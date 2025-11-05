@@ -1,0 +1,26 @@
+{
+  "name": "iam-service",
+  "module": "index.ts",
+  "type": "module",
+  "private": true,
+  "devDependencies": {
+    "@types/bun": "latest"
+  },
+  "peerDependencies": {
+    "typescript": "^5"
+  },
+  "dependencies": {
+    "@hono/swagger-ui": "^0.5.2",
+    "@hono/zod-openapi": "^1.1.4",
+    "@prisma/client": "^6.17.1",
+    "axios": "^1.12.2",
+    "bcrypt": "^6.0.0",
+    "bcrypt-ts": "^7.1.0",
+    "hono": "^4.9.11",
+    "ioredis": "^5.8.1",
+    "p-limit": "^7.2.0",
+    "prisma": "^6.17.1",
+    "swagger-ui-dist": "^5.29.5",
+    "xlsx": "^0.18.5"
+  }
+}
