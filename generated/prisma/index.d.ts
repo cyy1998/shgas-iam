@@ -29,6 +29,11 @@ export type Organization = $Result.DefaultSelection<Prisma.$OrganizationPayload>
  */
 export type Position = $Result.DefaultSelection<Prisma.$PositionPayload>
 /**
+ * Model PosOrgComposition
+ * 
+ */
+export type PosOrgComposition = $Result.DefaultSelection<Prisma.$PosOrgCompositionPayload>
+/**
  * Model Employment
  * 
  */
@@ -58,6 +63,11 @@ export type EmploymentRole = $Result.DefaultSelection<Prisma.$EmploymentRolePayl
  * 
  */
 export type OrganizationRole = $Result.DefaultSelection<Prisma.$OrganizationRolePayload>
+/**
+ * Model PosOrgRole
+ * 
+ */
+export type PosOrgRole = $Result.DefaultSelection<Prisma.$PosOrgRolePayload>
 /**
  * Model AuthObject
  * 
@@ -233,6 +243,16 @@ export class PrismaClient<
   get position(): Prisma.PositionDelegate<ExtArgs, ClientOptions>;
 
   /**
+   * `prisma.posOrgComposition`: Exposes CRUD operations for the **PosOrgComposition** model.
+    * Example usage:
+    * ```ts
+    * // Fetch zero or more PosOrgCompositions
+    * const posOrgCompositions = await prisma.posOrgComposition.findMany()
+    * ```
+    */
+  get posOrgComposition(): Prisma.PosOrgCompositionDelegate<ExtArgs, ClientOptions>;
+
+  /**
    * `prisma.employment`: Exposes CRUD operations for the **Employment** model.
     * Example usage:
     * ```ts
@@ -291,6 +311,16 @@ export class PrismaClient<
     * ```
     */
   get organizationRole(): Prisma.OrganizationRoleDelegate<ExtArgs, ClientOptions>;
+
+  /**
+   * `prisma.posOrgRole`: Exposes CRUD operations for the **PosOrgRole** model.
+    * Example usage:
+    * ```ts
+    * // Fetch zero or more PosOrgRoles
+    * const posOrgRoles = await prisma.posOrgRole.findMany()
+    * ```
+    */
+  get posOrgRole(): Prisma.PosOrgRoleDelegate<ExtArgs, ClientOptions>;
 
   /**
    * `prisma.authObject`: Exposes CRUD operations for the **AuthObject** model.
@@ -784,12 +814,14 @@ export namespace Prisma {
     User: 'User',
     Organization: 'Organization',
     Position: 'Position',
+    PosOrgComposition: 'PosOrgComposition',
     Employment: 'Employment',
     Client: 'Client',
     Role: 'Role',
     PositionRole: 'PositionRole',
     EmploymentRole: 'EmploymentRole',
     OrganizationRole: 'OrganizationRole',
+    PosOrgRole: 'PosOrgRole',
     AuthObject: 'AuthObject',
     Privilege: 'Privilege',
     PrivilegeDelegation: 'PrivilegeDelegation',
@@ -813,7 +845,7 @@ export namespace Prisma {
       omit: GlobalOmitOptions
     }
     meta: {
-      modelProps: "user" | "organization" | "position" | "employment" | "client" | "role" | "positionRole" | "employmentRole" | "organizationRole" | "authObject" | "privilege" | "privilegeDelegation" | "delegationDetail" | "rolePrivilege"
+      modelProps: "user" | "organization" | "position" | "posOrgComposition" | "employment" | "client" | "role" | "positionRole" | "employmentRole" | "organizationRole" | "posOrgRole" | "authObject" | "privilege" | "privilegeDelegation" | "delegationDetail" | "rolePrivilege"
       txIsolationLevel: Prisma.TransactionIsolationLevel
     }
     model: {
@@ -1012,6 +1044,72 @@ export namespace Prisma {
           count: {
             args: Prisma.PositionCountArgs<ExtArgs>
             result: $Utils.Optional<PositionCountAggregateOutputType> | number
+          }
+        }
+      }
+      PosOrgComposition: {
+        payload: Prisma.$PosOrgCompositionPayload<ExtArgs>
+        fields: Prisma.PosOrgCompositionFieldRefs
+        operations: {
+          findUnique: {
+            args: Prisma.PosOrgCompositionFindUniqueArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$PosOrgCompositionPayload> | null
+          }
+          findUniqueOrThrow: {
+            args: Prisma.PosOrgCompositionFindUniqueOrThrowArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$PosOrgCompositionPayload>
+          }
+          findFirst: {
+            args: Prisma.PosOrgCompositionFindFirstArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$PosOrgCompositionPayload> | null
+          }
+          findFirstOrThrow: {
+            args: Prisma.PosOrgCompositionFindFirstOrThrowArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$PosOrgCompositionPayload>
+          }
+          findMany: {
+            args: Prisma.PosOrgCompositionFindManyArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$PosOrgCompositionPayload>[]
+          }
+          create: {
+            args: Prisma.PosOrgCompositionCreateArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$PosOrgCompositionPayload>
+          }
+          createMany: {
+            args: Prisma.PosOrgCompositionCreateManyArgs<ExtArgs>
+            result: BatchPayload
+          }
+          delete: {
+            args: Prisma.PosOrgCompositionDeleteArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$PosOrgCompositionPayload>
+          }
+          update: {
+            args: Prisma.PosOrgCompositionUpdateArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$PosOrgCompositionPayload>
+          }
+          deleteMany: {
+            args: Prisma.PosOrgCompositionDeleteManyArgs<ExtArgs>
+            result: BatchPayload
+          }
+          updateMany: {
+            args: Prisma.PosOrgCompositionUpdateManyArgs<ExtArgs>
+            result: BatchPayload
+          }
+          upsert: {
+            args: Prisma.PosOrgCompositionUpsertArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$PosOrgCompositionPayload>
+          }
+          aggregate: {
+            args: Prisma.PosOrgCompositionAggregateArgs<ExtArgs>
+            result: $Utils.Optional<AggregatePosOrgComposition>
+          }
+          groupBy: {
+            args: Prisma.PosOrgCompositionGroupByArgs<ExtArgs>
+            result: $Utils.Optional<PosOrgCompositionGroupByOutputType>[]
+          }
+          count: {
+            args: Prisma.PosOrgCompositionCountArgs<ExtArgs>
+            result: $Utils.Optional<PosOrgCompositionCountAggregateOutputType> | number
           }
         }
       }
@@ -1408,6 +1506,72 @@ export namespace Prisma {
           count: {
             args: Prisma.OrganizationRoleCountArgs<ExtArgs>
             result: $Utils.Optional<OrganizationRoleCountAggregateOutputType> | number
+          }
+        }
+      }
+      PosOrgRole: {
+        payload: Prisma.$PosOrgRolePayload<ExtArgs>
+        fields: Prisma.PosOrgRoleFieldRefs
+        operations: {
+          findUnique: {
+            args: Prisma.PosOrgRoleFindUniqueArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$PosOrgRolePayload> | null
+          }
+          findUniqueOrThrow: {
+            args: Prisma.PosOrgRoleFindUniqueOrThrowArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$PosOrgRolePayload>
+          }
+          findFirst: {
+            args: Prisma.PosOrgRoleFindFirstArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$PosOrgRolePayload> | null
+          }
+          findFirstOrThrow: {
+            args: Prisma.PosOrgRoleFindFirstOrThrowArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$PosOrgRolePayload>
+          }
+          findMany: {
+            args: Prisma.PosOrgRoleFindManyArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$PosOrgRolePayload>[]
+          }
+          create: {
+            args: Prisma.PosOrgRoleCreateArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$PosOrgRolePayload>
+          }
+          createMany: {
+            args: Prisma.PosOrgRoleCreateManyArgs<ExtArgs>
+            result: BatchPayload
+          }
+          delete: {
+            args: Prisma.PosOrgRoleDeleteArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$PosOrgRolePayload>
+          }
+          update: {
+            args: Prisma.PosOrgRoleUpdateArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$PosOrgRolePayload>
+          }
+          deleteMany: {
+            args: Prisma.PosOrgRoleDeleteManyArgs<ExtArgs>
+            result: BatchPayload
+          }
+          updateMany: {
+            args: Prisma.PosOrgRoleUpdateManyArgs<ExtArgs>
+            result: BatchPayload
+          }
+          upsert: {
+            args: Prisma.PosOrgRoleUpsertArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$PosOrgRolePayload>
+          }
+          aggregate: {
+            args: Prisma.PosOrgRoleAggregateArgs<ExtArgs>
+            result: $Utils.Optional<AggregatePosOrgRole>
+          }
+          groupBy: {
+            args: Prisma.PosOrgRoleGroupByArgs<ExtArgs>
+            result: $Utils.Optional<PosOrgRoleGroupByOutputType>[]
+          }
+          count: {
+            args: Prisma.PosOrgRoleCountArgs<ExtArgs>
+            result: $Utils.Optional<PosOrgRoleCountAggregateOutputType> | number
           }
         }
       }
@@ -1840,12 +2004,14 @@ export namespace Prisma {
     user?: UserOmit
     organization?: OrganizationOmit
     position?: PositionOmit
+    posOrgComposition?: PosOrgCompositionOmit
     employment?: EmploymentOmit
     client?: ClientOmit
     role?: RoleOmit
     positionRole?: PositionRoleOmit
     employmentRole?: EmploymentRoleOmit
     organizationRole?: OrganizationRoleOmit
+    posOrgRole?: PosOrgRoleOmit
     authObject?: AuthObjectOmit
     privilege?: PrivilegeOmit
     privilegeDelegation?: PrivilegeDelegationOmit
@@ -1983,12 +2149,14 @@ export namespace Prisma {
     deptEmployments: number
     compEmployments: number
     roles: number
+    posOrgComposition: number
   }
 
   export type OrganizationCountOutputTypeSelect<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
     deptEmployments?: boolean | OrganizationCountOutputTypeCountDeptEmploymentsArgs
     compEmployments?: boolean | OrganizationCountOutputTypeCountCompEmploymentsArgs
     roles?: boolean | OrganizationCountOutputTypeCountRolesArgs
+    posOrgComposition?: boolean | OrganizationCountOutputTypeCountPosOrgCompositionArgs
   }
 
   // Custom InputTypes
@@ -2023,6 +2191,13 @@ export namespace Prisma {
     where?: OrganizationRoleWhereInput
   }
 
+  /**
+   * OrganizationCountOutputType without action
+   */
+  export type OrganizationCountOutputTypeCountPosOrgCompositionArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    where?: PosOrgCompositionWhereInput
+  }
+
 
   /**
    * Count Type PositionCountOutputType
@@ -2031,11 +2206,13 @@ export namespace Prisma {
   export type PositionCountOutputType = {
     employments: number
     roles: number
+    posOrgComposition: number
   }
 
   export type PositionCountOutputTypeSelect<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
     employments?: boolean | PositionCountOutputTypeCountEmploymentsArgs
     roles?: boolean | PositionCountOutputTypeCountRolesArgs
+    posOrgComposition?: boolean | PositionCountOutputTypeCountPosOrgCompositionArgs
   }
 
   // Custom InputTypes
@@ -2061,6 +2238,53 @@ export namespace Prisma {
    */
   export type PositionCountOutputTypeCountRolesArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
     where?: PositionRoleWhereInput
+  }
+
+  /**
+   * PositionCountOutputType without action
+   */
+  export type PositionCountOutputTypeCountPosOrgCompositionArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    where?: PosOrgCompositionWhereInput
+  }
+
+
+  /**
+   * Count Type PosOrgCompositionCountOutputType
+   */
+
+  export type PosOrgCompositionCountOutputType = {
+    employments: number
+    roles: number
+  }
+
+  export type PosOrgCompositionCountOutputTypeSelect<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    employments?: boolean | PosOrgCompositionCountOutputTypeCountEmploymentsArgs
+    roles?: boolean | PosOrgCompositionCountOutputTypeCountRolesArgs
+  }
+
+  // Custom InputTypes
+  /**
+   * PosOrgCompositionCountOutputType without action
+   */
+  export type PosOrgCompositionCountOutputTypeDefaultArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the PosOrgCompositionCountOutputType
+     */
+    select?: PosOrgCompositionCountOutputTypeSelect<ExtArgs> | null
+  }
+
+  /**
+   * PosOrgCompositionCountOutputType without action
+   */
+  export type PosOrgCompositionCountOutputTypeCountEmploymentsArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    where?: EmploymentWhereInput
+  }
+
+  /**
+   * PosOrgCompositionCountOutputType without action
+   */
+  export type PosOrgCompositionCountOutputTypeCountRolesArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    where?: PosOrgRoleWhereInput
   }
 
 
@@ -2133,6 +2357,7 @@ export namespace Prisma {
   export type RoleCountOutputType = {
     positions: number
     organizations: number
+    positionOrganizations: number
     employments: number
     privileges: number
   }
@@ -2140,6 +2365,7 @@ export namespace Prisma {
   export type RoleCountOutputTypeSelect<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
     positions?: boolean | RoleCountOutputTypeCountPositionsArgs
     organizations?: boolean | RoleCountOutputTypeCountOrganizationsArgs
+    positionOrganizations?: boolean | RoleCountOutputTypeCountPositionOrganizationsArgs
     employments?: boolean | RoleCountOutputTypeCountEmploymentsArgs
     privileges?: boolean | RoleCountOutputTypeCountPrivilegesArgs
   }
@@ -2167,6 +2393,13 @@ export namespace Prisma {
    */
   export type RoleCountOutputTypeCountOrganizationsArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
     where?: OrganizationRoleWhereInput
+  }
+
+  /**
+   * RoleCountOutputType without action
+   */
+  export type RoleCountOutputTypeCountPositionOrganizationsArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    where?: PosOrgRoleWhereInput
   }
 
   /**
@@ -3674,6 +3907,7 @@ export namespace Prisma {
     deptEmployments?: boolean | Organization$deptEmploymentsArgs<ExtArgs>
     compEmployments?: boolean | Organization$compEmploymentsArgs<ExtArgs>
     roles?: boolean | Organization$rolesArgs<ExtArgs>
+    posOrgComposition?: boolean | Organization$posOrgCompositionArgs<ExtArgs>
     _count?: boolean | OrganizationCountOutputTypeDefaultArgs<ExtArgs>
   }, ExtArgs["result"]["organization"]>
 
@@ -3701,6 +3935,7 @@ export namespace Prisma {
     deptEmployments?: boolean | Organization$deptEmploymentsArgs<ExtArgs>
     compEmployments?: boolean | Organization$compEmploymentsArgs<ExtArgs>
     roles?: boolean | Organization$rolesArgs<ExtArgs>
+    posOrgComposition?: boolean | Organization$posOrgCompositionArgs<ExtArgs>
     _count?: boolean | OrganizationCountOutputTypeDefaultArgs<ExtArgs>
   }
 
@@ -3710,6 +3945,7 @@ export namespace Prisma {
       deptEmployments: Prisma.$EmploymentPayload<ExtArgs>[]
       compEmployments: Prisma.$EmploymentPayload<ExtArgs>[]
       roles: Prisma.$OrganizationRolePayload<ExtArgs>[]
+      posOrgComposition: Prisma.$PosOrgCompositionPayload<ExtArgs>[]
     }
     scalars: $Extensions.GetPayloadResult<{
       id: number
@@ -4069,6 +4305,7 @@ export namespace Prisma {
     deptEmployments<T extends Organization$deptEmploymentsArgs<ExtArgs> = {}>(args?: Subset<T, Organization$deptEmploymentsArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$EmploymentPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
     compEmployments<T extends Organization$compEmploymentsArgs<ExtArgs> = {}>(args?: Subset<T, Organization$compEmploymentsArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$EmploymentPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
     roles<T extends Organization$rolesArgs<ExtArgs> = {}>(args?: Subset<T, Organization$rolesArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$OrganizationRolePayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
+    posOrgComposition<T extends Organization$posOrgCompositionArgs<ExtArgs> = {}>(args?: Subset<T, Organization$posOrgCompositionArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$PosOrgCompositionPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
     /**
      * Attaches callbacks for the resolution and/or rejection of the Promise.
      * @param onfulfilled The callback to execute when the Promise is resolved.
@@ -4527,6 +4764,30 @@ export namespace Prisma {
   }
 
   /**
+   * Organization.posOrgComposition
+   */
+  export type Organization$posOrgCompositionArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the PosOrgComposition
+     */
+    select?: PosOrgCompositionSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the PosOrgComposition
+     */
+    omit?: PosOrgCompositionOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: PosOrgCompositionInclude<ExtArgs> | null
+    where?: PosOrgCompositionWhereInput
+    orderBy?: PosOrgCompositionOrderByWithRelationInput | PosOrgCompositionOrderByWithRelationInput[]
+    cursor?: PosOrgCompositionWhereUniqueInput
+    take?: number
+    skip?: number
+    distinct?: PosOrgCompositionScalarFieldEnum | PosOrgCompositionScalarFieldEnum[]
+  }
+
+  /**
    * Organization without action
    */
   export type OrganizationDefaultArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
@@ -4773,6 +5034,7 @@ export namespace Prisma {
     updateTime?: boolean
     employments?: boolean | Position$employmentsArgs<ExtArgs>
     roles?: boolean | Position$rolesArgs<ExtArgs>
+    posOrgComposition?: boolean | Position$posOrgCompositionArgs<ExtArgs>
     _count?: boolean | PositionCountOutputTypeDefaultArgs<ExtArgs>
   }, ExtArgs["result"]["position"]>
 
@@ -4793,6 +5055,7 @@ export namespace Prisma {
   export type PositionInclude<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
     employments?: boolean | Position$employmentsArgs<ExtArgs>
     roles?: boolean | Position$rolesArgs<ExtArgs>
+    posOrgComposition?: boolean | Position$posOrgCompositionArgs<ExtArgs>
     _count?: boolean | PositionCountOutputTypeDefaultArgs<ExtArgs>
   }
 
@@ -4801,6 +5064,7 @@ export namespace Prisma {
     objects: {
       employments: Prisma.$EmploymentPayload<ExtArgs>[]
       roles: Prisma.$PositionRolePayload<ExtArgs>[]
+      posOrgComposition: Prisma.$PosOrgCompositionPayload<ExtArgs>[]
     }
     scalars: $Extensions.GetPayloadResult<{
       id: number
@@ -5153,6 +5417,7 @@ export namespace Prisma {
     readonly [Symbol.toStringTag]: "PrismaPromise"
     employments<T extends Position$employmentsArgs<ExtArgs> = {}>(args?: Subset<T, Position$employmentsArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$EmploymentPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
     roles<T extends Position$rolesArgs<ExtArgs> = {}>(args?: Subset<T, Position$rolesArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$PositionRolePayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
+    posOrgComposition<T extends Position$posOrgCompositionArgs<ExtArgs> = {}>(args?: Subset<T, Position$posOrgCompositionArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$PosOrgCompositionPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
     /**
      * Attaches callbacks for the resolution and/or rejection of the Promise.
      * @param onfulfilled The callback to execute when the Promise is resolved.
@@ -5581,6 +5846,30 @@ export namespace Prisma {
   }
 
   /**
+   * Position.posOrgComposition
+   */
+  export type Position$posOrgCompositionArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the PosOrgComposition
+     */
+    select?: PosOrgCompositionSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the PosOrgComposition
+     */
+    omit?: PosOrgCompositionOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: PosOrgCompositionInclude<ExtArgs> | null
+    where?: PosOrgCompositionWhereInput
+    orderBy?: PosOrgCompositionOrderByWithRelationInput | PosOrgCompositionOrderByWithRelationInput[]
+    cursor?: PosOrgCompositionWhereUniqueInput
+    take?: number
+    skip?: number
+    distinct?: PosOrgCompositionScalarFieldEnum | PosOrgCompositionScalarFieldEnum[]
+  }
+
+  /**
    * Position without action
    */
   export type PositionDefaultArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
@@ -5596,6 +5885,1076 @@ export namespace Prisma {
      * Choose, which related nodes to fetch as well
      */
     include?: PositionInclude<ExtArgs> | null
+  }
+
+
+  /**
+   * Model PosOrgComposition
+   */
+
+  export type AggregatePosOrgComposition = {
+    _count: PosOrgCompositionCountAggregateOutputType | null
+    _avg: PosOrgCompositionAvgAggregateOutputType | null
+    _sum: PosOrgCompositionSumAggregateOutputType | null
+    _min: PosOrgCompositionMinAggregateOutputType | null
+    _max: PosOrgCompositionMaxAggregateOutputType | null
+  }
+
+  export type PosOrgCompositionAvgAggregateOutputType = {
+    id: number | null
+    posId: number | null
+    orgId: number | null
+    status: number | null
+  }
+
+  export type PosOrgCompositionSumAggregateOutputType = {
+    id: number | null
+    posId: number | null
+    orgId: number | null
+    status: number | null
+  }
+
+  export type PosOrgCompositionMinAggregateOutputType = {
+    id: number | null
+    posId: number | null
+    orgId: number | null
+    status: number | null
+    description: string | null
+    isDelete: boolean | null
+    createTime: Date | null
+    updateTime: Date | null
+  }
+
+  export type PosOrgCompositionMaxAggregateOutputType = {
+    id: number | null
+    posId: number | null
+    orgId: number | null
+    status: number | null
+    description: string | null
+    isDelete: boolean | null
+    createTime: Date | null
+    updateTime: Date | null
+  }
+
+  export type PosOrgCompositionCountAggregateOutputType = {
+    id: number
+    posId: number
+    orgId: number
+    status: number
+    description: number
+    isDelete: number
+    createTime: number
+    updateTime: number
+    _all: number
+  }
+
+
+  export type PosOrgCompositionAvgAggregateInputType = {
+    id?: true
+    posId?: true
+    orgId?: true
+    status?: true
+  }
+
+  export type PosOrgCompositionSumAggregateInputType = {
+    id?: true
+    posId?: true
+    orgId?: true
+    status?: true
+  }
+
+  export type PosOrgCompositionMinAggregateInputType = {
+    id?: true
+    posId?: true
+    orgId?: true
+    status?: true
+    description?: true
+    isDelete?: true
+    createTime?: true
+    updateTime?: true
+  }
+
+  export type PosOrgCompositionMaxAggregateInputType = {
+    id?: true
+    posId?: true
+    orgId?: true
+    status?: true
+    description?: true
+    isDelete?: true
+    createTime?: true
+    updateTime?: true
+  }
+
+  export type PosOrgCompositionCountAggregateInputType = {
+    id?: true
+    posId?: true
+    orgId?: true
+    status?: true
+    description?: true
+    isDelete?: true
+    createTime?: true
+    updateTime?: true
+    _all?: true
+  }
+
+  export type PosOrgCompositionAggregateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Filter which PosOrgComposition to aggregate.
+     */
+    where?: PosOrgCompositionWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of PosOrgCompositions to fetch.
+     */
+    orderBy?: PosOrgCompositionOrderByWithRelationInput | PosOrgCompositionOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the start position
+     */
+    cursor?: PosOrgCompositionWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` PosOrgCompositions from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` PosOrgCompositions.
+     */
+    skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Count returned PosOrgCompositions
+    **/
+    _count?: true | PosOrgCompositionCountAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to average
+    **/
+    _avg?: PosOrgCompositionAvgAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to sum
+    **/
+    _sum?: PosOrgCompositionSumAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to find the minimum value
+    **/
+    _min?: PosOrgCompositionMinAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to find the maximum value
+    **/
+    _max?: PosOrgCompositionMaxAggregateInputType
+  }
+
+  export type GetPosOrgCompositionAggregateType<T extends PosOrgCompositionAggregateArgs> = {
+        [P in keyof T & keyof AggregatePosOrgComposition]: P extends '_count' | 'count'
+      ? T[P] extends true
+        ? number
+        : GetScalarType<T[P], AggregatePosOrgComposition[P]>
+      : GetScalarType<T[P], AggregatePosOrgComposition[P]>
+  }
+
+
+
+
+  export type PosOrgCompositionGroupByArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    where?: PosOrgCompositionWhereInput
+    orderBy?: PosOrgCompositionOrderByWithAggregationInput | PosOrgCompositionOrderByWithAggregationInput[]
+    by: PosOrgCompositionScalarFieldEnum[] | PosOrgCompositionScalarFieldEnum
+    having?: PosOrgCompositionScalarWhereWithAggregatesInput
+    take?: number
+    skip?: number
+    _count?: PosOrgCompositionCountAggregateInputType | true
+    _avg?: PosOrgCompositionAvgAggregateInputType
+    _sum?: PosOrgCompositionSumAggregateInputType
+    _min?: PosOrgCompositionMinAggregateInputType
+    _max?: PosOrgCompositionMaxAggregateInputType
+  }
+
+  export type PosOrgCompositionGroupByOutputType = {
+    id: number
+    posId: number
+    orgId: number
+    status: number
+    description: string | null
+    isDelete: boolean
+    createTime: Date
+    updateTime: Date
+    _count: PosOrgCompositionCountAggregateOutputType | null
+    _avg: PosOrgCompositionAvgAggregateOutputType | null
+    _sum: PosOrgCompositionSumAggregateOutputType | null
+    _min: PosOrgCompositionMinAggregateOutputType | null
+    _max: PosOrgCompositionMaxAggregateOutputType | null
+  }
+
+  type GetPosOrgCompositionGroupByPayload<T extends PosOrgCompositionGroupByArgs> = Prisma.PrismaPromise<
+    Array<
+      PickEnumerable<PosOrgCompositionGroupByOutputType, T['by']> &
+        {
+          [P in ((keyof T) & (keyof PosOrgCompositionGroupByOutputType))]: P extends '_count'
+            ? T[P] extends boolean
+              ? number
+              : GetScalarType<T[P], PosOrgCompositionGroupByOutputType[P]>
+            : GetScalarType<T[P], PosOrgCompositionGroupByOutputType[P]>
+        }
+      >
+    >
+
+
+  export type PosOrgCompositionSelect<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
+    id?: boolean
+    posId?: boolean
+    orgId?: boolean
+    status?: boolean
+    description?: boolean
+    isDelete?: boolean
+    createTime?: boolean
+    updateTime?: boolean
+    position?: boolean | PositionDefaultArgs<ExtArgs>
+    organization?: boolean | OrganizationDefaultArgs<ExtArgs>
+    employments?: boolean | PosOrgComposition$employmentsArgs<ExtArgs>
+    roles?: boolean | PosOrgComposition$rolesArgs<ExtArgs>
+    _count?: boolean | PosOrgCompositionCountOutputTypeDefaultArgs<ExtArgs>
+  }, ExtArgs["result"]["posOrgComposition"]>
+
+
+
+  export type PosOrgCompositionSelectScalar = {
+    id?: boolean
+    posId?: boolean
+    orgId?: boolean
+    status?: boolean
+    description?: boolean
+    isDelete?: boolean
+    createTime?: boolean
+    updateTime?: boolean
+  }
+
+  export type PosOrgCompositionOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "posId" | "orgId" | "status" | "description" | "isDelete" | "createTime" | "updateTime", ExtArgs["result"]["posOrgComposition"]>
+  export type PosOrgCompositionInclude<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    position?: boolean | PositionDefaultArgs<ExtArgs>
+    organization?: boolean | OrganizationDefaultArgs<ExtArgs>
+    employments?: boolean | PosOrgComposition$employmentsArgs<ExtArgs>
+    roles?: boolean | PosOrgComposition$rolesArgs<ExtArgs>
+    _count?: boolean | PosOrgCompositionCountOutputTypeDefaultArgs<ExtArgs>
+  }
+
+  export type $PosOrgCompositionPayload<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    name: "PosOrgComposition"
+    objects: {
+      position: Prisma.$PositionPayload<ExtArgs>
+      organization: Prisma.$OrganizationPayload<ExtArgs>
+      employments: Prisma.$EmploymentPayload<ExtArgs>[]
+      roles: Prisma.$PosOrgRolePayload<ExtArgs>[]
+    }
+    scalars: $Extensions.GetPayloadResult<{
+      id: number
+      posId: number
+      orgId: number
+      status: number
+      description: string | null
+      isDelete: boolean
+      createTime: Date
+      updateTime: Date
+    }, ExtArgs["result"]["posOrgComposition"]>
+    composites: {}
+  }
+
+  type PosOrgCompositionGetPayload<S extends boolean | null | undefined | PosOrgCompositionDefaultArgs> = $Result.GetResult<Prisma.$PosOrgCompositionPayload, S>
+
+  type PosOrgCompositionCountArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> =
+    Omit<PosOrgCompositionFindManyArgs, 'select' | 'include' | 'distinct' | 'omit'> & {
+      select?: PosOrgCompositionCountAggregateInputType | true
+    }
+
+  export interface PosOrgCompositionDelegate<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs, GlobalOmitOptions = {}> {
+    [K: symbol]: { types: Prisma.TypeMap<ExtArgs>['model']['PosOrgComposition'], meta: { name: 'PosOrgComposition' } }
+    /**
+     * Find zero or one PosOrgComposition that matches the filter.
+     * @param {PosOrgCompositionFindUniqueArgs} args - Arguments to find a PosOrgComposition
+     * @example
+     * // Get one PosOrgComposition
+     * const posOrgComposition = await prisma.posOrgComposition.findUnique({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findUnique<T extends PosOrgCompositionFindUniqueArgs>(args: SelectSubset<T, PosOrgCompositionFindUniqueArgs<ExtArgs>>): Prisma__PosOrgCompositionClient<$Result.GetResult<Prisma.$PosOrgCompositionPayload<ExtArgs>, T, "findUnique", GlobalOmitOptions> | null, null, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find one PosOrgComposition that matches the filter or throw an error with `error.code='P2025'`
+     * if no matches were found.
+     * @param {PosOrgCompositionFindUniqueOrThrowArgs} args - Arguments to find a PosOrgComposition
+     * @example
+     * // Get one PosOrgComposition
+     * const posOrgComposition = await prisma.posOrgComposition.findUniqueOrThrow({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findUniqueOrThrow<T extends PosOrgCompositionFindUniqueOrThrowArgs>(args: SelectSubset<T, PosOrgCompositionFindUniqueOrThrowArgs<ExtArgs>>): Prisma__PosOrgCompositionClient<$Result.GetResult<Prisma.$PosOrgCompositionPayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find the first PosOrgComposition that matches the filter.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {PosOrgCompositionFindFirstArgs} args - Arguments to find a PosOrgComposition
+     * @example
+     * // Get one PosOrgComposition
+     * const posOrgComposition = await prisma.posOrgComposition.findFirst({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findFirst<T extends PosOrgCompositionFindFirstArgs>(args?: SelectSubset<T, PosOrgCompositionFindFirstArgs<ExtArgs>>): Prisma__PosOrgCompositionClient<$Result.GetResult<Prisma.$PosOrgCompositionPayload<ExtArgs>, T, "findFirst", GlobalOmitOptions> | null, null, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find the first PosOrgComposition that matches the filter or
+     * throw `PrismaKnownClientError` with `P2025` code if no matches were found.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {PosOrgCompositionFindFirstOrThrowArgs} args - Arguments to find a PosOrgComposition
+     * @example
+     * // Get one PosOrgComposition
+     * const posOrgComposition = await prisma.posOrgComposition.findFirstOrThrow({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findFirstOrThrow<T extends PosOrgCompositionFindFirstOrThrowArgs>(args?: SelectSubset<T, PosOrgCompositionFindFirstOrThrowArgs<ExtArgs>>): Prisma__PosOrgCompositionClient<$Result.GetResult<Prisma.$PosOrgCompositionPayload<ExtArgs>, T, "findFirstOrThrow", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find zero or more PosOrgCompositions that matches the filter.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {PosOrgCompositionFindManyArgs} args - Arguments to filter and select certain fields only.
+     * @example
+     * // Get all PosOrgCompositions
+     * const posOrgCompositions = await prisma.posOrgComposition.findMany()
+     * 
+     * // Get first 10 PosOrgCompositions
+     * const posOrgCompositions = await prisma.posOrgComposition.findMany({ take: 10 })
+     * 
+     * // Only select the `id`
+     * const posOrgCompositionWithIdOnly = await prisma.posOrgComposition.findMany({ select: { id: true } })
+     * 
+     */
+    findMany<T extends PosOrgCompositionFindManyArgs>(args?: SelectSubset<T, PosOrgCompositionFindManyArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$PosOrgCompositionPayload<ExtArgs>, T, "findMany", GlobalOmitOptions>>
+
+    /**
+     * Create a PosOrgComposition.
+     * @param {PosOrgCompositionCreateArgs} args - Arguments to create a PosOrgComposition.
+     * @example
+     * // Create one PosOrgComposition
+     * const PosOrgComposition = await prisma.posOrgComposition.create({
+     *   data: {
+     *     // ... data to create a PosOrgComposition
+     *   }
+     * })
+     * 
+     */
+    create<T extends PosOrgCompositionCreateArgs>(args: SelectSubset<T, PosOrgCompositionCreateArgs<ExtArgs>>): Prisma__PosOrgCompositionClient<$Result.GetResult<Prisma.$PosOrgCompositionPayload<ExtArgs>, T, "create", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Create many PosOrgCompositions.
+     * @param {PosOrgCompositionCreateManyArgs} args - Arguments to create many PosOrgCompositions.
+     * @example
+     * // Create many PosOrgCompositions
+     * const posOrgComposition = await prisma.posOrgComposition.createMany({
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     *     
+     */
+    createMany<T extends PosOrgCompositionCreateManyArgs>(args?: SelectSubset<T, PosOrgCompositionCreateManyArgs<ExtArgs>>): Prisma.PrismaPromise<BatchPayload>
+
+    /**
+     * Delete a PosOrgComposition.
+     * @param {PosOrgCompositionDeleteArgs} args - Arguments to delete one PosOrgComposition.
+     * @example
+     * // Delete one PosOrgComposition
+     * const PosOrgComposition = await prisma.posOrgComposition.delete({
+     *   where: {
+     *     // ... filter to delete one PosOrgComposition
+     *   }
+     * })
+     * 
+     */
+    delete<T extends PosOrgCompositionDeleteArgs>(args: SelectSubset<T, PosOrgCompositionDeleteArgs<ExtArgs>>): Prisma__PosOrgCompositionClient<$Result.GetResult<Prisma.$PosOrgCompositionPayload<ExtArgs>, T, "delete", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Update one PosOrgComposition.
+     * @param {PosOrgCompositionUpdateArgs} args - Arguments to update one PosOrgComposition.
+     * @example
+     * // Update one PosOrgComposition
+     * const posOrgComposition = await prisma.posOrgComposition.update({
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: {
+     *     // ... provide data here
+     *   }
+     * })
+     * 
+     */
+    update<T extends PosOrgCompositionUpdateArgs>(args: SelectSubset<T, PosOrgCompositionUpdateArgs<ExtArgs>>): Prisma__PosOrgCompositionClient<$Result.GetResult<Prisma.$PosOrgCompositionPayload<ExtArgs>, T, "update", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Delete zero or more PosOrgCompositions.
+     * @param {PosOrgCompositionDeleteManyArgs} args - Arguments to filter PosOrgCompositions to delete.
+     * @example
+     * // Delete a few PosOrgCompositions
+     * const { count } = await prisma.posOrgComposition.deleteMany({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     * 
+     */
+    deleteMany<T extends PosOrgCompositionDeleteManyArgs>(args?: SelectSubset<T, PosOrgCompositionDeleteManyArgs<ExtArgs>>): Prisma.PrismaPromise<BatchPayload>
+
+    /**
+     * Update zero or more PosOrgCompositions.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {PosOrgCompositionUpdateManyArgs} args - Arguments to update one or more rows.
+     * @example
+     * // Update many PosOrgCompositions
+     * const posOrgComposition = await prisma.posOrgComposition.updateMany({
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: {
+     *     // ... provide data here
+     *   }
+     * })
+     * 
+     */
+    updateMany<T extends PosOrgCompositionUpdateManyArgs>(args: SelectSubset<T, PosOrgCompositionUpdateManyArgs<ExtArgs>>): Prisma.PrismaPromise<BatchPayload>
+
+    /**
+     * Create or update one PosOrgComposition.
+     * @param {PosOrgCompositionUpsertArgs} args - Arguments to update or create a PosOrgComposition.
+     * @example
+     * // Update or create a PosOrgComposition
+     * const posOrgComposition = await prisma.posOrgComposition.upsert({
+     *   create: {
+     *     // ... data to create a PosOrgComposition
+     *   },
+     *   update: {
+     *     // ... in case it already exists, update
+     *   },
+     *   where: {
+     *     // ... the filter for the PosOrgComposition we want to update
+     *   }
+     * })
+     */
+    upsert<T extends PosOrgCompositionUpsertArgs>(args: SelectSubset<T, PosOrgCompositionUpsertArgs<ExtArgs>>): Prisma__PosOrgCompositionClient<$Result.GetResult<Prisma.$PosOrgCompositionPayload<ExtArgs>, T, "upsert", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+
+    /**
+     * Count the number of PosOrgCompositions.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {PosOrgCompositionCountArgs} args - Arguments to filter PosOrgCompositions to count.
+     * @example
+     * // Count the number of PosOrgCompositions
+     * const count = await prisma.posOrgComposition.count({
+     *   where: {
+     *     // ... the filter for the PosOrgCompositions we want to count
+     *   }
+     * })
+    **/
+    count<T extends PosOrgCompositionCountArgs>(
+      args?: Subset<T, PosOrgCompositionCountArgs>,
+    ): Prisma.PrismaPromise<
+      T extends $Utils.Record<'select', any>
+        ? T['select'] extends true
+          ? number
+          : GetScalarType<T['select'], PosOrgCompositionCountAggregateOutputType>
+        : number
+    >
+
+    /**
+     * Allows you to perform aggregations operations on a PosOrgComposition.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {PosOrgCompositionAggregateArgs} args - Select which aggregations you would like to apply and on what fields.
+     * @example
+     * // Ordered by age ascending
+     * // Where email contains prisma.io
+     * // Limited to the 10 users
+     * const aggregations = await prisma.user.aggregate({
+     *   _avg: {
+     *     age: true,
+     *   },
+     *   where: {
+     *     email: {
+     *       contains: "prisma.io",
+     *     },
+     *   },
+     *   orderBy: {
+     *     age: "asc",
+     *   },
+     *   take: 10,
+     * })
+    **/
+    aggregate<T extends PosOrgCompositionAggregateArgs>(args: Subset<T, PosOrgCompositionAggregateArgs>): Prisma.PrismaPromise<GetPosOrgCompositionAggregateType<T>>
+
+    /**
+     * Group by PosOrgComposition.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {PosOrgCompositionGroupByArgs} args - Group by arguments.
+     * @example
+     * // Group by city, order by createdAt, get count
+     * const result = await prisma.user.groupBy({
+     *   by: ['city', 'createdAt'],
+     *   orderBy: {
+     *     createdAt: true
+     *   },
+     *   _count: {
+     *     _all: true
+     *   },
+     * })
+     * 
+    **/
+    groupBy<
+      T extends PosOrgCompositionGroupByArgs,
+      HasSelectOrTake extends Or<
+        Extends<'skip', Keys<T>>,
+        Extends<'take', Keys<T>>
+      >,
+      OrderByArg extends True extends HasSelectOrTake
+        ? { orderBy: PosOrgCompositionGroupByArgs['orderBy'] }
+        : { orderBy?: PosOrgCompositionGroupByArgs['orderBy'] },
+      OrderFields extends ExcludeUnderscoreKeys<Keys<MaybeTupleToUnion<T['orderBy']>>>,
+      ByFields extends MaybeTupleToUnion<T['by']>,
+      ByValid extends Has<ByFields, OrderFields>,
+      HavingFields extends GetHavingFields<T['having']>,
+      HavingValid extends Has<ByFields, HavingFields>,
+      ByEmpty extends T['by'] extends never[] ? True : False,
+      InputErrors extends ByEmpty extends True
+      ? `Error: "by" must not be empty.`
+      : HavingValid extends False
+      ? {
+          [P in HavingFields]: P extends ByFields
+            ? never
+            : P extends string
+            ? `Error: Field "${P}" used in "having" needs to be provided in "by".`
+            : [
+                Error,
+                'Field ',
+                P,
+                ` in "having" needs to be provided in "by"`,
+              ]
+        }[HavingFields]
+      : 'take' extends Keys<T>
+      ? 'orderBy' extends Keys<T>
+        ? ByValid extends True
+          ? {}
+          : {
+              [P in OrderFields]: P extends ByFields
+                ? never
+                : `Error: Field "${P}" in "orderBy" needs to be provided in "by"`
+            }[OrderFields]
+        : 'Error: If you provide "take", you also need to provide "orderBy"'
+      : 'skip' extends Keys<T>
+      ? 'orderBy' extends Keys<T>
+        ? ByValid extends True
+          ? {}
+          : {
+              [P in OrderFields]: P extends ByFields
+                ? never
+                : `Error: Field "${P}" in "orderBy" needs to be provided in "by"`
+            }[OrderFields]
+        : 'Error: If you provide "skip", you also need to provide "orderBy"'
+      : ByValid extends True
+      ? {}
+      : {
+          [P in OrderFields]: P extends ByFields
+            ? never
+            : `Error: Field "${P}" in "orderBy" needs to be provided in "by"`
+        }[OrderFields]
+    >(args: SubsetIntersection<T, PosOrgCompositionGroupByArgs, OrderByArg> & InputErrors): {} extends InputErrors ? GetPosOrgCompositionGroupByPayload<T> : Prisma.PrismaPromise<InputErrors>
+  /**
+   * Fields of the PosOrgComposition model
+   */
+  readonly fields: PosOrgCompositionFieldRefs;
+  }
+
+  /**
+   * The delegate class that acts as a "Promise-like" for PosOrgComposition.
+   * Why is this prefixed with `Prisma__`?
+   * Because we want to prevent naming conflicts as mentioned in
+   * https://github.com/prisma/prisma-client-js/issues/707
+   */
+  export interface Prisma__PosOrgCompositionClient<T, Null = never, ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs, GlobalOmitOptions = {}> extends Prisma.PrismaPromise<T> {
+    readonly [Symbol.toStringTag]: "PrismaPromise"
+    position<T extends PositionDefaultArgs<ExtArgs> = {}>(args?: Subset<T, PositionDefaultArgs<ExtArgs>>): Prisma__PositionClient<$Result.GetResult<Prisma.$PositionPayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions> | Null, Null, ExtArgs, GlobalOmitOptions>
+    organization<T extends OrganizationDefaultArgs<ExtArgs> = {}>(args?: Subset<T, OrganizationDefaultArgs<ExtArgs>>): Prisma__OrganizationClient<$Result.GetResult<Prisma.$OrganizationPayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions> | Null, Null, ExtArgs, GlobalOmitOptions>
+    employments<T extends PosOrgComposition$employmentsArgs<ExtArgs> = {}>(args?: Subset<T, PosOrgComposition$employmentsArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$EmploymentPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
+    roles<T extends PosOrgComposition$rolesArgs<ExtArgs> = {}>(args?: Subset<T, PosOrgComposition$rolesArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$PosOrgRolePayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
+    /**
+     * Attaches callbacks for the resolution and/or rejection of the Promise.
+     * @param onfulfilled The callback to execute when the Promise is resolved.
+     * @param onrejected The callback to execute when the Promise is rejected.
+     * @returns A Promise for the completion of which ever callback is executed.
+     */
+    then<TResult1 = T, TResult2 = never>(onfulfilled?: ((value: T) => TResult1 | PromiseLike<TResult1>) | undefined | null, onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | undefined | null): $Utils.JsPromise<TResult1 | TResult2>
+    /**
+     * Attaches a callback for only the rejection of the Promise.
+     * @param onrejected The callback to execute when the Promise is rejected.
+     * @returns A Promise for the completion of the callback.
+     */
+    catch<TResult = never>(onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | undefined | null): $Utils.JsPromise<T | TResult>
+    /**
+     * Attaches a callback that is invoked when the Promise is settled (fulfilled or rejected). The
+     * resolved value cannot be modified from the callback.
+     * @param onfinally The callback to execute when the Promise is settled (fulfilled or rejected).
+     * @returns A Promise for the completion of the callback.
+     */
+    finally(onfinally?: (() => void) | undefined | null): $Utils.JsPromise<T>
+  }
+
+
+
+
+  /**
+   * Fields of the PosOrgComposition model
+   */
+  interface PosOrgCompositionFieldRefs {
+    readonly id: FieldRef<"PosOrgComposition", 'Int'>
+    readonly posId: FieldRef<"PosOrgComposition", 'Int'>
+    readonly orgId: FieldRef<"PosOrgComposition", 'Int'>
+    readonly status: FieldRef<"PosOrgComposition", 'Int'>
+    readonly description: FieldRef<"PosOrgComposition", 'String'>
+    readonly isDelete: FieldRef<"PosOrgComposition", 'Boolean'>
+    readonly createTime: FieldRef<"PosOrgComposition", 'DateTime'>
+    readonly updateTime: FieldRef<"PosOrgComposition", 'DateTime'>
+  }
+    
+
+  // Custom InputTypes
+  /**
+   * PosOrgComposition findUnique
+   */
+  export type PosOrgCompositionFindUniqueArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the PosOrgComposition
+     */
+    select?: PosOrgCompositionSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the PosOrgComposition
+     */
+    omit?: PosOrgCompositionOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: PosOrgCompositionInclude<ExtArgs> | null
+    /**
+     * Filter, which PosOrgComposition to fetch.
+     */
+    where: PosOrgCompositionWhereUniqueInput
+  }
+
+  /**
+   * PosOrgComposition findUniqueOrThrow
+   */
+  export type PosOrgCompositionFindUniqueOrThrowArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the PosOrgComposition
+     */
+    select?: PosOrgCompositionSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the PosOrgComposition
+     */
+    omit?: PosOrgCompositionOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: PosOrgCompositionInclude<ExtArgs> | null
+    /**
+     * Filter, which PosOrgComposition to fetch.
+     */
+    where: PosOrgCompositionWhereUniqueInput
+  }
+
+  /**
+   * PosOrgComposition findFirst
+   */
+  export type PosOrgCompositionFindFirstArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the PosOrgComposition
+     */
+    select?: PosOrgCompositionSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the PosOrgComposition
+     */
+    omit?: PosOrgCompositionOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: PosOrgCompositionInclude<ExtArgs> | null
+    /**
+     * Filter, which PosOrgComposition to fetch.
+     */
+    where?: PosOrgCompositionWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of PosOrgCompositions to fetch.
+     */
+    orderBy?: PosOrgCompositionOrderByWithRelationInput | PosOrgCompositionOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the position for searching for PosOrgCompositions.
+     */
+    cursor?: PosOrgCompositionWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` PosOrgCompositions from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` PosOrgCompositions.
+     */
+    skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/distinct Distinct Docs}
+     * 
+     * Filter by unique combinations of PosOrgCompositions.
+     */
+    distinct?: PosOrgCompositionScalarFieldEnum | PosOrgCompositionScalarFieldEnum[]
+  }
+
+  /**
+   * PosOrgComposition findFirstOrThrow
+   */
+  export type PosOrgCompositionFindFirstOrThrowArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the PosOrgComposition
+     */
+    select?: PosOrgCompositionSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the PosOrgComposition
+     */
+    omit?: PosOrgCompositionOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: PosOrgCompositionInclude<ExtArgs> | null
+    /**
+     * Filter, which PosOrgComposition to fetch.
+     */
+    where?: PosOrgCompositionWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of PosOrgCompositions to fetch.
+     */
+    orderBy?: PosOrgCompositionOrderByWithRelationInput | PosOrgCompositionOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the position for searching for PosOrgCompositions.
+     */
+    cursor?: PosOrgCompositionWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` PosOrgCompositions from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` PosOrgCompositions.
+     */
+    skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/distinct Distinct Docs}
+     * 
+     * Filter by unique combinations of PosOrgCompositions.
+     */
+    distinct?: PosOrgCompositionScalarFieldEnum | PosOrgCompositionScalarFieldEnum[]
+  }
+
+  /**
+   * PosOrgComposition findMany
+   */
+  export type PosOrgCompositionFindManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the PosOrgComposition
+     */
+    select?: PosOrgCompositionSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the PosOrgComposition
+     */
+    omit?: PosOrgCompositionOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: PosOrgCompositionInclude<ExtArgs> | null
+    /**
+     * Filter, which PosOrgCompositions to fetch.
+     */
+    where?: PosOrgCompositionWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of PosOrgCompositions to fetch.
+     */
+    orderBy?: PosOrgCompositionOrderByWithRelationInput | PosOrgCompositionOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the position for listing PosOrgCompositions.
+     */
+    cursor?: PosOrgCompositionWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` PosOrgCompositions from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` PosOrgCompositions.
+     */
+    skip?: number
+    distinct?: PosOrgCompositionScalarFieldEnum | PosOrgCompositionScalarFieldEnum[]
+  }
+
+  /**
+   * PosOrgComposition create
+   */
+  export type PosOrgCompositionCreateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the PosOrgComposition
+     */
+    select?: PosOrgCompositionSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the PosOrgComposition
+     */
+    omit?: PosOrgCompositionOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: PosOrgCompositionInclude<ExtArgs> | null
+    /**
+     * The data needed to create a PosOrgComposition.
+     */
+    data: XOR<PosOrgCompositionCreateInput, PosOrgCompositionUncheckedCreateInput>
+  }
+
+  /**
+   * PosOrgComposition createMany
+   */
+  export type PosOrgCompositionCreateManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * The data used to create many PosOrgCompositions.
+     */
+    data: PosOrgCompositionCreateManyInput | PosOrgCompositionCreateManyInput[]
+    skipDuplicates?: boolean
+  }
+
+  /**
+   * PosOrgComposition update
+   */
+  export type PosOrgCompositionUpdateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the PosOrgComposition
+     */
+    select?: PosOrgCompositionSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the PosOrgComposition
+     */
+    omit?: PosOrgCompositionOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: PosOrgCompositionInclude<ExtArgs> | null
+    /**
+     * The data needed to update a PosOrgComposition.
+     */
+    data: XOR<PosOrgCompositionUpdateInput, PosOrgCompositionUncheckedUpdateInput>
+    /**
+     * Choose, which PosOrgComposition to update.
+     */
+    where: PosOrgCompositionWhereUniqueInput
+  }
+
+  /**
+   * PosOrgComposition updateMany
+   */
+  export type PosOrgCompositionUpdateManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * The data used to update PosOrgCompositions.
+     */
+    data: XOR<PosOrgCompositionUpdateManyMutationInput, PosOrgCompositionUncheckedUpdateManyInput>
+    /**
+     * Filter which PosOrgCompositions to update
+     */
+    where?: PosOrgCompositionWhereInput
+    /**
+     * Limit how many PosOrgCompositions to update.
+     */
+    limit?: number
+  }
+
+  /**
+   * PosOrgComposition upsert
+   */
+  export type PosOrgCompositionUpsertArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the PosOrgComposition
+     */
+    select?: PosOrgCompositionSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the PosOrgComposition
+     */
+    omit?: PosOrgCompositionOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: PosOrgCompositionInclude<ExtArgs> | null
+    /**
+     * The filter to search for the PosOrgComposition to update in case it exists.
+     */
+    where: PosOrgCompositionWhereUniqueInput
+    /**
+     * In case the PosOrgComposition found by the `where` argument doesn't exist, create a new PosOrgComposition with this data.
+     */
+    create: XOR<PosOrgCompositionCreateInput, PosOrgCompositionUncheckedCreateInput>
+    /**
+     * In case the PosOrgComposition was found with the provided `where` argument, update it with this data.
+     */
+    update: XOR<PosOrgCompositionUpdateInput, PosOrgCompositionUncheckedUpdateInput>
+  }
+
+  /**
+   * PosOrgComposition delete
+   */
+  export type PosOrgCompositionDeleteArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the PosOrgComposition
+     */
+    select?: PosOrgCompositionSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the PosOrgComposition
+     */
+    omit?: PosOrgCompositionOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: PosOrgCompositionInclude<ExtArgs> | null
+    /**
+     * Filter which PosOrgComposition to delete.
+     */
+    where: PosOrgCompositionWhereUniqueInput
+  }
+
+  /**
+   * PosOrgComposition deleteMany
+   */
+  export type PosOrgCompositionDeleteManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Filter which PosOrgCompositions to delete
+     */
+    where?: PosOrgCompositionWhereInput
+    /**
+     * Limit how many PosOrgCompositions to delete.
+     */
+    limit?: number
+  }
+
+  /**
+   * PosOrgComposition.employments
+   */
+  export type PosOrgComposition$employmentsArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the Employment
+     */
+    select?: EmploymentSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the Employment
+     */
+    omit?: EmploymentOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: EmploymentInclude<ExtArgs> | null
+    where?: EmploymentWhereInput
+    orderBy?: EmploymentOrderByWithRelationInput | EmploymentOrderByWithRelationInput[]
+    cursor?: EmploymentWhereUniqueInput
+    take?: number
+    skip?: number
+    distinct?: EmploymentScalarFieldEnum | EmploymentScalarFieldEnum[]
+  }
+
+  /**
+   * PosOrgComposition.roles
+   */
+  export type PosOrgComposition$rolesArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the PosOrgRole
+     */
+    select?: PosOrgRoleSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the PosOrgRole
+     */
+    omit?: PosOrgRoleOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: PosOrgRoleInclude<ExtArgs> | null
+    where?: PosOrgRoleWhereInput
+    orderBy?: PosOrgRoleOrderByWithRelationInput | PosOrgRoleOrderByWithRelationInput[]
+    cursor?: PosOrgRoleWhereUniqueInput
+    take?: number
+    skip?: number
+    distinct?: PosOrgRoleScalarFieldEnum | PosOrgRoleScalarFieldEnum[]
+  }
+
+  /**
+   * PosOrgComposition without action
+   */
+  export type PosOrgCompositionDefaultArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the PosOrgComposition
+     */
+    select?: PosOrgCompositionSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the PosOrgComposition
+     */
+    omit?: PosOrgCompositionOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: PosOrgCompositionInclude<ExtArgs> | null
   }
 
 
@@ -5636,6 +6995,8 @@ export namespace Prisma {
     deptId: number | null
     compId: number | null
     status: number | null
+    startTime: Date | null
+    endTime: Date | null
     description: string | null
     isDelete: boolean | null
     createTime: Date | null
@@ -5649,6 +7010,8 @@ export namespace Prisma {
     deptId: number | null
     compId: number | null
     status: number | null
+    startTime: Date | null
+    endTime: Date | null
     description: string | null
     isDelete: boolean | null
     createTime: Date | null
@@ -5662,6 +7025,8 @@ export namespace Prisma {
     deptId: number
     compId: number
     status: number
+    startTime: number
+    endTime: number
     description: number
     isDelete: number
     createTime: number
@@ -5695,6 +7060,8 @@ export namespace Prisma {
     deptId?: true
     compId?: true
     status?: true
+    startTime?: true
+    endTime?: true
     description?: true
     isDelete?: true
     createTime?: true
@@ -5708,6 +7075,8 @@ export namespace Prisma {
     deptId?: true
     compId?: true
     status?: true
+    startTime?: true
+    endTime?: true
     description?: true
     isDelete?: true
     createTime?: true
@@ -5721,6 +7090,8 @@ export namespace Prisma {
     deptId?: true
     compId?: true
     status?: true
+    startTime?: true
+    endTime?: true
     description?: true
     isDelete?: true
     createTime?: true
@@ -5821,6 +7192,8 @@ export namespace Prisma {
     deptId: number
     compId: number
     status: number
+    startTime: Date
+    endTime: Date | null
     description: string | null
     isDelete: boolean
     createTime: Date
@@ -5853,6 +7226,8 @@ export namespace Prisma {
     deptId?: boolean
     compId?: boolean
     status?: boolean
+    startTime?: boolean
+    endTime?: boolean
     description?: boolean
     isDelete?: boolean
     createTime?: boolean
@@ -5861,6 +7236,7 @@ export namespace Prisma {
     deptartment?: boolean | OrganizationDefaultArgs<ExtArgs>
     company?: boolean | OrganizationDefaultArgs<ExtArgs>
     position?: boolean | PositionDefaultArgs<ExtArgs>
+    posOrg?: boolean | PosOrgCompositionDefaultArgs<ExtArgs>
     roles?: boolean | Employment$rolesArgs<ExtArgs>
     _count?: boolean | EmploymentCountOutputTypeDefaultArgs<ExtArgs>
   }, ExtArgs["result"]["employment"]>
@@ -5874,18 +7250,21 @@ export namespace Prisma {
     deptId?: boolean
     compId?: boolean
     status?: boolean
+    startTime?: boolean
+    endTime?: boolean
     description?: boolean
     isDelete?: boolean
     createTime?: boolean
     updateTime?: boolean
   }
 
-  export type EmploymentOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "userId" | "posId" | "deptId" | "compId" | "status" | "description" | "isDelete" | "createTime" | "updateTime", ExtArgs["result"]["employment"]>
+  export type EmploymentOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "userId" | "posId" | "deptId" | "compId" | "status" | "startTime" | "endTime" | "description" | "isDelete" | "createTime" | "updateTime", ExtArgs["result"]["employment"]>
   export type EmploymentInclude<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
     user?: boolean | UserDefaultArgs<ExtArgs>
     deptartment?: boolean | OrganizationDefaultArgs<ExtArgs>
     company?: boolean | OrganizationDefaultArgs<ExtArgs>
     position?: boolean | PositionDefaultArgs<ExtArgs>
+    posOrg?: boolean | PosOrgCompositionDefaultArgs<ExtArgs>
     roles?: boolean | Employment$rolesArgs<ExtArgs>
     _count?: boolean | EmploymentCountOutputTypeDefaultArgs<ExtArgs>
   }
@@ -5897,6 +7276,7 @@ export namespace Prisma {
       deptartment: Prisma.$OrganizationPayload<ExtArgs>
       company: Prisma.$OrganizationPayload<ExtArgs>
       position: Prisma.$PositionPayload<ExtArgs>
+      posOrg: Prisma.$PosOrgCompositionPayload<ExtArgs>
       roles: Prisma.$EmploymentRolePayload<ExtArgs>[]
     }
     scalars: $Extensions.GetPayloadResult<{
@@ -5906,6 +7286,8 @@ export namespace Prisma {
       deptId: number
       compId: number
       status: number
+      startTime: Date
+      endTime: Date | null
       description: string | null
       isDelete: boolean
       createTime: Date
@@ -6254,6 +7636,7 @@ export namespace Prisma {
     deptartment<T extends OrganizationDefaultArgs<ExtArgs> = {}>(args?: Subset<T, OrganizationDefaultArgs<ExtArgs>>): Prisma__OrganizationClient<$Result.GetResult<Prisma.$OrganizationPayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions> | Null, Null, ExtArgs, GlobalOmitOptions>
     company<T extends OrganizationDefaultArgs<ExtArgs> = {}>(args?: Subset<T, OrganizationDefaultArgs<ExtArgs>>): Prisma__OrganizationClient<$Result.GetResult<Prisma.$OrganizationPayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions> | Null, Null, ExtArgs, GlobalOmitOptions>
     position<T extends PositionDefaultArgs<ExtArgs> = {}>(args?: Subset<T, PositionDefaultArgs<ExtArgs>>): Prisma__PositionClient<$Result.GetResult<Prisma.$PositionPayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions> | Null, Null, ExtArgs, GlobalOmitOptions>
+    posOrg<T extends PosOrgCompositionDefaultArgs<ExtArgs> = {}>(args?: Subset<T, PosOrgCompositionDefaultArgs<ExtArgs>>): Prisma__PosOrgCompositionClient<$Result.GetResult<Prisma.$PosOrgCompositionPayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions> | Null, Null, ExtArgs, GlobalOmitOptions>
     roles<T extends Employment$rolesArgs<ExtArgs> = {}>(args?: Subset<T, Employment$rolesArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$EmploymentRolePayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
     /**
      * Attaches callbacks for the resolution and/or rejection of the Promise.
@@ -6290,6 +7673,8 @@ export namespace Prisma {
     readonly deptId: FieldRef<"Employment", 'Int'>
     readonly compId: FieldRef<"Employment", 'Int'>
     readonly status: FieldRef<"Employment", 'Int'>
+    readonly startTime: FieldRef<"Employment", 'DateTime'>
+    readonly endTime: FieldRef<"Employment", 'DateTime'>
     readonly description: FieldRef<"Employment", 'String'>
     readonly isDelete: FieldRef<"Employment", 'Boolean'>
     readonly createTime: FieldRef<"Employment", 'DateTime'>
@@ -7946,6 +9331,7 @@ export namespace Prisma {
     client?: boolean | ClientDefaultArgs<ExtArgs>
     positions?: boolean | Role$positionsArgs<ExtArgs>
     organizations?: boolean | Role$organizationsArgs<ExtArgs>
+    positionOrganizations?: boolean | Role$positionOrganizationsArgs<ExtArgs>
     employments?: boolean | Role$employmentsArgs<ExtArgs>
     privileges?: boolean | Role$privilegesArgs<ExtArgs>
     _count?: boolean | RoleCountOutputTypeDefaultArgs<ExtArgs>
@@ -7970,6 +9356,7 @@ export namespace Prisma {
     client?: boolean | ClientDefaultArgs<ExtArgs>
     positions?: boolean | Role$positionsArgs<ExtArgs>
     organizations?: boolean | Role$organizationsArgs<ExtArgs>
+    positionOrganizations?: boolean | Role$positionOrganizationsArgs<ExtArgs>
     employments?: boolean | Role$employmentsArgs<ExtArgs>
     privileges?: boolean | Role$privilegesArgs<ExtArgs>
     _count?: boolean | RoleCountOutputTypeDefaultArgs<ExtArgs>
@@ -7981,6 +9368,7 @@ export namespace Prisma {
       client: Prisma.$ClientPayload<ExtArgs>
       positions: Prisma.$PositionRolePayload<ExtArgs>[]
       organizations: Prisma.$OrganizationRolePayload<ExtArgs>[]
+      positionOrganizations: Prisma.$PosOrgRolePayload<ExtArgs>[]
       employments: Prisma.$EmploymentRolePayload<ExtArgs>[]
       privileges: Prisma.$RolePrivilegePayload<ExtArgs>[]
     }
@@ -8337,6 +9725,7 @@ export namespace Prisma {
     client<T extends ClientDefaultArgs<ExtArgs> = {}>(args?: Subset<T, ClientDefaultArgs<ExtArgs>>): Prisma__ClientClient<$Result.GetResult<Prisma.$ClientPayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions> | Null, Null, ExtArgs, GlobalOmitOptions>
     positions<T extends Role$positionsArgs<ExtArgs> = {}>(args?: Subset<T, Role$positionsArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$PositionRolePayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
     organizations<T extends Role$organizationsArgs<ExtArgs> = {}>(args?: Subset<T, Role$organizationsArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$OrganizationRolePayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
+    positionOrganizations<T extends Role$positionOrganizationsArgs<ExtArgs> = {}>(args?: Subset<T, Role$positionOrganizationsArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$PosOrgRolePayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
     employments<T extends Role$employmentsArgs<ExtArgs> = {}>(args?: Subset<T, Role$employmentsArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$EmploymentRolePayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
     privileges<T extends Role$privilegesArgs<ExtArgs> = {}>(args?: Subset<T, Role$privilegesArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$RolePrivilegePayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
     /**
@@ -8765,6 +10154,30 @@ export namespace Prisma {
     take?: number
     skip?: number
     distinct?: OrganizationRoleScalarFieldEnum | OrganizationRoleScalarFieldEnum[]
+  }
+
+  /**
+   * Role.positionOrganizations
+   */
+  export type Role$positionOrganizationsArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the PosOrgRole
+     */
+    select?: PosOrgRoleSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the PosOrgRole
+     */
+    omit?: PosOrgRoleOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: PosOrgRoleInclude<ExtArgs> | null
+    where?: PosOrgRoleWhereInput
+    orderBy?: PosOrgRoleOrderByWithRelationInput | PosOrgRoleOrderByWithRelationInput[]
+    cursor?: PosOrgRoleWhereUniqueInput
+    take?: number
+    skip?: number
+    distinct?: PosOrgRoleScalarFieldEnum | PosOrgRoleScalarFieldEnum[]
   }
 
   /**
@@ -11645,6 +13058,944 @@ export namespace Prisma {
      * Choose, which related nodes to fetch as well
      */
     include?: OrganizationRoleInclude<ExtArgs> | null
+  }
+
+
+  /**
+   * Model PosOrgRole
+   */
+
+  export type AggregatePosOrgRole = {
+    _count: PosOrgRoleCountAggregateOutputType | null
+    _avg: PosOrgRoleAvgAggregateOutputType | null
+    _sum: PosOrgRoleSumAggregateOutputType | null
+    _min: PosOrgRoleMinAggregateOutputType | null
+    _max: PosOrgRoleMaxAggregateOutputType | null
+  }
+
+  export type PosOrgRoleAvgAggregateOutputType = {
+    posOrgId: number | null
+    roleId: number | null
+  }
+
+  export type PosOrgRoleSumAggregateOutputType = {
+    posOrgId: number | null
+    roleId: number | null
+  }
+
+  export type PosOrgRoleMinAggregateOutputType = {
+    posOrgId: number | null
+    roleId: number | null
+  }
+
+  export type PosOrgRoleMaxAggregateOutputType = {
+    posOrgId: number | null
+    roleId: number | null
+  }
+
+  export type PosOrgRoleCountAggregateOutputType = {
+    posOrgId: number
+    roleId: number
+    _all: number
+  }
+
+
+  export type PosOrgRoleAvgAggregateInputType = {
+    posOrgId?: true
+    roleId?: true
+  }
+
+  export type PosOrgRoleSumAggregateInputType = {
+    posOrgId?: true
+    roleId?: true
+  }
+
+  export type PosOrgRoleMinAggregateInputType = {
+    posOrgId?: true
+    roleId?: true
+  }
+
+  export type PosOrgRoleMaxAggregateInputType = {
+    posOrgId?: true
+    roleId?: true
+  }
+
+  export type PosOrgRoleCountAggregateInputType = {
+    posOrgId?: true
+    roleId?: true
+    _all?: true
+  }
+
+  export type PosOrgRoleAggregateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Filter which PosOrgRole to aggregate.
+     */
+    where?: PosOrgRoleWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of PosOrgRoles to fetch.
+     */
+    orderBy?: PosOrgRoleOrderByWithRelationInput | PosOrgRoleOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the start position
+     */
+    cursor?: PosOrgRoleWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` PosOrgRoles from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` PosOrgRoles.
+     */
+    skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Count returned PosOrgRoles
+    **/
+    _count?: true | PosOrgRoleCountAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to average
+    **/
+    _avg?: PosOrgRoleAvgAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to sum
+    **/
+    _sum?: PosOrgRoleSumAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to find the minimum value
+    **/
+    _min?: PosOrgRoleMinAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to find the maximum value
+    **/
+    _max?: PosOrgRoleMaxAggregateInputType
+  }
+
+  export type GetPosOrgRoleAggregateType<T extends PosOrgRoleAggregateArgs> = {
+        [P in keyof T & keyof AggregatePosOrgRole]: P extends '_count' | 'count'
+      ? T[P] extends true
+        ? number
+        : GetScalarType<T[P], AggregatePosOrgRole[P]>
+      : GetScalarType<T[P], AggregatePosOrgRole[P]>
+  }
+
+
+
+
+  export type PosOrgRoleGroupByArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    where?: PosOrgRoleWhereInput
+    orderBy?: PosOrgRoleOrderByWithAggregationInput | PosOrgRoleOrderByWithAggregationInput[]
+    by: PosOrgRoleScalarFieldEnum[] | PosOrgRoleScalarFieldEnum
+    having?: PosOrgRoleScalarWhereWithAggregatesInput
+    take?: number
+    skip?: number
+    _count?: PosOrgRoleCountAggregateInputType | true
+    _avg?: PosOrgRoleAvgAggregateInputType
+    _sum?: PosOrgRoleSumAggregateInputType
+    _min?: PosOrgRoleMinAggregateInputType
+    _max?: PosOrgRoleMaxAggregateInputType
+  }
+
+  export type PosOrgRoleGroupByOutputType = {
+    posOrgId: number
+    roleId: number
+    _count: PosOrgRoleCountAggregateOutputType | null
+    _avg: PosOrgRoleAvgAggregateOutputType | null
+    _sum: PosOrgRoleSumAggregateOutputType | null
+    _min: PosOrgRoleMinAggregateOutputType | null
+    _max: PosOrgRoleMaxAggregateOutputType | null
+  }
+
+  type GetPosOrgRoleGroupByPayload<T extends PosOrgRoleGroupByArgs> = Prisma.PrismaPromise<
+    Array<
+      PickEnumerable<PosOrgRoleGroupByOutputType, T['by']> &
+        {
+          [P in ((keyof T) & (keyof PosOrgRoleGroupByOutputType))]: P extends '_count'
+            ? T[P] extends boolean
+              ? number
+              : GetScalarType<T[P], PosOrgRoleGroupByOutputType[P]>
+            : GetScalarType<T[P], PosOrgRoleGroupByOutputType[P]>
+        }
+      >
+    >
+
+
+  export type PosOrgRoleSelect<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
+    posOrgId?: boolean
+    roleId?: boolean
+    posOrg?: boolean | PosOrgCompositionDefaultArgs<ExtArgs>
+    role?: boolean | RoleDefaultArgs<ExtArgs>
+  }, ExtArgs["result"]["posOrgRole"]>
+
+
+
+  export type PosOrgRoleSelectScalar = {
+    posOrgId?: boolean
+    roleId?: boolean
+  }
+
+  export type PosOrgRoleOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"posOrgId" | "roleId", ExtArgs["result"]["posOrgRole"]>
+  export type PosOrgRoleInclude<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    posOrg?: boolean | PosOrgCompositionDefaultArgs<ExtArgs>
+    role?: boolean | RoleDefaultArgs<ExtArgs>
+  }
+
+  export type $PosOrgRolePayload<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    name: "PosOrgRole"
+    objects: {
+      posOrg: Prisma.$PosOrgCompositionPayload<ExtArgs>
+      role: Prisma.$RolePayload<ExtArgs>
+    }
+    scalars: $Extensions.GetPayloadResult<{
+      posOrgId: number
+      roleId: number
+    }, ExtArgs["result"]["posOrgRole"]>
+    composites: {}
+  }
+
+  type PosOrgRoleGetPayload<S extends boolean | null | undefined | PosOrgRoleDefaultArgs> = $Result.GetResult<Prisma.$PosOrgRolePayload, S>
+
+  type PosOrgRoleCountArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> =
+    Omit<PosOrgRoleFindManyArgs, 'select' | 'include' | 'distinct' | 'omit'> & {
+      select?: PosOrgRoleCountAggregateInputType | true
+    }
+
+  export interface PosOrgRoleDelegate<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs, GlobalOmitOptions = {}> {
+    [K: symbol]: { types: Prisma.TypeMap<ExtArgs>['model']['PosOrgRole'], meta: { name: 'PosOrgRole' } }
+    /**
+     * Find zero or one PosOrgRole that matches the filter.
+     * @param {PosOrgRoleFindUniqueArgs} args - Arguments to find a PosOrgRole
+     * @example
+     * // Get one PosOrgRole
+     * const posOrgRole = await prisma.posOrgRole.findUnique({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findUnique<T extends PosOrgRoleFindUniqueArgs>(args: SelectSubset<T, PosOrgRoleFindUniqueArgs<ExtArgs>>): Prisma__PosOrgRoleClient<$Result.GetResult<Prisma.$PosOrgRolePayload<ExtArgs>, T, "findUnique", GlobalOmitOptions> | null, null, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find one PosOrgRole that matches the filter or throw an error with `error.code='P2025'`
+     * if no matches were found.
+     * @param {PosOrgRoleFindUniqueOrThrowArgs} args - Arguments to find a PosOrgRole
+     * @example
+     * // Get one PosOrgRole
+     * const posOrgRole = await prisma.posOrgRole.findUniqueOrThrow({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findUniqueOrThrow<T extends PosOrgRoleFindUniqueOrThrowArgs>(args: SelectSubset<T, PosOrgRoleFindUniqueOrThrowArgs<ExtArgs>>): Prisma__PosOrgRoleClient<$Result.GetResult<Prisma.$PosOrgRolePayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find the first PosOrgRole that matches the filter.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {PosOrgRoleFindFirstArgs} args - Arguments to find a PosOrgRole
+     * @example
+     * // Get one PosOrgRole
+     * const posOrgRole = await prisma.posOrgRole.findFirst({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findFirst<T extends PosOrgRoleFindFirstArgs>(args?: SelectSubset<T, PosOrgRoleFindFirstArgs<ExtArgs>>): Prisma__PosOrgRoleClient<$Result.GetResult<Prisma.$PosOrgRolePayload<ExtArgs>, T, "findFirst", GlobalOmitOptions> | null, null, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find the first PosOrgRole that matches the filter or
+     * throw `PrismaKnownClientError` with `P2025` code if no matches were found.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {PosOrgRoleFindFirstOrThrowArgs} args - Arguments to find a PosOrgRole
+     * @example
+     * // Get one PosOrgRole
+     * const posOrgRole = await prisma.posOrgRole.findFirstOrThrow({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findFirstOrThrow<T extends PosOrgRoleFindFirstOrThrowArgs>(args?: SelectSubset<T, PosOrgRoleFindFirstOrThrowArgs<ExtArgs>>): Prisma__PosOrgRoleClient<$Result.GetResult<Prisma.$PosOrgRolePayload<ExtArgs>, T, "findFirstOrThrow", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find zero or more PosOrgRoles that matches the filter.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {PosOrgRoleFindManyArgs} args - Arguments to filter and select certain fields only.
+     * @example
+     * // Get all PosOrgRoles
+     * const posOrgRoles = await prisma.posOrgRole.findMany()
+     * 
+     * // Get first 10 PosOrgRoles
+     * const posOrgRoles = await prisma.posOrgRole.findMany({ take: 10 })
+     * 
+     * // Only select the `posOrgId`
+     * const posOrgRoleWithPosOrgIdOnly = await prisma.posOrgRole.findMany({ select: { posOrgId: true } })
+     * 
+     */
+    findMany<T extends PosOrgRoleFindManyArgs>(args?: SelectSubset<T, PosOrgRoleFindManyArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$PosOrgRolePayload<ExtArgs>, T, "findMany", GlobalOmitOptions>>
+
+    /**
+     * Create a PosOrgRole.
+     * @param {PosOrgRoleCreateArgs} args - Arguments to create a PosOrgRole.
+     * @example
+     * // Create one PosOrgRole
+     * const PosOrgRole = await prisma.posOrgRole.create({
+     *   data: {
+     *     // ... data to create a PosOrgRole
+     *   }
+     * })
+     * 
+     */
+    create<T extends PosOrgRoleCreateArgs>(args: SelectSubset<T, PosOrgRoleCreateArgs<ExtArgs>>): Prisma__PosOrgRoleClient<$Result.GetResult<Prisma.$PosOrgRolePayload<ExtArgs>, T, "create", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Create many PosOrgRoles.
+     * @param {PosOrgRoleCreateManyArgs} args - Arguments to create many PosOrgRoles.
+     * @example
+     * // Create many PosOrgRoles
+     * const posOrgRole = await prisma.posOrgRole.createMany({
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     *     
+     */
+    createMany<T extends PosOrgRoleCreateManyArgs>(args?: SelectSubset<T, PosOrgRoleCreateManyArgs<ExtArgs>>): Prisma.PrismaPromise<BatchPayload>
+
+    /**
+     * Delete a PosOrgRole.
+     * @param {PosOrgRoleDeleteArgs} args - Arguments to delete one PosOrgRole.
+     * @example
+     * // Delete one PosOrgRole
+     * const PosOrgRole = await prisma.posOrgRole.delete({
+     *   where: {
+     *     // ... filter to delete one PosOrgRole
+     *   }
+     * })
+     * 
+     */
+    delete<T extends PosOrgRoleDeleteArgs>(args: SelectSubset<T, PosOrgRoleDeleteArgs<ExtArgs>>): Prisma__PosOrgRoleClient<$Result.GetResult<Prisma.$PosOrgRolePayload<ExtArgs>, T, "delete", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Update one PosOrgRole.
+     * @param {PosOrgRoleUpdateArgs} args - Arguments to update one PosOrgRole.
+     * @example
+     * // Update one PosOrgRole
+     * const posOrgRole = await prisma.posOrgRole.update({
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: {
+     *     // ... provide data here
+     *   }
+     * })
+     * 
+     */
+    update<T extends PosOrgRoleUpdateArgs>(args: SelectSubset<T, PosOrgRoleUpdateArgs<ExtArgs>>): Prisma__PosOrgRoleClient<$Result.GetResult<Prisma.$PosOrgRolePayload<ExtArgs>, T, "update", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Delete zero or more PosOrgRoles.
+     * @param {PosOrgRoleDeleteManyArgs} args - Arguments to filter PosOrgRoles to delete.
+     * @example
+     * // Delete a few PosOrgRoles
+     * const { count } = await prisma.posOrgRole.deleteMany({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     * 
+     */
+    deleteMany<T extends PosOrgRoleDeleteManyArgs>(args?: SelectSubset<T, PosOrgRoleDeleteManyArgs<ExtArgs>>): Prisma.PrismaPromise<BatchPayload>
+
+    /**
+     * Update zero or more PosOrgRoles.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {PosOrgRoleUpdateManyArgs} args - Arguments to update one or more rows.
+     * @example
+     * // Update many PosOrgRoles
+     * const posOrgRole = await prisma.posOrgRole.updateMany({
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: {
+     *     // ... provide data here
+     *   }
+     * })
+     * 
+     */
+    updateMany<T extends PosOrgRoleUpdateManyArgs>(args: SelectSubset<T, PosOrgRoleUpdateManyArgs<ExtArgs>>): Prisma.PrismaPromise<BatchPayload>
+
+    /**
+     * Create or update one PosOrgRole.
+     * @param {PosOrgRoleUpsertArgs} args - Arguments to update or create a PosOrgRole.
+     * @example
+     * // Update or create a PosOrgRole
+     * const posOrgRole = await prisma.posOrgRole.upsert({
+     *   create: {
+     *     // ... data to create a PosOrgRole
+     *   },
+     *   update: {
+     *     // ... in case it already exists, update
+     *   },
+     *   where: {
+     *     // ... the filter for the PosOrgRole we want to update
+     *   }
+     * })
+     */
+    upsert<T extends PosOrgRoleUpsertArgs>(args: SelectSubset<T, PosOrgRoleUpsertArgs<ExtArgs>>): Prisma__PosOrgRoleClient<$Result.GetResult<Prisma.$PosOrgRolePayload<ExtArgs>, T, "upsert", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+
+    /**
+     * Count the number of PosOrgRoles.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {PosOrgRoleCountArgs} args - Arguments to filter PosOrgRoles to count.
+     * @example
+     * // Count the number of PosOrgRoles
+     * const count = await prisma.posOrgRole.count({
+     *   where: {
+     *     // ... the filter for the PosOrgRoles we want to count
+     *   }
+     * })
+    **/
+    count<T extends PosOrgRoleCountArgs>(
+      args?: Subset<T, PosOrgRoleCountArgs>,
+    ): Prisma.PrismaPromise<
+      T extends $Utils.Record<'select', any>
+        ? T['select'] extends true
+          ? number
+          : GetScalarType<T['select'], PosOrgRoleCountAggregateOutputType>
+        : number
+    >
+
+    /**
+     * Allows you to perform aggregations operations on a PosOrgRole.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {PosOrgRoleAggregateArgs} args - Select which aggregations you would like to apply and on what fields.
+     * @example
+     * // Ordered by age ascending
+     * // Where email contains prisma.io
+     * // Limited to the 10 users
+     * const aggregations = await prisma.user.aggregate({
+     *   _avg: {
+     *     age: true,
+     *   },
+     *   where: {
+     *     email: {
+     *       contains: "prisma.io",
+     *     },
+     *   },
+     *   orderBy: {
+     *     age: "asc",
+     *   },
+     *   take: 10,
+     * })
+    **/
+    aggregate<T extends PosOrgRoleAggregateArgs>(args: Subset<T, PosOrgRoleAggregateArgs>): Prisma.PrismaPromise<GetPosOrgRoleAggregateType<T>>
+
+    /**
+     * Group by PosOrgRole.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {PosOrgRoleGroupByArgs} args - Group by arguments.
+     * @example
+     * // Group by city, order by createdAt, get count
+     * const result = await prisma.user.groupBy({
+     *   by: ['city', 'createdAt'],
+     *   orderBy: {
+     *     createdAt: true
+     *   },
+     *   _count: {
+     *     _all: true
+     *   },
+     * })
+     * 
+    **/
+    groupBy<
+      T extends PosOrgRoleGroupByArgs,
+      HasSelectOrTake extends Or<
+        Extends<'skip', Keys<T>>,
+        Extends<'take', Keys<T>>
+      >,
+      OrderByArg extends True extends HasSelectOrTake
+        ? { orderBy: PosOrgRoleGroupByArgs['orderBy'] }
+        : { orderBy?: PosOrgRoleGroupByArgs['orderBy'] },
+      OrderFields extends ExcludeUnderscoreKeys<Keys<MaybeTupleToUnion<T['orderBy']>>>,
+      ByFields extends MaybeTupleToUnion<T['by']>,
+      ByValid extends Has<ByFields, OrderFields>,
+      HavingFields extends GetHavingFields<T['having']>,
+      HavingValid extends Has<ByFields, HavingFields>,
+      ByEmpty extends T['by'] extends never[] ? True : False,
+      InputErrors extends ByEmpty extends True
+      ? `Error: "by" must not be empty.`
+      : HavingValid extends False
+      ? {
+          [P in HavingFields]: P extends ByFields
+            ? never
+            : P extends string
+            ? `Error: Field "${P}" used in "having" needs to be provided in "by".`
+            : [
+                Error,
+                'Field ',
+                P,
+                ` in "having" needs to be provided in "by"`,
+              ]
+        }[HavingFields]
+      : 'take' extends Keys<T>
+      ? 'orderBy' extends Keys<T>
+        ? ByValid extends True
+          ? {}
+          : {
+              [P in OrderFields]: P extends ByFields
+                ? never
+                : `Error: Field "${P}" in "orderBy" needs to be provided in "by"`
+            }[OrderFields]
+        : 'Error: If you provide "take", you also need to provide "orderBy"'
+      : 'skip' extends Keys<T>
+      ? 'orderBy' extends Keys<T>
+        ? ByValid extends True
+          ? {}
+          : {
+              [P in OrderFields]: P extends ByFields
+                ? never
+                : `Error: Field "${P}" in "orderBy" needs to be provided in "by"`
+            }[OrderFields]
+        : 'Error: If you provide "skip", you also need to provide "orderBy"'
+      : ByValid extends True
+      ? {}
+      : {
+          [P in OrderFields]: P extends ByFields
+            ? never
+            : `Error: Field "${P}" in "orderBy" needs to be provided in "by"`
+        }[OrderFields]
+    >(args: SubsetIntersection<T, PosOrgRoleGroupByArgs, OrderByArg> & InputErrors): {} extends InputErrors ? GetPosOrgRoleGroupByPayload<T> : Prisma.PrismaPromise<InputErrors>
+  /**
+   * Fields of the PosOrgRole model
+   */
+  readonly fields: PosOrgRoleFieldRefs;
+  }
+
+  /**
+   * The delegate class that acts as a "Promise-like" for PosOrgRole.
+   * Why is this prefixed with `Prisma__`?
+   * Because we want to prevent naming conflicts as mentioned in
+   * https://github.com/prisma/prisma-client-js/issues/707
+   */
+  export interface Prisma__PosOrgRoleClient<T, Null = never, ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs, GlobalOmitOptions = {}> extends Prisma.PrismaPromise<T> {
+    readonly [Symbol.toStringTag]: "PrismaPromise"
+    posOrg<T extends PosOrgCompositionDefaultArgs<ExtArgs> = {}>(args?: Subset<T, PosOrgCompositionDefaultArgs<ExtArgs>>): Prisma__PosOrgCompositionClient<$Result.GetResult<Prisma.$PosOrgCompositionPayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions> | Null, Null, ExtArgs, GlobalOmitOptions>
+    role<T extends RoleDefaultArgs<ExtArgs> = {}>(args?: Subset<T, RoleDefaultArgs<ExtArgs>>): Prisma__RoleClient<$Result.GetResult<Prisma.$RolePayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions> | Null, Null, ExtArgs, GlobalOmitOptions>
+    /**
+     * Attaches callbacks for the resolution and/or rejection of the Promise.
+     * @param onfulfilled The callback to execute when the Promise is resolved.
+     * @param onrejected The callback to execute when the Promise is rejected.
+     * @returns A Promise for the completion of which ever callback is executed.
+     */
+    then<TResult1 = T, TResult2 = never>(onfulfilled?: ((value: T) => TResult1 | PromiseLike<TResult1>) | undefined | null, onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | undefined | null): $Utils.JsPromise<TResult1 | TResult2>
+    /**
+     * Attaches a callback for only the rejection of the Promise.
+     * @param onrejected The callback to execute when the Promise is rejected.
+     * @returns A Promise for the completion of the callback.
+     */
+    catch<TResult = never>(onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | undefined | null): $Utils.JsPromise<T | TResult>
+    /**
+     * Attaches a callback that is invoked when the Promise is settled (fulfilled or rejected). The
+     * resolved value cannot be modified from the callback.
+     * @param onfinally The callback to execute when the Promise is settled (fulfilled or rejected).
+     * @returns A Promise for the completion of the callback.
+     */
+    finally(onfinally?: (() => void) | undefined | null): $Utils.JsPromise<T>
+  }
+
+
+
+
+  /**
+   * Fields of the PosOrgRole model
+   */
+  interface PosOrgRoleFieldRefs {
+    readonly posOrgId: FieldRef<"PosOrgRole", 'Int'>
+    readonly roleId: FieldRef<"PosOrgRole", 'Int'>
+  }
+    
+
+  // Custom InputTypes
+  /**
+   * PosOrgRole findUnique
+   */
+  export type PosOrgRoleFindUniqueArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the PosOrgRole
+     */
+    select?: PosOrgRoleSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the PosOrgRole
+     */
+    omit?: PosOrgRoleOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: PosOrgRoleInclude<ExtArgs> | null
+    /**
+     * Filter, which PosOrgRole to fetch.
+     */
+    where: PosOrgRoleWhereUniqueInput
+  }
+
+  /**
+   * PosOrgRole findUniqueOrThrow
+   */
+  export type PosOrgRoleFindUniqueOrThrowArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the PosOrgRole
+     */
+    select?: PosOrgRoleSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the PosOrgRole
+     */
+    omit?: PosOrgRoleOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: PosOrgRoleInclude<ExtArgs> | null
+    /**
+     * Filter, which PosOrgRole to fetch.
+     */
+    where: PosOrgRoleWhereUniqueInput
+  }
+
+  /**
+   * PosOrgRole findFirst
+   */
+  export type PosOrgRoleFindFirstArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the PosOrgRole
+     */
+    select?: PosOrgRoleSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the PosOrgRole
+     */
+    omit?: PosOrgRoleOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: PosOrgRoleInclude<ExtArgs> | null
+    /**
+     * Filter, which PosOrgRole to fetch.
+     */
+    where?: PosOrgRoleWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of PosOrgRoles to fetch.
+     */
+    orderBy?: PosOrgRoleOrderByWithRelationInput | PosOrgRoleOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the position for searching for PosOrgRoles.
+     */
+    cursor?: PosOrgRoleWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` PosOrgRoles from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` PosOrgRoles.
+     */
+    skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/distinct Distinct Docs}
+     * 
+     * Filter by unique combinations of PosOrgRoles.
+     */
+    distinct?: PosOrgRoleScalarFieldEnum | PosOrgRoleScalarFieldEnum[]
+  }
+
+  /**
+   * PosOrgRole findFirstOrThrow
+   */
+  export type PosOrgRoleFindFirstOrThrowArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the PosOrgRole
+     */
+    select?: PosOrgRoleSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the PosOrgRole
+     */
+    omit?: PosOrgRoleOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: PosOrgRoleInclude<ExtArgs> | null
+    /**
+     * Filter, which PosOrgRole to fetch.
+     */
+    where?: PosOrgRoleWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of PosOrgRoles to fetch.
+     */
+    orderBy?: PosOrgRoleOrderByWithRelationInput | PosOrgRoleOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the position for searching for PosOrgRoles.
+     */
+    cursor?: PosOrgRoleWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` PosOrgRoles from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` PosOrgRoles.
+     */
+    skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/distinct Distinct Docs}
+     * 
+     * Filter by unique combinations of PosOrgRoles.
+     */
+    distinct?: PosOrgRoleScalarFieldEnum | PosOrgRoleScalarFieldEnum[]
+  }
+
+  /**
+   * PosOrgRole findMany
+   */
+  export type PosOrgRoleFindManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the PosOrgRole
+     */
+    select?: PosOrgRoleSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the PosOrgRole
+     */
+    omit?: PosOrgRoleOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: PosOrgRoleInclude<ExtArgs> | null
+    /**
+     * Filter, which PosOrgRoles to fetch.
+     */
+    where?: PosOrgRoleWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of PosOrgRoles to fetch.
+     */
+    orderBy?: PosOrgRoleOrderByWithRelationInput | PosOrgRoleOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the position for listing PosOrgRoles.
+     */
+    cursor?: PosOrgRoleWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` PosOrgRoles from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` PosOrgRoles.
+     */
+    skip?: number
+    distinct?: PosOrgRoleScalarFieldEnum | PosOrgRoleScalarFieldEnum[]
+  }
+
+  /**
+   * PosOrgRole create
+   */
+  export type PosOrgRoleCreateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the PosOrgRole
+     */
+    select?: PosOrgRoleSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the PosOrgRole
+     */
+    omit?: PosOrgRoleOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: PosOrgRoleInclude<ExtArgs> | null
+    /**
+     * The data needed to create a PosOrgRole.
+     */
+    data: XOR<PosOrgRoleCreateInput, PosOrgRoleUncheckedCreateInput>
+  }
+
+  /**
+   * PosOrgRole createMany
+   */
+  export type PosOrgRoleCreateManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * The data used to create many PosOrgRoles.
+     */
+    data: PosOrgRoleCreateManyInput | PosOrgRoleCreateManyInput[]
+    skipDuplicates?: boolean
+  }
+
+  /**
+   * PosOrgRole update
+   */
+  export type PosOrgRoleUpdateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the PosOrgRole
+     */
+    select?: PosOrgRoleSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the PosOrgRole
+     */
+    omit?: PosOrgRoleOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: PosOrgRoleInclude<ExtArgs> | null
+    /**
+     * The data needed to update a PosOrgRole.
+     */
+    data: XOR<PosOrgRoleUpdateInput, PosOrgRoleUncheckedUpdateInput>
+    /**
+     * Choose, which PosOrgRole to update.
+     */
+    where: PosOrgRoleWhereUniqueInput
+  }
+
+  /**
+   * PosOrgRole updateMany
+   */
+  export type PosOrgRoleUpdateManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * The data used to update PosOrgRoles.
+     */
+    data: XOR<PosOrgRoleUpdateManyMutationInput, PosOrgRoleUncheckedUpdateManyInput>
+    /**
+     * Filter which PosOrgRoles to update
+     */
+    where?: PosOrgRoleWhereInput
+    /**
+     * Limit how many PosOrgRoles to update.
+     */
+    limit?: number
+  }
+
+  /**
+   * PosOrgRole upsert
+   */
+  export type PosOrgRoleUpsertArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the PosOrgRole
+     */
+    select?: PosOrgRoleSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the PosOrgRole
+     */
+    omit?: PosOrgRoleOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: PosOrgRoleInclude<ExtArgs> | null
+    /**
+     * The filter to search for the PosOrgRole to update in case it exists.
+     */
+    where: PosOrgRoleWhereUniqueInput
+    /**
+     * In case the PosOrgRole found by the `where` argument doesn't exist, create a new PosOrgRole with this data.
+     */
+    create: XOR<PosOrgRoleCreateInput, PosOrgRoleUncheckedCreateInput>
+    /**
+     * In case the PosOrgRole was found with the provided `where` argument, update it with this data.
+     */
+    update: XOR<PosOrgRoleUpdateInput, PosOrgRoleUncheckedUpdateInput>
+  }
+
+  /**
+   * PosOrgRole delete
+   */
+  export type PosOrgRoleDeleteArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the PosOrgRole
+     */
+    select?: PosOrgRoleSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the PosOrgRole
+     */
+    omit?: PosOrgRoleOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: PosOrgRoleInclude<ExtArgs> | null
+    /**
+     * Filter which PosOrgRole to delete.
+     */
+    where: PosOrgRoleWhereUniqueInput
+  }
+
+  /**
+   * PosOrgRole deleteMany
+   */
+  export type PosOrgRoleDeleteManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Filter which PosOrgRoles to delete
+     */
+    where?: PosOrgRoleWhereInput
+    /**
+     * Limit how many PosOrgRoles to delete.
+     */
+    limit?: number
+  }
+
+  /**
+   * PosOrgRole without action
+   */
+  export type PosOrgRoleDefaultArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the PosOrgRole
+     */
+    select?: PosOrgRoleSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the PosOrgRole
+     */
+    omit?: PosOrgRoleOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: PosOrgRoleInclude<ExtArgs> | null
   }
 
 
@@ -16692,6 +19043,20 @@ export namespace Prisma {
   export type PositionScalarFieldEnum = (typeof PositionScalarFieldEnum)[keyof typeof PositionScalarFieldEnum]
 
 
+  export const PosOrgCompositionScalarFieldEnum: {
+    id: 'id',
+    posId: 'posId',
+    orgId: 'orgId',
+    status: 'status',
+    description: 'description',
+    isDelete: 'isDelete',
+    createTime: 'createTime',
+    updateTime: 'updateTime'
+  };
+
+  export type PosOrgCompositionScalarFieldEnum = (typeof PosOrgCompositionScalarFieldEnum)[keyof typeof PosOrgCompositionScalarFieldEnum]
+
+
   export const EmploymentScalarFieldEnum: {
     id: 'id',
     userId: 'userId',
@@ -16699,6 +19064,8 @@ export namespace Prisma {
     deptId: 'deptId',
     compId: 'compId',
     status: 'status',
+    startTime: 'startTime',
+    endTime: 'endTime',
     description: 'description',
     isDelete: 'isDelete',
     createTime: 'createTime',
@@ -16759,6 +19126,14 @@ export namespace Prisma {
   };
 
   export type OrganizationRoleScalarFieldEnum = (typeof OrganizationRoleScalarFieldEnum)[keyof typeof OrganizationRoleScalarFieldEnum]
+
+
+  export const PosOrgRoleScalarFieldEnum: {
+    posOrgId: 'posOrgId',
+    roleId: 'roleId'
+  };
+
+  export type PosOrgRoleScalarFieldEnum = (typeof PosOrgRoleScalarFieldEnum)[keyof typeof PosOrgRoleScalarFieldEnum]
 
 
   export const AuthObjectScalarFieldEnum: {
@@ -16872,6 +19247,13 @@ export namespace Prisma {
   };
 
   export type PositionOrderByRelevanceFieldEnum = (typeof PositionOrderByRelevanceFieldEnum)[keyof typeof PositionOrderByRelevanceFieldEnum]
+
+
+  export const PosOrgCompositionOrderByRelevanceFieldEnum: {
+    description: 'description'
+  };
+
+  export type PosOrgCompositionOrderByRelevanceFieldEnum = (typeof PosOrgCompositionOrderByRelevanceFieldEnum)[keyof typeof PosOrgCompositionOrderByRelevanceFieldEnum]
 
 
   export const EmploymentOrderByRelevanceFieldEnum: {
@@ -17116,6 +19498,7 @@ export namespace Prisma {
     deptEmployments?: EmploymentListRelationFilter
     compEmployments?: EmploymentListRelationFilter
     roles?: OrganizationRoleListRelationFilter
+    posOrgComposition?: PosOrgCompositionListRelationFilter
   }
 
   export type OrganizationOrderByWithRelationInput = {
@@ -17136,6 +19519,7 @@ export namespace Prisma {
     deptEmployments?: EmploymentOrderByRelationAggregateInput
     compEmployments?: EmploymentOrderByRelationAggregateInput
     roles?: OrganizationRoleOrderByRelationAggregateInput
+    posOrgComposition?: PosOrgCompositionOrderByRelationAggregateInput
     _relevance?: OrganizationOrderByRelevanceInput
   }
 
@@ -17160,6 +19544,7 @@ export namespace Prisma {
     deptEmployments?: EmploymentListRelationFilter
     compEmployments?: EmploymentListRelationFilter
     roles?: OrganizationRoleListRelationFilter
+    posOrgComposition?: PosOrgCompositionListRelationFilter
   }, "id">
 
   export type OrganizationOrderByWithAggregationInput = {
@@ -17218,6 +19603,7 @@ export namespace Prisma {
     updateTime?: DateTimeFilter<"Position"> | Date | string
     employments?: EmploymentListRelationFilter
     roles?: PositionRoleListRelationFilter
+    posOrgComposition?: PosOrgCompositionListRelationFilter
   }
 
   export type PositionOrderByWithRelationInput = {
@@ -17231,6 +19617,7 @@ export namespace Prisma {
     updateTime?: SortOrder
     employments?: EmploymentOrderByRelationAggregateInput
     roles?: PositionRoleOrderByRelationAggregateInput
+    posOrgComposition?: PosOrgCompositionOrderByRelationAggregateInput
     _relevance?: PositionOrderByRelevanceInput
   }
 
@@ -17248,6 +19635,7 @@ export namespace Prisma {
     updateTime?: DateTimeFilter<"Position"> | Date | string
     employments?: EmploymentListRelationFilter
     roles?: PositionRoleListRelationFilter
+    posOrgComposition?: PosOrgCompositionListRelationFilter
   }, "id">
 
   export type PositionOrderByWithAggregationInput = {
@@ -17280,6 +19668,89 @@ export namespace Prisma {
     updateTime?: DateTimeWithAggregatesFilter<"Position"> | Date | string
   }
 
+  export type PosOrgCompositionWhereInput = {
+    AND?: PosOrgCompositionWhereInput | PosOrgCompositionWhereInput[]
+    OR?: PosOrgCompositionWhereInput[]
+    NOT?: PosOrgCompositionWhereInput | PosOrgCompositionWhereInput[]
+    id?: IntFilter<"PosOrgComposition"> | number
+    posId?: IntFilter<"PosOrgComposition"> | number
+    orgId?: IntFilter<"PosOrgComposition"> | number
+    status?: IntFilter<"PosOrgComposition"> | number
+    description?: StringNullableFilter<"PosOrgComposition"> | string | null
+    isDelete?: BoolFilter<"PosOrgComposition"> | boolean
+    createTime?: DateTimeFilter<"PosOrgComposition"> | Date | string
+    updateTime?: DateTimeFilter<"PosOrgComposition"> | Date | string
+    position?: XOR<PositionScalarRelationFilter, PositionWhereInput>
+    organization?: XOR<OrganizationScalarRelationFilter, OrganizationWhereInput>
+    employments?: EmploymentListRelationFilter
+    roles?: PosOrgRoleListRelationFilter
+  }
+
+  export type PosOrgCompositionOrderByWithRelationInput = {
+    id?: SortOrder
+    posId?: SortOrder
+    orgId?: SortOrder
+    status?: SortOrder
+    description?: SortOrderInput | SortOrder
+    isDelete?: SortOrder
+    createTime?: SortOrder
+    updateTime?: SortOrder
+    position?: PositionOrderByWithRelationInput
+    organization?: OrganizationOrderByWithRelationInput
+    employments?: EmploymentOrderByRelationAggregateInput
+    roles?: PosOrgRoleOrderByRelationAggregateInput
+    _relevance?: PosOrgCompositionOrderByRelevanceInput
+  }
+
+  export type PosOrgCompositionWhereUniqueInput = Prisma.AtLeast<{
+    id?: number
+    posId_orgId?: PosOrgCompositionPosIdOrgIdCompoundUniqueInput
+    AND?: PosOrgCompositionWhereInput | PosOrgCompositionWhereInput[]
+    OR?: PosOrgCompositionWhereInput[]
+    NOT?: PosOrgCompositionWhereInput | PosOrgCompositionWhereInput[]
+    posId?: IntFilter<"PosOrgComposition"> | number
+    orgId?: IntFilter<"PosOrgComposition"> | number
+    status?: IntFilter<"PosOrgComposition"> | number
+    description?: StringNullableFilter<"PosOrgComposition"> | string | null
+    isDelete?: BoolFilter<"PosOrgComposition"> | boolean
+    createTime?: DateTimeFilter<"PosOrgComposition"> | Date | string
+    updateTime?: DateTimeFilter<"PosOrgComposition"> | Date | string
+    position?: XOR<PositionScalarRelationFilter, PositionWhereInput>
+    organization?: XOR<OrganizationScalarRelationFilter, OrganizationWhereInput>
+    employments?: EmploymentListRelationFilter
+    roles?: PosOrgRoleListRelationFilter
+  }, "id" | "posId_orgId">
+
+  export type PosOrgCompositionOrderByWithAggregationInput = {
+    id?: SortOrder
+    posId?: SortOrder
+    orgId?: SortOrder
+    status?: SortOrder
+    description?: SortOrderInput | SortOrder
+    isDelete?: SortOrder
+    createTime?: SortOrder
+    updateTime?: SortOrder
+    _count?: PosOrgCompositionCountOrderByAggregateInput
+    _avg?: PosOrgCompositionAvgOrderByAggregateInput
+    _max?: PosOrgCompositionMaxOrderByAggregateInput
+    _min?: PosOrgCompositionMinOrderByAggregateInput
+    _sum?: PosOrgCompositionSumOrderByAggregateInput
+  }
+
+  export type PosOrgCompositionScalarWhereWithAggregatesInput = {
+    AND?: PosOrgCompositionScalarWhereWithAggregatesInput | PosOrgCompositionScalarWhereWithAggregatesInput[]
+    OR?: PosOrgCompositionScalarWhereWithAggregatesInput[]
+    NOT?: PosOrgCompositionScalarWhereWithAggregatesInput | PosOrgCompositionScalarWhereWithAggregatesInput[]
+    id?: IntWithAggregatesFilter<"PosOrgComposition"> | number
+    posId?: IntWithAggregatesFilter<"PosOrgComposition"> | number
+    orgId?: IntWithAggregatesFilter<"PosOrgComposition"> | number
+    status?: IntWithAggregatesFilter<"PosOrgComposition"> | number
+    description?: StringNullableWithAggregatesFilter<"PosOrgComposition"> | string | null
+    isDelete?: BoolWithAggregatesFilter<"PosOrgComposition"> | boolean
+    createTime?: DateTimeWithAggregatesFilter<"PosOrgComposition"> | Date | string
+    updateTime?: DateTimeWithAggregatesFilter<"PosOrgComposition"> | Date | string
+  }
+
   export type EmploymentWhereInput = {
     AND?: EmploymentWhereInput | EmploymentWhereInput[]
     OR?: EmploymentWhereInput[]
@@ -17290,6 +19761,8 @@ export namespace Prisma {
     deptId?: IntFilter<"Employment"> | number
     compId?: IntFilter<"Employment"> | number
     status?: IntFilter<"Employment"> | number
+    startTime?: DateTimeFilter<"Employment"> | Date | string
+    endTime?: DateTimeNullableFilter<"Employment"> | Date | string | null
     description?: StringNullableFilter<"Employment"> | string | null
     isDelete?: BoolFilter<"Employment"> | boolean
     createTime?: DateTimeFilter<"Employment"> | Date | string
@@ -17298,6 +19771,7 @@ export namespace Prisma {
     deptartment?: XOR<OrganizationScalarRelationFilter, OrganizationWhereInput>
     company?: XOR<OrganizationScalarRelationFilter, OrganizationWhereInput>
     position?: XOR<PositionScalarRelationFilter, PositionWhereInput>
+    posOrg?: XOR<PosOrgCompositionScalarRelationFilter, PosOrgCompositionWhereInput>
     roles?: EmploymentRoleListRelationFilter
   }
 
@@ -17308,6 +19782,8 @@ export namespace Prisma {
     deptId?: SortOrder
     compId?: SortOrder
     status?: SortOrder
+    startTime?: SortOrder
+    endTime?: SortOrderInput | SortOrder
     description?: SortOrderInput | SortOrder
     isDelete?: SortOrder
     createTime?: SortOrder
@@ -17316,6 +19792,7 @@ export namespace Prisma {
     deptartment?: OrganizationOrderByWithRelationInput
     company?: OrganizationOrderByWithRelationInput
     position?: PositionOrderByWithRelationInput
+    posOrg?: PosOrgCompositionOrderByWithRelationInput
     roles?: EmploymentRoleOrderByRelationAggregateInput
     _relevance?: EmploymentOrderByRelevanceInput
   }
@@ -17330,6 +19807,8 @@ export namespace Prisma {
     deptId?: IntFilter<"Employment"> | number
     compId?: IntFilter<"Employment"> | number
     status?: IntFilter<"Employment"> | number
+    startTime?: DateTimeFilter<"Employment"> | Date | string
+    endTime?: DateTimeNullableFilter<"Employment"> | Date | string | null
     description?: StringNullableFilter<"Employment"> | string | null
     isDelete?: BoolFilter<"Employment"> | boolean
     createTime?: DateTimeFilter<"Employment"> | Date | string
@@ -17338,6 +19817,7 @@ export namespace Prisma {
     deptartment?: XOR<OrganizationScalarRelationFilter, OrganizationWhereInput>
     company?: XOR<OrganizationScalarRelationFilter, OrganizationWhereInput>
     position?: XOR<PositionScalarRelationFilter, PositionWhereInput>
+    posOrg?: XOR<PosOrgCompositionScalarRelationFilter, PosOrgCompositionWhereInput>
     roles?: EmploymentRoleListRelationFilter
   }, "id">
 
@@ -17348,6 +19828,8 @@ export namespace Prisma {
     deptId?: SortOrder
     compId?: SortOrder
     status?: SortOrder
+    startTime?: SortOrder
+    endTime?: SortOrderInput | SortOrder
     description?: SortOrderInput | SortOrder
     isDelete?: SortOrder
     createTime?: SortOrder
@@ -17369,6 +19851,8 @@ export namespace Prisma {
     deptId?: IntWithAggregatesFilter<"Employment"> | number
     compId?: IntWithAggregatesFilter<"Employment"> | number
     status?: IntWithAggregatesFilter<"Employment"> | number
+    startTime?: DateTimeWithAggregatesFilter<"Employment"> | Date | string
+    endTime?: DateTimeNullableWithAggregatesFilter<"Employment"> | Date | string | null
     description?: StringNullableWithAggregatesFilter<"Employment"> | string | null
     isDelete?: BoolWithAggregatesFilter<"Employment"> | boolean
     createTime?: DateTimeWithAggregatesFilter<"Employment"> | Date | string
@@ -17464,6 +19948,7 @@ export namespace Prisma {
     client?: XOR<ClientScalarRelationFilter, ClientWhereInput>
     positions?: PositionRoleListRelationFilter
     organizations?: OrganizationRoleListRelationFilter
+    positionOrganizations?: PosOrgRoleListRelationFilter
     employments?: EmploymentRoleListRelationFilter
     privileges?: RolePrivilegeListRelationFilter
   }
@@ -17481,6 +19966,7 @@ export namespace Prisma {
     client?: ClientOrderByWithRelationInput
     positions?: PositionRoleOrderByRelationAggregateInput
     organizations?: OrganizationRoleOrderByRelationAggregateInput
+    positionOrganizations?: PosOrgRoleOrderByRelationAggregateInput
     employments?: EmploymentRoleOrderByRelationAggregateInput
     privileges?: RolePrivilegeOrderByRelationAggregateInput
     _relevance?: RoleOrderByRelevanceInput
@@ -17502,6 +19988,7 @@ export namespace Prisma {
     client?: XOR<ClientScalarRelationFilter, ClientWhereInput>
     positions?: PositionRoleListRelationFilter
     organizations?: OrganizationRoleListRelationFilter
+    positionOrganizations?: PosOrgRoleListRelationFilter
     employments?: EmploymentRoleListRelationFilter
     privileges?: RolePrivilegeListRelationFilter
   }, "id">
@@ -17674,6 +20161,52 @@ export namespace Prisma {
     NOT?: OrganizationRoleScalarWhereWithAggregatesInput | OrganizationRoleScalarWhereWithAggregatesInput[]
     organizationId?: IntWithAggregatesFilter<"OrganizationRole"> | number
     roleId?: IntWithAggregatesFilter<"OrganizationRole"> | number
+  }
+
+  export type PosOrgRoleWhereInput = {
+    AND?: PosOrgRoleWhereInput | PosOrgRoleWhereInput[]
+    OR?: PosOrgRoleWhereInput[]
+    NOT?: PosOrgRoleWhereInput | PosOrgRoleWhereInput[]
+    posOrgId?: IntFilter<"PosOrgRole"> | number
+    roleId?: IntFilter<"PosOrgRole"> | number
+    posOrg?: XOR<PosOrgCompositionScalarRelationFilter, PosOrgCompositionWhereInput>
+    role?: XOR<RoleScalarRelationFilter, RoleWhereInput>
+  }
+
+  export type PosOrgRoleOrderByWithRelationInput = {
+    posOrgId?: SortOrder
+    roleId?: SortOrder
+    posOrg?: PosOrgCompositionOrderByWithRelationInput
+    role?: RoleOrderByWithRelationInput
+  }
+
+  export type PosOrgRoleWhereUniqueInput = Prisma.AtLeast<{
+    posOrgId_roleId?: PosOrgRolePosOrgIdRoleIdCompoundUniqueInput
+    AND?: PosOrgRoleWhereInput | PosOrgRoleWhereInput[]
+    OR?: PosOrgRoleWhereInput[]
+    NOT?: PosOrgRoleWhereInput | PosOrgRoleWhereInput[]
+    posOrgId?: IntFilter<"PosOrgRole"> | number
+    roleId?: IntFilter<"PosOrgRole"> | number
+    posOrg?: XOR<PosOrgCompositionScalarRelationFilter, PosOrgCompositionWhereInput>
+    role?: XOR<RoleScalarRelationFilter, RoleWhereInput>
+  }, "posOrgId_roleId">
+
+  export type PosOrgRoleOrderByWithAggregationInput = {
+    posOrgId?: SortOrder
+    roleId?: SortOrder
+    _count?: PosOrgRoleCountOrderByAggregateInput
+    _avg?: PosOrgRoleAvgOrderByAggregateInput
+    _max?: PosOrgRoleMaxOrderByAggregateInput
+    _min?: PosOrgRoleMinOrderByAggregateInput
+    _sum?: PosOrgRoleSumOrderByAggregateInput
+  }
+
+  export type PosOrgRoleScalarWhereWithAggregatesInput = {
+    AND?: PosOrgRoleScalarWhereWithAggregatesInput | PosOrgRoleScalarWhereWithAggregatesInput[]
+    OR?: PosOrgRoleScalarWhereWithAggregatesInput[]
+    NOT?: PosOrgRoleScalarWhereWithAggregatesInput | PosOrgRoleScalarWhereWithAggregatesInput[]
+    posOrgId?: IntWithAggregatesFilter<"PosOrgRole"> | number
+    roleId?: IntWithAggregatesFilter<"PosOrgRole"> | number
   }
 
   export type AuthObjectWhereInput = {
@@ -18121,6 +20654,7 @@ export namespace Prisma {
     deptEmployments?: EmploymentCreateNestedManyWithoutDeptartmentInput
     compEmployments?: EmploymentCreateNestedManyWithoutCompanyInput
     roles?: OrganizationRoleCreateNestedManyWithoutOrganizationInput
+    posOrgComposition?: PosOrgCompositionCreateNestedManyWithoutOrganizationInput
   }
 
   export type OrganizationUncheckedCreateInput = {
@@ -18141,6 +20675,7 @@ export namespace Prisma {
     deptEmployments?: EmploymentUncheckedCreateNestedManyWithoutDeptartmentInput
     compEmployments?: EmploymentUncheckedCreateNestedManyWithoutCompanyInput
     roles?: OrganizationRoleUncheckedCreateNestedManyWithoutOrganizationInput
+    posOrgComposition?: PosOrgCompositionUncheckedCreateNestedManyWithoutOrganizationInput
   }
 
   export type OrganizationUpdateInput = {
@@ -18160,6 +20695,7 @@ export namespace Prisma {
     deptEmployments?: EmploymentUpdateManyWithoutDeptartmentNestedInput
     compEmployments?: EmploymentUpdateManyWithoutCompanyNestedInput
     roles?: OrganizationRoleUpdateManyWithoutOrganizationNestedInput
+    posOrgComposition?: PosOrgCompositionUpdateManyWithoutOrganizationNestedInput
   }
 
   export type OrganizationUncheckedUpdateInput = {
@@ -18180,6 +20716,7 @@ export namespace Prisma {
     deptEmployments?: EmploymentUncheckedUpdateManyWithoutDeptartmentNestedInput
     compEmployments?: EmploymentUncheckedUpdateManyWithoutCompanyNestedInput
     roles?: OrganizationRoleUncheckedUpdateManyWithoutOrganizationNestedInput
+    posOrgComposition?: PosOrgCompositionUncheckedUpdateManyWithoutOrganizationNestedInput
   }
 
   export type OrganizationCreateManyInput = {
@@ -18242,6 +20779,7 @@ export namespace Prisma {
     updateTime?: Date | string
     employments?: EmploymentCreateNestedManyWithoutPositionInput
     roles?: PositionRoleCreateNestedManyWithoutPositionInput
+    posOrgComposition?: PosOrgCompositionCreateNestedManyWithoutPositionInput
   }
 
   export type PositionUncheckedCreateInput = {
@@ -18255,6 +20793,7 @@ export namespace Prisma {
     updateTime?: Date | string
     employments?: EmploymentUncheckedCreateNestedManyWithoutPositionInput
     roles?: PositionRoleUncheckedCreateNestedManyWithoutPositionInput
+    posOrgComposition?: PosOrgCompositionUncheckedCreateNestedManyWithoutPositionInput
   }
 
   export type PositionUpdateInput = {
@@ -18267,6 +20806,7 @@ export namespace Prisma {
     updateTime?: DateTimeFieldUpdateOperationsInput | Date | string
     employments?: EmploymentUpdateManyWithoutPositionNestedInput
     roles?: PositionRoleUpdateManyWithoutPositionNestedInput
+    posOrgComposition?: PosOrgCompositionUpdateManyWithoutPositionNestedInput
   }
 
   export type PositionUncheckedUpdateInput = {
@@ -18280,6 +20820,7 @@ export namespace Prisma {
     updateTime?: DateTimeFieldUpdateOperationsInput | Date | string
     employments?: EmploymentUncheckedUpdateManyWithoutPositionNestedInput
     roles?: PositionRoleUncheckedUpdateManyWithoutPositionNestedInput
+    posOrgComposition?: PosOrgCompositionUncheckedUpdateManyWithoutPositionNestedInput
   }
 
   export type PositionCreateManyInput = {
@@ -18314,8 +20855,90 @@ export namespace Prisma {
     updateTime?: DateTimeFieldUpdateOperationsInput | Date | string
   }
 
+  export type PosOrgCompositionCreateInput = {
+    status?: number
+    description?: string | null
+    isDelete?: boolean
+    createTime?: Date | string
+    updateTime?: Date | string
+    position: PositionCreateNestedOneWithoutPosOrgCompositionInput
+    organization: OrganizationCreateNestedOneWithoutPosOrgCompositionInput
+    employments?: EmploymentCreateNestedManyWithoutPosOrgInput
+    roles?: PosOrgRoleCreateNestedManyWithoutPosOrgInput
+  }
+
+  export type PosOrgCompositionUncheckedCreateInput = {
+    id?: number
+    posId: number
+    orgId: number
+    status?: number
+    description?: string | null
+    isDelete?: boolean
+    createTime?: Date | string
+    updateTime?: Date | string
+    employments?: EmploymentUncheckedCreateNestedManyWithoutPosOrgInput
+    roles?: PosOrgRoleUncheckedCreateNestedManyWithoutPosOrgInput
+  }
+
+  export type PosOrgCompositionUpdateInput = {
+    status?: IntFieldUpdateOperationsInput | number
+    description?: NullableStringFieldUpdateOperationsInput | string | null
+    isDelete?: BoolFieldUpdateOperationsInput | boolean
+    createTime?: DateTimeFieldUpdateOperationsInput | Date | string
+    updateTime?: DateTimeFieldUpdateOperationsInput | Date | string
+    position?: PositionUpdateOneRequiredWithoutPosOrgCompositionNestedInput
+    organization?: OrganizationUpdateOneRequiredWithoutPosOrgCompositionNestedInput
+    employments?: EmploymentUpdateManyWithoutPosOrgNestedInput
+    roles?: PosOrgRoleUpdateManyWithoutPosOrgNestedInput
+  }
+
+  export type PosOrgCompositionUncheckedUpdateInput = {
+    id?: IntFieldUpdateOperationsInput | number
+    posId?: IntFieldUpdateOperationsInput | number
+    orgId?: IntFieldUpdateOperationsInput | number
+    status?: IntFieldUpdateOperationsInput | number
+    description?: NullableStringFieldUpdateOperationsInput | string | null
+    isDelete?: BoolFieldUpdateOperationsInput | boolean
+    createTime?: DateTimeFieldUpdateOperationsInput | Date | string
+    updateTime?: DateTimeFieldUpdateOperationsInput | Date | string
+    employments?: EmploymentUncheckedUpdateManyWithoutPosOrgNestedInput
+    roles?: PosOrgRoleUncheckedUpdateManyWithoutPosOrgNestedInput
+  }
+
+  export type PosOrgCompositionCreateManyInput = {
+    id?: number
+    posId: number
+    orgId: number
+    status?: number
+    description?: string | null
+    isDelete?: boolean
+    createTime?: Date | string
+    updateTime?: Date | string
+  }
+
+  export type PosOrgCompositionUpdateManyMutationInput = {
+    status?: IntFieldUpdateOperationsInput | number
+    description?: NullableStringFieldUpdateOperationsInput | string | null
+    isDelete?: BoolFieldUpdateOperationsInput | boolean
+    createTime?: DateTimeFieldUpdateOperationsInput | Date | string
+    updateTime?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type PosOrgCompositionUncheckedUpdateManyInput = {
+    id?: IntFieldUpdateOperationsInput | number
+    posId?: IntFieldUpdateOperationsInput | number
+    orgId?: IntFieldUpdateOperationsInput | number
+    status?: IntFieldUpdateOperationsInput | number
+    description?: NullableStringFieldUpdateOperationsInput | string | null
+    isDelete?: BoolFieldUpdateOperationsInput | boolean
+    createTime?: DateTimeFieldUpdateOperationsInput | Date | string
+    updateTime?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
   export type EmploymentCreateInput = {
     status?: number
+    startTime?: Date | string
+    endTime?: Date | string | null
     description?: string | null
     isDelete?: boolean
     createTime?: Date | string
@@ -18324,6 +20947,7 @@ export namespace Prisma {
     deptartment: OrganizationCreateNestedOneWithoutDeptEmploymentsInput
     company: OrganizationCreateNestedOneWithoutCompEmploymentsInput
     position: PositionCreateNestedOneWithoutEmploymentsInput
+    posOrg: PosOrgCompositionCreateNestedOneWithoutEmploymentsInput
     roles?: EmploymentRoleCreateNestedManyWithoutEmploymentInput
   }
 
@@ -18334,6 +20958,8 @@ export namespace Prisma {
     deptId: number
     compId: number
     status?: number
+    startTime?: Date | string
+    endTime?: Date | string | null
     description?: string | null
     isDelete?: boolean
     createTime?: Date | string
@@ -18343,6 +20969,8 @@ export namespace Prisma {
 
   export type EmploymentUpdateInput = {
     status?: IntFieldUpdateOperationsInput | number
+    startTime?: DateTimeFieldUpdateOperationsInput | Date | string
+    endTime?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     description?: NullableStringFieldUpdateOperationsInput | string | null
     isDelete?: BoolFieldUpdateOperationsInput | boolean
     createTime?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -18351,6 +20979,7 @@ export namespace Prisma {
     deptartment?: OrganizationUpdateOneRequiredWithoutDeptEmploymentsNestedInput
     company?: OrganizationUpdateOneRequiredWithoutCompEmploymentsNestedInput
     position?: PositionUpdateOneRequiredWithoutEmploymentsNestedInput
+    posOrg?: PosOrgCompositionUpdateOneRequiredWithoutEmploymentsNestedInput
     roles?: EmploymentRoleUpdateManyWithoutEmploymentNestedInput
   }
 
@@ -18361,6 +20990,8 @@ export namespace Prisma {
     deptId?: IntFieldUpdateOperationsInput | number
     compId?: IntFieldUpdateOperationsInput | number
     status?: IntFieldUpdateOperationsInput | number
+    startTime?: DateTimeFieldUpdateOperationsInput | Date | string
+    endTime?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     description?: NullableStringFieldUpdateOperationsInput | string | null
     isDelete?: BoolFieldUpdateOperationsInput | boolean
     createTime?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -18375,6 +21006,8 @@ export namespace Prisma {
     deptId: number
     compId: number
     status?: number
+    startTime?: Date | string
+    endTime?: Date | string | null
     description?: string | null
     isDelete?: boolean
     createTime?: Date | string
@@ -18383,6 +21016,8 @@ export namespace Prisma {
 
   export type EmploymentUpdateManyMutationInput = {
     status?: IntFieldUpdateOperationsInput | number
+    startTime?: DateTimeFieldUpdateOperationsInput | Date | string
+    endTime?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     description?: NullableStringFieldUpdateOperationsInput | string | null
     isDelete?: BoolFieldUpdateOperationsInput | boolean
     createTime?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -18396,6 +21031,8 @@ export namespace Prisma {
     deptId?: IntFieldUpdateOperationsInput | number
     compId?: IntFieldUpdateOperationsInput | number
     status?: IntFieldUpdateOperationsInput | number
+    startTime?: DateTimeFieldUpdateOperationsInput | Date | string
+    endTime?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     description?: NullableStringFieldUpdateOperationsInput | string | null
     isDelete?: BoolFieldUpdateOperationsInput | boolean
     createTime?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -18491,6 +21128,7 @@ export namespace Prisma {
     client: ClientCreateNestedOneWithoutRoleInput
     positions?: PositionRoleCreateNestedManyWithoutRoleInput
     organizations?: OrganizationRoleCreateNestedManyWithoutRoleInput
+    positionOrganizations?: PosOrgRoleCreateNestedManyWithoutRoleInput
     employments?: EmploymentRoleCreateNestedManyWithoutRoleInput
     privileges?: RolePrivilegeCreateNestedManyWithoutRoleInput
   }
@@ -18507,6 +21145,7 @@ export namespace Prisma {
     updateTime?: Date | string
     positions?: PositionRoleUncheckedCreateNestedManyWithoutRoleInput
     organizations?: OrganizationRoleUncheckedCreateNestedManyWithoutRoleInput
+    positionOrganizations?: PosOrgRoleUncheckedCreateNestedManyWithoutRoleInput
     employments?: EmploymentRoleUncheckedCreateNestedManyWithoutRoleInput
     privileges?: RolePrivilegeUncheckedCreateNestedManyWithoutRoleInput
   }
@@ -18522,6 +21161,7 @@ export namespace Prisma {
     client?: ClientUpdateOneRequiredWithoutRoleNestedInput
     positions?: PositionRoleUpdateManyWithoutRoleNestedInput
     organizations?: OrganizationRoleUpdateManyWithoutRoleNestedInput
+    positionOrganizations?: PosOrgRoleUpdateManyWithoutRoleNestedInput
     employments?: EmploymentRoleUpdateManyWithoutRoleNestedInput
     privileges?: RolePrivilegeUpdateManyWithoutRoleNestedInput
   }
@@ -18538,6 +21178,7 @@ export namespace Prisma {
     updateTime?: DateTimeFieldUpdateOperationsInput | Date | string
     positions?: PositionRoleUncheckedUpdateManyWithoutRoleNestedInput
     organizations?: OrganizationRoleUncheckedUpdateManyWithoutRoleNestedInput
+    positionOrganizations?: PosOrgRoleUncheckedUpdateManyWithoutRoleNestedInput
     employments?: EmploymentRoleUncheckedUpdateManyWithoutRoleNestedInput
     privileges?: RolePrivilegeUncheckedUpdateManyWithoutRoleNestedInput
   }
@@ -18675,6 +21316,40 @@ export namespace Prisma {
 
   export type OrganizationRoleUncheckedUpdateManyInput = {
     organizationId?: IntFieldUpdateOperationsInput | number
+    roleId?: IntFieldUpdateOperationsInput | number
+  }
+
+  export type PosOrgRoleCreateInput = {
+    posOrg: PosOrgCompositionCreateNestedOneWithoutRolesInput
+    role: RoleCreateNestedOneWithoutPositionOrganizationsInput
+  }
+
+  export type PosOrgRoleUncheckedCreateInput = {
+    posOrgId: number
+    roleId: number
+  }
+
+  export type PosOrgRoleUpdateInput = {
+    posOrg?: PosOrgCompositionUpdateOneRequiredWithoutRolesNestedInput
+    role?: RoleUpdateOneRequiredWithoutPositionOrganizationsNestedInput
+  }
+
+  export type PosOrgRoleUncheckedUpdateInput = {
+    posOrgId?: IntFieldUpdateOperationsInput | number
+    roleId?: IntFieldUpdateOperationsInput | number
+  }
+
+  export type PosOrgRoleCreateManyInput = {
+    posOrgId: number
+    roleId: number
+  }
+
+  export type PosOrgRoleUpdateManyMutationInput = {
+
+  }
+
+  export type PosOrgRoleUncheckedUpdateManyInput = {
+    posOrgId?: IntFieldUpdateOperationsInput | number
     roleId?: IntFieldUpdateOperationsInput | number
   }
 
@@ -19208,7 +21883,17 @@ export namespace Prisma {
     none?: OrganizationRoleWhereInput
   }
 
+  export type PosOrgCompositionListRelationFilter = {
+    every?: PosOrgCompositionWhereInput
+    some?: PosOrgCompositionWhereInput
+    none?: PosOrgCompositionWhereInput
+  }
+
   export type OrganizationRoleOrderByRelationAggregateInput = {
+    _count?: SortOrder
+  }
+
+  export type PosOrgCompositionOrderByRelationAggregateInput = {
     _count?: SortOrder
   }
 
@@ -19344,9 +22029,9 @@ export namespace Prisma {
     status?: SortOrder
   }
 
-  export type UserScalarRelationFilter = {
-    is?: UserWhereInput
-    isNot?: UserWhereInput
+  export type PositionScalarRelationFilter = {
+    is?: PositionWhereInput
+    isNot?: PositionWhereInput
   }
 
   export type OrganizationScalarRelationFilter = {
@@ -19354,9 +22039,93 @@ export namespace Prisma {
     isNot?: OrganizationWhereInput
   }
 
-  export type PositionScalarRelationFilter = {
-    is?: PositionWhereInput
-    isNot?: PositionWhereInput
+  export type PosOrgRoleListRelationFilter = {
+    every?: PosOrgRoleWhereInput
+    some?: PosOrgRoleWhereInput
+    none?: PosOrgRoleWhereInput
+  }
+
+  export type PosOrgRoleOrderByRelationAggregateInput = {
+    _count?: SortOrder
+  }
+
+  export type PosOrgCompositionOrderByRelevanceInput = {
+    fields: PosOrgCompositionOrderByRelevanceFieldEnum | PosOrgCompositionOrderByRelevanceFieldEnum[]
+    sort: SortOrder
+    search: string
+  }
+
+  export type PosOrgCompositionPosIdOrgIdCompoundUniqueInput = {
+    posId: number
+    orgId: number
+  }
+
+  export type PosOrgCompositionCountOrderByAggregateInput = {
+    id?: SortOrder
+    posId?: SortOrder
+    orgId?: SortOrder
+    status?: SortOrder
+    description?: SortOrder
+    isDelete?: SortOrder
+    createTime?: SortOrder
+    updateTime?: SortOrder
+  }
+
+  export type PosOrgCompositionAvgOrderByAggregateInput = {
+    id?: SortOrder
+    posId?: SortOrder
+    orgId?: SortOrder
+    status?: SortOrder
+  }
+
+  export type PosOrgCompositionMaxOrderByAggregateInput = {
+    id?: SortOrder
+    posId?: SortOrder
+    orgId?: SortOrder
+    status?: SortOrder
+    description?: SortOrder
+    isDelete?: SortOrder
+    createTime?: SortOrder
+    updateTime?: SortOrder
+  }
+
+  export type PosOrgCompositionMinOrderByAggregateInput = {
+    id?: SortOrder
+    posId?: SortOrder
+    orgId?: SortOrder
+    status?: SortOrder
+    description?: SortOrder
+    isDelete?: SortOrder
+    createTime?: SortOrder
+    updateTime?: SortOrder
+  }
+
+  export type PosOrgCompositionSumOrderByAggregateInput = {
+    id?: SortOrder
+    posId?: SortOrder
+    orgId?: SortOrder
+    status?: SortOrder
+  }
+
+  export type DateTimeNullableFilter<$PrismaModel = never> = {
+    equals?: Date | string | DateTimeFieldRefInput<$PrismaModel> | null
+    in?: Date[] | string[] | null
+    notIn?: Date[] | string[] | null
+    lt?: Date | string | DateTimeFieldRefInput<$PrismaModel>
+    lte?: Date | string | DateTimeFieldRefInput<$PrismaModel>
+    gt?: Date | string | DateTimeFieldRefInput<$PrismaModel>
+    gte?: Date | string | DateTimeFieldRefInput<$PrismaModel>
+    not?: NestedDateTimeNullableFilter<$PrismaModel> | Date | string | null
+  }
+
+  export type UserScalarRelationFilter = {
+    is?: UserWhereInput
+    isNot?: UserWhereInput
+  }
+
+  export type PosOrgCompositionScalarRelationFilter = {
+    is?: PosOrgCompositionWhereInput
+    isNot?: PosOrgCompositionWhereInput
   }
 
   export type EmploymentRoleListRelationFilter = {
@@ -19382,6 +22151,8 @@ export namespace Prisma {
     deptId?: SortOrder
     compId?: SortOrder
     status?: SortOrder
+    startTime?: SortOrder
+    endTime?: SortOrder
     description?: SortOrder
     isDelete?: SortOrder
     createTime?: SortOrder
@@ -19404,6 +22175,8 @@ export namespace Prisma {
     deptId?: SortOrder
     compId?: SortOrder
     status?: SortOrder
+    startTime?: SortOrder
+    endTime?: SortOrder
     description?: SortOrder
     isDelete?: SortOrder
     createTime?: SortOrder
@@ -19417,6 +22190,8 @@ export namespace Prisma {
     deptId?: SortOrder
     compId?: SortOrder
     status?: SortOrder
+    startTime?: SortOrder
+    endTime?: SortOrder
     description?: SortOrder
     isDelete?: SortOrder
     createTime?: SortOrder
@@ -19430,6 +22205,20 @@ export namespace Prisma {
     deptId?: SortOrder
     compId?: SortOrder
     status?: SortOrder
+  }
+
+  export type DateTimeNullableWithAggregatesFilter<$PrismaModel = never> = {
+    equals?: Date | string | DateTimeFieldRefInput<$PrismaModel> | null
+    in?: Date[] | string[] | null
+    notIn?: Date[] | string[] | null
+    lt?: Date | string | DateTimeFieldRefInput<$PrismaModel>
+    lte?: Date | string | DateTimeFieldRefInput<$PrismaModel>
+    gt?: Date | string | DateTimeFieldRefInput<$PrismaModel>
+    gte?: Date | string | DateTimeFieldRefInput<$PrismaModel>
+    not?: NestedDateTimeNullableWithAggregatesFilter<$PrismaModel> | Date | string | null
+    _count?: NestedIntNullableFilter<$PrismaModel>
+    _min?: NestedDateTimeNullableFilter<$PrismaModel>
+    _max?: NestedDateTimeNullableFilter<$PrismaModel>
   }
 
   export type RoleListRelationFilter = {
@@ -19657,6 +22446,36 @@ export namespace Prisma {
 
   export type OrganizationRoleSumOrderByAggregateInput = {
     organizationId?: SortOrder
+    roleId?: SortOrder
+  }
+
+  export type PosOrgRolePosOrgIdRoleIdCompoundUniqueInput = {
+    posOrgId: number
+    roleId: number
+  }
+
+  export type PosOrgRoleCountOrderByAggregateInput = {
+    posOrgId?: SortOrder
+    roleId?: SortOrder
+  }
+
+  export type PosOrgRoleAvgOrderByAggregateInput = {
+    posOrgId?: SortOrder
+    roleId?: SortOrder
+  }
+
+  export type PosOrgRoleMaxOrderByAggregateInput = {
+    posOrgId?: SortOrder
+    roleId?: SortOrder
+  }
+
+  export type PosOrgRoleMinOrderByAggregateInput = {
+    posOrgId?: SortOrder
+    roleId?: SortOrder
+  }
+
+  export type PosOrgRoleSumOrderByAggregateInput = {
+    posOrgId?: SortOrder
     roleId?: SortOrder
   }
   export type JsonNullableFilter<$PrismaModel = never> =
@@ -20132,6 +22951,13 @@ export namespace Prisma {
     connect?: OrganizationRoleWhereUniqueInput | OrganizationRoleWhereUniqueInput[]
   }
 
+  export type PosOrgCompositionCreateNestedManyWithoutOrganizationInput = {
+    create?: XOR<PosOrgCompositionCreateWithoutOrganizationInput, PosOrgCompositionUncheckedCreateWithoutOrganizationInput> | PosOrgCompositionCreateWithoutOrganizationInput[] | PosOrgCompositionUncheckedCreateWithoutOrganizationInput[]
+    connectOrCreate?: PosOrgCompositionCreateOrConnectWithoutOrganizationInput | PosOrgCompositionCreateOrConnectWithoutOrganizationInput[]
+    createMany?: PosOrgCompositionCreateManyOrganizationInputEnvelope
+    connect?: PosOrgCompositionWhereUniqueInput | PosOrgCompositionWhereUniqueInput[]
+  }
+
   export type EmploymentUncheckedCreateNestedManyWithoutDeptartmentInput = {
     create?: XOR<EmploymentCreateWithoutDeptartmentInput, EmploymentUncheckedCreateWithoutDeptartmentInput> | EmploymentCreateWithoutDeptartmentInput[] | EmploymentUncheckedCreateWithoutDeptartmentInput[]
     connectOrCreate?: EmploymentCreateOrConnectWithoutDeptartmentInput | EmploymentCreateOrConnectWithoutDeptartmentInput[]
@@ -20151,6 +22977,13 @@ export namespace Prisma {
     connectOrCreate?: OrganizationRoleCreateOrConnectWithoutOrganizationInput | OrganizationRoleCreateOrConnectWithoutOrganizationInput[]
     createMany?: OrganizationRoleCreateManyOrganizationInputEnvelope
     connect?: OrganizationRoleWhereUniqueInput | OrganizationRoleWhereUniqueInput[]
+  }
+
+  export type PosOrgCompositionUncheckedCreateNestedManyWithoutOrganizationInput = {
+    create?: XOR<PosOrgCompositionCreateWithoutOrganizationInput, PosOrgCompositionUncheckedCreateWithoutOrganizationInput> | PosOrgCompositionCreateWithoutOrganizationInput[] | PosOrgCompositionUncheckedCreateWithoutOrganizationInput[]
+    connectOrCreate?: PosOrgCompositionCreateOrConnectWithoutOrganizationInput | PosOrgCompositionCreateOrConnectWithoutOrganizationInput[]
+    createMany?: PosOrgCompositionCreateManyOrganizationInputEnvelope
+    connect?: PosOrgCompositionWhereUniqueInput | PosOrgCompositionWhereUniqueInput[]
   }
 
   export type EmploymentUpdateManyWithoutDeptartmentNestedInput = {
@@ -20195,6 +23028,20 @@ export namespace Prisma {
     deleteMany?: OrganizationRoleScalarWhereInput | OrganizationRoleScalarWhereInput[]
   }
 
+  export type PosOrgCompositionUpdateManyWithoutOrganizationNestedInput = {
+    create?: XOR<PosOrgCompositionCreateWithoutOrganizationInput, PosOrgCompositionUncheckedCreateWithoutOrganizationInput> | PosOrgCompositionCreateWithoutOrganizationInput[] | PosOrgCompositionUncheckedCreateWithoutOrganizationInput[]
+    connectOrCreate?: PosOrgCompositionCreateOrConnectWithoutOrganizationInput | PosOrgCompositionCreateOrConnectWithoutOrganizationInput[]
+    upsert?: PosOrgCompositionUpsertWithWhereUniqueWithoutOrganizationInput | PosOrgCompositionUpsertWithWhereUniqueWithoutOrganizationInput[]
+    createMany?: PosOrgCompositionCreateManyOrganizationInputEnvelope
+    set?: PosOrgCompositionWhereUniqueInput | PosOrgCompositionWhereUniqueInput[]
+    disconnect?: PosOrgCompositionWhereUniqueInput | PosOrgCompositionWhereUniqueInput[]
+    delete?: PosOrgCompositionWhereUniqueInput | PosOrgCompositionWhereUniqueInput[]
+    connect?: PosOrgCompositionWhereUniqueInput | PosOrgCompositionWhereUniqueInput[]
+    update?: PosOrgCompositionUpdateWithWhereUniqueWithoutOrganizationInput | PosOrgCompositionUpdateWithWhereUniqueWithoutOrganizationInput[]
+    updateMany?: PosOrgCompositionUpdateManyWithWhereWithoutOrganizationInput | PosOrgCompositionUpdateManyWithWhereWithoutOrganizationInput[]
+    deleteMany?: PosOrgCompositionScalarWhereInput | PosOrgCompositionScalarWhereInput[]
+  }
+
   export type EmploymentUncheckedUpdateManyWithoutDeptartmentNestedInput = {
     create?: XOR<EmploymentCreateWithoutDeptartmentInput, EmploymentUncheckedCreateWithoutDeptartmentInput> | EmploymentCreateWithoutDeptartmentInput[] | EmploymentUncheckedCreateWithoutDeptartmentInput[]
     connectOrCreate?: EmploymentCreateOrConnectWithoutDeptartmentInput | EmploymentCreateOrConnectWithoutDeptartmentInput[]
@@ -20237,6 +23084,20 @@ export namespace Prisma {
     deleteMany?: OrganizationRoleScalarWhereInput | OrganizationRoleScalarWhereInput[]
   }
 
+  export type PosOrgCompositionUncheckedUpdateManyWithoutOrganizationNestedInput = {
+    create?: XOR<PosOrgCompositionCreateWithoutOrganizationInput, PosOrgCompositionUncheckedCreateWithoutOrganizationInput> | PosOrgCompositionCreateWithoutOrganizationInput[] | PosOrgCompositionUncheckedCreateWithoutOrganizationInput[]
+    connectOrCreate?: PosOrgCompositionCreateOrConnectWithoutOrganizationInput | PosOrgCompositionCreateOrConnectWithoutOrganizationInput[]
+    upsert?: PosOrgCompositionUpsertWithWhereUniqueWithoutOrganizationInput | PosOrgCompositionUpsertWithWhereUniqueWithoutOrganizationInput[]
+    createMany?: PosOrgCompositionCreateManyOrganizationInputEnvelope
+    set?: PosOrgCompositionWhereUniqueInput | PosOrgCompositionWhereUniqueInput[]
+    disconnect?: PosOrgCompositionWhereUniqueInput | PosOrgCompositionWhereUniqueInput[]
+    delete?: PosOrgCompositionWhereUniqueInput | PosOrgCompositionWhereUniqueInput[]
+    connect?: PosOrgCompositionWhereUniqueInput | PosOrgCompositionWhereUniqueInput[]
+    update?: PosOrgCompositionUpdateWithWhereUniqueWithoutOrganizationInput | PosOrgCompositionUpdateWithWhereUniqueWithoutOrganizationInput[]
+    updateMany?: PosOrgCompositionUpdateManyWithWhereWithoutOrganizationInput | PosOrgCompositionUpdateManyWithWhereWithoutOrganizationInput[]
+    deleteMany?: PosOrgCompositionScalarWhereInput | PosOrgCompositionScalarWhereInput[]
+  }
+
   export type EmploymentCreateNestedManyWithoutPositionInput = {
     create?: XOR<EmploymentCreateWithoutPositionInput, EmploymentUncheckedCreateWithoutPositionInput> | EmploymentCreateWithoutPositionInput[] | EmploymentUncheckedCreateWithoutPositionInput[]
     connectOrCreate?: EmploymentCreateOrConnectWithoutPositionInput | EmploymentCreateOrConnectWithoutPositionInput[]
@@ -20251,6 +23112,13 @@ export namespace Prisma {
     connect?: PositionRoleWhereUniqueInput | PositionRoleWhereUniqueInput[]
   }
 
+  export type PosOrgCompositionCreateNestedManyWithoutPositionInput = {
+    create?: XOR<PosOrgCompositionCreateWithoutPositionInput, PosOrgCompositionUncheckedCreateWithoutPositionInput> | PosOrgCompositionCreateWithoutPositionInput[] | PosOrgCompositionUncheckedCreateWithoutPositionInput[]
+    connectOrCreate?: PosOrgCompositionCreateOrConnectWithoutPositionInput | PosOrgCompositionCreateOrConnectWithoutPositionInput[]
+    createMany?: PosOrgCompositionCreateManyPositionInputEnvelope
+    connect?: PosOrgCompositionWhereUniqueInput | PosOrgCompositionWhereUniqueInput[]
+  }
+
   export type EmploymentUncheckedCreateNestedManyWithoutPositionInput = {
     create?: XOR<EmploymentCreateWithoutPositionInput, EmploymentUncheckedCreateWithoutPositionInput> | EmploymentCreateWithoutPositionInput[] | EmploymentUncheckedCreateWithoutPositionInput[]
     connectOrCreate?: EmploymentCreateOrConnectWithoutPositionInput | EmploymentCreateOrConnectWithoutPositionInput[]
@@ -20263,6 +23131,13 @@ export namespace Prisma {
     connectOrCreate?: PositionRoleCreateOrConnectWithoutPositionInput | PositionRoleCreateOrConnectWithoutPositionInput[]
     createMany?: PositionRoleCreateManyPositionInputEnvelope
     connect?: PositionRoleWhereUniqueInput | PositionRoleWhereUniqueInput[]
+  }
+
+  export type PosOrgCompositionUncheckedCreateNestedManyWithoutPositionInput = {
+    create?: XOR<PosOrgCompositionCreateWithoutPositionInput, PosOrgCompositionUncheckedCreateWithoutPositionInput> | PosOrgCompositionCreateWithoutPositionInput[] | PosOrgCompositionUncheckedCreateWithoutPositionInput[]
+    connectOrCreate?: PosOrgCompositionCreateOrConnectWithoutPositionInput | PosOrgCompositionCreateOrConnectWithoutPositionInput[]
+    createMany?: PosOrgCompositionCreateManyPositionInputEnvelope
+    connect?: PosOrgCompositionWhereUniqueInput | PosOrgCompositionWhereUniqueInput[]
   }
 
   export type EmploymentUpdateManyWithoutPositionNestedInput = {
@@ -20293,6 +23168,20 @@ export namespace Prisma {
     deleteMany?: PositionRoleScalarWhereInput | PositionRoleScalarWhereInput[]
   }
 
+  export type PosOrgCompositionUpdateManyWithoutPositionNestedInput = {
+    create?: XOR<PosOrgCompositionCreateWithoutPositionInput, PosOrgCompositionUncheckedCreateWithoutPositionInput> | PosOrgCompositionCreateWithoutPositionInput[] | PosOrgCompositionUncheckedCreateWithoutPositionInput[]
+    connectOrCreate?: PosOrgCompositionCreateOrConnectWithoutPositionInput | PosOrgCompositionCreateOrConnectWithoutPositionInput[]
+    upsert?: PosOrgCompositionUpsertWithWhereUniqueWithoutPositionInput | PosOrgCompositionUpsertWithWhereUniqueWithoutPositionInput[]
+    createMany?: PosOrgCompositionCreateManyPositionInputEnvelope
+    set?: PosOrgCompositionWhereUniqueInput | PosOrgCompositionWhereUniqueInput[]
+    disconnect?: PosOrgCompositionWhereUniqueInput | PosOrgCompositionWhereUniqueInput[]
+    delete?: PosOrgCompositionWhereUniqueInput | PosOrgCompositionWhereUniqueInput[]
+    connect?: PosOrgCompositionWhereUniqueInput | PosOrgCompositionWhereUniqueInput[]
+    update?: PosOrgCompositionUpdateWithWhereUniqueWithoutPositionInput | PosOrgCompositionUpdateWithWhereUniqueWithoutPositionInput[]
+    updateMany?: PosOrgCompositionUpdateManyWithWhereWithoutPositionInput | PosOrgCompositionUpdateManyWithWhereWithoutPositionInput[]
+    deleteMany?: PosOrgCompositionScalarWhereInput | PosOrgCompositionScalarWhereInput[]
+  }
+
   export type EmploymentUncheckedUpdateManyWithoutPositionNestedInput = {
     create?: XOR<EmploymentCreateWithoutPositionInput, EmploymentUncheckedCreateWithoutPositionInput> | EmploymentCreateWithoutPositionInput[] | EmploymentUncheckedCreateWithoutPositionInput[]
     connectOrCreate?: EmploymentCreateOrConnectWithoutPositionInput | EmploymentCreateOrConnectWithoutPositionInput[]
@@ -20321,6 +23210,132 @@ export namespace Prisma {
     deleteMany?: PositionRoleScalarWhereInput | PositionRoleScalarWhereInput[]
   }
 
+  export type PosOrgCompositionUncheckedUpdateManyWithoutPositionNestedInput = {
+    create?: XOR<PosOrgCompositionCreateWithoutPositionInput, PosOrgCompositionUncheckedCreateWithoutPositionInput> | PosOrgCompositionCreateWithoutPositionInput[] | PosOrgCompositionUncheckedCreateWithoutPositionInput[]
+    connectOrCreate?: PosOrgCompositionCreateOrConnectWithoutPositionInput | PosOrgCompositionCreateOrConnectWithoutPositionInput[]
+    upsert?: PosOrgCompositionUpsertWithWhereUniqueWithoutPositionInput | PosOrgCompositionUpsertWithWhereUniqueWithoutPositionInput[]
+    createMany?: PosOrgCompositionCreateManyPositionInputEnvelope
+    set?: PosOrgCompositionWhereUniqueInput | PosOrgCompositionWhereUniqueInput[]
+    disconnect?: PosOrgCompositionWhereUniqueInput | PosOrgCompositionWhereUniqueInput[]
+    delete?: PosOrgCompositionWhereUniqueInput | PosOrgCompositionWhereUniqueInput[]
+    connect?: PosOrgCompositionWhereUniqueInput | PosOrgCompositionWhereUniqueInput[]
+    update?: PosOrgCompositionUpdateWithWhereUniqueWithoutPositionInput | PosOrgCompositionUpdateWithWhereUniqueWithoutPositionInput[]
+    updateMany?: PosOrgCompositionUpdateManyWithWhereWithoutPositionInput | PosOrgCompositionUpdateManyWithWhereWithoutPositionInput[]
+    deleteMany?: PosOrgCompositionScalarWhereInput | PosOrgCompositionScalarWhereInput[]
+  }
+
+  export type PositionCreateNestedOneWithoutPosOrgCompositionInput = {
+    create?: XOR<PositionCreateWithoutPosOrgCompositionInput, PositionUncheckedCreateWithoutPosOrgCompositionInput>
+    connectOrCreate?: PositionCreateOrConnectWithoutPosOrgCompositionInput
+    connect?: PositionWhereUniqueInput
+  }
+
+  export type OrganizationCreateNestedOneWithoutPosOrgCompositionInput = {
+    create?: XOR<OrganizationCreateWithoutPosOrgCompositionInput, OrganizationUncheckedCreateWithoutPosOrgCompositionInput>
+    connectOrCreate?: OrganizationCreateOrConnectWithoutPosOrgCompositionInput
+    connect?: OrganizationWhereUniqueInput
+  }
+
+  export type EmploymentCreateNestedManyWithoutPosOrgInput = {
+    create?: XOR<EmploymentCreateWithoutPosOrgInput, EmploymentUncheckedCreateWithoutPosOrgInput> | EmploymentCreateWithoutPosOrgInput[] | EmploymentUncheckedCreateWithoutPosOrgInput[]
+    connectOrCreate?: EmploymentCreateOrConnectWithoutPosOrgInput | EmploymentCreateOrConnectWithoutPosOrgInput[]
+    createMany?: EmploymentCreateManyPosOrgInputEnvelope
+    connect?: EmploymentWhereUniqueInput | EmploymentWhereUniqueInput[]
+  }
+
+  export type PosOrgRoleCreateNestedManyWithoutPosOrgInput = {
+    create?: XOR<PosOrgRoleCreateWithoutPosOrgInput, PosOrgRoleUncheckedCreateWithoutPosOrgInput> | PosOrgRoleCreateWithoutPosOrgInput[] | PosOrgRoleUncheckedCreateWithoutPosOrgInput[]
+    connectOrCreate?: PosOrgRoleCreateOrConnectWithoutPosOrgInput | PosOrgRoleCreateOrConnectWithoutPosOrgInput[]
+    createMany?: PosOrgRoleCreateManyPosOrgInputEnvelope
+    connect?: PosOrgRoleWhereUniqueInput | PosOrgRoleWhereUniqueInput[]
+  }
+
+  export type EmploymentUncheckedCreateNestedManyWithoutPosOrgInput = {
+    create?: XOR<EmploymentCreateWithoutPosOrgInput, EmploymentUncheckedCreateWithoutPosOrgInput> | EmploymentCreateWithoutPosOrgInput[] | EmploymentUncheckedCreateWithoutPosOrgInput[]
+    connectOrCreate?: EmploymentCreateOrConnectWithoutPosOrgInput | EmploymentCreateOrConnectWithoutPosOrgInput[]
+    createMany?: EmploymentCreateManyPosOrgInputEnvelope
+    connect?: EmploymentWhereUniqueInput | EmploymentWhereUniqueInput[]
+  }
+
+  export type PosOrgRoleUncheckedCreateNestedManyWithoutPosOrgInput = {
+    create?: XOR<PosOrgRoleCreateWithoutPosOrgInput, PosOrgRoleUncheckedCreateWithoutPosOrgInput> | PosOrgRoleCreateWithoutPosOrgInput[] | PosOrgRoleUncheckedCreateWithoutPosOrgInput[]
+    connectOrCreate?: PosOrgRoleCreateOrConnectWithoutPosOrgInput | PosOrgRoleCreateOrConnectWithoutPosOrgInput[]
+    createMany?: PosOrgRoleCreateManyPosOrgInputEnvelope
+    connect?: PosOrgRoleWhereUniqueInput | PosOrgRoleWhereUniqueInput[]
+  }
+
+  export type PositionUpdateOneRequiredWithoutPosOrgCompositionNestedInput = {
+    create?: XOR<PositionCreateWithoutPosOrgCompositionInput, PositionUncheckedCreateWithoutPosOrgCompositionInput>
+    connectOrCreate?: PositionCreateOrConnectWithoutPosOrgCompositionInput
+    upsert?: PositionUpsertWithoutPosOrgCompositionInput
+    connect?: PositionWhereUniqueInput
+    update?: XOR<XOR<PositionUpdateToOneWithWhereWithoutPosOrgCompositionInput, PositionUpdateWithoutPosOrgCompositionInput>, PositionUncheckedUpdateWithoutPosOrgCompositionInput>
+  }
+
+  export type OrganizationUpdateOneRequiredWithoutPosOrgCompositionNestedInput = {
+    create?: XOR<OrganizationCreateWithoutPosOrgCompositionInput, OrganizationUncheckedCreateWithoutPosOrgCompositionInput>
+    connectOrCreate?: OrganizationCreateOrConnectWithoutPosOrgCompositionInput
+    upsert?: OrganizationUpsertWithoutPosOrgCompositionInput
+    connect?: OrganizationWhereUniqueInput
+    update?: XOR<XOR<OrganizationUpdateToOneWithWhereWithoutPosOrgCompositionInput, OrganizationUpdateWithoutPosOrgCompositionInput>, OrganizationUncheckedUpdateWithoutPosOrgCompositionInput>
+  }
+
+  export type EmploymentUpdateManyWithoutPosOrgNestedInput = {
+    create?: XOR<EmploymentCreateWithoutPosOrgInput, EmploymentUncheckedCreateWithoutPosOrgInput> | EmploymentCreateWithoutPosOrgInput[] | EmploymentUncheckedCreateWithoutPosOrgInput[]
+    connectOrCreate?: EmploymentCreateOrConnectWithoutPosOrgInput | EmploymentCreateOrConnectWithoutPosOrgInput[]
+    upsert?: EmploymentUpsertWithWhereUniqueWithoutPosOrgInput | EmploymentUpsertWithWhereUniqueWithoutPosOrgInput[]
+    createMany?: EmploymentCreateManyPosOrgInputEnvelope
+    set?: EmploymentWhereUniqueInput | EmploymentWhereUniqueInput[]
+    disconnect?: EmploymentWhereUniqueInput | EmploymentWhereUniqueInput[]
+    delete?: EmploymentWhereUniqueInput | EmploymentWhereUniqueInput[]
+    connect?: EmploymentWhereUniqueInput | EmploymentWhereUniqueInput[]
+    update?: EmploymentUpdateWithWhereUniqueWithoutPosOrgInput | EmploymentUpdateWithWhereUniqueWithoutPosOrgInput[]
+    updateMany?: EmploymentUpdateManyWithWhereWithoutPosOrgInput | EmploymentUpdateManyWithWhereWithoutPosOrgInput[]
+    deleteMany?: EmploymentScalarWhereInput | EmploymentScalarWhereInput[]
+  }
+
+  export type PosOrgRoleUpdateManyWithoutPosOrgNestedInput = {
+    create?: XOR<PosOrgRoleCreateWithoutPosOrgInput, PosOrgRoleUncheckedCreateWithoutPosOrgInput> | PosOrgRoleCreateWithoutPosOrgInput[] | PosOrgRoleUncheckedCreateWithoutPosOrgInput[]
+    connectOrCreate?: PosOrgRoleCreateOrConnectWithoutPosOrgInput | PosOrgRoleCreateOrConnectWithoutPosOrgInput[]
+    upsert?: PosOrgRoleUpsertWithWhereUniqueWithoutPosOrgInput | PosOrgRoleUpsertWithWhereUniqueWithoutPosOrgInput[]
+    createMany?: PosOrgRoleCreateManyPosOrgInputEnvelope
+    set?: PosOrgRoleWhereUniqueInput | PosOrgRoleWhereUniqueInput[]
+    disconnect?: PosOrgRoleWhereUniqueInput | PosOrgRoleWhereUniqueInput[]
+    delete?: PosOrgRoleWhereUniqueInput | PosOrgRoleWhereUniqueInput[]
+    connect?: PosOrgRoleWhereUniqueInput | PosOrgRoleWhereUniqueInput[]
+    update?: PosOrgRoleUpdateWithWhereUniqueWithoutPosOrgInput | PosOrgRoleUpdateWithWhereUniqueWithoutPosOrgInput[]
+    updateMany?: PosOrgRoleUpdateManyWithWhereWithoutPosOrgInput | PosOrgRoleUpdateManyWithWhereWithoutPosOrgInput[]
+    deleteMany?: PosOrgRoleScalarWhereInput | PosOrgRoleScalarWhereInput[]
+  }
+
+  export type EmploymentUncheckedUpdateManyWithoutPosOrgNestedInput = {
+    create?: XOR<EmploymentCreateWithoutPosOrgInput, EmploymentUncheckedCreateWithoutPosOrgInput> | EmploymentCreateWithoutPosOrgInput[] | EmploymentUncheckedCreateWithoutPosOrgInput[]
+    connectOrCreate?: EmploymentCreateOrConnectWithoutPosOrgInput | EmploymentCreateOrConnectWithoutPosOrgInput[]
+    upsert?: EmploymentUpsertWithWhereUniqueWithoutPosOrgInput | EmploymentUpsertWithWhereUniqueWithoutPosOrgInput[]
+    createMany?: EmploymentCreateManyPosOrgInputEnvelope
+    set?: EmploymentWhereUniqueInput | EmploymentWhereUniqueInput[]
+    disconnect?: EmploymentWhereUniqueInput | EmploymentWhereUniqueInput[]
+    delete?: EmploymentWhereUniqueInput | EmploymentWhereUniqueInput[]
+    connect?: EmploymentWhereUniqueInput | EmploymentWhereUniqueInput[]
+    update?: EmploymentUpdateWithWhereUniqueWithoutPosOrgInput | EmploymentUpdateWithWhereUniqueWithoutPosOrgInput[]
+    updateMany?: EmploymentUpdateManyWithWhereWithoutPosOrgInput | EmploymentUpdateManyWithWhereWithoutPosOrgInput[]
+    deleteMany?: EmploymentScalarWhereInput | EmploymentScalarWhereInput[]
+  }
+
+  export type PosOrgRoleUncheckedUpdateManyWithoutPosOrgNestedInput = {
+    create?: XOR<PosOrgRoleCreateWithoutPosOrgInput, PosOrgRoleUncheckedCreateWithoutPosOrgInput> | PosOrgRoleCreateWithoutPosOrgInput[] | PosOrgRoleUncheckedCreateWithoutPosOrgInput[]
+    connectOrCreate?: PosOrgRoleCreateOrConnectWithoutPosOrgInput | PosOrgRoleCreateOrConnectWithoutPosOrgInput[]
+    upsert?: PosOrgRoleUpsertWithWhereUniqueWithoutPosOrgInput | PosOrgRoleUpsertWithWhereUniqueWithoutPosOrgInput[]
+    createMany?: PosOrgRoleCreateManyPosOrgInputEnvelope
+    set?: PosOrgRoleWhereUniqueInput | PosOrgRoleWhereUniqueInput[]
+    disconnect?: PosOrgRoleWhereUniqueInput | PosOrgRoleWhereUniqueInput[]
+    delete?: PosOrgRoleWhereUniqueInput | PosOrgRoleWhereUniqueInput[]
+    connect?: PosOrgRoleWhereUniqueInput | PosOrgRoleWhereUniqueInput[]
+    update?: PosOrgRoleUpdateWithWhereUniqueWithoutPosOrgInput | PosOrgRoleUpdateWithWhereUniqueWithoutPosOrgInput[]
+    updateMany?: PosOrgRoleUpdateManyWithWhereWithoutPosOrgInput | PosOrgRoleUpdateManyWithWhereWithoutPosOrgInput[]
+    deleteMany?: PosOrgRoleScalarWhereInput | PosOrgRoleScalarWhereInput[]
+  }
+
   export type UserCreateNestedOneWithoutEmploymentsInput = {
     create?: XOR<UserCreateWithoutEmploymentsInput, UserUncheckedCreateWithoutEmploymentsInput>
     connectOrCreate?: UserCreateOrConnectWithoutEmploymentsInput
@@ -20345,6 +23360,12 @@ export namespace Prisma {
     connect?: PositionWhereUniqueInput
   }
 
+  export type PosOrgCompositionCreateNestedOneWithoutEmploymentsInput = {
+    create?: XOR<PosOrgCompositionCreateWithoutEmploymentsInput, PosOrgCompositionUncheckedCreateWithoutEmploymentsInput>
+    connectOrCreate?: PosOrgCompositionCreateOrConnectWithoutEmploymentsInput
+    connect?: PosOrgCompositionWhereUniqueInput
+  }
+
   export type EmploymentRoleCreateNestedManyWithoutEmploymentInput = {
     create?: XOR<EmploymentRoleCreateWithoutEmploymentInput, EmploymentRoleUncheckedCreateWithoutEmploymentInput> | EmploymentRoleCreateWithoutEmploymentInput[] | EmploymentRoleUncheckedCreateWithoutEmploymentInput[]
     connectOrCreate?: EmploymentRoleCreateOrConnectWithoutEmploymentInput | EmploymentRoleCreateOrConnectWithoutEmploymentInput[]
@@ -20357,6 +23378,10 @@ export namespace Prisma {
     connectOrCreate?: EmploymentRoleCreateOrConnectWithoutEmploymentInput | EmploymentRoleCreateOrConnectWithoutEmploymentInput[]
     createMany?: EmploymentRoleCreateManyEmploymentInputEnvelope
     connect?: EmploymentRoleWhereUniqueInput | EmploymentRoleWhereUniqueInput[]
+  }
+
+  export type NullableDateTimeFieldUpdateOperationsInput = {
+    set?: Date | string | null
   }
 
   export type UserUpdateOneRequiredWithoutEmploymentsNestedInput = {
@@ -20389,6 +23414,14 @@ export namespace Prisma {
     upsert?: PositionUpsertWithoutEmploymentsInput
     connect?: PositionWhereUniqueInput
     update?: XOR<XOR<PositionUpdateToOneWithWhereWithoutEmploymentsInput, PositionUpdateWithoutEmploymentsInput>, PositionUncheckedUpdateWithoutEmploymentsInput>
+  }
+
+  export type PosOrgCompositionUpdateOneRequiredWithoutEmploymentsNestedInput = {
+    create?: XOR<PosOrgCompositionCreateWithoutEmploymentsInput, PosOrgCompositionUncheckedCreateWithoutEmploymentsInput>
+    connectOrCreate?: PosOrgCompositionCreateOrConnectWithoutEmploymentsInput
+    upsert?: PosOrgCompositionUpsertWithoutEmploymentsInput
+    connect?: PosOrgCompositionWhereUniqueInput
+    update?: XOR<XOR<PosOrgCompositionUpdateToOneWithWhereWithoutEmploymentsInput, PosOrgCompositionUpdateWithoutEmploymentsInput>, PosOrgCompositionUncheckedUpdateWithoutEmploymentsInput>
   }
 
   export type EmploymentRoleUpdateManyWithoutEmploymentNestedInput = {
@@ -20481,6 +23514,13 @@ export namespace Prisma {
     connect?: OrganizationRoleWhereUniqueInput | OrganizationRoleWhereUniqueInput[]
   }
 
+  export type PosOrgRoleCreateNestedManyWithoutRoleInput = {
+    create?: XOR<PosOrgRoleCreateWithoutRoleInput, PosOrgRoleUncheckedCreateWithoutRoleInput> | PosOrgRoleCreateWithoutRoleInput[] | PosOrgRoleUncheckedCreateWithoutRoleInput[]
+    connectOrCreate?: PosOrgRoleCreateOrConnectWithoutRoleInput | PosOrgRoleCreateOrConnectWithoutRoleInput[]
+    createMany?: PosOrgRoleCreateManyRoleInputEnvelope
+    connect?: PosOrgRoleWhereUniqueInput | PosOrgRoleWhereUniqueInput[]
+  }
+
   export type EmploymentRoleCreateNestedManyWithoutRoleInput = {
     create?: XOR<EmploymentRoleCreateWithoutRoleInput, EmploymentRoleUncheckedCreateWithoutRoleInput> | EmploymentRoleCreateWithoutRoleInput[] | EmploymentRoleUncheckedCreateWithoutRoleInput[]
     connectOrCreate?: EmploymentRoleCreateOrConnectWithoutRoleInput | EmploymentRoleCreateOrConnectWithoutRoleInput[]
@@ -20507,6 +23547,13 @@ export namespace Prisma {
     connectOrCreate?: OrganizationRoleCreateOrConnectWithoutRoleInput | OrganizationRoleCreateOrConnectWithoutRoleInput[]
     createMany?: OrganizationRoleCreateManyRoleInputEnvelope
     connect?: OrganizationRoleWhereUniqueInput | OrganizationRoleWhereUniqueInput[]
+  }
+
+  export type PosOrgRoleUncheckedCreateNestedManyWithoutRoleInput = {
+    create?: XOR<PosOrgRoleCreateWithoutRoleInput, PosOrgRoleUncheckedCreateWithoutRoleInput> | PosOrgRoleCreateWithoutRoleInput[] | PosOrgRoleUncheckedCreateWithoutRoleInput[]
+    connectOrCreate?: PosOrgRoleCreateOrConnectWithoutRoleInput | PosOrgRoleCreateOrConnectWithoutRoleInput[]
+    createMany?: PosOrgRoleCreateManyRoleInputEnvelope
+    connect?: PosOrgRoleWhereUniqueInput | PosOrgRoleWhereUniqueInput[]
   }
 
   export type EmploymentRoleUncheckedCreateNestedManyWithoutRoleInput = {
@@ -20557,6 +23604,20 @@ export namespace Prisma {
     update?: OrganizationRoleUpdateWithWhereUniqueWithoutRoleInput | OrganizationRoleUpdateWithWhereUniqueWithoutRoleInput[]
     updateMany?: OrganizationRoleUpdateManyWithWhereWithoutRoleInput | OrganizationRoleUpdateManyWithWhereWithoutRoleInput[]
     deleteMany?: OrganizationRoleScalarWhereInput | OrganizationRoleScalarWhereInput[]
+  }
+
+  export type PosOrgRoleUpdateManyWithoutRoleNestedInput = {
+    create?: XOR<PosOrgRoleCreateWithoutRoleInput, PosOrgRoleUncheckedCreateWithoutRoleInput> | PosOrgRoleCreateWithoutRoleInput[] | PosOrgRoleUncheckedCreateWithoutRoleInput[]
+    connectOrCreate?: PosOrgRoleCreateOrConnectWithoutRoleInput | PosOrgRoleCreateOrConnectWithoutRoleInput[]
+    upsert?: PosOrgRoleUpsertWithWhereUniqueWithoutRoleInput | PosOrgRoleUpsertWithWhereUniqueWithoutRoleInput[]
+    createMany?: PosOrgRoleCreateManyRoleInputEnvelope
+    set?: PosOrgRoleWhereUniqueInput | PosOrgRoleWhereUniqueInput[]
+    disconnect?: PosOrgRoleWhereUniqueInput | PosOrgRoleWhereUniqueInput[]
+    delete?: PosOrgRoleWhereUniqueInput | PosOrgRoleWhereUniqueInput[]
+    connect?: PosOrgRoleWhereUniqueInput | PosOrgRoleWhereUniqueInput[]
+    update?: PosOrgRoleUpdateWithWhereUniqueWithoutRoleInput | PosOrgRoleUpdateWithWhereUniqueWithoutRoleInput[]
+    updateMany?: PosOrgRoleUpdateManyWithWhereWithoutRoleInput | PosOrgRoleUpdateManyWithWhereWithoutRoleInput[]
+    deleteMany?: PosOrgRoleScalarWhereInput | PosOrgRoleScalarWhereInput[]
   }
 
   export type EmploymentRoleUpdateManyWithoutRoleNestedInput = {
@@ -20613,6 +23674,20 @@ export namespace Prisma {
     update?: OrganizationRoleUpdateWithWhereUniqueWithoutRoleInput | OrganizationRoleUpdateWithWhereUniqueWithoutRoleInput[]
     updateMany?: OrganizationRoleUpdateManyWithWhereWithoutRoleInput | OrganizationRoleUpdateManyWithWhereWithoutRoleInput[]
     deleteMany?: OrganizationRoleScalarWhereInput | OrganizationRoleScalarWhereInput[]
+  }
+
+  export type PosOrgRoleUncheckedUpdateManyWithoutRoleNestedInput = {
+    create?: XOR<PosOrgRoleCreateWithoutRoleInput, PosOrgRoleUncheckedCreateWithoutRoleInput> | PosOrgRoleCreateWithoutRoleInput[] | PosOrgRoleUncheckedCreateWithoutRoleInput[]
+    connectOrCreate?: PosOrgRoleCreateOrConnectWithoutRoleInput | PosOrgRoleCreateOrConnectWithoutRoleInput[]
+    upsert?: PosOrgRoleUpsertWithWhereUniqueWithoutRoleInput | PosOrgRoleUpsertWithWhereUniqueWithoutRoleInput[]
+    createMany?: PosOrgRoleCreateManyRoleInputEnvelope
+    set?: PosOrgRoleWhereUniqueInput | PosOrgRoleWhereUniqueInput[]
+    disconnect?: PosOrgRoleWhereUniqueInput | PosOrgRoleWhereUniqueInput[]
+    delete?: PosOrgRoleWhereUniqueInput | PosOrgRoleWhereUniqueInput[]
+    connect?: PosOrgRoleWhereUniqueInput | PosOrgRoleWhereUniqueInput[]
+    update?: PosOrgRoleUpdateWithWhereUniqueWithoutRoleInput | PosOrgRoleUpdateWithWhereUniqueWithoutRoleInput[]
+    updateMany?: PosOrgRoleUpdateManyWithWhereWithoutRoleInput | PosOrgRoleUpdateManyWithWhereWithoutRoleInput[]
+    deleteMany?: PosOrgRoleScalarWhereInput | PosOrgRoleScalarWhereInput[]
   }
 
   export type EmploymentRoleUncheckedUpdateManyWithoutRoleNestedInput = {
@@ -20725,6 +23800,34 @@ export namespace Prisma {
     upsert?: RoleUpsertWithoutOrganizationsInput
     connect?: RoleWhereUniqueInput
     update?: XOR<XOR<RoleUpdateToOneWithWhereWithoutOrganizationsInput, RoleUpdateWithoutOrganizationsInput>, RoleUncheckedUpdateWithoutOrganizationsInput>
+  }
+
+  export type PosOrgCompositionCreateNestedOneWithoutRolesInput = {
+    create?: XOR<PosOrgCompositionCreateWithoutRolesInput, PosOrgCompositionUncheckedCreateWithoutRolesInput>
+    connectOrCreate?: PosOrgCompositionCreateOrConnectWithoutRolesInput
+    connect?: PosOrgCompositionWhereUniqueInput
+  }
+
+  export type RoleCreateNestedOneWithoutPositionOrganizationsInput = {
+    create?: XOR<RoleCreateWithoutPositionOrganizationsInput, RoleUncheckedCreateWithoutPositionOrganizationsInput>
+    connectOrCreate?: RoleCreateOrConnectWithoutPositionOrganizationsInput
+    connect?: RoleWhereUniqueInput
+  }
+
+  export type PosOrgCompositionUpdateOneRequiredWithoutRolesNestedInput = {
+    create?: XOR<PosOrgCompositionCreateWithoutRolesInput, PosOrgCompositionUncheckedCreateWithoutRolesInput>
+    connectOrCreate?: PosOrgCompositionCreateOrConnectWithoutRolesInput
+    upsert?: PosOrgCompositionUpsertWithoutRolesInput
+    connect?: PosOrgCompositionWhereUniqueInput
+    update?: XOR<XOR<PosOrgCompositionUpdateToOneWithWhereWithoutRolesInput, PosOrgCompositionUpdateWithoutRolesInput>, PosOrgCompositionUncheckedUpdateWithoutRolesInput>
+  }
+
+  export type RoleUpdateOneRequiredWithoutPositionOrganizationsNestedInput = {
+    create?: XOR<RoleCreateWithoutPositionOrganizationsInput, RoleUncheckedCreateWithoutPositionOrganizationsInput>
+    connectOrCreate?: RoleCreateOrConnectWithoutPositionOrganizationsInput
+    upsert?: RoleUpsertWithoutPositionOrganizationsInput
+    connect?: RoleWhereUniqueInput
+    update?: XOR<XOR<RoleUpdateToOneWithWhereWithoutPositionOrganizationsInput, RoleUpdateWithoutPositionOrganizationsInput>, RoleUncheckedUpdateWithoutPositionOrganizationsInput>
   }
 
   export type PrivilegeCreateNestedManyWithoutObjectInput = {
@@ -21089,6 +24192,31 @@ export namespace Prisma {
     _min?: NestedDateTimeFilter<$PrismaModel>
     _max?: NestedDateTimeFilter<$PrismaModel>
   }
+
+  export type NestedDateTimeNullableFilter<$PrismaModel = never> = {
+    equals?: Date | string | DateTimeFieldRefInput<$PrismaModel> | null
+    in?: Date[] | string[] | null
+    notIn?: Date[] | string[] | null
+    lt?: Date | string | DateTimeFieldRefInput<$PrismaModel>
+    lte?: Date | string | DateTimeFieldRefInput<$PrismaModel>
+    gt?: Date | string | DateTimeFieldRefInput<$PrismaModel>
+    gte?: Date | string | DateTimeFieldRefInput<$PrismaModel>
+    not?: NestedDateTimeNullableFilter<$PrismaModel> | Date | string | null
+  }
+
+  export type NestedDateTimeNullableWithAggregatesFilter<$PrismaModel = never> = {
+    equals?: Date | string | DateTimeFieldRefInput<$PrismaModel> | null
+    in?: Date[] | string[] | null
+    notIn?: Date[] | string[] | null
+    lt?: Date | string | DateTimeFieldRefInput<$PrismaModel>
+    lte?: Date | string | DateTimeFieldRefInput<$PrismaModel>
+    gt?: Date | string | DateTimeFieldRefInput<$PrismaModel>
+    gte?: Date | string | DateTimeFieldRefInput<$PrismaModel>
+    not?: NestedDateTimeNullableWithAggregatesFilter<$PrismaModel> | Date | string | null
+    _count?: NestedIntNullableFilter<$PrismaModel>
+    _min?: NestedDateTimeNullableFilter<$PrismaModel>
+    _max?: NestedDateTimeNullableFilter<$PrismaModel>
+  }
   export type NestedJsonNullableFilter<$PrismaModel = never> =
     | PatchUndefined<
         Either<Required<NestedJsonNullableFilterBase<$PrismaModel>>, Exclude<keyof Required<NestedJsonNullableFilterBase<$PrismaModel>>, 'path'>>,
@@ -21115,6 +24243,8 @@ export namespace Prisma {
 
   export type EmploymentCreateWithoutUserInput = {
     status?: number
+    startTime?: Date | string
+    endTime?: Date | string | null
     description?: string | null
     isDelete?: boolean
     createTime?: Date | string
@@ -21122,6 +24252,7 @@ export namespace Prisma {
     deptartment: OrganizationCreateNestedOneWithoutDeptEmploymentsInput
     company: OrganizationCreateNestedOneWithoutCompEmploymentsInput
     position: PositionCreateNestedOneWithoutEmploymentsInput
+    posOrg: PosOrgCompositionCreateNestedOneWithoutEmploymentsInput
     roles?: EmploymentRoleCreateNestedManyWithoutEmploymentInput
   }
 
@@ -21131,6 +24262,8 @@ export namespace Prisma {
     deptId: number
     compId: number
     status?: number
+    startTime?: Date | string
+    endTime?: Date | string | null
     description?: string | null
     isDelete?: boolean
     createTime?: Date | string
@@ -21244,6 +24377,8 @@ export namespace Prisma {
     deptId?: IntFilter<"Employment"> | number
     compId?: IntFilter<"Employment"> | number
     status?: IntFilter<"Employment"> | number
+    startTime?: DateTimeFilter<"Employment"> | Date | string
+    endTime?: DateTimeNullableFilter<"Employment"> | Date | string | null
     description?: StringNullableFilter<"Employment"> | string | null
     isDelete?: BoolFilter<"Employment"> | boolean
     createTime?: DateTimeFilter<"Employment"> | Date | string
@@ -21300,6 +24435,8 @@ export namespace Prisma {
 
   export type EmploymentCreateWithoutDeptartmentInput = {
     status?: number
+    startTime?: Date | string
+    endTime?: Date | string | null
     description?: string | null
     isDelete?: boolean
     createTime?: Date | string
@@ -21307,6 +24444,7 @@ export namespace Prisma {
     user: UserCreateNestedOneWithoutEmploymentsInput
     company: OrganizationCreateNestedOneWithoutCompEmploymentsInput
     position: PositionCreateNestedOneWithoutEmploymentsInput
+    posOrg: PosOrgCompositionCreateNestedOneWithoutEmploymentsInput
     roles?: EmploymentRoleCreateNestedManyWithoutEmploymentInput
   }
 
@@ -21316,6 +24454,8 @@ export namespace Prisma {
     posId: number
     compId: number
     status?: number
+    startTime?: Date | string
+    endTime?: Date | string | null
     description?: string | null
     isDelete?: boolean
     createTime?: Date | string
@@ -21335,6 +24475,8 @@ export namespace Prisma {
 
   export type EmploymentCreateWithoutCompanyInput = {
     status?: number
+    startTime?: Date | string
+    endTime?: Date | string | null
     description?: string | null
     isDelete?: boolean
     createTime?: Date | string
@@ -21342,6 +24484,7 @@ export namespace Prisma {
     user: UserCreateNestedOneWithoutEmploymentsInput
     deptartment: OrganizationCreateNestedOneWithoutDeptEmploymentsInput
     position: PositionCreateNestedOneWithoutEmploymentsInput
+    posOrg: PosOrgCompositionCreateNestedOneWithoutEmploymentsInput
     roles?: EmploymentRoleCreateNestedManyWithoutEmploymentInput
   }
 
@@ -21351,6 +24494,8 @@ export namespace Prisma {
     posId: number
     deptId: number
     status?: number
+    startTime?: Date | string
+    endTime?: Date | string | null
     description?: string | null
     isDelete?: boolean
     createTime?: Date | string
@@ -21383,6 +24528,39 @@ export namespace Prisma {
 
   export type OrganizationRoleCreateManyOrganizationInputEnvelope = {
     data: OrganizationRoleCreateManyOrganizationInput | OrganizationRoleCreateManyOrganizationInput[]
+    skipDuplicates?: boolean
+  }
+
+  export type PosOrgCompositionCreateWithoutOrganizationInput = {
+    status?: number
+    description?: string | null
+    isDelete?: boolean
+    createTime?: Date | string
+    updateTime?: Date | string
+    position: PositionCreateNestedOneWithoutPosOrgCompositionInput
+    employments?: EmploymentCreateNestedManyWithoutPosOrgInput
+    roles?: PosOrgRoleCreateNestedManyWithoutPosOrgInput
+  }
+
+  export type PosOrgCompositionUncheckedCreateWithoutOrganizationInput = {
+    id?: number
+    posId: number
+    status?: number
+    description?: string | null
+    isDelete?: boolean
+    createTime?: Date | string
+    updateTime?: Date | string
+    employments?: EmploymentUncheckedCreateNestedManyWithoutPosOrgInput
+    roles?: PosOrgRoleUncheckedCreateNestedManyWithoutPosOrgInput
+  }
+
+  export type PosOrgCompositionCreateOrConnectWithoutOrganizationInput = {
+    where: PosOrgCompositionWhereUniqueInput
+    create: XOR<PosOrgCompositionCreateWithoutOrganizationInput, PosOrgCompositionUncheckedCreateWithoutOrganizationInput>
+  }
+
+  export type PosOrgCompositionCreateManyOrganizationInputEnvelope = {
+    data: PosOrgCompositionCreateManyOrganizationInput | PosOrgCompositionCreateManyOrganizationInput[]
     skipDuplicates?: boolean
   }
 
@@ -21442,8 +24620,40 @@ export namespace Prisma {
     roleId?: IntFilter<"OrganizationRole"> | number
   }
 
+  export type PosOrgCompositionUpsertWithWhereUniqueWithoutOrganizationInput = {
+    where: PosOrgCompositionWhereUniqueInput
+    update: XOR<PosOrgCompositionUpdateWithoutOrganizationInput, PosOrgCompositionUncheckedUpdateWithoutOrganizationInput>
+    create: XOR<PosOrgCompositionCreateWithoutOrganizationInput, PosOrgCompositionUncheckedCreateWithoutOrganizationInput>
+  }
+
+  export type PosOrgCompositionUpdateWithWhereUniqueWithoutOrganizationInput = {
+    where: PosOrgCompositionWhereUniqueInput
+    data: XOR<PosOrgCompositionUpdateWithoutOrganizationInput, PosOrgCompositionUncheckedUpdateWithoutOrganizationInput>
+  }
+
+  export type PosOrgCompositionUpdateManyWithWhereWithoutOrganizationInput = {
+    where: PosOrgCompositionScalarWhereInput
+    data: XOR<PosOrgCompositionUpdateManyMutationInput, PosOrgCompositionUncheckedUpdateManyWithoutOrganizationInput>
+  }
+
+  export type PosOrgCompositionScalarWhereInput = {
+    AND?: PosOrgCompositionScalarWhereInput | PosOrgCompositionScalarWhereInput[]
+    OR?: PosOrgCompositionScalarWhereInput[]
+    NOT?: PosOrgCompositionScalarWhereInput | PosOrgCompositionScalarWhereInput[]
+    id?: IntFilter<"PosOrgComposition"> | number
+    posId?: IntFilter<"PosOrgComposition"> | number
+    orgId?: IntFilter<"PosOrgComposition"> | number
+    status?: IntFilter<"PosOrgComposition"> | number
+    description?: StringNullableFilter<"PosOrgComposition"> | string | null
+    isDelete?: BoolFilter<"PosOrgComposition"> | boolean
+    createTime?: DateTimeFilter<"PosOrgComposition"> | Date | string
+    updateTime?: DateTimeFilter<"PosOrgComposition"> | Date | string
+  }
+
   export type EmploymentCreateWithoutPositionInput = {
     status?: number
+    startTime?: Date | string
+    endTime?: Date | string | null
     description?: string | null
     isDelete?: boolean
     createTime?: Date | string
@@ -21451,6 +24661,7 @@ export namespace Prisma {
     user: UserCreateNestedOneWithoutEmploymentsInput
     deptartment: OrganizationCreateNestedOneWithoutDeptEmploymentsInput
     company: OrganizationCreateNestedOneWithoutCompEmploymentsInput
+    posOrg: PosOrgCompositionCreateNestedOneWithoutEmploymentsInput
     roles?: EmploymentRoleCreateNestedManyWithoutEmploymentInput
   }
 
@@ -21460,6 +24671,8 @@ export namespace Prisma {
     deptId: number
     compId: number
     status?: number
+    startTime?: Date | string
+    endTime?: Date | string | null
     description?: string | null
     isDelete?: boolean
     createTime?: Date | string
@@ -21492,6 +24705,39 @@ export namespace Prisma {
 
   export type PositionRoleCreateManyPositionInputEnvelope = {
     data: PositionRoleCreateManyPositionInput | PositionRoleCreateManyPositionInput[]
+    skipDuplicates?: boolean
+  }
+
+  export type PosOrgCompositionCreateWithoutPositionInput = {
+    status?: number
+    description?: string | null
+    isDelete?: boolean
+    createTime?: Date | string
+    updateTime?: Date | string
+    organization: OrganizationCreateNestedOneWithoutPosOrgCompositionInput
+    employments?: EmploymentCreateNestedManyWithoutPosOrgInput
+    roles?: PosOrgRoleCreateNestedManyWithoutPosOrgInput
+  }
+
+  export type PosOrgCompositionUncheckedCreateWithoutPositionInput = {
+    id?: number
+    orgId: number
+    status?: number
+    description?: string | null
+    isDelete?: boolean
+    createTime?: Date | string
+    updateTime?: Date | string
+    employments?: EmploymentUncheckedCreateNestedManyWithoutPosOrgInput
+    roles?: PosOrgRoleUncheckedCreateNestedManyWithoutPosOrgInput
+  }
+
+  export type PosOrgCompositionCreateOrConnectWithoutPositionInput = {
+    where: PosOrgCompositionWhereUniqueInput
+    create: XOR<PosOrgCompositionCreateWithoutPositionInput, PosOrgCompositionUncheckedCreateWithoutPositionInput>
+  }
+
+  export type PosOrgCompositionCreateManyPositionInputEnvelope = {
+    data: PosOrgCompositionCreateManyPositionInput | PosOrgCompositionCreateManyPositionInput[]
     skipDuplicates?: boolean
   }
 
@@ -21533,6 +24779,279 @@ export namespace Prisma {
     NOT?: PositionRoleScalarWhereInput | PositionRoleScalarWhereInput[]
     positionId?: IntFilter<"PositionRole"> | number
     roleId?: IntFilter<"PositionRole"> | number
+  }
+
+  export type PosOrgCompositionUpsertWithWhereUniqueWithoutPositionInput = {
+    where: PosOrgCompositionWhereUniqueInput
+    update: XOR<PosOrgCompositionUpdateWithoutPositionInput, PosOrgCompositionUncheckedUpdateWithoutPositionInput>
+    create: XOR<PosOrgCompositionCreateWithoutPositionInput, PosOrgCompositionUncheckedCreateWithoutPositionInput>
+  }
+
+  export type PosOrgCompositionUpdateWithWhereUniqueWithoutPositionInput = {
+    where: PosOrgCompositionWhereUniqueInput
+    data: XOR<PosOrgCompositionUpdateWithoutPositionInput, PosOrgCompositionUncheckedUpdateWithoutPositionInput>
+  }
+
+  export type PosOrgCompositionUpdateManyWithWhereWithoutPositionInput = {
+    where: PosOrgCompositionScalarWhereInput
+    data: XOR<PosOrgCompositionUpdateManyMutationInput, PosOrgCompositionUncheckedUpdateManyWithoutPositionInput>
+  }
+
+  export type PositionCreateWithoutPosOrgCompositionInput = {
+    posCode: string
+    posName: string
+    status?: number
+    description?: string | null
+    isDelete?: boolean
+    createTime?: Date | string
+    updateTime?: Date | string
+    employments?: EmploymentCreateNestedManyWithoutPositionInput
+    roles?: PositionRoleCreateNestedManyWithoutPositionInput
+  }
+
+  export type PositionUncheckedCreateWithoutPosOrgCompositionInput = {
+    id?: number
+    posCode: string
+    posName: string
+    status?: number
+    description?: string | null
+    isDelete?: boolean
+    createTime?: Date | string
+    updateTime?: Date | string
+    employments?: EmploymentUncheckedCreateNestedManyWithoutPositionInput
+    roles?: PositionRoleUncheckedCreateNestedManyWithoutPositionInput
+  }
+
+  export type PositionCreateOrConnectWithoutPosOrgCompositionInput = {
+    where: PositionWhereUniqueInput
+    create: XOR<PositionCreateWithoutPosOrgCompositionInput, PositionUncheckedCreateWithoutPosOrgCompositionInput>
+  }
+
+  export type OrganizationCreateWithoutPosOrgCompositionInput = {
+    orgCode: string
+    orgName: string
+    parentId?: number
+    businessParentId?: number
+    level: number
+    orgType: string
+    orderNum?: number
+    isVirtual?: boolean
+    isEntity?: boolean
+    status?: boolean
+    isDelete?: boolean
+    createTime?: Date | string
+    updateTime?: Date | string
+    deptEmployments?: EmploymentCreateNestedManyWithoutDeptartmentInput
+    compEmployments?: EmploymentCreateNestedManyWithoutCompanyInput
+    roles?: OrganizationRoleCreateNestedManyWithoutOrganizationInput
+  }
+
+  export type OrganizationUncheckedCreateWithoutPosOrgCompositionInput = {
+    id?: number
+    orgCode: string
+    orgName: string
+    parentId?: number
+    businessParentId?: number
+    level: number
+    orgType: string
+    orderNum?: number
+    isVirtual?: boolean
+    isEntity?: boolean
+    status?: boolean
+    isDelete?: boolean
+    createTime?: Date | string
+    updateTime?: Date | string
+    deptEmployments?: EmploymentUncheckedCreateNestedManyWithoutDeptartmentInput
+    compEmployments?: EmploymentUncheckedCreateNestedManyWithoutCompanyInput
+    roles?: OrganizationRoleUncheckedCreateNestedManyWithoutOrganizationInput
+  }
+
+  export type OrganizationCreateOrConnectWithoutPosOrgCompositionInput = {
+    where: OrganizationWhereUniqueInput
+    create: XOR<OrganizationCreateWithoutPosOrgCompositionInput, OrganizationUncheckedCreateWithoutPosOrgCompositionInput>
+  }
+
+  export type EmploymentCreateWithoutPosOrgInput = {
+    status?: number
+    startTime?: Date | string
+    endTime?: Date | string | null
+    description?: string | null
+    isDelete?: boolean
+    createTime?: Date | string
+    updateTime?: Date | string
+    user: UserCreateNestedOneWithoutEmploymentsInput
+    deptartment: OrganizationCreateNestedOneWithoutDeptEmploymentsInput
+    company: OrganizationCreateNestedOneWithoutCompEmploymentsInput
+    position: PositionCreateNestedOneWithoutEmploymentsInput
+    roles?: EmploymentRoleCreateNestedManyWithoutEmploymentInput
+  }
+
+  export type EmploymentUncheckedCreateWithoutPosOrgInput = {
+    id?: number
+    userId: number
+    compId: number
+    status?: number
+    startTime?: Date | string
+    endTime?: Date | string | null
+    description?: string | null
+    isDelete?: boolean
+    createTime?: Date | string
+    updateTime?: Date | string
+    roles?: EmploymentRoleUncheckedCreateNestedManyWithoutEmploymentInput
+  }
+
+  export type EmploymentCreateOrConnectWithoutPosOrgInput = {
+    where: EmploymentWhereUniqueInput
+    create: XOR<EmploymentCreateWithoutPosOrgInput, EmploymentUncheckedCreateWithoutPosOrgInput>
+  }
+
+  export type EmploymentCreateManyPosOrgInputEnvelope = {
+    data: EmploymentCreateManyPosOrgInput | EmploymentCreateManyPosOrgInput[]
+    skipDuplicates?: boolean
+  }
+
+  export type PosOrgRoleCreateWithoutPosOrgInput = {
+    role: RoleCreateNestedOneWithoutPositionOrganizationsInput
+  }
+
+  export type PosOrgRoleUncheckedCreateWithoutPosOrgInput = {
+    roleId: number
+  }
+
+  export type PosOrgRoleCreateOrConnectWithoutPosOrgInput = {
+    where: PosOrgRoleWhereUniqueInput
+    create: XOR<PosOrgRoleCreateWithoutPosOrgInput, PosOrgRoleUncheckedCreateWithoutPosOrgInput>
+  }
+
+  export type PosOrgRoleCreateManyPosOrgInputEnvelope = {
+    data: PosOrgRoleCreateManyPosOrgInput | PosOrgRoleCreateManyPosOrgInput[]
+    skipDuplicates?: boolean
+  }
+
+  export type PositionUpsertWithoutPosOrgCompositionInput = {
+    update: XOR<PositionUpdateWithoutPosOrgCompositionInput, PositionUncheckedUpdateWithoutPosOrgCompositionInput>
+    create: XOR<PositionCreateWithoutPosOrgCompositionInput, PositionUncheckedCreateWithoutPosOrgCompositionInput>
+    where?: PositionWhereInput
+  }
+
+  export type PositionUpdateToOneWithWhereWithoutPosOrgCompositionInput = {
+    where?: PositionWhereInput
+    data: XOR<PositionUpdateWithoutPosOrgCompositionInput, PositionUncheckedUpdateWithoutPosOrgCompositionInput>
+  }
+
+  export type PositionUpdateWithoutPosOrgCompositionInput = {
+    posCode?: StringFieldUpdateOperationsInput | string
+    posName?: StringFieldUpdateOperationsInput | string
+    status?: IntFieldUpdateOperationsInput | number
+    description?: NullableStringFieldUpdateOperationsInput | string | null
+    isDelete?: BoolFieldUpdateOperationsInput | boolean
+    createTime?: DateTimeFieldUpdateOperationsInput | Date | string
+    updateTime?: DateTimeFieldUpdateOperationsInput | Date | string
+    employments?: EmploymentUpdateManyWithoutPositionNestedInput
+    roles?: PositionRoleUpdateManyWithoutPositionNestedInput
+  }
+
+  export type PositionUncheckedUpdateWithoutPosOrgCompositionInput = {
+    id?: IntFieldUpdateOperationsInput | number
+    posCode?: StringFieldUpdateOperationsInput | string
+    posName?: StringFieldUpdateOperationsInput | string
+    status?: IntFieldUpdateOperationsInput | number
+    description?: NullableStringFieldUpdateOperationsInput | string | null
+    isDelete?: BoolFieldUpdateOperationsInput | boolean
+    createTime?: DateTimeFieldUpdateOperationsInput | Date | string
+    updateTime?: DateTimeFieldUpdateOperationsInput | Date | string
+    employments?: EmploymentUncheckedUpdateManyWithoutPositionNestedInput
+    roles?: PositionRoleUncheckedUpdateManyWithoutPositionNestedInput
+  }
+
+  export type OrganizationUpsertWithoutPosOrgCompositionInput = {
+    update: XOR<OrganizationUpdateWithoutPosOrgCompositionInput, OrganizationUncheckedUpdateWithoutPosOrgCompositionInput>
+    create: XOR<OrganizationCreateWithoutPosOrgCompositionInput, OrganizationUncheckedCreateWithoutPosOrgCompositionInput>
+    where?: OrganizationWhereInput
+  }
+
+  export type OrganizationUpdateToOneWithWhereWithoutPosOrgCompositionInput = {
+    where?: OrganizationWhereInput
+    data: XOR<OrganizationUpdateWithoutPosOrgCompositionInput, OrganizationUncheckedUpdateWithoutPosOrgCompositionInput>
+  }
+
+  export type OrganizationUpdateWithoutPosOrgCompositionInput = {
+    orgCode?: StringFieldUpdateOperationsInput | string
+    orgName?: StringFieldUpdateOperationsInput | string
+    parentId?: IntFieldUpdateOperationsInput | number
+    businessParentId?: IntFieldUpdateOperationsInput | number
+    level?: IntFieldUpdateOperationsInput | number
+    orgType?: StringFieldUpdateOperationsInput | string
+    orderNum?: IntFieldUpdateOperationsInput | number
+    isVirtual?: BoolFieldUpdateOperationsInput | boolean
+    isEntity?: BoolFieldUpdateOperationsInput | boolean
+    status?: BoolFieldUpdateOperationsInput | boolean
+    isDelete?: BoolFieldUpdateOperationsInput | boolean
+    createTime?: DateTimeFieldUpdateOperationsInput | Date | string
+    updateTime?: DateTimeFieldUpdateOperationsInput | Date | string
+    deptEmployments?: EmploymentUpdateManyWithoutDeptartmentNestedInput
+    compEmployments?: EmploymentUpdateManyWithoutCompanyNestedInput
+    roles?: OrganizationRoleUpdateManyWithoutOrganizationNestedInput
+  }
+
+  export type OrganizationUncheckedUpdateWithoutPosOrgCompositionInput = {
+    id?: IntFieldUpdateOperationsInput | number
+    orgCode?: StringFieldUpdateOperationsInput | string
+    orgName?: StringFieldUpdateOperationsInput | string
+    parentId?: IntFieldUpdateOperationsInput | number
+    businessParentId?: IntFieldUpdateOperationsInput | number
+    level?: IntFieldUpdateOperationsInput | number
+    orgType?: StringFieldUpdateOperationsInput | string
+    orderNum?: IntFieldUpdateOperationsInput | number
+    isVirtual?: BoolFieldUpdateOperationsInput | boolean
+    isEntity?: BoolFieldUpdateOperationsInput | boolean
+    status?: BoolFieldUpdateOperationsInput | boolean
+    isDelete?: BoolFieldUpdateOperationsInput | boolean
+    createTime?: DateTimeFieldUpdateOperationsInput | Date | string
+    updateTime?: DateTimeFieldUpdateOperationsInput | Date | string
+    deptEmployments?: EmploymentUncheckedUpdateManyWithoutDeptartmentNestedInput
+    compEmployments?: EmploymentUncheckedUpdateManyWithoutCompanyNestedInput
+    roles?: OrganizationRoleUncheckedUpdateManyWithoutOrganizationNestedInput
+  }
+
+  export type EmploymentUpsertWithWhereUniqueWithoutPosOrgInput = {
+    where: EmploymentWhereUniqueInput
+    update: XOR<EmploymentUpdateWithoutPosOrgInput, EmploymentUncheckedUpdateWithoutPosOrgInput>
+    create: XOR<EmploymentCreateWithoutPosOrgInput, EmploymentUncheckedCreateWithoutPosOrgInput>
+  }
+
+  export type EmploymentUpdateWithWhereUniqueWithoutPosOrgInput = {
+    where: EmploymentWhereUniqueInput
+    data: XOR<EmploymentUpdateWithoutPosOrgInput, EmploymentUncheckedUpdateWithoutPosOrgInput>
+  }
+
+  export type EmploymentUpdateManyWithWhereWithoutPosOrgInput = {
+    where: EmploymentScalarWhereInput
+    data: XOR<EmploymentUpdateManyMutationInput, EmploymentUncheckedUpdateManyWithoutPosOrgInput>
+  }
+
+  export type PosOrgRoleUpsertWithWhereUniqueWithoutPosOrgInput = {
+    where: PosOrgRoleWhereUniqueInput
+    update: XOR<PosOrgRoleUpdateWithoutPosOrgInput, PosOrgRoleUncheckedUpdateWithoutPosOrgInput>
+    create: XOR<PosOrgRoleCreateWithoutPosOrgInput, PosOrgRoleUncheckedCreateWithoutPosOrgInput>
+  }
+
+  export type PosOrgRoleUpdateWithWhereUniqueWithoutPosOrgInput = {
+    where: PosOrgRoleWhereUniqueInput
+    data: XOR<PosOrgRoleUpdateWithoutPosOrgInput, PosOrgRoleUncheckedUpdateWithoutPosOrgInput>
+  }
+
+  export type PosOrgRoleUpdateManyWithWhereWithoutPosOrgInput = {
+    where: PosOrgRoleScalarWhereInput
+    data: XOR<PosOrgRoleUpdateManyMutationInput, PosOrgRoleUncheckedUpdateManyWithoutPosOrgInput>
+  }
+
+  export type PosOrgRoleScalarWhereInput = {
+    AND?: PosOrgRoleScalarWhereInput | PosOrgRoleScalarWhereInput[]
+    OR?: PosOrgRoleScalarWhereInput[]
+    NOT?: PosOrgRoleScalarWhereInput | PosOrgRoleScalarWhereInput[]
+    posOrgId?: IntFilter<"PosOrgRole"> | number
+    roleId?: IntFilter<"PosOrgRole"> | number
   }
 
   export type UserCreateWithoutEmploymentsInput = {
@@ -21585,6 +25104,7 @@ export namespace Prisma {
     updateTime?: Date | string
     compEmployments?: EmploymentCreateNestedManyWithoutCompanyInput
     roles?: OrganizationRoleCreateNestedManyWithoutOrganizationInput
+    posOrgComposition?: PosOrgCompositionCreateNestedManyWithoutOrganizationInput
   }
 
   export type OrganizationUncheckedCreateWithoutDeptEmploymentsInput = {
@@ -21604,6 +25124,7 @@ export namespace Prisma {
     updateTime?: Date | string
     compEmployments?: EmploymentUncheckedCreateNestedManyWithoutCompanyInput
     roles?: OrganizationRoleUncheckedCreateNestedManyWithoutOrganizationInput
+    posOrgComposition?: PosOrgCompositionUncheckedCreateNestedManyWithoutOrganizationInput
   }
 
   export type OrganizationCreateOrConnectWithoutDeptEmploymentsInput = {
@@ -21627,6 +25148,7 @@ export namespace Prisma {
     updateTime?: Date | string
     deptEmployments?: EmploymentCreateNestedManyWithoutDeptartmentInput
     roles?: OrganizationRoleCreateNestedManyWithoutOrganizationInput
+    posOrgComposition?: PosOrgCompositionCreateNestedManyWithoutOrganizationInput
   }
 
   export type OrganizationUncheckedCreateWithoutCompEmploymentsInput = {
@@ -21646,6 +25168,7 @@ export namespace Prisma {
     updateTime?: Date | string
     deptEmployments?: EmploymentUncheckedCreateNestedManyWithoutDeptartmentInput
     roles?: OrganizationRoleUncheckedCreateNestedManyWithoutOrganizationInput
+    posOrgComposition?: PosOrgCompositionUncheckedCreateNestedManyWithoutOrganizationInput
   }
 
   export type OrganizationCreateOrConnectWithoutCompEmploymentsInput = {
@@ -21662,6 +25185,7 @@ export namespace Prisma {
     createTime?: Date | string
     updateTime?: Date | string
     roles?: PositionRoleCreateNestedManyWithoutPositionInput
+    posOrgComposition?: PosOrgCompositionCreateNestedManyWithoutPositionInput
   }
 
   export type PositionUncheckedCreateWithoutEmploymentsInput = {
@@ -21674,11 +25198,40 @@ export namespace Prisma {
     createTime?: Date | string
     updateTime?: Date | string
     roles?: PositionRoleUncheckedCreateNestedManyWithoutPositionInput
+    posOrgComposition?: PosOrgCompositionUncheckedCreateNestedManyWithoutPositionInput
   }
 
   export type PositionCreateOrConnectWithoutEmploymentsInput = {
     where: PositionWhereUniqueInput
     create: XOR<PositionCreateWithoutEmploymentsInput, PositionUncheckedCreateWithoutEmploymentsInput>
+  }
+
+  export type PosOrgCompositionCreateWithoutEmploymentsInput = {
+    status?: number
+    description?: string | null
+    isDelete?: boolean
+    createTime?: Date | string
+    updateTime?: Date | string
+    position: PositionCreateNestedOneWithoutPosOrgCompositionInput
+    organization: OrganizationCreateNestedOneWithoutPosOrgCompositionInput
+    roles?: PosOrgRoleCreateNestedManyWithoutPosOrgInput
+  }
+
+  export type PosOrgCompositionUncheckedCreateWithoutEmploymentsInput = {
+    id?: number
+    posId: number
+    orgId: number
+    status?: number
+    description?: string | null
+    isDelete?: boolean
+    createTime?: Date | string
+    updateTime?: Date | string
+    roles?: PosOrgRoleUncheckedCreateNestedManyWithoutPosOrgInput
+  }
+
+  export type PosOrgCompositionCreateOrConnectWithoutEmploymentsInput = {
+    where: PosOrgCompositionWhereUniqueInput
+    create: XOR<PosOrgCompositionCreateWithoutEmploymentsInput, PosOrgCompositionUncheckedCreateWithoutEmploymentsInput>
   }
 
   export type EmploymentRoleCreateWithoutEmploymentInput = {
@@ -21766,6 +25319,7 @@ export namespace Prisma {
     updateTime?: DateTimeFieldUpdateOperationsInput | Date | string
     compEmployments?: EmploymentUpdateManyWithoutCompanyNestedInput
     roles?: OrganizationRoleUpdateManyWithoutOrganizationNestedInput
+    posOrgComposition?: PosOrgCompositionUpdateManyWithoutOrganizationNestedInput
   }
 
   export type OrganizationUncheckedUpdateWithoutDeptEmploymentsInput = {
@@ -21785,6 +25339,7 @@ export namespace Prisma {
     updateTime?: DateTimeFieldUpdateOperationsInput | Date | string
     compEmployments?: EmploymentUncheckedUpdateManyWithoutCompanyNestedInput
     roles?: OrganizationRoleUncheckedUpdateManyWithoutOrganizationNestedInput
+    posOrgComposition?: PosOrgCompositionUncheckedUpdateManyWithoutOrganizationNestedInput
   }
 
   export type OrganizationUpsertWithoutCompEmploymentsInput = {
@@ -21814,6 +25369,7 @@ export namespace Prisma {
     updateTime?: DateTimeFieldUpdateOperationsInput | Date | string
     deptEmployments?: EmploymentUpdateManyWithoutDeptartmentNestedInput
     roles?: OrganizationRoleUpdateManyWithoutOrganizationNestedInput
+    posOrgComposition?: PosOrgCompositionUpdateManyWithoutOrganizationNestedInput
   }
 
   export type OrganizationUncheckedUpdateWithoutCompEmploymentsInput = {
@@ -21833,6 +25389,7 @@ export namespace Prisma {
     updateTime?: DateTimeFieldUpdateOperationsInput | Date | string
     deptEmployments?: EmploymentUncheckedUpdateManyWithoutDeptartmentNestedInput
     roles?: OrganizationRoleUncheckedUpdateManyWithoutOrganizationNestedInput
+    posOrgComposition?: PosOrgCompositionUncheckedUpdateManyWithoutOrganizationNestedInput
   }
 
   export type PositionUpsertWithoutEmploymentsInput = {
@@ -21855,6 +25412,7 @@ export namespace Prisma {
     createTime?: DateTimeFieldUpdateOperationsInput | Date | string
     updateTime?: DateTimeFieldUpdateOperationsInput | Date | string
     roles?: PositionRoleUpdateManyWithoutPositionNestedInput
+    posOrgComposition?: PosOrgCompositionUpdateManyWithoutPositionNestedInput
   }
 
   export type PositionUncheckedUpdateWithoutEmploymentsInput = {
@@ -21867,6 +25425,41 @@ export namespace Prisma {
     createTime?: DateTimeFieldUpdateOperationsInput | Date | string
     updateTime?: DateTimeFieldUpdateOperationsInput | Date | string
     roles?: PositionRoleUncheckedUpdateManyWithoutPositionNestedInput
+    posOrgComposition?: PosOrgCompositionUncheckedUpdateManyWithoutPositionNestedInput
+  }
+
+  export type PosOrgCompositionUpsertWithoutEmploymentsInput = {
+    update: XOR<PosOrgCompositionUpdateWithoutEmploymentsInput, PosOrgCompositionUncheckedUpdateWithoutEmploymentsInput>
+    create: XOR<PosOrgCompositionCreateWithoutEmploymentsInput, PosOrgCompositionUncheckedCreateWithoutEmploymentsInput>
+    where?: PosOrgCompositionWhereInput
+  }
+
+  export type PosOrgCompositionUpdateToOneWithWhereWithoutEmploymentsInput = {
+    where?: PosOrgCompositionWhereInput
+    data: XOR<PosOrgCompositionUpdateWithoutEmploymentsInput, PosOrgCompositionUncheckedUpdateWithoutEmploymentsInput>
+  }
+
+  export type PosOrgCompositionUpdateWithoutEmploymentsInput = {
+    status?: IntFieldUpdateOperationsInput | number
+    description?: NullableStringFieldUpdateOperationsInput | string | null
+    isDelete?: BoolFieldUpdateOperationsInput | boolean
+    createTime?: DateTimeFieldUpdateOperationsInput | Date | string
+    updateTime?: DateTimeFieldUpdateOperationsInput | Date | string
+    position?: PositionUpdateOneRequiredWithoutPosOrgCompositionNestedInput
+    organization?: OrganizationUpdateOneRequiredWithoutPosOrgCompositionNestedInput
+    roles?: PosOrgRoleUpdateManyWithoutPosOrgNestedInput
+  }
+
+  export type PosOrgCompositionUncheckedUpdateWithoutEmploymentsInput = {
+    id?: IntFieldUpdateOperationsInput | number
+    posId?: IntFieldUpdateOperationsInput | number
+    orgId?: IntFieldUpdateOperationsInput | number
+    status?: IntFieldUpdateOperationsInput | number
+    description?: NullableStringFieldUpdateOperationsInput | string | null
+    isDelete?: BoolFieldUpdateOperationsInput | boolean
+    createTime?: DateTimeFieldUpdateOperationsInput | Date | string
+    updateTime?: DateTimeFieldUpdateOperationsInput | Date | string
+    roles?: PosOrgRoleUncheckedUpdateManyWithoutPosOrgNestedInput
   }
 
   export type EmploymentRoleUpsertWithWhereUniqueWithoutEmploymentInput = {
@@ -21903,6 +25496,7 @@ export namespace Prisma {
     updateTime?: Date | string
     positions?: PositionRoleCreateNestedManyWithoutRoleInput
     organizations?: OrganizationRoleCreateNestedManyWithoutRoleInput
+    positionOrganizations?: PosOrgRoleCreateNestedManyWithoutRoleInput
     employments?: EmploymentRoleCreateNestedManyWithoutRoleInput
     privileges?: RolePrivilegeCreateNestedManyWithoutRoleInput
   }
@@ -21918,6 +25512,7 @@ export namespace Prisma {
     updateTime?: Date | string
     positions?: PositionRoleUncheckedCreateNestedManyWithoutRoleInput
     organizations?: OrganizationRoleUncheckedCreateNestedManyWithoutRoleInput
+    positionOrganizations?: PosOrgRoleUncheckedCreateNestedManyWithoutRoleInput
     employments?: EmploymentRoleUncheckedCreateNestedManyWithoutRoleInput
     privileges?: RolePrivilegeUncheckedCreateNestedManyWithoutRoleInput
   }
@@ -22025,6 +25620,24 @@ export namespace Prisma {
     skipDuplicates?: boolean
   }
 
+  export type PosOrgRoleCreateWithoutRoleInput = {
+    posOrg: PosOrgCompositionCreateNestedOneWithoutRolesInput
+  }
+
+  export type PosOrgRoleUncheckedCreateWithoutRoleInput = {
+    posOrgId: number
+  }
+
+  export type PosOrgRoleCreateOrConnectWithoutRoleInput = {
+    where: PosOrgRoleWhereUniqueInput
+    create: XOR<PosOrgRoleCreateWithoutRoleInput, PosOrgRoleUncheckedCreateWithoutRoleInput>
+  }
+
+  export type PosOrgRoleCreateManyRoleInputEnvelope = {
+    data: PosOrgRoleCreateManyRoleInput | PosOrgRoleCreateManyRoleInput[]
+    skipDuplicates?: boolean
+  }
+
   export type EmploymentRoleCreateWithoutRoleInput = {
     employment: EmploymentCreateNestedOneWithoutRolesInput
   }
@@ -22125,6 +25738,22 @@ export namespace Prisma {
     data: XOR<OrganizationRoleUpdateManyMutationInput, OrganizationRoleUncheckedUpdateManyWithoutRoleInput>
   }
 
+  export type PosOrgRoleUpsertWithWhereUniqueWithoutRoleInput = {
+    where: PosOrgRoleWhereUniqueInput
+    update: XOR<PosOrgRoleUpdateWithoutRoleInput, PosOrgRoleUncheckedUpdateWithoutRoleInput>
+    create: XOR<PosOrgRoleCreateWithoutRoleInput, PosOrgRoleUncheckedCreateWithoutRoleInput>
+  }
+
+  export type PosOrgRoleUpdateWithWhereUniqueWithoutRoleInput = {
+    where: PosOrgRoleWhereUniqueInput
+    data: XOR<PosOrgRoleUpdateWithoutRoleInput, PosOrgRoleUncheckedUpdateWithoutRoleInput>
+  }
+
+  export type PosOrgRoleUpdateManyWithWhereWithoutRoleInput = {
+    where: PosOrgRoleScalarWhereInput
+    data: XOR<PosOrgRoleUpdateManyMutationInput, PosOrgRoleUncheckedUpdateManyWithoutRoleInput>
+  }
+
   export type EmploymentRoleUpsertWithWhereUniqueWithoutRoleInput = {
     where: EmploymentRoleWhereUniqueInput
     update: XOR<EmploymentRoleUpdateWithoutRoleInput, EmploymentRoleUncheckedUpdateWithoutRoleInput>
@@ -22174,6 +25803,7 @@ export namespace Prisma {
     createTime?: Date | string
     updateTime?: Date | string
     employments?: EmploymentCreateNestedManyWithoutPositionInput
+    posOrgComposition?: PosOrgCompositionCreateNestedManyWithoutPositionInput
   }
 
   export type PositionUncheckedCreateWithoutRolesInput = {
@@ -22186,6 +25816,7 @@ export namespace Prisma {
     createTime?: Date | string
     updateTime?: Date | string
     employments?: EmploymentUncheckedCreateNestedManyWithoutPositionInput
+    posOrgComposition?: PosOrgCompositionUncheckedCreateNestedManyWithoutPositionInput
   }
 
   export type PositionCreateOrConnectWithoutRolesInput = {
@@ -22203,6 +25834,7 @@ export namespace Prisma {
     updateTime?: Date | string
     client: ClientCreateNestedOneWithoutRoleInput
     organizations?: OrganizationRoleCreateNestedManyWithoutRoleInput
+    positionOrganizations?: PosOrgRoleCreateNestedManyWithoutRoleInput
     employments?: EmploymentRoleCreateNestedManyWithoutRoleInput
     privileges?: RolePrivilegeCreateNestedManyWithoutRoleInput
   }
@@ -22218,6 +25850,7 @@ export namespace Prisma {
     createTime?: Date | string
     updateTime?: Date | string
     organizations?: OrganizationRoleUncheckedCreateNestedManyWithoutRoleInput
+    positionOrganizations?: PosOrgRoleUncheckedCreateNestedManyWithoutRoleInput
     employments?: EmploymentRoleUncheckedCreateNestedManyWithoutRoleInput
     privileges?: RolePrivilegeUncheckedCreateNestedManyWithoutRoleInput
   }
@@ -22247,6 +25880,7 @@ export namespace Prisma {
     createTime?: DateTimeFieldUpdateOperationsInput | Date | string
     updateTime?: DateTimeFieldUpdateOperationsInput | Date | string
     employments?: EmploymentUpdateManyWithoutPositionNestedInput
+    posOrgComposition?: PosOrgCompositionUpdateManyWithoutPositionNestedInput
   }
 
   export type PositionUncheckedUpdateWithoutRolesInput = {
@@ -22259,6 +25893,7 @@ export namespace Prisma {
     createTime?: DateTimeFieldUpdateOperationsInput | Date | string
     updateTime?: DateTimeFieldUpdateOperationsInput | Date | string
     employments?: EmploymentUncheckedUpdateManyWithoutPositionNestedInput
+    posOrgComposition?: PosOrgCompositionUncheckedUpdateManyWithoutPositionNestedInput
   }
 
   export type RoleUpsertWithoutPositionsInput = {
@@ -22282,6 +25917,7 @@ export namespace Prisma {
     updateTime?: DateTimeFieldUpdateOperationsInput | Date | string
     client?: ClientUpdateOneRequiredWithoutRoleNestedInput
     organizations?: OrganizationRoleUpdateManyWithoutRoleNestedInput
+    positionOrganizations?: PosOrgRoleUpdateManyWithoutRoleNestedInput
     employments?: EmploymentRoleUpdateManyWithoutRoleNestedInput
     privileges?: RolePrivilegeUpdateManyWithoutRoleNestedInput
   }
@@ -22297,12 +25933,15 @@ export namespace Prisma {
     createTime?: DateTimeFieldUpdateOperationsInput | Date | string
     updateTime?: DateTimeFieldUpdateOperationsInput | Date | string
     organizations?: OrganizationRoleUncheckedUpdateManyWithoutRoleNestedInput
+    positionOrganizations?: PosOrgRoleUncheckedUpdateManyWithoutRoleNestedInput
     employments?: EmploymentRoleUncheckedUpdateManyWithoutRoleNestedInput
     privileges?: RolePrivilegeUncheckedUpdateManyWithoutRoleNestedInput
   }
 
   export type EmploymentCreateWithoutRolesInput = {
     status?: number
+    startTime?: Date | string
+    endTime?: Date | string | null
     description?: string | null
     isDelete?: boolean
     createTime?: Date | string
@@ -22311,6 +25950,7 @@ export namespace Prisma {
     deptartment: OrganizationCreateNestedOneWithoutDeptEmploymentsInput
     company: OrganizationCreateNestedOneWithoutCompEmploymentsInput
     position: PositionCreateNestedOneWithoutEmploymentsInput
+    posOrg: PosOrgCompositionCreateNestedOneWithoutEmploymentsInput
   }
 
   export type EmploymentUncheckedCreateWithoutRolesInput = {
@@ -22320,6 +25960,8 @@ export namespace Prisma {
     deptId: number
     compId: number
     status?: number
+    startTime?: Date | string
+    endTime?: Date | string | null
     description?: string | null
     isDelete?: boolean
     createTime?: Date | string
@@ -22342,6 +25984,7 @@ export namespace Prisma {
     client: ClientCreateNestedOneWithoutRoleInput
     positions?: PositionRoleCreateNestedManyWithoutRoleInput
     organizations?: OrganizationRoleCreateNestedManyWithoutRoleInput
+    positionOrganizations?: PosOrgRoleCreateNestedManyWithoutRoleInput
     privileges?: RolePrivilegeCreateNestedManyWithoutRoleInput
   }
 
@@ -22357,6 +26000,7 @@ export namespace Prisma {
     updateTime?: Date | string
     positions?: PositionRoleUncheckedCreateNestedManyWithoutRoleInput
     organizations?: OrganizationRoleUncheckedCreateNestedManyWithoutRoleInput
+    positionOrganizations?: PosOrgRoleUncheckedCreateNestedManyWithoutRoleInput
     privileges?: RolePrivilegeUncheckedCreateNestedManyWithoutRoleInput
   }
 
@@ -22378,6 +26022,8 @@ export namespace Prisma {
 
   export type EmploymentUpdateWithoutRolesInput = {
     status?: IntFieldUpdateOperationsInput | number
+    startTime?: DateTimeFieldUpdateOperationsInput | Date | string
+    endTime?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     description?: NullableStringFieldUpdateOperationsInput | string | null
     isDelete?: BoolFieldUpdateOperationsInput | boolean
     createTime?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -22386,6 +26032,7 @@ export namespace Prisma {
     deptartment?: OrganizationUpdateOneRequiredWithoutDeptEmploymentsNestedInput
     company?: OrganizationUpdateOneRequiredWithoutCompEmploymentsNestedInput
     position?: PositionUpdateOneRequiredWithoutEmploymentsNestedInput
+    posOrg?: PosOrgCompositionUpdateOneRequiredWithoutEmploymentsNestedInput
   }
 
   export type EmploymentUncheckedUpdateWithoutRolesInput = {
@@ -22395,6 +26042,8 @@ export namespace Prisma {
     deptId?: IntFieldUpdateOperationsInput | number
     compId?: IntFieldUpdateOperationsInput | number
     status?: IntFieldUpdateOperationsInput | number
+    startTime?: DateTimeFieldUpdateOperationsInput | Date | string
+    endTime?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     description?: NullableStringFieldUpdateOperationsInput | string | null
     isDelete?: BoolFieldUpdateOperationsInput | boolean
     createTime?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -22423,6 +26072,7 @@ export namespace Prisma {
     client?: ClientUpdateOneRequiredWithoutRoleNestedInput
     positions?: PositionRoleUpdateManyWithoutRoleNestedInput
     organizations?: OrganizationRoleUpdateManyWithoutRoleNestedInput
+    positionOrganizations?: PosOrgRoleUpdateManyWithoutRoleNestedInput
     privileges?: RolePrivilegeUpdateManyWithoutRoleNestedInput
   }
 
@@ -22438,6 +26088,7 @@ export namespace Prisma {
     updateTime?: DateTimeFieldUpdateOperationsInput | Date | string
     positions?: PositionRoleUncheckedUpdateManyWithoutRoleNestedInput
     organizations?: OrganizationRoleUncheckedUpdateManyWithoutRoleNestedInput
+    positionOrganizations?: PosOrgRoleUncheckedUpdateManyWithoutRoleNestedInput
     privileges?: RolePrivilegeUncheckedUpdateManyWithoutRoleNestedInput
   }
 
@@ -22457,6 +26108,7 @@ export namespace Prisma {
     updateTime?: Date | string
     deptEmployments?: EmploymentCreateNestedManyWithoutDeptartmentInput
     compEmployments?: EmploymentCreateNestedManyWithoutCompanyInput
+    posOrgComposition?: PosOrgCompositionCreateNestedManyWithoutOrganizationInput
   }
 
   export type OrganizationUncheckedCreateWithoutRolesInput = {
@@ -22476,6 +26128,7 @@ export namespace Prisma {
     updateTime?: Date | string
     deptEmployments?: EmploymentUncheckedCreateNestedManyWithoutDeptartmentInput
     compEmployments?: EmploymentUncheckedCreateNestedManyWithoutCompanyInput
+    posOrgComposition?: PosOrgCompositionUncheckedCreateNestedManyWithoutOrganizationInput
   }
 
   export type OrganizationCreateOrConnectWithoutRolesInput = {
@@ -22493,6 +26146,7 @@ export namespace Prisma {
     updateTime?: Date | string
     client: ClientCreateNestedOneWithoutRoleInput
     positions?: PositionRoleCreateNestedManyWithoutRoleInput
+    positionOrganizations?: PosOrgRoleCreateNestedManyWithoutRoleInput
     employments?: EmploymentRoleCreateNestedManyWithoutRoleInput
     privileges?: RolePrivilegeCreateNestedManyWithoutRoleInput
   }
@@ -22508,6 +26162,7 @@ export namespace Prisma {
     createTime?: Date | string
     updateTime?: Date | string
     positions?: PositionRoleUncheckedCreateNestedManyWithoutRoleInput
+    positionOrganizations?: PosOrgRoleUncheckedCreateNestedManyWithoutRoleInput
     employments?: EmploymentRoleUncheckedCreateNestedManyWithoutRoleInput
     privileges?: RolePrivilegeUncheckedCreateNestedManyWithoutRoleInput
   }
@@ -22544,6 +26199,7 @@ export namespace Prisma {
     updateTime?: DateTimeFieldUpdateOperationsInput | Date | string
     deptEmployments?: EmploymentUpdateManyWithoutDeptartmentNestedInput
     compEmployments?: EmploymentUpdateManyWithoutCompanyNestedInput
+    posOrgComposition?: PosOrgCompositionUpdateManyWithoutOrganizationNestedInput
   }
 
   export type OrganizationUncheckedUpdateWithoutRolesInput = {
@@ -22563,6 +26219,7 @@ export namespace Prisma {
     updateTime?: DateTimeFieldUpdateOperationsInput | Date | string
     deptEmployments?: EmploymentUncheckedUpdateManyWithoutDeptartmentNestedInput
     compEmployments?: EmploymentUncheckedUpdateManyWithoutCompanyNestedInput
+    posOrgComposition?: PosOrgCompositionUncheckedUpdateManyWithoutOrganizationNestedInput
   }
 
   export type RoleUpsertWithoutOrganizationsInput = {
@@ -22586,6 +26243,7 @@ export namespace Prisma {
     updateTime?: DateTimeFieldUpdateOperationsInput | Date | string
     client?: ClientUpdateOneRequiredWithoutRoleNestedInput
     positions?: PositionRoleUpdateManyWithoutRoleNestedInput
+    positionOrganizations?: PosOrgRoleUpdateManyWithoutRoleNestedInput
     employments?: EmploymentRoleUpdateManyWithoutRoleNestedInput
     privileges?: RolePrivilegeUpdateManyWithoutRoleNestedInput
   }
@@ -22601,6 +26259,147 @@ export namespace Prisma {
     createTime?: DateTimeFieldUpdateOperationsInput | Date | string
     updateTime?: DateTimeFieldUpdateOperationsInput | Date | string
     positions?: PositionRoleUncheckedUpdateManyWithoutRoleNestedInput
+    positionOrganizations?: PosOrgRoleUncheckedUpdateManyWithoutRoleNestedInput
+    employments?: EmploymentRoleUncheckedUpdateManyWithoutRoleNestedInput
+    privileges?: RolePrivilegeUncheckedUpdateManyWithoutRoleNestedInput
+  }
+
+  export type PosOrgCompositionCreateWithoutRolesInput = {
+    status?: number
+    description?: string | null
+    isDelete?: boolean
+    createTime?: Date | string
+    updateTime?: Date | string
+    position: PositionCreateNestedOneWithoutPosOrgCompositionInput
+    organization: OrganizationCreateNestedOneWithoutPosOrgCompositionInput
+    employments?: EmploymentCreateNestedManyWithoutPosOrgInput
+  }
+
+  export type PosOrgCompositionUncheckedCreateWithoutRolesInput = {
+    id?: number
+    posId: number
+    orgId: number
+    status?: number
+    description?: string | null
+    isDelete?: boolean
+    createTime?: Date | string
+    updateTime?: Date | string
+    employments?: EmploymentUncheckedCreateNestedManyWithoutPosOrgInput
+  }
+
+  export type PosOrgCompositionCreateOrConnectWithoutRolesInput = {
+    where: PosOrgCompositionWhereUniqueInput
+    create: XOR<PosOrgCompositionCreateWithoutRolesInput, PosOrgCompositionUncheckedCreateWithoutRolesInput>
+  }
+
+  export type RoleCreateWithoutPositionOrganizationsInput = {
+    roleCode: string
+    roleName: string
+    status?: number
+    description?: string | null
+    isDelete?: boolean
+    createTime?: Date | string
+    updateTime?: Date | string
+    client: ClientCreateNestedOneWithoutRoleInput
+    positions?: PositionRoleCreateNestedManyWithoutRoleInput
+    organizations?: OrganizationRoleCreateNestedManyWithoutRoleInput
+    employments?: EmploymentRoleCreateNestedManyWithoutRoleInput
+    privileges?: RolePrivilegeCreateNestedManyWithoutRoleInput
+  }
+
+  export type RoleUncheckedCreateWithoutPositionOrganizationsInput = {
+    id?: number
+    roleCode: string
+    roleName: string
+    clientId: number
+    status?: number
+    description?: string | null
+    isDelete?: boolean
+    createTime?: Date | string
+    updateTime?: Date | string
+    positions?: PositionRoleUncheckedCreateNestedManyWithoutRoleInput
+    organizations?: OrganizationRoleUncheckedCreateNestedManyWithoutRoleInput
+    employments?: EmploymentRoleUncheckedCreateNestedManyWithoutRoleInput
+    privileges?: RolePrivilegeUncheckedCreateNestedManyWithoutRoleInput
+  }
+
+  export type RoleCreateOrConnectWithoutPositionOrganizationsInput = {
+    where: RoleWhereUniqueInput
+    create: XOR<RoleCreateWithoutPositionOrganizationsInput, RoleUncheckedCreateWithoutPositionOrganizationsInput>
+  }
+
+  export type PosOrgCompositionUpsertWithoutRolesInput = {
+    update: XOR<PosOrgCompositionUpdateWithoutRolesInput, PosOrgCompositionUncheckedUpdateWithoutRolesInput>
+    create: XOR<PosOrgCompositionCreateWithoutRolesInput, PosOrgCompositionUncheckedCreateWithoutRolesInput>
+    where?: PosOrgCompositionWhereInput
+  }
+
+  export type PosOrgCompositionUpdateToOneWithWhereWithoutRolesInput = {
+    where?: PosOrgCompositionWhereInput
+    data: XOR<PosOrgCompositionUpdateWithoutRolesInput, PosOrgCompositionUncheckedUpdateWithoutRolesInput>
+  }
+
+  export type PosOrgCompositionUpdateWithoutRolesInput = {
+    status?: IntFieldUpdateOperationsInput | number
+    description?: NullableStringFieldUpdateOperationsInput | string | null
+    isDelete?: BoolFieldUpdateOperationsInput | boolean
+    createTime?: DateTimeFieldUpdateOperationsInput | Date | string
+    updateTime?: DateTimeFieldUpdateOperationsInput | Date | string
+    position?: PositionUpdateOneRequiredWithoutPosOrgCompositionNestedInput
+    organization?: OrganizationUpdateOneRequiredWithoutPosOrgCompositionNestedInput
+    employments?: EmploymentUpdateManyWithoutPosOrgNestedInput
+  }
+
+  export type PosOrgCompositionUncheckedUpdateWithoutRolesInput = {
+    id?: IntFieldUpdateOperationsInput | number
+    posId?: IntFieldUpdateOperationsInput | number
+    orgId?: IntFieldUpdateOperationsInput | number
+    status?: IntFieldUpdateOperationsInput | number
+    description?: NullableStringFieldUpdateOperationsInput | string | null
+    isDelete?: BoolFieldUpdateOperationsInput | boolean
+    createTime?: DateTimeFieldUpdateOperationsInput | Date | string
+    updateTime?: DateTimeFieldUpdateOperationsInput | Date | string
+    employments?: EmploymentUncheckedUpdateManyWithoutPosOrgNestedInput
+  }
+
+  export type RoleUpsertWithoutPositionOrganizationsInput = {
+    update: XOR<RoleUpdateWithoutPositionOrganizationsInput, RoleUncheckedUpdateWithoutPositionOrganizationsInput>
+    create: XOR<RoleCreateWithoutPositionOrganizationsInput, RoleUncheckedCreateWithoutPositionOrganizationsInput>
+    where?: RoleWhereInput
+  }
+
+  export type RoleUpdateToOneWithWhereWithoutPositionOrganizationsInput = {
+    where?: RoleWhereInput
+    data: XOR<RoleUpdateWithoutPositionOrganizationsInput, RoleUncheckedUpdateWithoutPositionOrganizationsInput>
+  }
+
+  export type RoleUpdateWithoutPositionOrganizationsInput = {
+    roleCode?: StringFieldUpdateOperationsInput | string
+    roleName?: StringFieldUpdateOperationsInput | string
+    status?: IntFieldUpdateOperationsInput | number
+    description?: NullableStringFieldUpdateOperationsInput | string | null
+    isDelete?: BoolFieldUpdateOperationsInput | boolean
+    createTime?: DateTimeFieldUpdateOperationsInput | Date | string
+    updateTime?: DateTimeFieldUpdateOperationsInput | Date | string
+    client?: ClientUpdateOneRequiredWithoutRoleNestedInput
+    positions?: PositionRoleUpdateManyWithoutRoleNestedInput
+    organizations?: OrganizationRoleUpdateManyWithoutRoleNestedInput
+    employments?: EmploymentRoleUpdateManyWithoutRoleNestedInput
+    privileges?: RolePrivilegeUpdateManyWithoutRoleNestedInput
+  }
+
+  export type RoleUncheckedUpdateWithoutPositionOrganizationsInput = {
+    id?: IntFieldUpdateOperationsInput | number
+    roleCode?: StringFieldUpdateOperationsInput | string
+    roleName?: StringFieldUpdateOperationsInput | string
+    clientId?: IntFieldUpdateOperationsInput | number
+    status?: IntFieldUpdateOperationsInput | number
+    description?: NullableStringFieldUpdateOperationsInput | string | null
+    isDelete?: BoolFieldUpdateOperationsInput | boolean
+    createTime?: DateTimeFieldUpdateOperationsInput | Date | string
+    updateTime?: DateTimeFieldUpdateOperationsInput | Date | string
+    positions?: PositionRoleUncheckedUpdateManyWithoutRoleNestedInput
+    organizations?: OrganizationRoleUncheckedUpdateManyWithoutRoleNestedInput
     employments?: EmploymentRoleUncheckedUpdateManyWithoutRoleNestedInput
     privileges?: RolePrivilegeUncheckedUpdateManyWithoutRoleNestedInput
   }
@@ -23023,6 +26822,7 @@ export namespace Prisma {
     client: ClientCreateNestedOneWithoutRoleInput
     positions?: PositionRoleCreateNestedManyWithoutRoleInput
     organizations?: OrganizationRoleCreateNestedManyWithoutRoleInput
+    positionOrganizations?: PosOrgRoleCreateNestedManyWithoutRoleInput
     employments?: EmploymentRoleCreateNestedManyWithoutRoleInput
   }
 
@@ -23038,6 +26838,7 @@ export namespace Prisma {
     updateTime?: Date | string
     positions?: PositionRoleUncheckedCreateNestedManyWithoutRoleInput
     organizations?: OrganizationRoleUncheckedCreateNestedManyWithoutRoleInput
+    positionOrganizations?: PosOrgRoleUncheckedCreateNestedManyWithoutRoleInput
     employments?: EmploymentRoleUncheckedCreateNestedManyWithoutRoleInput
   }
 
@@ -23098,6 +26899,7 @@ export namespace Prisma {
     client?: ClientUpdateOneRequiredWithoutRoleNestedInput
     positions?: PositionRoleUpdateManyWithoutRoleNestedInput
     organizations?: OrganizationRoleUpdateManyWithoutRoleNestedInput
+    positionOrganizations?: PosOrgRoleUpdateManyWithoutRoleNestedInput
     employments?: EmploymentRoleUpdateManyWithoutRoleNestedInput
   }
 
@@ -23113,6 +26915,7 @@ export namespace Prisma {
     updateTime?: DateTimeFieldUpdateOperationsInput | Date | string
     positions?: PositionRoleUncheckedUpdateManyWithoutRoleNestedInput
     organizations?: OrganizationRoleUncheckedUpdateManyWithoutRoleNestedInput
+    positionOrganizations?: PosOrgRoleUncheckedUpdateManyWithoutRoleNestedInput
     employments?: EmploymentRoleUncheckedUpdateManyWithoutRoleNestedInput
   }
 
@@ -23158,6 +26961,8 @@ export namespace Prisma {
     deptId: number
     compId: number
     status?: number
+    startTime?: Date | string
+    endTime?: Date | string | null
     description?: string | null
     isDelete?: boolean
     createTime?: Date | string
@@ -23190,6 +26995,8 @@ export namespace Prisma {
 
   export type EmploymentUpdateWithoutUserInput = {
     status?: IntFieldUpdateOperationsInput | number
+    startTime?: DateTimeFieldUpdateOperationsInput | Date | string
+    endTime?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     description?: NullableStringFieldUpdateOperationsInput | string | null
     isDelete?: BoolFieldUpdateOperationsInput | boolean
     createTime?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -23197,6 +27004,7 @@ export namespace Prisma {
     deptartment?: OrganizationUpdateOneRequiredWithoutDeptEmploymentsNestedInput
     company?: OrganizationUpdateOneRequiredWithoutCompEmploymentsNestedInput
     position?: PositionUpdateOneRequiredWithoutEmploymentsNestedInput
+    posOrg?: PosOrgCompositionUpdateOneRequiredWithoutEmploymentsNestedInput
     roles?: EmploymentRoleUpdateManyWithoutEmploymentNestedInput
   }
 
@@ -23206,6 +27014,8 @@ export namespace Prisma {
     deptId?: IntFieldUpdateOperationsInput | number
     compId?: IntFieldUpdateOperationsInput | number
     status?: IntFieldUpdateOperationsInput | number
+    startTime?: DateTimeFieldUpdateOperationsInput | Date | string
+    endTime?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     description?: NullableStringFieldUpdateOperationsInput | string | null
     isDelete?: BoolFieldUpdateOperationsInput | boolean
     createTime?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -23219,6 +27029,8 @@ export namespace Prisma {
     deptId?: IntFieldUpdateOperationsInput | number
     compId?: IntFieldUpdateOperationsInput | number
     status?: IntFieldUpdateOperationsInput | number
+    startTime?: DateTimeFieldUpdateOperationsInput | Date | string
+    endTime?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     description?: NullableStringFieldUpdateOperationsInput | string | null
     isDelete?: BoolFieldUpdateOperationsInput | boolean
     createTime?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -23305,6 +27117,8 @@ export namespace Prisma {
     posId: number
     compId: number
     status?: number
+    startTime?: Date | string
+    endTime?: Date | string | null
     description?: string | null
     isDelete?: boolean
     createTime?: Date | string
@@ -23317,6 +27131,8 @@ export namespace Prisma {
     posId: number
     deptId: number
     status?: number
+    startTime?: Date | string
+    endTime?: Date | string | null
     description?: string | null
     isDelete?: boolean
     createTime?: Date | string
@@ -23327,8 +27143,20 @@ export namespace Prisma {
     roleId: number
   }
 
+  export type PosOrgCompositionCreateManyOrganizationInput = {
+    id?: number
+    posId: number
+    status?: number
+    description?: string | null
+    isDelete?: boolean
+    createTime?: Date | string
+    updateTime?: Date | string
+  }
+
   export type EmploymentUpdateWithoutDeptartmentInput = {
     status?: IntFieldUpdateOperationsInput | number
+    startTime?: DateTimeFieldUpdateOperationsInput | Date | string
+    endTime?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     description?: NullableStringFieldUpdateOperationsInput | string | null
     isDelete?: BoolFieldUpdateOperationsInput | boolean
     createTime?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -23336,6 +27164,7 @@ export namespace Prisma {
     user?: UserUpdateOneRequiredWithoutEmploymentsNestedInput
     company?: OrganizationUpdateOneRequiredWithoutCompEmploymentsNestedInput
     position?: PositionUpdateOneRequiredWithoutEmploymentsNestedInput
+    posOrg?: PosOrgCompositionUpdateOneRequiredWithoutEmploymentsNestedInput
     roles?: EmploymentRoleUpdateManyWithoutEmploymentNestedInput
   }
 
@@ -23345,6 +27174,8 @@ export namespace Prisma {
     posId?: IntFieldUpdateOperationsInput | number
     compId?: IntFieldUpdateOperationsInput | number
     status?: IntFieldUpdateOperationsInput | number
+    startTime?: DateTimeFieldUpdateOperationsInput | Date | string
+    endTime?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     description?: NullableStringFieldUpdateOperationsInput | string | null
     isDelete?: BoolFieldUpdateOperationsInput | boolean
     createTime?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -23358,6 +27189,8 @@ export namespace Prisma {
     posId?: IntFieldUpdateOperationsInput | number
     compId?: IntFieldUpdateOperationsInput | number
     status?: IntFieldUpdateOperationsInput | number
+    startTime?: DateTimeFieldUpdateOperationsInput | Date | string
+    endTime?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     description?: NullableStringFieldUpdateOperationsInput | string | null
     isDelete?: BoolFieldUpdateOperationsInput | boolean
     createTime?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -23366,6 +27199,8 @@ export namespace Prisma {
 
   export type EmploymentUpdateWithoutCompanyInput = {
     status?: IntFieldUpdateOperationsInput | number
+    startTime?: DateTimeFieldUpdateOperationsInput | Date | string
+    endTime?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     description?: NullableStringFieldUpdateOperationsInput | string | null
     isDelete?: BoolFieldUpdateOperationsInput | boolean
     createTime?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -23373,6 +27208,7 @@ export namespace Prisma {
     user?: UserUpdateOneRequiredWithoutEmploymentsNestedInput
     deptartment?: OrganizationUpdateOneRequiredWithoutDeptEmploymentsNestedInput
     position?: PositionUpdateOneRequiredWithoutEmploymentsNestedInput
+    posOrg?: PosOrgCompositionUpdateOneRequiredWithoutEmploymentsNestedInput
     roles?: EmploymentRoleUpdateManyWithoutEmploymentNestedInput
   }
 
@@ -23382,6 +27218,8 @@ export namespace Prisma {
     posId?: IntFieldUpdateOperationsInput | number
     deptId?: IntFieldUpdateOperationsInput | number
     status?: IntFieldUpdateOperationsInput | number
+    startTime?: DateTimeFieldUpdateOperationsInput | Date | string
+    endTime?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     description?: NullableStringFieldUpdateOperationsInput | string | null
     isDelete?: BoolFieldUpdateOperationsInput | boolean
     createTime?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -23395,6 +27233,8 @@ export namespace Prisma {
     posId?: IntFieldUpdateOperationsInput | number
     deptId?: IntFieldUpdateOperationsInput | number
     status?: IntFieldUpdateOperationsInput | number
+    startTime?: DateTimeFieldUpdateOperationsInput | Date | string
+    endTime?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     description?: NullableStringFieldUpdateOperationsInput | string | null
     isDelete?: BoolFieldUpdateOperationsInput | boolean
     createTime?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -23413,12 +27253,47 @@ export namespace Prisma {
     roleId?: IntFieldUpdateOperationsInput | number
   }
 
+  export type PosOrgCompositionUpdateWithoutOrganizationInput = {
+    status?: IntFieldUpdateOperationsInput | number
+    description?: NullableStringFieldUpdateOperationsInput | string | null
+    isDelete?: BoolFieldUpdateOperationsInput | boolean
+    createTime?: DateTimeFieldUpdateOperationsInput | Date | string
+    updateTime?: DateTimeFieldUpdateOperationsInput | Date | string
+    position?: PositionUpdateOneRequiredWithoutPosOrgCompositionNestedInput
+    employments?: EmploymentUpdateManyWithoutPosOrgNestedInput
+    roles?: PosOrgRoleUpdateManyWithoutPosOrgNestedInput
+  }
+
+  export type PosOrgCompositionUncheckedUpdateWithoutOrganizationInput = {
+    id?: IntFieldUpdateOperationsInput | number
+    posId?: IntFieldUpdateOperationsInput | number
+    status?: IntFieldUpdateOperationsInput | number
+    description?: NullableStringFieldUpdateOperationsInput | string | null
+    isDelete?: BoolFieldUpdateOperationsInput | boolean
+    createTime?: DateTimeFieldUpdateOperationsInput | Date | string
+    updateTime?: DateTimeFieldUpdateOperationsInput | Date | string
+    employments?: EmploymentUncheckedUpdateManyWithoutPosOrgNestedInput
+    roles?: PosOrgRoleUncheckedUpdateManyWithoutPosOrgNestedInput
+  }
+
+  export type PosOrgCompositionUncheckedUpdateManyWithoutOrganizationInput = {
+    id?: IntFieldUpdateOperationsInput | number
+    posId?: IntFieldUpdateOperationsInput | number
+    status?: IntFieldUpdateOperationsInput | number
+    description?: NullableStringFieldUpdateOperationsInput | string | null
+    isDelete?: BoolFieldUpdateOperationsInput | boolean
+    createTime?: DateTimeFieldUpdateOperationsInput | Date | string
+    updateTime?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
   export type EmploymentCreateManyPositionInput = {
     id?: number
     userId: number
     deptId: number
     compId: number
     status?: number
+    startTime?: Date | string
+    endTime?: Date | string | null
     description?: string | null
     isDelete?: boolean
     createTime?: Date | string
@@ -23429,8 +27304,20 @@ export namespace Prisma {
     roleId: number
   }
 
+  export type PosOrgCompositionCreateManyPositionInput = {
+    id?: number
+    orgId: number
+    status?: number
+    description?: string | null
+    isDelete?: boolean
+    createTime?: Date | string
+    updateTime?: Date | string
+  }
+
   export type EmploymentUpdateWithoutPositionInput = {
     status?: IntFieldUpdateOperationsInput | number
+    startTime?: DateTimeFieldUpdateOperationsInput | Date | string
+    endTime?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     description?: NullableStringFieldUpdateOperationsInput | string | null
     isDelete?: BoolFieldUpdateOperationsInput | boolean
     createTime?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -23438,6 +27325,7 @@ export namespace Prisma {
     user?: UserUpdateOneRequiredWithoutEmploymentsNestedInput
     deptartment?: OrganizationUpdateOneRequiredWithoutDeptEmploymentsNestedInput
     company?: OrganizationUpdateOneRequiredWithoutCompEmploymentsNestedInput
+    posOrg?: PosOrgCompositionUpdateOneRequiredWithoutEmploymentsNestedInput
     roles?: EmploymentRoleUpdateManyWithoutEmploymentNestedInput
   }
 
@@ -23447,6 +27335,8 @@ export namespace Prisma {
     deptId?: IntFieldUpdateOperationsInput | number
     compId?: IntFieldUpdateOperationsInput | number
     status?: IntFieldUpdateOperationsInput | number
+    startTime?: DateTimeFieldUpdateOperationsInput | Date | string
+    endTime?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     description?: NullableStringFieldUpdateOperationsInput | string | null
     isDelete?: BoolFieldUpdateOperationsInput | boolean
     createTime?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -23460,6 +27350,8 @@ export namespace Prisma {
     deptId?: IntFieldUpdateOperationsInput | number
     compId?: IntFieldUpdateOperationsInput | number
     status?: IntFieldUpdateOperationsInput | number
+    startTime?: DateTimeFieldUpdateOperationsInput | Date | string
+    endTime?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     description?: NullableStringFieldUpdateOperationsInput | string | null
     isDelete?: BoolFieldUpdateOperationsInput | boolean
     createTime?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -23475,6 +27367,110 @@ export namespace Prisma {
   }
 
   export type PositionRoleUncheckedUpdateManyWithoutPositionInput = {
+    roleId?: IntFieldUpdateOperationsInput | number
+  }
+
+  export type PosOrgCompositionUpdateWithoutPositionInput = {
+    status?: IntFieldUpdateOperationsInput | number
+    description?: NullableStringFieldUpdateOperationsInput | string | null
+    isDelete?: BoolFieldUpdateOperationsInput | boolean
+    createTime?: DateTimeFieldUpdateOperationsInput | Date | string
+    updateTime?: DateTimeFieldUpdateOperationsInput | Date | string
+    organization?: OrganizationUpdateOneRequiredWithoutPosOrgCompositionNestedInput
+    employments?: EmploymentUpdateManyWithoutPosOrgNestedInput
+    roles?: PosOrgRoleUpdateManyWithoutPosOrgNestedInput
+  }
+
+  export type PosOrgCompositionUncheckedUpdateWithoutPositionInput = {
+    id?: IntFieldUpdateOperationsInput | number
+    orgId?: IntFieldUpdateOperationsInput | number
+    status?: IntFieldUpdateOperationsInput | number
+    description?: NullableStringFieldUpdateOperationsInput | string | null
+    isDelete?: BoolFieldUpdateOperationsInput | boolean
+    createTime?: DateTimeFieldUpdateOperationsInput | Date | string
+    updateTime?: DateTimeFieldUpdateOperationsInput | Date | string
+    employments?: EmploymentUncheckedUpdateManyWithoutPosOrgNestedInput
+    roles?: PosOrgRoleUncheckedUpdateManyWithoutPosOrgNestedInput
+  }
+
+  export type PosOrgCompositionUncheckedUpdateManyWithoutPositionInput = {
+    id?: IntFieldUpdateOperationsInput | number
+    orgId?: IntFieldUpdateOperationsInput | number
+    status?: IntFieldUpdateOperationsInput | number
+    description?: NullableStringFieldUpdateOperationsInput | string | null
+    isDelete?: BoolFieldUpdateOperationsInput | boolean
+    createTime?: DateTimeFieldUpdateOperationsInput | Date | string
+    updateTime?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type EmploymentCreateManyPosOrgInput = {
+    id?: number
+    userId: number
+    compId: number
+    status?: number
+    startTime?: Date | string
+    endTime?: Date | string | null
+    description?: string | null
+    isDelete?: boolean
+    createTime?: Date | string
+    updateTime?: Date | string
+  }
+
+  export type PosOrgRoleCreateManyPosOrgInput = {
+    roleId: number
+  }
+
+  export type EmploymentUpdateWithoutPosOrgInput = {
+    status?: IntFieldUpdateOperationsInput | number
+    startTime?: DateTimeFieldUpdateOperationsInput | Date | string
+    endTime?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    description?: NullableStringFieldUpdateOperationsInput | string | null
+    isDelete?: BoolFieldUpdateOperationsInput | boolean
+    createTime?: DateTimeFieldUpdateOperationsInput | Date | string
+    updateTime?: DateTimeFieldUpdateOperationsInput | Date | string
+    user?: UserUpdateOneRequiredWithoutEmploymentsNestedInput
+    deptartment?: OrganizationUpdateOneRequiredWithoutDeptEmploymentsNestedInput
+    company?: OrganizationUpdateOneRequiredWithoutCompEmploymentsNestedInput
+    position?: PositionUpdateOneRequiredWithoutEmploymentsNestedInput
+    roles?: EmploymentRoleUpdateManyWithoutEmploymentNestedInput
+  }
+
+  export type EmploymentUncheckedUpdateWithoutPosOrgInput = {
+    id?: IntFieldUpdateOperationsInput | number
+    userId?: IntFieldUpdateOperationsInput | number
+    compId?: IntFieldUpdateOperationsInput | number
+    status?: IntFieldUpdateOperationsInput | number
+    startTime?: DateTimeFieldUpdateOperationsInput | Date | string
+    endTime?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    description?: NullableStringFieldUpdateOperationsInput | string | null
+    isDelete?: BoolFieldUpdateOperationsInput | boolean
+    createTime?: DateTimeFieldUpdateOperationsInput | Date | string
+    updateTime?: DateTimeFieldUpdateOperationsInput | Date | string
+    roles?: EmploymentRoleUncheckedUpdateManyWithoutEmploymentNestedInput
+  }
+
+  export type EmploymentUncheckedUpdateManyWithoutPosOrgInput = {
+    id?: IntFieldUpdateOperationsInput | number
+    userId?: IntFieldUpdateOperationsInput | number
+    compId?: IntFieldUpdateOperationsInput | number
+    status?: IntFieldUpdateOperationsInput | number
+    startTime?: DateTimeFieldUpdateOperationsInput | Date | string
+    endTime?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    description?: NullableStringFieldUpdateOperationsInput | string | null
+    isDelete?: BoolFieldUpdateOperationsInput | boolean
+    createTime?: DateTimeFieldUpdateOperationsInput | Date | string
+    updateTime?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type PosOrgRoleUpdateWithoutPosOrgInput = {
+    role?: RoleUpdateOneRequiredWithoutPositionOrganizationsNestedInput
+  }
+
+  export type PosOrgRoleUncheckedUpdateWithoutPosOrgInput = {
+    roleId?: IntFieldUpdateOperationsInput | number
+  }
+
+  export type PosOrgRoleUncheckedUpdateManyWithoutPosOrgInput = {
     roleId?: IntFieldUpdateOperationsInput | number
   }
 
@@ -23515,6 +27511,7 @@ export namespace Prisma {
     updateTime?: DateTimeFieldUpdateOperationsInput | Date | string
     positions?: PositionRoleUpdateManyWithoutRoleNestedInput
     organizations?: OrganizationRoleUpdateManyWithoutRoleNestedInput
+    positionOrganizations?: PosOrgRoleUpdateManyWithoutRoleNestedInput
     employments?: EmploymentRoleUpdateManyWithoutRoleNestedInput
     privileges?: RolePrivilegeUpdateManyWithoutRoleNestedInput
   }
@@ -23530,6 +27527,7 @@ export namespace Prisma {
     updateTime?: DateTimeFieldUpdateOperationsInput | Date | string
     positions?: PositionRoleUncheckedUpdateManyWithoutRoleNestedInput
     organizations?: OrganizationRoleUncheckedUpdateManyWithoutRoleNestedInput
+    positionOrganizations?: PosOrgRoleUncheckedUpdateManyWithoutRoleNestedInput
     employments?: EmploymentRoleUncheckedUpdateManyWithoutRoleNestedInput
     privileges?: RolePrivilegeUncheckedUpdateManyWithoutRoleNestedInput
   }
@@ -23551,6 +27549,10 @@ export namespace Prisma {
 
   export type OrganizationRoleCreateManyRoleInput = {
     organizationId: number
+  }
+
+  export type PosOrgRoleCreateManyRoleInput = {
+    posOrgId: number
   }
 
   export type EmploymentRoleCreateManyRoleInput = {
@@ -23583,6 +27585,18 @@ export namespace Prisma {
 
   export type OrganizationRoleUncheckedUpdateManyWithoutRoleInput = {
     organizationId?: IntFieldUpdateOperationsInput | number
+  }
+
+  export type PosOrgRoleUpdateWithoutRoleInput = {
+    posOrg?: PosOrgCompositionUpdateOneRequiredWithoutRolesNestedInput
+  }
+
+  export type PosOrgRoleUncheckedUpdateWithoutRoleInput = {
+    posOrgId?: IntFieldUpdateOperationsInput | number
+  }
+
+  export type PosOrgRoleUncheckedUpdateManyWithoutRoleInput = {
+    posOrgId?: IntFieldUpdateOperationsInput | number
   }
 
   export type EmploymentRoleUpdateWithoutRoleInput = {

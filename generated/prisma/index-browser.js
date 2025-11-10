@@ -161,6 +161,17 @@ exports.Prisma.PositionScalarFieldEnum = {
   updateTime: 'updateTime'
 };
 
+exports.Prisma.PosOrgCompositionScalarFieldEnum = {
+  id: 'id',
+  posId: 'posId',
+  orgId: 'orgId',
+  status: 'status',
+  description: 'description',
+  isDelete: 'isDelete',
+  createTime: 'createTime',
+  updateTime: 'updateTime'
+};
+
 exports.Prisma.EmploymentScalarFieldEnum = {
   id: 'id',
   userId: 'userId',
@@ -168,6 +179,8 @@ exports.Prisma.EmploymentScalarFieldEnum = {
   deptId: 'deptId',
   compId: 'compId',
   status: 'status',
+  startTime: 'startTime',
+  endTime: 'endTime',
   description: 'description',
   isDelete: 'isDelete',
   createTime: 'createTime',
@@ -209,6 +222,11 @@ exports.Prisma.EmploymentRoleScalarFieldEnum = {
 
 exports.Prisma.OrganizationRoleScalarFieldEnum = {
   organizationId: 'organizationId',
+  roleId: 'roleId'
+};
+
+exports.Prisma.PosOrgRoleScalarFieldEnum = {
+  posOrgId: 'posOrgId',
   roleId: 'roleId'
 };
 
@@ -292,6 +310,10 @@ exports.Prisma.PositionOrderByRelevanceFieldEnum = {
   description: 'description'
 };
 
+exports.Prisma.PosOrgCompositionOrderByRelevanceFieldEnum = {
+  description: 'description'
+};
+
 exports.Prisma.EmploymentOrderByRelevanceFieldEnum = {
   description: 'description'
 };
@@ -345,12 +367,14 @@ exports.Prisma.ModelName = {
   User: 'User',
   Organization: 'Organization',
   Position: 'Position',
+  PosOrgComposition: 'PosOrgComposition',
   Employment: 'Employment',
   Client: 'Client',
   Role: 'Role',
   PositionRole: 'PositionRole',
   EmploymentRole: 'EmploymentRole',
   OrganizationRole: 'OrganizationRole',
+  PosOrgRole: 'PosOrgRole',
   AuthObject: 'AuthObject',
   Privilege: 'Privilege',
   PrivilegeDelegation: 'PrivilegeDelegation',

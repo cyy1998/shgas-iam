@@ -2,6 +2,8 @@ import { redis, prisma } from '../extensions'
 import { getEmploymentDTO, getOrgDTO, getPrivDTO, getUserDTO, PrivDTO, UserDTO } from '../dto'
 import axios from 'axios'
 import { hash, compare } from 'bcrypt-ts'
+import { EmploymentStatus, PASSWORD_HASH_ROUNDS } from '../constant'
+import { User } from '../generated/prisma'
 
 export const userService = {
     async createUserSession(userQueryCondition: object, verifyPassword: boolean = true, password: string = '') {
@@ -53,7 +55,8 @@ export const userService = {
                                             position: {
                                                 employments: {
                                                     some: {
-                                                        userId: user.id
+                                                        userId: user.id,
+                                                        status: EmploymentStatus.Enable
                                                     }
                                                 }
                                             }
@@ -68,14 +71,16 @@ export const userService = {
                                                     {
                                                         deptEmployments: {
                                                             some: {
-                                                                userId: user.id
+                                                                userId: user.id,
+                                                                status: EmploymentStatus.Enable
                                                             }
                                                         }
                                                     },
                                                     {
                                                         compEmployments: {
                                                             some: {
-                                                                userId: user.id
+                                                                userId: user.id,
+                                                                status: EmploymentStatus.Enable
                                                             }
                                                         }
                                                     },
@@ -86,10 +91,25 @@ export const userService = {
                                     }
                                 },
                                 {
+                                    positionOrganizations: {
+                                        some: {
+                                            posOrg: {
+                                                employments: {
+                                                    some: {
+                                                        userId: user.id,
+                                                        status: EmploymentStatus.Enable
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                },
+                                {
                                     employments: {
                                         some: {
                                             employment: {
-                                                userId: user.id
+                                                userId: user.id,
+                                                status: EmploymentStatus.Enable
                                             }
                                         }
                                     }
@@ -116,6 +136,13 @@ export const userService = {
         }
     },
 
+    // async getUserSession(sessionId: string): Promise<UserDTO> {
+    //     return (await redis.get(`session${sessionId}`)) as UserDTO
+    // },
+    async updateUserSession(sessionId: string, userDTO: UserDTO) {
+        await redis.set(`session:${sessionId}`, JSON.stringify(userDTO), 'EX', parseInt(process.env.REDIS_EXPIRE_TIME ?? '3600'))
+    },
+
     async orcasLogin(userDTO: UserDTO) {
         const resp = await axios('http://176.169.99.150:18091/orcas/login', {
             method: 'POST',
@@ -139,5 +166,43 @@ export const userService = {
             res: 'success',
             orcasSessionId: orcasSessionId
         }
+    },
+
+    async changePassword(userDTO: UserDTO, oldPassword: string, newPassword: string): Promise<boolean> {
+        const user = await prisma.user.findUnique({
+            where: {
+                id: userDTO.id
+            }
+        }) as User
+        const isMatch = await compare(oldPassword, user.password ?? '')
+        console.log(isMatch)
+        if (!isMatch) {
+            console.log(isMatch)
+            return false
+        }
+        const newPasswordHash = await hash(newPassword, PASSWORD_HASH_ROUNDS)
+        const userUpdated = await prisma.user.update({
+            where: {
+                id: userDTO.id
+            },
+            data: {
+                password: newPasswordHash
+            }
+        })
+        return true
+
+    },
+
+    async setMobile(userDTO: UserDTO, newMobile: string): Promise<UserDTO> {
+        const userUpdated = await prisma.user.update({
+            where: {
+                id: userDTO.id
+            },
+            data: {
+                mobilePhone: newMobile
+            }
+        })
+        userDTO.mobile = newMobile
+        return userDTO
     }
 }

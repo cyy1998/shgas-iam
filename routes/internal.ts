@@ -1,9 +1,10 @@
 import { Hono } from 'hono'
 import { prisma } from '../extensions'
-import { getUserDTO } from '../dto'
+import { getEmploymentDTO, getUserDTO } from '../dto'
 import { z, createRoute, OpenAPIHono } from '@hono/zod-openapi'
 import { makeResponse } from '../utils'
 import { ResponseSchema, createResponseSchema, OrganizationInputSchema, UserOutSchema } from '../schema'
+import { EmploymentStatus } from '../constant'
 
 const app = new OpenAPIHono()
 
@@ -36,6 +37,53 @@ app.openapi(
             }
         })
         return user ? c.json(makeResponse(200, getUserDTO(user))) : c.json(makeResponse(404, {}, 'not found'))
+    })
+
+app.openapi(
+    createRoute({
+        method: 'get',
+        path: '/search-users/org-position',
+        tags: ['Internal'],
+        request: {
+            query: z.object({
+                posCode: z.string().openapi({ example: 'E001' }),
+                orgCode: z.string().openapi({ example: 'SR23' }),
+                orgScope: z.enum(['direct', 'recursive']).default('direct').optional().openapi({ example: 'direct or recursive' }),
+                resourceCode: z.string().optional().openapi({ example: 'tender:flow:SR_CZLX' })
+            })
+        },
+        responses: {
+            200: {
+                content: {
+                    'application/json': {
+                        schema: createResponseSchema(UserOutSchema),
+                    },
+                },
+                description: '符合条件用户列表',
+            }
+        }
+    }),
+    async (c) => {
+        const { posCode, orgCode, orgScope } = c.req.valid('query')
+        const orgCondition = orgScope === 'direct' ? orgCode : {
+            startsWith: orgCode
+        }
+        const users = await prisma.user.findMany({
+            where: {
+                employments: {
+                    some: {
+                        deptartment: {
+                            orgCode: orgCondition
+                        },
+                        position: {
+                            posCode: posCode
+                        }
+                    }
+                }
+            }
+        })
+        console.log(users.map(u => getUserDTO(u)))
+        return c.json(makeResponse(200, users.map(u => getUserDTO(u))))
     })
 
 
@@ -76,7 +124,8 @@ app.openapi(
                             {
                                 deptartment: {
                                     orgCode: orgCondition
-                                }
+                                },
+                                status: EmploymentStatus.Enable
                             },
                             {
                                 OR: [
@@ -90,6 +139,17 @@ app.openapi(
                                                 }
                                             }
                                         },
+                                    },
+                                    {
+                                        posOrg: {
+                                            roles: {
+                                                some: {
+                                                    role: {
+                                                        roleCode: roleCode
+                                                    }
+                                                }
+                                            }
+                                        }
                                     },
                                     {
                                         roles: {
@@ -226,7 +286,7 @@ app.openapi(
         }
         const suppPos = await prisma.position.findFirst({
             where: {
-                posCode: 'E031'
+                posCode: 'P001'
             }
         })
         if (!suppPos) {
@@ -252,6 +312,125 @@ app.openapi(
             return c.json(makeResponse(9999, '系统错误，注册失败'))
         }
         return c.json(makeResponse())
+    })
+
+app.openapi(
+    createRoute({
+        method: 'get',
+        path: '/search-employments/user-privilege',
+        tags: ['Internal'],
+        request: {
+            query: z.object({
+                username: z.string().openapi({ example: '138550' }),
+                privCode: z.string().openapi({ example: '123' }),
+            })
+        },
+        responses: {
+            200: {
+                content: {
+                    'application/json': {
+                        schema: createResponseSchema(z.array(z.object({
+                            posId: z.int(),
+                            posCode: z.string(),
+                            posName: z.string(),
+                            orgId: z.int(),
+                            orgCode: z.string(),
+                            orgName: z.string(),
+                            compId: z.int(),
+                            compCode: z.string(),
+                            compName: z.string(),
+                        }))),
+                    },
+                },
+                description: '符合条件用户列表',
+            }
+        }
+    }),
+    async (c) => {
+        const { username, privCode } = c.req.valid('query')
+        const employments = await prisma.employment.findMany({
+            where: {
+                user: {
+                    username: username
+                },
+                OR: [
+                    {
+                        deptartment: {
+                            roles: {
+                                some: {
+                                    role: {
+                                        privileges: {
+                                            some: {
+                                                privilege: {
+                                                    privilegeCode: privCode
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    {
+                        company: {
+                            roles: {
+                                some: {
+                                    role: {
+                                        privileges: {
+                                            some: {
+                                                privilege: {
+                                                    privilegeCode: privCode
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    {
+                        position: {
+                            roles: {
+                                some: {
+                                    role: {
+                                        privileges: {
+                                            some: {
+                                                privilege: {
+                                                    privilegeCode: privCode
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    {
+                        roles: {
+                            some: {
+                                role: {
+                                    privileges: {
+                                        some: {
+                                            privilege: {
+                                                privilegeCode: privCode
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                ]
+            },
+            include: {
+                deptartment: true,
+                company: true,
+                position: true,
+                user: true
+            }
+        })
+        console.log(employments)
+        return c.json(makeResponse(200, employments.map(e => getEmploymentDTO(e))))
     })
 
 export default app

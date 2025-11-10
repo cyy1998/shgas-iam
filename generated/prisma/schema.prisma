@@ -46,9 +46,10 @@ model Organization {
   createTime       DateTime @default(now()) @map("create_time")
   updateTime       DateTime @default(now()) @updatedAt @map("update_time")
 
-  deptEmployments Employment[]       @relation("employment_dept")
-  compEmployments Employment[]       @relation("employment_comp")
-  roles           OrganizationRole[]
+  deptEmployments   Employment[]        @relation("employment_dept")
+  compEmployments   Employment[]        @relation("employment_comp")
+  roles             OrganizationRole[]
+  posOrgComposition PosOrgComposition[]
 
   @@map("organization")
 }
@@ -63,34 +64,59 @@ model Position {
   createTime  DateTime @default(now()) @map("create_time")
   updateTime  DateTime @default(now()) @updatedAt @map("update_time")
 
-  employments Employment[]
-  roles       PositionRole[]
+  employments       Employment[]
+  roles             PositionRole[]
+  posOrgComposition PosOrgComposition[]
 
   @@map("position")
 }
 
-model Employment {
+model PosOrgComposition {
   id          Int      @id @default(autoincrement()) @map("id")
-  userId      Int      @map("user_id")
   posId       Int      @map("pos_id")
-  deptId      Int      @map("dept_id")
-  compId      Int      @map("comp_id")
+  orgId       Int      @map("org_id")
   status      Int      @default(1) @map("status") @db.TinyInt
   description String?  @map("description") @db.VarChar(500)
   isDelete    Boolean  @default(false) @map("is_delete") @db.TinyInt
   createTime  DateTime @default(now()) @map("create_time")
   updateTime  DateTime @default(now()) @updatedAt @map("update_time")
 
-  user        User             @relation(fields: [userId], references: [id])
-  deptartment Organization     @relation("employment_dept", fields: [deptId], references: [id])
-  company     Organization     @relation("employment_comp", fields: [compId], references: [id])
-  position    Position         @relation(fields: [posId], references: [id])
+  position     Position     @relation(fields: [posId], references: [id])
+  organization Organization @relation(fields: [orgId], references: [id])
+  employments  Employment[]
+  roles        PosOrgRole[]
+
+  @@unique([posId, orgId])
+  @@index([orgId], map: "idx_org_id")
+  @@map("pos_org_composition")
+}
+
+model Employment {
+  id          Int       @id @default(autoincrement()) @map("id")
+  userId      Int       @map("user_id")
+  posId       Int       @map("pos_id")
+  deptId      Int       @map("dept_id")
+  compId      Int       @map("comp_id")
+  status      Int       @default(1) @map("status") @db.TinyInt
+  startTime   DateTime  @default(now()) @map("start_time")
+  endTime     DateTime? @map("end_time")
+  description String?   @map("description") @db.VarChar(500)
+  isDelete    Boolean   @default(false) @map("is_delete") @db.TinyInt
+  createTime  DateTime  @default(now()) @map("create_time")
+  updateTime  DateTime  @default(now()) @updatedAt @map("update_time")
+
+  user        User              @relation(fields: [userId], references: [id])
+  deptartment Organization      @relation("employment_dept", fields: [deptId], references: [id])
+  company     Organization      @relation("employment_comp", fields: [compId], references: [id])
+  position    Position          @relation(fields: [posId], references: [id])
+  posOrg      PosOrgComposition @relation(fields: [posId, deptId], references: [posId, orgId])
   roles       EmploymentRole[]
 
   @@index([userId], map: "idx_user_id")
   @@index([deptId], map: "idx_dept_id")
   @@index([compId], map: "idx_comp_id")
   @@index([posId], map: "idx_pos_id")
+  @@index([posId, deptId], map: "idx_pos_dept_id")
   @@map("employment")
 }
 
@@ -109,20 +135,21 @@ model Client {
 }
 
 model Role {
-  id            Int                @id @default(autoincrement()) @map("id")
-  roleCode      String             @map("role_code") @db.VarChar(64)
-  roleName      String             @map("role_name") @db.VarChar(128)
-  clientId      Int                @map("client_id")
-  status        Int                @default(1) @map("status") @db.TinyInt
-  description   String?            @map("description") @db.VarChar(500)
-  isDelete      Boolean            @default(false) @map("is_delete") @db.TinyInt
-  createTime    DateTime           @default(now()) @map("create_time")
-  updateTime    DateTime           @default(now()) @updatedAt @map("update_time")
-  client        Client             @relation(fields: [clientId], references: [id])
-  positions     PositionRole[]
-  organizations OrganizationRole[]
-  employments   EmploymentRole[]
-  privileges    RolePrivilege[]
+  id                    Int                @id @default(autoincrement()) @map("id")
+  roleCode              String             @map("role_code") @db.VarChar(64)
+  roleName              String             @map("role_name") @db.VarChar(128)
+  clientId              Int                @map("client_id")
+  status                Int                @default(1) @map("status") @db.TinyInt
+  description           String?            @map("description") @db.VarChar(500)
+  isDelete              Boolean            @default(false) @map("is_delete") @db.TinyInt
+  createTime            DateTime           @default(now()) @map("create_time")
+  updateTime            DateTime           @default(now()) @updatedAt @map("update_time")
+  client                Client             @relation(fields: [clientId], references: [id])
+  positions             PositionRole[]
+  organizations         OrganizationRole[]
+  positionOrganizations PosOrgRole[]
+  employments           EmploymentRole[]
+  privileges            RolePrivilege[]
 
   @@index([clientId], map: "idx_client_id")
   @@map("role")
@@ -162,6 +189,18 @@ model OrganizationRole {
   @@id([organizationId, roleId])
   @@index([roleId], map: "idx_role_id")
   @@map("organization_role")
+}
+
+model PosOrgRole {
+  posOrgId Int @map("pos_org_id")
+  roleId   Int @map("role_id")
+
+  posOrg PosOrgComposition @relation(fields: [posOrgId], references: [id])
+  role   Role              @relation(fields: [roleId], references: [id])
+
+  @@id([posOrgId, roleId])
+  @@index([roleId], map: "idx_role_id")
+  @@map("position_organization_role")
 }
 
 model AuthObject {
