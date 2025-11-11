@@ -1,12 +1,12 @@
 import { Hono } from 'hono'
-import { OrganizationQuery, UserDTO, getEmploymentDTO, getOrgDTO, getUserDTO } from '../dto'
-import { User } from '../generated/prisma'
+import { OrganizationQuery, UserDTO, getEmploymentDTO, getOrgDTO, getUserDTO } from '../repositories/dto'
+import { User } from '../../generated/prisma'
 import { redis, prisma } from '../extensions'
 import { makeResponse } from '../utils'
 import { z, createRoute, OpenAPIHono } from '@hono/zod-openapi'
 import { ResponseSchema, createResponseSchema, OrganizationInputSchema, UserOutSchema } from '../schema'
-import { userService } from '../services/userService'
-import { mobileService } from '../services/mobileService'
+import { userService } from '../services/user.service'
+import { mobileService } from '../services/mobile.service'
 import { getCookie } from 'hono/cookie'
 
 const app = new OpenAPIHono()

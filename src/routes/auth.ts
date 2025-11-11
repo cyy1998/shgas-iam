@@ -3,11 +3,11 @@ import { Hono } from 'hono'
 import { setCookie, getCookie, deleteCookie } from 'hono/cookie'
 import { getEvenLengthSubstrings, hmacSha256, makeResponse } from '../utils'
 import { redis, prisma } from '../extensions'
-import { getEmploymentDTO, getOrgDTO, getPrivDTO, getUserDTO, PrivDTO } from '../dto'
-import { userService } from '../services/userService'
+import { getEmploymentDTO, getOrgDTO, getPrivDTO, getUserDTO, PrivDTO } from '../repositories/dto'
+import { userService } from '../services/user.service'
 import { z, createRoute, OpenAPIHono } from '@hono/zod-openapi'
 import { createResponseSchema } from '../schema'
-import { mobileService } from '../services/mobileService'
+import { mobileService } from '../services/mobile.service'
 
 const app = new OpenAPIHono()
 

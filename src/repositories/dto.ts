@@ -1,4 +1,4 @@
-import { Prisma, Organization, Position, User, Privilege, Employment } from "./generated/prisma"
+import { Prisma, Organization, Position, User, Privilege, Employment } from "../../generated/prisma"
 
 
 type EmploymentDetail = Prisma.EmploymentGetPayload<{

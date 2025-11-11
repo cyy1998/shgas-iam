@@ -1,9 +1,9 @@
 import { redis, prisma } from '../extensions'
-import { getEmploymentDTO, getOrgDTO, getPrivDTO, getUserDTO, PrivDTO, UserDTO } from '../dto'
+import { getEmploymentDTO, getOrgDTO, getPrivDTO, getUserDTO, PrivDTO, UserDTO } from '../repositories/dto'
 import axios from 'axios'
 import { hash, compare } from 'bcrypt-ts'
 import { EmploymentStatus, PASSWORD_HASH_ROUNDS } from '../constant'
-import { User } from '../generated/prisma'
+import { User } from '../../generated/prisma'
 
 export const userService = {
     async createUserSession(userQueryCondition: object, verifyPassword: boolean = true, password: string = '') {

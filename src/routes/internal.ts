@@ -1,6 +1,6 @@
 import { Hono } from 'hono'
 import { prisma } from '../extensions'
-import { getEmploymentDTO, getUserDTO } from '../dto'
+import { getEmploymentDTO, getUserDTO } from '../repositories/dto'
 import { z, createRoute, OpenAPIHono } from '@hono/zod-openapi'
 import { makeResponse } from '../utils'
 import { ResponseSchema, createResponseSchema, OrganizationInputSchema, UserOutSchema } from '../schema'
@@ -246,9 +246,8 @@ app.openapi(
                 content: {
                     'application/json': {
                         schema: z.object({
-                            username: z.string().openapi({ example: '1234' }),
-                            name: z.string().openapi({ example: '供应商A' }),
-                            mobile: z.string().openapi({ example: '12345678' }),
+                            orgCode: z.string().openapi({ example: '统一社会信用代码' }),
+                            orgName: z.string().openapi({ example: '供应商A' }),
                         })
                     }
                 }
@@ -266,16 +265,79 @@ app.openapi(
         },
     }),
     async (c) => {
-        const body = c.req.valid('json')
+        const { orgCode, orgName } = c.req.valid('json')
+        const exisitngOrgs = await prisma.organization.findMany(
+            {
+                where: {
+                    orgCode: orgCode
+                }
+            }
+        )
+        if (exisitngOrgs.length !== 0) {
+            return c.json(makeResponse(9999, {}, '已存在重复供应商'))
+        }
+        const parentOrg = await prisma.organization.findFirst({
+            where: {
+                orgCode: 'GY'
+            }
+        })
+        const organization = await prisma.organization.create({
+            data: {
+                orgCode: orgCode,
+                orgName: orgName,
+                parentId: parentOrg?.id,
+                level: 2,
+                orgType: '外部组织',
+                isVirtual: true
+            }
+        })
+        if (!organization) {
+            return c.json(makeResponse(9999, '系统错误，注册失败'))
+        }
+        return c.json(makeResponse())
+    })
+
+app.openapi(
+    createRoute({
+        method: 'post',
+        path: '/purveyor/contact/register',
+        tags: ['Internal'],
+        request: {
+            body: {
+                content: {
+                    'application/json': {
+                        schema: z.object({
+                            username: z.string().openapi({ example: '身份证号' }),
+                            orgCode: z.string().openapi({ example: '供应商统一社会信用代码' }),
+                            mobile: z.string().openapi({ example: '12345678' }),
+                            name: z.string().openapi({ example: '1234' }),
+                        })
+                    }
+                }
+            },
+        },
+        responses: {
+            200: {
+                content: {
+                    'application/json': {
+                        schema: ResponseSchema,
+                    },
+                },
+                description: '供应商注册成功',
+            },
+        },
+    }),
+    async (c) => {
+        const { username, mobile, name, orgCode } = c.req.valid('json')
         const existingUser = await prisma.user.findMany(
             {
                 where: {
                     OR: [
                         {
-                            username: body.username
+                            username: username
                         },
                         {
-                            mobilePhone: body.mobile
+                            mobilePhone: mobile
                         }
                     ]
                 }
@@ -284,25 +346,41 @@ app.openapi(
         if (existingUser.length !== 0) {
             return c.json(makeResponse(9999, {}, '已存在重复用户名或手机号'))
         }
-        const suppPos = await prisma.position.findFirst({
-            where: {
-                posCode: 'P001'
-            }
-        })
-        if (!suppPos) {
-            return c.json(makeResponse(9999, '无有效供应商岗位'))
+        const [pos, comp, org] = await Promise.all([
+            prisma.position.findFirst({
+                where: {
+                    posCode: 'P001'
+                }
+            }),
+            prisma.organization.findFirst({
+                where: {
+                    orgCode: 'GY'
+                }
+            }),
+            prisma.organization.findFirst({
+                where: {
+                    orgCode: orgCode,
+                    orgType: '外部组织'
+                }
+            })
+        ])
+        if (!org) {
+            return c.json(makeResponse(9999, {}, '该供应商未注册'))
+        }
+        if (!pos || !comp) {
+            return c.json(makeResponse(9999, {}, '系统基本信息缺失'))
         }
         const user = await prisma.user.create({
             data: {
-                username: body.username,
-                name: body.name,
-                mobilePhone: body.mobile,
+                username: username,
+                name: name,
+                mobilePhone: mobile,
                 userType: '外部用户',
                 employments: {
                     create: {
-                        posId: suppPos.id,
-                        deptId: 96,
-                        compId: 1
+                        posId: pos.id,
+                        deptId: org.id,
+                        compId: comp.id
                     }
 
                 }

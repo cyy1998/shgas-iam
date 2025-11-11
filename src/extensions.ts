@@ -1,5 +1,5 @@
 import Redis from 'ioredis'
-import { PrismaClient, User, Prisma } from './generated/prisma'
+import { PrismaClient, User, Prisma } from '../generated/prisma'
 
 export const redis = new Redis({
     host: '176.169.99.95',
