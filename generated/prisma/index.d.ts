@@ -6994,6 +6994,7 @@ export namespace Prisma {
     posId: number | null
     deptId: number | null
     compId: number | null
+    isPrimary: boolean | null
     status: number | null
     startTime: Date | null
     endTime: Date | null
@@ -7009,6 +7010,7 @@ export namespace Prisma {
     posId: number | null
     deptId: number | null
     compId: number | null
+    isPrimary: boolean | null
     status: number | null
     startTime: Date | null
     endTime: Date | null
@@ -7024,6 +7026,7 @@ export namespace Prisma {
     posId: number
     deptId: number
     compId: number
+    isPrimary: number
     status: number
     startTime: number
     endTime: number
@@ -7059,6 +7062,7 @@ export namespace Prisma {
     posId?: true
     deptId?: true
     compId?: true
+    isPrimary?: true
     status?: true
     startTime?: true
     endTime?: true
@@ -7074,6 +7078,7 @@ export namespace Prisma {
     posId?: true
     deptId?: true
     compId?: true
+    isPrimary?: true
     status?: true
     startTime?: true
     endTime?: true
@@ -7089,6 +7094,7 @@ export namespace Prisma {
     posId?: true
     deptId?: true
     compId?: true
+    isPrimary?: true
     status?: true
     startTime?: true
     endTime?: true
@@ -7191,6 +7197,7 @@ export namespace Prisma {
     posId: number
     deptId: number
     compId: number
+    isPrimary: boolean
     status: number
     startTime: Date
     endTime: Date | null
@@ -7225,6 +7232,7 @@ export namespace Prisma {
     posId?: boolean
     deptId?: boolean
     compId?: boolean
+    isPrimary?: boolean
     status?: boolean
     startTime?: boolean
     endTime?: boolean
@@ -7249,6 +7257,7 @@ export namespace Prisma {
     posId?: boolean
     deptId?: boolean
     compId?: boolean
+    isPrimary?: boolean
     status?: boolean
     startTime?: boolean
     endTime?: boolean
@@ -7258,7 +7267,7 @@ export namespace Prisma {
     updateTime?: boolean
   }
 
-  export type EmploymentOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "userId" | "posId" | "deptId" | "compId" | "status" | "startTime" | "endTime" | "description" | "isDelete" | "createTime" | "updateTime", ExtArgs["result"]["employment"]>
+  export type EmploymentOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "userId" | "posId" | "deptId" | "compId" | "isPrimary" | "status" | "startTime" | "endTime" | "description" | "isDelete" | "createTime" | "updateTime", ExtArgs["result"]["employment"]>
   export type EmploymentInclude<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
     user?: boolean | UserDefaultArgs<ExtArgs>
     deptartment?: boolean | OrganizationDefaultArgs<ExtArgs>
@@ -7285,6 +7294,7 @@ export namespace Prisma {
       posId: number
       deptId: number
       compId: number
+      isPrimary: boolean
       status: number
       startTime: Date
       endTime: Date | null
@@ -7672,6 +7682,7 @@ export namespace Prisma {
     readonly posId: FieldRef<"Employment", 'Int'>
     readonly deptId: FieldRef<"Employment", 'Int'>
     readonly compId: FieldRef<"Employment", 'Int'>
+    readonly isPrimary: FieldRef<"Employment", 'Boolean'>
     readonly status: FieldRef<"Employment", 'Int'>
     readonly startTime: FieldRef<"Employment", 'DateTime'>
     readonly endTime: FieldRef<"Employment", 'DateTime'>
@@ -19063,6 +19074,7 @@ export namespace Prisma {
     posId: 'posId',
     deptId: 'deptId',
     compId: 'compId',
+    isPrimary: 'isPrimary',
     status: 'status',
     startTime: 'startTime',
     endTime: 'endTime',
@@ -19760,6 +19772,7 @@ export namespace Prisma {
     posId?: IntFilter<"Employment"> | number
     deptId?: IntFilter<"Employment"> | number
     compId?: IntFilter<"Employment"> | number
+    isPrimary?: BoolFilter<"Employment"> | boolean
     status?: IntFilter<"Employment"> | number
     startTime?: DateTimeFilter<"Employment"> | Date | string
     endTime?: DateTimeNullableFilter<"Employment"> | Date | string | null
@@ -19781,6 +19794,7 @@ export namespace Prisma {
     posId?: SortOrder
     deptId?: SortOrder
     compId?: SortOrder
+    isPrimary?: SortOrder
     status?: SortOrder
     startTime?: SortOrder
     endTime?: SortOrderInput | SortOrder
@@ -19806,6 +19820,7 @@ export namespace Prisma {
     posId?: IntFilter<"Employment"> | number
     deptId?: IntFilter<"Employment"> | number
     compId?: IntFilter<"Employment"> | number
+    isPrimary?: BoolFilter<"Employment"> | boolean
     status?: IntFilter<"Employment"> | number
     startTime?: DateTimeFilter<"Employment"> | Date | string
     endTime?: DateTimeNullableFilter<"Employment"> | Date | string | null
@@ -19827,6 +19842,7 @@ export namespace Prisma {
     posId?: SortOrder
     deptId?: SortOrder
     compId?: SortOrder
+    isPrimary?: SortOrder
     status?: SortOrder
     startTime?: SortOrder
     endTime?: SortOrderInput | SortOrder
@@ -19850,6 +19866,7 @@ export namespace Prisma {
     posId?: IntWithAggregatesFilter<"Employment"> | number
     deptId?: IntWithAggregatesFilter<"Employment"> | number
     compId?: IntWithAggregatesFilter<"Employment"> | number
+    isPrimary?: BoolWithAggregatesFilter<"Employment"> | boolean
     status?: IntWithAggregatesFilter<"Employment"> | number
     startTime?: DateTimeWithAggregatesFilter<"Employment"> | Date | string
     endTime?: DateTimeNullableWithAggregatesFilter<"Employment"> | Date | string | null
@@ -20936,6 +20953,7 @@ export namespace Prisma {
   }
 
   export type EmploymentCreateInput = {
+    isPrimary?: boolean
     status?: number
     startTime?: Date | string
     endTime?: Date | string | null
@@ -20957,6 +20975,7 @@ export namespace Prisma {
     posId: number
     deptId: number
     compId: number
+    isPrimary?: boolean
     status?: number
     startTime?: Date | string
     endTime?: Date | string | null
@@ -20968,6 +20987,7 @@ export namespace Prisma {
   }
 
   export type EmploymentUpdateInput = {
+    isPrimary?: BoolFieldUpdateOperationsInput | boolean
     status?: IntFieldUpdateOperationsInput | number
     startTime?: DateTimeFieldUpdateOperationsInput | Date | string
     endTime?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -20989,6 +21009,7 @@ export namespace Prisma {
     posId?: IntFieldUpdateOperationsInput | number
     deptId?: IntFieldUpdateOperationsInput | number
     compId?: IntFieldUpdateOperationsInput | number
+    isPrimary?: BoolFieldUpdateOperationsInput | boolean
     status?: IntFieldUpdateOperationsInput | number
     startTime?: DateTimeFieldUpdateOperationsInput | Date | string
     endTime?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -21005,6 +21026,7 @@ export namespace Prisma {
     posId: number
     deptId: number
     compId: number
+    isPrimary?: boolean
     status?: number
     startTime?: Date | string
     endTime?: Date | string | null
@@ -21015,6 +21037,7 @@ export namespace Prisma {
   }
 
   export type EmploymentUpdateManyMutationInput = {
+    isPrimary?: BoolFieldUpdateOperationsInput | boolean
     status?: IntFieldUpdateOperationsInput | number
     startTime?: DateTimeFieldUpdateOperationsInput | Date | string
     endTime?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -21030,6 +21053,7 @@ export namespace Prisma {
     posId?: IntFieldUpdateOperationsInput | number
     deptId?: IntFieldUpdateOperationsInput | number
     compId?: IntFieldUpdateOperationsInput | number
+    isPrimary?: BoolFieldUpdateOperationsInput | boolean
     status?: IntFieldUpdateOperationsInput | number
     startTime?: DateTimeFieldUpdateOperationsInput | Date | string
     endTime?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -22150,6 +22174,7 @@ export namespace Prisma {
     posId?: SortOrder
     deptId?: SortOrder
     compId?: SortOrder
+    isPrimary?: SortOrder
     status?: SortOrder
     startTime?: SortOrder
     endTime?: SortOrder
@@ -22174,6 +22199,7 @@ export namespace Prisma {
     posId?: SortOrder
     deptId?: SortOrder
     compId?: SortOrder
+    isPrimary?: SortOrder
     status?: SortOrder
     startTime?: SortOrder
     endTime?: SortOrder
@@ -22189,6 +22215,7 @@ export namespace Prisma {
     posId?: SortOrder
     deptId?: SortOrder
     compId?: SortOrder
+    isPrimary?: SortOrder
     status?: SortOrder
     startTime?: SortOrder
     endTime?: SortOrder
@@ -24242,6 +24269,7 @@ export namespace Prisma {
   }
 
   export type EmploymentCreateWithoutUserInput = {
+    isPrimary?: boolean
     status?: number
     startTime?: Date | string
     endTime?: Date | string | null
@@ -24261,6 +24289,7 @@ export namespace Prisma {
     posId: number
     deptId: number
     compId: number
+    isPrimary?: boolean
     status?: number
     startTime?: Date | string
     endTime?: Date | string | null
@@ -24376,6 +24405,7 @@ export namespace Prisma {
     posId?: IntFilter<"Employment"> | number
     deptId?: IntFilter<"Employment"> | number
     compId?: IntFilter<"Employment"> | number
+    isPrimary?: BoolFilter<"Employment"> | boolean
     status?: IntFilter<"Employment"> | number
     startTime?: DateTimeFilter<"Employment"> | Date | string
     endTime?: DateTimeNullableFilter<"Employment"> | Date | string | null
@@ -24434,6 +24464,7 @@ export namespace Prisma {
   }
 
   export type EmploymentCreateWithoutDeptartmentInput = {
+    isPrimary?: boolean
     status?: number
     startTime?: Date | string
     endTime?: Date | string | null
@@ -24453,6 +24484,7 @@ export namespace Prisma {
     userId: number
     posId: number
     compId: number
+    isPrimary?: boolean
     status?: number
     startTime?: Date | string
     endTime?: Date | string | null
@@ -24474,6 +24506,7 @@ export namespace Prisma {
   }
 
   export type EmploymentCreateWithoutCompanyInput = {
+    isPrimary?: boolean
     status?: number
     startTime?: Date | string
     endTime?: Date | string | null
@@ -24493,6 +24526,7 @@ export namespace Prisma {
     userId: number
     posId: number
     deptId: number
+    isPrimary?: boolean
     status?: number
     startTime?: Date | string
     endTime?: Date | string | null
@@ -24651,6 +24685,7 @@ export namespace Prisma {
   }
 
   export type EmploymentCreateWithoutPositionInput = {
+    isPrimary?: boolean
     status?: number
     startTime?: Date | string
     endTime?: Date | string | null
@@ -24670,6 +24705,7 @@ export namespace Prisma {
     userId: number
     deptId: number
     compId: number
+    isPrimary?: boolean
     status?: number
     startTime?: Date | string
     endTime?: Date | string | null
@@ -24872,6 +24908,7 @@ export namespace Prisma {
   }
 
   export type EmploymentCreateWithoutPosOrgInput = {
+    isPrimary?: boolean
     status?: number
     startTime?: Date | string
     endTime?: Date | string | null
@@ -24890,6 +24927,7 @@ export namespace Prisma {
     id?: number
     userId: number
     compId: number
+    isPrimary?: boolean
     status?: number
     startTime?: Date | string
     endTime?: Date | string | null
@@ -25939,6 +25977,7 @@ export namespace Prisma {
   }
 
   export type EmploymentCreateWithoutRolesInput = {
+    isPrimary?: boolean
     status?: number
     startTime?: Date | string
     endTime?: Date | string | null
@@ -25959,6 +25998,7 @@ export namespace Prisma {
     posId: number
     deptId: number
     compId: number
+    isPrimary?: boolean
     status?: number
     startTime?: Date | string
     endTime?: Date | string | null
@@ -26021,6 +26061,7 @@ export namespace Prisma {
   }
 
   export type EmploymentUpdateWithoutRolesInput = {
+    isPrimary?: BoolFieldUpdateOperationsInput | boolean
     status?: IntFieldUpdateOperationsInput | number
     startTime?: DateTimeFieldUpdateOperationsInput | Date | string
     endTime?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -26041,6 +26082,7 @@ export namespace Prisma {
     posId?: IntFieldUpdateOperationsInput | number
     deptId?: IntFieldUpdateOperationsInput | number
     compId?: IntFieldUpdateOperationsInput | number
+    isPrimary?: BoolFieldUpdateOperationsInput | boolean
     status?: IntFieldUpdateOperationsInput | number
     startTime?: DateTimeFieldUpdateOperationsInput | Date | string
     endTime?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -26960,6 +27002,7 @@ export namespace Prisma {
     posId: number
     deptId: number
     compId: number
+    isPrimary?: boolean
     status?: number
     startTime?: Date | string
     endTime?: Date | string | null
@@ -26994,6 +27037,7 @@ export namespace Prisma {
   }
 
   export type EmploymentUpdateWithoutUserInput = {
+    isPrimary?: BoolFieldUpdateOperationsInput | boolean
     status?: IntFieldUpdateOperationsInput | number
     startTime?: DateTimeFieldUpdateOperationsInput | Date | string
     endTime?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -27013,6 +27057,7 @@ export namespace Prisma {
     posId?: IntFieldUpdateOperationsInput | number
     deptId?: IntFieldUpdateOperationsInput | number
     compId?: IntFieldUpdateOperationsInput | number
+    isPrimary?: BoolFieldUpdateOperationsInput | boolean
     status?: IntFieldUpdateOperationsInput | number
     startTime?: DateTimeFieldUpdateOperationsInput | Date | string
     endTime?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -27028,6 +27073,7 @@ export namespace Prisma {
     posId?: IntFieldUpdateOperationsInput | number
     deptId?: IntFieldUpdateOperationsInput | number
     compId?: IntFieldUpdateOperationsInput | number
+    isPrimary?: BoolFieldUpdateOperationsInput | boolean
     status?: IntFieldUpdateOperationsInput | number
     startTime?: DateTimeFieldUpdateOperationsInput | Date | string
     endTime?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -27116,6 +27162,7 @@ export namespace Prisma {
     userId: number
     posId: number
     compId: number
+    isPrimary?: boolean
     status?: number
     startTime?: Date | string
     endTime?: Date | string | null
@@ -27130,6 +27177,7 @@ export namespace Prisma {
     userId: number
     posId: number
     deptId: number
+    isPrimary?: boolean
     status?: number
     startTime?: Date | string
     endTime?: Date | string | null
@@ -27154,6 +27202,7 @@ export namespace Prisma {
   }
 
   export type EmploymentUpdateWithoutDeptartmentInput = {
+    isPrimary?: BoolFieldUpdateOperationsInput | boolean
     status?: IntFieldUpdateOperationsInput | number
     startTime?: DateTimeFieldUpdateOperationsInput | Date | string
     endTime?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -27173,6 +27222,7 @@ export namespace Prisma {
     userId?: IntFieldUpdateOperationsInput | number
     posId?: IntFieldUpdateOperationsInput | number
     compId?: IntFieldUpdateOperationsInput | number
+    isPrimary?: BoolFieldUpdateOperationsInput | boolean
     status?: IntFieldUpdateOperationsInput | number
     startTime?: DateTimeFieldUpdateOperationsInput | Date | string
     endTime?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -27188,6 +27238,7 @@ export namespace Prisma {
     userId?: IntFieldUpdateOperationsInput | number
     posId?: IntFieldUpdateOperationsInput | number
     compId?: IntFieldUpdateOperationsInput | number
+    isPrimary?: BoolFieldUpdateOperationsInput | boolean
     status?: IntFieldUpdateOperationsInput | number
     startTime?: DateTimeFieldUpdateOperationsInput | Date | string
     endTime?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -27198,6 +27249,7 @@ export namespace Prisma {
   }
 
   export type EmploymentUpdateWithoutCompanyInput = {
+    isPrimary?: BoolFieldUpdateOperationsInput | boolean
     status?: IntFieldUpdateOperationsInput | number
     startTime?: DateTimeFieldUpdateOperationsInput | Date | string
     endTime?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -27217,6 +27269,7 @@ export namespace Prisma {
     userId?: IntFieldUpdateOperationsInput | number
     posId?: IntFieldUpdateOperationsInput | number
     deptId?: IntFieldUpdateOperationsInput | number
+    isPrimary?: BoolFieldUpdateOperationsInput | boolean
     status?: IntFieldUpdateOperationsInput | number
     startTime?: DateTimeFieldUpdateOperationsInput | Date | string
     endTime?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -27232,6 +27285,7 @@ export namespace Prisma {
     userId?: IntFieldUpdateOperationsInput | number
     posId?: IntFieldUpdateOperationsInput | number
     deptId?: IntFieldUpdateOperationsInput | number
+    isPrimary?: BoolFieldUpdateOperationsInput | boolean
     status?: IntFieldUpdateOperationsInput | number
     startTime?: DateTimeFieldUpdateOperationsInput | Date | string
     endTime?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -27291,6 +27345,7 @@ export namespace Prisma {
     userId: number
     deptId: number
     compId: number
+    isPrimary?: boolean
     status?: number
     startTime?: Date | string
     endTime?: Date | string | null
@@ -27315,6 +27370,7 @@ export namespace Prisma {
   }
 
   export type EmploymentUpdateWithoutPositionInput = {
+    isPrimary?: BoolFieldUpdateOperationsInput | boolean
     status?: IntFieldUpdateOperationsInput | number
     startTime?: DateTimeFieldUpdateOperationsInput | Date | string
     endTime?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -27334,6 +27390,7 @@ export namespace Prisma {
     userId?: IntFieldUpdateOperationsInput | number
     deptId?: IntFieldUpdateOperationsInput | number
     compId?: IntFieldUpdateOperationsInput | number
+    isPrimary?: BoolFieldUpdateOperationsInput | boolean
     status?: IntFieldUpdateOperationsInput | number
     startTime?: DateTimeFieldUpdateOperationsInput | Date | string
     endTime?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -27349,6 +27406,7 @@ export namespace Prisma {
     userId?: IntFieldUpdateOperationsInput | number
     deptId?: IntFieldUpdateOperationsInput | number
     compId?: IntFieldUpdateOperationsInput | number
+    isPrimary?: BoolFieldUpdateOperationsInput | boolean
     status?: IntFieldUpdateOperationsInput | number
     startTime?: DateTimeFieldUpdateOperationsInput | Date | string
     endTime?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -27407,6 +27465,7 @@ export namespace Prisma {
     id?: number
     userId: number
     compId: number
+    isPrimary?: boolean
     status?: number
     startTime?: Date | string
     endTime?: Date | string | null
@@ -27421,6 +27480,7 @@ export namespace Prisma {
   }
 
   export type EmploymentUpdateWithoutPosOrgInput = {
+    isPrimary?: BoolFieldUpdateOperationsInput | boolean
     status?: IntFieldUpdateOperationsInput | number
     startTime?: DateTimeFieldUpdateOperationsInput | Date | string
     endTime?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -27439,6 +27499,7 @@ export namespace Prisma {
     id?: IntFieldUpdateOperationsInput | number
     userId?: IntFieldUpdateOperationsInput | number
     compId?: IntFieldUpdateOperationsInput | number
+    isPrimary?: BoolFieldUpdateOperationsInput | boolean
     status?: IntFieldUpdateOperationsInput | number
     startTime?: DateTimeFieldUpdateOperationsInput | Date | string
     endTime?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -27453,6 +27514,7 @@ export namespace Prisma {
     id?: IntFieldUpdateOperationsInput | number
     userId?: IntFieldUpdateOperationsInput | number
     compId?: IntFieldUpdateOperationsInput | number
+    isPrimary?: BoolFieldUpdateOperationsInput | boolean
     status?: IntFieldUpdateOperationsInput | number
     startTime?: DateTimeFieldUpdateOperationsInput | Date | string
     endTime?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null

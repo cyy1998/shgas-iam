@@ -178,6 +178,7 @@ exports.Prisma.EmploymentScalarFieldEnum = {
   posId: 'posId',
   deptId: 'deptId',
   compId: 'compId',
+  isPrimary: 'isPrimary',
   status: 'status',
   startTime: 'startTime',
   endTime: 'endTime',

@@ -1,16 +1,21 @@
-import { Hono } from 'hono'
-import { OrganizationQuery, UserDTO, getEmploymentDTO, getOrgDTO, getUserDTO } from '../repositories/dto'
-import { User } from '../../generated/prisma'
-import { redis, prisma } from '../extensions'
 import { makeResponse } from '../utils'
 import { z, createRoute, OpenAPIHono } from '@hono/zod-openapi'
 import { ResponseSchema, createResponseSchema, OrganizationInputSchema, UserOutSchema } from '../schema'
 import { userService } from '../services/user.service'
 import { mobileService } from '../services/mobile.service'
 import { getCookie } from 'hono/cookie'
+import { ServiceStatusCode } from '../constant'
+import { authService } from '../services/auth.service'
+import { UserDTO } from '../types/user.type'
+import { employmentService } from '../services/employment.service'
+import { organizationService } from '../services/organization.service'
 
 const app = new OpenAPIHono()
 
+/*
+path: /user-info
+function: 获取当前已登录用户信息 
+*/
 app.openapi(
     createRoute({
         method: 'get',
@@ -32,6 +37,10 @@ app.openapi(
     }
 )
 
+/*
+path: /password/change
+function: 更换密码 
+*/
 app.openapi(
     createRoute({
         method: 'post',
@@ -63,14 +72,15 @@ app.openapi(
     async (c) => {
         const userDTO: UserDTO = JSON.parse(Buffer.from(c.req.header('X-User-Info') ?? '', 'base64').toString('utf8'))
         const { oldPassword, newPassword } = c.req.valid('json')
-        const res = await userService.changePassword(userDTO, oldPassword, newPassword)
-        if (!res) {
-            return c.json(makeResponse(9999, {}, '原密码错误'))
-        }
-        return c.json(makeResponse(200, {}, 'success'))
+        const res = await userService.setPassword(userDTO, oldPassword, newPassword)
+        return c.json(makeResponse(res.code, res.data, res.message))
     }
 )
 
+/*
+path: /mobile/send-message
+function: 发送短信 
+*/
 app.openapi(
     createRoute({
         method: 'post',
@@ -103,13 +113,15 @@ app.openapi(
         if (!mobileService.checkValidPhoneNumber(phoneNumber)) {
             return c.json(makeResponse(400, {}, '无效手机号'))
         }
-        const res: boolean = await mobileService.sendVerificationCode(phoneNumber)
-        if (!res) {
-            return c.json(makeResponse(9999, {}, '短信发送失败'))
-        }
-        return c.json(makeResponse(200, {}, 'success'))
-    })
+        const res = await mobileService.sendVerificationCode(phoneNumber)
+        return c.json(makeResponse(res.code, res.data, res.message))
+    }
+)
 
+/*
+path: /mobile/set
+function: 设置手机号 
+*/
 app.openapi(
     createRoute({
         method: 'post',
@@ -140,22 +152,22 @@ app.openapi(
     }),
     async (c) => {
         const { phoneNumber, code } = c.req.valid('json')
-        const sessionId = getCookie(c, 'session')
-        console.log(sessionId)
+        const sessionId = getCookie(c, 'session') as string
         if (!mobileService.checkValidPhoneNumber(phoneNumber)) {
-            return c.json(makeResponse(400, {}, '无效手机号'))
+            return c.json(makeResponse(ServiceStatusCode.Failure, {}, '无效手机号'))
         }
         if (await mobileService.checkExistingPhoneNumber(phoneNumber)) {
-            return c.json(makeResponse(400, {}, '手机号已存在'))
+            return c.json(makeResponse(ServiceStatusCode.Failure, {}, '手机号已存在'))
         }
         if (!await mobileService.cehckVerificationCode(phoneNumber, code)) {
-            return c.json(makeResponse(9999, {}, '验证码错误'))
+            return c.json(makeResponse(ServiceStatusCode.Failure, {}, '验证码错误'))
         }
         const userDTO: UserDTO = JSON.parse(Buffer.from(c.req.header('X-User-Info') ?? '', 'base64').toString('utf8'))
         const newUserDTO = await userService.setMobile(userDTO, phoneNumber)
-        await userService.updateUserSession(sessionId as string, newUserDTO)
-        return c.json(makeResponse(200, {}, 'success'))
-    })
+        const res = await authService.updateSession(sessionId, newUserDTO)
+        return c.json(makeResponse(res.code, res.data, res.message))
+    }
+)
 
 app.openapi(
     createRoute({
@@ -179,24 +191,8 @@ app.openapi(
     async (c) => {
         const user: UserDTO = JSON.parse(Buffer.from(c.req.header('X-User-Info') ?? '', 'base64').toString('utf8'))
         const { orgCode } = c.req.valid('query')
-        const users = await prisma.user.findMany({
-            where: {
-                employments: {
-                    some: {
-                        deptartment: {
-                            orgCode: {
-                                startsWith: orgCode
-                            }
-                        }
-                    }
-                },
-                NOT: {
-                    username: user.username
-                }
-            },
-
-        })
-        return c.json(makeResponse(200, users.map(u => getUserDTO(u))))
+        const res = await userService.searchOtherUserUnderOrg(orgCode, user)
+        return c.json(makeResponse(res.code, res.data, res.message))
     }
 )
 
@@ -234,113 +230,20 @@ app.openapi(
     }),
     async (c) => {
         const { privCode, codeType } = c.req.valid('query')
-        let privCondition = null
-        if (codeType === 'full') {
-            privCondition = privCode
-        } else if (codeType === 'prefix') {
-            privCondition = {
-                startsWith: privCode
-            }
-        } else {
-            privCondition = {
-                endsWith: privCode
-            }
-        }
         const user: UserDTO = JSON.parse(Buffer.from(c.req.header('X-User-Info') ?? '', 'base64').toString('utf8'))
-        const employments = await prisma.employment.findMany({
-            where: {
-                user: {
-                    username: user.username
-                },
-                OR: [
-                    {
-                        deptartment: {
-                            roles: {
-                                some: {
-                                    role: {
-                                        privileges: {
-                                            some: {
-                                                privilege: {
-                                                    privilegeCode: privCondition
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    },
-                    {
-                        company: {
-                            roles: {
-                                some: {
-                                    role: {
-                                        privileges: {
-                                            some: {
-                                                privilege: {
-                                                    privilegeCode: privCondition
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    },
-                    {
-                        position: {
-                            roles: {
-                                some: {
-                                    role: {
-                                        privileges: {
-                                            some: {
-                                                privilege: {
-                                                    privilegeCode: privCondition
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    },
-                    {
-                        roles: {
-                            some: {
-                                role: {
-                                    privileges: {
-                                        some: {
-                                            privilege: {
-                                                privilegeCode: privCondition
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                ]
-            },
-            include: {
-                deptartment: true,
-                company: true,
-                position: true,
-                user: true
-            }
-        })
-        console.log(employments)
-        return c.json(makeResponse(200, employments.map(e => getEmploymentDTO(e))))
+        const res = await employmentService.getEmploymentsByUserAndPrivilege(user.username, privCode, codeType)
+        return c.json(makeResponse(res.code, res.data, res.message))
     })
 
 app.openapi(
     createRoute({
         method: 'get',
-        path: '/organizations',
+        path: '/search-organizations',
         tags: ['Self'],
         request: {
             query: z.object({
                 orgLevel: z.coerce.number().int().openapi({ example: "2" }),
-                comCode: z.string().optional().openapi({ example: "SR" })
+                comCode: z.string().openapi({ example: "SR" })
             })
         },
         responses: {
@@ -364,19 +267,9 @@ app.openapi(
         },
     }),
     async (c) => {
-        const user: UserDTO = JSON.parse(Buffer.from(c.req.header('X-User-Info') ?? '', 'base64').toString('utf8'))
         const { orgLevel, comCode } = c.req.valid('query')
-        const orgCodes = user.positions?.map(p => p.orgCode.substring(0, orgLevel * 2))
-        const organizations = await prisma.organization.findMany({
-            where: {
-                orgCode: {
-                    in: orgCodes,
-                    startsWith: comCode
-                },
-                level: orgLevel
-            }
-        })
-        return c.json(makeResponse(200, organizations.map(o => getOrgDTO(o))))
+        const res = await organizationService.searchFormalOrganization(comCode, orgLevel)
+        return c.json(makeResponse(res.code, res.data, res.message))
     }
 )
 

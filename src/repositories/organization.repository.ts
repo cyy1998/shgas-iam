@@ -1,0 +1,36 @@
+import { prisma } from "../extensions"
+
+export const organizationRepository = {
+    async searchFormalOrganization(orgCode: string, orgLevel: number) {
+        return await prisma.organization.findMany({
+            where: {
+                orgCode: {
+                    startsWith: orgCode
+                },
+                orgType: {
+                    notIn: ['虚拟组织', '外部组织']
+                },
+                level: orgLevel
+            }
+        })
+    },
+    async getOrganizationByCode(orgCode: string) {
+        return await prisma.organization.findFirst({
+            where: {
+                orgCode: orgCode,
+            }
+        })
+    },
+    async setOrganization(orgCode: string, orgName: string, orgLevel: number, parentId: number) {
+        return await prisma.organization.create({
+            data: {
+                orgCode: orgCode,
+                orgName: orgName,
+                parentId: parentId,
+                level: orgLevel,
+                orgType: '外部组织',
+                isVirtual: true
+            }
+        })
+    }
+}

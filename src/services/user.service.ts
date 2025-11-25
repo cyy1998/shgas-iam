@@ -1,199 +1,59 @@
 import { redis, prisma } from '../extensions'
-import { getEmploymentDTO, getOrgDTO, getPrivDTO, getUserDTO, PrivDTO, UserDTO } from '../repositories/dto'
 import axios from 'axios'
 import { hash, compare } from 'bcrypt-ts'
-import { EmploymentStatus, PASSWORD_HASH_ROUNDS } from '../constant'
+import { DEFAULT_USER_PASSWORD, EmploymentStatus, PASSWORD_HASH_ROUNDS, PURVEYOR_ORG_PRFFIX, ServiceStatusCode } from '../constant'
 import { User } from '../../generated/prisma'
+import { use } from 'react'
+import { ServiceResult } from '../types/service.type'
+import { userRepository } from '../repositories/user.repository'
+import { UserDTO } from '../types/user.type'
+import { userMapper } from '../mapper/user.mapper'
+import { employmentRepository } from '../repositories/employment.repository'
+import { privilegeRepository } from '../repositories/privilege.repository'
+import { employmentMapper } from '../mapper/employment.mapper'
+import { privilegeMapper } from '../mapper/privilege.mapper'
+import { roleRepository } from '../repositories/role.repository'
+import { roleMapper } from '../mapper/role.mapper'
+import { positionRepository } from '../repositories/position.repository'
+import { organizationRepository } from '../repositories/organization.repository'
+import { mobileService } from './mobile.service'
 
 export const userService = {
-    async createUserSession(userQueryCondition: object, verifyPassword: boolean = true, password: string = '') {
-        const user = await prisma.user.findFirst({
-            where: userQueryCondition,
-            include: {
-                employments: {
-                    include: {
-                        position: true,
-                        deptartment: true,
-                        company: true
-                    }
-                }
-            }
-        })
-        if (!user) {
+
+    async setPassword(userDTO: UserDTO, oldPassword: string, newPassword: string): Promise<ServiceResult> {
+        const user = await userRepository.getUserByUsername(userDTO.username)
+        if (user === null) {
             return {
-                userDTO: null,
-                user: null,
-                sessionId: null,
-                message: '用户不存在',
-                code: 401
+                code: ServiceStatusCode.Failure,
+                data: {},
+                message: '用户不存在'
             }
         }
-        if (verifyPassword) {
-            const isMatch = user.password ? await compare(password, user.password ?? '') : password === '1111'
-            if (!isMatch) {
-                return {
-                    userDTO: null,
-                    user: null,
-                    sessionId: null,
-                    message: '密码错误',
-                    code: 401
-                }
-            }
-        }
-        const userDTO = getUserDTO(user)
-        userDTO.positions = user.employments.map(e => getEmploymentDTO(e))
-        // const comCodes = [...new Set(userDTO.positions.map(e => e.orgCode.slice(0, 2)))]
-        const privileges = await prisma.privilege.findMany({
-            where: {
-                roles: {
-                    some: {
-                        role: {
-                            OR: [
-                                {
-                                    positions: {
-                                        some: {
-                                            position: {
-                                                employments: {
-                                                    some: {
-                                                        userId: user.id,
-                                                        status: EmploymentStatus.Enable
-                                                    }
-                                                }
-                                            }
-                                        }
-                                    }
-                                },
-                                {
-                                    organizations: {
-                                        some: {
-                                            organization: {
-                                                OR: [
-                                                    {
-                                                        deptEmployments: {
-                                                            some: {
-                                                                userId: user.id,
-                                                                status: EmploymentStatus.Enable
-                                                            }
-                                                        }
-                                                    },
-                                                    {
-                                                        compEmployments: {
-                                                            some: {
-                                                                userId: user.id,
-                                                                status: EmploymentStatus.Enable
-                                                            }
-                                                        }
-                                                    },
-                                                ]
-                                            }
-
-                                        }
-                                    }
-                                },
-                                {
-                                    positionOrganizations: {
-                                        some: {
-                                            posOrg: {
-                                                employments: {
-                                                    some: {
-                                                        userId: user.id,
-                                                        status: EmploymentStatus.Enable
-                                                    }
-                                                }
-                                            }
-                                        }
-                                    }
-                                },
-                                {
-                                    employments: {
-                                        some: {
-                                            employment: {
-                                                userId: user.id,
-                                                status: EmploymentStatus.Enable
-                                            }
-                                        }
-                                    }
-                                }
-                            ]
-                        }
-                    }
-                }
-            },
-            include: {
-                object: true
-            }
-        })
-        userDTO.privileges = privileges.map(p => getPrivDTO(p))
-        // userDTO.companies = companies.map(c => getOrgDTO(c))
-        const token = crypto.randomUUID()
-        await redis.set(`session:${token}`, JSON.stringify(userDTO), 'EX', parseInt(process.env.REDIS_EXPIRE_TIME ?? '3600'))
-        return {
-            userDTO: userDTO,
-            user: user,
-            sessionId: token,
-            message: 'success',
-            code: 200
-        }
-    },
-
-    // async getUserSession(sessionId: string): Promise<UserDTO> {
-    //     return (await redis.get(`session${sessionId}`)) as UserDTO
-    // },
-    async updateUserSession(sessionId: string, userDTO: UserDTO) {
-        await redis.set(`session:${sessionId}`, JSON.stringify(userDTO), 'EX', parseInt(process.env.REDIS_EXPIRE_TIME ?? '3600'))
-    },
-
-    async orcasLogin(userDTO: UserDTO) {
-        const resp = await axios('http://176.169.99.150:18091/orcas/login', {
-            method: 'POST',
-            data: {
-                id: userDTO.id,
-                username: userDTO.username,
-                name: userDTO.name,
-                mobile: userDTO.mobile ?? ''
-            }
-        })
-        if (resp.status != 200 || resp.data.code != 200 || !resp.headers["set-cookie"]) {
-            return {
-                res: 'fail',
-                orcasSessionId: null
-            }
-        }
-        const cookieStr = resp.headers["set-cookie"][1] ?? ''
-        const match = cookieStr.match(/orcas_sso_sessionid=([^;]+)/)
-        const orcasSessionId = match ? match[1] : ''
-        return {
-            res: 'success',
-            orcasSessionId: orcasSessionId
-        }
-    },
-
-    async changePassword(userDTO: UserDTO, oldPassword: string, newPassword: string): Promise<boolean> {
-        const user = await prisma.user.findUnique({
-            where: {
-                id: userDTO.id
-            }
-        }) as User
-        const isMatch = await compare(oldPassword, user.password ?? '')
-        console.log(isMatch)
+        const isMatch = this.checkPassword(user, oldPassword)
         if (!isMatch) {
-            console.log(isMatch)
-            return false
+            return {
+                code: ServiceStatusCode.Failure,
+                data: {},
+                message: '旧密码错误'
+            }
         }
         const newPasswordHash = await hash(newPassword, PASSWORD_HASH_ROUNDS)
-        const userUpdated = await prisma.user.update({
-            where: {
-                id: userDTO.id
-            },
-            data: {
-                password: newPasswordHash
-            }
-        })
-        return true
+        await userRepository.setPassword(userDTO.id, newPasswordHash)
+        return {
+            code: ServiceStatusCode.Success,
+            data: {},
+            message: 'success'
+        }
 
+    },
+
+    async checkPassword(user: User, inputPassword: string): Promise<boolean> {
+        //console.log(inputPassword, DEFAULT_USER_PASSWORD, user.password, inputPassword === DEFAULT_USER_PASSWORD)
+        return user.password ? await compare(inputPassword, user.password ?? '') : inputPassword === DEFAULT_USER_PASSWORD
     },
 
     async setMobile(userDTO: UserDTO, newMobile: string): Promise<UserDTO> {
+
         const userUpdated = await prisma.user.update({
             where: {
                 id: userDTO.id
@@ -204,5 +64,165 @@ export const userService = {
         })
         userDTO.mobile = newMobile
         return userDTO
+    },
+
+    async getUserDetailByUsername(username: string) {
+        const user = await userRepository.getUserByUsername(username)
+        if (user === null) {
+            return {
+                code: ServiceStatusCode.Failure,
+                data: {},
+                message: 'User Not Found'
+            }
+        }
+        const userDTO = userMapper.toUserDTO(user)
+        const positions = await employmentRepository.getEmploymentsByUserId(userDTO.id)
+        const privileges = await privilegeRepository.getPrivilegesByUserId(userDTO.id)
+        const roles = await roleRepository.getRoleByUserId(userDTO.id)
+        userDTO.positions = positions.map(e => employmentMapper.toEmploymentDTO(e))
+        userDTO.privileges = privileges.map(p => privilegeMapper.toPrivilegeDTO(p))
+        userDTO.roles = roles.map(r => roleMapper.toRoleDTO(r))
+        return {
+            code: ServiceStatusCode.Success,
+            data: userDTO,
+            message: 'success'
+        }
+    },
+
+    async searchOtherUserUnderOrg(orgCode: string, userDTO: UserDTO): Promise<ServiceResult> {
+        const users = await userRepository.searchOtherUsersUnderOrg(userDTO.id, orgCode)
+        const userDTOs = users.map(u => userMapper.toUserDTO(u))
+        return {
+            code: ServiceStatusCode.Success,
+            data: userDTOs,
+            message: 'success'
+        }
+    },
+
+    async searchUsersUnderOrg(orgCode: string, orgScope: string): Promise<ServiceResult> {
+        if (orgScope === 'direct') {
+            const users = await userRepository.searchUsersUnderOrgDirect(orgCode)
+            const userDTOs = users.map(u => userMapper.toUserDTO(u))
+            return {
+                code: ServiceStatusCode.Success,
+                data: userDTOs,
+                message: 'success'
+            }
+        }
+        else if (orgScope == 'recursive') {
+            const users = await userRepository.searchUsersUnderOrgRecursive(orgCode)
+            const userDTOs = users.map(u => userMapper.toUserDTO(u))
+            return {
+                code: ServiceStatusCode.Success,
+                data: userDTOs,
+                message: 'success'
+            }
+        }
+        else {
+            return {
+                code: ServiceStatusCode.Failure,
+                data: {},
+                message: 'Invalid OrgScope'
+            }
+        }
+    },
+
+    async searchUserByOrgRole(orgCode: string, roleCode: string, orgScope: string): Promise<ServiceResult> {
+        if (orgScope === 'direct') {
+            const users = await userRepository.searchUsersByOrgRoleDirect(orgCode, roleCode)
+            const userDTOs = users.map(u => userMapper.toUserDTO(u))
+            return {
+                code: ServiceStatusCode.Success,
+                data: userDTOs,
+                message: 'success'
+            }
+        }
+        else if (orgScope == 'recursive') {
+            const users = await userRepository.searchUsersByOrgRoleRecursive(orgCode, roleCode)
+            const userDTOs = users.map(u => userMapper.toUserDTO(u))
+            return {
+                code: ServiceStatusCode.Success,
+                data: userDTOs,
+                message: 'success'
+            }
+        }
+        else {
+            return {
+                code: ServiceStatusCode.Failure,
+                data: {},
+                message: 'Invalid OrgScope'
+            }
+        }
+
+
+    },
+    async searchUserByOrgPos(orgCode: string, roleCode: string, orgScope: string): Promise<ServiceResult> {
+        if (orgScope === 'direct') {
+            const users = await userRepository.searchUsersByOrgPosDirect(orgCode, roleCode)
+            const userDTOs = users.map(u => userMapper.toUserDTO(u))
+            return {
+                code: ServiceStatusCode.Success,
+                data: userDTOs,
+                message: 'success'
+            }
+        }
+        else if (orgScope == 'recursive') {
+            const users = await userRepository.searchUsersByOrgPosRecursive(orgCode, roleCode)
+            const userDTOs = users.map(u => userMapper.toUserDTO(u))
+            return {
+                code: ServiceStatusCode.Success,
+                data: userDTOs,
+                message: 'success'
+            }
+        }
+        else {
+            return {
+                code: ServiceStatusCode.Failure,
+                data: {},
+                message: 'Invalid OrgScope'
+            }
+        }
+
+
+    },
+    async purveyorConcatRegister(username: string, mobile: string, name: string, orgCode: string) {
+        const [_eu1, _eu2] = await Promise.all([
+            userRepository.getUserByUsername(username),
+            userRepository.getUserByMobile(mobile)
+        ])
+        if (_eu1 !== null || _eu2 !== null) {
+            return {
+                code: ServiceStatusCode.Failure,
+                data: {},
+                message: '已存在重复用户名或手机号+'
+            }
+        }
+        const [pos, comp, org] = await Promise.all([
+            positionRepository.getPositionByCode('P001'),
+            organizationRepository.getOrganizationByCode(PURVEYOR_ORG_PRFFIX),
+            organizationRepository.getOrganizationByCode(orgCode)
+        ])
+        if (org === null) {
+            return {
+                code: ServiceStatusCode.Failure,
+                data: {},
+                message: '供应商未注册'
+            }
+        }
+        if (pos === null || comp === null) {
+            return {
+                code: ServiceStatusCode.Failure,
+                data: {},
+                message: '系统基本信息缺失'
+            }
+        }
+        const user = await userRepository.setUser(username, name, mobile, '外部用户')
+        const employment = await employmentRepository.setEmployment(user.id, pos.id, org.id, comp.id)
+        await mobileService.sendMessage(mobile, mobileService.getPurveyorWelcomeMessage(name))
+        return {
+            code: ServiceStatusCode.Success,
+            data: {},
+            message: 'success'
+        }
     }
 }

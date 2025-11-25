@@ -97,6 +97,7 @@ model Employment {
   posId       Int       @map("pos_id")
   deptId      Int       @map("dept_id")
   compId      Int       @map("comp_id")
+  isPrimary   Boolean   @default(false) @map("is_primary") @db.TinyInt
   status      Int       @default(1) @map("status") @db.TinyInt
   startTime   DateTime  @default(now()) @map("start_time")
   endTime     DateTime? @map("end_time")

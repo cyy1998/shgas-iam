@@ -5,6 +5,10 @@ import { ResponseSchema } from '../schema'
 
 const app = new OpenAPIHono()
 
+/*
+path: /position/set
+function: 设置新岗位
+*/
 app.openapi(
     createRoute({
         method: 'post',
@@ -41,6 +45,10 @@ app.openapi(
         return c.json(makeResponse())
     })
 
+/*
+path: /employment/set
+function: 设置新任职关系
+*/
 app.openapi(
     createRoute({
         method: 'post',
@@ -125,6 +133,11 @@ app.openapi(
         return c.json(makeResponse())
     })
 
+
+/*
+path: /role/pos-org/set
+function: 为岗位-部门组合设置角色
+*/
 app.openapi(
     createRoute({
         method: 'post',
