@@ -38,7 +38,8 @@ app.openapi(
         const { username } = c.req.valid('query')
         const res = await userService.getUserDetailByUsername(username)
         return c.json(makeResponse(res.code, res.data, res.message))
-    })
+    }
+)
 
 /*
 path: /search-users/org-position
@@ -72,7 +73,8 @@ app.openapi(
         const { posCode, orgCode, orgScope } = c.req.valid('query')
         const res = await userService.searchUserByOrgPos(orgCode, posCode, orgScope)
         return c.json(makeResponse(res.code, res.data, res.message))
-    })
+    }
+)
 
 /*
 path: /search-users/org-roles
@@ -106,7 +108,8 @@ app.openapi(
         const { roleCode, orgCode, orgScope } = c.req.valid('query')
         const res = await userService.searchUserByOrgRole(orgCode, roleCode, orgScope)
         return c.json(makeResponse(res.code, res.data, res.message))
-    })
+    }
+)
 
 /*
 path: /search-users/under-org
@@ -177,7 +180,8 @@ app.openapi(
         const { orgCode, orgName } = c.req.valid('json')
         const res = await organizationService.purveyorRegister(orgCode, orgName)
         return c.json(makeResponse(res.code, res.data, res.message))
-    })
+    }
+)
 
 /*
 path: /purveyor/contact/register
@@ -217,7 +221,8 @@ app.openapi(
         const { username, mobile, name, orgCode } = c.req.valid('json')
         const res = await userService.purveyorConcatRegister(username, mobile, name, orgCode)
         return c.json(makeResponse(res.code, res.data, res.message))
-    })
+    }
+)
 
 /*
 path: /search-employments/user-privilege
@@ -259,6 +264,7 @@ app.openapi(
         const { username, privCode } = c.req.valid('query')
         const res = await employmentService.getEmploymentsByUserAndPrivilege(username, privCode, 'full')
         return c.json(makeResponse(res.code, res.data, res.message))
-    })
+    }
+)
 
 export default app

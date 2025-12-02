@@ -6,12 +6,26 @@ import admin from './routes/admin.route'
 import { serveStatic } from 'hono/bun'
 import { OpenAPIHono } from '@hono/zod-openapi'
 import { logger } from 'hono/logger'
+import { PORT } from './constant'
 
 const app = new OpenAPIHono()
-const port = 30010
+const port = PORT
 
 app.use('/static/*', serveStatic({ root: './' }))
-app.use(logger())
+// app.use('*', async (c, next) => {
+//   const ip = c.req.header('X-Forwarded-For')
+//   const uri = c.req.header('X-Forwarded-Uri')
+//   const host = c.req.header('X-Forwarded-Host')
+
+//   console.log('User-URI', uri)
+//   console.log('User-Host', host)
+//   await next()
+// })
+app.use(logger(
+  (str: string, ...args: any[]) => {
+    console.log(`[INFO] ${new Date().toISOString()} - ${str}`, ...args)
+  }
+))
 
 app.route('/auth', auth)
 app.route('/self', self)

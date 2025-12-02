@@ -1,5 +1,5 @@
 import { compare } from "bcrypt-ts"
-import { DEFAULT_USER_PASSWORD, REDIS_EXPIRE_TIME, ServiceStatusCode } from "../constant"
+import { DEFAULT_USER_PASSWORD, IAM_SECRET_KEY, ORCAS_URL, REDIS_EXPIRE_TIME, RUN_MODE, ServiceStatusCode } from "../constant"
 import { userRepository } from "../repositories/user.repository"
 import { ServiceResult } from "../types/service.type"
 import { Context } from "hono"
@@ -14,6 +14,7 @@ import axios from "axios"
 import { setCookie, getCookie, deleteCookie } from 'hono/cookie'
 import { User } from "../../generated/prisma"
 import { userService } from "./user.service"
+import { getTimestampDifference, hmacSha256 } from "../utils"
 
 
 export const authService = {
@@ -32,6 +33,25 @@ export const authService = {
                 code: ServiceStatusCode.WrongPassword,
                 data: {},
                 message: '密码错误'
+            }
+        }
+        return await this._login(user, c)
+    },
+    async loginThirdParty(username: string, flowId: string, sign: string, c: Context) {
+        const vetifyToken = hmacSha256(`${username}${flowId}`, IAM_SECRET_KEY)
+        if (vetifyToken !== sign) {
+            return {
+                code: ServiceStatusCode.Failure,
+                data: {},
+                message: 'token校验错误'
+            }
+        }
+        const user = await userRepository.getUserByUsername(username)
+        if (user === null) {
+            return {
+                code: ServiceStatusCode.UserNotExisting,
+                data: {},
+                message: '用户不存在'
             }
         }
         return await this._login(user, c)
@@ -95,7 +115,9 @@ export const authService = {
     },
 
     async _orcasLogin(userDTO: UserDTO) {
-        const resp = await axios('http://176.169.99.150:18091/orcas/login', {
+        const orcasUri = ORCAS_URL
+        console.log(orcasUri)
+        const resp = await axios(orcasUri, {
             method: 'POST',
             data: {
                 id: userDTO.id,
@@ -105,14 +127,21 @@ export const authService = {
             }
         })
         if (resp.status != 200 || resp.data.code != 200 || !resp.headers["set-cookie"]) {
+            console.log({
+                id: userDTO.id,
+                username: userDTO.username,
+                name: userDTO.name,
+                mobile: userDTO.mobile ?? ''
+            })
+            console.log(resp.data)
             return {
-                code: ServiceStatusCode.Success,
-                orcasSessionId: null
+                code: ServiceStatusCode.Failure
             }
         }
         const cookieStr = resp.headers["set-cookie"][1] ?? ''
         const match = cookieStr.match(/orcas_sso_sessionid=([^;]+)/)
         const orcasSessionId = match ? match[1] : ''
+        console.log(orcasSessionId)
         return {
             code: ServiceStatusCode.Success,
             orcasSessionId: orcasSessionId

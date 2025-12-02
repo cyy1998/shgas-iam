@@ -1,7 +1,7 @@
 import { redis, prisma } from '../extensions'
 import axios from 'axios'
 import { hash, compare } from 'bcrypt-ts'
-import { DEFAULT_USER_PASSWORD, EmploymentStatus, PASSWORD_HASH_ROUNDS, PURVEYOR_ORG_PRFFIX, ServiceStatusCode } from '../constant'
+import { DEFAULT_USER_PASSWORD, EmploymentStatus, PASSWORD_HASH_ROUNDS, PURVEYOR_ORG_PRFFIX, RUN_MODE, ServiceStatusCode } from '../constant'
 import { User } from '../../generated/prisma'
 import { use } from 'react'
 import { ServiceResult } from '../types/service.type'
@@ -186,17 +186,7 @@ export const userService = {
 
     },
     async purveyorConcatRegister(username: string, mobile: string, name: string, orgCode: string) {
-        const [_eu1, _eu2] = await Promise.all([
-            userRepository.getUserByUsername(username),
-            userRepository.getUserByMobile(mobile)
-        ])
-        if (_eu1 !== null || _eu2 !== null) {
-            return {
-                code: ServiceStatusCode.Failure,
-                data: {},
-                message: '已存在重复用户名或手机号+'
-            }
-        }
+        const existingUser = await userRepository.getUserByMobile(mobile)
         const [pos, comp, org] = await Promise.all([
             positionRepository.getPositionByCode('P001'),
             organizationRepository.getOrganizationByCode(PURVEYOR_ORG_PRFFIX),
@@ -216,9 +206,19 @@ export const userService = {
                 message: '系统基本信息缺失'
             }
         }
-        const user = await userRepository.setUser(username, name, mobile, '外部用户')
-        const employment = await employmentRepository.setEmployment(user.id, pos.id, org.id, comp.id)
-        await mobileService.sendMessage(mobile, mobileService.getPurveyorWelcomeMessage(name))
+        if (existingUser !== null) {
+            const existingEmployment = employmentRepository.getEmploymentsByUserOrgPos(existingUser.id, org.id, pos.id)
+            if (existingEmployment === null) {
+                const employment = await employmentRepository.setEmployment(existingUser.id, pos.id, org.id, comp.id)
+            }
+        }
+        else {
+            const user = await userRepository.setUser(username, name, mobile, '外部用户')
+            const employment = await employmentRepository.setEmployment(user.id, pos.id, org.id, comp.id)
+        }
+        if (RUN_MODE === 'production' || RUN_MODE === 'development') {
+            await mobileService.sendMessage(mobile, mobileService.getPurveyorWelcomeMessage(name))
+        }
         return {
             code: ServiceStatusCode.Success,
             data: {},

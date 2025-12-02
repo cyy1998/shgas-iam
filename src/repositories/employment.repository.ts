@@ -14,7 +14,21 @@ export const employmentRepository = {
             }
         })
     },
-
+    async getEmploymentsByUserOrgPos(userId: number, orgId: number, posId: number) {
+        return await prisma.employment.findFirst({
+            where: {
+                userId: userId,
+                deptId: orgId,
+                posId: posId
+            },
+            include: {
+                user: true,
+                deptartment: true,
+                company: true,
+                position: true
+            }
+        })
+    },
     async getEmploymentsByUserAndPrivilege(username: string, privCondition: any) {
         return await prisma.employment.findMany({
             where: {

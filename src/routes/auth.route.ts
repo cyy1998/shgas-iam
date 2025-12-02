@@ -60,7 +60,63 @@ app.openapi(
         const { username, password } = c.req.valid('json')
         const res = await authService.loginByPassword(username, password, c)
         return c.json(makeResponse(res.code, res.data, res.message))
-    })
+    }
+)
+
+/* 
+function: login through oa
+*/
+app.openapi(
+    createRoute({
+        method: 'post',
+        path: '/login/oa',
+        tags: ['Auth'],
+        request: {
+            body: {
+                content: {
+                    'application/json': {
+                        schema: z.object({
+                            username: z.string().openapi({ example: '138550' }),
+                            flowId: z.string().openapi({ example: '1234' }),
+                            sign: z.string().openapi({ example: '138550' })
+                        })
+                    }
+                }
+            },
+        },
+        responses: {
+            200: {
+                content: {
+                    'application/json': {
+                        schema: createResponseSchema(z.object()),
+                    },
+                },
+                description: '设置岗位成功',
+            },
+            401: {
+                content: {
+                    'application/json': {
+                        schema: createResponseSchema(z.object()),
+                    },
+                },
+                description: '认证失败',
+            },
+            500: {
+                content: {
+                    'application/json': {
+                        schema: createResponseSchema(z.object()),
+                    },
+                },
+                description: '内部错误',
+            },
+        },
+    }),
+    async (c) => {
+        const { username, flowId, sign } = c.req.valid('json')
+        const res = await authService.loginThirdParty(username, flowId, sign, c)
+        return c.json(makeResponse(res.code, res.data, res.message))
+    }
+)
 
 /* 
 function: logout

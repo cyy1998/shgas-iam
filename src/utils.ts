@@ -22,3 +22,8 @@ export function getEvenLengthSubstrings(str: string): string[] {
     }
     return result;
 }
+
+export function getTimestampDifference(targetTimestamp: number): number {
+    const currentTimestamp = Date.now()
+    return Math.abs(Math.floor((currentTimestamp - targetTimestamp) / 1000))
+}

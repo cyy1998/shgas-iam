@@ -68,7 +68,7 @@ export const mobileService = {
 
     getPurveyorWelcomeMessage(name: string): string {
         return `尊敬的${name}：
-诚挚邀请贵司成为我司的候选供应商。请通过网站https://tender.shgas.com.cn/tender-portal完成相关信息登记，登录时请选择“手机号验证码登录”方式。感谢贵司的支持与配合！
+诚挚邀请贵司成为我司的候选供应商。请通过网站 https://tender.shgas.com.cn/tender-portal/ 完成相关信息登记，登录时请选择“手机号验证码登录”方式。感谢贵司的支持与配合！
 上海燃气有限公司`
     },
 

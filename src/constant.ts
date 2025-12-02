@@ -21,8 +21,12 @@ export enum ServiceStatusCode {
     Failure = 99999
 }
 
-export const PASSWORD_HASH_ROUNDS = 10
-export const SMS_SIGNATURE_KEY = 'aa8099eb32c945f39157f339d8fd702c'
-export const DEFAULT_USER_PASSWORD = '1234'
-export const REDIS_EXPIRE_TIME = '3600'
-export const PURVEYOR_ORG_PRFFIX = 'GY'
+export const PASSWORD_HASH_ROUNDS = process.env.PASSWORD_HASH_ROUNDS as string
+export const SMS_SIGNATURE_KEY = process.env.SMS_SIGNATURE_KEY as string
+export const DEFAULT_USER_PASSWORD = process.env.DEFAULT_USER_PASSWORD as string
+export const REDIS_EXPIRE_TIME = process.env.REDIS_EXPIRE_TIME as string
+export const PURVEYOR_ORG_PRFFIX = process.env.PURVEYOR_ORG_PRFFIX as string
+export const RUN_MODE = process.env.RUN_MODE as string
+export const ORCAS_URL = process.env.ORCAS_URL as string
+export const PORT = process.env.PORT as string
+export const IAM_SECRET_KEY = process.env.IAM_SECRET_KEY as string

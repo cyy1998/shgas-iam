@@ -12,6 +12,9 @@ import { organizationService } from '../services/organization.service'
 
 const app = new OpenAPIHono()
 
+
+
+
 /*
 path: /user-info
 function: 获取当前已登录用户信息 

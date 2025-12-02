@@ -16,9 +16,9 @@ export const organizationService = {
         const exisitngOrg = await organizationRepository.getOrganizationByCode(orgCode)
         if (exisitngOrg !== null) {
             return {
-                code: ServiceStatusCode.Failure,
+                code: ServiceStatusCode.Success,
                 data: {},
-                message: '相同组织已存在'
+                message: 'success'
             }
         }
         const parentOrg = await organizationRepository.getOrganizationByCode(PURVEYOR_ORG_PRFFIX)
