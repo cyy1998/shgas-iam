@@ -37,6 +37,7 @@ export const userService = {
                 message: '旧密码错误'
             }
         }
+
         const newPasswordHash = await hash(newPassword, PASSWORD_HASH_ROUNDS)
         await userRepository.setPassword(userDTO.id, newPasswordHash)
         return {

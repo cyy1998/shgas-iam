@@ -85,7 +85,7 @@ export const authService = {
 
         const privileges = await privilegeRepository.getPrivilegesByUserId(user.id)
         userDTO.privileges = privileges.map(p => privilegeMapper.toPrivilegeDTO(p))
-        const { code, orcasSessionId } = await this._orcasLogin(userDTO)
+        const { code, orcasSessionId, orcasId } = await this._orcasLogin(userDTO)
         if (code !== ServiceStatusCode.Success) {
             return {
                 code: ServiceStatusCode.Failure,
@@ -93,6 +93,8 @@ export const authService = {
                 message: 'Orcas登录失败'
             }
         }
+        userDTO.orcasId = orcasId
+        // console.log(userDTO)
         const token = crypto.randomUUID()
         await redis.set(`session:${token}`, JSON.stringify(userDTO), 'EX', parseInt(REDIS_EXPIRE_TIME))
         setCookie(c, 'orcas_sso_sessionid', orcasSessionId as string, {
@@ -116,7 +118,6 @@ export const authService = {
 
     async _orcasLogin(userDTO: UserDTO) {
         const orcasUri = ORCAS_URL
-        console.log(orcasUri)
         const resp = await axios(orcasUri, {
             method: 'POST',
             data: {
@@ -127,13 +128,6 @@ export const authService = {
             }
         })
         if (resp.status != 200 || resp.data.code != 200 || !resp.headers["set-cookie"]) {
-            console.log({
-                id: userDTO.id,
-                username: userDTO.username,
-                name: userDTO.name,
-                mobile: userDTO.mobile ?? ''
-            })
-            console.log(resp.data)
             return {
                 code: ServiceStatusCode.Failure
             }
@@ -141,10 +135,10 @@ export const authService = {
         const cookieStr = resp.headers["set-cookie"][1] ?? ''
         const match = cookieStr.match(/orcas_sso_sessionid=([^;]+)/)
         const orcasSessionId = match ? match[1] : ''
-        console.log(orcasSessionId)
         return {
             code: ServiceStatusCode.Success,
-            orcasSessionId: orcasSessionId
+            orcasSessionId: orcasSessionId,
+            orcasId: resp.data.data.id
         }
     },
 
@@ -187,6 +181,14 @@ export const authService = {
                 code: ServiceStatusCode.Forbidden,
                 data: {},
                 message: 'Deny'
+            }
+        }
+        const user: UserDTO = JSON.parse(userString)
+        if (!['138550', '107611'].includes(user.username)) {
+            return {
+                code: ServiceStatusCode.Forbidden,
+                data: {},
+                message: 'Maintenance'
             }
         }
         const userInfo = Buffer.from(userString, 'utf8').toString('base64')

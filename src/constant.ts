@@ -21,7 +21,7 @@ export enum ServiceStatusCode {
     Failure = 99999
 }
 
-export const PASSWORD_HASH_ROUNDS = process.env.PASSWORD_HASH_ROUNDS as string
+export const PASSWORD_HASH_ROUNDS = 10
 export const SMS_SIGNATURE_KEY = process.env.SMS_SIGNATURE_KEY as string
 export const DEFAULT_USER_PASSWORD = process.env.DEFAULT_USER_PASSWORD as string
 export const REDIS_EXPIRE_TIME = process.env.REDIS_EXPIRE_TIME as string

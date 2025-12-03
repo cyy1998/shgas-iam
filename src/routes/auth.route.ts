@@ -267,6 +267,12 @@ app.openapi(
         const sessionId = getCookie(c, 'session') ?? null
         const res = await authService.authz(sessionId)
         if (res.code == ServiceStatusCode.Forbidden) {
+            if (res.message === 'Maintenance') {
+                c.header('Forbidden-Reason', 'maintenance')
+            }
+            else {
+                c.header('Forbidden-Reason', 'Not Login')
+            }
             return c.json(makeResponse(res.code, res.data, res.message), HttpStatusCode.Unauthorized)
         }
         c.header('X-User-Info', res.data)

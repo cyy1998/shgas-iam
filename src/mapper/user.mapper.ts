@@ -7,7 +7,8 @@ export const userMapper = {
             id: user.id,
             username: user.username,
             name: user.name,
-            mobile: user.mobilePhone
+            mobile: user.mobilePhone,
+            orcasId: null
         }
         return userDTO
     }
