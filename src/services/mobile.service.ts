@@ -54,7 +54,7 @@ export const mobileService = {
             body: JSON.stringify(request_data),
             headers: { "Content-Type": "application/json", "Accept": "application/json" }
         })
-        console.log(await res.json())
+        // console.log(await res.json())
         return true
     },
 

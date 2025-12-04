@@ -80,7 +80,7 @@ app.openapi(
     }),
     async (c) => {
         const { username, orgCode, posCode } = c.req.valid('json')
-        console.log(username, orgCode, posCode)
+        // console.log(username, orgCode, posCode)
         const [employment, user, department, company, position] = await Promise.all([
             prisma.employment.findFirst({
                 where: {
@@ -111,7 +111,7 @@ app.openapi(
                 where: { posCode: posCode }
             })
         ])
-        console.log(user)
+        // console.log(user)
         if (!user || !department || !company || !position) {
             return c.json(makeResponse(9999, {
                 message: '实体不存在'
