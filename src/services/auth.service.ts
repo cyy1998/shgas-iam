@@ -199,7 +199,7 @@ export const authService = {
         }
         const user: UserDTO = JSON.parse(userString)
         const userInfo = Buffer.from(userString, 'utf8').toString('base64')
-        if (!['138550', '107611'].includes(user.username)) {
+        if (!['138550', '107611', '13817551510'].includes(user.username)) {
             return {
                 code: ServiceStatusCode.Forbidden,
                 data: userInfo,
