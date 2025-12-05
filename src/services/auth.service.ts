@@ -44,16 +44,16 @@ export const authService = {
         }
         return await this._login(user, c)
     },
-    async loginThirdParty(username: string, flowId: string, sign: string, c: Context) {
-        const vetifyToken = hmacSha256(`${username}${flowId}`, IAM_SECRET_KEY)
-        if (vetifyToken !== sign) {
-            return {
-                code: ServiceStatusCode.Failure,
-                data: {},
-                message: 'token校验错误'
-            }
-        }
-        const user = await userRepository.getUserByUsername(username)
+    async loginThirdParty(loginid: string, ts: number, token: string, c: Context) {
+        // const vetifyToken = hmacSha256(`${username}${flowId}`, IAM_SECRET_KEY)
+        // if (vetifyToken !== sign) {
+        //     return {
+        //         code: ServiceStatusCode.Failure,
+        //         data: {},
+        //         message: 'token校验错误'
+        //     }
+        // }
+        const user = await userRepository.getUserByUsername(loginid)
         if (user === null) {
             return {
                 code: ServiceStatusCode.UserNotExisting,

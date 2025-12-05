@@ -76,9 +76,9 @@ app.openapi(
                 content: {
                     'application/json': {
                         schema: z.object({
-                            username: z.string().openapi({ example: '138550' }),
-                            flowId: z.string().openapi({ example: '1234' }),
-                            sign: z.string().openapi({ example: '138550' })
+                            loginid: z.string().openapi({ example: '138550' }),
+                            ts: z.number().openapi({ example: '1234' }),
+                            token: z.string().openapi({ example: '138550' })
                         })
                     }
                 }
@@ -112,8 +112,8 @@ app.openapi(
         },
     }),
     async (c) => {
-        const { username, flowId, sign } = c.req.valid('json')
-        const res = await authService.loginThirdParty(username, flowId, sign, c)
+        const { loginid, ts, token } = c.req.valid('json')
+        const res = await authService.loginThirdParty(loginid, ts, token, c)
         return c.json(makeResponse(res.code, res.data, res.message))
     }
 )
