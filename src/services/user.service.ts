@@ -37,7 +37,13 @@ export const userService = {
                 message: '旧密码错误'
             }
         }
-
+        if (!this.validatePasswordStrength(newPassword)) {
+            return {
+                code: ServiceStatusCode.Failure,
+                data: {},
+                message: '新密码强度过低'
+            }
+        }
         const newPasswordHash = await hash(newPassword, PASSWORD_HASH_ROUNDS)
         await userRepository.setPassword(userDTO.id, newPasswordHash)
         return {
@@ -226,5 +232,19 @@ export const userService = {
             data: {},
             message: 'success'
         }
+    },
+    validatePasswordStrength(password: string): boolean {
+        // 检查长度是否至少为8
+        if (password.length < 8) {
+            return false;
+        }
+
+        // 检查是否包含至少一个字母
+        const hasLetter = /[a-zA-Z]/.test(password);
+
+        // 检查是否包含至少一个数字
+        const hasDigit = /\d/.test(password);
+
+        return hasLetter && hasDigit;
     }
 }

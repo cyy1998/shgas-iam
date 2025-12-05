@@ -1,0 +1,5 @@
+const adminService = {
+    async filterUsersList() {
+
+    }
+}

@@ -1,9 +1,48 @@
 import { prisma } from '../extensions'
 import { z, createRoute, OpenAPIHono } from '@hono/zod-openapi'
 import { makeResponse } from '../utils'
-import { ResponseSchema } from '../schema'
+import { createResponseSchema, ResponseSchema, UserOutSchema } from '../schema'
 
 const app = new OpenAPIHono()
+
+/*
+path: /position/set
+function: 设置新岗位
+*/
+// app.openapi(
+//     createRoute({
+//         method: 'get',
+//         path: '/users/filter/page',
+//         tags: ['Admin'],
+//         request: {
+//             query: z.object({
+//                 pageNum: z.number().openapi({ example: '123456' }),
+//                 pageSize: z.number().openapi({ example: '123456' }),
+//             })
+//         },
+//         responses: {
+//             200: {
+//                 content: {
+//                     'application/json': {
+//                         schema: createResponseSchema(z.object({
+//                             pageNum: z.number(),
+//                             pageSize: z.number(),
+//                             total: z.number(),
+//                             totalPages: z.number(),
+//                             list: z.array(UserOutSchema),
+//                         })),
+//                     },
+//                 },
+//                 description: '设置岗位成功',
+//             },
+//         },
+//     }),
+//     async (c) => {
+//         const { pageNum, pageSize } = c.req.valid('query')
+//         const res =
+//         return c.json(makeResponse())
+//     }
+// )
 
 /*
 path: /position/set
@@ -43,7 +82,8 @@ app.openapi(
             data: body
         })
         return c.json(makeResponse())
-    })
+    }
+)
 
 /*
 path: /employment/set
