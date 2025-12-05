@@ -29,7 +29,7 @@ export const userService = {
                 message: '用户不存在'
             }
         }
-        const isMatch = this.checkPassword(user, oldPassword)
+        const isMatch = await this.checkPassword(user, oldPassword)
         if (!isMatch) {
             return {
                 code: ServiceStatusCode.Failure,
@@ -45,7 +45,7 @@ export const userService = {
             }
         }
         const newPasswordHash = await hash(newPassword, PASSWORD_HASH_ROUNDS)
-        await userRepository.setPassword(userDTO.id, newPasswordHash)
+        await userRepository.setPassword(user.id, newPasswordHash)
         return {
             code: ServiceStatusCode.Success,
             data: {},
@@ -55,7 +55,6 @@ export const userService = {
     },
 
     async checkPassword(user: User, inputPassword: string): Promise<boolean> {
-        //console.log(inputPassword, DEFAULT_USER_PASSWORD, user.password, inputPassword === DEFAULT_USER_PASSWORD)
         return user.password ? await compare(inputPassword, user.password ?? '') : inputPassword === DEFAULT_USER_PASSWORD
     },
 
