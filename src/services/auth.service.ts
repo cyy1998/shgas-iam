@@ -44,7 +44,7 @@ export const authService = {
         }
         return await this._login(user, c)
     },
-    async loginThirdParty(loginid: string, ts: number, token: string, c: Context) {
+    async loginThirdParty(loginid: string, ts: string, token: string, c: Context) {
         // const vetifyToken = hmacSha256(`${username}${flowId}`, IAM_SECRET_KEY)
         // if (vetifyToken !== sign) {
         //     return {

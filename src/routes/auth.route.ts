@@ -77,7 +77,7 @@ app.openapi(
                     'application/json': {
                         schema: z.object({
                             loginid: z.string().openapi({ example: '138550' }),
-                            ts: z.number().openapi({ example: '1234' }),
+                            ts: z.string().openapi({ example: '1234' }),
                             token: z.string().openapi({ example: '138550' })
                         })
                     }
