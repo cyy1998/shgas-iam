@@ -29,6 +29,13 @@ export const userService = {
                 message: '用户不存在'
             }
         }
+        if (oldPassword === newPassword) {
+            return {
+                code: ServiceStatusCode.Failure,
+                data: {},
+                message: '旧密码与新密码相同'
+            }
+        }
         const isMatch = await this.checkPassword(user, oldPassword)
         if (!isMatch) {
             return {
