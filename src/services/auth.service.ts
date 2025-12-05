@@ -27,6 +27,13 @@ export const authService = {
                 message: '用户不存在'
             }
         }
+        if (user.userType !== '正式员工') {
+            return {
+                code: ServiceStatusCode.UserNotExisting,
+                data: {},
+                message: '用户类别不支持密码登录'
+            }
+        }
         const isMatch = await userService.checkPassword(user, password)
         if (!isMatch) {
             return {
