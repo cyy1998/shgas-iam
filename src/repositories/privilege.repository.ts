@@ -1,4 +1,4 @@
-import { EmploymentStatus } from "../constant"
+import { EmploymentStatus } from "../types/employment.type"
 import { prisma } from "../extensions"
 
 export const privilegeRepository = {

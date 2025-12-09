@@ -1,9 +1,9 @@
 import { redis, prisma } from '../extensions'
 import axios from 'axios'
 import { hash, compare } from 'bcrypt-ts'
-import { DEFAULT_USER_PASSWORD, EmploymentStatus, PASSWORD_HASH_ROUNDS, PURVEYOR_ORG_PRFFIX, RUN_MODE, ServiceStatusCode } from '../constant'
+import { EmploymentStatus } from "../types/employment.type"
+import { ServiceStatusCode } from "../constants/service.status"
 import { User } from '../../generated/prisma'
-import { use } from 'react'
 import { ServiceResult } from '../types/service.type'
 import { userRepository } from '../repositories/user.repository'
 import { UserDTO } from '../types/user.type'
@@ -17,6 +17,7 @@ import { roleMapper } from '../mapper/role.mapper'
 import { positionRepository } from '../repositories/position.repository'
 import { organizationRepository } from '../repositories/organization.repository'
 import { mobileService } from './mobile.service'
+import { env } from '../config'
 
 export const userService = {
 
@@ -51,7 +52,7 @@ export const userService = {
                 message: '新密码强度过低'
             }
         }
-        const newPasswordHash = await hash(newPassword, PASSWORD_HASH_ROUNDS)
+        const newPasswordHash = await hash(newPassword, env.PASSWORD_HASH_ROUNDS)
         await userRepository.setPassword(user.id, newPasswordHash)
         return {
             code: ServiceStatusCode.Success,
@@ -62,7 +63,7 @@ export const userService = {
     },
 
     async checkPassword(user: User, inputPassword: string): Promise<boolean> {
-        return user.password ? await compare(inputPassword, user.password ?? '') : inputPassword === DEFAULT_USER_PASSWORD
+        return user.password ? await compare(inputPassword, user.password ?? '') : inputPassword === env.DEFAULT_USER_PASSWORD
     },
 
     async setMobile(userDTO: UserDTO, newMobile: string): Promise<UserDTO> {
@@ -202,7 +203,7 @@ export const userService = {
         const existingUser = await userRepository.getUserByMobile(mobile)
         const [pos, comp, org] = await Promise.all([
             positionRepository.getPositionByCode('P001'),
-            organizationRepository.getOrganizationByCode(PURVEYOR_ORG_PRFFIX),
+            organizationRepository.getOrganizationByCode('GY'),
             organizationRepository.getOrganizationByCode(orgCode)
         ])
         if (org === null) {

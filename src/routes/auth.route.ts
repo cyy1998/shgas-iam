@@ -5,7 +5,8 @@ import { z, createRoute, OpenAPIHono } from '@hono/zod-openapi'
 import { createResponseSchema } from '../schema'
 import { mobileService } from '../services/mobile.service'
 import { authService } from '../services/auth.service'
-import { HttpStatusCode, ServiceStatusCode } from '../constant'
+import { ServiceStatusCode } from "../constants/service.status"
+import { HttpStatusCode } from "../constants/http.status"
 
 const app = new OpenAPIHono()
 
@@ -114,6 +115,51 @@ app.openapi(
     async (c) => {
         const { loginid, ts, token } = c.req.valid('json')
         const res = await authService.loginThirdParty(loginid, ts, token, c)
+        return c.json(makeResponse(res.code, res.data, res.message))
+    }
+)
+
+/* 
+function: login through wx
+*/
+app.openapi(
+    createRoute({
+        method: 'post',
+        path: '/login/wx',
+        tags: ['Auth'],
+        request: {
+            body: {
+                content: {
+                    'application/json': {
+                        schema: z.object({
+                            code: z.string().openapi({ example: '1234' }),
+                        })
+                    }
+                }
+            },
+        },
+        responses: {
+            200: {
+                content: {
+                    'application/json': {
+                        schema: createResponseSchema(z.object()),
+                    },
+                },
+                description: '认证',
+            },
+            401: {
+                content: {
+                    'application/json': {
+                        schema: createResponseSchema(z.object()),
+                    },
+                },
+                description: '认证失败',
+            },
+        },
+    }),
+    async (c) => {
+        const { code } = c.req.valid('json')
+        const res = await authService.loginWX(code)
         return c.json(makeResponse(res.code, res.data, res.message))
     }
 )

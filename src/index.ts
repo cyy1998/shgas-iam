@@ -1,4 +1,3 @@
-import { Hono } from 'hono'
 import auth from './routes/auth.route'
 import self from './routes/self.route'
 import internal from './routes/internal.route'
@@ -6,10 +5,10 @@ import admin from './routes/admin.route'
 import { serveStatic } from 'hono/bun'
 import { OpenAPIHono } from '@hono/zod-openapi'
 import { logger } from 'hono/logger'
-import { PORT } from './constant'
+import { env } from './config'
 
 const app = new OpenAPIHono()
-const port = PORT
+const port = env.PORT
 
 app.use('/static/*', serveStatic({ root: './' }))
 // app.use('*', async (c, next) => {

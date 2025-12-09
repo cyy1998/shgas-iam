@@ -1,5 +1,4 @@
-import { compare } from "bcrypt-ts"
-import { DEFAULT_USER_PASSWORD, IAM_SECRET_KEY, ORCAS_URL, REDIS_EXPIRE_TIME, RUN_MODE, ServiceStatusCode } from "../constant"
+import { ServiceStatusCode } from "../constants/service.status"
 import { userRepository } from "../repositories/user.repository"
 import { ServiceResult } from "../types/service.type"
 import { Context } from "hono"
@@ -15,6 +14,7 @@ import { setCookie, getCookie, deleteCookie } from 'hono/cookie'
 import { User } from "../../generated/prisma"
 import { userService } from "./user.service"
 import { getTimestampDifference, hmacSha256 } from "../utils"
+import { env } from "../config"
 
 
 export const authService = {
@@ -94,6 +94,13 @@ export const authService = {
         }
         return await this._login(user, c)
     },
+    async loginWX(code: string): Promise<ServiceResult> {
+        return {
+            code: ServiceStatusCode.Failure,
+            data: {},
+            message: '用户不存在'
+        }
+    },
 
     async _login(user: User, c: Context): Promise<ServiceResult> {
         const userDTO = userMapper.toUserDTO(user)
@@ -115,17 +122,17 @@ export const authService = {
         userDTO.orcasId = orcasId
         // console.log(userDTO)
         const token = crypto.randomUUID()
-        await redis.set(`session:${token}`, JSON.stringify(userDTO), 'EX', parseInt(REDIS_EXPIRE_TIME))
+        await redis.set(`session:${token}`, JSON.stringify(userDTO), 'EX', env.REDIS_EXPIRE_TIME)
         setCookie(c, 'orcas_sso_sessionid', orcasSessionId as string, {
             httpOnly: true,
             sameSite: 'Strict',  // 防 CSRF
-            maxAge: parseInt(REDIS_EXPIRE_TIME),
+            maxAge: env.REDIS_EXPIRE_TIME,
             path: '/',
         })
         setCookie(c, 'session', token, {
             httpOnly: true,
             sameSite: 'Strict',  // 防 CSRF
-            maxAge: parseInt(REDIS_EXPIRE_TIME),
+            maxAge: env.REDIS_EXPIRE_TIME,
             path: '/',
         })
         return {
@@ -136,7 +143,7 @@ export const authService = {
     },
 
     async _orcasLogin(userDTO: UserDTO) {
-        const orcasUri = ORCAS_URL
+        const orcasUri = env.ORCAS_URL
         // console.log(orcasUri)
         const resp = await axios(orcasUri, {
             method: 'POST',
@@ -220,11 +227,18 @@ export const authService = {
         }
     },
     async updateSession(sessionId: string, userDTO: UserDTO): Promise<ServiceResult> {
-        await redis.set(`session:${sessionId}`, JSON.stringify(userDTO), 'EX', parseInt(REDIS_EXPIRE_TIME))
+        await redis.set(`session:${sessionId}`, JSON.stringify(userDTO), 'EX', env.REDIS_EXPIRE_TIME)
         return {
             code: ServiceStatusCode.Success,
             data: {},
             message: 'success'
         }
     },
+    // async getWXAccessToken() {
+    //     const res = await fetch(`https://qyapi.weixin.qq.com/cgi-bin/gettoken?corpid=${CORPID}&corpsecret={current_app.config['CORPSECRET']}`,
+    //         {
+    //             method: 'POST'
+    //         }
+    //     )
+    // }
 }

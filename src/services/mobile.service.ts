@@ -1,4 +1,5 @@
-import { ServiceStatusCode, SMS_SIGNATURE_KEY } from '../constant'
+import { env } from '../config'
+import { ServiceStatusCode } from "../constants/service.status"
 import { redis, prisma } from '../extensions'
 import { ServiceResult, SMSServiceResult } from '../types/service.type'
 import { hmacSha256 } from '../utils'
@@ -15,7 +16,7 @@ export const mobileService = {
             "message": message,
             "timestamp": currentTimestamp,
             "origin": origin,
-            'signature': hmacSha256(data, SMS_SIGNATURE_KEY)
+            'signature': hmacSha256(data, env.SMS_SIGNATURE_KEY)
         }
         const res = await fetch(process.env.SMS_URL as string, {
             method: 'POST',
@@ -47,7 +48,7 @@ export const mobileService = {
             "message": message,
             "timestamp": currentTimestamp,
             "origin": origin,
-            'signature': hmacSha256(data, SMS_SIGNATURE_KEY)
+            'signature': hmacSha256(data, env.SMS_SIGNATURE_KEY)
         }
         const res = await fetch(process.env.SMS_URL as string, {
             method: 'POST',

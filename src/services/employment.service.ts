@@ -1,4 +1,4 @@
-import { ServiceStatusCode } from "../constant";
+import { ServiceStatusCode } from "../constants/service.status";
 import { employmentMapper } from "../mapper/employment.mapper";
 import { employmentRepository } from "../repositories/employment.repository";
 import { ServiceResult } from "../types/service.type";

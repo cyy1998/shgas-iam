@@ -1,4 +1,4 @@
-import { PURVEYOR_ORG_PRFFIX, ServiceStatusCode } from "../constant"
+import { ServiceStatusCode } from "../constants/service.status"
 import { organizationMapper } from "../mapper/organization.mapper"
 import { organizationRepository } from "../repositories/organization.repository"
 
@@ -21,7 +21,7 @@ export const organizationService = {
                 message: 'success'
             }
         }
-        const parentOrg = await organizationRepository.getOrganizationByCode(PURVEYOR_ORG_PRFFIX)
+        const parentOrg = await organizationRepository.getOrganizationByCode('GY')
         if (parentOrg === null) {
             return {
                 code: ServiceStatusCode.Failure,
