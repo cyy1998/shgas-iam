@@ -276,4 +276,38 @@ app.openapi(
     }
 )
 
+/*
+path: /organizations/top
+function: 获取一级公司列表 
+*/
+app.openapi(
+    createRoute({
+        method: 'get',
+        path: '/organizations/top',
+        tags: ['Self'],
+        responses: {
+            200: {
+                content: {
+                    'application/json': {
+                        schema: createResponseSchema(
+                            z.object({
+                                id: z.int(),
+                                orgCode: z.string(),
+                                orgName: z.string(),
+                                orgType: z.string(),
+                                level: z.int()
+                            })
+                        ),
+                    },
+                },
+                description: '本用户信息',
+            },
+        },
+    }),
+    async (c) => {
+        const res = await organizationService.searchFormalOrganization('', 1)
+        return c.json(makeResponse(res.code, res.data, res.message))
+    }
+)
+
 export default app
