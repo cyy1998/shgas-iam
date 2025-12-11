@@ -7,6 +7,7 @@ import { mobileService } from '../services/mobile.service'
 import { authService } from '../services/auth.service'
 import { ServiceStatusCode } from "../constants/service.status"
 import { HttpStatusCode } from "../constants/http.status"
+import { env } from '../config'
 
 const app = new OpenAPIHono()
 
@@ -59,7 +60,21 @@ app.openapi(
     }),
     async (c) => {
         const { username, password } = c.req.valid('json')
-        const res = await authService.loginByPassword(username, password, c)
+        const res = await authService.loginByPassword(username, password)
+        if (res.code === ServiceStatusCode.Success) {
+            setCookie(c, 'orcas_sso_sessionid', res.data.orcasSessionId, {
+                httpOnly: true,
+                sameSite: 'Strict',  // 防 CSRF
+                maxAge: env.REDIS_EXPIRE_TIME,
+                path: '/',
+            })
+            setCookie(c, 'session', res.data.token, {
+                httpOnly: true,
+                sameSite: 'Strict',  // 防 CSRF
+                maxAge: env.REDIS_EXPIRE_TIME,
+                path: '/',
+            })
+        }
         return c.json(makeResponse(res.code, res.data, res.message))
     }
 )
@@ -114,7 +129,21 @@ app.openapi(
     }),
     async (c) => {
         const { loginid, ts, token } = c.req.valid('json')
-        const res = await authService.loginThirdParty(loginid, ts, token, c)
+        const res = await authService.loginThirdParty(loginid, ts, token)
+        if (res.code === ServiceStatusCode.Success) {
+            setCookie(c, 'orcas_sso_sessionid', res.data.orcasSessionId, {
+                httpOnly: true,
+                sameSite: 'Strict',  // 防 CSRF
+                maxAge: env.REDIS_EXPIRE_TIME,
+                path: '/',
+            })
+            setCookie(c, 'session', res.data.token, {
+                httpOnly: true,
+                sameSite: 'Strict',  // 防 CSRF
+                maxAge: env.REDIS_EXPIRE_TIME,
+                path: '/',
+            })
+        }
         return c.json(makeResponse(res.code, res.data, res.message))
     }
 )
@@ -281,7 +310,21 @@ app.openapi(
     }),
     async (c) => {
         const { code, phoneNumber } = c.req.valid('json')
-        const res = await authService.loginByMobile(phoneNumber, code, c)
+        const res = await authService.loginByMobile(phoneNumber, code)
+        if (res.code === ServiceStatusCode.Success) {
+            setCookie(c, 'orcas_sso_sessionid', res.data.orcasSessionId, {
+                httpOnly: true,
+                sameSite: 'Strict',  // 防 CSRF
+                maxAge: env.REDIS_EXPIRE_TIME,
+                path: '/',
+            })
+            setCookie(c, 'session', res.data.token, {
+                httpOnly: true,
+                sameSite: 'Strict',  // 防 CSRF
+                maxAge: env.REDIS_EXPIRE_TIME,
+                path: '/',
+            })
+        }
         return c.json(makeResponse(res.code, res.data, res.message))
     })
 

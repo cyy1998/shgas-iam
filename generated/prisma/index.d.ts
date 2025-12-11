@@ -2539,6 +2539,7 @@ export namespace Prisma {
   export type UserMinAggregateOutputType = {
     id: number | null
     username: string | null
+    wxId: string | null
     name: string | null
     password: string | null
     mobilePhone: string | null
@@ -2552,6 +2553,7 @@ export namespace Prisma {
   export type UserMaxAggregateOutputType = {
     id: number | null
     username: string | null
+    wxId: string | null
     name: string | null
     password: string | null
     mobilePhone: string | null
@@ -2565,6 +2567,7 @@ export namespace Prisma {
   export type UserCountAggregateOutputType = {
     id: number
     username: number
+    wxId: number
     name: number
     password: number
     mobilePhone: number
@@ -2590,6 +2593,7 @@ export namespace Prisma {
   export type UserMinAggregateInputType = {
     id?: true
     username?: true
+    wxId?: true
     name?: true
     password?: true
     mobilePhone?: true
@@ -2603,6 +2607,7 @@ export namespace Prisma {
   export type UserMaxAggregateInputType = {
     id?: true
     username?: true
+    wxId?: true
     name?: true
     password?: true
     mobilePhone?: true
@@ -2616,6 +2621,7 @@ export namespace Prisma {
   export type UserCountAggregateInputType = {
     id?: true
     username?: true
+    wxId?: true
     name?: true
     password?: true
     mobilePhone?: true
@@ -2716,6 +2722,7 @@ export namespace Prisma {
   export type UserGroupByOutputType = {
     id: number
     username: string
+    wxId: string | null
     name: string
     password: string | null
     mobilePhone: string | null
@@ -2748,6 +2755,7 @@ export namespace Prisma {
   export type UserSelect<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
     id?: boolean
     username?: boolean
+    wxId?: boolean
     name?: boolean
     password?: boolean
     mobilePhone?: boolean
@@ -2767,6 +2775,7 @@ export namespace Prisma {
   export type UserSelectScalar = {
     id?: boolean
     username?: boolean
+    wxId?: boolean
     name?: boolean
     password?: boolean
     mobilePhone?: boolean
@@ -2777,7 +2786,7 @@ export namespace Prisma {
     updateTime?: boolean
   }
 
-  export type UserOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "username" | "name" | "password" | "mobilePhone" | "userType" | "status" | "isDelete" | "createTime" | "updateTime", ExtArgs["result"]["user"]>
+  export type UserOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "username" | "wxId" | "name" | "password" | "mobilePhone" | "userType" | "status" | "isDelete" | "createTime" | "updateTime", ExtArgs["result"]["user"]>
   export type UserInclude<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
     employments?: boolean | User$employmentsArgs<ExtArgs>
     delegationTo?: boolean | User$delegationToArgs<ExtArgs>
@@ -2795,6 +2804,7 @@ export namespace Prisma {
     scalars: $Extensions.GetPayloadResult<{
       id: number
       username: string
+      wxId: string | null
       name: string
       password: string | null
       mobilePhone: string | null
@@ -3177,6 +3187,7 @@ export namespace Prisma {
   interface UserFieldRefs {
     readonly id: FieldRef<"User", 'Int'>
     readonly username: FieldRef<"User", 'String'>
+    readonly wxId: FieldRef<"User", 'String'>
     readonly name: FieldRef<"User", 'String'>
     readonly password: FieldRef<"User", 'String'>
     readonly mobilePhone: FieldRef<"User", 'String'>
@@ -19007,6 +19018,7 @@ export namespace Prisma {
   export const UserScalarFieldEnum: {
     id: 'id',
     username: 'username',
+    wxId: 'wxId',
     name: 'name',
     password: 'password',
     mobilePhone: 'mobilePhone',
@@ -19234,6 +19246,7 @@ export namespace Prisma {
 
   export const UserOrderByRelevanceFieldEnum: {
     username: 'username',
+    wxId: 'wxId',
     name: 'name',
     password: 'password',
     mobilePhone: 'mobilePhone',
@@ -19406,6 +19419,7 @@ export namespace Prisma {
     NOT?: UserWhereInput | UserWhereInput[]
     id?: IntFilter<"User"> | number
     username?: StringFilter<"User"> | string
+    wxId?: StringNullableFilter<"User"> | string | null
     name?: StringFilter<"User"> | string
     password?: StringNullableFilter<"User"> | string | null
     mobilePhone?: StringNullableFilter<"User"> | string | null
@@ -19422,6 +19436,7 @@ export namespace Prisma {
   export type UserOrderByWithRelationInput = {
     id?: SortOrder
     username?: SortOrder
+    wxId?: SortOrderInput | SortOrder
     name?: SortOrder
     password?: SortOrderInput | SortOrder
     mobilePhone?: SortOrderInput | SortOrder
@@ -19442,6 +19457,7 @@ export namespace Prisma {
     OR?: UserWhereInput[]
     NOT?: UserWhereInput | UserWhereInput[]
     username?: StringFilter<"User"> | string
+    wxId?: StringNullableFilter<"User"> | string | null
     name?: StringFilter<"User"> | string
     password?: StringNullableFilter<"User"> | string | null
     mobilePhone?: StringNullableFilter<"User"> | string | null
@@ -19458,6 +19474,7 @@ export namespace Prisma {
   export type UserOrderByWithAggregationInput = {
     id?: SortOrder
     username?: SortOrder
+    wxId?: SortOrderInput | SortOrder
     name?: SortOrder
     password?: SortOrderInput | SortOrder
     mobilePhone?: SortOrderInput | SortOrder
@@ -19479,6 +19496,7 @@ export namespace Prisma {
     NOT?: UserScalarWhereWithAggregatesInput | UserScalarWhereWithAggregatesInput[]
     id?: IntWithAggregatesFilter<"User"> | number
     username?: StringWithAggregatesFilter<"User"> | string
+    wxId?: StringNullableWithAggregatesFilter<"User"> | string | null
     name?: StringWithAggregatesFilter<"User"> | string
     password?: StringNullableWithAggregatesFilter<"User"> | string | null
     mobilePhone?: StringNullableWithAggregatesFilter<"User"> | string | null
@@ -20556,6 +20574,7 @@ export namespace Prisma {
 
   export type UserCreateInput = {
     username: string
+    wxId?: string | null
     name: string
     password?: string | null
     mobilePhone?: string | null
@@ -20572,6 +20591,7 @@ export namespace Prisma {
   export type UserUncheckedCreateInput = {
     id?: number
     username: string
+    wxId?: string | null
     name: string
     password?: string | null
     mobilePhone?: string | null
@@ -20587,6 +20607,7 @@ export namespace Prisma {
 
   export type UserUpdateInput = {
     username?: StringFieldUpdateOperationsInput | string
+    wxId?: NullableStringFieldUpdateOperationsInput | string | null
     name?: StringFieldUpdateOperationsInput | string
     password?: NullableStringFieldUpdateOperationsInput | string | null
     mobilePhone?: NullableStringFieldUpdateOperationsInput | string | null
@@ -20603,6 +20624,7 @@ export namespace Prisma {
   export type UserUncheckedUpdateInput = {
     id?: IntFieldUpdateOperationsInput | number
     username?: StringFieldUpdateOperationsInput | string
+    wxId?: NullableStringFieldUpdateOperationsInput | string | null
     name?: StringFieldUpdateOperationsInput | string
     password?: NullableStringFieldUpdateOperationsInput | string | null
     mobilePhone?: NullableStringFieldUpdateOperationsInput | string | null
@@ -20619,6 +20641,7 @@ export namespace Prisma {
   export type UserCreateManyInput = {
     id?: number
     username: string
+    wxId?: string | null
     name: string
     password?: string | null
     mobilePhone?: string | null
@@ -20631,6 +20654,7 @@ export namespace Prisma {
 
   export type UserUpdateManyMutationInput = {
     username?: StringFieldUpdateOperationsInput | string
+    wxId?: NullableStringFieldUpdateOperationsInput | string | null
     name?: StringFieldUpdateOperationsInput | string
     password?: NullableStringFieldUpdateOperationsInput | string | null
     mobilePhone?: NullableStringFieldUpdateOperationsInput | string | null
@@ -20644,6 +20668,7 @@ export namespace Prisma {
   export type UserUncheckedUpdateManyInput = {
     id?: IntFieldUpdateOperationsInput | number
     username?: StringFieldUpdateOperationsInput | string
+    wxId?: NullableStringFieldUpdateOperationsInput | string | null
     name?: StringFieldUpdateOperationsInput | string
     password?: NullableStringFieldUpdateOperationsInput | string | null
     mobilePhone?: NullableStringFieldUpdateOperationsInput | string | null
@@ -21781,6 +21806,7 @@ export namespace Prisma {
   export type UserCountOrderByAggregateInput = {
     id?: SortOrder
     username?: SortOrder
+    wxId?: SortOrder
     name?: SortOrder
     password?: SortOrder
     mobilePhone?: SortOrder
@@ -21799,6 +21825,7 @@ export namespace Prisma {
   export type UserMaxOrderByAggregateInput = {
     id?: SortOrder
     username?: SortOrder
+    wxId?: SortOrder
     name?: SortOrder
     password?: SortOrder
     mobilePhone?: SortOrder
@@ -21812,6 +21839,7 @@ export namespace Prisma {
   export type UserMinOrderByAggregateInput = {
     id?: SortOrder
     username?: SortOrder
+    wxId?: SortOrder
     name?: SortOrder
     password?: SortOrder
     mobilePhone?: SortOrder
@@ -25094,6 +25122,7 @@ export namespace Prisma {
 
   export type UserCreateWithoutEmploymentsInput = {
     username: string
+    wxId?: string | null
     name: string
     password?: string | null
     mobilePhone?: string | null
@@ -25109,6 +25138,7 @@ export namespace Prisma {
   export type UserUncheckedCreateWithoutEmploymentsInput = {
     id?: number
     username: string
+    wxId?: string | null
     name: string
     password?: string | null
     mobilePhone?: string | null
@@ -25303,6 +25333,7 @@ export namespace Prisma {
 
   export type UserUpdateWithoutEmploymentsInput = {
     username?: StringFieldUpdateOperationsInput | string
+    wxId?: NullableStringFieldUpdateOperationsInput | string | null
     name?: StringFieldUpdateOperationsInput | string
     password?: NullableStringFieldUpdateOperationsInput | string | null
     mobilePhone?: NullableStringFieldUpdateOperationsInput | string | null
@@ -25318,6 +25349,7 @@ export namespace Prisma {
   export type UserUncheckedUpdateWithoutEmploymentsInput = {
     id?: IntFieldUpdateOperationsInput | number
     username?: StringFieldUpdateOperationsInput | string
+    wxId?: NullableStringFieldUpdateOperationsInput | string | null
     name?: StringFieldUpdateOperationsInput | string
     password?: NullableStringFieldUpdateOperationsInput | string | null
     mobilePhone?: NullableStringFieldUpdateOperationsInput | string | null
@@ -26599,6 +26631,7 @@ export namespace Prisma {
 
   export type UserCreateWithoutDelegationToInput = {
     username: string
+    wxId?: string | null
     name: string
     password?: string | null
     mobilePhone?: string | null
@@ -26614,6 +26647,7 @@ export namespace Prisma {
   export type UserUncheckedCreateWithoutDelegationToInput = {
     id?: number
     username: string
+    wxId?: string | null
     name: string
     password?: string | null
     mobilePhone?: string | null
@@ -26633,6 +26667,7 @@ export namespace Prisma {
 
   export type UserCreateWithoutDelegationFromInput = {
     username: string
+    wxId?: string | null
     name: string
     password?: string | null
     mobilePhone?: string | null
@@ -26648,6 +26683,7 @@ export namespace Prisma {
   export type UserUncheckedCreateWithoutDelegationFromInput = {
     id?: number
     username: string
+    wxId?: string | null
     name: string
     password?: string | null
     mobilePhone?: string | null
@@ -26696,6 +26732,7 @@ export namespace Prisma {
 
   export type UserUpdateWithoutDelegationToInput = {
     username?: StringFieldUpdateOperationsInput | string
+    wxId?: NullableStringFieldUpdateOperationsInput | string | null
     name?: StringFieldUpdateOperationsInput | string
     password?: NullableStringFieldUpdateOperationsInput | string | null
     mobilePhone?: NullableStringFieldUpdateOperationsInput | string | null
@@ -26711,6 +26748,7 @@ export namespace Prisma {
   export type UserUncheckedUpdateWithoutDelegationToInput = {
     id?: IntFieldUpdateOperationsInput | number
     username?: StringFieldUpdateOperationsInput | string
+    wxId?: NullableStringFieldUpdateOperationsInput | string | null
     name?: StringFieldUpdateOperationsInput | string
     password?: NullableStringFieldUpdateOperationsInput | string | null
     mobilePhone?: NullableStringFieldUpdateOperationsInput | string | null
@@ -26736,6 +26774,7 @@ export namespace Prisma {
 
   export type UserUpdateWithoutDelegationFromInput = {
     username?: StringFieldUpdateOperationsInput | string
+    wxId?: NullableStringFieldUpdateOperationsInput | string | null
     name?: StringFieldUpdateOperationsInput | string
     password?: NullableStringFieldUpdateOperationsInput | string | null
     mobilePhone?: NullableStringFieldUpdateOperationsInput | string | null
@@ -26751,6 +26790,7 @@ export namespace Prisma {
   export type UserUncheckedUpdateWithoutDelegationFromInput = {
     id?: IntFieldUpdateOperationsInput | number
     username?: StringFieldUpdateOperationsInput | string
+    wxId?: NullableStringFieldUpdateOperationsInput | string | null
     name?: StringFieldUpdateOperationsInput | string
     password?: NullableStringFieldUpdateOperationsInput | string | null
     mobilePhone?: NullableStringFieldUpdateOperationsInput | string | null

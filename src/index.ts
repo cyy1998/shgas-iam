@@ -6,6 +6,8 @@ import { serveStatic } from 'hono/bun'
 import { OpenAPIHono } from '@hono/zod-openapi'
 import { logger } from 'hono/logger'
 import { env } from './config'
+import { makeResponse } from './utils'
+import { ServiceStatusCode } from './constants/service.status'
 
 const app = new OpenAPIHono()
 const port = env.PORT
@@ -25,6 +27,10 @@ app.use(logger(
     console.log(`[INFO] ${new Date().toISOString()} - ${str}`, ...args)
   }
 ))
+app.onError((err, c) => {
+  console.error(err)
+  return c.json(makeResponse(ServiceStatusCode.Failure, null, '服务器内部错误'))
+})
 
 app.route('/auth', auth)
 app.route('/self', self)

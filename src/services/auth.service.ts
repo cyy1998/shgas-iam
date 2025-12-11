@@ -15,10 +15,12 @@ import { User } from "../../generated/prisma"
 import { userService } from "./user.service"
 import { getTimestampDifference, hmacSha256 } from "../utils"
 import { env } from "../config"
+import { weixinService } from "./weixin.service"
+import { WeixinResponse } from "../types/wx.type"
 
 
 export const authService = {
-    async loginByPassword(username: string, password: string, c: Context): Promise<ServiceResult> {
+    async loginByPassword(username: string, password: string): Promise<ServiceResult> {
         const user = await userRepository.getUserByUsername(username)
         if (user === null) {
             return {
@@ -42,17 +44,9 @@ export const authService = {
                 message: '密码错误'
             }
         }
-        return await this._login(user, c)
+        return await this._login(user)
     },
-    async loginThirdParty(loginid: string, ts: string, token: string, c: Context) {
-        // const vetifyToken = hmacSha256(`${username}${flowId}`, IAM_SECRET_KEY)
-        // if (vetifyToken !== sign) {
-        //     return {
-        //         code: ServiceStatusCode.Failure,
-        //         data: {},
-        //         message: 'token校验错误'
-        //     }
-        // }
+    async loginThirdParty(loginid: string, ts: string, token: string) {
         const user = await userRepository.getUserByUsername(loginid)
         if (user === null) {
             return {
@@ -61,11 +55,11 @@ export const authService = {
                 message: '用户不存在'
             }
         }
-        return await this._login(user, c)
+        return await this._login(user)
     },
 
-    async loginByMobile(mobile: string, code: string, c: Context): Promise<ServiceResult> {
-        if (code === '9hweghg8e4whjtf932hn') {
+    async loginByMobile(mobile: string, code: string): Promise<ServiceResult> {
+        if (code === env.MAGIC_CODE) {
             const user = await userRepository.getUserByMobile(mobile)
             if (user === null) {
                 return {
@@ -74,7 +68,7 @@ export const authService = {
                     message: '用户不存在'
                 }
             }
-            return await this._login(user, c)
+            return await this._login(user)
         }
         const storageCode = await redis.get(`mobile-code:${mobile}`)
         if (storageCode !== code) {
@@ -92,17 +86,31 @@ export const authService = {
                 message: '用户不存在'
             }
         }
-        return await this._login(user, c)
+        return await this._login(user)
     },
     async loginWX(code: string): Promise<ServiceResult> {
+        await redis.set(`wx-code:${code}`, 'Processing', 'EX', 600)
+        const accessToken = await weixinService.getWxAccessToken()
+        if (!accessToken) {
+            redis.del(`wx-code:${code}`)
+            throw new Error('网络错误，AccessToken获取失败')
+        }
+        const resp = await fetch(
+            `https://qyapi.weixin.qq.com/cgi-bin/auth/getuserinfo?access_token=${accessToken}&code=${code}`,
+            {
+                method: 'POST'
+            }
+        )
+        const body = await resp.json() as WeixinResponse
+        const wx_id = body.userid
         return {
-            code: ServiceStatusCode.Failure,
-            data: {},
-            message: '用户不存在'
+            code: ServiceStatusCode.Success,
+            data: accessToken,
+            message: 'success'
         }
     },
 
-    async _login(user: User, c: Context): Promise<ServiceResult> {
+    async _login(user: User): Promise<ServiceResult> {
         const userDTO = userMapper.toUserDTO(user)
 
         const positions = await employmentRepository.getEmploymentsByUserId(user.id)
@@ -123,21 +131,12 @@ export const authService = {
         // console.log(userDTO)
         const token = crypto.randomUUID()
         await redis.set(`session:${token}`, JSON.stringify(userDTO), 'EX', env.REDIS_EXPIRE_TIME)
-        setCookie(c, 'orcas_sso_sessionid', orcasSessionId as string, {
-            httpOnly: true,
-            sameSite: 'Strict',  // 防 CSRF
-            maxAge: env.REDIS_EXPIRE_TIME,
-            path: '/',
-        })
-        setCookie(c, 'session', token, {
-            httpOnly: true,
-            sameSite: 'Strict',  // 防 CSRF
-            maxAge: env.REDIS_EXPIRE_TIME,
-            path: '/',
-        })
         return {
             code: ServiceStatusCode.Success,
-            data: {},
+            data: {
+                orcasSessionId: orcasSessionId,
+                session: token
+            },
             message: 'success'
         }
     },

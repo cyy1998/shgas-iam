@@ -7,7 +7,10 @@ const EnvSchema = z.object({
     REDIS_EXPIRE_TIME: z.coerce.number(),
     ORCAS_URL: z.string(),
     IAM_SECRET_KEY: z.string(),
-    PORT: z.coerce.number().default(30000)
+    PORT: z.coerce.number().default(30000),
+    WX_CORPID: z.string(),
+    WX_CORPSECRET: z.string(),
+    MAGIC_CODE: z.string()
 });
 
 export type Env = z.infer<typeof EnvSchema>;

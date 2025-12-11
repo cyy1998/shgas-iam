@@ -13,6 +13,7 @@ datasource db {
 model User {
   id          Int      @id @default(autoincrement()) @map("id")
   username    String   @map("username") @db.VarChar(64)
+  wxId        String?  @db.VarChar(255)
   name        String   @map("name") @db.VarChar(64)
   password    String?  @map("password") @db.VarChar(255)
   mobilePhone String?  @map("mobile_phone") @db.VarChar(20)
