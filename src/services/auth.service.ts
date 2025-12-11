@@ -135,7 +135,7 @@ export const authService = {
             code: ServiceStatusCode.Success,
             data: {
                 orcasSessionId: orcasSessionId,
-                session: token
+                token: token
             },
             message: 'success'
         }
