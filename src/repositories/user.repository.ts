@@ -9,6 +9,13 @@ export const userRepository = {
             }
         })
     },
+    async getUserByWxId(wxId: string) {
+        return await prisma.user.findFirst({
+            where: {
+                wxId: wxId
+            }
+        })
+    },
     async getUserByMobile(mobile: string) {
         return await prisma.user.findFirst({
             where: {

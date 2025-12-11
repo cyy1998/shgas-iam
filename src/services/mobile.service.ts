@@ -1,7 +1,7 @@
 import { env } from '../config'
 import { ServiceStatusCode } from "../constants/service.status"
 import { redis, prisma } from '../extensions'
-import { ServiceResult, SMSServiceResult } from '../types/service.type'
+import type { ServiceResult, SMSServiceResult } from '../types/service.type'
 import { hmacSha256 } from '../utils'
 
 export const mobileService = {

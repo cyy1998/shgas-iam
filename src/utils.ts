@@ -27,3 +27,7 @@ export function getTimestampDifference(targetTimestamp: number): number {
     const currentTimestamp = Date.now()
     return Math.abs(Math.floor((currentTimestamp - targetTimestamp) / 1000))
 }
+
+export function sleep(ms: number): Promise<void> {
+    return new Promise(resolve => setTimeout(resolve, ms));
+}

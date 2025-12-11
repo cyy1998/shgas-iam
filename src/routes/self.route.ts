@@ -6,7 +6,7 @@ import { mobileService } from '../services/mobile.service'
 import { getCookie } from 'hono/cookie'
 import { ServiceStatusCode } from "../constants/service.status"
 import { authService } from '../services/auth.service'
-import { UserDTO } from '../types/user.type'
+import type { UserDTO } from '../types/user.type'
 import { employmentService } from '../services/employment.service'
 import { organizationService } from '../services/organization.service'
 

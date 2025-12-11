@@ -3,10 +3,10 @@ import axios from 'axios'
 import { hash, compare } from 'bcrypt-ts'
 import { EmploymentStatus } from "../types/employment.type"
 import { ServiceStatusCode } from "../constants/service.status"
-import { User } from '../../generated/prisma'
-import { ServiceResult } from '../types/service.type'
+import type { User } from '../../generated/prisma'
+import type { ServiceResult } from '../types/service.type'
 import { userRepository } from '../repositories/user.repository'
-import { UserDTO } from '../types/user.type'
+import type { UserDTO } from '../types/user.type'
 import { userMapper } from '../mapper/user.mapper'
 import { employmentRepository } from '../repositories/employment.repository'
 import { privilegeRepository } from '../repositories/privilege.repository'

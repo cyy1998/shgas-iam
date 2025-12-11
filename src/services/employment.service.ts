@@ -1,8 +1,8 @@
 import { ServiceStatusCode } from "../constants/service.status";
 import { employmentMapper } from "../mapper/employment.mapper";
 import { employmentRepository } from "../repositories/employment.repository";
-import { ServiceResult } from "../types/service.type";
-import { UserDTO } from "../types/user.type";
+import type { ServiceResult } from "../types/service.type";
+import type { UserDTO } from "../types/user.type";
 
 export const employmentService = {
     async getEmploymentsByUserAndPrivilege(username: string, privCode: string, codeType: string): Promise<ServiceResult> {
