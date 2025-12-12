@@ -84,7 +84,6 @@ app.openapi(
         return c.json(makeResponse())
     }
 )
-
 /*
 path: /employment/set
 function: 设置新任职关系
@@ -171,9 +170,8 @@ app.openapi(
             }
         })
         return c.json(makeResponse())
-    })
-
-
+    }
+)
 /*
 path: /role/pos-org/set
 function: 为岗位-部门组合设置角色

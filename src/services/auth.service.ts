@@ -222,7 +222,7 @@ export const authService = {
     async authz(sessionId: string | null): Promise<ServiceResult> {
         if (!sessionId) {
             return {
-                code: ServiceStatusCode.Forbidden,
+                code: ServiceStatusCode.Unauthorized,
                 data: {},
                 message: 'Deny'
             }
@@ -230,7 +230,7 @@ export const authService = {
         const userString = await redis.get(`session:${sessionId}`)
         if (!userString) {
             return {
-                code: ServiceStatusCode.Forbidden,
+                code: ServiceStatusCode.Unauthorized,
                 data: {},
                 message: 'Deny'
             }

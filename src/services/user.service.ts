@@ -230,9 +230,6 @@ export const userService = {
             const user = await userRepository.setUser(username, name, mobile, '外部用户')
             const employment = await employmentRepository.setEmployment(user.id, pos.id, org.id, comp.id)
         }
-        // if (RUN_MODE === 'production' || RUN_MODE === 'development') {
-        //     await mobileService.sendMessage(mobile, mobileService.getPurveyorWelcomeMessage(name))
-        // }
         await mobileService.sendMessage(mobile, mobileService.getPurveyorWelcomeMessage(name))
         return {
             code: ServiceStatusCode.Success,

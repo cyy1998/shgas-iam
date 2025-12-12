@@ -12,7 +12,8 @@ import { env } from '../config'
 const app = new OpenAPIHono()
 
 /* 
-function: login by password
+path: /login
+function: 密码登录
 */
 app.openapi(
     createRoute({
@@ -79,7 +80,8 @@ app.openapi(
     }
 )
 /* 
-function: login through oa
+path: /login/oa
+function: oa登录
 */
 app.openapi(
     createRoute({
@@ -147,7 +149,8 @@ app.openapi(
     }
 )
 /* 
-function: login through wx
+path: /login/wx
+function: 微信登录
 */
 app.openapi(
     createRoute({
@@ -202,7 +205,8 @@ app.openapi(
         return c.json(makeResponse(res.code, res.data, res.message))
     }
 )
-/* 
+/*
+path: /logout 
 function: logout
 */
 app.openapi(
@@ -238,6 +242,10 @@ app.openapi(
         return c.json(makeResponse(res.code, res.data, res.message))
     }
 )
+/*
+path: /logout 
+function: 发送登录验证码
+*/
 app.openapi(
     createRoute({
         method: 'post',
@@ -277,6 +285,10 @@ app.openapi(
         return c.json(makeResponse(res.code, res.data, res.message))
     }
 )
+/*
+path: /mobile-login 
+function: 手机登录
+*/
 app.openapi(
     createRoute({
         method: 'post',
@@ -339,8 +351,12 @@ app.openapi(
             })
         }
         return c.json(makeResponse(res.code, res.data, res.message))
-    })
-
+    }
+)
+/*
+path: /authz 
+function: 接口鉴权
+*/
 app.openapi(
     createRoute({
         method: 'get',
@@ -380,6 +396,7 @@ app.openapi(
         }
         c.header('X-User-Info', res.data)
         return c.json(makeResponse(res.code, res.data, res.message))
-    })
+    }
+)
 
 export default app
