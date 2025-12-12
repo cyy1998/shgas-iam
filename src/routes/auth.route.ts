@@ -371,20 +371,44 @@ app.openapi(
                 },
                 description: 'Allow',
             },
+            400: {
+                content: {
+                    'application/json': {
+                        schema: createResponseSchema(z.object()),
+                    },
+                },
+                description: 'Bad Request',
+            },
+            500: {
+                content: {
+                    'application/json': {
+                        schema: createResponseSchema(z.object()),
+                    },
+                },
+                description: 'Server Error',
+            },
             401: {
                 content: {
                     'application/json': {
                         schema: createResponseSchema(z.object()),
                     },
                 },
-                description: 'Deny',
+                description: 'Unauthorized',
+            },
+            403: {
+                content: {
+                    'application/json': {
+                        schema: createResponseSchema(z.object()),
+                    },
+                },
+                description: 'Forbidden',
             }
         }
     }),
     async (c) => {
         const sessionId = getCookie(c, 'session') ?? null
         const res = await authService.authz(sessionId)
-        if (res.code == ServiceStatusCode.Forbidden) {
+        if (res.code !== ServiceStatusCode.Success) {
             // console.log(res)
             if (res.message === 'Maintenance') {
                 c.header('Forbidden-Reason', 'maintenance')
@@ -392,7 +416,7 @@ app.openapi(
             else {
                 c.header('Forbidden-Reason', 'Not Login')
             }
-            return c.json(makeResponse(res.code, res.data, res.message), HttpStatusCode.Unauthorized)
+            return c.json(makeResponse(res.code, res.data, res.message), res.httpCode ?? HttpStatusCode.Ok)
         }
         c.header('X-User-Info', res.data)
         return c.json(makeResponse(res.code, res.data, res.message))

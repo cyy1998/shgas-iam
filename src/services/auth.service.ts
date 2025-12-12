@@ -17,6 +17,7 @@ import { env } from "../config"
 import { weixinService } from "./weixin.service"
 import type { WeixinResponse } from "../types/wx.type"
 import { sleep } from "bun"
+import { HttpStatusCode } from "../constants/http.status"
 
 async function _login(user: User): Promise<ServiceResult> {
     const userDTO = userMapper.toUserDTO(user)
@@ -223,6 +224,7 @@ export const authService = {
         if (!sessionId) {
             return {
                 code: ServiceStatusCode.Unauthorized,
+                httpCode: HttpStatusCode.Unauthorized,
                 data: {},
                 message: 'Deny'
             }
@@ -231,11 +233,12 @@ export const authService = {
         if (!userString) {
             return {
                 code: ServiceStatusCode.Unauthorized,
+                httpCode: HttpStatusCode.Unauthorized,
                 data: {},
                 message: 'Deny'
             }
         }
-        const user: UserDTO = JSON.parse(userString)
+        // const user: UserDTO = JSON.parse(userString)
         const userInfo = Buffer.from(userString, 'utf8').toString('base64')
         // if (!['138550', '107611', '13817551510'].includes(user.username)) {
         //     return {
