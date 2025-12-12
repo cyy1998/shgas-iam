@@ -226,7 +226,7 @@ export const authService = {
                 code: ServiceStatusCode.Unauthorized,
                 httpCode: HttpStatusCode.Unauthorized,
                 data: {},
-                message: 'Deny'
+                message: 'Unauthorized'
             }
         }
         const userString = await redis.get(`session:${sessionId}`)
@@ -235,7 +235,7 @@ export const authService = {
                 code: ServiceStatusCode.Unauthorized,
                 httpCode: HttpStatusCode.Unauthorized,
                 data: {},
-                message: 'Deny'
+                message: 'Unauthorized'
             }
         }
         // const user: UserDTO = JSON.parse(userString)
