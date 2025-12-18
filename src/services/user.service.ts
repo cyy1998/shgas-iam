@@ -223,7 +223,8 @@ export const userService = {
             }
         }
         if (existingUser !== null) {
-            const existingEmployment = employmentRepository.getEmploymentsByUserOrgPos(existingUser.id, org.id, pos.id)
+            const existingEmployment = await employmentRepository.getEmploymentsByUserOrgPos(existingUser.id, org.id, pos.id)
+
             if (existingEmployment === null) {
                 const employment = await employmentRepository.setEmployment(existingUser.id, pos.id, org.id, comp.id)
             }

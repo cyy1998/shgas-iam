@@ -31,6 +31,13 @@ export const organizationRepository = {
             }
         })
     },
+    async getOrganizationByParent(parentId: number) {
+        return await prisma.organization.findMany({
+            where: {
+                parentId: parentId,
+            }
+        })
+    },
     async setOrganization(orgCode: string, orgName: string, orgLevel: number, parentId: number) {
         return await prisma.organization.create({
             data: {
