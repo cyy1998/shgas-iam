@@ -17,6 +17,17 @@ import { organizationRepository } from '../repositories/organization.repository'
 import { mobileService } from './mobile.service'
 import { env } from '../config'
 
+async function _getUserDetail(user: User) {
+    const userDTO = userMapper.toUserDTO(user)
+    const positions = await employmentRepository.getEmploymentsByUserId(userDTO.id)
+    const roles = await roleRepository.getRolesByUserId(userDTO.id)
+    const privileges = await privilegeRepository.getPrivilegesByUserId(userDTO.id)
+    userDTO.positions = positions.map(e => employmentMapper.toEmploymentDTO(e))
+    userDTO.privileges = privileges.map(p => privilegeMapper.toPrivilegeDTO(p))
+    userDTO.roles = roles.map(r => roleMapper.toRoleDTO(r))
+    return userDTO
+}
+
 export const userService = {
 
     async setPassword(userDTO: UserDTO, oldPassword: string, newPassword: string): Promise<ServiceResult> {
@@ -77,22 +88,6 @@ export const userService = {
         userDTO.mobile = newMobile
         return userDTO
     },
-    async getUserDetailByUser(user: User) {
-        const userDTO = userMapper.toUserDTO(user)
-        const positions = await employmentRepository.getEmploymentsByUserId(userDTO.id)
-
-
-        const roles = await roleRepository.getRolesByUserId(userDTO.id)
-        const privileges = await privilegeRepository.getPrivilegesByUserId(userDTO.id)
-        userDTO.positions = positions.map(e => employmentMapper.toEmploymentDTO(e))
-        userDTO.privileges = privileges.map(p => privilegeMapper.toPrivilegeDTO(p))
-        userDTO.roles = roles.map(r => roleMapper.toRoleDTO(r))
-        return {
-            code: ServiceStatusCode.Success,
-            data: userDTO,
-            message: 'success'
-        }
-    },
 
     async getUserDetailByUsername(username: string) {
         const user = await userRepository.getUserByUsername(username)
@@ -103,8 +98,14 @@ export const userService = {
                 message: 'User Not Found'
             }
         }
-        return await this.getUserDetailByUser(user)
+        const data = await _getUserDetail(user)
+        return {
+            code: ServiceStatusCode.Success,
+            data: data,
+            message: 'success'
+        }
     },
+
     async searchOtherUserUnderOrg(orgCode: string, userDTO: UserDTO): Promise<ServiceResult> {
         const users = await userRepository.searchOtherUsersUnderOrg(userDTO.id, orgCode)
         const userDTOs = users.map(u => userMapper.toUserDTO(u))

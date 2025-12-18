@@ -31,6 +31,13 @@ export const organizationRepository = {
             }
         })
     },
+    async getOrganizationById(id: number) {
+        return await prisma.organization.findFirst({
+            where: {
+                id: id,
+            }
+        })
+    },
     async getOrganizationByParent(parentId: number) {
         return await prisma.organization.findMany({
             where: {
@@ -38,7 +45,7 @@ export const organizationRepository = {
             }
         })
     },
-    async setOrganization(orgCode: string, orgName: string, orgLevel: number, parentId: number) {
+    async setOrganization(orgCode: string, orgName: string, orgLevel: number, parentId: number, path: string) {
         return await prisma.organization.create({
             data: {
                 orgCode: orgCode,
@@ -46,7 +53,18 @@ export const organizationRepository = {
                 parentId: parentId,
                 level: orgLevel,
                 orgType: '外部组织',
-                isVirtual: true
+                isVirtual: true,
+                path: path
+            }
+        })
+    },
+    async updateOrganizationPath(orgId: number, path: string) {
+        return await prisma.organization.update({
+            where: {
+                id: orgId
+            },
+            data: {
+                path: path
             }
         })
     }

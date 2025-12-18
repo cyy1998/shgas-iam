@@ -1,6 +1,6 @@
-import { EmploymentDTO } from "./employment.type"
-import { PrivilegeDTO } from "./privilege.type"
-import { RoleDTO } from "./role.type"
+import type { EmploymentDTO } from "./employment.type"
+import type { PrivilegeDTO } from "./privilege.type"
+import type { RoleDTO } from "./role.type"
 
 export type UserDTO = {
     id: number

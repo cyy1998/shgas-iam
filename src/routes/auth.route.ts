@@ -1,6 +1,5 @@
-import { Hono } from 'hono'
 import { setCookie, getCookie, deleteCookie } from 'hono/cookie'
-import { getEvenLengthSubstrings, hmacSha256, makeResponse } from '../utils'
+import { makeResponse } from '../utils'
 import { z, createRoute, OpenAPIHono } from '@hono/zod-openapi'
 import { createResponseSchema } from '../schema'
 import { mobileService } from '../services/mobile.service'

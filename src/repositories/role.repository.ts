@@ -1,5 +1,6 @@
-import { EmploymentStatus } from "../types/employment.type"
+import { EmploymentStatus, type EmploymentDTO } from "../types/employment.type"
 import { prisma } from "../extensions"
+import { organizationRepository } from "./organization.repository"
 
 export const roleRepository = {
     async getRolesByUserId(userId: number) {
@@ -74,16 +75,5 @@ export const roleRepository = {
                 ]
             }
         })
-    },
-    // async getRolesByOrganization(orgId: number) {
-    //     return await prisma.role.findMany({
-    //         where: {
-    //             organizations: {
-    //                 some: {
-    //                     is
-    //                 }
-    //             }
-    //         }
-    //     })
-    // }
+    }
 }

@@ -1,8 +1,6 @@
 import { z, createRoute, OpenAPIHono } from '@hono/zod-openapi'
 import { makeResponse } from '../utils'
-import { ResponseSchema, createResponseSchema, OrganizationInputSchema, UserOutSchema } from '../schema'
-import { EmploymentStatus } from "../types/employment.type"
-import { mobileService } from '../services/mobile.service'
+import { ResponseSchema, createResponseSchema, UserOutSchema } from '../schema'
 import { userService } from '../services/user.service'
 import { organizationService } from '../services/organization.service'
 import { employmentService } from '../services/employment.service'

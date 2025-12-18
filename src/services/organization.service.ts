@@ -38,7 +38,9 @@ export const organizationService = {
                 message: '有效父组织不存在'
             }
         }
-        const organization = await organizationRepository.setOrganization(orgCode, orgName, 2, parentOrg.id)
+        const organization = await organizationRepository.setOrganization(orgCode, orgName, 2, parentOrg.id, '')
+        const path = `${parentOrg.path}/${organization.id}`
+        await organizationRepository.updateOrganizationPath(organization.id, path)
         if (organization === null) {
             return {
                 code: ServiceStatusCode.Failure,

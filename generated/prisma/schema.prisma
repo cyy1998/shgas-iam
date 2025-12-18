@@ -37,7 +37,7 @@ model Organization {
   orgName          String   @map("org_name")
   parentId         Int      @default(-1) @map("parent_id")
   businessParentId Int      @default(-1) @map("business_parent_id")
-  path             String?  @map("path")
+  path             String   @map("path")
   level            Int      @map("level")
   orgType          String   @map("org_type")
   orderNum         Int      @default(0) @map("order_num")

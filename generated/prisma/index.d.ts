@@ -3876,7 +3876,7 @@ export namespace Prisma {
     orgName: string
     parentId: number
     businessParentId: number
-    path: string | null
+    path: string
     level: number
     orgType: string
     orderNum: number
@@ -3973,7 +3973,7 @@ export namespace Prisma {
       orgName: string
       parentId: number
       businessParentId: number
-      path: string | null
+      path: string
       level: number
       orgType: string
       orderNum: number
@@ -19541,7 +19541,7 @@ export namespace Prisma {
     orgName?: StringFilter<"Organization"> | string
     parentId?: IntFilter<"Organization"> | number
     businessParentId?: IntFilter<"Organization"> | number
-    path?: StringNullableFilter<"Organization"> | string | null
+    path?: StringFilter<"Organization"> | string
     level?: IntFilter<"Organization"> | number
     orgType?: StringFilter<"Organization"> | string
     orderNum?: IntFilter<"Organization"> | number
@@ -19563,7 +19563,7 @@ export namespace Prisma {
     orgName?: SortOrder
     parentId?: SortOrder
     businessParentId?: SortOrder
-    path?: SortOrderInput | SortOrder
+    path?: SortOrder
     level?: SortOrder
     orgType?: SortOrder
     orderNum?: SortOrder
@@ -19589,7 +19589,7 @@ export namespace Prisma {
     orgName?: StringFilter<"Organization"> | string
     parentId?: IntFilter<"Organization"> | number
     businessParentId?: IntFilter<"Organization"> | number
-    path?: StringNullableFilter<"Organization"> | string | null
+    path?: StringFilter<"Organization"> | string
     level?: IntFilter<"Organization"> | number
     orgType?: StringFilter<"Organization"> | string
     orderNum?: IntFilter<"Organization"> | number
@@ -19611,7 +19611,7 @@ export namespace Prisma {
     orgName?: SortOrder
     parentId?: SortOrder
     businessParentId?: SortOrder
-    path?: SortOrderInput | SortOrder
+    path?: SortOrder
     level?: SortOrder
     orgType?: SortOrder
     orderNum?: SortOrder
@@ -19637,7 +19637,7 @@ export namespace Prisma {
     orgName?: StringWithAggregatesFilter<"Organization"> | string
     parentId?: IntWithAggregatesFilter<"Organization"> | number
     businessParentId?: IntWithAggregatesFilter<"Organization"> | number
-    path?: StringNullableWithAggregatesFilter<"Organization"> | string | null
+    path?: StringWithAggregatesFilter<"Organization"> | string
     level?: IntWithAggregatesFilter<"Organization"> | number
     orgType?: StringWithAggregatesFilter<"Organization"> | string
     orderNum?: IntWithAggregatesFilter<"Organization"> | number
@@ -20719,7 +20719,7 @@ export namespace Prisma {
     orgName: string
     parentId?: number
     businessParentId?: number
-    path?: string | null
+    path: string
     level: number
     orgType: string
     orderNum?: number
@@ -20741,7 +20741,7 @@ export namespace Prisma {
     orgName: string
     parentId?: number
     businessParentId?: number
-    path?: string | null
+    path: string
     level: number
     orgType: string
     orderNum?: number
@@ -20762,7 +20762,7 @@ export namespace Prisma {
     orgName?: StringFieldUpdateOperationsInput | string
     parentId?: IntFieldUpdateOperationsInput | number
     businessParentId?: IntFieldUpdateOperationsInput | number
-    path?: NullableStringFieldUpdateOperationsInput | string | null
+    path?: StringFieldUpdateOperationsInput | string
     level?: IntFieldUpdateOperationsInput | number
     orgType?: StringFieldUpdateOperationsInput | string
     orderNum?: IntFieldUpdateOperationsInput | number
@@ -20784,7 +20784,7 @@ export namespace Prisma {
     orgName?: StringFieldUpdateOperationsInput | string
     parentId?: IntFieldUpdateOperationsInput | number
     businessParentId?: IntFieldUpdateOperationsInput | number
-    path?: NullableStringFieldUpdateOperationsInput | string | null
+    path?: StringFieldUpdateOperationsInput | string
     level?: IntFieldUpdateOperationsInput | number
     orgType?: StringFieldUpdateOperationsInput | string
     orderNum?: IntFieldUpdateOperationsInput | number
@@ -20806,7 +20806,7 @@ export namespace Prisma {
     orgName: string
     parentId?: number
     businessParentId?: number
-    path?: string | null
+    path: string
     level: number
     orgType: string
     orderNum?: number
@@ -20823,7 +20823,7 @@ export namespace Prisma {
     orgName?: StringFieldUpdateOperationsInput | string
     parentId?: IntFieldUpdateOperationsInput | number
     businessParentId?: IntFieldUpdateOperationsInput | number
-    path?: NullableStringFieldUpdateOperationsInput | string | null
+    path?: StringFieldUpdateOperationsInput | string
     level?: IntFieldUpdateOperationsInput | number
     orgType?: StringFieldUpdateOperationsInput | string
     orderNum?: IntFieldUpdateOperationsInput | number
@@ -20841,7 +20841,7 @@ export namespace Prisma {
     orgName?: StringFieldUpdateOperationsInput | string
     parentId?: IntFieldUpdateOperationsInput | number
     businessParentId?: IntFieldUpdateOperationsInput | number
-    path?: NullableStringFieldUpdateOperationsInput | string | null
+    path?: StringFieldUpdateOperationsInput | string
     level?: IntFieldUpdateOperationsInput | number
     orgType?: StringFieldUpdateOperationsInput | string
     orderNum?: IntFieldUpdateOperationsInput | number
@@ -24953,7 +24953,7 @@ export namespace Prisma {
     orgName: string
     parentId?: number
     businessParentId?: number
-    path?: string | null
+    path: string
     level: number
     orgType: string
     orderNum?: number
@@ -24974,7 +24974,7 @@ export namespace Prisma {
     orgName: string
     parentId?: number
     businessParentId?: number
-    path?: string | null
+    path: string
     level: number
     orgType: string
     orderNum?: number
@@ -25105,7 +25105,7 @@ export namespace Prisma {
     orgName?: StringFieldUpdateOperationsInput | string
     parentId?: IntFieldUpdateOperationsInput | number
     businessParentId?: IntFieldUpdateOperationsInput | number
-    path?: NullableStringFieldUpdateOperationsInput | string | null
+    path?: StringFieldUpdateOperationsInput | string
     level?: IntFieldUpdateOperationsInput | number
     orgType?: StringFieldUpdateOperationsInput | string
     orderNum?: IntFieldUpdateOperationsInput | number
@@ -25126,7 +25126,7 @@ export namespace Prisma {
     orgName?: StringFieldUpdateOperationsInput | string
     parentId?: IntFieldUpdateOperationsInput | number
     businessParentId?: IntFieldUpdateOperationsInput | number
-    path?: NullableStringFieldUpdateOperationsInput | string | null
+    path?: StringFieldUpdateOperationsInput | string
     level?: IntFieldUpdateOperationsInput | number
     orgType?: StringFieldUpdateOperationsInput | string
     orderNum?: IntFieldUpdateOperationsInput | number
@@ -25222,7 +25222,7 @@ export namespace Prisma {
     orgName: string
     parentId?: number
     businessParentId?: number
-    path?: string | null
+    path: string
     level: number
     orgType: string
     orderNum?: number
@@ -25243,7 +25243,7 @@ export namespace Prisma {
     orgName: string
     parentId?: number
     businessParentId?: number
-    path?: string | null
+    path: string
     level: number
     orgType: string
     orderNum?: number
@@ -25268,7 +25268,7 @@ export namespace Prisma {
     orgName: string
     parentId?: number
     businessParentId?: number
-    path?: string | null
+    path: string
     level: number
     orgType: string
     orderNum?: number
@@ -25289,7 +25289,7 @@ export namespace Prisma {
     orgName: string
     parentId?: number
     businessParentId?: number
-    path?: string | null
+    path: string
     level: number
     orgType: string
     orderNum?: number
@@ -25443,7 +25443,7 @@ export namespace Prisma {
     orgName?: StringFieldUpdateOperationsInput | string
     parentId?: IntFieldUpdateOperationsInput | number
     businessParentId?: IntFieldUpdateOperationsInput | number
-    path?: NullableStringFieldUpdateOperationsInput | string | null
+    path?: StringFieldUpdateOperationsInput | string
     level?: IntFieldUpdateOperationsInput | number
     orgType?: StringFieldUpdateOperationsInput | string
     orderNum?: IntFieldUpdateOperationsInput | number
@@ -25464,7 +25464,7 @@ export namespace Prisma {
     orgName?: StringFieldUpdateOperationsInput | string
     parentId?: IntFieldUpdateOperationsInput | number
     businessParentId?: IntFieldUpdateOperationsInput | number
-    path?: NullableStringFieldUpdateOperationsInput | string | null
+    path?: StringFieldUpdateOperationsInput | string
     level?: IntFieldUpdateOperationsInput | number
     orgType?: StringFieldUpdateOperationsInput | string
     orderNum?: IntFieldUpdateOperationsInput | number
@@ -25495,7 +25495,7 @@ export namespace Prisma {
     orgName?: StringFieldUpdateOperationsInput | string
     parentId?: IntFieldUpdateOperationsInput | number
     businessParentId?: IntFieldUpdateOperationsInput | number
-    path?: NullableStringFieldUpdateOperationsInput | string | null
+    path?: StringFieldUpdateOperationsInput | string
     level?: IntFieldUpdateOperationsInput | number
     orgType?: StringFieldUpdateOperationsInput | string
     orderNum?: IntFieldUpdateOperationsInput | number
@@ -25516,7 +25516,7 @@ export namespace Prisma {
     orgName?: StringFieldUpdateOperationsInput | string
     parentId?: IntFieldUpdateOperationsInput | number
     businessParentId?: IntFieldUpdateOperationsInput | number
-    path?: NullableStringFieldUpdateOperationsInput | string | null
+    path?: StringFieldUpdateOperationsInput | string
     level?: IntFieldUpdateOperationsInput | number
     orgType?: StringFieldUpdateOperationsInput | string
     orderNum?: IntFieldUpdateOperationsInput | number
@@ -26242,7 +26242,7 @@ export namespace Prisma {
     orgName: string
     parentId?: number
     businessParentId?: number
-    path?: string | null
+    path: string
     level: number
     orgType: string
     orderNum?: number
@@ -26263,7 +26263,7 @@ export namespace Prisma {
     orgName: string
     parentId?: number
     businessParentId?: number
-    path?: string | null
+    path: string
     level: number
     orgType: string
     orderNum?: number
@@ -26335,7 +26335,7 @@ export namespace Prisma {
     orgName?: StringFieldUpdateOperationsInput | string
     parentId?: IntFieldUpdateOperationsInput | number
     businessParentId?: IntFieldUpdateOperationsInput | number
-    path?: NullableStringFieldUpdateOperationsInput | string | null
+    path?: StringFieldUpdateOperationsInput | string
     level?: IntFieldUpdateOperationsInput | number
     orgType?: StringFieldUpdateOperationsInput | string
     orderNum?: IntFieldUpdateOperationsInput | number
@@ -26356,7 +26356,7 @@ export namespace Prisma {
     orgName?: StringFieldUpdateOperationsInput | string
     parentId?: IntFieldUpdateOperationsInput | number
     businessParentId?: IntFieldUpdateOperationsInput | number
-    path?: NullableStringFieldUpdateOperationsInput | string | null
+    path?: StringFieldUpdateOperationsInput | string
     level?: IntFieldUpdateOperationsInput | number
     orgType?: StringFieldUpdateOperationsInput | string
     orderNum?: IntFieldUpdateOperationsInput | number
