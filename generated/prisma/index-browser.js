@@ -140,6 +140,7 @@ exports.Prisma.OrganizationScalarFieldEnum = {
   orgName: 'orgName',
   parentId: 'parentId',
   businessParentId: 'businessParentId',
+  path: 'path',
   level: 'level',
   orgType: 'orgType',
   orderNum: 'orderNum',
@@ -224,7 +225,8 @@ exports.Prisma.EmploymentRoleScalarFieldEnum = {
 
 exports.Prisma.OrganizationRoleScalarFieldEnum = {
   organizationId: 'organizationId',
-  roleId: 'roleId'
+  roleId: 'roleId',
+  isAllSub: 'isAllSub'
 };
 
 exports.Prisma.PosOrgRoleScalarFieldEnum = {
@@ -304,6 +306,7 @@ exports.Prisma.UserOrderByRelevanceFieldEnum = {
 exports.Prisma.OrganizationOrderByRelevanceFieldEnum = {
   orgCode: 'orgCode',
   orgName: 'orgName',
+  path: 'path',
   orgType: 'orgType'
 };
 

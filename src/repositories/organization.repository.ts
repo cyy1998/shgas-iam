@@ -1,7 +1,7 @@
 import { prisma } from "../extensions"
 
 export const organizationRepository = {
-    async searchFormalOrganization(orgCode: string, orgLevel: number) {
+    async searchFormalOrganizations(orgCode: string, orgLevel: number) {
         return await prisma.organization.findMany({
             where: {
                 orgCode: {
@@ -9,6 +9,16 @@ export const organizationRepository = {
                 },
                 orgType: {
                     notIn: ['虚拟组织', '外部组织']
+                },
+                level: orgLevel
+            }
+        })
+    },
+    async searchOrganizations(orgCode: string, orgLevel: number) {
+        return await prisma.organization.findMany({
+            where: {
+                orgCode: {
+                    startsWith: orgCode
                 },
                 level: orgLevel
             }

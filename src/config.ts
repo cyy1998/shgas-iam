@@ -10,7 +10,8 @@ const EnvSchema = z.object({
     PORT: z.coerce.number().default(30000),
     WX_CORPID: z.string(),
     WX_CORPSECRET: z.string(),
-    MAGIC_CODE: z.string()
+    MAGIC_CODE: z.string(),
+    NODE_ENV: z.string()
 });
 
 export type Env = z.infer<typeof EnvSchema>;

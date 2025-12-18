@@ -3,8 +3,17 @@ import { organizationMapper } from "../mapper/organization.mapper"
 import { organizationRepository } from "../repositories/organization.repository"
 
 export const organizationService = {
-    async searchFormalOrganization(orgCode: string, orgLevel: number) {
-        const organizations = await organizationRepository.searchFormalOrganization(orgCode, orgLevel)
+    async searchFormalOrganizations(orgCode: string, orgLevel: number) {
+        const organizations = await organizationRepository.searchFormalOrganizations(orgCode, orgLevel)
+        const orgDTOs = organizations.map(o => organizationMapper.toOrganizationDTO(o))
+        return {
+            code: ServiceStatusCode.Success,
+            data: orgDTOs,
+            message: 'success'
+        }
+    },
+    async searchOrganizations(orgCode: string, orgLevel: number) {
+        const organizations = await organizationRepository.searchOrganizations(orgCode, orgLevel)
         const orgDTOs = organizations.map(o => organizationMapper.toOrganizationDTO(o))
         return {
             code: ServiceStatusCode.Success,

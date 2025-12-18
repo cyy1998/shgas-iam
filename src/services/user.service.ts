@@ -1,7 +1,5 @@
 import { redis, prisma } from '../extensions'
-import axios from 'axios'
 import { hash, compare } from 'bcrypt-ts'
-import { EmploymentStatus } from "../types/employment.type"
 import { ServiceStatusCode } from "../constants/service.status"
 import type { User } from '../../generated/prisma'
 import type { ServiceResult } from '../types/service.type'
@@ -79,20 +77,13 @@ export const userService = {
         userDTO.mobile = newMobile
         return userDTO
     },
-
-    async getUserDetailByUsername(username: string) {
-        const user = await userRepository.getUserByUsername(username)
-        if (user === null) {
-            return {
-                code: ServiceStatusCode.Failure,
-                data: {},
-                message: 'User Not Found'
-            }
-        }
+    async getUserDetailByUser(user: User) {
         const userDTO = userMapper.toUserDTO(user)
         const positions = await employmentRepository.getEmploymentsByUserId(userDTO.id)
+
+
+        const roles = await roleRepository.getRolesByUserId(userDTO.id)
         const privileges = await privilegeRepository.getPrivilegesByUserId(userDTO.id)
-        const roles = await roleRepository.getRoleByUserId(userDTO.id)
         userDTO.positions = positions.map(e => employmentMapper.toEmploymentDTO(e))
         userDTO.privileges = privileges.map(p => privilegeMapper.toPrivilegeDTO(p))
         userDTO.roles = roles.map(r => roleMapper.toRoleDTO(r))
@@ -103,6 +94,17 @@ export const userService = {
         }
     },
 
+    async getUserDetailByUsername(username: string) {
+        const user = await userRepository.getUserByUsername(username)
+        if (user === null) {
+            return {
+                code: ServiceStatusCode.Failure,
+                data: {},
+                message: 'User Not Found'
+            }
+        }
+        return await this.getUserDetailByUser(user)
+    },
     async searchOtherUserUnderOrg(orgCode: string, userDTO: UserDTO): Promise<ServiceResult> {
         const users = await userRepository.searchOtherUsersUnderOrg(userDTO.id, orgCode)
         const userDTOs = users.map(u => userMapper.toUserDTO(u))
@@ -230,7 +232,9 @@ export const userService = {
             const user = await userRepository.setUser(username, name, mobile, '外部用户')
             const employment = await employmentRepository.setEmployment(user.id, pos.id, org.id, comp.id)
         }
-        await mobileService.sendMessage(mobile, mobileService.getPurveyorWelcomeMessage(name))
+        if (env.NODE_ENV === 'production') {
+            await mobileService.sendMessage(mobile, mobileService.getPurveyorWelcomeMessage(name))
+        }
         return {
             code: ServiceStatusCode.Success,
             data: {},

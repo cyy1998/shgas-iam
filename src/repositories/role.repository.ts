@@ -2,7 +2,7 @@ import { EmploymentStatus } from "../types/employment.type"
 import { prisma } from "../extensions"
 
 export const roleRepository = {
-    async getRoleByUserId(userId: number) {
+    async getRolesByUserId(userId: number) {
         return await prisma.role.findMany({
             where: {
                 OR: [
@@ -74,5 +74,16 @@ export const roleRepository = {
                 ]
             }
         })
-    }
+    },
+    // async getRolesByOrganization(orgId: number) {
+    //     return await prisma.role.findMany({
+    //         where: {
+    //             organizations: {
+    //                 some: {
+    //                     is
+    //                 }
+    //             }
+    //         }
+    //     })
+    // }
 }

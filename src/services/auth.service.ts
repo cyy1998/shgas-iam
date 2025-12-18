@@ -9,7 +9,6 @@ import { employmentMapper } from "../mapper/employment.mapper"
 import { redis } from "../extensions"
 import type { UserDTO } from "../types/user.type"
 import axios from "axios"
-import { setCookie, getCookie, deleteCookie } from 'hono/cookie'
 import type { User } from "../../generated/prisma"
 import { userService } from "./user.service"
 import { getTimestampDifference, hmacSha256 } from "../utils"
@@ -27,7 +26,6 @@ async function _login(user: User): Promise<ServiceResult> {
 
     const privileges = await privilegeRepository.getPrivilegesByUserId(user.id)
     userDTO.privileges = privileges.map(p => privilegeMapper.toPrivilegeDTO(p))
-    // console.log(userDTO)
     const { code, orcasSessionId, orcasId } = await _orcasLogin(userDTO)
     if (code !== ServiceStatusCode.Success) {
         return {
@@ -37,7 +35,6 @@ async function _login(user: User): Promise<ServiceResult> {
         }
     }
     userDTO.orcasId = orcasId
-    // console.log(userDTO)
     const token = crypto.randomUUID()
     await redis.set(`session:${token}`, JSON.stringify(userDTO), 'EX', env.REDIS_EXPIRE_TIME)
     return {

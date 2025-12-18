@@ -271,7 +271,7 @@ app.openapi(
     }),
     async (c) => {
         const { orgLevel, comCode } = c.req.valid('query')
-        const res = await organizationService.searchFormalOrganization(comCode, orgLevel)
+        const res = await organizationService.searchFormalOrganizations(comCode, orgLevel)
         return c.json(makeResponse(res.code, res.data, res.message))
     }
 )
@@ -305,7 +305,7 @@ app.openapi(
         },
     }),
     async (c) => {
-        const res = await organizationService.searchFormalOrganization('', 1)
+        const res = await organizationService.searchFormalOrganizations('', 1)
         return c.json(makeResponse(res.code, res.data, res.message))
     }
 )
