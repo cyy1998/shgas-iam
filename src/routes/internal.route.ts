@@ -103,7 +103,7 @@ app.openapi(
         }
     }),
     async (c) => {
-        const { roleCode, orgCode, orgScope } = c.req.valid('query')
+        const { roleCode, orgCode, orgScope, resourceCode } = c.req.valid('query')
         const res = await userService.searchUserByOrgRole(orgCode, roleCode, orgScope)
         return c.json(makeResponse(res.code, res.data, res.message))
     }

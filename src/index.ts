@@ -8,20 +8,13 @@ import { logger } from 'hono/logger'
 import { env } from './config'
 import { makeResponse } from './utils'
 import { ServiceStatusCode } from './constants/service.status'
+import { CustomError } from './errors/CustomError'
 
 const app = new OpenAPIHono()
 const port = env.PORT
 
 app.use('/static/*', serveStatic({ root: './' }))
-// app.use('*', async (c, next) => {
-//   const ip = c.req.header('X-Forwarded-For')
-//   const uri = c.req.header('X-Forwarded-Uri')
-//   const host = c.req.header('X-Forwarded-Host')
 
-//   console.log('User-URI', uri)
-//   console.log('User-Host', host)
-//   await next()
-// })
 app.use(logger(
   (str: string, ...args: any[]) => {
     console.log(`[INFO] ${new Date().toISOString()} - ${str}`, ...args)
@@ -29,14 +22,18 @@ app.use(logger(
 ))
 app.onError((err, c) => {
   console.error(err)
-  return c.json(makeResponse(ServiceStatusCode.Failure, null, '服务器内部错误'))
+  if (err instanceof CustomError) {
+    return c.json(makeResponse(err.code, null, err.message))
+  }
+  else {
+    return c.json(makeResponse(ServiceStatusCode.Failure, null, '服务器内部错误'))
+  }
 })
 
 app.route('/auth', auth)
 app.route('/self', self)
 app.route('/internal/iam', internal)
 app.route('/admin', admin)
-// app.route('/doc', doc)
 
 app.doc('/doc', {
   openapi: '3.0.0',

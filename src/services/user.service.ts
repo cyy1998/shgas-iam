@@ -15,6 +15,7 @@ import { env } from '../config'
 import { roleService } from './role.service'
 import { mergeAndDedupe } from '../utils'
 import { privilegeService } from './privilege.service'
+import { UserNotFoundError } from '../errors/UserNotFoundError'
 
 async function _getUserDetail(user: User) {
     const userDTO = userMapper.toUserDTO(user)
@@ -30,7 +31,7 @@ async function _getUserDetail(user: User) {
     const rolesFromPosOrg = await Promise.all(posDeptIds.map(e => roleService.getRolesByOrgPosition(e.posId, e.orgId)))
     const rolesFromEmployment = await Promise.all(employments.map(e => roleService.getRolesByEmployment(e.id)))
     const rolesCombined = [...rolesFromDepts, ...rolesFromPosition, ...rolesFromPosOrg, ...rolesFromEmployment]
-    const roles = rolesCombined.reduce((acc, cur) => mergeAndDedupe(acc, cur, 'roleId'))
+    const roles = rolesCombined.reduce((acc, cur) => mergeAndDedupe(acc, cur, 'roleId'), [])
     userDTO.roles = roles
 
     const privileges = await privilegeService.getPrivilegesByRoles(roles.map(r => r.roleId))
@@ -107,11 +108,12 @@ export const userService = {
     async getUserDetailByUsername(username: string) {
         const user = await userRepository.getUserByUsername(username)
         if (user === null) {
-            return {
-                code: ServiceStatusCode.Failure,
-                data: null,
-                message: 'User Not Found'
-            }
+            throw new UserNotFoundError()
+            // return {
+            //     code: ServiceStatusCode.Failure,
+            //     data: null,
+            //     message: 'User Not Found'
+            // }
         }
         const data = await _getUserDetail(user)
         return {
