@@ -8,6 +8,7 @@ export type UserDTO = {
     name: string
     mobile: string | null
     orcasId: string | null
+    userType: string | null
     positions?: EmploymentDTO[]
     privileges?: PrivilegeDTO[]
     roles?: RoleDTO[]

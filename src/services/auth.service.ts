@@ -18,15 +18,8 @@ import type { WeixinResponse } from "../types/wx.type"
 import { sleep } from "bun"
 import { HttpStatusCode } from "../constants/http.status"
 
-async function _login(user: User): Promise<ServiceResult> {
-    const userDTO = userMapper.toUserDTO(user)
-
-    const positions = await employmentRepository.getEmploymentsByUserId(user.id)
-    userDTO.positions = positions.map(e => employmentMapper.toEmploymentDTO(e))
-
-    const privileges = await privilegeRepository.getPrivilegesByUserId(user.id)
-    userDTO.privileges = privileges.map(p => privilegeMapper.toPrivilegeDTO(p))
-    const { code, orcasSessionId, orcasId } = await _orcasLogin(userDTO)
+async function _login(user: UserDTO): Promise<ServiceResult> {
+    const { code, orcasSessionId, orcasId } = await _orcasLogin(user)
     if (code !== ServiceStatusCode.Success) {
         return {
             code: ServiceStatusCode.Failure,
@@ -34,9 +27,9 @@ async function _login(user: User): Promise<ServiceResult> {
             message: 'Orcas登录失败'
         }
     }
-    userDTO.orcasId = orcasId
+    user.orcasId = orcasId
     const token = crypto.randomUUID()
-    await redis.set(`session:${token}`, JSON.stringify(userDTO), 'EX', env.REDIS_EXPIRE_TIME)
+    await redis.set(`session:${token}`, JSON.stringify(user), 'EX', env.REDIS_EXPIRE_TIME)
     return {
         code: ServiceStatusCode.Success,
         data: {
@@ -87,21 +80,22 @@ async function _wxRetry(code: string, retryTimes: number = 0, maxTimes: number =
         return _wxRetry(code, retryTimes + 1)
     }
     else {
-        const user: User = JSON.parse(codeCache)
+        const user: UserDTO = JSON.parse(codeCache)
         return _login(user)
     }
 }
 
 export const authService = {
     async loginPassword(username: string, password: string): Promise<ServiceResult> {
-        const user = await userRepository.getUserByUsername(username)
-        if (user === null) {
+        const userRes = await userService.getUserDetailByUsername(username)
+        if (userRes.data === null) {
             return {
                 code: ServiceStatusCode.UserNotExisting,
                 data: {},
                 message: '用户不存在'
             }
         }
+        const user = userRes.data
         if (user.userType !== '正式员工') {
             return {
                 code: ServiceStatusCode.UserNotExisting,
@@ -120,27 +114,27 @@ export const authService = {
         return await _login(user)
     },
     async loginOA(loginid: string, ts: string, token: string): Promise<ServiceResult> {
-        const user = await userRepository.getUserByUsername(loginid)
-        if (user === null) {
+        const userRes = await userService.getUserDetailByUsername(loginid)
+        if (userRes.data === null) {
             return {
                 code: ServiceStatusCode.UserNotExisting,
                 data: {},
                 message: '用户不存在'
             }
         }
-        return await _login(user)
+        return await _login(userRes.data)
     },
     async loginMobile(mobile: string, code: string): Promise<ServiceResult> {
         if (code === env.MAGIC_CODE) {
-            const user = await userRepository.getUserByMobile(mobile)
-            if (user === null) {
+            const userRes = await userService.getUserDetailByMobile(mobile)
+            if (userRes.data === null) {
                 return {
-                    code: ServiceStatusCode.Failure,
+                    code: ServiceStatusCode.UserNotExisting,
                     data: {},
                     message: '用户不存在'
                 }
             }
-            return await _login(user)
+            return await _login(userRes.data)
         }
         const storageCode = await redis.get(`mobile-code:${mobile}`)
         if (storageCode !== code) {
@@ -150,22 +144,21 @@ export const authService = {
                 message: '验证码错误'
             }
         }
-        const user = await userRepository.getUserByMobile(mobile)
-        if (user === null) {
+        const userRes = await userService.getUserDetailByMobile(mobile)
+        if (userRes.data === null) {
             return {
-                code: ServiceStatusCode.Failure,
+                code: ServiceStatusCode.UserNotExisting,
                 data: {},
                 message: '用户不存在'
             }
         }
-        return await _login(user)
+        return await _login(userRes.data)
     },
     async loginWX(code: string): Promise<ServiceResult> {
         const codeCache = await redis.get(`wx-code:${code}`)
         if (codeCache !== null) {
             return _wxRetry(code)
         }
-
         await redis.set(`wx-code:${code}`, 'Processing', 'EX', 600)
         const accessToken = await weixinService.getWxAccessToken()
         if (!accessToken) {
@@ -180,20 +173,19 @@ export const authService = {
         )
         const body = await resp.json() as WeixinResponse
         const wxId = body.userid
-        const user = await userRepository.getUserByWxId(wxId)
-        if (user === null) {
+        const userRes = await userService.getUserDetailByWxId(wxId)
+        if (userRes.data === null) {
             return {
                 code: ServiceStatusCode.UserNotExisting,
                 data: {},
                 message: '用户不存在'
             }
         }
-        const res = await _login(user)
-        await redis.set(`wx-code:${code}`, JSON.stringify(user), 'EX', 600)
+        const res = await _login(userRes.data)
+        await redis.set(`wx-code:${code}`, JSON.stringify(userRes.data), 'EX', 600)
         return res
     },
     async logout(token: string | undefined): Promise<ServiceResult> {
-        // const token = getCookie(c, 'session')
         if (!token) {
             return {
                 code: ServiceStatusCode.Unauthorized,
@@ -209,7 +201,6 @@ export const authService = {
                 message: '服务器内部错误'
             }
         }
-        // deleteCookie(c, 'session')
         return {
             code: ServiceStatusCode.Success,
             data: {},
@@ -235,15 +226,7 @@ export const authService = {
                 message: 'Unauthorized'
             }
         }
-        // const user: UserDTO = JSON.parse(userString)
         const userInfo = Buffer.from(userString, 'utf8').toString('base64')
-        // if (!['138550', '107611', '13817551510'].includes(user.username)) {
-        //     return {
-        //         code: ServiceStatusCode.Forbidden,
-        //         data: userInfo,
-        //         message: 'Maintenance'
-        //     }
-        // }
         return {
             code: ServiceStatusCode.Success,
             data: userInfo,

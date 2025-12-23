@@ -7,5 +7,12 @@ export const positionRepository = {
                 posCode: posCode,
             }
         })
+    },
+    async getPositionById(posId: number) {
+        return await prisma.position.findFirst({
+            where: {
+                id: posId,
+            }
+        })
     }
 }

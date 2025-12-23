@@ -31,3 +31,42 @@ export function getTimestampDifference(targetTimestamp: number): number {
 export function sleep(ms: number): Promise<void> {
     return new Promise(resolve => setTimeout(resolve, ms));
 }
+
+export function mergeAndDedupe<T extends Record<string, any>>(
+    arr1: T[],
+    arr2: T[],
+    key: keyof T
+): T[] {
+    const seen = new Set<T[keyof T]>();
+    const result: T[] = [];
+
+    for (const item of [...arr1, ...arr2]) {
+        const keyValue = item[key];
+        if (!seen.has(keyValue)) {
+            seen.add(keyValue);
+            result.push(item);
+        }
+    }
+
+    return result;
+}
+
+export function mergeAndDedupeOverride<T extends Record<string, any>>(
+    arr1: T[],
+    arr2: T[],
+    key: keyof T
+): T[] {
+    const map = new Map<T[keyof T], T>();
+
+    // 先放 arr1
+    for (const item of arr1) {
+        map.set(item[key], item);
+    }
+
+    // 再放 arr2（会覆盖重复 key）
+    for (const item of arr2) {
+        map.set(item[key], item);
+    }
+
+    return Array.from(map.values());
+}

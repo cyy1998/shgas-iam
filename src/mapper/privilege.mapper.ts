@@ -1,4 +1,4 @@
-import { PrivilegeDTO, PrivilegeEntity } from "../types/privilege.type";
+import type { PrivilegeDTO, PrivilegeEntity } from "../types/privilege.type";
 
 export const privilegeMapper = {
     toPrivilegeDTO(priv: PrivilegeEntity): PrivilegeDTO {

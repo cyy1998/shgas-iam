@@ -75,5 +75,63 @@ export const roleRepository = {
                 ]
             }
         })
+    },
+    async getRolesByAncestorOrgs(ancestorgIds: number[]) {
+        return await prisma.role.findMany({
+            where: {
+                organizations: {
+                    some: {
+                        organizationId: {
+                            in: ancestorgIds
+                        },
+                        isAllSub: true
+                    }
+                }
+            }
+        })
+    },
+    async getRolesByDirectOrg(orgId: number) {
+        return await prisma.role.findMany({
+            where: {
+                organizations: {
+                    some: {
+                        organizationId: orgId,
+                    }
+                }
+            }
+        })
+    },
+    async getRolesByPosition(posId: number) {
+        return await prisma.role.findMany({
+            where: {
+                positions: {
+                    some: {
+                        positionId: posId,
+                    }
+                }
+            }
+        })
+    },
+    async getRolesByPosOrg(posOrgId: number) {
+        return await prisma.role.findMany({
+            where: {
+                positionOrganizations: {
+                    some: {
+                        posOrgId: posOrgId,
+                    }
+                }
+            }
+        })
+    },
+    async getRolesByEmployment(employmentId: number) {
+        return await prisma.role.findMany({
+            where: {
+                employments: {
+                    some: {
+                        employmentId: employmentId,
+                    }
+                }
+            }
+        })
     }
 }

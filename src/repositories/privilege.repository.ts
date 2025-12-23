@@ -83,5 +83,21 @@ export const privilegeRepository = {
                 object: true
             }
         })
+    },
+    async getPrivilegesByRoles(roleIds: number[]) {
+        return await prisma.privilege.findMany({
+            where: {
+                roles: {
+                    some: {
+                        roleId: {
+                            in: roleIds
+                        }
+                    }
+                }
+            },
+            include: {
+                object: true
+            }
+        })
     }
 } 

@@ -7,38 +7,49 @@ import { userRepository } from '../repositories/user.repository'
 import type { UserDTO } from '../types/user.type'
 import { userMapper } from '../mapper/user.mapper'
 import { employmentRepository } from '../repositories/employment.repository'
-import { privilegeRepository } from '../repositories/privilege.repository'
 import { employmentMapper } from '../mapper/employment.mapper'
-import { privilegeMapper } from '../mapper/privilege.mapper'
-import { roleRepository } from '../repositories/role.repository'
-import { roleMapper } from '../mapper/role.mapper'
 import { positionRepository } from '../repositories/position.repository'
 import { organizationRepository } from '../repositories/organization.repository'
 import { mobileService } from './mobile.service'
 import { env } from '../config'
+import { roleService } from './role.service'
+import { mergeAndDedupe } from '../utils'
+import { privilegeService } from './privilege.service'
 
 async function _getUserDetail(user: User) {
     const userDTO = userMapper.toUserDTO(user)
-    const positions = await employmentRepository.getEmploymentsByUserId(userDTO.id)
-    const roles = await roleRepository.getRolesByUserId(userDTO.id)
-    const privileges = await privilegeRepository.getPrivilegesByUserId(userDTO.id)
-    userDTO.positions = positions.map(e => employmentMapper.toEmploymentDTO(e))
-    userDTO.privileges = privileges.map(p => privilegeMapper.toPrivilegeDTO(p))
-    userDTO.roles = roles.map(r => roleMapper.toRoleDTO(r))
+    const employments = await employmentRepository.getEmploymentsByUserId(userDTO.id)
+    userDTO.positions = employments.map(e => employmentMapper.toEmploymentDTO(e))
+
+    const deptIds = employments.map(e => e.deptId)
+    const posIds = employments.map(e => e.posId)
+    const posDeptIds = employments.map(e => { return { posId: e.posId, orgId: e.deptId } })
+
+    const rolesFromDepts = await Promise.all(deptIds.map(e => roleService.getRolesByOrganization(e)))
+    const rolesFromPosition = await Promise.all(posIds.map(e => roleService.getRolesByPosition(e)))
+    const rolesFromPosOrg = await Promise.all(posDeptIds.map(e => roleService.getRolesByOrgPosition(e.posId, e.orgId)))
+    const rolesFromEmployment = await Promise.all(employments.map(e => roleService.getRolesByEmployment(e.id)))
+    const rolesCombined = [...rolesFromDepts, ...rolesFromPosition, ...rolesFromPosOrg, ...rolesFromEmployment]
+    const roles = rolesCombined.reduce((acc, cur) => mergeAndDedupe(acc, cur, 'roleId'))
+    userDTO.roles = roles
+
+    const privileges = await privilegeService.getPrivilegesByRoles(roles.map(r => r.roleId))
+    userDTO.privileges = privileges
+
     return userDTO
 }
 
 export const userService = {
 
     async setPassword(userDTO: UserDTO, oldPassword: string, newPassword: string): Promise<ServiceResult> {
-        const user = await userRepository.getUserByUsername(userDTO.username)
-        if (user === null) {
-            return {
-                code: ServiceStatusCode.Failure,
-                data: {},
-                message: '用户不存在'
-            }
-        }
+        // const user = await userRepository.getUserByUsername(userDTO.username)
+        // if (user === null) {
+        //     return {
+        //         code: ServiceStatusCode.Failure,
+        //         data: {},
+        //         message: '用户不存在'
+        //     }
+        // }
         if (oldPassword === newPassword) {
             return {
                 code: ServiceStatusCode.Failure,
@@ -46,7 +57,7 @@ export const userService = {
                 message: '旧密码与新密码相同'
             }
         }
-        const isMatch = await this.checkPassword(user, oldPassword)
+        const isMatch = await this.checkPassword(userDTO, oldPassword)
         if (!isMatch) {
             return {
                 code: ServiceStatusCode.Failure,
@@ -62,7 +73,7 @@ export const userService = {
             }
         }
         const newPasswordHash = await hash(newPassword, env.PASSWORD_HASH_ROUNDS)
-        await userRepository.setPassword(user.id, newPasswordHash)
+        await userRepository.setPassword(userDTO.id, newPasswordHash)
         return {
             code: ServiceStatusCode.Success,
             data: {},
@@ -71,7 +82,11 @@ export const userService = {
 
     },
 
-    async checkPassword(user: User, inputPassword: string): Promise<boolean> {
+    async checkPassword(userDTO: UserDTO, inputPassword: string): Promise<boolean> {
+        const user = await userRepository.getUserByUsername(userDTO.username)
+        if (user === null) {
+            return false
+        }
         return user.password ? await compare(inputPassword, user.password ?? '') : inputPassword === env.DEFAULT_USER_PASSWORD
     },
 
@@ -94,7 +109,41 @@ export const userService = {
         if (user === null) {
             return {
                 code: ServiceStatusCode.Failure,
-                data: {},
+                data: null,
+                message: 'User Not Found'
+            }
+        }
+        const data = await _getUserDetail(user)
+        return {
+            code: ServiceStatusCode.Success,
+            data: data,
+            message: 'success'
+        }
+    },
+
+    async getUserDetailByMobile(mobile: string) {
+        const user = await userRepository.getUserByMobile(mobile)
+        if (user === null) {
+            return {
+                code: ServiceStatusCode.Failure,
+                data: null,
+                message: 'User Not Found'
+            }
+        }
+        const data = await _getUserDetail(user)
+        return {
+            code: ServiceStatusCode.Success,
+            data: data,
+            message: 'success'
+        }
+    },
+
+    async getUserDetailByWxId(wxId: string) {
+        const user = await userRepository.getUserByWxId(wxId)
+        if (user === null) {
+            return {
+                code: ServiceStatusCode.Failure,
+                data: null,
                 message: 'User Not Found'
             }
         }
