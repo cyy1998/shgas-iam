@@ -70,7 +70,7 @@ app.openapi(
     }),
     async (c) => {
         const { posCode, orgCode, orgScope } = c.req.valid('query')
-        const data = await userService.searchUserByOrgPos(orgCode, posCode, orgScope)
+        const data = await userService.getUsersByOrgPos(orgCode, posCode, orgScope)
         return c.json(success(data))
     }
 )
@@ -105,7 +105,7 @@ app.openapi(
     }),
     async (c) => {
         const { roleCode, orgCode, orgScope, resourceCode } = c.req.valid('query')
-        const data = await userService.searchUsersByOrgRole(orgCode, roleCode, orgScope)
+        const data = await userService.getUsersByOrgRole(orgCode, roleCode, orgScope)
         return c.json(success(data))
     }
 )
@@ -138,7 +138,7 @@ app.openapi(
     }),
     async (c) => {
         const { orgCode, orgScope } = c.req.valid('query')
-        const data = await userService.searchUsersByOrg(orgCode, orgScope)
+        const data = await userService.getUsersByOrg(orgCode, orgScope)
         return c.json(success(data))
     }
 )
@@ -218,7 +218,7 @@ app.openapi(
     }),
     async (c) => {
         const { username, mobile, name, orgCode } = c.req.valid('json')
-        const res = await userService.purveyorConcatRegister(username, mobile, name, orgCode)
+        const res = await userService.registerPurveyorConcat(username, mobile, name, orgCode)
         return c.json(success())
     }
 )

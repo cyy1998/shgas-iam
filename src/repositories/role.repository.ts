@@ -1,6 +1,5 @@
-import { EmploymentStatus, type EmploymentDTO } from "../types/employment.type"
+import { EmploymentStatus } from "../types/employment.type"
 import { prisma } from "../extensions"
-import { organizationRepository } from "./organization.repository"
 
 export const roleRepository = {
     async getRolesByUserId(userId: number) {

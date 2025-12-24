@@ -1,7 +1,7 @@
 import { env } from "../config"
 import { redis } from "../extensions"
 
-export type WeixinAccessTokenResponse = {
+type WeixinAccessTokenResponse = {
     errcode: number
     errmsg: string
     access_token: string

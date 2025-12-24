@@ -53,7 +53,7 @@ export const userRepository = {
             }
         })
     },
-    async searchOtherUsersUnderOrg(userId: number, orgCode: string) {
+    async getOtherUsersByOrg(userId: number, orgCode: string) {
         return await prisma.user.findMany({
             where: {
                 employments: {
@@ -71,7 +71,7 @@ export const userRepository = {
             }
         })
     },
-    async searchUsersByOrgDirect(orgCode: string) {
+    async getUsersByOrg(orgCode: string) {
         return await prisma.user.findMany({
             where: {
                 employments: {
@@ -84,7 +84,7 @@ export const userRepository = {
             }
         })
     },
-    async searchUsersByOrgRecursive(orgCode: string) {
+    async getUsersByOrgAndAllSub(orgCode: string) {
         return await prisma.user.findMany({
             where: {
                 employments: {
@@ -100,7 +100,7 @@ export const userRepository = {
         })
     },
 
-    async searchUsersByOrgRoleDirect(orgCode: string, roleCode: string) {
+    async getUsersByOrgRole(orgCode: string, roleCode: string) {
         return await prisma.user.findMany({
             where: {
                 employments: {
@@ -175,7 +175,7 @@ export const userRepository = {
             }
         })
     },
-    async searchUsersByOrgRoleRecursive(orgCode: string, roleCode: string) {
+    async getUsersByOrgAndAllSubRole(orgCode: string, roleCode: string) {
         return await prisma.user.findMany({
             where: {
                 employments: {
@@ -252,7 +252,7 @@ export const userRepository = {
             }
         })
     },
-    async searchUsersByOrgPosDirect(orgCode: string, posCode: string) {
+    async getUsersByOrgPos(orgCode: string, posCode: string) {
         return await prisma.user.findMany({
             where: {
                 employments: {
@@ -268,7 +268,7 @@ export const userRepository = {
             }
         })
     },
-    async searchUsersByOrgPosRecursive(orgCode: string, posCode: string) {
+    async getUsersByOrgAndAllSubPos(orgCode: string, posCode: string) {
         return await prisma.user.findMany({
             where: {
                 employments: {

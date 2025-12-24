@@ -1,8 +1,5 @@
-import { redis, prisma } from '../extensions'
 import { hash, compare } from 'bcrypt-ts'
-import { ServiceStatusCode } from "../constants/service.status"
 import type { User } from '../../generated/prisma'
-import type { ServiceResult } from '../types/service.type'
 import { userRepository } from '../repositories/user.repository'
 import type { UserDTO } from '../types/user.type'
 import { userMapper } from '../mapper/user.mapper'
@@ -17,7 +14,6 @@ import { mergeAndDedupe } from '../utils/common.utils'
 import { privilegeService } from './privilege.service'
 import { UserNotFoundError } from '../errors/UserNotFoundError'
 import { CustomError } from '../errors/CustomError'
-import { authService } from './auth.service'
 
 async function _getUserDetail(user: User | null) {
     if (user === null) {
@@ -116,52 +112,34 @@ export const userService = {
         return userDetail
     },
 
-    async searchOtherUsersByOrg(orgCode: string, userDTO: UserDTO) {
-        const users = await userRepository.searchOtherUsersUnderOrg(userDTO.id, orgCode)
+    async getOtherUsersByOrg(orgCode: string, userDTO: UserDTO) {
+        const users = await userRepository.getOtherUsersByOrg(userDTO.id, orgCode)
         const userDTOs = users.map(u => userMapper.toUserDTO(u))
         return userDTOs
     },
 
-    async searchUsersByOrg(orgCode: string, orgScope: string) {
-        if (orgScope === 'direct') {
-            const users = await userRepository.searchUsersByOrgDirect(orgCode)
-            const userDTOs = users.map(u => userMapper.toUserDTO(u))
-            return userDTOs
-        }
-        else {
-            const users = await userRepository.searchUsersByOrgRecursive(orgCode)
-            const userDTOs = users.map(u => userMapper.toUserDTO(u))
-            return userDTOs
-        }
+    async getUsersByOrg(orgCode: string, orgScope: string) {
+        const users = orgScope === 'direct' ? await userRepository.getUsersByOrg(orgCode) :
+            await userRepository.getUsersByOrgAndAllSub(orgCode)
+        const userDTOs = users.map(u => userMapper.toUserDTO(u))
+        return userDTOs
     },
 
-    async searchUsersByOrgRole(orgCode: string, roleCode: string, orgScope: string) {
-        if (orgScope === 'direct') {
-            const users = await userRepository.searchUsersByOrgRoleDirect(orgCode, roleCode)
-            const userDTOs = users.map(u => userMapper.toUserDTO(u))
-            return userDTOs
-        }
-        else {
-            const users = await userRepository.searchUsersByOrgRoleRecursive(orgCode, roleCode)
-            const userDTOs = users.map(u => userMapper.toUserDTO(u))
-            return userDTOs
-        }
+    async getUsersByOrgRole(orgCode: string, roleCode: string, orgScope: string) {
+        const users = orgScope === 'direct' ? await userRepository.getUsersByOrgRole(orgCode, roleCode) :
+            await userRepository.getUsersByOrgAndAllSubRole(orgCode, roleCode)
+        const userDTOs = users.map(u => userMapper.toUserDTO(u))
+        return userDTOs
     },
 
-    async searchUserByOrgPos(orgCode: string, roleCode: string, orgScope: string) {
-        if (orgScope === 'direct') {
-            const users = await userRepository.searchUsersByOrgPosDirect(orgCode, roleCode)
-            const userDTOs = users.map(u => userMapper.toUserDTO(u))
-            return userDTOs
-        }
-        else {
-            const users = await userRepository.searchUsersByOrgPosRecursive(orgCode, roleCode)
-            const userDTOs = users.map(u => userMapper.toUserDTO(u))
-            return userDTOs
-        }
+    async getUsersByOrgPos(orgCode: string, roleCode: string, orgScope: string) {
+        const users = orgScope === 'direct' ? await userRepository.getUsersByOrgPos(orgCode, roleCode) :
+            await userRepository.getUsersByOrgAndAllSubPos(orgCode, roleCode)
+        const userDTOs = users.map(u => userMapper.toUserDTO(u))
+        return userDTOs
     },
 
-    async purveyorConcatRegister(username: string, mobile: string, name: string, orgCode: string) {
+    async registerPurveyorConcat(username: string, mobile: string, name: string, orgCode: string) {
         const existingUser = await userRepository.getUserByMobile(mobile)
         const [pos, comp, org] = await Promise.all([
             positionRepository.getPositionByCode('P001'),

@@ -1,23 +1,11 @@
-import { ServiceStatusCode } from "../constants/service.status"
-import { userRepository } from "../repositories/user.repository"
-import type { ServiceResult } from "../types/service.type"
-import { employmentRepository } from "../repositories/employment.repository"
-import { privilegeRepository } from "../repositories/privilege.repository"
-import { privilegeMapper } from "../mapper/privilege.mapper"
-import { userMapper } from "../mapper/user.mapper"
-import { employmentMapper } from "../mapper/employment.mapper"
 import { redis } from "../extensions"
 import type { UserDTO } from "../types/user.type"
 import axios from "axios"
-import type { User } from "../../generated/prisma"
 import { userService } from "./user.service"
-import { hmacSha256 } from '../utils/encryption.utils'
-import { getTimestampDifference } from '../utils/common.utils'
 import { env } from "../config"
 import { weixinService } from "./weixin.service"
 import type { WeixinResponse } from "../types/wx.type"
 import { sleep } from "bun"
-import { HttpStatusCode } from "../constants/http.status"
 import { CustomError } from "../errors/CustomError"
 import { AuthzUnauthorizedError } from "../errors/AuthzUnauthorizedError"
 
@@ -154,8 +142,5 @@ export const authService = {
         const userInfo = Buffer.from(userString, 'utf8').toString('base64')
         return userInfo
     },
-    async updateSession(sessionId: string, userDTO: UserDTO) {
-        await redis.set(`session:${sessionId}`, JSON.stringify(userDTO), 'EX', env.REDIS_EXPIRE_TIME)
-        return true
-    },
+
 }

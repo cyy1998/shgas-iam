@@ -3,13 +3,13 @@ import { organizationMapper } from "../mapper/organization.mapper"
 import { organizationRepository } from "../repositories/organization.repository"
 
 export const organizationService = {
-    async searchFormalOrganizations(orgCode: string, orgLevel: number) {
+    async getFormalOrganizationsByCode(orgCode: string, orgLevel: number) {
         const organizations = await organizationRepository.searchFormalOrganizations(orgCode, orgLevel)
         const orgDTOs = organizations.map(o => organizationMapper.toOrganizationDTO(o))
         return orgDTOs
     },
 
-    async searchOrganizations(orgCode: string, orgLevel: number) {
+    async getOrganizationsByCode(orgCode: string, orgLevel: number) {
         const organizations = await organizationRepository.searchOrganizations(orgCode, orgLevel)
         const orgDTOs = organizations.map(o => organizationMapper.toOrganizationDTO(o))
         return orgDTOs

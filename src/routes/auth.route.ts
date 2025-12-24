@@ -1,11 +1,9 @@
 import { setCookie, getCookie, deleteCookie } from 'hono/cookie'
-import { makeResponse, success } from '../utils/response.utils'
+import { success } from '../utils/response.utils'
 import { z, createRoute, OpenAPIHono } from '@hono/zod-openapi'
 import { createResponseSchema } from '../utils/response.utils'
 import { mobileService } from '../services/mobile.service'
 import { authService } from '../services/auth.service'
-import { ServiceStatusCode } from "../constants/service.status"
-import { HttpStatusCode } from "../constants/http.status"
 import { env } from '../config'
 
 const app = new OpenAPIHono()

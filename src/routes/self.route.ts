@@ -1,15 +1,15 @@
-import { makeResponse, success } from '../utils/response.utils'
+import { success } from '../utils/response.utils'
 import { z, createRoute, OpenAPIHono } from '@hono/zod-openapi'
 import { ResponseSchema, OrganizationInputSchema, UserOutSchema } from '../schema'
 import { createResponseSchema } from '../utils/response.utils'
 import { userService } from '../services/user.service'
 import { mobileService } from '../services/mobile.service'
 import { getCookie } from 'hono/cookie'
-import { ServiceStatusCode } from "../constants/service.status"
 import { authService } from '../services/auth.service'
 import type { UserDTO } from '../types/user.type'
 import { employmentService } from '../services/employment.service'
 import { organizationService } from '../services/organization.service'
+import { cacheService } from '../services/cache.service'
 
 const app = new OpenAPIHono()
 
@@ -147,7 +147,7 @@ app.openapi(
                         schema: createResponseSchema(z.object()),
                     },
                 },
-                description: '发送短信成功',
+                description: '新手机设置成功',
             }
         }
     }),
@@ -156,7 +156,7 @@ app.openapi(
         const sessionId = getCookie(c, 'session') as string
         const userDTO: UserDTO = JSON.parse(Buffer.from(c.req.header('X-User-Info') ?? '', 'base64').toString('utf8'))
         const newUserDTO = await userService.setMobile(userDTO, phoneNumber, code)
-        const data = await authService.updateSession(sessionId, newUserDTO)
+        const data = await cacheService.updateSession(sessionId, JSON.stringify(newUserDTO))
         return c.json(success(data))
     }
 )
@@ -183,7 +183,7 @@ app.openapi(
     async (c) => {
         const user: UserDTO = JSON.parse(Buffer.from(c.req.header('X-User-Info') ?? '', 'base64').toString('utf8'))
         const { orgCode } = c.req.valid('query')
-        const data = await userService.searchOtherUsersByOrg(orgCode, user)
+        const data = await userService.getOtherUsersByOrg(orgCode, user)
         return c.json(success(data))
     }
 )
@@ -225,7 +225,8 @@ app.openapi(
         const user: UserDTO = JSON.parse(Buffer.from(c.req.header('X-User-Info') ?? '', 'base64').toString('utf8'))
         const data = await employmentService.getEmploymentsByUserAndPrivilege(user.username, privCode, codeType)
         return c.json(success(data))
-    })
+    }
+)
 
 app.openapi(
     createRoute({
@@ -254,13 +255,13 @@ app.openapi(
                             ))
                     },
                 },
-                description: '本公司用户列表',
+                description: '本公司下属组织列表',
             },
         },
     }),
     async (c) => {
         const { orgLevel, comCode } = c.req.valid('query')
-        const data = await organizationService.searchFormalOrganizations(comCode, orgLevel)
+        const data = await organizationService.getFormalOrganizationsByCode(comCode, orgLevel)
         return c.json(success(data))
     }
 )
@@ -294,7 +295,7 @@ app.openapi(
         },
     }),
     async (c) => {
-        const data = await organizationService.searchFormalOrganizations('', 1)
+        const data = await organizationService.getFormalOrganizationsByCode('', 1)
         return c.json(success(data))
     }
 )
