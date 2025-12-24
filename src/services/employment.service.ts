@@ -36,15 +36,15 @@ export const employmentService = {
         const eList = await _getEmploymentsDetail(username)
         if (codeType === 'full') {
             const filtedEList = eList.filter(e => e.privileges.includes(privCode))
-            return filtedEList
+            return filtedEList.map(e => e.employment)
         }
         else if (codeType === 'prefix') {
             const filtedEList = eList.filter(e => e.privileges.some(s => s.startsWith(privCode)))
-            return filtedEList
+            return filtedEList.map(e => e.employment)
         }
         else {
             const filtedEList = eList.filter(e => e.privileges.some(s => s.endsWith(privCode)))
-            return filtedEList
+            return filtedEList.map(e => e.employment)
         }
     }
 
