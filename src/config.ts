@@ -3,6 +3,7 @@ import { z } from 'zod';
 const EnvSchema = z.object({
     PASSWORD_HASH_ROUNDS: z.coerce.number().default(10),
     SMS_SIGNATURE_KEY: z.string(),
+    SMS_URL: z.string(),
     DEFAULT_USER_PASSWORD: z.string(),
     REDIS_EXPIRE_TIME: z.coerce.number(),
     ORCAS_URL: z.string(),

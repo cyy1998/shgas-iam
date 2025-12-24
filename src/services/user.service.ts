@@ -13,15 +13,20 @@ import { organizationRepository } from '../repositories/organization.repository'
 import { mobileService } from './mobile.service'
 import { env } from '../config'
 import { roleService } from './role.service'
-import { mergeAndDedupe } from '../utils'
+import { mergeAndDedupe } from '../utils/common.utils'
 import { privilegeService } from './privilege.service'
 import { UserNotFoundError } from '../errors/UserNotFoundError'
+import { CustomError } from '../errors/CustomError'
+import { authService } from './auth.service'
 
-async function _getUserDetail(user: User) {
+async function _getUserDetail(user: User | null) {
+    if (user === null) {
+        throw new UserNotFoundError('该用户不存在')
+    }
     const userDTO = userMapper.toUserDTO(user)
     const employments = await employmentRepository.getEmploymentsByUserId(userDTO.id)
-    userDTO.positions = employments.map(e => employmentMapper.toEmploymentDTO(e))
 
+    userDTO.positions = employments.map(e => employmentMapper.toEmploymentDTO(e))
     const deptIds = employments.map(e => e.deptId)
     const posIds = employments.map(e => e.posId)
     const posDeptIds = employments.map(e => { return { posId: e.posId, orgId: e.deptId } })
@@ -40,50 +45,37 @@ async function _getUserDetail(user: User) {
     return userDTO
 }
 
+function _validatePasswordStrength(password: string): boolean {
+    // 检查长度是否至少为8
+    if (password.length < 8) {
+        return false
+    }
+    // 检查是否包含至少一个字母
+    const hasLetter = /[a-zA-Z]/.test(password)
+    // 检查是否包含至少一个数字
+    const hasDigit = /\d/.test(password)
+    return hasLetter && hasDigit
+}
+
 export const userService = {
 
-    async setPassword(userDTO: UserDTO, oldPassword: string, newPassword: string): Promise<ServiceResult> {
-        // const user = await userRepository.getUserByUsername(userDTO.username)
-        // if (user === null) {
-        //     return {
-        //         code: ServiceStatusCode.Failure,
-        //         data: {},
-        //         message: '用户不存在'
-        //     }
-        // }
+    async setPassword(userDTO: UserDTO, oldPassword: string, newPassword: string) {
         if (oldPassword === newPassword) {
-            return {
-                code: ServiceStatusCode.Failure,
-                data: {},
-                message: '旧密码与新密码相同'
-            }
+            throw new CustomError('旧密码与新密码相同')
         }
         const isMatch = await this.checkPassword(userDTO, oldPassword)
         if (!isMatch) {
-            return {
-                code: ServiceStatusCode.Failure,
-                data: {},
-                message: '旧密码错误'
-            }
+            throw new CustomError('旧密码错误')
         }
-        if (!this.validatePasswordStrength(newPassword)) {
-            return {
-                code: ServiceStatusCode.Failure,
-                data: {},
-                message: '新密码强度过低'
-            }
+        if (!_validatePasswordStrength(newPassword)) {
+            throw new CustomError('新密码强度过低')
         }
         const newPasswordHash = await hash(newPassword, env.PASSWORD_HASH_ROUNDS)
         await userRepository.setPassword(userDTO.id, newPasswordHash)
-        return {
-            code: ServiceStatusCode.Success,
-            data: {},
-            message: 'success'
-        }
-
+        return true
     },
 
-    async checkPassword(userDTO: UserDTO, inputPassword: string): Promise<boolean> {
+    async checkPassword(userDTO: UserDTO, inputPassword: string) {
         const user = await userRepository.getUserByUsername(userDTO.username)
         if (user === null) {
             return false
@@ -91,168 +83,84 @@ export const userService = {
         return user.password ? await compare(inputPassword, user.password ?? '') : inputPassword === env.DEFAULT_USER_PASSWORD
     },
 
-    async setMobile(userDTO: UserDTO, newMobile: string): Promise<UserDTO> {
-
-        const userUpdated = await prisma.user.update({
-            where: {
-                id: userDTO.id
-            },
-            data: {
-                mobilePhone: newMobile
-            }
-        })
-        userDTO.mobile = newMobile
+    async setMobile(userDTO: UserDTO, phoneNumber: string, code: string) {
+        if (!mobileService.checkValidPhoneNumber(phoneNumber)) {
+            throw new CustomError('无效手机号')
+        }
+        if (await mobileService.checkExistingPhoneNumber(phoneNumber)) {
+            throw new CustomError('手机号已存在')
+        }
+        if (!await mobileService.cehckVerificationCode(phoneNumber, code)) {
+            throw new CustomError('验证码错误')
+        }
+        await userRepository.setMobile(userDTO.id, phoneNumber)
+        userDTO.mobile = phoneNumber
         return userDTO
     },
 
     async getUserDetailByUsername(username: string) {
         const user = await userRepository.getUserByUsername(username)
-        if (user === null) {
-            throw new UserNotFoundError()
-            // return {
-            //     code: ServiceStatusCode.Failure,
-            //     data: null,
-            //     message: 'User Not Found'
-            // }
-        }
-        const data = await _getUserDetail(user)
-        return {
-            code: ServiceStatusCode.Success,
-            data: data,
-            message: 'success'
-        }
+        const userDetail = await _getUserDetail(user)
+        return userDetail
     },
 
     async getUserDetailByMobile(mobile: string) {
         const user = await userRepository.getUserByMobile(mobile)
-        if (user === null) {
-            return {
-                code: ServiceStatusCode.Failure,
-                data: null,
-                message: 'User Not Found'
-            }
-        }
-        const data = await _getUserDetail(user)
-        return {
-            code: ServiceStatusCode.Success,
-            data: data,
-            message: 'success'
-        }
+        const userDetail = await _getUserDetail(user)
+        return userDetail
     },
 
     async getUserDetailByWxId(wxId: string) {
         const user = await userRepository.getUserByWxId(wxId)
-        if (user === null) {
-            return {
-                code: ServiceStatusCode.Failure,
-                data: null,
-                message: 'User Not Found'
-            }
-        }
-        const data = await _getUserDetail(user)
-        return {
-            code: ServiceStatusCode.Success,
-            data: data,
-            message: 'success'
-        }
+        const userDetail = await _getUserDetail(user)
+        return userDetail
     },
 
-    async searchOtherUserUnderOrg(orgCode: string, userDTO: UserDTO): Promise<ServiceResult> {
+    async searchOtherUsersByOrg(orgCode: string, userDTO: UserDTO) {
         const users = await userRepository.searchOtherUsersUnderOrg(userDTO.id, orgCode)
         const userDTOs = users.map(u => userMapper.toUserDTO(u))
-        return {
-            code: ServiceStatusCode.Success,
-            data: userDTOs,
-            message: 'success'
-        }
+        return userDTOs
     },
 
-    async searchUsersUnderOrg(orgCode: string, orgScope: string): Promise<ServiceResult> {
+    async searchUsersByOrg(orgCode: string, orgScope: string) {
         if (orgScope === 'direct') {
-            const users = await userRepository.searchUsersUnderOrgDirect(orgCode)
+            const users = await userRepository.searchUsersByOrgDirect(orgCode)
             const userDTOs = users.map(u => userMapper.toUserDTO(u))
-            return {
-                code: ServiceStatusCode.Success,
-                data: userDTOs,
-                message: 'success'
-            }
-        }
-        else if (orgScope == 'recursive') {
-            const users = await userRepository.searchUsersUnderOrgRecursive(orgCode)
-            const userDTOs = users.map(u => userMapper.toUserDTO(u))
-            return {
-                code: ServiceStatusCode.Success,
-                data: userDTOs,
-                message: 'success'
-            }
+            return userDTOs
         }
         else {
-            return {
-                code: ServiceStatusCode.Failure,
-                data: {},
-                message: 'Invalid OrgScope'
-            }
+            const users = await userRepository.searchUsersByOrgRecursive(orgCode)
+            const userDTOs = users.map(u => userMapper.toUserDTO(u))
+            return userDTOs
         }
     },
 
-    async searchUserByOrgRole(orgCode: string, roleCode: string, orgScope: string): Promise<ServiceResult> {
+    async searchUsersByOrgRole(orgCode: string, roleCode: string, orgScope: string) {
         if (orgScope === 'direct') {
             const users = await userRepository.searchUsersByOrgRoleDirect(orgCode, roleCode)
             const userDTOs = users.map(u => userMapper.toUserDTO(u))
-            return {
-                code: ServiceStatusCode.Success,
-                data: userDTOs,
-                message: 'success'
-            }
-        }
-        else if (orgScope == 'recursive') {
-            const users = await userRepository.searchUsersByOrgRoleRecursive(orgCode, roleCode)
-            const userDTOs = users.map(u => userMapper.toUserDTO(u))
-            return {
-                code: ServiceStatusCode.Success,
-                data: userDTOs,
-                message: 'success'
-            }
+            return userDTOs
         }
         else {
-            return {
-                code: ServiceStatusCode.Failure,
-                data: {},
-                message: 'Invalid OrgScope'
-            }
+            const users = await userRepository.searchUsersByOrgRoleRecursive(orgCode, roleCode)
+            const userDTOs = users.map(u => userMapper.toUserDTO(u))
+            return userDTOs
         }
-
-
     },
-    async searchUserByOrgPos(orgCode: string, roleCode: string, orgScope: string): Promise<ServiceResult> {
+
+    async searchUserByOrgPos(orgCode: string, roleCode: string, orgScope: string) {
         if (orgScope === 'direct') {
             const users = await userRepository.searchUsersByOrgPosDirect(orgCode, roleCode)
             const userDTOs = users.map(u => userMapper.toUserDTO(u))
-            return {
-                code: ServiceStatusCode.Success,
-                data: userDTOs,
-                message: 'success'
-            }
-        }
-        else if (orgScope == 'recursive') {
-            const users = await userRepository.searchUsersByOrgPosRecursive(orgCode, roleCode)
-            const userDTOs = users.map(u => userMapper.toUserDTO(u))
-            return {
-                code: ServiceStatusCode.Success,
-                data: userDTOs,
-                message: 'success'
-            }
+            return userDTOs
         }
         else {
-            return {
-                code: ServiceStatusCode.Failure,
-                data: {},
-                message: 'Invalid OrgScope'
-            }
+            const users = await userRepository.searchUsersByOrgPosRecursive(orgCode, roleCode)
+            const userDTOs = users.map(u => userMapper.toUserDTO(u))
+            return userDTOs
         }
-
-
     },
+
     async purveyorConcatRegister(username: string, mobile: string, name: string, orgCode: string) {
         const existingUser = await userRepository.getUserByMobile(mobile)
         const [pos, comp, org] = await Promise.all([
@@ -261,51 +169,24 @@ export const userService = {
             organizationRepository.getOrganizationByCode(orgCode)
         ])
         if (org === null) {
-            return {
-                code: ServiceStatusCode.Failure,
-                data: {},
-                message: '供应商未注册'
-            }
+            throw new CustomError('供应商尚未注册')
         }
         if (pos === null || comp === null) {
-            return {
-                code: ServiceStatusCode.Failure,
-                data: {},
-                message: '系统基本信息缺失'
-            }
+            throw new CustomError('系统基本信息缺失')
         }
         if (existingUser !== null) {
             const existingEmployment = await employmentRepository.getEmploymentsByUserOrgPos(existingUser.id, org.id, pos.id)
-
             if (existingEmployment === null) {
                 const employment = await employmentRepository.setEmployment(existingUser.id, pos.id, org.id, comp.id)
             }
         }
         else {
             const user = await userRepository.setUser(username, name, mobile, '外部用户')
-            const employment = await employmentRepository.setEmployment(user.id, pos.id, org.id, comp.id)
+            await employmentRepository.setEmployment(user.id, pos.id, org.id, comp.id)
         }
         if (env.NODE_ENV === 'production') {
             await mobileService.sendMessage(mobile, mobileService.getPurveyorWelcomeMessage(name))
         }
-        return {
-            code: ServiceStatusCode.Success,
-            data: {},
-            message: 'success'
-        }
+        return true
     },
-    validatePasswordStrength(password: string): boolean {
-        // 检查长度是否至少为8
-        if (password.length < 8) {
-            return false;
-        }
-
-        // 检查是否包含至少一个字母
-        const hasLetter = /[a-zA-Z]/.test(password);
-
-        // 检查是否包含至少一个数字
-        const hasDigit = /\d/.test(password);
-
-        return hasLetter && hasDigit;
-    }
 }

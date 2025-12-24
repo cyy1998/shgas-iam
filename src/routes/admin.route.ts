@@ -1,7 +1,8 @@
 import { prisma } from '../extensions'
 import { z, createRoute, OpenAPIHono } from '@hono/zod-openapi'
-import { makeResponse } from '../utils'
-import { createResponseSchema, ResponseSchema, UserOutSchema } from '../schema'
+import { makeResponse } from '../utils/response.utils'
+import { ResponseSchema, UserOutSchema } from '../schema'
+import { createResponseSchema } from '../utils/response.utils'
 
 const app = new OpenAPIHono()
 

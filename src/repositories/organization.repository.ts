@@ -38,6 +38,31 @@ export const organizationRepository = {
             }
         })
     },
+    async getOrgByRoleId(roleId: number) {
+        return await prisma.organization.findMany({
+            include: {
+                roles: {
+                    where: {
+                        roleId: roleId
+                    }
+                }
+            },
+            where: {
+                roles: {
+                    some: {
+                        roleId: roleId
+                    }
+                }
+            }
+        })
+    },
+    async getOrgIdsByIds(ids: number[]) {
+        return await prisma.organization.findMany({
+            select: {
+                id: true
+            }
+        })
+    },
     async getOrganizationByParent(parentId: number) {
         return await prisma.organization.findMany({
             where: {

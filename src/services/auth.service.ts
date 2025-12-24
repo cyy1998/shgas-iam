@@ -11,37 +11,28 @@ import type { UserDTO } from "../types/user.type"
 import axios from "axios"
 import type { User } from "../../generated/prisma"
 import { userService } from "./user.service"
-import { getTimestampDifference, hmacSha256 } from "../utils"
+import { hmacSha256 } from '../utils/encryption.utils'
+import { getTimestampDifference } from '../utils/common.utils'
 import { env } from "../config"
 import { weixinService } from "./weixin.service"
 import type { WeixinResponse } from "../types/wx.type"
 import { sleep } from "bun"
 import { HttpStatusCode } from "../constants/http.status"
+import { CustomError } from "../errors/CustomError"
+import { AuthzUnauthorizedError } from "../errors/AuthzUnauthorizedError"
 
-async function _login(user: UserDTO): Promise<ServiceResult> {
-    const { code, orcasSessionId, orcasId } = await _orcasLogin(user)
-    if (code !== ServiceStatusCode.Success) {
-        return {
-            code: ServiceStatusCode.Failure,
-            data: {},
-            message: 'Orcas登录失败'
-        }
-    }
+async function _login(user: UserDTO) {
+    const { orcasSessionId, orcasId } = await _orcasLogin(user)
     user.orcasId = orcasId
     const token = crypto.randomUUID()
     await redis.set(`session:${token}`, JSON.stringify(user), 'EX', env.REDIS_EXPIRE_TIME)
     return {
-        code: ServiceStatusCode.Success,
-        data: {
-            orcasSessionId: orcasSessionId,
-            token: token
-        },
-        message: 'success'
+        orcasSessionId: orcasSessionId,
+        token: token
     }
 }
 async function _orcasLogin(userDTO: UserDTO) {
     const orcasUri = env.ORCAS_URL
-    // console.log(orcasUri)
     const resp = await axios(orcasUri, {
         method: 'POST',
         data: {
@@ -51,17 +42,16 @@ async function _orcasLogin(userDTO: UserDTO) {
             mobile: userDTO.mobile ?? ''
         }
     })
-    // console.log(resp)
     if (resp.status != 200 || resp.data.code != 200 || !resp.headers["set-cookie"]) {
-        return {
-            code: ServiceStatusCode.Failure
-        }
+        throw new CustomError('Orcas登录失败')
     }
     const cookieStr = resp.headers["set-cookie"][1] ?? ''
     const match = cookieStr.match(/orcas_sso_sessionid=([^;]+)/)
-    const orcasSessionId = match ? match[1] : ''
+    const orcasSessionId = match ? match[1] : null
+    if (!orcasSessionId) {
+        throw new CustomError('Orcas登录失败')
+    }
     return {
-        code: ServiceStatusCode.Success,
         orcasSessionId: orcasSessionId,
         orcasId: resp.data.data.id
     }
@@ -69,12 +59,12 @@ async function _orcasLogin(userDTO: UserDTO) {
 async function _wxRetry(code: string, retryTimes: number = 0, maxTimes: number = 5) {
     if (retryTimes > maxTimes) {
         await redis.del(`wx-code:${code}`)
-        throw Error('微信登录超时')
+        throw new CustomError('微信登录超时')
     }
     await sleep(200)
     const codeCache = await redis.get(`wx-code:${code}`)
     if (codeCache === null) {
-        throw Error('微信登录失败')
+        throw new CustomError('微信登录超时')
     }
     if (codeCache === 'Processing') {
         return _wxRetry(code, retryTimes + 1)
@@ -86,75 +76,40 @@ async function _wxRetry(code: string, retryTimes: number = 0, maxTimes: number =
 }
 
 export const authService = {
-    async loginPassword(username: string, password: string): Promise<ServiceResult> {
-        const userRes = await userService.getUserDetailByUsername(username)
-        if (userRes.data === null) {
-            return {
-                code: ServiceStatusCode.UserNotExisting,
-                data: {},
-                message: '用户不存在'
-            }
-        }
-        const user = userRes.data
+    async loginPassword(username: string, password: string) {
+        const user = await userService.getUserDetailByUsername(username)
         if (user.userType !== '正式员工') {
-            return {
-                code: ServiceStatusCode.UserNotExisting,
-                data: {},
-                message: '用户类别不支持密码登录'
-            }
+            throw new CustomError('用户类别不支持密码登录')
         }
         const isMatch = await userService.checkPassword(user, password)
         if (!isMatch) {
-            return {
-                code: ServiceStatusCode.WrongPassword,
-                data: {},
-                message: '密码错误'
-            }
+            throw new CustomError('密码错误')
         }
         return await _login(user)
     },
-    async loginOA(loginid: string, ts: string, token: string): Promise<ServiceResult> {
-        const userRes = await userService.getUserDetailByUsername(loginid)
-        if (userRes.data === null) {
-            return {
-                code: ServiceStatusCode.UserNotExisting,
-                data: {},
-                message: '用户不存在'
-            }
+
+    async loginOA(loginid: string, ts: string, token: string) {
+        const user = await userService.getUserDetailByUsername(loginid)
+        if (user.userType !== '正式员工') {
+            throw new CustomError('用户类别不支持密码登录')
         }
-        return await _login(userRes.data)
+        return await _login(user)
     },
-    async loginMobile(mobile: string, code: string): Promise<ServiceResult> {
+
+    async loginMobile(mobile: string, code: string) {
         if (code === env.MAGIC_CODE) {
-            const userRes = await userService.getUserDetailByMobile(mobile)
-            if (userRes.data === null) {
-                return {
-                    code: ServiceStatusCode.UserNotExisting,
-                    data: {},
-                    message: '用户不存在'
-                }
-            }
-            return await _login(userRes.data)
+            const user = await userService.getUserDetailByMobile(mobile)
+            return await _login(user)
         }
         const storageCode = await redis.get(`mobile-code:${mobile}`)
         if (storageCode !== code) {
-            return {
-                code: ServiceStatusCode.Failure,
-                data: {},
-                message: '验证码错误'
-            }
+            throw new CustomError('验证码错误')
         }
-        const userRes = await userService.getUserDetailByMobile(mobile)
-        if (userRes.data === null) {
-            return {
-                code: ServiceStatusCode.UserNotExisting,
-                data: {},
-                message: '用户不存在'
-            }
-        }
-        return await _login(userRes.data)
+        const user = await userService.getUserDetailByMobile(mobile)
+        return await _login(user)
     },
-    async loginWX(code: string): Promise<ServiceResult> {
+
+    async loginWX(code: string) {
         const codeCache = await redis.get(`wx-code:${code}`)
         if (codeCache !== null) {
             return _wxRetry(code)
@@ -173,72 +128,34 @@ export const authService = {
         )
         const body = await resp.json() as WeixinResponse
         const wxId = body.userid
-        const userRes = await userService.getUserDetailByWxId(wxId)
-        if (userRes.data === null) {
-            return {
-                code: ServiceStatusCode.UserNotExisting,
-                data: {},
-                message: '用户不存在'
-            }
-        }
-        const res = await _login(userRes.data)
-        await redis.set(`wx-code:${code}`, JSON.stringify(userRes.data), 'EX', 600)
+        const user = await userService.getUserDetailByWxId(wxId)
+        const res = await _login(user)
+        await redis.set(`wx-code:${code}`, JSON.stringify(user), 'EX', 600)
         return res
     },
-    async logout(token: string | undefined): Promise<ServiceResult> {
+    async logout(token: string | undefined) {
         if (!token) {
-            return {
-                code: ServiceStatusCode.Unauthorized,
-                data: {},
-                message: '用户不存在'
-            }
+            throw new CustomError('用户不存在')
         }
         const result = await redis.del(`session:${token}`)
         if (result !== 1) {
-            return {
-                code: ServiceStatusCode.Failure,
-                data: {},
-                message: '服务器内部错误'
-            }
+            throw new CustomError('服务器内部错误')
         }
-        return {
-            code: ServiceStatusCode.Success,
-            data: {},
-            message: 'success'
-        }
-
+        return true
     },
-    async authz(sessionId: string | null): Promise<ServiceResult> {
+    async authz(sessionId: string | null) {
         if (!sessionId) {
-            return {
-                code: ServiceStatusCode.Unauthorized,
-                httpCode: HttpStatusCode.Unauthorized,
-                data: {},
-                message: 'Unauthorized'
-            }
+            throw new AuthzUnauthorizedError('Session缺失')
         }
         const userString = await redis.get(`session:${sessionId}`)
         if (!userString) {
-            return {
-                code: ServiceStatusCode.Unauthorized,
-                httpCode: HttpStatusCode.Unauthorized,
-                data: {},
-                message: 'Unauthorized'
-            }
+            throw new AuthzUnauthorizedError('非法Session')
         }
         const userInfo = Buffer.from(userString, 'utf8').toString('base64')
-        return {
-            code: ServiceStatusCode.Success,
-            data: userInfo,
-            message: 'Allow'
-        }
+        return userInfo
     },
-    async updateSession(sessionId: string, userDTO: UserDTO): Promise<ServiceResult> {
+    async updateSession(sessionId: string, userDTO: UserDTO) {
         await redis.set(`session:${sessionId}`, JSON.stringify(userDTO), 'EX', env.REDIS_EXPIRE_TIME)
-        return {
-            code: ServiceStatusCode.Success,
-            data: {},
-            message: 'success'
-        }
+        return true
     },
 }

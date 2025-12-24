@@ -1,29 +1,50 @@
-import { ServiceStatusCode } from "../constants/service.status";
+import type { Employment } from "../../generated/prisma";
 import { employmentMapper } from "../mapper/employment.mapper";
 import { employmentRepository } from "../repositories/employment.repository";
-import type { ServiceResult } from "../types/service.type";
-import type { UserDTO } from "../types/user.type";
+import { mergeAndDedupe } from "../utils/common.utils";
+import { privilegeService } from "./privilege.service";
+import { roleService } from "./role.service";
+import { userService } from "./user.service";
+
+async function _getEmploymentsDetail(username: string) {
+    const employments = await employmentRepository.getEmploymentsByUsername(username)
+    const res = []
+    for (const e of employments) {
+        const [rolesFromDepts, rolesFromPosition, rolesFromPosOrg, rolesFromEmployment] = await Promise.all([
+            roleService.getRolesByOrganization(e.deptId),
+            roleService.getRolesByPosition(e.posId),
+            roleService.getRolesByOrgPosition(e.posId, e.deptId),
+            roleService.getRolesByEmployment(e.id)
+        ])
+        // const rolesFromDepts = await roleService.getRolesByOrganization(e.deptId)
+        // const rolesFromPosition = await roleService.getRolesByPosition(e.posId)
+        // const rolesFromPosOrg = await roleService.getRolesByOrgPosition(e.posId, e.deptId)
+        // const rolesFromEmployment = await roleService.getRolesByEmployment(e.id)
+        const rolesCombined = [...rolesFromDepts, ...rolesFromPosition, ...rolesFromPosOrg, ...rolesFromEmployment]
+        const roles = rolesCombined.filter((item, index, self) => index === self.findIndex((t) => t.roleId === item.roleId))
+        const privileges = await privilegeService.getPrivilegesByRoles(roles.map(r => r.roleId))
+        res.push({
+            employment: employmentMapper.toEmploymentDTO(e),
+            privileges: privileges.map(p => p.privCode)
+        })
+    }
+    return res
+}
 
 export const employmentService = {
-    async getEmploymentsByUserAndPrivilege(username: string, privCode: string, codeType: string): Promise<ServiceResult> {
-        let privCondition = null
+    async getEmploymentsByUserAndPrivilege(username: string, privCode: string, codeType: string) {
+        const eList = await _getEmploymentsDetail(username)
         if (codeType === 'full') {
-            privCondition = privCode
-        } else if (codeType === 'prefix') {
-            privCondition = {
-                startsWith: privCode
-            }
-        } else {
-            privCondition = {
-                endsWith: privCode
-            }
+            const filtedEList = eList.filter(e => e.privileges.includes(privCode))
+            return filtedEList
         }
-        const employments = await employmentRepository.getEmploymentsByUserAndPrivilege(username, privCondition)
-        const employmentDTOs = employments.map(e => employmentMapper.toEmploymentDTO(e))
-        return {
-            code: ServiceStatusCode.Success,
-            data: employmentDTOs,
-            message: 'success'
+        else if (codeType === 'prefix') {
+            const filtedEList = eList.filter(e => e.privileges.some(s => s.startsWith(privCode)))
+            return filtedEList
+        }
+        else {
+            const filtedEList = eList.filter(e => e.privileges.some(s => s.endsWith(privCode)))
+            return filtedEList
         }
     }
 

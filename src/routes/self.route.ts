@@ -1,6 +1,7 @@
-import { makeResponse } from '../utils'
+import { makeResponse, success } from '../utils/response.utils'
 import { z, createRoute, OpenAPIHono } from '@hono/zod-openapi'
-import { ResponseSchema, createResponseSchema, OrganizationInputSchema, UserOutSchema } from '../schema'
+import { ResponseSchema, OrganizationInputSchema, UserOutSchema } from '../schema'
+import { createResponseSchema } from '../utils/response.utils'
 import { userService } from '../services/user.service'
 import { mobileService } from '../services/mobile.service'
 import { getCookie } from 'hono/cookie'
@@ -36,7 +37,7 @@ app.openapi(
         },
     }),
     async (c) => {
-        return c.json(makeResponse(200, JSON.parse(Buffer.from(c.req.header('X-User-Info') ?? '', 'base64').toString('utf8'))))
+        return c.json(success(JSON.parse(Buffer.from(c.req.header('X-User-Info') ?? '', 'base64').toString('utf8'))))
     }
 )
 
@@ -75,8 +76,8 @@ app.openapi(
     async (c) => {
         const userDTO: UserDTO = JSON.parse(Buffer.from(c.req.header('X-User-Info') ?? '', 'base64').toString('utf8'))
         const { oldPassword, newPassword } = c.req.valid('json')
-        const res = await userService.setPassword(userDTO, oldPassword, newPassword)
-        return c.json(makeResponse(res.code, res.data, res.message))
+        const data = await userService.setPassword(userDTO, oldPassword, newPassword)
+        return c.json(success(data))
     }
 )
 
@@ -113,11 +114,8 @@ app.openapi(
     }),
     async (c) => {
         const { phoneNumber } = c.req.valid('json')
-        if (!mobileService.checkValidPhoneNumber(phoneNumber)) {
-            return c.json(makeResponse(400, {}, '无效手机号'))
-        }
-        const res = await mobileService.sendVerificationCode(phoneNumber)
-        return c.json(makeResponse(res.code, res.data, res.message))
+        const data = await mobileService.sendCodeWithOutExistingPhone(phoneNumber)
+        return c.json(success(data))
     }
 )
 
@@ -156,19 +154,10 @@ app.openapi(
     async (c) => {
         const { phoneNumber, code } = c.req.valid('json')
         const sessionId = getCookie(c, 'session') as string
-        if (!mobileService.checkValidPhoneNumber(phoneNumber)) {
-            return c.json(makeResponse(ServiceStatusCode.Failure, {}, '无效手机号'))
-        }
-        if (await mobileService.checkExistingPhoneNumber(phoneNumber)) {
-            return c.json(makeResponse(ServiceStatusCode.Failure, {}, '手机号已存在'))
-        }
-        if (!await mobileService.cehckVerificationCode(phoneNumber, code)) {
-            return c.json(makeResponse(ServiceStatusCode.Failure, {}, '验证码错误'))
-        }
         const userDTO: UserDTO = JSON.parse(Buffer.from(c.req.header('X-User-Info') ?? '', 'base64').toString('utf8'))
-        const newUserDTO = await userService.setMobile(userDTO, phoneNumber)
-        const res = await authService.updateSession(sessionId, newUserDTO)
-        return c.json(makeResponse(res.code, res.data, res.message))
+        const newUserDTO = await userService.setMobile(userDTO, phoneNumber, code)
+        const data = await authService.updateSession(sessionId, newUserDTO)
+        return c.json(success(data))
     }
 )
 
@@ -194,8 +183,8 @@ app.openapi(
     async (c) => {
         const user: UserDTO = JSON.parse(Buffer.from(c.req.header('X-User-Info') ?? '', 'base64').toString('utf8'))
         const { orgCode } = c.req.valid('query')
-        const res = await userService.searchOtherUserUnderOrg(orgCode, user)
-        return c.json(makeResponse(res.code, res.data, res.message))
+        const data = await userService.searchOtherUsersByOrg(orgCode, user)
+        return c.json(success(data))
     }
 )
 
@@ -234,8 +223,8 @@ app.openapi(
     async (c) => {
         const { privCode, codeType } = c.req.valid('query')
         const user: UserDTO = JSON.parse(Buffer.from(c.req.header('X-User-Info') ?? '', 'base64').toString('utf8'))
-        const res = await employmentService.getEmploymentsByUserAndPrivilege(user.username, privCode, codeType)
-        return c.json(makeResponse(res.code, res.data, res.message))
+        const data = await employmentService.getEmploymentsByUserAndPrivilege(user.username, privCode, codeType)
+        return c.json(success(data))
     })
 
 app.openapi(
@@ -271,8 +260,8 @@ app.openapi(
     }),
     async (c) => {
         const { orgLevel, comCode } = c.req.valid('query')
-        const res = await organizationService.searchFormalOrganizations(comCode, orgLevel)
-        return c.json(makeResponse(res.code, res.data, res.message))
+        const data = await organizationService.searchFormalOrganizations(comCode, orgLevel)
+        return c.json(success(data))
     }
 )
 
@@ -305,8 +294,8 @@ app.openapi(
         },
     }),
     async (c) => {
-        const res = await organizationService.searchFormalOrganizations('', 1)
-        return c.json(makeResponse(res.code, res.data, res.message))
+        const data = await organizationService.searchFormalOrganizations('', 1)
+        return c.json(success(data))
     }
 )
 

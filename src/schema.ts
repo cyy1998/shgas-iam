@@ -6,13 +6,6 @@ export const ResponseSchema = z.object({
     message: z.string().openapi({ example: 'success' })
 }).openapi('Response')
 
-export const createResponseSchema = <T extends z.ZodTypeAny>(dataSchema: T) =>
-    z.object({
-        code: z.int().openapi({ example: 200 }),
-        message: z.string().openapi({ example: 'success' }),
-        data: dataSchema, // 这里是“抽象”的，由调用者决定具体结构
-    })
-
 export const OrganizationInputSchema = z.object({
     orgCode: z.string().openapi({ example: 'SR23' }),
 }).openapi('Username')

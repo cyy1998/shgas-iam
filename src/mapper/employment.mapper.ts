@@ -1,4 +1,4 @@
-import { EmploymentDTO, EmploymentEntity } from "../types/employment.type";
+import type { EmploymentDTO, EmploymentEntity } from "../types/employment.type";
 
 export const employmentMapper = {
     toEmploymentDTO(employment: EmploymentEntity): EmploymentDTO {

@@ -1,6 +1,7 @@
 import { z, createRoute, OpenAPIHono } from '@hono/zod-openapi'
-import { makeResponse } from '../utils'
-import { ResponseSchema, createResponseSchema, UserOutSchema } from '../schema'
+import { makeResponse, success } from '../utils/response.utils'
+import { ResponseSchema, UserOutSchema } from '../schema'
+import { createResponseSchema } from '../utils/response.utils'
 import { userService } from '../services/user.service'
 import { organizationService } from '../services/organization.service'
 import { employmentService } from '../services/employment.service'
@@ -34,8 +35,8 @@ app.openapi(
     }),
     async (c) => {
         const { username } = c.req.valid('query')
-        const res = await userService.getUserDetailByUsername(username)
-        return c.json(makeResponse(res.code, res.data, res.message))
+        const data = await userService.getUserDetailByUsername(username)
+        return c.json(success(data))
     }
 )
 
@@ -69,8 +70,8 @@ app.openapi(
     }),
     async (c) => {
         const { posCode, orgCode, orgScope } = c.req.valid('query')
-        const res = await userService.searchUserByOrgPos(orgCode, posCode, orgScope)
-        return c.json(makeResponse(res.code, res.data, res.message))
+        const data = await userService.searchUserByOrgPos(orgCode, posCode, orgScope)
+        return c.json(success(data))
     }
 )
 
@@ -104,8 +105,8 @@ app.openapi(
     }),
     async (c) => {
         const { roleCode, orgCode, orgScope, resourceCode } = c.req.valid('query')
-        const res = await userService.searchUserByOrgRole(orgCode, roleCode, orgScope)
-        return c.json(makeResponse(res.code, res.data, res.message))
+        const data = await userService.searchUsersByOrgRole(orgCode, roleCode, orgScope)
+        return c.json(success(data))
     }
 )
 
@@ -137,8 +138,8 @@ app.openapi(
     }),
     async (c) => {
         const { orgCode, orgScope } = c.req.valid('query')
-        const res = await userService.searchUsersUnderOrg(orgCode, orgScope)
-        return c.json(makeResponse(res.code, res.data, res.message))
+        const data = await userService.searchUsersByOrg(orgCode, orgScope)
+        return c.json(success(data))
     }
 )
 
@@ -176,8 +177,8 @@ app.openapi(
     }),
     async (c) => {
         const { orgCode, orgName } = c.req.valid('json')
-        const res = await organizationService.purveyorRegister(orgCode, orgName)
-        return c.json(makeResponse(res.code, res.data, res.message))
+        await organizationService.purveyorRegister(orgCode, orgName)
+        return c.json(success())
     }
 )
 
@@ -218,7 +219,7 @@ app.openapi(
     async (c) => {
         const { username, mobile, name, orgCode } = c.req.valid('json')
         const res = await userService.purveyorConcatRegister(username, mobile, name, orgCode)
-        return c.json(makeResponse(res.code, res.data, res.message))
+        return c.json(success())
     }
 )
 
@@ -260,8 +261,8 @@ app.openapi(
     }),
     async (c) => {
         const { username, privCode } = c.req.valid('query')
-        const res = await employmentService.getEmploymentsByUserAndPrivilege(username, privCode, 'full')
-        return c.json(makeResponse(res.code, res.data, res.message))
+        const data = await employmentService.getEmploymentsByUserAndPrivilege(username, privCode, 'full')
+        return c.json(success(data))
     }
 )
 

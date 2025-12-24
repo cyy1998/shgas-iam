@@ -1,11 +1,8 @@
-import type { Organization, Position } from "../../generated/prisma"
 import { roleMapper } from "../mapper/role.mapper"
 import { organizationRepository } from "../repositories/organization.repository"
-import { positionRepository } from "../repositories/position.repository"
 import { posorgRepository } from "../repositories/posorg.repository"
 import { roleRepository } from "../repositories/role.repository"
-import type { EmploymentDTO } from "../types/employment.type"
-import { mergeAndDedupe } from "../utils"
+import { mergeAndDedupe } from '../utils/common.utils'
 
 export const roleService = {
     async getRolesByOrganization(orgId: number) {
@@ -20,15 +17,10 @@ export const roleService = {
         return mergeAndDedupe(rolesAncestor, rolesDirect, 'roleId')
     },
     async getRolesByPosition(posId: number) {
-        // const pos = await positionRepository.getPositionById(posId)
-        // if (pos === null) {
-        //     return []
-        // }
         const roles = (await roleRepository.getRolesByPosition(posId)).map(r => roleMapper.toRoleDTO(r))
         return roles
     },
     async getRolesByOrgPosition(posId: number, orgId: number) {
-        // const pos = await positionRepository.getPositionById(posId)
         const posOrg = await posorgRepository.getPosOrgById(posId, orgId)
         if (posOrg === null) {
             return []

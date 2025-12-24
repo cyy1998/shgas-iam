@@ -33,6 +33,16 @@ export const userRepository = {
             }
         })
     },
+    async setMobile(userId: number, phoneNumber: string) {
+        return await prisma.user.update({
+            where: {
+                id: userId
+            },
+            data: {
+                mobilePhone: phoneNumber
+            }
+        })
+    },
     async setUser(username: string, name: string, mobile: string, userType: string) {
         return await prisma.user.create({
             data: {
@@ -61,7 +71,7 @@ export const userRepository = {
             }
         })
     },
-    async searchUsersUnderOrgDirect(orgCode: string) {
+    async searchUsersByOrgDirect(orgCode: string) {
         return await prisma.user.findMany({
             where: {
                 employments: {
@@ -74,7 +84,7 @@ export const userRepository = {
             }
         })
     },
-    async searchUsersUnderOrgRecursive(orgCode: string) {
+    async searchUsersByOrgRecursive(orgCode: string) {
         return await prisma.user.findMany({
             where: {
                 employments: {

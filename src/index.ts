@@ -6,9 +6,10 @@ import { serveStatic } from 'hono/bun'
 import { OpenAPIHono } from '@hono/zod-openapi'
 import { logger } from 'hono/logger'
 import { env } from './config'
-import { makeResponse } from './utils'
+import { makeResponse } from './utils/response.utils'
 import { ServiceStatusCode } from './constants/service.status'
 import { CustomError } from './errors/CustomError'
+import { AuthzError } from './errors/AuthzError'
 
 const app = new OpenAPIHono()
 const port = env.PORT
@@ -20,15 +21,7 @@ app.use(logger(
     console.log(`[INFO] ${new Date().toISOString()} - ${str}`, ...args)
   }
 ))
-app.onError((err, c) => {
-  console.error(err)
-  if (err instanceof CustomError) {
-    return c.json(makeResponse(err.code, null, err.message))
-  }
-  else {
-    return c.json(makeResponse(ServiceStatusCode.Failure, null, '服务器内部错误'))
-  }
-})
+
 
 app.route('/auth', auth)
 app.route('/self', self)
@@ -71,6 +64,19 @@ app.get('/doc/swagger', (c) => {
 </html>
   `
   return c.html(html)
+})
+
+app.onError((err, c) => {
+  console.error(err)
+  if (err instanceof CustomError) {
+    return c.json(makeResponse(err.code, null, err.message))
+  }
+  else if (err instanceof AuthzError) {
+    return c.json(makeResponse(err.code, null, err.message), err.httpCode)
+  }
+  else {
+    return c.json(makeResponse(ServiceStatusCode.Failure, null, '服务器内部错误'))
+  }
 })
 
 export default {
