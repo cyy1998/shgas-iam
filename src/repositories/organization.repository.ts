@@ -4,8 +4,13 @@ export const organizationRepository = {
     async searchFormalOrganizations(orgCode: string, orgLevel: number) {
         return await prisma.organization.findMany({
             where: {
-                orgCode: {
-                    startsWith: orgCode
+
+                descendantClosures: {
+                    some: {
+                        ancestor: {
+                            orgCode: orgCode
+                        }
+                    }
                 },
                 orgType: {
                     notIn: ['虚拟组织', '外部组织']
@@ -17,21 +22,25 @@ export const organizationRepository = {
     async searchOrganizations(orgCode: string, orgLevel: number) {
         return await prisma.organization.findMany({
             where: {
-                orgCode: {
-                    startsWith: orgCode
+                descendantClosures: {
+                    some: {
+                        ancestor: {
+                            orgCode: orgCode
+                        }
+                    }
                 },
                 level: orgLevel
             }
         })
     },
-    async getOrganizationByCode(orgCode: string) {
+    async getOrgByCode(orgCode: string) {
         return await prisma.organization.findFirst({
             where: {
                 orgCode: orgCode,
             }
         })
     },
-    async getOrganizationById(id: number) {
+    async getOrgById(id: number) {
         return await prisma.organization.findFirst({
             where: {
                 id: id,

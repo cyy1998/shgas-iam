@@ -48,12 +48,34 @@ model Organization {
   createTime       DateTime @default(now()) @map("create_time")
   updateTime       DateTime @default(now()) @updatedAt @map("update_time")
 
-  deptEmployments   Employment[]        @relation("employment_dept")
-  compEmployments   Employment[]        @relation("employment_comp")
+  deptEmployments   Employment[]          @relation("employment_dept")
+  compEmployments   Employment[]          @relation("employment_comp")
   roles             OrganizationRole[]
   posOrgComposition PosOrgComposition[]
+  // 反向关系：该组织作为祖先时的闭包记录
+  ancestorClosures  OrganizationClosure[] @relation("org_ancestor")
+
+  // 反向关系：该组织作为后代时的闭包记录
+  descendantClosures OrganizationClosure[] @relation("org_descendant")
 
   @@map("organization")
+}
+
+model OrganizationClosure {
+  id           Int @id @default(autoincrement())
+  ancestorId   Int @map("ancestor_id") // 祖先组织 ID
+  descendantId Int @map("descendant_id") // 后代组织 ID
+  depth        Int @map("depth") // 从 ancestor 到 descendant 的层级深度（0 表示自己）
+
+  // 关联到祖先组织
+  ancestor   Organization @relation("org_ancestor", fields: [ancestorId], references: [id])
+  // 关联到后代组织
+  descendant Organization @relation("org_descendant", fields: [descendantId], references: [id])
+
+  @@unique([ancestorId, descendantId])
+  @@index([ancestorId])
+  @@index([descendantId])
+  @@map("organization_closure")
 }
 
 model Position {

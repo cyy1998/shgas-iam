@@ -67,14 +67,15 @@ app.get('/doc/swagger', (c) => {
 })
 
 app.onError((err, c) => {
-  console.error(err)
   if (err instanceof CustomError) {
+    console.error(err)
     return c.json(makeResponse(err.code, null, err.message))
   }
   else if (err instanceof AuthzError) {
     return c.json(makeResponse(err.code, null, err.message), err.httpCode)
   }
   else {
+    console.error(err)
     return c.json(makeResponse(ServiceStatusCode.Failure, null, '服务器内部错误'))
   }
 })

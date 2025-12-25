@@ -53,24 +53,7 @@ export const userRepository = {
             }
         })
     },
-    async getOtherUsersByOrg(userId: number, orgCode: string) {
-        return await prisma.user.findMany({
-            where: {
-                employments: {
-                    some: {
-                        deptartment: {
-                            orgCode: {
-                                startsWith: orgCode
-                            }
-                        }
-                    }
-                },
-                NOT: {
-                    id: userId
-                }
-            }
-        })
-    },
+
     async getUsersByOrg(orgCode: string) {
         return await prisma.user.findMany({
             where: {
@@ -90,11 +73,37 @@ export const userRepository = {
                 employments: {
                     some: {
                         deptartment: {
-                            orgCode: {
-                                startsWith: orgCode
+                            descendantClosures: {
+                                some: {
+                                    ancestor: {
+                                        orgCode: orgCode
+                                    }
+                                }
                             }
                         }
                     }
+                }
+            }
+        })
+    },
+    async getOtherUsersByOrgAndAllSub(userId: number, orgCode: string) {
+        return await prisma.user.findMany({
+            where: {
+                employments: {
+                    some: {
+                        deptartment: {
+                            descendantClosures: {
+                                some: {
+                                    ancestor: {
+                                        orgCode: orgCode
+                                    }
+                                }
+                            }
+                        }
+                    }
+                },
+                NOT: {
+                    id: userId
                 }
             }
         })
@@ -183,8 +192,12 @@ export const userRepository = {
                         AND: [
                             {
                                 deptartment: {
-                                    orgCode: {
-                                        startsWith: orgCode
+                                    descendantClosures: {
+                                        some: {
+                                            ancestor: {
+                                                orgCode: orgCode
+                                            }
+                                        }
                                     }
                                 },
                                 status: EmploymentStatus.Enable
@@ -224,24 +237,46 @@ export const userRepository = {
                                     },
                                     {
                                         deptartment: {
-                                            roles: {
+                                            descendantClosures: {
                                                 some: {
-                                                    role: {
-                                                        roleCode: roleCode
-                                                    }
+                                                    OR: [
+                                                        {
+                                                            depth: 0,
+                                                            ancestor: {
+                                                                roles: {
+                                                                    some: {
+                                                                        role: {
+                                                                            roleCode: roleCode
+                                                                        }
+                                                                    }
+                                                                }
+                                                            }
+                                                        },
+                                                        {
+                                                            depth: {
+                                                                gt: 0
+                                                            },
+                                                            ancestor: {
+                                                                roles: {
+                                                                    some: {
+                                                                        isAllSub: true,
+                                                                        role: {
+                                                                            roleCode: roleCode
+                                                                        }
+                                                                    }
+                                                                }
+                                                            }
+                                                        }
+                                                    ]
                                                 }
                                             }
-                                        }
-                                    },
-                                    {
-                                        company: {
-                                            roles: {
-                                                some: {
-                                                    role: {
-                                                        roleCode: roleCode
-                                                    }
-                                                }
-                                            }
+                                            // roles: {
+                                            //     some: {
+                                            //         role: {
+                                            //             roleCode: roleCode
+                                            //         }
+                                            //     }
+                                            // }
                                         }
                                     }
                                 ]
@@ -274,8 +309,12 @@ export const userRepository = {
                 employments: {
                     some: {
                         deptartment: {
-                            orgCode: {
-                                startsWith: orgCode
+                            descendantClosures: {
+                                some: {
+                                    ancestor: {
+                                        orgCode: orgCode
+                                    }
+                                }
                             }
                         },
                         position: {

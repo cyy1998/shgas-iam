@@ -152,6 +152,13 @@ exports.Prisma.OrganizationScalarFieldEnum = {
   updateTime: 'updateTime'
 };
 
+exports.Prisma.OrganizationClosureScalarFieldEnum = {
+  id: 'id',
+  ancestorId: 'ancestorId',
+  descendantId: 'descendantId',
+  depth: 'depth'
+};
+
 exports.Prisma.PositionScalarFieldEnum = {
   id: 'id',
   posCode: 'posCode',
@@ -372,6 +379,7 @@ exports.Prisma.DelegationDetailOrderByRelevanceFieldEnum = {
 exports.Prisma.ModelName = {
   User: 'User',
   Organization: 'Organization',
+  OrganizationClosure: 'OrganizationClosure',
   Position: 'Position',
   PosOrgComposition: 'PosOrgComposition',
   Employment: 'Employment',

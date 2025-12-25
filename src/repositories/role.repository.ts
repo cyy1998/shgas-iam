@@ -23,26 +23,56 @@ export const roleRepository = {
                     {
                         organizations: {
                             some: {
-                                organization: {
-                                    OR: [
-                                        {
+                                OR: [
+                                    {
+                                        isAllSub: false,
+                                        organization: {
                                             deptEmployments: {
                                                 some: {
                                                     userId: userId,
                                                     status: EmploymentStatus.Enable
                                                 }
                                             }
-                                        },
-                                        {
-                                            compEmployments: {
+                                        }
+                                    },
+                                    {
+                                        isAllSub: true,
+                                        organization: {
+                                            ancestorClosures: {
                                                 some: {
-                                                    userId: userId,
-                                                    status: EmploymentStatus.Enable
+                                                    descendant: {
+                                                        deptEmployments: {
+                                                            some: {
+                                                                userId: userId,
+                                                                status: EmploymentStatus.Enable
+                                                            }
+                                                        }
+                                                    }
                                                 }
                                             }
-                                        },
-                                    ]
-                                }
+                                        }
+                                    }
+                                ]
+                                // organization: {
+                                //     OR: [
+                                //         {
+                                //             deptEmployments: {
+                                //                 some: {
+                                //                     userId: userId,
+                                //                     status: EmploymentStatus.Enable
+                                //                 }
+                                //             }
+                                //         },
+                                //         {
+                                //             compEmployments: {
+                                //                 some: {
+                                //                     userId: userId,
+                                //                     status: EmploymentStatus.Enable
+                                //                 }
+                                //             }
+                                //         },
+                                //     ]
+                                // }
 
                             }
                         }

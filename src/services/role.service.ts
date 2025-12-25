@@ -6,7 +6,7 @@ import { mergeAndDedupe } from '../utils/common.utils'
 
 export const roleService = {
     async getRolesByOrganization(orgId: number) {
-        const org = await organizationRepository.getOrganizationById(orgId)
+        const org = await organizationRepository.getOrgById(orgId)
         if (org === null) {
             return []
         }
@@ -30,6 +30,10 @@ export const roleService = {
     },
     async getRolesByEmployment(employmentId: number) {
         const roles = (await roleRepository.getRolesByEmployment(employmentId)).map(r => roleMapper.toRoleDTO(r))
+        return roles
+    },
+    async getRolesByUserId(userId: number) {
+        const roles = (await roleRepository.getRolesByUserId(userId)).map(r => roleMapper.toRoleDTO(r))
         return roles
     }
 }

@@ -23,16 +23,17 @@ async function _getUserDetail(user: User | null) {
     const employments = await employmentRepository.getEmploymentsByUserId(userDTO.id)
 
     userDTO.positions = employments.map(e => employmentMapper.toEmploymentDTO(e))
-    const deptIds = employments.map(e => e.deptId)
-    const posIds = employments.map(e => e.posId)
-    const posDeptIds = employments.map(e => { return { posId: e.posId, orgId: e.deptId } })
+    // const deptIds = employments.map(e => e.deptId)
+    // const posIds = employments.map(e => e.posId)
+    // const posDeptIds = employments.map(e => { return { posId: e.posId, orgId: e.deptId } })
 
-    const rolesFromDepts = await Promise.all(deptIds.map(e => roleService.getRolesByOrganization(e)))
-    const rolesFromPosition = await Promise.all(posIds.map(e => roleService.getRolesByPosition(e)))
-    const rolesFromPosOrg = await Promise.all(posDeptIds.map(e => roleService.getRolesByOrgPosition(e.posId, e.orgId)))
-    const rolesFromEmployment = await Promise.all(employments.map(e => roleService.getRolesByEmployment(e.id)))
-    const rolesCombined = [...rolesFromDepts, ...rolesFromPosition, ...rolesFromPosOrg, ...rolesFromEmployment]
-    const roles = rolesCombined.reduce((acc, cur) => mergeAndDedupe(acc, cur, 'roleId'), [])
+    // const rolesFromDepts = await Promise.all(deptIds.map(e => roleService.getRolesByOrganization(e)))
+    // const rolesFromPosition = await Promise.all(posIds.map(e => roleService.getRolesByPosition(e)))
+    // const rolesFromPosOrg = await Promise.all(posDeptIds.map(e => roleService.getRolesByOrgPosition(e.posId, e.orgId)))
+    // const rolesFromEmployment = await Promise.all(employments.map(e => roleService.getRolesByEmployment(e.id)))
+    // const rolesCombined = [...rolesFromDepts, ...rolesFromPosition, ...rolesFromPosOrg, ...rolesFromEmployment]
+    // const roles = rolesCombined.reduce((acc, cur) => mergeAndDedupe(acc, cur, 'roleId'), [])
+    const roles = await roleService.getRolesByUserId(userDTO.id)
     userDTO.roles = roles
 
     const privileges = await privilegeService.getPrivilegesByRoles(roles.map(r => r.roleId))
@@ -113,7 +114,7 @@ export const userService = {
     },
 
     async getOtherUsersByOrg(orgCode: string, userDTO: UserDTO) {
-        const users = await userRepository.getOtherUsersByOrg(userDTO.id, orgCode)
+        const users = await userRepository.getOtherUsersByOrgAndAllSub(userDTO.id, orgCode)
         const userDTOs = users.map(u => userMapper.toUserDTO(u))
         return userDTOs
     },
@@ -143,8 +144,8 @@ export const userService = {
         const existingUser = await userRepository.getUserByMobile(mobile)
         const [pos, comp, org] = await Promise.all([
             positionRepository.getPositionByCode('P001'),
-            organizationRepository.getOrganizationByCode('GY'),
-            organizationRepository.getOrganizationByCode(orgCode)
+            organizationRepository.getOrgByCode('GY'),
+            organizationRepository.getOrgByCode(orgCode)
         ])
         if (org === null) {
             throw new CustomError('供应商尚未注册')
