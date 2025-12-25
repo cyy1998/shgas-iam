@@ -69,7 +69,7 @@ app.openapi(
                         schema: createResponseSchema(z.object()),
                     },
                 },
-                description: '本用户信息',
+                description: '密码设置成功',
             },
         },
     }),
@@ -161,6 +161,10 @@ app.openapi(
     }
 )
 
+/*
+path: /search-other-users/under-org
+function: 搜索某个组织下的其他用户 
+*/
 app.openapi(
     createRoute({
         method: 'get',
@@ -188,6 +192,10 @@ app.openapi(
     }
 )
 
+/*
+path: /employments/by-privilege
+function: 查询具有某个权限的任职关系 
+*/
 app.openapi(
     createRoute({
         method: 'get',
@@ -228,6 +236,10 @@ app.openapi(
     }
 )
 
+/*
+path: /employments/by-privilege
+function: 查询具有某个权限的任职关系 
+*/
 app.openapi(
     createRoute({
         method: 'get',
