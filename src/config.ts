@@ -12,7 +12,8 @@ const EnvSchema = z.object({
     WX_CORPID: z.string(),
     WX_CORPSECRET: z.string(),
     MAGIC_CODE: z.string(),
-    NODE_ENV: z.string()
+    NODE_ENV: z.string(),
+    PURVEYOR_PARENT_ORG: z.string()
 });
 
 export type Env = z.infer<typeof EnvSchema>;

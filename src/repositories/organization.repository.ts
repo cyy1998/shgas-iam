@@ -79,7 +79,7 @@ export const organizationRepository = {
             }
         })
     },
-    async setOrganization(orgCode: string, orgName: string, orgLevel: number, parentId: number, path: string) {
+    async setOrganization(orgCode: string, orgName: string, orgLevel: number, parentId: number) {
         return await prisma.organization.create({
             data: {
                 orgCode: orgCode,
@@ -88,7 +88,7 @@ export const organizationRepository = {
                 level: orgLevel,
                 orgType: '外部组织',
                 isVirtual: true,
-                path: path
+                path: ''
             }
         })
     },
@@ -101,5 +101,36 @@ export const organizationRepository = {
                 path: path
             }
         })
+    },
+    async updateOrganizationClosure(orgId: number, parentId: number) {
+        const closureRelations = [];
+        // closureRelations.push({
+        //     ancestorId: parentId,
+        //     descendantId: orgId,
+        //     depth: 1,
+        // })
+        const parentAncestors = await prisma.organizationClosure.findMany({
+            where: { descendantId: parentId },
+            select: { ancestorId: true, depth: true },
+        })
+        parentAncestors.forEach((rel) => {
+            closureRelations.push({
+                ancestorId: rel.ancestorId,
+                descendantId: orgId,
+                depth: rel.depth + 1,
+            })
+        })
+        closureRelations.push({
+            ancestorId: orgId,
+            descendantId: orgId,
+            depth: 0,
+        })
+        if (closureRelations.length > 0) {
+            await prisma.organizationClosure.createMany({
+                data: closureRelations,
+                skipDuplicates: true, // 防止意外重复，虽然主键约束会拦截，但这样更安全
+            })
+        }
+
     }
 }

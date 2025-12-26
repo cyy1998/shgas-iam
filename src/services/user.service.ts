@@ -34,7 +34,7 @@ async function _getUserDetail(user: User | null) {
     // const rolesCombined = [...rolesFromDepts, ...rolesFromPosition, ...rolesFromPosOrg, ...rolesFromEmployment]
     // const roles = rolesCombined.reduce((acc, cur) => mergeAndDedupe(acc, cur, 'roleId'), [])
     const roles = await roleService.getRolesByUserId(userDTO.id)
-    //userDTO.roles = roles
+    // userDTO.roles = roles
 
     const privileges = await privilegeService.getPrivilegesByRoles(roles.map(r => r.roleId))
     userDTO.privileges = privileges

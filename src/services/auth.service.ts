@@ -131,14 +131,16 @@ export const authService = {
         }
         return true
     },
-    async authz(sessionId: string | null) {
+    async authz(sessionId: string | null, path: string | undefined) {
+        console.log(path)
         if (!sessionId) {
-            throw new AuthzUnauthorizedError('Session缺失')
+            throw new AuthzUnauthorizedError('未登录')
         }
         const userString = await redis.get(`session:${sessionId}`)
         if (!userString) {
-            throw new AuthzUnauthorizedError('非法Session')
+            throw new AuthzUnauthorizedError('未登录')
         }
+        const userDTO: UserDTO = JSON.parse(userString)
         const userInfo = Buffer.from(userString, 'utf8').toString('base64')
         return userInfo
     },
