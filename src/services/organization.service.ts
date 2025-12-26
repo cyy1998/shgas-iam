@@ -1,3 +1,4 @@
+import type { Organization } from "../../generated/prisma"
 import { env } from "../config"
 import { CustomError } from "../errors/CustomError"
 import { organizationMapper } from "../mapper/organization.mapper"
@@ -18,7 +19,14 @@ export const organizationService = {
     async getSubOrganizationsByParent(parentCodes: string[]) {
         const organizations = await organizationRepository.getOrganizationsByParentsCode(parentCodes)
         const orgDTOs = organizations.map(o => organizationMapper.toOrganizationDTO(o))
-        return orgDTOs
+        const compDict = await this.getCompDict()
+        const orgVOs = orgDTOs.map(o => organizationMapper.toOrganizationVO(o, compDict[o.orgCode.slice(0, 2)] as Organization))
+        return orgVOs
+    },
+    async getCompDict() {
+        const organizations = organizationRepository.getOrganizationsByParentId(-1)
+        const companies = (await organizations).filter(o => o.orgType === '分公司')
+        return companies.reduce((acc, comp) => { acc[comp.orgCode] = comp; return acc; }, {} as Record<string, Organization>)
     },
 
     // async getOrganizationsByRole(roleId: number) {

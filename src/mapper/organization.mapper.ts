@@ -1,5 +1,5 @@
 import type { Organization } from "../../generated/prisma"
-import type { OrganizationDTO } from "../types/organization.type"
+import type { OrganizationDTO, OrganizationVO } from "../types/organization.type"
 
 export const organizationMapper = {
 
@@ -10,6 +10,18 @@ export const organizationMapper = {
             orgName: org.orgName,
             orgType: org.orgType,
             level: org.level
+        }
+    },
+
+    toOrganizationVO(orgDTO: OrganizationDTO, comapny: Organization): OrganizationVO {
+        return {
+            id: orgDTO.id,
+            orgCode: orgDTO.orgCode,
+            orgName: orgDTO.orgName,
+            orgType: orgDTO.orgType,
+            level: orgDTO.level,
+            compCode: comapny.orgCode,
+            compName: comapny.orgName
         }
     }
 
