@@ -68,7 +68,6 @@ app.get('/doc/swagger', (c) => {
 
 app.onError((err, c) => {
   if (err instanceof CustomError) {
-    console.error(err)
     return c.json(makeResponse(err.code, null, err.message))
   }
   else if (err instanceof AuthzError) {

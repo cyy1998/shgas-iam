@@ -180,8 +180,8 @@ app.openapi(
                 content: {
                     'application/json': {
                         schema: z.object({
-                            privCode: z.string().openapi({ example: 'E01' }),
-                            privName: z.string().openapi({ example: 'SR01' }),
+                            roleCode: z.string().openapi({ example: 'E01' }),
+                            roleName: z.string().openapi({ example: 'SR01' }),
                         })
                     }
                 }
@@ -199,8 +199,47 @@ app.openapi(
         },
     }),
     async (c) => {
-        const { privCode, privName } = c.req.valid('json')
-        const data = await privilegeService.setPrivilege(privCode, privName)
+        const { roleCode, roleName } = c.req.valid('json')
+        const data = await roleService.setRole(roleCode, roleName)
+        return c.json(success(data))
+    }
+)
+
+/*
+path: /role/privilege/set
+function: 设置角色权限关系
+*/
+app.openapi(
+    createRoute({
+        method: 'post',
+        path: '/role/privilege/set',
+        tags: ['Admin'],
+        request: {
+            body: {
+                content: {
+                    'application/json': {
+                        schema: z.object({
+                            roleCode: z.string().openapi({ example: 'E01' }),
+                            privCode: z.string().openapi({ example: 'E01' }),
+                        })
+                    }
+                }
+            },
+        },
+        responses: {
+            200: {
+                content: {
+                    'application/json': {
+                        schema: ResponseSchema,
+                    },
+                },
+                description: '设置任职关系成功',
+            },
+        },
+    }),
+    async (c) => {
+        const { roleCode, privCode } = c.req.valid('json')
+        const data = await roleService.setRolePrivilege(roleCode, privCode)
         return c.json(success(data))
     }
 )
@@ -247,6 +286,46 @@ app.openapi(
 )
 
 /*
+path: /role/organization/set
+function: 为任职关系设置角色
+*/
+app.openapi(
+    createRoute({
+        method: 'post',
+        path: '/role/organization/set',
+        tags: ['Admin'],
+        request: {
+            body: {
+                content: {
+                    'application/json': {
+                        schema: z.object({
+                            roleCode: z.string().openapi({ example: 'E01' }),
+                            orgCode: z.string().openapi({ example: 'SR01' }),
+                            isAllSub: z.boolean()
+                        })
+                    }
+                }
+            },
+        },
+        responses: {
+            200: {
+                content: {
+                    'application/json': {
+                        schema: ResponseSchema,
+                    },
+                },
+                description: '角色设置成功',
+            },
+        },
+    }),
+    async (c) => {
+        const { orgCode, roleCode, isAllSub } = c.req.valid('json')
+        const data = await roleService.setRoleForOrganization(orgCode, roleCode)
+        return c.json(success(data))
+    }
+)
+
+/*
 path: /role/pos-org/set
 function: 为岗位-部门组合设置角色
 */
@@ -281,60 +360,8 @@ app.openapi(
     }),
     async (c) => {
         const { roleCode, orgCode, posCode } = c.req.valid('json')
-        const [role, organization, position] = await Promise.all([
-            prisma.role.findFirst({
-                where: {
-                    roleCode: roleCode
-                }
-            }),
-            prisma.organization.findFirst({
-                where: {
-                    orgCode: orgCode
-                }
-            }),
-            prisma.position.findFirst({
-                where: {
-                    posCode: posCode
-                }
-            })
-        ])
-        if (!role || !organization || !position) {
-            return c.json(makeResponse(9999, {
-                message: '实体不存在'
-            }))
-        }
-        let orgPos = await prisma.posOrgComposition.findFirst({
-            where: {
-                orgId: organization.id,
-                posId: position.id
-            }
-        })
-        if (!orgPos) {
-            orgPos = await prisma.posOrgComposition.create({
-                data: {
-                    orgId: organization.id,
-                    posId: position.id
-                }
-            })
-        }
-        const posOrgRole = await prisma.posOrgRole.findFirst({
-            where: {
-                posOrgId: orgPos.id,
-                roleId: role.id
-            }
-        })
-        if (posOrgRole) {
-            return c.json(makeResponse(9999, {
-                message: '相同权限关系已存在'
-            }))
-        }
-        const res = await prisma.posOrgRole.create({
-            data: {
-                posOrgId: orgPos.id,
-                roleId: role.id
-            }
-        })
-        return c.json(makeResponse())
+        const data = roleService.setRoleForPosOrg(orgCode, posCode, roleCode)
+        return c.json(success(data))
     }
 )
 

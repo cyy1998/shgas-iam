@@ -178,11 +178,44 @@ export const roleRepository = {
             }
         })) !== null
     },
+    async setRole(roleCode: string, roleName: string) {
+        return await prisma.role.create({
+            data: {
+                roleCode: roleCode,
+                roleName: roleName,
+                clientId: 1
+            }
+        })
+    },
+    async setRolePrivilege(roleId: number, privilegeId: number) {
+        return await prisma.rolePrivilege.create({
+            data: {
+                roleId: roleId,
+                privilegeId: privilegeId
+            }
+        })
+    },
     async setRoleForEmployment(roleId: number, employmentId: number) {
         return await prisma.employmentRole.create({
             data: {
                 roleId: roleId,
                 employmentId: employmentId
+            }
+        })
+    },
+    async setRoleForOrganization(roleId: number, orgId: number) {
+        return await prisma.organizationRole.create({
+            data: {
+                roleId: roleId,
+                organizationId: orgId
+            }
+        })
+    },
+    async setRoleForPosOrg(roleId: number, posOrgId: number) {
+        return await prisma.posOrgRole.create({
+            data: {
+                roleId: roleId,
+                posOrgId: posOrgId
             }
         })
     }

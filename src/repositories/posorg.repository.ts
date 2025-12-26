@@ -7,5 +7,13 @@ export const posorgRepository = {
                 orgId: orgId
             }
         })
+    },
+    async setPosOrg(posId: number, orgId: number) {
+        return await prisma.posOrgComposition.create({
+            data: {
+                posId: posId,
+                orgId: orgId
+            }
+        })
     }
 }

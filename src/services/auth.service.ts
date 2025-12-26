@@ -19,6 +19,13 @@ async function _login(user: UserDTO) {
         token: token
     }
 }
+
+const dz_user_map = {
+    dzgas_fengzhh: '999999',
+    dzgas_liym: '999998',
+    dzgas_zhaorj: '999997'
+}
+
 async function _orcasLogin(userDTO: UserDTO) {
     const orcasUri = env.ORCAS_URL
     const resp = await axios(orcasUri, {
