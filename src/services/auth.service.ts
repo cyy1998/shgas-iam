@@ -132,7 +132,9 @@ export const authService = {
         return true
     },
     async authz(sessionId: string | null, path: string | undefined) {
-        console.log(path)
+        if (!path) {
+            throw new AuthzUnauthorizedError('非法访问')
+        }
         if (!sessionId) {
             throw new AuthzUnauthorizedError('未登录')
         }
@@ -141,6 +143,11 @@ export const authService = {
             throw new AuthzUnauthorizedError('未登录')
         }
         const userDTO: UserDTO = JSON.parse(userString)
+        if (path.startsWith('/api/tender/')) {
+            userDTO.positions = []
+            userDTO.roles = []
+            userDTO.privileges = []
+        }
         const userInfo = Buffer.from(userString, 'utf8').toString('base64')
         return userInfo
     },
