@@ -1,8 +1,11 @@
 import { prisma } from '../extensions'
 import { z, createRoute, OpenAPIHono } from '@hono/zod-openapi'
-import { makeResponse } from '../utils/response.utils'
+import { makeResponse, success } from '../utils/response.utils'
 import { ResponseSchema, UserOutSchema } from '../schema'
 import { createResponseSchema } from '../utils/response.utils'
+import { employmentService } from '../services/employment.service'
+import { roleService } from '../services/role.service'
+import { privilegeService } from '../services/privilege.service'
 
 const app = new OpenAPIHono()
 
@@ -87,7 +90,7 @@ app.openapi(
 )
 /*
 path: /employment/set
-function: 设置新任职关系
+function: 设置新权限
 */
 app.openapi(
     createRoute({
@@ -99,9 +102,9 @@ app.openapi(
                 content: {
                     'application/json': {
                         schema: z.object({
-                            posCode: z.string().openapi({ example: 'E01' }),
-                            orgCode: z.string().openapi({ example: 'SR01' }),
-                            username: z.string().openapi({ example: '138550' }),
+                            username: z.string().openapi({ example: 'E01' }),
+                            posCode: z.string().openapi({ example: 'SR01' }),
+                            orgCode: z.string().openapi({ example: 'SR01' })
                         })
                     }
                 }
@@ -119,60 +122,130 @@ app.openapi(
         },
     }),
     async (c) => {
-        const { username, orgCode, posCode } = c.req.valid('json')
-        // console.log(username, orgCode, posCode)
-        const [employment, user, department, company, position] = await Promise.all([
-            prisma.employment.findFirst({
-                where: {
-                    user: {
-                        username: username,
-                    },
-                    deptartment: {
-                        orgCode: orgCode
-                    },
-                    company: {
-                        orgCode: orgCode.slice(0, 2)
-                    },
-                    position: {
-                        posCode: posCode
-                    }
-                }
-            }),
-            prisma.user.findFirst({
-                where: { username: username }
-            }),
-            prisma.organization.findFirst({
-                where: { orgCode: orgCode }
-            }),
-            prisma.organization.findFirst({
-                where: { orgCode: orgCode.slice(0, 2) }
-            }),
-            prisma.position.findFirst({
-                where: { posCode: posCode }
-            })
-        ])
-        // console.log(user)
-        if (!user || !department || !company || !position) {
-            return c.json(makeResponse(9999, {
-                message: '实体不存在'
-            }))
-        }
-        if (employment) {
-            return c.json(makeResponse(9999, {
-                message: '相同任职关系已存在'
-            }))
-        }
-        const res = await prisma.employment.create({
-            data: {
-                userId: user.id,
-                posId: position.id,
-                deptId: department.id,
-                compId: company.id
-            }
-        })
-        return c.json(makeResponse())
+        const { username, posCode, orgCode } = c.req.valid('json')
+        const data = await employmentService.setEmployment(username, posCode, orgCode)
+        return c.json(success(data))
     }
 )
+/*
+path: /privilege/set
+function: 设置新权限
+*/
+app.openapi(
+    createRoute({
+        method: 'post',
+        path: '/privilege/set',
+        tags: ['Admin'],
+        request: {
+            body: {
+                content: {
+                    'application/json': {
+                        schema: z.object({
+                            privCode: z.string().openapi({ example: 'E01' }),
+                            privName: z.string().openapi({ example: 'SR01' }),
+                        })
+                    }
+                }
+            },
+        },
+        responses: {
+            200: {
+                content: {
+                    'application/json': {
+                        schema: ResponseSchema,
+                    },
+                },
+                description: '设置任职关系成功',
+            },
+        },
+    }),
+    async (c) => {
+        const { privCode, privName } = c.req.valid('json')
+        const data = await privilegeService.setPrivilege(privCode, privName)
+        return c.json(success(data))
+    }
+)
+
+/*
+path: /role/set
+function: 设置新角色
+*/
+app.openapi(
+    createRoute({
+        method: 'post',
+        path: '/role/set',
+        tags: ['Admin'],
+        request: {
+            body: {
+                content: {
+                    'application/json': {
+                        schema: z.object({
+                            privCode: z.string().openapi({ example: 'E01' }),
+                            privName: z.string().openapi({ example: 'SR01' }),
+                        })
+                    }
+                }
+            },
+        },
+        responses: {
+            200: {
+                content: {
+                    'application/json': {
+                        schema: ResponseSchema,
+                    },
+                },
+                description: '设置任职关系成功',
+            },
+        },
+    }),
+    async (c) => {
+        const { privCode, privName } = c.req.valid('json')
+        const data = await privilegeService.setPrivilege(privCode, privName)
+        return c.json(success(data))
+    }
+)
+
+/*
+path: /role/employment/set
+function: 为任职关系设置角色
+*/
+app.openapi(
+    createRoute({
+        method: 'post',
+        path: '/role/employment/set',
+        tags: ['Admin'],
+        request: {
+            body: {
+                content: {
+                    'application/json': {
+                        schema: z.object({
+                            posCode: z.string().openapi({ example: 'E01' }),
+                            orgCode: z.string().openapi({ example: 'SR01' }),
+                            username: z.string().openapi({ example: '138550' }),
+                            roleCode: z.string().openapi({ example: '138550' }),
+                        })
+                    }
+                }
+            },
+        },
+        responses: {
+            200: {
+                content: {
+                    'application/json': {
+                        schema: ResponseSchema,
+                    },
+                },
+                description: '角色设置成功',
+            },
+        },
+    }),
+    async (c) => {
+        const { username, orgCode, posCode, roleCode } = c.req.valid('json')
+        const data = await roleService.setRoleForEmployment(username, posCode, orgCode, roleCode)
+        return c.json(success(data))
+    }
+)
+
 /*
 path: /role/pos-org/set
 function: 为岗位-部门组合设置角色

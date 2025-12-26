@@ -154,7 +154,7 @@ export const userService = {
             throw new CustomError('系统基本信息缺失')
         }
         if (existingUser !== null) {
-            const existingEmployment = await employmentRepository.getEmploymentsByUserOrgPos(existingUser.id, org.id, pos.id)
+            const existingEmployment = await employmentRepository.getEmploymentByUserOrgPosId(existingUser.id, org.id, pos.id)
             if (existingEmployment === null) {
                 const employment = await employmentRepository.setEmployment(existingUser.id, pos.id, org.id, comp.id)
             }

@@ -1,7 +1,12 @@
+import { CustomError } from "../errors/CustomError";
 import { employmentMapper } from "../mapper/employment.mapper";
 import { employmentRepository } from "../repositories/employment.repository";
+import { organizationRepository } from "../repositories/organization.repository";
+import { positionRepository } from "../repositories/position.repository";
+import { userRepository } from "../repositories/user.repository";
 import { privilegeService } from "./privilege.service";
 import { roleService } from "./role.service";
+import { userService } from "./user.service";
 
 
 async function _getEmploymentsDetail(username: string) {
@@ -40,6 +45,23 @@ export const employmentService = {
             const filtedEList = eList.filter(e => e.privileges.some(s => s.endsWith(privCode)))
             return filtedEList.map(e => e.employment)
         }
+    },
+    async setEmployment(username: string, posCode: string, orgCode: string) {
+        const [employment, user, department, company, position] = await Promise.all([
+            employmentRepository.getEmploymentByUserOrgPosCode(username, orgCode, posCode),
+            userRepository.getUserByUsername(username),
+            organizationRepository.getOrgByCode(orgCode),
+            organizationRepository.getOrgByCode(orgCode.slice(0, 2)),
+            positionRepository.getPositionByCode(posCode)
+        ])
+        if (!user || !department || !company || !position) {
+            throw new CustomError('实体不存在')
+        }
+        if (employment !== null) {
+            throw new CustomError('相同任职关系已存在')
+        }
+        await employmentRepository.setEmployment(user.id, position.id, department.id, company.id)
+        return true
     }
 
 }

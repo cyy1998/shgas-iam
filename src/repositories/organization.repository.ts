@@ -72,7 +72,7 @@ export const organizationRepository = {
             }
         })
     },
-    async getOrganizationByParent(parentId: number) {
+    async getOrganizationsByParentId(parentId: number) {
         return await prisma.organization.findMany({
             where: {
                 parentId: parentId,

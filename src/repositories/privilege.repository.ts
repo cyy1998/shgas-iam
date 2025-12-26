@@ -99,5 +99,21 @@ export const privilegeRepository = {
                 object: true
             }
         })
+    },
+    async getPrivilegeByCode(privCode: string) {
+        return await prisma.privilege.findFirst({
+            where: {
+                privilegeCode: privCode
+            }
+        })
+    },
+    async setPrivilege(privCode: string, privName: string) {
+        return await prisma.privilege.create({
+            data: {
+                privilegeCode: privCode,
+                privilegeName: privName,
+                objectId: 1
+            }
+        })
     }
 } 

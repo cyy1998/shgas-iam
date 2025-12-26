@@ -2,6 +2,13 @@ import { EmploymentStatus } from "../types/employment.type"
 import { prisma } from "../extensions"
 
 export const roleRepository = {
+    async getRoleByCode(roleCode: string) {
+        return await prisma.role.findFirst({
+            where: {
+                roleCode: roleCode
+            }
+        })
+    },
     async getRolesByUserId(userId: number) {
         return await prisma.role.findMany({
             where: {
@@ -160,6 +167,22 @@ export const roleRepository = {
                         employmentId: employmentId,
                     }
                 }
+            }
+        })
+    },
+    async checkEmploymentRoleExisting(roleId: number, employmentId: number) {
+        return (await prisma.employmentRole.findFirst({
+            where: {
+                roleId: roleId,
+                employmentId: employmentId
+            }
+        })) !== null
+    },
+    async setRoleForEmployment(roleId: number, employmentId: number) {
+        return await prisma.employmentRole.create({
+            data: {
+                roleId: roleId,
+                employmentId: employmentId
             }
         })
     }

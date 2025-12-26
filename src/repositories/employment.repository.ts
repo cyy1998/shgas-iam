@@ -29,7 +29,7 @@ export const employmentRepository = {
             }
         })
     },
-    async getEmploymentsByUserOrgPos(userId: number, orgId: number, posId: number) {
+    async getEmploymentByUserOrgPosId(userId: number, orgId: number, posId: number) {
         return await prisma.employment.findFirst({
             where: {
                 userId: userId,
@@ -41,6 +41,21 @@ export const employmentRepository = {
                 deptartment: true,
                 company: true,
                 position: true
+            }
+        })
+    },
+    async getEmploymentByUserOrgPosCode(username: string, orgCode: string, posCode: string) {
+        return await prisma.employment.findFirst({
+            where: {
+                user: {
+                    username: username,
+                },
+                deptartment: {
+                    orgCode: orgCode
+                },
+                position: {
+                    posCode: posCode
+                }
             }
         })
     },
@@ -153,5 +168,6 @@ export const employmentRepository = {
                 compId: compId
             }
         })
-    }
+    },
+
 }

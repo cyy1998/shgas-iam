@@ -161,6 +161,8 @@ app.openapi(
     }
 )
 
+
+
 /*
 path: /search-other-users/under-org
 function: 搜索某个组织下的其他用户 
@@ -308,6 +310,78 @@ app.openapi(
     }),
     async (c) => {
         const data = await organizationService.getFormalOrganizationsByCode('', 1)
+        return c.json(success(data))
+    }
+)
+
+/*
+path: /organizations/by-parent
+function: 获取一级公司列表 
+*/
+app.openapi(
+    createRoute({
+        method: 'get',
+        path: '/organizations/by-parent',
+        tags: ['Self'],
+        request: {
+            query: z.object({
+                parentCode: z.string().openapi({ example: '123' })
+            })
+        },
+        responses: {
+            200: {
+                content: {
+                    'application/json': {
+                        schema: createResponseSchema(
+                            z.array(z.object({
+                                id: z.int(),
+                                orgCode: z.string(),
+                                orgName: z.string(),
+                                orgType: z.string(),
+                                level: z.int()
+                            }))
+                        ),
+                    },
+                },
+                description: '所有子组织列表',
+            },
+        },
+    }),
+    async (c) => {
+        const { parentCode } = c.req.valid('query')
+        const data = await organizationService.getSubOrganizationsByParent(parentCode)
+        return c.json(success(data))
+    }
+)
+
+/*
+path: /users/by-org
+function: 搜索某个组织下的其他用户 
+*/
+app.openapi(
+    createRoute({
+        method: 'get',
+        path: '/users/by-org',
+        tags: ['Self'],
+        request: {
+            query: z.object({
+                orgCode: z.string().openapi({ example: '123' })
+            })
+        },
+        responses: {
+            200: {
+                content: {
+                    'application/json': {
+                        schema: createResponseSchema(z.array(UserOutSchema)),
+                    },
+                },
+                description: '本用户信息',
+            },
+        },
+    }),
+    async (c) => {
+        const { orgCode } = c.req.valid('query')
+        const data = await userService.getUsersByOrg(orgCode, 'direct')
         return c.json(success(data))
     }
 )
