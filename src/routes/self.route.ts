@@ -320,13 +320,19 @@ function: 获取一级公司列表
 */
 app.openapi(
     createRoute({
-        method: 'get',
+        method: 'post',
         path: '/organizations/by-parent',
         tags: ['Self'],
         request: {
-            query: z.object({
-                parentCode: z.string().openapi({ example: '123' })
-            })
+            body: {
+                content: {
+                    'application/json': {
+                        schema: z.object({
+                            parentCodes: z.array(z.string()).openapi({ example: '123' })
+                        })
+                    }
+                }
+            }
         },
         responses: {
             200: {
@@ -348,8 +354,8 @@ app.openapi(
         },
     }),
     async (c) => {
-        const { parentCode } = c.req.valid('query')
-        const data = await organizationService.getSubOrganizationsByParent(parentCode)
+        const { parentCodes } = c.req.valid('json')
+        const data = await organizationService.getSubOrganizationsByParent(parentCodes)
         return c.json(success(data))
     }
 )

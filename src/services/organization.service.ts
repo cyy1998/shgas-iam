@@ -15,12 +15,8 @@ export const organizationService = {
         const orgDTOs = organizations.map(o => organizationMapper.toOrganizationDTO(o))
         return orgDTOs
     },
-    async getSubOrganizationsByParent(parentCode: string) {
-        const parent = await organizationRepository.getOrgByCode(parentCode)
-        if (parent === null) {
-            throw new CustomError('无效父级组织代码')
-        }
-        const organizations = await organizationRepository.getOrganizationsByParentId(parent.id)
+    async getSubOrganizationsByParent(parentCodes: string[]) {
+        const organizations = await organizationRepository.getOrganizationsByParentsCode(parentCodes)
         const orgDTOs = organizations.map(o => organizationMapper.toOrganizationDTO(o))
         return orgDTOs
     },

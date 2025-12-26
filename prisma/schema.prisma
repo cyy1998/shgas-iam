@@ -52,12 +52,15 @@ model Organization {
   compEmployments   Employment[]          @relation("employment_comp")
   roles             OrganizationRole[]
   posOrgComposition PosOrgComposition[]
+  parent            Organization          @relation("org_parent", fields: [parentId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  children          Organization[]        @relation("org_parent")
   // 反向关系：该组织作为祖先时的闭包记录
   ancestorClosures  OrganizationClosure[] @relation("org_ancestor")
 
   // 反向关系：该组织作为后代时的闭包记录
   descendantClosures OrganizationClosure[] @relation("org_descendant")
 
+  @@index([parentId])
   @@map("organization")
 }
 
