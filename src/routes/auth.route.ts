@@ -243,6 +243,7 @@ app.openapi(
         const token = getCookie(c, 'session')
         const data = await authService.logout(token)
         deleteCookie(c, 'session')
+        deleteCookie(c, 'orcas_sso_sessionid')
         return c.json(success(data))
     }
 )
