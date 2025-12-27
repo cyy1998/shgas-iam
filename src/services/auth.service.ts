@@ -10,12 +10,16 @@ import { CustomError } from "../errors/CustomError"
 import { AuthzUnauthorizedError } from "../errors/AuthzUnauthorizedError"
 
 async function _login(user: UserDTO) {
-    const { orcasSessionId, orcasId } = await _orcasLogin(user)
-    user.orcasId = orcasId
+    let orcasSessionId_1 = '-1'
+    if (user.userType === '正式员工') {
+        const { orcasSessionId, orcasId } = await _orcasLogin(user)
+        orcasSessionId_1 = orcasSessionId
+        user.orcasId = orcasId
+    }
     const token = crypto.randomUUID()
     await redis.set(`session:${token}`, JSON.stringify(user), 'EX', env.REDIS_EXPIRE_TIME)
     return {
-        orcasSessionId: orcasSessionId,
+        orcasSessionId: orcasSessionId_1,
         token: token
     }
 }
