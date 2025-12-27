@@ -38,6 +38,7 @@ async function _orcasLogin(userDTO: UserDTO) {
         }
     })
     if (resp.status != 200 || resp.data.code != 200 || !resp.headers["set-cookie"]) {
+        console.log(resp.data)
         throw new CustomError('Orcas登录失败')
     }
     const cookieStr = resp.headers["set-cookie"][1] ?? ''
