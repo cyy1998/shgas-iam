@@ -1,4 +1,4 @@
-import { prisma } from "../extensions"
+import { prisma } from '../libs/database/prisma'
 
 export const positionRepository = {
     async getPositionByCode(posCode: string) {

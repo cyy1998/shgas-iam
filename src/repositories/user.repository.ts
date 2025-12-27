@@ -1,5 +1,5 @@
-import { EmploymentStatus } from "../types/employment.type"
-import { prisma } from "../extensions"
+import { EmploymentStatus } from "../constants/employment.status"
+import { prisma } from '../libs/database/prisma'
 
 export const userRepository = {
     async getUserByUsername(username: string) {

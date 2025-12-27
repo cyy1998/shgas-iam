@@ -1,5 +1,5 @@
 import { env } from "../config"
-import { redis } from "../extensions"
+import { redis } from "../libs/cache/redis"
 
 type WeixinAccessTokenResponse = {
     errcode: number

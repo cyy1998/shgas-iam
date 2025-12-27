@@ -1,5 +1,5 @@
 import { env } from "../config"
-import { redis } from "../extensions"
+import { redis } from "../libs/cache/redis"
 
 export const cacheService = {
     async updateSession(sessionId: string, userInfo: string) {

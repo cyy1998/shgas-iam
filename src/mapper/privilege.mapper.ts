@@ -1,13 +1,12 @@
-import type { PrivilegeDTO, PrivilegeEntity } from "../types/privilege.type"
+import type { Privilege } from "../../generated/prisma"
+import type { PrivilegeDTO } from "../types/privilege.type"
 
 export const privilegeMapper = {
-    toPrivilegeDTO(priv: PrivilegeEntity): PrivilegeDTO {
+    toPrivilegeDTO(priv: Privilege): PrivilegeDTO {
         return {
             id: priv.id,
             privCode: priv.privilegeCode,
-            privName: priv.privilegeName,
-            objType: priv.object.objectType,
-            path: priv.object.path ?? 'none',
+            privName: priv.privilegeName
         }
     }
 }

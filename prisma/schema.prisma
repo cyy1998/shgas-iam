@@ -1,6 +1,6 @@
 generator client {
   provider        = "prisma-client-js"
-  output          = "../generated/prisma"
+  output          = "..src/generated/prisma"
   previewFeatures = ["views"]
 }
 
@@ -232,24 +232,24 @@ model PosOrgRole {
   @@map("position_organization_role")
 }
 
-model AuthObject {
-  id         Int     @id @default(autoincrement()) @map("id")
-  objectCode String  @map("object_code") @db.VarChar(64)
-  objectName String  @map("object_name") @db.VarChar(128)
-  objectType String  @map("object_type") @db.VarChar(128)
-  path       String? @map("path") @db.VarChar(255)
-  authFields Json?   @map("auth_fields")
+// model AuthObject {
+//   id         Int     @id @default(autoincrement()) @map("id")
+//   objectCode String  @map("object_code") @db.VarChar(64)
+//   objectName String  @map("object_name") @db.VarChar(128)
+//   objectType String  @map("object_type") @db.VarChar(128)
+//   path       String? @map("path") @db.VarChar(255)
+//   authFields Json?   @map("auth_fields")
 
-  privileges Privilege[]
+//   privileges Privilege[]
 
-  @@map("auth_object")
-}
+//   @@map("auth_object")
+// }
 
 model Privilege {
   id            Int      @id @default(autoincrement()) @map("id")
   privilegeCode String   @map("privilege_code")
   privilegeName String   @map("privilege_name")
-  objectId      Int      @map("object_id")
+  // objectId      Int      @map("object_id")
   fieldValues   Json?    @map("field_values")
   status        Int      @default(1) @map("status") @db.TinyInt
   description   String?  @map("description") @db.VarChar(500)
@@ -257,10 +257,10 @@ model Privilege {
   createTime    DateTime @default(now()) @map("create_time")
   updateTime    DateTime @default(now()) @updatedAt @map("update_time")
 
-  roles  RolePrivilege[]
-  object AuthObject      @relation(fields: [objectId], references: [id])
+  roles RolePrivilege[]
+  // object AuthObject      @relation(fields: [objectId], references: [id])
 
-  @@index([objectId], map: "idx_object_id")
+  // @@index([objectId], map: "idx_object_id")
   @@map("privilege")
 }
 

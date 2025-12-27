@@ -24,8 +24,3 @@ export type EmploymentEntity = Prisma.EmploymentGetPayload<{
     }
 
 }>
-export enum EmploymentStatus {
-    Enable = 1,
-    Pause,
-    Disable
-}

@@ -1,5 +1,5 @@
-import { EmploymentStatus } from "../types/employment.type"
-import { prisma } from "../extensions"
+import { EmploymentStatus } from "../constants/employment.status"
+import { prisma } from '../libs/database/prisma'
 
 export const privilegeRepository = {
     async getPrivilegesByUserId(userId: number) {
@@ -78,9 +78,6 @@ export const privilegeRepository = {
                         }
                     }
                 }
-            },
-            include: {
-                object: true
             }
         })
     },
@@ -94,9 +91,6 @@ export const privilegeRepository = {
                         }
                     }
                 }
-            },
-            include: {
-                object: true
             }
         })
     },
@@ -112,7 +106,6 @@ export const privilegeRepository = {
             data: {
                 privilegeCode: privCode,
                 privilegeName: privName,
-                objectId: 1
             }
         })
     }

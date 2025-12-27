@@ -1,4 +1,4 @@
-import { prisma } from "../extensions"
+import { prisma } from '../libs/database/prisma'
 export const posorgRepository = {
     async getPosOrgById(posId: number, orgId: number) {
         return await prisma.posOrgComposition.findFirst({

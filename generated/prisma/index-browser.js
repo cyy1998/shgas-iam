@@ -241,20 +241,10 @@ exports.Prisma.PosOrgRoleScalarFieldEnum = {
   roleId: 'roleId'
 };
 
-exports.Prisma.AuthObjectScalarFieldEnum = {
-  id: 'id',
-  objectCode: 'objectCode',
-  objectName: 'objectName',
-  objectType: 'objectType',
-  path: 'path',
-  authFields: 'authFields'
-};
-
 exports.Prisma.PrivilegeScalarFieldEnum = {
   id: 'id',
   privilegeCode: 'privilegeCode',
   privilegeName: 'privilegeName',
-  objectId: 'objectId',
   fieldValues: 'fieldValues',
   status: 'status',
   description: 'description',
@@ -354,13 +344,6 @@ exports.Prisma.QueryMode = {
   insensitive: 'insensitive'
 };
 
-exports.Prisma.AuthObjectOrderByRelevanceFieldEnum = {
-  objectCode: 'objectCode',
-  objectName: 'objectName',
-  objectType: 'objectType',
-  path: 'path'
-};
-
 exports.Prisma.PrivilegeOrderByRelevanceFieldEnum = {
   privilegeCode: 'privilegeCode',
   privilegeName: 'privilegeName',
@@ -389,7 +372,6 @@ exports.Prisma.ModelName = {
   EmploymentRole: 'EmploymentRole',
   OrganizationRole: 'OrganizationRole',
   PosOrgRole: 'PosOrgRole',
-  AuthObject: 'AuthObject',
   Privilege: 'Privilege',
   PrivilegeDelegation: 'PrivilegeDelegation',
   DelegationDetail: 'DelegationDetail',

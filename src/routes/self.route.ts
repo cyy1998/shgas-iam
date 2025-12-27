@@ -13,11 +13,9 @@ import { cacheService } from '../services/cache.service'
 
 const app = new OpenAPIHono()
 
-
-
-
 /*
 path: /user-info
+method: GET
 function: 获取当前已登录用户信息 
 */
 app.openapi(
@@ -43,6 +41,7 @@ app.openapi(
 
 /*
 path: /password/change
+method: POST
 function: 更换密码 
 */
 app.openapi(
@@ -83,6 +82,7 @@ app.openapi(
 
 /*
 path: /mobile/send-message
+method: POST
 function: 发送短信 
 */
 app.openapi(
@@ -121,6 +121,7 @@ app.openapi(
 
 /*
 path: /mobile/set
+method: GET
 function: 设置手机号 
 */
 app.openapi(
@@ -161,10 +162,9 @@ app.openapi(
     }
 )
 
-
-
 /*
 path: /search-other-users/under-org
+method: GET
 function: 搜索某个组织下的其他用户 
 */
 app.openapi(
@@ -196,6 +196,7 @@ app.openapi(
 
 /*
 path: /employments/by-privilege
+method: GET
 function: 查询具有某个权限的任职关系 
 */
 app.openapi(
@@ -239,8 +240,9 @@ app.openapi(
 )
 
 /*
-path: /employments/by-privilege
-function: 查询具有某个权限的任职关系 
+path: /search-organizations
+method: GET
+function: 查询某个公司的下属组织 
 */
 app.openapi(
     createRoute({
@@ -282,6 +284,7 @@ app.openapi(
 
 /*
 path: /organizations/top
+method: GET
 function: 获取一级公司列表 
 */
 app.openapi(
@@ -316,7 +319,8 @@ app.openapi(
 
 /*
 path: /organizations/by-parent
-function: 获取一级公司列表 
+method: POST
+function: 获取 
 */
 app.openapi(
     createRoute({
@@ -362,7 +366,8 @@ app.openapi(
 
 /*
 path: /users/by-org
-function: 搜索某个组织下的其他用户 
+method: GET
+function: 搜索某个组织下的所有用户 
 */
 app.openapi(
     createRoute({

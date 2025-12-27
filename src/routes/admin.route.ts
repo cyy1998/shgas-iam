@@ -1,53 +1,12 @@
-import { prisma } from '../extensions'
+import { prisma } from '../libs/database/prisma'
 import { z, createRoute, OpenAPIHono } from '@hono/zod-openapi'
 import { makeResponse, success } from '../utils/response.utils'
-import { ResponseSchema, UserOutSchema } from '../schema'
-import { createResponseSchema } from '../utils/response.utils'
+import { ResponseSchema } from '../schema'
 import { employmentService } from '../services/employment.service'
 import { roleService } from '../services/role.service'
 import { privilegeService } from '../services/privilege.service'
 
 const app = new OpenAPIHono()
-
-/*
-path: /position/set
-function: 设置新岗位
-*/
-// app.openapi(
-//     createRoute({
-//         method: 'get',
-//         path: '/users/filter/page',
-//         tags: ['Admin'],
-//         request: {
-//             query: z.object({
-//                 pageNum: z.number().openapi({ example: '123456' }),
-//                 pageSize: z.number().openapi({ example: '123456' }),
-//             })
-//         },
-//         responses: {
-//             200: {
-//                 content: {
-//                     'application/json': {
-//                         schema: createResponseSchema(z.object({
-//                             pageNum: z.number(),
-//                             pageSize: z.number(),
-//                             total: z.number(),
-//                             totalPages: z.number(),
-//                             list: z.array(UserOutSchema),
-//                         })),
-//                     },
-//                 },
-//                 description: '设置岗位成功',
-//             },
-//         },
-//     }),
-//     async (c) => {
-//         const { pageNum, pageSize } = c.req.valid('query')
-//         const res =
-//         return c.json(makeResponse())
-//     }
-// )
-
 /*
 path: /position/set
 function: 设置新岗位

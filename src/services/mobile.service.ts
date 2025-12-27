@@ -1,6 +1,7 @@
 import { env } from '../config'
 import { CustomError } from '../errors/CustomError'
-import { redis, prisma } from '../extensions'
+import { redis } from "../libs/cache/redis"
+import { prisma } from '../libs/database/prisma'
 import type { SMSServiceResult } from '../types/service.type'
 import { hmacSha256 } from '../utils/encryption.utils'
 

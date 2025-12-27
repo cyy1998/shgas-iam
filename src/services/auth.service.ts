@@ -1,4 +1,4 @@
-import { redis } from "../extensions"
+import { redis } from "../libs/cache/redis"
 import type { UserDTO } from "../types/user.type"
 import axios from "axios"
 import { userService } from "./user.service"

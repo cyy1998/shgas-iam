@@ -74,11 +74,6 @@ export type OrganizationRole = $Result.DefaultSelection<Prisma.$OrganizationRole
  */
 export type PosOrgRole = $Result.DefaultSelection<Prisma.$PosOrgRolePayload>
 /**
- * Model AuthObject
- * 
- */
-export type AuthObject = $Result.DefaultSelection<Prisma.$AuthObjectPayload>
-/**
  * Model Privilege
  * 
  */
@@ -336,16 +331,6 @@ export class PrismaClient<
     * ```
     */
   get posOrgRole(): Prisma.PosOrgRoleDelegate<ExtArgs, ClientOptions>;
-
-  /**
-   * `prisma.authObject`: Exposes CRUD operations for the **AuthObject** model.
-    * Example usage:
-    * ```ts
-    * // Fetch zero or more AuthObjects
-    * const authObjects = await prisma.authObject.findMany()
-    * ```
-    */
-  get authObject(): Prisma.AuthObjectDelegate<ExtArgs, ClientOptions>;
 
   /**
    * `prisma.privilege`: Exposes CRUD operations for the **Privilege** model.
@@ -838,7 +823,6 @@ export namespace Prisma {
     EmploymentRole: 'EmploymentRole',
     OrganizationRole: 'OrganizationRole',
     PosOrgRole: 'PosOrgRole',
-    AuthObject: 'AuthObject',
     Privilege: 'Privilege',
     PrivilegeDelegation: 'PrivilegeDelegation',
     DelegationDetail: 'DelegationDetail',
@@ -861,7 +845,7 @@ export namespace Prisma {
       omit: GlobalOmitOptions
     }
     meta: {
-      modelProps: "user" | "organization" | "organizationClosure" | "position" | "posOrgComposition" | "employment" | "client" | "role" | "positionRole" | "employmentRole" | "organizationRole" | "posOrgRole" | "authObject" | "privilege" | "privilegeDelegation" | "delegationDetail" | "rolePrivilege"
+      modelProps: "user" | "organization" | "organizationClosure" | "position" | "posOrgComposition" | "employment" | "client" | "role" | "positionRole" | "employmentRole" | "organizationRole" | "posOrgRole" | "privilege" | "privilegeDelegation" | "delegationDetail" | "rolePrivilege"
       txIsolationLevel: Prisma.TransactionIsolationLevel
     }
     model: {
@@ -1657,72 +1641,6 @@ export namespace Prisma {
           }
         }
       }
-      AuthObject: {
-        payload: Prisma.$AuthObjectPayload<ExtArgs>
-        fields: Prisma.AuthObjectFieldRefs
-        operations: {
-          findUnique: {
-            args: Prisma.AuthObjectFindUniqueArgs<ExtArgs>
-            result: $Utils.PayloadToResult<Prisma.$AuthObjectPayload> | null
-          }
-          findUniqueOrThrow: {
-            args: Prisma.AuthObjectFindUniqueOrThrowArgs<ExtArgs>
-            result: $Utils.PayloadToResult<Prisma.$AuthObjectPayload>
-          }
-          findFirst: {
-            args: Prisma.AuthObjectFindFirstArgs<ExtArgs>
-            result: $Utils.PayloadToResult<Prisma.$AuthObjectPayload> | null
-          }
-          findFirstOrThrow: {
-            args: Prisma.AuthObjectFindFirstOrThrowArgs<ExtArgs>
-            result: $Utils.PayloadToResult<Prisma.$AuthObjectPayload>
-          }
-          findMany: {
-            args: Prisma.AuthObjectFindManyArgs<ExtArgs>
-            result: $Utils.PayloadToResult<Prisma.$AuthObjectPayload>[]
-          }
-          create: {
-            args: Prisma.AuthObjectCreateArgs<ExtArgs>
-            result: $Utils.PayloadToResult<Prisma.$AuthObjectPayload>
-          }
-          createMany: {
-            args: Prisma.AuthObjectCreateManyArgs<ExtArgs>
-            result: BatchPayload
-          }
-          delete: {
-            args: Prisma.AuthObjectDeleteArgs<ExtArgs>
-            result: $Utils.PayloadToResult<Prisma.$AuthObjectPayload>
-          }
-          update: {
-            args: Prisma.AuthObjectUpdateArgs<ExtArgs>
-            result: $Utils.PayloadToResult<Prisma.$AuthObjectPayload>
-          }
-          deleteMany: {
-            args: Prisma.AuthObjectDeleteManyArgs<ExtArgs>
-            result: BatchPayload
-          }
-          updateMany: {
-            args: Prisma.AuthObjectUpdateManyArgs<ExtArgs>
-            result: BatchPayload
-          }
-          upsert: {
-            args: Prisma.AuthObjectUpsertArgs<ExtArgs>
-            result: $Utils.PayloadToResult<Prisma.$AuthObjectPayload>
-          }
-          aggregate: {
-            args: Prisma.AuthObjectAggregateArgs<ExtArgs>
-            result: $Utils.Optional<AggregateAuthObject>
-          }
-          groupBy: {
-            args: Prisma.AuthObjectGroupByArgs<ExtArgs>
-            result: $Utils.Optional<AuthObjectGroupByOutputType>[]
-          }
-          count: {
-            args: Prisma.AuthObjectCountArgs<ExtArgs>
-            result: $Utils.Optional<AuthObjectCountAggregateOutputType> | number
-          }
-        }
-      }
       Privilege: {
         payload: Prisma.$PrivilegePayload<ExtArgs>
         fields: Prisma.PrivilegeFieldRefs
@@ -2095,7 +2013,6 @@ export namespace Prisma {
     employmentRole?: EmploymentRoleOmit
     organizationRole?: OrganizationRoleOmit
     posOrgRole?: PosOrgRoleOmit
-    authObject?: AuthObjectOmit
     privilege?: PrivilegeOmit
     privilegeDelegation?: PrivilegeDelegationOmit
     delegationDetail?: DelegationDetailOmit
@@ -2524,37 +2441,6 @@ export namespace Prisma {
    */
   export type RoleCountOutputTypeCountPrivilegesArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
     where?: RolePrivilegeWhereInput
-  }
-
-
-  /**
-   * Count Type AuthObjectCountOutputType
-   */
-
-  export type AuthObjectCountOutputType = {
-    privileges: number
-  }
-
-  export type AuthObjectCountOutputTypeSelect<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
-    privileges?: boolean | AuthObjectCountOutputTypeCountPrivilegesArgs
-  }
-
-  // Custom InputTypes
-  /**
-   * AuthObjectCountOutputType without action
-   */
-  export type AuthObjectCountOutputTypeDefaultArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
-    /**
-     * Select specific fields to fetch from the AuthObjectCountOutputType
-     */
-    select?: AuthObjectCountOutputTypeSelect<ExtArgs> | null
-  }
-
-  /**
-   * AuthObjectCountOutputType without action
-   */
-  export type AuthObjectCountOutputTypeCountPrivilegesArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
-    where?: PrivilegeWhereInput
   }
 
 
@@ -15210,1002 +15096,6 @@ export namespace Prisma {
 
 
   /**
-   * Model AuthObject
-   */
-
-  export type AggregateAuthObject = {
-    _count: AuthObjectCountAggregateOutputType | null
-    _avg: AuthObjectAvgAggregateOutputType | null
-    _sum: AuthObjectSumAggregateOutputType | null
-    _min: AuthObjectMinAggregateOutputType | null
-    _max: AuthObjectMaxAggregateOutputType | null
-  }
-
-  export type AuthObjectAvgAggregateOutputType = {
-    id: number | null
-  }
-
-  export type AuthObjectSumAggregateOutputType = {
-    id: number | null
-  }
-
-  export type AuthObjectMinAggregateOutputType = {
-    id: number | null
-    objectCode: string | null
-    objectName: string | null
-    objectType: string | null
-    path: string | null
-  }
-
-  export type AuthObjectMaxAggregateOutputType = {
-    id: number | null
-    objectCode: string | null
-    objectName: string | null
-    objectType: string | null
-    path: string | null
-  }
-
-  export type AuthObjectCountAggregateOutputType = {
-    id: number
-    objectCode: number
-    objectName: number
-    objectType: number
-    path: number
-    authFields: number
-    _all: number
-  }
-
-
-  export type AuthObjectAvgAggregateInputType = {
-    id?: true
-  }
-
-  export type AuthObjectSumAggregateInputType = {
-    id?: true
-  }
-
-  export type AuthObjectMinAggregateInputType = {
-    id?: true
-    objectCode?: true
-    objectName?: true
-    objectType?: true
-    path?: true
-  }
-
-  export type AuthObjectMaxAggregateInputType = {
-    id?: true
-    objectCode?: true
-    objectName?: true
-    objectType?: true
-    path?: true
-  }
-
-  export type AuthObjectCountAggregateInputType = {
-    id?: true
-    objectCode?: true
-    objectName?: true
-    objectType?: true
-    path?: true
-    authFields?: true
-    _all?: true
-  }
-
-  export type AuthObjectAggregateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
-    /**
-     * Filter which AuthObject to aggregate.
-     */
-    where?: AuthObjectWhereInput
-    /**
-     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
-     * 
-     * Determine the order of AuthObjects to fetch.
-     */
-    orderBy?: AuthObjectOrderByWithRelationInput | AuthObjectOrderByWithRelationInput[]
-    /**
-     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
-     * 
-     * Sets the start position
-     */
-    cursor?: AuthObjectWhereUniqueInput
-    /**
-     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
-     * 
-     * Take `±n` AuthObjects from the position of the cursor.
-     */
-    take?: number
-    /**
-     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
-     * 
-     * Skip the first `n` AuthObjects.
-     */
-    skip?: number
-    /**
-     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
-     * 
-     * Count returned AuthObjects
-    **/
-    _count?: true | AuthObjectCountAggregateInputType
-    /**
-     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
-     * 
-     * Select which fields to average
-    **/
-    _avg?: AuthObjectAvgAggregateInputType
-    /**
-     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
-     * 
-     * Select which fields to sum
-    **/
-    _sum?: AuthObjectSumAggregateInputType
-    /**
-     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
-     * 
-     * Select which fields to find the minimum value
-    **/
-    _min?: AuthObjectMinAggregateInputType
-    /**
-     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
-     * 
-     * Select which fields to find the maximum value
-    **/
-    _max?: AuthObjectMaxAggregateInputType
-  }
-
-  export type GetAuthObjectAggregateType<T extends AuthObjectAggregateArgs> = {
-        [P in keyof T & keyof AggregateAuthObject]: P extends '_count' | 'count'
-      ? T[P] extends true
-        ? number
-        : GetScalarType<T[P], AggregateAuthObject[P]>
-      : GetScalarType<T[P], AggregateAuthObject[P]>
-  }
-
-
-
-
-  export type AuthObjectGroupByArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
-    where?: AuthObjectWhereInput
-    orderBy?: AuthObjectOrderByWithAggregationInput | AuthObjectOrderByWithAggregationInput[]
-    by: AuthObjectScalarFieldEnum[] | AuthObjectScalarFieldEnum
-    having?: AuthObjectScalarWhereWithAggregatesInput
-    take?: number
-    skip?: number
-    _count?: AuthObjectCountAggregateInputType | true
-    _avg?: AuthObjectAvgAggregateInputType
-    _sum?: AuthObjectSumAggregateInputType
-    _min?: AuthObjectMinAggregateInputType
-    _max?: AuthObjectMaxAggregateInputType
-  }
-
-  export type AuthObjectGroupByOutputType = {
-    id: number
-    objectCode: string
-    objectName: string
-    objectType: string
-    path: string | null
-    authFields: JsonValue | null
-    _count: AuthObjectCountAggregateOutputType | null
-    _avg: AuthObjectAvgAggregateOutputType | null
-    _sum: AuthObjectSumAggregateOutputType | null
-    _min: AuthObjectMinAggregateOutputType | null
-    _max: AuthObjectMaxAggregateOutputType | null
-  }
-
-  type GetAuthObjectGroupByPayload<T extends AuthObjectGroupByArgs> = Prisma.PrismaPromise<
-    Array<
-      PickEnumerable<AuthObjectGroupByOutputType, T['by']> &
-        {
-          [P in ((keyof T) & (keyof AuthObjectGroupByOutputType))]: P extends '_count'
-            ? T[P] extends boolean
-              ? number
-              : GetScalarType<T[P], AuthObjectGroupByOutputType[P]>
-            : GetScalarType<T[P], AuthObjectGroupByOutputType[P]>
-        }
-      >
-    >
-
-
-  export type AuthObjectSelect<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
-    id?: boolean
-    objectCode?: boolean
-    objectName?: boolean
-    objectType?: boolean
-    path?: boolean
-    authFields?: boolean
-    privileges?: boolean | AuthObject$privilegesArgs<ExtArgs>
-    _count?: boolean | AuthObjectCountOutputTypeDefaultArgs<ExtArgs>
-  }, ExtArgs["result"]["authObject"]>
-
-
-
-  export type AuthObjectSelectScalar = {
-    id?: boolean
-    objectCode?: boolean
-    objectName?: boolean
-    objectType?: boolean
-    path?: boolean
-    authFields?: boolean
-  }
-
-  export type AuthObjectOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "objectCode" | "objectName" | "objectType" | "path" | "authFields", ExtArgs["result"]["authObject"]>
-  export type AuthObjectInclude<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
-    privileges?: boolean | AuthObject$privilegesArgs<ExtArgs>
-    _count?: boolean | AuthObjectCountOutputTypeDefaultArgs<ExtArgs>
-  }
-
-  export type $AuthObjectPayload<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
-    name: "AuthObject"
-    objects: {
-      privileges: Prisma.$PrivilegePayload<ExtArgs>[]
-    }
-    scalars: $Extensions.GetPayloadResult<{
-      id: number
-      objectCode: string
-      objectName: string
-      objectType: string
-      path: string | null
-      authFields: Prisma.JsonValue | null
-    }, ExtArgs["result"]["authObject"]>
-    composites: {}
-  }
-
-  type AuthObjectGetPayload<S extends boolean | null | undefined | AuthObjectDefaultArgs> = $Result.GetResult<Prisma.$AuthObjectPayload, S>
-
-  type AuthObjectCountArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> =
-    Omit<AuthObjectFindManyArgs, 'select' | 'include' | 'distinct' | 'omit'> & {
-      select?: AuthObjectCountAggregateInputType | true
-    }
-
-  export interface AuthObjectDelegate<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs, GlobalOmitOptions = {}> {
-    [K: symbol]: { types: Prisma.TypeMap<ExtArgs>['model']['AuthObject'], meta: { name: 'AuthObject' } }
-    /**
-     * Find zero or one AuthObject that matches the filter.
-     * @param {AuthObjectFindUniqueArgs} args - Arguments to find a AuthObject
-     * @example
-     * // Get one AuthObject
-     * const authObject = await prisma.authObject.findUnique({
-     *   where: {
-     *     // ... provide filter here
-     *   }
-     * })
-     */
-    findUnique<T extends AuthObjectFindUniqueArgs>(args: SelectSubset<T, AuthObjectFindUniqueArgs<ExtArgs>>): Prisma__AuthObjectClient<$Result.GetResult<Prisma.$AuthObjectPayload<ExtArgs>, T, "findUnique", GlobalOmitOptions> | null, null, ExtArgs, GlobalOmitOptions>
-
-    /**
-     * Find one AuthObject that matches the filter or throw an error with `error.code='P2025'`
-     * if no matches were found.
-     * @param {AuthObjectFindUniqueOrThrowArgs} args - Arguments to find a AuthObject
-     * @example
-     * // Get one AuthObject
-     * const authObject = await prisma.authObject.findUniqueOrThrow({
-     *   where: {
-     *     // ... provide filter here
-     *   }
-     * })
-     */
-    findUniqueOrThrow<T extends AuthObjectFindUniqueOrThrowArgs>(args: SelectSubset<T, AuthObjectFindUniqueOrThrowArgs<ExtArgs>>): Prisma__AuthObjectClient<$Result.GetResult<Prisma.$AuthObjectPayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
-
-    /**
-     * Find the first AuthObject that matches the filter.
-     * Note, that providing `undefined` is treated as the value not being there.
-     * Read more here: https://pris.ly/d/null-undefined
-     * @param {AuthObjectFindFirstArgs} args - Arguments to find a AuthObject
-     * @example
-     * // Get one AuthObject
-     * const authObject = await prisma.authObject.findFirst({
-     *   where: {
-     *     // ... provide filter here
-     *   }
-     * })
-     */
-    findFirst<T extends AuthObjectFindFirstArgs>(args?: SelectSubset<T, AuthObjectFindFirstArgs<ExtArgs>>): Prisma__AuthObjectClient<$Result.GetResult<Prisma.$AuthObjectPayload<ExtArgs>, T, "findFirst", GlobalOmitOptions> | null, null, ExtArgs, GlobalOmitOptions>
-
-    /**
-     * Find the first AuthObject that matches the filter or
-     * throw `PrismaKnownClientError` with `P2025` code if no matches were found.
-     * Note, that providing `undefined` is treated as the value not being there.
-     * Read more here: https://pris.ly/d/null-undefined
-     * @param {AuthObjectFindFirstOrThrowArgs} args - Arguments to find a AuthObject
-     * @example
-     * // Get one AuthObject
-     * const authObject = await prisma.authObject.findFirstOrThrow({
-     *   where: {
-     *     // ... provide filter here
-     *   }
-     * })
-     */
-    findFirstOrThrow<T extends AuthObjectFindFirstOrThrowArgs>(args?: SelectSubset<T, AuthObjectFindFirstOrThrowArgs<ExtArgs>>): Prisma__AuthObjectClient<$Result.GetResult<Prisma.$AuthObjectPayload<ExtArgs>, T, "findFirstOrThrow", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
-
-    /**
-     * Find zero or more AuthObjects that matches the filter.
-     * Note, that providing `undefined` is treated as the value not being there.
-     * Read more here: https://pris.ly/d/null-undefined
-     * @param {AuthObjectFindManyArgs} args - Arguments to filter and select certain fields only.
-     * @example
-     * // Get all AuthObjects
-     * const authObjects = await prisma.authObject.findMany()
-     * 
-     * // Get first 10 AuthObjects
-     * const authObjects = await prisma.authObject.findMany({ take: 10 })
-     * 
-     * // Only select the `id`
-     * const authObjectWithIdOnly = await prisma.authObject.findMany({ select: { id: true } })
-     * 
-     */
-    findMany<T extends AuthObjectFindManyArgs>(args?: SelectSubset<T, AuthObjectFindManyArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$AuthObjectPayload<ExtArgs>, T, "findMany", GlobalOmitOptions>>
-
-    /**
-     * Create a AuthObject.
-     * @param {AuthObjectCreateArgs} args - Arguments to create a AuthObject.
-     * @example
-     * // Create one AuthObject
-     * const AuthObject = await prisma.authObject.create({
-     *   data: {
-     *     // ... data to create a AuthObject
-     *   }
-     * })
-     * 
-     */
-    create<T extends AuthObjectCreateArgs>(args: SelectSubset<T, AuthObjectCreateArgs<ExtArgs>>): Prisma__AuthObjectClient<$Result.GetResult<Prisma.$AuthObjectPayload<ExtArgs>, T, "create", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
-
-    /**
-     * Create many AuthObjects.
-     * @param {AuthObjectCreateManyArgs} args - Arguments to create many AuthObjects.
-     * @example
-     * // Create many AuthObjects
-     * const authObject = await prisma.authObject.createMany({
-     *   data: [
-     *     // ... provide data here
-     *   ]
-     * })
-     *     
-     */
-    createMany<T extends AuthObjectCreateManyArgs>(args?: SelectSubset<T, AuthObjectCreateManyArgs<ExtArgs>>): Prisma.PrismaPromise<BatchPayload>
-
-    /**
-     * Delete a AuthObject.
-     * @param {AuthObjectDeleteArgs} args - Arguments to delete one AuthObject.
-     * @example
-     * // Delete one AuthObject
-     * const AuthObject = await prisma.authObject.delete({
-     *   where: {
-     *     // ... filter to delete one AuthObject
-     *   }
-     * })
-     * 
-     */
-    delete<T extends AuthObjectDeleteArgs>(args: SelectSubset<T, AuthObjectDeleteArgs<ExtArgs>>): Prisma__AuthObjectClient<$Result.GetResult<Prisma.$AuthObjectPayload<ExtArgs>, T, "delete", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
-
-    /**
-     * Update one AuthObject.
-     * @param {AuthObjectUpdateArgs} args - Arguments to update one AuthObject.
-     * @example
-     * // Update one AuthObject
-     * const authObject = await prisma.authObject.update({
-     *   where: {
-     *     // ... provide filter here
-     *   },
-     *   data: {
-     *     // ... provide data here
-     *   }
-     * })
-     * 
-     */
-    update<T extends AuthObjectUpdateArgs>(args: SelectSubset<T, AuthObjectUpdateArgs<ExtArgs>>): Prisma__AuthObjectClient<$Result.GetResult<Prisma.$AuthObjectPayload<ExtArgs>, T, "update", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
-
-    /**
-     * Delete zero or more AuthObjects.
-     * @param {AuthObjectDeleteManyArgs} args - Arguments to filter AuthObjects to delete.
-     * @example
-     * // Delete a few AuthObjects
-     * const { count } = await prisma.authObject.deleteMany({
-     *   where: {
-     *     // ... provide filter here
-     *   }
-     * })
-     * 
-     */
-    deleteMany<T extends AuthObjectDeleteManyArgs>(args?: SelectSubset<T, AuthObjectDeleteManyArgs<ExtArgs>>): Prisma.PrismaPromise<BatchPayload>
-
-    /**
-     * Update zero or more AuthObjects.
-     * Note, that providing `undefined` is treated as the value not being there.
-     * Read more here: https://pris.ly/d/null-undefined
-     * @param {AuthObjectUpdateManyArgs} args - Arguments to update one or more rows.
-     * @example
-     * // Update many AuthObjects
-     * const authObject = await prisma.authObject.updateMany({
-     *   where: {
-     *     // ... provide filter here
-     *   },
-     *   data: {
-     *     // ... provide data here
-     *   }
-     * })
-     * 
-     */
-    updateMany<T extends AuthObjectUpdateManyArgs>(args: SelectSubset<T, AuthObjectUpdateManyArgs<ExtArgs>>): Prisma.PrismaPromise<BatchPayload>
-
-    /**
-     * Create or update one AuthObject.
-     * @param {AuthObjectUpsertArgs} args - Arguments to update or create a AuthObject.
-     * @example
-     * // Update or create a AuthObject
-     * const authObject = await prisma.authObject.upsert({
-     *   create: {
-     *     // ... data to create a AuthObject
-     *   },
-     *   update: {
-     *     // ... in case it already exists, update
-     *   },
-     *   where: {
-     *     // ... the filter for the AuthObject we want to update
-     *   }
-     * })
-     */
-    upsert<T extends AuthObjectUpsertArgs>(args: SelectSubset<T, AuthObjectUpsertArgs<ExtArgs>>): Prisma__AuthObjectClient<$Result.GetResult<Prisma.$AuthObjectPayload<ExtArgs>, T, "upsert", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
-
-
-    /**
-     * Count the number of AuthObjects.
-     * Note, that providing `undefined` is treated as the value not being there.
-     * Read more here: https://pris.ly/d/null-undefined
-     * @param {AuthObjectCountArgs} args - Arguments to filter AuthObjects to count.
-     * @example
-     * // Count the number of AuthObjects
-     * const count = await prisma.authObject.count({
-     *   where: {
-     *     // ... the filter for the AuthObjects we want to count
-     *   }
-     * })
-    **/
-    count<T extends AuthObjectCountArgs>(
-      args?: Subset<T, AuthObjectCountArgs>,
-    ): Prisma.PrismaPromise<
-      T extends $Utils.Record<'select', any>
-        ? T['select'] extends true
-          ? number
-          : GetScalarType<T['select'], AuthObjectCountAggregateOutputType>
-        : number
-    >
-
-    /**
-     * Allows you to perform aggregations operations on a AuthObject.
-     * Note, that providing `undefined` is treated as the value not being there.
-     * Read more here: https://pris.ly/d/null-undefined
-     * @param {AuthObjectAggregateArgs} args - Select which aggregations you would like to apply and on what fields.
-     * @example
-     * // Ordered by age ascending
-     * // Where email contains prisma.io
-     * // Limited to the 10 users
-     * const aggregations = await prisma.user.aggregate({
-     *   _avg: {
-     *     age: true,
-     *   },
-     *   where: {
-     *     email: {
-     *       contains: "prisma.io",
-     *     },
-     *   },
-     *   orderBy: {
-     *     age: "asc",
-     *   },
-     *   take: 10,
-     * })
-    **/
-    aggregate<T extends AuthObjectAggregateArgs>(args: Subset<T, AuthObjectAggregateArgs>): Prisma.PrismaPromise<GetAuthObjectAggregateType<T>>
-
-    /**
-     * Group by AuthObject.
-     * Note, that providing `undefined` is treated as the value not being there.
-     * Read more here: https://pris.ly/d/null-undefined
-     * @param {AuthObjectGroupByArgs} args - Group by arguments.
-     * @example
-     * // Group by city, order by createdAt, get count
-     * const result = await prisma.user.groupBy({
-     *   by: ['city', 'createdAt'],
-     *   orderBy: {
-     *     createdAt: true
-     *   },
-     *   _count: {
-     *     _all: true
-     *   },
-     * })
-     * 
-    **/
-    groupBy<
-      T extends AuthObjectGroupByArgs,
-      HasSelectOrTake extends Or<
-        Extends<'skip', Keys<T>>,
-        Extends<'take', Keys<T>>
-      >,
-      OrderByArg extends True extends HasSelectOrTake
-        ? { orderBy: AuthObjectGroupByArgs['orderBy'] }
-        : { orderBy?: AuthObjectGroupByArgs['orderBy'] },
-      OrderFields extends ExcludeUnderscoreKeys<Keys<MaybeTupleToUnion<T['orderBy']>>>,
-      ByFields extends MaybeTupleToUnion<T['by']>,
-      ByValid extends Has<ByFields, OrderFields>,
-      HavingFields extends GetHavingFields<T['having']>,
-      HavingValid extends Has<ByFields, HavingFields>,
-      ByEmpty extends T['by'] extends never[] ? True : False,
-      InputErrors extends ByEmpty extends True
-      ? `Error: "by" must not be empty.`
-      : HavingValid extends False
-      ? {
-          [P in HavingFields]: P extends ByFields
-            ? never
-            : P extends string
-            ? `Error: Field "${P}" used in "having" needs to be provided in "by".`
-            : [
-                Error,
-                'Field ',
-                P,
-                ` in "having" needs to be provided in "by"`,
-              ]
-        }[HavingFields]
-      : 'take' extends Keys<T>
-      ? 'orderBy' extends Keys<T>
-        ? ByValid extends True
-          ? {}
-          : {
-              [P in OrderFields]: P extends ByFields
-                ? never
-                : `Error: Field "${P}" in "orderBy" needs to be provided in "by"`
-            }[OrderFields]
-        : 'Error: If you provide "take", you also need to provide "orderBy"'
-      : 'skip' extends Keys<T>
-      ? 'orderBy' extends Keys<T>
-        ? ByValid extends True
-          ? {}
-          : {
-              [P in OrderFields]: P extends ByFields
-                ? never
-                : `Error: Field "${P}" in "orderBy" needs to be provided in "by"`
-            }[OrderFields]
-        : 'Error: If you provide "skip", you also need to provide "orderBy"'
-      : ByValid extends True
-      ? {}
-      : {
-          [P in OrderFields]: P extends ByFields
-            ? never
-            : `Error: Field "${P}" in "orderBy" needs to be provided in "by"`
-        }[OrderFields]
-    >(args: SubsetIntersection<T, AuthObjectGroupByArgs, OrderByArg> & InputErrors): {} extends InputErrors ? GetAuthObjectGroupByPayload<T> : Prisma.PrismaPromise<InputErrors>
-  /**
-   * Fields of the AuthObject model
-   */
-  readonly fields: AuthObjectFieldRefs;
-  }
-
-  /**
-   * The delegate class that acts as a "Promise-like" for AuthObject.
-   * Why is this prefixed with `Prisma__`?
-   * Because we want to prevent naming conflicts as mentioned in
-   * https://github.com/prisma/prisma-client-js/issues/707
-   */
-  export interface Prisma__AuthObjectClient<T, Null = never, ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs, GlobalOmitOptions = {}> extends Prisma.PrismaPromise<T> {
-    readonly [Symbol.toStringTag]: "PrismaPromise"
-    privileges<T extends AuthObject$privilegesArgs<ExtArgs> = {}>(args?: Subset<T, AuthObject$privilegesArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$PrivilegePayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
-    /**
-     * Attaches callbacks for the resolution and/or rejection of the Promise.
-     * @param onfulfilled The callback to execute when the Promise is resolved.
-     * @param onrejected The callback to execute when the Promise is rejected.
-     * @returns A Promise for the completion of which ever callback is executed.
-     */
-    then<TResult1 = T, TResult2 = never>(onfulfilled?: ((value: T) => TResult1 | PromiseLike<TResult1>) | undefined | null, onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | undefined | null): $Utils.JsPromise<TResult1 | TResult2>
-    /**
-     * Attaches a callback for only the rejection of the Promise.
-     * @param onrejected The callback to execute when the Promise is rejected.
-     * @returns A Promise for the completion of the callback.
-     */
-    catch<TResult = never>(onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | undefined | null): $Utils.JsPromise<T | TResult>
-    /**
-     * Attaches a callback that is invoked when the Promise is settled (fulfilled or rejected). The
-     * resolved value cannot be modified from the callback.
-     * @param onfinally The callback to execute when the Promise is settled (fulfilled or rejected).
-     * @returns A Promise for the completion of the callback.
-     */
-    finally(onfinally?: (() => void) | undefined | null): $Utils.JsPromise<T>
-  }
-
-
-
-
-  /**
-   * Fields of the AuthObject model
-   */
-  interface AuthObjectFieldRefs {
-    readonly id: FieldRef<"AuthObject", 'Int'>
-    readonly objectCode: FieldRef<"AuthObject", 'String'>
-    readonly objectName: FieldRef<"AuthObject", 'String'>
-    readonly objectType: FieldRef<"AuthObject", 'String'>
-    readonly path: FieldRef<"AuthObject", 'String'>
-    readonly authFields: FieldRef<"AuthObject", 'Json'>
-  }
-    
-
-  // Custom InputTypes
-  /**
-   * AuthObject findUnique
-   */
-  export type AuthObjectFindUniqueArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
-    /**
-     * Select specific fields to fetch from the AuthObject
-     */
-    select?: AuthObjectSelect<ExtArgs> | null
-    /**
-     * Omit specific fields from the AuthObject
-     */
-    omit?: AuthObjectOmit<ExtArgs> | null
-    /**
-     * Choose, which related nodes to fetch as well
-     */
-    include?: AuthObjectInclude<ExtArgs> | null
-    /**
-     * Filter, which AuthObject to fetch.
-     */
-    where: AuthObjectWhereUniqueInput
-  }
-
-  /**
-   * AuthObject findUniqueOrThrow
-   */
-  export type AuthObjectFindUniqueOrThrowArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
-    /**
-     * Select specific fields to fetch from the AuthObject
-     */
-    select?: AuthObjectSelect<ExtArgs> | null
-    /**
-     * Omit specific fields from the AuthObject
-     */
-    omit?: AuthObjectOmit<ExtArgs> | null
-    /**
-     * Choose, which related nodes to fetch as well
-     */
-    include?: AuthObjectInclude<ExtArgs> | null
-    /**
-     * Filter, which AuthObject to fetch.
-     */
-    where: AuthObjectWhereUniqueInput
-  }
-
-  /**
-   * AuthObject findFirst
-   */
-  export type AuthObjectFindFirstArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
-    /**
-     * Select specific fields to fetch from the AuthObject
-     */
-    select?: AuthObjectSelect<ExtArgs> | null
-    /**
-     * Omit specific fields from the AuthObject
-     */
-    omit?: AuthObjectOmit<ExtArgs> | null
-    /**
-     * Choose, which related nodes to fetch as well
-     */
-    include?: AuthObjectInclude<ExtArgs> | null
-    /**
-     * Filter, which AuthObject to fetch.
-     */
-    where?: AuthObjectWhereInput
-    /**
-     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
-     * 
-     * Determine the order of AuthObjects to fetch.
-     */
-    orderBy?: AuthObjectOrderByWithRelationInput | AuthObjectOrderByWithRelationInput[]
-    /**
-     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
-     * 
-     * Sets the position for searching for AuthObjects.
-     */
-    cursor?: AuthObjectWhereUniqueInput
-    /**
-     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
-     * 
-     * Take `±n` AuthObjects from the position of the cursor.
-     */
-    take?: number
-    /**
-     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
-     * 
-     * Skip the first `n` AuthObjects.
-     */
-    skip?: number
-    /**
-     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/distinct Distinct Docs}
-     * 
-     * Filter by unique combinations of AuthObjects.
-     */
-    distinct?: AuthObjectScalarFieldEnum | AuthObjectScalarFieldEnum[]
-  }
-
-  /**
-   * AuthObject findFirstOrThrow
-   */
-  export type AuthObjectFindFirstOrThrowArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
-    /**
-     * Select specific fields to fetch from the AuthObject
-     */
-    select?: AuthObjectSelect<ExtArgs> | null
-    /**
-     * Omit specific fields from the AuthObject
-     */
-    omit?: AuthObjectOmit<ExtArgs> | null
-    /**
-     * Choose, which related nodes to fetch as well
-     */
-    include?: AuthObjectInclude<ExtArgs> | null
-    /**
-     * Filter, which AuthObject to fetch.
-     */
-    where?: AuthObjectWhereInput
-    /**
-     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
-     * 
-     * Determine the order of AuthObjects to fetch.
-     */
-    orderBy?: AuthObjectOrderByWithRelationInput | AuthObjectOrderByWithRelationInput[]
-    /**
-     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
-     * 
-     * Sets the position for searching for AuthObjects.
-     */
-    cursor?: AuthObjectWhereUniqueInput
-    /**
-     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
-     * 
-     * Take `±n` AuthObjects from the position of the cursor.
-     */
-    take?: number
-    /**
-     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
-     * 
-     * Skip the first `n` AuthObjects.
-     */
-    skip?: number
-    /**
-     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/distinct Distinct Docs}
-     * 
-     * Filter by unique combinations of AuthObjects.
-     */
-    distinct?: AuthObjectScalarFieldEnum | AuthObjectScalarFieldEnum[]
-  }
-
-  /**
-   * AuthObject findMany
-   */
-  export type AuthObjectFindManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
-    /**
-     * Select specific fields to fetch from the AuthObject
-     */
-    select?: AuthObjectSelect<ExtArgs> | null
-    /**
-     * Omit specific fields from the AuthObject
-     */
-    omit?: AuthObjectOmit<ExtArgs> | null
-    /**
-     * Choose, which related nodes to fetch as well
-     */
-    include?: AuthObjectInclude<ExtArgs> | null
-    /**
-     * Filter, which AuthObjects to fetch.
-     */
-    where?: AuthObjectWhereInput
-    /**
-     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
-     * 
-     * Determine the order of AuthObjects to fetch.
-     */
-    orderBy?: AuthObjectOrderByWithRelationInput | AuthObjectOrderByWithRelationInput[]
-    /**
-     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
-     * 
-     * Sets the position for listing AuthObjects.
-     */
-    cursor?: AuthObjectWhereUniqueInput
-    /**
-     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
-     * 
-     * Take `±n` AuthObjects from the position of the cursor.
-     */
-    take?: number
-    /**
-     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
-     * 
-     * Skip the first `n` AuthObjects.
-     */
-    skip?: number
-    distinct?: AuthObjectScalarFieldEnum | AuthObjectScalarFieldEnum[]
-  }
-
-  /**
-   * AuthObject create
-   */
-  export type AuthObjectCreateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
-    /**
-     * Select specific fields to fetch from the AuthObject
-     */
-    select?: AuthObjectSelect<ExtArgs> | null
-    /**
-     * Omit specific fields from the AuthObject
-     */
-    omit?: AuthObjectOmit<ExtArgs> | null
-    /**
-     * Choose, which related nodes to fetch as well
-     */
-    include?: AuthObjectInclude<ExtArgs> | null
-    /**
-     * The data needed to create a AuthObject.
-     */
-    data: XOR<AuthObjectCreateInput, AuthObjectUncheckedCreateInput>
-  }
-
-  /**
-   * AuthObject createMany
-   */
-  export type AuthObjectCreateManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
-    /**
-     * The data used to create many AuthObjects.
-     */
-    data: AuthObjectCreateManyInput | AuthObjectCreateManyInput[]
-    skipDuplicates?: boolean
-  }
-
-  /**
-   * AuthObject update
-   */
-  export type AuthObjectUpdateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
-    /**
-     * Select specific fields to fetch from the AuthObject
-     */
-    select?: AuthObjectSelect<ExtArgs> | null
-    /**
-     * Omit specific fields from the AuthObject
-     */
-    omit?: AuthObjectOmit<ExtArgs> | null
-    /**
-     * Choose, which related nodes to fetch as well
-     */
-    include?: AuthObjectInclude<ExtArgs> | null
-    /**
-     * The data needed to update a AuthObject.
-     */
-    data: XOR<AuthObjectUpdateInput, AuthObjectUncheckedUpdateInput>
-    /**
-     * Choose, which AuthObject to update.
-     */
-    where: AuthObjectWhereUniqueInput
-  }
-
-  /**
-   * AuthObject updateMany
-   */
-  export type AuthObjectUpdateManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
-    /**
-     * The data used to update AuthObjects.
-     */
-    data: XOR<AuthObjectUpdateManyMutationInput, AuthObjectUncheckedUpdateManyInput>
-    /**
-     * Filter which AuthObjects to update
-     */
-    where?: AuthObjectWhereInput
-    /**
-     * Limit how many AuthObjects to update.
-     */
-    limit?: number
-  }
-
-  /**
-   * AuthObject upsert
-   */
-  export type AuthObjectUpsertArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
-    /**
-     * Select specific fields to fetch from the AuthObject
-     */
-    select?: AuthObjectSelect<ExtArgs> | null
-    /**
-     * Omit specific fields from the AuthObject
-     */
-    omit?: AuthObjectOmit<ExtArgs> | null
-    /**
-     * Choose, which related nodes to fetch as well
-     */
-    include?: AuthObjectInclude<ExtArgs> | null
-    /**
-     * The filter to search for the AuthObject to update in case it exists.
-     */
-    where: AuthObjectWhereUniqueInput
-    /**
-     * In case the AuthObject found by the `where` argument doesn't exist, create a new AuthObject with this data.
-     */
-    create: XOR<AuthObjectCreateInput, AuthObjectUncheckedCreateInput>
-    /**
-     * In case the AuthObject was found with the provided `where` argument, update it with this data.
-     */
-    update: XOR<AuthObjectUpdateInput, AuthObjectUncheckedUpdateInput>
-  }
-
-  /**
-   * AuthObject delete
-   */
-  export type AuthObjectDeleteArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
-    /**
-     * Select specific fields to fetch from the AuthObject
-     */
-    select?: AuthObjectSelect<ExtArgs> | null
-    /**
-     * Omit specific fields from the AuthObject
-     */
-    omit?: AuthObjectOmit<ExtArgs> | null
-    /**
-     * Choose, which related nodes to fetch as well
-     */
-    include?: AuthObjectInclude<ExtArgs> | null
-    /**
-     * Filter which AuthObject to delete.
-     */
-    where: AuthObjectWhereUniqueInput
-  }
-
-  /**
-   * AuthObject deleteMany
-   */
-  export type AuthObjectDeleteManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
-    /**
-     * Filter which AuthObjects to delete
-     */
-    where?: AuthObjectWhereInput
-    /**
-     * Limit how many AuthObjects to delete.
-     */
-    limit?: number
-  }
-
-  /**
-   * AuthObject.privileges
-   */
-  export type AuthObject$privilegesArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
-    /**
-     * Select specific fields to fetch from the Privilege
-     */
-    select?: PrivilegeSelect<ExtArgs> | null
-    /**
-     * Omit specific fields from the Privilege
-     */
-    omit?: PrivilegeOmit<ExtArgs> | null
-    /**
-     * Choose, which related nodes to fetch as well
-     */
-    include?: PrivilegeInclude<ExtArgs> | null
-    where?: PrivilegeWhereInput
-    orderBy?: PrivilegeOrderByWithRelationInput | PrivilegeOrderByWithRelationInput[]
-    cursor?: PrivilegeWhereUniqueInput
-    take?: number
-    skip?: number
-    distinct?: PrivilegeScalarFieldEnum | PrivilegeScalarFieldEnum[]
-  }
-
-  /**
-   * AuthObject without action
-   */
-  export type AuthObjectDefaultArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
-    /**
-     * Select specific fields to fetch from the AuthObject
-     */
-    select?: AuthObjectSelect<ExtArgs> | null
-    /**
-     * Omit specific fields from the AuthObject
-     */
-    omit?: AuthObjectOmit<ExtArgs> | null
-    /**
-     * Choose, which related nodes to fetch as well
-     */
-    include?: AuthObjectInclude<ExtArgs> | null
-  }
-
-
-  /**
    * Model Privilege
    */
 
@@ -16219,13 +15109,11 @@ export namespace Prisma {
 
   export type PrivilegeAvgAggregateOutputType = {
     id: number | null
-    objectId: number | null
     status: number | null
   }
 
   export type PrivilegeSumAggregateOutputType = {
     id: number | null
-    objectId: number | null
     status: number | null
   }
 
@@ -16233,7 +15121,6 @@ export namespace Prisma {
     id: number | null
     privilegeCode: string | null
     privilegeName: string | null
-    objectId: number | null
     status: number | null
     description: string | null
     isDelete: boolean | null
@@ -16245,7 +15132,6 @@ export namespace Prisma {
     id: number | null
     privilegeCode: string | null
     privilegeName: string | null
-    objectId: number | null
     status: number | null
     description: string | null
     isDelete: boolean | null
@@ -16257,7 +15143,6 @@ export namespace Prisma {
     id: number
     privilegeCode: number
     privilegeName: number
-    objectId: number
     fieldValues: number
     status: number
     description: number
@@ -16270,13 +15155,11 @@ export namespace Prisma {
 
   export type PrivilegeAvgAggregateInputType = {
     id?: true
-    objectId?: true
     status?: true
   }
 
   export type PrivilegeSumAggregateInputType = {
     id?: true
-    objectId?: true
     status?: true
   }
 
@@ -16284,7 +15167,6 @@ export namespace Prisma {
     id?: true
     privilegeCode?: true
     privilegeName?: true
-    objectId?: true
     status?: true
     description?: true
     isDelete?: true
@@ -16296,7 +15178,6 @@ export namespace Prisma {
     id?: true
     privilegeCode?: true
     privilegeName?: true
-    objectId?: true
     status?: true
     description?: true
     isDelete?: true
@@ -16308,7 +15189,6 @@ export namespace Prisma {
     id?: true
     privilegeCode?: true
     privilegeName?: true
-    objectId?: true
     fieldValues?: true
     status?: true
     description?: true
@@ -16408,7 +15288,6 @@ export namespace Prisma {
     id: number
     privilegeCode: string
     privilegeName: string
-    objectId: number
     fieldValues: JsonValue | null
     status: number
     description: string | null
@@ -16440,7 +15319,6 @@ export namespace Prisma {
     id?: boolean
     privilegeCode?: boolean
     privilegeName?: boolean
-    objectId?: boolean
     fieldValues?: boolean
     status?: boolean
     description?: boolean
@@ -16448,7 +15326,6 @@ export namespace Prisma {
     createTime?: boolean
     updateTime?: boolean
     roles?: boolean | Privilege$rolesArgs<ExtArgs>
-    object?: boolean | AuthObjectDefaultArgs<ExtArgs>
     _count?: boolean | PrivilegeCountOutputTypeDefaultArgs<ExtArgs>
   }, ExtArgs["result"]["privilege"]>
 
@@ -16458,7 +15335,6 @@ export namespace Prisma {
     id?: boolean
     privilegeCode?: boolean
     privilegeName?: boolean
-    objectId?: boolean
     fieldValues?: boolean
     status?: boolean
     description?: boolean
@@ -16467,10 +15343,9 @@ export namespace Prisma {
     updateTime?: boolean
   }
 
-  export type PrivilegeOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "privilegeCode" | "privilegeName" | "objectId" | "fieldValues" | "status" | "description" | "isDelete" | "createTime" | "updateTime", ExtArgs["result"]["privilege"]>
+  export type PrivilegeOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "privilegeCode" | "privilegeName" | "fieldValues" | "status" | "description" | "isDelete" | "createTime" | "updateTime", ExtArgs["result"]["privilege"]>
   export type PrivilegeInclude<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
     roles?: boolean | Privilege$rolesArgs<ExtArgs>
-    object?: boolean | AuthObjectDefaultArgs<ExtArgs>
     _count?: boolean | PrivilegeCountOutputTypeDefaultArgs<ExtArgs>
   }
 
@@ -16478,13 +15353,11 @@ export namespace Prisma {
     name: "Privilege"
     objects: {
       roles: Prisma.$RolePrivilegePayload<ExtArgs>[]
-      object: Prisma.$AuthObjectPayload<ExtArgs>
     }
     scalars: $Extensions.GetPayloadResult<{
       id: number
       privilegeCode: string
       privilegeName: string
-      objectId: number
       fieldValues: Prisma.JsonValue | null
       status: number
       description: string | null
@@ -16832,7 +15705,6 @@ export namespace Prisma {
   export interface Prisma__PrivilegeClient<T, Null = never, ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs, GlobalOmitOptions = {}> extends Prisma.PrismaPromise<T> {
     readonly [Symbol.toStringTag]: "PrismaPromise"
     roles<T extends Privilege$rolesArgs<ExtArgs> = {}>(args?: Subset<T, Privilege$rolesArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$RolePrivilegePayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
-    object<T extends AuthObjectDefaultArgs<ExtArgs> = {}>(args?: Subset<T, AuthObjectDefaultArgs<ExtArgs>>): Prisma__AuthObjectClient<$Result.GetResult<Prisma.$AuthObjectPayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions> | Null, Null, ExtArgs, GlobalOmitOptions>
     /**
      * Attaches callbacks for the resolution and/or rejection of the Promise.
      * @param onfulfilled The callback to execute when the Promise is resolved.
@@ -16865,7 +15737,6 @@ export namespace Prisma {
     readonly id: FieldRef<"Privilege", 'Int'>
     readonly privilegeCode: FieldRef<"Privilege", 'String'>
     readonly privilegeName: FieldRef<"Privilege", 'String'>
-    readonly objectId: FieldRef<"Privilege", 'Int'>
     readonly fieldValues: FieldRef<"Privilege", 'Json'>
     readonly status: FieldRef<"Privilege", 'Int'>
     readonly description: FieldRef<"Privilege", 'String'>
@@ -20360,23 +19231,10 @@ export namespace Prisma {
   export type PosOrgRoleScalarFieldEnum = (typeof PosOrgRoleScalarFieldEnum)[keyof typeof PosOrgRoleScalarFieldEnum]
 
 
-  export const AuthObjectScalarFieldEnum: {
-    id: 'id',
-    objectCode: 'objectCode',
-    objectName: 'objectName',
-    objectType: 'objectType',
-    path: 'path',
-    authFields: 'authFields'
-  };
-
-  export type AuthObjectScalarFieldEnum = (typeof AuthObjectScalarFieldEnum)[keyof typeof AuthObjectScalarFieldEnum]
-
-
   export const PrivilegeScalarFieldEnum: {
     id: 'id',
     privilegeCode: 'privilegeCode',
     privilegeName: 'privilegeName',
-    objectId: 'objectId',
     fieldValues: 'fieldValues',
     status: 'status',
     description: 'description',
@@ -20522,16 +19380,6 @@ export namespace Prisma {
   };
 
   export type QueryMode = (typeof QueryMode)[keyof typeof QueryMode]
-
-
-  export const AuthObjectOrderByRelevanceFieldEnum: {
-    objectCode: 'objectCode',
-    objectName: 'objectName',
-    objectType: 'objectType',
-    path: 'path'
-  };
-
-  export type AuthObjectOrderByRelevanceFieldEnum = (typeof AuthObjectOrderByRelevanceFieldEnum)[keyof typeof AuthObjectOrderByRelevanceFieldEnum]
 
 
   export const PrivilegeOrderByRelevanceFieldEnum: {
@@ -21523,69 +20371,6 @@ export namespace Prisma {
     roleId?: IntWithAggregatesFilter<"PosOrgRole"> | number
   }
 
-  export type AuthObjectWhereInput = {
-    AND?: AuthObjectWhereInput | AuthObjectWhereInput[]
-    OR?: AuthObjectWhereInput[]
-    NOT?: AuthObjectWhereInput | AuthObjectWhereInput[]
-    id?: IntFilter<"AuthObject"> | number
-    objectCode?: StringFilter<"AuthObject"> | string
-    objectName?: StringFilter<"AuthObject"> | string
-    objectType?: StringFilter<"AuthObject"> | string
-    path?: StringNullableFilter<"AuthObject"> | string | null
-    authFields?: JsonNullableFilter<"AuthObject">
-    privileges?: PrivilegeListRelationFilter
-  }
-
-  export type AuthObjectOrderByWithRelationInput = {
-    id?: SortOrder
-    objectCode?: SortOrder
-    objectName?: SortOrder
-    objectType?: SortOrder
-    path?: SortOrderInput | SortOrder
-    authFields?: SortOrderInput | SortOrder
-    privileges?: PrivilegeOrderByRelationAggregateInput
-    _relevance?: AuthObjectOrderByRelevanceInput
-  }
-
-  export type AuthObjectWhereUniqueInput = Prisma.AtLeast<{
-    id?: number
-    AND?: AuthObjectWhereInput | AuthObjectWhereInput[]
-    OR?: AuthObjectWhereInput[]
-    NOT?: AuthObjectWhereInput | AuthObjectWhereInput[]
-    objectCode?: StringFilter<"AuthObject"> | string
-    objectName?: StringFilter<"AuthObject"> | string
-    objectType?: StringFilter<"AuthObject"> | string
-    path?: StringNullableFilter<"AuthObject"> | string | null
-    authFields?: JsonNullableFilter<"AuthObject">
-    privileges?: PrivilegeListRelationFilter
-  }, "id">
-
-  export type AuthObjectOrderByWithAggregationInput = {
-    id?: SortOrder
-    objectCode?: SortOrder
-    objectName?: SortOrder
-    objectType?: SortOrder
-    path?: SortOrderInput | SortOrder
-    authFields?: SortOrderInput | SortOrder
-    _count?: AuthObjectCountOrderByAggregateInput
-    _avg?: AuthObjectAvgOrderByAggregateInput
-    _max?: AuthObjectMaxOrderByAggregateInput
-    _min?: AuthObjectMinOrderByAggregateInput
-    _sum?: AuthObjectSumOrderByAggregateInput
-  }
-
-  export type AuthObjectScalarWhereWithAggregatesInput = {
-    AND?: AuthObjectScalarWhereWithAggregatesInput | AuthObjectScalarWhereWithAggregatesInput[]
-    OR?: AuthObjectScalarWhereWithAggregatesInput[]
-    NOT?: AuthObjectScalarWhereWithAggregatesInput | AuthObjectScalarWhereWithAggregatesInput[]
-    id?: IntWithAggregatesFilter<"AuthObject"> | number
-    objectCode?: StringWithAggregatesFilter<"AuthObject"> | string
-    objectName?: StringWithAggregatesFilter<"AuthObject"> | string
-    objectType?: StringWithAggregatesFilter<"AuthObject"> | string
-    path?: StringNullableWithAggregatesFilter<"AuthObject"> | string | null
-    authFields?: JsonNullableWithAggregatesFilter<"AuthObject">
-  }
-
   export type PrivilegeWhereInput = {
     AND?: PrivilegeWhereInput | PrivilegeWhereInput[]
     OR?: PrivilegeWhereInput[]
@@ -21593,7 +20378,6 @@ export namespace Prisma {
     id?: IntFilter<"Privilege"> | number
     privilegeCode?: StringFilter<"Privilege"> | string
     privilegeName?: StringFilter<"Privilege"> | string
-    objectId?: IntFilter<"Privilege"> | number
     fieldValues?: JsonNullableFilter<"Privilege">
     status?: IntFilter<"Privilege"> | number
     description?: StringNullableFilter<"Privilege"> | string | null
@@ -21601,14 +20385,12 @@ export namespace Prisma {
     createTime?: DateTimeFilter<"Privilege"> | Date | string
     updateTime?: DateTimeFilter<"Privilege"> | Date | string
     roles?: RolePrivilegeListRelationFilter
-    object?: XOR<AuthObjectScalarRelationFilter, AuthObjectWhereInput>
   }
 
   export type PrivilegeOrderByWithRelationInput = {
     id?: SortOrder
     privilegeCode?: SortOrder
     privilegeName?: SortOrder
-    objectId?: SortOrder
     fieldValues?: SortOrderInput | SortOrder
     status?: SortOrder
     description?: SortOrderInput | SortOrder
@@ -21616,7 +20398,6 @@ export namespace Prisma {
     createTime?: SortOrder
     updateTime?: SortOrder
     roles?: RolePrivilegeOrderByRelationAggregateInput
-    object?: AuthObjectOrderByWithRelationInput
     _relevance?: PrivilegeOrderByRelevanceInput
   }
 
@@ -21627,7 +20408,6 @@ export namespace Prisma {
     NOT?: PrivilegeWhereInput | PrivilegeWhereInput[]
     privilegeCode?: StringFilter<"Privilege"> | string
     privilegeName?: StringFilter<"Privilege"> | string
-    objectId?: IntFilter<"Privilege"> | number
     fieldValues?: JsonNullableFilter<"Privilege">
     status?: IntFilter<"Privilege"> | number
     description?: StringNullableFilter<"Privilege"> | string | null
@@ -21635,14 +20415,12 @@ export namespace Prisma {
     createTime?: DateTimeFilter<"Privilege"> | Date | string
     updateTime?: DateTimeFilter<"Privilege"> | Date | string
     roles?: RolePrivilegeListRelationFilter
-    object?: XOR<AuthObjectScalarRelationFilter, AuthObjectWhereInput>
   }, "id">
 
   export type PrivilegeOrderByWithAggregationInput = {
     id?: SortOrder
     privilegeCode?: SortOrder
     privilegeName?: SortOrder
-    objectId?: SortOrder
     fieldValues?: SortOrderInput | SortOrder
     status?: SortOrder
     description?: SortOrderInput | SortOrder
@@ -21663,7 +20441,6 @@ export namespace Prisma {
     id?: IntWithAggregatesFilter<"Privilege"> | number
     privilegeCode?: StringWithAggregatesFilter<"Privilege"> | string
     privilegeName?: StringWithAggregatesFilter<"Privilege"> | string
-    objectId?: IntWithAggregatesFilter<"Privilege"> | number
     fieldValues?: JsonNullableWithAggregatesFilter<"Privilege">
     status?: IntWithAggregatesFilter<"Privilege"> | number
     description?: StringNullableWithAggregatesFilter<"Privilege"> | string | null
@@ -22749,70 +21526,6 @@ export namespace Prisma {
     roleId?: IntFieldUpdateOperationsInput | number
   }
 
-  export type AuthObjectCreateInput = {
-    objectCode: string
-    objectName: string
-    objectType: string
-    path?: string | null
-    authFields?: NullableJsonNullValueInput | InputJsonValue
-    privileges?: PrivilegeCreateNestedManyWithoutObjectInput
-  }
-
-  export type AuthObjectUncheckedCreateInput = {
-    id?: number
-    objectCode: string
-    objectName: string
-    objectType: string
-    path?: string | null
-    authFields?: NullableJsonNullValueInput | InputJsonValue
-    privileges?: PrivilegeUncheckedCreateNestedManyWithoutObjectInput
-  }
-
-  export type AuthObjectUpdateInput = {
-    objectCode?: StringFieldUpdateOperationsInput | string
-    objectName?: StringFieldUpdateOperationsInput | string
-    objectType?: StringFieldUpdateOperationsInput | string
-    path?: NullableStringFieldUpdateOperationsInput | string | null
-    authFields?: NullableJsonNullValueInput | InputJsonValue
-    privileges?: PrivilegeUpdateManyWithoutObjectNestedInput
-  }
-
-  export type AuthObjectUncheckedUpdateInput = {
-    id?: IntFieldUpdateOperationsInput | number
-    objectCode?: StringFieldUpdateOperationsInput | string
-    objectName?: StringFieldUpdateOperationsInput | string
-    objectType?: StringFieldUpdateOperationsInput | string
-    path?: NullableStringFieldUpdateOperationsInput | string | null
-    authFields?: NullableJsonNullValueInput | InputJsonValue
-    privileges?: PrivilegeUncheckedUpdateManyWithoutObjectNestedInput
-  }
-
-  export type AuthObjectCreateManyInput = {
-    id?: number
-    objectCode: string
-    objectName: string
-    objectType: string
-    path?: string | null
-    authFields?: NullableJsonNullValueInput | InputJsonValue
-  }
-
-  export type AuthObjectUpdateManyMutationInput = {
-    objectCode?: StringFieldUpdateOperationsInput | string
-    objectName?: StringFieldUpdateOperationsInput | string
-    objectType?: StringFieldUpdateOperationsInput | string
-    path?: NullableStringFieldUpdateOperationsInput | string | null
-    authFields?: NullableJsonNullValueInput | InputJsonValue
-  }
-
-  export type AuthObjectUncheckedUpdateManyInput = {
-    id?: IntFieldUpdateOperationsInput | number
-    objectCode?: StringFieldUpdateOperationsInput | string
-    objectName?: StringFieldUpdateOperationsInput | string
-    objectType?: StringFieldUpdateOperationsInput | string
-    path?: NullableStringFieldUpdateOperationsInput | string | null
-    authFields?: NullableJsonNullValueInput | InputJsonValue
-  }
-
   export type PrivilegeCreateInput = {
     privilegeCode: string
     privilegeName: string
@@ -22823,14 +21536,12 @@ export namespace Prisma {
     createTime?: Date | string
     updateTime?: Date | string
     roles?: RolePrivilegeCreateNestedManyWithoutPrivilegeInput
-    object: AuthObjectCreateNestedOneWithoutPrivilegesInput
   }
 
   export type PrivilegeUncheckedCreateInput = {
     id?: number
     privilegeCode: string
     privilegeName: string
-    objectId: number
     fieldValues?: NullableJsonNullValueInput | InputJsonValue
     status?: number
     description?: string | null
@@ -22850,14 +21561,12 @@ export namespace Prisma {
     createTime?: DateTimeFieldUpdateOperationsInput | Date | string
     updateTime?: DateTimeFieldUpdateOperationsInput | Date | string
     roles?: RolePrivilegeUpdateManyWithoutPrivilegeNestedInput
-    object?: AuthObjectUpdateOneRequiredWithoutPrivilegesNestedInput
   }
 
   export type PrivilegeUncheckedUpdateInput = {
     id?: IntFieldUpdateOperationsInput | number
     privilegeCode?: StringFieldUpdateOperationsInput | string
     privilegeName?: StringFieldUpdateOperationsInput | string
-    objectId?: IntFieldUpdateOperationsInput | number
     fieldValues?: NullableJsonNullValueInput | InputJsonValue
     status?: IntFieldUpdateOperationsInput | number
     description?: NullableStringFieldUpdateOperationsInput | string | null
@@ -22871,7 +21580,6 @@ export namespace Prisma {
     id?: number
     privilegeCode: string
     privilegeName: string
-    objectId: number
     fieldValues?: NullableJsonNullValueInput | InputJsonValue
     status?: number
     description?: string | null
@@ -22895,7 +21603,6 @@ export namespace Prisma {
     id?: IntFieldUpdateOperationsInput | number
     privilegeCode?: StringFieldUpdateOperationsInput | string
     privilegeName?: StringFieldUpdateOperationsInput | string
-    objectId?: IntFieldUpdateOperationsInput | number
     fieldValues?: NullableJsonNullValueInput | InputJsonValue
     status?: IntFieldUpdateOperationsInput | number
     description?: NullableStringFieldUpdateOperationsInput | string | null
@@ -23970,53 +22677,54 @@ export namespace Prisma {
     not?: InputJsonValue | JsonFieldRefInput<$PrismaModel> | JsonNullValueFilter
   }
 
-  export type PrivilegeListRelationFilter = {
-    every?: PrivilegeWhereInput
-    some?: PrivilegeWhereInput
-    none?: PrivilegeWhereInput
-  }
-
-  export type PrivilegeOrderByRelationAggregateInput = {
-    _count?: SortOrder
-  }
-
-  export type AuthObjectOrderByRelevanceInput = {
-    fields: AuthObjectOrderByRelevanceFieldEnum | AuthObjectOrderByRelevanceFieldEnum[]
+  export type PrivilegeOrderByRelevanceInput = {
+    fields: PrivilegeOrderByRelevanceFieldEnum | PrivilegeOrderByRelevanceFieldEnum[]
     sort: SortOrder
     search: string
   }
 
-  export type AuthObjectCountOrderByAggregateInput = {
+  export type PrivilegeCountOrderByAggregateInput = {
     id?: SortOrder
-    objectCode?: SortOrder
-    objectName?: SortOrder
-    objectType?: SortOrder
-    path?: SortOrder
-    authFields?: SortOrder
+    privilegeCode?: SortOrder
+    privilegeName?: SortOrder
+    fieldValues?: SortOrder
+    status?: SortOrder
+    description?: SortOrder
+    isDelete?: SortOrder
+    createTime?: SortOrder
+    updateTime?: SortOrder
   }
 
-  export type AuthObjectAvgOrderByAggregateInput = {
+  export type PrivilegeAvgOrderByAggregateInput = {
     id?: SortOrder
+    status?: SortOrder
   }
 
-  export type AuthObjectMaxOrderByAggregateInput = {
+  export type PrivilegeMaxOrderByAggregateInput = {
     id?: SortOrder
-    objectCode?: SortOrder
-    objectName?: SortOrder
-    objectType?: SortOrder
-    path?: SortOrder
+    privilegeCode?: SortOrder
+    privilegeName?: SortOrder
+    status?: SortOrder
+    description?: SortOrder
+    isDelete?: SortOrder
+    createTime?: SortOrder
+    updateTime?: SortOrder
   }
 
-  export type AuthObjectMinOrderByAggregateInput = {
+  export type PrivilegeMinOrderByAggregateInput = {
     id?: SortOrder
-    objectCode?: SortOrder
-    objectName?: SortOrder
-    objectType?: SortOrder
-    path?: SortOrder
+    privilegeCode?: SortOrder
+    privilegeName?: SortOrder
+    status?: SortOrder
+    description?: SortOrder
+    isDelete?: SortOrder
+    createTime?: SortOrder
+    updateTime?: SortOrder
   }
 
-  export type AuthObjectSumOrderByAggregateInput = {
+  export type PrivilegeSumOrderByAggregateInput = {
     id?: SortOrder
+    status?: SortOrder
   }
   export type JsonNullableWithAggregatesFilter<$PrismaModel = never> =
     | PatchUndefined<
@@ -24043,66 +22751,6 @@ export namespace Prisma {
     _count?: NestedIntNullableFilter<$PrismaModel>
     _min?: NestedJsonNullableFilter<$PrismaModel>
     _max?: NestedJsonNullableFilter<$PrismaModel>
-  }
-
-  export type AuthObjectScalarRelationFilter = {
-    is?: AuthObjectWhereInput
-    isNot?: AuthObjectWhereInput
-  }
-
-  export type PrivilegeOrderByRelevanceInput = {
-    fields: PrivilegeOrderByRelevanceFieldEnum | PrivilegeOrderByRelevanceFieldEnum[]
-    sort: SortOrder
-    search: string
-  }
-
-  export type PrivilegeCountOrderByAggregateInput = {
-    id?: SortOrder
-    privilegeCode?: SortOrder
-    privilegeName?: SortOrder
-    objectId?: SortOrder
-    fieldValues?: SortOrder
-    status?: SortOrder
-    description?: SortOrder
-    isDelete?: SortOrder
-    createTime?: SortOrder
-    updateTime?: SortOrder
-  }
-
-  export type PrivilegeAvgOrderByAggregateInput = {
-    id?: SortOrder
-    objectId?: SortOrder
-    status?: SortOrder
-  }
-
-  export type PrivilegeMaxOrderByAggregateInput = {
-    id?: SortOrder
-    privilegeCode?: SortOrder
-    privilegeName?: SortOrder
-    objectId?: SortOrder
-    status?: SortOrder
-    description?: SortOrder
-    isDelete?: SortOrder
-    createTime?: SortOrder
-    updateTime?: SortOrder
-  }
-
-  export type PrivilegeMinOrderByAggregateInput = {
-    id?: SortOrder
-    privilegeCode?: SortOrder
-    privilegeName?: SortOrder
-    objectId?: SortOrder
-    status?: SortOrder
-    description?: SortOrder
-    isDelete?: SortOrder
-    createTime?: SortOrder
-    updateTime?: SortOrder
-  }
-
-  export type PrivilegeSumOrderByAggregateInput = {
-    id?: SortOrder
-    objectId?: SortOrder
-    status?: SortOrder
   }
 
   export type DelegationDetailListRelationFilter = {
@@ -25466,59 +24114,11 @@ export namespace Prisma {
     update?: XOR<XOR<RoleUpdateToOneWithWhereWithoutPositionOrganizationsInput, RoleUpdateWithoutPositionOrganizationsInput>, RoleUncheckedUpdateWithoutPositionOrganizationsInput>
   }
 
-  export type PrivilegeCreateNestedManyWithoutObjectInput = {
-    create?: XOR<PrivilegeCreateWithoutObjectInput, PrivilegeUncheckedCreateWithoutObjectInput> | PrivilegeCreateWithoutObjectInput[] | PrivilegeUncheckedCreateWithoutObjectInput[]
-    connectOrCreate?: PrivilegeCreateOrConnectWithoutObjectInput | PrivilegeCreateOrConnectWithoutObjectInput[]
-    createMany?: PrivilegeCreateManyObjectInputEnvelope
-    connect?: PrivilegeWhereUniqueInput | PrivilegeWhereUniqueInput[]
-  }
-
-  export type PrivilegeUncheckedCreateNestedManyWithoutObjectInput = {
-    create?: XOR<PrivilegeCreateWithoutObjectInput, PrivilegeUncheckedCreateWithoutObjectInput> | PrivilegeCreateWithoutObjectInput[] | PrivilegeUncheckedCreateWithoutObjectInput[]
-    connectOrCreate?: PrivilegeCreateOrConnectWithoutObjectInput | PrivilegeCreateOrConnectWithoutObjectInput[]
-    createMany?: PrivilegeCreateManyObjectInputEnvelope
-    connect?: PrivilegeWhereUniqueInput | PrivilegeWhereUniqueInput[]
-  }
-
-  export type PrivilegeUpdateManyWithoutObjectNestedInput = {
-    create?: XOR<PrivilegeCreateWithoutObjectInput, PrivilegeUncheckedCreateWithoutObjectInput> | PrivilegeCreateWithoutObjectInput[] | PrivilegeUncheckedCreateWithoutObjectInput[]
-    connectOrCreate?: PrivilegeCreateOrConnectWithoutObjectInput | PrivilegeCreateOrConnectWithoutObjectInput[]
-    upsert?: PrivilegeUpsertWithWhereUniqueWithoutObjectInput | PrivilegeUpsertWithWhereUniqueWithoutObjectInput[]
-    createMany?: PrivilegeCreateManyObjectInputEnvelope
-    set?: PrivilegeWhereUniqueInput | PrivilegeWhereUniqueInput[]
-    disconnect?: PrivilegeWhereUniqueInput | PrivilegeWhereUniqueInput[]
-    delete?: PrivilegeWhereUniqueInput | PrivilegeWhereUniqueInput[]
-    connect?: PrivilegeWhereUniqueInput | PrivilegeWhereUniqueInput[]
-    update?: PrivilegeUpdateWithWhereUniqueWithoutObjectInput | PrivilegeUpdateWithWhereUniqueWithoutObjectInput[]
-    updateMany?: PrivilegeUpdateManyWithWhereWithoutObjectInput | PrivilegeUpdateManyWithWhereWithoutObjectInput[]
-    deleteMany?: PrivilegeScalarWhereInput | PrivilegeScalarWhereInput[]
-  }
-
-  export type PrivilegeUncheckedUpdateManyWithoutObjectNestedInput = {
-    create?: XOR<PrivilegeCreateWithoutObjectInput, PrivilegeUncheckedCreateWithoutObjectInput> | PrivilegeCreateWithoutObjectInput[] | PrivilegeUncheckedCreateWithoutObjectInput[]
-    connectOrCreate?: PrivilegeCreateOrConnectWithoutObjectInput | PrivilegeCreateOrConnectWithoutObjectInput[]
-    upsert?: PrivilegeUpsertWithWhereUniqueWithoutObjectInput | PrivilegeUpsertWithWhereUniqueWithoutObjectInput[]
-    createMany?: PrivilegeCreateManyObjectInputEnvelope
-    set?: PrivilegeWhereUniqueInput | PrivilegeWhereUniqueInput[]
-    disconnect?: PrivilegeWhereUniqueInput | PrivilegeWhereUniqueInput[]
-    delete?: PrivilegeWhereUniqueInput | PrivilegeWhereUniqueInput[]
-    connect?: PrivilegeWhereUniqueInput | PrivilegeWhereUniqueInput[]
-    update?: PrivilegeUpdateWithWhereUniqueWithoutObjectInput | PrivilegeUpdateWithWhereUniqueWithoutObjectInput[]
-    updateMany?: PrivilegeUpdateManyWithWhereWithoutObjectInput | PrivilegeUpdateManyWithWhereWithoutObjectInput[]
-    deleteMany?: PrivilegeScalarWhereInput | PrivilegeScalarWhereInput[]
-  }
-
   export type RolePrivilegeCreateNestedManyWithoutPrivilegeInput = {
     create?: XOR<RolePrivilegeCreateWithoutPrivilegeInput, RolePrivilegeUncheckedCreateWithoutPrivilegeInput> | RolePrivilegeCreateWithoutPrivilegeInput[] | RolePrivilegeUncheckedCreateWithoutPrivilegeInput[]
     connectOrCreate?: RolePrivilegeCreateOrConnectWithoutPrivilegeInput | RolePrivilegeCreateOrConnectWithoutPrivilegeInput[]
     createMany?: RolePrivilegeCreateManyPrivilegeInputEnvelope
     connect?: RolePrivilegeWhereUniqueInput | RolePrivilegeWhereUniqueInput[]
-  }
-
-  export type AuthObjectCreateNestedOneWithoutPrivilegesInput = {
-    create?: XOR<AuthObjectCreateWithoutPrivilegesInput, AuthObjectUncheckedCreateWithoutPrivilegesInput>
-    connectOrCreate?: AuthObjectCreateOrConnectWithoutPrivilegesInput
-    connect?: AuthObjectWhereUniqueInput
   }
 
   export type RolePrivilegeUncheckedCreateNestedManyWithoutPrivilegeInput = {
@@ -25540,14 +24140,6 @@ export namespace Prisma {
     update?: RolePrivilegeUpdateWithWhereUniqueWithoutPrivilegeInput | RolePrivilegeUpdateWithWhereUniqueWithoutPrivilegeInput[]
     updateMany?: RolePrivilegeUpdateManyWithWhereWithoutPrivilegeInput | RolePrivilegeUpdateManyWithWhereWithoutPrivilegeInput[]
     deleteMany?: RolePrivilegeScalarWhereInput | RolePrivilegeScalarWhereInput[]
-  }
-
-  export type AuthObjectUpdateOneRequiredWithoutPrivilegesNestedInput = {
-    create?: XOR<AuthObjectCreateWithoutPrivilegesInput, AuthObjectUncheckedCreateWithoutPrivilegesInput>
-    connectOrCreate?: AuthObjectCreateOrConnectWithoutPrivilegesInput
-    upsert?: AuthObjectUpsertWithoutPrivilegesInput
-    connect?: AuthObjectWhereUniqueInput
-    update?: XOR<XOR<AuthObjectUpdateToOneWithWhereWithoutPrivilegesInput, AuthObjectUpdateWithoutPrivilegesInput>, AuthObjectUncheckedUpdateWithoutPrivilegesInput>
   }
 
   export type RolePrivilegeUncheckedUpdateManyWithoutPrivilegeNestedInput = {
@@ -28636,73 +27228,6 @@ export namespace Prisma {
     privileges?: RolePrivilegeUncheckedUpdateManyWithoutRoleNestedInput
   }
 
-  export type PrivilegeCreateWithoutObjectInput = {
-    privilegeCode: string
-    privilegeName: string
-    fieldValues?: NullableJsonNullValueInput | InputJsonValue
-    status?: number
-    description?: string | null
-    isDelete?: boolean
-    createTime?: Date | string
-    updateTime?: Date | string
-    roles?: RolePrivilegeCreateNestedManyWithoutPrivilegeInput
-  }
-
-  export type PrivilegeUncheckedCreateWithoutObjectInput = {
-    id?: number
-    privilegeCode: string
-    privilegeName: string
-    fieldValues?: NullableJsonNullValueInput | InputJsonValue
-    status?: number
-    description?: string | null
-    isDelete?: boolean
-    createTime?: Date | string
-    updateTime?: Date | string
-    roles?: RolePrivilegeUncheckedCreateNestedManyWithoutPrivilegeInput
-  }
-
-  export type PrivilegeCreateOrConnectWithoutObjectInput = {
-    where: PrivilegeWhereUniqueInput
-    create: XOR<PrivilegeCreateWithoutObjectInput, PrivilegeUncheckedCreateWithoutObjectInput>
-  }
-
-  export type PrivilegeCreateManyObjectInputEnvelope = {
-    data: PrivilegeCreateManyObjectInput | PrivilegeCreateManyObjectInput[]
-    skipDuplicates?: boolean
-  }
-
-  export type PrivilegeUpsertWithWhereUniqueWithoutObjectInput = {
-    where: PrivilegeWhereUniqueInput
-    update: XOR<PrivilegeUpdateWithoutObjectInput, PrivilegeUncheckedUpdateWithoutObjectInput>
-    create: XOR<PrivilegeCreateWithoutObjectInput, PrivilegeUncheckedCreateWithoutObjectInput>
-  }
-
-  export type PrivilegeUpdateWithWhereUniqueWithoutObjectInput = {
-    where: PrivilegeWhereUniqueInput
-    data: XOR<PrivilegeUpdateWithoutObjectInput, PrivilegeUncheckedUpdateWithoutObjectInput>
-  }
-
-  export type PrivilegeUpdateManyWithWhereWithoutObjectInput = {
-    where: PrivilegeScalarWhereInput
-    data: XOR<PrivilegeUpdateManyMutationInput, PrivilegeUncheckedUpdateManyWithoutObjectInput>
-  }
-
-  export type PrivilegeScalarWhereInput = {
-    AND?: PrivilegeScalarWhereInput | PrivilegeScalarWhereInput[]
-    OR?: PrivilegeScalarWhereInput[]
-    NOT?: PrivilegeScalarWhereInput | PrivilegeScalarWhereInput[]
-    id?: IntFilter<"Privilege"> | number
-    privilegeCode?: StringFilter<"Privilege"> | string
-    privilegeName?: StringFilter<"Privilege"> | string
-    objectId?: IntFilter<"Privilege"> | number
-    fieldValues?: JsonNullableFilter<"Privilege">
-    status?: IntFilter<"Privilege"> | number
-    description?: StringNullableFilter<"Privilege"> | string | null
-    isDelete?: BoolFilter<"Privilege"> | boolean
-    createTime?: DateTimeFilter<"Privilege"> | Date | string
-    updateTime?: DateTimeFilter<"Privilege"> | Date | string
-  }
-
   export type RolePrivilegeCreateWithoutPrivilegeInput = {
     role: RoleCreateNestedOneWithoutPrivilegesInput
   }
@@ -28721,28 +27246,6 @@ export namespace Prisma {
     skipDuplicates?: boolean
   }
 
-  export type AuthObjectCreateWithoutPrivilegesInput = {
-    objectCode: string
-    objectName: string
-    objectType: string
-    path?: string | null
-    authFields?: NullableJsonNullValueInput | InputJsonValue
-  }
-
-  export type AuthObjectUncheckedCreateWithoutPrivilegesInput = {
-    id?: number
-    objectCode: string
-    objectName: string
-    objectType: string
-    path?: string | null
-    authFields?: NullableJsonNullValueInput | InputJsonValue
-  }
-
-  export type AuthObjectCreateOrConnectWithoutPrivilegesInput = {
-    where: AuthObjectWhereUniqueInput
-    create: XOR<AuthObjectCreateWithoutPrivilegesInput, AuthObjectUncheckedCreateWithoutPrivilegesInput>
-  }
-
   export type RolePrivilegeUpsertWithWhereUniqueWithoutPrivilegeInput = {
     where: RolePrivilegeWhereUniqueInput
     update: XOR<RolePrivilegeUpdateWithoutPrivilegeInput, RolePrivilegeUncheckedUpdateWithoutPrivilegeInput>
@@ -28757,34 +27260,6 @@ export namespace Prisma {
   export type RolePrivilegeUpdateManyWithWhereWithoutPrivilegeInput = {
     where: RolePrivilegeScalarWhereInput
     data: XOR<RolePrivilegeUpdateManyMutationInput, RolePrivilegeUncheckedUpdateManyWithoutPrivilegeInput>
-  }
-
-  export type AuthObjectUpsertWithoutPrivilegesInput = {
-    update: XOR<AuthObjectUpdateWithoutPrivilegesInput, AuthObjectUncheckedUpdateWithoutPrivilegesInput>
-    create: XOR<AuthObjectCreateWithoutPrivilegesInput, AuthObjectUncheckedCreateWithoutPrivilegesInput>
-    where?: AuthObjectWhereInput
-  }
-
-  export type AuthObjectUpdateToOneWithWhereWithoutPrivilegesInput = {
-    where?: AuthObjectWhereInput
-    data: XOR<AuthObjectUpdateWithoutPrivilegesInput, AuthObjectUncheckedUpdateWithoutPrivilegesInput>
-  }
-
-  export type AuthObjectUpdateWithoutPrivilegesInput = {
-    objectCode?: StringFieldUpdateOperationsInput | string
-    objectName?: StringFieldUpdateOperationsInput | string
-    objectType?: StringFieldUpdateOperationsInput | string
-    path?: NullableStringFieldUpdateOperationsInput | string | null
-    authFields?: NullableJsonNullValueInput | InputJsonValue
-  }
-
-  export type AuthObjectUncheckedUpdateWithoutPrivilegesInput = {
-    id?: IntFieldUpdateOperationsInput | number
-    objectCode?: StringFieldUpdateOperationsInput | string
-    objectName?: StringFieldUpdateOperationsInput | string
-    objectType?: StringFieldUpdateOperationsInput | string
-    path?: NullableStringFieldUpdateOperationsInput | string | null
-    authFields?: NullableJsonNullValueInput | InputJsonValue
   }
 
   export type UserCreateWithoutDelegationToInput = {
@@ -29096,14 +27571,12 @@ export namespace Prisma {
     isDelete?: boolean
     createTime?: Date | string
     updateTime?: Date | string
-    object: AuthObjectCreateNestedOneWithoutPrivilegesInput
   }
 
   export type PrivilegeUncheckedCreateWithoutRolesInput = {
     id?: number
     privilegeCode: string
     privilegeName: string
-    objectId: number
     fieldValues?: NullableJsonNullValueInput | InputJsonValue
     status?: number
     description?: string | null
@@ -29179,14 +27652,12 @@ export namespace Prisma {
     isDelete?: BoolFieldUpdateOperationsInput | boolean
     createTime?: DateTimeFieldUpdateOperationsInput | Date | string
     updateTime?: DateTimeFieldUpdateOperationsInput | Date | string
-    object?: AuthObjectUpdateOneRequiredWithoutPrivilegesNestedInput
   }
 
   export type PrivilegeUncheckedUpdateWithoutRolesInput = {
     id?: IntFieldUpdateOperationsInput | number
     privilegeCode?: StringFieldUpdateOperationsInput | string
     privilegeName?: StringFieldUpdateOperationsInput | string
-    objectId?: IntFieldUpdateOperationsInput | number
     fieldValues?: NullableJsonNullValueInput | InputJsonValue
     status?: IntFieldUpdateOperationsInput | number
     description?: NullableStringFieldUpdateOperationsInput | string | null
@@ -30016,55 +28487,6 @@ export namespace Prisma {
 
   export type RolePrivilegeUncheckedUpdateManyWithoutRoleInput = {
     privilegeId?: IntFieldUpdateOperationsInput | number
-  }
-
-  export type PrivilegeCreateManyObjectInput = {
-    id?: number
-    privilegeCode: string
-    privilegeName: string
-    fieldValues?: NullableJsonNullValueInput | InputJsonValue
-    status?: number
-    description?: string | null
-    isDelete?: boolean
-    createTime?: Date | string
-    updateTime?: Date | string
-  }
-
-  export type PrivilegeUpdateWithoutObjectInput = {
-    privilegeCode?: StringFieldUpdateOperationsInput | string
-    privilegeName?: StringFieldUpdateOperationsInput | string
-    fieldValues?: NullableJsonNullValueInput | InputJsonValue
-    status?: IntFieldUpdateOperationsInput | number
-    description?: NullableStringFieldUpdateOperationsInput | string | null
-    isDelete?: BoolFieldUpdateOperationsInput | boolean
-    createTime?: DateTimeFieldUpdateOperationsInput | Date | string
-    updateTime?: DateTimeFieldUpdateOperationsInput | Date | string
-    roles?: RolePrivilegeUpdateManyWithoutPrivilegeNestedInput
-  }
-
-  export type PrivilegeUncheckedUpdateWithoutObjectInput = {
-    id?: IntFieldUpdateOperationsInput | number
-    privilegeCode?: StringFieldUpdateOperationsInput | string
-    privilegeName?: StringFieldUpdateOperationsInput | string
-    fieldValues?: NullableJsonNullValueInput | InputJsonValue
-    status?: IntFieldUpdateOperationsInput | number
-    description?: NullableStringFieldUpdateOperationsInput | string | null
-    isDelete?: BoolFieldUpdateOperationsInput | boolean
-    createTime?: DateTimeFieldUpdateOperationsInput | Date | string
-    updateTime?: DateTimeFieldUpdateOperationsInput | Date | string
-    roles?: RolePrivilegeUncheckedUpdateManyWithoutPrivilegeNestedInput
-  }
-
-  export type PrivilegeUncheckedUpdateManyWithoutObjectInput = {
-    id?: IntFieldUpdateOperationsInput | number
-    privilegeCode?: StringFieldUpdateOperationsInput | string
-    privilegeName?: StringFieldUpdateOperationsInput | string
-    fieldValues?: NullableJsonNullValueInput | InputJsonValue
-    status?: IntFieldUpdateOperationsInput | number
-    description?: NullableStringFieldUpdateOperationsInput | string | null
-    isDelete?: BoolFieldUpdateOperationsInput | boolean
-    createTime?: DateTimeFieldUpdateOperationsInput | Date | string
-    updateTime?: DateTimeFieldUpdateOperationsInput | Date | string
   }
 
   export type RolePrivilegeCreateManyPrivilegeInput = {
