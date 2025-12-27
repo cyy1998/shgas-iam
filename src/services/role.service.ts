@@ -52,7 +52,7 @@ export const roleService = {
     async setRolePrivilege(roleCode: string, privCode: string) {
         const [role, priv] = await Promise.all([roleRepository.getRoleByCode(roleCode), privilegeRepository.getPrivilegeByCode(privCode)])
         if (role === null || priv === null) {
-            throw new CustomError('对应实体不存在')
+            throw new CustomError(`对应实体不存在: ${roleCode}, ${privCode}`)
         }
         try {
             await roleRepository.setRolePrivilege(role.id, priv.id)
@@ -95,7 +95,7 @@ export const roleService = {
             roleRepository.getRoleByCode(roleCode)
         ])
         if (org === null || role === null) {
-            throw new CustomError('对应实体不存在')
+            throw new CustomError(`对应实体不存在: ${orgCode},${roleCode}`)
         }
         try {
             await roleRepository.setRoleForOrganization(role.id, org.id)
@@ -116,7 +116,7 @@ export const roleService = {
             positionRepository.getPositionByCode(posCode)
         ])
         if (org === null || role === null || pos === null) {
-            throw new CustomError('对应实体不存在')
+            throw new CustomError(`对应实体不存在: ${orgCode}, ${posCode}`)
         }
         let posOrg = await posorgRepository.getPosOrgById(pos.id, org.id)
         if (posOrg === null) {

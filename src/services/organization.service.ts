@@ -50,12 +50,12 @@ export const organizationService = {
         return true
     },
 
-    async purveyorRegister(orgCode: string, orgName: string) {
+    async purveyorRegister(orgCode: string, orgName: string, parentOrg: string) {
         const exisitngOrg = await organizationRepository.getOrgByCode(orgCode)
         if (exisitngOrg !== null) {
             return true
         }
-        await this.setOrganization(orgCode, orgName, env.PURVEYOR_PARENT_ORG)
+        await this.setOrganization(orgCode, orgName, parentOrg)
         // const parentOrg = await organizationRepository.getOrgByCode('GY')
         // if (parentOrg === null) {
         //     throw new CustomError('有效父组织不存在')

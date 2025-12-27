@@ -208,6 +208,7 @@ app.openapi(
                         schema: z.object({
                             orgCode: z.string().openapi({ example: '统一社会信用代码' }),
                             orgName: z.string().openapi({ example: '供应商A' }),
+                            parentOrg: z.enum(['GY', 'GT']).default('GY')
                         })
                     }
                 }
@@ -225,8 +226,8 @@ app.openapi(
         },
     }),
     async (c) => {
-        const { orgCode, orgName } = c.req.valid('json')
-        await organizationService.purveyorRegister(orgCode, orgName)
+        const { orgCode, orgName, parentOrg } = c.req.valid('json')
+        await organizationService.purveyorRegister(orgCode, orgName, parentOrg)
         return c.json(success())
     }
 )

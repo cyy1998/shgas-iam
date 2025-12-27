@@ -1,6 +1,6 @@
 #!/bin/bash
 
-url="http://176.169.99.191:30011"
+url="http://176.169.99.191:40010"
 
 #权限设置
 curl -X POST "$url/admin/privilege/set" \
@@ -272,7 +272,7 @@ curl -X POST "$url/admin/role/privilege/set" \
 
 curl -X POST "$url/admin/role/privilege/set" \
      -H "Content-Type: application/json" \
-     -d '{"roleCode": "tender:sub-viewers", "privCode": "ui:menu:tender:query-process"}'
+     -d '{"roleCode": "tender:sub-viewer", "privCode": "ui:menu:tender:query-process"}'
 
 #组织角色设置
 

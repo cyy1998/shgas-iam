@@ -187,6 +187,7 @@ export const userRepository = {
     async getUsersByOrgAndAllSubRole(orgCode: string, roleCode: string) {
         return await prisma.user.findMany({
             where: {
+                // userType: '正式员工',
                 employments: {
                     some: {
                         AND: [
