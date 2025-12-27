@@ -60,12 +60,14 @@ app.openapi(
     async (c) => {
         const { username, password } = c.req.valid('json')
         const data = await authService.loginPassword(username, password)
-        setCookie(c, 'orcas_sso_sessionid', data.orcasSessionId, {
-            httpOnly: true,
-            sameSite: 'Strict',  // 防 CSRF
-            maxAge: env.REDIS_EXPIRE_TIME,
-            path: '/',
-        })
+        if (data.orcasSessionId !== null) {
+            setCookie(c, 'orcas_sso_sessionid', data.orcasSessionId, {
+                httpOnly: true,
+                sameSite: 'Strict',  // 防 CSRF
+                maxAge: env.REDIS_EXPIRE_TIME,
+                path: '/',
+            })
+        }
         setCookie(c, 'session', data.token, {
             httpOnly: true,
             sameSite: 'Strict',  // 防 CSRF
@@ -129,12 +131,14 @@ app.openapi(
     async (c) => {
         const { loginid, ts, token } = c.req.valid('json')
         const data = await authService.loginOA(loginid, ts, token)
-        setCookie(c, 'orcas_sso_sessionid', data.orcasSessionId, {
-            httpOnly: true,
-            sameSite: 'Strict',  // 防 CSRF
-            maxAge: env.REDIS_EXPIRE_TIME,
-            path: '/',
-        })
+        if (data.orcasSessionId !== null) {
+            setCookie(c, 'orcas_sso_sessionid', data.orcasSessionId, {
+                httpOnly: true,
+                sameSite: 'Strict',  // 防 CSRF
+                maxAge: env.REDIS_EXPIRE_TIME,
+                path: '/',
+            })
+        }
         setCookie(c, 'session', data.token, {
             httpOnly: true,
             sameSite: 'Strict',  // 防 CSRF
@@ -188,12 +192,14 @@ app.openapi(
     async (c) => {
         const { code } = c.req.valid('json')
         const data = await authService.loginWX(code)
-        setCookie(c, 'orcas_sso_sessionid', data.orcasSessionId, {
-            httpOnly: true,
-            sameSite: 'Strict',  // 防 CSRF
-            maxAge: env.REDIS_EXPIRE_TIME,
-            path: '/',
-        })
+        if (data.orcasSessionId !== null) {
+            setCookie(c, 'orcas_sso_sessionid', data.orcasSessionId, {
+                httpOnly: true,
+                sameSite: 'Strict',  // 防 CSRF
+                maxAge: env.REDIS_EXPIRE_TIME,
+                path: '/',
+            })
+        }
         setCookie(c, 'session', data.token, {
             httpOnly: true,
             sameSite: 'Strict',  // 防 CSRF
@@ -332,12 +338,14 @@ app.openapi(
     async (c) => {
         const { code, phoneNumber } = c.req.valid('json')
         const data = await authService.loginMobile(phoneNumber, code)
-        setCookie(c, 'orcas_sso_sessionid', data.orcasSessionId, {
-            httpOnly: true,
-            sameSite: 'Strict',  // 防 CSRF
-            maxAge: env.REDIS_EXPIRE_TIME,
-            path: '/',
-        })
+        if (data.orcasSessionId !== null) {
+            setCookie(c, 'orcas_sso_sessionid', data.orcasSessionId, {
+                httpOnly: true,
+                sameSite: 'Strict',  // 防 CSRF
+                maxAge: env.REDIS_EXPIRE_TIME,
+                path: '/',
+            })
+        }
         setCookie(c, 'session', data.token, {
             httpOnly: true,
             sameSite: 'Strict',  // 防 CSRF

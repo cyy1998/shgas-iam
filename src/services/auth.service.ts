@@ -10,7 +10,7 @@ import { CustomError } from "../errors/CustomError"
 import { AuthzUnauthorizedError } from "../errors/AuthzUnauthorizedError"
 
 async function _login(user: UserDTO) {
-    let orcasSessionId_1 = '-1'
+    let orcasSessionId_1 = null
     if (user.userType === '正式员工') {
         const { orcasSessionId, orcasId } = await _orcasLogin(user)
         orcasSessionId_1 = orcasSessionId
