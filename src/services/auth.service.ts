@@ -150,12 +150,15 @@ export const authService = {
             throw new AuthzUnauthorizedError('未登录')
         }
         const userDTO: UserDTO = JSON.parse(userString)
-        if (path.startsWith('/api/tender/')) {
-            userDTO.positions = []
-            userDTO.roles = []
-            userDTO.privileges = []
+        const userFinal = {
+            username: userDTO.username
         }
-        const userInfo = Buffer.from(userString, 'utf8').toString('base64')
+        // if (path.startsWith('/api/tender/')) {
+        //     userDTO.positions = []
+        //     userDTO.roles = []
+        //     userDTO.privileges = []
+        // }
+        const userInfo = Buffer.from(JSON.stringify(userFinal), 'utf8').toString('base64')
         return userInfo
     },
 

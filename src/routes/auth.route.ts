@@ -10,6 +10,7 @@ const app = new OpenAPIHono()
 
 /* 
 path: /login
+method: POST
 function: 密码登录
 */
 app.openapi(
@@ -74,8 +75,10 @@ app.openapi(
         return c.json(success(data))
     }
 )
+
 /* 
 path: /login/oa
+method: POST
 function: oa登录
 */
 app.openapi(
@@ -141,8 +144,10 @@ app.openapi(
         return c.json(success(data))
     }
 )
+
 /* 
 path: /login/wx
+method: POST
 function: 微信登录
 */
 app.openapi(
@@ -198,8 +203,10 @@ app.openapi(
         return c.json(success(data))
     }
 )
+
 /*
 path: /logout 
+method: POST
 function: logout
 */
 app.openapi(
@@ -233,8 +240,10 @@ app.openapi(
         return c.json(success(data))
     }
 )
+
 /*
 path: /send-message
+method: POST
 function: 发送登录验证码
 */
 app.openapi(
@@ -270,8 +279,10 @@ app.openapi(
         return c.json(success(data))
     }
 )
+
 /*
 path: /mobile-login 
+method: POST
 function: 手机登录
 */
 app.openapi(
@@ -336,8 +347,10 @@ app.openapi(
         return c.json(success(data))
     }
 )
+
 /*
 path: /authz 
+method: GET
 function: 接口鉴权
 */
 app.openapi(

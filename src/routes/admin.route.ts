@@ -1,7 +1,7 @@
 import { prisma } from '../libs/database/prisma'
 import { z, createRoute, OpenAPIHono } from '@hono/zod-openapi'
 import { makeResponse, success } from '../utils/response.utils'
-import { ResponseSchema } from '../schema'
+import { ResponseSchema } from '../schemas/schema'
 import { employmentService } from '../services/employment.service'
 import { roleService } from '../services/role.service'
 import { privilegeService } from '../services/privilege.service'

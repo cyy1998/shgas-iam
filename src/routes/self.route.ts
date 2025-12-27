@@ -1,6 +1,6 @@
 import { success } from '../utils/response.utils'
 import { z, createRoute, OpenAPIHono } from '@hono/zod-openapi'
-import { ResponseSchema, OrganizationInputSchema, UserOutSchema } from '../schema'
+import { ResponseSchema, OrganizationInputSchema, UserOutSchema } from '../schemas/schema'
 import { createResponseSchema } from '../utils/response.utils'
 import { userService } from '../services/user.service'
 import { mobileService } from '../services/mobile.service'
@@ -35,7 +35,9 @@ app.openapi(
         },
     }),
     async (c) => {
-        return c.json(success(JSON.parse(Buffer.from(c.req.header('X-User-Info') ?? '', 'base64').toString('utf8'))))
+        const sessionId = getCookie(c, 'session') ?? ''
+        const data = await cacheService.getSessionById(sessionId)
+        return c.json(success(data))
     }
 )
 

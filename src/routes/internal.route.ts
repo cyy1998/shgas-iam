@@ -1,6 +1,6 @@
 import { z, createRoute, OpenAPIHono } from '@hono/zod-openapi'
 import { makeResponse, success } from '../utils/response.utils'
-import { ResponseSchema, UserOutSchema } from '../schema'
+import { ResponseSchema, UserOutSchema } from '../schemas/schema'
 import { createResponseSchema } from '../utils/response.utils'
 import { userService } from '../services/user.service'
 import { organizationService } from '../services/organization.service'
@@ -10,6 +10,7 @@ const app = new OpenAPIHono()
 
 /*
 path: /user-info
+method: GET
 function: 获取用户详情
 */
 app.openapi(
@@ -42,6 +43,7 @@ app.openapi(
 
 /*
 path: /search-users/org-position
+method: GET
 function: 根据组织岗位搜索用户
 */
 app.openapi(
@@ -77,6 +79,7 @@ app.openapi(
 
 /*
 path: /search-users/org-roles
+method: GET
 function: 根据组织角色搜索用户
 */
 app.openapi(
@@ -112,6 +115,7 @@ app.openapi(
 
 /*
 path: /search-users/under-org
+method: GET
 function: 根据组织搜索用户
 */
 app.openapi(
@@ -144,87 +148,8 @@ app.openapi(
 )
 
 /*
-path: /purveyor/register
-function: 供应商注册
-*/
-app.openapi(
-    createRoute({
-        method: 'post',
-        path: '/purveyor/register',
-        tags: ['Internal'],
-        request: {
-            body: {
-                content: {
-                    'application/json': {
-                        schema: z.object({
-                            orgCode: z.string().openapi({ example: '统一社会信用代码' }),
-                            orgName: z.string().openapi({ example: '供应商A' }),
-                        })
-                    }
-                }
-            },
-        },
-        responses: {
-            200: {
-                content: {
-                    'application/json': {
-                        schema: ResponseSchema,
-                    },
-                },
-                description: '供应商注册成功',
-            },
-        },
-    }),
-    async (c) => {
-        const { orgCode, orgName } = c.req.valid('json')
-        await organizationService.purveyorRegister(orgCode, orgName)
-        return c.json(success())
-    }
-)
-
-/*
-path: /purveyor/contact/register
-function: 供应商联系人注册
-*/
-app.openapi(
-    createRoute({
-        method: 'post',
-        path: '/purveyor/contact/register',
-        tags: ['Internal'],
-        request: {
-            body: {
-                content: {
-                    'application/json': {
-                        schema: z.object({
-                            username: z.string().openapi({ example: '身份证号' }),
-                            orgCode: z.string().openapi({ example: '供应商统一社会信用代码' }),
-                            mobile: z.string().openapi({ example: '12345678' }),
-                            name: z.string().openapi({ example: '1234' }),
-                        })
-                    }
-                }
-            },
-        },
-        responses: {
-            200: {
-                content: {
-                    'application/json': {
-                        schema: ResponseSchema,
-                    },
-                },
-                description: '供应商注册成功',
-            },
-        },
-    }),
-    async (c) => {
-        const { username, mobile, name, orgCode } = c.req.valid('json')
-        const res = await userService.registerPurveyorConcat(username, mobile, name, orgCode)
-        return c.json(success())
-    }
-)
-
-/*
 path: /search-employments/user-privilege
+method: GET
 function: 根据用户域权限搜索任职关系
 */
 app.openapi(
@@ -265,5 +190,89 @@ app.openapi(
         return c.json(success(data))
     }
 )
+
+/*
+path: /purveyor/register
+method: POST
+function: 供应商注册
+*/
+app.openapi(
+    createRoute({
+        method: 'post',
+        path: '/purveyor/register',
+        tags: ['Internal'],
+        request: {
+            body: {
+                content: {
+                    'application/json': {
+                        schema: z.object({
+                            orgCode: z.string().openapi({ example: '统一社会信用代码' }),
+                            orgName: z.string().openapi({ example: '供应商A' }),
+                        })
+                    }
+                }
+            },
+        },
+        responses: {
+            200: {
+                content: {
+                    'application/json': {
+                        schema: ResponseSchema,
+                    },
+                },
+                description: '供应商注册成功',
+            },
+        },
+    }),
+    async (c) => {
+        const { orgCode, orgName } = c.req.valid('json')
+        await organizationService.purveyorRegister(orgCode, orgName)
+        return c.json(success())
+    }
+)
+
+/*
+path: /purveyor/contact/register
+method: POST
+function: 供应商联系人注册
+*/
+app.openapi(
+    createRoute({
+        method: 'post',
+        path: '/purveyor/contact/register',
+        tags: ['Internal'],
+        request: {
+            body: {
+                content: {
+                    'application/json': {
+                        schema: z.object({
+                            username: z.string().openapi({ example: '身份证号' }),
+                            orgCode: z.string().openapi({ example: '供应商统一社会信用代码' }),
+                            mobile: z.string().openapi({ example: '12345678' }),
+                            name: z.string().openapi({ example: '1234' }),
+                        })
+                    }
+                }
+            },
+        },
+        responses: {
+            200: {
+                content: {
+                    'application/json': {
+                        schema: ResponseSchema,
+                    },
+                },
+                description: '供应商注册成功',
+            },
+        },
+    }),
+    async (c) => {
+        const { username, mobile, name, orgCode } = c.req.valid('json')
+        const res = await userService.registerPurveyorConcat(username, mobile, name, orgCode)
+        return c.json(success())
+    }
+)
+
+
 
 export default app
