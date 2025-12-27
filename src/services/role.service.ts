@@ -69,7 +69,7 @@ export const roleService = {
     },
     async setRoleForEmployment(username: string, posCode: string, orgCode: string, roleCode: string) {
         const [employment, role] = await Promise.all([
-            employmentRepository.getEmploymentByUserOrgPosCode(username, posCode, orgCode),
+            employmentRepository.getEmploymentByUserOrgPosCode(username, orgCode, posCode),
             roleRepository.getRoleByCode(roleCode)
         ])
         if (employment === null || role === null) {
@@ -116,7 +116,7 @@ export const roleService = {
             positionRepository.getPositionByCode(posCode)
         ])
         if (org === null || role === null || pos === null) {
-            throw new CustomError(`对应实体不存在: ${orgCode}, ${posCode}`)
+            throw new CustomError(`对应实体不存在`)
         }
         let posOrg = await posorgRepository.getPosOrgById(pos.id, org.id)
         if (posOrg === null) {
@@ -133,5 +133,35 @@ export const roleService = {
             }
         }
         return true
-    }
+    },
+    async deleteRoleForPosOrg(orgCode: string, posCode: string, roleCode: string) {
+        const [role, org, pos] = await Promise.all([
+            roleRepository.getRoleByCode(roleCode),
+            organizationRepository.getOrgByCode(orgCode),
+            positionRepository.getPositionByCode(posCode)
+        ])
+        if (org === null || role === null || pos === null) {
+            throw new CustomError('对应实体不存在')
+        }
+        const posOrg = await posorgRepository.getPosOrgById(pos.id, org.id)
+        if (posOrg === null) {
+            throw new CustomError(`对应实体不存在: ${orgCode}, ${posCode}`)
+        }
+        await roleRepository.deleteRoleForPosOrg(role.id, posOrg.id)
+
+        return true
+    },
+    async deleteRoleForEmployment(username: string, posCode: string, orgCode: string, roleCode: string) {
+        const [employment, role] = await Promise.all([
+            employmentRepository.getEmploymentByUserOrgPosCode(username, orgCode, posCode),
+            roleRepository.getRoleByCode(roleCode)
+        ])
+        if (employment === null || role === null) {
+            throw new CustomError('对应实体不存在')
+        }
+        await roleRepository.deleteRoleForEmployment(role.id, employment.id)
+
+        return true
+    },
+
 }

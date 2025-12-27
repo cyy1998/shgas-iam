@@ -218,5 +218,25 @@ export const roleRepository = {
                 posOrgId: posOrgId
             }
         })
-    }
+    },
+    async deleteRoleForPosOrg(roleId: number, posOrgId: number) {
+        return await prisma.posOrgRole.delete({
+            where: {
+                posOrgId_roleId: {
+                    roleId: roleId,
+                    posOrgId: posOrgId
+                }
+            }
+        })
+    },
+    async deleteRoleForEmployment(roleId: number, employmentId: number) {
+        return await prisma.employmentRole.delete({
+            where: {
+                employmentId_roleId: {
+                    roleId: roleId,
+                    employmentId: employmentId
+                }
+            }
+        })
+    },
 }

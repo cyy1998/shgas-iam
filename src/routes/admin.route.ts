@@ -319,7 +319,88 @@ app.openapi(
     }),
     async (c) => {
         const { roleCode, orgCode, posCode } = c.req.valid('json')
-        const data = roleService.setRoleForPosOrg(orgCode, posCode, roleCode)
+        const data = await roleService.setRoleForPosOrg(orgCode, posCode, roleCode)
+        return c.json(success(data))
+    }
+)
+
+/*
+path: /role/pos-org/delete
+function: 为岗位-部门组合设置角色
+*/
+app.openapi(
+    createRoute({
+        method: 'post',
+        path: '/role/pos-org/delete',
+        tags: ['Admin'],
+        request: {
+            body: {
+                content: {
+                    'application/json': {
+                        schema: z.object({
+                            posCode: z.string().openapi({ example: 'E01' }),
+                            orgCode: z.string().openapi({ example: 'SR01' }),
+                            roleCode: z.string().openapi({ example: 'dept-head' }),
+                        })
+                    }
+                }
+            },
+        },
+        responses: {
+            200: {
+                content: {
+                    'application/json': {
+                        schema: ResponseSchema,
+                    },
+                },
+                description: '删除角色成功',
+            },
+        },
+    }),
+    async (c) => {
+        const { roleCode, orgCode, posCode } = c.req.valid('json')
+        const data = await roleService.deleteRoleForPosOrg(orgCode, posCode, roleCode)
+        return c.json(success(data))
+    }
+)
+
+/*
+path: /role/employment/delete
+function: 为任职关系设置角色
+*/
+app.openapi(
+    createRoute({
+        method: 'post',
+        path: '/role/employment/delete',
+        tags: ['Admin'],
+        request: {
+            body: {
+                content: {
+                    'application/json': {
+                        schema: z.object({
+                            posCode: z.string().openapi({ example: 'E01' }),
+                            orgCode: z.string().openapi({ example: 'SR01' }),
+                            username: z.string().openapi({ example: '138550' }),
+                            roleCode: z.string().openapi({ example: '138550' }),
+                        })
+                    }
+                }
+            },
+        },
+        responses: {
+            200: {
+                content: {
+                    'application/json': {
+                        schema: ResponseSchema,
+                    },
+                },
+                description: '角色设置成功',
+            },
+        },
+    }),
+    async (c) => {
+        const { username, orgCode, posCode, roleCode } = c.req.valid('json')
+        const data = await roleService.deleteRoleForEmployment(username, posCode, orgCode, roleCode)
         return c.json(success(data))
     }
 )
