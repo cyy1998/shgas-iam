@@ -261,11 +261,23 @@ model Privilege {
   createTime    DateTime @default(now()) @map("create_time")
   updateTime    DateTime @default(now()) @updatedAt @map("update_time")
 
-  roles RolePrivilege[]
+  roles       RolePrivilege[]
+  delegations DelegationDetail[]
   // object AuthObject      @relation(fields: [objectId], references: [id])
 
   @@index([privilegeCode], map: "idx_privilegeCode")
   @@map("privilege")
+}
+
+model RolePrivilege {
+  roleId      Int       @map("role_id")
+  privilegeId Int       @map("privilege_id")
+  role        Role      @relation(fields: [roleId], references: [id])
+  privilege   Privilege @relation(fields: [privilegeId], references: [id])
+
+  @@id([roleId, privilegeId])
+  @@index([privilegeId], map: "idx_position_id")
+  @@map("role_privilege")
 }
 
 model PrivilegeDelegation {
@@ -290,22 +302,12 @@ model PrivilegeDelegation {
 }
 
 model DelegationDetail {
-  delegationId Int    @map("delegation_id")
-  resourceCode String @map("resource_code")
+  delegationId Int @map("delegation_id")
+  privilegeId  Int @map("privilegeId")
 
   delegation PrivilegeDelegation @relation(fields: [delegationId], references: [id])
+  privilege  Privilege           @relation(fields: [privilegeId], references: [id])
 
-  @@id([delegationId, resourceCode])
+  @@id([delegationId, privilegeId])
   @@map("delegation_detail")
-}
-
-model RolePrivilege {
-  roleId      Int       @map("role_id")
-  privilegeId Int       @map("privilege_id")
-  role        Role      @relation(fields: [roleId], references: [id])
-  privilege   Privilege @relation(fields: [privilegeId], references: [id])
-
-  @@id([roleId, privilegeId])
-  @@index([privilegeId], map: "idx_position_id")
-  @@map("role_privilege")
 }
