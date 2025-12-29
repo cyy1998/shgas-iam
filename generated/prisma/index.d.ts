@@ -79,6 +79,11 @@ export type PosOrgRole = $Result.DefaultSelection<Prisma.$PosOrgRolePayload>
  */
 export type Privilege = $Result.DefaultSelection<Prisma.$PrivilegePayload>
 /**
+ * Model RolePrivilege
+ * 
+ */
+export type RolePrivilege = $Result.DefaultSelection<Prisma.$RolePrivilegePayload>
+/**
  * Model PrivilegeDelegation
  * 
  */
@@ -88,11 +93,6 @@ export type PrivilegeDelegation = $Result.DefaultSelection<Prisma.$PrivilegeDele
  * 
  */
 export type DelegationDetail = $Result.DefaultSelection<Prisma.$DelegationDetailPayload>
-/**
- * Model RolePrivilege
- * 
- */
-export type RolePrivilege = $Result.DefaultSelection<Prisma.$RolePrivilegePayload>
 
 /**
  * ##  Prisma Client ʲˢ
@@ -343,6 +343,16 @@ export class PrismaClient<
   get privilege(): Prisma.PrivilegeDelegate<ExtArgs, ClientOptions>;
 
   /**
+   * `prisma.rolePrivilege`: Exposes CRUD operations for the **RolePrivilege** model.
+    * Example usage:
+    * ```ts
+    * // Fetch zero or more RolePrivileges
+    * const rolePrivileges = await prisma.rolePrivilege.findMany()
+    * ```
+    */
+  get rolePrivilege(): Prisma.RolePrivilegeDelegate<ExtArgs, ClientOptions>;
+
+  /**
    * `prisma.privilegeDelegation`: Exposes CRUD operations for the **PrivilegeDelegation** model.
     * Example usage:
     * ```ts
@@ -361,16 +371,6 @@ export class PrismaClient<
     * ```
     */
   get delegationDetail(): Prisma.DelegationDetailDelegate<ExtArgs, ClientOptions>;
-
-  /**
-   * `prisma.rolePrivilege`: Exposes CRUD operations for the **RolePrivilege** model.
-    * Example usage:
-    * ```ts
-    * // Fetch zero or more RolePrivileges
-    * const rolePrivileges = await prisma.rolePrivilege.findMany()
-    * ```
-    */
-  get rolePrivilege(): Prisma.RolePrivilegeDelegate<ExtArgs, ClientOptions>;
 }
 
 export namespace Prisma {
@@ -824,9 +824,9 @@ export namespace Prisma {
     OrganizationRole: 'OrganizationRole',
     PosOrgRole: 'PosOrgRole',
     Privilege: 'Privilege',
+    RolePrivilege: 'RolePrivilege',
     PrivilegeDelegation: 'PrivilegeDelegation',
-    DelegationDetail: 'DelegationDetail',
-    RolePrivilege: 'RolePrivilege'
+    DelegationDetail: 'DelegationDetail'
   };
 
   export type ModelName = (typeof ModelName)[keyof typeof ModelName]
@@ -845,7 +845,7 @@ export namespace Prisma {
       omit: GlobalOmitOptions
     }
     meta: {
-      modelProps: "user" | "organization" | "organizationClosure" | "position" | "posOrgComposition" | "employment" | "client" | "role" | "positionRole" | "employmentRole" | "organizationRole" | "posOrgRole" | "privilege" | "privilegeDelegation" | "delegationDetail" | "rolePrivilege"
+      modelProps: "user" | "organization" | "organizationClosure" | "position" | "posOrgComposition" | "employment" | "client" | "role" | "positionRole" | "employmentRole" | "organizationRole" | "posOrgRole" | "privilege" | "rolePrivilege" | "privilegeDelegation" | "delegationDetail"
       txIsolationLevel: Prisma.TransactionIsolationLevel
     }
     model: {
@@ -1707,6 +1707,72 @@ export namespace Prisma {
           }
         }
       }
+      RolePrivilege: {
+        payload: Prisma.$RolePrivilegePayload<ExtArgs>
+        fields: Prisma.RolePrivilegeFieldRefs
+        operations: {
+          findUnique: {
+            args: Prisma.RolePrivilegeFindUniqueArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$RolePrivilegePayload> | null
+          }
+          findUniqueOrThrow: {
+            args: Prisma.RolePrivilegeFindUniqueOrThrowArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$RolePrivilegePayload>
+          }
+          findFirst: {
+            args: Prisma.RolePrivilegeFindFirstArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$RolePrivilegePayload> | null
+          }
+          findFirstOrThrow: {
+            args: Prisma.RolePrivilegeFindFirstOrThrowArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$RolePrivilegePayload>
+          }
+          findMany: {
+            args: Prisma.RolePrivilegeFindManyArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$RolePrivilegePayload>[]
+          }
+          create: {
+            args: Prisma.RolePrivilegeCreateArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$RolePrivilegePayload>
+          }
+          createMany: {
+            args: Prisma.RolePrivilegeCreateManyArgs<ExtArgs>
+            result: BatchPayload
+          }
+          delete: {
+            args: Prisma.RolePrivilegeDeleteArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$RolePrivilegePayload>
+          }
+          update: {
+            args: Prisma.RolePrivilegeUpdateArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$RolePrivilegePayload>
+          }
+          deleteMany: {
+            args: Prisma.RolePrivilegeDeleteManyArgs<ExtArgs>
+            result: BatchPayload
+          }
+          updateMany: {
+            args: Prisma.RolePrivilegeUpdateManyArgs<ExtArgs>
+            result: BatchPayload
+          }
+          upsert: {
+            args: Prisma.RolePrivilegeUpsertArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$RolePrivilegePayload>
+          }
+          aggregate: {
+            args: Prisma.RolePrivilegeAggregateArgs<ExtArgs>
+            result: $Utils.Optional<AggregateRolePrivilege>
+          }
+          groupBy: {
+            args: Prisma.RolePrivilegeGroupByArgs<ExtArgs>
+            result: $Utils.Optional<RolePrivilegeGroupByOutputType>[]
+          }
+          count: {
+            args: Prisma.RolePrivilegeCountArgs<ExtArgs>
+            result: $Utils.Optional<RolePrivilegeCountAggregateOutputType> | number
+          }
+        }
+      }
       PrivilegeDelegation: {
         payload: Prisma.$PrivilegeDelegationPayload<ExtArgs>
         fields: Prisma.PrivilegeDelegationFieldRefs
@@ -1839,72 +1905,6 @@ export namespace Prisma {
           }
         }
       }
-      RolePrivilege: {
-        payload: Prisma.$RolePrivilegePayload<ExtArgs>
-        fields: Prisma.RolePrivilegeFieldRefs
-        operations: {
-          findUnique: {
-            args: Prisma.RolePrivilegeFindUniqueArgs<ExtArgs>
-            result: $Utils.PayloadToResult<Prisma.$RolePrivilegePayload> | null
-          }
-          findUniqueOrThrow: {
-            args: Prisma.RolePrivilegeFindUniqueOrThrowArgs<ExtArgs>
-            result: $Utils.PayloadToResult<Prisma.$RolePrivilegePayload>
-          }
-          findFirst: {
-            args: Prisma.RolePrivilegeFindFirstArgs<ExtArgs>
-            result: $Utils.PayloadToResult<Prisma.$RolePrivilegePayload> | null
-          }
-          findFirstOrThrow: {
-            args: Prisma.RolePrivilegeFindFirstOrThrowArgs<ExtArgs>
-            result: $Utils.PayloadToResult<Prisma.$RolePrivilegePayload>
-          }
-          findMany: {
-            args: Prisma.RolePrivilegeFindManyArgs<ExtArgs>
-            result: $Utils.PayloadToResult<Prisma.$RolePrivilegePayload>[]
-          }
-          create: {
-            args: Prisma.RolePrivilegeCreateArgs<ExtArgs>
-            result: $Utils.PayloadToResult<Prisma.$RolePrivilegePayload>
-          }
-          createMany: {
-            args: Prisma.RolePrivilegeCreateManyArgs<ExtArgs>
-            result: BatchPayload
-          }
-          delete: {
-            args: Prisma.RolePrivilegeDeleteArgs<ExtArgs>
-            result: $Utils.PayloadToResult<Prisma.$RolePrivilegePayload>
-          }
-          update: {
-            args: Prisma.RolePrivilegeUpdateArgs<ExtArgs>
-            result: $Utils.PayloadToResult<Prisma.$RolePrivilegePayload>
-          }
-          deleteMany: {
-            args: Prisma.RolePrivilegeDeleteManyArgs<ExtArgs>
-            result: BatchPayload
-          }
-          updateMany: {
-            args: Prisma.RolePrivilegeUpdateManyArgs<ExtArgs>
-            result: BatchPayload
-          }
-          upsert: {
-            args: Prisma.RolePrivilegeUpsertArgs<ExtArgs>
-            result: $Utils.PayloadToResult<Prisma.$RolePrivilegePayload>
-          }
-          aggregate: {
-            args: Prisma.RolePrivilegeAggregateArgs<ExtArgs>
-            result: $Utils.Optional<AggregateRolePrivilege>
-          }
-          groupBy: {
-            args: Prisma.RolePrivilegeGroupByArgs<ExtArgs>
-            result: $Utils.Optional<RolePrivilegeGroupByOutputType>[]
-          }
-          count: {
-            args: Prisma.RolePrivilegeCountArgs<ExtArgs>
-            result: $Utils.Optional<RolePrivilegeCountAggregateOutputType> | number
-          }
-        }
-      }
     }
   } & {
     other: {
@@ -2014,9 +2014,9 @@ export namespace Prisma {
     organizationRole?: OrganizationRoleOmit
     posOrgRole?: PosOrgRoleOmit
     privilege?: PrivilegeOmit
+    rolePrivilege?: RolePrivilegeOmit
     privilegeDelegation?: PrivilegeDelegationOmit
     delegationDetail?: DelegationDetailOmit
-    rolePrivilege?: RolePrivilegeOmit
   }
 
   /* Types for Logging */
@@ -2450,10 +2450,12 @@ export namespace Prisma {
 
   export type PrivilegeCountOutputType = {
     roles: number
+    delegations: number
   }
 
   export type PrivilegeCountOutputTypeSelect<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
     roles?: boolean | PrivilegeCountOutputTypeCountRolesArgs
+    delegations?: boolean | PrivilegeCountOutputTypeCountDelegationsArgs
   }
 
   // Custom InputTypes
@@ -2472,6 +2474,13 @@ export namespace Prisma {
    */
   export type PrivilegeCountOutputTypeCountRolesArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
     where?: RolePrivilegeWhereInput
+  }
+
+  /**
+   * PrivilegeCountOutputType without action
+   */
+  export type PrivilegeCountOutputTypeCountDelegationsArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    where?: DelegationDetailWhereInput
   }
 
 
@@ -15326,6 +15335,7 @@ export namespace Prisma {
     createTime?: boolean
     updateTime?: boolean
     roles?: boolean | Privilege$rolesArgs<ExtArgs>
+    delegations?: boolean | Privilege$delegationsArgs<ExtArgs>
     _count?: boolean | PrivilegeCountOutputTypeDefaultArgs<ExtArgs>
   }, ExtArgs["result"]["privilege"]>
 
@@ -15346,6 +15356,7 @@ export namespace Prisma {
   export type PrivilegeOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "privilegeCode" | "privilegeName" | "fieldValues" | "status" | "description" | "isDelete" | "createTime" | "updateTime", ExtArgs["result"]["privilege"]>
   export type PrivilegeInclude<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
     roles?: boolean | Privilege$rolesArgs<ExtArgs>
+    delegations?: boolean | Privilege$delegationsArgs<ExtArgs>
     _count?: boolean | PrivilegeCountOutputTypeDefaultArgs<ExtArgs>
   }
 
@@ -15353,6 +15364,7 @@ export namespace Prisma {
     name: "Privilege"
     objects: {
       roles: Prisma.$RolePrivilegePayload<ExtArgs>[]
+      delegations: Prisma.$DelegationDetailPayload<ExtArgs>[]
     }
     scalars: $Extensions.GetPayloadResult<{
       id: number
@@ -15705,6 +15717,7 @@ export namespace Prisma {
   export interface Prisma__PrivilegeClient<T, Null = never, ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs, GlobalOmitOptions = {}> extends Prisma.PrismaPromise<T> {
     readonly [Symbol.toStringTag]: "PrismaPromise"
     roles<T extends Privilege$rolesArgs<ExtArgs> = {}>(args?: Subset<T, Privilege$rolesArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$RolePrivilegePayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
+    delegations<T extends Privilege$delegationsArgs<ExtArgs> = {}>(args?: Subset<T, Privilege$delegationsArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$DelegationDetailPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
     /**
      * Attaches callbacks for the resolution and/or rejection of the Promise.
      * @param onfulfilled The callback to execute when the Promise is resolved.
@@ -16110,6 +16123,30 @@ export namespace Prisma {
   }
 
   /**
+   * Privilege.delegations
+   */
+  export type Privilege$delegationsArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the DelegationDetail
+     */
+    select?: DelegationDetailSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the DelegationDetail
+     */
+    omit?: DelegationDetailOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: DelegationDetailInclude<ExtArgs> | null
+    where?: DelegationDetailWhereInput
+    orderBy?: DelegationDetailOrderByWithRelationInput | DelegationDetailOrderByWithRelationInput[]
+    cursor?: DelegationDetailWhereUniqueInput
+    take?: number
+    skip?: number
+    distinct?: DelegationDetailScalarFieldEnum | DelegationDetailScalarFieldEnum[]
+  }
+
+  /**
    * Privilege without action
    */
   export type PrivilegeDefaultArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
@@ -16125,6 +16162,944 @@ export namespace Prisma {
      * Choose, which related nodes to fetch as well
      */
     include?: PrivilegeInclude<ExtArgs> | null
+  }
+
+
+  /**
+   * Model RolePrivilege
+   */
+
+  export type AggregateRolePrivilege = {
+    _count: RolePrivilegeCountAggregateOutputType | null
+    _avg: RolePrivilegeAvgAggregateOutputType | null
+    _sum: RolePrivilegeSumAggregateOutputType | null
+    _min: RolePrivilegeMinAggregateOutputType | null
+    _max: RolePrivilegeMaxAggregateOutputType | null
+  }
+
+  export type RolePrivilegeAvgAggregateOutputType = {
+    roleId: number | null
+    privilegeId: number | null
+  }
+
+  export type RolePrivilegeSumAggregateOutputType = {
+    roleId: number | null
+    privilegeId: number | null
+  }
+
+  export type RolePrivilegeMinAggregateOutputType = {
+    roleId: number | null
+    privilegeId: number | null
+  }
+
+  export type RolePrivilegeMaxAggregateOutputType = {
+    roleId: number | null
+    privilegeId: number | null
+  }
+
+  export type RolePrivilegeCountAggregateOutputType = {
+    roleId: number
+    privilegeId: number
+    _all: number
+  }
+
+
+  export type RolePrivilegeAvgAggregateInputType = {
+    roleId?: true
+    privilegeId?: true
+  }
+
+  export type RolePrivilegeSumAggregateInputType = {
+    roleId?: true
+    privilegeId?: true
+  }
+
+  export type RolePrivilegeMinAggregateInputType = {
+    roleId?: true
+    privilegeId?: true
+  }
+
+  export type RolePrivilegeMaxAggregateInputType = {
+    roleId?: true
+    privilegeId?: true
+  }
+
+  export type RolePrivilegeCountAggregateInputType = {
+    roleId?: true
+    privilegeId?: true
+    _all?: true
+  }
+
+  export type RolePrivilegeAggregateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Filter which RolePrivilege to aggregate.
+     */
+    where?: RolePrivilegeWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of RolePrivileges to fetch.
+     */
+    orderBy?: RolePrivilegeOrderByWithRelationInput | RolePrivilegeOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the start position
+     */
+    cursor?: RolePrivilegeWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` RolePrivileges from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` RolePrivileges.
+     */
+    skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Count returned RolePrivileges
+    **/
+    _count?: true | RolePrivilegeCountAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to average
+    **/
+    _avg?: RolePrivilegeAvgAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to sum
+    **/
+    _sum?: RolePrivilegeSumAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to find the minimum value
+    **/
+    _min?: RolePrivilegeMinAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to find the maximum value
+    **/
+    _max?: RolePrivilegeMaxAggregateInputType
+  }
+
+  export type GetRolePrivilegeAggregateType<T extends RolePrivilegeAggregateArgs> = {
+        [P in keyof T & keyof AggregateRolePrivilege]: P extends '_count' | 'count'
+      ? T[P] extends true
+        ? number
+        : GetScalarType<T[P], AggregateRolePrivilege[P]>
+      : GetScalarType<T[P], AggregateRolePrivilege[P]>
+  }
+
+
+
+
+  export type RolePrivilegeGroupByArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    where?: RolePrivilegeWhereInput
+    orderBy?: RolePrivilegeOrderByWithAggregationInput | RolePrivilegeOrderByWithAggregationInput[]
+    by: RolePrivilegeScalarFieldEnum[] | RolePrivilegeScalarFieldEnum
+    having?: RolePrivilegeScalarWhereWithAggregatesInput
+    take?: number
+    skip?: number
+    _count?: RolePrivilegeCountAggregateInputType | true
+    _avg?: RolePrivilegeAvgAggregateInputType
+    _sum?: RolePrivilegeSumAggregateInputType
+    _min?: RolePrivilegeMinAggregateInputType
+    _max?: RolePrivilegeMaxAggregateInputType
+  }
+
+  export type RolePrivilegeGroupByOutputType = {
+    roleId: number
+    privilegeId: number
+    _count: RolePrivilegeCountAggregateOutputType | null
+    _avg: RolePrivilegeAvgAggregateOutputType | null
+    _sum: RolePrivilegeSumAggregateOutputType | null
+    _min: RolePrivilegeMinAggregateOutputType | null
+    _max: RolePrivilegeMaxAggregateOutputType | null
+  }
+
+  type GetRolePrivilegeGroupByPayload<T extends RolePrivilegeGroupByArgs> = Prisma.PrismaPromise<
+    Array<
+      PickEnumerable<RolePrivilegeGroupByOutputType, T['by']> &
+        {
+          [P in ((keyof T) & (keyof RolePrivilegeGroupByOutputType))]: P extends '_count'
+            ? T[P] extends boolean
+              ? number
+              : GetScalarType<T[P], RolePrivilegeGroupByOutputType[P]>
+            : GetScalarType<T[P], RolePrivilegeGroupByOutputType[P]>
+        }
+      >
+    >
+
+
+  export type RolePrivilegeSelect<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
+    roleId?: boolean
+    privilegeId?: boolean
+    role?: boolean | RoleDefaultArgs<ExtArgs>
+    privilege?: boolean | PrivilegeDefaultArgs<ExtArgs>
+  }, ExtArgs["result"]["rolePrivilege"]>
+
+
+
+  export type RolePrivilegeSelectScalar = {
+    roleId?: boolean
+    privilegeId?: boolean
+  }
+
+  export type RolePrivilegeOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"roleId" | "privilegeId", ExtArgs["result"]["rolePrivilege"]>
+  export type RolePrivilegeInclude<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    role?: boolean | RoleDefaultArgs<ExtArgs>
+    privilege?: boolean | PrivilegeDefaultArgs<ExtArgs>
+  }
+
+  export type $RolePrivilegePayload<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    name: "RolePrivilege"
+    objects: {
+      role: Prisma.$RolePayload<ExtArgs>
+      privilege: Prisma.$PrivilegePayload<ExtArgs>
+    }
+    scalars: $Extensions.GetPayloadResult<{
+      roleId: number
+      privilegeId: number
+    }, ExtArgs["result"]["rolePrivilege"]>
+    composites: {}
+  }
+
+  type RolePrivilegeGetPayload<S extends boolean | null | undefined | RolePrivilegeDefaultArgs> = $Result.GetResult<Prisma.$RolePrivilegePayload, S>
+
+  type RolePrivilegeCountArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> =
+    Omit<RolePrivilegeFindManyArgs, 'select' | 'include' | 'distinct' | 'omit'> & {
+      select?: RolePrivilegeCountAggregateInputType | true
+    }
+
+  export interface RolePrivilegeDelegate<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs, GlobalOmitOptions = {}> {
+    [K: symbol]: { types: Prisma.TypeMap<ExtArgs>['model']['RolePrivilege'], meta: { name: 'RolePrivilege' } }
+    /**
+     * Find zero or one RolePrivilege that matches the filter.
+     * @param {RolePrivilegeFindUniqueArgs} args - Arguments to find a RolePrivilege
+     * @example
+     * // Get one RolePrivilege
+     * const rolePrivilege = await prisma.rolePrivilege.findUnique({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findUnique<T extends RolePrivilegeFindUniqueArgs>(args: SelectSubset<T, RolePrivilegeFindUniqueArgs<ExtArgs>>): Prisma__RolePrivilegeClient<$Result.GetResult<Prisma.$RolePrivilegePayload<ExtArgs>, T, "findUnique", GlobalOmitOptions> | null, null, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find one RolePrivilege that matches the filter or throw an error with `error.code='P2025'`
+     * if no matches were found.
+     * @param {RolePrivilegeFindUniqueOrThrowArgs} args - Arguments to find a RolePrivilege
+     * @example
+     * // Get one RolePrivilege
+     * const rolePrivilege = await prisma.rolePrivilege.findUniqueOrThrow({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findUniqueOrThrow<T extends RolePrivilegeFindUniqueOrThrowArgs>(args: SelectSubset<T, RolePrivilegeFindUniqueOrThrowArgs<ExtArgs>>): Prisma__RolePrivilegeClient<$Result.GetResult<Prisma.$RolePrivilegePayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find the first RolePrivilege that matches the filter.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {RolePrivilegeFindFirstArgs} args - Arguments to find a RolePrivilege
+     * @example
+     * // Get one RolePrivilege
+     * const rolePrivilege = await prisma.rolePrivilege.findFirst({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findFirst<T extends RolePrivilegeFindFirstArgs>(args?: SelectSubset<T, RolePrivilegeFindFirstArgs<ExtArgs>>): Prisma__RolePrivilegeClient<$Result.GetResult<Prisma.$RolePrivilegePayload<ExtArgs>, T, "findFirst", GlobalOmitOptions> | null, null, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find the first RolePrivilege that matches the filter or
+     * throw `PrismaKnownClientError` with `P2025` code if no matches were found.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {RolePrivilegeFindFirstOrThrowArgs} args - Arguments to find a RolePrivilege
+     * @example
+     * // Get one RolePrivilege
+     * const rolePrivilege = await prisma.rolePrivilege.findFirstOrThrow({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findFirstOrThrow<T extends RolePrivilegeFindFirstOrThrowArgs>(args?: SelectSubset<T, RolePrivilegeFindFirstOrThrowArgs<ExtArgs>>): Prisma__RolePrivilegeClient<$Result.GetResult<Prisma.$RolePrivilegePayload<ExtArgs>, T, "findFirstOrThrow", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find zero or more RolePrivileges that matches the filter.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {RolePrivilegeFindManyArgs} args - Arguments to filter and select certain fields only.
+     * @example
+     * // Get all RolePrivileges
+     * const rolePrivileges = await prisma.rolePrivilege.findMany()
+     * 
+     * // Get first 10 RolePrivileges
+     * const rolePrivileges = await prisma.rolePrivilege.findMany({ take: 10 })
+     * 
+     * // Only select the `roleId`
+     * const rolePrivilegeWithRoleIdOnly = await prisma.rolePrivilege.findMany({ select: { roleId: true } })
+     * 
+     */
+    findMany<T extends RolePrivilegeFindManyArgs>(args?: SelectSubset<T, RolePrivilegeFindManyArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$RolePrivilegePayload<ExtArgs>, T, "findMany", GlobalOmitOptions>>
+
+    /**
+     * Create a RolePrivilege.
+     * @param {RolePrivilegeCreateArgs} args - Arguments to create a RolePrivilege.
+     * @example
+     * // Create one RolePrivilege
+     * const RolePrivilege = await prisma.rolePrivilege.create({
+     *   data: {
+     *     // ... data to create a RolePrivilege
+     *   }
+     * })
+     * 
+     */
+    create<T extends RolePrivilegeCreateArgs>(args: SelectSubset<T, RolePrivilegeCreateArgs<ExtArgs>>): Prisma__RolePrivilegeClient<$Result.GetResult<Prisma.$RolePrivilegePayload<ExtArgs>, T, "create", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Create many RolePrivileges.
+     * @param {RolePrivilegeCreateManyArgs} args - Arguments to create many RolePrivileges.
+     * @example
+     * // Create many RolePrivileges
+     * const rolePrivilege = await prisma.rolePrivilege.createMany({
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     *     
+     */
+    createMany<T extends RolePrivilegeCreateManyArgs>(args?: SelectSubset<T, RolePrivilegeCreateManyArgs<ExtArgs>>): Prisma.PrismaPromise<BatchPayload>
+
+    /**
+     * Delete a RolePrivilege.
+     * @param {RolePrivilegeDeleteArgs} args - Arguments to delete one RolePrivilege.
+     * @example
+     * // Delete one RolePrivilege
+     * const RolePrivilege = await prisma.rolePrivilege.delete({
+     *   where: {
+     *     // ... filter to delete one RolePrivilege
+     *   }
+     * })
+     * 
+     */
+    delete<T extends RolePrivilegeDeleteArgs>(args: SelectSubset<T, RolePrivilegeDeleteArgs<ExtArgs>>): Prisma__RolePrivilegeClient<$Result.GetResult<Prisma.$RolePrivilegePayload<ExtArgs>, T, "delete", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Update one RolePrivilege.
+     * @param {RolePrivilegeUpdateArgs} args - Arguments to update one RolePrivilege.
+     * @example
+     * // Update one RolePrivilege
+     * const rolePrivilege = await prisma.rolePrivilege.update({
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: {
+     *     // ... provide data here
+     *   }
+     * })
+     * 
+     */
+    update<T extends RolePrivilegeUpdateArgs>(args: SelectSubset<T, RolePrivilegeUpdateArgs<ExtArgs>>): Prisma__RolePrivilegeClient<$Result.GetResult<Prisma.$RolePrivilegePayload<ExtArgs>, T, "update", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Delete zero or more RolePrivileges.
+     * @param {RolePrivilegeDeleteManyArgs} args - Arguments to filter RolePrivileges to delete.
+     * @example
+     * // Delete a few RolePrivileges
+     * const { count } = await prisma.rolePrivilege.deleteMany({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     * 
+     */
+    deleteMany<T extends RolePrivilegeDeleteManyArgs>(args?: SelectSubset<T, RolePrivilegeDeleteManyArgs<ExtArgs>>): Prisma.PrismaPromise<BatchPayload>
+
+    /**
+     * Update zero or more RolePrivileges.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {RolePrivilegeUpdateManyArgs} args - Arguments to update one or more rows.
+     * @example
+     * // Update many RolePrivileges
+     * const rolePrivilege = await prisma.rolePrivilege.updateMany({
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: {
+     *     // ... provide data here
+     *   }
+     * })
+     * 
+     */
+    updateMany<T extends RolePrivilegeUpdateManyArgs>(args: SelectSubset<T, RolePrivilegeUpdateManyArgs<ExtArgs>>): Prisma.PrismaPromise<BatchPayload>
+
+    /**
+     * Create or update one RolePrivilege.
+     * @param {RolePrivilegeUpsertArgs} args - Arguments to update or create a RolePrivilege.
+     * @example
+     * // Update or create a RolePrivilege
+     * const rolePrivilege = await prisma.rolePrivilege.upsert({
+     *   create: {
+     *     // ... data to create a RolePrivilege
+     *   },
+     *   update: {
+     *     // ... in case it already exists, update
+     *   },
+     *   where: {
+     *     // ... the filter for the RolePrivilege we want to update
+     *   }
+     * })
+     */
+    upsert<T extends RolePrivilegeUpsertArgs>(args: SelectSubset<T, RolePrivilegeUpsertArgs<ExtArgs>>): Prisma__RolePrivilegeClient<$Result.GetResult<Prisma.$RolePrivilegePayload<ExtArgs>, T, "upsert", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+
+    /**
+     * Count the number of RolePrivileges.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {RolePrivilegeCountArgs} args - Arguments to filter RolePrivileges to count.
+     * @example
+     * // Count the number of RolePrivileges
+     * const count = await prisma.rolePrivilege.count({
+     *   where: {
+     *     // ... the filter for the RolePrivileges we want to count
+     *   }
+     * })
+    **/
+    count<T extends RolePrivilegeCountArgs>(
+      args?: Subset<T, RolePrivilegeCountArgs>,
+    ): Prisma.PrismaPromise<
+      T extends $Utils.Record<'select', any>
+        ? T['select'] extends true
+          ? number
+          : GetScalarType<T['select'], RolePrivilegeCountAggregateOutputType>
+        : number
+    >
+
+    /**
+     * Allows you to perform aggregations operations on a RolePrivilege.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {RolePrivilegeAggregateArgs} args - Select which aggregations you would like to apply and on what fields.
+     * @example
+     * // Ordered by age ascending
+     * // Where email contains prisma.io
+     * // Limited to the 10 users
+     * const aggregations = await prisma.user.aggregate({
+     *   _avg: {
+     *     age: true,
+     *   },
+     *   where: {
+     *     email: {
+     *       contains: "prisma.io",
+     *     },
+     *   },
+     *   orderBy: {
+     *     age: "asc",
+     *   },
+     *   take: 10,
+     * })
+    **/
+    aggregate<T extends RolePrivilegeAggregateArgs>(args: Subset<T, RolePrivilegeAggregateArgs>): Prisma.PrismaPromise<GetRolePrivilegeAggregateType<T>>
+
+    /**
+     * Group by RolePrivilege.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {RolePrivilegeGroupByArgs} args - Group by arguments.
+     * @example
+     * // Group by city, order by createdAt, get count
+     * const result = await prisma.user.groupBy({
+     *   by: ['city', 'createdAt'],
+     *   orderBy: {
+     *     createdAt: true
+     *   },
+     *   _count: {
+     *     _all: true
+     *   },
+     * })
+     * 
+    **/
+    groupBy<
+      T extends RolePrivilegeGroupByArgs,
+      HasSelectOrTake extends Or<
+        Extends<'skip', Keys<T>>,
+        Extends<'take', Keys<T>>
+      >,
+      OrderByArg extends True extends HasSelectOrTake
+        ? { orderBy: RolePrivilegeGroupByArgs['orderBy'] }
+        : { orderBy?: RolePrivilegeGroupByArgs['orderBy'] },
+      OrderFields extends ExcludeUnderscoreKeys<Keys<MaybeTupleToUnion<T['orderBy']>>>,
+      ByFields extends MaybeTupleToUnion<T['by']>,
+      ByValid extends Has<ByFields, OrderFields>,
+      HavingFields extends GetHavingFields<T['having']>,
+      HavingValid extends Has<ByFields, HavingFields>,
+      ByEmpty extends T['by'] extends never[] ? True : False,
+      InputErrors extends ByEmpty extends True
+      ? `Error: "by" must not be empty.`
+      : HavingValid extends False
+      ? {
+          [P in HavingFields]: P extends ByFields
+            ? never
+            : P extends string
+            ? `Error: Field "${P}" used in "having" needs to be provided in "by".`
+            : [
+                Error,
+                'Field ',
+                P,
+                ` in "having" needs to be provided in "by"`,
+              ]
+        }[HavingFields]
+      : 'take' extends Keys<T>
+      ? 'orderBy' extends Keys<T>
+        ? ByValid extends True
+          ? {}
+          : {
+              [P in OrderFields]: P extends ByFields
+                ? never
+                : `Error: Field "${P}" in "orderBy" needs to be provided in "by"`
+            }[OrderFields]
+        : 'Error: If you provide "take", you also need to provide "orderBy"'
+      : 'skip' extends Keys<T>
+      ? 'orderBy' extends Keys<T>
+        ? ByValid extends True
+          ? {}
+          : {
+              [P in OrderFields]: P extends ByFields
+                ? never
+                : `Error: Field "${P}" in "orderBy" needs to be provided in "by"`
+            }[OrderFields]
+        : 'Error: If you provide "skip", you also need to provide "orderBy"'
+      : ByValid extends True
+      ? {}
+      : {
+          [P in OrderFields]: P extends ByFields
+            ? never
+            : `Error: Field "${P}" in "orderBy" needs to be provided in "by"`
+        }[OrderFields]
+    >(args: SubsetIntersection<T, RolePrivilegeGroupByArgs, OrderByArg> & InputErrors): {} extends InputErrors ? GetRolePrivilegeGroupByPayload<T> : Prisma.PrismaPromise<InputErrors>
+  /**
+   * Fields of the RolePrivilege model
+   */
+  readonly fields: RolePrivilegeFieldRefs;
+  }
+
+  /**
+   * The delegate class that acts as a "Promise-like" for RolePrivilege.
+   * Why is this prefixed with `Prisma__`?
+   * Because we want to prevent naming conflicts as mentioned in
+   * https://github.com/prisma/prisma-client-js/issues/707
+   */
+  export interface Prisma__RolePrivilegeClient<T, Null = never, ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs, GlobalOmitOptions = {}> extends Prisma.PrismaPromise<T> {
+    readonly [Symbol.toStringTag]: "PrismaPromise"
+    role<T extends RoleDefaultArgs<ExtArgs> = {}>(args?: Subset<T, RoleDefaultArgs<ExtArgs>>): Prisma__RoleClient<$Result.GetResult<Prisma.$RolePayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions> | Null, Null, ExtArgs, GlobalOmitOptions>
+    privilege<T extends PrivilegeDefaultArgs<ExtArgs> = {}>(args?: Subset<T, PrivilegeDefaultArgs<ExtArgs>>): Prisma__PrivilegeClient<$Result.GetResult<Prisma.$PrivilegePayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions> | Null, Null, ExtArgs, GlobalOmitOptions>
+    /**
+     * Attaches callbacks for the resolution and/or rejection of the Promise.
+     * @param onfulfilled The callback to execute when the Promise is resolved.
+     * @param onrejected The callback to execute when the Promise is rejected.
+     * @returns A Promise for the completion of which ever callback is executed.
+     */
+    then<TResult1 = T, TResult2 = never>(onfulfilled?: ((value: T) => TResult1 | PromiseLike<TResult1>) | undefined | null, onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | undefined | null): $Utils.JsPromise<TResult1 | TResult2>
+    /**
+     * Attaches a callback for only the rejection of the Promise.
+     * @param onrejected The callback to execute when the Promise is rejected.
+     * @returns A Promise for the completion of the callback.
+     */
+    catch<TResult = never>(onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | undefined | null): $Utils.JsPromise<T | TResult>
+    /**
+     * Attaches a callback that is invoked when the Promise is settled (fulfilled or rejected). The
+     * resolved value cannot be modified from the callback.
+     * @param onfinally The callback to execute when the Promise is settled (fulfilled or rejected).
+     * @returns A Promise for the completion of the callback.
+     */
+    finally(onfinally?: (() => void) | undefined | null): $Utils.JsPromise<T>
+  }
+
+
+
+
+  /**
+   * Fields of the RolePrivilege model
+   */
+  interface RolePrivilegeFieldRefs {
+    readonly roleId: FieldRef<"RolePrivilege", 'Int'>
+    readonly privilegeId: FieldRef<"RolePrivilege", 'Int'>
+  }
+    
+
+  // Custom InputTypes
+  /**
+   * RolePrivilege findUnique
+   */
+  export type RolePrivilegeFindUniqueArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the RolePrivilege
+     */
+    select?: RolePrivilegeSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the RolePrivilege
+     */
+    omit?: RolePrivilegeOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: RolePrivilegeInclude<ExtArgs> | null
+    /**
+     * Filter, which RolePrivilege to fetch.
+     */
+    where: RolePrivilegeWhereUniqueInput
+  }
+
+  /**
+   * RolePrivilege findUniqueOrThrow
+   */
+  export type RolePrivilegeFindUniqueOrThrowArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the RolePrivilege
+     */
+    select?: RolePrivilegeSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the RolePrivilege
+     */
+    omit?: RolePrivilegeOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: RolePrivilegeInclude<ExtArgs> | null
+    /**
+     * Filter, which RolePrivilege to fetch.
+     */
+    where: RolePrivilegeWhereUniqueInput
+  }
+
+  /**
+   * RolePrivilege findFirst
+   */
+  export type RolePrivilegeFindFirstArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the RolePrivilege
+     */
+    select?: RolePrivilegeSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the RolePrivilege
+     */
+    omit?: RolePrivilegeOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: RolePrivilegeInclude<ExtArgs> | null
+    /**
+     * Filter, which RolePrivilege to fetch.
+     */
+    where?: RolePrivilegeWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of RolePrivileges to fetch.
+     */
+    orderBy?: RolePrivilegeOrderByWithRelationInput | RolePrivilegeOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the position for searching for RolePrivileges.
+     */
+    cursor?: RolePrivilegeWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` RolePrivileges from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` RolePrivileges.
+     */
+    skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/distinct Distinct Docs}
+     * 
+     * Filter by unique combinations of RolePrivileges.
+     */
+    distinct?: RolePrivilegeScalarFieldEnum | RolePrivilegeScalarFieldEnum[]
+  }
+
+  /**
+   * RolePrivilege findFirstOrThrow
+   */
+  export type RolePrivilegeFindFirstOrThrowArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the RolePrivilege
+     */
+    select?: RolePrivilegeSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the RolePrivilege
+     */
+    omit?: RolePrivilegeOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: RolePrivilegeInclude<ExtArgs> | null
+    /**
+     * Filter, which RolePrivilege to fetch.
+     */
+    where?: RolePrivilegeWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of RolePrivileges to fetch.
+     */
+    orderBy?: RolePrivilegeOrderByWithRelationInput | RolePrivilegeOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the position for searching for RolePrivileges.
+     */
+    cursor?: RolePrivilegeWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` RolePrivileges from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` RolePrivileges.
+     */
+    skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/distinct Distinct Docs}
+     * 
+     * Filter by unique combinations of RolePrivileges.
+     */
+    distinct?: RolePrivilegeScalarFieldEnum | RolePrivilegeScalarFieldEnum[]
+  }
+
+  /**
+   * RolePrivilege findMany
+   */
+  export type RolePrivilegeFindManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the RolePrivilege
+     */
+    select?: RolePrivilegeSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the RolePrivilege
+     */
+    omit?: RolePrivilegeOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: RolePrivilegeInclude<ExtArgs> | null
+    /**
+     * Filter, which RolePrivileges to fetch.
+     */
+    where?: RolePrivilegeWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of RolePrivileges to fetch.
+     */
+    orderBy?: RolePrivilegeOrderByWithRelationInput | RolePrivilegeOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the position for listing RolePrivileges.
+     */
+    cursor?: RolePrivilegeWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` RolePrivileges from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` RolePrivileges.
+     */
+    skip?: number
+    distinct?: RolePrivilegeScalarFieldEnum | RolePrivilegeScalarFieldEnum[]
+  }
+
+  /**
+   * RolePrivilege create
+   */
+  export type RolePrivilegeCreateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the RolePrivilege
+     */
+    select?: RolePrivilegeSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the RolePrivilege
+     */
+    omit?: RolePrivilegeOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: RolePrivilegeInclude<ExtArgs> | null
+    /**
+     * The data needed to create a RolePrivilege.
+     */
+    data: XOR<RolePrivilegeCreateInput, RolePrivilegeUncheckedCreateInput>
+  }
+
+  /**
+   * RolePrivilege createMany
+   */
+  export type RolePrivilegeCreateManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * The data used to create many RolePrivileges.
+     */
+    data: RolePrivilegeCreateManyInput | RolePrivilegeCreateManyInput[]
+    skipDuplicates?: boolean
+  }
+
+  /**
+   * RolePrivilege update
+   */
+  export type RolePrivilegeUpdateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the RolePrivilege
+     */
+    select?: RolePrivilegeSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the RolePrivilege
+     */
+    omit?: RolePrivilegeOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: RolePrivilegeInclude<ExtArgs> | null
+    /**
+     * The data needed to update a RolePrivilege.
+     */
+    data: XOR<RolePrivilegeUpdateInput, RolePrivilegeUncheckedUpdateInput>
+    /**
+     * Choose, which RolePrivilege to update.
+     */
+    where: RolePrivilegeWhereUniqueInput
+  }
+
+  /**
+   * RolePrivilege updateMany
+   */
+  export type RolePrivilegeUpdateManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * The data used to update RolePrivileges.
+     */
+    data: XOR<RolePrivilegeUpdateManyMutationInput, RolePrivilegeUncheckedUpdateManyInput>
+    /**
+     * Filter which RolePrivileges to update
+     */
+    where?: RolePrivilegeWhereInput
+    /**
+     * Limit how many RolePrivileges to update.
+     */
+    limit?: number
+  }
+
+  /**
+   * RolePrivilege upsert
+   */
+  export type RolePrivilegeUpsertArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the RolePrivilege
+     */
+    select?: RolePrivilegeSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the RolePrivilege
+     */
+    omit?: RolePrivilegeOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: RolePrivilegeInclude<ExtArgs> | null
+    /**
+     * The filter to search for the RolePrivilege to update in case it exists.
+     */
+    where: RolePrivilegeWhereUniqueInput
+    /**
+     * In case the RolePrivilege found by the `where` argument doesn't exist, create a new RolePrivilege with this data.
+     */
+    create: XOR<RolePrivilegeCreateInput, RolePrivilegeUncheckedCreateInput>
+    /**
+     * In case the RolePrivilege was found with the provided `where` argument, update it with this data.
+     */
+    update: XOR<RolePrivilegeUpdateInput, RolePrivilegeUncheckedUpdateInput>
+  }
+
+  /**
+   * RolePrivilege delete
+   */
+  export type RolePrivilegeDeleteArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the RolePrivilege
+     */
+    select?: RolePrivilegeSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the RolePrivilege
+     */
+    omit?: RolePrivilegeOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: RolePrivilegeInclude<ExtArgs> | null
+    /**
+     * Filter which RolePrivilege to delete.
+     */
+    where: RolePrivilegeWhereUniqueInput
+  }
+
+  /**
+   * RolePrivilege deleteMany
+   */
+  export type RolePrivilegeDeleteManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Filter which RolePrivileges to delete
+     */
+    where?: RolePrivilegeWhereInput
+    /**
+     * Limit how many RolePrivileges to delete.
+     */
+    limit?: number
+  }
+
+  /**
+   * RolePrivilege without action
+   */
+  export type RolePrivilegeDefaultArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the RolePrivilege
+     */
+    select?: RolePrivilegeSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the RolePrivilege
+     */
+    omit?: RolePrivilegeOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: RolePrivilegeInclude<ExtArgs> | null
   }
 
 
@@ -17206,50 +18181,54 @@ export namespace Prisma {
 
   export type DelegationDetailAvgAggregateOutputType = {
     delegationId: number | null
+    privilegeId: number | null
   }
 
   export type DelegationDetailSumAggregateOutputType = {
     delegationId: number | null
+    privilegeId: number | null
   }
 
   export type DelegationDetailMinAggregateOutputType = {
     delegationId: number | null
-    resourceCode: string | null
+    privilegeId: number | null
   }
 
   export type DelegationDetailMaxAggregateOutputType = {
     delegationId: number | null
-    resourceCode: string | null
+    privilegeId: number | null
   }
 
   export type DelegationDetailCountAggregateOutputType = {
     delegationId: number
-    resourceCode: number
+    privilegeId: number
     _all: number
   }
 
 
   export type DelegationDetailAvgAggregateInputType = {
     delegationId?: true
+    privilegeId?: true
   }
 
   export type DelegationDetailSumAggregateInputType = {
     delegationId?: true
+    privilegeId?: true
   }
 
   export type DelegationDetailMinAggregateInputType = {
     delegationId?: true
-    resourceCode?: true
+    privilegeId?: true
   }
 
   export type DelegationDetailMaxAggregateInputType = {
     delegationId?: true
-    resourceCode?: true
+    privilegeId?: true
   }
 
   export type DelegationDetailCountAggregateInputType = {
     delegationId?: true
-    resourceCode?: true
+    privilegeId?: true
     _all?: true
   }
 
@@ -17341,7 +18320,7 @@ export namespace Prisma {
 
   export type DelegationDetailGroupByOutputType = {
     delegationId: number
-    resourceCode: string
+    privilegeId: number
     _count: DelegationDetailCountAggregateOutputType | null
     _avg: DelegationDetailAvgAggregateOutputType | null
     _sum: DelegationDetailSumAggregateOutputType | null
@@ -17365,30 +18344,33 @@ export namespace Prisma {
 
   export type DelegationDetailSelect<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
     delegationId?: boolean
-    resourceCode?: boolean
+    privilegeId?: boolean
     delegation?: boolean | PrivilegeDelegationDefaultArgs<ExtArgs>
+    privilege?: boolean | PrivilegeDefaultArgs<ExtArgs>
   }, ExtArgs["result"]["delegationDetail"]>
 
 
 
   export type DelegationDetailSelectScalar = {
     delegationId?: boolean
-    resourceCode?: boolean
+    privilegeId?: boolean
   }
 
-  export type DelegationDetailOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"delegationId" | "resourceCode", ExtArgs["result"]["delegationDetail"]>
+  export type DelegationDetailOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"delegationId" | "privilegeId", ExtArgs["result"]["delegationDetail"]>
   export type DelegationDetailInclude<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
     delegation?: boolean | PrivilegeDelegationDefaultArgs<ExtArgs>
+    privilege?: boolean | PrivilegeDefaultArgs<ExtArgs>
   }
 
   export type $DelegationDetailPayload<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
     name: "DelegationDetail"
     objects: {
       delegation: Prisma.$PrivilegeDelegationPayload<ExtArgs>
+      privilege: Prisma.$PrivilegePayload<ExtArgs>
     }
     scalars: $Extensions.GetPayloadResult<{
       delegationId: number
-      resourceCode: string
+      privilegeId: number
     }, ExtArgs["result"]["delegationDetail"]>
     composites: {}
   }
@@ -17730,6 +18712,7 @@ export namespace Prisma {
   export interface Prisma__DelegationDetailClient<T, Null = never, ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs, GlobalOmitOptions = {}> extends Prisma.PrismaPromise<T> {
     readonly [Symbol.toStringTag]: "PrismaPromise"
     delegation<T extends PrivilegeDelegationDefaultArgs<ExtArgs> = {}>(args?: Subset<T, PrivilegeDelegationDefaultArgs<ExtArgs>>): Prisma__PrivilegeDelegationClient<$Result.GetResult<Prisma.$PrivilegeDelegationPayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions> | Null, Null, ExtArgs, GlobalOmitOptions>
+    privilege<T extends PrivilegeDefaultArgs<ExtArgs> = {}>(args?: Subset<T, PrivilegeDefaultArgs<ExtArgs>>): Prisma__PrivilegeClient<$Result.GetResult<Prisma.$PrivilegePayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions> | Null, Null, ExtArgs, GlobalOmitOptions>
     /**
      * Attaches callbacks for the resolution and/or rejection of the Promise.
      * @param onfulfilled The callback to execute when the Promise is resolved.
@@ -17760,7 +18743,7 @@ export namespace Prisma {
    */
   interface DelegationDetailFieldRefs {
     readonly delegationId: FieldRef<"DelegationDetail", 'Int'>
-    readonly resourceCode: FieldRef<"DelegationDetail", 'String'>
+    readonly privilegeId: FieldRef<"DelegationDetail", 'Int'>
   }
     
 
@@ -18123,944 +19106,6 @@ export namespace Prisma {
 
 
   /**
-   * Model RolePrivilege
-   */
-
-  export type AggregateRolePrivilege = {
-    _count: RolePrivilegeCountAggregateOutputType | null
-    _avg: RolePrivilegeAvgAggregateOutputType | null
-    _sum: RolePrivilegeSumAggregateOutputType | null
-    _min: RolePrivilegeMinAggregateOutputType | null
-    _max: RolePrivilegeMaxAggregateOutputType | null
-  }
-
-  export type RolePrivilegeAvgAggregateOutputType = {
-    roleId: number | null
-    privilegeId: number | null
-  }
-
-  export type RolePrivilegeSumAggregateOutputType = {
-    roleId: number | null
-    privilegeId: number | null
-  }
-
-  export type RolePrivilegeMinAggregateOutputType = {
-    roleId: number | null
-    privilegeId: number | null
-  }
-
-  export type RolePrivilegeMaxAggregateOutputType = {
-    roleId: number | null
-    privilegeId: number | null
-  }
-
-  export type RolePrivilegeCountAggregateOutputType = {
-    roleId: number
-    privilegeId: number
-    _all: number
-  }
-
-
-  export type RolePrivilegeAvgAggregateInputType = {
-    roleId?: true
-    privilegeId?: true
-  }
-
-  export type RolePrivilegeSumAggregateInputType = {
-    roleId?: true
-    privilegeId?: true
-  }
-
-  export type RolePrivilegeMinAggregateInputType = {
-    roleId?: true
-    privilegeId?: true
-  }
-
-  export type RolePrivilegeMaxAggregateInputType = {
-    roleId?: true
-    privilegeId?: true
-  }
-
-  export type RolePrivilegeCountAggregateInputType = {
-    roleId?: true
-    privilegeId?: true
-    _all?: true
-  }
-
-  export type RolePrivilegeAggregateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
-    /**
-     * Filter which RolePrivilege to aggregate.
-     */
-    where?: RolePrivilegeWhereInput
-    /**
-     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
-     * 
-     * Determine the order of RolePrivileges to fetch.
-     */
-    orderBy?: RolePrivilegeOrderByWithRelationInput | RolePrivilegeOrderByWithRelationInput[]
-    /**
-     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
-     * 
-     * Sets the start position
-     */
-    cursor?: RolePrivilegeWhereUniqueInput
-    /**
-     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
-     * 
-     * Take `±n` RolePrivileges from the position of the cursor.
-     */
-    take?: number
-    /**
-     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
-     * 
-     * Skip the first `n` RolePrivileges.
-     */
-    skip?: number
-    /**
-     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
-     * 
-     * Count returned RolePrivileges
-    **/
-    _count?: true | RolePrivilegeCountAggregateInputType
-    /**
-     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
-     * 
-     * Select which fields to average
-    **/
-    _avg?: RolePrivilegeAvgAggregateInputType
-    /**
-     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
-     * 
-     * Select which fields to sum
-    **/
-    _sum?: RolePrivilegeSumAggregateInputType
-    /**
-     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
-     * 
-     * Select which fields to find the minimum value
-    **/
-    _min?: RolePrivilegeMinAggregateInputType
-    /**
-     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
-     * 
-     * Select which fields to find the maximum value
-    **/
-    _max?: RolePrivilegeMaxAggregateInputType
-  }
-
-  export type GetRolePrivilegeAggregateType<T extends RolePrivilegeAggregateArgs> = {
-        [P in keyof T & keyof AggregateRolePrivilege]: P extends '_count' | 'count'
-      ? T[P] extends true
-        ? number
-        : GetScalarType<T[P], AggregateRolePrivilege[P]>
-      : GetScalarType<T[P], AggregateRolePrivilege[P]>
-  }
-
-
-
-
-  export type RolePrivilegeGroupByArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
-    where?: RolePrivilegeWhereInput
-    orderBy?: RolePrivilegeOrderByWithAggregationInput | RolePrivilegeOrderByWithAggregationInput[]
-    by: RolePrivilegeScalarFieldEnum[] | RolePrivilegeScalarFieldEnum
-    having?: RolePrivilegeScalarWhereWithAggregatesInput
-    take?: number
-    skip?: number
-    _count?: RolePrivilegeCountAggregateInputType | true
-    _avg?: RolePrivilegeAvgAggregateInputType
-    _sum?: RolePrivilegeSumAggregateInputType
-    _min?: RolePrivilegeMinAggregateInputType
-    _max?: RolePrivilegeMaxAggregateInputType
-  }
-
-  export type RolePrivilegeGroupByOutputType = {
-    roleId: number
-    privilegeId: number
-    _count: RolePrivilegeCountAggregateOutputType | null
-    _avg: RolePrivilegeAvgAggregateOutputType | null
-    _sum: RolePrivilegeSumAggregateOutputType | null
-    _min: RolePrivilegeMinAggregateOutputType | null
-    _max: RolePrivilegeMaxAggregateOutputType | null
-  }
-
-  type GetRolePrivilegeGroupByPayload<T extends RolePrivilegeGroupByArgs> = Prisma.PrismaPromise<
-    Array<
-      PickEnumerable<RolePrivilegeGroupByOutputType, T['by']> &
-        {
-          [P in ((keyof T) & (keyof RolePrivilegeGroupByOutputType))]: P extends '_count'
-            ? T[P] extends boolean
-              ? number
-              : GetScalarType<T[P], RolePrivilegeGroupByOutputType[P]>
-            : GetScalarType<T[P], RolePrivilegeGroupByOutputType[P]>
-        }
-      >
-    >
-
-
-  export type RolePrivilegeSelect<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
-    roleId?: boolean
-    privilegeId?: boolean
-    role?: boolean | RoleDefaultArgs<ExtArgs>
-    privilege?: boolean | PrivilegeDefaultArgs<ExtArgs>
-  }, ExtArgs["result"]["rolePrivilege"]>
-
-
-
-  export type RolePrivilegeSelectScalar = {
-    roleId?: boolean
-    privilegeId?: boolean
-  }
-
-  export type RolePrivilegeOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"roleId" | "privilegeId", ExtArgs["result"]["rolePrivilege"]>
-  export type RolePrivilegeInclude<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
-    role?: boolean | RoleDefaultArgs<ExtArgs>
-    privilege?: boolean | PrivilegeDefaultArgs<ExtArgs>
-  }
-
-  export type $RolePrivilegePayload<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
-    name: "RolePrivilege"
-    objects: {
-      role: Prisma.$RolePayload<ExtArgs>
-      privilege: Prisma.$PrivilegePayload<ExtArgs>
-    }
-    scalars: $Extensions.GetPayloadResult<{
-      roleId: number
-      privilegeId: number
-    }, ExtArgs["result"]["rolePrivilege"]>
-    composites: {}
-  }
-
-  type RolePrivilegeGetPayload<S extends boolean | null | undefined | RolePrivilegeDefaultArgs> = $Result.GetResult<Prisma.$RolePrivilegePayload, S>
-
-  type RolePrivilegeCountArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> =
-    Omit<RolePrivilegeFindManyArgs, 'select' | 'include' | 'distinct' | 'omit'> & {
-      select?: RolePrivilegeCountAggregateInputType | true
-    }
-
-  export interface RolePrivilegeDelegate<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs, GlobalOmitOptions = {}> {
-    [K: symbol]: { types: Prisma.TypeMap<ExtArgs>['model']['RolePrivilege'], meta: { name: 'RolePrivilege' } }
-    /**
-     * Find zero or one RolePrivilege that matches the filter.
-     * @param {RolePrivilegeFindUniqueArgs} args - Arguments to find a RolePrivilege
-     * @example
-     * // Get one RolePrivilege
-     * const rolePrivilege = await prisma.rolePrivilege.findUnique({
-     *   where: {
-     *     // ... provide filter here
-     *   }
-     * })
-     */
-    findUnique<T extends RolePrivilegeFindUniqueArgs>(args: SelectSubset<T, RolePrivilegeFindUniqueArgs<ExtArgs>>): Prisma__RolePrivilegeClient<$Result.GetResult<Prisma.$RolePrivilegePayload<ExtArgs>, T, "findUnique", GlobalOmitOptions> | null, null, ExtArgs, GlobalOmitOptions>
-
-    /**
-     * Find one RolePrivilege that matches the filter or throw an error with `error.code='P2025'`
-     * if no matches were found.
-     * @param {RolePrivilegeFindUniqueOrThrowArgs} args - Arguments to find a RolePrivilege
-     * @example
-     * // Get one RolePrivilege
-     * const rolePrivilege = await prisma.rolePrivilege.findUniqueOrThrow({
-     *   where: {
-     *     // ... provide filter here
-     *   }
-     * })
-     */
-    findUniqueOrThrow<T extends RolePrivilegeFindUniqueOrThrowArgs>(args: SelectSubset<T, RolePrivilegeFindUniqueOrThrowArgs<ExtArgs>>): Prisma__RolePrivilegeClient<$Result.GetResult<Prisma.$RolePrivilegePayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
-
-    /**
-     * Find the first RolePrivilege that matches the filter.
-     * Note, that providing `undefined` is treated as the value not being there.
-     * Read more here: https://pris.ly/d/null-undefined
-     * @param {RolePrivilegeFindFirstArgs} args - Arguments to find a RolePrivilege
-     * @example
-     * // Get one RolePrivilege
-     * const rolePrivilege = await prisma.rolePrivilege.findFirst({
-     *   where: {
-     *     // ... provide filter here
-     *   }
-     * })
-     */
-    findFirst<T extends RolePrivilegeFindFirstArgs>(args?: SelectSubset<T, RolePrivilegeFindFirstArgs<ExtArgs>>): Prisma__RolePrivilegeClient<$Result.GetResult<Prisma.$RolePrivilegePayload<ExtArgs>, T, "findFirst", GlobalOmitOptions> | null, null, ExtArgs, GlobalOmitOptions>
-
-    /**
-     * Find the first RolePrivilege that matches the filter or
-     * throw `PrismaKnownClientError` with `P2025` code if no matches were found.
-     * Note, that providing `undefined` is treated as the value not being there.
-     * Read more here: https://pris.ly/d/null-undefined
-     * @param {RolePrivilegeFindFirstOrThrowArgs} args - Arguments to find a RolePrivilege
-     * @example
-     * // Get one RolePrivilege
-     * const rolePrivilege = await prisma.rolePrivilege.findFirstOrThrow({
-     *   where: {
-     *     // ... provide filter here
-     *   }
-     * })
-     */
-    findFirstOrThrow<T extends RolePrivilegeFindFirstOrThrowArgs>(args?: SelectSubset<T, RolePrivilegeFindFirstOrThrowArgs<ExtArgs>>): Prisma__RolePrivilegeClient<$Result.GetResult<Prisma.$RolePrivilegePayload<ExtArgs>, T, "findFirstOrThrow", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
-
-    /**
-     * Find zero or more RolePrivileges that matches the filter.
-     * Note, that providing `undefined` is treated as the value not being there.
-     * Read more here: https://pris.ly/d/null-undefined
-     * @param {RolePrivilegeFindManyArgs} args - Arguments to filter and select certain fields only.
-     * @example
-     * // Get all RolePrivileges
-     * const rolePrivileges = await prisma.rolePrivilege.findMany()
-     * 
-     * // Get first 10 RolePrivileges
-     * const rolePrivileges = await prisma.rolePrivilege.findMany({ take: 10 })
-     * 
-     * // Only select the `roleId`
-     * const rolePrivilegeWithRoleIdOnly = await prisma.rolePrivilege.findMany({ select: { roleId: true } })
-     * 
-     */
-    findMany<T extends RolePrivilegeFindManyArgs>(args?: SelectSubset<T, RolePrivilegeFindManyArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$RolePrivilegePayload<ExtArgs>, T, "findMany", GlobalOmitOptions>>
-
-    /**
-     * Create a RolePrivilege.
-     * @param {RolePrivilegeCreateArgs} args - Arguments to create a RolePrivilege.
-     * @example
-     * // Create one RolePrivilege
-     * const RolePrivilege = await prisma.rolePrivilege.create({
-     *   data: {
-     *     // ... data to create a RolePrivilege
-     *   }
-     * })
-     * 
-     */
-    create<T extends RolePrivilegeCreateArgs>(args: SelectSubset<T, RolePrivilegeCreateArgs<ExtArgs>>): Prisma__RolePrivilegeClient<$Result.GetResult<Prisma.$RolePrivilegePayload<ExtArgs>, T, "create", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
-
-    /**
-     * Create many RolePrivileges.
-     * @param {RolePrivilegeCreateManyArgs} args - Arguments to create many RolePrivileges.
-     * @example
-     * // Create many RolePrivileges
-     * const rolePrivilege = await prisma.rolePrivilege.createMany({
-     *   data: [
-     *     // ... provide data here
-     *   ]
-     * })
-     *     
-     */
-    createMany<T extends RolePrivilegeCreateManyArgs>(args?: SelectSubset<T, RolePrivilegeCreateManyArgs<ExtArgs>>): Prisma.PrismaPromise<BatchPayload>
-
-    /**
-     * Delete a RolePrivilege.
-     * @param {RolePrivilegeDeleteArgs} args - Arguments to delete one RolePrivilege.
-     * @example
-     * // Delete one RolePrivilege
-     * const RolePrivilege = await prisma.rolePrivilege.delete({
-     *   where: {
-     *     // ... filter to delete one RolePrivilege
-     *   }
-     * })
-     * 
-     */
-    delete<T extends RolePrivilegeDeleteArgs>(args: SelectSubset<T, RolePrivilegeDeleteArgs<ExtArgs>>): Prisma__RolePrivilegeClient<$Result.GetResult<Prisma.$RolePrivilegePayload<ExtArgs>, T, "delete", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
-
-    /**
-     * Update one RolePrivilege.
-     * @param {RolePrivilegeUpdateArgs} args - Arguments to update one RolePrivilege.
-     * @example
-     * // Update one RolePrivilege
-     * const rolePrivilege = await prisma.rolePrivilege.update({
-     *   where: {
-     *     // ... provide filter here
-     *   },
-     *   data: {
-     *     // ... provide data here
-     *   }
-     * })
-     * 
-     */
-    update<T extends RolePrivilegeUpdateArgs>(args: SelectSubset<T, RolePrivilegeUpdateArgs<ExtArgs>>): Prisma__RolePrivilegeClient<$Result.GetResult<Prisma.$RolePrivilegePayload<ExtArgs>, T, "update", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
-
-    /**
-     * Delete zero or more RolePrivileges.
-     * @param {RolePrivilegeDeleteManyArgs} args - Arguments to filter RolePrivileges to delete.
-     * @example
-     * // Delete a few RolePrivileges
-     * const { count } = await prisma.rolePrivilege.deleteMany({
-     *   where: {
-     *     // ... provide filter here
-     *   }
-     * })
-     * 
-     */
-    deleteMany<T extends RolePrivilegeDeleteManyArgs>(args?: SelectSubset<T, RolePrivilegeDeleteManyArgs<ExtArgs>>): Prisma.PrismaPromise<BatchPayload>
-
-    /**
-     * Update zero or more RolePrivileges.
-     * Note, that providing `undefined` is treated as the value not being there.
-     * Read more here: https://pris.ly/d/null-undefined
-     * @param {RolePrivilegeUpdateManyArgs} args - Arguments to update one or more rows.
-     * @example
-     * // Update many RolePrivileges
-     * const rolePrivilege = await prisma.rolePrivilege.updateMany({
-     *   where: {
-     *     // ... provide filter here
-     *   },
-     *   data: {
-     *     // ... provide data here
-     *   }
-     * })
-     * 
-     */
-    updateMany<T extends RolePrivilegeUpdateManyArgs>(args: SelectSubset<T, RolePrivilegeUpdateManyArgs<ExtArgs>>): Prisma.PrismaPromise<BatchPayload>
-
-    /**
-     * Create or update one RolePrivilege.
-     * @param {RolePrivilegeUpsertArgs} args - Arguments to update or create a RolePrivilege.
-     * @example
-     * // Update or create a RolePrivilege
-     * const rolePrivilege = await prisma.rolePrivilege.upsert({
-     *   create: {
-     *     // ... data to create a RolePrivilege
-     *   },
-     *   update: {
-     *     // ... in case it already exists, update
-     *   },
-     *   where: {
-     *     // ... the filter for the RolePrivilege we want to update
-     *   }
-     * })
-     */
-    upsert<T extends RolePrivilegeUpsertArgs>(args: SelectSubset<T, RolePrivilegeUpsertArgs<ExtArgs>>): Prisma__RolePrivilegeClient<$Result.GetResult<Prisma.$RolePrivilegePayload<ExtArgs>, T, "upsert", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
-
-
-    /**
-     * Count the number of RolePrivileges.
-     * Note, that providing `undefined` is treated as the value not being there.
-     * Read more here: https://pris.ly/d/null-undefined
-     * @param {RolePrivilegeCountArgs} args - Arguments to filter RolePrivileges to count.
-     * @example
-     * // Count the number of RolePrivileges
-     * const count = await prisma.rolePrivilege.count({
-     *   where: {
-     *     // ... the filter for the RolePrivileges we want to count
-     *   }
-     * })
-    **/
-    count<T extends RolePrivilegeCountArgs>(
-      args?: Subset<T, RolePrivilegeCountArgs>,
-    ): Prisma.PrismaPromise<
-      T extends $Utils.Record<'select', any>
-        ? T['select'] extends true
-          ? number
-          : GetScalarType<T['select'], RolePrivilegeCountAggregateOutputType>
-        : number
-    >
-
-    /**
-     * Allows you to perform aggregations operations on a RolePrivilege.
-     * Note, that providing `undefined` is treated as the value not being there.
-     * Read more here: https://pris.ly/d/null-undefined
-     * @param {RolePrivilegeAggregateArgs} args - Select which aggregations you would like to apply and on what fields.
-     * @example
-     * // Ordered by age ascending
-     * // Where email contains prisma.io
-     * // Limited to the 10 users
-     * const aggregations = await prisma.user.aggregate({
-     *   _avg: {
-     *     age: true,
-     *   },
-     *   where: {
-     *     email: {
-     *       contains: "prisma.io",
-     *     },
-     *   },
-     *   orderBy: {
-     *     age: "asc",
-     *   },
-     *   take: 10,
-     * })
-    **/
-    aggregate<T extends RolePrivilegeAggregateArgs>(args: Subset<T, RolePrivilegeAggregateArgs>): Prisma.PrismaPromise<GetRolePrivilegeAggregateType<T>>
-
-    /**
-     * Group by RolePrivilege.
-     * Note, that providing `undefined` is treated as the value not being there.
-     * Read more here: https://pris.ly/d/null-undefined
-     * @param {RolePrivilegeGroupByArgs} args - Group by arguments.
-     * @example
-     * // Group by city, order by createdAt, get count
-     * const result = await prisma.user.groupBy({
-     *   by: ['city', 'createdAt'],
-     *   orderBy: {
-     *     createdAt: true
-     *   },
-     *   _count: {
-     *     _all: true
-     *   },
-     * })
-     * 
-    **/
-    groupBy<
-      T extends RolePrivilegeGroupByArgs,
-      HasSelectOrTake extends Or<
-        Extends<'skip', Keys<T>>,
-        Extends<'take', Keys<T>>
-      >,
-      OrderByArg extends True extends HasSelectOrTake
-        ? { orderBy: RolePrivilegeGroupByArgs['orderBy'] }
-        : { orderBy?: RolePrivilegeGroupByArgs['orderBy'] },
-      OrderFields extends ExcludeUnderscoreKeys<Keys<MaybeTupleToUnion<T['orderBy']>>>,
-      ByFields extends MaybeTupleToUnion<T['by']>,
-      ByValid extends Has<ByFields, OrderFields>,
-      HavingFields extends GetHavingFields<T['having']>,
-      HavingValid extends Has<ByFields, HavingFields>,
-      ByEmpty extends T['by'] extends never[] ? True : False,
-      InputErrors extends ByEmpty extends True
-      ? `Error: "by" must not be empty.`
-      : HavingValid extends False
-      ? {
-          [P in HavingFields]: P extends ByFields
-            ? never
-            : P extends string
-            ? `Error: Field "${P}" used in "having" needs to be provided in "by".`
-            : [
-                Error,
-                'Field ',
-                P,
-                ` in "having" needs to be provided in "by"`,
-              ]
-        }[HavingFields]
-      : 'take' extends Keys<T>
-      ? 'orderBy' extends Keys<T>
-        ? ByValid extends True
-          ? {}
-          : {
-              [P in OrderFields]: P extends ByFields
-                ? never
-                : `Error: Field "${P}" in "orderBy" needs to be provided in "by"`
-            }[OrderFields]
-        : 'Error: If you provide "take", you also need to provide "orderBy"'
-      : 'skip' extends Keys<T>
-      ? 'orderBy' extends Keys<T>
-        ? ByValid extends True
-          ? {}
-          : {
-              [P in OrderFields]: P extends ByFields
-                ? never
-                : `Error: Field "${P}" in "orderBy" needs to be provided in "by"`
-            }[OrderFields]
-        : 'Error: If you provide "skip", you also need to provide "orderBy"'
-      : ByValid extends True
-      ? {}
-      : {
-          [P in OrderFields]: P extends ByFields
-            ? never
-            : `Error: Field "${P}" in "orderBy" needs to be provided in "by"`
-        }[OrderFields]
-    >(args: SubsetIntersection<T, RolePrivilegeGroupByArgs, OrderByArg> & InputErrors): {} extends InputErrors ? GetRolePrivilegeGroupByPayload<T> : Prisma.PrismaPromise<InputErrors>
-  /**
-   * Fields of the RolePrivilege model
-   */
-  readonly fields: RolePrivilegeFieldRefs;
-  }
-
-  /**
-   * The delegate class that acts as a "Promise-like" for RolePrivilege.
-   * Why is this prefixed with `Prisma__`?
-   * Because we want to prevent naming conflicts as mentioned in
-   * https://github.com/prisma/prisma-client-js/issues/707
-   */
-  export interface Prisma__RolePrivilegeClient<T, Null = never, ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs, GlobalOmitOptions = {}> extends Prisma.PrismaPromise<T> {
-    readonly [Symbol.toStringTag]: "PrismaPromise"
-    role<T extends RoleDefaultArgs<ExtArgs> = {}>(args?: Subset<T, RoleDefaultArgs<ExtArgs>>): Prisma__RoleClient<$Result.GetResult<Prisma.$RolePayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions> | Null, Null, ExtArgs, GlobalOmitOptions>
-    privilege<T extends PrivilegeDefaultArgs<ExtArgs> = {}>(args?: Subset<T, PrivilegeDefaultArgs<ExtArgs>>): Prisma__PrivilegeClient<$Result.GetResult<Prisma.$PrivilegePayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions> | Null, Null, ExtArgs, GlobalOmitOptions>
-    /**
-     * Attaches callbacks for the resolution and/or rejection of the Promise.
-     * @param onfulfilled The callback to execute when the Promise is resolved.
-     * @param onrejected The callback to execute when the Promise is rejected.
-     * @returns A Promise for the completion of which ever callback is executed.
-     */
-    then<TResult1 = T, TResult2 = never>(onfulfilled?: ((value: T) => TResult1 | PromiseLike<TResult1>) | undefined | null, onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | undefined | null): $Utils.JsPromise<TResult1 | TResult2>
-    /**
-     * Attaches a callback for only the rejection of the Promise.
-     * @param onrejected The callback to execute when the Promise is rejected.
-     * @returns A Promise for the completion of the callback.
-     */
-    catch<TResult = never>(onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | undefined | null): $Utils.JsPromise<T | TResult>
-    /**
-     * Attaches a callback that is invoked when the Promise is settled (fulfilled or rejected). The
-     * resolved value cannot be modified from the callback.
-     * @param onfinally The callback to execute when the Promise is settled (fulfilled or rejected).
-     * @returns A Promise for the completion of the callback.
-     */
-    finally(onfinally?: (() => void) | undefined | null): $Utils.JsPromise<T>
-  }
-
-
-
-
-  /**
-   * Fields of the RolePrivilege model
-   */
-  interface RolePrivilegeFieldRefs {
-    readonly roleId: FieldRef<"RolePrivilege", 'Int'>
-    readonly privilegeId: FieldRef<"RolePrivilege", 'Int'>
-  }
-    
-
-  // Custom InputTypes
-  /**
-   * RolePrivilege findUnique
-   */
-  export type RolePrivilegeFindUniqueArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
-    /**
-     * Select specific fields to fetch from the RolePrivilege
-     */
-    select?: RolePrivilegeSelect<ExtArgs> | null
-    /**
-     * Omit specific fields from the RolePrivilege
-     */
-    omit?: RolePrivilegeOmit<ExtArgs> | null
-    /**
-     * Choose, which related nodes to fetch as well
-     */
-    include?: RolePrivilegeInclude<ExtArgs> | null
-    /**
-     * Filter, which RolePrivilege to fetch.
-     */
-    where: RolePrivilegeWhereUniqueInput
-  }
-
-  /**
-   * RolePrivilege findUniqueOrThrow
-   */
-  export type RolePrivilegeFindUniqueOrThrowArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
-    /**
-     * Select specific fields to fetch from the RolePrivilege
-     */
-    select?: RolePrivilegeSelect<ExtArgs> | null
-    /**
-     * Omit specific fields from the RolePrivilege
-     */
-    omit?: RolePrivilegeOmit<ExtArgs> | null
-    /**
-     * Choose, which related nodes to fetch as well
-     */
-    include?: RolePrivilegeInclude<ExtArgs> | null
-    /**
-     * Filter, which RolePrivilege to fetch.
-     */
-    where: RolePrivilegeWhereUniqueInput
-  }
-
-  /**
-   * RolePrivilege findFirst
-   */
-  export type RolePrivilegeFindFirstArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
-    /**
-     * Select specific fields to fetch from the RolePrivilege
-     */
-    select?: RolePrivilegeSelect<ExtArgs> | null
-    /**
-     * Omit specific fields from the RolePrivilege
-     */
-    omit?: RolePrivilegeOmit<ExtArgs> | null
-    /**
-     * Choose, which related nodes to fetch as well
-     */
-    include?: RolePrivilegeInclude<ExtArgs> | null
-    /**
-     * Filter, which RolePrivilege to fetch.
-     */
-    where?: RolePrivilegeWhereInput
-    /**
-     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
-     * 
-     * Determine the order of RolePrivileges to fetch.
-     */
-    orderBy?: RolePrivilegeOrderByWithRelationInput | RolePrivilegeOrderByWithRelationInput[]
-    /**
-     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
-     * 
-     * Sets the position for searching for RolePrivileges.
-     */
-    cursor?: RolePrivilegeWhereUniqueInput
-    /**
-     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
-     * 
-     * Take `±n` RolePrivileges from the position of the cursor.
-     */
-    take?: number
-    /**
-     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
-     * 
-     * Skip the first `n` RolePrivileges.
-     */
-    skip?: number
-    /**
-     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/distinct Distinct Docs}
-     * 
-     * Filter by unique combinations of RolePrivileges.
-     */
-    distinct?: RolePrivilegeScalarFieldEnum | RolePrivilegeScalarFieldEnum[]
-  }
-
-  /**
-   * RolePrivilege findFirstOrThrow
-   */
-  export type RolePrivilegeFindFirstOrThrowArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
-    /**
-     * Select specific fields to fetch from the RolePrivilege
-     */
-    select?: RolePrivilegeSelect<ExtArgs> | null
-    /**
-     * Omit specific fields from the RolePrivilege
-     */
-    omit?: RolePrivilegeOmit<ExtArgs> | null
-    /**
-     * Choose, which related nodes to fetch as well
-     */
-    include?: RolePrivilegeInclude<ExtArgs> | null
-    /**
-     * Filter, which RolePrivilege to fetch.
-     */
-    where?: RolePrivilegeWhereInput
-    /**
-     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
-     * 
-     * Determine the order of RolePrivileges to fetch.
-     */
-    orderBy?: RolePrivilegeOrderByWithRelationInput | RolePrivilegeOrderByWithRelationInput[]
-    /**
-     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
-     * 
-     * Sets the position for searching for RolePrivileges.
-     */
-    cursor?: RolePrivilegeWhereUniqueInput
-    /**
-     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
-     * 
-     * Take `±n` RolePrivileges from the position of the cursor.
-     */
-    take?: number
-    /**
-     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
-     * 
-     * Skip the first `n` RolePrivileges.
-     */
-    skip?: number
-    /**
-     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/distinct Distinct Docs}
-     * 
-     * Filter by unique combinations of RolePrivileges.
-     */
-    distinct?: RolePrivilegeScalarFieldEnum | RolePrivilegeScalarFieldEnum[]
-  }
-
-  /**
-   * RolePrivilege findMany
-   */
-  export type RolePrivilegeFindManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
-    /**
-     * Select specific fields to fetch from the RolePrivilege
-     */
-    select?: RolePrivilegeSelect<ExtArgs> | null
-    /**
-     * Omit specific fields from the RolePrivilege
-     */
-    omit?: RolePrivilegeOmit<ExtArgs> | null
-    /**
-     * Choose, which related nodes to fetch as well
-     */
-    include?: RolePrivilegeInclude<ExtArgs> | null
-    /**
-     * Filter, which RolePrivileges to fetch.
-     */
-    where?: RolePrivilegeWhereInput
-    /**
-     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
-     * 
-     * Determine the order of RolePrivileges to fetch.
-     */
-    orderBy?: RolePrivilegeOrderByWithRelationInput | RolePrivilegeOrderByWithRelationInput[]
-    /**
-     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
-     * 
-     * Sets the position for listing RolePrivileges.
-     */
-    cursor?: RolePrivilegeWhereUniqueInput
-    /**
-     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
-     * 
-     * Take `±n` RolePrivileges from the position of the cursor.
-     */
-    take?: number
-    /**
-     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
-     * 
-     * Skip the first `n` RolePrivileges.
-     */
-    skip?: number
-    distinct?: RolePrivilegeScalarFieldEnum | RolePrivilegeScalarFieldEnum[]
-  }
-
-  /**
-   * RolePrivilege create
-   */
-  export type RolePrivilegeCreateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
-    /**
-     * Select specific fields to fetch from the RolePrivilege
-     */
-    select?: RolePrivilegeSelect<ExtArgs> | null
-    /**
-     * Omit specific fields from the RolePrivilege
-     */
-    omit?: RolePrivilegeOmit<ExtArgs> | null
-    /**
-     * Choose, which related nodes to fetch as well
-     */
-    include?: RolePrivilegeInclude<ExtArgs> | null
-    /**
-     * The data needed to create a RolePrivilege.
-     */
-    data: XOR<RolePrivilegeCreateInput, RolePrivilegeUncheckedCreateInput>
-  }
-
-  /**
-   * RolePrivilege createMany
-   */
-  export type RolePrivilegeCreateManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
-    /**
-     * The data used to create many RolePrivileges.
-     */
-    data: RolePrivilegeCreateManyInput | RolePrivilegeCreateManyInput[]
-    skipDuplicates?: boolean
-  }
-
-  /**
-   * RolePrivilege update
-   */
-  export type RolePrivilegeUpdateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
-    /**
-     * Select specific fields to fetch from the RolePrivilege
-     */
-    select?: RolePrivilegeSelect<ExtArgs> | null
-    /**
-     * Omit specific fields from the RolePrivilege
-     */
-    omit?: RolePrivilegeOmit<ExtArgs> | null
-    /**
-     * Choose, which related nodes to fetch as well
-     */
-    include?: RolePrivilegeInclude<ExtArgs> | null
-    /**
-     * The data needed to update a RolePrivilege.
-     */
-    data: XOR<RolePrivilegeUpdateInput, RolePrivilegeUncheckedUpdateInput>
-    /**
-     * Choose, which RolePrivilege to update.
-     */
-    where: RolePrivilegeWhereUniqueInput
-  }
-
-  /**
-   * RolePrivilege updateMany
-   */
-  export type RolePrivilegeUpdateManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
-    /**
-     * The data used to update RolePrivileges.
-     */
-    data: XOR<RolePrivilegeUpdateManyMutationInput, RolePrivilegeUncheckedUpdateManyInput>
-    /**
-     * Filter which RolePrivileges to update
-     */
-    where?: RolePrivilegeWhereInput
-    /**
-     * Limit how many RolePrivileges to update.
-     */
-    limit?: number
-  }
-
-  /**
-   * RolePrivilege upsert
-   */
-  export type RolePrivilegeUpsertArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
-    /**
-     * Select specific fields to fetch from the RolePrivilege
-     */
-    select?: RolePrivilegeSelect<ExtArgs> | null
-    /**
-     * Omit specific fields from the RolePrivilege
-     */
-    omit?: RolePrivilegeOmit<ExtArgs> | null
-    /**
-     * Choose, which related nodes to fetch as well
-     */
-    include?: RolePrivilegeInclude<ExtArgs> | null
-    /**
-     * The filter to search for the RolePrivilege to update in case it exists.
-     */
-    where: RolePrivilegeWhereUniqueInput
-    /**
-     * In case the RolePrivilege found by the `where` argument doesn't exist, create a new RolePrivilege with this data.
-     */
-    create: XOR<RolePrivilegeCreateInput, RolePrivilegeUncheckedCreateInput>
-    /**
-     * In case the RolePrivilege was found with the provided `where` argument, update it with this data.
-     */
-    update: XOR<RolePrivilegeUpdateInput, RolePrivilegeUncheckedUpdateInput>
-  }
-
-  /**
-   * RolePrivilege delete
-   */
-  export type RolePrivilegeDeleteArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
-    /**
-     * Select specific fields to fetch from the RolePrivilege
-     */
-    select?: RolePrivilegeSelect<ExtArgs> | null
-    /**
-     * Omit specific fields from the RolePrivilege
-     */
-    omit?: RolePrivilegeOmit<ExtArgs> | null
-    /**
-     * Choose, which related nodes to fetch as well
-     */
-    include?: RolePrivilegeInclude<ExtArgs> | null
-    /**
-     * Filter which RolePrivilege to delete.
-     */
-    where: RolePrivilegeWhereUniqueInput
-  }
-
-  /**
-   * RolePrivilege deleteMany
-   */
-  export type RolePrivilegeDeleteManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
-    /**
-     * Filter which RolePrivileges to delete
-     */
-    where?: RolePrivilegeWhereInput
-    /**
-     * Limit how many RolePrivileges to delete.
-     */
-    limit?: number
-  }
-
-  /**
-   * RolePrivilege without action
-   */
-  export type RolePrivilegeDefaultArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
-    /**
-     * Select specific fields to fetch from the RolePrivilege
-     */
-    select?: RolePrivilegeSelect<ExtArgs> | null
-    /**
-     * Omit specific fields from the RolePrivilege
-     */
-    omit?: RolePrivilegeOmit<ExtArgs> | null
-    /**
-     * Choose, which related nodes to fetch as well
-     */
-    include?: RolePrivilegeInclude<ExtArgs> | null
-  }
-
-
-  /**
    * Enums
    */
 
@@ -19246,6 +19291,14 @@ export namespace Prisma {
   export type PrivilegeScalarFieldEnum = (typeof PrivilegeScalarFieldEnum)[keyof typeof PrivilegeScalarFieldEnum]
 
 
+  export const RolePrivilegeScalarFieldEnum: {
+    roleId: 'roleId',
+    privilegeId: 'privilegeId'
+  };
+
+  export type RolePrivilegeScalarFieldEnum = (typeof RolePrivilegeScalarFieldEnum)[keyof typeof RolePrivilegeScalarFieldEnum]
+
+
   export const PrivilegeDelegationScalarFieldEnum: {
     id: 'id',
     delegatorUserId: 'delegatorUserId',
@@ -19264,18 +19317,10 @@ export namespace Prisma {
 
   export const DelegationDetailScalarFieldEnum: {
     delegationId: 'delegationId',
-    resourceCode: 'resourceCode'
-  };
-
-  export type DelegationDetailScalarFieldEnum = (typeof DelegationDetailScalarFieldEnum)[keyof typeof DelegationDetailScalarFieldEnum]
-
-
-  export const RolePrivilegeScalarFieldEnum: {
-    roleId: 'roleId',
     privilegeId: 'privilegeId'
   };
 
-  export type RolePrivilegeScalarFieldEnum = (typeof RolePrivilegeScalarFieldEnum)[keyof typeof RolePrivilegeScalarFieldEnum]
+  export type DelegationDetailScalarFieldEnum = (typeof DelegationDetailScalarFieldEnum)[keyof typeof DelegationDetailScalarFieldEnum]
 
 
   export const SortOrder: {
@@ -19396,13 +19441,6 @@ export namespace Prisma {
   };
 
   export type PrivilegeDelegationOrderByRelevanceFieldEnum = (typeof PrivilegeDelegationOrderByRelevanceFieldEnum)[keyof typeof PrivilegeDelegationOrderByRelevanceFieldEnum]
-
-
-  export const DelegationDetailOrderByRelevanceFieldEnum: {
-    resourceCode: 'resourceCode'
-  };
-
-  export type DelegationDetailOrderByRelevanceFieldEnum = (typeof DelegationDetailOrderByRelevanceFieldEnum)[keyof typeof DelegationDetailOrderByRelevanceFieldEnum]
 
 
   /**
@@ -20385,6 +20423,7 @@ export namespace Prisma {
     createTime?: DateTimeFilter<"Privilege"> | Date | string
     updateTime?: DateTimeFilter<"Privilege"> | Date | string
     roles?: RolePrivilegeListRelationFilter
+    delegations?: DelegationDetailListRelationFilter
   }
 
   export type PrivilegeOrderByWithRelationInput = {
@@ -20398,6 +20437,7 @@ export namespace Prisma {
     createTime?: SortOrder
     updateTime?: SortOrder
     roles?: RolePrivilegeOrderByRelationAggregateInput
+    delegations?: DelegationDetailOrderByRelationAggregateInput
     _relevance?: PrivilegeOrderByRelevanceInput
   }
 
@@ -20415,6 +20455,7 @@ export namespace Prisma {
     createTime?: DateTimeFilter<"Privilege"> | Date | string
     updateTime?: DateTimeFilter<"Privilege"> | Date | string
     roles?: RolePrivilegeListRelationFilter
+    delegations?: DelegationDetailListRelationFilter
   }, "id">
 
   export type PrivilegeOrderByWithAggregationInput = {
@@ -20447,6 +20488,52 @@ export namespace Prisma {
     isDelete?: BoolWithAggregatesFilter<"Privilege"> | boolean
     createTime?: DateTimeWithAggregatesFilter<"Privilege"> | Date | string
     updateTime?: DateTimeWithAggregatesFilter<"Privilege"> | Date | string
+  }
+
+  export type RolePrivilegeWhereInput = {
+    AND?: RolePrivilegeWhereInput | RolePrivilegeWhereInput[]
+    OR?: RolePrivilegeWhereInput[]
+    NOT?: RolePrivilegeWhereInput | RolePrivilegeWhereInput[]
+    roleId?: IntFilter<"RolePrivilege"> | number
+    privilegeId?: IntFilter<"RolePrivilege"> | number
+    role?: XOR<RoleScalarRelationFilter, RoleWhereInput>
+    privilege?: XOR<PrivilegeScalarRelationFilter, PrivilegeWhereInput>
+  }
+
+  export type RolePrivilegeOrderByWithRelationInput = {
+    roleId?: SortOrder
+    privilegeId?: SortOrder
+    role?: RoleOrderByWithRelationInput
+    privilege?: PrivilegeOrderByWithRelationInput
+  }
+
+  export type RolePrivilegeWhereUniqueInput = Prisma.AtLeast<{
+    roleId_privilegeId?: RolePrivilegeRoleIdPrivilegeIdCompoundUniqueInput
+    AND?: RolePrivilegeWhereInput | RolePrivilegeWhereInput[]
+    OR?: RolePrivilegeWhereInput[]
+    NOT?: RolePrivilegeWhereInput | RolePrivilegeWhereInput[]
+    roleId?: IntFilter<"RolePrivilege"> | number
+    privilegeId?: IntFilter<"RolePrivilege"> | number
+    role?: XOR<RoleScalarRelationFilter, RoleWhereInput>
+    privilege?: XOR<PrivilegeScalarRelationFilter, PrivilegeWhereInput>
+  }, "roleId_privilegeId">
+
+  export type RolePrivilegeOrderByWithAggregationInput = {
+    roleId?: SortOrder
+    privilegeId?: SortOrder
+    _count?: RolePrivilegeCountOrderByAggregateInput
+    _avg?: RolePrivilegeAvgOrderByAggregateInput
+    _max?: RolePrivilegeMaxOrderByAggregateInput
+    _min?: RolePrivilegeMinOrderByAggregateInput
+    _sum?: RolePrivilegeSumOrderByAggregateInput
+  }
+
+  export type RolePrivilegeScalarWhereWithAggregatesInput = {
+    AND?: RolePrivilegeScalarWhereWithAggregatesInput | RolePrivilegeScalarWhereWithAggregatesInput[]
+    OR?: RolePrivilegeScalarWhereWithAggregatesInput[]
+    NOT?: RolePrivilegeScalarWhereWithAggregatesInput | RolePrivilegeScalarWhereWithAggregatesInput[]
+    roleId?: IntWithAggregatesFilter<"RolePrivilege"> | number
+    privilegeId?: IntWithAggregatesFilter<"RolePrivilege"> | number
   }
 
   export type PrivilegeDelegationWhereInput = {
@@ -20543,30 +20630,32 @@ export namespace Prisma {
     OR?: DelegationDetailWhereInput[]
     NOT?: DelegationDetailWhereInput | DelegationDetailWhereInput[]
     delegationId?: IntFilter<"DelegationDetail"> | number
-    resourceCode?: StringFilter<"DelegationDetail"> | string
+    privilegeId?: IntFilter<"DelegationDetail"> | number
     delegation?: XOR<PrivilegeDelegationScalarRelationFilter, PrivilegeDelegationWhereInput>
+    privilege?: XOR<PrivilegeScalarRelationFilter, PrivilegeWhereInput>
   }
 
   export type DelegationDetailOrderByWithRelationInput = {
     delegationId?: SortOrder
-    resourceCode?: SortOrder
+    privilegeId?: SortOrder
     delegation?: PrivilegeDelegationOrderByWithRelationInput
-    _relevance?: DelegationDetailOrderByRelevanceInput
+    privilege?: PrivilegeOrderByWithRelationInput
   }
 
   export type DelegationDetailWhereUniqueInput = Prisma.AtLeast<{
-    delegationId_resourceCode?: DelegationDetailDelegationIdResourceCodeCompoundUniqueInput
+    delegationId_privilegeId?: DelegationDetailDelegationIdPrivilegeIdCompoundUniqueInput
     AND?: DelegationDetailWhereInput | DelegationDetailWhereInput[]
     OR?: DelegationDetailWhereInput[]
     NOT?: DelegationDetailWhereInput | DelegationDetailWhereInput[]
     delegationId?: IntFilter<"DelegationDetail"> | number
-    resourceCode?: StringFilter<"DelegationDetail"> | string
+    privilegeId?: IntFilter<"DelegationDetail"> | number
     delegation?: XOR<PrivilegeDelegationScalarRelationFilter, PrivilegeDelegationWhereInput>
-  }, "delegationId_resourceCode">
+    privilege?: XOR<PrivilegeScalarRelationFilter, PrivilegeWhereInput>
+  }, "delegationId_privilegeId">
 
   export type DelegationDetailOrderByWithAggregationInput = {
     delegationId?: SortOrder
-    resourceCode?: SortOrder
+    privilegeId?: SortOrder
     _count?: DelegationDetailCountOrderByAggregateInput
     _avg?: DelegationDetailAvgOrderByAggregateInput
     _max?: DelegationDetailMaxOrderByAggregateInput
@@ -20579,53 +20668,7 @@ export namespace Prisma {
     OR?: DelegationDetailScalarWhereWithAggregatesInput[]
     NOT?: DelegationDetailScalarWhereWithAggregatesInput | DelegationDetailScalarWhereWithAggregatesInput[]
     delegationId?: IntWithAggregatesFilter<"DelegationDetail"> | number
-    resourceCode?: StringWithAggregatesFilter<"DelegationDetail"> | string
-  }
-
-  export type RolePrivilegeWhereInput = {
-    AND?: RolePrivilegeWhereInput | RolePrivilegeWhereInput[]
-    OR?: RolePrivilegeWhereInput[]
-    NOT?: RolePrivilegeWhereInput | RolePrivilegeWhereInput[]
-    roleId?: IntFilter<"RolePrivilege"> | number
-    privilegeId?: IntFilter<"RolePrivilege"> | number
-    role?: XOR<RoleScalarRelationFilter, RoleWhereInput>
-    privilege?: XOR<PrivilegeScalarRelationFilter, PrivilegeWhereInput>
-  }
-
-  export type RolePrivilegeOrderByWithRelationInput = {
-    roleId?: SortOrder
-    privilegeId?: SortOrder
-    role?: RoleOrderByWithRelationInput
-    privilege?: PrivilegeOrderByWithRelationInput
-  }
-
-  export type RolePrivilegeWhereUniqueInput = Prisma.AtLeast<{
-    roleId_privilegeId?: RolePrivilegeRoleIdPrivilegeIdCompoundUniqueInput
-    AND?: RolePrivilegeWhereInput | RolePrivilegeWhereInput[]
-    OR?: RolePrivilegeWhereInput[]
-    NOT?: RolePrivilegeWhereInput | RolePrivilegeWhereInput[]
-    roleId?: IntFilter<"RolePrivilege"> | number
-    privilegeId?: IntFilter<"RolePrivilege"> | number
-    role?: XOR<RoleScalarRelationFilter, RoleWhereInput>
-    privilege?: XOR<PrivilegeScalarRelationFilter, PrivilegeWhereInput>
-  }, "roleId_privilegeId">
-
-  export type RolePrivilegeOrderByWithAggregationInput = {
-    roleId?: SortOrder
-    privilegeId?: SortOrder
-    _count?: RolePrivilegeCountOrderByAggregateInput
-    _avg?: RolePrivilegeAvgOrderByAggregateInput
-    _max?: RolePrivilegeMaxOrderByAggregateInput
-    _min?: RolePrivilegeMinOrderByAggregateInput
-    _sum?: RolePrivilegeSumOrderByAggregateInput
-  }
-
-  export type RolePrivilegeScalarWhereWithAggregatesInput = {
-    AND?: RolePrivilegeScalarWhereWithAggregatesInput | RolePrivilegeScalarWhereWithAggregatesInput[]
-    OR?: RolePrivilegeScalarWhereWithAggregatesInput[]
-    NOT?: RolePrivilegeScalarWhereWithAggregatesInput | RolePrivilegeScalarWhereWithAggregatesInput[]
-    roleId?: IntWithAggregatesFilter<"RolePrivilege"> | number
-    privilegeId?: IntWithAggregatesFilter<"RolePrivilege"> | number
+    privilegeId?: IntWithAggregatesFilter<"DelegationDetail"> | number
   }
 
   export type UserCreateInput = {
@@ -21536,6 +21579,7 @@ export namespace Prisma {
     createTime?: Date | string
     updateTime?: Date | string
     roles?: RolePrivilegeCreateNestedManyWithoutPrivilegeInput
+    delegations?: DelegationDetailCreateNestedManyWithoutPrivilegeInput
   }
 
   export type PrivilegeUncheckedCreateInput = {
@@ -21549,6 +21593,7 @@ export namespace Prisma {
     createTime?: Date | string
     updateTime?: Date | string
     roles?: RolePrivilegeUncheckedCreateNestedManyWithoutPrivilegeInput
+    delegations?: DelegationDetailUncheckedCreateNestedManyWithoutPrivilegeInput
   }
 
   export type PrivilegeUpdateInput = {
@@ -21561,6 +21606,7 @@ export namespace Prisma {
     createTime?: DateTimeFieldUpdateOperationsInput | Date | string
     updateTime?: DateTimeFieldUpdateOperationsInput | Date | string
     roles?: RolePrivilegeUpdateManyWithoutPrivilegeNestedInput
+    delegations?: DelegationDetailUpdateManyWithoutPrivilegeNestedInput
   }
 
   export type PrivilegeUncheckedUpdateInput = {
@@ -21574,6 +21620,7 @@ export namespace Prisma {
     createTime?: DateTimeFieldUpdateOperationsInput | Date | string
     updateTime?: DateTimeFieldUpdateOperationsInput | Date | string
     roles?: RolePrivilegeUncheckedUpdateManyWithoutPrivilegeNestedInput
+    delegations?: DelegationDetailUncheckedUpdateManyWithoutPrivilegeNestedInput
   }
 
   export type PrivilegeCreateManyInput = {
@@ -21609,6 +21656,40 @@ export namespace Prisma {
     isDelete?: BoolFieldUpdateOperationsInput | boolean
     createTime?: DateTimeFieldUpdateOperationsInput | Date | string
     updateTime?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type RolePrivilegeCreateInput = {
+    role: RoleCreateNestedOneWithoutPrivilegesInput
+    privilege: PrivilegeCreateNestedOneWithoutRolesInput
+  }
+
+  export type RolePrivilegeUncheckedCreateInput = {
+    roleId: number
+    privilegeId: number
+  }
+
+  export type RolePrivilegeUpdateInput = {
+    role?: RoleUpdateOneRequiredWithoutPrivilegesNestedInput
+    privilege?: PrivilegeUpdateOneRequiredWithoutRolesNestedInput
+  }
+
+  export type RolePrivilegeUncheckedUpdateInput = {
+    roleId?: IntFieldUpdateOperationsInput | number
+    privilegeId?: IntFieldUpdateOperationsInput | number
+  }
+
+  export type RolePrivilegeCreateManyInput = {
+    roleId: number
+    privilegeId: number
+  }
+
+  export type RolePrivilegeUpdateManyMutationInput = {
+
+  }
+
+  export type RolePrivilegeUncheckedUpdateManyInput = {
+    roleId?: IntFieldUpdateOperationsInput | number
+    privilegeId?: IntFieldUpdateOperationsInput | number
   }
 
   export type PrivilegeDelegationCreateInput = {
@@ -21702,70 +21783,36 @@ export namespace Prisma {
   }
 
   export type DelegationDetailCreateInput = {
-    resourceCode: string
     delegation: PrivilegeDelegationCreateNestedOneWithoutDelegationDetailsInput
+    privilege: PrivilegeCreateNestedOneWithoutDelegationsInput
   }
 
   export type DelegationDetailUncheckedCreateInput = {
     delegationId: number
-    resourceCode: string
+    privilegeId: number
   }
 
   export type DelegationDetailUpdateInput = {
-    resourceCode?: StringFieldUpdateOperationsInput | string
     delegation?: PrivilegeDelegationUpdateOneRequiredWithoutDelegationDetailsNestedInput
+    privilege?: PrivilegeUpdateOneRequiredWithoutDelegationsNestedInput
   }
 
   export type DelegationDetailUncheckedUpdateInput = {
     delegationId?: IntFieldUpdateOperationsInput | number
-    resourceCode?: StringFieldUpdateOperationsInput | string
+    privilegeId?: IntFieldUpdateOperationsInput | number
   }
 
   export type DelegationDetailCreateManyInput = {
     delegationId: number
-    resourceCode: string
+    privilegeId: number
   }
 
   export type DelegationDetailUpdateManyMutationInput = {
-    resourceCode?: StringFieldUpdateOperationsInput | string
+
   }
 
   export type DelegationDetailUncheckedUpdateManyInput = {
     delegationId?: IntFieldUpdateOperationsInput | number
-    resourceCode?: StringFieldUpdateOperationsInput | string
-  }
-
-  export type RolePrivilegeCreateInput = {
-    role: RoleCreateNestedOneWithoutPrivilegesInput
-    privilege: PrivilegeCreateNestedOneWithoutRolesInput
-  }
-
-  export type RolePrivilegeUncheckedCreateInput = {
-    roleId: number
-    privilegeId: number
-  }
-
-  export type RolePrivilegeUpdateInput = {
-    role?: RoleUpdateOneRequiredWithoutPrivilegesNestedInput
-    privilege?: PrivilegeUpdateOneRequiredWithoutRolesNestedInput
-  }
-
-  export type RolePrivilegeUncheckedUpdateInput = {
-    roleId?: IntFieldUpdateOperationsInput | number
-    privilegeId?: IntFieldUpdateOperationsInput | number
-  }
-
-  export type RolePrivilegeCreateManyInput = {
-    roleId: number
-    privilegeId: number
-  }
-
-  export type RolePrivilegeUpdateManyMutationInput = {
-
-  }
-
-  export type RolePrivilegeUncheckedUpdateManyInput = {
-    roleId?: IntFieldUpdateOperationsInput | number
     privilegeId?: IntFieldUpdateOperationsInput | number
   }
 
@@ -22677,6 +22724,16 @@ export namespace Prisma {
     not?: InputJsonValue | JsonFieldRefInput<$PrismaModel> | JsonNullValueFilter
   }
 
+  export type DelegationDetailListRelationFilter = {
+    every?: DelegationDetailWhereInput
+    some?: DelegationDetailWhereInput
+    none?: DelegationDetailWhereInput
+  }
+
+  export type DelegationDetailOrderByRelationAggregateInput = {
+    _count?: SortOrder
+  }
+
   export type PrivilegeOrderByRelevanceInput = {
     fields: PrivilegeOrderByRelevanceFieldEnum | PrivilegeOrderByRelevanceFieldEnum[]
     sort: SortOrder
@@ -22753,14 +22810,39 @@ export namespace Prisma {
     _max?: NestedJsonNullableFilter<$PrismaModel>
   }
 
-  export type DelegationDetailListRelationFilter = {
-    every?: DelegationDetailWhereInput
-    some?: DelegationDetailWhereInput
-    none?: DelegationDetailWhereInput
+  export type PrivilegeScalarRelationFilter = {
+    is?: PrivilegeWhereInput
+    isNot?: PrivilegeWhereInput
   }
 
-  export type DelegationDetailOrderByRelationAggregateInput = {
-    _count?: SortOrder
+  export type RolePrivilegeRoleIdPrivilegeIdCompoundUniqueInput = {
+    roleId: number
+    privilegeId: number
+  }
+
+  export type RolePrivilegeCountOrderByAggregateInput = {
+    roleId?: SortOrder
+    privilegeId?: SortOrder
+  }
+
+  export type RolePrivilegeAvgOrderByAggregateInput = {
+    roleId?: SortOrder
+    privilegeId?: SortOrder
+  }
+
+  export type RolePrivilegeMaxOrderByAggregateInput = {
+    roleId?: SortOrder
+    privilegeId?: SortOrder
+  }
+
+  export type RolePrivilegeMinOrderByAggregateInput = {
+    roleId?: SortOrder
+    privilegeId?: SortOrder
+  }
+
+  export type RolePrivilegeSumOrderByAggregateInput = {
+    roleId?: SortOrder
+    privilegeId?: SortOrder
   }
 
   export type PrivilegeDelegationOrderByRelevanceInput = {
@@ -22827,72 +22909,33 @@ export namespace Prisma {
     isNot?: PrivilegeDelegationWhereInput
   }
 
-  export type DelegationDetailOrderByRelevanceInput = {
-    fields: DelegationDetailOrderByRelevanceFieldEnum | DelegationDetailOrderByRelevanceFieldEnum[]
-    sort: SortOrder
-    search: string
-  }
-
-  export type DelegationDetailDelegationIdResourceCodeCompoundUniqueInput = {
+  export type DelegationDetailDelegationIdPrivilegeIdCompoundUniqueInput = {
     delegationId: number
-    resourceCode: string
+    privilegeId: number
   }
 
   export type DelegationDetailCountOrderByAggregateInput = {
     delegationId?: SortOrder
-    resourceCode?: SortOrder
+    privilegeId?: SortOrder
   }
 
   export type DelegationDetailAvgOrderByAggregateInput = {
     delegationId?: SortOrder
+    privilegeId?: SortOrder
   }
 
   export type DelegationDetailMaxOrderByAggregateInput = {
     delegationId?: SortOrder
-    resourceCode?: SortOrder
+    privilegeId?: SortOrder
   }
 
   export type DelegationDetailMinOrderByAggregateInput = {
     delegationId?: SortOrder
-    resourceCode?: SortOrder
+    privilegeId?: SortOrder
   }
 
   export type DelegationDetailSumOrderByAggregateInput = {
     delegationId?: SortOrder
-  }
-
-  export type PrivilegeScalarRelationFilter = {
-    is?: PrivilegeWhereInput
-    isNot?: PrivilegeWhereInput
-  }
-
-  export type RolePrivilegeRoleIdPrivilegeIdCompoundUniqueInput = {
-    roleId: number
-    privilegeId: number
-  }
-
-  export type RolePrivilegeCountOrderByAggregateInput = {
-    roleId?: SortOrder
-    privilegeId?: SortOrder
-  }
-
-  export type RolePrivilegeAvgOrderByAggregateInput = {
-    roleId?: SortOrder
-    privilegeId?: SortOrder
-  }
-
-  export type RolePrivilegeMaxOrderByAggregateInput = {
-    roleId?: SortOrder
-    privilegeId?: SortOrder
-  }
-
-  export type RolePrivilegeMinOrderByAggregateInput = {
-    roleId?: SortOrder
-    privilegeId?: SortOrder
-  }
-
-  export type RolePrivilegeSumOrderByAggregateInput = {
-    roleId?: SortOrder
     privilegeId?: SortOrder
   }
 
@@ -24121,11 +24164,25 @@ export namespace Prisma {
     connect?: RolePrivilegeWhereUniqueInput | RolePrivilegeWhereUniqueInput[]
   }
 
+  export type DelegationDetailCreateNestedManyWithoutPrivilegeInput = {
+    create?: XOR<DelegationDetailCreateWithoutPrivilegeInput, DelegationDetailUncheckedCreateWithoutPrivilegeInput> | DelegationDetailCreateWithoutPrivilegeInput[] | DelegationDetailUncheckedCreateWithoutPrivilegeInput[]
+    connectOrCreate?: DelegationDetailCreateOrConnectWithoutPrivilegeInput | DelegationDetailCreateOrConnectWithoutPrivilegeInput[]
+    createMany?: DelegationDetailCreateManyPrivilegeInputEnvelope
+    connect?: DelegationDetailWhereUniqueInput | DelegationDetailWhereUniqueInput[]
+  }
+
   export type RolePrivilegeUncheckedCreateNestedManyWithoutPrivilegeInput = {
     create?: XOR<RolePrivilegeCreateWithoutPrivilegeInput, RolePrivilegeUncheckedCreateWithoutPrivilegeInput> | RolePrivilegeCreateWithoutPrivilegeInput[] | RolePrivilegeUncheckedCreateWithoutPrivilegeInput[]
     connectOrCreate?: RolePrivilegeCreateOrConnectWithoutPrivilegeInput | RolePrivilegeCreateOrConnectWithoutPrivilegeInput[]
     createMany?: RolePrivilegeCreateManyPrivilegeInputEnvelope
     connect?: RolePrivilegeWhereUniqueInput | RolePrivilegeWhereUniqueInput[]
+  }
+
+  export type DelegationDetailUncheckedCreateNestedManyWithoutPrivilegeInput = {
+    create?: XOR<DelegationDetailCreateWithoutPrivilegeInput, DelegationDetailUncheckedCreateWithoutPrivilegeInput> | DelegationDetailCreateWithoutPrivilegeInput[] | DelegationDetailUncheckedCreateWithoutPrivilegeInput[]
+    connectOrCreate?: DelegationDetailCreateOrConnectWithoutPrivilegeInput | DelegationDetailCreateOrConnectWithoutPrivilegeInput[]
+    createMany?: DelegationDetailCreateManyPrivilegeInputEnvelope
+    connect?: DelegationDetailWhereUniqueInput | DelegationDetailWhereUniqueInput[]
   }
 
   export type RolePrivilegeUpdateManyWithoutPrivilegeNestedInput = {
@@ -24142,6 +24199,20 @@ export namespace Prisma {
     deleteMany?: RolePrivilegeScalarWhereInput | RolePrivilegeScalarWhereInput[]
   }
 
+  export type DelegationDetailUpdateManyWithoutPrivilegeNestedInput = {
+    create?: XOR<DelegationDetailCreateWithoutPrivilegeInput, DelegationDetailUncheckedCreateWithoutPrivilegeInput> | DelegationDetailCreateWithoutPrivilegeInput[] | DelegationDetailUncheckedCreateWithoutPrivilegeInput[]
+    connectOrCreate?: DelegationDetailCreateOrConnectWithoutPrivilegeInput | DelegationDetailCreateOrConnectWithoutPrivilegeInput[]
+    upsert?: DelegationDetailUpsertWithWhereUniqueWithoutPrivilegeInput | DelegationDetailUpsertWithWhereUniqueWithoutPrivilegeInput[]
+    createMany?: DelegationDetailCreateManyPrivilegeInputEnvelope
+    set?: DelegationDetailWhereUniqueInput | DelegationDetailWhereUniqueInput[]
+    disconnect?: DelegationDetailWhereUniqueInput | DelegationDetailWhereUniqueInput[]
+    delete?: DelegationDetailWhereUniqueInput | DelegationDetailWhereUniqueInput[]
+    connect?: DelegationDetailWhereUniqueInput | DelegationDetailWhereUniqueInput[]
+    update?: DelegationDetailUpdateWithWhereUniqueWithoutPrivilegeInput | DelegationDetailUpdateWithWhereUniqueWithoutPrivilegeInput[]
+    updateMany?: DelegationDetailUpdateManyWithWhereWithoutPrivilegeInput | DelegationDetailUpdateManyWithWhereWithoutPrivilegeInput[]
+    deleteMany?: DelegationDetailScalarWhereInput | DelegationDetailScalarWhereInput[]
+  }
+
   export type RolePrivilegeUncheckedUpdateManyWithoutPrivilegeNestedInput = {
     create?: XOR<RolePrivilegeCreateWithoutPrivilegeInput, RolePrivilegeUncheckedCreateWithoutPrivilegeInput> | RolePrivilegeCreateWithoutPrivilegeInput[] | RolePrivilegeUncheckedCreateWithoutPrivilegeInput[]
     connectOrCreate?: RolePrivilegeCreateOrConnectWithoutPrivilegeInput | RolePrivilegeCreateOrConnectWithoutPrivilegeInput[]
@@ -24154,6 +24225,48 @@ export namespace Prisma {
     update?: RolePrivilegeUpdateWithWhereUniqueWithoutPrivilegeInput | RolePrivilegeUpdateWithWhereUniqueWithoutPrivilegeInput[]
     updateMany?: RolePrivilegeUpdateManyWithWhereWithoutPrivilegeInput | RolePrivilegeUpdateManyWithWhereWithoutPrivilegeInput[]
     deleteMany?: RolePrivilegeScalarWhereInput | RolePrivilegeScalarWhereInput[]
+  }
+
+  export type DelegationDetailUncheckedUpdateManyWithoutPrivilegeNestedInput = {
+    create?: XOR<DelegationDetailCreateWithoutPrivilegeInput, DelegationDetailUncheckedCreateWithoutPrivilegeInput> | DelegationDetailCreateWithoutPrivilegeInput[] | DelegationDetailUncheckedCreateWithoutPrivilegeInput[]
+    connectOrCreate?: DelegationDetailCreateOrConnectWithoutPrivilegeInput | DelegationDetailCreateOrConnectWithoutPrivilegeInput[]
+    upsert?: DelegationDetailUpsertWithWhereUniqueWithoutPrivilegeInput | DelegationDetailUpsertWithWhereUniqueWithoutPrivilegeInput[]
+    createMany?: DelegationDetailCreateManyPrivilegeInputEnvelope
+    set?: DelegationDetailWhereUniqueInput | DelegationDetailWhereUniqueInput[]
+    disconnect?: DelegationDetailWhereUniqueInput | DelegationDetailWhereUniqueInput[]
+    delete?: DelegationDetailWhereUniqueInput | DelegationDetailWhereUniqueInput[]
+    connect?: DelegationDetailWhereUniqueInput | DelegationDetailWhereUniqueInput[]
+    update?: DelegationDetailUpdateWithWhereUniqueWithoutPrivilegeInput | DelegationDetailUpdateWithWhereUniqueWithoutPrivilegeInput[]
+    updateMany?: DelegationDetailUpdateManyWithWhereWithoutPrivilegeInput | DelegationDetailUpdateManyWithWhereWithoutPrivilegeInput[]
+    deleteMany?: DelegationDetailScalarWhereInput | DelegationDetailScalarWhereInput[]
+  }
+
+  export type RoleCreateNestedOneWithoutPrivilegesInput = {
+    create?: XOR<RoleCreateWithoutPrivilegesInput, RoleUncheckedCreateWithoutPrivilegesInput>
+    connectOrCreate?: RoleCreateOrConnectWithoutPrivilegesInput
+    connect?: RoleWhereUniqueInput
+  }
+
+  export type PrivilegeCreateNestedOneWithoutRolesInput = {
+    create?: XOR<PrivilegeCreateWithoutRolesInput, PrivilegeUncheckedCreateWithoutRolesInput>
+    connectOrCreate?: PrivilegeCreateOrConnectWithoutRolesInput
+    connect?: PrivilegeWhereUniqueInput
+  }
+
+  export type RoleUpdateOneRequiredWithoutPrivilegesNestedInput = {
+    create?: XOR<RoleCreateWithoutPrivilegesInput, RoleUncheckedCreateWithoutPrivilegesInput>
+    connectOrCreate?: RoleCreateOrConnectWithoutPrivilegesInput
+    upsert?: RoleUpsertWithoutPrivilegesInput
+    connect?: RoleWhereUniqueInput
+    update?: XOR<XOR<RoleUpdateToOneWithWhereWithoutPrivilegesInput, RoleUpdateWithoutPrivilegesInput>, RoleUncheckedUpdateWithoutPrivilegesInput>
+  }
+
+  export type PrivilegeUpdateOneRequiredWithoutRolesNestedInput = {
+    create?: XOR<PrivilegeCreateWithoutRolesInput, PrivilegeUncheckedCreateWithoutRolesInput>
+    connectOrCreate?: PrivilegeCreateOrConnectWithoutRolesInput
+    upsert?: PrivilegeUpsertWithoutRolesInput
+    connect?: PrivilegeWhereUniqueInput
+    update?: XOR<XOR<PrivilegeUpdateToOneWithWhereWithoutRolesInput, PrivilegeUpdateWithoutRolesInput>, PrivilegeUncheckedUpdateWithoutRolesInput>
   }
 
   export type UserCreateNestedOneWithoutDelegationToInput = {
@@ -24232,6 +24345,12 @@ export namespace Prisma {
     connect?: PrivilegeDelegationWhereUniqueInput
   }
 
+  export type PrivilegeCreateNestedOneWithoutDelegationsInput = {
+    create?: XOR<PrivilegeCreateWithoutDelegationsInput, PrivilegeUncheckedCreateWithoutDelegationsInput>
+    connectOrCreate?: PrivilegeCreateOrConnectWithoutDelegationsInput
+    connect?: PrivilegeWhereUniqueInput
+  }
+
   export type PrivilegeDelegationUpdateOneRequiredWithoutDelegationDetailsNestedInput = {
     create?: XOR<PrivilegeDelegationCreateWithoutDelegationDetailsInput, PrivilegeDelegationUncheckedCreateWithoutDelegationDetailsInput>
     connectOrCreate?: PrivilegeDelegationCreateOrConnectWithoutDelegationDetailsInput
@@ -24240,32 +24359,12 @@ export namespace Prisma {
     update?: XOR<XOR<PrivilegeDelegationUpdateToOneWithWhereWithoutDelegationDetailsInput, PrivilegeDelegationUpdateWithoutDelegationDetailsInput>, PrivilegeDelegationUncheckedUpdateWithoutDelegationDetailsInput>
   }
 
-  export type RoleCreateNestedOneWithoutPrivilegesInput = {
-    create?: XOR<RoleCreateWithoutPrivilegesInput, RoleUncheckedCreateWithoutPrivilegesInput>
-    connectOrCreate?: RoleCreateOrConnectWithoutPrivilegesInput
-    connect?: RoleWhereUniqueInput
-  }
-
-  export type PrivilegeCreateNestedOneWithoutRolesInput = {
-    create?: XOR<PrivilegeCreateWithoutRolesInput, PrivilegeUncheckedCreateWithoutRolesInput>
-    connectOrCreate?: PrivilegeCreateOrConnectWithoutRolesInput
+  export type PrivilegeUpdateOneRequiredWithoutDelegationsNestedInput = {
+    create?: XOR<PrivilegeCreateWithoutDelegationsInput, PrivilegeUncheckedCreateWithoutDelegationsInput>
+    connectOrCreate?: PrivilegeCreateOrConnectWithoutDelegationsInput
+    upsert?: PrivilegeUpsertWithoutDelegationsInput
     connect?: PrivilegeWhereUniqueInput
-  }
-
-  export type RoleUpdateOneRequiredWithoutPrivilegesNestedInput = {
-    create?: XOR<RoleCreateWithoutPrivilegesInput, RoleUncheckedCreateWithoutPrivilegesInput>
-    connectOrCreate?: RoleCreateOrConnectWithoutPrivilegesInput
-    upsert?: RoleUpsertWithoutPrivilegesInput
-    connect?: RoleWhereUniqueInput
-    update?: XOR<XOR<RoleUpdateToOneWithWhereWithoutPrivilegesInput, RoleUpdateWithoutPrivilegesInput>, RoleUncheckedUpdateWithoutPrivilegesInput>
-  }
-
-  export type PrivilegeUpdateOneRequiredWithoutRolesNestedInput = {
-    create?: XOR<PrivilegeCreateWithoutRolesInput, PrivilegeUncheckedCreateWithoutRolesInput>
-    connectOrCreate?: PrivilegeCreateOrConnectWithoutRolesInput
-    upsert?: PrivilegeUpsertWithoutRolesInput
-    connect?: PrivilegeWhereUniqueInput
-    update?: XOR<XOR<PrivilegeUpdateToOneWithWhereWithoutRolesInput, PrivilegeUpdateWithoutRolesInput>, PrivilegeUncheckedUpdateWithoutRolesInput>
+    update?: XOR<XOR<PrivilegeUpdateToOneWithWhereWithoutDelegationsInput, PrivilegeUpdateWithoutDelegationsInput>, PrivilegeUncheckedUpdateWithoutDelegationsInput>
   }
 
   export type NestedIntFilter<$PrismaModel = never> = {
@@ -27246,6 +27345,24 @@ export namespace Prisma {
     skipDuplicates?: boolean
   }
 
+  export type DelegationDetailCreateWithoutPrivilegeInput = {
+    delegation: PrivilegeDelegationCreateNestedOneWithoutDelegationDetailsInput
+  }
+
+  export type DelegationDetailUncheckedCreateWithoutPrivilegeInput = {
+    delegationId: number
+  }
+
+  export type DelegationDetailCreateOrConnectWithoutPrivilegeInput = {
+    where: DelegationDetailWhereUniqueInput
+    create: XOR<DelegationDetailCreateWithoutPrivilegeInput, DelegationDetailUncheckedCreateWithoutPrivilegeInput>
+  }
+
+  export type DelegationDetailCreateManyPrivilegeInputEnvelope = {
+    data: DelegationDetailCreateManyPrivilegeInput | DelegationDetailCreateManyPrivilegeInput[]
+    skipDuplicates?: boolean
+  }
+
   export type RolePrivilegeUpsertWithWhereUniqueWithoutPrivilegeInput = {
     where: RolePrivilegeWhereUniqueInput
     update: XOR<RolePrivilegeUpdateWithoutPrivilegeInput, RolePrivilegeUncheckedUpdateWithoutPrivilegeInput>
@@ -27260,6 +27377,174 @@ export namespace Prisma {
   export type RolePrivilegeUpdateManyWithWhereWithoutPrivilegeInput = {
     where: RolePrivilegeScalarWhereInput
     data: XOR<RolePrivilegeUpdateManyMutationInput, RolePrivilegeUncheckedUpdateManyWithoutPrivilegeInput>
+  }
+
+  export type DelegationDetailUpsertWithWhereUniqueWithoutPrivilegeInput = {
+    where: DelegationDetailWhereUniqueInput
+    update: XOR<DelegationDetailUpdateWithoutPrivilegeInput, DelegationDetailUncheckedUpdateWithoutPrivilegeInput>
+    create: XOR<DelegationDetailCreateWithoutPrivilegeInput, DelegationDetailUncheckedCreateWithoutPrivilegeInput>
+  }
+
+  export type DelegationDetailUpdateWithWhereUniqueWithoutPrivilegeInput = {
+    where: DelegationDetailWhereUniqueInput
+    data: XOR<DelegationDetailUpdateWithoutPrivilegeInput, DelegationDetailUncheckedUpdateWithoutPrivilegeInput>
+  }
+
+  export type DelegationDetailUpdateManyWithWhereWithoutPrivilegeInput = {
+    where: DelegationDetailScalarWhereInput
+    data: XOR<DelegationDetailUpdateManyMutationInput, DelegationDetailUncheckedUpdateManyWithoutPrivilegeInput>
+  }
+
+  export type DelegationDetailScalarWhereInput = {
+    AND?: DelegationDetailScalarWhereInput | DelegationDetailScalarWhereInput[]
+    OR?: DelegationDetailScalarWhereInput[]
+    NOT?: DelegationDetailScalarWhereInput | DelegationDetailScalarWhereInput[]
+    delegationId?: IntFilter<"DelegationDetail"> | number
+    privilegeId?: IntFilter<"DelegationDetail"> | number
+  }
+
+  export type RoleCreateWithoutPrivilegesInput = {
+    roleCode: string
+    roleName: string
+    status?: number
+    description?: string | null
+    isDelete?: boolean
+    createTime?: Date | string
+    updateTime?: Date | string
+    client: ClientCreateNestedOneWithoutRoleInput
+    positions?: PositionRoleCreateNestedManyWithoutRoleInput
+    organizations?: OrganizationRoleCreateNestedManyWithoutRoleInput
+    positionOrganizations?: PosOrgRoleCreateNestedManyWithoutRoleInput
+    employments?: EmploymentRoleCreateNestedManyWithoutRoleInput
+  }
+
+  export type RoleUncheckedCreateWithoutPrivilegesInput = {
+    id?: number
+    roleCode: string
+    roleName: string
+    clientId: number
+    status?: number
+    description?: string | null
+    isDelete?: boolean
+    createTime?: Date | string
+    updateTime?: Date | string
+    positions?: PositionRoleUncheckedCreateNestedManyWithoutRoleInput
+    organizations?: OrganizationRoleUncheckedCreateNestedManyWithoutRoleInput
+    positionOrganizations?: PosOrgRoleUncheckedCreateNestedManyWithoutRoleInput
+    employments?: EmploymentRoleUncheckedCreateNestedManyWithoutRoleInput
+  }
+
+  export type RoleCreateOrConnectWithoutPrivilegesInput = {
+    where: RoleWhereUniqueInput
+    create: XOR<RoleCreateWithoutPrivilegesInput, RoleUncheckedCreateWithoutPrivilegesInput>
+  }
+
+  export type PrivilegeCreateWithoutRolesInput = {
+    privilegeCode: string
+    privilegeName: string
+    fieldValues?: NullableJsonNullValueInput | InputJsonValue
+    status?: number
+    description?: string | null
+    isDelete?: boolean
+    createTime?: Date | string
+    updateTime?: Date | string
+    delegations?: DelegationDetailCreateNestedManyWithoutPrivilegeInput
+  }
+
+  export type PrivilegeUncheckedCreateWithoutRolesInput = {
+    id?: number
+    privilegeCode: string
+    privilegeName: string
+    fieldValues?: NullableJsonNullValueInput | InputJsonValue
+    status?: number
+    description?: string | null
+    isDelete?: boolean
+    createTime?: Date | string
+    updateTime?: Date | string
+    delegations?: DelegationDetailUncheckedCreateNestedManyWithoutPrivilegeInput
+  }
+
+  export type PrivilegeCreateOrConnectWithoutRolesInput = {
+    where: PrivilegeWhereUniqueInput
+    create: XOR<PrivilegeCreateWithoutRolesInput, PrivilegeUncheckedCreateWithoutRolesInput>
+  }
+
+  export type RoleUpsertWithoutPrivilegesInput = {
+    update: XOR<RoleUpdateWithoutPrivilegesInput, RoleUncheckedUpdateWithoutPrivilegesInput>
+    create: XOR<RoleCreateWithoutPrivilegesInput, RoleUncheckedCreateWithoutPrivilegesInput>
+    where?: RoleWhereInput
+  }
+
+  export type RoleUpdateToOneWithWhereWithoutPrivilegesInput = {
+    where?: RoleWhereInput
+    data: XOR<RoleUpdateWithoutPrivilegesInput, RoleUncheckedUpdateWithoutPrivilegesInput>
+  }
+
+  export type RoleUpdateWithoutPrivilegesInput = {
+    roleCode?: StringFieldUpdateOperationsInput | string
+    roleName?: StringFieldUpdateOperationsInput | string
+    status?: IntFieldUpdateOperationsInput | number
+    description?: NullableStringFieldUpdateOperationsInput | string | null
+    isDelete?: BoolFieldUpdateOperationsInput | boolean
+    createTime?: DateTimeFieldUpdateOperationsInput | Date | string
+    updateTime?: DateTimeFieldUpdateOperationsInput | Date | string
+    client?: ClientUpdateOneRequiredWithoutRoleNestedInput
+    positions?: PositionRoleUpdateManyWithoutRoleNestedInput
+    organizations?: OrganizationRoleUpdateManyWithoutRoleNestedInput
+    positionOrganizations?: PosOrgRoleUpdateManyWithoutRoleNestedInput
+    employments?: EmploymentRoleUpdateManyWithoutRoleNestedInput
+  }
+
+  export type RoleUncheckedUpdateWithoutPrivilegesInput = {
+    id?: IntFieldUpdateOperationsInput | number
+    roleCode?: StringFieldUpdateOperationsInput | string
+    roleName?: StringFieldUpdateOperationsInput | string
+    clientId?: IntFieldUpdateOperationsInput | number
+    status?: IntFieldUpdateOperationsInput | number
+    description?: NullableStringFieldUpdateOperationsInput | string | null
+    isDelete?: BoolFieldUpdateOperationsInput | boolean
+    createTime?: DateTimeFieldUpdateOperationsInput | Date | string
+    updateTime?: DateTimeFieldUpdateOperationsInput | Date | string
+    positions?: PositionRoleUncheckedUpdateManyWithoutRoleNestedInput
+    organizations?: OrganizationRoleUncheckedUpdateManyWithoutRoleNestedInput
+    positionOrganizations?: PosOrgRoleUncheckedUpdateManyWithoutRoleNestedInput
+    employments?: EmploymentRoleUncheckedUpdateManyWithoutRoleNestedInput
+  }
+
+  export type PrivilegeUpsertWithoutRolesInput = {
+    update: XOR<PrivilegeUpdateWithoutRolesInput, PrivilegeUncheckedUpdateWithoutRolesInput>
+    create: XOR<PrivilegeCreateWithoutRolesInput, PrivilegeUncheckedCreateWithoutRolesInput>
+    where?: PrivilegeWhereInput
+  }
+
+  export type PrivilegeUpdateToOneWithWhereWithoutRolesInput = {
+    where?: PrivilegeWhereInput
+    data: XOR<PrivilegeUpdateWithoutRolesInput, PrivilegeUncheckedUpdateWithoutRolesInput>
+  }
+
+  export type PrivilegeUpdateWithoutRolesInput = {
+    privilegeCode?: StringFieldUpdateOperationsInput | string
+    privilegeName?: StringFieldUpdateOperationsInput | string
+    fieldValues?: NullableJsonNullValueInput | InputJsonValue
+    status?: IntFieldUpdateOperationsInput | number
+    description?: NullableStringFieldUpdateOperationsInput | string | null
+    isDelete?: BoolFieldUpdateOperationsInput | boolean
+    createTime?: DateTimeFieldUpdateOperationsInput | Date | string
+    updateTime?: DateTimeFieldUpdateOperationsInput | Date | string
+    delegations?: DelegationDetailUpdateManyWithoutPrivilegeNestedInput
+  }
+
+  export type PrivilegeUncheckedUpdateWithoutRolesInput = {
+    id?: IntFieldUpdateOperationsInput | number
+    privilegeCode?: StringFieldUpdateOperationsInput | string
+    privilegeName?: StringFieldUpdateOperationsInput | string
+    fieldValues?: NullableJsonNullValueInput | InputJsonValue
+    status?: IntFieldUpdateOperationsInput | number
+    description?: NullableStringFieldUpdateOperationsInput | string | null
+    isDelete?: BoolFieldUpdateOperationsInput | boolean
+    createTime?: DateTimeFieldUpdateOperationsInput | Date | string
+    updateTime?: DateTimeFieldUpdateOperationsInput | Date | string
+    delegations?: DelegationDetailUncheckedUpdateManyWithoutPrivilegeNestedInput
   }
 
   export type UserCreateWithoutDelegationToInput = {
@@ -27335,11 +27620,11 @@ export namespace Prisma {
   }
 
   export type DelegationDetailCreateWithoutDelegationInput = {
-    resourceCode: string
+    privilege: PrivilegeCreateNestedOneWithoutDelegationsInput
   }
 
   export type DelegationDetailUncheckedCreateWithoutDelegationInput = {
-    resourceCode: string
+    privilegeId: number
   }
 
   export type DelegationDetailCreateOrConnectWithoutDelegationInput = {
@@ -27452,14 +27737,6 @@ export namespace Prisma {
     data: XOR<DelegationDetailUpdateManyMutationInput, DelegationDetailUncheckedUpdateManyWithoutDelegationInput>
   }
 
-  export type DelegationDetailScalarWhereInput = {
-    AND?: DelegationDetailScalarWhereInput | DelegationDetailScalarWhereInput[]
-    OR?: DelegationDetailScalarWhereInput[]
-    NOT?: DelegationDetailScalarWhereInput | DelegationDetailScalarWhereInput[]
-    delegationId?: IntFilter<"DelegationDetail"> | number
-    resourceCode?: StringFilter<"DelegationDetail"> | string
-  }
-
   export type PrivilegeDelegationCreateWithoutDelegationDetailsInput = {
     startTime: Date | string
     endTime: Date | string
@@ -27488,6 +27765,36 @@ export namespace Prisma {
   export type PrivilegeDelegationCreateOrConnectWithoutDelegationDetailsInput = {
     where: PrivilegeDelegationWhereUniqueInput
     create: XOR<PrivilegeDelegationCreateWithoutDelegationDetailsInput, PrivilegeDelegationUncheckedCreateWithoutDelegationDetailsInput>
+  }
+
+  export type PrivilegeCreateWithoutDelegationsInput = {
+    privilegeCode: string
+    privilegeName: string
+    fieldValues?: NullableJsonNullValueInput | InputJsonValue
+    status?: number
+    description?: string | null
+    isDelete?: boolean
+    createTime?: Date | string
+    updateTime?: Date | string
+    roles?: RolePrivilegeCreateNestedManyWithoutPrivilegeInput
+  }
+
+  export type PrivilegeUncheckedCreateWithoutDelegationsInput = {
+    id?: number
+    privilegeCode: string
+    privilegeName: string
+    fieldValues?: NullableJsonNullValueInput | InputJsonValue
+    status?: number
+    description?: string | null
+    isDelete?: boolean
+    createTime?: Date | string
+    updateTime?: Date | string
+    roles?: RolePrivilegeUncheckedCreateNestedManyWithoutPrivilegeInput
+  }
+
+  export type PrivilegeCreateOrConnectWithoutDelegationsInput = {
+    where: PrivilegeWhereUniqueInput
+    create: XOR<PrivilegeCreateWithoutDelegationsInput, PrivilegeUncheckedCreateWithoutDelegationsInput>
   }
 
   export type PrivilegeDelegationUpsertWithoutDelegationDetailsInput = {
@@ -27526,124 +27833,18 @@ export namespace Prisma {
     updateTime?: DateTimeFieldUpdateOperationsInput | Date | string
   }
 
-  export type RoleCreateWithoutPrivilegesInput = {
-    roleCode: string
-    roleName: string
-    status?: number
-    description?: string | null
-    isDelete?: boolean
-    createTime?: Date | string
-    updateTime?: Date | string
-    client: ClientCreateNestedOneWithoutRoleInput
-    positions?: PositionRoleCreateNestedManyWithoutRoleInput
-    organizations?: OrganizationRoleCreateNestedManyWithoutRoleInput
-    positionOrganizations?: PosOrgRoleCreateNestedManyWithoutRoleInput
-    employments?: EmploymentRoleCreateNestedManyWithoutRoleInput
-  }
-
-  export type RoleUncheckedCreateWithoutPrivilegesInput = {
-    id?: number
-    roleCode: string
-    roleName: string
-    clientId: number
-    status?: number
-    description?: string | null
-    isDelete?: boolean
-    createTime?: Date | string
-    updateTime?: Date | string
-    positions?: PositionRoleUncheckedCreateNestedManyWithoutRoleInput
-    organizations?: OrganizationRoleUncheckedCreateNestedManyWithoutRoleInput
-    positionOrganizations?: PosOrgRoleUncheckedCreateNestedManyWithoutRoleInput
-    employments?: EmploymentRoleUncheckedCreateNestedManyWithoutRoleInput
-  }
-
-  export type RoleCreateOrConnectWithoutPrivilegesInput = {
-    where: RoleWhereUniqueInput
-    create: XOR<RoleCreateWithoutPrivilegesInput, RoleUncheckedCreateWithoutPrivilegesInput>
-  }
-
-  export type PrivilegeCreateWithoutRolesInput = {
-    privilegeCode: string
-    privilegeName: string
-    fieldValues?: NullableJsonNullValueInput | InputJsonValue
-    status?: number
-    description?: string | null
-    isDelete?: boolean
-    createTime?: Date | string
-    updateTime?: Date | string
-  }
-
-  export type PrivilegeUncheckedCreateWithoutRolesInput = {
-    id?: number
-    privilegeCode: string
-    privilegeName: string
-    fieldValues?: NullableJsonNullValueInput | InputJsonValue
-    status?: number
-    description?: string | null
-    isDelete?: boolean
-    createTime?: Date | string
-    updateTime?: Date | string
-  }
-
-  export type PrivilegeCreateOrConnectWithoutRolesInput = {
-    where: PrivilegeWhereUniqueInput
-    create: XOR<PrivilegeCreateWithoutRolesInput, PrivilegeUncheckedCreateWithoutRolesInput>
-  }
-
-  export type RoleUpsertWithoutPrivilegesInput = {
-    update: XOR<RoleUpdateWithoutPrivilegesInput, RoleUncheckedUpdateWithoutPrivilegesInput>
-    create: XOR<RoleCreateWithoutPrivilegesInput, RoleUncheckedCreateWithoutPrivilegesInput>
-    where?: RoleWhereInput
-  }
-
-  export type RoleUpdateToOneWithWhereWithoutPrivilegesInput = {
-    where?: RoleWhereInput
-    data: XOR<RoleUpdateWithoutPrivilegesInput, RoleUncheckedUpdateWithoutPrivilegesInput>
-  }
-
-  export type RoleUpdateWithoutPrivilegesInput = {
-    roleCode?: StringFieldUpdateOperationsInput | string
-    roleName?: StringFieldUpdateOperationsInput | string
-    status?: IntFieldUpdateOperationsInput | number
-    description?: NullableStringFieldUpdateOperationsInput | string | null
-    isDelete?: BoolFieldUpdateOperationsInput | boolean
-    createTime?: DateTimeFieldUpdateOperationsInput | Date | string
-    updateTime?: DateTimeFieldUpdateOperationsInput | Date | string
-    client?: ClientUpdateOneRequiredWithoutRoleNestedInput
-    positions?: PositionRoleUpdateManyWithoutRoleNestedInput
-    organizations?: OrganizationRoleUpdateManyWithoutRoleNestedInput
-    positionOrganizations?: PosOrgRoleUpdateManyWithoutRoleNestedInput
-    employments?: EmploymentRoleUpdateManyWithoutRoleNestedInput
-  }
-
-  export type RoleUncheckedUpdateWithoutPrivilegesInput = {
-    id?: IntFieldUpdateOperationsInput | number
-    roleCode?: StringFieldUpdateOperationsInput | string
-    roleName?: StringFieldUpdateOperationsInput | string
-    clientId?: IntFieldUpdateOperationsInput | number
-    status?: IntFieldUpdateOperationsInput | number
-    description?: NullableStringFieldUpdateOperationsInput | string | null
-    isDelete?: BoolFieldUpdateOperationsInput | boolean
-    createTime?: DateTimeFieldUpdateOperationsInput | Date | string
-    updateTime?: DateTimeFieldUpdateOperationsInput | Date | string
-    positions?: PositionRoleUncheckedUpdateManyWithoutRoleNestedInput
-    organizations?: OrganizationRoleUncheckedUpdateManyWithoutRoleNestedInput
-    positionOrganizations?: PosOrgRoleUncheckedUpdateManyWithoutRoleNestedInput
-    employments?: EmploymentRoleUncheckedUpdateManyWithoutRoleNestedInput
-  }
-
-  export type PrivilegeUpsertWithoutRolesInput = {
-    update: XOR<PrivilegeUpdateWithoutRolesInput, PrivilegeUncheckedUpdateWithoutRolesInput>
-    create: XOR<PrivilegeCreateWithoutRolesInput, PrivilegeUncheckedCreateWithoutRolesInput>
+  export type PrivilegeUpsertWithoutDelegationsInput = {
+    update: XOR<PrivilegeUpdateWithoutDelegationsInput, PrivilegeUncheckedUpdateWithoutDelegationsInput>
+    create: XOR<PrivilegeCreateWithoutDelegationsInput, PrivilegeUncheckedCreateWithoutDelegationsInput>
     where?: PrivilegeWhereInput
   }
 
-  export type PrivilegeUpdateToOneWithWhereWithoutRolesInput = {
+  export type PrivilegeUpdateToOneWithWhereWithoutDelegationsInput = {
     where?: PrivilegeWhereInput
-    data: XOR<PrivilegeUpdateWithoutRolesInput, PrivilegeUncheckedUpdateWithoutRolesInput>
+    data: XOR<PrivilegeUpdateWithoutDelegationsInput, PrivilegeUncheckedUpdateWithoutDelegationsInput>
   }
 
-  export type PrivilegeUpdateWithoutRolesInput = {
+  export type PrivilegeUpdateWithoutDelegationsInput = {
     privilegeCode?: StringFieldUpdateOperationsInput | string
     privilegeName?: StringFieldUpdateOperationsInput | string
     fieldValues?: NullableJsonNullValueInput | InputJsonValue
@@ -27652,9 +27853,10 @@ export namespace Prisma {
     isDelete?: BoolFieldUpdateOperationsInput | boolean
     createTime?: DateTimeFieldUpdateOperationsInput | Date | string
     updateTime?: DateTimeFieldUpdateOperationsInput | Date | string
+    roles?: RolePrivilegeUpdateManyWithoutPrivilegeNestedInput
   }
 
-  export type PrivilegeUncheckedUpdateWithoutRolesInput = {
+  export type PrivilegeUncheckedUpdateWithoutDelegationsInput = {
     id?: IntFieldUpdateOperationsInput | number
     privilegeCode?: StringFieldUpdateOperationsInput | string
     privilegeName?: StringFieldUpdateOperationsInput | string
@@ -27664,6 +27866,7 @@ export namespace Prisma {
     isDelete?: BoolFieldUpdateOperationsInput | boolean
     createTime?: DateTimeFieldUpdateOperationsInput | Date | string
     updateTime?: DateTimeFieldUpdateOperationsInput | Date | string
+    roles?: RolePrivilegeUncheckedUpdateManyWithoutPrivilegeNestedInput
   }
 
   export type EmploymentCreateManyUserInput = {
@@ -28493,6 +28696,10 @@ export namespace Prisma {
     roleId: number
   }
 
+  export type DelegationDetailCreateManyPrivilegeInput = {
+    delegationId: number
+  }
+
   export type RolePrivilegeUpdateWithoutPrivilegeInput = {
     role?: RoleUpdateOneRequiredWithoutPrivilegesNestedInput
   }
@@ -28505,20 +28712,32 @@ export namespace Prisma {
     roleId?: IntFieldUpdateOperationsInput | number
   }
 
+  export type DelegationDetailUpdateWithoutPrivilegeInput = {
+    delegation?: PrivilegeDelegationUpdateOneRequiredWithoutDelegationDetailsNestedInput
+  }
+
+  export type DelegationDetailUncheckedUpdateWithoutPrivilegeInput = {
+    delegationId?: IntFieldUpdateOperationsInput | number
+  }
+
+  export type DelegationDetailUncheckedUpdateManyWithoutPrivilegeInput = {
+    delegationId?: IntFieldUpdateOperationsInput | number
+  }
+
   export type DelegationDetailCreateManyDelegationInput = {
-    resourceCode: string
+    privilegeId: number
   }
 
   export type DelegationDetailUpdateWithoutDelegationInput = {
-    resourceCode?: StringFieldUpdateOperationsInput | string
+    privilege?: PrivilegeUpdateOneRequiredWithoutDelegationsNestedInput
   }
 
   export type DelegationDetailUncheckedUpdateWithoutDelegationInput = {
-    resourceCode?: StringFieldUpdateOperationsInput | string
+    privilegeId?: IntFieldUpdateOperationsInput | number
   }
 
   export type DelegationDetailUncheckedUpdateManyWithoutDelegationInput = {
-    resourceCode?: StringFieldUpdateOperationsInput | string
+    privilegeId?: IntFieldUpdateOperationsInput | number
   }
 
 

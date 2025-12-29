@@ -1,6 +1,6 @@
 generator client {
   provider        = "prisma-client-js"
-  output          = "..src/generated/prisma"
+  output          = "../generated/prisma"
   previewFeatures = ["views"]
 }
 
@@ -236,24 +236,10 @@ model PosOrgRole {
   @@map("position_organization_role")
 }
 
-// model AuthObject {
-//   id         Int     @id @default(autoincrement()) @map("id")
-//   objectCode String  @map("object_code") @db.VarChar(64)
-//   objectName String  @map("object_name") @db.VarChar(128)
-//   objectType String  @map("object_type") @db.VarChar(128)
-//   path       String? @map("path") @db.VarChar(255)
-//   authFields Json?   @map("auth_fields")
-
-//   privileges Privilege[]
-
-//   @@map("auth_object")
-// }
-
 model Privilege {
   id            Int      @id @default(autoincrement()) @map("id")
   privilegeCode String   @map("privilege_code")
   privilegeName String   @map("privilege_name")
-  // objectId      Int      @map("object_id")
   fieldValues   Json?    @map("field_values")
   status        Int      @default(1) @map("status") @db.TinyInt
   description   String?  @map("description") @db.VarChar(500)
@@ -263,7 +249,6 @@ model Privilege {
 
   roles       RolePrivilege[]
   delegations DelegationDetail[]
-  // object AuthObject      @relation(fields: [objectId], references: [id])
 
   @@index([privilegeCode], map: "idx_privilegeCode")
   @@map("privilege")
@@ -276,7 +261,7 @@ model RolePrivilege {
   privilege   Privilege @relation(fields: [privilegeId], references: [id])
 
   @@id([roleId, privilegeId])
-  @@index([privilegeId], map: "idx_position_id")
+  @@index([privilegeId], map: "idx_privilege_id")
   @@map("role_privilege")
 }
 
@@ -309,5 +294,6 @@ model DelegationDetail {
   privilege  Privilege           @relation(fields: [privilegeId], references: [id])
 
   @@id([delegationId, privilegeId])
+  @@index([privilegeId], map: "idx_privilege")
   @@map("delegation_detail")
 }

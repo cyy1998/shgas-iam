@@ -28,6 +28,7 @@ model User {
   delegationFrom PrivilegeDelegation[] @relation("delegationFrom")
 
   @@index([username], map: "idx_username")
+  // @@index([userType], map: "idx_userType")
   @@map("user")
 }
 
@@ -60,7 +61,8 @@ model Organization {
   // 反向关系：该组织作为后代时的闭包记录
   descendantClosures OrganizationClosure[] @relation("org_descendant")
 
-  @@index([parentId])
+  @@index([parentId], map: "idx_parentId")
+  @@index([orgCode], map: "idx_orgCode")
   @@map("organization")
 }
 
@@ -95,6 +97,7 @@ model Position {
   roles             PositionRole[]
   posOrgComposition PosOrgComposition[]
 
+  @@index([posCode], map: "idx_posCode")
   @@map("position")
 }
 
@@ -180,6 +183,7 @@ model Role {
   privileges            RolePrivilege[]
 
   @@index([clientId], map: "idx_client_id")
+  @@index([roleCode], map: "idx_roleCode")
   @@map("role")
 }
 
@@ -232,24 +236,10 @@ model PosOrgRole {
   @@map("position_organization_role")
 }
 
-// model AuthObject {
-//   id         Int     @id @default(autoincrement()) @map("id")
-//   objectCode String  @map("object_code") @db.VarChar(64)
-//   objectName String  @map("object_name") @db.VarChar(128)
-//   objectType String  @map("object_type") @db.VarChar(128)
-//   path       String? @map("path") @db.VarChar(255)
-//   authFields Json?   @map("auth_fields")
-
-//   privileges Privilege[]
-
-//   @@map("auth_object")
-// }
-
 model Privilege {
   id            Int      @id @default(autoincrement()) @map("id")
   privilegeCode String   @map("privilege_code")
   privilegeName String   @map("privilege_name")
-  // objectId      Int      @map("object_id")
   fieldValues   Json?    @map("field_values")
   status        Int      @default(1) @map("status") @db.TinyInt
   description   String?  @map("description") @db.VarChar(500)
@@ -257,11 +247,22 @@ model Privilege {
   createTime    DateTime @default(now()) @map("create_time")
   updateTime    DateTime @default(now()) @updatedAt @map("update_time")
 
-  roles RolePrivilege[]
-  // object AuthObject      @relation(fields: [objectId], references: [id])
+  roles       RolePrivilege[]
+  delegations DelegationDetail[]
 
-  // @@index([objectId], map: "idx_object_id")
+  @@index([privilegeCode], map: "idx_privilegeCode")
   @@map("privilege")
+}
+
+model RolePrivilege {
+  roleId      Int       @map("role_id")
+  privilegeId Int       @map("privilege_id")
+  role        Role      @relation(fields: [roleId], references: [id])
+  privilege   Privilege @relation(fields: [privilegeId], references: [id])
+
+  @@id([roleId, privilegeId])
+  @@index([privilegeId], map: "idx_privilege_id")
+  @@map("role_privilege")
 }
 
 model PrivilegeDelegation {
@@ -286,22 +287,13 @@ model PrivilegeDelegation {
 }
 
 model DelegationDetail {
-  delegationId Int    @map("delegation_id")
-  resourceCode String @map("resource_code")
+  delegationId Int @map("delegation_id")
+  privilegeId  Int @map("privilege_id")
 
   delegation PrivilegeDelegation @relation(fields: [delegationId], references: [id])
+  privilege  Privilege           @relation(fields: [privilegeId], references: [id])
 
-  @@id([delegationId, resourceCode])
+  @@id([delegationId, privilegeId])
+  @@index([privilegeId], map: "idx_privilege")
   @@map("delegation_detail")
-}
-
-model RolePrivilege {
-  roleId      Int       @map("role_id")
-  privilegeId Int       @map("privilege_id")
-  role        Role      @relation(fields: [roleId], references: [id])
-  privilege   Privilege @relation(fields: [privilegeId], references: [id])
-
-  @@id([roleId, privilegeId])
-  @@index([privilegeId], map: "idx_position_id")
-  @@map("role_privilege")
 }

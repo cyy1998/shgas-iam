@@ -253,6 +253,11 @@ exports.Prisma.PrivilegeScalarFieldEnum = {
   updateTime: 'updateTime'
 };
 
+exports.Prisma.RolePrivilegeScalarFieldEnum = {
+  roleId: 'roleId',
+  privilegeId: 'privilegeId'
+};
+
 exports.Prisma.PrivilegeDelegationScalarFieldEnum = {
   id: 'id',
   delegatorUserId: 'delegatorUserId',
@@ -268,11 +273,6 @@ exports.Prisma.PrivilegeDelegationScalarFieldEnum = {
 
 exports.Prisma.DelegationDetailScalarFieldEnum = {
   delegationId: 'delegationId',
-  resourceCode: 'resourceCode'
-};
-
-exports.Prisma.RolePrivilegeScalarFieldEnum = {
-  roleId: 'roleId',
   privilegeId: 'privilegeId'
 };
 
@@ -354,10 +354,6 @@ exports.Prisma.PrivilegeDelegationOrderByRelevanceFieldEnum = {
   description: 'description'
 };
 
-exports.Prisma.DelegationDetailOrderByRelevanceFieldEnum = {
-  resourceCode: 'resourceCode'
-};
-
 
 exports.Prisma.ModelName = {
   User: 'User',
@@ -373,9 +369,9 @@ exports.Prisma.ModelName = {
   OrganizationRole: 'OrganizationRole',
   PosOrgRole: 'PosOrgRole',
   Privilege: 'Privilege',
+  RolePrivilege: 'RolePrivilege',
   PrivilegeDelegation: 'PrivilegeDelegation',
-  DelegationDetail: 'DelegationDetail',
-  RolePrivilege: 'RolePrivilege'
+  DelegationDetail: 'DelegationDetail'
 };
 
 /**
