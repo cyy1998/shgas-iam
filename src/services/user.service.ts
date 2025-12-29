@@ -14,6 +14,7 @@ import { mergeAndDedupe } from '../utils/common.utils'
 import { privilegeService } from './privilege.service'
 import { UserNotFoundError } from '../errors/UserNotFoundError'
 import { CustomError } from '../errors/CustomError'
+import { roleRepository } from '../repositories/role.repository'
 
 async function _getUserDetail(user: User | null) {
     if (user === null) {
@@ -21,18 +22,14 @@ async function _getUserDetail(user: User | null) {
     }
     const userDTO = userMapper.toUserDTO(user)
     const employments = await employmentRepository.getEmploymentsByUserId(userDTO.id)
-
-    userDTO.positions = employments.map(e => employmentMapper.toEmploymentDTO(e))
-    // const deptIds = employments.map(e => e.deptId)
-    // const posIds = employments.map(e => e.posId)
-    // const posDeptIds = employments.map(e => { return { posId: e.posId, orgId: e.deptId } })
-
-    // const rolesFromDepts = await Promise.all(deptIds.map(e => roleService.getRolesByOrganization(e)))
-    // const rolesFromPosition = await Promise.all(posIds.map(e => roleService.getRolesByPosition(e)))
-    // const rolesFromPosOrg = await Promise.all(posDeptIds.map(e => roleService.getRolesByOrgPosition(e.posId, e.orgId)))
-    // const rolesFromEmployment = await Promise.all(employments.map(e => roleService.getRolesByEmployment(e.id)))
-    // const rolesCombined = [...rolesFromDepts, ...rolesFromPosition, ...rolesFromPosOrg, ...rolesFromEmployment]
-    // const roles = rolesCombined.reduce((acc, cur) => mergeAndDedupe(acc, cur, 'roleId'), [])
+    const employmentDTOs = []
+    for (const employment of employments) {
+        const roles = await roleRepository.getRolesByEmploymentId(employment.id)
+        const employmentDTO = employmentMapper.toEmploymentDTO(employment)
+        employmentDTO.roles = roles.map(r => r.roleCode)
+        employmentDTOs.push(employmentDTO)
+    }
+    userDTO.positions = employmentDTOs
     const roles = await roleService.getRolesByUserId(userDTO.id)
     userDTO.roles = roles
 

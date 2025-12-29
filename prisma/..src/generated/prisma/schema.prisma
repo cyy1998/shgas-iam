@@ -303,7 +303,7 @@ model PrivilegeDelegation {
 
 model DelegationDetail {
   delegationId Int @map("delegation_id")
-  privilegeId  Int @map("privilegeId")
+  privilegeId  Int @map("privilege_id")
 
   delegation PrivilegeDelegation @relation(fields: [delegationId], references: [id])
   privilege  Privilege           @relation(fields: [privilegeId], references: [id])

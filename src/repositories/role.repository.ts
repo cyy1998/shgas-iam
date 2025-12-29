@@ -170,6 +170,89 @@ export const roleRepository = {
             }
         })
     },
+    async getRolesByEmploymentId(employmentId: number) {
+        return await prisma.role.findMany({
+            where: {
+                OR: [
+                    {
+                        positions: {
+                            some: {
+                                position: {
+                                    employments: {
+                                        some: {
+                                            id: employmentId,
+                                            status: EmploymentStatus.Enable
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    {
+                        organizations: {
+                            some: {
+                                OR: [
+                                    {
+                                        isAllSub: false,
+                                        organization: {
+                                            deptEmployments: {
+                                                some: {
+                                                    id: employmentId,
+                                                    status: EmploymentStatus.Enable
+                                                }
+                                            }
+                                        }
+                                    },
+                                    {
+                                        isAllSub: true,
+                                        organization: {
+                                            ancestorClosures: {
+                                                some: {
+                                                    descendant: {
+                                                        deptEmployments: {
+                                                            some: {
+                                                                id: employmentId,
+                                                                status: EmploymentStatus.Enable
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                ]
+
+                            }
+                        }
+                    },
+                    {
+                        positionOrganizations: {
+                            some: {
+                                posOrg: {
+                                    employments: {
+                                        some: {
+                                            id: employmentId,
+                                            status: EmploymentStatus.Enable
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    {
+                        employments: {
+                            some: {
+                                employment: {
+                                    id: employmentId,
+                                    status: EmploymentStatus.Enable
+                                }
+                            }
+                        }
+                    }
+                ]
+            }
+        })
+    },
     async checkEmploymentRoleExisting(roleId: number, employmentId: number) {
         return (await prisma.employmentRole.findFirst({
             where: {

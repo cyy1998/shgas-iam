@@ -13,6 +13,8 @@ export type EmploymentDTO = {
     compName: string
     isPrimary: boolean
     isPrimaryText: string
+    roles?: string[],
+    privileges?: string[]
 }
 
 export type EmploymentEntity = Prisma.EmploymentGetPayload<{
