@@ -10,6 +10,11 @@ export const organizationService = {
         const orgDTOs = organizations.map(o => organizationMapper.toOrganizationDTO(o))
         return orgDTOs
     },
+    async getTopFormalOrganizations() {
+        const organizations = await organizationRepository.getTopFormalOrganizations()
+        const orgDTOs = organizations.map(o => organizationMapper.toOrganizationDTO(o))
+        return orgDTOs
+    },
 
     async getOrganizationsByCode(orgCode: string, orgLevel: number) {
         const organizations = await organizationRepository.searchOrganizations(orgCode, orgLevel)

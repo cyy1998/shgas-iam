@@ -314,7 +314,7 @@ app.openapi(
         },
     }),
     async (c) => {
-        const data = await organizationService.getFormalOrganizationsByCode('', 1)
+        const data = await organizationService.getTopFormalOrganizations()
         return c.json(success(data))
     }
 )

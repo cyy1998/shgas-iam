@@ -4,7 +4,6 @@ export const organizationRepository = {
     async searchFormalOrganizations(orgCode: string, orgLevel: number) {
         return await prisma.organization.findMany({
             where: {
-
                 descendantClosures: {
                     some: {
                         ancestor: {
@@ -30,6 +29,16 @@ export const organizationRepository = {
                     }
                 },
                 level: orgLevel
+            }
+        })
+    },
+    async getTopFormalOrganizations() {
+        return await prisma.organization.findMany({
+            where: {
+                orgType: {
+                    notIn: ['虚拟组织', '外部组织']
+                },
+                level: 1
             }
         })
     },
