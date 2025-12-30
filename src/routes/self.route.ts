@@ -10,8 +10,42 @@ import type { UserDTO } from '../types/user.type'
 import { employmentService } from '../services/employment.service'
 import { organizationService } from '../services/organization.service'
 import { cacheService } from '../services/cache.service'
+import { clientService } from '../services/client.service'
 
 const app = new OpenAPIHono()
+
+/*
+path: /client/status
+method: GET
+function: 获取当前已登录用户信息 
+*/
+app.openapi(
+    createRoute({
+        method: 'get',
+        path: '/client/status',
+        tags: ['Self'],
+        request: {
+            query: z.object({
+                clientCode: z.string()
+            })
+        },
+        responses: {
+            200: {
+                content: {
+                    'application/json': {
+                        schema: ResponseSchema,
+                    },
+                },
+                description: '本用户信息',
+            },
+        },
+    }),
+    async (c) => {
+        const { clientCode } = c.req.valid('query')
+        const data = await clientService.getClientByCode(clientCode)
+        return c.json(success(data))
+    }
+)
 
 /*
 path: /user-info
@@ -123,7 +157,7 @@ app.openapi(
 
 /*
 path: /mobile/set
-method: GET
+method: POST
 function: 设置手机号 
 */
 app.openapi(
@@ -398,5 +432,7 @@ app.openapi(
         return c.json(success(data))
     }
 )
+
+
 
 export default app

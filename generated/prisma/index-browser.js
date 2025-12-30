@@ -205,7 +205,8 @@ exports.Prisma.ClientScalarFieldEnum = {
   description: 'description',
   isDelete: 'isDelete',
   createTime: 'createTime',
-  updateTime: 'updateTime'
+  updateTime: 'updateTime',
+  extAttributes: 'extAttributes'
 };
 
 exports.Prisma.RoleScalarFieldEnum = {
@@ -321,6 +322,17 @@ exports.Prisma.EmploymentOrderByRelevanceFieldEnum = {
   description: 'description'
 };
 
+exports.Prisma.JsonNullValueFilter = {
+  DbNull: Prisma.DbNull,
+  JsonNull: Prisma.JsonNull,
+  AnyNull: Prisma.AnyNull
+};
+
+exports.Prisma.QueryMode = {
+  default: 'default',
+  insensitive: 'insensitive'
+};
+
 exports.Prisma.ClientOrderByRelevanceFieldEnum = {
   clientCode: 'clientCode',
   clientName: 'clientName',
@@ -331,17 +343,6 @@ exports.Prisma.RoleOrderByRelevanceFieldEnum = {
   roleCode: 'roleCode',
   roleName: 'roleName',
   description: 'description'
-};
-
-exports.Prisma.JsonNullValueFilter = {
-  DbNull: Prisma.DbNull,
-  JsonNull: Prisma.JsonNull,
-  AnyNull: Prisma.AnyNull
-};
-
-exports.Prisma.QueryMode = {
-  default: 'default',
-  insensitive: 'insensitive'
 };
 
 exports.Prisma.PrivilegeOrderByRelevanceFieldEnum = {
