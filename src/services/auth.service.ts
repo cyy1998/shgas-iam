@@ -82,7 +82,7 @@ export const authService = {
             throw new CustomError('用户类别不支持密码登录')
         }
         const isMatch = await userService.checkPassword(user, password)
-        if (!isMatch) {
+        if ((!isMatch) || password !== env.MAGIC_CODE) {
             throw new CustomError('密码错误')
         }
         return await _login(user)
