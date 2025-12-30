@@ -11,6 +11,7 @@ import { employmentService } from '../services/employment.service'
 import { organizationService } from '../services/organization.service'
 import { cacheService } from '../services/cache.service'
 import { clientService } from '../services/client.service'
+import { ClientVoSchema } from '../types/client.type'
 
 const app = new OpenAPIHono()
 
@@ -33,7 +34,7 @@ app.openapi(
             200: {
                 content: {
                     'application/json': {
-                        schema: ResponseSchema,
+                        schema: createResponseSchema(ClientVoSchema),
                     },
                 },
                 description: '本用户信息',

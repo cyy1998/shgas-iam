@@ -7,7 +7,7 @@ export const ClientDtoSchema = z.object({
     clientName: z.string().openapi({ example: '采招系统' }),
     status: z.enum(ClientStatus).openapi({ example: 1 }),
     extAttributes: z.record(z.string(), z.unknown()).nullable().optional()
-}).openapi('ClientResponse')
+}).openapi('ClientDto')
 
 export type ClientDto = z.infer<typeof ClientDtoSchema>
 
@@ -19,4 +19,4 @@ export const ClientVoSchema = ClientDtoSchema.transform(dto => ({
     statusText: ClientStatus[dto.status],
     extAttributes: dto.extAttributes
 })
-)
+).openapi('ClientVo')
