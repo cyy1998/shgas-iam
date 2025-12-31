@@ -13,8 +13,7 @@ export const employmentMapper = {
             compId: employment.compId,
             compCode: employment.company.orgCode,
             compName: employment.company.orgName,
-            isPrimary: employment.isPrimary,
-            isPrimaryText: employment.isPrimary ? '是' : '否'
+            isPrimary: employment.isPrimary
         }
     }
 }

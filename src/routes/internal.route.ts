@@ -1,10 +1,12 @@
 import { z, createRoute, OpenAPIHono } from '@hono/zod-openapi'
 import { makeResponse, success } from '../utils/response.utils'
-import { ResponseSchema, UserOutSchema } from '../schemas/schema'
+import { UserOutSchema } from '../schemas/schema'
 import { createResponseSchema } from '../utils/response.utils'
 import { userService } from '../services/user.service'
 import { organizationService } from '../services/organization.service'
 import { employmentService } from '../services/employment.service'
+import { EmploymentDtoSchema } from '../types/employment.type'
+import { ResponseSchema } from '../types/response.type'
 
 const app = new OpenAPIHono()
 
@@ -167,17 +169,7 @@ app.openapi(
             200: {
                 content: {
                     'application/json': {
-                        schema: createResponseSchema(z.array(z.object({
-                            posId: z.int(),
-                            posCode: z.string(),
-                            posName: z.string(),
-                            orgId: z.int(),
-                            orgCode: z.string(),
-                            orgName: z.string(),
-                            compId: z.int(),
-                            compCode: z.string(),
-                            compName: z.string(),
-                        }))),
+                        schema: createResponseSchema(z.array(EmploymentDtoSchema)),
                     },
                 },
                 description: '符合条件用户列表',

@@ -35,7 +35,7 @@ async function _getUserDetail(user: User | null) {
     }
     userDTO.positions = employmentDtos
     const roles = await roleService.getRolesByUserId(userDTO.id)
-    userDTO.roles = roles
+    userDTO.roles = roles.map(r => r.roleCode)
 
     const privileges = await privilegeService.getPrivilegesByRoles(roles.map(r => r.roleId))
     userDTO.privileges = privileges

@@ -17,8 +17,8 @@ model User {
   name        String   @map("name") @db.VarChar(64)
   password    String?  @map("password") @db.VarChar(255)
   mobilePhone String?  @map("mobile_phone") @db.VarChar(20)
-  userType    String?  @default("正式员工") @map("user_type") @db.VarChar(20)
-  status      Int      @default(0) @map("status") @db.TinyInt
+  userType    String   @default("正式员工") @map("user_type") @db.VarChar(20)
+  status      Int      @default(1) @map("status") @db.TinyInt
   isDelete    Boolean  @default(false) @map("is_delete") @db.TinyInt
   createTime  DateTime @default(now()) @map("create_time") @db.DateTime(0)
   updateTime  DateTime @default(now()) @map("update_time") @db.DateTime(0)

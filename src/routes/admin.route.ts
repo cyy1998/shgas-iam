@@ -1,10 +1,10 @@
 import { prisma } from '../libs/database/prisma'
 import { z, createRoute, OpenAPIHono } from '@hono/zod-openapi'
 import { makeResponse, success } from '../utils/response.utils'
-import { ResponseSchema } from '../schemas/schema'
 import { employmentService } from '../services/employment.service'
 import { roleService } from '../services/role.service'
 import { privilegeService } from '../services/privilege.service'
+import { ResponseSchema } from '../types/response.type'
 
 const app = new OpenAPIHono()
 /*
@@ -23,7 +23,7 @@ app.openapi(
                         schema: z.object({
                             posCode: z.string().openapi({ example: 'SR01-01' }),
                             posName: z.string().openapi({ example: '党委书记' })
-                        }).openapi('Position')
+                        })
                     }
                 }
             },

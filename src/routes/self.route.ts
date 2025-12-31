@@ -1,17 +1,18 @@
 import { success } from '../utils/response.utils'
 import { z, createRoute, OpenAPIHono } from '@hono/zod-openapi'
-import { ResponseSchema, OrganizationInputSchema, UserOutSchema } from '../schemas/schema'
+import { OrganizationInputSchema, UserOutSchema } from '../schemas/schema'
 import { createResponseSchema } from '../utils/response.utils'
 import { userService } from '../services/user.service'
 import { mobileService } from '../services/mobile.service'
 import { getCookie } from 'hono/cookie'
-import { authService } from '../services/auth.service'
 import type { UserDto } from '../types/user.type'
 import { employmentService } from '../services/employment.service'
 import { organizationService } from '../services/organization.service'
 import { cacheService } from '../services/cache.service'
 import { clientService } from '../services/client.service'
 import { ClientVoSchema } from '../types/client.type'
+import { EmploymentDtoSchema } from '../types/employment.type'
+import { ResponseSchema } from '../types/response.type'
 
 const app = new OpenAPIHono()
 
@@ -210,7 +211,9 @@ app.openapi(
         path: '/search-other-users/under-org',
         tags: ['Self'],
         request: {
-            query: OrganizationInputSchema
+            query: z.object({
+                orgCode: z.string().openapi({ example: 'SR23' }),
+            })
         },
         responses: {
             200: {
@@ -251,17 +254,7 @@ app.openapi(
             200: {
                 content: {
                     'application/json': {
-                        schema: createResponseSchema(z.array(z.object({
-                            posId: z.int(),
-                            posCode: z.string(),
-                            posName: z.string(),
-                            orgId: z.int(),
-                            orgCode: z.string(),
-                            orgName: z.string(),
-                            compId: z.int(),
-                            compCode: z.string(),
-                            compName: z.string(),
-                        }))),
+                        schema: createResponseSchema(z.array(EmploymentDtoSchema)),
                     },
                 },
                 description: '符合条件用户列表',
