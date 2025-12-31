@@ -227,8 +227,8 @@ app.openapi(
     }),
     async (c) => {
         const { orgCode, orgName, parentOrg } = c.req.valid('json')
-        await organizationService.purveyorRegister(orgCode, orgName, parentOrg)
-        return c.json(success())
+        const data = await organizationService.purveyorRegister(orgCode, orgName, parentOrg)
+        return c.json(success(data))
     }
 )
 
@@ -269,8 +269,8 @@ app.openapi(
     }),
     async (c) => {
         const { username, mobile, name, orgCode } = c.req.valid('json')
-        const res = await userService.registerPurveyorConcat(username, mobile, name, orgCode)
-        return c.json(success())
+        const data = await userService.registerPurveyorConcat(username, mobile, name, orgCode)
+        return c.json(success(data))
     }
 )
 

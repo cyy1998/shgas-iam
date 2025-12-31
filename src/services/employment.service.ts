@@ -3,6 +3,7 @@ import { employmentMapper } from "../mapper/employment.mapper";
 import { employmentRepository } from "../repositories/employment.repository";
 import { organizationRepository } from "../repositories/organization.repository";
 import { positionRepository } from "../repositories/position.repository";
+import { roleRepository } from "../repositories/role.repository";
 import { userRepository } from "../repositories/user.repository";
 import { privilegeService } from "./privilege.service";
 import { roleService } from "./role.service";
@@ -13,15 +14,16 @@ async function _getEmploymentsDetail(username: string) {
     const employments = await employmentRepository.getEmploymentsByUsername(username)
     const res = []
     for (const e of employments) {
-        const [rolesFromDepts, rolesFromPosition, rolesFromPosOrg, rolesFromEmployment] = await Promise.all([
-            roleService.getRolesByOrganization(e.deptId),
-            roleService.getRolesByPosition(e.posId),
-            roleService.getRolesByOrgPosition(e.posId, e.deptId),
-            roleService.getRolesByEmployment(e.id)
-        ])
-        const rolesCombined = [...rolesFromDepts, ...rolesFromPosition, ...rolesFromPosOrg, ...rolesFromEmployment]
-        const roles = rolesCombined.filter((item, index, self) => index === self.findIndex((t) => t.roleId === item.roleId))
-        const privileges = await privilegeService.getPrivilegesByRoles(roles.map(r => r.roleId))
+        // const [rolesFromDepts, rolesFromPosition, rolesFromPosOrg, rolesFromEmployment] = await Promise.all([
+        //     roleService.getRolesByOrganization(e.deptId),
+        //     roleService.getRolesByPosition(e.posId),
+        //     roleService.getRolesByOrgPosition(e.posId, e.deptId),
+        //     roleService.getRolesByEmployment(e.id)
+        // ])
+        // const rolesCombined = [...rolesFromDepts, ...rolesFromPosition, ...rolesFromPosOrg, ...rolesFromEmployment]
+        // const roles = rolesCombined.filter((item, index, self) => index === self.findIndex((t) => t.roleId === item.roleId))
+        const roles = await roleRepository.getRolesByEmploymentId(e.id)
+        const privileges = await privilegeService.getPrivilegesByRoles(roles.map(r => r.id))
         res.push({
             employment: employmentMapper.entityToDto(e),
             privileges: privileges.map(p => p.privCode)

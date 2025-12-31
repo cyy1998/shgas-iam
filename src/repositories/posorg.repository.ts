@@ -1,15 +1,15 @@
-import { prisma } from '../libs/database/prisma'
+import { prisma, type PrismaTransaction } from '../libs/database/prisma'
 export const posorgRepository = {
-    async getPosOrgById(posId: number, orgId: number) {
-        return await prisma.posOrgComposition.findFirst({
+    async getPosOrgById(posId: number, orgId: number, tx: PrismaTransaction = prisma) {
+        return await tx.posOrgComposition.findFirst({
             where: {
                 posId: posId,
                 orgId: orgId
             }
         })
     },
-    async setPosOrg(posId: number, orgId: number) {
-        return await prisma.posOrgComposition.create({
+    async setPosOrg(posId: number, orgId: number, tx: PrismaTransaction = prisma) {
+        return await tx.posOrgComposition.create({
             data: {
                 posId: posId,
                 orgId: orgId

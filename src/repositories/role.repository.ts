@@ -1,17 +1,22 @@
 import { EmploymentStatus } from "../constants/employment.status"
-import { prisma } from '../libs/database/prisma'
+import { RoleStatus } from "../constants/role.status"
+import { prisma, type PrismaTransaction } from '../libs/database/prisma'
 
 export const roleRepository = {
-    async getRoleByCode(roleCode: string) {
-        return await prisma.role.findFirst({
+    async getRoleByCode(roleCode: string, tx: PrismaTransaction = prisma) {
+        return await tx.role.findFirst({
             where: {
-                roleCode: roleCode
+                roleCode: roleCode,
+                status: RoleStatus.Enable,
+                isDelete: false
             }
         })
     },
-    async getRolesByUserId(userId: number) {
-        return await prisma.role.findMany({
+    async getRolesByUserId(userId: number, tx: PrismaTransaction = prisma) {
+        return await tx.role.findMany({
             where: {
+                status: RoleStatus.Enable,
+                isDelete: false,
                 OR: [
                     {
                         positions: {
@@ -112,8 +117,8 @@ export const roleRepository = {
             }
         })
     },
-    async getRolesByAncestorOrgs(ancestorgIds: number[]) {
-        return await prisma.role.findMany({
+    async getRolesByAncestorOrgs(ancestorgIds: number[], tx: PrismaTransaction = prisma) {
+        return await tx.role.findMany({
             where: {
                 organizations: {
                     some: {
@@ -122,57 +127,69 @@ export const roleRepository = {
                         },
                         isAllSub: true
                     }
-                }
+                },
+                status: RoleStatus.Enable,
+                isDelete: false
             }
         })
     },
-    async getRolesByDirectOrg(orgId: number) {
-        return await prisma.role.findMany({
+    async getRolesByDirectOrg(orgId: number, tx: PrismaTransaction = prisma) {
+        return await tx.role.findMany({
             where: {
                 organizations: {
                     some: {
                         organizationId: orgId,
                     }
-                }
+                },
+                status: RoleStatus.Enable,
+                isDelete: false
             }
         })
     },
-    async getRolesByPosition(posId: number) {
-        return await prisma.role.findMany({
+    async getRolesByPosition(posId: number, tx: PrismaTransaction = prisma) {
+        return await tx.role.findMany({
             where: {
                 positions: {
                     some: {
                         positionId: posId,
                     }
-                }
+                },
+                status: RoleStatus.Enable,
+                isDelete: false
             }
         })
     },
-    async getRolesByPosOrg(posOrgId: number) {
-        return await prisma.role.findMany({
+    async getRolesByPosOrg(posOrgId: number, tx: PrismaTransaction = prisma) {
+        return await tx.role.findMany({
             where: {
                 positionOrganizations: {
                     some: {
                         posOrgId: posOrgId,
                     }
-                }
+                },
+                status: RoleStatus.Enable,
+                isDelete: false
             }
         })
     },
-    async getRolesByEmployment(employmentId: number) {
-        return await prisma.role.findMany({
+    async getRolesByEmployment(employmentId: number, tx: PrismaTransaction = prisma) {
+        return await tx.role.findMany({
             where: {
                 employments: {
                     some: {
                         employmentId: employmentId,
                     }
-                }
+                },
+                status: RoleStatus.Enable,
+                isDelete: false
             }
         })
     },
-    async getRolesByEmploymentId(employmentId: number) {
-        return await prisma.role.findMany({
+    async getRolesByEmploymentId(employmentId: number, tx: PrismaTransaction = prisma) {
+        return await tx.role.findMany({
             where: {
+                status: RoleStatus.Enable,
+                isDelete: false,
                 OR: [
                     {
                         positions: {
@@ -253,16 +270,16 @@ export const roleRepository = {
             }
         })
     },
-    async checkEmploymentRoleExisting(roleId: number, employmentId: number) {
-        return (await prisma.employmentRole.findFirst({
+    async checkEmploymentRoleExisting(roleId: number, employmentId: number, tx: PrismaTransaction = prisma) {
+        return (await tx.employmentRole.findFirst({
             where: {
                 roleId: roleId,
                 employmentId: employmentId
             }
         })) !== null
     },
-    async setRole(roleCode: string, roleName: string) {
-        return await prisma.role.create({
+    async setRole(roleCode: string, roleName: string, tx: PrismaTransaction = prisma) {
+        return await tx.role.create({
             data: {
                 roleCode: roleCode,
                 roleName: roleName,
@@ -270,40 +287,40 @@ export const roleRepository = {
             }
         })
     },
-    async setRolePrivilege(roleId: number, privilegeId: number) {
-        return await prisma.rolePrivilege.create({
+    async setRolePrivilege(roleId: number, privilegeId: number, tx: PrismaTransaction = prisma) {
+        return await tx.rolePrivilege.create({
             data: {
                 roleId: roleId,
                 privilegeId: privilegeId
             }
         })
     },
-    async setRoleForEmployment(roleId: number, employmentId: number) {
-        return await prisma.employmentRole.create({
+    async setRoleForEmployment(roleId: number, employmentId: number, tx: PrismaTransaction = prisma) {
+        return await tx.employmentRole.create({
             data: {
                 roleId: roleId,
                 employmentId: employmentId
             }
         })
     },
-    async setRoleForOrganization(roleId: number, orgId: number) {
-        return await prisma.organizationRole.create({
+    async setRoleForOrganization(roleId: number, orgId: number, tx: PrismaTransaction = prisma) {
+        return await tx.organizationRole.create({
             data: {
                 roleId: roleId,
                 organizationId: orgId
             }
         })
     },
-    async setRoleForPosOrg(roleId: number, posOrgId: number) {
-        return await prisma.posOrgRole.create({
+    async setRoleForPosOrg(roleId: number, posOrgId: number, tx: PrismaTransaction = prisma) {
+        return await tx.posOrgRole.create({
             data: {
                 roleId: roleId,
                 posOrgId: posOrgId
             }
         })
     },
-    async deleteRoleForPosOrg(roleId: number, posOrgId: number) {
-        return await prisma.posOrgRole.delete({
+    async deleteRoleForPosOrg(roleId: number, posOrgId: number, tx: PrismaTransaction = prisma) {
+        return await tx.posOrgRole.delete({
             where: {
                 posOrgId_roleId: {
                     roleId: roleId,
@@ -312,8 +329,8 @@ export const roleRepository = {
             }
         })
     },
-    async deleteRoleForEmployment(roleId: number, employmentId: number) {
-        return await prisma.employmentRole.delete({
+    async deleteRoleForEmployment(roleId: number, employmentId: number, tx: PrismaTransaction = prisma) {
+        return await tx.employmentRole.delete({
             where: {
                 employmentId_roleId: {
                     roleId: roleId,

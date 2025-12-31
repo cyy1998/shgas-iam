@@ -1,9 +1,9 @@
 import { EmploymentStatus } from "../constants/employment.status"
-import { prisma } from '../libs/database/prisma'
+import { prisma, type PrismaTransaction } from '../libs/database/prisma'
 
 export const privilegeRepository = {
-    async getPrivilegesByUserId(userId: number) {
-        return await prisma.privilege.findMany({
+    async getPrivilegesByUserId(userId: number, tx: PrismaTransaction = prisma) {
+        return await tx.privilege.findMany({
             where: {
                 roles: {
                     some: {
@@ -81,8 +81,8 @@ export const privilegeRepository = {
             }
         })
     },
-    async getPrivilegesByRoles(roleIds: number[]) {
-        return await prisma.privilege.findMany({
+    async getPrivilegesByRoles(roleIds: number[], tx: PrismaTransaction = prisma) {
+        return await tx.privilege.findMany({
             where: {
                 roles: {
                     some: {
@@ -94,15 +94,15 @@ export const privilegeRepository = {
             }
         })
     },
-    async getPrivilegeByCode(privCode: string) {
-        return await prisma.privilege.findFirst({
+    async getPrivilegeByCode(privCode: string, tx: PrismaTransaction = prisma) {
+        return await tx.privilege.findFirst({
             where: {
                 privilegeCode: privCode
             }
         })
     },
-    async setPrivilege(privCode: string, privName: string) {
-        return await prisma.privilege.create({
+    async setPrivilege(privCode: string, privName: string, tx: PrismaTransaction = prisma) {
+        return await tx.privilege.create({
             data: {
                 privilegeCode: privCode,
                 privilegeName: privName,

@@ -16,6 +16,7 @@ import { UserNotFoundError } from '../errors/UserNotFoundError'
 import { CustomError } from '../errors/CustomError'
 import { roleRepository } from '../repositories/role.repository'
 import { prisma } from '../libs/database/prisma'
+import { privilegeRepository } from '../repositories/privilege.repository'
 
 async function _getUserDetail(user: User | null) {
     if (user === null) {
@@ -23,14 +24,16 @@ async function _getUserDetail(user: User | null) {
     }
     const userDTO = userMapper.toUserDTO(user)
     const employments = await employmentRepository.getEmploymentsByUserId(userDTO.id)
-    const employmentDTOs = []
+    const employmentDtos = []
     for (const employment of employments) {
         const roles = await roleRepository.getRolesByEmploymentId(employment.id)
-        const employmentDTO = employmentMapper.entityToDto(employment)
-        employmentDTO.roles = roles.map(r => r.roleCode)
-        employmentDTOs.push(employmentDTO)
+        const privileges = await privilegeRepository.getPrivilegesByRoles(roles.map(r => r.id))
+        const employmentDto = employmentMapper.entityToDto(employment)
+        employmentDto.roles = roles.map(r => r.roleCode)
+        employmentDto.privileges = privileges.map(p => p.privilegeCode)
+        employmentDtos.push(employmentDto)
     }
-    userDTO.positions = employmentDTOs
+    userDTO.positions = employmentDtos
     const roles = await roleService.getRolesByUserId(userDTO.id)
     userDTO.roles = roles
 
