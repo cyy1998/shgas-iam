@@ -1,6 +1,16 @@
 import { Prisma } from "../../generated/prisma"
 
-export type EmploymentDTO = {
+export type EmploymentEntity = Prisma.EmploymentGetPayload<{
+    include: {
+        position: true,
+        deptartment: true,
+        company: true,
+        user: true
+    }
+
+}>
+
+export type EmploymentDto = {
     id: number
     posId: number
     posCode: string
@@ -17,12 +27,4 @@ export type EmploymentDTO = {
     privileges?: string[]
 }
 
-export type EmploymentEntity = Prisma.EmploymentGetPayload<{
-    include: {
-        position: true,
-        deptartment: true,
-        company: true,
-        user: true
-    }
 
-}>

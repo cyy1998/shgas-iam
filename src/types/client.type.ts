@@ -6,17 +6,19 @@ export const ClientDtoSchema = z.object({
     clientCode: z.string().openapi({ example: 'tender' }),
     clientName: z.string().openapi({ example: '采招系统' }),
     status: z.enum(ClientStatus).openapi({ example: 1 }),
-    extAttributes: z.record(z.string(), z.unknown()).nullable().optional()
+    extAttributes: z.record(z.string(), z.unknown()).nullable()
 }).openapi('ClientDto')
 
 export type ClientDto = z.infer<typeof ClientDtoSchema>
 
-export const ClientVoSchema = ClientDtoSchema.transform(dto => ({
-    clientId: dto.id,
-    clientCode: dto.clientCode,
-    clientName: dto.clientName,
-    status: dto.status,
-    statusText: ClientStatus[dto.status],
-    extAttributes: dto.extAttributes
-})
-).openapi('ClientVo')
+export const ClientVoSchema = z.object({
+    clientId: z.number().openapi({ example: 1 }),
+    clientCode: z.string().openapi({ example: 'tender' }),
+    clientName: z.string().openapi({ example: '采招系统' }),
+    status: z.enum(ClientStatus).openapi({ example: 1 }), // 或根据实际情况
+    statusText: z.string().openapi({ example: '启用' }),
+    extAttributes: z.record(z.string(), z.unknown()).nullable(),
+}).openapi('ClientVo')
+
+
+export type ClientVo = z.infer<typeof ClientVoSchema>

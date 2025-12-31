@@ -1,4 +1,4 @@
-export type OrganizationDTO = {
+export type OrganizationDto = {
     id: number
     orgCode: string
     orgName: string
@@ -6,7 +6,7 @@ export type OrganizationDTO = {
     level: number
 }
 
-export type OrganizationVO = {
+export type OrganizationVo = {
     id: number
     orgCode: string
     orgName: string

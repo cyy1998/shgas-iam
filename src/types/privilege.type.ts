@@ -1,6 +1,6 @@
 import { Prisma } from "../../generated/prisma"
 
-export type PrivilegeDTO = {
+export type PrivilegeDto = {
     id: number
     privCode: string
     privName: string

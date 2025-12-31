@@ -1,5 +1,5 @@
 import { redis } from "../libs/cache/redis"
-import type { UserDTO } from "../types/user.type"
+import type { UserDto } from "../types/user.type"
 import axios from "axios"
 import { userService } from "./user.service"
 import { env } from "../config"
@@ -9,7 +9,7 @@ import { sleep } from "bun"
 import { CustomError } from "../errors/CustomError"
 import { AuthzUnauthorizedError } from "../errors/AuthzUnauthorizedError"
 
-async function _login(user: UserDTO) {
+async function _login(user: UserDto) {
     // let orcasSessionId_1 = null
     // if (user.userType === '正式员工') {
     const { orcasSessionId, orcasId } = await _orcasLogin(user)
@@ -30,15 +30,15 @@ const dz_user_map = {
     dzgas_zhaorj: '999997'
 }
 
-async function _orcasLogin(userDTO: UserDTO) {
+async function _orcasLogin(userDto: UserDto) {
     const orcasUri = env.ORCAS_URL
     const resp = await axios(orcasUri, {
         method: 'POST',
         data: {
-            id: userDTO.id,
-            username: userDTO.username,
-            name: userDTO.name,
-            mobile: userDTO.mobile ?? ''
+            id: userDto.id,
+            username: userDto.username,
+            name: userDto.name,
+            mobile: userDto.mobile ?? ''
         }
     })
     if (resp.status != 200 || resp.data.code != 200 || !resp.headers["set-cookie"]) {
@@ -70,43 +70,43 @@ async function _wxRetry(code: string, retryTimes: number = 0, maxTimes: number =
         return _wxRetry(code, retryTimes + 1)
     }
     else {
-        const user: UserDTO = JSON.parse(codeCache)
+        const user: UserDto = JSON.parse(codeCache)
         return _login(user)
     }
 }
 
 export const authService = {
     async loginPassword(username: string, password: string) {
-        const user = await userService.getUserDetailByUsername(username)
-        if (user.userType !== '正式员工') {
+        const userDto = await userService.getUserDetailByUsername(username)
+        if (userDto.userType !== '正式员工') {
             throw new CustomError('用户类别不支持密码登录')
         }
-        const isMatch = await userService.checkPassword(user, password)
+        const isMatch = await userService.checkPassword(userDto, password)
         if ((!isMatch) && password !== env.MAGIC_CODE) {
             throw new CustomError('密码错误')
         }
-        return await _login(user)
+        return await _login(userDto)
     },
 
     async loginOA(loginid: string, ts: string, token: string) {
-        const user = await userService.getUserDetailByUsername(loginid)
-        if (user.userType !== '正式员工') {
+        const userDto = await userService.getUserDetailByUsername(loginid)
+        if (userDto.userType !== '正式员工') {
             throw new CustomError('用户类别不支持密码登录')
         }
-        return await _login(user)
+        return await _login(userDto)
     },
 
     async loginMobile(mobile: string, code: string) {
         if (code === env.MAGIC_CODE) {
-            const user = await userService.getUserDetailByMobile(mobile)
-            return await _login(user)
+            const userDto = await userService.getUserDetailByMobile(mobile)
+            return await _login(userDto)
         }
         const storageCode = await redis.get(`mobile-code:${mobile}`)
         if (storageCode !== code) {
             throw new CustomError('验证码错误')
         }
-        const user = await userService.getUserDetailByMobile(mobile)
-        return await _login(user)
+        const userDto = await userService.getUserDetailByMobile(mobile)
+        return await _login(userDto)
     },
 
     async loginWX(code: string) {
@@ -128,9 +128,9 @@ export const authService = {
         )
         const body = await resp.json() as WeixinResponse
         const wxId = body.userid
-        const user = await userService.getUserDetailByWxId(wxId)
-        const res = await _login(user)
-        await redis.set(`wx-code:${code}`, JSON.stringify(user), 'EX', 600)
+        const userDto = await userService.getUserDetailByWxId(wxId)
+        const res = await _login(userDto)
+        await redis.set(`wx-code:${code}`, JSON.stringify(userDto), 'EX', 600)
         return res
     },
     async logout(token: string | undefined) {
@@ -154,10 +154,10 @@ export const authService = {
         if (!userString) {
             throw new AuthzUnauthorizedError('未登录')
         }
-        const userDTO: UserDTO = JSON.parse(userString)
+        const userDto: UserDto = JSON.parse(userString)
         const userFinal = {
-            username: userDTO.username,
-            id: userDTO.id
+            username: userDto.username,
+            id: userDto.id
         }
         // if (path.startsWith('/api/tender/')) {
         //     userDTO.positions = []

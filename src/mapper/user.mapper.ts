@@ -1,9 +1,9 @@
 import type { User } from "../../generated/prisma"
-import type { UserDTO } from "../types/user.type"
+import type { UserDto } from "../types/user.type"
 
 export const userMapper = {
-    toUserDTO(user: User): UserDTO {
-        const userDTO: UserDTO = {
+    toUserDTO(user: User): UserDto {
+        return {
             id: user.id,
             username: user.username,
             name: user.name,
@@ -11,6 +11,5 @@ export const userMapper = {
             userType: user.userType,
             orcasId: null
         }
-        return userDTO
     }
 }

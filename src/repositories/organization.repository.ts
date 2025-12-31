@@ -1,8 +1,8 @@
-import { prisma } from '../libs/database/prisma'
+import { prisma, type PrismaTransaction } from '../libs/database/prisma'
 
 export const organizationRepository = {
-    async searchFormalOrganizations(orgCode: string, orgLevel: number) {
-        return await prisma.organization.findMany({
+    async searchFormalOrganizations(orgCode: string, orgLevel: number, tx: PrismaTransaction = prisma) {
+        return await tx.organization.findMany({
             where: {
                 descendantClosures: {
                     some: {
@@ -18,8 +18,8 @@ export const organizationRepository = {
             }
         })
     },
-    async searchOrganizations(orgCode: string, orgLevel: number) {
-        return await prisma.organization.findMany({
+    async searchOrganizations(orgCode: string, orgLevel: number, tx: PrismaTransaction = prisma) {
+        return await tx.organization.findMany({
             where: {
                 descendantClosures: {
                     some: {
@@ -32,8 +32,8 @@ export const organizationRepository = {
             }
         })
     },
-    async getTopFormalOrganizations() {
-        return await prisma.organization.findMany({
+    async getTopFormalOrganizations(tx: PrismaTransaction = prisma) {
+        return await tx.organization.findMany({
             where: {
                 orgType: {
                     notIn: ['虚拟组织', '外部组织']
@@ -42,22 +42,22 @@ export const organizationRepository = {
             }
         })
     },
-    async getOrgByCode(orgCode: string) {
-        return await prisma.organization.findFirst({
+    async getOrgByCode(orgCode: string, tx: PrismaTransaction = prisma) {
+        return await tx.organization.findFirst({
             where: {
                 orgCode: orgCode,
             }
         })
     },
-    async getOrgById(id: number) {
-        return await prisma.organization.findFirst({
+    async getOrgById(id: number, tx: PrismaTransaction = prisma) {
+        return await tx.organization.findFirst({
             where: {
                 id: id,
             }
         })
     },
-    async getOrgByRoleId(roleId: number) {
-        return await prisma.organization.findMany({
+    async getOrgByRoleId(roleId: number, tx: PrismaTransaction = prisma) {
+        return await tx.organization.findMany({
             include: {
                 roles: {
                     where: {
@@ -74,22 +74,22 @@ export const organizationRepository = {
             }
         })
     },
-    async getOrgIdsByIds(ids: number[]) {
-        return await prisma.organization.findMany({
+    async getOrgIdsByIds(ids: number[], tx: PrismaTransaction = prisma) {
+        return await tx.organization.findMany({
             select: {
                 id: true
             }
         })
     },
-    async getOrganizationsByParentId(parentId: number) {
-        return await prisma.organization.findMany({
+    async getOrganizationsByParentId(parentId: number, tx: PrismaTransaction = prisma) {
+        return await tx.organization.findMany({
             where: {
                 parentId: parentId,
             }
         })
     },
-    async getOrganizationsByParentsCode(parentCodes: string[]) {
-        return await prisma.organization.findMany({
+    async getOrganizationsByParentsCode(parentCodes: string[], tx: PrismaTransaction = prisma) {
+        return await tx.organization.findMany({
             where: {
                 parent: {
                     orgCode: {
@@ -99,8 +99,8 @@ export const organizationRepository = {
             }
         })
     },
-    async setOrganization(orgCode: string, orgName: string, orgLevel: number, parentId: number) {
-        return await prisma.organization.create({
+    async setOrganization(orgCode: string, orgName: string, orgLevel: number, parentId: number, tx: PrismaTransaction = prisma) {
+        return await tx.organization.create({
             data: {
                 orgCode: orgCode,
                 orgName: orgName,
@@ -112,8 +112,8 @@ export const organizationRepository = {
             }
         })
     },
-    async updateOrganizationPath(orgId: number, path: string) {
-        return await prisma.organization.update({
+    async updateOrganizationPath(orgId: number, path: string, tx: PrismaTransaction = prisma) {
+        return await tx.organization.update({
             where: {
                 id: orgId
             },
@@ -122,14 +122,9 @@ export const organizationRepository = {
             }
         })
     },
-    async updateOrganizationClosure(orgId: number, parentId: number) {
+    async updateOrganizationClosure(orgId: number, parentId: number, tx: PrismaTransaction = prisma) {
         const closureRelations = [];
-        // closureRelations.push({
-        //     ancestorId: parentId,
-        //     descendantId: orgId,
-        //     depth: 1,
-        // })
-        const parentAncestors = await prisma.organizationClosure.findMany({
+        const parentAncestors = await tx.organizationClosure.findMany({
             where: { descendantId: parentId },
             select: { ancestorId: true, depth: true },
         })
@@ -146,7 +141,7 @@ export const organizationRepository = {
             depth: 0,
         })
         if (closureRelations.length > 0) {
-            await prisma.organizationClosure.createMany({
+            await tx.organizationClosure.createMany({
                 data: closureRelations,
                 skipDuplicates: true, // 防止意外重复，虽然主键约束会拦截，但这样更安全
             })

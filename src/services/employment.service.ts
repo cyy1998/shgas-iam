@@ -23,7 +23,7 @@ async function _getEmploymentsDetail(username: string) {
         const roles = rolesCombined.filter((item, index, self) => index === self.findIndex((t) => t.roleId === item.roleId))
         const privileges = await privilegeService.getPrivilegesByRoles(roles.map(r => r.roleId))
         res.push({
-            employment: employmentMapper.toEmploymentDTO(e),
+            employment: employmentMapper.entityToDto(e),
             privileges: privileges.map(p => p.privCode)
         })
     }

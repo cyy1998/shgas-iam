@@ -1,8 +1,8 @@
 import type { Role } from "../../generated/prisma"
-import type { RoleDTO } from "../types/role.type"
+import type { RoleDto } from "../types/role.type"
 
 export const roleMapper = {
-    toRoleDTO(role: Role): RoleDTO {
+    toRoleDTO(role: Role): RoleDto {
         return {
             roleId: role.id,
             roleCode: role.roleCode,

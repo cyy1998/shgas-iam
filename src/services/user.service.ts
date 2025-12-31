@@ -1,7 +1,7 @@
 import { hash, compare } from 'bcrypt-ts'
 import type { User } from '../../generated/prisma'
 import { userRepository } from '../repositories/user.repository'
-import type { UserDTO } from '../types/user.type'
+import type { UserDto } from '../types/user.type'
 import { userMapper } from '../mapper/user.mapper'
 import { employmentRepository } from '../repositories/employment.repository'
 import { employmentMapper } from '../mapper/employment.mapper'
@@ -25,7 +25,7 @@ async function _getUserDetail(user: User | null) {
     const employmentDTOs = []
     for (const employment of employments) {
         const roles = await roleRepository.getRolesByEmploymentId(employment.id)
-        const employmentDTO = employmentMapper.toEmploymentDTO(employment)
+        const employmentDTO = employmentMapper.entityToDto(employment)
         employmentDTO.roles = roles.map(r => r.roleCode)
         employmentDTOs.push(employmentDTO)
     }
@@ -53,7 +53,7 @@ function _validatePasswordStrength(password: string): boolean {
 
 export const userService = {
 
-    async setPassword(userDTO: UserDTO, oldPassword: string, newPassword: string) {
+    async setPassword(userDTO: UserDto, oldPassword: string, newPassword: string) {
         if (oldPassword === newPassword) {
             throw new CustomError('旧密码与新密码相同')
         }
@@ -69,15 +69,15 @@ export const userService = {
         return true
     },
 
-    async checkPassword(userDTO: UserDTO, inputPassword: string) {
-        const user = await userRepository.getUserByUsername(userDTO.username)
+    async checkPassword(userDto: UserDto, inputPassword: string) {
+        const user = await userRepository.getUserByUsername(userDto.username)
         if (user === null) {
             return false
         }
         return user.password ? await compare(inputPassword, user.password ?? '') : inputPassword === env.DEFAULT_USER_PASSWORD
     },
 
-    async setMobile(userDTO: UserDTO, phoneNumber: string, code: string) {
+    async setMobile(userDto: UserDto, phoneNumber: string, code: string) {
         if (!mobileService.checkValidPhoneNumber(phoneNumber)) {
             throw new CustomError('无效手机号')
         }
@@ -87,9 +87,9 @@ export const userService = {
         if (!await mobileService.cehckVerificationCode(phoneNumber, code)) {
             throw new CustomError('验证码错误')
         }
-        await userRepository.setMobile(userDTO.id, phoneNumber)
-        userDTO.mobile = phoneNumber
-        return userDTO
+        await userRepository.setMobile(userDto.id, phoneNumber)
+        userDto.mobile = phoneNumber
+        return userDto
     },
 
     async getUserDetailByUsername(username: string) {
@@ -110,7 +110,7 @@ export const userService = {
         return userDetail
     },
 
-    async getOtherUsersByOrg(orgCode: string, userDTO: UserDTO) {
+    async getOtherUsersByOrg(orgCode: string, userDTO: UserDto) {
         const users = await userRepository.getOtherUsersByOrgAndAllSub(userDTO.id, orgCode)
         const userDTOs = users.map(u => userMapper.toUserDTO(u))
         return userDTOs

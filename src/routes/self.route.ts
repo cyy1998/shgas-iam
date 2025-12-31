@@ -6,7 +6,7 @@ import { userService } from '../services/user.service'
 import { mobileService } from '../services/mobile.service'
 import { getCookie } from 'hono/cookie'
 import { authService } from '../services/auth.service'
-import type { UserDTO } from '../types/user.type'
+import type { UserDto } from '../types/user.type'
 import { employmentService } from '../services/employment.service'
 import { organizationService } from '../services/organization.service'
 import { cacheService } from '../services/cache.service'
@@ -37,7 +37,7 @@ app.openapi(
                         schema: createResponseSchema(ClientVoSchema),
                     },
                 },
-                description: '本用户信息',
+                description: '应用信息',
             },
         },
     }),
@@ -79,7 +79,7 @@ app.openapi(
 /*
 path: /password/change
 method: POST
-function: 更换密码 
+function: 设置密码 
 */
 app.openapi(
     createRoute({
@@ -110,8 +110,7 @@ app.openapi(
         },
     }),
     async (c) => {
-        const userDTO: UserDTO = JSON.parse(Buffer.from(c.req.header('X-User-Info') ?? '', 'base64').toString('utf8'))
-        // console.log(userDTO)
+        const userDTO: UserDto = JSON.parse(Buffer.from(c.req.header('X-User-Info') ?? '', 'base64').toString('utf8'))
         const { oldPassword, newPassword } = c.req.valid('json')
         const data = await userService.setPassword(userDTO, oldPassword, newPassword)
         return c.json(success(data))
@@ -193,7 +192,7 @@ app.openapi(
     async (c) => {
         const { phoneNumber, code } = c.req.valid('json')
         const sessionId = getCookie(c, 'session') as string
-        const userDTO: UserDTO = JSON.parse(Buffer.from(c.req.header('X-User-Info') ?? '', 'base64').toString('utf8'))
+        const userDTO: UserDto = JSON.parse(Buffer.from(c.req.header('X-User-Info') ?? '', 'base64').toString('utf8'))
         const newUserDTO = await userService.setMobile(userDTO, phoneNumber, code)
         const data = await cacheService.updateSession(sessionId, JSON.stringify(newUserDTO))
         return c.json(success(data))
@@ -225,7 +224,7 @@ app.openapi(
         },
     }),
     async (c) => {
-        const user: UserDTO = JSON.parse(Buffer.from(c.req.header('X-User-Info') ?? '', 'base64').toString('utf8'))
+        const user: UserDto = JSON.parse(Buffer.from(c.req.header('X-User-Info') ?? '', 'base64').toString('utf8'))
         const { orgCode } = c.req.valid('query')
         const data = await userService.getOtherUsersByOrg(orgCode, user)
         return c.json(success(data))
@@ -271,7 +270,7 @@ app.openapi(
     }),
     async (c) => {
         const { privCode, codeType } = c.req.valid('query')
-        const user: UserDTO = JSON.parse(Buffer.from(c.req.header('X-User-Info') ?? '', 'base64').toString('utf8'))
+        const user: UserDto = JSON.parse(Buffer.from(c.req.header('X-User-Info') ?? '', 'base64').toString('utf8'))
         const data = await employmentService.getEmploymentsByUserAndPrivilege(user.username, privCode, codeType)
         return c.json(success(data))
     }

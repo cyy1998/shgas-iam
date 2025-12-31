@@ -1,8 +1,8 @@
 import type { Privilege } from "../../generated/prisma"
-import type { PrivilegeDTO } from "../types/privilege.type"
+import type { PrivilegeDto } from "../types/privilege.type"
 
 export const privilegeMapper = {
-    toPrivilegeDTO(priv: Privilege): PrivilegeDTO {
+    toPrivilegeDTO(priv: Privilege): PrivilegeDto {
         return {
             id: priv.id,
             privCode: priv.privilegeCode,

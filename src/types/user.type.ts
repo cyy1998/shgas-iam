@@ -1,16 +1,16 @@
-import type { EmploymentDTO } from "./employment.type"
-import type { PrivilegeDTO } from "./privilege.type"
-import type { RoleDTO } from "./role.type"
+import type { EmploymentDto } from "./employment.type"
+import type { PrivilegeDto } from "./privilege.type"
+import type { RoleDto } from "./role.type"
 
 
-export type UserDTO = {
+export type UserDto = {
     id: number
     username: string
     name: string
     mobile: string | null
     orcasId: string | null
     userType: string | null
-    positions?: EmploymentDTO[]
-    privileges?: PrivilegeDTO[]
-    roles?: RoleDTO[]
+    positions?: EmploymentDto[]
+    privileges?: PrivilegeDto[]
+    roles?: RoleDto[]
 }
