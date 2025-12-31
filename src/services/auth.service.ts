@@ -156,7 +156,8 @@ export const authService = {
         }
         const userDTO: UserDTO = JSON.parse(userString)
         const userFinal = {
-            username: userDTO.username
+            username: userDTO.username,
+            id: userDTO.id
         }
         // if (path.startsWith('/api/tender/')) {
         //     userDTO.positions = []

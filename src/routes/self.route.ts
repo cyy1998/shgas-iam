@@ -111,6 +111,7 @@ app.openapi(
     }),
     async (c) => {
         const userDTO: UserDTO = JSON.parse(Buffer.from(c.req.header('X-User-Info') ?? '', 'base64').toString('utf8'))
+        // console.log(userDTO)
         const { oldPassword, newPassword } = c.req.valid('json')
         const data = await userService.setPassword(userDTO, oldPassword, newPassword)
         return c.json(success(data))
