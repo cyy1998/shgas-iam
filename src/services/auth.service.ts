@@ -8,6 +8,8 @@ import type { WeixinResponse } from "../types/wx.type"
 import { sleep } from "bun"
 import { CustomError } from "../errors/CustomError"
 import { AuthzUnauthorizedError } from "../errors/AuthzUnauthorizedError"
+import { userRepository } from "../repositories/user.repository"
+import type { User } from "../../generated/prisma"
 
 async function _login(user: UserDto) {
     // let orcasSessionId_1 = null
@@ -78,10 +80,11 @@ async function _wxRetry(code: string, retryTimes: number = 0, maxTimes: number =
 export const authService = {
     async loginPassword(username: string, password: string) {
         const userDto = await userService.getUserDetailByUsername(username)
+        const user = await userRepository.getUserByUsername(username) as User
         if (userDto.userType !== '正式员工') {
             throw new CustomError('用户类别不支持密码登录')
         }
-        const isMatch = await userService.checkPassword(userDto, password)
+        const isMatch = await userService.checkPassword(user, password)
         if ((!isMatch) && password !== env.MAGIC_CODE) {
             throw new CustomError('密码错误')
         }

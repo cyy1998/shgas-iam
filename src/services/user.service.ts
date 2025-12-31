@@ -54,12 +54,16 @@ function _validatePasswordStrength(password: string): boolean {
 
 export const userService = {
 
-    async setPassword(userDTO: UserDto, oldPassword: string, newPassword: string) {
+    async setPassword(username: string, oldPassword: string, newPassword: string) {
         return await prisma.$transaction(async (tx) => {
+            const user = await userRepository.getUserByUsername(username)
+            if (user === null) {
+                throw new UserNotFoundError('用户名不存在')
+            }
             if (oldPassword === newPassword) {
                 throw new CustomError('旧密码与新密码相同')
             }
-            const isMatch = await this.checkPassword(userDTO, oldPassword)
+            const isMatch = await this.checkPassword(user, oldPassword)
             if (!isMatch) {
                 throw new CustomError('旧密码错误')
             }
@@ -67,16 +71,13 @@ export const userService = {
                 throw new CustomError('新密码强度过低')
             }
             const newPasswordHash = await hash(newPassword, env.PASSWORD_HASH_ROUNDS)
-            await userRepository.setPassword(userDTO.id, newPasswordHash, tx)
+            await userRepository.setPassword(user.id, newPasswordHash, tx)
             return true
         })
     },
 
-    async checkPassword(userDto: UserDto, inputPassword: string) {
-        const user = await userRepository.getUserByUsername(userDto.username)
-        if (user === null) {
-            return false
-        }
+    async checkPassword(user: User, inputPassword: string) {
+        // const user = await userRepository.getUserByUsername(userDto.username)
         return user.password ? await compare(inputPassword, user.password ?? '') : inputPassword === env.DEFAULT_USER_PASSWORD
     },
 
