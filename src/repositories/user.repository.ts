@@ -1,30 +1,30 @@
 import { EmploymentStatus } from "../constants/employment.status"
-import { prisma } from '../libs/database/prisma'
+import { prisma, type PrismaTransaction } from '../libs/database/prisma'
 
 export const userRepository = {
-    async getUserByUsername(username: string) {
-        return await prisma.user.findFirst({
+    async getUserByUsername(username: string, tx: PrismaTransaction = prisma) {
+        return await tx.user.findFirst({
             where: {
                 username: username
             }
         })
     },
-    async getUserByWxId(wxId: string) {
-        return await prisma.user.findFirst({
+    async getUserByWxId(wxId: string, tx: PrismaTransaction = prisma) {
+        return await tx.user.findFirst({
             where: {
                 wxId: wxId
             }
         })
     },
-    async getUserByMobile(mobile: string) {
-        return await prisma.user.findFirst({
+    async getUserByMobile(mobile: string, tx: PrismaTransaction = prisma) {
+        return await tx.user.findFirst({
             where: {
                 mobilePhone: mobile
             }
         })
     },
-    async setPassword(userId: number, password: string) {
-        return await prisma.user.update({
+    async setPassword(userId: number, password: string, tx: PrismaTransaction = prisma) {
+        return await tx.user.update({
             where: {
                 id: userId
             },
@@ -33,8 +33,8 @@ export const userRepository = {
             }
         })
     },
-    async setMobile(userId: number, phoneNumber: string) {
-        return await prisma.user.update({
+    async setMobile(userId: number, phoneNumber: string, tx: PrismaTransaction = prisma) {
+        return await tx.user.update({
             where: {
                 id: userId
             },
@@ -43,19 +43,19 @@ export const userRepository = {
             }
         })
     },
-    async setUser(username: string, name: string, mobile: string, userType: string) {
-        return await prisma.user.create({
+    async setUser(username: string, name: string, mobile: string, userType: string, tx: PrismaTransaction = prisma) {
+        return await tx.user.create({
             data: {
                 username: username,
                 name: name,
                 mobilePhone: mobile,
-                userType: '外部用户'
+                userType: userType
             }
         })
     },
 
-    async getUsersByOrg(orgCode: string) {
-        return await prisma.user.findMany({
+    async getUsersByOrg(orgCode: string, tx: PrismaTransaction = prisma) {
+        return await tx.user.findMany({
             where: {
                 employments: {
                     some: {
@@ -67,8 +67,8 @@ export const userRepository = {
             }
         })
     },
-    async getUsersByOrgAndAllSub(orgCode: string) {
-        return await prisma.user.findMany({
+    async getUsersByOrgAndAllSub(orgCode: string, tx: PrismaTransaction = prisma) {
+        return await tx.user.findMany({
             where: {
                 employments: {
                     some: {
@@ -86,8 +86,8 @@ export const userRepository = {
             }
         })
     },
-    async getOtherUsersByOrgAndAllSub(userId: number, orgCode: string) {
-        return await prisma.user.findMany({
+    async getOtherUsersByOrgAndAllSub(userId: number, orgCode: string, tx: PrismaTransaction = prisma) {
+        return await tx.user.findMany({
             where: {
                 employments: {
                     some: {
@@ -109,8 +109,8 @@ export const userRepository = {
         })
     },
 
-    async getUsersByOrgRole(orgCode: string, roleCode: string) {
-        return await prisma.user.findMany({
+    async getUsersByOrgRole(orgCode: string, roleCode: string, tx: PrismaTransaction = prisma) {
+        return await tx.user.findMany({
             where: {
                 employments: {
                     some: {
@@ -184,8 +184,8 @@ export const userRepository = {
             }
         })
     },
-    async getUsersByOrgAndAllSubRole(orgCode: string, roleCode: string) {
-        return await prisma.user.findMany({
+    async getUsersByOrgAndAllSubRole(orgCode: string, roleCode: string, tx: PrismaTransaction = prisma) {
+        return await tx.user.findMany({
             where: {
                 // userType: '正式员工',
                 employments: {
@@ -288,8 +288,8 @@ export const userRepository = {
             }
         })
     },
-    async getUsersByOrgPos(orgCode: string, posCode: string) {
-        return await prisma.user.findMany({
+    async getUsersByOrgPos(orgCode: string, posCode: string, tx: PrismaTransaction = prisma) {
+        return await tx.user.findMany({
             where: {
                 employments: {
                     some: {
@@ -304,8 +304,8 @@ export const userRepository = {
             }
         })
     },
-    async getUsersByOrgAndAllSubPos(orgCode: string, posCode: string) {
-        return await prisma.user.findMany({
+    async getUsersByOrgAndAllSubPos(orgCode: string, posCode: string, tx: PrismaTransaction = prisma) {
+        return await tx.user.findMany({
             where: {
                 employments: {
                     some: {

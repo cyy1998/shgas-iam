@@ -15,6 +15,7 @@ import { privilegeService } from './privilege.service'
 import { UserNotFoundError } from '../errors/UserNotFoundError'
 import { CustomError } from '../errors/CustomError'
 import { roleRepository } from '../repositories/role.repository'
+import { prisma } from '../libs/database/prisma'
 
 async function _getUserDetail(user: User | null) {
     if (user === null) {
@@ -54,19 +55,21 @@ function _validatePasswordStrength(password: string): boolean {
 export const userService = {
 
     async setPassword(userDTO: UserDto, oldPassword: string, newPassword: string) {
-        if (oldPassword === newPassword) {
-            throw new CustomError('旧密码与新密码相同')
-        }
-        const isMatch = await this.checkPassword(userDTO, oldPassword)
-        if (!isMatch) {
-            throw new CustomError('旧密码错误')
-        }
-        if (!_validatePasswordStrength(newPassword)) {
-            throw new CustomError('新密码强度过低')
-        }
-        const newPasswordHash = await hash(newPassword, env.PASSWORD_HASH_ROUNDS)
-        await userRepository.setPassword(userDTO.id, newPasswordHash)
-        return true
+        return await prisma.$transaction(async (tx) => {
+            if (oldPassword === newPassword) {
+                throw new CustomError('旧密码与新密码相同')
+            }
+            const isMatch = await this.checkPassword(userDTO, oldPassword)
+            if (!isMatch) {
+                throw new CustomError('旧密码错误')
+            }
+            if (!_validatePasswordStrength(newPassword)) {
+                throw new CustomError('新密码强度过低')
+            }
+            const newPasswordHash = await hash(newPassword, env.PASSWORD_HASH_ROUNDS)
+            await userRepository.setPassword(userDTO.id, newPasswordHash, tx)
+            return true
+        })
     },
 
     async checkPassword(userDto: UserDto, inputPassword: string) {
@@ -78,18 +81,20 @@ export const userService = {
     },
 
     async setMobile(userDto: UserDto, phoneNumber: string, code: string) {
-        if (!mobileService.checkValidPhoneNumber(phoneNumber)) {
-            throw new CustomError('无效手机号')
-        }
-        if (await mobileService.checkExistingPhoneNumber(phoneNumber)) {
-            throw new CustomError('手机号已存在')
-        }
-        if (!await mobileService.cehckVerificationCode(phoneNumber, code)) {
-            throw new CustomError('验证码错误')
-        }
-        await userRepository.setMobile(userDto.id, phoneNumber)
-        userDto.mobile = phoneNumber
-        return userDto
+        return await prisma.$transaction(async (tx) => {
+            if (!mobileService.checkValidPhoneNumber(phoneNumber)) {
+                throw new CustomError('无效手机号')
+            }
+            if (await mobileService.checkExistingPhoneNumber(phoneNumber)) {
+                throw new CustomError('手机号已存在')
+            }
+            if (!await mobileService.cehckVerificationCode(phoneNumber, code)) {
+                throw new CustomError('验证码错误')
+            }
+            await userRepository.setMobile(userDto.id, phoneNumber, tx)
+            userDto.mobile = phoneNumber
+            return userDto
+        })
     },
 
     async getUserDetailByUsername(username: string) {
@@ -138,28 +143,30 @@ export const userService = {
     },
 
     async registerPurveyorConcat(username: string, mobile: string, name: string, orgCode: string) {
-        const existingUser = await userRepository.getUserByMobile(mobile)
-        const [pos, comp, org] = await Promise.all([
-            positionRepository.getPositionByCode('P001'),
-            organizationRepository.getOrgByCode('GY'),
-            organizationRepository.getOrgByCode(orgCode)
-        ])
-        if (org === null) {
-            throw new CustomError('供应商尚未注册')
-        }
-        if (pos === null || comp === null) {
-            throw new CustomError('系统基本信息缺失')
-        }
-        if (existingUser !== null) {
-            const existingEmployment = await employmentRepository.getEmploymentByUserOrgPosId(existingUser.id, org.id, pos.id)
-            if (existingEmployment === null) {
-                const employment = await employmentRepository.setEmployment(existingUser.id, pos.id, org.id, comp.id)
+        await prisma.$transaction(async (tx) => {
+            const existingUser = await userRepository.getUserByMobile(mobile)
+            const [pos, comp, org] = await Promise.all([
+                positionRepository.getPositionByCode('P001'),
+                organizationRepository.getOrgByCode('GY'),
+                organizationRepository.getOrgByCode(orgCode)
+            ])
+            if (org === null) {
+                throw new CustomError('供应商尚未注册')
             }
-        }
-        else {
-            const user = await userRepository.setUser(username, name, mobile, '外部用户')
-            await employmentRepository.setEmployment(user.id, pos.id, org.id, comp.id)
-        }
+            if (pos === null || comp === null) {
+                throw new CustomError('系统基本信息缺失')
+            }
+            if (existingUser !== null) {
+                const existingEmployment = await employmentRepository.getEmploymentByUserOrgPosId(existingUser.id, org.id, pos.id)
+                if (existingEmployment === null) {
+                    await employmentRepository.setEmployment(existingUser.id, pos.id, org.id, comp.id, tx)
+                }
+            }
+            else {
+                const user = await userRepository.setUser(username, name, mobile, '外部用户', tx)
+                await employmentRepository.setEmployment(user.id, pos.id, org.id, comp.id, tx)
+            }
+        })
         if (env.NODE_ENV === 'production') {
             await mobileService.sendMessage(mobile, mobileService.getPurveyorWelcomeMessage(name))
         }

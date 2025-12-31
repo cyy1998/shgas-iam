@@ -1,8 +1,8 @@
-import { prisma } from '../libs/database/prisma'
+import { prisma, type PrismaTransaction } from '../libs/database/prisma'
 
 export const employmentRepository = {
-    async getEmploymentsByUserId(userId: number) {
-        return await prisma.employment.findMany({
+    async getEmploymentsByUserId(userId: number, tx: PrismaTransaction = prisma) {
+        return await tx.employment.findMany({
             where: {
                 userId: userId
             },
@@ -14,8 +14,8 @@ export const employmentRepository = {
             }
         })
     },
-    async getEmploymentsByUsername(username: string) {
-        return await prisma.employment.findMany({
+    async getEmploymentsByUsername(username: string, tx: PrismaTransaction = prisma) {
+        return await tx.employment.findMany({
             where: {
                 user: {
                     username: username
@@ -29,8 +29,8 @@ export const employmentRepository = {
             }
         })
     },
-    async getEmploymentByUserOrgPosId(userId: number, orgId: number, posId: number) {
-        return await prisma.employment.findFirst({
+    async getEmploymentByUserOrgPosId(userId: number, orgId: number, posId: number, tx: PrismaTransaction = prisma) {
+        return await tx.employment.findFirst({
             where: {
                 userId: userId,
                 deptId: orgId,
@@ -44,8 +44,8 @@ export const employmentRepository = {
             }
         })
     },
-    async getEmploymentByUserOrgPosCode(username: string, orgCode: string, posCode: string) {
-        return await prisma.employment.findFirst({
+    async getEmploymentByUserOrgPosCode(username: string, orgCode: string, posCode: string, tx: PrismaTransaction = prisma) {
+        return await tx.employment.findFirst({
             where: {
                 user: {
                     username: username,
@@ -59,8 +59,8 @@ export const employmentRepository = {
             }
         })
     },
-    async getEmploymentsByUserAndPrivilege(username: string, privCondition: any) {
-        return await prisma.employment.findMany({
+    async getEmploymentsByUserAndPrivilege(username: string, privCondition: any, tx: PrismaTransaction = prisma) {
+        return await tx.employment.findMany({
             where: {
                 user: {
                     username: username
@@ -159,8 +159,8 @@ export const employmentRepository = {
             }
         })
     },
-    async setEmployment(userId: number, posId: number, deptId: number, compId: number) {
-        return await prisma.employment.create({
+    async setEmployment(userId: number, posId: number, deptId: number, compId: number, tx: PrismaTransaction = prisma) {
+        return await tx.employment.create({
             data: {
                 userId: userId,
                 posId: posId,
