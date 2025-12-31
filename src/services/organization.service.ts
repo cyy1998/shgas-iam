@@ -37,8 +37,10 @@ export const organizationService = {
 
     async setOrganization(orgCode: string, orgName: string, parentCode: string) {
         return await prisma.$transaction(async (tx) => {
-            const [newOrg, parentOrg] = await Promise.all([organizationRepository.getOrgByCode(orgCode),
-            organizationRepository.getOrgByCode(parentCode)])
+            const [newOrg, parentOrg] = await Promise.all([
+                organizationRepository.getOrganizationByCode(orgCode, tx),
+                organizationRepository.getOrganizationByCode(parentCode, tx)
+            ])
             if (newOrg !== null) {
                 throw new CustomError('待创建组织已存在')
             }
@@ -54,7 +56,7 @@ export const organizationService = {
     },
 
     async purveyorRegister(orgCode: string, orgName: string, parentOrg: string) {
-        const exisitngOrg = await organizationRepository.getOrgByCode(orgCode)
+        const exisitngOrg = await organizationRepository.getOrganizationByCode(orgCode)
         if (exisitngOrg !== null) {
             return true
         }

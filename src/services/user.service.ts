@@ -56,7 +56,7 @@ export const userService = {
 
     async setPassword(username: string, oldPassword: string, newPassword: string) {
         return await prisma.$transaction(async (tx) => {
-            const user = await userRepository.getUserByUsername(username)
+            const user = await userRepository.getUserByUsername(username, tx)
             if (user === null) {
                 throw new UserNotFoundError('用户名不存在')
             }
@@ -145,11 +145,11 @@ export const userService = {
 
     async registerPurveyorConcat(username: string, mobile: string, name: string, orgCode: string) {
         await prisma.$transaction(async (tx) => {
-            const existingUser = await userRepository.getUserByMobile(mobile)
+            const existingUser = await userRepository.getUserByMobile(mobile, tx)
             const [pos, comp, org] = await Promise.all([
-                positionRepository.getPositionByCode('P001'),
-                organizationRepository.getOrgByCode('GY'),
-                organizationRepository.getOrgByCode(orgCode)
+                positionRepository.getPositionByCode('P001', tx),
+                organizationRepository.getOrganizationByCode(env.PURVEYOR_PARENT_ORG, tx),
+                organizationRepository.getOrganizationByCode(orgCode, tx)
             ])
             if (org === null) {
                 throw new CustomError('供应商尚未注册')
@@ -158,7 +158,7 @@ export const userService = {
                 throw new CustomError('系统基本信息缺失')
             }
             if (existingUser !== null) {
-                const existingEmployment = await employmentRepository.getEmploymentByUserOrgPosId(existingUser.id, org.id, pos.id)
+                const existingEmployment = await employmentRepository.getEmploymentByUserOrgPosId(existingUser.id, org.id, pos.id, tx)
                 if (existingEmployment === null) {
                     await employmentRepository.setEmployment(existingUser.id, pos.id, org.id, comp.id, tx)
                 }

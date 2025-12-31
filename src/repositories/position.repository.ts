@@ -1,14 +1,14 @@
-import { prisma } from '../libs/database/prisma'
+import { prisma, type PrismaTransaction } from '../libs/database/prisma'
 
 export const positionRepository = {
-    async getPositionByCode(posCode: string) {
+    async getPositionByCode(posCode: string, tx: PrismaTransaction = prisma) {
         return await prisma.position.findFirst({
             where: {
                 posCode: posCode,
             }
         })
     },
-    async getPositionById(posId: number) {
+    async getPositionById(posId: number, tx: PrismaTransaction = prisma) {
         return await prisma.position.findFirst({
             where: {
                 id: posId,

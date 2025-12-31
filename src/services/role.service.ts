@@ -11,7 +11,7 @@ import { mergeAndDedupe } from '../utils/common.utils'
 
 export const roleService = {
     async getRolesByOrganization(orgId: number) {
-        const org = await organizationRepository.getOrgById(orgId)
+        const org = await organizationRepository.getOrganizationById(orgId)
         if (org === null) {
             return []
         }
@@ -91,7 +91,7 @@ export const roleService = {
     },
     async setRoleForOrganization(orgCode: string, roleCode: string) {
         const [org, role] = await Promise.all([
-            organizationRepository.getOrgByCode(orgCode),
+            organizationRepository.getOrganizationByCode(orgCode),
             roleRepository.getRoleByCode(roleCode)
         ])
         if (org === null || role === null) {
@@ -112,7 +112,7 @@ export const roleService = {
     async setRoleForPosOrg(orgCode: string, posCode: string, roleCode: string) {
         const [role, org, pos] = await Promise.all([
             roleRepository.getRoleByCode(roleCode),
-            organizationRepository.getOrgByCode(orgCode),
+            organizationRepository.getOrganizationByCode(orgCode),
             positionRepository.getPositionByCode(posCode)
         ])
         if (org === null || role === null || pos === null) {
@@ -137,7 +137,7 @@ export const roleService = {
     async deleteRoleForPosOrg(orgCode: string, posCode: string, roleCode: string) {
         const [role, org, pos] = await Promise.all([
             roleRepository.getRoleByCode(roleCode),
-            organizationRepository.getOrgByCode(orgCode),
+            organizationRepository.getOrganizationByCode(orgCode),
             positionRepository.getPositionByCode(posCode)
         ])
         if (org === null || role === null || pos === null) {

@@ -3652,6 +3652,7 @@ export namespace Prisma {
     businessParentId: number | null
     level: number | null
     orderNum: number | null
+    status: number | null
   }
 
   export type OrganizationSumAggregateOutputType = {
@@ -3660,6 +3661,7 @@ export namespace Prisma {
     businessParentId: number | null
     level: number | null
     orderNum: number | null
+    status: number | null
   }
 
   export type OrganizationMinAggregateOutputType = {
@@ -3674,7 +3676,7 @@ export namespace Prisma {
     orderNum: number | null
     isVirtual: boolean | null
     isEntity: boolean | null
-    status: boolean | null
+    status: number | null
     isDelete: boolean | null
     createTime: Date | null
     updateTime: Date | null
@@ -3692,7 +3694,7 @@ export namespace Prisma {
     orderNum: number | null
     isVirtual: boolean | null
     isEntity: boolean | null
-    status: boolean | null
+    status: number | null
     isDelete: boolean | null
     createTime: Date | null
     updateTime: Date | null
@@ -3724,6 +3726,7 @@ export namespace Prisma {
     businessParentId?: true
     level?: true
     orderNum?: true
+    status?: true
   }
 
   export type OrganizationSumAggregateInputType = {
@@ -3732,6 +3735,7 @@ export namespace Prisma {
     businessParentId?: true
     level?: true
     orderNum?: true
+    status?: true
   }
 
   export type OrganizationMinAggregateInputType = {
@@ -3887,7 +3891,7 @@ export namespace Prisma {
     orderNum: number
     isVirtual: boolean
     isEntity: boolean
-    status: boolean
+    status: number
     isDelete: boolean
     createTime: Date
     updateTime: Date
@@ -3996,7 +4000,7 @@ export namespace Prisma {
       orderNum: number
       isVirtual: boolean
       isEntity: boolean
-      status: boolean
+      status: number
       isDelete: boolean
       createTime: Date
       updateTime: Date
@@ -4388,7 +4392,7 @@ export namespace Prisma {
     readonly orderNum: FieldRef<"Organization", 'Int'>
     readonly isVirtual: FieldRef<"Organization", 'Boolean'>
     readonly isEntity: FieldRef<"Organization", 'Boolean'>
-    readonly status: FieldRef<"Organization", 'Boolean'>
+    readonly status: FieldRef<"Organization", 'Int'>
     readonly isDelete: FieldRef<"Organization", 'Boolean'>
     readonly createTime: FieldRef<"Organization", 'DateTime'>
     readonly updateTime: FieldRef<"Organization", 'DateTime'>
@@ -19617,7 +19621,7 @@ export namespace Prisma {
     orderNum?: IntFilter<"Organization"> | number
     isVirtual?: BoolFilter<"Organization"> | boolean
     isEntity?: BoolFilter<"Organization"> | boolean
-    status?: BoolFilter<"Organization"> | boolean
+    status?: IntFilter<"Organization"> | number
     isDelete?: BoolFilter<"Organization"> | boolean
     createTime?: DateTimeFilter<"Organization"> | Date | string
     updateTime?: DateTimeFilter<"Organization"> | Date | string
@@ -19673,7 +19677,7 @@ export namespace Prisma {
     orderNum?: IntFilter<"Organization"> | number
     isVirtual?: BoolFilter<"Organization"> | boolean
     isEntity?: BoolFilter<"Organization"> | boolean
-    status?: BoolFilter<"Organization"> | boolean
+    status?: IntFilter<"Organization"> | number
     isDelete?: BoolFilter<"Organization"> | boolean
     createTime?: DateTimeFilter<"Organization"> | Date | string
     updateTime?: DateTimeFilter<"Organization"> | Date | string
@@ -19725,7 +19729,7 @@ export namespace Prisma {
     orderNum?: IntWithAggregatesFilter<"Organization"> | number
     isVirtual?: BoolWithAggregatesFilter<"Organization"> | boolean
     isEntity?: BoolWithAggregatesFilter<"Organization"> | boolean
-    status?: BoolWithAggregatesFilter<"Organization"> | boolean
+    status?: IntWithAggregatesFilter<"Organization"> | number
     isDelete?: BoolWithAggregatesFilter<"Organization"> | boolean
     createTime?: DateTimeWithAggregatesFilter<"Organization"> | Date | string
     updateTime?: DateTimeWithAggregatesFilter<"Organization"> | Date | string
@@ -20801,7 +20805,7 @@ export namespace Prisma {
     orderNum?: number
     isVirtual?: boolean
     isEntity?: boolean
-    status?: boolean
+    status?: number
     isDelete?: boolean
     createTime?: Date | string
     updateTime?: Date | string
@@ -20827,7 +20831,7 @@ export namespace Prisma {
     orderNum?: number
     isVirtual?: boolean
     isEntity?: boolean
-    status?: boolean
+    status?: number
     isDelete?: boolean
     createTime?: Date | string
     updateTime?: Date | string
@@ -20850,7 +20854,7 @@ export namespace Prisma {
     orderNum?: IntFieldUpdateOperationsInput | number
     isVirtual?: BoolFieldUpdateOperationsInput | boolean
     isEntity?: BoolFieldUpdateOperationsInput | boolean
-    status?: BoolFieldUpdateOperationsInput | boolean
+    status?: IntFieldUpdateOperationsInput | number
     isDelete?: BoolFieldUpdateOperationsInput | boolean
     createTime?: DateTimeFieldUpdateOperationsInput | Date | string
     updateTime?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -20876,7 +20880,7 @@ export namespace Prisma {
     orderNum?: IntFieldUpdateOperationsInput | number
     isVirtual?: BoolFieldUpdateOperationsInput | boolean
     isEntity?: BoolFieldUpdateOperationsInput | boolean
-    status?: BoolFieldUpdateOperationsInput | boolean
+    status?: IntFieldUpdateOperationsInput | number
     isDelete?: BoolFieldUpdateOperationsInput | boolean
     createTime?: DateTimeFieldUpdateOperationsInput | Date | string
     updateTime?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -20901,7 +20905,7 @@ export namespace Prisma {
     orderNum?: number
     isVirtual?: boolean
     isEntity?: boolean
-    status?: boolean
+    status?: number
     isDelete?: boolean
     createTime?: Date | string
     updateTime?: Date | string
@@ -20917,7 +20921,7 @@ export namespace Prisma {
     orderNum?: IntFieldUpdateOperationsInput | number
     isVirtual?: BoolFieldUpdateOperationsInput | boolean
     isEntity?: BoolFieldUpdateOperationsInput | boolean
-    status?: BoolFieldUpdateOperationsInput | boolean
+    status?: IntFieldUpdateOperationsInput | number
     isDelete?: BoolFieldUpdateOperationsInput | boolean
     createTime?: DateTimeFieldUpdateOperationsInput | Date | string
     updateTime?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -20935,7 +20939,7 @@ export namespace Prisma {
     orderNum?: IntFieldUpdateOperationsInput | number
     isVirtual?: BoolFieldUpdateOperationsInput | boolean
     isEntity?: BoolFieldUpdateOperationsInput | boolean
-    status?: BoolFieldUpdateOperationsInput | boolean
+    status?: IntFieldUpdateOperationsInput | number
     isDelete?: BoolFieldUpdateOperationsInput | boolean
     createTime?: DateTimeFieldUpdateOperationsInput | Date | string
     updateTime?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -22125,6 +22129,7 @@ export namespace Prisma {
     businessParentId?: SortOrder
     level?: SortOrder
     orderNum?: SortOrder
+    status?: SortOrder
   }
 
   export type OrganizationMaxOrderByAggregateInput = {
@@ -22169,6 +22174,7 @@ export namespace Prisma {
     businessParentId?: SortOrder
     level?: SortOrder
     orderNum?: SortOrder
+    status?: SortOrder
   }
 
   export type OrganizationClosureAncestorIdDescendantIdCompoundUniqueInput = {
@@ -24931,7 +24937,7 @@ export namespace Prisma {
     orderNum?: number
     isVirtual?: boolean
     isEntity?: boolean
-    status?: boolean
+    status?: number
     isDelete?: boolean
     createTime?: Date | string
     updateTime?: Date | string
@@ -24956,7 +24962,7 @@ export namespace Prisma {
     orderNum?: number
     isVirtual?: boolean
     isEntity?: boolean
-    status?: boolean
+    status?: number
     isDelete?: boolean
     createTime?: Date | string
     updateTime?: Date | string
@@ -24983,7 +24989,7 @@ export namespace Prisma {
     orderNum?: number
     isVirtual?: boolean
     isEntity?: boolean
-    status?: boolean
+    status?: number
     isDelete?: boolean
     createTime?: Date | string
     updateTime?: Date | string
@@ -25007,7 +25013,7 @@ export namespace Prisma {
     orderNum?: number
     isVirtual?: boolean
     isEntity?: boolean
-    status?: boolean
+    status?: number
     isDelete?: boolean
     createTime?: Date | string
     updateTime?: Date | string
@@ -25180,7 +25186,7 @@ export namespace Prisma {
     orderNum?: IntFieldUpdateOperationsInput | number
     isVirtual?: BoolFieldUpdateOperationsInput | boolean
     isEntity?: BoolFieldUpdateOperationsInput | boolean
-    status?: BoolFieldUpdateOperationsInput | boolean
+    status?: IntFieldUpdateOperationsInput | number
     isDelete?: BoolFieldUpdateOperationsInput | boolean
     createTime?: DateTimeFieldUpdateOperationsInput | Date | string
     updateTime?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -25205,7 +25211,7 @@ export namespace Prisma {
     orderNum?: IntFieldUpdateOperationsInput | number
     isVirtual?: BoolFieldUpdateOperationsInput | boolean
     isEntity?: BoolFieldUpdateOperationsInput | boolean
-    status?: BoolFieldUpdateOperationsInput | boolean
+    status?: IntFieldUpdateOperationsInput | number
     isDelete?: BoolFieldUpdateOperationsInput | boolean
     createTime?: DateTimeFieldUpdateOperationsInput | Date | string
     updateTime?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -25248,7 +25254,7 @@ export namespace Prisma {
     orderNum?: IntFilter<"Organization"> | number
     isVirtual?: BoolFilter<"Organization"> | boolean
     isEntity?: BoolFilter<"Organization"> | boolean
-    status?: BoolFilter<"Organization"> | boolean
+    status?: IntFilter<"Organization"> | number
     isDelete?: BoolFilter<"Organization"> | boolean
     createTime?: DateTimeFilter<"Organization"> | Date | string
     updateTime?: DateTimeFilter<"Organization"> | Date | string
@@ -25306,7 +25312,7 @@ export namespace Prisma {
     orderNum?: number
     isVirtual?: boolean
     isEntity?: boolean
-    status?: boolean
+    status?: number
     isDelete?: boolean
     createTime?: Date | string
     updateTime?: Date | string
@@ -25331,7 +25337,7 @@ export namespace Prisma {
     orderNum?: number
     isVirtual?: boolean
     isEntity?: boolean
-    status?: boolean
+    status?: number
     isDelete?: boolean
     createTime?: Date | string
     updateTime?: Date | string
@@ -25358,7 +25364,7 @@ export namespace Prisma {
     orderNum?: number
     isVirtual?: boolean
     isEntity?: boolean
-    status?: boolean
+    status?: number
     isDelete?: boolean
     createTime?: Date | string
     updateTime?: Date | string
@@ -25383,7 +25389,7 @@ export namespace Prisma {
     orderNum?: number
     isVirtual?: boolean
     isEntity?: boolean
-    status?: boolean
+    status?: number
     isDelete?: boolean
     createTime?: Date | string
     updateTime?: Date | string
@@ -25421,7 +25427,7 @@ export namespace Prisma {
     orderNum?: IntFieldUpdateOperationsInput | number
     isVirtual?: BoolFieldUpdateOperationsInput | boolean
     isEntity?: BoolFieldUpdateOperationsInput | boolean
-    status?: BoolFieldUpdateOperationsInput | boolean
+    status?: IntFieldUpdateOperationsInput | number
     isDelete?: BoolFieldUpdateOperationsInput | boolean
     createTime?: DateTimeFieldUpdateOperationsInput | Date | string
     updateTime?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -25446,7 +25452,7 @@ export namespace Prisma {
     orderNum?: IntFieldUpdateOperationsInput | number
     isVirtual?: BoolFieldUpdateOperationsInput | boolean
     isEntity?: BoolFieldUpdateOperationsInput | boolean
-    status?: BoolFieldUpdateOperationsInput | boolean
+    status?: IntFieldUpdateOperationsInput | number
     isDelete?: BoolFieldUpdateOperationsInput | boolean
     createTime?: DateTimeFieldUpdateOperationsInput | Date | string
     updateTime?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -25479,7 +25485,7 @@ export namespace Prisma {
     orderNum?: IntFieldUpdateOperationsInput | number
     isVirtual?: BoolFieldUpdateOperationsInput | boolean
     isEntity?: BoolFieldUpdateOperationsInput | boolean
-    status?: BoolFieldUpdateOperationsInput | boolean
+    status?: IntFieldUpdateOperationsInput | number
     isDelete?: BoolFieldUpdateOperationsInput | boolean
     createTime?: DateTimeFieldUpdateOperationsInput | Date | string
     updateTime?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -25504,7 +25510,7 @@ export namespace Prisma {
     orderNum?: IntFieldUpdateOperationsInput | number
     isVirtual?: BoolFieldUpdateOperationsInput | boolean
     isEntity?: BoolFieldUpdateOperationsInput | boolean
-    status?: BoolFieldUpdateOperationsInput | boolean
+    status?: IntFieldUpdateOperationsInput | number
     isDelete?: BoolFieldUpdateOperationsInput | boolean
     createTime?: DateTimeFieldUpdateOperationsInput | Date | string
     updateTime?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -25705,7 +25711,7 @@ export namespace Prisma {
     orderNum?: number
     isVirtual?: boolean
     isEntity?: boolean
-    status?: boolean
+    status?: number
     isDelete?: boolean
     createTime?: Date | string
     updateTime?: Date | string
@@ -25730,7 +25736,7 @@ export namespace Prisma {
     orderNum?: number
     isVirtual?: boolean
     isEntity?: boolean
-    status?: boolean
+    status?: number
     isDelete?: boolean
     createTime?: Date | string
     updateTime?: Date | string
@@ -25863,7 +25869,7 @@ export namespace Prisma {
     orderNum?: IntFieldUpdateOperationsInput | number
     isVirtual?: BoolFieldUpdateOperationsInput | boolean
     isEntity?: BoolFieldUpdateOperationsInput | boolean
-    status?: BoolFieldUpdateOperationsInput | boolean
+    status?: IntFieldUpdateOperationsInput | number
     isDelete?: BoolFieldUpdateOperationsInput | boolean
     createTime?: DateTimeFieldUpdateOperationsInput | Date | string
     updateTime?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -25888,7 +25894,7 @@ export namespace Prisma {
     orderNum?: IntFieldUpdateOperationsInput | number
     isVirtual?: BoolFieldUpdateOperationsInput | boolean
     isEntity?: BoolFieldUpdateOperationsInput | boolean
-    status?: BoolFieldUpdateOperationsInput | boolean
+    status?: IntFieldUpdateOperationsInput | number
     isDelete?: BoolFieldUpdateOperationsInput | boolean
     createTime?: DateTimeFieldUpdateOperationsInput | Date | string
     updateTime?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -25986,7 +25992,7 @@ export namespace Prisma {
     orderNum?: number
     isVirtual?: boolean
     isEntity?: boolean
-    status?: boolean
+    status?: number
     isDelete?: boolean
     createTime?: Date | string
     updateTime?: Date | string
@@ -26011,7 +26017,7 @@ export namespace Prisma {
     orderNum?: number
     isVirtual?: boolean
     isEntity?: boolean
-    status?: boolean
+    status?: number
     isDelete?: boolean
     createTime?: Date | string
     updateTime?: Date | string
@@ -26038,7 +26044,7 @@ export namespace Prisma {
     orderNum?: number
     isVirtual?: boolean
     isEntity?: boolean
-    status?: boolean
+    status?: number
     isDelete?: boolean
     createTime?: Date | string
     updateTime?: Date | string
@@ -26063,7 +26069,7 @@ export namespace Prisma {
     orderNum?: number
     isVirtual?: boolean
     isEntity?: boolean
-    status?: boolean
+    status?: number
     isDelete?: boolean
     createTime?: Date | string
     updateTime?: Date | string
@@ -26219,7 +26225,7 @@ export namespace Prisma {
     orderNum?: IntFieldUpdateOperationsInput | number
     isVirtual?: BoolFieldUpdateOperationsInput | boolean
     isEntity?: BoolFieldUpdateOperationsInput | boolean
-    status?: BoolFieldUpdateOperationsInput | boolean
+    status?: IntFieldUpdateOperationsInput | number
     isDelete?: BoolFieldUpdateOperationsInput | boolean
     createTime?: DateTimeFieldUpdateOperationsInput | Date | string
     updateTime?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -26244,7 +26250,7 @@ export namespace Prisma {
     orderNum?: IntFieldUpdateOperationsInput | number
     isVirtual?: BoolFieldUpdateOperationsInput | boolean
     isEntity?: BoolFieldUpdateOperationsInput | boolean
-    status?: BoolFieldUpdateOperationsInput | boolean
+    status?: IntFieldUpdateOperationsInput | number
     isDelete?: BoolFieldUpdateOperationsInput | boolean
     createTime?: DateTimeFieldUpdateOperationsInput | Date | string
     updateTime?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -26277,7 +26283,7 @@ export namespace Prisma {
     orderNum?: IntFieldUpdateOperationsInput | number
     isVirtual?: BoolFieldUpdateOperationsInput | boolean
     isEntity?: BoolFieldUpdateOperationsInput | boolean
-    status?: BoolFieldUpdateOperationsInput | boolean
+    status?: IntFieldUpdateOperationsInput | number
     isDelete?: BoolFieldUpdateOperationsInput | boolean
     createTime?: DateTimeFieldUpdateOperationsInput | Date | string
     updateTime?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -26302,7 +26308,7 @@ export namespace Prisma {
     orderNum?: IntFieldUpdateOperationsInput | number
     isVirtual?: BoolFieldUpdateOperationsInput | boolean
     isEntity?: BoolFieldUpdateOperationsInput | boolean
-    status?: BoolFieldUpdateOperationsInput | boolean
+    status?: IntFieldUpdateOperationsInput | number
     isDelete?: BoolFieldUpdateOperationsInput | boolean
     createTime?: DateTimeFieldUpdateOperationsInput | Date | string
     updateTime?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -27034,7 +27040,7 @@ export namespace Prisma {
     orderNum?: number
     isVirtual?: boolean
     isEntity?: boolean
-    status?: boolean
+    status?: number
     isDelete?: boolean
     createTime?: Date | string
     updateTime?: Date | string
@@ -27059,7 +27065,7 @@ export namespace Prisma {
     orderNum?: number
     isVirtual?: boolean
     isEntity?: boolean
-    status?: boolean
+    status?: number
     isDelete?: boolean
     createTime?: Date | string
     updateTime?: Date | string
@@ -27133,7 +27139,7 @@ export namespace Prisma {
     orderNum?: IntFieldUpdateOperationsInput | number
     isVirtual?: BoolFieldUpdateOperationsInput | boolean
     isEntity?: BoolFieldUpdateOperationsInput | boolean
-    status?: BoolFieldUpdateOperationsInput | boolean
+    status?: IntFieldUpdateOperationsInput | number
     isDelete?: BoolFieldUpdateOperationsInput | boolean
     createTime?: DateTimeFieldUpdateOperationsInput | Date | string
     updateTime?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -27158,7 +27164,7 @@ export namespace Prisma {
     orderNum?: IntFieldUpdateOperationsInput | number
     isVirtual?: BoolFieldUpdateOperationsInput | boolean
     isEntity?: BoolFieldUpdateOperationsInput | boolean
-    status?: BoolFieldUpdateOperationsInput | boolean
+    status?: IntFieldUpdateOperationsInput | number
     isDelete?: BoolFieldUpdateOperationsInput | boolean
     createTime?: DateTimeFieldUpdateOperationsInput | Date | string
     updateTime?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -28110,7 +28116,7 @@ export namespace Prisma {
     orderNum?: number
     isVirtual?: boolean
     isEntity?: boolean
-    status?: boolean
+    status?: number
     isDelete?: boolean
     createTime?: Date | string
     updateTime?: Date | string
@@ -28280,7 +28286,7 @@ export namespace Prisma {
     orderNum?: IntFieldUpdateOperationsInput | number
     isVirtual?: BoolFieldUpdateOperationsInput | boolean
     isEntity?: BoolFieldUpdateOperationsInput | boolean
-    status?: BoolFieldUpdateOperationsInput | boolean
+    status?: IntFieldUpdateOperationsInput | number
     isDelete?: BoolFieldUpdateOperationsInput | boolean
     createTime?: DateTimeFieldUpdateOperationsInput | Date | string
     updateTime?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -28304,7 +28310,7 @@ export namespace Prisma {
     orderNum?: IntFieldUpdateOperationsInput | number
     isVirtual?: BoolFieldUpdateOperationsInput | boolean
     isEntity?: BoolFieldUpdateOperationsInput | boolean
-    status?: BoolFieldUpdateOperationsInput | boolean
+    status?: IntFieldUpdateOperationsInput | number
     isDelete?: BoolFieldUpdateOperationsInput | boolean
     createTime?: DateTimeFieldUpdateOperationsInput | Date | string
     updateTime?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -28328,7 +28334,7 @@ export namespace Prisma {
     orderNum?: IntFieldUpdateOperationsInput | number
     isVirtual?: BoolFieldUpdateOperationsInput | boolean
     isEntity?: BoolFieldUpdateOperationsInput | boolean
-    status?: BoolFieldUpdateOperationsInput | boolean
+    status?: IntFieldUpdateOperationsInput | number
     isDelete?: BoolFieldUpdateOperationsInput | boolean
     createTime?: DateTimeFieldUpdateOperationsInput | Date | string
     updateTime?: DateTimeFieldUpdateOperationsInput | Date | string

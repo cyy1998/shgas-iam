@@ -1,3 +1,4 @@
+import { OrganizationStatus } from '../constants/organization.status'
 import { prisma, type PrismaTransaction } from '../libs/database/prisma'
 
 export const organizationRepository = {
@@ -14,7 +15,9 @@ export const organizationRepository = {
                 orgType: {
                     notIn: ['虚拟组织', '外部组织']
                 },
-                level: orgLevel
+                level: orgLevel,
+                status: OrganizationStatus.Enable,
+                isDelete: false
             }
         })
     },
@@ -28,7 +31,9 @@ export const organizationRepository = {
                         }
                     }
                 },
-                level: orgLevel
+                level: orgLevel,
+                status: OrganizationStatus.Enable,
+                isDelete: false
             }
         })
     },
@@ -38,53 +43,61 @@ export const organizationRepository = {
                 orgType: {
                     notIn: ['虚拟组织', '外部组织']
                 },
-                level: 1
+                level: 1,
+                status: OrganizationStatus.Enable,
+                isDelete: false
             }
         })
     },
-    async getOrgByCode(orgCode: string, tx: PrismaTransaction = prisma) {
+    async getOrganizationByCode(orgCode: string, tx: PrismaTransaction = prisma) {
         return await tx.organization.findFirst({
             where: {
                 orgCode: orgCode,
+                status: OrganizationStatus.Enable,
+                isDelete: false
             }
         })
     },
-    async getOrgById(id: number, tx: PrismaTransaction = prisma) {
+    async getOrganizationById(id: number, tx: PrismaTransaction = prisma) {
         return await tx.organization.findFirst({
             where: {
                 id: id,
+                status: OrganizationStatus.Enable,
+                isDelete: false
             }
         })
     },
-    async getOrgByRoleId(roleId: number, tx: PrismaTransaction = prisma) {
-        return await tx.organization.findMany({
-            include: {
-                roles: {
-                    where: {
-                        roleId: roleId
-                    }
-                }
-            },
-            where: {
-                roles: {
-                    some: {
-                        roleId: roleId
-                    }
-                }
-            }
-        })
-    },
-    async getOrgIdsByIds(ids: number[], tx: PrismaTransaction = prisma) {
-        return await tx.organization.findMany({
-            select: {
-                id: true
-            }
-        })
-    },
+    // async getOrgByRoleId(roleId: number, tx: PrismaTransaction = prisma) {
+    //     return await tx.organization.findMany({
+    //         include: {
+    //             roles: {
+    //                 where: {
+    //                     roleId: roleId
+    //                 }
+    //             }
+    //         },
+    //         where: {
+    //             roles: {
+    //                 some: {
+    //                     roleId: roleId
+    //                 }
+    //             }
+    //         }
+    //     })
+    // },
+    // async getOrgIdsByIds(ids: number[], tx: PrismaTransaction = prisma) {
+    //     return await tx.organization.findMany({
+    //         select: {
+    //             id: true
+    //         }
+    //     })
+    // },
     async getOrganizationsByParentId(parentId: number, tx: PrismaTransaction = prisma) {
         return await tx.organization.findMany({
             where: {
                 parentId: parentId,
+                status: OrganizationStatus.Enable,
+                isDelete: false
             }
         })
     },
@@ -95,7 +108,9 @@ export const organizationRepository = {
                     orgCode: {
                         in: parentCodes
                     }
-                }
+                },
+                status: OrganizationStatus.Enable,
+                isDelete: false
             }
         })
     },
@@ -115,7 +130,9 @@ export const organizationRepository = {
     async updateOrganizationPath(orgId: number, path: string, tx: PrismaTransaction = prisma) {
         return await tx.organization.update({
             where: {
-                id: orgId
+                id: orgId,
+                status: OrganizationStatus.Enable,
+                isDelete: false
             },
             data: {
                 path: path
@@ -125,7 +142,9 @@ export const organizationRepository = {
     async updateOrganizationClosure(orgId: number, parentId: number, tx: PrismaTransaction = prisma) {
         const closureRelations = [];
         const parentAncestors = await tx.organizationClosure.findMany({
-            where: { descendantId: parentId },
+            where: {
+                descendantId: parentId
+            },
             select: { ancestorId: true, depth: true },
         })
         parentAncestors.forEach((rel) => {

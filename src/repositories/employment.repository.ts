@@ -1,10 +1,13 @@
+import { EmploymentStatus } from '../constants/employment.status'
 import { prisma, type PrismaTransaction } from '../libs/database/prisma'
 
 export const employmentRepository = {
     async getEmploymentsByUserId(userId: number, tx: PrismaTransaction = prisma) {
         return await tx.employment.findMany({
             where: {
-                userId: userId
+                userId: userId,
+                status: EmploymentStatus.Enable,
+                isDelete: false
             },
             include: {
                 user: true,
@@ -19,7 +22,9 @@ export const employmentRepository = {
             where: {
                 user: {
                     username: username
-                }
+                },
+                status: EmploymentStatus.Enable,
+                isDelete: false
             },
             include: {
                 user: true,
@@ -34,7 +39,9 @@ export const employmentRepository = {
             where: {
                 userId: userId,
                 deptId: orgId,
-                posId: posId
+                posId: posId,
+                status: EmploymentStatus.Enable,
+                isDelete: false
             },
             include: {
                 user: true,
@@ -55,13 +62,17 @@ export const employmentRepository = {
                 },
                 position: {
                     posCode: posCode
-                }
+                },
+                status: EmploymentStatus.Enable,
+                isDelete: false
             }
         })
     },
     async getEmploymentsByUserAndPrivilege(username: string, privCondition: any, tx: PrismaTransaction = prisma) {
         return await tx.employment.findMany({
             where: {
+                status: EmploymentStatus.Enable,
+                isDelete: false,
                 user: {
                     username: username
                 },

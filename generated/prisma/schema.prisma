@@ -44,7 +44,7 @@ model Organization {
   orderNum         Int      @default(0) @map("order_num")
   isVirtual        Boolean  @default(false) @map("is_virtual")
   isEntity         Boolean  @default(false) @map("is_entity")
-  status           Boolean  @default(true) @map("status")
+  status           Int      @default(1) @map("status")
   isDelete         Boolean  @default(false) @map("is_delete")
   createTime       DateTime @default(now()) @map("create_time")
   updateTime       DateTime @default(now()) @updatedAt @map("update_time")

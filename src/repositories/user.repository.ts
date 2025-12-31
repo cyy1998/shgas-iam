@@ -1,32 +1,41 @@
 import { EmploymentStatus } from "../constants/employment.status"
+import { UserStatus } from "../constants/user.status"
 import { prisma, type PrismaTransaction } from '../libs/database/prisma'
 
 export const userRepository = {
     async getUserByUsername(username: string, tx: PrismaTransaction = prisma) {
         return await tx.user.findFirst({
             where: {
-                username: username
+                username: username,
+                status: UserStatus.Enable,
+                isDelete: false
             }
         })
     },
     async getUserByWxId(wxId: string, tx: PrismaTransaction = prisma) {
         return await tx.user.findFirst({
             where: {
-                wxId: wxId
+                wxId: wxId,
+                status: UserStatus.Enable,
+                isDelete: false
             }
         })
     },
     async getUserByMobile(mobile: string, tx: PrismaTransaction = prisma) {
         return await tx.user.findFirst({
             where: {
-                mobilePhone: mobile
+                mobilePhone: mobile,
+                status: UserStatus.Enable,
+                isDelete: false
             }
         })
     },
     async setPassword(userId: number, password: string, tx: PrismaTransaction = prisma) {
         return await tx.user.update({
             where: {
-                id: userId
+                id: userId,
+                status: UserStatus.Enable,
+                isDelete: false
             },
             data: {
                 password: password
@@ -36,7 +45,9 @@ export const userRepository = {
     async setMobile(userId: number, phoneNumber: string, tx: PrismaTransaction = prisma) {
         return await tx.user.update({
             where: {
-                id: userId
+                id: userId,
+                status: UserStatus.Enable,
+                isDelete: false
             },
             data: {
                 mobilePhone: phoneNumber
@@ -63,7 +74,9 @@ export const userRepository = {
                             orgCode: orgCode
                         }
                     }
-                }
+                },
+                status: UserStatus.Enable,
+                isDelete: false
             }
         })
     },
@@ -82,7 +95,9 @@ export const userRepository = {
                             }
                         }
                     }
-                }
+                },
+                status: UserStatus.Enable,
+                isDelete: false
             }
         })
     },
@@ -104,11 +119,12 @@ export const userRepository = {
                 },
                 NOT: {
                     id: userId
-                }
+                },
+                status: UserStatus.Enable,
+                isDelete: false
             }
         })
     },
-
     async getUsersByOrgRole(orgCode: string, roleCode: string, tx: PrismaTransaction = prisma) {
         return await tx.user.findMany({
             where: {
@@ -180,7 +196,9 @@ export const userRepository = {
                             }
                         ]
                     }
-                }
+                },
+                status: UserStatus.Enable,
+                isDelete: false
             }
         })
     },
@@ -284,7 +302,9 @@ export const userRepository = {
                             }
                         ]
                     }
-                }
+                },
+                status: UserStatus.Enable,
+                isDelete: false
             }
         })
     },
@@ -300,7 +320,9 @@ export const userRepository = {
                             posCode: posCode
                         }
                     }
-                }
+                },
+                status: UserStatus.Enable,
+                isDelete: false
             }
         })
     },
@@ -322,7 +344,9 @@ export const userRepository = {
                             posCode: posCode
                         }
                     }
-                }
+                },
+                status: UserStatus.Enable,
+                isDelete: false
             }
         })
     },

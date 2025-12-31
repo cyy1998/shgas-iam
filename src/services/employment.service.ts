@@ -50,8 +50,8 @@ export const employmentService = {
         const [employment, user, department, company, position] = await Promise.all([
             employmentRepository.getEmploymentByUserOrgPosCode(username, orgCode, posCode),
             userRepository.getUserByUsername(username),
-            organizationRepository.getOrgByCode(orgCode),
-            organizationRepository.getOrgByCode(orgCode.slice(0, 2)),
+            organizationRepository.getOrganizationByCode(orgCode),
+            organizationRepository.getOrganizationByCode(orgCode.slice(0, 2)),
             positionRepository.getPositionByCode(posCode)
         ])
         if (!user || !department || !company || !position) {
