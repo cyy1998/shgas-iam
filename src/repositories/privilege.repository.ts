@@ -81,7 +81,7 @@ export const privilegeRepository = {
             }
         })
     },
-    async getPrivilegesByRoles(roleIds: number[], tx: PrismaTransaction = prisma) {
+    async getPrivilegesByRoleIds(roleIds: number[], tx: PrismaTransaction = prisma) {
         return await tx.privilege.findMany({
             where: {
                 roles: {

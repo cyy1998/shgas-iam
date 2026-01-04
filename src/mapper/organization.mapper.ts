@@ -3,7 +3,7 @@ import type { OrganizationDto, OrganizationVo } from "../types/organization.type
 
 export const organizationMapper = {
 
-    toOrganizationDTO(org: Organization): OrganizationDto {
+    entityToDto(org: Organization): OrganizationDto {
         return {
             id: org.id,
             orgCode: org.orgCode,
@@ -13,13 +13,13 @@ export const organizationMapper = {
         }
     },
 
-    toOrganizationVO(orgDTO: OrganizationDto, comapny: Organization): OrganizationVo {
+    dtoToVo(orgDto: OrganizationDto, comapny: Organization): OrganizationVo {
         return {
-            id: orgDTO.id,
-            orgCode: orgDTO.orgCode,
-            orgName: orgDTO.orgName,
-            orgType: orgDTO.orgType,
-            level: orgDTO.level,
+            id: orgDto.id,
+            orgCode: orgDto.orgCode,
+            orgName: orgDto.orgName,
+            orgType: orgDto.orgType,
+            level: orgDto.level,
             compCode: comapny.orgCode,
             compName: comapny.orgName
         }

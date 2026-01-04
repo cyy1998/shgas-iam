@@ -18,12 +18,12 @@ export const roleService = {
         }
         const ancestorIds = org.path.split('/').filter(Boolean).map(Number)
         ancestorIds.pop()
-        const rolesAncestor = (await roleRepository.getRolesByAncestorOrgs(ancestorIds)).map(r => roleMapper.toRoleDTO(r))
-        const rolesDirect = (await roleRepository.getRolesByDirectOrg(org.id)).map(r => roleMapper.toRoleDTO(r))
-        return mergeAndDedupe(rolesAncestor, rolesDirect, 'roleId')
+        const rolesAncestor = (await roleRepository.getRolesByAncestorOrgs(ancestorIds)).map(r => roleMapper.entityToDto(r))
+        const rolesDirect = (await roleRepository.getRolesByDirectOrg(org.id)).map(r => roleMapper.entityToDto(r))
+        return mergeAndDedupe(rolesAncestor, rolesDirect, 'id')
     },
     async getRolesByPosition(posId: number) {
-        const roles = (await roleRepository.getRolesByPosition(posId)).map(r => roleMapper.toRoleDTO(r))
+        const roles = (await roleRepository.getRolesByPosition(posId)).map(r => roleMapper.entityToDto(r))
         return roles
     },
     async getRolesByOrgPosition(posId: number, orgId: number) {
@@ -31,15 +31,15 @@ export const roleService = {
         if (posOrg === null) {
             return []
         }
-        const roles = (await roleRepository.getRolesByPosOrg(posOrg.id)).map(r => roleMapper.toRoleDTO(r))
+        const roles = (await roleRepository.getRolesByPosOrg(posOrg.id)).map(r => roleMapper.entityToDto(r))
         return roles
     },
     async getRolesByEmployment(employmentId: number) {
-        const roles = (await roleRepository.getRolesByEmployment(employmentId)).map(r => roleMapper.toRoleDTO(r))
+        const roles = (await roleRepository.getRolesByEmployment(employmentId)).map(r => roleMapper.entityToDto(r))
         return roles
     },
     async getRolesByUserId(userId: number) {
-        const roles = (await roleRepository.getRolesByUserId(userId)).map(r => roleMapper.toRoleDTO(r))
+        const roles = (await roleRepository.getRolesByUserId(userId)).map(r => roleMapper.entityToDto(r))
         return roles
     },
     async setRole(roleCode: string, roleName: string) {
@@ -59,7 +59,7 @@ export const roleService = {
                 roleRepository.getRoleByCode(roleCode, tx),
                 privilegeRepository.getPrivilegeByCode(privCode, tx)])
             if (role === null || priv === null) {
-                throw new CustomError(`对应实体不存在: ${roleCode}, ${privCode}`)
+                throw new CustomError(`对应实体不存在`)
             }
             try {
                 await roleRepository.setRolePrivilege(role.id, priv.id, tx)
@@ -104,7 +104,7 @@ export const roleService = {
                 roleRepository.getRoleByCode(roleCode, tx)
             ])
             if (org === null || role === null) {
-                throw new CustomError(`对应实体不存在: ${orgCode},${roleCode}`)
+                throw new CustomError(`对应实体不存在`)
             }
             try {
                 await roleRepository.setRoleForOrganization(role.id, org.id, tx)

@@ -1,12 +1,11 @@
 import { z, createRoute, OpenAPIHono } from '@hono/zod-openapi'
-import { makeResponse, success } from '../utils/response.utils'
-import { UserOutSchema } from '../schemas/schema'
+import { success } from '../utils/response.utils'
 import { createResponseSchema } from '../utils/response.utils'
 import { userService } from '../services/user.service'
 import { organizationService } from '../services/organization.service'
 import { employmentService } from '../services/employment.service'
 import { EmploymentDtoSchema } from '../types/employment.type'
-import { ResponseSchema } from '../types/response.type'
+import { UserDetailDtoSchema, UserDtoSchema } from '../types/user.type'
 
 const app = new OpenAPIHono()
 
@@ -29,7 +28,7 @@ app.openapi(
             200: {
                 content: {
                     'application/json': {
-                        schema: createResponseSchema(UserOutSchema),
+                        schema: createResponseSchema(UserDetailDtoSchema),
                     },
                 },
                 description: '指定用户信息',
@@ -65,7 +64,7 @@ app.openapi(
             200: {
                 content: {
                     'application/json': {
-                        schema: createResponseSchema(UserOutSchema),
+                        schema: createResponseSchema(z.array(UserDtoSchema)),
                     },
                 },
                 description: '符合条件用户列表',
@@ -101,7 +100,7 @@ app.openapi(
             200: {
                 content: {
                     'application/json': {
-                        schema: createResponseSchema(UserOutSchema),
+                        schema: createResponseSchema(z.array(UserDtoSchema)),
                     },
                 },
                 description: '符合条件用户列表',
@@ -135,7 +134,7 @@ app.openapi(
             200: {
                 content: {
                     'application/json': {
-                        schema: createResponseSchema(z.array(UserOutSchema)),
+                        schema: createResponseSchema(z.array(UserDtoSchema)),
                     },
                 },
                 description: '符合条件用户列表',
@@ -210,7 +209,7 @@ app.openapi(
             200: {
                 content: {
                     'application/json': {
-                        schema: ResponseSchema,
+                        schema: createResponseSchema(z.boolean()),
                     },
                 },
                 description: '供应商注册成功',
@@ -252,7 +251,7 @@ app.openapi(
             200: {
                 content: {
                     'application/json': {
-                        schema: ResponseSchema,
+                        schema: createResponseSchema(z.boolean()),
                     },
                 },
                 description: '供应商注册成功',

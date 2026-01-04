@@ -1,10 +1,10 @@
 import { z } from "@hono/zod-openapi"
-import type { EmploymentDto } from "./employment.type"
-import type { PrivilegeDto } from "./privilege.type"
+import { EmploymentDtoSchema, type EmploymentDto } from "./employment.type"
+import { PrivilegeDtoSchema, type PrivilegeDto } from "./privilege.type"
 import type { RoleDto } from "./role.type"
 import { UserStatus } from "../constants/user.status"
 
-export const ClientDtoSchema = z.object({
+export const UserDtoSchema = z.object({
     id: z.number().openapi({ example: 1 }),
     username: z.string().openapi({ example: '138550' }),
     name: z.string().openapi({ example: '蔡奕阳' }),
@@ -12,17 +12,17 @@ export const ClientDtoSchema = z.object({
     userType: z.string().nullable().openapi({ example: '正式员工' }),
     orcasId: z.string().nullable().openapi({ example: 'ada8wf89w83b2' }),
     status: z.enum(UserStatus).openapi({ example: 1 }),
-    extAttributes: z.record(z.string(), z.unknown()).nullable()
-}).openapi('ClientDto')
+    // positions: z.array(EmploymentDtoSchema).optional(),
+    // privileges: z.array(PrivilegeDtoSchema).optional(),
+    // roles: z.array(z.string()).optional().openapi({ example: ['tender:default-user'] })
+}).openapi('UserDto')
 
-export type UserDto = {
-    id: number
-    username: string
-    name: string
-    mobile: string | null
-    orcasId: string | null
-    userType: string | null
-    positions?: EmploymentDto[]
-    privileges?: PrivilegeDto[]
-    roles?: string[]
-}
+export type UserDto = z.infer<typeof UserDtoSchema>
+
+export const UserDetailDtoSchema = UserDtoSchema.extend({
+    employments: z.array(EmploymentDtoSchema).optional(),
+    privileges: z.array(z.string()).default([]).openapi({ example: ['ui:button:tender:create-GYBG'] }),
+    roles: z.array(z.string()).default([]).openapi({ example: ['tender:default-user'] })
+})
+
+export type UserDetailDto = z.infer<typeof UserDetailDtoSchema>

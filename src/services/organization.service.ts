@@ -8,25 +8,25 @@ import { organizationRepository } from "../repositories/organization.repository"
 export const organizationService = {
     async getFormalOrganizationsByCode(orgCode: string, orgLevel: number) {
         const organizations = await organizationRepository.searchFormalOrganizations(orgCode, orgLevel)
-        const orgDTOs = organizations.map(o => organizationMapper.toOrganizationDTO(o))
-        return orgDTOs
+        const orgDtos = organizations.map(o => organizationMapper.entityToDto(o))
+        return orgDtos
     },
     async getTopFormalOrganizations() {
         const organizations = await organizationRepository.getTopFormalOrganizations()
-        const orgDTOs = organizations.map(o => organizationMapper.toOrganizationDTO(o))
-        return orgDTOs
+        const orgDtos = organizations.map(o => organizationMapper.entityToDto(o))
+        return orgDtos
     },
 
     async getOrganizationsByCode(orgCode: string, orgLevel: number) {
         const organizations = await organizationRepository.searchOrganizations(orgCode, orgLevel)
-        const orgDTOs = organizations.map(o => organizationMapper.toOrganizationDTO(o))
-        return orgDTOs
+        const orgDtos = organizations.map(o => organizationMapper.entityToDto(o))
+        return orgDtos
     },
     async getSubOrganizationsByParent(parentCodes: string[]) {
         const organizations = await organizationRepository.getOrganizationsByParentsCode(parentCodes)
-        const orgDTOs = organizations.map(o => organizationMapper.toOrganizationDTO(o))
+        const orgDTOs = organizations.map(o => organizationMapper.entityToDto(o))
         const compDict = await this.getCompDict()
-        const orgVOs = orgDTOs.map(o => organizationMapper.toOrganizationVO(o, compDict[o.orgCode.slice(0, 2)] as Organization))
+        const orgVOs = orgDTOs.map(o => organizationMapper.dtoToVo(o, compDict[o.orgCode.slice(0, 2)] as Organization))
         return orgVOs
     },
     async getCompDict() {

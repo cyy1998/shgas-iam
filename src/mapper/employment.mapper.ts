@@ -4,6 +4,9 @@ export const employmentMapper = {
     entityToDto(employment: EmploymentEntity): EmploymentDto {
         return {
             id: employment.id,
+            userId: employment.user.id,
+            username: employment.user.username,
+            name: employment.user.name,
             posId: employment.position.id,
             posCode: employment.position.posCode,
             posName: employment.position.posName,

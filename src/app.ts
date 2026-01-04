@@ -2,6 +2,7 @@ import auth from './routes/auth.route'
 import self from './routes/self.route'
 import internal from './routes/internal.route'
 import admin from './routes/admin.route'
+import open from './routes/open.route'
 import { serveStatic } from 'hono/bun'
 import { OpenAPIHono } from '@hono/zod-openapi'
 import { logger } from 'hono/logger'
@@ -26,6 +27,7 @@ app.use(logger(
 app.route('/auth', auth)
 app.route('/self', self)
 app.route('/public', self)
+app.route('/open', open)
 app.route('/internal/iam', internal)
 app.route('/admin', admin)
 

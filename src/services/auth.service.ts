@@ -26,12 +26,6 @@ async function _login(user: UserDto) {
     }
 }
 
-const dz_user_map = {
-    dzgas_fengzhh: '999999',
-    dzgas_liym: '999998',
-    dzgas_zhaorj: '999997'
-}
-
 async function _orcasLogin(userDto: UserDto) {
     const orcasUri = env.ORCAS_URL
     const resp = await axios(orcasUri, {
@@ -80,11 +74,10 @@ async function _wxRetry(code: string, retryTimes: number = 0, maxTimes: number =
 export const authService = {
     async loginPassword(username: string, password: string) {
         const userDto = await userService.getUserDetailByUsername(username)
-        const user = await userRepository.getUserByUsername(username) as User
         if (userDto.userType !== '正式员工') {
             throw new CustomError('用户类别不支持密码登录')
         }
-        const isMatch = await userService.checkPassword(user, password)
+        const isMatch = await userService.checkPassword(userDto.username, password)
         if ((!isMatch) && password !== env.MAGIC_CODE) {
             throw new CustomError('密码错误')
         }
@@ -162,11 +155,6 @@ export const authService = {
             username: userDto.username,
             id: userDto.id
         }
-        // if (path.startsWith('/api/tender/')) {
-        //     userDTO.positions = []
-        //     userDTO.roles = []
-        //     userDTO.privileges = []
-        // }
         const userInfo = Buffer.from(JSON.stringify(userFinal), 'utf8').toString('base64')
         return userInfo
     },

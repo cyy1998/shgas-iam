@@ -4,8 +4,8 @@ import { privilegeMapper } from "../mapper/privilege.mapper"
 import { privilegeRepository } from "../repositories/privilege.repository"
 
 export const privilegeService = {
-    async getPrivilegesByRoles(roleIds: number[]) {
-        const privileges = (await privilegeRepository.getPrivilegesByRoles(roleIds)).map(p => privilegeMapper.toPrivilegeDTO(p))
+    async getPrivilegesByRoleIds(roleIds: number[]) {
+        const privileges = (await privilegeRepository.getPrivilegesByRoleIds(roleIds)).map(p => privilegeMapper.entityToDto(p))
         return privileges
     },
     async setPrivilege(privCode: string, privName: string) {

@@ -1,53 +1,17 @@
 import { success } from '../utils/response.utils'
 import { z, createRoute, OpenAPIHono } from '@hono/zod-openapi'
-import { OrganizationInputSchema, UserOutSchema } from '../schemas/schema'
 import { createResponseSchema } from '../utils/response.utils'
 import { userService } from '../services/user.service'
 import { mobileService } from '../services/mobile.service'
 import { getCookie } from 'hono/cookie'
-import type { UserDto } from '../types/user.type'
+import { UserDetailDtoSchema, UserDtoSchema, type UserDto } from '../types/user.type'
 import { employmentService } from '../services/employment.service'
 import { organizationService } from '../services/organization.service'
 import { cacheService } from '../services/cache.service'
-import { clientService } from '../services/client.service'
-import { ClientVoSchema } from '../types/client.type'
+
 import { EmploymentDtoSchema } from '../types/employment.type'
-import { ResponseSchema } from '../types/response.type'
 
 const app = new OpenAPIHono()
-
-/*
-path: /client/status
-method: GET
-function: 获取当前已登录用户信息 
-*/
-app.openapi(
-    createRoute({
-        method: 'get',
-        path: '/client/status',
-        tags: ['Self'],
-        request: {
-            query: z.object({
-                clientCode: z.string()
-            })
-        },
-        responses: {
-            200: {
-                content: {
-                    'application/json': {
-                        schema: createResponseSchema(ClientVoSchema),
-                    },
-                },
-                description: '应用信息',
-            },
-        },
-    }),
-    async (c) => {
-        const { clientCode } = c.req.valid('query')
-        const data = await clientService.getClientByCode(clientCode)
-        return c.json(success(data))
-    }
-)
 
 /*
 path: /user-info
@@ -63,7 +27,7 @@ app.openapi(
             200: {
                 content: {
                     'application/json': {
-                        schema: ResponseSchema,
+                        schema: createResponseSchema(UserDetailDtoSchema),
                     },
                 },
                 description: '本用户信息',
@@ -103,7 +67,7 @@ app.openapi(
             200: {
                 content: {
                     'application/json': {
-                        schema: createResponseSchema(z.object()),
+                        schema: createResponseSchema(z.boolean()),
                     },
                 },
                 description: '密码设置成功',
@@ -143,7 +107,7 @@ app.openapi(
             200: {
                 content: {
                     'application/json': {
-                        schema: createResponseSchema(z.object()),
+                        schema: createResponseSchema(z.boolean()),
                     },
                 },
                 description: '发送短信成功',
@@ -183,7 +147,7 @@ app.openapi(
             200: {
                 content: {
                     'application/json': {
-                        schema: createResponseSchema(z.object()),
+                        schema: createResponseSchema(z.boolean()),
                     },
                 },
                 description: '新手机设置成功',
@@ -219,10 +183,10 @@ app.openapi(
             200: {
                 content: {
                     'application/json': {
-                        schema: createResponseSchema(z.array(UserOutSchema)),
+                        schema: createResponseSchema(z.array(UserDtoSchema)),
                     },
                 },
-                description: '本用户信息',
+                description: '符合条件用户列表',
             },
         },
     }),
@@ -350,7 +314,7 @@ app.openapi(
 /*
 path: /organizations/by-parent
 method: POST
-function: 获取 
+function: 获取某个组织的所有子组织
 */
 app.openapi(
     createRoute({
@@ -362,7 +326,7 @@ app.openapi(
                 content: {
                     'application/json': {
                         schema: z.object({
-                            parentCodes: z.array(z.string()).openapi({ example: '123' })
+                            parentCodes: z.array(z.string()).openapi({ example: ['SR', 'SB'] })
                         })
                     }
                 }
@@ -413,7 +377,7 @@ app.openapi(
             200: {
                 content: {
                     'application/json': {
-                        schema: createResponseSchema(z.array(UserOutSchema)),
+                        schema: createResponseSchema(z.array(UserDtoSchema)),
                     },
                 },
                 description: '本用户信息',
@@ -426,7 +390,5 @@ app.openapi(
         return c.json(success(data))
     }
 )
-
-
 
 export default app
