@@ -25,10 +25,10 @@ app.use(logger(
 
 
 app.route('/auth', auth)
-app.route('/self', self)
+// app.route('/self', self)
 app.route('/public', self)
 app.route('/open', open)
-app.route('/internal/iam', internal)
+app.route('/internal', internal)
 app.route('/admin', admin)
 
 app.doc('/doc', {
