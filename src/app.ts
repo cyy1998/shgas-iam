@@ -13,7 +13,7 @@ import { CustomError } from './errors/CustomError'
 import { AuthzError } from './errors/AuthzError'
 
 const app = new OpenAPIHono()
-const port = env.PORT
+// const port = env.PORT
 
 app.use('/static/*', serveStatic({ root: './' }))
 

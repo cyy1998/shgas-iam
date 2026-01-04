@@ -23,7 +23,7 @@ async function _getUserDetail(user: User | null) {
     if (user === null) {
         throw new UserNotFoundError('该用户不存在')
     }
-    const userDto = UserDetailDtoSchema.parse(user)
+    const userDto = UserDetailDtoSchema.parse(userMapper.entityToDto(user))
     const employments = await employmentRepository.getEmploymentsByUserId(userDto.id)
     const employmentDtos = []
     for (const employment of employments) {
