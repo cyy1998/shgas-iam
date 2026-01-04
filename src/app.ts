@@ -1,12 +1,11 @@
-import auth from './routes/auth.route'
-import self from './routes/self.route'
-import internal from './routes/internal.route'
-import admin from './routes/admin.route'
-import open from './routes/open.route'
+import authRoutes from './routes/auth.route'
+import publicRoutes from './routes/public.route'
+import internalRoutes from './routes/internal.route'
+import adminRoutes from './routes/admin.route'
+import openRoutes from './routes/open.route'
 import { serveStatic } from 'hono/bun'
 import { OpenAPIHono } from '@hono/zod-openapi'
 import { logger } from 'hono/logger'
-import { env } from './config'
 import { makeResponse } from './utils/response.utils'
 import { ServiceStatusCode } from './constants/service.status'
 import { CustomError } from './errors/CustomError'
@@ -24,12 +23,11 @@ app.use(logger(
 ))
 
 
-app.route('/auth', auth)
-// app.route('/self', self)
-app.route('/public', self)
-app.route('/open', open)
-app.route('/internal', internal)
-app.route('/admin', admin)
+app.route('/auth', authRoutes)
+app.route('/public', publicRoutes)
+app.route('/open', openRoutes)
+app.route('/internal', internalRoutes)
+app.route('/admin', adminRoutes)
 
 app.doc('/doc', {
   openapi: '3.0.0',
