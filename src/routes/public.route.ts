@@ -10,6 +10,7 @@ import { organizationService } from '../services/organization.service'
 import { cacheService } from '../services/cache.service'
 
 import { EmploymentDtoSchema } from '../types/employment.type'
+import { OrganizationDtoSchema } from '../types/organization.type'
 
 const app = new OpenAPIHono()
 
@@ -387,6 +388,40 @@ app.openapi(
     async (c) => {
         const { orgCode } = c.req.valid('query')
         const data = await userService.getUsersByOrg(orgCode, 'direct')
+        return c.json(success(data))
+    }
+)
+
+/*
+path: /organizations/getByCode
+method: GET
+function: 根据code搜索某个组织的信息 
+*/
+app.openapi(
+    createRoute({
+        method: 'get',
+        path: '/organizations/getByCode',
+        tags: ['Public'],
+        request: {
+            query: z.object({
+                orgCode: z.string()
+            })
+        },
+        responses: {
+            200: {
+                content: {
+                    'application/json': {
+                        schema:
+                            createResponseSchema(OrganizationDtoSchema)
+                    },
+                },
+                description: '本公司下属组织列表',
+            },
+        },
+    }),
+    async (c) => {
+        const { orgCode } = c.req.valid('query')
+        const data = await organizationService.getOrganizationByCode(orgCode)
         return c.json(success(data))
     }
 )
