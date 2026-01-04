@@ -22,7 +22,7 @@ app.openapi(
     createRoute({
         method: 'get',
         path: '/user-info',
-        tags: ['Self'],
+        tags: ['Public'],
         responses: {
             200: {
                 content: {
@@ -50,7 +50,7 @@ app.openapi(
     createRoute({
         method: 'post',
         path: '/password/change',
-        tags: ['Self'],
+        tags: ['Public'],
         request: {
             body: {
                 content: {
@@ -91,7 +91,7 @@ app.openapi(
     createRoute({
         method: 'post',
         path: '/mobile/send-message',
-        tags: ['Self'],
+        tags: ['Public'],
         request: {
             body: {
                 content: {
@@ -130,7 +130,7 @@ app.openapi(
     createRoute({
         method: 'post',
         path: '/mobile/set',
-        tags: ['Self'],
+        tags: ['Public'],
         request: {
             body: {
                 content: {
@@ -173,7 +173,7 @@ app.openapi(
     createRoute({
         method: 'get',
         path: '/search-other-users/under-org',
-        tags: ['Self'],
+        tags: ['Public'],
         request: {
             query: z.object({
                 orgCode: z.string().openapi({ example: 'SR23' }),
@@ -207,7 +207,7 @@ app.openapi(
     createRoute({
         method: 'get',
         path: '/employments/by-privilege',
-        tags: ['Self'],
+        tags: ['Public'],
         request: {
             query: z.object({
                 privCode: z.string().openapi({ example: '123' }),
@@ -242,7 +242,7 @@ app.openapi(
     createRoute({
         method: 'get',
         path: '/search-organizations',
-        tags: ['Self'],
+        tags: ['Public'],
         request: {
             query: z.object({
                 orgLevel: z.coerce.number().int().openapi({ example: "2" }),
@@ -285,7 +285,7 @@ app.openapi(
     createRoute({
         method: 'get',
         path: '/organizations/top',
-        tags: ['Self'],
+        tags: ['Public'],
         responses: {
             200: {
                 content: {
@@ -320,7 +320,7 @@ app.openapi(
     createRoute({
         method: 'post',
         path: '/organizations/by-parent',
-        tags: ['Self'],
+        tags: ['Public'],
         request: {
             body: {
                 content: {
@@ -367,7 +367,7 @@ app.openapi(
     createRoute({
         method: 'get',
         path: '/users/by-org',
-        tags: ['Self'],
+        tags: ['Public'],
         request: {
             query: z.object({
                 orgCode: z.string().openapi({ example: '123' })

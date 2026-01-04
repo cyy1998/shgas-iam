@@ -16,7 +16,13 @@ export const organizationService = {
         const orgDtos = organizations.map(o => organizationMapper.entityToDto(o))
         return orgDtos
     },
-
+    async getOrganizationByCode(orgCode: string) {
+        const organization = await organizationRepository.getOrganizationByCode(orgCode)
+        if (organization === null) {
+            throw new CustomError('组织不存在')
+        }
+        return organizationMapper.entityToDto(organization)
+    },
     async getOrganizationsByCode(orgCode: string, orgLevel: number) {
         const organizations = await organizationRepository.searchOrganizations(orgCode, orgLevel)
         const orgDtos = organizations.map(o => organizationMapper.entityToDto(o))

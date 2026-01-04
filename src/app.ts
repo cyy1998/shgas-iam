@@ -10,6 +10,7 @@ import { makeResponse } from './utils/response.utils'
 import { ServiceStatusCode } from './constants/service.status'
 import { CustomError } from './errors/CustomError'
 import { AuthzError } from './errors/AuthzError'
+import { errorHandler } from './middleware/error.handler'
 
 const app = new OpenAPIHono()
 // const port = env.PORT
@@ -67,17 +68,6 @@ app.get('/doc/swagger', (c) => {
   return c.html(html)
 })
 
-app.onError((err, c) => {
-  if (err instanceof CustomError) {
-    return c.json(makeResponse(err.code, null, err.message))
-  }
-  else if (err instanceof AuthzError) {
-    return c.json(makeResponse(err.code, null, err.message), err.httpCode)
-  }
-  else {
-    console.error(err)
-    return c.json(makeResponse(ServiceStatusCode.Failure, null, '服务器内部错误'))
-  }
-})
+app.onError(errorHandler)
 
 export default app

@@ -6,6 +6,7 @@ import { organizationService } from '../services/organization.service'
 import { employmentService } from '../services/employment.service'
 import { EmploymentDtoSchema } from '../types/employment.type'
 import { UserDetailDtoSchema, UserDtoSchema } from '../types/user.type'
+import { OrganizationDtoSchema } from '../types/organization.type'
 
 const app = new OpenAPIHono()
 
@@ -264,6 +265,36 @@ app.openapi(
         return c.json(success(data))
     }
 )
+
+app.openapi(
+    createRoute({
+        method: 'get',
+        path: '/organizations/getByCode',
+        tags: ['Internal'],
+        request: {
+            query: z.object({
+                orgCode: z.string()
+            })
+        },
+        responses: {
+            200: {
+                content: {
+                    'application/json': {
+                        schema:
+                            createResponseSchema(OrganizationDtoSchema)
+                    },
+                },
+                description: '本公司下属组织列表',
+            },
+        },
+    }),
+    async (c) => {
+        const { orgCode } = c.req.valid('query')
+        const data = await organizationService.getOrganizationByCode(orgCode)
+        return c.json(success(data))
+    }
+)
+
 
 
 

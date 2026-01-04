@@ -14,7 +14,7 @@ app.openapi(
     createRoute({
         method: 'get',
         path: '/client/status',
-        tags: ['Self'],
+        tags: ['Open'],
         request: {
             query: z.object({
                 clientCode: z.string()

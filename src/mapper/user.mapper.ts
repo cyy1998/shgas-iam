@@ -12,8 +12,5 @@ export const userMapper = {
             status: user.status,
             orcasId: null
         }
-    },
-    dtoToDetailDto(userDto: UserDto) {
-
     }
 }
