@@ -11,8 +11,29 @@ import { cacheService } from '../services/cache.service'
 
 import { EmploymentDtoSchema } from '../types/employment.type'
 import { OrganizationDtoSchema } from '../types/organization.type'
+import { CustomError } from '../errors/CustomError'
+import { AuthzError } from '../errors/AuthzError'
+import { AuthzUnauthorizedError } from '../errors/AuthzUnauthorizedError'
 
-const app = new OpenAPIHono()
+interface AppEnv {
+    Variables: {
+        userId: number,
+        username: string
+    }
+}
+
+const app = new OpenAPIHono<AppEnv>()
+
+app.use('/*', async (c, next) => {
+    const userString = c.req.header('X-User-Info')
+    if (!userString) {
+        throw new AuthzUnauthorizedError('未登录')
+    }
+    const userDto: UserDto = JSON.parse(Buffer.from(userString, 'base64').toString('utf8'))
+    c.set('userId', userDto.id)
+    c.set('username', userDto.username)
+    return await next()
+})
 
 /*
 path: /user-info
@@ -76,9 +97,8 @@ app.openapi(
         },
     }),
     async (c) => {
-        const userDTO: UserDto = JSON.parse(Buffer.from(c.req.header('X-User-Info') ?? '', 'base64').toString('utf8'))
         const { oldPassword, newPassword } = c.req.valid('json')
-        const data = await userService.setPassword(userDTO.username, oldPassword, newPassword)
+        const data = await userService.setPassword(c.get('username'), oldPassword, newPassword)
         return c.json(success(data))
     }
 )
@@ -158,9 +178,8 @@ app.openapi(
     async (c) => {
         const { phoneNumber, code } = c.req.valid('json')
         const sessionId = getCookie(c, 'session') as string
-        const userDTO: UserDto = JSON.parse(Buffer.from(c.req.header('X-User-Info') ?? '', 'base64').toString('utf8'))
-        const newUserDTO = await userService.setMobile(userDTO, phoneNumber, code)
-        const data = await cacheService.updateSession(sessionId, JSON.stringify(newUserDTO))
+        const newUserDto = await userService.setMobile(c.get('userId'), phoneNumber, code)
+        const data = await cacheService.updateSession(sessionId, JSON.stringify(newUserDto))
         return c.json(success(data))
     }
 )
@@ -192,9 +211,8 @@ app.openapi(
         },
     }),
     async (c) => {
-        const user: UserDto = JSON.parse(Buffer.from(c.req.header('X-User-Info') ?? '', 'base64').toString('utf8'))
         const { orgCode } = c.req.valid('query')
-        const data = await userService.getOtherUsersByOrg(orgCode, user)
+        const data = await userService.getOtherUsersByOrg(orgCode, c.get('userId'))
         return c.json(success(data))
     }
 )
@@ -228,8 +246,7 @@ app.openapi(
     }),
     async (c) => {
         const { privCode, codeType } = c.req.valid('query')
-        const user: UserDto = JSON.parse(Buffer.from(c.req.header('X-User-Info') ?? '', 'base64').toString('utf8'))
-        const data = await employmentService.getEmploymentsByUserAndPrivilege(user.username, privCode, codeType)
+        const data = await employmentService.getEmploymentsByUserAndPrivilege(c.get('username'), privCode, codeType)
         return c.json(success(data))
     }
 )

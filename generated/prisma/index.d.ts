@@ -2533,11 +2533,13 @@ export namespace Prisma {
 
   export type UserAvgAggregateOutputType = {
     id: number | null
+    orderNum: number | null
     status: number | null
   }
 
   export type UserSumAggregateOutputType = {
     id: number | null
+    orderNum: number | null
     status: number | null
   }
 
@@ -2549,6 +2551,7 @@ export namespace Prisma {
     password: string | null
     mobilePhone: string | null
     userType: string | null
+    orderNum: number | null
     status: number | null
     isDelete: boolean | null
     createTime: Date | null
@@ -2563,6 +2566,7 @@ export namespace Prisma {
     password: string | null
     mobilePhone: string | null
     userType: string | null
+    orderNum: number | null
     status: number | null
     isDelete: boolean | null
     createTime: Date | null
@@ -2577,6 +2581,7 @@ export namespace Prisma {
     password: number
     mobilePhone: number
     userType: number
+    orderNum: number
     status: number
     isDelete: number
     createTime: number
@@ -2587,11 +2592,13 @@ export namespace Prisma {
 
   export type UserAvgAggregateInputType = {
     id?: true
+    orderNum?: true
     status?: true
   }
 
   export type UserSumAggregateInputType = {
     id?: true
+    orderNum?: true
     status?: true
   }
 
@@ -2603,6 +2610,7 @@ export namespace Prisma {
     password?: true
     mobilePhone?: true
     userType?: true
+    orderNum?: true
     status?: true
     isDelete?: true
     createTime?: true
@@ -2617,6 +2625,7 @@ export namespace Prisma {
     password?: true
     mobilePhone?: true
     userType?: true
+    orderNum?: true
     status?: true
     isDelete?: true
     createTime?: true
@@ -2631,6 +2640,7 @@ export namespace Prisma {
     password?: true
     mobilePhone?: true
     userType?: true
+    orderNum?: true
     status?: true
     isDelete?: true
     createTime?: true
@@ -2732,6 +2742,7 @@ export namespace Prisma {
     password: string | null
     mobilePhone: string | null
     userType: string
+    orderNum: number
     status: number
     isDelete: boolean
     createTime: Date
@@ -2765,6 +2776,7 @@ export namespace Prisma {
     password?: boolean
     mobilePhone?: boolean
     userType?: boolean
+    orderNum?: boolean
     status?: boolean
     isDelete?: boolean
     createTime?: boolean
@@ -2785,13 +2797,14 @@ export namespace Prisma {
     password?: boolean
     mobilePhone?: boolean
     userType?: boolean
+    orderNum?: boolean
     status?: boolean
     isDelete?: boolean
     createTime?: boolean
     updateTime?: boolean
   }
 
-  export type UserOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "username" | "wxId" | "name" | "password" | "mobilePhone" | "userType" | "status" | "isDelete" | "createTime" | "updateTime", ExtArgs["result"]["user"]>
+  export type UserOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "username" | "wxId" | "name" | "password" | "mobilePhone" | "userType" | "orderNum" | "status" | "isDelete" | "createTime" | "updateTime", ExtArgs["result"]["user"]>
   export type UserInclude<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
     employments?: boolean | User$employmentsArgs<ExtArgs>
     delegationTo?: boolean | User$delegationToArgs<ExtArgs>
@@ -2814,6 +2827,7 @@ export namespace Prisma {
       password: string | null
       mobilePhone: string | null
       userType: string
+      orderNum: number
       status: number
       isDelete: boolean
       createTime: Date
@@ -3197,6 +3211,7 @@ export namespace Prisma {
     readonly password: FieldRef<"User", 'String'>
     readonly mobilePhone: FieldRef<"User", 'String'>
     readonly userType: FieldRef<"User", 'String'>
+    readonly orderNum: FieldRef<"User", 'Int'>
     readonly status: FieldRef<"User", 'Int'>
     readonly isDelete: FieldRef<"User", 'Boolean'>
     readonly createTime: FieldRef<"User", 'DateTime'>
@@ -19138,6 +19153,7 @@ export namespace Prisma {
     password: 'password',
     mobilePhone: 'mobilePhone',
     userType: 'userType',
+    orderNum: 'orderNum',
     status: 'status',
     isDelete: 'isDelete',
     createTime: 'createTime',
@@ -19523,6 +19539,7 @@ export namespace Prisma {
     password?: StringNullableFilter<"User"> | string | null
     mobilePhone?: StringNullableFilter<"User"> | string | null
     userType?: StringFilter<"User"> | string
+    orderNum?: IntFilter<"User"> | number
     status?: IntFilter<"User"> | number
     isDelete?: BoolFilter<"User"> | boolean
     createTime?: DateTimeFilter<"User"> | Date | string
@@ -19540,6 +19557,7 @@ export namespace Prisma {
     password?: SortOrderInput | SortOrder
     mobilePhone?: SortOrderInput | SortOrder
     userType?: SortOrder
+    orderNum?: SortOrder
     status?: SortOrder
     isDelete?: SortOrder
     createTime?: SortOrder
@@ -19561,6 +19579,7 @@ export namespace Prisma {
     password?: StringNullableFilter<"User"> | string | null
     mobilePhone?: StringNullableFilter<"User"> | string | null
     userType?: StringFilter<"User"> | string
+    orderNum?: IntFilter<"User"> | number
     status?: IntFilter<"User"> | number
     isDelete?: BoolFilter<"User"> | boolean
     createTime?: DateTimeFilter<"User"> | Date | string
@@ -19578,6 +19597,7 @@ export namespace Prisma {
     password?: SortOrderInput | SortOrder
     mobilePhone?: SortOrderInput | SortOrder
     userType?: SortOrder
+    orderNum?: SortOrder
     status?: SortOrder
     isDelete?: SortOrder
     createTime?: SortOrder
@@ -19600,6 +19620,7 @@ export namespace Prisma {
     password?: StringNullableWithAggregatesFilter<"User"> | string | null
     mobilePhone?: StringNullableWithAggregatesFilter<"User"> | string | null
     userType?: StringWithAggregatesFilter<"User"> | string
+    orderNum?: IntWithAggregatesFilter<"User"> | number
     status?: IntWithAggregatesFilter<"User"> | number
     isDelete?: BoolWithAggregatesFilter<"User"> | boolean
     createTime?: DateTimeWithAggregatesFilter<"User"> | Date | string
@@ -20695,6 +20716,7 @@ export namespace Prisma {
     password?: string | null
     mobilePhone?: string | null
     userType?: string
+    orderNum?: number
     status?: number
     isDelete?: boolean
     createTime?: Date | string
@@ -20712,6 +20734,7 @@ export namespace Prisma {
     password?: string | null
     mobilePhone?: string | null
     userType?: string
+    orderNum?: number
     status?: number
     isDelete?: boolean
     createTime?: Date | string
@@ -20728,6 +20751,7 @@ export namespace Prisma {
     password?: NullableStringFieldUpdateOperationsInput | string | null
     mobilePhone?: NullableStringFieldUpdateOperationsInput | string | null
     userType?: StringFieldUpdateOperationsInput | string
+    orderNum?: IntFieldUpdateOperationsInput | number
     status?: IntFieldUpdateOperationsInput | number
     isDelete?: BoolFieldUpdateOperationsInput | boolean
     createTime?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -20745,6 +20769,7 @@ export namespace Prisma {
     password?: NullableStringFieldUpdateOperationsInput | string | null
     mobilePhone?: NullableStringFieldUpdateOperationsInput | string | null
     userType?: StringFieldUpdateOperationsInput | string
+    orderNum?: IntFieldUpdateOperationsInput | number
     status?: IntFieldUpdateOperationsInput | number
     isDelete?: BoolFieldUpdateOperationsInput | boolean
     createTime?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -20762,6 +20787,7 @@ export namespace Prisma {
     password?: string | null
     mobilePhone?: string | null
     userType?: string
+    orderNum?: number
     status?: number
     isDelete?: boolean
     createTime?: Date | string
@@ -20775,6 +20801,7 @@ export namespace Prisma {
     password?: NullableStringFieldUpdateOperationsInput | string | null
     mobilePhone?: NullableStringFieldUpdateOperationsInput | string | null
     userType?: StringFieldUpdateOperationsInput | string
+    orderNum?: IntFieldUpdateOperationsInput | number
     status?: IntFieldUpdateOperationsInput | number
     isDelete?: BoolFieldUpdateOperationsInput | boolean
     createTime?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -20789,6 +20816,7 @@ export namespace Prisma {
     password?: NullableStringFieldUpdateOperationsInput | string | null
     mobilePhone?: NullableStringFieldUpdateOperationsInput | string | null
     userType?: StringFieldUpdateOperationsInput | string
+    orderNum?: IntFieldUpdateOperationsInput | number
     status?: IntFieldUpdateOperationsInput | number
     isDelete?: BoolFieldUpdateOperationsInput | boolean
     createTime?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -21936,6 +21964,7 @@ export namespace Prisma {
     password?: SortOrder
     mobilePhone?: SortOrder
     userType?: SortOrder
+    orderNum?: SortOrder
     status?: SortOrder
     isDelete?: SortOrder
     createTime?: SortOrder
@@ -21944,6 +21973,7 @@ export namespace Prisma {
 
   export type UserAvgOrderByAggregateInput = {
     id?: SortOrder
+    orderNum?: SortOrder
     status?: SortOrder
   }
 
@@ -21955,6 +21985,7 @@ export namespace Prisma {
     password?: SortOrder
     mobilePhone?: SortOrder
     userType?: SortOrder
+    orderNum?: SortOrder
     status?: SortOrder
     isDelete?: SortOrder
     createTime?: SortOrder
@@ -21969,6 +22000,7 @@ export namespace Prisma {
     password?: SortOrder
     mobilePhone?: SortOrder
     userType?: SortOrder
+    orderNum?: SortOrder
     status?: SortOrder
     isDelete?: SortOrder
     createTime?: SortOrder
@@ -21977,6 +22009,7 @@ export namespace Prisma {
 
   export type UserSumOrderByAggregateInput = {
     id?: SortOrder
+    orderNum?: SortOrder
     status?: SortOrder
   }
 
@@ -25953,6 +25986,7 @@ export namespace Prisma {
     password?: string | null
     mobilePhone?: string | null
     userType?: string
+    orderNum?: number
     status?: number
     isDelete?: boolean
     createTime?: Date | string
@@ -25969,6 +26003,7 @@ export namespace Prisma {
     password?: string | null
     mobilePhone?: string | null
     userType?: string
+    orderNum?: number
     status?: number
     isDelete?: boolean
     createTime?: Date | string
@@ -26180,6 +26215,7 @@ export namespace Prisma {
     password?: NullableStringFieldUpdateOperationsInput | string | null
     mobilePhone?: NullableStringFieldUpdateOperationsInput | string | null
     userType?: StringFieldUpdateOperationsInput | string
+    orderNum?: IntFieldUpdateOperationsInput | number
     status?: IntFieldUpdateOperationsInput | number
     isDelete?: BoolFieldUpdateOperationsInput | boolean
     createTime?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -26196,6 +26232,7 @@ export namespace Prisma {
     password?: NullableStringFieldUpdateOperationsInput | string | null
     mobilePhone?: NullableStringFieldUpdateOperationsInput | string | null
     userType?: StringFieldUpdateOperationsInput | string
+    orderNum?: IntFieldUpdateOperationsInput | number
     status?: IntFieldUpdateOperationsInput | number
     isDelete?: BoolFieldUpdateOperationsInput | boolean
     createTime?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -27585,6 +27622,7 @@ export namespace Prisma {
     password?: string | null
     mobilePhone?: string | null
     userType?: string
+    orderNum?: number
     status?: number
     isDelete?: boolean
     createTime?: Date | string
@@ -27601,6 +27639,7 @@ export namespace Prisma {
     password?: string | null
     mobilePhone?: string | null
     userType?: string
+    orderNum?: number
     status?: number
     isDelete?: boolean
     createTime?: Date | string
@@ -27621,6 +27660,7 @@ export namespace Prisma {
     password?: string | null
     mobilePhone?: string | null
     userType?: string
+    orderNum?: number
     status?: number
     isDelete?: boolean
     createTime?: Date | string
@@ -27637,6 +27677,7 @@ export namespace Prisma {
     password?: string | null
     mobilePhone?: string | null
     userType?: string
+    orderNum?: number
     status?: number
     isDelete?: boolean
     createTime?: Date | string
@@ -27686,6 +27727,7 @@ export namespace Prisma {
     password?: NullableStringFieldUpdateOperationsInput | string | null
     mobilePhone?: NullableStringFieldUpdateOperationsInput | string | null
     userType?: StringFieldUpdateOperationsInput | string
+    orderNum?: IntFieldUpdateOperationsInput | number
     status?: IntFieldUpdateOperationsInput | number
     isDelete?: BoolFieldUpdateOperationsInput | boolean
     createTime?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -27702,6 +27744,7 @@ export namespace Prisma {
     password?: NullableStringFieldUpdateOperationsInput | string | null
     mobilePhone?: NullableStringFieldUpdateOperationsInput | string | null
     userType?: StringFieldUpdateOperationsInput | string
+    orderNum?: IntFieldUpdateOperationsInput | number
     status?: IntFieldUpdateOperationsInput | number
     isDelete?: BoolFieldUpdateOperationsInput | boolean
     createTime?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -27728,6 +27771,7 @@ export namespace Prisma {
     password?: NullableStringFieldUpdateOperationsInput | string | null
     mobilePhone?: NullableStringFieldUpdateOperationsInput | string | null
     userType?: StringFieldUpdateOperationsInput | string
+    orderNum?: IntFieldUpdateOperationsInput | number
     status?: IntFieldUpdateOperationsInput | number
     isDelete?: BoolFieldUpdateOperationsInput | boolean
     createTime?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -27744,6 +27788,7 @@ export namespace Prisma {
     password?: NullableStringFieldUpdateOperationsInput | string | null
     mobilePhone?: NullableStringFieldUpdateOperationsInput | string | null
     userType?: StringFieldUpdateOperationsInput | string
+    orderNum?: IntFieldUpdateOperationsInput | number
     status?: IntFieldUpdateOperationsInput | number
     isDelete?: BoolFieldUpdateOperationsInput | boolean
     createTime?: DateTimeFieldUpdateOperationsInput | Date | string

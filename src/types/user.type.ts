@@ -12,6 +12,7 @@ export const UserDtoSchema = z.object({
     userType: z.string().nullable().openapi({ example: '正式员工' }),
     orcasId: z.string().nullable().openapi({ example: 'ada8wf89w83b2' }),
     status: z.enum(UserStatus).openapi({ example: 1 }),
+    orderNum: z.number().openapi({ example: 1 })
     // positions: z.array(EmploymentDtoSchema).optional(),
     // privileges: z.array(PrivilegeDtoSchema).optional(),
     // roles: z.array(z.string()).optional().openapi({ example: ['tender:default-user'] })

@@ -326,7 +326,7 @@ app.openapi(
 
 /*
 path: /role/pos-org/delete
-function: 为岗位-部门组合设置角色
+function: 为岗位-部门组合删除角色
 */
 app.openapi(
     createRoute({

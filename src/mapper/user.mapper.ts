@@ -10,6 +10,7 @@ export const userMapper = {
             mobile: user.mobilePhone,
             userType: user.userType,
             status: user.status,
+            orderNum: user.orderNum,
             orcasId: null
         }
     }

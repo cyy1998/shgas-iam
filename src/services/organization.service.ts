@@ -23,17 +23,17 @@ export const organizationService = {
         }
         return organizationMapper.entityToDto(organization)
     },
-    async getOrganizationsByCode(orgCode: string, orgLevel: number) {
-        const organizations = await organizationRepository.searchOrganizations(orgCode, orgLevel)
-        const orgDtos = organizations.map(o => organizationMapper.entityToDto(o))
-        return orgDtos
-    },
+    // async getOrganizationsByCode(orgCode: string, orgLevel: number) {
+    //     const organizations = await organizationRepository.searchOrganizations(orgCode, orgLevel)
+    //     const orgDtos = organizations.map(o => organizationMapper.entityToDto(o))
+    //     return orgDtos
+    // },
     async getSubOrganizationsByParent(parentCodes: string[]) {
         const organizations = await organizationRepository.getOrganizationsByParentsCode(parentCodes)
-        const orgDTOs = organizations.map(o => organizationMapper.entityToDto(o))
+        const orgDtos = organizations.map(o => organizationMapper.entityToDto(o))
         const compDict = await this.getCompDict()
-        const orgVOs = orgDTOs.map(o => organizationMapper.dtoToVo(o, compDict[o.orgCode.slice(0, 2)] as Organization))
-        return orgVOs
+        const orgVos = orgDtos.map(o => organizationMapper.dtoToVo(o, compDict[o.orgCode.slice(0, 2)] as Organization))
+        return orgVos
     },
     async getCompDict() {
         const organizations = organizationRepository.getOrganizationsByParentId(-1)

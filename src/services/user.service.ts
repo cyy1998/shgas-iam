@@ -9,9 +9,6 @@ import { positionRepository } from '../repositories/position.repository'
 import { organizationRepository } from '../repositories/organization.repository'
 import { mobileService } from './mobile.service'
 import { env } from '../config'
-import { roleService } from './role.service'
-import { mergeAndDedupe } from '../utils/common.utils'
-import { privilegeService } from './privilege.service'
 import { UserNotFoundError } from '../errors/UserNotFoundError'
 import { CustomError } from '../errors/CustomError'
 import { roleRepository } from '../repositories/role.repository'
@@ -39,8 +36,6 @@ async function _getUserDetail(user: User | null) {
     userDto.roles = [...new Set(employmentDtos.flatMap(e => e.roles))]
     userDto.privileges = [...new Set(employmentDtos.flatMap(e => e.privileges))]
 
-    // const privileges = await privilegeService.getPrivilegesByRoleIds(roles.map(r => r.id))
-    // userDto.privileges = privileges.map(p => p.privCode)
 
     return userDto
 }
@@ -89,7 +84,7 @@ export const userService = {
         return user.password ? await compare(inputPassword, user.password ?? '') : inputPassword === env.DEFAULT_USER_PASSWORD
     },
 
-    async setMobile(userDto: UserDto, phoneNumber: string, code: string) {
+    async setMobile(userId: number, phoneNumber: string, code: string) {
         return await prisma.$transaction(async (tx) => {
             if (!mobileService.checkValidPhoneNumber(phoneNumber)) {
                 throw new CustomError('无效手机号')
@@ -100,9 +95,8 @@ export const userService = {
             if (!await mobileService.cehckVerificationCode(phoneNumber, code)) {
                 throw new CustomError('验证码错误')
             }
-            await userRepository.setMobile(userDto.id, phoneNumber, tx)
-            userDto.mobile = phoneNumber
-            return userDto
+            await userRepository.setMobile(userId, phoneNumber, tx)
+            return true
         })
     },
 
@@ -124,8 +118,8 @@ export const userService = {
         return userDetail
     },
 
-    async getOtherUsersByOrg(orgCode: string, userDTO: UserDto) {
-        const users = await userRepository.getOtherUsersByOrgAndAllSub(userDTO.id, orgCode)
+    async getOtherUsersByOrg(orgCode: string, userId: number) {
+        const users = await userRepository.getOtherUsersByOrgAndAllSub(userId, orgCode)
         const userDtos = users.map(u => userMapper.entityToDto(u))
         return userDtos
     },
