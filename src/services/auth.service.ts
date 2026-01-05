@@ -21,7 +21,7 @@ function extractClientKey(path: string): string {
     if (parts.length < 2) {
         return ''; // 不符合格式
     }
-    return `cache:client:${parts[1]}`;
+    return parts[1] as string;
 }
 
 async function _login(user: UserDto) {
