@@ -153,6 +153,7 @@ export const authService = {
         return true
     },
     async authz(sessionId: string | null, path: string | undefined) {
+        console.log(path)
         if (!path) {
             throw new AuthzUnauthorizedError('非法访问')
         }
