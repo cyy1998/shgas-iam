@@ -202,6 +202,7 @@ exports.Prisma.ClientScalarFieldEnum = {
   id: 'id',
   clientCode: 'clientCode',
   clientName: 'clientName',
+  url: 'url',
   status: 'status',
   description: 'description',
   isDelete: 'isDelete',
@@ -337,6 +338,7 @@ exports.Prisma.QueryMode = {
 exports.Prisma.ClientOrderByRelevanceFieldEnum = {
   clientCode: 'clientCode',
   clientName: 'clientName',
+  url: 'url',
   description: 'description'
 };
 

@@ -1,12 +1,49 @@
 import { prisma } from '../libs/database/prisma'
 import { z, createRoute, OpenAPIHono } from '@hono/zod-openapi'
-import { makeResponse, success } from '../utils/response.utils'
+import { createResponseSchema, makeResponse, success } from '../utils/response.utils'
 import { employmentService } from '../services/employment.service'
 import { roleService } from '../services/role.service'
 import { privilegeService } from '../services/privilege.service'
 import { ResponseSchema } from '../types/response.type'
+import { ClientDtoSchema } from '../types/client.type'
+import { clientService } from '../services/client.service'
 
 const app = new OpenAPIHono()
+/*
+path: /client/update
+function: 岗位更新
+*/
+app.openapi(
+    createRoute({
+        method: 'post',
+        path: '/client/update',
+        tags: ['Admin'],
+        request: {
+            body: {
+                content: {
+                    'application/json': {
+                        schema: ClientDtoSchema
+                    }
+                }
+            },
+        },
+        responses: {
+            200: {
+                content: {
+                    'application/json': {
+                        schema: createResponseSchema(z.boolean()),
+                    },
+                },
+                description: '设置岗位成功',
+            },
+        },
+    }),
+    async (c) => {
+        const body = c.req.valid('json')
+        const data = await clientService.updateClient(body)
+        return c.json(success(data))
+    }
+)
 /*
 path: /position/set
 function: 设置新岗位

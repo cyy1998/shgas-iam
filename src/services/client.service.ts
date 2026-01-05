@@ -1,16 +1,32 @@
 import { CustomError } from "../errors/CustomError"
+import { redis } from "../libs/cache/redis"
 import { prisma } from "../libs/database/prisma"
 import { clientMapper } from "../mapper/client.mapper"
 import { clientRepository } from "../repositories/client.repository"
-import { ClientDtoSchema, ClientVoSchema } from "../types/client.type"
+import { ClientDtoSchema, ClientVoSchema, type ClientDto } from "../types/client.type"
 
 export const clientService = {
     async getClientByCode(clientCode: string) {
+        const cacheString = await redis.get(`cache:client:${clientCode}`)
+        if (cacheString !== null) {
+            const cacheClient: ClientDto = JSON.parse(cacheString)
+            return cacheClient
+        }
         const client = await clientRepository.getClientByCode(clientCode)
         if (client === null) {
             throw new CustomError('client不存在')
         }
-        const clientVo = clientMapper.dtoToVo(clientMapper.entityToDto(client))
-        return clientVo
-    }
+        // const clientVo = clientMapper.dtoToVo(clientMapper.entityToDto(client))
+        const clientDto = clientMapper.entityToDto(client)
+        await redis.set(`cache:client:${clientCode}`, JSON.stringify(clientDto))
+        return clientDto
+    },
+    async updateClient(clientDto: ClientDto) {
+        return await prisma.$transaction(async (tx) => {
+            const client = await clientRepository.updateClient(clientDto, tx)
+            const updatedClientDto = clientMapper.entityToDto(client)
+            await redis.set(`cache:client:${updatedClientDto.clientCode}`, JSON.stringify(updatedClientDto))
+            return true
+        })
+    },
 }

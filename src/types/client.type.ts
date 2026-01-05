@@ -5,6 +5,7 @@ export const ClientDtoSchema = z.object({
     id: z.number().openapi({ example: 1 }),
     clientCode: z.string().openapi({ example: 'tender' }),
     clientName: z.string().openapi({ example: '采招系统' }),
+    url: z.string().nullable().openapi({ example: '采招系统' }),
     status: z.enum(ClientStatus).openapi({ example: 1 }),
     extAttributes: z.record(z.string(), z.unknown()).nullable()
 }).openapi('ClientDto')

@@ -2351,11 +2351,11 @@ export namespace Prisma {
    */
 
   export type ClientCountOutputType = {
-    role: number
+    roles: number
   }
 
   export type ClientCountOutputTypeSelect<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
-    role?: boolean | ClientCountOutputTypeCountRoleArgs
+    roles?: boolean | ClientCountOutputTypeCountRolesArgs
   }
 
   // Custom InputTypes
@@ -2372,7 +2372,7 @@ export namespace Prisma {
   /**
    * ClientCountOutputType without action
    */
-  export type ClientCountOutputTypeCountRoleArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+  export type ClientCountOutputTypeCountRolesArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
     where?: RoleWhereInput
   }
 
@@ -9203,6 +9203,7 @@ export namespace Prisma {
     id: number | null
     clientCode: string | null
     clientName: string | null
+    url: string | null
     status: number | null
     description: string | null
     isDelete: boolean | null
@@ -9214,6 +9215,7 @@ export namespace Prisma {
     id: number | null
     clientCode: string | null
     clientName: string | null
+    url: string | null
     status: number | null
     description: string | null
     isDelete: boolean | null
@@ -9225,6 +9227,7 @@ export namespace Prisma {
     id: number
     clientCode: number
     clientName: number
+    url: number
     status: number
     description: number
     isDelete: number
@@ -9249,6 +9252,7 @@ export namespace Prisma {
     id?: true
     clientCode?: true
     clientName?: true
+    url?: true
     status?: true
     description?: true
     isDelete?: true
@@ -9260,6 +9264,7 @@ export namespace Prisma {
     id?: true
     clientCode?: true
     clientName?: true
+    url?: true
     status?: true
     description?: true
     isDelete?: true
@@ -9271,6 +9276,7 @@ export namespace Prisma {
     id?: true
     clientCode?: true
     clientName?: true
+    url?: true
     status?: true
     description?: true
     isDelete?: true
@@ -9370,6 +9376,7 @@ export namespace Prisma {
     id: number
     clientCode: string
     clientName: string
+    url: string | null
     status: number
     description: string | null
     isDelete: boolean
@@ -9401,13 +9408,14 @@ export namespace Prisma {
     id?: boolean
     clientCode?: boolean
     clientName?: boolean
+    url?: boolean
     status?: boolean
     description?: boolean
     isDelete?: boolean
     createTime?: boolean
     updateTime?: boolean
     extAttributes?: boolean
-    role?: boolean | Client$roleArgs<ExtArgs>
+    roles?: boolean | Client$rolesArgs<ExtArgs>
     _count?: boolean | ClientCountOutputTypeDefaultArgs<ExtArgs>
   }, ExtArgs["result"]["client"]>
 
@@ -9417,6 +9425,7 @@ export namespace Prisma {
     id?: boolean
     clientCode?: boolean
     clientName?: boolean
+    url?: boolean
     status?: boolean
     description?: boolean
     isDelete?: boolean
@@ -9425,21 +9434,22 @@ export namespace Prisma {
     extAttributes?: boolean
   }
 
-  export type ClientOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "clientCode" | "clientName" | "status" | "description" | "isDelete" | "createTime" | "updateTime" | "extAttributes", ExtArgs["result"]["client"]>
+  export type ClientOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "clientCode" | "clientName" | "url" | "status" | "description" | "isDelete" | "createTime" | "updateTime" | "extAttributes", ExtArgs["result"]["client"]>
   export type ClientInclude<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
-    role?: boolean | Client$roleArgs<ExtArgs>
+    roles?: boolean | Client$rolesArgs<ExtArgs>
     _count?: boolean | ClientCountOutputTypeDefaultArgs<ExtArgs>
   }
 
   export type $ClientPayload<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
     name: "Client"
     objects: {
-      role: Prisma.$RolePayload<ExtArgs>[]
+      roles: Prisma.$RolePayload<ExtArgs>[]
     }
     scalars: $Extensions.GetPayloadResult<{
       id: number
       clientCode: string
       clientName: string
+      url: string | null
       status: number
       description: string | null
       isDelete: boolean
@@ -9786,7 +9796,7 @@ export namespace Prisma {
    */
   export interface Prisma__ClientClient<T, Null = never, ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs, GlobalOmitOptions = {}> extends Prisma.PrismaPromise<T> {
     readonly [Symbol.toStringTag]: "PrismaPromise"
-    role<T extends Client$roleArgs<ExtArgs> = {}>(args?: Subset<T, Client$roleArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$RolePayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
+    roles<T extends Client$rolesArgs<ExtArgs> = {}>(args?: Subset<T, Client$rolesArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$RolePayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
     /**
      * Attaches callbacks for the resolution and/or rejection of the Promise.
      * @param onfulfilled The callback to execute when the Promise is resolved.
@@ -9819,6 +9829,7 @@ export namespace Prisma {
     readonly id: FieldRef<"Client", 'Int'>
     readonly clientCode: FieldRef<"Client", 'String'>
     readonly clientName: FieldRef<"Client", 'String'>
+    readonly url: FieldRef<"Client", 'String'>
     readonly status: FieldRef<"Client", 'Int'>
     readonly description: FieldRef<"Client", 'String'>
     readonly isDelete: FieldRef<"Client", 'Boolean'>
@@ -10168,9 +10179,9 @@ export namespace Prisma {
   }
 
   /**
-   * Client.role
+   * Client.roles
    */
-  export type Client$roleArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+  export type Client$rolesArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
     /**
      * Select specific fields to fetch from the Role
      */
@@ -19245,6 +19256,7 @@ export namespace Prisma {
     id: 'id',
     clientCode: 'clientCode',
     clientName: 'clientName',
+    url: 'url',
     status: 'status',
     description: 'description',
     isDelete: 'isDelete',
@@ -19440,6 +19452,7 @@ export namespace Prisma {
   export const ClientOrderByRelevanceFieldEnum: {
     clientCode: 'clientCode',
     clientName: 'clientName',
+    url: 'url',
     description: 'description'
   };
 
@@ -20094,26 +20107,28 @@ export namespace Prisma {
     id?: IntFilter<"Client"> | number
     clientCode?: StringFilter<"Client"> | string
     clientName?: StringFilter<"Client"> | string
+    url?: StringNullableFilter<"Client"> | string | null
     status?: IntFilter<"Client"> | number
     description?: StringNullableFilter<"Client"> | string | null
     isDelete?: BoolFilter<"Client"> | boolean
     createTime?: DateTimeFilter<"Client"> | Date | string
     updateTime?: DateTimeFilter<"Client"> | Date | string
     extAttributes?: JsonNullableFilter<"Client">
-    role?: RoleListRelationFilter
+    roles?: RoleListRelationFilter
   }
 
   export type ClientOrderByWithRelationInput = {
     id?: SortOrder
     clientCode?: SortOrder
     clientName?: SortOrder
+    url?: SortOrderInput | SortOrder
     status?: SortOrder
     description?: SortOrderInput | SortOrder
     isDelete?: SortOrder
     createTime?: SortOrder
     updateTime?: SortOrder
     extAttributes?: SortOrderInput | SortOrder
-    role?: RoleOrderByRelationAggregateInput
+    roles?: RoleOrderByRelationAggregateInput
     _relevance?: ClientOrderByRelevanceInput
   }
 
@@ -20124,19 +20139,21 @@ export namespace Prisma {
     NOT?: ClientWhereInput | ClientWhereInput[]
     clientCode?: StringFilter<"Client"> | string
     clientName?: StringFilter<"Client"> | string
+    url?: StringNullableFilter<"Client"> | string | null
     status?: IntFilter<"Client"> | number
     description?: StringNullableFilter<"Client"> | string | null
     isDelete?: BoolFilter<"Client"> | boolean
     createTime?: DateTimeFilter<"Client"> | Date | string
     updateTime?: DateTimeFilter<"Client"> | Date | string
     extAttributes?: JsonNullableFilter<"Client">
-    role?: RoleListRelationFilter
+    roles?: RoleListRelationFilter
   }, "id">
 
   export type ClientOrderByWithAggregationInput = {
     id?: SortOrder
     clientCode?: SortOrder
     clientName?: SortOrder
+    url?: SortOrderInput | SortOrder
     status?: SortOrder
     description?: SortOrderInput | SortOrder
     isDelete?: SortOrder
@@ -20157,6 +20174,7 @@ export namespace Prisma {
     id?: IntWithAggregatesFilter<"Client"> | number
     clientCode?: StringWithAggregatesFilter<"Client"> | string
     clientName?: StringWithAggregatesFilter<"Client"> | string
+    url?: StringNullableWithAggregatesFilter<"Client"> | string | null
     status?: IntWithAggregatesFilter<"Client"> | number
     description?: StringNullableWithAggregatesFilter<"Client"> | string | null
     isDelete?: BoolWithAggregatesFilter<"Client"> | boolean
@@ -21297,57 +21315,62 @@ export namespace Prisma {
   export type ClientCreateInput = {
     clientCode: string
     clientName: string
+    url?: string | null
     status?: number
     description?: string | null
     isDelete?: boolean
     createTime?: Date | string
     updateTime?: Date | string
     extAttributes?: NullableJsonNullValueInput | InputJsonValue
-    role?: RoleCreateNestedManyWithoutClientInput
+    roles?: RoleCreateNestedManyWithoutClientInput
   }
 
   export type ClientUncheckedCreateInput = {
     id?: number
     clientCode: string
     clientName: string
+    url?: string | null
     status?: number
     description?: string | null
     isDelete?: boolean
     createTime?: Date | string
     updateTime?: Date | string
     extAttributes?: NullableJsonNullValueInput | InputJsonValue
-    role?: RoleUncheckedCreateNestedManyWithoutClientInput
+    roles?: RoleUncheckedCreateNestedManyWithoutClientInput
   }
 
   export type ClientUpdateInput = {
     clientCode?: StringFieldUpdateOperationsInput | string
     clientName?: StringFieldUpdateOperationsInput | string
+    url?: NullableStringFieldUpdateOperationsInput | string | null
     status?: IntFieldUpdateOperationsInput | number
     description?: NullableStringFieldUpdateOperationsInput | string | null
     isDelete?: BoolFieldUpdateOperationsInput | boolean
     createTime?: DateTimeFieldUpdateOperationsInput | Date | string
     updateTime?: DateTimeFieldUpdateOperationsInput | Date | string
     extAttributes?: NullableJsonNullValueInput | InputJsonValue
-    role?: RoleUpdateManyWithoutClientNestedInput
+    roles?: RoleUpdateManyWithoutClientNestedInput
   }
 
   export type ClientUncheckedUpdateInput = {
     id?: IntFieldUpdateOperationsInput | number
     clientCode?: StringFieldUpdateOperationsInput | string
     clientName?: StringFieldUpdateOperationsInput | string
+    url?: NullableStringFieldUpdateOperationsInput | string | null
     status?: IntFieldUpdateOperationsInput | number
     description?: NullableStringFieldUpdateOperationsInput | string | null
     isDelete?: BoolFieldUpdateOperationsInput | boolean
     createTime?: DateTimeFieldUpdateOperationsInput | Date | string
     updateTime?: DateTimeFieldUpdateOperationsInput | Date | string
     extAttributes?: NullableJsonNullValueInput | InputJsonValue
-    role?: RoleUncheckedUpdateManyWithoutClientNestedInput
+    roles?: RoleUncheckedUpdateManyWithoutClientNestedInput
   }
 
   export type ClientCreateManyInput = {
     id?: number
     clientCode: string
     clientName: string
+    url?: string | null
     status?: number
     description?: string | null
     isDelete?: boolean
@@ -21359,6 +21382,7 @@ export namespace Prisma {
   export type ClientUpdateManyMutationInput = {
     clientCode?: StringFieldUpdateOperationsInput | string
     clientName?: StringFieldUpdateOperationsInput | string
+    url?: NullableStringFieldUpdateOperationsInput | string | null
     status?: IntFieldUpdateOperationsInput | number
     description?: NullableStringFieldUpdateOperationsInput | string | null
     isDelete?: BoolFieldUpdateOperationsInput | boolean
@@ -21371,6 +21395,7 @@ export namespace Prisma {
     id?: IntFieldUpdateOperationsInput | number
     clientCode?: StringFieldUpdateOperationsInput | string
     clientName?: StringFieldUpdateOperationsInput | string
+    url?: NullableStringFieldUpdateOperationsInput | string | null
     status?: IntFieldUpdateOperationsInput | number
     description?: NullableStringFieldUpdateOperationsInput | string | null
     isDelete?: BoolFieldUpdateOperationsInput | boolean
@@ -21387,7 +21412,7 @@ export namespace Prisma {
     isDelete?: boolean
     createTime?: Date | string
     updateTime?: Date | string
-    client: ClientCreateNestedOneWithoutRoleInput
+    client: ClientCreateNestedOneWithoutRolesInput
     positions?: PositionRoleCreateNestedManyWithoutRoleInput
     organizations?: OrganizationRoleCreateNestedManyWithoutRoleInput
     positionOrganizations?: PosOrgRoleCreateNestedManyWithoutRoleInput
@@ -21420,7 +21445,7 @@ export namespace Prisma {
     isDelete?: BoolFieldUpdateOperationsInput | boolean
     createTime?: DateTimeFieldUpdateOperationsInput | Date | string
     updateTime?: DateTimeFieldUpdateOperationsInput | Date | string
-    client?: ClientUpdateOneRequiredWithoutRoleNestedInput
+    client?: ClientUpdateOneRequiredWithoutRolesNestedInput
     positions?: PositionRoleUpdateManyWithoutRoleNestedInput
     organizations?: OrganizationRoleUpdateManyWithoutRoleNestedInput
     positionOrganizations?: PosOrgRoleUpdateManyWithoutRoleNestedInput
@@ -22542,6 +22567,7 @@ export namespace Prisma {
     id?: SortOrder
     clientCode?: SortOrder
     clientName?: SortOrder
+    url?: SortOrder
     status?: SortOrder
     description?: SortOrder
     isDelete?: SortOrder
@@ -22559,6 +22585,7 @@ export namespace Prisma {
     id?: SortOrder
     clientCode?: SortOrder
     clientName?: SortOrder
+    url?: SortOrder
     status?: SortOrder
     description?: SortOrder
     isDelete?: SortOrder
@@ -22570,6 +22597,7 @@ export namespace Prisma {
     id?: SortOrder
     clientCode?: SortOrder
     clientName?: SortOrder
+    url?: SortOrder
     status?: SortOrder
     description?: SortOrder
     isDelete?: SortOrder
@@ -23881,9 +23909,9 @@ export namespace Prisma {
     deleteMany?: RoleScalarWhereInput | RoleScalarWhereInput[]
   }
 
-  export type ClientCreateNestedOneWithoutRoleInput = {
-    create?: XOR<ClientCreateWithoutRoleInput, ClientUncheckedCreateWithoutRoleInput>
-    connectOrCreate?: ClientCreateOrConnectWithoutRoleInput
+  export type ClientCreateNestedOneWithoutRolesInput = {
+    create?: XOR<ClientCreateWithoutRolesInput, ClientUncheckedCreateWithoutRolesInput>
+    connectOrCreate?: ClientCreateOrConnectWithoutRolesInput
     connect?: ClientWhereUniqueInput
   }
 
@@ -23957,12 +23985,12 @@ export namespace Prisma {
     connect?: RolePrivilegeWhereUniqueInput | RolePrivilegeWhereUniqueInput[]
   }
 
-  export type ClientUpdateOneRequiredWithoutRoleNestedInput = {
-    create?: XOR<ClientCreateWithoutRoleInput, ClientUncheckedCreateWithoutRoleInput>
-    connectOrCreate?: ClientCreateOrConnectWithoutRoleInput
-    upsert?: ClientUpsertWithoutRoleInput
+  export type ClientUpdateOneRequiredWithoutRolesNestedInput = {
+    create?: XOR<ClientCreateWithoutRolesInput, ClientUncheckedCreateWithoutRolesInput>
+    connectOrCreate?: ClientCreateOrConnectWithoutRolesInput
+    upsert?: ClientUpsertWithoutRolesInput
     connect?: ClientWhereUniqueInput
-    update?: XOR<XOR<ClientUpdateToOneWithWhereWithoutRoleInput, ClientUpdateWithoutRoleInput>, ClientUncheckedUpdateWithoutRoleInput>
+    update?: XOR<XOR<ClientUpdateToOneWithWhereWithoutRolesInput, ClientUpdateWithoutRolesInput>, ClientUncheckedUpdateWithoutRolesInput>
   }
 
   export type PositionRoleUpdateManyWithoutRoleNestedInput = {
@@ -26523,9 +26551,10 @@ export namespace Prisma {
     updateTime?: DateTimeFilter<"Role"> | Date | string
   }
 
-  export type ClientCreateWithoutRoleInput = {
+  export type ClientCreateWithoutRolesInput = {
     clientCode: string
     clientName: string
+    url?: string | null
     status?: number
     description?: string | null
     isDelete?: boolean
@@ -26534,10 +26563,11 @@ export namespace Prisma {
     extAttributes?: NullableJsonNullValueInput | InputJsonValue
   }
 
-  export type ClientUncheckedCreateWithoutRoleInput = {
+  export type ClientUncheckedCreateWithoutRolesInput = {
     id?: number
     clientCode: string
     clientName: string
+    url?: string | null
     status?: number
     description?: string | null
     isDelete?: boolean
@@ -26546,9 +26576,9 @@ export namespace Prisma {
     extAttributes?: NullableJsonNullValueInput | InputJsonValue
   }
 
-  export type ClientCreateOrConnectWithoutRoleInput = {
+  export type ClientCreateOrConnectWithoutRolesInput = {
     where: ClientWhereUniqueInput
-    create: XOR<ClientCreateWithoutRoleInput, ClientUncheckedCreateWithoutRoleInput>
+    create: XOR<ClientCreateWithoutRolesInput, ClientUncheckedCreateWithoutRolesInput>
   }
 
   export type PositionRoleCreateWithoutRoleInput = {
@@ -26643,20 +26673,21 @@ export namespace Prisma {
     skipDuplicates?: boolean
   }
 
-  export type ClientUpsertWithoutRoleInput = {
-    update: XOR<ClientUpdateWithoutRoleInput, ClientUncheckedUpdateWithoutRoleInput>
-    create: XOR<ClientCreateWithoutRoleInput, ClientUncheckedCreateWithoutRoleInput>
+  export type ClientUpsertWithoutRolesInput = {
+    update: XOR<ClientUpdateWithoutRolesInput, ClientUncheckedUpdateWithoutRolesInput>
+    create: XOR<ClientCreateWithoutRolesInput, ClientUncheckedCreateWithoutRolesInput>
     where?: ClientWhereInput
   }
 
-  export type ClientUpdateToOneWithWhereWithoutRoleInput = {
+  export type ClientUpdateToOneWithWhereWithoutRolesInput = {
     where?: ClientWhereInput
-    data: XOR<ClientUpdateWithoutRoleInput, ClientUncheckedUpdateWithoutRoleInput>
+    data: XOR<ClientUpdateWithoutRolesInput, ClientUncheckedUpdateWithoutRolesInput>
   }
 
-  export type ClientUpdateWithoutRoleInput = {
+  export type ClientUpdateWithoutRolesInput = {
     clientCode?: StringFieldUpdateOperationsInput | string
     clientName?: StringFieldUpdateOperationsInput | string
+    url?: NullableStringFieldUpdateOperationsInput | string | null
     status?: IntFieldUpdateOperationsInput | number
     description?: NullableStringFieldUpdateOperationsInput | string | null
     isDelete?: BoolFieldUpdateOperationsInput | boolean
@@ -26665,10 +26696,11 @@ export namespace Prisma {
     extAttributes?: NullableJsonNullValueInput | InputJsonValue
   }
 
-  export type ClientUncheckedUpdateWithoutRoleInput = {
+  export type ClientUncheckedUpdateWithoutRolesInput = {
     id?: IntFieldUpdateOperationsInput | number
     clientCode?: StringFieldUpdateOperationsInput | string
     clientName?: StringFieldUpdateOperationsInput | string
+    url?: NullableStringFieldUpdateOperationsInput | string | null
     status?: IntFieldUpdateOperationsInput | number
     description?: NullableStringFieldUpdateOperationsInput | string | null
     isDelete?: BoolFieldUpdateOperationsInput | boolean
@@ -26803,7 +26835,7 @@ export namespace Prisma {
     isDelete?: boolean
     createTime?: Date | string
     updateTime?: Date | string
-    client: ClientCreateNestedOneWithoutRoleInput
+    client: ClientCreateNestedOneWithoutRolesInput
     organizations?: OrganizationRoleCreateNestedManyWithoutRoleInput
     positionOrganizations?: PosOrgRoleCreateNestedManyWithoutRoleInput
     employments?: EmploymentRoleCreateNestedManyWithoutRoleInput
@@ -26886,7 +26918,7 @@ export namespace Prisma {
     isDelete?: BoolFieldUpdateOperationsInput | boolean
     createTime?: DateTimeFieldUpdateOperationsInput | Date | string
     updateTime?: DateTimeFieldUpdateOperationsInput | Date | string
-    client?: ClientUpdateOneRequiredWithoutRoleNestedInput
+    client?: ClientUpdateOneRequiredWithoutRolesNestedInput
     organizations?: OrganizationRoleUpdateManyWithoutRoleNestedInput
     positionOrganizations?: PosOrgRoleUpdateManyWithoutRoleNestedInput
     employments?: EmploymentRoleUpdateManyWithoutRoleNestedInput
@@ -26954,7 +26986,7 @@ export namespace Prisma {
     isDelete?: boolean
     createTime?: Date | string
     updateTime?: Date | string
-    client: ClientCreateNestedOneWithoutRoleInput
+    client: ClientCreateNestedOneWithoutRolesInput
     positions?: PositionRoleCreateNestedManyWithoutRoleInput
     organizations?: OrganizationRoleCreateNestedManyWithoutRoleInput
     positionOrganizations?: PosOrgRoleCreateNestedManyWithoutRoleInput
@@ -27044,7 +27076,7 @@ export namespace Prisma {
     isDelete?: BoolFieldUpdateOperationsInput | boolean
     createTime?: DateTimeFieldUpdateOperationsInput | Date | string
     updateTime?: DateTimeFieldUpdateOperationsInput | Date | string
-    client?: ClientUpdateOneRequiredWithoutRoleNestedInput
+    client?: ClientUpdateOneRequiredWithoutRolesNestedInput
     positions?: PositionRoleUpdateManyWithoutRoleNestedInput
     organizations?: OrganizationRoleUpdateManyWithoutRoleNestedInput
     positionOrganizations?: PosOrgRoleUpdateManyWithoutRoleNestedInput
@@ -27127,7 +27159,7 @@ export namespace Prisma {
     isDelete?: boolean
     createTime?: Date | string
     updateTime?: Date | string
-    client: ClientCreateNestedOneWithoutRoleInput
+    client: ClientCreateNestedOneWithoutRolesInput
     positions?: PositionRoleCreateNestedManyWithoutRoleInput
     positionOrganizations?: PosOrgRoleCreateNestedManyWithoutRoleInput
     employments?: EmploymentRoleCreateNestedManyWithoutRoleInput
@@ -27232,7 +27264,7 @@ export namespace Prisma {
     isDelete?: BoolFieldUpdateOperationsInput | boolean
     createTime?: DateTimeFieldUpdateOperationsInput | Date | string
     updateTime?: DateTimeFieldUpdateOperationsInput | Date | string
-    client?: ClientUpdateOneRequiredWithoutRoleNestedInput
+    client?: ClientUpdateOneRequiredWithoutRolesNestedInput
     positions?: PositionRoleUpdateManyWithoutRoleNestedInput
     positionOrganizations?: PosOrgRoleUpdateManyWithoutRoleNestedInput
     employments?: EmploymentRoleUpdateManyWithoutRoleNestedInput
@@ -27291,7 +27323,7 @@ export namespace Prisma {
     isDelete?: boolean
     createTime?: Date | string
     updateTime?: Date | string
-    client: ClientCreateNestedOneWithoutRoleInput
+    client: ClientCreateNestedOneWithoutRolesInput
     positions?: PositionRoleCreateNestedManyWithoutRoleInput
     organizations?: OrganizationRoleCreateNestedManyWithoutRoleInput
     employments?: EmploymentRoleCreateNestedManyWithoutRoleInput
@@ -27372,7 +27404,7 @@ export namespace Prisma {
     isDelete?: BoolFieldUpdateOperationsInput | boolean
     createTime?: DateTimeFieldUpdateOperationsInput | Date | string
     updateTime?: DateTimeFieldUpdateOperationsInput | Date | string
-    client?: ClientUpdateOneRequiredWithoutRoleNestedInput
+    client?: ClientUpdateOneRequiredWithoutRolesNestedInput
     positions?: PositionRoleUpdateManyWithoutRoleNestedInput
     organizations?: OrganizationRoleUpdateManyWithoutRoleNestedInput
     employments?: EmploymentRoleUpdateManyWithoutRoleNestedInput
@@ -27479,7 +27511,7 @@ export namespace Prisma {
     isDelete?: boolean
     createTime?: Date | string
     updateTime?: Date | string
-    client: ClientCreateNestedOneWithoutRoleInput
+    client: ClientCreateNestedOneWithoutRolesInput
     positions?: PositionRoleCreateNestedManyWithoutRoleInput
     organizations?: OrganizationRoleCreateNestedManyWithoutRoleInput
     positionOrganizations?: PosOrgRoleCreateNestedManyWithoutRoleInput
@@ -27556,7 +27588,7 @@ export namespace Prisma {
     isDelete?: BoolFieldUpdateOperationsInput | boolean
     createTime?: DateTimeFieldUpdateOperationsInput | Date | string
     updateTime?: DateTimeFieldUpdateOperationsInput | Date | string
-    client?: ClientUpdateOneRequiredWithoutRoleNestedInput
+    client?: ClientUpdateOneRequiredWithoutRolesNestedInput
     positions?: PositionRoleUpdateManyWithoutRoleNestedInput
     organizations?: OrganizationRoleUpdateManyWithoutRoleNestedInput
     positionOrganizations?: PosOrgRoleUpdateManyWithoutRoleNestedInput

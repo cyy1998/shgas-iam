@@ -1,6 +1,6 @@
 import { z, createRoute, OpenAPIHono } from '@hono/zod-openapi'
 import { clientService } from '../services/client.service'
-import { ClientVoSchema } from '../types/client.type'
+import { ClientDtoSchema, ClientVoSchema } from '../types/client.type'
 import { createResponseSchema, success } from '../utils/response.utils'
 
 const app = new OpenAPIHono()
@@ -24,7 +24,7 @@ app.openapi(
             200: {
                 content: {
                     'application/json': {
-                        schema: createResponseSchema(ClientVoSchema),
+                        schema: createResponseSchema(ClientDtoSchema),
                     },
                 },
                 description: '应用信息',

@@ -10,6 +10,17 @@ import { CustomError } from "../errors/CustomError"
 import { AuthzUnauthorizedError } from "../errors/AuthzUnauthorizedError"
 import { userRepository } from "../repositories/user.repository"
 import type { User } from "../../generated/prisma"
+import type { ClientDto } from "../types/client.type"
+import { ClientStatus } from "../constants/client.status"
+import { AuthzForbiddenError } from "../errors/AuthzForbiddenError"
+
+function extractClientKey(path: string): string {
+    const parts = path.split('/').filter(Boolean);
+    if (parts.length < 2) {
+        return ''; // 不符合格式
+    }
+    return `cache:client:${parts[1]}`;
+}
 
 async function _login(user: UserDto) {
     // let orcasSessionId_1 = null
@@ -142,6 +153,14 @@ export const authService = {
     async authz(sessionId: string | null, path: string | undefined) {
         if (!path) {
             throw new AuthzUnauthorizedError('非法访问')
+        }
+        const clientString = await redis.get(extractClientKey(path))
+        if (clientString === null) {
+            throw new AuthzUnauthorizedError('非法访问')
+        }
+        const client: ClientDto = JSON.parse(clientString)
+        if (client.status === ClientStatus.Maintance) {
+            throw new AuthzForbiddenError('系统维护中')
         }
         if (!sessionId) {
             throw new AuthzUnauthorizedError('未登录')

@@ -8,6 +8,7 @@ export const clientMapper = {
             id: entity.id,
             clientCode: entity.clientCode,
             clientName: entity.clientName,
+            url: entity.url,
             status: entity.status,
             extAttributes: typeof entity.extAttributes === 'string' ? JSON.parse(entity.extAttributes) : entity.extAttributes
         }
