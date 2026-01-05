@@ -13,7 +13,10 @@ const EnvSchema = z.object({
     WX_CORPSECRET: z.string(),
     MAGIC_CODE: z.string(),
     NODE_ENV: z.string(),
-    PURVEYOR_PARENT_ORG: z.string()
+    PURVEYOR_PARENT_ORG: z.string(),
+    REDIS_URL: z.string(),
+    REDIS_PORT: z.coerce.number(),
+    REDIS_DB: z.coerce.number()
 });
 
 export type Env = z.infer<typeof EnvSchema>;
