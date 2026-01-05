@@ -154,6 +154,7 @@ export const authService = {
         if (!path) {
             throw new AuthzUnauthorizedError('非法访问')
         }
+        console.log(path)
         const clientString = await redis.get(extractClientKey(path))
         if (clientString === null) {
             throw new AuthzUnauthorizedError('非法访问')
