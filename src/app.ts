@@ -6,10 +6,6 @@ import openRoutes from './routes/open.route'
 import { serveStatic } from 'hono/bun'
 import { OpenAPIHono } from '@hono/zod-openapi'
 import { logger } from 'hono/logger'
-import { makeResponse } from './utils/response.utils'
-import { ServiceStatusCode } from './constants/service.status'
-import { CustomError } from './errors/CustomError'
-import { AuthzError } from './errors/AuthzError'
 import { errorHandler } from './middleware/error.handler'
 
 const app = new OpenAPIHono()

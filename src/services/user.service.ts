@@ -145,6 +145,11 @@ export const userService = {
         return userDtos
     },
 
+    async getUsersByOrgPosWithDelegation(orgCode: string, roleCode: string, orgScope: string, privCode: string) {
+        const userDtos = this.getUsersByOrgPos(orgCode, roleCode, orgScope)
+        return userDtos
+    },
+
     async registerPurveyorConcat(username: string, mobile: string, name: string, orgCode: string) {
         await prisma.$transaction(async (tx) => {
             const existingUser = await userRepository.getUserByMobile(mobile, tx)
