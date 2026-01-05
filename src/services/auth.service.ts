@@ -13,6 +13,7 @@ import type { User } from "../../generated/prisma"
 import type { ClientDto } from "../types/client.type"
 import { ClientStatus } from "../constants/client.status"
 import { AuthzForbiddenError } from "../errors/AuthzForbiddenError"
+import { AuthzMaintaincingError } from "../errors/AuthzMaintaincingError"
 
 function extractClientKey(path: string): string {
     const parts = path.split('/').filter(Boolean);
@@ -154,14 +155,13 @@ export const authService = {
         if (!path) {
             throw new AuthzUnauthorizedError('非法访问')
         }
-        console.log(path)
         const clientString = await redis.get(extractClientKey(path))
         if (clientString === null) {
             throw new AuthzUnauthorizedError('非法访问')
         }
         const client: ClientDto = JSON.parse(clientString)
         if (client.status === ClientStatus.Maintance) {
-            throw new AuthzForbiddenError('系统维护中')
+            throw new AuthzMaintaincingError('系统维护中')
         }
         if (!sessionId) {
             throw new AuthzUnauthorizedError('未登录')
