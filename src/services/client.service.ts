@@ -14,7 +14,7 @@ export const clientService = {
         }
         const client = await clientRepository.getClientByCode(clientCode)
         if (client === null) {
-            throw new CustomError('client不存在')
+            return null
         }
         // const clientVo = clientMapper.dtoToVo(clientMapper.entityToDto(client))
         const clientDto = clientMapper.entityToDto(client)
