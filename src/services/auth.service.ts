@@ -168,12 +168,12 @@ export const authService = {
         if (!userString) {
             throw new AuthzUnauthorizedError('未登录')
         }
-        console.log(client)
         const userDto: UserDto = JSON.parse(userString)
         let userInExcludingList = false
-        // if (client.extAttributes.userExcluding && client.extAttributes.userExcluding.includes(userDto.username)) {
-        //     userInExcludingList = true
-        // }
+        if (client.extAttributes.userExcluding !== undefined
+            && client.extAttributes.userExcluding.includes(userDto.username)) {
+            userInExcludingList = true
+        }
         if (client.status === ClientStatus.Maintance && !userInExcludingList) {
             throw new AuthzMaintaincingError('系统维护中')
         }
