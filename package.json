@@ -4,7 +4,8 @@
   "type": "module",
   "private": true,
   "devDependencies": {
-    "@types/bun": "latest"
+    "@types/bun": "latest",
+    "@types/sm-crypto": "^0.3.4"
   },
   "peerDependencies": {
     "typescript": "^5"
@@ -24,6 +25,7 @@
     "oidc-provider": "^9.6.0",
     "p-limit": "^7.2.0",
     "prisma": "^6.17.1",
+    "sm-crypto": "^0.3.13",
     "swagger-ui-dist": "^5.29.5",
     "xlsx": "^0.18.5"
   },

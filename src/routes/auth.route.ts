@@ -228,14 +228,6 @@ app.openapi(
                     },
                 },
                 description: '登出成功',
-            },
-            401: {
-                content: {
-                    'application/json': {
-                        schema: createResponseSchema(z.object()),
-                    },
-                },
-                description: '认证失败',
             }
         },
     }),
@@ -317,22 +309,6 @@ app.openapi(
                     },
                 },
                 description: '发送短信成功',
-            },
-            401: {
-                content: {
-                    'application/json': {
-                        schema: createResponseSchema(z.object()),
-                    },
-                },
-                description: '认证失败',
-            },
-            500: {
-                content: {
-                    'application/json': {
-                        schema: createResponseSchema(z.object()),
-                    },
-                },
-                description: '内部错误',
             },
         }
     }),
