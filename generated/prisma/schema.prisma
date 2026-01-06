@@ -162,7 +162,7 @@ model Client {
   isDelete      Boolean  @default(false) @map("is_delete") @db.TinyInt
   createTime    DateTime @default(now()) @map("create_time")
   updateTime    DateTime @default(now()) @updatedAt @map("update_time")
-  extAttributes Json?    @map("ext_attributes") @db.Json
+  extAttributes Json     @map("ext_attributes") @db.Json
   roles         Role[]
 
   @@map("client")

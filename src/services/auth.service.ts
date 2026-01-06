@@ -161,9 +161,6 @@ export const authService = {
         if (client === null) {
             throw new AuthzUnauthorizedError('非法访问')
         }
-        if (client.status === ClientStatus.Maintance) {
-            throw new AuthzMaintaincingError('系统维护中')
-        }
         if (!sessionId) {
             throw new AuthzUnauthorizedError('未登录')
         }
@@ -172,6 +169,13 @@ export const authService = {
             throw new AuthzUnauthorizedError('未登录')
         }
         const userDto: UserDto = JSON.parse(userString)
+        let userInExcludingList = false
+        if (client.extAttributes.userExcluding !== null && client.extAttributes.userExcluding.includes(userDto.username)) {
+            userInExcludingList = true
+        }
+        if (client.status === ClientStatus.Maintance && !userInExcludingList) {
+            throw new AuthzMaintaincingError('系统维护中')
+        }
         const userFinal = {
             username: userDto.username,
             id: userDto.id

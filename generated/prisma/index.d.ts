@@ -9382,7 +9382,7 @@ export namespace Prisma {
     isDelete: boolean
     createTime: Date
     updateTime: Date
-    extAttributes: JsonValue | null
+    extAttributes: JsonValue
     _count: ClientCountAggregateOutputType | null
     _avg: ClientAvgAggregateOutputType | null
     _sum: ClientSumAggregateOutputType | null
@@ -9455,7 +9455,7 @@ export namespace Prisma {
       isDelete: boolean
       createTime: Date
       updateTime: Date
-      extAttributes: Prisma.JsonValue | null
+      extAttributes: Prisma.JsonValue
     }, ExtArgs["result"]["client"]>
     composites: {}
   }
@@ -19371,6 +19371,13 @@ export namespace Prisma {
   export type SortOrder = (typeof SortOrder)[keyof typeof SortOrder]
 
 
+  export const JsonNullValueInput: {
+    JsonNull: typeof JsonNull
+  };
+
+  export type JsonNullValueInput = (typeof JsonNullValueInput)[keyof typeof JsonNullValueInput]
+
+
   export const NullableJsonNullValueInput: {
     DbNull: typeof DbNull,
     JsonNull: typeof JsonNull
@@ -20113,7 +20120,7 @@ export namespace Prisma {
     isDelete?: BoolFilter<"Client"> | boolean
     createTime?: DateTimeFilter<"Client"> | Date | string
     updateTime?: DateTimeFilter<"Client"> | Date | string
-    extAttributes?: JsonNullableFilter<"Client">
+    extAttributes?: JsonFilter<"Client">
     roles?: RoleListRelationFilter
   }
 
@@ -20127,7 +20134,7 @@ export namespace Prisma {
     isDelete?: SortOrder
     createTime?: SortOrder
     updateTime?: SortOrder
-    extAttributes?: SortOrderInput | SortOrder
+    extAttributes?: SortOrder
     roles?: RoleOrderByRelationAggregateInput
     _relevance?: ClientOrderByRelevanceInput
   }
@@ -20145,7 +20152,7 @@ export namespace Prisma {
     isDelete?: BoolFilter<"Client"> | boolean
     createTime?: DateTimeFilter<"Client"> | Date | string
     updateTime?: DateTimeFilter<"Client"> | Date | string
-    extAttributes?: JsonNullableFilter<"Client">
+    extAttributes?: JsonFilter<"Client">
     roles?: RoleListRelationFilter
   }, "id">
 
@@ -20159,7 +20166,7 @@ export namespace Prisma {
     isDelete?: SortOrder
     createTime?: SortOrder
     updateTime?: SortOrder
-    extAttributes?: SortOrderInput | SortOrder
+    extAttributes?: SortOrder
     _count?: ClientCountOrderByAggregateInput
     _avg?: ClientAvgOrderByAggregateInput
     _max?: ClientMaxOrderByAggregateInput
@@ -20180,7 +20187,7 @@ export namespace Prisma {
     isDelete?: BoolWithAggregatesFilter<"Client"> | boolean
     createTime?: DateTimeWithAggregatesFilter<"Client"> | Date | string
     updateTime?: DateTimeWithAggregatesFilter<"Client"> | Date | string
-    extAttributes?: JsonNullableWithAggregatesFilter<"Client">
+    extAttributes?: JsonWithAggregatesFilter<"Client">
   }
 
   export type RoleWhereInput = {
@@ -21321,7 +21328,7 @@ export namespace Prisma {
     isDelete?: boolean
     createTime?: Date | string
     updateTime?: Date | string
-    extAttributes?: NullableJsonNullValueInput | InputJsonValue
+    extAttributes: JsonNullValueInput | InputJsonValue
     roles?: RoleCreateNestedManyWithoutClientInput
   }
 
@@ -21335,7 +21342,7 @@ export namespace Prisma {
     isDelete?: boolean
     createTime?: Date | string
     updateTime?: Date | string
-    extAttributes?: NullableJsonNullValueInput | InputJsonValue
+    extAttributes: JsonNullValueInput | InputJsonValue
     roles?: RoleUncheckedCreateNestedManyWithoutClientInput
   }
 
@@ -21348,7 +21355,7 @@ export namespace Prisma {
     isDelete?: BoolFieldUpdateOperationsInput | boolean
     createTime?: DateTimeFieldUpdateOperationsInput | Date | string
     updateTime?: DateTimeFieldUpdateOperationsInput | Date | string
-    extAttributes?: NullableJsonNullValueInput | InputJsonValue
+    extAttributes?: JsonNullValueInput | InputJsonValue
     roles?: RoleUpdateManyWithoutClientNestedInput
   }
 
@@ -21362,7 +21369,7 @@ export namespace Prisma {
     isDelete?: BoolFieldUpdateOperationsInput | boolean
     createTime?: DateTimeFieldUpdateOperationsInput | Date | string
     updateTime?: DateTimeFieldUpdateOperationsInput | Date | string
-    extAttributes?: NullableJsonNullValueInput | InputJsonValue
+    extAttributes?: JsonNullValueInput | InputJsonValue
     roles?: RoleUncheckedUpdateManyWithoutClientNestedInput
   }
 
@@ -21376,7 +21383,7 @@ export namespace Prisma {
     isDelete?: boolean
     createTime?: Date | string
     updateTime?: Date | string
-    extAttributes?: NullableJsonNullValueInput | InputJsonValue
+    extAttributes: JsonNullValueInput | InputJsonValue
   }
 
   export type ClientUpdateManyMutationInput = {
@@ -21388,7 +21395,7 @@ export namespace Prisma {
     isDelete?: BoolFieldUpdateOperationsInput | boolean
     createTime?: DateTimeFieldUpdateOperationsInput | Date | string
     updateTime?: DateTimeFieldUpdateOperationsInput | Date | string
-    extAttributes?: NullableJsonNullValueInput | InputJsonValue
+    extAttributes?: JsonNullValueInput | InputJsonValue
   }
 
   export type ClientUncheckedUpdateManyInput = {
@@ -21401,7 +21408,7 @@ export namespace Prisma {
     isDelete?: BoolFieldUpdateOperationsInput | boolean
     createTime?: DateTimeFieldUpdateOperationsInput | Date | string
     updateTime?: DateTimeFieldUpdateOperationsInput | Date | string
-    extAttributes?: NullableJsonNullValueInput | InputJsonValue
+    extAttributes?: JsonNullValueInput | InputJsonValue
   }
 
   export type RoleCreateInput = {
@@ -22523,14 +22530,14 @@ export namespace Prisma {
     _min?: NestedDateTimeNullableFilter<$PrismaModel>
     _max?: NestedDateTimeNullableFilter<$PrismaModel>
   }
-  export type JsonNullableFilter<$PrismaModel = never> =
+  export type JsonFilter<$PrismaModel = never> =
     | PatchUndefined<
-        Either<Required<JsonNullableFilterBase<$PrismaModel>>, Exclude<keyof Required<JsonNullableFilterBase<$PrismaModel>>, 'path'>>,
-        Required<JsonNullableFilterBase<$PrismaModel>>
+        Either<Required<JsonFilterBase<$PrismaModel>>, Exclude<keyof Required<JsonFilterBase<$PrismaModel>>, 'path'>>,
+        Required<JsonFilterBase<$PrismaModel>>
       >
-    | OptionalFlat<Omit<Required<JsonNullableFilterBase<$PrismaModel>>, 'path'>>
+    | OptionalFlat<Omit<Required<JsonFilterBase<$PrismaModel>>, 'path'>>
 
-  export type JsonNullableFilterBase<$PrismaModel = never> = {
+  export type JsonFilterBase<$PrismaModel = never> = {
     equals?: InputJsonValue | JsonFieldRefInput<$PrismaModel> | JsonNullValueFilter
     path?: string
     mode?: QueryMode | EnumQueryModeFieldRefInput<$PrismaModel>
@@ -22609,14 +22616,14 @@ export namespace Prisma {
     id?: SortOrder
     status?: SortOrder
   }
-  export type JsonNullableWithAggregatesFilter<$PrismaModel = never> =
+  export type JsonWithAggregatesFilter<$PrismaModel = never> =
     | PatchUndefined<
-        Either<Required<JsonNullableWithAggregatesFilterBase<$PrismaModel>>, Exclude<keyof Required<JsonNullableWithAggregatesFilterBase<$PrismaModel>>, 'path'>>,
-        Required<JsonNullableWithAggregatesFilterBase<$PrismaModel>>
+        Either<Required<JsonWithAggregatesFilterBase<$PrismaModel>>, Exclude<keyof Required<JsonWithAggregatesFilterBase<$PrismaModel>>, 'path'>>,
+        Required<JsonWithAggregatesFilterBase<$PrismaModel>>
       >
-    | OptionalFlat<Omit<Required<JsonNullableWithAggregatesFilterBase<$PrismaModel>>, 'path'>>
+    | OptionalFlat<Omit<Required<JsonWithAggregatesFilterBase<$PrismaModel>>, 'path'>>
 
-  export type JsonNullableWithAggregatesFilterBase<$PrismaModel = never> = {
+  export type JsonWithAggregatesFilterBase<$PrismaModel = never> = {
     equals?: InputJsonValue | JsonFieldRefInput<$PrismaModel> | JsonNullValueFilter
     path?: string
     mode?: QueryMode | EnumQueryModeFieldRefInput<$PrismaModel>
@@ -22631,9 +22638,9 @@ export namespace Prisma {
     gt?: InputJsonValue
     gte?: InputJsonValue
     not?: InputJsonValue | JsonFieldRefInput<$PrismaModel> | JsonNullValueFilter
-    _count?: NestedIntNullableFilter<$PrismaModel>
-    _min?: NestedJsonNullableFilter<$PrismaModel>
-    _max?: NestedJsonNullableFilter<$PrismaModel>
+    _count?: NestedIntFilter<$PrismaModel>
+    _min?: NestedJsonFilter<$PrismaModel>
+    _max?: NestedJsonFilter<$PrismaModel>
   }
 
   export type ClientScalarRelationFilter = {
@@ -22837,6 +22844,29 @@ export namespace Prisma {
     posOrgId?: SortOrder
     roleId?: SortOrder
   }
+  export type JsonNullableFilter<$PrismaModel = never> =
+    | PatchUndefined<
+        Either<Required<JsonNullableFilterBase<$PrismaModel>>, Exclude<keyof Required<JsonNullableFilterBase<$PrismaModel>>, 'path'>>,
+        Required<JsonNullableFilterBase<$PrismaModel>>
+      >
+    | OptionalFlat<Omit<Required<JsonNullableFilterBase<$PrismaModel>>, 'path'>>
+
+  export type JsonNullableFilterBase<$PrismaModel = never> = {
+    equals?: InputJsonValue | JsonFieldRefInput<$PrismaModel> | JsonNullValueFilter
+    path?: string
+    mode?: QueryMode | EnumQueryModeFieldRefInput<$PrismaModel>
+    string_contains?: string | StringFieldRefInput<$PrismaModel>
+    string_starts_with?: string | StringFieldRefInput<$PrismaModel>
+    string_ends_with?: string | StringFieldRefInput<$PrismaModel>
+    array_starts_with?: InputJsonValue | JsonFieldRefInput<$PrismaModel> | null
+    array_ends_with?: InputJsonValue | JsonFieldRefInput<$PrismaModel> | null
+    array_contains?: InputJsonValue | JsonFieldRefInput<$PrismaModel> | null
+    lt?: InputJsonValue
+    lte?: InputJsonValue
+    gt?: InputJsonValue
+    gte?: InputJsonValue
+    not?: InputJsonValue | JsonFieldRefInput<$PrismaModel> | JsonNullValueFilter
+  }
 
   export type DelegationDetailListRelationFilter = {
     every?: DelegationDetailWhereInput
@@ -22896,6 +22926,32 @@ export namespace Prisma {
   export type PrivilegeSumOrderByAggregateInput = {
     id?: SortOrder
     status?: SortOrder
+  }
+  export type JsonNullableWithAggregatesFilter<$PrismaModel = never> =
+    | PatchUndefined<
+        Either<Required<JsonNullableWithAggregatesFilterBase<$PrismaModel>>, Exclude<keyof Required<JsonNullableWithAggregatesFilterBase<$PrismaModel>>, 'path'>>,
+        Required<JsonNullableWithAggregatesFilterBase<$PrismaModel>>
+      >
+    | OptionalFlat<Omit<Required<JsonNullableWithAggregatesFilterBase<$PrismaModel>>, 'path'>>
+
+  export type JsonNullableWithAggregatesFilterBase<$PrismaModel = never> = {
+    equals?: InputJsonValue | JsonFieldRefInput<$PrismaModel> | JsonNullValueFilter
+    path?: string
+    mode?: QueryMode | EnumQueryModeFieldRefInput<$PrismaModel>
+    string_contains?: string | StringFieldRefInput<$PrismaModel>
+    string_starts_with?: string | StringFieldRefInput<$PrismaModel>
+    string_ends_with?: string | StringFieldRefInput<$PrismaModel>
+    array_starts_with?: InputJsonValue | JsonFieldRefInput<$PrismaModel> | null
+    array_ends_with?: InputJsonValue | JsonFieldRefInput<$PrismaModel> | null
+    array_contains?: InputJsonValue | JsonFieldRefInput<$PrismaModel> | null
+    lt?: InputJsonValue
+    lte?: InputJsonValue
+    gt?: InputJsonValue
+    gte?: InputJsonValue
+    not?: InputJsonValue | JsonFieldRefInput<$PrismaModel> | JsonNullValueFilter
+    _count?: NestedIntNullableFilter<$PrismaModel>
+    _min?: NestedJsonNullableFilter<$PrismaModel>
+    _max?: NestedJsonNullableFilter<$PrismaModel>
   }
 
   export type PrivilegeScalarRelationFilter = {
@@ -24631,6 +24687,29 @@ export namespace Prisma {
     _count?: NestedIntNullableFilter<$PrismaModel>
     _min?: NestedDateTimeNullableFilter<$PrismaModel>
     _max?: NestedDateTimeNullableFilter<$PrismaModel>
+  }
+  export type NestedJsonFilter<$PrismaModel = never> =
+    | PatchUndefined<
+        Either<Required<NestedJsonFilterBase<$PrismaModel>>, Exclude<keyof Required<NestedJsonFilterBase<$PrismaModel>>, 'path'>>,
+        Required<NestedJsonFilterBase<$PrismaModel>>
+      >
+    | OptionalFlat<Omit<Required<NestedJsonFilterBase<$PrismaModel>>, 'path'>>
+
+  export type NestedJsonFilterBase<$PrismaModel = never> = {
+    equals?: InputJsonValue | JsonFieldRefInput<$PrismaModel> | JsonNullValueFilter
+    path?: string
+    mode?: QueryMode | EnumQueryModeFieldRefInput<$PrismaModel>
+    string_contains?: string | StringFieldRefInput<$PrismaModel>
+    string_starts_with?: string | StringFieldRefInput<$PrismaModel>
+    string_ends_with?: string | StringFieldRefInput<$PrismaModel>
+    array_starts_with?: InputJsonValue | JsonFieldRefInput<$PrismaModel> | null
+    array_ends_with?: InputJsonValue | JsonFieldRefInput<$PrismaModel> | null
+    array_contains?: InputJsonValue | JsonFieldRefInput<$PrismaModel> | null
+    lt?: InputJsonValue
+    lte?: InputJsonValue
+    gt?: InputJsonValue
+    gte?: InputJsonValue
+    not?: InputJsonValue | JsonFieldRefInput<$PrismaModel> | JsonNullValueFilter
   }
   export type NestedJsonNullableFilter<$PrismaModel = never> =
     | PatchUndefined<
@@ -26560,7 +26639,7 @@ export namespace Prisma {
     isDelete?: boolean
     createTime?: Date | string
     updateTime?: Date | string
-    extAttributes?: NullableJsonNullValueInput | InputJsonValue
+    extAttributes: JsonNullValueInput | InputJsonValue
   }
 
   export type ClientUncheckedCreateWithoutRolesInput = {
@@ -26573,7 +26652,7 @@ export namespace Prisma {
     isDelete?: boolean
     createTime?: Date | string
     updateTime?: Date | string
-    extAttributes?: NullableJsonNullValueInput | InputJsonValue
+    extAttributes: JsonNullValueInput | InputJsonValue
   }
 
   export type ClientCreateOrConnectWithoutRolesInput = {
@@ -26693,7 +26772,7 @@ export namespace Prisma {
     isDelete?: BoolFieldUpdateOperationsInput | boolean
     createTime?: DateTimeFieldUpdateOperationsInput | Date | string
     updateTime?: DateTimeFieldUpdateOperationsInput | Date | string
-    extAttributes?: NullableJsonNullValueInput | InputJsonValue
+    extAttributes?: JsonNullValueInput | InputJsonValue
   }
 
   export type ClientUncheckedUpdateWithoutRolesInput = {
@@ -26706,7 +26785,7 @@ export namespace Prisma {
     isDelete?: BoolFieldUpdateOperationsInput | boolean
     createTime?: DateTimeFieldUpdateOperationsInput | Date | string
     updateTime?: DateTimeFieldUpdateOperationsInput | Date | string
-    extAttributes?: NullableJsonNullValueInput | InputJsonValue
+    extAttributes?: JsonNullValueInput | InputJsonValue
   }
 
   export type PositionRoleUpsertWithWhereUniqueWithoutRoleInput = {
