@@ -170,7 +170,7 @@ export const authService = {
         }
         const userDto: UserDto = JSON.parse(userString)
         let userInExcludingList = false
-        if (client.extAttributes.userExcluding !== null && client.extAttributes.userExcluding.includes(userDto.username)) {
+        if (client.extAttributes.userExcluding && client.extAttributes.userExcluding.includes(userDto.username)) {
             userInExcludingList = true
         }
         if (client.status === ClientStatus.Maintance && !userInExcludingList) {
