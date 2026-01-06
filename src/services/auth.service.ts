@@ -170,9 +170,9 @@ export const authService = {
         }
         const userDto: UserDto = JSON.parse(userString)
         let userInExcludingList = false
-        if (client.extAttributes.userExcluding && client.extAttributes.userExcluding.includes(userDto.username)) {
-            userInExcludingList = true
-        }
+        // if (client.extAttributes.userExcluding && client.extAttributes.userExcluding.includes(userDto.username)) {
+        //     userInExcludingList = true
+        // }
         if (client.status === ClientStatus.Maintance && !userInExcludingList) {
             throw new AuthzMaintaincingError('系统维护中')
         }
