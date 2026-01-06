@@ -53,10 +53,10 @@ export const organizationService = {
             if (parentOrg === null) {
                 throw new CustomError('有效父组织不存在')
             }
-            const organization = await organizationRepository.setOrganization(orgCode, orgName, parentOrg.level + 1, parentOrg.id, tx)
-            const path = `${parentOrg.path}/${organization.id}`
-            await Promise.all([organizationRepository.updateOrganizationPath(organization.id, path, tx),
-            organizationRepository.updateOrganizationClosure(organization.id, parentOrg.id, tx)])
+            await organizationRepository.setOrganization(orgCode, orgName, parentOrg.level + 1, parentOrg, tx)
+            // const path = `${parentOrg.path}/${organization.id}`
+            // await Promise.all([organizationRepository.updateOrganizationPath(organization.id, path, tx),
+            // organizationRepository.updateOrganizationClosure(organization.id, parentOrg.id, tx)])
             return true
         })
     },

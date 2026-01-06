@@ -5,13 +5,13 @@ import { employmentService } from '../services/employment.service'
 import { roleService } from '../services/role.service'
 import { privilegeService } from '../services/privilege.service'
 import { ResponseSchema } from '../types/response.type'
-import { ClientDtoSchema } from '../types/client.type'
+import { ClientDtoSchema, ClientInputDtoSchema } from '../types/client.type'
 import { clientService } from '../services/client.service'
 
 const app = new OpenAPIHono()
 /*
 path: /client/update
-function: 岗位更新
+function: 应用更新
 */
 app.openapi(
     createRoute({
@@ -22,7 +22,7 @@ app.openapi(
             body: {
                 content: {
                     'application/json': {
-                        schema: ClientDtoSchema
+                        schema: ClientInputDtoSchema
                     }
                 }
             },

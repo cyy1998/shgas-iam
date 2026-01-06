@@ -3,7 +3,7 @@ import { redis } from "../libs/cache/redis"
 import { prisma } from "../libs/database/prisma"
 import { clientMapper } from "../mapper/client.mapper"
 import { clientRepository } from "../repositories/client.repository"
-import { ClientDtoSchema, ClientVoSchema, type ClientDto } from "../types/client.type"
+import { ClientDtoSchema, ClientVoSchema, type ClientDto, type ClientInputDto } from "../types/client.type"
 
 export const clientService = {
     async getClientByCode(clientCode: string) {
@@ -21,7 +21,7 @@ export const clientService = {
         await redis.set(`cache:client:${clientCode}`, JSON.stringify(clientDto))
         return clientDto
     },
-    async updateClient(clientDto: ClientDto) {
+    async updateClient(clientDto: ClientInputDto) {
         return await prisma.$transaction(async (tx) => {
             const client = await clientRepository.updateClient(clientDto, tx)
             const updatedClientDto = clientMapper.entityToDto(client)

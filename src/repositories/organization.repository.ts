@@ -1,3 +1,4 @@
+import type { Organization } from '../../generated/prisma'
 import { OrganizationStatus } from '../constants/organization.status'
 import { prisma, type PrismaTransaction } from '../libs/database/prisma'
 
@@ -114,23 +115,22 @@ export const organizationRepository = {
             }
         })
     },
-    async setOrganization(orgCode: string, orgName: string, orgLevel: number, parentId: number, tx: PrismaTransaction = prisma) {
-        return await tx.organization.create({
+    async setOrganization(orgCode: string, orgName: string, orgLevel: number, parentOrganization: Organization, tx: PrismaTransaction = prisma) {
+        const newOrganization = await tx.organization.create({
             data: {
                 orgCode: orgCode,
                 orgName: orgName,
-                parentId: parentId,
+                parentId: parentOrganization.id,
                 level: orgLevel,
                 orgType: '外部组织',
                 isVirtual: true,
                 path: ''
             }
         })
-    },
-    async updateOrganizationPath(orgId: number, path: string, tx: PrismaTransaction = prisma) {
-        return await tx.organization.update({
+        const path = `${parentOrganization.path}/${newOrganization.id}`
+        const updatedOrganization = await tx.organization.update({
             where: {
-                id: orgId,
+                id: newOrganization.id,
                 status: OrganizationStatus.Enable,
                 isDelete: false
             },
@@ -138,25 +138,23 @@ export const organizationRepository = {
                 path: path
             }
         })
-    },
-    async updateOrganizationClosure(orgId: number, parentId: number, tx: PrismaTransaction = prisma) {
         const closureRelations = [];
         const parentAncestors = await tx.organizationClosure.findMany({
             where: {
-                descendantId: parentId
+                descendantId: parentOrganization.id
             },
             select: { ancestorId: true, depth: true },
         })
         parentAncestors.forEach((rel) => {
             closureRelations.push({
                 ancestorId: rel.ancestorId,
-                descendantId: orgId,
+                descendantId: newOrganization.id,
                 depth: rel.depth + 1,
             })
         })
         closureRelations.push({
-            ancestorId: orgId,
-            descendantId: orgId,
+            ancestorId: newOrganization.id,
+            descendantId: newOrganization.id,
             depth: 0,
         })
         if (closureRelations.length > 0) {
@@ -165,6 +163,46 @@ export const organizationRepository = {
                 skipDuplicates: true, // 防止意外重复，虽然主键约束会拦截，但这样更安全
             })
         }
+        return updatedOrganization
+    },
+    // async updateOrganizationPath(orgId: number, path: string, tx: PrismaTransaction = prisma) {
+    //     return await tx.organization.update({
+    //         where: {
+    //             id: orgId,
+    //             status: OrganizationStatus.Enable,
+    //             isDelete: false
+    //         },
+    //         data: {
+    //             path: path
+    //         }
+    //     })
+    // },
+    // async updateOrganizationClosure(orgId: number, parentId: number, tx: PrismaTransaction = prisma) {
+    //     const closureRelations = [];
+    //     const parentAncestors = await tx.organizationClosure.findMany({
+    //         where: {
+    //             descendantId: parentId
+    //         },
+    //         select: { ancestorId: true, depth: true },
+    //     })
+    //     parentAncestors.forEach((rel) => {
+    //         closureRelations.push({
+    //             ancestorId: rel.ancestorId,
+    //             descendantId: orgId,
+    //             depth: rel.depth + 1,
+    //         })
+    //     })
+    //     closureRelations.push({
+    //         ancestorId: orgId,
+    //         descendantId: orgId,
+    //         depth: 0,
+    //     })
+    //     if (closureRelations.length > 0) {
+    //         await tx.organizationClosure.createMany({
+    //             data: closureRelations,
+    //             skipDuplicates: true, // 防止意外重复，虽然主键约束会拦截，但这样更安全
+    //         })
+    //     }
 
-    }
+    // }
 }
