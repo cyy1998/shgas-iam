@@ -153,7 +153,6 @@ export const authService = {
         return true
     },
     async authz(sessionId: string | null, path: string | undefined) {
-        console.log(path)
         if (!path) {
             throw new AuthzUnauthorizedError('非法访问')
         }
@@ -170,7 +169,9 @@ export const authService = {
         }
         const userDto: UserDto = JSON.parse(userString)
         let userInExcludingList = false
+        console.log(client)
         if (client.extAttributes.userExcluding !== undefined
+            && client.extAttributes.userExcluding !== null
             && client.extAttributes.userExcluding.includes(userDto.username)) {
             userInExcludingList = true
         }
