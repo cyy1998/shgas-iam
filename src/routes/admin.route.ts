@@ -7,6 +7,7 @@ import { privilegeService } from '../services/privilege.service'
 import { ResponseSchema } from '../types/response.type'
 import { ClientDtoSchema, ClientInputDtoSchema } from '../types/client.type'
 import { clientService } from '../services/client.service'
+import { organizationService } from '../services/organization.service'
 
 const app = new OpenAPIHono()
 /*
@@ -82,6 +83,45 @@ app.openapi(
             data: body
         })
         return c.json(makeResponse())
+    }
+)
+/*
+path: /organizations/set
+function: 设置新组织
+*/
+app.openapi(
+    createRoute({
+        method: 'post',
+        path: '/organizations/set',
+        tags: ['Admin'],
+        request: {
+            body: {
+                content: {
+                    'application/json': {
+                        schema: z.object({
+                            orgCode: z.string().openapi({ example: 'SR01' }),
+                            orgName: z.string().openapi({ example: '办公室' }),
+                            parentCode: z.string().openapi({ example: 'SR' }),
+                        })
+                    }
+                }
+            },
+        },
+        responses: {
+            200: {
+                content: {
+                    'application/json': {
+                        schema: ResponseSchema,
+                    },
+                },
+                description: '设置组织成功',
+            },
+        },
+    }),
+    async (c) => {
+        const { orgCode, orgName, parentCode } = c.req.valid('json')
+        const data = await organizationService.setOrganization(orgCode, orgName, parentCode)
+        return c.json(success(data))
     }
 )
 /*
@@ -283,7 +323,7 @@ app.openapi(
 
 /*
 path: /role/organization/set
-function: 为任职关系设置角色
+function: 为组织设置角色
 */
 app.openapi(
     createRoute({
