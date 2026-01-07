@@ -8,6 +8,7 @@ import { ResponseSchema } from '../types/response.type'
 import { ClientDtoSchema, ClientInputDtoSchema } from '../types/client.type'
 import { clientService } from '../services/client.service'
 import { organizationService } from '../services/organization.service'
+import { OrganizationCreateDtoSchema } from '../types/organization.type'
 
 const app = new OpenAPIHono()
 /*
@@ -98,11 +99,7 @@ app.openapi(
             body: {
                 content: {
                     'application/json': {
-                        schema: z.object({
-                            orgCode: z.string().openapi({ example: 'SR01' }),
-                            orgName: z.string().openapi({ example: '办公室' }),
-                            parentCode: z.string().openapi({ example: 'SR' }),
-                        })
+                        schema: OrganizationCreateDtoSchema
                     }
                 }
             },
@@ -119,8 +116,8 @@ app.openapi(
         },
     }),
     async (c) => {
-        const { orgCode, orgName, parentCode } = c.req.valid('json')
-        const data = await organizationService.setOrganization(orgCode, orgName, parentCode)
+        const organizationCreateDto = c.req.valid('json')
+        const data = await organizationService.setOrganization(organizationCreateDto)
         return c.json(success(data))
     }
 )

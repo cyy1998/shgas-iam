@@ -20,6 +20,7 @@
         "prisma": "^6.17.1",
         "sm-crypto": "^0.3.13",
         "swagger-ui-dist": "^5.29.5",
+        "ts-enum-util": "^4.1.0",
         "xlsx": "^0.18.5",
       },
       "devDependencies": {
@@ -307,6 +308,8 @@
     "tinyexec": ["tinyexec@1.0.1", "", {}, "sha512-5uC6DDlmeqiOwCPmK9jMSdOuZTh8bU39Ys6yidB+UTt5hfZUPGAypSgFRiEp+jbi9qH40BLDvy85jIU88wKSqw=="],
 
     "toidentifier": ["toidentifier@1.0.1", "", {}, "sha512-o5sSPKEkg/DIQNmH43V0/uerLrpzVedkUh8tGNvaeXpfpuwjKenlSox/2O/BTlZUtEe+JG7s5YhEz608PlAHRA=="],
+
+    "ts-enum-util": ["ts-enum-util@4.1.0", "", {}, "sha512-kIs48itmNehkzLk0YJW/LfI2+VFYlyscGsY+oDNCnxrDfkex/OfYUV1ip7L7YIN7ppSqj2VmOOssiW81Rno9QA=="],
 
     "tsscmp": ["tsscmp@1.0.6", "", {}, "sha512-LxhtAkPDTkVCMQjt2h6eBVY28KCjikZqZfMcC15YBeNjkgUpdCfBu5HoiOTDu86v6smE8yOjyEktJ8hlbANHQA=="],
 

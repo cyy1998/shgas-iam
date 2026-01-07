@@ -4,6 +4,7 @@ import { CustomError } from "../errors/CustomError"
 import { prisma } from "../libs/database/prisma"
 import { organizationMapper } from "../mapper/organization.mapper"
 import { organizationRepository } from "../repositories/organization.repository"
+import { OrganizationDtoSchema, type OrganizationCreateDto } from "../types/organization.type"
 
 export const organizationService = {
     async getFormalOrganizationsByCode(orgCode: string, orgLevel: number) {
@@ -32,7 +33,14 @@ export const organizationService = {
         const organizations = await organizationRepository.getOrganizationsByParentsCode(parentCodes)
         const orgDtos = organizations.map(o => organizationMapper.entityToDto(o))
         const compDict = await this.getCompDict()
-        const orgVos = orgDtos.map(o => organizationMapper.dtoToVo(o, compDict[o.orgCode.slice(0, 2)] as Organization))
+        const orgVos = orgDtos.map(o => organizationMapper.dtotoFormalOrganizationVo(o, compDict[o.orgCode.slice(0, 2)] as Organization))
+        return orgVos
+    },
+    async getOrganizationsByAncestorCodes(ancestorCodes: string[], levels: number[], orgTypes: string[]) {
+        const organizations = await organizationRepository.getOrganizationsByAncestorCodes(ancestorCodes, orgTypes, levels)
+        const orgDtos = organizations.map(o => organizationMapper.entityToDto(o))
+        const compDict = await this.getCompDict()
+        const orgVos = orgDtos.map(o => organizationMapper.dtotoFormalOrganizationVo(o, compDict[o.orgCode.slice(0, 2)] as Organization))
         return orgVos
     },
     async getCompDict() {
@@ -41,11 +49,11 @@ export const organizationService = {
         return companies.reduce((acc, comp) => { acc[comp.orgCode] = comp; return acc; }, {} as Record<string, Organization>)
     },
 
-    async setOrganization(orgCode: string, orgName: string, parentCode: string) {
+    async setOrganization(organizationCreateDto: OrganizationCreateDto) {
         return await prisma.$transaction(async (tx) => {
             const [newOrg, parentOrg] = await Promise.all([
-                organizationRepository.getOrganizationByCode(orgCode, tx),
-                organizationRepository.getOrganizationByCode(parentCode, tx)
+                organizationRepository.getOrganizationByCode(organizationCreateDto.orgCode, tx),
+                organizationRepository.getOrganizationByCode(organizationCreateDto.parentCode, tx)
             ])
             if (newOrg !== null) {
                 throw new CustomError('待创建组织已存在')
@@ -53,20 +61,23 @@ export const organizationService = {
             if (parentOrg === null) {
                 throw new CustomError('有效父组织不存在')
             }
-            await organizationRepository.setOrganization(orgCode, orgName, parentOrg.level + 1, parentOrg, tx)
-            // const path = `${parentOrg.path}/${organization.id}`
-            // await Promise.all([organizationRepository.updateOrganizationPath(organization.id, path, tx),
-            // organizationRepository.updateOrganizationClosure(organization.id, parentOrg.id, tx)])
+            await organizationRepository.setOrganization(
+                organizationCreateDto.orgCode,
+                organizationCreateDto.orgName,
+                parentOrg.level + 1,
+                organizationCreateDto.orgType,
+                parentOrg,
+                tx)
             return true
         })
     },
 
-    async purveyorRegister(orgCode: string, orgName: string, parentOrg: string) {
+    async purveyorRegister(orgCode: string, orgName: string, parentCode: string) {
         const exisitngOrg = await organizationRepository.getOrganizationByCode(orgCode)
         if (exisitngOrg !== null) {
             return true
         }
-        await this.setOrganization(orgCode, orgName, parentOrg)
+        await this.setOrganization({ orgCode: orgCode, orgName: orgName, parentCode: parentCode, orgType: '外部组织' })
         return true
     }
 }

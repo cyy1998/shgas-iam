@@ -1,5 +1,6 @@
 import type { Organization } from '../../generated/prisma'
 import { OrganizationStatus } from '../constants/organization.status'
+import { OrganizationType } from '../constants/organization.type'
 import { prisma, type PrismaTransaction } from '../libs/database/prisma'
 
 export const organizationRepository = {
@@ -14,7 +15,7 @@ export const organizationRepository = {
                     }
                 },
                 orgType: {
-                    notIn: ['虚拟组织', '外部组织']
+                    notIn: [OrganizationType.Virtual, OrganizationType.External]
                 },
                 level: orgLevel,
                 status: OrganizationStatus.Enable,
@@ -42,7 +43,7 @@ export const organizationRepository = {
         return await tx.organization.findMany({
             where: {
                 orgType: {
-                    notIn: ['虚拟组织', '外部组织']
+                    notIn: [OrganizationType.Virtual, OrganizationType.External]
                 },
                 level: 1,
                 status: OrganizationStatus.Enable,
@@ -63,6 +64,32 @@ export const organizationRepository = {
         return await tx.organization.findFirst({
             where: {
                 id: id,
+                status: OrganizationStatus.Enable,
+                isDelete: false
+            }
+        })
+    },
+    async getOrganizationsByAncestorCodes(ancestorCodes: string[],
+        orgTypes: string[],
+        orgLevels: number[],
+        tx: PrismaTransaction = prisma) {
+        return await tx.organization.findMany({
+            where: {
+                descendantClosures: {
+                    some: {
+                        ancestor: {
+                            orgCode: {
+                                in: ancestorCodes
+                            }
+                        }
+                    }
+                },
+                level: {
+                    in: orgLevels
+                },
+                orgType: {
+                    in: orgTypes
+                },
                 status: OrganizationStatus.Enable,
                 isDelete: false
             }
@@ -115,14 +142,17 @@ export const organizationRepository = {
             }
         })
     },
-    async setOrganization(orgCode: string, orgName: string, orgLevel: number, parentOrganization: Organization, tx: PrismaTransaction = prisma) {
+    async setOrganization(orgCode: string, orgName: string,
+        orgLevel: number, orgType: string,
+        parentOrganization: Organization,
+        tx: PrismaTransaction = prisma) {
         const newOrganization = await tx.organization.create({
             data: {
                 orgCode: orgCode,
                 orgName: orgName,
                 parentId: parentOrganization.id,
                 level: orgLevel,
-                orgType: '外部组织',
+                orgType: orgType,
                 isVirtual: true,
                 path: ''
             }

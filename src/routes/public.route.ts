@@ -10,10 +10,13 @@ import { organizationService } from '../services/organization.service'
 import { cacheService } from '../services/cache.service'
 
 import { EmploymentDtoSchema } from '../types/employment.type'
-import { OrganizationDtoSchema } from '../types/organization.type'
+import { FormalOrganizationVoSchema, OrganizationDtoSchema } from '../types/organization.type'
 import { CustomError } from '../errors/CustomError'
 import { AuthzError } from '../errors/AuthzError'
 import { AuthzUnauthorizedError } from '../errors/AuthzUnauthorizedError'
+import { OrganizationType } from '../constants/organization.type'
+import { OrganizationLevel } from '../constants/organization.level'
+import { $enum } from 'ts-enum-util'
 
 interface AppEnv {
     Variables: {
@@ -325,6 +328,94 @@ app.openapi(
     }),
     async (c) => {
         const data = await organizationService.getTopFormalOrganizations()
+        return c.json(success(data))
+    }
+)
+
+/*
+path: /organizations/listByParentCode
+method: POST
+function: 获取某个组织的所有子组织
+*/
+app.openapi(
+    createRoute({
+        method: 'post',
+        path: '/organizations/by-parent',
+        tags: ['Public'],
+        request: {
+            body: {
+                content: {
+                    'application/json': {
+                        schema: z.object({
+                            parentCodes: z.array(z.string()).openapi({ example: ['SR', 'SB'] })
+                        })
+                    }
+                }
+            }
+        },
+        responses: {
+            200: {
+                content: {
+                    'application/json': {
+                        schema: createResponseSchema(
+                            z.array(z.object({
+                                id: z.int(),
+                                orgCode: z.string(),
+                                orgName: z.string(),
+                                orgType: z.string(),
+                                level: z.int()
+                            }))
+                        ),
+                    },
+                },
+                description: '所有子组织列表',
+            },
+        },
+    }),
+    async (c) => {
+        const { parentCodes } = c.req.valid('json')
+        const data = await organizationService.getSubOrganizationsByParent(parentCodes)
+        return c.json(success(data))
+    }
+)
+
+/*
+path: /organizations/listByAncestorAndLevel
+method: POST
+function: 获取某个组织的所有子组织
+*/
+app.openapi(
+    createRoute({
+        method: 'post',
+        path: '/organizations/listFormalByAncestors',
+        tags: ['Public'],
+        request: {
+            body: {
+                content: {
+                    'application/json': {
+                        schema: z.object({
+                            ancestorCodes: z.array(z.string()).openapi({ example: ['SR', 'SB'] }),
+                            levels: z.array(z.number()).default($enum(OrganizationLevel).getValues()),
+                            orgTypes: z.array(z.string()).default($enum(OrganizationType).getValues())
+                        })
+                    }
+                }
+            }
+        },
+        responses: {
+            200: {
+                content: {
+                    'application/json': {
+                        schema: createResponseSchema(z.array(FormalOrganizationVoSchema)),
+                    },
+                },
+                description: '所有子组织列表',
+            },
+        },
+    }),
+    async (c) => {
+        const { ancestorCodes, levels, orgTypes } = c.req.valid('json')
+        const data = await organizationService.getOrganizationsByAncestorCodes(ancestorCodes, levels, orgTypes)
         return c.json(success(data))
     }
 )

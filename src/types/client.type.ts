@@ -19,7 +19,8 @@ export const ClientDtoSchema = z.object({
 export type ClientDto = z.infer<typeof ClientDtoSchema>
 
 export const ClientInputDtoSchema = ClientDtoSchema.partial().required({
-    id: true
+    id: true,
+    clientCode: true
 })
 
 export type ClientInputDto = z.infer<typeof ClientInputDtoSchema>
