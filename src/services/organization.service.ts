@@ -6,6 +6,14 @@ import { organizationMapper } from "../mapper/organization.mapper"
 import { organizationRepository } from "../repositories/organization.repository"
 import { OrganizationDtoSchema, type OrganizationCreateDto } from "../types/organization.type"
 
+const compDict = {}
+
+async function getCompDict() {
+    const organizations = organizationRepository.getOrganizationsByParentId(-1)
+    const companies = (await organizations).filter(o => o.orgType === '分公司')
+    return companies.reduce((acc, comp) => { acc[comp.orgCode] = comp; return acc; }, {} as Record<string, Organization>)
+}
+
 export const organizationService = {
     async getFormalOrganizationsByCode(orgCode: string, orgLevel: number) {
         const organizations = await organizationRepository.searchFormalOrganizations(orgCode, orgLevel)
@@ -29,24 +37,21 @@ export const organizationService = {
     //     const orgDtos = organizations.map(o => organizationMapper.entityToDto(o))
     //     return orgDtos
     // },
-    async getSubOrganizationsByParent(parentCodes: string[]) {
+    async getOrganizationsByParentCodes(parentCodes: string[]) {
         const organizations = await organizationRepository.getOrganizationsByParentsCode(parentCodes)
         const orgDtos = organizations.map(o => organizationMapper.entityToDto(o))
-        const compDict = await this.getCompDict()
+        const compDict = await getCompDict()
         const orgVos = orgDtos.map(o => organizationMapper.dtotoFormalOrganizationVo(o, compDict[o.orgCode.slice(0, 2)] as Organization))
         return orgVos
     },
-    async getOrganizationsByAncestorCodes(ancestorCodes: string[], levels: number[], orgTypes: string[]) {
+    async getOrganizationsByAncestorCodes(ancestorCodes: string[] | undefined,
+        levels: number[] | undefined,
+        orgTypes: string[] | undefined) {
         const organizations = await organizationRepository.getOrganizationsByAncestorCodes(ancestorCodes, orgTypes, levels)
         const orgDtos = organizations.map(o => organizationMapper.entityToDto(o))
-        const compDict = await this.getCompDict()
+        const compDict = await getCompDict()
         const orgVos = orgDtos.map(o => organizationMapper.dtotoFormalOrganizationVo(o, compDict[o.orgCode.slice(0, 2)] as Organization))
         return orgVos
-    },
-    async getCompDict() {
-        const organizations = organizationRepository.getOrganizationsByParentId(-1)
-        const companies = (await organizations).filter(o => o.orgType === '分公司')
-        return companies.reduce((acc, comp) => { acc[comp.orgCode] = comp; return acc; }, {} as Record<string, Organization>)
     },
 
     async setOrganization(organizationCreateDto: OrganizationCreateDto) {

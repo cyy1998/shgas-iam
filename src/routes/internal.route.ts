@@ -306,6 +306,11 @@ app.openapi(
     }
 )
 
+/*
+path: /organizations/getByCode
+method: GET
+function: 根据代码获取组织
+*/
 app.openapi(
     createRoute({
         method: 'get',

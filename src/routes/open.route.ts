@@ -40,14 +40,14 @@ app.openapi(
 )
 
 /*
-path: /users/detail
+path: /users/userinfo
 method: GET
-function: 获取当前应用状态信息 
+function: 获取用户当前信息 
 */
 app.openapi(
     createRoute({
         method: 'get',
-        path: '/users/detail',
+        path: '/users/userinfo',
         tags: ['Open'],
         request: {
             query: z.object({

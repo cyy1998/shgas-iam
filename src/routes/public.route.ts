@@ -187,39 +187,7 @@ app.openapi(
     }
 )
 
-/*
-path: /search-other-users/under-org
-method: GET
-function: 搜索某个组织下的其他用户 
-*/
-app.openapi(
-    createRoute({
-        method: 'get',
-        path: '/search-other-users/under-org',
-        tags: ['Public'],
-        request: {
-            query: z.object({
-                orgCode: z.string().openapi({ example: 'SR23' }),
-            })
-        },
-        responses: {
-            200: {
-                content: {
-                    'application/json': {
-                        schema: createResponseSchema(z.array(UserDtoSchema)),
-                    },
-                },
-                description: '符合条件用户列表',
-            },
-        },
-    }),
-    async (c) => {
-        const { orgCode } = c.req.valid('query')
-        const data = await userService.getOtherUsersByOrg(orgCode, c.get('userId'))
-        return c.json(success(data))
-    }
-)
-
+//待废弃
 /*
 path: /employments/by-privilege
 method: GET
@@ -254,6 +222,7 @@ app.openapi(
     }
 )
 
+//待废弃
 /*
 path: /search-organizations
 method: GET
@@ -333,70 +302,23 @@ app.openapi(
 )
 
 /*
-path: /organizations/listByParentCode
+path: /organizations/listsByAncestors
 method: POST
 function: 获取某个组织的所有子组织
 */
 app.openapi(
     createRoute({
         method: 'post',
-        path: '/organizations/by-parent',
+        path: '/organizations/search',
         tags: ['Public'],
         request: {
             body: {
                 content: {
                     'application/json': {
                         schema: z.object({
-                            parentCodes: z.array(z.string()).openapi({ example: ['SR', 'SB'] })
-                        })
-                    }
-                }
-            }
-        },
-        responses: {
-            200: {
-                content: {
-                    'application/json': {
-                        schema: createResponseSchema(
-                            z.array(z.object({
-                                id: z.int(),
-                                orgCode: z.string(),
-                                orgName: z.string(),
-                                orgType: z.string(),
-                                level: z.int()
-                            }))
-                        ),
-                    },
-                },
-                description: '所有子组织列表',
-            },
-        },
-    }),
-    async (c) => {
-        const { parentCodes } = c.req.valid('json')
-        const data = await organizationService.getSubOrganizationsByParent(parentCodes)
-        return c.json(success(data))
-    }
-)
-
-/*
-path: /organizations/listByAncestorAndLevel
-method: POST
-function: 获取某个组织的所有子组织
-*/
-app.openapi(
-    createRoute({
-        method: 'post',
-        path: '/organizations/listFormalByAncestors',
-        tags: ['Public'],
-        request: {
-            body: {
-                content: {
-                    'application/json': {
-                        schema: z.object({
-                            ancestorCodes: z.array(z.string()).openapi({ example: ['SR', 'SB'] }),
-                            levels: z.array(z.number()).default($enum(OrganizationLevel).getValues()),
-                            orgTypes: z.array(z.string()).default($enum(OrganizationType).getValues())
+                            ancestorCodes: z.array(z.string()).optional().openapi({ example: ['SR', 'SB'] }),
+                            levels: z.array(z.number()).optional().openapi({ example: [1] }),
+                            orgTypes: z.array(z.string()).optional().openapi({ example: ['部门'] })
                         })
                     }
                 }
@@ -420,6 +342,41 @@ app.openapi(
     }
 )
 
+/*
+path: /organizations/getByCode
+method: GET
+function: 根据code搜索某个组织的信息 
+*/
+app.openapi(
+    createRoute({
+        method: 'get',
+        path: '/organizations/getByCode',
+        tags: ['Public'],
+        request: {
+            query: z.object({
+                orgCode: z.string()
+            })
+        },
+        responses: {
+            200: {
+                content: {
+                    'application/json': {
+                        schema:
+                            createResponseSchema(OrganizationDtoSchema)
+                    },
+                },
+                description: '本公司下属组织列表',
+            },
+        },
+    }),
+    async (c) => {
+        const { orgCode } = c.req.valid('query')
+        const data = await organizationService.getOrganizationByCode(orgCode)
+        return c.json(success(data))
+    }
+)
+
+//待废弃
 /*
 path: /organizations/by-parent
 method: POST
@@ -462,7 +419,7 @@ app.openapi(
     }),
     async (c) => {
         const { parentCodes } = c.req.valid('json')
-        const data = await organizationService.getSubOrganizationsByParent(parentCodes)
+        const data = await organizationService.getOrganizationsByParentCodes(parentCodes)
         return c.json(success(data))
     }
 )
@@ -500,38 +457,39 @@ app.openapi(
     }
 )
 
+//待废弃
 /*
-path: /organizations/getByCode
+path: /search-other-users/under-org
 method: GET
-function: 根据code搜索某个组织的信息 
+function: 搜索某个组织下的其他用户 
 */
 app.openapi(
     createRoute({
         method: 'get',
-        path: '/organizations/getByCode',
+        path: '/search-other-users/under-org',
         tags: ['Public'],
         request: {
             query: z.object({
-                orgCode: z.string()
+                orgCode: z.string().openapi({ example: 'SR23' }),
             })
         },
         responses: {
             200: {
                 content: {
                     'application/json': {
-                        schema:
-                            createResponseSchema(OrganizationDtoSchema)
+                        schema: createResponseSchema(z.array(UserDtoSchema)),
                     },
                 },
-                description: '本公司下属组织列表',
+                description: '符合条件用户列表',
             },
         },
     }),
     async (c) => {
         const { orgCode } = c.req.valid('query')
-        const data = await organizationService.getOrganizationByCode(orgCode)
+        const data = await userService.getOtherUsersByOrg(orgCode, c.get('userId'))
         return c.json(success(data))
     }
 )
+
 
 export default app

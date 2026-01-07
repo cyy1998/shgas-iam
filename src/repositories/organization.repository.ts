@@ -69,9 +69,9 @@ export const organizationRepository = {
             }
         })
     },
-    async getOrganizationsByAncestorCodes(ancestorCodes: string[],
-        orgTypes: string[],
-        orgLevels: number[],
+    async getOrganizationsByAncestorCodes(ancestorCodes: string[] | undefined,
+        orgTypes: string[] | undefined,
+        orgLevels: number[] | undefined,
         tx: PrismaTransaction = prisma) {
         return await tx.organization.findMany({
             where: {
