@@ -44,14 +44,18 @@ export const organizationService = {
         const orgVos = orgDtos.map(o => organizationMapper.dtotoFormalOrganizationVo(o, compDict[o.orgCode.slice(0, 2)] as Organization))
         return orgVos
     },
-    async getOrganizationsByAncestorCodes(ancestorCodes: string[] | undefined,
+    async searchOrganizations(
         levels: number[] | undefined,
-        orgTypes: string[] | undefined) {
-        const organizations = await organizationRepository.getOrganizationsByAncestorCodes(ancestorCodes, orgTypes, levels)
+        orgTypes: string[] | undefined,
+        ancestorCodes: string[] | undefined,
+        ancestorDepths: number[] | undefined,
+        descendantCodes: string[] | undefined,
+        descendantDepths: number[] | undefined) {
+        const organizations = await organizationRepository.searchOrganizations(orgTypes, levels, ancestorCodes, ancestorDepths, descendantCodes, descendantDepths)
         const orgDtos = organizations.map(o => organizationMapper.entityToDto(o))
-        const compDict = await getCompDict()
-        const orgVos = orgDtos.map(o => organizationMapper.dtotoFormalOrganizationVo(o, compDict[o.orgCode.slice(0, 2)] as Organization))
-        return orgVos
+        // const compDict = await getCompDict()
+        // const orgVos = orgDtos.map(o => organizationMapper.dtotoFormalOrganizationVo(o, compDict[o.orgCode.slice(0, 2)] as Organization))
+        return orgDtos
     },
 
     async setOrganization(organizationCreateDto: OrganizationCreateDto) {

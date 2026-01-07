@@ -302,7 +302,7 @@ app.openapi(
 )
 
 /*
-path: /organizations/listsByAncestors
+path: /organizations/search
 method: POST
 function: 获取某个组织的所有子组织
 */
@@ -316,9 +316,12 @@ app.openapi(
                 content: {
                     'application/json': {
                         schema: z.object({
-                            ancestorCodes: z.array(z.string()).optional().openapi({ example: ['SR', 'SB'] }),
                             levels: z.array(z.number()).optional().openapi({ example: [1] }),
-                            orgTypes: z.array(z.string()).optional().openapi({ example: ['部门'] })
+                            orgTypes: z.array(z.string()).optional().openapi({ example: ['部门'] }),
+                            ancestorCodes: z.array(z.string()).optional().openapi({ example: ['SR', 'SB'] }),
+                            ancestorDepths: z.array(z.number()).optional().openapi({ example: [1] }),
+                            descendantCodes: z.array(z.string()).optional().openapi({ example: ['SR', 'SB'] }),
+                            descendantDepths: z.array(z.number()).optional().openapi({ example: [1] }),
                         })
                     }
                 }
@@ -336,8 +339,8 @@ app.openapi(
         },
     }),
     async (c) => {
-        const { ancestorCodes, levels, orgTypes } = c.req.valid('json')
-        const data = await organizationService.getOrganizationsByAncestorCodes(ancestorCodes, levels, orgTypes)
+        const { ancestorCodes, levels, orgTypes, ancestorDepths, descendantCodes, descendantDepths } = c.req.valid('json')
+        const data = await organizationService.searchOrganizations(levels, orgTypes, ancestorCodes, ancestorDepths, descendantCodes, descendantDepths)
         return c.json(success(data))
     }
 )

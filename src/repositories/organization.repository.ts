@@ -23,22 +23,22 @@ export const organizationRepository = {
             }
         })
     },
-    async searchOrganizations(orgCode: string, orgLevel: number, tx: PrismaTransaction = prisma) {
-        return await tx.organization.findMany({
-            where: {
-                descendantClosures: {
-                    some: {
-                        ancestor: {
-                            orgCode: orgCode
-                        }
-                    }
-                },
-                level: orgLevel,
-                status: OrganizationStatus.Enable,
-                isDelete: false
-            }
-        })
-    },
+    // async searchOrganizations(orgCode: string, orgLevel: number, tx: PrismaTransaction = prisma) {
+    //     return await tx.organization.findMany({
+    //         where: {
+    //             descendantClosures: {
+    //                 some: {
+    //                     ancestor: {
+    //                         orgCode: orgCode
+    //                     }
+    //                 }
+    //             },
+    //             level: orgLevel,
+    //             status: OrganizationStatus.Enable,
+    //             isDelete: false
+    //         }
+    //     })
+    // },
     async getTopFormalOrganizations(tx: PrismaTransaction = prisma) {
         return await tx.organization.findMany({
             where: {
@@ -69,9 +69,13 @@ export const organizationRepository = {
             }
         })
     },
-    async getOrganizationsByAncestorCodes(ancestorCodes: string[] | undefined,
+    async searchOrganizations(
         orgTypes: string[] | undefined,
         orgLevels: number[] | undefined,
+        ancestorCodes: string[] | undefined,
+        ancestorDepths: number[] | undefined,
+        descendantCodes: string[] | undefined,
+        descendantDepths: number[] | undefined,
         tx: PrismaTransaction = prisma) {
         return await tx.organization.findMany({
             where: {
@@ -81,6 +85,21 @@ export const organizationRepository = {
                             orgCode: {
                                 in: ancestorCodes
                             }
+                        },
+                        depth: {
+                            in: ancestorDepths
+                        }
+                    }
+                },
+                ancestorClosures: {
+                    some: {
+                        descendant: {
+                            orgCode: {
+                                in: descendantCodes
+                            }
+                        },
+                        depth: {
+                            in: descendantDepths
                         }
                     }
                 },
