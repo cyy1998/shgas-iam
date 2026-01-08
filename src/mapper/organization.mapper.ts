@@ -9,7 +9,8 @@ export const organizationMapper = {
             orgCode: org.orgCode,
             orgName: org.orgName,
             orgType: org.orgType,
-            level: org.level
+            level: org.level,
+            parentId: org.parentId
         }
     },
 

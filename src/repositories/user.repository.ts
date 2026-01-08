@@ -1,6 +1,9 @@
 import { EmploymentStatus } from "../constants/employment.status"
+import { PositionStatus } from "../constants/position.status"
+import { RoleStatus } from "../constants/role.status"
 import { UserStatus } from "../constants/user.status"
 import { prisma, type PrismaTransaction } from '../libs/database/prisma'
+import type { UserQueryDto } from "../types/user.type"
 
 export const userRepository = {
     async getUserByUsername(username: string, tx: PrismaTransaction = prisma) {
@@ -25,6 +28,143 @@ export const userRepository = {
         return await tx.user.findFirst({
             where: {
                 mobilePhone: mobile,
+                status: UserStatus.Enable,
+                isDelete: false
+            }
+        })
+    },
+    async searchUsers(
+        userQueryDto: UserQueryDto,
+        tx: PrismaTransaction = prisma
+    ) {
+        return await tx.user.findMany({
+            where: {
+                username: {
+                    in: userQueryDto.usernames
+                },
+                mobilePhone: {
+                    in: userQueryDto.phones
+                },
+                wxId: {
+                    in: userQueryDto.wxIds
+                },
+                employments: {
+                    some: {
+                        status: EmploymentStatus.Enable,
+                        isDelete: false,
+                        deptartment: {
+                            descendantClosures: {
+                                some: {
+                                    ancestor: {
+                                        orgCode: {
+                                            in: userQueryDto.ancestorOrgCodes
+                                        }
+                                    },
+                                    depth: {
+                                        in: userQueryDto.ancestorOrgDepths
+                                    }
+                                }
+                            }
+                        },
+                        position: {
+                            status: PositionStatus.Enable,
+                            isDelete: false,
+                            posCode: {
+                                in: userQueryDto.positionCodes
+                            }
+                        },
+                        OR: [
+                            {
+                                position: {
+                                    roles: {
+                                        some: {
+                                            role: {
+                                                status: RoleStatus.Enable,
+                                                isDelete: false,
+                                                roleCode: {
+                                                    in: userQueryDto.roleCodes
+                                                }
+                                            }
+                                        }
+                                    }
+                                },
+                            },
+                            {
+                                posOrg: {
+                                    roles: {
+                                        some: {
+                                            role: {
+                                                status: RoleStatus.Enable,
+                                                isDelete: false,
+                                                roleCode: {
+                                                    in: userQueryDto.roleCodes
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            },
+                            {
+                                roles: {
+                                    some: {
+                                        role: {
+                                            status: RoleStatus.Enable,
+                                            isDelete: false,
+                                            roleCode: {
+                                                in: userQueryDto.roleCodes
+                                            }
+                                        }
+                                    }
+                                }
+                            },
+                            {
+                                deptartment: {
+                                    descendantClosures: {
+                                        some: {
+                                            OR: [
+                                                {
+                                                    depth: 0,
+                                                    ancestor: {
+                                                        roles: {
+                                                            some: {
+                                                                role: {
+                                                                    status: RoleStatus.Enable,
+                                                                    isDelete: false,
+                                                                    roleCode: {
+                                                                        in: userQueryDto.roleCodes
+                                                                    }
+                                                                }
+                                                            }
+                                                        }
+                                                    }
+                                                },
+                                                {
+                                                    depth: {
+                                                        gt: 0
+                                                    },
+                                                    ancestor: {
+                                                        roles: {
+                                                            some: {
+                                                                isAllSub: true,
+                                                                role: {
+                                                                    status: RoleStatus.Enable,
+                                                                    isDelete: false,
+                                                                    roleCode: {
+                                                                        in: userQueryDto.roleCodes
+                                                                    }
+                                                                }
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                            ]
+                                        }
+                                    }
+                                }
+                            }
+                        ]
+                    }
+                },
                 status: UserStatus.Enable,
                 isDelete: false
             }

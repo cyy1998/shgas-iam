@@ -1,7 +1,7 @@
 import { hash, compare } from 'bcrypt-ts'
 import type { User } from '../../generated/prisma'
 import { userRepository } from '../repositories/user.repository'
-import { UserDetailDtoSchema, type UserDetailDto, type UserDto } from '../types/user.type'
+import { UserDetailDtoSchema, type UserDetailDto, type UserDto, type UserQueryDto } from '../types/user.type'
 import { userMapper } from '../mapper/user.mapper'
 import { employmentRepository } from '../repositories/employment.repository'
 import { employmentMapper } from '../mapper/employment.mapper'
@@ -98,6 +98,11 @@ export const userService = {
             await userRepository.setMobile(userId, phoneNumber, tx)
             return true
         })
+    },
+    async searchUsers(userQueryDto: UserQueryDto) {
+        const users = await userRepository.searchUsers(userQueryDto)
+        const userDtos = users.map(u => userMapper.entityToDto(u))
+        return userDtos
     },
 
     async getUserDetailByUsername(username: string) {

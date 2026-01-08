@@ -6,6 +6,7 @@ export const OrganizationDtoSchema = z.object({
     orgName: z.string().openapi({ example: '信息中心' }),
     orgType: z.string().openapi({ example: '组织类型' }),
     level: z.number().openapi({ example: 2 }),
+    parentId: z.number().openapi({ example: 1 })
 }).openapi('OrganizationDto')
 
 export type OrganizationDto = z.infer<typeof OrganizationDtoSchema>
@@ -31,4 +32,15 @@ export const FormalOrganizationVoSchema = z.object({
 })
 
 export type FormalOrganizationVo = z.infer<typeof FormalOrganizationVoSchema>
+
+export const OrganizationQueryDtoSchema = z.object({
+    orgTypes: z.array(z.string()).optional().openapi({ example: ['部门', '分公司'] }),
+    orgLevels: z.array(z.number()).optional().openapi({ example: [1, 2] }),
+    ancestorCodes: z.array(z.string()).optional().openapi({ example: ['SR', 'SB'] }),
+    ancestorDepths: z.array(z.number()).optional().openapi({ example: [1, 2] }),
+    descendantCodes: z.array(z.string()).optional().openapi({ example: ['SR01', 'SB01'] }),
+    descendantDepths: z.array(z.number()).optional().openapi({ example: [1, 2] }),
+}).openapi('OrganizationQueryDto')
+
+export type OrganizationQueryDto = z.infer<typeof OrganizationQueryDtoSchema>
 

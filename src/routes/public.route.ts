@@ -4,13 +4,13 @@ import { createResponseSchema } from '../utils/response.utils'
 import { userService } from '../services/user.service'
 import { mobileService } from '../services/mobile.service'
 import { getCookie } from 'hono/cookie'
-import { UserDetailDtoSchema, UserDtoSchema, type UserDto } from '../types/user.type'
+import { UserDetailDtoSchema, UserDtoSchema, UserQueryDtoSchema, type UserDto } from '../types/user.type'
 import { employmentService } from '../services/employment.service'
 import { organizationService } from '../services/organization.service'
 import { cacheService } from '../services/cache.service'
 
 import { EmploymentDtoSchema } from '../types/employment.type'
-import { FormalOrganizationVoSchema, OrganizationDtoSchema } from '../types/organization.type'
+import { FormalOrganizationVoSchema, OrganizationDtoSchema, OrganizationQueryDtoSchema } from '../types/organization.type'
 import { CustomError } from '../errors/CustomError'
 import { AuthzError } from '../errors/AuthzError'
 import { AuthzUnauthorizedError } from '../errors/AuthzUnauthorizedError'
@@ -266,6 +266,7 @@ app.openapi(
     }
 )
 
+//待废弃
 /*
 path: /organizations/top
 method: GET
@@ -315,14 +316,7 @@ app.openapi(
             body: {
                 content: {
                     'application/json': {
-                        schema: z.object({
-                            levels: z.array(z.number()).optional().openapi({ example: [1] }),
-                            orgTypes: z.array(z.string()).optional().openapi({ example: ['部门'] }),
-                            ancestorCodes: z.array(z.string()).optional().openapi({ example: ['SR', 'SB'] }),
-                            ancestorDepths: z.array(z.number()).optional().openapi({ example: [1] }),
-                            descendantCodes: z.array(z.string()).optional().openapi({ example: ['SR', 'SB'] }),
-                            descendantDepths: z.array(z.number()).optional().openapi({ example: [1] }),
-                        })
+                        schema: OrganizationQueryDtoSchema
                     }
                 }
             }
@@ -334,17 +328,18 @@ app.openapi(
                         schema: createResponseSchema(z.array(FormalOrganizationVoSchema)),
                     },
                 },
-                description: '所有子组织列表',
+                description: '所有符合条件组织列表',
             },
         },
     }),
     async (c) => {
-        const { ancestorCodes, levels, orgTypes, ancestorDepths, descendantCodes, descendantDepths } = c.req.valid('json')
-        const data = await organizationService.searchOrganizations(levels, orgTypes, ancestorCodes, ancestorDepths, descendantCodes, descendantDepths)
+        const organizationQueryDto = c.req.valid('json')
+        const data = await organizationService.searchOrganizations(organizationQueryDto)
         return c.json(success(data))
     }
 )
 
+//待废弃
 /*
 path: /organizations/getByCode
 method: GET
@@ -423,6 +418,43 @@ app.openapi(
     async (c) => {
         const { parentCodes } = c.req.valid('json')
         const data = await organizationService.getOrganizationsByParentCodes(parentCodes)
+        return c.json(success(data))
+    }
+)
+
+/*
+path: /users/search
+method: POST
+function: 获取某个组织的所有子组织
+*/
+app.openapi(
+    createRoute({
+        method: 'post',
+        path: '/users/search',
+        tags: ['Public'],
+        request: {
+            body: {
+                content: {
+                    'application/json': {
+                        schema: UserQueryDtoSchema
+                    }
+                }
+            }
+        },
+        responses: {
+            200: {
+                content: {
+                    'application/json': {
+                        schema: createResponseSchema(z.array(UserDtoSchema)),
+                    },
+                },
+                description: '所有子组织列表',
+            },
+        },
+    }),
+    async (c) => {
+        const userQueryDto = c.req.valid('json')
+        const data = await userService.searchUsers(userQueryDto)
         return c.json(success(data))
     }
 )

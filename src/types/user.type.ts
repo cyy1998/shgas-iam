@@ -27,3 +27,15 @@ export const UserDetailDtoSchema = UserDtoSchema.extend({
 })
 
 export type UserDetailDto = z.infer<typeof UserDetailDtoSchema>
+
+export const UserQueryDtoSchema = z.object({
+    usernames: z.array(z.string()).optional().openapi({ example: ['138550', '136163'] }),
+    phones: z.array(z.string()).optional().openapi({ example: ['17721462865'] }),
+    wxIds: z.array(z.string()).optional().openapi({ example: ['1592677631'] }),
+    ancestorOrgCodes: z.array(z.string()).optional().openapi({ example: ['SR', 'SB'] }),
+    ancestorOrgDepths: z.array(z.number()).optional().openapi({ example: [1, 2] }),
+    positionCodes: z.array(z.string()).optional().openapi({ example: ['E033', 'E034'] }),
+    roleCodes: z.array(z.string()).optional().openapi({ example: ['tender:default-user'] })
+}).openapi('UserQueryDto')
+
+export type UserQueryDto = z.infer<typeof UserQueryDtoSchema>

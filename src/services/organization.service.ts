@@ -4,7 +4,7 @@ import { CustomError } from "../errors/CustomError"
 import { prisma } from "../libs/database/prisma"
 import { organizationMapper } from "../mapper/organization.mapper"
 import { organizationRepository } from "../repositories/organization.repository"
-import { OrganizationDtoSchema, type OrganizationCreateDto } from "../types/organization.type"
+import { OrganizationDtoSchema, type OrganizationCreateDto, type OrganizationQueryDto } from "../types/organization.type"
 
 const compDict = {}
 
@@ -44,14 +44,8 @@ export const organizationService = {
         const orgVos = orgDtos.map(o => organizationMapper.dtotoFormalOrganizationVo(o, compDict[o.orgCode.slice(0, 2)] as Organization))
         return orgVos
     },
-    async searchOrganizations(
-        levels: number[] | undefined,
-        orgTypes: string[] | undefined,
-        ancestorCodes: string[] | undefined,
-        ancestorDepths: number[] | undefined,
-        descendantCodes: string[] | undefined,
-        descendantDepths: number[] | undefined) {
-        const organizations = await organizationRepository.searchOrganizations(orgTypes, levels, ancestorCodes, ancestorDepths, descendantCodes, descendantDepths)
+    async searchOrganizations(organizationQueryDto: OrganizationQueryDto) {
+        const organizations = await organizationRepository.searchOrganizations(organizationQueryDto)
         const orgDtos = organizations.map(o => organizationMapper.entityToDto(o))
         // const compDict = await getCompDict()
         // const orgVos = orgDtos.map(o => organizationMapper.dtotoFormalOrganizationVo(o, compDict[o.orgCode.slice(0, 2)] as Organization))

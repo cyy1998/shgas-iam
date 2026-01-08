@@ -2,6 +2,7 @@ import type { Organization } from '../../generated/prisma'
 import { OrganizationStatus } from '../constants/organization.status'
 import { OrganizationType } from '../constants/organization.type'
 import { prisma, type PrismaTransaction } from '../libs/database/prisma'
+import type { OrganizationQueryDto } from '../types/organization.type'
 
 export const organizationRepository = {
     async searchFormalOrganizations(orgCode: string, orgLevel: number, tx: PrismaTransaction = prisma) {
@@ -70,24 +71,20 @@ export const organizationRepository = {
         })
     },
     async searchOrganizations(
-        orgTypes: string[] | undefined,
-        orgLevels: number[] | undefined,
-        ancestorCodes: string[] | undefined,
-        ancestorDepths: number[] | undefined,
-        descendantCodes: string[] | undefined,
-        descendantDepths: number[] | undefined,
-        tx: PrismaTransaction = prisma) {
+        organizationQueryDto: OrganizationQueryDto,
+        tx: PrismaTransaction = prisma
+    ) {
         return await tx.organization.findMany({
             where: {
                 descendantClosures: {
                     some: {
                         ancestor: {
                             orgCode: {
-                                in: ancestorCodes
+                                in: organizationQueryDto.ancestorCodes
                             }
                         },
                         depth: {
-                            in: ancestorDepths
+                            in: organizationQueryDto.ancestorDepths
                         }
                     }
                 },
@@ -95,19 +92,19 @@ export const organizationRepository = {
                     some: {
                         descendant: {
                             orgCode: {
-                                in: descendantCodes
+                                in: organizationQueryDto.descendantCodes
                             }
                         },
                         depth: {
-                            in: descendantDepths
+                            in: organizationQueryDto.descendantDepths
                         }
                     }
                 },
                 level: {
-                    in: orgLevels
+                    in: organizationQueryDto.orgLevels
                 },
                 orgType: {
-                    in: orgTypes
+                    in: organizationQueryDto.orgTypes
                 },
                 status: OrganizationStatus.Enable,
                 isDelete: false

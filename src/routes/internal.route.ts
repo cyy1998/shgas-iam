@@ -306,6 +306,7 @@ app.openapi(
     }
 )
 
+// 待废弃
 /*
 path: /organizations/getByCode
 method: GET
