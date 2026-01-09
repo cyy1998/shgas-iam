@@ -37,7 +37,7 @@ model Organization {
   id               Int      @id @default(autoincrement()) @map("id")
   orgCode          String   @map("org_code")
   orgName          String   @map("org_name")
-  parentId         Int      @default(-1) @map("parent_id")
+  parentId         Int?     @default(-1) @map("parent_id")
   businessParentId Int      @default(-1) @map("business_parent_id")
   path             String   @map("path")
   level            Int      @map("level")
@@ -54,7 +54,7 @@ model Organization {
   compEmployments   Employment[]          @relation("employment_comp")
   roles             OrganizationRole[]
   posOrgComposition PosOrgComposition[]
-  parent            Organization          @relation("org_parent", fields: [parentId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  parent            Organization?         @relation("org_parent", fields: [parentId], references: [id], onDelete: NoAction, onUpdate: NoAction)
   children          Organization[]        @relation("org_parent")
   // 反向关系：该组织作为祖先时的闭包记录
   ancestorClosures  OrganizationClosure[] @relation("org_ancestor")

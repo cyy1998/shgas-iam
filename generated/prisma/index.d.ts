@@ -3898,7 +3898,7 @@ export namespace Prisma {
     id: number
     orgCode: string
     orgName: string
-    parentId: number
+    parentId: number | null
     businessParentId: number
     path: string
     level: number
@@ -3951,7 +3951,7 @@ export namespace Prisma {
     compEmployments?: boolean | Organization$compEmploymentsArgs<ExtArgs>
     roles?: boolean | Organization$rolesArgs<ExtArgs>
     posOrgComposition?: boolean | Organization$posOrgCompositionArgs<ExtArgs>
-    parent?: boolean | OrganizationDefaultArgs<ExtArgs>
+    parent?: boolean | Organization$parentArgs<ExtArgs>
     children?: boolean | Organization$childrenArgs<ExtArgs>
     ancestorClosures?: boolean | Organization$ancestorClosuresArgs<ExtArgs>
     descendantClosures?: boolean | Organization$descendantClosuresArgs<ExtArgs>
@@ -3984,7 +3984,7 @@ export namespace Prisma {
     compEmployments?: boolean | Organization$compEmploymentsArgs<ExtArgs>
     roles?: boolean | Organization$rolesArgs<ExtArgs>
     posOrgComposition?: boolean | Organization$posOrgCompositionArgs<ExtArgs>
-    parent?: boolean | OrganizationDefaultArgs<ExtArgs>
+    parent?: boolean | Organization$parentArgs<ExtArgs>
     children?: boolean | Organization$childrenArgs<ExtArgs>
     ancestorClosures?: boolean | Organization$ancestorClosuresArgs<ExtArgs>
     descendantClosures?: boolean | Organization$descendantClosuresArgs<ExtArgs>
@@ -3998,7 +3998,7 @@ export namespace Prisma {
       compEmployments: Prisma.$EmploymentPayload<ExtArgs>[]
       roles: Prisma.$OrganizationRolePayload<ExtArgs>[]
       posOrgComposition: Prisma.$PosOrgCompositionPayload<ExtArgs>[]
-      parent: Prisma.$OrganizationPayload<ExtArgs>
+      parent: Prisma.$OrganizationPayload<ExtArgs> | null
       children: Prisma.$OrganizationPayload<ExtArgs>[]
       ancestorClosures: Prisma.$OrganizationClosurePayload<ExtArgs>[]
       descendantClosures: Prisma.$OrganizationClosurePayload<ExtArgs>[]
@@ -4007,7 +4007,7 @@ export namespace Prisma {
       id: number
       orgCode: string
       orgName: string
-      parentId: number
+      parentId: number | null
       businessParentId: number
       path: string
       level: number
@@ -4363,7 +4363,7 @@ export namespace Prisma {
     compEmployments<T extends Organization$compEmploymentsArgs<ExtArgs> = {}>(args?: Subset<T, Organization$compEmploymentsArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$EmploymentPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
     roles<T extends Organization$rolesArgs<ExtArgs> = {}>(args?: Subset<T, Organization$rolesArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$OrganizationRolePayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
     posOrgComposition<T extends Organization$posOrgCompositionArgs<ExtArgs> = {}>(args?: Subset<T, Organization$posOrgCompositionArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$PosOrgCompositionPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
-    parent<T extends OrganizationDefaultArgs<ExtArgs> = {}>(args?: Subset<T, OrganizationDefaultArgs<ExtArgs>>): Prisma__OrganizationClient<$Result.GetResult<Prisma.$OrganizationPayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions> | Null, Null, ExtArgs, GlobalOmitOptions>
+    parent<T extends Organization$parentArgs<ExtArgs> = {}>(args?: Subset<T, Organization$parentArgs<ExtArgs>>): Prisma__OrganizationClient<$Result.GetResult<Prisma.$OrganizationPayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions> | null, null, ExtArgs, GlobalOmitOptions>
     children<T extends Organization$childrenArgs<ExtArgs> = {}>(args?: Subset<T, Organization$childrenArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$OrganizationPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
     ancestorClosures<T extends Organization$ancestorClosuresArgs<ExtArgs> = {}>(args?: Subset<T, Organization$ancestorClosuresArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$OrganizationClosurePayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
     descendantClosures<T extends Organization$descendantClosuresArgs<ExtArgs> = {}>(args?: Subset<T, Organization$descendantClosuresArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$OrganizationClosurePayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
@@ -4847,6 +4847,25 @@ export namespace Prisma {
     take?: number
     skip?: number
     distinct?: PosOrgCompositionScalarFieldEnum | PosOrgCompositionScalarFieldEnum[]
+  }
+
+  /**
+   * Organization.parent
+   */
+  export type Organization$parentArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the Organization
+     */
+    select?: OrganizationSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the Organization
+     */
+    omit?: OrganizationOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: OrganizationInclude<ExtArgs> | null
+    where?: OrganizationWhereInput
   }
 
   /**
@@ -19654,7 +19673,7 @@ export namespace Prisma {
     id?: IntFilter<"Organization"> | number
     orgCode?: StringFilter<"Organization"> | string
     orgName?: StringFilter<"Organization"> | string
-    parentId?: IntFilter<"Organization"> | number
+    parentId?: IntNullableFilter<"Organization"> | number | null
     businessParentId?: IntFilter<"Organization"> | number
     path?: StringFilter<"Organization"> | string
     level?: IntFilter<"Organization"> | number
@@ -19670,7 +19689,7 @@ export namespace Prisma {
     compEmployments?: EmploymentListRelationFilter
     roles?: OrganizationRoleListRelationFilter
     posOrgComposition?: PosOrgCompositionListRelationFilter
-    parent?: XOR<OrganizationScalarRelationFilter, OrganizationWhereInput>
+    parent?: XOR<OrganizationNullableScalarRelationFilter, OrganizationWhereInput> | null
     children?: OrganizationListRelationFilter
     ancestorClosures?: OrganizationClosureListRelationFilter
     descendantClosures?: OrganizationClosureListRelationFilter
@@ -19680,7 +19699,7 @@ export namespace Prisma {
     id?: SortOrder
     orgCode?: SortOrder
     orgName?: SortOrder
-    parentId?: SortOrder
+    parentId?: SortOrderInput | SortOrder
     businessParentId?: SortOrder
     path?: SortOrder
     level?: SortOrder
@@ -19710,7 +19729,7 @@ export namespace Prisma {
     NOT?: OrganizationWhereInput | OrganizationWhereInput[]
     orgCode?: StringFilter<"Organization"> | string
     orgName?: StringFilter<"Organization"> | string
-    parentId?: IntFilter<"Organization"> | number
+    parentId?: IntNullableFilter<"Organization"> | number | null
     businessParentId?: IntFilter<"Organization"> | number
     path?: StringFilter<"Organization"> | string
     level?: IntFilter<"Organization"> | number
@@ -19726,7 +19745,7 @@ export namespace Prisma {
     compEmployments?: EmploymentListRelationFilter
     roles?: OrganizationRoleListRelationFilter
     posOrgComposition?: PosOrgCompositionListRelationFilter
-    parent?: XOR<OrganizationScalarRelationFilter, OrganizationWhereInput>
+    parent?: XOR<OrganizationNullableScalarRelationFilter, OrganizationWhereInput> | null
     children?: OrganizationListRelationFilter
     ancestorClosures?: OrganizationClosureListRelationFilter
     descendantClosures?: OrganizationClosureListRelationFilter
@@ -19736,7 +19755,7 @@ export namespace Prisma {
     id?: SortOrder
     orgCode?: SortOrder
     orgName?: SortOrder
-    parentId?: SortOrder
+    parentId?: SortOrderInput | SortOrder
     businessParentId?: SortOrder
     path?: SortOrder
     level?: SortOrder
@@ -19762,7 +19781,7 @@ export namespace Prisma {
     id?: IntWithAggregatesFilter<"Organization"> | number
     orgCode?: StringWithAggregatesFilter<"Organization"> | string
     orgName?: StringWithAggregatesFilter<"Organization"> | string
-    parentId?: IntWithAggregatesFilter<"Organization"> | number
+    parentId?: IntNullableWithAggregatesFilter<"Organization"> | number | null
     businessParentId?: IntWithAggregatesFilter<"Organization"> | number
     path?: StringWithAggregatesFilter<"Organization"> | string
     level?: IntWithAggregatesFilter<"Organization"> | number
@@ -20876,7 +20895,7 @@ export namespace Prisma {
     id?: number
     orgCode: string
     orgName: string
-    parentId?: number
+    parentId?: number | null
     businessParentId?: number
     path: string
     level: number
@@ -20915,7 +20934,7 @@ export namespace Prisma {
     compEmployments?: EmploymentUpdateManyWithoutCompanyNestedInput
     roles?: OrganizationRoleUpdateManyWithoutOrganizationNestedInput
     posOrgComposition?: PosOrgCompositionUpdateManyWithoutOrganizationNestedInput
-    parent?: OrganizationUpdateOneRequiredWithoutChildrenNestedInput
+    parent?: OrganizationUpdateOneWithoutChildrenNestedInput
     children?: OrganizationUpdateManyWithoutParentNestedInput
     ancestorClosures?: OrganizationClosureUpdateManyWithoutAncestorNestedInput
     descendantClosures?: OrganizationClosureUpdateManyWithoutDescendantNestedInput
@@ -20925,7 +20944,7 @@ export namespace Prisma {
     id?: IntFieldUpdateOperationsInput | number
     orgCode?: StringFieldUpdateOperationsInput | string
     orgName?: StringFieldUpdateOperationsInput | string
-    parentId?: IntFieldUpdateOperationsInput | number
+    parentId?: NullableIntFieldUpdateOperationsInput | number | null
     businessParentId?: IntFieldUpdateOperationsInput | number
     path?: StringFieldUpdateOperationsInput | string
     level?: IntFieldUpdateOperationsInput | number
@@ -20950,7 +20969,7 @@ export namespace Prisma {
     id?: number
     orgCode: string
     orgName: string
-    parentId?: number
+    parentId?: number | null
     businessParentId?: number
     path: string
     level: number
@@ -20984,7 +21003,7 @@ export namespace Prisma {
     id?: IntFieldUpdateOperationsInput | number
     orgCode?: StringFieldUpdateOperationsInput | string
     orgName?: StringFieldUpdateOperationsInput | string
-    parentId?: IntFieldUpdateOperationsInput | number
+    parentId?: NullableIntFieldUpdateOperationsInput | number | null
     businessParentId?: IntFieldUpdateOperationsInput | number
     path?: StringFieldUpdateOperationsInput | string
     level?: IntFieldUpdateOperationsInput | number
@@ -22119,6 +22138,17 @@ export namespace Prisma {
     _max?: NestedDateTimeFilter<$PrismaModel>
   }
 
+  export type IntNullableFilter<$PrismaModel = never> = {
+    equals?: number | IntFieldRefInput<$PrismaModel> | null
+    in?: number[] | null
+    notIn?: number[] | null
+    lt?: number | IntFieldRefInput<$PrismaModel>
+    lte?: number | IntFieldRefInput<$PrismaModel>
+    gt?: number | IntFieldRefInput<$PrismaModel>
+    gte?: number | IntFieldRefInput<$PrismaModel>
+    not?: NestedIntNullableFilter<$PrismaModel> | number | null
+  }
+
   export type OrganizationRoleListRelationFilter = {
     every?: OrganizationRoleWhereInput
     some?: OrganizationRoleWhereInput
@@ -22131,9 +22161,9 @@ export namespace Prisma {
     none?: PosOrgCompositionWhereInput
   }
 
-  export type OrganizationScalarRelationFilter = {
-    is?: OrganizationWhereInput
-    isNot?: OrganizationWhereInput
+  export type OrganizationNullableScalarRelationFilter = {
+    is?: OrganizationWhereInput | null
+    isNot?: OrganizationWhereInput | null
   }
 
   export type OrganizationListRelationFilter = {
@@ -22240,6 +22270,27 @@ export namespace Prisma {
     level?: SortOrder
     orderNum?: SortOrder
     status?: SortOrder
+  }
+
+  export type IntNullableWithAggregatesFilter<$PrismaModel = never> = {
+    equals?: number | IntFieldRefInput<$PrismaModel> | null
+    in?: number[] | null
+    notIn?: number[] | null
+    lt?: number | IntFieldRefInput<$PrismaModel>
+    lte?: number | IntFieldRefInput<$PrismaModel>
+    gt?: number | IntFieldRefInput<$PrismaModel>
+    gte?: number | IntFieldRefInput<$PrismaModel>
+    not?: NestedIntNullableWithAggregatesFilter<$PrismaModel> | number | null
+    _count?: NestedIntNullableFilter<$PrismaModel>
+    _avg?: NestedFloatNullableFilter<$PrismaModel>
+    _sum?: NestedIntNullableFilter<$PrismaModel>
+    _min?: NestedIntNullableFilter<$PrismaModel>
+    _max?: NestedIntNullableFilter<$PrismaModel>
+  }
+
+  export type OrganizationScalarRelationFilter = {
+    is?: OrganizationWhereInput
+    isNot?: OrganizationWhereInput
   }
 
   export type OrganizationClosureAncestorIdDescendantIdCompoundUniqueInput = {
@@ -23393,10 +23444,12 @@ export namespace Prisma {
     deleteMany?: PosOrgCompositionScalarWhereInput | PosOrgCompositionScalarWhereInput[]
   }
 
-  export type OrganizationUpdateOneRequiredWithoutChildrenNestedInput = {
+  export type OrganizationUpdateOneWithoutChildrenNestedInput = {
     create?: XOR<OrganizationCreateWithoutChildrenInput, OrganizationUncheckedCreateWithoutChildrenInput>
     connectOrCreate?: OrganizationCreateOrConnectWithoutChildrenInput
     upsert?: OrganizationUpsertWithoutChildrenInput
+    disconnect?: OrganizationWhereInput | boolean
+    delete?: OrganizationWhereInput | boolean
     connect?: OrganizationWhereUniqueInput
     update?: XOR<XOR<OrganizationUpdateToOneWithWhereWithoutChildrenInput, OrganizationUpdateWithoutChildrenInput>, OrganizationUncheckedUpdateWithoutChildrenInput>
   }
@@ -23441,6 +23494,14 @@ export namespace Prisma {
     update?: OrganizationClosureUpdateWithWhereUniqueWithoutDescendantInput | OrganizationClosureUpdateWithWhereUniqueWithoutDescendantInput[]
     updateMany?: OrganizationClosureUpdateManyWithWhereWithoutDescendantInput | OrganizationClosureUpdateManyWithWhereWithoutDescendantInput[]
     deleteMany?: OrganizationClosureScalarWhereInput | OrganizationClosureScalarWhereInput[]
+  }
+
+  export type NullableIntFieldUpdateOperationsInput = {
+    set?: number | null
+    increment?: number
+    decrement?: number
+    multiply?: number
+    divide?: number
   }
 
   export type EmploymentUncheckedUpdateManyWithoutDeptartmentNestedInput = {
@@ -24664,6 +24725,33 @@ export namespace Prisma {
     _max?: NestedDateTimeFilter<$PrismaModel>
   }
 
+  export type NestedIntNullableWithAggregatesFilter<$PrismaModel = never> = {
+    equals?: number | IntFieldRefInput<$PrismaModel> | null
+    in?: number[] | null
+    notIn?: number[] | null
+    lt?: number | IntFieldRefInput<$PrismaModel>
+    lte?: number | IntFieldRefInput<$PrismaModel>
+    gt?: number | IntFieldRefInput<$PrismaModel>
+    gte?: number | IntFieldRefInput<$PrismaModel>
+    not?: NestedIntNullableWithAggregatesFilter<$PrismaModel> | number | null
+    _count?: NestedIntNullableFilter<$PrismaModel>
+    _avg?: NestedFloatNullableFilter<$PrismaModel>
+    _sum?: NestedIntNullableFilter<$PrismaModel>
+    _min?: NestedIntNullableFilter<$PrismaModel>
+    _max?: NestedIntNullableFilter<$PrismaModel>
+  }
+
+  export type NestedFloatNullableFilter<$PrismaModel = never> = {
+    equals?: number | FloatFieldRefInput<$PrismaModel> | null
+    in?: number[] | null
+    notIn?: number[] | null
+    lt?: number | FloatFieldRefInput<$PrismaModel>
+    lte?: number | FloatFieldRefInput<$PrismaModel>
+    gt?: number | FloatFieldRefInput<$PrismaModel>
+    gte?: number | FloatFieldRefInput<$PrismaModel>
+    not?: NestedFloatNullableFilter<$PrismaModel> | number | null
+  }
+
   export type NestedDateTimeNullableFilter<$PrismaModel = never> = {
     equals?: Date | string | DateTimeFieldRefInput<$PrismaModel> | null
     in?: Date[] | string[] | null
@@ -25094,7 +25182,7 @@ export namespace Prisma {
     id?: number
     orgCode: string
     orgName: string
-    parentId?: number
+    parentId?: number | null
     businessParentId?: number
     path: string
     level: number
@@ -25334,7 +25422,7 @@ export namespace Prisma {
     compEmployments?: EmploymentUpdateManyWithoutCompanyNestedInput
     roles?: OrganizationRoleUpdateManyWithoutOrganizationNestedInput
     posOrgComposition?: PosOrgCompositionUpdateManyWithoutOrganizationNestedInput
-    parent?: OrganizationUpdateOneRequiredWithoutChildrenNestedInput
+    parent?: OrganizationUpdateOneWithoutChildrenNestedInput
     ancestorClosures?: OrganizationClosureUpdateManyWithoutAncestorNestedInput
     descendantClosures?: OrganizationClosureUpdateManyWithoutDescendantNestedInput
   }
@@ -25343,7 +25431,7 @@ export namespace Prisma {
     id?: IntFieldUpdateOperationsInput | number
     orgCode?: StringFieldUpdateOperationsInput | string
     orgName?: StringFieldUpdateOperationsInput | string
-    parentId?: IntFieldUpdateOperationsInput | number
+    parentId?: NullableIntFieldUpdateOperationsInput | number | null
     businessParentId?: IntFieldUpdateOperationsInput | number
     path?: StringFieldUpdateOperationsInput | string
     level?: IntFieldUpdateOperationsInput | number
@@ -25386,7 +25474,7 @@ export namespace Prisma {
     id?: IntFilter<"Organization"> | number
     orgCode?: StringFilter<"Organization"> | string
     orgName?: StringFilter<"Organization"> | string
-    parentId?: IntFilter<"Organization"> | number
+    parentId?: IntNullableFilter<"Organization"> | number | null
     businessParentId?: IntFilter<"Organization"> | number
     path?: StringFilter<"Organization"> | string
     level?: IntFilter<"Organization"> | number
@@ -25469,7 +25557,7 @@ export namespace Prisma {
     id?: number
     orgCode: string
     orgName: string
-    parentId?: number
+    parentId?: number | null
     businessParentId?: number
     path: string
     level: number
@@ -25521,7 +25609,7 @@ export namespace Prisma {
     id?: number
     orgCode: string
     orgName: string
-    parentId?: number
+    parentId?: number | null
     businessParentId?: number
     path: string
     level: number
@@ -25575,7 +25663,7 @@ export namespace Prisma {
     compEmployments?: EmploymentUpdateManyWithoutCompanyNestedInput
     roles?: OrganizationRoleUpdateManyWithoutOrganizationNestedInput
     posOrgComposition?: PosOrgCompositionUpdateManyWithoutOrganizationNestedInput
-    parent?: OrganizationUpdateOneRequiredWithoutChildrenNestedInput
+    parent?: OrganizationUpdateOneWithoutChildrenNestedInput
     children?: OrganizationUpdateManyWithoutParentNestedInput
     descendantClosures?: OrganizationClosureUpdateManyWithoutDescendantNestedInput
   }
@@ -25584,7 +25672,7 @@ export namespace Prisma {
     id?: IntFieldUpdateOperationsInput | number
     orgCode?: StringFieldUpdateOperationsInput | string
     orgName?: StringFieldUpdateOperationsInput | string
-    parentId?: IntFieldUpdateOperationsInput | number
+    parentId?: NullableIntFieldUpdateOperationsInput | number | null
     businessParentId?: IntFieldUpdateOperationsInput | number
     path?: StringFieldUpdateOperationsInput | string
     level?: IntFieldUpdateOperationsInput | number
@@ -25633,7 +25721,7 @@ export namespace Prisma {
     compEmployments?: EmploymentUpdateManyWithoutCompanyNestedInput
     roles?: OrganizationRoleUpdateManyWithoutOrganizationNestedInput
     posOrgComposition?: PosOrgCompositionUpdateManyWithoutOrganizationNestedInput
-    parent?: OrganizationUpdateOneRequiredWithoutChildrenNestedInput
+    parent?: OrganizationUpdateOneWithoutChildrenNestedInput
     children?: OrganizationUpdateManyWithoutParentNestedInput
     ancestorClosures?: OrganizationClosureUpdateManyWithoutAncestorNestedInput
   }
@@ -25642,7 +25730,7 @@ export namespace Prisma {
     id?: IntFieldUpdateOperationsInput | number
     orgCode?: StringFieldUpdateOperationsInput | string
     orgName?: StringFieldUpdateOperationsInput | string
-    parentId?: IntFieldUpdateOperationsInput | number
+    parentId?: NullableIntFieldUpdateOperationsInput | number | null
     businessParentId?: IntFieldUpdateOperationsInput | number
     path?: StringFieldUpdateOperationsInput | string
     level?: IntFieldUpdateOperationsInput | number
@@ -25868,7 +25956,7 @@ export namespace Prisma {
     id?: number
     orgCode: string
     orgName: string
-    parentId?: number
+    parentId?: number | null
     businessParentId?: number
     path: string
     level: number
@@ -26016,7 +26104,7 @@ export namespace Prisma {
     deptEmployments?: EmploymentUpdateManyWithoutDeptartmentNestedInput
     compEmployments?: EmploymentUpdateManyWithoutCompanyNestedInput
     roles?: OrganizationRoleUpdateManyWithoutOrganizationNestedInput
-    parent?: OrganizationUpdateOneRequiredWithoutChildrenNestedInput
+    parent?: OrganizationUpdateOneWithoutChildrenNestedInput
     children?: OrganizationUpdateManyWithoutParentNestedInput
     ancestorClosures?: OrganizationClosureUpdateManyWithoutAncestorNestedInput
     descendantClosures?: OrganizationClosureUpdateManyWithoutDescendantNestedInput
@@ -26026,7 +26114,7 @@ export namespace Prisma {
     id?: IntFieldUpdateOperationsInput | number
     orgCode?: StringFieldUpdateOperationsInput | string
     orgName?: StringFieldUpdateOperationsInput | string
-    parentId?: IntFieldUpdateOperationsInput | number
+    parentId?: NullableIntFieldUpdateOperationsInput | number | null
     businessParentId?: IntFieldUpdateOperationsInput | number
     path?: StringFieldUpdateOperationsInput | string
     level?: IntFieldUpdateOperationsInput | number
@@ -26151,7 +26239,7 @@ export namespace Prisma {
     id?: number
     orgCode: string
     orgName: string
-    parentId?: number
+    parentId?: number | null
     businessParentId?: number
     path: string
     level: number
@@ -26203,7 +26291,7 @@ export namespace Prisma {
     id?: number
     orgCode: string
     orgName: string
-    parentId?: number
+    parentId?: number | null
     businessParentId?: number
     path: string
     level: number
@@ -26376,7 +26464,7 @@ export namespace Prisma {
     compEmployments?: EmploymentUpdateManyWithoutCompanyNestedInput
     roles?: OrganizationRoleUpdateManyWithoutOrganizationNestedInput
     posOrgComposition?: PosOrgCompositionUpdateManyWithoutOrganizationNestedInput
-    parent?: OrganizationUpdateOneRequiredWithoutChildrenNestedInput
+    parent?: OrganizationUpdateOneWithoutChildrenNestedInput
     children?: OrganizationUpdateManyWithoutParentNestedInput
     ancestorClosures?: OrganizationClosureUpdateManyWithoutAncestorNestedInput
     descendantClosures?: OrganizationClosureUpdateManyWithoutDescendantNestedInput
@@ -26386,7 +26474,7 @@ export namespace Prisma {
     id?: IntFieldUpdateOperationsInput | number
     orgCode?: StringFieldUpdateOperationsInput | string
     orgName?: StringFieldUpdateOperationsInput | string
-    parentId?: IntFieldUpdateOperationsInput | number
+    parentId?: NullableIntFieldUpdateOperationsInput | number | null
     businessParentId?: IntFieldUpdateOperationsInput | number
     path?: StringFieldUpdateOperationsInput | string
     level?: IntFieldUpdateOperationsInput | number
@@ -26434,7 +26522,7 @@ export namespace Prisma {
     deptEmployments?: EmploymentUpdateManyWithoutDeptartmentNestedInput
     roles?: OrganizationRoleUpdateManyWithoutOrganizationNestedInput
     posOrgComposition?: PosOrgCompositionUpdateManyWithoutOrganizationNestedInput
-    parent?: OrganizationUpdateOneRequiredWithoutChildrenNestedInput
+    parent?: OrganizationUpdateOneWithoutChildrenNestedInput
     children?: OrganizationUpdateManyWithoutParentNestedInput
     ancestorClosures?: OrganizationClosureUpdateManyWithoutAncestorNestedInput
     descendantClosures?: OrganizationClosureUpdateManyWithoutDescendantNestedInput
@@ -26444,7 +26532,7 @@ export namespace Prisma {
     id?: IntFieldUpdateOperationsInput | number
     orgCode?: StringFieldUpdateOperationsInput | string
     orgName?: StringFieldUpdateOperationsInput | string
-    parentId?: IntFieldUpdateOperationsInput | number
+    parentId?: NullableIntFieldUpdateOperationsInput | number | null
     businessParentId?: IntFieldUpdateOperationsInput | number
     path?: StringFieldUpdateOperationsInput | string
     level?: IntFieldUpdateOperationsInput | number
@@ -27205,7 +27293,7 @@ export namespace Prisma {
     id?: number
     orgCode: string
     orgName: string
-    parentId?: number
+    parentId?: number | null
     businessParentId?: number
     path: string
     level: number
@@ -27294,7 +27382,7 @@ export namespace Prisma {
     deptEmployments?: EmploymentUpdateManyWithoutDeptartmentNestedInput
     compEmployments?: EmploymentUpdateManyWithoutCompanyNestedInput
     posOrgComposition?: PosOrgCompositionUpdateManyWithoutOrganizationNestedInput
-    parent?: OrganizationUpdateOneRequiredWithoutChildrenNestedInput
+    parent?: OrganizationUpdateOneWithoutChildrenNestedInput
     children?: OrganizationUpdateManyWithoutParentNestedInput
     ancestorClosures?: OrganizationClosureUpdateManyWithoutAncestorNestedInput
     descendantClosures?: OrganizationClosureUpdateManyWithoutDescendantNestedInput
@@ -27304,7 +27392,7 @@ export namespace Prisma {
     id?: IntFieldUpdateOperationsInput | number
     orgCode?: StringFieldUpdateOperationsInput | string
     orgName?: StringFieldUpdateOperationsInput | string
-    parentId?: IntFieldUpdateOperationsInput | number
+    parentId?: NullableIntFieldUpdateOperationsInput | number | null
     businessParentId?: IntFieldUpdateOperationsInput | number
     path?: StringFieldUpdateOperationsInput | string
     level?: IntFieldUpdateOperationsInput | number

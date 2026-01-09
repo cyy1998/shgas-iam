@@ -21,6 +21,9 @@ export const organizationRepository = {
                 level: orgLevel,
                 status: OrganizationStatus.Enable,
                 isDelete: false
+            },
+            include: {
+                parent: true
             }
         })
     },
@@ -49,6 +52,9 @@ export const organizationRepository = {
                 level: 1,
                 status: OrganizationStatus.Enable,
                 isDelete: false
+            },
+            include: {
+                parent: true
             }
         })
     },
@@ -58,6 +64,9 @@ export const organizationRepository = {
                 orgCode: orgCode,
                 status: OrganizationStatus.Enable,
                 isDelete: false
+            },
+            include: {
+                parent: true
             }
         })
     },
@@ -67,6 +76,9 @@ export const organizationRepository = {
                 id: id,
                 status: OrganizationStatus.Enable,
                 isDelete: false
+            },
+            include: {
+                parent: true
             }
         })
     },
@@ -108,6 +120,9 @@ export const organizationRepository = {
                 },
                 status: OrganizationStatus.Enable,
                 isDelete: false
+            },
+            include: {
+                parent: true
             }
         })
     },
@@ -142,6 +157,9 @@ export const organizationRepository = {
                 parentId: parentId,
                 status: OrganizationStatus.Enable,
                 isDelete: false
+            },
+            include: {
+                parent: true
             }
         })
     },
@@ -155,6 +173,9 @@ export const organizationRepository = {
                 },
                 status: OrganizationStatus.Enable,
                 isDelete: false
+            },
+            include: {
+                parent: true
             }
         })
     },

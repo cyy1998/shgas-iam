@@ -1,4 +1,12 @@
 import { z } from "@hono/zod-openapi"
+import type { Prisma } from "../../generated/prisma"
+
+export type OrganizationEntity = Prisma.OrganizationGetPayload<{
+    include: {
+        parent: true
+    }
+
+}>
 
 export const OrganizationDtoSchema = z.object({
     id: z.number().openapi({ example: 1 }),
@@ -6,7 +14,11 @@ export const OrganizationDtoSchema = z.object({
     orgName: z.string().openapi({ example: '信息中心' }),
     orgType: z.string().openapi({ example: '组织类型' }),
     level: z.number().openapi({ example: 2 }),
-    parentId: z.number().openapi({ example: 1 })
+    parentId: z.number().nullable().openapi({ example: -1 }),
+    parentCode: z.string().nullable().openapi({ example: 'SR' }),
+    parentName: z.string().nullable().openapi({ example: '上海燃气有限公司' }),
+
+    // parentId: z.number().openapi({ example: 1 })
 }).openapi('OrganizationDto')
 
 export type OrganizationDto = z.infer<typeof OrganizationDtoSchema>

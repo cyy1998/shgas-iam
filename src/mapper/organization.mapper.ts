@@ -1,16 +1,18 @@
 import type { Organization } from "../../generated/prisma"
-import type { OrganizationDto, FormalOrganizationVo } from "../types/organization.type"
+import type { OrganizationDto, FormalOrganizationVo, OrganizationEntity } from "../types/organization.type"
 
 export const organizationMapper = {
 
-    entityToDto(org: Organization): OrganizationDto {
+    entityToDto(org: OrganizationEntity): OrganizationDto {
         return {
             id: org.id,
             orgCode: org.orgCode,
             orgName: org.orgName,
             orgType: org.orgType,
             level: org.level,
-            parentId: org.parentId
+            parentId: org.parentId,
+            parentCode: org.parent ? org.parent.orgCode : null,
+            parentName: org.parent ? org.parent.orgName : null
         }
     },
 

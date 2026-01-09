@@ -26,6 +26,9 @@ async function _getUserDetail(user: User | null) {
     for (const employment of employments) {
         const roles = await roleRepository.getRolesByEmploymentId(employment.id)
         const privileges = await privilegeRepository.getPrivilegesByRoleIds(roles.map(r => r.id))
+        console.log(roles.map(r => r.id))
+        console.log(roles.map(r => r.roleCode))
+        console.log(privileges.map(p => p.privilegeCode))
         const employmentDto = EmploymentDetailDtoSchema.parse(employmentMapper.entityToDto(employment))
         employmentDto.roles = roles.map(r => r.roleCode)
         employmentDto.privileges = privileges.map(p => p.privilegeCode)
@@ -102,6 +105,7 @@ export const userService = {
     async searchUsers(userQueryDto: UserQueryDto) {
         const users = await userRepository.searchUsers(userQueryDto)
         const userDtos = users.map(u => userMapper.entityToDto(u))
+        console.log(userDtos)
         return userDtos
     },
 
