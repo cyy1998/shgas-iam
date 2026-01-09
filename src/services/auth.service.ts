@@ -100,7 +100,7 @@ export const authService = {
 
     async loginOA(loginid: string, ts: string, token: string) {
         const currentTimestamp = Date.now()
-        if (Math.abs(currentTimestamp - parseInt(ts)) >= 1000 * 300) {
+        if (env.NODE_ENV === 'production' && Math.abs(currentTimestamp - parseInt(ts)) >= 1000 * 300) {
             throw new AuthzUnauthorizedError('token过期')
         }
         // const hashSting = Buffer.from(sm3(`${loginid}|${ts}|${env.IAM_SECRET_KEY}${env.IAM_SECRET_KEY}`), 'hex').toBase64()
