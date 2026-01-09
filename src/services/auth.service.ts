@@ -103,10 +103,10 @@ export const authService = {
         if (env.NODE_ENV === 'production' && Math.abs(currentTimestamp - parseInt(ts)) >= 1000 * 300) {
             throw new AuthzUnauthorizedError('token过期')
         }
-        // const hashSting = Buffer.from(sm3(`${loginid}|${ts}|${env.IAM_SECRET_KEY}${env.IAM_SECRET_KEY}`), 'hex').toBase64()
-        // if (hashSting !== token) {
-        //     throw new AuthzUnauthorizedError('token校验失败')
-        // }
+        const hashSting = Buffer.from(sm3(`${loginid}|${ts}|${env.IAM_SECRET_KEY}${env.IAM_SECRET_KEY}`), 'hex').toBase64()
+        if (hashSting !== token) {
+            throw new AuthzUnauthorizedError('token校验失败')
+        }
         const userDto = await userService.getUserDetailByUsername(loginid)
         if (userDto.userType !== '正式员工') {
             throw new CustomError('用户类别不支持密码登录')
