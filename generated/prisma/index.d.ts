@@ -19609,10 +19609,10 @@ export namespace Prisma {
 
   export type UserWhereUniqueInput = Prisma.AtLeast<{
     id?: number
+    username?: string
     AND?: UserWhereInput | UserWhereInput[]
     OR?: UserWhereInput[]
     NOT?: UserWhereInput | UserWhereInput[]
-    username?: StringFilter<"User"> | string
     wxId?: StringNullableFilter<"User"> | string | null
     name?: StringFilter<"User"> | string
     password?: StringNullableFilter<"User"> | string | null
@@ -19626,7 +19626,7 @@ export namespace Prisma {
     employments?: EmploymentListRelationFilter
     delegationTo?: PrivilegeDelegationListRelationFilter
     delegationFrom?: PrivilegeDelegationListRelationFilter
-  }, "id">
+  }, "id" | "username">
 
   export type UserOrderByWithAggregationInput = {
     id?: SortOrder
@@ -19724,10 +19724,10 @@ export namespace Prisma {
 
   export type OrganizationWhereUniqueInput = Prisma.AtLeast<{
     id?: number
+    orgCode?: string
     AND?: OrganizationWhereInput | OrganizationWhereInput[]
     OR?: OrganizationWhereInput[]
     NOT?: OrganizationWhereInput | OrganizationWhereInput[]
-    orgCode?: StringFilter<"Organization"> | string
     orgName?: StringFilter<"Organization"> | string
     parentId?: IntNullableFilter<"Organization"> | number | null
     businessParentId?: IntFilter<"Organization"> | number
@@ -19749,7 +19749,7 @@ export namespace Prisma {
     children?: OrganizationListRelationFilter
     ancestorClosures?: OrganizationClosureListRelationFilter
     descendantClosures?: OrganizationClosureListRelationFilter
-  }, "id">
+  }, "id" | "orgCode">
 
   export type OrganizationOrderByWithAggregationInput = {
     id?: SortOrder
@@ -19885,10 +19885,10 @@ export namespace Prisma {
 
   export type PositionWhereUniqueInput = Prisma.AtLeast<{
     id?: number
+    posCode?: string
     AND?: PositionWhereInput | PositionWhereInput[]
     OR?: PositionWhereInput[]
     NOT?: PositionWhereInput | PositionWhereInput[]
-    posCode?: StringFilter<"Position"> | string
     posName?: StringFilter<"Position"> | string
     status?: IntFilter<"Position"> | number
     description?: StringNullableFilter<"Position"> | string | null
@@ -19898,7 +19898,7 @@ export namespace Prisma {
     employments?: EmploymentListRelationFilter
     roles?: PositionRoleListRelationFilter
     posOrgComposition?: PosOrgCompositionListRelationFilter
-  }, "id">
+  }, "id" | "posCode">
 
   export type PositionOrderByWithAggregationInput = {
     id?: SortOrder
@@ -20160,10 +20160,10 @@ export namespace Prisma {
 
   export type ClientWhereUniqueInput = Prisma.AtLeast<{
     id?: number
+    clientCode?: string
     AND?: ClientWhereInput | ClientWhereInput[]
     OR?: ClientWhereInput[]
     NOT?: ClientWhereInput | ClientWhereInput[]
-    clientCode?: StringFilter<"Client"> | string
     clientName?: StringFilter<"Client"> | string
     url?: StringNullableFilter<"Client"> | string | null
     status?: IntFilter<"Client"> | number
@@ -20173,7 +20173,7 @@ export namespace Prisma {
     updateTime?: DateTimeFilter<"Client"> | Date | string
     extAttributes?: JsonFilter<"Client">
     roles?: RoleListRelationFilter
-  }, "id">
+  }, "id" | "clientCode">
 
   export type ClientOrderByWithAggregationInput = {
     id?: SortOrder
@@ -20251,10 +20251,10 @@ export namespace Prisma {
 
   export type RoleWhereUniqueInput = Prisma.AtLeast<{
     id?: number
+    roleCode?: string
     AND?: RoleWhereInput | RoleWhereInput[]
     OR?: RoleWhereInput[]
     NOT?: RoleWhereInput | RoleWhereInput[]
-    roleCode?: StringFilter<"Role"> | string
     roleName?: StringFilter<"Role"> | string
     clientId?: IntFilter<"Role"> | number
     status?: IntFilter<"Role"> | number
@@ -20268,7 +20268,7 @@ export namespace Prisma {
     positionOrganizations?: PosOrgRoleListRelationFilter
     employments?: EmploymentRoleListRelationFilter
     privileges?: RolePrivilegeListRelationFilter
-  }, "id">
+  }, "id" | "roleCode">
 
   export type RoleOrderByWithAggregationInput = {
     id?: SortOrder
@@ -20525,10 +20525,10 @@ export namespace Prisma {
 
   export type PrivilegeWhereUniqueInput = Prisma.AtLeast<{
     id?: number
+    privilegeCode?: string
     AND?: PrivilegeWhereInput | PrivilegeWhereInput[]
     OR?: PrivilegeWhereInput[]
     NOT?: PrivilegeWhereInput | PrivilegeWhereInput[]
-    privilegeCode?: StringFilter<"Privilege"> | string
     privilegeName?: StringFilter<"Privilege"> | string
     fieldValues?: JsonNullableFilter<"Privilege">
     status?: IntFilter<"Privilege"> | number
@@ -20538,7 +20538,7 @@ export namespace Prisma {
     updateTime?: DateTimeFilter<"Privilege"> | Date | string
     roles?: RolePrivilegeListRelationFilter
     delegations?: DelegationDetailListRelationFilter
-  }, "id">
+  }, "id" | "privilegeCode">
 
   export type PrivilegeOrderByWithAggregationInput = {
     id?: SortOrder
