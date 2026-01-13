@@ -1,7 +1,5 @@
 import { z } from "@hono/zod-openapi"
-import { EmploymentDtoSchema, type EmploymentDto } from "./employment.type"
-import { PrivilegeDtoSchema, type PrivilegeDto } from "./privilege.type"
-import type { RoleDto } from "./role.type"
+import { EmploymentDtoSchema, type EmploymentDto } from "./employment.common.type"
 import { UserStatus } from "../constants/user.status"
 
 export const UserDtoSchema = z.object({
@@ -39,3 +37,5 @@ export const UserQueryDtoSchema = z.object({
 }).openapi('UserQueryDto')
 
 export type UserQueryDto = z.infer<typeof UserQueryDtoSchema>
+
+

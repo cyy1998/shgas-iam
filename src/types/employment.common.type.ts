@@ -1,16 +1,4 @@
 import { z } from "@hono/zod-openapi"
-import { Prisma } from "../../generated/prisma"
-import { EmploymentStatus } from "../constants/employment.status"
-
-export type EmploymentEntity = Prisma.EmploymentGetPayload<{
-    include: {
-        position: true,
-        deptartment: true,
-        company: true,
-        user: true
-    }
-
-}>
 
 export const EmploymentDtoSchema = z.object({
     id: z.number().openapi({ example: 1 }),
@@ -34,8 +22,8 @@ export type EmploymentDto = z.infer<typeof EmploymentDtoSchema>
 export const EmploymentDetailDtoSchema = EmploymentDtoSchema.extend({
     privileges: z.array(z.string()).default([]).openapi({ example: ['ui:button:tender:create-GYBG'] }),
     roles: z.array(z.string()).default([]).openapi({ example: ['tender:default-user'] })
-})
+}).openapi('EmploymentDetailDto')
 
-export type EmploymentDetailDtoSchema = z.infer<typeof EmploymentDetailDtoSchema>
+export type EmploymentDetailDto = z.infer<typeof EmploymentDetailDtoSchema>
 
 

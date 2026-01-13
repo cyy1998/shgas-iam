@@ -1,10 +1,10 @@
 import { CustomError } from "../errors/CustomError";
-import { employmentMapper } from "../mapper/employment.mapper";
-import { employmentRepository } from "../repositories/employment.repository";
+import { employmentMapper } from "../mapper/employment.common.mapper";
+import { employmentRepository } from "../repositories/employment.common.repository";
 import { organizationRepository } from "../repositories/organization.repository";
 import { positionRepository } from "../repositories/position.repository";
 import { roleRepository } from "../repositories/role.repository";
-import { userRepository } from "../repositories/user.repository";
+import { userRepository } from "../repositories/user.common.repository";
 import { privilegeService } from "./privilege.service";
 import { roleService } from "./role.service";
 import { userService } from "./user.service";

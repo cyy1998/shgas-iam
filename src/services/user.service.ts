@@ -1,10 +1,10 @@
 import { hash, compare } from 'bcrypt-ts'
 import type { User } from '../../generated/prisma'
-import { userRepository } from '../repositories/user.repository'
-import { UserDetailDtoSchema, type UserDetailDto, type UserDto, type UserQueryDto } from '../types/user.type'
-import { userMapper } from '../mapper/user.mapper'
-import { employmentRepository } from '../repositories/employment.repository'
-import { employmentMapper } from '../mapper/employment.mapper'
+import { userRepository } from '../repositories/user.common.repository'
+import { UserDetailDtoSchema, type UserDetailDto, type UserDto, type UserQueryDto } from '../types/user.common.type'
+import { userMapper } from '../mapper/user.common.mapper'
+import { employmentRepository } from '../repositories/employment.common.repository'
+import { employmentMapper } from '../mapper/employment.common.mapper'
 import { positionRepository } from '../repositories/position.repository'
 import { organizationRepository } from '../repositories/organization.repository'
 import { mobileService } from './mobile.service'
@@ -14,7 +14,7 @@ import { CustomError } from '../errors/CustomError'
 import { roleRepository } from '../repositories/role.repository'
 import { prisma } from '../libs/database/prisma'
 import { privilegeRepository } from '../repositories/privilege.repository'
-import { EmploymentDetailDtoSchema } from '../types/employment.type'
+import { EmploymentDetailDtoSchema } from '../types/employment.common.type'
 
 async function _getUserDetail(user: User | null) {
     if (user === null) {
@@ -26,9 +26,9 @@ async function _getUserDetail(user: User | null) {
     for (const employment of employments) {
         const roles = await roleRepository.getRolesByEmploymentId(employment.id)
         const privileges = await privilegeRepository.getPrivilegesByRoleIds(roles.map(r => r.id))
-        console.log(roles.map(r => r.id))
-        console.log(roles.map(r => r.roleCode))
-        console.log(privileges.map(p => p.privilegeCode))
+        // console.log(roles.map(r => r.id))
+        // console.log(roles.map(r => r.roleCode))
+        // console.log(privileges.map(p => p.privilegeCode))
         const employmentDto = EmploymentDetailDtoSchema.parse(employmentMapper.entityToDto(employment))
         employmentDto.roles = roles.map(r => r.roleCode)
         employmentDto.privileges = privileges.map(p => p.privilegeCode)
@@ -105,7 +105,6 @@ export const userService = {
     async searchUsers(userQueryDto: UserQueryDto) {
         const users = await userRepository.searchUsers(userQueryDto)
         const userDtos = users.map(u => userMapper.entityToDto(u))
-        console.log(userDtos)
         return userDtos
     },
 

@@ -1,5 +1,5 @@
 import type { User } from "../../generated/prisma"
-import type { UserDto } from "../types/user.type"
+import type { UserDto } from "../types/user.common.type"
 
 export const userMapper = {
     entityToDto(user: User): UserDto {

@@ -2,7 +2,7 @@ import { env } from "../config"
 import { AuthzError } from "../errors/AuthzError"
 import { AuthzUnauthorizedError } from "../errors/AuthzUnauthorizedError"
 import { redis } from "../libs/cache/redis"
-import type { UserDetailDto } from "../types/user.type"
+import type { UserDetailDto } from "../types/user.common.type"
 
 export const cacheService = {
     async getSessionById(sessionId: string): Promise<UserDetailDto> {

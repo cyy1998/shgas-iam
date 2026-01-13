@@ -1,6 +1,7 @@
 import { prisma } from '../libs/database/prisma'
 import { z, createRoute, OpenAPIHono } from '@hono/zod-openapi'
-import { createResponseSchema, makeResponse, success } from '../utils/response.utils'
+import { makeResponse, success } from '../utils/response.utils'
+import { createResponseSchema } from '../types/response.type'
 import { employmentService } from '../services/employment.service'
 import { roleService } from '../services/role.service'
 import { privilegeService } from '../services/privilege.service'
@@ -9,8 +10,81 @@ import { ClientDtoSchema, ClientInputDtoSchema } from '../types/client.type'
 import { clientService } from '../services/client.service'
 import { organizationService } from '../services/organization.service'
 import { OrganizationCreateDtoSchema } from '../types/organization.type'
+import { createPageQuerySchema, createPageResultSchema } from '../types/page.type'
+import { UserDtoSchema, UserQueryDtoSchema } from '../types/user.common.type'
+import { UserAdminDetailVoSchema, UserAdminDtoSchema, UserAdminQueryDtoSchema, UserAdminVoSchema } from "../types/user.admin.type"
+import { userService } from '../services/user.service'
+import { adminService } from '../services/admin.service'
+
 
 const app = new OpenAPIHono()
+
+/*
+path: /users/search
+function: 应用更新
+*/
+app.openapi(
+    createRoute({
+        method: 'post',
+        path: '/users/search',
+        tags: ['Admin'],
+        request: {
+            body: {
+                content: {
+                    'application/json': {
+                        schema: UserAdminQueryDtoSchema
+                    }
+                }
+            },
+        },
+        responses: {
+            200: {
+                content: {
+                    'application/json': {
+                        schema: createResponseSchema(createPageResultSchema(UserAdminVoSchema)),
+                    },
+                },
+                description: '符合条件用户列表',
+            },
+        },
+    }),
+    async (c) => {
+        const body = c.req.valid('json')
+        const data = await adminService.searchUsersFuzzy(body)
+        return c.json(success(data))
+    }
+)
+/*
+path: /users/detail
+function: 应用更新
+*/
+app.openapi(
+    createRoute({
+        method: 'get',
+        path: '/users/detail',
+        tags: ['Admin'],
+        request: {
+            query: z.object({
+                username: z.string().openapi({ example: '123456' }),
+            })
+        },
+        responses: {
+            200: {
+                content: {
+                    'application/json': {
+                        schema: createResponseSchema(UserAdminDetailVoSchema),
+                    },
+                },
+                description: '用户详情',
+            },
+        },
+    }),
+    async (c) => {
+        const { username } = c.req.valid('query')
+        const data = await adminService.getUserDetail(username)
+        return c.json(success(data))
+    }
+)
 /*
 path: /client/update
 function: 应用更新

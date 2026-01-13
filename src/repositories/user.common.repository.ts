@@ -5,7 +5,8 @@ import { PositionStatus } from "../constants/position.status"
 import { RoleStatus } from "../constants/role.status"
 import { UserStatus } from "../constants/user.status"
 import { prisma, type PrismaTransaction } from '../libs/database/prisma'
-import type { UserQueryDto } from "../types/user.type"
+import type { UserQueryDto } from "../types/user.common.type"
+import type { UserAdminQueryDto } from "../types/user.admin.type"
 
 const searchUserQuery = `
 SELECT

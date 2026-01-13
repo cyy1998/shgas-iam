@@ -1,4 +1,5 @@
-import type { EmploymentDto, EmploymentEntity } from "../types/employment.type"
+import type { EmploymentDto } from "../types/employment.common.type"
+import type { EmploymentEntity } from "../types/employment.entity.type"
 
 export const employmentMapper = {
     entityToDto(employment: EmploymentEntity): EmploymentDto {

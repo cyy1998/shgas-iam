@@ -1,7 +1,7 @@
 import { setCookie, getCookie, deleteCookie } from 'hono/cookie'
 import { success } from '../utils/response.utils'
 import { z, createRoute, OpenAPIHono } from '@hono/zod-openapi'
-import { createResponseSchema } from '../utils/response.utils'
+import { createResponseSchema } from '../types/response.type'
 import { mobileService } from '../services/mobile.service'
 import { authService } from '../services/auth.service'
 import { env } from '../config'
