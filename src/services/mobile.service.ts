@@ -41,7 +41,7 @@ export const mobileService = {
         })
         const smsResult: SMSServiceResult = await res.json() as SMSServiceResult
         if (smsResult.resultCode !== '0000') {
-            throw new CustomError('短信发送失败')
+            throw new CustomError(`短信发送失败:${phoneNumber}`)
         }
         await redis.set(`mobile-code:${phoneNumber}`, random4Digit, 'EX', 180)
         return true
