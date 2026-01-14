@@ -17,7 +17,6 @@ export const OrganizationDtoSchema = z.object({
     parentId: z.number().nullable().openapi({ example: -1 }),
     parentCode: z.string().nullable().openapi({ example: 'SR' }),
     parentName: z.string().nullable().openapi({ example: '上海燃气有限公司' }),
-
     // parentId: z.number().openapi({ example: 1 })
 }).openapi('OrganizationDto')
 
@@ -52,6 +51,7 @@ export const OrganizationQueryDtoSchema = z.object({
     ancestorDepths: z.array(z.number()).optional().openapi({ example: [1, 2] }),
     descendantCodes: z.array(z.string()).optional().openapi({ example: ['SR01', 'SB01'] }),
     descendantDepths: z.array(z.number()).optional().openapi({ example: [1, 2] }),
+    orgCodes: z.array(z.string()).optional().openapi({ example: ['SR', 'SB'] }),
 }).openapi('OrganizationQueryDto')
 
 export type OrganizationQueryDto = z.infer<typeof OrganizationQueryDtoSchema>

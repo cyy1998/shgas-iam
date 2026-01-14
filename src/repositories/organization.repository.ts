@@ -118,6 +118,9 @@ export const organizationRepository = {
                 orgType: {
                     in: organizationQueryDto.orgTypes
                 },
+                orgCode: {
+                    in: organizationQueryDto.orgCodes
+                },
                 status: OrganizationStatus.Enable,
                 isDelete: false
             },

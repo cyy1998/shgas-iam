@@ -305,7 +305,7 @@ app.openapi(
 /*
 path: /organizations/search
 method: POST
-function: 获取某个组织的所有子组织
+function: 按条件搜索某组织
 */
 app.openapi(
     createRoute({
@@ -325,7 +325,7 @@ app.openapi(
             200: {
                 content: {
                     'application/json': {
-                        schema: createResponseSchema(z.array(FormalOrganizationVoSchema)),
+                        schema: createResponseSchema(z.array(OrganizationDtoSchema)),
                     },
                 },
                 description: '所有符合条件组织列表',

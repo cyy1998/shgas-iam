@@ -6,7 +6,7 @@ import { organizationService } from '../services/organization.service'
 import { employmentService } from '../services/employment.service'
 import { EmploymentDtoSchema } from '../types/employment.common.type'
 import { UserDetailDtoSchema, UserDtoSchema } from '../types/user.common.type'
-import { OrganizationDtoSchema } from '../types/organization.type'
+import { FormalOrganizationVoSchema, OrganizationDtoSchema, OrganizationQueryDtoSchema } from '../types/organization.type'
 import { DelegationAbstractDtoSchema } from '../types/delegation.type'
 
 const app = new OpenAPIHono()
@@ -302,6 +302,43 @@ app.openapi(
     async (c) => {
         const { username, mobile, name, orgCode } = c.req.valid('json')
         const data = await userService.registerPurveyorConcat(username, mobile, name, orgCode)
+        return c.json(success(data))
+    }
+)
+
+/*
+path: /organizations/search
+method: POST
+function: 按条件搜索某组织
+*/
+app.openapi(
+    createRoute({
+        method: 'post',
+        path: '/organizations/search',
+        tags: ['Public'],
+        request: {
+            body: {
+                content: {
+                    'application/json': {
+                        schema: OrganizationQueryDtoSchema
+                    }
+                }
+            }
+        },
+        responses: {
+            200: {
+                content: {
+                    'application/json': {
+                        schema: createResponseSchema(z.array(OrganizationDtoSchema)),
+                    },
+                },
+                description: '所有符合条件组织列表',
+            },
+        },
+    }),
+    async (c) => {
+        const organizationQueryDto = c.req.valid('json')
+        const data = await organizationService.searchOrganizations(organizationQueryDto)
         return c.json(success(data))
     }
 )
