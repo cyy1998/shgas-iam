@@ -315,7 +315,7 @@ app.openapi(
     createRoute({
         method: 'post',
         path: '/organizations/search',
-        tags: ['Public'],
+        tags: ['Internal'],
         request: {
             body: {
                 content: {
