@@ -2,7 +2,7 @@ import { prisma } from '../libs/database/prisma'
 import { z, createRoute, OpenAPIHono } from '@hono/zod-openapi'
 import { makeResponse, success } from '../utils/response.utils'
 import { createResponseSchema } from '../types/response.type'
-import { employmentService } from '../services/employment.service'
+import { employmentService } from '../services/employment.common.service'
 import { roleService } from '../services/role.service'
 import { privilegeService } from '../services/privilege.service'
 import { ResponseSchema } from '../types/response.type'
@@ -13,8 +13,8 @@ import { OrganizationCreateDtoSchema } from '../types/organization.type'
 import { createPageQuerySchema, createPageResultSchema } from '../types/page.type'
 import { UserDtoSchema, UserQueryDtoSchema } from '../types/user.common.type'
 import { UserAdminDetailVoSchema, UserAdminDtoSchema, UserAdminQueryDtoSchema, UserAdminVoSchema } from "../types/user.admin.type"
-import { userService } from '../services/user.service'
-import { adminService } from '../services/admin.service'
+import { userService } from '../services/user.common.service'
+import { userAdminService } from '../services/user.admin.service'
 
 
 const app = new OpenAPIHono()
@@ -50,7 +50,7 @@ app.openapi(
     }),
     async (c) => {
         const body = c.req.valid('json')
-        const data = await adminService.searchUsersFuzzy(body)
+        const data = await userAdminService.searchUsersFuzzy(body)
         return c.json(success(data))
     }
 )
@@ -81,7 +81,7 @@ app.openapi(
     }),
     async (c) => {
         const { username } = c.req.valid('query')
-        const data = await adminService.getUserDetail(username)
+        const data = await userAdminService.getUserDetail(username)
         return c.json(success(data))
     }
 )

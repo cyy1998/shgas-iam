@@ -16,7 +16,7 @@ import { prisma } from '../libs/database/prisma'
 import { privilegeRepository } from '../repositories/privilege.repository'
 import { EmploymentDetailDtoSchema } from '../types/employment.common.type'
 
-async function _getUserDetail(user: User | null) {
+async function _getUserDetail(user: User | null): Promise<UserDetailDto> {
     if (user === null) {
         throw new UserNotFoundError('该用户不存在')
     }
@@ -108,19 +108,19 @@ export const userService = {
         return userDtos
     },
 
-    async getUserDetailByUsername(username: string) {
+    async getUserDetailByUsername(username: string): Promise<UserDetailDto> {
         const user = await userRepository.getUserByUsername(username)
         const userDetail = await _getUserDetail(user)
         return userDetail
     },
 
-    async getUserDetailByMobile(mobile: string) {
+    async getUserDetailByMobile(mobile: string): Promise<UserDetailDto> {
         const user = await userRepository.getUserByMobile(mobile)
         const userDetail = await _getUserDetail(user)
         return userDetail
     },
 
-    async getUserDetailByWxId(wxId: string) {
+    async getUserDetailByWxId(wxId: string): Promise<UserDetailDto> {
         const user = await userRepository.getUserByWxId(wxId)
         const userDetail = await _getUserDetail(user)
         return userDetail

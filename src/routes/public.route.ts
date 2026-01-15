@@ -1,40 +1,48 @@
 import { success } from '../utils/response.utils'
 import { z, createRoute, OpenAPIHono } from '@hono/zod-openapi'
 import { createResponseSchema } from '../types/response.type'
-import { userService } from '../services/user.service'
+import { userService } from '../services/user.common.service'
 import { mobileService } from '../services/mobile.service'
 import { getCookie } from 'hono/cookie'
-import { UserDetailDtoSchema, UserDtoSchema, UserQueryDtoSchema, type UserDto } from '../types/user.common.type'
-import { employmentService } from '../services/employment.service'
+import { UserDetailDtoSchema, UserDtoSchema, UserQueryDtoSchema, type UserDetailDto, type UserDto } from '../types/user.common.type'
+import { employmentService } from '../services/employment.common.service'
 import { organizationService } from '../services/organization.service'
 import { cacheService } from '../services/cache.service'
 
 import { EmploymentDtoSchema } from '../types/employment.common.type'
-import { FormalOrganizationVoSchema, OrganizationDtoSchema, OrganizationQueryDtoSchema } from '../types/organization.type'
-import { CustomError } from '../errors/CustomError'
-import { AuthzError } from '../errors/AuthzError'
+import { OrganizationDtoSchema, OrganizationQueryDtoSchema } from '../types/organization.type'
 import { AuthzUnauthorizedError } from '../errors/AuthzUnauthorizedError'
-import { OrganizationType } from '../constants/organization.type'
-import { OrganizationLevel } from '../constants/organization.level'
-import { $enum } from 'ts-enum-util'
+import { redis } from '../libs/cache/redis'
 
 interface AppEnv {
     Variables: {
         userId: number,
-        username: string
+        username: string,
+        userDetailDto: UserDetailDto
     }
 }
 
 const app = new OpenAPIHono<AppEnv>()
 
 app.use('/*', async (c, next) => {
-    const userString = c.req.header('X-User-Info')
+    const sessionId = getCookie(c, 'session') ?? null
+    // const path = c.req.header('X-Forwarded-Uri')
+    // const userString = c.req.header('X-User-Info')
+    if (!sessionId) {
+        throw new AuthzUnauthorizedError('未登录')
+    }
+    // if (!userString) {
+    //     throw new AuthzUnauthorizedError('未登录')
+    // }
+    const userString = await redis.get(`session:${sessionId}`)
     if (!userString) {
         throw new AuthzUnauthorizedError('未登录')
     }
-    const userDto: UserDto = JSON.parse(Buffer.from(userString, 'base64').toString('utf8'))
+    const userDto: UserDetailDto = JSON.parse(userString)
+    // const userDto: UserDto = JSON.parse(Buffer.from(userString, 'base64').toString('utf8'))
     c.set('userId', userDto.id)
     c.set('username', userDto.username)
+    c.set('userDetailDto', userDto)
     return await next()
 })
 
@@ -60,8 +68,9 @@ app.openapi(
         },
     }),
     async (c) => {
-        const sessionId = getCookie(c, 'session') ?? ''
-        const data = await cacheService.getSessionById(sessionId)
+        // const sessionId = getCookie(c, 'session') ?? ''
+        // const data = await cacheService.getSessionById(sessionId)
+        const data = c.get('userDetailDto')
         return c.json(success(data))
     }
 )

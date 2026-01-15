@@ -7,7 +7,7 @@ import { roleRepository } from "../repositories/role.repository";
 import { userRepository } from "../repositories/user.common.repository";
 import { privilegeService } from "./privilege.service";
 import { roleService } from "./role.service";
-import { userService } from "./user.service";
+import { userService } from "./user.common.service";
 
 
 async function _getEmploymentsDetail(username: string) {

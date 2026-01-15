@@ -3,7 +3,7 @@ import { clientService } from '../services/client.service'
 import { ClientDtoSchema, ClientVoSchema } from '../types/client.type'
 import { success } from '../utils/response.utils'
 import { createResponseSchema } from '../types/response.type'
-import { userService } from '../services/user.service'
+import { userService } from '../services/user.common.service'
 
 const app = new OpenAPIHono()
 

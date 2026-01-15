@@ -1,16 +1,10 @@
-import type { z } from "@hono/zod-openapi";
-import { userMapper } from "../mapper/user.common.mapper";
-import { userRepository } from "../repositories/user.common.repository";
-import type { PageQuery } from "../types/page.type";
+
 import { UserAdminDetailDtoSchema, type UserAdminQueryDto } from "../types/user.admin.type";
 import { paginate } from "../utils/page.util";
 import { UserNotFoundError } from "../errors/UserNotFoundError";
 import { userAdminMapper } from "../mapper/user.admin.mapper";
 import type { User } from "../../generated/prisma";
 import { employmentRepository } from "../repositories/employment.common.repository";
-import { roleRepository } from "../repositories/role.repository";
-import { privilegeRepository } from "../repositories/privilege.repository";
-import { EmploymentAdminDetailDtoSchema } from "../types/employment.admin.type";
 import { employmentAdminMapper } from "../mapper/employment.admin.mapper";
 import { userAdminRepository } from "../repositories/user.admin.repository";
 
@@ -44,7 +38,7 @@ async function _getUserDetail(user: User | null) {
 }
 
 
-export const adminService = {
+export const userAdminService = {
     async searchUsersFuzzy(userPageQuery: UserAdminQueryDto) {
         const users = await userAdminRepository.searchUsersFuzzy(userPageQuery)
         const userDtos = users.map(u => userAdminMapper.entityToDto(u)).map(u => userAdminMapper.dtoToVo(u))

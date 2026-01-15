@@ -1,7 +1,7 @@
 import { redis } from "../libs/cache/redis"
-import type { UserDto } from "../types/user.common.type"
+import type { UserDetailDto, UserDto } from "../types/user.common.type"
 import axios from "axios"
-import { userService } from "./user.service"
+import { userService } from "./user.common.service"
 import { env } from "../config"
 import { weixinService } from "./weixin.service"
 import type { WeixinResponse } from "../types/wx.type"
@@ -25,7 +25,7 @@ function extractClientKey(path: string): string {
     return parts[1] as string;
 }
 
-async function _login(user: UserDto) {
+async function _login(user: UserDetailDto) {
     // let orcasSessionId_1 = null
     // if (user.userType === '正式员工') {
     const { orcasSessionId, orcasId } = await _orcasLogin(user)
@@ -80,7 +80,7 @@ async function _wxRetry(code: string, retryTimes: number = 0, maxTimes: number =
         return _wxRetry(code, retryTimes + 1)
     }
     else {
-        const user: UserDto = JSON.parse(codeCache)
+        const user: UserDetailDto = JSON.parse(codeCache)
         return _login(user)
     }
 }
