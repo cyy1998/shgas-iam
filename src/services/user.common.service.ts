@@ -103,7 +103,7 @@ export const userService = {
         })
     },
     async searchUsers(userQueryDto: UserQueryDto) {
-        const users = await userRepository.searchUsersRawSql(userQueryDto)
+        const users = await userRepository.searchUsers(userQueryDto)
         const userDtos = users.map(u => userMapper.entityToDto(u))
         return userDtos
     },
