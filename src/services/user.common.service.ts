@@ -107,6 +107,11 @@ export const userService = {
         const userDtos = users.map(u => userMapper.entityToDto(u))
         return userDtos
     },
+    async searchUsersRawSql(userQueryDto: UserQueryDto) {
+        const users = await userRepository.searchUsersRawSql(userQueryDto)
+        const userDtos = users.map(u => userMapper.entityToDto(u))
+        return userDtos
+    },
 
     async getUserDetailByUsername(username: string): Promise<UserDetailDto> {
         const user = await userRepository.getUserByUsername(username)

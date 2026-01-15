@@ -136,21 +136,21 @@ export const userRepository = {
                                     }
                                 },
                             },
-                            {
-                                posOrg: {
-                                    roles: {
-                                        some: {
-                                            role: {
-                                                status: RoleStatus.Enable,
-                                                isDelete: false,
-                                                roleCode: {
-                                                    in: userQueryDto.roleCodes
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
-                            },
+                            // {
+                            //     posOrg: {
+                            //         roles: {
+                            //             some: {
+                            //                 role: {
+                            //                     status: RoleStatus.Enable,
+                            //                     isDelete: false,
+                            //                     roleCode: {
+                            //                         in: userQueryDto.roleCodes
+                            //                     }
+                            //                 }
+                            //             }
+                            //         }
+                            //     }
+                            // },
                             {
                                 roles: {
                                     some: {

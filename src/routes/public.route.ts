@@ -467,6 +467,42 @@ app.openapi(
         return c.json(success(data))
     }
 )
+/*
+path: /users/search
+method: POST
+function: 获取某个组织的所有子组织
+*/
+app.openapi(
+    createRoute({
+        method: 'post',
+        path: '/users/search/sql',
+        tags: ['Public'],
+        request: {
+            body: {
+                content: {
+                    'application/json': {
+                        schema: UserQueryDtoSchema
+                    }
+                }
+            }
+        },
+        responses: {
+            200: {
+                content: {
+                    'application/json': {
+                        schema: createResponseSchema(z.array(UserDtoSchema)),
+                    },
+                },
+                description: '所有子组织列表',
+            },
+        },
+    }),
+    async (c) => {
+        const userQueryDto = c.req.valid('json')
+        const data = await userService.searchUsersRawSql(userQueryDto)
+        return c.json(success(data))
+    }
+)
 
 /*
 path: /users/by-org
