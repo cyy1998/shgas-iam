@@ -433,6 +433,45 @@ app.openapi(
 )
 
 /*
+path: /role/position/set
+function: 为组织设置角色
+*/
+app.openapi(
+    createRoute({
+        method: 'post',
+        path: '/role/position/set',
+        tags: ['Admin'],
+        request: {
+            body: {
+                content: {
+                    'application/json': {
+                        schema: z.object({
+                            roleCode: z.string().openapi({ example: 'E01' }),
+                            posCode: z.string().openapi({ example: 'E001' })
+                        })
+                    }
+                }
+            },
+        },
+        responses: {
+            200: {
+                content: {
+                    'application/json': {
+                        schema: ResponseSchema,
+                    },
+                },
+                description: '角色设置成功',
+            },
+        },
+    }),
+    async (c) => {
+        const { posCode, roleCode } = c.req.valid('json')
+        const data = await roleService.setRoleForPosition(posCode, roleCode)
+        return c.json(success(data))
+    }
+)
+
+/*
 path: /role/pos-org/set
 function: 为岗位-部门组合设置角色
 */

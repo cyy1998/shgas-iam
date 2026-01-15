@@ -311,6 +311,14 @@ export const roleRepository = {
             }
         })
     },
+    async setRoleForPosition(roleId: number, posId: number, tx: PrismaTransaction = prisma) {
+        return await tx.positionRole.create({
+            data: {
+                roleId: roleId,
+                positionId: posId
+            }
+        })
+    },
     async setRoleForPosOrg(roleId: number, posOrgId: number, tx: PrismaTransaction = prisma) {
         return await tx.posOrgRole.create({
             data: {

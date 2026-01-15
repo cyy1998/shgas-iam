@@ -119,6 +119,28 @@ export const roleService = {
             return true
         })
     },
+    async setRoleForPosition(posCode: string, roleCode: string) {
+        return await prisma.$transaction(async (tx) => {
+            const [pos, role] = await Promise.all([
+                positionRepository.getPositionByCode(posCode, tx),
+                roleRepository.getRoleByCode(roleCode, tx)
+            ])
+            if (pos === null || role === null) {
+                throw new CustomError(`对应实体不存在`)
+            }
+            try {
+                await roleRepository.setRoleForPosition(role.id, pos.id, tx)
+            } catch (err) {
+                if (err instanceof Prisma.PrismaClientKnownRequestError) {
+                    throw new CustomError('对应关系已存在')
+                }
+                else {
+                    throw err
+                }
+            }
+            return true
+        })
+    },
     async setRoleForPosOrg(orgCode: string, posCode: string, roleCode: string) {
         return await prisma.$transaction(async (tx) => {
             const [role, org, pos] = await Promise.all([
