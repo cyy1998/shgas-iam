@@ -246,11 +246,11 @@ export const userRepository = {
             AND o2.org_code IN (${userQueryDto.ancestorOrgCodes.map(r => "'" + r + "'").join(',')})
             `
         }
-        if (userQueryDto.ancestorOrgCodes) {
-            query += `
-            AND o2.org_code IN (${userQueryDto.ancestorOrgCodes.map(r => "'" + r + "'").join(',')})
-            `
-        }
+        // if (userQueryDto.ancestorOrgCodes) {
+        //     query += `
+        //     AND o2.org_code IN (${userQueryDto.ancestorOrgCodes.map(r => "'" + r + "'").join(',')})
+        //     `
+        // }
         if (userQueryDto.ancestorOrgDepths) {
             query += `
             AND oc.\`depth\` IN (${userQueryDto.ancestorOrgDepths.map(r => "'" + r + "'").join(',')})
@@ -271,6 +271,7 @@ export const userRepository = {
             AND u.wxId IN (${userQueryDto.wxIds.map(r => "'" + r + "'").join(',')})
             `
         }
+        console.log(query)
         const q = Prisma.sql([query])
         return await tx.$queryRaw<User[]>(q)
     },
