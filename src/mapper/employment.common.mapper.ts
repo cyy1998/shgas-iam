@@ -12,6 +12,7 @@ export const employmentMapper = {
             posCode: employment.position.posCode,
             posName: employment.position.posName,
             orgId: employment.deptId,
+            orgType: employment.deptartment.orgType,
             orgCode: employment.deptartment.orgCode,
             orgName: employment.deptartment.orgName,
             compId: employment.compId,

@@ -10,6 +10,7 @@ export const EmploymentDtoSchema = z.object({
     posName: z.string().openapi({ example: '职员' }),
     orgId: z.number().openapi({ example: 1 }),
     orgCode: z.string().openapi({ example: 'SR23' }),
+    orgType: z.string().openapi({ example: '部门' }),
     orgName: z.string().openapi({ example: '信息中心' }),
     compId: z.number().openapi({ example: 1 }),
     compCode: z.string().openapi({ example: 'SR' }),
