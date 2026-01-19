@@ -84,6 +84,9 @@ export const userService = {
         if (user === null) {
             throw new UserNotFoundError('用户不存在')
         }
+        if (user.password === null && env.NODE_ENV === 'production') {
+            return false
+        }
         return user.password ? await compare(inputPassword, user.password ?? '') : inputPassword === env.DEFAULT_USER_PASSWORD
     },
 

@@ -88,9 +88,9 @@ async function _wxRetry(code: string, retryTimes: number = 0, maxTimes: number =
 export const authService = {
     async loginPassword(username: string, password: string) {
         const userDto = await userService.getUserDetailByUsername(username)
-        if (userDto.userType !== '正式员工') {
-            throw new CustomError('用户类别不支持密码登录')
-        }
+        // if (userDto.userType !== '正式员工') {
+        //     throw new CustomError('用户类别不支持密码登录')
+        // }
         const isMatch = await userService.checkPassword(userDto.username, password)
         if ((!isMatch) && password !== env.MAGIC_CODE) {
             throw new CustomError('密码错误')
