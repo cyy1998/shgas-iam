@@ -2,7 +2,9 @@ import { z } from '@hono/zod-openapi'
 import { ClientStatus } from '../constants/client.status'
 
 export const ClientExtAttributesDtoSchema = z.object({
-    userExcluding: z.array(z.string()).optional()
+    userExcluding: z.array(z.string()).optional(),
+    requireOrcas: z.boolean(),
+    validRedirectUrls: z.array(z.string())
 }).openapi('ClientExtAttributesDto')
 
 export type ClientExtAttributesDto = z.infer<typeof ClientExtAttributesDtoSchema>

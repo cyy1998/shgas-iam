@@ -54,3 +54,11 @@ export function sleep(ms: number): Promise<void> {
     return new Promise(resolve => setTimeout(resolve, ms));
 }
 
+export function getProtocolAndHost(url: string): string {
+    try {
+        const parsedUrl = new URL(url);
+        return `${parsedUrl.protocol}//${parsedUrl.host}`;
+    } catch (error) {
+        throw new Error(`Invalid URL: ${url}`);
+    }
+}

@@ -16,7 +16,8 @@ const EnvSchema = z.object({
     PURVEYOR_PARENT_ORG: z.string(),
     REDIS_URL: z.string(),
     REDIS_PORT: z.coerce.number(),
-    REDIS_DB: z.coerce.number()
+    REDIS_DB: z.coerce.number(),
+    LOGIN_PATH: z.string()
 });
 
 export type Env = z.infer<typeof EnvSchema>;

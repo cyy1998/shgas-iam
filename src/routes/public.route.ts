@@ -25,7 +25,7 @@ interface AppEnv {
 const app = new OpenAPIHono<AppEnv>()
 
 app.use('/*', async (c, next) => {
-    const sessionId = getCookie(c, 'session') ?? null
+    const sessionId = getCookie(c, 'local_session') ?? null
     // const path = c.req.header('X-Forwarded-Uri')
     // const userString = c.req.header('X-User-Info')
     if (!sessionId) {

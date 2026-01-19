@@ -8,11 +8,7 @@ import type { WeixinResponse } from "../types/wx.type"
 import { sleep } from "bun"
 import { CustomError } from "../errors/CustomError"
 import { AuthzUnauthorizedError } from "../errors/AuthzUnauthorizedError"
-import { userRepository } from "../repositories/user.common.repository"
-import type { User } from "../../generated/prisma"
-import type { ClientDto } from "../types/client.type"
 import { ClientStatus } from "../constants/client.status"
-import { AuthzForbiddenError } from "../errors/AuthzForbiddenError"
 import { AuthzMaintaincingError } from "../errors/AuthzMaintaincingError"
 import { clientService } from "./client.service"
 import { sm3 } from 'sm-crypto'
@@ -28,15 +24,21 @@ function extractClientKey(path: string): string {
 async function _login(user: UserDetailDto) {
     // let orcasSessionId_1 = null
     // if (user.userType === '正式员工') {
-    const { orcasSessionId, orcasId } = await _orcasLogin(user)
+    // const { orcasSessionId, orcasId } = await _orcasLogin(user)
     // orcasSessionId_1 = orcasSessionId
-    user.orcasId = orcasId
+    // user.orcasId = orcasId
     // }
     const token = crypto.randomUUID()
-    await redis.set(`session:${token}`, JSON.stringify(user), 'EX', env.REDIS_EXPIRE_TIME)
+    const code = crypto.randomUUID()
+    await Promise.all([
+        redis.set(`global_session:${token}`, JSON.stringify(user), 'EX', env.REDIS_EXPIRE_TIME),
+        redis.set(`auth_code:${code}`, JSON.stringify(user), 'EX', 180),
+        redis.set(`${user.username}_global_session`, token, 'EX', env.REDIS_EXPIRE_TIME)
+    ])
     return {
-        orcasSessionId: orcasSessionId,
-        token: token
+        // orcasSessionId: orcasSessionId,
+        token: token,
+        code: code
     }
 }
 
@@ -172,7 +174,7 @@ export const authService = {
         if (!sessionId) {
             throw new AuthzUnauthorizedError('未登录')
         }
-        const userString = await redis.get(`session:${sessionId}`)
+        const userString = await redis.get(`local_session:${sessionId}`)
         if (!userString) {
             throw new AuthzUnauthorizedError('未登录')
         }
@@ -193,5 +195,58 @@ export const authService = {
         const userInfo = Buffer.from(JSON.stringify(userFinal), 'utf8').toString('base64')
         return userInfo
     },
+    async setLocalSession(code: string, clientCode: string, redirectUrl: string) {
+        const client = await clientService.getClientByCode(clientCode)
+        if (client === null) {
+            throw new CustomError('非法client代码')
+        }
+        if (!client.extAttributes.validRedirectUrls.some(u => redirectUrl.startsWith(u))) {
+            throw new CustomError('非法重定向地址')
+        }
+        const userString = await redis.get(`auth_code:${code}`)
+        if (userString === null) {
+            throw new AuthzUnauthorizedError('非法code')
+        }
+        const user: UserDetailDto = JSON.parse(userString)
+        const ttl = await redis.ttl(`${user.username}_global_session`)
+        const token = crypto.randomUUID()
+        let globalOrcasSessionId = null
+        if (client.extAttributes.requireOrcas === true) {
+            const { orcasSessionId, orcasId } = await _orcasLogin(user)
+            globalOrcasSessionId = orcasSessionId
+            user.orcasId = orcasId
+        }
+        await Promise.all([
+            redis.set(`local_session:${token}`, JSON.stringify(user), 'EX', ttl),
+            redis.del(`auth_code:${code}`),
+            redis.lpush(`${user.username}_local_session_list`, token)
+        ])
+        return {
+            orcasSessionId: globalOrcasSessionId,
+            token: token
+        }
+    },
+    async authorize(globalSessionId: string, clientCode: string, redirectUrl: string) {
+        const client = await clientService.getClientByCode(clientCode)
+        if (client === null) {
+            throw new CustomError('非法client代码')
+        }
+        if (!client.extAttributes.validRedirectUrls.some(u => redirectUrl.startsWith(u))) {
+            throw new CustomError('非法重定向地址')
+        }
+        const userString = await redis.get(`global_session:${globalSessionId}`)
+        if (userString === null) {
+            return {
+                isLogin: false,
+                code: null
+            }
+        }
+        const code = crypto.randomUUID()
+        await redis.set(`auth_code:${code}`, userString, 'EX', 180)
+        return {
+            isLogin: true,
+            code: code
+        }
+    }
 
 }
