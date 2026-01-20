@@ -265,6 +265,7 @@ exports.Prisma.PrivilegeDelegationScalarFieldEnum = {
   id: 'id',
   delegatorUserId: 'delegatorUserId',
   delegateeUserId: 'delegateeUserId',
+  organizationScopeId: 'organizationScopeId',
   startTime: 'startTime',
   endTime: 'endTime',
   status: 'status',

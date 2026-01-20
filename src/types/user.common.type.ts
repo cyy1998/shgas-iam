@@ -38,4 +38,11 @@ export const UserQueryDtoSchema = z.object({
 
 export type UserQueryDto = z.infer<typeof UserQueryDtoSchema>
 
+export const UserQueryWithPrivilegeDelegationDtoSchema = UserQueryDtoSchema.extend({
+    ancestorOrgCodes: z.array(z.string()).openapi({ example: ['SR', 'SB'] }),
+    privilegeCode: z.string().openapi({ example: 'ui:button:tender:create-GYBG' })
+}).openapi('UserQueryWithPrivilegeDelegationDto')
+
+export type UserQueryWithPrivilegeDelegationDto = z.infer<typeof UserQueryWithPrivilegeDelegationDtoSchema>
+
 

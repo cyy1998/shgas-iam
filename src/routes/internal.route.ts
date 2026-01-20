@@ -5,9 +5,10 @@ import { userService } from '../services/user.common.service'
 import { organizationService } from '../services/organization.service'
 import { employmentService } from '../services/employment.common.service'
 import { EmploymentDtoSchema } from '../types/employment.common.type'
-import { UserDetailDtoSchema, UserDtoSchema } from '../types/user.common.type'
+import { UserDetailDtoSchema, UserDtoSchema, UserQueryDtoSchema, UserQueryWithPrivilegeDelegationDtoSchema } from '../types/user.common.type'
 import { FormalOrganizationVoSchema, OrganizationDtoSchema, OrganizationQueryDtoSchema } from '../types/organization.type'
 import { DelegationAbstractDtoSchema } from '../types/delegation.type'
+import { PrivilegeDelegationDtoSchema } from '../types/privilegeDelegation.type'
 
 const app = new OpenAPIHono()
 
@@ -81,43 +82,124 @@ app.openapi(
 )
 
 /*
-path: /users/listByOrgPosWithDelegations
-method: GET
-function: 根据组织岗位搜索用户（带权限代理关系）
+path: /users/search
+method: POST
+function: 根据条件搜索用户
 */
 app.openapi(
     createRoute({
-        method: 'get',
-        path: '/users/listByOrgPosWithDelegations',
+        method: 'post',
+        path: '/users/search',
         tags: ['Internal'],
         request: {
-            query: z.object({
-                posCode: z.string().openapi({ example: 'E001' }),
-                orgCode: z.string().openapi({ example: 'SR23' }),
-                orgScope: z.enum(['direct', 'recursive']).default('direct').openapi({ example: 'direct or recursive' }),
-                privCode: z.string().optional().openapi({ example: 'tender:flow:SR_CZLX' })
-            })
+            body: {
+                content: {
+                    'application/json': {
+                        schema: UserQueryDtoSchema
+                    }
+                }
+            }
         },
         responses: {
             200: {
                 content: {
                     'application/json': {
-                        schema: createResponseSchema(z.object({
-                            users: z.array(UserDtoSchema),
-                            delegations: z.array(DelegationAbstractDtoSchema)
-                        })),
+                        schema: createResponseSchema(z.array(UserDtoSchema)),
                     },
                 },
-                description: '符合条件用户与权限代理关系列表',
-            }
-        }
+                description: '用户列表',
+            },
+        },
     }),
     async (c) => {
-        const { posCode, orgCode, orgScope, privCode } = c.req.valid('query')
-        const data = await userService.getUsersByOrgPos(orgCode, posCode, orgScope)
+        const userQueryDto = c.req.valid('json')
+        const data = await userService.searchUsers(userQueryDto)
         return c.json(success(data))
     }
 )
+
+/*
+path: /users/searchWithPrivilegeDelegation
+method: POST
+function: 根据条件搜索用户
+*/
+app.openapi(
+    createRoute({
+        method: 'post',
+        path: '/users/searchWithPrivilegeDelegation',
+        tags: ['Internal'],
+        request: {
+            body: {
+                content: {
+                    'application/json': {
+                        schema: UserQueryWithPrivilegeDelegationDtoSchema
+                    }
+                }
+            }
+        },
+        responses: {
+            200: {
+                content: {
+                    'application/json': {
+                        schema: createResponseSchema(
+                            z.object(
+                                {
+                                    users: z.array(UserDtoSchema),
+                                    delegations: z.array(PrivilegeDelegationDtoSchema)
+                                }
+                            )
+                        ),
+                    },
+                },
+                description: '用户列表',
+            },
+        },
+    }),
+    async (c) => {
+        const userQueryDto = c.req.valid('json')
+        const data = await userService.searchUsersWithPrivilegeDelegation(userQueryDto)
+        return c.json(success(data))
+    }
+)
+
+/*
+path: /users/listByOrgPosWithDelegations
+method: GET
+function: 根据组织岗位搜索用户（带权限代理关系）
+*/
+// app.openapi(
+//     createRoute({
+//         method: 'get',
+//         path: '/users/listByOrgPosWithDelegations',
+//         tags: ['Internal'],
+//         request: {
+//             query: z.object({
+//                 posCode: z.string().openapi({ example: 'E001' }),
+//                 orgCode: z.string().openapi({ example: 'SR23' }),
+//                 orgScope: z.enum(['direct', 'recursive']).default('direct').openapi({ example: 'direct or recursive' }),
+//                 privCode: z.string().optional().openapi({ example: 'tender:flow:SR_CZLX' })
+//             })
+//         },
+//         responses: {
+//             200: {
+//                 content: {
+//                     'application/json': {
+//                         schema: createResponseSchema(z.object({
+//                             users: z.array(UserDtoSchema),
+//                             delegations: z.array(DelegationAbstractDtoSchema)
+//                         })),
+//                     },
+//                 },
+//                 description: '符合条件用户与权限代理关系列表',
+//             }
+//         }
+//     }),
+//     async (c) => {
+//         const { posCode, orgCode, orgScope, privCode } = c.req.valid('query')
+//         const data = await userService.getUsersByOrgPos(orgCode, posCode, orgScope)
+//         return c.json(success(data))
+//     }
+// )
 
 /*
 path: /search-users/org-roles

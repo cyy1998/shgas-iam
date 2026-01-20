@@ -2153,6 +2153,7 @@ export namespace Prisma {
     children: number
     ancestorClosures: number
     descendantClosures: number
+    privilegeDelegations: number
   }
 
   export type OrganizationCountOutputTypeSelect<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
@@ -2163,6 +2164,7 @@ export namespace Prisma {
     children?: boolean | OrganizationCountOutputTypeCountChildrenArgs
     ancestorClosures?: boolean | OrganizationCountOutputTypeCountAncestorClosuresArgs
     descendantClosures?: boolean | OrganizationCountOutputTypeCountDescendantClosuresArgs
+    privilegeDelegations?: boolean | OrganizationCountOutputTypeCountPrivilegeDelegationsArgs
   }
 
   // Custom InputTypes
@@ -2223,6 +2225,13 @@ export namespace Prisma {
    */
   export type OrganizationCountOutputTypeCountDescendantClosuresArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
     where?: OrganizationClosureWhereInput
+  }
+
+  /**
+   * OrganizationCountOutputType without action
+   */
+  export type OrganizationCountOutputTypeCountPrivilegeDelegationsArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    where?: PrivilegeDelegationWhereInput
   }
 
 
@@ -3955,6 +3964,7 @@ export namespace Prisma {
     children?: boolean | Organization$childrenArgs<ExtArgs>
     ancestorClosures?: boolean | Organization$ancestorClosuresArgs<ExtArgs>
     descendantClosures?: boolean | Organization$descendantClosuresArgs<ExtArgs>
+    privilegeDelegations?: boolean | Organization$privilegeDelegationsArgs<ExtArgs>
     _count?: boolean | OrganizationCountOutputTypeDefaultArgs<ExtArgs>
   }, ExtArgs["result"]["organization"]>
 
@@ -3988,6 +3998,7 @@ export namespace Prisma {
     children?: boolean | Organization$childrenArgs<ExtArgs>
     ancestorClosures?: boolean | Organization$ancestorClosuresArgs<ExtArgs>
     descendantClosures?: boolean | Organization$descendantClosuresArgs<ExtArgs>
+    privilegeDelegations?: boolean | Organization$privilegeDelegationsArgs<ExtArgs>
     _count?: boolean | OrganizationCountOutputTypeDefaultArgs<ExtArgs>
   }
 
@@ -4002,6 +4013,7 @@ export namespace Prisma {
       children: Prisma.$OrganizationPayload<ExtArgs>[]
       ancestorClosures: Prisma.$OrganizationClosurePayload<ExtArgs>[]
       descendantClosures: Prisma.$OrganizationClosurePayload<ExtArgs>[]
+      privilegeDelegations: Prisma.$PrivilegeDelegationPayload<ExtArgs>[]
     }
     scalars: $Extensions.GetPayloadResult<{
       id: number
@@ -4367,6 +4379,7 @@ export namespace Prisma {
     children<T extends Organization$childrenArgs<ExtArgs> = {}>(args?: Subset<T, Organization$childrenArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$OrganizationPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
     ancestorClosures<T extends Organization$ancestorClosuresArgs<ExtArgs> = {}>(args?: Subset<T, Organization$ancestorClosuresArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$OrganizationClosurePayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
     descendantClosures<T extends Organization$descendantClosuresArgs<ExtArgs> = {}>(args?: Subset<T, Organization$descendantClosuresArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$OrganizationClosurePayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
+    privilegeDelegations<T extends Organization$privilegeDelegationsArgs<ExtArgs> = {}>(args?: Subset<T, Organization$privilegeDelegationsArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$PrivilegeDelegationPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
     /**
      * Attaches callbacks for the resolution and/or rejection of the Promise.
      * @param onfulfilled The callback to execute when the Promise is resolved.
@@ -4938,6 +4951,30 @@ export namespace Prisma {
     take?: number
     skip?: number
     distinct?: OrganizationClosureScalarFieldEnum | OrganizationClosureScalarFieldEnum[]
+  }
+
+  /**
+   * Organization.privilegeDelegations
+   */
+  export type Organization$privilegeDelegationsArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the PrivilegeDelegation
+     */
+    select?: PrivilegeDelegationSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the PrivilegeDelegation
+     */
+    omit?: PrivilegeDelegationOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: PrivilegeDelegationInclude<ExtArgs> | null
+    where?: PrivilegeDelegationWhereInput
+    orderBy?: PrivilegeDelegationOrderByWithRelationInput | PrivilegeDelegationOrderByWithRelationInput[]
+    cursor?: PrivilegeDelegationWhereUniqueInput
+    take?: number
+    skip?: number
+    distinct?: PrivilegeDelegationScalarFieldEnum | PrivilegeDelegationScalarFieldEnum[]
   }
 
   /**
@@ -17175,6 +17212,7 @@ export namespace Prisma {
     id: number | null
     delegatorUserId: number | null
     delegateeUserId: number | null
+    organizationScopeId: number | null
     status: number | null
   }
 
@@ -17182,6 +17220,7 @@ export namespace Prisma {
     id: number | null
     delegatorUserId: number | null
     delegateeUserId: number | null
+    organizationScopeId: number | null
     status: number | null
   }
 
@@ -17189,6 +17228,7 @@ export namespace Prisma {
     id: number | null
     delegatorUserId: number | null
     delegateeUserId: number | null
+    organizationScopeId: number | null
     startTime: Date | null
     endTime: Date | null
     status: number | null
@@ -17202,6 +17242,7 @@ export namespace Prisma {
     id: number | null
     delegatorUserId: number | null
     delegateeUserId: number | null
+    organizationScopeId: number | null
     startTime: Date | null
     endTime: Date | null
     status: number | null
@@ -17215,6 +17256,7 @@ export namespace Prisma {
     id: number
     delegatorUserId: number
     delegateeUserId: number
+    organizationScopeId: number
     startTime: number
     endTime: number
     status: number
@@ -17230,6 +17272,7 @@ export namespace Prisma {
     id?: true
     delegatorUserId?: true
     delegateeUserId?: true
+    organizationScopeId?: true
     status?: true
   }
 
@@ -17237,6 +17280,7 @@ export namespace Prisma {
     id?: true
     delegatorUserId?: true
     delegateeUserId?: true
+    organizationScopeId?: true
     status?: true
   }
 
@@ -17244,6 +17288,7 @@ export namespace Prisma {
     id?: true
     delegatorUserId?: true
     delegateeUserId?: true
+    organizationScopeId?: true
     startTime?: true
     endTime?: true
     status?: true
@@ -17257,6 +17302,7 @@ export namespace Prisma {
     id?: true
     delegatorUserId?: true
     delegateeUserId?: true
+    organizationScopeId?: true
     startTime?: true
     endTime?: true
     status?: true
@@ -17270,6 +17316,7 @@ export namespace Prisma {
     id?: true
     delegatorUserId?: true
     delegateeUserId?: true
+    organizationScopeId?: true
     startTime?: true
     endTime?: true
     status?: true
@@ -17370,6 +17417,7 @@ export namespace Prisma {
     id: number
     delegatorUserId: number
     delegateeUserId: number
+    organizationScopeId: number
     startTime: Date
     endTime: Date
     status: number
@@ -17402,6 +17450,7 @@ export namespace Prisma {
     id?: boolean
     delegatorUserId?: boolean
     delegateeUserId?: boolean
+    organizationScopeId?: boolean
     startTime?: boolean
     endTime?: boolean
     status?: boolean
@@ -17411,6 +17460,7 @@ export namespace Prisma {
     updateTime?: boolean
     delegatorUser?: boolean | UserDefaultArgs<ExtArgs>
     delegateeUser?: boolean | UserDefaultArgs<ExtArgs>
+    organizationScope?: boolean | OrganizationDefaultArgs<ExtArgs>
     delegationDetails?: boolean | PrivilegeDelegation$delegationDetailsArgs<ExtArgs>
     _count?: boolean | PrivilegeDelegationCountOutputTypeDefaultArgs<ExtArgs>
   }, ExtArgs["result"]["privilegeDelegation"]>
@@ -17421,6 +17471,7 @@ export namespace Prisma {
     id?: boolean
     delegatorUserId?: boolean
     delegateeUserId?: boolean
+    organizationScopeId?: boolean
     startTime?: boolean
     endTime?: boolean
     status?: boolean
@@ -17430,10 +17481,11 @@ export namespace Prisma {
     updateTime?: boolean
   }
 
-  export type PrivilegeDelegationOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "delegatorUserId" | "delegateeUserId" | "startTime" | "endTime" | "status" | "description" | "isDelete" | "createTime" | "updateTime", ExtArgs["result"]["privilegeDelegation"]>
+  export type PrivilegeDelegationOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "delegatorUserId" | "delegateeUserId" | "organizationScopeId" | "startTime" | "endTime" | "status" | "description" | "isDelete" | "createTime" | "updateTime", ExtArgs["result"]["privilegeDelegation"]>
   export type PrivilegeDelegationInclude<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
     delegatorUser?: boolean | UserDefaultArgs<ExtArgs>
     delegateeUser?: boolean | UserDefaultArgs<ExtArgs>
+    organizationScope?: boolean | OrganizationDefaultArgs<ExtArgs>
     delegationDetails?: boolean | PrivilegeDelegation$delegationDetailsArgs<ExtArgs>
     _count?: boolean | PrivilegeDelegationCountOutputTypeDefaultArgs<ExtArgs>
   }
@@ -17443,12 +17495,14 @@ export namespace Prisma {
     objects: {
       delegatorUser: Prisma.$UserPayload<ExtArgs>
       delegateeUser: Prisma.$UserPayload<ExtArgs>
+      organizationScope: Prisma.$OrganizationPayload<ExtArgs>
       delegationDetails: Prisma.$DelegationDetailPayload<ExtArgs>[]
     }
     scalars: $Extensions.GetPayloadResult<{
       id: number
       delegatorUserId: number
       delegateeUserId: number
+      organizationScopeId: number
       startTime: Date
       endTime: Date
       status: number
@@ -17798,6 +17852,7 @@ export namespace Prisma {
     readonly [Symbol.toStringTag]: "PrismaPromise"
     delegatorUser<T extends UserDefaultArgs<ExtArgs> = {}>(args?: Subset<T, UserDefaultArgs<ExtArgs>>): Prisma__UserClient<$Result.GetResult<Prisma.$UserPayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions> | Null, Null, ExtArgs, GlobalOmitOptions>
     delegateeUser<T extends UserDefaultArgs<ExtArgs> = {}>(args?: Subset<T, UserDefaultArgs<ExtArgs>>): Prisma__UserClient<$Result.GetResult<Prisma.$UserPayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions> | Null, Null, ExtArgs, GlobalOmitOptions>
+    organizationScope<T extends OrganizationDefaultArgs<ExtArgs> = {}>(args?: Subset<T, OrganizationDefaultArgs<ExtArgs>>): Prisma__OrganizationClient<$Result.GetResult<Prisma.$OrganizationPayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions> | Null, Null, ExtArgs, GlobalOmitOptions>
     delegationDetails<T extends PrivilegeDelegation$delegationDetailsArgs<ExtArgs> = {}>(args?: Subset<T, PrivilegeDelegation$delegationDetailsArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$DelegationDetailPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
     /**
      * Attaches callbacks for the resolution and/or rejection of the Promise.
@@ -17831,6 +17886,7 @@ export namespace Prisma {
     readonly id: FieldRef<"PrivilegeDelegation", 'Int'>
     readonly delegatorUserId: FieldRef<"PrivilegeDelegation", 'Int'>
     readonly delegateeUserId: FieldRef<"PrivilegeDelegation", 'Int'>
+    readonly organizationScopeId: FieldRef<"PrivilegeDelegation", 'Int'>
     readonly startTime: FieldRef<"PrivilegeDelegation", 'DateTime'>
     readonly endTime: FieldRef<"PrivilegeDelegation", 'DateTime'>
     readonly status: FieldRef<"PrivilegeDelegation", 'Int'>
@@ -19362,6 +19418,7 @@ export namespace Prisma {
     id: 'id',
     delegatorUserId: 'delegatorUserId',
     delegateeUserId: 'delegateeUserId',
+    organizationScopeId: 'organizationScopeId',
     startTime: 'startTime',
     endTime: 'endTime',
     status: 'status',
@@ -19693,6 +19750,7 @@ export namespace Prisma {
     children?: OrganizationListRelationFilter
     ancestorClosures?: OrganizationClosureListRelationFilter
     descendantClosures?: OrganizationClosureListRelationFilter
+    privilegeDelegations?: PrivilegeDelegationListRelationFilter
   }
 
   export type OrganizationOrderByWithRelationInput = {
@@ -19719,6 +19777,7 @@ export namespace Prisma {
     children?: OrganizationOrderByRelationAggregateInput
     ancestorClosures?: OrganizationClosureOrderByRelationAggregateInput
     descendantClosures?: OrganizationClosureOrderByRelationAggregateInput
+    privilegeDelegations?: PrivilegeDelegationOrderByRelationAggregateInput
     _relevance?: OrganizationOrderByRelevanceInput
   }
 
@@ -19749,6 +19808,7 @@ export namespace Prisma {
     children?: OrganizationListRelationFilter
     ancestorClosures?: OrganizationClosureListRelationFilter
     descendantClosures?: OrganizationClosureListRelationFilter
+    privilegeDelegations?: PrivilegeDelegationListRelationFilter
   }, "id" | "orgCode">
 
   export type OrganizationOrderByWithAggregationInput = {
@@ -20625,6 +20685,7 @@ export namespace Prisma {
     id?: IntFilter<"PrivilegeDelegation"> | number
     delegatorUserId?: IntFilter<"PrivilegeDelegation"> | number
     delegateeUserId?: IntFilter<"PrivilegeDelegation"> | number
+    organizationScopeId?: IntFilter<"PrivilegeDelegation"> | number
     startTime?: DateTimeFilter<"PrivilegeDelegation"> | Date | string
     endTime?: DateTimeFilter<"PrivilegeDelegation"> | Date | string
     status?: IntFilter<"PrivilegeDelegation"> | number
@@ -20634,6 +20695,7 @@ export namespace Prisma {
     updateTime?: DateTimeFilter<"PrivilegeDelegation"> | Date | string
     delegatorUser?: XOR<UserScalarRelationFilter, UserWhereInput>
     delegateeUser?: XOR<UserScalarRelationFilter, UserWhereInput>
+    organizationScope?: XOR<OrganizationScalarRelationFilter, OrganizationWhereInput>
     delegationDetails?: DelegationDetailListRelationFilter
   }
 
@@ -20641,6 +20703,7 @@ export namespace Prisma {
     id?: SortOrder
     delegatorUserId?: SortOrder
     delegateeUserId?: SortOrder
+    organizationScopeId?: SortOrder
     startTime?: SortOrder
     endTime?: SortOrder
     status?: SortOrder
@@ -20650,6 +20713,7 @@ export namespace Prisma {
     updateTime?: SortOrder
     delegatorUser?: UserOrderByWithRelationInput
     delegateeUser?: UserOrderByWithRelationInput
+    organizationScope?: OrganizationOrderByWithRelationInput
     delegationDetails?: DelegationDetailOrderByRelationAggregateInput
     _relevance?: PrivilegeDelegationOrderByRelevanceInput
   }
@@ -20661,6 +20725,7 @@ export namespace Prisma {
     NOT?: PrivilegeDelegationWhereInput | PrivilegeDelegationWhereInput[]
     delegatorUserId?: IntFilter<"PrivilegeDelegation"> | number
     delegateeUserId?: IntFilter<"PrivilegeDelegation"> | number
+    organizationScopeId?: IntFilter<"PrivilegeDelegation"> | number
     startTime?: DateTimeFilter<"PrivilegeDelegation"> | Date | string
     endTime?: DateTimeFilter<"PrivilegeDelegation"> | Date | string
     status?: IntFilter<"PrivilegeDelegation"> | number
@@ -20670,6 +20735,7 @@ export namespace Prisma {
     updateTime?: DateTimeFilter<"PrivilegeDelegation"> | Date | string
     delegatorUser?: XOR<UserScalarRelationFilter, UserWhereInput>
     delegateeUser?: XOR<UserScalarRelationFilter, UserWhereInput>
+    organizationScope?: XOR<OrganizationScalarRelationFilter, OrganizationWhereInput>
     delegationDetails?: DelegationDetailListRelationFilter
   }, "id">
 
@@ -20677,6 +20743,7 @@ export namespace Prisma {
     id?: SortOrder
     delegatorUserId?: SortOrder
     delegateeUserId?: SortOrder
+    organizationScopeId?: SortOrder
     startTime?: SortOrder
     endTime?: SortOrder
     status?: SortOrder
@@ -20698,6 +20765,7 @@ export namespace Prisma {
     id?: IntWithAggregatesFilter<"PrivilegeDelegation"> | number
     delegatorUserId?: IntWithAggregatesFilter<"PrivilegeDelegation"> | number
     delegateeUserId?: IntWithAggregatesFilter<"PrivilegeDelegation"> | number
+    organizationScopeId?: IntWithAggregatesFilter<"PrivilegeDelegation"> | number
     startTime?: DateTimeWithAggregatesFilter<"PrivilegeDelegation"> | Date | string
     endTime?: DateTimeWithAggregatesFilter<"PrivilegeDelegation"> | Date | string
     status?: IntWithAggregatesFilter<"PrivilegeDelegation"> | number
@@ -20889,6 +20957,7 @@ export namespace Prisma {
     children?: OrganizationCreateNestedManyWithoutParentInput
     ancestorClosures?: OrganizationClosureCreateNestedManyWithoutAncestorInput
     descendantClosures?: OrganizationClosureCreateNestedManyWithoutDescendantInput
+    privilegeDelegations?: PrivilegeDelegationCreateNestedManyWithoutOrganizationScopeInput
   }
 
   export type OrganizationUncheckedCreateInput = {
@@ -20914,6 +20983,7 @@ export namespace Prisma {
     children?: OrganizationUncheckedCreateNestedManyWithoutParentInput
     ancestorClosures?: OrganizationClosureUncheckedCreateNestedManyWithoutAncestorInput
     descendantClosures?: OrganizationClosureUncheckedCreateNestedManyWithoutDescendantInput
+    privilegeDelegations?: PrivilegeDelegationUncheckedCreateNestedManyWithoutOrganizationScopeInput
   }
 
   export type OrganizationUpdateInput = {
@@ -20938,6 +21008,7 @@ export namespace Prisma {
     children?: OrganizationUpdateManyWithoutParentNestedInput
     ancestorClosures?: OrganizationClosureUpdateManyWithoutAncestorNestedInput
     descendantClosures?: OrganizationClosureUpdateManyWithoutDescendantNestedInput
+    privilegeDelegations?: PrivilegeDelegationUpdateManyWithoutOrganizationScopeNestedInput
   }
 
   export type OrganizationUncheckedUpdateInput = {
@@ -20963,6 +21034,7 @@ export namespace Prisma {
     children?: OrganizationUncheckedUpdateManyWithoutParentNestedInput
     ancestorClosures?: OrganizationClosureUncheckedUpdateManyWithoutAncestorNestedInput
     descendantClosures?: OrganizationClosureUncheckedUpdateManyWithoutDescendantNestedInput
+    privilegeDelegations?: PrivilegeDelegationUncheckedUpdateManyWithoutOrganizationScopeNestedInput
   }
 
   export type OrganizationCreateManyInput = {
@@ -21805,6 +21877,7 @@ export namespace Prisma {
     updateTime?: Date | string
     delegatorUser: UserCreateNestedOneWithoutDelegationToInput
     delegateeUser: UserCreateNestedOneWithoutDelegationFromInput
+    organizationScope: OrganizationCreateNestedOneWithoutPrivilegeDelegationsInput
     delegationDetails?: DelegationDetailCreateNestedManyWithoutDelegationInput
   }
 
@@ -21812,6 +21885,7 @@ export namespace Prisma {
     id?: number
     delegatorUserId: number
     delegateeUserId: number
+    organizationScopeId: number
     startTime: Date | string
     endTime: Date | string
     status?: number
@@ -21832,6 +21906,7 @@ export namespace Prisma {
     updateTime?: DateTimeFieldUpdateOperationsInput | Date | string
     delegatorUser?: UserUpdateOneRequiredWithoutDelegationToNestedInput
     delegateeUser?: UserUpdateOneRequiredWithoutDelegationFromNestedInput
+    organizationScope?: OrganizationUpdateOneRequiredWithoutPrivilegeDelegationsNestedInput
     delegationDetails?: DelegationDetailUpdateManyWithoutDelegationNestedInput
   }
 
@@ -21839,6 +21914,7 @@ export namespace Prisma {
     id?: IntFieldUpdateOperationsInput | number
     delegatorUserId?: IntFieldUpdateOperationsInput | number
     delegateeUserId?: IntFieldUpdateOperationsInput | number
+    organizationScopeId?: IntFieldUpdateOperationsInput | number
     startTime?: DateTimeFieldUpdateOperationsInput | Date | string
     endTime?: DateTimeFieldUpdateOperationsInput | Date | string
     status?: IntFieldUpdateOperationsInput | number
@@ -21853,6 +21929,7 @@ export namespace Prisma {
     id?: number
     delegatorUserId: number
     delegateeUserId: number
+    organizationScopeId: number
     startTime: Date | string
     endTime: Date | string
     status?: number
@@ -21876,6 +21953,7 @@ export namespace Prisma {
     id?: IntFieldUpdateOperationsInput | number
     delegatorUserId?: IntFieldUpdateOperationsInput | number
     delegateeUserId?: IntFieldUpdateOperationsInput | number
+    organizationScopeId?: IntFieldUpdateOperationsInput | number
     startTime?: DateTimeFieldUpdateOperationsInput | Date | string
     endTime?: DateTimeFieldUpdateOperationsInput | Date | string
     status?: IntFieldUpdateOperationsInput | number
@@ -23050,6 +23128,7 @@ export namespace Prisma {
     id?: SortOrder
     delegatorUserId?: SortOrder
     delegateeUserId?: SortOrder
+    organizationScopeId?: SortOrder
     startTime?: SortOrder
     endTime?: SortOrder
     status?: SortOrder
@@ -23063,6 +23142,7 @@ export namespace Prisma {
     id?: SortOrder
     delegatorUserId?: SortOrder
     delegateeUserId?: SortOrder
+    organizationScopeId?: SortOrder
     status?: SortOrder
   }
 
@@ -23070,6 +23150,7 @@ export namespace Prisma {
     id?: SortOrder
     delegatorUserId?: SortOrder
     delegateeUserId?: SortOrder
+    organizationScopeId?: SortOrder
     startTime?: SortOrder
     endTime?: SortOrder
     status?: SortOrder
@@ -23083,6 +23164,7 @@ export namespace Prisma {
     id?: SortOrder
     delegatorUserId?: SortOrder
     delegateeUserId?: SortOrder
+    organizationScopeId?: SortOrder
     startTime?: SortOrder
     endTime?: SortOrder
     status?: SortOrder
@@ -23096,6 +23178,7 @@ export namespace Prisma {
     id?: SortOrder
     delegatorUserId?: SortOrder
     delegateeUserId?: SortOrder
+    organizationScopeId?: SortOrder
     status?: SortOrder
   }
 
@@ -23339,6 +23422,13 @@ export namespace Prisma {
     connect?: OrganizationClosureWhereUniqueInput | OrganizationClosureWhereUniqueInput[]
   }
 
+  export type PrivilegeDelegationCreateNestedManyWithoutOrganizationScopeInput = {
+    create?: XOR<PrivilegeDelegationCreateWithoutOrganizationScopeInput, PrivilegeDelegationUncheckedCreateWithoutOrganizationScopeInput> | PrivilegeDelegationCreateWithoutOrganizationScopeInput[] | PrivilegeDelegationUncheckedCreateWithoutOrganizationScopeInput[]
+    connectOrCreate?: PrivilegeDelegationCreateOrConnectWithoutOrganizationScopeInput | PrivilegeDelegationCreateOrConnectWithoutOrganizationScopeInput[]
+    createMany?: PrivilegeDelegationCreateManyOrganizationScopeInputEnvelope
+    connect?: PrivilegeDelegationWhereUniqueInput | PrivilegeDelegationWhereUniqueInput[]
+  }
+
   export type EmploymentUncheckedCreateNestedManyWithoutDeptartmentInput = {
     create?: XOR<EmploymentCreateWithoutDeptartmentInput, EmploymentUncheckedCreateWithoutDeptartmentInput> | EmploymentCreateWithoutDeptartmentInput[] | EmploymentUncheckedCreateWithoutDeptartmentInput[]
     connectOrCreate?: EmploymentCreateOrConnectWithoutDeptartmentInput | EmploymentCreateOrConnectWithoutDeptartmentInput[]
@@ -23386,6 +23476,13 @@ export namespace Prisma {
     connectOrCreate?: OrganizationClosureCreateOrConnectWithoutDescendantInput | OrganizationClosureCreateOrConnectWithoutDescendantInput[]
     createMany?: OrganizationClosureCreateManyDescendantInputEnvelope
     connect?: OrganizationClosureWhereUniqueInput | OrganizationClosureWhereUniqueInput[]
+  }
+
+  export type PrivilegeDelegationUncheckedCreateNestedManyWithoutOrganizationScopeInput = {
+    create?: XOR<PrivilegeDelegationCreateWithoutOrganizationScopeInput, PrivilegeDelegationUncheckedCreateWithoutOrganizationScopeInput> | PrivilegeDelegationCreateWithoutOrganizationScopeInput[] | PrivilegeDelegationUncheckedCreateWithoutOrganizationScopeInput[]
+    connectOrCreate?: PrivilegeDelegationCreateOrConnectWithoutOrganizationScopeInput | PrivilegeDelegationCreateOrConnectWithoutOrganizationScopeInput[]
+    createMany?: PrivilegeDelegationCreateManyOrganizationScopeInputEnvelope
+    connect?: PrivilegeDelegationWhereUniqueInput | PrivilegeDelegationWhereUniqueInput[]
   }
 
   export type EmploymentUpdateManyWithoutDeptartmentNestedInput = {
@@ -23496,6 +23593,20 @@ export namespace Prisma {
     deleteMany?: OrganizationClosureScalarWhereInput | OrganizationClosureScalarWhereInput[]
   }
 
+  export type PrivilegeDelegationUpdateManyWithoutOrganizationScopeNestedInput = {
+    create?: XOR<PrivilegeDelegationCreateWithoutOrganizationScopeInput, PrivilegeDelegationUncheckedCreateWithoutOrganizationScopeInput> | PrivilegeDelegationCreateWithoutOrganizationScopeInput[] | PrivilegeDelegationUncheckedCreateWithoutOrganizationScopeInput[]
+    connectOrCreate?: PrivilegeDelegationCreateOrConnectWithoutOrganizationScopeInput | PrivilegeDelegationCreateOrConnectWithoutOrganizationScopeInput[]
+    upsert?: PrivilegeDelegationUpsertWithWhereUniqueWithoutOrganizationScopeInput | PrivilegeDelegationUpsertWithWhereUniqueWithoutOrganizationScopeInput[]
+    createMany?: PrivilegeDelegationCreateManyOrganizationScopeInputEnvelope
+    set?: PrivilegeDelegationWhereUniqueInput | PrivilegeDelegationWhereUniqueInput[]
+    disconnect?: PrivilegeDelegationWhereUniqueInput | PrivilegeDelegationWhereUniqueInput[]
+    delete?: PrivilegeDelegationWhereUniqueInput | PrivilegeDelegationWhereUniqueInput[]
+    connect?: PrivilegeDelegationWhereUniqueInput | PrivilegeDelegationWhereUniqueInput[]
+    update?: PrivilegeDelegationUpdateWithWhereUniqueWithoutOrganizationScopeInput | PrivilegeDelegationUpdateWithWhereUniqueWithoutOrganizationScopeInput[]
+    updateMany?: PrivilegeDelegationUpdateManyWithWhereWithoutOrganizationScopeInput | PrivilegeDelegationUpdateManyWithWhereWithoutOrganizationScopeInput[]
+    deleteMany?: PrivilegeDelegationScalarWhereInput | PrivilegeDelegationScalarWhereInput[]
+  }
+
   export type NullableIntFieldUpdateOperationsInput = {
     set?: number | null
     increment?: number
@@ -23600,6 +23711,20 @@ export namespace Prisma {
     update?: OrganizationClosureUpdateWithWhereUniqueWithoutDescendantInput | OrganizationClosureUpdateWithWhereUniqueWithoutDescendantInput[]
     updateMany?: OrganizationClosureUpdateManyWithWhereWithoutDescendantInput | OrganizationClosureUpdateManyWithWhereWithoutDescendantInput[]
     deleteMany?: OrganizationClosureScalarWhereInput | OrganizationClosureScalarWhereInput[]
+  }
+
+  export type PrivilegeDelegationUncheckedUpdateManyWithoutOrganizationScopeNestedInput = {
+    create?: XOR<PrivilegeDelegationCreateWithoutOrganizationScopeInput, PrivilegeDelegationUncheckedCreateWithoutOrganizationScopeInput> | PrivilegeDelegationCreateWithoutOrganizationScopeInput[] | PrivilegeDelegationUncheckedCreateWithoutOrganizationScopeInput[]
+    connectOrCreate?: PrivilegeDelegationCreateOrConnectWithoutOrganizationScopeInput | PrivilegeDelegationCreateOrConnectWithoutOrganizationScopeInput[]
+    upsert?: PrivilegeDelegationUpsertWithWhereUniqueWithoutOrganizationScopeInput | PrivilegeDelegationUpsertWithWhereUniqueWithoutOrganizationScopeInput[]
+    createMany?: PrivilegeDelegationCreateManyOrganizationScopeInputEnvelope
+    set?: PrivilegeDelegationWhereUniqueInput | PrivilegeDelegationWhereUniqueInput[]
+    disconnect?: PrivilegeDelegationWhereUniqueInput | PrivilegeDelegationWhereUniqueInput[]
+    delete?: PrivilegeDelegationWhereUniqueInput | PrivilegeDelegationWhereUniqueInput[]
+    connect?: PrivilegeDelegationWhereUniqueInput | PrivilegeDelegationWhereUniqueInput[]
+    update?: PrivilegeDelegationUpdateWithWhereUniqueWithoutOrganizationScopeInput | PrivilegeDelegationUpdateWithWhereUniqueWithoutOrganizationScopeInput[]
+    updateMany?: PrivilegeDelegationUpdateManyWithWhereWithoutOrganizationScopeInput | PrivilegeDelegationUpdateManyWithWhereWithoutOrganizationScopeInput[]
+    deleteMany?: PrivilegeDelegationScalarWhereInput | PrivilegeDelegationScalarWhereInput[]
   }
 
   export type OrganizationCreateNestedOneWithoutAncestorClosuresInput = {
@@ -24486,6 +24611,12 @@ export namespace Prisma {
     connect?: UserWhereUniqueInput
   }
 
+  export type OrganizationCreateNestedOneWithoutPrivilegeDelegationsInput = {
+    create?: XOR<OrganizationCreateWithoutPrivilegeDelegationsInput, OrganizationUncheckedCreateWithoutPrivilegeDelegationsInput>
+    connectOrCreate?: OrganizationCreateOrConnectWithoutPrivilegeDelegationsInput
+    connect?: OrganizationWhereUniqueInput
+  }
+
   export type DelegationDetailCreateNestedManyWithoutDelegationInput = {
     create?: XOR<DelegationDetailCreateWithoutDelegationInput, DelegationDetailUncheckedCreateWithoutDelegationInput> | DelegationDetailCreateWithoutDelegationInput[] | DelegationDetailUncheckedCreateWithoutDelegationInput[]
     connectOrCreate?: DelegationDetailCreateOrConnectWithoutDelegationInput | DelegationDetailCreateOrConnectWithoutDelegationInput[]
@@ -24514,6 +24645,14 @@ export namespace Prisma {
     upsert?: UserUpsertWithoutDelegationFromInput
     connect?: UserWhereUniqueInput
     update?: XOR<XOR<UserUpdateToOneWithWhereWithoutDelegationFromInput, UserUpdateWithoutDelegationFromInput>, UserUncheckedUpdateWithoutDelegationFromInput>
+  }
+
+  export type OrganizationUpdateOneRequiredWithoutPrivilegeDelegationsNestedInput = {
+    create?: XOR<OrganizationCreateWithoutPrivilegeDelegationsInput, OrganizationUncheckedCreateWithoutPrivilegeDelegationsInput>
+    connectOrCreate?: OrganizationCreateOrConnectWithoutPrivilegeDelegationsInput
+    upsert?: OrganizationUpsertWithoutPrivilegeDelegationsInput
+    connect?: OrganizationWhereUniqueInput
+    update?: XOR<XOR<OrganizationUpdateToOneWithWhereWithoutPrivilegeDelegationsInput, OrganizationUpdateWithoutPrivilegeDelegationsInput>, OrganizationUncheckedUpdateWithoutPrivilegeDelegationsInput>
   }
 
   export type DelegationDetailUpdateManyWithoutDelegationNestedInput = {
@@ -24874,12 +25013,14 @@ export namespace Prisma {
     createTime?: Date | string
     updateTime?: Date | string
     delegateeUser: UserCreateNestedOneWithoutDelegationFromInput
+    organizationScope: OrganizationCreateNestedOneWithoutPrivilegeDelegationsInput
     delegationDetails?: DelegationDetailCreateNestedManyWithoutDelegationInput
   }
 
   export type PrivilegeDelegationUncheckedCreateWithoutDelegatorUserInput = {
     id?: number
     delegateeUserId: number
+    organizationScopeId: number
     startTime: Date | string
     endTime: Date | string
     status?: number
@@ -24909,12 +25050,14 @@ export namespace Prisma {
     createTime?: Date | string
     updateTime?: Date | string
     delegatorUser: UserCreateNestedOneWithoutDelegationToInput
+    organizationScope: OrganizationCreateNestedOneWithoutPrivilegeDelegationsInput
     delegationDetails?: DelegationDetailCreateNestedManyWithoutDelegationInput
   }
 
   export type PrivilegeDelegationUncheckedCreateWithoutDelegateeUserInput = {
     id?: number
     delegatorUserId: number
+    organizationScopeId: number
     startTime: Date | string
     endTime: Date | string
     status?: number
@@ -24993,6 +25136,7 @@ export namespace Prisma {
     id?: IntFilter<"PrivilegeDelegation"> | number
     delegatorUserId?: IntFilter<"PrivilegeDelegation"> | number
     delegateeUserId?: IntFilter<"PrivilegeDelegation"> | number
+    organizationScopeId?: IntFilter<"PrivilegeDelegation"> | number
     startTime?: DateTimeFilter<"PrivilegeDelegation"> | Date | string
     endTime?: DateTimeFilter<"PrivilegeDelegation"> | Date | string
     status?: IntFilter<"PrivilegeDelegation"> | number
@@ -25176,6 +25320,7 @@ export namespace Prisma {
     parent?: OrganizationCreateNestedOneWithoutChildrenInput
     ancestorClosures?: OrganizationClosureCreateNestedManyWithoutAncestorInput
     descendantClosures?: OrganizationClosureCreateNestedManyWithoutDescendantInput
+    privilegeDelegations?: PrivilegeDelegationCreateNestedManyWithoutOrganizationScopeInput
   }
 
   export type OrganizationUncheckedCreateWithoutChildrenInput = {
@@ -25200,6 +25345,7 @@ export namespace Prisma {
     posOrgComposition?: PosOrgCompositionUncheckedCreateNestedManyWithoutOrganizationInput
     ancestorClosures?: OrganizationClosureUncheckedCreateNestedManyWithoutAncestorInput
     descendantClosures?: OrganizationClosureUncheckedCreateNestedManyWithoutDescendantInput
+    privilegeDelegations?: PrivilegeDelegationUncheckedCreateNestedManyWithoutOrganizationScopeInput
   }
 
   export type OrganizationCreateOrConnectWithoutChildrenInput = {
@@ -25228,6 +25374,7 @@ export namespace Prisma {
     children?: OrganizationCreateNestedManyWithoutParentInput
     ancestorClosures?: OrganizationClosureCreateNestedManyWithoutAncestorInput
     descendantClosures?: OrganizationClosureCreateNestedManyWithoutDescendantInput
+    privilegeDelegations?: PrivilegeDelegationCreateNestedManyWithoutOrganizationScopeInput
   }
 
   export type OrganizationUncheckedCreateWithoutParentInput = {
@@ -25252,6 +25399,7 @@ export namespace Prisma {
     children?: OrganizationUncheckedCreateNestedManyWithoutParentInput
     ancestorClosures?: OrganizationClosureUncheckedCreateNestedManyWithoutAncestorInput
     descendantClosures?: OrganizationClosureUncheckedCreateNestedManyWithoutDescendantInput
+    privilegeDelegations?: PrivilegeDelegationUncheckedCreateNestedManyWithoutOrganizationScopeInput
   }
 
   export type OrganizationCreateOrConnectWithoutParentInput = {
@@ -25303,6 +25451,43 @@ export namespace Prisma {
 
   export type OrganizationClosureCreateManyDescendantInputEnvelope = {
     data: OrganizationClosureCreateManyDescendantInput | OrganizationClosureCreateManyDescendantInput[]
+    skipDuplicates?: boolean
+  }
+
+  export type PrivilegeDelegationCreateWithoutOrganizationScopeInput = {
+    startTime: Date | string
+    endTime: Date | string
+    status?: number
+    description?: string | null
+    isDelete?: boolean
+    createTime?: Date | string
+    updateTime?: Date | string
+    delegatorUser: UserCreateNestedOneWithoutDelegationToInput
+    delegateeUser: UserCreateNestedOneWithoutDelegationFromInput
+    delegationDetails?: DelegationDetailCreateNestedManyWithoutDelegationInput
+  }
+
+  export type PrivilegeDelegationUncheckedCreateWithoutOrganizationScopeInput = {
+    id?: number
+    delegatorUserId: number
+    delegateeUserId: number
+    startTime: Date | string
+    endTime: Date | string
+    status?: number
+    description?: string | null
+    isDelete?: boolean
+    createTime?: Date | string
+    updateTime?: Date | string
+    delegationDetails?: DelegationDetailUncheckedCreateNestedManyWithoutDelegationInput
+  }
+
+  export type PrivilegeDelegationCreateOrConnectWithoutOrganizationScopeInput = {
+    where: PrivilegeDelegationWhereUniqueInput
+    create: XOR<PrivilegeDelegationCreateWithoutOrganizationScopeInput, PrivilegeDelegationUncheckedCreateWithoutOrganizationScopeInput>
+  }
+
+  export type PrivilegeDelegationCreateManyOrganizationScopeInputEnvelope = {
+    data: PrivilegeDelegationCreateManyOrganizationScopeInput | PrivilegeDelegationCreateManyOrganizationScopeInput[]
     skipDuplicates?: boolean
   }
 
@@ -25425,6 +25610,7 @@ export namespace Prisma {
     parent?: OrganizationUpdateOneWithoutChildrenNestedInput
     ancestorClosures?: OrganizationClosureUpdateManyWithoutAncestorNestedInput
     descendantClosures?: OrganizationClosureUpdateManyWithoutDescendantNestedInput
+    privilegeDelegations?: PrivilegeDelegationUpdateManyWithoutOrganizationScopeNestedInput
   }
 
   export type OrganizationUncheckedUpdateWithoutChildrenInput = {
@@ -25449,6 +25635,7 @@ export namespace Prisma {
     posOrgComposition?: PosOrgCompositionUncheckedUpdateManyWithoutOrganizationNestedInput
     ancestorClosures?: OrganizationClosureUncheckedUpdateManyWithoutAncestorNestedInput
     descendantClosures?: OrganizationClosureUncheckedUpdateManyWithoutDescendantNestedInput
+    privilegeDelegations?: PrivilegeDelegationUncheckedUpdateManyWithoutOrganizationScopeNestedInput
   }
 
   export type OrganizationUpsertWithWhereUniqueWithoutParentInput = {
@@ -25530,6 +25717,22 @@ export namespace Prisma {
     data: XOR<OrganizationClosureUpdateManyMutationInput, OrganizationClosureUncheckedUpdateManyWithoutDescendantInput>
   }
 
+  export type PrivilegeDelegationUpsertWithWhereUniqueWithoutOrganizationScopeInput = {
+    where: PrivilegeDelegationWhereUniqueInput
+    update: XOR<PrivilegeDelegationUpdateWithoutOrganizationScopeInput, PrivilegeDelegationUncheckedUpdateWithoutOrganizationScopeInput>
+    create: XOR<PrivilegeDelegationCreateWithoutOrganizationScopeInput, PrivilegeDelegationUncheckedCreateWithoutOrganizationScopeInput>
+  }
+
+  export type PrivilegeDelegationUpdateWithWhereUniqueWithoutOrganizationScopeInput = {
+    where: PrivilegeDelegationWhereUniqueInput
+    data: XOR<PrivilegeDelegationUpdateWithoutOrganizationScopeInput, PrivilegeDelegationUncheckedUpdateWithoutOrganizationScopeInput>
+  }
+
+  export type PrivilegeDelegationUpdateManyWithWhereWithoutOrganizationScopeInput = {
+    where: PrivilegeDelegationScalarWhereInput
+    data: XOR<PrivilegeDelegationUpdateManyMutationInput, PrivilegeDelegationUncheckedUpdateManyWithoutOrganizationScopeInput>
+  }
+
   export type OrganizationCreateWithoutAncestorClosuresInput = {
     orgCode: string
     orgName: string
@@ -25551,6 +25754,7 @@ export namespace Prisma {
     parent?: OrganizationCreateNestedOneWithoutChildrenInput
     children?: OrganizationCreateNestedManyWithoutParentInput
     descendantClosures?: OrganizationClosureCreateNestedManyWithoutDescendantInput
+    privilegeDelegations?: PrivilegeDelegationCreateNestedManyWithoutOrganizationScopeInput
   }
 
   export type OrganizationUncheckedCreateWithoutAncestorClosuresInput = {
@@ -25575,6 +25779,7 @@ export namespace Prisma {
     posOrgComposition?: PosOrgCompositionUncheckedCreateNestedManyWithoutOrganizationInput
     children?: OrganizationUncheckedCreateNestedManyWithoutParentInput
     descendantClosures?: OrganizationClosureUncheckedCreateNestedManyWithoutDescendantInput
+    privilegeDelegations?: PrivilegeDelegationUncheckedCreateNestedManyWithoutOrganizationScopeInput
   }
 
   export type OrganizationCreateOrConnectWithoutAncestorClosuresInput = {
@@ -25603,6 +25808,7 @@ export namespace Prisma {
     parent?: OrganizationCreateNestedOneWithoutChildrenInput
     children?: OrganizationCreateNestedManyWithoutParentInput
     ancestorClosures?: OrganizationClosureCreateNestedManyWithoutAncestorInput
+    privilegeDelegations?: PrivilegeDelegationCreateNestedManyWithoutOrganizationScopeInput
   }
 
   export type OrganizationUncheckedCreateWithoutDescendantClosuresInput = {
@@ -25627,6 +25833,7 @@ export namespace Prisma {
     posOrgComposition?: PosOrgCompositionUncheckedCreateNestedManyWithoutOrganizationInput
     children?: OrganizationUncheckedCreateNestedManyWithoutParentInput
     ancestorClosures?: OrganizationClosureUncheckedCreateNestedManyWithoutAncestorInput
+    privilegeDelegations?: PrivilegeDelegationUncheckedCreateNestedManyWithoutOrganizationScopeInput
   }
 
   export type OrganizationCreateOrConnectWithoutDescendantClosuresInput = {
@@ -25666,6 +25873,7 @@ export namespace Prisma {
     parent?: OrganizationUpdateOneWithoutChildrenNestedInput
     children?: OrganizationUpdateManyWithoutParentNestedInput
     descendantClosures?: OrganizationClosureUpdateManyWithoutDescendantNestedInput
+    privilegeDelegations?: PrivilegeDelegationUpdateManyWithoutOrganizationScopeNestedInput
   }
 
   export type OrganizationUncheckedUpdateWithoutAncestorClosuresInput = {
@@ -25690,6 +25898,7 @@ export namespace Prisma {
     posOrgComposition?: PosOrgCompositionUncheckedUpdateManyWithoutOrganizationNestedInput
     children?: OrganizationUncheckedUpdateManyWithoutParentNestedInput
     descendantClosures?: OrganizationClosureUncheckedUpdateManyWithoutDescendantNestedInput
+    privilegeDelegations?: PrivilegeDelegationUncheckedUpdateManyWithoutOrganizationScopeNestedInput
   }
 
   export type OrganizationUpsertWithoutDescendantClosuresInput = {
@@ -25724,6 +25933,7 @@ export namespace Prisma {
     parent?: OrganizationUpdateOneWithoutChildrenNestedInput
     children?: OrganizationUpdateManyWithoutParentNestedInput
     ancestorClosures?: OrganizationClosureUpdateManyWithoutAncestorNestedInput
+    privilegeDelegations?: PrivilegeDelegationUpdateManyWithoutOrganizationScopeNestedInput
   }
 
   export type OrganizationUncheckedUpdateWithoutDescendantClosuresInput = {
@@ -25748,6 +25958,7 @@ export namespace Prisma {
     posOrgComposition?: PosOrgCompositionUncheckedUpdateManyWithoutOrganizationNestedInput
     children?: OrganizationUncheckedUpdateManyWithoutParentNestedInput
     ancestorClosures?: OrganizationClosureUncheckedUpdateManyWithoutAncestorNestedInput
+    privilegeDelegations?: PrivilegeDelegationUncheckedUpdateManyWithoutOrganizationScopeNestedInput
   }
 
   export type EmploymentCreateWithoutPositionInput = {
@@ -25950,6 +26161,7 @@ export namespace Prisma {
     children?: OrganizationCreateNestedManyWithoutParentInput
     ancestorClosures?: OrganizationClosureCreateNestedManyWithoutAncestorInput
     descendantClosures?: OrganizationClosureCreateNestedManyWithoutDescendantInput
+    privilegeDelegations?: PrivilegeDelegationCreateNestedManyWithoutOrganizationScopeInput
   }
 
   export type OrganizationUncheckedCreateWithoutPosOrgCompositionInput = {
@@ -25974,6 +26186,7 @@ export namespace Prisma {
     children?: OrganizationUncheckedCreateNestedManyWithoutParentInput
     ancestorClosures?: OrganizationClosureUncheckedCreateNestedManyWithoutAncestorInput
     descendantClosures?: OrganizationClosureUncheckedCreateNestedManyWithoutDescendantInput
+    privilegeDelegations?: PrivilegeDelegationUncheckedCreateNestedManyWithoutOrganizationScopeInput
   }
 
   export type OrganizationCreateOrConnectWithoutPosOrgCompositionInput = {
@@ -26108,6 +26321,7 @@ export namespace Prisma {
     children?: OrganizationUpdateManyWithoutParentNestedInput
     ancestorClosures?: OrganizationClosureUpdateManyWithoutAncestorNestedInput
     descendantClosures?: OrganizationClosureUpdateManyWithoutDescendantNestedInput
+    privilegeDelegations?: PrivilegeDelegationUpdateManyWithoutOrganizationScopeNestedInput
   }
 
   export type OrganizationUncheckedUpdateWithoutPosOrgCompositionInput = {
@@ -26132,6 +26346,7 @@ export namespace Prisma {
     children?: OrganizationUncheckedUpdateManyWithoutParentNestedInput
     ancestorClosures?: OrganizationClosureUncheckedUpdateManyWithoutAncestorNestedInput
     descendantClosures?: OrganizationClosureUncheckedUpdateManyWithoutDescendantNestedInput
+    privilegeDelegations?: PrivilegeDelegationUncheckedUpdateManyWithoutOrganizationScopeNestedInput
   }
 
   export type EmploymentUpsertWithWhereUniqueWithoutPosOrgInput = {
@@ -26233,6 +26448,7 @@ export namespace Prisma {
     children?: OrganizationCreateNestedManyWithoutParentInput
     ancestorClosures?: OrganizationClosureCreateNestedManyWithoutAncestorInput
     descendantClosures?: OrganizationClosureCreateNestedManyWithoutDescendantInput
+    privilegeDelegations?: PrivilegeDelegationCreateNestedManyWithoutOrganizationScopeInput
   }
 
   export type OrganizationUncheckedCreateWithoutDeptEmploymentsInput = {
@@ -26257,6 +26473,7 @@ export namespace Prisma {
     children?: OrganizationUncheckedCreateNestedManyWithoutParentInput
     ancestorClosures?: OrganizationClosureUncheckedCreateNestedManyWithoutAncestorInput
     descendantClosures?: OrganizationClosureUncheckedCreateNestedManyWithoutDescendantInput
+    privilegeDelegations?: PrivilegeDelegationUncheckedCreateNestedManyWithoutOrganizationScopeInput
   }
 
   export type OrganizationCreateOrConnectWithoutDeptEmploymentsInput = {
@@ -26285,6 +26502,7 @@ export namespace Prisma {
     children?: OrganizationCreateNestedManyWithoutParentInput
     ancestorClosures?: OrganizationClosureCreateNestedManyWithoutAncestorInput
     descendantClosures?: OrganizationClosureCreateNestedManyWithoutDescendantInput
+    privilegeDelegations?: PrivilegeDelegationCreateNestedManyWithoutOrganizationScopeInput
   }
 
   export type OrganizationUncheckedCreateWithoutCompEmploymentsInput = {
@@ -26309,6 +26527,7 @@ export namespace Prisma {
     children?: OrganizationUncheckedCreateNestedManyWithoutParentInput
     ancestorClosures?: OrganizationClosureUncheckedCreateNestedManyWithoutAncestorInput
     descendantClosures?: OrganizationClosureUncheckedCreateNestedManyWithoutDescendantInput
+    privilegeDelegations?: PrivilegeDelegationUncheckedCreateNestedManyWithoutOrganizationScopeInput
   }
 
   export type OrganizationCreateOrConnectWithoutCompEmploymentsInput = {
@@ -26468,6 +26687,7 @@ export namespace Prisma {
     children?: OrganizationUpdateManyWithoutParentNestedInput
     ancestorClosures?: OrganizationClosureUpdateManyWithoutAncestorNestedInput
     descendantClosures?: OrganizationClosureUpdateManyWithoutDescendantNestedInput
+    privilegeDelegations?: PrivilegeDelegationUpdateManyWithoutOrganizationScopeNestedInput
   }
 
   export type OrganizationUncheckedUpdateWithoutDeptEmploymentsInput = {
@@ -26492,6 +26712,7 @@ export namespace Prisma {
     children?: OrganizationUncheckedUpdateManyWithoutParentNestedInput
     ancestorClosures?: OrganizationClosureUncheckedUpdateManyWithoutAncestorNestedInput
     descendantClosures?: OrganizationClosureUncheckedUpdateManyWithoutDescendantNestedInput
+    privilegeDelegations?: PrivilegeDelegationUncheckedUpdateManyWithoutOrganizationScopeNestedInput
   }
 
   export type OrganizationUpsertWithoutCompEmploymentsInput = {
@@ -26526,6 +26747,7 @@ export namespace Prisma {
     children?: OrganizationUpdateManyWithoutParentNestedInput
     ancestorClosures?: OrganizationClosureUpdateManyWithoutAncestorNestedInput
     descendantClosures?: OrganizationClosureUpdateManyWithoutDescendantNestedInput
+    privilegeDelegations?: PrivilegeDelegationUpdateManyWithoutOrganizationScopeNestedInput
   }
 
   export type OrganizationUncheckedUpdateWithoutCompEmploymentsInput = {
@@ -26550,6 +26772,7 @@ export namespace Prisma {
     children?: OrganizationUncheckedUpdateManyWithoutParentNestedInput
     ancestorClosures?: OrganizationClosureUncheckedUpdateManyWithoutAncestorNestedInput
     descendantClosures?: OrganizationClosureUncheckedUpdateManyWithoutDescendantNestedInput
+    privilegeDelegations?: PrivilegeDelegationUncheckedUpdateManyWithoutOrganizationScopeNestedInput
   }
 
   export type PositionUpsertWithoutEmploymentsInput = {
@@ -27287,6 +27510,7 @@ export namespace Prisma {
     children?: OrganizationCreateNestedManyWithoutParentInput
     ancestorClosures?: OrganizationClosureCreateNestedManyWithoutAncestorInput
     descendantClosures?: OrganizationClosureCreateNestedManyWithoutDescendantInput
+    privilegeDelegations?: PrivilegeDelegationCreateNestedManyWithoutOrganizationScopeInput
   }
 
   export type OrganizationUncheckedCreateWithoutRolesInput = {
@@ -27311,6 +27535,7 @@ export namespace Prisma {
     children?: OrganizationUncheckedCreateNestedManyWithoutParentInput
     ancestorClosures?: OrganizationClosureUncheckedCreateNestedManyWithoutAncestorInput
     descendantClosures?: OrganizationClosureUncheckedCreateNestedManyWithoutDescendantInput
+    privilegeDelegations?: PrivilegeDelegationUncheckedCreateNestedManyWithoutOrganizationScopeInput
   }
 
   export type OrganizationCreateOrConnectWithoutRolesInput = {
@@ -27386,6 +27611,7 @@ export namespace Prisma {
     children?: OrganizationUpdateManyWithoutParentNestedInput
     ancestorClosures?: OrganizationClosureUpdateManyWithoutAncestorNestedInput
     descendantClosures?: OrganizationClosureUpdateManyWithoutDescendantNestedInput
+    privilegeDelegations?: PrivilegeDelegationUpdateManyWithoutOrganizationScopeNestedInput
   }
 
   export type OrganizationUncheckedUpdateWithoutRolesInput = {
@@ -27410,6 +27636,7 @@ export namespace Prisma {
     children?: OrganizationUncheckedUpdateManyWithoutParentNestedInput
     ancestorClosures?: OrganizationClosureUncheckedUpdateManyWithoutAncestorNestedInput
     descendantClosures?: OrganizationClosureUncheckedUpdateManyWithoutDescendantNestedInput
+    privilegeDelegations?: PrivilegeDelegationUncheckedUpdateManyWithoutOrganizationScopeNestedInput
   }
 
   export type RoleUpsertWithoutOrganizationsInput = {
@@ -27890,6 +28117,60 @@ export namespace Prisma {
     create: XOR<UserCreateWithoutDelegationFromInput, UserUncheckedCreateWithoutDelegationFromInput>
   }
 
+  export type OrganizationCreateWithoutPrivilegeDelegationsInput = {
+    orgCode: string
+    orgName: string
+    businessParentId?: number
+    path: string
+    level: number
+    orgType: string
+    orderNum?: number
+    isVirtual?: boolean
+    isEntity?: boolean
+    status?: number
+    isDelete?: boolean
+    createTime?: Date | string
+    updateTime?: Date | string
+    deptEmployments?: EmploymentCreateNestedManyWithoutDeptartmentInput
+    compEmployments?: EmploymentCreateNestedManyWithoutCompanyInput
+    roles?: OrganizationRoleCreateNestedManyWithoutOrganizationInput
+    posOrgComposition?: PosOrgCompositionCreateNestedManyWithoutOrganizationInput
+    parent?: OrganizationCreateNestedOneWithoutChildrenInput
+    children?: OrganizationCreateNestedManyWithoutParentInput
+    ancestorClosures?: OrganizationClosureCreateNestedManyWithoutAncestorInput
+    descendantClosures?: OrganizationClosureCreateNestedManyWithoutDescendantInput
+  }
+
+  export type OrganizationUncheckedCreateWithoutPrivilegeDelegationsInput = {
+    id?: number
+    orgCode: string
+    orgName: string
+    parentId?: number | null
+    businessParentId?: number
+    path: string
+    level: number
+    orgType: string
+    orderNum?: number
+    isVirtual?: boolean
+    isEntity?: boolean
+    status?: number
+    isDelete?: boolean
+    createTime?: Date | string
+    updateTime?: Date | string
+    deptEmployments?: EmploymentUncheckedCreateNestedManyWithoutDeptartmentInput
+    compEmployments?: EmploymentUncheckedCreateNestedManyWithoutCompanyInput
+    roles?: OrganizationRoleUncheckedCreateNestedManyWithoutOrganizationInput
+    posOrgComposition?: PosOrgCompositionUncheckedCreateNestedManyWithoutOrganizationInput
+    children?: OrganizationUncheckedCreateNestedManyWithoutParentInput
+    ancestorClosures?: OrganizationClosureUncheckedCreateNestedManyWithoutAncestorInput
+    descendantClosures?: OrganizationClosureUncheckedCreateNestedManyWithoutDescendantInput
+  }
+
+  export type OrganizationCreateOrConnectWithoutPrivilegeDelegationsInput = {
+    where: OrganizationWhereUniqueInput
+    create: XOR<OrganizationCreateWithoutPrivilegeDelegationsInput, OrganizationUncheckedCreateWithoutPrivilegeDelegationsInput>
+  }
+
   export type DelegationDetailCreateWithoutDelegationInput = {
     privilege: PrivilegeCreateNestedOneWithoutDelegationsInput
   }
@@ -27996,6 +28277,66 @@ export namespace Prisma {
     delegationTo?: PrivilegeDelegationUncheckedUpdateManyWithoutDelegatorUserNestedInput
   }
 
+  export type OrganizationUpsertWithoutPrivilegeDelegationsInput = {
+    update: XOR<OrganizationUpdateWithoutPrivilegeDelegationsInput, OrganizationUncheckedUpdateWithoutPrivilegeDelegationsInput>
+    create: XOR<OrganizationCreateWithoutPrivilegeDelegationsInput, OrganizationUncheckedCreateWithoutPrivilegeDelegationsInput>
+    where?: OrganizationWhereInput
+  }
+
+  export type OrganizationUpdateToOneWithWhereWithoutPrivilegeDelegationsInput = {
+    where?: OrganizationWhereInput
+    data: XOR<OrganizationUpdateWithoutPrivilegeDelegationsInput, OrganizationUncheckedUpdateWithoutPrivilegeDelegationsInput>
+  }
+
+  export type OrganizationUpdateWithoutPrivilegeDelegationsInput = {
+    orgCode?: StringFieldUpdateOperationsInput | string
+    orgName?: StringFieldUpdateOperationsInput | string
+    businessParentId?: IntFieldUpdateOperationsInput | number
+    path?: StringFieldUpdateOperationsInput | string
+    level?: IntFieldUpdateOperationsInput | number
+    orgType?: StringFieldUpdateOperationsInput | string
+    orderNum?: IntFieldUpdateOperationsInput | number
+    isVirtual?: BoolFieldUpdateOperationsInput | boolean
+    isEntity?: BoolFieldUpdateOperationsInput | boolean
+    status?: IntFieldUpdateOperationsInput | number
+    isDelete?: BoolFieldUpdateOperationsInput | boolean
+    createTime?: DateTimeFieldUpdateOperationsInput | Date | string
+    updateTime?: DateTimeFieldUpdateOperationsInput | Date | string
+    deptEmployments?: EmploymentUpdateManyWithoutDeptartmentNestedInput
+    compEmployments?: EmploymentUpdateManyWithoutCompanyNestedInput
+    roles?: OrganizationRoleUpdateManyWithoutOrganizationNestedInput
+    posOrgComposition?: PosOrgCompositionUpdateManyWithoutOrganizationNestedInput
+    parent?: OrganizationUpdateOneWithoutChildrenNestedInput
+    children?: OrganizationUpdateManyWithoutParentNestedInput
+    ancestorClosures?: OrganizationClosureUpdateManyWithoutAncestorNestedInput
+    descendantClosures?: OrganizationClosureUpdateManyWithoutDescendantNestedInput
+  }
+
+  export type OrganizationUncheckedUpdateWithoutPrivilegeDelegationsInput = {
+    id?: IntFieldUpdateOperationsInput | number
+    orgCode?: StringFieldUpdateOperationsInput | string
+    orgName?: StringFieldUpdateOperationsInput | string
+    parentId?: NullableIntFieldUpdateOperationsInput | number | null
+    businessParentId?: IntFieldUpdateOperationsInput | number
+    path?: StringFieldUpdateOperationsInput | string
+    level?: IntFieldUpdateOperationsInput | number
+    orgType?: StringFieldUpdateOperationsInput | string
+    orderNum?: IntFieldUpdateOperationsInput | number
+    isVirtual?: BoolFieldUpdateOperationsInput | boolean
+    isEntity?: BoolFieldUpdateOperationsInput | boolean
+    status?: IntFieldUpdateOperationsInput | number
+    isDelete?: BoolFieldUpdateOperationsInput | boolean
+    createTime?: DateTimeFieldUpdateOperationsInput | Date | string
+    updateTime?: DateTimeFieldUpdateOperationsInput | Date | string
+    deptEmployments?: EmploymentUncheckedUpdateManyWithoutDeptartmentNestedInput
+    compEmployments?: EmploymentUncheckedUpdateManyWithoutCompanyNestedInput
+    roles?: OrganizationRoleUncheckedUpdateManyWithoutOrganizationNestedInput
+    posOrgComposition?: PosOrgCompositionUncheckedUpdateManyWithoutOrganizationNestedInput
+    children?: OrganizationUncheckedUpdateManyWithoutParentNestedInput
+    ancestorClosures?: OrganizationClosureUncheckedUpdateManyWithoutAncestorNestedInput
+    descendantClosures?: OrganizationClosureUncheckedUpdateManyWithoutDescendantNestedInput
+  }
+
   export type DelegationDetailUpsertWithWhereUniqueWithoutDelegationInput = {
     where: DelegationDetailWhereUniqueInput
     update: XOR<DelegationDetailUpdateWithoutDelegationInput, DelegationDetailUncheckedUpdateWithoutDelegationInput>
@@ -28022,12 +28363,14 @@ export namespace Prisma {
     updateTime?: Date | string
     delegatorUser: UserCreateNestedOneWithoutDelegationToInput
     delegateeUser: UserCreateNestedOneWithoutDelegationFromInput
+    organizationScope: OrganizationCreateNestedOneWithoutPrivilegeDelegationsInput
   }
 
   export type PrivilegeDelegationUncheckedCreateWithoutDelegationDetailsInput = {
     id?: number
     delegatorUserId: number
     delegateeUserId: number
+    organizationScopeId: number
     startTime: Date | string
     endTime: Date | string
     status?: number
@@ -28093,12 +28436,14 @@ export namespace Prisma {
     updateTime?: DateTimeFieldUpdateOperationsInput | Date | string
     delegatorUser?: UserUpdateOneRequiredWithoutDelegationToNestedInput
     delegateeUser?: UserUpdateOneRequiredWithoutDelegationFromNestedInput
+    organizationScope?: OrganizationUpdateOneRequiredWithoutPrivilegeDelegationsNestedInput
   }
 
   export type PrivilegeDelegationUncheckedUpdateWithoutDelegationDetailsInput = {
     id?: IntFieldUpdateOperationsInput | number
     delegatorUserId?: IntFieldUpdateOperationsInput | number
     delegateeUserId?: IntFieldUpdateOperationsInput | number
+    organizationScopeId?: IntFieldUpdateOperationsInput | number
     startTime?: DateTimeFieldUpdateOperationsInput | Date | string
     endTime?: DateTimeFieldUpdateOperationsInput | Date | string
     status?: IntFieldUpdateOperationsInput | number
@@ -28162,6 +28507,7 @@ export namespace Prisma {
   export type PrivilegeDelegationCreateManyDelegatorUserInput = {
     id?: number
     delegateeUserId: number
+    organizationScopeId: number
     startTime: Date | string
     endTime: Date | string
     status?: number
@@ -28174,6 +28520,7 @@ export namespace Prisma {
   export type PrivilegeDelegationCreateManyDelegateeUserInput = {
     id?: number
     delegatorUserId: number
+    organizationScopeId: number
     startTime: Date | string
     endTime: Date | string
     status?: number
@@ -28239,12 +28586,14 @@ export namespace Prisma {
     createTime?: DateTimeFieldUpdateOperationsInput | Date | string
     updateTime?: DateTimeFieldUpdateOperationsInput | Date | string
     delegateeUser?: UserUpdateOneRequiredWithoutDelegationFromNestedInput
+    organizationScope?: OrganizationUpdateOneRequiredWithoutPrivilegeDelegationsNestedInput
     delegationDetails?: DelegationDetailUpdateManyWithoutDelegationNestedInput
   }
 
   export type PrivilegeDelegationUncheckedUpdateWithoutDelegatorUserInput = {
     id?: IntFieldUpdateOperationsInput | number
     delegateeUserId?: IntFieldUpdateOperationsInput | number
+    organizationScopeId?: IntFieldUpdateOperationsInput | number
     startTime?: DateTimeFieldUpdateOperationsInput | Date | string
     endTime?: DateTimeFieldUpdateOperationsInput | Date | string
     status?: IntFieldUpdateOperationsInput | number
@@ -28258,6 +28607,7 @@ export namespace Prisma {
   export type PrivilegeDelegationUncheckedUpdateManyWithoutDelegatorUserInput = {
     id?: IntFieldUpdateOperationsInput | number
     delegateeUserId?: IntFieldUpdateOperationsInput | number
+    organizationScopeId?: IntFieldUpdateOperationsInput | number
     startTime?: DateTimeFieldUpdateOperationsInput | Date | string
     endTime?: DateTimeFieldUpdateOperationsInput | Date | string
     status?: IntFieldUpdateOperationsInput | number
@@ -28276,12 +28626,14 @@ export namespace Prisma {
     createTime?: DateTimeFieldUpdateOperationsInput | Date | string
     updateTime?: DateTimeFieldUpdateOperationsInput | Date | string
     delegatorUser?: UserUpdateOneRequiredWithoutDelegationToNestedInput
+    organizationScope?: OrganizationUpdateOneRequiredWithoutPrivilegeDelegationsNestedInput
     delegationDetails?: DelegationDetailUpdateManyWithoutDelegationNestedInput
   }
 
   export type PrivilegeDelegationUncheckedUpdateWithoutDelegateeUserInput = {
     id?: IntFieldUpdateOperationsInput | number
     delegatorUserId?: IntFieldUpdateOperationsInput | number
+    organizationScopeId?: IntFieldUpdateOperationsInput | number
     startTime?: DateTimeFieldUpdateOperationsInput | Date | string
     endTime?: DateTimeFieldUpdateOperationsInput | Date | string
     status?: IntFieldUpdateOperationsInput | number
@@ -28295,6 +28647,7 @@ export namespace Prisma {
   export type PrivilegeDelegationUncheckedUpdateManyWithoutDelegateeUserInput = {
     id?: IntFieldUpdateOperationsInput | number
     delegatorUserId?: IntFieldUpdateOperationsInput | number
+    organizationScopeId?: IntFieldUpdateOperationsInput | number
     startTime?: DateTimeFieldUpdateOperationsInput | Date | string
     endTime?: DateTimeFieldUpdateOperationsInput | Date | string
     status?: IntFieldUpdateOperationsInput | number
@@ -28376,6 +28729,19 @@ export namespace Prisma {
     id?: number
     ancestorId: number
     depth: number
+  }
+
+  export type PrivilegeDelegationCreateManyOrganizationScopeInput = {
+    id?: number
+    delegatorUserId: number
+    delegateeUserId: number
+    startTime: Date | string
+    endTime: Date | string
+    status?: number
+    description?: string | null
+    isDelete?: boolean
+    createTime?: Date | string
+    updateTime?: Date | string
   }
 
   export type EmploymentUpdateWithoutDeptartmentInput = {
@@ -28541,6 +28907,7 @@ export namespace Prisma {
     children?: OrganizationUpdateManyWithoutParentNestedInput
     ancestorClosures?: OrganizationClosureUpdateManyWithoutAncestorNestedInput
     descendantClosures?: OrganizationClosureUpdateManyWithoutDescendantNestedInput
+    privilegeDelegations?: PrivilegeDelegationUpdateManyWithoutOrganizationScopeNestedInput
   }
 
   export type OrganizationUncheckedUpdateWithoutParentInput = {
@@ -28565,6 +28932,7 @@ export namespace Prisma {
     children?: OrganizationUncheckedUpdateManyWithoutParentNestedInput
     ancestorClosures?: OrganizationClosureUncheckedUpdateManyWithoutAncestorNestedInput
     descendantClosures?: OrganizationClosureUncheckedUpdateManyWithoutDescendantNestedInput
+    privilegeDelegations?: PrivilegeDelegationUncheckedUpdateManyWithoutOrganizationScopeNestedInput
   }
 
   export type OrganizationUncheckedUpdateManyWithoutParentInput = {
@@ -28616,6 +28984,46 @@ export namespace Prisma {
     id?: IntFieldUpdateOperationsInput | number
     ancestorId?: IntFieldUpdateOperationsInput | number
     depth?: IntFieldUpdateOperationsInput | number
+  }
+
+  export type PrivilegeDelegationUpdateWithoutOrganizationScopeInput = {
+    startTime?: DateTimeFieldUpdateOperationsInput | Date | string
+    endTime?: DateTimeFieldUpdateOperationsInput | Date | string
+    status?: IntFieldUpdateOperationsInput | number
+    description?: NullableStringFieldUpdateOperationsInput | string | null
+    isDelete?: BoolFieldUpdateOperationsInput | boolean
+    createTime?: DateTimeFieldUpdateOperationsInput | Date | string
+    updateTime?: DateTimeFieldUpdateOperationsInput | Date | string
+    delegatorUser?: UserUpdateOneRequiredWithoutDelegationToNestedInput
+    delegateeUser?: UserUpdateOneRequiredWithoutDelegationFromNestedInput
+    delegationDetails?: DelegationDetailUpdateManyWithoutDelegationNestedInput
+  }
+
+  export type PrivilegeDelegationUncheckedUpdateWithoutOrganizationScopeInput = {
+    id?: IntFieldUpdateOperationsInput | number
+    delegatorUserId?: IntFieldUpdateOperationsInput | number
+    delegateeUserId?: IntFieldUpdateOperationsInput | number
+    startTime?: DateTimeFieldUpdateOperationsInput | Date | string
+    endTime?: DateTimeFieldUpdateOperationsInput | Date | string
+    status?: IntFieldUpdateOperationsInput | number
+    description?: NullableStringFieldUpdateOperationsInput | string | null
+    isDelete?: BoolFieldUpdateOperationsInput | boolean
+    createTime?: DateTimeFieldUpdateOperationsInput | Date | string
+    updateTime?: DateTimeFieldUpdateOperationsInput | Date | string
+    delegationDetails?: DelegationDetailUncheckedUpdateManyWithoutDelegationNestedInput
+  }
+
+  export type PrivilegeDelegationUncheckedUpdateManyWithoutOrganizationScopeInput = {
+    id?: IntFieldUpdateOperationsInput | number
+    delegatorUserId?: IntFieldUpdateOperationsInput | number
+    delegateeUserId?: IntFieldUpdateOperationsInput | number
+    startTime?: DateTimeFieldUpdateOperationsInput | Date | string
+    endTime?: DateTimeFieldUpdateOperationsInput | Date | string
+    status?: IntFieldUpdateOperationsInput | number
+    description?: NullableStringFieldUpdateOperationsInput | string | null
+    isDelete?: BoolFieldUpdateOperationsInput | boolean
+    createTime?: DateTimeFieldUpdateOperationsInput | Date | string
+    updateTime?: DateTimeFieldUpdateOperationsInput | Date | string
   }
 
   export type EmploymentCreateManyPositionInput = {

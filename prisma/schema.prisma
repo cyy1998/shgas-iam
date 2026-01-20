@@ -60,7 +60,8 @@ model Organization {
   ancestorClosures  OrganizationClosure[] @relation("org_ancestor")
 
   // 反向关系：该组织作为后代时的闭包记录
-  descendantClosures OrganizationClosure[] @relation("org_descendant")
+  descendantClosures   OrganizationClosure[] @relation("org_descendant")
+  privilegeDelegations PrivilegeDelegation[]
 
   @@index([parentId], map: "idx_parentId")
   // @@index([orgCode], map: "idx_orgCode")
@@ -269,23 +270,26 @@ model RolePrivilege {
 }
 
 model PrivilegeDelegation {
-  id              Int      @id @default(autoincrement()) @map("id")
-  delegatorUserId Int      @map("delegator_user_id")
-  delegateeUserId Int      @map("delegatee_user_id")
-  startTime       DateTime @map("start_time")
-  endTime         DateTime @map("end_time")
-  status          Int      @default(1) @map("status") @db.TinyInt
-  description     String?  @map("description") @db.VarChar(500)
-  isDelete        Boolean  @default(false) @map("is_delete") @db.TinyInt
-  createTime      DateTime @default(now()) @map("create_time")
-  updateTime      DateTime @default(now()) @updatedAt @map("update_time")
+  id                  Int      @id @default(autoincrement()) @map("id")
+  delegatorUserId     Int      @map("delegator_user_id")
+  delegateeUserId     Int      @map("delegatee_user_id")
+  organizationScopeId Int      @map("organization_scope_id")
+  startTime           DateTime @map("start_time")
+  endTime             DateTime @map("end_time")
+  status              Int      @default(1) @map("status") @db.TinyInt
+  description         String?  @map("description") @db.VarChar(500)
+  isDelete            Boolean  @default(false) @map("is_delete") @db.TinyInt
+  createTime          DateTime @default(now()) @map("create_time")
+  updateTime          DateTime @default(now()) @updatedAt @map("update_time")
 
   delegatorUser     User               @relation("delegationTo", fields: [delegatorUserId], references: [id])
   delegateeUser     User               @relation("delegationFrom", fields: [delegateeUserId], references: [id])
+  organizationScope Organization       @relation(fields: [organizationScopeId], references: [id])
   delegationDetails DelegationDetail[]
 
   @@index([delegatorUserId, delegateeUserId], map: "idx_delegationTo")
   @@index([delegateeUserId, delegatorUserId], map: "idx_delegationFrom")
+  @@index([organizationScopeId], map: "idx_organizationScopeId")
   @@map("privilege_delegation")
 }
 

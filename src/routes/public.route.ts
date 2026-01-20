@@ -434,7 +434,7 @@ app.openapi(
 /*
 path: /users/search
 method: POST
-function: 获取某个组织的所有子组织
+function: 根据条件搜索用户
 */
 app.openapi(
     createRoute({
@@ -457,7 +457,7 @@ app.openapi(
                         schema: createResponseSchema(z.array(UserDtoSchema)),
                     },
                 },
-                description: '所有子组织列表',
+                description: '用户列表',
             },
         },
     }),
@@ -468,9 +468,9 @@ app.openapi(
     }
 )
 /*
-path: /users/search
+path: /users/search/sql
 method: POST
-function: 获取某个组织的所有子组织
+function: 根据条件搜索用户
 */
 app.openapi(
     createRoute({
@@ -493,7 +493,7 @@ app.openapi(
                         schema: createResponseSchema(z.array(UserDtoSchema)),
                     },
                 },
-                description: '所有子组织列表',
+                description: '用户列表',
             },
         },
     }),

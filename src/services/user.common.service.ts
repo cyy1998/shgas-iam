@@ -1,7 +1,10 @@
 import { hash, compare } from 'bcrypt-ts'
 import type { User } from '../../generated/prisma'
 import { userRepository } from '../repositories/user.common.repository'
-import { UserDetailDtoSchema, type UserDetailDto, type UserDto, type UserQueryDto } from '../types/user.common.type'
+import {
+    UserDetailDtoSchema, type UserDetailDto, type UserDto,
+    type UserQueryDto, type UserQueryWithPrivilegeDelegationDto
+} from '../types/user.common.type'
 import { userMapper } from '../mapper/user.common.mapper'
 import { employmentRepository } from '../repositories/employment.common.repository'
 import { employmentMapper } from '../mapper/employment.common.mapper'
@@ -15,6 +18,8 @@ import { roleRepository } from '../repositories/role.repository'
 import { prisma } from '../libs/database/prisma'
 import { privilegeRepository } from '../repositories/privilege.repository'
 import { EmploymentDetailDtoSchema } from '../types/employment.common.type'
+import { privilegeDelegationRepository } from '../repositories/privilegeDelegation.repository'
+import { privilegeDelegationMapper } from '../mapper/privilegeDelegation.mapper'
 
 async function _getUserDetail(user: User | null): Promise<UserDetailDto> {
     if (user === null) {
@@ -109,6 +114,22 @@ export const userService = {
         const users = await userRepository.searchUsers(userQueryDto)
         const userDtos = users.map(u => userMapper.entityToDto(u))
         return userDtos
+    },
+    async searchUsersWithPrivilegeDelegation(userQueryWithPrivilegeDelegationDto: UserQueryWithPrivilegeDelegationDto) {
+        if (userQueryWithPrivilegeDelegationDto.ancestorOrgCodes.length != 1) {
+            throw new CustomError('该接口ancestorOrgCodes元素数量只支持为1')
+        }
+        const users = await userRepository.searchUsers(userQueryWithPrivilegeDelegationDto)
+        const userDtos = users.map(u => userMapper.entityToDto(u))
+        const orgCode = userQueryWithPrivilegeDelegationDto.ancestorOrgCodes[0] as string
+        const privCode = userQueryWithPrivilegeDelegationDto.privilegeCode
+        const delegations = (await privilegeDelegationRepository.getDelegationsByUserAndOrganizationScopeAndPrivilege(
+            userDtos.map(u => u.username), orgCode, privCode
+        )).map(pd => privilegeDelegationMapper.entityToDto(pd))
+        return {
+            users: userDtos,
+            delegations: delegations
+        }
     },
     async searchUsersRawSql(userQueryDto: UserQueryDto) {
         const users = await userRepository.searchUsersRawSql(userQueryDto)
