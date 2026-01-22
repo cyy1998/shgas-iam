@@ -20,7 +20,7 @@ async function _login(user: UserDetailDto) {
     if (existingGlobalSessionId !== null) {
         const existingGlobalSession = await redis.get(`global_session:${existingGlobalSessionId}`)
         if (existingGlobalSession !== null) {
-            await redis.set(`auth_code:${code}`, JSON.stringify(existingGlobalSession), 'EX', 180)
+            await redis.set(`auth_code:${code}`, existingGlobalSession, 'EX', 180)
             return {
                 token: existingGlobalSessionId,
                 code: code
