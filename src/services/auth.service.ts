@@ -153,11 +153,16 @@ export const authService = {
         await redis.set(`wx-code:${code}`, JSON.stringify(userDto), 'EX', 600)
         return res
     },
-    async logout(token: string | undefined) {
-        if (!token) {
+    async logout(sessionId: string | undefined) {
+        if (!sessionId) {
             throw new CustomError('用户不存在')
         }
-        const result = await redis.del(`session:${token}`)
+        const userString = await redis.get(`local_session:${sessionId}`)
+        if (!userString) {
+
+        }
+        // const user = JSON.parse(userString)
+        const result = await redis.del(`local_session:${sessionId}`)
         if (result !== 1) {
             throw new CustomError('服务器内部错误')
         }

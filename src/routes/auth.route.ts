@@ -477,7 +477,7 @@ app.openapi(
         }
     }),
     async (c) => {
-        const sessionId = getCookie(c, 'session') ?? null
+        const sessionId = getCookie(c, 'local_session') ?? null
         const data = await authService.authz(sessionId, c.req.header('X-Forwarded-Uri'))
         c.header('X-User-Info', data)
         return c.json(success(data))
