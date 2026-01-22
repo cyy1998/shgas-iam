@@ -27,8 +27,8 @@ interface AppEnv {
 const app = new OpenAPIHono<AppEnv>()
 
 app.use('/*', async (c, next) => {
-    const sessionId = getCookie(c, 'local_session') ?? null
     const clientCode = c.req.header('Client')
+    const sessionId = getCookie(c, `local_${clientCode}_session`) ?? null
     if (!client) {
         throw new CustomError('非法请求')
     }

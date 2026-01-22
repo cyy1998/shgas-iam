@@ -13,14 +13,6 @@ import { AuthzMaintaincingError } from "../errors/AuthzMaintaincingError"
 import { clientService } from "./client.service"
 import { sm3 } from 'sm-crypto'
 
-function extractClientKey(path: string): string {
-    const parts = path.split('/').filter(Boolean);
-    if (parts.length < 2) {
-        return ''; // 不符合格式
-    }
-    return parts[1] as string;
-}
-
 async function _login(user: UserDetailDto) {
     const token = crypto.randomUUID()
     const code = crypto.randomUUID()
@@ -215,7 +207,7 @@ export const authService = {
             user.orcasId = orcasId
         }
         await Promise.all([
-            redis.set(`local_session:${token}`, JSON.stringify(user), 'EX', ttl),
+            redis.set(`local_${clientCode}_session:${token}`, JSON.stringify(user), 'EX', ttl),
             redis.del(`auth_code:${code}`),
             redis.lpush(`${user.username}_local_session_list`, token)
         ])

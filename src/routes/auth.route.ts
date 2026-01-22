@@ -441,44 +441,12 @@ app.openapi(
                     },
                 },
                 description: 'Allow',
-            },
-            400: {
-                content: {
-                    'application/json': {
-                        schema: createResponseSchema(z.object()),
-                    },
-                },
-                description: 'Bad Request',
-            },
-            500: {
-                content: {
-                    'application/json': {
-                        schema: createResponseSchema(z.object()),
-                    },
-                },
-                description: 'Server Error',
-            },
-            401: {
-                content: {
-                    'application/json': {
-                        schema: createResponseSchema(z.object()),
-                    },
-                },
-                description: 'Unauthorized',
-            },
-            403: {
-                content: {
-                    'application/json': {
-                        schema: createResponseSchema(z.object()),
-                    },
-                },
-                description: 'Forbidden',
             }
         }
     }),
     async (c) => {
-        const sessionId = getCookie(c, 'local_session') ?? null
         const clientCode = c.req.header('Client') ?? null
+        const sessionId = getCookie(c, `local_${clientCode}_session`) ?? null
         const data = await authService.authz(sessionId, clientCode, c.req.header('X-Forwarded-Uri'))
         c.header('X-User-Info', data)
         return c.json(success(data))
