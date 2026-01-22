@@ -34,7 +34,7 @@ app.use('/*', async (c, next) => {
     // if (!userString) {
     //     throw new AuthzUnauthorizedError('未登录')
     // }
-    const userString = await redis.get(`session:${sessionId}`)
+    const userString = await redis.get(`local_session:${sessionId}`)
     if (!userString) {
         throw new AuthzUnauthorizedError('未登录')
     }
