@@ -173,14 +173,6 @@ app.openapi(
     async (c) => {
         const { code, phoneNumber } = c.req.valid('json')
         const data = await authService.loginMobile(phoneNumber, code)
-        // if (data.orcasSessionId !== null) {
-        //     setCookie(c, 'orcas_sso_sessionid', data.orcasSessionId, {
-        //         httpOnly: true,
-        //         sameSite: 'Strict',  // 防 CSRF
-        //         maxAge: env.REDIS_EXPIRE_TIME,
-        //         path: '/',
-        //     })
-        // }
         setCookie(c, 'global_session', data.token, {
             httpOnly: true,
             sameSite: 'Strict',  // 防 CSRF

@@ -28,7 +28,8 @@ const app = new OpenAPIHono<AppEnv>()
 
 app.use('/*', async (c, next) => {
     const clientCode = c.req.header('Client')
-    const sessionId = getCookie(c, `local_${clientCode}_session`) ?? null
+    const sessionId = clientCode === 'iam' ? getCookie(c, `global_session`) ?? null
+        : getCookie(c, `local_${clientCode}_session`) ?? null
     if (!client) {
         throw new CustomError('非法请求')
     }
@@ -41,7 +42,7 @@ app.use('/*', async (c, next) => {
     //     throw new AuthzUnauthorizedError('未登录')
     // }
     const userString = clientCode === 'iam' ? await redis.get(`global_session:${sessionId}`)
-        : await redis.get(`local_${client}_session:${sessionId}`)
+        : await redis.get(`local_${clientCode}_session:${sessionId}`)
     if (!userString) {
         throw new AuthzUnauthorizedError('未登录')
     }
@@ -61,7 +62,7 @@ function: 获取当前已登录用户信息
 app.openapi(
     createRoute({
         method: 'get',
-        path: '/userinfo',
+        path: '/user-info',
         tags: ['Public'],
         responses: {
             200: {

@@ -163,7 +163,7 @@ export const authService = {
         if (!sessionId) {
             throw new AuthzUnauthorizedError('未登录')
         }
-        const userString = await redis.get(`local_${client}_session:${sessionId}`)
+        const userString = await redis.get(`local_${clientCode}_session:${sessionId}`)
         if (!userString) {
             throw new AuthzUnauthorizedError('未登录')
         }
