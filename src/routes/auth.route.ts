@@ -226,14 +226,6 @@ app.openapi(
     async (c) => {
         const { code } = c.req.valid('json')
         const data = await authService.loginWX(code)
-        // if (data.orcasSessionId !== null) {
-        //     setCookie(c, 'orcas_sso_sessionid', data.orcasSessionId, {
-        //         httpOnly: true,
-        //         sameSite: 'Strict',  // 防 CSRF
-        //         maxAge: env.REDIS_EXPIRE_TIME,
-        //         path: '/',
-        //     })
-        // }
         setCookie(c, 'session', data.token, {
             httpOnly: true,
             sameSite: 'Strict',  // 防 CSRF
@@ -356,7 +348,7 @@ app.openapi(
         tags: ['Auth'],
         request: {
             query: z.object({
-                redirectUrl: z.url().optional().openapi({ example: 'http://localhost:8080' })
+                redirectUrl: z.url().openapi({ example: 'http://localhost:8080' })
             })
         },
         responses: {
