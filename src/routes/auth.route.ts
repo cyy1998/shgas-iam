@@ -344,14 +344,11 @@ app.openapi(
     async (c) => {
         const { client, redirectUrl } = c.req.valid('query')
         const sessionId = getCookie(c, 'global_session')
-        if (sessionId === undefined) {
-            return c.redirect(`${env.LOGIN_PATH}?redriect_url=${redirectUrl}`)
-        }
         const data = await authService.authorize(sessionId, client, redirectUrl)
         if (data.isLogin === false) {
-            return c.redirect(`${env.LOGIN_PATH}?redriect_url=${redirectUrl}`)
+            return c.redirect(`${env.LOGIN_PATH}?client=${client}&redriect_url=${encodeURIComponent(redirectUrl)}`)
         }
-        return c.redirect(`${getProtocolAndHost(redirectUrl)}/api/iam/auth/callback?code=${data.code}&client=${client}&redirectUrl=${redirectUrl}`)
+        return c.redirect(`${getProtocolAndHost(redirectUrl)}/api/iam/auth/callback?code=${data.code}&client=${client}&redirectUrl=${encodeURIComponent(redirectUrl)}`)
     }
 )
 

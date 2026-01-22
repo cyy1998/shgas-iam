@@ -226,13 +226,19 @@ export const authService = {
             token: token
         }
     },
-    async authorize(globalSessionId: string, clientCode: string, redirectUrl: string) {
+    async authorize(globalSessionId: string | undefined, clientCode: string, redirectUrl: string) {
         const client = await clientService.getClientByCode(clientCode)
         if (client === null) {
             throw new CustomError('非法client代码')
         }
         if (!client.extAttributes.validRedirectUrls.some(u => redirectUrl.startsWith(u))) {
             throw new CustomError('非法重定向地址')
+        }
+        if (globalSessionId === undefined) {
+            return {
+                isLogin: false,
+                code: null
+            }
         }
         const userString = await redis.get(`global_session:${globalSessionId}`)
         if (userString === null) {
