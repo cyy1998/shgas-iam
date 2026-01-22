@@ -15,9 +15,12 @@ import { UserDtoSchema, UserQueryDtoSchema } from '../types/user.common.type'
 import { UserAdminDetailVoSchema, UserAdminDtoSchema, UserAdminQueryDtoSchema, UserAdminVoSchema } from "../types/user.admin.type"
 import { userService } from '../services/user.common.service'
 import { userAdminService } from '../services/user.admin.service'
+import { authenicationHandler } from '../middleware/authenication.handler'
 
 
 const app = new OpenAPIHono()
+
+app.use('/*', authenicationHandler)
 
 /*
 path: /users/search

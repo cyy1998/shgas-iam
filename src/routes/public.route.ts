@@ -3,7 +3,7 @@ import { z, createRoute, OpenAPIHono } from '@hono/zod-openapi'
 import { createResponseSchema } from '../types/response.type'
 import { userService } from '../services/user.common.service'
 import { mobileService } from '../services/mobile.service'
-import { deleteCookie, getCookie } from 'hono/cookie'
+import { getCookie } from 'hono/cookie'
 import { UserDetailDtoSchema, UserDtoSchema, UserQueryDtoSchema, type UserDetailDto, type UserDto } from '../types/user.common.type'
 import { employmentService } from '../services/employment.common.service'
 import { organizationService } from '../services/organization.service'
@@ -11,10 +11,7 @@ import { cacheService } from '../services/cache.service'
 
 import { EmploymentDtoSchema } from '../types/employment.common.type'
 import { OrganizationDtoSchema, OrganizationQueryDtoSchema } from '../types/organization.type'
-import { AuthzUnauthorizedError } from '../errors/AuthzUnauthorizedError'
-import { redis } from '../libs/cache/redis'
-import client from '../../generated/prisma/client'
-import { CustomError } from '../errors/CustomError'
+import { authenicationHandler } from '../middleware/authenication.handler'
 
 interface AppEnv {
     Variables: {
@@ -26,35 +23,7 @@ interface AppEnv {
 
 const app = new OpenAPIHono<AppEnv>()
 
-app.use('/*', async (c, next) => {
-    const clientCode = c.req.header('Client')
-    const sessionId = clientCode === 'iam' ? getCookie(c, `global_session`) ?? null
-        : getCookie(c, `local_${clientCode}_session`) ?? null
-    if (!client) {
-        throw new CustomError('非法请求')
-    }
-    // const path = c.req.header('X-Forwarded-Uri')
-    // const userString = c.req.header('X-User-Info')
-    if (!sessionId) {
-        throw new AuthzUnauthorizedError('未登录')
-    }
-    // if (!userString) {
-    //     throw new AuthzUnauthorizedError('未登录')
-    // }
-    const userString = clientCode === 'iam' ? await redis.get(`global_session:${sessionId}`)
-        : await redis.get(`local_${clientCode}_session:${sessionId}`)
-    if (!userString) {
-        deleteCookie(c, clientCode === 'iam' ? `global_session:${sessionId}` : `local_${clientCode}_session:${sessionId}`)
-        deleteCookie(c, 'orcas_sso_sessionid')
-        throw new AuthzUnauthorizedError('未登录')
-    }
-    const userDto: UserDetailDto = JSON.parse(userString)
-    // const userDto: UserDto = JSON.parse(Buffer.from(userString, 'base64').toString('utf8'))
-    c.set('userId', userDto.id)
-    c.set('username', userDto.username)
-    c.set('userDetailDto', userDto)
-    return await next()
-})
+app.use('/*', authenicationHandler)
 
 /*
 path: /user-info
