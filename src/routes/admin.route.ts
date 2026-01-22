@@ -86,6 +86,37 @@ app.openapi(
     }
 )
 /*
+path: /users/password/reset
+function: 应用更新
+*/
+app.openapi(
+    createRoute({
+        method: 'get',
+        path: '/users/password/reset',
+        tags: ['Admin'],
+        request: {
+            query: z.object({
+                username: z.string().openapi({ example: '138550' })
+            })
+        },
+        responses: {
+            200: {
+                content: {
+                    'application/json': {
+                        schema: createResponseSchema(z.string()),
+                    },
+                },
+                description: '用户新密码',
+            },
+        },
+    }),
+    async (c) => {
+        const { username } = c.req.valid('query')
+        const data = await userAdminService.getUserDetail(username)
+        return c.json(success(data))
+    }
+)
+/*
 path: /client/update
 function: 应用更新
 */

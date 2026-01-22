@@ -1,12 +1,17 @@
 
-import { UserAdminDetailDtoSchema, type UserAdminQueryDto } from "../types/user.admin.type";
+import { UserAdminDetailDtoSchema, type UserAdminQueryDto } from "../types/user.admin.type"
 import { paginate } from "../utils/page.util";
-import { UserNotFoundError } from "../errors/UserNotFoundError";
-import { userAdminMapper } from "../mapper/user.admin.mapper";
-import type { User } from "../../generated/prisma";
-import { employmentRepository } from "../repositories/employment.common.repository";
-import { employmentAdminMapper } from "../mapper/employment.admin.mapper";
-import { userAdminRepository } from "../repositories/user.admin.repository";
+import { UserNotFoundError } from "../errors/UserNotFoundError"
+import { userAdminMapper } from "../mapper/user.admin.mapper"
+import type { User } from "../../generated/prisma"
+import { employmentRepository } from "../repositories/employment.common.repository"
+import { employmentAdminMapper } from "../mapper/employment.admin.mapper"
+import { userAdminRepository } from "../repositories/user.admin.repository"
+import { prisma } from "../libs/database/prisma"
+import { userRepository } from "../repositories/user.common.repository"
+import { hash, compare } from 'bcrypt-ts'
+import { generateRandomPassword } from "../utils/encryption.utils";
+import { env } from "../config";
 
 async function _getUserDetail(user: User | null) {
     if (user === null) {
@@ -49,5 +54,18 @@ export const userAdminService = {
         const user = await userAdminRepository.getUserByUsername(username)
         const userDto = _getUserDetail(user)
         return userDto
-    }
+    },
+
+    async resetPassword(username: string) {
+        return await prisma.$transaction(async (tx) => {
+            const user = await userRepository.getUserByUsername(username, tx)
+            if (user === null) {
+                throw new UserNotFoundError('用户名不存在')
+            }
+            const newPassword = generateRandomPassword(8)
+            const newPasswordHash = await hash(newPassword, env.PASSWORD_HASH_ROUNDS)
+            await userRepository.setPassword(user.id, newPasswordHash, tx)
+            return newPassword
+        })
+    },
 }
