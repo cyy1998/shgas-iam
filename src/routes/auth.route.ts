@@ -278,7 +278,7 @@ app.openapi(
     async (c) => {
         const { code, client, redirectUrl } = c.req.valid('query')
         const data = await authService.setLocalSession(code, client, redirectUrl)
-        setCookie(c, `local_session`, data.token, {
+        setCookie(c, `local_${client}_session`, data.token, {
             httpOnly: true,
             sameSite: 'Strict',  // 防 CSRF
             maxAge: env.REDIS_EXPIRE_TIME,

@@ -13,6 +13,8 @@ import { EmploymentDtoSchema } from '../types/employment.common.type'
 import { OrganizationDtoSchema, OrganizationQueryDtoSchema } from '../types/organization.type'
 import { AuthzUnauthorizedError } from '../errors/AuthzUnauthorizedError'
 import { redis } from '../libs/cache/redis'
+import client from '../../generated/prisma/client'
+import { CustomError } from '../errors/CustomError'
 
 interface AppEnv {
     Variables: {
@@ -26,6 +28,10 @@ const app = new OpenAPIHono<AppEnv>()
 
 app.use('/*', async (c, next) => {
     const sessionId = getCookie(c, 'local_session') ?? null
+    const clientCode = c.req.header('Client')
+    if (!client) {
+        throw new CustomError('非法请求')
+    }
     // const path = c.req.header('X-Forwarded-Uri')
     // const userString = c.req.header('X-User-Info')
     if (!sessionId) {
@@ -34,7 +40,7 @@ app.use('/*', async (c, next) => {
     // if (!userString) {
     //     throw new AuthzUnauthorizedError('未登录')
     // }
-    const userString = await redis.get(`local_session:${sessionId}`)
+    const userString = await redis.get(`local_${client}_session:${sessionId}`)
     if (!userString) {
         throw new AuthzUnauthorizedError('未登录')
     }
@@ -54,7 +60,7 @@ function: 获取当前已登录用户信息
 app.openapi(
     createRoute({
         method: 'get',
-        path: '/user-info',
+        path: '/userinfo',
         tags: ['Public'],
         responses: {
             200: {
