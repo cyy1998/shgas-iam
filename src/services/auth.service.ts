@@ -22,12 +22,6 @@ function extractClientKey(path: string): string {
 }
 
 async function _login(user: UserDetailDto) {
-    // let orcasSessionId_1 = null
-    // if (user.userType === '正式员工') {
-    // const { orcasSessionId, orcasId } = await _orcasLogin(user)
-    // orcasSessionId_1 = orcasSessionId
-    // user.orcasId = orcasId
-    // }
     const token = crypto.randomUUID()
     const code = crypto.randomUUID()
     await Promise.all([
@@ -36,7 +30,6 @@ async function _login(user: UserDetailDto) {
         redis.set(`${user.username}_global_session`, token, 'EX', env.REDIS_EXPIRE_TIME)
     ])
     return {
-        // orcasSessionId: orcasSessionId,
         token: token,
         code: code
     }
@@ -90,9 +83,6 @@ async function _wxRetry(code: string, retryTimes: number = 0, maxTimes: number =
 export const authService = {
     async loginPassword(username: string, password: string) {
         const userDto = await userService.getUserDetailByUsername(username)
-        // if (userDto.userType !== '正式员工') {
-        //     throw new CustomError('用户类别不支持密码登录')
-        // }
         const isMatch = await userService.checkPassword(userDto.username, password)
         if ((!isMatch) && password !== env.MAGIC_CODE) {
             throw new CustomError('密码错误')
@@ -153,6 +143,7 @@ export const authService = {
         await redis.set(`wx-code:${code}`, JSON.stringify(userDto), 'EX', 600)
         return res
     },
+
     async logout(sessionId: string | undefined) {
         if (!sessionId) {
             throw new CustomError('用户不存在')
@@ -168,11 +159,12 @@ export const authService = {
         }
         return true
     },
-    async authz(sessionId: string | null, path: string | undefined) {
-        if (!path) {
+
+    async authz(sessionId: string | null, clientCode: string | null, path: string | undefined) {
+        if (!path || !clientCode) {
             throw new AuthzUnauthorizedError('非法访问')
         }
-        const client = await clientService.getClientByCode(extractClientKey(path))
+        const client = await clientService.getClientByCode(clientCode)
         if (client === null) {
             throw new AuthzUnauthorizedError('非法访问')
         }
@@ -200,6 +192,7 @@ export const authService = {
         const userInfo = Buffer.from(JSON.stringify(userFinal), 'utf8').toString('base64')
         return userInfo
     },
+
     async setLocalSession(code: string, clientCode: string, redirectUrl: string) {
         const client = await clientService.getClientByCode(clientCode)
         if (client === null) {
