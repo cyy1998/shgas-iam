@@ -16,6 +16,17 @@ import { sm3 } from 'sm-crypto'
 async function _login(user: UserDetailDto) {
     const token = crypto.randomUUID()
     const code = crypto.randomUUID()
+    const existingGlobalSessionId = await redis.get(`${user.username}_global_session`)
+    if (existingGlobalSessionId !== null) {
+        const existingGlobalSession = await redis.get(`global_session:${existingGlobalSessionId}`)
+        if (existingGlobalSession !== null) {
+            await redis.set(`auth_code:${code}`, JSON.stringify(existingGlobalSession), 'EX', 180)
+            return {
+                token: existingGlobalSessionId,
+                code: code
+            }
+        }
+    }
     await Promise.all([
         redis.set(`global_session:${token}`, JSON.stringify(user), 'EX', env.REDIS_EXPIRE_TIME),
         redis.set(`auth_code:${code}`, JSON.stringify(user), 'EX', 180),
@@ -136,16 +147,19 @@ export const authService = {
         return res
     },
 
-    async logout(sessionId: string | undefined) {
+    async logout(sessionId: string | null) {
         if (!sessionId) {
-            throw new CustomError('用户不存在')
+            throw new CustomError('会话不存在')
         }
-        const userString = await redis.get(`local_session:${sessionId}`)
+        const userString = await redis.get(`global_session:${sessionId}`)
         if (!userString) {
-
+            throw new CustomError('会话不存在')
         }
-        // const user = JSON.parse(userString)
-        const result = await redis.del(`local_session:${sessionId}`)
+        const user: UserDetailDto = JSON.parse(userString)
+        const localSessionList = await redis.lrange(`${user.username}_local_session_list`, 0, -1)
+        console.log(localSessionList)
+        await Promise.all(localSessionList.map(s => redis.del(s)))
+        const result = await redis.del(`global_session:${sessionId}`)
         if (result !== 1) {
             throw new CustomError('服务器内部错误')
         }
@@ -209,7 +223,7 @@ export const authService = {
         await Promise.all([
             redis.set(`local_${clientCode}_session:${token}`, JSON.stringify(user), 'EX', ttl),
             redis.del(`auth_code:${code}`),
-            redis.lpush(`${user.username}_local_session_list`, token)
+            redis.lpush(`${user.username}_local_session_list`, `local_${clientCode}_session:${token}`)
         ])
         return {
             orcasSessionId: globalOrcasSessionId,

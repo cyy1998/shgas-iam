@@ -3,7 +3,7 @@ import { z, createRoute, OpenAPIHono } from '@hono/zod-openapi'
 import { createResponseSchema } from '../types/response.type'
 import { userService } from '../services/user.common.service'
 import { mobileService } from '../services/mobile.service'
-import { getCookie } from 'hono/cookie'
+import { deleteCookie, getCookie } from 'hono/cookie'
 import { UserDetailDtoSchema, UserDtoSchema, UserQueryDtoSchema, type UserDetailDto, type UserDto } from '../types/user.common.type'
 import { employmentService } from '../services/employment.common.service'
 import { organizationService } from '../services/organization.service'
@@ -44,6 +44,8 @@ app.use('/*', async (c, next) => {
     const userString = clientCode === 'iam' ? await redis.get(`global_session:${sessionId}`)
         : await redis.get(`local_${clientCode}_session:${sessionId}`)
     if (!userString) {
+        deleteCookie(c, clientCode === 'iam' ? `global_session:${sessionId}` : `local_${clientCode}_session:${sessionId}`)
+        deleteCookie(c, 'orcas_sso_sessionid')
         throw new AuthzUnauthorizedError('未登录')
     }
     const userDto: UserDetailDto = JSON.parse(userString)

@@ -113,7 +113,7 @@ app.openapi(
     }),
     async (c) => {
         const { username } = c.req.valid('query')
-        const data = await userAdminService.getUserDetail(username)
+        const data = await userAdminService.resetPassword(username)
         return c.json(success(data))
     }
 )

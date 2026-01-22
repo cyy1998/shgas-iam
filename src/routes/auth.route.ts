@@ -346,31 +346,31 @@ app.openapi(
 
 /*
 path: /logout 
-method: POST
+method: GET
 function: logout
 */
 app.openapi(
     createRoute({
-        method: 'post',
+        method: 'get',
         path: '/logout',
         tags: ['Auth'],
+        request: {
+            query: z.object({
+                redirectUrl: z.url().optional().openapi({ example: 'http://localhost:8080' })
+            })
+        },
         responses: {
-            200: {
-                content: {
-                    'application/json': {
-                        schema: createResponseSchema(z.object()),
-                    },
-                },
+            302: {
                 description: '登出成功',
             }
         },
     }),
     async (c) => {
-        const token = getCookie(c, 'session')
-        const data = await authService.logout(token)
-        deleteCookie(c, 'session')
-        deleteCookie(c, 'orcas_sso_sessionid')
-        return c.json(success(data))
+        const { redirectUrl } = c.req.valid('query')
+        const token = getCookie(c, 'global_session') ?? null
+        await authService.logout(token)
+        deleteCookie(c, 'global_session')
+        return c.redirect(redirectUrl ?? env.LOGIN_PATH)
     }
 )
 
