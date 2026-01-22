@@ -87,11 +87,12 @@ app.openapi(
 )
 /*
 path: /users/password/reset
+method: POST
 function: 应用更新
 */
 app.openapi(
     createRoute({
-        method: 'get',
+        method: 'post',
         path: '/users/password/reset',
         tags: ['Admin'],
         request: {
