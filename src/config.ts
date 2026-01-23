@@ -6,6 +6,7 @@ const EnvSchema = z.object({
     SMS_URL: z.string(),
     DEFAULT_USER_PASSWORD: z.string(),
     REDIS_EXPIRE_TIME: z.coerce.number(),
+    AUTH_CODE_EXPIRE_TIME: z.coerce.number(),
     ORCAS_URL: z.string(),
     IAM_SECRET_KEY: z.string(),
     PORT: z.coerce.number().default(30000),
