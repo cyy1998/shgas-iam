@@ -105,7 +105,7 @@ export const authService = {
         }
         const userDto = await userService.getUserDetailByUsername(loginid)
         if (userDto.userType !== '正式员工') {
-            throw new CustomError('用户类别不支持密码登录')
+            throw new CustomError('用户类别不支持OA登录')
         }
         return await _login(userDto)
     },
@@ -214,9 +214,14 @@ export const authService = {
         const user: UserDetailDto = JSON.parse(userString)
 
         const globalSessionId = await redis.get(`global_session_for_code:${code}`)
+        if (!globalSessionId) {
+            throw new AuthzUnauthorizedError('全局session不存在')
+        }
         const ttl = await redis.ttl(`global_session:${globalSessionId}`)
         const localSessionId = crypto.randomUUID()
         let globalOrcasSessionId = null
+        console.log(`TTL TIme: ${ttl}
+            Global Session: ${globalSessionId}`)
         if (client.extAttributes.requireOrcas === true) {
             const { orcasSessionId, orcasId } = await _orcasLogin(user)
             globalOrcasSessionId = orcasSessionId
@@ -227,6 +232,7 @@ export const authService = {
             redis.del(`auth_code:${code}`),
             redis.lpush(`local_session_set:${globalSessionId}`, `local_${clientCode}_session:${localSessionId}`)
         ])
+
         await redis.expire(`local_session_set:${globalSessionId}`, ttl)
         return {
             orcasSessionId: globalOrcasSessionId,
@@ -241,14 +247,14 @@ export const authService = {
         if (!client.extAttributes.validRedirectUrls.some(u => redirectUrl.startsWith(u))) {
             throw new CustomError('非法重定向地址')
         }
-        if (globalSessionId === undefined) {
-            return {
-                isLogin: false,
-                code: null
-            }
-        }
+        // if (globalSessionId === undefined) {
+        //     return {
+        //         isLogin: false,
+        //         code: null
+        //     }
+        // }
         const userString = await redis.get(`global_session:${globalSessionId}`)
-        if (userString === null) {
+        if (!userString || !globalSessionId) {
             return {
                 isLogin: false,
                 code: null
@@ -257,7 +263,8 @@ export const authService = {
         const code = crypto.randomUUID()
         await Promise.all([
             redis.expire(`global_session:${globalSessionId}`, env.REDIS_EXPIRE_TIME),
-            redis.set(`auth_code:${code}`, userString, 'EX', 180)
+            redis.set(`auth_code:${code}`, userString, 'EX', env.AUTH_CODE_EXPIRE_TIME),
+            redis.set(`global_session_for_code:${code}`, globalSessionId, 'EX', env.AUTH_CODE_EXPIRE_TIME)
         ])
         return {
             isLogin: true,
