@@ -31,8 +31,11 @@ async function _login(user: UserDetailDto) {
     // }
     await Promise.all([
         redis.set(`global_session:${sessionId}`, JSON.stringify(user), 'EX', env.REDIS_EXPIRE_TIME),
-        redis.set(`auth_code:${code}`, JSON.stringify(user), 'EX', env.AUTH_CODE_EXPIRE_TIME),
-        redis.set(`global_session_for_code:${code}`, sessionId, 'EX', env.AUTH_CODE_EXPIRE_TIME)
+        redis.set(`auth_code:${code}`, JSON.stringify({
+            sessionId: sessionId,
+            data: JSON.stringify(user)
+        }), 'EX', env.AUTH_CODE_EXPIRE_TIME),
+        // redis.set(`global_session_for_code:${code}`, sessionId, 'EX', env.AUTH_CODE_EXPIRE_TIME)
         // redis.set(`${user.username}_global_session`, token, 'EX', env.REDIS_EXPIRE_TIME)
     ])
     return {
@@ -215,7 +218,7 @@ export const authService = {
             throw new AuthzUnauthorizedError('非法code')
         }
         const authObject: AuthObject = JSON.parse(authObjectString)
-
+        console.log(authObject)
         const userString = authObject.data
         const globalSessionId = authObject.sessionId
 

@@ -6,7 +6,6 @@ import type { Context } from "hono"
 import { ServiceStatusCode } from "../constants/service.status"
 
 export function errorHandler(err: Error | HTTPResponseError, c: Context) {
-    console.error(err)
     if (err instanceof CustomError) {
         return c.json(makeResponse(err.code, null, err.message))
     }
@@ -14,6 +13,7 @@ export function errorHandler(err: Error | HTTPResponseError, c: Context) {
         return c.json(makeResponse(err.code, null, err.message), err.httpCode)
     }
     else {
+        console.error(err)
         return c.json(makeResponse(ServiceStatusCode.Failure, null, '服务器内部错误'))
     }
 }
