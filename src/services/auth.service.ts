@@ -13,6 +13,7 @@ import { AuthzMaintaincingError } from "../errors/AuthzMaintaincingError"
 import { clientService } from "./client.service"
 import { sm3 } from 'sm-crypto'
 import { sessionService } from "./session.service"
+import type { AuthObject } from "../types/authObject.type"
 
 async function _login(user: UserDetailDto) {
     const sessionId = crypto.randomUUID()
@@ -209,13 +210,18 @@ export const authService = {
         if (!client.extAttributes.validRedirectUrls.some(u => redirectUrl.startsWith(u))) {
             throw new CustomError('非法重定向地址')
         }
-        const userString = await redis.get(`auth_code:${code}`)
-        if (userString === null) {
+        const authObjectString = await redis.get(`auth_code:${code}`)
+        if (authObjectString === null) {
             throw new AuthzUnauthorizedError('非法code')
         }
+        const authObject: AuthObject = JSON.parse(authObjectString)
+
+        const userString = authObject.data
+        const globalSessionId = authObject.sessionId
+
         const user: UserDetailDto = JSON.parse(userString)
 
-        const globalSessionId = await redis.get(`global_session_for_code:${code}`)
+        // const globalSessionId = await redis.get(`global_session_for_code:${code}`)
         if (!globalSessionId) {
             throw new AuthzUnauthorizedError('全局session不存在')
         }
@@ -248,12 +254,6 @@ export const authService = {
         if (!client.extAttributes.validRedirectUrls.some(u => redirectUrl.startsWith(u))) {
             throw new CustomError('非法重定向地址')
         }
-        // if (globalSessionId === undefined) {
-        //     return {
-        //         isLogin: false,
-        //         code: null
-        //     }
-        // }
         const userString = await redis.get(`global_session:${globalSessionId}`)
         if (!userString || !globalSessionId) {
             return {
@@ -264,8 +264,13 @@ export const authService = {
         const code = crypto.randomUUID()
         await Promise.all([
             redis.expire(`global_session:${globalSessionId}`, env.REDIS_EXPIRE_TIME),
-            redis.set(`auth_code:${code}`, userString, 'EX', env.AUTH_CODE_EXPIRE_TIME),
-            redis.set(`global_session_for_code:${code}`, globalSessionId, 'EX', env.AUTH_CODE_EXPIRE_TIME)
+            redis.set(`auth_code:${code}`, JSON.stringify(
+                {
+                    sessionId: globalSessionId,
+                    data: userString
+                }
+            ), 'EX', env.AUTH_CODE_EXPIRE_TIME),
+            // redis.set(`global_session_for_code:${code}`, globalSessionId, 'EX', env.AUTH_CODE_EXPIRE_TIME)
         ])
         return {
             isLogin: true,
