@@ -7,7 +7,7 @@ import { getCookie } from 'hono/cookie'
 import { UserDetailDtoSchema, UserDtoSchema, UserQueryDtoSchema, type UserDetailDto, type UserDto } from '../types/user.common.type'
 import { employmentService } from '../services/employment.common.service'
 import { organizationService } from '../services/organization.service'
-import { cacheService } from '../services/cache.service'
+import { sessionService } from '../services/session.service'
 
 import { EmploymentDtoSchema } from '../types/employment.common.type'
 import { OrganizationDtoSchema, OrganizationQueryDtoSchema } from '../types/organization.type'
@@ -168,9 +168,9 @@ app.openapi(
     }),
     async (c) => {
         const { phoneNumber, code } = c.req.valid('json')
-        const sessionId = getCookie(c, 'session') as string
+        const sessionId = getCookie(c, 'global_session') as string
         const newUserDto = await userService.setMobile(c.get('userId'), phoneNumber, code)
-        const data = await cacheService.updateSession(sessionId, JSON.stringify(newUserDto))
+        const data = await sessionService.updateSession(sessionId, JSON.stringify(newUserDto))
         return c.json(success(data))
     }
 )

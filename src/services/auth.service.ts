@@ -12,6 +12,7 @@ import { ClientStatus } from "../constants/client.status"
 import { AuthzMaintaincingError } from "../errors/AuthzMaintaincingError"
 import { clientService } from "./client.service"
 import { sm3 } from 'sm-crypto'
+import { sessionService } from "./session.service"
 
 async function _login(user: UserDetailDto) {
     const sessionId = crypto.randomUUID()
@@ -148,17 +149,18 @@ export const authService = {
         return res
     },
 
-    async logout(sessionId: string | null) {
-        const existSession = await redis.exists(`global_session:${sessionId}`)
+    async logout(globalSessionId: string | null) {
+        const existSession = await redis.exists(`global_session:${globalSessionId}`)
         if (existSession === 0) {
             throw new CustomError('会话不存在')
         }
         // const user: UserDetailDto = JSON.parse(userString)
-        const localSessionSet = await redis.lrange(`local_session_set:${sessionId}`, 0, -1)
+        // const localSessionSet = await redis.lrange(`local_session_set:${sessionId}`, 0, -1)
+        const localSessionSet = await sessionService.getValidLocalSessions(`local_session_set:${globalSessionId}`)
         await Promise.all(localSessionSet.map(s => redis.del(s)))
         await Promise.all([
-            redis.del(`global_session:${sessionId}`),
-            redis.del(`local_session_set:${sessionId}`)
+            redis.del(`global_session:${globalSessionId}`),
+            redis.del(`local_session_set:${globalSessionId}`)
         ])
         // if (result !== 1) {
         //     throw new CustomError('服务器内部错误')
@@ -220,8 +222,6 @@ export const authService = {
         const ttl = await redis.ttl(`global_session:${globalSessionId}`)
         const localSessionId = crypto.randomUUID()
         let globalOrcasSessionId = null
-        console.log(`TTL TIme: ${ttl}
-            Global Session: ${globalSessionId}`)
         if (client.extAttributes.requireOrcas === true) {
             const { orcasSessionId, orcasId } = await _orcasLogin(user)
             globalOrcasSessionId = orcasSessionId
@@ -230,10 +230,11 @@ export const authService = {
         await Promise.all([
             redis.set(`local_${clientCode}_session:${localSessionId}`, JSON.stringify(user), 'EX', ttl),
             redis.del(`auth_code:${code}`),
-            redis.lpush(`local_session_set:${globalSessionId}`, `local_${clientCode}_session:${localSessionId}`)
+            sessionService.setLocalSession(`local_session_set:${globalSessionId}`, `local_${clientCode}_session:${localSessionId}`, ttl)
+            // redis.lpush(`local_session_set:${globalSessionId}`, `local_${clientCode}_session:${localSessionId}`)
         ])
 
-        await redis.expire(`local_session_set:${globalSessionId}`, ttl)
+        await redis.expire(`local_session_set:${globalSessionId}`, env.REDIS_EXPIRE_TIME)
         return {
             orcasSessionId: globalOrcasSessionId,
             token: localSessionId
