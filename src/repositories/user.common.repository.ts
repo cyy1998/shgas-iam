@@ -53,6 +53,15 @@ WHERE
 `
 
 export const userRepository = {
+    async getUserById(userId: number, tx: PrismaTransaction = prisma) {
+        return await tx.user.findFirst({
+            where: {
+                id: userId,
+                status: UserStatus.Enable,
+                isDelete: false
+            }
+        })
+    },
     async getUserByUsername(username: string, tx: PrismaTransaction = prisma) {
         return await tx.user.findFirst({
             where: {

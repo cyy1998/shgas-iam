@@ -19,8 +19,9 @@ export const sessionService = {
     },
 
     async setLocalSession(key: string, item: string, ttlSeconds: number) {
-        const expireAt = Date.now() + ttlSeconds * 1000; // 毫秒时间戳
-        await redis.zadd(key, expireAt, item);
+        const expireAt = Date.now() + ttlSeconds * 1000 // 毫秒时间戳
+        await redis.zadd(key, expireAt, item)
+        return true
     },
 
     async getValidLocalSessions(key: string) {

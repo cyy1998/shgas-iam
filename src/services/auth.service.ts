@@ -218,7 +218,6 @@ export const authService = {
             throw new AuthzUnauthorizedError('非法code')
         }
         const authObject: AuthObject = JSON.parse(authObjectString)
-        console.log(authObject)
         const userString = authObject.data
         const globalSessionId = authObject.sessionId
 

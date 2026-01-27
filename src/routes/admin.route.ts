@@ -99,9 +99,15 @@ app.openapi(
         path: '/users/password/reset',
         tags: ['Admin'],
         request: {
-            query: z.object({
-                username: z.string().openapi({ example: '138550' })
-            })
+            body: {
+                content: {
+                    'application/json': {
+                        schema: z.object({
+                            username: z.string().openapi({ example: '138550' })
+                        })
+                    }
+                }
+            }
         },
         responses: {
             200: {
@@ -115,7 +121,7 @@ app.openapi(
         },
     }),
     async (c) => {
-        const { username } = c.req.valid('query')
+        const { username } = c.req.valid('json')
         const data = await userAdminService.resetPassword(username)
         return c.json(success(data))
     }

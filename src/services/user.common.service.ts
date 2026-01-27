@@ -31,16 +31,12 @@ async function _getUserDetail(user: User | null): Promise<UserDetailDto> {
     for (const employment of employments) {
         const roles = await roleRepository.getRolesByEmploymentId(employment.id)
         const privileges = await privilegeRepository.getPrivilegesByRoleIds(roles.map(r => r.id))
-        // console.log(roles.map(r => r.id))
-        // console.log(roles.map(r => r.roleCode))
-        // console.log(privileges.map(p => p.privilegeCode))
         const employmentDto = EmploymentDetailDtoSchema.parse(employmentMapper.entityToDto(employment))
         employmentDto.roles = roles.map(r => r.roleCode)
         employmentDto.privileges = privileges.map(p => p.privilegeCode)
         employmentDtos.push(employmentDto)
     }
     userDto.employments = employmentDtos
-    // const roles = await roleService.getRolesByUserId(userDto.id)
     userDto.roles = [...new Set(employmentDtos.flatMap(e => e.roles))]
     userDto.privileges = [...new Set(employmentDtos.flatMap(e => e.privileges))]
 
@@ -96,7 +92,7 @@ export const userService = {
     },
 
     async setMobile(userId: number, phoneNumber: string, code: string) {
-        return await prisma.$transaction(async (tx) => {
+        await prisma.$transaction(async (tx) => {
             if (!mobileService.checkValidPhoneNumber(phoneNumber)) {
                 throw new CustomError('无效手机号')
             }
@@ -107,8 +103,8 @@ export const userService = {
                 throw new CustomError('验证码错误')
             }
             await userRepository.setMobile(userId, phoneNumber, tx)
-            return true
         })
+        return await this.getUserDetailById(userId)
     },
     async searchUsers(userQueryDto: UserQueryDto) {
         const users = await userRepository.searchUsers(userQueryDto)
@@ -135,6 +131,12 @@ export const userService = {
         const users = await userRepository.searchUsersRawSql(userQueryDto)
         const userDtos = users.map(u => userMapper.entityToDto(u))
         return userDtos
+    },
+
+    async getUserDetailById(userId: number): Promise<UserDetailDto> {
+        const user = await userRepository.getUserById(userId)
+        const userDetail = await _getUserDetail(user)
+        return userDetail
     },
 
     async getUserDetailByUsername(username: string): Promise<UserDetailDto> {
