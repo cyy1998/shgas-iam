@@ -27,4 +27,14 @@ export const EmploymentDetailDtoSchema = EmploymentDtoSchema.extend({
 
 export type EmploymentDetailDto = z.infer<typeof EmploymentDetailDtoSchema>
 
+export const EmploymentQueryDtoSchema = z.object({
+    usernames: z.array(z.string()).optional().openapi({ example: ['138550', '136163'] }),
+    phones: z.array(z.string()).optional().openapi({ example: ['17721462865'] }),
+    wxIds: z.array(z.string()).optional().openapi({ example: ['1592677631'] }),
+    ancestorOrgCodes: z.array(z.string()).optional().openapi({ example: ['SR', 'SB'] }),
+    ancestorOrgDepths: z.array(z.number()).optional().openapi({ example: [1, 2] }),
+    positionCodes: z.array(z.string()).optional().openapi({ example: ['E033', 'E034'] }),
+    roleCodes: z.array(z.string()).optional().openapi({ example: ['tender:default-user'] })
+}).openapi('EmploymentQueryDto')
+
 

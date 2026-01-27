@@ -17,7 +17,7 @@ import type { AuthObject } from "../types/authObject.type"
 
 async function _login(user: UserDetailDto) {
     const sessionId = crypto.randomUUID()
-    const code = crypto.randomUUID()
+    // const code = crypto.randomUUID()
     // const existingGlobalSessionId = await redis.get(`${user.username}_global_session`)
     // if (existingGlobalSessionId !== null) {
     //     const existingGlobalSession = await redis.get(`global_session:${existingGlobalSessionId}`)
@@ -28,19 +28,20 @@ async function _login(user: UserDetailDto) {
     //             code: code
     //         }
     //     }
-    // }
-    await Promise.all([
-        redis.set(`global_session:${sessionId}`, JSON.stringify(user), 'EX', env.REDIS_EXPIRE_TIME),
-        redis.set(`auth_code:${code}`, JSON.stringify({
-            sessionId: sessionId,
-            data: JSON.stringify(user)
-        }), 'EX', env.AUTH_CODE_EXPIRE_TIME),
-        // redis.set(`global_session_for_code:${code}`, sessionId, 'EX', env.AUTH_CODE_EXPIRE_TIME)
-        // redis.set(`${user.username}_global_session`, token, 'EX', env.REDIS_EXPIRE_TIME)
-    ])
+    // // }
+    // await Promise.all([
+    //     redis.set(`global_session:${sessionId}`, JSON.stringify(user), 'EX', env.REDIS_EXPIRE_TIME),
+    //     redis.set(`auth_code:${code}`, JSON.stringify({
+    //         sessionId: sessionId,
+    //         data: JSON.stringify(user)
+    //     }), 'EX', env.AUTH_CODE_EXPIRE_TIME),
+    //     // redis.set(`global_session_for_code:${code}`, sessionId, 'EX', env.AUTH_CODE_EXPIRE_TIME)
+    //     // redis.set(`${user.username}_global_session`, token, 'EX', env.REDIS_EXPIRE_TIME)
+    // ])
+    await redis.set(`global_session:${sessionId}`, JSON.stringify(user), 'EX', env.REDIS_EXPIRE_TIME)
     return {
         token: sessionId,
-        code: code
+        // code: code
     }
 }
 

@@ -9,7 +9,7 @@ import { ResponseSchema } from '../types/response.type'
 import { ClientDtoSchema, ClientInputDtoSchema } from '../types/client.type'
 import { clientService } from '../services/client.service'
 import { organizationService } from '../services/organization.service'
-import { OrganizationCreateDtoSchema } from '../types/organization.type'
+import { OrganizationCreateDtoSchema, OrganizationDtoSchema, OrganizationQueryDtoSchema } from '../types/organization.type'
 import { createPageQuerySchema, createPageResultSchema } from '../types/page.type'
 import { UserDtoSchema, UserQueryDtoSchema } from '../types/user.common.type'
 import { UserAdminDetailVoSchema, UserAdminDtoSchema, UserAdminQueryDtoSchema, UserAdminVoSchema } from "../types/user.admin.type"
@@ -57,6 +57,81 @@ app.openapi(
         return c.json(success(data))
     }
 )
+
+/*
+path: /organizations/search
+method: POST
+function: 按条件搜索某组织
+*/
+app.openapi(
+    createRoute({
+        method: 'post',
+        path: '/organizations/search',
+        tags: ['Public'],
+        request: {
+            body: {
+                content: {
+                    'application/json': {
+                        schema: OrganizationQueryDtoSchema
+                    }
+                }
+            }
+        },
+        responses: {
+            200: {
+                content: {
+                    'application/json': {
+                        schema: createResponseSchema(z.array(OrganizationDtoSchema)),
+                    },
+                },
+                description: '所有符合条件组织列表',
+            },
+        },
+    }),
+    async (c) => {
+        const organizationQueryDto = c.req.valid('json')
+        const data = await organizationService.searchOrganizations(organizationQueryDto)
+        return c.json(success(data))
+    }
+)
+
+/*
+path: /employments/search
+method: POST
+function: 按条件搜索某组织
+*/
+app.openapi(
+    createRoute({
+        method: 'post',
+        path: '/employments/search',
+        tags: ['Public'],
+        request: {
+            body: {
+                content: {
+                    'application/json': {
+                        schema: OrganizationQueryDtoSchema
+                    }
+                }
+            }
+        },
+        responses: {
+            200: {
+                content: {
+                    'application/json': {
+                        schema: createResponseSchema(z.array(OrganizationDtoSchema)),
+                    },
+                },
+                description: '所有符合条件组织列表',
+            },
+        },
+    }),
+    async (c) => {
+        const organizationQueryDto = c.req.valid('json')
+        const data = await organizationService.searchOrganizations(organizationQueryDto)
+        return c.json(success(data))
+    }
+)
+
 /*
 path: /users/detail
 function: 应用更新

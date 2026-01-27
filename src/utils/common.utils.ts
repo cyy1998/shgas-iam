@@ -1,3 +1,4 @@
+import { CustomError } from "../errors/CustomError";
 
 export function mergeAndDedupe<T extends Record<string, any>>(
     arr1: T[],
@@ -59,6 +60,6 @@ export function getProtocolAndHost(url: string): string {
         const parsedUrl = new URL(url);
         return `${parsedUrl.protocol}//${parsedUrl.host}`;
     } catch (error) {
-        throw new Error(`Invalid URL: ${url}`);
+        throw new CustomError(`Invalid URL: ${url}`);
     }
 }

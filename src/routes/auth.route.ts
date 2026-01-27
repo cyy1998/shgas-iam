@@ -62,7 +62,7 @@ app.openapi(
             maxAge: env.REDIS_EXPIRE_TIME,
             path: '/',
         })
-        return c.json(success({ code: data.code }))
+        return c.json(success(data))
     }
 )
 
@@ -327,10 +327,11 @@ app.openapi(
     }),
     async (c) => {
         const { client, redirectUrl } = c.req.valid('query')
+        const searchParams = new URLSearchParams(c.req.query())
         const sessionId = getCookie(c, 'global_session')
         const data = await authService.authorize(sessionId, client, redirectUrl)
         if (data.isLogin === false) {
-            return c.redirect(`${env.LOGIN_PATH}?client=${client}&redriect_url=${encodeURIComponent(redirectUrl)}`)
+            return c.redirect(`${env.LOGIN_PATH}?${searchParams.toString()}`)
         }
         return c.redirect(`${getProtocolAndHost(redirectUrl)}/api/iam/auth/callback?code=${data.code}&client=${client}&redirectUrl=${encodeURIComponent(redirectUrl)}`)
     }
