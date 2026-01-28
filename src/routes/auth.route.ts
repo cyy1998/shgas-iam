@@ -48,86 +48,7 @@ app.openapi(
     async (c) => {
         const { username, password } = c.req.valid('json')
         const data = await authService.loginPassword(username, password)
-        // if (data.orcasSessionId !== null) {
-        //     setCookie(c, 'orcas_sso_sessionid', data.orcasSessionId, {
-        //         httpOnly: true,
-        //         sameSite: 'Strict',  // 防 CSRF
-        //         maxAge: env.REDIS_EXPIRE_TIME,
-        //         path: '/',
-        //     })
-        // }
         setCookie(c, 'global_session', data.token, {
-            httpOnly: true,
-            sameSite: 'Strict',  // 防 CSRF
-            maxAge: env.REDIS_EXPIRE_TIME,
-            path: '/',
-        })
-        return c.json(success(data))
-    }
-)
-
-/* 
-path: /login/oa
-method: POST
-function: oa登录
-*/
-app.openapi(
-    createRoute({
-        method: 'post',
-        path: '/login/oa',
-        tags: ['Auth'],
-        request: {
-            body: {
-                content: {
-                    'application/json': {
-                        schema: z.object({
-                            loginid: z.string().openapi({ example: '138550' }),
-                            ts: z.string().openapi({ example: '1234' }),
-                            token: z.string().openapi({ example: '138550' })
-                        })
-                    }
-                }
-            },
-        },
-        responses: {
-            200: {
-                content: {
-                    'application/json': {
-                        schema: createResponseSchema(z.object()),
-                    },
-                },
-                description: '设置岗位成功',
-            },
-            401: {
-                content: {
-                    'application/json': {
-                        schema: createResponseSchema(z.object()),
-                    },
-                },
-                description: '认证失败',
-            },
-            500: {
-                content: {
-                    'application/json': {
-                        schema: createResponseSchema(z.object()),
-                    },
-                },
-                description: '内部错误',
-            },
-        },
-    }),
-    async (c) => {
-        const { loginid, ts, token } = c.req.valid('json')
-        const data = await authService.loginOA(loginid, ts, token)
-        // if (data.orcasSessionId !== null) {
-        //     setCookie(c, 'orcas_sso_sessionid', data.orcasSessionId, {
-        //         httpOnly: true,
-        //         sameSite: 'Strict',  // 防 CSRF
-        //         maxAge: env.REDIS_EXPIRE_TIME,
-        //         path: '/',
-        //     })
-        // }
-        setCookie(c, 'session', data.token, {
             httpOnly: true,
             sameSite: 'Strict',  // 防 CSRF
             maxAge: env.REDIS_EXPIRE_TIME,
@@ -233,6 +154,48 @@ app.openapi(
             path: '/',
         })
         return c.json(success(data))
+    }
+)
+
+/* 
+path: /sso/oa
+method: POST
+function: oa登录
+*/
+app.openapi(
+    createRoute({
+        method: 'get',
+        path: '/sso/oa',
+        tags: ['Auth'],
+        request: {
+            query: z.object({
+                loginid: z.string().openapi({ example: '138550' }),
+                ts: z.string().openapi({ example: '1234' }),
+                token: z.string().openapi({ example: '138550' }),
+                redirectUrl: z.url().openapi({ example: 'http://localhost:8080' }),
+                client: z.string().openapi({ example: 'tender' })
+            })
+        },
+        responses: {
+            301: {
+                description: 'OA登录成功',
+            }
+        },
+    }),
+    async (c) => {
+        const { loginid, ts, token, redirectUrl, client } = c.req.valid('query')
+        const sessionId = getCookie(c, 'global_session') ?? null
+        if (sessionId !== null) {
+            authService.logout(sessionId)
+        }
+        const data = await authService.loginOA(loginid, ts, token)
+        setCookie(c, 'global_session', data.token, {
+            httpOnly: true,
+            sameSite: 'Strict',  // 防 CSRF
+            maxAge: env.REDIS_EXPIRE_TIME,
+            path: '/',
+        })
+        return c.redirect(`/api/iam/auth/authorize?client=${client}&redirectUrl=${encodeURIComponent(redirectUrl)}`)
     }
 )
 
