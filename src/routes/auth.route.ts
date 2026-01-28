@@ -186,7 +186,7 @@ app.openapi(
         const { loginid, ts, token, redirectUrl, client } = c.req.valid('query')
         const sessionId = getCookie(c, 'global_session') ?? null
         if (sessionId !== null) {
-            authService.logout(sessionId)
+            await authService.logout(sessionId)
         }
         const data = await authService.loginOA(loginid, ts, token)
         setCookie(c, 'global_session', data.token, {

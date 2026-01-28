@@ -105,6 +105,7 @@ export const authService = {
         if (env.NODE_ENV === 'production' && Math.abs(currentTimestamp - parseInt(ts)) >= 1000 * 300) {
             throw new AuthzUnauthorizedError('token过期')
         }
+        console.log(token)
         const hashSting = Buffer.from(sm3(`${loginid}|${ts}|${env.IAM_SECRET_KEY}${env.IAM_SECRET_KEY}`), 'hex').toBase64()
         if (hashSting !== token) {
             throw new AuthzUnauthorizedError('token校验失败')
@@ -157,7 +158,7 @@ export const authService = {
     async logout(globalSessionId: string | null) {
         const existSession = await redis.exists(`global_session:${globalSessionId}`)
         if (existSession === 0) {
-            throw new CustomError('会话不存在')
+            return true
         }
         // const user: UserDetailDto = JSON.parse(userString)
         // const localSessionSet = await redis.lrange(`local_session_set:${sessionId}`, 0, -1)
