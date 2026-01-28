@@ -20,6 +20,7 @@ import { privilegeRepository } from '../repositories/privilege.repository'
 import { EmploymentDetailDtoSchema } from '../types/employment.common.type'
 import { privilegeDelegationRepository } from '../repositories/privilegeDelegation.repository'
 import { privilegeDelegationMapper } from '../mapper/privilegeDelegation.mapper'
+import { VerificationCodeUsage } from '../constants/verificationCode.usage'
 
 async function _getUserDetail(user: User | null): Promise<UserDetailDto> {
     if (user === null) {
@@ -99,7 +100,7 @@ export const userService = {
             if (await mobileService.checkExistingPhoneNumber(phoneNumber)) {
                 throw new CustomError('手机号已存在')
             }
-            if (!await mobileService.cehckVerificationCode(phoneNumber, code)) {
+            if (!await mobileService.cehckVerificationCode(VerificationCodeUsage.BindPhone, phoneNumber, code)) {
                 throw new CustomError('验证码错误')
             }
             await userRepository.setMobile(userId, phoneNumber, tx)

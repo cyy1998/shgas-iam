@@ -1,4 +1,5 @@
 import { env } from '../config'
+import { VerificationCodeUsage } from '../constants/verificationCode.usage'
 import { CustomError } from '../errors/CustomError'
 import { redis } from "../libs/cache/redis"
 import { prisma } from '../libs/database/prisma'
@@ -6,22 +7,31 @@ import type { SMSServiceResult } from '../types/service.type'
 import { hmacSha256 } from '../utils/encryption.utils'
 
 export const mobileService = {
-    async sendCodeWithExistingPhone(phoneNumber: string) {
+    // async sendCodeWithExistingPhone(phoneNumber: string) {
+    //     if (!this.checkValidPhoneNumber(phoneNumber)) {
+    //         throw new CustomError('无效手机号')
+    //     }
+    //     if (!await this.checkExistingPhoneNumber(phoneNumber)) {
+    //         throw new CustomError('手机号不存在')
+    //     }
+    //     return await this.sendVerificationCode(phoneNumber)
+    // },
+    // async sendCodeWithOutExistingPhone(phoneNumber: string) {
+    //     if (!this.checkValidPhoneNumber(phoneNumber)) {
+    //         throw new CustomError('无效手机号')
+    //     }
+    //     return await this.sendVerificationCode(phoneNumber)
+    // },
+    async sendCode(phoneNumber: string, usage: string) {
         if (!this.checkValidPhoneNumber(phoneNumber)) {
             throw new CustomError('无效手机号')
         }
-        if (!await this.checkExistingPhoneNumber(phoneNumber)) {
+        if (!await this.checkExistingPhoneNumber(phoneNumber) && usage !== VerificationCodeUsage.BindPhone) {
             throw new CustomError('手机号不存在')
         }
-        return await this.sendVerificationCode(phoneNumber)
+        return await this.sendVerificationCode(phoneNumber, usage)
     },
-    async sendCodeWithOutExistingPhone(phoneNumber: string) {
-        if (!this.checkValidPhoneNumber(phoneNumber)) {
-            throw new CustomError('无效手机号')
-        }
-        return await this.sendVerificationCode(phoneNumber)
-    },
-    async sendVerificationCode(phoneNumber: string) {
+    async sendVerificationCode(phoneNumber: string, usage: string) {
         const random4Digit = Math.floor(1000 + Math.random() * 9000)
         const message = `登录验证码：${random4Digit}`
         const currentTimestamp = Math.floor(Date.now() / 1000)
@@ -43,7 +53,7 @@ export const mobileService = {
         if (smsResult.resultCode !== '0000') {
             throw new CustomError(`短信发送失败:${phoneNumber}`)
         }
-        await redis.set(`mobile-code:${phoneNumber}`, random4Digit, 'EX', 180)
+        await redis.set(`mobile-code:${usage}:${phoneNumber}`, random4Digit, 'EX', 180)
         return true
     },
 
@@ -90,8 +100,8 @@ export const mobileService = {
         return userCount !== 0
     },
 
-    async cehckVerificationCode(phone: string, code: string): Promise<boolean> {
-        const savedCode = await redis.get(`mobile-code:${phone}`)
+    async cehckVerificationCode(usage: string, phone: string, code: string): Promise<boolean> {
+        const savedCode = await redis.get(`mobile-code:${usage}:${phone}`)
         return savedCode === code
     }
 

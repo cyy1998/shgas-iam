@@ -99,39 +99,39 @@ path: /mobile/send-message
 method: POST
 function: 发送短信 
 */
-app.openapi(
-    createRoute({
-        method: 'post',
-        path: '/mobile/send-message',
-        tags: ['Public'],
-        request: {
-            body: {
-                content: {
-                    'application/json': {
-                        schema: z.object({
-                            phoneNumber: z.string().openapi({ example: '17721462865' }),
-                        })
-                    }
-                }
-            },
-        },
-        responses: {
-            200: {
-                content: {
-                    'application/json': {
-                        schema: createResponseSchema(z.boolean()),
-                    },
-                },
-                description: '发送短信成功',
-            }
-        }
-    }),
-    async (c) => {
-        const { phoneNumber } = c.req.valid('json')
-        const data = await mobileService.sendCodeWithOutExistingPhone(phoneNumber)
-        return c.json(success(data))
-    }
-)
+// app.openapi(
+//     createRoute({
+//         method: 'post',
+//         path: '/mobile/send-message',
+//         tags: ['Public'],
+//         request: {
+//             body: {
+//                 content: {
+//                     'application/json': {
+//                         schema: z.object({
+//                             phoneNumber: z.string().openapi({ example: '17721462865' }),
+//                         })
+//                     }
+//                 }
+//             },
+//         },
+//         responses: {
+//             200: {
+//                 content: {
+//                     'application/json': {
+//                         schema: createResponseSchema(z.boolean()),
+//                     },
+//                 },
+//                 description: '发送短信成功',
+//             }
+//         }
+//     }),
+//     async (c) => {
+//         const { phoneNumber } = c.req.valid('json')
+//         const data = await mobileService.sendCodeWithOutExistingPhone(phoneNumber)
+//         return c.json(success(data))
+//     }
+// )
 
 /*
 path: /mobile/set

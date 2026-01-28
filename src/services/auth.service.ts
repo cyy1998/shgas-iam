@@ -14,6 +14,8 @@ import { clientService } from "./client.service"
 import { sm3 } from 'sm-crypto'
 import { sessionService } from "./session.service"
 import type { AuthObject } from "../types/authObject.type"
+import { mobileService } from "./mobile.service"
+import { VerificationCodeUsage } from "../constants/verificationCode.usage"
 
 async function _login(user: UserDetailDto) {
     const sessionId = crypto.randomUUID()
@@ -117,16 +119,15 @@ export const authService = {
         return await _login(userDto)
     },
 
-    async loginMobile(mobile: string, code: string) {
+    async loginMobile(phoneNumber: string, code: string) {
         if (code === env.MAGIC_CODE) {
-            const userDto = await userService.getUserDetailByMobile(mobile)
+            const userDto = await userService.getUserDetailByMobile(phoneNumber)
             return await _login(userDto)
         }
-        const storageCode = await redis.get(`mobile-code:${mobile}`)
-        if (storageCode !== code) {
+        if (!mobileService.cehckVerificationCode(VerificationCodeUsage.Login, phoneNumber, code)) {
             throw new CustomError('验证码错误')
         }
-        const userDto = await userService.getUserDetailByMobile(mobile)
+        const userDto = await userService.getUserDetailByMobile(phoneNumber)
         return await _login(userDto)
     },
 

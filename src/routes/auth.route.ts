@@ -13,14 +13,14 @@ import { getProtocolAndHost } from '../utils/common.utils'
 const app = new OpenAPIHono()
 
 /* 
-path: /login
+path: /login/password
 method: POST
 function: 密码登录
 */
 app.openapi(
     createRoute({
         method: 'post',
-        path: '/login',
+        path: '/login/password',
         tags: ['Auth'],
         request: {
             body: {
@@ -59,14 +59,14 @@ app.openapi(
 )
 
 /*
-path: /mobile-login 
+path: /login/mobile
 method: POST
 function: 手机登录
 */
 app.openapi(
     createRoute({
         method: 'post',
-        path: '/mobile-login',
+        path: '/login/mobile',
         tags: ['Auth'],
         request: {
             body: {
@@ -329,47 +329,6 @@ app.openapi(
         return c.redirect(redirectUrl ?? env.LOGIN_PATH)
     }
 )
-
-/*
-path: /send-message
-method: POST
-function: 发送登录验证码
-*/
-app.openapi(
-    createRoute({
-        method: 'post',
-        path: '/send-message',
-        tags: ['Auth'],
-        request: {
-            body: {
-                content: {
-                    'application/json': {
-                        schema: z.object({
-                            phoneNumber: z.string().openapi({ example: '138550' }),
-                        })
-                    }
-                }
-            },
-        },
-        responses: {
-            200: {
-                content: {
-                    'application/json': {
-                        schema: createResponseSchema(z.object()),
-                    },
-                },
-                description: '发送短信成功',
-            }
-        }
-    }),
-    async (c) => {
-        const { phoneNumber } = c.req.valid('json')
-        const data = await mobileService.sendCodeWithExistingPhone(phoneNumber)
-        return c.json(success(data))
-    }
-)
-
-
 
 /*
 path: /authz 
