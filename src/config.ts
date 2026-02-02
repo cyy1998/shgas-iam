@@ -21,6 +21,7 @@ const EnvSchema = z.object({
     LOGIN_PATH: z.string(),
     AUTHORIZATION_ENDPOINT: z.string(),
     LOGOUT_ENDPOINT: z.string(),
+    THIRDPARTY_OA_ENDPOINT: z.string()
 })
 
 export type Env = z.infer<typeof EnvSchema>

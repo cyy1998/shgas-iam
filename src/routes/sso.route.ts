@@ -5,6 +5,7 @@ import { config } from "../config";
 import { deleteCookie, getCookie, setCookie } from "hono/cookie";
 import { authService } from "../services/auth.service";
 import { getProtocolAndHost } from "../utils/common.utils";
+import { SSOMetaInfoSchema } from "../types/sso.type";
 
 const app = new OpenAPIHono()
 
@@ -23,7 +24,7 @@ app.openapi(
             200: {
                 content: {
                     'application/json': {
-                        schema: createResponseSchema(z.object()),
+                        schema: createResponseSchema(SSOMetaInfoSchema),
                     },
                 },
                 description: '元数据信息',
@@ -34,7 +35,8 @@ app.openapi(
         const origin = (new URL(c.req.url)).origin
         return c.json(success({
             authorizationEndpoint: `${origin}${config.AUTHORIZATION_ENDPOINT}`,
-            logoutEndpoint: `${origin}${config.LOGOUT_ENDPOINT}`
+            logoutEndpoint: `${origin}${config.LOGOUT_ENDPOINT}`,
+            thirdPartyOAEndpoint: `${origin}${config.THIRDPARTY_OA_ENDPOINT}`
         }))
     }
 )
@@ -79,21 +81,6 @@ app.openapi(
                 path: '/',
             })
         }
-        // const data = await authService.loginPassword(username, password)
-        // if (data.orcasSessionId !== null) {
-        //     setCookie(c, 'orcas_sso_sessionid', data.orcasSessionId, {
-        //         httpOnly: true,
-        //         sameSite: 'Strict',  // 防 CSRF
-        //         maxAge: env.REDIS_EXPIRE_TIME,
-        //         path: '/',
-        //     })
-        // }
-        // setCookie(c, 'session', data.token, {
-        //     httpOnly: true,
-        //     sameSite: 'Strict',  // 防 CSRF
-        //     maxAge: env.REDIS_EXPIRE_TIME,
-        //     path: '/',
-        // })
         return c.redirect(redirectUrl)
     }
 )
@@ -167,6 +154,48 @@ app.openapi(
         await authService.logout(token)
         deleteCookie(c, 'global_session')
         return c.redirect(redirectUrl ?? config.LOGIN_PATH)
+    }
+)
+
+/* 
+path: /third-party/oa
+method: POST
+function: oa登录
+*/
+app.openapi(
+    createRoute({
+        method: 'get',
+        path: '/third-party/oa',
+        tags: ['Auth'],
+        request: {
+            query: z.object({
+                loginid: z.string().openapi({ example: '138550' }),
+                ts: z.string().openapi({ example: '1234' }),
+                token: z.string().openapi({ example: '138550' }),
+                redirectUrl: z.url().openapi({ example: 'http://localhost:8080' }),
+                client: z.string().openapi({ example: 'tender' })
+            })
+        },
+        responses: {
+            301: {
+                description: 'OA登录成功',
+            }
+        },
+    }),
+    async (c) => {
+        const { loginid, ts, token, redirectUrl, client } = c.req.valid('query')
+        const sessionId = getCookie(c, 'global_session') ?? null
+        if (sessionId !== null) {
+            await authService.logout(sessionId)
+        }
+        const data = await authService.loginOA(loginid, ts, token)
+        setCookie(c, 'global_session', data.token, {
+            httpOnly: true,
+            sameSite: 'Strict',  // 防 CSRF
+            maxAge: config.REDIS_EXPIRE_TIME,
+            path: '/',
+        })
+        return c.redirect(`/sso/authorize?client=${client}&redirectUrl=${encodeURIComponent(redirectUrl)}`)
     }
 )
 
