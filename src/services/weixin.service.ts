@@ -1,4 +1,4 @@
-import { env } from "../config"
+import { config } from "../config"
 import { redis } from "../libs/cache/redis"
 
 type WeixinAccessTokenResponse = {
@@ -15,7 +15,7 @@ export const weixinService = {
             return cachedToken
         }
         const res = await fetch(
-            `https://qyapi.weixin.qq.com/cgi-bin/gettoken?corpid=${env.WX_CORPID}&corpsecret=${env.WX_CORPSECRET}`,
+            `https://qyapi.weixin.qq.com/cgi-bin/gettoken?corpid=${config.WX_CORPID}&corpsecret=${config.WX_CORPSECRET}`,
             {
                 method: 'POST'
             }

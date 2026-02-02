@@ -1,4 +1,4 @@
-import { env } from '../config'
+import { config } from '../config'
 import { VerificationCodeUsage } from '../constants/verificationCode.usage'
 import { CustomError } from '../errors/CustomError'
 import { redis } from "../libs/cache/redis"
@@ -42,7 +42,7 @@ export const mobileService = {
             "message": message,
             "timestamp": currentTimestamp,
             "origin": origin,
-            'signature': hmacSha256(data, env.SMS_SIGNATURE_KEY)
+            'signature': hmacSha256(data, config.SMS_SIGNATURE_KEY)
         }
         const res = await fetch(process.env.SMS_URL as string, {
             method: 'POST',
@@ -66,9 +66,9 @@ export const mobileService = {
             "message": message,
             "timestamp": currentTimestamp,
             "origin": origin,
-            'signature': hmacSha256(data, env.SMS_SIGNATURE_KEY)
+            'signature': hmacSha256(data, config.SMS_SIGNATURE_KEY)
         }
-        const res = await fetch(env.SMS_URL, {
+        const res = await fetch(config.SMS_URL, {
             method: 'POST',
             body: JSON.stringify(request_data),
             headers: { "Content-Type": "application/json", "Accept": "application/json" }

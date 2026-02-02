@@ -4,7 +4,7 @@ import { z, createRoute, OpenAPIHono } from '@hono/zod-openapi'
 import { createResponseSchema } from '../types/response.type'
 import { mobileService } from '../services/mobile.service'
 import { authService } from '../services/auth.service'
-import { env } from '../config'
+import { config } from '../config'
 import { redis } from 'bun'
 import { AuthzUnauthorizedError } from '../errors/AuthzUnauthorizedError'
 import type { UserDetailDto } from '../types/user.common.type'
@@ -51,7 +51,7 @@ app.openapi(
         setCookie(c, 'global_session', data.token, {
             httpOnly: true,
             sameSite: 'Strict',  // 防 CSRF
-            maxAge: env.REDIS_EXPIRE_TIME,
+            maxAge: config.REDIS_EXPIRE_TIME,
             path: '/',
         })
         return c.json(success(data))
@@ -97,7 +97,7 @@ app.openapi(
         setCookie(c, 'global_session', data.token, {
             httpOnly: true,
             sameSite: 'Strict',  // 防 CSRF
-            maxAge: env.REDIS_EXPIRE_TIME,
+            maxAge: config.REDIS_EXPIRE_TIME,
             path: '/',
         })
         return c.json(success(data))
@@ -150,7 +150,7 @@ app.openapi(
         setCookie(c, 'session', data.token, {
             httpOnly: true,
             sameSite: 'Strict',  // 防 CSRF
-            maxAge: env.REDIS_EXPIRE_TIME,
+            maxAge: config.REDIS_EXPIRE_TIME,
             path: '/',
         })
         return c.json(success(data))
@@ -192,7 +192,7 @@ app.openapi(
         setCookie(c, 'global_session', data.token, {
             httpOnly: true,
             sameSite: 'Strict',  // 防 CSRF
-            maxAge: env.REDIS_EXPIRE_TIME,
+            maxAge: config.REDIS_EXPIRE_TIME,
             path: '/',
         })
         return c.redirect(`/api/iam/auth/authorize?client=${client}&redirectUrl=${encodeURIComponent(redirectUrl)}`)
@@ -228,14 +228,14 @@ app.openapi(
         setCookie(c, `local_${client}_session`, data.token, {
             httpOnly: true,
             sameSite: 'Strict',  // 防 CSRF
-            maxAge: env.REDIS_EXPIRE_TIME,
+            maxAge: config.REDIS_EXPIRE_TIME,
             path: '/',
         })
         if (data.orcasSessionId != null) {
             setCookie(c, `orcas_sso_sessionid`, data.orcasSessionId, {
                 httpOnly: true,
                 sameSite: 'Strict',  // 防 CSRF
-                maxAge: env.REDIS_EXPIRE_TIME,
+                maxAge: config.REDIS_EXPIRE_TIME,
                 path: '/',
             })
         }
@@ -294,7 +294,7 @@ app.openapi(
         const sessionId = getCookie(c, 'global_session')
         const data = await authService.authorize(sessionId, client, redirectUrl)
         if (data.isLogin === false) {
-            return c.redirect(`${env.LOGIN_PATH}?${searchParams.toString()}`)
+            return c.redirect(`${config.LOGIN_PATH}?${searchParams.toString()}`)
         }
         return c.redirect(`${getProtocolAndHost(redirectUrl)}/api/iam/auth/callback?code=${data.code}&client=${client}&redirectUrl=${encodeURIComponent(redirectUrl)}`)
     }
@@ -326,7 +326,7 @@ app.openapi(
         const token = getCookie(c, 'global_session') ?? null
         await authService.logout(token)
         deleteCookie(c, 'global_session')
-        return c.redirect(redirectUrl ?? env.LOGIN_PATH)
+        return c.redirect(redirectUrl ?? config.LOGIN_PATH)
     }
 )
 

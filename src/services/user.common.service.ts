@@ -11,7 +11,7 @@ import { employmentMapper } from '../mapper/employment.common.mapper'
 import { positionRepository } from '../repositories/position.repository'
 import { organizationRepository } from '../repositories/organization.repository'
 import { mobileService } from './mobile.service'
-import { env } from '../config'
+import { config } from '../config'
 import { UserNotFoundError } from '../errors/UserNotFoundError'
 import { CustomError } from '../errors/CustomError'
 import { roleRepository } from '../repositories/role.repository'
@@ -75,7 +75,7 @@ export const userService = {
             if (!_validatePasswordStrength(newPassword)) {
                 throw new CustomError('新密码强度过低')
             }
-            const newPasswordHash = await hash(newPassword, env.PASSWORD_HASH_ROUNDS)
+            const newPasswordHash = await hash(newPassword, config.PASSWORD_HASH_ROUNDS)
             await userRepository.setPassword(user.id, newPasswordHash, tx)
             return true
         })
@@ -86,10 +86,10 @@ export const userService = {
         if (user === null) {
             throw new UserNotFoundError('用户不存在')
         }
-        if (user.password === null && env.NODE_ENV === 'production') {
+        if (user.password === null && config.NODE_ENV === 'production') {
             return false
         }
-        return user.password ? await compare(inputPassword, user.password ?? '') : inputPassword === env.DEFAULT_USER_PASSWORD
+        return user.password ? await compare(inputPassword, user.password ?? '') : inputPassword === config.DEFAULT_USER_PASSWORD
     },
 
     async setMobile(userId: number, phoneNumber: string, code: string) {
@@ -195,7 +195,7 @@ export const userService = {
             const existingUser = await userRepository.getUserByMobile(mobile, tx)
             const [pos, comp, org] = await Promise.all([
                 positionRepository.getPositionByCode('P001', tx),
-                organizationRepository.getOrganizationByCode(env.PURVEYOR_PARENT_ORG, tx),
+                organizationRepository.getOrganizationByCode(config.PURVEYOR_PARENT_ORG, tx),
                 organizationRepository.getOrganizationByCode(orgCode, tx)
             ])
             if (org === null) {
@@ -215,7 +215,7 @@ export const userService = {
                 await employmentRepository.setEmployment(user.id, pos.id, org.id, comp.id, tx)
             }
         })
-        if (env.NODE_ENV === 'production') {
+        if (config.NODE_ENV === 'production') {
             await mobileService.sendMessage(mobile, mobileService.getPurveyorWelcomeMessage(name))
         }
         return true

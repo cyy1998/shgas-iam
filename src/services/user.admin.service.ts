@@ -11,7 +11,7 @@ import { prisma } from "../libs/database/prisma"
 import { userRepository } from "../repositories/user.common.repository"
 import { hash, compare } from 'bcrypt-ts'
 import { generateRandomPassword } from "../utils/encryption.utils";
-import { env } from "../config";
+import { config } from "../config";
 
 async function _getUserDetail(user: User | null) {
     if (user === null) {
@@ -63,7 +63,7 @@ export const userAdminService = {
                 throw new UserNotFoundError('用户名不存在')
             }
             const newPassword = generateRandomPassword(8)
-            const newPasswordHash = await hash(newPassword, env.PASSWORD_HASH_ROUNDS)
+            const newPasswordHash = await hash(newPassword, config.PASSWORD_HASH_ROUNDS)
             await userRepository.setPassword(user.id, newPasswordHash, tx)
             return newPassword
         })

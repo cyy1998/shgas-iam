@@ -1,5 +1,5 @@
 import type { Organization } from "../../generated/prisma"
-import { env } from "../config"
+import { config } from "../config"
 import { CustomError } from "../errors/CustomError"
 import { prisma } from "../libs/database/prisma"
 import { organizationMapper } from "../mapper/organization.mapper"

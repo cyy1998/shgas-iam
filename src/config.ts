@@ -18,12 +18,14 @@ const EnvSchema = z.object({
     REDIS_URL: z.string(),
     REDIS_PORT: z.coerce.number(),
     REDIS_DB: z.coerce.number(),
-    LOGIN_PATH: z.string()
-});
+    LOGIN_PATH: z.string(),
+    AUTHORIZATION_ENDPOINT: z.string(),
+    LOGOUT_ENDPOINT: z.string(),
+})
 
-export type Env = z.infer<typeof EnvSchema>;
+export type Env = z.infer<typeof EnvSchema>
 
 // 从 process.env 或 Deno.env 获取（根据运行时调整）
 const rawEnv = process.env
 
-export const env = EnvSchema.parse(rawEnv);
+export const config = EnvSchema.parse(rawEnv)

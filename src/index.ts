@@ -1,8 +1,8 @@
-import { env } from "./config";
+import { config } from "./config";
 import app from "./app"
 
 
-const port = env.PORT
+const port = config.PORT
 
 export default {
     port,

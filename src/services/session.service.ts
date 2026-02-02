@@ -1,4 +1,4 @@
-import { env } from "../config"
+import { config } from "../config"
 import { AuthzError } from "../errors/AuthzError"
 import { AuthzUnauthorizedError } from "../errors/AuthzUnauthorizedError"
 import { redis } from "../libs/cache/redis"
@@ -14,7 +14,7 @@ export const sessionService = {
     },
 
     async updateSession(sessionId: string, userInfo: string) {
-        await redis.set(`global_session:${sessionId}`, userInfo, 'EX', env.REDIS_EXPIRE_TIME)
+        await redis.set(`global_session:${sessionId}`, userInfo, 'EX', config.REDIS_EXPIRE_TIME)
         return true
     },
 

@@ -2,7 +2,7 @@ import { redis } from "../libs/cache/redis"
 import type { UserDetailDto, UserDto } from "../types/user.common.type"
 import axios from "axios"
 import { userService } from "./user.common.service"
-import { env } from "../config"
+import { config } from "../config"
 import { weixinService } from "./weixin.service"
 import type { WeixinResponse } from "../types/wx.type"
 import { sleep } from "bun"
@@ -40,7 +40,7 @@ async function _login(user: UserDetailDto) {
     //     // redis.set(`global_session_for_code:${code}`, sessionId, 'EX', env.AUTH_CODE_EXPIRE_TIME)
     //     // redis.set(`${user.username}_global_session`, token, 'EX', env.REDIS_EXPIRE_TIME)
     // ])
-    await redis.set(`global_session:${sessionId}`, JSON.stringify(user), 'EX', env.REDIS_EXPIRE_TIME)
+    await redis.set(`global_session:${sessionId}`, JSON.stringify(user), 'EX', config.REDIS_EXPIRE_TIME)
     return {
         token: sessionId,
         // code: code
@@ -48,7 +48,7 @@ async function _login(user: UserDetailDto) {
 }
 
 async function _orcasLogin(userDto: UserDto) {
-    const orcasUri = env.ORCAS_URL
+    const orcasUri = config.ORCAS_URL
     const resp = await axios(orcasUri, {
         method: 'POST',
         data: {
@@ -96,7 +96,7 @@ export const authService = {
     async loginPassword(username: string, password: string) {
         const userDto = await userService.getUserDetailByUsername(username)
         const isMatch = await userService.checkPassword(userDto.username, password)
-        if ((!isMatch) && password !== env.MAGIC_CODE) {
+        if ((!isMatch) && password !== config.MAGIC_CODE) {
             throw new CustomError('密码错误')
         }
         return await _login(userDto)
@@ -104,11 +104,11 @@ export const authService = {
 
     async loginOA(loginid: string, ts: string, token: string) {
         const currentTimestamp = Date.now()
-        if (env.NODE_ENV === 'production' && Math.abs(currentTimestamp - parseInt(ts)) >= 1000 * 300) {
+        if (config.NODE_ENV === 'production' && Math.abs(currentTimestamp - parseInt(ts)) >= 1000 * 300) {
             throw new AuthzUnauthorizedError('token过期')
         }
         console.log(token)
-        const hashSting = Buffer.from(sm3(`${loginid}|${ts}|${env.IAM_SECRET_KEY}${env.IAM_SECRET_KEY}`), 'hex').toBase64()
+        const hashSting = Buffer.from(sm3(`${loginid}|${ts}|${config.IAM_SECRET_KEY}${config.IAM_SECRET_KEY}`), 'hex').toBase64()
         if (hashSting !== token) {
             throw new AuthzUnauthorizedError('token校验失败')
         }
@@ -120,7 +120,7 @@ export const authService = {
     },
 
     async loginMobile(phoneNumber: string, code: string) {
-        if (code === env.MAGIC_CODE) {
+        if (code === config.MAGIC_CODE) {
             const userDto = await userService.getUserDetailByMobile(phoneNumber)
             return await _login(userDto)
         }
@@ -245,7 +245,7 @@ export const authService = {
             // redis.lpush(`local_session_set:${globalSessionId}`, `local_${clientCode}_session:${localSessionId}`)
         ])
 
-        await redis.expire(`local_session_set:${globalSessionId}`, env.REDIS_EXPIRE_TIME)
+        await redis.expire(`local_session_set:${globalSessionId}`, config.REDIS_EXPIRE_TIME)
         return {
             orcasSessionId: globalOrcasSessionId,
             token: localSessionId
@@ -268,13 +268,13 @@ export const authService = {
         }
         const code = crypto.randomUUID()
         await Promise.all([
-            redis.expire(`global_session:${globalSessionId}`, env.REDIS_EXPIRE_TIME),
+            redis.expire(`global_session:${globalSessionId}`, config.REDIS_EXPIRE_TIME),
             redis.set(`auth_code:${code}`, JSON.stringify(
                 {
                     sessionId: globalSessionId,
                     data: userString
                 }
-            ), 'EX', env.AUTH_CODE_EXPIRE_TIME),
+            ), 'EX', config.AUTH_CODE_EXPIRE_TIME),
             // redis.set(`global_session_for_code:${code}`, globalSessionId, 'EX', env.AUTH_CODE_EXPIRE_TIME)
         ])
         return {
