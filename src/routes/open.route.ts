@@ -164,7 +164,7 @@ function: 重置密码
 app.openapi(
     createRoute({
         method: 'post',
-        path: '/sendMessage',
+        path: '/password/reset',
         tags: ['Open'],
         request: {
             body: {
