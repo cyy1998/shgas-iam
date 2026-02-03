@@ -294,7 +294,7 @@ app.openapi(
         const sessionId = getCookie(c, 'global_session')
         const data = await authService.authorize(sessionId, client, redirectUrl)
         if (data.isLogin === false) {
-            return c.redirect(`${config.LOGIN_PATH}?${searchParams.toString()}`)
+            return c.redirect(`${config.LOGIN_ENDPOINT}?${searchParams.toString()}`)
         }
         return c.redirect(`${getProtocolAndHost(redirectUrl)}/api/iam/auth/callback?code=${data.code}&client=${client}&redirectUrl=${encodeURIComponent(redirectUrl)}`)
     }
@@ -326,7 +326,7 @@ app.openapi(
         const token = getCookie(c, 'global_session') ?? null
         await authService.logout(token)
         deleteCookie(c, 'global_session')
-        return c.redirect(redirectUrl ?? config.LOGIN_PATH)
+        return c.redirect(redirectUrl ?? config.LOGIN_ENDPOINT)
     }
 )
 

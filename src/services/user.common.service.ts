@@ -81,6 +81,24 @@ export const userService = {
         })
     },
 
+    async resetPassword(username: string, phone: string, code: string, newPassword: string) {
+        return await prisma.$transaction(async (tx) => {
+            const user = await userRepository.getUserByUsername(username, tx)
+            if (user === null) {
+                throw new UserNotFoundError('用户不存在')
+            }
+            if (user.mobilePhone !== phone) {
+                throw new UserNotFoundError('用户名与手机号不匹配')
+            }
+            if (!mobileService.cehckVerificationCode('resetPassword', phone, code)) {
+                throw new UserNotFoundError('验证码错误')
+            }
+            const newPasswordHash = await hash(newPassword, config.PASSWORD_HASH_ROUNDS)
+            await userRepository.setPassword(user.id, newPasswordHash, tx)
+            return true
+        })
+    },
+
     async checkPassword(username: string, inputPassword: string) {
         const user = await userRepository.getUserByUsername(username)
         if (user === null) {

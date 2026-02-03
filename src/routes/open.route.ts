@@ -43,14 +43,14 @@ app.openapi(
 )
 
 /*
-path: /users/userinfo
+path: /users/userInfo
 method: GET
 function: 获取用户当前信息 
 */
 app.openapi(
     createRoute({
         method: 'get',
-        path: '/users/userinfo',
+        path: '/users/userInfo',
         tags: ['Open'],
         request: {
             query: z.object({
@@ -76,14 +76,14 @@ app.openapi(
 )
 
 /*
-path: /sendMessage
+path: /code/send
 method: POST
 function: 发送登录验证码
 */
 app.openapi(
     createRoute({
         method: 'post',
-        path: '/sendMessage',
+        path: '/code/send',
         tags: ['Open'],
         request: {
             body: {
@@ -111,6 +111,89 @@ app.openapi(
     async (c) => {
         const { phoneNumber, usage } = c.req.valid('json')
         const data = await mobileService.sendCode(phoneNumber, usage)
+        return c.json(success(data))
+    }
+)
+
+/*
+path: /code/verify
+method: POST
+function: 发送登录验证码
+*/
+app.openapi(
+    createRoute({
+        method: 'post',
+        path: '/code/verify',
+        tags: ['Open'],
+        request: {
+            body: {
+                content: {
+                    'application/json': {
+                        schema: z.object({
+                            phoneNumber: z.string().openapi({ example: '138550' }),
+                            usage: z.enum(Object.values(VerificationCodeUsage)).openapi({ example: 'login' }),
+                            code: z.string().openapi({ example: '1234' }),
+                        })
+                    }
+                }
+            },
+        },
+        responses: {
+            200: {
+                content: {
+                    'application/json': {
+                        schema: createResponseSchema(z.object()),
+                    },
+                },
+                description: '发送短信成功',
+            }
+        }
+    }),
+    async (c) => {
+        const { phoneNumber, usage, code } = c.req.valid('json')
+        const data = await mobileService.cehckVerificationCode(usage, phoneNumber, code)
+        return c.json(success({ result: data }))
+    }
+)
+
+/*
+path: /password/reset
+method: POST
+function: 重置密码
+*/
+app.openapi(
+    createRoute({
+        method: 'post',
+        path: '/sendMessage',
+        tags: ['Open'],
+        request: {
+            body: {
+                content: {
+                    'application/json': {
+                        schema: z.object({
+                            username: z.string().openapi({ example: '138550' }),
+                            phoneNumber: z.string().openapi({ example: '17721462865' }),
+                            code: z.string().openapi({ example: '1234' }),
+                            newPassword: z.string().openapi({ example: 'abcd1234' })
+                        })
+                    }
+                }
+            },
+        },
+        responses: {
+            200: {
+                content: {
+                    'application/json': {
+                        schema: createResponseSchema(z.object()),
+                    },
+                },
+                description: '发送短信成功',
+            }
+        }
+    }),
+    async (c) => {
+        const { username, phoneNumber, code, newPassword } = c.req.valid('json')
+        const data = await userService.resetPassword(username, phoneNumber, code, newPassword)
         return c.json(success(data))
     }
 )

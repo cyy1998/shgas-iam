@@ -18,7 +18,7 @@ const EnvSchema = z.object({
     REDIS_URL: z.string(),
     REDIS_PORT: z.coerce.number(),
     REDIS_DB: z.coerce.number(),
-    LOGIN_PATH: z.string(),
+    LOGIN_ENDPOINT: z.string(),
     AUTHORIZATION_ENDPOINT: z.string(),
     LOGOUT_ENDPOINT: z.string(),
     THIRDPARTY_OA_ENDPOINT: z.string()
