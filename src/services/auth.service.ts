@@ -176,6 +176,7 @@ export const authService = {
     },
 
     async authz(sessionId: string | null, clientCode: string | null, path: string | undefined) {
+
         if (!path || !clientCode) {
             throw new AuthzUnauthorizedError('非法访问')
         }
