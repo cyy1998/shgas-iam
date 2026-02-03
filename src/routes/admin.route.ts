@@ -9,13 +9,16 @@ import { ResponseSchema } from '../types/response.type'
 import { ClientDtoSchema, ClientInputDtoSchema } from '../types/client.type'
 import { clientService } from '../services/client.service'
 import { organizationService } from '../services/organization.service'
-import { OrganizationCreateDtoSchema, OrganizationDtoSchema, OrganizationQueryDtoSchema } from '../types/organization.type'
+import { OrganizationCreateDtoSchema, OrganizationDtoSchema, OrganizationQueryDtoSchema } from '../types/organization.common.type'
 import { createPageQuerySchema, createPageResultSchema } from '../types/page.type'
 import { UserDtoSchema, UserQueryDtoSchema } from '../types/user.common.type'
 import { UserAdminDetailVoSchema, UserAdminDtoSchema, UserAdminQueryDtoSchema, UserAdminVoSchema } from "../types/user.admin.type"
 import { userService } from '../services/user.common.service'
 import { userAdminService } from '../services/user.admin.service'
 import { authenicationHandler } from '../middleware/authenication.handler'
+import { EmploymentQueryDtoSchema } from '../types/employment.common.type'
+import { employmentAdminService } from '../services/employment.admin.service'
+import { EmploymentAdminDtoSchema, EmploymentAdminVoSchema } from '../types/employment.admin.type'
 
 
 const app = new OpenAPIHono()
@@ -67,7 +70,7 @@ app.openapi(
     createRoute({
         method: 'post',
         path: '/organizations/search',
-        tags: ['Public'],
+        tags: ['Admin'],
         request: {
             body: {
                 content: {
@@ -98,18 +101,18 @@ app.openapi(
 /*
 path: /employments/search
 method: POST
-function: 按条件搜索某组织
+function: 按条件搜索任职关系
 */
 app.openapi(
     createRoute({
         method: 'post',
         path: '/employments/search',
-        tags: ['Public'],
+        tags: ['Admin'],
         request: {
             body: {
                 content: {
                     'application/json': {
-                        schema: OrganizationQueryDtoSchema
+                        schema: EmploymentQueryDtoSchema
                     }
                 }
             }
@@ -118,7 +121,7 @@ app.openapi(
             200: {
                 content: {
                     'application/json': {
-                        schema: createResponseSchema(z.array(OrganizationDtoSchema)),
+                        schema: createResponseSchema(z.array(EmploymentAdminVoSchema)),
                     },
                 },
                 description: '所有符合条件组织列表',
@@ -126,8 +129,8 @@ app.openapi(
         },
     }),
     async (c) => {
-        const organizationQueryDto = c.req.valid('json')
-        const data = await organizationService.searchOrganizations(organizationQueryDto)
+        const employmentQueryDto = c.req.valid('json')
+        const data = await employmentAdminService.searchEmployments(employmentQueryDto)
         return c.json(success(data))
     }
 )

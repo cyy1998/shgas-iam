@@ -2,7 +2,7 @@ import type { Organization } from '../../generated/prisma'
 import { OrganizationStatus } from '../constants/organization.status'
 import { OrganizationType } from '../constants/organization.type'
 import { prisma, type PrismaTransaction } from '../libs/database/prisma'
-import type { OrganizationQueryDto } from '../types/organization.type'
+import type { OrganizationQueryDto } from '../types/organization.common.type'
 
 export const organizationRepository = {
     async searchFormalOrganizations(orgCode: string, orgLevel: number, tx: PrismaTransaction = prisma) {

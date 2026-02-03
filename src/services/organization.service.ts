@@ -4,7 +4,7 @@ import { CustomError } from "../errors/CustomError"
 import { prisma } from "../libs/database/prisma"
 import { organizationMapper } from "../mapper/organization.mapper"
 import { organizationRepository } from "../repositories/organization.repository"
-import { OrganizationDtoSchema, type OrganizationCreateDto, type OrganizationQueryDto } from "../types/organization.type"
+import { OrganizationDtoSchema, type OrganizationCreateDto, type OrganizationQueryDto } from "../types/organization.common.type"
 
 const compDict = {}
 

@@ -37,4 +37,6 @@ export const EmploymentQueryDtoSchema = z.object({
     roleCodes: z.array(z.string()).optional().openapi({ example: ['tender:default-user'] })
 }).openapi('EmploymentQueryDto')
 
+export type EmploymentQueryDto = z.infer<typeof EmploymentQueryDtoSchema>
+
 

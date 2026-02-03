@@ -6,7 +6,7 @@ import { organizationService } from '../services/organization.service'
 import { employmentService } from '../services/employment.common.service'
 import { EmploymentDtoSchema } from '../types/employment.common.type'
 import { UserDetailDtoSchema, UserDtoSchema, UserQueryDtoSchema, UserQueryWithPrivilegeDelegationDtoSchema } from '../types/user.common.type'
-import { FormalOrganizationVoSchema, OrganizationDtoSchema, OrganizationQueryDtoSchema } from '../types/organization.type'
+import { FormalOrganizationVoSchema, OrganizationDtoSchema, OrganizationQueryDtoSchema } from '../types/organization.common.type'
 import { DelegationAbstractDtoSchema } from '../types/delegation.type'
 import { PrivilegeDelegationDtoSchema } from '../types/privilegeDelegation.type'
 

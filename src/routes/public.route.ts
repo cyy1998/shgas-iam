@@ -10,7 +10,7 @@ import { organizationService } from '../services/organization.service'
 import { sessionService } from '../services/session.service'
 
 import { EmploymentDtoSchema } from '../types/employment.common.type'
-import { OrganizationDtoSchema, OrganizationQueryDtoSchema } from '../types/organization.type'
+import { OrganizationDtoSchema, OrganizationQueryDtoSchema } from '../types/organization.common.type'
 import { authenicationHandler } from '../middleware/authenication.handler'
 
 interface AppEnv {

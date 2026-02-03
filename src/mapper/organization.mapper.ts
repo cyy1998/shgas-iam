@@ -1,5 +1,5 @@
 import type { Organization } from "../../generated/prisma"
-import type { OrganizationDto, FormalOrganizationVo, OrganizationEntity } from "../types/organization.type"
+import type { OrganizationDto, FormalOrganizationVo, OrganizationEntity } from "../types/organization.common.type"
 
 export const organizationMapper = {
 

@@ -5,6 +5,7 @@ import { organizationRepository } from "../repositories/organization.repository"
 import { positionRepository } from "../repositories/position.repository";
 import { roleRepository } from "../repositories/role.repository";
 import { userRepository } from "../repositories/user.common.repository";
+import type { EmploymentQueryDto } from "../types/employment.common.type";
 import { privilegeService } from "./privilege.service";
 import { roleService } from "./role.service";
 import { userService } from "./user.common.service";
@@ -56,6 +57,11 @@ export const employmentService = {
         }
         await employmentRepository.setEmployment(user.id, position.id, department.id, company.id)
         return true
-    }
+    },
+    async searchEmployments(employmentQueryDto: EmploymentQueryDto) {
+        const employments = await employmentRepository.searchEmployments(employmentQueryDto)
+        const employmentDtos = employments.map(e => employmentMapper.entityToDto(e))
+        return employmentDtos
+    },
 
 }
