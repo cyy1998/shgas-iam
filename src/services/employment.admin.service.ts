@@ -1,11 +1,13 @@
 import { employmentAdminMapper } from "../mapper/employment.admin.mapper"
 import { employmentRepository } from "../repositories/employment.common.repository"
+import type { EmploymentAdminQueryDto } from "../types/employment.admin.type"
 import type { EmploymentQueryDto } from "../types/employment.common.type"
+import { paginate } from "../utils/page.util"
 
 export const employmentAdminService = {
-    async searchEmployments(employmentQueryDto: EmploymentQueryDto) {
-        const employments = await employmentRepository.searchEmployments(employmentQueryDto)
+    async searchEmployments(employmentQueryDto: EmploymentAdminQueryDto) {
+        const employments = await employmentRepository.searchEmployments(employmentQueryDto.conditions)
         const employmentDtos = employments.map(e => employmentAdminMapper.entityToDto(e)).map(e => employmentAdminMapper.dtoToVo(e))
-        return employmentDtos
+        return paginate(employmentDtos, employmentQueryDto)
     },
 }

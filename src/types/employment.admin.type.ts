@@ -1,6 +1,8 @@
 import { z } from "@hono/zod-openapi";
 import { endTime, startTime } from "hono/timing";
 import { EmploymentStatus } from "../constants/employment.status";
+import { createPageQuerySchema } from "./page.type";
+import { EmploymentQueryDtoSchema } from "./employment.common.type";
 
 export const EmploymentAdminDtoSchema = z.object({
     id: z.number().openapi({ example: 1 }),
@@ -27,6 +29,10 @@ export const EmploymentAdminDtoSchema = z.object({
 }).openapi('EmploymentAdminDto')
 
 export type EmploymentAdminDto = z.infer<typeof EmploymentAdminDtoSchema>
+
+export const EmploymentAdminQueryDtoSchema = createPageQuerySchema(EmploymentQueryDtoSchema)
+
+export type EmploymentAdminQueryDto = z.infer<typeof EmploymentAdminQueryDtoSchema>
 
 export const EmploymentAdminDetailDtoSchema = EmploymentAdminDtoSchema.extend({
     privileges: z.array(z.string()).default([]).openapi({ example: ['ui:button:tender:create-GYBG'] }),

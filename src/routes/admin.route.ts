@@ -13,12 +13,11 @@ import { OrganizationCreateDtoSchema, OrganizationDtoSchema, OrganizationQueryDt
 import { createPageQuerySchema, createPageResultSchema } from '../types/page.type'
 import { UserDtoSchema, UserQueryDtoSchema } from '../types/user.common.type'
 import { UserAdminDetailVoSchema, UserAdminDtoSchema, UserAdminQueryDtoSchema, UserAdminVoSchema } from "../types/user.admin.type"
-import { userService } from '../services/user.common.service'
 import { userAdminService } from '../services/user.admin.service'
 import { authenicationHandler } from '../middleware/authenication.handler'
 import { EmploymentQueryDtoSchema } from '../types/employment.common.type'
 import { employmentAdminService } from '../services/employment.admin.service'
-import { EmploymentAdminDtoSchema, EmploymentAdminVoSchema } from '../types/employment.admin.type'
+import { EmploymentAdminDtoSchema, EmploymentAdminQueryDtoSchema, EmploymentAdminVoSchema } from '../types/employment.admin.type'
 
 
 const app = new OpenAPIHono()
@@ -112,7 +111,7 @@ app.openapi(
             body: {
                 content: {
                     'application/json': {
-                        schema: EmploymentQueryDtoSchema
+                        schema: EmploymentAdminQueryDtoSchema
                     }
                 }
             }
