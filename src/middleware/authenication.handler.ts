@@ -6,8 +6,6 @@ import { redis } from "../libs/cache/redis";
 import type { UserDetailDto } from "../types/user.common.type";
 
 export async function authenicationHandler(c: Context, next: Next) {
-    console.log(c.req.header('X-Real-IP'))
-    console.log(c.req.header('X-Forwarded-For'))
     const clientCode = c.req.header('Client')
     const sessionId = clientCode === 'iam' ? getCookie(c, `global_session`) ?? null
         : getCookie(c, `local_${clientCode}_session`) ?? null

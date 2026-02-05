@@ -126,7 +126,7 @@ exports.Prisma.UserScalarFieldEnum = {
   wxId: 'wxId',
   name: 'name',
   password: 'password',
-  mobilePhone: 'mobilePhone',
+  mobile: 'mobile',
   userType: 'userType',
   orderNum: 'orderNum',
   status: 'status',
@@ -304,7 +304,7 @@ exports.Prisma.UserOrderByRelevanceFieldEnum = {
   wxId: 'wxId',
   name: 'name',
   password: 'password',
-  mobilePhone: 'mobilePhone',
+  mobile: 'mobile',
   userType: 'userType'
 };
 

@@ -8,7 +8,7 @@ export const userAdminMapper = {
             id: user.id,
             username: user.username,
             name: user.name,
-            mobile: user.mobilePhone,
+            mobile: user.mobile,
             wxId: user.wxId,
             userType: user.userType,
             status: user.status,

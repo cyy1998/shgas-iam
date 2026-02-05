@@ -13,7 +13,7 @@ SELECT
         u.id as id,
         u.username as username,
         u.name as name,
-        u.mobile_phone as mobilePhone,
+        u.mobile_phone as mobile,
         u.wxId as wxId,
         NULL as password,
         u.user_type as userType,
@@ -83,7 +83,7 @@ export const userRepository = {
     async getUserByMobile(mobile: string, tx: PrismaTransaction = prisma) {
         return await tx.user.findFirst({
             where: {
-                mobilePhone: mobile,
+                mobile: mobile,
                 status: UserStatus.Enable,
                 isDelete: false
             }
@@ -98,7 +98,7 @@ export const userRepository = {
                 username: {
                     in: userQueryDto.usernames
                 },
-                mobilePhone: {
+                mobile: {
                     in: userQueryDto.phones
                 },
                 wxId: {
@@ -304,7 +304,7 @@ export const userRepository = {
                 isDelete: false
             },
             data: {
-                mobilePhone: phoneNumber
+                mobile: phoneNumber
             }
         })
     },
@@ -313,7 +313,7 @@ export const userRepository = {
             data: {
                 username: username,
                 name: name,
-                mobilePhone: mobile,
+                mobile: mobile,
                 userType: userType
             }
         })

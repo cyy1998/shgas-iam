@@ -9,7 +9,7 @@ export const employmentAdminMapper = {
             userId: employment.user.id,
             username: employment.user.username,
             name: employment.user.name,
-            mobile: employment.user.mobilePhone,
+            mobile: employment.user.mobile,
             wxId: employment.user.wxId,
             posId: employment.position.id,
             posCode: employment.position.posCode,

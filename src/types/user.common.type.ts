@@ -51,7 +51,7 @@ export const UserCreateDtoSchema = UserDtoSchema.partial().extend({
     username: z.string().openapi({ example: '138550' }),
     name: z.string().openapi({ example: '蔡奕阳' }),
     password: z.string().openapi({ example: '1234' }),
-    userType: z.string().openapi({ example: '正式员工' }),
+    userType: z.string().openapi({ example: '正式员工' })
 }).openapi('UserCreateDto')
 
 export type UserCreateDto = z.infer<typeof UserCreateDtoSchema>

@@ -3,7 +3,8 @@ import type { Prisma } from "../../generated/prisma"
 
 export type OrganizationEntity = Prisma.OrganizationGetPayload<{
     include: {
-        parent: true
+        parent: true,
+        children: true
     }
 
 }>
@@ -15,6 +16,7 @@ export const OrganizationDtoSchema = z.object({
     orgType: z.string().openapi({ example: '组织类型' }),
     level: z.number().openapi({ example: 2 }),
     parentId: z.number().nullable().openapi({ example: -1 }),
+    isLeaf: z.boolean().openapi({ example: true }),
     parentCode: z.string().nullable().openapi({ example: 'SR' }),
     parentName: z.string().nullable().openapi({ example: '上海燃气有限公司' }),
     // parentId: z.number().openapi({ example: 1 })

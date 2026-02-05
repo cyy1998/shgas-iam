@@ -27,7 +27,7 @@ export const userAdminRepository = {
                             contains: userAdminSearchDto.conditions.fuzzyConditions.text,
                         }
                     }, {
-                        mobilePhone: {
+                        mobile: {
                             contains: userAdminSearchDto.conditions.fuzzyConditions.text,
                         }
                     },
@@ -43,7 +43,7 @@ export const userAdminRepository = {
                 username: {
                     in: userAdminSearchDto.conditions.exactConditions.usernames
                 },
-                mobilePhone: {
+                mobile: {
                     in: userAdminSearchDto.conditions.exactConditions.phones
                 },
                 wxId: {

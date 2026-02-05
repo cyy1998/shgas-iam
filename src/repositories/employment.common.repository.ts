@@ -194,7 +194,7 @@ export const employmentRepository = {
                     username: {
                         in: employmentQueryDto.usernames
                     },
-                    mobilePhone: {
+                    mobile: {
                         in: employmentQueryDto.phones
                     },
                     wxId: {

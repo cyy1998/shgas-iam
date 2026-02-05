@@ -11,6 +11,7 @@ export const organizationMapper = {
             orgType: org.orgType,
             level: org.level,
             parentId: org.parentId,
+            isLeaf: org.children.length === 0,
             parentCode: org.parent ? org.parent.orgCode : null,
             parentName: org.parent ? org.parent.orgName : null
         }

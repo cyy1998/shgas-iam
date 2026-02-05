@@ -94,7 +94,7 @@ export const mobileService = {
     async checkExistingPhoneNumber(phone: string): Promise<boolean> {
         const userCount = await prisma.user.count({
             where: {
-                mobilePhone: phone
+                mobile: phone
             }
         })
         return userCount !== 0

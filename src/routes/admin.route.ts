@@ -210,7 +210,7 @@ app.openapi(
 /*
 path: /users/set
 method: POST
-function: 应用更新
+function: 创建用户
 */
 app.openapi(
     createRoute({
@@ -241,7 +241,7 @@ app.openapi(
     }),
     async (c) => {
         const users = c.req.valid('json').data
-        const data = userAdminService.setUsers(users)
+        const data = await userAdminService.setUsers(users)
         return c.json(success(data))
     }
 )

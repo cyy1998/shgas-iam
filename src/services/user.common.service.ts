@@ -88,7 +88,7 @@ export const userService = {
             if (user === null) {
                 throw new UserNotFoundError('用户不存在')
             }
-            if (user.mobilePhone !== phone) {
+            if (user.mobile !== phone) {
                 throw new UserNotFoundError('用户名与手机号不匹配')
             }
             if (!mobileService.cehckVerificationCode('resetPassword', phone, code)) {

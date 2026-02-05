@@ -23,26 +23,11 @@ export const organizationRepository = {
                 isDelete: false
             },
             include: {
-                parent: true
+                parent: true,
+                children: true
             }
         })
     },
-    // async searchOrganizations(orgCode: string, orgLevel: number, tx: PrismaTransaction = prisma) {
-    //     return await tx.organization.findMany({
-    //         where: {
-    //             descendantClosures: {
-    //                 some: {
-    //                     ancestor: {
-    //                         orgCode: orgCode
-    //                     }
-    //                 }
-    //             },
-    //             level: orgLevel,
-    //             status: OrganizationStatus.Enable,
-    //             isDelete: false
-    //         }
-    //     })
-    // },
     async getTopFormalOrganizations(tx: PrismaTransaction = prisma) {
         return await tx.organization.findMany({
             where: {
@@ -54,7 +39,8 @@ export const organizationRepository = {
                 isDelete: false
             },
             include: {
-                parent: true
+                parent: true,
+                children: true
             }
         })
     },
@@ -66,7 +52,8 @@ export const organizationRepository = {
                 isDelete: false
             },
             include: {
-                parent: true
+                parent: true,
+                children: true
             }
         })
     },
@@ -78,7 +65,8 @@ export const organizationRepository = {
                 isDelete: false
             },
             include: {
-                parent: true
+                parent: true,
+                children: true
             }
         })
     },
@@ -125,35 +113,11 @@ export const organizationRepository = {
                 isDelete: false
             },
             include: {
-                parent: true
+                parent: true,
+                children: true
             }
         })
     },
-    // async getOrgByRoleId(roleId: number, tx: PrismaTransaction = prisma) {
-    //     return await tx.organization.findMany({
-    //         include: {
-    //             roles: {
-    //                 where: {
-    //                     roleId: roleId
-    //                 }
-    //             }
-    //         },
-    //         where: {
-    //             roles: {
-    //                 some: {
-    //                     roleId: roleId
-    //                 }
-    //             }
-    //         }
-    //     })
-    // },
-    // async getOrgIdsByIds(ids: number[], tx: PrismaTransaction = prisma) {
-    //     return await tx.organization.findMany({
-    //         select: {
-    //             id: true
-    //         }
-    //     })
-    // },
     async getOrganizationsByParentId(parentId: number, tx: PrismaTransaction = prisma) {
         return await tx.organization.findMany({
             where: {
@@ -162,7 +126,8 @@ export const organizationRepository = {
                 isDelete: false
             },
             include: {
-                parent: true
+                parent: true,
+                children: true
             }
         })
     },
@@ -178,7 +143,8 @@ export const organizationRepository = {
                 isDelete: false
             },
             include: {
-                parent: true
+                parent: true,
+                children: true
             }
         })
     },
@@ -235,44 +201,4 @@ export const organizationRepository = {
         }
         return updatedOrganization
     },
-    // async updateOrganizationPath(orgId: number, path: string, tx: PrismaTransaction = prisma) {
-    //     return await tx.organization.update({
-    //         where: {
-    //             id: orgId,
-    //             status: OrganizationStatus.Enable,
-    //             isDelete: false
-    //         },
-    //         data: {
-    //             path: path
-    //         }
-    //     })
-    // },
-    // async updateOrganizationClosure(orgId: number, parentId: number, tx: PrismaTransaction = prisma) {
-    //     const closureRelations = [];
-    //     const parentAncestors = await tx.organizationClosure.findMany({
-    //         where: {
-    //             descendantId: parentId
-    //         },
-    //         select: { ancestorId: true, depth: true },
-    //     })
-    //     parentAncestors.forEach((rel) => {
-    //         closureRelations.push({
-    //             ancestorId: rel.ancestorId,
-    //             descendantId: orgId,
-    //             depth: rel.depth + 1,
-    //         })
-    //     })
-    //     closureRelations.push({
-    //         ancestorId: orgId,
-    //         descendantId: orgId,
-    //         depth: 0,
-    //     })
-    //     if (closureRelations.length > 0) {
-    //         await tx.organizationClosure.createMany({
-    //             data: closureRelations,
-    //             skipDuplicates: true, // 防止意外重复，虽然主键约束会拦截，但这样更安全
-    //         })
-    //     }
-
-    // }
 }

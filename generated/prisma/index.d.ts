@@ -2558,7 +2558,7 @@ export namespace Prisma {
     wxId: string | null
     name: string | null
     password: string | null
-    mobilePhone: string | null
+    mobile: string | null
     userType: string | null
     orderNum: number | null
     status: number | null
@@ -2573,7 +2573,7 @@ export namespace Prisma {
     wxId: string | null
     name: string | null
     password: string | null
-    mobilePhone: string | null
+    mobile: string | null
     userType: string | null
     orderNum: number | null
     status: number | null
@@ -2588,7 +2588,7 @@ export namespace Prisma {
     wxId: number
     name: number
     password: number
-    mobilePhone: number
+    mobile: number
     userType: number
     orderNum: number
     status: number
@@ -2617,7 +2617,7 @@ export namespace Prisma {
     wxId?: true
     name?: true
     password?: true
-    mobilePhone?: true
+    mobile?: true
     userType?: true
     orderNum?: true
     status?: true
@@ -2632,7 +2632,7 @@ export namespace Prisma {
     wxId?: true
     name?: true
     password?: true
-    mobilePhone?: true
+    mobile?: true
     userType?: true
     orderNum?: true
     status?: true
@@ -2647,7 +2647,7 @@ export namespace Prisma {
     wxId?: true
     name?: true
     password?: true
-    mobilePhone?: true
+    mobile?: true
     userType?: true
     orderNum?: true
     status?: true
@@ -2749,7 +2749,7 @@ export namespace Prisma {
     wxId: string | null
     name: string
     password: string | null
-    mobilePhone: string | null
+    mobile: string | null
     userType: string
     orderNum: number
     status: number
@@ -2783,7 +2783,7 @@ export namespace Prisma {
     wxId?: boolean
     name?: boolean
     password?: boolean
-    mobilePhone?: boolean
+    mobile?: boolean
     userType?: boolean
     orderNum?: boolean
     status?: boolean
@@ -2804,7 +2804,7 @@ export namespace Prisma {
     wxId?: boolean
     name?: boolean
     password?: boolean
-    mobilePhone?: boolean
+    mobile?: boolean
     userType?: boolean
     orderNum?: boolean
     status?: boolean
@@ -2813,7 +2813,7 @@ export namespace Prisma {
     updateTime?: boolean
   }
 
-  export type UserOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "username" | "wxId" | "name" | "password" | "mobilePhone" | "userType" | "orderNum" | "status" | "isDelete" | "createTime" | "updateTime", ExtArgs["result"]["user"]>
+  export type UserOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "username" | "wxId" | "name" | "password" | "mobile" | "userType" | "orderNum" | "status" | "isDelete" | "createTime" | "updateTime", ExtArgs["result"]["user"]>
   export type UserInclude<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
     employments?: boolean | User$employmentsArgs<ExtArgs>
     delegationTo?: boolean | User$delegationToArgs<ExtArgs>
@@ -2834,7 +2834,7 @@ export namespace Prisma {
       wxId: string | null
       name: string
       password: string | null
-      mobilePhone: string | null
+      mobile: string | null
       userType: string
       orderNum: number
       status: number
@@ -3218,7 +3218,7 @@ export namespace Prisma {
     readonly wxId: FieldRef<"User", 'String'>
     readonly name: FieldRef<"User", 'String'>
     readonly password: FieldRef<"User", 'String'>
-    readonly mobilePhone: FieldRef<"User", 'String'>
+    readonly mobile: FieldRef<"User", 'String'>
     readonly userType: FieldRef<"User", 'String'>
     readonly orderNum: FieldRef<"User", 'Int'>
     readonly status: FieldRef<"User", 'Int'>
@@ -19237,7 +19237,7 @@ export namespace Prisma {
     wxId: 'wxId',
     name: 'name',
     password: 'password',
-    mobilePhone: 'mobilePhone',
+    mobile: 'mobile',
     userType: 'userType',
     orderNum: 'orderNum',
     status: 'status',
@@ -19475,7 +19475,7 @@ export namespace Prisma {
     wxId: 'wxId',
     name: 'name',
     password: 'password',
-    mobilePhone: 'mobilePhone',
+    mobile: 'mobile',
     userType: 'userType'
   };
 
@@ -19633,7 +19633,7 @@ export namespace Prisma {
     wxId?: StringNullableFilter<"User"> | string | null
     name?: StringFilter<"User"> | string
     password?: StringNullableFilter<"User"> | string | null
-    mobilePhone?: StringNullableFilter<"User"> | string | null
+    mobile?: StringNullableFilter<"User"> | string | null
     userType?: StringFilter<"User"> | string
     orderNum?: IntFilter<"User"> | number
     status?: IntFilter<"User"> | number
@@ -19651,7 +19651,7 @@ export namespace Prisma {
     wxId?: SortOrderInput | SortOrder
     name?: SortOrder
     password?: SortOrderInput | SortOrder
-    mobilePhone?: SortOrderInput | SortOrder
+    mobile?: SortOrderInput | SortOrder
     userType?: SortOrder
     orderNum?: SortOrder
     status?: SortOrder
@@ -19673,7 +19673,7 @@ export namespace Prisma {
     wxId?: StringNullableFilter<"User"> | string | null
     name?: StringFilter<"User"> | string
     password?: StringNullableFilter<"User"> | string | null
-    mobilePhone?: StringNullableFilter<"User"> | string | null
+    mobile?: StringNullableFilter<"User"> | string | null
     userType?: StringFilter<"User"> | string
     orderNum?: IntFilter<"User"> | number
     status?: IntFilter<"User"> | number
@@ -19691,7 +19691,7 @@ export namespace Prisma {
     wxId?: SortOrderInput | SortOrder
     name?: SortOrder
     password?: SortOrderInput | SortOrder
-    mobilePhone?: SortOrderInput | SortOrder
+    mobile?: SortOrderInput | SortOrder
     userType?: SortOrder
     orderNum?: SortOrder
     status?: SortOrder
@@ -19714,7 +19714,7 @@ export namespace Prisma {
     wxId?: StringNullableWithAggregatesFilter<"User"> | string | null
     name?: StringWithAggregatesFilter<"User"> | string
     password?: StringNullableWithAggregatesFilter<"User"> | string | null
-    mobilePhone?: StringNullableWithAggregatesFilter<"User"> | string | null
+    mobile?: StringNullableWithAggregatesFilter<"User"> | string | null
     userType?: StringWithAggregatesFilter<"User"> | string
     orderNum?: IntWithAggregatesFilter<"User"> | number
     status?: IntWithAggregatesFilter<"User"> | number
@@ -20826,7 +20826,7 @@ export namespace Prisma {
     wxId?: string | null
     name: string
     password?: string | null
-    mobilePhone?: string | null
+    mobile?: string | null
     userType?: string
     orderNum?: number
     status?: number
@@ -20844,7 +20844,7 @@ export namespace Prisma {
     wxId?: string | null
     name: string
     password?: string | null
-    mobilePhone?: string | null
+    mobile?: string | null
     userType?: string
     orderNum?: number
     status?: number
@@ -20861,7 +20861,7 @@ export namespace Prisma {
     wxId?: NullableStringFieldUpdateOperationsInput | string | null
     name?: StringFieldUpdateOperationsInput | string
     password?: NullableStringFieldUpdateOperationsInput | string | null
-    mobilePhone?: NullableStringFieldUpdateOperationsInput | string | null
+    mobile?: NullableStringFieldUpdateOperationsInput | string | null
     userType?: StringFieldUpdateOperationsInput | string
     orderNum?: IntFieldUpdateOperationsInput | number
     status?: IntFieldUpdateOperationsInput | number
@@ -20879,7 +20879,7 @@ export namespace Prisma {
     wxId?: NullableStringFieldUpdateOperationsInput | string | null
     name?: StringFieldUpdateOperationsInput | string
     password?: NullableStringFieldUpdateOperationsInput | string | null
-    mobilePhone?: NullableStringFieldUpdateOperationsInput | string | null
+    mobile?: NullableStringFieldUpdateOperationsInput | string | null
     userType?: StringFieldUpdateOperationsInput | string
     orderNum?: IntFieldUpdateOperationsInput | number
     status?: IntFieldUpdateOperationsInput | number
@@ -20897,7 +20897,7 @@ export namespace Prisma {
     wxId?: string | null
     name: string
     password?: string | null
-    mobilePhone?: string | null
+    mobile?: string | null
     userType?: string
     orderNum?: number
     status?: number
@@ -20911,7 +20911,7 @@ export namespace Prisma {
     wxId?: NullableStringFieldUpdateOperationsInput | string | null
     name?: StringFieldUpdateOperationsInput | string
     password?: NullableStringFieldUpdateOperationsInput | string | null
-    mobilePhone?: NullableStringFieldUpdateOperationsInput | string | null
+    mobile?: NullableStringFieldUpdateOperationsInput | string | null
     userType?: StringFieldUpdateOperationsInput | string
     orderNum?: IntFieldUpdateOperationsInput | number
     status?: IntFieldUpdateOperationsInput | number
@@ -20926,7 +20926,7 @@ export namespace Prisma {
     wxId?: NullableStringFieldUpdateOperationsInput | string | null
     name?: StringFieldUpdateOperationsInput | string
     password?: NullableStringFieldUpdateOperationsInput | string | null
-    mobilePhone?: NullableStringFieldUpdateOperationsInput | string | null
+    mobile?: NullableStringFieldUpdateOperationsInput | string | null
     userType?: StringFieldUpdateOperationsInput | string
     orderNum?: IntFieldUpdateOperationsInput | number
     status?: IntFieldUpdateOperationsInput | number
@@ -22091,7 +22091,7 @@ export namespace Prisma {
     wxId?: SortOrder
     name?: SortOrder
     password?: SortOrder
-    mobilePhone?: SortOrder
+    mobile?: SortOrder
     userType?: SortOrder
     orderNum?: SortOrder
     status?: SortOrder
@@ -22112,7 +22112,7 @@ export namespace Prisma {
     wxId?: SortOrder
     name?: SortOrder
     password?: SortOrder
-    mobilePhone?: SortOrder
+    mobile?: SortOrder
     userType?: SortOrder
     orderNum?: SortOrder
     status?: SortOrder
@@ -22127,7 +22127,7 @@ export namespace Prisma {
     wxId?: SortOrder
     name?: SortOrder
     password?: SortOrder
-    mobilePhone?: SortOrder
+    mobile?: SortOrder
     userType?: SortOrder
     orderNum?: SortOrder
     status?: SortOrder
@@ -26394,7 +26394,7 @@ export namespace Prisma {
     wxId?: string | null
     name: string
     password?: string | null
-    mobilePhone?: string | null
+    mobile?: string | null
     userType?: string
     orderNum?: number
     status?: number
@@ -26411,7 +26411,7 @@ export namespace Prisma {
     wxId?: string | null
     name: string
     password?: string | null
-    mobilePhone?: string | null
+    mobile?: string | null
     userType?: string
     orderNum?: number
     status?: number
@@ -26627,7 +26627,7 @@ export namespace Prisma {
     wxId?: NullableStringFieldUpdateOperationsInput | string | null
     name?: StringFieldUpdateOperationsInput | string
     password?: NullableStringFieldUpdateOperationsInput | string | null
-    mobilePhone?: NullableStringFieldUpdateOperationsInput | string | null
+    mobile?: NullableStringFieldUpdateOperationsInput | string | null
     userType?: StringFieldUpdateOperationsInput | string
     orderNum?: IntFieldUpdateOperationsInput | number
     status?: IntFieldUpdateOperationsInput | number
@@ -26644,7 +26644,7 @@ export namespace Prisma {
     wxId?: NullableStringFieldUpdateOperationsInput | string | null
     name?: StringFieldUpdateOperationsInput | string
     password?: NullableStringFieldUpdateOperationsInput | string | null
-    mobilePhone?: NullableStringFieldUpdateOperationsInput | string | null
+    mobile?: NullableStringFieldUpdateOperationsInput | string | null
     userType?: StringFieldUpdateOperationsInput | string
     orderNum?: IntFieldUpdateOperationsInput | number
     status?: IntFieldUpdateOperationsInput | number
@@ -28046,7 +28046,7 @@ export namespace Prisma {
     wxId?: string | null
     name: string
     password?: string | null
-    mobilePhone?: string | null
+    mobile?: string | null
     userType?: string
     orderNum?: number
     status?: number
@@ -28063,7 +28063,7 @@ export namespace Prisma {
     wxId?: string | null
     name: string
     password?: string | null
-    mobilePhone?: string | null
+    mobile?: string | null
     userType?: string
     orderNum?: number
     status?: number
@@ -28084,7 +28084,7 @@ export namespace Prisma {
     wxId?: string | null
     name: string
     password?: string | null
-    mobilePhone?: string | null
+    mobile?: string | null
     userType?: string
     orderNum?: number
     status?: number
@@ -28101,7 +28101,7 @@ export namespace Prisma {
     wxId?: string | null
     name: string
     password?: string | null
-    mobilePhone?: string | null
+    mobile?: string | null
     userType?: string
     orderNum?: number
     status?: number
@@ -28205,7 +28205,7 @@ export namespace Prisma {
     wxId?: NullableStringFieldUpdateOperationsInput | string | null
     name?: StringFieldUpdateOperationsInput | string
     password?: NullableStringFieldUpdateOperationsInput | string | null
-    mobilePhone?: NullableStringFieldUpdateOperationsInput | string | null
+    mobile?: NullableStringFieldUpdateOperationsInput | string | null
     userType?: StringFieldUpdateOperationsInput | string
     orderNum?: IntFieldUpdateOperationsInput | number
     status?: IntFieldUpdateOperationsInput | number
@@ -28222,7 +28222,7 @@ export namespace Prisma {
     wxId?: NullableStringFieldUpdateOperationsInput | string | null
     name?: StringFieldUpdateOperationsInput | string
     password?: NullableStringFieldUpdateOperationsInput | string | null
-    mobilePhone?: NullableStringFieldUpdateOperationsInput | string | null
+    mobile?: NullableStringFieldUpdateOperationsInput | string | null
     userType?: StringFieldUpdateOperationsInput | string
     orderNum?: IntFieldUpdateOperationsInput | number
     status?: IntFieldUpdateOperationsInput | number
@@ -28249,7 +28249,7 @@ export namespace Prisma {
     wxId?: NullableStringFieldUpdateOperationsInput | string | null
     name?: StringFieldUpdateOperationsInput | string
     password?: NullableStringFieldUpdateOperationsInput | string | null
-    mobilePhone?: NullableStringFieldUpdateOperationsInput | string | null
+    mobile?: NullableStringFieldUpdateOperationsInput | string | null
     userType?: StringFieldUpdateOperationsInput | string
     orderNum?: IntFieldUpdateOperationsInput | number
     status?: IntFieldUpdateOperationsInput | number
@@ -28266,7 +28266,7 @@ export namespace Prisma {
     wxId?: NullableStringFieldUpdateOperationsInput | string | null
     name?: StringFieldUpdateOperationsInput | string
     password?: NullableStringFieldUpdateOperationsInput | string | null
-    mobilePhone?: NullableStringFieldUpdateOperationsInput | string | null
+    mobile?: NullableStringFieldUpdateOperationsInput | string | null
     userType?: StringFieldUpdateOperationsInput | string
     orderNum?: IntFieldUpdateOperationsInput | number
     status?: IntFieldUpdateOperationsInput | number

@@ -13,6 +13,7 @@ import { hash, compare } from 'bcrypt-ts'
 import { generateRandomPassword } from "../utils/encryption.utils";
 import { config } from "../config";
 import type { UserCreateDto } from "../types/user.common.type";
+import { CustomError } from "../errors/CustomError";
 
 async function _getUserDetail(user: User | null) {
     if (user === null) {
@@ -72,9 +73,14 @@ export const userAdminService = {
 
     async setUsers(userCreateDtos: UserCreateDto[]) {
         return await prisma.$transaction(async (tx) => {
-            userCreateDtos.forEach(async (u) => {
+            const existingUsers = await userRepository.searchUsers({ usernames: userCreateDtos.map(u => u.username) })
+            if (existingUsers.length !== 0) {
+                throw new CustomError('相同用户名已被注册')
+            }
+            for (const u of userCreateDtos) {
                 u.password = await hash(u.password, config.PASSWORD_HASH_ROUNDS)
-            })
+            }
+            console.log(userCreateDtos)
             const users = await userAdminRepository.setUsers(userCreateDtos, tx)
             return true
         })
