@@ -12,6 +12,7 @@ import { userRepository } from "../repositories/user.common.repository"
 import { hash, compare } from 'bcrypt-ts'
 import { generateRandomPassword } from "../utils/encryption.utils";
 import { config } from "../config";
+import type { UserCreateDto } from "../types/user.common.type";
 
 async function _getUserDetail(user: User | null) {
     if (user === null) {
@@ -68,4 +69,14 @@ export const userAdminService = {
             return newPassword
         })
     },
+
+    async setUsers(userCreateDtos: UserCreateDto[]) {
+        return await prisma.$transaction(async (tx) => {
+            userCreateDtos.forEach(async (u) => {
+                u.password = await hash(u.password, config.PASSWORD_HASH_ROUNDS)
+            })
+            const users = await userAdminRepository.setUsers(userCreateDtos, tx)
+            return true
+        })
+    }
 }

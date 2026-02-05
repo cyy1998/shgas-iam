@@ -11,13 +11,15 @@ import { clientService } from '../services/client.service'
 import { organizationService } from '../services/organization.service'
 import { OrganizationCreateDtoSchema, OrganizationDtoSchema, OrganizationQueryDtoSchema } from '../types/organization.common.type'
 import { createPageQuerySchema, createPageResultSchema } from '../types/page.type'
-import { UserDtoSchema, UserQueryDtoSchema } from '../types/user.common.type'
+import { UserCreateDtoSchema, UserDtoSchema, UserQueryDtoSchema } from '../types/user.common.type'
 import { UserAdminDetailVoSchema, UserAdminDtoSchema, UserAdminQueryDtoSchema, UserAdminVoSchema } from "../types/user.admin.type"
 import { userAdminService } from '../services/user.admin.service'
 import { authenicationHandler } from '../middleware/authenication.handler'
 import { EmploymentQueryDtoSchema } from '../types/employment.common.type'
 import { employmentAdminService } from '../services/employment.admin.service'
 import { EmploymentAdminDtoSchema, EmploymentAdminQueryDtoSchema, EmploymentAdminVoSchema } from '../types/employment.admin.type'
+import { generateRandomPassword } from '../utils/encryption.utils'
+import { UserType } from '../constants/user.type'
 
 
 const app = new OpenAPIHono()
@@ -165,6 +167,7 @@ app.openapi(
         return c.json(success(data))
     }
 )
+
 /*
 path: /users/password/reset
 method: POST
@@ -203,6 +206,73 @@ app.openapi(
         return c.json(success(data))
     }
 )
+
+/*
+path: /users/set
+method: POST
+function: 应用更新
+*/
+app.openapi(
+    createRoute({
+        method: 'post',
+        path: '/users/set',
+        tags: ['Admin'],
+        request: {
+            body: {
+                content: {
+                    'application/json': {
+                        schema: z.object({
+                            data: z.array(UserCreateDtoSchema)
+                        })
+                    }
+                }
+            },
+        },
+        responses: {
+            200: {
+                content: {
+                    'application/json': {
+                        schema: createResponseSchema(z.string()),
+                    },
+                },
+                description: '用户新密码',
+            },
+        },
+    }),
+    async (c) => {
+        const users = c.req.valid('json').data
+        const data = userAdminService.setUsers(users)
+        return c.json(success(data))
+    }
+)
+
+/*
+path: /users/password/generate
+method: POST
+function: 应用更新
+*/
+app.openapi(
+    createRoute({
+        method: 'post',
+        path: '/users/password/generate',
+        tags: ['Admin'],
+        responses: {
+            200: {
+                content: {
+                    'application/json': {
+                        schema: createResponseSchema(z.string()),
+                    },
+                },
+                description: '用户新密码',
+            },
+        },
+    }),
+    async (c) => {
+        const data = generateRandomPassword(8)
+        return c.json(success(data))
+    }
+)
+
 /*
 path: /client/update
 function: 应用更新
@@ -710,5 +780,31 @@ app.openapi(
     }
 )
 
+/*
+path: /meta/userType
+method: POST
+function: 应用更新
+*/
+app.openapi(
+    createRoute({
+        method: 'get',
+        path: '/meta/userType',
+        tags: ['Admin'],
+        responses: {
+            200: {
+                content: {
+                    'application/json': {
+                        schema: createResponseSchema(z.array(z.string())),
+                    },
+                },
+                description: '用户新密码',
+            },
+        },
+    }),
+    async (c) => {
+        const data = Object.values(UserType)
+        return c.json(success(data))
+    }
+)
 
 export default app

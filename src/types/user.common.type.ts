@@ -1,12 +1,14 @@
 import { z } from "@hono/zod-openapi"
 import { EmploymentDtoSchema, type EmploymentDto } from "./employment.common.type"
 import { UserStatus } from "../constants/user.status"
+import { password } from "bun"
 
 export const UserDtoSchema = z.object({
     id: z.number().openapi({ example: 1 }),
     username: z.string().openapi({ example: '138550' }),
     name: z.string().openapi({ example: '蔡奕阳' }),
     mobile: z.string().nullable().openapi({ example: '17721462865' }),
+    wxId: z.string().nullable().openapi({ example: '1592677631' }),
     userType: z.string().nullable().openapi({ example: '正式员工' }),
     orcasId: z.string().nullable().openapi({ example: 'ada8wf89w83b2' }),
     status: z.enum(UserStatus).openapi({ example: 1 }),
@@ -44,5 +46,14 @@ export const UserQueryWithPrivilegeDelegationDtoSchema = UserQueryDtoSchema.exte
 }).openapi('UserQueryWithPrivilegeDelegationDto')
 
 export type UserQueryWithPrivilegeDelegationDto = z.infer<typeof UserQueryWithPrivilegeDelegationDtoSchema>
+
+export const UserCreateDtoSchema = UserDtoSchema.partial().extend({
+    username: z.string().openapi({ example: '138550' }),
+    name: z.string().openapi({ example: '蔡奕阳' }),
+    password: z.string().openapi({ example: '1234' }),
+    userType: z.string().openapi({ example: '正式员工' }),
+}).openapi('UserCreateDto')
+
+export type UserCreateDto = z.infer<typeof UserCreateDtoSchema>
 
 

@@ -1,5 +1,6 @@
 import { prisma, type PrismaTransaction } from "../libs/database/prisma"
 import type { UserAdminQueryDto } from "../types/user.admin.type"
+import type { UserCreateDto } from "../types/user.common.type"
 
 export const userAdminRepository = {
     async getUserByUsername(username: string, tx: PrismaTransaction = prisma) {
@@ -52,4 +53,9 @@ export const userAdminRepository = {
             }
         })
     },
+    async setUsers(userCreateDtos: UserCreateDto[], tx: PrismaTransaction = prisma) {
+        return await tx.user.createMany({
+            data: userCreateDtos
+        })
+    }
 }

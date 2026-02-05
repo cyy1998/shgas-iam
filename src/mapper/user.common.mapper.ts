@@ -8,6 +8,7 @@ export const userMapper = {
             username: user.username,
             name: user.name,
             mobile: user.mobilePhone,
+            wxId: user.wxId,
             userType: user.userType,
             status: user.status,
             orderNum: user.orderNum,

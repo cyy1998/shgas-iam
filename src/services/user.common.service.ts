@@ -21,6 +21,7 @@ import { EmploymentDetailDtoSchema } from '../types/employment.common.type'
 import { privilegeDelegationRepository } from '../repositories/privilegeDelegation.repository'
 import { privilegeDelegationMapper } from '../mapper/privilegeDelegation.mapper'
 import { VerificationCodeUsage } from '../constants/verificationCode.usage'
+import { UserType } from '../constants/user.type'
 
 async function _getUserDetail(user: User | null): Promise<UserDetailDto> {
     if (user === null) {
@@ -229,7 +230,7 @@ export const userService = {
                 }
             }
             else {
-                const user = await userRepository.setUser(username, name, mobile, '外部用户', tx)
+                const user = await userRepository.setUser(username, name, mobile, UserType.External, tx)
                 await employmentRepository.setEmployment(user.id, pos.id, org.id, comp.id, tx)
             }
         })

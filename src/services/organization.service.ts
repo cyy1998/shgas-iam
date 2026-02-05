@@ -1,5 +1,6 @@
 import type { Organization } from "../../generated/prisma"
 import { config } from "../config"
+import { OrganizationType } from "../constants/organization.type"
 import { CustomError } from "../errors/CustomError"
 import { prisma } from "../libs/database/prisma"
 import { organizationMapper } from "../mapper/organization.mapper"
@@ -80,7 +81,7 @@ export const organizationService = {
         if (exisitngOrg !== null) {
             return true
         }
-        await this.setOrganization({ orgCode: orgCode, orgName: orgName, parentCode: parentCode, orgType: '外部组织' })
+        await this.setOrganization({ orgCode: orgCode, orgName: orgName, parentCode: parentCode, orgType: OrganizationType.External })
         return true
     }
 }
