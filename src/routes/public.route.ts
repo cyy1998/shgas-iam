@@ -260,35 +260,35 @@ path: /organizations/top
 method: GET
 function: 获取一级公司列表 
 */
-// app.openapi(
-//     createRoute({
-//         method: 'get',
-//         path: '/organizations/top',
-//         tags: ['Public'],
-//         responses: {
-//             200: {
-//                 content: {
-//                     'application/json': {
-//                         schema: createResponseSchema(
-//                             z.object({
-//                                 id: z.int(),
-//                                 orgCode: z.string(),
-//                                 orgName: z.string(),
-//                                 orgType: z.string(),
-//                                 level: z.int()
-//                             })
-//                         ),
-//                     },
-//                 },
-//                 description: '本用户信息',
-//             },
-//         },
-//     }),
-//     async (c) => {
-//         const data = await organizationService.getTopFormalOrganizations()
-//         return c.json(success(data))
-//     }
-// )
+app.openapi(
+    createRoute({
+        method: 'get',
+        path: '/organizations/top',
+        tags: ['Public'],
+        responses: {
+            200: {
+                content: {
+                    'application/json': {
+                        schema: createResponseSchema(
+                            z.object({
+                                id: z.int(),
+                                orgCode: z.string(),
+                                orgName: z.string(),
+                                orgType: z.string(),
+                                level: z.int()
+                            })
+                        ),
+                    },
+                },
+                description: '本用户信息',
+            },
+        },
+    }),
+    async (c) => {
+        const data = await organizationService.getTopFormalOrganizations()
+        return c.json(success(data))
+    }
+)
 
 /*
 path: /organizations/search
