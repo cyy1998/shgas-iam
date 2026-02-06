@@ -20,6 +20,9 @@ export const positionAdminRepository = {
                     }
                 ] : undefined,
                 isDelete: false
+            },
+            include: {
+                employments: true
             }
         })
     },

@@ -1,14 +1,16 @@
 import type { Position } from "../../generated/prisma"
 import { positionStatusToString } from "../constants/position.status"
 import type { PositionAdminDto, PositionAdminVo } from "../types/position.admin.type"
+import type { PositionAdminEntity } from "../types/position.entity.type"
 
 export const positionAdminMapper = {
-    entityToDto(position: Position): PositionAdminDto {
+    entityToDto(position: PositionAdminEntity): PositionAdminDto {
         return {
             id: position.id,
             posCode: position.posCode,
             posName: position.posName,
             status: position.status,
+            memberNumber: position.employments.length,
             createTime: position.createTime.toISOString(),
             updateTime: position.updateTime.toISOString()
         }

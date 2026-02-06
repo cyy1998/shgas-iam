@@ -19,6 +19,7 @@ export const PositionAdminDtoSchema = z.object({
     posCode: z.string().openapi({ example: 'E001' }),
     posName: z.string().openapi({ example: 'E002' }),
     status: z.enum(PositionStatus).openapi({ example: 1 }),
+    memberNumber: z.number().openapi({ example: 10 }),
     createTime: z.iso.datetime(),
     updateTime: z.iso.datetime()
 }).openapi('PositionAdminDto')
