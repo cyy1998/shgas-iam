@@ -210,51 +210,6 @@ app.openapi(
     }
 )
 
-//待废弃
-/*
-path: /search-organizations
-method: GET
-function: 查询某个公司的下属组织 
-*/
-// app.openapi(
-//     createRoute({
-//         method: 'get',
-//         path: '/search-organizations',
-//         tags: ['Public'],
-//         request: {
-//             query: z.object({
-//                 orgLevel: z.coerce.number().int().openapi({ example: "2" }),
-//                 comCode: z.string().openapi({ example: "SR" })
-//             })
-//         },
-//         responses: {
-//             200: {
-//                 content: {
-//                     'application/json': {
-//                         schema:
-//                             createResponseSchema(z.array(
-//                                 z.object({
-//                                     id: z.int(),
-//                                     orgCode: z.string(),
-//                                     orgName: z.string(),
-//                                     orgType: z.string(),
-//                                     level: z.int()
-//                                 })
-//                             ))
-//                     },
-//                 },
-//                 description: '本公司下属组织列表',
-//             },
-//         },
-//     }),
-//     async (c) => {
-//         const { orgLevel, comCode } = c.req.valid('query')
-//         const data = await organizationService.getFormalOrganizationsByCode(comCode, orgLevel)
-//         return c.json(success(data))
-//     }
-// )
-
-//待废弃
 /*
 path: /organizations/top
 method: GET
@@ -327,89 +282,6 @@ app.openapi(
     }
 )
 
-//待废弃
-/*
-path: /organizations/getByCode
-method: GET
-function: 根据code搜索某个组织的信息 
-*/
-// app.openapi(
-//     createRoute({
-//         method: 'get',
-//         path: '/organizations/getByCode',
-//         tags: ['Public'],
-//         request: {
-//             query: z.object({
-//                 orgCode: z.string()
-//             })
-//         },
-//         responses: {
-//             200: {
-//                 content: {
-//                     'application/json': {
-//                         schema:
-//                             createResponseSchema(OrganizationDtoSchema)
-//                     },
-//                 },
-//                 description: '本公司下属组织列表',
-//             },
-//         },
-//     }),
-//     async (c) => {
-//         const { orgCode } = c.req.valid('query')
-//         const data = await organizationService.getOrganizationByCode(orgCode)
-//         return c.json(success(data))
-//     }
-// )
-
-//待废弃
-/*
-path: /organizations/by-parent
-method: POST
-function: 获取某个组织的所有子组织
-*/
-// app.openapi(
-//     createRoute({
-//         method: 'post',
-//         path: '/organizations/by-parent',
-//         tags: ['Public'],
-//         request: {
-//             body: {
-//                 content: {
-//                     'application/json': {
-//                         schema: z.object({
-//                             parentCodes: z.array(z.string()).openapi({ example: ['SR', 'SB'] })
-//                         })
-//                     }
-//                 }
-//             }
-//         },
-//         responses: {
-//             200: {
-//                 content: {
-//                     'application/json': {
-//                         schema: createResponseSchema(
-//                             z.array(z.object({
-//                                 id: z.int(),
-//                                 orgCode: z.string(),
-//                                 orgName: z.string(),
-//                                 orgType: z.string(),
-//                                 level: z.int()
-//                             }))
-//                         ),
-//                     },
-//                 },
-//                 description: '所有子组织列表',
-//             },
-//         },
-//     }),
-//     async (c) => {
-//         const { parentCodes } = c.req.valid('json')
-//         const data = await organizationService.getOrganizationsByParentCodes(parentCodes)
-//         return c.json(success(data))
-//     }
-// )
-
 /*
 path: /users/search
 method: POST
@@ -446,43 +318,6 @@ app.openapi(
         return c.json(success(data))
     }
 )
-
-/*
-path: /users/search/sql
-method: POST
-function: 根据条件搜索用户
-*/
-// app.openapi(
-//     createRoute({
-//         method: 'post',
-//         path: '/users/search/sql',
-//         tags: ['Public'],
-//         request: {
-//             body: {
-//                 content: {
-//                     'application/json': {
-//                         schema: UserQueryDtoSchema
-//                     }
-//                 }
-//             }
-//         },
-//         responses: {
-//             200: {
-//                 content: {
-//                     'application/json': {
-//                         schema: createResponseSchema(z.array(UserDtoSchema)),
-//                     },
-//                 },
-//                 description: '用户列表',
-//             },
-//         },
-//     }),
-//     async (c) => {
-//         const userQueryDto = c.req.valid('json')
-//         const data = await userService.searchUsersRawSql(userQueryDto)
-//         return c.json(success(data))
-//     }
-// )
 
 /*
 path: /users/by-org
