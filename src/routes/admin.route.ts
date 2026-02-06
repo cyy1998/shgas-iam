@@ -20,6 +20,8 @@ import { employmentAdminService } from '../services/employment.admin.service'
 import { EmploymentAdminDtoSchema, EmploymentAdminQueryDtoSchema, EmploymentAdminVoSchema } from '../types/employment.admin.type'
 import { generateRandomPassword } from '../utils/encryption.utils'
 import { UserType } from '../constants/user.type'
+import { PositionAdminQueryDtoSchema, PositionAdminVoSchema } from '../types/position.admin.type'
+import { positionAdminService } from '../services/position.admin.service'
 
 
 const app = new OpenAPIHono()
@@ -132,6 +134,43 @@ app.openapi(
     async (c) => {
         const employmentQueryDto = c.req.valid('json')
         const data = await employmentAdminService.searchEmployments(employmentQueryDto)
+        return c.json(success(data))
+    }
+)
+
+/*
+path: /positions/search
+method: POST
+function: 按条件搜索岗位
+*/
+app.openapi(
+    createRoute({
+        method: 'post',
+        path: '/positions/search',
+        tags: ['Admin'],
+        request: {
+            body: {
+                content: {
+                    'application/json': {
+                        schema: PositionAdminQueryDtoSchema
+                    }
+                }
+            }
+        },
+        responses: {
+            200: {
+                content: {
+                    'application/json': {
+                        schema: createResponseSchema(z.array(PositionAdminVoSchema)),
+                    },
+                },
+                description: '所有符合条件组织列表',
+            },
+        },
+    }),
+    async (c) => {
+        const positionQueryDto = c.req.valid('json')
+        const data = await positionAdminService.searchPositionsFuzzy(positionQueryDto)
         return c.json(success(data))
     }
 )

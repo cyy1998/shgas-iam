@@ -40,8 +40,6 @@ export type UserAdminDto = z.infer<typeof UserAdminDtoSchema>
 
 export const UserAdminDetailDtoSchema = UserAdminDtoSchema.extend({
     employments: z.array(EmploymentAdminDtoSchema).optional(),
-    // privileges: z.array(z.string()).default([]).openapi({ example: ['ui:button:tender:create-GYBG'] }),
-    // roles: z.array(z.string()).default([]).openapi({ example: ['tender:default-user'] })
 })
 
 export const UserAdminVoSchema = UserAdminDtoSchema.extend({
@@ -52,7 +50,5 @@ export type UserAdminVo = z.infer<typeof UserAdminVoSchema>
 
 export const UserAdminDetailVoSchema = UserAdminVoSchema.extend({
     employments: z.array(EmploymentAdminVoSchema).optional(),
-    // privileges: z.array(z.string()).default([]).openapi({ example: ['ui:button:tender:create-GYBG'] }),
-    // roles: z.array(z.string()).default([]).openapi({ example: ['tender:default-user'] })
 })
 

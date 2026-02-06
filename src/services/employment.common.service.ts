@@ -2,7 +2,7 @@ import { CustomError } from "../errors/CustomError";
 import { employmentMapper } from "../mapper/employment.common.mapper";
 import { employmentRepository } from "../repositories/employment.common.repository";
 import { organizationRepository } from "../repositories/organization.repository";
-import { positionRepository } from "../repositories/position.repository";
+import { positionRepository } from "../repositories/position.common.repository";
 import { roleRepository } from "../repositories/role.repository";
 import { userRepository } from "../repositories/user.common.repository";
 import type { EmploymentQueryDto } from "../types/employment.common.type";
