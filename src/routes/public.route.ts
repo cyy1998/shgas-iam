@@ -142,69 +142,34 @@ path: /employments/by-privilege
 method: GET
 function: 查询具有某个权限的任职关系 
 */
-app.openapi(
-    createRoute({
-        method: 'get',
-        path: '/employments/by-privilege',
-        tags: ['Public'],
-        request: {
-            query: z.object({
-                privCode: z.string().openapi({ example: '123' }),
-                codeType: z.enum(['full', 'prefix', 'suffix']).default('full')
-            })
-        },
-        responses: {
-            200: {
-                content: {
-                    'application/json': {
-                        schema: createResponseSchema(z.array(EmploymentDtoSchema)),
-                    },
-                },
-                description: '符合条件用户列表',
-            }
-        }
-    }),
-    async (c) => {
-        const { privCode, codeType } = c.req.valid('query')
-        const data = await employmentService.getEmploymentsByUserAndPrivilege(c.get('username'), privCode, codeType)
-        return c.json(success(data))
-    }
-)
-
-/*
-path: /organizations/top
-method: GET
-function: 获取一级公司列表 
-*/
-app.openapi(
-    createRoute({
-        method: 'get',
-        path: '/organizations/top',
-        tags: ['Public'],
-        responses: {
-            200: {
-                content: {
-                    'application/json': {
-                        schema: createResponseSchema(
-                            z.object({
-                                id: z.int(),
-                                orgCode: z.string(),
-                                orgName: z.string(),
-                                orgType: z.string(),
-                                level: z.int()
-                            })
-                        ),
-                    },
-                },
-                description: '本用户信息',
-            },
-        },
-    }),
-    async (c) => {
-        const data = await organizationService.getTopFormalOrganizations()
-        return c.json(success(data))
-    }
-)
+// app.openapi(
+//     createRoute({
+//         method: 'get',
+//         path: '/employments/by-privilege',
+//         tags: ['Public'],
+//         request: {
+//             query: z.object({
+//                 privCode: z.string().openapi({ example: '123' }),
+//                 codeType: z.enum(['full', 'prefix', 'suffix']).default('full')
+//             })
+//         },
+//         responses: {
+//             200: {
+//                 content: {
+//                     'application/json': {
+//                         schema: createResponseSchema(z.array(EmploymentDtoSchema)),
+//                     },
+//                 },
+//                 description: '符合条件用户列表',
+//             }
+//         }
+//     }),
+//     async (c) => {
+//         const { privCode, codeType } = c.req.valid('query')
+//         const data = await employmentService.getEmploymentsByUserAndPrivilege(c.get('username'), privCode, codeType)
+//         return c.json(success(data))
+//     }
+// )
 
 /*
 path: /organizations/search
@@ -319,33 +284,33 @@ path: /search-other-users/under-org
 method: GET
 function: 搜索某个组织下的其他用户 
 */
-app.openapi(
-    createRoute({
-        method: 'get',
-        path: '/search-other-users/under-org',
-        tags: ['Public'],
-        request: {
-            query: z.object({
-                orgCode: z.string().openapi({ example: 'SR23' }),
-            })
-        },
-        responses: {
-            200: {
-                content: {
-                    'application/json': {
-                        schema: createResponseSchema(z.array(UserDtoSchema)),
-                    },
-                },
-                description: '符合条件用户列表',
-            },
-        },
-    }),
-    async (c) => {
-        const { orgCode } = c.req.valid('query')
-        const data = await userService.getOtherUsersByOrg(orgCode, c.get('userId'))
-        return c.json(success(data))
-    }
-)
+// app.openapi(
+//     createRoute({
+//         method: 'get',
+//         path: '/search-other-users/under-org',
+//         tags: ['Public'],
+//         request: {
+//             query: z.object({
+//                 orgCode: z.string().openapi({ example: 'SR23' }),
+//             })
+//         },
+//         responses: {
+//             200: {
+//                 content: {
+//                     'application/json': {
+//                         schema: createResponseSchema(z.array(UserDtoSchema)),
+//                     },
+//                 },
+//                 description: '符合条件用户列表',
+//             },
+//         },
+//     }),
+//     async (c) => {
+//         const { orgCode } = c.req.valid('query')
+//         const data = await userService.getOtherUsersByOrg(orgCode, c.get('userId'))
+//         return c.json(success(data))
+//     }
+// )
 
 
 export default app
