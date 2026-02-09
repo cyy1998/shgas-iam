@@ -1,6 +1,6 @@
 import { EmploymentStatus } from "../constants/employment.status"
 import { RoleStatus } from "../constants/role.status"
-import { prisma, type PrismaTransaction } from '../libs/database/prisma'
+import { prisma, type PrismaTransaction } from '../libs/database/db'
 
 export const roleRepository = {
     async getRoleByCode(roleCode: string, tx: PrismaTransaction = prisma) {

@@ -3,11 +3,11 @@ import { UserAdminDetailDtoSchema, type UserAdminQueryDto } from "../types/user.
 import { paginate } from "../utils/page.util";
 import { UserNotFoundError } from "../errors/UserNotFoundError"
 import { userAdminMapper } from "../mapper/user.admin.mapper"
-import type { User } from "../../generated/prisma"
+import type { User } from "@database/client"
 import { employmentRepository } from "../repositories/employment.common.repository"
 import { employmentAdminMapper } from "../mapper/employment.admin.mapper"
 import { userAdminRepository } from "../repositories/user.admin.repository"
-import { prisma } from "../libs/database/prisma"
+import { prisma } from "../libs/database/db"
 import { userRepository } from "../repositories/user.common.repository"
 import { hash, compare } from 'bcrypt-ts'
 import { generateRandomPassword } from "../utils/encryption.utils";

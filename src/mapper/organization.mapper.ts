@@ -1,4 +1,4 @@
-import type { Organization } from "../../generated/prisma"
+import type { Organization } from "@database/client"
 import type { OrganizationDto, FormalOrganizationVo, OrganizationEntity } from "../types/organization.common.type"
 
 export const organizationMapper = {

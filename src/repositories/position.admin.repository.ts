@@ -1,4 +1,4 @@
-import { prisma, type PrismaTransaction } from "../libs/database/prisma"
+import { prisma, type PrismaTransaction } from "../libs/database/db"
 import type { PositionAdminQueryDto } from "../types/position.admin.type"
 
 export const positionAdminRepository = {

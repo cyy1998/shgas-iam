@@ -1,5 +1,5 @@
 import { PrivilegeDelegationStatus } from "../constants/privilegeDelegation.status";
-import { prisma, type PrismaTransaction } from "../libs/database/prisma";
+import { prisma, type PrismaTransaction } from "../libs/database/db";
 import type { PrivilegeDelegationEntity } from "../types/privilegeDelegation.entity.type";
 
 export const privilegeDelegationRepository = {

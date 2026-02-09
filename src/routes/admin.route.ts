@@ -1,4 +1,4 @@
-import { prisma } from '../libs/database/prisma'
+import { prisma } from '../libs/database/db'
 import { z, createRoute, OpenAPIHono } from '@hono/zod-openapi'
 import { makeResponse, success } from '../utils/response.utils'
 import { createResponseSchema } from '../types/response.type'

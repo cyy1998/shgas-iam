@@ -1,6 +1,6 @@
 import { CustomError } from "../errors/CustomError"
 import { redis } from "../libs/cache/redis"
-import { prisma } from "../libs/database/prisma"
+import { prisma } from "../libs/database/db"
 import { clientMapper } from "../mapper/client.mapper"
 import { clientRepository } from "../repositories/client.repository"
 import { ClientDtoSchema, ClientVoSchema, type ClientDto, type ClientInputDto } from "../types/client.type"

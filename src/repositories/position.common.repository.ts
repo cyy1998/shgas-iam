@@ -1,4 +1,4 @@
-import { prisma, type PrismaTransaction } from '../libs/database/prisma'
+import { prisma, type PrismaTransaction } from '../libs/database/db'
 
 export const positionRepository = {
     async getPositionByCode(posCode: string, tx: PrismaTransaction = prisma) {

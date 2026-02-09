@@ -1,5 +1,5 @@
 import { DelegationStatus } from "../constants/delegation.status"
-import { prisma, type PrismaTransaction } from "../libs/database/prisma"
+import { prisma, type PrismaTransaction } from "../libs/database/db"
 
 export const delegationRepository = {
     async getDelegationsBydelegatorsAndprivCode(usernames: string[], privCode: string, tx: PrismaTransaction = prisma) {

@@ -1,5 +1,5 @@
 import { CustomError } from "../errors/CustomError"
-import { prisma } from "../libs/database/prisma"
+import { prisma } from "../libs/database/db"
 import { privilegeMapper } from "../mapper/privilege.mapper"
 import { privilegeRepository } from "../repositories/privilege.repository"
 

@@ -1,6 +1,7 @@
-import type { Client } from "../../generated/prisma";
+import type { ClientModel as Client } from "../libs/database/generated/prisma/models";
 import { ClientStatus } from "../constants/client.status";
 import type { ClientDto, ClientVo } from "../types/client.type";
+
 
 export const clientMapper = {
     entityToDto(entity: Client): ClientDto {

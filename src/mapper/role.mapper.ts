@@ -1,4 +1,4 @@
-import type { Role } from "../../generated/prisma"
+import type { Role } from "@database/client"
 import type { RoleDto } from "../types/role.type"
 
 export const roleMapper = {

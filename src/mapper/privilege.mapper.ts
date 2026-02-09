@@ -1,4 +1,4 @@
-import type { Privilege } from "../../generated/prisma"
+import type { Privilege } from "@database/client"
 import type { PrivilegeDto } from "../types/privilege.type"
 
 export const privilegeMapper = {

@@ -1,4 +1,4 @@
-import type { User } from "../../generated/prisma"
+import type { User } from "@database/client"
 import { userStatusToString } from "../constants/user.status"
 import type { UserAdminDto, UserAdminVo } from "../types/user.admin.type"
 

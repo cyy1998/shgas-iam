@@ -1,4 +1,4 @@
-import type { Prisma } from "../../generated/prisma"
+import type { Prisma } from "@database/client"
 
 export type PrivilegeDelegationEntity = Prisma.PrivilegeDelegationGetPayload<{
     include: {

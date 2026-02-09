@@ -1,6 +1,6 @@
-import { Prisma } from "../../generated/prisma"
+import { Prisma } from "@database/client"
 import { CustomError } from "../errors/CustomError"
-import { prisma } from "../libs/database/prisma"
+import { prisma } from "../libs/database/db"
 import { roleMapper } from "../mapper/role.mapper"
 import { employmentRepository } from "../repositories/employment.common.repository"
 import { organizationRepository } from "../repositories/organization.repository"

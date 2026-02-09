@@ -1,5 +1,5 @@
 import { hash, compare } from 'bcrypt-ts'
-import type { User } from '../../generated/prisma'
+import type { User } from '@database/client'
 import { userRepository } from '../repositories/user.common.repository'
 import {
     UserDetailDtoSchema, type UserDetailDto, type UserDto,
@@ -15,7 +15,7 @@ import { config } from '../config'
 import { UserNotFoundError } from '../errors/UserNotFoundError'
 import { CustomError } from '../errors/CustomError'
 import { roleRepository } from '../repositories/role.repository'
-import { prisma } from '../libs/database/prisma'
+import { prisma } from '../libs/database/db'
 import { privilegeRepository } from '../repositories/privilege.repository'
 import { EmploymentDetailDtoSchema } from '../types/employment.common.type'
 import { privilegeDelegationRepository } from '../repositories/privilegeDelegation.repository'

@@ -1,4 +1,5 @@
-import type { Prisma } from "../../generated/prisma";
+import type { Prisma, User } from "@database/client"
+// import { Prisma } from '@prisma/client'
 
 
 export type EmploymentEntity = Prisma.EmploymentGetPayload<{

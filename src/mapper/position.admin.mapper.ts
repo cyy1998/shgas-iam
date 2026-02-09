@@ -1,4 +1,4 @@
-import type { Position } from "../../generated/prisma"
+import type { Position } from "@database/client"
 import { positionStatusToString } from "../constants/position.status"
 import type { PositionAdminDto, PositionAdminVo } from "../types/position.admin.type"
 import type { PositionAdminEntity } from "../types/position.entity.type"

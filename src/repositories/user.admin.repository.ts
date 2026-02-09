@@ -1,4 +1,4 @@
-import { prisma, type PrismaTransaction } from "../libs/database/prisma"
+import { prisma, type PrismaTransaction } from "../libs/database/db"
 import type { UserAdminQueryDto } from "../types/user.admin.type"
 import type { UserCreateDto } from "../types/user.common.type"
 

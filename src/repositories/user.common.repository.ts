@@ -1,10 +1,10 @@
-import type { User } from "../../generated/prisma"
-import { Prisma } from "../../generated/prisma"
+import type { User } from "@database/client"
+import { Prisma } from "@database/client"
 import { EmploymentStatus } from "../constants/employment.status"
 import { PositionStatus } from "../constants/position.status"
 import { RoleStatus } from "../constants/role.status"
 import { UserStatus } from "../constants/user.status"
-import { prisma, type PrismaTransaction } from '../libs/database/prisma'
+import { prisma, type PrismaTransaction } from '../libs/database/db'
 import type { UserQueryDto } from "../types/user.common.type"
 
 const searchUserQuery = `

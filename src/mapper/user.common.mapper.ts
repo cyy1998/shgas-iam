@@ -1,4 +1,4 @@
-import type { User } from "../../generated/prisma"
+import type { User } from "@database/client"
 import type { UserDto } from "../types/user.common.type"
 
 export const userMapper = {

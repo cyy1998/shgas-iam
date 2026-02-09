@@ -1,5 +1,5 @@
 import type { PrismaClient } from "@prisma/client/extension"
-import { prisma, type PrismaTransaction } from "../libs/database/prisma"
+import { prisma, type PrismaTransaction } from "../libs/database/db"
 import type { ClientDto, ClientInputDto } from "../types/client.type"
 
 export const clientRepository = {
