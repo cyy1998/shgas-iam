@@ -43,6 +43,7 @@ async function _login(user: UserDetailDto) {
     await redis.set(`global_session:${sessionId}`, JSON.stringify(user), 'EX', config.REDIS_EXPIRE_TIME)
     return {
         token: sessionId,
+        isMobileSet: user.mobile === null ? false : true
         // code: code
     }
 }
