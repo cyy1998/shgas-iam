@@ -1,5 +1,5 @@
-import type { Role } from "@database/client"
-import type { RoleDto } from "../types/role.type"
+import type { Role } from "@prisma-client/client"
+import type { RoleDto } from "@schemas/role.type"
 
 export const roleMapper = {
     entityToDto(role: Role): RoleDto {

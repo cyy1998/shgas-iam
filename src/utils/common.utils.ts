@@ -1,4 +1,4 @@
-import { CustomError } from "../errors/CustomError";
+import { CustomError } from "@errors/CustomError";
 
 export function mergeAndDedupe<T extends Record<string, any>>(
     arr1: T[],

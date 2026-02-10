@@ -1,4 +1,4 @@
-import type { Prisma, User } from "@database/client"
+import type { Prisma } from "@prisma-client/client"
 // import { Prisma } from '@prisma/client'
 
 

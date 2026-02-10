@@ -1,7 +1,7 @@
-import type { Position } from "@database/client"
-import { positionStatusToString } from "../constants/position.status"
-import type { PositionAdminDto, PositionAdminVo } from "../types/position.admin.type"
-import type { PositionAdminEntity } from "../types/position.entity.type"
+import type { Position } from "@prisma-client/client"
+import { positionStatusToString } from "@constants/position.status"
+import type { PositionAdminDto, PositionAdminVo } from "@schemas/position.admin.type"
+import type { PositionAdminEntity } from "@schemas/position.entity.type"
 
 export const positionAdminMapper = {
     entityToDto(position: PositionAdminEntity): PositionAdminDto {

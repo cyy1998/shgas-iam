@@ -1,13 +1,13 @@
 import { setCookie, getCookie, deleteCookie } from 'hono/cookie'
 import { success } from '../utils/response.utils'
 import { z, createRoute, OpenAPIHono } from '@hono/zod-openapi'
-import { createResponseSchema } from '../types/response.type'
-import { mobileService } from '../services/mobile.service'
-import { authService } from '../services/auth.service'
+import { createResponseSchema } from '@schemas/response.type'
+import { mobileService } from '@services/mobile.service'
+import { authService } from '@services/auth.service'
 import { config } from '../config'
 import { redis } from 'bun'
-import { AuthzUnauthorizedError } from '../errors/AuthzUnauthorizedError'
-import type { UserDetailDto } from '../types/user.common.type'
+import { AuthzUnauthorizedError } from '@errors/AuthzUnauthorizedError'
+import type { UserDetailDto } from '@schemas/user.common.type'
 import { getProtocolAndHost } from '../utils/common.utils'
 
 const app = new OpenAPIHono()

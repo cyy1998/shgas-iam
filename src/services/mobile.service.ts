@@ -1,9 +1,9 @@
 import { config } from '../config'
-import { VerificationCodeUsage } from '../constants/verificationCode.usage'
-import { CustomError } from '../errors/CustomError'
+import { VerificationCodeUsage } from '@constants/verificationCode.usage'
+import { CustomError } from '@errors/CustomError'
 import { redis } from "../libs/cache/redis"
-import { prisma } from '../libs/database/db'
-import type { SMSServiceResult } from '../types/service.type'
+import { prisma } from '@database/db'
+import type { SMSServiceResult } from '@schemas/service.type'
 import { hmacSha256 } from '../utils/encryption.utils'
 
 export const mobileService = {

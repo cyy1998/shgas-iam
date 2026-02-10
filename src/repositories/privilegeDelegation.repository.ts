@@ -1,6 +1,6 @@
-import { PrivilegeDelegationStatus } from "../constants/privilegeDelegation.status";
-import { prisma, type PrismaTransaction } from "../libs/database/db";
-import type { PrivilegeDelegationEntity } from "../types/privilegeDelegation.entity.type";
+import { PrivilegeDelegationStatus } from "@constants/privilegeDelegation.status";
+import { prisma, type PrismaTransaction } from "@database/db";
+import type { PrivilegeDelegationEntity } from "@schemas/privilegeDelegation.entity.type";
 
 export const privilegeDelegationRepository = {
     async getDelegationsByUserAndOrganizationScopeAndPrivilege(

@@ -1,6 +1,6 @@
-import { prisma, type PrismaTransaction } from "../libs/database/db"
-import type { UserAdminQueryDto } from "../types/user.admin.type"
-import type { UserCreateDto } from "../types/user.common.type"
+import { prisma, type PrismaTransaction } from "@database/db"
+import type { UserAdminQueryDto } from "@schemas/user.admin.type"
+import type { UserCreateDto } from "@schemas/user.common.type"
 
 export const userAdminRepository = {
     async getUserByUsername(username: string, tx: PrismaTransaction = prisma) {

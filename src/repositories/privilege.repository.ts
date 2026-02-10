@@ -1,5 +1,5 @@
-import { EmploymentStatus } from "../constants/employment.status"
-import { prisma, type PrismaTransaction } from '../libs/database/db'
+import { EmploymentStatus } from "@constants/employment.status"
+import { prisma, type PrismaTransaction } from '@database/db'
 
 export const privilegeRepository = {
     async getPrivilegesByUserId(userId: number, tx: PrismaTransaction = prisma) {

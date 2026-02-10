@@ -1,4 +1,4 @@
-import { prisma, type PrismaTransaction } from "../libs/database/db"
+import { prisma, type PrismaTransaction } from "@database/db"
 
 export const employmentAdminRepository = {
     async getEmploymentsByUserId(userId: number, tx: PrismaTransaction = prisma) {

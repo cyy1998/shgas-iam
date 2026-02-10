@@ -1,9 +1,9 @@
 import type { HTTPResponseError } from "hono/types"
-import { AuthzError } from "../errors/AuthzError"
-import { CustomError } from "../errors/CustomError"
+import { AuthzError } from "@errors/AuthzError"
+import { CustomError } from "@errors/CustomError"
 import { makeResponse } from "../utils/response.utils"
 import type { Context } from "hono"
-import { ServiceStatusCode } from "../constants/service.status"
+import { ServiceStatusCode } from "@constants/service.status"
 
 export function errorHandler(err: Error | HTTPResponseError, c: Context) {
     if (err instanceof CustomError) {

@@ -1,14 +1,14 @@
 import { z, createRoute, OpenAPIHono } from '@hono/zod-openapi'
 import { success } from '../utils/response.utils'
-import { createResponseSchema } from '../types/response.type'
-import { userService } from '../services/user.common.service'
-import { organizationService } from '../services/organization.service'
-import { employmentService } from '../services/employment.common.service'
-import { EmploymentDtoSchema } from '../types/employment.common.type'
-import { UserDetailDtoSchema, UserDtoSchema, UserQueryDtoSchema, UserQueryWithPrivilegeDelegationDtoSchema } from '../types/user.common.type'
-import { FormalOrganizationVoSchema, OrganizationDtoSchema, OrganizationQueryDtoSchema } from '../types/organization.common.type'
-import { DelegationAbstractDtoSchema } from '../types/delegation.type'
-import { PrivilegeDelegationDtoSchema } from '../types/privilegeDelegation.type'
+import { createResponseSchema } from '@schemas/response.type'
+import { userService } from '@services/user.common.service'
+import { organizationService } from '@services/organization.service'
+import { employmentService } from '@services/employment.common.service'
+import { EmploymentDtoSchema } from '@schemas/employment.common.type'
+import { UserDetailDtoSchema, UserDtoSchema, UserQueryDtoSchema, UserQueryWithPrivilegeDelegationDtoSchema } from '@schemas/user.common.type'
+import { FormalOrganizationVoSchema, OrganizationDtoSchema, OrganizationQueryDtoSchema } from '@schemas/organization.common.type'
+import { DelegationAbstractDtoSchema } from '@schemas/delegation.type'
+import { PrivilegeDelegationDtoSchema } from '@schemas/privilegeDelegation.type'
 
 const app = new OpenAPIHono()
 

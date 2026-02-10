@@ -1,9 +1,9 @@
-import { EmploymentStatus } from '../constants/employment.status'
-import { PositionStatus } from '../constants/position.status'
-import { RoleStatus } from '../constants/role.status'
-import { UserStatus } from '../constants/user.status'
-import { prisma, type PrismaTransaction } from '../libs/database/db'
-import type { EmploymentQueryDto } from '../types/employment.common.type'
+import { EmploymentStatus } from '@constants/employment.status'
+import { PositionStatus } from '@constants/position.status'
+import { RoleStatus } from '@constants/role.status'
+import { UserStatus } from '@constants/user.status'
+import { prisma, type PrismaTransaction } from '@database/db'
+import type { EmploymentQueryDto } from '@schemas/employment.common.type'
 
 export const employmentRepository = {
     async getEmploymentsByUserId(userId: number, tx: PrismaTransaction = prisma) {

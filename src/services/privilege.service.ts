@@ -1,6 +1,6 @@
-import { CustomError } from "../errors/CustomError"
-import { prisma } from "../libs/database/db"
-import { privilegeMapper } from "../mapper/privilege.mapper"
+import { CustomError } from "@errors/CustomError"
+import { prisma } from "@database/db"
+import { privilegeMapper } from "@mapper/privilege.mapper"
 import { privilegeRepository } from "../repositories/privilege.repository"
 
 export const privilegeService = {

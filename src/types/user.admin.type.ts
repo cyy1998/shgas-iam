@@ -1,6 +1,6 @@
 import { z } from "@hono/zod-openapi"
 import { createPageQuerySchema } from "./page.type"
-import { UserStatus } from "../constants/user.status"
+import { UserStatus } from "@constants/user.status"
 import { EmploymentAdminDtoSchema, EmploymentAdminVoSchema } from "./employment.admin.type"
 
 

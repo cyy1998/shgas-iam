@@ -1,9 +1,9 @@
 import type { Context, Next } from "hono";
 import { deleteCookie, getCookie } from "hono/cookie";
-import { CustomError } from "../errors/CustomError";
-import { AuthzUnauthorizedError } from "../errors/AuthzUnauthorizedError";
+import { CustomError } from "@errors/CustomError";
+import { AuthzUnauthorizedError } from "@errors/AuthzUnauthorizedError";
 import { redis } from "../libs/cache/redis";
-import type { UserDetailDto } from "../types/user.common.type";
+import type { UserDetailDto } from "@schemas/user.common.type";
 
 export async function authenicationHandler(c: Context, next: Next) {
     const clientCode = c.req.header('Client')

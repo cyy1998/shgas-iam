@@ -1,4 +1,4 @@
-import type { HttpStatusCode } from "../constants/http.status"
+import type { HttpStatusCode } from "@constants/http.status"
 
 
 export type ServiceResult = {

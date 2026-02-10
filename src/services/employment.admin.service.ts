@@ -1,7 +1,7 @@
-import { employmentAdminMapper } from "../mapper/employment.admin.mapper"
+import { employmentAdminMapper } from "@mapper/employment.admin.mapper"
 import { employmentRepository } from "../repositories/employment.common.repository"
-import type { EmploymentAdminQueryDto } from "../types/employment.admin.type"
-import type { EmploymentQueryDto } from "../types/employment.common.type"
+import type { EmploymentAdminQueryDto } from "@schemas/employment.admin.type"
+import type { EmploymentQueryDto } from "@schemas/employment.common.type"
 import { paginate } from "../utils/page.util"
 
 export const employmentAdminService = {

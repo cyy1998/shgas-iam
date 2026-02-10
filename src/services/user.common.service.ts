@@ -1,27 +1,27 @@
 import { hash, compare } from 'bcrypt-ts'
-import type { User } from '@database/client'
+import type { User } from '@prisma-client/client'
 import { userRepository } from '../repositories/user.common.repository'
 import {
     UserDetailDtoSchema, type UserDetailDto, type UserDto,
     type UserQueryDto, type UserQueryWithPrivilegeDelegationDto
-} from '../types/user.common.type'
-import { userMapper } from '../mapper/user.common.mapper'
+} from '@schemas/user.common.type'
+import { userMapper } from '@mapper/user.common.mapper'
 import { employmentRepository } from '../repositories/employment.common.repository'
-import { employmentMapper } from '../mapper/employment.common.mapper'
+import { employmentMapper } from '@mapper/employment.common.mapper'
 import { positionRepository } from '../repositories/position.common.repository'
 import { organizationRepository } from '../repositories/organization.repository'
 import { mobileService } from './mobile.service'
 import { config } from '../config'
-import { UserNotFoundError } from '../errors/UserNotFoundError'
-import { CustomError } from '../errors/CustomError'
+import { UserNotFoundError } from '@errors/UserNotFoundError'
+import { CustomError } from '@errors/CustomError'
 import { roleRepository } from '../repositories/role.repository'
-import { prisma } from '../libs/database/db'
+import { prisma } from '@database/db'
 import { privilegeRepository } from '../repositories/privilege.repository'
-import { EmploymentDetailDtoSchema } from '../types/employment.common.type'
+import { EmploymentDetailDtoSchema } from '@schemas/employment.common.type'
 import { privilegeDelegationRepository } from '../repositories/privilegeDelegation.repository'
-import { privilegeDelegationMapper } from '../mapper/privilegeDelegation.mapper'
-import { VerificationCodeUsage } from '../constants/verificationCode.usage'
-import { UserType } from '../constants/user.type'
+import { privilegeDelegationMapper } from '@mapper/privilegeDelegation.mapper'
+import { VerificationCodeUsage } from '@constants/verificationCode.usage'
+import { UserType } from '@constants/user.type'
 
 async function _getUserDetail(user: User | null): Promise<UserDetailDto> {
     if (user === null) {

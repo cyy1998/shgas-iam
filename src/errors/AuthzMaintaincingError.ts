@@ -1,5 +1,5 @@
-import { HttpStatusCode } from "../constants/http.status"
-import { ServiceStatusCode } from "../constants/service.status"
+import { HttpStatusCode } from "@constants/http.status"
+import { ServiceStatusCode } from "@constants/service.status"
 import { AuthzError } from "./AuthzError"
 
 export class AuthzMaintaincingError extends AuthzError {

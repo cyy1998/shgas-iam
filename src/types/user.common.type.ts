@@ -1,6 +1,6 @@
 import { z } from "@hono/zod-openapi"
 import { EmploymentDtoSchema, type EmploymentDto } from "./employment.common.type"
-import { UserStatus } from "../constants/user.status"
+import { UserStatus } from "@constants/user.status"
 import { password } from "bun"
 
 export const UserDtoSchema = z.object({

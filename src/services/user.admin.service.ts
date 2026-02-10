@@ -1,19 +1,19 @@
 
-import { UserAdminDetailDtoSchema, type UserAdminQueryDto } from "../types/user.admin.type"
+import { UserAdminDetailDtoSchema, type UserAdminQueryDto } from "@schemas/user.admin.type"
 import { paginate } from "../utils/page.util";
-import { UserNotFoundError } from "../errors/UserNotFoundError"
-import { userAdminMapper } from "../mapper/user.admin.mapper"
-import type { User } from "@database/client"
+import { UserNotFoundError } from "@errors/UserNotFoundError"
+import { userAdminMapper } from "@mapper/user.admin.mapper"
+import type { User } from "@prisma-client/client"
 import { employmentRepository } from "../repositories/employment.common.repository"
-import { employmentAdminMapper } from "../mapper/employment.admin.mapper"
+import { employmentAdminMapper } from "@mapper/employment.admin.mapper"
 import { userAdminRepository } from "../repositories/user.admin.repository"
-import { prisma } from "../libs/database/db"
+import { prisma } from "@database/db"
 import { userRepository } from "../repositories/user.common.repository"
 import { hash, compare } from 'bcrypt-ts'
 import { generateRandomPassword } from "../utils/encryption.utils";
 import { config } from "../config";
-import type { UserCreateDto } from "../types/user.common.type";
-import { CustomError } from "../errors/CustomError";
+import type { UserCreateDto } from "@schemas/user.common.type";
+import { CustomError } from "@errors/CustomError";
 
 async function _getUserDetail(user: User | null) {
     if (user === null) {

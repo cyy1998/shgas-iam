@@ -1,6 +1,6 @@
 import { z } from "@hono/zod-openapi";
 import { createPageQuerySchema } from "./page.type";
-import { PositionStatus } from "../constants/position.status";
+import { PositionStatus } from "@constants/position.status";
 
 export const PositionAdminQueryDtoSchema = createPageQuerySchema(
     z.object({

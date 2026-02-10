@@ -1,11 +1,11 @@
-import type { User } from "@database/client"
-import { Prisma } from "@database/client"
-import { EmploymentStatus } from "../constants/employment.status"
-import { PositionStatus } from "../constants/position.status"
-import { RoleStatus } from "../constants/role.status"
-import { UserStatus } from "../constants/user.status"
-import { prisma, type PrismaTransaction } from '../libs/database/db'
-import type { UserQueryDto } from "../types/user.common.type"
+import type { User } from "@prisma-client/client"
+import { Prisma } from "@prisma-client/client"
+import { EmploymentStatus } from "@constants/employment.status"
+import { PositionStatus } from "@constants/position.status"
+import { RoleStatus } from "@constants/role.status"
+import { UserStatus } from "@constants/user.status"
+import { prisma, type PrismaTransaction } from '@database/db'
+import type { UserQueryDto } from "@schemas/user.common.type"
 
 const searchUserQuery = `
 SELECT

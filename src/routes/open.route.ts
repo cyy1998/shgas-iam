@@ -1,11 +1,11 @@
 import { z, createRoute, OpenAPIHono } from '@hono/zod-openapi'
-import { clientService } from '../services/client.service'
-import { ClientDtoSchema, ClientVoSchema } from '../types/client.type'
+import { clientService } from '@services/client.service'
+import { ClientDtoSchema, ClientVoSchema } from '@schemas/client.type'
 import { success } from '../utils/response.utils'
-import { createResponseSchema } from '../types/response.type'
-import { userService } from '../services/user.common.service'
-import { mobileService } from '../services/mobile.service'
-import { VerificationCodeUsage } from '../constants/verificationCode.usage'
+import { createResponseSchema } from '@schemas/response.type'
+import { userService } from '@services/user.common.service'
+import { mobileService } from '@services/mobile.service'
+import { VerificationCodeUsage } from '@constants/verificationCode.usage'
 
 const app = new OpenAPIHono()
 

@@ -1,5 +1,5 @@
-import type { PrivilegeDelegationEntity } from "../types/privilegeDelegation.entity.type"
-import type { PrivilegeDelegationDto } from "../types/privilegeDelegation.type"
+import type { PrivilegeDelegationEntity } from "@schemas/privilegeDelegation.entity.type"
+import type { PrivilegeDelegationDto } from "@schemas/privilegeDelegation.type"
 
 export const privilegeDelegationMapper = {
     entityToDto(pd: PrivilegeDelegationEntity): PrivilegeDelegationDto {

@@ -1,4 +1,4 @@
-import { PrismaClient } from "@database/client";
+import { PrismaClient } from "@prisma-client/client";
 import { PrismaMariaDb } from '@prisma/adapter-mariadb';
 
 

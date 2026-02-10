@@ -1,6 +1,5 @@
 import { z } from "@hono/zod-openapi";
-import { endTime, startTime } from "hono/timing";
-import { EmploymentStatus } from "../constants/employment.status";
+import { EmploymentStatus } from "@constants/employment.status";
 import { createPageQuerySchema } from "./page.type";
 import { EmploymentQueryDtoSchema } from "./employment.common.type";
 

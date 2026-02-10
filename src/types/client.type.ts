@@ -1,5 +1,5 @@
 import { z } from '@hono/zod-openapi'
-import { ClientStatus } from '../constants/client.status'
+import { ClientStatus } from '@constants/client.status'
 
 export const ClientExtAttributesDtoSchema = z.object({
     userExcluding: z.array(z.string()).optional(),

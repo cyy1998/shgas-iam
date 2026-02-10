@@ -1,4 +1,4 @@
-import { prisma, type PrismaTransaction } from '../libs/database/db'
+import { prisma, type PrismaTransaction } from '@database/db'
 export const posorgRepository = {
     async getPosOrgById(posId: number, orgId: number, tx: PrismaTransaction = prisma) {
         return await tx.posOrgComposition.findFirst({

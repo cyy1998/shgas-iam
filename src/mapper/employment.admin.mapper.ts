@@ -1,6 +1,6 @@
-import { employmentStatusToString } from "../constants/employment.status"
-import type { EmploymentAdminDto, EmploymentAdminVo } from "../types/employment.admin.type"
-import type { EmploymentEntity } from "../types/employment.entity.type"
+import { employmentStatusToString } from "@constants/employment.status"
+import type { EmploymentAdminDto, EmploymentAdminVo } from "@schemas/employment.admin.type"
+import type { EmploymentEntity } from "@schemas/employment.entity.type"
 
 export const employmentAdminMapper = {
     entityToDto(employment: EmploymentEntity): EmploymentAdminDto {

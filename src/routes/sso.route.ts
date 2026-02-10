@@ -1,11 +1,11 @@
 import { createRoute, OpenAPIHono, z } from "@hono/zod-openapi";
-import { createResponseSchema } from "../types/response.type";
+import { createResponseSchema } from "@schemas/response.type";
 import { success } from "../utils/response.utils";
 import { config } from "../config";
 import { deleteCookie, getCookie, setCookie } from "hono/cookie";
-import { authService } from "../services/auth.service";
+import { authService } from "@services/auth.service";
 import { getProtocolAndHost } from "../utils/common.utils";
-import { SSOMetaInfoSchema } from "../types/sso.type";
+import { SSOMetaInfoSchema } from "@schemas/sso.type";
 
 const app = new OpenAPIHono()
 

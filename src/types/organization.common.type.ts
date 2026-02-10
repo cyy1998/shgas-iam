@@ -1,5 +1,5 @@
 import { z } from "@hono/zod-openapi"
-import type { Prisma } from "@database/client"
+import type { Prisma } from "@prisma-client/client"
 
 export type OrganizationEntity = Prisma.OrganizationGetPayload<{
     include: {

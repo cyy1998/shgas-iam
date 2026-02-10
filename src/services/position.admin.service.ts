@@ -1,6 +1,6 @@
-import { positionAdminMapper } from "../mapper/position.admin.mapper"
+import { positionAdminMapper } from "@mapper/position.admin.mapper"
 import { positionAdminRepository } from "../repositories/position.admin.repository"
-import type { PositionAdminQueryDto } from "../types/position.admin.type"
+import type { PositionAdminQueryDto } from "@schemas/position.admin.type"
 import { paginate } from "../utils/page.util"
 
 export const positionAdminService = {

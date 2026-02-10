@@ -1,11 +1,11 @@
-import type { Organization } from "@database/client"
+import type { Organization } from "@prisma-client/client"
 import { config } from "../config"
-import { OrganizationType } from "../constants/organization.type"
-import { CustomError } from "../errors/CustomError"
-import { prisma } from "../libs/database/db"
-import { organizationMapper } from "../mapper/organization.mapper"
+import { OrganizationType } from "@constants/organization.type"
+import { CustomError } from "@errors/CustomError"
+import { prisma } from "@database/db"
+import { organizationMapper } from "@mapper/organization.mapper"
 import { organizationRepository } from "../repositories/organization.repository"
-import { OrganizationDtoSchema, type OrganizationCreateDto, type OrganizationQueryDto } from "../types/organization.common.type"
+import { OrganizationDtoSchema, type OrganizationCreateDto, type OrganizationQueryDto } from "@schemas/organization.common.type"
 
 const compDict = {}
 

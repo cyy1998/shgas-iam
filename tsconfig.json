@@ -26,8 +26,26 @@
     "noPropertyAccessFromIndexSignature": false,
     "baseUrl": ".",
     "paths": {
-      "@database/*": [
+      "@prisma-client/*": [
         "src/libs/database/generated/prisma/*"
+      ],
+      "@database/*": [
+        "src/libs/database/*"
+      ],
+      "@services/*": [
+        "src/services/*"
+      ],
+      "@schemas/*": [
+        "src/types/*"
+      ],
+      "@constants/*": [
+        "src/constants/*"
+      ],
+      "@mapper/*": [
+        "src/mapper/*"
+      ],
+      "@errors/*": [
+        "src/errors/*"
       ]
     }
   }
