@@ -166,7 +166,7 @@ app.openapi(
     createRoute({
         method: 'get',
         path: '/third-party/oa',
-        tags: ['Auth'],
+        tags: ['SSO'],
         request: {
             query: z.object({
                 loginid: z.string().openapi({ example: '138550' }),
@@ -189,6 +189,42 @@ app.openapi(
             await authService.logout(sessionId)
         }
         const data = await authService.loginOA(loginid, ts, token)
+        setCookie(c, 'global_session', data.token, {
+            httpOnly: true,
+            sameSite: 'Strict',  // 防 CSRF
+            maxAge: config.REDIS_EXPIRE_TIME,
+            path: '/',
+        })
+        return c.redirect(`/sso/authorize?client=${client}&redirectUrl=${encodeURIComponent(redirectUrl)}`)
+    }
+)
+
+/* 
+path: /third-party/wx
+method: POST
+function: 微信登录
+*/
+app.openapi(
+    createRoute({
+        method: 'get',
+        path: '/third-party/wx',
+        tags: ['SSO'],
+        request: {
+            query: z.object({
+                code: z.string().openapi({ example: '1234' }),
+                redirectUrl: z.url().openapi({ example: 'http://localhost:8080' }),
+                client: z.string().openapi({ example: 'tender' })
+            })
+        },
+        responses: {
+            301: {
+                description: 'OA登录成功',
+            }
+        },
+    }),
+    async (c) => {
+        const { code, redirectUrl, client } = c.req.valid('query')
+        const data = await authService.loginWX(code)
         setCookie(c, 'global_session', data.token, {
             httpOnly: true,
             sameSite: 'Strict',  // 防 CSRF

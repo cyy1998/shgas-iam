@@ -5,7 +5,8 @@
   "private": true,
   "devDependencies": {
     "@types/bun": "latest",
-    "@types/sm-crypto": "^0.3.4"
+    "@types/sm-crypto": "^0.3.4",
+    "eslint": "^10.0.0"
   },
   "peerDependencies": {
     "typescript": "^5"
