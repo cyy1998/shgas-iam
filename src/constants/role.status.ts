@@ -1,6 +1,5 @@
-
 export enum RoleStatus {
-    Enable = 1,
-    Pause,
-    Disable
+  Enable = 1,
+  Pause,
+  Disable,
 }

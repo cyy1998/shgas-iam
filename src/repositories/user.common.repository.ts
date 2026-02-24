@@ -1,11 +1,12 @@
-import type { User } from "@prisma-client/client"
-import { Prisma } from "@prisma-client/client"
-import { EmploymentStatus } from "@constants/employment.status"
-import { PositionStatus } from "@constants/position.status"
-import { RoleStatus } from "@constants/role.status"
-import { UserStatus } from "@constants/user.status"
-import { prisma, type PrismaTransaction } from '@database/db'
-import type { UserQueryDto } from "@schemas/user.common.type"
+import type { PrismaTransaction } from '@database/db';
+import type { User } from '@prisma-client/client';
+import type { UserQueryDto } from '@schemas/user.common.type';
+import { EmploymentStatus } from '@constants/employment.status';
+import { PositionStatus } from '@constants/position.status';
+import { RoleStatus } from '@constants/role.status';
+import { UserStatus } from '@constants/user.status';
+import { prisma } from '@database/db';
+import { Prisma } from '@prisma-client/client';
 
 const searchUserQuery = `
 SELECT
@@ -44,565 +45,565 @@ WHERE
 	AND o1.is_delete = 0
 	AND o2.is_delete = 0
 	AND u.status = 1
-	AND e.status = 1
+  AND e.status = 1
 	AND (r1.status = 1 OR r1.status IS NULL )
 	AND (r2.status = 1 OR r2.status IS NULL )
 	AND (r3.status = 1 OR r3.status IS NULL )
 	AND o1.status = 1
 	AND o2.status = 1
-`
+`;
 
 export const userRepository = {
-    async getUserById(userId: number, tx: PrismaTransaction = prisma) {
-        return await tx.user.findFirst({
-            where: {
-                id: userId,
-                status: UserStatus.Enable,
-                isDelete: false
-            }
-        })
-    },
-    async getUserByUsername(username: string, tx: PrismaTransaction = prisma) {
-        return await tx.user.findFirst({
-            where: {
-                username: username,
-                status: UserStatus.Enable,
-                isDelete: false
-            }
-        })
-    },
-    async getUserByWxId(wxId: string, tx: PrismaTransaction = prisma) {
-        return await tx.user.findFirst({
-            where: {
-                wxId: wxId,
-                status: UserStatus.Enable,
-                isDelete: false
-            }
-        })
-    },
-    async getUserByMobile(mobile: string, tx: PrismaTransaction = prisma) {
-        return await tx.user.findFirst({
-            where: {
-                mobile: mobile,
-                status: UserStatus.Enable,
-                isDelete: false
-            }
-        })
-    },
-    async searchUsers(
-        userQueryDto: UserQueryDto,
-        tx: PrismaTransaction = prisma
-    ) {
-        return await tx.user.findMany({
-            where: {
-                username: {
-                    in: userQueryDto.usernames
+  async getUserById(userId: number, tx: PrismaTransaction = prisma) {
+    return await tx.user.findFirst({
+      where: {
+        id: userId,
+        status: UserStatus.Enable,
+        isDelete: false,
+      },
+    });
+  },
+  async getUserByUsername(username: string, tx: PrismaTransaction = prisma) {
+    return await tx.user.findFirst({
+      where: {
+        username,
+        status: UserStatus.Enable,
+        isDelete: false,
+      },
+    });
+  },
+  async getUserByWxId(wxId: string, tx: PrismaTransaction = prisma) {
+    return await tx.user.findFirst({
+      where: {
+        wxId,
+        status: UserStatus.Enable,
+        isDelete: false,
+      },
+    });
+  },
+  async getUserByMobile(mobile: string, tx: PrismaTransaction = prisma) {
+    return await tx.user.findFirst({
+      where: {
+        mobile,
+        status: UserStatus.Enable,
+        isDelete: false,
+      },
+    });
+  },
+  async searchUsers(
+    userQueryDto: UserQueryDto,
+    tx: PrismaTransaction = prisma,
+  ) {
+    return await tx.user.findMany({
+      where: {
+        username: {
+          in: userQueryDto.usernames,
+        },
+        mobile: {
+          in: userQueryDto.phones,
+        },
+        wxId: {
+          in: userQueryDto.wxIds,
+        },
+        employments: {
+          some: {
+            status: EmploymentStatus.Enable,
+            isDelete: false,
+            deptartment: {
+              descendantClosures: {
+                some: {
+                  ancestor: {
+                    orgCode: {
+                      in: userQueryDto.ancestorOrgCodes,
+                    },
+                  },
+                  depth: {
+                    in: userQueryDto.ancestorOrgDepths,
+                  },
                 },
-                mobile: {
-                    in: userQueryDto.phones
-                },
-                wxId: {
-                    in: userQueryDto.wxIds
-                },
-                employments: {
+              },
+            },
+            position: {
+              status: PositionStatus.Enable,
+              isDelete: false,
+              posCode: {
+                in: userQueryDto.positionCodes,
+              },
+            },
+            OR: [
+              {
+                position: {
+                  roles: {
                     some: {
-                        status: EmploymentStatus.Enable,
+                      role: {
+                        status: RoleStatus.Enable,
                         isDelete: false,
-                        deptartment: {
-                            descendantClosures: {
-                                some: {
-                                    ancestor: {
-                                        orgCode: {
-                                            in: userQueryDto.ancestorOrgCodes
-                                        }
-                                    },
-                                    depth: {
-                                        in: userQueryDto.ancestorOrgDepths
-                                    }
-                                }
-                            }
+                        roleCode: {
+                          in: userQueryDto.roleCodes,
                         },
-                        position: {
-                            status: PositionStatus.Enable,
-                            isDelete: false,
-                            posCode: {
-                                in: userQueryDto.positionCodes
-                            }
-                        },
-                        OR: [
-                            {
-                                position: {
-                                    roles: {
-                                        some: {
-                                            role: {
-                                                status: RoleStatus.Enable,
-                                                isDelete: false,
-                                                roleCode: {
-                                                    in: userQueryDto.roleCodes
-                                                }
-                                            }
-                                        }
-                                    }
-                                },
-                            },
-                            // {
-                            //     posOrg: {
-                            //         roles: {
-                            //             some: {
-                            //                 role: {
-                            //                     status: RoleStatus.Enable,
-                            //                     isDelete: false,
-                            //                     roleCode: {
-                            //                         in: userQueryDto.roleCodes
-                            //                     }
-                            //                 }
-                            //             }
-                            //         }
-                            //     }
-                            // },
-                            {
-                                roles: {
-                                    some: {
-                                        role: {
-                                            status: RoleStatus.Enable,
-                                            isDelete: false,
-                                            roleCode: {
-                                                in: userQueryDto.roleCodes
-                                            }
-                                        }
-                                    }
-                                }
-                            },
-                            {
-                                deptartment: {
-                                    descendantClosures: {
-                                        some: {
-                                            OR: [
-                                                {
-                                                    depth: 0,
-                                                    ancestor: {
-                                                        roles: {
-                                                            some: {
-                                                                role: {
-                                                                    status: RoleStatus.Enable,
-                                                                    isDelete: false,
-                                                                    roleCode: {
-                                                                        in: userQueryDto.roleCodes
-                                                                    }
-                                                                }
-                                                            }
-                                                        }
-                                                    }
-                                                },
-                                                {
-                                                    depth: {
-                                                        gt: 0
-                                                    },
-                                                    ancestor: {
-                                                        roles: {
-                                                            some: {
-                                                                isAllSub: true,
-                                                                role: {
-                                                                    status: RoleStatus.Enable,
-                                                                    isDelete: false,
-                                                                    roleCode: {
-                                                                        in: userQueryDto.roleCodes
-                                                                    }
-                                                                }
-                                                            }
-                                                        }
-                                                    }
-                                                }
-                                            ]
-                                        }
-                                    }
-                                }
-                            }
-                        ]
-                    }
+                      },
+                    },
+                  },
                 },
-                status: UserStatus.Enable,
-                isDelete: false
-            }
-        })
-    },
-    async searchUsersRawSql(
-        userQueryDto: UserQueryDto,
-        tx: PrismaTransaction = prisma
-    ) {
-        let query = searchUserQuery
-        if (userQueryDto.roleCodes) {
-            query += `
+              },
+              // {
+              //     posOrg: {
+              //         roles: {
+              //             some: {
+              //                 role: {
+              //                     status: RoleStatus.Enable,
+              //                     isDelete: false,
+              //                     roleCode: {
+              //                         in: userQueryDto.roleCodes
+              //                     }
+              //                 }
+              //             }
+              //         }
+              //     }
+              // },
+              {
+                roles: {
+                  some: {
+                    role: {
+                      status: RoleStatus.Enable,
+                      isDelete: false,
+                      roleCode: {
+                        in: userQueryDto.roleCodes,
+                      },
+                    },
+                  },
+                },
+              },
+              {
+                deptartment: {
+                  descendantClosures: {
+                    some: {
+                      OR: [
+                        {
+                          depth: 0,
+                          ancestor: {
+                            roles: {
+                              some: {
+                                role: {
+                                  status: RoleStatus.Enable,
+                                  isDelete: false,
+                                  roleCode: {
+                                    in: userQueryDto.roleCodes,
+                                  },
+                                },
+                              },
+                            },
+                          },
+                        },
+                        {
+                          depth: {
+                            gt: 0,
+                          },
+                          ancestor: {
+                            roles: {
+                              some: {
+                                isAllSub: true,
+                                role: {
+                                  status: RoleStatus.Enable,
+                                  isDelete: false,
+                                  roleCode: {
+                                    in: userQueryDto.roleCodes,
+                                  },
+                                },
+                              },
+                            },
+                          },
+                        },
+                      ],
+                    },
+                  },
+                },
+              },
+            ],
+          },
+        },
+        status: UserStatus.Enable,
+        isDelete: false,
+      },
+    });
+  },
+  async searchUsersRawSql(
+    userQueryDto: UserQueryDto,
+    tx: PrismaTransaction = prisma,
+  ) {
+    let query = searchUserQuery;
+    if (userQueryDto.roleCodes) {
+      query += `
             AND (
 			(
-				r2.role_code IN (${userQueryDto.roleCodes.map(r => "'" + r + "'").join(',')})
+				r2.role_code IN (${userQueryDto.roleCodes.map(r => `'${r}'`).join(',')})
 				AND (or2.is_all_sub = 1 OR (or2.is_all_sub = 0 AND oc.\`depth\` = 0))
 			)
 			OR
-				r1.role_code IN (${userQueryDto.roleCodes.map(r => "'" + r + "'").join(',')})
+				r1.role_code IN (${userQueryDto.roleCodes.map(r => `'${r}'`).join(',')})
 			OR
-				r3.role_code IN (${userQueryDto.roleCodes.map(r => "'" + r + "'").join(',')})
+				r3.role_code IN (${userQueryDto.roleCodes.map(r => `'${r}'`).join(',')})
 	        )
-            `
-        }
-        if (userQueryDto.positionCodes) {
-            query += `
-            AND p.post_code IN (${userQueryDto.positionCodes.map(r => "'" + r + "'").join(',')})
-            `
-        }
-        if (userQueryDto.ancestorOrgCodes) {
-            query += `
-            AND o2.org_code IN (${userQueryDto.ancestorOrgCodes.map(r => "'" + r + "'").join(',')})
-            `
-        }
-        // if (userQueryDto.ancestorOrgCodes) {
-        //     query += `
-        //     AND o2.org_code IN (${userQueryDto.ancestorOrgCodes.map(r => "'" + r + "'").join(',')})
-        //     `
-        // }
-        if (userQueryDto.ancestorOrgDepths) {
-            query += `
-            AND oc.\`depth\` IN (${userQueryDto.ancestorOrgDepths.map(r => "'" + r + "'").join(',')})
-            `
-        }
-        if (userQueryDto.usernames) {
-            query += `
-            AND u.username IN (${userQueryDto.usernames.map(r => "'" + r + "'").join(',')})
-            `
-        }
-        if (userQueryDto.phones) {
-            query += `
-            AND u.mobile_phone IN (${userQueryDto.phones.map(r => "'" + r + "'").join(',')})
-            `
-        }
-        if (userQueryDto.wxIds) {
-            query += `
-            AND u.wxId IN (${userQueryDto.wxIds.map(r => "'" + r + "'").join(',')})
-            `
-        }
-        console.log(query)
-        const q = Prisma.sql([query])
-        return await tx.$queryRaw<User[]>(q)
-    },
-    async setPassword(userId: number, password: string, tx: PrismaTransaction = prisma) {
-        return await tx.user.update({
-            where: {
-                id: userId,
-                status: UserStatus.Enable,
-                isDelete: false
-            },
-            data: {
-                password: password
-            }
-        })
-    },
-    async setMobile(userId: number, phoneNumber: string, tx: PrismaTransaction = prisma) {
-        return await tx.user.update({
-            where: {
-                id: userId,
-                status: UserStatus.Enable,
-                isDelete: false
-            },
-            data: {
-                mobile: phoneNumber
-            }
-        })
-    },
-    async setUser(username: string, name: string, mobile: string, userType: string, tx: PrismaTransaction = prisma) {
-        return await tx.user.create({
-            data: {
-                username: username,
-                name: name,
-                mobile: mobile,
-                userType: userType
-            }
-        })
-    },
+            `;
+    }
+    if (userQueryDto.positionCodes) {
+      query += `
+            AND p.post_code IN (${userQueryDto.positionCodes.map(r => `'${r}'`).join(',')})
+            `;
+    }
+    if (userQueryDto.ancestorOrgCodes) {
+      query += `
+            AND o2.org_code IN (${userQueryDto.ancestorOrgCodes.map(r => `'${r}'`).join(',')})
+            `;
+    }
+    // if (userQueryDto.ancestorOrgCodes) {
+    //     query += `
+    //     AND o2.org_code IN (${userQueryDto.ancestorOrgCodes.map(r => "'" + r + "'").join(',')})
+    //     `
+    // }
+    if (userQueryDto.ancestorOrgDepths) {
+      query += `
+            AND oc.\`depth\` IN (${userQueryDto.ancestorOrgDepths.map(r => `'${r}'`).join(',')})
+            `;
+    }
+    if (userQueryDto.usernames) {
+      query += `
+            AND u.username IN (${userQueryDto.usernames.map(r => `'${r}'`).join(',')})
+            `;
+    }
+    if (userQueryDto.phones) {
+      query += `
+            AND u.mobile_phone IN (${userQueryDto.phones.map(r => `'${r}'`).join(',')})
+            `;
+    }
+    if (userQueryDto.wxIds) {
+      query += `
+            AND u.wxId IN (${userQueryDto.wxIds.map(r => `'${r}'`).join(',')})
+            `;
+    }
+    console.log(query);
+    const q = Prisma.sql([query]);
+    return await tx.$queryRaw<User[]>(q);
+  },
+  async setPassword(userId: number, password: string, tx: PrismaTransaction = prisma) {
+    return await tx.user.update({
+      where: {
+        id: userId,
+        status: UserStatus.Enable,
+        isDelete: false,
+      },
+      data: {
+        password,
+      },
+    });
+  },
+  async setMobile(userId: number, phoneNumber: string, tx: PrismaTransaction = prisma) {
+    return await tx.user.update({
+      where: {
+        id: userId,
+        status: UserStatus.Enable,
+        isDelete: false,
+      },
+      data: {
+        mobile: phoneNumber,
+      },
+    });
+  },
+  async setUser(username: string, name: string, mobile: string, userType: string, tx: PrismaTransaction = prisma) {
+    return await tx.user.create({
+      data: {
+        username,
+        name,
+        mobile,
+        userType,
+      },
+    });
+  },
 
-    async getUsersByOrg(orgCode: string, tx: PrismaTransaction = prisma) {
-        return await tx.user.findMany({
-            where: {
-                employments: {
-                    some: {
-                        deptartment: {
-                            orgCode: orgCode
-                        }
-                    }
+  async getUsersByOrg(orgCode: string, tx: PrismaTransaction = prisma) {
+    return await tx.user.findMany({
+      where: {
+        employments: {
+          some: {
+            deptartment: {
+              orgCode,
+            },
+          },
+        },
+        status: UserStatus.Enable,
+        isDelete: false,
+      },
+    });
+  },
+  async getUsersByOrgAndAllSub(orgCode: string, tx: PrismaTransaction = prisma) {
+    return await tx.user.findMany({
+      where: {
+        employments: {
+          some: {
+            deptartment: {
+              descendantClosures: {
+                some: {
+                  ancestor: {
+                    orgCode,
+                  },
                 },
-                status: UserStatus.Enable,
-                isDelete: false
-            }
-        })
-    },
-    async getUsersByOrgAndAllSub(orgCode: string, tx: PrismaTransaction = prisma) {
-        return await tx.user.findMany({
-            where: {
-                employments: {
-                    some: {
-                        deptartment: {
-                            descendantClosures: {
-                                some: {
-                                    ancestor: {
-                                        orgCode: orgCode
-                                    }
-                                }
-                            }
-                        }
-                    }
+              },
+            },
+          },
+        },
+        status: UserStatus.Enable,
+        isDelete: false,
+      },
+    });
+  },
+  async getOtherUsersByOrgAndAllSub(userId: number, orgCode: string, tx: PrismaTransaction = prisma) {
+    return await tx.user.findMany({
+      where: {
+        employments: {
+          some: {
+            deptartment: {
+              descendantClosures: {
+                some: {
+                  ancestor: {
+                    orgCode,
+                  },
                 },
-                status: UserStatus.Enable,
-                isDelete: false
-            }
-        })
-    },
-    async getOtherUsersByOrgAndAllSub(userId: number, orgCode: string, tx: PrismaTransaction = prisma) {
-        return await tx.user.findMany({
-            where: {
-                employments: {
-                    some: {
-                        deptartment: {
-                            descendantClosures: {
-                                some: {
-                                    ancestor: {
-                                        orgCode: orgCode
-                                    }
-                                }
-                            }
-                        }
-                    }
+              },
+            },
+          },
+        },
+        NOT: {
+          id: userId,
+        },
+        status: UserStatus.Enable,
+        isDelete: false,
+      },
+    });
+  },
+  async getUsersByOrgRole(orgCode: string, roleCode: string, tx: PrismaTransaction = prisma) {
+    return await tx.user.findMany({
+      where: {
+        employments: {
+          some: {
+            AND: [
+              {
+                deptartment: {
+                  orgCode,
                 },
-                NOT: {
-                    id: userId
-                },
-                status: UserStatus.Enable,
-                isDelete: false
-            }
-        })
-    },
-    async getUsersByOrgRole(orgCode: string, roleCode: string, tx: PrismaTransaction = prisma) {
-        return await tx.user.findMany({
-            where: {
-                employments: {
+                status: EmploymentStatus.Enable,
+              },
+              {
+                OR: [
+                  {
+                    position: {
+                      roles: {
+                        some: {
+                          role: {
+                            roleCode,
+                          },
+                        },
+                      },
+                    },
+                  },
+                  {
+                    posOrg: {
+                      roles: {
+                        some: {
+                          role: {
+                            roleCode,
+                          },
+                        },
+                      },
+                    },
+                  },
+                  {
+                    roles: {
+                      some: {
+                        role: {
+                          roleCode,
+                        },
+                      },
+                    },
+                  },
+                  {
+                    deptartment: {
+                      roles: {
+                        some: {
+                          role: {
+                            roleCode,
+                          },
+                        },
+                      },
+                    },
+                  },
+                  {
+                    company: {
+                      roles: {
+                        some: {
+                          role: {
+                            roleCode,
+                          },
+                        },
+                      },
+                    },
+                  },
+                ],
+              },
+            ],
+          },
+        },
+        status: UserStatus.Enable,
+        isDelete: false,
+      },
+    });
+  },
+  async getUsersByOrgAndAllSubRole(orgCode: string, roleCode: string, tx: PrismaTransaction = prisma) {
+    return await tx.user.findMany({
+      where: {
+        // userType: '正式员工',
+        employments: {
+          some: {
+            AND: [
+              {
+                deptartment: {
+                  descendantClosures: {
                     some: {
-                        AND: [
+                      ancestor: {
+                        orgCode,
+                      },
+                    },
+                  },
+                },
+                status: EmploymentStatus.Enable,
+              },
+              {
+                OR: [
+                  {
+                    position: {
+                      roles: {
+                        some: {
+                          role: {
+                            roleCode,
+                          },
+                        },
+                      },
+                    },
+                  },
+                  {
+                    posOrg: {
+                      roles: {
+                        some: {
+                          role: {
+                            roleCode,
+                          },
+                        },
+                      },
+                    },
+                  },
+                  {
+                    roles: {
+                      some: {
+                        role: {
+                          roleCode,
+                        },
+                      },
+                    },
+                  },
+                  {
+                    deptartment: {
+                      descendantClosures: {
+                        some: {
+                          OR: [
                             {
-                                deptartment: {
-                                    orgCode: orgCode
+                              depth: 0,
+                              ancestor: {
+                                roles: {
+                                  some: {
+                                    role: {
+                                      roleCode,
+                                    },
+                                  },
                                 },
-                                status: EmploymentStatus.Enable
+                              },
                             },
                             {
-                                OR: [
-                                    {
-                                        position: {
-                                            roles: {
-                                                some: {
-                                                    role: {
-                                                        roleCode: roleCode
-                                                    }
-                                                }
-                                            }
-                                        },
+                              depth: {
+                                gt: 0,
+                              },
+                              ancestor: {
+                                roles: {
+                                  some: {
+                                    isAllSub: true,
+                                    role: {
+                                      roleCode,
                                     },
-                                    {
-                                        posOrg: {
-                                            roles: {
-                                                some: {
-                                                    role: {
-                                                        roleCode: roleCode
-                                                    }
-                                                }
-                                            }
-                                        }
-                                    },
-                                    {
-                                        roles: {
-                                            some: {
-                                                role: {
-                                                    roleCode: roleCode
-                                                }
-                                            }
-                                        }
-                                    },
-                                    {
-                                        deptartment: {
-                                            roles: {
-                                                some: {
-                                                    role: {
-                                                        roleCode: roleCode
-                                                    }
-                                                }
-                                            }
-                                        }
-                                    },
-                                    {
-                                        company: {
-                                            roles: {
-                                                some: {
-                                                    role: {
-                                                        roleCode: roleCode
-                                                    }
-                                                }
-                                            }
-                                        }
-                                    }
-                                ]
-                            }
-                        ]
-                    }
-                },
-                status: UserStatus.Enable,
-                isDelete: false
-            }
-        })
-    },
-    async getUsersByOrgAndAllSubRole(orgCode: string, roleCode: string, tx: PrismaTransaction = prisma) {
-        return await tx.user.findMany({
-            where: {
-                // userType: '正式员工',
-                employments: {
-                    some: {
-                        AND: [
-                            {
-                                deptartment: {
-                                    descendantClosures: {
-                                        some: {
-                                            ancestor: {
-                                                orgCode: orgCode
-                                            }
-                                        }
-                                    }
+                                  },
                                 },
-                                status: EmploymentStatus.Enable
+                              },
                             },
-                            {
-                                OR: [
-                                    {
-                                        position: {
-                                            roles: {
-                                                some: {
-                                                    role: {
-                                                        roleCode: roleCode
-                                                    }
-                                                }
-                                            }
-                                        },
-                                    },
-                                    {
-                                        posOrg: {
-                                            roles: {
-                                                some: {
-                                                    role: {
-                                                        roleCode: roleCode
-                                                    }
-                                                }
-                                            }
-                                        }
-                                    },
-                                    {
-                                        roles: {
-                                            some: {
-                                                role: {
-                                                    roleCode: roleCode
-                                                }
-                                            }
-                                        }
-                                    },
-                                    {
-                                        deptartment: {
-                                            descendantClosures: {
-                                                some: {
-                                                    OR: [
-                                                        {
-                                                            depth: 0,
-                                                            ancestor: {
-                                                                roles: {
-                                                                    some: {
-                                                                        role: {
-                                                                            roleCode: roleCode
-                                                                        }
-                                                                    }
-                                                                }
-                                                            }
-                                                        },
-                                                        {
-                                                            depth: {
-                                                                gt: 0
-                                                            },
-                                                            ancestor: {
-                                                                roles: {
-                                                                    some: {
-                                                                        isAllSub: true,
-                                                                        role: {
-                                                                            roleCode: roleCode
-                                                                        }
-                                                                    }
-                                                                }
-                                                            }
-                                                        }
-                                                    ]
-                                                }
-                                            }
-                                            // roles: {
-                                            //     some: {
-                                            //         role: {
-                                            //             roleCode: roleCode
-                                            //         }
-                                            //     }
-                                            // }
-                                        }
-                                    }
-                                ]
-                            }
-                        ]
-                    }
-                },
-                status: UserStatus.Enable,
-                isDelete: false
-            }
-        })
-    },
-    async getUsersByOrgPos(orgCode: string, posCode: string, tx: PrismaTransaction = prisma) {
-        return await tx.user.findMany({
-            where: {
-                employments: {
-                    some: {
-                        deptartment: {
-                            orgCode: orgCode
+                          ],
                         },
-                        position: {
-                            posCode: posCode
-                        }
-                    }
+                      },
+                      // roles: {
+                      //     some: {
+                      //         role: {
+                      //             roleCode: roleCode
+                      //         }
+                      //     }
+                      // }
+                    },
+                  },
+                ],
+              },
+            ],
+          },
+        },
+        status: UserStatus.Enable,
+        isDelete: false,
+      },
+    });
+  },
+  async getUsersByOrgPos(orgCode: string, posCode: string, tx: PrismaTransaction = prisma) {
+    return await tx.user.findMany({
+      where: {
+        employments: {
+          some: {
+            deptartment: {
+              orgCode,
+            },
+            position: {
+              posCode,
+            },
+          },
+        },
+        status: UserStatus.Enable,
+        isDelete: false,
+      },
+    });
+  },
+  async getUsersByOrgAndAllSubPos(orgCode: string, posCode: string, tx: PrismaTransaction = prisma) {
+    return await tx.user.findMany({
+      where: {
+        employments: {
+          some: {
+            deptartment: {
+              descendantClosures: {
+                some: {
+                  ancestor: {
+                    orgCode,
+                  },
                 },
-                status: UserStatus.Enable,
-                isDelete: false
-            }
-        })
-    },
-    async getUsersByOrgAndAllSubPos(orgCode: string, posCode: string, tx: PrismaTransaction = prisma) {
-        return await tx.user.findMany({
-            where: {
-                employments: {
-                    some: {
-                        deptartment: {
-                            descendantClosures: {
-                                some: {
-                                    ancestor: {
-                                        orgCode: orgCode
-                                    }
-                                }
-                            }
-                        },
-                        position: {
-                            posCode: posCode
-                        }
-                    }
-                },
-                status: UserStatus.Enable,
-                isDelete: false
-            }
-        })
-    },
+              },
+            },
+            position: {
+              posCode,
+            },
+          },
+        },
+        status: UserStatus.Enable,
+        isDelete: false,
+      },
+    });
+  },
 
-}
+};

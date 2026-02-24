@@ -1,8 +1,8 @@
-import type { Prisma } from "@prisma-client/client"
+import type { Prisma } from '@prisma-client/client';
 
 export type PositionAdminEntity = Prisma.PositionGetPayload<{
-    include: {
-        employments: true
-    }
+  include: {
+    employments: true;
+  };
 
-}>
+}>;

@@ -1,5 +1,5 @@
 export enum PrivilegeDelegationStatus {
-    Enable = 1,
-    Pause,
-    Disable
+  Enable = 1,
+  Pause,
+  Disable,
 }

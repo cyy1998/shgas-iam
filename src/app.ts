@@ -1,32 +1,31 @@
-import authRoutes from './routes/auth.route'
-import publicRoutes from './routes/public.route'
-import internalRoutes from './routes/internal.route'
-import adminRoutes from './routes/admin.route'
-import openRoutes from './routes/open.route'
-import ssoRoutes from './routes/sso.route'
-import { serveStatic } from 'hono/bun'
-import { OpenAPIHono } from '@hono/zod-openapi'
-import { logger } from 'hono/logger'
-import { errorHandler } from './middleware/error.handler'
+import { OpenAPIHono } from '@hono/zod-openapi';
+import { serveStatic } from 'hono/bun';
+import { logger } from 'hono/logger';
+import { errorHandler } from './middleware/error.handler';
+import adminRoutes from './routes/admin.route';
+import authRoutes from './routes/auth.route';
+import internalRoutes from './routes/internal.route';
+import openRoutes from './routes/open.route';
+import publicRoutes from './routes/public.route';
+import ssoRoutes from './routes/sso.route';
 
-const app = new OpenAPIHono()
+const app = new OpenAPIHono();
 // const port = env.PORT
 
-app.use('/static/*', serveStatic({ root: './' }))
+app.use('/static/*', serveStatic({ root: './' }));
 
 app.use(logger(
   (str: string, ...args: any[]) => {
-    console.log(`[INFO] ${new Date().toISOString()} - ${str}`, ...args)
-  }
-))
+    console.log(`[INFO] ${new Date().toISOString()} - ${str}`, ...args);
+  },
+));
 
-
-app.route('/auth', authRoutes)
-app.route('/sso', ssoRoutes)
-app.route('/public', publicRoutes)
-app.route('/open', openRoutes)
-app.route('/internal', internalRoutes)
-app.route('/admin', adminRoutes)
+app.route('/auth', authRoutes);
+app.route('/sso', ssoRoutes);
+app.route('/public', publicRoutes);
+app.route('/open', openRoutes);
+app.route('/internal', internalRoutes);
+app.route('/admin', adminRoutes);
 
 app.doc('/doc', {
   openapi: '3.0.0',
@@ -34,7 +33,7 @@ app.doc('/doc', {
     version: '1.0.0',
     title: 'IAM Service',
   },
-})
+});
 
 app.get('/doc/swagger', (c) => {
   const html = `
@@ -62,10 +61,10 @@ app.get('/doc/swagger', (c) => {
   </script>
 </body>
 </html>
-  `
-  return c.html(html)
-})
+  `;
+  return c.html(html);
+});
 
-app.onError(errorHandler)
+app.onError(errorHandler);
 
-export default app
+export default app;

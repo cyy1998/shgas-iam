@@ -1,8 +1,8 @@
-import type { Prisma } from "@prisma-client/client"
+import type { Prisma } from '@prisma-client/client';
 
 export type PrivilegeDelegationEntity = Prisma.PrivilegeDelegationGetPayload<{
-    include: {
-        delegateeUser: true,
-        delegatorUser: true
-    }
-}>
+  include: {
+    delegateeUser: true;
+    delegatorUser: true;
+  };
+}>;

@@ -1,19 +1,19 @@
-import { PrismaClient } from "@prisma-client/client";
+import { PrismaClient } from '@prisma-client/client';
 import { PrismaMariaDb } from '@prisma/adapter-mariadb';
 
-
-const globalForPrisma = globalThis as unknown as { prisma: PrismaClient }
+const globalForPrisma = globalThis as unknown as { prisma: PrismaClient };
 
 const adapter = new PrismaMariaDb({
-    host: process.env.DATABASE_HOST,
-    port: parseInt(process.env.DATABASE_PORT as string),
-    user: process.env.DATABASE_USER,
-    password: process.env.DATABASE_PASSWORD,
-    database: process.env.DATABASE_NAME,
-    connectionLimit: 10
-})
-export const prisma = globalForPrisma.prisma || new PrismaClient({ adapter })
+  host: process.env.DATABASE_HOST,
+  port: Number.parseInt(process.env.DATABASE_PORT as string),
+  user: process.env.DATABASE_USER,
+  password: process.env.DATABASE_PASSWORD,
+  database: process.env.DATABASE_NAME,
+  connectionLimit: 10,
+});
+export const prisma = globalForPrisma.prisma || new PrismaClient({ adapter });
 
-export type PrismaTransaction = Omit<typeof prisma, '$connect' | '$disconnect' | '$on' | '$transaction' | '$use' | '$extends'>
+export type PrismaTransaction = Omit<typeof prisma, '$connect' | '$disconnect' | '$on' | '$transaction' | '$use' | '$extends'>;
 
-if (process.env.NODE_ENV !== 'production') globalForPrisma.prisma = prisma
+if (process.env.NODE_ENV !== 'production')
+  globalForPrisma.prisma = prisma;

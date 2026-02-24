@@ -1,10 +1,9 @@
-import { config } from "./config";
-import app from "./app"
+import app from './app';
+import { config } from './config';
 
-
-const port = config.PORT
+const port = config.PORT;
 
 export default {
-    port,
-    fetch: app.fetch
-}
+  port,
+  fetch: app.fetch,
+};

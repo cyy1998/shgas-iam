@@ -1,62 +1,57 @@
-import { setCookie, getCookie, deleteCookie } from 'hono/cookie'
-import { success } from '../utils/response.utils'
-import { z, createRoute, OpenAPIHono } from '@hono/zod-openapi'
-import { createResponseSchema } from '@schemas/response.type'
-import { mobileService } from '@services/mobile.service'
-import { authService } from '@services/auth.service'
-import { config } from '../config'
-import { redis } from 'bun'
-import { AuthzUnauthorizedError } from '@errors/AuthzUnauthorizedError'
-import type { UserDetailDto } from '@schemas/user.common.type'
-import { getProtocolAndHost } from '../utils/common.utils'
+import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
+import { createResponseSchema } from '@schemas/response.type';
+import { authService } from '@services/auth.service';
+import { getCookie, setCookie } from 'hono/cookie';
+import { config } from '../config';
+import { success } from '../utils/response.utils';
 
-const app = new OpenAPIHono()
+const app = new OpenAPIHono();
 
-/* 
+/*
 path: /login/password
 method: POST
 function: 密码登录
 */
 app.openapi(
-    createRoute({
-        method: 'post',
-        path: '/login/password',
-        tags: ['Auth'],
-        request: {
-            body: {
-                content: {
-                    'application/json': {
-                        schema: z.object({
-                            username: z.string().openapi({ example: '138550' }),
-                            password: z.string().openapi({ example: '1234' })
-                        })
-                    }
-                }
-            },
+  createRoute({
+    method: 'post',
+    path: '/login/password',
+    tags: ['Auth'],
+    request: {
+      body: {
+        content: {
+          'application/json': {
+            schema: z.object({
+              username: z.string().openapi({ example: '138550' }),
+              password: z.string().openapi({ example: '1234' }),
+            }),
+          },
         },
-        responses: {
-            200: {
-                content: {
-                    'application/json': {
-                        schema: createResponseSchema(z.object()),
-                    },
-                },
-                description: '设置岗位成功',
-            }
+      },
+    },
+    responses: {
+      200: {
+        content: {
+          'application/json': {
+            schema: createResponseSchema(z.object()),
+          },
         },
-    }),
-    async (c) => {
-        const { username, password } = c.req.valid('json')
-        const data = await authService.loginPassword(username, password)
-        setCookie(c, 'global_session', data.token, {
-            httpOnly: true,
-            sameSite: 'Strict',  // 防 CSRF
-            maxAge: config.REDIS_EXPIRE_TIME,
-            path: '/',
-        })
-        return c.json(success(data))
-    }
-)
+        description: '设置岗位成功',
+      },
+    },
+  }),
+  async (c) => {
+    const { username, password } = c.req.valid('json');
+    const data = await authService.loginPassword(username, password);
+    setCookie(c, 'global_session', data.token, {
+      httpOnly: true,
+      sameSite: 'Strict', // 防 CSRF
+      maxAge: config.REDIS_EXPIRE_TIME,
+      path: '/',
+    });
+    return c.json(success(data));
+  },
+);
 
 /*
 path: /login/mobile
@@ -64,100 +59,100 @@ method: POST
 function: 手机登录
 */
 app.openapi(
-    createRoute({
-        method: 'post',
-        path: '/login/mobile',
-        tags: ['Auth'],
-        request: {
-            body: {
-                content: {
-                    'application/json': {
-                        schema: z.object({
-                            phoneNumber: z.string().openapi({ example: '17721462865' }),
-                            code: z.string().openapi({ example: '1234' })
-                        })
-                    }
-                }
-            },
+  createRoute({
+    method: 'post',
+    path: '/login/mobile',
+    tags: ['Auth'],
+    request: {
+      body: {
+        content: {
+          'application/json': {
+            schema: z.object({
+              phoneNumber: z.string().openapi({ example: '17721462865' }),
+              code: z.string().openapi({ example: '1234' }),
+            }),
+          },
         },
-        responses: {
-            200: {
-                content: {
-                    'application/json': {
-                        schema: createResponseSchema(z.object()),
-                    },
-                },
-                description: '发送短信成功',
-            },
-        }
-    }),
-    async (c) => {
-        const { code, phoneNumber } = c.req.valid('json')
-        const data = await authService.loginMobile(phoneNumber, code)
-        setCookie(c, 'global_session', data.token, {
-            httpOnly: true,
-            sameSite: 'Strict',  // 防 CSRF
-            maxAge: config.REDIS_EXPIRE_TIME,
-            path: '/',
-        })
-        return c.json(success(data))
-    }
-)
+      },
+    },
+    responses: {
+      200: {
+        content: {
+          'application/json': {
+            schema: createResponseSchema(z.object()),
+          },
+        },
+        description: '发送短信成功',
+      },
+    },
+  }),
+  async (c) => {
+    const { code, phoneNumber } = c.req.valid('json');
+    const data = await authService.loginMobile(phoneNumber, code);
+    setCookie(c, 'global_session', data.token, {
+      httpOnly: true,
+      sameSite: 'Strict', // 防 CSRF
+      maxAge: config.REDIS_EXPIRE_TIME,
+      path: '/',
+    });
+    return c.json(success(data));
+  },
+);
 
-/* 
+/*
 path: /login/wx
 method: POST
 function: 微信登录
 */
 app.openapi(
-    createRoute({
-        method: 'post',
-        path: '/login/wx',
-        tags: ['Auth'],
-        request: {
-            body: {
-                content: {
-                    'application/json': {
-                        schema: z.object({
-                            code: z.string().openapi({ example: '1234' }),
-                        })
-                    }
-                }
-            },
+  createRoute({
+    method: 'post',
+    path: '/login/wx',
+    tags: ['Auth'],
+    request: {
+      body: {
+        content: {
+          'application/json': {
+            schema: z.object({
+              code: z.string().openapi({ example: '1234' }),
+            }),
+          },
         },
-        responses: {
-            200: {
-                content: {
-                    'application/json': {
-                        schema: createResponseSchema(z.object()),
-                    },
-                },
-                description: '认证',
-            },
-            401: {
-                content: {
-                    'application/json': {
-                        schema: createResponseSchema(z.object()),
-                    },
-                },
-                description: '认证失败',
-            },
+      },
+    },
+    responses: {
+      200: {
+        content: {
+          'application/json': {
+            schema: createResponseSchema(z.object()),
+          },
         },
-    }),
-    async (c) => {
-        const { code } = c.req.valid('json')
-        const data = await authService.loginWX(code)
-        setCookie(c, 'session', data.token, {
-            httpOnly: true,
-            sameSite: 'Strict',  // 防 CSRF
-            maxAge: config.REDIS_EXPIRE_TIME,
-            path: '/',
-        })
-        return c.json(success(data))
-    }
-)
+        description: '认证',
+      },
+      401: {
+        content: {
+          'application/json': {
+            schema: createResponseSchema(z.object()),
+          },
+        },
+        description: '认证失败',
+      },
+    },
+  }),
+  async (c) => {
+    const { code } = c.req.valid('json');
+    const data = await authService.loginWX(code);
+    setCookie(c, 'session', data.token, {
+      httpOnly: true,
+      sameSite: 'Strict', // 防 CSRF
+      maxAge: config.REDIS_EXPIRE_TIME,
+      path: '/',
+    });
+    return c.json(success(data));
+  },
+);
 
-// /* 
+// /*
 // path: /sso/oa
 // method: POST
 // function: oa登录
@@ -199,7 +194,7 @@ app.openapi(
 //     }
 // )
 
-// /* 
+// /*
 // path: /callback
 // method: GET
 // function: 本地session建立
@@ -258,7 +253,7 @@ app.openapi(
 //     }
 // )
 
-// /* 
+// /*
 // path: /authorize
 // method: GET
 // function: 本地session建立
@@ -301,7 +296,7 @@ app.openapi(
 // )
 
 // /*
-// path: /logout 
+// path: /logout
 // method: GET
 // function: logout
 // */
@@ -331,33 +326,33 @@ app.openapi(
 // )
 
 /*
-path: /authz 
+path: /authz
 method: GET
 function: 接口鉴权
 */
 app.openapi(
-    createRoute({
-        method: 'get',
-        path: '/authz',
-        tags: ['Auth'],
-        responses: {
-            200: {
-                content: {
-                    'application/json': {
-                        schema: createResponseSchema(z.object()),
-                    },
-                },
-                description: 'Allow',
-            }
-        }
-    }),
-    async (c) => {
-        const clientCode = c.req.header('Client') ?? null
-        const sessionId = getCookie(c, `local_${clientCode}_session`) ?? null
-        const data = await authService.authz(sessionId, clientCode, c.req.header('X-Forwarded-Uri'))
-        c.header('X-User-Info', data)
-        return c.json(success(data))
-    }
-)
+  createRoute({
+    method: 'get',
+    path: '/authz',
+    tags: ['Auth'],
+    responses: {
+      200: {
+        content: {
+          'application/json': {
+            schema: createResponseSchema(z.object()),
+          },
+        },
+        description: 'Allow',
+      },
+    },
+  }),
+  async (c) => {
+    const clientCode = c.req.header('Client') ?? null;
+    const sessionId = getCookie(c, `local_${clientCode}_session`) ?? null;
+    const data = await authService.authz(sessionId, clientCode, c.req.header('X-Forwarded-Uri'));
+    c.header('X-User-Info', data);
+    return c.json(success(data));
+  },
+);
 
-export default app
+export default app;

@@ -1,112 +1,113 @@
-import { EmploymentStatus } from "@constants/employment.status"
-import { prisma, type PrismaTransaction } from '@database/db'
+import type { PrismaTransaction } from '@database/db';
+import { EmploymentStatus } from '@constants/employment.status';
+import { prisma } from '@database/db';
 
 export const privilegeRepository = {
-    async getPrivilegesByUserId(userId: number, tx: PrismaTransaction = prisma) {
-        return await tx.privilege.findMany({
-            where: {
-                roles: {
+  async getPrivilegesByUserId(userId: number, tx: PrismaTransaction = prisma) {
+    return await tx.privilege.findMany({
+      where: {
+        roles: {
+          some: {
+            role: {
+              OR: [
+                {
+                  positions: {
                     some: {
-                        role: {
-                            OR: [
-                                {
-                                    positions: {
-                                        some: {
-                                            position: {
-                                                employments: {
-                                                    some: {
-                                                        userId: userId,
-                                                        status: EmploymentStatus.Enable
-                                                    }
-                                                }
-                                            }
-                                        }
-                                    }
-                                },
-                                {
-                                    organizations: {
-                                        some: {
-                                            organization: {
-                                                OR: [
-                                                    {
-                                                        deptEmployments: {
-                                                            some: {
-                                                                userId: userId,
-                                                                status: EmploymentStatus.Enable
-                                                            }
-                                                        }
-                                                    },
-                                                    {
-                                                        compEmployments: {
-                                                            some: {
-                                                                userId: userId,
-                                                                status: EmploymentStatus.Enable
-                                                            }
-                                                        }
-                                                    },
-                                                ]
-                                            }
+                      position: {
+                        employments: {
+                          some: {
+                            userId,
+                            status: EmploymentStatus.Enable,
+                          },
+                        },
+                      },
+                    },
+                  },
+                },
+                {
+                  organizations: {
+                    some: {
+                      organization: {
+                        OR: [
+                          {
+                            deptEmployments: {
+                              some: {
+                                userId,
+                                status: EmploymentStatus.Enable,
+                              },
+                            },
+                          },
+                          {
+                            compEmployments: {
+                              some: {
+                                userId,
+                                status: EmploymentStatus.Enable,
+                              },
+                            },
+                          },
+                        ],
+                      },
 
-                                        }
-                                    }
-                                },
-                                {
-                                    positionOrganizations: {
-                                        some: {
-                                            posOrg: {
-                                                employments: {
-                                                    some: {
-                                                        userId: userId,
-                                                        status: EmploymentStatus.Enable
-                                                    }
-                                                }
-                                            }
-                                        }
-                                    }
-                                },
-                                {
-                                    employments: {
-                                        some: {
-                                            employment: {
-                                                userId: userId,
-                                                status: EmploymentStatus.Enable
-                                            }
-                                        }
-                                    }
-                                }
-                            ]
-                        }
-                    }
-                }
-            }
-        })
-    },
-    async getPrivilegesByRoleIds(roleIds: number[], tx: PrismaTransaction = prisma) {
-        return await tx.privilege.findMany({
-            where: {
-                roles: {
+                    },
+                  },
+                },
+                {
+                  positionOrganizations: {
                     some: {
-                        roleId: {
-                            in: roleIds
-                        }
-                    }
-                }
-            }
-        })
-    },
-    async getPrivilegeByCode(privCode: string, tx: PrismaTransaction = prisma) {
-        return await tx.privilege.findFirst({
-            where: {
-                privilegeCode: privCode
-            }
-        })
-    },
-    async setPrivilege(privCode: string, privName: string, tx: PrismaTransaction = prisma) {
-        return await tx.privilege.create({
-            data: {
-                privilegeCode: privCode,
-                privilegeName: privName,
-            }
-        })
-    }
-} 
+                      posOrg: {
+                        employments: {
+                          some: {
+                            userId,
+                            status: EmploymentStatus.Enable,
+                          },
+                        },
+                      },
+                    },
+                  },
+                },
+                {
+                  employments: {
+                    some: {
+                      employment: {
+                        userId,
+                        status: EmploymentStatus.Enable,
+                      },
+                    },
+                  },
+                },
+              ],
+            },
+          },
+        },
+      },
+    });
+  },
+  async getPrivilegesByRoleIds(roleIds: number[], tx: PrismaTransaction = prisma) {
+    return await tx.privilege.findMany({
+      where: {
+        roles: {
+          some: {
+            roleId: {
+              in: roleIds,
+            },
+          },
+        },
+      },
+    });
+  },
+  async getPrivilegeByCode(privCode: string, tx: PrismaTransaction = prisma) {
+    return await tx.privilege.findFirst({
+      where: {
+        privilegeCode: privCode,
+      },
+    });
+  },
+  async setPrivilege(privCode: string, privName: string, tx: PrismaTransaction = prisma) {
+    return await tx.privilege.create({
+      data: {
+        privilegeCode: privCode,
+        privilegeName: privName,
+      },
+    });
+  },
+};

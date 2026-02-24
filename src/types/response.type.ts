@@ -1,13 +1,15 @@
-import { z } from "@hono/zod-openapi";
+import { z } from '@hono/zod-openapi';
 
 export const ResponseSchema = z.object({
-    code: z.int().openapi({ example: 200 }),
-    data: z.unknown().openapi({ example: {} }),
-    message: z.string().openapi({ example: 'success' })
-}).openapi('ResponseSchema')
+  code: z.int().openapi({ example: 200 }),
+  data: z.unknown().openapi({ example: {} }),
+  message: z.string().openapi({ example: 'success' }),
+}).openapi('ResponseSchema');
 
-export const createResponseSchema = <T extends z.ZodTypeAny>(dataSchema: T) => z.object({
+export function createResponseSchema<T extends z.ZodTypeAny>(dataSchema: T) {
+  return z.object({
     code: z.int().openapi({ example: 200 }),
     message: z.string().openapi({ example: 'success' }),
     data: dataSchema,
-})
+  });
+}

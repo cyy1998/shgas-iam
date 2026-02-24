@@ -1,5 +1,5 @@
-export type WeixinResponse = {
-    errcode: number
-    errmsg: string
-    userid: string
+export interface WeixinResponse {
+  errcode: number;
+  errmsg: string;
+  userid: string;
 }
