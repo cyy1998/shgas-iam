@@ -7,7 +7,7 @@ import { UserDetailDtoSchema, UserDtoSchema, UserQueryDtoSchema, UserQueryWithPr
 import { employmentService } from '@services/employment.common.service';
 import { organizationService } from '@services/organization.service';
 import { userService } from '@services/user.common.service';
-import { success } from '../utils/response.utils';
+import { success } from '@utils/response.utils';
 
 const app = new OpenAPIHono();
 
@@ -191,7 +191,7 @@ app.openapi(
     },
   }),
   async (c) => {
-    const { roleCode, orgCode, orgScope, resourceCode } = c.req.valid('query');
+    const { roleCode, orgCode, orgScope } = c.req.valid('query');
     const data = await userService.getUsersByOrgRole(orgCode, roleCode, orgScope);
     return c.json(success(data));
   },

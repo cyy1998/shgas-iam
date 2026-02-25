@@ -1,6 +1,7 @@
 import { OpenAPIHono } from '@hono/zod-openapi';
 import { serveStatic } from 'hono/bun';
 import { logger } from 'hono/logger';
+import { pinoLogger } from './libs/logger/pino';
 import { errorHandler } from './middleware/error.handler';
 import adminRoutes from './routes/admin.route';
 import authRoutes from './routes/auth.route';
@@ -16,7 +17,8 @@ app.use('/static/*', serveStatic({ root: './' }));
 
 app.use(logger(
   (str: string, ...args: any[]) => {
-    console.log(`[INFO] ${new Date().toISOString()} - ${str}`, ...args);
+    pinoLogger.info(`[INFO] ${new Date().toISOString()} - ${str}`, ...args);
+    // pinoLogger.info({ type: 'query' });
   },
 ));
 

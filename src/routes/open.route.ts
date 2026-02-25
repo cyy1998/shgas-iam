@@ -5,7 +5,7 @@ import { createResponseSchema } from '@schemas/response.type';
 import { clientService } from '@services/client.service';
 import { mobileService } from '@services/mobile.service';
 import { userService } from '@services/user.common.service';
-import { success } from '../utils/response.utils';
+import { success } from '@utils/response.utils';
 
 const app = new OpenAPIHono();
 

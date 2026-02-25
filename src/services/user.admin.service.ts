@@ -7,13 +7,13 @@ import { UserNotFoundError } from '@errors/UserNotFoundError';
 import { employmentAdminMapper } from '@mapper/employment.admin.mapper';
 import { userAdminMapper } from '@mapper/user.admin.mapper';
 import { UserAdminDetailDtoSchema } from '@schemas/user.admin.type';
+import { generateRandomPassword } from '@utils/encryption.utils';
+import { paginate } from '@utils/page.util';
 import { hash } from 'bcrypt-ts';
 import { config } from '../config';
 import { employmentRepository } from '../repositories/employment.common.repository';
 import { userAdminRepository } from '../repositories/user.admin.repository';
 import { userRepository } from '../repositories/user.common.repository';
-import { generateRandomPassword } from '../utils/encryption.utils';
-import { paginate } from '../utils/page.util';
 
 async function _getUserDetail(user: User | null) {
   if (user === null) {

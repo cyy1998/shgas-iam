@@ -6,6 +6,8 @@ export default antfu({
         semi: true
     },
     rules:{
-        "no-console":"warn"
+        "no-console":"warn",
+        "node/prefer-global/process":"off",
+        "node/prefer-global/buffer":"off"
     }
 })

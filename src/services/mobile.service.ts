@@ -2,9 +2,9 @@ import type { SMSServiceResult } from '@schemas/service.type';
 import { VerificationCodeUsage } from '@constants/verificationCode.usage';
 import { prisma } from '@database/db';
 import { CustomError } from '@errors/CustomError';
+import { hmacSha256 } from '@utils/encryption.utils';
 import { config } from '../config';
 import { redis } from '../libs/cache/redis';
-import { hmacSha256 } from '../utils/encryption.utils';
 
 export const mobileService = {
   // async sendCodeWithExistingPhone(phoneNumber: string) {

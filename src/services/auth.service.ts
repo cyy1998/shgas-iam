@@ -59,7 +59,7 @@ async function _orcasLogin(userDto: UserDto) {
       mobile: userDto.mobile ?? '',
     },
   });
-  if (resp.status != 200 || resp.data.code != 200 || !resp.headers['set-cookie']) {
+  if (resp.status !== 200 || resp.data.code !== 200 || !resp.headers['set-cookie']) {
     console.log(resp.data);
     throw new CustomError('Orcas登录失败');
   }

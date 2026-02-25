@@ -1,9 +1,9 @@
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
 import { createResponseSchema } from '@schemas/response.type';
 import { authService } from '@services/auth.service';
+import { success } from '@utils/response.utils';
 import { getCookie, setCookie } from 'hono/cookie';
 import { config } from '../config';
-import { success } from '../utils/response.utils';
 
 const app = new OpenAPIHono();
 

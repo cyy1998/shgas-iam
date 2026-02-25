@@ -2,13 +2,13 @@ import { prisma } from '@database/db';
 import { CustomError } from '@errors/CustomError';
 import { roleMapper } from '@mapper/role.mapper';
 import { Prisma } from '@prisma-client/client';
+import { mergeAndDedupe } from '@utils/common.utils';
 import { employmentRepository } from '../repositories/employment.common.repository';
 import { organizationRepository } from '../repositories/organization.repository';
 import { positionRepository } from '../repositories/position.common.repository';
 import { posorgRepository } from '../repositories/posorg.repository';
 import { privilegeRepository } from '../repositories/privilege.repository';
 import { roleRepository } from '../repositories/role.repository';
-import { mergeAndDedupe } from '../utils/common.utils';
 
 export const roleService = {
   async getRolesByOrganization(orgId: number) {
