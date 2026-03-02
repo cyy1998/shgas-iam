@@ -243,10 +243,9 @@ export const authService = {
       redis.set(`local_${clientCode}_session:${localSessionId}`, JSON.stringify(user), 'EX', ttl),
       redis.del(`auth_code:${code}`),
       sessionService.setLocalSession(`local_session_set:${globalSessionId}`, `local_${clientCode}_session:${localSessionId}`, ttl),
+      redis.expire(`local_session_set:${globalSessionId}`, config.REDIS_EXPIRE_TIME)
       // redis.lpush(`local_session_set:${globalSessionId}`, `local_${clientCode}_session:${localSessionId}`)
     ]);
-
-    await redis.expire(`local_session_set:${globalSessionId}`, config.REDIS_EXPIRE_TIME);
     return {
       orcasSessionId: globalOrcasSessionId,
       token: localSessionId,
@@ -283,5 +282,30 @@ export const authService = {
       code,
     };
   },
+  async setToken(code: string, clientCode: string, clientSecret: string){
+    const client = await clientService.getClientByCode(clientCode)
+    if(client === null || clientSecret!==client.extAttributes.clientSecret){
+      throw new CustomError('非法Client');
+    }
+    const sid = crypto.randomUUID();
+    const authStr = await redis.get(`auth_code:${code}`)
+    if(authStr===null){
+      throw new CustomError('非法Code');
+    }
+    const authData = JSON.parse(authStr)['data']
+    const globalSessionId = JSON.parse(authStr)['sessionId']
+    const ttl = await redis.ttl(`global_session:${globalSessionId}`);
+    await Promise.all([
+      redis.del(`auth_code:${code}`),
+      sessionService.setLocalSession(`local_session_set:${globalSessionId}`, `local_${clientCode}_session:${sid}`, ttl),
+      redis.expire(`local_session_set:${globalSessionId}`, config.REDIS_EXPIRE_TIME)
+      // redis.lpush(`local_session_set:${globalSessionId}`, `local_${clientCode}_session:${localSessionId}`)
+    ]);
+    return {
+      sid: sid,
+      ttl: ttl,
+      userInfo: authData
+    }
+  }
 
 };

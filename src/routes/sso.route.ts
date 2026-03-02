@@ -6,6 +6,8 @@ import { getProtocolAndHost } from '@utils/common.utils';
 import { success } from '@utils/response.utils';
 import { deleteCookie, getCookie, setCookie } from 'hono/cookie';
 import { config } from '../config';
+import { clientService } from '@services/client.service';
+import { ClientManagementLevel } from '@constants/client.managementLevel';
 
 const app = new OpenAPIHono();
 
@@ -85,6 +87,37 @@ app.openapi(
 );
 
 /*
+path: /token
+method: GET
+function: 获取token
+*/
+app.openapi(
+  createRoute({
+    method: 'get',
+    path: '/token',
+    tags: ['SSO'],
+    request: {
+      query: z.object({
+        code: z.string().openapi({ example: 'dw98qr3hoi2hn' }),
+        client: z.string().openapi({ example: 'tender' }),
+        clientSecret: z.string().openapi({ example: 'jt123456' }),
+      }),
+    },
+    responses: {
+      301: {
+        description: '本地会话回调成功',
+      },
+    },
+  }),
+  async (c) => {
+    const { code, client, clientSecret } = c.req.valid('query');
+    const data = await authService.setToken(code, client, clientSecret);
+    return c.json(success(data))
+    // return c.redirect(redirectUrl);
+  },
+);
+
+/*
 path: /authorize
 method: GET
 function: 本地session建立
@@ -118,11 +151,14 @@ app.openapi(
     const { client, redirectUrl } = c.req.valid('query');
     const searchParams = new URLSearchParams(c.req.query());
     const sessionId = getCookie(c, 'global_session');
+    const clientInstance = await clientService.getClientByCode(client)
     const data = await authService.authorize(sessionId, client, redirectUrl);
     if (data.isLogin === false) {
       return c.redirect(`${config.LOGIN_ENDPOINT}?${searchParams.toString()}`);
     }
-    return c.redirect(`${getProtocolAndHost(redirectUrl)}/sso/callback?code=${data.code}&client=${client}&redirectUrl=${encodeURIComponent(redirectUrl)}`);
+    const callbackPath = clientInstance?.extAttributes.managementLevel===ClientManagementLevel.Gateway?
+    `${getProtocolAndHost(redirectUrl)}/sso/callback`:`${clientInstance?.extAttributes.callbackEndpoint}`
+    return c.redirect(`${callbackPath}?code=${data.code}&client=${client}&redirectUrl=${encodeURIComponent(redirectUrl)}`);
   },
 );
 

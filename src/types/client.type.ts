@@ -1,3 +1,4 @@
+import { ClientManagementLevel } from '@constants/client.managementLevel';
 import { ClientStatus } from '@constants/client.status';
 import { z } from '@hono/zod-openapi';
 
@@ -5,6 +6,10 @@ export const ClientExtAttributesDtoSchema = z.object({
   userExcluding: z.array(z.string()).optional(),
   requireOrcas: z.boolean(),
   validRedirectUrls: z.array(z.string()),
+  clientSecret: z.string(),
+  managementLevel: z.enum(ClientManagementLevel).openapi({ example: "Independent" }),
+  logoutEndpoint: z.url(),
+  callbackEndpoint: z.url()
 }).openapi('ClientExtAttributesDto');
 
 export type ClientExtAttributesDto = z.infer<typeof ClientExtAttributesDtoSchema>;
