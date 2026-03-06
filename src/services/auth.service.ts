@@ -108,7 +108,6 @@ export const authService = {
     if (config.NODE_ENV === 'production' && Math.abs(currentTimestamp - Number.parseInt(ts)) >= 1000 * 300) {
       throw new AuthzUnauthorizedError('token过期');
     }
-    console.log(token);
     const hashSting = Buffer.from(sm3(`${loginid}|${ts}|${config.IAM_SECRET_KEY}${config.IAM_SECRET_KEY}`), 'hex').toBase64();
     if (hashSting !== token) {
       throw new AuthzUnauthorizedError('token校验失败');

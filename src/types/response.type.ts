@@ -6,7 +6,7 @@ export const ResponseSchema = z.object({
   message: z.string().openapi({ example: 'success' }),
 }).openapi('ResponseSchema');
 
-export function createResponseSchema<T extends z.ZodTypeAny>(dataSchema: T) {
+export function createResponseSchema<T extends z.ZodSchema>(dataSchema: T) {
   return z.object({
     code: z.int().openapi({ example: 200 }),
     message: z.string().openapi({ example: 'success' }),

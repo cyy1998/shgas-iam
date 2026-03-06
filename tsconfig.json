@@ -34,7 +34,7 @@
         "src/errors/*"
       ],
       "@middleware/*": [
-        "src/middleware/*"
+        "src/middlewares/*"
       ],
       "@utils/*": [
         "src/utils/*"

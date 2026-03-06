@@ -2,12 +2,14 @@ import { OpenAPIHono } from '@hono/zod-openapi';
 import { serveStatic } from 'hono/bun';
 import { logger } from 'hono/logger';
 import { pinoLogger } from './libs/logger/pino';
-import { errorHandler } from './middleware/error.handler';
+import { errorHandler } from './middlewares/error.handler';
 import adminRoutes from './routes/admin.route';
-import authRoutes from './routes/auth.route';
-import internalRoutes from './routes/internal.route';
-import openRoutes from './routes/open.route';
-import publicRoutes from './routes/public.route';
+// import authRoutes from './routes/auth.route';
+import authRoutes from './routes/auth/auth.index';
+import internalRoutes from './routes/internal/internal.index';
+import openRoutes from './routes/open/open.index';
+// import publicRoutes from './routes/public.route';
+import publicRoutes from './routes/public/public.index';
 import ssoRoutes from './routes/sso.route';
 
 const app = new OpenAPIHono();
@@ -23,10 +25,12 @@ app.use(logger(
 ));
 
 app.route('/auth', authRoutes);
-app.route('/sso', ssoRoutes);
 app.route('/public', publicRoutes);
-app.route('/open', openRoutes);
 app.route('/internal', internalRoutes);
+app.route('/open', openRoutes);
+
+app.route('/sso', ssoRoutes);
+
 app.route('/admin', adminRoutes);
 
 app.doc('/doc', {

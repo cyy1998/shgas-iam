@@ -1,11 +1,15 @@
-import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
+import { createRoute, z } from '@hono/zod-openapi';
 import { createResponseSchema } from '@schemas/response.type';
 import { authService } from '@services/auth.service';
 import { success } from '@utils/response.utils';
 import { getCookie, setCookie } from 'hono/cookie';
+import { createRouter } from 'src/libs/core/create-app';
+import * as HttpStatusCodes from 'src/libs/core/http-status-codes';
+import jsonContent from 'src/libs/core/openapi/helpers/json-content';
+import jsonContentRequired from 'src/libs/core/openapi/helpers/json-content-required';
 import { config } from '../config';
 
-const app = new OpenAPIHono();
+const app = createRouter();
 
 /*
 path: /login/password
@@ -18,26 +22,13 @@ app.openapi(
     path: '/login/password',
     tags: ['Auth'],
     request: {
-      body: {
-        content: {
-          'application/json': {
-            schema: z.object({
-              username: z.string().openapi({ example: '138550' }),
-              password: z.string().openapi({ example: '1234' }),
-            }),
-          },
-        },
-      },
+      body: jsonContentRequired(z.object({
+        username: z.string().openapi({ example: '138550' }),
+        password: z.string().openapi({ example: '1234' }),
+      }), '用户名密码登录参数'),
     },
     responses: {
-      200: {
-        content: {
-          'application/json': {
-            schema: createResponseSchema(z.object()),
-          },
-        },
-        description: '设置岗位成功',
-      },
+      [HttpStatusCodes.OK]: jsonContent(createResponseSchema(z.object()), '登录成功'),
     },
   }),
   async (c) => {
@@ -76,7 +67,7 @@ app.openapi(
       },
     },
     responses: {
-      200: {
+      [HttpStatusCodes.OK]: {
         content: {
           'application/json': {
             schema: createResponseSchema(z.object()),
@@ -121,7 +112,7 @@ app.openapi(
       },
     },
     responses: {
-      200: {
+      [HttpStatusCodes.OK]: {
         content: {
           'application/json': {
             schema: createResponseSchema(z.object()),
@@ -270,7 +261,7 @@ app.openapi(
 //             }),
 //         },
 //         responses: {
-//             200: {
+//             [HttpStatusCodes.OK]: {
 //                 content: {
 //                     'application/json': {
 //                         schema: createResponseSchema(z.object()),
@@ -336,7 +327,7 @@ app.openapi(
     path: '/authz',
     tags: ['Auth'],
     responses: {
-      200: {
+      [HttpStatusCodes.OK]: {
         content: {
           'application/json': {
             schema: createResponseSchema(z.object()),

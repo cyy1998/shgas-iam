@@ -4,6 +4,7 @@ import { ServiceStatusCode } from '@constants/service.status';
 import { AuthzError } from '@errors/AuthzError';
 import { CustomError } from '@errors/CustomError';
 import { makeResponse } from '@utils/response.utils';
+import { HTTPException } from 'hono/http-exception';
 
 export function errorHandler(err: Error | HTTPResponseError, c: Context) {
   if (err instanceof CustomError) {
@@ -11,6 +12,9 @@ export function errorHandler(err: Error | HTTPResponseError, c: Context) {
   }
   else if (err instanceof AuthzError) {
     return c.json(makeResponse(err.code, null, err.message), err.httpCode);
+  }
+  else if (err instanceof HTTPException) {
+    return c.json(makeResponse(err.status, null, err.message), err.status);
   }
   else {
     console.error(err);

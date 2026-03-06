@@ -79,7 +79,7 @@ export const userAdminService = {
         u.password = await hash(u.password, config.PASSWORD_HASH_ROUNDS);
       }
       console.log(userCreateDtos);
-      const users = await userAdminRepository.setUsers(userCreateDtos, tx);
+      await userAdminRepository.setUsers(userCreateDtos, tx);
       return true;
     });
   },
