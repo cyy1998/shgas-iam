@@ -1,0 +1,123 @@
+import { createRoute, z } from '@hono/zod-openapi';
+import { SSOMetaInfoSchema } from '@schemas/sso.type';
+import * as HttpStatusCodes from 'src/libs/core/http-status-codes';
+import jsonContent from 'src/libs/core/openapi/helpers/json-content';
+import createSuccessResponseSchema from 'src/libs/core/openapi/schemas/create-success-schema';
+
+const tags = ['SSO'];
+
+export const endpointsConfiguration = createRoute({
+  method: 'get',
+  path: '/.well-known/authentication-configuration',
+  tags,
+  responses: {
+    [HttpStatusCodes.OK]: jsonContent(createSuccessResponseSchema(SSOMetaInfoSchema), '单点登录端点信息'),
+  },
+});
+
+export const callback = createRoute({
+  method: 'get',
+  path: '/callback',
+  tags,
+  request: {
+    query: z.object({
+      code: z.string().openapi({ example: 'dw98qr3hoi2hn' }),
+      client: z.string().openapi({ example: 'tender' }),
+      redirectUrl: z.url().openapi({ example: 'http://localhost:8080' }),
+    }),
+  },
+  responses: {
+    [HttpStatusCodes.MOVED_TEMPORARILY]: {
+      description: '本地会话回调成功',
+    },
+  },
+});
+
+export const token = createRoute({
+  method: 'get',
+  path: '/token',
+  tags,
+  request: {
+    query: z.object({
+      code: z.string().openapi({ example: 'dw98qr3hoi2hn' }),
+      client: z.string().openapi({ example: 'tender' }),
+      clientSecret: z.string().openapi({ example: 'jt123456' }),
+    }),
+  },
+  responses: {
+    [HttpStatusCodes.MOVED_TEMPORARILY]: {
+      description: '本地会话回调成功',
+    },
+  },
+});
+
+export const authorize = createRoute({
+  method: 'get',
+  path: '/authorize',
+  tags,
+  request: {
+    query: z.object({
+      client: z.string().openapi({ example: 'tender' }),
+      redirectUrl: z.url().openapi({ example: 'http://localhost:8080' }),
+    }),
+  },
+  responses: {
+    [HttpStatusCodes.MOVED_TEMPORARILY]: {
+      description: '全局未登录，跳转登录页面',
+    },
+  },
+});
+
+export const logout = createRoute({
+  method: 'get',
+  path: '/logout',
+  tags,
+  request: {
+    query: z.object({
+      redirectUrl: z.url().openapi({ example: 'http://localhost:8080' }),
+    }),
+  },
+  responses: {
+    [HttpStatusCodes.MOVED_TEMPORARILY]: {
+      description: '登出成功',
+    },
+  },
+});
+
+export const loginOA = createRoute({
+  method: 'get',
+  path: '/third-party/oa',
+  tags,
+  request: {
+    query: z.object({
+      loginid: z.string().openapi({ example: '138550' }),
+      ts: z.string().openapi({ example: '1234' }),
+      token: z.string().openapi({ example: '138550' }),
+      redirectUrl: z.url().openapi({ example: 'http://localhost:8080' }),
+      client: z.string().openapi({ example: 'tender' }),
+    }),
+  },
+  responses: {
+    [HttpStatusCodes.MOVED_TEMPORARILY]: {
+      description: 'OA登录成功',
+    },
+  },
+});
+
+export const loginWX = createRoute({
+  method: 'get',
+  path: '/third-party/wx',
+  tags,
+  request: {
+    query: z.object({
+      code: z.string().openapi({ example: '1234' }),
+      redirectUrl: z.url().openapi({ example: 'http://localhost:8080' }),
+      client: z.string().openapi({ example: 'tender' }),
+    }),
+  },
+  responses: {
+    [HttpStatusCodes.MOVED_TEMPORARILY]: {
+      description: 'OA登录成功',
+    },
+  },
+});

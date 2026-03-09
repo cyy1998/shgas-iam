@@ -10,7 +10,7 @@ import internalRoutes from './routes/internal/internal.index';
 import openRoutes from './routes/open/open.index';
 // import publicRoutes from './routes/public.route';
 import publicRoutes from './routes/public/public.index';
-import ssoRoutes from './routes/sso.route';
+import ssoRoutes from './routes/sso/sso.index';
 
 const app = new OpenAPIHono();
 // const port = env.PORT
@@ -28,7 +28,6 @@ app.route('/auth', authRoutes);
 app.route('/public', publicRoutes);
 app.route('/internal', internalRoutes);
 app.route('/open', openRoutes);
-
 app.route('/sso', ssoRoutes);
 
 app.route('/admin', adminRoutes);

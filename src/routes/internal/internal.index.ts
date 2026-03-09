@@ -1,5 +1,3 @@
-import { authenicationHandler } from '@middleware/authenication.handler';
-
 import { createRouter } from 'src/libs/core/create-app';
 import * as handlers from './internal.handlers';
 import * as routes from './internal.routes';
