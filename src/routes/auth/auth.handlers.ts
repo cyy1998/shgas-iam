@@ -1,7 +1,7 @@
 import type { AuthRouteHandler } from './auth.types';
 import { success } from '@utils/response.utils';
 import { getCookie, setCookie } from 'hono/cookie';
-import { config } from 'src/config';
+import { config } from '@/config';
 import * as authService from './auth.service';
 
 export const loginPassword: AuthRouteHandler<'loginPassword'> = async (c) => {

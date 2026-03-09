@@ -1,0 +1,14 @@
+import type { Prisma } from '../prisma/client';
+import { z } from '@hono/zod-openapi';
+import { PositionOrderByWithRelationInputObjectSchema as PositionOrderByWithRelationInputObjectSchema } from './objects/PositionOrderByWithRelationInput.schema';
+import { PositionWhereInputObjectSchema as PositionWhereInputObjectSchema } from './objects/PositionWhereInput.schema';
+import { PositionWhereUniqueInputObjectSchema as PositionWhereUniqueInputObjectSchema } from './objects/PositionWhereUniqueInput.schema';
+import { PositionCountAggregateInputObjectSchema as PositionCountAggregateInputObjectSchema } from './objects/PositionCountAggregateInput.schema';
+import { PositionMinAggregateInputObjectSchema as PositionMinAggregateInputObjectSchema } from './objects/PositionMinAggregateInput.schema';
+import { PositionMaxAggregateInputObjectSchema as PositionMaxAggregateInputObjectSchema } from './objects/PositionMaxAggregateInput.schema';
+import { PositionAvgAggregateInputObjectSchema as PositionAvgAggregateInputObjectSchema } from './objects/PositionAvgAggregateInput.schema';
+import { PositionSumAggregateInputObjectSchema as PositionSumAggregateInputObjectSchema } from './objects/PositionSumAggregateInput.schema';
+
+export const PositionAggregateSchema: z.ZodType<Prisma.PositionAggregateArgs> = z.object({ orderBy: z.union([PositionOrderByWithRelationInputObjectSchema, PositionOrderByWithRelationInputObjectSchema.array()]).optional(), where: PositionWhereInputObjectSchema.optional(), cursor: PositionWhereUniqueInputObjectSchema.optional(), take: z.number().optional(), skip: z.number().optional(), _count: z.union([ z.literal(true), PositionCountAggregateInputObjectSchema ]).optional(), _min: PositionMinAggregateInputObjectSchema.optional(), _max: PositionMaxAggregateInputObjectSchema.optional(), _avg: PositionAvgAggregateInputObjectSchema.optional(), _sum: PositionSumAggregateInputObjectSchema.optional() }).strict() as unknown as z.ZodType<Prisma.PositionAggregateArgs>;
+
+export const PositionAggregateZodSchema = z.object({ orderBy: z.union([PositionOrderByWithRelationInputObjectSchema, PositionOrderByWithRelationInputObjectSchema.array()]).optional(), where: PositionWhereInputObjectSchema.optional(), cursor: PositionWhereUniqueInputObjectSchema.optional(), take: z.number().optional(), skip: z.number().optional(), _count: z.union([ z.literal(true), PositionCountAggregateInputObjectSchema ]).optional(), _min: PositionMinAggregateInputObjectSchema.optional(), _max: PositionMaxAggregateInputObjectSchema.optional(), _avg: PositionAvgAggregateInputObjectSchema.optional(), _sum: PositionSumAggregateInputObjectSchema.optional() }).strict();

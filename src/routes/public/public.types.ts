@@ -1,7 +1,6 @@
 import type { AppRouteHandler } from '@schemas/lib';
 import type * as routes from './public.routes';
 
-
 // export type UserTokenInfo = {
 //   id: string | number;
 //   roles: string[];

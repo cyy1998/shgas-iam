@@ -1,7 +1,7 @@
-import { prisma } from '@database/db';
+import { prisma } from '@/db';
 import { CustomError } from '@errors/CustomError';
 import { privilegeMapper } from '@mapper/privilege.mapper';
-import { privilegeRepository } from '../repositories/privilege.repository';
+import { privilegeRepository } from '@repositories/privilege.repository';
 
 export const privilegeService = {
   async getPrivilegesByRoleIds(roleIds: number[]) {

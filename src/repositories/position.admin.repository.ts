@@ -1,6 +1,6 @@
-import type { PrismaTransaction } from '@database/db';
+import type { PrismaTransaction } from '@/db';
 import type { PositionAdminQueryDto } from '@schemas/position.admin.type';
-import { prisma } from '@database/db';
+import { prisma } from '@/db';
 
 export const positionAdminRepository = {
   async searchPositionsFuzzy(

@@ -1,22 +1,37 @@
 import type { ClientDto, ClientInputDto } from '@schemas/client.type';
-import { prisma } from '@database/db';
+import { redis } from '@lib/cache/redis';
 import { clientMapper } from '@mapper/client.mapper';
-import { redis } from '../libs/cache/redis';
-import { clientRepository } from '../repositories/client.repository';
+import { clientRepository } from '@repositories/client.repository';
+import { ClientDtoSchema } from '@schemas/client.type';
+import { ZodError } from 'zod';
+import { prisma } from '@/db';
 
 export const clientService = {
   async getClientByCode(clientCode: string) {
     const cacheString = await redis.get(`cache:client:${clientCode}`);
     if (cacheString !== null) {
-      const cacheClient: ClientDto = JSON.parse(cacheString);
-      return cacheClient;
+      try {
+        const cacheClient = ClientDtoSchema.parse(JSON.parse(cacheString));
+        return cacheClient;
+      }
+      catch (err) {
+        if (err instanceof ZodError) {
+          await redis.del(`cache:client:${clientCode}`);
+        }
+        else {
+          throw err;
+        }
+      }
     }
     const client = await clientRepository.getClientByCode(clientCode);
     if (client === null) {
       return null;
     }
     // const clientVo = clientMapper.dtoToVo(clientMapper.entityToDto(client))
-    const clientDto = clientMapper.entityToDto(client);
+    // const clientDto = clientMapper.entityToDto(client);
+    console.log(client);
+    const clientDto = ClientDtoSchema.parse(client);
+
     await redis.set(`cache:client:${clientCode}`, JSON.stringify(clientDto));
     return clientDto;
   },

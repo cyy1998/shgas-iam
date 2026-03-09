@@ -1,0 +1,10 @@
+import type { Prisma } from '../prisma/client';
+import { z } from '@hono/zod-openapi';
+import { OrganizationClosureOrderByWithRelationInputObjectSchema as OrganizationClosureOrderByWithRelationInputObjectSchema } from './objects/OrganizationClosureOrderByWithRelationInput.schema';
+import { OrganizationClosureWhereInputObjectSchema as OrganizationClosureWhereInputObjectSchema } from './objects/OrganizationClosureWhereInput.schema';
+import { OrganizationClosureWhereUniqueInputObjectSchema as OrganizationClosureWhereUniqueInputObjectSchema } from './objects/OrganizationClosureWhereUniqueInput.schema';
+import { OrganizationClosureCountAggregateInputObjectSchema as OrganizationClosureCountAggregateInputObjectSchema } from './objects/OrganizationClosureCountAggregateInput.schema';
+
+export const OrganizationClosureCountSchema: z.ZodType<Prisma.OrganizationClosureCountArgs> = z.object({ orderBy: z.union([OrganizationClosureOrderByWithRelationInputObjectSchema, OrganizationClosureOrderByWithRelationInputObjectSchema.array()]).optional(), where: OrganizationClosureWhereInputObjectSchema.optional(), cursor: OrganizationClosureWhereUniqueInputObjectSchema.optional(), take: z.number().optional(), skip: z.number().optional(), select: z.union([ z.literal(true), OrganizationClosureCountAggregateInputObjectSchema ]).optional() }).strict() as unknown as z.ZodType<Prisma.OrganizationClosureCountArgs>;
+
+export const OrganizationClosureCountZodSchema = z.object({ orderBy: z.union([OrganizationClosureOrderByWithRelationInputObjectSchema, OrganizationClosureOrderByWithRelationInputObjectSchema.array()]).optional(), where: OrganizationClosureWhereInputObjectSchema.optional(), cursor: OrganizationClosureWhereUniqueInputObjectSchema.optional(), take: z.number().optional(), skip: z.number().optional(), select: z.union([ z.literal(true), OrganizationClosureCountAggregateInputObjectSchema ]).optional() }).strict();

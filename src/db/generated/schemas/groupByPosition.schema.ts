@@ -1,0 +1,15 @@
+import type { Prisma } from '../prisma/client';
+import { z } from '@hono/zod-openapi';
+import { PositionWhereInputObjectSchema as PositionWhereInputObjectSchema } from './objects/PositionWhereInput.schema';
+import { PositionOrderByWithAggregationInputObjectSchema as PositionOrderByWithAggregationInputObjectSchema } from './objects/PositionOrderByWithAggregationInput.schema';
+import { PositionScalarWhereWithAggregatesInputObjectSchema as PositionScalarWhereWithAggregatesInputObjectSchema } from './objects/PositionScalarWhereWithAggregatesInput.schema';
+import { PositionScalarFieldEnumSchema } from './enums/PositionScalarFieldEnum.schema';
+import { PositionCountAggregateInputObjectSchema as PositionCountAggregateInputObjectSchema } from './objects/PositionCountAggregateInput.schema';
+import { PositionMinAggregateInputObjectSchema as PositionMinAggregateInputObjectSchema } from './objects/PositionMinAggregateInput.schema';
+import { PositionMaxAggregateInputObjectSchema as PositionMaxAggregateInputObjectSchema } from './objects/PositionMaxAggregateInput.schema';
+import { PositionAvgAggregateInputObjectSchema as PositionAvgAggregateInputObjectSchema } from './objects/PositionAvgAggregateInput.schema';
+import { PositionSumAggregateInputObjectSchema as PositionSumAggregateInputObjectSchema } from './objects/PositionSumAggregateInput.schema';
+
+export const PositionGroupBySchema: z.ZodType<Prisma.PositionGroupByArgs> = z.object({ where: PositionWhereInputObjectSchema.optional(), orderBy: z.union([PositionOrderByWithAggregationInputObjectSchema, PositionOrderByWithAggregationInputObjectSchema.array()]).optional(), having: PositionScalarWhereWithAggregatesInputObjectSchema.optional(), take: z.number().optional(), skip: z.number().optional(), by: z.array(PositionScalarFieldEnumSchema), _count: z.union([ z.literal(true), PositionCountAggregateInputObjectSchema ]).optional(), _min: PositionMinAggregateInputObjectSchema.optional(), _max: PositionMaxAggregateInputObjectSchema.optional(), _avg: PositionAvgAggregateInputObjectSchema.optional(), _sum: PositionSumAggregateInputObjectSchema.optional() }).strict() as unknown as z.ZodType<Prisma.PositionGroupByArgs>;
+
+export const PositionGroupByZodSchema = z.object({ where: PositionWhereInputObjectSchema.optional(), orderBy: z.union([PositionOrderByWithAggregationInputObjectSchema, PositionOrderByWithAggregationInputObjectSchema.array()]).optional(), having: PositionScalarWhereWithAggregatesInputObjectSchema.optional(), take: z.number().optional(), skip: z.number().optional(), by: z.array(PositionScalarFieldEnumSchema), _count: z.union([ z.literal(true), PositionCountAggregateInputObjectSchema ]).optional(), _min: PositionMinAggregateInputObjectSchema.optional(), _max: PositionMaxAggregateInputObjectSchema.optional(), _avg: PositionAvgAggregateInputObjectSchema.optional(), _sum: PositionSumAggregateInputObjectSchema.optional() }).strict();

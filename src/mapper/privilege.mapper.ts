@@ -1,5 +1,5 @@
-import type { Privilege } from '@prisma-client/client';
 import type { PrivilegeDto } from '@schemas/privilege.type';
+import type { Privilege } from '@/db/generated/prisma/client';
 
 export const privilegeMapper = {
   entityToDto(priv: Privilege): PrivilegeDto {

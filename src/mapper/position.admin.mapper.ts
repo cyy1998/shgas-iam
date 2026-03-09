@@ -1,6 +1,6 @@
 import type { PositionAdminDto, PositionAdminVo } from '@schemas/position.admin.type';
 import type { PositionAdminEntity } from '@schemas/position.entity.type';
-import { positionStatusToString } from '@constants/position.status';
+import { positionStatusToString } from '@enums/position.status';
 
 export const positionAdminMapper = {
   entityToDto(position: PositionAdminEntity): PositionAdminDto {

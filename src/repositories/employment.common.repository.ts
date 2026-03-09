@@ -1,17 +1,14 @@
-import type { PrismaTransaction } from '@database/db';
+import type { PrismaTransaction } from '@/db';
 import type { EmploymentQueryDto } from '@schemas/employment.common.type';
-import { EmploymentStatus } from '@constants/employment.status';
-import { PositionStatus } from '@constants/position.status';
-import { RoleStatus } from '@constants/role.status';
-import { UserStatus } from '@constants/user.status';
-import { prisma } from '@database/db';
+import { prisma } from '@/db';
+import { Status } from '@enums/status';
 
 export const employmentRepository = {
   async getEmploymentsByUserId(userId: number, tx: PrismaTransaction = prisma) {
     return await tx.employment.findMany({
       where: {
         userId,
-        status: EmploymentStatus.Enable,
+        status: Status.Enable,
         isDelete: false,
       },
       include: {
@@ -28,7 +25,7 @@ export const employmentRepository = {
         user: {
           username,
         },
-        status: EmploymentStatus.Enable,
+        status: Status.Enable,
         isDelete: false,
       },
       include: {
@@ -45,7 +42,7 @@ export const employmentRepository = {
         userId,
         deptId: orgId,
         posId,
-        status: EmploymentStatus.Enable,
+        status: Status.Enable,
         isDelete: false,
       },
       include: {
@@ -68,7 +65,7 @@ export const employmentRepository = {
         position: {
           posCode,
         },
-        status: EmploymentStatus.Enable,
+        status: Status.Enable,
         isDelete: false,
       },
     });
@@ -76,7 +73,7 @@ export const employmentRepository = {
   async getEmploymentsByUserAndPrivilege(username: string, privCondition: any, tx: PrismaTransaction = prisma) {
     return await tx.employment.findMany({
       where: {
-        status: EmploymentStatus.Enable,
+        status: Status.Enable,
         isDelete: false,
         user: {
           username,
@@ -201,7 +198,7 @@ export const employmentRepository = {
           wxId: {
             in: employmentQueryDto.wxIds,
           },
-          status: UserStatus.Enable,
+          status: Status.Enable,
           isDelete: false,
         },
 
@@ -220,7 +217,7 @@ export const employmentRepository = {
           },
         },
         position: {
-          status: PositionStatus.Enable,
+          status: Status.Enable,
           isDelete: false,
           posCode: {
             in: employmentQueryDto.positionCodes,
@@ -232,7 +229,7 @@ export const employmentRepository = {
               roles: {
                 some: {
                   role: {
-                    status: RoleStatus.Enable,
+                    status: Status.Enable,
                     isDelete: false,
                     roleCode: {
                       in: employmentQueryDto.roleCodes,
@@ -246,7 +243,7 @@ export const employmentRepository = {
             roles: {
               some: {
                 role: {
-                  status: RoleStatus.Enable,
+                  status: Status.Enable,
                   isDelete: false,
                   roleCode: {
                     in: employmentQueryDto.roleCodes,
@@ -266,7 +263,7 @@ export const employmentRepository = {
                         roles: {
                           some: {
                             role: {
-                              status: RoleStatus.Enable,
+                              status: Status.Enable,
                               isDelete: false,
                               roleCode: {
                                 in: employmentQueryDto.roleCodes,
@@ -285,7 +282,7 @@ export const employmentRepository = {
                           some: {
                             isAllSub: true,
                             role: {
-                              status: RoleStatus.Enable,
+                              status: Status.Enable,
                               isDelete: false,
                               roleCode: {
                                 in: employmentQueryDto.roleCodes,
@@ -301,7 +298,7 @@ export const employmentRepository = {
             },
           },
         ],
-        status: EmploymentStatus.Enable,
+        status: Status.Enable,
         isDelete: false,
       },
       include: {
@@ -312,5 +309,4 @@ export const employmentRepository = {
       },
     });
   },
-
 };

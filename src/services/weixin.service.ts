@@ -1,5 +1,5 @@
-import { config } from '../config';
-import { redis } from '../libs/cache/redis';
+import { redis } from '@lib/cache/redis';
+import { config } from '@/config';
 
 interface WeixinAccessTokenResponse {
   errcode: number;

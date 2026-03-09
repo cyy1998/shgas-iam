@@ -1,10 +1,10 @@
 import { createRoute, z } from '@hono/zod-openapi';
 import { OrganizationDtoSchema, OrganizationQueryDtoSchema } from '@schemas/organization.common.type';
 import { UserDetailDtoSchema, UserDtoSchema, UserQueryDtoSchema } from '@schemas/user.common.type';
-import * as HttpStatusCodes from 'src/libs/core/http-status-codes';
-import jsonContent from 'src/libs/core/openapi/helpers/json-content';
-import jsonContentRequired from 'src/libs/core/openapi/helpers/json-content-required';
-import createSuccessResponseSchema from 'src/libs/core/openapi/schemas/create-success-schema';
+import * as HttpStatusCodes from '@lib/core/http-status-codes';
+import jsonContent from '@lib/core/openapi/helpers/json-content';
+import jsonContentRequired from '@lib/core/openapi/helpers/json-content-required';
+import createSuccessResponseSchema from '@lib/core/openapi/schemas/create-success-schema';
 
 const tags = ['Public'];
 
@@ -84,5 +84,3 @@ export const usersQueryByOrg = createRoute({
     [HttpStatusCodes.OK]: jsonContent(createSuccessResponseSchema(z.array(UserDtoSchema)), '用户查询结果'),
   },
 });
-
-

@@ -1,27 +1,27 @@
-import type { User } from '@prisma-client/client';
+import type { User } from '@/db/generated/prisma/client';
 import type { UserDetailDto, UserQueryDto, UserQueryWithPrivilegeDelegationDto } from '@schemas/user.common.type';
-import { UserType } from '@constants/user.type';
-import { VerificationCodeUsage } from '@constants/verificationCode.usage';
-import { prisma } from '@database/db';
+import { prisma } from '@/db';
+import { UserType } from '@enums/user.type';
+import { VerificationCodeUsage } from '@enums/verificationCode.usage';
 import { CustomError } from '@errors/CustomError';
 import { UserNotFoundError } from '@errors/UserNotFoundError';
 import { employmentMapper } from '@mapper/employment.common.mapper';
 import { privilegeDelegationMapper } from '@mapper/privilegeDelegation.mapper';
 import { userMapper } from '@mapper/user.common.mapper';
+import { employmentRepository } from '@repositories/employment.common.repository';
+import { organizationRepository } from '@repositories/organization.repository';
+import { positionRepository } from '@repositories/position.common.repository';
+import { privilegeRepository } from '@repositories/privilege.repository';
+import { privilegeDelegationRepository } from '@repositories/privilegeDelegation.repository';
+import { roleRepository } from '@repositories/role.repository';
+import { userRepository } from '@repositories/user.common.repository';
 import { EmploymentDetailDtoSchema } from '@schemas/employment.common.type';
 import {
   UserDetailDtoSchema,
 
 } from '@schemas/user.common.type';
 import { compare, hash } from 'bcrypt-ts';
-import { config } from '../config';
-import { employmentRepository } from '../repositories/employment.common.repository';
-import { organizationRepository } from '../repositories/organization.repository';
-import { positionRepository } from '../repositories/position.common.repository';
-import { privilegeRepository } from '../repositories/privilege.repository';
-import { privilegeDelegationRepository } from '../repositories/privilegeDelegation.repository';
-import { roleRepository } from '../repositories/role.repository';
-import { userRepository } from '../repositories/user.common.repository';
+import { config } from '@/config';
 import { mobileService } from './mobile.service';
 
 async function _getUserDetail(user: User | null): Promise<UserDetailDto> {
@@ -148,11 +148,6 @@ export const userService = {
       users: userDtos,
       delegations,
     };
-  },
-  async searchUsersRawSql(userQueryDto: UserQueryDto) {
-    const users = await userRepository.searchUsersRawSql(userQueryDto);
-    const userDtos = users.map(u => userMapper.entityToDto(u));
-    return userDtos;
   },
 
   async getUserDetailById(userId: number): Promise<UserDetailDto> {

@@ -1,6 +1,6 @@
-import type { PrismaTransaction } from '@database/db';
 import type { ClientInputDto } from '@schemas/client.type';
-import { prisma } from '@database/db';
+import type { PrismaTransaction } from '@/db';
+import { prisma } from '@/db';
 
 export const clientRepository = {
   async getClientByCode(clientCode: string, tx: PrismaTransaction = prisma) {

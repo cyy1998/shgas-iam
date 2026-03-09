@@ -1,0 +1,7 @@
+import type { Prisma } from '../prisma/client';
+import { z } from '@hono/zod-openapi';
+import { OrganizationCreateManyInputObjectSchema as OrganizationCreateManyInputObjectSchema } from './objects/OrganizationCreateManyInput.schema';
+
+export const OrganizationCreateManySchema: z.ZodType<Prisma.OrganizationCreateManyArgs> = z.object({ data: z.union([ OrganizationCreateManyInputObjectSchema, z.array(OrganizationCreateManyInputObjectSchema) ]),  }).strict() as unknown as z.ZodType<Prisma.OrganizationCreateManyArgs>;
+
+export const OrganizationCreateManyZodSchema = z.object({ data: z.union([ OrganizationCreateManyInputObjectSchema, z.array(OrganizationCreateManyInputObjectSchema) ]),  }).strict();

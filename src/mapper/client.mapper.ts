@@ -1,6 +1,6 @@
-import type { ClientModel as Client } from '@prisma-client/models';
 import type { ClientDto, ClientVo } from '@schemas/client.type';
-import { ClientStatus } from '@constants/client.status';
+import type { ClientModel as Client } from '@/db/generated/prisma/models';
+import { ClientStatus } from '@enums/client.status';
 
 export const clientMapper = {
   entityToDto(entity: Client): ClientDto {

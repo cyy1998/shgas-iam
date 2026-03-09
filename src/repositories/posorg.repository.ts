@@ -1,5 +1,5 @@
-import type { PrismaTransaction } from '@database/db';
-import { prisma } from '@database/db';
+import type { PrismaTransaction } from '@/db';
+import { prisma } from '@/db';
 
 export const posorgRepository = {
   async getPosOrgById(posId: number, orgId: number, tx: PrismaTransaction = prisma) {

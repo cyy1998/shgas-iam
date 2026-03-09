@@ -1,0 +1,15 @@
+import type { Prisma } from '../prisma/client';
+import { z } from '@hono/zod-openapi';
+import { PrivilegeWhereInputObjectSchema as PrivilegeWhereInputObjectSchema } from './objects/PrivilegeWhereInput.schema';
+import { PrivilegeOrderByWithAggregationInputObjectSchema as PrivilegeOrderByWithAggregationInputObjectSchema } from './objects/PrivilegeOrderByWithAggregationInput.schema';
+import { PrivilegeScalarWhereWithAggregatesInputObjectSchema as PrivilegeScalarWhereWithAggregatesInputObjectSchema } from './objects/PrivilegeScalarWhereWithAggregatesInput.schema';
+import { PrivilegeScalarFieldEnumSchema } from './enums/PrivilegeScalarFieldEnum.schema';
+import { PrivilegeCountAggregateInputObjectSchema as PrivilegeCountAggregateInputObjectSchema } from './objects/PrivilegeCountAggregateInput.schema';
+import { PrivilegeMinAggregateInputObjectSchema as PrivilegeMinAggregateInputObjectSchema } from './objects/PrivilegeMinAggregateInput.schema';
+import { PrivilegeMaxAggregateInputObjectSchema as PrivilegeMaxAggregateInputObjectSchema } from './objects/PrivilegeMaxAggregateInput.schema';
+import { PrivilegeAvgAggregateInputObjectSchema as PrivilegeAvgAggregateInputObjectSchema } from './objects/PrivilegeAvgAggregateInput.schema';
+import { PrivilegeSumAggregateInputObjectSchema as PrivilegeSumAggregateInputObjectSchema } from './objects/PrivilegeSumAggregateInput.schema';
+
+export const PrivilegeGroupBySchema: z.ZodType<Prisma.PrivilegeGroupByArgs> = z.object({ where: PrivilegeWhereInputObjectSchema.optional(), orderBy: z.union([PrivilegeOrderByWithAggregationInputObjectSchema, PrivilegeOrderByWithAggregationInputObjectSchema.array()]).optional(), having: PrivilegeScalarWhereWithAggregatesInputObjectSchema.optional(), take: z.number().optional(), skip: z.number().optional(), by: z.array(PrivilegeScalarFieldEnumSchema), _count: z.union([ z.literal(true), PrivilegeCountAggregateInputObjectSchema ]).optional(), _min: PrivilegeMinAggregateInputObjectSchema.optional(), _max: PrivilegeMaxAggregateInputObjectSchema.optional(), _avg: PrivilegeAvgAggregateInputObjectSchema.optional(), _sum: PrivilegeSumAggregateInputObjectSchema.optional() }).strict() as unknown as z.ZodType<Prisma.PrivilegeGroupByArgs>;
+
+export const PrivilegeGroupByZodSchema = z.object({ where: PrivilegeWhereInputObjectSchema.optional(), orderBy: z.union([PrivilegeOrderByWithAggregationInputObjectSchema, PrivilegeOrderByWithAggregationInputObjectSchema.array()]).optional(), having: PrivilegeScalarWhereWithAggregatesInputObjectSchema.optional(), take: z.number().optional(), skip: z.number().optional(), by: z.array(PrivilegeScalarFieldEnumSchema), _count: z.union([ z.literal(true), PrivilegeCountAggregateInputObjectSchema ]).optional(), _min: PrivilegeMinAggregateInputObjectSchema.optional(), _max: PrivilegeMaxAggregateInputObjectSchema.optional(), _avg: PrivilegeAvgAggregateInputObjectSchema.optional(), _sum: PrivilegeSumAggregateInputObjectSchema.optional() }).strict();

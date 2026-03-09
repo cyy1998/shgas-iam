@@ -1,17 +1,18 @@
-import type { Organization } from '@prisma-client/client';
 import type { OrganizationCreateDto, OrganizationQueryDto } from '@schemas/organization.common.type';
-import { OrganizationType } from '@constants/organization.type';
-import { prisma } from '@database/db';
+import type { Organization } from '@/db/generated/prisma/client';
+import { prisma } from '@/db';
+import { OrganizationType } from '@enums/organization.type';
 import { CustomError } from '@errors/CustomError';
 import { organizationMapper } from '@mapper/organization.mapper';
-import { organizationRepository } from '../repositories/organization.repository';
-
-const compDict = {};
+import { organizationRepository } from '@repositories/organization.repository';
 
 async function getCompDict() {
   const organizations = organizationRepository.getOrganizationsByParentId(-1);
   const companies = (await organizations).filter(o => o.orgType === '分公司');
-  return companies.reduce((acc, comp) => { acc[comp.orgCode] = comp; return acc; }, {} as Record<string, Organization>);
+  return companies.reduce((acc, comp) => {
+    acc[comp.orgCode] = comp;
+    return acc;
+  }, {} as Record<string, Organization>);
 }
 
 export const organizationService = {

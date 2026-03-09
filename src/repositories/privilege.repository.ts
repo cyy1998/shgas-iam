@@ -1,6 +1,6 @@
-import type { PrismaTransaction } from '@database/db';
-import { EmploymentStatus } from '@constants/employment.status';
-import { prisma } from '@database/db';
+import type { PrismaTransaction } from '@/db';
+import { prisma } from '@/db';
+import { Status } from '@enums/status';
 
 export const privilegeRepository = {
   async getPrivilegesByUserId(userId: number, tx: PrismaTransaction = prisma) {
@@ -17,7 +17,7 @@ export const privilegeRepository = {
                         employments: {
                           some: {
                             userId,
-                            status: EmploymentStatus.Enable,
+                            status: Status.Enable,
                           },
                         },
                       },
@@ -33,7 +33,7 @@ export const privilegeRepository = {
                             deptEmployments: {
                               some: {
                                 userId,
-                                status: EmploymentStatus.Enable,
+                                status: Status.Enable,
                               },
                             },
                           },
@@ -41,7 +41,7 @@ export const privilegeRepository = {
                             compEmployments: {
                               some: {
                                 userId,
-                                status: EmploymentStatus.Enable,
+                                status: Status.Enable,
                               },
                             },
                           },
@@ -58,7 +58,7 @@ export const privilegeRepository = {
                         employments: {
                           some: {
                             userId,
-                            status: EmploymentStatus.Enable,
+                            status: Status.Enable,
                           },
                         },
                       },
@@ -70,7 +70,7 @@ export const privilegeRepository = {
                     some: {
                       employment: {
                         userId,
-                        status: EmploymentStatus.Enable,
+                        status: Status.Enable,
                       },
                     },
                   },

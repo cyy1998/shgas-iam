@@ -3,10 +3,10 @@ import { EmploymentDtoSchema } from '@schemas/employment.common.type';
 import { OrganizationDtoSchema, OrganizationQueryDtoSchema } from '@schemas/organization.common.type';
 import { PrivilegeDelegationDtoSchema } from '@schemas/privilegeDelegation.type';
 import { UserDetailDtoSchema, UserDtoSchema, UserQueryDtoSchema, UserQueryWithPrivilegeDelegationDtoSchema } from '@schemas/user.common.type';
-import * as HttpStatusCodes from 'src/libs/core/http-status-codes';
-import jsonContent from 'src/libs/core/openapi/helpers/json-content';
-import jsonContentRequired from 'src/libs/core/openapi/helpers/json-content-required';
-import createSuccessResponseSchema from 'src/libs/core/openapi/schemas/create-success-schema';
+import * as HttpStatusCodes from '@lib/core/http-status-codes';
+import jsonContent from '@lib/core/openapi/helpers/json-content';
+import jsonContentRequired from '@lib/core/openapi/helpers/json-content-required';
+import createSuccessResponseSchema from '@lib/core/openapi/schemas/create-success-schema';
 
 const tags = ['Internal'];
 

@@ -1,0 +1,10 @@
+import { z } from '@hono/zod-openapi';
+import type { Prisma } from '../../prisma/client';
+import { OrganizationWhereInputObjectSchema as OrganizationWhereInputObjectSchema } from './OrganizationWhereInput.schema'
+
+const makeSchema = () => z.object({
+  is: z.lazy(() => OrganizationWhereInputObjectSchema).optional().nullable(),
+  isNot: z.lazy(() => OrganizationWhereInputObjectSchema).optional().nullable()
+}).strict();
+export const OrganizationNullableScalarRelationFilterObjectSchema: z.ZodType<Prisma.OrganizationNullableScalarRelationFilter> = makeSchema() as unknown as z.ZodType<Prisma.OrganizationNullableScalarRelationFilter>;
+export const OrganizationNullableScalarRelationFilterObjectZodSchema = makeSchema();

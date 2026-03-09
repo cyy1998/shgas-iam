@@ -1,13 +1,13 @@
 import { createRoute, z } from '@hono/zod-openapi';
+import * as HttpStatusCodes from '@lib/core/http-status-codes';
+import jsonContent from '@lib/core/openapi/helpers/json-content';
+import jsonContentRequired from '@lib/core/openapi/helpers/json-content-required';
+import createSuccessResponseSchema from '@lib/core/openapi/schemas/create-success-schema';
 import { EmploymentAdminQueryDtoSchema, EmploymentAdminVoSchema } from '@schemas/employment.admin.type';
 import { OrganizationDtoSchema, OrganizationQueryDtoSchema } from '@schemas/organization.common.type';
 import { createPageResultSchema } from '@schemas/page.type';
 import { PositionAdminQueryDtoSchema, PositionAdminVoSchema } from '@schemas/position.admin.type';
 import { UserAdminDetailVoSchema, UserAdminQueryDtoSchema, UserAdminVoSchema } from '@schemas/user.admin.type';
-import * as HttpStatusCodes from 'src/libs/core/http-status-codes';
-import jsonContent from 'src/libs/core/openapi/helpers/json-content';
-import jsonContentRequired from 'src/libs/core/openapi/helpers/json-content-required';
-import createSuccessResponseSchema from 'src/libs/core/openapi/schemas/create-success-schema';
 
 const tags = ['Admin'];
 

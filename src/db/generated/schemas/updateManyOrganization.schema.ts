@@ -1,0 +1,8 @@
+import type { Prisma } from '../prisma/client';
+import { z } from '@hono/zod-openapi';
+import { OrganizationUpdateManyMutationInputObjectSchema as OrganizationUpdateManyMutationInputObjectSchema } from './objects/OrganizationUpdateManyMutationInput.schema';
+import { OrganizationWhereInputObjectSchema as OrganizationWhereInputObjectSchema } from './objects/OrganizationWhereInput.schema';
+
+export const OrganizationUpdateManySchema: z.ZodType<Prisma.OrganizationUpdateManyArgs> = z.object({ data: OrganizationUpdateManyMutationInputObjectSchema, where: OrganizationWhereInputObjectSchema.optional() }).strict() as unknown as z.ZodType<Prisma.OrganizationUpdateManyArgs>;
+
+export const OrganizationUpdateManyZodSchema = z.object({ data: OrganizationUpdateManyMutationInputObjectSchema, where: OrganizationWhereInputObjectSchema.optional() }).strict();

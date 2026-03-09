@@ -1,5 +1,5 @@
-import type { User } from '@prisma-client/client';
 import type { UserDto } from '@schemas/user.common.type';
+import type { User } from '@/db/generated/prisma/client';
 
 export const userMapper = {
   entityToDto(user: User): UserDto {

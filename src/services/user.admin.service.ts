@@ -1,19 +1,19 @@
-import type { User } from '@prisma-client/client';
 import type { UserAdminQueryDto } from '@schemas/user.admin.type';
 import type { UserCreateDto } from '@schemas/user.common.type';
-import { prisma } from '@database/db';
+import type { User } from '@/db/generated/prisma/client';
+import { prisma } from '@/db';
 import { CustomError } from '@errors/CustomError';
 import { UserNotFoundError } from '@errors/UserNotFoundError';
 import { employmentAdminMapper } from '@mapper/employment.admin.mapper';
 import { userAdminMapper } from '@mapper/user.admin.mapper';
+import { employmentRepository } from '@repositories/employment.common.repository';
+import { userAdminRepository } from '@repositories/user.admin.repository';
+import { userRepository } from '@repositories/user.common.repository';
 import { UserAdminDetailDtoSchema } from '@schemas/user.admin.type';
 import { generateRandomPassword } from '@utils/encryption.utils';
 import { paginate } from '@utils/page.util';
 import { hash } from 'bcrypt-ts';
-import { config } from '../config';
-import { employmentRepository } from '../repositories/employment.common.repository';
-import { userAdminRepository } from '../repositories/user.admin.repository';
-import { userRepository } from '../repositories/user.common.repository';
+import { config } from '@/config';
 
 async function _getUserDetail(user: User | null) {
   if (user === null) {

@@ -1,9 +1,9 @@
-import type { PrismaTransaction } from '@database/db';
-import type { Organization } from '@prisma-client/client';
+import type { PrismaTransaction } from '@/db';
 import type { OrganizationQueryDto } from '@schemas/organization.common.type';
-import { OrganizationStatus } from '@constants/organization.status';
-import { OrganizationType } from '@constants/organization.type';
-import { prisma } from '@database/db';
+import type { Organization } from '@/db/generated/prisma/client';
+import { prisma } from '@/db';
+import { OrganizationType } from '@enums/organization.type';
+import { Status } from '@enums/status';
 
 export const organizationRepository = {
   async searchFormalOrganizations(orgCode: string, orgLevel: number, tx: PrismaTransaction = prisma) {
@@ -20,7 +20,7 @@ export const organizationRepository = {
           notIn: [OrganizationType.Virtual, OrganizationType.External],
         },
         level: orgLevel,
-        status: OrganizationStatus.Enable,
+        status: Status.Enable,
         isDelete: false,
       },
       include: {
@@ -36,7 +36,7 @@ export const organizationRepository = {
           notIn: [OrganizationType.Virtual, OrganizationType.External],
         },
         level: 1,
-        status: OrganizationStatus.Enable,
+        status: Status.Enable,
         isDelete: false,
       },
       include: {
@@ -49,7 +49,7 @@ export const organizationRepository = {
     return await tx.organization.findFirst({
       where: {
         orgCode,
-        status: OrganizationStatus.Enable,
+        status: Status.Enable,
         isDelete: false,
       },
       include: {
@@ -62,7 +62,7 @@ export const organizationRepository = {
     return await tx.organization.findFirst({
       where: {
         id,
-        status: OrganizationStatus.Enable,
+        status: Status.Enable,
         isDelete: false,
       },
       include: {
@@ -110,7 +110,7 @@ export const organizationRepository = {
         orgCode: {
           in: organizationQueryDto.orgCodes,
         },
-        status: OrganizationStatus.Enable,
+        status: Status.Enable,
         isDelete: false,
       },
       include: {
@@ -123,7 +123,7 @@ export const organizationRepository = {
     return await tx.organization.findMany({
       where: {
         parentId,
-        status: OrganizationStatus.Enable,
+        status: Status.Enable,
         isDelete: false,
       },
       include: {
@@ -140,7 +140,7 @@ export const organizationRepository = {
             in: parentCodes,
           },
         },
-        status: OrganizationStatus.Enable,
+        status: Status.Enable,
         isDelete: false,
       },
       include: {
@@ -165,7 +165,7 @@ export const organizationRepository = {
     const updatedOrganization = await tx.organization.update({
       where: {
         id: newOrganization.id,
-        status: OrganizationStatus.Enable,
+        status: Status.Enable,
         isDelete: false,
       },
       data: {

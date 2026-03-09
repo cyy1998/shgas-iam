@@ -1,0 +1,10 @@
+import type { Prisma } from '../prisma/client';
+import { z } from '@hono/zod-openapi';
+import { PosOrgCompositionOrderByWithRelationInputObjectSchema as PosOrgCompositionOrderByWithRelationInputObjectSchema } from './objects/PosOrgCompositionOrderByWithRelationInput.schema';
+import { PosOrgCompositionWhereInputObjectSchema as PosOrgCompositionWhereInputObjectSchema } from './objects/PosOrgCompositionWhereInput.schema';
+import { PosOrgCompositionWhereUniqueInputObjectSchema as PosOrgCompositionWhereUniqueInputObjectSchema } from './objects/PosOrgCompositionWhereUniqueInput.schema';
+import { PosOrgCompositionCountAggregateInputObjectSchema as PosOrgCompositionCountAggregateInputObjectSchema } from './objects/PosOrgCompositionCountAggregateInput.schema';
+
+export const PosOrgCompositionCountSchema: z.ZodType<Prisma.PosOrgCompositionCountArgs> = z.object({ orderBy: z.union([PosOrgCompositionOrderByWithRelationInputObjectSchema, PosOrgCompositionOrderByWithRelationInputObjectSchema.array()]).optional(), where: PosOrgCompositionWhereInputObjectSchema.optional(), cursor: PosOrgCompositionWhereUniqueInputObjectSchema.optional(), take: z.number().optional(), skip: z.number().optional(), select: z.union([ z.literal(true), PosOrgCompositionCountAggregateInputObjectSchema ]).optional() }).strict() as unknown as z.ZodType<Prisma.PosOrgCompositionCountArgs>;
+
+export const PosOrgCompositionCountZodSchema = z.object({ orderBy: z.union([PosOrgCompositionOrderByWithRelationInputObjectSchema, PosOrgCompositionOrderByWithRelationInputObjectSchema.array()]).optional(), where: PosOrgCompositionWhereInputObjectSchema.optional(), cursor: PosOrgCompositionWhereUniqueInputObjectSchema.optional(), take: z.number().optional(), skip: z.number().optional(), select: z.union([ z.literal(true), PosOrgCompositionCountAggregateInputObjectSchema ]).optional() }).strict();

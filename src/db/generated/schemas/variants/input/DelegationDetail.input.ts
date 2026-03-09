@@ -1,0 +1,10 @@
+import { z } from '@hono/zod-openapi';
+// prettier-ignore
+export const DelegationDetailInputSchema = z.object({
+    delegationId: z.number().int(),
+    privilegeId: z.number().int(),
+    delegation: z.unknown(),
+    privilege: z.unknown()
+}).strict();
+
+export type DelegationDetailInputType = z.infer<typeof DelegationDetailInputSchema>;

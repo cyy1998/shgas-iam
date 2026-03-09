@@ -3,7 +3,7 @@ import type { Context, Next } from 'hono';
 import { AuthzUnauthorizedError } from '@errors/AuthzUnauthorizedError';
 import { CustomError } from '@errors/CustomError';
 import { deleteCookie, getCookie } from 'hono/cookie';
-import { redis } from '../libs/cache/redis';
+import { redis } from '@lib/cache/redis';
 
 export async function authenicationHandler(c: Context, next: Next) {
   const clientCode = c.req.header('Client');

@@ -1,0 +1,14 @@
+import type { Prisma } from '../prisma/client';
+import { z } from '@hono/zod-openapi';
+import { EmploymentRoleOrderByWithRelationInputObjectSchema as EmploymentRoleOrderByWithRelationInputObjectSchema } from './objects/EmploymentRoleOrderByWithRelationInput.schema';
+import { EmploymentRoleWhereInputObjectSchema as EmploymentRoleWhereInputObjectSchema } from './objects/EmploymentRoleWhereInput.schema';
+import { EmploymentRoleWhereUniqueInputObjectSchema as EmploymentRoleWhereUniqueInputObjectSchema } from './objects/EmploymentRoleWhereUniqueInput.schema';
+import { EmploymentRoleCountAggregateInputObjectSchema as EmploymentRoleCountAggregateInputObjectSchema } from './objects/EmploymentRoleCountAggregateInput.schema';
+import { EmploymentRoleMinAggregateInputObjectSchema as EmploymentRoleMinAggregateInputObjectSchema } from './objects/EmploymentRoleMinAggregateInput.schema';
+import { EmploymentRoleMaxAggregateInputObjectSchema as EmploymentRoleMaxAggregateInputObjectSchema } from './objects/EmploymentRoleMaxAggregateInput.schema';
+import { EmploymentRoleAvgAggregateInputObjectSchema as EmploymentRoleAvgAggregateInputObjectSchema } from './objects/EmploymentRoleAvgAggregateInput.schema';
+import { EmploymentRoleSumAggregateInputObjectSchema as EmploymentRoleSumAggregateInputObjectSchema } from './objects/EmploymentRoleSumAggregateInput.schema';
+
+export const EmploymentRoleAggregateSchema: z.ZodType<Prisma.EmploymentRoleAggregateArgs> = z.object({ orderBy: z.union([EmploymentRoleOrderByWithRelationInputObjectSchema, EmploymentRoleOrderByWithRelationInputObjectSchema.array()]).optional(), where: EmploymentRoleWhereInputObjectSchema.optional(), cursor: EmploymentRoleWhereUniqueInputObjectSchema.optional(), take: z.number().optional(), skip: z.number().optional(), _count: z.union([ z.literal(true), EmploymentRoleCountAggregateInputObjectSchema ]).optional(), _min: EmploymentRoleMinAggregateInputObjectSchema.optional(), _max: EmploymentRoleMaxAggregateInputObjectSchema.optional(), _avg: EmploymentRoleAvgAggregateInputObjectSchema.optional(), _sum: EmploymentRoleSumAggregateInputObjectSchema.optional() }).strict() as unknown as z.ZodType<Prisma.EmploymentRoleAggregateArgs>;
+
+export const EmploymentRoleAggregateZodSchema = z.object({ orderBy: z.union([EmploymentRoleOrderByWithRelationInputObjectSchema, EmploymentRoleOrderByWithRelationInputObjectSchema.array()]).optional(), where: EmploymentRoleWhereInputObjectSchema.optional(), cursor: EmploymentRoleWhereUniqueInputObjectSchema.optional(), take: z.number().optional(), skip: z.number().optional(), _count: z.union([ z.literal(true), EmploymentRoleCountAggregateInputObjectSchema ]).optional(), _min: EmploymentRoleMinAggregateInputObjectSchema.optional(), _max: EmploymentRoleMaxAggregateInputObjectSchema.optional(), _avg: EmploymentRoleAvgAggregateInputObjectSchema.optional(), _sum: EmploymentRoleSumAggregateInputObjectSchema.optional() }).strict();

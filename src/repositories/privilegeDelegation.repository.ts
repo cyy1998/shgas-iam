@@ -1,7 +1,7 @@
-import type { PrismaTransaction } from '@database/db';
+import type { PrismaTransaction } from '@/db';
 import type { PrivilegeDelegationEntity } from '@schemas/privilegeDelegation.entity.type';
-import { PrivilegeDelegationStatus } from '@constants/privilegeDelegation.status';
-import { prisma } from '@database/db';
+import { prisma } from '@/db';
+import { Status } from '@enums/status';
 
 export const privilegeDelegationRepository = {
   async getDelegationsByUserAndOrganizationScopeAndPrivilege(
@@ -34,7 +34,7 @@ export const privilegeDelegationRepository = {
             in: usernames,
           },
         },
-        status: PrivilegeDelegationStatus.Enable,
+        status: Status.Enable,
         startTime: {
           lte: now,
         },

@@ -1,14 +1,13 @@
-import type { PrismaTransaction } from '@database/db';
-import { EmploymentStatus } from '@constants/employment.status';
-import { RoleStatus } from '@constants/role.status';
-import { prisma } from '@database/db';
+import type { PrismaTransaction } from '@/db';
+import { prisma } from '@/db';
+import { Status } from '@enums/status';
 
 export const roleRepository = {
   async getRoleByCode(roleCode: string, tx: PrismaTransaction = prisma) {
     return await tx.role.findFirst({
       where: {
         roleCode,
-        status: RoleStatus.Enable,
+        status: Status.Enable,
         isDelete: false,
       },
     });
@@ -16,7 +15,7 @@ export const roleRepository = {
   async getRolesByUserId(userId: number, tx: PrismaTransaction = prisma) {
     return await tx.role.findMany({
       where: {
-        status: RoleStatus.Enable,
+        status: Status.Enable,
         isDelete: false,
         OR: [
           {
@@ -26,7 +25,7 @@ export const roleRepository = {
                   employments: {
                     some: {
                       userId,
-                      status: EmploymentStatus.Enable,
+                      status: Status.Enable,
                     },
                   },
                 },
@@ -43,7 +42,7 @@ export const roleRepository = {
                       deptEmployments: {
                         some: {
                           userId,
-                          status: EmploymentStatus.Enable,
+                          status: Status.Enable,
                         },
                       },
                     },
@@ -57,7 +56,7 @@ export const roleRepository = {
                             deptEmployments: {
                               some: {
                                 userId,
-                                status: EmploymentStatus.Enable,
+                                status: Status.Enable,
                               },
                             },
                           },
@@ -66,27 +65,6 @@ export const roleRepository = {
                     },
                   },
                 ],
-                // organization: {
-                //     OR: [
-                //         {
-                //             deptEmployments: {
-                //                 some: {
-                //                     userId: userId,
-                //                     status: EmploymentStatus.Enable
-                //                 }
-                //             }
-                //         },
-                //         {
-                //             compEmployments: {
-                //                 some: {
-                //                     userId: userId,
-                //                     status: EmploymentStatus.Enable
-                //                 }
-                //             }
-                //         },
-                //     ]
-                // }
-
               },
             },
           },
@@ -97,7 +75,7 @@ export const roleRepository = {
                   employments: {
                     some: {
                       userId,
-                      status: EmploymentStatus.Enable,
+                      status: Status.Enable,
                     },
                   },
                 },
@@ -109,7 +87,7 @@ export const roleRepository = {
               some: {
                 employment: {
                   userId,
-                  status: EmploymentStatus.Enable,
+                  status: Status.Enable,
                 },
               },
             },
@@ -129,7 +107,7 @@ export const roleRepository = {
             isAllSub: true,
           },
         },
-        status: RoleStatus.Enable,
+        status: Status.Enable,
         isDelete: false,
       },
     });
@@ -142,7 +120,7 @@ export const roleRepository = {
             organizationId: orgId,
           },
         },
-        status: RoleStatus.Enable,
+        status: Status.Enable,
         isDelete: false,
       },
     });
@@ -155,7 +133,7 @@ export const roleRepository = {
             positionId: posId,
           },
         },
-        status: RoleStatus.Enable,
+        status: Status.Enable,
         isDelete: false,
       },
     });
@@ -168,7 +146,7 @@ export const roleRepository = {
             posOrgId,
           },
         },
-        status: RoleStatus.Enable,
+        status: Status.Enable,
         isDelete: false,
       },
     });
@@ -181,7 +159,7 @@ export const roleRepository = {
             employmentId,
           },
         },
-        status: RoleStatus.Enable,
+        status: Status.Enable,
         isDelete: false,
       },
     });
@@ -189,7 +167,7 @@ export const roleRepository = {
   async getRolesByEmploymentId(employmentId: number, tx: PrismaTransaction = prisma) {
     return await tx.role.findMany({
       where: {
-        status: RoleStatus.Enable,
+        status: Status.Enable,
         isDelete: false,
         OR: [
           {
@@ -199,7 +177,7 @@ export const roleRepository = {
                   employments: {
                     some: {
                       id: employmentId,
-                      status: EmploymentStatus.Enable,
+                      status: Status.Enable,
                     },
                   },
                 },
@@ -216,7 +194,7 @@ export const roleRepository = {
                       deptEmployments: {
                         some: {
                           id: employmentId,
-                          status: EmploymentStatus.Enable,
+                          status: Status.Enable,
                         },
                       },
                     },
@@ -230,7 +208,7 @@ export const roleRepository = {
                             deptEmployments: {
                               some: {
                                 id: employmentId,
-                                status: EmploymentStatus.Enable,
+                                status: Status.Enable,
                               },
                             },
                           },
@@ -250,7 +228,7 @@ export const roleRepository = {
                   employments: {
                     some: {
                       id: employmentId,
-                      status: EmploymentStatus.Enable,
+                      status: Status.Enable,
                     },
                   },
                 },
@@ -262,7 +240,7 @@ export const roleRepository = {
               some: {
                 employment: {
                   id: employmentId,
-                  status: EmploymentStatus.Enable,
+                  status: Status.Enable,
                 },
               },
             },

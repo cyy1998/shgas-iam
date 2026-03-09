@@ -1,7 +1,7 @@
 import type { UserDetailDto } from '@schemas/user.common.type';
 import { AuthzUnauthorizedError } from '@errors/AuthzUnauthorizedError';
-import { config } from '../config';
-import { redis } from '../libs/cache/redis';
+import { redis } from '@lib/cache/redis';
+import { config } from '@/config';
 
 export const sessionService = {
   async getSessionById(sessionId: string): Promise<UserDetailDto> {

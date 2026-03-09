@@ -1,0 +1,14 @@
+import type { Prisma } from '../prisma/client';
+import { z } from '@hono/zod-openapi';
+import { EmploymentOrderByWithRelationInputObjectSchema as EmploymentOrderByWithRelationInputObjectSchema } from './objects/EmploymentOrderByWithRelationInput.schema';
+import { EmploymentWhereInputObjectSchema as EmploymentWhereInputObjectSchema } from './objects/EmploymentWhereInput.schema';
+import { EmploymentWhereUniqueInputObjectSchema as EmploymentWhereUniqueInputObjectSchema } from './objects/EmploymentWhereUniqueInput.schema';
+import { EmploymentCountAggregateInputObjectSchema as EmploymentCountAggregateInputObjectSchema } from './objects/EmploymentCountAggregateInput.schema';
+import { EmploymentMinAggregateInputObjectSchema as EmploymentMinAggregateInputObjectSchema } from './objects/EmploymentMinAggregateInput.schema';
+import { EmploymentMaxAggregateInputObjectSchema as EmploymentMaxAggregateInputObjectSchema } from './objects/EmploymentMaxAggregateInput.schema';
+import { EmploymentAvgAggregateInputObjectSchema as EmploymentAvgAggregateInputObjectSchema } from './objects/EmploymentAvgAggregateInput.schema';
+import { EmploymentSumAggregateInputObjectSchema as EmploymentSumAggregateInputObjectSchema } from './objects/EmploymentSumAggregateInput.schema';
+
+export const EmploymentAggregateSchema: z.ZodType<Prisma.EmploymentAggregateArgs> = z.object({ orderBy: z.union([EmploymentOrderByWithRelationInputObjectSchema, EmploymentOrderByWithRelationInputObjectSchema.array()]).optional(), where: EmploymentWhereInputObjectSchema.optional(), cursor: EmploymentWhereUniqueInputObjectSchema.optional(), take: z.number().optional(), skip: z.number().optional(), _count: z.union([ z.literal(true), EmploymentCountAggregateInputObjectSchema ]).optional(), _min: EmploymentMinAggregateInputObjectSchema.optional(), _max: EmploymentMaxAggregateInputObjectSchema.optional(), _avg: EmploymentAvgAggregateInputObjectSchema.optional(), _sum: EmploymentSumAggregateInputObjectSchema.optional() }).strict() as unknown as z.ZodType<Prisma.EmploymentAggregateArgs>;
+
+export const EmploymentAggregateZodSchema = z.object({ orderBy: z.union([EmploymentOrderByWithRelationInputObjectSchema, EmploymentOrderByWithRelationInputObjectSchema.array()]).optional(), where: EmploymentWhereInputObjectSchema.optional(), cursor: EmploymentWhereUniqueInputObjectSchema.optional(), take: z.number().optional(), skip: z.number().optional(), _count: z.union([ z.literal(true), EmploymentCountAggregateInputObjectSchema ]).optional(), _min: EmploymentMinAggregateInputObjectSchema.optional(), _max: EmploymentMaxAggregateInputObjectSchema.optional(), _avg: EmploymentAvgAggregateInputObjectSchema.optional(), _sum: EmploymentSumAggregateInputObjectSchema.optional() }).strict();

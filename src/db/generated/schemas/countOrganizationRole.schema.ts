@@ -1,0 +1,10 @@
+import type { Prisma } from '../prisma/client';
+import { z } from '@hono/zod-openapi';
+import { OrganizationRoleOrderByWithRelationInputObjectSchema as OrganizationRoleOrderByWithRelationInputObjectSchema } from './objects/OrganizationRoleOrderByWithRelationInput.schema';
+import { OrganizationRoleWhereInputObjectSchema as OrganizationRoleWhereInputObjectSchema } from './objects/OrganizationRoleWhereInput.schema';
+import { OrganizationRoleWhereUniqueInputObjectSchema as OrganizationRoleWhereUniqueInputObjectSchema } from './objects/OrganizationRoleWhereUniqueInput.schema';
+import { OrganizationRoleCountAggregateInputObjectSchema as OrganizationRoleCountAggregateInputObjectSchema } from './objects/OrganizationRoleCountAggregateInput.schema';
+
+export const OrganizationRoleCountSchema: z.ZodType<Prisma.OrganizationRoleCountArgs> = z.object({ orderBy: z.union([OrganizationRoleOrderByWithRelationInputObjectSchema, OrganizationRoleOrderByWithRelationInputObjectSchema.array()]).optional(), where: OrganizationRoleWhereInputObjectSchema.optional(), cursor: OrganizationRoleWhereUniqueInputObjectSchema.optional(), take: z.number().optional(), skip: z.number().optional(), select: z.union([ z.literal(true), OrganizationRoleCountAggregateInputObjectSchema ]).optional() }).strict() as unknown as z.ZodType<Prisma.OrganizationRoleCountArgs>;
+
+export const OrganizationRoleCountZodSchema = z.object({ orderBy: z.union([OrganizationRoleOrderByWithRelationInputObjectSchema, OrganizationRoleOrderByWithRelationInputObjectSchema.array()]).optional(), where: OrganizationRoleWhereInputObjectSchema.optional(), cursor: OrganizationRoleWhereUniqueInputObjectSchema.optional(), take: z.number().optional(), skip: z.number().optional(), select: z.union([ z.literal(true), OrganizationRoleCountAggregateInputObjectSchema ]).optional() }).strict();

@@ -1,16 +1,16 @@
 import type { AuthObject } from '@schemas/authObject.type';
 import type { UserDetailDto, UserDto } from '@schemas/user.common.type';
 import type { WeixinResponse } from '@schemas/wx.type';
-import { ClientStatus } from '@constants/client.status';
-import { VerificationCodeUsage } from '@constants/verificationCode.usage';
+import { Status } from '@enums/status';
+import { VerificationCodeUsage } from '@enums/verificationCode.usage';
 import { AuthzMaintaincingError } from '@errors/AuthzMaintaincingError';
 import { AuthzUnauthorizedError } from '@errors/AuthzUnauthorizedError';
 import { CustomError } from '@errors/CustomError';
+import { redis } from '@lib/cache/redis';
 import axios from 'axios';
 import { sleep } from 'bun';
 import { sm3 } from 'sm-crypto';
-import { config } from '../config';
-import { redis } from '../libs/cache/redis';
+import { config } from '@/config';
 import { clientService } from './client.service';
 import { mobileService } from './mobile.service';
 import { sessionService } from './session.service';
@@ -197,7 +197,7 @@ export const authService = {
       && client.extAttributes.userExcluding.includes(userDto.username)) {
       userInExcludingList = true;
     }
-    if (client.status === ClientStatus.Maintance && !userInExcludingList) {
+    if (client.status === Status.Pause && !userInExcludingList) {
       throw new AuthzMaintaincingError('系统维护中');
     }
     const userFinal = {
@@ -242,7 +242,7 @@ export const authService = {
       redis.set(`local_${clientCode}_session:${localSessionId}`, JSON.stringify(user), 'EX', ttl),
       redis.del(`auth_code:${code}`),
       sessionService.setLocalSession(`local_session_set:${globalSessionId}`, `local_${clientCode}_session:${localSessionId}`, ttl),
-      redis.expire(`local_session_set:${globalSessionId}`, config.REDIS_EXPIRE_TIME)
+      redis.expire(`local_session_set:${globalSessionId}`, config.REDIS_EXPIRE_TIME),
       // redis.lpush(`local_session_set:${globalSessionId}`, `local_${clientCode}_session:${localSessionId}`)
     ]);
     return {
@@ -281,30 +281,30 @@ export const authService = {
       code,
     };
   },
-  async setToken(code: string, clientCode: string, clientSecret: string){
-    const client = await clientService.getClientByCode(clientCode)
-    if(client === null || clientSecret!==client.extAttributes.clientSecret){
+  async setToken(code: string, clientCode: string, clientSecret: string) {
+    const client = await clientService.getClientByCode(clientCode);
+    if (client === null || clientSecret !== client.extAttributes.clientSecret) {
       throw new CustomError('非法Client');
     }
     const sid = crypto.randomUUID();
-    const authStr = await redis.get(`auth_code:${code}`)
-    if(authStr===null){
+    const authStr = await redis.get(`auth_code:${code}`);
+    if (authStr === null) {
       throw new CustomError('非法Code');
     }
-    const authData = JSON.parse(authStr)['data']
-    const globalSessionId = JSON.parse(authStr)['sessionId']
+    const authData = JSON.parse(authStr).data;
+    const globalSessionId = JSON.parse(authStr).sessionId;
     const ttl = await redis.ttl(`global_session:${globalSessionId}`);
     await Promise.all([
       redis.del(`auth_code:${code}`),
       sessionService.setLocalSession(`local_session_set:${globalSessionId}`, `local_${clientCode}_session:${sid}`, ttl),
-      redis.expire(`local_session_set:${globalSessionId}`, config.REDIS_EXPIRE_TIME)
+      redis.expire(`local_session_set:${globalSessionId}`, config.REDIS_EXPIRE_TIME),
       // redis.lpush(`local_session_set:${globalSessionId}`, `local_${clientCode}_session:${localSessionId}`)
     ]);
     return {
-      sid: sid,
-      ttl: ttl,
-      userInfo: authData
-    }
-  }
+      sid,
+      ttl,
+      userInfo: authData,
+    };
+  },
 
 };

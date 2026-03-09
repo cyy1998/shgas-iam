@@ -12,20 +12,29 @@
     // Bundler mode
     "moduleResolution": "bundler",
     "paths": {
-      "@prisma-client/*": [
-        "src/libs/database/generated/prisma/*"
+      "@/*": [
+        "src/*"
       ],
-      "@database/*": [
-        "src/libs/database/*"
+      "@prisma-client/*": [
+        "src/db/generated/prisma/*"
+      ],
+      "@db": [
+        "src/db"
+      ],
+      "@lib/*": [
+        "src/libs/*"
       ],
       "@services/*": [
         "src/services/*"
       ],
-      "@schemas/*": [
-        "src/types/*"
+      "@repositories/*": [
+        "src/repositories/*"
       ],
-      "@constants/*": [
-        "src/constants/*"
+      "@schemas/*": [
+        "src/schemas/*"
+      ],
+      "@enums/*": [
+        "src/enums/*"
       ],
       "@mapper/*": [
         "src/mapper/*"
@@ -33,7 +42,7 @@
       "@errors/*": [
         "src/errors/*"
       ],
-      "@middleware/*": [
+      "@middlewares/*": [
         "src/middlewares/*"
       ],
       "@utils/*": [

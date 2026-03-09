@@ -1,7 +1,7 @@
-import { UserType } from '@constants/user.type';
-import { prisma } from '@database/db';
+import { prisma } from '@/db';
+import { UserType } from '@enums/user.type';
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
-import { authenicationHandler } from 'src/middlewares/authenication.handler';
+import { authenicationHandler } from '@middlewares/authenication.handler';
 import { ClientInputDtoSchema } from '@schemas/client.type';
 import { EmploymentAdminQueryDtoSchema, EmploymentAdminVoSchema } from '@schemas/employment.admin.type';
 import { OrganizationCreateDtoSchema, OrganizationDtoSchema, OrganizationQueryDtoSchema } from '@schemas/organization.common.type';

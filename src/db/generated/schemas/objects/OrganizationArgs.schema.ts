@@ -1,0 +1,11 @@
+import { z } from '@hono/zod-openapi';
+import type { Prisma } from '../../prisma/client';
+import { OrganizationSelectObjectSchema as OrganizationSelectObjectSchema } from './OrganizationSelect.schema';
+import { OrganizationIncludeObjectSchema as OrganizationIncludeObjectSchema } from './OrganizationInclude.schema'
+
+const makeSchema = () => z.object({
+  select: z.lazy(() => OrganizationSelectObjectSchema).optional(),
+  include: z.lazy(() => OrganizationIncludeObjectSchema).optional()
+}).strict();
+export const OrganizationArgsObjectSchema = makeSchema();
+export const OrganizationArgsObjectZodSchema = makeSchema();

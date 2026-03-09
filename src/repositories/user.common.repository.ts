@@ -1,64 +1,14 @@
-import type { PrismaTransaction } from '@database/db';
-import type { User } from '@prisma-client/client';
+import type { PrismaTransaction } from '@/db';
 import type { UserQueryDto } from '@schemas/user.common.type';
-import { EmploymentStatus } from '@constants/employment.status';
-import { PositionStatus } from '@constants/position.status';
-import { RoleStatus } from '@constants/role.status';
-import { UserStatus } from '@constants/user.status';
-import { prisma } from '@database/db';
-import { Prisma } from '@prisma-client/client';
-
-const searchUserQuery = `
-SELECT
-    DISTINCT 
-        u.id as id,
-        u.username as username,
-        u.name as name,
-        u.mobile_phone as mobile,
-        u.wxId as wxId,
-        NULL as password,
-        u.user_type as userType,
-        u.order_num as orderNum,
-        u.status as status,
-        u.is_delete as isDelete,
-        u.create_time as createTime,
-        u.update_time as updateTime
-FROM
-    iam.\`user\` u
-    JOIN iam.employment e ON u.id = e.user_id
-    JOIN iam.\`position\` p ON e.pos_id = p.id
-    JOIN iam.organization o1 ON e.dept_id = o1.id
-    JOIN iam.organization_closure oc ON o1.id = oc.descendant_id
-    JOIN iam.organization o2 ON oc.ancestor_id = o2.id
-    LEFT JOIN iam.position_role pr ON p.id = pr.position_id
-    LEFT JOIN iam.employment_role er ON e.id = er.employment_id
-    LEFT JOIN iam.organization_role or2 ON o2.id = or2.organization_id
-    LEFT JOIN iam.\`role\` r1 ON er.role_id = r1.id
-    LEFT JOIN iam.\`role\` r3 ON pr.role_id = r3.id
-    LEFT JOIN iam.\`role\` r2 ON r2.id = or2.role_id
-WHERE
-	u.is_delete = 0
-	AND e.is_delete = 0
-	AND (r1.is_delete = 0 OR r1.is_delete IS NULL)
-	AND (r2.is_delete = 0 OR r2.is_delete IS NULL)
-	AND (r3.is_delete = 0 OR r3.is_delete IS NULL)
-	AND o1.is_delete = 0
-	AND o2.is_delete = 0
-	AND u.status = 1
-  AND e.status = 1
-	AND (r1.status = 1 OR r1.status IS NULL )
-	AND (r2.status = 1 OR r2.status IS NULL )
-	AND (r3.status = 1 OR r3.status IS NULL )
-	AND o1.status = 1
-	AND o2.status = 1
-`;
+import { prisma } from '@/db';
+import { Status } from '@enums/status';
 
 export const userRepository = {
   async getUserById(userId: number, tx: PrismaTransaction = prisma) {
     return await tx.user.findFirst({
       where: {
         id: userId,
-        status: UserStatus.Enable,
+        status: Status.Enable,
         isDelete: false,
       },
     });
@@ -67,7 +17,7 @@ export const userRepository = {
     return await tx.user.findFirst({
       where: {
         username,
-        status: UserStatus.Enable,
+        status: Status.Enable,
         isDelete: false,
       },
     });
@@ -76,7 +26,7 @@ export const userRepository = {
     return await tx.user.findFirst({
       where: {
         wxId,
-        status: UserStatus.Enable,
+        status: Status.Enable,
         isDelete: false,
       },
     });
@@ -85,7 +35,7 @@ export const userRepository = {
     return await tx.user.findFirst({
       where: {
         mobile,
-        status: UserStatus.Enable,
+        status: Status.Enable,
         isDelete: false,
       },
     });
@@ -107,7 +57,7 @@ export const userRepository = {
         },
         employments: {
           some: {
-            status: EmploymentStatus.Enable,
+            status: Status.Enable,
             isDelete: false,
             deptartment: {
               descendantClosures: {
@@ -124,7 +74,7 @@ export const userRepository = {
               },
             },
             position: {
-              status: PositionStatus.Enable,
+              status: Status.Enable,
               isDelete: false,
               posCode: {
                 in: userQueryDto.positionCodes,
@@ -136,7 +86,7 @@ export const userRepository = {
                   roles: {
                     some: {
                       role: {
-                        status: RoleStatus.Enable,
+                        status: Status.Enable,
                         isDelete: false,
                         roleCode: {
                           in: userQueryDto.roleCodes,
@@ -151,7 +101,7 @@ export const userRepository = {
               //         roles: {
               //             some: {
               //                 role: {
-              //                     status: RoleStatus.Enable,
+              //                     status: Status.Enable,
               //                     isDelete: false,
               //                     roleCode: {
               //                         in: userQueryDto.roleCodes
@@ -165,7 +115,7 @@ export const userRepository = {
                 roles: {
                   some: {
                     role: {
-                      status: RoleStatus.Enable,
+                      status: Status.Enable,
                       isDelete: false,
                       roleCode: {
                         in: userQueryDto.roleCodes,
@@ -185,7 +135,7 @@ export const userRepository = {
                             roles: {
                               some: {
                                 role: {
-                                  status: RoleStatus.Enable,
+                                  status: Status.Enable,
                                   isDelete: false,
                                   roleCode: {
                                     in: userQueryDto.roleCodes,
@@ -204,7 +154,7 @@ export const userRepository = {
                               some: {
                                 isAllSub: true,
                                 role: {
-                                  status: RoleStatus.Enable,
+                                  status: Status.Enable,
                                   isDelete: false,
                                   roleCode: {
                                     in: userQueryDto.roleCodes,
@@ -222,74 +172,16 @@ export const userRepository = {
             ],
           },
         },
-        status: UserStatus.Enable,
+        status: Status.Enable,
         isDelete: false,
       },
     });
-  },
-  async searchUsersRawSql(
-    userQueryDto: UserQueryDto,
-    tx: PrismaTransaction = prisma,
-  ) {
-    let query = searchUserQuery;
-    if (userQueryDto.roleCodes) {
-      query += `
-            AND (
-			(
-				r2.role_code IN (${userQueryDto.roleCodes.map(r => `'${r}'`).join(',')})
-				AND (or2.is_all_sub = 1 OR (or2.is_all_sub = 0 AND oc.\`depth\` = 0))
-			)
-			OR
-				r1.role_code IN (${userQueryDto.roleCodes.map(r => `'${r}'`).join(',')})
-			OR
-				r3.role_code IN (${userQueryDto.roleCodes.map(r => `'${r}'`).join(',')})
-	        )
-            `;
-    }
-    if (userQueryDto.positionCodes) {
-      query += `
-            AND p.post_code IN (${userQueryDto.positionCodes.map(r => `'${r}'`).join(',')})
-            `;
-    }
-    if (userQueryDto.ancestorOrgCodes) {
-      query += `
-            AND o2.org_code IN (${userQueryDto.ancestorOrgCodes.map(r => `'${r}'`).join(',')})
-            `;
-    }
-    // if (userQueryDto.ancestorOrgCodes) {
-    //     query += `
-    //     AND o2.org_code IN (${userQueryDto.ancestorOrgCodes.map(r => "'" + r + "'").join(',')})
-    //     `
-    // }
-    if (userQueryDto.ancestorOrgDepths) {
-      query += `
-            AND oc.\`depth\` IN (${userQueryDto.ancestorOrgDepths.map(r => `'${r}'`).join(',')})
-            `;
-    }
-    if (userQueryDto.usernames) {
-      query += `
-            AND u.username IN (${userQueryDto.usernames.map(r => `'${r}'`).join(',')})
-            `;
-    }
-    if (userQueryDto.phones) {
-      query += `
-            AND u.mobile_phone IN (${userQueryDto.phones.map(r => `'${r}'`).join(',')})
-            `;
-    }
-    if (userQueryDto.wxIds) {
-      query += `
-            AND u.wxId IN (${userQueryDto.wxIds.map(r => `'${r}'`).join(',')})
-            `;
-    }
-    console.log(query);
-    const q = Prisma.sql([query]);
-    return await tx.$queryRaw<User[]>(q);
   },
   async setPassword(userId: number, password: string, tx: PrismaTransaction = prisma) {
     return await tx.user.update({
       where: {
         id: userId,
-        status: UserStatus.Enable,
+        status: Status.Enable,
         isDelete: false,
       },
       data: {
@@ -301,7 +193,7 @@ export const userRepository = {
     return await tx.user.update({
       where: {
         id: userId,
-        status: UserStatus.Enable,
+        status: Status.Enable,
         isDelete: false,
       },
       data: {
@@ -330,7 +222,7 @@ export const userRepository = {
             },
           },
         },
-        status: UserStatus.Enable,
+        status: Status.Enable,
         isDelete: false,
       },
     });
@@ -351,7 +243,7 @@ export const userRepository = {
             },
           },
         },
-        status: UserStatus.Enable,
+        status: Status.Enable,
         isDelete: false,
       },
     });
@@ -375,7 +267,7 @@ export const userRepository = {
         NOT: {
           id: userId,
         },
-        status: UserStatus.Enable,
+        status: Status.Enable,
         isDelete: false,
       },
     });
@@ -390,7 +282,7 @@ export const userRepository = {
                 deptartment: {
                   orgCode,
                 },
-                status: EmploymentStatus.Enable,
+                status: Status.Enable,
               },
               {
                 OR: [
@@ -452,7 +344,7 @@ export const userRepository = {
             ],
           },
         },
-        status: UserStatus.Enable,
+        status: Status.Enable,
         isDelete: false,
       },
     });
@@ -474,7 +366,7 @@ export const userRepository = {
                     },
                   },
                 },
-                status: EmploymentStatus.Enable,
+                status: Status.Enable,
               },
               {
                 OR: [
@@ -558,7 +450,7 @@ export const userRepository = {
             ],
           },
         },
-        status: UserStatus.Enable,
+        status: Status.Enable,
         isDelete: false,
       },
     });
@@ -576,7 +468,7 @@ export const userRepository = {
             },
           },
         },
-        status: UserStatus.Enable,
+        status: Status.Enable,
         isDelete: false,
       },
     });
@@ -600,7 +492,7 @@ export const userRepository = {
             },
           },
         },
-        status: UserStatus.Enable,
+        status: Status.Enable,
         isDelete: false,
       },
     });

@@ -1,11 +1,11 @@
 import type { SsoRouteHandler } from './sso.type';
-import { ClientManagementLevel } from '@constants/client.managementLevel';
+import { ClientManagementLevel } from '@enums/client.managementLevel';
 import { authService } from '@services/auth.service';
 import { clientService } from '@services/client.service';
 import { getProtocolAndHost } from '@utils/common.utils';
 import { success } from '@utils/response.utils';
 import { deleteCookie, getCookie, setCookie } from 'hono/cookie';
-import { config } from 'src/config';
+import { config } from '@/config';
 
 export const endpointsConfiguration: SsoRouteHandler<'endpointsConfiguration'> = async (c) => {
   const origin = (new URL(c.req.url)).origin;

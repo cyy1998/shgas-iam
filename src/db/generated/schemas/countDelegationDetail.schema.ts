@@ -1,0 +1,10 @@
+import type { Prisma } from '../prisma/client';
+import { z } from '@hono/zod-openapi';
+import { DelegationDetailOrderByWithRelationInputObjectSchema as DelegationDetailOrderByWithRelationInputObjectSchema } from './objects/DelegationDetailOrderByWithRelationInput.schema';
+import { DelegationDetailWhereInputObjectSchema as DelegationDetailWhereInputObjectSchema } from './objects/DelegationDetailWhereInput.schema';
+import { DelegationDetailWhereUniqueInputObjectSchema as DelegationDetailWhereUniqueInputObjectSchema } from './objects/DelegationDetailWhereUniqueInput.schema';
+import { DelegationDetailCountAggregateInputObjectSchema as DelegationDetailCountAggregateInputObjectSchema } from './objects/DelegationDetailCountAggregateInput.schema';
+
+export const DelegationDetailCountSchema: z.ZodType<Prisma.DelegationDetailCountArgs> = z.object({ orderBy: z.union([DelegationDetailOrderByWithRelationInputObjectSchema, DelegationDetailOrderByWithRelationInputObjectSchema.array()]).optional(), where: DelegationDetailWhereInputObjectSchema.optional(), cursor: DelegationDetailWhereUniqueInputObjectSchema.optional(), take: z.number().optional(), skip: z.number().optional(), select: z.union([ z.literal(true), DelegationDetailCountAggregateInputObjectSchema ]).optional() }).strict() as unknown as z.ZodType<Prisma.DelegationDetailCountArgs>;
+
+export const DelegationDetailCountZodSchema = z.object({ orderBy: z.union([DelegationDetailOrderByWithRelationInputObjectSchema, DelegationDetailOrderByWithRelationInputObjectSchema.array()]).optional(), where: DelegationDetailWhereInputObjectSchema.optional(), cursor: DelegationDetailWhereUniqueInputObjectSchema.optional(), take: z.number().optional(), skip: z.number().optional(), select: z.union([ z.literal(true), DelegationDetailCountAggregateInputObjectSchema ]).optional() }).strict();

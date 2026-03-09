@@ -1,11 +1,12 @@
 import type { AuthObject } from '@schemas/authObject.type';
 import type { UserDetailDto, UserDto } from '@schemas/user.common.type';
 import type { WeixinResponse } from '@schemas/wx.type';
-import { ClientStatus } from '@constants/client.status';
-import { VerificationCodeUsage } from '@constants/verificationCode.usage';
+import { Status } from '@enums/status';
+import { VerificationCodeUsage } from '@enums/verificationCode.usage';
 import { AuthzMaintaincingError } from '@errors/AuthzMaintaincingError';
 import { AuthzUnauthorizedError } from '@errors/AuthzUnauthorizedError';
 import { CustomError } from '@errors/CustomError';
+import { redis } from '@lib/cache/redis';
 import { clientService } from '@services/client.service';
 import { mobileService } from '@services/mobile.service';
 import { sessionService } from '@services/session.service';
@@ -13,8 +14,7 @@ import { userService } from '@services/user.common.service';
 import { weixinService } from '@services/weixin.service';
 import axios from 'axios';
 import { sleep } from 'bun';
-import { config } from 'src/config';
-import { redis } from 'src/libs/cache/redis';
+import { config } from '@/config';
 
 async function _login(user: UserDetailDto) {
   const sessionId = crypto.randomUUID();
@@ -158,7 +158,7 @@ export async function authz(sessionId: string | null, clientCode: string | null,
     && client.extAttributes.userExcluding.includes(userDto.username)) {
     userInExcludingList = true;
   }
-  if (client.status === ClientStatus.Maintance && !userInExcludingList) {
+  if (client.status === Status.Pause && !userInExcludingList) {
     throw new AuthzMaintaincingError('系统维护中');
   }
   const userFinal = {
@@ -268,5 +268,3 @@ export async function setToken(code: string, clientCode: string, clientSecret: s
     userInfo,
   };
 }
-
-
