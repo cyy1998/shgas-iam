@@ -28,17 +28,17 @@ export const loginMobile: AuthRouteHandler<'loginMobile'> = async (c) => {
   return c.json(success(data));
 };
 
-export const loginWX: AuthRouteHandler<'loginWX'> = async (c) => {
-  const { code } = c.req.valid('json');
-  const data = await authService.loginWX(code);
-  setCookie(c, 'session', data.token, {
-    httpOnly: true,
-    sameSite: 'Strict', // 防 CSRF
-    maxAge: config.REDIS_EXPIRE_TIME,
-    path: '/',
-  });
-  return c.json(success(data));
-};
+// export const loginWX: AuthRouteHandler<'loginWX'> = async (c) => {
+//   const { code } = c.req.valid('json');
+//   const data = await authService.loginWX(code);
+//   setCookie(c, 'session', data.token, {
+//     httpOnly: true,
+//     sameSite: 'Strict', // 防 CSRF
+//     maxAge: config.REDIS_EXPIRE_TIME,
+//     path: '/',
+//   });
+//   return c.json(success(data));
+// };
 
 export const authz: AuthRouteHandler<'authz'> = async (c) => {
   const clientCode = c.req.header('Client') ?? null;

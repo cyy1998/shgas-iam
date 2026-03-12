@@ -1,10 +1,10 @@
 import type { ClientDto, ClientInputDto } from '@schemas/client.type';
-import { redis } from '@lib/cache/redis';
 import { clientMapper } from '@mapper/client.mapper';
 import { clientRepository } from '@repositories/client.repository';
 import { ClientDtoSchema } from '@schemas/client.type';
 import { ZodError } from 'zod';
 import { prisma } from '@/db';
+import { redis } from '@/lib/clients/redis';
 
 export const clientService = {
   async getClientByCode(clientCode: string) {
@@ -24,7 +24,7 @@ export const clientService = {
       }
     }
     const client = await clientRepository.getClientByCode(clientCode);
-    console.log(client)
+    console.log(client);
     if (client === null) {
       return null;
     }

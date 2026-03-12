@@ -22,6 +22,7 @@ const EnvSchema = z.object({
   AUTHORIZATION_ENDPOINT: z.string(),
   LOGOUT_ENDPOINT: z.string(),
   THIRDPARTY_OA_ENDPOINT: z.string(),
+  LOG_LEVEL: z.string().default('info'),
 });
 
 export type Env = z.infer<typeof EnvSchema>;

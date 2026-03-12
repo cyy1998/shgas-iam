@@ -1,4 +1,3 @@
-import { prisma } from '@/db';
 import { UserType } from '@enums/user.type';
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
 import { authenicationHandler } from '@middlewares/authenication.handler';
@@ -20,6 +19,7 @@ import { roleService } from '@services/role.service';
 import { userAdminService } from '@services/user.admin.service';
 import { generateRandomPassword } from '@utils/encryption.utils';
 import { makeResponse, success } from '@utils/response.utils';
+import { prisma } from '@/db';
 
 const app = new OpenAPIHono();
 

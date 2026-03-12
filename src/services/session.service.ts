@@ -1,7 +1,7 @@
 import type { UserDetailDto } from '@schemas/user.common.type';
 import { AuthzUnauthorizedError } from '@errors/AuthzUnauthorizedError';
-import { redis } from '@lib/cache/redis';
 import { config } from '@/config';
+import { redis } from '@/lib/clients/redis';
 
 export const sessionService = {
   async getSessionById(sessionId: string): Promise<UserDetailDto> {
@@ -29,5 +29,10 @@ export const sessionService = {
     await redis.zremrangebyscore(key, '-inf', now);
     // 返回剩余（未过期）的元素
     return await redis.zrange(key, 0, -1);
+  },
+  async setGlobalSession(user: UserDetailDto) {
+    const sessionId = crypto.randomUUID();
+    await redis.set(`global_session:${sessionId}`, JSON.stringify(user), 'EX', config.REDIS_EXPIRE_TIME);
+    return sessionId;
   },
 };

@@ -2,7 +2,7 @@ import type { SMSServiceResult } from '@schemas/service.type';
 import { prisma } from '@/db';
 import { VerificationCodeUsage } from '@enums/verificationCode.usage';
 import { CustomError } from '@errors/CustomError';
-import { redis } from '@lib/cache/redis';
+import { redis } from '@/lib/clients/redis';
 import { hmacSha256 } from '@utils/encryption.utils';
 import { config } from '@/config';
 

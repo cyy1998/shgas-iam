@@ -1,4 +1,4 @@
-import { redis } from '@lib/cache/redis';
+import { redis } from '@/lib/clients/redis';
 import { config } from '@/config';
 
 interface WeixinAccessTokenResponse {

@@ -1,5 +1,5 @@
 import { OpenAPIHono } from '@hono/zod-openapi';
-import { pinoLogger } from '@lib/logger/pino';
+import { pinoLogger } from '@/lib/clients/pino';
 import { serveStatic } from 'hono/bun';
 import { logger } from 'hono/logger';
 import { errorHandler } from './middlewares/error.handler';

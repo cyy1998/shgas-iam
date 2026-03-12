@@ -6,7 +6,7 @@ import { VerificationCodeUsage } from '@enums/verificationCode.usage';
 import { AuthzMaintaincingError } from '@errors/AuthzMaintaincingError';
 import { AuthzUnauthorizedError } from '@errors/AuthzUnauthorizedError';
 import { CustomError } from '@errors/CustomError';
-import { redis } from '@lib/cache/redis';
+import { redis } from '@/lib/clients/redis';
 import axios from 'axios';
 import { sleep } from 'bun';
 import { sm3 } from 'sm-crypto';

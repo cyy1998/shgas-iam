@@ -1,6 +1,5 @@
-import type { User } from '@/db/generated/prisma/client';
 import type { UserDetailDto, UserQueryDto, UserQueryWithPrivilegeDelegationDto } from '@schemas/user.common.type';
-import { prisma } from '@/db';
+import type { User } from '@/db/generated/prisma/client';
 import { UserType } from '@enums/user.type';
 import { VerificationCodeUsage } from '@enums/verificationCode.usage';
 import { CustomError } from '@errors/CustomError';
@@ -18,10 +17,10 @@ import { userRepository } from '@repositories/user.common.repository';
 import { EmploymentDetailDtoSchema } from '@schemas/employment.common.type';
 import {
   UserDetailDtoSchema,
-
 } from '@schemas/user.common.type';
 import { compare, hash } from 'bcrypt-ts';
 import { config } from '@/config';
+import { prisma } from '@/db';
 import { mobileService } from './mobile.service';
 
 async function _getUserDetail(user: User | null): Promise<UserDetailDto> {
@@ -204,7 +203,7 @@ export const userService = {
     return userDtos;
   },
 
-  async getUsersByOrgPosWithDelegation(orgCode: string, roleCode: string, orgScope: string, privCode: string) {
+  async getUsersByOrgPosWithDelegation(orgCode: string, roleCode: string, orgScope: string, _privCode: string) {
     const userDtos = this.getUsersByOrgPos(orgCode, roleCode, orgScope);
     return userDtos;
   },

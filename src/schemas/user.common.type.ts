@@ -23,7 +23,7 @@ export const UserDetailDtoSchema = UserDtoSchema.extend({
   employments: z.array(EmploymentDtoSchema).optional(),
   privileges: z.array(z.string()).default([]).openapi({ example: ['ui:button:tender:create-GYBG'] }),
   roles: z.array(z.string()).default([]).openapi({ example: ['tender:default-user'] }),
-});
+}).openapi('UserDetailDto');
 
 export type UserDetailDto = z.infer<typeof UserDetailDtoSchema>;
 

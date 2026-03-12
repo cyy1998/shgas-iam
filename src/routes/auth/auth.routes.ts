@@ -52,27 +52,27 @@ export const loginMobile = createRoute({
   },
 });
 
-export const loginWX = createRoute({
-  method: 'post',
-  path: '/login/wx',
-  tags,
-  request: {
-    body: jsonContentRequired(z.object({
-      code: z.string().openapi({ example: '1234' }),
-    }), '微信单点登录参数'),
-  },
-  responses: {
-    [HttpStatusCodes.OK]: jsonContent(
-      createSuccessResponseSchema(
-        z.object({
-          token: z.string().openapi({ example: 'ed5776f0-5d5d-44a7-b44b-9505f5799a12' }),
-          isMobileSet: z.boolean(),
-        }),
-      ),
-      '登录成功',
-    ),
-  },
-});
+// export const loginWX = createRoute({
+//   method: 'post',
+//   path: '/login/wx',
+//   tags,
+//   request: {
+//     body: jsonContentRequired(z.object({
+//       code: z.string().openapi({ example: '1234' }),
+//     }), '微信单点登录参数'),
+//   },
+//   responses: {
+//     [HttpStatusCodes.OK]: jsonContent(
+//       createSuccessResponseSchema(
+//         z.object({
+//           token: z.string().openapi({ example: 'ed5776f0-5d5d-44a7-b44b-9505f5799a12' }),
+//           isMobileSet: z.boolean(),
+//         }),
+//       ),
+//       '登录成功',
+//     ),
+//   },
+// });
 
 export const authz = createRoute({
   method: 'get',
