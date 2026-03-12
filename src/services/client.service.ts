@@ -24,12 +24,12 @@ export const clientService = {
       }
     }
     const client = await clientRepository.getClientByCode(clientCode);
+    console.log(client)
     if (client === null) {
       return null;
     }
     // const clientVo = clientMapper.dtoToVo(clientMapper.entityToDto(client))
     // const clientDto = clientMapper.entityToDto(client);
-    console.log(client);
     const clientDto = ClientDtoSchema.parse(client);
 
     await redis.set(`cache:client:${clientCode}`, JSON.stringify(clientDto));

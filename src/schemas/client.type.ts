@@ -17,22 +17,12 @@ export type ClientExtAttributesDto = z.infer<typeof ClientExtAttributesDtoSchema
 
 export const ClientDtoSchema = ClientSchema.extend({
   extAttributes: ClientExtAttributesDtoSchema,
-});
-
-// export const ClientDtoSchema = z.object({
-//   id: z.number().openapi({ example: 1 }),
-//   clientCode: z.string().openapi({ example: 'tender' }),
-//   clientName: z.string().openapi({ example: '采招系统' }),
-//   url: z.string().nullable().openapi({ example: '采招系统' }),
-//   status: z.enum(Status).openapi({ example: 1 }),
-//   extAttributes: ClientExtAttributesDtoSchema,
-// }).openapi('ClientDto');
+}) ;
 
 export type ClientDto = z.infer<typeof ClientDtoSchema>;
 
 export const ClientInputDtoSchema = ClientDtoSchema.partial().required({
   id: true,
-  clientCode: true,
 });
 
 export type ClientInputDto = z.infer<typeof ClientInputDtoSchema>;

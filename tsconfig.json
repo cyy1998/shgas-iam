@@ -22,7 +22,7 @@
         "src/db"
       ],
       "@lib/*": [
-        "src/libs/*"
+        "src/lib/*"
       ],
       "@services/*": [
         "src/services/*"

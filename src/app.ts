@@ -1,7 +1,7 @@
 import { OpenAPIHono } from '@hono/zod-openapi';
+import { pinoLogger } from '@lib/logger/pino';
 import { serveStatic } from 'hono/bun';
 import { logger } from 'hono/logger';
-import { pinoLogger } from './libs/logger/pino';
 import { errorHandler } from './middlewares/error.handler';
 import adminRoutes from './routes/admin.route';
 // import authRoutes from './routes/auth.route';
