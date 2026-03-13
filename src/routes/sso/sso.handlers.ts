@@ -31,6 +31,8 @@ export const callback: SsoRouteHandler<'callback'> = async (c) => {
     maxAge: config.REDIS_EXPIRE_TIME,
     path: '/',
   });
+  const urlObject = new URL(redirectUrl);
+  urlObject.searchParams.set('token', data.token);
   if (data.orcasSessionId != null) {
     setCookie(c, `orcas_sso_sessionid`, data.orcasSessionId, {
       httpOnly: true,
@@ -38,8 +40,9 @@ export const callback: SsoRouteHandler<'callback'> = async (c) => {
       maxAge: config.REDIS_EXPIRE_TIME,
       path: '/',
     });
+    urlObject.searchParams.set('orcasToken', data.orcasSessionId);
   }
-  return c.redirect(`${redirectUrl}?token=${data.token}&orcasToken=${data.orcasSessionId}`);
+  return c.redirect(urlObject.toString());
 };
 
 export const token: SsoRouteHandler<'token'> = async (c) => {
@@ -51,10 +54,7 @@ export const token: SsoRouteHandler<'token'> = async (c) => {
 export const authorize: SsoRouteHandler<'authorize'> = async (c) => {
   const { client, redirectUrl, token } = c.req.valid('query');
   const searchParams = new URLSearchParams(c.req.query());
-  const sessionId = getCookie(c, 'global_session') ?? token;
-  if (!sessionId) {
-    throw new AuthzUnauthorizedError('缺少有效SessionId');
-  }
+  const sessionId = getCookie(c, 'global_session') ?? c.req.header('Authorization') ?? token;
   const clientInstance = await clientService.getClientByCode(client);
   const data = await ssoService.authorize(sessionId, client, redirectUrl);
   if (data.isLogin === false) {
@@ -67,8 +67,8 @@ export const authorize: SsoRouteHandler<'authorize'> = async (c) => {
 };
 
 export const logout: SsoRouteHandler<'logout'> = async (c) => {
-  const { redirectUrl, token } = c.req.valid('query');
-  const sessionId = getCookie(c, 'global_session') ?? token;
+  const { redirectUrl } = c.req.valid('query');
+  const sessionId = getCookie(c, 'global_session') ?? c.req.header('Authorization');
   if (!sessionId) {
     throw new AuthzUnauthorizedError('缺少有效SessionId');
   }
@@ -79,7 +79,7 @@ export const logout: SsoRouteHandler<'logout'> = async (c) => {
 
 export const loginOA: SsoRouteHandler<'loginOA'> = async (c) => {
   const { loginid, ts, token, redirectUrl, client } = c.req.valid('query');
-  const sessionId = _getSessionId(c);
+  const sessionId = getCookie(c, 'global_session') ?? c.req.header('Authorization');
   if (sessionId) {
     await ssoService.logout(sessionId);
   }

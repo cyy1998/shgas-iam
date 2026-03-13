@@ -76,7 +76,7 @@ export const logout = createRoute({
   request: {
     query: z.object({
       redirectUrl: z.url().openapi({ example: 'http://localhost:8080' }),
-      token: z.string().optional().openapi({ example: 'abcd' }),
+      // token: z.string().optional().openapi({ example: 'abcd' }),
     }),
   },
   responses: {

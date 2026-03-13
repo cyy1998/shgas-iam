@@ -8,8 +8,8 @@ import redis from '@/lib/clients/redis';
 export async function authenicationHandler(c: Context, next: Next) {
   const clientCode = c.req.header('Client');
   const sessionId = clientCode === 'iam'
-    ? getCookie(c, `global_session`) ?? null
-    : getCookie(c, `local_${clientCode}_session`) ?? null;
+    ? getCookie(c, `global_session`) ?? c.req.header('Authorization') ?? null
+    : getCookie(c, `local_${clientCode}_session`) ?? c.req.header('Authorization') ?? null;
   if (!clientCode) {
     throw new CustomError('非法请求');
   }
