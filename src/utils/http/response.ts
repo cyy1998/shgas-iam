@@ -8,6 +8,6 @@ export function makeResponse(code: number = 200, data: unknown = null, message: 
   };
 }
 
-export function success(data: unknown = null) {
+export function ok(data: unknown = null) {
   return makeResponse(ServiceStatusCode.Success, data, 'success');
 }

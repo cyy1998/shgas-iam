@@ -1,7 +1,6 @@
 import { UserType } from '@enums/user.type';
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
 import { authenicationHandler } from '@middlewares/authenication.handler';
-import { ClientInputDtoSchema } from '@schemas/client.type';
 import { EmploymentAdminQueryDtoSchema, EmploymentAdminVoSchema } from '@schemas/employment.admin.type';
 import { OrganizationCreateDtoSchema, OrganizationDtoSchema, OrganizationQueryDtoSchema } from '@schemas/organization.common.type';
 import { createPageResultSchema } from '@schemas/page.type';
@@ -9,7 +8,6 @@ import { PositionAdminQueryDtoSchema, PositionAdminVoSchema } from '@schemas/pos
 import { createResponseSchema, ResponseSchema } from '@schemas/response.type';
 import { UserAdminDetailVoSchema, UserAdminQueryDtoSchema, UserAdminVoSchema } from '@schemas/user.admin.type';
 import { UserCreateDtoSchema } from '@schemas/user.common.type';
-import { clientService } from '@services/client.service';
 import { employmentAdminService } from '@services/employment.admin.service';
 import { employmentService } from '@services/employment.common.service';
 import { organizationService } from '@services/organization.service';
@@ -18,8 +16,10 @@ import { privilegeService } from '@services/privilege.service';
 import { roleService } from '@services/role.service';
 import { userAdminService } from '@services/user.admin.service';
 import { generateRandomPassword } from '@utils/encryption.utils';
-import { makeResponse, success } from '@utils/response.utils';
 import { prisma } from '@/db';
+import { ClientDtoSchema, ClientInputDtoSchema } from '@/services/client/client.schema';
+import * as clientService from '@/services/client/client.service';
+import * as resp from '@/utils/http/response';
 
 const app = new OpenAPIHono();
 
@@ -57,7 +57,7 @@ app.openapi(
   async (c) => {
     const body = c.req.valid('json');
     const data = await userAdminService.searchUsersFuzzy(body);
-    return c.json(success(data));
+    return c.json(resp.ok(data));
   },
 );
 
@@ -94,7 +94,7 @@ app.openapi(
   async (c) => {
     const organizationQueryDto = c.req.valid('json');
     const data = await organizationService.searchOrganizations(organizationQueryDto);
-    return c.json(success(data));
+    return c.json(resp.ok(data));
   },
 );
 
@@ -131,7 +131,7 @@ app.openapi(
   async (c) => {
     const employmentQueryDto = c.req.valid('json');
     const data = await employmentAdminService.searchEmployments(employmentQueryDto);
-    return c.json(success(data));
+    return c.json(resp.ok(data));
   },
 );
 
@@ -168,7 +168,7 @@ app.openapi(
   async (c) => {
     const positionQueryDto = c.req.valid('json');
     const data = await positionAdminService.searchPositionsFuzzy(positionQueryDto);
-    return c.json(success(data));
+    return c.json(resp.ok(data));
   },
 );
 
@@ -200,7 +200,7 @@ app.openapi(
   async (c) => {
     const { username } = c.req.valid('query');
     const data = await userAdminService.getUserDetail(username);
-    return c.json(success(data));
+    return c.json(resp.ok(data));
   },
 );
 
@@ -239,7 +239,7 @@ app.openapi(
   async (c) => {
     const { username } = c.req.valid('json');
     const data = await userAdminService.resetPassword(username);
-    return c.json(success(data));
+    return c.json(resp.ok(data));
   },
 );
 
@@ -278,7 +278,7 @@ app.openapi(
   async (c) => {
     const users = c.req.valid('json').data;
     const data = await userAdminService.setUsers(users);
-    return c.json(success(data));
+    return c.json(resp.ok(data));
   },
 );
 
@@ -305,7 +305,7 @@ app.openapi(
   }),
   async (c) => {
     const data = generateRandomPassword(8);
-    return c.json(success(data));
+    return c.json(resp.ok(data));
   },
 );
 
@@ -331,7 +331,7 @@ app.openapi(
       200: {
         content: {
           'application/json': {
-            schema: createResponseSchema(z.boolean()),
+            schema: createResponseSchema(ClientDtoSchema),
           },
         },
         description: '设置岗位成功',
@@ -341,7 +341,7 @@ app.openapi(
   async (c) => {
     const body = c.req.valid('json');
     const data = await clientService.updateClient(body);
-    return c.json(success(data));
+    return c.json(resp.ok(data));
   },
 );
 /*
@@ -381,7 +381,7 @@ app.openapi(
     const position = await prisma.position.create({
       data: body,
     });
-    return c.json(makeResponse());
+    return c.json(resp.ok());
   },
 );
 /*
@@ -416,7 +416,7 @@ app.openapi(
   async (c) => {
     const organizationCreateDto = c.req.valid('json');
     const data = await organizationService.setOrganization(organizationCreateDto);
-    return c.json(success(data));
+    return c.json(resp.ok(data));
   },
 );
 /*
@@ -455,7 +455,7 @@ app.openapi(
   async (c) => {
     const { username, posCode, orgCode } = c.req.valid('json');
     const data = await employmentService.setEmployment(username, posCode, orgCode);
-    return c.json(success(data));
+    return c.json(resp.ok(data));
   },
 );
 /*
@@ -493,7 +493,7 @@ app.openapi(
   async (c) => {
     const { privCode, privName } = c.req.valid('json');
     const data = await privilegeService.setPrivilege(privCode, privName);
-    return c.json(success(data));
+    return c.json(resp.ok(data));
   },
 );
 
@@ -532,7 +532,7 @@ app.openapi(
   async (c) => {
     const { roleCode, roleName } = c.req.valid('json');
     const data = await roleService.setRole(roleCode, roleName);
-    return c.json(success(data));
+    return c.json(resp.ok(data));
   },
 );
 
@@ -571,7 +571,7 @@ app.openapi(
   async (c) => {
     const { roleCode, privCode } = c.req.valid('json');
     const data = await roleService.setRolePrivilege(roleCode, privCode);
-    return c.json(success(data));
+    return c.json(resp.ok(data));
   },
 );
 
@@ -612,7 +612,7 @@ app.openapi(
   async (c) => {
     const { username, orgCode, posCode, roleCode } = c.req.valid('json');
     const data = await roleService.setRoleForEmployment(username, posCode, orgCode, roleCode);
-    return c.json(success(data));
+    return c.json(resp.ok(data));
   },
 );
 
@@ -652,7 +652,7 @@ app.openapi(
   async (c) => {
     const { orgCode, roleCode, isAllSub } = c.req.valid('json');
     const data = await roleService.setRoleForOrganization(orgCode, roleCode);
-    return c.json(success(data));
+    return c.json(resp.ok(data));
   },
 );
 
@@ -691,7 +691,7 @@ app.openapi(
   async (c) => {
     const { posCode, roleCode } = c.req.valid('json');
     const data = await roleService.setRoleForPosition(posCode, roleCode);
-    return c.json(success(data));
+    return c.json(resp.ok(data));
   },
 );
 
@@ -731,7 +731,7 @@ app.openapi(
   async (c) => {
     const { roleCode, orgCode, posCode } = c.req.valid('json');
     const data = await roleService.setRoleForPosOrg(orgCode, posCode, roleCode);
-    return c.json(success(data));
+    return c.json(resp.ok(data));
   },
 );
 
@@ -771,7 +771,7 @@ app.openapi(
   async (c) => {
     const { roleCode, orgCode, posCode } = c.req.valid('json');
     const data = await roleService.deleteRoleForPosOrg(orgCode, posCode, roleCode);
-    return c.json(success(data));
+    return c.json(resp.ok(data));
   },
 );
 
@@ -812,7 +812,7 @@ app.openapi(
   async (c) => {
     const { username, orgCode, posCode, roleCode } = c.req.valid('json');
     const data = await roleService.deleteRoleForEmployment(username, posCode, orgCode, roleCode);
-    return c.json(success(data));
+    return c.json(resp.ok(data));
   },
 );
 
@@ -839,7 +839,7 @@ app.openapi(
   }),
   async (c) => {
     const data = Object.values(UserType);
-    return c.json(success(data));
+    return c.json(resp.ok(data));
   },
 );
 

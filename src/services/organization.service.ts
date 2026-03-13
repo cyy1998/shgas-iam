@@ -1,10 +1,10 @@
 import type { OrganizationCreateDto, OrganizationQueryDto } from '@schemas/organization.common.type';
 import type { Organization } from '@/db/generated/prisma/client';
-import { prisma } from '@/db';
 import { OrganizationType } from '@enums/organization.type';
 import { CustomError } from '@errors/CustomError';
 import { organizationMapper } from '@mapper/organization.mapper';
 import { organizationRepository } from '@repositories/organization.repository';
+import { prisma } from '@/db';
 
 async function getCompDict() {
   const organizations = organizationRepository.getOrganizationsByParentId(-1);

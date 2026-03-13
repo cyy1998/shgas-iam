@@ -4,12 +4,12 @@ import type { WeixinResponse } from '@/schemas/wx.type';
 import axios from 'axios';
 import { sleep } from 'bun';
 import { sm3 } from 'sm-crypto';
-import { config } from '@/config';
+import config from '@/env';
 import { AuthzUnauthorizedError } from '@/errors/AuthzUnauthorizedError';
 import { CustomError } from '@/errors/CustomError';
-import { redis } from '@/lib/clients/redis';
+import redis from '@/lib/clients/redis';
 import { UserDetailDtoSchema } from '@/schemas/user.common.type';
-import { clientService } from '@/services/client.service';
+import * as clientService from '@/services/client/client.service';
 import { sessionService } from '@/services/session.service';
 import { userService } from '@/services/user.common.service';
 import { weixinService } from '@/services/weixin.service';
@@ -149,7 +149,6 @@ export async function authorize(globalSessionId: string | undefined, clientCode:
         data: userString,
       },
     ), 'EX', config.AUTH_CODE_EXPIRE_TIME),
-    // redis.set(`global_session_for_code:${code}`, globalSessionId, 'EX', env.AUTH_CODE_EXPIRE_TIME)
   ]);
   return {
     isLogin: true,

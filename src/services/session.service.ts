@@ -1,7 +1,8 @@
 import type { UserDetailDto } from '@schemas/user.common.type';
 import { AuthzUnauthorizedError } from '@errors/AuthzUnauthorizedError';
-import { config } from '@/config';
-import { redis } from '@/lib/clients/redis';
+import { UserDetailDtoSchema } from '@schemas/user.common.type';
+import config from '@/env';
+import redis from '@/lib/clients/redis';
 
 export const sessionService = {
   async getSessionById(sessionId: string): Promise<UserDetailDto> {
@@ -9,7 +10,7 @@ export const sessionService = {
     if (session === null) {
       throw new AuthzUnauthorizedError('未登录');
     }
-    return JSON.parse(session) as UserDetailDto;
+    return UserDetailDtoSchema.parse(JSON.parse(session));
   },
 
   async updateSession(sessionId: string, userInfo: string) {
@@ -34,5 +35,9 @@ export const sessionService = {
     const sessionId = crypto.randomUUID();
     await redis.set(`global_session:${sessionId}`, JSON.stringify(user), 'EX', config.REDIS_EXPIRE_TIME);
     return sessionId;
+  },
+  async cehckVerificationCode(usage: string, phone: string, code: string): Promise<boolean> {
+    const savedCode = await redis.get(`mobile-code:${usage}:${phone}`);
+    return savedCode === code;
   },
 };

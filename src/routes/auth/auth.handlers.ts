@@ -1,7 +1,7 @@
 import type { AuthRouteHandler } from './auth.types';
-import { success } from '@utils/response.utils';
 import { getCookie, setCookie } from 'hono/cookie';
-import { config } from '@/config';
+import config from '@/env';
+import * as resp from '@/utils/http/response';
 import * as authService from './auth.service';
 
 export const loginPassword: AuthRouteHandler<'loginPassword'> = async (c) => {
@@ -13,7 +13,7 @@ export const loginPassword: AuthRouteHandler<'loginPassword'> = async (c) => {
     maxAge: config.REDIS_EXPIRE_TIME,
     path: '/',
   });
-  return c.json(success(data));
+  return c.json(resp.ok(data));
 };
 
 export const loginMobile: AuthRouteHandler<'loginMobile'> = async (c) => {
@@ -25,25 +25,13 @@ export const loginMobile: AuthRouteHandler<'loginMobile'> = async (c) => {
     maxAge: config.REDIS_EXPIRE_TIME,
     path: '/',
   });
-  return c.json(success(data));
+  return c.json(resp.ok(data));
 };
-
-// export const loginWX: AuthRouteHandler<'loginWX'> = async (c) => {
-//   const { code } = c.req.valid('json');
-//   const data = await authService.loginWX(code);
-//   setCookie(c, 'session', data.token, {
-//     httpOnly: true,
-//     sameSite: 'Strict', // 防 CSRF
-//     maxAge: config.REDIS_EXPIRE_TIME,
-//     path: '/',
-//   });
-//   return c.json(success(data));
-// };
 
 export const authz: AuthRouteHandler<'authz'> = async (c) => {
   const clientCode = c.req.header('Client') ?? null;
-  const sessionId = getCookie(c, `local_${clientCode}_session`) ?? null;
+  const sessionId = getCookie(c, `local_${clientCode}_session`) ?? c.req.header('Authorization') ?? null;
   const data = await authService.authz(sessionId, clientCode, c.req.header('X-Forwarded-Uri'));
   c.header('X-User-Info', data);
-  return c.json(success(data));
+  return c.json(resp.ok(data));
 };

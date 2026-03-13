@@ -13,7 +13,7 @@ import { UserAdminDetailDtoSchema } from '@schemas/user.admin.type';
 import { generateRandomPassword } from '@utils/encryption.utils';
 import { paginate } from '@utils/page.util';
 import { hash } from 'bcrypt-ts';
-import { config } from '@/config';
+import config  from '@/env';
 
 async function _getUserDetail(user: User | null) {
   if (user === null) {

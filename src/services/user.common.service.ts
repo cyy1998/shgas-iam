@@ -19,8 +19,8 @@ import {
   UserDetailDtoSchema,
 } from '@schemas/user.common.type';
 import { compare, hash } from 'bcrypt-ts';
-import { config } from '@/config';
 import { prisma } from '@/db';
+import config from '@/env';
 import { mobileService } from './mobile.service';
 
 async function _getUserDetail(user: User | null): Promise<UserDetailDto> {

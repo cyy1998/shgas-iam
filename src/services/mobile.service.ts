@@ -1,27 +1,12 @@
 import type { SMSServiceResult } from '@schemas/service.type';
-import { prisma } from '@/db';
 import { VerificationCodeUsage } from '@enums/verificationCode.usage';
 import { CustomError } from '@errors/CustomError';
-import { redis } from '@/lib/clients/redis';
 import { hmacSha256 } from '@utils/encryption.utils';
-import { config } from '@/config';
+import { prisma } from '@/db';
+import config from '@/env';
+import redis from '@/lib/clients/redis';
 
 export const mobileService = {
-  // async sendCodeWithExistingPhone(phoneNumber: string) {
-  //     if (!this.checkValidPhoneNumber(phoneNumber)) {
-  //         throw new CustomError('无效手机号')
-  //     }
-  //     if (!await this.checkExistingPhoneNumber(phoneNumber)) {
-  //         throw new CustomError('手机号不存在')
-  //     }
-  //     return await this.sendVerificationCode(phoneNumber)
-  // },
-  // async sendCodeWithOutExistingPhone(phoneNumber: string) {
-  //     if (!this.checkValidPhoneNumber(phoneNumber)) {
-  //         throw new CustomError('无效手机号')
-  //     }
-  //     return await this.sendVerificationCode(phoneNumber)
-  // },
   async sendCode(phoneNumber: string, usage: string) {
     if (!this.checkValidPhoneNumber(phoneNumber)) {
       throw new CustomError('无效手机号');
@@ -68,12 +53,12 @@ export const mobileService = {
       origin,
       signature: hmacSha256(data, config.SMS_SIGNATURE_KEY),
     };
-    const res = await fetch(config.SMS_URL, {
+    await fetch(config.SMS_URL, {
       method: 'POST',
       body: JSON.stringify(request_data),
       headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
     });
-    console.log(await res.json());
+    // console.log(await res.json());
     return true;
   },
 

@@ -1,6 +1,6 @@
 import type { TransportTargetOptions } from 'pino';
 import pino from 'pino';
-import { config } from '@/config';
+import config from '@/env';
 import { createSingleton } from '../core/singleton';
 
 // export const pinoLogger = pino();

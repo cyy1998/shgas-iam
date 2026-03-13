@@ -30,4 +30,6 @@ export type Env = z.infer<typeof EnvSchema>;
 // 从 process.env 或 Deno.env 获取（根据运行时调整）
 const rawEnv = process.env;
 
-export const config = EnvSchema.parse(rawEnv);
+const env = EnvSchema.parse(rawEnv);
+
+export default env;

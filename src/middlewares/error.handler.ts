@@ -3,7 +3,7 @@ import type { HTTPResponseError } from 'hono/types';
 import { ServiceStatusCode } from '@enums/service.status';
 import { AuthzError } from '@errors/AuthzError';
 import { CustomError } from '@errors/CustomError';
-import { makeResponse } from '@utils/response.utils';
+import { makeResponse } from '@/utils/http/response';
 import { HTTPException } from 'hono/http-exception';
 
 export function errorHandler(err: Error | HTTPResponseError, c: Context) {
