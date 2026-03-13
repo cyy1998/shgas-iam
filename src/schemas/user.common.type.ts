@@ -1,6 +1,6 @@
 import { UserStatus } from '@enums/user.status';
 import { z } from '@hono/zod-openapi';
-import { EmploymentDtoSchema } from './employment.common.type';
+import { EmploymentDetailDtoSchema, EmploymentDtoSchema } from './employment.common.type';
 
 export const UserDtoSchema = z.object({
   id: z.number().openapi({ example: 1 }),
@@ -20,7 +20,7 @@ export const UserDtoSchema = z.object({
 export type UserDto = z.infer<typeof UserDtoSchema>;
 
 export const UserDetailDtoSchema = UserDtoSchema.extend({
-  employments: z.array(EmploymentDtoSchema).optional(),
+  employments: z.array(EmploymentDetailDtoSchema).optional(),
   privileges: z.array(z.string()).default([]).openapi({ example: ['ui:button:tender:create-GYBG'] }),
   roles: z.array(z.string()).default([]).openapi({ example: ['tender:default-user'] }),
 }).openapi('UserDetailDto');
