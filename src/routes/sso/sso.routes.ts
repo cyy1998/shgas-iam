@@ -2,7 +2,7 @@ import { createRoute, z } from '@hono/zod-openapi';
 import * as HttpStatusCodes from '@lib/core/http-status-codes';
 import jsonContent from '@lib/core/openapi/helpers/json-content';
 import createSuccessResponseSchema from '@lib/core/openapi/schemas/create-success-schema';
-import { SSOMetaInfoSchema } from '@schemas/sso.type';
+import { SSOMetaInfoSchema } from './sso.schema';
 
 const tags = ['SSO'];
 
@@ -76,7 +76,7 @@ export const logout = createRoute({
   request: {
     query: z.object({
       redirectUrl: z.url().openapi({ example: 'http://localhost:8080' }),
-      // token: z.string().optional().openapi({ example: 'abcd' }),
+      token: z.string().optional().openapi({ example: 'abcd' }),
     }),
   },
   responses: {

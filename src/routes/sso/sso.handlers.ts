@@ -9,10 +9,6 @@ import * as clientService from '@/services/client/client.service';
 import * as resp from '@/utils/http/response';
 import * as ssoService from './sso.service';
 
-function _getSessionId(c: Context) {
-  return getCookie(c, 'global_session') ?? c.req.header('Authorization');
-}
-
 export const endpointsConfiguration: SsoRouteHandler<'endpointsConfiguration'> = async (c) => {
   const origin = (new URL(c.req.url)).origin;
   return c.json(resp.ok({

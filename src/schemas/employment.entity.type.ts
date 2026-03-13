@@ -8,5 +8,4 @@ export type EmploymentEntity = Prisma.EmploymentGetPayload<{
     company: true;
     user: true;
   };
-
 }>;

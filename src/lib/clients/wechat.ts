@@ -1,15 +1,24 @@
+import { z } from '@hono/zod-openapi';
 import config from '@/env';
 import { createSingleton } from '../core/singleton';
 import redis from './redis';
 
-type WeixinAccessTokenResponse = {
-  errcode: number;
-  errmsg: string;
-  access_token: string;
-  expires_in: number;
-};
+const WechatAccessTokenResponseSchema = z.object({
+  errcode: z.number(),
+  errmsg: z.string(),
+  access_token: z.string(),
+  expires_in: z.number(),
+}).openapi('WechatAccessTokenResponseSchema');
 
-function createWWechatClient() {
+
+const WechatUserInfoResponseSchema = z.object({
+  errcode: z.number(),
+  errmsg: z.string(),
+  userid: z.string(),
+});
+
+
+function createWechatClient() {
   return {
     async getWxAccessToken() {
       const cachedToken = await redis.get('wx_access_token');
@@ -22,7 +31,7 @@ function createWWechatClient() {
           method: 'POST',
         },
       );
-      const body = await res.json() as WeixinAccessTokenResponse;
+      const body = WechatAccessTokenResponseSchema.parse(await res.json());
       if (body.errcode !== 0) {
         return null;
       }
@@ -30,12 +39,23 @@ function createWWechatClient() {
       await redis.set('wx_access_token', accessToken, 'EX', 3600);
       return accessToken;
     },
+    async getWxUserId(code: string) {
+      const accessToken = await this.getWxAccessToken();
+      const resp = await fetch(
+        `https://qyapi.weixin.qq.com/cgi-bin/auth/getuserinfo?access_token=${accessToken}&code=${code}`,
+        {
+          method: 'POST',
+        },
+      );
+      const body = WechatUserInfoResponseSchema.parse(await resp.json());
+      return body.userid;
+    },
   };
 }
 
 const wechatClient = createSingleton(
   'wechat',
-  createWWechatClient,
+  createWechatClient,
 );
 
 export default wechatClient;
