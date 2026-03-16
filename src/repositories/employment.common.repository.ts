@@ -1,7 +1,7 @@
-import type { PrismaTransaction } from '@/db';
-import type { EmploymentQueryDto } from '@schemas/employment.common.type';
-import { prisma } from '@/db';
-import { Status } from '@enums/status';
+import type { EmploymentQueryDto } from "@schemas/employment.common.type";
+import type { PrismaTransaction } from "@/db";
+import { Status } from "@enums/status";
+import { prisma } from "@/db";
 
 export const employmentRepository = {
   async getEmploymentsByUserId(userId: number, tx: PrismaTransaction = prisma) {

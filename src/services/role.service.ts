@@ -1,14 +1,14 @@
-import { prisma } from '@/db';
-import { CustomError } from '@errors/CustomError';
-import { roleMapper } from '@mapper/role.mapper';
-import { mergeAndDedupe } from '@utils/common.utils';
-import { Prisma } from '@/db/generated/prisma/client';
-import { employmentRepository } from '@repositories/employment.common.repository';
-import { organizationRepository } from '@repositories/organization.repository';
-import { positionRepository } from '@repositories/position.common.repository';
-import { posorgRepository } from '@repositories/posorg.repository';
-import { privilegeRepository } from '@repositories/privilege.repository';
-import { roleRepository } from '@repositories/role.repository';
+import { CustomError } from "@errors/CustomError";
+import { roleMapper } from "@mapper/role.mapper";
+import { employmentRepository } from "@repositories/employment.common.repository";
+import { organizationRepository } from "@repositories/organization.repository";
+import { positionRepository } from "@repositories/position.common.repository";
+import { posorgRepository } from "@repositories/posorg.repository";
+import { privilegeRepository } from "@repositories/privilege.repository";
+import { roleRepository } from "@repositories/role.repository";
+import { mergeAndDedupe } from "@utils/common.utils";
+import { prisma } from "@/db";
+import { Prisma } from "@/db/generated/prisma/client";
 
 export const roleService = {
   async getRolesByOrganization(orgId: number) {
@@ -16,11 +16,11 @@ export const roleService = {
     if (org === null) {
       return [];
     }
-    const ancestorIds = org.path.split('/').filter(Boolean).map(Number);
+    const ancestorIds = org.path.split("/").filter(Boolean).map(Number);
     ancestorIds.pop();
     const rolesAncestor = (await roleRepository.getRolesByAncestorOrgs(ancestorIds)).map(r => roleMapper.entityToDto(r));
     const rolesDirect = (await roleRepository.getRolesByDirectOrg(org.id)).map(r => roleMapper.entityToDto(r));
-    return mergeAndDedupe(rolesAncestor, rolesDirect, 'id');
+    return mergeAndDedupe(rolesAncestor, rolesDirect, "id");
   },
   async getRolesByPosition(posId: number) {
     const roles = (await roleRepository.getRolesByPosition(posId)).map(r => roleMapper.entityToDto(r));
@@ -46,7 +46,7 @@ export const roleService = {
     return await prisma.$transaction(async (tx) => {
       const existingRole = await roleRepository.getRoleByCode(roleCode, tx);
       if (existingRole !== null) {
-        throw new CustomError('重复角色code代码');
+        throw new CustomError("重复角色code代码");
       }
       await roleRepository.setRole(roleCode, roleName, tx);
       return true;
@@ -66,7 +66,7 @@ export const roleService = {
       }
       catch (err) {
         if (err instanceof Prisma.PrismaClientKnownRequestError) {
-          throw new CustomError('对应关系已存在');
+          throw new CustomError("对应关系已存在");
         }
         else {
           throw err;
@@ -83,14 +83,14 @@ export const roleService = {
         roleRepository.getRoleByCode(roleCode, tx),
       ]);
       if (employment === null || role === null) {
-        throw new CustomError('对应实体不存在');
+        throw new CustomError("对应实体不存在");
       }
       try {
         await roleRepository.setRoleForEmployment(role.id, employment.id, tx);
       }
       catch (err) {
         if (err instanceof Prisma.PrismaClientKnownRequestError) {
-          throw new CustomError('对应关系已存在');
+          throw new CustomError("对应关系已存在");
         }
         else {
           throw err;
@@ -113,7 +113,7 @@ export const roleService = {
       }
       catch (err) {
         if (err instanceof Prisma.PrismaClientKnownRequestError) {
-          throw new CustomError('对应关系已存在');
+          throw new CustomError("对应关系已存在");
         }
         else {
           throw err;
@@ -136,7 +136,7 @@ export const roleService = {
       }
       catch (err) {
         if (err instanceof Prisma.PrismaClientKnownRequestError) {
-          throw new CustomError('对应关系已存在');
+          throw new CustomError("对应关系已存在");
         }
         else {
           throw err;
@@ -164,7 +164,7 @@ export const roleService = {
       }
       catch (err) {
         if (err instanceof Prisma.PrismaClientKnownRequestError) {
-          throw new CustomError('对应关系已存在');
+          throw new CustomError("对应关系已存在");
         }
         else {
           throw err;
@@ -181,7 +181,7 @@ export const roleService = {
         positionRepository.getPositionByCode(posCode, tx),
       ]);
       if (org === null || role === null || pos === null) {
-        throw new CustomError('对应实体不存在');
+        throw new CustomError("对应实体不存在");
       }
       const posOrg = await posorgRepository.getPosOrgById(pos.id, org.id, tx);
       if (posOrg === null) {
@@ -198,7 +198,7 @@ export const roleService = {
         roleRepository.getRoleByCode(roleCode, tx),
       ]);
       if (employment === null || role === null) {
-        throw new CustomError('对应实体不存在');
+        throw new CustomError("对应实体不存在");
       }
       await roleRepository.deleteRoleForEmployment(role.id, employment.id, tx);
       return true;

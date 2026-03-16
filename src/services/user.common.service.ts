@@ -1,31 +1,31 @@
-import type { UserDetailDto, UserQueryDto, UserQueryWithPrivilegeDelegationDto } from '@schemas/user.common.type';
-import type { User } from '@/db/generated/prisma/client';
-import { UserType } from '@enums/user.type';
-import { VerificationCodeUsage } from '@enums/verificationCode.usage';
-import { CustomError } from '@errors/CustomError';
-import { UserNotFoundError } from '@errors/UserNotFoundError';
-import { employmentMapper } from '@mapper/employment.common.mapper';
-import { privilegeDelegationMapper } from '@mapper/privilegeDelegation.mapper';
-import { userMapper } from '@mapper/user.common.mapper';
-import { employmentRepository } from '@repositories/employment.common.repository';
-import { organizationRepository } from '@repositories/organization.repository';
-import { positionRepository } from '@repositories/position.common.repository';
-import { privilegeRepository } from '@repositories/privilege.repository';
-import { privilegeDelegationRepository } from '@repositories/privilegeDelegation.repository';
-import { roleRepository } from '@repositories/role.repository';
-import { userRepository } from '@repositories/user.common.repository';
-import { EmploymentDetailDtoSchema } from '@schemas/employment.common.type';
+import type { UserDetailDto, UserQueryDto, UserQueryWithPrivilegeDelegationDto } from "@schemas/user.common.type";
+import type { User } from "@/db/generated/prisma/client";
+import { UserType } from "@enums/user.type";
+import { VerificationCodeUsage } from "@enums/verificationCode.usage";
+import { CustomError } from "@errors/CustomError";
+import { UserNotFoundError } from "@errors/UserNotFoundError";
+import { employmentMapper } from "@mapper/employment.common.mapper";
+import { privilegeDelegationMapper } from "@mapper/privilegeDelegation.mapper";
+import { userMapper } from "@mapper/user.common.mapper";
+import { employmentRepository } from "@repositories/employment.common.repository";
+import { organizationRepository } from "@repositories/organization.repository";
+import { positionRepository } from "@repositories/position.common.repository";
+import { privilegeRepository } from "@repositories/privilege.repository";
+import { privilegeDelegationRepository } from "@repositories/privilegeDelegation.repository";
+import { roleRepository } from "@repositories/role.repository";
+import { userRepository } from "@repositories/user.common.repository";
+import { EmploymentDetailDtoSchema } from "@schemas/employment.common.type";
 import {
   UserDetailDtoSchema,
-} from '@schemas/user.common.type';
-import { compare, hash } from 'bcrypt-ts';
-import { prisma } from '@/db';
-import config from '@/env';
-import { mobileService } from './mobile.service';
+} from "@schemas/user.common.type";
+import { compare, hash } from "bcrypt-ts";
+import { prisma } from "@/db";
+import config from "@/env";
+import { mobileService } from "./mobile.service";
 
 async function _getUserDetail(user: User | null): Promise<UserDetailDto> {
   if (user === null) {
-    throw new UserNotFoundError('该用户不存在');
+    throw new UserNotFoundError("该用户不存在");
   }
   const userDto = UserDetailDtoSchema.parse(userMapper.entityToDto(user));
   const employments = await employmentRepository.getEmploymentsByUserId(userDto.id);
@@ -63,17 +63,17 @@ export const userService = {
     return await prisma.$transaction(async (tx) => {
       const user = await userRepository.getUserByUsername(username, tx);
       if (user === null) {
-        throw new UserNotFoundError('用户名不存在');
+        throw new UserNotFoundError("用户名不存在");
       }
       if (oldPassword === newPassword) {
-        throw new CustomError('旧密码与新密码相同');
+        throw new CustomError("旧密码与新密码相同");
       }
       const isMatch = await this.checkPassword(user.username, oldPassword);
       if (!isMatch) {
-        throw new CustomError('旧密码错误');
+        throw new CustomError("旧密码错误");
       }
       if (!_validatePasswordStrength(newPassword)) {
-        throw new CustomError('新密码强度过低');
+        throw new CustomError("新密码强度过低");
       }
       const newPasswordHash = await hash(newPassword, config.PASSWORD_HASH_ROUNDS);
       await userRepository.setPassword(user.id, newPasswordHash, tx);
@@ -85,13 +85,13 @@ export const userService = {
     return await prisma.$transaction(async (tx) => {
       const user = await userRepository.getUserByUsername(username, tx);
       if (user === null) {
-        throw new UserNotFoundError('用户不存在');
+        throw new UserNotFoundError("用户不存在");
       }
       if (user.mobile !== phone) {
-        throw new UserNotFoundError('用户名与手机号不匹配');
+        throw new UserNotFoundError("用户名与手机号不匹配");
       }
-      if (!mobileService.cehckVerificationCode('resetPassword', phone, code)) {
-        throw new UserNotFoundError('验证码错误');
+      if (!mobileService.cehckVerificationCode("resetPassword", phone, code)) {
+        throw new UserNotFoundError("验证码错误");
       }
       const newPasswordHash = await hash(newPassword, config.PASSWORD_HASH_ROUNDS);
       await userRepository.setPassword(user.id, newPasswordHash, tx);
@@ -102,24 +102,24 @@ export const userService = {
   async checkPassword(username: string, inputPassword: string) {
     const user = await userRepository.getUserByUsername(username);
     if (user === null) {
-      throw new UserNotFoundError('用户不存在');
+      throw new UserNotFoundError("用户不存在");
     }
-    if (user.password === null && config.NODE_ENV === 'production') {
+    if (user.password === null && config.NODE_ENV === "production") {
       return false;
     }
-    return user.password ? await compare(inputPassword, user.password ?? '') : inputPassword === config.DEFAULT_USER_PASSWORD;
+    return user.password ? await compare(inputPassword, user.password ?? "") : inputPassword === config.DEFAULT_USER_PASSWORD;
   },
 
   async setMobile(userId: number, phoneNumber: string, code: string) {
     await prisma.$transaction(async (tx) => {
       if (!mobileService.checkValidPhoneNumber(phoneNumber)) {
-        throw new CustomError('无效手机号');
+        throw new CustomError("无效手机号");
       }
       if (await mobileService.checkExistingPhoneNumber(phoneNumber)) {
-        throw new CustomError('手机号已存在');
+        throw new CustomError("手机号已存在");
       }
       if (!await mobileService.cehckVerificationCode(VerificationCodeUsage.BindPhone, phoneNumber, code)) {
-        throw new CustomError('验证码错误');
+        throw new CustomError("验证码错误");
       }
       await userRepository.setMobile(userId, phoneNumber, tx);
     });
@@ -132,7 +132,7 @@ export const userService = {
   },
   async searchUsersWithPrivilegeDelegation(userQueryWithPrivilegeDelegationDto: UserQueryWithPrivilegeDelegationDto) {
     if (userQueryWithPrivilegeDelegationDto.ancestorOrgCodes.length !== 1) {
-      throw new CustomError('该接口ancestorOrgCodes元素数量只支持为1');
+      throw new CustomError("该接口ancestorOrgCodes元素数量只支持为1");
     }
     const users = await userRepository.searchUsers(userQueryWithPrivilegeDelegationDto);
     const userDtos = users.map(u => userMapper.entityToDto(u));
@@ -180,7 +180,7 @@ export const userService = {
   },
 
   async getUsersByOrg(orgCode: string, orgScope: string) {
-    const users = orgScope === 'direct'
+    const users = orgScope === "direct"
       ? await userRepository.getUsersByOrg(orgCode)
       : await userRepository.getUsersByOrgAndAllSub(orgCode);
     const userDtos = users.map(u => userMapper.entityToDto(u));
@@ -188,7 +188,7 @@ export const userService = {
   },
 
   async getUsersByOrgRole(orgCode: string, roleCode: string, orgScope: string) {
-    const users = orgScope === 'direct'
+    const users = orgScope === "direct"
       ? await userRepository.getUsersByOrgRole(orgCode, roleCode)
       : await userRepository.getUsersByOrgAndAllSubRole(orgCode, roleCode);
     const userDtos = users.map(u => userMapper.entityToDto(u));
@@ -196,7 +196,7 @@ export const userService = {
   },
 
   async getUsersByOrgPos(orgCode: string, roleCode: string, orgScope: string) {
-    const users = orgScope === 'direct'
+    const users = orgScope === "direct"
       ? await userRepository.getUsersByOrgPos(orgCode, roleCode)
       : await userRepository.getUsersByOrgAndAllSubPos(orgCode, roleCode);
     const userDtos = users.map(u => userMapper.entityToDto(u));
@@ -212,15 +212,15 @@ export const userService = {
     await prisma.$transaction(async (tx) => {
       const existingUser = await userRepository.getUserByMobile(mobile, tx);
       const [pos, comp, org] = await Promise.all([
-        positionRepository.getPositionByCode('P001', tx),
+        positionRepository.getPositionByCode("P001", tx),
         organizationRepository.getOrganizationByCode(config.PURVEYOR_PARENT_ORG, tx),
         organizationRepository.getOrganizationByCode(orgCode, tx),
       ]);
       if (org === null) {
-        throw new CustomError('供应商尚未注册');
+        throw new CustomError("供应商尚未注册");
       }
       if (pos === null || comp === null) {
-        throw new CustomError('系统基本信息缺失');
+        throw new CustomError("系统基本信息缺失");
       }
       if (existingUser !== null) {
         const existingEmployment = await employmentRepository.getEmploymentByUserOrgPosId(existingUser.id, org.id, pos.id, tx);
@@ -233,7 +233,7 @@ export const userService = {
         await employmentRepository.setEmployment(user.id, pos.id, org.id, comp.id, tx);
       }
     });
-    if (config.NODE_ENV === 'production') {
+    if (config.NODE_ENV === "production") {
       await mobileService.sendMessage(mobile, mobileService.getPurveyorWelcomeMessage(name));
     }
     return true;

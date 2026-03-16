@@ -1,18 +1,18 @@
-import type { TransportTargetOptions } from 'pino';
-import pino from 'pino';
-import config from '@/env';
-import { createSingleton } from '../core/singleton';
+import type { TransportTargetOptions } from "pino";
+import pino from "pino";
+import config from "@/env";
+import { createSingleton } from "../core/singleton";
 
 // export const pinoLogger = pino();
 
 function buildTransportTargets(): TransportTargetOptions[] {
   const targets: TransportTargetOptions[] = [];
 
-  if (config.NODE_ENV === 'development') {
-    targets.push({ target: 'pino-pretty', level: config.LOG_LEVEL || 'info', options: {} });
+  if (config.NODE_ENV === "development") {
+    targets.push({ target: "pino-pretty", level: config.LOG_LEVEL || "info", options: {} });
   }
   else {
-    targets.push({ target: 'pino/file', level: config.LOG_LEVEL || 'info', options: { destination: 1 } });
+    targets.push({ target: "pino/file", level: config.LOG_LEVEL || "info", options: { destination: 1 } });
   }
 
   // Optional: Alibaba Cloud SLS transport (user implements transport file) / 可选：阿里云 SLS transport（用户自行实现 transport 文件）
@@ -28,8 +28,8 @@ function buildTransportTargets(): TransportTargetOptions[] {
   return targets;
 }
 
-export const pinoLogger = createSingleton('logger', () =>
-  pino({ level: config.LOG_LEVEL || 'info' }, pino.transport({ targets: buildTransportTargets() })));
+export const pinoLogger = createSingleton("logger", () =>
+  pino({ level: config.LOG_LEVEL || "info" }, pino.transport({ targets: buildTransportTargets() })));
 
 // /** Operation logger / 操作日志 logger */
 // export const operationLogger = logger.child({ type: "OPERATION" });

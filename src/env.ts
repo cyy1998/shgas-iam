@@ -1,4 +1,4 @@
-import { z } from '@hono/zod-openapi';
+import { z } from "@hono/zod-openapi";
 
 const EnvSchema = z.object({
   PASSWORD_HASH_ROUNDS: z.coerce.number().default(10),
@@ -22,7 +22,7 @@ const EnvSchema = z.object({
   AUTHORIZATION_ENDPOINT: z.string(),
   LOGOUT_ENDPOINT: z.string(),
   THIRDPARTY_OA_ENDPOINT: z.string(),
-  LOG_LEVEL: z.string().default('info'),
+  LOG_LEVEL: z.string().default("info"),
 });
 
 export type Env = z.infer<typeof EnvSchema>;

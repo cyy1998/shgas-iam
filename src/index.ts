@@ -1,5 +1,5 @@
-import app from './app';
-import config  from './env';
+import app from "./app";
+import config from "./env";
 
 const port = config.PORT;
 

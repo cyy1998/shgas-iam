@@ -1,6 +1,6 @@
-import type { EmploymentAdminDto, EmploymentAdminVo } from '@schemas/employment.admin.type';
-import type { EmploymentEntity } from '@schemas/employment.entity.type';
-import { employmentStatusToString } from '@enums/employment.status';
+import type { EmploymentAdminDto, EmploymentAdminVo } from "@schemas/employment.admin.type";
+import type { EmploymentEntity } from "@schemas/employment.entity.type";
+import { employmentStatusToString } from "@enums/employment.status";
 
 export const employmentAdminMapper = {
   entityToDto(employment: EmploymentEntity): EmploymentAdminDto {

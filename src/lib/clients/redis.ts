@@ -1,6 +1,6 @@
-import Redis from 'ioredis';
-import config from '@/env';
-import { createSingleton } from '../core/singleton';
+import Redis from "ioredis";
+import config from "@/env";
+import { createSingleton } from "../core/singleton";
 
 function createRedisClient() {
   return new Redis({
@@ -11,7 +11,7 @@ function createRedisClient() {
 }
 
 const redisClient = createSingleton<Redis>(
-  'redis',
+  "redis",
   createRedisClient,
   { destroy: async client => void await client.quit() },
 );

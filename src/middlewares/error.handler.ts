@@ -1,10 +1,10 @@
-import type { Context } from 'hono';
-import type { HTTPResponseError } from 'hono/types';
-import { ServiceStatusCode } from '@enums/service.status';
-import { AuthzError } from '@errors/AuthzError';
-import { CustomError } from '@errors/CustomError';
-import { makeResponse } from '@/utils/http/response';
-import { HTTPException } from 'hono/http-exception';
+import type { Context } from "hono";
+import type { HTTPResponseError } from "hono/types";
+import { ServiceStatusCode } from "@enums/service.status";
+import { AuthzError } from "@errors/AuthzError";
+import { CustomError } from "@errors/CustomError";
+import { HTTPException } from "hono/http-exception";
+import { makeResponse } from "@/utils/http/response";
 
 export function errorHandler(err: Error | HTTPResponseError, c: Context) {
   if (err instanceof CustomError) {
@@ -18,6 +18,6 @@ export function errorHandler(err: Error | HTTPResponseError, c: Context) {
   }
   else {
     console.error(err);
-    return c.json(makeResponse(ServiceStatusCode.Failure, null, '服务器内部错误'));
+    return c.json(makeResponse(ServiceStatusCode.Failure, null, "服务器内部错误"));
   }
 }

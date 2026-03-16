@@ -1,10 +1,10 @@
-import { z } from '@hono/zod-openapi';
+import { z } from "@hono/zod-openapi";
 
 export const PageQuerySchema = z.object({
   conditions: z.unknown(),
   pageNum: z.int().positive().default(1),
   pageSize: z.int().positive().default(10),
-}).openapi('PageQuerySchema');
+}).openapi("PageQuerySchema");
 
 export type PageQuery = z.infer<typeof PageQuerySchema>;
 
@@ -14,7 +14,7 @@ export const PageResultSchema = z.object({
   pageNum: z.int().positive().default(1),
   pageSize: z.int().positive().default(10),
   pages: z.int().nonnegative(),
-}).openapi('PageResultSchema');
+}).openapi("PageResultSchema");
 
 export function createPageResultSchema<T extends z.ZodTypeAny>(dataSchema: T) {
   return z.object({

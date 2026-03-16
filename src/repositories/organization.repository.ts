@@ -1,9 +1,9 @@
-import type { PrismaTransaction } from '@/db';
-import type { OrganizationQueryDto } from '@schemas/organization.common.type';
-import type { Organization } from '@/db/generated/prisma/client';
-import { prisma } from '@/db';
-import { OrganizationType } from '@enums/organization.type';
-import { Status } from '@enums/status';
+import type { OrganizationQueryDto } from "@schemas/organization.common.type";
+import type { PrismaTransaction } from "@/db";
+import type { Organization } from "@/db/generated/prisma/client";
+import { OrganizationType } from "@enums/organization.type";
+import { Status } from "@enums/status";
+import { prisma } from "@/db";
 
 export const organizationRepository = {
   async searchFormalOrganizations(orgCode: string, orgLevel: number, tx: PrismaTransaction = prisma) {
@@ -158,7 +158,7 @@ export const organizationRepository = {
         level: orgLevel,
         orgType,
         isVirtual: true,
-        path: '',
+        path: "",
       },
     });
     const path = `${parentOrganization.path}/${newOrganization.id}`;

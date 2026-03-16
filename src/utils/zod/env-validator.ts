@@ -1,6 +1,6 @@
-import type { z } from 'zod';
+import type { z } from "zod";
 
-import { env as processEnv } from 'bun';
+import { env as processEnv } from "bun";
 
 export type ValidationResult<T> = {
   success: boolean;
@@ -30,8 +30,8 @@ export function safeParseEnv<T extends z.ZodType>(
   result.error.issues.forEach((issue) => {
     // Ensure path elements are strings (Symbol cannot be used as index type) / 确保路径元素是字符串 (Symbol 不能作为索引类型)
     const field = issue.path
-      .filter((p): p is string => typeof p === 'string')
-      .join('.'); // Handle nested paths, although env vars are flat / 处理嵌套路径，尽管环境变量是扁平的
+      .filter((p): p is string => typeof p === "string")
+      .join("."); // Handle nested paths, although env vars are flat / 处理嵌套路径，尽管环境变量是扁平的
 
     if (field) {
       // Add error to corresponding field / 将错误添加到对应字段
@@ -42,7 +42,7 @@ export function safeParseEnv<T extends z.ZodType>(
     }
     else {
       // Handle errors not associated with a field (e.g., root-level errors) / 处理无字段关联的错误（如根级错误）
-      const rootKey = '_';
+      const rootKey = "_";
       if (!fieldErrors[rootKey]) {
         fieldErrors[rootKey] = [];
       }
@@ -67,7 +67,7 @@ export function parseEnvOrExit<T extends z.ZodType>(
   const result = safeParseEnv(schema, env);
 
   if (!result.success) {
-    console.error('❌ Invalid env:');
+    console.error("❌ Invalid env:");
     console.error(JSON.stringify(result.fieldErrors, null, 2));
     process.exit(1);
   }

@@ -5,7 +5,7 @@ export enum EmploymentStatus {
 }
 
 export const employmentStatusToString: Record<EmploymentStatus, string> = {
-  [EmploymentStatus.Enable]: '正常',
-  [EmploymentStatus.Pause]: '暂停',
-  [EmploymentStatus.Disable]: '结束',
+  [EmploymentStatus.Enable]: "正常",
+  [EmploymentStatus.Pause]: "暂停",
+  [EmploymentStatus.Disable]: "结束",
 };

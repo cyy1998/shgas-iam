@@ -1,6 +1,6 @@
-import { createRouter } from '@lib/core/create-app';
-import * as handlers from './sso.handlers';
-import * as routes from './sso.routes';
+import { createRouter } from "@lib/core/create-app";
+import * as handlers from "./sso.handlers";
+import * as routes from "./sso.routes";
 
 const router = createRouter();
 

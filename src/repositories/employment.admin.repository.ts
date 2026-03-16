@@ -1,5 +1,5 @@
-import type { PrismaTransaction } from '@/db';
-import { prisma } from '@/db';
+import type { PrismaTransaction } from "@/db";
+import { prisma } from "@/db";
 
 export const employmentAdminRepository = {
   async getEmploymentsByUserId(userId: number, tx: PrismaTransaction = prisma) {

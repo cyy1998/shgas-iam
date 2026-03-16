@@ -1,6 +1,6 @@
-import type { PrismaTransaction } from '@/db';
-import { prisma } from '@/db';
-import { Status } from '@enums/status';
+import type { PrismaTransaction } from "@/db";
+import { Status } from "@enums/status";
+import { prisma } from "@/db";
 
 export const privilegeRepository = {
   async getPrivilegesByUserId(userId: number, tx: PrismaTransaction = prisma) {

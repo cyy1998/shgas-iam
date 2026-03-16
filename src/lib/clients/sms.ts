@@ -1,6 +1,6 @@
-import config from '@/env';
-import { hmacSha256 } from '@/utils/encryption.utils';
-import { createSingleton } from '../core/singleton';
+import config from "@/env";
+import { hmacSha256 } from "@/utils/encryption.utils";
+import { createSingleton } from "../core/singleton";
 
 type SMSServiceResult = {
   resultCode: string;
@@ -14,7 +14,7 @@ function createSmsClient() {
       const random4Digit = Math.floor(1000 + Math.random() * 9000);
       const message = `登录验证码：${random4Digit}`;
       const currentTimestamp = Math.floor(Date.now() / 1000);
-      const origin = 'SHGAS';
+      const origin = "SHGAS";
       const data = currentTimestamp.toString() + origin + phoneNumber + message;
       const request_data = {
         mobile: phoneNumber,
@@ -24,12 +24,12 @@ function createSmsClient() {
         signature: hmacSha256(data, config.SMS_SIGNATURE_KEY),
       };
       const res = await fetch(process.env.SMS_URL as string, {
-        method: 'POST',
+        method: "POST",
         body: JSON.stringify(request_data),
-        headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+        headers: { "Content-Type": "application/json", "Accept": "application/json" },
       });
       const smsResult: SMSServiceResult = await res.json() as SMSServiceResult;
-      if (smsResult.resultCode !== '0000') {
+      if (smsResult.resultCode !== "0000") {
         return {
           success: false,
           message: smsResult.resultInfo,
@@ -38,13 +38,13 @@ function createSmsClient() {
       //   await redis.set(`mobile-code:${usage}:${phoneNumber}`, random4Digit, 'EX', 180);
       return {
         success: true,
-        message: 'success',
+        message: "success",
       };
     },
 
     async sendMessage(phoneNumber: string, message: string) {
       const currentTimestamp = Math.floor(Date.now() / 1000);
-      const origin = 'SHGAS';
+      const origin = "SHGAS";
       const data = currentTimestamp.toString() + origin + phoneNumber + message;
       const request_data = {
         mobile: phoneNumber,
@@ -54,9 +54,9 @@ function createSmsClient() {
         signature: hmacSha256(data, config.SMS_SIGNATURE_KEY),
       };
       await fetch(config.SMS_URL, {
-        method: 'POST',
+        method: "POST",
         body: JSON.stringify(request_data),
-        headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+        headers: { "Content-Type": "application/json", "Accept": "application/json" },
       });
       // console.log(await res.json());
       return true;
@@ -84,7 +84,7 @@ function createSmsClient() {
 }
 
 const smsClient = createSingleton(
-  'sms',
+  "sms",
   createSmsClient,
 );
 

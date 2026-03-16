@@ -1,6 +1,6 @@
-import type { PrismaTransaction } from '@/db';
-import { prisma } from '@/db';
-import { Status } from '@enums/status';
+import type { PrismaTransaction } from "@/db";
+import { Status } from "@enums/status";
+import { prisma } from "@/db";
 
 export const delegationRepository = {
   async getDelegationsBydelegatorsAndprivCode(usernames: string[], privCode: string, tx: PrismaTransaction = prisma) {

@@ -1,12 +1,12 @@
-import type { EmploymentQueryDto } from '@schemas/employment.common.type';
-import { CustomError } from '@errors/CustomError';
-import { employmentMapper } from '@mapper/employment.common.mapper';
-import { employmentRepository } from '@repositories/employment.common.repository';
-import { organizationRepository } from '@repositories/organization.repository';
-import { positionRepository } from '@repositories/position.common.repository';
-import { roleRepository } from '@repositories/role.repository';
-import { userRepository } from '@repositories/user.common.repository';
-import { privilegeService } from './privilege.service';
+import type { EmploymentQueryDto } from "@schemas/employment.common.type";
+import { CustomError } from "@errors/CustomError";
+import { employmentMapper } from "@mapper/employment.common.mapper";
+import { employmentRepository } from "@repositories/employment.common.repository";
+import { organizationRepository } from "@repositories/organization.repository";
+import { positionRepository } from "@repositories/position.common.repository";
+import { roleRepository } from "@repositories/role.repository";
+import { userRepository } from "@repositories/user.common.repository";
+import { privilegeService } from "./privilege.service";
 
 async function _getEmploymentsDetail(username: string) {
   const employments = await employmentRepository.getEmploymentsByUsername(username);
@@ -25,11 +25,11 @@ async function _getEmploymentsDetail(username: string) {
 export const employmentService = {
   async getEmploymentsByUserAndPrivilege(username: string, privCode: string, codeType: string) {
     const eList = await _getEmploymentsDetail(username);
-    if (codeType === 'full') {
+    if (codeType === "full") {
       const filtedEList = eList.filter(e => e.privileges.includes(privCode));
       return filtedEList.map(e => e.employment);
     }
-    else if (codeType === 'prefix') {
+    else if (codeType === "prefix") {
       const filtedEList = eList.filter(e => e.privileges.some(s => s.startsWith(privCode)));
       return filtedEList.map(e => e.employment);
     }
@@ -47,10 +47,10 @@ export const employmentService = {
       positionRepository.getPositionByCode(posCode),
     ]);
     if (!user || !department || !company || !position) {
-      throw new CustomError('实体不存在');
+      throw new CustomError("实体不存在");
     }
     if (employment !== null) {
-      throw new CustomError('相同任职关系已存在');
+      throw new CustomError("相同任职关系已存在");
     }
     await employmentRepository.setEmployment(user.id, position.id, department.id, company.id);
     return true;

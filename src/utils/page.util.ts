@@ -1,4 +1,4 @@
-import type { PageQuery } from '@schemas/page.type';
+import type { PageQuery } from "@schemas/page.type";
 
 export async function paginate<T>(
   items: T[],

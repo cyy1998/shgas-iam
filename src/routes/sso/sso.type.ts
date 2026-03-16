@@ -1,5 +1,5 @@
-import type { AppRouteHandler } from '@schemas/lib';
-import type * as routes from './sso.routes';
+import type * as routes from "./sso.routes";
+import type { AppRouteHandler } from "@/lib/lib";
 
 // export type UserTokenInfo = {
 //   id: string | number;

@@ -5,7 +5,7 @@ export enum Status {
 }
 
 export const statusToString: Record<Status, string> = {
-  [Status.Enable]: '正常',
-  [Status.Pause]: '暂停',
-  [Status.Disable]: '结束',
+  [Status.Enable]: "正常",
+  [Status.Pause]: "暂停",
+  [Status.Disable]: "结束",
 };

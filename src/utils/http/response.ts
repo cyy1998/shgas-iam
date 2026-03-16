@@ -1,6 +1,6 @@
-import { ServiceStatusCode } from '@enums/service.status';
+import { ServiceStatusCode } from "@enums/service.status";
 
-export function makeResponse(code: number = 200, data: unknown = null, message: string = 'success'): any {
+export function makeResponse(code: number = 200, data: unknown = null, message: string = "success"): any {
   return {
     code,
     data,
@@ -9,5 +9,5 @@ export function makeResponse(code: number = 200, data: unknown = null, message: 
 }
 
 export function ok(data: unknown = null) {
-  return makeResponse(ServiceStatusCode.Success, data, 'success');
+  return makeResponse(ServiceStatusCode.Success, data, "success");
 }

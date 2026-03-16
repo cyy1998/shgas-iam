@@ -1,15 +1,14 @@
-import { z } from '@hono/zod-openapi';
-import config from '@/env';
-import { createSingleton } from '../core/singleton';
-import redis from './redis';
+import { z } from "@hono/zod-openapi";
+import config from "@/env";
+import { createSingleton } from "../core/singleton";
+import redis from "./redis";
 
 const WechatAccessTokenResponseSchema = z.object({
   errcode: z.number(),
   errmsg: z.string(),
   access_token: z.string(),
   expires_in: z.number(),
-}).openapi('WechatAccessTokenResponseSchema');
-
+}).openapi("WechatAccessTokenResponseSchema");
 
 const WechatUserInfoResponseSchema = z.object({
   errcode: z.number(),
@@ -17,18 +16,17 @@ const WechatUserInfoResponseSchema = z.object({
   userid: z.string(),
 });
 
-
 function createWechatClient() {
   return {
     async getWxAccessToken() {
-      const cachedToken = await redis.get('wx_access_token');
+      const cachedToken = await redis.get("wx_access_token");
       if (cachedToken !== null) {
         return cachedToken;
       }
       const res = await fetch(
         `https://qyapi.weixin.qq.com/cgi-bin/gettoken?corpid=${config.WX_CORPID}&corpsecret=${config.WX_CORPSECRET}`,
         {
-          method: 'POST',
+          method: "POST",
         },
       );
       const body = WechatAccessTokenResponseSchema.parse(await res.json());
@@ -36,7 +34,7 @@ function createWechatClient() {
         return null;
       }
       const accessToken = body.access_token;
-      await redis.set('wx_access_token', accessToken, 'EX', 3600);
+      await redis.set("wx_access_token", accessToken, "EX", 3600);
       return accessToken;
     },
     async getWxUserId(code: string) {
@@ -44,7 +42,7 @@ function createWechatClient() {
       const resp = await fetch(
         `https://qyapi.weixin.qq.com/cgi-bin/auth/getuserinfo?access_token=${accessToken}&code=${code}`,
         {
-          method: 'POST',
+          method: "POST",
         },
       );
       const body = WechatUserInfoResponseSchema.parse(await resp.json());
@@ -54,7 +52,7 @@ function createWechatClient() {
 }
 
 const wechatClient = createSingleton(
-  'wechat',
+  "wechat",
   createWechatClient,
 );
 

@@ -1,18 +1,18 @@
-import type { SMSServiceResult } from '@schemas/service.type';
-import { VerificationCodeUsage } from '@enums/verificationCode.usage';
-import { CustomError } from '@errors/CustomError';
-import { hmacSha256 } from '@utils/encryption.utils';
-import { prisma } from '@/db';
-import config from '@/env';
-import redis from '@/lib/clients/redis';
+import type { SMSServiceResult } from "@schemas/service.type";
+import { VerificationCodeUsage } from "@enums/verificationCode.usage";
+import { CustomError } from "@errors/CustomError";
+import { hmacSha256 } from "@utils/encryption.utils";
+import { prisma } from "@/db";
+import config from "@/env";
+import redis from "@/lib/clients/redis";
 
 export const mobileService = {
   async sendCode(phoneNumber: string, usage: string) {
     if (!this.checkValidPhoneNumber(phoneNumber)) {
-      throw new CustomError('无效手机号');
+      throw new CustomError("无效手机号");
     }
     if (!await this.checkExistingPhoneNumber(phoneNumber) && usage !== VerificationCodeUsage.BindPhone) {
-      throw new CustomError('手机号不存在');
+      throw new CustomError("手机号不存在");
     }
     return await this.sendVerificationCode(phoneNumber, usage);
   },
@@ -20,7 +20,7 @@ export const mobileService = {
     const random4Digit = Math.floor(1000 + Math.random() * 9000);
     const message = `登录验证码：${random4Digit}`;
     const currentTimestamp = Math.floor(Date.now() / 1000);
-    const origin = 'SHGAS';
+    const origin = "SHGAS";
     const data = currentTimestamp.toString() + origin + phoneNumber + message;
     const request_data = {
       mobile: phoneNumber,
@@ -30,21 +30,21 @@ export const mobileService = {
       signature: hmacSha256(data, config.SMS_SIGNATURE_KEY),
     };
     const res = await fetch(process.env.SMS_URL as string, {
-      method: 'POST',
+      method: "POST",
       body: JSON.stringify(request_data),
-      headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+      headers: { "Content-Type": "application/json", "Accept": "application/json" },
     });
     const smsResult: SMSServiceResult = await res.json() as SMSServiceResult;
-    if (smsResult.resultCode !== '0000') {
+    if (smsResult.resultCode !== "0000") {
       throw new CustomError(`短信发送失败:${phoneNumber}`);
     }
-    await redis.set(`mobile-code:${usage}:${phoneNumber}`, random4Digit, 'EX', 180);
+    await redis.set(`mobile-code:${usage}:${phoneNumber}`, random4Digit, "EX", 180);
     return true;
   },
 
   async sendMessage(phoneNumber: string, message: string) {
     const currentTimestamp = Math.floor(Date.now() / 1000);
-    const origin = 'SHGAS';
+    const origin = "SHGAS";
     const data = currentTimestamp.toString() + origin + phoneNumber + message;
     const request_data = {
       mobile: phoneNumber,
@@ -54,9 +54,9 @@ export const mobileService = {
       signature: hmacSha256(data, config.SMS_SIGNATURE_KEY),
     };
     await fetch(config.SMS_URL, {
-      method: 'POST',
+      method: "POST",
       body: JSON.stringify(request_data),
-      headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+      headers: { "Content-Type": "application/json", "Accept": "application/json" },
     });
     // console.log(await res.json());
     return true;

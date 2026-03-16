@@ -1,5 +1,5 @@
-import { PrismaMariaDb } from '@prisma/adapter-mariadb';
-import { PrismaClient } from '@/db/generated/prisma/client';
+import { PrismaMariaDb } from "@prisma/adapter-mariadb";
+import { PrismaClient } from "@/db/generated/prisma/client";
 
 const globalForPrisma = globalThis as unknown as { prisma: PrismaClient };
 
@@ -13,7 +13,7 @@ const adapter = new PrismaMariaDb({
 });
 export const prisma = globalForPrisma.prisma || new PrismaClient({ adapter });
 
-export type PrismaTransaction = Omit<typeof prisma, '$connect' | '$disconnect' | '$on' | '$transaction' | '$use' | '$extends'>;
+export type PrismaTransaction = Omit<typeof prisma, "$connect" | "$disconnect" | "$on" | "$transaction" | "$use" | "$extends">;
 
-if (process.env.NODE_ENV !== 'production')
+if (process.env.NODE_ENV !== "production")
   globalForPrisma.prisma = prisma;

@@ -1,17 +1,17 @@
-import { ClientManagementLevel } from '@enums/client.managementLevel';
+import { ClientManagementLevel } from "@enums/client.managementLevel";
 // import { Status } from '@enums/status';
-import { z } from '@hono/zod-openapi';
-import { ClientSchema } from '@/db/generated/schemas';
+import { z } from "@hono/zod-openapi";
+import { ClientSchema } from "@/db/generated/schemas";
 
 export const ClientExtAttributesDtoSchema = z.object({
   userExcluding: z.array(z.string()).optional(),
   requireOrcas: z.boolean(),
   validRedirectUrls: z.array(z.string()),
   clientSecret: z.string(),
-  managementLevel: z.enum(ClientManagementLevel).openapi({ example: 'Independent' }),
+  managementLevel: z.enum(ClientManagementLevel).openapi({ example: "Independent" }),
   logoutEndpoint: z.url(),
   callbackEndpoint: z.url(),
-}).openapi('ClientExtAttributesDto');
+}).openapi("ClientExtAttributesDto");
 
 export const ClientDtoSchema = ClientSchema.extend({
   extAttributes: ClientExtAttributesDtoSchema,

@@ -1,5 +1,5 @@
-import config from '@/env';
-import redis from '@/lib/clients/redis';
+import config from "@/env";
+import redis from "@/lib/clients/redis";
 
 type WeixinAccessTokenResponse = {
   errcode: number;
@@ -10,14 +10,14 @@ type WeixinAccessTokenResponse = {
 
 export const weixinService = {
   async getWxAccessToken() {
-    const cachedToken = await redis.get('wx_access_token');
+    const cachedToken = await redis.get("wx_access_token");
     if (cachedToken !== null) {
       return cachedToken;
     }
     const res = await fetch(
       `https://qyapi.weixin.qq.com/cgi-bin/gettoken?corpid=${config.WX_CORPID}&corpsecret=${config.WX_CORPSECRET}`,
       {
-        method: 'POST',
+        method: "POST",
       },
     );
     const body = await res.json() as WeixinAccessTokenResponse;
@@ -25,7 +25,7 @@ export const weixinService = {
       return null;
     }
     const accessToken = body.access_token;
-    await redis.set('wx_access_token', accessToken, 'EX', 3600);
+    await redis.set("wx_access_token", accessToken, "EX", 3600);
     return accessToken;
   },
 };

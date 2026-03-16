@@ -1,23 +1,23 @@
-import type { UserAdminQueryDto } from '@schemas/user.admin.type';
-import type { UserCreateDto } from '@schemas/user.common.type';
-import type { User } from '@/db/generated/prisma/client';
-import { prisma } from '@/db';
-import { CustomError } from '@errors/CustomError';
-import { UserNotFoundError } from '@errors/UserNotFoundError';
-import { employmentAdminMapper } from '@mapper/employment.admin.mapper';
-import { userAdminMapper } from '@mapper/user.admin.mapper';
-import { employmentRepository } from '@repositories/employment.common.repository';
-import { userAdminRepository } from '@repositories/user.admin.repository';
-import { userRepository } from '@repositories/user.common.repository';
-import { UserAdminDetailDtoSchema } from '@schemas/user.admin.type';
-import { generateRandomPassword } from '@utils/encryption.utils';
-import { paginate } from '@utils/page.util';
-import { hash } from 'bcrypt-ts';
-import config  from '@/env';
+import type { UserAdminQueryDto } from "@schemas/user.admin.type";
+import type { UserCreateDto } from "@schemas/user.common.type";
+import type { User } from "@/db/generated/prisma/client";
+import { CustomError } from "@errors/CustomError";
+import { UserNotFoundError } from "@errors/UserNotFoundError";
+import { employmentAdminMapper } from "@mapper/employment.admin.mapper";
+import { userAdminMapper } from "@mapper/user.admin.mapper";
+import { employmentRepository } from "@repositories/employment.common.repository";
+import { userAdminRepository } from "@repositories/user.admin.repository";
+import { userRepository } from "@repositories/user.common.repository";
+import { UserAdminDetailDtoSchema } from "@schemas/user.admin.type";
+import { generateRandomPassword } from "@utils/encryption.utils";
+import { paginate } from "@utils/page.util";
+import { hash } from "bcrypt-ts";
+import { prisma } from "@/db";
+import config from "@/env";
 
 async function _getUserDetail(user: User | null) {
   if (user === null) {
-    throw new UserNotFoundError('该用户不存在');
+    throw new UserNotFoundError("该用户不存在");
   }
   const userDto = UserAdminDetailDtoSchema.parse(userAdminMapper.entityToDto(user));
   const employments = await employmentRepository.getEmploymentsByUserId(userDto.id);
@@ -60,7 +60,7 @@ export const userAdminService = {
     return await prisma.$transaction(async (tx) => {
       const user = await userRepository.getUserByUsername(username, tx);
       if (user === null) {
-        throw new UserNotFoundError('用户名不存在');
+        throw new UserNotFoundError("用户名不存在");
       }
       const newPassword = generateRandomPassword(8);
       const newPasswordHash = await hash(newPassword, config.PASSWORD_HASH_ROUNDS);
@@ -73,12 +73,11 @@ export const userAdminService = {
     return await prisma.$transaction(async (tx) => {
       const existingUsers = await userRepository.searchUsers({ usernames: userCreateDtos.map(u => u.username) });
       if (existingUsers.length !== 0) {
-        throw new CustomError('相同用户名已被注册');
+        throw new CustomError("相同用户名已被注册");
       }
       for (const u of userCreateDtos) {
         u.password = await hash(u.password, config.PASSWORD_HASH_ROUNDS);
       }
-      console.log(userCreateDtos);
       await userAdminRepository.setUsers(userCreateDtos, tx);
       return true;
     });

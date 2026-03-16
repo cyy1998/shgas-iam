@@ -1,4 +1,4 @@
 export enum ClientManagementLevel {
-  Independent = 'Independent',
-  Gateway = 'Gateway',
+  Independent = "Independent",
+  Gateway = "Gateway",
 }

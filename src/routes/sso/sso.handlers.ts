@@ -1,15 +1,15 @@
-import type { SsoRouteHandler } from './sso.type';
-import { ClientManagementLevel } from '@enums/client.managementLevel';
-import { getProtocolAndHost } from '@utils/common.utils';
-import { deleteCookie, getCookie, setCookie } from 'hono/cookie';
-import config from '@/env';
-import { AuthzUnauthorizedError } from '@/errors/AuthzUnauthorizedError';
-import * as clientService from '@/services/client/client.service';
-import * as sessionService from '@/services/session/session.service';
-import * as resp from '@/utils/http/response';
-import * as ssoService from './sso.service';
+import type { SsoRouteHandler } from "./sso.type";
+import { ClientManagementLevel } from "@enums/client.managementLevel";
+import { getProtocolAndHost } from "@utils/common.utils";
+import { deleteCookie, getCookie, setCookie } from "hono/cookie";
+import config from "@/env";
+import { AuthzUnauthorizedError } from "@/errors/AuthzUnauthorizedError";
+import * as clientService from "@/services/client/client.service";
+import * as sessionService from "@/services/session/session.service";
+import * as resp from "@/utils/http/response";
+import * as ssoService from "./sso.service";
 
-export const endpointsConfiguration: SsoRouteHandler<'endpointsConfiguration'> = async (c) => {
+export const endpointsConfiguration: SsoRouteHandler<"endpointsConfiguration"> = async (c) => {
   const origin = (new URL(c.req.url)).origin;
   return c.json(resp.ok({
     authorizationEndpoint: `${origin}${config.AUTHORIZATION_ENDPOINT}`,
@@ -18,39 +18,39 @@ export const endpointsConfiguration: SsoRouteHandler<'endpointsConfiguration'> =
   }));
 };
 
-export const callback: SsoRouteHandler<'callback'> = async (c) => {
-  const { code, client, redirectUrl } = c.req.valid('query');
+export const callback: SsoRouteHandler<"callback"> = async (c) => {
+  const { code, client, redirectUrl } = c.req.valid("query");
   const data = await ssoService.callback(code, client, redirectUrl);
   setCookie(c, `local_${client}_session`, data.token, {
     httpOnly: true,
-    sameSite: 'Strict', // 防 CSRF
+    sameSite: "Strict", // 防 CSRF
     maxAge: config.REDIS_EXPIRE_TIME,
-    path: '/',
+    path: "/",
   });
   const urlObject = new URL(redirectUrl);
-  urlObject.searchParams.set('token', data.token);
+  urlObject.searchParams.set("token", data.token);
   if (data.orcasSessionId != null) {
     setCookie(c, `orcas_sso_sessionid`, data.orcasSessionId, {
       httpOnly: true,
-      sameSite: 'Strict', // 防 CSRF
+      sameSite: "Strict", // 防 CSRF
       maxAge: config.REDIS_EXPIRE_TIME,
-      path: '/',
+      path: "/",
     });
-    urlObject.searchParams.set('orcasToken', data.orcasSessionId);
+    urlObject.searchParams.set("orcasToken", data.orcasSessionId);
   }
   return c.redirect(urlObject.toString());
 };
 
-export const token: SsoRouteHandler<'token'> = async (c) => {
-  const { code, client, clientSecret } = c.req.valid('query');
+export const token: SsoRouteHandler<"token"> = async (c) => {
+  const { code, client, clientSecret } = c.req.valid("query");
   const data = await ssoService.setToken(code, client, clientSecret);
   return c.json(resp.ok(data));
 };
 
-export const authorize: SsoRouteHandler<'authorize'> = async (c) => {
-  const { client, redirectUrl, token } = c.req.valid('query');
+export const authorize: SsoRouteHandler<"authorize"> = async (c) => {
+  const { client, redirectUrl, token } = c.req.valid("query");
   const searchParams = new URLSearchParams(c.req.query());
-  const sessionId = getCookie(c, 'global_session') ?? c.req.header('Authorization') ?? token;
+  const sessionId = getCookie(c, "global_session") ?? c.req.header("Authorization") ?? token;
   const clientInstance = await clientService.getClientByCode(client);
   const data = await ssoService.authorize(sessionId, client, redirectUrl);
   if (data.isLogin === false) {
@@ -62,41 +62,41 @@ export const authorize: SsoRouteHandler<'authorize'> = async (c) => {
   return c.redirect(`${callbackPath}?code=${data.code}&client=${client}&redirectUrl=${encodeURIComponent(redirectUrl)}`);
 };
 
-export const logout: SsoRouteHandler<'logout'> = async (c) => {
-  const { redirectUrl, token } = c.req.valid('query');
-  const sessionId = getCookie(c, 'global_session') ?? await sessionService.getGlobalSessionIdByLocalSession(token ?? '');
+export const logout: SsoRouteHandler<"logout"> = async (c) => {
+  const { redirectUrl, token } = c.req.valid("query");
+  const sessionId = getCookie(c, "global_session") ?? await sessionService.getGlobalSessionIdByLocalSession(token ?? "");
   if (!sessionId) {
-    throw new AuthzUnauthorizedError('缺少有效SessionId');
+    throw new AuthzUnauthorizedError("缺少有效SessionId");
   }
   await ssoService.logout(sessionId);
-  deleteCookie(c, 'global_session');
+  deleteCookie(c, "global_session");
   return c.redirect(redirectUrl ?? config.LOGIN_ENDPOINT);
 };
 
-export const loginOA: SsoRouteHandler<'loginOA'> = async (c) => {
-  const { loginid, ts, token, redirectUrl, client } = c.req.valid('query');
-  const sessionId = getCookie(c, 'global_session') ?? c.req.header('Authorization');
+export const loginOA: SsoRouteHandler<"loginOA"> = async (c) => {
+  const { loginid, ts, token, redirectUrl, client } = c.req.valid("query");
+  const sessionId = getCookie(c, "global_session") ?? c.req.header("Authorization");
   if (sessionId) {
     await ssoService.logout(sessionId);
   }
   const data = await ssoService.loginOA(loginid, ts, token);
-  setCookie(c, 'global_session', data.token, {
+  setCookie(c, "global_session", data.token, {
     httpOnly: true,
-    sameSite: 'Strict', // 防 CSRF
+    sameSite: "Strict", // 防 CSRF
     maxAge: config.REDIS_EXPIRE_TIME,
-    path: '/',
+    path: "/",
   });
   return c.redirect(`/sso/authorize?client=${client}&redirectUrl=${encodeURIComponent(redirectUrl)}&token=${data.token}`);
 };
 
-export const loginWX: SsoRouteHandler<'loginWX'> = async (c) => {
-  const { code, redirectUrl, client } = c.req.valid('query');
+export const loginWX: SsoRouteHandler<"loginWX"> = async (c) => {
+  const { code, redirectUrl, client } = c.req.valid("query");
   const data = await ssoService.loginWX(code);
-  setCookie(c, 'global_session', data.token, {
+  setCookie(c, "global_session", data.token, {
     httpOnly: true,
-    sameSite: 'Strict', // 防 CSRF
+    sameSite: "Strict", // 防 CSRF
     maxAge: config.REDIS_EXPIRE_TIME,
-    path: '/',
+    path: "/",
   });
   return c.redirect(`/sso/authorize?client=${client}&redirectUrl=${encodeURIComponent(redirectUrl)}&token=${data.token}`);
 };

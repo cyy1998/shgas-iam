@@ -1,4 +1,4 @@
-import type { RouteConfig as HonoRouteConfig, RouteHandler } from '@hono/zod-openapi';
+import type { RouteConfig as HonoRouteConfig, RouteHandler } from "@hono/zod-openapi";
 
 export type AppBindings = {
   Variables: {

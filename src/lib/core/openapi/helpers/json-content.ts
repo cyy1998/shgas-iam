@@ -1,11 +1,11 @@
-import type { ZodSchema } from './types';
+import type { ZodSchema } from "./types";
 
 function jsonContent<
   T extends ZodSchema,
 >(schema: T, description: string) {
   return {
     content: {
-      'application/json': {
+      "application/json": {
         schema,
       },
     },

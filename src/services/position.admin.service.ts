@@ -1,7 +1,7 @@
-import type { PositionAdminQueryDto } from '@schemas/position.admin.type';
-import { positionAdminMapper } from '@mapper/position.admin.mapper';
-import { paginate } from '@utils/page.util';
-import { positionAdminRepository } from '@repositories/position.admin.repository';
+import type { PositionAdminQueryDto } from "@schemas/position.admin.type";
+import { positionAdminMapper } from "@mapper/position.admin.mapper";
+import { positionAdminRepository } from "@repositories/position.admin.repository";
+import { paginate } from "@utils/page.util";
 
 export const positionAdminService = {
   async searchPositionsFuzzy(positionPageQuery: PositionAdminQueryDto) {

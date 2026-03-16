@@ -1,7 +1,7 @@
-import { createRouter } from '@lib/core/create-app';
+import { createRouter } from "@lib/core/create-app";
 
-import * as handlers from './auth.handlers';
-import * as routes from './auth.routes';
+import * as handlers from "./auth.handlers";
+import * as routes from "./auth.routes";
 
 const router = createRouter()
   .openapi(routes.loginPassword, handlers.loginPassword)

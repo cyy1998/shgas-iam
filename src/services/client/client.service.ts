@@ -1,9 +1,9 @@
-import type { ClientDto, ClientInputDto } from './client.type';
-import { ZodError } from 'zod';
-import { prisma } from '@/db';
-import redis from '@/lib/clients/redis';
-import * as clientRepository from '@/services/client/client.repository';
-import { ClientDtoSchema } from '@/services/client/client.schema';
+import type { ClientDto, ClientInputDto } from "./client.type";
+import { ZodError } from "zod";
+import { prisma } from "@/db";
+import redis from "@/lib/clients/redis";
+import * as clientRepository from "@/services/client/client.repository";
+import { ClientDtoSchema } from "@/services/client/client.schema";
 
 async function setClientCache(clientCode: string, clientDto: ClientDto) {
   await redis.set(`cache:client:${clientCode}`, JSON.stringify(clientDto));

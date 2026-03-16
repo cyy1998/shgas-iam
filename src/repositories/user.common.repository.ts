@@ -1,7 +1,7 @@
-import type { PrismaTransaction } from '@/db';
-import type { UserQueryDto } from '@schemas/user.common.type';
-import { prisma } from '@/db';
-import { Status } from '@enums/status';
+import type { UserQueryDto } from "@schemas/user.common.type";
+import type { PrismaTransaction } from "@/db";
+import { Status } from "@enums/status";
+import { prisma } from "@/db";
 
 export const userRepository = {
   async getUserById(userId: number, tx: PrismaTransaction = prisma) {

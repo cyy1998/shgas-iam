@@ -1,6 +1,6 @@
-import type { UserAdminDto, UserAdminVo } from '@schemas/user.admin.type';
-import type { User } from '@/db/generated/prisma/client';
-import { userStatusToString } from '@enums/user.status';
+import type { UserAdminDto, UserAdminVo } from "@schemas/user.admin.type";
+import type { User } from "@/db/generated/prisma/client";
+import { userStatusToString } from "@enums/user.status";
 
 export const userAdminMapper = {
   entityToDto(user: User): UserAdminDto {

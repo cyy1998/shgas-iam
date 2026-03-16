@@ -1,6 +1,6 @@
-import { createRouter } from '@lib/core/create-app';
-import * as handlers from './internal.handlers';
-import * as routes from './internal.routes';
+import { createRouter } from "@lib/core/create-app";
+import * as handlers from "./internal.handlers";
+import * as routes from "./internal.routes";
 
 const router = createRouter();
 
