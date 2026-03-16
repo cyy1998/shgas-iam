@@ -1,4 +1,3 @@
-import type { Context } from 'hono';
 import type { SsoRouteHandler } from './sso.type';
 import { ClientManagementLevel } from '@enums/client.managementLevel';
 import { getProtocolAndHost } from '@utils/common.utils';
@@ -6,6 +5,7 @@ import { deleteCookie, getCookie, setCookie } from 'hono/cookie';
 import config from '@/env';
 import { AuthzUnauthorizedError } from '@/errors/AuthzUnauthorizedError';
 import * as clientService from '@/services/client/client.service';
+import * as sessionService from '@/services/session.service';
 import * as resp from '@/utils/http/response';
 import * as ssoService from './sso.service';
 
@@ -63,8 +63,8 @@ export const authorize: SsoRouteHandler<'authorize'> = async (c) => {
 };
 
 export const logout: SsoRouteHandler<'logout'> = async (c) => {
-  const { redirectUrl } = c.req.valid('query');
-  const sessionId = getCookie(c, 'global_session') ?? c.req.header('Authorization');
+  const { redirectUrl, token } = c.req.valid('query');
+  const sessionId = getCookie(c, 'global_session') ?? await sessionService.getGlobalSessionIdByLocalSession(token ?? '');
   if (!sessionId) {
     throw new AuthzUnauthorizedError('缺少有效SessionId');
   }

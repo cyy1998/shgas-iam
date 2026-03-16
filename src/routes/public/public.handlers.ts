@@ -1,6 +1,6 @@
 import type { PublicRouteHandler } from './public.types';
 import { organizationService } from '@services/organization.service';
-import { sessionService } from '@services/session.service';
+import * as sessionService from '@services/session.service';
 import { userService } from '@services/user.common.service';
 import { getCookie } from 'hono/cookie';
 import * as resp from '@/utils/http/response';

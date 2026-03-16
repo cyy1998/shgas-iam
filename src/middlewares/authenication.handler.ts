@@ -1,7 +1,7 @@
-import type { UserDetailDto } from '@schemas/user.common.type';
 import type { Context, Next } from 'hono';
 import { AuthzUnauthorizedError } from '@errors/AuthzUnauthorizedError';
 import { CustomError } from '@errors/CustomError';
+import { UserDetailDtoSchema } from '@schemas/user.common.type';
 import { deleteCookie, getCookie } from 'hono/cookie';
 import redis from '@/lib/clients/redis';
 
@@ -13,14 +13,9 @@ export async function authenicationHandler(c: Context, next: Next) {
   if (!clientCode) {
     throw new CustomError('非法请求');
   }
-  // const path = c.req.header('X-Forwarded-Uri')
-  // const userString = c.req.header('X-User-Info')
   if (!sessionId) {
     throw new AuthzUnauthorizedError('未登录');
   }
-  // if (!userString) {
-  //     throw new AuthzUnauthorizedError('未登录')
-  // }
   const userString = clientCode === 'iam'
     ? await redis.get(`global_session:${sessionId}`)
     : await redis.get(`local_${clientCode}_session:${sessionId}`);
@@ -29,10 +24,10 @@ export async function authenicationHandler(c: Context, next: Next) {
     deleteCookie(c, 'orcas_sso_sessionid');
     throw new AuthzUnauthorizedError('未登录');
   }
-  const userDto: UserDetailDto = JSON.parse(userString);
+  const userDetailDto = UserDetailDtoSchema.parse(JSON.parse(userString));
   // const userDto: UserDto = JSON.parse(Buffer.from(userString, 'base64').toString('utf8'))
-  c.set('userId', userDto.id);
-  c.set('username', userDto.username);
-  c.set('userDetailDto', userDto);
+  c.set('userId', userDetailDto.id);
+  c.set('username', userDetailDto.username);
+  c.set('userDetailDto', userDetailDto);
   return await next();
 }

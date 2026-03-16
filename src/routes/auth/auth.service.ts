@@ -4,7 +4,7 @@ import { AuthzMaintaincingError } from '@errors/AuthzMaintaincingError';
 import { AuthzUnauthorizedError } from '@errors/AuthzUnauthorizedError';
 import { CustomError } from '@errors/CustomError';
 import { UserDtoSchema } from '@schemas/user.common.type';
-import { sessionService } from '@services/session.service';
+import * as sessionService from '@services/session.service';
 import { userService } from '@services/user.common.service';
 import config from '@/env';
 import redis from '@/lib/clients/redis';

@@ -1,4 +1,3 @@
-import type { AuthObject } from '@/schemas/authObject.type';
 import { sleep } from 'bun';
 import { sm3 } from 'sm-crypto';
 import config from '@/env';
@@ -7,9 +6,10 @@ import { CustomError } from '@/errors/CustomError';
 import orcasClient from '@/lib/clients/orcas';
 import redis from '@/lib/clients/redis';
 import wechatClient from '@/lib/clients/wechat';
+import { AuthObjectSchema } from '@/schemas/authObject.type';
 import { UserDetailDtoSchema } from '@/schemas/user.common.type';
 import * as clientService from '@/services/client/client.service';
-import { sessionService } from '@/services/session.service';
+import * as sessionService from '@/services/session.service';
 import { userService } from '@/services/user.common.service';
 
 export async function callback(code: string, clientCode: string, redirectUrl: string) {
@@ -24,7 +24,7 @@ export async function callback(code: string, clientCode: string, redirectUrl: st
   if (authObjectString === null) {
     throw new AuthzUnauthorizedError('非法code');
   }
-  const authObject: AuthObject = JSON.parse(authObjectString);
+  const authObject = AuthObjectSchema.parse(JSON.parse(authObjectString));
   const userString = authObject.data;
   const globalSessionId = authObject.sessionId;
 
@@ -33,20 +33,13 @@ export async function callback(code: string, clientCode: string, redirectUrl: st
   if (!globalSessionId) {
     throw new AuthzUnauthorizedError('全局session不存在');
   }
-  const ttl = await redis.ttl(`global_session:${globalSessionId}`);
-  const localSessionId = crypto.randomUUID();
   let globalOrcasSessionId = null;
   if (client.extAttributes.requireOrcas === true) {
     const { orcasSessionId, orcasId } = await orcasClient.orcasLogin(userDetailDto);
     globalOrcasSessionId = orcasSessionId;
     userDetailDto.orcasId = orcasId;
   }
-  await Promise.all([
-    redis.set(`local_${clientCode}_session:${localSessionId}`, JSON.stringify(userDetailDto), 'EX', ttl),
-    redis.del(`auth_code:${code}`),
-    sessionService.setLocalSession(`local_session_set:${globalSessionId}`, `local_${clientCode}_session:${localSessionId}`, ttl),
-    redis.expire(`local_session_set:${globalSessionId}`, config.REDIS_EXPIRE_TIME),
-  ]);
+  const { localSessionId } = await sessionService.setLocalSession(globalSessionId, clientCode, userDetailDto);
   return {
     orcasSessionId: globalOrcasSessionId,
     token: localSessionId,
@@ -58,20 +51,16 @@ export async function setToken(code: string, clientCode: string, clientSecret: s
   if (client === null || clientSecret !== client.extAttributes.clientSecret) {
     throw new CustomError('非法Client');
   }
-  const sid = crypto.randomUUID();
-  const authStr = await redis.get(`auth_code:${code}`);
-  if (authStr === null) {
+  const authObjectString = await redis.get(`auth_code:${code}`);
+  if (authObjectString === null) {
     throw new CustomError('非法Code');
   }
-  const userInfo = JSON.parse(authStr).data;
-  const globalSessionId = JSON.parse(authStr).sessionId;
-  const ttl = await redis.ttl(`global_session:${globalSessionId}`);
-  await Promise.all([
-    redis.del(`auth_code:${code}`),
-    sessionService.setLocalSession(`local_session_set:${globalSessionId}`, `local_${clientCode}_session:${sid}`, ttl),
-    redis.expire(`local_session_set:${globalSessionId}`, config.REDIS_EXPIRE_TIME),
-  ]);
-  return { sid, ttl, userInfo };
+  const authObject = AuthObjectSchema.parse(JSON.parse(authObjectString));
+  const userString = authObject.data;
+  const globalSessionId = authObject.sessionId;
+  const userDetailDto = UserDetailDtoSchema.parse(JSON.parse(userString));
+  const { localSessionId, ttl } = await sessionService.setLocalSession(globalSessionId, clientCode, userDetailDto);
+  return { sid: localSessionId, ttl, userInfo: userString };
 }
 
 export async function authorize(globalSessionId: string | undefined, clientCode: string, redirectUrl: string) {
