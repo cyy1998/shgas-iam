@@ -29,7 +29,7 @@ export async function setLocalSession(globalSessionId: string, clientCode: strin
   await Promise.all([
     redis.set(`local_${clientCode}_session:${localSessionId}`, JSON.stringify(userDetailDto), 'EX', ttl),
     redis.set(`local_session_reverse:${localSessionId}`, globalSessionId, 'EX', ttl),
-    redis.zadd(`local_session_set:${globalSessionId}`, `local_${clientCode}_session:${localSessionId}`, Date.now() + ttl * 1000),
+    redis.zadd(`local_session_set:${globalSessionId}`, Date.now() + ttl * 1000, `local_${clientCode}_session:${localSessionId}`),
     redis.expire(`local_session_set:${globalSessionId}`, config.REDIS_EXPIRE_TIME),
   ]);
   return { localSessionId, ttl };
