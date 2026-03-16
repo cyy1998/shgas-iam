@@ -1,6 +1,6 @@
 import type { RouteConfig as HonoRouteConfig, RouteHandler } from '@hono/zod-openapi';
 
-export interface AppBindings {
+export type AppBindings = {
   Variables: {
     userId: number;
     username: string;

@@ -4,11 +4,11 @@ import { AuthzMaintaincingError } from '@errors/AuthzMaintaincingError';
 import { AuthzUnauthorizedError } from '@errors/AuthzUnauthorizedError';
 import { CustomError } from '@errors/CustomError';
 import { UserDtoSchema } from '@schemas/user.common.type';
-import * as sessionService from '@services/session.service';
 import { userService } from '@services/user.common.service';
 import config from '@/env';
 import redis from '@/lib/clients/redis';
 import * as clientService from '@/services/client/client.service';
+import * as sessionService from '@/services/session/session.service';
 
 export async function loginPassword(username: string, password: string) {
   const userDetailDto = await userService.getUserDetailByUsername(username);

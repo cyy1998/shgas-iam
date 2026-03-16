@@ -5,7 +5,7 @@ import { deleteCookie, getCookie, setCookie } from 'hono/cookie';
 import config from '@/env';
 import { AuthzUnauthorizedError } from '@/errors/AuthzUnauthorizedError';
 import * as clientService from '@/services/client/client.service';
-import * as sessionService from '@/services/session.service';
+import * as sessionService from '@/services/session/session.service';
 import * as resp from '@/utils/http/response';
 import * as ssoService from './sso.service';
 

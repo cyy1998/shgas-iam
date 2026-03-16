@@ -1,12 +1,12 @@
+import config from '@/env';
 import redis from '@/lib/clients/redis';
-import config  from '@/env';
 
-interface WeixinAccessTokenResponse {
+type WeixinAccessTokenResponse = {
   errcode: number;
   errmsg: string;
   access_token: string;
   expires_in: number;
-}
+};
 
 export const weixinService = {
   async getWxAccessToken() {

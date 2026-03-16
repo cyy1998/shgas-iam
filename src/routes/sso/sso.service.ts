@@ -1,5 +1,6 @@
 import { sleep } from 'bun';
 import { sm3 } from 'sm-crypto';
+import { ClientManagementLevel } from '@/enums/client.managementLevel';
 import config from '@/env';
 import { AuthzUnauthorizedError } from '@/errors/AuthzUnauthorizedError';
 import { CustomError } from '@/errors/CustomError';
@@ -9,7 +10,7 @@ import wechatClient from '@/lib/clients/wechat';
 import { AuthObjectSchema } from '@/schemas/authObject.type';
 import { UserDetailDtoSchema } from '@/schemas/user.common.type';
 import * as clientService from '@/services/client/client.service';
-import * as sessionService from '@/services/session.service';
+import * as sessionService from '@/services/session/session.service';
 import { userService } from '@/services/user.common.service';
 
 export async function callback(code: string, clientCode: string, redirectUrl: string) {
@@ -39,7 +40,7 @@ export async function callback(code: string, clientCode: string, redirectUrl: st
     globalOrcasSessionId = orcasSessionId;
     userDetailDto.orcasId = orcasId;
   }
-  const { localSessionId } = await sessionService.setLocalSession(globalSessionId, clientCode, userDetailDto);
+  const { localSessionId } = await sessionService.setLocalSession(globalSessionId, clientCode, userDetailDto, ClientManagementLevel.Gateway);
   return {
     orcasSessionId: globalOrcasSessionId,
     token: localSessionId,
@@ -59,7 +60,7 @@ export async function setToken(code: string, clientCode: string, clientSecret: s
   const userString = authObject.data;
   const globalSessionId = authObject.sessionId;
   const userDetailDto = UserDetailDtoSchema.parse(JSON.parse(userString));
-  const { localSessionId, ttl } = await sessionService.setLocalSession(globalSessionId, clientCode, userDetailDto);
+  const { localSessionId, ttl } = await sessionService.setLocalSession(globalSessionId, clientCode, userDetailDto, ClientManagementLevel.Independent);
   return { sid: localSessionId, ttl, userInfo: userString };
 }
 
@@ -94,17 +95,14 @@ export async function authorize(globalSessionId: string | undefined, clientCode:
   };
 }
 
-export async function logout(globalSessionId: string | null) {
+export async function logout(globalSessionId: string) {
   const existSession = await redis.exists(`global_session:${globalSessionId}`);
   if (existSession === 0) {
     return true;
   }
-  const localSessionSet = await sessionService.getValidLocalSessions(`local_session_set:${globalSessionId}`);
-  await Promise.all(localSessionSet.map(s => redis.del(s)));
-  await Promise.all([
-    redis.del(`global_session:${globalSessionId}`),
-    redis.del(`local_session_set:${globalSessionId}`),
-  ]);
+  const localSessionSet = await sessionService.getValidLocalSessions(globalSessionId);
+  await Promise.all(localSessionSet.map(e => sessionService.removeLocalSession(e)));
+  await sessionService.removeGlobalSession(globalSessionId);
   return true;
 }
 
