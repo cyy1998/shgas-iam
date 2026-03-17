@@ -14,7 +14,7 @@ export const employmentAdminMapper = {
       posId: employment.position.id,
       posCode: employment.position.posCode,
       posName: employment.position.posName,
-      orgId: employment.deptId,
+      orgId: employment.orgId,
       orgCode: employment.deptartment.orgCode,
       orgName: employment.deptartment.orgName,
       compId: employment.compId,

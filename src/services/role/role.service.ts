@@ -1,13 +1,13 @@
 import { CustomError } from "@errors/CustomError";
-import { employmentRepository } from "@repositories/employment.common.repository";
-import { positionRepository } from "@repositories/position.common.repository";
 import { posorgRepository } from "@repositories/posorg.repository";
 import { privilegeRepository } from "@repositories/privilege.repository";
-import { roleRepository } from "@repositories/role.repository";
 import { mergeAndDedupe } from "@utils/common.utils";
 import { prisma } from "@/db";
 import { Prisma } from "@/db/generated/prisma/client";
+import * as employmentRepository from "@/services/employment/employment.repository";
 import { organizationRepository } from "@/services/organization/organization.repository";
+import * as positionRepository from "@/services/position/position.repository";
+import * as roleRepository from "@/services/role/role.repository";
 import { RoleDtoSchema } from "./role.schema";
 
 export async function getRolesByOrganization(orgId: number) {
@@ -25,14 +25,14 @@ export async function getRolesByPosition(posId: number) {
   const roles = (await roleRepository.getRolesByPosition(posId)).map(r => RoleDtoSchema.parse(r));
   return roles;
 }
-export async function getRolesByOrgPosition(posId: number, orgId: number) {
-  const posOrg = await posorgRepository.getPosOrgById(posId, orgId);
-  if (posOrg === null) {
-    return [];
-  }
-  const roles = (await roleRepository.getRolesByPosOrg(posOrg.id)).map(r => RoleDtoSchema.parse(r));
-  return roles;
-}
+// export async function getRolesByOrgPosition(posId: number, orgId: number) {
+//   const posOrg = await posorgRepository.getPosOrgById(posId, orgId);
+//   if (posOrg === null) {
+//     return [];
+//   }
+//   const roles = (await roleRepository.getRolesByPosOrg(posOrg.id)).map(r => RoleDtoSchema.parse(r));
+//   return roles;
+// }
 export async function getRolesByEmployment(employmentId: number) {
   const roles = (await roleRepository.getRolesByEmployment(employmentId)).map(r => RoleDtoSchema.parse(r));
   return roles;

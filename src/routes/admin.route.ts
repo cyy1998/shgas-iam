@@ -3,21 +3,21 @@ import { createRoute, OpenAPIHono, z } from "@hono/zod-openapi";
 import { authenicationHandler } from "@middlewares/authenication.handler";
 import { EmploymentAdminQueryDtoSchema, EmploymentAdminVoSchema } from "@schemas/employment.admin.type";
 import { createPageResultSchema } from "@schemas/page.type";
-import { PositionAdminQueryDtoSchema, PositionAdminVoSchema } from "@schemas/position.admin.type";
 import { createResponseSchema, ResponseSchema } from "@schemas/response.type";
 import { UserAdminDetailVoSchema, UserAdminQueryDtoSchema, UserAdminVoSchema } from "@schemas/user.admin.type";
 import { UserCreateDtoSchema } from "@schemas/user.common.type";
 import { employmentAdminService } from "@services/employment.admin.service";
-import { positionAdminService } from "@services/position.admin.service";
 import { privilegeService } from "@services/privilege.service";
 import { userAdminService } from "@services/user.admin.service";
 import { generateRandomPassword } from "@utils/encryption.utils";
 import { prisma } from "@/db";
 import { ClientDtoSchema, ClientInputDtoSchema } from "@/services/client/client.schema";
 import * as clientService from "@/services/client/client.service";
-import { employmentService } from "@/services/employment/employment.service";
+import * as employmentService from "@/services/employment/employment.service";
 import { OrganizationCreateDtoSchema, OrganizationDtoSchema, OrganizationQueryDtoSchema } from "@/services/organization/organization.schema";
 import * as organizationService from "@/services/organization/organization.service";
+import { PositionAdminVoSchema, PositionFuzzyQueryDtoSchema } from "@/services/position/position.schema";
+import * as positionService from "@/services/position/position.service";
 import * as roleService from "@/services/role/role.service";
 import * as resp from "@/utils/http/response";
 
@@ -149,7 +149,7 @@ app.openapi(
       body: {
         content: {
           "application/json": {
-            schema: PositionAdminQueryDtoSchema,
+            schema: PositionFuzzyQueryDtoSchema,
           },
         },
       },
@@ -167,7 +167,7 @@ app.openapi(
   }),
   async (c) => {
     const positionQueryDto = c.req.valid("json");
-    const data = await positionAdminService.searchPositionsFuzzy(positionQueryDto);
+    const data = await positionService.searchPositionsFuzzy(positionQueryDto);
     return c.json(resp.ok(data));
   },
 );

@@ -5,7 +5,7 @@ import jsonContentRequired from "@lib/core/openapi/helpers/json-content-required
 import createSuccessResponseSchema from "@lib/core/openapi/schemas/create-success-schema";
 import { EmploymentAdminQueryDtoSchema, EmploymentAdminVoSchema } from "@schemas/employment.admin.type";
 import { createPageResultSchema } from "@schemas/page.type";
-import { PositionAdminQueryDtoSchema, PositionAdminVoSchema } from "@schemas/position.admin.type";
+import { PositionFuzzyQueryDtoSchema, PositionAdminVoSchema } from "@/services/position/position.schema";
 import { UserAdminDetailVoSchema, UserAdminQueryDtoSchema, UserAdminVoSchema } from "@schemas/user.admin.type";
 import { OrganizationDtoSchema, OrganizationQueryDtoSchema } from "@/services/organization/organization.schema";
 
@@ -52,7 +52,7 @@ export const positionSearch = createRoute({
   path: "/positions/search",
   tags,
   request: {
-    body: jsonContentRequired(PositionAdminQueryDtoSchema, "管理员岗位查询"),
+    body: jsonContentRequired(PositionFuzzyQueryDtoSchema, "管理员岗位查询"),
   },
   responses: {
     [HttpStatusCodes.OK]: jsonContent(createSuccessResponseSchema(z.array(PositionAdminVoSchema)), "查询结果"),

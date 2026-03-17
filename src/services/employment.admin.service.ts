@@ -1,7 +1,7 @@
 import type { EmploymentAdminQueryDto } from "@schemas/employment.admin.type";
 import { employmentAdminMapper } from "@mapper/employment.admin.mapper";
-import { employmentRepository } from "@repositories/employment.common.repository";
 import { paginate } from "@utils/page.util";
+import * as employmentRepository from "@/services/employment/employment.repository";
 
 export const employmentAdminService = {
   async searchEmployments(employmentQueryDto: EmploymentAdminQueryDto) {

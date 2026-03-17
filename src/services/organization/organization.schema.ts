@@ -4,7 +4,7 @@ import { OrganizationSchema as PrismaOrganizationSchema } from "@/db/generated/s
 export const OrganizationSchema = z.object(PrismaOrganizationSchema.shape);
 
 export const OrganizationDetailSchema = OrganizationSchema.extend({
-  parent: PrismaOrganizationSchema.nullable(),
+  parent: OrganizationSchema.nullable(),
   children: z.array(OrganizationSchema),
 });
 

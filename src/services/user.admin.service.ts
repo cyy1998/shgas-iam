@@ -5,7 +5,6 @@ import { CustomError } from "@errors/CustomError";
 import { UserNotFoundError } from "@errors/UserNotFoundError";
 import { employmentAdminMapper } from "@mapper/employment.admin.mapper";
 import { userAdminMapper } from "@mapper/user.admin.mapper";
-import { employmentRepository } from "@repositories/employment.common.repository";
 import { userAdminRepository } from "@repositories/user.admin.repository";
 import { userRepository } from "@repositories/user.common.repository";
 import { UserAdminDetailDtoSchema } from "@schemas/user.admin.type";
@@ -14,6 +13,7 @@ import { paginate } from "@utils/page.util";
 import { hash } from "bcrypt-ts";
 import { prisma } from "@/db";
 import config from "@/env";
+import * as employmentRepository from "@/services/employment/employment.repository";
 
 async function _getUserDetail(user: User | null) {
   if (user === null) {

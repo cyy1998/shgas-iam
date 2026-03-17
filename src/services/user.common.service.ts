@@ -4,23 +4,22 @@ import { UserType } from "@enums/user.type";
 import { VerificationCodeUsage } from "@enums/verificationCode.usage";
 import { CustomError } from "@errors/CustomError";
 import { UserNotFoundError } from "@errors/UserNotFoundError";
-import { employmentMapper } from "@mapper/employment.common.mapper";
 import { privilegeDelegationMapper } from "@mapper/privilegeDelegation.mapper";
 import { userMapper } from "@mapper/user.common.mapper";
-import { employmentRepository } from "@repositories/employment.common.repository";
-import { positionRepository } from "@repositories/position.common.repository";
 import { privilegeRepository } from "@repositories/privilege.repository";
 import { privilegeDelegationRepository } from "@repositories/privilegeDelegation.repository";
-import { roleRepository } from "@repositories/role.repository";
 import { userRepository } from "@repositories/user.common.repository";
-import { EmploymentDetailDtoSchema } from "@/services/employment/employment.schema";
 import {
   UserDetailDtoSchema,
 } from "@schemas/user.common.type";
 import { compare, hash } from "bcrypt-ts";
 import { prisma } from "@/db";
 import config from "@/env";
+import * as employmentRepository from "@/services/employment/employment.repository";
+import { EmploymentDetailDtoSchema, EmploymentDtoConverterSchema } from "@/services/employment/employment.schema";
 import { organizationRepository } from "@/services/organization/organization.repository";
+import * as positionRepository from "@/services/position/position.repository";
+import * as roleRepository from "@/services/role/role.repository";
 import { mobileService } from "./mobile.service";
 
 async function _getUserDetail(user: User | null): Promise<UserDetailDto> {
@@ -33,7 +32,7 @@ async function _getUserDetail(user: User | null): Promise<UserDetailDto> {
   for (const employment of employments) {
     const roles = await roleRepository.getRolesByEmploymentId(employment.id);
     const privileges = await privilegeRepository.getPrivilegesByRoleIds(roles.map(r => r.id));
-    const employmentDto = EmploymentDetailDtoSchema.parse(employmentMapper.entityToDto(employment));
+    const employmentDto = EmploymentDetailDtoSchema.parse(EmploymentDtoConverterSchema.parse(employment));
     employmentDto.roles = roles.map(r => r.roleCode);
     employmentDto.privileges = privileges.map(p => p.privilegeCode);
     employmentDtos.push(employmentDto);
