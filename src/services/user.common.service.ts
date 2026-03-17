@@ -8,7 +8,6 @@ import { employmentMapper } from "@mapper/employment.common.mapper";
 import { privilegeDelegationMapper } from "@mapper/privilegeDelegation.mapper";
 import { userMapper } from "@mapper/user.common.mapper";
 import { employmentRepository } from "@repositories/employment.common.repository";
-import { organizationRepository } from "@repositories/organization.repository";
 import { positionRepository } from "@repositories/position.common.repository";
 import { privilegeRepository } from "@repositories/privilege.repository";
 import { privilegeDelegationRepository } from "@repositories/privilegeDelegation.repository";
@@ -21,6 +20,7 @@ import {
 import { compare, hash } from "bcrypt-ts";
 import { prisma } from "@/db";
 import config from "@/env";
+import { organizationRepository } from "@/services/organization/organization.repository";
 import { mobileService } from "./mobile.service";
 
 async function _getUserDetail(user: User | null): Promise<UserDetailDto> {

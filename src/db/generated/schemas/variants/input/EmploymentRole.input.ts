@@ -1,4 +1,4 @@
-import { z } from '@hono/zod-openapi';
+import * as z from 'zod';
 // prettier-ignore
 export const EmploymentRoleInputSchema = z.object({
     employmentId: z.number().int(),

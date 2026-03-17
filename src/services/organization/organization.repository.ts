@@ -1,6 +1,6 @@
-import type { OrganizationQueryDto } from "@schemas/organization.common.type";
 import type { PrismaTransaction } from "@/db";
 import type { Organization } from "@/db/generated/prisma/client";
+import type { OrganizationQueryDto } from "@/services/organization/organization.type";
 import { OrganizationType } from "@enums/organization.type";
 import { Status } from "@enums/status";
 import { prisma } from "@/db";
@@ -29,22 +29,22 @@ export const organizationRepository = {
       },
     });
   },
-  async getTopFormalOrganizations(tx: PrismaTransaction = prisma) {
-    return await tx.organization.findMany({
-      where: {
-        orgType: {
-          notIn: [OrganizationType.Virtual, OrganizationType.External],
-        },
-        level: 1,
-        status: Status.Enable,
-        isDelete: false,
-      },
-      include: {
-        parent: true,
-        children: true,
-      },
-    });
-  },
+  // async getTopFormalOrganizations(tx: PrismaTransaction = prisma) {
+  //   return await tx.organization.findMany({
+  //     where: {
+  //       orgType: {
+  //         notIn: [OrganizationType.Virtual, OrganizationType.External],
+  //       },
+  //       level: 1,
+  //       status: Status.Enable,
+  //       isDelete: false,
+  //     },
+  //     include: {
+  //       parent: true,
+  //       children: true,
+  //     },
+  //   });
+  // },
   async getOrganizationByCode(orgCode: string, tx: PrismaTransaction = prisma) {
     return await tx.organization.findFirst({
       where: {
@@ -194,7 +194,7 @@ export const organizationRepository = {
     if (closureRelations.length > 0) {
       await tx.organizationClosure.createMany({
         data: closureRelations,
-        skipDuplicates: true, // 防止意外重复，虽然主键约束会拦截，但这样更安全
+        skipDuplicates: true,
       });
     }
     return updatedOrganization;

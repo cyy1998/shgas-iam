@@ -1,4 +1,4 @@
-import { z } from '@hono/zod-openapi';
+import * as z from 'zod';
 export const DelegationDetailCreateResultSchema = z.object({
   delegationId: z.number().int(),
   privilegeId: z.number().int(),

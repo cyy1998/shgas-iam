@@ -1,4 +1,4 @@
-import { z } from '@hono/zod-openapi';
+import * as z from 'zod';
 
 export const PositionScalarFieldEnumSchema = z.enum(['id', 'posCode', 'posName', 'status', 'description', 'isDelete', 'createTime', 'updateTime'])
 

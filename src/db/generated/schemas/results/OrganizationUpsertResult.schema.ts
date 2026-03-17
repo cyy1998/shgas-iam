@@ -1,4 +1,4 @@
-import { z } from '@hono/zod-openapi';
+import * as z from 'zod';
 export const OrganizationUpsertResultSchema = z.object({
   id: z.number().int(),
   orgCode: z.string(),

@@ -1,5 +1,5 @@
 import type { Prisma } from '../prisma/client';
-import { z } from '@hono/zod-openapi';
+import * as z from 'zod';
 import { PrivilegeIncludeObjectSchema as PrivilegeIncludeObjectSchema } from './objects/PrivilegeInclude.schema';
 import { PrivilegeOrderByWithRelationInputObjectSchema as PrivilegeOrderByWithRelationInputObjectSchema } from './objects/PrivilegeOrderByWithRelationInput.schema';
 import { PrivilegeWhereInputObjectSchema as PrivilegeWhereInputObjectSchema } from './objects/PrivilegeWhereInput.schema';

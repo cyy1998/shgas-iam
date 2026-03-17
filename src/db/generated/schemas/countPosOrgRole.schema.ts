@@ -1,5 +1,5 @@
 import type { Prisma } from '../prisma/client';
-import { z } from '@hono/zod-openapi';
+import * as z from 'zod';
 import { PosOrgRoleOrderByWithRelationInputObjectSchema as PosOrgRoleOrderByWithRelationInputObjectSchema } from './objects/PosOrgRoleOrderByWithRelationInput.schema';
 import { PosOrgRoleWhereInputObjectSchema as PosOrgRoleWhereInputObjectSchema } from './objects/PosOrgRoleWhereInput.schema';
 import { PosOrgRoleWhereUniqueInputObjectSchema as PosOrgRoleWhereUniqueInputObjectSchema } from './objects/PosOrgRoleWhereUniqueInput.schema';

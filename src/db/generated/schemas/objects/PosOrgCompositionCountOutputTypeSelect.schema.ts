@@ -1,4 +1,4 @@
-import { z } from '@hono/zod-openapi';
+import * as z from 'zod';
 import type { Prisma } from '../../prisma/client';
 import { PosOrgCompositionCountOutputTypeCountEmploymentsArgsObjectSchema as PosOrgCompositionCountOutputTypeCountEmploymentsArgsObjectSchema } from './PosOrgCompositionCountOutputTypeCountEmploymentsArgs.schema';
 import { PosOrgCompositionCountOutputTypeCountRolesArgsObjectSchema as PosOrgCompositionCountOutputTypeCountRolesArgsObjectSchema } from './PosOrgCompositionCountOutputTypeCountRolesArgs.schema'

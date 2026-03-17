@@ -1,4 +1,4 @@
-import { z } from '@hono/zod-openapi';
+import * as z from 'zod';
 export const PositionUpdateResultSchema = z.nullable(z.object({
   id: z.number().int(),
   posCode: z.string(),

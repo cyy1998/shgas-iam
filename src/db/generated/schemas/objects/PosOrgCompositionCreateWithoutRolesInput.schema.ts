@@ -1,4 +1,4 @@
-import { z } from '@hono/zod-openapi';
+import * as z from 'zod';
 import type { Prisma } from '../../prisma/client';
 import { PositionCreateNestedOneWithoutPosOrgCompositionInputObjectSchema as PositionCreateNestedOneWithoutPosOrgCompositionInputObjectSchema } from './PositionCreateNestedOneWithoutPosOrgCompositionInput.schema';
 import { OrganizationCreateNestedOneWithoutPosOrgCompositionInputObjectSchema as OrganizationCreateNestedOneWithoutPosOrgCompositionInputObjectSchema } from './OrganizationCreateNestedOneWithoutPosOrgCompositionInput.schema';

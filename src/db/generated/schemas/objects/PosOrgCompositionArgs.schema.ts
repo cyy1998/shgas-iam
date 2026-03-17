@@ -1,4 +1,4 @@
-import { z } from '@hono/zod-openapi';
+import * as z from 'zod';
 import type { Prisma } from '../../prisma/client';
 import { PosOrgCompositionSelectObjectSchema as PosOrgCompositionSelectObjectSchema } from './PosOrgCompositionSelect.schema';
 import { PosOrgCompositionIncludeObjectSchema as PosOrgCompositionIncludeObjectSchema } from './PosOrgCompositionInclude.schema'

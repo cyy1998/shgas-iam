@@ -1,4 +1,4 @@
-import { z } from '@hono/zod-openapi';
+import * as z from 'zod';
 import type { Prisma } from '../../prisma/client';
 import { PositionCreateWithoutEmploymentsInputObjectSchema as PositionCreateWithoutEmploymentsInputObjectSchema } from './PositionCreateWithoutEmploymentsInput.schema';
 import { PositionUncheckedCreateWithoutEmploymentsInputObjectSchema as PositionUncheckedCreateWithoutEmploymentsInputObjectSchema } from './PositionUncheckedCreateWithoutEmploymentsInput.schema';

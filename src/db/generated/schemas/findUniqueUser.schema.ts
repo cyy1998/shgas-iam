@@ -1,5 +1,5 @@
 import type { Prisma } from '../prisma/client';
-import { z } from '@hono/zod-openapi';
+import * as z from 'zod';
 import { UserSelectObjectSchema as UserSelectObjectSchema } from './objects/UserSelect.schema';
 import { UserIncludeObjectSchema as UserIncludeObjectSchema } from './objects/UserInclude.schema';
 import { UserWhereUniqueInputObjectSchema as UserWhereUniqueInputObjectSchema } from './objects/UserWhereUniqueInput.schema';

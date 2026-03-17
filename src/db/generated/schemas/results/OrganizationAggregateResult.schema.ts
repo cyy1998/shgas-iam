@@ -1,4 +1,4 @@
-import { z } from '@hono/zod-openapi';
+import * as z from 'zod';
 export const OrganizationAggregateResultSchema = z.object({  _count: z.object({
     id: z.number(),
     orgCode: z.number(),

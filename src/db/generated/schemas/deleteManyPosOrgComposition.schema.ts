@@ -1,5 +1,5 @@
 import type { Prisma } from '../prisma/client';
-import { z } from '@hono/zod-openapi';
+import * as z from 'zod';
 import { PosOrgCompositionWhereInputObjectSchema as PosOrgCompositionWhereInputObjectSchema } from './objects/PosOrgCompositionWhereInput.schema';
 
 export const PosOrgCompositionDeleteManySchema: z.ZodType<Prisma.PosOrgCompositionDeleteManyArgs> = z.object({ where: PosOrgCompositionWhereInputObjectSchema.optional() }).strict() as unknown as z.ZodType<Prisma.PosOrgCompositionDeleteManyArgs>;

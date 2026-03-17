@@ -1,5 +1,5 @@
 import type { Prisma } from '../prisma/client';
-import { z } from '@hono/zod-openapi';
+import * as z from 'zod';
 import { PositionWhereInputObjectSchema as PositionWhereInputObjectSchema } from './objects/PositionWhereInput.schema';
 import { PositionOrderByWithAggregationInputObjectSchema as PositionOrderByWithAggregationInputObjectSchema } from './objects/PositionOrderByWithAggregationInput.schema';
 import { PositionScalarWhereWithAggregatesInputObjectSchema as PositionScalarWhereWithAggregatesInputObjectSchema } from './objects/PositionScalarWhereWithAggregatesInput.schema';

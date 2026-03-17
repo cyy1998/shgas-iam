@@ -1,4 +1,4 @@
-import { z } from '@hono/zod-openapi';
+import * as z from 'zod';
 export const PrivilegeDelegationUpdateResultSchema = z.nullable(z.object({
   id: z.number().int(),
   delegatorUserId: z.number().int(),

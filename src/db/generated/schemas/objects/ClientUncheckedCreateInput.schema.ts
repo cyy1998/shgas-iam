@@ -1,4 +1,4 @@
-import { z } from '@hono/zod-openapi';
+import * as z from 'zod';
 import type { Prisma } from '../../prisma/client';
 import { JsonNullValueInputSchema } from '../enums/JsonNullValueInput.schema';
 import { RoleUncheckedCreateNestedManyWithoutClientInputObjectSchema as RoleUncheckedCreateNestedManyWithoutClientInputObjectSchema } from './RoleUncheckedCreateNestedManyWithoutClientInput.schema'

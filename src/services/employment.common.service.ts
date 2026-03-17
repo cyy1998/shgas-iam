@@ -2,10 +2,10 @@ import type { EmploymentQueryDto } from "@schemas/employment.common.type";
 import { CustomError } from "@errors/CustomError";
 import { employmentMapper } from "@mapper/employment.common.mapper";
 import { employmentRepository } from "@repositories/employment.common.repository";
-import { organizationRepository } from "@repositories/organization.repository";
 import { positionRepository } from "@repositories/position.common.repository";
 import { roleRepository } from "@repositories/role.repository";
 import { userRepository } from "@repositories/user.common.repository";
+import { organizationRepository } from "@/services/organization/organization.repository";
 import { privilegeService } from "./privilege.service";
 
 async function _getEmploymentsDetail(username: string) {

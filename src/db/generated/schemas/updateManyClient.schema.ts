@@ -1,5 +1,5 @@
 import type { Prisma } from '../prisma/client';
-import { z } from '@hono/zod-openapi';
+import * as z from 'zod';
 import { ClientUpdateManyMutationInputObjectSchema as ClientUpdateManyMutationInputObjectSchema } from './objects/ClientUpdateManyMutationInput.schema';
 import { ClientWhereInputObjectSchema as ClientWhereInputObjectSchema } from './objects/ClientWhereInput.schema';
 

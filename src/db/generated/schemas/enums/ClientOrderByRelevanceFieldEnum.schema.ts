@@ -1,4 +1,4 @@
-import { z } from '@hono/zod-openapi';
+import * as z from 'zod';
 
 export const ClientOrderByRelevanceFieldEnumSchema = z.enum(['clientCode', 'clientName', 'url', 'description'])
 

@@ -1,4 +1,4 @@
-import { z } from '@hono/zod-openapi';
+import * as z from 'zod';
 
 export const RolePrivilegeScalarFieldEnumSchema = z.enum(['roleId', 'privilegeId'])
 

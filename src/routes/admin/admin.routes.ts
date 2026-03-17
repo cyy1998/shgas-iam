@@ -4,10 +4,10 @@ import jsonContent from "@lib/core/openapi/helpers/json-content";
 import jsonContentRequired from "@lib/core/openapi/helpers/json-content-required";
 import createSuccessResponseSchema from "@lib/core/openapi/schemas/create-success-schema";
 import { EmploymentAdminQueryDtoSchema, EmploymentAdminVoSchema } from "@schemas/employment.admin.type";
-import { OrganizationDtoSchema, OrganizationQueryDtoSchema } from "@schemas/organization.common.type";
 import { createPageResultSchema } from "@schemas/page.type";
 import { PositionAdminQueryDtoSchema, PositionAdminVoSchema } from "@schemas/position.admin.type";
 import { UserAdminDetailVoSchema, UserAdminQueryDtoSchema, UserAdminVoSchema } from "@schemas/user.admin.type";
+import { OrganizationDtoSchema, OrganizationQueryDtoSchema } from "@/services/organization/organization.schema";
 
 const tags = ["Admin"];
 

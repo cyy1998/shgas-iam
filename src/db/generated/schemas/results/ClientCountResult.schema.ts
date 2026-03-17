@@ -1,2 +1,2 @@
-import { z } from '@hono/zod-openapi';
+import * as z from 'zod';
 export const ClientCountResultSchema = z.number();

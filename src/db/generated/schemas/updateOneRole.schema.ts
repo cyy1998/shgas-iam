@@ -1,5 +1,5 @@
 import type { Prisma } from '../prisma/client';
-import { z } from '@hono/zod-openapi';
+import * as z from 'zod';
 import { RoleSelectObjectSchema as RoleSelectObjectSchema } from './objects/RoleSelect.schema';
 import { RoleIncludeObjectSchema as RoleIncludeObjectSchema } from './objects/RoleInclude.schema';
 import { RoleUpdateInputObjectSchema as RoleUpdateInputObjectSchema } from './objects/RoleUpdateInput.schema';

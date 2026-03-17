@@ -1,4 +1,4 @@
-import { z } from '@hono/zod-openapi';
+import * as z from 'zod';
 export const PrivilegeAggregateResultSchema = z.object({  _count: z.object({
     id: z.number(),
     privilegeCode: z.number(),

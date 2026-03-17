@@ -1,7 +1,6 @@
 import { CustomError } from "@errors/CustomError";
 import { roleMapper } from "@mapper/role.mapper";
 import { employmentRepository } from "@repositories/employment.common.repository";
-import { organizationRepository } from "@repositories/organization.repository";
 import { positionRepository } from "@repositories/position.common.repository";
 import { posorgRepository } from "@repositories/posorg.repository";
 import { privilegeRepository } from "@repositories/privilege.repository";
@@ -9,6 +8,7 @@ import { roleRepository } from "@repositories/role.repository";
 import { mergeAndDedupe } from "@utils/common.utils";
 import { prisma } from "@/db";
 import { Prisma } from "@/db/generated/prisma/client";
+import { organizationRepository } from "@/services/organization/organization.repository";
 
 export const roleService = {
   async getRolesByOrganization(orgId: number) {
@@ -72,7 +72,6 @@ export const roleService = {
           throw err;
         }
       }
-
       return true;
     });
   },

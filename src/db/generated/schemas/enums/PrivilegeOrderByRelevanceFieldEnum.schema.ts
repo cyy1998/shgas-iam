@@ -1,4 +1,4 @@
-import { z } from '@hono/zod-openapi';
+import * as z from 'zod';
 
 export const PrivilegeOrderByRelevanceFieldEnumSchema = z.enum(['privilegeCode', 'privilegeName', 'description'])
 

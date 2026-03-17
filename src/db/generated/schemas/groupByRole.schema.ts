@@ -1,5 +1,5 @@
 import type { Prisma } from '../prisma/client';
-import { z } from '@hono/zod-openapi';
+import * as z from 'zod';
 import { RoleWhereInputObjectSchema as RoleWhereInputObjectSchema } from './objects/RoleWhereInput.schema';
 import { RoleOrderByWithAggregationInputObjectSchema as RoleOrderByWithAggregationInputObjectSchema } from './objects/RoleOrderByWithAggregationInput.schema';
 import { RoleScalarWhereWithAggregatesInputObjectSchema as RoleScalarWhereWithAggregatesInputObjectSchema } from './objects/RoleScalarWhereWithAggregatesInput.schema';

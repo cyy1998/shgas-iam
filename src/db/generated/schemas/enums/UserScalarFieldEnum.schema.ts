@@ -1,4 +1,4 @@
-import { z } from '@hono/zod-openapi';
+import * as z from 'zod';
 
 export const UserScalarFieldEnumSchema = z.enum(['id', 'username', 'wxId', 'name', 'password', 'mobile', 'userType', 'orderNum', 'status', 'isDelete', 'createTime', 'updateTime'])
 

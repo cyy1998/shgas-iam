@@ -1,4 +1,4 @@
-import { z } from '@hono/zod-openapi';
+import * as z from 'zod';
 import type { Prisma } from '../../prisma/client';
 import { RoleArgsObjectSchema as RoleArgsObjectSchema } from './RoleArgs.schema';
 import { PrivilegeArgsObjectSchema as PrivilegeArgsObjectSchema } from './PrivilegeArgs.schema'

@@ -1,4 +1,4 @@
-import { z } from '@hono/zod-openapi';
+import * as z from 'zod';
 import type { Prisma } from '../../prisma/client';
 import { RolePrivilegeWhereUniqueInputObjectSchema as RolePrivilegeWhereUniqueInputObjectSchema } from './RolePrivilegeWhereUniqueInput.schema';
 import { RolePrivilegeCreateWithoutRoleInputObjectSchema as RolePrivilegeCreateWithoutRoleInputObjectSchema } from './RolePrivilegeCreateWithoutRoleInput.schema';

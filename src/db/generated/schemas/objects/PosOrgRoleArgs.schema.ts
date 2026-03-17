@@ -1,4 +1,4 @@
-import { z } from '@hono/zod-openapi';
+import * as z from 'zod';
 import type { Prisma } from '../../prisma/client';
 import { PosOrgRoleSelectObjectSchema as PosOrgRoleSelectObjectSchema } from './PosOrgRoleSelect.schema';
 import { PosOrgRoleIncludeObjectSchema as PosOrgRoleIncludeObjectSchema } from './PosOrgRoleInclude.schema'

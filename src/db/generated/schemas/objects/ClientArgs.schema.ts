@@ -1,4 +1,4 @@
-import { z } from '@hono/zod-openapi';
+import * as z from 'zod';
 import type { Prisma } from '../../prisma/client';
 import { ClientSelectObjectSchema as ClientSelectObjectSchema } from './ClientSelect.schema';
 import { ClientIncludeObjectSchema as ClientIncludeObjectSchema } from './ClientInclude.schema'

@@ -1,4 +1,4 @@
-import { z } from '@hono/zod-openapi';
+import * as z from 'zod';
 export const RolePrivilegeGroupByResultSchema = z.array(z.object({
   roleId: z.number().int(),
   privilegeId: z.number().int(),

@@ -1,4 +1,4 @@
-import { z } from '@hono/zod-openapi';
+import * as z from 'zod';
 import type { Prisma } from '../../prisma/client';
 import { OrganizationClosureSelectObjectSchema as OrganizationClosureSelectObjectSchema } from './OrganizationClosureSelect.schema';
 import { OrganizationClosureIncludeObjectSchema as OrganizationClosureIncludeObjectSchema } from './OrganizationClosureInclude.schema'

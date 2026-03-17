@@ -1,4 +1,4 @@
-import { z } from '@hono/zod-openapi';
+import * as z from 'zod';
 
 export const UserOrderByRelevanceFieldEnumSchema = z.enum(['username', 'wxId', 'name', 'password', 'mobile', 'userType'])
 

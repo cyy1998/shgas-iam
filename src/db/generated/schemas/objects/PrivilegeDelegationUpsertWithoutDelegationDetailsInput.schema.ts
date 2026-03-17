@@ -1,4 +1,4 @@
-import { z } from '@hono/zod-openapi';
+import * as z from 'zod';
 import type { Prisma } from '../../prisma/client';
 import { PrivilegeDelegationUpdateWithoutDelegationDetailsInputObjectSchema as PrivilegeDelegationUpdateWithoutDelegationDetailsInputObjectSchema } from './PrivilegeDelegationUpdateWithoutDelegationDetailsInput.schema';
 import { PrivilegeDelegationUncheckedUpdateWithoutDelegationDetailsInputObjectSchema as PrivilegeDelegationUncheckedUpdateWithoutDelegationDetailsInputObjectSchema } from './PrivilegeDelegationUncheckedUpdateWithoutDelegationDetailsInput.schema';

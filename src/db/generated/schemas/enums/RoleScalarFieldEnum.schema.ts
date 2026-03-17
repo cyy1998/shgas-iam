@@ -1,4 +1,4 @@
-import { z } from '@hono/zod-openapi';
+import * as z from 'zod';
 
 export const RoleScalarFieldEnumSchema = z.enum(['id', 'roleCode', 'roleName', 'clientId', 'status', 'description', 'isDelete', 'createTime', 'updateTime'])
 

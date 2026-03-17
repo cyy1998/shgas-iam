@@ -2,7 +2,6 @@ import { UserType } from "@enums/user.type";
 import { createRoute, OpenAPIHono, z } from "@hono/zod-openapi";
 import { authenicationHandler } from "@middlewares/authenication.handler";
 import { EmploymentAdminQueryDtoSchema, EmploymentAdminVoSchema } from "@schemas/employment.admin.type";
-import { OrganizationCreateDtoSchema, OrganizationDtoSchema, OrganizationQueryDtoSchema } from "@schemas/organization.common.type";
 import { createPageResultSchema } from "@schemas/page.type";
 import { PositionAdminQueryDtoSchema, PositionAdminVoSchema } from "@schemas/position.admin.type";
 import { createResponseSchema, ResponseSchema } from "@schemas/response.type";
@@ -10,15 +9,16 @@ import { UserAdminDetailVoSchema, UserAdminQueryDtoSchema, UserAdminVoSchema } f
 import { UserCreateDtoSchema } from "@schemas/user.common.type";
 import { employmentAdminService } from "@services/employment.admin.service";
 import { employmentService } from "@services/employment.common.service";
-import { organizationService } from "@services/organization.service";
 import { positionAdminService } from "@services/position.admin.service";
 import { privilegeService } from "@services/privilege.service";
-import { roleService } from "@services/role.service";
 import { userAdminService } from "@services/user.admin.service";
 import { generateRandomPassword } from "@utils/encryption.utils";
 import { prisma } from "@/db";
 import { ClientDtoSchema, ClientInputDtoSchema } from "@/services/client/client.schema";
 import * as clientService from "@/services/client/client.service";
+import { OrganizationCreateDtoSchema, OrganizationDtoSchema, OrganizationQueryDtoSchema } from "@/services/organization/organization.schema";
+import * as organizationService from "@/services/organization/organization.service";
+import { roleService } from "@/services/role/role.service";
 import * as resp from "@/utils/http/response";
 
 const app = new OpenAPIHono();
@@ -378,7 +378,7 @@ app.openapi(
   }),
   async (c) => {
     const body = c.req.valid("json");
-    const position = await prisma.position.create({
+    await prisma.position.create({
       data: body,
     });
     return c.json(resp.ok());
@@ -650,7 +650,7 @@ app.openapi(
     },
   }),
   async (c) => {
-    const { orgCode, roleCode, isAllSub } = c.req.valid("json");
+    const { orgCode, roleCode } = c.req.valid("json");
     const data = await roleService.setRoleForOrganization(orgCode, roleCode);
     return c.json(resp.ok(data));
   },

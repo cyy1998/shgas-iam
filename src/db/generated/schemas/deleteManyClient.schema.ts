@@ -1,5 +1,5 @@
 import type { Prisma } from '../prisma/client';
-import { z } from '@hono/zod-openapi';
+import * as z from 'zod';
 import { ClientWhereInputObjectSchema as ClientWhereInputObjectSchema } from './objects/ClientWhereInput.schema';
 
 export const ClientDeleteManySchema: z.ZodType<Prisma.ClientDeleteManyArgs> = z.object({ where: ClientWhereInputObjectSchema.optional() }).strict() as unknown as z.ZodType<Prisma.ClientDeleteManyArgs>;

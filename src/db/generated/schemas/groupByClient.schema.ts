@@ -1,5 +1,5 @@
 import type { Prisma } from '../prisma/client';
-import { z } from '@hono/zod-openapi';
+import * as z from 'zod';
 import { ClientWhereInputObjectSchema as ClientWhereInputObjectSchema } from './objects/ClientWhereInput.schema';
 import { ClientOrderByWithAggregationInputObjectSchema as ClientOrderByWithAggregationInputObjectSchema } from './objects/ClientOrderByWithAggregationInput.schema';
 import { ClientScalarWhereWithAggregatesInputObjectSchema as ClientScalarWhereWithAggregatesInputObjectSchema } from './objects/ClientScalarWhereWithAggregatesInput.schema';

@@ -1,4 +1,4 @@
-import { z } from '@hono/zod-openapi';
+import * as z from 'zod';
 import type { Prisma } from '../../prisma/client';
 import { PosOrgCompositionWhereUniqueInputObjectSchema as PosOrgCompositionWhereUniqueInputObjectSchema } from './PosOrgCompositionWhereUniqueInput.schema';
 import { PosOrgCompositionUpdateWithoutPositionInputObjectSchema as PosOrgCompositionUpdateWithoutPositionInputObjectSchema } from './PosOrgCompositionUpdateWithoutPositionInput.schema';

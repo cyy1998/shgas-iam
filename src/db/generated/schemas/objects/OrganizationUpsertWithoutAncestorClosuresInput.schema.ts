@@ -1,4 +1,4 @@
-import { z } from '@hono/zod-openapi';
+import * as z from 'zod';
 import type { Prisma } from '../../prisma/client';
 import { OrganizationUpdateWithoutAncestorClosuresInputObjectSchema as OrganizationUpdateWithoutAncestorClosuresInputObjectSchema } from './OrganizationUpdateWithoutAncestorClosuresInput.schema';
 import { OrganizationUncheckedUpdateWithoutAncestorClosuresInputObjectSchema as OrganizationUncheckedUpdateWithoutAncestorClosuresInputObjectSchema } from './OrganizationUncheckedUpdateWithoutAncestorClosuresInput.schema';

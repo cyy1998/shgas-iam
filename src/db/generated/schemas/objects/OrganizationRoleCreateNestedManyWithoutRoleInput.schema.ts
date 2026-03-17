@@ -1,4 +1,4 @@
-import { z } from '@hono/zod-openapi';
+import * as z from 'zod';
 import type { Prisma } from '../../prisma/client';
 import { OrganizationRoleCreateWithoutRoleInputObjectSchema as OrganizationRoleCreateWithoutRoleInputObjectSchema } from './OrganizationRoleCreateWithoutRoleInput.schema';
 import { OrganizationRoleUncheckedCreateWithoutRoleInputObjectSchema as OrganizationRoleUncheckedCreateWithoutRoleInputObjectSchema } from './OrganizationRoleUncheckedCreateWithoutRoleInput.schema';

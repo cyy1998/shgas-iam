@@ -27,7 +27,7 @@
     "bcrypt-ts": "^7.1.0",
     "csv-parse": "^6.1.0",
     "csv-parser": "^3.2.0",
-    "hono": "^4.9.11",
+    "hono": "^4.12.8",
     "hono-pino": "^0.10.3",
     "ioredis": "^5.8.1",
     "luxon": "^3.7.2",

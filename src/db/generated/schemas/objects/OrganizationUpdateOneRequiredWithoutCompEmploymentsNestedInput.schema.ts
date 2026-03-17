@@ -1,4 +1,4 @@
-import { z } from '@hono/zod-openapi';
+import * as z from 'zod';
 import type { Prisma } from '../../prisma/client';
 import { OrganizationCreateWithoutCompEmploymentsInputObjectSchema as OrganizationCreateWithoutCompEmploymentsInputObjectSchema } from './OrganizationCreateWithoutCompEmploymentsInput.schema';
 import { OrganizationUncheckedCreateWithoutCompEmploymentsInputObjectSchema as OrganizationUncheckedCreateWithoutCompEmploymentsInputObjectSchema } from './OrganizationUncheckedCreateWithoutCompEmploymentsInput.schema';

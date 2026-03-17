@@ -1,4 +1,4 @@
-import { z } from '@hono/zod-openapi';
+import * as z from 'zod';
 import type { Prisma } from '../../prisma/client';
 import { PosOrgRoleScalarWhereInputObjectSchema as PosOrgRoleScalarWhereInputObjectSchema } from './PosOrgRoleScalarWhereInput.schema';
 import { PosOrgRoleUpdateManyMutationInputObjectSchema as PosOrgRoleUpdateManyMutationInputObjectSchema } from './PosOrgRoleUpdateManyMutationInput.schema';

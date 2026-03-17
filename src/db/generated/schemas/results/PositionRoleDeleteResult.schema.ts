@@ -1,4 +1,4 @@
-import { z } from '@hono/zod-openapi';
+import * as z from 'zod';
 export const PositionRoleDeleteResultSchema = z.nullable(z.object({
   positionId: z.number().int(),
   roleId: z.number().int(),

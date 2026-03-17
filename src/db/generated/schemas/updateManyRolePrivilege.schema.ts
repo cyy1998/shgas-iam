@@ -1,5 +1,5 @@
 import type { Prisma } from '../prisma/client';
-import { z } from '@hono/zod-openapi';
+import * as z from 'zod';
 import { RolePrivilegeUpdateManyMutationInputObjectSchema as RolePrivilegeUpdateManyMutationInputObjectSchema } from './objects/RolePrivilegeUpdateManyMutationInput.schema';
 import { RolePrivilegeWhereInputObjectSchema as RolePrivilegeWhereInputObjectSchema } from './objects/RolePrivilegeWhereInput.schema';
 

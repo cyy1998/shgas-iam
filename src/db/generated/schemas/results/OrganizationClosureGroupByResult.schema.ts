@@ -1,4 +1,4 @@
-import { z } from '@hono/zod-openapi';
+import * as z from 'zod';
 export const OrganizationClosureGroupByResultSchema = z.array(z.object({
   id: z.number().int(),
   ancestorId: z.number().int(),

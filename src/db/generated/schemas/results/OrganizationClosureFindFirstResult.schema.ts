@@ -1,4 +1,4 @@
-import { z } from '@hono/zod-openapi';
+import * as z from 'zod';
 export const OrganizationClosureFindFirstResultSchema = z.nullable(z.object({
   id: z.number().int(),
   ancestorId: z.number().int(),

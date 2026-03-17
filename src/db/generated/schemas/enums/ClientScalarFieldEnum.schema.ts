@@ -1,4 +1,4 @@
-import { z } from '@hono/zod-openapi';
+import * as z from 'zod';
 
 export const ClientScalarFieldEnumSchema = z.enum(['id', 'clientCode', 'clientName', 'url', 'status', 'description', 'isDelete', 'createTime', 'updateTime', 'extAttributes'])
 

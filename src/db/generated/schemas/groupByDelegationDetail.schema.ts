@@ -1,5 +1,5 @@
 import type { Prisma } from '../prisma/client';
-import { z } from '@hono/zod-openapi';
+import * as z from 'zod';
 import { DelegationDetailWhereInputObjectSchema as DelegationDetailWhereInputObjectSchema } from './objects/DelegationDetailWhereInput.schema';
 import { DelegationDetailOrderByWithAggregationInputObjectSchema as DelegationDetailOrderByWithAggregationInputObjectSchema } from './objects/DelegationDetailOrderByWithAggregationInput.schema';
 import { DelegationDetailScalarWhereWithAggregatesInputObjectSchema as DelegationDetailScalarWhereWithAggregatesInputObjectSchema } from './objects/DelegationDetailScalarWhereWithAggregatesInput.schema';

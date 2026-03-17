@@ -1,4 +1,4 @@
-import { z } from '@hono/zod-openapi';
+import * as z from 'zod';
 export const EmploymentRoleFindFirstResultSchema = z.nullable(z.object({
   employmentId: z.number().int(),
   roleId: z.number().int(),

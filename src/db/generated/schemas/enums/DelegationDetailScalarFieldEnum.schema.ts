@@ -1,4 +1,4 @@
-import { z } from '@hono/zod-openapi';
+import * as z from 'zod';
 
 export const DelegationDetailScalarFieldEnumSchema = z.enum(['delegationId', 'privilegeId'])
 

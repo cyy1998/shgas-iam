@@ -1,4 +1,4 @@
-import { z } from '@hono/zod-openapi';
+import * as z from 'zod';
 import type { Prisma } from '../../prisma/client';
 import { DelegationDetailScalarWhereInputObjectSchema as DelegationDetailScalarWhereInputObjectSchema } from './DelegationDetailScalarWhereInput.schema';
 import { DelegationDetailUpdateManyMutationInputObjectSchema as DelegationDetailUpdateManyMutationInputObjectSchema } from './DelegationDetailUpdateManyMutationInput.schema';

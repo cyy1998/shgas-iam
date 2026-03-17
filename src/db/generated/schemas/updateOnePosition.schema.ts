@@ -1,5 +1,5 @@
 import type { Prisma } from '../prisma/client';
-import { z } from '@hono/zod-openapi';
+import * as z from 'zod';
 import { PositionSelectObjectSchema as PositionSelectObjectSchema } from './objects/PositionSelect.schema';
 import { PositionIncludeObjectSchema as PositionIncludeObjectSchema } from './objects/PositionInclude.schema';
 import { PositionUpdateInputObjectSchema as PositionUpdateInputObjectSchema } from './objects/PositionUpdateInput.schema';

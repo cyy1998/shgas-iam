@@ -1,4 +1,4 @@
-import { z } from '@hono/zod-openapi';
+import * as z from 'zod';
 import type { Prisma } from '../../prisma/client';
 import { NullableJsonNullValueInputSchema } from '../enums/NullableJsonNullValueInput.schema';
 import { DelegationDetailUncheckedCreateNestedManyWithoutPrivilegeInputObjectSchema as DelegationDetailUncheckedCreateNestedManyWithoutPrivilegeInputObjectSchema } from './DelegationDetailUncheckedCreateNestedManyWithoutPrivilegeInput.schema'

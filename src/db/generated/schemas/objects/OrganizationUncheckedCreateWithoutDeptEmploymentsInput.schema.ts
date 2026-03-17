@@ -1,4 +1,4 @@
-import { z } from '@hono/zod-openapi';
+import * as z from 'zod';
 import type { Prisma } from '../../prisma/client';
 import { EmploymentUncheckedCreateNestedManyWithoutCompanyInputObjectSchema as EmploymentUncheckedCreateNestedManyWithoutCompanyInputObjectSchema } from './EmploymentUncheckedCreateNestedManyWithoutCompanyInput.schema';
 import { OrganizationRoleUncheckedCreateNestedManyWithoutOrganizationInputObjectSchema as OrganizationRoleUncheckedCreateNestedManyWithoutOrganizationInputObjectSchema } from './OrganizationRoleUncheckedCreateNestedManyWithoutOrganizationInput.schema';

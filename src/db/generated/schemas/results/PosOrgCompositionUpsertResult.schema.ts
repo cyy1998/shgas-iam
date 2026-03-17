@@ -1,4 +1,4 @@
-import { z } from '@hono/zod-openapi';
+import * as z from 'zod';
 export const PosOrgCompositionUpsertResultSchema = z.object({
   id: z.number().int(),
   posId: z.number().int(),

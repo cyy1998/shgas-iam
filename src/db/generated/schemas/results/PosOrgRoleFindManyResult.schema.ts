@@ -1,4 +1,4 @@
-import { z } from '@hono/zod-openapi';
+import * as z from 'zod';
 export const PosOrgRoleFindManyResultSchema = z.object({
   data: z.array(z.object({
   posOrgId: z.number().int(),
