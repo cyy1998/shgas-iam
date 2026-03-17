@@ -1595,7 +1595,7 @@ export const EmploymentScalarFieldEnum = {
   id: 'id',
   userId: 'userId',
   posId: 'posId',
-  deptId: 'deptId',
+  orgId: 'orgId',
   compId: 'compId',
   isPrimary: 'isPrimary',
   status: 'status',

@@ -6,7 +6,7 @@ const makeSchema = () => z.object({
   id: z.literal(true).optional(),
   userId: z.literal(true).optional(),
   posId: z.literal(true).optional(),
-  deptId: z.literal(true).optional(),
+  orgId: z.literal(true).optional(),
   compId: z.literal(true).optional(),
   status: z.literal(true).optional()
 }).strict();

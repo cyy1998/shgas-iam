@@ -1,4 +1,4 @@
-import type { EmploymentQueryDto } from "@schemas/employment.common.type";
+import type { EmploymentQueryDto } from "@/services/employment/employment.schema";
 import { CustomError } from "@errors/CustomError";
 import { employmentMapper } from "@mapper/employment.common.mapper";
 import { employmentRepository } from "@repositories/employment.common.repository";
@@ -6,7 +6,7 @@ import { positionRepository } from "@repositories/position.common.repository";
 import { roleRepository } from "@repositories/role.repository";
 import { userRepository } from "@repositories/user.common.repository";
 import { organizationRepository } from "@/services/organization/organization.repository";
-import { privilegeService } from "./privilege.service";
+import { privilegeService } from "../privilege.service";
 
 async function _getEmploymentsDetail(username: string) {
   const employments = await employmentRepository.getEmploymentsByUsername(username);

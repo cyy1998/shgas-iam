@@ -30,7 +30,7 @@ export type EmploymentAvgAggregateOutputType = {
   id: number | null
   userId: number | null
   posId: number | null
-  deptId: number | null
+  orgId: number | null
   compId: number | null
   status: number | null
 }
@@ -39,7 +39,7 @@ export type EmploymentSumAggregateOutputType = {
   id: number | null
   userId: number | null
   posId: number | null
-  deptId: number | null
+  orgId: number | null
   compId: number | null
   status: number | null
 }
@@ -48,7 +48,7 @@ export type EmploymentMinAggregateOutputType = {
   id: number | null
   userId: number | null
   posId: number | null
-  deptId: number | null
+  orgId: number | null
   compId: number | null
   isPrimary: boolean | null
   status: number | null
@@ -64,7 +64,7 @@ export type EmploymentMaxAggregateOutputType = {
   id: number | null
   userId: number | null
   posId: number | null
-  deptId: number | null
+  orgId: number | null
   compId: number | null
   isPrimary: boolean | null
   status: number | null
@@ -80,7 +80,7 @@ export type EmploymentCountAggregateOutputType = {
   id: number
   userId: number
   posId: number
-  deptId: number
+  orgId: number
   compId: number
   isPrimary: number
   status: number
@@ -98,7 +98,7 @@ export type EmploymentAvgAggregateInputType = {
   id?: true
   userId?: true
   posId?: true
-  deptId?: true
+  orgId?: true
   compId?: true
   status?: true
 }
@@ -107,7 +107,7 @@ export type EmploymentSumAggregateInputType = {
   id?: true
   userId?: true
   posId?: true
-  deptId?: true
+  orgId?: true
   compId?: true
   status?: true
 }
@@ -116,7 +116,7 @@ export type EmploymentMinAggregateInputType = {
   id?: true
   userId?: true
   posId?: true
-  deptId?: true
+  orgId?: true
   compId?: true
   isPrimary?: true
   status?: true
@@ -132,7 +132,7 @@ export type EmploymentMaxAggregateInputType = {
   id?: true
   userId?: true
   posId?: true
-  deptId?: true
+  orgId?: true
   compId?: true
   isPrimary?: true
   status?: true
@@ -148,7 +148,7 @@ export type EmploymentCountAggregateInputType = {
   id?: true
   userId?: true
   posId?: true
-  deptId?: true
+  orgId?: true
   compId?: true
   isPrimary?: true
   status?: true
@@ -251,7 +251,7 @@ export type EmploymentGroupByOutputType = {
   id: number
   userId: number
   posId: number
-  deptId: number
+  orgId: number
   compId: number
   isPrimary: boolean
   status: number
@@ -290,7 +290,7 @@ export type EmploymentWhereInput = {
   id?: Prisma.IntFilter<"Employment"> | number
   userId?: Prisma.IntFilter<"Employment"> | number
   posId?: Prisma.IntFilter<"Employment"> | number
-  deptId?: Prisma.IntFilter<"Employment"> | number
+  orgId?: Prisma.IntFilter<"Employment"> | number
   compId?: Prisma.IntFilter<"Employment"> | number
   isPrimary?: Prisma.BoolFilter<"Employment"> | boolean
   status?: Prisma.IntFilter<"Employment"> | number
@@ -312,7 +312,7 @@ export type EmploymentOrderByWithRelationInput = {
   id?: Prisma.SortOrder
   userId?: Prisma.SortOrder
   posId?: Prisma.SortOrder
-  deptId?: Prisma.SortOrder
+  orgId?: Prisma.SortOrder
   compId?: Prisma.SortOrder
   isPrimary?: Prisma.SortOrder
   status?: Prisma.SortOrder
@@ -338,7 +338,7 @@ export type EmploymentWhereUniqueInput = Prisma.AtLeast<{
   NOT?: Prisma.EmploymentWhereInput | Prisma.EmploymentWhereInput[]
   userId?: Prisma.IntFilter<"Employment"> | number
   posId?: Prisma.IntFilter<"Employment"> | number
-  deptId?: Prisma.IntFilter<"Employment"> | number
+  orgId?: Prisma.IntFilter<"Employment"> | number
   compId?: Prisma.IntFilter<"Employment"> | number
   isPrimary?: Prisma.BoolFilter<"Employment"> | boolean
   status?: Prisma.IntFilter<"Employment"> | number
@@ -360,7 +360,7 @@ export type EmploymentOrderByWithAggregationInput = {
   id?: Prisma.SortOrder
   userId?: Prisma.SortOrder
   posId?: Prisma.SortOrder
-  deptId?: Prisma.SortOrder
+  orgId?: Prisma.SortOrder
   compId?: Prisma.SortOrder
   isPrimary?: Prisma.SortOrder
   status?: Prisma.SortOrder
@@ -384,7 +384,7 @@ export type EmploymentScalarWhereWithAggregatesInput = {
   id?: Prisma.IntWithAggregatesFilter<"Employment"> | number
   userId?: Prisma.IntWithAggregatesFilter<"Employment"> | number
   posId?: Prisma.IntWithAggregatesFilter<"Employment"> | number
-  deptId?: Prisma.IntWithAggregatesFilter<"Employment"> | number
+  orgId?: Prisma.IntWithAggregatesFilter<"Employment"> | number
   compId?: Prisma.IntWithAggregatesFilter<"Employment"> | number
   isPrimary?: Prisma.BoolWithAggregatesFilter<"Employment"> | boolean
   status?: Prisma.IntWithAggregatesFilter<"Employment"> | number
@@ -417,7 +417,7 @@ export type EmploymentUncheckedCreateInput = {
   id?: number
   userId: number
   posId: number
-  deptId: number
+  orgId: number
   compId: number
   isPrimary?: boolean
   status?: number
@@ -451,7 +451,7 @@ export type EmploymentUncheckedUpdateInput = {
   id?: Prisma.IntFieldUpdateOperationsInput | number
   userId?: Prisma.IntFieldUpdateOperationsInput | number
   posId?: Prisma.IntFieldUpdateOperationsInput | number
-  deptId?: Prisma.IntFieldUpdateOperationsInput | number
+  orgId?: Prisma.IntFieldUpdateOperationsInput | number
   compId?: Prisma.IntFieldUpdateOperationsInput | number
   isPrimary?: Prisma.BoolFieldUpdateOperationsInput | boolean
   status?: Prisma.IntFieldUpdateOperationsInput | number
@@ -468,7 +468,7 @@ export type EmploymentCreateManyInput = {
   id?: number
   userId: number
   posId: number
-  deptId: number
+  orgId: number
   compId: number
   isPrimary?: boolean
   status?: number
@@ -495,7 +495,7 @@ export type EmploymentUncheckedUpdateManyInput = {
   id?: Prisma.IntFieldUpdateOperationsInput | number
   userId?: Prisma.IntFieldUpdateOperationsInput | number
   posId?: Prisma.IntFieldUpdateOperationsInput | number
-  deptId?: Prisma.IntFieldUpdateOperationsInput | number
+  orgId?: Prisma.IntFieldUpdateOperationsInput | number
   compId?: Prisma.IntFieldUpdateOperationsInput | number
   isPrimary?: Prisma.BoolFieldUpdateOperationsInput | boolean
   status?: Prisma.IntFieldUpdateOperationsInput | number
@@ -527,7 +527,7 @@ export type EmploymentCountOrderByAggregateInput = {
   id?: Prisma.SortOrder
   userId?: Prisma.SortOrder
   posId?: Prisma.SortOrder
-  deptId?: Prisma.SortOrder
+  orgId?: Prisma.SortOrder
   compId?: Prisma.SortOrder
   isPrimary?: Prisma.SortOrder
   status?: Prisma.SortOrder
@@ -543,7 +543,7 @@ export type EmploymentAvgOrderByAggregateInput = {
   id?: Prisma.SortOrder
   userId?: Prisma.SortOrder
   posId?: Prisma.SortOrder
-  deptId?: Prisma.SortOrder
+  orgId?: Prisma.SortOrder
   compId?: Prisma.SortOrder
   status?: Prisma.SortOrder
 }
@@ -552,7 +552,7 @@ export type EmploymentMaxOrderByAggregateInput = {
   id?: Prisma.SortOrder
   userId?: Prisma.SortOrder
   posId?: Prisma.SortOrder
-  deptId?: Prisma.SortOrder
+  orgId?: Prisma.SortOrder
   compId?: Prisma.SortOrder
   isPrimary?: Prisma.SortOrder
   status?: Prisma.SortOrder
@@ -568,7 +568,7 @@ export type EmploymentMinOrderByAggregateInput = {
   id?: Prisma.SortOrder
   userId?: Prisma.SortOrder
   posId?: Prisma.SortOrder
-  deptId?: Prisma.SortOrder
+  orgId?: Prisma.SortOrder
   compId?: Prisma.SortOrder
   isPrimary?: Prisma.SortOrder
   status?: Prisma.SortOrder
@@ -584,7 +584,7 @@ export type EmploymentSumOrderByAggregateInput = {
   id?: Prisma.SortOrder
   userId?: Prisma.SortOrder
   posId?: Prisma.SortOrder
-  deptId?: Prisma.SortOrder
+  orgId?: Prisma.SortOrder
   compId?: Prisma.SortOrder
   status?: Prisma.SortOrder
 }
@@ -841,7 +841,7 @@ export type EmploymentCreateWithoutUserInput = {
 export type EmploymentUncheckedCreateWithoutUserInput = {
   id?: number
   posId: number
-  deptId: number
+  orgId: number
   compId: number
   isPrimary?: boolean
   status?: number
@@ -887,7 +887,7 @@ export type EmploymentScalarWhereInput = {
   id?: Prisma.IntFilter<"Employment"> | number
   userId?: Prisma.IntFilter<"Employment"> | number
   posId?: Prisma.IntFilter<"Employment"> | number
-  deptId?: Prisma.IntFilter<"Employment"> | number
+  orgId?: Prisma.IntFilter<"Employment"> | number
   compId?: Prisma.IntFilter<"Employment"> | number
   isPrimary?: Prisma.BoolFilter<"Employment"> | boolean
   status?: Prisma.IntFilter<"Employment"> | number
@@ -961,7 +961,7 @@ export type EmploymentUncheckedCreateWithoutCompanyInput = {
   id?: number
   userId: number
   posId: number
-  deptId: number
+  orgId: number
   isPrimary?: boolean
   status?: number
   startTime?: Date | string
@@ -1034,7 +1034,7 @@ export type EmploymentCreateWithoutPositionInput = {
 export type EmploymentUncheckedCreateWithoutPositionInput = {
   id?: number
   userId: number
-  deptId: number
+  orgId: number
   compId: number
   isPrimary?: boolean
   status?: number
@@ -1150,7 +1150,7 @@ export type EmploymentUncheckedCreateWithoutRolesInput = {
   id?: number
   userId: number
   posId: number
-  deptId: number
+  orgId: number
   compId: number
   isPrimary?: boolean
   status?: number
@@ -1198,7 +1198,7 @@ export type EmploymentUncheckedUpdateWithoutRolesInput = {
   id?: Prisma.IntFieldUpdateOperationsInput | number
   userId?: Prisma.IntFieldUpdateOperationsInput | number
   posId?: Prisma.IntFieldUpdateOperationsInput | number
-  deptId?: Prisma.IntFieldUpdateOperationsInput | number
+  orgId?: Prisma.IntFieldUpdateOperationsInput | number
   compId?: Prisma.IntFieldUpdateOperationsInput | number
   isPrimary?: Prisma.BoolFieldUpdateOperationsInput | boolean
   status?: Prisma.IntFieldUpdateOperationsInput | number
@@ -1213,7 +1213,7 @@ export type EmploymentUncheckedUpdateWithoutRolesInput = {
 export type EmploymentCreateManyUserInput = {
   id?: number
   posId: number
-  deptId: number
+  orgId: number
   compId: number
   isPrimary?: boolean
   status?: number
@@ -1244,7 +1244,7 @@ export type EmploymentUpdateWithoutUserInput = {
 export type EmploymentUncheckedUpdateWithoutUserInput = {
   id?: Prisma.IntFieldUpdateOperationsInput | number
   posId?: Prisma.IntFieldUpdateOperationsInput | number
-  deptId?: Prisma.IntFieldUpdateOperationsInput | number
+  orgId?: Prisma.IntFieldUpdateOperationsInput | number
   compId?: Prisma.IntFieldUpdateOperationsInput | number
   isPrimary?: Prisma.BoolFieldUpdateOperationsInput | boolean
   status?: Prisma.IntFieldUpdateOperationsInput | number
@@ -1260,7 +1260,7 @@ export type EmploymentUncheckedUpdateWithoutUserInput = {
 export type EmploymentUncheckedUpdateManyWithoutUserInput = {
   id?: Prisma.IntFieldUpdateOperationsInput | number
   posId?: Prisma.IntFieldUpdateOperationsInput | number
-  deptId?: Prisma.IntFieldUpdateOperationsInput | number
+  orgId?: Prisma.IntFieldUpdateOperationsInput | number
   compId?: Prisma.IntFieldUpdateOperationsInput | number
   isPrimary?: Prisma.BoolFieldUpdateOperationsInput | boolean
   status?: Prisma.IntFieldUpdateOperationsInput | number
@@ -1291,7 +1291,7 @@ export type EmploymentCreateManyCompanyInput = {
   id?: number
   userId: number
   posId: number
-  deptId: number
+  orgId: number
   isPrimary?: boolean
   status?: number
   startTime?: Date | string
@@ -1369,7 +1369,7 @@ export type EmploymentUncheckedUpdateWithoutCompanyInput = {
   id?: Prisma.IntFieldUpdateOperationsInput | number
   userId?: Prisma.IntFieldUpdateOperationsInput | number
   posId?: Prisma.IntFieldUpdateOperationsInput | number
-  deptId?: Prisma.IntFieldUpdateOperationsInput | number
+  orgId?: Prisma.IntFieldUpdateOperationsInput | number
   isPrimary?: Prisma.BoolFieldUpdateOperationsInput | boolean
   status?: Prisma.IntFieldUpdateOperationsInput | number
   startTime?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
@@ -1385,7 +1385,7 @@ export type EmploymentUncheckedUpdateManyWithoutCompanyInput = {
   id?: Prisma.IntFieldUpdateOperationsInput | number
   userId?: Prisma.IntFieldUpdateOperationsInput | number
   posId?: Prisma.IntFieldUpdateOperationsInput | number
-  deptId?: Prisma.IntFieldUpdateOperationsInput | number
+  orgId?: Prisma.IntFieldUpdateOperationsInput | number
   isPrimary?: Prisma.BoolFieldUpdateOperationsInput | boolean
   status?: Prisma.IntFieldUpdateOperationsInput | number
   startTime?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
@@ -1399,7 +1399,7 @@ export type EmploymentUncheckedUpdateManyWithoutCompanyInput = {
 export type EmploymentCreateManyPositionInput = {
   id?: number
   userId: number
-  deptId: number
+  orgId: number
   compId: number
   isPrimary?: boolean
   status?: number
@@ -1430,7 +1430,7 @@ export type EmploymentUpdateWithoutPositionInput = {
 export type EmploymentUncheckedUpdateWithoutPositionInput = {
   id?: Prisma.IntFieldUpdateOperationsInput | number
   userId?: Prisma.IntFieldUpdateOperationsInput | number
-  deptId?: Prisma.IntFieldUpdateOperationsInput | number
+  orgId?: Prisma.IntFieldUpdateOperationsInput | number
   compId?: Prisma.IntFieldUpdateOperationsInput | number
   isPrimary?: Prisma.BoolFieldUpdateOperationsInput | boolean
   status?: Prisma.IntFieldUpdateOperationsInput | number
@@ -1446,7 +1446,7 @@ export type EmploymentUncheckedUpdateWithoutPositionInput = {
 export type EmploymentUncheckedUpdateManyWithoutPositionInput = {
   id?: Prisma.IntFieldUpdateOperationsInput | number
   userId?: Prisma.IntFieldUpdateOperationsInput | number
-  deptId?: Prisma.IntFieldUpdateOperationsInput | number
+  orgId?: Prisma.IntFieldUpdateOperationsInput | number
   compId?: Prisma.IntFieldUpdateOperationsInput | number
   isPrimary?: Prisma.BoolFieldUpdateOperationsInput | boolean
   status?: Prisma.IntFieldUpdateOperationsInput | number
@@ -1552,7 +1552,7 @@ export type EmploymentSelect<ExtArgs extends runtime.Types.Extensions.InternalAr
   id?: boolean
   userId?: boolean
   posId?: boolean
-  deptId?: boolean
+  orgId?: boolean
   compId?: boolean
   isPrimary?: boolean
   status?: boolean
@@ -1577,7 +1577,7 @@ export type EmploymentSelectScalar = {
   id?: boolean
   userId?: boolean
   posId?: boolean
-  deptId?: boolean
+  orgId?: boolean
   compId?: boolean
   isPrimary?: boolean
   status?: boolean
@@ -1589,7 +1589,7 @@ export type EmploymentSelectScalar = {
   updateTime?: boolean
 }
 
-export type EmploymentOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "userId" | "posId" | "deptId" | "compId" | "isPrimary" | "status" | "startTime" | "endTime" | "description" | "isDelete" | "createTime" | "updateTime", ExtArgs["result"]["employment"]>
+export type EmploymentOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "userId" | "posId" | "orgId" | "compId" | "isPrimary" | "status" | "startTime" | "endTime" | "description" | "isDelete" | "createTime" | "updateTime", ExtArgs["result"]["employment"]>
 export type EmploymentInclude<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
   user?: boolean | Prisma.UserDefaultArgs<ExtArgs>
   deptartment?: boolean | Prisma.OrganizationDefaultArgs<ExtArgs>
@@ -1614,7 +1614,7 @@ export type $EmploymentPayload<ExtArgs extends runtime.Types.Extensions.Internal
     id: number
     userId: number
     posId: number
-    deptId: number
+    orgId: number
     compId: number
     isPrimary: boolean
     status: number
@@ -2002,7 +2002,7 @@ export interface EmploymentFieldRefs {
   readonly id: Prisma.FieldRef<"Employment", 'Int'>
   readonly userId: Prisma.FieldRef<"Employment", 'Int'>
   readonly posId: Prisma.FieldRef<"Employment", 'Int'>
-  readonly deptId: Prisma.FieldRef<"Employment", 'Int'>
+  readonly orgId: Prisma.FieldRef<"Employment", 'Int'>
   readonly compId: Prisma.FieldRef<"Employment", 'Int'>
   readonly isPrimary: Prisma.FieldRef<"Employment", 'Boolean'>
   readonly status: Prisma.FieldRef<"Employment", 'Int'>

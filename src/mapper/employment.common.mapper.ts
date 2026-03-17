@@ -1,4 +1,4 @@
-import type { EmploymentDto } from "@schemas/employment.common.type";
+import type { EmploymentDto } from "@/services/employment/employment.schema";
 import type { EmploymentEntity } from "@schemas/employment.entity.type";
 
 export const employmentMapper = {

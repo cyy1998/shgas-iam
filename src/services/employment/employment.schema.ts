@@ -1,4 +1,9 @@
 import { z } from "@hono/zod-openapi";
+import { EmploymentSchema as PrismaEmploymentSchema } from "@/db/generated/schemas";
+
+export const EmploymentSchema = z.object(PrismaEmploymentSchema.shape);
+
+// export const EmploymentDtoSchema = Em
 
 export const EmploymentDtoSchema = z.object({
   id: z.number().openapi({ example: 1 }),

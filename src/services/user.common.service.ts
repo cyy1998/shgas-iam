@@ -13,7 +13,7 @@ import { privilegeRepository } from "@repositories/privilege.repository";
 import { privilegeDelegationRepository } from "@repositories/privilegeDelegation.repository";
 import { roleRepository } from "@repositories/role.repository";
 import { userRepository } from "@repositories/user.common.repository";
-import { EmploymentDetailDtoSchema } from "@schemas/employment.common.type";
+import { EmploymentDetailDtoSchema } from "@/services/employment/employment.schema";
 import {
   UserDetailDtoSchema,
 } from "@schemas/user.common.type";

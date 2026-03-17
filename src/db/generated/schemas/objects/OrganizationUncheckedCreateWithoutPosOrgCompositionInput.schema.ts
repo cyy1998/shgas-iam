@@ -12,7 +12,7 @@ const makeSchema = () => z.object({
   id: z.number().int().optional(),
   orgCode: z.string(),
   orgName: z.string(),
-  parentId: z.number().int().optional().nullable(),
+  parentId: z.number().int().optional(),
   businessParentId: z.number().int().optional(),
   path: z.string(),
   level: z.number().int(),

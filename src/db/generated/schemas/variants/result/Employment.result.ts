@@ -4,7 +4,7 @@ export const EmploymentResultSchema = z.object({
     id: z.number().int(),
     userId: z.number().int(),
     posId: z.number().int(),
-    deptId: z.number().int(),
+    orgId: z.number().int(),
     compId: z.number().int(),
     isPrimary: z.boolean(),
     status: z.number().int(),

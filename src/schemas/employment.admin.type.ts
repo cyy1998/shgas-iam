@@ -1,6 +1,6 @@
 import { EmploymentStatus } from "@enums/employment.status";
 import { z } from "@hono/zod-openapi";
-import { EmploymentQueryDtoSchema } from "./employment.common.type";
+import { EmploymentQueryDtoSchema } from "../services/employment/employment.schema";
 import { createPageQuerySchema } from "./page.type";
 
 export const EmploymentAdminDtoSchema = z.object({

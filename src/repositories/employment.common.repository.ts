@@ -1,4 +1,4 @@
-import type { EmploymentQueryDto } from "@schemas/employment.common.type";
+import type { EmploymentQueryDto } from "@/services/employment/employment.schema";
 import type { PrismaTransaction } from "@/db";
 import { Status } from "@enums/status";
 import { prisma } from "@/db";

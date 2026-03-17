@@ -4,7 +4,7 @@ export const OrganizationSchema = z.object({
   id: z.number().int(),
   orgCode: z.string(),
   orgName: z.string(),
-  parentId: z.number().int().default(-1).nullish(),
+  parentId: z.number().int().default(-1),
   businessParentId: z.number().int().default(-1),
   path: z.string(),
   level: z.number().int(),

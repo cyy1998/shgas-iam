@@ -263,7 +263,7 @@ export type OrganizationGroupByOutputType = {
   id: number
   orgCode: string
   orgName: string
-  parentId: number | null
+  parentId: number
   businessParentId: number
   path: string
   level: number
@@ -304,7 +304,7 @@ export type OrganizationWhereInput = {
   id?: Prisma.IntFilter<"Organization"> | number
   orgCode?: Prisma.StringFilter<"Organization"> | string
   orgName?: Prisma.StringFilter<"Organization"> | string
-  parentId?: Prisma.IntNullableFilter<"Organization"> | number | null
+  parentId?: Prisma.IntFilter<"Organization"> | number
   businessParentId?: Prisma.IntFilter<"Organization"> | number
   path?: Prisma.StringFilter<"Organization"> | string
   level?: Prisma.IntFilter<"Organization"> | number
@@ -331,7 +331,7 @@ export type OrganizationOrderByWithRelationInput = {
   id?: Prisma.SortOrder
   orgCode?: Prisma.SortOrder
   orgName?: Prisma.SortOrder
-  parentId?: Prisma.SortOrderInput | Prisma.SortOrder
+  parentId?: Prisma.SortOrder
   businessParentId?: Prisma.SortOrder
   path?: Prisma.SortOrder
   level?: Prisma.SortOrder
@@ -362,7 +362,7 @@ export type OrganizationWhereUniqueInput = Prisma.AtLeast<{
   OR?: Prisma.OrganizationWhereInput[]
   NOT?: Prisma.OrganizationWhereInput | Prisma.OrganizationWhereInput[]
   orgName?: Prisma.StringFilter<"Organization"> | string
-  parentId?: Prisma.IntNullableFilter<"Organization"> | number | null
+  parentId?: Prisma.IntFilter<"Organization"> | number
   businessParentId?: Prisma.IntFilter<"Organization"> | number
   path?: Prisma.StringFilter<"Organization"> | string
   level?: Prisma.IntFilter<"Organization"> | number
@@ -389,7 +389,7 @@ export type OrganizationOrderByWithAggregationInput = {
   id?: Prisma.SortOrder
   orgCode?: Prisma.SortOrder
   orgName?: Prisma.SortOrder
-  parentId?: Prisma.SortOrderInput | Prisma.SortOrder
+  parentId?: Prisma.SortOrder
   businessParentId?: Prisma.SortOrder
   path?: Prisma.SortOrder
   level?: Prisma.SortOrder
@@ -415,7 +415,7 @@ export type OrganizationScalarWhereWithAggregatesInput = {
   id?: Prisma.IntWithAggregatesFilter<"Organization"> | number
   orgCode?: Prisma.StringWithAggregatesFilter<"Organization"> | string
   orgName?: Prisma.StringWithAggregatesFilter<"Organization"> | string
-  parentId?: Prisma.IntNullableWithAggregatesFilter<"Organization"> | number | null
+  parentId?: Prisma.IntWithAggregatesFilter<"Organization"> | number
   businessParentId?: Prisma.IntWithAggregatesFilter<"Organization"> | number
   path?: Prisma.StringWithAggregatesFilter<"Organization"> | string
   level?: Prisma.IntWithAggregatesFilter<"Organization"> | number
@@ -458,7 +458,7 @@ export type OrganizationUncheckedCreateInput = {
   id?: number
   orgCode: string
   orgName: string
-  parentId?: number | null
+  parentId?: number
   businessParentId?: number
   path: string
   level: number
@@ -509,7 +509,7 @@ export type OrganizationUncheckedUpdateInput = {
   id?: Prisma.IntFieldUpdateOperationsInput | number
   orgCode?: Prisma.StringFieldUpdateOperationsInput | string
   orgName?: Prisma.StringFieldUpdateOperationsInput | string
-  parentId?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
+  parentId?: Prisma.IntFieldUpdateOperationsInput | number
   businessParentId?: Prisma.IntFieldUpdateOperationsInput | number
   path?: Prisma.StringFieldUpdateOperationsInput | string
   level?: Prisma.IntFieldUpdateOperationsInput | number
@@ -535,7 +535,7 @@ export type OrganizationCreateManyInput = {
   id?: number
   orgCode: string
   orgName: string
-  parentId?: number | null
+  parentId?: number
   businessParentId?: number
   path: string
   level: number
@@ -569,7 +569,7 @@ export type OrganizationUncheckedUpdateManyInput = {
   id?: Prisma.IntFieldUpdateOperationsInput | number
   orgCode?: Prisma.StringFieldUpdateOperationsInput | string
   orgName?: Prisma.StringFieldUpdateOperationsInput | string
-  parentId?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
+  parentId?: Prisma.IntFieldUpdateOperationsInput | number
   businessParentId?: Prisma.IntFieldUpdateOperationsInput | number
   path?: Prisma.StringFieldUpdateOperationsInput | string
   level?: Prisma.IntFieldUpdateOperationsInput | number
@@ -725,14 +725,6 @@ export type OrganizationUpdateManyWithoutParentNestedInput = {
   deleteMany?: Prisma.OrganizationScalarWhereInput | Prisma.OrganizationScalarWhereInput[]
 }
 
-export type NullableIntFieldUpdateOperationsInput = {
-  set?: number | null
-  increment?: number
-  decrement?: number
-  multiply?: number
-  divide?: number
-}
-
 export type OrganizationUncheckedUpdateManyWithoutParentNestedInput = {
   create?: Prisma.XOR<Prisma.OrganizationCreateWithoutParentInput, Prisma.OrganizationUncheckedCreateWithoutParentInput> | Prisma.OrganizationCreateWithoutParentInput[] | Prisma.OrganizationUncheckedCreateWithoutParentInput[]
   connectOrCreate?: Prisma.OrganizationCreateOrConnectWithoutParentInput | Prisma.OrganizationCreateOrConnectWithoutParentInput[]
@@ -873,7 +865,7 @@ export type OrganizationUncheckedCreateWithoutChildrenInput = {
   id?: number
   orgCode: string
   orgName: string
-  parentId?: number | null
+  parentId?: number
   businessParentId?: number
   path: string
   level: number
@@ -997,7 +989,7 @@ export type OrganizationUncheckedUpdateWithoutChildrenInput = {
   id?: Prisma.IntFieldUpdateOperationsInput | number
   orgCode?: Prisma.StringFieldUpdateOperationsInput | string
   orgName?: Prisma.StringFieldUpdateOperationsInput | string
-  parentId?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
+  parentId?: Prisma.IntFieldUpdateOperationsInput | number
   businessParentId?: Prisma.IntFieldUpdateOperationsInput | number
   path?: Prisma.StringFieldUpdateOperationsInput | string
   level?: Prisma.IntFieldUpdateOperationsInput | number
@@ -1041,7 +1033,7 @@ export type OrganizationScalarWhereInput = {
   id?: Prisma.IntFilter<"Organization"> | number
   orgCode?: Prisma.StringFilter<"Organization"> | string
   orgName?: Prisma.StringFilter<"Organization"> | string
-  parentId?: Prisma.IntNullableFilter<"Organization"> | number | null
+  parentId?: Prisma.IntFilter<"Organization"> | number
   businessParentId?: Prisma.IntFilter<"Organization"> | number
   path?: Prisma.StringFilter<"Organization"> | string
   level?: Prisma.IntFilter<"Organization"> | number
@@ -1083,7 +1075,7 @@ export type OrganizationUncheckedCreateWithoutAncestorClosuresInput = {
   id?: number
   orgCode: string
   orgName: string
-  parentId?: number | null
+  parentId?: number
   businessParentId?: number
   path: string
   level: number
@@ -1137,7 +1129,7 @@ export type OrganizationUncheckedCreateWithoutDescendantClosuresInput = {
   id?: number
   orgCode: string
   orgName: string
-  parentId?: number | null
+  parentId?: number
   businessParentId?: number
   path: string
   level: number
@@ -1202,7 +1194,7 @@ export type OrganizationUncheckedUpdateWithoutAncestorClosuresInput = {
   id?: Prisma.IntFieldUpdateOperationsInput | number
   orgCode?: Prisma.StringFieldUpdateOperationsInput | string
   orgName?: Prisma.StringFieldUpdateOperationsInput | string
-  parentId?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
+  parentId?: Prisma.IntFieldUpdateOperationsInput | number
   businessParentId?: Prisma.IntFieldUpdateOperationsInput | number
   path?: Prisma.StringFieldUpdateOperationsInput | string
   level?: Prisma.IntFieldUpdateOperationsInput | number
@@ -1262,7 +1254,7 @@ export type OrganizationUncheckedUpdateWithoutDescendantClosuresInput = {
   id?: Prisma.IntFieldUpdateOperationsInput | number
   orgCode?: Prisma.StringFieldUpdateOperationsInput | string
   orgName?: Prisma.StringFieldUpdateOperationsInput | string
-  parentId?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
+  parentId?: Prisma.IntFieldUpdateOperationsInput | number
   businessParentId?: Prisma.IntFieldUpdateOperationsInput | number
   path?: Prisma.StringFieldUpdateOperationsInput | string
   level?: Prisma.IntFieldUpdateOperationsInput | number
@@ -1311,7 +1303,7 @@ export type OrganizationUncheckedCreateWithoutPosOrgCompositionInput = {
   id?: number
   orgCode: string
   orgName: string
-  parentId?: number | null
+  parentId?: number
   businessParentId?: number
   path: string
   level: number
@@ -1376,7 +1368,7 @@ export type OrganizationUncheckedUpdateWithoutPosOrgCompositionInput = {
   id?: Prisma.IntFieldUpdateOperationsInput | number
   orgCode?: Prisma.StringFieldUpdateOperationsInput | string
   orgName?: Prisma.StringFieldUpdateOperationsInput | string
-  parentId?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
+  parentId?: Prisma.IntFieldUpdateOperationsInput | number
   businessParentId?: Prisma.IntFieldUpdateOperationsInput | number
   path?: Prisma.StringFieldUpdateOperationsInput | string
   level?: Prisma.IntFieldUpdateOperationsInput | number
@@ -1425,7 +1417,7 @@ export type OrganizationUncheckedCreateWithoutDeptEmploymentsInput = {
   id?: number
   orgCode: string
   orgName: string
-  parentId?: number | null
+  parentId?: number
   businessParentId?: number
   path: string
   level: number
@@ -1479,7 +1471,7 @@ export type OrganizationUncheckedCreateWithoutCompEmploymentsInput = {
   id?: number
   orgCode: string
   orgName: string
-  parentId?: number | null
+  parentId?: number
   businessParentId?: number
   path: string
   level: number
@@ -1544,7 +1536,7 @@ export type OrganizationUncheckedUpdateWithoutDeptEmploymentsInput = {
   id?: Prisma.IntFieldUpdateOperationsInput | number
   orgCode?: Prisma.StringFieldUpdateOperationsInput | string
   orgName?: Prisma.StringFieldUpdateOperationsInput | string
-  parentId?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
+  parentId?: Prisma.IntFieldUpdateOperationsInput | number
   businessParentId?: Prisma.IntFieldUpdateOperationsInput | number
   path?: Prisma.StringFieldUpdateOperationsInput | string
   level?: Prisma.IntFieldUpdateOperationsInput | number
@@ -1604,7 +1596,7 @@ export type OrganizationUncheckedUpdateWithoutCompEmploymentsInput = {
   id?: Prisma.IntFieldUpdateOperationsInput | number
   orgCode?: Prisma.StringFieldUpdateOperationsInput | string
   orgName?: Prisma.StringFieldUpdateOperationsInput | string
-  parentId?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
+  parentId?: Prisma.IntFieldUpdateOperationsInput | number
   businessParentId?: Prisma.IntFieldUpdateOperationsInput | number
   path?: Prisma.StringFieldUpdateOperationsInput | string
   level?: Prisma.IntFieldUpdateOperationsInput | number
@@ -1653,7 +1645,7 @@ export type OrganizationUncheckedCreateWithoutRolesInput = {
   id?: number
   orgCode: string
   orgName: string
-  parentId?: number | null
+  parentId?: number
   businessParentId?: number
   path: string
   level: number
@@ -1718,7 +1710,7 @@ export type OrganizationUncheckedUpdateWithoutRolesInput = {
   id?: Prisma.IntFieldUpdateOperationsInput | number
   orgCode?: Prisma.StringFieldUpdateOperationsInput | string
   orgName?: Prisma.StringFieldUpdateOperationsInput | string
-  parentId?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
+  parentId?: Prisma.IntFieldUpdateOperationsInput | number
   businessParentId?: Prisma.IntFieldUpdateOperationsInput | number
   path?: Prisma.StringFieldUpdateOperationsInput | string
   level?: Prisma.IntFieldUpdateOperationsInput | number
@@ -1767,7 +1759,7 @@ export type OrganizationUncheckedCreateWithoutPrivilegeDelegationsInput = {
   id?: number
   orgCode: string
   orgName: string
-  parentId?: number | null
+  parentId?: number
   businessParentId?: number
   path: string
   level: number
@@ -1832,7 +1824,7 @@ export type OrganizationUncheckedUpdateWithoutPrivilegeDelegationsInput = {
   id?: Prisma.IntFieldUpdateOperationsInput | number
   orgCode?: Prisma.StringFieldUpdateOperationsInput | string
   orgName?: Prisma.StringFieldUpdateOperationsInput | string
-  parentId?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
+  parentId?: Prisma.IntFieldUpdateOperationsInput | number
   businessParentId?: Prisma.IntFieldUpdateOperationsInput | number
   path?: Prisma.StringFieldUpdateOperationsInput | string
   level?: Prisma.IntFieldUpdateOperationsInput | number
@@ -2109,7 +2101,7 @@ export type $OrganizationPayload<ExtArgs extends runtime.Types.Extensions.Intern
     id: number
     orgCode: string
     orgName: string
-    parentId: number | null
+    parentId: number
     businessParentId: number
     path: string
     level: number

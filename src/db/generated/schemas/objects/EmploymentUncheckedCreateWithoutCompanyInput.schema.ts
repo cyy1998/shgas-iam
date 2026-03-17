@@ -6,7 +6,7 @@ const makeSchema = () => z.object({
   id: z.number().int().optional(),
   userId: z.number().int(),
   posId: z.number().int(),
-  deptId: z.number().int(),
+  orgId: z.number().int(),
   isPrimary: z.boolean().optional(),
   status: z.number().int().optional(),
   startTime: z.coerce.date().optional(),

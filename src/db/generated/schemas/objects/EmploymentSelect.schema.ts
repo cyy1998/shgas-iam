@@ -11,7 +11,7 @@ const makeSchema = () => z.object({
   id: z.boolean().optional(),
   userId: z.boolean().optional(),
   posId: z.boolean().optional(),
-  deptId: z.boolean().optional(),
+  orgId: z.boolean().optional(),
   compId: z.boolean().optional(),
   isPrimary: z.boolean().optional(),
   status: z.boolean().optional(),

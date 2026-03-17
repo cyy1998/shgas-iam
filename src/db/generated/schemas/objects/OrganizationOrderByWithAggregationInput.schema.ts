@@ -1,7 +1,6 @@
 import * as z from 'zod';
 import type { Prisma } from '../../prisma/client';
 import { SortOrderSchema } from '../enums/SortOrder.schema';
-import { SortOrderInputObjectSchema as SortOrderInputObjectSchema } from './SortOrderInput.schema';
 import { OrganizationCountOrderByAggregateInputObjectSchema as OrganizationCountOrderByAggregateInputObjectSchema } from './OrganizationCountOrderByAggregateInput.schema';
 import { OrganizationAvgOrderByAggregateInputObjectSchema as OrganizationAvgOrderByAggregateInputObjectSchema } from './OrganizationAvgOrderByAggregateInput.schema';
 import { OrganizationMaxOrderByAggregateInputObjectSchema as OrganizationMaxOrderByAggregateInputObjectSchema } from './OrganizationMaxOrderByAggregateInput.schema';
@@ -12,7 +11,7 @@ const makeSchema = () => z.object({
   id: SortOrderSchema.optional(),
   orgCode: SortOrderSchema.optional(),
   orgName: SortOrderSchema.optional(),
-  parentId: z.union([SortOrderSchema, z.lazy(() => SortOrderInputObjectSchema)]).optional(),
+  parentId: SortOrderSchema.optional(),
   businessParentId: SortOrderSchema.optional(),
   path: SortOrderSchema.optional(),
   level: SortOrderSchema.optional(),

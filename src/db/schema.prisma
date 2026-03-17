@@ -41,7 +41,7 @@ model Organization {
   id               Int      @id @default(autoincrement()) @map("id")
   orgCode          String   @unique @map("org_code")
   orgName          String   @map("org_name")
-  parentId         Int?     @default(-1) @map("parent_id")
+  parentId         Int     @default(-1) @map("parent_id")
   businessParentId Int      @default(-1) @map("business_parent_id")
   path             String   @map("path")
   level            Int      @map("level")
@@ -131,7 +131,7 @@ model Employment {
   id          Int       @id @default(autoincrement()) @map("id")
   userId      Int       @map("user_id")
   posId       Int       @map("pos_id")
-  deptId      Int       @map("dept_id")
+  orgId      Int       @map("dept_id")
   compId      Int       @map("comp_id")
   isPrimary   Boolean   @default(false) @map("is_primary") @db.TinyInt
   status      Int       @default(1) @map("status") @db.TinyInt
@@ -143,17 +143,17 @@ model Employment {
   updateTime  DateTime  @default(now()) @updatedAt @map("update_time")
 
   user        User              @relation(fields: [userId], references: [id])
-  deptartment Organization      @relation("employment_dept", fields: [deptId], references: [id])
+  deptartment Organization      @relation("employment_dept", fields: [orgId], references: [id])
   company     Organization      @relation("employment_comp", fields: [compId], references: [id])
   position    Position          @relation(fields: [posId], references: [id])
-  posOrg      PosOrgComposition @relation(fields: [posId, deptId], references: [posId, orgId])
+  posOrg      PosOrgComposition @relation(fields: [posId, orgId], references: [posId, orgId])
   roles       EmploymentRole[]
 
   @@index([userId], map: "idx_user_id")
-  @@index([deptId], map: "idx_dept_id")
+  @@index([orgId], map: "idx_dept_id")
   @@index([compId], map: "idx_comp_id")
   @@index([posId], map: "idx_pos_id")
-  @@index([posId, deptId], map: "idx_pos_dept_id")
+  @@index([posId, orgId], map: "idx_pos_dept_id")
   @@map("employment")
 }
 

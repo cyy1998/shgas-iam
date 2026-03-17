@@ -1,6 +1,6 @@
 import { UserStatus } from "@enums/user.status";
 import { z } from "@hono/zod-openapi";
-import { EmploymentDetailDtoSchema } from "./employment.common.type";
+import { EmploymentDetailDtoSchema } from "../services/employment/employment.schema";
 
 export const UserDtoSchema = z.object({
   id: z.number().openapi({ example: 1 }),

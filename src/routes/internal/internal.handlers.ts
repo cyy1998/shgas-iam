@@ -1,5 +1,5 @@
 import type { InternalRouteHandler } from "./internal.type";
-import { employmentService } from "@services/employment.common.service";
+import { employmentService } from "@/services/employment/employment.service";
 import { userService } from "@services/user.common.service";
 import { OrganizationType } from "@/enums/organization.type";
 import * as organizationService from "@/services/organization/organization.service";
