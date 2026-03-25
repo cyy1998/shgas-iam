@@ -19,3 +19,4 @@ export { PrivilegeInputSchema } from './Privilege.input';
 export { RolePrivilegeInputSchema } from './RolePrivilege.input';
 export { PrivilegeDelegationInputSchema } from './PrivilegeDelegation.input';
 export { DelegationDetailInputSchema } from './DelegationDetail.input';
+export { LoginLogInputSchema } from './LoginLog.input';

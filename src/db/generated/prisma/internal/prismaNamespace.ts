@@ -399,7 +399,8 @@ export const ModelName = {
   Privilege: 'Privilege',
   RolePrivilege: 'RolePrivilege',
   PrivilegeDelegation: 'PrivilegeDelegation',
-  DelegationDetail: 'DelegationDetail'
+  DelegationDetail: 'DelegationDetail',
+  LoginLog: 'LoginLog'
 } as const
 
 export type ModelName = (typeof ModelName)[keyof typeof ModelName]
@@ -415,7 +416,7 @@ export type TypeMap<ExtArgs extends runtime.Types.Extensions.InternalArgs = runt
     omit: GlobalOmitOptions
   }
   meta: {
-    modelProps: "user" | "organization" | "organizationClosure" | "position" | "posOrgComposition" | "employment" | "client" | "role" | "positionRole" | "employmentRole" | "organizationRole" | "posOrgRole" | "privilege" | "rolePrivilege" | "privilegeDelegation" | "delegationDetail"
+    modelProps: "user" | "organization" | "organizationClosure" | "position" | "posOrgComposition" | "employment" | "client" | "role" | "positionRole" | "employmentRole" | "organizationRole" | "posOrgRole" | "privilege" | "rolePrivilege" | "privilegeDelegation" | "delegationDetail" | "loginLog"
     txIsolationLevel: TransactionIsolationLevel
   }
   model: {
@@ -1475,6 +1476,72 @@ export type TypeMap<ExtArgs extends runtime.Types.Extensions.InternalArgs = runt
         }
       }
     }
+    LoginLog: {
+      payload: Prisma.$LoginLogPayload<ExtArgs>
+      fields: Prisma.LoginLogFieldRefs
+      operations: {
+        findUnique: {
+          args: Prisma.LoginLogFindUniqueArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$LoginLogPayload> | null
+        }
+        findUniqueOrThrow: {
+          args: Prisma.LoginLogFindUniqueOrThrowArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$LoginLogPayload>
+        }
+        findFirst: {
+          args: Prisma.LoginLogFindFirstArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$LoginLogPayload> | null
+        }
+        findFirstOrThrow: {
+          args: Prisma.LoginLogFindFirstOrThrowArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$LoginLogPayload>
+        }
+        findMany: {
+          args: Prisma.LoginLogFindManyArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$LoginLogPayload>[]
+        }
+        create: {
+          args: Prisma.LoginLogCreateArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$LoginLogPayload>
+        }
+        createMany: {
+          args: Prisma.LoginLogCreateManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        delete: {
+          args: Prisma.LoginLogDeleteArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$LoginLogPayload>
+        }
+        update: {
+          args: Prisma.LoginLogUpdateArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$LoginLogPayload>
+        }
+        deleteMany: {
+          args: Prisma.LoginLogDeleteManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        updateMany: {
+          args: Prisma.LoginLogUpdateManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        upsert: {
+          args: Prisma.LoginLogUpsertArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$LoginLogPayload>
+        }
+        aggregate: {
+          args: Prisma.LoginLogAggregateArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.AggregateLoginLog>
+        }
+        groupBy: {
+          args: Prisma.LoginLogGroupByArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.LoginLogGroupByOutputType>[]
+        }
+        count: {
+          args: Prisma.LoginLogCountArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.LoginLogCountAggregateOutputType> | number
+        }
+      }
+    }
   }
 } & {
   other: {
@@ -1722,6 +1789,19 @@ export const DelegationDetailScalarFieldEnum = {
 export type DelegationDetailScalarFieldEnum = (typeof DelegationDetailScalarFieldEnum)[keyof typeof DelegationDetailScalarFieldEnum]
 
 
+export const LoginLogScalarFieldEnum = {
+  id: 'id',
+  userId: 'userId',
+  username: 'username',
+  name: 'name',
+  clientCode: 'clientCode',
+  loginType: 'loginType',
+  loginTime: 'loginTime'
+} as const
+
+export type LoginLogScalarFieldEnum = (typeof LoginLogScalarFieldEnum)[keyof typeof LoginLogScalarFieldEnum]
+
+
 export const SortOrder = {
   asc: 'asc',
   desc: 'desc'
@@ -1848,6 +1928,16 @@ export const PrivilegeDelegationOrderByRelevanceFieldEnum = {
 } as const
 
 export type PrivilegeDelegationOrderByRelevanceFieldEnum = (typeof PrivilegeDelegationOrderByRelevanceFieldEnum)[keyof typeof PrivilegeDelegationOrderByRelevanceFieldEnum]
+
+
+export const LoginLogOrderByRelevanceFieldEnum = {
+  username: 'username',
+  name: 'name',
+  clientCode: 'clientCode',
+  loginType: 'loginType'
+} as const
+
+export type LoginLogOrderByRelevanceFieldEnum = (typeof LoginLogOrderByRelevanceFieldEnum)[keyof typeof LoginLogOrderByRelevanceFieldEnum]
 
 
 
@@ -2015,6 +2105,7 @@ export type GlobalOmitConfig = {
   rolePrivilege?: Prisma.RolePrivilegeOmit
   privilegeDelegation?: Prisma.PrivilegeDelegationOmit
   delegationDetail?: Prisma.DelegationDetailOmit
+  loginLog?: Prisma.LoginLogOmit
 }
 
 /* Types for Logging */

@@ -1,0 +1,14 @@
+import type { Prisma } from '../prisma/client';
+import * as z from 'zod';
+import { LoginLogOrderByWithRelationInputObjectSchema as LoginLogOrderByWithRelationInputObjectSchema } from './objects/LoginLogOrderByWithRelationInput.schema';
+import { LoginLogWhereInputObjectSchema as LoginLogWhereInputObjectSchema } from './objects/LoginLogWhereInput.schema';
+import { LoginLogWhereUniqueInputObjectSchema as LoginLogWhereUniqueInputObjectSchema } from './objects/LoginLogWhereUniqueInput.schema';
+import { LoginLogCountAggregateInputObjectSchema as LoginLogCountAggregateInputObjectSchema } from './objects/LoginLogCountAggregateInput.schema';
+import { LoginLogMinAggregateInputObjectSchema as LoginLogMinAggregateInputObjectSchema } from './objects/LoginLogMinAggregateInput.schema';
+import { LoginLogMaxAggregateInputObjectSchema as LoginLogMaxAggregateInputObjectSchema } from './objects/LoginLogMaxAggregateInput.schema';
+import { LoginLogAvgAggregateInputObjectSchema as LoginLogAvgAggregateInputObjectSchema } from './objects/LoginLogAvgAggregateInput.schema';
+import { LoginLogSumAggregateInputObjectSchema as LoginLogSumAggregateInputObjectSchema } from './objects/LoginLogSumAggregateInput.schema';
+
+export const LoginLogAggregateSchema: z.ZodType<Prisma.LoginLogAggregateArgs> = z.object({ orderBy: z.union([LoginLogOrderByWithRelationInputObjectSchema, LoginLogOrderByWithRelationInputObjectSchema.array()]).optional(), where: LoginLogWhereInputObjectSchema.optional(), cursor: LoginLogWhereUniqueInputObjectSchema.optional(), take: z.number().optional(), skip: z.number().optional(), _count: z.union([ z.literal(true), LoginLogCountAggregateInputObjectSchema ]).optional(), _min: LoginLogMinAggregateInputObjectSchema.optional(), _max: LoginLogMaxAggregateInputObjectSchema.optional(), _avg: LoginLogAvgAggregateInputObjectSchema.optional(), _sum: LoginLogSumAggregateInputObjectSchema.optional() }).strict() as unknown as z.ZodType<Prisma.LoginLogAggregateArgs>;
+
+export const LoginLogAggregateZodSchema = z.object({ orderBy: z.union([LoginLogOrderByWithRelationInputObjectSchema, LoginLogOrderByWithRelationInputObjectSchema.array()]).optional(), where: LoginLogWhereInputObjectSchema.optional(), cursor: LoginLogWhereUniqueInputObjectSchema.optional(), take: z.number().optional(), skip: z.number().optional(), _count: z.union([ z.literal(true), LoginLogCountAggregateInputObjectSchema ]).optional(), _min: LoginLogMinAggregateInputObjectSchema.optional(), _max: LoginLogMaxAggregateInputObjectSchema.optional(), _avg: LoginLogAvgAggregateInputObjectSchema.optional(), _sum: LoginLogSumAggregateInputObjectSchema.optional() }).strict();

@@ -6,6 +6,7 @@ import { ClientManagementLevel } from "@/enums/client.managementLevel";
 import config from "@/env";
 import redis from "@/lib/clients/redis";
 import * as clientService from "@/services/client/client.service";
+import * as sessionRepository from "@/services/session/session.repository";
 import { LocalSessionAbstractSchema } from "./session.schema";
 
 export async function getSessionById(sessionId: string): Promise<UserDetailDto> {
@@ -34,6 +35,7 @@ export async function setLocalSession(
     redis.set(`local_session_reverse:${localSessionId}`, globalSessionId, "EX", ttl),
     redis.zadd(`local_session_set:${globalSessionId}`, Date.now() + ttl * 1000, JSON.stringify({ clientCode, localSessionId, mode })),
     redis.expire(`local_session_set:${globalSessionId}`, config.REDIS_EXPIRE_TIME),
+    sessionRepository.loginLog(userDetailDto, clientCode, "local"),
   ]);
   return { localSessionId, ttl };
 }
@@ -72,7 +74,11 @@ export async function getValidLocalSessions(globalSessionId: string) {
 }
 export async function setGlobalSession(user: UserDetailDto) {
   const sessionId = crypto.randomUUID();
-  await redis.set(`global_session:${sessionId}`, JSON.stringify(user), "EX", config.REDIS_EXPIRE_TIME);
+  await Promise.all([
+    redis.set(`global_session:${sessionId}`, JSON.stringify(user), "EX", config.REDIS_EXPIRE_TIME),
+    sessionRepository.loginLog(user, "global", "global"),
+  ]);
+
   return sessionId;
 }
 

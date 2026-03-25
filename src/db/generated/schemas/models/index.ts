@@ -19,3 +19,4 @@ export { PrivilegeSchema } from './Privilege.schema';
 export { RolePrivilegeSchema } from './RolePrivilege.schema';
 export { PrivilegeDelegationSchema } from './PrivilegeDelegation.schema';
 export { DelegationDetailSchema } from './DelegationDetail.schema';
+export { LoginLogSchema } from './LoginLog.schema';

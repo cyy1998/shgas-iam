@@ -1,0 +1,15 @@
+import type { Prisma } from '../prisma/client';
+import * as z from 'zod';
+import { LoginLogWhereInputObjectSchema as LoginLogWhereInputObjectSchema } from './objects/LoginLogWhereInput.schema';
+import { LoginLogOrderByWithAggregationInputObjectSchema as LoginLogOrderByWithAggregationInputObjectSchema } from './objects/LoginLogOrderByWithAggregationInput.schema';
+import { LoginLogScalarWhereWithAggregatesInputObjectSchema as LoginLogScalarWhereWithAggregatesInputObjectSchema } from './objects/LoginLogScalarWhereWithAggregatesInput.schema';
+import { LoginLogScalarFieldEnumSchema } from './enums/LoginLogScalarFieldEnum.schema';
+import { LoginLogCountAggregateInputObjectSchema as LoginLogCountAggregateInputObjectSchema } from './objects/LoginLogCountAggregateInput.schema';
+import { LoginLogMinAggregateInputObjectSchema as LoginLogMinAggregateInputObjectSchema } from './objects/LoginLogMinAggregateInput.schema';
+import { LoginLogMaxAggregateInputObjectSchema as LoginLogMaxAggregateInputObjectSchema } from './objects/LoginLogMaxAggregateInput.schema';
+import { LoginLogAvgAggregateInputObjectSchema as LoginLogAvgAggregateInputObjectSchema } from './objects/LoginLogAvgAggregateInput.schema';
+import { LoginLogSumAggregateInputObjectSchema as LoginLogSumAggregateInputObjectSchema } from './objects/LoginLogSumAggregateInput.schema';
+
+export const LoginLogGroupBySchema: z.ZodType<Prisma.LoginLogGroupByArgs> = z.object({ where: LoginLogWhereInputObjectSchema.optional(), orderBy: z.union([LoginLogOrderByWithAggregationInputObjectSchema, LoginLogOrderByWithAggregationInputObjectSchema.array()]).optional(), having: LoginLogScalarWhereWithAggregatesInputObjectSchema.optional(), take: z.number().optional(), skip: z.number().optional(), by: z.array(LoginLogScalarFieldEnumSchema), _count: z.union([ z.literal(true), LoginLogCountAggregateInputObjectSchema ]).optional(), _min: LoginLogMinAggregateInputObjectSchema.optional(), _max: LoginLogMaxAggregateInputObjectSchema.optional(), _avg: LoginLogAvgAggregateInputObjectSchema.optional(), _sum: LoginLogSumAggregateInputObjectSchema.optional() }).strict() as unknown as z.ZodType<Prisma.LoginLogGroupByArgs>;
+
+export const LoginLogGroupByZodSchema = z.object({ where: LoginLogWhereInputObjectSchema.optional(), orderBy: z.union([LoginLogOrderByWithAggregationInputObjectSchema, LoginLogOrderByWithAggregationInputObjectSchema.array()]).optional(), having: LoginLogScalarWhereWithAggregatesInputObjectSchema.optional(), take: z.number().optional(), skip: z.number().optional(), by: z.array(LoginLogScalarFieldEnumSchema), _count: z.union([ z.literal(true), LoginLogCountAggregateInputObjectSchema ]).optional(), _min: LoginLogMinAggregateInputObjectSchema.optional(), _max: LoginLogMaxAggregateInputObjectSchema.optional(), _avg: LoginLogAvgAggregateInputObjectSchema.optional(), _sum: LoginLogSumAggregateInputObjectSchema.optional() }).strict();

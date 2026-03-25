@@ -66,7 +66,8 @@ export const ModelName = {
   Privilege: 'Privilege',
   RolePrivilege: 'RolePrivilege',
   PrivilegeDelegation: 'PrivilegeDelegation',
-  DelegationDetail: 'DelegationDetail'
+  DelegationDetail: 'DelegationDetail',
+  LoginLog: 'LoginLog'
 } as const
 
 export type ModelName = (typeof ModelName)[keyof typeof ModelName]
@@ -293,6 +294,19 @@ export const DelegationDetailScalarFieldEnum = {
 export type DelegationDetailScalarFieldEnum = (typeof DelegationDetailScalarFieldEnum)[keyof typeof DelegationDetailScalarFieldEnum]
 
 
+export const LoginLogScalarFieldEnum = {
+  id: 'id',
+  userId: 'userId',
+  username: 'username',
+  name: 'name',
+  clientCode: 'clientCode',
+  loginType: 'loginType',
+  loginTime: 'loginTime'
+} as const
+
+export type LoginLogScalarFieldEnum = (typeof LoginLogScalarFieldEnum)[keyof typeof LoginLogScalarFieldEnum]
+
+
 export const SortOrder = {
   asc: 'asc',
   desc: 'desc'
@@ -419,4 +433,14 @@ export const PrivilegeDelegationOrderByRelevanceFieldEnum = {
 } as const
 
 export type PrivilegeDelegationOrderByRelevanceFieldEnum = (typeof PrivilegeDelegationOrderByRelevanceFieldEnum)[keyof typeof PrivilegeDelegationOrderByRelevanceFieldEnum]
+
+
+export const LoginLogOrderByRelevanceFieldEnum = {
+  username: 'username',
+  name: 'name',
+  clientCode: 'clientCode',
+  loginType: 'loginType'
+} as const
+
+export type LoginLogOrderByRelevanceFieldEnum = (typeof LoginLogOrderByRelevanceFieldEnum)[keyof typeof LoginLogOrderByRelevanceFieldEnum]
 

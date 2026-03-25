@@ -119,3 +119,8 @@ export type PrivilegeDelegation = Prisma.PrivilegeDelegationModel
  * 
  */
 export type DelegationDetail = Prisma.DelegationDetailModel
+/**
+ * Model LoginLog
+ * 
+ */
+export type LoginLog = Prisma.LoginLogModel

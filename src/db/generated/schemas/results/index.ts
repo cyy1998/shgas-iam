@@ -206,3 +206,16 @@ export { DelegationDetailDeleteManyResultSchema } from './DelegationDetailDelete
 export { DelegationDetailAggregateResultSchema } from './DelegationDetailAggregateResult.schema';
 export { DelegationDetailGroupByResultSchema } from './DelegationDetailGroupByResult.schema';
 export { DelegationDetailCountResultSchema } from './DelegationDetailCountResult.schema';
+export { LoginLogFindUniqueResultSchema } from './LoginLogFindUniqueResult.schema';
+export { LoginLogFindFirstResultSchema } from './LoginLogFindFirstResult.schema';
+export { LoginLogFindManyResultSchema } from './LoginLogFindManyResult.schema';
+export { LoginLogCreateResultSchema } from './LoginLogCreateResult.schema';
+export { LoginLogCreateManyResultSchema } from './LoginLogCreateManyResult.schema';
+export { LoginLogUpdateResultSchema } from './LoginLogUpdateResult.schema';
+export { LoginLogUpdateManyResultSchema } from './LoginLogUpdateManyResult.schema';
+export { LoginLogUpsertResultSchema } from './LoginLogUpsertResult.schema';
+export { LoginLogDeleteResultSchema } from './LoginLogDeleteResult.schema';
+export { LoginLogDeleteManyResultSchema } from './LoginLogDeleteManyResult.schema';
+export { LoginLogAggregateResultSchema } from './LoginLogAggregateResult.schema';
+export { LoginLogGroupByResultSchema } from './LoginLogGroupByResult.schema';
+export { LoginLogCountResultSchema } from './LoginLogCountResult.schema';

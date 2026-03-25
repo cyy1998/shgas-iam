@@ -1,19 +1,17 @@
 import { z } from "@hono/zod-openapi";
 import { PositionSchema as PrismaPositionSchema } from "@/db/generated/schemas";
+import { EmploymentSchema } from "@/services/employment/employment.schema";
 import { createPageQuerySchema } from "../../schemas/page.type";
-import { EmploymentSchema } from "../employment/employment.schema";
 
 export const PositionSchema = z.object(PrismaPositionSchema.shape);
 
 export const PositionDetailSchema = PositionSchema.extend({
-  employments: z.array(EmploymentSchema),
+  employments: z.lazy(() => z.array(EmploymentSchema)),
 });
 
 export const PositionDtoSchema = PositionSchema.extend({
   memberNumber: z.number().openapi({ example: 10 }),
 }).required().openapi("PositionDto");
-
-
 
 export const PositionDtoConverterSchema = PositionDetailSchema.transform((e) => {
   const { employments, ...position } = e;
@@ -42,10 +40,6 @@ export const PositionFuzzyQueryDtoSchema = createPageQuerySchema(
   }),
 ).openapi("PositionAdminQueryDto");
 
-
-
 export const PositionAdminVoSchema = PositionDtoSchema.extend({
   statusText: z.string().openapi({ example: "正常" }),
 }).openapi("PositionAdminVo");
-
-

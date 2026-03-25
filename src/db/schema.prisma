@@ -41,7 +41,7 @@ model Organization {
   id               Int      @id @default(autoincrement()) @map("id")
   orgCode          String   @unique @map("org_code")
   orgName          String   @map("org_name")
-  parentId         Int     @default(-1) @map("parent_id")
+  parentId         Int      @default(-1) @map("parent_id")
   businessParentId Int      @default(-1) @map("business_parent_id")
   path             String   @map("path")
   level            Int      @map("level")
@@ -131,7 +131,7 @@ model Employment {
   id          Int       @id @default(autoincrement()) @map("id")
   userId      Int       @map("user_id")
   posId       Int       @map("pos_id")
-  orgId      Int       @map("dept_id")
+  orgId       Int       @map("dept_id")
   compId      Int       @map("comp_id")
   isPrimary   Boolean   @default(false) @map("is_primary") @db.TinyInt
   status      Int       @default(1) @map("status") @db.TinyInt
@@ -307,4 +307,19 @@ model DelegationDetail {
   @@id([delegationId, privilegeId])
   @@index([privilegeId], map: "idx_privilege")
   @@map("delegation_detail")
+}
+
+model LoginLog {
+  id         Int      @id @default(autoincrement()) @map("id")
+  userId     Int      @map("user_id")
+  username   String   @map("username") @db.VarChar(64)
+  name       String   @map("name") @db.VarChar(64)
+  clientCode String   @map("client_code") @db.VarChar(64)
+  loginType  String   @map("login_type") @db.VarChar(64)
+  loginTime  DateTime @default(now()) @map("login_time") @db.DateTime(0)
+
+  @@index([userId], map: "idx_user_id")
+  @@index([username], map: "idx_username")
+  @@index([clientCode], map: "idx_client_code")
+  @@map("login_log")
 }
