@@ -9,6 +9,7 @@ import config from "@/env";
 import redis from "@/lib/clients/redis";
 import * as clientService from "@/services/client/client.service";
 import * as sessionService from "@/services/session/session.service";
+import { reviveIsoDates } from "@/utils/common.utils";
 
 export async function loginPassword(username: string, password: string) {
   const userDetailDto = await userService.getUserDetailByUsername(username);
@@ -44,7 +45,7 @@ export async function authz(sessionId: string | null, clientCode: string | null,
   if (!userString) {
     throw new AuthzUnauthorizedError("未登录");
   }
-  const userDto = UserDtoSchema.parse(JSON.parse(userString));
+  const userDto = UserDtoSchema.parse(JSON.parse(userString, reviveIsoDates));
   let userInExcludingList = false;
   if (client.extAttributes.userExcluding !== undefined
     && client.extAttributes.userExcluding !== null

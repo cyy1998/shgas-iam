@@ -12,6 +12,7 @@ import { UserDetailDtoSchema } from "@/schemas/user.common.type";
 import * as clientService from "@/services/client/client.service";
 import * as sessionService from "@/services/session/session.service";
 import { userService } from "@/services/user.common.service";
+import { reviveIsoDates } from "@/utils/common.utils";
 
 export async function callback(code: string, clientCode: string, redirectUrl: string) {
   const client = await clientService.getClientByCode(clientCode);
@@ -25,12 +26,10 @@ export async function callback(code: string, clientCode: string, redirectUrl: st
   if (authObjectString === null) {
     throw new AuthzUnauthorizedError("非法code");
   }
-  const authObject = AuthObjectSchema.parse(JSON.parse(authObjectString));
+  const authObject = AuthObjectSchema.parse(JSON.parse(authObjectString, reviveIsoDates));
   const userString = authObject.data;
   const globalSessionId = authObject.sessionId;
-
-  const userDetailDto = UserDetailDtoSchema.parse(JSON.parse(userString));
-
+  const userDetailDto = UserDetailDtoSchema.parse(JSON.parse(userString, reviveIsoDates));
   if (!globalSessionId) {
     throw new AuthzUnauthorizedError("全局session不存在");
   }
@@ -56,10 +55,10 @@ export async function setToken(code: string, clientCode: string, clientSecret: s
   if (authObjectString === null) {
     throw new CustomError("非法Code");
   }
-  const authObject = AuthObjectSchema.parse(JSON.parse(authObjectString));
+  const authObject = AuthObjectSchema.parse(JSON.parse(authObjectString, reviveIsoDates));
   const userString = authObject.data;
   const globalSessionId = authObject.sessionId;
-  const userDetailDto = UserDetailDtoSchema.parse(JSON.parse(userString));
+  const userDetailDto = UserDetailDtoSchema.parse(JSON.parse(userString, reviveIsoDates));
   const { localSessionId, ttl } = await sessionService.setLocalSession(globalSessionId, clientCode, userDetailDto, ClientManagementLevel.Independent);
   return { sid: localSessionId, ttl, userInfo: userString };
 }
@@ -136,7 +135,7 @@ async function _wxRetry(code: string, retryTimes: number = 0, maxTimes: number =
   if (codeCache === "Processing") {
     return _wxRetry(code, retryTimes + 1);
   }
-  const userDetailDto = UserDetailDtoSchema.parse(JSON.parse(codeCache));
+  const userDetailDto = UserDetailDtoSchema.parse(JSON.parse(codeCache, reviveIsoDates));
   const token = await sessionService.setGlobalSession(userDetailDto);
   return { token, isMobileSet: userDetailDto.mobile !== null };
 }

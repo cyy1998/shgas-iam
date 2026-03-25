@@ -66,3 +66,15 @@ export function getProtocolAndHost(url: string): string {
     throw new CustomError(`Invalid URL: ${url}`);
   }
 }
+
+export function reviveIsoDates(key: string, value: any): any {
+  // 只处理字符串
+  if (typeof value === "string") {
+    // 匹配 ISO 8601 格式的时间字符串（带 Z 或 ± 时区）
+    const isoDateRegex = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,3})?(?:Z|[+-]\d{2}:\d{2})$/;
+    if (isoDateRegex.test(value)) {
+      return new Date(value);
+    }
+  }
+  return value;
+}

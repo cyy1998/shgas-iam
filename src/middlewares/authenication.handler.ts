@@ -4,6 +4,7 @@ import { CustomError } from "@errors/CustomError";
 import { UserDetailDtoSchema } from "@schemas/user.common.type";
 import { deleteCookie, getCookie } from "hono/cookie";
 import redis from "@/lib/clients/redis";
+import { reviveIsoDates } from "@/utils/common.utils";
 
 export async function authenicationHandler(c: Context, next: Next) {
   const clientCode = c.req.header("Client");
@@ -24,7 +25,7 @@ export async function authenicationHandler(c: Context, next: Next) {
     deleteCookie(c, "orcas_sso_sessionid");
     throw new AuthzUnauthorizedError("未登录");
   }
-  const userDetailDto = UserDetailDtoSchema.parse(JSON.parse(userString));
+  const userDetailDto = UserDetailDtoSchema.parse(JSON.parse(userString, reviveIsoDates));
   // const userDto: UserDto = JSON.parse(Buffer.from(userString, 'base64').toString('utf8'))
   c.set("userId", userDetailDto.id);
   c.set("username", userDetailDto.username);

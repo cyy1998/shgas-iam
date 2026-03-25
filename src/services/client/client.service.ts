@@ -4,6 +4,7 @@ import { prisma } from "@/db";
 import redis from "@/lib/clients/redis";
 import * as clientRepository from "@/services/client/client.repository";
 import { ClientDtoSchema } from "@/services/client/client.schema";
+import { reviveIsoDates } from "@/utils/common.utils";
 
 async function setClientCache(clientCode: string, clientDto: ClientDto) {
   await redis.set(`cache:client:${clientCode}`, JSON.stringify(clientDto));
@@ -13,7 +14,7 @@ async function getClientFromCache(clientCode: string): Promise<ClientDto | null>
   const cacheString = await redis.get(`cache:client:${clientCode}`);
   if (cacheString !== null) {
     try {
-      const cacheClient = ClientDtoSchema.parse(JSON.parse(cacheString));
+      const cacheClient = ClientDtoSchema.parse(JSON.parse(cacheString, reviveIsoDates));
       return cacheClient;
     }
     catch (err) {

@@ -7,6 +7,7 @@ import config from "@/env";
 import redis from "@/lib/clients/redis";
 import * as clientService from "@/services/client/client.service";
 import * as sessionRepository from "@/services/session/session.repository";
+import { reviveIsoDates } from "@/utils/common.utils";
 import { LocalSessionAbstractSchema } from "./session.schema";
 
 export async function getSessionById(sessionId: string): Promise<UserDetailDto> {
@@ -14,7 +15,7 @@ export async function getSessionById(sessionId: string): Promise<UserDetailDto> 
   if (session === null) {
     throw new AuthzUnauthorizedError("未登录");
   }
-  return UserDetailDtoSchema.parse(JSON.parse(session));
+  return UserDetailDtoSchema.parse(JSON.parse(session, reviveIsoDates));
 }
 
 export async function updateSession(sessionId: string, userInfo: string) {
@@ -70,7 +71,7 @@ export async function getValidLocalSessions(globalSessionId: string) {
   // 移除所有 score <= now 的过期元素（可选）
   await redis.zremrangebyscore(`local_session_set:${globalSessionId}`, "-inf", now);
   // 返回剩余（未过期）的元素
-  return (await redis.zrange(`local_session_set:${globalSessionId}`, 0, -1)).map(e => LocalSessionAbstractSchema.parse(JSON.parse(e)));
+  return (await redis.zrange(`local_session_set:${globalSessionId}`, 0, -1)).map(e => LocalSessionAbstractSchema.parse(JSON.parse(e, reviveIsoDates)));
 }
 export async function setGlobalSession(user: UserDetailDto) {
   const sessionId = crypto.randomUUID();
