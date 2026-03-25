@@ -36,7 +36,7 @@ export async function setLocalSession(
     redis.set(`local_session_reverse:${localSessionId}`, globalSessionId, "EX", ttl),
     redis.zadd(`local_session_set:${globalSessionId}`, Date.now() + ttl * 1000, JSON.stringify({ clientCode, localSessionId, mode })),
     redis.expire(`local_session_set:${globalSessionId}`, config.REDIS_EXPIRE_TIME),
-    sessionRepository.loginLog(userDetailDto, clientCode, "local"),
+    sessionRepository.loginLog(userDetailDto, clientCode, "局部系统登录"),
   ]);
   return { localSessionId, ttl };
 }
@@ -77,7 +77,6 @@ export async function setGlobalSession(user: UserDetailDto) {
   const sessionId = crypto.randomUUID();
   await Promise.all([
     redis.set(`global_session:${sessionId}`, JSON.stringify(user), "EX", config.REDIS_EXPIRE_TIME),
-    sessionRepository.loginLog(user, "global", "global"),
   ]);
 
   return sessionId;

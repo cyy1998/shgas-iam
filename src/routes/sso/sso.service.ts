@@ -10,6 +10,7 @@ import wechatClient from "@/lib/clients/wechat";
 import { AuthObjectSchema } from "@/schemas/authObject.type";
 import { UserDetailDtoSchema } from "@/schemas/user.common.type";
 import * as clientService from "@/services/client/client.service";
+import * as sessionRepository from "@/services/session/session.repository";
 import * as sessionService from "@/services/session/session.service";
 import { userService } from "@/services/user.common.service";
 import { reviveIsoDates } from "@/utils/common.utils";
@@ -119,6 +120,7 @@ export async function loginOA(loginid: string, ts: string, token: string) {
     throw new CustomError("用户类别不支持OA登录");
   }
   const sessionId = await sessionService.setGlobalSession(userDetailDto);
+  await sessionRepository.loginLog(userDetailDto, "global", "全局第三方OA登录");
   return { token: sessionId, isMobileSet: userDetailDto.mobile !== null };
 }
 
@@ -149,6 +151,7 @@ export async function loginWX(code: string) {
   const wxId = await wechatClient.getWxUserId(code);
   const userDetailDto = await userService.getUserDetailByWxId(wxId);
   const token = await sessionService.setGlobalSession(userDetailDto);
+  await sessionRepository.loginLog(userDetailDto, "global", "全局第三方微信登录");
   await redis.set(`wx-code:${code}`, JSON.stringify(userDetailDto), "EX", 600);
   return { token, isMobileSet: userDetailDto.mobile !== null };
 }
