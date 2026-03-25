@@ -321,5 +321,6 @@ model LoginLog {
   @@index([userId], map: "idx_user_id")
   @@index([username], map: "idx_username")
   @@index([clientCode], map: "idx_client_code")
+  @@index([loginTime], map: "idx_login_time")
   @@map("login_log")
 }
