@@ -64,3 +64,9 @@ export const EmploymentQueryDtoSchema = z.object({
 }).openapi("EmploymentQueryDto");
 
 export const EmploymentPaginationQueryDtoSchema = createPageQuerySchema(EmploymentQueryDtoSchema);
+
+export const EmploymentCreateDtoSchema = EmploymentDtoSchema.pick({
+  username: true,
+  posCode: true,
+  orgCode: true,
+}).openapi("EmploymentCreateDto");

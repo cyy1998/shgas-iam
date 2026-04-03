@@ -7,6 +7,7 @@ const router = createRouter();
 
 router.use("/*", publicAuthenicationHandler);
 
-router.openapi(routes.employmentsSearch, handlers.employmentsSearch);
+router.openapi(routes.employmentsSearch, handlers.employmentsSearch)
+  .openapi(routes.employmentsSet, handlers.employmentsSet);
 
 export default router;

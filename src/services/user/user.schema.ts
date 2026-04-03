@@ -53,6 +53,10 @@ export const UserCreateDtoSchema = UserSchema.partial().required({
   username: true,
   name: true,
   userType: true,
-}).extend({
-  password: z.string(),
+  password: true,
+}).omit({
+  id: true,
+  isDelete: true,
+  createTime: true,
+  updateTime: true,
 }).openapi("UserCreateDto");

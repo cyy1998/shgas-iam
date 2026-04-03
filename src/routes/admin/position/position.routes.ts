@@ -3,10 +3,10 @@ import * as HttpStatusCodes from "@lib/core/http-status-codes";
 import jsonContent from "@/lib/core/openapi/helpers/json-content";
 import jsonContentRequired from "@/lib/core/openapi/helpers/json-content-required";
 import createSuccessResponseSchema from "@/lib/core/openapi/schemas/create-success-schema";
-import { PositionPaginationQueryDtoSchema } from "@/services/position/position.schema";
+import { PositionCreateDtoSchema, PositionPaginationQueryDtoSchema } from "@/services/position/position.schema";
 import { PositionVoSchema } from "./position.schema";
 
-const tags = ["Admin"];
+const tags = ["Admin/Position"];
 
 export const positionsSearch = createRoute({
   method: "post",
@@ -17,5 +17,17 @@ export const positionsSearch = createRoute({
   },
   responses: {
     [HttpStatusCodes.OK]: jsonContent(createSuccessResponseSchema(z.array(PositionVoSchema)), "符合条件岗位列表"),
+  },
+});
+
+export const positionsSet = createRoute({
+  method: "post",
+  path: "/set",
+  tags,
+  request: {
+    body: jsonContentRequired(z.object({ data: z.array(PositionCreateDtoSchema) }), "岗位创建参数"),
+  },
+  responses: {
+    [HttpStatusCodes.OK]: jsonContent(createSuccessResponseSchema(z.boolean()), "岗位设置成功"),
   },
 });

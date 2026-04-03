@@ -30,8 +30,7 @@ export const OrganizationCreateDtoSchema = OrganizationDtoSchema.partial().requi
   orgCode: true,
   orgType: true,
   orgName: true,
-}).extend({
-  parentCode: z.string().openapi({ example: "SR" }),
+  parentCode: true,
 }).openapi("OrganizationCreateDto");
 
 export const OrganizationQueryDtoSchema = z.object({

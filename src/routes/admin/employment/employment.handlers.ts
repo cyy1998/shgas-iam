@@ -9,3 +9,9 @@ export const employmentsSearch: EmploymentRouteHandler<"employmentsSearch"> = as
   const employmentVos = result.map(e => EmploymentVoConverterSchema.parse(e));
   return c.json(resp.ok({ result: employmentVos, ...data }));
 };
+
+export const employmentsSet: EmploymentRouteHandler<"employmentsSet"> = async (c) => {
+  const { username, posCode, orgCode } = c.req.valid("json");
+  const data = await employmentService.setEmployment(username, posCode, orgCode);
+  return c.json(resp.ok(data));
+};

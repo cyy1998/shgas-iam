@@ -9,9 +9,22 @@ export async function setPosition(positionCreateDto: PositionCreateDto) {
   return await prisma.$transaction(async (tx) => {
     const existingPos = await positionRepository.getPositionByCode(positionCreateDto.posCode, tx);
     if (existingPos !== null) {
-      throw new CustomError("重复角色code代码");
+      throw new CustomError("重复岗位code代码");
     }
     await positionRepository.setPosition(positionCreateDto, tx);
+    return true;
+  });
+}
+
+export async function setPositions(positionCreateDtos: PositionCreateDto[]) {
+  return await prisma.$transaction(async (tx) => {
+    const existingPositions = await positionRepository.searchPositions({
+      posCodes: positionCreateDtos.map(e => e.posCode),
+    }, tx);
+    if (existingPositions.length !== 0) {
+      throw new CustomError("重复岗位code代码");
+    }
+    await positionRepository.setPositions(positionCreateDtos, tx);
     return true;
   });
 }

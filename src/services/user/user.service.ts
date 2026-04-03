@@ -1,6 +1,7 @@
-import type { UserCreateDto, UserDetailDto, UserPaginationQueryDto, UserQueryDto, UserQueryWithPrivilegeDelegationDto } from "./user.type";
+import type { UserCreateDto, UserDetailDto, UserDto, UserPaginationQueryDto, UserQueryDto, UserQueryWithPrivilegeDelegationDto } from "./user.type";
 
 import type { User } from "@/db/generated/prisma/client";
+import type { Prettify } from "@/utils/lint.util";
 import { UserType } from "@enums/user.type";
 import { VerificationCodeUsage } from "@enums/verificationCode.usage";
 import { CustomError } from "@errors/CustomError";
@@ -124,7 +125,7 @@ export async function setMobile(userId: number, phoneNumber: string, code: strin
   });
   return await getUserDetailById(userId);
 }
-export async function searchUsers(userQueryDto: UserQueryDto) {
+export async function searchUsers(userQueryDto: UserQueryDto): Promise<UserDto[]> {
   const users = await userRepository.searchUsers(userQueryDto);
   const userDtos = users.map(u => UserDtoSchema.parse(u));
   return userDtos;
@@ -136,7 +137,9 @@ export async function searchUsersFuzzy(userPageQuery: UserPaginationQueryDto) {
   return paginate(userDtos, userPageQuery);
 }
 
-export async function searchUsersWithPrivilegeDelegation(userQueryWithPrivilegeDelegationDto: UserQueryWithPrivilegeDelegationDto) {
+export async function searchUsersWithPrivilegeDelegation(
+  userQueryWithPrivilegeDelegationDto: UserQueryWithPrivilegeDelegationDto,
+) {
   if (userQueryWithPrivilegeDelegationDto.ancestorOrgCodes.length !== 1) {
     throw new CustomError("该接口ancestorOrgCodes元素数量只支持为1");
   }
@@ -209,50 +212,52 @@ export async function getUsersByOrgPos(orgCode: string, roleCode: string, orgSco
   return userDtos;
 }
 
-export async function getUsersByOrgPosWithDelegation(orgCode: string, roleCode: string, orgScope: string, _privCode: string) {
-  const userDtos = getUsersByOrgPos(orgCode, roleCode, orgScope);
-  return userDtos;
-}
+// export async function registerPurveyorConcat(username: string, mobile: string, name: string, orgCode: string) {
+//   await prisma.$transaction(async (tx) => {
+//     const existingUser = await userRepository.getUserByMobile(mobile, tx);
+//     const [pos, comp, org] = await Promise.all([
+//       positionRepository.getPositionByCode("P001", tx),
+//       organizationRepository.getOrganizationByCode(config.PURVEYOR_PARENT_ORG, tx),
+//       organizationRepository.getOrganizationByCode(orgCode, tx),
+//     ]);
+//     if (org === null) {
+//       throw new CustomError("供应商尚未注册");
+//     }
+//     if (pos === null || comp === null) {
+//       throw new CustomError("系统基本信息缺失");
+//     }
+//     if (existingUser !== null) {
+//       const existingEmployment = await employmentRepository.getEmploymentByUserOrgPosId(
+//         existingUser.id,
+//         org.id,
+//         pos.id,
+//         tx,
+//       );
+//       if (existingEmployment === null) {
+//         await employmentRepository.setEmployment(existingUser.id, pos.id, org.id, comp.id, tx);
+//       }
+//     }
+//     else {
+//       const user = await userRepository.setUser(username, name, mobile, UserType.External, tx);
+//       await employmentRepository.setEmployment(user.id, pos.id, org.id, comp.id, tx);
+//     }
+//   });
+//   if (config.NODE_ENV === "production") {
+//     await mobileService.sendMessage(mobile, mobileService.getPurveyorWelcomeMessage(name));
+//   }
+//   return true;
+// }
 
-export async function registerPurveyorConcat(username: string, mobile: string, name: string, orgCode: string) {
-  await prisma.$transaction(async (tx) => {
-    const existingUser = await userRepository.getUserByMobile(mobile, tx);
-    const [pos, comp, org] = await Promise.all([
-      positionRepository.getPositionByCode("P001", tx),
-      organizationRepository.getOrganizationByCode(config.PURVEYOR_PARENT_ORG, tx),
-      organizationRepository.getOrganizationByCode(orgCode, tx),
-    ]);
-    if (org === null) {
-      throw new CustomError("供应商尚未注册");
-    }
-    if (pos === null || comp === null) {
-      throw new CustomError("系统基本信息缺失");
-    }
-    if (existingUser !== null) {
-      const existingEmployment = await employmentRepository.getEmploymentByUserOrgPosId(existingUser.id, org.id, pos.id, tx);
-      if (existingEmployment === null) {
-        await employmentRepository.setEmployment(existingUser.id, pos.id, org.id, comp.id, tx);
-      }
-    }
-    else {
-      const user = await userRepository.setUser(username, name, mobile, UserType.External, tx);
-      await employmentRepository.setEmployment(user.id, pos.id, org.id, comp.id, tx);
-    }
-  });
-  if (config.NODE_ENV === "production") {
-    await mobileService.sendMessage(mobile, mobileService.getPurveyorWelcomeMessage(name));
-  }
-  return true;
-}
-
-export async function setUsers(userCreateDtos: UserCreateDto[]) {
+export async function setUsers(userCreateDtos: Prettify<UserCreateDto>[]) {
   return await prisma.$transaction(async (tx) => {
-    const existingUsers = await userRepository.searchUsers({ usernames: userCreateDtos.map(u => u.username) });
+    const existingUsers = await userRepository.searchUsers({ usernames: userCreateDtos.map(u => u.username) }, tx);
     if (existingUsers.length !== 0) {
       throw new CustomError("相同用户名已被注册");
     }
     for (const u of userCreateDtos) {
-      u.password = await hash(u.password, config.PASSWORD_HASH_ROUNDS);
+      if (u.password !== null) {
+        u.password = await hash(u.password, config.PASSWORD_HASH_ROUNDS);
+      }
     }
     await userRepository.setUsers(userCreateDtos, tx);
     return true;

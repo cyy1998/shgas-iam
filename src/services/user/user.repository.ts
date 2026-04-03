@@ -1,5 +1,6 @@
 import type { PrismaTransaction } from "@/db";
 import type { UserCreateDto, UserPaginationQueryDto, UserQueryDto } from "@/services/user/user.type";
+import type { Prettify } from "@/utils/lint.util";
 import { Status } from "@enums/status";
 import { prisma } from "@/db";
 
@@ -185,18 +186,16 @@ export async function setMobile(userId: number, phoneNumber: string, tx: PrismaT
     },
   });
 }
-export async function setUser(username: string, name: string, mobile: string, userType: string, tx: PrismaTransaction = prisma) {
+export async function setUser(userCreateDto: UserCreateDto, tx: PrismaTransaction = prisma) {
   return await tx.user.create({
-    data: {
-      username,
-      name,
-      mobile,
-      userType,
-    },
+    data: userCreateDto,
   });
 }
 
-export async function setUsers(userCreateDtos: UserCreateDto[], tx: PrismaTransaction = prisma) {
+export async function setUsers(
+  userCreateDtos: Prettify<UserCreateDto>[],
+  tx: PrismaTransaction = prisma,
+) {
   return await tx.user.createMany({
     data: userCreateDtos,
   });
