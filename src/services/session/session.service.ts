@@ -1,12 +1,12 @@
-import type { UserDetailDto } from "@schemas/user.common.type";
+import type { UserDetailDto } from "../user/user.type";
 import type { LocalSessionAbstract } from "./session.type";
 import { AuthzUnauthorizedError } from "@errors/AuthzUnauthorizedError";
-import { UserDetailDtoSchema } from "@schemas/user.common.type";
 import { ClientManagementLevel } from "@/enums/client.managementLevel";
 import config from "@/env";
 import redis from "@/lib/clients/redis";
 import * as clientService from "@/services/client/client.service";
 import * as sessionRepository from "@/services/session/session.repository";
+import { UserDetailDtoSchema } from "@/services/user/user.schema";
 import { reviveIsoDates } from "@/utils/common.utils";
 import { LocalSessionAbstractSchema } from "./session.schema";
 

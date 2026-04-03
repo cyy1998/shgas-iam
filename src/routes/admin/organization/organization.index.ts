@@ -1,0 +1,12 @@
+import { createRouter } from "@lib/core/create-app";
+import { authenicationHandler } from "@middlewares/authenication.handler";
+import * as handlers from "./organization.handlers";
+import * as routes from "./organization.routes";
+
+const router = createRouter();
+
+router.use("/*", authenicationHandler);
+
+router.openapi(routes.organizationsSearch, handlers.organizationsSearch);
+
+export default router;

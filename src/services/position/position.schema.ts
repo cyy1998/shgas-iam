@@ -1,7 +1,8 @@
 import { z } from "@hono/zod-openapi";
 import { PositionSchema as PrismaPositionSchema } from "@/db/generated/schemas";
+import { Status } from "@/enums/status";
 import { EmploymentSchema } from "@/services/employment/employment.schema";
-import { createPageQuerySchema } from "../../schemas/page.type";
+import { createPageQuerySchema } from "../../lib/core/pagination/schema";
 
 export const PositionSchema = z.object(PrismaPositionSchema.shape);
 
@@ -10,16 +11,8 @@ export const PositionDetailSchema = PositionSchema.extend({
 });
 
 export const PositionDtoSchema = PositionSchema.extend({
-  memberNumber: z.number().openapi({ example: 10 }),
+  status: z.enum(Status),
 }).required().openapi("PositionDto");
-
-export const PositionDtoConverterSchema = PositionDetailSchema.transform((e) => {
-  const { employments, ...position } = e;
-  return {
-    ...position,
-    memberNumber: employments.length,
-  };
-}).pipe(PositionDtoSchema);
 
 export const PositionCreateDtoSchema = PositionSchema.omit({
   id: true,
@@ -31,15 +24,11 @@ export const PositionCreateDtoSchema = PositionSchema.omit({
   posName: true,
 });
 
-export const PositionFuzzyQueryDtoSchema = createPageQuerySchema(
+export const PositionPaginationQueryDtoSchema = createPageQuerySchema(
   z.object({
     fuzzyConditions: z.object({
       text: z.string().optional().openapi({ example: "138550" }),
     }),
     exactConditions: z.object(),
   }),
-).openapi("PositionAdminQueryDto");
-
-export const PositionAdminVoSchema = PositionDtoSchema.extend({
-  statusText: z.string().openapi({ example: "正常" }),
-}).openapi("PositionAdminVo");
+).openapi("PositionPaginationQueryDtoSchema");

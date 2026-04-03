@@ -3,3 +3,4 @@ ignoredBuiltDependencies:
   - '@scarf/scarf'
   - bcrypt
   - prisma
+  - prisma-zod-generator

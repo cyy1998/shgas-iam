@@ -1,8 +1,8 @@
-import type { PageQuery } from "@schemas/page.type";
+import type { PaginationQuery } from "@/lib/core/pagination/type";
 
-export async function paginate<T>(
+export function paginate<T>(
   items: T[],
-  pageQuery: PageQuery,
+  pageQuery: PaginationQuery,
 ) {
   // 确保页码和页面大小有效
   const page = Math.max(1, pageQuery.pageNum || 1);

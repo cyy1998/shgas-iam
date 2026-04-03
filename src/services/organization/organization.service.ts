@@ -1,7 +1,7 @@
 import type { OrganizationCreateDto, OrganizationQueryDto } from "@/services/organization/organization.type";
 import { CustomError } from "@errors/CustomError";
 import { prisma } from "@/db";
-import { organizationRepository } from "@/services/organization/organization.repository";
+import * as organizationRepository from "@/services/organization/organization.repository";
 import { OrganizationDtoConverterSchema } from "@/services/organization/organization.schema";
 
 export async function getFormalOrganizationsByCode(orgCode: string, orgLevel: number) {

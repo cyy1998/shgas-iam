@@ -1,7 +1,124 @@
+import type { EmploymentQueryDto } from "./employment.type";
 import type { PrismaTransaction } from "@/db";
-import type { EmploymentQueryDto } from "@/services/employment/employment.schema";
+import type { EmploymentWhereInput } from "@/db/generated/prisma/models";
 import { Status } from "@enums/status";
 import { prisma } from "@/db";
+
+function constructSearchEmploymentsCondition(employmentQueryDto: EmploymentQueryDto): EmploymentWhereInput {
+  return {
+    user: {
+      username: {
+        in: employmentQueryDto.usernames,
+      },
+      mobile: {
+        in: employmentQueryDto.phones,
+      },
+      wxId: {
+        in: employmentQueryDto.wxIds,
+      },
+      status: Status.Enable,
+      isDelete: false,
+    },
+    deptartment: {
+      descendantClosures: {
+        some: {
+          ancestor: {
+            orgCode: {
+              in: employmentQueryDto.ancestorOrgCodes,
+            },
+          },
+          depth: {
+            in: employmentQueryDto.ancestorOrgDepths,
+          },
+        },
+      },
+    },
+    position: {
+      status: Status.Enable,
+      isDelete: false,
+      posCode: {
+        in: employmentQueryDto.positionCodes,
+      },
+    },
+    OR: [
+      {
+        position: {
+          roles: {
+            some: {
+              role: {
+                status: Status.Enable,
+                isDelete: false,
+                roleCode: {
+                  in: employmentQueryDto.roleCodes,
+                },
+              },
+            },
+          },
+        },
+      },
+      {
+        roles: {
+          some: {
+            role: {
+              status: Status.Enable,
+              isDelete: false,
+              roleCode: {
+                in: employmentQueryDto.roleCodes,
+              },
+            },
+          },
+        },
+      },
+      {
+        deptartment: {
+          descendantClosures: {
+            some: {
+              OR: [
+                {
+                  depth: 0,
+                  ancestor: {
+                    roles: {
+                      some: {
+                        role: {
+                          status: Status.Enable,
+                          isDelete: false,
+                          roleCode: {
+                            in: employmentQueryDto.roleCodes,
+                          },
+                        },
+                      },
+                    },
+                  },
+                },
+                {
+                  depth: {
+                    gt: 0,
+                  },
+                  ancestor: {
+                    roles: {
+                      some: {
+                        isAllSub: true,
+                        role: {
+                          status: Status.Enable,
+                          isDelete: false,
+                          roleCode: {
+                            in: employmentQueryDto.roleCodes,
+                          },
+                        },
+                      },
+                    },
+                  },
+                },
+              ],
+            },
+          },
+        },
+      },
+    ],
+    status: Status.Enable,
+    isDelete: false,
+  };
+}
 
 export async function getEmploymentsByUserId(userId: number, tx: PrismaTransaction = prisma) {
   return await tx.employment.findMany({
@@ -181,125 +298,13 @@ export async function setEmployment(userId: number, posId: number, orgId: number
     },
   });
 }
+
 export async function searchEmployments(
   employmentQueryDto: EmploymentQueryDto,
   tx: PrismaTransaction = prisma,
 ) {
   return await tx.employment.findMany({
-    where: {
-      user: {
-        username: {
-          in: employmentQueryDto.usernames,
-        },
-        mobile: {
-          in: employmentQueryDto.phones,
-        },
-        wxId: {
-          in: employmentQueryDto.wxIds,
-        },
-        status: Status.Enable,
-        isDelete: false,
-      },
-
-      deptartment: {
-        descendantClosures: {
-          some: {
-            ancestor: {
-              orgCode: {
-                in: employmentQueryDto.ancestorOrgCodes,
-              },
-            },
-            depth: {
-              in: employmentQueryDto.ancestorOrgDepths,
-            },
-          },
-        },
-      },
-      position: {
-        status: Status.Enable,
-        isDelete: false,
-        posCode: {
-          in: employmentQueryDto.positionCodes,
-        },
-      },
-      OR: [
-        {
-          position: {
-            roles: {
-              some: {
-                role: {
-                  status: Status.Enable,
-                  isDelete: false,
-                  roleCode: {
-                    in: employmentQueryDto.roleCodes,
-                  },
-                },
-              },
-            },
-          },
-        },
-        {
-          roles: {
-            some: {
-              role: {
-                status: Status.Enable,
-                isDelete: false,
-                roleCode: {
-                  in: employmentQueryDto.roleCodes,
-                },
-              },
-            },
-          },
-        },
-        {
-          deptartment: {
-            descendantClosures: {
-              some: {
-                OR: [
-                  {
-                    depth: 0,
-                    ancestor: {
-                      roles: {
-                        some: {
-                          role: {
-                            status: Status.Enable,
-                            isDelete: false,
-                            roleCode: {
-                              in: employmentQueryDto.roleCodes,
-                            },
-                          },
-                        },
-                      },
-                    },
-                  },
-                  {
-                    depth: {
-                      gt: 0,
-                    },
-                    ancestor: {
-                      roles: {
-                        some: {
-                          isAllSub: true,
-                          role: {
-                            status: Status.Enable,
-                            isDelete: false,
-                            roleCode: {
-                              in: employmentQueryDto.roleCodes,
-                            },
-                          },
-                        },
-                      },
-                    },
-                  },
-                ],
-              },
-            },
-          },
-        },
-      ],
-      status: Status.Enable,
-      isDelete: false,
-    },
+    where: constructSearchEmploymentsCondition(employmentQueryDto),
     include: {
       user: true,
       deptartment: true,

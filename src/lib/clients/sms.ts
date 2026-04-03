@@ -12,7 +12,7 @@ function createSmsClient() {
   return {
     async sendVerificationCode(phoneNumber: string) {
       const random4Digit = Math.floor(1000 + Math.random() * 9000);
-      const message = `登录验证码：${random4Digit}`;
+      const message = `验证码：${random4Digit}`;
       const currentTimestamp = Math.floor(Date.now() / 1000);
       const origin = "SHGAS";
       const data = currentTimestamp.toString() + origin + phoneNumber + message;
@@ -33,12 +33,14 @@ function createSmsClient() {
         return {
           success: false,
           message: smsResult.resultInfo,
+          code: -1,
         };
       }
       //   await redis.set(`mobile-code:${usage}:${phoneNumber}`, random4Digit, 'EX', 180);
       return {
         success: true,
         message: "success",
+        code: random4Digit,
       };
     },
 

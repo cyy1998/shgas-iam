@@ -5,3 +5,7 @@ export const SSOMetaInfoSchema = z.object({
   logoutEndpoint: z.url().openapi({ example: "http://176.169.99.150/sso/logout" }),
   thirdPartyOAEndpoint: z.url().openapi({ example: "http://176.169.99.150/sso/third-party/oa" }),
 }).openapi("SSOMetaInfo");
+
+
+
+

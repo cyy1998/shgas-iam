@@ -1,9 +1,9 @@
 import type { Context, Next } from "hono";
 import { AuthzUnauthorizedError } from "@errors/AuthzUnauthorizedError";
 import { CustomError } from "@errors/CustomError";
-import { UserDetailDtoSchema } from "@schemas/user.common.type";
 import { deleteCookie, getCookie } from "hono/cookie";
 import redis from "@/lib/clients/redis";
+import { UserDetailDtoSchema } from "@/services/user/user.schema";
 import { reviveIsoDates } from "@/utils/common.utils";
 
 export async function authenicationHandler(c: Context, next: Next) {

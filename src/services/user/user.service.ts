@@ -1,0 +1,260 @@
+import type { UserCreateDto, UserDetailDto, UserPaginationQueryDto, UserQueryDto, UserQueryWithPrivilegeDelegationDto } from "./user.type";
+
+import type { User } from "@/db/generated/prisma/client";
+import { UserType } from "@enums/user.type";
+import { VerificationCodeUsage } from "@enums/verificationCode.usage";
+import { CustomError } from "@errors/CustomError";
+import { UserNotFoundError } from "@errors/UserNotFoundError";
+import { compare, hash } from "bcrypt-ts";
+import { prisma } from "@/db";
+import config from "@/env";
+import * as employmentRepository from "@/services/employment/employment.repository";
+import { EmploymentDetailDtoSchema, EmploymentDtoConverterSchema } from "@/services/employment/employment.schema";
+import * as mobileService from "@/services/mobile/mobile.service";
+import * as organizationRepository from "@/services/organization/organization.repository";
+import * as positionRepository from "@/services/position/position.repository";
+import * as privilegeRepository from "@/services/privilege/privilege.repository";
+import * as privilegeDelegationRepository from "@/services/privilege/privilegeDelegation.repository";
+import * as roleRepository from "@/services/role/role.repository";
+import * as userRepository from "@/services/user/user.repository";
+import {
+  UserDetailDtoSchema,
+  UserDtoSchema,
+} from "@/services/user/user.schema";
+import { paginate } from "@/utils/page.util";
+import { PrivilegeDelegationDtoConverterSchema } from "../privilege/privilege.schema";
+
+async function _getUserDetail(user: User | null): Promise<UserDetailDto> {
+  if (user === null) {
+    throw new UserNotFoundError("该用户不存在");
+  }
+  const userDto = UserDetailDtoSchema.parse(user);
+  const employments = await employmentRepository.getEmploymentsByUserId(userDto.id);
+  const employmentDtos = [];
+  for (const employment of employments) {
+    const roles = await roleRepository.getRolesByEmploymentId(employment.id);
+    const privileges = await privilegeRepository.getPrivilegesByRoleIds(roles.map(r => r.id));
+    const employmentDto = EmploymentDetailDtoSchema.parse(EmploymentDtoConverterSchema.parse(employment));
+    employmentDto.roles = roles.map(r => r.roleCode);
+    employmentDto.privileges = privileges.map(p => p.privilegeCode);
+    employmentDtos.push(employmentDto);
+  }
+  userDto.employments = employmentDtos;
+  userDto.roles = [...new Set(employmentDtos.flatMap(e => e.roles))];
+  userDto.privileges = [...new Set(employmentDtos.flatMap(e => e.privileges))];
+
+  return userDto;
+}
+
+function _validatePasswordStrength(password: string): boolean {
+  // 检查长度是否至少为8
+  if (password.length < 8) {
+    return false;
+  }
+  // 检查是否包含至少一个字母
+  const hasLetter = /[a-z]/i.test(password);
+  // 检查是否包含至少一个数字
+  const hasDigit = /\d/.test(password);
+  return hasLetter && hasDigit;
+}
+
+export async function setPassword(username: string, oldPassword: string, newPassword: string) {
+  return await prisma.$transaction(async (tx) => {
+    const user = await userRepository.getUserByUsername(username, tx);
+    if (user === null) {
+      throw new UserNotFoundError("用户名不存在");
+    }
+    if (oldPassword === newPassword) {
+      throw new CustomError("旧密码与新密码相同");
+    }
+    const isMatch = await checkPassword(user.username, oldPassword);
+    if (!isMatch) {
+      throw new CustomError("旧密码错误");
+    }
+    if (!_validatePasswordStrength(newPassword)) {
+      throw new CustomError("新密码强度过低");
+    }
+    const newPasswordHash = await hash(newPassword, config.PASSWORD_HASH_ROUNDS);
+    await userRepository.setPassword(user.id, newPasswordHash, tx);
+    return true;
+  });
+}
+
+export async function resetPassword(username: string, phone: string, code: string, newPassword: string) {
+  return await prisma.$transaction(async (tx) => {
+    const user = await userRepository.getUserByUsername(username, tx);
+    if (user === null) {
+      throw new UserNotFoundError("用户不存在");
+    }
+    if (user.mobile !== phone) {
+      throw new UserNotFoundError("用户名与手机号不匹配");
+    }
+    if (!mobileService.cehckVerificationCode("resetPassword", phone, code)) {
+      throw new UserNotFoundError("验证码错误");
+    }
+    const newPasswordHash = await hash(newPassword, config.PASSWORD_HASH_ROUNDS);
+    await userRepository.setPassword(user.id, newPasswordHash, tx);
+    return true;
+  });
+}
+
+export async function checkPassword(username: string, inputPassword: string) {
+  const user = await userRepository.getUserByUsername(username);
+  if (user === null) {
+    throw new UserNotFoundError("用户不存在");
+  }
+  if (user.password === null && config.NODE_ENV === "production") {
+    return false;
+  }
+  return user.password ? await compare(inputPassword, user.password ?? "") : inputPassword === config.DEFAULT_USER_PASSWORD;
+}
+
+export async function setMobile(userId: number, phoneNumber: string, code: string) {
+  await prisma.$transaction(async (tx) => {
+    if (!mobileService.checkValidPhoneNumber(phoneNumber)) {
+      throw new CustomError("无效手机号");
+    }
+    if (await mobileService.checkExistingPhoneNumber(phoneNumber)) {
+      throw new CustomError("手机号已存在");
+    }
+    if (!await mobileService.cehckVerificationCode(VerificationCodeUsage.BindPhone, phoneNumber, code)) {
+      throw new CustomError("验证码错误");
+    }
+    await userRepository.setMobile(userId, phoneNumber, tx);
+  });
+  return await getUserDetailById(userId);
+}
+export async function searchUsers(userQueryDto: UserQueryDto) {
+  const users = await userRepository.searchUsers(userQueryDto);
+  const userDtos = users.map(u => UserDtoSchema.parse(u));
+  return userDtos;
+}
+
+export async function searchUsersFuzzy(userPageQuery: UserPaginationQueryDto) {
+  const users = await userRepository.searchUsersFuzzy(userPageQuery);
+  const userDtos = users.map(u => UserDtoSchema.parse(u));
+  return paginate(userDtos, userPageQuery);
+}
+
+export async function searchUsersWithPrivilegeDelegation(userQueryWithPrivilegeDelegationDto: UserQueryWithPrivilegeDelegationDto) {
+  if (userQueryWithPrivilegeDelegationDto.ancestorOrgCodes.length !== 1) {
+    throw new CustomError("该接口ancestorOrgCodes元素数量只支持为1");
+  }
+  const users = await userRepository.searchUsers(userQueryWithPrivilegeDelegationDto);
+  const userDtos = users.map(u => UserDtoSchema.parse(u));
+  const orgCode = userQueryWithPrivilegeDelegationDto.ancestorOrgCodes[0] as string;
+  const privCode = userQueryWithPrivilegeDelegationDto.privilegeCode;
+  const delegations = (await privilegeDelegationRepository.getDelegationsByUserAndOrganizationScopeAndPrivilege(
+    userDtos.map(u => u.username),
+    orgCode,
+    privCode,
+  )).map(pd => PrivilegeDelegationDtoConverterSchema.parse(pd));
+  return {
+    users: userDtos,
+    delegations,
+  };
+}
+
+export async function getUserDetailById(userId: number): Promise<UserDetailDto> {
+  const user = await userRepository.getUserById(userId);
+  const userDetail = await _getUserDetail(user);
+  return userDetail;
+}
+
+export async function getUserDetailByUsername(username: string): Promise<UserDetailDto> {
+  const user = await userRepository.getUserByUsername(username);
+  const userDetail = await _getUserDetail(user);
+  return userDetail;
+}
+
+export async function getUserDetailByMobile(mobile: string): Promise<UserDetailDto> {
+  const user = await userRepository.getUserByMobile(mobile);
+  const userDetail = await _getUserDetail(user);
+  return userDetail;
+}
+
+export async function getUserDetailByWxId(wxId: string): Promise<UserDetailDto> {
+  const user = await userRepository.getUserByWxId(wxId);
+  const userDetail = await _getUserDetail(user);
+  return userDetail;
+}
+
+export async function getOtherUsersByOrg(orgCode: string, userId: number) {
+  const users = await userRepository.getOtherUsersByOrgAndAllSub(userId, orgCode);
+  const userDtos = users.map(u => UserDtoSchema.parse(u));
+  return userDtos;
+}
+
+export async function getUsersByOrg(orgCode: string, orgScope: string) {
+  const users = orgScope === "direct"
+    ? await userRepository.getUsersByOrg(orgCode)
+    : await userRepository.getUsersByOrgAndAllSub(orgCode);
+  const userDtos = users.map(u => UserDtoSchema.parse(u));
+  return userDtos;
+}
+
+export async function getUsersByOrgRole(orgCode: string, roleCode: string, orgScope: string) {
+  const users = orgScope === "direct"
+    ? await userRepository.getUsersByOrgRole(orgCode, roleCode)
+    : await userRepository.getUsersByOrgAndAllSubRole(orgCode, roleCode);
+  const userDtos = users.map(u => UserDtoSchema.parse(u));
+  return userDtos;
+}
+
+export async function getUsersByOrgPos(orgCode: string, roleCode: string, orgScope: string) {
+  const users = orgScope === "direct"
+    ? await userRepository.getUsersByOrgPos(orgCode, roleCode)
+    : await userRepository.getUsersByOrgAndAllSubPos(orgCode, roleCode);
+  const userDtos = users.map(u => UserDtoSchema.parse(u));
+  return userDtos;
+}
+
+export async function getUsersByOrgPosWithDelegation(orgCode: string, roleCode: string, orgScope: string, _privCode: string) {
+  const userDtos = getUsersByOrgPos(orgCode, roleCode, orgScope);
+  return userDtos;
+}
+
+export async function registerPurveyorConcat(username: string, mobile: string, name: string, orgCode: string) {
+  await prisma.$transaction(async (tx) => {
+    const existingUser = await userRepository.getUserByMobile(mobile, tx);
+    const [pos, comp, org] = await Promise.all([
+      positionRepository.getPositionByCode("P001", tx),
+      organizationRepository.getOrganizationByCode(config.PURVEYOR_PARENT_ORG, tx),
+      organizationRepository.getOrganizationByCode(orgCode, tx),
+    ]);
+    if (org === null) {
+      throw new CustomError("供应商尚未注册");
+    }
+    if (pos === null || comp === null) {
+      throw new CustomError("系统基本信息缺失");
+    }
+    if (existingUser !== null) {
+      const existingEmployment = await employmentRepository.getEmploymentByUserOrgPosId(existingUser.id, org.id, pos.id, tx);
+      if (existingEmployment === null) {
+        await employmentRepository.setEmployment(existingUser.id, pos.id, org.id, comp.id, tx);
+      }
+    }
+    else {
+      const user = await userRepository.setUser(username, name, mobile, UserType.External, tx);
+      await employmentRepository.setEmployment(user.id, pos.id, org.id, comp.id, tx);
+    }
+  });
+  if (config.NODE_ENV === "production") {
+    await mobileService.sendMessage(mobile, mobileService.getPurveyorWelcomeMessage(name));
+  }
+  return true;
+}
+
+export async function setUsers(userCreateDtos: UserCreateDto[]) {
+  return await prisma.$transaction(async (tx) => {
+    const existingUsers = await userRepository.searchUsers({ usernames: userCreateDtos.map(u => u.username) });
+    if (existingUsers.length !== 0) {
+      throw new CustomError("相同用户名已被注册");
+    }
+    for (const u of userCreateDtos) {
+      u.password = await hash(u.password, config.PASSWORD_HASH_ROUNDS);
+    }
+    await userRepository.setUsers(userCreateDtos, tx);
+    return true;
+  });
+}

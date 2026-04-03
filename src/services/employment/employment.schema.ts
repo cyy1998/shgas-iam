@@ -1,5 +1,7 @@
 import { z } from "@hono/zod-openapi";
 import { EmploymentSchema as PrismaEmploymentSchema, UserSchema } from "@/db/generated/schemas";
+import { Status } from "@/enums/status";
+import { createPageQuerySchema } from "@/lib/core/pagination/schema";
 import { OrganizationSchema } from "../organization/organization.schema";
 import { PositionSchema } from "../position/position.schema";
 
@@ -24,6 +26,8 @@ export const EmploymentDtoSchema = EmploymentSchema.extend({
   orgName: z.string().openapi({ example: "信息中心" }),
   compCode: z.string().openapi({ example: "SR" }),
   compName: z.string().openapi({ example: "上海燃气" }),
+}).extend({
+  status: z.enum(Status),
 }).required().openapi("EmploymentDto");
 
 export const EmploymentDtoConverterSchema = EmploymentDetailSchema.transform((e) => {
@@ -59,4 +63,4 @@ export const EmploymentQueryDtoSchema = z.object({
   roleCodes: z.array(z.string()).optional().openapi({ example: ["tender:default-user"] }),
 }).openapi("EmploymentQueryDto");
 
-export type EmploymentQueryDto = z.infer<typeof EmploymentQueryDtoSchema>;
+export const EmploymentPaginationQueryDtoSchema = createPageQuerySchema(EmploymentQueryDtoSchema);

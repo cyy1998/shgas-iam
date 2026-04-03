@@ -1,9 +1,9 @@
 import type { InternalRouteHandler } from "./internal.type";
-import { userService } from "@services/user.common.service";
-import { organizationRepository } from "@/services/organization/organization.repository";
 import { OrganizationType } from "@/enums/organization.type";
 import * as employmentService from "@/services/employment/employment.service";
+import * as organizationRepository from "@/services/organization/organization.repository";
 import * as organizationService from "@/services/organization/organization.service";
+import * as userService from "@/services/user/user.service";
 import * as resp from "@/utils/http/response";
 
 export const userInfo: InternalRouteHandler<"userInfo"> = async (c) => {
@@ -54,7 +54,7 @@ export const purveyorRegister: InternalRouteHandler<"purveyorRegister"> = async 
   if (exisitngOrg !== null) {
     return c.json(resp.ok(true));
   }
-  console.log(orgCode, orgName, parentOrg)
+  console.log(orgCode, orgName, parentOrg);
   await organizationService.setOrganization({ orgCode, orgName, parentCode: parentOrg, orgType: OrganizationType.External });
   return c.json(resp.ok(true));
 };

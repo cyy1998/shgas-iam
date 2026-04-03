@@ -3,12 +3,14 @@ import { serveStatic } from "hono/bun";
 import { logger } from "hono/logger";
 import { pinoLogger } from "@/lib/clients/pino";
 import { errorHandler } from "./middlewares/error.handler";
-import adminRoutes from "./routes/admin.route";
-// import authRoutes from './routes/auth.route';
+import adminClientRoutes from "./routes/admin/client/client.index";
+import adminEmploymentRoutes from "./routes/admin/employment/employment.index";
+import adminOrganizationRoutes from "./routes/admin/organization/organization.index";
+import adminPositionRoutes from "./routes/admin/position/position.index";
+import adminUserRoutes from "./routes/admin/user/user.index";
 import authRoutes from "./routes/auth/auth.index";
 import internalRoutes from "./routes/internal/internal.index";
 import openRoutes from "./routes/open/open.index";
-// import publicRoutes from './routes/public.route';
 import publicRoutes from "./routes/public/public.index";
 import ssoRoutes from "./routes/sso/sso.index";
 
@@ -24,13 +26,18 @@ app.use(logger(
   },
 ));
 
+app.onError(errorHandler);
+
 app.route("/auth", authRoutes);
 app.route("/public", publicRoutes);
 app.route("/internal", internalRoutes);
 app.route("/open", openRoutes);
 app.route("/sso", ssoRoutes);
-
-app.route("/admin", adminRoutes);
+app.route("/admin/users", adminUserRoutes);
+app.route("/admin/organizations", adminOrganizationRoutes);
+app.route("/admin/employments", adminEmploymentRoutes);
+app.route("/admin/positions", adminPositionRoutes);
+app.route("/admin/clients", adminClientRoutes);
 
 app.doc("/doc", {
   openapi: "3.0.0",
@@ -69,7 +76,5 @@ app.get("/doc/swagger", (c) => {
   `;
   return c.html(html);
 });
-
-app.onError(errorHandler);
 
 export default app;

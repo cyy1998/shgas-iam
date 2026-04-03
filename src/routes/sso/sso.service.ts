@@ -7,12 +7,12 @@ import { CustomError } from "@/errors/CustomError";
 import orcasClient from "@/lib/clients/orcas";
 import redis from "@/lib/clients/redis";
 import wechatClient from "@/lib/clients/wechat";
-import { AuthObjectSchema } from "@/schemas/authObject.type";
-import { UserDetailDtoSchema } from "@/schemas/user.common.type";
 import * as clientService from "@/services/client/client.service";
 import * as sessionRepository from "@/services/session/session.repository";
+import { SessionObjectSchema } from "@/services/session/session.schema";
 import * as sessionService from "@/services/session/session.service";
-import { userService } from "@/services/user.common.service";
+import { UserDetailDtoSchema } from "@/services/user/user.schema";
+import * as userService from "@/services/user/user.service";
 import { reviveIsoDates } from "@/utils/common.utils";
 
 export async function callback(code: string, clientCode: string, redirectUrl: string) {
@@ -27,7 +27,7 @@ export async function callback(code: string, clientCode: string, redirectUrl: st
   if (authObjectString === null) {
     throw new AuthzUnauthorizedError("非法code");
   }
-  const authObject = AuthObjectSchema.parse(JSON.parse(authObjectString, reviveIsoDates));
+  const authObject = SessionObjectSchema.parse(JSON.parse(authObjectString, reviveIsoDates));
   const userString = authObject.data;
   const globalSessionId = authObject.sessionId;
   const userDetailDto = UserDetailDtoSchema.parse(JSON.parse(userString, reviveIsoDates));
@@ -56,12 +56,12 @@ export async function setToken(code: string, clientCode: string, clientSecret: s
   if (authObjectString === null) {
     throw new CustomError("非法Code");
   }
-  const authObject = AuthObjectSchema.parse(JSON.parse(authObjectString, reviveIsoDates));
+  const authObject = SessionObjectSchema.parse(JSON.parse(authObjectString, reviveIsoDates));
   const userString = authObject.data;
   const globalSessionId = authObject.sessionId;
   const userDetailDto = UserDetailDtoSchema.parse(JSON.parse(userString, reviveIsoDates));
   const { localSessionId, ttl } = await sessionService.setLocalSession(globalSessionId, clientCode, userDetailDto, ClientManagementLevel.Independent);
-  return { sid: localSessionId, ttl, userInfo: userString };
+  return { sid: localSessionId, ttl, userInfo: UserDetailDtoSchema.parse(userString) };
 }
 
 export async function authorize(globalSessionId: string | undefined, clientCode: string, redirectUrl: string) {

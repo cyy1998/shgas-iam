@@ -6,3 +6,8 @@ export const LocalSessionAbstractSchema = z.object({
   localSessionId: z.string(),
   mode: z.enum(ClientManagementLevel),
 }).openapi("LocalSessionAbstractSchema");
+
+export const SessionObjectSchema = z.object({
+  sessionId: z.string(),
+  data: z.string(),
+}).openapi("SessionObject");

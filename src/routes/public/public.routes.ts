@@ -3,8 +3,8 @@ import * as HttpStatusCodes from "@lib/core/http-status-codes";
 import jsonContent from "@lib/core/openapi/helpers/json-content";
 import jsonContentRequired from "@lib/core/openapi/helpers/json-content-required";
 import createSuccessResponseSchema from "@lib/core/openapi/schemas/create-success-schema";
-import { UserDetailDtoSchema, UserDtoSchema, UserQueryDtoSchema } from "@schemas/user.common.type";
 import { OrganizationDtoSchema, OrganizationQueryDtoSchema } from "@/services/organization/organization.schema";
+import { UserDetailDtoSchema, UserDtoSchema, UserQueryDtoSchema } from "@/services/user/user.schema";
 
 const tags = ["Public"];
 

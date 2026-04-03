@@ -1,4 +1,4 @@
-import type { UserDto } from "@/schemas/user.common.type";
+import type { UserDto } from "@/services/user/user.type";
 import axios from "axios";
 import config from "@/env";
 import { CustomError } from "@/errors/CustomError";

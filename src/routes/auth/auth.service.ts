@@ -3,13 +3,13 @@ import { VerificationCodeUsage } from "@enums/verificationCode.usage";
 import { AuthzMaintaincingError } from "@errors/AuthzMaintaincingError";
 import { AuthzUnauthorizedError } from "@errors/AuthzUnauthorizedError";
 import { CustomError } from "@errors/CustomError";
-import { UserDtoSchema } from "@schemas/user.common.type";
-import { userService } from "@services/user.common.service";
 import config from "@/env";
 import redis from "@/lib/clients/redis";
 import * as clientService from "@/services/client/client.service";
 import * as sessionRepository from "@/services/session/session.repository";
 import * as sessionService from "@/services/session/session.service";
+import { UserDtoSchema } from "@/services/user/user.schema";
+import * as userService from "@/services/user/user.service";
 import { reviveIsoDates } from "@/utils/common.utils";
 
 export async function loginPassword(username: string, password: string) {

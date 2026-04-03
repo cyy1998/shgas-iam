@@ -1,12 +1,13 @@
-import type { EmploymentQueryDto } from "@/services/employment/employment.schema";
+import type { EmploymentPaginationQueryDto, EmploymentQueryDto } from "./employment.type";
 import { CustomError } from "@errors/CustomError";
-import { userRepository } from "@repositories/user.common.repository";
 import * as employmentRepository from "@/services/employment/employment.repository";
 import { EmploymentDtoConverterSchema } from "@/services/employment/employment.schema";
-import { organizationRepository } from "@/services/organization/organization.repository";
+import * as organizationRepository from "@/services/organization/organization.repository";
 import * as positionRepository from "@/services/position/position.repository";
 import * as roleRepository from "@/services/role/role.repository";
-import { privilegeService } from "../privilege.service";
+import * as userRepository from "@/services/user/user.repository";
+import { paginate } from "@/utils/page.util";
+import * as privilegeService from "../privilege/privilege.service";
 
 async function _getEmploymentsDetail(username: string) {
   const employments = await employmentRepository.getEmploymentsByUsername(username);
@@ -16,7 +17,7 @@ async function _getEmploymentsDetail(username: string) {
     const privileges = await privilegeService.getPrivilegesByRoleIds(roles.map(r => r.id));
     res.push({
       employment: EmploymentDtoConverterSchema.parse(e),
-      privileges: privileges.map(p => p.privCode),
+      privileges: privileges.map(p => p.privilegeCode),
     });
   }
   return res;
@@ -58,4 +59,10 @@ export async function searchEmployments(employmentQueryDto: EmploymentQueryDto) 
   const employments = await employmentRepository.searchEmployments(employmentQueryDto);
   const employmentDtos = employments.map(e => EmploymentDtoConverterSchema.parse(e));
   return employmentDtos;
+}
+
+export async function searchEmploymentsFuzzy(employmentQueryDto: EmploymentPaginationQueryDto) {
+  const employments = await employmentRepository.searchEmployments(employmentQueryDto.conditions);
+  const employmentDtos = employments.map(e => EmploymentDtoConverterSchema.parse(e));
+  return paginate(employmentDtos, employmentQueryDto);
 }

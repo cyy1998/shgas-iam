@@ -1,12 +1,11 @@
 import { CustomError } from "@errors/CustomError";
-import { posorgRepository } from "@repositories/posorg.repository";
-import { privilegeRepository } from "@repositories/privilege.repository";
 import { mergeAndDedupe } from "@utils/common.utils";
 import { prisma } from "@/db";
 import { Prisma } from "@/db/generated/prisma/client";
 import * as employmentRepository from "@/services/employment/employment.repository";
-import { organizationRepository } from "@/services/organization/organization.repository";
+import * as organizationRepository from "@/services/organization/organization.repository";
 import * as positionRepository from "@/services/position/position.repository";
+import * as privilegeRepository from "@/services/privilege/privilege.repository";
 import * as roleRepository from "@/services/role/role.repository";
 import { RoleDtoSchema } from "./role.schema";
 
@@ -143,52 +142,52 @@ export async function setRoleForPosition(posCode: string, roleCode: string) {
     return true;
   });
 }
-export async function setRoleForPosOrg(orgCode: string, posCode: string, roleCode: string) {
-  return await prisma.$transaction(async (tx) => {
-    const [role, org, pos] = await Promise.all([
-      roleRepository.getRoleByCode(roleCode, tx),
-      organizationRepository.getOrganizationByCode(orgCode, tx),
-      positionRepository.getPositionByCode(posCode, tx),
-    ]);
-    if (org === null || role === null || pos === null) {
-      throw new CustomError(`对应实体不存在`);
-    }
-    let posOrg = await posorgRepository.getPosOrgById(pos.id, org.id, tx);
-    if (posOrg === null) {
-      posOrg = await posorgRepository.setPosOrg(pos.id, org.id, tx);
-    }
-    try {
-      await roleRepository.setRoleForPosOrg(role.id, posOrg.id, tx);
-    }
-    catch (err) {
-      if (err instanceof Prisma.PrismaClientKnownRequestError) {
-        throw new CustomError("对应关系已存在");
-      }
-      else {
-        throw err;
-      }
-    }
-    return true;
-  });
-}
-export async function deleteRoleForPosOrg(orgCode: string, posCode: string, roleCode: string) {
-  return await prisma.$transaction(async (tx) => {
-    const [role, org, pos] = await Promise.all([
-      roleRepository.getRoleByCode(roleCode, tx),
-      organizationRepository.getOrganizationByCode(orgCode, tx),
-      positionRepository.getPositionByCode(posCode, tx),
-    ]);
-    if (org === null || role === null || pos === null) {
-      throw new CustomError("对应实体不存在");
-    }
-    const posOrg = await posorgRepository.getPosOrgById(pos.id, org.id, tx);
-    if (posOrg === null) {
-      throw new CustomError(`对应实体不存在: ${orgCode}, ${posCode}`);
-    }
-    await roleRepository.deleteRoleForPosOrg(role.id, posOrg.id, tx);
-    return true;
-  });
-}
+// export async function setRoleForPosOrg(orgCode: string, posCode: string, roleCode: string) {
+//   return await prisma.$transaction(async (tx) => {
+//     const [role, org, pos] = await Promise.all([
+//       roleRepository.getRoleByCode(roleCode, tx),
+//       organizationRepository.getOrganizationByCode(orgCode, tx),
+//       positionRepository.getPositionByCode(posCode, tx),
+//     ]);
+//     if (org === null || role === null || pos === null) {
+//       throw new CustomError(`对应实体不存在`);
+//     }
+//     let posOrg = await posorgRepository.getPosOrgById(pos.id, org.id, tx);
+//     if (posOrg === null) {
+//       posOrg = await posorgRepository.setPosOrg(pos.id, org.id, tx);
+//     }
+//     try {
+//       await roleRepository.setRoleForPosOrg(role.id, posOrg.id, tx);
+//     }
+//     catch (err) {
+//       if (err instanceof Prisma.PrismaClientKnownRequestError) {
+//         throw new CustomError("对应关系已存在");
+//       }
+//       else {
+//         throw err;
+//       }
+//     }
+//     return true;
+//   });
+// }
+// export async function deleteRoleForPosOrg(orgCode: string, posCode: string, roleCode: string) {
+//   return await prisma.$transaction(async (tx) => {
+//     const [role, org, pos] = await Promise.all([
+//       roleRepository.getRoleByCode(roleCode, tx),
+//       organizationRepository.getOrganizationByCode(orgCode, tx),
+//       positionRepository.getPositionByCode(posCode, tx),
+//     ]);
+//     if (org === null || role === null || pos === null) {
+//       throw new CustomError("对应实体不存在");
+//     }
+//     const posOrg = await posorgRepository.getPosOrgById(pos.id, org.id, tx);
+//     if (posOrg === null) {
+//       throw new CustomError(`对应实体不存在: ${orgCode}, ${posCode}`);
+//     }
+//     await roleRepository.deleteRoleForPosOrg(role.id, posOrg.id, tx);
+//     return true;
+//   });
+// }
 export async function deleteRoleForEmployment(username: string, posCode: string, orgCode: string, roleCode: string) {
   return await prisma.$transaction(async (tx) => {
     const [employment, role] = await Promise.all([

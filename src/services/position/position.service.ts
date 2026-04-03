@@ -3,7 +3,7 @@ import { prisma } from "@/db";
 import { CustomError } from "@/errors/CustomError";
 import { paginate } from "@/utils/page.util";
 import * as positionRepository from "./position.repository";
-import { PositionDtoConverterSchema } from "./position.schema";
+import { PositionDtoSchema } from "./position.schema";
 
 export async function setPosition(positionCreateDto: PositionCreateDto) {
   return await prisma.$transaction(async (tx) => {
@@ -16,8 +16,8 @@ export async function setPosition(positionCreateDto: PositionCreateDto) {
   });
 }
 
-export async function searchPositionsFuzzy(positionPageQuery: PositionFuzzyQueryDto) {
-  const positions = await positionRepository.searchPositionsFuzzy(positionPageQuery);
-  const positionDtos = positions.map(p => PositionDtoConverterSchema.parse(p));
-  return paginate(positionDtos, positionPageQuery);
+export async function searchPositionsFuzzy(positionPaginationQuery: PositionFuzzyQueryDto) {
+  const positions = await positionRepository.searchPositionsFuzzy(positionPaginationQuery);
+  const positionDtos = positions.map(p => PositionDtoSchema.parse(p));
+  return paginate(positionDtos, positionPaginationQuery);
 }

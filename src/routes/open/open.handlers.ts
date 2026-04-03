@@ -1,7 +1,7 @@
 import type { OpenRouteHandler } from "./open.type";
-import { mobileService } from "@services/mobile.service";
-import { userService } from "@services/user.common.service";
 import * as clientService from "@/services/client/client.service";
+import * as mobileService from "@/services/mobile/mobile.service";
+import * as userService from "@/services/user/user.service";
 import * as resp from "@/utils/http/response";
 
 export const clientStatus: OpenRouteHandler<"clientStatus"> = async (c) => {
