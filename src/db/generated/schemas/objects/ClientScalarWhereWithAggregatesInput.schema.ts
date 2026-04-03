@@ -14,6 +14,7 @@ const clientscalarwherewithaggregatesinputSchema = z.object({
   id: z.union([z.lazy(() => IntWithAggregatesFilterObjectSchema), z.number().int()]).optional(),
   clientCode: z.union([z.lazy(() => StringWithAggregatesFilterObjectSchema), z.string().max(64)]).optional(),
   clientName: z.union([z.lazy(() => StringWithAggregatesFilterObjectSchema), z.string().max(128)]).optional(),
+  clientSecret: z.union([z.lazy(() => StringWithAggregatesFilterObjectSchema), z.string().max(255)]).optional(),
   url: z.union([z.lazy(() => StringNullableWithAggregatesFilterObjectSchema), z.string().max(128)]).optional().nullable(),
   status: z.union([z.lazy(() => IntWithAggregatesFilterObjectSchema), z.number().int()]).optional(),
   description: z.union([z.lazy(() => StringNullableWithAggregatesFilterObjectSchema), z.string().max(500)]).optional().nullable(),

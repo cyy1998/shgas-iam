@@ -12,6 +12,7 @@ const makeSchema = () => z.object({
   id: SortOrderSchema.optional(),
   clientCode: SortOrderSchema.optional(),
   clientName: SortOrderSchema.optional(),
+  clientSecret: SortOrderSchema.optional(),
   url: z.union([SortOrderSchema, z.lazy(() => SortOrderInputObjectSchema)]).optional(),
   status: SortOrderSchema.optional(),
   description: z.union([SortOrderSchema, z.lazy(() => SortOrderInputObjectSchema)]).optional(),

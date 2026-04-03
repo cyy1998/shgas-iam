@@ -1,6 +1,6 @@
 import { UserType } from "@enums/user.type";
 import { createRoute, OpenAPIHono, z } from "@hono/zod-openapi";
-import { authenicationHandler } from "@middlewares/authenication.handler";
+import { publicAuthenicationHandler } from "@middlewares/authenication.handler";
 import { EmploymentAdminQueryDtoSchema, EmploymentAdminVoSchema } from "@schemas/employment.admin.type";
 import { createResponseSchema, ResponseSchema } from "@schemas/response.type";
 import { employmentAdminService } from "@services/employment.admin.service";
@@ -22,7 +22,7 @@ import * as resp from "@/utils/http/response";
 
 const app = new OpenAPIHono();
 
-app.use("/*", authenicationHandler);
+app.use("/*", publicAuthenicationHandler);
 
 // /*
 // path: /users/search

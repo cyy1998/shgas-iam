@@ -6,12 +6,15 @@ import * as clientRepository from "@/services/client/client.repository";
 import { ClientDtoSchema } from "@/services/client/client.schema";
 import { reviveIsoDates } from "@/utils/common.utils";
 
-async function setClientCache(clientCode: string, clientDto: ClientDto) {
-  await redis.set(`cache:client:${clientCode}`, JSON.stringify(clientDto));
+async function setClientCache(clientDto: ClientDto) {
+  await Promise.all([
+    redis.set(`cache:client:code:${clientDto.clientCode}`, JSON.stringify(clientDto)),
+    redis.set(`cache:client:secret:${clientDto.clientSecret}`, JSON.stringify(clientDto)),
+  ]);
 }
 
-async function getClientFromCache(clientCode: string): Promise<ClientDto | null> {
-  const cacheString = await redis.get(`cache:client:${clientCode}`);
+async function getClientFromCache(key: string, type: string): Promise<ClientDto | null> {
+  const cacheString = await redis.get(`cache:client:${type}:${key}`);
   if (cacheString !== null) {
     try {
       const cacheClient = ClientDtoSchema.parse(JSON.parse(cacheString, reviveIsoDates));
@@ -19,7 +22,7 @@ async function getClientFromCache(clientCode: string): Promise<ClientDto | null>
     }
     catch (err) {
       if (err instanceof ZodError) {
-        await redis.del(`cache:client:${clientCode}`);
+        await redis.del(`cache:client:${type}:${key}`);
         return null;
       }
       else {
@@ -30,8 +33,8 @@ async function getClientFromCache(clientCode: string): Promise<ClientDto | null>
   return null;
 }
 
-export async function getClientByCode(clientCode: string) {
-  const cachedClient = await getClientFromCache(clientCode);
+export async function getClientByCode(clientCode: string): Promise<ClientDto | null> {
+  const cachedClient = await getClientFromCache(clientCode, "code");
   if (cachedClient !== null) {
     return cachedClient;
   }
@@ -40,7 +43,21 @@ export async function getClientByCode(clientCode: string) {
     return null;
   }
   const clientDto = ClientDtoSchema.parse(client);
-  await setClientCache(clientCode, clientDto);
+  await setClientCache(clientDto);
+  return clientDto;
+}
+
+export async function getClientBySecret(clientSecret: string): Promise<ClientDto | null> {
+  const cachedClient = await getClientFromCache(clientSecret, "secret");
+  if (cachedClient !== null) {
+    return cachedClient;
+  }
+  const client = await clientRepository.getClientBySecret(clientSecret);
+  if (client === null) {
+    return null;
+  }
+  const clientDto = ClientDtoSchema.parse(client);
+  await setClientCache(clientDto);
   return clientDto;
 }
 
@@ -48,7 +65,7 @@ export async function updateClient(clientDto: ClientInputDto) {
   return await prisma.$transaction(async (tx) => {
     const client = await clientRepository.updateClient(clientDto, tx);
     const updatedClientDto = ClientDtoSchema.parse(client);
-    await setClientCache(updatedClientDto.clientCode, updatedClientDto);
+    await setClientCache(updatedClientDto);
     return updatedClientDto;
   });
 }

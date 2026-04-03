@@ -9,6 +9,13 @@ export async function getClientByCode(clientCode: string, tx: PrismaTransaction 
     },
   });
 }
+export async function getClientBySecret(clientSecret: string, tx: PrismaTransaction = prisma) {
+  return await tx.client.findFirst({
+    where: {
+      clientSecret,
+    },
+  });
+}
 export async function updateClient(clientDto: ClientInputDto, tx: PrismaTransaction = prisma) {
   return await tx.client.update({
     data: clientDto,

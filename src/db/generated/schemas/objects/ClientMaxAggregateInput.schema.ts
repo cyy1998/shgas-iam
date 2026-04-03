@@ -6,6 +6,7 @@ const makeSchema = () => z.object({
   id: z.literal(true).optional(),
   clientCode: z.literal(true).optional(),
   clientName: z.literal(true).optional(),
+  clientSecret: z.literal(true).optional(),
   url: z.literal(true).optional(),
   status: z.literal(true).optional(),
   description: z.literal(true).optional(),

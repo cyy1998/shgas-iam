@@ -60,3 +60,12 @@ export const authz = createRoute({
     [HttpStatusCodes.OK]: jsonContent(createSuccessResponseSchema(z.object()), "准许"),
   },
 });
+
+export const internalAuthz = createRoute({
+  method: "get",
+  path: "/internal-authz",
+  tags,
+  responses: {
+    [HttpStatusCodes.OK]: jsonContent(createSuccessResponseSchema(z.object()), "准许"),
+  },
+});

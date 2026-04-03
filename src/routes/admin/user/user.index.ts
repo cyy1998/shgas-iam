@@ -1,11 +1,11 @@
 import { createRouter } from "@lib/core/create-app";
-import { authenicationHandler } from "@middlewares/authenication.handler";
+import { publicAuthenicationHandler } from "@middlewares/authenication.handler";
 import * as handlers from "./user.handlers";
 import * as routes from "./user.routes";
 
 const router = createRouter();
 
-router.use("/*", authenicationHandler);
+router.use("/*", publicAuthenicationHandler);
 
 router.openapi(routes.usersSearch, handlers.usersSearch)
   .openapi(routes.usersDetail, handlers.userDetail)

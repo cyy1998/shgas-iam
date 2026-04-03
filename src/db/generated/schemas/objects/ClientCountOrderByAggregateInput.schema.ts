@@ -6,6 +6,7 @@ const makeSchema = () => z.object({
   id: SortOrderSchema.optional(),
   clientCode: SortOrderSchema.optional(),
   clientName: SortOrderSchema.optional(),
+  clientSecret: SortOrderSchema.optional(),
   url: SortOrderSchema.optional(),
   status: SortOrderSchema.optional(),
   description: SortOrderSchema.optional(),

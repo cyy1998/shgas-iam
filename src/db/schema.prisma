@@ -161,6 +161,7 @@ model Client {
   id            Int      @id @default(autoincrement()) @map("id")
   clientCode    String   @unique @map("client_code") @db.VarChar(64)
   clientName    String   @map("client_name") @db.VarChar(128)
+  clientSecret  String   @map("client_secret") @db.VarChar(255)
   url           String?  @map("url") @db.VarChar(128)
   status        Int      @default(1) @map("status") @db.TinyInt
   description   String?  @map("description") @db.VarChar(500)

@@ -4,6 +4,7 @@ export const ClientFindManyResultSchema = z.object({
   id: z.number().int(),
   clientCode: z.string(),
   clientName: z.string(),
+  clientSecret: z.string(),
   url: z.string().optional(),
   status: z.number().int(),
   description: z.string().optional(),

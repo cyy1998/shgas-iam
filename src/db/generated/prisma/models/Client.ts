@@ -40,6 +40,7 @@ export type ClientMinAggregateOutputType = {
   id: number | null
   clientCode: string | null
   clientName: string | null
+  clientSecret: string | null
   url: string | null
   status: number | null
   description: string | null
@@ -52,6 +53,7 @@ export type ClientMaxAggregateOutputType = {
   id: number | null
   clientCode: string | null
   clientName: string | null
+  clientSecret: string | null
   url: string | null
   status: number | null
   description: string | null
@@ -64,6 +66,7 @@ export type ClientCountAggregateOutputType = {
   id: number
   clientCode: number
   clientName: number
+  clientSecret: number
   url: number
   status: number
   description: number
@@ -89,6 +92,7 @@ export type ClientMinAggregateInputType = {
   id?: true
   clientCode?: true
   clientName?: true
+  clientSecret?: true
   url?: true
   status?: true
   description?: true
@@ -101,6 +105,7 @@ export type ClientMaxAggregateInputType = {
   id?: true
   clientCode?: true
   clientName?: true
+  clientSecret?: true
   url?: true
   status?: true
   description?: true
@@ -113,6 +118,7 @@ export type ClientCountAggregateInputType = {
   id?: true
   clientCode?: true
   clientName?: true
+  clientSecret?: true
   url?: true
   status?: true
   description?: true
@@ -213,6 +219,7 @@ export type ClientGroupByOutputType = {
   id: number
   clientCode: string
   clientName: string
+  clientSecret: string
   url: string | null
   status: number
   description: string | null
@@ -249,6 +256,7 @@ export type ClientWhereInput = {
   id?: Prisma.IntFilter<"Client"> | number
   clientCode?: Prisma.StringFilter<"Client"> | string
   clientName?: Prisma.StringFilter<"Client"> | string
+  clientSecret?: Prisma.StringFilter<"Client"> | string
   url?: Prisma.StringNullableFilter<"Client"> | string | null
   status?: Prisma.IntFilter<"Client"> | number
   description?: Prisma.StringNullableFilter<"Client"> | string | null
@@ -263,6 +271,7 @@ export type ClientOrderByWithRelationInput = {
   id?: Prisma.SortOrder
   clientCode?: Prisma.SortOrder
   clientName?: Prisma.SortOrder
+  clientSecret?: Prisma.SortOrder
   url?: Prisma.SortOrderInput | Prisma.SortOrder
   status?: Prisma.SortOrder
   description?: Prisma.SortOrderInput | Prisma.SortOrder
@@ -281,6 +290,7 @@ export type ClientWhereUniqueInput = Prisma.AtLeast<{
   OR?: Prisma.ClientWhereInput[]
   NOT?: Prisma.ClientWhereInput | Prisma.ClientWhereInput[]
   clientName?: Prisma.StringFilter<"Client"> | string
+  clientSecret?: Prisma.StringFilter<"Client"> | string
   url?: Prisma.StringNullableFilter<"Client"> | string | null
   status?: Prisma.IntFilter<"Client"> | number
   description?: Prisma.StringNullableFilter<"Client"> | string | null
@@ -295,6 +305,7 @@ export type ClientOrderByWithAggregationInput = {
   id?: Prisma.SortOrder
   clientCode?: Prisma.SortOrder
   clientName?: Prisma.SortOrder
+  clientSecret?: Prisma.SortOrder
   url?: Prisma.SortOrderInput | Prisma.SortOrder
   status?: Prisma.SortOrder
   description?: Prisma.SortOrderInput | Prisma.SortOrder
@@ -316,6 +327,7 @@ export type ClientScalarWhereWithAggregatesInput = {
   id?: Prisma.IntWithAggregatesFilter<"Client"> | number
   clientCode?: Prisma.StringWithAggregatesFilter<"Client"> | string
   clientName?: Prisma.StringWithAggregatesFilter<"Client"> | string
+  clientSecret?: Prisma.StringWithAggregatesFilter<"Client"> | string
   url?: Prisma.StringNullableWithAggregatesFilter<"Client"> | string | null
   status?: Prisma.IntWithAggregatesFilter<"Client"> | number
   description?: Prisma.StringNullableWithAggregatesFilter<"Client"> | string | null
@@ -328,6 +340,7 @@ export type ClientScalarWhereWithAggregatesInput = {
 export type ClientCreateInput = {
   clientCode: string
   clientName: string
+  clientSecret: string
   url?: string | null
   status?: number
   description?: string | null
@@ -342,6 +355,7 @@ export type ClientUncheckedCreateInput = {
   id?: number
   clientCode: string
   clientName: string
+  clientSecret: string
   url?: string | null
   status?: number
   description?: string | null
@@ -355,6 +369,7 @@ export type ClientUncheckedCreateInput = {
 export type ClientUpdateInput = {
   clientCode?: Prisma.StringFieldUpdateOperationsInput | string
   clientName?: Prisma.StringFieldUpdateOperationsInput | string
+  clientSecret?: Prisma.StringFieldUpdateOperationsInput | string
   url?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   status?: Prisma.IntFieldUpdateOperationsInput | number
   description?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
@@ -369,6 +384,7 @@ export type ClientUncheckedUpdateInput = {
   id?: Prisma.IntFieldUpdateOperationsInput | number
   clientCode?: Prisma.StringFieldUpdateOperationsInput | string
   clientName?: Prisma.StringFieldUpdateOperationsInput | string
+  clientSecret?: Prisma.StringFieldUpdateOperationsInput | string
   url?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   status?: Prisma.IntFieldUpdateOperationsInput | number
   description?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
@@ -383,6 +399,7 @@ export type ClientCreateManyInput = {
   id?: number
   clientCode: string
   clientName: string
+  clientSecret: string
   url?: string | null
   status?: number
   description?: string | null
@@ -395,6 +412,7 @@ export type ClientCreateManyInput = {
 export type ClientUpdateManyMutationInput = {
   clientCode?: Prisma.StringFieldUpdateOperationsInput | string
   clientName?: Prisma.StringFieldUpdateOperationsInput | string
+  clientSecret?: Prisma.StringFieldUpdateOperationsInput | string
   url?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   status?: Prisma.IntFieldUpdateOperationsInput | number
   description?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
@@ -408,6 +426,7 @@ export type ClientUncheckedUpdateManyInput = {
   id?: Prisma.IntFieldUpdateOperationsInput | number
   clientCode?: Prisma.StringFieldUpdateOperationsInput | string
   clientName?: Prisma.StringFieldUpdateOperationsInput | string
+  clientSecret?: Prisma.StringFieldUpdateOperationsInput | string
   url?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   status?: Prisma.IntFieldUpdateOperationsInput | number
   description?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
@@ -427,6 +446,7 @@ export type ClientCountOrderByAggregateInput = {
   id?: Prisma.SortOrder
   clientCode?: Prisma.SortOrder
   clientName?: Prisma.SortOrder
+  clientSecret?: Prisma.SortOrder
   url?: Prisma.SortOrder
   status?: Prisma.SortOrder
   description?: Prisma.SortOrder
@@ -445,6 +465,7 @@ export type ClientMaxOrderByAggregateInput = {
   id?: Prisma.SortOrder
   clientCode?: Prisma.SortOrder
   clientName?: Prisma.SortOrder
+  clientSecret?: Prisma.SortOrder
   url?: Prisma.SortOrder
   status?: Prisma.SortOrder
   description?: Prisma.SortOrder
@@ -457,6 +478,7 @@ export type ClientMinOrderByAggregateInput = {
   id?: Prisma.SortOrder
   clientCode?: Prisma.SortOrder
   clientName?: Prisma.SortOrder
+  clientSecret?: Prisma.SortOrder
   url?: Prisma.SortOrder
   status?: Prisma.SortOrder
   description?: Prisma.SortOrder
@@ -492,6 +514,7 @@ export type ClientUpdateOneRequiredWithoutRolesNestedInput = {
 export type ClientCreateWithoutRolesInput = {
   clientCode: string
   clientName: string
+  clientSecret: string
   url?: string | null
   status?: number
   description?: string | null
@@ -505,6 +528,7 @@ export type ClientUncheckedCreateWithoutRolesInput = {
   id?: number
   clientCode: string
   clientName: string
+  clientSecret: string
   url?: string | null
   status?: number
   description?: string | null
@@ -533,6 +557,7 @@ export type ClientUpdateToOneWithWhereWithoutRolesInput = {
 export type ClientUpdateWithoutRolesInput = {
   clientCode?: Prisma.StringFieldUpdateOperationsInput | string
   clientName?: Prisma.StringFieldUpdateOperationsInput | string
+  clientSecret?: Prisma.StringFieldUpdateOperationsInput | string
   url?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   status?: Prisma.IntFieldUpdateOperationsInput | number
   description?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
@@ -546,6 +571,7 @@ export type ClientUncheckedUpdateWithoutRolesInput = {
   id?: Prisma.IntFieldUpdateOperationsInput | number
   clientCode?: Prisma.StringFieldUpdateOperationsInput | string
   clientName?: Prisma.StringFieldUpdateOperationsInput | string
+  clientSecret?: Prisma.StringFieldUpdateOperationsInput | string
   url?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   status?: Prisma.IntFieldUpdateOperationsInput | number
   description?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
@@ -590,6 +616,7 @@ export type ClientSelect<ExtArgs extends runtime.Types.Extensions.InternalArgs =
   id?: boolean
   clientCode?: boolean
   clientName?: boolean
+  clientSecret?: boolean
   url?: boolean
   status?: boolean
   description?: boolean
@@ -607,6 +634,7 @@ export type ClientSelectScalar = {
   id?: boolean
   clientCode?: boolean
   clientName?: boolean
+  clientSecret?: boolean
   url?: boolean
   status?: boolean
   description?: boolean
@@ -616,7 +644,7 @@ export type ClientSelectScalar = {
   extAttributes?: boolean
 }
 
-export type ClientOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "clientCode" | "clientName" | "url" | "status" | "description" | "isDelete" | "createTime" | "updateTime" | "extAttributes", ExtArgs["result"]["client"]>
+export type ClientOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "clientCode" | "clientName" | "clientSecret" | "url" | "status" | "description" | "isDelete" | "createTime" | "updateTime" | "extAttributes", ExtArgs["result"]["client"]>
 export type ClientInclude<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
   roles?: boolean | Prisma.Client$rolesArgs<ExtArgs>
   _count?: boolean | Prisma.ClientCountOutputTypeDefaultArgs<ExtArgs>
@@ -631,6 +659,7 @@ export type $ClientPayload<ExtArgs extends runtime.Types.Extensions.InternalArgs
     id: number
     clientCode: string
     clientName: string
+    clientSecret: string
     url: string | null
     status: number
     description: string | null
@@ -1011,6 +1040,7 @@ export interface ClientFieldRefs {
   readonly id: Prisma.FieldRef<"Client", 'Int'>
   readonly clientCode: Prisma.FieldRef<"Client", 'String'>
   readonly clientName: Prisma.FieldRef<"Client", 'String'>
+  readonly clientSecret: Prisma.FieldRef<"Client", 'String'>
   readonly url: Prisma.FieldRef<"Client", 'String'>
   readonly status: Prisma.FieldRef<"Client", 'Int'>
   readonly description: Prisma.FieldRef<"Client", 'String'>

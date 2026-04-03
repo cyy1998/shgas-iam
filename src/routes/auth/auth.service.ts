@@ -1,3 +1,4 @@
+import type { ClientDto } from "@/services/client/client.type";
 import { Status } from "@enums/status";
 import { VerificationCodeUsage } from "@enums/verificationCode.usage";
 import { AuthzMaintaincingError } from "@errors/AuthzMaintaincingError";
@@ -33,18 +34,18 @@ export async function loginMobile(phoneNumber: string, code: string) {
   return { token, isMobileSet: userDetailDto.mobile !== null };
 }
 
-export async function authz(sessionId: string | null, clientCode: string | null, path: string | undefined) {
-  if (!path || !clientCode) {
-    throw new AuthzUnauthorizedError("非法访问");
-  }
-  const client = await clientService.getClientByCode(clientCode);
-  if (client === null) {
-    throw new AuthzUnauthorizedError("非法访问");
-  }
-  if (!sessionId) {
-    throw new AuthzUnauthorizedError("未登录");
-  }
-  const userString = await redis.get(`local_${clientCode}_session:${sessionId}`);
+export async function authz(sessionId: string, client: ClientDto) {
+  // if (!path || !clientCode) {
+  //   throw new AuthzUnauthorizedError("非法访问");
+  // }
+  // const client = await clientService.getClientByCode(clientCode);
+  // if (client === null) {
+  //   throw new AuthzUnauthorizedError("非法访问");
+  // }
+  // if (!sessionId) {
+  //   throw new AuthzUnauthorizedError("未登录");
+  // }
+  const userString = await redis.get(`local_${client.clientCode}_session:${sessionId}`);
   if (!userString) {
     throw new AuthzUnauthorizedError("未登录");
   }

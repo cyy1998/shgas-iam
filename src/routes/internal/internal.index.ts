@@ -1,8 +1,11 @@
 import { createRouter } from "@lib/core/create-app";
+import { internalAuthenicationHandler } from "@/middlewares/authenication.handler";
 import * as handlers from "./internal.handlers";
 import * as routes from "./internal.routes";
 
 const router = createRouter();
+
+router.use("/*", internalAuthenicationHandler);
 
 router
   .openapi(routes.userInfo, handlers.userInfo)

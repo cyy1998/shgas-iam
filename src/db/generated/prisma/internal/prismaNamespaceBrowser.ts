@@ -186,6 +186,7 @@ export const ClientScalarFieldEnum = {
   id: 'id',
   clientCode: 'clientCode',
   clientName: 'clientName',
+  clientSecret: 'clientSecret',
   url: 'url',
   status: 'status',
   description: 'description',
@@ -403,6 +404,7 @@ export type QueryMode = (typeof QueryMode)[keyof typeof QueryMode]
 export const ClientOrderByRelevanceFieldEnum = {
   clientCode: 'clientCode',
   clientName: 'clientName',
+  clientSecret: 'clientSecret',
   url: 'url',
   description: 'description'
 } as const

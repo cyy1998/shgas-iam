@@ -4,6 +4,7 @@ export const ClientSchema = z.object({
   id: z.number().int(),
   clientCode: z.string(),
   clientName: z.string(),
+  clientSecret: z.string(),
   url: z.string().nullish(),
   status: z.number().int().default(1),
   description: z.string().nullish(),

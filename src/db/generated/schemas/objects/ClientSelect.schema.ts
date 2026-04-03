@@ -7,6 +7,7 @@ const makeSchema = () => z.object({
   id: z.boolean().optional(),
   clientCode: z.boolean().optional(),
   clientName: z.boolean().optional(),
+  clientSecret: z.boolean().optional(),
   url: z.boolean().optional(),
   status: z.boolean().optional(),
   description: z.boolean().optional(),

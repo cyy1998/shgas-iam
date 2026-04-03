@@ -3,10 +3,11 @@ import { AuthzUnauthorizedError } from "@errors/AuthzUnauthorizedError";
 import { CustomError } from "@errors/CustomError";
 import { deleteCookie, getCookie } from "hono/cookie";
 import redis from "@/lib/clients/redis";
+import * as clientService from "@/services/client/client.service";
 import { UserDetailDtoSchema } from "@/services/user/user.schema";
 import { reviveIsoDates } from "@/utils/common.utils";
 
-export async function authenicationHandler(c: Context, next: Next) {
+export async function publicAuthenicationHandler(c: Context, next: Next) {
   const clientCode = c.req.header("Client");
   const sessionId = clientCode === "iam"
     ? getCookie(c, `global_session`) ?? c.req.header("Authorization") ?? null
@@ -30,5 +31,17 @@ export async function authenicationHandler(c: Context, next: Next) {
   c.set("userId", userDetailDto.id);
   c.set("username", userDetailDto.username);
   c.set("userDetailDto", userDetailDto);
+  return await next();
+}
+
+export async function internalAuthenicationHandler(c: Context, next: Next) {
+  const clientSecret = c.req.header("apikey");
+  if (!clientSecret) {
+    throw new AuthzUnauthorizedError("非法访问");
+  }
+  const clientDto = await clientService.getClientBySecret(clientSecret);
+  if (!clientDto) {
+    throw new AuthzUnauthorizedError("无效secret");
+  }
   return await next();
 }
