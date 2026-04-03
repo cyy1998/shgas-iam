@@ -7,6 +7,7 @@ const router = createRouter()
   .openapi(routes.loginPassword, handlers.loginPassword)
   .openapi(routes.loginMobile, handlers.loginMobile)
   // .openapi(routes.loginWX, handlers.loginWX)
-  .openapi(routes.authz, handlers.authz);
+  .openapi(routes.authz, handlers.authz)
+  .openapi(routes.internalAuthz, handlers.internalAuthz);
 
 export default router;
