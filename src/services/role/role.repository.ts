@@ -248,7 +248,11 @@ export async function getRolesByEmploymentId(employmentId: number, tx: PrismaTra
     },
   });
 }
-export async function checkEmploymentRoleExisting(roleId: number, employmentId: number, tx: PrismaTransaction = prisma) {
+export async function checkEmploymentRoleExisting(
+  roleId: number,
+  employmentId: number,
+  tx: PrismaTransaction = prisma,
+) {
   return (await tx.employmentRole.findFirst({
     where: {
       roleId,

@@ -132,7 +132,14 @@ export async function getOrganizationsByParentsCode(parentCodes: string[], tx: P
     },
   });
 }
-export async function setOrganization(orgCode: string, orgName: string, orgLevel: number, orgType: string, parentOrganization: Organization, tx: PrismaTransaction = prisma) {
+export async function setOrganization(
+  orgCode: string,
+  orgName: string,
+  orgLevel: number,
+  orgType: string,
+  parentOrganization: Organization,
+  tx: PrismaTransaction = prisma,
+) {
   const newOrganization = await tx.organization.create({
     data: {
       orgCode,

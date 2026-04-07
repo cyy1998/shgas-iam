@@ -2,11 +2,11 @@ import config from "@/env";
 import { hmacSha256 } from "@/utils/encryption.utils";
 import { createSingleton } from "../core/singleton";
 
-type SMSServiceResult = {
+interface SMSServiceResult {
   resultCode: string;
   resultInfo: string;
   result: string;
-};
+}
 
 function createSmsClient() {
   return {
@@ -64,13 +64,12 @@ function createSmsClient() {
       return true;
     },
 
-    checkValidPhoneNumber(phone: string): boolean {
-      // 去除前后空格
-      const trimmedPhone = phone.trim();
-      // 正则表达式：以1开头，第二位为3-9之间的数字，总共11位
-      const reg = /^1[3-9]\d{9}$/;
-      return reg.test(trimmedPhone);
-    },
+    // checkValidPhoneNumber(phone: string): boolean {
+    //   // 去除前后空格
+    //   const trimmedPhone = phone.trim();
+    //   // 正则表达式：以1开头，第二位为3-9之间的数字，总共11位
+    //   return MOBILE_REGEX.test(trimmedPhone);
+    // },
 
     // getPurveyorWelcomeMessage(name: string): string {
     //   return `尊敬的${name}：

@@ -152,7 +152,12 @@ export async function getEmploymentsByUsername(username: string, tx: PrismaTrans
     },
   });
 }
-export async function getEmploymentByUserOrgPosId(userId: number, orgId: number, posId: number, tx: PrismaTransaction = prisma) {
+export async function getEmploymentByUserOrgPosId(
+  userId: number,
+  orgId: number,
+  posId: number,
+  tx: PrismaTransaction = prisma,
+) {
   return await tx.employment.findFirst({
     where: {
       userId,
@@ -169,7 +174,12 @@ export async function getEmploymentByUserOrgPosId(userId: number, orgId: number,
     },
   });
 }
-export async function getEmploymentByUserOrgPosCode(username: string, orgCode: string, posCode: string, tx: PrismaTransaction = prisma) {
+export async function getEmploymentByUserOrgPosCode(
+  username: string,
+  orgCode: string,
+  posCode: string,
+  tx: PrismaTransaction = prisma,
+) {
   return await tx.employment.findFirst({
     where: {
       user: {
@@ -186,7 +196,11 @@ export async function getEmploymentByUserOrgPosCode(username: string, orgCode: s
     },
   });
 }
-export async function getEmploymentsByUserAndPrivilege(username: string, privCondition: any, tx: PrismaTransaction = prisma) {
+export async function getEmploymentsByUserAndPrivilege(
+  username: string,
+  privCondition: any,
+  tx: PrismaTransaction = prisma,
+) {
   return await tx.employment.findMany({
     where: {
       status: Status.Enable,
@@ -288,7 +302,13 @@ export async function getEmploymentsByUserAndPrivilege(username: string, privCon
     },
   });
 }
-export async function setEmployment(userId: number, posId: number, orgId: number, compId: number, tx: PrismaTransaction = prisma) {
+export async function setEmployment(
+  userId: number,
+  posId: number,
+  orgId: number,
+  compId: number,
+  tx: PrismaTransaction = prisma,
+) {
   return await tx.employment.create({
     data: {
       userId,

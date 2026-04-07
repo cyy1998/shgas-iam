@@ -4,6 +4,8 @@ import { prisma } from "@/db";
 import redis from "@/lib/clients/redis";
 import smsClient from "@/lib/clients/sms";
 
+const MOBILE_REGEX = /^1[3-9]\d{9}$/;
+
 export async function sendCode(phoneNumber: string, usage: string) {
   if (!checkValidPhoneNumber(phoneNumber)) {
     throw new CustomError("无效手机号");
@@ -28,8 +30,8 @@ export function checkValidPhoneNumber(phone: string): boolean {
   // 去除前后空格
   const trimmedPhone = phone.trim();
   // 正则表达式：以1开头，第二位为3-9之间的数字，总共11位
-  const reg = /^1[3-9]\d{9}$/;
-  return reg.test(trimmedPhone);
+  // const reg = /^1[3-9]\d{9}$/;
+  return MOBILE_REGEX.test(trimmedPhone);
 }
 
 export function getPurveyorWelcomeMessage(name: string): string {

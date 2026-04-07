@@ -1,5 +1,7 @@
 import { CustomError } from "@errors/CustomError";
 
+const ISO_DATE_REGEX = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,3})?(?:Z|[+-]\d{2}:\d{2})$/;
+
 export function mergeAndDedupe<T extends Record<string, any>>(
   arr1: T[],
   arr2: T[],
@@ -62,6 +64,7 @@ export function getProtocolAndHost(url: string): string {
     const parsedUrl = new URL(url);
     return `${parsedUrl.protocol}//${parsedUrl.host}`;
   }
+  // eslint-disable-next-line unused-imports/no-unused-vars
   catch (e) {
     throw new CustomError(`Invalid URL: ${url}`);
   }
@@ -71,8 +74,7 @@ export function reviveIsoDates(key: string, value: any): any {
   // 只处理字符串
   if (typeof value === "string") {
     // 匹配 ISO 8601 格式的时间字符串（带 Z 或 ± 时区）
-    const isoDateRegex = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,3})?(?:Z|[+-]\d{2}:\d{2})$/;
-    if (isoDateRegex.test(value)) {
+    if (ISO_DATE_REGEX.test(value)) {
       return new Date(value);
     }
   }

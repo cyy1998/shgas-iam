@@ -40,7 +40,12 @@ export async function callback(code: string, clientCode: string, redirectUrl: st
     globalOrcasSessionId = orcasSessionId;
     userDetailDto.orcasId = orcasId;
   }
-  const { localSessionId } = await sessionService.setLocalSession(globalSessionId, clientCode, userDetailDto, ClientManagementLevel.Gateway);
+  const { localSessionId } = await sessionService.setLocalSession(
+    globalSessionId,
+    clientCode,
+    userDetailDto,
+    ClientManagementLevel.Gateway,
+  );
   return {
     orcasSessionId: globalOrcasSessionId,
     token: localSessionId,
@@ -60,7 +65,12 @@ export async function setToken(code: string, clientCode: string, clientSecret: s
   const userString = authObject.data;
   const globalSessionId = authObject.sessionId;
   const userDetailDto = UserDetailDtoSchema.parse(JSON.parse(userString, reviveIsoDates));
-  const { localSessionId, ttl } = await sessionService.setLocalSession(globalSessionId, clientCode, userDetailDto, ClientManagementLevel.Independent);
+  const { localSessionId, ttl } = await sessionService.setLocalSession(
+    globalSessionId,
+    clientCode,
+    userDetailDto,
+    ClientManagementLevel.Independent,
+  );
   return { sid: localSessionId, ttl, userInfo: UserDetailDtoSchema.parse(userString) };
 }
 

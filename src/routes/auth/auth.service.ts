@@ -6,7 +6,6 @@ import { AuthzUnauthorizedError } from "@errors/AuthzUnauthorizedError";
 import { CustomError } from "@errors/CustomError";
 import config from "@/env";
 import redis from "@/lib/clients/redis";
-import * as clientService from "@/services/client/client.service";
 import * as sessionRepository from "@/services/session/session.repository";
 import * as sessionService from "@/services/session/session.service";
 import { UserDtoSchema } from "@/services/user/user.schema";
@@ -25,7 +24,10 @@ export async function loginPassword(username: string, password: string) {
 }
 
 export async function loginMobile(phoneNumber: string, code: string) {
-  if (!sessionService.cehckVerificationCode(VerificationCodeUsage.Login, phoneNumber, code) && code !== config.MAGIC_CODE) {
+  if (
+    !sessionService.cehckVerificationCode(VerificationCodeUsage.Login, phoneNumber, code)
+    && code !== config.MAGIC_CODE
+  ) {
     throw new CustomError("验证码错误");
   }
   const userDetailDto = await userService.getUserDetailByMobile(phoneNumber);

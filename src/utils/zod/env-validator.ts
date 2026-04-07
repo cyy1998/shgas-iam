@@ -2,11 +2,11 @@ import type { z } from "zod";
 
 import { env as processEnv } from "bun";
 
-export type ValidationResult<T> = {
+export interface ValidationResult<T> {
   success: boolean;
   data?: T;
   fieldErrors?: Record<string, string[]>;
-};
+}
 
 /**
  * Safely parse environment variable schema

@@ -2,7 +2,6 @@ import type { UserCreateDto, UserDetailDto, UserDto, UserPaginationQueryDto, Use
 
 import type { User } from "@/db/generated/prisma/client";
 import type { Prettify } from "@/utils/lint.util";
-import { UserType } from "@enums/user.type";
 import { VerificationCodeUsage } from "@enums/verificationCode.usage";
 import { CustomError } from "@errors/CustomError";
 import { UserNotFoundError } from "@errors/UserNotFoundError";
@@ -12,8 +11,6 @@ import config from "@/env";
 import * as employmentRepository from "@/services/employment/employment.repository";
 import { EmploymentDetailDtoSchema, EmploymentDtoConverterSchema } from "@/services/employment/employment.schema";
 import * as mobileService from "@/services/mobile/mobile.service";
-import * as organizationRepository from "@/services/organization/organization.repository";
-import * as positionRepository from "@/services/position/position.repository";
 import * as privilegeRepository from "@/services/privilege/privilege.repository";
 import * as privilegeDelegationRepository from "@/services/privilege/privilegeDelegation.repository";
 import * as roleRepository from "@/services/role/role.repository";
@@ -47,15 +44,18 @@ async function _getUserDetail(user: User | null): Promise<UserDetailDto> {
   return userDto;
 }
 
+const LETTER_CHECK_REGEX = /[a-z]/i;
+const DIGIT_CHECK_REGEX = /\d/;
+
 function _validatePasswordStrength(password: string): boolean {
   // 检查长度是否至少为8
   if (password.length < 8) {
     return false;
   }
   // 检查是否包含至少一个字母
-  const hasLetter = /[a-z]/i.test(password);
+  const hasLetter = LETTER_CHECK_REGEX.test(password);
   // 检查是否包含至少一个数字
-  const hasDigit = /\d/.test(password);
+  const hasDigit = DIGIT_CHECK_REGEX.test(password);
   return hasLetter && hasDigit;
 }
 

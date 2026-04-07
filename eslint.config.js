@@ -21,6 +21,17 @@ export default antfu({
         ignoreUrls: true, // 忽略URL
       },
     ],
+    // 'unused-imports/no-unused-vars': [
+    //   'error', // 将错误级别改为警告
+    //   {
+    //     vars: 'all',
+    //     // 忽略所有以下划线 '_' 开头的变量
+    //     varsIgnorePattern: '^_',
+    //     args: 'after-used',
+    //     // 忽略所有以下划线 '_' 开头的函数参数
+    //     argsIgnorePattern: '^_',
+    //   },
+    // ],
   },
   ignores: [
     "src/db/generated",

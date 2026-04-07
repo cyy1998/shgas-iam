@@ -40,15 +40,15 @@
 
 type DestroyFn<T> = (instance: T) => void | Promise<void>;
 
-type SingletonOptions<T> = {
+interface SingletonOptions<T> {
   /** Optional destroy function for graceful shutdown / 可选的销毁函数，用于优雅关闭 */
   destroy?: DestroyFn<T>;
-};
+}
 
-type SingletonEntry = {
+interface SingletonEntry {
   instance: unknown;
   destroy?: DestroyFn<unknown>;
-};
+}
 
 // Use Symbol.for to ensure cross-module uniqueness, avoids maintaining types in global.d.ts
 // 使用 Symbol.for 保证跨模块唯一性，避免在 global.d.ts 中维护类型
@@ -120,7 +120,11 @@ export function createLazySingleton<T>(key: string, factory: () => T, options?: 
  *   return newEnforcer(model, adapter);
  * });
  */
-export function createAsyncSingleton<T>(key: string, factory: () => Promise<T>, options?: SingletonOptions<T>): Promise<T> {
+export function createAsyncSingleton<T>(
+  key: string,
+  factory: () => Promise<T>,
+  options?: SingletonOptions<T>,
+): Promise<T> {
   const registry = getRegistry();
 
   if (!registry.has(key)) {
