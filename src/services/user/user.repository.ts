@@ -162,330 +162,6 @@ export async function searchUsers(
     },
   });
 }
-export async function setPassword(userId: number, password: string, tx: PrismaTransaction = prisma) {
-  return await tx.user.update({
-    where: {
-      id: userId,
-      status: Status.Enable,
-      isDelete: false,
-    },
-    data: {
-      password,
-    },
-  });
-}
-export async function setMobile(userId: number, phoneNumber: string, tx: PrismaTransaction = prisma) {
-  return await tx.user.update({
-    where: {
-      id: userId,
-      status: Status.Enable,
-      isDelete: false,
-    },
-    data: {
-      mobile: phoneNumber,
-    },
-  });
-}
-export async function setUser(userCreateDto: UserCreateDto, tx: PrismaTransaction = prisma) {
-  return await tx.user.create({
-    data: userCreateDto,
-  });
-}
-
-export async function setUsers(
-  userCreateDtos: Prettify<UserCreateDto>[],
-  tx: PrismaTransaction = prisma,
-) {
-  return await tx.user.createMany({
-    data: userCreateDtos,
-  });
-}
-
-export async function getUsersByOrg(orgCode: string, tx: PrismaTransaction = prisma) {
-  return await tx.user.findMany({
-    where: {
-      employments: {
-        some: {
-          deptartment: {
-            orgCode,
-          },
-        },
-      },
-      status: Status.Enable,
-      isDelete: false,
-    },
-  });
-}
-export async function getUsersByOrgAndAllSub(orgCode: string, tx: PrismaTransaction = prisma) {
-  return await tx.user.findMany({
-    where: {
-      employments: {
-        some: {
-          deptartment: {
-            descendantClosures: {
-              some: {
-                ancestor: {
-                  orgCode,
-                },
-              },
-            },
-          },
-        },
-      },
-      status: Status.Enable,
-      isDelete: false,
-    },
-  });
-}
-export async function getOtherUsersByOrgAndAllSub(userId: number, orgCode: string, tx: PrismaTransaction = prisma) {
-  return await tx.user.findMany({
-    where: {
-      employments: {
-        some: {
-          deptartment: {
-            descendantClosures: {
-              some: {
-                ancestor: {
-                  orgCode,
-                },
-              },
-            },
-          },
-        },
-      },
-      NOT: {
-        id: userId,
-      },
-      status: Status.Enable,
-      isDelete: false,
-    },
-  });
-}
-export async function getUsersByOrgRole(orgCode: string, roleCode: string, tx: PrismaTransaction = prisma) {
-  return await tx.user.findMany({
-    where: {
-      employments: {
-        some: {
-          AND: [
-            {
-              deptartment: {
-                orgCode,
-              },
-              status: Status.Enable,
-            },
-            {
-              OR: [
-                {
-                  position: {
-                    roles: {
-                      some: {
-                        role: {
-                          roleCode,
-                        },
-                      },
-                    },
-                  },
-                },
-                {
-                  posOrg: {
-                    roles: {
-                      some: {
-                        role: {
-                          roleCode,
-                        },
-                      },
-                    },
-                  },
-                },
-                {
-                  roles: {
-                    some: {
-                      role: {
-                        roleCode,
-                      },
-                    },
-                  },
-                },
-                {
-                  deptartment: {
-                    roles: {
-                      some: {
-                        role: {
-                          roleCode,
-                        },
-                      },
-                    },
-                  },
-                },
-                {
-                  company: {
-                    roles: {
-                      some: {
-                        role: {
-                          roleCode,
-                        },
-                      },
-                    },
-                  },
-                },
-              ],
-            },
-          ],
-        },
-      },
-      status: Status.Enable,
-      isDelete: false,
-    },
-  });
-}
-export async function getUsersByOrgAndAllSubRole(orgCode: string, roleCode: string, tx: PrismaTransaction = prisma) {
-  return await tx.user.findMany({
-    where: {
-      // userType: '正式员工',
-      employments: {
-        some: {
-          AND: [
-            {
-              deptartment: {
-                descendantClosures: {
-                  some: {
-                    ancestor: {
-                      orgCode,
-                    },
-                  },
-                },
-              },
-              status: Status.Enable,
-            },
-            {
-              OR: [
-                {
-                  position: {
-                    roles: {
-                      some: {
-                        role: {
-                          roleCode,
-                        },
-                      },
-                    },
-                  },
-                },
-                {
-                  posOrg: {
-                    roles: {
-                      some: {
-                        role: {
-                          roleCode,
-                        },
-                      },
-                    },
-                  },
-                },
-                {
-                  roles: {
-                    some: {
-                      role: {
-                        roleCode,
-                      },
-                    },
-                  },
-                },
-                {
-                  deptartment: {
-                    descendantClosures: {
-                      some: {
-                        OR: [
-                          {
-                            depth: 0,
-                            ancestor: {
-                              roles: {
-                                some: {
-                                  role: {
-                                    roleCode,
-                                  },
-                                },
-                              },
-                            },
-                          },
-                          {
-                            depth: {
-                              gt: 0,
-                            },
-                            ancestor: {
-                              roles: {
-                                some: {
-                                  isAllSub: true,
-                                  role: {
-                                    roleCode,
-                                  },
-                                },
-                              },
-                            },
-                          },
-                        ],
-                      },
-                    },
-                    // roles: {
-                    //     some: {
-                    //         role: {
-                    //             roleCode: roleCode
-                    //         }
-                    //     }
-                    // }
-                  },
-                },
-              ],
-            },
-          ],
-        },
-      },
-      status: Status.Enable,
-      isDelete: false,
-    },
-  });
-}
-export async function getUsersByOrgPos(orgCode: string, posCode: string, tx: PrismaTransaction = prisma) {
-  return await tx.user.findMany({
-    where: {
-      employments: {
-        some: {
-          deptartment: {
-            orgCode,
-          },
-          position: {
-            posCode,
-          },
-        },
-      },
-      status: Status.Enable,
-      isDelete: false,
-    },
-  });
-}
-export async function getUsersByOrgAndAllSubPos(orgCode: string, posCode: string, tx: PrismaTransaction = prisma) {
-  return await tx.user.findMany({
-    where: {
-      employments: {
-        some: {
-          deptartment: {
-            descendantClosures: {
-              some: {
-                ancestor: {
-                  orgCode,
-                },
-              },
-            },
-          },
-          position: {
-            posCode,
-          },
-        },
-      },
-      status: Status.Enable,
-      isDelete: false,
-    },
-  });
-}
 export async function searchUsersFuzzy(
   userPaginationQueryDto: UserPaginationQueryDto,
   tx: PrismaTransaction = prisma,
@@ -528,6 +204,69 @@ export async function searchUsersFuzzy(
       wxId: {
         in: userPaginationQueryDto.conditions.exactConditions.wxIds,
       },
+      isDelete: false,
+    },
+  });
+}
+export async function setPassword(userId: number, password: string, tx: PrismaTransaction = prisma) {
+  return await tx.user.update({
+    where: {
+      id: userId,
+      status: Status.Enable,
+      isDelete: false,
+    },
+    data: {
+      password,
+    },
+  });
+}
+export async function setMobile(userId: number, phoneNumber: string, tx: PrismaTransaction = prisma) {
+  return await tx.user.update({
+    where: {
+      id: userId,
+      status: Status.Enable,
+      isDelete: false,
+    },
+    data: {
+      mobile: phoneNumber,
+    },
+  });
+}
+export async function setUser(userCreateDto: UserCreateDto, tx: PrismaTransaction = prisma) {
+  return await tx.user.create({
+    data: userCreateDto,
+  });
+}
+
+export async function setUsers(
+  userCreateDtos: Prettify<UserCreateDto>[],
+  tx: PrismaTransaction = prisma,
+) {
+  return await tx.user.createMany({
+    data: userCreateDtos,
+  });
+}
+
+export async function getOtherUsersByOrgAndAllSub(userId: number, orgCode: string, tx: PrismaTransaction = prisma) {
+  return await tx.user.findMany({
+    where: {
+      employments: {
+        some: {
+          deptartment: {
+            descendantClosures: {
+              some: {
+                ancestor: {
+                  orgCode,
+                },
+              },
+            },
+          },
+        },
+      },
+      NOT: {
+        id: userId,
+      },
+      status: Status.Enable,
       isDelete: false,
     },
   });

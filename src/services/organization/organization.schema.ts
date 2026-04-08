@@ -26,11 +26,20 @@ export const OrganizationDtoConverterSchema = OrganizationDetailSchema.transform
 
 // export type OrganizationDto = z.infer<typeof OrganizationDtoSchema>;
 
-export const OrganizationCreateDtoSchema = OrganizationDtoSchema.partial().required({
+export const OrganizationCreateDtoSchema = OrganizationSchema.partial().required({
   orgCode: true,
   orgType: true,
   orgName: true,
-  parentCode: true,
+  // parentCode: true,
+}).extend({
+  path: z.string().default(""),
+  level: z.number().default(0),
+}).omit({
+  id: true,
+  isDelete: true,
+  createTime: true,
+  updateTime: true,
+  parentId: true,
 }).openapi("OrganizationCreateDto");
 
 export const OrganizationQueryDtoSchema = z.object({

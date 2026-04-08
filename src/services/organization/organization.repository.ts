@@ -1,6 +1,6 @@
 import type { PrismaTransaction } from "@/db";
 import type { Organization } from "@/db/generated/prisma/client";
-import type { OrganizationQueryDto } from "@/services/organization/organization.type";
+import type { OrganizationCreateDto, OrganizationQueryDto } from "@/services/organization/organization.type";
 import { OrganizationType } from "@enums/organization.type";
 import { Status } from "@enums/status";
 import { prisma } from "@/db";
@@ -133,25 +133,15 @@ export async function getOrganizationsByParentsCode(parentCodes: string[], tx: P
   });
 }
 export async function setOrganization(
-  orgCode: string,
-  orgName: string,
-  orgLevel: number,
-  orgType: string,
-  parentOrganization: Organization,
+  organizationCreateDto: OrganizationCreateDto,
+  parentOrganization: Organization | null,
   tx: PrismaTransaction = prisma,
 ) {
   const newOrganization = await tx.organization.create({
-    data: {
-      orgCode,
-      orgName,
-      parentId: parentOrganization.id,
-      level: orgLevel,
-      orgType,
-      isVirtual: true,
-      path: "",
-    },
+    data: organizationCreateDto,
   });
-  const path = `${parentOrganization.path}/${newOrganization.id}`;
+  const path = `${parentOrganization ? parentOrganization.path : ""}/${newOrganization.id}`;
+  const level = parentOrganization ? parentOrganization.level + 1 : 1;
   const updatedOrganization = await tx.organization.update({
     where: {
       id: newOrganization.id,
@@ -160,12 +150,14 @@ export async function setOrganization(
     },
     data: {
       path,
+      level,
+      parentId: parentOrganization?.id,
     },
   });
   const closureRelations = [];
   const parentAncestors = await tx.organizationClosure.findMany({
     where: {
-      descendantId: parentOrganization.id,
+      descendantId: parentOrganization?.id,
     },
     select: { ancestorId: true, depth: true },
   });

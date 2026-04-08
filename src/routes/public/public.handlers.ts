@@ -38,6 +38,10 @@ export const usersSearch: PublicRouteHandler<"usersSearch"> = async (c) => {
 
 export const usersQueryByOrg: PublicRouteHandler<"usersQueryByOrg"> = async (c) => {
   const { orgCode } = c.req.valid("query");
-  const data = await userService.getUsersByOrg(orgCode, "direct");
-  return c.json(resp.ok(data));
+  // const data = await userService.getUsersByOrg(orgCode, "direct");
+  const userDtos = await userService.searchUsers({
+    ancestorOrgCodes: [orgCode],
+    ancestorOrgDepths: [0],
+  });
+  return c.json(resp.ok(userDtos));
 };

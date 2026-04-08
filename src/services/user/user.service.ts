@@ -188,66 +188,6 @@ export async function getOtherUsersByOrg(orgCode: string, userId: number) {
   return userDtos;
 }
 
-export async function getUsersByOrg(orgCode: string, orgScope: string) {
-  const users = orgScope === "direct"
-    ? await userRepository.getUsersByOrg(orgCode)
-    : await userRepository.getUsersByOrgAndAllSub(orgCode);
-  const userDtos = users.map(u => UserDtoSchema.parse(u));
-  return userDtos;
-}
-
-export async function getUsersByOrgRole(orgCode: string, roleCode: string, orgScope: string) {
-  const users = orgScope === "direct"
-    ? await userRepository.getUsersByOrgRole(orgCode, roleCode)
-    : await userRepository.getUsersByOrgAndAllSubRole(orgCode, roleCode);
-  const userDtos = users.map(u => UserDtoSchema.parse(u));
-  return userDtos;
-}
-
-export async function getUsersByOrgPos(orgCode: string, roleCode: string, orgScope: string) {
-  const users = orgScope === "direct"
-    ? await userRepository.getUsersByOrgPos(orgCode, roleCode)
-    : await userRepository.getUsersByOrgAndAllSubPos(orgCode, roleCode);
-  const userDtos = users.map(u => UserDtoSchema.parse(u));
-  return userDtos;
-}
-
-// export async function registerPurveyorConcat(username: string, mobile: string, name: string, orgCode: string) {
-//   await prisma.$transaction(async (tx) => {
-//     const existingUser = await userRepository.getUserByMobile(mobile, tx);
-//     const [pos, comp, org] = await Promise.all([
-//       positionRepository.getPositionByCode("P001", tx),
-//       organizationRepository.getOrganizationByCode(config.PURVEYOR_PARENT_ORG, tx),
-//       organizationRepository.getOrganizationByCode(orgCode, tx),
-//     ]);
-//     if (org === null) {
-//       throw new CustomError("供应商尚未注册");
-//     }
-//     if (pos === null || comp === null) {
-//       throw new CustomError("系统基本信息缺失");
-//     }
-//     if (existingUser !== null) {
-//       const existingEmployment = await employmentRepository.getEmploymentByUserOrgPosId(
-//         existingUser.id,
-//         org.id,
-//         pos.id,
-//         tx,
-//       );
-//       if (existingEmployment === null) {
-//         await employmentRepository.setEmployment(existingUser.id, pos.id, org.id, comp.id, tx);
-//       }
-//     }
-//     else {
-//       const user = await userRepository.setUser(username, name, mobile, UserType.External, tx);
-//       await employmentRepository.setEmployment(user.id, pos.id, org.id, comp.id, tx);
-//     }
-//   });
-//   if (config.NODE_ENV === "production") {
-//     await mobileService.sendMessage(mobile, mobileService.getPurveyorWelcomeMessage(name));
-//   }
-//   return true;
-// }
-
 export async function setUsers(userCreateDtos: Prettify<UserCreateDto>[]) {
   return await prisma.$transaction(async (tx) => {
     const existingUsers = await userRepository.searchUsers({ usernames: userCreateDtos.map(u => u.username) }, tx);

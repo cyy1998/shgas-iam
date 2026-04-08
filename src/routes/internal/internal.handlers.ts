@@ -8,6 +8,7 @@ import * as employmentRepository from "@/services/employment/employment.reposito
 import * as employmentService from "@/services/employment/employment.service";
 import * as mobileService from "@/services/mobile/mobile.service";
 import * as organizationRepository from "@/services/organization/organization.repository";
+import { OrganizationCreateDtoSchema } from "@/services/organization/organization.schema";
 import * as organizationService from "@/services/organization/organization.service";
 import * as positionRepository from "@/services/position/position.repository";
 import * as userRepository from "@/services/user/user.repository";
@@ -22,8 +23,12 @@ export const userInfo: InternalRouteHandler<"userInfo"> = async (c) => {
 
 export const usersQueryByOrgPosition: InternalRouteHandler<"usersQueryByOrgPosition"> = async (c) => {
   const { posCode, orgCode, orgScope } = c.req.valid("query");
-  const data = await userService.getUsersByOrgPos(orgCode, posCode, orgScope);
-  return c.json(resp.ok(data));
+  const userDtos = await userService.searchUsers({
+    positionCodes: [posCode],
+    ancestorOrgCodes: [orgCode],
+    ancestorOrgDepths: orgScope === "direct" ? [0] : undefined,
+  });
+  return c.json(resp.ok(userDtos));
 };
 
 export const usersSearch: InternalRouteHandler<"usersSearch"> = async (c) => {
@@ -40,14 +45,22 @@ export const usersSearchWithPrivilegeDelegation: InternalRouteHandler<"usersSear
 
 export const usersQueryByOrgRole: InternalRouteHandler<"usersQueryByOrgRole"> = async (c) => {
   const { roleCode, orgCode, orgScope } = c.req.valid("query");
-  const data = await userService.getUsersByOrgRole(orgCode, roleCode, orgScope);
-  return c.json(resp.ok(data));
+  const userDtos = await userService.searchUsers({
+    roleCodes: [roleCode],
+    ancestorOrgCodes: [orgCode],
+    ancestorOrgDepths: orgScope === "direct" ? [0] : undefined,
+  });
+  return c.json(resp.ok(userDtos));
 };
 
 export const usersQueryByOrg: InternalRouteHandler<"usersQueryByOrg"> = async (c) => {
   const { orgCode, orgScope } = c.req.valid("query");
-  const data = await userService.getUsersByOrg(orgCode, orgScope);
-  return c.json(resp.ok(data));
+  // const data = await userService.getUsersByOrg(orgCode, orgScope);
+  const userDtos = await userService.searchUsers({
+    ancestorOrgCodes: [orgCode],
+    ancestorOrgDepths: orgScope === "direct" ? [0] : undefined,
+  });
+  return c.json(resp.ok(userDtos));
 };
 
 export const employmentsQueryByUserPriv: InternalRouteHandler<"employmentsQueryByUserPriv"> = async (c) => {
@@ -62,12 +75,13 @@ export const purveyorRegister: InternalRouteHandler<"purveyorRegister"> = async 
   if (exisitngOrg !== null) {
     return c.json(resp.ok(true));
   }
-  await organizationService.setOrganization({
+  const organizationCreateDto = OrganizationCreateDtoSchema.parse({
     orgCode,
     orgName,
-    parentCode: parentOrg,
     orgType: OrganizationType.External,
+    isVirtual: true,
   });
+  await organizationService.setOrganization(organizationCreateDto, parentOrg);
   return c.json(resp.ok(true));
 };
 
