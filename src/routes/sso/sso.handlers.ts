@@ -75,19 +75,20 @@ export const logout: SsoRouteHandler<"logout"> = async (c) => {
 };
 
 export const loginOA: SsoRouteHandler<"loginOA"> = async (c) => {
-  const { loginid, ts, token, redirectUrl, client } = c.req.valid("query");
+  const { clientCode } = c.req.valid("param");
+  const { loginid, ts, token, redirectUrl } = c.req.valid("query");
   const sessionId = getCookie(c, "global_session") ?? c.req.header("Authorization");
   if (sessionId) {
     await ssoService.logout(sessionId);
   }
-  const data = await ssoService.loginOA(loginid, ts, token);
+  const data = await ssoService.loginOA(clientCode, loginid, ts, token);
   setCookie(c, "global_session", data.token, {
     httpOnly: true,
     sameSite: "Strict", // 防 CSRF
     maxAge: config.REDIS_EXPIRE_TIME,
     path: "/",
   });
-  return c.redirect(`/sso/authorize?client=${client}&redirectUrl=${encodeURIComponent(redirectUrl)}&token=${data.token}`);
+  return c.redirect(`/sso/authorize?client=${clientCode}&redirectUrl=${encodeURIComponent(redirectUrl)}&token=${data.token}`);
 };
 
 export const loginWX: SsoRouteHandler<"loginWX"> = async (c) => {

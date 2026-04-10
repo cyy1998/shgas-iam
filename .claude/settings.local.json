@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(find D:\\\\Gas-Development\\\\iam-service:*)",
+      "Bash(find D:\\\\Gas-Development\\\\iam-service\\\\src:*)",
+      "Bash(xargs grep:*)",
+      "Bash(find . -type f -name \"*.ts\" -path \"*/src/*\" -exec grep -l \"Provider\\\\|configuration\\\\|client.*secret\" {} \\\\;)",
+      "Bash(bun run:*)"
+    ]
+  }
+}

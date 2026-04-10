@@ -88,15 +88,17 @@ export const logout = createRoute({
 
 export const loginOA = createRoute({
   method: "get",
-  path: "/third-party/oa",
+  path: "/third-party/:clientCode",
   tags,
   request: {
+    params: z.object({
+      clientCode: z.string().openapi({ example: "oa" }),
+    }),
     query: z.object({
       loginid: z.string().openapi({ example: "138550" }),
       ts: z.string().openapi({ example: "1234" }),
       token: z.string().openapi({ example: "138550" }),
       redirectUrl: z.url().openapi({ example: "http://localhost:8080" }),
-      client: z.string().openapi({ example: "tender" }),
     }),
   },
   responses: {

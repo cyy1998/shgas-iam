@@ -116,12 +116,16 @@ export async function logout(globalSessionId: string) {
   return true;
 }
 
-export async function loginOA(loginid: string, ts: string, token: string) {
+export async function loginOA(clientCode: string, loginid: string, ts: string, token: string) {
+  const client = await clientService.getClientByCode(clientCode);
+  if (client === null) {
+    throw new CustomError("非法client代码");
+  }
   const currentTimestamp = Date.now();
   if (config.NODE_ENV === "production" && Math.abs(currentTimestamp - Number.parseInt(ts)) >= 1000 * 300) {
     throw new AuthzUnauthorizedError("token过期");
   }
-  const hashSting = Buffer.from(sm3(`${loginid}|${ts}|${config.IAM_SECRET_KEY}${config.IAM_SECRET_KEY}`), "hex").toBase64();
+  const hashSting = Buffer.from(sm3(`${loginid}|${ts}|${client.clientSecret}${client.clientSecret}`), "hex").toBase64();
   if (hashSting !== token) {
     throw new AuthzUnauthorizedError("token校验失败");
   }
