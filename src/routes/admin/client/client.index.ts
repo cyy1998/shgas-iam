@@ -7,6 +7,7 @@ const router = createRouter();
 
 router.use("/*", publicAuthenicationHandler);
 
+router.openapi(routes.clientCreate, handlers.clientCreate);
 router.openapi(routes.clientUpdate, handlers.clientUpdate);
 
 export default router;

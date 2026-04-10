@@ -1,4 +1,4 @@
-import type { ClientDto, ClientInputDto } from "./client.type";
+import type { ClientCreateDto, ClientDto, ClientInputDto } from "./client.type";
 import { ZodError } from "zod";
 import { prisma } from "@/db";
 import redis from "@/lib/clients/redis";
@@ -59,6 +59,15 @@ export async function getClientBySecret(clientSecret: string): Promise<ClientDto
   const clientDto = ClientDtoSchema.parse(client);
   await setClientCache(clientDto);
   return clientDto;
+}
+
+export async function createClient(clientDto: ClientCreateDto) {
+  return await prisma.$transaction(async (tx) => {
+    const client = await clientRepository.createClient(clientDto, tx);
+    const createdClientDto = ClientDtoSchema.parse(client);
+    await setClientCache(createdClientDto);
+    return createdClientDto;
+  });
 }
 
 export async function updateClient(clientDto: ClientInputDto) {

@@ -1,4 +1,4 @@
-import type { ClientInputDto } from "./client.type";
+import type { ClientCreateDto, ClientInputDto } from "./client.type";
 import type { PrismaTransaction } from "@/db";
 import { prisma } from "@/db";
 
@@ -14,6 +14,11 @@ export async function getClientBySecret(clientSecret: string, tx: PrismaTransact
     where: {
       clientSecret,
     },
+  });
+}
+export async function createClient(clientDto: ClientCreateDto, tx: PrismaTransaction = prisma) {
+  return await tx.client.create({
+    data: clientDto,
   });
 }
 export async function updateClient(clientDto: ClientInputDto, tx: PrismaTransaction = prisma) {
