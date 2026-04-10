@@ -51,14 +51,15 @@ export const authorize: SsoRouteHandler<"authorize"> = async (c) => {
   const { client, redirectUrl, token } = c.req.valid("query");
   const searchParams = new URLSearchParams(c.req.query());
   const sessionId = getCookie(c, "global_session") ?? c.req.header("Authorization") ?? token;
-  const clientInstance = await clientService.getClientByCode(client);
+  const clientDto = await clientService.getClientByCode(client);
+  // if(clientDto.)
   const data = await ssoService.authorize(sessionId, client, redirectUrl);
   if (data.isLogin === false) {
     return c.redirect(`${config.LOGIN_ENDPOINT}?${searchParams.toString()}`);
   }
-  const callbackPath = clientInstance?.extAttributes.managementLevel === ClientManagementLevel.Gateway
+  const callbackPath = clientDto?.extAttributes.managementLevel === ClientManagementLevel.Gateway
     ? `${getProtocolAndHost(redirectUrl)}/sso/callback`
-    : `${clientInstance?.extAttributes.callbackEndpoint}`;
+    : `${clientDto?.extAttributes.callbackEndpoint}`;
   return c.redirect(`${callbackPath}?code=${data.code}&client=${client}&redirectUrl=${encodeURIComponent(redirectUrl)}`);
 };
 

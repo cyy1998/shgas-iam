@@ -54,7 +54,7 @@ export async function callback(code: string, clientCode: string, redirectUrl: st
 
 export async function setToken(code: string, clientCode: string, clientSecret: string) {
   const client = await clientService.getClientByCode(clientCode);
-  if (client === null || clientSecret !== client.extAttributes.clientSecret) {
+  if (client === null || clientSecret !== client.clientSecret) {
     throw new CustomError("非法Client");
   }
   const authObjectString = await redis.get(`auth_code:${code}`);
