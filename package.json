@@ -15,7 +15,7 @@
     "lint:fix": "eslint --fix src/"
   },
   "peerDependencies": {
-    "typescript": "^5"
+    "typescript": "^6"
   },
   "dependencies": {
     "@hono/swagger-ui": "^0.5.2",
@@ -48,6 +48,7 @@
     "eslint": "^10.0.0",
     "eslint-plugin-format": "^2.0.1",
     "prisma": "7",
-    "prisma-zod-generator": "^2.1.4"
+    "prisma-zod-generator": "^2.1.4",
+    "typescript": "^6"
   }
 }
