@@ -1,5 +1,11 @@
 import type { AppBindings } from "@/lib/lib";
+import { readdirSync, statSync } from "node:fs";
+import path, { join } from "node:path";
 import { OpenAPIHono } from "@hono/zod-openapi";
+import { serveStatic } from "hono/bun";
+import { logger } from "hono/logger";
+import { errorHandler } from "@/middlewares/error.handler";
+import { pinoLogger } from "../clients/pino";
 import defaultHook from "./openapi/default-hook";
 
 export function createRouter() {
@@ -7,4 +13,92 @@ export function createRouter() {
     strict: false,
     defaultHook,
   });
+}
+
+// Auto-detect and register routes from src/routes/
+function registerRoutes(app: OpenAPIHono, dir: string, prefix = "") {
+  const entries = readdirSync(dir);
+
+  for (const entry of entries) {
+    const fullPath = join(dir, entry);
+    const stat = statSync(fullPath);
+
+    if (stat.isDirectory()) {
+      // Recurse into subdirectories, using subdirectory name as prefix
+      const routePrefix = prefix ? `${prefix}/${entry}` : entry;
+      registerRoutes(app, fullPath, routePrefix);
+    }
+    else if (entry.endsWith(".index.ts")) {
+      // Register the router with the prefix derived from relative path
+      // eslint-disable-next-line ts/no-require-imports
+      const routeModule = require(fullPath);
+      const router = routeModule.default;
+
+      if (router && typeof router.route === "function") {
+        const routePrefix = prefix || "/";
+        app.route(routePrefix, router);
+        pinoLogger.info(`Registered route: ${routePrefix}`);
+      }
+    }
+  }
+}
+
+export default function createApp() {
+  const app = new OpenAPIHono();
+
+  // const port = env.PORT
+
+  app.use("/static/*", serveStatic({ root: "./" }));
+
+  app.use(logger(
+    (str: string, ...args: any[]) => {
+      pinoLogger.info(`[INFO] ${new Date().toISOString()} - ${str}`, ...args);
+      // pinoLogger.info({ type: 'query' });
+    },
+  ));
+
+  app.onError(errorHandler);
+
+  const routesDir = join(path.resolve(__dirname, "../.."), "routes");
+  registerRoutes(app, routesDir);
+
+  app.doc("/doc", {
+    openapi: "3.0.0",
+    info: {
+      version: "1.0.0",
+      title: "IAM Service",
+    },
+  });
+
+  app.get("/doc/swagger", (c) => {
+    const html = `
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Swagger UI</title>
+  <link rel="stylesheet" type="text/css" href="/static/swagger/swagger-ui.css" />
+</head>
+<body>
+  <div id="swagger-ui"></div>
+  <script src="/static/swagger/swagger-ui-bundle.js"></script>
+  <script src="/static/swagger/swagger-ui-standalone-preset.js"></script>
+  <script>
+    SwaggerUIBundle({
+      url: '/doc', // 指向你的 OpenAPI JSON 地址
+      dom_id: '#swagger-ui',
+      presets: [
+        SwaggerUIBundle.presets.apis,
+        SwaggerUIStandalonePreset
+      ],
+      layout: "StandaloneLayout"
+    })
+  </script>
+</body>
+</html>
+  `;
+    return c.html(html);
+  });
+
+  return app;
 }

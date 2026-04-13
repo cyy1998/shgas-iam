@@ -5,6 +5,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Project Overview
 
 This is an IAM (Identity and Access Management) service built with:
+
 - **Runtime**: Bun (see `devEngines.runtime` in package.json)
 - **Framework**: Hono with OpenAPI extensions (`@hono/zod-openapi`)
 - **Database**: MySQL with Prisma ORM
@@ -16,32 +17,34 @@ This is an IAM (Identity and Access Management) service built with:
 ## Development Commands
 
 ### Prerequisites
+
 - **Bun** runtime (version compatible with `devEngines.runtime` in package.json)
 - **MySQL** database with connection string in `DATABASE_URL` environment variable
 - **Redis** instance for session storage (configured via `REDIS_URL`, `REDIS_PORT`, `REDIS_DB`)
 - **Environment variables**: Set required variables (see `src/env.ts`). A `.env` file is used but not committed.
 
 ### Common Commands
+
 ```bash
 # Install dependencies (uses pnpm)
 pnpm install
 
 # Start development server with hot reload
-bun run dev
+pnpm dev
 
 # Start production server
-bun run serve
+pnpm serve
 
 # Lint code
-bun run lint
+pnpm lint
 
 # Lint and auto-fix
-bun run lint:fix
+pnpm lint:fix
 
 # Database operations (not in package.json but commonly used)
-bunx prisma generate    # Generate Prisma client after schema changes
-bunx prisma migrate dev # Create and apply migrations
-bunx prisma studio      # Open Prisma Studio for data inspection
+pnpm prisma generate    # Generate Prisma client after schema changes
+pnpm prisma migrate dev # Create and apply migrations
+pnpm prisma studio      # Open Prisma Studio for data inspection
 ```
 
 ## Architecture
@@ -53,7 +56,7 @@ bunx prisma studio      # Open Prisma Studio for data inspection
 - **`src/env.ts`**: Environment variable validation using Zod
 - **`src/routes/`**: API routes organized by access level:
   - `admin/` – Administrative endpoints (client, employment, organization, position, user management)
-  - `auth/` – Authentication endpoints  
+  - `auth/` – Authentication endpoints
   - `internal/` – Internal service calls
   - `open/` – Open APIs
   - `public/` – Public APIs
