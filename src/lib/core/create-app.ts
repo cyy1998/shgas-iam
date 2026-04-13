@@ -2,6 +2,7 @@ import type { AppBindings } from "@/lib/lib";
 import { readdirSync, statSync } from "node:fs";
 import path, { join } from "node:path";
 import { OpenAPIHono } from "@hono/zod-openapi";
+import { Scalar } from "@scalar/hono-api-reference";
 import { serveStatic } from "hono/bun";
 import { logger } from "hono/logger";
 import { errorHandler } from "@/middlewares/error.handler";
@@ -70,35 +71,13 @@ export default function createApp() {
     },
   });
 
-  app.get("/doc/swagger", (c) => {
-    const html = `
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="utf-8" />
-  <title>Swagger UI</title>
-  <link rel="stylesheet" type="text/css" href="/static/swagger/swagger-ui.css" />
-</head>
-<body>
-  <div id="swagger-ui"></div>
-  <script src="/static/swagger/swagger-ui-bundle.js"></script>
-  <script src="/static/swagger/swagger-ui-standalone-preset.js"></script>
-  <script>
-    SwaggerUIBundle({
-      url: '/doc', // 指向你的 OpenAPI JSON 地址
-      dom_id: '#swagger-ui',
-      presets: [
-        SwaggerUIBundle.presets.apis,
-        SwaggerUIStandalonePreset
-      ],
-      layout: "StandaloneLayout"
-    })
-  </script>
-</body>
-</html>
-  `;
-    return c.html(html);
-  });
+  app.get("/doc/scalar", Scalar({
+    content: {
+      openapi: "3.0.0",
+      info: { version: "1.0.0", title: "IAM Service" },
+    },
+    url: "/doc",
+  }));
 
   return app;
 }
