@@ -1,1 +1,8 @@
-{ "permissionMode": "auto" }
+{
+  "permissionMode": "auto",
+  "permissions": {
+    "allow": [
+      "WebSearch"
+    ]
+  }
+}

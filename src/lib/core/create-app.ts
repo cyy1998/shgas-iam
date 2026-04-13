@@ -77,6 +77,7 @@ export default function createApp() {
       info: { version: "1.0.0", title: "IAM Service" },
     },
     url: "/doc",
+    cdn: "/static/scalar/api-reference.js",
   }));
 
   return app;
