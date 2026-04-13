@@ -97,7 +97,7 @@ export const usersQueryByOrg = createRoute({
     query: z.object({
       orgCode: z.string().openapi({ example: "SR23" }),
       orgScope: z.enum(["direct", "recursive"]).default("direct").openapi({ example: "direct or recursive" }),
-    }).openapi("Username"),
+    }),
   },
   responses: {
     [HttpStatusCodes.OK]: jsonContent(createSuccessResponseSchema(z.array(UserDtoSchema)), "用户搜索结果"),

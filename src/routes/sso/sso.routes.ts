@@ -121,7 +121,7 @@ export const loginWX = createRoute({
   },
   responses: {
     [HttpStatusCodes.MOVED_TEMPORARILY]: {
-      description: "OA登录成功",
+      description: "微信登录成功",
     },
   },
 });
