@@ -5,11 +5,12 @@ import jsonContentRequired from "@/lib/core/openapi/helpers/json-content-require
 import createSuccessResponseSchema from "@/lib/core/openapi/schemas/create-success-schema";
 import { OrganizationCreateDtoSchema, OrganizationDtoSchema, OrganizationQueryDtoSchema } from "@/services/organization/organization.schema";
 
-const tags = ["Admin"];
+const routePrefix = "/admin/organizations";
+const tags = ["Admin/Organization"];
 
 export const organizationsSearch = createRoute({
   method: "post",
-  path: "/search",
+  path: `${routePrefix}/search`,
   tags,
   request: {
     body: jsonContentRequired(OrganizationQueryDtoSchema, "组织查询参数"),
@@ -21,7 +22,7 @@ export const organizationsSearch = createRoute({
 
 export const organizationsSet = createRoute({
   method: "post",
-  path: "/set",
+  path: `${routePrefix}/set`,
   tags,
   request: {
     body: jsonContentRequired(OrganizationCreateDtoSchema.extend({ parentCode: z.string().nullish() }), "组织创建参数"),

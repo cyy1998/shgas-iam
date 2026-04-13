@@ -6,11 +6,12 @@ import createSuccessResponseSchema from "@/lib/core/openapi/schemas/create-succe
 import { PositionCreateDtoSchema, PositionPaginationQueryDtoSchema } from "@/services/position/position.schema";
 import { PositionVoSchema } from "./position.schema";
 
+const routePrefix = "/admin/positions";
 const tags = ["Admin/Position"];
 
 export const positionsSearch = createRoute({
   method: "post",
-  path: "/search",
+  path: `${routePrefix}/search`,
   tags,
   request: {
     body: jsonContentRequired(PositionPaginationQueryDtoSchema, "岗位分页查询参数"),
@@ -22,7 +23,7 @@ export const positionsSearch = createRoute({
 
 export const positionsSet = createRoute({
   method: "post",
-  path: "/set",
+  path: `${routePrefix}/set`,
   tags,
   request: {
     body: jsonContentRequired(z.object({ data: z.array(PositionCreateDtoSchema) }), "岗位创建参数"),

@@ -5,11 +5,12 @@ import jsonContentRequired from "@/lib/core/openapi/helpers/json-content-require
 import createSuccessResponseSchema from "@/lib/core/openapi/schemas/create-success-schema";
 import { ClientCreateDtoSchema, ClientDtoSchema, ClientInputDtoSchema } from "@/services/client/client.schema";
 
-const tags = ["Admin"];
+const routePrefix = "/admin/clients";
+const tags = ["Admin/Client"];
 
 export const clientUpdate = createRoute({
   method: "post",
-  path: "/update",
+  path: `${routePrefix}/update`,
   tags,
   request: {
     body: jsonContentRequired(ClientInputDtoSchema, "客户端更新参数"),
@@ -21,7 +22,7 @@ export const clientUpdate = createRoute({
 
 export const clientCreate = createRoute({
   method: "post",
-  path: "/create",
+  path: `${routePrefix}/create`,
   tags,
   request: {
     body: jsonContentRequired(ClientCreateDtoSchema, "客户端创建参数"),

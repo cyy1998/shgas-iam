@@ -37,7 +37,7 @@ function registerRoutes(app: OpenAPIHono, dir: string, prefix = "") {
 
       if (router && typeof router.route === "function") {
         const routePrefix = prefix || "/";
-        app.route(routePrefix, router);
+        app.route("/", router);
         pinoLogger.info(`Registered route: ${routePrefix}`);
       }
     }

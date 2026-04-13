@@ -4,11 +4,12 @@ import jsonContent from "@lib/core/openapi/helpers/json-content";
 import createSuccessResponseSchema from "@lib/core/openapi/schemas/create-success-schema";
 import { SSOMetaInfoSchema } from "./sso.schema";
 
+const routePrefix = "/sso";
 const tags = ["SSO"];
 
 export const endpointsConfiguration = createRoute({
   method: "get",
-  path: "/.well-known/authentication-configuration",
+  path: `${routePrefix}/.well-known/authentication-configuration`,
   tags,
   responses: {
     [HttpStatusCodes.OK]: jsonContent(createSuccessResponseSchema(SSOMetaInfoSchema), "单点登录端点信息"),
@@ -17,7 +18,7 @@ export const endpointsConfiguration = createRoute({
 
 export const callback = createRoute({
   method: "get",
-  path: "/callback",
+  path: `${routePrefix}/callback`,
   tags,
   request: {
     query: z.object({
@@ -35,7 +36,7 @@ export const callback = createRoute({
 
 export const token = createRoute({
   method: "get",
-  path: "/token",
+  path: `${routePrefix}/token`,
   tags,
   request: {
     query: z.object({
@@ -53,7 +54,7 @@ export const token = createRoute({
 
 export const authorize = createRoute({
   method: "get",
-  path: "/authorize",
+  path: `${routePrefix}/authorize`,
   tags,
   request: {
     query: z.object({
@@ -71,7 +72,7 @@ export const authorize = createRoute({
 
 export const logout = createRoute({
   method: "get",
-  path: "/logout",
+  path: `${routePrefix}/logout`,
   tags,
   request: {
     query: z.object({
@@ -88,7 +89,7 @@ export const logout = createRoute({
 
 export const loginOA = createRoute({
   method: "get",
-  path: "/third-party/:clientCode",
+  path: `${routePrefix}/third-party/:clientCode`,
   tags,
   request: {
     params: z.object({
@@ -110,7 +111,7 @@ export const loginOA = createRoute({
 
 export const loginWX = createRoute({
   method: "get",
-  path: "/third-party/wx",
+  path: `${routePrefix}/third-party/wx`,
   tags,
   request: {
     query: z.object({

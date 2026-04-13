@@ -7,11 +7,12 @@ import { createPageResultSchema } from "@/lib/core/pagination/schema";
 import { UserDetailVoSchema, UserVoSchema } from "@/routes/admin/user/user.schema";
 import { UserCreateDtoSchema, UserPaginationQueryDtoSchema } from "@/services/user/user.schema";
 
-const tags = ["Admin"];
+const routePrefix = "/admin/users";
+const tags = ["Admin/User"];
 
 export const usersSearch = createRoute({
   method: "post",
-  path: "/search",
+  path: `${routePrefix}/search`,
   tags,
   request: {
     body: jsonContentRequired(UserPaginationQueryDtoSchema, "管理员用户查询"),
@@ -23,7 +24,7 @@ export const usersSearch = createRoute({
 
 export const usersDetail = createRoute({
   method: "get",
-  path: "/detail",
+  path: `${routePrefix}/detail`,
   tags,
   request: {
     query: z.object({
@@ -37,7 +38,7 @@ export const usersDetail = createRoute({
 
 export const passwordReset = createRoute({
   method: "post",
-  path: "/reset-password",
+  path: `${routePrefix}/reset-password`,
   tags,
   request: {
     body: jsonContentRequired(z.object({ username: z.string().openapi({ example: "138550" }) }), "用户名"),
@@ -49,7 +50,7 @@ export const passwordReset = createRoute({
 
 export const passwordGenerate = createRoute({
   method: "post",
-  path: "/generate-password",
+  path: `${routePrefix}/generate-password`,
   tags,
   responses: {
     [HttpStatusCodes.OK]: jsonContent(createSuccessResponseSchema(z.string()), "用户新密码"),
@@ -58,7 +59,7 @@ export const passwordGenerate = createRoute({
 
 export const usersSet = createRoute({
   method: "post",
-  path: "/set",
+  path: `${routePrefix}/set`,
   tags,
   request: {
     body: jsonContentRequired(z.object({ data: z.array(UserCreateDtoSchema) }), "用户创建参数"),

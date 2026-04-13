@@ -8,11 +8,12 @@ import { OrganizationDtoSchema, OrganizationQueryDtoSchema } from "@/services/or
 import { PrivilegeDelegationDtoSchema } from "@/services/privilege/privilege.schema";
 import { UserDetailDtoSchema, UserDtoSchema, UserQueryDtoSchema, UserQueryWithPrivilegeDelegationDtoSchema } from "@/services/user/user.schema";
 
+const routePrefix = "/internal";
 const tags = ["Internal"];
 
 export const userInfo = createRoute({
   method: "get",
-  path: "/user-info",
+  path: `${routePrefix}/user-info`,
   tags,
   request: {
     query: z.object({
@@ -26,7 +27,7 @@ export const userInfo = createRoute({
 
 export const usersQueryByOrgPosition = createRoute({
   method: "get",
-  path: "/search-users/org-position",
+  path: `${routePrefix}/search-users/org-position`,
   tags,
   request: {
     query: z.object({
@@ -43,7 +44,7 @@ export const usersQueryByOrgPosition = createRoute({
 
 export const usersSearch = createRoute({
   method: "post",
-  path: "/users/search",
+  path: `${routePrefix}/users/search`,
   tags,
   request: {
     body: jsonContentRequired(UserQueryDtoSchema, "用户搜索条件"),
@@ -55,7 +56,7 @@ export const usersSearch = createRoute({
 
 export const usersSearchWithPrivilegeDelegation = createRoute({
   method: "post",
-  path: "/users/searchWithPrivilegeDelegation",
+  path: `${routePrefix}/users/searchWithPrivilegeDelegation`,
   tags,
   request: {
     body: jsonContent(UserQueryWithPrivilegeDelegationDtoSchema, "用户搜索条件"),
@@ -74,7 +75,7 @@ export const usersSearchWithPrivilegeDelegation = createRoute({
 
 export const usersQueryByOrgRole = createRoute({
   method: "get",
-  path: "/search-users/org-roles",
+  path: `${routePrefix}/search-users/org-roles`,
   tags,
   request: {
     query: z.object({
@@ -91,7 +92,7 @@ export const usersQueryByOrgRole = createRoute({
 
 export const usersQueryByOrg = createRoute({
   method: "get",
-  path: "/search-users/under-org",
+  path: `${routePrefix}/search-users/under-org`,
   tags,
   request: {
     query: z.object({
@@ -106,7 +107,7 @@ export const usersQueryByOrg = createRoute({
 
 export const employmentsQueryByUserPriv = createRoute({
   method: "get",
-  path: "/search-employments/user-privilege",
+  path: `${routePrefix}/search-employments/user-privilege`,
   tags,
   request: {
     query: z.object({
@@ -121,7 +122,7 @@ export const employmentsQueryByUserPriv = createRoute({
 
 export const purveyorRegister = createRoute({
   method: "post",
-  path: "/purveyor/register",
+  path: `${routePrefix}/purveyor/register`,
   tags,
   request: {
     body: jsonContentRequired(z.object({
@@ -137,7 +138,7 @@ export const purveyorRegister = createRoute({
 
 export const contactRegister = createRoute({
   method: "post",
-  path: "/purveyor/contact/register",
+  path: `${routePrefix}/purveyor/contact/register`,
   tags,
   request: {
     body: jsonContentRequired(z.object({
@@ -154,7 +155,7 @@ export const contactRegister = createRoute({
 
 export const organizationsSearch = createRoute({
   method: "post",
-  path: "/organizations/search",
+  path: `${routePrefix}/organizations/search`,
   tags,
   request: {
     body: jsonContentRequired(OrganizationQueryDtoSchema, "组织搜索参数"),
@@ -166,7 +167,7 @@ export const organizationsSearch = createRoute({
 
 export const organizationGetByCode = createRoute({
   method: "get",
-  path: "/organizations/getByCode",
+  path: `${routePrefix}/organizations/getByCode`,
   tags,
   request: {
     query: z.object({

@@ -6,11 +6,12 @@ import createSuccessResponseSchema from "@lib/core/openapi/schemas/create-succes
 import { OrganizationDtoSchema, OrganizationQueryDtoSchema } from "@/services/organization/organization.schema";
 import { UserDetailDtoSchema, UserDtoSchema, UserQueryDtoSchema } from "@/services/user/user.schema";
 
+const routePrefix = "/public";
 const tags = ["Public"];
 
 export const userInfo = createRoute({
   method: "get",
-  path: "/user-info",
+  path: `${routePrefix}/user-info`,
   tags,
   responses: {
     [HttpStatusCodes.OK]: jsonContent(createSuccessResponseSchema(UserDetailDtoSchema), "本用户基本信息"),
@@ -34,7 +35,7 @@ export const passwordChange = createRoute({
 
 export const mobileSet = createRoute({
   method: "post",
-  path: "/mobile/set",
+  path: `${routePrefix}/mobile/set`,
   tags,
   request: {
     body: jsonContentRequired(z.object({
@@ -49,7 +50,7 @@ export const mobileSet = createRoute({
 
 export const organizationsSearch = createRoute({
   method: "post",
-  path: "/organizations/search",
+  path: `${routePrefix}/organizations/search`,
   tags,
   request: {
     body: jsonContentRequired(OrganizationQueryDtoSchema, "组织查询请求参数"),
@@ -61,7 +62,7 @@ export const organizationsSearch = createRoute({
 
 export const usersSearch = createRoute({
   method: "post",
-  path: "/users/search",
+  path: `${routePrefix}/users/search`,
   tags,
   request: {
     body: jsonContentRequired(UserQueryDtoSchema, "用户查询参数"),
@@ -73,7 +74,7 @@ export const usersSearch = createRoute({
 
 export const usersQueryByOrg = createRoute({
   method: "get",
-  path: "/users/by-org",
+  path: `${routePrefix}/users/by-org`,
   tags,
   request: {
     query: z.object({

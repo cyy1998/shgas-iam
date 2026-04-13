@@ -6,11 +6,12 @@ import createSuccessResponseSchema from "@/lib/core/openapi/schemas/create-succe
 import { EmploymentCreateDtoSchema, EmploymentPaginationQueryDtoSchema } from "@/services/employment/employment.schema";
 import { EmploymentVoSchema } from "./employment.schema";
 
-const tags = ["Admin"];
+const routePrefix = "/admin/employments";
+const tags = ["Admin/Employment"];
 
 export const employmentsSearch = createRoute({
   method: "post",
-  path: "/search",
+  path: `${routePrefix}/search`,
   tags,
   request: {
     body: jsonContentRequired(EmploymentPaginationQueryDtoSchema, "任职关系查询参数"),
@@ -22,7 +23,7 @@ export const employmentsSearch = createRoute({
 
 export const employmentsSet = createRoute({
   method: "post",
-  path: "/set",
+  path: `${routePrefix}/set`,
   tags,
   request: {
     body: jsonContentRequired(EmploymentCreateDtoSchema, "任职关系创建参数"),

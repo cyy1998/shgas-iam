@@ -4,11 +4,12 @@ import jsonContent from "@lib/core/openapi/helpers/json-content";
 import jsonContentRequired from "@lib/core/openapi/helpers/json-content-required";
 import createSuccessResponseSchema from "@lib/core/openapi/schemas/create-success-schema";
 
+const routePrefix = "/auth";
 const tags = ["Auth"];
 
 export const loginPassword = createRoute({
   method: "post",
-  path: "/login/password",
+  path: `${routePrefix}/login/password`,
   tags,
   request: {
     body: jsonContentRequired(z.object({
@@ -31,7 +32,7 @@ export const loginPassword = createRoute({
 
 export const loginMobile = createRoute({
   method: "post",
-  path: "/login/mobile",
+  path: `${routePrefix}/login/mobile`,
   tags,
   request: {
     body: jsonContentRequired(z.object({
@@ -54,7 +55,7 @@ export const loginMobile = createRoute({
 
 export const authz = createRoute({
   method: "get",
-  path: "/authz",
+  path: `${routePrefix}/authz`,
   tags,
   responses: {
     [HttpStatusCodes.OK]: jsonContent(createSuccessResponseSchema(z.object()), "准许"),
@@ -63,7 +64,7 @@ export const authz = createRoute({
 
 export const internalAuthz = createRoute({
   method: "get",
-  path: "/internal-authz",
+  path: `${routePrefix}/internal-authz`,
   tags,
   responses: {
     [HttpStatusCodes.OK]: jsonContent(createSuccessResponseSchema(z.object()), "准许"),

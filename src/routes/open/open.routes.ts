@@ -7,11 +7,12 @@ import createSuccessResponseSchema from "@lib/core/openapi/schemas/create-succes
 import { ClientDtoSchema } from "@/services/client/client.schema";
 import { UserDetailDtoSchema } from "@/services/user/user.schema";
 
+const routePrefix = "/open";
 const tags = ["Open"];
 
 export const clientStatus = createRoute({
   method: "get",
-  path: "/client/status",
+  path: `${routePrefix}/client/status`,
   tags,
   request: {
     query: z.object({
@@ -25,7 +26,7 @@ export const clientStatus = createRoute({
 
 export const userInfo = createRoute({
   method: "get",
-  path: "/users/userInfo",
+  path: `${routePrefix}/users/userInfo`,
   tags,
   request: {
     query: z.object({
@@ -39,7 +40,7 @@ export const userInfo = createRoute({
 
 export const codeSend = createRoute({
   method: "post",
-  path: "/code/send",
+  path: `${routePrefix}/code/send`,
   tags,
   request: {
     body: jsonContentRequired(z.object({
@@ -54,7 +55,7 @@ export const codeSend = createRoute({
 
 export const codeVerify = createRoute({
   method: "post",
-  path: "/code/verify",
+  path: `${routePrefix}/code/verify`,
   tags,
   request: {
     body: jsonContentRequired(z.object({
@@ -70,7 +71,7 @@ export const codeVerify = createRoute({
 
 export const passwordReset = createRoute({
   method: "post",
-  path: "/password/reset",
+  path: `${routePrefix}/password/reset`,
   tags,
   request: {
     body: jsonContentRequired(z.object({
