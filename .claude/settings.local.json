@@ -1,8 +1,10 @@
 {
-  "permissionMode": "auto",
   "permissions": {
     "allow": [
-      "WebSearch"
+      "WebSearch",
+      "Bash(git add:*)",
+      "Bash(git commit -m ':*)"
     ]
-  }
+  },
+  "permissionMode": "auto"
 }
