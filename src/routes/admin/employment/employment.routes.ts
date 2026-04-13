@@ -6,7 +6,7 @@ import createSuccessResponseSchema from "@/lib/core/openapi/schemas/create-succe
 import { EmploymentCreateDtoSchema, EmploymentPaginationQueryDtoSchema } from "@/services/employment/employment.schema";
 import { EmploymentVoSchema } from "./employment.schema";
 
-const routePrefix = "/admin/employments";
+export const routePrefix = "/admin/employments";
 const tags = ["Admin/Employment"];
 
 export const employmentsSearch = createRoute({

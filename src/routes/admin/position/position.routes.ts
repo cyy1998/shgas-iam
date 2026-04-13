@@ -6,7 +6,7 @@ import createSuccessResponseSchema from "@/lib/core/openapi/schemas/create-succe
 import { PositionCreateDtoSchema, PositionPaginationQueryDtoSchema } from "@/services/position/position.schema";
 import { PositionVoSchema } from "./position.schema";
 
-const routePrefix = "/admin/positions";
+export const routePrefix = "/admin/positions";
 const tags = ["Admin/Position"];
 
 export const positionsSearch = createRoute({

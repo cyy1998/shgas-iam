@@ -5,7 +5,7 @@ import * as routes from "./position.routes";
 
 const router = createRouter();
 
-router.use("/*", publicAuthenicationHandler);
+router.use(`${routes.routePrefix}/*`, publicAuthenicationHandler);
 
 router.openapi(routes.positionsSearch, handlers.positionsSearch)
   .openapi(routes.positionsSet, handlers.positionsSet);

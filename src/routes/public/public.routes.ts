@@ -6,7 +6,7 @@ import createSuccessResponseSchema from "@lib/core/openapi/schemas/create-succes
 import { OrganizationDtoSchema, OrganizationQueryDtoSchema } from "@/services/organization/organization.schema";
 import { UserDetailDtoSchema, UserDtoSchema, UserQueryDtoSchema } from "@/services/user/user.schema";
 
-const routePrefix = "/public";
+export const routePrefix = "/public";
 const tags = ["Public"];
 
 export const userInfo = createRoute({

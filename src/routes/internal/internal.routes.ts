@@ -8,7 +8,7 @@ import { OrganizationDtoSchema, OrganizationQueryDtoSchema } from "@/services/or
 import { PrivilegeDelegationDtoSchema } from "@/services/privilege/privilege.schema";
 import { UserDetailDtoSchema, UserDtoSchema, UserQueryDtoSchema, UserQueryWithPrivilegeDelegationDtoSchema } from "@/services/user/user.schema";
 
-const routePrefix = "/internal";
+export const routePrefix = "/internal";
 const tags = ["Internal"];
 
 export const userInfo = createRoute({

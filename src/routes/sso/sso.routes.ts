@@ -4,7 +4,7 @@ import jsonContent from "@lib/core/openapi/helpers/json-content";
 import createSuccessResponseSchema from "@lib/core/openapi/schemas/create-success-schema";
 import { SSOMetaInfoSchema } from "./sso.schema";
 
-const routePrefix = "/sso";
+export const routePrefix = "/sso";
 const tags = ["SSO"];
 
 export const endpointsConfiguration = createRoute({

@@ -5,7 +5,7 @@ import * as routes from "./client.routes";
 
 const router = createRouter();
 
-router.use("/*", publicAuthenicationHandler);
+router.use(`${routes.routePrefix}/*`, publicAuthenicationHandler);
 
 router.openapi(routes.clientCreate, handlers.clientCreate);
 router.openapi(routes.clientUpdate, handlers.clientUpdate);

@@ -7,7 +7,7 @@ import createSuccessResponseSchema from "@lib/core/openapi/schemas/create-succes
 import { ClientDtoSchema } from "@/services/client/client.schema";
 import { UserDetailDtoSchema } from "@/services/user/user.schema";
 
-const routePrefix = "/open";
+export const routePrefix = "/open";
 const tags = ["Open"];
 
 export const clientStatus = createRoute({

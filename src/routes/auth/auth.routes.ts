@@ -4,7 +4,7 @@ import jsonContent from "@lib/core/openapi/helpers/json-content";
 import jsonContentRequired from "@lib/core/openapi/helpers/json-content-required";
 import createSuccessResponseSchema from "@lib/core/openapi/schemas/create-success-schema";
 
-const routePrefix = "/auth";
+export const routePrefix = "/auth";
 const tags = ["Auth"];
 
 export const loginPassword = createRoute({

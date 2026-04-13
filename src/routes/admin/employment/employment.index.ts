@@ -5,7 +5,7 @@ import * as routes from "./employment.routes";
 
 const router = createRouter();
 
-router.use("/*", publicAuthenicationHandler);
+router.use(`${routes.routePrefix}/*`, publicAuthenicationHandler);
 
 router.openapi(routes.employmentsSearch, handlers.employmentsSearch)
   .openapi(routes.employmentsSet, handlers.employmentsSet);

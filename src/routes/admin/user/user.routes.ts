@@ -7,7 +7,7 @@ import { createPageResultSchema } from "@/lib/core/pagination/schema";
 import { UserDetailVoSchema, UserVoSchema } from "@/routes/admin/user/user.schema";
 import { UserCreateDtoSchema, UserPaginationQueryDtoSchema } from "@/services/user/user.schema";
 
-const routePrefix = "/admin/users";
+export const routePrefix = "/admin/users";
 const tags = ["Admin/User"];
 
 export const usersSearch = createRoute({
