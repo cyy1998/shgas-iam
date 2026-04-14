@@ -1,9 +1,9 @@
 import type { PrismaTransaction } from "@/db";
-import { Status } from "@/enums/status";
 import { prisma } from "@/db";
+import { Status } from "@/enums/status";
 import { CustomError } from "@/errors/CustomError";
 import * as userRepository from "@/services/user/user.repository";
-import { PrivilegeDelegationDtoConverterSchema, PrivilegeDelegationDtoSchema } from "./privilege.schema";
+import { PrivilegeDelegationDtoConverterSchema } from "./privilegeDelegation.schema";
 
 export interface PrivilegeDelegationQueryDto {
   delegatorUsername?: string;
@@ -58,7 +58,7 @@ export async function queryPrivilegeDelegations(
     },
   });
 
-  return delegations.map((d) => PrivilegeDelegationDtoConverterSchema.parse(d));
+  return delegations.map(d => PrivilegeDelegationDtoConverterSchema.parse(d));
 }
 
 export async function setPrivilegeDelegation(
@@ -96,8 +96,8 @@ export async function setPrivilegeDelegation(
     },
   });
   if (privileges.length !== dto.privilegeCodes.length) {
-    const foundCodes = privileges.map((p) => p.privilegeCode);
-    const notFound = dto.privilegeCodes.filter((c) => !foundCodes.includes(c));
+    const foundCodes = privileges.map(p => p.privilegeCode);
+    const notFound = dto.privilegeCodes.filter(c => !foundCodes.includes(c));
     throw new CustomError(`权限不存在: ${notFound.join(", ")}`);
   }
 
@@ -111,7 +111,7 @@ export async function setPrivilegeDelegation(
       status: Status.Enable,
       description: dto.description,
       delegationDetails: {
-        create: privileges.map((p) => ({
+        create: privileges.map(p => ({
           privilegeId: p.id,
         })),
       },

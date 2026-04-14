@@ -1,5 +1,5 @@
 {
-  "mode": "full",
+  "mode": "minimal",
   "pureModels": true,
   "variants": {
     "pure": { "enabled": true },

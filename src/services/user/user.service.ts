@@ -20,7 +20,7 @@ import {
   UserDtoSchema,
 } from "@/services/user/user.schema";
 import { paginate } from "@/utils/page.util";
-import { PrivilegeDelegationDtoConverterSchema } from "../privilege/privilege.schema";
+import { PrivilegeDelegationDtoConverterSchema } from "../privilege/privilegeDelegation.schema";
 
 async function _getUserDetail(user: User | null): Promise<UserDetailDto> {
   if (user === null) {
