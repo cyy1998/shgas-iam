@@ -5,10 +5,13 @@ import { StringFieldUpdateOperationsInputObjectSchema as StringFieldUpdateOperat
 import { NullableStringFieldUpdateOperationsInputObjectSchema as NullableStringFieldUpdateOperationsInputObjectSchema } from './NullableStringFieldUpdateOperationsInput.schema';
 import { BoolFieldUpdateOperationsInputObjectSchema as BoolFieldUpdateOperationsInputObjectSchema } from './BoolFieldUpdateOperationsInput.schema';
 import { DateTimeFieldUpdateOperationsInputObjectSchema as DateTimeFieldUpdateOperationsInputObjectSchema } from './DateTimeFieldUpdateOperationsInput.schema';
-import { JsonNullValueInputSchema } from '../enums/JsonNullValueInput.schema';
-import { RoleUncheckedUpdateManyWithoutClientNestedInputObjectSchema as RoleUncheckedUpdateManyWithoutClientNestedInputObjectSchema } from './RoleUncheckedUpdateManyWithoutClientNestedInput.schema'
+import { JsonNullValueInputSchema } from '../enums/JsonNullValueInput.schema'
 
-import { JsonValueSchema as jsonSchema } from '../../helpers/json-helpers';
+
+const literalSchema = z.union([z.string(), z.number(), z.boolean()]);
+const jsonSchema: any = z.lazy(() =>
+  z.union([literalSchema, z.array(jsonSchema.nullable()), z.record(z.string(), jsonSchema.nullable())])
+);
 
 const makeSchema = () => z.object({
   id: z.union([z.number().int(), z.lazy(() => IntFieldUpdateOperationsInputObjectSchema)]).optional(),
@@ -21,8 +24,7 @@ const makeSchema = () => z.object({
   isDelete: z.union([z.boolean(), z.lazy(() => BoolFieldUpdateOperationsInputObjectSchema)]).optional(),
   createTime: z.union([z.coerce.date(), z.lazy(() => DateTimeFieldUpdateOperationsInputObjectSchema)]).optional(),
   updateTime: z.union([z.coerce.date(), z.lazy(() => DateTimeFieldUpdateOperationsInputObjectSchema)]).optional(),
-  extAttributes: z.union([JsonNullValueInputSchema, jsonSchema]).optional(),
-  roles: z.lazy(() => RoleUncheckedUpdateManyWithoutClientNestedInputObjectSchema).optional()
+  extAttributes: z.union([JsonNullValueInputSchema, jsonSchema]).optional()
 }).strict();
 export const ClientUncheckedUpdateInputObjectSchema: z.ZodType<Prisma.ClientUncheckedUpdateInput> = makeSchema() as unknown as z.ZodType<Prisma.ClientUncheckedUpdateInput>;
 export const ClientUncheckedUpdateInputObjectZodSchema = makeSchema();

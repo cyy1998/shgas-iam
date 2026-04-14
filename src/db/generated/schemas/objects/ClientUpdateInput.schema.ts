@@ -5,10 +5,13 @@ import { NullableStringFieldUpdateOperationsInputObjectSchema as NullableStringF
 import { IntFieldUpdateOperationsInputObjectSchema as IntFieldUpdateOperationsInputObjectSchema } from './IntFieldUpdateOperationsInput.schema';
 import { BoolFieldUpdateOperationsInputObjectSchema as BoolFieldUpdateOperationsInputObjectSchema } from './BoolFieldUpdateOperationsInput.schema';
 import { DateTimeFieldUpdateOperationsInputObjectSchema as DateTimeFieldUpdateOperationsInputObjectSchema } from './DateTimeFieldUpdateOperationsInput.schema';
-import { JsonNullValueInputSchema } from '../enums/JsonNullValueInput.schema';
-import { RoleUpdateManyWithoutClientNestedInputObjectSchema as RoleUpdateManyWithoutClientNestedInputObjectSchema } from './RoleUpdateManyWithoutClientNestedInput.schema'
+import { JsonNullValueInputSchema } from '../enums/JsonNullValueInput.schema'
 
-import { JsonValueSchema as jsonSchema } from '../../helpers/json-helpers';
+
+const literalSchema = z.union([z.string(), z.number(), z.boolean()]);
+const jsonSchema: any = z.lazy(() =>
+  z.union([literalSchema, z.array(jsonSchema.nullable()), z.record(z.string(), jsonSchema.nullable())])
+);
 
 const makeSchema = () => z.object({
   clientCode: z.union([z.string().max(64), z.lazy(() => StringFieldUpdateOperationsInputObjectSchema)]).optional(),
@@ -20,8 +23,7 @@ const makeSchema = () => z.object({
   isDelete: z.union([z.boolean(), z.lazy(() => BoolFieldUpdateOperationsInputObjectSchema)]).optional(),
   createTime: z.union([z.coerce.date(), z.lazy(() => DateTimeFieldUpdateOperationsInputObjectSchema)]).optional(),
   updateTime: z.union([z.coerce.date(), z.lazy(() => DateTimeFieldUpdateOperationsInputObjectSchema)]).optional(),
-  extAttributes: z.union([JsonNullValueInputSchema, jsonSchema]).optional(),
-  roles: z.lazy(() => RoleUpdateManyWithoutClientNestedInputObjectSchema).optional()
+  extAttributes: z.union([JsonNullValueInputSchema, jsonSchema]).optional()
 }).strict();
 export const ClientUpdateInputObjectSchema: z.ZodType<Prisma.ClientUpdateInput> = makeSchema() as unknown as z.ZodType<Prisma.ClientUpdateInput>;
 export const ClientUpdateInputObjectZodSchema = makeSchema();

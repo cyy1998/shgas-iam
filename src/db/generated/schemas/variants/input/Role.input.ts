@@ -1,7 +1,6 @@
 import * as z from 'zod';
 // prettier-ignore
 export const RoleInputSchema = z.object({
-    id: z.number().int(),
     roleCode: z.string(),
     roleName: z.string(),
     clientId: z.number().int(),

@@ -3,11 +3,7 @@ import type { Prisma } from '../../prisma/client';
 import { DateTimeFieldUpdateOperationsInputObjectSchema as DateTimeFieldUpdateOperationsInputObjectSchema } from './DateTimeFieldUpdateOperationsInput.schema';
 import { IntFieldUpdateOperationsInputObjectSchema as IntFieldUpdateOperationsInputObjectSchema } from './IntFieldUpdateOperationsInput.schema';
 import { NullableStringFieldUpdateOperationsInputObjectSchema as NullableStringFieldUpdateOperationsInputObjectSchema } from './NullableStringFieldUpdateOperationsInput.schema';
-import { BoolFieldUpdateOperationsInputObjectSchema as BoolFieldUpdateOperationsInputObjectSchema } from './BoolFieldUpdateOperationsInput.schema';
-import { UserUpdateOneRequiredWithoutDelegationToNestedInputObjectSchema as UserUpdateOneRequiredWithoutDelegationToNestedInputObjectSchema } from './UserUpdateOneRequiredWithoutDelegationToNestedInput.schema';
-import { UserUpdateOneRequiredWithoutDelegationFromNestedInputObjectSchema as UserUpdateOneRequiredWithoutDelegationFromNestedInputObjectSchema } from './UserUpdateOneRequiredWithoutDelegationFromNestedInput.schema';
-import { OrganizationUpdateOneRequiredWithoutPrivilegeDelegationsNestedInputObjectSchema as OrganizationUpdateOneRequiredWithoutPrivilegeDelegationsNestedInputObjectSchema } from './OrganizationUpdateOneRequiredWithoutPrivilegeDelegationsNestedInput.schema';
-import { DelegationDetailUpdateManyWithoutDelegationNestedInputObjectSchema as DelegationDetailUpdateManyWithoutDelegationNestedInputObjectSchema } from './DelegationDetailUpdateManyWithoutDelegationNestedInput.schema'
+import { BoolFieldUpdateOperationsInputObjectSchema as BoolFieldUpdateOperationsInputObjectSchema } from './BoolFieldUpdateOperationsInput.schema'
 
 const makeSchema = () => z.object({
   startTime: z.union([z.coerce.date(), z.lazy(() => DateTimeFieldUpdateOperationsInputObjectSchema)]).optional(),
@@ -17,10 +13,9 @@ const makeSchema = () => z.object({
   isDelete: z.union([z.boolean(), z.lazy(() => BoolFieldUpdateOperationsInputObjectSchema)]).optional(),
   createTime: z.union([z.coerce.date(), z.lazy(() => DateTimeFieldUpdateOperationsInputObjectSchema)]).optional(),
   updateTime: z.union([z.coerce.date(), z.lazy(() => DateTimeFieldUpdateOperationsInputObjectSchema)]).optional(),
-  delegatorUser: z.lazy(() => UserUpdateOneRequiredWithoutDelegationToNestedInputObjectSchema).optional(),
-  delegateeUser: z.lazy(() => UserUpdateOneRequiredWithoutDelegationFromNestedInputObjectSchema).optional(),
-  organizationScope: z.lazy(() => OrganizationUpdateOneRequiredWithoutPrivilegeDelegationsNestedInputObjectSchema).optional(),
-  delegationDetails: z.lazy(() => DelegationDetailUpdateManyWithoutDelegationNestedInputObjectSchema).optional()
+  delegatorUserId: z.number().int(),
+  delegateeUserId: z.number().int(),
+  organizationScopeId: z.number().int()
 }).strict();
 export const PrivilegeDelegationUpdateInputObjectSchema: z.ZodType<Prisma.PrivilegeDelegationUpdateInput> = makeSchema() as unknown as z.ZodType<Prisma.PrivilegeDelegationUpdateInput>;
 export const PrivilegeDelegationUpdateInputObjectZodSchema = makeSchema();

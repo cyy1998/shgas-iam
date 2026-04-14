@@ -1,9 +1,0 @@
-import type { Prisma } from '../prisma/client';
-import * as z from 'zod';
-import { RolePrivilegeSelectObjectSchema as RolePrivilegeSelectObjectSchema } from './objects/RolePrivilegeSelect.schema';
-import { RolePrivilegeIncludeObjectSchema as RolePrivilegeIncludeObjectSchema } from './objects/RolePrivilegeInclude.schema';
-import { RolePrivilegeWhereUniqueInputObjectSchema as RolePrivilegeWhereUniqueInputObjectSchema } from './objects/RolePrivilegeWhereUniqueInput.schema';
-
-export const RolePrivilegeFindUniqueOrThrowSchema: z.ZodType<Prisma.RolePrivilegeFindUniqueOrThrowArgs> = z.object({ select: RolePrivilegeSelectObjectSchema.optional(), include: RolePrivilegeIncludeObjectSchema.optional(), where: RolePrivilegeWhereUniqueInputObjectSchema }).strict() as unknown as z.ZodType<Prisma.RolePrivilegeFindUniqueOrThrowArgs>;
-
-export const RolePrivilegeFindUniqueOrThrowZodSchema = z.object({ select: RolePrivilegeSelectObjectSchema.optional(), include: RolePrivilegeIncludeObjectSchema.optional(), where: RolePrivilegeWhereUniqueInputObjectSchema }).strict();

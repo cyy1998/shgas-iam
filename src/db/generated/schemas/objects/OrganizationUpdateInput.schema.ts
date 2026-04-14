@@ -3,16 +3,7 @@ import type { Prisma } from '../../prisma/client';
 import { StringFieldUpdateOperationsInputObjectSchema as StringFieldUpdateOperationsInputObjectSchema } from './StringFieldUpdateOperationsInput.schema';
 import { IntFieldUpdateOperationsInputObjectSchema as IntFieldUpdateOperationsInputObjectSchema } from './IntFieldUpdateOperationsInput.schema';
 import { BoolFieldUpdateOperationsInputObjectSchema as BoolFieldUpdateOperationsInputObjectSchema } from './BoolFieldUpdateOperationsInput.schema';
-import { DateTimeFieldUpdateOperationsInputObjectSchema as DateTimeFieldUpdateOperationsInputObjectSchema } from './DateTimeFieldUpdateOperationsInput.schema';
-import { EmploymentUpdateManyWithoutDeptartmentNestedInputObjectSchema as EmploymentUpdateManyWithoutDeptartmentNestedInputObjectSchema } from './EmploymentUpdateManyWithoutDeptartmentNestedInput.schema';
-import { EmploymentUpdateManyWithoutCompanyNestedInputObjectSchema as EmploymentUpdateManyWithoutCompanyNestedInputObjectSchema } from './EmploymentUpdateManyWithoutCompanyNestedInput.schema';
-import { OrganizationRoleUpdateManyWithoutOrganizationNestedInputObjectSchema as OrganizationRoleUpdateManyWithoutOrganizationNestedInputObjectSchema } from './OrganizationRoleUpdateManyWithoutOrganizationNestedInput.schema';
-import { PosOrgCompositionUpdateManyWithoutOrganizationNestedInputObjectSchema as PosOrgCompositionUpdateManyWithoutOrganizationNestedInputObjectSchema } from './PosOrgCompositionUpdateManyWithoutOrganizationNestedInput.schema';
-import { OrganizationUpdateOneWithoutChildrenNestedInputObjectSchema as OrganizationUpdateOneWithoutChildrenNestedInputObjectSchema } from './OrganizationUpdateOneWithoutChildrenNestedInput.schema';
-import { OrganizationUpdateManyWithoutParentNestedInputObjectSchema as OrganizationUpdateManyWithoutParentNestedInputObjectSchema } from './OrganizationUpdateManyWithoutParentNestedInput.schema';
-import { OrganizationClosureUpdateManyWithoutAncestorNestedInputObjectSchema as OrganizationClosureUpdateManyWithoutAncestorNestedInputObjectSchema } from './OrganizationClosureUpdateManyWithoutAncestorNestedInput.schema';
-import { OrganizationClosureUpdateManyWithoutDescendantNestedInputObjectSchema as OrganizationClosureUpdateManyWithoutDescendantNestedInputObjectSchema } from './OrganizationClosureUpdateManyWithoutDescendantNestedInput.schema';
-import { PrivilegeDelegationUpdateManyWithoutOrganizationScopeNestedInputObjectSchema as PrivilegeDelegationUpdateManyWithoutOrganizationScopeNestedInputObjectSchema } from './PrivilegeDelegationUpdateManyWithoutOrganizationScopeNestedInput.schema'
+import { DateTimeFieldUpdateOperationsInputObjectSchema as DateTimeFieldUpdateOperationsInputObjectSchema } from './DateTimeFieldUpdateOperationsInput.schema'
 
 const makeSchema = () => z.object({
   orgCode: z.union([z.string(), z.lazy(() => StringFieldUpdateOperationsInputObjectSchema)]).optional(),
@@ -27,16 +18,7 @@ const makeSchema = () => z.object({
   status: z.union([z.number().int(), z.lazy(() => IntFieldUpdateOperationsInputObjectSchema)]).optional(),
   isDelete: z.union([z.boolean(), z.lazy(() => BoolFieldUpdateOperationsInputObjectSchema)]).optional(),
   createTime: z.union([z.coerce.date(), z.lazy(() => DateTimeFieldUpdateOperationsInputObjectSchema)]).optional(),
-  updateTime: z.union([z.coerce.date(), z.lazy(() => DateTimeFieldUpdateOperationsInputObjectSchema)]).optional(),
-  deptEmployments: z.lazy(() => EmploymentUpdateManyWithoutDeptartmentNestedInputObjectSchema).optional(),
-  compEmployments: z.lazy(() => EmploymentUpdateManyWithoutCompanyNestedInputObjectSchema).optional(),
-  roles: z.lazy(() => OrganizationRoleUpdateManyWithoutOrganizationNestedInputObjectSchema).optional(),
-  posOrgComposition: z.lazy(() => PosOrgCompositionUpdateManyWithoutOrganizationNestedInputObjectSchema).optional(),
-  parent: z.lazy(() => OrganizationUpdateOneWithoutChildrenNestedInputObjectSchema).optional(),
-  children: z.lazy(() => OrganizationUpdateManyWithoutParentNestedInputObjectSchema).optional(),
-  ancestorClosures: z.lazy(() => OrganizationClosureUpdateManyWithoutAncestorNestedInputObjectSchema).optional(),
-  descendantClosures: z.lazy(() => OrganizationClosureUpdateManyWithoutDescendantNestedInputObjectSchema).optional(),
-  privilegeDelegations: z.lazy(() => PrivilegeDelegationUpdateManyWithoutOrganizationScopeNestedInputObjectSchema).optional()
+  updateTime: z.union([z.coerce.date(), z.lazy(() => DateTimeFieldUpdateOperationsInputObjectSchema)]).optional()
 }).strict();
 export const OrganizationUpdateInputObjectSchema: z.ZodType<Prisma.OrganizationUpdateInput> = makeSchema() as unknown as z.ZodType<Prisma.OrganizationUpdateInput>;
 export const OrganizationUpdateInputObjectZodSchema = makeSchema();

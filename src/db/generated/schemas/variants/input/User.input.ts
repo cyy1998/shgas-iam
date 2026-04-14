@@ -1,7 +1,6 @@
 import * as z from 'zod';
 // prettier-ignore
 export const UserInputSchema = z.object({
-    id: z.number().int(),
     username: z.string(),
     wxId: z.string().optional().nullable(),
     name: z.string(),

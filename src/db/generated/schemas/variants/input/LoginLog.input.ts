@@ -1,7 +1,6 @@
 import * as z from 'zod';
 // prettier-ignore
 export const LoginLogInputSchema = z.object({
-    id: z.number().int(),
     userId: z.number().int(),
     username: z.string(),
     name: z.string(),

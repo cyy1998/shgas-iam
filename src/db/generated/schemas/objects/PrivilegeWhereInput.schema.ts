@@ -5,9 +5,7 @@ import { StringFilterObjectSchema as StringFilterObjectSchema } from './StringFi
 import { JsonNullableFilterObjectSchema as JsonNullableFilterObjectSchema } from './JsonNullableFilter.schema';
 import { StringNullableFilterObjectSchema as StringNullableFilterObjectSchema } from './StringNullableFilter.schema';
 import { BoolFilterObjectSchema as BoolFilterObjectSchema } from './BoolFilter.schema';
-import { DateTimeFilterObjectSchema as DateTimeFilterObjectSchema } from './DateTimeFilter.schema';
-import { RolePrivilegeListRelationFilterObjectSchema as RolePrivilegeListRelationFilterObjectSchema } from './RolePrivilegeListRelationFilter.schema';
-import { DelegationDetailListRelationFilterObjectSchema as DelegationDetailListRelationFilterObjectSchema } from './DelegationDetailListRelationFilter.schema'
+import { DateTimeFilterObjectSchema as DateTimeFilterObjectSchema } from './DateTimeFilter.schema'
 
 const privilegewhereinputSchema = z.object({
   AND: z.union([z.lazy(() => PrivilegeWhereInputObjectSchema), z.lazy(() => PrivilegeWhereInputObjectSchema).array()]).optional(),
@@ -21,9 +19,7 @@ const privilegewhereinputSchema = z.object({
   description: z.union([z.lazy(() => StringNullableFilterObjectSchema), z.string().max(500)]).optional().nullable(),
   isDelete: z.union([z.lazy(() => BoolFilterObjectSchema), z.boolean()]).optional(),
   createTime: z.union([z.lazy(() => DateTimeFilterObjectSchema), z.coerce.date()]).optional(),
-  updateTime: z.union([z.lazy(() => DateTimeFilterObjectSchema), z.coerce.date()]).optional(),
-  roles: z.lazy(() => RolePrivilegeListRelationFilterObjectSchema).optional(),
-  delegations: z.lazy(() => DelegationDetailListRelationFilterObjectSchema).optional()
+  updateTime: z.union([z.lazy(() => DateTimeFilterObjectSchema), z.coerce.date()]).optional()
 }).strict();
 export const PrivilegeWhereInputObjectSchema: z.ZodType<Prisma.PrivilegeWhereInput> = privilegewhereinputSchema as unknown as z.ZodType<Prisma.PrivilegeWhereInput>;
 export const PrivilegeWhereInputObjectZodSchema = privilegewhereinputSchema;

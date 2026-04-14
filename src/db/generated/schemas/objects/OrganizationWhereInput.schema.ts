@@ -3,14 +3,7 @@ import type { Prisma } from '../../prisma/client';
 import { IntFilterObjectSchema as IntFilterObjectSchema } from './IntFilter.schema';
 import { StringFilterObjectSchema as StringFilterObjectSchema } from './StringFilter.schema';
 import { BoolFilterObjectSchema as BoolFilterObjectSchema } from './BoolFilter.schema';
-import { DateTimeFilterObjectSchema as DateTimeFilterObjectSchema } from './DateTimeFilter.schema';
-import { EmploymentListRelationFilterObjectSchema as EmploymentListRelationFilterObjectSchema } from './EmploymentListRelationFilter.schema';
-import { OrganizationRoleListRelationFilterObjectSchema as OrganizationRoleListRelationFilterObjectSchema } from './OrganizationRoleListRelationFilter.schema';
-import { PosOrgCompositionListRelationFilterObjectSchema as PosOrgCompositionListRelationFilterObjectSchema } from './PosOrgCompositionListRelationFilter.schema';
-import { OrganizationNullableScalarRelationFilterObjectSchema as OrganizationNullableScalarRelationFilterObjectSchema } from './OrganizationNullableScalarRelationFilter.schema';
-import { OrganizationListRelationFilterObjectSchema as OrganizationListRelationFilterObjectSchema } from './OrganizationListRelationFilter.schema';
-import { OrganizationClosureListRelationFilterObjectSchema as OrganizationClosureListRelationFilterObjectSchema } from './OrganizationClosureListRelationFilter.schema';
-import { PrivilegeDelegationListRelationFilterObjectSchema as PrivilegeDelegationListRelationFilterObjectSchema } from './PrivilegeDelegationListRelationFilter.schema'
+import { DateTimeFilterObjectSchema as DateTimeFilterObjectSchema } from './DateTimeFilter.schema'
 
 const organizationwhereinputSchema = z.object({
   AND: z.union([z.lazy(() => OrganizationWhereInputObjectSchema), z.lazy(() => OrganizationWhereInputObjectSchema).array()]).optional(),
@@ -30,16 +23,7 @@ const organizationwhereinputSchema = z.object({
   status: z.union([z.lazy(() => IntFilterObjectSchema), z.number().int()]).optional(),
   isDelete: z.union([z.lazy(() => BoolFilterObjectSchema), z.boolean()]).optional(),
   createTime: z.union([z.lazy(() => DateTimeFilterObjectSchema), z.coerce.date()]).optional(),
-  updateTime: z.union([z.lazy(() => DateTimeFilterObjectSchema), z.coerce.date()]).optional(),
-  deptEmployments: z.lazy(() => EmploymentListRelationFilterObjectSchema).optional(),
-  compEmployments: z.lazy(() => EmploymentListRelationFilterObjectSchema).optional(),
-  roles: z.lazy(() => OrganizationRoleListRelationFilterObjectSchema).optional(),
-  posOrgComposition: z.lazy(() => PosOrgCompositionListRelationFilterObjectSchema).optional(),
-  parent: z.union([z.lazy(() => OrganizationNullableScalarRelationFilterObjectSchema), z.lazy(() => OrganizationWhereInputObjectSchema)]).optional(),
-  children: z.lazy(() => OrganizationListRelationFilterObjectSchema).optional(),
-  ancestorClosures: z.lazy(() => OrganizationClosureListRelationFilterObjectSchema).optional(),
-  descendantClosures: z.lazy(() => OrganizationClosureListRelationFilterObjectSchema).optional(),
-  privilegeDelegations: z.lazy(() => PrivilegeDelegationListRelationFilterObjectSchema).optional()
+  updateTime: z.union([z.lazy(() => DateTimeFilterObjectSchema), z.coerce.date()]).optional()
 }).strict();
 export const OrganizationWhereInputObjectSchema: z.ZodType<Prisma.OrganizationWhereInput> = organizationwhereinputSchema as unknown as z.ZodType<Prisma.OrganizationWhereInput>;
 export const OrganizationWhereInputObjectZodSchema = organizationwhereinputSchema;

@@ -5,8 +5,7 @@ import { StringFilterObjectSchema as StringFilterObjectSchema } from './StringFi
 import { StringNullableFilterObjectSchema as StringNullableFilterObjectSchema } from './StringNullableFilter.schema';
 import { BoolFilterObjectSchema as BoolFilterObjectSchema } from './BoolFilter.schema';
 import { DateTimeFilterObjectSchema as DateTimeFilterObjectSchema } from './DateTimeFilter.schema';
-import { JsonFilterObjectSchema as JsonFilterObjectSchema } from './JsonFilter.schema';
-import { RoleListRelationFilterObjectSchema as RoleListRelationFilterObjectSchema } from './RoleListRelationFilter.schema'
+import { JsonFilterObjectSchema as JsonFilterObjectSchema } from './JsonFilter.schema'
 
 const clientwhereinputSchema = z.object({
   AND: z.union([z.lazy(() => ClientWhereInputObjectSchema), z.lazy(() => ClientWhereInputObjectSchema).array()]).optional(),
@@ -22,8 +21,7 @@ const clientwhereinputSchema = z.object({
   isDelete: z.union([z.lazy(() => BoolFilterObjectSchema), z.boolean()]).optional(),
   createTime: z.union([z.lazy(() => DateTimeFilterObjectSchema), z.coerce.date()]).optional(),
   updateTime: z.union([z.lazy(() => DateTimeFilterObjectSchema), z.coerce.date()]).optional(),
-  extAttributes: z.lazy(() => JsonFilterObjectSchema).optional(),
-  roles: z.lazy(() => RoleListRelationFilterObjectSchema).optional()
+  extAttributes: z.lazy(() => JsonFilterObjectSchema).optional()
 }).strict();
 export const ClientWhereInputObjectSchema: z.ZodType<Prisma.ClientWhereInput> = clientwhereinputSchema as unknown as z.ZodType<Prisma.ClientWhereInput>;
 export const ClientWhereInputObjectZodSchema = clientwhereinputSchema;

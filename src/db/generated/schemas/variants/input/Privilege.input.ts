@@ -1,7 +1,6 @@
 import * as z from 'zod';
 // prettier-ignore
 export const PrivilegeInputSchema = z.object({
-    id: z.number().int(),
     privilegeCode: z.string(),
     privilegeName: z.string(),
     fieldValues: z.unknown().optional().nullable(),

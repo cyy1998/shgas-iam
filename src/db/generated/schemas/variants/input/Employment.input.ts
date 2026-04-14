@@ -1,7 +1,6 @@
 import * as z from 'zod';
 // prettier-ignore
 export const EmploymentInputSchema = z.object({
-    id: z.number().int(),
     userId: z.number().int(),
     posId: z.number().int(),
     orgId: z.number().int(),

@@ -1,7 +1,6 @@
 import * as z from 'zod';
 // prettier-ignore
 export const PositionInputSchema = z.object({
-    id: z.number().int(),
     posCode: z.string(),
     posName: z.string(),
     status: z.number().int(),

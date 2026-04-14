@@ -1,7 +1,6 @@
 import * as z from 'zod';
 // prettier-ignore
 export const ClientInputSchema = z.object({
-    id: z.number().int(),
     clientCode: z.string(),
     clientName: z.string(),
     clientSecret: z.string(),

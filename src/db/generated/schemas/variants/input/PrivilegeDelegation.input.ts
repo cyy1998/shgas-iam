@@ -1,7 +1,6 @@
 import * as z from 'zod';
 // prettier-ignore
 export const PrivilegeDelegationInputSchema = z.object({
-    id: z.number().int(),
     delegatorUserId: z.number().int(),
     delegateeUserId: z.number().int(),
     organizationScopeId: z.number().int(),

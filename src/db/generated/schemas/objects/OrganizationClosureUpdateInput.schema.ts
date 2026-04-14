@@ -1,13 +1,11 @@
 import * as z from 'zod';
 import type { Prisma } from '../../prisma/client';
-import { IntFieldUpdateOperationsInputObjectSchema as IntFieldUpdateOperationsInputObjectSchema } from './IntFieldUpdateOperationsInput.schema';
-import { OrganizationUpdateOneRequiredWithoutAncestorClosuresNestedInputObjectSchema as OrganizationUpdateOneRequiredWithoutAncestorClosuresNestedInputObjectSchema } from './OrganizationUpdateOneRequiredWithoutAncestorClosuresNestedInput.schema';
-import { OrganizationUpdateOneRequiredWithoutDescendantClosuresNestedInputObjectSchema as OrganizationUpdateOneRequiredWithoutDescendantClosuresNestedInputObjectSchema } from './OrganizationUpdateOneRequiredWithoutDescendantClosuresNestedInput.schema'
+import { IntFieldUpdateOperationsInputObjectSchema as IntFieldUpdateOperationsInputObjectSchema } from './IntFieldUpdateOperationsInput.schema'
 
 const makeSchema = () => z.object({
   depth: z.union([z.number().int(), z.lazy(() => IntFieldUpdateOperationsInputObjectSchema)]).optional(),
-  ancestor: z.lazy(() => OrganizationUpdateOneRequiredWithoutAncestorClosuresNestedInputObjectSchema).optional(),
-  descendant: z.lazy(() => OrganizationUpdateOneRequiredWithoutDescendantClosuresNestedInputObjectSchema).optional()
+  ancestorId: z.number().int(),
+  descendantId: z.number().int()
 }).strict();
 export const OrganizationClosureUpdateInputObjectSchema: z.ZodType<Prisma.OrganizationClosureUpdateInput> = makeSchema() as unknown as z.ZodType<Prisma.OrganizationClosureUpdateInput>;
 export const OrganizationClosureUpdateInputObjectZodSchema = makeSchema();

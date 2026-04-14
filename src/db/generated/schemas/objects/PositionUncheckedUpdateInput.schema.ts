@@ -4,10 +4,7 @@ import { IntFieldUpdateOperationsInputObjectSchema as IntFieldUpdateOperationsIn
 import { StringFieldUpdateOperationsInputObjectSchema as StringFieldUpdateOperationsInputObjectSchema } from './StringFieldUpdateOperationsInput.schema';
 import { NullableStringFieldUpdateOperationsInputObjectSchema as NullableStringFieldUpdateOperationsInputObjectSchema } from './NullableStringFieldUpdateOperationsInput.schema';
 import { BoolFieldUpdateOperationsInputObjectSchema as BoolFieldUpdateOperationsInputObjectSchema } from './BoolFieldUpdateOperationsInput.schema';
-import { DateTimeFieldUpdateOperationsInputObjectSchema as DateTimeFieldUpdateOperationsInputObjectSchema } from './DateTimeFieldUpdateOperationsInput.schema';
-import { EmploymentUncheckedUpdateManyWithoutPositionNestedInputObjectSchema as EmploymentUncheckedUpdateManyWithoutPositionNestedInputObjectSchema } from './EmploymentUncheckedUpdateManyWithoutPositionNestedInput.schema';
-import { PositionRoleUncheckedUpdateManyWithoutPositionNestedInputObjectSchema as PositionRoleUncheckedUpdateManyWithoutPositionNestedInputObjectSchema } from './PositionRoleUncheckedUpdateManyWithoutPositionNestedInput.schema';
-import { PosOrgCompositionUncheckedUpdateManyWithoutPositionNestedInputObjectSchema as PosOrgCompositionUncheckedUpdateManyWithoutPositionNestedInputObjectSchema } from './PosOrgCompositionUncheckedUpdateManyWithoutPositionNestedInput.schema'
+import { DateTimeFieldUpdateOperationsInputObjectSchema as DateTimeFieldUpdateOperationsInputObjectSchema } from './DateTimeFieldUpdateOperationsInput.schema'
 
 const makeSchema = () => z.object({
   id: z.union([z.number().int(), z.lazy(() => IntFieldUpdateOperationsInputObjectSchema)]).optional(),
@@ -17,10 +14,7 @@ const makeSchema = () => z.object({
   description: z.union([z.string().max(500), z.lazy(() => NullableStringFieldUpdateOperationsInputObjectSchema)]).optional().nullable(),
   isDelete: z.union([z.boolean(), z.lazy(() => BoolFieldUpdateOperationsInputObjectSchema)]).optional(),
   createTime: z.union([z.coerce.date(), z.lazy(() => DateTimeFieldUpdateOperationsInputObjectSchema)]).optional(),
-  updateTime: z.union([z.coerce.date(), z.lazy(() => DateTimeFieldUpdateOperationsInputObjectSchema)]).optional(),
-  employments: z.lazy(() => EmploymentUncheckedUpdateManyWithoutPositionNestedInputObjectSchema).optional(),
-  roles: z.lazy(() => PositionRoleUncheckedUpdateManyWithoutPositionNestedInputObjectSchema).optional(),
-  posOrgComposition: z.lazy(() => PosOrgCompositionUncheckedUpdateManyWithoutPositionNestedInputObjectSchema).optional()
+  updateTime: z.union([z.coerce.date(), z.lazy(() => DateTimeFieldUpdateOperationsInputObjectSchema)]).optional()
 }).strict();
 export const PositionUncheckedUpdateInputObjectSchema: z.ZodType<Prisma.PositionUncheckedUpdateInput> = makeSchema() as unknown as z.ZodType<Prisma.PositionUncheckedUpdateInput>;
 export const PositionUncheckedUpdateInputObjectZodSchema = makeSchema();

@@ -1,7 +1,6 @@
 import * as z from 'zod';
 // prettier-ignore
 export const OrganizationClosureInputSchema = z.object({
-    id: z.number().int(),
     ancestorId: z.number().int(),
     descendantId: z.number().int(),
     depth: z.number().int(),

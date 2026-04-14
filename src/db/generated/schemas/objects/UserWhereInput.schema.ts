@@ -4,9 +4,7 @@ import { IntFilterObjectSchema as IntFilterObjectSchema } from './IntFilter.sche
 import { StringFilterObjectSchema as StringFilterObjectSchema } from './StringFilter.schema';
 import { StringNullableFilterObjectSchema as StringNullableFilterObjectSchema } from './StringNullableFilter.schema';
 import { BoolFilterObjectSchema as BoolFilterObjectSchema } from './BoolFilter.schema';
-import { DateTimeFilterObjectSchema as DateTimeFilterObjectSchema } from './DateTimeFilter.schema';
-import { EmploymentListRelationFilterObjectSchema as EmploymentListRelationFilterObjectSchema } from './EmploymentListRelationFilter.schema';
-import { PrivilegeDelegationListRelationFilterObjectSchema as PrivilegeDelegationListRelationFilterObjectSchema } from './PrivilegeDelegationListRelationFilter.schema'
+import { DateTimeFilterObjectSchema as DateTimeFilterObjectSchema } from './DateTimeFilter.schema'
 
 const userwhereinputSchema = z.object({
   AND: z.union([z.lazy(() => UserWhereInputObjectSchema), z.lazy(() => UserWhereInputObjectSchema).array()]).optional(),
@@ -23,10 +21,7 @@ const userwhereinputSchema = z.object({
   status: z.union([z.lazy(() => IntFilterObjectSchema), z.number().int()]).optional(),
   isDelete: z.union([z.lazy(() => BoolFilterObjectSchema), z.boolean()]).optional(),
   createTime: z.union([z.lazy(() => DateTimeFilterObjectSchema), z.coerce.date()]).optional(),
-  updateTime: z.union([z.lazy(() => DateTimeFilterObjectSchema), z.coerce.date()]).optional(),
-  employments: z.lazy(() => EmploymentListRelationFilterObjectSchema).optional(),
-  delegationTo: z.lazy(() => PrivilegeDelegationListRelationFilterObjectSchema).optional(),
-  delegationFrom: z.lazy(() => PrivilegeDelegationListRelationFilterObjectSchema).optional()
+  updateTime: z.union([z.lazy(() => DateTimeFilterObjectSchema), z.coerce.date()]).optional()
 }).strict();
 export const UserWhereInputObjectSchema: z.ZodType<Prisma.UserWhereInput> = userwhereinputSchema as unknown as z.ZodType<Prisma.UserWhereInput>;
 export const UserWhereInputObjectZodSchema = userwhereinputSchema;

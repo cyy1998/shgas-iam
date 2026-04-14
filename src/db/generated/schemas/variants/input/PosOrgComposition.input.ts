@@ -1,7 +1,6 @@
 import * as z from 'zod';
 // prettier-ignore
 export const PosOrgCompositionInputSchema = z.object({
-    id: z.number().int(),
     posId: z.number().int(),
     orgId: z.number().int(),
     status: z.number().int(),

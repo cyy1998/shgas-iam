@@ -1,10 +1,7 @@
 import type { Prisma } from '../prisma/client';
 import * as z from 'zod';
-import { OrganizationRoleSelectObjectSchema as OrganizationRoleSelectObjectSchema } from './objects/OrganizationRoleSelect.schema';
-import { OrganizationRoleIncludeObjectSchema as OrganizationRoleIncludeObjectSchema } from './objects/OrganizationRoleInclude.schema';
-import { OrganizationRoleCreateInputObjectSchema as OrganizationRoleCreateInputObjectSchema } from './objects/OrganizationRoleCreateInput.schema';
 import { OrganizationRoleUncheckedCreateInputObjectSchema as OrganizationRoleUncheckedCreateInputObjectSchema } from './objects/OrganizationRoleUncheckedCreateInput.schema';
 
-export const OrganizationRoleCreateOneSchema: z.ZodType<Prisma.OrganizationRoleCreateArgs> = z.object({ select: OrganizationRoleSelectObjectSchema.optional(), include: OrganizationRoleIncludeObjectSchema.optional(), data: z.union([OrganizationRoleCreateInputObjectSchema, OrganizationRoleUncheckedCreateInputObjectSchema]) }).strict() as unknown as z.ZodType<Prisma.OrganizationRoleCreateArgs>;
+export const OrganizationRoleCreateOneSchema: z.ZodType<Prisma.OrganizationRoleCreateArgs> = z.object({   data: OrganizationRoleUncheckedCreateInputObjectSchema }).strict() as unknown as z.ZodType<Prisma.OrganizationRoleCreateArgs>;
 
-export const OrganizationRoleCreateOneZodSchema = z.object({ select: OrganizationRoleSelectObjectSchema.optional(), include: OrganizationRoleIncludeObjectSchema.optional(), data: z.union([OrganizationRoleCreateInputObjectSchema, OrganizationRoleUncheckedCreateInputObjectSchema]) }).strict();
+export const OrganizationRoleCreateOneZodSchema = z.object({   data: OrganizationRoleUncheckedCreateInputObjectSchema }).strict();

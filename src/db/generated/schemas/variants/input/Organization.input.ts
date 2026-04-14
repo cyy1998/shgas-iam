@@ -1,7 +1,6 @@
 import * as z from 'zod';
 // prettier-ignore
 export const OrganizationInputSchema = z.object({
-    id: z.number().int(),
     orgCode: z.string(),
     orgName: z.string(),
     parentId: z.number().int(),

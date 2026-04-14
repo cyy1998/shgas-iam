@@ -5,11 +5,13 @@ import { StringFieldUpdateOperationsInputObjectSchema as StringFieldUpdateOperat
 import { NullableJsonNullValueInputSchema } from '../enums/NullableJsonNullValueInput.schema';
 import { NullableStringFieldUpdateOperationsInputObjectSchema as NullableStringFieldUpdateOperationsInputObjectSchema } from './NullableStringFieldUpdateOperationsInput.schema';
 import { BoolFieldUpdateOperationsInputObjectSchema as BoolFieldUpdateOperationsInputObjectSchema } from './BoolFieldUpdateOperationsInput.schema';
-import { DateTimeFieldUpdateOperationsInputObjectSchema as DateTimeFieldUpdateOperationsInputObjectSchema } from './DateTimeFieldUpdateOperationsInput.schema';
-import { RolePrivilegeUncheckedUpdateManyWithoutPrivilegeNestedInputObjectSchema as RolePrivilegeUncheckedUpdateManyWithoutPrivilegeNestedInputObjectSchema } from './RolePrivilegeUncheckedUpdateManyWithoutPrivilegeNestedInput.schema';
-import { DelegationDetailUncheckedUpdateManyWithoutPrivilegeNestedInputObjectSchema as DelegationDetailUncheckedUpdateManyWithoutPrivilegeNestedInputObjectSchema } from './DelegationDetailUncheckedUpdateManyWithoutPrivilegeNestedInput.schema'
+import { DateTimeFieldUpdateOperationsInputObjectSchema as DateTimeFieldUpdateOperationsInputObjectSchema } from './DateTimeFieldUpdateOperationsInput.schema'
 
-import { JsonValueSchema as jsonSchema } from '../../helpers/json-helpers';
+
+const literalSchema = z.union([z.string(), z.number(), z.boolean()]);
+const jsonSchema: any = z.lazy(() =>
+  z.union([literalSchema, z.array(jsonSchema.nullable()), z.record(z.string(), jsonSchema.nullable())])
+);
 
 const makeSchema = () => z.object({
   id: z.union([z.number().int(), z.lazy(() => IntFieldUpdateOperationsInputObjectSchema)]).optional(),
@@ -20,9 +22,7 @@ const makeSchema = () => z.object({
   description: z.union([z.string().max(500), z.lazy(() => NullableStringFieldUpdateOperationsInputObjectSchema)]).optional().nullable(),
   isDelete: z.union([z.boolean(), z.lazy(() => BoolFieldUpdateOperationsInputObjectSchema)]).optional(),
   createTime: z.union([z.coerce.date(), z.lazy(() => DateTimeFieldUpdateOperationsInputObjectSchema)]).optional(),
-  updateTime: z.union([z.coerce.date(), z.lazy(() => DateTimeFieldUpdateOperationsInputObjectSchema)]).optional(),
-  roles: z.lazy(() => RolePrivilegeUncheckedUpdateManyWithoutPrivilegeNestedInputObjectSchema).optional(),
-  delegations: z.lazy(() => DelegationDetailUncheckedUpdateManyWithoutPrivilegeNestedInputObjectSchema).optional()
+  updateTime: z.union([z.coerce.date(), z.lazy(() => DateTimeFieldUpdateOperationsInputObjectSchema)]).optional()
 }).strict();
 export const PrivilegeUncheckedUpdateInputObjectSchema: z.ZodType<Prisma.PrivilegeUncheckedUpdateInput> = makeSchema() as unknown as z.ZodType<Prisma.PrivilegeUncheckedUpdateInput>;
 export const PrivilegeUncheckedUpdateInputObjectZodSchema = makeSchema();

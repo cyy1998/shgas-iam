@@ -1,8 +1,6 @@
 import * as z from 'zod';
 import type { Prisma } from '../../prisma/client';
-import { EmploymentUncheckedCreateNestedManyWithoutUserInputObjectSchema as EmploymentUncheckedCreateNestedManyWithoutUserInputObjectSchema } from './EmploymentUncheckedCreateNestedManyWithoutUserInput.schema';
-import { PrivilegeDelegationUncheckedCreateNestedManyWithoutDelegatorUserInputObjectSchema as PrivilegeDelegationUncheckedCreateNestedManyWithoutDelegatorUserInputObjectSchema } from './PrivilegeDelegationUncheckedCreateNestedManyWithoutDelegatorUserInput.schema';
-import { PrivilegeDelegationUncheckedCreateNestedManyWithoutDelegateeUserInputObjectSchema as PrivilegeDelegationUncheckedCreateNestedManyWithoutDelegateeUserInputObjectSchema } from './PrivilegeDelegationUncheckedCreateNestedManyWithoutDelegateeUserInput.schema'
+
 
 const makeSchema = () => z.object({
   id: z.number().int().optional(),
@@ -16,10 +14,7 @@ const makeSchema = () => z.object({
   status: z.number().int().optional(),
   isDelete: z.boolean().optional(),
   createTime: z.coerce.date().optional(),
-  updateTime: z.coerce.date().optional(),
-  employments: z.lazy(() => EmploymentUncheckedCreateNestedManyWithoutUserInputObjectSchema).optional(),
-  delegationTo: z.lazy(() => PrivilegeDelegationUncheckedCreateNestedManyWithoutDelegatorUserInputObjectSchema).optional(),
-  delegationFrom: z.lazy(() => PrivilegeDelegationUncheckedCreateNestedManyWithoutDelegateeUserInputObjectSchema).optional()
+  updateTime: z.coerce.date().optional()
 }).strict();
 export const UserUncheckedCreateInputObjectSchema: z.ZodType<Prisma.UserUncheckedCreateInput> = makeSchema() as unknown as z.ZodType<Prisma.UserUncheckedCreateInput>;
 export const UserUncheckedCreateInputObjectZodSchema = makeSchema();

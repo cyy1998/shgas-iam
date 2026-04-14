@@ -1,6 +1,6 @@
 import * as z from 'zod';
 import type { Prisma } from '../../prisma/client';
-import { EmploymentRoleUncheckedCreateNestedManyWithoutEmploymentInputObjectSchema as EmploymentRoleUncheckedCreateNestedManyWithoutEmploymentInputObjectSchema } from './EmploymentRoleUncheckedCreateNestedManyWithoutEmploymentInput.schema'
+
 
 const makeSchema = () => z.object({
   id: z.number().int().optional(),
@@ -14,8 +14,7 @@ const makeSchema = () => z.object({
   endTime: z.coerce.date().optional().nullable(),
   description: z.string().max(500).optional().nullable(),
   isDelete: z.boolean().optional(),
-  createTime: z.coerce.date().optional(),
-  roles: z.lazy(() => EmploymentRoleUncheckedCreateNestedManyWithoutEmploymentInputObjectSchema).optional()
+  createTime: z.coerce.date().optional()
 }).strict();
 export const EmploymentUncheckedCreateInputObjectSchema: z.ZodType<Prisma.EmploymentUncheckedCreateInput> = makeSchema() as unknown as z.ZodType<Prisma.EmploymentUncheckedCreateInput>;
 export const EmploymentUncheckedCreateInputObjectZodSchema = makeSchema();

@@ -4,14 +4,7 @@ import { IntFilterObjectSchema as IntFilterObjectSchema } from './IntFilter.sche
 import { StringFilterObjectSchema as StringFilterObjectSchema } from './StringFilter.schema';
 import { StringNullableFilterObjectSchema as StringNullableFilterObjectSchema } from './StringNullableFilter.schema';
 import { BoolFilterObjectSchema as BoolFilterObjectSchema } from './BoolFilter.schema';
-import { DateTimeFilterObjectSchema as DateTimeFilterObjectSchema } from './DateTimeFilter.schema';
-import { ClientScalarRelationFilterObjectSchema as ClientScalarRelationFilterObjectSchema } from './ClientScalarRelationFilter.schema';
-import { ClientWhereInputObjectSchema as ClientWhereInputObjectSchema } from './ClientWhereInput.schema';
-import { PositionRoleListRelationFilterObjectSchema as PositionRoleListRelationFilterObjectSchema } from './PositionRoleListRelationFilter.schema';
-import { OrganizationRoleListRelationFilterObjectSchema as OrganizationRoleListRelationFilterObjectSchema } from './OrganizationRoleListRelationFilter.schema';
-import { PosOrgRoleListRelationFilterObjectSchema as PosOrgRoleListRelationFilterObjectSchema } from './PosOrgRoleListRelationFilter.schema';
-import { EmploymentRoleListRelationFilterObjectSchema as EmploymentRoleListRelationFilterObjectSchema } from './EmploymentRoleListRelationFilter.schema';
-import { RolePrivilegeListRelationFilterObjectSchema as RolePrivilegeListRelationFilterObjectSchema } from './RolePrivilegeListRelationFilter.schema'
+import { DateTimeFilterObjectSchema as DateTimeFilterObjectSchema } from './DateTimeFilter.schema'
 
 const rolewhereinputSchema = z.object({
   AND: z.union([z.lazy(() => RoleWhereInputObjectSchema), z.lazy(() => RoleWhereInputObjectSchema).array()]).optional(),
@@ -25,13 +18,7 @@ const rolewhereinputSchema = z.object({
   description: z.union([z.lazy(() => StringNullableFilterObjectSchema), z.string().max(500)]).optional().nullable(),
   isDelete: z.union([z.lazy(() => BoolFilterObjectSchema), z.boolean()]).optional(),
   createTime: z.union([z.lazy(() => DateTimeFilterObjectSchema), z.coerce.date()]).optional(),
-  updateTime: z.union([z.lazy(() => DateTimeFilterObjectSchema), z.coerce.date()]).optional(),
-  client: z.union([z.lazy(() => ClientScalarRelationFilterObjectSchema), z.lazy(() => ClientWhereInputObjectSchema)]).optional(),
-  positions: z.lazy(() => PositionRoleListRelationFilterObjectSchema).optional(),
-  organizations: z.lazy(() => OrganizationRoleListRelationFilterObjectSchema).optional(),
-  positionOrganizations: z.lazy(() => PosOrgRoleListRelationFilterObjectSchema).optional(),
-  employments: z.lazy(() => EmploymentRoleListRelationFilterObjectSchema).optional(),
-  privileges: z.lazy(() => RolePrivilegeListRelationFilterObjectSchema).optional()
+  updateTime: z.union([z.lazy(() => DateTimeFilterObjectSchema), z.coerce.date()]).optional()
 }).strict();
 export const RoleWhereInputObjectSchema: z.ZodType<Prisma.RoleWhereInput> = rolewhereinputSchema as unknown as z.ZodType<Prisma.RoleWhereInput>;
 export const RoleWhereInputObjectZodSchema = rolewhereinputSchema;

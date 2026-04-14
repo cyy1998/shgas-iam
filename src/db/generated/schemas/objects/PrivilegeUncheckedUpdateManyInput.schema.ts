@@ -7,7 +7,11 @@ import { NullableStringFieldUpdateOperationsInputObjectSchema as NullableStringF
 import { BoolFieldUpdateOperationsInputObjectSchema as BoolFieldUpdateOperationsInputObjectSchema } from './BoolFieldUpdateOperationsInput.schema';
 import { DateTimeFieldUpdateOperationsInputObjectSchema as DateTimeFieldUpdateOperationsInputObjectSchema } from './DateTimeFieldUpdateOperationsInput.schema'
 
-import { JsonValueSchema as jsonSchema } from '../../helpers/json-helpers';
+
+const literalSchema = z.union([z.string(), z.number(), z.boolean()]);
+const jsonSchema: any = z.lazy(() =>
+  z.union([literalSchema, z.array(jsonSchema.nullable()), z.record(z.string(), jsonSchema.nullable())])
+);
 
 const makeSchema = () => z.object({
   id: z.union([z.number().int(), z.lazy(() => IntFieldUpdateOperationsInputObjectSchema)]).optional(),

@@ -1,6 +1,5 @@
 import type { Prisma } from '../prisma/client';
 import * as z from 'zod';
-import { PositionIncludeObjectSchema as PositionIncludeObjectSchema } from './objects/PositionInclude.schema';
 import { PositionOrderByWithRelationInputObjectSchema as PositionOrderByWithRelationInputObjectSchema } from './objects/PositionOrderByWithRelationInput.schema';
 import { PositionWhereInputObjectSchema as PositionWhereInputObjectSchema } from './objects/PositionWhereInput.schema';
 import { PositionWhereUniqueInputObjectSchema as PositionWhereUniqueInputObjectSchema } from './objects/PositionWhereUniqueInput.schema';
@@ -39,6 +38,6 @@ export const PositionFindFirstSelectZodSchema = z.object({
     _count: z.boolean().optional()
   }).strict();
 
-export const PositionFindFirstSchema: z.ZodType<Prisma.PositionFindFirstArgs> = z.object({ select: PositionFindFirstSelectSchema.optional(), include: z.lazy(() => PositionIncludeObjectSchema.optional()), orderBy: z.union([PositionOrderByWithRelationInputObjectSchema, PositionOrderByWithRelationInputObjectSchema.array()]).optional(), where: PositionWhereInputObjectSchema.optional(), cursor: PositionWhereUniqueInputObjectSchema.optional(), take: z.number().optional(), skip: z.number().optional(), distinct: z.union([PositionScalarFieldEnumSchema, PositionScalarFieldEnumSchema.array()]).optional() }).strict() as unknown as z.ZodType<Prisma.PositionFindFirstArgs>;
+export const PositionFindFirstSchema: z.ZodType<Prisma.PositionFindFirstArgs> = z.object({ select: PositionFindFirstSelectSchema.optional(),  orderBy: z.union([PositionOrderByWithRelationInputObjectSchema, PositionOrderByWithRelationInputObjectSchema.array()]).optional(), where: PositionWhereInputObjectSchema.optional(), cursor: PositionWhereUniqueInputObjectSchema.optional(), take: z.number().optional(), skip: z.number().optional(), distinct: z.union([PositionScalarFieldEnumSchema, PositionScalarFieldEnumSchema.array()]).optional() }).strict() as unknown as z.ZodType<Prisma.PositionFindFirstArgs>;
 
-export const PositionFindFirstZodSchema = z.object({ select: PositionFindFirstSelectSchema.optional(), include: z.lazy(() => PositionIncludeObjectSchema.optional()), orderBy: z.union([PositionOrderByWithRelationInputObjectSchema, PositionOrderByWithRelationInputObjectSchema.array()]).optional(), where: PositionWhereInputObjectSchema.optional(), cursor: PositionWhereUniqueInputObjectSchema.optional(), take: z.number().optional(), skip: z.number().optional(), distinct: z.union([PositionScalarFieldEnumSchema, PositionScalarFieldEnumSchema.array()]).optional() }).strict();
+export const PositionFindFirstZodSchema = z.object({ select: PositionFindFirstSelectSchema.optional(),  orderBy: z.union([PositionOrderByWithRelationInputObjectSchema, PositionOrderByWithRelationInputObjectSchema.array()]).optional(), where: PositionWhereInputObjectSchema.optional(), cursor: PositionWhereUniqueInputObjectSchema.optional(), take: z.number().optional(), skip: z.number().optional(), distinct: z.union([PositionScalarFieldEnumSchema, PositionScalarFieldEnumSchema.array()]).optional() }).strict();
