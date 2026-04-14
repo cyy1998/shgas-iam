@@ -55,7 +55,7 @@ export async function getOrganizationById(id: number, tx: PrismaTransaction = pr
   });
 }
 export async function searchOrganizations(
-  organizationQueryDto: OrganizationQueryDto,
+  query: OrganizationQueryDto,
   tx: PrismaTransaction = prisma,
 ) {
   return await tx.organization.findMany({
@@ -64,11 +64,11 @@ export async function searchOrganizations(
         some: {
           ancestor: {
             orgCode: {
-              in: organizationQueryDto.ancestorCodes,
+              in: query.ancestorCodes,
             },
           },
           depth: {
-            in: organizationQueryDto.ancestorDepths,
+            in: query.ancestorDepths,
           },
         },
       },
@@ -76,22 +76,22 @@ export async function searchOrganizations(
         some: {
           descendant: {
             orgCode: {
-              in: organizationQueryDto.descendantCodes,
+              in: query.descendantCodes,
             },
           },
           depth: {
-            in: organizationQueryDto.descendantDepths,
+            in: query.descendantDepths,
           },
         },
       },
       level: {
-        in: organizationQueryDto.orgLevels,
+        in: query.orgLevels,
       },
       orgType: {
-        in: organizationQueryDto.orgTypes,
+        in: query.orgTypes,
       },
       orgCode: {
-        in: organizationQueryDto.orgCodes,
+        in: query.orgCodes,
       },
       status: Status.Enable,
       isDelete: false,
@@ -137,8 +137,9 @@ export async function setOrganization(
   parentOrganization: Organization | null,
   tx: PrismaTransaction = prisma,
 ) {
+  const { parentCode, ...org } = organizationCreateDto;
   const newOrganization = await tx.organization.create({
-    data: organizationCreateDto,
+    data: org,
   });
   const path = `${parentOrganization ? parentOrganization.path : ""}/${newOrganization.id}`;
   const level = parentOrganization ? parentOrganization.level + 1 : 1;

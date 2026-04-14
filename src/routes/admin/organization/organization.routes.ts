@@ -25,7 +25,7 @@ export const organizationsSet = createRoute({
   path: `${routePrefix}/set`,
   tags,
   request: {
-    body: jsonContentRequired(OrganizationCreateDtoSchema.extend({ parentCode: z.string().nullish() }), "组织创建参数"),
+    body: jsonContentRequired(OrganizationCreateDtoSchema, "组织创建参数"),
   },
   responses: {
     [HttpStatusCodes.OK]: jsonContent(createSuccessResponseSchema(z.boolean()), "设置组织成功"),

@@ -1,4 +1,6 @@
+import type { PrivilegeQueryDto } from "./privilege.type";
 import type { PrismaTransaction } from "@/db";
+import type { Prettify } from "@/utils/lint.util";
 import { Status } from "@enums/status";
 import { prisma } from "@/db";
 
@@ -106,6 +108,28 @@ export async function setPrivilege(privCode: string, privName: string, tx: Prism
     data: {
       privilegeCode: privCode,
       privilegeName: privName,
+    },
+  });
+}
+
+export async function searchPrivileges(
+  query: Prettify<PrivilegeQueryDto>,
+  tx: PrismaTransaction = prisma,
+) {
+  return await tx.privilege.findMany({
+    where: {
+      privilegeCode: {
+        in: query.privilegeCodes,
+      },
+      roles: {
+        some: {
+          role: {
+            roleCode: {
+              in: query.roleCodes,
+            },
+          },
+        },
+      },
     },
   });
 }

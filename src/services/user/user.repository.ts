@@ -41,19 +41,19 @@ export async function getUserByMobile(mobile: string, tx: PrismaTransaction = pr
   });
 }
 export async function searchUsers(
-  userQueryDto: UserQueryDto,
+  query: UserQueryDto,
   tx: PrismaTransaction = prisma,
 ) {
   return await tx.user.findMany({
     where: {
       username: {
-        in: userQueryDto.usernames,
+        in: query.usernames,
       },
       mobile: {
-        in: userQueryDto.phones,
+        in: query.phones,
       },
       wxId: {
-        in: userQueryDto.wxIds,
+        in: query.wxIds,
       },
       employments: {
         some: {
@@ -64,11 +64,11 @@ export async function searchUsers(
               some: {
                 ancestor: {
                   orgCode: {
-                    in: userQueryDto.ancestorOrgCodes,
+                    in: query.ancestorOrgCodes,
                   },
                 },
                 depth: {
-                  in: userQueryDto.ancestorOrgDepths,
+                  in: query.ancestorOrgDepths,
                 },
               },
             },
@@ -77,7 +77,7 @@ export async function searchUsers(
             status: Status.Enable,
             isDelete: false,
             posCode: {
-              in: userQueryDto.positionCodes,
+              in: query.positionCodes,
             },
           },
           OR: [
@@ -89,7 +89,7 @@ export async function searchUsers(
                       status: Status.Enable,
                       isDelete: false,
                       roleCode: {
-                        in: userQueryDto.roleCodes,
+                        in: query.roleCodes,
                       },
                     },
                   },
@@ -103,7 +103,7 @@ export async function searchUsers(
                     status: Status.Enable,
                     isDelete: false,
                     roleCode: {
-                      in: userQueryDto.roleCodes,
+                      in: query.roleCodes,
                     },
                   },
                 },
@@ -123,7 +123,7 @@ export async function searchUsers(
                                 status: Status.Enable,
                                 isDelete: false,
                                 roleCode: {
-                                  in: userQueryDto.roleCodes,
+                                  in: query.roleCodes,
                                 },
                               },
                             },
@@ -142,7 +142,7 @@ export async function searchUsers(
                                 status: Status.Enable,
                                 isDelete: false,
                                 roleCode: {
-                                  in: userQueryDto.roleCodes,
+                                  in: query.roleCodes,
                                 },
                               },
                             },

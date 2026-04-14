@@ -24,8 +24,6 @@ export const OrganizationDtoConverterSchema = OrganizationDetailSchema.transform
   };
 }).pipe(OrganizationDtoSchema);
 
-// export type OrganizationDto = z.infer<typeof OrganizationDtoSchema>;
-
 export const OrganizationCreateDtoSchema = OrganizationSchema.partial().required({
   orgCode: true,
   orgType: true,
@@ -34,6 +32,7 @@ export const OrganizationCreateDtoSchema = OrganizationSchema.partial().required
 }).extend({
   path: z.string().default(""),
   level: z.number().default(0),
+  parentCode: z.string().nullish().openapi({ example: "SR" }),
 }).omit({
   id: true,
   isDelete: true,

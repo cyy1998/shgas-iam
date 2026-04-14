@@ -5,7 +5,7 @@ import jsonContentRequired from "@lib/core/openapi/helpers/json-content-required
 import createSuccessResponseSchema from "@lib/core/openapi/schemas/create-success-schema";
 import { EmploymentDtoSchema } from "@/services/employment/employment.schema";
 import { OrganizationDtoSchema, OrganizationQueryDtoSchema } from "@/services/organization/organization.schema";
-import { PrivilegeDelegationDtoSchema } from "@/services/privilege/privilegeDelegation.schema";
+import { PrivilegeDelegationCreateDtoSchema, PrivilegeDelegationDetailDtoSchema, PrivilegeDelegationDtoSchema, PrivilegeDelegationQueryDtoSchema } from "@/services/privilege/privilegeDelegation.schema";
 import { UserDetailDtoSchema, UserDtoSchema, UserQueryDtoSchema, UserQueryWithPrivilegeDelegationDtoSchema } from "@/services/user/user.schema";
 
 export const routePrefix = "/internal";
@@ -180,37 +180,25 @@ export const organizationGetByCode = createRoute({
 });
 
 export const privilegeDelegationsQuery = createRoute({
-  method: "get",
-  path: `${routePrefix}/privilege-delegations`,
+  method: "post",
+  path: `${routePrefix}/delegations/search`,
   tags,
   request: {
-    query: z.object({
-      delegatorUsername: z.string().optional().openapi({ example: "138550" }),
-      delegateeUsername: z.string().optional().openapi({ example: "138551" }),
-      orgCode: z.string().optional().openapi({ example: "SR23" }),
-    }),
+    body: jsonContentRequired(PrivilegeDelegationQueryDtoSchema, "权限代理搜索参数"),
   },
   responses: {
-    [HttpStatusCodes.OK]: jsonContent(createSuccessResponseSchema(z.array(PrivilegeDelegationDtoSchema)), "权限Delegation列表"),
+    [HttpStatusCodes.OK]: jsonContent(createSuccessResponseSchema(z.array(PrivilegeDelegationDetailDtoSchema)), "权限Delegation列表"),
   },
 });
 
 export const privilegeDelegationSet = createRoute({
   method: "post",
-  path: `${routePrefix}/privilege-delegations`,
+  path: `${routePrefix}/delegations/set`,
   tags,
   request: {
-    body: jsonContentRequired(z.object({
-      delegatorUsername: z.string().openapi({ example: "138550" }),
-      delegateeUsername: z.string().openapi({ example: "138551" }),
-      orgCode: z.string().openapi({ example: "SR23" }),
-      privilegeCodes: z.array(z.string()).openapi({ example: ["tender:flow:SR_CZLX"] }),
-      startTime: z.string().datetime().openapi({ example: "2024-01-01T00:00:00Z" }),
-      endTime: z.string().datetime().openapi({ example: "2024-12-31T23:59:59Z" }),
-      description: z.string().optional().openapi({ example: "临时授权" }),
-    }), "权限Delegation设置参数"),
+    body: jsonContentRequired(PrivilegeDelegationCreateDtoSchema, "权限Delegation设置参数"),
   },
   responses: {
-    [HttpStatusCodes.OK]: jsonContent(createSuccessResponseSchema(PrivilegeDelegationDtoSchema), "权限Delegation设置结果"),
+    [HttpStatusCodes.OK]: jsonContent(createSuccessResponseSchema(PrivilegeDelegationDetailDtoSchema), "权限Delegation设置结果"),
   },
 });

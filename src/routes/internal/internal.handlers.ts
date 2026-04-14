@@ -81,8 +81,9 @@ export const purveyorRegister: InternalRouteHandler<"purveyorRegister"> = async 
     orgName,
     orgType: OrganizationType.External,
     isVirtual: true,
+    parentCode: parentOrg,
   });
-  await organizationService.setOrganization(organizationCreateDto, parentOrg);
+  await organizationService.setOrganization(organizationCreateDto);
   return c.json(resp.ok(true));
 };
 
@@ -143,17 +144,13 @@ export const organizationGetByCode: InternalRouteHandler<"organizationGetByCode"
 };
 
 export const privilegeDelegationsQuery: InternalRouteHandler<"privilegeDelegationsQuery"> = async (c) => {
-  const query = c.req.valid("query");
+  const query = c.req.valid("json");
   const data = await privilegeDelegationService.queryPrivilegeDelegations(query);
   return c.json(resp.ok(data));
 };
 
 export const privilegeDelegationSet: InternalRouteHandler<"privilegeDelegationSet"> = async (c) => {
   const dto = c.req.valid("json");
-  const data = await privilegeDelegationService.setPrivilegeDelegation({
-    ...dto,
-    startTime: new Date(dto.startTime),
-    endTime: new Date(dto.endTime),
-  });
+  const data = await privilegeDelegationService.createPrivilegeDelegation(dto);
   return c.json(resp.ok(data));
 };

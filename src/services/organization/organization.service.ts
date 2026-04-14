@@ -22,29 +22,17 @@ export async function searchOrganizations(organizationQueryDto: OrganizationQuer
   return orgDtos;
 }
 
-export async function setOrganization(
-  organizationCreateDto: OrganizationCreateDto,
-  parentCode: string | null | undefined,
-) {
+export async function setOrganization(organizationCreateDto: OrganizationCreateDto) {
   return await prisma.$transaction(async (tx) => {
     const newOrg = await organizationRepository.getOrganizationByCode(organizationCreateDto.orgCode, tx);
-    const parentOrg = parentCode ? await organizationRepository.getOrganizationByCode(parentCode, tx) : null;
-    // const [newOrg, parentOrg] = await Promise.all([
-    //   // organizationRepository.getOrganizationByCode(organizationCreateDto.orgCode, tx),
-    //   organizationRepository.getOrganizationByCode(parentCode ?? "", tx),
-    // ]);
+    const parentOrg = organizationCreateDto.parentCode
+      ? await organizationRepository.getOrganizationByCode(organizationCreateDto.parentCode, tx)
+      : null;
     if (newOrg !== null) {
       throw new CustomError("待创建组织已存在");
     }
-    // if (parentOrg === null) {
-    //   throw new CustomError("有效父组织不存在");
-    // }
     await organizationRepository.setOrganization(
       organizationCreateDto,
-      // organizationCreateDto.orgCode,
-      // organizationCreateDto.orgName,
-      // parentOrg.level + 1,
-      // organizationCreateDto.orgType,
       parentOrg,
       tx,
     );
