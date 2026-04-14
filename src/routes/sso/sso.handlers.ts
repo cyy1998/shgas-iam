@@ -76,7 +76,7 @@ export const logout: SsoRouteHandler<"logout"> = async (c) => {
 
 export const loginOA: SsoRouteHandler<"loginOA"> = async (c) => {
   const { clientCode } = c.req.valid("param");
-  const { loginid, ts, token, redirectUrl } = c.req.valid("query");
+  const { loginid, ts, token, redirectUrl, client } = c.req.valid("query");
   const sessionId = getCookie(c, "global_session") ?? c.req.header("Authorization");
   if (sessionId) {
     await ssoService.logout(sessionId);
@@ -88,7 +88,7 @@ export const loginOA: SsoRouteHandler<"loginOA"> = async (c) => {
     maxAge: config.REDIS_EXPIRE_TIME,
     path: "/",
   });
-  return c.redirect(`/sso/authorize?client=${clientCode}&redirectUrl=${encodeURIComponent(redirectUrl)}&token=${data.token}`);
+  return c.redirect(`/sso/authorize?client=${client}&redirectUrl=${encodeURIComponent(redirectUrl)}&token=${data.token}`);
 };
 
 export const loginWX: SsoRouteHandler<"loginWX"> = async (c) => {

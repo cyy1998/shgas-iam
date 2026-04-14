@@ -11,6 +11,7 @@ import * as organizationRepository from "@/services/organization/organization.re
 import { OrganizationCreateDtoSchema } from "@/services/organization/organization.schema";
 import * as organizationService from "@/services/organization/organization.service";
 import * as positionRepository from "@/services/position/position.repository";
+import * as privilegeDelegationService from "@/services/privilege/privilegeDelegation.service";
 import * as userRepository from "@/services/user/user.repository";
 import * as userService from "@/services/user/user.service";
 import * as resp from "@/utils/http/response";
@@ -138,5 +139,21 @@ export const organizationsSearch: InternalRouteHandler<"organizationsSearch"> = 
 export const organizationGetByCode: InternalRouteHandler<"organizationGetByCode"> = async (c) => {
   const { orgCode } = c.req.valid("query");
   const data = await organizationService.getOrganizationByCode(orgCode);
+  return c.json(resp.ok(data));
+};
+
+export const privilegeDelegationsQuery: InternalRouteHandler<"privilegeDelegationsQuery"> = async (c) => {
+  const query = c.req.valid("query");
+  const data = await privilegeDelegationService.queryPrivilegeDelegations(query);
+  return c.json(resp.ok(data));
+};
+
+export const privilegeDelegationSet: InternalRouteHandler<"privilegeDelegationSet"> = async (c) => {
+  const dto = c.req.valid("json");
+  const data = await privilegeDelegationService.setPrivilegeDelegation({
+    ...dto,
+    startTime: new Date(dto.startTime),
+    endTime: new Date(dto.endTime),
+  });
   return c.json(resp.ok(data));
 };

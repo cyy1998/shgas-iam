@@ -100,6 +100,7 @@ export const loginOA = createRoute({
       ts: z.string().openapi({ example: "1234" }),
       token: z.string().openapi({ example: "138550" }),
       redirectUrl: z.url().openapi({ example: "http://localhost:8080" }),
+      client: z.string().openapi({ example: "tender" }),
     }),
   },
   responses: {

@@ -14,28 +14,33 @@
 ## 🛠️ 技术栈
 
 ### 核心框架
+
 - **运行时**: [Bun](https://bun.sh/) - 快速的全能 JavaScript 运行时
 - **Web 框架**: [Hono](https://hono.dev/) - 轻量级、快速的 Web 框架
 - **API 文档**: [@hono/zod-openapi](https://github.com/honojs/middleware/tree/main/packages/zod-openapi) - OpenAPI 集成
 - **API UI**: [@hono/swagger-ui](https://github.com/honojs/middleware/tree/main/packages/swagger-ui) - Swagger UI 集成
 
 ### 数据库与 ORM
+
 - **ORM**: [Prisma](https://www.prisma.io/) - 下一代 Node.js 和 TypeScript ORM
 - **数据库**: MySQL (通过 Prisma 适配器)
 - **模式生成**: [prisma-zod-generator](https://github.com/omar-dulaimi/prisma-zod-generator) - 从 Prisma 生成 Zod schema
 
 ### 认证与安全
+
 - **OIDC 提供商**: [oidc-provider](https://github.com/panva/node-oidc-provider) - OAuth 2.0 和 OIDC 实现
 - **密码哈希**: [bcrypt-ts](https://github.com/iamdavidfrancis/bcrypt-ts) - 密码安全哈希
 - **加密**: [sm-crypto](https://github.com/JuneAndGreen/sm-crypto) - 国密算法支持
 
 ### 基础设施
+
 - **缓存**: [ioredis](https://github.com/redis/ioredis) - Redis 客户端
 - **日志**: [pino](https://github.com/pinojs/pino) - 极简日志库
 - **HTTP 客户端**: [axios](https://axios-http.com/) - HTTP 请求库
 - **日期处理**: [luxon](https://moment.github.io/luxon/) - 现代日期库
 
 ### 开发工具
+
 - **包管理**: [pnpm](https://pnpm.io/) - 快速、节省磁盘空间的包管理器
 - **代码检查**: [ESLint](https://eslint.org/) (Antfu 配置)
 - **验证**: [Zod](https://zod.dev/) - TypeScript 优先的模式验证
@@ -53,45 +58,48 @@
 ### 安装步骤
 
 1. **克隆仓库**
+
    ```bash
    git clone <repository-url>
    cd iam-service
    ```
 
 2. **安装依赖**
+
    ```bash
    # 使用 pnpm (推荐)
    pnpm install
 
-   # 或者使用 bun
-   bun install
    ```
 
 3. **配置环境变量**
    复制 `.env.example` 到 `.env` 并填写必要配置：
+
    ```bash
    cp .env.example .env
    ```
-   
+
    编辑 `.env` 文件，配置数据库、Redis 和其他服务连接信息。
 
 4. **数据库设置**
+
    ```bash
    # 生成 Prisma 客户端
-   bunx prisma generate
-   
+   pnpm prisma generate
+
    # 创建并应用数据库迁移
-   bunx prisma migrate dev
-   
+   pnpm prisma migrate dev
+
    # 可选：使用 Prisma Studio 查看数据
-   bunx prisma studio
+   pnpm prisma studio
    ```
 
 5. **启动开发服务器**
+
    ```bash
-   bun run dev
+   pnpm dev
    ```
-   
+
    服务将在 http://localhost:30000 启动，Swagger UI 文档在 http://localhost:30000/doc/swagger
 
 ## 📁 项目结构
@@ -171,26 +179,27 @@ cp .env.example .env
 
 **注意**: `.env` 文件包含敏感信息，已添加到 `.gitignore`，切勿提交到版本控制。
 
-| 变量名 | 说明 | 默认值 | 必需 |
-|--------|------|--------|------|
-| `DATABASE_URL` | MySQL 数据库连接字符串（Prisma 使用） | - | 是 |
-| `REDIS_URL` | Redis 服务器地址 | - | 是 |
-| `REDIS_PORT` | Redis 端口 | - | 是 |
-| `REDIS_DB` | Redis 数据库编号 | - | 是 |
-| `PORT` | 服务监听端口 | `30000` | 否 |
-| `IAM_SECRET_KEY` | JWT 签名密钥 | - | 是 |
-| `WX_CORPID` | 企业微信 CorpID | - | 是 |
-| `WX_CORPSECRET` | 企业微信 CorpSecret | - | 是 |
-| `SMS_URL` | 短信服务地址 | - | 是 |
-| `SMS_SIGNATURE_KEY` | 短信签名密钥 | - | 是 |
-| `ORCAS_URL` | 外部 ORCAS 服务地址 | - | 是 |
-| `LOG_LEVEL` | 日志级别 | `"info"` | 否 |
-| `LOGIN_ENDPOINT` | 登录端点地址 | - | 是 |
-| `AUTHORIZATION_ENDPOINT` | 授权端点地址 | - | 是 |
-| `LOGOUT_ENDPOINT` | 登出端点地址 | - | 是 |
-| `THIRDPARTY_OA_ENDPOINT` | 第三方 OA 端点地址 | - | 是 |
+| 变量名                   | 说明                                  | 默认值   | 必需 |
+| ------------------------ | ------------------------------------- | -------- | ---- |
+| `DATABASE_URL`           | MySQL 数据库连接字符串（Prisma 使用） | -        | 是   |
+| `REDIS_URL`              | Redis 服务器地址                      | -        | 是   |
+| `REDIS_PORT`             | Redis 端口                            | -        | 是   |
+| `REDIS_DB`               | Redis 数据库编号                      | -        | 是   |
+| `PORT`                   | 服务监听端口                          | `30000`  | 否   |
+| `IAM_SECRET_KEY`         | JWT 签名密钥                          | -        | 是   |
+| `WX_CORPID`              | 企业微信 CorpID                       | -        | 是   |
+| `WX_CORPSECRET`          | 企业微信 CorpSecret                   | -        | 是   |
+| `SMS_URL`                | 短信服务地址                          | -        | 是   |
+| `SMS_SIGNATURE_KEY`      | 短信签名密钥                          | -        | 是   |
+| `ORCAS_URL`              | 外部 ORCAS 服务地址                   | -        | 是   |
+| `LOG_LEVEL`              | 日志级别                              | `"info"` | 否   |
+| `LOGIN_ENDPOINT`         | 登录端点地址                          | -        | 是   |
+| `AUTHORIZATION_ENDPOINT` | 授权端点地址                          | -        | 是   |
+| `LOGOUT_ENDPOINT`        | 登出端点地址                          | -        | 是   |
+| `THIRDPARTY_OA_ENDPOINT` | 第三方 OA 端点地址                    | -        | 是   |
 
 **注意**:
+
 - `DATABASE_URL` 由 Prisma 直接读取，用于数据库连接
 - 其他变量由 `src/env.ts` 中的 Zod schema 验证和管理
 - 所有以 `_ENDPOINT` 结尾的变量通常配置为路径（如 `/auth/login`），而非完整 URL
@@ -201,8 +210,8 @@ cp .env.example .env
 
 ### 访问 API 文档
 
-1. 启动开发服务器：`bun run dev`
-2. 打开浏览器访问：http://localhost:30000/doc/swagger
+1. 启动开发服务器：`pnpm dev`
+2. 打开浏览器访问：http://localhost:30000/doc/scalar
 
 ### API 分类
 
@@ -218,25 +227,25 @@ cp .env.example .env
 
 ```bash
 # 启动开发服务器（热重载）
-bun run dev
+pnpm dev
 
 # 启动生产服务器
-bun run serve
+pnpm serve
 
 # 代码检查
-bun run lint
+pnpm lint
 
 # 代码检查并自动修复
-bun run lint:fix
+pnpm lint:fix
 
 # 生成 Prisma 客户端（数据库 schema 变更后）
-bunx prisma generate
+pnpm prisma generate
 
 # 创建并应用数据库迁移
-bunx prisma migrate dev --name <迁移名称>
+pnpm prisma migrate dev --name <迁移名称>
 
 # 打开 Prisma Studio 管理数据
-bunx prisma studio
+pnpm prisma studio
 ```
 
 ### 添加新 API 端点
@@ -308,13 +317,13 @@ VS Code 用户可启用 `.vscode/settings.json` 中的设置，实现保存时�
 编辑 `src/db/schema.prisma`
 
 # 2. 生成 Prisma 客户端和 Zod schema
-bunx prisma generate
+pnpm prisma generate
 
 # 3. 创建迁移
-bunx prisma migrate dev --name <描述性名称>
+pnpm prisma migrate dev --name <描述性名称>
 
 # 4. 应用迁移到生产环境
-bunx prisma migrate deploy
+pnpm prisma migrate deploy
 ```
 
 ## 🚢 部署
@@ -322,22 +331,24 @@ bunx prisma migrate deploy
 ### 生产环境部署
 
 1. **构建准备**
+
    ```bash
    # 安装生产依赖
    pnpm install --production
-   
+
    # 生成 Prisma 客户端
-   bunx prisma generate
-   
+   pnpm prisma generate
+
    # 应用数据库迁移
-   bunx prisma migrate deploy
+   pnpm prisma migrate deploy
    ```
 
 2. **启动服务**
+
    ```bash
    # 使用生产模式启动
-   bun run serve
-   
+   pnpm serve
+
    # 或直接运行
    bun src/index.ts
    ```
@@ -377,11 +388,11 @@ CMD ["bun", "run", "serve"]
 项目使用 **Pino** 日志库，支持结构化日志和多级别输出：
 
 ```typescript
-import logger from '@/lib/clients/pino';
+import logger from "@/lib/clients/pino";
 
-logger.info('信息日志');
-logger.warn('警告日志');
-logger.error('错误日志', { error: err });
+logger.info("信息日志");
+logger.warn("警告日志");
+logger.error("错误日志", { error: err });
 ```
 
 通过 `LOG_LEVEL` 环境变量控制日志级别：`trace`、`debug`、`info`、`warn`、`error`、`fatal`

@@ -3,14 +3,14 @@ import { PrivilegeDelegationSchema as PrismaPrivilegeDelegationSchema, Privilege
 
 export const PrivilegeDtoSchema = z.object(PrismaPrivilegeSchema.shape).openapi("PrivilegeDto");
 
-export const PrivilegeSchema = z.object(PrismaPrivilegeDelegationSchema.shape);
+export const PrivilegeDelegationSchema = z.object(PrismaPrivilegeDelegationSchema.shape);
 
-export const PrivilegeDetailSchema = PrivilegeSchema.extend({
+export const PrivilegeDetailSchema = PrivilegeDelegationSchema.extend({
   delegatorUser: PrismaUserSchema,
   delegateeUser: PrismaUserSchema,
 });
 
-export const PrivilegeDelegationDtoSchema = PrivilegeSchema.extend({
+export const PrivilegeDelegationDtoSchema = PrivilegeDelegationSchema.extend({
   delegatorUsername: z.string().openapi({ example: "138550" }),
   delegatorName: z.string().openapi({ example: "蔡奕阳" }),
   delegateeUsername: z.string().openapi({ example: "138550" }),

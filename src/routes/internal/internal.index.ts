@@ -19,6 +19,8 @@ router
   .openapi(routes.contactRegister, handlers.contactRegister)
   .openapi(routes.organizationsSearch, handlers.organizationsSearch)
   .openapi(routes.organizationGetByCode, handlers.organizationGetByCode)
+  .openapi(routes.privilegeDelegationsQuery, handlers.privilegeDelegationsQuery)
+  .openapi(routes.privilegeDelegationSet, handlers.privilegeDelegationSet)
 ;
 
 export default router;

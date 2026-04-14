@@ -178,3 +178,39 @@ export const organizationGetByCode = createRoute({
     [HttpStatusCodes.OK]: jsonContent(createSuccessResponseSchema(OrganizationDtoSchema), "组织查询结果"),
   },
 });
+
+export const privilegeDelegationsQuery = createRoute({
+  method: "get",
+  path: `${routePrefix}/privilege-delegations`,
+  tags,
+  request: {
+    query: z.object({
+      delegatorUsername: z.string().optional().openapi({ example: "138550" }),
+      delegateeUsername: z.string().optional().openapi({ example: "138551" }),
+      orgCode: z.string().optional().openapi({ example: "SR23" }),
+    }),
+  },
+  responses: {
+    [HttpStatusCodes.OK]: jsonContent(createSuccessResponseSchema(z.array(PrivilegeDelegationDtoSchema)), "权限Delegation列表"),
+  },
+});
+
+export const privilegeDelegationSet = createRoute({
+  method: "post",
+  path: `${routePrefix}/privilege-delegations`,
+  tags,
+  request: {
+    body: jsonContentRequired(z.object({
+      delegatorUsername: z.string().openapi({ example: "138550" }),
+      delegateeUsername: z.string().openapi({ example: "138551" }),
+      orgCode: z.string().openapi({ example: "SR23" }),
+      privilegeCodes: z.array(z.string()).openapi({ example: ["tender:flow:SR_CZLX"] }),
+      startTime: z.string().datetime().openapi({ example: "2024-01-01T00:00:00Z" }),
+      endTime: z.string().datetime().openapi({ example: "2024-12-31T23:59:59Z" }),
+      description: z.string().optional().openapi({ example: "临时授权" }),
+    }), "权限Delegation设置参数"),
+  },
+  responses: {
+    [HttpStatusCodes.OK]: jsonContent(createSuccessResponseSchema(PrivilegeDelegationDtoSchema), "权限Delegation设置结果"),
+  },
+});
