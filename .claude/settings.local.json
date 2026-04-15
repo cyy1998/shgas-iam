@@ -4,7 +4,9 @@
       "WebSearch",
       "Bash(git add:*)",
       "Bash(git commit -m ':*)",
-      "Bash(git commit:*)"
+      "Bash(git commit:*)",
+      "Bash(find:*)",
+      "Bash(npm list:*)"
     ]
   },
   "permissionMode": "auto"
