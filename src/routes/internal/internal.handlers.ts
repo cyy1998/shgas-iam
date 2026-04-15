@@ -149,6 +149,12 @@ export const privilegeDelegationsQuery: InternalRouteHandler<"privilegeDelegatio
   return c.json(resp.ok(data));
 };
 
+export const privilegeDelegationUpdateStatus: InternalRouteHandler<"privilegeDelegationUpdateStatus"> = async (c) => {
+  const { id, status } = c.req.valid("json");
+  const data = await privilegeDelegationService.updateDelegationStatus(id, status);
+  return c.json(resp.ok(data));
+};
+
 export const privilegeDelegationSet: InternalRouteHandler<"privilegeDelegationSet"> = async (c) => {
   const dto = c.req.valid("json");
   const data = await privilegeDelegationService.createPrivilegeDelegation(dto);

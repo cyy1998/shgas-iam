@@ -1,6 +1,7 @@
 import type { PrivilegeDelegationCreateDto, PrivilegeDelegationQueryDto } from "./privilegeDelegation.type";
 import type { Prettify } from "@/utils/lint.util";
 import { prisma } from "@/db";
+import { Status } from "@/enums/status";
 import { CustomError } from "@/errors/CustomError";
 import * as organizationRepository from "@/services/organization/organization.repository";
 import * as privilegeRepository from "@/services/privilege/privilege.repository";
@@ -11,6 +12,20 @@ import { PrivilegeDelegationDetailDtoConverterSchema } from "./privilegeDelegati
 export async function queryPrivilegeDelegations(query: PrivilegeDelegationQueryDto) {
   const delegations = await delegationRepository.searchDelegations(query);
   return delegations.map(d => PrivilegeDelegationDetailDtoConverterSchema.parse(d));
+}
+
+export async function updateDelegationStatus(id: number, status: Status) {
+  return await prisma.$transaction(async (tx) => {
+    const existing = await tx.privilegeDelegation.findUnique({ where: { id } });
+    if (!existing) {
+      throw new CustomError(`委托记录不存在: ${id}`);
+    }
+    if (existing.status === Status.Disable) {
+      throw new CustomError("该委托已结束，不允许再修改状态");
+    }
+    await delegationRepository.updateDelegationStatus(id, status, tx);
+    return true;
+  });
 }
 
 export async function createPrivilegeDelegation(

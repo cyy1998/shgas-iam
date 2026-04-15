@@ -124,6 +124,17 @@ export async function searchDelegations(
   });
 }
 
+export async function updateDelegationStatus(
+  id: number,
+  status: Status,
+  tx: PrismaTransaction = prisma,
+) {
+  return tx.privilegeDelegation.update({
+    where: { id },
+    data: { status },
+  });
+}
+
 export async function setPrivilegeDelegation(
   dto: Prettify<PrivilegeDelegationCreateDto>,
   tx: PrismaTransaction = prisma,

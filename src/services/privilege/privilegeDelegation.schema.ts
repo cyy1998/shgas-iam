@@ -1,11 +1,13 @@
 import { z } from "@hono/zod-openapi";
-import { describe } from "zod/v4/core";
 import * as PrismaSchema from "@/db/generated/schemas";
+import { Status } from "@/enums/status";
 import { OrganizationDtoConverterSchema, OrganizationDtoSchema } from "../organization/organization.schema";
 import { UserDtoSchema } from "../user/user.schema";
 import { PrivilegeDtoSchema } from "./privilege.schema";
 
-export const PrivilegeDelegationSchema = z.object(PrismaSchema.PrivilegeDelegationSchema.shape);
+export const PrivilegeDelegationSchema = z.object(PrismaSchema.PrivilegeDelegationSchema.shape).extend({
+  status: z.enum(Status),
+});
 
 export const PrivilegeDelegationDetailSchema = PrivilegeDelegationSchema.extend({
   delegatorUser: PrismaSchema.UserSchema,

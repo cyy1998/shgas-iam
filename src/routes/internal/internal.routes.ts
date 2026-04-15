@@ -3,6 +3,7 @@ import * as HttpStatusCodes from "@lib/core/http-status-codes";
 import jsonContent from "@lib/core/openapi/helpers/json-content";
 import jsonContentRequired from "@lib/core/openapi/helpers/json-content-required";
 import createSuccessResponseSchema from "@lib/core/openapi/schemas/create-success-schema";
+import { Status } from "@/enums/status";
 import { EmploymentDtoSchema } from "@/services/employment/employment.schema";
 import { OrganizationDtoSchema, OrganizationQueryDtoSchema } from "@/services/organization/organization.schema";
 import { PrivilegeDelegationCreateDtoSchema, PrivilegeDelegationDetailDtoSchema, PrivilegeDelegationDtoSchema, PrivilegeDelegationQueryDtoSchema } from "@/services/privilege/privilegeDelegation.schema";
@@ -188,6 +189,21 @@ export const privilegeDelegationsQuery = createRoute({
   },
   responses: {
     [HttpStatusCodes.OK]: jsonContent(createSuccessResponseSchema(z.array(PrivilegeDelegationDetailDtoSchema)), "权限Delegation列表"),
+  },
+});
+
+export const privilegeDelegationUpdateStatus = createRoute({
+  method: "post",
+  path: `${routePrefix}/delegations/update-status`,
+  tags,
+  request: {
+    body: jsonContentRequired(z.object({
+      id: z.coerce.number().int().describe("权限Delegation ID").openapi({ example: 1 }),
+      status: z.enum(Status).describe("权限Delegation状态(正常1、暂停2、结束3)").openapi({ example: Status.Disable }),
+    }), "权限Delegation状态更新参数"),
+  },
+  responses: {
+    [HttpStatusCodes.OK]: jsonContent(createSuccessResponseSchema(z.boolean()), "权限Delegation状态更新结果"),
   },
 });
 
