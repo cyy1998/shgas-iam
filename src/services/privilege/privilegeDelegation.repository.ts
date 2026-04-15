@@ -124,6 +124,30 @@ export async function searchDelegations(
   });
 }
 
+export async function getActiveDelegationsByDelegatorAndPrivileges(
+  delegatorUserId: number,
+  privilegeIds: number[],
+  tx: PrismaTransaction = prisma,
+) {
+  return tx.privilegeDelegation.findMany({
+    where: {
+      delegatorUserId,
+      isDelete: false,
+      status: { not: Status.Disable },
+      delegationDetails: {
+        some: {
+          privilegeId: { in: privilegeIds },
+        },
+      },
+    },
+    include: {
+      delegationDetails: {
+        include: { privilege: true },
+      },
+    },
+  });
+}
+
 export async function updateDelegationStatus(
   id: number,
   status: Status,

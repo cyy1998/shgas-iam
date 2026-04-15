@@ -54,6 +54,18 @@ export async function createPrivilegeDelegation(
       throw new CustomError(`权限不存在: ${notFound.join(", ")}`);
     }
 
+    const conflicting = await delegationRepository.getActiveDelegationsByDelegatorAndPrivileges(
+      delegator.id,
+      privileges.map(p => p.id),
+      tx,
+    );
+    if (conflicting.length > 0) {
+      const delegatedCodes = [...new Set(
+        conflicting.flatMap(d => d.delegationDetails.map(dd => dd.privilege.privilegeCode)),
+      )].filter(code => dto.privilegeCodes.includes(code));
+      throw new CustomError(`以下权限已被授权: ${delegatedCodes.join(", ")}`);
+    }
+
     const delegation = await delegationRepository.setPrivilegeDelegation({
       ...dto,
       delegatorUserId: delegator.id,
