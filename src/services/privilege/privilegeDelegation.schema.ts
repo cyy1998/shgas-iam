@@ -1,4 +1,5 @@
 import { z } from "@hono/zod-openapi";
+import { describe } from "zod/v4/core";
 import * as PrismaSchema from "@/db/generated/schemas";
 import { OrganizationDtoConverterSchema, OrganizationDtoSchema } from "../organization/organization.schema";
 import { UserDtoSchema } from "../user/user.schema";
@@ -65,11 +66,11 @@ export const PrivilegeDelegationDetailDtoConverterSchema = PrivilegeDelegationDe
 }).pipe(PrivilegeDelegationDetailDtoSchema);
 
 export const PrivilegeDelegationQueryDtoSchema = z.object({
-  delegatorUsernames: z.array(z.string()).optional().openapi({ example: ["138550", "136163"] }),
-  delegateeUsernames: z.array(z.string()).optional().openapi({ example: ["138550", "136163"] }),
-  orgCodes: z.array(z.string()).optional().openapi({ example: ["SR", "SB"] }),
-  privCodes: z.array(z.string()).optional().openapi({ example: ["ui:button:tender:create-GYBG"] }),
-  validTime: z.iso.datetime().optional().openapi({ example: "2024-01-01T00:00:00Z" }),
+  delegatorUsernames: z.array(z.string()).optional().describe("授权人用户名列表").openapi({ example: ["138550", "136163"] }),
+  delegateeUsernames: z.array(z.string()).optional().describe("被授权人用户名列表").openapi({ example: ["138550", "136163"] }),
+  orgCodes: z.array(z.string()).optional().describe("组织编码列表").openapi({ example: ["SR", "SB"] }),
+  privCodes: z.array(z.string()).optional().describe("权限编码列表").openapi({ example: ["ui:button:tender:create-GYBG"] }),
+  validTime: z.iso.datetime().optional().describe("有效时间").openapi({ example: "2024-01-01T00:00:00Z" }),
 }).openapi("PrivilegeDelegationQueryDto");
 
 export const PrivilegeDelegationCreateDtoSchema = PrivilegeDelegationSchema.omit({
@@ -82,9 +83,9 @@ export const PrivilegeDelegationCreateDtoSchema = PrivilegeDelegationSchema.omit
   delegatorUserId: true,
   organizationScopeId: true,
 }).extend({
-  delegatorUsername: z.string().openapi({ example: "138550" }),
-  delegateeUsername: z.string().openapi({ example: "138550" }),
-  orgCode: z.string().openapi({ example: "SR23" }),
-  privilegeCodes: z.array(z.string()).openapi({ example: ["tender:flow:SR_CZLX"] }),
-  privilegeIds: z.array(z.number()).optional().openapi({ example: [1, 2] }),
+  delegatorUsername: z.string().describe("授权人用户名").openapi({ example: "138550" }),
+  delegateeUsername: z.string().describe("被授权人用户名").openapi({ example: "138550" }),
+  orgCode: z.string().describe("组织编码").openapi({ example: "SR23" }),
+  privilegeCodes: z.array(z.string()).describe("权限编码列表").openapi({ example: ["tender:flow:SR_CZLX"] }),
+  privilegeIds: z.array(z.number()).describe("权限ID列表(非必填)").optional().openapi({ example: [1, 2] }),
 }).openapi("PrivilegeDelegationCreateDto");
