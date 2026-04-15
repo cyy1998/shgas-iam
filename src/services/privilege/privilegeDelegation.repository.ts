@@ -141,7 +141,7 @@ export async function setPrivilegeDelegation(
       status: Status.Enable,
       description: dto.description,
       delegationDetails: {
-        create:dto.privilegeIds.map((p) => ({
+        create: dto.privilegeIds.map(p => ({
           privilegeId: p,
         })),
       },

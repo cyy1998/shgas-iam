@@ -123,6 +123,12 @@ Required environment variables (see `src/env.ts` for complete schema):
 - **Semicolons**: Required
 - **Quotes**: Double quotes
 
+## Core Principles
+
+- **Simplicity first**: Make every change as simple as possible, touching minimal code
+- **No shortcuts**: Find root causes, no temporary fixes, hold to senior developer standards
+- **Minimal blast radius**: Only touch what's necessary, avoid introducing new bugs
+
 ## Testing
 
 No test framework is currently configured. Consider adding tests with `bun:test` or Vitest.

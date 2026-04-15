@@ -87,6 +87,4 @@ export const PrivilegeDelegationCreateDtoSchema = PrivilegeDelegationSchema.omit
   orgCode: z.string().openapi({ example: "SR23" }),
   privilegeCodes: z.array(z.string()).openapi({ example: ["tender:flow:SR_CZLX"] }),
   privilegeIds: z.array(z.number()).optional().openapi({ example: [1, 2] }),
-  startTime: z.iso.datetime().openapi({ example: "2024-01-01T00:00:00Z" }),
-  endTime: z.iso.datetime().openapi({ example: "2024-01-01T00:00:00Z" }),
 }).openapi("PrivilegeDelegationCreateDto");

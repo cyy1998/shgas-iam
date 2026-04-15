@@ -1,14 +1,12 @@
 import type { PrivilegeDelegationCreateDto, PrivilegeDelegationQueryDto } from "./privilegeDelegation.type";
-import type { PrismaTransaction } from "@/db";
 import type { Prettify } from "@/utils/lint.util";
 import { prisma } from "@/db";
-import { Status } from "@/enums/status";
 import { CustomError } from "@/errors/CustomError";
 import * as organizationRepository from "@/services/organization/organization.repository";
 import * as privilegeRepository from "@/services/privilege/privilege.repository";
 import * as delegationRepository from "@/services/privilege/privilegeDelegation.repository";
 import * as userRepository from "@/services/user/user.repository";
-import { PrivilegeDelegationDetailDtoConverterSchema, PrivilegeDelegationDtoConverterSchema } from "./privilegeDelegation.schema";
+import { PrivilegeDelegationDetailDtoConverterSchema } from "./privilegeDelegation.schema";
 
 export async function queryPrivilegeDelegations(query: PrivilegeDelegationQueryDto) {
   const delegations = await delegationRepository.searchDelegations(query);
