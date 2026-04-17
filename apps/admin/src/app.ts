@@ -18,10 +18,18 @@ export async function getInitialState(): Promise<{
 
     if (res.ok) {
       const body = await res.json();
+      const roles = (body.data.roles as string[]) ?? [];
+
+      if (!roles.includes('iam:admin')) {
+        // Logged in but not an admin
+        window.location.href = '/403';
+        return new Promise(() => {});
+      }
+
       return {
         currentUser: {
           username: body.data.username as string,
-          roles: (body.data.roles as string[]) ?? [],
+          roles,
         },
       };
     }
