@@ -1,4 +1,5 @@
 // 运行时配置
+import { ADMIN_ROLE_CODE, SSO_AUTHORIZE_URL, SSO_CLIENT_CODE } from '@/constants/config';
 
 // 全局初始化数据配置，用于 Layout 用户信息和权限初始化
 // 更多信息见文档：https://umijs.org/docs/api/runtime-config#getinitialstate
@@ -9,13 +10,13 @@ export async function getInitialState(): Promise<{
     const res = await fetch('/public/user-info', {
       credentials: 'include',
       headers: {
-        Client: 'iam',
+        Client: SSO_CLIENT_CODE,
       },
     });
 
     if (res.status === 401) {
       const redirectUrl = encodeURIComponent(window.location.href);
-      window.location.href = `/sso/authorize?client=iam&redirectUrl=${redirectUrl}`;
+      window.location.href = `${SSO_AUTHORIZE_URL}?client=${SSO_CLIENT_CODE}&redirectUrl=${redirectUrl}`;
       return new Promise(() => {});
     }
 
@@ -23,7 +24,7 @@ export async function getInitialState(): Promise<{
       const body = await res.json();
       const roles = (body.data.roles as string[]) ?? [];
 
-      if (!roles.includes('iam:admin')) {
+      if (!roles.includes(ADMIN_ROLE_CODE)) {
         // Logged in but not an admin
         window.location.href = '/403';
         return new Promise(() => {});
@@ -49,7 +50,7 @@ export const request = {
         ...config,
         headers: {
           ...config.headers,
-          Client: 'iam',
+          Client: SSO_CLIENT_CODE,
         },
       };
     },
