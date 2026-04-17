@@ -16,7 +16,9 @@
     "@iam/shared": "workspace:*",
     "@umijs/max": "^4.6.45",
     "antd": "^5.4.0",
-    "hono": "^4.12.8"
+    "hono": "^4.12.8",
+    "react": "^18.0.0",
+    "react-dom": "^18.0.0"
   },
   "devDependencies": {
     "@iam/api": "workspace:*",
