@@ -32,4 +32,30 @@ export default defineConfig({
   ],
   npmClient: 'pnpm',
   utoopack: {},
+  proxy: {
+    '/public': {
+      target: 'http://localhost:30000',
+      changeOrigin: true,
+    },
+    '/admin': {
+      target: 'http://localhost:30000',
+      changeOrigin: true,
+    },
+    '/auth': {
+      target: 'http://localhost:30000',
+      changeOrigin: true,
+    },
+    '/sso': {
+      target: 'http://localhost:30000',
+      changeOrigin: true,
+    },
+    '/internal': {
+      target: 'http://localhost:30000',
+      changeOrigin: true,
+    },
+    '/open': {
+      target: 'http://localhost:30000',
+      changeOrigin: true,
+    },
+  },
 });
