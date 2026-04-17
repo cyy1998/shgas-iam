@@ -4,6 +4,6 @@ export default function access(initialState: {
   const roles = initialState?.currentUser?.roles ?? [];
 
   return {
-    isAdmin: roles.includes('role:admin'),
+    isAdmin: roles.includes('iam:admin'),
   };
 }

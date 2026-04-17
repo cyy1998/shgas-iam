@@ -12,7 +12,7 @@ export async function getInitialState(): Promise<{
 
     if (res.status === 401) {
       const redirectUrl = encodeURIComponent(window.location.href);
-      window.location.href = `/sso/authorize?client=admin&redirectUrl=${redirectUrl}`;
+      window.location.href = `/sso/authorize?client=iam&redirectUrl=${redirectUrl}`;
       return new Promise(() => {});
     }
 
