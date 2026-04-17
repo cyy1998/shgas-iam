@@ -2,10 +2,10 @@
   "name": "@iam/api",
   "type": "module",
   "private": true,
-  "module": "index.ts",
   "exports": {
     ".": "./src/app.ts"
   },
+  "module": "index.ts",
   "devEngines": {
     "runtime": {
       "name": "bun"
@@ -22,8 +22,8 @@
     "typescript": "^6"
   },
   "dependencies": {
-    "@iam/shared": "workspace:*",
     "@hono/zod-openapi": "^1.1.4",
+    "@iam/shared": "workspace:*",
     "@prisma/adapter-mariadb": "^7.3.0",
     "@prisma/client": "7",
     "@scalar/hono-api-reference": "^0.10.7",
