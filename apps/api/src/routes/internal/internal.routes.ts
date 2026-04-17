@@ -9,7 +9,7 @@ import { OrganizationDtoSchema, OrganizationQueryDtoSchema } from "@/services/or
 import { PrivilegeDelegationCreateDtoSchema, PrivilegeDelegationDetailDtoSchema, PrivilegeDelegationDtoSchema, PrivilegeDelegationQueryDtoSchema } from "@/services/privilege/privilegeDelegation.schema";
 import { UserDetailDtoSchema, UserDtoSchema, UserQueryDtoSchema, UserQueryWithPrivilegeDelegationDtoSchema } from "@/services/user/user.schema";
 
-export const routePrefix = "/internal";
+const routePrefix = "";
 const tags = ["Internal"];
 
 export const userInfo = createRoute({

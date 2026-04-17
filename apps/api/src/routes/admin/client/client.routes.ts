@@ -5,7 +5,7 @@ import jsonContentRequired from "@/lib/core/openapi/helpers/json-content-require
 import createSuccessResponseSchema from "@/lib/core/openapi/schemas/create-success-schema";
 import { ClientCreateDtoSchema, ClientDtoSchema, ClientInputDtoSchema } from "@/services/client/client.schema";
 
-export const routePrefix = "/admin/clients";
+const routePrefix = "";
 const tags = ["Admin/Client"];
 
 export const clientUpdate = createRoute({
