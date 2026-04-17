@@ -2,8 +2,33 @@
 
 // 全局初始化数据配置，用于 Layout 用户信息和权限初始化
 // 更多信息见文档：https://umijs.org/docs/api/runtime-config#getinitialstate
-export async function getInitialState(): Promise<{ name: string }> {
-  return { name: '@umijs/max' };
+export async function getInitialState(): Promise<{
+  currentUser?: { username: string; roles: string[] };
+}> {
+  try {
+    const res = await fetch('/public/user-info', {
+      credentials: 'include',
+    });
+
+    if (res.status === 401) {
+      const redirectUrl = encodeURIComponent(window.location.href);
+      window.location.href = `/sso/authorize?client=admin&redirectUrl=${redirectUrl}`;
+      return {};
+    }
+
+    if (res.ok) {
+      const body = await res.json();
+      return {
+        currentUser: {
+          username: body.data.username as string,
+          roles: (body.data.roles as string[]) ?? [],
+        },
+      };
+    }
+  } catch {
+    // Network error — don't redirect
+  }
+  return {};
 }
 
 export const layout = () => {

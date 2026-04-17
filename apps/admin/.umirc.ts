@@ -9,26 +9,14 @@ export default defineConfig({
   layout: {
     title: '@umijs/max',
   },
+  unAccessible: '/403',
   routes: [
-    {
-      path: '/',
-      redirect: '/home',
-    },
-    {
-      name: '首页',
-      path: '/home',
-      component: './Home',
-    },
-    {
-      name: '权限演示',
-      path: '/access',
-      component: './Access',
-    },
-    {
-      name: ' CRUD 示例',
-      path: '/table',
-      component: './Table',
-    },
+    { path: '/', redirect: '/users' },
+    { path: '/users', name: '用户管理', icon: 'team', component: './users/index' },
+    { path: '/organizations', name: '组织管理', icon: 'apartment', component: './organizations/index' },
+    { path: '/positions', name: '职位管理', icon: 'solution', component: './positions/index' },
+    { path: '/employments', name: '雇佣关系', icon: 'profile', component: './employments/index' },
+    { path: '/403', component: './403', hideInMenu: true },
   ],
   npmClient: 'pnpm',
   utoopack: {},
