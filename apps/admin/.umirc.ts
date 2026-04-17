@@ -19,8 +19,6 @@ export default defineConfig({
     { path: '/403', component: './403', hideInMenu: true },
   ],
   npmClient: 'pnpm',
-  mako: false,
-  utoopack: {},
   proxy: {
     '/public': {
       target: 'http://localhost:30000',
