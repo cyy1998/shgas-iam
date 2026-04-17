@@ -1,6 +1,4 @@
 import type { AppBindings } from "@/lib/lib";
-import { readdirSync, statSync } from "node:fs";
-import path, { join } from "node:path";
 import { OpenAPIHono } from "@hono/zod-openapi";
 import { Scalar } from "@scalar/hono-api-reference";
 import { serveStatic } from "hono/bun";
@@ -9,6 +7,20 @@ import { errorHandler } from "@/middlewares/error.handler";
 import { pinoLogger } from "../clients/pino";
 import defaultHook from "./openapi/default-hook";
 
+// 顶层路由
+import authRouter from "@/routes/auth/auth.index";
+import internalRouter from "@/routes/internal/internal.index";
+import openRouter from "@/routes/open/open.index";
+import publicRouter from "@/routes/public/public.index";
+import ssoRouter from "@/routes/sso/sso.index";
+
+// admin 子路由
+import adminClientRouter from "@/routes/admin/client/client.index";
+import adminEmploymentRouter from "@/routes/admin/employment/employment.index";
+import adminOrganizationRouter from "@/routes/admin/organization/organization.index";
+import adminPositionRouter from "@/routes/admin/position/position.index";
+import adminUserRouter from "@/routes/admin/user/user.index";
+
 export function createRouter() {
   return new OpenAPIHono<AppBindings>({
     strict: false,
@@ -16,52 +28,29 @@ export function createRouter() {
   });
 }
 
-// Auto-detect and register routes from src/routes/
-function registerRoutes(app: OpenAPIHono, dir: string, prefix = "") {
-  const entries = readdirSync(dir);
-
-  for (const entry of entries) {
-    const fullPath = join(dir, entry);
-    const stat = statSync(fullPath);
-
-    if (stat.isDirectory()) {
-      // Recurse into subdirectories, using subdirectory name as prefix
-      const routePrefix = prefix ? `${prefix}/${entry}` : entry;
-      registerRoutes(app, fullPath, routePrefix);
-    }
-    else if (entry.endsWith(".index.ts")) {
-      // Register the router with the prefix derived from relative path
-      // eslint-disable-next-line ts/no-require-imports
-      const routeModule = require(fullPath);
-      const router = routeModule.default;
-
-      if (router && typeof router.route === "function") {
-        const routePrefix = prefix || "/";
-        app.route("/", router);
-        pinoLogger.info(`Registered route: ${routePrefix}`);
-      }
-    }
-  }
-}
-
 export default function createApp() {
   const app = new OpenAPIHono();
-
-  // const port = env.PORT
 
   app.use("/static/*", serveStatic({ root: "./" }));
 
   app.use(logger(
     (str: string, ...args: any[]) => {
       pinoLogger.info(`[INFO] ${new Date().toISOString()} - ${str}`, ...args);
-      // pinoLogger.info({ type: 'query' });
     },
   ));
 
   app.onError(errorHandler);
 
-  const routesDir = join(path.resolve(__dirname, "../.."), "routes");
-  registerRoutes(app, routesDir);
+  app.route("/", publicRouter);
+  app.route("/", authRouter);
+  app.route("/", internalRouter);
+  app.route("/", openRouter);
+  app.route("/", ssoRouter);
+  app.route("/", adminClientRouter);
+  app.route("/", adminEmploymentRouter);
+  app.route("/", adminOrganizationRouter);
+  app.route("/", adminPositionRouter);
+  app.route("/", adminUserRouter);
 
   app.doc("/doc", {
     openapi: "3.0.0",
