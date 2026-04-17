@@ -44,7 +44,9 @@ export const UserPaginationQueryDtoSchema = createPageQuerySchema(
   }),
 ).openapi("UserPaginationQueryDto");
 
-export const UserQueryWithPrivilegeDelegationDtoSchema = UserQueryDtoSchema.extend({
+export const UserQueryWithPrivilegeDelegationDtoSchema = UserQueryDtoSchema.required({
+  ancestorOrgCodes: true,
+}).extend({
   // ancestorOrgCodes: z.array(z.string()).openapi({ example: ["SR", "SB"] }),
   privilegeCode: z.string().describe("权限编码").openapi({ example: "ui:button:tender:create-GYBG" }),
 }).openapi("UserQueryWithPrivilegeDelegationDto");

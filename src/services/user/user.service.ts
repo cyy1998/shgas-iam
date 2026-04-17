@@ -137,16 +137,14 @@ export async function searchUsersFuzzy(userPageQuery: UserPaginationQueryDto) {
   return paginate(userDtos, userPageQuery);
 }
 
-export async function searchUsersWithPrivilegeDelegation(
-  userQueryWithPrivilegeDelegationDto: UserQueryWithPrivilegeDelegationDto,
-) {
-  if (userQueryWithPrivilegeDelegationDto.ancestorOrgCodes.length !== 1) {
+export async function searchUsersWithPrivilegeDelegation(query: UserQueryWithPrivilegeDelegationDto) {
+  if (query.ancestorOrgCodes.length !== 1) {
     throw new CustomError("该接口ancestorOrgCodes元素数量只支持为1");
   }
-  const users = await userRepository.searchUsers(userQueryWithPrivilegeDelegationDto);
+  const users = await userRepository.searchUsers(query);
   const userDtos = users.map(u => UserDtoSchema.parse(u));
-  const orgCode = userQueryWithPrivilegeDelegationDto.ancestorOrgCodes[0] as string;
-  const privCode = userQueryWithPrivilegeDelegationDto.privilegeCode;
+  const orgCode = query.ancestorOrgCodes[0] as string;
+  const privCode = query.privilegeCode;
   const delegations = (await privilegeDelegationRepository.getDelegationsByUserAndOrganizationScopeAndPrivilege(
     userDtos.map(u => u.username),
     orgCode,
