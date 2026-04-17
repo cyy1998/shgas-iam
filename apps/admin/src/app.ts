@@ -8,6 +8,9 @@ export async function getInitialState(): Promise<{
   try {
     const res = await fetch('/public/user-info', {
       credentials: 'include',
+      headers: {
+        Client: 'iam',
+      },
     });
 
     if (res.status === 401) {
@@ -38,6 +41,20 @@ export async function getInitialState(): Promise<{
   }
   return {};
 }
+
+export const request = {
+  requestInterceptors: [
+    (config: any) => {
+      return {
+        ...config,
+        headers: {
+          ...config.headers,
+          Client: 'iam',
+        },
+      };
+    },
+  ],
+};
 
 export const layout = () => {
   return {
