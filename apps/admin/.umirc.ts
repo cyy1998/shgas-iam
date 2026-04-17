@@ -21,27 +21,27 @@ export default defineConfig({
   npmClient: 'pnpm',
   proxy: {
     '/public': {
-      target: 'http://localhost:30000',
+      target: 'http://176.169.99.191:30010',
       changeOrigin: true,
     },
     '/admin': {
-      target: 'http://localhost:30000',
+      target: 'http://176.169.99.191:30010',
       changeOrigin: true,
     },
     '/auth': {
-      target: 'http://localhost:30000',
+      target: 'http://176.169.99.191:30010',
       changeOrigin: true,
     },
     '/sso': {
-      target: 'http://localhost:30000',
+      target: 'http://176.169.99.191:30010',
       changeOrigin: true,
     },
     '/internal': {
-      target: 'http://localhost:30000',
+      target: 'http://176.169.99.191:30010',
       changeOrigin: true,
     },
     '/open': {
-      target: 'http://localhost:30000',
+      target: 'http://176.169.99.191:30010',
       changeOrigin: true,
     },
   },

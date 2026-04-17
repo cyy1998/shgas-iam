@@ -38,3 +38,6 @@ debug
 
 .turbo
 package-lock.json
+
+# superpowers brainstorming session artifacts
+.superpowers/
