@@ -22,6 +22,7 @@
     "typescript": "^6"
   },
   "dependencies": {
+    "@iam/shared": "workspace:*",
     "@hono/zod-openapi": "^1.1.4",
     "@prisma/adapter-mariadb": "^7.3.0",
     "@prisma/client": "7",
