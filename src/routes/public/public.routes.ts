@@ -20,7 +20,7 @@ export const userInfo = createRoute({
 
 export const passwordChange = createRoute({
   method: "post",
-  path: "/password/change",
+  path: `${routePrefix}/password/change`,
   tags,
   request: {
     body: jsonContentRequired(z.object({
