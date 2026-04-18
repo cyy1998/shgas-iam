@@ -1,7 +1,1 @@
-export enum OrganizationLevel {
-  One = 1,
-  Two,
-  Three,
-  Four,
-  Five,
-}
+export { OrganizationLevel } from "@iam/shared";

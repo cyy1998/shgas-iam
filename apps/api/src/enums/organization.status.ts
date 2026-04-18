@@ -1,5 +1,1 @@
-export enum OrganizationStatus {
-  Enable = 1,
-  Pause,
-  Disable,
-}
+export { OrganizationStatus } from "@iam/shared";
