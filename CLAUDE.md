@@ -4,161 +4,252 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-This is an IAM (Identity and Access Management) service built with:
+This repository is a **pnpm + Turborepo monorepo** for an IAM (Identity and Access Management) platform. It contains:
 
-- **Runtime**: Bun (see `devEngines.runtime` in package.json)
-- **Framework**: Hono with OpenAPI extensions (`@hono/zod-openapi`)
-- **Database**: MySQL with Prisma ORM
-- **Session storage**: Redis (ioredis client)
-- **Authentication**: OIDC provider (`oidc-provider`) for SSO
-- **API documentation**: Swagger UI served at `/doc/swagger`
-- **Code style**: ESLint with Antfu configuration (semicolons, double quotes, max line length 120)
+- **`apps/api`** (`@iam/api`) — Backend service (Bun + Hono + Prisma)
+- **`apps/admin`** (`@iam/admin`) — Admin dashboard frontend (UMI Max + React + Ant Design Pro)
+- **`packages/shared`** (`@iam/shared`) — Cross-package shared code (enums, constants)
+
+Key characteristics:
+
+- **Package manager**: pnpm (`packageManager: pnpm@10.33.0` at the root `package.json`)
+- **Task runner**: [Turborepo](https://turbo.build/) — `turbo dev / build / lint / typecheck`
+- **End-to-end type safety**: `apps/admin` imports `AppType` from `@iam/api` through `hono/client` (`apps/admin/src/lib/api-client.ts`), giving the frontend typed request/response for every route
+- **Workspace layout**: `apps/*` and `packages/*` declared in `pnpm-workspace.yaml`
+
+## Repository Layout
+
+```
+iam-service/
+├── apps/
+│   ├── api/                # Backend (@iam/api) — Bun + Hono
+│   │   ├── src/
+│   │   ├── static/swagger/
+│   │   ├── scripts/
+│   │   ├── prisma.config.ts
+│   │   ├── eslint.config.js
+│   │   └── tsconfig.json
+│   └── admin/              # Admin frontend (@iam/admin) — UMI Max + React
+│       ├── src/
+│       │   ├── pages/      # users / organizations / positions / employments / 403
+│       │   ├── components/
+│       │   ├── models/
+│       │   ├── services/
+│       │   ├── lib/api-client.ts
+│       │   ├── access.ts
+│       │   └── app.ts
+│       ├── mock/
+│       ├── .umirc.ts       # Routes, proxy, UMI config
+│       └── .env.example    # UMI_APP_* variables
+├── packages/
+│   └── shared/             # @iam/shared — enums, cross-cutting constants
+│       └── src/
+│           ├── enums/service.status.ts
+│           └── index.ts
+├── docs/
+├── pnpm-workspace.yaml
+├── turbo.json
+└── package.json            # Root scripts: turbo dev/build/lint/typecheck
+```
 
 ## Development Commands
 
 ### Prerequisites
 
-- **Bun** runtime (version compatible with `devEngines.runtime` in package.json)
-- **MySQL** database with connection string in `DATABASE_URL` environment variable
-- **Redis** instance for session storage (configured via `REDIS_URL`, `REDIS_PORT`, `REDIS_DB`)
-- **Environment variables**: Set required variables (see `src/env.ts`). A `.env` file is used but not committed.
+- **Bun** (matches `apps/api` `devEngines.runtime`) — used to run the API
+- **Node.js ≥ 18** — required by UMI Max build
+- **pnpm ≥ 10** — `packageManager` pinned at `pnpm@10.33.0`
+- **MySQL** reachable via `DATABASE_URL`
+- **Redis** configured via `REDIS_URL` / `REDIS_PORT` / `REDIS_DB`
 
-### Common Commands
+### Root-level (Turborepo)
 
 ```bash
-# Install dependencies (uses pnpm)
-pnpm install
+pnpm install        # install all workspace deps
+pnpm dev            # turbo dev — runs dev in every package in parallel
+pnpm build          # turbo build — respects ^build dependency order
+pnpm lint           # turbo lint
+pnpm typecheck      # turbo typecheck
+```
 
-# Start development server with hot reload
-pnpm dev
+### Backend (`apps/api` — `@iam/api`)
 
-# Start production server
-pnpm serve
+```bash
+pnpm --filter @iam/api dev          # bun --hot src/index.ts
+pnpm --filter @iam/api serve        # production: bun run src/index.ts
+pnpm --filter @iam/api lint
+pnpm --filter @iam/api lint:fix
+pnpm --filter @iam/api typecheck    # bunx tsc --noEmit
 
-# Lint code
-pnpm lint
+# Prisma (run from apps/api via --filter)
+pnpm --filter @iam/api exec prisma generate
+pnpm --filter @iam/api exec prisma migrate dev --name <name>
+pnpm --filter @iam/api exec prisma studio
+```
 
-# Lint and auto-fix
-pnpm lint:fix
+### Admin frontend (`apps/admin` — `@iam/admin`)
 
-# Database operations (not in package.json but commonly used)
-pnpm prisma generate    # Generate Prisma client after schema changes
-pnpm prisma migrate dev # Create and apply migrations
-pnpm prisma studio      # Open Prisma Studio for data inspection
+```bash
+pnpm --filter @iam/admin dev        # max dev (UMI Max)
+pnpm --filter @iam/admin build      # max build → apps/admin/dist
+pnpm --filter @iam/admin format     # prettier
 ```
 
 ## Architecture
 
-### Application Structure
+### Backend (`apps/api/src`)
 
-- **`src/app.ts`**: Main Hono application with route registration and OpenAPI configuration
-- **`src/index.ts`**: Service entry point exporting Bun server configuration
-- **`src/env.ts`**: Environment variable validation using Zod
-- **`src/routes/`**: API routes organized by access level:
-  - `admin/` – Administrative endpoints (client, employment, organization, position, user management)
-  - `auth/` – Authentication endpoints
-  - `internal/` – Internal service calls
-  - `open/` – Open APIs
-  - `public/` – Public APIs
-  - `sso/` – Single sign-on endpoints
-- **`src/services/`**: Business logic layer, each with:
-  - `*.service.ts` – Main service functions
-  - `*.repository.ts` – Database queries (Prisma calls)
-  - `*.schema.ts` – Zod schemas for validation
-  - `*.type.ts` – TypeScript type definitions
-- **`src/db/`**: Database configuration
-  - `schema.prisma` – Prisma schema defining models
-  - `generated/` – Auto-generated Prisma client and Zod schemas
-  - `sql/` – Raw SQL scripts for data synchronization
-- **`src/lib/`**: External client configurations (Redis, Pino logger, OpenAPI utilities)
-- **`src/middlewares/`**: Hono middlewares (error handling, etc.)
-- **`src/utils/`**: Shared utilities (HTTP helpers, Zod utilities, pagination)
-- **`src/enums/`**: TypeScript enums for status codes, usage types, etc.
-- **`src/errors/`**: Custom error classes extending `CustomError`
+- **`app.ts`** — Hono app assembly and OpenAPI registration
+- **`index.ts`** — Service entry point exporting Bun server config
+- **`env.ts`** — Environment variable validation via Zod
+- **`routes/`** — API routes grouped by access level:
+  - `admin/` — administrative endpoints (client, employment, organization, position, user)
+  - `auth/` — authentication
+  - `internal/` — internal service calls
+  - `open/` — open APIs
+  - `public/` — public APIs
+  - `sso/` — OIDC single sign-on
+- **`services/`** — business logic, one folder per domain. Each contains:
+  - `*.service.ts` — main service functions
+  - `*.repository.ts` — Prisma calls
+  - `*.schema.ts` — Zod validation schemas
+  - `*.type.ts` — TypeScript types
+- **`db/`** — `schema.prisma`, generated Prisma client/Zod schemas under `generated/`, raw SQL under `sql/`
+- **`lib/`** — external clients (Redis, Pino, OpenAPI helpers)
+- **`middlewares/`** — Hono middlewares (error handler, etc.)
+- **`utils/`** — HTTP helpers, Zod utilities, pagination
+- **`enums/`** — status codes, usage types, etc.
+- **`errors/`** — custom errors extending `CustomError`
+
+Path aliases (see `apps/api/tsconfig.json`): `@/*`, `@db`, `@lib/*`, `@services/*`, `@repositories/*`, `@schemas/*`, `@enums/*`, `@mapper/*`, `@errors/*`, `@middlewares/*`, `@utils/*`, `@prisma-client/*`.
+
+### Admin frontend (`apps/admin/src`)
+
+- **`.umirc.ts`** — UMI config: routes, `proxy` mapping `/admin`, `/auth`, `/public`, `/sso`, `/internal`, `/open` to the backend; sets `antd`, `access`, `model`, `initialState`, `request`, `layout`
+- **`app.ts`** — UMI runtime configuration
+- **`access.ts`** — access policy (checks role code against `UMI_APP_ADMIN_ROLE_CODE`)
+- **`pages/`** — `users`, `organizations`, `positions`, `employments`, `403`
+- **`lib/api-client.ts`** — `hc<AppType>('/')` typed Hono client; any route defined in `@iam/api` is typed here
+- **`models/`** — UMI data-flow models
+- **`services/`**, **`components/`**, **`utils/`**
+
+Environment variables — UMI Max only exposes variables prefixed with `UMI_APP_`:
+
+- `UMI_APP_SSO_AUTHORIZE_URL` (default `/sso/authorize`)
+- `UMI_APP_SSO_CLIENT_CODE` (default `iam`)
+- `UMI_APP_ADMIN_ROLE_CODE` (default `iam:admin`)
+
+Copy `apps/admin/.env.example` to `apps/admin/.env.local` to override locally.
+
+### Shared package (`packages/shared`)
+
+- `@iam/shared` — imported by both `apps/api` and `apps/admin` via `workspace:*`
+- Currently exports `ServiceStatusCode` and related status helpers from `src/enums/service.status.ts`
+- Add new cross-cutting constants / enums here rather than duplicating them across apps
 
 ### Key Patterns
 
-1. **Route Handlers**: Use Hono's OpenAPI integration with Zod validation
-2. **Service Layer**: Business logic in services, database operations in repositories
-3. **Error Handling**: Custom error classes with service status codes (see `ServiceStatusCode` enum), caught by `errorHandler` middleware
-4. **Validation**: Zod schemas for both runtime validation and TypeScript types
-5. **Pagination**: Uses `paginate` utility from `@/utils/page.util`
-6. **Path Aliases**: Configured in tsconfig.json (e.g., `@/*`, `@services/*`, `@db`, `@lib/*`)
-7. **Error Codes**: Standardized error codes defined in `src/enums/service.status.ts`
-8. **Logging**: Pino logger configured in `@/lib/clients/pino`, used via middleware in `app.ts`
+1. **Route handlers**: Hono + `@hono/zod-openapi` (OpenAPI-aware, Zod-validated)
+2. **Service layer**: business logic in `*.service.ts`, DB access isolated to `*.repository.ts`
+3. **Error handling**: custom errors with `ServiceStatusCode`, caught by the `errorHandler` middleware
+4. **Validation**: Zod schemas drive both runtime validation and TS types
+5. **Pagination**: `paginate` helper in `@/utils/page.util`
+6. **Logging**: Pino configured in `@/lib/clients/pino`, attached via middleware in `app.ts`
+7. **Typed RPC**: frontend consumes backend types via `hc<AppType>` — keep `apps/api` exports at `./src/app.ts` typed correctly
 
 ### Data Flow
 
-1. Request → Route handler (validates input with Zod OpenAPI) → Service method → Repository method → Prisma client → Database
-2. Response ← Service formats data ← Repository returns Prisma models ← Database
-
-### Dependencies
-
-- **Core**: `hono`, `@hono/zod-openapi`, `@hono/swagger-ui`
-- **Database**: `@prisma/client`, `@prisma/adapter-mariadb`, `prisma-zod-generator`
-- **Auth**: `oidc-provider`, `bcrypt-ts`, `sm-crypto`
-- **External APIs**: `axios` (HTTP client), `ioredis` (Redis), `pino` (logging)
-- **Utilities**: `luxon` (datetime), `zod` (validation), `xlsx` (Excel), `csv-parse`
+1. Request → Route handler (Zod validation via `@hono/zod-openapi`) → Service → Repository → Prisma → DB
+2. Response ← Service formats data ← Repository returns Prisma models ← DB
+3. Frontend (`apps/admin`) calls backend through `apiClient` in `apps/admin/src/lib/api-client.ts`, sharing types through `@iam/api`’s `AppType` export.
 
 ## Environment Variables
 
-Required environment variables (see `src/env.ts` for complete schema):
+### Backend (`apps/api/.env`)
 
-- `DATABASE_URL`: MySQL connection string (used by Prisma)
-- `REDIS_URL`, `REDIS_PORT`, `REDIS_DB`: Redis configuration
-- `PORT`: Server port (default: 30000)
-- `IAM_SECRET_KEY`: Secret for JWT/signing
-- `WX_CORPID`, `WX_CORPSECRET`: WeChat integration
-- `SMS_URL`, `SMS_SIGNATURE_KEY`: SMS service configuration
-- `ORCAS_URL`: External service URL
-- `LOG_LEVEL`: Pino log level (default: "info")
+Required variables — full schema in `apps/api/src/env.ts`:
+
+- `DATABASE_URL` — MySQL connection string (consumed by Prisma directly)
+- `REDIS_URL`, `REDIS_PORT`, `REDIS_DB`
+- `PORT` (default 30000)
+- `IAM_SECRET_KEY`
+- `WX_CORPID`, `WX_CORPSECRET`
+- `SMS_URL`, `SMS_SIGNATURE_KEY`
+- `ORCAS_URL`
+- `LOG_LEVEL` (default `info`)
+- `LOGIN_ENDPOINT`, `AUTHORIZATION_ENDPOINT`, `LOGOUT_ENDPOINT`, `THIRDPARTY_OA_ENDPOINT`
+
+Template: `apps/api/.env.example`. Bun auto-loads `apps/api/.env` when the API is started via `pnpm --filter @iam/api dev/serve` (CWD is `apps/api`). Prisma commands executed through `pnpm --filter @iam/api exec prisma ...` pick up the same file.
+
+### Frontend (`apps/admin/.env` / `.env.local`)
+
+Only `UMI_APP_*` variables are injected into client code — see above.
 
 ## Code Style
 
-- **ESLint**: Antfu configuration with stylistic rules
-- **Formatting**: ESLint handles formatting (Prettier disabled)
-- **VS Code**: Settings in `.vscode/settings.json` enable ESLint auto-fix on save
-- **Imports**: Use path aliases (`@/`, `@services/`, etc.) not relative paths
-- **Line length**: Maximum 120 characters (warnings only)
-- **Semicolons**: Required
-- **Quotes**: Double quotes
+- **Backend**: ESLint (Antfu config) — semicolons required, double quotes, max 120 chars (warn)
+- **Frontend**: Prettier + ESLint (`.prettierrc`, `.eslintrc.js`) — organize imports via `prettier-plugin-organize-imports`
+- **Formatting**: ESLint/Prettier handle formatting; do not reintroduce separate formatters
+- **VS Code**: `.vscode/settings.json` enables auto-fix on save
+- **Imports**: prefer path aliases in `apps/api` (`@/`, `@services/`, etc.) over relative paths
 
 ## Core Principles
 
-- **Simplicity first**: Make every change as simple as possible, touching minimal code
-- **No shortcuts**: Find root causes, no temporary fixes, hold to senior developer standards
-- **Minimal blast radius**: Only touch what's necessary, avoid introducing new bugs
+- **Simplicity first**: every change should touch the minimum number of files
+- **No shortcuts**: find and fix root causes; hold to senior-developer standards
+- **Minimal blast radius**: avoid unrelated changes; respect package boundaries (don’t leak API-only code into the shared package)
 
 ## Testing
 
-No test framework is currently configured. Consider adding tests with `bun:test` or Vitest.
+No test framework is configured yet. When adding tests, consider `bun:test` or Vitest for the API, and Vitest / Playwright for the admin.
 
 ## Deployment
 
-- Service runs via Bun (`bun run serve`)
-- Static files served from `static/` directory
-- Swagger UI resources in `static/swagger/`
-- Database migrations must be applied before deployment (`prisma migrate deploy`)
+### Backend
+
+```bash
+pnpm install --frozen-lockfile
+pnpm --filter @iam/api exec prisma generate
+pnpm --filter @iam/api exec prisma migrate deploy
+pnpm --filter @iam/api serve   # or: bun run apps/api/src/index.ts
+```
+
+- Static files (Swagger) served from `apps/api/static/`
+- Apply DB migrations before deploy (`prisma migrate deploy`)
+
+### Admin frontend
+
+```bash
+pnpm --filter @iam/admin build  # artifacts in apps/admin/dist
+```
+
+Serve `apps/admin/dist` via Nginx/CDN and proxy `/admin`, `/auth`, `/public`, `/sso`, `/internal`, `/open` to the backend.
 
 ## Common Tasks
 
-### Adding a New API Endpoint
+### Add a new API endpoint
 
-1. Add Zod schema in appropriate `src/services/*/*.schema.ts`
-2. Add route handler in relevant `src/routes/*/*.ts`
-3. Register route in `src/app.ts` if new route group
-4. Implement service method in `src/services/*/*.service.ts`
-5. Add repository methods if new database queries needed
+1. Add/extend Zod schema in `apps/api/src/services/<domain>/*.schema.ts`
+2. Implement service logic in `*.service.ts`; add repository methods if new DB access is required
+3. Add the route handler under `apps/api/src/routes/<group>/`
+4. If it is a new route group, mount it in `apps/api/src/app.ts`
+5. Frontend can call the endpoint via `apiClient.<path>.$get/$post(...)` with full type inference
 
-### Modifying Database Schema
+### Modify the database schema
 
-1. Edit `src/db/schema.prisma`
-2. Generate Prisma client: `bunx prisma generate`
-3. Create migration: `bunx prisma migrate dev --name descriptive_name`
-4. Update Zod schemas (auto-generated by prisma-zod-generator)
+1. Edit `apps/api/src/db/schema.prisma`
+2. `pnpm --filter @iam/api exec prisma generate`
+3. `pnpm --filter @iam/api exec prisma migrate dev --name <name>`
+4. Zod schemas auto-regenerate via `prisma-zod-generator`
+
+### Share code between api and admin
+
+- Put it in `packages/shared/src/` and re-export from `packages/shared/src/index.ts`
+- Import via `import { ... } from "@iam/shared"` in both apps
 
 ### Debugging
 
-- Logging uses Pino with configurable log level via `LOG_LEVEL`
-- Debug utilities in `debug/` directory
-- Swagger UI available at `http://localhost:30000/doc/swagger` when running locally
+- Pino logs — configure level via `LOG_LEVEL`
+- Scalar API reference: <http://localhost:30000/doc/scalar>
+- Prisma Studio for DB inspection
+- UMI proxies defined in `apps/admin/.umirc.ts` — update targets when running against a different backend

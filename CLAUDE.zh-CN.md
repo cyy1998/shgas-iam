@@ -4,161 +4,252 @@
 
 ## 项目概述
 
-这是一个使用以下技术构建的 IAM（身份与访问管理）服务：
+本仓库是一个基于 **pnpm + Turborepo 的 Monorepo** 的 IAM（身份与访问管理）平台，包含：
 
-- **运行时**：Bun（见 package.json 中的 `devEngines.runtime`）
-- **框架**：Hono 及 OpenAPI 扩展（`@hono/zod-openapi`）
-- **数据库**：MySQL，使用 Prisma ORM
-- **会话存储**：Redis（ioredis 客户端）
-- **认证**：OIDC 提供者（`oidc-provider`）用于 SSO
-- **API 文档**：Swagger UI，访问路径 `/doc/swagger`
-- **代码风格**：ESLint，使用 Antfu 配置（需分号、双引号、最大行长 120）
+- **`apps/api`**（`@iam/api`）— 后端服务（Bun + Hono + Prisma）
+- **`apps/admin`**（`@iam/admin`）— 管理后台前端（UMI Max + React + Ant Design Pro）
+- **`packages/shared`**（`@iam/shared`）— 跨包共享代码（枚举、常量等）
+
+关键特征：
+
+- **包管理器**：pnpm（根 `package.json` 中 `packageManager: pnpm@10.33.0`）
+- **任务编排**：[Turborepo](https://turbo.build/) — `turbo dev / build / lint / typecheck`
+- **端到端类型安全**：`apps/admin` 通过 `hono/client` 从 `@iam/api` 引入 `AppType`（见 `apps/admin/src/lib/api-client.ts`），前端发起的每个请求都具备类型推导
+- **工作区布局**：`pnpm-workspace.yaml` 中声明 `apps/*` 与 `packages/*`
+
+## 仓库结构
+
+```
+iam-service/
+├── apps/
+│   ├── api/                # 后端（@iam/api）— Bun + Hono
+│   │   ├── src/
+│   │   ├── static/swagger/
+│   │   ├── scripts/
+│   │   ├── prisma.config.ts
+│   │   ├── eslint.config.js
+│   │   └── tsconfig.json
+│   └── admin/              # 管理后台前端（@iam/admin）— UMI Max + React
+│       ├── src/
+│       │   ├── pages/      # users / organizations / positions / employments / 403
+│       │   ├── components/
+│       │   ├── models/
+│       │   ├── services/
+│       │   ├── lib/api-client.ts
+│       │   ├── access.ts
+│       │   └── app.ts
+│       ├── mock/
+│       ├── .umirc.ts       # 路由、proxy、UMI 配置
+│       └── .env.example    # UMI_APP_* 变量
+├── packages/
+│   └── shared/             # @iam/shared — 枚举、跨端常量
+│       └── src/
+│           ├── enums/service.status.ts
+│           └── index.ts
+├── docs/
+├── pnpm-workspace.yaml
+├── turbo.json
+└── package.json            # 根脚本：turbo dev/build/lint/typecheck
+```
 
 ## 开发命令
 
 ### 前置条件
 
-- **Bun** 运行时（版本需与 package.json 中 `devEngines.runtime` 兼容）
-- **MySQL** 数据库，连接字符串配置在 `DATABASE_URL` 环境变量中
-- **Redis** 实例用于会话存储（通过 `REDIS_URL`、`REDIS_PORT`、`REDIS_DB` 配置）
-- **环境变量**：设置必要变量（见 `src/env.ts`），使用 `.env` 文件但不提交至仓库
+- **Bun**（与 `apps/api` 中 `devEngines.runtime` 匹配）— 用于运行后端
+- **Node.js ≥ 18** — UMI Max 构建所需
+- **pnpm ≥ 10** — 根 `packageManager` 固定为 `pnpm@10.33.0`
+- **MySQL** — 通过 `DATABASE_URL` 接入
+- **Redis** — 通过 `REDIS_URL` / `REDIS_PORT` / `REDIS_DB` 配置
 
-### 常用命令
+### 根级命令（Turborepo）
 
 ```bash
-# 安装依赖（使用 pnpm）
-pnpm install
+pnpm install        # 安装所有工作区依赖
+pnpm dev            # turbo dev — 并行运行所有包的 dev
+pnpm build          # turbo build — 遵循 ^build 依赖顺序
+pnpm lint           # turbo lint
+pnpm typecheck      # turbo typecheck
+```
 
-# 启动带热重载的开发服务器
-pnpm dev
+### 后端（`apps/api` — `@iam/api`）
 
-# 启动生产服务器
-pnpm serve
+```bash
+pnpm --filter @iam/api dev          # bun --hot src/index.ts
+pnpm --filter @iam/api serve        # 生产：bun run src/index.ts
+pnpm --filter @iam/api lint
+pnpm --filter @iam/api lint:fix
+pnpm --filter @iam/api typecheck    # bunx tsc --noEmit
 
-# 代码检查
-pnpm lint
+# Prisma（通过 --filter 在 apps/api 下执行）
+pnpm --filter @iam/api exec prisma generate
+pnpm --filter @iam/api exec prisma migrate dev --name <name>
+pnpm --filter @iam/api exec prisma studio
+```
 
-# 代码检查并自动修复
-pnpm lint:fix
+### 管理后台（`apps/admin` — `@iam/admin`）
 
-# 数据库操作（package.json 中未列出，但常用）
-pnpm prisma generate    # Schema 变更后生成 Prisma 客户端
-pnpm prisma migrate dev # 创建并应用迁移
-pnpm prisma studio      # 打开 Prisma Studio 进行数据检查
+```bash
+pnpm --filter @iam/admin dev        # max dev（UMI Max）
+pnpm --filter @iam/admin build      # max build → apps/admin/dist
+pnpm --filter @iam/admin format     # prettier
 ```
 
 ## 架构
 
-### 应用结构
+### 后端（`apps/api/src`）
 
-- **`src/app.ts`**：主 Hono 应用，包含路由注册和 OpenAPI 配置
-- **`src/index.ts`**：服务入口，导出 Bun 服务器配置
-- **`src/env.ts`**：使用 Zod 进行环境变量验证
-- **`src/routes/`**：按访问级别组织的 API 路由：
-  - `admin/` – 管理端接口（客户端、雇佣关系、组织、职位、用户管理）
-  - `auth/` – 认证接口
-  - `internal/` – 内部服务调用
-  - `open/` – 开放 API
-  - `public/` – 公共 API
-  - `sso/` – 单点登录接口
-- **`src/services/`**：业务逻辑层，每个模块包含：
-  - `*.service.ts` – 主要服务函数
-  - `*.repository.ts` – 数据库查询（Prisma 调用）
-  - `*.schema.ts` – 用于验证的 Zod Schema
-  - `*.type.ts` – TypeScript 类型定义
-- **`src/db/`**：数据库配置
-  - `schema.prisma` – 定义模型的 Prisma Schema
-  - `generated/` – 自动生成的 Prisma 客户端和 Zod Schema
-  - `sql/` – 用于数据同步的原生 SQL 脚本
-- **`src/lib/`**：外部客户端配置（Redis、Pino 日志、OpenAPI 工具）
-- **`src/middlewares/`**：Hono 中间件（错误处理等）
-- **`src/utils/`**：共享工具函数（HTTP 辅助、Zod 工具、分页）
-- **`src/enums/`**：TypeScript 枚举（状态码、使用类型等）
-- **`src/errors/`**：继承自 `CustomError` 的自定义错误类
+- **`app.ts`** — Hono 应用装配与 OpenAPI 注册
+- **`index.ts`** — 服务入口，导出 Bun server 配置
+- **`env.ts`** — 使用 Zod 做环境变量校验
+- **`routes/`** — 按访问级别分组的 API：
+  - `admin/` — 后台管理接口（client、employment、organization、position、user）
+  - `auth/` — 认证
+  - `internal/` — 内部服务调用
+  - `open/` — 开放 API
+  - `public/` — 公共 API
+  - `sso/` — OIDC 单点登录
+- **`services/`** — 业务逻辑层，按业务域划分文件夹，每个包含：
+  - `*.service.ts` — 主要服务函数
+  - `*.repository.ts` — Prisma 调用
+  - `*.schema.ts` — Zod 校验
+  - `*.type.ts` — TS 类型
+- **`db/`** — `schema.prisma`、`generated/` 下的 Prisma 客户端与 Zod schema、`sql/` 下的原生 SQL
+- **`lib/`** — 外部客户端（Redis、Pino、OpenAPI 工具）
+- **`middlewares/`** — Hono 中间件（错误处理等）
+- **`utils/`** — HTTP、Zod、分页工具
+- **`enums/`** — 状态码、使用类型等
+- **`errors/`** — 继承自 `CustomError` 的自定义错误
+
+路径别名（见 `apps/api/tsconfig.json`）：`@/*`、`@db`、`@lib/*`、`@services/*`、`@repositories/*`、`@schemas/*`、`@enums/*`、`@mapper/*`、`@errors/*`、`@middlewares/*`、`@utils/*`、`@prisma-client/*`。
+
+### 管理后台（`apps/admin/src`）
+
+- **`.umirc.ts`** — UMI 配置：路由定义、`proxy`（将 `/admin`、`/auth`、`/public`、`/sso`、`/internal`、`/open` 代理到后端）、`antd`、`access`、`model`、`initialState`、`request`、`layout`
+- **`app.ts`** — UMI 运行时配置
+- **`access.ts`** — 访问策略（基于 `UMI_APP_ADMIN_ROLE_CODE` 判断角色）
+- **`pages/`** — `users`、`organizations`、`positions`、`employments`、`403`
+- **`lib/api-client.ts`** — `hc<AppType>('/')` 类型安全的 Hono 客户端；`@iam/api` 中定义的每条路由都能被正确推导
+- **`models/`** — UMI 数据流模型
+- **`services/`**、**`components/`**、**`utils/`**
+
+环境变量 — UMI Max 仅注入 `UMI_APP_` 前缀的变量：
+
+- `UMI_APP_SSO_AUTHORIZE_URL`（默认 `/sso/authorize`）
+- `UMI_APP_SSO_CLIENT_CODE`（默认 `iam`）
+- `UMI_APP_ADMIN_ROLE_CODE`（默认 `iam:admin`）
+
+本地覆盖：将 `apps/admin/.env.example` 复制为 `apps/admin/.env.local`。
+
+### 共享包（`packages/shared`）
+
+- `@iam/shared` — `apps/api` 与 `apps/admin` 均通过 `workspace:*` 引用
+- 当前从 `src/enums/service.status.ts` 导出 `ServiceStatusCode` 等状态码
+- 新增跨端共用的常量/枚举请放在此处，避免在两个应用间复制
 
 ### 关键模式
 
-1. **路由处理器**：使用 Hono 的 OpenAPI 集成与 Zod 验证
-2. **服务层**：业务逻辑在 Service 中，数据库操作在 Repository 中
-3. **错误处理**：使用服务状态码的自定义错误类（见 `ServiceStatusCode` 枚举），由 `errorHandler` 中间件捕获
-4. **验证**：Zod Schema 同时用于运行时验证和 TypeScript 类型
-5. **分页**：使用 `@/utils/page.util` 中的 `paginate` 工具
-6. **路径别名**：在 tsconfig.json 中配置（如 `@/*`、`@services/*` 等）
-7. **错误码**：在 `src/enums/service.status.ts` 中定义的标准化错误码
-8. **日志**：Pino 日志配置在 `@/lib/clients/pino`，通过 `app.ts` 中的中间件使用
+1. **路由处理器**：Hono + `@hono/zod-openapi`（OpenAPI 感知 + Zod 校验）
+2. **服务层**：业务逻辑写在 `*.service.ts`，DB 访问隔离到 `*.repository.ts`
+3. **错误处理**：自定义错误携带 `ServiceStatusCode`，由 `errorHandler` 中间件统一捕获
+4. **校验**：Zod schema 同时驱动运行时校验与 TS 类型
+5. **分页**：`@/utils/page.util` 的 `paginate` 工具
+6. **日志**：Pino 在 `@/lib/clients/pino` 中配置，并通过 `app.ts` 的中间件接入
+7. **类型化 RPC**：前端通过 `hc<AppType>` 消费后端类型 — 保持 `apps/api` 在 `./src/app.ts` 的导出类型正确
 
 ### 数据流
 
-1. 请求 → 路由处理器（Zod OpenAPI 验证输入）→ Service 方法 → Repository 方法 → Prisma 客户端 → 数据库
+1. 请求 → 路由处理器（`@hono/zod-openapi` 校验）→ Service → Repository → Prisma → 数据库
 2. 响应 ← Service 格式化数据 ← Repository 返回 Prisma 模型 ← 数据库
-
-### 依赖项
-
-- **核心**：`hono`、`@hono/zod-openapi`、`@hono/swagger-ui`
-- **数据库**：`@prisma/client`、`@prisma/adapter-mariadb`、`prisma-zod-generator`
-- **认证**：`oidc-provider`、`bcrypt-ts`、`sm-crypto`
-- **外部 API**：`axios`（HTTP 客户端）、`ioredis`（Redis）、`pino`（日志）
-- **工具库**：`luxon`（日期时间）、`zod`（验证）、`xlsx`（Excel）、`csv-parse`
+3. 前端（`apps/admin`）通过 `apps/admin/src/lib/api-client.ts` 中的 `apiClient` 调用后端，类型通过 `@iam/api` 的 `AppType` 导出共享
 
 ## 环境变量
 
-必要的环境变量（完整 Schema 见 `src/env.ts`）：
+### 后端（`apps/api/.env`）
 
-- `DATABASE_URL`：MySQL 连接字符串（供 Prisma 使用）
-- `REDIS_URL`、`REDIS_PORT`、`REDIS_DB`：Redis 配置
-- `PORT`：服务端口（默认：30000）
-- `IAM_SECRET_KEY`：JWT/签名密钥
-- `WX_CORPID`、`WX_CORPSECRET`：企业微信集成
-- `SMS_URL`、`SMS_SIGNATURE_KEY`：短信服务配置
-- `ORCAS_URL`：外部服务 URL
-- `LOG_LEVEL`：Pino 日志级别（默认："info"）
+完整 Schema 见 `apps/api/src/env.ts`，必需变量：
+
+- `DATABASE_URL` — MySQL 连接字符串（Prisma 直接读取）
+- `REDIS_URL`、`REDIS_PORT`、`REDIS_DB`
+- `PORT`（默认 30000）
+- `IAM_SECRET_KEY`
+- `WX_CORPID`、`WX_CORPSECRET`
+- `SMS_URL`、`SMS_SIGNATURE_KEY`
+- `ORCAS_URL`
+- `LOG_LEVEL`（默认 `info`）
+- `LOGIN_ENDPOINT`、`AUTHORIZATION_ENDPOINT`、`LOGOUT_ENDPOINT`、`THIRDPARTY_OA_ENDPOINT`
+
+模板：`apps/api/.env.example`。通过 `pnpm --filter @iam/api dev/serve` 启动时 CWD 即为 `apps/api`，Bun 会自动加载 `apps/api/.env`；`pnpm --filter @iam/api exec prisma ...` 同理。
+
+### 前端（`apps/admin/.env` / `.env.local`）
+
+仅 `UMI_APP_*` 前缀的变量会注入客户端 — 参见上文。
 
 ## 代码风格
 
-- **ESLint**：Antfu 配置，包含代码风格规则
-- **格式化**：由 ESLint 处理（Prettier 已禁用）
-- **VS Code**：`.vscode/settings.json` 中的设置开启保存时 ESLint 自动修复
-- **导入**：使用路径别名（`@/`、`@services/` 等），不使用相对路径
-- **行长度**：最大 120 个字符（仅警告）
-- **分号**：必须使用
-- **引号**：双引号
+- **后端**：ESLint（Antfu 配置）— 必须分号、双引号、最大行长 120（警告）
+- **前端**：Prettier + ESLint（`.prettierrc`、`.eslintrc.js`）— `prettier-plugin-organize-imports` 整理导入
+- **格式化**：由 ESLint / Prettier 负责，不要引入其他格式化器
+- **VS Code**：`.vscode/settings.json` 启用保存时自动修复
+- **导入**：`apps/api` 中优先使用路径别名（`@/`、`@services/` 等），避免相对路径
 
 ## 核心原则
 
-- **简单优先**：每次变更尽可能简单，只改动必要的代码
-- **不走捷径**：找到根本原因，不做临时修复，遵守高级开发者标准
-- **最小影响范围**：只改动必要的部分，避免引入新的问题
+- **简单优先**：每次变更尽可能少改动文件
+- **不走捷径**：定位并修复根因，坚守高级开发者标准
+- **最小影响面**：不做无关改动；尊重包边界（不要把只属于 api 的代码泄漏到 shared 包里）
 
 ## 测试
 
-目前未配置测试框架，可考虑使用 `bun:test` 或 Vitest 添加测试。
+当前未配置测试框架。补充测试时可考虑：后端用 `bun:test` 或 Vitest，管理后台用 Vitest / Playwright。
 
 ## 部署
 
-- 服务通过 Bun 运行（`bun run serve`）
-- 静态文件从 `static/` 目录提供
-- Swagger UI 资源在 `static/swagger/`
-- 部署前必须应用数据库迁移（`prisma migrate deploy`）
+### 后端
+
+```bash
+pnpm install --frozen-lockfile
+pnpm --filter @iam/api exec prisma generate
+pnpm --filter @iam/api exec prisma migrate deploy
+pnpm --filter @iam/api serve   # 或：bun run apps/api/src/index.ts
+```
+
+- 静态资源（Swagger）位于 `apps/api/static/`
+- 部署前必须执行数据库迁移（`prisma migrate deploy`）
+
+### 管理后台
+
+```bash
+pnpm --filter @iam/admin build  # 产物位于 apps/admin/dist
+```
+
+将 `apps/admin/dist` 交由 Nginx / CDN 托管，并将 `/admin`、`/auth`、`/public`、`/sso`、`/internal`、`/open` 反向代理至后端。
 
 ## 常见任务
 
-### 添加新的 API 接口
+### 新增 API 接口
 
-1. 在对应的 `src/services/*/*.schema.ts` 中添加 Zod Schema
-2. 在相关的 `src/routes/*/*.ts` 中添加路由处理器
-3. 如果是新路由组，在 `src/app.ts` 中注册路由
-4. 在 `src/services/*/*.service.ts` 中实现 Service 方法
-5. 如需新的数据库查询，在 Repository 中添加对应方法
+1. 在 `apps/api/src/services/<业务域>/*.schema.ts` 中添加或扩展 Zod schema
+2. 在 `*.service.ts` 中实现业务逻辑，必要时在 repository 中添加新的 DB 查询
+3. 在 `apps/api/src/routes/<分组>/` 下添加路由处理器
+4. 如果是新路由组，在 `apps/api/src/app.ts` 中挂载
+5. 前端通过 `apiClient.<path>.$get/$post(...)` 直接调用，类型自动同步
 
 ### 修改数据库 Schema
 
-1. 编辑 `src/db/schema.prisma`
-2. 生成 Prisma 客户端：`bunx prisma generate`
-3. 创建迁移：`bunx prisma migrate dev --name 描述性名称`
-4. 更新 Zod Schema（由 prisma-zod-generator 自动生成）
+1. 编辑 `apps/api/src/db/schema.prisma`
+2. `pnpm --filter @iam/api exec prisma generate`
+3. `pnpm --filter @iam/api exec prisma migrate dev --name <name>`
+4. Zod schema 由 `prisma-zod-generator` 自动重新生成
+
+### 在 api 与 admin 间共享代码
+
+- 放入 `packages/shared/src/`，并在 `packages/shared/src/index.ts` 中重新导出
+- 两端都通过 `import { ... } from "@iam/shared"` 引用
 
 ### 调试
 
-- 日志使用 Pino，通过 `LOG_LEVEL` 配置日志级别
-- 调试工具在 `debug/` 目录中
-- 本地运行时 Swagger UI 访问地址：`http://localhost:30000/doc/swagger`
+- Pino 日志 — 通过 `LOG_LEVEL` 调整级别
+- Scalar API 文档：<http://localhost:30000/doc/scalar>
+- 使用 `prisma studio` 查看数据
+- UMI 的 proxy 定义在 `apps/admin/.umirc.ts`，切换后端目标时更新这里即可
