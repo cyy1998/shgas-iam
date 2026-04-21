@@ -44,5 +44,9 @@ export default defineConfig({
       target: 'http://176.169.99.191:30010',
       changeOrigin: true,
     },
+    '/rpc': {
+      target: 'http://176.169.99.191:30010',
+      changeOrigin: true,
+    },
   },
 });

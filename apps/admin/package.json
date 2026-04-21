@@ -14,6 +14,8 @@
     "@ant-design/icons": "^5.0.1",
     "@ant-design/pro-components": "^2.4.4",
     "@iam/shared": "workspace:*",
+    "@trpc/client": "^11.16.0",
+    "@trpc/server": "^11.16.0",
     "@umijs/max": "^4.6.45",
     "antd": "^5.4.0",
     "hono": "^4.12.8",
@@ -21,8 +23,8 @@
     "react-dom": "^18.0.0"
   },
   "devDependencies": {
-    "@iam/api": "workspace:*",
     "@hono/zod-openapi": "^1.1.4",
+    "@iam/api": "workspace:*",
     "@types/react": "^18.0.33",
     "@types/react-dom": "^18.0.11",
     "lint-staged": "^13.2.0",
