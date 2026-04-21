@@ -1,4 +1,5 @@
 import type { AppRouter } from "@iam/api/trpc";
+import { SSO_CLIENT_CODE } from "@/constants/config";
 import { createTRPCClient, httpBatchLink } from "@trpc/client";
 
 export const apiClient = createTRPCClient<AppRouter>({
@@ -11,7 +12,7 @@ export const apiClient = createTRPCClient<AppRouter>({
           credentials: "include",
           headers: {
             ...(init?.headers ?? {}),
-            Client: "iam",
+            Client: SSO_CLIENT_CODE,
           },
         }),
     }),
