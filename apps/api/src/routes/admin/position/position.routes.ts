@@ -3,15 +3,20 @@ import * as HttpStatusCodes from "@lib/core/http-status-codes";
 import jsonContent from "@/lib/core/openapi/helpers/json-content";
 import jsonContentRequired from "@/lib/core/openapi/helpers/json-content-required";
 import createSuccessResponseSchema from "@/lib/core/openapi/schemas/create-success-schema";
-import { PositionCreateDtoSchema, PositionPaginationQueryDtoSchema } from "@/services/position/position.schema";
+import {
+  PositionCreateDtoSchema,
+  PositionDtoSchema,
+  PositionPaginationQueryDtoSchema,
+  PositionStatusUpdateDtoSchema,
+  PositionUpdateDtoSchema,
+} from "@/services/position/position.schema";
 import { PositionVoSchema } from "./position.schema";
 
-const routePrefix = "";
 const tags = ["Admin/Position"];
 
 export const positionsSearch = createRoute({
   method: "post",
-  path: `${routePrefix}/search`,
+  path: "/search",
   tags,
   request: {
     body: jsonContentRequired(PositionPaginationQueryDtoSchema, "岗位分页查询参数"),
@@ -21,14 +26,64 @@ export const positionsSearch = createRoute({
   },
 });
 
-export const positionsSet = createRoute({
-  method: "post",
-  path: `${routePrefix}/set`,
+export const positionDetail = createRoute({
+  method: "get",
+  path: "/:posCode",
   tags,
   request: {
-    body: jsonContentRequired(z.object({ data: z.array(PositionCreateDtoSchema) }), "岗位创建参数"),
+    params: z.object({ posCode: z.string().openapi({ example: "E001" }) }),
   },
   responses: {
-    [HttpStatusCodes.OK]: jsonContent(createSuccessResponseSchema(z.boolean()), "岗位设置成功"),
+    [HttpStatusCodes.OK]: jsonContent(createSuccessResponseSchema(PositionDtoSchema), "岗位详情"),
+  },
+});
+
+export const positionCreate = createRoute({
+  method: "post",
+  path: "/",
+  tags,
+  request: {
+    body: jsonContentRequired(PositionCreateDtoSchema, "岗位创建参数"),
+  },
+  responses: {
+    [HttpStatusCodes.OK]: jsonContent(createSuccessResponseSchema(z.boolean()), "岗位创建成功"),
+  },
+});
+
+export const positionUpdate = createRoute({
+  method: "put",
+  path: "/:posCode",
+  tags,
+  request: {
+    params: z.object({ posCode: z.string() }),
+    body: jsonContentRequired(PositionUpdateDtoSchema, "岗位更新参数"),
+  },
+  responses: {
+    [HttpStatusCodes.OK]: jsonContent(createSuccessResponseSchema(z.boolean()), "岗位更新成功"),
+  },
+});
+
+export const positionStatusUpdate = createRoute({
+  method: "patch",
+  path: "/:posCode/status",
+  tags,
+  request: {
+    params: z.object({ posCode: z.string() }),
+    body: jsonContentRequired(PositionStatusUpdateDtoSchema, "岗位状态变更"),
+  },
+  responses: {
+    [HttpStatusCodes.OK]: jsonContent(createSuccessResponseSchema(z.boolean()), "状态更新成功"),
+  },
+});
+
+export const positionDelete = createRoute({
+  method: "delete",
+  path: "/:posCode",
+  tags,
+  request: {
+    params: z.object({ posCode: z.string() }),
+  },
+  responses: {
+    [HttpStatusCodes.OK]: jsonContent(createSuccessResponseSchema(z.boolean()), "岗位删除成功"),
   },
 });
