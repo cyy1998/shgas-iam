@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { Status } from "@/enums/status";
 import { defineMutationOp, defineQueryOp } from "@/lib/business-op";
 import { PositionVoConverterSchema } from "@/routes/admin/position/position.schema";
 import { paginate } from "@/utils/page.util";
@@ -6,7 +7,6 @@ import * as positionRepository from "./position.repository";
 import {
   PositionCreateDtoSchema,
   PositionPaginationQueryDtoSchema,
-  PositionStatusUpdateDtoSchema,
   PositionUpdateDtoSchema,
 } from "./position.schema";
 import * as positionService from "./position.service";
@@ -39,7 +39,10 @@ export const updatePositionOp = defineMutationOp({
 });
 
 export const updatePositionStatusOp = defineMutationOp({
-  input: z.object({ posCode: z.string() }).and(PositionStatusUpdateDtoSchema),
+  input: z.object({
+    posCode: z.string(),
+    status: z.enum(Status),
+  }),
   handler: ({ posCode, status }) => positionService.updatePositionStatus(posCode, status),
 });
 

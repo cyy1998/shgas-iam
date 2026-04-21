@@ -1,5 +1,6 @@
 import type { inferRouterOutputs } from "@trpc/server";
 import type { AppRouter } from "@iam/api/trpc";
+import { Status } from "@iam/shared";
 import { apiClient } from "@/lib/api-client";
 
 type AdminPositionOutputs = inferRouterOutputs<AppRouter>["admin"]["position"];
@@ -27,19 +28,19 @@ export function createPosition(body: {
   posCode: string;
   posName: string;
   description?: string;
-  status?: number;
+  status?: Status;
 }) {
   return apiClient.admin.position.create.mutate(body);
 }
 
 export function updatePosition(
   posCode: string,
-  data: { posName?: string; description?: string | null; status?: number },
+  data: { posName?: string; description?: string | null; status?: Status },
 ) {
   return apiClient.admin.position.update.mutate({ posCode, data });
 }
 
-export function updatePositionStatus(posCode: string, status: number) {
+export function updatePositionStatus(posCode: string, status: Status) {
   return apiClient.admin.position.updateStatus.mutate({ posCode, status });
 }
 

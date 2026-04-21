@@ -1,5 +1,5 @@
 import * as ops from "@/services/position/position.ops";
-import { router } from "../../trpc";
+import { router } from "@/trpc/trpc";
 
 export const positionAdminRouter = router({
   search: ops.searchPositionOp.toTRPC(),

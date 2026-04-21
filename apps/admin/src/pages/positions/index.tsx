@@ -98,7 +98,12 @@ export default function PositionsPage() {
         search={{ labelWidth: "auto" }}
         request={async (params) => {
           try {
-            const { current = 1, pageSize = 10, posCode, posName } = params as any;
+            const { current = 1, pageSize = 10, posCode, posName } = params as {
+              current?: number;
+              pageSize?: number;
+              posCode?: string;
+              posName?: string;
+            };
             const text = (posCode || posName || "") as string;
             const data = await searchPositions({
               pageNum: current,

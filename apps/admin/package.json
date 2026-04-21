@@ -18,12 +18,10 @@
     "@trpc/server": "^11.16.0",
     "@umijs/max": "^4.6.45",
     "antd": "^5.4.0",
-    "hono": "^4.12.8",
     "react": "^18.0.0",
     "react-dom": "^18.0.0"
   },
   "devDependencies": {
-    "@hono/zod-openapi": "^1.1.4",
     "@iam/api": "workspace:*",
     "@types/react": "^18.0.33",
     "@types/react-dom": "^18.0.11",
