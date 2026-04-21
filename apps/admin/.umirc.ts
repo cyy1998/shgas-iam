@@ -8,7 +8,7 @@ export default defineConfig({
   initialState: {},
   request: {},
   layout: {
-    title: '@umijs/max',
+    title: '上海燃气IAM管理员平台',
   },
   routes: [
     { path: '/', redirect: '/users' },
