@@ -1,8 +1,11 @@
 import { OpenAPIHono } from "@hono/zod-openapi";
 import { Scalar } from "@scalar/hono-api-reference";
+import { fetchRequestHandler } from "@trpc/server/adapters/fetch";
 import { serveStatic } from "hono/bun";
 import { logger } from "hono/logger";
 import { errorHandler } from "@/middlewares/error.handler";
+import { appRouter } from "@/trpc/app.router";
+import { createTRPCContext } from "@/trpc/trpc";
 // admin 子路由
 import adminClientRouter from "@/routes/admin/client/client.index";
 import adminEmploymentRouter from "@/routes/admin/employment/employment.index";
@@ -31,6 +34,15 @@ export default function createApp() {
   ));
 
   app.onError(errorHandler);
+
+  app.all("/rpc/*", async (c) => {
+    return await fetchRequestHandler({
+      endpoint: "/rpc",
+      req: c.req.raw,
+      router: appRouter,
+      createContext: () => createTRPCContext({ honoCtx: c }),
+    });
+  });
 
   app.route("/public", publicRouter);
   app.route("/auth", authRouter);

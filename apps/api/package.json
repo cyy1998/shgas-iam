@@ -3,7 +3,8 @@
   "type": "module",
   "private": true,
   "exports": {
-    ".": "./src/app.ts"
+    ".": "./src/app.ts",
+    "./trpc": "./src/trpc/app.router.ts"
   },
   "module": "index.ts",
   "devEngines": {
