@@ -23,7 +23,7 @@ export const callback: SsoRouteHandler<"callback"> = async (c) => {
   const data = await ssoService.callback(code, client, redirectUrl);
   setCookie(c, `local_${client}_session`, data.token, {
     httpOnly: true,
-    sameSite: "Strict", // 防 CSRF
+    sameSite: "Lax", // 防 CSRF；Lax 允许顶级导航带上 cookie，SSO 跨站跳回时会话不丢
     maxAge: config.REDIS_EXPIRE_TIME,
     path: "/",
   });
@@ -32,7 +32,7 @@ export const callback: SsoRouteHandler<"callback"> = async (c) => {
   if (data.orcasSessionId != null) {
     setCookie(c, `orcas_sso_sessionid`, data.orcasSessionId, {
       httpOnly: true,
-      sameSite: "Strict", // 防 CSRF
+      sameSite: "Lax", // 防 CSRF；Lax 允许顶级导航带上 cookie，SSO 跨站跳回时会话不丢
       maxAge: config.REDIS_EXPIRE_TIME,
       path: "/",
     });
@@ -84,7 +84,7 @@ export const loginOA: SsoRouteHandler<"loginOA"> = async (c) => {
   const data = await ssoService.loginOA(clientCode, loginid, ts, token);
   setCookie(c, "global_session", data.token, {
     httpOnly: true,
-    sameSite: "Strict", // 防 CSRF
+    sameSite: "Lax", // 防 CSRF；Lax 允许顶级导航带上 cookie，SSO 跨站跳回时会话不丢
     maxAge: config.REDIS_EXPIRE_TIME,
     path: "/",
   });
@@ -96,7 +96,7 @@ export const loginWX: SsoRouteHandler<"loginWX"> = async (c) => {
   const data = await ssoService.loginWX(code);
   setCookie(c, "global_session", data.token, {
     httpOnly: true,
-    sameSite: "Strict", // 防 CSRF
+    sameSite: "Lax", // 防 CSRF；Lax 允许顶级导航带上 cookie，SSO 跨站跳回时会话不丢
     maxAge: config.REDIS_EXPIRE_TIME,
     path: "/",
   });

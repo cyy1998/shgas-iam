@@ -12,7 +12,7 @@ export const loginPassword: AuthRouteHandler<"loginPassword"> = async (c) => {
   const data = await authService.loginPassword(username, password);
   setCookie(c, "global_session", data.token, {
     httpOnly: true,
-    sameSite: "Strict", // 防 CSRF
+    sameSite: "Lax", // 防 CSRF；Lax 允许顶级导航带上 cookie，SSO 跨站跳回时会话不丢
     maxAge: config.REDIS_EXPIRE_TIME,
     path: "/",
   });
@@ -24,7 +24,7 @@ export const loginMobile: AuthRouteHandler<"loginMobile"> = async (c) => {
   const data = await authService.loginMobile(phoneNumber, code);
   setCookie(c, "global_session", data.token, {
     httpOnly: true,
-    sameSite: "Strict", // 防 CSRF
+    sameSite: "Lax", // 防 CSRF；Lax 允许顶级导航带上 cookie，SSO 跨站跳回时会话不丢
     maxAge: config.REDIS_EXPIRE_TIME,
     path: "/",
   });
