@@ -6,6 +6,7 @@ import { logger } from "hono/logger";
 import { errorHandler } from "@/middlewares/error.handler";
 import { appRouter } from "@/trpc/app.router";
 import { createTRPCContext } from "@/trpc/trpc";
+import { publicAuthenicationHandler } from "@middlewares/authenication.handler";
 // admin 子路由
 import adminClientRouter from "@/routes/admin/client/client.index";
 import adminEmploymentRouter from "@/routes/admin/employment/employment.index";
@@ -35,6 +36,7 @@ export default function createApp() {
 
   app.onError(errorHandler);
 
+  app.use("/rpc/*", publicAuthenicationHandler);
   app.all("/rpc/*", async (c) => {
     return await fetchRequestHandler({
       endpoint: "/rpc",
