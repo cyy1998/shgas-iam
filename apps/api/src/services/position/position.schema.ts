@@ -37,3 +37,13 @@ export const PositionPaginationQueryDtoSchema = createPageQuerySchema(
     exactConditions: z.object(),
   }),
 ).openapi("PositionPaginationQueryDto");
+
+export const PositionUpdateDtoSchema = z.object({
+  posName: z.string().min(1).optional(),
+  description: z.string().nullable().optional(),
+  status: z.enum(Status).optional(),
+}).openapi("PositionUpdateDto");
+
+export const PositionStatusUpdateDtoSchema = z.object({
+  status: z.enum(Status),
+}).openapi("PositionStatusUpdateDto");
