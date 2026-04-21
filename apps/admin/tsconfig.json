@@ -1,3 +1,23 @@
 {
-  "extends": "./src/.umi/tsconfig.json"
+  "extends": "./src/.umi/tsconfig.json",
+  "compilerOptions": {
+    "baseUrl": ".",
+    "paths": {
+      "@/*": ["./src/*", "../api/src/*"],
+      "@@/*": ["./src/.umi/*"],
+      "@umijs/max": ["./node_modules/@umijs/max"],
+      "@umijs/max/typings": ["./src/.umi/typings"],
+      "@db": ["../api/src/db"],
+      "@lib/*": ["../api/src/lib/*"],
+      "@services/*": ["../api/src/services/*"],
+      "@repositories/*": ["../api/src/repositories/*"],
+      "@schemas/*": ["../api/src/schemas/*"],
+      "@enums/*": ["../api/src/enums/*"],
+      "@mapper/*": ["../api/src/mapper/*"],
+      "@errors/*": ["../api/src/errors/*"],
+      "@middlewares/*": ["../api/src/middlewares/*"],
+      "@utils/*": ["../api/src/utils/*"],
+      "@prisma-client/*": ["../api/src/db/generated/prisma/*"]
+    }
+  }
 }
