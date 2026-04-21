@@ -11,7 +11,7 @@ export const EmploymentDetailSchema = EmploymentSchema.extend({
   user: UserSchema,
   deptartment: OrganizationSchema,
   company: OrganizationSchema,
-  position: PositionSchema,
+  position: z.lazy(() => PositionSchema),
 });
 
 export const EmploymentDtoSchema = EmploymentSchema.extend({
