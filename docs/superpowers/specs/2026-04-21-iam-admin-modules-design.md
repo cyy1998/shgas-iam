@@ -254,3 +254,39 @@ ProTable.request
 5. **Employment**：依赖前三者就绪，含全部业务动作
 
 每模块内部顺序：后端端点 → Zod schema → 前端 service → 页面组件。
+
+## 11. 架构修订：tRPC 层与 Hono OpenAPI 并存（2026-04-21）
+
+**背景**：Plan 1 实施 Position 端到端时，admin 端 `hc<AppType>` 类型推导失效（Hono typed RPC 在链式路由达到一定复杂度后命中 TS 深度上限降级为 `unknown`）。单靠修 tsconfig 无法根治。
+
+**决策**：在 api 中新增 tRPC 层，与现有 Hono OpenAPI 路由并存（不替换）。
+
+**原则**：
+- Hono OpenAPI 路由（`/admin/*` 下的 RESTful 端点）**保持不变**，仍给外部客户端、Scalar UI、curl 测试使用
+- 新增 tRPC router 挂载在同一 Hono app 的 `/rpc/*`，共享中间件链（认证等）
+- tRPC procedures 是薄壳：调用已有的 `services/<domain>/*.service.ts` 函数，不重复业务逻辑
+- admin 端放弃 `hc<AppType>` 方案，改用 `@trpc/client` 消费 `/rpc/*`
+- 服务层（`services/*.service.ts`、`*.repository.ts`、`*.schema.ts`）和 `@iam/shared` 的改动一律不受影响，双暴露只是薄壳变化
+
+**数据流（修订）**：
+```
+Hono OpenAPI 路由 ──┐
+                    ├── 共用 services/<domain>/*.service.ts → repository → Prisma
+tRPC procedures ────┘
+
+admin 只消费 tRPC：
+ProTable.request → services/<domain>.search(params) 
+  → apiClient.admin.position.search.query(params)  // tRPC typed call
+  → HTTP POST /rpc/admin.position.search
+  → tRPC handler → positionService.searchPositionsFuzzy(...)
+```
+
+**错误处理**：
+- `CustomError` 在 tRPC 入口被捕获 → 转为 `TRPCError`，保留 `code` 与 `message`
+- admin 端由 tRPC client 的错误接口统一处理；不再需要 `utils/request.ts` 的 `unwrap`（但保留，未来可能给第三方 HTTP 调用复用）
+
+**React Query**：本次不引入，继续用 umi `useRequest` / ProTable 自带的请求封装，在其 `request` 回调里调 tRPC procedure。
+
+**实现计划**：Plan 1 的 A1-A3、B1-B7、C0 已完成；C1 被替换。Plan 1b 覆盖：
+- 后端：`apps/api/src/trpc/` 目录结构、initTRPC + fetch adapter 挂载、position.router、CustomError→TRPCError 映射
+- 前端：`apiClient` 改为 tRPC client、`services/position.ts` 基于 tRPC、`utils/request.ts` 精简或保留
