@@ -9,3 +9,13 @@ export const userStatusToString: Record<UserStatus, string> = {
   [UserStatus.Pause]: "暂停",
   [UserStatus.Disable]: "结束",
 };
+
+import type { StatusOption } from "./organization.status";
+
+export function getUserStatusOptions(): StatusOption[] {
+  return [
+    { label: "正常", value: UserStatus.Enable, color: "success" },
+    { label: "暂停", value: UserStatus.Pause, color: "warning" },
+    { label: "结束", value: UserStatus.Disable, color: "default" },
+  ];
+}

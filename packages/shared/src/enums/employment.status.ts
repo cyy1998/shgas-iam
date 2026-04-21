@@ -9,3 +9,13 @@ export const employmentStatusToString: Record<EmploymentStatus, string> = {
   [EmploymentStatus.Pause]: "暂停",
   [EmploymentStatus.Disable]: "结束",
 };
+
+import type { StatusOption } from "./organization.status";
+
+export function getEmploymentStatusOptions(): StatusOption[] {
+  return [
+    { label: "正常", value: EmploymentStatus.Enable, color: "success" },
+    { label: "暂停", value: EmploymentStatus.Pause, color: "warning" },
+    { label: "结束", value: EmploymentStatus.Disable, color: "default" },
+  ];
+}
