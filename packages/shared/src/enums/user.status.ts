@@ -1,3 +1,5 @@
+import type { StatusOption } from "./organization.status";
+
 export enum UserStatus {
   Enable = 1,
   Pause,
@@ -9,8 +11,6 @@ export const userStatusToString: Record<UserStatus, string> = {
   [UserStatus.Pause]: "暂停",
   [UserStatus.Disable]: "结束",
 };
-
-import type { StatusOption } from "./organization.status";
 
 export function getUserStatusOptions(): StatusOption[] {
   return [
