@@ -2,40 +2,50 @@ import type { z } from "zod";
 import { mapCustomErrorToTRPCError, publicProcedure } from "@/trpc/trpc";
 import * as resp from "@/utils/http/response";
 
-type OpKind = "query" | "mutation";
+type Handler<TSchema extends z.ZodTypeAny, TOutput> = (
+  input: z.infer<TSchema>,
+) => Promise<TOutput>;
 
-export type BusinessOp<TSchema extends z.ZodTypeAny, TOutput> = {
-  input: TSchema;
-  kind: OpKind;
-  handler: (input: z.infer<TSchema>) => Promise<TOutput>;
-};
-
-type InferInput<TSchema extends z.ZodTypeAny> = z.infer<TSchema>;
-
-export function defineOp<TSchema extends z.ZodTypeAny, TOutput>(
-  op: BusinessOp<TSchema, TOutput>,
+function buildResolver<TSchema extends z.ZodTypeAny, TOutput>(
+  handler: Handler<TSchema, TOutput>,
 ) {
-  const toTRPC = () => {
-    const proc = publicProcedure.input(op.input);
-    const resolver = async (opts: { input: unknown }) => {
-      try {
-        return await op.handler(opts.input as InferInput<TSchema>);
-      }
-      catch (err) {
-        mapCustomErrorToTRPCError(err);
-      }
-    };
-    return op.kind === "query" ? proc.query(resolver) : proc.mutation(resolver);
+  return async (opts: { input: unknown }) => {
+    try {
+      return await handler(opts.input as z.infer<TSchema>);
+    }
+    catch (err) {
+      mapCustomErrorToTRPCError(err);
+    }
   };
+}
 
-  const run = async (input: InferInput<TSchema>) => {
-    const data = await op.handler(input);
+function buildRun<TSchema extends z.ZodTypeAny, TOutput>(
+  handler: Handler<TSchema, TOutput>,
+) {
+  return async (input: z.infer<TSchema>) => {
+    const data = await handler(input);
     return resp.ok(data);
   };
+}
 
+export function defineQueryOp<TSchema extends z.ZodTypeAny, TOutput>(
+  op: { input: TSchema; handler: Handler<TSchema, TOutput> },
+) {
   return {
-    ...op,
-    toTRPC,
-    run,
+    input: op.input,
+    handler: op.handler,
+    toTRPC: () => publicProcedure.input(op.input).query(buildResolver(op.handler)),
+    run: buildRun(op.handler),
+  };
+}
+
+export function defineMutationOp<TSchema extends z.ZodTypeAny, TOutput>(
+  op: { input: TSchema; handler: Handler<TSchema, TOutput> },
+) {
+  return {
+    input: op.input,
+    handler: op.handler,
+    toTRPC: () => publicProcedure.input(op.input).mutation(buildResolver(op.handler)),
+    run: buildRun(op.handler),
   };
 }
