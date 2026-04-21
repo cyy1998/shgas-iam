@@ -136,6 +136,7 @@ Path aliases (see `apps/api/tsconfig.json`): `@/*`, `@db`, `@lib/*`, `@services/
 Environment variables — UMI Max only exposes variables prefixed with `UMI_APP_`:
 
 - `UMI_APP_SSO_AUTHORIZE_URL` (default `/sso/authorize`)
+- `UMI_APP_SSO_LOGOUT_URL` (default `/sso/logout`)
 - `UMI_APP_SSO_CLIENT_CODE` (default `iam`)
 - `UMI_APP_ADMIN_ROLE_CODE` (default `iam:admin`)
 
