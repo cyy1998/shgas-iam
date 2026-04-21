@@ -6,6 +6,7 @@ export async function getPositionByCode(posCode: string, tx: PrismaTransaction =
   return await tx.position.findFirst({
     where: {
       posCode,
+      isDelete: false,
     },
   });
 }
@@ -69,6 +70,39 @@ export async function searchPositionsFuzzy(
     },
     include: {
       employments: true,
+    },
+  });
+}
+
+export async function updatePositionByCode(
+  posCode: string,
+  data: { posName?: string; description?: string | null; status?: number },
+  tx: PrismaTransaction = prisma,
+) {
+  return await tx.position.updateMany({
+    where: { posCode, isDelete: false },
+    data,
+  });
+}
+
+export async function softDeletePositionByCode(
+  posCode: string,
+  tx: PrismaTransaction = prisma,
+) {
+  return await tx.position.updateMany({
+    where: { posCode, isDelete: false },
+    data: { isDelete: true },
+  });
+}
+
+export async function countActiveEmploymentsByPosCode(
+  posCode: string,
+  tx: PrismaTransaction = prisma,
+) {
+  return await tx.employment.count({
+    where: {
+      isDelete: false,
+      position: { posCode, isDelete: false },
     },
   });
 }
