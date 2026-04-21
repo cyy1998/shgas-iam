@@ -9,7 +9,6 @@ export const organizationsSearch: OrganizationRouteHandler<"organizationsSearch"
 };
 
 export const organizationsSet: OrganizationRouteHandler<"organizationsSet"> = async (c) => {
-  const { parentCode, ...organizationCreateDto } = c.req.valid("json");
-  const data = await organizationService.setOrganization(organizationCreateDto, parentCode);
+  const data = await organizationService.setOrganization(c.req.valid("json"));
   return c.json(resp.ok(data));
 };
