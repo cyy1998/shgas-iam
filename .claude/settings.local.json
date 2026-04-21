@@ -53,7 +53,9 @@
       "Bash(curl --noproxy \"*\" -s \"http://localhost:8000/umi.js\")",
       "Bash(curl --noproxy \"*\" -s \"http://localhost:8000/umi.css\")",
       "Bash(curl --noproxy \"*\" -s \"http://localhost:8000/\")",
-      "Bash(curl --noproxy \"*\" -v \"http://localhost:8000/umi.js\")"
+      "Bash(curl --noproxy \"*\" -v \"http://localhost:8000/umi.js\")",
+      "Bash(pnpm --filter @iam/admin exec tsc --noEmit)",
+      "Bash(grep -v \"D:\\\\\\\\\\\\\\\\Gas-Development\\\\\\\\\\\\\\\\iam-service\")"
     ]
   },
   "permissionMode": "auto"
