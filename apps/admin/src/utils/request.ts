@@ -1,9 +1,10 @@
+import { ServiceStatusCode } from "@iam/shared";
 import { message } from "antd";
 
 export class ServiceError extends Error {
   public code: number;
-  constructor(message: string, code: number) {
-    super(message);
+  constructor(msg: string, code: number) {
+    super(msg);
     this.name = "ServiceError";
     this.code = code;
   }
@@ -23,7 +24,7 @@ export async function unwrap<T>(
     throw new ServiceError(`HTTP ${res.status}`, res.status);
   }
   const body = (await res.json()) as ApiEnvelope<T>;
-  if (body.code !== 200) {
+  if (body.code !== ServiceStatusCode.Success) {
     throw new ServiceError(body.message || "请求失败", body.code);
   }
   return body.data;
