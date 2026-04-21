@@ -1,13 +1,14 @@
 import type { PositionCreateDto, PositionFuzzyQueryDto } from "./position.type";
 import { prisma } from "@/db";
 import { CustomError } from "@/errors/CustomError";
+import { PositionHasEmploymentError } from "@errors/PositionHasEmploymentError";
 import { paginate } from "@/utils/page.util";
 import * as positionRepository from "./position.repository";
 import { PositionDtoSchema } from "./position.schema";
 
 export async function setPosition(positionCreateDto: PositionCreateDto) {
   return await prisma.$transaction(async (tx) => {
-    const existingPos = await positionRepository.getPositionByCode(positionCreateDto.posCode, tx);
+    const existingPos = await positionRepository.getAnyPositionByCode(positionCreateDto.posCode, tx);
     if (existingPos !== null) {
       throw new CustomError("重复岗位code代码");
     }
@@ -33,4 +34,45 @@ export async function searchPositionsFuzzy(positionPaginationQuery: PositionFuzz
   const positions = await positionRepository.searchPositionsFuzzy(positionPaginationQuery);
   const positionDtos = positions.map(p => PositionDtoSchema.parse(p));
   return paginate(positionDtos, positionPaginationQuery);
+}
+
+export async function getPositionDetailByCode(posCode: string) {
+  const pos = await positionRepository.getPositionByCode(posCode);
+  if (pos === null) {
+    throw new CustomError("岗位不存在", 404);
+  }
+  return PositionDtoSchema.parse(pos);
+}
+
+export async function updatePosition(
+  posCode: string,
+  data: { posName?: string; description?: string | null; status?: number },
+) {
+  return await prisma.$transaction(async (tx) => {
+    const existing = await positionRepository.getPositionByCode(posCode, tx);
+    if (existing === null) {
+      throw new CustomError("岗位不存在", 404);
+    }
+    await positionRepository.updatePositionByCode(posCode, data, tx);
+    return true;
+  });
+}
+
+export async function updatePositionStatus(posCode: string, status: number) {
+  return await updatePosition(posCode, { status });
+}
+
+export async function deletePosition(posCode: string) {
+  return await prisma.$transaction(async (tx) => {
+    const existing = await positionRepository.getPositionByCode(posCode, tx);
+    if (existing === null) {
+      throw new CustomError("岗位不存在", 404);
+    }
+    const employmentCount = await positionRepository.countActiveEmploymentsByPosCode(posCode, tx);
+    if (employmentCount > 0) {
+      throw new PositionHasEmploymentError();
+    }
+    await positionRepository.softDeletePositionByCode(posCode, tx);
+    return true;
+  });
 }

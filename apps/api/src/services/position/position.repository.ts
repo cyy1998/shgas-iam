@@ -106,3 +106,9 @@ export async function countActiveEmploymentsByPosCode(
     },
   });
 }
+
+export async function getAnyPositionByCode(posCode: string, tx: PrismaTransaction = prisma) {
+  return await tx.position.findFirst({
+    where: { posCode },
+  });
+}
