@@ -1,0 +1,269 @@
+import StatusTag from "@/components/StatusTag";
+import { deleteUser, getUser, type UserDetailVo, updateUserStatus } from "@/services/user";
+import { ProDescriptions } from "@ant-design/pro-components";
+import { getUserStatusOptions } from "@iam/shared";
+import {
+  Button,
+  Drawer,
+  Dropdown,
+  Empty,
+  message,
+  Modal,
+  Skeleton,
+  Space,
+  Table,
+  Tabs,
+  Tag,
+} from "antd";
+import type { ColumnsType } from "antd/es/table";
+import { useEffect, useState } from "react";
+import { history } from "@umijs/max";
+import { confirmResetPassword } from "./ResetPasswordModal";
+
+type EmploymentRow = UserDetailVo["employments"][number];
+
+type Props = {
+  open: boolean;
+  username: string | null;
+  onClose: () => void;
+  onEdit: (detail: UserDetailVo) => void;
+  onChanged: () => void;
+};
+
+export default function UserDetailDrawer({
+  open,
+  username,
+  onClose,
+  onEdit,
+  onChanged,
+}: Props) {
+  const [detail, setDetail] = useState<UserDetailVo | null>(null);
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    if (!open || !username) {
+      setDetail(null);
+      return;
+    }
+    setLoading(true);
+    getUser(username)
+      .then(setDetail)
+      .catch((err: unknown) => message.error(err instanceof Error ? err.message : "加载详情失败"))
+      .finally(() => setLoading(false));
+  }, [open, username]);
+
+  const handleError = (err: unknown) =>
+    message.error(err instanceof Error ? err.message : "操作失败");
+
+  const refresh = async () => {
+    if (!username) return;
+    setLoading(true);
+    try {
+      const d = await getUser(username);
+      setDetail(d);
+    }
+    finally {
+      setLoading(false);
+    }
+    onChanged();
+  };
+
+  const onStatusChange = async (status: number) => {
+    if (!detail) return;
+    try {
+      await updateUserStatus(detail.username, status as 1 | 2 | 3);
+      message.success("状态已更新");
+      await refresh();
+    }
+    catch (err) {
+      handleError(err);
+    }
+  };
+
+  const onDelete = () => {
+    if (!detail) return;
+    Modal.confirm({
+      title: `删除用户 ${detail.name}？`,
+      content: "软删除后用户将不再可见。若用户存在活跃雇佣，将被拒绝。",
+      okType: "danger",
+      onOk: async () => {
+        try {
+          await deleteUser(detail.username);
+          message.success("已删除");
+          onChanged();
+          onClose();
+        }
+        catch (err) {
+          handleError(err);
+        }
+      },
+    });
+  };
+
+  const gotoCreateEmployment = () => {
+    if (!detail) return;
+    history.push(`/employments?username=${encodeURIComponent(detail.username)}`);
+  };
+
+  // EmploymentDetailDtoSchema extends EmploymentDtoSchema which has flat fields:
+  // compName (company name), orgName (dept name), posName (position name), isPrimary, status
+  const employmentColumns: ColumnsType<EmploymentRow> = [
+    {
+      title: "公司",
+      dataIndex: "compName",
+      render: (val: string | undefined) => val ?? "—",
+    },
+    {
+      title: "部门",
+      dataIndex: "orgName",
+      render: (val: string | undefined) => val ?? "—",
+    },
+    {
+      title: "岗位",
+      dataIndex: "posName",
+      render: (val: string | undefined) => val ?? "—",
+    },
+    {
+      title: "主岗",
+      dataIndex: "isPrimary",
+      render: (val: boolean) => (val ? <Tag color="blue">主岗</Tag> : null),
+      width: 70,
+    },
+    {
+      title: "状态",
+      dataIndex: "status",
+      render: (_: unknown, row: EmploymentRow) => <StatusTag domain="employment" status={row.status} />,
+      width: 90,
+    },
+  ];
+
+  return (
+    <Drawer
+      width={640}
+      open={open}
+      onClose={onClose}
+      destroyOnClose
+      title={
+        detail
+          ? (
+              <Space>
+                <span>{detail.name}</span>
+                <span style={{ color: "#999", fontSize: 12 }}>{detail.username}</span>
+                <StatusTag domain="user" status={detail.status} />
+              </Space>
+            )
+          : "用户详情"
+      }
+      extra={
+        detail && (
+          <Space>
+            <Button onClick={() => onEdit(detail)}>编辑</Button>
+            <Dropdown
+              menu={{
+                items: getUserStatusOptions()
+                  .filter(o => o.value !== detail.status)
+                  .map(o => ({
+                    key: String(o.value),
+                    label: `切为「${o.label}」`,
+                    onClick: () => onStatusChange(o.value),
+                  })),
+              }}
+            >
+              <Button>状态</Button>
+            </Dropdown>
+            <Button onClick={() => confirmResetPassword({ username: detail.username, name: detail.name })}>
+              重置密码
+            </Button>
+            <Button danger onClick={onDelete}>删除</Button>
+          </Space>
+        )
+      }
+    >
+      {loading && !detail ? <Skeleton active /> : null}
+      {!loading && !detail ? <Empty /> : null}
+      {detail && (
+        <Tabs
+          items={[
+            {
+              key: "basic",
+              label: "基本信息",
+              children: (
+                <ProDescriptions<UserDetailVo>
+                  column={2}
+                  dataSource={detail}
+                  columns={[
+                    { title: "用户名", dataIndex: "username" },
+                    { title: "姓名", dataIndex: "name" },
+                    { title: "手机", dataIndex: "mobile", render: (_, r) => r.mobile ?? "—" },
+                    { title: "微信 ID", dataIndex: "wxId", render: (_, r) => r.wxId ?? "—" },
+                    { title: "用户类型", dataIndex: "userType", render: (_, r) => r.userType ?? "—" },
+                    {
+                      title: "状态",
+                      dataIndex: "status",
+                      render: (_, r) => <StatusTag domain="user" status={r.status} />,
+                    },
+                    {
+                      title: "角色",
+                      dataIndex: "roles",
+                      span: 2,
+                      render: (_, r) =>
+                        r.roles.length === 0
+                          ? "—"
+                          : r.roles.map((code: string) => <Tag key={code}>{code}</Tag>),
+                    },
+                    {
+                      title: "权限数",
+                      dataIndex: "privileges",
+                      render: (_, r) => r.privileges.length,
+                    },
+                    {
+                      title: "雇佣数",
+                      dataIndex: "employments",
+                      render: (_, r) => r.employments.length,
+                    },
+                    {
+                      title: "创建时间",
+                      dataIndex: "createTime",
+                      render: (_, r) => new Date(r.createTime).toLocaleString(),
+                    },
+                    {
+                      title: "更新时间",
+                      dataIndex: "updateTime",
+                      render: (_, r) => new Date(r.updateTime).toLocaleString(),
+                    },
+                  ]}
+                />
+              ),
+            },
+            {
+              key: "employments",
+              label: `雇佣（${detail.employments.length}）`,
+              children: (
+                <div>
+                  <div style={{ marginBottom: 12, textAlign: "right" }}>
+                    <Button type="primary" onClick={gotoCreateEmployment}>
+                      + 新增雇佣
+                    </Button>
+                  </div>
+                  <Table<EmploymentRow>
+                    rowKey="id"
+                    size="small"
+                    columns={employmentColumns}
+                    dataSource={detail.employments}
+                    pagination={false}
+                    locale={{ emptyText: "暂无雇佣" }}
+                  />
+                </div>
+              ),
+            },
+            {
+              key: "logs",
+              label: "操作日志",
+              children: <Empty description="日志功能尚未接入" />,
+            },
+          ]}
+        />
+      )}
+    </Drawer>
+  );
+}
