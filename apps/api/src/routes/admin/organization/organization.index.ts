@@ -7,7 +7,13 @@ const router = createRouter();
 
 router.use(`*`, publicAuthenicationHandler);
 
-router.openapi(routes.organizationsSearch, handlers.organizationsSearch)
-  .openapi(routes.organizationsSet, handlers.organizationsSet);
+router
+  .openapi(routes.organizationsSearch, handlers.organizationsSearch)
+  .openapi(routes.organizationsTree, handlers.organizationsTree)
+  .openapi(routes.organizationDetail, handlers.organizationDetail)
+  .openapi(routes.organizationCreate, handlers.organizationCreate)
+  .openapi(routes.organizationUpdate, handlers.organizationUpdate)
+  .openapi(routes.organizationStatusUpdate, handlers.organizationStatusUpdate)
+  .openapi(routes.organizationDelete, handlers.organizationDelete);
 
 export default router;
