@@ -76,7 +76,7 @@ export const OrganizationStatusUpdateDtoSchema = z.object({
   status: z.enum(Status),
 }).openapi("OrganizationStatusUpdateDto");
 
-type OrganizationTreeNodeDto = {
+interface OrganizationTreeNodeDto {
   id: number;
   orgCode: string;
   orgName: string;
@@ -86,7 +86,7 @@ type OrganizationTreeNodeDto = {
   parentId: number;
   orderNum: number;
   children: OrganizationTreeNodeDto[];
-};
+}
 
 export const OrganizationTreeNodeDtoSchema: z.ZodType<OrganizationTreeNodeDto> = z.lazy(() =>
   z.object({
