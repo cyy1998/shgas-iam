@@ -5,12 +5,16 @@ import * as routes from "./user.routes";
 
 const router = createRouter();
 
-router.use(`*`, publicAuthenicationHandler);
+router.use("*", publicAuthenicationHandler);
 
-router.openapi(routes.usersSearch, handlers.usersSearch)
-  .openapi(routes.usersDetail, handlers.userDetail)
-  .openapi(routes.passwordReset, handlers.passwordReset)
-  .openapi(routes.passwordGenerate, handlers.passwordGenerate)
-  .openapi(routes.usersSet, handlers.usersSet);
+router
+  .openapi(routes.usersSearch, handlers.usersSearch)
+  .openapi(routes.usersDetail, handlers.usersDetail)
+  .openapi(routes.usersCreate, handlers.usersCreate)
+  .openapi(routes.usersUpdate, handlers.usersUpdate)
+  .openapi(routes.usersStatusUpdate, handlers.usersStatusUpdate)
+  .openapi(routes.usersDelete, handlers.usersDelete)
+  .openapi(routes.usersResetPassword, handlers.usersResetPassword)
+  .openapi(routes.usersGeneratePassword, handlers.usersGeneratePassword);
 
 export default router;
