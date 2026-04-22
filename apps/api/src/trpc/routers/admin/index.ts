@@ -1,6 +1,8 @@
+import { organizationAdminRouter } from "@/routes/admin/organization/organization.trpc";
 import { positionAdminRouter } from "@/routes/admin/position/position.trpc";
 import { router } from "@/trpc/trpc";
 
 export const adminRouter = router({
+  organization: organizationAdminRouter,
   position: positionAdminRouter,
 });
