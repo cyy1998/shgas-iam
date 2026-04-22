@@ -7,47 +7,45 @@
       "ESNext"
     ],
     "moduleDetection": "force",
-    "baseUrl": ".",
-    "ignoreDeprecations": "5.0",
     "module": "Preserve",
     // Bundler mode
     "moduleResolution": "bundler",
     "paths": {
       "@/*": [
-        "src/*"
+        "./src/*"
       ],
       "@prisma-client/*": [
-        "src/db/generated/prisma/*"
+        "./src/db/generated/prisma/*"
       ],
       "@db": [
-        "src/db"
+        "./src/db"
       ],
       "@lib/*": [
-        "src/lib/*"
+        "./src/lib/*"
       ],
       "@services/*": [
-        "src/services/*"
+        "./src/services/*"
       ],
       "@repositories/*": [
-        "src/repositories/*"
+        "./src/repositories/*"
       ],
       "@schemas/*": [
-        "src/schemas/*"
+        "./src/schemas/*"
       ],
       "@enums/*": [
-        "src/enums/*"
+        "./src/enums/*"
       ],
       "@mapper/*": [
-        "src/mapper/*"
+        "./src/mapper/*"
       ],
       "@errors/*": [
-        "src/errors/*"
+        "./src/errors/*"
       ],
       "@middlewares/*": [
-        "src/middlewares/*"
+        "./src/middlewares/*"
       ],
       "@utils/*": [
-        "src/utils/*"
+        "./src/utils/*"
       ]
     },
     "allowImportingTsExtensions": true,
