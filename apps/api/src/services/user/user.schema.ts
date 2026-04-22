@@ -40,6 +40,7 @@ export const UserPaginationQueryDtoSchema = createPageQuerySchema(
       phones: z.array(z.string()).optional().openapi({ example: ["17721462865"] }),
       wxIds: z.array(z.string()).optional().openapi({ example: ["1592677631"] }),
       names: z.array(z.string()).optional().openapi({ example: ["蔡奕阳"] }),
+      statuses: z.array(z.enum(Status)).optional().openapi({ example: [Status.Enable, Status.Pause] }),
     }),
   }),
 ).openapi("UserPaginationQueryDto");
@@ -62,3 +63,36 @@ export const UserCreateDtoSchema = UserSchema.partial().required({
   createTime: true,
   updateTime: true,
 }).openapi("UserCreateDto");
+
+export const UserAdminCreateDtoSchema = UserSchema.partial().required({
+  username: true,
+  name: true,
+  userType: true,
+}).omit({
+  id: true,
+  isDelete: true,
+  createTime: true,
+  updateTime: true,
+  password: true,
+}).extend({
+  password: z.string().min(8).optional().openapi({
+    example: "P@ssw0rd1",
+    description: "留空则后端生成随机 8 位密码（需由前端通过单独渠道展示给管理员）",
+  }),
+  status: z.enum(Status).optional().openapi({ example: Status.Enable }),
+}).openapi("UserAdminCreateDto");
+
+export const UserUpdateDtoSchema = UserSchema.partial().pick({
+  name: true,
+  mobile: true,
+  wxId: true,
+  userType: true,
+  status: true,
+  orderNum: true,
+}).extend({
+  status: z.enum(Status).optional(),
+}).openapi("UserUpdateDto");
+
+export const UserStatusUpdateDtoSchema = z.object({
+  status: z.enum(Status),
+}).openapi("UserStatusUpdateDto");
