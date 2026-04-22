@@ -1,11 +1,11 @@
-import { ServiceStatusCode } from '@iam/shared';
-import { message } from 'antd';
+import { ServiceStatusCode } from "@iam/shared";
+import { message } from "antd";
 
 export class ServiceError extends Error {
   public code: number;
   constructor(msg: string, code: number) {
     super(msg);
-    this.name = 'ServiceError';
+    this.name = "ServiceError";
     this.code = code;
   }
 }
@@ -25,7 +25,7 @@ export async function unwrap<T>(
   }
   const body = (await res.json()) as ApiEnvelope<T>;
   if (body.code !== ServiceStatusCode.Success) {
-    throw new ServiceError(body.message || '请求失败', body.code);
+    throw new ServiceError(body.message || "请求失败", body.code);
   }
   return body.data;
 }
@@ -39,5 +39,5 @@ export function handleError(err: unknown) {
     message.error(err.message);
     return;
   }
-  message.error('未知错误');
+  message.error("未知错误");
 }

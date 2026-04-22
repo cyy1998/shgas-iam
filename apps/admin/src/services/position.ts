@@ -1,11 +1,11 @@
-import { apiClient } from '@/lib/api-client';
-import type { AppRouter } from '@iam/api/trpc';
-import { Status } from '@iam/shared';
-import type { inferRouterOutputs } from '@trpc/server';
+import type { inferRouterOutputs } from "@trpc/server";
+import type { AppRouter } from "@iam/api/trpc";
+import { Status } from "@iam/shared";
+import { apiClient } from "@/lib/api-client";
 
-type AdminPositionOutputs = inferRouterOutputs<AppRouter>['admin']['position'];
-export type PositionVo = AdminPositionOutputs['search']['result'][number];
-export type PositionDetailVo = AdminPositionOutputs['detail'];
+type AdminPositionOutputs = inferRouterOutputs<AppRouter>["admin"]["position"];
+export type PositionVo = AdminPositionOutputs["search"]["result"][number];
+export type PositionDetailVo = AdminPositionOutputs["detail"];
 
 export type PositionSearchParams = {
   pageNum: number;

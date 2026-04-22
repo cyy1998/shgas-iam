@@ -1,11 +1,7 @@
 // 运行时配置
-import AvatarDropdown from '@/components/RightContent/AvatarDropdown';
-import {
-  ADMIN_ROLE_CODE,
-  SSO_AUTHORIZE_URL,
-  SSO_CLIENT_CODE,
-} from '@/constants/config';
 import { createElement, type ReactElement } from 'react';
+import AvatarDropdown from '@/components/RightContent/AvatarDropdown';
+import { ADMIN_ROLE_CODE, SSO_AUTHORIZE_URL, SSO_CLIENT_CODE } from '@/constants/config';
 
 type InitialState = { currentUser?: { username: string; roles: string[] } };
 
@@ -34,10 +30,7 @@ export async function getInitialState(): Promise<InitialState> {
         roles,
       };
 
-      if (
-        !roles.includes(ADMIN_ROLE_CODE) &&
-        window.location.pathname !== '/403'
-      ) {
+      if (!roles.includes(ADMIN_ROLE_CODE) && window.location.pathname !== '/403') {
         // 非管理员跳转 403；若已在 /403 则不再跳，否则 getInitialState 永远不 resolve
         window.location.href = '/403';
         return new Promise(() => {});
@@ -75,8 +68,7 @@ export const layout = ({ initialState }: { initialState?: InitialState }) => {
       src: 'https://gw.alipayobjects.com/zos/antfincdn/XAosXuNZyF/BiazfanxmamNRoxxVxka.png',
       size: 'small' as const,
       title: initialState?.currentUser?.username ?? '',
-      render: (_: unknown, dom: ReactElement) =>
-        createElement(AvatarDropdown, { children: dom }),
+      render: (_: unknown, dom: ReactElement) => createElement(AvatarDropdown, { children: dom }),
     },
   };
 };

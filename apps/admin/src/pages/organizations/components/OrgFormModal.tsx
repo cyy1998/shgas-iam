@@ -2,18 +2,14 @@ import {
   createOrganization,
   type OrganizationDetailVo,
   updateOrganization,
-} from '@/services/organization';
-import {
-  ModalForm,
-  ProFormSelect,
-  ProFormText,
-} from '@ant-design/pro-components';
-import { getOrganizationStatusOptions, OrganizationType } from '@iam/shared';
-import { message } from 'antd';
+} from "@/services/organization";
+import { ModalForm, ProFormSelect, ProFormText } from "@ant-design/pro-components";
+import { getOrganizationStatusOptions, OrganizationType } from "@iam/shared";
+import { message } from "antd";
 
 type Props = {
   open: boolean;
-  mode: 'create-root' | 'create-child' | 'edit';
+  mode: "create-root" | "create-child" | "edit";
   initialValues?: OrganizationDetailVo | null;
   parentCode?: string | null;
   onOpenChange: (open: boolean) => void;
@@ -25,10 +21,10 @@ const orgTypeOptions = Object.values(OrganizationType).map((t) => ({
   value: t,
 }));
 
-const titleMap: Record<Props['mode'], string> = {
-  'create-root': '新建根组织',
-  'create-child': '新建下级组织',
-  edit: '编辑组织',
+const titleMap: Record<Props["mode"], string> = {
+  "create-root": "新建根组织",
+  "create-child": "新建下级组织",
+  "edit": "编辑组织",
 };
 
 export default function OrgFormModal({
@@ -39,7 +35,7 @@ export default function OrgFormModal({
   onOpenChange,
   onSuccess,
 }: Props) {
-  const isEdit = mode === 'edit';
+  const isEdit = mode === "edit";
 
   return (
     <ModalForm
@@ -68,21 +64,21 @@ export default function OrgFormModal({
               orgType: values.orgType,
               status: values.status,
             });
-            message.success('更新成功');
+            message.success("更新成功");
           } else {
             await createOrganization({
               orgCode: values.orgCode,
               orgName: values.orgName,
               orgType: values.orgType,
-              parentCode: mode === 'create-child' ? parentCode ?? null : null,
+              parentCode: mode === "create-child" ? (parentCode ?? null) : null,
               status: values.status,
             });
-            message.success('创建成功');
+            message.success("创建成功");
           }
           onSuccess?.();
           return true;
         } catch (err) {
-          message.error(err instanceof Error ? err.message : '操作失败');
+          message.error(err instanceof Error ? err.message : "操作失败");
           return false;
         }
       }}
@@ -91,12 +87,12 @@ export default function OrgFormModal({
         name="orgCode"
         label="组织编码"
         disabled={isEdit}
-        rules={[{ required: true, message: '请输入组织编码' }]}
+        rules={[{ required: true, message: "请输入组织编码" }]}
       />
       <ProFormText
         name="orgName"
         label="组织名称"
-        rules={[{ required: true, message: '请输入组织名称' }]}
+        rules={[{ required: true, message: "请输入组织名称" }]}
       />
       <ProFormSelect
         name="orgType"
@@ -104,12 +100,12 @@ export default function OrgFormModal({
         options={orgTypeOptions}
         rules={[{ required: true }]}
       />
-      {mode === 'create-child' && (
+      {mode === "create-child" && (
         <ProFormText
           label="上级组织"
-          initialValue={parentCode ?? ''}
+          initialValue={parentCode ?? ""}
           disabled
-          fieldProps={{ value: parentCode ?? '' }}
+          fieldProps={{ value: parentCode ?? "" }}
         />
       )}
       <ProFormSelect

@@ -1,13 +1,13 @@
-import { apiClient } from '@/lib/api-client';
-import type { AppRouter } from '@iam/api/trpc';
-import { Status } from '@iam/shared';
-import type { inferRouterOutputs } from '@trpc/server';
+import type { inferRouterOutputs } from "@trpc/server";
+import type { AppRouter } from "@iam/api/trpc";
+import { Status } from "@iam/shared";
+import { apiClient } from "@/lib/api-client";
 
-type AdminOrgOutputs = inferRouterOutputs<AppRouter>['admin']['organization'];
-export type OrganizationVo = AdminOrgOutputs['search']['result'][number];
-export type OrganizationDetailVo = AdminOrgOutputs['detail'];
-export type OrganizationChildrenPage = AdminOrgOutputs['children'];
-export type OrganizationTreeNode = OrganizationChildrenPage['result'][number];
+type AdminOrgOutputs = inferRouterOutputs<AppRouter>["admin"]["organization"];
+export type OrganizationVo = AdminOrgOutputs["search"]["result"][number];
+export type OrganizationDetailVo = AdminOrgOutputs["detail"];
+export type OrganizationChildrenPage = AdminOrgOutputs["children"];
+export type OrganizationTreeNode = OrganizationChildrenPage["result"][number];
 
 export type OrganizationSearchParams = {
   pageNum: number;
@@ -31,11 +31,7 @@ export function getOrganizationChildren(
   pageNum: number = 1,
   pageSize: number = 50,
 ) {
-  return apiClient.admin.organization.children.query({
-    parentOrgCode,
-    pageNum,
-    pageSize,
-  });
+  return apiClient.admin.organization.children.query({ parentOrgCode, pageNum, pageSize });
 }
 
 export function getOrganization(orgCode: string) {
