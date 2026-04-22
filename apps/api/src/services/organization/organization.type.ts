@@ -1,5 +1,6 @@
 import type { z } from "@hono/zod-openapi";
 import type {
+  OrganizationChildrenQueryDtoSchema,
   OrganizationCreateDtoSchema,
   OrganizationDtoSchema,
   OrganizationPaginationQueryDtoSchema,
@@ -16,3 +17,4 @@ export type OrganizationPaginationQueryDto = z.infer<typeof OrganizationPaginati
 export type OrganizationUpdateDto = z.infer<typeof OrganizationUpdateDtoSchema>;
 export type OrganizationStatusUpdateDto = z.infer<typeof OrganizationStatusUpdateDtoSchema>;
 export type OrganizationTreeNodeDto = z.infer<typeof OrganizationTreeNodeDtoSchema>;
+export type OrganizationChildrenQueryDto = z.infer<typeof OrganizationChildrenQueryDtoSchema>;

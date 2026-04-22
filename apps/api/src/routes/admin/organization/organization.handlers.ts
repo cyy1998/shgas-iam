@@ -4,8 +4,8 @@ import * as ops from "./organization.ops";
 export const organizationsSearch: OrganizationRouteHandler<"organizationsSearch"> = async c =>
   c.json(await ops.searchOrganizationOp.run(c.req.valid("json")));
 
-export const organizationsTree: OrganizationRouteHandler<"organizationsTree"> = async c =>
-  c.json(await ops.getOrganizationTreeOp.run(undefined));
+export const organizationsChildren: OrganizationRouteHandler<"organizationsChildren"> = async c =>
+  c.json(await ops.getOrganizationChildrenOp.run(c.req.valid("query")));
 
 export const organizationDetail: OrganizationRouteHandler<"organizationDetail"> = async c =>
   c.json(await ops.getOrganizationOp.run(c.req.valid("param")));

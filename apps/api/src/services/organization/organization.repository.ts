@@ -183,16 +183,55 @@ export async function setOrganization(
   return updatedOrganization;
 }
 
-/** Admin: 列出全部未删除组织（用于构造组织树） */
-export async function listAllOrganizationsForAdmin(tx: PrismaTransaction = prisma) {
-  return await tx.organization.findMany({
-    where: { isDelete: false },
+/**
+ * Admin: 返回指定父节点的直接子组织（含每个子节点的下级数量，供前端 isLeaf 判定）。
+ * parentOrgCode 为 null 时返回根组织（parentId = -1）。
+ */
+export async function listOrgChildrenByParentCode(
+  parentOrgCode: string | null,
+  tx: PrismaTransaction = prisma,
+) {
+  let parentId: number;
+  if (parentOrgCode === null) {
+    parentId = -1;
+  }
+  else {
+    const parent = await tx.organization.findFirst({
+      where: { orgCode: parentOrgCode, isDelete: false },
+      select: { id: true },
+    });
+    if (parent === null) {
+      return [];
+    }
+    parentId = parent.id;
+  }
+
+  const rows = await tx.organization.findMany({
+    where: { isDelete: false, parentId },
     orderBy: [
-      { level: "asc" },
       { orderNum: "asc" },
       { id: "asc" },
     ],
   });
+
+  if (rows.length === 0) {
+    return [];
+  }
+
+  const grandchildCounts = await tx.organization.groupBy({
+    by: ["parentId"],
+    where: {
+      isDelete: false,
+      parentId: { in: rows.map(r => r.id) },
+    },
+    _count: { _all: true },
+  });
+  const countMap = new Map(grandchildCounts.map(c => [c.parentId, c._count._all]));
+
+  return rows.map(r => ({
+    ...r,
+    childCount: countMap.get(r.id) ?? 0,
+  }));
 }
 
 /** Admin: 按 orgCode 查询（不过滤 status） */

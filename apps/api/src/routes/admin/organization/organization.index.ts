@@ -9,7 +9,7 @@ router.use(`*`, publicAuthenicationHandler);
 
 router
   .openapi(routes.organizationsSearch, handlers.organizationsSearch)
-  .openapi(routes.organizationsTree, handlers.organizationsTree)
+  .openapi(routes.organizationsChildren, handlers.organizationsChildren)
   .openapi(routes.organizationDetail, handlers.organizationDetail)
   .openapi(routes.organizationCreate, handlers.organizationCreate)
   .openapi(routes.organizationUpdate, handlers.organizationUpdate)

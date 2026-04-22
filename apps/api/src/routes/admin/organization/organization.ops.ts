@@ -2,6 +2,7 @@ import { z } from "zod";
 import { Status } from "@/enums/status";
 import { defineMutationOp, defineQueryOp } from "@/lib/core/business-op";
 import {
+  OrganizationChildrenQueryDtoSchema,
   OrganizationCreateDtoSchema,
   OrganizationPaginationQueryDtoSchema,
   OrganizationUpdateDtoSchema,
@@ -13,9 +14,10 @@ export const searchOrganizationOp = defineQueryOp({
   handler: input => organizationService.searchOrganizationsForAdmin(input),
 });
 
-export const getOrganizationTreeOp = defineQueryOp({
-  input: z.object({}).optional(),
-  handler: () => organizationService.getOrganizationTreeForAdmin(),
+export const getOrganizationChildrenOp = defineQueryOp({
+  input: OrganizationChildrenQueryDtoSchema,
+  handler: ({ parentOrgCode }) =>
+    organizationService.getOrganizationChildrenForAdmin(parentOrgCode ?? null),
 });
 
 export const getOrganizationOp = defineQueryOp({

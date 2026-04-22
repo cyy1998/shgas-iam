@@ -26,12 +26,17 @@ export const organizationsSearch = createRoute({
   },
 });
 
-export const organizationsTree = createRoute({
+export const organizationsChildren = createRoute({
   method: "get",
-  path: "/tree",
+  path: "/children",
   tags,
+  request: {
+    query: z.object({
+      parentOrgCode: z.string().optional().openapi({ example: "SR", description: "父组织编码；留空返回根组织" }),
+    }),
+  },
   responses: {
-    [HttpStatusCodes.OK]: jsonContent(createSuccessResponseSchema(z.array(OrganizationTreeNodeDtoSchema)), "完整组织树"),
+    [HttpStatusCodes.OK]: jsonContent(createSuccessResponseSchema(z.array(OrganizationTreeNodeDtoSchema)), "指定父节点的直接子组织"),
   },
 });
 

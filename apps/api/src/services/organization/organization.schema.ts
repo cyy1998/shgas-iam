@@ -76,28 +76,18 @@ export const OrganizationStatusUpdateDtoSchema = z.object({
   status: z.enum(Status),
 }).openapi("OrganizationStatusUpdateDto");
 
-interface OrganizationTreeNodeDto {
-  id: number;
-  orgCode: string;
-  orgName: string;
-  orgType: string;
-  status: number;
-  level: number;
-  parentId: number;
-  orderNum: number;
-  children: OrganizationTreeNodeDto[];
-}
+export const OrganizationTreeNodeDtoSchema = z.object({
+  id: z.number(),
+  orgCode: z.string(),
+  orgName: z.string(),
+  orgType: z.string(),
+  status: z.number(),
+  level: z.number(),
+  parentId: z.number(),
+  orderNum: z.number(),
+  isLeaf: z.boolean(),
+}).openapi("OrganizationTreeNodeDto");
 
-export const OrganizationTreeNodeDtoSchema: z.ZodType<OrganizationTreeNodeDto> = z.lazy(() =>
-  z.object({
-    id: z.number(),
-    orgCode: z.string(),
-    orgName: z.string(),
-    orgType: z.string(),
-    status: z.number(),
-    level: z.number(),
-    parentId: z.number(),
-    orderNum: z.number(),
-    children: z.array(OrganizationTreeNodeDtoSchema),
-  }),
-).openapi("OrganizationTreeNodeDto");
+export const OrganizationChildrenQueryDtoSchema = z.object({
+  parentOrgCode: z.string().nullish().openapi({ example: "SR" }),
+}).openapi("OrganizationChildrenQueryDto");

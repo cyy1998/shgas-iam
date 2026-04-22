@@ -51,37 +51,21 @@ export async function setOrganization(organizationCreateDto: OrganizationCreateD
   });
 }
 
-export async function getOrganizationTreeForAdmin(): Promise<OrganizationTreeNodeDto[]> {
-  const all = await organizationRepository.listAllOrganizationsForAdmin();
-  const nodeMap = new Map<number, OrganizationTreeNodeDto>();
-  const roots: OrganizationTreeNodeDto[] = [];
-
-  for (const o of all) {
-    nodeMap.set(o.id, {
-      id: o.id,
-      orgCode: o.orgCode,
-      orgName: o.orgName,
-      orgType: o.orgType,
-      status: o.status,
-      level: o.level,
-      parentId: o.parentId,
-      orderNum: o.orderNum,
-      children: [],
-    });
-  }
-
-  for (const o of all) {
-    const node = nodeMap.get(o.id)!;
-    const parent = nodeMap.get(o.parentId);
-    if (parent) {
-      parent.children.push(node);
-    }
-    else {
-      roots.push(node);
-    }
-  }
-
-  return roots;
+export async function getOrganizationChildrenForAdmin(
+  parentOrgCode: string | null,
+): Promise<OrganizationTreeNodeDto[]> {
+  const rows = await organizationRepository.listOrgChildrenByParentCode(parentOrgCode);
+  return rows.map(r => ({
+    id: r.id,
+    orgCode: r.orgCode,
+    orgName: r.orgName,
+    orgType: r.orgType,
+    status: r.status,
+    level: r.level,
+    parentId: r.parentId,
+    orderNum: r.orderNum,
+    isLeaf: r.childCount === 0,
+  }));
 }
 
 export async function getOrganizationDetailByCodeForAdmin(orgCode: string) {

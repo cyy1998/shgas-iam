@@ -3,7 +3,7 @@ import * as ops from "./organization.ops";
 
 export const organizationAdminRouter = router({
   search: ops.searchOrganizationOp.toTRPC(),
-  tree: ops.getOrganizationTreeOp.toTRPC(),
+  children: ops.getOrganizationChildrenOp.toTRPC(),
   detail: ops.getOrganizationOp.toTRPC(),
   create: ops.createOrganizationOp.toTRPC(),
   update: ops.updateOrganizationOp.toTRPC(),
