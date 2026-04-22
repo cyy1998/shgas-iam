@@ -1,5 +1,5 @@
 import type { PrismaTransaction } from "@/db";
-import type { UserAdminCreateDto, UserCreateDto, UserPaginationQueryDto, UserQueryDto } from "@/services/user/user.type";
+import type { UserCreateDto, UserPaginationQueryDto, UserQueryDto } from "@/services/user/user.type";
 import type { Prettify } from "@/utils/lint.util";
 import { Status } from "@enums/status";
 import { prisma } from "@/db";
@@ -389,7 +389,7 @@ export async function countActiveEmploymentsByUsername(
 }
 
 export async function setUserForAdmin(
-  userCreateDto: UserAdminCreateDto,
+  userCreateDto: UserCreateDto,
   tx: PrismaTransaction = prisma,
 ) {
   return await tx.user.create({
