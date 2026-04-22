@@ -1,8 +1,18 @@
-import type { OrganizationCreateDto, OrganizationQueryDto } from "@/services/organization/organization.type";
-import { CustomError } from "@errors/CustomError";
+import type {
+  OrganizationCreateDto,
+  OrganizationPaginationQueryDto,
+  OrganizationQueryDto,
+  OrganizationTreeNodeDto,
+  OrganizationUpdateDto,
+} from "@/services/organization/organization.type";
 import { prisma } from "@/db";
+import { Status, statusToString } from "@/enums/status";
+import { CustomError } from "@errors/CustomError";
+import { OrganizationHasChildrenError } from "@errors/OrganizationHasChildrenError";
+import { OrganizationHasEmploymentError } from "@errors/OrganizationHasEmploymentError";
 import * as organizationRepository from "@/services/organization/organization.repository";
 import { OrganizationDtoConverterSchema } from "@/services/organization/organization.schema";
+import { paginate } from "@/utils/page.util";
 
 export async function getFormalOrganizationsByCode(orgCode: string, orgLevel: number) {
   const organizations = await organizationRepository.searchFormalOrganizations(orgCode, orgLevel);
@@ -36,6 +46,101 @@ export async function setOrganization(organizationCreateDto: OrganizationCreateD
       parentOrg,
       tx,
     );
+    return true;
+  });
+}
+
+export async function getOrganizationTreeForAdmin(): Promise<OrganizationTreeNodeDto[]> {
+  const all = await organizationRepository.listAllOrganizationsForAdmin();
+  const nodeMap = new Map<number, OrganizationTreeNodeDto>();
+  const roots: OrganizationTreeNodeDto[] = [];
+
+  for (const o of all) {
+    nodeMap.set(o.id, {
+      id: o.id,
+      orgCode: o.orgCode,
+      orgName: o.orgName,
+      orgType: o.orgType,
+      status: o.status,
+      level: o.level,
+      parentId: o.parentId,
+      orderNum: o.orderNum,
+      children: [],
+    });
+  }
+
+  for (const o of all) {
+    const node = nodeMap.get(o.id)!;
+    const parent = nodeMap.get(o.parentId);
+    if (parent) {
+      parent.children.push(node);
+    }
+    else {
+      roots.push(node);
+    }
+  }
+
+  return roots;
+}
+
+export async function getOrganizationDetailByCodeForAdmin(orgCode: string) {
+  const org = await organizationRepository.getOrganizationByCodeForAdmin(orgCode);
+  if (org === null) {
+    throw new CustomError("组织不存在", 404);
+  }
+  const employmentCount = await organizationRepository.countActiveEmploymentsByOrgCode(orgCode);
+  const dto = OrganizationDtoConverterSchema.parse(org);
+  return {
+    ...dto,
+    statusText: statusToString[dto.status as Status] ?? "未知",
+    childrenCount: org.children.length,
+    employmentCount,
+  };
+}
+
+export async function searchOrganizationsForAdmin(query: OrganizationPaginationQueryDto) {
+  const orgs = await organizationRepository.searchOrganizationsForAdmin(query);
+  const vos = orgs.map((o) => {
+    const dto = OrganizationDtoConverterSchema.parse(o);
+    return {
+      ...dto,
+      statusText: statusToString[dto.status as Status] ?? "未知",
+      childrenCount: o.children.length,
+    };
+  });
+  return paginate(vos, query);
+}
+
+export async function updateOrganization(orgCode: string, data: OrganizationUpdateDto) {
+  return await prisma.$transaction(async (tx) => {
+    const existing = await organizationRepository.getOrganizationByCodeForAdmin(orgCode, tx);
+    if (existing === null) {
+      throw new CustomError("组织不存在", 404);
+    }
+    await organizationRepository.updateOrganizationByCode(orgCode, data, tx);
+    return true;
+  });
+}
+
+export async function updateOrganizationStatus(orgCode: string, status: number) {
+  return await updateOrganization(orgCode, { status });
+}
+
+export async function deleteOrganization(orgCode: string) {
+  return await prisma.$transaction(async (tx) => {
+    const existing = await organizationRepository.getOrganizationByCodeForAdmin(orgCode, tx);
+    if (existing === null) {
+      throw new CustomError("组织不存在", 404);
+    }
+    const childrenCount = await organizationRepository.countActiveChildrenByOrgCode(orgCode, tx);
+    if (childrenCount > 0) {
+      throw new OrganizationHasChildrenError();
+    }
+    const employmentCount = await organizationRepository.countActiveEmploymentsByOrgCode(orgCode, tx);
+    if (employmentCount > 0) {
+      throw new OrganizationHasEmploymentError();
+    }
+    await organizationRepository.softDeleteOrganizationByCode(orgCode, tx);
     return true;
   });
 }
