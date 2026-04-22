@@ -1,5 +1,7 @@
 import { z } from "@hono/zod-openapi";
 import { OrganizationSchema as PrismaOrganizationSchema } from "@/db/generated/schemas";
+import { Status } from "@/enums/status";
+import { createPageQuerySchema } from "../../lib/core/pagination/schema";
 
 export const OrganizationSchema = z.object(PrismaOrganizationSchema.shape);
 
@@ -50,3 +52,52 @@ export const OrganizationQueryDtoSchema = z.object({
   descendantDepths: z.array(z.number()).optional().openapi({ example: [1, 2] }),
   orgCodes: z.array(z.string()).optional().openapi({ example: ["SR", "SB"] }),
 }).openapi("OrganizationQueryDto");
+
+export const OrganizationPaginationQueryDtoSchema = createPageQuerySchema(
+  z.object({
+    fuzzyConditions: z.object({
+      text: z.string().optional().openapi({ example: "上海" }),
+    }),
+    exactConditions: z.object({
+      orgType: z.string().optional().openapi({ example: "部门" }),
+      status: z.number().optional().openapi({ example: 1 }),
+      parentOrgCode: z.string().optional().openapi({ example: "SR" }),
+    }),
+  }),
+).openapi("OrganizationPaginationQueryDto");
+
+export const OrganizationUpdateDtoSchema = z.object({
+  orgName: z.string().min(1).optional(),
+  orgType: z.string().min(1).optional(),
+  status: z.enum(Status).optional(),
+}).openapi("OrganizationUpdateDto");
+
+export const OrganizationStatusUpdateDtoSchema = z.object({
+  status: z.enum(Status),
+}).openapi("OrganizationStatusUpdateDto");
+
+type OrganizationTreeNodeDto = {
+  id: number;
+  orgCode: string;
+  orgName: string;
+  orgType: string;
+  status: number;
+  level: number;
+  parentId: number;
+  orderNum: number;
+  children: OrganizationTreeNodeDto[];
+};
+
+export const OrganizationTreeNodeDtoSchema: z.ZodType<OrganizationTreeNodeDto> = z.lazy(() =>
+  z.object({
+    id: z.number(),
+    orgCode: z.string(),
+    orgName: z.string(),
+    orgType: z.string(),
+    status: z.number(),
+    level: z.number(),
+    parentId: z.number(),
+    orderNum: z.number(),
+    children: z.array(OrganizationTreeNodeDtoSchema),
+  }),
+).openapi("OrganizationTreeNodeDto");
