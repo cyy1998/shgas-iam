@@ -8,9 +8,8 @@ import {
   type OrganizationTreeNode,
 } from "@/services/organization";
 import { PageContainer } from "@ant-design/pro-components";
-import { useRequest } from "@umijs/max";
 import { Button, Card, Col, message, Row, Spin } from "antd";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 type FormState =
   | { open: false }
@@ -34,33 +33,57 @@ export default function OrganizationsPage() {
   const [selectedCode, setSelectedCode] = useState<string | undefined>();
   const [formState, setFormState] = useState<FormState>({ open: false });
 
-  const treeReq = useRequest(() => getOrganizationTree(), {
-    onError: (e) => message.error(e instanceof Error ? e.message : "加载组织树失败"),
-  });
+  const [treeData, setTreeData] = useState<OrganizationTreeNode[]>([]);
+  const [treeLoading, setTreeLoading] = useState(true);
 
-  const detailReq = useRequest<OrganizationDetailVo, [string]>(
-    (orgCode: string) => getOrganization(orgCode),
-    {
-      manual: true,
-      onError: (e) => message.error(e instanceof Error ? e.message : "加载组织详情失败"),
-    },
-  );
+  const [detailData, setDetailData] = useState<OrganizationDetailVo | null>(null);
+  const [detailLoading, setDetailLoading] = useState(false);
+
+  const loadTree = useCallback(async () => {
+    setTreeLoading(true);
+    try {
+      const data = await getOrganizationTree();
+      setTreeData(data);
+    } catch (err) {
+      message.error(err instanceof Error ? err.message : "加载组织树失败");
+    } finally {
+      setTreeLoading(false);
+    }
+  }, []);
+
+  const loadDetail = useCallback(async (orgCode: string) => {
+    setDetailLoading(true);
+    try {
+      const data = await getOrganization(orgCode);
+      setDetailData(data);
+    } catch (err) {
+      message.error(err instanceof Error ? err.message : "加载组织详情失败");
+    } finally {
+      setDetailLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadTree();
+  }, [loadTree]);
 
   useEffect(() => {
     if (selectedCode) {
-      detailReq.run(selectedCode);
+      loadDetail(selectedCode);
+    } else {
+      setDetailData(null);
     }
-  }, [selectedCode]);
+  }, [selectedCode, loadDetail]);
 
   const selectedChildren = useMemo(() => {
-    if (!selectedCode || !treeReq.data) return [];
-    const node = findNode(treeReq.data, selectedCode);
+    if (!selectedCode) return [];
+    const node = findNode(treeData, selectedCode);
     return node?.children ?? [];
-  }, [selectedCode, treeReq.data]);
+  }, [selectedCode, treeData]);
 
   const refreshAll = () => {
-    treeReq.refresh();
-    if (selectedCode) detailReq.run(selectedCode);
+    loadTree();
+    if (selectedCode) loadDetail(selectedCode);
   };
 
   const onSuccess = () => {
@@ -89,11 +112,11 @@ export default function OrganizationsPage() {
               </Button>
             }
           >
-            {treeReq.loading ? (
+            {treeLoading ? (
               <Spin />
             ) : (
               <OrgTree
-                data={treeReq.data ?? []}
+                data={treeData}
                 selectedKey={selectedCode}
                 onSelect={(code) => setSelectedCode(code)}
               />
@@ -103,15 +126,15 @@ export default function OrganizationsPage() {
         <Col span={16}>
           <Card bodyStyle={{ padding: 0 }}>
             <OrgDetailPanel
-              loading={detailReq.loading}
-              detail={detailReq.data ?? null}
+              loading={detailLoading}
+              detail={detailData}
               childrenNodes={selectedChildren}
               onEdit={() => {
-                if (detailReq.data) {
+                if (detailData) {
                   setFormState({
                     open: true,
                     mode: "edit",
-                    initialValues: detailReq.data,
+                    initialValues: detailData,
                   });
                 }
               }}
