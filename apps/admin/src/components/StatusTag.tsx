@@ -3,10 +3,10 @@ import {
   getOrganizationStatusOptions,
   getPositionStatusOptions,
   getUserStatusOptions,
-} from "@iam/shared";
-import { Tag } from "antd";
+} from '@iam/shared';
+import { Tag } from 'antd';
 
-type Domain = "user" | "org" | "position" | "employment";
+type Domain = 'user' | 'org' | 'position' | 'employment';
 
 const optionsByDomain = {
   user: getUserStatusOptions,

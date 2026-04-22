@@ -1,28 +1,28 @@
-import StatusTag from "@/components/StatusTag";
-import UserDetailDrawer from "@/pages/users/components/UserDetailDrawer";
-import UserFormModal from "@/pages/users/components/UserFormModal";
-import { confirmResetPassword } from "@/pages/users/components/ResetPasswordModal";
+import StatusTag from '@/components/StatusTag';
+import { confirmResetPassword } from '@/pages/users/components/ResetPasswordModal';
+import UserDetailDrawer from '@/pages/users/components/UserDetailDrawer';
+import UserFormModal from '@/pages/users/components/UserFormModal';
 import {
   deleteUser,
-  type UserDetailVo,
-  type UserVo,
   searchUsers,
   updateUserStatus,
-} from "@/services/user";
+  type UserDetailVo,
+  type UserVo,
+} from '@/services/user';
 import {
   type ActionType,
   PageContainer,
   type ProColumns,
   ProTable,
-} from "@ant-design/pro-components";
-import { getUserStatusOptions } from "@iam/shared";
-import { Button, Dropdown, message, Modal } from "antd";
-import { useRef, useState } from "react";
+} from '@ant-design/pro-components';
+import { getUserStatusOptions } from '@iam/shared';
+import { Button, Dropdown, message, Modal } from 'antd';
+import { useRef, useState } from 'react';
 
 type FormState =
   | { open: false }
-  | { open: true; mode: "create" }
-  | { open: true; mode: "edit"; initialValues: UserDetailVo };
+  | { open: true; mode: 'create' }
+  | { open: true; mode: 'edit'; initialValues: UserDetailVo };
 
 export default function UsersPage() {
   const actionRef = useRef<ActionType>();
@@ -30,20 +30,19 @@ export default function UsersPage() {
   const [drawerUsername, setDrawerUsername] = useState<string | null>(null);
 
   const handleError = (err: unknown) =>
-    message.error(err instanceof Error ? err.message : "操作失败");
+    message.error(err instanceof Error ? err.message : '操作失败');
 
   const onDelete = (row: UserVo) => {
     Modal.confirm({
       title: `删除用户 ${row.name}？`,
-      content: "软删除后用户不再可见。若存在活跃雇佣将被拒绝。",
-      okType: "danger",
+      content: '软删除后用户不再可见。若存在活跃雇佣将被拒绝。',
+      okType: 'danger',
       onOk: async () => {
         try {
           await deleteUser(row.username);
-          message.success("已删除");
+          message.success('已删除');
           actionRef.current?.reload();
-        }
-        catch (err) {
+        } catch (err) {
           handleError(err);
         }
       },
@@ -53,45 +52,48 @@ export default function UsersPage() {
   const onStatusChange = async (row: UserVo, status: number) => {
     try {
       await updateUserStatus(row.username, status as 1 | 2 | 3);
-      message.success("状态已更新");
+      message.success('状态已更新');
       actionRef.current?.reload();
-    }
-    catch (err) {
+    } catch (err) {
       handleError(err);
     }
   };
 
   const columns: ProColumns<UserVo>[] = [
-    { title: "工号", dataIndex: "username", width: 120 },
-    { title: "姓名", dataIndex: "name", width: 120 },
-    { title: "手机", dataIndex: "mobile", width: 140, search: false },
-    { title: "类型", dataIndex: "userType", width: 120, search: false },
+    { title: '工号', dataIndex: 'username', width: 120 },
+    { title: '姓名', dataIndex: 'name', width: 120 },
+    { title: '手机', dataIndex: 'mobile', width: 140, search: false },
+    { title: '类型', dataIndex: 'userType', width: 120, search: false },
     {
-      title: "状态",
-      dataIndex: "status",
+      title: '状态',
+      dataIndex: 'status',
       width: 100,
-      valueType: "select",
+      valueType: 'select',
       valueEnum: Object.fromEntries(
-        getUserStatusOptions().map(o => [o.value, { text: o.label }]),
+        getUserStatusOptions().map((o) => [o.value, { text: o.label }]),
       ),
       render: (_, row) => <StatusTag domain="user" status={row.status} />,
     },
     {
-      title: "创建时间",
-      dataIndex: "createTime",
+      title: '创建时间',
+      dataIndex: 'createTime',
       width: 170,
       search: false,
       render: (_, row) => new Date(row.createTime).toLocaleString(),
     },
     {
-      title: "操作",
-      valueType: "option",
+      title: '操作',
+      valueType: 'option',
       width: 280,
       render: (_, row) => [
-        <a key="view" onClick={() => setDrawerUsername(row.username)}>查看</a>,
+        <a key="view" onClick={() => setDrawerUsername(row.username)}>
+          查看
+        </a>,
         <a
           key="reset"
-          onClick={() => confirmResetPassword({ username: row.username, name: row.name })}
+          onClick={() =>
+            confirmResetPassword({ username: row.username, name: row.name })
+          }
         >
           重置密码
         </a>,
@@ -99,8 +101,8 @@ export default function UsersPage() {
           key="status"
           menu={{
             items: getUserStatusOptions()
-              .filter(o => o.value !== row.status)
-              .map(o => ({
+              .filter((o) => o.value !== row.status)
+              .map((o) => ({
                 key: String(o.value),
                 label: `切为「${o.label}」`,
                 onClick: () => onStatusChange(row, o.value),
@@ -109,7 +111,11 @@ export default function UsersPage() {
         >
           <a>状态</a>
         </Dropdown>,
-        <a key="delete" style={{ color: "#d4380d" }} onClick={() => onDelete(row)}>
+        <a
+          key="delete"
+          style={{ color: '#d4380d' }}
+          onClick={() => onDelete(row)}
+        >
           删除
         </a>,
       ],
@@ -122,24 +128,31 @@ export default function UsersPage() {
         actionRef={actionRef}
         rowKey="username"
         columns={columns}
-        search={{ labelWidth: "auto" }}
+        search={{ labelWidth: 'auto' }}
         request={async (params) => {
           try {
-            const { current = 1, pageSize = 20, username, name, status } = params as {
+            const {
+              current = 1,
+              pageSize = 20,
+              username,
+              name,
+              status,
+            } = params as {
               current?: number;
               pageSize?: number;
               username?: string;
               name?: string;
               status?: number;
             };
-            const text = (username || name || "") as string;
+            const text = (username || name || '') as string;
             const data = await searchUsers({
               pageNum: current,
               pageSize,
               conditions: {
                 fuzzyConditions: text ? { text } : {},
                 exactConditions: {
-                  statuses: status !== undefined ? [status as 1 | 2 | 3] : undefined,
+                  statuses:
+                    status !== undefined ? [status as 1 | 2 | 3] : undefined,
                 },
               },
             });
@@ -148,8 +161,7 @@ export default function UsersPage() {
               total: data.total,
               success: true,
             };
-          }
-          catch (err) {
+          } catch (err) {
             handleError(err);
             return { data: [], total: 0, success: false };
           }
@@ -158,7 +170,7 @@ export default function UsersPage() {
           <Button
             key="create"
             type="primary"
-            onClick={() => setFormState({ open: true, mode: "create" })}
+            onClick={() => setFormState({ open: true, mode: 'create' })}
           >
             + 新建用户
           </Button>,
@@ -167,9 +179,11 @@ export default function UsersPage() {
 
       <UserFormModal
         open={formState.open}
-        mode={formState.open ? formState.mode : "create"}
+        mode={formState.open ? formState.mode : 'create'}
         initialValues={
-          formState.open && formState.mode === "edit" ? formState.initialValues : null
+          formState.open && formState.mode === 'edit'
+            ? formState.initialValues
+            : null
         }
         onOpenChange={(open) => {
           if (!open) setFormState({ open: false });
@@ -186,7 +200,7 @@ export default function UsersPage() {
         onClose={() => setDrawerUsername(null)}
         onEdit={(detail) => {
           setDrawerUsername(null);
-          setFormState({ open: true, mode: "edit", initialValues: detail });
+          setFormState({ open: true, mode: 'edit', initialValues: detail });
         }}
         onChanged={() => actionRef.current?.reload()}
       />

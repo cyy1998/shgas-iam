@@ -1,13 +1,13 @@
-import { createUser, type UserDetailVo, updateUser } from "@/services/user";
+import { createUser, updateUser, type UserDetailVo } from '@/services/user';
 import {
   ModalForm,
   ProFormSelect,
   ProFormText,
-} from "@ant-design/pro-components";
-import { getUserStatusOptions } from "@iam/shared";
-import { message, Modal } from "antd";
+} from '@ant-design/pro-components';
+import { getUserStatusOptions } from '@iam/shared';
+import { message, Modal } from 'antd';
 
-type Mode = "create" | "edit";
+type Mode = 'create' | 'edit';
 
 type Props = {
   open: boolean;
@@ -24,29 +24,29 @@ export default function UserFormModal({
   onOpenChange,
   onSuccess,
 }: Props) {
-  const isEdit = mode === "edit";
+  const isEdit = mode === 'edit';
 
   const handleError = (err: unknown) =>
-    message.error(err instanceof Error ? err.message : "操作失败");
+    message.error(err instanceof Error ? err.message : '操作失败');
 
   const showGeneratedPassword = (password: string) => {
     Modal.info({
-      title: "用户创建成功 — 初始密码",
+      title: '用户创建成功 — 初始密码',
       content: (
         <div>
           <p>请将下列密码复制并告知用户，关闭后不再显示：</p>
-          <pre style={{ fontSize: 16, background: "#f5f5f5", padding: 8 }}>
+          <pre style={{ fontSize: 16, background: '#f5f5f5', padding: 8 }}>
             {password}
           </pre>
         </div>
       ),
-      okText: "我已复制",
+      okText: '我已复制',
     });
   };
 
   return (
     <ModalForm
-      title={isEdit ? "编辑用户" : "新建用户"}
+      title={isEdit ? '编辑用户' : '新建用户'}
       open={open}
       onOpenChange={onOpenChange}
       initialValues={
@@ -54,9 +54,9 @@ export default function UserFormModal({
           ? {
               username: initialValues.username,
               name: initialValues.name,
-              mobile: initialValues.mobile ?? "",
-              wxId: initialValues.wxId ?? "",
-              userType: initialValues.userType ?? "",
+              mobile: initialValues.mobile ?? '',
+              wxId: initialValues.wxId ?? '',
+              userType: initialValues.userType ?? '',
               status: initialValues.status,
             }
           : { status: 1 }
@@ -72,9 +72,8 @@ export default function UserFormModal({
               userType: values.userType || undefined,
               status: values.status,
             });
-            message.success("更新成功");
-          }
-          else {
+            message.success('更新成功');
+          } else {
             const res = await createUser({
               username: values.username,
               name: values.name,
@@ -84,15 +83,14 @@ export default function UserFormModal({
               wxId: values.wxId || null,
               status: values.status,
             });
-            message.success("创建成功");
+            message.success('创建成功');
             if (res.generatedPassword) {
               showGeneratedPassword(res.generatedPassword);
             }
           }
           onSuccess?.();
           return true;
-        }
-        catch (err) {
+        } catch (err) {
           handleError(err);
           return false;
         }
@@ -102,18 +100,18 @@ export default function UserFormModal({
         name="username"
         label="用户名"
         disabled={isEdit}
-        rules={[{ required: true, message: "请输入用户名" }]}
+        rules={[{ required: true, message: '请输入用户名' }]}
       />
       <ProFormText
         name="name"
         label="姓名"
-        rules={[{ required: true, message: "请输入姓名" }]}
+        rules={[{ required: true, message: '请输入姓名' }]}
       />
       <ProFormText
         name="userType"
         label="用户类型"
         placeholder="例如：正式员工 / 外包 / 劳务派遣"
-        rules={[{ required: true, message: "请输入用户类型" }]}
+        rules={[{ required: true, message: '请输入用户类型' }]}
       />
       <ProFormText name="mobile" label="手机号" />
       <ProFormText name="wxId" label="微信 ID" />
@@ -127,7 +125,7 @@ export default function UserFormModal({
       <ProFormSelect
         name="status"
         label="状态"
-        options={getUserStatusOptions().map(o => ({
+        options={getUserStatusOptions().map((o) => ({
           label: o.label,
           value: o.value,
         }))}
