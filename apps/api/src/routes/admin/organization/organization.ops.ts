@@ -16,8 +16,8 @@ export const searchOrganizationOp = defineQueryOp({
 
 export const getOrganizationChildrenOp = defineQueryOp({
   input: OrganizationChildrenQueryDtoSchema,
-  handler: ({ parentOrgCode }) =>
-    organizationService.getOrganizationChildrenForAdmin(parentOrgCode ?? null),
+  handler: ({ parentOrgCode, pageNum, pageSize }) =>
+    organizationService.getOrganizationChildrenForAdmin(parentOrgCode ?? null, pageNum, pageSize),
 });
 
 export const getOrganizationOp = defineQueryOp({

@@ -53,9 +53,15 @@ export async function setOrganization(organizationCreateDto: OrganizationCreateD
 
 export async function getOrganizationChildrenForAdmin(
   parentOrgCode: string | null,
-): Promise<OrganizationTreeNodeDto[]> {
-  const rows = await organizationRepository.listOrgChildrenByParentCode(parentOrgCode);
-  return rows.map(r => ({
+  pageNum: number,
+  pageSize: number,
+) {
+  const { rows, total } = await organizationRepository.listOrgChildrenByParentCode(
+    parentOrgCode,
+    pageNum,
+    pageSize,
+  );
+  const result: OrganizationTreeNodeDto[] = rows.map(r => ({
     id: r.id,
     orgCode: r.orgCode,
     orgName: r.orgName,
@@ -66,6 +72,8 @@ export async function getOrganizationChildrenForAdmin(
     orderNum: r.orderNum,
     isLeaf: r.childCount === 0,
   }));
+  const pages = total === 0 ? 0 : Math.ceil(total / pageSize);
+  return { result, total, pageNum, pageSize, pages };
 }
 
 export async function getOrganizationDetailByCodeForAdmin(orgCode: string) {

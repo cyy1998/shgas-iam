@@ -184,11 +184,13 @@ export async function setOrganization(
 }
 
 /**
- * Admin: 返回指定父节点的直接子组织（含每个子节点的下级数量，供前端 isLeaf 判定）。
+ * Admin: 按页返回指定父节点的直接子组织。
  * parentOrgCode 为 null 时返回根组织（parentId = -1）。
  */
 export async function listOrgChildrenByParentCode(
   parentOrgCode: string | null,
+  pageNum: number,
+  pageSize: number,
   tx: PrismaTransaction = prisma,
 ) {
   let parentId: number;
@@ -201,21 +203,27 @@ export async function listOrgChildrenByParentCode(
       select: { id: true },
     });
     if (parent === null) {
-      return [];
+      return { rows: [], total: 0 };
     }
     parentId = parent.id;
   }
 
-  const rows = await tx.organization.findMany({
-    where: { isDelete: false, parentId },
-    orderBy: [
-      { orderNum: "asc" },
-      { id: "asc" },
-    ],
-  });
+  const where = { isDelete: false, parentId };
+  const [rows, total] = await Promise.all([
+    tx.organization.findMany({
+      where,
+      skip: (pageNum - 1) * pageSize,
+      take: pageSize,
+      orderBy: [
+        { orderNum: "asc" },
+        { id: "asc" },
+      ],
+    }),
+    tx.organization.count({ where }),
+  ]);
 
   if (rows.length === 0) {
-    return [];
+    return { rows: [], total };
   }
 
   const grandchildCounts = await tx.organization.groupBy({
@@ -228,10 +236,13 @@ export async function listOrgChildrenByParentCode(
   });
   const countMap = new Map(grandchildCounts.map(c => [c.parentId, c._count._all]));
 
-  return rows.map(r => ({
-    ...r,
-    childCount: countMap.get(r.id) ?? 0,
-  }));
+  return {
+    rows: rows.map(r => ({
+      ...r,
+      childCount: countMap.get(r.id) ?? 0,
+    })),
+    total,
+  };
 }
 
 /** Admin: 按 orgCode 查询（不过滤 status） */

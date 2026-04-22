@@ -2,6 +2,7 @@ import { createRoute, z } from "@hono/zod-openapi";
 import * as HttpStatusCodes from "@lib/core/http-status-codes";
 import jsonContent from "@/lib/core/openapi/helpers/json-content";
 import jsonContentRequired from "@/lib/core/openapi/helpers/json-content-required";
+import { createPageResultSchema } from "@/lib/core/pagination/schema";
 import createSuccessResponseSchema from "@/lib/core/openapi/schemas/create-success-schema";
 import {
   OrganizationCreateDtoSchema,
@@ -33,10 +34,15 @@ export const organizationsChildren = createRoute({
   request: {
     query: z.object({
       parentOrgCode: z.string().optional().openapi({ example: "SR", description: "父组织编码；留空返回根组织" }),
+      pageNum: z.coerce.number().int().positive().default(1),
+      pageSize: z.coerce.number().int().positive().max(500).default(50),
     }),
   },
   responses: {
-    [HttpStatusCodes.OK]: jsonContent(createSuccessResponseSchema(z.array(OrganizationTreeNodeDtoSchema)), "指定父节点的直接子组织"),
+    [HttpStatusCodes.OK]: jsonContent(
+      createSuccessResponseSchema(createPageResultSchema(z.array(OrganizationTreeNodeDtoSchema))),
+      "指定父节点的直接子组织（分页）",
+    ),
   },
 });
 

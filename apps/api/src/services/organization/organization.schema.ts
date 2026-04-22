@@ -90,4 +90,6 @@ export const OrganizationTreeNodeDtoSchema = z.object({
 
 export const OrganizationChildrenQueryDtoSchema = z.object({
   parentOrgCode: z.string().nullish().openapi({ example: "SR" }),
+  pageNum: z.int().positive().default(1),
+  pageSize: z.int().positive().max(500).default(50),
 }).openapi("OrganizationChildrenQueryDto");
