@@ -102,7 +102,7 @@ pnpm --filter @iam/admin format     # prettier
 - **`app.ts`** — Hono app assembly and OpenAPI registration
 - **`index.ts`** — Service entry point exporting Bun server config
 - **`env.ts`** — Environment variable validation via Zod
-- **`routes/`** — API routes grouped by access level:
+- **`routes/`** — API routes grouped by access level. Each `<group>/<domain>/` folder colocates REST + tRPC adapters for the domain:
   - `admin/` — administrative endpoints (client, employment, organization, position, user)
   - `auth/` — authentication
   - `internal/` — internal service calls
@@ -112,10 +112,16 @@ pnpm --filter @iam/admin format     # prettier
 - **`services/`** — business logic, one folder per domain. Each contains:
   - `*.service.ts` — main service functions
   - `*.repository.ts` — Prisma calls
-  - `*.schema.ts` — Zod validation schemas
+  - `*.schema.ts` — DTO Zod schemas (request input, DB-adjacent shapes)
   - `*.type.ts` — TypeScript types
+- **`trpc/`** — tRPC assembly:
+  - `trpc.ts` — `initTRPC`, `publicProcedure`, `mapCustomErrorToTRPCError`
+  - `app.router.ts` — root `appRouter` (exports `AppRouter` type for the frontend)
+  - `routers/<group>/index.ts` — thin composer that combines per-domain sub-routers imported from `routes/<group>/<domain>/<domain>.trpc.ts`
 - **`db/`** — `schema.prisma`, generated Prisma client/Zod schemas under `generated/`, raw SQL under `sql/`
-- **`lib/`** — external clients (Redis, Pino, OpenAPI helpers)
+- **`lib/`** — shared infrastructure:
+  - `clients/` — external clients (Redis, Pino)
+  - `core/` — framework glue (`create-app`, `create-router`, `business-op`, `openapi/*`, `pagination/*`, `http-status-codes`)
 - **`middlewares/`** — Hono middlewares (error handler, etc.)
 - **`utils/`** — HTTP helpers, Zod utilities, pagination
 - **`enums/`** — status codes, usage types, etc.
@@ -152,11 +158,48 @@ Copy `apps/admin/.env.example` to `apps/admin/.env.local` to override locally.
 
 1. **Route handlers**: Hono + `@hono/zod-openapi` (OpenAPI-aware, Zod-validated)
 2. **Service layer**: business logic in `*.service.ts`, DB access isolated to `*.repository.ts`
-3. **Error handling**: custom errors with `ServiceStatusCode`, caught by the `errorHandler` middleware
+3. **Error handling**: custom errors with `ServiceStatusCode`, caught by the `errorHandler` middleware; on the tRPC side `mapCustomErrorToTRPCError` (in `@/trpc/trpc`) maps `CustomError` → `TRPCError` and attaches `serviceCode` / `serviceMessage` via `errorFormatter`
 4. **Validation**: Zod schemas drive both runtime validation and TS types
 5. **Pagination**: `paginate` helper in `@/utils/page.util`
 6. **Logging**: Pino configured in `@/lib/clients/pino`, attached via middleware in `app.ts`
-7. **Typed RPC**: frontend consumes backend types via `hc<AppType>` — keep `apps/api` exports at `./src/app.ts` typed correctly
+7. **Typed RPC**: frontend consumes backend types via `hc<AppType>` (Hono REST) **and** `createTRPCClient<AppRouter>` (tRPC) — keep `apps/api` exports at `./src/app.ts` and `./src/trpc/app.router.ts` typed correctly
+
+### REST + tRPC dual-protocol endpoints (Business Op pattern)
+
+Every admin-style domain exposes its endpoints through **both** a Hono REST route (OpenAPI-documented) and a tRPC procedure. To avoid duplicating input schemas and handler logic, the two adapters share a single **Business Op** defined once per endpoint.
+
+**Factory — `@/lib/core/business-op`**
+
+```ts
+defineQueryOp({ input: ZodSchema, handler: (input) => Promise<T> })
+defineMutationOp({ input: ZodSchema, handler: (input) => Promise<T> })
+```
+
+Each returns an op object with three things:
+
+- `input` / `handler` — the raw pieces (reused by the adapters if needed)
+- `toTRPC()` — builds a `publicProcedure.input(...).query/mutation(...)` with error mapping wired in
+- `run(input)` — calls the handler and wraps the result in the REST success envelope (`resp.ok(data)`); Hono handlers call this inside `c.json(...)`
+
+**Per-domain layout (colocated under `routes/<group>/<domain>/`)**
+
+```
+routes/admin/position/
+  position.ops.ts        # source of truth: defineQueryOp / defineMutationOp
+  position.handlers.ts   # Hono adapters — each handler: c.json(await ops.xxxOp.run(c.req.valid(...)))
+  position.routes.ts     # @hono/zod-openapi route definitions (method/path/schemas)
+  position.trpc.ts       # tRPC adapter — router({ search: ops.searchPositionOp.toTRPC(), ... })
+  position.schema.ts     # VO schemas (presentation-layer, e.g. PositionVoSchema/Converter)
+  position.type.ts       # PositionRouteHandler<K> typing helper
+  position.index.ts      # Hono sub-router wiring routes↔handlers (mounted from app.ts)
+```
+
+**Important boundaries**
+
+- `*.ops.ts` lives under `routes/<group>/<domain>/`, **not** under `services/`. Ops are transport-agnostic endpoint definitions; services remain pure business logic with no Zod/route coupling.
+- DTO schemas (input/DB-adjacent) stay in `services/<domain>/*.schema.ts`; VO schemas (presentation) stay in `routes/<group>/<domain>/*.schema.ts`. Ops typically import DTOs from services and VOs from the local folder.
+- Ops may call either services or repositories directly when the logic is a thin view-model adapter (e.g. fuzzy-search + VO conversion). Keep write/business-rule logic inside services.
+- The tRPC root composer (`trpc/routers/<group>/index.ts`) only imports the per-domain `*.trpc.ts` — never reaches into services or ops itself.
 
 ### Data Flow
 
@@ -230,11 +273,19 @@ Serve `apps/admin/dist` via Nginx/CDN and proxy `/admin`, `/auth`, `/public`, `/
 
 ### Add a new API endpoint
 
-1. Add/extend Zod schema in `apps/api/src/services/<domain>/*.schema.ts`
+1. Add/extend the DTO Zod schema in `apps/api/src/services/<domain>/*.schema.ts`
 2. Implement service logic in `*.service.ts`; add repository methods if new DB access is required
-3. Add the route handler under `apps/api/src/routes/<group>/`
-4. If it is a new route group, mount it in `apps/api/src/app.ts`
-5. Frontend can call the endpoint via `apiClient.<path>.$get/$post(...)` with full type inference
+3. Add/extend the VO schema in `apps/api/src/routes/<group>/<domain>/<domain>.schema.ts` (if the response needs reshaping)
+4. Define the Business Op in `apps/api/src/routes/<group>/<domain>/<domain>.ops.ts` via `defineQueryOp` / `defineMutationOp` (from `@/lib/core/business-op`)
+5. Wire the REST side:
+   - Add the OpenAPI route in `<domain>.routes.ts`
+   - Add a one-line handler in `<domain>.handlers.ts`: `c => c.json(await ops.xxxOp.run(c.req.valid(...)))`
+   - Mount it in `<domain>.index.ts` via `.openapi(routes.x, handlers.x)`
+6. Wire the tRPC side: add `x: ops.xxxOp.toTRPC()` to the router in `<domain>.trpc.ts`
+7. If it is a new route group, mount the Hono sub-router in `apps/api/src/app.ts` and add the group composer under `apps/api/src/trpc/routers/<group>/`
+8. Frontend:
+   - REST → `apiClient.<path>.$get/$post(...)` (typed via `AppType`)
+   - tRPC → `trpcClient.<group>.<domain>.<op>.query/mutate(...)` (typed via `AppRouter`)
 
 ### Modify the database schema
 

@@ -1,5 +1,5 @@
 import type { PositionRouteHandler } from "./position.type";
-import * as ops from "@/services/position/position.ops";
+import * as ops from "./position.ops";
 
 export const positionsSearch: PositionRouteHandler<"positionsSearch"> = async c =>
   c.json(await ops.searchPositionOp.run(c.req.valid("json")));
