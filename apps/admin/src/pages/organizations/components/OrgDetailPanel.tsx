@@ -1,6 +1,7 @@
 import StatusTag from "@/components/StatusTag";
 import {
   deleteOrganization,
+  type OrganizationChildrenPage,
   type OrganizationDetailVo,
   type OrganizationTreeNode,
   updateOrganizationStatus,
@@ -13,7 +14,9 @@ import type { ColumnsType } from "antd/es/table";
 type Props = {
   loading: boolean;
   detail: OrganizationDetailVo | null;
-  childrenNodes: OrganizationTreeNode[];
+  childrenPage: OrganizationChildrenPage | null;
+  childrenLoading: boolean;
+  onChildrenPageChange: (pageNum: number, pageSize: number) => void;
   onEdit: () => void;
   onCreateChild: () => void;
   onSelectChild: (orgCode: string) => void;
@@ -40,7 +43,9 @@ const childColumns = (onSelectChild: (orgCode: string) => void): ColumnsType<Org
 export default function OrgDetailPanel({
   loading,
   detail,
-  childrenNodes,
+  childrenPage,
+  childrenLoading,
+  onChildrenPageChange,
   onEdit,
   onCreateChild,
   onSelectChild,
@@ -167,13 +172,32 @@ export default function OrgDetailPanel({
       />
 
       <div style={{ marginTop: 24 }}>
-        <h4>下级组织</h4>
+        <h4>
+          下级组织
+          {childrenPage && childrenPage.total > 0 && (
+            <span style={{ color: "#999", fontSize: 12, marginLeft: 8 }}>
+              共
+              {" "}
+              {childrenPage.total}
+              {" "}
+              条
+            </span>
+          )}
+        </h4>
         <Table<OrganizationTreeNode>
           rowKey="orgCode"
           size="small"
-          pagination={false}
+          loading={childrenLoading}
           columns={childColumns(onSelectChild)}
-          dataSource={childrenNodes}
+          dataSource={childrenPage?.result ?? []}
+          pagination={{
+            current: childrenPage?.pageNum ?? 1,
+            pageSize: childrenPage?.pageSize ?? 20,
+            total: childrenPage?.total ?? 0,
+            showSizeChanger: true,
+            pageSizeOptions: [10, 20, 50, 100],
+            onChange: (page, size) => onChildrenPageChange(page, size),
+          }}
           locale={{ emptyText: "无下级组织" }}
         />
       </div>

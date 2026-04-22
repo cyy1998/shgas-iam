@@ -5,8 +5,8 @@ import OrgTree from "@/pages/organizations/components/OrgTree";
 import {
   getOrganization,
   getOrganizationChildren,
+  type OrganizationChildrenPage,
   type OrganizationDetailVo,
-  type OrganizationTreeNode,
 } from "@/services/organization";
 import { PageContainer } from "@ant-design/pro-components";
 import { Button, Card, Col, message, Row, Space } from "antd";
@@ -18,30 +18,32 @@ type FormState =
   | { open: true; mode: "create-child"; parentCode: string }
   | { open: true; mode: "edit"; initialValues: OrganizationDetailVo };
 
+const DETAIL_CHILDREN_DEFAULT_SIZE = 20;
+
 export default function OrganizationsPage() {
   const [selectedCode, setSelectedCode] = useState<string | undefined>();
   const [formState, setFormState] = useState<FormState>({ open: false });
 
   const [detailData, setDetailData] = useState<OrganizationDetailVo | null>(null);
-  const [detailChildren, setDetailChildren] = useState<OrganizationTreeNode[]>([]);
   const [detailLoading, setDetailLoading] = useState(false);
+  const [detailChildrenPage, setDetailChildrenPage] = useState<OrganizationChildrenPage | null>(null);
+  const [detailChildrenLoading, setDetailChildrenLoading] = useState(false);
+  const [detailChildrenPageNum, setDetailChildrenPageNum] = useState(1);
+  const [detailChildrenPageSize, setDetailChildrenPageSize] = useState(DETAIL_CHILDREN_DEFAULT_SIZE);
 
   const [treeReloadSeq, setTreeReloadSeq] = useState(0);
 
-  const loadChildren = useCallback(
-    (parentOrgCode: string | null) => getOrganizationChildren(parentOrgCode),
+  const loadChildrenPage = useCallback(
+    (parentOrgCode: string | null, pageNum: number) =>
+      getOrganizationChildren(parentOrgCode, pageNum, 50),
     [],
   );
 
   const loadDetail = useCallback(async (orgCode: string) => {
     setDetailLoading(true);
     try {
-      const [d, children] = await Promise.all([
-        getOrganization(orgCode),
-        getOrganizationChildren(orgCode),
-      ]);
+      const d = await getOrganization(orgCode);
       setDetailData(d);
-      setDetailChildren(children);
     }
     catch (err) {
       message.error(err instanceof Error ? err.message : "加载组织详情失败");
@@ -51,19 +53,51 @@ export default function OrganizationsPage() {
     }
   }, []);
 
+  const loadDetailChildren = useCallback(
+    async (orgCode: string, pageNum: number, pageSize: number) => {
+      setDetailChildrenLoading(true);
+      try {
+        const page = await getOrganizationChildren(orgCode, pageNum, pageSize);
+        setDetailChildrenPage(page);
+      }
+      catch (err) {
+        message.error(err instanceof Error ? err.message : "加载下级组织失败");
+      }
+      finally {
+        setDetailChildrenLoading(false);
+      }
+    },
+    [],
+  );
+
+  // 切换选中组织：重置分页并加载 detail + 下级首页
   useEffect(() => {
-    if (selectedCode) {
-      loadDetail(selectedCode);
-    }
-    else {
+    if (!selectedCode) {
       setDetailData(null);
-      setDetailChildren([]);
+      setDetailChildrenPage(null);
+      setDetailChildrenPageNum(1);
+      setDetailChildrenPageSize(DETAIL_CHILDREN_DEFAULT_SIZE);
+      return;
     }
-  }, [selectedCode, loadDetail]);
+    setDetailChildrenPageNum(1);
+    setDetailChildrenPageSize(DETAIL_CHILDREN_DEFAULT_SIZE);
+    loadDetail(selectedCode);
+    loadDetailChildren(selectedCode, 1, DETAIL_CHILDREN_DEFAULT_SIZE);
+  }, [selectedCode, loadDetail, loadDetailChildren]);
+
+  const onDetailChildrenPageChange = (pageNum: number, pageSize: number) => {
+    if (!selectedCode) return;
+    setDetailChildrenPageNum(pageNum);
+    setDetailChildrenPageSize(pageSize);
+    loadDetailChildren(selectedCode, pageNum, pageSize);
+  };
 
   const refreshAll = () => {
     setTreeReloadSeq(s => s + 1);
-    if (selectedCode) loadDetail(selectedCode);
+    if (selectedCode) {
+      loadDetail(selectedCode);
+      loadDetailChildren(selectedCode, detailChildrenPageNum, detailChildrenPageSize);
+    }
   };
 
   const onSuccess = () => {
@@ -95,7 +129,7 @@ export default function OrganizationsPage() {
             <Space direction="vertical" size="middle" style={{ width: "100%" }}>
               <OrgSearchPanel onSelect={code => setSelectedCode(code)} />
               <OrgTree
-                loadChildren={loadChildren}
+                loadChildrenPage={loadChildrenPage}
                 selectedKey={selectedCode}
                 onSelect={code => setSelectedCode(code)}
                 reloadSeq={treeReloadSeq}
@@ -108,7 +142,9 @@ export default function OrganizationsPage() {
             <OrgDetailPanel
               loading={detailLoading}
               detail={detailData}
-              childrenNodes={detailChildren}
+              childrenPage={detailChildrenPage}
+              childrenLoading={detailChildrenLoading}
+              onChildrenPageChange={onDetailChildrenPageChange}
               onEdit={() => {
                 if (detailData) {
                   setFormState({
