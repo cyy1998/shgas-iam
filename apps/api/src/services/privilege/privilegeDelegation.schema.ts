@@ -90,4 +90,6 @@ export const PrivilegeDelegationCreateDtoSchema = PrivilegeDelegationSchema.omit
   orgCode: z.string().describe("组织编码").openapi({ example: "SR23" }),
   privilegeCodes: z.array(z.string()).describe("权限编码列表").openapi({ example: ["tender:flow:SR_CZLX"] }),
   privilegeIds: z.array(z.number()).describe("权限ID列表(非必填)").optional().openapi({ example: [1, 2] }),
+  startTime: z.coerce.date().describe("授权开始时间").openapi({ example: "2024-01-01T00:00:00Z" }),
+  endTime: z.coerce.date().describe("授权结束时间").openapi({ example: "2024-01-31T23:59:59Z" }),
 }).openapi("PrivilegeDelegationCreateDto");
