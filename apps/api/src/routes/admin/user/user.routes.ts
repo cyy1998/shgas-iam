@@ -5,66 +5,123 @@ import jsonContentRequired from "@/lib/core/openapi/helpers/json-content-require
 import createSuccessResponseSchema from "@/lib/core/openapi/schemas/create-success-schema";
 import { createPageResultSchema } from "@/lib/core/pagination/schema";
 import { UserDetailVoSchema, UserVoSchema } from "@/routes/admin/user/user.schema";
-import { UserCreateDtoSchema, UserPaginationQueryDtoSchema } from "@/services/user/user.schema";
+import {
+  UserAdminCreateDtoSchema,
+  UserPaginationQueryDtoSchema,
+  UserStatusUpdateDtoSchema,
+  UserUpdateDtoSchema,
+} from "@/services/user/user.schema";
 
-const routePrefix = "";
 const tags = ["Admin/User"];
 
 export const usersSearch = createRoute({
   method: "post",
-  path: `${routePrefix}/search`,
+  path: "/search",
   tags,
   request: {
-    body: jsonContentRequired(UserPaginationQueryDtoSchema, "管理员用户查询"),
+    body: jsonContentRequired(UserPaginationQueryDtoSchema, "用户分页查询参数"),
   },
   responses: {
-    [HttpStatusCodes.OK]: jsonContent(createSuccessResponseSchema(createPageResultSchema(UserVoSchema)), "搜索结果"),
+    [HttpStatusCodes.OK]: jsonContent(
+      createSuccessResponseSchema(createPageResultSchema(z.array(UserVoSchema))),
+      "分页用户列表",
+    ),
   },
 });
 
 export const usersDetail = createRoute({
   method: "get",
-  path: `${routePrefix}/detail`,
+  path: "/:username",
   tags,
   request: {
-    query: z.object({
-      username: z.string().openapi({ example: "123456" }),
-    }),
+    params: z.object({ username: z.string().openapi({ example: "138550" }) }),
   },
   responses: {
-    [HttpStatusCodes.OK]: jsonContent(createSuccessResponseSchema(UserDetailVoSchema), "用户详情"),
+    [HttpStatusCodes.OK]: jsonContent(
+      createSuccessResponseSchema(UserDetailVoSchema),
+      "用户详情（含雇佣/角色/权限聚合）",
+    ),
   },
 });
 
-export const passwordReset = createRoute({
+export const usersCreate = createRoute({
   method: "post",
-  path: `${routePrefix}/reset-password`,
+  path: "/",
   tags,
   request: {
-    body: jsonContentRequired(z.object({ username: z.string().openapi({ example: "138550" }) }), "用户名"),
+    body: jsonContentRequired(UserAdminCreateDtoSchema, "创建用户参数（密码可留空由后端生成）"),
   },
   responses: {
-    [HttpStatusCodes.OK]: jsonContent(createSuccessResponseSchema(z.string()), "用户新密码"),
+    [HttpStatusCodes.OK]: jsonContent(
+      createSuccessResponseSchema(z.object({
+        username: z.string(),
+        generatedPassword: z.string().nullable().openapi({
+          description: "若请求未提供 password，则返回后端生成的明文密码；否则为 null",
+        }),
+      })),
+      "用户创建成功",
+    ),
   },
 });
 
-export const passwordGenerate = createRoute({
-  method: "post",
-  path: `${routePrefix}/generate-password`,
+export const usersUpdate = createRoute({
+  method: "put",
+  path: "/:username",
   tags,
+  request: {
+    params: z.object({ username: z.string() }),
+    body: jsonContentRequired(UserUpdateDtoSchema, "用户更新参数"),
+  },
   responses: {
-    [HttpStatusCodes.OK]: jsonContent(createSuccessResponseSchema(z.string()), "用户新密码"),
+    [HttpStatusCodes.OK]: jsonContent(createSuccessResponseSchema(z.boolean()), "更新成功"),
   },
 });
 
-export const usersSet = createRoute({
-  method: "post",
-  path: `${routePrefix}/set`,
+export const usersStatusUpdate = createRoute({
+  method: "patch",
+  path: "/:username/status",
   tags,
   request: {
-    body: jsonContentRequired(z.object({ data: z.array(UserCreateDtoSchema) }), "用户创建参数"),
+    params: z.object({ username: z.string() }),
+    body: jsonContentRequired(UserStatusUpdateDtoSchema, "用户状态变更"),
   },
   responses: {
-    [HttpStatusCodes.OK]: jsonContent(createSuccessResponseSchema(z.boolean()), "创建结果"),
+    [HttpStatusCodes.OK]: jsonContent(createSuccessResponseSchema(z.boolean()), "状态更新成功"),
+  },
+});
+
+export const usersDelete = createRoute({
+  method: "delete",
+  path: "/:username",
+  tags,
+  request: {
+    params: z.object({ username: z.string() }),
+  },
+  responses: {
+    [HttpStatusCodes.OK]: jsonContent(createSuccessResponseSchema(z.boolean()), "软删除成功"),
+  },
+});
+
+export const usersResetPassword = createRoute({
+  method: "post",
+  path: "/:username/reset-password",
+  tags,
+  request: {
+    params: z.object({ username: z.string() }),
+  },
+  responses: {
+    [HttpStatusCodes.OK]: jsonContent(
+      createSuccessResponseSchema(z.string().openapi({ example: "Z8m2xq7W", description: "新的明文密码" })),
+      "密码已重置",
+    ),
+  },
+});
+
+export const usersGeneratePassword = createRoute({
+  method: "post",
+  path: "/generate-password",
+  tags,
+  responses: {
+    [HttpStatusCodes.OK]: jsonContent(createSuccessResponseSchema(z.string()), "候选密码"),
   },
 });
