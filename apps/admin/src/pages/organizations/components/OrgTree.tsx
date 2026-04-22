@@ -1,13 +1,16 @@
 import type { OrganizationTreeNode } from "@/services/organization";
 import { getOrganizationStatusOptions } from "@iam/shared";
-import { Badge, Input, Tree } from "antd";
+import { Badge, Empty, Spin, Tree } from "antd";
 import type { DataNode } from "antd/es/tree";
-import { useMemo, useState } from "react";
+import type { ReactNode } from "react";
+import { useCallback, useEffect, useState } from "react";
 
 type Props = {
-  data: OrganizationTreeNode[];
+  loadChildren: (parentOrgCode: string | null) => Promise<OrganizationTreeNode[]>;
   selectedKey?: string;
   onSelect: (orgCode: string, node: OrganizationTreeNode) => void;
+  /** 调用方变更此值（递增）以触发整树重置（创建/删除后刷新） */
+  reloadSeq?: number;
 };
 
 type TreeDataNode = DataNode & {
@@ -16,17 +19,15 @@ type TreeDataNode = DataNode & {
 };
 
 const statusColorMap = Object.fromEntries(
-  getOrganizationStatusOptions().map((o) => [
+  getOrganizationStatusOptions().map(o => [
     o.value,
     o.color === "success" ? "green" : o.color === "warning" ? "gold" : "default",
   ]),
 ) as Record<number, "green" | "gold" | "default">;
 
-function toDataNode(node: OrganizationTreeNode, keyword: string): TreeDataNode {
-  const matched = keyword
-    && (node.orgName.includes(keyword) || node.orgCode.includes(keyword));
-  const title = (
-    <span style={{ fontWeight: matched ? 600 : 400 }}>
+function renderTitle(node: OrganizationTreeNode): ReactNode {
+  return (
+    <span>
       <Badge color={statusColorMap[node.status] ?? "default"} />
       {" "}
       {node.orgName}
@@ -37,91 +38,84 @@ function toDataNode(node: OrganizationTreeNode, keyword: string): TreeDataNode {
       </span>
     </span>
   );
+}
+
+function toDataNode(node: OrganizationTreeNode): TreeDataNode {
   return {
     key: node.orgCode,
-    title,
+    title: renderTitle(node),
+    isLeaf: node.isLeaf,
     orgCode: node.orgCode,
     raw: node,
-    children: node.children.map((c: OrganizationTreeNode) => toDataNode(c, keyword)),
   };
 }
 
-function collectMatchedKeys(
-  nodes: OrganizationTreeNode[],
-  keyword: string,
-  acc: string[] = [],
-): string[] {
-  for (const n of nodes) {
-    const hit = n.orgName.includes(keyword) || n.orgCode.includes(keyword);
-    if (hit) {
-      acc.push(n.orgCode);
+function setNodeChildren(
+  tree: TreeDataNode[],
+  parentKey: string,
+  children: TreeDataNode[],
+): TreeDataNode[] {
+  return tree.map((n) => {
+    if (n.key === parentKey) {
+      return { ...n, children };
     }
-    if (n.children.length > 0) {
-      collectMatchedKeys(n.children, keyword, acc);
+    if (n.children) {
+      return {
+        ...n,
+        children: setNodeChildren(n.children as TreeDataNode[], parentKey, children),
+      };
     }
-  }
-  return acc;
+    return n;
+  });
 }
 
-function collectAncestorKeys(
-  nodes: OrganizationTreeNode[],
-  targets: Set<string>,
-  path: string[] = [],
-  acc: Set<string> = new Set(),
-): Set<string> {
-  for (const n of nodes) {
-    const nextPath = [...path, n.orgCode];
-    if (targets.has(n.orgCode)) {
-      path.forEach((k) => acc.add(k));
-    }
-    if (n.children.length > 0) {
-      collectAncestorKeys(n.children, targets, nextPath, acc);
-    }
-  }
-  return acc;
-}
-
-export default function OrgTree({ data, selectedKey, onSelect }: Props) {
-  const [keyword, setKeyword] = useState("");
+export default function OrgTree({ loadChildren, selectedKey, onSelect, reloadSeq = 0 }: Props) {
+  const [treeData, setTreeData] = useState<TreeDataNode[]>([]);
+  const [loading, setLoading] = useState(true);
   const [expandedKeys, setExpandedKeys] = useState<string[]>([]);
-  const [autoExpand, setAutoExpand] = useState(true);
 
-  const treeData = useMemo(() => data.map((n) => toDataNode(n, keyword)), [data, keyword]);
+  const reloadRoots = useCallback(async () => {
+    setLoading(true);
+    try {
+      const roots = await loadChildren(null);
+      setTreeData(roots.map(toDataNode));
+      setExpandedKeys([]);
+    }
+    finally {
+      setLoading(false);
+    }
+  }, [loadChildren]);
 
-  const computedExpanded = useMemo(() => {
-    if (!keyword) return expandedKeys;
-    const matched = new Set(collectMatchedKeys(data, keyword));
-    const ancestors = collectAncestorKeys(data, matched);
-    return Array.from(new Set([...ancestors, ...matched]));
-  }, [keyword, data, expandedKeys]);
+  useEffect(() => {
+    reloadRoots();
+  }, [reloadRoots, reloadSeq]);
+
+  const onLoadData = async (node: TreeDataNode) => {
+    const children = await loadChildren(node.orgCode);
+    setTreeData(prev => setNodeChildren(prev, node.orgCode, children.map(toDataNode)));
+  };
+
+  if (loading) {
+    return <Spin />;
+  }
+
+  if (treeData.length === 0) {
+    return <Empty description="暂无组织数据" />;
+  }
 
   return (
-    <div>
-      <Input.Search
-        placeholder="搜索组织名称或编码"
-        allowClear
-        onChange={(e) => {
-          setKeyword(e.target.value);
-          setAutoExpand(true);
-        }}
-        style={{ marginBottom: 8 }}
-      />
-      <Tree<TreeDataNode>
-        blockNode
-        showLine
-        treeData={treeData}
-        selectedKeys={selectedKey ? [selectedKey] : []}
-        expandedKeys={computedExpanded}
-        autoExpandParent={autoExpand}
-        onExpand={(keys) => {
-          setExpandedKeys(keys as string[]);
-          setAutoExpand(false);
-        }}
-        onSelect={(_, info) => {
-          const node = info.node as TreeDataNode;
-          onSelect(node.orgCode, node.raw);
-        }}
-      />
-    </div>
+    <Tree<TreeDataNode>
+      blockNode
+      showLine
+      treeData={treeData}
+      selectedKeys={selectedKey ? [selectedKey] : []}
+      expandedKeys={expandedKeys}
+      loadData={onLoadData}
+      onExpand={keys => setExpandedKeys(keys as string[])}
+      onSelect={(_, info) => {
+        const node = info.node as TreeDataNode;
+        onSelect(node.orgCode, node.raw);
+      }}
+    />
   );
 }

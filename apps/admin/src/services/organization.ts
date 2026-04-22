@@ -6,7 +6,7 @@ import { apiClient } from "@/lib/api-client";
 type AdminOrgOutputs = inferRouterOutputs<AppRouter>["admin"]["organization"];
 export type OrganizationVo = AdminOrgOutputs["search"]["result"][number];
 export type OrganizationDetailVo = AdminOrgOutputs["detail"];
-export type OrganizationTreeNode = AdminOrgOutputs["tree"][number];
+export type OrganizationTreeNode = AdminOrgOutputs["children"][number];
 
 export type OrganizationSearchParams = {
   pageNum: number;
@@ -25,8 +25,8 @@ export function searchOrganizations(params: OrganizationSearchParams) {
   return apiClient.admin.organization.search.query(params);
 }
 
-export function getOrganizationTree() {
-  return apiClient.admin.organization.tree.query();
+export function getOrganizationChildren(parentOrgCode: string | null = null) {
+  return apiClient.admin.organization.children.query({ parentOrgCode });
 }
 
 export function getOrganization(orgCode: string) {

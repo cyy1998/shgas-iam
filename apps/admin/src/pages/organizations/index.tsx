@@ -1,15 +1,16 @@
 import OrgDetailPanel from "@/pages/organizations/components/OrgDetailPanel";
 import OrgFormModal from "@/pages/organizations/components/OrgFormModal";
+import OrgSearchPanel from "@/pages/organizations/components/OrgSearchPanel";
 import OrgTree from "@/pages/organizations/components/OrgTree";
 import {
   getOrganization,
-  getOrganizationTree,
+  getOrganizationChildren,
   type OrganizationDetailVo,
   type OrganizationTreeNode,
 } from "@/services/organization";
 import { PageContainer } from "@ant-design/pro-components";
-import { Button, Card, Col, message, Row, Spin } from "antd";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { Button, Card, Col, message, Row, Space } from "antd";
+import { useCallback, useEffect, useState } from "react";
 
 type FormState =
   | { open: false }
@@ -17,72 +18,51 @@ type FormState =
   | { open: true; mode: "create-child"; parentCode: string }
   | { open: true; mode: "edit"; initialValues: OrganizationDetailVo };
 
-function findNode(
-  nodes: OrganizationTreeNode[],
-  orgCode: string,
-): OrganizationTreeNode | undefined {
-  for (const n of nodes) {
-    if (n.orgCode === orgCode) return n;
-    const child = findNode(n.children, orgCode);
-    if (child) return child;
-  }
-  return undefined;
-}
-
 export default function OrganizationsPage() {
   const [selectedCode, setSelectedCode] = useState<string | undefined>();
   const [formState, setFormState] = useState<FormState>({ open: false });
 
-  const [treeData, setTreeData] = useState<OrganizationTreeNode[]>([]);
-  const [treeLoading, setTreeLoading] = useState(true);
-
   const [detailData, setDetailData] = useState<OrganizationDetailVo | null>(null);
+  const [detailChildren, setDetailChildren] = useState<OrganizationTreeNode[]>([]);
   const [detailLoading, setDetailLoading] = useState(false);
 
-  const loadTree = useCallback(async () => {
-    setTreeLoading(true);
-    try {
-      const data = await getOrganizationTree();
-      setTreeData(data);
-    } catch (err) {
-      message.error(err instanceof Error ? err.message : "加载组织树失败");
-    } finally {
-      setTreeLoading(false);
-    }
-  }, []);
+  const [treeReloadSeq, setTreeReloadSeq] = useState(0);
+
+  const loadChildren = useCallback(
+    (parentOrgCode: string | null) => getOrganizationChildren(parentOrgCode),
+    [],
+  );
 
   const loadDetail = useCallback(async (orgCode: string) => {
     setDetailLoading(true);
     try {
-      const data = await getOrganization(orgCode);
-      setDetailData(data);
-    } catch (err) {
+      const [d, children] = await Promise.all([
+        getOrganization(orgCode),
+        getOrganizationChildren(orgCode),
+      ]);
+      setDetailData(d);
+      setDetailChildren(children);
+    }
+    catch (err) {
       message.error(err instanceof Error ? err.message : "加载组织详情失败");
-    } finally {
+    }
+    finally {
       setDetailLoading(false);
     }
   }, []);
 
   useEffect(() => {
-    loadTree();
-  }, [loadTree]);
-
-  useEffect(() => {
     if (selectedCode) {
       loadDetail(selectedCode);
-    } else {
+    }
+    else {
       setDetailData(null);
+      setDetailChildren([]);
     }
   }, [selectedCode, loadDetail]);
 
-  const selectedChildren = useMemo(() => {
-    if (!selectedCode) return [];
-    const node = findNode(treeData, selectedCode);
-    return node?.children ?? [];
-  }, [selectedCode, treeData]);
-
   const refreshAll = () => {
-    loadTree();
+    setTreeReloadSeq(s => s + 1);
     if (selectedCode) loadDetail(selectedCode);
   };
 
@@ -92,8 +72,8 @@ export default function OrganizationsPage() {
   };
 
   const onDetailChanged = () => {
-    refreshAll();
     setSelectedCode(undefined);
+    setTreeReloadSeq(s => s + 1);
   };
 
   return (
@@ -112,15 +92,15 @@ export default function OrganizationsPage() {
               </Button>
             }
           >
-            {treeLoading ? (
-              <Spin />
-            ) : (
+            <Space direction="vertical" size="middle" style={{ width: "100%" }}>
+              <OrgSearchPanel onSelect={code => setSelectedCode(code)} />
               <OrgTree
-                data={treeData}
+                loadChildren={loadChildren}
                 selectedKey={selectedCode}
-                onSelect={(code) => setSelectedCode(code)}
+                onSelect={code => setSelectedCode(code)}
+                reloadSeq={treeReloadSeq}
               />
-            )}
+            </Space>
           </Card>
         </Col>
         <Col span={16}>
@@ -128,7 +108,7 @@ export default function OrganizationsPage() {
             <OrgDetailPanel
               loading={detailLoading}
               detail={detailData}
-              childrenNodes={selectedChildren}
+              childrenNodes={detailChildren}
               onEdit={() => {
                 if (detailData) {
                   setFormState({
@@ -147,7 +127,7 @@ export default function OrganizationsPage() {
                   });
                 }
               }}
-              onSelectChild={(code) => setSelectedCode(code)}
+              onSelectChild={code => setSelectedCode(code)}
               onChanged={onDetailChanged}
             />
           </Card>
