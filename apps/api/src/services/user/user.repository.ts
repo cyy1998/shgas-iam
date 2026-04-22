@@ -1,5 +1,5 @@
 import type { PrismaTransaction } from "@/db";
-import type { UserCreateDto, UserPaginationQueryDto, UserQueryDto } from "@/services/user/user.type";
+import type { UserAdminCreateDto, UserCreateDto, UserPaginationQueryDto, UserQueryDto } from "@/services/user/user.type";
 import type { Prettify } from "@/utils/lint.util";
 import { Status } from "@enums/status";
 import { prisma } from "@/db";
@@ -204,6 +204,9 @@ export async function searchUsersFuzzy(
       wxId: {
         in: userPaginationQueryDto.conditions.exactConditions.wxIds,
       },
+      status: {
+        in: userPaginationQueryDto.conditions.exactConditions.statuses,
+      },
       isDelete: false,
     },
   });
@@ -269,5 +272,127 @@ export async function getOtherUsersByOrgAndAllSub(userId: number, orgCode: strin
       status: Status.Enable,
       isDelete: false,
     },
+  });
+}
+
+export async function getUserByUsernameForAdmin(
+  username: string,
+  tx: PrismaTransaction = prisma,
+) {
+  return await tx.user.findFirst({
+    where: {
+      username,
+      isDelete: false,
+    },
+  });
+}
+
+export async function countUsersFuzzy(
+  userPaginationQueryDto: UserPaginationQueryDto,
+  tx: PrismaTransaction = prisma,
+) {
+  return await tx.user.count({
+    where: {
+      OR: userPaginationQueryDto.conditions.fuzzyConditions.text !== undefined
+        ? [
+            { username: { contains: userPaginationQueryDto.conditions.fuzzyConditions.text } },
+            { name: { contains: userPaginationQueryDto.conditions.fuzzyConditions.text } },
+            { mobile: { contains: userPaginationQueryDto.conditions.fuzzyConditions.text } },
+            { wxId: { contains: userPaginationQueryDto.conditions.fuzzyConditions.text } },
+          ]
+        : undefined,
+      userType: { in: userPaginationQueryDto.conditions.exactConditions.userTypes },
+      username: { in: userPaginationQueryDto.conditions.exactConditions.usernames },
+      mobile: { in: userPaginationQueryDto.conditions.exactConditions.phones },
+      wxId: { in: userPaginationQueryDto.conditions.exactConditions.wxIds },
+      status: { in: userPaginationQueryDto.conditions.exactConditions.statuses },
+      isDelete: false,
+    },
+  });
+}
+
+export async function searchUsersFuzzyPaged(
+  userPaginationQueryDto: UserPaginationQueryDto,
+  tx: PrismaTransaction = prisma,
+) {
+  const { pageNum, pageSize } = userPaginationQueryDto;
+  const where = {
+    OR: userPaginationQueryDto.conditions.fuzzyConditions.text !== undefined
+      ? [
+          { username: { contains: userPaginationQueryDto.conditions.fuzzyConditions.text } },
+          { name: { contains: userPaginationQueryDto.conditions.fuzzyConditions.text } },
+          { mobile: { contains: userPaginationQueryDto.conditions.fuzzyConditions.text } },
+          { wxId: { contains: userPaginationQueryDto.conditions.fuzzyConditions.text } },
+        ]
+      : undefined,
+    userType: { in: userPaginationQueryDto.conditions.exactConditions.userTypes },
+    username: { in: userPaginationQueryDto.conditions.exactConditions.usernames },
+    mobile: { in: userPaginationQueryDto.conditions.exactConditions.phones },
+    wxId: { in: userPaginationQueryDto.conditions.exactConditions.wxIds },
+    status: { in: userPaginationQueryDto.conditions.exactConditions.statuses },
+    isDelete: false,
+  };
+  const [rows, total] = await Promise.all([
+    tx.user.findMany({
+      where,
+      skip: (pageNum - 1) * pageSize,
+      take: pageSize,
+      orderBy: [{ orderNum: "asc" }, { id: "asc" }],
+    }),
+    tx.user.count({ where }),
+  ]);
+  return { rows, total };
+}
+
+export async function updateUserByUsername(
+  username: string,
+  data: {
+    name?: string;
+    mobile?: string | null;
+    wxId?: string | null;
+    userType?: string;
+    status?: number;
+    orderNum?: number;
+  },
+  tx: PrismaTransaction = prisma,
+) {
+  return await tx.user.update({
+    where: { username },
+    data,
+  });
+}
+
+export async function softDeleteUserByUsername(
+  username: string,
+  tx: PrismaTransaction = prisma,
+) {
+  return await tx.user.update({
+    where: { username },
+    data: { isDelete: true },
+  });
+}
+
+export async function countActiveEmploymentsByUsername(
+  username: string,
+  tx: PrismaTransaction = prisma,
+) {
+  return await tx.employment.count({
+    where: {
+      isDelete: false,
+      status: Status.Enable,
+      user: {
+        username,
+        isDelete: false,
+      },
+    },
+  });
+}
+
+export async function setUserForAdmin(
+  userCreateDto: UserAdminCreateDto,
+  tx: PrismaTransaction = prisma,
+) {
+  return await tx.user.create({
+    data: userCreateDto,
   });
 }
