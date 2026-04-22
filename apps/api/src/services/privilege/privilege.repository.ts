@@ -121,15 +121,17 @@ export async function searchPrivileges(
       privilegeCode: {
         in: query.privilegeCodes,
       },
-      roles: {
-        some: {
-          role: {
-            roleCode: {
-              in: query.roleCodes,
+      roles: query.roleCodes
+        ? {
+            some: {
+              role: {
+                roleCode: {
+                  in: query.roleCodes,
+                },
+              },
             },
-          },
-        },
-      },
+          }
+        : undefined,
     },
   });
 }
