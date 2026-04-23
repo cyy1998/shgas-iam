@@ -1,6 +1,6 @@
+import { createSingleton } from "@lib/core/singleton";
 import config from "@/env";
 import { hmacSha256 } from "@/utils/encryption.utils";
-import { createSingleton } from "../core/singleton";
 
 interface SMSServiceResult {
   resultCode: string;
@@ -36,7 +36,6 @@ function createSmsClient() {
           code: -1,
         };
       }
-      //   await redis.set(`mobile-code:${usage}:${phoneNumber}`, random4Digit, 'EX', 180);
       return {
         success: true,
         message: "success",
@@ -60,27 +59,8 @@ function createSmsClient() {
         body: JSON.stringify(request_data),
         headers: { "Content-Type": "application/json", "Accept": "application/json" },
       });
-      // console.log(await res.json());
       return true;
     },
-
-    // checkValidPhoneNumber(phone: string): boolean {
-    //   // 去除前后空格
-    //   const trimmedPhone = phone.trim();
-    //   // 正则表达式：以1开头，第二位为3-9之间的数字，总共11位
-    //   return MOBILE_REGEX.test(trimmedPhone);
-    // },
-
-    // getPurveyorWelcomeMessage(name: string): string {
-    //   return `尊敬的${name}：
-    // 诚挚邀请贵司成为我司的候选供应商。请通过网站 https://tender.shgas.com.cn/tender-portal/ 完成相关信息登记，登录时请选择“手机号验证码登录”方式。感谢贵司的支持与配合！
-    // 上海燃气有限公司`;
-    // },
-
-    // async cehckVerificationCode(usage: string, phone: string, code: string): Promise<boolean> {
-    //   const savedCode = await redis.get(`mobile-code:${usage}:${phone}`);
-    //   return savedCode === code;
-    // },
   };
 }
 

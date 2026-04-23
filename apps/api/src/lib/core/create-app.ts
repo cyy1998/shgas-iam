@@ -21,7 +21,7 @@ import ssoRouter from "@/routes/sso/sso.index";
 import { appRouter } from "@/trpc/app.router";
 import { createTRPCContext } from "@/trpc/trpc";
 
-import { pinoLogger } from "../clients/pino";
+import { pinoLogger } from "../logger";
 
 export default function createApp() {
   const app = new OpenAPIHono();

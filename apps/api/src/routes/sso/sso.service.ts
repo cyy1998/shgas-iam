@@ -1,12 +1,12 @@
+import orcasClient from "@integrations/orcas";
+import wechatClient from "@integrations/wechat";
 import { sleep } from "bun";
 import { sm3 } from "sm-crypto";
 import { ClientManagementLevel } from "@/enums/client.managementLevel";
 import config from "@/env";
 import { AuthzUnauthorizedError } from "@/errors/AuthzUnauthorizedError";
 import { CustomError } from "@/errors/CustomError";
-import orcasClient from "@/lib/clients/orcas";
 import redis from "@/lib/clients/redis";
-import wechatClient from "@/lib/clients/wechat";
 import * as clientService from "@/services/client/client.service";
 import * as sessionRepository from "@/services/session/session.repository";
 import { SessionObjectSchema } from "@/services/session/session.schema";

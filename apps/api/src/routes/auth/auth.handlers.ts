@@ -1,8 +1,8 @@
 import type { AuthRouteHandler } from "./auth.types";
+import { pinoLogger } from "@lib/logger";
 import { getCookie, setCookie } from "hono/cookie";
 import config from "@/env";
 import { AuthzUnauthorizedError } from "@/errors/AuthzUnauthorizedError";
-import { pinoLogger } from "@/lib/clients/pino";
 import * as clientService from "@/services/client/client.service";
 import * as resp from "@/utils/http/response";
 import * as authService from "./auth.service";
