@@ -8,6 +8,7 @@ import {
   ProFormTextArea,
 } from '@ant-design/pro-components';
 import type { AppRouter } from '@iam/api/trpc';
+import { OrganizationType } from '@iam/shared';
 import type { inferRouterOutputs } from '@trpc/server';
 import { Descriptions, message } from 'antd';
 
@@ -95,7 +96,7 @@ export default function TransferModal({
             pageSize: 50,
             conditions: {
               fuzzyConditions: { text: params.keyWords || undefined },
-              exactConditions: { orgType: '公司' },
+              exactConditions: { orgType: OrganizationType.Company },
             },
           });
           return res.result.map((o: OrgVo) => ({
@@ -115,7 +116,7 @@ export default function TransferModal({
             pageSize: 50,
             conditions: {
               fuzzyConditions: { text: params.keyWords || undefined },
-              exactConditions: { orgType: '部门' },
+              exactConditions: { orgType: OrganizationType.Department },
             },
           });
           return res.result.map((o: OrgVo) => ({
