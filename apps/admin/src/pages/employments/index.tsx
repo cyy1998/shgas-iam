@@ -212,10 +212,14 @@ export default function EmploymentsPage() {
               current?: number;
               pageSize?: number;
               name?: string;
-              status?: 1 | 2 | 3;
+              status?: string | number;
               isPrimary?: 'true' | 'false' | boolean;
             };
             const text = (name ?? '').trim();
+            const statusNum
+              = status === undefined || status === null || status === ''
+                ? undefined
+                : (Number(status) as 1 | 2 | 3);
             const isPrimaryBool
               = isPrimary === undefined
                 ? undefined
@@ -228,7 +232,7 @@ export default function EmploymentsPage() {
               conditions: {
                 fuzzyConditions: text ? { text } : {},
                 exactConditions: {
-                  statuses: status !== undefined ? [status] : [1, 2],
+                  statuses: statusNum !== undefined ? [statusNum] : [1, 2],
                   isPrimary: isPrimaryBool,
                 },
               },
