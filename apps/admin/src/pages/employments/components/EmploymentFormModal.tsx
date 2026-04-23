@@ -6,7 +6,6 @@ import {
   ProFormDependency,
   ProFormSelect,
   ProFormSwitch,
-  ProFormText,
   ProFormTextArea,
 } from '@ant-design/pro-components';
 import type { ProFormInstance } from '@ant-design/pro-components';
@@ -20,6 +19,8 @@ type OrgVo =
   inferRouterOutputs<AppRouter>['admin']['organization']['search']['result'][number];
 type PosVo =
   inferRouterOutputs<AppRouter>['admin']['position']['search']['result'][number];
+type UserVo =
+  inferRouterOutputs<AppRouter>['admin']['user']['search']['result'][number];
 
 type Props = {
   open: boolean;
@@ -72,12 +73,37 @@ export default function EmploymentFormModal({
         }
       }}
     >
-      <ProFormText
+      <ProFormSelect
         name="username"
         label="用户"
+        showSearch
         disabled={!!presetUsername}
-        rules={[{ required: true, message: '请输入用户名（工号）' }]}
-        tooltip="如果从用户抽屉跳转，此处自动预填"
+        rules={[{ required: true, message: '请选择用户' }]}
+        tooltip="输入工号或姓名模糊搜索；从用户抽屉跳转时会自动预填"
+        fieldProps={{
+          filterOption: false,
+          placeholder: presetUsername ? undefined : '输入工号或姓名搜索',
+          showSearch: true,
+        }}
+        request={async (params) => {
+          if (presetUsername) {
+            return [{ label: presetUsername, value: presetUsername }];
+          }
+          const text = (params.keyWords as string | undefined) || undefined;
+          if (!text) return [];
+          const res = await apiClient.admin.user.search.query({
+            pageNum: 1,
+            pageSize: 20,
+            conditions: {
+              fuzzyConditions: { text },
+              exactConditions: {},
+            },
+          });
+          return res.result.map((u: UserVo) => ({
+            label: `${u.name} (${u.username})`,
+            value: u.username,
+          }));
+        }}
       />
       <ProFormSelect
         name="companyOrgCode"
