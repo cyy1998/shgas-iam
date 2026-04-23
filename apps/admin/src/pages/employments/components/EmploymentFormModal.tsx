@@ -25,6 +25,7 @@ type UserVo =
 type Props = {
   open: boolean;
   presetUsername?: string | null;
+  presetName?: string | null;
   onOpenChange: (open: boolean) => void;
   onSuccess?: () => void;
 };
@@ -32,6 +33,7 @@ type Props = {
 export default function EmploymentFormModal({
   open,
   presetUsername,
+  presetName,
   onOpenChange,
   onSuccess,
 }: Props) {
@@ -42,7 +44,11 @@ export default function EmploymentFormModal({
 
   return (
     <ModalForm
-      title={presetUsername ? `为 ${presetUsername} 新增雇佣` : '新增雇佣'}
+      title={
+        presetUsername
+          ? `为 ${presetName ? `${presetName} (${presetUsername})` : presetUsername} 新增雇佣`
+          : '新增雇佣'
+      }
       open={open}
       onOpenChange={onOpenChange}
       formRef={formRef}
@@ -87,7 +93,10 @@ export default function EmploymentFormModal({
         }}
         request={async (params) => {
           if (presetUsername) {
-            return [{ label: presetUsername, value: presetUsername }];
+            const label = presetName
+              ? `${presetName} (${presetUsername})`
+              : presetUsername;
+            return [{ label, value: presetUsername }];
           }
           const text = (params.keyWords as string | undefined) || undefined;
           if (!text) return [];

@@ -21,12 +21,13 @@ import { useLocation } from '@umijs/max';
 import { Button, Dropdown, message, Modal, Space, Tag } from 'antd';
 import { useEffect, useRef, useState } from 'react';
 
-type PresetFromUrl = { username?: string };
+type PresetFromUrl = { username?: string; name?: string };
 
 function parseQuery(search: string): PresetFromUrl {
   const params = new URLSearchParams(search);
   const username = params.get('username');
-  return username ? { username } : {};
+  const name = params.get('name');
+  return username ? { username, name: name ?? undefined } : {};
 }
 
 export default function EmploymentsPage() {
@@ -37,6 +38,7 @@ export default function EmploymentsPage() {
   const [formPresetUsername, setFormPresetUsername] = useState<string | null>(
     null,
   );
+  const [formPresetName, setFormPresetName] = useState<string | null>(null);
   const [transferTarget, setTransferTarget] = useState<EmploymentVo | null>(
     null,
   );
@@ -48,6 +50,7 @@ export default function EmploymentsPage() {
     const preset = parseQuery(location.search);
     if (preset.username) {
       setFormPresetUsername(preset.username);
+      setFormPresetName(preset.name ?? null);
       setFormOpen(true);
     }
   }, [location.search]);
@@ -268,13 +271,18 @@ export default function EmploymentsPage() {
       <EmploymentFormModal
         open={formOpen}
         presetUsername={formPresetUsername}
+        presetName={formPresetName}
         onOpenChange={(open) => {
           setFormOpen(open);
-          if (!open) setFormPresetUsername(null);
+          if (!open) {
+            setFormPresetUsername(null);
+            setFormPresetName(null);
+          }
         }}
         onSuccess={() => {
           setFormOpen(false);
           setFormPresetUsername(null);
+          setFormPresetName(null);
           actionRef.current?.reload();
         }}
       />

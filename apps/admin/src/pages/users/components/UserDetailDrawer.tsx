@@ -107,7 +107,7 @@ export default function UserDetailDrawer({
   const gotoCreateEmployment = () => {
     if (!detail) return;
     history.push(
-      `/employments?username=${encodeURIComponent(detail.username)}`,
+      `/employments?username=${encodeURIComponent(detail.username)}&name=${encodeURIComponent(detail.name)}`,
     );
   };
 
