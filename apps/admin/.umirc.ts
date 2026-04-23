@@ -2,6 +2,7 @@ import { defineConfig } from '@umijs/max';
 
 export default defineConfig({
   base: '/iam-admin',
+  publicPath: '/iam-admin/',
   antd: {},
   access: {},
   model: {},
