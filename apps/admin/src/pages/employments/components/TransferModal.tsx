@@ -136,7 +136,7 @@ export default function TransferModal({
                   },
                   exactConditions: {
                     orgType: OrganizationType.Department,
-                    parentOrgCode: newCompanyOrgCode,
+                    ancestorOrgCode: newCompanyOrgCode,
                   },
                 },
               });

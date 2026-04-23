@@ -261,7 +261,12 @@ export async function searchOrganizationsForAdmin(
   query: {
     conditions: {
       fuzzyConditions: { text?: string };
-      exactConditions: { orgType?: string; status?: number; parentOrgCode?: string };
+      exactConditions: {
+        orgType?: string;
+        status?: number;
+        parentOrgCode?: string;
+        ancestorOrgCode?: string;
+      };
     };
   },
   tx: PrismaTransaction = prisma,
@@ -274,6 +279,16 @@ export async function searchOrganizationsForAdmin(
       ...(exactConditions.status !== undefined ? { status: exactConditions.status } : {}),
       ...(exactConditions.parentOrgCode
         ? { parent: { orgCode: exactConditions.parentOrgCode } }
+        : {}),
+      ...(exactConditions.ancestorOrgCode
+        ? {
+            descendantClosures: {
+              some: {
+                depth: { gt: 0 },
+                ancestor: { orgCode: exactConditions.ancestorOrgCode },
+              },
+            },
+          }
         : {}),
       ...(fuzzyConditions.text
         ? {

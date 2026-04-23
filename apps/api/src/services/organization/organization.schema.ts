@@ -62,6 +62,10 @@ export const OrganizationPaginationQueryDtoSchema = createPageQuerySchema(
       orgType: z.string().optional().openapi({ example: "部门" }),
       status: z.number().optional().openapi({ example: 1 }),
       parentOrgCode: z.string().optional().openapi({ example: "SR" }),
+      ancestorOrgCode: z.string().optional().openapi({
+        example: "SR",
+        description: "按祖先 orgCode 过滤（闭包表，匹配任意深度后代，不含自身）",
+      }),
     }),
   }),
 ).openapi("OrganizationPaginationQueryDto");

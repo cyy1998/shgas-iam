@@ -124,7 +124,7 @@ export default function EmploymentFormModal({
                   },
                   exactConditions: {
                     orgType: OrganizationType.Department,
-                    parentOrgCode: companyOrgCode,
+                    ancestorOrgCode: companyOrgCode,
                   },
                 },
               });
