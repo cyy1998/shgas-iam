@@ -104,6 +104,7 @@ export default function EmploymentsPage() {
       dataIndex: 'name',
       render: (_, r) => `${r.name} (${r.username})`,
       width: 160,
+      fieldProps: { placeholder: '工号或姓名' },
     },
     { title: '公司', dataIndex: 'compName', width: 140, search: false },
     { title: '部门', dataIndex: 'orgName', width: 140, search: false },
@@ -140,12 +141,6 @@ export default function EmploymentsPage() {
           {r.endTime ? new Date(r.endTime).toLocaleDateString() : '—'}
         </span>
       ),
-    },
-    {
-      title: '搜索',
-      dataIndex: 'username',
-      hideInTable: true,
-      fieldProps: { placeholder: '工号或姓名' },
     },
     {
       title: '操作',
@@ -210,21 +205,31 @@ export default function EmploymentsPage() {
             const {
               current = 1,
               pageSize = 20,
-              username,
+              name,
               status,
+              isPrimary,
             } = params as {
               current?: number;
               pageSize?: number;
-              username?: string;
+              name?: string;
               status?: 1 | 2 | 3;
+              isPrimary?: 'true' | 'false' | boolean;
             };
+            const text = (name ?? '').trim();
+            const isPrimaryBool
+              = isPrimary === undefined
+                ? undefined
+                : typeof isPrimary === 'boolean'
+                  ? isPrimary
+                  : isPrimary === 'true';
             const data = await searchEmployments({
               pageNum: current,
               pageSize,
               conditions: {
-                fuzzyConditions: username ? { text: username } : {},
+                fuzzyConditions: text ? { text } : {},
                 exactConditions: {
                   statuses: status !== undefined ? [status] : [1, 2],
+                  isPrimary: isPrimaryBool,
                 },
               },
             });
