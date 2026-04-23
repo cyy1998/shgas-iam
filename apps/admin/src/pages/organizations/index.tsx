@@ -1,22 +1,22 @@
-import OrgDetailPanel from "@/pages/organizations/components/OrgDetailPanel";
-import OrgFormModal from "@/pages/organizations/components/OrgFormModal";
-import OrgSearchPanel from "@/pages/organizations/components/OrgSearchPanel";
-import OrgTree from "@/pages/organizations/components/OrgTree";
+import OrgDetailPanel from '@/pages/organizations/components/OrgDetailPanel';
+import OrgFormModal from '@/pages/organizations/components/OrgFormModal';
+import OrgSearchPanel from '@/pages/organizations/components/OrgSearchPanel';
+import OrgTree from '@/pages/organizations/components/OrgTree';
 import {
   getOrganization,
   getOrganizationChildren,
   type OrganizationChildrenPage,
   type OrganizationDetailVo,
-} from "@/services/organization";
-import { PageContainer } from "@ant-design/pro-components";
-import { Button, Card, Col, message, Row, Space } from "antd";
-import { useCallback, useEffect, useState } from "react";
+} from '@/services/organization';
+import { PageContainer } from '@ant-design/pro-components';
+import { Button, Card, Col, message, Row, Space } from 'antd';
+import { useCallback, useEffect, useState } from 'react';
 
 type FormState =
   | { open: false }
-  | { open: true; mode: "create-root" }
-  | { open: true; mode: "create-child"; parentCode: string }
-  | { open: true; mode: "edit"; initialValues: OrganizationDetailVo };
+  | { open: true; mode: 'create-root' }
+  | { open: true; mode: 'create-child'; parentCode: string }
+  | { open: true; mode: 'edit'; initialValues: OrganizationDetailVo };
 
 const DETAIL_CHILDREN_DEFAULT_SIZE = 20;
 
@@ -24,12 +24,17 @@ export default function OrganizationsPage() {
   const [selectedCode, setSelectedCode] = useState<string | undefined>();
   const [formState, setFormState] = useState<FormState>({ open: false });
 
-  const [detailData, setDetailData] = useState<OrganizationDetailVo | null>(null);
+  const [detailData, setDetailData] = useState<OrganizationDetailVo | null>(
+    null,
+  );
   const [detailLoading, setDetailLoading] = useState(false);
-  const [detailChildrenPage, setDetailChildrenPage] = useState<OrganizationChildrenPage | null>(null);
+  const [detailChildrenPage, setDetailChildrenPage] =
+    useState<OrganizationChildrenPage | null>(null);
   const [detailChildrenLoading, setDetailChildrenLoading] = useState(false);
   const [detailChildrenPageNum, setDetailChildrenPageNum] = useState(1);
-  const [detailChildrenPageSize, setDetailChildrenPageSize] = useState(DETAIL_CHILDREN_DEFAULT_SIZE);
+  const [detailChildrenPageSize, setDetailChildrenPageSize] = useState(
+    DETAIL_CHILDREN_DEFAULT_SIZE,
+  );
 
   const [treeReloadSeq, setTreeReloadSeq] = useState(0);
 
@@ -44,11 +49,9 @@ export default function OrganizationsPage() {
     try {
       const d = await getOrganization(orgCode);
       setDetailData(d);
-    }
-    catch (err) {
-      message.error(err instanceof Error ? err.message : "加载组织详情失败");
-    }
-    finally {
+    } catch (err) {
+      message.error(err instanceof Error ? err.message : '加载组织详情失败');
+    } finally {
       setDetailLoading(false);
     }
   }, []);
@@ -59,11 +62,9 @@ export default function OrganizationsPage() {
       try {
         const page = await getOrganizationChildren(orgCode, pageNum, pageSize);
         setDetailChildrenPage(page);
-      }
-      catch (err) {
-        message.error(err instanceof Error ? err.message : "加载下级组织失败");
-      }
-      finally {
+      } catch (err) {
+        message.error(err instanceof Error ? err.message : '加载下级组织失败');
+      } finally {
         setDetailChildrenLoading(false);
       }
     },
@@ -93,10 +94,14 @@ export default function OrganizationsPage() {
   };
 
   const refreshAll = () => {
-    setTreeReloadSeq(s => s + 1);
+    setTreeReloadSeq((s) => s + 1);
     if (selectedCode) {
       loadDetail(selectedCode);
-      loadDetailChildren(selectedCode, detailChildrenPageNum, detailChildrenPageSize);
+      loadDetailChildren(
+        selectedCode,
+        detailChildrenPageNum,
+        detailChildrenPageSize,
+      );
     }
   };
 
@@ -107,7 +112,7 @@ export default function OrganizationsPage() {
 
   const onDetailChanged = () => {
     setSelectedCode(undefined);
-    setTreeReloadSeq(s => s + 1);
+    setTreeReloadSeq((s) => s + 1);
   };
 
   return (
@@ -120,18 +125,20 @@ export default function OrganizationsPage() {
               <Button
                 type="primary"
                 size="small"
-                onClick={() => setFormState({ open: true, mode: "create-root" })}
+                onClick={() =>
+                  setFormState({ open: true, mode: 'create-root' })
+                }
               >
                 + 新建根组织
               </Button>
             }
           >
-            <Space direction="vertical" size="middle" style={{ width: "100%" }}>
-              <OrgSearchPanel onSelect={code => setSelectedCode(code)} />
+            <Space direction="vertical" size="middle" style={{ width: '100%' }}>
+              <OrgSearchPanel onSelect={(code) => setSelectedCode(code)} />
               <OrgTree
                 loadChildrenPage={loadChildrenPage}
                 selectedKey={selectedCode}
-                onSelect={code => setSelectedCode(code)}
+                onSelect={(code) => setSelectedCode(code)}
                 reloadSeq={treeReloadSeq}
               />
             </Space>
@@ -149,7 +156,7 @@ export default function OrganizationsPage() {
                 if (detailData) {
                   setFormState({
                     open: true,
-                    mode: "edit",
+                    mode: 'edit',
                     initialValues: detailData,
                   });
                 }
@@ -158,12 +165,12 @@ export default function OrganizationsPage() {
                 if (selectedCode) {
                   setFormState({
                     open: true,
-                    mode: "create-child",
+                    mode: 'create-child',
                     parentCode: selectedCode,
                   });
                 }
               }}
-              onSelectChild={code => setSelectedCode(code)}
+              onSelectChild={(code) => setSelectedCode(code)}
               onChanged={onDetailChanged}
             />
           </Card>
@@ -172,9 +179,17 @@ export default function OrganizationsPage() {
 
       <OrgFormModal
         open={formState.open}
-        mode={formState.open ? formState.mode : "create-root"}
-        initialValues={formState.open && formState.mode === "edit" ? formState.initialValues : null}
-        parentCode={formState.open && formState.mode === "create-child" ? formState.parentCode : null}
+        mode={formState.open ? formState.mode : 'create-root'}
+        initialValues={
+          formState.open && formState.mode === 'edit'
+            ? formState.initialValues
+            : null
+        }
+        parentCode={
+          formState.open && formState.mode === 'create-child'
+            ? formState.parentCode
+            : null
+        }
         onOpenChange={(open) => {
           if (!open) setFormState({ open: false });
         }}

@@ -2,10 +2,15 @@ import {
   createPosition,
   type PositionVo,
   updatePosition,
-} from "@/services/position";
-import { ModalForm, ProFormSelect, ProFormText, ProFormTextArea } from "@ant-design/pro-components";
-import { getPositionStatusOptions } from "@iam/shared";
-import { message } from "antd";
+} from '@/services/position';
+import {
+  ModalForm,
+  ProFormSelect,
+  ProFormText,
+  ProFormTextArea,
+} from '@ant-design/pro-components';
+import { getPositionStatusOptions } from '@iam/shared';
+import { message } from 'antd';
 
 type Props = {
   open: boolean;
@@ -24,7 +29,7 @@ export default function PositionFormModal({
 
   return (
     <ModalForm
-      title={isEdit ? "编辑岗位" : "新建岗位"}
+      title={isEdit ? '编辑岗位' : '新建岗位'}
       open={open}
       onOpenChange={onOpenChange}
       initialValues={
@@ -32,7 +37,7 @@ export default function PositionFormModal({
           ? {
               posCode: initialValues.posCode,
               posName: initialValues.posName,
-              description: initialValues.description ?? "",
+              description: initialValues.description ?? '',
               status: initialValues.status,
             }
           : { status: 1 }
@@ -46,7 +51,7 @@ export default function PositionFormModal({
               description: values.description || null,
               status: values.status,
             });
-            message.success("更新成功");
+            message.success('更新成功');
           } else {
             await createPosition({
               posCode: values.posCode,
@@ -54,12 +59,12 @@ export default function PositionFormModal({
               description: values.description || undefined,
               status: values.status,
             });
-            message.success("创建成功");
+            message.success('创建成功');
           }
           onSuccess?.();
           return true;
         } catch (err) {
-          message.error(err instanceof Error ? err.message : "操作失败");
+          message.error(err instanceof Error ? err.message : '操作失败');
           return false;
         }
       }}
@@ -68,12 +73,12 @@ export default function PositionFormModal({
         name="posCode"
         label="岗位编码"
         disabled={isEdit}
-        rules={[{ required: true, message: "请输入岗位编码" }]}
+        rules={[{ required: true, message: '请输入岗位编码' }]}
       />
       <ProFormText
         name="posName"
         label="岗位名称"
-        rules={[{ required: true, message: "请输入岗位名称" }]}
+        rules={[{ required: true, message: '请输入岗位名称' }]}
       />
       <ProFormTextArea name="description" label="描述" />
       <ProFormSelect

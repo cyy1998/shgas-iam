@@ -1,14 +1,17 @@
-import StatusTag from "@/components/StatusTag";
-import { type OrganizationVo, searchOrganizations } from "@/services/organization";
-import { Empty, Input, List, Spin } from "antd";
-import { useEffect, useRef, useState } from "react";
+import StatusTag from '@/components/StatusTag';
+import {
+  type OrganizationVo,
+  searchOrganizations,
+} from '@/services/organization';
+import { Empty, Input, List, Spin } from 'antd';
+import { useEffect, useRef, useState } from 'react';
 
 type Props = {
   onSelect: (orgCode: string) => void;
 };
 
 export default function OrgSearchPanel({ onSelect }: Props) {
-  const [keyword, setKeyword] = useState("");
+  const [keyword, setKeyword] = useState('');
   const [results, setResults] = useState<OrganizationVo[]>([]);
   const [loading, setLoading] = useState(false);
   const seqRef = useRef(0);
@@ -35,8 +38,7 @@ export default function OrgSearchPanel({ onSelect }: Props) {
         });
         if (mySeq !== seqRef.current) return; // outdated
         setResults(data.result);
-      }
-      finally {
+      } finally {
         if (mySeq === seqRef.current) setLoading(false);
       }
     }, 250);
@@ -52,33 +54,51 @@ export default function OrgSearchPanel({ onSelect }: Props) {
         placeholder="搜索组织名称或编码"
         allowClear
         value={keyword}
-        onChange={e => setKeyword(e.target.value)}
+        onChange={(e) => setKeyword(e.target.value)}
       />
       {showResults && (
-        <div style={{ marginTop: 8, maxHeight: 240, overflowY: "auto", border: "1px solid #f0f0f0" }}>
+        <div
+          style={{
+            marginTop: 8,
+            maxHeight: 240,
+            overflowY: 'auto',
+            border: '1px solid #f0f0f0',
+          }}
+        >
           {loading ? (
-            <div style={{ padding: 12, textAlign: "center" }}><Spin size="small" /></div>
+            <div style={{ padding: 12, textAlign: 'center' }}>
+              <Spin size="small" />
+            </div>
           ) : results.length === 0 ? (
-            <Empty style={{ padding: 12 }} image={Empty.PRESENTED_IMAGE_SIMPLE} description="无匹配结果" />
+            <Empty
+              style={{ padding: 12 }}
+              image={Empty.PRESENTED_IMAGE_SIMPLE}
+              description="无匹配结果"
+            />
           ) : (
             <List<OrganizationVo>
               size="small"
               dataSource={results}
-              renderItem={r => (
+              renderItem={(r) => (
                 <List.Item
-                  style={{ cursor: "pointer", padding: "6px 12px" }}
+                  style={{ cursor: 'pointer', padding: '6px 12px' }}
                   onClick={() => {
                     onSelect(r.orgCode);
-                    setKeyword("");
+                    setKeyword('');
                   }}
                 >
-                  <div style={{ display: "flex", justifyContent: "space-between", width: "100%", alignItems: "center" }}>
+                  <div
+                    style={{
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      width: '100%',
+                      alignItems: 'center',
+                    }}
+                  >
                     <span>
                       {r.orgName}
-                      <span style={{ color: "#999", marginLeft: 6 }}>
-                        (
-                        {r.orgCode}
-                        )
+                      <span style={{ color: '#999', marginLeft: 6 }}>
+                        ({r.orgCode})
                       </span>
                     </span>
                     <StatusTag domain="org" status={r.status} />

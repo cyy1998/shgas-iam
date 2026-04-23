@@ -1,7 +1,13 @@
-import StatusTag from "@/components/StatusTag";
-import { deleteUser, getUser, type UserDetailVo, updateUserStatus } from "@/services/user";
-import { ProDescriptions } from "@ant-design/pro-components";
-import { getUserStatusOptions } from "@iam/shared";
+import StatusTag from '@/components/StatusTag';
+import {
+  deleteUser,
+  getUser,
+  updateUserStatus,
+  type UserDetailVo,
+} from '@/services/user';
+import { ProDescriptions } from '@ant-design/pro-components';
+import { getUserStatusOptions } from '@iam/shared';
+import { history } from '@umijs/max';
 import {
   Button,
   Drawer,
@@ -14,13 +20,12 @@ import {
   Table,
   Tabs,
   Tag,
-} from "antd";
-import type { ColumnsType } from "antd/es/table";
-import { useEffect, useState } from "react";
-import { history } from "@umijs/max";
-import { confirmResetPassword } from "./ResetPasswordModal";
+} from 'antd';
+import type { ColumnsType } from 'antd/es/table';
+import { useEffect, useState } from 'react';
+import { confirmResetPassword } from './ResetPasswordModal';
 
-type EmploymentRow = UserDetailVo["employments"][number];
+type EmploymentRow = UserDetailVo['employments'][number];
 
 type Props = {
   open: boolean;
@@ -48,12 +53,14 @@ export default function UserDetailDrawer({
     setLoading(true);
     getUser(username)
       .then(setDetail)
-      .catch((err: unknown) => message.error(err instanceof Error ? err.message : "加载详情失败"))
+      .catch((err: unknown) =>
+        message.error(err instanceof Error ? err.message : '加载详情失败'),
+      )
       .finally(() => setLoading(false));
   }, [open, username]);
 
   const handleError = (err: unknown) =>
-    message.error(err instanceof Error ? err.message : "操作失败");
+    message.error(err instanceof Error ? err.message : '操作失败');
 
   const refresh = async () => {
     if (!username) return;
@@ -61,8 +68,7 @@ export default function UserDetailDrawer({
     try {
       const d = await getUser(username);
       setDetail(d);
-    }
-    finally {
+    } finally {
       setLoading(false);
     }
     onChanged();
@@ -72,10 +78,9 @@ export default function UserDetailDrawer({
     if (!detail) return;
     try {
       await updateUserStatus(detail.username, status as 1 | 2 | 3);
-      message.success("状态已更新");
+      message.success('状态已更新');
       await refresh();
-    }
-    catch (err) {
+    } catch (err) {
       handleError(err);
     }
   };
@@ -84,16 +89,15 @@ export default function UserDetailDrawer({
     if (!detail) return;
     Modal.confirm({
       title: `删除用户 ${detail.name}？`,
-      content: "软删除后用户将不再可见。若用户存在活跃雇佣，将被拒绝。",
-      okType: "danger",
+      content: '软删除后用户将不再可见。若用户存在活跃雇佣，将被拒绝。',
+      okType: 'danger',
       onOk: async () => {
         try {
           await deleteUser(detail.username);
-          message.success("已删除");
+          message.success('已删除');
           onChanged();
           onClose();
-        }
-        catch (err) {
+        } catch (err) {
           handleError(err);
         }
       },
@@ -102,37 +106,41 @@ export default function UserDetailDrawer({
 
   const gotoCreateEmployment = () => {
     if (!detail) return;
-    history.push(`/employments?username=${encodeURIComponent(detail.username)}`);
+    history.push(
+      `/employments?username=${encodeURIComponent(detail.username)}`,
+    );
   };
 
   // EmploymentDetailDtoSchema extends EmploymentDtoSchema which has flat fields:
   // compName (company name), orgName (dept name), posName (position name), isPrimary, status
   const employmentColumns: ColumnsType<EmploymentRow> = [
     {
-      title: "公司",
-      dataIndex: "compName",
-      render: (val: string | undefined) => val ?? "—",
+      title: '公司',
+      dataIndex: 'compName',
+      render: (val: string | undefined) => val ?? '—',
     },
     {
-      title: "部门",
-      dataIndex: "orgName",
-      render: (val: string | undefined) => val ?? "—",
+      title: '部门',
+      dataIndex: 'orgName',
+      render: (val: string | undefined) => val ?? '—',
     },
     {
-      title: "岗位",
-      dataIndex: "posName",
-      render: (val: string | undefined) => val ?? "—",
+      title: '岗位',
+      dataIndex: 'posName',
+      render: (val: string | undefined) => val ?? '—',
     },
     {
-      title: "主岗",
-      dataIndex: "isPrimary",
+      title: '主岗',
+      dataIndex: 'isPrimary',
       render: (val: boolean) => (val ? <Tag color="blue">主岗</Tag> : null),
       width: 70,
     },
     {
-      title: "状态",
-      dataIndex: "status",
-      render: (_: unknown, row: EmploymentRow) => <StatusTag domain="employment" status={row.status} />,
+      title: '状态',
+      dataIndex: 'status',
+      render: (_: unknown, row: EmploymentRow) => (
+        <StatusTag domain="employment" status={row.status} />
+      ),
       width: 90,
     },
   ];
@@ -144,15 +152,17 @@ export default function UserDetailDrawer({
       onClose={onClose}
       destroyOnClose
       title={
-        detail
-          ? (
-              <Space>
-                <span>{detail.name}</span>
-                <span style={{ color: "#999", fontSize: 12 }}>{detail.username}</span>
-                <StatusTag domain="user" status={detail.status} />
-              </Space>
-            )
-          : "用户详情"
+        detail ? (
+          <Space>
+            <span>{detail.name}</span>
+            <span style={{ color: '#999', fontSize: 12 }}>
+              {detail.username}
+            </span>
+            <StatusTag domain="user" status={detail.status} />
+          </Space>
+        ) : (
+          '用户详情'
+        )
       }
       extra={
         detail && (
@@ -161,8 +171,8 @@ export default function UserDetailDrawer({
             <Dropdown
               menu={{
                 items: getUserStatusOptions()
-                  .filter(o => o.value !== detail.status)
-                  .map(o => ({
+                  .filter((o) => o.value !== detail.status)
+                  .map((o) => ({
                     key: String(o.value),
                     label: `切为「${o.label}」`,
                     onClick: () => onStatusChange(o.value),
@@ -171,10 +181,19 @@ export default function UserDetailDrawer({
             >
               <Button>状态</Button>
             </Dropdown>
-            <Button onClick={() => confirmResetPassword({ username: detail.username, name: detail.name })}>
+            <Button
+              onClick={() =>
+                confirmResetPassword({
+                  username: detail.username,
+                  name: detail.name,
+                })
+              }
+            >
               重置密码
             </Button>
-            <Button danger onClick={onDelete}>删除</Button>
+            <Button danger onClick={onDelete}>
+              删除
+            </Button>
           </Space>
         )
       }
@@ -185,50 +204,66 @@ export default function UserDetailDrawer({
         <Tabs
           items={[
             {
-              key: "basic",
-              label: "基本信息",
+              key: 'basic',
+              label: '基本信息',
               children: (
                 <ProDescriptions<UserDetailVo>
                   column={2}
                   dataSource={detail}
                   columns={[
-                    { title: "用户名", dataIndex: "username" },
-                    { title: "姓名", dataIndex: "name" },
-                    { title: "手机", dataIndex: "mobile", render: (_, r) => r.mobile ?? "—" },
-                    { title: "微信 ID", dataIndex: "wxId", render: (_, r) => r.wxId ?? "—" },
-                    { title: "用户类型", dataIndex: "userType", render: (_, r) => r.userType ?? "—" },
+                    { title: '用户名', dataIndex: 'username' },
+                    { title: '姓名', dataIndex: 'name' },
                     {
-                      title: "状态",
-                      dataIndex: "status",
-                      render: (_, r) => <StatusTag domain="user" status={r.status} />,
+                      title: '手机',
+                      dataIndex: 'mobile',
+                      render: (_, r) => r.mobile ?? '—',
                     },
                     {
-                      title: "角色",
-                      dataIndex: "roles",
+                      title: '微信 ID',
+                      dataIndex: 'wxId',
+                      render: (_, r) => r.wxId ?? '—',
+                    },
+                    {
+                      title: '用户类型',
+                      dataIndex: 'userType',
+                      render: (_, r) => r.userType ?? '—',
+                    },
+                    {
+                      title: '状态',
+                      dataIndex: 'status',
+                      render: (_, r) => (
+                        <StatusTag domain="user" status={r.status} />
+                      ),
+                    },
+                    {
+                      title: '角色',
+                      dataIndex: 'roles',
                       span: 2,
                       render: (_, r) =>
                         r.roles.length === 0
-                          ? "—"
-                          : r.roles.map((code: string) => <Tag key={code}>{code}</Tag>),
+                          ? '—'
+                          : r.roles.map((code: string) => (
+                              <Tag key={code}>{code}</Tag>
+                            )),
                     },
                     {
-                      title: "权限数",
-                      dataIndex: "privileges",
+                      title: '权限数',
+                      dataIndex: 'privileges',
                       render: (_, r) => r.privileges.length,
                     },
                     {
-                      title: "雇佣数",
-                      dataIndex: "employments",
+                      title: '雇佣数',
+                      dataIndex: 'employments',
                       render: (_, r) => r.employments.length,
                     },
                     {
-                      title: "创建时间",
-                      dataIndex: "createTime",
+                      title: '创建时间',
+                      dataIndex: 'createTime',
                       render: (_, r) => new Date(r.createTime).toLocaleString(),
                     },
                     {
-                      title: "更新时间",
-                      dataIndex: "updateTime",
+                      title: '更新时间',
+                      dataIndex: 'updateTime',
                       render: (_, r) => new Date(r.updateTime).toLocaleString(),
                     },
                   ]}
@@ -236,11 +271,11 @@ export default function UserDetailDrawer({
               ),
             },
             {
-              key: "employments",
+              key: 'employments',
               label: `雇佣（${detail.employments.length}）`,
               children: (
                 <div>
-                  <div style={{ marginBottom: 12, textAlign: "right" }}>
+                  <div style={{ marginBottom: 12, textAlign: 'right' }}>
                     <Button type="primary" onClick={gotoCreateEmployment}>
                       + 新增雇佣
                     </Button>
@@ -251,14 +286,14 @@ export default function UserDetailDrawer({
                     columns={employmentColumns}
                     dataSource={detail.employments}
                     pagination={false}
-                    locale={{ emptyText: "暂无雇佣" }}
+                    locale={{ emptyText: '暂无雇佣' }}
                   />
                 </div>
               ),
             },
             {
-              key: "logs",
-              label: "操作日志",
+              key: 'logs',
+              label: '操作日志',
               children: <Empty description="日志功能尚未接入" />,
             },
           ]}

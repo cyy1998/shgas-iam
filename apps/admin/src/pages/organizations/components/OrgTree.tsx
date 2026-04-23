@@ -1,9 +1,12 @@
-import type { OrganizationChildrenPage, OrganizationTreeNode } from "@/services/organization";
-import { getOrganizationStatusOptions } from "@iam/shared";
-import { Badge, Empty, Spin, Tree } from "antd";
-import type { DataNode } from "antd/es/tree";
-import type { ReactNode } from "react";
-import { useCallback, useEffect, useState } from "react";
+import type {
+  OrganizationChildrenPage,
+  OrganizationTreeNode,
+} from '@/services/organization';
+import { getOrganizationStatusOptions } from '@iam/shared';
+import { Badge, Empty, Spin, Tree } from 'antd';
+import type { DataNode } from 'antd/es/tree';
+import type { ReactNode } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 
 type Props = {
   loadChildrenPage: (
@@ -25,27 +28,25 @@ type TreeDataNode = DataNode & {
 };
 
 const statusColorMap = Object.fromEntries(
-  getOrganizationStatusOptions().map(o => [
+  getOrganizationStatusOptions().map((o) => [
     o.value,
-    o.color === "success" ? "green" : o.color === "warning" ? "gold" : "default",
+    o.color === 'success'
+      ? 'green'
+      : o.color === 'warning'
+      ? 'gold'
+      : 'default',
   ]),
-) as Record<number, "green" | "gold" | "default">;
+) as Record<number, 'green' | 'gold' | 'default'>;
 
 function loadMoreKey(parentOrgCode: string | null, nextPage: number): string {
-  return `__loadmore__:${parentOrgCode ?? ""}:${nextPage}`;
+  return `__loadmore__:${parentOrgCode ?? ''}:${nextPage}`;
 }
 
 function renderOrgTitle(node: OrganizationTreeNode): ReactNode {
   return (
     <span>
-      <Badge color={statusColorMap[node.status] ?? "default"} />
-      {" "}
-      {node.orgName}
-      <span style={{ color: "#999", marginLeft: 6 }}>
-        (
-        {node.orgCode}
-        )
-      </span>
+      <Badge color={statusColorMap[node.status] ?? 'default'} /> {node.orgName}
+      <span style={{ color: '#999', marginLeft: 6 }}>({node.orgCode})</span>
     </span>
   );
 }
@@ -67,7 +68,11 @@ function makeLoadMoreNode(
 ): TreeDataNode {
   return {
     key: loadMoreKey(parentOrgCode, nextPage),
-    title: <span style={{ color: "#1677ff" }}>{`加载更多（剩余 ${remaining} 条）`}</span>,
+    title: (
+      <span
+        style={{ color: '#1677ff' }}
+      >{`加载更多（剩余 ${remaining} 条）`}</span>
+    ),
     isLeaf: true,
     isLoadMore: true,
     loadMoreParent: parentOrgCode,
@@ -100,7 +105,11 @@ function setNodeChildren(
     if (n.children) {
       return {
         ...n,
-        children: setNodeChildren(n.children as TreeDataNode[], parentKey, children),
+        children: setNodeChildren(
+          n.children as TreeDataNode[],
+          parentKey,
+          children,
+        ),
       };
     }
     return n;
@@ -114,7 +123,7 @@ function appendPageAt(
 ): TreeDataNode[] {
   // Root-level append
   if (parentOrgCode === null) {
-    const kept = tree.filter(n => !n.isLoadMore);
+    const kept = tree.filter((n) => !n.isLoadMore);
     const next: TreeDataNode[] = [...kept, ...page.result.map(toOrgNode)];
     const loadedEnd = (page.pageNum - 1) * page.pageSize + page.result.length;
     const remaining = page.total - loadedEnd;
@@ -127,7 +136,7 @@ function appendPageAt(
   return tree.map((n) => {
     if (n.key === parentOrgCode) {
       const existing = (n.children ?? []) as TreeDataNode[];
-      const kept = existing.filter(c => !c.isLoadMore);
+      const kept = existing.filter((c) => !c.isLoadMore);
       const next: TreeDataNode[] = [...kept, ...page.result.map(toOrgNode)];
       const loadedEnd = (page.pageNum - 1) * page.pageSize + page.result.length;
       const remaining = page.total - loadedEnd;
@@ -139,7 +148,11 @@ function appendPageAt(
     if (n.children) {
       return {
         ...n,
-        children: appendPageAt(n.children as TreeDataNode[], parentOrgCode, page),
+        children: appendPageAt(
+          n.children as TreeDataNode[],
+          parentOrgCode,
+          page,
+        ),
       };
     }
     return n;
@@ -162,8 +175,7 @@ export default function OrgTree({
       const page = await loadChildrenPage(null, 1);
       setTreeData(buildLevel(page, null));
       setExpandedKeys([]);
-    }
-    finally {
+    } finally {
       setLoading(false);
     }
   }, [loadChildrenPage]);
@@ -175,12 +187,17 @@ export default function OrgTree({
   const onLoadData = async (node: TreeDataNode) => {
     if (node.isLoadMore || !node.orgCode) return;
     const page = await loadChildrenPage(node.orgCode, 1);
-    setTreeData(prev => setNodeChildren(prev, node.orgCode!, buildLevel(page, node.orgCode!)));
+    setTreeData((prev) =>
+      setNodeChildren(prev, node.orgCode!, buildLevel(page, node.orgCode!)),
+    );
   };
 
-  const handleLoadMore = async (parentOrgCode: string | null, nextPage: number) => {
+  const handleLoadMore = async (
+    parentOrgCode: string | null,
+    nextPage: number,
+  ) => {
     const page = await loadChildrenPage(parentOrgCode, nextPage);
-    setTreeData(prev => appendPageAt(prev, parentOrgCode, page));
+    setTreeData((prev) => appendPageAt(prev, parentOrgCode, page));
   };
 
   if (loading) {
@@ -199,11 +216,14 @@ export default function OrgTree({
       selectedKeys={selectedKey ? [selectedKey] : []}
       expandedKeys={expandedKeys}
       loadData={onLoadData}
-      onExpand={keys => setExpandedKeys(keys as string[])}
+      onExpand={(keys) => setExpandedKeys(keys as string[])}
       onSelect={(_, info) => {
         const node = info.node as TreeDataNode;
         if (node.isLoadMore) {
-          void handleLoadMore(node.loadMoreParent ?? null, node.loadMoreNextPage!);
+          void handleLoadMore(
+            node.loadMoreParent ?? null,
+            node.loadMoreNextPage!,
+          );
           return;
         }
         if (node.orgCode && node.raw) {

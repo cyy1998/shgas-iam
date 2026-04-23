@@ -1,25 +1,25 @@
 import { OpenAPIHono } from "@hono/zod-openapi";
+import { publicAuthenicationHandler } from "@middlewares/authenication.handler";
 import { Scalar } from "@scalar/hono-api-reference";
 import { fetchRequestHandler } from "@trpc/server/adapters/fetch";
 import { serveStatic } from "hono/bun";
 import { logger } from "hono/logger";
 import { errorHandler } from "@/middlewares/error.handler";
-import { appRouter } from "@/trpc/app.router";
-import { createTRPCContext } from "@/trpc/trpc";
-import { publicAuthenicationHandler } from "@middlewares/authenication.handler";
 // admin 子路由
 import adminClientRouter from "@/routes/admin/client/client.index";
 import adminEmploymentRouter from "@/routes/admin/employment/employment.index";
 import adminOrganizationRouter from "@/routes/admin/organization/organization.index";
 import adminPositionRouter from "@/routes/admin/position/position.index";
 import adminUserRouter from "@/routes/admin/user/user.index";
-
 // 顶层路由
 import authRouter from "@/routes/auth/auth.index";
 import internalRouter from "@/routes/internal/internal.index";
+
 import openRouter from "@/routes/open/open.index";
 import publicRouter from "@/routes/public/public.index";
 import ssoRouter from "@/routes/sso/sso.index";
+import { appRouter } from "@/trpc/app.router";
+import { createTRPCContext } from "@/trpc/trpc";
 
 import { pinoLogger } from "../clients/pino";
 

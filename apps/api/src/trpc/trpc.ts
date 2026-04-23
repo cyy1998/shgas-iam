@@ -1,10 +1,10 @@
 import type { Context as HonoContext } from "hono";
-import { initTRPC, TRPCError } from "@trpc/server";
 import { CustomError } from "@errors/CustomError";
+import { initTRPC, TRPCError } from "@trpc/server";
 
-export type TRPCAppContext = {
+export interface TRPCAppContext {
   hono: HonoContext;
-};
+}
 
 export async function createTRPCContext(opts: { honoCtx: HonoContext }): Promise<TRPCAppContext> {
   return { hono: opts.honoCtx };

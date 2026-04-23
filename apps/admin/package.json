@@ -3,8 +3,8 @@
   "private": true,
   "author": "cyy",
   "scripts": {
-    "dev": "max dev",
     "build": "max build",
+    "dev": "max dev",
     "format": "prettier --cache --write .",
     "postinstall": "max setup",
     "setup": "max setup",

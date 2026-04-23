@@ -1,15 +1,24 @@
-import StatusTag from "@/components/StatusTag";
+import StatusTag from '@/components/StatusTag';
 import {
   deleteOrganization,
   type OrganizationChildrenPage,
   type OrganizationDetailVo,
   type OrganizationTreeNode,
   updateOrganizationStatus,
-} from "@/services/organization";
-import { ProDescriptions } from "@ant-design/pro-components";
-import { getOrganizationStatusOptions } from "@iam/shared";
-import { Button, Dropdown, Empty, message, Modal, Space, Table, Tooltip } from "antd";
-import type { ColumnsType } from "antd/es/table";
+} from '@/services/organization';
+import { ProDescriptions } from '@ant-design/pro-components';
+import { getOrganizationStatusOptions } from '@iam/shared';
+import {
+  Button,
+  Dropdown,
+  Empty,
+  message,
+  Modal,
+  Space,
+  Table,
+  Tooltip,
+} from 'antd';
+import type { ColumnsType } from 'antd/es/table';
 
 type Props = {
   loading: boolean;
@@ -23,19 +32,19 @@ type Props = {
   onChanged: () => void;
 };
 
-const childColumns = (onSelectChild: (orgCode: string) => void): ColumnsType<OrganizationTreeNode> => [
+const childColumns = (
+  onSelectChild: (orgCode: string) => void,
+): ColumnsType<OrganizationTreeNode> => [
   {
-    title: "编码",
-    dataIndex: "orgCode",
-    render: (v, row) => (
-      <a onClick={() => onSelectChild(row.orgCode)}>{v}</a>
-    ),
+    title: '编码',
+    dataIndex: 'orgCode',
+    render: (v, row) => <a onClick={() => onSelectChild(row.orgCode)}>{v}</a>,
   },
-  { title: "名称", dataIndex: "orgName" },
-  { title: "类型", dataIndex: "orgType" },
+  { title: '名称', dataIndex: 'orgName' },
+  { title: '类型', dataIndex: 'orgType' },
   {
-    title: "状态",
-    dataIndex: "status",
+    title: '状态',
+    dataIndex: 'status',
     render: (_, row) => <StatusTag domain="org" status={row.status} />,
   },
 ];
@@ -60,12 +69,12 @@ export default function OrgDetailPanel({
   }
 
   const handleError = (err: unknown) =>
-    message.error(err instanceof Error ? err.message : "操作失败");
+    message.error(err instanceof Error ? err.message : '操作失败');
 
   const onStatusChange = async (status: number) => {
     try {
       await updateOrganizationStatus(detail.orgCode, status);
-      message.success("状态已更新");
+      message.success('状态已更新');
       onChanged();
     } catch (err) {
       handleError(err);
@@ -73,21 +82,22 @@ export default function OrgDetailPanel({
   };
 
   const deleteDisabled = detail.childrenCount > 0 || detail.employmentCount > 0;
-  const deleteDisabledReason = detail.childrenCount > 0
-    ? "有下级组织，不可删除"
-    : detail.employmentCount > 0
-      ? "存在关联雇佣，不可删除"
-      : "";
+  const deleteDisabledReason =
+    detail.childrenCount > 0
+      ? '有下级组织，不可删除'
+      : detail.employmentCount > 0
+      ? '存在关联雇佣，不可删除'
+      : '';
 
   const onDelete = () => {
     Modal.confirm({
       title: `删除组织 ${detail.orgName}？`,
-      content: "软删除后不会出现在列表中，如需恢复请联系管理员。",
-      okType: "danger",
+      content: '软删除后不会出现在列表中，如需恢复请联系管理员。',
+      okType: 'danger',
       onOk: async () => {
         try {
           await deleteOrganization(detail.orgCode);
-          message.success("已删除");
+          message.success('已删除');
           onChanged();
         } catch (err) {
           handleError(err);
@@ -98,11 +108,17 @@ export default function OrgDetailPanel({
 
   return (
     <div style={{ padding: 16 }}>
-      <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 16 }}>
+      <div
+        style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          marginBottom: 16,
+        }}
+      >
         <Space size="middle">
           <h3 style={{ margin: 0 }}>
             {detail.orgName}
-            <span style={{ color: "#999", fontSize: 12, marginLeft: 8 }}>
+            <span style={{ color: '#999', fontSize: 12, marginLeft: 8 }}>
               {detail.orgCode}
             </span>
           </h3>
@@ -126,10 +142,14 @@ export default function OrgDetailPanel({
           </Dropdown>
           {deleteDisabled ? (
             <Tooltip title={deleteDisabledReason}>
-              <Button danger disabled>删除</Button>
+              <Button danger disabled>
+                删除
+              </Button>
             </Tooltip>
           ) : (
-            <Button danger onClick={onDelete}>删除</Button>
+            <Button danger onClick={onDelete}>
+              删除
+            </Button>
           )}
         </Space>
       </div>
@@ -139,33 +159,32 @@ export default function OrgDetailPanel({
         dataSource={detail}
         loading={loading}
         columns={[
-          { title: "编码", dataIndex: "orgCode" },
-          { title: "名称", dataIndex: "orgName" },
-          { title: "类型", dataIndex: "orgType" },
-          { title: "层级", dataIndex: "level" },
-          { title: "路径", dataIndex: "path", span: 2 },
+          { title: '编码', dataIndex: 'orgCode' },
+          { title: '名称', dataIndex: 'orgName' },
+          { title: '类型', dataIndex: 'orgType' },
+          { title: '层级', dataIndex: 'level' },
+          { title: '路径', dataIndex: 'path', span: 2 },
           {
-            title: "上级",
-            dataIndex: "parentName",
-            render: (_, row) => row.parentCode
-              ? `${row.parentName} (${row.parentCode})`
-              : "—",
+            title: '上级',
+            dataIndex: 'parentName',
+            render: (_, row) =>
+              row.parentCode ? `${row.parentName} (${row.parentCode})` : '—',
           },
           {
-            title: "状态",
-            dataIndex: "status",
+            title: '状态',
+            dataIndex: 'status',
             render: (_, row) => <StatusTag domain="org" status={row.status} />,
           },
-          { title: "下级数", dataIndex: "childrenCount" },
-          { title: "在职雇佣", dataIndex: "employmentCount" },
+          { title: '下级数', dataIndex: 'childrenCount' },
+          { title: '在职雇佣', dataIndex: 'employmentCount' },
           {
-            title: "创建时间",
-            dataIndex: "createTime",
+            title: '创建时间',
+            dataIndex: 'createTime',
             render: (_, row) => new Date(row.createTime).toLocaleString(),
           },
           {
-            title: "更新时间",
-            dataIndex: "updateTime",
+            title: '更新时间',
+            dataIndex: 'updateTime',
             render: (_, row) => new Date(row.updateTime).toLocaleString(),
           },
         ]}
@@ -175,12 +194,8 @@ export default function OrgDetailPanel({
         <h4>
           下级组织
           {childrenPage && childrenPage.total > 0 && (
-            <span style={{ color: "#999", fontSize: 12, marginLeft: 8 }}>
-              共
-              {" "}
-              {childrenPage.total}
-              {" "}
-              条
+            <span style={{ color: '#999', fontSize: 12, marginLeft: 8 }}>
+              共 {childrenPage.total} 条
             </span>
           )}
         </h4>
@@ -198,7 +213,7 @@ export default function OrgDetailPanel({
             pageSizeOptions: [10, 20, 50, 100],
             onChange: (page, size) => onChildrenPageChange(page, size),
           }}
-          locale={{ emptyText: "无下级组织" }}
+          locale={{ emptyText: '无下级组织' }}
         />
       </div>
     </div>
