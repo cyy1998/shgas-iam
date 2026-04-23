@@ -1,0 +1,8 @@
+**/node_modules
+**/.turbo
+**/.env
+**/.env.local
+**/dist
+apps/admin
+apps/api/debug
+apps/api/src/db/migrations
