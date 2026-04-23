@@ -19,7 +19,7 @@ import {
 import { getEmploymentStatusOptions } from "@iam/shared";
 import { Button, Dropdown, message, Modal, Space, Tag } from "antd";
 import { useEffect, useRef, useState } from "react";
-import { useLocation } from "@@/exports";
+import { useLocation } from "@umijs/max";
 
 type PresetFromUrl = { username?: string };
 
