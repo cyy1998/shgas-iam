@@ -3,9 +3,9 @@ import AvatarDropdown from '@/components/RightContent/AvatarDropdown';
 import {
   ADMIN_ROLE_CODE,
   API_BASE,
-  SSO_AUTHORIZE_URL,
   SSO_CLIENT_CODE,
 } from '@/constants/config';
+import { redirectToLogin } from '@/utils/auth';
 import { createElement, type ReactElement } from 'react';
 
 type InitialState = { currentUser?: { username: string; roles: string[] } };
@@ -22,8 +22,7 @@ export async function getInitialState(): Promise<InitialState> {
     });
 
     if (res.status === 401) {
-      const redirectUrl = encodeURIComponent(window.location.href);
-      window.location.href = `${SSO_AUTHORIZE_URL}?client=${SSO_CLIENT_CODE}&redirectUrl=${redirectUrl}`;
+      redirectToLogin();
       return new Promise(() => {});
     }
 
@@ -63,6 +62,18 @@ export const request = {
         },
       };
     },
+  ],
+  responseInterceptors: [
+    [
+      (response: any) => response,
+      (error: any) => {
+        if (error?.response?.status === 401) {
+          redirectToLogin();
+          return new Promise(() => {});
+        }
+        return Promise.reject(error);
+      },
+    ],
   ],
 };
 
