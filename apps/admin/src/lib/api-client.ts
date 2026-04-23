@@ -7,7 +7,7 @@ export const apiClient = createTRPCClient<AppRouter>({
   links: [
     httpBatchLink({
       url: `${API_BASE}/rpc`,
-      fetch: async (input, init) => {
+      fetch: async (input: RequestInfo | URL, init?: RequestInit) => {
         const response = await fetch(input, {
           ...init,
           credentials: 'include',

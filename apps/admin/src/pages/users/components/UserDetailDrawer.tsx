@@ -1,4 +1,10 @@
 import StatusTag from '@/components/StatusTag';
+import TransferModal from '@/pages/employments/components/TransferModal';
+import {
+  deleteEmployment,
+  type EmploymentVo,
+  updateEmploymentStatus,
+} from '@/services/employment';
 import {
   deleteUser,
   getUser,
@@ -6,7 +12,7 @@ import {
   type UserDetailVo,
 } from '@/services/user';
 import { ProDescriptions } from '@ant-design/pro-components';
-import { getUserStatusOptions } from '@iam/shared';
+import { getEmploymentStatusOptions, getUserStatusOptions } from '@iam/shared';
 import { history } from '@umijs/max';
 import {
   Button,
@@ -44,6 +50,7 @@ export default function UserDetailDrawer({
 }: Props) {
   const [detail, setDetail] = useState<UserDetailVo | null>(null);
   const [loading, setLoading] = useState(false);
+  const [transferTarget, setTransferTarget] = useState<EmploymentVo | null>(null);
 
   useEffect(() => {
     if (!open || !username) {
@@ -104,6 +111,33 @@ export default function UserDetailDrawer({
     });
   };
 
+  const onEmploymentStatusChange = async (row: EmploymentRow, status: 1 | 2 | 3) => {
+    try {
+      await updateEmploymentStatus(row.id, status);
+      message.success('状态已更新');
+      await refresh();
+    } catch (err) {
+      handleError(err);
+    }
+  };
+
+  const onEmploymentDelete = (row: EmploymentRow) => {
+    Modal.confirm({
+      title: `删除雇佣 ${row.posName}？`,
+      content: '软删除后该雇佣记录不再可见。',
+      okType: 'danger',
+      onOk: async () => {
+        try {
+          await deleteEmployment(row.id);
+          message.success('已删除');
+          await refresh();
+        } catch (err) {
+          handleError(err);
+        }
+      },
+    });
+  };
+
   const gotoCreateEmployment = () => {
     if (!detail) return;
     history.push(
@@ -143,9 +177,47 @@ export default function UserDetailDrawer({
       ),
       width: 90,
     },
+    {
+      title: '操作',
+      key: 'action',
+      width: 160,
+      render: (_: unknown, row: EmploymentRow) => {
+        if (row.status === 3) return null;
+        return (
+          <Space size="middle">
+            <a onClick={() => setTransferTarget(row as unknown as EmploymentVo)}>
+              转岗
+            </a>
+            <Dropdown
+              menu={{
+                items: getEmploymentStatusOptions()
+                  .filter((o) => o.value !== row.status)
+                  .map((o) => ({
+                    key: String(o.value),
+                    label: `切为「${o.label}」`,
+                    onClick: () => onEmploymentStatusChange(row, o.value as 1 | 2 | 3),
+                  })),
+              }}
+            >
+              <a>状态</a>
+            </Dropdown>
+            <a style={{ color: '#d4380d' }} onClick={() => onEmploymentDelete(row)}>
+              删除
+            </a>
+          </Space>
+        );
+      },
+    },
   ];
 
   return (
+    <>
+    <TransferModal
+      open={transferTarget !== null}
+      employment={transferTarget}
+      onOpenChange={(open) => { if (!open) setTransferTarget(null); }}
+      onSuccess={async () => { setTransferTarget(null); await refresh(); }}
+    />
     <Drawer
       width={640}
       open={open}
@@ -300,5 +372,6 @@ export default function UserDetailDrawer({
         />
       )}
     </Drawer>
+    </>
   );
 }
