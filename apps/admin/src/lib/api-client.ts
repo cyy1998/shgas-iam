@@ -5,7 +5,7 @@ import { createTRPCClient, httpBatchLink } from '@trpc/client';
 export const apiClient = createTRPCClient<AppRouter>({
   links: [
     httpBatchLink({
-      url: '/rpc',
+      url: process.env.NODE_ENV === 'production' ? '/api/iam/rpc' : '/rpc',
       fetch: (input, init) =>
         fetch(input, {
           ...init,
