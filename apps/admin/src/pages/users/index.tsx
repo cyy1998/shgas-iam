@@ -15,7 +15,7 @@ import {
   type ProColumns,
   ProTable,
 } from "@ant-design/pro-components";
-import { getUserStatusOptions } from "@iam/shared";
+import { getUserStatusOptions, getUserTypeOptions } from "@iam/shared";
 import { Button, Dropdown, message, Modal } from "antd";
 import { useRef, useState } from "react";
 
@@ -65,7 +65,15 @@ export default function UsersPage() {
     { title: "工号", dataIndex: "username", width: 120 },
     { title: "姓名", dataIndex: "name", width: 120 },
     { title: "手机", dataIndex: "mobile", width: 140, search: false },
-    { title: "类型", dataIndex: "userType", width: 120, search: false },
+    {
+      title: "类型",
+      dataIndex: "userType",
+      width: 120,
+      valueType: "select",
+      valueEnum: Object.fromEntries(
+        getUserTypeOptions().map(o => [o.value, { text: o.label }]),
+      ),
+    },
     {
       title: "状态",
       dataIndex: "status",
@@ -125,12 +133,13 @@ export default function UsersPage() {
         search={{ labelWidth: "auto" }}
         request={async (params) => {
           try {
-            const { current = 1, pageSize = 20, username, name, status } = params as {
+            const { current = 1, pageSize = 20, username, name, status, userType } = params as {
               current?: number;
               pageSize?: number;
               username?: string;
               name?: string;
               status?: number;
+              userType?: string;
             };
             const text = (username || name || "") as string;
             const data = await searchUsers({
@@ -140,6 +149,7 @@ export default function UsersPage() {
                 fuzzyConditions: text ? { text } : {},
                 exactConditions: {
                   statuses: status !== undefined ? [status as 1 | 2 | 3] : undefined,
+                  userTypes: userType ? [userType] : undefined,
                 },
               },
             });
