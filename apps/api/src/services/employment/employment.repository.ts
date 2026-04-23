@@ -1,4 +1,4 @@
-import type { EmploymentQueryDto } from "./employment.type";
+import type { EmploymentAdminPaginationQueryDto, EmploymentQueryDto } from "./employment.type";
 import type { PrismaTransaction } from "@/db";
 import type { EmploymentWhereInput } from "@/db/generated/prisma/models";
 import { Status } from "@enums/status";
@@ -330,6 +330,186 @@ export async function searchEmployments(
       deptartment: true,
       company: true,
       position: true,
+    },
+  });
+}
+
+export async function getEmploymentByIdForAdmin(
+  id: number,
+  tx: PrismaTransaction = prisma,
+) {
+  return await tx.employment.findFirst({
+    where: {
+      id,
+      isDelete: false,
+    },
+    include: {
+      user: true,
+      deptartment: true,
+      company: true,
+      position: true,
+    },
+  });
+}
+
+export async function getEmploymentsByUserIdForAdmin(
+  userId: number,
+  tx: PrismaTransaction = prisma,
+) {
+  return await tx.employment.findMany({
+    where: {
+      userId,
+      isDelete: false,
+    },
+    include: {
+      user: true,
+      deptartment: true,
+      company: true,
+      position: true,
+    },
+  });
+}
+
+function buildEmploymentAdminWhere(dto: EmploymentAdminPaginationQueryDto) {
+  const text = dto.conditions.fuzzyConditions.text;
+  return {
+    isDelete: false,
+    status: { in: dto.conditions.exactConditions.statuses },
+    isPrimary: dto.conditions.exactConditions.isPrimary,
+    user: {
+      isDelete: false,
+      username: { in: dto.conditions.exactConditions.usernames },
+      ...(text !== undefined
+        ? {
+            OR: [
+              { username: { contains: text } },
+              { name: { contains: text } },
+            ],
+          }
+        : {}),
+    },
+    company: {
+      isDelete: false,
+      orgCode: { in: dto.conditions.exactConditions.companyOrgCodes },
+    },
+    deptartment: {
+      isDelete: false,
+      orgCode: { in: dto.conditions.exactConditions.deptOrgCodes },
+    },
+    position: {
+      isDelete: false,
+      posCode: { in: dto.conditions.exactConditions.posCodes },
+    },
+  };
+}
+
+export async function searchEmploymentsFuzzyForAdminPaged(
+  dto: EmploymentAdminPaginationQueryDto,
+  tx: PrismaTransaction = prisma,
+) {
+  const { pageNum, pageSize } = dto;
+  const where = buildEmploymentAdminWhere(dto);
+  const [rows, total] = await Promise.all([
+    tx.employment.findMany({
+      where,
+      skip: (pageNum - 1) * pageSize,
+      take: pageSize,
+      orderBy: [{ isPrimary: "desc" }, { id: "desc" }],
+      include: {
+        user: true,
+        deptartment: true,
+        company: true,
+        position: true,
+      },
+    }),
+    tx.employment.count({ where }),
+  ]);
+  return { rows, total };
+}
+
+export async function createEmploymentRecord(
+  data: {
+    userId: number;
+    posId: number;
+    orgId: number;
+    compId: number;
+    isPrimary?: boolean;
+    startTime?: Date;
+    description?: string | null;
+    status?: number;
+  },
+  tx: PrismaTransaction = prisma,
+) {
+  return await tx.employment.create({
+    data: {
+      userId: data.userId,
+      posId: data.posId,
+      orgId: data.orgId,
+      compId: data.compId,
+      isPrimary: data.isPrimary ?? false,
+      startTime: data.startTime ?? new Date(),
+      description: data.description ?? null,
+      status: data.status ?? Status.Enable,
+    },
+  });
+}
+
+export async function updateEmploymentRecord(
+  id: number,
+  data: {
+    isPrimary?: boolean;
+    startTime?: Date;
+    endTime?: Date | null;
+    description?: string | null;
+    status?: number;
+  },
+  tx: PrismaTransaction = prisma,
+) {
+  return await tx.employment.update({
+    where: { id },
+    data,
+  });
+}
+
+export async function unsetPrimariesByUserId(
+  userId: number,
+  exceptEmploymentId: number | null,
+  tx: PrismaTransaction = prisma,
+) {
+  return await tx.employment.updateMany({
+    where: {
+      userId,
+      isPrimary: true,
+      isDelete: false,
+      ...(exceptEmploymentId !== null ? { NOT: { id: exceptEmploymentId } } : {}),
+    },
+    data: { isPrimary: false },
+  });
+}
+
+export async function softDeleteEmployment(
+  id: number,
+  tx: PrismaTransaction = prisma,
+) {
+  return await tx.employment.update({
+    where: { id },
+    data: { isDelete: true },
+  });
+}
+
+export async function endActiveEmploymentsByUserId(
+  userId: number,
+  tx: PrismaTransaction = prisma,
+) {
+  return await tx.employment.updateMany({
+    where: {
+      userId,
+      isDelete: false,
+      status: { in: [Status.Enable, Status.Pause] },
+    },
+    data: {
+      status: Status.Disable,
+      endTime: new Date(),
     },
   });
 }
