@@ -1,10 +1,11 @@
-import type { inferRouterOutputs } from "@trpc/server";
-import type { AppRouter } from "@iam/api/trpc";
-import { apiClient } from "@/lib/api-client";
+import { apiClient } from '@/lib/api-client';
+import type { AppRouter } from '@iam/api/trpc';
+import type { inferRouterOutputs } from '@trpc/server';
 
-type AdminEmploymentOutputs = inferRouterOutputs<AppRouter>["admin"]["employment"];
-export type EmploymentVo = AdminEmploymentOutputs["search"]["result"][number];
-export type EmploymentDetailVo = AdminEmploymentOutputs["detail"];
+type AdminEmploymentOutputs =
+  inferRouterOutputs<AppRouter>['admin']['employment'];
+export type EmploymentVo = AdminEmploymentOutputs['search']['result'][number];
+export type EmploymentDetailVo = AdminEmploymentOutputs['detail'];
 
 export type EmploymentSearchParams = {
   pageNum: number;

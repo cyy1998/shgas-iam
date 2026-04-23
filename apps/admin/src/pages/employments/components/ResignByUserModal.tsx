@@ -1,7 +1,7 @@
-import { apiClient } from "@/lib/api-client";
-import { resignUser } from "@/services/employment";
-import { message, Modal, Select } from "antd";
-import { useState } from "react";
+import { apiClient } from '@/lib/api-client';
+import { resignUser } from '@/services/employment';
+import { message, Modal, Select } from 'antd';
+import { useState } from 'react';
 
 type UserOption = { label: string; value: string; name: string };
 
@@ -11,7 +11,11 @@ type Props = {
   onSuccess?: () => void;
 };
 
-export default function ResignByUserDialog({ open, onClose, onSuccess }: Props) {
+export default function ResignByUserDialog({
+  open,
+  onClose,
+  onSuccess,
+}: Props) {
   const [selected, setSelected] = useState<UserOption | null>(null);
   const [options, setOptions] = useState<UserOption[]>([]);
   const [loading, setLoading] = useState(false);
@@ -34,24 +38,22 @@ export default function ResignByUserDialog({ open, onClose, onSuccess }: Props) 
       });
       const result = res.result as Array<{ username: string; name: string }>;
       setOptions(
-        result.map(u => ({
+        result.map((u) => ({
           label: `${u.name} (${u.username})`,
           value: u.username,
           name: u.name,
         })),
       );
-    }
-    catch (err) {
-      message.error(err instanceof Error ? err.message : "搜索失败");
-    }
-    finally {
+    } catch (err) {
+      message.error(err instanceof Error ? err.message : '搜索失败');
+    } finally {
       setLoading(false);
     }
   };
 
   const onOk = async () => {
     if (!selected) {
-      message.warning("请先选择用户");
+      message.warning('请先选择用户');
       return;
     }
     setSubmitting(true);
@@ -62,11 +64,9 @@ export default function ResignByUserDialog({ open, onClose, onSuccess }: Props) 
       onClose();
       setSelected(null);
       setOptions([]);
-    }
-    catch (err) {
-      message.error(err instanceof Error ? err.message : "离职失败");
-    }
-    finally {
+    } catch (err) {
+      message.error(err instanceof Error ? err.message : '离职失败');
+    } finally {
       setSubmitting(false);
     }
   };
@@ -93,13 +93,13 @@ export default function ResignByUserDialog({ open, onClose, onSuccess }: Props) 
       <Select
         showSearch
         placeholder="输入工号/姓名搜索"
-        style={{ width: "100%" }}
+        style={{ width: '100%' }}
         filterOption={false}
         loading={loading}
         onSearch={onSearch}
-        options={options.map(o => ({ label: o.label, value: o.value }))}
+        options={options.map((o) => ({ label: o.label, value: o.value }))}
         onChange={(v) => {
-          const found = options.find(o => o.value === v);
+          const found = options.find((o) => o.value === v);
           setSelected(found ?? null);
         }}
         value={selected?.value}

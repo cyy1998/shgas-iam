@@ -1,7 +1,5 @@
-import type { inferRouterOutputs } from "@trpc/server";
-import type { AppRouter } from "@iam/api/trpc";
-import { apiClient } from "@/lib/api-client";
-import { createEmployment } from "@/services/employment";
+import { apiClient } from '@/lib/api-client';
+import { createEmployment } from '@/services/employment';
 import {
   ModalForm,
   ProFormDatePicker,
@@ -9,11 +7,15 @@ import {
   ProFormSwitch,
   ProFormText,
   ProFormTextArea,
-} from "@ant-design/pro-components";
-import { message } from "antd";
+} from '@ant-design/pro-components';
+import type { AppRouter } from '@iam/api/trpc';
+import type { inferRouterOutputs } from '@trpc/server';
+import { message } from 'antd';
 
-type OrgVo = inferRouterOutputs<AppRouter>["admin"]["organization"]["search"]["result"][number];
-type PosVo = inferRouterOutputs<AppRouter>["admin"]["position"]["search"]["result"][number];
+type OrgVo =
+  inferRouterOutputs<AppRouter>['admin']['organization']['search']['result'][number];
+type PosVo =
+  inferRouterOutputs<AppRouter>['admin']['position']['search']['result'][number];
 
 type Props = {
   open: boolean;
@@ -29,11 +31,11 @@ export default function EmploymentFormModal({
   onSuccess,
 }: Props) {
   const handleError = (err: unknown) =>
-    message.error(err instanceof Error ? err.message : "创建失败");
+    message.error(err instanceof Error ? err.message : '创建失败');
 
   return (
     <ModalForm
-      title={presetUsername ? `为 ${presetUsername} 新增雇佣` : "新增雇佣"}
+      title={presetUsername ? `为 ${presetUsername} 新增雇佣` : '新增雇佣'}
       open={open}
       onOpenChange={onOpenChange}
       initialValues={{
@@ -49,14 +51,15 @@ export default function EmploymentFormModal({
             deptOrgCode: values.deptOrgCode,
             posCode: values.posCode,
             isPrimary: values.isPrimary,
-            startTime: values.startTime ? new Date(values.startTime) : undefined,
+            startTime: values.startTime
+              ? new Date(values.startTime)
+              : undefined,
             description: values.description || null,
           });
-          message.success("雇佣已创建");
+          message.success('雇佣已创建');
           onSuccess?.();
           return true;
-        }
-        catch (err) {
+        } catch (err) {
           handleError(err);
           return false;
         }
@@ -66,7 +69,7 @@ export default function EmploymentFormModal({
         name="username"
         label="用户"
         disabled={!!presetUsername}
-        rules={[{ required: true, message: "请输入用户名（工号）" }]}
+        rules={[{ required: true, message: '请输入用户名（工号）' }]}
         tooltip="如果从用户抽屉跳转，此处自动预填"
       />
       {/* exactConditions.orgType 为单值字符串，按 orgType 过滤公司类型 */}
@@ -74,14 +77,14 @@ export default function EmploymentFormModal({
         name="companyOrgCode"
         label="公司"
         showSearch
-        rules={[{ required: true, message: "请选择公司" }]}
+        rules={[{ required: true, message: '请选择公司' }]}
         request={async (params) => {
           const res = await apiClient.admin.organization.search.query({
             pageNum: 1,
             pageSize: 50,
             conditions: {
               fuzzyConditions: { text: params.keyWords || undefined },
-              exactConditions: { orgType: "公司" },
+              exactConditions: { orgType: '公司' },
             },
           });
           return res.result.map((o: OrgVo) => ({
@@ -95,14 +98,14 @@ export default function EmploymentFormModal({
         name="deptOrgCode"
         label="部门"
         showSearch
-        rules={[{ required: true, message: "请选择部门" }]}
+        rules={[{ required: true, message: '请选择部门' }]}
         request={async (params) => {
           const res = await apiClient.admin.organization.search.query({
             pageNum: 1,
             pageSize: 50,
             conditions: {
               fuzzyConditions: { text: params.keyWords || undefined },
-              exactConditions: { orgType: "部门" },
+              exactConditions: { orgType: '部门' },
             },
           });
           return res.result.map((o: OrgVo) => ({
@@ -115,7 +118,7 @@ export default function EmploymentFormModal({
         name="posCode"
         label="岗位"
         showSearch
-        rules={[{ required: true, message: "请选择岗位" }]}
+        rules={[{ required: true, message: '请选择岗位' }]}
         request={async (params) => {
           const res = await apiClient.admin.position.search.query({
             pageNum: 1,
