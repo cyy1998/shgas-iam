@@ -3,15 +3,18 @@ import { createEmployment } from '@/services/employment';
 import {
   ModalForm,
   ProFormDatePicker,
+  ProFormDependency,
   ProFormSelect,
   ProFormSwitch,
   ProFormText,
   ProFormTextArea,
 } from '@ant-design/pro-components';
+import type { ProFormInstance } from '@ant-design/pro-components';
 import type { AppRouter } from '@iam/api/trpc';
 import { OrganizationType } from '@iam/shared';
 import type { inferRouterOutputs } from '@trpc/server';
 import { message } from 'antd';
+import { useRef } from 'react';
 
 type OrgVo =
   inferRouterOutputs<AppRouter>['admin']['organization']['search']['result'][number];
@@ -31,6 +34,8 @@ export default function EmploymentFormModal({
   onOpenChange,
   onSuccess,
 }: Props) {
+  const formRef = useRef<ProFormInstance>();
+
   const handleError = (err: unknown) =>
     message.error(err instanceof Error ? err.message : '创建失败');
 
@@ -39,6 +44,7 @@ export default function EmploymentFormModal({
       title={presetUsername ? `为 ${presetUsername} 新增雇佣` : '新增雇佣'}
       open={open}
       onOpenChange={onOpenChange}
+      formRef={formRef}
       initialValues={{
         username: presetUsername ?? undefined,
         isPrimary: false,
@@ -73,12 +79,15 @@ export default function EmploymentFormModal({
         rules={[{ required: true, message: '请输入用户名（工号）' }]}
         tooltip="如果从用户抽屉跳转，此处自动预填"
       />
-      {/* exactConditions.orgType 为单值字符串，按 orgType 过滤公司类型 */}
       <ProFormSelect
         name="companyOrgCode"
         label="公司"
         showSearch
         rules={[{ required: true, message: '请选择公司' }]}
+        fieldProps={{
+          onChange: () =>
+            formRef.current?.setFieldValue('deptOrgCode', undefined),
+        }}
         request={async (params) => {
           const res = await apiClient.admin.organization.search.query({
             pageNum: 1,
@@ -94,27 +103,39 @@ export default function EmploymentFormModal({
           }));
         }}
       />
-      {/* exactConditions.orgType 为单值字符串，按 orgType 过滤部门类型 */}
-      <ProFormSelect
-        name="deptOrgCode"
-        label="部门"
-        showSearch
-        rules={[{ required: true, message: '请选择部门' }]}
-        request={async (params) => {
-          const res = await apiClient.admin.organization.search.query({
-            pageNum: 1,
-            pageSize: 50,
-            conditions: {
-              fuzzyConditions: { text: params.keyWords || undefined },
-              exactConditions: { orgType: OrganizationType.Department },
-            },
-          });
-          return res.result.map((o: OrgVo) => ({
-            label: `${o.orgName} (${o.orgCode})`,
-            value: o.orgCode,
-          }));
-        }}
-      />
+      <ProFormDependency name={['companyOrgCode']}>
+        {({ companyOrgCode }: { companyOrgCode?: string }) => (
+          <ProFormSelect
+            name="deptOrgCode"
+            label="部门"
+            showSearch
+            disabled={!companyOrgCode}
+            placeholder={companyOrgCode ? '请选择部门' : '请先选择公司'}
+            rules={[{ required: true, message: '请选择部门' }]}
+            params={{ companyOrgCode }}
+            request={async (params) => {
+              if (!companyOrgCode) return [];
+              const res = await apiClient.admin.organization.search.query({
+                pageNum: 1,
+                pageSize: 200,
+                conditions: {
+                  fuzzyConditions: {
+                    text: (params.keyWords as string | undefined) || undefined,
+                  },
+                  exactConditions: {
+                    orgType: OrganizationType.Department,
+                    parentOrgCode: companyOrgCode,
+                  },
+                },
+              });
+              return res.result.map((o: OrgVo) => ({
+                label: `${o.orgName} (${o.orgCode})`,
+                value: o.orgCode,
+              }));
+            }}
+          />
+        )}
+      </ProFormDependency>
       <ProFormSelect
         name="posCode"
         label="岗位"

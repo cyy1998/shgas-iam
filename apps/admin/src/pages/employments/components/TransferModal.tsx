@@ -3,14 +3,17 @@ import { type EmploymentVo, transferEmployment } from '@/services/employment';
 import {
   ModalForm,
   ProFormDatePicker,
+  ProFormDependency,
   ProFormSelect,
   ProFormSwitch,
   ProFormTextArea,
 } from '@ant-design/pro-components';
+import type { ProFormInstance } from '@ant-design/pro-components';
 import type { AppRouter } from '@iam/api/trpc';
 import { OrganizationType } from '@iam/shared';
 import type { inferRouterOutputs } from '@trpc/server';
 import { Descriptions, message } from 'antd';
+import { useRef } from 'react';
 
 type OrgVo =
   inferRouterOutputs<AppRouter>['admin']['organization']['search']['result'][number];
@@ -30,6 +33,8 @@ export default function TransferModal({
   onOpenChange,
   onSuccess,
 }: Props) {
+  const formRef = useRef<ProFormInstance>();
+
   const handleError = (err: unknown) =>
     message.error(err instanceof Error ? err.message : '转岗失败');
 
@@ -38,6 +43,7 @@ export default function TransferModal({
       title={`转岗 — ${employment?.name ?? ''} (${employment?.username ?? ''})`}
       open={open}
       onOpenChange={onOpenChange}
+      formRef={formRef}
       initialValues={{ inheritPrimary: true }}
       modalProps={{ destroyOnClose: true, maskClosable: false }}
       onFinish={async (values) => {
@@ -90,6 +96,10 @@ export default function TransferModal({
         label="新公司"
         showSearch
         rules={[{ required: true }]}
+        fieldProps={{
+          onChange: () =>
+            formRef.current?.setFieldValue('newDeptOrgCode', undefined),
+        }}
         request={async (params) => {
           const res = await apiClient.admin.organization.search.query({
             pageNum: 1,
@@ -105,26 +115,39 @@ export default function TransferModal({
           }));
         }}
       />
-      <ProFormSelect
-        name="newDeptOrgCode"
-        label="新部门"
-        showSearch
-        rules={[{ required: true }]}
-        request={async (params) => {
-          const res = await apiClient.admin.organization.search.query({
-            pageNum: 1,
-            pageSize: 50,
-            conditions: {
-              fuzzyConditions: { text: params.keyWords || undefined },
-              exactConditions: { orgType: OrganizationType.Department },
-            },
-          });
-          return res.result.map((o: OrgVo) => ({
-            label: `${o.orgName} (${o.orgCode})`,
-            value: o.orgCode,
-          }));
-        }}
-      />
+      <ProFormDependency name={['newCompanyOrgCode']}>
+        {({ newCompanyOrgCode }: { newCompanyOrgCode?: string }) => (
+          <ProFormSelect
+            name="newDeptOrgCode"
+            label="新部门"
+            showSearch
+            disabled={!newCompanyOrgCode}
+            placeholder={newCompanyOrgCode ? '请选择部门' : '请先选择新公司'}
+            rules={[{ required: true }]}
+            params={{ newCompanyOrgCode }}
+            request={async (params) => {
+              if (!newCompanyOrgCode) return [];
+              const res = await apiClient.admin.organization.search.query({
+                pageNum: 1,
+                pageSize: 200,
+                conditions: {
+                  fuzzyConditions: {
+                    text: (params.keyWords as string | undefined) || undefined,
+                  },
+                  exactConditions: {
+                    orgType: OrganizationType.Department,
+                    parentOrgCode: newCompanyOrgCode,
+                  },
+                },
+              });
+              return res.result.map((o: OrgVo) => ({
+                label: `${o.orgName} (${o.orgCode})`,
+                value: o.orgCode,
+              }));
+            }}
+          />
+        )}
+      </ProFormDependency>
       <ProFormSelect
         name="newPosCode"
         label="新岗位"
