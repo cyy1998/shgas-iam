@@ -1,6 +1,6 @@
 import { z } from "@hono/zod-openapi";
 import { OrganizationSchema as PrismaOrganizationSchema } from "@/db/generated/schemas";
-import { Status } from "@/enums/status";
+import { OrganizationStatus } from "@/enums/organization.status";
 import { createPageQuerySchema } from "../../lib/core/pagination/schema";
 
 export const OrganizationSchema = z.object(PrismaOrganizationSchema.shape);
@@ -73,11 +73,11 @@ export const OrganizationPaginationQueryDtoSchema = createPageQuerySchema(
 export const OrganizationUpdateDtoSchema = z.object({
   orgName: z.string().min(1).optional(),
   orgType: z.string().min(1).optional(),
-  status: z.enum(Status).optional(),
+  status: z.enum(OrganizationStatus).optional(),
 }).openapi("OrganizationUpdateDto");
 
 export const OrganizationStatusUpdateDtoSchema = z.object({
-  status: z.enum(Status),
+  status: z.enum(OrganizationStatus),
 }).openapi("OrganizationStatusUpdateDto");
 
 export const OrganizationTreeNodeDtoSchema = z.object({

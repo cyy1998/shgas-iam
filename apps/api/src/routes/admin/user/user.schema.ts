@@ -1,5 +1,5 @@
 import { z } from "@hono/zod-openapi";
-import { statusToString } from "@/enums/status";
+import { userStatusToString } from "@/enums/user.status";
 import { EmploymentDetailDtoSchema } from "@/services/employment/employment.schema";
 import { UserDetailDtoSchema, UserDtoSchema } from "@/services/user/user.schema";
 
@@ -10,7 +10,7 @@ export const UserVoSchema = UserDtoSchema.extend({
 export const UserVoConverterSchema = UserDtoSchema.transform((e) => {
   return {
     ...e,
-    statusText: statusToString[e.status],
+    statusText: userStatusToString[e.status],
   };
 }).pipe(UserVoSchema);
 
@@ -23,7 +23,7 @@ export const UserDetailVoSchema = UserVoSchema.extend({
 export const UserDetailVoConverterSchema = UserDetailDtoSchema.transform((e) => {
   return {
     ...e,
-    statusText: statusToString[e.status],
+    statusText: userStatusToString[e.status],
   };
 }).pipe(UserDetailVoSchema);
 

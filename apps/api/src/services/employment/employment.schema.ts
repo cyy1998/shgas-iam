@@ -1,6 +1,6 @@
 import { z } from "@hono/zod-openapi";
 import { EmploymentSchema as PrismaEmploymentSchema, UserSchema } from "@/db/generated/schemas";
-import { Status } from "@/enums/status";
+import { EmploymentStatus } from "@/enums/employment.status";
 import { createPageQuerySchema } from "@/lib/core/pagination/schema";
 import { OrganizationSchema } from "../organization/organization.schema";
 import { PositionSchema } from "../position/position.schema";
@@ -27,7 +27,7 @@ export const EmploymentDtoSchema = EmploymentSchema.extend({
   compCode: z.string().openapi({ example: "SR" }),
   compName: z.string().openapi({ example: "上海燃气" }),
 }).extend({
-  status: z.enum(Status),
+  status: z.enum(EmploymentStatus),
 }).required().openapi("EmploymentDto");
 
 export const EmploymentDtoConverterSchema = EmploymentDetailSchema.transform((e) => {
@@ -85,8 +85,8 @@ export const EmploymentAdminPaginationQueryDtoSchema = createPageQuerySchema(
       deptOrgCodes: z.array(z.string()).optional().openapi({ example: ["SR23"] }),
       posCodes: z.array(z.string()).optional().openapi({ example: ["E033"] }),
       isPrimary: z.boolean().optional().openapi({ example: true }),
-      statuses: z.array(z.enum(Status)).optional().openapi({
-        example: [Status.Enable, Status.Pause],
+      statuses: z.array(z.enum(EmploymentStatus)).optional().openapi({
+        example: [EmploymentStatus.Enable, EmploymentStatus.Pause],
         description: "未传则返回全部状态，前端默认注入 [Enable, Pause] 以隐藏已结束",
       }),
     }),
@@ -113,7 +113,7 @@ export const EmploymentUpdateDtoSchema = z.object({
 }).openapi("EmploymentUpdateDto");
 
 export const EmploymentStatusUpdateDtoSchema = z.object({
-  status: z.enum(Status),
+  status: z.enum(EmploymentStatus),
 }).openapi("EmploymentStatusUpdateDto");
 
 export const EmploymentTransferDtoSchema = z.object({

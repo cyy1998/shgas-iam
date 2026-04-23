@@ -1,6 +1,6 @@
 import { z } from "@hono/zod-openapi";
 import { PositionSchema as PrismaPositionSchema } from "@/db/generated/schemas";
-import { Status } from "@/enums/status";
+import { PositionStatus } from "@/enums/position.status";
 import { EmploymentSchema } from "@/services/employment/employment.schema";
 import { createPageQuerySchema } from "../../lib/core/pagination/schema";
 
@@ -11,7 +11,7 @@ export const PositionDetailSchema = PositionSchema.extend({
 });
 
 export const PositionDtoSchema = PositionSchema.extend({
-  status: z.enum(Status),
+  status: z.enum(PositionStatus),
 }).required().openapi("PositionDto");
 
 export const PositionCreateDtoSchema = PositionSchema.omit({
@@ -41,9 +41,9 @@ export const PositionPaginationQueryDtoSchema = createPageQuerySchema(
 export const PositionUpdateDtoSchema = z.object({
   posName: z.string().min(1).optional(),
   description: z.string().nullable().optional(),
-  status: z.enum(Status).optional(),
+  status: z.enum(PositionStatus).optional(),
 }).openapi("PositionUpdateDto");
 
 export const PositionStatusUpdateDtoSchema = z.object({
-  status: z.enum(Status),
+  status: z.enum(PositionStatus),
 }).openapi("PositionStatusUpdateDto");

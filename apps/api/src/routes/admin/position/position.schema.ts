@@ -1,5 +1,5 @@
 import { z } from "@hono/zod-openapi";
-import { statusToString } from "@/enums/status";
+import { positionStatusToString } from "@/enums/position.status";
 import { PositionDetailSchema, PositionDtoSchema } from "@/services/position/position.schema";
 
 export const PositionVoSchema = PositionDtoSchema.extend({
@@ -11,7 +11,7 @@ export const PositionVoConverterSchema = PositionDetailSchema.transform((e) => {
   const dto = PositionDtoSchema.parse(e);
   return {
     ...dto,
-    statusText: statusToString[dto.status],
+    statusText: positionStatusToString[dto.status],
     memberNumber: e.employments.length,
   };
 }).pipe(PositionVoSchema);

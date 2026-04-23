@@ -1,6 +1,6 @@
 import { z } from "@hono/zod-openapi";
 import { UserSchema as PrismaUserSchema } from "@/db/generated/schemas";
-import { Status } from "@/enums/status";
+import { UserStatus } from "@/enums/user.status";
 import { createPageQuerySchema } from "@/lib/core/pagination/schema";
 import { EmploymentDetailDtoSchema } from "../employment/employment.schema";
 
@@ -10,7 +10,7 @@ export const UserDtoSchema = UserSchema.omit({
   password: true,
 }).extend({
   orcasId: z.string().nullable().default(null).openapi({ example: "ada8wf89w83b2" }),
-  status: z.enum(Status),
+  status: z.enum(UserStatus),
 }).required().openapi("UserDto");
 
 export const UserDetailDtoSchema = UserDtoSchema.extend({
@@ -40,7 +40,7 @@ export const UserPaginationQueryDtoSchema = createPageQuerySchema(
       phones: z.array(z.string()).optional().openapi({ example: ["17721462865"] }),
       wxIds: z.array(z.string()).optional().openapi({ example: ["1592677631"] }),
       names: z.array(z.string()).optional().openapi({ example: ["蔡奕阳"] }),
-      statuses: z.array(z.enum(Status)).optional().openapi({ example: [Status.Enable, Status.Pause] }),
+      statuses: z.array(z.enum(UserStatus)).optional().openapi({ example: [UserStatus.Enable, UserStatus.Pause] }),
     }),
   }),
 ).openapi("UserPaginationQueryDto");
@@ -79,7 +79,7 @@ export const UserAdminCreateDtoSchema = UserSchema.partial().required({
     example: "P@ssw0rd1",
     description: "留空则后端生成随机 8 位密码（需由前端通过单独渠道展示给管理员）",
   }),
-  status: z.enum(Status).optional().openapi({ example: Status.Enable }),
+  status: z.enum(UserStatus).optional().openapi({ example: UserStatus.Enable }),
 }).openapi("UserAdminCreateDto");
 
 export const UserUpdateDtoSchema = UserSchema.partial().pick({
@@ -90,9 +90,9 @@ export const UserUpdateDtoSchema = UserSchema.partial().pick({
   status: true,
   orderNum: true,
 }).extend({
-  status: z.enum(Status).optional(),
+  status: z.enum(UserStatus).optional(),
 }).openapi("UserUpdateDto");
 
 export const UserStatusUpdateDtoSchema = z.object({
-  status: z.enum(Status),
+  status: z.enum(UserStatus),
 }).openapi("UserStatusUpdateDto");

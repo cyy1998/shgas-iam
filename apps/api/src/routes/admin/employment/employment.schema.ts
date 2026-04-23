@@ -1,5 +1,5 @@
 import { z } from "@hono/zod-openapi";
-import { statusToString } from "@/enums/status";
+import { employmentStatusToString } from "@/enums/employment.status";
 import { EmploymentDetailDtoSchema, EmploymentDtoSchema } from "@/services/employment/employment.schema";
 
 export const EmploymentVoSchema = EmploymentDtoSchema.extend({
@@ -8,7 +8,7 @@ export const EmploymentVoSchema = EmploymentDtoSchema.extend({
 
 export const EmploymentVoConverterSchema = EmploymentDtoSchema.transform(dto => ({
   ...dto,
-  statusText: statusToString[dto.status],
+  statusText: employmentStatusToString[dto.status],
 })).pipe(EmploymentVoSchema);
 
 export const EmploymentDetailVoSchema = EmploymentDetailDtoSchema.extend({
@@ -21,5 +21,5 @@ export const EmploymentDetailVoConverterSchema = EmploymentDetailDtoSchema.trans
   ...dto,
   privileges: dto.privileges ?? [],
   roles: dto.roles ?? [],
-  statusText: statusToString[dto.status],
+  statusText: employmentStatusToString[dto.status],
 })).pipe(EmploymentDetailVoSchema);
