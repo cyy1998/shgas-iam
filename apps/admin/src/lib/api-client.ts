@@ -1,11 +1,11 @@
-import { SSO_CLIENT_CODE } from '@/constants/config';
+import { API_BASE, SSO_CLIENT_CODE } from '@/constants/config';
 import type { AppRouter } from '@iam/api/trpc';
 import { createTRPCClient, httpBatchLink } from '@trpc/client';
 
 export const apiClient = createTRPCClient<AppRouter>({
   links: [
     httpBatchLink({
-      url: process.env.NODE_ENV === 'production' ? '/api/iam/rpc' : '/rpc',
+      url: `${API_BASE}/rpc`,
       fetch: (input, init) =>
         fetch(input, {
           ...init,

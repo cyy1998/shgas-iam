@@ -2,6 +2,7 @@
 import AvatarDropdown from '@/components/RightContent/AvatarDropdown';
 import {
   ADMIN_ROLE_CODE,
+  API_BASE,
   SSO_AUTHORIZE_URL,
   SSO_CLIENT_CODE,
 } from '@/constants/config';
@@ -13,7 +14,7 @@ type InitialState = { currentUser?: { username: string; roles: string[] } };
 // 更多信息见文档：https://umijs.org/docs/api/runtime-config#getinitialstate
 export async function getInitialState(): Promise<InitialState> {
   try {
-    const res = await fetch('/public/user-info', {
+    const res = await fetch(`${API_BASE}/public/user-info`, {
       credentials: 'include',
       headers: {
         Client: SSO_CLIENT_CODE,
