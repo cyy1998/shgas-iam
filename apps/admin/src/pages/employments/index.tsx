@@ -16,10 +16,142 @@ import {
   type ProColumns,
   ProTable,
 } from '@ant-design/pro-components';
-import { getEmploymentStatusOptions } from '@iam/shared';
+import { apiClient } from '@/lib/api-client';
+import { getEmploymentStatusOptions, OrganizationType } from '@iam/shared';
 import { useLocation } from '@umijs/max';
-import { Button, Dropdown, message, Modal, Space, Tag } from 'antd';
+import type { AppRouter } from '@iam/api/trpc';
+import type { inferRouterOutputs } from '@trpc/server';
+import { Button, Dropdown, Form, message, Modal, Select, Space, Tag } from 'antd';
+import type { FormInstance } from 'antd';
 import { useEffect, useRef, useState } from 'react';
+
+type OrgVo =
+  inferRouterOutputs<AppRouter>['admin']['organization']['search']['result'][number];
+
+interface FilterSelectProps {
+  value?: string;
+  onChange?: (val: string | undefined) => void;
+  form: FormInstance;
+}
+
+function CompanyFilterSelect({ value, onChange, form }: FilterSelectProps) {
+  const [options, setOptions] = useState<{ label: string; value: string }[]>([]);
+
+  useEffect(() => {
+    let cancelled = false;
+    apiClient.admin.organization.search
+      .query({
+        pageNum: 1,
+        pageSize: 50,
+        conditions: {
+          fuzzyConditions: {},
+          exactConditions: { orgType: OrganizationType.Company },
+        },
+      })
+      .then((res: { result: OrgVo[] }) => {
+        if (!cancelled) {
+          setOptions(
+            res.result.map((o) => ({
+              label: `${o.orgName} (${o.orgCode})`,
+              value: o.orgCode,
+            })),
+          );
+        }
+      })
+      .catch((err: unknown) => {
+        if (!cancelled) message.error(err instanceof Error ? err.message : '加载公司列表失败');
+      });
+    return () => { cancelled = true; };
+  }, []);
+
+  const handleChange = (val: string | undefined) => {
+    form.setFieldValue('deptOrgCode', undefined);
+    onChange?.(val);
+  };
+
+  return (
+    <Select
+      value={value}
+      onChange={handleChange}
+      options={options}
+      showSearch
+      allowClear
+      filterOption={(input, option) =>
+        ((option?.label as string) ?? '').toLowerCase().includes(input.toLowerCase())
+      }
+      placeholder="请选择公司"
+    />
+  );
+}
+
+function DeptFilterSelect({ value, onChange, form }: FilterSelectProps) {
+  const companyOrgCode = Form.useWatch('companyOrgCode', form);
+  const [options, setOptions] = useState<{ label: string; value: string }[]>([]);
+  const [loading, setLoading] = useState(false);
+  const prevCompanyRef = useRef<string | undefined>(undefined);
+  const onChangeRef = useRef(onChange);
+  useEffect(() => { onChangeRef.current = onChange; });
+
+  useEffect(() => {
+    const prev = prevCompanyRef.current;
+    prevCompanyRef.current = companyOrgCode;
+
+    if (prev !== undefined && prev !== companyOrgCode) {
+      onChangeRef.current?.(undefined);
+    }
+
+    setOptions([]);
+    if (!companyOrgCode) return;
+
+    let cancelled = false;
+    setLoading(true);
+    apiClient.admin.organization.search
+      .query({
+        pageNum: 1,
+        pageSize: 200,
+        conditions: {
+          fuzzyConditions: {},
+          exactConditions: {
+            orgType: OrganizationType.Department,
+            ancestorOrgCode: companyOrgCode,
+          },
+        },
+      })
+      .then((res: { result: OrgVo[] }) => {
+        if (!cancelled) {
+          setOptions(
+            res.result.map((o) => ({
+              label: `${o.orgName} (${o.orgCode})`,
+              value: o.orgCode,
+            })),
+          );
+        }
+      })
+      .catch((err: unknown) => {
+        if (!cancelled) message.error(err instanceof Error ? err.message : '加载部门列表失败');
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => { cancelled = true; };
+  }, [companyOrgCode]);
+
+  return (
+    <Select
+      value={value}
+      onChange={onChange}
+      options={options}
+      loading={loading}
+      disabled={!companyOrgCode}
+      showSearch
+      allowClear
+      filterOption={(input, option) =>
+        ((option?.label as string) ?? '').toLowerCase().includes(input.toLowerCase())
+      }
+      placeholder={companyOrgCode ? '请选择部门' : '请先选择公司'}
+    />
+  );
+}
 
 type PresetFromUrl = { username?: string; name?: string };
 
@@ -108,6 +240,18 @@ export default function EmploymentsPage() {
       render: (_, r) => `${r.name} (${r.username})`,
       width: 160,
       fieldProps: { placeholder: '工号或姓名' },
+    },
+    {
+      title: '公司',
+      dataIndex: 'companyOrgCode',
+      hideInTable: true,
+      renderFormItem: (_, __, form) => <CompanyFilterSelect form={form} />,
+    },
+    {
+      title: '部门',
+      dataIndex: 'deptOrgCode',
+      hideInTable: true,
+      renderFormItem: (_, __, form) => <DeptFilterSelect form={form} />,
     },
     { title: '公司', dataIndex: 'compName', width: 140, search: false },
     { title: '部门', dataIndex: 'orgName', width: 140, search: false },
@@ -211,12 +355,16 @@ export default function EmploymentsPage() {
               name,
               status,
               isPrimary,
+              companyOrgCode,
+              deptOrgCode,
             } = params as {
               current?: number;
               pageSize?: number;
               name?: string;
               status?: string | number;
               isPrimary?: 'true' | 'false' | boolean;
+              companyOrgCode?: string;
+              deptOrgCode?: string;
             };
             const text = (name ?? '').trim();
             const statusNum
@@ -237,6 +385,8 @@ export default function EmploymentsPage() {
                 exactConditions: {
                   statuses: statusNum !== undefined ? [statusNum] : [1, 2],
                   isPrimary: isPrimaryBool,
+                  companyOrgCodes: companyOrgCode ? [companyOrgCode] : undefined,
+                  deptOrgCodes: deptOrgCode ? [deptOrgCode] : undefined,
                 },
               },
             });
