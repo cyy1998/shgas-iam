@@ -57,6 +57,8 @@ export async function createPrivilegeDelegation(
     const conflicting = await delegationRepository.getActiveDelegationsByDelegatorAndPrivileges(
       delegator.id,
       privileges.map(p => p.id),
+      dto.startTime,
+      dto.endTime,
       tx,
     );
     if (conflicting.length > 0) {

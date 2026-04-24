@@ -127,6 +127,8 @@ export async function searchDelegations(
 export async function getActiveDelegationsByDelegatorAndPrivileges(
   delegatorUserId: number,
   privilegeIds: number[],
+  startTime: Date,
+  endTime: Date,
   tx: PrismaTransaction = prisma,
 ) {
   return tx.privilegeDelegation.findMany({
@@ -134,6 +136,12 @@ export async function getActiveDelegationsByDelegatorAndPrivileges(
       delegatorUserId,
       isDelete: false,
       status: { not: Status.Disable },
+      NOT: {
+        OR: [
+          { endTime: { lt: startTime } },
+          { startTime: { gt: endTime } },
+        ],
+      },
       delegationDetails: {
         some: {
           privilegeId: { in: privilegeIds },
