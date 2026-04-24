@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { Status } from "@/enums/status";
+import { OrganizationStatus } from "@/enums/organization.status";
 import { defineMutationOp, defineQueryOp } from "@/lib/core/business-op";
 import {
   OrganizationChildrenQueryDtoSchema,
@@ -41,7 +41,7 @@ export const updateOrganizationOp = defineMutationOp({
 export const updateOrganizationStatusOp = defineMutationOp({
   input: z.object({
     orgCode: z.string(),
-    status: z.enum(Status),
+    status: z.enum(OrganizationStatus),
   }),
   handler: ({ orgCode, status }) => organizationService.updateOrganizationStatus(orgCode, status),
 });

@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { Status } from "@/enums/status";
+import { PositionStatus } from "@/enums/position.status";
 import { defineMutationOp, defineQueryOp } from "@/lib/core/business-op";
 import * as positionRepository from "@/services/position/position.repository";
 import {
@@ -41,7 +41,7 @@ export const updatePositionOp = defineMutationOp({
 export const updatePositionStatusOp = defineMutationOp({
   input: z.object({
     posCode: z.string(),
-    status: z.enum(Status),
+    status: z.enum(PositionStatus),
   }),
   handler: ({ posCode, status }) => positionService.updatePositionStatus(posCode, status),
 });

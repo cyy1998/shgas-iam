@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { Status } from "@/enums/status";
+import { EmploymentStatus } from "@/enums/employment.status";
 import { defineMutationOp, defineQueryOp } from "@/lib/core/business-op";
 import {
   EmploymentAdminCreateDtoSchema,
@@ -46,7 +46,7 @@ export const updateEmploymentOp = defineMutationOp({
 export const updateEmploymentStatusOp = defineMutationOp({
   input: z.object({
     id: z.coerce.number().int().positive(),
-    status: z.enum(Status),
+    status: z.enum(EmploymentStatus),
   }),
   handler: ({ id, status }) => employmentService.updateEmploymentStatus(id, status),
 });

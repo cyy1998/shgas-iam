@@ -1,6 +1,6 @@
 import { generateRandomPassword } from "@utils/encryption.utils";
 import { z } from "zod";
-import { Status } from "@/enums/status";
+import { UserStatus } from "@/enums/user.status";
 import { defineMutationOp, defineQueryOp } from "@/lib/core/business-op";
 import {
   UserAdminCreateDtoSchema,
@@ -45,7 +45,7 @@ export const updateUserOp = defineMutationOp({
 export const updateUserStatusOp = defineMutationOp({
   input: z.object({
     username: z.string(),
-    status: z.enum(Status),
+    status: z.enum(UserStatus),
   }),
   handler: ({ username, status }) => userService.updateUserStatus(username, status),
 });
