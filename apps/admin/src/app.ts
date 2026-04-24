@@ -6,6 +6,7 @@ import {
   SSO_CLIENT_CODE,
 } from '@/constants/config';
 import { redirectToLogin } from '@/utils/auth';
+import { history } from '@umijs/max';
 import { createElement, type ReactElement } from 'react';
 
 type InitialState = { currentUser?: { username: string; roles: string[] } };
@@ -36,10 +37,11 @@ export async function getInitialState(): Promise<InitialState> {
 
       if (
         !roles.includes(ADMIN_ROLE_CODE) &&
-        window.location.pathname !== '/403'
+        !window.location.pathname.endsWith('/403')
       ) {
         // 非管理员跳转 403；若已在 /403 则不再跳，否则 getInitialState 永远不 resolve
-        window.location.href = '/403';
+        // history.replace 会自动补全 base 前缀（如 /iam-admin），window.location 无法感知
+        history.replace('/403');
         return new Promise(() => {});
       }
 
