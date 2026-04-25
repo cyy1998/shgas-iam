@@ -48,7 +48,7 @@
         "./src/utils/*"
       ],
       "@integrations/*": [
-        "./src/integrations/*"
+        "src/lib/integrations/*"
       ]
     },
     "allowImportingTsExtensions": true,

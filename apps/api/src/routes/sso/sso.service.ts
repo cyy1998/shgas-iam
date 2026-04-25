@@ -1,5 +1,5 @@
-import orcasClient from "@integrations/orcas";
-import wechatClient from "@integrations/wechat";
+import orcasClient from "@/lib/integrations/orcas";
+import wechatClient from "@/lib/integrations/wechat";
 import { sleep } from "bun";
 import { sm3 } from "sm-crypto";
 import { ClientManagementLevel } from "@/enums/client.managementLevel";
