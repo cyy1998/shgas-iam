@@ -1,5 +1,5 @@
 import type { AuthRouteHandler } from "./auth.types";
-import { pinoLogger } from "@lib/logger";
+import { logger } from "@lib/logger";
 import { getCookie, setCookie } from "hono/cookie";
 import config from "@/env";
 import { AuthzUnauthorizedError } from "@/errors/AuthzUnauthorizedError";
@@ -52,7 +52,7 @@ export const authz: AuthRouteHandler<"authz"> = async (c) => {
 export const internalAuthz: AuthRouteHandler<"internalAuthz"> = async (c) => {
   const clientSecret = c.req.header("apikey");
   const sourceIp = c.req.header("IP-Chain");
-  pinoLogger.info(sourceIp);
+  logger.info(sourceIp);
   if (["192.168.93.", "192.168.73.88"].some(key => sourceIp?.includes(key))) {
     return c.json(resp.ok(true));
   }

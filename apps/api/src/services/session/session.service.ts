@@ -89,7 +89,7 @@ export async function removeGlobalSession(globalSessionId: string) {
   ]);
 }
 
-export async function cehckVerificationCode(usage: string, phone: string, code: string): Promise<boolean> {
+export async function checkVerificationCode(usage: string, phone: string, code: string): Promise<boolean> {
   const savedCode = await redis.get(`mobile-code:${usage}:${phone}`);
   return savedCode === code;
 }

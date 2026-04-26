@@ -2,7 +2,7 @@
 #   docker build -f apps/api/Dockerfile -t iam-api .
 
 # ── Stage 1: pnpm base ───────────────────────────────────────────────────────
-FROM node:20-alpine AS base
+FROM node:24-bookworm AS base
 ENV PNPM_HOME="/pnpm"
 ENV PATH="$PNPM_HOME:$PATH"
 RUN corepack enable && corepack prepare pnpm@10.33.0 --activate
@@ -16,18 +16,22 @@ COPY apps/api/package.json           ./apps/api/
 RUN pnpm install --frozen-lockfile
 
 # ── Stage 3: Generate Prisma client & create deploy bundle ───────────────────
-FROM deps AS builder
-COPY packages/shared/ ./packages/shared/
-COPY apps/api/        ./apps/api/
-# Prisma client outputs to apps/api/src/db/generated/prisma
-RUN pnpm --filter @iam/api exec prisma generate
-# Flatten monorepo → self-contained bundle (prod deps + source, no devDeps)
-RUN pnpm --filter @iam/api deploy --prod /deploy/api
+# FROM deps AS builder
+# COPY packages/shared/ ./packages/shared/
+# COPY apps/api/        ./apps/api/
+# # Prisma client outputs to apps/api/src/db/generated/prisma
+# RUN pnpm --filter @iam/api exec prisma generate
+# # Flatten monorepo → self-contained bundle (prod deps + source, no devDeps)
+# RUN pnpm --filter @iam/api deploy --prod /deploy/api
 
 # ── Stage 4: Production runtime (Bun) ────────────────────────────────────────
-FROM oven/bun:1-slim AS runner
+FROM oven/bun:1-alpine AS runner
 ENV NODE_ENV=production
 WORKDIR /app
-COPY --from=builder /deploy/api ./
+COPY --from=deps /app/node_modules              ./node_modules
+# COPY --from=deps /app/packages/shared/node_modules ./packages/shared/node_modules
+COPY --from=deps /app/apps/api/node_modules    ./apps/api/node_modules
+COPY packages/shared/ ./packages/shared/
+COPY apps/api/        ./apps/api/
 EXPOSE 30000
-CMD ["bun", "run", "src/index.ts"]
+CMD ["bun", "run", "apps/api/src/index.ts"]

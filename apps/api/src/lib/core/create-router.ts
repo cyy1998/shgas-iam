@@ -1,4 +1,4 @@
-import type { AppBindings } from "@/lib/lib";
+import type { AppBindings } from "@/types/lib";
 import { OpenAPIHono } from "@hono/zod-openapi";
 import defaultHook from "./openapi/default-hook";
 

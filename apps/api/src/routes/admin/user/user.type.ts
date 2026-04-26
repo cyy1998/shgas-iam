@@ -1,7 +1,7 @@
 import type { z } from "@hono/zod-openapi";
 import type * as routes from "./user.routes";
 import type { UserVoSchema } from "./user.schema";
-import type { AppRouteHandler } from "@/lib/lib";
+import type { AppRouteHandler } from "@/types/lib";
 
 // export type UserTokenInfo = {
 //   id: string | number;

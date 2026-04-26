@@ -1,0 +1,72 @@
+services:
+  db:
+    image: mysql:8.0.39
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: iam_db
+      MYSQL_USER: iam
+      MYSQL_PASSWORD: iam_password
+    ports:
+      - "5455:3306"
+    volumes:
+      - db_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: valkey/valkey:8
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  api:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    restart: unless-stopped
+    ports:
+      - "30000:30000"
+    environment:
+      DATABASE_URL: mysql://iam:iam_password@db:5455/iam_db
+      REDIS_URL: redis
+      REDIS_PORT: 6379
+      REDIS_DB: 0
+      PORT: 30000
+      NODE_ENV: production
+      LOG_LEVEL: info
+      IAM_SECRET_KEY: change-me-in-production
+      PASSWORD_HASH_ROUNDS: 10
+      DEFAULT_USER_PASSWORD: default123
+      MAGIC_CODE: change-me-in-production
+      WX_CORPID: ""
+      WX_CORPSECRET: ""
+      SMS_URL: ""
+      SMS_SIGNATURE_KEY: ""
+      ORCAS_URL: ""
+      PURVEYOR_PARENT_ORG: ""
+      REDIS_EXPIRE_TIME: 86400
+      AUTH_CODE_EXPIRE_TIME: 300
+      LOGIN_ENDPOINT: /auth/login
+      AUTHORIZATION_ENDPOINT: /auth/authorize
+      LOGOUT_ENDPOINT: /auth/logout
+      THIRDPARTY_OA_ENDPOINT: /sso/thirdparty/oa
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+volumes:
+  db_data:
+  redis_data:

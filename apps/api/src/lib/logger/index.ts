@@ -16,5 +16,5 @@ function buildTransportTargets(): TransportTargetOptions[] {
   return targets;
 }
 
-export const pinoLogger = createSingleton("logger", () =>
+export const logger = createSingleton("logger", () =>
   pino({ level: config.LOG_LEVEL || "info" }, pino.transport({ targets: buildTransportTargets() })));

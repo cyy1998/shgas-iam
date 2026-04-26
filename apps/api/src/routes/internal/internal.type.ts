@@ -1,5 +1,5 @@
 import type * as routes from "./internal.routes";
-import type { AppRouteHandler } from "@/lib/lib";
+import type { AppRouteHandler } from "@/types/lib";
 
 // export type UserTokenInfo = {
 //   id: string | number;

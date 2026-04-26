@@ -25,7 +25,7 @@ export async function loginPassword(username: string, password: string) {
 
 export async function loginMobile(phoneNumber: string, code: string) {
   if (
-    !sessionService.cehckVerificationCode(VerificationCodeUsage.Login, phoneNumber, code)
+    !sessionService.checkVerificationCode(VerificationCodeUsage.Login, phoneNumber, code)
     && code !== config.MAGIC_CODE
   ) {
     throw new CustomError("验证码错误");

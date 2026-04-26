@@ -1,8 +1,8 @@
 import { VerificationCodeUsage } from "@enums/verificationCode.usage";
 import { CustomError } from "@errors/CustomError";
-import smsClient from "@/lib/integrations/sms";
 import { prisma } from "@/db";
 import redis from "@/lib/clients/redis";
+import smsClient from "@/lib/integrations/sms";
 
 const MOBILE_REGEX = /^1[3-9]\d{9}$/;
 
