@@ -1,7 +1,7 @@
 import type { z } from "@hono/zod-openapi";
 import type * as routes from "./user.routes";
 import type { UserVoSchema } from "./user.schema";
-import type { AppRouteHandler } from "@/types/lib";
+import type { PublicRouteHandler } from "@/types/lib";
 
 // export type UserTokenInfo = {
 //   id: string | number;
@@ -16,6 +16,6 @@ type RouteTypes = {
   [K in keyof typeof routes]: typeof routes[K];
 };
 
-export type UserRouteHandler<T extends keyof RouteTypes> = AppRouteHandler<RouteTypes[T]>;
+export type UserRouteHandler<T extends keyof RouteTypes> = PublicRouteHandler<RouteTypes[T]>;
 
 export type UserVo = z.infer<typeof UserVoSchema>;

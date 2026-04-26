@@ -1,5 +1,4 @@
 import { createRouter } from "@lib/core/create-router";
-
 import * as handlers from "./auth.handlers";
 import * as routes from "./auth.routes";
 

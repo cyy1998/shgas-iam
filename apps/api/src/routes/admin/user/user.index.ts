@@ -1,9 +1,10 @@
+import type { PublicBindings } from "@/types/lib";
 import { createRouter } from "@lib/core/create-router";
 import { publicAuthenicationHandler } from "@middlewares/authenication.handler";
 import * as handlers from "./user.handlers";
 import * as routes from "./user.routes";
 
-const router = createRouter();
+const router = createRouter<PublicBindings>();
 
 router.use("*", publicAuthenicationHandler);
 

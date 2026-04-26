@@ -1,5 +1,5 @@
 import type * as routes from "./internal.routes";
-import type { AppRouteHandler } from "@/types/lib";
+import type { BaseRouteHandler } from "@/types/lib";
 
 // export type UserTokenInfo = {
 //   id: string | number;
@@ -14,4 +14,4 @@ type RouteTypes = {
   [K in keyof typeof routes]: typeof routes[K];
 };
 
-export type InternalRouteHandler<T extends keyof RouteTypes> = AppRouteHandler<RouteTypes[T]>;
+export type InternalRouteHandler<T extends keyof RouteTypes> = BaseRouteHandler<RouteTypes[T]>;

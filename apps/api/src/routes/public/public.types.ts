@@ -1,5 +1,5 @@
 import type * as routes from "./public.routes";
-import type { AppRouteHandler } from "@/types/lib";
+import type { PublicRouteHandler as Public2RouteHandler } from "@/types/lib";
 
 // export type UserTokenInfo = {
 //   id: string | number;
@@ -14,4 +14,4 @@ type RouteTypes = {
   [K in keyof typeof routes]: typeof routes[K];
 };
 
-export type PublicRouteHandler<T extends keyof RouteTypes> = AppRouteHandler<RouteTypes[T]>;
+export type PublicRouteHandler<T extends keyof RouteTypes> = Public2RouteHandler<RouteTypes[T]>;

@@ -10,7 +10,7 @@ export default antfu({
     "no-console": "warn",
     "node/prefer-global/process": "off",
     "node/prefer-global/buffer": "off",
-    // "ts/consistent-type-definitions": ["error", "type"],
+    "ts/consistent-type-definitions": "off",
     "max-len": [
       "warn", // 超过限制时发出警告，也可以设为 "error"
       {

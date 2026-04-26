@@ -14,6 +14,7 @@
       "@/*": [
         "./src/*"
       ],
+      "~/*": ["./*"],
       "@prisma-client/*": [
         "./src/db/generated/prisma/*"
       ],

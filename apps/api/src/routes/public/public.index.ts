@@ -1,11 +1,11 @@
+import type { PublicBindings } from "@/types/lib";
 import { createRouter } from "@lib/core/create-router";
-import { publicAuthenicationHandler } from "@middlewares/authenication.handler";
 import * as handlers from "./public.handlers";
 import * as routes from "./public.routes";
 
-const router = createRouter();
+const router = createRouter<PublicBindings>();
 
-router.use(`*`, publicAuthenicationHandler);
+// router.use(`*`, publicAuthenicationHandler);
 
 router.openapi(routes.userInfo, handlers.userInfo)
   .openapi(routes.passwordChange, handlers.passwordChange)
