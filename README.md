@@ -19,8 +19,10 @@ iam-service/
 ├── apps/
 │   ├── api/                        # 后端服务（@iam/api）
 │   │   ├── src/                    # 源代码（详见下文）
-│   │   ├── static/swagger/         # Swagger UI 静态资源
+│   │   ├── static/                 # Scalar / Swagger 静态资源
 │   │   ├── scripts/                # 维护脚本
+│   │   ├── app.config.ts           # 应用/Tier 声明式配置（defineConfig）
+│   │   ├── Dockerfile              # 多阶段镜像（pnpm install → Bun runtime）
 │   │   ├── prisma.config.ts
 │   │   ├── eslint.config.js
 │   │   ├── tsconfig.json
@@ -53,18 +55,27 @@ iam-service/
 
 ```
 src/
-├── app.ts                # Hono 应用装配、OpenAPI 注册
+├── app.ts                # 一行装配：createApp(appConfig)，导出 AppType
 ├── index.ts              # 服务入口（Bun server 配置）
 ├── env.ts                # 环境变量 Zod 校验
 ├── routes/               # 按访问级别分组：admin / auth / internal / open / public / sso
+│                         # 每组可放 _middleware.ts（defineMiddleware）；*.index.ts 由框架自动发现
 ├── services/             # 业务逻辑层（每模块 *.service / *.repository / *.schema / *.type）
+├── trpc/                 # tRPC 装配（trpc.ts、app.router.ts、routers/<group>/index.ts）
 ├── db/                   # schema.prisma、生成产物、SQL 脚本
-├── lib/                  # 外部客户端（Redis、Pino、OpenAPI 工具等）
-├── middlewares/          # 错误处理等 Hono 中间件
-├── utils/                # HTTP、Zod、分页工具
+├── lib/
+│   ├── clients/          # Redis 等外部客户端
+│   ├── logger/           # Pino logger
+│   ├── integrations/     # 第三方集成（orcas / sms / wechat）
+│   └── core/             # 框架胶水：create-app、create-router、define-config、business-op、openapi/、pagination/
+├── middlewares/          # 认证、错误处理等 Hono 中间件
+├── utils/                # HTTP、Zod、分页工具；tools/glob.ts（Bun glob 自动加载）
 ├── enums/                # 服务状态码等枚举
-└── errors/               # 继承 CustomError 的自定义错误
+├── errors/               # 继承 CustomError 的自定义错误
+└── types/                # lib.d.ts（Hono Bindings/路由助手）、global.d.ts
 ```
+
+> 应用装配采用**声明式配置 + 自动发现**：在 `apps/api/app.config.ts` 中通过 `defineConfig` 声明 tier；`createApp` 通过 `Bun.Glob` 扫描 `routes/**/*.index.ts` 与 `routes/*/_middleware.ts` 自动挂载。新增同组域名无需改动 `app.config.ts`，仅新增 tier 时才需追加配置。
 
 ## 🛠️ 技术栈
 
@@ -179,11 +190,12 @@ pnpm --filter @iam/admin format     # prettier
 
 ### 添加新 API 端点
 
-1. 在 `apps/api/src/services/*/*.schema.ts` 中补充 Zod schema
-2. 在 `apps/api/src/services/*/*.service.ts` 实现业务逻辑，必要时新增 repository
-3. 在 `apps/api/src/routes/*/` 下添加/补充路由
-4. 如为新路由组，在 `apps/api/src/app.ts` 中挂载
-5. 前端可直接通过 `apiClient.xxx.$get(...)` 调用，类型自动同步
+1. 在 `apps/api/src/services/<domain>/*.schema.ts` 中补充 Zod schema
+2. 在 `apps/api/src/services/<domain>/*.service.ts` 实现业务逻辑，必要时新增 repository
+3. 在 `apps/api/src/routes/<group>/<domain>/` 下补齐 `*.routes.ts` / `*.handlers.ts` / `*.ops.ts` / `*.trpc.ts` / `*.index.ts`
+4. **无需手动挂载** —— `*.index.ts` 由 `createApp` 通过 glob 自动发现；新增 tier 才需要在 `apps/api/app.config.ts` 的 `tiers` 中追加，并在 `apps/api/src/trpc/routers/<group>/` 下放置组合器
+5. Tier 级中间件放置在 `routes/<group>/_middleware.ts`，使用 `defineMiddleware([...])` 导出
+6. 前端可直接通过 `apiClient.xxx.$get(...)` 或 `trpcClient.<group>.<domain>.<op>.query/mutate(...)` 调用，类型自动同步
 
 ### 修改数据库 Schema
 
@@ -279,20 +291,13 @@ pnpm --filter @iam/admin build  # 产物在 apps/admin/dist
 
 将 `apps/admin/dist` 产物部署到静态服务器（Nginx/CDN），并将 `/admin`、`/auth`、`/public`、`/sso`、`/internal`、`/open` 反向代理至后端。
 
-### Docker（示例）
+### Docker
 
-```dockerfile
-FROM oven/bun:1-alpine AS builder
-WORKDIR /app
-COPY . .
-RUN bun install --frozen-lockfile
-RUN cd apps/api && bunx prisma generate
+仓库已提供多阶段 `apps/api/Dockerfile`（pnpm 安装依赖 → Bun 运行时）。**构建上下文为仓库根目录**：
 
-FROM oven/bun:1-alpine
-WORKDIR /app
-COPY --from=builder /app /app
-EXPOSE 30000
-CMD ["bun", "run", "apps/api/src/index.ts"]
+```bash
+docker build -f apps/api/Dockerfile -t iam-api .
+docker run --rm -p 30000:30000 --env-file apps/api/.env iam-api
 ```
 
 ## 🔧 调试与故障排除
@@ -323,4 +328,4 @@ CMD ["bun", "run", "apps/api/src/index.ts"]
 
 ---
 
-**最后更新**：2026-04-18
+**最后更新**：2026-04-26

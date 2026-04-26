@@ -24,8 +24,10 @@ iam-service/
 ├── apps/
 │   ├── api/                # Backend (@iam/api) — Bun + Hono
 │   │   ├── src/
-│   │   ├── static/swagger/
+│   │   ├── static/         # scalar/, swagger/
 │   │   ├── scripts/
+│   │   ├── app.config.ts   # Declarative app/tier configuration (defineConfig)
+│   │   ├── Dockerfile
 │   │   ├── prisma.config.ts
 │   │   ├── eslint.config.js
 │   │   └── tsconfig.json
@@ -99,15 +101,15 @@ pnpm --filter @iam/admin format     # prettier
 
 ### Backend (`apps/api/src`)
 
-- **`app.ts`** — Hono app assembly and OpenAPI registration
+- **`app.ts`** — Bootstraps the Hono app via `createApp(appConfig)` (one-liner). The actual assembly lives in `lib/core/create-app.ts` and is driven by `apps/api/app.config.ts`. Also exports `AppType` for the typed Hono client.
 - **`index.ts`** — Service entry point exporting Bun server config
 - **`env.ts`** — Environment variable validation via Zod
-- **`routes/`** — API routes grouped by access level. Each `<group>/<domain>/` folder colocates REST + tRPC adapters for the domain:
-  - `admin/` — administrative endpoints (client, employment, organization, position, user)
+- **`routes/`** — API routes grouped by access level. Each `<group>/` may contain a `_middleware.ts` (auto-loaded tier middleware) and per-domain folders. Each `<group>/<domain>/` folder colocates REST + tRPC adapters for the domain:
+  - `admin/` — administrative endpoints (client, employment, organization, position, user) + `_middleware.ts`
   - `auth/` — authentication
-  - `internal/` — internal service calls
+  - `internal/` — internal service calls + `_middleware.ts`
   - `open/` — open APIs
-  - `public/` — public APIs
+  - `public/` — public APIs + `_middleware.ts`
   - `sso/` — OIDC single sign-on
 - **`services/`** — business logic, one folder per domain. Each contains:
   - `*.service.ts` — main service functions
@@ -120,14 +122,21 @@ pnpm --filter @iam/admin format     # prettier
   - `routers/<group>/index.ts` — thin composer that combines per-domain sub-routers imported from `routes/<group>/<domain>/<domain>.trpc.ts`
 - **`db/`** — `schema.prisma`, generated Prisma client/Zod schemas under `generated/`, raw SQL under `sql/`
 - **`lib/`** — shared infrastructure:
-  - `clients/` — external clients (Redis, Pino)
-  - `core/` — framework glue (`create-app`, `create-router`, `business-op`, `openapi/*`, `pagination/*`, `http-status-codes`)
-- **`middlewares/`** — Hono middlewares (error handler, etc.)
-- **`utils/`** — HTTP helpers, Zod utilities, pagination
+  - `clients/` — external clients (Redis)
+  - `logger/` — Pino logger
+  - `integrations/` — third-party integrations (`orcas/`, `sms/`, `wechat/`)
+  - `core/` — framework glue (`create-app`, `create-router`, `define-config`, `business-op`, `singleton`, `openapi/*`, `pagination/*`, `http-status-codes`)
+- **`middlewares/`** — Hono middlewares (error handler, authentication, etc.)
+- **`utils/`** — HTTP helpers, Zod utilities, pagination, `tools/glob.ts` (Bun-glob auto-loader)
 - **`enums/`** — status codes, usage types, etc.
 - **`errors/`** — custom errors extending `CustomError`
+- **`types/`** — ambient TypeScript types: `lib.d.ts` (Hono bindings/route helpers), `global.d.ts` (`ParamsType` etc.)
 
-Path aliases (see `apps/api/tsconfig.json`): `@/*`, `@db`, `@lib/*`, `@services/*`, `@repositories/*`, `@schemas/*`, `@enums/*`, `@mapper/*`, `@errors/*`, `@middlewares/*`, `@utils/*`, `@prisma-client/*`.
+Path aliases (see `apps/api/tsconfig.json`):
+
+- `@/*` → `./src/*`
+- `~/*` → `./` (project root, used to import `app.config.ts`)
+- `@db`, `@lib/*`, `@services/*`, `@repositories/*`, `@schemas/*`, `@enums/*`, `@mapper/*`, `@errors/*`, `@middlewares/*`, `@utils/*`, `@prisma-client/*`
 
 ### Admin frontend (`apps/admin/src`)
 
@@ -154,6 +163,53 @@ Copy `apps/admin/.env.example` to `apps/admin/.env.local` to override locally.
 - Currently exports `ServiceStatusCode` and related status helpers from `src/enums/service.status.ts`
 - Add new cross-cutting constants / enums here rather than duplicating them across apps
 
+### Declarative app config & auto-discovery
+
+The Hono app is assembled from `apps/api/app.config.ts` rather than wired by hand in `app.ts`. Two factories from `@/lib/core/define-config` produce typed configuration objects:
+
+```ts
+// app.config.ts
+import { defineConfig } from "@/lib/core/define-config";
+
+export default defineConfig({
+  prefix: "/api/iam",
+  openapi: {
+    enabled: env => env.NODE_ENV !== "production",
+    docEndpoint: "/doc",
+    scalar: { /* ... */ },
+  },
+  tiers: [
+    { name: "public",   title: "通用用户API" },
+    { name: "open",     title: "公开API" },
+    { name: "admin",    title: "管理端API" },
+    { name: "internal", title: "内部API" },
+    { name: "sso",      title: "单点登录API" },
+    { name: "auth",     title: "认证API" },
+  ],
+});
+```
+
+```ts
+// routes/admin/_middleware.ts
+import { defineMiddleware } from "@/lib/core/define-config";
+import { publicAuthenicationHandler } from "@/middlewares/authenication.handler";
+
+export default defineMiddleware([publicAuthenicationHandler]);
+```
+
+**How it ties together (`@/lib/core/create-app.ts`)**
+
+- `createApp(config)` mounts each `tier` at `<prefix>/<version?>/<name>` (or `tier.basePath` if set).
+- Routes are auto-discovered via `globImport("./src/routes/**/*.index.ts")` (`@/utils/tools/glob`); the file's parent group folder must equal `tier.routeDir ?? tier.name`. Override by passing `tier.routes` explicitly.
+- Tier-level middlewares are auto-discovered the same way from `./src/routes/*/_middleware.ts`. Override by passing `tier.middlewares` explicitly.
+- `MiddlewareWithExcept` (`{ handler, except }`) wraps a handler with `hono/combine`'s `except` so a tier-level middleware can be skipped on specific routes.
+- Each tier app gets a `tierBasePath` variable set on the Hono context for downstream middleware to consume.
+
+**Implications for adding/removing endpoints**
+
+- A new domain under an existing tier (e.g. `routes/admin/<new>/<new>.index.ts`) is picked up automatically — no edit to `app.ts`/`app.config.ts` needed.
+- A new tier requires (1) creating `routes/<tier>/` with its `*.index.ts` files and optional `_middleware.ts`, and (2) appending an entry to `tiers` in `app.config.ts`.
+
 ### Key Patterns
 
 1. **Route handlers**: Hono + `@hono/zod-openapi` (OpenAPI-aware, Zod-validated)
@@ -161,7 +217,7 @@ Copy `apps/admin/.env.example` to `apps/admin/.env.local` to override locally.
 3. **Error handling**: custom errors with `ServiceStatusCode`, caught by the `errorHandler` middleware; on the tRPC side `mapCustomErrorToTRPCError` (in `@/trpc/trpc`) maps `CustomError` → `TRPCError` and attaches `serviceCode` / `serviceMessage` via `errorFormatter`
 4. **Validation**: Zod schemas drive both runtime validation and TS types
 5. **Pagination**: `paginate` helper in `@/utils/page.util`
-6. **Logging**: Pino configured in `@/lib/clients/pino`, attached via middleware in `app.ts`
+6. **Logging**: Pino configured in `@/lib/logger`, attached via `hono-pino` middleware inside `createApp` (`@/lib/core/create-app`)
 7. **Typed RPC**: frontend consumes backend types via `hc<AppType>` (Hono REST) **and** `createTRPCClient<AppRouter>` (tRPC) — keep `apps/api` exports at `./src/app.ts` and `./src/trpc/app.router.ts` typed correctly
 
 ### REST + tRPC dual-protocol endpoints (Business Op pattern)
@@ -191,7 +247,7 @@ routes/admin/position/
   position.trpc.ts       # tRPC adapter — router({ search: ops.searchPositionOp.toTRPC(), ... })
   position.schema.ts     # VO schemas (presentation-layer, e.g. PositionVoSchema/Converter)
   position.type.ts       # PositionRouteHandler<K> typing helper
-  position.index.ts      # Hono sub-router wiring routes↔handlers (mounted from app.ts)
+  position.index.ts      # Hono sub-router wiring routes↔handlers (auto-discovered by createApp via glob)
 ```
 
 **Important boundaries**
@@ -258,8 +314,9 @@ pnpm --filter @iam/api exec prisma migrate deploy
 pnpm --filter @iam/api serve   # or: bun run apps/api/src/index.ts
 ```
 
-- Static files (Swagger) served from `apps/api/static/`
+- Static files (Scalar/Swagger) served from `apps/api/static/`
 - Apply DB migrations before deploy (`prisma migrate deploy`)
+- Container build: `docker build -f apps/api/Dockerfile -t iam-api .` (multi-stage: pnpm install → Bun runtime, build context is the monorepo root)
 
 ### Admin frontend
 
@@ -282,7 +339,7 @@ Serve `apps/admin/dist` via Nginx/CDN and proxy `/admin`, `/auth`, `/public`, `/
    - Add a one-line handler in `<domain>.handlers.ts`: `c => c.json(await ops.xxxOp.run(c.req.valid(...)))`
    - Mount it in `<domain>.index.ts` via `.openapi(routes.x, handlers.x)`
 6. Wire the tRPC side: add `x: ops.xxxOp.toTRPC()` to the router in `<domain>.trpc.ts`
-7. If it is a new route group, mount the Hono sub-router in `apps/api/src/app.ts` and add the group composer under `apps/api/src/trpc/routers/<group>/`
+7. **No manual mount needed** — `<domain>.index.ts` is auto-discovered by `createApp` via `globImport("./src/routes/**/*.index.ts")`. Adding a brand-new route group requires (a) appending it to `tiers` in `apps/api/app.config.ts` and (b) adding the group composer under `apps/api/src/trpc/routers/<group>/`. Tier-level middleware (e.g. authentication) goes in `routes/<group>/_middleware.ts` via `defineMiddleware([...])`.
 8. Frontend:
    - REST → `apiClient.<path>.$get/$post(...)` (typed via `AppType`)
    - tRPC → `trpcClient.<group>.<domain>.<op>.query/mutate(...)` (typed via `AppRouter`)
