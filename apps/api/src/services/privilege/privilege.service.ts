@@ -1,4 +1,4 @@
-import { CustomError } from "@errors/CustomError";
+import { CustomError } from "@/errors/CustomError";
 import { prisma } from "@/db";
 import * as privilegeRepository from "@/services/privilege/privilege.repository";
 import { PrivilegeDtoSchema } from "./privilege.schema";

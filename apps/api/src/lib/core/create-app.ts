@@ -1,13 +1,13 @@
 /* eslint-disable antfu/no-top-level-await */
 import type { OpenAPIHono } from "@hono/zod-openapi";
 import type { AppConfig, MiddlewareWithExcept, TierConfig, TierMiddleware } from "./define-config";
-import { publicAuthenicationHandler } from "@middlewares/authenication.handler";
 import { Scalar } from "@scalar/hono-api-reference";
 import { fetchRequestHandler } from "@trpc/server/adapters/fetch";
 import { pinoLogger } from "hono-pino";
 import { serveStatic } from "hono/bun";
 import { except } from "hono/combine";
 import { requestId } from "hono/request-id";
+import { publicAuthenicationHandler } from "@/middlewares/authenication.handler";
 import { errorHandler } from "@/middlewares/error.handler";
 // admin 子路由
 

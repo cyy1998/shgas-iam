@@ -1,5 +1,5 @@
 import { z } from "@hono/zod-openapi";
-import { createSingleton } from "@lib/core/singleton";
+import { createSingleton } from "@/lib/core/singleton";
 import config from "@/env";
 import redis from "@/lib/clients/redis";
 

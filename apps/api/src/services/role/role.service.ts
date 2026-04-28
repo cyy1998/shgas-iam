@@ -1,5 +1,5 @@
-import { CustomError } from "@errors/CustomError";
-import { mergeAndDedupe } from "@utils/common.utils";
+import { CustomError } from "@/errors/CustomError";
+import { mergeAndDedupe } from "@/utils/common.utils";
 import { prisma } from "@/db";
 import { Prisma } from "@/db/generated/prisma/client";
 import * as employmentRepository from "@/services/employment/employment.repository";

@@ -1,6 +1,6 @@
 import type { SsoRouteHandler } from "./sso.type";
-import { ClientManagementLevel } from "@enums/client.managementLevel";
-import { getProtocolAndHost } from "@utils/common.utils";
+import { ClientManagementLevel } from "@/enums/client.managementLevel";
+import { getProtocolAndHost } from "@/utils/common.utils";
 import { deleteCookie, getCookie, setCookie } from "hono/cookie";
 import config from "@/env";
 import { AuthzUnauthorizedError } from "@/errors/AuthzUnauthorizedError";

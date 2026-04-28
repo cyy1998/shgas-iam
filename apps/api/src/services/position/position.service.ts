@@ -1,5 +1,5 @@
 import type { PositionCreateDto, PositionFuzzyQueryDto } from "./position.type";
-import { PositionHasEmploymentError } from "@errors/PositionHasEmploymentError";
+import { PositionHasEmploymentError } from "@/errors/PositionHasEmploymentError";
 import { prisma } from "@/db";
 import { CustomError } from "@/errors/CustomError";
 import { paginate } from "@/utils/page.util";

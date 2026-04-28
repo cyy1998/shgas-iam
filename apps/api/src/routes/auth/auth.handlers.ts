@@ -1,5 +1,5 @@
 import type { AuthRouteHandler } from "./auth.types";
-import { logger } from "@lib/logger";
+import { logger } from "@/lib/logger";
 import { getCookie, setCookie } from "hono/cookie";
 import config from "@/env";
 import { AuthzUnauthorizedError } from "@/errors/AuthzUnauthorizedError";

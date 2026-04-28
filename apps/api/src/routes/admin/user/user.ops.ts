@@ -1,4 +1,4 @@
-import { generateRandomPassword } from "@utils/encryption.utils";
+import { generateRandomPassword } from "@/utils/encryption.utils";
 import { z } from "zod";
 import { UserStatus } from "@/enums/user.status";
 import { defineMutationOp, defineQueryOp } from "@/lib/core/business-op";

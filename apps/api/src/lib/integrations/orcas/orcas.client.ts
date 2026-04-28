@@ -1,5 +1,5 @@
 import type { OrcasLoginInput } from "./orcas.type";
-import { createSingleton } from "@lib/core/singleton";
+import { createSingleton } from "@/lib/core/singleton";
 import axios from "axios";
 import config from "@/env";
 import { CustomError } from "@/errors/CustomError";

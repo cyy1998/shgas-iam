@@ -1,7 +1,7 @@
 import type { EmploymentAdminPaginationQueryDto, EmploymentQueryDto } from "./employment.type";
 import type { PrismaTransaction } from "@/db";
 import type { EmploymentWhereInput } from "@/db/generated/prisma/models";
-import { Status } from "@enums/status";
+import { Status } from "@/enums/status";
 import { prisma } from "@/db";
 
 function constructSearchEmploymentsCondition(employmentQueryDto: EmploymentQueryDto): EmploymentWhereInput {

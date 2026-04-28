@@ -1,4 +1,4 @@
-import { createRouter } from "@lib/core/create-router";
+import { createRouter } from "@/lib/core/create-router";
 import * as handlers from "./organization.handlers";
 import * as routes from "./organization.routes";
 

@@ -1,7 +1,7 @@
 import type { PrismaTransaction } from "@/db";
 import type { UserCreateDto, UserPaginationQueryDto, UserQueryDto } from "@/services/user/user.type";
 import type { Prettify } from "@/utils/lint.util";
-import { Status } from "@enums/status";
+import { Status } from "@/enums/status";
 import { prisma } from "@/db";
 
 export async function getUserById(userId: number, tx: PrismaTransaction = prisma) {

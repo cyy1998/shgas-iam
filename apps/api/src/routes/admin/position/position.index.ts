@@ -1,5 +1,5 @@
 import type { PublicBindings } from "@/types/lib";
-import { createRouter } from "@lib/core/create-router";
+import { createRouter } from "@/lib/core/create-router";
 import * as handlers from "./position.handlers";
 import * as routes from "./position.routes";
 

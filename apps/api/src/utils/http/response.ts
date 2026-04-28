@@ -1,4 +1,4 @@
-import { ServiceStatusCode } from "@enums/service.status";
+import { ServiceStatusCode } from "@/enums/service.status";
 
 export function makeResponse(code: number = 200, data: unknown = null, message: string = "success"): any {
   return {

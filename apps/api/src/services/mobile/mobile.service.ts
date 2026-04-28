@@ -1,5 +1,5 @@
-import { VerificationCodeUsage } from "@enums/verificationCode.usage";
-import { CustomError } from "@errors/CustomError";
+import { VerificationCodeUsage } from "@/enums/verificationCode.usage";
+import { CustomError } from "@/errors/CustomError";
 import { prisma } from "@/db";
 import redis from "@/lib/clients/redis";
 import smsClient from "@/lib/integrations/sms";

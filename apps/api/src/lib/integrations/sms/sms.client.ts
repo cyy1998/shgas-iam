@@ -1,4 +1,4 @@
-import { createSingleton } from "@lib/core/singleton";
+import { createSingleton } from "@/lib/core/singleton";
 import config from "@/env";
 import { hmacSha256 } from "@/utils/encryption.utils";
 

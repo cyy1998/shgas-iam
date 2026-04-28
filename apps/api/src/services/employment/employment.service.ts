@@ -6,11 +6,11 @@ import type {
   EmploymentTransferDto,
   EmploymentUpdateDto,
 } from "./employment.type";
-import { Status } from "@enums/status";
-import { CustomError } from "@errors/CustomError";
-import { EmploymentNotEditableError } from "@errors/EmploymentNotEditableError";
-import { EmploymentNotFoundError } from "@errors/EmploymentNotFoundError";
-import { UserNotFoundError } from "@errors/UserNotFoundError";
+import { Status } from "@/enums/status";
+import { CustomError } from "@/errors/CustomError";
+import { EmploymentNotEditableError } from "@/errors/EmploymentNotEditableError";
+import { EmploymentNotFoundError } from "@/errors/EmploymentNotFoundError";
+import { UserNotFoundError } from "@/errors/UserNotFoundError";
 import { prisma } from "@/db";
 import * as employmentRepository from "@/services/employment/employment.repository";
 import { EmploymentDetailDtoSchema, EmploymentDtoConverterSchema } from "@/services/employment/employment.schema";

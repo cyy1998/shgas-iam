@@ -1,9 +1,9 @@
 import type { ClientDto } from "@/services/client/client.type";
-import { Status } from "@enums/status";
-import { VerificationCodeUsage } from "@enums/verificationCode.usage";
-import { AuthzMaintaincingError } from "@errors/AuthzMaintaincingError";
-import { AuthzUnauthorizedError } from "@errors/AuthzUnauthorizedError";
-import { CustomError } from "@errors/CustomError";
+import { Status } from "@/enums/status";
+import { VerificationCodeUsage } from "@/enums/verificationCode.usage";
+import { AuthzMaintaincingError } from "@/errors/AuthzMaintaincingError";
+import { AuthzUnauthorizedError } from "@/errors/AuthzUnauthorizedError";
+import { CustomError } from "@/errors/CustomError";
 import config from "@/env";
 import redis from "@/lib/clients/redis";
 import * as sessionRepository from "@/services/session/session.repository";

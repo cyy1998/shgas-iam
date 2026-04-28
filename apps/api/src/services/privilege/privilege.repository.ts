@@ -1,7 +1,7 @@
 import type { PrivilegeQueryDto } from "./privilege.type";
 import type { PrismaTransaction } from "@/db";
 import type { Prettify } from "@/utils/lint.util";
-import { Status } from "@enums/status";
+import { Status } from "@/enums/status";
 import { prisma } from "@/db";
 
 export async function getPrivilegesByUserId(userId: number, tx: PrismaTransaction = prisma) {

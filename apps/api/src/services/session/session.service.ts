@@ -1,6 +1,6 @@
 import type { UserDetailDto } from "../user/user.type";
 import type { LocalSessionAbstract } from "./session.type";
-import { AuthzUnauthorizedError } from "@errors/AuthzUnauthorizedError";
+import { AuthzUnauthorizedError } from "@/errors/AuthzUnauthorizedError";
 import { ClientManagementLevel } from "@/enums/client.managementLevel";
 import config from "@/env";
 import redis from "@/lib/clients/redis";

@@ -1,9 +1,9 @@
-import { VerificationCodeUsage } from "@enums/verificationCode.usage";
+import { VerificationCodeUsage } from "@/enums/verificationCode.usage";
 import { createRoute, z } from "@hono/zod-openapi";
-import * as HttpStatusCodes from "@lib/core/http-status-codes";
-import jsonContent from "@lib/core/openapi/helpers/json-content";
-import jsonContentRequired from "@lib/core/openapi/helpers/json-content-required";
-import createSuccessResponseSchema from "@lib/core/openapi/schemas/create-success-schema";
+import * as HttpStatusCodes from "@/lib/core/http-status-codes";
+import jsonContent from "@/lib/core/openapi/helpers/json-content";
+import jsonContentRequired from "@/lib/core/openapi/helpers/json-content-required";
+import createSuccessResponseSchema from "@/lib/core/openapi/schemas/create-success-schema";
 import { ClientDtoSchema } from "@/services/client/client.schema";
 import { UserDetailDtoSchema } from "@/services/user/user.schema";
 

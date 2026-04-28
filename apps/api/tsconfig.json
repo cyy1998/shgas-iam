@@ -11,43 +11,8 @@
     // Bundler mode
     "moduleResolution": "bundler",
     "paths": {
-      "@/*": [
-        "./src/*"
-      ],
-      "~/*": ["./*"],
-      "@prisma-client/*": [
-        "./src/db/generated/prisma/*"
-      ],
-      "@db": [
-        "./src/db"
-      ],
-      "@lib/*": [
-        "./src/lib/*"
-      ],
-      "@services/*": [
-        "./src/services/*"
-      ],
-      "@repositories/*": [
-        "./src/repositories/*"
-      ],
-      "@schemas/*": [
-        "./src/schemas/*"
-      ],
-      "@enums/*": [
-        "./src/enums/*"
-      ],
-      "@mapper/*": [
-        "./src/mapper/*"
-      ],
-      "@errors/*": [
-        "./src/errors/*"
-      ],
-      "@middlewares/*": [
-        "./src/middlewares/*"
-      ],
-      "@utils/*": [
-        "./src/utils/*"
-      ]
+      "@/*": ["./src/*"],
+      "~/*": ["./*"]
     },
     "allowImportingTsExtensions": true,
     "allowJs": true,

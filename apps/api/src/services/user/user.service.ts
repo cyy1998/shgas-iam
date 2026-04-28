@@ -2,12 +2,12 @@ import type { UserCreateDto, UserDetailDto, UserDto, UserPaginationQueryDto, Use
 
 import type { User } from "@/db/generated/prisma/client";
 import type { Prettify } from "@/utils/lint.util";
-import { Status } from "@enums/status";
-import { VerificationCodeUsage } from "@enums/verificationCode.usage";
-import { CustomError } from "@errors/CustomError";
-import { UserHasActiveEmploymentError } from "@errors/UserHasActiveEmploymentError";
-import { UserNotFoundError } from "@errors/UserNotFoundError";
-import { generateRandomPassword } from "@utils/encryption.utils";
+import { Status } from "@/enums/status";
+import { VerificationCodeUsage } from "@/enums/verificationCode.usage";
+import { CustomError } from "@/errors/CustomError";
+import { UserHasActiveEmploymentError } from "@/errors/UserHasActiveEmploymentError";
+import { UserNotFoundError } from "@/errors/UserNotFoundError";
+import { generateRandomPassword } from "@/utils/encryption.utils";
 import { compare, hash } from "bcrypt-ts";
 import { prisma } from "@/db";
 import config from "@/env";

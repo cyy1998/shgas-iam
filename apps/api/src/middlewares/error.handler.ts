@@ -1,8 +1,8 @@
 import type { Context } from "hono";
 import type { HTTPResponseError } from "hono/types";
-import { ServiceStatusCode } from "@enums/service.status";
-import { AuthzError } from "@errors/AuthzError";
-import { CustomError } from "@errors/CustomError";
+import { ServiceStatusCode } from "@/enums/service.status";
+import { AuthzError } from "@/errors/AuthzError";
+import { CustomError } from "@/errors/CustomError";
 import { HTTPException } from "hono/http-exception";
 import { makeResponse } from "@/utils/http/response";
 

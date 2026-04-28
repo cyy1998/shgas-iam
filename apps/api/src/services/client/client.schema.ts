@@ -1,4 +1,4 @@
-import { ClientManagementLevel } from "@enums/client.managementLevel";
+import { ClientManagementLevel } from "@/enums/client.managementLevel";
 import { z } from "@hono/zod-openapi";
 import { ClientSchema as PrismaClientSchema } from "@/db/generated/schemas";
 

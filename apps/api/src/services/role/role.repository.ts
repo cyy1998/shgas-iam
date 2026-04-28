@@ -1,5 +1,5 @@
 import type { PrismaTransaction } from "@/db";
-import { Status } from "@enums/status";
+import { Status } from "@/enums/status";
 import { prisma } from "@/db";
 
 export async function getRoleByCode(roleCode: string, tx: PrismaTransaction = prisma) {
