@@ -7,8 +7,8 @@ function createPrismaClient() {
   const adapter = new PrismaMariaDb({
     host: url.hostname,
     port: Number.parseInt(url.port),
-    user: url.username,
-    password: url.password,
+    user: decodeURIComponent(url.username),
+    password: decodeURIComponent(url.password),
     database: url.pathname.slice(1),
     connectionLimit: 10,
   });
