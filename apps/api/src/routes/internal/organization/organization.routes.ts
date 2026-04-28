@@ -3,7 +3,7 @@ import * as HttpStatusCodes from "@lib/core/http-status-codes";
 import jsonContent from "@lib/core/openapi/helpers/json-content";
 import jsonContentRequired from "@lib/core/openapi/helpers/json-content-required";
 import createSuccessResponseSchema from "@lib/core/openapi/schemas/create-success-schema";
-import { OrganizationDtoSchema, OrganizationQueryDtoSchema } from "@/services/organization/organization.schema";
+import { OrganizationDtoSchema, OrganizationQueryDtoSchema, OrganizationUpdateDtoSchema } from "@/services/organization/organization.schema";
 
 const tags = ["Internal"];
 
@@ -30,6 +30,19 @@ export const organizationGetByCode = createRoute({
   },
   responses: {
     [HttpStatusCodes.OK]: jsonContent(createSuccessResponseSchema(OrganizationDtoSchema), "组织查询结果"),
+  },
+});
+
+export const organizationUpdate = createRoute({
+  method: "put",
+  path: "/:orgCode",
+  tags,
+  request: {
+    params: z.object({ orgCode: z.string() }),
+    body: jsonContentRequired(OrganizationUpdateDtoSchema, "组织更新参数"),
+  },
+  responses: {
+    [HttpStatusCodes.OK]: jsonContent(createSuccessResponseSchema(z.boolean()), "组织更新成功"),
   },
 });
 

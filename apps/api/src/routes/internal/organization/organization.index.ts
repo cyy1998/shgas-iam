@@ -7,6 +7,7 @@ const router = createRouter().basePath("/organizations");
 router
   .openapi(routes.organizationsSearch, handlers.organizationsSearch)
   .openapi(routes.organizationGetByCode, handlers.organizationGetByCode)
+  .openapi(routes.organizationUpdate, handlers.organizationUpdate)
   .openapi(routes.purveyorRegister, handlers.purveyorRegister);
 
 export default router;

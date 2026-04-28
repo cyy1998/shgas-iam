@@ -71,6 +71,7 @@ export const OrganizationPaginationQueryDtoSchema = createPageQuerySchema(
 ).openapi("OrganizationPaginationQueryDto");
 
 export const OrganizationUpdateDtoSchema = z.object({
+  orgCode: z.string().min(1).optional(),
   orgName: z.string().min(1).optional(),
   orgType: z.string().min(1).optional(),
   status: z.enum(OrganizationStatus).optional(),

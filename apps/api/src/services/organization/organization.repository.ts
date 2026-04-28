@@ -313,7 +313,7 @@ export async function searchOrganizationsForAdmin(
 
 export async function updateOrganizationByCode(
   orgCode: string,
-  data: { orgName?: string; orgType?: string; status?: number },
+  data: { orgCode?: string; orgName?: string; orgType?: string; status?: number },
   tx: PrismaTransaction = prisma,
 ) {
   return await tx.organization.updateMany({

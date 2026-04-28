@@ -17,6 +17,13 @@ export const organizationGetByCode: OrganizationRouteHandler<"organizationGetByC
   return c.json(resp.ok(data));
 };
 
+export const organizationUpdate: OrganizationRouteHandler<"organizationUpdate"> = async (c) => {
+  const { orgCode } = c.req.valid("param");
+  const data = c.req.valid("json");
+  const result = await organizationService.updateOrganization(orgCode, data);
+  return c.json(resp.ok(result));
+};
+
 export const purveyorRegister: OrganizationRouteHandler<"purveyorRegister"> = async (c) => {
   const { orgCode, orgName, parentOrg } = c.req.valid("json");
   const exisitngOrg = await organizationRepository.getOrganizationByCode(orgCode);

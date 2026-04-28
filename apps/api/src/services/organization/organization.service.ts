@@ -110,6 +110,12 @@ export async function updateOrganization(orgCode: string, data: OrganizationUpda
     if (existing === null) {
       throw new CustomError("组织不存在", 404);
     }
+    if (data.orgCode && data.orgCode !== orgCode) {
+      const conflict = await organizationRepository.getOrganizationByCode(data.orgCode, tx);
+      if (conflict !== null) {
+        throw new CustomError(`组织编码已存在: ${data.orgCode}`);
+      }
+    }
     await organizationRepository.updateOrganizationByCode(orgCode, data, tx);
     return true;
   });
