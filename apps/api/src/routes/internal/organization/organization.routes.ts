@@ -5,7 +5,7 @@ import jsonContentRequired from "@lib/core/openapi/helpers/json-content-required
 import createSuccessResponseSchema from "@lib/core/openapi/schemas/create-success-schema";
 import { OrganizationDtoSchema, OrganizationQueryDtoSchema, OrganizationUpdateDtoSchema } from "@/services/organization/organization.schema";
 
-const tags = ["Internal"];
+const tags = ["Internal/Organization"];
 
 export const organizationsSearch = createRoute({
   method: "post",

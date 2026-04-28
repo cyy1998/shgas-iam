@@ -5,7 +5,7 @@ import jsonContentRequired from "@lib/core/openapi/helpers/json-content-required
 import createSuccessResponseSchema from "@lib/core/openapi/schemas/create-success-schema";
 import { PrivilegeDelegationCreateDtoSchema, PrivilegeDelegationDetailDtoSchema, PrivilegeDelegationQueryDtoSchema, PrivilegeDelegationUpdateDtoSchema } from "@/services/privilege/privilegeDelegation.schema";
 
-const tags = ["Internal"];
+const tags = ["Internal/Delegation"];
 
 export const privilegeDelegationsQuery = createRoute({
   method: "post",

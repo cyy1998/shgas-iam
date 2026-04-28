@@ -6,7 +6,7 @@ import createSuccessResponseSchema from "@lib/core/openapi/schemas/create-succes
 import { PrivilegeDelegationDtoSchema } from "@/services/privilege/privilegeDelegation.schema";
 import { UserDetailDtoSchema, UserDtoSchema, UserQueryDtoSchema, UserQueryWithPrivilegeDelegationDtoSchema } from "@/services/user/user.schema";
 
-const tags = ["Internal"];
+const tags = ["Internal/User"];
 
 export const userInfo = createRoute({
   method: "get",
