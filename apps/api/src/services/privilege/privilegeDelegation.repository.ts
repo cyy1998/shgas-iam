@@ -167,6 +167,17 @@ export async function updateDelegationStatus(
   });
 }
 
+export async function updateDelegation(
+  id: number,
+  data: { startTime?: Date; endTime?: Date; status?: Status; description?: string | null },
+  tx: PrismaTransaction = prisma,
+) {
+  return tx.privilegeDelegation.update({
+    where: { id },
+    data,
+  });
+}
+
 export async function setPrivilegeDelegation(
   dto: Prettify<PrivilegeDelegationCreateDto>,
   tx: PrismaTransaction = prisma,

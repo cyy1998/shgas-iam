@@ -1,7 +1,7 @@
 import { defineConfig } from "@/lib/core/define-config";
 
 export default defineConfig({
-  prefix: "/api/iam",
+  prefix: "",
 
   openapi: {
     enabled: env => env.NODE_ENV !== "production",
