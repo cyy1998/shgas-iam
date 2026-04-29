@@ -13,6 +13,7 @@ import { errorHandler } from "@/middlewares/error.handler";
 
 // 顶层路由
 
+import notFound from "@/middlewares/not-found-handler";
 import { appRouter } from "@/trpc/app.router";
 import { createTRPCContext } from "@/trpc/trpc";
 import { globImport } from "@/utils/tools/glob";
@@ -80,6 +81,7 @@ export default function createApp(config: AppConfig) {
   const requestLogger = pinoLogger({ pino: logger });
   app.use(requestLogger);
 
+  app.notFound(notFound);
   app.onError(errorHandler);
   app.use(requestId());
 
