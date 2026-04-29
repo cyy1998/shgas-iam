@@ -137,7 +137,7 @@ services:
 
   api:
     build:
-      context: .
+      context: ..
       dockerfile: apps/api/Dockerfile
     restart: unless-stopped
     ports:
