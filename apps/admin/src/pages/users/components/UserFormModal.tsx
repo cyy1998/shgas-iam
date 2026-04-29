@@ -4,7 +4,7 @@ import {
   ProFormSelect,
   ProFormText,
 } from '@ant-design/pro-components';
-import { getUserStatusOptions } from '@iam/shared';
+import { getUserStatusOptions, getUserTypeOptions } from '@iam/shared';
 import { message, Modal } from 'antd';
 
 type Mode = 'create' | 'edit';
@@ -107,11 +107,11 @@ export default function UserFormModal({
         label="姓名"
         rules={[{ required: true, message: '请输入姓名' }]}
       />
-      <ProFormText
+      <ProFormSelect
         name="userType"
         label="用户类型"
-        placeholder="例如：正式员工 / 外包 / 劳务派遣"
-        rules={[{ required: true, message: '请输入用户类型' }]}
+        options={getUserTypeOptions()}
+        rules={[{ required: true, message: '请选择用户类型' }]}
       />
       <ProFormText name="mobile" label="手机号" />
       <ProFormText name="wxId" label="微信 ID" />

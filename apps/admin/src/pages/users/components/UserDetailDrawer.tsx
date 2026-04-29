@@ -1,4 +1,5 @@
 import StatusTag from '@/components/StatusTag';
+import EmploymentFormModal from '@/pages/employments/components/EmploymentFormModal';
 import TransferModal from '@/pages/employments/components/TransferModal';
 import {
   deleteEmployment,
@@ -13,7 +14,6 @@ import {
 } from '@/services/user';
 import { ProDescriptions } from '@ant-design/pro-components';
 import { getEmploymentStatusOptions, getUserStatusOptions } from '@iam/shared';
-import { history } from '@umijs/max';
 import {
   Button,
   Drawer,
@@ -51,6 +51,7 @@ export default function UserDetailDrawer({
   const [detail, setDetail] = useState<UserDetailVo | null>(null);
   const [loading, setLoading] = useState(false);
   const [transferTarget, setTransferTarget] = useState<EmploymentVo | null>(null);
+  const [employmentFormOpen, setEmploymentFormOpen] = useState(false);
 
   useEffect(() => {
     if (!open || !username) {
@@ -138,13 +139,6 @@ export default function UserDetailDrawer({
     });
   };
 
-  const gotoCreateEmployment = () => {
-    if (!detail) return;
-    history.push(
-      `/employments?username=${encodeURIComponent(detail.username)}&name=${encodeURIComponent(detail.name)}`,
-    );
-  };
-
   // EmploymentDetailDtoSchema extends EmploymentDtoSchema which has flat fields:
   // compName (company name), orgName (dept name), posName (position name), isPrimary, status
   const employmentColumns: ColumnsType<EmploymentRow> = [
@@ -212,6 +206,13 @@ export default function UserDetailDrawer({
 
   return (
     <>
+    <EmploymentFormModal
+      open={employmentFormOpen}
+      presetUsername={detail?.username}
+      presetName={detail?.name}
+      onOpenChange={setEmploymentFormOpen}
+      onSuccess={async () => { setEmploymentFormOpen(false); await refresh(); }}
+    />
     <TransferModal
       open={transferTarget !== null}
       employment={transferTarget}
@@ -348,7 +349,7 @@ export default function UserDetailDrawer({
               children: (
                 <div>
                   <div style={{ marginBottom: 12, textAlign: 'right' }}>
-                    <Button type="primary" onClick={gotoCreateEmployment}>
+                    <Button type="primary" onClick={() => setEmploymentFormOpen(true)}>
                       + 新增雇佣
                     </Button>
                   </div>
