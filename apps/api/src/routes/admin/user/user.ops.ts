@@ -1,4 +1,3 @@
-import { generateRandomPassword } from "@/utils/encryption.utils";
 import { z } from "zod";
 import { UserStatus } from "@/enums/user.status";
 import { defineMutationOp, defineQueryOp } from "@/lib/core/business-op";
@@ -8,6 +7,7 @@ import {
   UserUpdateDtoSchema,
 } from "@/services/user/user.schema";
 import * as userService from "@/services/user/user.service";
+import { generateRandomPassword } from "@/utils/encryption.utils";
 import { UserDetailVoConverterSchema, UserVoConverterSchema } from "./user.schema";
 
 export const searchUserOp = defineQueryOp({

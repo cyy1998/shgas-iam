@@ -1,6 +1,6 @@
-import { ClientManagementLevel } from "@/enums/client.managementLevel";
 import { z } from "@hono/zod-openapi";
 import { ClientSchema as PrismaClientSchema } from "@/db/generated/schemas";
+import { ClientManagementLevel } from "@/enums/client.managementLevel";
 
 export const ClientSchema = z.object(PrismaClientSchema.shape);
 

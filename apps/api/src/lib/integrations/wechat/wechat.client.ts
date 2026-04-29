@@ -1,7 +1,7 @@
 import { z } from "@hono/zod-openapi";
-import { createSingleton } from "@/lib/core/singleton";
 import config from "@/env";
 import redis from "@/lib/clients/redis";
+import { createSingleton } from "@/lib/core/singleton";
 
 const WechatAccessTokenResponseSchema = z.object({
   errcode: z.number(),

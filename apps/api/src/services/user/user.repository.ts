@@ -1,8 +1,8 @@
 import type { PrismaTransaction } from "@/db";
 import type { UserCreateDto, UserPaginationQueryDto, UserQueryDto } from "@/services/user/user.type";
 import type { Prettify } from "@/utils/lint.util";
-import { Status } from "@/enums/status";
 import { prisma } from "@/db";
+import { Status } from "@/enums/status";
 
 export async function getUserById(userId: number, tx: PrismaTransaction = prisma) {
   return await tx.user.findFirst({

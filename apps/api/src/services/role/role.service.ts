@@ -1,12 +1,12 @@
-import { CustomError } from "@/errors/CustomError";
-import { mergeAndDedupe } from "@/utils/common.utils";
 import { prisma } from "@/db";
 import { Prisma } from "@/db/generated/prisma/client";
+import { CustomError } from "@/errors/CustomError";
 import * as employmentRepository from "@/services/employment/employment.repository";
 import * as organizationRepository from "@/services/organization/organization.repository";
 import * as positionRepository from "@/services/position/position.repository";
 import * as privilegeRepository from "@/services/privilege/privilege.repository";
 import * as roleRepository from "@/services/role/role.repository";
+import { mergeAndDedupe } from "@/utils/common.utils";
 import { RoleDtoSchema } from "./role.schema";
 
 export async function getRolesByOrganization(orgId: number) {

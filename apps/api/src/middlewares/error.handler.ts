@@ -1,9 +1,9 @@
 import type { Context } from "hono";
 import type { HTTPResponseError } from "hono/types";
+import { HTTPException } from "hono/http-exception";
 import { ServiceStatusCode } from "@/enums/service.status";
 import { AuthzError } from "@/errors/AuthzError";
 import { CustomError } from "@/errors/CustomError";
-import { HTTPException } from "hono/http-exception";
 import { makeResponse } from "@/utils/http/response";
 
 export function errorHandler(err: Error | HTTPResponseError, c: Context) {

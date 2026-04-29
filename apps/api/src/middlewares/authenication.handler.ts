@@ -1,7 +1,7 @@
 import type { Context, Next } from "hono";
+import { deleteCookie, getCookie } from "hono/cookie";
 import { AuthzUnauthorizedError } from "@/errors/AuthzUnauthorizedError";
 import { CustomError } from "@/errors/CustomError";
-import { deleteCookie, getCookie } from "hono/cookie";
 import redis from "@/lib/clients/redis";
 import * as clientService from "@/services/client/client.service";
 import { UserDetailDtoSchema } from "@/services/user/user.schema";

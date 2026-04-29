@@ -1,5 +1,5 @@
-import { createSingleton } from "@/lib/core/singleton";
 import config from "@/env";
+import { createSingleton } from "@/lib/core/singleton";
 import { hmacSha256 } from "@/utils/encryption.utils";
 
 interface SMSServiceResult {
