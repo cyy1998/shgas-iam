@@ -4,4 +4,5 @@ export enum OrganizationType {
   TempDepartment = "临时部门",
   Virtual = "虚拟组织",
   External = "外部组织",
+  IndividualExternal = "个体外部组织",
 }
