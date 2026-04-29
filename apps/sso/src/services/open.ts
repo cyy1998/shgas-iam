@@ -3,7 +3,7 @@ import { request } from '@/utils/request';
 import { toQueryString } from '@/utils/url';
 
 export function sendMessage(body: { phoneNumber: string; usage: SmsUsage }) {
-  return request<void>('/api/iam/open/code/send', {
+  return request<void>('/open/code/send', {
     method: 'POST',
     body: JSON.stringify(body),
   });
@@ -13,7 +13,7 @@ export function selfMobileSendMsg(body: {
   phoneNumber: string;
   usage: SmsUsage;
 }) {
-  return request<void>('/api/iam/open/sendMessage', {
+  return request<void>('/open/sendMessage', {
     method: 'POST',
     body: JSON.stringify(body),
   });
@@ -24,7 +24,7 @@ export function codeVerify(body: {
   usage: SmsUsage;
   code: string;
 }) {
-  return request<void>('/api/iam/open/code/verify', {
+  return request<void>('/open/code/verify', {
     method: 'POST',
     body: JSON.stringify(body),
   });
@@ -36,7 +36,7 @@ export function passwordReset(body: {
   code: string;
   newPassword: string;
 }) {
-  return request<void>('/api/iam/open/password/reset', {
+  return request<void>('/open/password/reset', {
     method: 'POST',
     body: JSON.stringify(body),
   });
@@ -44,7 +44,7 @@ export function passwordReset(body: {
 
 export function clientStatus(params: { clientCode: string }) {
   const qs = toQueryString(params);
-  return request<ClientStatus>(`/api/iam/open/client/status?${qs}`, {
+  return request<ClientStatus>(`/open/client/status?${qs}`, {
     skipAuthRedirect: true,
   });
 }
@@ -52,7 +52,7 @@ export function clientStatus(params: { clientCode: string }) {
 export function usersUserInfo(params: { username: string }) {
   const qs = toQueryString(params);
   return request<Pick<UserInfo, 'username' | 'name' | 'mobile'>>(
-    `/api/iam/open/users/userInfo?${qs}`,
+    `/open/users/userInfo?${qs}`,
     { skipAuthRedirect: true },
   );
 }

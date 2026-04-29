@@ -1,6 +1,5 @@
-// 生产环境后端 API 默认走 /api/iam，开发走 proxy 同域
-export const API_BASE =
-  process.env.NODE_ENV === 'production' ? '/api/iam' : '';
+// 后端 API 前缀。开发环境同样使用此前缀，由 .umirc.ts 中的 proxy 处理跨域。
+export const API_PREFIX = process.env.UMI_APP_API_PREFIX || '/api/iam';
 
 // 当前应用注册到 SSO 的 client code
 export const SSO_CLIENT_CODE = process.env.UMI_APP_SSO_CLIENT_CODE || 'iam';

@@ -1,4 +1,4 @@
-import { API_BASE, SSO_CLIENT_CODE } from '@/constants/config';
+import { API_PREFIX, SSO_CLIENT_CODE } from '@/constants/config';
 import type { ApiEnvelope } from '@/types/api';
 import { currentSearchParams } from '@/utils/url';
 import { ServiceStatusCode } from '@iam/shared';
@@ -36,7 +36,7 @@ export async function request<T>(
 ): Promise<T> {
   const url = path.startsWith('http')
     ? path
-    : `${API_BASE}${path.startsWith('/') ? path : `/${path}`}`;
+    : `${API_PREFIX}${path.startsWith('/') ? path : `/${path}`}`;
 
   const res = await fetch(url, {
     credentials: 'include',
@@ -92,7 +92,7 @@ export function requestRaw(
 ): Promise<Response> {
   const url = path.startsWith('http')
     ? path
-    : `${API_BASE}${path.startsWith('/') ? path : `/${path}`}`;
+    : `${API_PREFIX}${path.startsWith('/') ? path : `/${path}`}`;
   return fetch(url, {
     credentials: 'include',
     ...init,
