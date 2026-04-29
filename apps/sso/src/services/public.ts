@@ -2,9 +2,7 @@ import type { UserInfo } from '@/types/api';
 import { request } from '@/utils/request';
 
 export function getCurrentUserInfo() {
-  return request<UserInfo>('/public/user-info', {
-    skipAuthRedirect: true,
-  });
+  return request<UserInfo>('/public/user-info');
 }
 
 export function passwordChange(body: {
