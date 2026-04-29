@@ -4,7 +4,7 @@ import { login, mobileLogin } from '@/services/auth';
 import { sendMessage } from '@/services/open';
 import { mobileSet } from '@/services/public';
 import { decodeRedirect, getQuery } from '@/utils/url';
-import { useModel } from '@umijs/max';
+import { history, useModel } from '@umijs/max';
 import { Button, Form, Input, Tabs, message } from 'antd';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import './index.less';
@@ -224,11 +224,9 @@ export default function LoginPage() {
                       const params = new URLSearchParams(
                         window.location.search,
                       );
-                      params.set(
-                        'username',
-                        pwdForm.getFieldValue('username') ?? '',
-                      );
-                      window.location.hash = `#/reset-password?${params.toString()}`;
+                      const username = pwdForm.getFieldValue('username');
+                      if (username) params.set('username', username);
+                      history.push(`/reset-password?${params.toString()}`);
                     }}
                   >
                     忘记密码？
