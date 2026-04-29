@@ -35,14 +35,9 @@ export async function getInitialState(): Promise<InitialState> {
         roles,
       };
 
-      if (
-        !roles.includes(ADMIN_ROLE_CODE) &&
-        !window.location.pathname.endsWith('/403')
-      ) {
-        // 非管理员跳转 403；若已在 /403 则不再跳，否则 getInitialState 永远不 resolve
-        // history.replace 会自动补全 base 前缀（如 /iam-admin），window.location 无法感知
+      if (!roles.includes(ADMIN_ROLE_CODE)) {
         history.replace('/403');
-        return new Promise(() => {});
+        return { currentUser };
       }
 
       return { currentUser };
