@@ -191,8 +191,8 @@ export default function LoginPage() {
       <div className="login-card">
         <div className="login-header">
           <img src={logo} alt="logo" />
-          <div className="title-zh">上海燃气</div>
-          <div className="title-en">SHANGHAI GAS</div>
+          <div className="title-zh">上海燃气身份认证平台</div>
+          <div className="title-en">SHANGHAI GAS IAM</div>
           {mode === 'BMN' && (
             <div className="bmn-tip">
               您的账号尚未绑定手机号，为保障账户安全并及时接收重要通知，强烈建议您立即绑定手机号。
