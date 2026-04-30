@@ -7,8 +7,7 @@ import { PositionRoleOrderByRelationAggregateInputObjectSchema as PositionRoleOr
 import { OrganizationRoleOrderByRelationAggregateInputObjectSchema as OrganizationRoleOrderByRelationAggregateInputObjectSchema } from './OrganizationRoleOrderByRelationAggregateInput.schema';
 import { PosOrgRoleOrderByRelationAggregateInputObjectSchema as PosOrgRoleOrderByRelationAggregateInputObjectSchema } from './PosOrgRoleOrderByRelationAggregateInput.schema';
 import { EmploymentRoleOrderByRelationAggregateInputObjectSchema as EmploymentRoleOrderByRelationAggregateInputObjectSchema } from './EmploymentRoleOrderByRelationAggregateInput.schema';
-import { RolePrivilegeOrderByRelationAggregateInputObjectSchema as RolePrivilegeOrderByRelationAggregateInputObjectSchema } from './RolePrivilegeOrderByRelationAggregateInput.schema';
-import { RoleOrderByRelevanceInputObjectSchema as RoleOrderByRelevanceInputObjectSchema } from './RoleOrderByRelevanceInput.schema'
+import { RolePrivilegeOrderByRelationAggregateInputObjectSchema as RolePrivilegeOrderByRelationAggregateInputObjectSchema } from './RolePrivilegeOrderByRelationAggregateInput.schema'
 
 const makeSchema = () => z.object({
   id: SortOrderSchema.optional(),
@@ -25,8 +24,7 @@ const makeSchema = () => z.object({
   organizations: z.lazy(() => OrganizationRoleOrderByRelationAggregateInputObjectSchema).optional(),
   positionOrganizations: z.lazy(() => PosOrgRoleOrderByRelationAggregateInputObjectSchema).optional(),
   employments: z.lazy(() => EmploymentRoleOrderByRelationAggregateInputObjectSchema).optional(),
-  privileges: z.lazy(() => RolePrivilegeOrderByRelationAggregateInputObjectSchema).optional(),
-  _relevance: z.lazy(() => RoleOrderByRelevanceInputObjectSchema).optional()
+  privileges: z.lazy(() => RolePrivilegeOrderByRelationAggregateInputObjectSchema).optional()
 }).strict();
 export const RoleOrderByWithRelationInputObjectSchema: z.ZodType<Prisma.RoleOrderByWithRelationInput> = makeSchema() as unknown as z.ZodType<Prisma.RoleOrderByWithRelationInput>;
 export const RoleOrderByWithRelationInputObjectZodSchema = makeSchema();

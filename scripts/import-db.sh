@@ -2,8 +2,8 @@
 # 将 SQL 备份文件导入 docker-db-1 容器的 iam_db 数据库
 set -euo pipefail
 
-SQL_FILE="${1:-C:/Users/caiyi/Downloads/iam_backup20260428.sql}"
-CONTAINER="docker-db-1"
+SQL_FILE="${1:-scripts/iam_backup20260430.sql}"
+CONTAINER="docker-db-mysql-1"
 DB="iam_db"
 ROOT_PASSWORD="root"
 

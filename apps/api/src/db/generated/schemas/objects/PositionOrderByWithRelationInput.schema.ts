@@ -4,8 +4,7 @@ import { SortOrderSchema } from '../enums/SortOrder.schema';
 import { SortOrderInputObjectSchema as SortOrderInputObjectSchema } from './SortOrderInput.schema';
 import { EmploymentOrderByRelationAggregateInputObjectSchema as EmploymentOrderByRelationAggregateInputObjectSchema } from './EmploymentOrderByRelationAggregateInput.schema';
 import { PositionRoleOrderByRelationAggregateInputObjectSchema as PositionRoleOrderByRelationAggregateInputObjectSchema } from './PositionRoleOrderByRelationAggregateInput.schema';
-import { PosOrgCompositionOrderByRelationAggregateInputObjectSchema as PosOrgCompositionOrderByRelationAggregateInputObjectSchema } from './PosOrgCompositionOrderByRelationAggregateInput.schema';
-import { PositionOrderByRelevanceInputObjectSchema as PositionOrderByRelevanceInputObjectSchema } from './PositionOrderByRelevanceInput.schema'
+import { PosOrgCompositionOrderByRelationAggregateInputObjectSchema as PosOrgCompositionOrderByRelationAggregateInputObjectSchema } from './PosOrgCompositionOrderByRelationAggregateInput.schema'
 
 const makeSchema = () => z.object({
   id: SortOrderSchema.optional(),
@@ -18,8 +17,7 @@ const makeSchema = () => z.object({
   updateTime: SortOrderSchema.optional(),
   employments: z.lazy(() => EmploymentOrderByRelationAggregateInputObjectSchema).optional(),
   roles: z.lazy(() => PositionRoleOrderByRelationAggregateInputObjectSchema).optional(),
-  posOrgComposition: z.lazy(() => PosOrgCompositionOrderByRelationAggregateInputObjectSchema).optional(),
-  _relevance: z.lazy(() => PositionOrderByRelevanceInputObjectSchema).optional()
+  posOrgComposition: z.lazy(() => PosOrgCompositionOrderByRelationAggregateInputObjectSchema).optional()
 }).strict();
 export const PositionOrderByWithRelationInputObjectSchema: z.ZodType<Prisma.PositionOrderByWithRelationInput> = makeSchema() as unknown as z.ZodType<Prisma.PositionOrderByWithRelationInput>;
 export const PositionOrderByWithRelationInputObjectZodSchema = makeSchema();

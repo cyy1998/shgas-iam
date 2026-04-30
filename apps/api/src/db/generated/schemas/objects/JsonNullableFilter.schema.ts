@@ -10,7 +10,7 @@ const jsonSchema: any = z.lazy(() =>
 
 const makeSchema = () => z.object({
   equals: jsonSchema.optional(),
-  path: z.string().optional(),
+  path: z.string().array().optional(),
   mode: QueryModeSchema.optional(),
   string_contains: z.string().optional(),
   string_starts_with: z.string().optional(),

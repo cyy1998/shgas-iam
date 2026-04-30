@@ -546,7 +546,21 @@ export type OrganizationRoleSelect<ExtArgs extends runtime.Types.Extensions.Inte
   role?: boolean | Prisma.RoleDefaultArgs<ExtArgs>
 }, ExtArgs["result"]["organizationRole"]>
 
+export type OrganizationRoleSelectCreateManyAndReturn<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetSelect<{
+  organizationId?: boolean
+  roleId?: boolean
+  isAllSub?: boolean
+  organization?: boolean | Prisma.OrganizationDefaultArgs<ExtArgs>
+  role?: boolean | Prisma.RoleDefaultArgs<ExtArgs>
+}, ExtArgs["result"]["organizationRole"]>
 
+export type OrganizationRoleSelectUpdateManyAndReturn<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetSelect<{
+  organizationId?: boolean
+  roleId?: boolean
+  isAllSub?: boolean
+  organization?: boolean | Prisma.OrganizationDefaultArgs<ExtArgs>
+  role?: boolean | Prisma.RoleDefaultArgs<ExtArgs>
+}, ExtArgs["result"]["organizationRole"]>
 
 export type OrganizationRoleSelectScalar = {
   organizationId?: boolean
@@ -556,6 +570,14 @@ export type OrganizationRoleSelectScalar = {
 
 export type OrganizationRoleOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"organizationId" | "roleId" | "isAllSub", ExtArgs["result"]["organizationRole"]>
 export type OrganizationRoleInclude<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
+  organization?: boolean | Prisma.OrganizationDefaultArgs<ExtArgs>
+  role?: boolean | Prisma.RoleDefaultArgs<ExtArgs>
+}
+export type OrganizationRoleIncludeCreateManyAndReturn<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
+  organization?: boolean | Prisma.OrganizationDefaultArgs<ExtArgs>
+  role?: boolean | Prisma.RoleDefaultArgs<ExtArgs>
+}
+export type OrganizationRoleIncludeUpdateManyAndReturn<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
   organization?: boolean | Prisma.OrganizationDefaultArgs<ExtArgs>
   role?: boolean | Prisma.RoleDefaultArgs<ExtArgs>
 }
@@ -688,6 +710,30 @@ export interface OrganizationRoleDelegate<ExtArgs extends runtime.Types.Extensio
   createMany<T extends OrganizationRoleCreateManyArgs>(args?: Prisma.SelectSubset<T, OrganizationRoleCreateManyArgs<ExtArgs>>): Prisma.PrismaPromise<Prisma.BatchPayload>
 
   /**
+   * Create many OrganizationRoles and returns the data saved in the database.
+   * @param {OrganizationRoleCreateManyAndReturnArgs} args - Arguments to create many OrganizationRoles.
+   * @example
+   * // Create many OrganizationRoles
+   * const organizationRole = await prisma.organizationRole.createManyAndReturn({
+   *   data: [
+   *     // ... provide data here
+   *   ]
+   * })
+   * 
+   * // Create many OrganizationRoles and only return the `organizationId`
+   * const organizationRoleWithOrganizationIdOnly = await prisma.organizationRole.createManyAndReturn({
+   *   select: { organizationId: true },
+   *   data: [
+   *     // ... provide data here
+   *   ]
+   * })
+   * Note, that providing `undefined` is treated as the value not being there.
+   * Read more here: https://pris.ly/d/null-undefined
+   * 
+   */
+  createManyAndReturn<T extends OrganizationRoleCreateManyAndReturnArgs>(args?: Prisma.SelectSubset<T, OrganizationRoleCreateManyAndReturnArgs<ExtArgs>>): Prisma.PrismaPromise<runtime.Types.Result.GetResult<Prisma.$OrganizationRolePayload<ExtArgs>, T, "createManyAndReturn", GlobalOmitOptions>>
+
+  /**
    * Delete a OrganizationRole.
    * @param {OrganizationRoleDeleteArgs} args - Arguments to delete one OrganizationRole.
    * @example
@@ -750,6 +796,36 @@ export interface OrganizationRoleDelegate<ExtArgs extends runtime.Types.Extensio
    * 
    */
   updateMany<T extends OrganizationRoleUpdateManyArgs>(args: Prisma.SelectSubset<T, OrganizationRoleUpdateManyArgs<ExtArgs>>): Prisma.PrismaPromise<Prisma.BatchPayload>
+
+  /**
+   * Update zero or more OrganizationRoles and returns the data updated in the database.
+   * @param {OrganizationRoleUpdateManyAndReturnArgs} args - Arguments to update many OrganizationRoles.
+   * @example
+   * // Update many OrganizationRoles
+   * const organizationRole = await prisma.organizationRole.updateManyAndReturn({
+   *   where: {
+   *     // ... provide filter here
+   *   },
+   *   data: [
+   *     // ... provide data here
+   *   ]
+   * })
+   * 
+   * // Update zero or more OrganizationRoles and only return the `organizationId`
+   * const organizationRoleWithOrganizationIdOnly = await prisma.organizationRole.updateManyAndReturn({
+   *   select: { organizationId: true },
+   *   where: {
+   *     // ... provide filter here
+   *   },
+   *   data: [
+   *     // ... provide data here
+   *   ]
+   * })
+   * Note, that providing `undefined` is treated as the value not being there.
+   * Read more here: https://pris.ly/d/null-undefined
+   * 
+   */
+  updateManyAndReturn<T extends OrganizationRoleUpdateManyAndReturnArgs>(args: Prisma.SelectSubset<T, OrganizationRoleUpdateManyAndReturnArgs<ExtArgs>>): Prisma.PrismaPromise<runtime.Types.Result.GetResult<Prisma.$OrganizationRolePayload<ExtArgs>, T, "updateManyAndReturn", GlobalOmitOptions>>
 
   /**
    * Create or update one OrganizationRole.
@@ -1177,6 +1253,29 @@ export type OrganizationRoleCreateManyArgs<ExtArgs extends runtime.Types.Extensi
 }
 
 /**
+ * OrganizationRole createManyAndReturn
+ */
+export type OrganizationRoleCreateManyAndReturnArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
+  /**
+   * Select specific fields to fetch from the OrganizationRole
+   */
+  select?: Prisma.OrganizationRoleSelectCreateManyAndReturn<ExtArgs> | null
+  /**
+   * Omit specific fields from the OrganizationRole
+   */
+  omit?: Prisma.OrganizationRoleOmit<ExtArgs> | null
+  /**
+   * The data used to create many OrganizationRoles.
+   */
+  data: Prisma.OrganizationRoleCreateManyInput | Prisma.OrganizationRoleCreateManyInput[]
+  skipDuplicates?: boolean
+  /**
+   * Choose, which related nodes to fetch as well
+   */
+  include?: Prisma.OrganizationRoleIncludeCreateManyAndReturn<ExtArgs> | null
+}
+
+/**
  * OrganizationRole update
  */
 export type OrganizationRoleUpdateArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
@@ -1218,6 +1317,36 @@ export type OrganizationRoleUpdateManyArgs<ExtArgs extends runtime.Types.Extensi
    * Limit how many OrganizationRoles to update.
    */
   limit?: number
+}
+
+/**
+ * OrganizationRole updateManyAndReturn
+ */
+export type OrganizationRoleUpdateManyAndReturnArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
+  /**
+   * Select specific fields to fetch from the OrganizationRole
+   */
+  select?: Prisma.OrganizationRoleSelectUpdateManyAndReturn<ExtArgs> | null
+  /**
+   * Omit specific fields from the OrganizationRole
+   */
+  omit?: Prisma.OrganizationRoleOmit<ExtArgs> | null
+  /**
+   * The data used to update OrganizationRoles.
+   */
+  data: Prisma.XOR<Prisma.OrganizationRoleUpdateManyMutationInput, Prisma.OrganizationRoleUncheckedUpdateManyInput>
+  /**
+   * Filter which OrganizationRoles to update
+   */
+  where?: Prisma.OrganizationRoleWhereInput
+  /**
+   * Limit how many OrganizationRoles to update.
+   */
+  limit?: number
+  /**
+   * Choose, which related nodes to fetch as well
+   */
+  include?: Prisma.OrganizationRoleIncludeUpdateManyAndReturn<ExtArgs> | null
 }
 
 /**

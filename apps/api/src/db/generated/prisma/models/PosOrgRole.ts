@@ -511,7 +511,19 @@ export type PosOrgRoleSelect<ExtArgs extends runtime.Types.Extensions.InternalAr
   role?: boolean | Prisma.RoleDefaultArgs<ExtArgs>
 }, ExtArgs["result"]["posOrgRole"]>
 
+export type PosOrgRoleSelectCreateManyAndReturn<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetSelect<{
+  posOrgId?: boolean
+  roleId?: boolean
+  posOrg?: boolean | Prisma.PosOrgCompositionDefaultArgs<ExtArgs>
+  role?: boolean | Prisma.RoleDefaultArgs<ExtArgs>
+}, ExtArgs["result"]["posOrgRole"]>
 
+export type PosOrgRoleSelectUpdateManyAndReturn<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetSelect<{
+  posOrgId?: boolean
+  roleId?: boolean
+  posOrg?: boolean | Prisma.PosOrgCompositionDefaultArgs<ExtArgs>
+  role?: boolean | Prisma.RoleDefaultArgs<ExtArgs>
+}, ExtArgs["result"]["posOrgRole"]>
 
 export type PosOrgRoleSelectScalar = {
   posOrgId?: boolean
@@ -520,6 +532,14 @@ export type PosOrgRoleSelectScalar = {
 
 export type PosOrgRoleOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"posOrgId" | "roleId", ExtArgs["result"]["posOrgRole"]>
 export type PosOrgRoleInclude<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
+  posOrg?: boolean | Prisma.PosOrgCompositionDefaultArgs<ExtArgs>
+  role?: boolean | Prisma.RoleDefaultArgs<ExtArgs>
+}
+export type PosOrgRoleIncludeCreateManyAndReturn<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
+  posOrg?: boolean | Prisma.PosOrgCompositionDefaultArgs<ExtArgs>
+  role?: boolean | Prisma.RoleDefaultArgs<ExtArgs>
+}
+export type PosOrgRoleIncludeUpdateManyAndReturn<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
   posOrg?: boolean | Prisma.PosOrgCompositionDefaultArgs<ExtArgs>
   role?: boolean | Prisma.RoleDefaultArgs<ExtArgs>
 }
@@ -651,6 +671,30 @@ export interface PosOrgRoleDelegate<ExtArgs extends runtime.Types.Extensions.Int
   createMany<T extends PosOrgRoleCreateManyArgs>(args?: Prisma.SelectSubset<T, PosOrgRoleCreateManyArgs<ExtArgs>>): Prisma.PrismaPromise<Prisma.BatchPayload>
 
   /**
+   * Create many PosOrgRoles and returns the data saved in the database.
+   * @param {PosOrgRoleCreateManyAndReturnArgs} args - Arguments to create many PosOrgRoles.
+   * @example
+   * // Create many PosOrgRoles
+   * const posOrgRole = await prisma.posOrgRole.createManyAndReturn({
+   *   data: [
+   *     // ... provide data here
+   *   ]
+   * })
+   * 
+   * // Create many PosOrgRoles and only return the `posOrgId`
+   * const posOrgRoleWithPosOrgIdOnly = await prisma.posOrgRole.createManyAndReturn({
+   *   select: { posOrgId: true },
+   *   data: [
+   *     // ... provide data here
+   *   ]
+   * })
+   * Note, that providing `undefined` is treated as the value not being there.
+   * Read more here: https://pris.ly/d/null-undefined
+   * 
+   */
+  createManyAndReturn<T extends PosOrgRoleCreateManyAndReturnArgs>(args?: Prisma.SelectSubset<T, PosOrgRoleCreateManyAndReturnArgs<ExtArgs>>): Prisma.PrismaPromise<runtime.Types.Result.GetResult<Prisma.$PosOrgRolePayload<ExtArgs>, T, "createManyAndReturn", GlobalOmitOptions>>
+
+  /**
    * Delete a PosOrgRole.
    * @param {PosOrgRoleDeleteArgs} args - Arguments to delete one PosOrgRole.
    * @example
@@ -713,6 +757,36 @@ export interface PosOrgRoleDelegate<ExtArgs extends runtime.Types.Extensions.Int
    * 
    */
   updateMany<T extends PosOrgRoleUpdateManyArgs>(args: Prisma.SelectSubset<T, PosOrgRoleUpdateManyArgs<ExtArgs>>): Prisma.PrismaPromise<Prisma.BatchPayload>
+
+  /**
+   * Update zero or more PosOrgRoles and returns the data updated in the database.
+   * @param {PosOrgRoleUpdateManyAndReturnArgs} args - Arguments to update many PosOrgRoles.
+   * @example
+   * // Update many PosOrgRoles
+   * const posOrgRole = await prisma.posOrgRole.updateManyAndReturn({
+   *   where: {
+   *     // ... provide filter here
+   *   },
+   *   data: [
+   *     // ... provide data here
+   *   ]
+   * })
+   * 
+   * // Update zero or more PosOrgRoles and only return the `posOrgId`
+   * const posOrgRoleWithPosOrgIdOnly = await prisma.posOrgRole.updateManyAndReturn({
+   *   select: { posOrgId: true },
+   *   where: {
+   *     // ... provide filter here
+   *   },
+   *   data: [
+   *     // ... provide data here
+   *   ]
+   * })
+   * Note, that providing `undefined` is treated as the value not being there.
+   * Read more here: https://pris.ly/d/null-undefined
+   * 
+   */
+  updateManyAndReturn<T extends PosOrgRoleUpdateManyAndReturnArgs>(args: Prisma.SelectSubset<T, PosOrgRoleUpdateManyAndReturnArgs<ExtArgs>>): Prisma.PrismaPromise<runtime.Types.Result.GetResult<Prisma.$PosOrgRolePayload<ExtArgs>, T, "updateManyAndReturn", GlobalOmitOptions>>
 
   /**
    * Create or update one PosOrgRole.
@@ -1139,6 +1213,29 @@ export type PosOrgRoleCreateManyArgs<ExtArgs extends runtime.Types.Extensions.In
 }
 
 /**
+ * PosOrgRole createManyAndReturn
+ */
+export type PosOrgRoleCreateManyAndReturnArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
+  /**
+   * Select specific fields to fetch from the PosOrgRole
+   */
+  select?: Prisma.PosOrgRoleSelectCreateManyAndReturn<ExtArgs> | null
+  /**
+   * Omit specific fields from the PosOrgRole
+   */
+  omit?: Prisma.PosOrgRoleOmit<ExtArgs> | null
+  /**
+   * The data used to create many PosOrgRoles.
+   */
+  data: Prisma.PosOrgRoleCreateManyInput | Prisma.PosOrgRoleCreateManyInput[]
+  skipDuplicates?: boolean
+  /**
+   * Choose, which related nodes to fetch as well
+   */
+  include?: Prisma.PosOrgRoleIncludeCreateManyAndReturn<ExtArgs> | null
+}
+
+/**
  * PosOrgRole update
  */
 export type PosOrgRoleUpdateArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
@@ -1180,6 +1277,36 @@ export type PosOrgRoleUpdateManyArgs<ExtArgs extends runtime.Types.Extensions.In
    * Limit how many PosOrgRoles to update.
    */
   limit?: number
+}
+
+/**
+ * PosOrgRole updateManyAndReturn
+ */
+export type PosOrgRoleUpdateManyAndReturnArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
+  /**
+   * Select specific fields to fetch from the PosOrgRole
+   */
+  select?: Prisma.PosOrgRoleSelectUpdateManyAndReturn<ExtArgs> | null
+  /**
+   * Omit specific fields from the PosOrgRole
+   */
+  omit?: Prisma.PosOrgRoleOmit<ExtArgs> | null
+  /**
+   * The data used to update PosOrgRoles.
+   */
+  data: Prisma.XOR<Prisma.PosOrgRoleUpdateManyMutationInput, Prisma.PosOrgRoleUncheckedUpdateManyInput>
+  /**
+   * Filter which PosOrgRoles to update
+   */
+  where?: Prisma.PosOrgRoleWhereInput
+  /**
+   * Limit how many PosOrgRoles to update.
+   */
+  limit?: number
+  /**
+   * Choose, which related nodes to fetch as well
+   */
+  include?: Prisma.PosOrgRoleIncludeUpdateManyAndReturn<ExtArgs> | null
 }
 
 /**

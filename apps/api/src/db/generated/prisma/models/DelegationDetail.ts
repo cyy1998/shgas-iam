@@ -511,7 +511,19 @@ export type DelegationDetailSelect<ExtArgs extends runtime.Types.Extensions.Inte
   privilege?: boolean | Prisma.PrivilegeDefaultArgs<ExtArgs>
 }, ExtArgs["result"]["delegationDetail"]>
 
+export type DelegationDetailSelectCreateManyAndReturn<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetSelect<{
+  delegationId?: boolean
+  privilegeId?: boolean
+  delegation?: boolean | Prisma.PrivilegeDelegationDefaultArgs<ExtArgs>
+  privilege?: boolean | Prisma.PrivilegeDefaultArgs<ExtArgs>
+}, ExtArgs["result"]["delegationDetail"]>
 
+export type DelegationDetailSelectUpdateManyAndReturn<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetSelect<{
+  delegationId?: boolean
+  privilegeId?: boolean
+  delegation?: boolean | Prisma.PrivilegeDelegationDefaultArgs<ExtArgs>
+  privilege?: boolean | Prisma.PrivilegeDefaultArgs<ExtArgs>
+}, ExtArgs["result"]["delegationDetail"]>
 
 export type DelegationDetailSelectScalar = {
   delegationId?: boolean
@@ -520,6 +532,14 @@ export type DelegationDetailSelectScalar = {
 
 export type DelegationDetailOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"delegationId" | "privilegeId", ExtArgs["result"]["delegationDetail"]>
 export type DelegationDetailInclude<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
+  delegation?: boolean | Prisma.PrivilegeDelegationDefaultArgs<ExtArgs>
+  privilege?: boolean | Prisma.PrivilegeDefaultArgs<ExtArgs>
+}
+export type DelegationDetailIncludeCreateManyAndReturn<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
+  delegation?: boolean | Prisma.PrivilegeDelegationDefaultArgs<ExtArgs>
+  privilege?: boolean | Prisma.PrivilegeDefaultArgs<ExtArgs>
+}
+export type DelegationDetailIncludeUpdateManyAndReturn<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
   delegation?: boolean | Prisma.PrivilegeDelegationDefaultArgs<ExtArgs>
   privilege?: boolean | Prisma.PrivilegeDefaultArgs<ExtArgs>
 }
@@ -651,6 +671,30 @@ export interface DelegationDetailDelegate<ExtArgs extends runtime.Types.Extensio
   createMany<T extends DelegationDetailCreateManyArgs>(args?: Prisma.SelectSubset<T, DelegationDetailCreateManyArgs<ExtArgs>>): Prisma.PrismaPromise<Prisma.BatchPayload>
 
   /**
+   * Create many DelegationDetails and returns the data saved in the database.
+   * @param {DelegationDetailCreateManyAndReturnArgs} args - Arguments to create many DelegationDetails.
+   * @example
+   * // Create many DelegationDetails
+   * const delegationDetail = await prisma.delegationDetail.createManyAndReturn({
+   *   data: [
+   *     // ... provide data here
+   *   ]
+   * })
+   * 
+   * // Create many DelegationDetails and only return the `delegationId`
+   * const delegationDetailWithDelegationIdOnly = await prisma.delegationDetail.createManyAndReturn({
+   *   select: { delegationId: true },
+   *   data: [
+   *     // ... provide data here
+   *   ]
+   * })
+   * Note, that providing `undefined` is treated as the value not being there.
+   * Read more here: https://pris.ly/d/null-undefined
+   * 
+   */
+  createManyAndReturn<T extends DelegationDetailCreateManyAndReturnArgs>(args?: Prisma.SelectSubset<T, DelegationDetailCreateManyAndReturnArgs<ExtArgs>>): Prisma.PrismaPromise<runtime.Types.Result.GetResult<Prisma.$DelegationDetailPayload<ExtArgs>, T, "createManyAndReturn", GlobalOmitOptions>>
+
+  /**
    * Delete a DelegationDetail.
    * @param {DelegationDetailDeleteArgs} args - Arguments to delete one DelegationDetail.
    * @example
@@ -713,6 +757,36 @@ export interface DelegationDetailDelegate<ExtArgs extends runtime.Types.Extensio
    * 
    */
   updateMany<T extends DelegationDetailUpdateManyArgs>(args: Prisma.SelectSubset<T, DelegationDetailUpdateManyArgs<ExtArgs>>): Prisma.PrismaPromise<Prisma.BatchPayload>
+
+  /**
+   * Update zero or more DelegationDetails and returns the data updated in the database.
+   * @param {DelegationDetailUpdateManyAndReturnArgs} args - Arguments to update many DelegationDetails.
+   * @example
+   * // Update many DelegationDetails
+   * const delegationDetail = await prisma.delegationDetail.updateManyAndReturn({
+   *   where: {
+   *     // ... provide filter here
+   *   },
+   *   data: [
+   *     // ... provide data here
+   *   ]
+   * })
+   * 
+   * // Update zero or more DelegationDetails and only return the `delegationId`
+   * const delegationDetailWithDelegationIdOnly = await prisma.delegationDetail.updateManyAndReturn({
+   *   select: { delegationId: true },
+   *   where: {
+   *     // ... provide filter here
+   *   },
+   *   data: [
+   *     // ... provide data here
+   *   ]
+   * })
+   * Note, that providing `undefined` is treated as the value not being there.
+   * Read more here: https://pris.ly/d/null-undefined
+   * 
+   */
+  updateManyAndReturn<T extends DelegationDetailUpdateManyAndReturnArgs>(args: Prisma.SelectSubset<T, DelegationDetailUpdateManyAndReturnArgs<ExtArgs>>): Prisma.PrismaPromise<runtime.Types.Result.GetResult<Prisma.$DelegationDetailPayload<ExtArgs>, T, "updateManyAndReturn", GlobalOmitOptions>>
 
   /**
    * Create or update one DelegationDetail.
@@ -1139,6 +1213,29 @@ export type DelegationDetailCreateManyArgs<ExtArgs extends runtime.Types.Extensi
 }
 
 /**
+ * DelegationDetail createManyAndReturn
+ */
+export type DelegationDetailCreateManyAndReturnArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
+  /**
+   * Select specific fields to fetch from the DelegationDetail
+   */
+  select?: Prisma.DelegationDetailSelectCreateManyAndReturn<ExtArgs> | null
+  /**
+   * Omit specific fields from the DelegationDetail
+   */
+  omit?: Prisma.DelegationDetailOmit<ExtArgs> | null
+  /**
+   * The data used to create many DelegationDetails.
+   */
+  data: Prisma.DelegationDetailCreateManyInput | Prisma.DelegationDetailCreateManyInput[]
+  skipDuplicates?: boolean
+  /**
+   * Choose, which related nodes to fetch as well
+   */
+  include?: Prisma.DelegationDetailIncludeCreateManyAndReturn<ExtArgs> | null
+}
+
+/**
  * DelegationDetail update
  */
 export type DelegationDetailUpdateArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
@@ -1180,6 +1277,36 @@ export type DelegationDetailUpdateManyArgs<ExtArgs extends runtime.Types.Extensi
    * Limit how many DelegationDetails to update.
    */
   limit?: number
+}
+
+/**
+ * DelegationDetail updateManyAndReturn
+ */
+export type DelegationDetailUpdateManyAndReturnArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
+  /**
+   * Select specific fields to fetch from the DelegationDetail
+   */
+  select?: Prisma.DelegationDetailSelectUpdateManyAndReturn<ExtArgs> | null
+  /**
+   * Omit specific fields from the DelegationDetail
+   */
+  omit?: Prisma.DelegationDetailOmit<ExtArgs> | null
+  /**
+   * The data used to update DelegationDetails.
+   */
+  data: Prisma.XOR<Prisma.DelegationDetailUpdateManyMutationInput, Prisma.DelegationDetailUncheckedUpdateManyInput>
+  /**
+   * Filter which DelegationDetails to update
+   */
+  where?: Prisma.DelegationDetailWhereInput
+  /**
+   * Limit how many DelegationDetails to update.
+   */
+  limit?: number
+  /**
+   * Choose, which related nodes to fetch as well
+   */
+  include?: Prisma.DelegationDetailIncludeUpdateManyAndReturn<ExtArgs> | null
 }
 
 /**

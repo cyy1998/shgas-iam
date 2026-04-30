@@ -328,7 +328,6 @@ export type EmploymentOrderByWithRelationInput = {
   position?: Prisma.PositionOrderByWithRelationInput
   posOrg?: Prisma.PosOrgCompositionOrderByWithRelationInput
   roles?: Prisma.EmploymentRoleOrderByRelationAggregateInput
-  _relevance?: Prisma.EmploymentOrderByRelevanceInput
 }
 
 export type EmploymentWhereUniqueInput = Prisma.AtLeast<{
@@ -515,12 +514,6 @@ export type EmploymentListRelationFilter = {
 
 export type EmploymentOrderByRelationAggregateInput = {
   _count?: Prisma.SortOrder
-}
-
-export type EmploymentOrderByRelevanceInput = {
-  fields: Prisma.EmploymentOrderByRelevanceFieldEnum | Prisma.EmploymentOrderByRelevanceFieldEnum[]
-  sort: Prisma.SortOrder
-  search: string
 }
 
 export type EmploymentCountOrderByAggregateInput = {
@@ -1571,7 +1564,47 @@ export type EmploymentSelect<ExtArgs extends runtime.Types.Extensions.InternalAr
   _count?: boolean | Prisma.EmploymentCountOutputTypeDefaultArgs<ExtArgs>
 }, ExtArgs["result"]["employment"]>
 
+export type EmploymentSelectCreateManyAndReturn<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetSelect<{
+  id?: boolean
+  userId?: boolean
+  posId?: boolean
+  orgId?: boolean
+  compId?: boolean
+  isPrimary?: boolean
+  status?: boolean
+  startTime?: boolean
+  endTime?: boolean
+  description?: boolean
+  isDelete?: boolean
+  createTime?: boolean
+  updateTime?: boolean
+  user?: boolean | Prisma.UserDefaultArgs<ExtArgs>
+  deptartment?: boolean | Prisma.OrganizationDefaultArgs<ExtArgs>
+  company?: boolean | Prisma.OrganizationDefaultArgs<ExtArgs>
+  position?: boolean | Prisma.PositionDefaultArgs<ExtArgs>
+  posOrg?: boolean | Prisma.PosOrgCompositionDefaultArgs<ExtArgs>
+}, ExtArgs["result"]["employment"]>
 
+export type EmploymentSelectUpdateManyAndReturn<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetSelect<{
+  id?: boolean
+  userId?: boolean
+  posId?: boolean
+  orgId?: boolean
+  compId?: boolean
+  isPrimary?: boolean
+  status?: boolean
+  startTime?: boolean
+  endTime?: boolean
+  description?: boolean
+  isDelete?: boolean
+  createTime?: boolean
+  updateTime?: boolean
+  user?: boolean | Prisma.UserDefaultArgs<ExtArgs>
+  deptartment?: boolean | Prisma.OrganizationDefaultArgs<ExtArgs>
+  company?: boolean | Prisma.OrganizationDefaultArgs<ExtArgs>
+  position?: boolean | Prisma.PositionDefaultArgs<ExtArgs>
+  posOrg?: boolean | Prisma.PosOrgCompositionDefaultArgs<ExtArgs>
+}, ExtArgs["result"]["employment"]>
 
 export type EmploymentSelectScalar = {
   id?: boolean
@@ -1598,6 +1631,20 @@ export type EmploymentInclude<ExtArgs extends runtime.Types.Extensions.InternalA
   posOrg?: boolean | Prisma.PosOrgCompositionDefaultArgs<ExtArgs>
   roles?: boolean | Prisma.Employment$rolesArgs<ExtArgs>
   _count?: boolean | Prisma.EmploymentCountOutputTypeDefaultArgs<ExtArgs>
+}
+export type EmploymentIncludeCreateManyAndReturn<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
+  user?: boolean | Prisma.UserDefaultArgs<ExtArgs>
+  deptartment?: boolean | Prisma.OrganizationDefaultArgs<ExtArgs>
+  company?: boolean | Prisma.OrganizationDefaultArgs<ExtArgs>
+  position?: boolean | Prisma.PositionDefaultArgs<ExtArgs>
+  posOrg?: boolean | Prisma.PosOrgCompositionDefaultArgs<ExtArgs>
+}
+export type EmploymentIncludeUpdateManyAndReturn<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
+  user?: boolean | Prisma.UserDefaultArgs<ExtArgs>
+  deptartment?: boolean | Prisma.OrganizationDefaultArgs<ExtArgs>
+  company?: boolean | Prisma.OrganizationDefaultArgs<ExtArgs>
+  position?: boolean | Prisma.PositionDefaultArgs<ExtArgs>
+  posOrg?: boolean | Prisma.PosOrgCompositionDefaultArgs<ExtArgs>
 }
 
 export type $EmploymentPayload<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
@@ -1742,6 +1789,30 @@ export interface EmploymentDelegate<ExtArgs extends runtime.Types.Extensions.Int
   createMany<T extends EmploymentCreateManyArgs>(args?: Prisma.SelectSubset<T, EmploymentCreateManyArgs<ExtArgs>>): Prisma.PrismaPromise<Prisma.BatchPayload>
 
   /**
+   * Create many Employments and returns the data saved in the database.
+   * @param {EmploymentCreateManyAndReturnArgs} args - Arguments to create many Employments.
+   * @example
+   * // Create many Employments
+   * const employment = await prisma.employment.createManyAndReturn({
+   *   data: [
+   *     // ... provide data here
+   *   ]
+   * })
+   * 
+   * // Create many Employments and only return the `id`
+   * const employmentWithIdOnly = await prisma.employment.createManyAndReturn({
+   *   select: { id: true },
+   *   data: [
+   *     // ... provide data here
+   *   ]
+   * })
+   * Note, that providing `undefined` is treated as the value not being there.
+   * Read more here: https://pris.ly/d/null-undefined
+   * 
+   */
+  createManyAndReturn<T extends EmploymentCreateManyAndReturnArgs>(args?: Prisma.SelectSubset<T, EmploymentCreateManyAndReturnArgs<ExtArgs>>): Prisma.PrismaPromise<runtime.Types.Result.GetResult<Prisma.$EmploymentPayload<ExtArgs>, T, "createManyAndReturn", GlobalOmitOptions>>
+
+  /**
    * Delete a Employment.
    * @param {EmploymentDeleteArgs} args - Arguments to delete one Employment.
    * @example
@@ -1804,6 +1875,36 @@ export interface EmploymentDelegate<ExtArgs extends runtime.Types.Extensions.Int
    * 
    */
   updateMany<T extends EmploymentUpdateManyArgs>(args: Prisma.SelectSubset<T, EmploymentUpdateManyArgs<ExtArgs>>): Prisma.PrismaPromise<Prisma.BatchPayload>
+
+  /**
+   * Update zero or more Employments and returns the data updated in the database.
+   * @param {EmploymentUpdateManyAndReturnArgs} args - Arguments to update many Employments.
+   * @example
+   * // Update many Employments
+   * const employment = await prisma.employment.updateManyAndReturn({
+   *   where: {
+   *     // ... provide filter here
+   *   },
+   *   data: [
+   *     // ... provide data here
+   *   ]
+   * })
+   * 
+   * // Update zero or more Employments and only return the `id`
+   * const employmentWithIdOnly = await prisma.employment.updateManyAndReturn({
+   *   select: { id: true },
+   *   where: {
+   *     // ... provide filter here
+   *   },
+   *   data: [
+   *     // ... provide data here
+   *   ]
+   * })
+   * Note, that providing `undefined` is treated as the value not being there.
+   * Read more here: https://pris.ly/d/null-undefined
+   * 
+   */
+  updateManyAndReturn<T extends EmploymentUpdateManyAndReturnArgs>(args: Prisma.SelectSubset<T, EmploymentUpdateManyAndReturnArgs<ExtArgs>>): Prisma.PrismaPromise<runtime.Types.Result.GetResult<Prisma.$EmploymentPayload<ExtArgs>, T, "updateManyAndReturn", GlobalOmitOptions>>
 
   /**
    * Create or update one Employment.
@@ -2245,6 +2346,29 @@ export type EmploymentCreateManyArgs<ExtArgs extends runtime.Types.Extensions.In
 }
 
 /**
+ * Employment createManyAndReturn
+ */
+export type EmploymentCreateManyAndReturnArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
+  /**
+   * Select specific fields to fetch from the Employment
+   */
+  select?: Prisma.EmploymentSelectCreateManyAndReturn<ExtArgs> | null
+  /**
+   * Omit specific fields from the Employment
+   */
+  omit?: Prisma.EmploymentOmit<ExtArgs> | null
+  /**
+   * The data used to create many Employments.
+   */
+  data: Prisma.EmploymentCreateManyInput | Prisma.EmploymentCreateManyInput[]
+  skipDuplicates?: boolean
+  /**
+   * Choose, which related nodes to fetch as well
+   */
+  include?: Prisma.EmploymentIncludeCreateManyAndReturn<ExtArgs> | null
+}
+
+/**
  * Employment update
  */
 export type EmploymentUpdateArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
@@ -2286,6 +2410,36 @@ export type EmploymentUpdateManyArgs<ExtArgs extends runtime.Types.Extensions.In
    * Limit how many Employments to update.
    */
   limit?: number
+}
+
+/**
+ * Employment updateManyAndReturn
+ */
+export type EmploymentUpdateManyAndReturnArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
+  /**
+   * Select specific fields to fetch from the Employment
+   */
+  select?: Prisma.EmploymentSelectUpdateManyAndReturn<ExtArgs> | null
+  /**
+   * Omit specific fields from the Employment
+   */
+  omit?: Prisma.EmploymentOmit<ExtArgs> | null
+  /**
+   * The data used to update Employments.
+   */
+  data: Prisma.XOR<Prisma.EmploymentUpdateManyMutationInput, Prisma.EmploymentUncheckedUpdateManyInput>
+  /**
+   * Filter which Employments to update
+   */
+  where?: Prisma.EmploymentWhereInput
+  /**
+   * Limit how many Employments to update.
+   */
+  limit?: number
+  /**
+   * Choose, which related nodes to fetch as well
+   */
+  include?: Prisma.EmploymentIncludeUpdateManyAndReturn<ExtArgs> | null
 }
 
 /**

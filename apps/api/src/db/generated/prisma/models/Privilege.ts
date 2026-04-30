@@ -264,7 +264,6 @@ export type PrivilegeOrderByWithRelationInput = {
   updateTime?: Prisma.SortOrder
   roles?: Prisma.RolePrivilegeOrderByRelationAggregateInput
   delegations?: Prisma.DelegationDetailOrderByRelationAggregateInput
-  _relevance?: Prisma.PrivilegeOrderByRelevanceInput
 }
 
 export type PrivilegeWhereUniqueInput = Prisma.AtLeast<{
@@ -403,12 +402,6 @@ export type PrivilegeUncheckedUpdateManyInput = {
   isDelete?: Prisma.BoolFieldUpdateOperationsInput | boolean
   createTime?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updateTime?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
-}
-
-export type PrivilegeOrderByRelevanceInput = {
-  fields: Prisma.PrivilegeOrderByRelevanceFieldEnum | Prisma.PrivilegeOrderByRelevanceFieldEnum[]
-  sort: Prisma.SortOrder
-  search: string
 }
 
 export type PrivilegeCountOrderByAggregateInput = {
@@ -675,7 +668,29 @@ export type PrivilegeSelect<ExtArgs extends runtime.Types.Extensions.InternalArg
   _count?: boolean | Prisma.PrivilegeCountOutputTypeDefaultArgs<ExtArgs>
 }, ExtArgs["result"]["privilege"]>
 
+export type PrivilegeSelectCreateManyAndReturn<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetSelect<{
+  id?: boolean
+  privilegeCode?: boolean
+  privilegeName?: boolean
+  fieldValues?: boolean
+  status?: boolean
+  description?: boolean
+  isDelete?: boolean
+  createTime?: boolean
+  updateTime?: boolean
+}, ExtArgs["result"]["privilege"]>
 
+export type PrivilegeSelectUpdateManyAndReturn<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetSelect<{
+  id?: boolean
+  privilegeCode?: boolean
+  privilegeName?: boolean
+  fieldValues?: boolean
+  status?: boolean
+  description?: boolean
+  isDelete?: boolean
+  createTime?: boolean
+  updateTime?: boolean
+}, ExtArgs["result"]["privilege"]>
 
 export type PrivilegeSelectScalar = {
   id?: boolean
@@ -695,6 +710,8 @@ export type PrivilegeInclude<ExtArgs extends runtime.Types.Extensions.InternalAr
   delegations?: boolean | Prisma.Privilege$delegationsArgs<ExtArgs>
   _count?: boolean | Prisma.PrivilegeCountOutputTypeDefaultArgs<ExtArgs>
 }
+export type PrivilegeIncludeCreateManyAndReturn<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {}
+export type PrivilegeIncludeUpdateManyAndReturn<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {}
 
 export type $PrivilegePayload<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
   name: "Privilege"
@@ -830,6 +847,30 @@ export interface PrivilegeDelegate<ExtArgs extends runtime.Types.Extensions.Inte
   createMany<T extends PrivilegeCreateManyArgs>(args?: Prisma.SelectSubset<T, PrivilegeCreateManyArgs<ExtArgs>>): Prisma.PrismaPromise<Prisma.BatchPayload>
 
   /**
+   * Create many Privileges and returns the data saved in the database.
+   * @param {PrivilegeCreateManyAndReturnArgs} args - Arguments to create many Privileges.
+   * @example
+   * // Create many Privileges
+   * const privilege = await prisma.privilege.createManyAndReturn({
+   *   data: [
+   *     // ... provide data here
+   *   ]
+   * })
+   * 
+   * // Create many Privileges and only return the `id`
+   * const privilegeWithIdOnly = await prisma.privilege.createManyAndReturn({
+   *   select: { id: true },
+   *   data: [
+   *     // ... provide data here
+   *   ]
+   * })
+   * Note, that providing `undefined` is treated as the value not being there.
+   * Read more here: https://pris.ly/d/null-undefined
+   * 
+   */
+  createManyAndReturn<T extends PrivilegeCreateManyAndReturnArgs>(args?: Prisma.SelectSubset<T, PrivilegeCreateManyAndReturnArgs<ExtArgs>>): Prisma.PrismaPromise<runtime.Types.Result.GetResult<Prisma.$PrivilegePayload<ExtArgs>, T, "createManyAndReturn", GlobalOmitOptions>>
+
+  /**
    * Delete a Privilege.
    * @param {PrivilegeDeleteArgs} args - Arguments to delete one Privilege.
    * @example
@@ -892,6 +933,36 @@ export interface PrivilegeDelegate<ExtArgs extends runtime.Types.Extensions.Inte
    * 
    */
   updateMany<T extends PrivilegeUpdateManyArgs>(args: Prisma.SelectSubset<T, PrivilegeUpdateManyArgs<ExtArgs>>): Prisma.PrismaPromise<Prisma.BatchPayload>
+
+  /**
+   * Update zero or more Privileges and returns the data updated in the database.
+   * @param {PrivilegeUpdateManyAndReturnArgs} args - Arguments to update many Privileges.
+   * @example
+   * // Update many Privileges
+   * const privilege = await prisma.privilege.updateManyAndReturn({
+   *   where: {
+   *     // ... provide filter here
+   *   },
+   *   data: [
+   *     // ... provide data here
+   *   ]
+   * })
+   * 
+   * // Update zero or more Privileges and only return the `id`
+   * const privilegeWithIdOnly = await prisma.privilege.updateManyAndReturn({
+   *   select: { id: true },
+   *   where: {
+   *     // ... provide filter here
+   *   },
+   *   data: [
+   *     // ... provide data here
+   *   ]
+   * })
+   * Note, that providing `undefined` is treated as the value not being there.
+   * Read more here: https://pris.ly/d/null-undefined
+   * 
+   */
+  updateManyAndReturn<T extends PrivilegeUpdateManyAndReturnArgs>(args: Prisma.SelectSubset<T, PrivilegeUpdateManyAndReturnArgs<ExtArgs>>): Prisma.PrismaPromise<runtime.Types.Result.GetResult<Prisma.$PrivilegePayload<ExtArgs>, T, "updateManyAndReturn", GlobalOmitOptions>>
 
   /**
    * Create or update one Privilege.
@@ -1325,6 +1396,25 @@ export type PrivilegeCreateManyArgs<ExtArgs extends runtime.Types.Extensions.Int
 }
 
 /**
+ * Privilege createManyAndReturn
+ */
+export type PrivilegeCreateManyAndReturnArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
+  /**
+   * Select specific fields to fetch from the Privilege
+   */
+  select?: Prisma.PrivilegeSelectCreateManyAndReturn<ExtArgs> | null
+  /**
+   * Omit specific fields from the Privilege
+   */
+  omit?: Prisma.PrivilegeOmit<ExtArgs> | null
+  /**
+   * The data used to create many Privileges.
+   */
+  data: Prisma.PrivilegeCreateManyInput | Prisma.PrivilegeCreateManyInput[]
+  skipDuplicates?: boolean
+}
+
+/**
  * Privilege update
  */
 export type PrivilegeUpdateArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
@@ -1354,6 +1444,32 @@ export type PrivilegeUpdateArgs<ExtArgs extends runtime.Types.Extensions.Interna
  * Privilege updateMany
  */
 export type PrivilegeUpdateManyArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
+  /**
+   * The data used to update Privileges.
+   */
+  data: Prisma.XOR<Prisma.PrivilegeUpdateManyMutationInput, Prisma.PrivilegeUncheckedUpdateManyInput>
+  /**
+   * Filter which Privileges to update
+   */
+  where?: Prisma.PrivilegeWhereInput
+  /**
+   * Limit how many Privileges to update.
+   */
+  limit?: number
+}
+
+/**
+ * Privilege updateManyAndReturn
+ */
+export type PrivilegeUpdateManyAndReturnArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
+  /**
+   * Select specific fields to fetch from the Privilege
+   */
+  select?: Prisma.PrivilegeSelectUpdateManyAndReturn<ExtArgs> | null
+  /**
+   * Omit specific fields from the Privilege
+   */
+  omit?: Prisma.PrivilegeOmit<ExtArgs> | null
   /**
    * The data used to update Privileges.
    */

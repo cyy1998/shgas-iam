@@ -2,6 +2,7 @@ import type { PrismaTransaction } from "@/db";
 import type { UserCreateDto, UserPaginationQueryDto, UserQueryDto } from "@/services/user/user.type";
 import type { Prettify } from "@/utils/lint.util";
 import { prisma } from "@/db";
+import { Prisma } from "@/db/generated/prisma/client";
 import { Status } from "@/enums/status";
 
 export async function getUserById(userId: number, tx: PrismaTransaction = prisma) {
@@ -173,21 +174,25 @@ export async function searchUsersFuzzy(
             {
               username: {
                 contains: userPaginationQueryDto.conditions.fuzzyConditions.text,
+                mode: Prisma.QueryMode.insensitive,
               },
             },
             {
               name: {
                 contains: userPaginationQueryDto.conditions.fuzzyConditions.text,
+                mode: Prisma.QueryMode.insensitive,
               },
             },
             {
               mobile: {
                 contains: userPaginationQueryDto.conditions.fuzzyConditions.text,
+                mode: Prisma.QueryMode.insensitive,
               },
             },
             {
               wxId: {
                 contains: userPaginationQueryDto.conditions.fuzzyConditions.text,
+                mode: Prisma.QueryMode.insensitive,
               },
             },
           ]
@@ -295,10 +300,10 @@ export async function countUsersFuzzy(
     where: {
       OR: userPaginationQueryDto.conditions.fuzzyConditions.text !== undefined
         ? [
-            { username: { contains: userPaginationQueryDto.conditions.fuzzyConditions.text } },
-            { name: { contains: userPaginationQueryDto.conditions.fuzzyConditions.text } },
-            { mobile: { contains: userPaginationQueryDto.conditions.fuzzyConditions.text } },
-            { wxId: { contains: userPaginationQueryDto.conditions.fuzzyConditions.text } },
+            { username: { contains: userPaginationQueryDto.conditions.fuzzyConditions.text, mode: "insensitive" } },
+            { name: { contains: userPaginationQueryDto.conditions.fuzzyConditions.text, mode: "insensitive" } },
+            { mobile: { contains: userPaginationQueryDto.conditions.fuzzyConditions.text, mode: "insensitive" } },
+            { wxId: { contains: userPaginationQueryDto.conditions.fuzzyConditions.text, mode: "insensitive" } },
           ]
         : undefined,
       userType: { in: userPaginationQueryDto.conditions.exactConditions.userTypes },

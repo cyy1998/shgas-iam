@@ -280,7 +280,6 @@ export type ClientOrderByWithRelationInput = {
   updateTime?: Prisma.SortOrder
   extAttributes?: Prisma.SortOrder
   roles?: Prisma.RoleOrderByRelationAggregateInput
-  _relevance?: Prisma.ClientOrderByRelevanceInput
 }
 
 export type ClientWhereUniqueInput = Prisma.AtLeast<{
@@ -434,12 +433,6 @@ export type ClientUncheckedUpdateManyInput = {
   createTime?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updateTime?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   extAttributes?: Prisma.JsonNullValueInput | runtime.InputJsonValue
-}
-
-export type ClientOrderByRelevanceInput = {
-  fields: Prisma.ClientOrderByRelevanceFieldEnum | Prisma.ClientOrderByRelevanceFieldEnum[]
-  sort: Prisma.SortOrder
-  search: string
 }
 
 export type ClientCountOrderByAggregateInput = {
@@ -628,7 +621,33 @@ export type ClientSelect<ExtArgs extends runtime.Types.Extensions.InternalArgs =
   _count?: boolean | Prisma.ClientCountOutputTypeDefaultArgs<ExtArgs>
 }, ExtArgs["result"]["client"]>
 
+export type ClientSelectCreateManyAndReturn<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetSelect<{
+  id?: boolean
+  clientCode?: boolean
+  clientName?: boolean
+  clientSecret?: boolean
+  url?: boolean
+  status?: boolean
+  description?: boolean
+  isDelete?: boolean
+  createTime?: boolean
+  updateTime?: boolean
+  extAttributes?: boolean
+}, ExtArgs["result"]["client"]>
 
+export type ClientSelectUpdateManyAndReturn<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetSelect<{
+  id?: boolean
+  clientCode?: boolean
+  clientName?: boolean
+  clientSecret?: boolean
+  url?: boolean
+  status?: boolean
+  description?: boolean
+  isDelete?: boolean
+  createTime?: boolean
+  updateTime?: boolean
+  extAttributes?: boolean
+}, ExtArgs["result"]["client"]>
 
 export type ClientSelectScalar = {
   id?: boolean
@@ -649,6 +668,8 @@ export type ClientInclude<ExtArgs extends runtime.Types.Extensions.InternalArgs 
   roles?: boolean | Prisma.Client$rolesArgs<ExtArgs>
   _count?: boolean | Prisma.ClientCountOutputTypeDefaultArgs<ExtArgs>
 }
+export type ClientIncludeCreateManyAndReturn<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {}
+export type ClientIncludeUpdateManyAndReturn<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {}
 
 export type $ClientPayload<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
   name: "Client"
@@ -785,6 +806,30 @@ export interface ClientDelegate<ExtArgs extends runtime.Types.Extensions.Interna
   createMany<T extends ClientCreateManyArgs>(args?: Prisma.SelectSubset<T, ClientCreateManyArgs<ExtArgs>>): Prisma.PrismaPromise<Prisma.BatchPayload>
 
   /**
+   * Create many Clients and returns the data saved in the database.
+   * @param {ClientCreateManyAndReturnArgs} args - Arguments to create many Clients.
+   * @example
+   * // Create many Clients
+   * const client = await prisma.client.createManyAndReturn({
+   *   data: [
+   *     // ... provide data here
+   *   ]
+   * })
+   * 
+   * // Create many Clients and only return the `id`
+   * const clientWithIdOnly = await prisma.client.createManyAndReturn({
+   *   select: { id: true },
+   *   data: [
+   *     // ... provide data here
+   *   ]
+   * })
+   * Note, that providing `undefined` is treated as the value not being there.
+   * Read more here: https://pris.ly/d/null-undefined
+   * 
+   */
+  createManyAndReturn<T extends ClientCreateManyAndReturnArgs>(args?: Prisma.SelectSubset<T, ClientCreateManyAndReturnArgs<ExtArgs>>): Prisma.PrismaPromise<runtime.Types.Result.GetResult<Prisma.$ClientPayload<ExtArgs>, T, "createManyAndReturn", GlobalOmitOptions>>
+
+  /**
    * Delete a Client.
    * @param {ClientDeleteArgs} args - Arguments to delete one Client.
    * @example
@@ -847,6 +892,36 @@ export interface ClientDelegate<ExtArgs extends runtime.Types.Extensions.Interna
    * 
    */
   updateMany<T extends ClientUpdateManyArgs>(args: Prisma.SelectSubset<T, ClientUpdateManyArgs<ExtArgs>>): Prisma.PrismaPromise<Prisma.BatchPayload>
+
+  /**
+   * Update zero or more Clients and returns the data updated in the database.
+   * @param {ClientUpdateManyAndReturnArgs} args - Arguments to update many Clients.
+   * @example
+   * // Update many Clients
+   * const client = await prisma.client.updateManyAndReturn({
+   *   where: {
+   *     // ... provide filter here
+   *   },
+   *   data: [
+   *     // ... provide data here
+   *   ]
+   * })
+   * 
+   * // Update zero or more Clients and only return the `id`
+   * const clientWithIdOnly = await prisma.client.updateManyAndReturn({
+   *   select: { id: true },
+   *   where: {
+   *     // ... provide filter here
+   *   },
+   *   data: [
+   *     // ... provide data here
+   *   ]
+   * })
+   * Note, that providing `undefined` is treated as the value not being there.
+   * Read more here: https://pris.ly/d/null-undefined
+   * 
+   */
+  updateManyAndReturn<T extends ClientUpdateManyAndReturnArgs>(args: Prisma.SelectSubset<T, ClientUpdateManyAndReturnArgs<ExtArgs>>): Prisma.PrismaPromise<runtime.Types.Result.GetResult<Prisma.$ClientPayload<ExtArgs>, T, "updateManyAndReturn", GlobalOmitOptions>>
 
   /**
    * Create or update one Client.
@@ -1281,6 +1356,25 @@ export type ClientCreateManyArgs<ExtArgs extends runtime.Types.Extensions.Intern
 }
 
 /**
+ * Client createManyAndReturn
+ */
+export type ClientCreateManyAndReturnArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
+  /**
+   * Select specific fields to fetch from the Client
+   */
+  select?: Prisma.ClientSelectCreateManyAndReturn<ExtArgs> | null
+  /**
+   * Omit specific fields from the Client
+   */
+  omit?: Prisma.ClientOmit<ExtArgs> | null
+  /**
+   * The data used to create many Clients.
+   */
+  data: Prisma.ClientCreateManyInput | Prisma.ClientCreateManyInput[]
+  skipDuplicates?: boolean
+}
+
+/**
  * Client update
  */
 export type ClientUpdateArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
@@ -1310,6 +1404,32 @@ export type ClientUpdateArgs<ExtArgs extends runtime.Types.Extensions.InternalAr
  * Client updateMany
  */
 export type ClientUpdateManyArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
+  /**
+   * The data used to update Clients.
+   */
+  data: Prisma.XOR<Prisma.ClientUpdateManyMutationInput, Prisma.ClientUncheckedUpdateManyInput>
+  /**
+   * Filter which Clients to update
+   */
+  where?: Prisma.ClientWhereInput
+  /**
+   * Limit how many Clients to update.
+   */
+  limit?: number
+}
+
+/**
+ * Client updateManyAndReturn
+ */
+export type ClientUpdateManyAndReturnArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
+  /**
+   * Select specific fields to fetch from the Client
+   */
+  select?: Prisma.ClientSelectUpdateManyAndReturn<ExtArgs> | null
+  /**
+   * Omit specific fields from the Client
+   */
+  omit?: Prisma.ClientOmit<ExtArgs> | null
   /**
    * The data used to update Clients.
    */

@@ -2,6 +2,7 @@ import type { EmploymentAdminPaginationQueryDto, EmploymentQueryDto } from "./em
 import type { PrismaTransaction } from "@/db";
 import type { EmploymentWhereInput } from "@/db/generated/prisma/models";
 import { prisma } from "@/db";
+import { Prisma } from "@/db/generated/prisma/client";
 import { Status } from "@/enums/status";
 
 function constructSearchEmploymentsCondition(employmentQueryDto: EmploymentQueryDto): EmploymentWhereInput {
@@ -382,8 +383,8 @@ function buildEmploymentAdminWhere(dto: EmploymentAdminPaginationQueryDto) {
       ...(text !== undefined
         ? {
             OR: [
-              { username: { contains: text } },
-              { name: { contains: text } },
+              { username: { contains: text, mode: Prisma.QueryMode.insensitive } },
+              { name: { contains: text, mode: Prisma.QueryMode.insensitive } },
             ],
           }
         : {}),

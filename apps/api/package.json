@@ -17,12 +17,13 @@
     "serve": "bun run src/index.ts",
     "lint": "eslint src/",
     "lint:fix": "eslint --fix src/",
+    "migrate:mysql-to-postgres": "bun scripts/migrate-mysql-to-postgres.ts",
     "typecheck": "bunx tsc --noEmit"
   },
   "dependencies": {
     "@hono/zod-openapi": "^1.1.4",
     "@iam/shared": "workspace:*",
-    "@prisma/adapter-mariadb": "^7.3.0",
+    "@prisma/adapter-pg": "^7.3.0",
     "@prisma/client": "7",
     "@scalar/hono-api-reference": "^0.10.7",
     "@trpc/server": "^11.16.0",
@@ -34,7 +35,7 @@
     "hono": "^4.12.8",
     "hono-pino": "^0.10.3",
     "ioredis": "^5.8.1",
-    "luxon": "^3.7.2",
+    "mysql2": "^3.15.2",
     "p-limit": "^7.2.0",
     "pino": "^10.3.1",
     "pino-pretty": "^13.1.3",

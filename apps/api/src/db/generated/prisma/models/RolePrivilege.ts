@@ -511,7 +511,19 @@ export type RolePrivilegeSelect<ExtArgs extends runtime.Types.Extensions.Interna
   privilege?: boolean | Prisma.PrivilegeDefaultArgs<ExtArgs>
 }, ExtArgs["result"]["rolePrivilege"]>
 
+export type RolePrivilegeSelectCreateManyAndReturn<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetSelect<{
+  roleId?: boolean
+  privilegeId?: boolean
+  role?: boolean | Prisma.RoleDefaultArgs<ExtArgs>
+  privilege?: boolean | Prisma.PrivilegeDefaultArgs<ExtArgs>
+}, ExtArgs["result"]["rolePrivilege"]>
 
+export type RolePrivilegeSelectUpdateManyAndReturn<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetSelect<{
+  roleId?: boolean
+  privilegeId?: boolean
+  role?: boolean | Prisma.RoleDefaultArgs<ExtArgs>
+  privilege?: boolean | Prisma.PrivilegeDefaultArgs<ExtArgs>
+}, ExtArgs["result"]["rolePrivilege"]>
 
 export type RolePrivilegeSelectScalar = {
   roleId?: boolean
@@ -520,6 +532,14 @@ export type RolePrivilegeSelectScalar = {
 
 export type RolePrivilegeOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"roleId" | "privilegeId", ExtArgs["result"]["rolePrivilege"]>
 export type RolePrivilegeInclude<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
+  role?: boolean | Prisma.RoleDefaultArgs<ExtArgs>
+  privilege?: boolean | Prisma.PrivilegeDefaultArgs<ExtArgs>
+}
+export type RolePrivilegeIncludeCreateManyAndReturn<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
+  role?: boolean | Prisma.RoleDefaultArgs<ExtArgs>
+  privilege?: boolean | Prisma.PrivilegeDefaultArgs<ExtArgs>
+}
+export type RolePrivilegeIncludeUpdateManyAndReturn<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
   role?: boolean | Prisma.RoleDefaultArgs<ExtArgs>
   privilege?: boolean | Prisma.PrivilegeDefaultArgs<ExtArgs>
 }
@@ -651,6 +671,30 @@ export interface RolePrivilegeDelegate<ExtArgs extends runtime.Types.Extensions.
   createMany<T extends RolePrivilegeCreateManyArgs>(args?: Prisma.SelectSubset<T, RolePrivilegeCreateManyArgs<ExtArgs>>): Prisma.PrismaPromise<Prisma.BatchPayload>
 
   /**
+   * Create many RolePrivileges and returns the data saved in the database.
+   * @param {RolePrivilegeCreateManyAndReturnArgs} args - Arguments to create many RolePrivileges.
+   * @example
+   * // Create many RolePrivileges
+   * const rolePrivilege = await prisma.rolePrivilege.createManyAndReturn({
+   *   data: [
+   *     // ... provide data here
+   *   ]
+   * })
+   * 
+   * // Create many RolePrivileges and only return the `roleId`
+   * const rolePrivilegeWithRoleIdOnly = await prisma.rolePrivilege.createManyAndReturn({
+   *   select: { roleId: true },
+   *   data: [
+   *     // ... provide data here
+   *   ]
+   * })
+   * Note, that providing `undefined` is treated as the value not being there.
+   * Read more here: https://pris.ly/d/null-undefined
+   * 
+   */
+  createManyAndReturn<T extends RolePrivilegeCreateManyAndReturnArgs>(args?: Prisma.SelectSubset<T, RolePrivilegeCreateManyAndReturnArgs<ExtArgs>>): Prisma.PrismaPromise<runtime.Types.Result.GetResult<Prisma.$RolePrivilegePayload<ExtArgs>, T, "createManyAndReturn", GlobalOmitOptions>>
+
+  /**
    * Delete a RolePrivilege.
    * @param {RolePrivilegeDeleteArgs} args - Arguments to delete one RolePrivilege.
    * @example
@@ -713,6 +757,36 @@ export interface RolePrivilegeDelegate<ExtArgs extends runtime.Types.Extensions.
    * 
    */
   updateMany<T extends RolePrivilegeUpdateManyArgs>(args: Prisma.SelectSubset<T, RolePrivilegeUpdateManyArgs<ExtArgs>>): Prisma.PrismaPromise<Prisma.BatchPayload>
+
+  /**
+   * Update zero or more RolePrivileges and returns the data updated in the database.
+   * @param {RolePrivilegeUpdateManyAndReturnArgs} args - Arguments to update many RolePrivileges.
+   * @example
+   * // Update many RolePrivileges
+   * const rolePrivilege = await prisma.rolePrivilege.updateManyAndReturn({
+   *   where: {
+   *     // ... provide filter here
+   *   },
+   *   data: [
+   *     // ... provide data here
+   *   ]
+   * })
+   * 
+   * // Update zero or more RolePrivileges and only return the `roleId`
+   * const rolePrivilegeWithRoleIdOnly = await prisma.rolePrivilege.updateManyAndReturn({
+   *   select: { roleId: true },
+   *   where: {
+   *     // ... provide filter here
+   *   },
+   *   data: [
+   *     // ... provide data here
+   *   ]
+   * })
+   * Note, that providing `undefined` is treated as the value not being there.
+   * Read more here: https://pris.ly/d/null-undefined
+   * 
+   */
+  updateManyAndReturn<T extends RolePrivilegeUpdateManyAndReturnArgs>(args: Prisma.SelectSubset<T, RolePrivilegeUpdateManyAndReturnArgs<ExtArgs>>): Prisma.PrismaPromise<runtime.Types.Result.GetResult<Prisma.$RolePrivilegePayload<ExtArgs>, T, "updateManyAndReturn", GlobalOmitOptions>>
 
   /**
    * Create or update one RolePrivilege.
@@ -1139,6 +1213,29 @@ export type RolePrivilegeCreateManyArgs<ExtArgs extends runtime.Types.Extensions
 }
 
 /**
+ * RolePrivilege createManyAndReturn
+ */
+export type RolePrivilegeCreateManyAndReturnArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
+  /**
+   * Select specific fields to fetch from the RolePrivilege
+   */
+  select?: Prisma.RolePrivilegeSelectCreateManyAndReturn<ExtArgs> | null
+  /**
+   * Omit specific fields from the RolePrivilege
+   */
+  omit?: Prisma.RolePrivilegeOmit<ExtArgs> | null
+  /**
+   * The data used to create many RolePrivileges.
+   */
+  data: Prisma.RolePrivilegeCreateManyInput | Prisma.RolePrivilegeCreateManyInput[]
+  skipDuplicates?: boolean
+  /**
+   * Choose, which related nodes to fetch as well
+   */
+  include?: Prisma.RolePrivilegeIncludeCreateManyAndReturn<ExtArgs> | null
+}
+
+/**
  * RolePrivilege update
  */
 export type RolePrivilegeUpdateArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
@@ -1180,6 +1277,36 @@ export type RolePrivilegeUpdateManyArgs<ExtArgs extends runtime.Types.Extensions
    * Limit how many RolePrivileges to update.
    */
   limit?: number
+}
+
+/**
+ * RolePrivilege updateManyAndReturn
+ */
+export type RolePrivilegeUpdateManyAndReturnArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
+  /**
+   * Select specific fields to fetch from the RolePrivilege
+   */
+  select?: Prisma.RolePrivilegeSelectUpdateManyAndReturn<ExtArgs> | null
+  /**
+   * Omit specific fields from the RolePrivilege
+   */
+  omit?: Prisma.RolePrivilegeOmit<ExtArgs> | null
+  /**
+   * The data used to update RolePrivileges.
+   */
+  data: Prisma.XOR<Prisma.RolePrivilegeUpdateManyMutationInput, Prisma.RolePrivilegeUncheckedUpdateManyInput>
+  /**
+   * Filter which RolePrivileges to update
+   */
+  where?: Prisma.RolePrivilegeWhereInput
+  /**
+   * Limit how many RolePrivileges to update.
+   */
+  limit?: number
+  /**
+   * Choose, which related nodes to fetch as well
+   */
+  include?: Prisma.RolePrivilegeIncludeUpdateManyAndReturn<ExtArgs> | null
 }
 
 /**

@@ -511,7 +511,19 @@ export type PositionRoleSelect<ExtArgs extends runtime.Types.Extensions.Internal
   role?: boolean | Prisma.RoleDefaultArgs<ExtArgs>
 }, ExtArgs["result"]["positionRole"]>
 
+export type PositionRoleSelectCreateManyAndReturn<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetSelect<{
+  positionId?: boolean
+  roleId?: boolean
+  position?: boolean | Prisma.PositionDefaultArgs<ExtArgs>
+  role?: boolean | Prisma.RoleDefaultArgs<ExtArgs>
+}, ExtArgs["result"]["positionRole"]>
 
+export type PositionRoleSelectUpdateManyAndReturn<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetSelect<{
+  positionId?: boolean
+  roleId?: boolean
+  position?: boolean | Prisma.PositionDefaultArgs<ExtArgs>
+  role?: boolean | Prisma.RoleDefaultArgs<ExtArgs>
+}, ExtArgs["result"]["positionRole"]>
 
 export type PositionRoleSelectScalar = {
   positionId?: boolean
@@ -520,6 +532,14 @@ export type PositionRoleSelectScalar = {
 
 export type PositionRoleOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"positionId" | "roleId", ExtArgs["result"]["positionRole"]>
 export type PositionRoleInclude<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
+  position?: boolean | Prisma.PositionDefaultArgs<ExtArgs>
+  role?: boolean | Prisma.RoleDefaultArgs<ExtArgs>
+}
+export type PositionRoleIncludeCreateManyAndReturn<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
+  position?: boolean | Prisma.PositionDefaultArgs<ExtArgs>
+  role?: boolean | Prisma.RoleDefaultArgs<ExtArgs>
+}
+export type PositionRoleIncludeUpdateManyAndReturn<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
   position?: boolean | Prisma.PositionDefaultArgs<ExtArgs>
   role?: boolean | Prisma.RoleDefaultArgs<ExtArgs>
 }
@@ -651,6 +671,30 @@ export interface PositionRoleDelegate<ExtArgs extends runtime.Types.Extensions.I
   createMany<T extends PositionRoleCreateManyArgs>(args?: Prisma.SelectSubset<T, PositionRoleCreateManyArgs<ExtArgs>>): Prisma.PrismaPromise<Prisma.BatchPayload>
 
   /**
+   * Create many PositionRoles and returns the data saved in the database.
+   * @param {PositionRoleCreateManyAndReturnArgs} args - Arguments to create many PositionRoles.
+   * @example
+   * // Create many PositionRoles
+   * const positionRole = await prisma.positionRole.createManyAndReturn({
+   *   data: [
+   *     // ... provide data here
+   *   ]
+   * })
+   * 
+   * // Create many PositionRoles and only return the `positionId`
+   * const positionRoleWithPositionIdOnly = await prisma.positionRole.createManyAndReturn({
+   *   select: { positionId: true },
+   *   data: [
+   *     // ... provide data here
+   *   ]
+   * })
+   * Note, that providing `undefined` is treated as the value not being there.
+   * Read more here: https://pris.ly/d/null-undefined
+   * 
+   */
+  createManyAndReturn<T extends PositionRoleCreateManyAndReturnArgs>(args?: Prisma.SelectSubset<T, PositionRoleCreateManyAndReturnArgs<ExtArgs>>): Prisma.PrismaPromise<runtime.Types.Result.GetResult<Prisma.$PositionRolePayload<ExtArgs>, T, "createManyAndReturn", GlobalOmitOptions>>
+
+  /**
    * Delete a PositionRole.
    * @param {PositionRoleDeleteArgs} args - Arguments to delete one PositionRole.
    * @example
@@ -713,6 +757,36 @@ export interface PositionRoleDelegate<ExtArgs extends runtime.Types.Extensions.I
    * 
    */
   updateMany<T extends PositionRoleUpdateManyArgs>(args: Prisma.SelectSubset<T, PositionRoleUpdateManyArgs<ExtArgs>>): Prisma.PrismaPromise<Prisma.BatchPayload>
+
+  /**
+   * Update zero or more PositionRoles and returns the data updated in the database.
+   * @param {PositionRoleUpdateManyAndReturnArgs} args - Arguments to update many PositionRoles.
+   * @example
+   * // Update many PositionRoles
+   * const positionRole = await prisma.positionRole.updateManyAndReturn({
+   *   where: {
+   *     // ... provide filter here
+   *   },
+   *   data: [
+   *     // ... provide data here
+   *   ]
+   * })
+   * 
+   * // Update zero or more PositionRoles and only return the `positionId`
+   * const positionRoleWithPositionIdOnly = await prisma.positionRole.updateManyAndReturn({
+   *   select: { positionId: true },
+   *   where: {
+   *     // ... provide filter here
+   *   },
+   *   data: [
+   *     // ... provide data here
+   *   ]
+   * })
+   * Note, that providing `undefined` is treated as the value not being there.
+   * Read more here: https://pris.ly/d/null-undefined
+   * 
+   */
+  updateManyAndReturn<T extends PositionRoleUpdateManyAndReturnArgs>(args: Prisma.SelectSubset<T, PositionRoleUpdateManyAndReturnArgs<ExtArgs>>): Prisma.PrismaPromise<runtime.Types.Result.GetResult<Prisma.$PositionRolePayload<ExtArgs>, T, "updateManyAndReturn", GlobalOmitOptions>>
 
   /**
    * Create or update one PositionRole.
@@ -1139,6 +1213,29 @@ export type PositionRoleCreateManyArgs<ExtArgs extends runtime.Types.Extensions.
 }
 
 /**
+ * PositionRole createManyAndReturn
+ */
+export type PositionRoleCreateManyAndReturnArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
+  /**
+   * Select specific fields to fetch from the PositionRole
+   */
+  select?: Prisma.PositionRoleSelectCreateManyAndReturn<ExtArgs> | null
+  /**
+   * Omit specific fields from the PositionRole
+   */
+  omit?: Prisma.PositionRoleOmit<ExtArgs> | null
+  /**
+   * The data used to create many PositionRoles.
+   */
+  data: Prisma.PositionRoleCreateManyInput | Prisma.PositionRoleCreateManyInput[]
+  skipDuplicates?: boolean
+  /**
+   * Choose, which related nodes to fetch as well
+   */
+  include?: Prisma.PositionRoleIncludeCreateManyAndReturn<ExtArgs> | null
+}
+
+/**
  * PositionRole update
  */
 export type PositionRoleUpdateArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
@@ -1180,6 +1277,36 @@ export type PositionRoleUpdateManyArgs<ExtArgs extends runtime.Types.Extensions.
    * Limit how many PositionRoles to update.
    */
   limit?: number
+}
+
+/**
+ * PositionRole updateManyAndReturn
+ */
+export type PositionRoleUpdateManyAndReturnArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
+  /**
+   * Select specific fields to fetch from the PositionRole
+   */
+  select?: Prisma.PositionRoleSelectUpdateManyAndReturn<ExtArgs> | null
+  /**
+   * Omit specific fields from the PositionRole
+   */
+  omit?: Prisma.PositionRoleOmit<ExtArgs> | null
+  /**
+   * The data used to update PositionRoles.
+   */
+  data: Prisma.XOR<Prisma.PositionRoleUpdateManyMutationInput, Prisma.PositionRoleUncheckedUpdateManyInput>
+  /**
+   * Filter which PositionRoles to update
+   */
+  where?: Prisma.PositionRoleWhereInput
+  /**
+   * Limit how many PositionRoles to update.
+   */
+  limit?: number
+  /**
+   * Choose, which related nodes to fetch as well
+   */
+  include?: Prisma.PositionRoleIncludeUpdateManyAndReturn<ExtArgs> | null
 }
 
 /**

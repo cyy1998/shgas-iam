@@ -3,8 +3,7 @@ import type { Prisma } from '../../prisma/client';
 import { SortOrderSchema } from '../enums/SortOrder.schema';
 import { SortOrderInputObjectSchema as SortOrderInputObjectSchema } from './SortOrderInput.schema';
 import { EmploymentOrderByRelationAggregateInputObjectSchema as EmploymentOrderByRelationAggregateInputObjectSchema } from './EmploymentOrderByRelationAggregateInput.schema';
-import { PrivilegeDelegationOrderByRelationAggregateInputObjectSchema as PrivilegeDelegationOrderByRelationAggregateInputObjectSchema } from './PrivilegeDelegationOrderByRelationAggregateInput.schema';
-import { UserOrderByRelevanceInputObjectSchema as UserOrderByRelevanceInputObjectSchema } from './UserOrderByRelevanceInput.schema'
+import { PrivilegeDelegationOrderByRelationAggregateInputObjectSchema as PrivilegeDelegationOrderByRelationAggregateInputObjectSchema } from './PrivilegeDelegationOrderByRelationAggregateInput.schema'
 
 const makeSchema = () => z.object({
   id: SortOrderSchema.optional(),
@@ -21,8 +20,7 @@ const makeSchema = () => z.object({
   updateTime: SortOrderSchema.optional(),
   employments: z.lazy(() => EmploymentOrderByRelationAggregateInputObjectSchema).optional(),
   delegationTo: z.lazy(() => PrivilegeDelegationOrderByRelationAggregateInputObjectSchema).optional(),
-  delegationFrom: z.lazy(() => PrivilegeDelegationOrderByRelationAggregateInputObjectSchema).optional(),
-  _relevance: z.lazy(() => UserOrderByRelevanceInputObjectSchema).optional()
+  delegationFrom: z.lazy(() => PrivilegeDelegationOrderByRelationAggregateInputObjectSchema).optional()
 }).strict();
 export const UserOrderByWithRelationInputObjectSchema: z.ZodType<Prisma.UserOrderByWithRelationInput> = makeSchema() as unknown as z.ZodType<Prisma.UserOrderByWithRelationInput>;
 export const UserOrderByWithRelationInputObjectZodSchema = makeSchema();

@@ -2,6 +2,7 @@ import type { PrismaTransaction } from "@/db";
 import type { Organization } from "@/db/generated/prisma/client";
 import type { OrganizationCreateDto, OrganizationQueryDto } from "@/services/organization/organization.type";
 import { prisma } from "@/db";
+import { Prisma } from "@/db/generated/prisma/client";
 import { OrganizationType } from "@/enums/organization.type";
 import { Status } from "@/enums/status";
 
@@ -293,8 +294,8 @@ export async function searchOrganizationsForAdmin(
       ...(fuzzyConditions.text
         ? {
             OR: [
-              { orgCode: { contains: fuzzyConditions.text } },
-              { orgName: { contains: fuzzyConditions.text } },
+              { orgCode: { contains: fuzzyConditions.text, mode: Prisma.QueryMode.insensitive } },
+              { orgName: { contains: fuzzyConditions.text, mode: Prisma.QueryMode.insensitive } },
             ],
           }
         : {}),

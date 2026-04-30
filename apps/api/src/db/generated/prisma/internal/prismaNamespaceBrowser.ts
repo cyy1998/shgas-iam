@@ -331,57 +331,20 @@ export const NullableJsonNullValueInput = {
 export type NullableJsonNullValueInput = (typeof NullableJsonNullValueInput)[keyof typeof NullableJsonNullValueInput]
 
 
+export const QueryMode = {
+  default: 'default',
+  insensitive: 'insensitive'
+} as const
+
+export type QueryMode = (typeof QueryMode)[keyof typeof QueryMode]
+
+
 export const NullsOrder = {
   first: 'first',
   last: 'last'
 } as const
 
 export type NullsOrder = (typeof NullsOrder)[keyof typeof NullsOrder]
-
-
-export const UserOrderByRelevanceFieldEnum = {
-  username: 'username',
-  wxId: 'wxId',
-  name: 'name',
-  password: 'password',
-  mobile: 'mobile',
-  userType: 'userType'
-} as const
-
-export type UserOrderByRelevanceFieldEnum = (typeof UserOrderByRelevanceFieldEnum)[keyof typeof UserOrderByRelevanceFieldEnum]
-
-
-export const OrganizationOrderByRelevanceFieldEnum = {
-  orgCode: 'orgCode',
-  orgName: 'orgName',
-  path: 'path',
-  orgType: 'orgType'
-} as const
-
-export type OrganizationOrderByRelevanceFieldEnum = (typeof OrganizationOrderByRelevanceFieldEnum)[keyof typeof OrganizationOrderByRelevanceFieldEnum]
-
-
-export const PositionOrderByRelevanceFieldEnum = {
-  posCode: 'posCode',
-  posName: 'posName',
-  description: 'description'
-} as const
-
-export type PositionOrderByRelevanceFieldEnum = (typeof PositionOrderByRelevanceFieldEnum)[keyof typeof PositionOrderByRelevanceFieldEnum]
-
-
-export const PosOrgCompositionOrderByRelevanceFieldEnum = {
-  description: 'description'
-} as const
-
-export type PosOrgCompositionOrderByRelevanceFieldEnum = (typeof PosOrgCompositionOrderByRelevanceFieldEnum)[keyof typeof PosOrgCompositionOrderByRelevanceFieldEnum]
-
-
-export const EmploymentOrderByRelevanceFieldEnum = {
-  description: 'description'
-} as const
-
-export type EmploymentOrderByRelevanceFieldEnum = (typeof EmploymentOrderByRelevanceFieldEnum)[keyof typeof EmploymentOrderByRelevanceFieldEnum]
 
 
 export const JsonNullValueFilter = {
@@ -391,58 +354,4 @@ export const JsonNullValueFilter = {
 } as const
 
 export type JsonNullValueFilter = (typeof JsonNullValueFilter)[keyof typeof JsonNullValueFilter]
-
-
-export const QueryMode = {
-  default: 'default',
-  insensitive: 'insensitive'
-} as const
-
-export type QueryMode = (typeof QueryMode)[keyof typeof QueryMode]
-
-
-export const ClientOrderByRelevanceFieldEnum = {
-  clientCode: 'clientCode',
-  clientName: 'clientName',
-  clientSecret: 'clientSecret',
-  url: 'url',
-  description: 'description'
-} as const
-
-export type ClientOrderByRelevanceFieldEnum = (typeof ClientOrderByRelevanceFieldEnum)[keyof typeof ClientOrderByRelevanceFieldEnum]
-
-
-export const RoleOrderByRelevanceFieldEnum = {
-  roleCode: 'roleCode',
-  roleName: 'roleName',
-  description: 'description'
-} as const
-
-export type RoleOrderByRelevanceFieldEnum = (typeof RoleOrderByRelevanceFieldEnum)[keyof typeof RoleOrderByRelevanceFieldEnum]
-
-
-export const PrivilegeOrderByRelevanceFieldEnum = {
-  privilegeCode: 'privilegeCode',
-  privilegeName: 'privilegeName',
-  description: 'description'
-} as const
-
-export type PrivilegeOrderByRelevanceFieldEnum = (typeof PrivilegeOrderByRelevanceFieldEnum)[keyof typeof PrivilegeOrderByRelevanceFieldEnum]
-
-
-export const PrivilegeDelegationOrderByRelevanceFieldEnum = {
-  description: 'description'
-} as const
-
-export type PrivilegeDelegationOrderByRelevanceFieldEnum = (typeof PrivilegeDelegationOrderByRelevanceFieldEnum)[keyof typeof PrivilegeDelegationOrderByRelevanceFieldEnum]
-
-
-export const LoginLogOrderByRelevanceFieldEnum = {
-  username: 'username',
-  name: 'name',
-  clientCode: 'clientCode',
-  loginType: 'loginType'
-} as const
-
-export type LoginLogOrderByRelevanceFieldEnum = (typeof LoginLogOrderByRelevanceFieldEnum)[keyof typeof LoginLogOrderByRelevanceFieldEnum]
 

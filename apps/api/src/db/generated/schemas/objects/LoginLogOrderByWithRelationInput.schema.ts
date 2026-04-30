@@ -1,7 +1,6 @@
 import * as z from 'zod';
 import type { Prisma } from '../../prisma/client';
-import { SortOrderSchema } from '../enums/SortOrder.schema';
-import { LoginLogOrderByRelevanceInputObjectSchema as LoginLogOrderByRelevanceInputObjectSchema } from './LoginLogOrderByRelevanceInput.schema'
+import { SortOrderSchema } from '../enums/SortOrder.schema'
 
 const makeSchema = () => z.object({
   id: SortOrderSchema.optional(),
@@ -10,8 +9,7 @@ const makeSchema = () => z.object({
   name: SortOrderSchema.optional(),
   clientCode: SortOrderSchema.optional(),
   loginType: SortOrderSchema.optional(),
-  loginTime: SortOrderSchema.optional(),
-  _relevance: z.lazy(() => LoginLogOrderByRelevanceInputObjectSchema).optional()
+  loginTime: SortOrderSchema.optional()
 }).strict();
 export const LoginLogOrderByWithRelationInputObjectSchema: z.ZodType<Prisma.LoginLogOrderByWithRelationInput> = makeSchema() as unknown as z.ZodType<Prisma.LoginLogOrderByWithRelationInput>;
 export const LoginLogOrderByWithRelationInputObjectZodSchema = makeSchema();

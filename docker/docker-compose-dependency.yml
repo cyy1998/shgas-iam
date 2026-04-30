@@ -1,5 +1,5 @@
 services:
-  db:
+  db-mysql:
     image: docker.xuanyuan.run/mysql:8.0.39
     restart: unless-stopped
     command:
@@ -16,9 +16,25 @@ services:
     ports:
       - "5455:3306"
     volumes:
-      - db_data:/var/lib/mysql
+      - mysql_data:/var/lib/mysql
     healthcheck:
       test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+  db:
+    image: docker.xuanyuan.run/postgres:18
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: iam
+      POSTGRES_PASSWORD: iam_password
+      POSTGRES_DB: iam_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - db_data:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U iam -d iam_db"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -38,5 +54,5 @@ services:
 
 volumes:
   db_data:
-  db_replica_data:
+  mysql_data:
   redis_data:

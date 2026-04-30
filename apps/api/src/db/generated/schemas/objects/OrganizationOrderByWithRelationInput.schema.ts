@@ -6,8 +6,7 @@ import { OrganizationRoleOrderByRelationAggregateInputObjectSchema as Organizati
 import { PosOrgCompositionOrderByRelationAggregateInputObjectSchema as PosOrgCompositionOrderByRelationAggregateInputObjectSchema } from './PosOrgCompositionOrderByRelationAggregateInput.schema';
 import { OrganizationOrderByRelationAggregateInputObjectSchema as OrganizationOrderByRelationAggregateInputObjectSchema } from './OrganizationOrderByRelationAggregateInput.schema';
 import { OrganizationClosureOrderByRelationAggregateInputObjectSchema as OrganizationClosureOrderByRelationAggregateInputObjectSchema } from './OrganizationClosureOrderByRelationAggregateInput.schema';
-import { PrivilegeDelegationOrderByRelationAggregateInputObjectSchema as PrivilegeDelegationOrderByRelationAggregateInputObjectSchema } from './PrivilegeDelegationOrderByRelationAggregateInput.schema';
-import { OrganizationOrderByRelevanceInputObjectSchema as OrganizationOrderByRelevanceInputObjectSchema } from './OrganizationOrderByRelevanceInput.schema'
+import { PrivilegeDelegationOrderByRelationAggregateInputObjectSchema as PrivilegeDelegationOrderByRelationAggregateInputObjectSchema } from './PrivilegeDelegationOrderByRelationAggregateInput.schema'
 
 const organizationorderbywithrelationinputSchema = z.object({
   id: SortOrderSchema.optional(),
@@ -33,8 +32,7 @@ const organizationorderbywithrelationinputSchema = z.object({
   children: z.lazy(() => OrganizationOrderByRelationAggregateInputObjectSchema).optional(),
   ancestorClosures: z.lazy(() => OrganizationClosureOrderByRelationAggregateInputObjectSchema).optional(),
   descendantClosures: z.lazy(() => OrganizationClosureOrderByRelationAggregateInputObjectSchema).optional(),
-  privilegeDelegations: z.lazy(() => PrivilegeDelegationOrderByRelationAggregateInputObjectSchema).optional(),
-  _relevance: z.lazy(() => OrganizationOrderByRelevanceInputObjectSchema).optional()
+  privilegeDelegations: z.lazy(() => PrivilegeDelegationOrderByRelationAggregateInputObjectSchema).optional()
 }).strict();
 export const OrganizationOrderByWithRelationInputObjectSchema: z.ZodType<Prisma.OrganizationOrderByWithRelationInput> = organizationorderbywithrelationinputSchema as unknown as z.ZodType<Prisma.OrganizationOrderByWithRelationInput>;
 export const OrganizationOrderByWithRelationInputObjectZodSchema = organizationorderbywithrelationinputSchema;

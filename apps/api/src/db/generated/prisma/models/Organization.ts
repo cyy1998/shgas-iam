@@ -352,7 +352,6 @@ export type OrganizationOrderByWithRelationInput = {
   ancestorClosures?: Prisma.OrganizationClosureOrderByRelationAggregateInput
   descendantClosures?: Prisma.OrganizationClosureOrderByRelationAggregateInput
   privilegeDelegations?: Prisma.PrivilegeDelegationOrderByRelationAggregateInput
-  _relevance?: Prisma.OrganizationOrderByRelevanceInput
 }
 
 export type OrganizationWhereUniqueInput = Prisma.AtLeast<{
@@ -596,12 +595,6 @@ export type OrganizationListRelationFilter = {
 
 export type OrganizationOrderByRelationAggregateInput = {
   _count?: Prisma.SortOrder
-}
-
-export type OrganizationOrderByRelevanceInput = {
-  fields: Prisma.OrganizationOrderByRelevanceFieldEnum | Prisma.OrganizationOrderByRelevanceFieldEnum[]
-  sort: Prisma.SortOrder
-  search: string
 }
 
 export type OrganizationCountOrderByAggregateInput = {
@@ -2050,7 +2043,43 @@ export type OrganizationSelect<ExtArgs extends runtime.Types.Extensions.Internal
   _count?: boolean | Prisma.OrganizationCountOutputTypeDefaultArgs<ExtArgs>
 }, ExtArgs["result"]["organization"]>
 
+export type OrganizationSelectCreateManyAndReturn<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetSelect<{
+  id?: boolean
+  orgCode?: boolean
+  orgName?: boolean
+  parentId?: boolean
+  businessParentId?: boolean
+  path?: boolean
+  level?: boolean
+  orgType?: boolean
+  orderNum?: boolean
+  isVirtual?: boolean
+  isEntity?: boolean
+  status?: boolean
+  isDelete?: boolean
+  createTime?: boolean
+  updateTime?: boolean
+  parent?: boolean | Prisma.Organization$parentArgs<ExtArgs>
+}, ExtArgs["result"]["organization"]>
 
+export type OrganizationSelectUpdateManyAndReturn<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetSelect<{
+  id?: boolean
+  orgCode?: boolean
+  orgName?: boolean
+  parentId?: boolean
+  businessParentId?: boolean
+  path?: boolean
+  level?: boolean
+  orgType?: boolean
+  orderNum?: boolean
+  isVirtual?: boolean
+  isEntity?: boolean
+  status?: boolean
+  isDelete?: boolean
+  createTime?: boolean
+  updateTime?: boolean
+  parent?: boolean | Prisma.Organization$parentArgs<ExtArgs>
+}, ExtArgs["result"]["organization"]>
 
 export type OrganizationSelectScalar = {
   id?: boolean
@@ -2082,6 +2111,12 @@ export type OrganizationInclude<ExtArgs extends runtime.Types.Extensions.Interna
   descendantClosures?: boolean | Prisma.Organization$descendantClosuresArgs<ExtArgs>
   privilegeDelegations?: boolean | Prisma.Organization$privilegeDelegationsArgs<ExtArgs>
   _count?: boolean | Prisma.OrganizationCountOutputTypeDefaultArgs<ExtArgs>
+}
+export type OrganizationIncludeCreateManyAndReturn<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
+  parent?: boolean | Prisma.Organization$parentArgs<ExtArgs>
+}
+export type OrganizationIncludeUpdateManyAndReturn<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
+  parent?: boolean | Prisma.Organization$parentArgs<ExtArgs>
 }
 
 export type $OrganizationPayload<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
@@ -2231,6 +2266,30 @@ export interface OrganizationDelegate<ExtArgs extends runtime.Types.Extensions.I
   createMany<T extends OrganizationCreateManyArgs>(args?: Prisma.SelectSubset<T, OrganizationCreateManyArgs<ExtArgs>>): Prisma.PrismaPromise<Prisma.BatchPayload>
 
   /**
+   * Create many Organizations and returns the data saved in the database.
+   * @param {OrganizationCreateManyAndReturnArgs} args - Arguments to create many Organizations.
+   * @example
+   * // Create many Organizations
+   * const organization = await prisma.organization.createManyAndReturn({
+   *   data: [
+   *     // ... provide data here
+   *   ]
+   * })
+   * 
+   * // Create many Organizations and only return the `id`
+   * const organizationWithIdOnly = await prisma.organization.createManyAndReturn({
+   *   select: { id: true },
+   *   data: [
+   *     // ... provide data here
+   *   ]
+   * })
+   * Note, that providing `undefined` is treated as the value not being there.
+   * Read more here: https://pris.ly/d/null-undefined
+   * 
+   */
+  createManyAndReturn<T extends OrganizationCreateManyAndReturnArgs>(args?: Prisma.SelectSubset<T, OrganizationCreateManyAndReturnArgs<ExtArgs>>): Prisma.PrismaPromise<runtime.Types.Result.GetResult<Prisma.$OrganizationPayload<ExtArgs>, T, "createManyAndReturn", GlobalOmitOptions>>
+
+  /**
    * Delete a Organization.
    * @param {OrganizationDeleteArgs} args - Arguments to delete one Organization.
    * @example
@@ -2293,6 +2352,36 @@ export interface OrganizationDelegate<ExtArgs extends runtime.Types.Extensions.I
    * 
    */
   updateMany<T extends OrganizationUpdateManyArgs>(args: Prisma.SelectSubset<T, OrganizationUpdateManyArgs<ExtArgs>>): Prisma.PrismaPromise<Prisma.BatchPayload>
+
+  /**
+   * Update zero or more Organizations and returns the data updated in the database.
+   * @param {OrganizationUpdateManyAndReturnArgs} args - Arguments to update many Organizations.
+   * @example
+   * // Update many Organizations
+   * const organization = await prisma.organization.updateManyAndReturn({
+   *   where: {
+   *     // ... provide filter here
+   *   },
+   *   data: [
+   *     // ... provide data here
+   *   ]
+   * })
+   * 
+   * // Update zero or more Organizations and only return the `id`
+   * const organizationWithIdOnly = await prisma.organization.updateManyAndReturn({
+   *   select: { id: true },
+   *   where: {
+   *     // ... provide filter here
+   *   },
+   *   data: [
+   *     // ... provide data here
+   *   ]
+   * })
+   * Note, that providing `undefined` is treated as the value not being there.
+   * Read more here: https://pris.ly/d/null-undefined
+   * 
+   */
+  updateManyAndReturn<T extends OrganizationUpdateManyAndReturnArgs>(args: Prisma.SelectSubset<T, OrganizationUpdateManyAndReturnArgs<ExtArgs>>): Prisma.PrismaPromise<runtime.Types.Result.GetResult<Prisma.$OrganizationPayload<ExtArgs>, T, "updateManyAndReturn", GlobalOmitOptions>>
 
   /**
    * Create or update one Organization.
@@ -2739,6 +2828,29 @@ export type OrganizationCreateManyArgs<ExtArgs extends runtime.Types.Extensions.
 }
 
 /**
+ * Organization createManyAndReturn
+ */
+export type OrganizationCreateManyAndReturnArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
+  /**
+   * Select specific fields to fetch from the Organization
+   */
+  select?: Prisma.OrganizationSelectCreateManyAndReturn<ExtArgs> | null
+  /**
+   * Omit specific fields from the Organization
+   */
+  omit?: Prisma.OrganizationOmit<ExtArgs> | null
+  /**
+   * The data used to create many Organizations.
+   */
+  data: Prisma.OrganizationCreateManyInput | Prisma.OrganizationCreateManyInput[]
+  skipDuplicates?: boolean
+  /**
+   * Choose, which related nodes to fetch as well
+   */
+  include?: Prisma.OrganizationIncludeCreateManyAndReturn<ExtArgs> | null
+}
+
+/**
  * Organization update
  */
 export type OrganizationUpdateArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
@@ -2780,6 +2892,36 @@ export type OrganizationUpdateManyArgs<ExtArgs extends runtime.Types.Extensions.
    * Limit how many Organizations to update.
    */
   limit?: number
+}
+
+/**
+ * Organization updateManyAndReturn
+ */
+export type OrganizationUpdateManyAndReturnArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
+  /**
+   * Select specific fields to fetch from the Organization
+   */
+  select?: Prisma.OrganizationSelectUpdateManyAndReturn<ExtArgs> | null
+  /**
+   * Omit specific fields from the Organization
+   */
+  omit?: Prisma.OrganizationOmit<ExtArgs> | null
+  /**
+   * The data used to update Organizations.
+   */
+  data: Prisma.XOR<Prisma.OrganizationUpdateManyMutationInput, Prisma.OrganizationUncheckedUpdateManyInput>
+  /**
+   * Filter which Organizations to update
+   */
+  where?: Prisma.OrganizationWhereInput
+  /**
+   * Limit how many Organizations to update.
+   */
+  limit?: number
+  /**
+   * Choose, which related nodes to fetch as well
+   */
+  include?: Prisma.OrganizationIncludeUpdateManyAndReturn<ExtArgs> | null
 }
 
 /**

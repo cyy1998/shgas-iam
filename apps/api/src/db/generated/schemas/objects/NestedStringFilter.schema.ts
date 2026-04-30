@@ -13,7 +13,6 @@ const nestedstringfilterSchema = z.object({
   contains: z.string().optional(),
   startsWith: z.string().optional(),
   endsWith: z.string().optional(),
-  search: z.string().optional(),
   not: z.union([z.string(), z.lazy(() => NestedStringFilterObjectSchema)]).optional()
 }).strict();
 export const NestedStringFilterObjectSchema: z.ZodType<Prisma.NestedStringFilter> = nestedstringfilterSchema as unknown as z.ZodType<Prisma.NestedStringFilter>;

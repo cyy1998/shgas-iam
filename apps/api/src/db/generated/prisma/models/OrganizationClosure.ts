@@ -587,7 +587,23 @@ export type OrganizationClosureSelect<ExtArgs extends runtime.Types.Extensions.I
   descendant?: boolean | Prisma.OrganizationDefaultArgs<ExtArgs>
 }, ExtArgs["result"]["organizationClosure"]>
 
+export type OrganizationClosureSelectCreateManyAndReturn<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetSelect<{
+  id?: boolean
+  ancestorId?: boolean
+  descendantId?: boolean
+  depth?: boolean
+  ancestor?: boolean | Prisma.OrganizationDefaultArgs<ExtArgs>
+  descendant?: boolean | Prisma.OrganizationDefaultArgs<ExtArgs>
+}, ExtArgs["result"]["organizationClosure"]>
 
+export type OrganizationClosureSelectUpdateManyAndReturn<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetSelect<{
+  id?: boolean
+  ancestorId?: boolean
+  descendantId?: boolean
+  depth?: boolean
+  ancestor?: boolean | Prisma.OrganizationDefaultArgs<ExtArgs>
+  descendant?: boolean | Prisma.OrganizationDefaultArgs<ExtArgs>
+}, ExtArgs["result"]["organizationClosure"]>
 
 export type OrganizationClosureSelectScalar = {
   id?: boolean
@@ -598,6 +614,14 @@ export type OrganizationClosureSelectScalar = {
 
 export type OrganizationClosureOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "ancestorId" | "descendantId" | "depth", ExtArgs["result"]["organizationClosure"]>
 export type OrganizationClosureInclude<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
+  ancestor?: boolean | Prisma.OrganizationDefaultArgs<ExtArgs>
+  descendant?: boolean | Prisma.OrganizationDefaultArgs<ExtArgs>
+}
+export type OrganizationClosureIncludeCreateManyAndReturn<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
+  ancestor?: boolean | Prisma.OrganizationDefaultArgs<ExtArgs>
+  descendant?: boolean | Prisma.OrganizationDefaultArgs<ExtArgs>
+}
+export type OrganizationClosureIncludeUpdateManyAndReturn<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
   ancestor?: boolean | Prisma.OrganizationDefaultArgs<ExtArgs>
   descendant?: boolean | Prisma.OrganizationDefaultArgs<ExtArgs>
 }
@@ -731,6 +755,30 @@ export interface OrganizationClosureDelegate<ExtArgs extends runtime.Types.Exten
   createMany<T extends OrganizationClosureCreateManyArgs>(args?: Prisma.SelectSubset<T, OrganizationClosureCreateManyArgs<ExtArgs>>): Prisma.PrismaPromise<Prisma.BatchPayload>
 
   /**
+   * Create many OrganizationClosures and returns the data saved in the database.
+   * @param {OrganizationClosureCreateManyAndReturnArgs} args - Arguments to create many OrganizationClosures.
+   * @example
+   * // Create many OrganizationClosures
+   * const organizationClosure = await prisma.organizationClosure.createManyAndReturn({
+   *   data: [
+   *     // ... provide data here
+   *   ]
+   * })
+   * 
+   * // Create many OrganizationClosures and only return the `id`
+   * const organizationClosureWithIdOnly = await prisma.organizationClosure.createManyAndReturn({
+   *   select: { id: true },
+   *   data: [
+   *     // ... provide data here
+   *   ]
+   * })
+   * Note, that providing `undefined` is treated as the value not being there.
+   * Read more here: https://pris.ly/d/null-undefined
+   * 
+   */
+  createManyAndReturn<T extends OrganizationClosureCreateManyAndReturnArgs>(args?: Prisma.SelectSubset<T, OrganizationClosureCreateManyAndReturnArgs<ExtArgs>>): Prisma.PrismaPromise<runtime.Types.Result.GetResult<Prisma.$OrganizationClosurePayload<ExtArgs>, T, "createManyAndReturn", GlobalOmitOptions>>
+
+  /**
    * Delete a OrganizationClosure.
    * @param {OrganizationClosureDeleteArgs} args - Arguments to delete one OrganizationClosure.
    * @example
@@ -793,6 +841,36 @@ export interface OrganizationClosureDelegate<ExtArgs extends runtime.Types.Exten
    * 
    */
   updateMany<T extends OrganizationClosureUpdateManyArgs>(args: Prisma.SelectSubset<T, OrganizationClosureUpdateManyArgs<ExtArgs>>): Prisma.PrismaPromise<Prisma.BatchPayload>
+
+  /**
+   * Update zero or more OrganizationClosures and returns the data updated in the database.
+   * @param {OrganizationClosureUpdateManyAndReturnArgs} args - Arguments to update many OrganizationClosures.
+   * @example
+   * // Update many OrganizationClosures
+   * const organizationClosure = await prisma.organizationClosure.updateManyAndReturn({
+   *   where: {
+   *     // ... provide filter here
+   *   },
+   *   data: [
+   *     // ... provide data here
+   *   ]
+   * })
+   * 
+   * // Update zero or more OrganizationClosures and only return the `id`
+   * const organizationClosureWithIdOnly = await prisma.organizationClosure.updateManyAndReturn({
+   *   select: { id: true },
+   *   where: {
+   *     // ... provide filter here
+   *   },
+   *   data: [
+   *     // ... provide data here
+   *   ]
+   * })
+   * Note, that providing `undefined` is treated as the value not being there.
+   * Read more here: https://pris.ly/d/null-undefined
+   * 
+   */
+  updateManyAndReturn<T extends OrganizationClosureUpdateManyAndReturnArgs>(args: Prisma.SelectSubset<T, OrganizationClosureUpdateManyAndReturnArgs<ExtArgs>>): Prisma.PrismaPromise<runtime.Types.Result.GetResult<Prisma.$OrganizationClosurePayload<ExtArgs>, T, "updateManyAndReturn", GlobalOmitOptions>>
 
   /**
    * Create or update one OrganizationClosure.
@@ -1221,6 +1299,29 @@ export type OrganizationClosureCreateManyArgs<ExtArgs extends runtime.Types.Exte
 }
 
 /**
+ * OrganizationClosure createManyAndReturn
+ */
+export type OrganizationClosureCreateManyAndReturnArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
+  /**
+   * Select specific fields to fetch from the OrganizationClosure
+   */
+  select?: Prisma.OrganizationClosureSelectCreateManyAndReturn<ExtArgs> | null
+  /**
+   * Omit specific fields from the OrganizationClosure
+   */
+  omit?: Prisma.OrganizationClosureOmit<ExtArgs> | null
+  /**
+   * The data used to create many OrganizationClosures.
+   */
+  data: Prisma.OrganizationClosureCreateManyInput | Prisma.OrganizationClosureCreateManyInput[]
+  skipDuplicates?: boolean
+  /**
+   * Choose, which related nodes to fetch as well
+   */
+  include?: Prisma.OrganizationClosureIncludeCreateManyAndReturn<ExtArgs> | null
+}
+
+/**
  * OrganizationClosure update
  */
 export type OrganizationClosureUpdateArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
@@ -1262,6 +1363,36 @@ export type OrganizationClosureUpdateManyArgs<ExtArgs extends runtime.Types.Exte
    * Limit how many OrganizationClosures to update.
    */
   limit?: number
+}
+
+/**
+ * OrganizationClosure updateManyAndReturn
+ */
+export type OrganizationClosureUpdateManyAndReturnArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
+  /**
+   * Select specific fields to fetch from the OrganizationClosure
+   */
+  select?: Prisma.OrganizationClosureSelectUpdateManyAndReturn<ExtArgs> | null
+  /**
+   * Omit specific fields from the OrganizationClosure
+   */
+  omit?: Prisma.OrganizationClosureOmit<ExtArgs> | null
+  /**
+   * The data used to update OrganizationClosures.
+   */
+  data: Prisma.XOR<Prisma.OrganizationClosureUpdateManyMutationInput, Prisma.OrganizationClosureUncheckedUpdateManyInput>
+  /**
+   * Filter which OrganizationClosures to update
+   */
+  where?: Prisma.OrganizationClosureWhereInput
+  /**
+   * Limit how many OrganizationClosures to update.
+   */
+  limit?: number
+  /**
+   * Choose, which related nodes to fetch as well
+   */
+  include?: Prisma.OrganizationClosureIncludeUpdateManyAndReturn<ExtArgs> | null
 }
 
 /**

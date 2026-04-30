@@ -14,7 +14,6 @@ const nestedstringnullablewithaggregatesfilterSchema = z.object({
   contains: z.string().optional(),
   startsWith: z.string().optional(),
   endsWith: z.string().optional(),
-  search: z.string().optional(),
   not: z.union([z.string(), z.lazy(() => NestedStringNullableWithAggregatesFilterObjectSchema)]).optional().nullable(),
   _count: z.lazy(() => NestedIntNullableFilterObjectSchema).optional(),
   _min: z.lazy(() => NestedStringNullableFilterObjectSchema).optional(),

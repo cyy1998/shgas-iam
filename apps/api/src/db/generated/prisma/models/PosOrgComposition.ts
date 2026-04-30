@@ -271,7 +271,6 @@ export type PosOrgCompositionOrderByWithRelationInput = {
   organization?: Prisma.OrganizationOrderByWithRelationInput
   employments?: Prisma.EmploymentOrderByRelationAggregateInput
   roles?: Prisma.PosOrgRoleOrderByRelationAggregateInput
-  _relevance?: Prisma.PosOrgCompositionOrderByRelevanceInput
 }
 
 export type PosOrgCompositionWhereUniqueInput = Prisma.AtLeast<{
@@ -411,12 +410,6 @@ export type PosOrgCompositionListRelationFilter = {
 
 export type PosOrgCompositionOrderByRelationAggregateInput = {
   _count?: Prisma.SortOrder
-}
-
-export type PosOrgCompositionOrderByRelevanceInput = {
-  fields: Prisma.PosOrgCompositionOrderByRelevanceFieldEnum | Prisma.PosOrgCompositionOrderByRelevanceFieldEnum[]
-  sort: Prisma.SortOrder
-  search: string
 }
 
 export type PosOrgCompositionPosIdOrgIdCompoundUniqueInput = {
@@ -966,7 +959,31 @@ export type PosOrgCompositionSelect<ExtArgs extends runtime.Types.Extensions.Int
   _count?: boolean | Prisma.PosOrgCompositionCountOutputTypeDefaultArgs<ExtArgs>
 }, ExtArgs["result"]["posOrgComposition"]>
 
+export type PosOrgCompositionSelectCreateManyAndReturn<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetSelect<{
+  id?: boolean
+  posId?: boolean
+  orgId?: boolean
+  status?: boolean
+  description?: boolean
+  isDelete?: boolean
+  createTime?: boolean
+  updateTime?: boolean
+  position?: boolean | Prisma.PositionDefaultArgs<ExtArgs>
+  organization?: boolean | Prisma.OrganizationDefaultArgs<ExtArgs>
+}, ExtArgs["result"]["posOrgComposition"]>
 
+export type PosOrgCompositionSelectUpdateManyAndReturn<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetSelect<{
+  id?: boolean
+  posId?: boolean
+  orgId?: boolean
+  status?: boolean
+  description?: boolean
+  isDelete?: boolean
+  createTime?: boolean
+  updateTime?: boolean
+  position?: boolean | Prisma.PositionDefaultArgs<ExtArgs>
+  organization?: boolean | Prisma.OrganizationDefaultArgs<ExtArgs>
+}, ExtArgs["result"]["posOrgComposition"]>
 
 export type PosOrgCompositionSelectScalar = {
   id?: boolean
@@ -986,6 +1003,14 @@ export type PosOrgCompositionInclude<ExtArgs extends runtime.Types.Extensions.In
   employments?: boolean | Prisma.PosOrgComposition$employmentsArgs<ExtArgs>
   roles?: boolean | Prisma.PosOrgComposition$rolesArgs<ExtArgs>
   _count?: boolean | Prisma.PosOrgCompositionCountOutputTypeDefaultArgs<ExtArgs>
+}
+export type PosOrgCompositionIncludeCreateManyAndReturn<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
+  position?: boolean | Prisma.PositionDefaultArgs<ExtArgs>
+  organization?: boolean | Prisma.OrganizationDefaultArgs<ExtArgs>
+}
+export type PosOrgCompositionIncludeUpdateManyAndReturn<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
+  position?: boolean | Prisma.PositionDefaultArgs<ExtArgs>
+  organization?: boolean | Prisma.OrganizationDefaultArgs<ExtArgs>
 }
 
 export type $PosOrgCompositionPayload<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
@@ -1123,6 +1148,30 @@ export interface PosOrgCompositionDelegate<ExtArgs extends runtime.Types.Extensi
   createMany<T extends PosOrgCompositionCreateManyArgs>(args?: Prisma.SelectSubset<T, PosOrgCompositionCreateManyArgs<ExtArgs>>): Prisma.PrismaPromise<Prisma.BatchPayload>
 
   /**
+   * Create many PosOrgCompositions and returns the data saved in the database.
+   * @param {PosOrgCompositionCreateManyAndReturnArgs} args - Arguments to create many PosOrgCompositions.
+   * @example
+   * // Create many PosOrgCompositions
+   * const posOrgComposition = await prisma.posOrgComposition.createManyAndReturn({
+   *   data: [
+   *     // ... provide data here
+   *   ]
+   * })
+   * 
+   * // Create many PosOrgCompositions and only return the `id`
+   * const posOrgCompositionWithIdOnly = await prisma.posOrgComposition.createManyAndReturn({
+   *   select: { id: true },
+   *   data: [
+   *     // ... provide data here
+   *   ]
+   * })
+   * Note, that providing `undefined` is treated as the value not being there.
+   * Read more here: https://pris.ly/d/null-undefined
+   * 
+   */
+  createManyAndReturn<T extends PosOrgCompositionCreateManyAndReturnArgs>(args?: Prisma.SelectSubset<T, PosOrgCompositionCreateManyAndReturnArgs<ExtArgs>>): Prisma.PrismaPromise<runtime.Types.Result.GetResult<Prisma.$PosOrgCompositionPayload<ExtArgs>, T, "createManyAndReturn", GlobalOmitOptions>>
+
+  /**
    * Delete a PosOrgComposition.
    * @param {PosOrgCompositionDeleteArgs} args - Arguments to delete one PosOrgComposition.
    * @example
@@ -1185,6 +1234,36 @@ export interface PosOrgCompositionDelegate<ExtArgs extends runtime.Types.Extensi
    * 
    */
   updateMany<T extends PosOrgCompositionUpdateManyArgs>(args: Prisma.SelectSubset<T, PosOrgCompositionUpdateManyArgs<ExtArgs>>): Prisma.PrismaPromise<Prisma.BatchPayload>
+
+  /**
+   * Update zero or more PosOrgCompositions and returns the data updated in the database.
+   * @param {PosOrgCompositionUpdateManyAndReturnArgs} args - Arguments to update many PosOrgCompositions.
+   * @example
+   * // Update many PosOrgCompositions
+   * const posOrgComposition = await prisma.posOrgComposition.updateManyAndReturn({
+   *   where: {
+   *     // ... provide filter here
+   *   },
+   *   data: [
+   *     // ... provide data here
+   *   ]
+   * })
+   * 
+   * // Update zero or more PosOrgCompositions and only return the `id`
+   * const posOrgCompositionWithIdOnly = await prisma.posOrgComposition.updateManyAndReturn({
+   *   select: { id: true },
+   *   where: {
+   *     // ... provide filter here
+   *   },
+   *   data: [
+   *     // ... provide data here
+   *   ]
+   * })
+   * Note, that providing `undefined` is treated as the value not being there.
+   * Read more here: https://pris.ly/d/null-undefined
+   * 
+   */
+  updateManyAndReturn<T extends PosOrgCompositionUpdateManyAndReturnArgs>(args: Prisma.SelectSubset<T, PosOrgCompositionUpdateManyAndReturnArgs<ExtArgs>>): Prisma.PrismaPromise<runtime.Types.Result.GetResult<Prisma.$PosOrgCompositionPayload<ExtArgs>, T, "updateManyAndReturn", GlobalOmitOptions>>
 
   /**
    * Create or update one PosOrgComposition.
@@ -1619,6 +1698,29 @@ export type PosOrgCompositionCreateManyArgs<ExtArgs extends runtime.Types.Extens
 }
 
 /**
+ * PosOrgComposition createManyAndReturn
+ */
+export type PosOrgCompositionCreateManyAndReturnArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
+  /**
+   * Select specific fields to fetch from the PosOrgComposition
+   */
+  select?: Prisma.PosOrgCompositionSelectCreateManyAndReturn<ExtArgs> | null
+  /**
+   * Omit specific fields from the PosOrgComposition
+   */
+  omit?: Prisma.PosOrgCompositionOmit<ExtArgs> | null
+  /**
+   * The data used to create many PosOrgCompositions.
+   */
+  data: Prisma.PosOrgCompositionCreateManyInput | Prisma.PosOrgCompositionCreateManyInput[]
+  skipDuplicates?: boolean
+  /**
+   * Choose, which related nodes to fetch as well
+   */
+  include?: Prisma.PosOrgCompositionIncludeCreateManyAndReturn<ExtArgs> | null
+}
+
+/**
  * PosOrgComposition update
  */
 export type PosOrgCompositionUpdateArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
@@ -1660,6 +1762,36 @@ export type PosOrgCompositionUpdateManyArgs<ExtArgs extends runtime.Types.Extens
    * Limit how many PosOrgCompositions to update.
    */
   limit?: number
+}
+
+/**
+ * PosOrgComposition updateManyAndReturn
+ */
+export type PosOrgCompositionUpdateManyAndReturnArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
+  /**
+   * Select specific fields to fetch from the PosOrgComposition
+   */
+  select?: Prisma.PosOrgCompositionSelectUpdateManyAndReturn<ExtArgs> | null
+  /**
+   * Omit specific fields from the PosOrgComposition
+   */
+  omit?: Prisma.PosOrgCompositionOmit<ExtArgs> | null
+  /**
+   * The data used to update PosOrgCompositions.
+   */
+  data: Prisma.XOR<Prisma.PosOrgCompositionUpdateManyMutationInput, Prisma.PosOrgCompositionUncheckedUpdateManyInput>
+  /**
+   * Filter which PosOrgCompositions to update
+   */
+  where?: Prisma.PosOrgCompositionWhereInput
+  /**
+   * Limit how many PosOrgCompositions to update.
+   */
+  limit?: number
+  /**
+   * Choose, which related nodes to fetch as well
+   */
+  include?: Prisma.PosOrgCompositionIncludeUpdateManyAndReturn<ExtArgs> | null
 }
 
 /**

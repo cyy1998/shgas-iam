@@ -246,7 +246,6 @@ export type LoginLogOrderByWithRelationInput = {
   clientCode?: Prisma.SortOrder
   loginType?: Prisma.SortOrder
   loginTime?: Prisma.SortOrder
-  _relevance?: Prisma.LoginLogOrderByRelevanceInput
 }
 
 export type LoginLogWhereUniqueInput = Prisma.AtLeast<{
@@ -357,12 +356,6 @@ export type LoginLogUncheckedUpdateManyInput = {
   loginTime?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
 }
 
-export type LoginLogOrderByRelevanceInput = {
-  fields: Prisma.LoginLogOrderByRelevanceFieldEnum | Prisma.LoginLogOrderByRelevanceFieldEnum[]
-  sort: Prisma.SortOrder
-  search: string
-}
-
 export type LoginLogCountOrderByAggregateInput = {
   id?: Prisma.SortOrder
   userId?: Prisma.SortOrder
@@ -415,7 +408,25 @@ export type LoginLogSelect<ExtArgs extends runtime.Types.Extensions.InternalArgs
   loginTime?: boolean
 }, ExtArgs["result"]["loginLog"]>
 
+export type LoginLogSelectCreateManyAndReturn<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetSelect<{
+  id?: boolean
+  userId?: boolean
+  username?: boolean
+  name?: boolean
+  clientCode?: boolean
+  loginType?: boolean
+  loginTime?: boolean
+}, ExtArgs["result"]["loginLog"]>
 
+export type LoginLogSelectUpdateManyAndReturn<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetSelect<{
+  id?: boolean
+  userId?: boolean
+  username?: boolean
+  name?: boolean
+  clientCode?: boolean
+  loginType?: boolean
+  loginTime?: boolean
+}, ExtArgs["result"]["loginLog"]>
 
 export type LoginLogSelectScalar = {
   id?: boolean
@@ -558,6 +569,30 @@ export interface LoginLogDelegate<ExtArgs extends runtime.Types.Extensions.Inter
   createMany<T extends LoginLogCreateManyArgs>(args?: Prisma.SelectSubset<T, LoginLogCreateManyArgs<ExtArgs>>): Prisma.PrismaPromise<Prisma.BatchPayload>
 
   /**
+   * Create many LoginLogs and returns the data saved in the database.
+   * @param {LoginLogCreateManyAndReturnArgs} args - Arguments to create many LoginLogs.
+   * @example
+   * // Create many LoginLogs
+   * const loginLog = await prisma.loginLog.createManyAndReturn({
+   *   data: [
+   *     // ... provide data here
+   *   ]
+   * })
+   * 
+   * // Create many LoginLogs and only return the `id`
+   * const loginLogWithIdOnly = await prisma.loginLog.createManyAndReturn({
+   *   select: { id: true },
+   *   data: [
+   *     // ... provide data here
+   *   ]
+   * })
+   * Note, that providing `undefined` is treated as the value not being there.
+   * Read more here: https://pris.ly/d/null-undefined
+   * 
+   */
+  createManyAndReturn<T extends LoginLogCreateManyAndReturnArgs>(args?: Prisma.SelectSubset<T, LoginLogCreateManyAndReturnArgs<ExtArgs>>): Prisma.PrismaPromise<runtime.Types.Result.GetResult<Prisma.$LoginLogPayload<ExtArgs>, T, "createManyAndReturn", GlobalOmitOptions>>
+
+  /**
    * Delete a LoginLog.
    * @param {LoginLogDeleteArgs} args - Arguments to delete one LoginLog.
    * @example
@@ -620,6 +655,36 @@ export interface LoginLogDelegate<ExtArgs extends runtime.Types.Extensions.Inter
    * 
    */
   updateMany<T extends LoginLogUpdateManyArgs>(args: Prisma.SelectSubset<T, LoginLogUpdateManyArgs<ExtArgs>>): Prisma.PrismaPromise<Prisma.BatchPayload>
+
+  /**
+   * Update zero or more LoginLogs and returns the data updated in the database.
+   * @param {LoginLogUpdateManyAndReturnArgs} args - Arguments to update many LoginLogs.
+   * @example
+   * // Update many LoginLogs
+   * const loginLog = await prisma.loginLog.updateManyAndReturn({
+   *   where: {
+   *     // ... provide filter here
+   *   },
+   *   data: [
+   *     // ... provide data here
+   *   ]
+   * })
+   * 
+   * // Update zero or more LoginLogs and only return the `id`
+   * const loginLogWithIdOnly = await prisma.loginLog.updateManyAndReturn({
+   *   select: { id: true },
+   *   where: {
+   *     // ... provide filter here
+   *   },
+   *   data: [
+   *     // ... provide data here
+   *   ]
+   * })
+   * Note, that providing `undefined` is treated as the value not being there.
+   * Read more here: https://pris.ly/d/null-undefined
+   * 
+   */
+  updateManyAndReturn<T extends LoginLogUpdateManyAndReturnArgs>(args: Prisma.SelectSubset<T, LoginLogUpdateManyAndReturnArgs<ExtArgs>>): Prisma.PrismaPromise<runtime.Types.Result.GetResult<Prisma.$LoginLogPayload<ExtArgs>, T, "updateManyAndReturn", GlobalOmitOptions>>
 
   /**
    * Create or update one LoginLog.
@@ -1025,6 +1090,25 @@ export type LoginLogCreateManyArgs<ExtArgs extends runtime.Types.Extensions.Inte
 }
 
 /**
+ * LoginLog createManyAndReturn
+ */
+export type LoginLogCreateManyAndReturnArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
+  /**
+   * Select specific fields to fetch from the LoginLog
+   */
+  select?: Prisma.LoginLogSelectCreateManyAndReturn<ExtArgs> | null
+  /**
+   * Omit specific fields from the LoginLog
+   */
+  omit?: Prisma.LoginLogOmit<ExtArgs> | null
+  /**
+   * The data used to create many LoginLogs.
+   */
+  data: Prisma.LoginLogCreateManyInput | Prisma.LoginLogCreateManyInput[]
+  skipDuplicates?: boolean
+}
+
+/**
  * LoginLog update
  */
 export type LoginLogUpdateArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
@@ -1050,6 +1134,32 @@ export type LoginLogUpdateArgs<ExtArgs extends runtime.Types.Extensions.Internal
  * LoginLog updateMany
  */
 export type LoginLogUpdateManyArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
+  /**
+   * The data used to update LoginLogs.
+   */
+  data: Prisma.XOR<Prisma.LoginLogUpdateManyMutationInput, Prisma.LoginLogUncheckedUpdateManyInput>
+  /**
+   * Filter which LoginLogs to update
+   */
+  where?: Prisma.LoginLogWhereInput
+  /**
+   * Limit how many LoginLogs to update.
+   */
+  limit?: number
+}
+
+/**
+ * LoginLog updateManyAndReturn
+ */
+export type LoginLogUpdateManyAndReturnArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
+  /**
+   * Select specific fields to fetch from the LoginLog
+   */
+  select?: Prisma.LoginLogSelectUpdateManyAndReturn<ExtArgs> | null
+  /**
+   * Omit specific fields from the LoginLog
+   */
+  omit?: Prisma.LoginLogOmit<ExtArgs> | null
   /**
    * The data used to update LoginLogs.
    */

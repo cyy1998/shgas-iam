@@ -1,5 +1,6 @@
 import * as z from 'zod';
 import type { Prisma } from '../../prisma/client';
+import { QueryModeSchema } from '../enums/QueryMode.schema';
 import { NestedStringFilterObjectSchema as NestedStringFilterObjectSchema } from './NestedStringFilter.schema'
 
 const makeSchema = () => z.object({
@@ -13,7 +14,7 @@ const makeSchema = () => z.object({
   contains: z.string().optional(),
   startsWith: z.string().optional(),
   endsWith: z.string().optional(),
-  search: z.string().optional(),
+  mode: QueryModeSchema.optional(),
   not: z.union([z.string(), z.lazy(() => NestedStringFilterObjectSchema)]).optional()
 }).strict();
 export const StringFilterObjectSchema: z.ZodType<Prisma.StringFilter> = makeSchema() as unknown as z.ZodType<Prisma.StringFilter>;

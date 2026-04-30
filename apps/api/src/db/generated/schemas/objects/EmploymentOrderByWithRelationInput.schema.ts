@@ -6,8 +6,7 @@ import { UserOrderByWithRelationInputObjectSchema as UserOrderByWithRelationInpu
 import { OrganizationOrderByWithRelationInputObjectSchema as OrganizationOrderByWithRelationInputObjectSchema } from './OrganizationOrderByWithRelationInput.schema';
 import { PositionOrderByWithRelationInputObjectSchema as PositionOrderByWithRelationInputObjectSchema } from './PositionOrderByWithRelationInput.schema';
 import { PosOrgCompositionOrderByWithRelationInputObjectSchema as PosOrgCompositionOrderByWithRelationInputObjectSchema } from './PosOrgCompositionOrderByWithRelationInput.schema';
-import { EmploymentRoleOrderByRelationAggregateInputObjectSchema as EmploymentRoleOrderByRelationAggregateInputObjectSchema } from './EmploymentRoleOrderByRelationAggregateInput.schema';
-import { EmploymentOrderByRelevanceInputObjectSchema as EmploymentOrderByRelevanceInputObjectSchema } from './EmploymentOrderByRelevanceInput.schema'
+import { EmploymentRoleOrderByRelationAggregateInputObjectSchema as EmploymentRoleOrderByRelationAggregateInputObjectSchema } from './EmploymentRoleOrderByRelationAggregateInput.schema'
 
 const makeSchema = () => z.object({
   id: SortOrderSchema.optional(),
@@ -28,8 +27,7 @@ const makeSchema = () => z.object({
   company: z.lazy(() => OrganizationOrderByWithRelationInputObjectSchema).optional(),
   position: z.lazy(() => PositionOrderByWithRelationInputObjectSchema).optional(),
   posOrg: z.lazy(() => PosOrgCompositionOrderByWithRelationInputObjectSchema).optional(),
-  roles: z.lazy(() => EmploymentRoleOrderByRelationAggregateInputObjectSchema).optional(),
-  _relevance: z.lazy(() => EmploymentOrderByRelevanceInputObjectSchema).optional()
+  roles: z.lazy(() => EmploymentRoleOrderByRelationAggregateInputObjectSchema).optional()
 }).strict();
 export const EmploymentOrderByWithRelationInputObjectSchema: z.ZodType<Prisma.EmploymentOrderByWithRelationInput> = makeSchema() as unknown as z.ZodType<Prisma.EmploymentOrderByWithRelationInput>;
 export const EmploymentOrderByWithRelationInputObjectZodSchema = makeSchema();
