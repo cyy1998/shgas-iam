@@ -3,6 +3,7 @@ import { buildAuthorizeUrl } from '@/lib/sso';
 import { login, mobileLogin } from '@/services/auth';
 import { sendMessage } from '@/services/open';
 import { mobileSet } from '@/services/public';
+import { ServiceError } from '@/utils/request';
 import { decodeRedirect, getQuery } from '@/utils/url';
 import { LockOutlined, UserOutlined } from '@ant-design/icons';
 import { history, useModel } from '@umijs/max';
@@ -71,6 +72,8 @@ export default function LoginPage() {
         return;
       }
       redirectToAuthorize();
+    } catch (e) {
+      if (!(e instanceof ServiceError)) throw e;
     } finally {
       setSubmitting(false);
     }
@@ -85,6 +88,8 @@ export default function LoginPage() {
         code: values.code.trim(),
       });
       redirectToAuthorize();
+    } catch (e) {
+      if (!(e instanceof ServiceError)) throw e;
     } finally {
       setSubmitting(false);
     }
@@ -99,6 +104,8 @@ export default function LoginPage() {
         code: values.code.trim(),
       });
       redirectToAuthorize();
+    } catch (e) {
+      if (!(e instanceof ServiceError)) throw e;
     } finally {
       setSubmitting(false);
     }
@@ -117,11 +124,15 @@ export default function LoginPage() {
       message.error('请填写正确的手机号');
       return;
     }
-    await sendMessage({
-      phoneNumber: phoneNumber.trim(),
-      usage: mode === 'BMN' ? 'bindPhone' : 'login',
-    });
-    startCountdown();
+    try {
+      await sendMessage({
+        phoneNumber: phoneNumber.trim(),
+        usage: mode === 'BMN' ? 'bindPhone' : 'login',
+      });
+      startCountdown();
+    } catch (e) {
+      if (!(e instanceof ServiceError)) throw e;
+    }
   };
 
   const tipBlock = useMemo(() => {

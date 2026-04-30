@@ -5,6 +5,7 @@ import {
   passwordRule,
   phoneRule,
 } from '@/utils/form-check';
+import { ServiceError } from '@/utils/request';
 import { decodeRedirect, getQuery } from '@/utils/url';
 import { history, useModel } from '@umijs/max';
 import {
@@ -63,8 +64,12 @@ export default function UserInfoPage() {
       return;
     }
     if (countdown > 0) return;
-    await selfMobileSendMsg({ phoneNumber, usage: 'bindPhone' });
-    startCountdown();
+    try {
+      await selfMobileSendMsg({ phoneNumber, usage: 'bindPhone' });
+      startCountdown();
+    } catch (e) {
+      if (!(e instanceof ServiceError)) throw e;
+    }
   };
 
   const submitPassword = async () => {
@@ -77,6 +82,8 @@ export default function UserInfoPage() {
       });
       message.success('更换成功！');
       pwdForm.resetFields();
+    } catch (e) {
+      if (!(e instanceof ServiceError)) throw e;
     } finally {
       setSubmitting(false);
     }
@@ -90,6 +97,8 @@ export default function UserInfoPage() {
       message.success('更换成功！');
       mobileForm.resetFields();
       void loadUserInfo();
+    } catch (e) {
+      if (!(e instanceof ServiceError)) throw e;
     } finally {
       setSubmitting(false);
     }

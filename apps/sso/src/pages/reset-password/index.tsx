@@ -1,5 +1,6 @@
 import { codeVerify, passwordReset, sendMessage, usersUserInfo } from '@/services/open';
 import { confirmPasswordRule, passwordRule } from '@/utils/form-check';
+import { ServiceError } from '@/utils/request';
 import { getQuery } from '@/utils/url';
 import { history } from '@umijs/max';
 import { Button, Form, Input, Modal, Select, Spin, message } from 'antd';
@@ -110,6 +111,8 @@ export default function ResetPasswordPage() {
         });
         setDone(true);
       }
+    } catch (e) {
+      if (!(e instanceof ServiceError)) throw e;
     } finally {
       setLoading(false);
     }
@@ -138,6 +141,8 @@ export default function ResetPasswordPage() {
     try {
       await sendMessage({ phoneNumber, usage: 'login' });
       startCountdown();
+    } catch (e) {
+      if (!(e instanceof ServiceError)) throw e;
     } finally {
       setLoading(false);
     }
