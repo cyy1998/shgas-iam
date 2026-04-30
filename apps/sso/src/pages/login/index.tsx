@@ -4,6 +4,7 @@ import { login, mobileLogin } from '@/services/auth';
 import { sendMessage } from '@/services/open';
 import { mobileSet } from '@/services/public';
 import { decodeRedirect, getQuery } from '@/utils/url';
+import { LockOutlined, UserOutlined } from '@ant-design/icons';
 import { history, useModel } from '@umijs/max';
 import { Button, Form, Input, Tabs, message } from 'antd';
 import { useEffect, useMemo, useRef, useState } from 'react';
@@ -212,31 +213,35 @@ export default function LoginPage() {
               name="username"
               rules={[{ required: true, message: '请输入您的工号' }]}
             >
-              <Input size="large" placeholder="请输入您的工号" />
+              <Input
+                size="large"
+                placeholder="请输入您的工号"
+                prefix={<UserOutlined style={{ color: '#9ca3af' }} />}
+              />
             </Form.Item>
+            <div className="login-actions">
+              <span className="login-actions-label">登录密码</span>
+              <span
+                className="forgot-link"
+                onClick={() => {
+                  const params = new URLSearchParams(window.location.search);
+                  const username = pwdForm.getFieldValue('username');
+                  if (username) params.set('username', username);
+                  history.push(`/reset-password?${params.toString()}`);
+                }}
+              >
+                忘记密码？
+              </span>
+            </div>
             <Form.Item
-              label={
-                <div className="login-actions" style={{ width: '100%' }}>
-                  <span>登录密码</span>
-                  <span
-                    className="forgot-link"
-                    onClick={() => {
-                      const params = new URLSearchParams(
-                        window.location.search,
-                      );
-                      const username = pwdForm.getFieldValue('username');
-                      if (username) params.set('username', username);
-                      history.push(`/reset-password?${params.toString()}`);
-                    }}
-                  >
-                    忘记密码？
-                  </span>
-                </div>
-              }
               name="password"
               rules={[{ required: true, message: '请输入登录密码' }]}
             >
-              <Input.Password size="large" placeholder="请输入登录密码" />
+              <Input.Password
+                size="large"
+                placeholder="请输入登录密码"
+                prefix={<LockOutlined style={{ color: '#9ca3af' }} />}
+              />
             </Form.Item>
           </Form>
         )}
@@ -259,7 +264,11 @@ export default function LoginPage() {
                 },
               ]}
             >
-              <Input size="large" placeholder="请输入手机号" />
+              <Input
+                size="large"
+                placeholder="请输入手机号"
+                prefix={<UserOutlined style={{ color: '#9ca3af' }} />}
+              />
             </Form.Item>
             <Form.Item
               label="验证码"
@@ -269,11 +278,9 @@ export default function LoginPage() {
               <Input
                 size="large"
                 placeholder="验证码"
+                prefix={<LockOutlined style={{ color: '#9ca3af' }} />}
                 addonAfter={
-                  <span
-                    style={{ cursor: 'pointer' }}
-                    onClick={sendSms}
-                  >
+                  <span style={{ cursor: 'pointer' }} onClick={sendSms}>
                     {countdown <= 0 ? '获取验证码' : `${countdown} s`}
                   </span>
                 }

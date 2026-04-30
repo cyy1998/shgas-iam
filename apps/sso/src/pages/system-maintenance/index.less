@@ -1,16 +1,43 @@
 .maintenance-page {
   width: 100%;
-  height: 100vh;
+  min-height: 100vh;
   display: flex;
   align-items: center;
-  justify-content: center;
-  background-color: #f0f7ff;
+  justify-content: flex-end;
+  background-image: url('~@/assets/bg.jpg');
+  background-size: cover;
+  background-position: center;
+  background-repeat: repeat;
 
   .maintenance-card {
-    background-color: #fff;
-    padding: 64px 96px;
-    border-radius: 8px;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+    width: 25vw;
+    min-width: 380px;
+    max-width: 480px;
+    min-height: 500px;
+    margin-right: 10vw;
+    padding: 2rem;
+    background: #ffffff;
+    border-radius: 19px;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.08);
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 24px;
+  }
+
+  .maintenance-tip-bar {
+    position: absolute;
+    top: 2rem;
+    left: 0;
+    width: 30%;
+    height: 4px;
+    background: #ff1313;
+  }
+
+  .ant-spin-nested-loading,
+  .ant-spin-container {
     display: flex;
     flex-direction: column;
     align-items: center;
@@ -18,7 +45,7 @@
   }
 
   .maintenance-title {
-    font-size: 32px;
+    font-size: 1.8vw;
     font-weight: 600;
     color: #333;
   }

@@ -25,14 +25,20 @@ export default function SystemMaintenancePage() {
 
   return (
     <div className="maintenance-page">
-      <Spin spinning={loading}>
-        <div className="maintenance-card">
+      <div className="maintenance-card">
+        <div className="maintenance-tip-bar" />
+        <Spin spinning={loading}>
           <div className="maintenance-title">系统维护中</div>
-          <Button type="primary" danger size="large" onClick={handleRetry}>
+          <Button
+            type="primary"
+            size="large"
+            onClick={handleRetry}
+            style={{ background: '#e6a23c', borderColor: '#e6a23c' }}
+          >
             刷新重试
           </Button>
-        </div>
-      </Spin>
+        </Spin>
+      </div>
     </div>
   );
 }

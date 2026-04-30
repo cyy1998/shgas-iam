@@ -2,15 +2,27 @@ import { codeVerify, passwordReset, sendMessage, usersUserInfo } from '@/service
 import { confirmPasswordRule, passwordRule } from '@/utils/form-check';
 import { getQuery } from '@/utils/url';
 import { history } from '@umijs/max';
-import { Button, Form, Input, Modal, Select, Spin, Steps, message } from 'antd';
+import { Button, Form, Input, Modal, Select, Spin, message } from 'antd';
 import { useEffect, useRef, useState } from 'react';
 import './index.less';
 
-const STEP_ITEMS = [
-  { title: '确认账号' },
-  { title: '安全验证' },
-  { title: '设置密码' },
-];
+function StepBar({ current }: { current: 0 | 1 | 2 }) {
+  return (
+    <div className="step-bar">
+      <div className="step-item step-1-active">确认账号</div>
+      <div
+        className={`step-item ${current >= 1 ? 'step-2-active' : 'step-2-inactive'}`}
+      >
+        安全验证
+      </div>
+      <div
+        className={`step-item ${current >= 2 ? 'step-3-active' : 'step-3-inactive'}`}
+      >
+        设置密码
+      </div>
+    </div>
+  );
+}
 
 type Step1 = { type: '用户名'; username: string };
 type Step2 = { phoneNumber: string; code: string };
@@ -141,7 +153,7 @@ export default function ResetPasswordPage() {
     <div className="reset-page">
       <Spin spinning={loading}>
         <div className="reset-card">
-          <Steps current={current} items={STEP_ITEMS} />
+          <StepBar current={current as 0 | 1 | 2} />
 
           <div className="reset-form">
             {current === 0 && (

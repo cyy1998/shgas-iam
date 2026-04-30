@@ -1,30 +1,84 @@
 .reset-page {
   width: 100%;
   min-height: 100vh;
+  padding: 5% 20%;
+  box-sizing: border-box;
   background-image: url('~@/assets/bg.jpg');
   background-size: cover;
   background-position: center;
-  padding: 5% 20%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  background-repeat: repeat;
+
+  // Antd Spin wrapper — must fill width so reset-card occupies full column
+  .ant-spin-nested-loading,
+  .ant-spin-container {
+    width: 100%;
+  }
 
   .reset-card {
     width: 100%;
+    min-height: 90vh;
     background-color: #fff;
-    border-radius: 8px;
-    padding: 32px 64px;
-    min-height: 60vh;
+    box-sizing: border-box;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .step-bar {
+    display: flex;
+    align-items: center;
+    flex-shrink: 0;
+
+    .step-item {
+      flex: 1;
+      height: 50px;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      color: #fff;
+      font-size: 16px;
+      font-weight: 500;
+      background-size: 100% 100%;
+      background-repeat: no-repeat;
+
+      &.step-1-active {
+        background-image: url('~@/assets/password1.png');
+      }
+
+      &.step-2-active {
+        background-image: url('~@/assets/password2.png');
+      }
+
+      &.step-2-inactive {
+        background-image: url('~@/assets/password_no2.png');
+      }
+
+      &.step-3-active {
+        background-image: url('~@/assets/password3.png');
+      }
+
+      &.step-3-inactive {
+        background-image: url('~@/assets/password_no3.png');
+      }
+    }
+  }
+
+  // Form and action buttons share the same centered 30%-wide column
+  .reset-form,
+  .form-actions {
+    width: 30%;
+    min-width: 320px;
+    margin-left: auto;
+    margin-right: auto;
   }
 
   .reset-form {
-    width: 60%;
-    margin: 32px auto;
+    margin-top: 15%;
   }
 
   .form-actions {
+    margin-top: 16px;
     display: flex;
-    gap: 16px;
+    gap: 12px;
 
     button {
       flex: 1;

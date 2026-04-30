@@ -11,12 +11,12 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 16px 32px;
+  padding: 1rem 2vw;
   background: #fff;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
 
   .topbar-logo {
-    height: 40px;
+    width: 10em;
   }
 
   .topbar-user {
@@ -24,20 +24,50 @@
     align-items: center;
     cursor: pointer;
     color: #4b5563;
+    font-size: 14px;
+
+    &:hover {
+      color: #006a67;
+    }
   }
 }
 
 .user-info-body {
   width: 100%;
-  padding: 32px 10vw;
+  padding: 2vw 10vw;
 
   .back-btn {
-    margin-bottom: 16px;
+    padding: 0;
+    margin-bottom: 8px;
+  }
+
+  :global(.ant-card) {
+    border-radius: 10px;
+  }
+
+  :global(.ant-card-head-title) {
+    text-align: center;
+    font-size: 20px;
   }
 
   .section-title {
-    font-size: 18px;
+    font-size: 14px;
     font-weight: 600;
-    margin: 16px 0 8px;
+    color: #4b5563;
+    margin: 8px 0 12px;
+  }
+
+  :global(.ant-table) {
+    margin-bottom: 24px;
+  }
+
+  :global(.ant-tabs) {
+    margin-top: 8px;
+  }
+
+  .submit-row {
+    display: flex;
+    justify-content: center;
+    margin-top: 16px;
   }
 }

@@ -132,6 +132,7 @@ export default function UserInfoPage() {
             />
 
             <Tabs
+              type="card"
               style={{ marginTop: 24 }}
               activeKey={activeKey}
               onChange={(k) => setActiveKey(k as TabKey)}
@@ -205,9 +206,15 @@ export default function UserInfoPage() {
               </Form>
             )}
 
-            <Button type="primary" loading={submitting} onClick={handleSubmit}>
-              提交
-            </Button>
+            <div className="submit-row">
+              <Button
+                type="primary"
+                loading={submitting}
+                onClick={handleSubmit}
+              >
+                提交
+              </Button>
+            </div>
           </Spin>
         </Card>
       </div>
