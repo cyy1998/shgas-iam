@@ -93,11 +93,16 @@ export default function ResetPasswordPage() {
           message.warning('请先绑定手机号！');
           return;
         }
-        await codeVerify({
+        const verification = await codeVerify({
+          username: form1.getFieldValue('username'),
           phoneNumber: v.phoneNumber,
-          usage: 'login',
+          usage: 'resetPassword',
           code: v.code,
         });
+        if (!verification.result) {
+          message.error('验证码错误');
+          return;
+        }
         setCurrent(2);
         return;
       }
@@ -139,7 +144,11 @@ export default function ResetPasswordPage() {
     if (countdown > 0) return;
     setLoading(true);
     try {
-      await sendMessage({ phoneNumber, usage: 'login' });
+      await sendMessage({
+        username: form1.getFieldValue('username'),
+        phoneNumber,
+        usage: 'resetPassword',
+      });
       startCountdown();
     } catch (e) {
       if (!(e instanceof ServiceError)) throw e;

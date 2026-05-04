@@ -24,7 +24,7 @@ export type UserInfo = {
   employments: Employment[];
 };
 
-export type SmsUsage = 'login' | 'bindPhone';
+export type SmsUsage = 'login' | 'resetPassword' | 'bindPhone';
 
 export type LoginPasswordResult = {
   isMobileSet: boolean;

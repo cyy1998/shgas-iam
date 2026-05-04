@@ -5,7 +5,7 @@ import jsonContent from "@/lib/core/openapi/helpers/json-content";
 import jsonContentRequired from "@/lib/core/openapi/helpers/json-content-required";
 import createSuccessResponseSchema from "@/lib/core/openapi/schemas/create-success-schema";
 import { ClientDtoSchema } from "@/services/client/client.schema";
-import { UserDetailDtoSchema } from "@/services/user/user.schema";
+import { OpenUserInfoSchema } from "./open.schema";
 
 const routePrefix = "";
 const tags = ["Open"];
@@ -34,7 +34,7 @@ export const userInfo = createRoute({
     }),
   },
   responses: {
-    [HttpStatusCodes.OK]: jsonContent(createSuccessResponseSchema(UserDetailDtoSchema), "用户信息"),
+    [HttpStatusCodes.OK]: jsonContent(createSuccessResponseSchema(OpenUserInfoSchema), "用户脱敏信息"),
   },
 });
 
@@ -44,7 +44,8 @@ export const codeSend = createRoute({
   tags,
   request: {
     body: jsonContentRequired(z.object({
-      phoneNumber: z.string().openapi({ example: "138550" }),
+      phoneNumber: z.string().optional().openapi({ example: "138****1234" }),
+      username: z.string().optional().openapi({ example: "zhangsan" }),
       usage: z.enum(Object.values(VerificationCodeUsage)).openapi({ example: "login" }),
     }), "发送短信验证码参数"),
   },
@@ -59,13 +60,14 @@ export const codeVerify = createRoute({
   tags,
   request: {
     body: jsonContentRequired(z.object({
-      phoneNumber: z.string().openapi({ example: "138550" }),
+      phoneNumber: z.string().optional().openapi({ example: "138****1234" }),
+      username: z.string().optional().openapi({ example: "zhangsan" }),
       usage: z.enum(Object.values(VerificationCodeUsage)).openapi({ example: "login" }),
       code: z.string().openapi({ example: "1234" }),
     }), "验证短信验证码参数"),
   },
   responses: {
-    [HttpStatusCodes.OK]: jsonContent(createSuccessResponseSchema(z.boolean()), "短信验证结果"),
+    [HttpStatusCodes.OK]: jsonContent(createSuccessResponseSchema(z.object({ result: z.boolean() })), "短信验证结果"),
   },
 });
 
@@ -76,7 +78,7 @@ export const passwordReset = createRoute({
   request: {
     body: jsonContentRequired(z.object({
       username: z.string().openapi({ example: "138550" }),
-      phoneNumber: z.string().openapi({ example: "17721462865" }),
+      phoneNumber: z.string().optional().openapi({ example: "177****2865" }),
       code: z.string().openapi({ example: "1234" }),
       newPassword: z.string().openapi({ example: "abcd1234" }),
     }), "重置密码参数"),

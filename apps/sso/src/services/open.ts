@@ -2,7 +2,11 @@ import type { ClientStatus, SmsUsage, UserInfo } from '@/types/api';
 import { request } from '@/utils/request';
 import { toQueryString } from '@/utils/url';
 
-export function sendMessage(body: { phoneNumber: string; usage: SmsUsage }) {
+export function sendMessage(body: {
+  phoneNumber?: string;
+  username?: string;
+  usage: SmsUsage;
+}) {
   return request<void>('/open/code/send', {
     method: 'POST',
     body: JSON.stringify(body),
@@ -20,11 +24,12 @@ export function selfMobileSendMsg(body: {
 }
 
 export function codeVerify(body: {
-  phoneNumber: string;
+  phoneNumber?: string;
+  username?: string;
   usage: SmsUsage;
   code: string;
 }) {
-  return request<void>('/open/code/verify', {
+  return request<{ result: boolean }>('/open/code/verify', {
     method: 'POST',
     body: JSON.stringify(body),
   });
@@ -32,7 +37,7 @@ export function codeVerify(body: {
 
 export function passwordReset(body: {
   username: string;
-  phoneNumber: string;
+  phoneNumber?: string;
   code: string;
   newPassword: string;
 }) {
