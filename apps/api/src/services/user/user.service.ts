@@ -93,7 +93,7 @@ export async function resetPassword(username: string, phone: string, code: strin
     if (user.mobile !== phone) {
       throw new UserNotFoundError("用户名与手机号不匹配");
     }
-    if (!mobileService.cehckVerificationCode("resetPassword", phone, code)) {
+    if (!await mobileService.cehckVerificationCode("resetPassword", phone, code)) {
       throw new UserNotFoundError("验证码错误");
     }
     const newPasswordHash = await hash(newPassword, config.PASSWORD_HASH_ROUNDS);

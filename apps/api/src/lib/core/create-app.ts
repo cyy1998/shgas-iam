@@ -1,21 +1,18 @@
 /* eslint-disable antfu/no-top-level-await */
 import type { OpenAPIHono } from "@hono/zod-openapi";
-import type { AppConfig, MiddlewareWithExcept, TierConfig, TierMiddleware } from "./define-config";
-import { Scalar } from "@scalar/hono-api-reference";
-import { fetchRequestHandler } from "@trpc/server/adapters/fetch";
+import type { ApiReferenceConfiguration } from "@scalar/hono-api-reference";
+import type { AppConfig, MiddlewareWithExcept, OpenAPIConfig, TierConfig, TierMiddleware } from "./define-config";
+import { Scalar as ScalarHonoAPIReference } from "@scalar/hono-api-reference";
 import { pinoLogger } from "hono-pino";
 import { serveStatic } from "hono/bun";
 import { except } from "hono/combine";
 import { requestId } from "hono/request-id";
-import { publicAuthenicationHandler } from "@/middlewares/authenication.handler";
+import env from "@/env";
 import { errorHandler } from "@/middlewares/error.handler";
-// admin 子路由
 
 // 顶层路由
 
 import notFound from "@/middlewares/not-found-handler";
-import { appRouter } from "@/trpc/app.router";
-import { createTRPCContext } from "@/trpc/trpc";
 import { globImport } from "@/utils/tools/glob";
 import { logger } from "../logger";
 import { createRouter } from "./create-router";
@@ -33,8 +30,8 @@ function resolveTierBasePath(tier: TierConfig, config: AppConfig): string {
   }
 
   const prefix = config.prefix ?? "/api";
-  const version = config.version ? `/${config.version}` : "";
-  return `${prefix}${version}/${tier.name}`;
+  // const version = config.version ? `/${config.version}` : "";
+  return `${prefix}/${tier.name}`;
 }
 
 /** Route matching (three modes) / 路由匹配（三种模式） */
@@ -63,14 +60,59 @@ function resolveTierMiddlewares(
     const match = path.match(/[/\\]+routes[/\\]+([^/\\]+)[/\\]+/);
     return match?.[1] === dirName;
   }))).flatMap(mod => mod.default);
-  // const key = Object.keys(_allMiddlewares).find(k => k.includes(`/routes/${dirName}/_middleware.ts`));
-  // const mod = key ? _allMiddlewares[key]?.default : [];
-  // return mod ?? [];
 }
 
 /** Type guard / 类型守卫 */
 function isMiddlewareWithExcept(mw: TierMiddleware): mw is MiddlewareWithExcept {
   return typeof mw === "object" && "handler" in mw && "except" in mw;
+}
+
+/** OpenAPI enabled resolution / OpenAPI enabled 解析 */
+function resolveEnabled(enabled: OpenAPIConfig["enabled"]): boolean {
+  if (typeof enabled === "function")
+    return enabled(env);
+  if (typeof enabled === "boolean")
+    return enabled;
+  return env.NODE_ENV !== "production";
+}
+
+/** Configure OpenAPI doc for a single tier / 配置单个 tier 的 OpenAPI 文档 */
+function configureAppDoc(router: AnyRouter, tier: TierConfig, config: AppConfig, docEndpoint: string) {
+  const version = config.openapi?.version ?? "3.1.0";
+  const docConfig = {
+    openapi: version,
+    info: { version: config.version ?? "1.0.0", title: tier.title },
+  };
+
+  if (tier.token) {
+    const securityName = `${tier.name}Bearer`;
+    router.openAPIRegistry.registerComponent("securitySchemes", securityName, {
+      type: "http",
+      scheme: "bearer",
+    });
+    router.doc31(docEndpoint, { ...docConfig, security: [{ [securityName]: [] }] });
+  }
+  else {
+    router.doc31(docEndpoint, docConfig);
+  }
+}
+
+/** Configure Scalar documentation homepage / 配置 Scalar 文档主页 */
+function configureScalarUI(app: AnyRouter, tierApps: TierApps, config: AppConfig, docEndpoint: string) {
+  const scalarConfig = config.openapi?.scalar ?? {};
+  app.get("/", ScalarHonoAPIReference({
+    ...scalarConfig as Partial<ApiReferenceConfiguration>,
+    sources: tierApps.map(({ tier, basePath }, i) => ({
+      title: tier.title,
+      slug: tier.name,
+      url: `${basePath}${docEndpoint}`,
+      default: i === 0,
+    })),
+    authentication: {
+      securitySchemes: Object.fromEntries(tierApps.filter(({ tier }) => tier.token)
+        .map(({ tier }) => [`${tier.name}Bearer`, { token: tier.token! }])),
+    },
+  }));
 }
 
 export default function createApp(config: AppConfig) {
@@ -85,24 +127,17 @@ export default function createApp(config: AppConfig) {
   app.onError(errorHandler);
   app.use(requestId());
 
-  app.use("/rpc/*", publicAuthenicationHandler);
-  app.all("/rpc/*", async (c) => {
-    return await fetchRequestHandler({
-      endpoint: "/rpc",
-      req: c.req.raw,
-      router: appRouter,
-      createContext: () => createTRPCContext({ honoCtx: c }),
-    });
-  });
+  const openapiEnabled = resolveEnabled(config.openapi?.enabled);
+  const docEndpoint = config.openapi?.docEndpoint ?? "/doc";
 
   const tierApps: TierApps = [];
   for (const tier of config.tiers) {
     const basePath = resolveTierBasePath(tier, config);
     const tierApp = createRouter().basePath(basePath);
     // OpenAPI docs (registered before middlewares to avoid auth interception) / OpenAPI 文档（在中间件之前注册，避免被认证拦截）
-    // if (openapiEnabled) {
-    //   configureAppDoc(tierApp, tier, config, docEndpoint);
-    // }
+    if (openapiEnabled) {
+      configureAppDoc(tierApp, tier, config, docEndpoint);
+    }
 
     // Inject tier basePath for downstream middleware use / 注入 tier basePath 供下游中间件使用
     tierApp.use("/*", async (c, next) => {
@@ -126,33 +161,9 @@ export default function createApp(config: AppConfig) {
     tierApps.push({ tierApp, tier, basePath });
   }
 
-  // app.route("/public", publicRouter);
-  // app.route("/auth", authRouter);
-  // app.route("/internal", internalRouter);
-  // app.route("/open", openRouter);
-  // app.route("/sso", ssoRouter);
-  // app.route("/admin/clients", adminClientRouter);
-  // app.route("/admin/employments", adminEmploymentRouter);
-  // app.route("/admin/organizations", adminOrganizationRouter);
-  // app.route("/admin/positions", adminPositionRouter);
-  // app.route("/admin/users", adminUserRouter);
-
-  app.doc("/doc", {
-    openapi: "3.0.0",
-    info: {
-      version: "1.0.0",
-      title: "IAM Service",
-    },
-  });
-
-  app.get("/doc/scalar", Scalar({
-    content: {
-      openapi: "3.0.0",
-      info: { version: "1.0.0", title: "IAM Service" },
-    },
-    url: "/doc",
-    cdn: "/static/scalar/api-reference.js",
-  }));
+  if (openapiEnabled) {
+    configureScalarUI(app, tierApps, config, docEndpoint);
+  }
 
   // Mount in tiers order / 按 tiers 顺序挂载
   for (const { tierApp } of tierApps) {

@@ -1,5 +1,6 @@
 import type { OpenAPIHono } from "@hono/zod-openapi";
 import type { ApiReferenceConfiguration } from "@scalar/hono-api-reference";
+import type { AnyTRPCRouter } from "@trpc/server";
 import type { Context, MiddlewareHandler } from "hono";
 import type { Env } from "@/env";
 
@@ -46,10 +47,20 @@ export type OpenAPIConfig = {
   scalar?: Partial<ApiReferenceConfiguration>;
 };
 
+/** tRPC endpoint configuration / tRPC 端点配置 */
+export type RpcConfig = {
+  enabled?: boolean;
+  path: string;
+  router: AnyTRPCRouter;
+  middlewares?: TierMiddleware[];
+  createContext: (c: Context) => unknown;
+};
+
 export type AppConfig = {
   prefix?: string;
   version?: string;
   openapi?: OpenAPIConfig;
+  rpc?: RpcConfig;
   tiers: TierConfig[];
 };
 
