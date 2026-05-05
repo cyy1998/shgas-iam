@@ -1,4 +1,4 @@
-import { SSO_AUTHORIZE_URL, SSO_CLIENT_CODE, SSO_LOGOUT_URL } from '@/constants/config';
+import { SSO_AUTHORIZE_URL, SSO_CLIENT_CODE, SSO_LOGOUT_URL } from '@admin/constants/config';
 
 export function redirectToLogin() {
   const redirectUrl = encodeURIComponent(window.location.href);

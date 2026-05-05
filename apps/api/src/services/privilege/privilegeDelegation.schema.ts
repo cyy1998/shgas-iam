@@ -1,6 +1,6 @@
+import * as PrismaSchema from "@api/db/generated/schemas";
+import { Status } from "@api/enums/status";
 import { z } from "@hono/zod-openapi";
-import * as PrismaSchema from "@/db/generated/schemas";
-import { Status } from "@/enums/status";
 import { OrganizationDtoConverterSchema, OrganizationDtoSchema } from "../organization/organization.schema";
 import { UserDtoSchema } from "../user/user.schema";
 import { PrivilegeDtoSchema } from "./privilege.schema";

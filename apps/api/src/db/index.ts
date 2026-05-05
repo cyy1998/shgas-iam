@@ -1,6 +1,6 @@
+import { PrismaClient } from "@api/db/generated/prisma/client";
+import { createSingleton } from "@api/lib/core/singleton";
 import { PrismaPg } from "@prisma/adapter-pg";
-import { PrismaClient } from "@/db/generated/prisma/client";
-import { createSingleton } from "@/lib/core/singleton";
 
 function createPrismaClient() {
   const adapter = new PrismaPg({

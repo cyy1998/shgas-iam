@@ -6,20 +6,20 @@ import type {
   EmploymentTransferDto,
   EmploymentUpdateDto,
 } from "./employment.type";
-import { prisma } from "@/db";
-import { Status } from "@/enums/status";
-import { CustomError } from "@/errors/CustomError";
-import { EmploymentNotEditableError } from "@/errors/EmploymentNotEditableError";
-import { EmploymentNotFoundError } from "@/errors/EmploymentNotFoundError";
-import { UserNotFoundError } from "@/errors/UserNotFoundError";
-import * as employmentRepository from "@/services/employment/employment.repository";
-import { EmploymentDetailDtoSchema, EmploymentDtoConverterSchema } from "@/services/employment/employment.schema";
-import * as organizationRepository from "@/services/organization/organization.repository";
-import * as positionRepository from "@/services/position/position.repository";
-import * as privilegeRepository from "@/services/privilege/privilege.repository";
-import * as roleRepository from "@/services/role/role.repository";
-import * as userRepository from "@/services/user/user.repository";
-import { paginate } from "@/utils/page.util";
+import { prisma } from "@api/db";
+import { Status } from "@api/enums/status";
+import { CustomError } from "@api/errors/CustomError";
+import { EmploymentNotEditableError } from "@api/errors/EmploymentNotEditableError";
+import { EmploymentNotFoundError } from "@api/errors/EmploymentNotFoundError";
+import { UserNotFoundError } from "@api/errors/UserNotFoundError";
+import * as employmentRepository from "@api/services/employment/employment.repository";
+import { EmploymentDetailDtoSchema, EmploymentDtoConverterSchema } from "@api/services/employment/employment.schema";
+import * as organizationRepository from "@api/services/organization/organization.repository";
+import * as positionRepository from "@api/services/position/position.repository";
+import * as privilegeRepository from "@api/services/privilege/privilege.repository";
+import * as roleRepository from "@api/services/role/role.repository";
+import * as userRepository from "@api/services/user/user.repository";
+import { paginate } from "@api/utils/page.util";
 import * as privilegeService from "../privilege/privilege.service";
 
 async function _getEmploymentsDetail(username: string) {

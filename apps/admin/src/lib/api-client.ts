@@ -1,5 +1,5 @@
-import { API_BASE, SSO_CLIENT_CODE } from '@/constants/config';
-import { redirectToLogin } from '@/utils/auth';
+import { API_BASE, SSO_CLIENT_CODE } from '@admin/constants/config';
+import { redirectToLogin } from '@admin/utils/auth';
 import type { AppRouter } from '@iam/api/trpc';
 import { createTRPCClient, httpBatchLink } from '@trpc/client';
 

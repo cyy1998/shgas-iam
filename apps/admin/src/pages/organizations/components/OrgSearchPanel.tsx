@@ -1,8 +1,8 @@
-import StatusTag from '@/components/StatusTag';
+import StatusTag from '@admin/components/StatusTag';
 import {
   type OrganizationVo,
   searchOrganizations,
-} from '@/services/organization';
+} from '@admin/services/organization';
 import { Empty, Input, List, Spin } from 'antd';
 import { useEffect, useRef, useState } from 'react';
 

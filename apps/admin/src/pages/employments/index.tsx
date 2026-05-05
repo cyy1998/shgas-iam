@@ -1,22 +1,22 @@
-import StatusTag from '@/components/StatusTag';
-import EmploymentDetailDrawer from '@/pages/employments/components/EmploymentDetailDrawer';
-import EmploymentFormModal from '@/pages/employments/components/EmploymentFormModal';
-import ResignByUserDialog from '@/pages/employments/components/ResignByUserModal';
-import TransferModal from '@/pages/employments/components/TransferModal';
+import StatusTag from '@admin/components/StatusTag';
+import EmploymentDetailDrawer from '@admin/pages/employments/components/EmploymentDetailDrawer';
+import EmploymentFormModal from '@admin/pages/employments/components/EmploymentFormModal';
+import ResignByUserDialog from '@admin/pages/employments/components/ResignByUserModal';
+import TransferModal from '@admin/pages/employments/components/TransferModal';
 import {
   deleteEmployment,
   type EmploymentVo,
   searchEmployments,
   setPrimaryEmployment,
   updateEmploymentStatus,
-} from '@/services/employment';
+} from '@admin/services/employment';
 import {
   type ActionType,
   PageContainer,
   type ProColumns,
   ProTable,
 } from '@ant-design/pro-components';
-import { apiClient } from '@/lib/api-client';
+import { apiClient } from '@admin/lib/api-client';
 import { getEmploymentStatusOptions, OrganizationType } from '@iam/shared';
 import { useLocation } from '@umijs/max';
 import type { AppRouter } from '@iam/api/trpc';

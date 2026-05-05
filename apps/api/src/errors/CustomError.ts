@@ -1,4 +1,4 @@
-import { ServiceStatusCode } from "@/enums/service.status";
+import { ServiceStatusCode } from "@api/enums/service.status";
 
 export class CustomError extends Error {
   public code: number;

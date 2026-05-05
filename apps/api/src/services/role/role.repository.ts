@@ -1,6 +1,6 @@
-import type { PrismaTransaction } from "@/db";
-import { prisma } from "@/db";
-import { Status } from "@/enums/status";
+import type { PrismaTransaction } from "@api/db";
+import { prisma } from "@api/db";
+import { Status } from "@api/enums/status";
 
 export async function getRoleByCode(roleCode: string, tx: PrismaTransaction = prisma) {
   return await tx.role.findFirst({

@@ -1,6 +1,6 @@
 import type { TransportTargetOptions } from "pino";
+import config from "@api/env";
 import pino from "pino";
-import config from "@/env";
 import { createSingleton } from "../core/singleton";
 
 function buildTransportTargets(): TransportTargetOptions[] {

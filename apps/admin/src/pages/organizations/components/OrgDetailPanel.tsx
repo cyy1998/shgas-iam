@@ -1,11 +1,11 @@
-import StatusTag from '@/components/StatusTag';
+import StatusTag from '@admin/components/StatusTag';
 import {
   deleteOrganization,
   type OrganizationChildrenPage,
   type OrganizationDetailVo,
   type OrganizationTreeNode,
   updateOrganizationStatus,
-} from '@/services/organization';
+} from '@admin/services/organization';
 import { ProDescriptions } from '@ant-design/pro-components';
 import { getOrganizationStatusOptions } from '@iam/shared';
 import {

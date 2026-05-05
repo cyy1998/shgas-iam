@@ -1,4 +1,4 @@
-import { resetUserPassword } from '@/services/user';
+import { resetUserPassword } from '@admin/services/user';
 import { message, Modal } from 'antd';
 
 type Args = {

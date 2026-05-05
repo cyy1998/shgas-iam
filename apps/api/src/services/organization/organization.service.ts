@@ -1,19 +1,19 @@
-import type { Status } from "@/enums/status";
+import type { Status } from "@api/enums/status";
 import type {
   OrganizationCreateDto,
   OrganizationPaginationQueryDto,
   OrganizationQueryDto,
   OrganizationTreeNodeDto,
   OrganizationUpdateDto,
-} from "@/services/organization/organization.type";
-import { prisma } from "@/db";
-import { statusToString } from "@/enums/status";
-import { CustomError } from "@/errors/CustomError";
-import { OrganizationHasChildrenError } from "@/errors/OrganizationHasChildrenError";
-import { OrganizationHasEmploymentError } from "@/errors/OrganizationHasEmploymentError";
-import * as organizationRepository from "@/services/organization/organization.repository";
-import { OrganizationDtoConverterSchema } from "@/services/organization/organization.schema";
-import { paginate } from "@/utils/page.util";
+} from "@api/services/organization/organization.type";
+import { prisma } from "@api/db";
+import { statusToString } from "@api/enums/status";
+import { CustomError } from "@api/errors/CustomError";
+import { OrganizationHasChildrenError } from "@api/errors/OrganizationHasChildrenError";
+import { OrganizationHasEmploymentError } from "@api/errors/OrganizationHasEmploymentError";
+import * as organizationRepository from "@api/services/organization/organization.repository";
+import { OrganizationDtoConverterSchema } from "@api/services/organization/organization.schema";
+import { paginate } from "@api/utils/page.util";
 
 export async function getFormalOrganizationsByCode(orgCode: string, orgLevel: number) {
   const organizations = await organizationRepository.searchFormalOrganizations(orgCode, orgLevel);

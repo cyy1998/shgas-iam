@@ -1,13 +1,13 @@
-import OrgDetailPanel from '@/pages/organizations/components/OrgDetailPanel';
-import OrgFormModal from '@/pages/organizations/components/OrgFormModal';
-import OrgSearchPanel from '@/pages/organizations/components/OrgSearchPanel';
-import OrgTree from '@/pages/organizations/components/OrgTree';
+import OrgDetailPanel from '@admin/pages/organizations/components/OrgDetailPanel';
+import OrgFormModal from '@admin/pages/organizations/components/OrgFormModal';
+import OrgSearchPanel from '@admin/pages/organizations/components/OrgSearchPanel';
+import OrgTree from '@admin/pages/organizations/components/OrgTree';
 import {
   getOrganization,
   getOrganizationChildren,
   type OrganizationChildrenPage,
   type OrganizationDetailVo,
-} from '@/services/organization';
+} from '@admin/services/organization';
 import { PageContainer } from '@ant-design/pro-components';
 import { Button, Card, Col, message, Row, Space } from 'antd';
 import { useCallback, useEffect, useState } from 'react';

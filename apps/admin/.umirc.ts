@@ -1,6 +1,11 @@
 import { defineConfig } from '@umijs/max';
+import { resolve } from 'node:path';
 
 export default defineConfig({
+  alias: {
+    '@admin': resolve(__dirname, 'src'),
+    '~admin': __dirname,
+  },
   base: '/iam-admin',
   publicPath: '/iam-admin/',
   antd: {},

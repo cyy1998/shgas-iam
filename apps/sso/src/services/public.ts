@@ -1,5 +1,5 @@
-import type { UserInfo } from '@/types/api';
-import { request } from '@/utils/request';
+import type { UserInfo } from '@sso/types/api';
+import { request } from '@sso/utils/request';
 
 export function getCurrentUserInfo() {
   return request<UserInfo>('/public/user-info');

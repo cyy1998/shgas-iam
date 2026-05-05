@@ -1,11 +1,11 @@
-import StatusTag from '@/components/StatusTag';
-import PositionFormModal from '@/pages/positions/components/PositionFormModal';
+import StatusTag from '@admin/components/StatusTag';
+import PositionFormModal from '@admin/pages/positions/components/PositionFormModal';
 import {
   deletePosition,
   type PositionVo,
   searchPositions,
   updatePositionStatus,
-} from '@/services/position';
+} from '@admin/services/position';
 import {
   ActionType,
   PageContainer,

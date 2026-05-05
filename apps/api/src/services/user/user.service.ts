@@ -1,28 +1,28 @@
-import type { UserCreateDto, UserDetailDto, UserDto, UserPaginationQueryDto, UserQueryDto, UserQueryWithPrivilegeDelegationDto } from "./user.type";
+import type { User } from "@api/db/generated/prisma/client";
 
-import type { User } from "@/db/generated/prisma/client";
-import type { Prettify } from "@/utils/lint.util";
-import { compare, hash } from "bcrypt-ts";
-import { prisma } from "@/db";
-import { Status } from "@/enums/status";
-import { VerificationCodeUsage } from "@/enums/verificationCode.usage";
-import config from "@/env";
-import { CustomError } from "@/errors/CustomError";
-import { UserHasActiveEmploymentError } from "@/errors/UserHasActiveEmploymentError";
-import { UserNotFoundError } from "@/errors/UserNotFoundError";
-import * as employmentRepository from "@/services/employment/employment.repository";
-import { EmploymentDetailDtoSchema, EmploymentDtoConverterSchema } from "@/services/employment/employment.schema";
-import * as mobileService from "@/services/mobile/mobile.service";
-import * as privilegeRepository from "@/services/privilege/privilege.repository";
-import * as privilegeDelegationRepository from "@/services/privilege/privilegeDelegation.repository";
-import * as roleRepository from "@/services/role/role.repository";
-import * as userRepository from "@/services/user/user.repository";
+import type { Prettify } from "@api/utils/lint.util";
+import type { UserCreateDto, UserDetailDto, UserDto, UserPaginationQueryDto, UserQueryDto, UserQueryWithPrivilegeDelegationDto } from "./user.type";
+import { prisma } from "@api/db";
+import { Status } from "@api/enums/status";
+import { VerificationCodeUsage } from "@api/enums/verificationCode.usage";
+import config from "@api/env";
+import { CustomError } from "@api/errors/CustomError";
+import { UserHasActiveEmploymentError } from "@api/errors/UserHasActiveEmploymentError";
+import { UserNotFoundError } from "@api/errors/UserNotFoundError";
+import * as employmentRepository from "@api/services/employment/employment.repository";
+import { EmploymentDetailDtoSchema, EmploymentDtoConverterSchema } from "@api/services/employment/employment.schema";
+import * as mobileService from "@api/services/mobile/mobile.service";
+import * as privilegeRepository from "@api/services/privilege/privilege.repository";
+import * as privilegeDelegationRepository from "@api/services/privilege/privilegeDelegation.repository";
+import * as roleRepository from "@api/services/role/role.repository";
+import * as userRepository from "@api/services/user/user.repository";
 import {
   UserDetailDtoSchema,
   UserDtoSchema,
-} from "@/services/user/user.schema";
-import { generateRandomPassword } from "@/utils/encryption.utils";
-import { paginate } from "@/utils/page.util";
+} from "@api/services/user/user.schema";
+import { generateRandomPassword } from "@api/utils/encryption.utils";
+import { paginate } from "@api/utils/page.util";
+import { compare, hash } from "bcrypt-ts";
 import { PrivilegeDelegationDtoConverterSchema } from "../privilege/privilegeDelegation.schema";
 
 async function _getUserDetail(user: User | null): Promise<UserDetailDto> {

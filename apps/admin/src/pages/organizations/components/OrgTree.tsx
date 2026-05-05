@@ -1,7 +1,7 @@
 import type {
   OrganizationChildrenPage,
   OrganizationTreeNode,
-} from '@/services/organization';
+} from '@admin/services/organization';
 import { getOrganizationStatusOptions } from '@iam/shared';
 import { Badge, Empty, Spin, Tree } from 'antd';
 import type { DataNode } from 'antd/es/tree';

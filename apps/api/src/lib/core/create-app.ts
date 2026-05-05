@@ -2,18 +2,18 @@
 import type { OpenAPIHono } from "@hono/zod-openapi";
 import type { ApiReferenceConfiguration } from "@scalar/hono-api-reference";
 import type { AppConfig, MiddlewareWithExcept, OpenAPIConfig, TierConfig, TierMiddleware } from "./define-config";
+import env from "@api/env";
+import { errorHandler } from "@api/middlewares/error.handler";
+import notFound from "@api/middlewares/not-found-handler";
+import { globImport } from "@api/utils/tools/glob";
 import { Scalar as ScalarHonoAPIReference } from "@scalar/hono-api-reference";
 import { pinoLogger } from "hono-pino";
 import { serveStatic } from "hono/bun";
-import { except } from "hono/combine";
-import { requestId } from "hono/request-id";
-import env from "@/env";
-import { errorHandler } from "@/middlewares/error.handler";
 
 // 顶层路由
 
-import notFound from "@/middlewares/not-found-handler";
-import { globImport } from "@/utils/tools/glob";
+import { except } from "hono/combine";
+import { requestId } from "hono/request-id";
 import { logger } from "../logger";
 import { createRouter } from "./create-router";
 

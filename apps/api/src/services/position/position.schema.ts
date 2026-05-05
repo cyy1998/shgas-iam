@@ -1,7 +1,7 @@
+import { PositionSchema as PrismaPositionSchema } from "@api/db/generated/schemas";
+import { PositionStatus } from "@api/enums/position.status";
+import { EmploymentSchema } from "@api/services/employment/employment.schema";
 import { z } from "@hono/zod-openapi";
-import { PositionSchema as PrismaPositionSchema } from "@/db/generated/schemas";
-import { PositionStatus } from "@/enums/position.status";
-import { EmploymentSchema } from "@/services/employment/employment.schema";
 import { createPageQuerySchema } from "../../lib/core/pagination/schema";
 
 export const PositionSchema = z.object(PrismaPositionSchema.shape);

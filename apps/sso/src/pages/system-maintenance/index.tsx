@@ -1,5 +1,5 @@
-import { clientStatus } from '@/services/open';
-import { decodeRedirect, getQuery } from '@/utils/url';
+import { clientStatus } from '@sso/services/open';
+import { decodeRedirect, getQuery } from '@sso/utils/url';
 import { Button, Spin } from 'antd';
 import { useState } from 'react';
 import './index.less';

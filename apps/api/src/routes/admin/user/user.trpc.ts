@@ -1,4 +1,4 @@
-import { router } from "@/trpc/trpc";
+import { router } from "@api/trpc/trpc";
 import * as ops from "./user.ops";
 
 export const userAdminRouter = router({

@@ -1,9 +1,9 @@
 import type { OpenRouteHandler } from "./open.type";
-import { VerificationCodeUsage } from "@/enums/verificationCode.usage";
-import * as clientService from "@/services/client/client.service";
-import * as mobileService from "@/services/mobile/mobile.service";
-import * as userService from "@/services/user/user.service";
-import * as resp from "@/utils/http/response";
+import { VerificationCodeUsage } from "@api/enums/verificationCode.usage";
+import * as clientService from "@api/services/client/client.service";
+import * as mobileService from "@api/services/mobile/mobile.service";
+import * as userService from "@api/services/user/user.service";
+import * as resp from "@api/utils/http/response";
 import { maskMobile, requirePhoneNumber, resolveResetPasswordMobile } from "./open.service";
 
 export const clientStatus: OpenRouteHandler<"clientStatus"> = async (c) => {

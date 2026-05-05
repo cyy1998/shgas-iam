@@ -2,7 +2,7 @@ import {
   createOrganization,
   type OrganizationDetailVo,
   updateOrganization,
-} from '@/services/organization';
+} from '@admin/services/organization';
 import {
   ModalForm,
   ProFormSelect,

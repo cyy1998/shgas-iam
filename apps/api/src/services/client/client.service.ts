@@ -1,10 +1,10 @@
 import type { ClientCreateDto, ClientDto, ClientInputDto } from "./client.type";
+import { prisma } from "@api/db";
+import redis from "@api/lib/clients/redis";
+import * as clientRepository from "@api/services/client/client.repository";
+import { ClientDtoSchema } from "@api/services/client/client.schema";
+import { reviveIsoDates } from "@api/utils/common.utils";
 import { ZodError } from "zod";
-import { prisma } from "@/db";
-import redis from "@/lib/clients/redis";
-import * as clientRepository from "@/services/client/client.repository";
-import { ClientDtoSchema } from "@/services/client/client.schema";
-import { reviveIsoDates } from "@/utils/common.utils";
 
 async function setClientCache(clientDto: ClientDto) {
   await Promise.all([

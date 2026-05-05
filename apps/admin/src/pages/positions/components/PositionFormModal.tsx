@@ -2,7 +2,7 @@ import {
   createPosition,
   type PositionVo,
   updatePosition,
-} from '@/services/position';
+} from '@admin/services/position';
 import {
   ModalForm,
   ProFormSelect,

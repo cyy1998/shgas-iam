@@ -2,7 +2,8 @@
   "extends": "./src/.umi/tsconfig.json",
   "compilerOptions": {
     "paths": {
-      "@/*": ["./src/*"],
+      "@sso/*": ["./src/*"],
+      "~sso/*": ["./*"],
       "@@/*": ["./src/.umi/*"],
       "@umijs/max": ["./node_modules/@umijs/max"],
       "@umijs/max/typings": ["./src/.umi/typings"]

@@ -1,5 +1,5 @@
-import { apiClient } from '@/lib/api-client';
-import { createEmployment } from '@/services/employment';
+import { apiClient } from '@admin/lib/api-client';
+import { createEmployment } from '@admin/services/employment';
 import {
   ModalForm,
   ProFormDatePicker,

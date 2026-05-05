@@ -1,9 +1,9 @@
+import * as HttpStatusCodes from "@api/lib/core/http-status-codes";
+import jsonContent from "@api/lib/core/openapi/helpers/json-content";
+import jsonContentRequired from "@api/lib/core/openapi/helpers/json-content-required";
+import createSuccessResponseSchema from "@api/lib/core/openapi/schemas/create-success-schema";
+import { ClientCreateDtoSchema, ClientDtoSchema, ClientInputDtoSchema } from "@api/services/client/client.schema";
 import { createRoute } from "@hono/zod-openapi";
-import * as HttpStatusCodes from "@/lib/core/http-status-codes";
-import jsonContent from "@/lib/core/openapi/helpers/json-content";
-import jsonContentRequired from "@/lib/core/openapi/helpers/json-content-required";
-import createSuccessResponseSchema from "@/lib/core/openapi/schemas/create-success-schema";
-import { ClientCreateDtoSchema, ClientDtoSchema, ClientInputDtoSchema } from "@/services/client/client.schema";
 
 const routePrefix = "";
 const tags = ["Admin/Client"];

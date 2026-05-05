@@ -1,17 +1,17 @@
-import StatusTag from '@/components/StatusTag';
-import EmploymentFormModal from '@/pages/employments/components/EmploymentFormModal';
-import TransferModal from '@/pages/employments/components/TransferModal';
+import StatusTag from '@admin/components/StatusTag';
+import EmploymentFormModal from '@admin/pages/employments/components/EmploymentFormModal';
+import TransferModal from '@admin/pages/employments/components/TransferModal';
 import {
   deleteEmployment,
   type EmploymentVo,
   updateEmploymentStatus,
-} from '@/services/employment';
+} from '@admin/services/employment';
 import {
   deleteUser,
   getUser,
   updateUserStatus,
   type UserDetailVo,
-} from '@/services/user';
+} from '@admin/services/user';
 import { ProDescriptions } from '@ant-design/pro-components';
 import { getEmploymentStatusOptions, getUserStatusOptions } from '@iam/shared';
 import {

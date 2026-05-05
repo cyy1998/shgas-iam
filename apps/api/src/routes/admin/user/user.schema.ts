@@ -1,7 +1,7 @@
+import { userStatusToString } from "@api/enums/user.status";
+import { EmploymentDetailDtoSchema } from "@api/services/employment/employment.schema";
+import { UserDetailDtoSchema, UserDtoSchema } from "@api/services/user/user.schema";
 import { z } from "@hono/zod-openapi";
-import { userStatusToString } from "@/enums/user.status";
-import { EmploymentDetailDtoSchema } from "@/services/employment/employment.schema";
-import { UserDetailDtoSchema, UserDtoSchema } from "@/services/user/user.schema";
 
 export const UserVoSchema = UserDtoSchema.extend({
   statusText: z.string().openapi({ example: "正常" }),

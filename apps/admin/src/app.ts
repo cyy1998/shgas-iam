@@ -1,11 +1,11 @@
 // 运行时配置
-import AvatarDropdown from '@/components/RightContent/AvatarDropdown';
+import AvatarDropdown from '@admin/components/RightContent/AvatarDropdown';
 import {
   ADMIN_ROLE_CODE,
   API_BASE,
   SSO_CLIENT_CODE,
-} from '@/constants/config';
-import { redirectToLogin } from '@/utils/auth';
+} from '@admin/constants/config';
+import { redirectToLogin } from '@admin/utils/auth';
 import { history } from '@umijs/max';
 import { createElement, type ReactElement } from 'react';
 

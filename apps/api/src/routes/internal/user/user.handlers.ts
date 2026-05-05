@@ -1,15 +1,15 @@
 import type { UserRouteHandler } from "./user.type";
-import { prisma } from "@/db";
-import { UserType } from "@/enums/user.type";
-import config from "@/env";
-import { CustomError } from "@/errors/CustomError";
-import * as employmentRepository from "@/services/employment/employment.repository";
-import * as mobileService from "@/services/mobile/mobile.service";
-import * as organizationRepository from "@/services/organization/organization.repository";
-import * as positionRepository from "@/services/position/position.repository";
-import * as userRepository from "@/services/user/user.repository";
-import * as userService from "@/services/user/user.service";
-import * as resp from "@/utils/http/response";
+import { prisma } from "@api/db";
+import { UserType } from "@api/enums/user.type";
+import config from "@api/env";
+import { CustomError } from "@api/errors/CustomError";
+import * as employmentRepository from "@api/services/employment/employment.repository";
+import * as mobileService from "@api/services/mobile/mobile.service";
+import * as organizationRepository from "@api/services/organization/organization.repository";
+import * as positionRepository from "@api/services/position/position.repository";
+import * as userRepository from "@api/services/user/user.repository";
+import * as userService from "@api/services/user/user.service";
+import * as resp from "@api/utils/http/response";
 
 export const userInfo: UserRouteHandler<"userInfo"> = async (c) => {
   const { username } = c.req.valid("param");

@@ -1,16 +1,16 @@
-import type { ClientDto } from "@/services/client/client.type";
-import { Status } from "@/enums/status";
-import { VerificationCodeUsage } from "@/enums/verificationCode.usage";
-import config from "@/env";
-import { AuthzMaintaincingError } from "@/errors/AuthzMaintaincingError";
-import { AuthzUnauthorizedError } from "@/errors/AuthzUnauthorizedError";
-import { CustomError } from "@/errors/CustomError";
-import redis from "@/lib/clients/redis";
-import * as sessionRepository from "@/services/session/session.repository";
-import * as sessionService from "@/services/session/session.service";
-import { UserDtoSchema } from "@/services/user/user.schema";
-import * as userService from "@/services/user/user.service";
-import { reviveIsoDates } from "@/utils/common.utils";
+import type { ClientDto } from "@api/services/client/client.type";
+import { Status } from "@api/enums/status";
+import { VerificationCodeUsage } from "@api/enums/verificationCode.usage";
+import config from "@api/env";
+import { AuthzMaintaincingError } from "@api/errors/AuthzMaintaincingError";
+import { AuthzUnauthorizedError } from "@api/errors/AuthzUnauthorizedError";
+import { CustomError } from "@api/errors/CustomError";
+import redis from "@api/lib/clients/redis";
+import * as sessionRepository from "@api/services/session/session.repository";
+import * as sessionService from "@api/services/session/session.service";
+import { UserDtoSchema } from "@api/services/user/user.schema";
+import * as userService from "@api/services/user/user.service";
+import { reviveIsoDates } from "@api/utils/common.utils";
 
 export async function loginPassword(username: string, password: string) {
   const userDetailDto = await userService.getUserDetailByUsername(username);

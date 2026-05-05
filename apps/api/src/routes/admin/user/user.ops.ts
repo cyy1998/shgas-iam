@@ -1,13 +1,13 @@
-import { z } from "zod";
-import { UserStatus } from "@/enums/user.status";
-import { defineMutationOp, defineQueryOp } from "@/lib/core/business-op";
+import { UserStatus } from "@api/enums/user.status";
+import { defineMutationOp, defineQueryOp } from "@api/lib/core/business-op";
 import {
   UserAdminCreateDtoSchema,
   UserPaginationQueryDtoSchema,
   UserUpdateDtoSchema,
-} from "@/services/user/user.schema";
-import * as userService from "@/services/user/user.service";
-import { generateRandomPassword } from "@/utils/encryption.utils";
+} from "@api/services/user/user.schema";
+import * as userService from "@api/services/user/user.service";
+import { generateRandomPassword } from "@api/utils/encryption.utils";
+import { z } from "zod";
 import { UserDetailVoConverterSchema, UserVoConverterSchema } from "./user.schema";
 
 export const searchUserOp = defineQueryOp({

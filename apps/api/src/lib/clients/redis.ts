@@ -1,5 +1,5 @@
+import config from "@api/env";
 import Redis from "ioredis";
-import config from "@/env";
 import { createSingleton } from "../core/singleton";
 
 function createRedisClient() {

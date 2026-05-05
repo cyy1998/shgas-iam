@@ -1,6 +1,6 @@
-import { fetchAuthenticationConfig } from '@/lib/sso';
-import { getCurrentUserInfo } from '@/services/public';
-import type { AuthConfig, UserInfo } from '@/types/api';
+import { fetchAuthenticationConfig } from '@sso/lib/sso';
+import { getCurrentUserInfo } from '@sso/services/public';
+import type { AuthConfig, UserInfo } from '@sso/types/api';
 import { useCallback, useEffect, useState } from 'react';
 
 export default function useSsoModel() {

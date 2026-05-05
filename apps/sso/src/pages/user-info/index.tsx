@@ -1,12 +1,12 @@
-import { selfMobileSendMsg } from '@/services/open';
-import { mobileSet, passwordChange } from '@/services/public';
+import { selfMobileSendMsg } from '@sso/services/open';
+import { mobileSet, passwordChange } from '@sso/services/public';
 import {
   confirmPasswordRule,
   passwordRule,
   phoneRule,
-} from '@/utils/form-check';
-import { ServiceError } from '@/utils/request';
-import { decodeRedirect, getQuery } from '@/utils/url';
+} from '@sso/utils/form-check';
+import { ServiceError } from '@sso/utils/request';
+import { decodeRedirect, getQuery } from '@sso/utils/url';
 import { history, useModel } from '@umijs/max';
 import {
   Button,

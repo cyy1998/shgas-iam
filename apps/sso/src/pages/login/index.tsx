@@ -1,10 +1,10 @@
-import logo from '@/assets/logo.png';
-import { buildAuthorizeUrl } from '@/lib/sso';
-import { login, mobileLogin } from '@/services/auth';
-import { sendMessage } from '@/services/open';
-import { mobileSet } from '@/services/public';
-import { ServiceError } from '@/utils/request';
-import { decodeRedirect, getQuery } from '@/utils/url';
+import logo from '@sso/assets/logo.png';
+import { buildAuthorizeUrl } from '@sso/lib/sso';
+import { login, mobileLogin } from '@sso/services/auth';
+import { sendMessage } from '@sso/services/open';
+import { mobileSet } from '@sso/services/public';
+import { ServiceError } from '@sso/utils/request';
+import { decodeRedirect, getQuery } from '@sso/utils/url';
 import { LockOutlined, UserOutlined } from '@ant-design/icons';
 import { history, useModel } from '@umijs/max';
 import { Button, Form, Input, Tabs, message } from 'antd';

@@ -1,6 +1,6 @@
-import logo from '@/assets/logo.png';
-import { buildLogoutUrl } from '@/lib/sso';
-import { decodeRedirect, getQuery } from '@/utils/url';
+import logo from '@sso/assets/logo.png';
+import { buildLogoutUrl } from '@sso/lib/sso';
+import { decodeRedirect, getQuery } from '@sso/utils/url';
 import { useModel } from '@umijs/max';
 import { Avatar, Dropdown, message } from 'antd';
 

@@ -1,4 +1,4 @@
-import { logout } from '@/utils/auth';
+import { logout } from '@admin/utils/auth';
 import { LogoutOutlined } from '@ant-design/icons';
 import { Dropdown } from 'antd';
 import type { ReactElement } from 'react';

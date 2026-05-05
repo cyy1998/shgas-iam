@@ -1,14 +1,14 @@
-import StatusTag from '@/components/StatusTag';
-import { confirmResetPassword } from '@/pages/users/components/ResetPasswordModal';
-import UserDetailDrawer from '@/pages/users/components/UserDetailDrawer';
-import UserFormModal from '@/pages/users/components/UserFormModal';
+import StatusTag from '@admin/components/StatusTag';
+import { confirmResetPassword } from '@admin/pages/users/components/ResetPasswordModal';
+import UserDetailDrawer from '@admin/pages/users/components/UserDetailDrawer';
+import UserFormModal from '@admin/pages/users/components/UserFormModal';
 import {
   deleteUser,
   searchUsers,
   updateUserStatus,
   type UserDetailVo,
   type UserVo,
-} from '@/services/user';
+} from '@admin/services/user';
 import {
   type ActionType,
   PageContainer,

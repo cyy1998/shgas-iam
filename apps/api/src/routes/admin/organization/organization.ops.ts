@@ -1,13 +1,13 @@
-import { z } from "zod";
-import { OrganizationStatus } from "@/enums/organization.status";
-import { defineMutationOp, defineQueryOp } from "@/lib/core/business-op";
+import { OrganizationStatus } from "@api/enums/organization.status";
+import { defineMutationOp, defineQueryOp } from "@api/lib/core/business-op";
 import {
   OrganizationChildrenQueryDtoSchema,
   OrganizationCreateDtoSchema,
   OrganizationPaginationQueryDtoSchema,
   OrganizationUpdateDtoSchema,
-} from "@/services/organization/organization.schema";
-import * as organizationService from "@/services/organization/organization.service";
+} from "@api/services/organization/organization.schema";
+import * as organizationService from "@api/services/organization/organization.service";
+import { z } from "zod";
 
 export const searchOrganizationOp = defineQueryOp({
   input: OrganizationPaginationQueryDtoSchema,

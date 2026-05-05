@@ -1,4 +1,4 @@
-import type { PaginationQuery } from "@/lib/core/pagination/type";
+import type { PaginationQuery } from "@api/lib/core/pagination/type";
 
 export function paginate<T>(
   items: T[],

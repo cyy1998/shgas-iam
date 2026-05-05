@@ -1,9 +1,9 @@
 import type { OrganizationRouteHandler } from "./organization.type";
-import { OrganizationType } from "@/enums/organization.type";
-import * as organizationRepository from "@/services/organization/organization.repository";
-import { OrganizationCreateDtoSchema } from "@/services/organization/organization.schema";
-import * as organizationService from "@/services/organization/organization.service";
-import * as resp from "@/utils/http/response";
+import { OrganizationType } from "@api/enums/organization.type";
+import * as organizationRepository from "@api/services/organization/organization.repository";
+import { OrganizationCreateDtoSchema } from "@api/services/organization/organization.schema";
+import * as organizationService from "@api/services/organization/organization.service";
+import * as resp from "@api/utils/http/response";
 
 export const organizationsSearch: OrganizationRouteHandler<"organizationsSearch"> = async (c) => {
   const organizationQueryDto = c.req.valid("json");

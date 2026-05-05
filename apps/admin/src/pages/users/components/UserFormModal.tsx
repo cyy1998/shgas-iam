@@ -1,4 +1,4 @@
-import { createUser, updateUser, type UserDetailVo } from '@/services/user';
+import { createUser, updateUser, type UserDetailVo } from '@admin/services/user';
 import {
   ModalForm,
   ProFormSelect,

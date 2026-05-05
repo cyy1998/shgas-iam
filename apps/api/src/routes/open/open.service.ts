@@ -1,5 +1,5 @@
-import { CustomError } from "@/errors/CustomError";
-import * as userService from "@/services/user/user.service";
+import { CustomError } from "@api/errors/CustomError";
+import * as userService from "@api/services/user/user.service";
 
 export function maskMobile(mobile: string | null): string | null {
   if (mobile === null) {

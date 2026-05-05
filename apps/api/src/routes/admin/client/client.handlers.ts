@@ -1,6 +1,6 @@
 import type { ClientRouteHandler } from "./client.type";
-import * as clientService from "@/services/client/client.service";
-import * as resp from "@/utils/http/response";
+import * as clientService from "@api/services/client/client.service";
+import * as resp from "@api/utils/http/response";
 
 export const clientCreate: ClientRouteHandler<"clientCreate"> = async (c) => {
   const body = c.req.valid("json");

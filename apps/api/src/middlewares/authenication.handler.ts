@@ -1,11 +1,11 @@
 import type { Context, Next } from "hono";
+import { AuthzUnauthorizedError } from "@api/errors/AuthzUnauthorizedError";
+import { CustomError } from "@api/errors/CustomError";
+import redis from "@api/lib/clients/redis";
+import * as clientService from "@api/services/client/client.service";
+import { UserDetailDtoSchema } from "@api/services/user/user.schema";
+import { reviveIsoDates } from "@api/utils/common.utils";
 import { deleteCookie, getCookie } from "hono/cookie";
-import { AuthzUnauthorizedError } from "@/errors/AuthzUnauthorizedError";
-import { CustomError } from "@/errors/CustomError";
-import redis from "@/lib/clients/redis";
-import * as clientService from "@/services/client/client.service";
-import { UserDetailDtoSchema } from "@/services/user/user.schema";
-import { reviveIsoDates } from "@/utils/common.utils";
 
 export async function publicAuthenicationHandler(c: Context, next: Next) {
   const clientCode = c.req.header("Client");

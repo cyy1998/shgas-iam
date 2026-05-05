@@ -1,19 +1,19 @@
+import { ClientManagementLevel } from "@api/enums/client.managementLevel";
+import config from "@api/env";
+import { AuthzUnauthorizedError } from "@api/errors/AuthzUnauthorizedError";
+import { CustomError } from "@api/errors/CustomError";
+import redis from "@api/lib/clients/redis";
+import orcasClient from "@api/lib/integrations/orcas";
+import wechatClient from "@api/lib/integrations/wechat";
+import * as clientService from "@api/services/client/client.service";
+import * as sessionRepository from "@api/services/session/session.repository";
+import { SessionObjectSchema } from "@api/services/session/session.schema";
+import * as sessionService from "@api/services/session/session.service";
+import { UserDetailDtoSchema } from "@api/services/user/user.schema";
+import * as userService from "@api/services/user/user.service";
+import { reviveIsoDates } from "@api/utils/common.utils";
 import { sleep } from "bun";
 import { sm3 } from "sm-crypto";
-import { ClientManagementLevel } from "@/enums/client.managementLevel";
-import config from "@/env";
-import { AuthzUnauthorizedError } from "@/errors/AuthzUnauthorizedError";
-import { CustomError } from "@/errors/CustomError";
-import redis from "@/lib/clients/redis";
-import orcasClient from "@/lib/integrations/orcas";
-import wechatClient from "@/lib/integrations/wechat";
-import * as clientService from "@/services/client/client.service";
-import * as sessionRepository from "@/services/session/session.repository";
-import { SessionObjectSchema } from "@/services/session/session.schema";
-import * as sessionService from "@/services/session/session.service";
-import { UserDetailDtoSchema } from "@/services/user/user.schema";
-import * as userService from "@/services/user/user.service";
-import { reviveIsoDates } from "@/utils/common.utils";
 
 export async function callback(code: string, clientCode: string, redirectUrl: string) {
   const client = await clientService.getClientByCode(clientCode);

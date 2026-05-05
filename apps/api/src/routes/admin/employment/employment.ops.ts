@@ -1,14 +1,14 @@
-import { z } from "zod";
-import { EmploymentStatus } from "@/enums/employment.status";
-import { defineMutationOp, defineQueryOp } from "@/lib/core/business-op";
+import { EmploymentStatus } from "@api/enums/employment.status";
+import { defineMutationOp, defineQueryOp } from "@api/lib/core/business-op";
 import {
   EmploymentAdminCreateDtoSchema,
   EmploymentAdminPaginationQueryDtoSchema,
   EmploymentStatusUpdateDtoSchema,
   EmploymentTransferDtoSchema,
   EmploymentUpdateDtoSchema,
-} from "@/services/employment/employment.schema";
-import * as employmentService from "@/services/employment/employment.service";
+} from "@api/services/employment/employment.schema";
+import * as employmentService from "@api/services/employment/employment.service";
+import { z } from "zod";
 import { EmploymentDetailVoConverterSchema, EmploymentVoConverterSchema } from "./employment.schema";
 
 export const searchEmploymentOp = defineQueryOp({

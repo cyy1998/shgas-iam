@@ -1,8 +1,8 @@
+import type { Env } from "@api/env";
 import type { OpenAPIHono } from "@hono/zod-openapi";
 import type { ApiReferenceConfiguration } from "@scalar/hono-api-reference";
 import type { AnyTRPCRouter } from "@trpc/server";
 import type { Context, MiddlewareHandler } from "hono";
-import type { Env } from "@/env";
 
 export type MiddlewareWithExcept = {
   handler: MiddlewareHandler;

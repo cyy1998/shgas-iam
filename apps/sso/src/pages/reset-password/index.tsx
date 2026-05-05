@@ -1,7 +1,7 @@
-import { codeVerify, passwordReset, sendMessage, usersUserInfo } from '@/services/open';
-import { confirmPasswordRule, passwordRule } from '@/utils/form-check';
-import { ServiceError } from '@/utils/request';
-import { getQuery } from '@/utils/url';
+import { codeVerify, passwordReset, sendMessage, usersUserInfo } from '@sso/services/open';
+import { confirmPasswordRule, passwordRule } from '@sso/utils/form-check';
+import { ServiceError } from '@sso/utils/request';
+import { getQuery } from '@sso/utils/url';
 import { history } from '@umijs/max';
 import { Button, Form, Input, Modal, Select, Spin, message } from 'antd';
 import { useEffect, useRef, useState } from 'react';

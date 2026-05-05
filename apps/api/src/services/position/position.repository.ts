@@ -1,7 +1,7 @@
+import type { PrismaTransaction } from "@api/db";
 import type { PositionCreateDto, PositionFuzzyQueryDto, PositionQueryDto } from "./position.type";
-import type { PrismaTransaction } from "@/db";
-import { prisma } from "@/db";
-import { Prisma } from "@/db/generated/prisma/client";
+import { prisma } from "@api/db";
+import { Prisma } from "@api/db/generated/prisma/client";
 
 export async function getPositionByCode(posCode: string, tx: PrismaTransaction = prisma) {
   return await tx.position.findFirst({

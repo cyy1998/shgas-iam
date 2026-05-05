@@ -1,5 +1,5 @@
-import { fetchAuthenticationConfig } from '@/lib/sso';
-import type { AuthConfig } from '@/types/api';
+import { fetchAuthenticationConfig } from '@sso/lib/sso';
+import type { AuthConfig } from '@sso/types/api';
 
 type InitialState = {
   authConfig?: AuthConfig | null;

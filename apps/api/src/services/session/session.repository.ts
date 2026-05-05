@@ -1,6 +1,6 @@
+import type { PrismaTransaction } from "@api/db";
 import type { UserDetailDto } from "../user/user.type";
-import type { PrismaTransaction } from "@/db";
-import { prisma } from "@/db";
+import { prisma } from "@api/db";
 
 export async function loginLog(
   userDetailDto: UserDetailDto,

@@ -1,6 +1,6 @@
+import { OrganizationSchema as PrismaOrganizationSchema } from "@api/db/generated/schemas";
+import { OrganizationStatus } from "@api/enums/organization.status";
 import { z } from "@hono/zod-openapi";
-import { OrganizationSchema as PrismaOrganizationSchema } from "@/db/generated/schemas";
-import { OrganizationStatus } from "@/enums/organization.status";
 import { createPageQuerySchema } from "../../lib/core/pagination/schema";
 
 export const OrganizationSchema = z.object(PrismaOrganizationSchema.shape);

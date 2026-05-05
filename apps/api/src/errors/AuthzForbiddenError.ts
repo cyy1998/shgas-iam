@@ -1,5 +1,5 @@
-import { HttpStatusCode } from "@/enums/http.status";
-import { ServiceStatusCode } from "@/enums/service.status";
+import { HttpStatusCode } from "@api/enums/http.status";
+import { ServiceStatusCode } from "@api/enums/service.status";
 import { AuthzError } from "./AuthzError";
 
 export class AuthzForbiddenError extends AuthzError {

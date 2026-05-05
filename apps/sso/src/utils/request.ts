@@ -1,6 +1,6 @@
-import { API_PREFIX, SSO_CLIENT_CODE } from '@/constants/config';
-import type { ApiEnvelope } from '@/types/api';
-import { currentSearchParams } from '@/utils/url';
+import { API_PREFIX, SSO_CLIENT_CODE } from '@sso/constants/config';
+import type { ApiEnvelope } from '@sso/types/api';
+import { currentSearchParams } from '@sso/utils/url';
 import { ServiceStatusCode } from '@iam/shared';
 import { history } from '@umijs/max';
 import { message } from 'antd';

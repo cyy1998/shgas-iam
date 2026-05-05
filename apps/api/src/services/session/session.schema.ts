@@ -1,5 +1,5 @@
+import { ClientManagementLevel } from "@api/enums/client.managementLevel";
 import { z } from "@hono/zod-openapi";
-import { ClientManagementLevel } from "@/enums/client.managementLevel";
 
 export const LocalSessionAbstractSchema = z.object({
   clientCode: z.string(),

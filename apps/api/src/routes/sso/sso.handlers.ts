@@ -1,12 +1,12 @@
 import type { SsoRouteHandler } from "./sso.type";
+import { ClientManagementLevel } from "@api/enums/client.managementLevel";
+import config from "@api/env";
+import { AuthzUnauthorizedError } from "@api/errors/AuthzUnauthorizedError";
+import * as clientService from "@api/services/client/client.service";
+import * as sessionService from "@api/services/session/session.service";
+import { getProtocolAndHost } from "@api/utils/common.utils";
+import * as resp from "@api/utils/http/response";
 import { deleteCookie, getCookie, setCookie } from "hono/cookie";
-import { ClientManagementLevel } from "@/enums/client.managementLevel";
-import config from "@/env";
-import { AuthzUnauthorizedError } from "@/errors/AuthzUnauthorizedError";
-import * as clientService from "@/services/client/client.service";
-import * as sessionService from "@/services/session/session.service";
-import { getProtocolAndHost } from "@/utils/common.utils";
-import * as resp from "@/utils/http/response";
 import * as ssoService from "./sso.service";
 
 export const endpointsConfiguration: SsoRouteHandler<"endpointsConfiguration"> = async (c) => {

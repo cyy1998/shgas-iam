@@ -1,7 +1,7 @@
+import { EmploymentSchema as PrismaEmploymentSchema, UserSchema } from "@api/db/generated/schemas";
+import { EmploymentStatus } from "@api/enums/employment.status";
+import { createPageQuerySchema } from "@api/lib/core/pagination/schema";
 import { z } from "@hono/zod-openapi";
-import { EmploymentSchema as PrismaEmploymentSchema, UserSchema } from "@/db/generated/schemas";
-import { EmploymentStatus } from "@/enums/employment.status";
-import { createPageQuerySchema } from "@/lib/core/pagination/schema";
 import { OrganizationSchema } from "../organization/organization.schema";
 import { PositionSchema } from "../position/position.schema";
 

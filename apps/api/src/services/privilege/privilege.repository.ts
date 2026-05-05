@@ -1,8 +1,8 @@
+import type { PrismaTransaction } from "@api/db";
+import type { Prettify } from "@api/utils/lint.util";
 import type { PrivilegeQueryDto } from "./privilege.type";
-import type { PrismaTransaction } from "@/db";
-import type { Prettify } from "@/utils/lint.util";
-import { prisma } from "@/db";
-import { Status } from "@/enums/status";
+import { prisma } from "@api/db";
+import { Status } from "@api/enums/status";
 
 export async function getPrivilegesByUserId(userId: number, tx: PrismaTransaction = prisma) {
   return await tx.privilege.findMany({

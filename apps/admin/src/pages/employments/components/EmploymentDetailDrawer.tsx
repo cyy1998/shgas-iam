@@ -1,5 +1,5 @@
-import StatusTag from '@/components/StatusTag';
-import { type EmploymentDetailVo, getEmployment } from '@/services/employment';
+import StatusTag from '@admin/components/StatusTag';
+import { type EmploymentDetailVo, getEmployment } from '@admin/services/employment';
 import { ProDescriptions } from '@ant-design/pro-components';
 import { Drawer, Empty, message, Skeleton, Space, Tabs, Tag } from 'antd';
 import { useEffect, useState } from 'react';

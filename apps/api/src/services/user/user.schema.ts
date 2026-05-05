@@ -1,7 +1,7 @@
+import { UserSchema as PrismaUserSchema } from "@api/db/generated/schemas";
+import { UserStatus } from "@api/enums/user.status";
+import { createPageQuerySchema } from "@api/lib/core/pagination/schema";
 import { z } from "@hono/zod-openapi";
-import { UserSchema as PrismaUserSchema } from "@/db/generated/schemas";
-import { UserStatus } from "@/enums/user.status";
-import { createPageQuerySchema } from "@/lib/core/pagination/schema";
 import { EmploymentDetailDtoSchema } from "../employment/employment.schema";
 
 export const UserSchema = z.object(PrismaUserSchema.shape);

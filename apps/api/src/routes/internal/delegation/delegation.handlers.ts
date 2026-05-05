@@ -1,6 +1,6 @@
 import type { DelegationRouteHandler } from "./delegation.type";
-import * as privilegeDelegationService from "@/services/privilege/privilegeDelegation.service";
-import * as resp from "@/utils/http/response";
+import * as privilegeDelegationService from "@api/services/privilege/privilegeDelegation.service";
+import * as resp from "@api/utils/http/response";
 
 export const privilegeDelegationsQuery: DelegationRouteHandler<"privilegeDelegationsQuery"> = async (c) => {
   const query = c.req.valid("json");

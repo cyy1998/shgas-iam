@@ -1,12 +1,12 @@
+import type { Prettify } from "@api/utils/lint.util";
 import type { PrivilegeDelegationCreateDto, PrivilegeDelegationQueryDto, PrivilegeDelegationUpdateDto } from "./privilegeDelegation.type";
-import type { Prettify } from "@/utils/lint.util";
-import { prisma } from "@/db";
-import { Status } from "@/enums/status";
-import { CustomError } from "@/errors/CustomError";
-import * as organizationRepository from "@/services/organization/organization.repository";
-import * as privilegeRepository from "@/services/privilege/privilege.repository";
-import * as delegationRepository from "@/services/privilege/privilegeDelegation.repository";
-import * as userRepository from "@/services/user/user.repository";
+import { prisma } from "@api/db";
+import { Status } from "@api/enums/status";
+import { CustomError } from "@api/errors/CustomError";
+import * as organizationRepository from "@api/services/organization/organization.repository";
+import * as privilegeRepository from "@api/services/privilege/privilege.repository";
+import * as delegationRepository from "@api/services/privilege/privilegeDelegation.repository";
+import * as userRepository from "@api/services/user/user.repository";
 import { PrivilegeDelegationDetailDtoConverterSchema } from "./privilegeDelegation.schema";
 
 export async function queryPrivilegeDelegations(query: PrivilegeDelegationQueryDto) {

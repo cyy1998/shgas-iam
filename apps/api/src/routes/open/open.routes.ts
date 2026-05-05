@@ -1,10 +1,10 @@
+import { VerificationCodeUsage } from "@api/enums/verificationCode.usage";
+import * as HttpStatusCodes from "@api/lib/core/http-status-codes";
+import jsonContent from "@api/lib/core/openapi/helpers/json-content";
+import jsonContentRequired from "@api/lib/core/openapi/helpers/json-content-required";
+import createSuccessResponseSchema from "@api/lib/core/openapi/schemas/create-success-schema";
+import { ClientDtoSchema } from "@api/services/client/client.schema";
 import { createRoute, z } from "@hono/zod-openapi";
-import { VerificationCodeUsage } from "@/enums/verificationCode.usage";
-import * as HttpStatusCodes from "@/lib/core/http-status-codes";
-import jsonContent from "@/lib/core/openapi/helpers/json-content";
-import jsonContentRequired from "@/lib/core/openapi/helpers/json-content-required";
-import createSuccessResponseSchema from "@/lib/core/openapi/schemas/create-success-schema";
-import { ClientDtoSchema } from "@/services/client/client.schema";
 import { OpenUserInfoSchema } from "./open.schema";
 
 const routePrefix = "";

@@ -1,4 +1,4 @@
-import { apiClient } from '@/lib/api-client';
+import { apiClient } from '@admin/lib/api-client';
 import type { AppRouter } from '@iam/api/trpc';
 import type { inferRouterInputs, inferRouterOutputs } from '@trpc/server';
 

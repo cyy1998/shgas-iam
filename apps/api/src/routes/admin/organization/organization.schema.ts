@@ -1,5 +1,5 @@
+import { OrganizationDtoSchema } from "@api/services/organization/organization.schema";
 import { z } from "@hono/zod-openapi";
-import { OrganizationDtoSchema } from "@/services/organization/organization.schema";
 
 export const OrganizationVoSchema = OrganizationDtoSchema.extend({
   statusText: z.string().openapi({ example: "正常" }),

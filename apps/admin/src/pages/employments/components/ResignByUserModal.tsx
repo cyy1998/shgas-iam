@@ -1,5 +1,5 @@
-import { apiClient } from '@/lib/api-client';
-import { resignUser } from '@/services/employment';
+import { apiClient } from '@admin/lib/api-client';
+import { resignUser } from '@admin/services/employment';
 import { message, Modal, Select } from 'antd';
 import { useState } from 'react';
 

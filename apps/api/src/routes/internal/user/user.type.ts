@@ -1,5 +1,5 @@
+import type { BaseRouteHandler } from "@api/types/lib";
 import type * as routes from "./user.routes";
-import type { BaseRouteHandler } from "@/types/lib";
 
 type RouteTypes = {
   [K in keyof typeof routes]: typeof routes[K];

@@ -1,6 +1,6 @@
+import { PrivilegeSchema as PrismaPrivilegeSchema } from "@api/db/generated/schemas";
+import { Status } from "@api/enums/status";
 import { z } from "@hono/zod-openapi";
-import { PrivilegeSchema as PrismaPrivilegeSchema } from "@/db/generated/schemas";
-import { Status } from "@/enums/status";
 
 export const PrivilegeSchema = z.object(PrismaPrivilegeSchema.shape);
 

@@ -1,6 +1,6 @@
-import { prisma } from "@/db";
-import { CustomError } from "@/errors/CustomError";
-import * as privilegeRepository from "@/services/privilege/privilege.repository";
+import { prisma } from "@api/db";
+import { CustomError } from "@api/errors/CustomError";
+import * as privilegeRepository from "@api/services/privilege/privilege.repository";
 import { PrivilegeDtoSchema } from "./privilege.schema";
 
 export async function getPrivilegesByRoleIds(roleIds: number[]) {

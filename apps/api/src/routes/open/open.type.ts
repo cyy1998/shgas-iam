@@ -1,5 +1,5 @@
+import type { BaseRouteHandler } from "@api/types/lib";
 import type * as routes from "./open.routes";
-import type { BaseRouteHandler } from "@/types/lib";
 
 // export type UserTokenInfo = {
 //   id: string | number;

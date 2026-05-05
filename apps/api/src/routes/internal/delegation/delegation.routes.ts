@@ -1,9 +1,9 @@
+import * as HttpStatusCodes from "@api/lib/core/http-status-codes";
+import jsonContent from "@api/lib/core/openapi/helpers/json-content";
+import jsonContentRequired from "@api/lib/core/openapi/helpers/json-content-required";
+import createSuccessResponseSchema from "@api/lib/core/openapi/schemas/create-success-schema";
+import { PrivilegeDelegationCreateDtoSchema, PrivilegeDelegationDetailDtoSchema, PrivilegeDelegationQueryDtoSchema, PrivilegeDelegationUpdateDtoSchema } from "@api/services/privilege/privilegeDelegation.schema";
 import { createRoute, z } from "@hono/zod-openapi";
-import * as HttpStatusCodes from "@/lib/core/http-status-codes";
-import jsonContent from "@/lib/core/openapi/helpers/json-content";
-import jsonContentRequired from "@/lib/core/openapi/helpers/json-content-required";
-import createSuccessResponseSchema from "@/lib/core/openapi/schemas/create-success-schema";
-import { PrivilegeDelegationCreateDtoSchema, PrivilegeDelegationDetailDtoSchema, PrivilegeDelegationQueryDtoSchema, PrivilegeDelegationUpdateDtoSchema } from "@/services/privilege/privilegeDelegation.schema";
 
 const tags = ["Internal/Delegation"];
 

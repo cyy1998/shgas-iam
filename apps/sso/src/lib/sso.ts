@@ -1,5 +1,5 @@
-import { WELL_KNOWN_URL } from '@/constants/config';
-import type { AuthConfig } from '@/types/api';
+import { WELL_KNOWN_URL } from '@sso/constants/config';
+import type { AuthConfig } from '@sso/types/api';
 
 export async function fetchAuthenticationConfig(): Promise<AuthConfig | null> {
   try {

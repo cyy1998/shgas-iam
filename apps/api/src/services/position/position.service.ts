@@ -1,8 +1,8 @@
 import type { PositionCreateDto, PositionFuzzyQueryDto } from "./position.type";
-import { prisma } from "@/db";
-import { CustomError } from "@/errors/CustomError";
-import { PositionHasEmploymentError } from "@/errors/PositionHasEmploymentError";
-import { paginate } from "@/utils/page.util";
+import { prisma } from "@api/db";
+import { CustomError } from "@api/errors/CustomError";
+import { PositionHasEmploymentError } from "@api/errors/PositionHasEmploymentError";
+import { paginate } from "@api/utils/page.util";
 import * as positionRepository from "./position.repository";
 import { PositionDtoSchema } from "./position.schema";
 

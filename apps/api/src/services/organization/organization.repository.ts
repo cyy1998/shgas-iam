@@ -1,10 +1,10 @@
-import type { PrismaTransaction } from "@/db";
-import type { Organization } from "@/db/generated/prisma/client";
-import type { OrganizationCreateDto, OrganizationQueryDto } from "@/services/organization/organization.type";
-import { prisma } from "@/db";
-import { Prisma } from "@/db/generated/prisma/client";
-import { OrganizationType } from "@/enums/organization.type";
-import { Status } from "@/enums/status";
+import type { PrismaTransaction } from "@api/db";
+import type { Organization } from "@api/db/generated/prisma/client";
+import type { OrganizationCreateDto, OrganizationQueryDto } from "@api/services/organization/organization.type";
+import { prisma } from "@api/db";
+import { Prisma } from "@api/db/generated/prisma/client";
+import { OrganizationType } from "@api/enums/organization.type";
+import { Status } from "@api/enums/status";
 
 export async function searchFormalOrganizations(orgCode: string, orgLevel: number, tx: PrismaTransaction = prisma) {
   return await tx.organization.findMany({

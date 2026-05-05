@@ -1,6 +1,6 @@
-import type { ClientStatus, SmsUsage, UserInfo } from '@/types/api';
-import { request } from '@/utils/request';
-import { toQueryString } from '@/utils/url';
+import type { ClientStatus, SmsUsage, UserInfo } from '@sso/types/api';
+import { request } from '@sso/utils/request';
+import { toQueryString } from '@sso/utils/url';
 
 export function sendMessage(body: {
   phoneNumber?: string;

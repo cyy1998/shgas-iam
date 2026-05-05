@@ -1,6 +1,11 @@
 import { defineConfig } from '@umijs/max';
+import { resolve } from 'node:path';
 
 export default defineConfig({
+  alias: {
+    '@sso': resolve(__dirname, 'src'),
+    '~sso': __dirname,
+  },
   base: '/iam-sso',
   publicPath: '/iam-sso/',
   antd: {},

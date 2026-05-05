@@ -1,16 +1,16 @@
-import { createRoute, z } from "@hono/zod-openapi";
-import * as HttpStatusCodes from "@/lib/core/http-status-codes";
-import jsonContent from "@/lib/core/openapi/helpers/json-content";
-import jsonContentRequired from "@/lib/core/openapi/helpers/json-content-required";
-import createSuccessResponseSchema from "@/lib/core/openapi/schemas/create-success-schema";
-import { createPageResultSchema } from "@/lib/core/pagination/schema";
-import { UserDetailVoSchema, UserVoSchema } from "@/routes/admin/user/user.schema";
+import * as HttpStatusCodes from "@api/lib/core/http-status-codes";
+import jsonContent from "@api/lib/core/openapi/helpers/json-content";
+import jsonContentRequired from "@api/lib/core/openapi/helpers/json-content-required";
+import createSuccessResponseSchema from "@api/lib/core/openapi/schemas/create-success-schema";
+import { createPageResultSchema } from "@api/lib/core/pagination/schema";
+import { UserDetailVoSchema, UserVoSchema } from "@api/routes/admin/user/user.schema";
 import {
   UserAdminCreateDtoSchema,
   UserPaginationQueryDtoSchema,
   UserStatusUpdateDtoSchema,
   UserUpdateDtoSchema,
-} from "@/services/user/user.schema";
+} from "@api/services/user/user.schema";
+import { createRoute, z } from "@hono/zod-openapi";
 
 const tags = ["Admin/User"];
 

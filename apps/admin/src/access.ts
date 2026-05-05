@@ -1,4 +1,4 @@
-import { ADMIN_ROLE_CODE } from '@/constants/config';
+import { ADMIN_ROLE_CODE } from '@admin/constants/config';
 
 export default function access(initialState: {
   currentUser?: { username: string; roles: string[] };

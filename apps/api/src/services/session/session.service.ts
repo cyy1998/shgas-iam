@@ -1,13 +1,13 @@
 import type { UserDetailDto } from "../user/user.type";
 import type { LocalSessionAbstract } from "./session.type";
-import { ClientManagementLevel } from "@/enums/client.managementLevel";
-import config from "@/env";
-import { AuthzUnauthorizedError } from "@/errors/AuthzUnauthorizedError";
-import redis from "@/lib/clients/redis";
-import * as clientService from "@/services/client/client.service";
-import * as sessionRepository from "@/services/session/session.repository";
-import { UserDetailDtoSchema } from "@/services/user/user.schema";
-import { reviveIsoDates } from "@/utils/common.utils";
+import { ClientManagementLevel } from "@api/enums/client.managementLevel";
+import config from "@api/env";
+import { AuthzUnauthorizedError } from "@api/errors/AuthzUnauthorizedError";
+import redis from "@api/lib/clients/redis";
+import * as clientService from "@api/services/client/client.service";
+import * as sessionRepository from "@api/services/session/session.repository";
+import { UserDetailDtoSchema } from "@api/services/user/user.schema";
+import { reviveIsoDates } from "@api/utils/common.utils";
 import { LocalSessionAbstractSchema } from "./session.schema";
 
 export async function getSessionById(sessionId: string): Promise<UserDetailDto> {

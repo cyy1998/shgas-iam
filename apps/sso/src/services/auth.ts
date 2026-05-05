@@ -1,5 +1,5 @@
-import type { LoginPasswordResult } from '@/types/api';
-import { request } from '@/utils/request';
+import type { LoginPasswordResult } from '@sso/types/api';
+import { request } from '@sso/utils/request';
 
 export function login(body: { username: string; password: string }) {
   return request<LoginPasswordResult>('/auth/login/password', {

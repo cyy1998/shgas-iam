@@ -1,14 +1,14 @@
-import { z } from "zod";
-import { PositionStatus } from "@/enums/position.status";
-import { defineMutationOp, defineQueryOp } from "@/lib/core/business-op";
-import * as positionRepository from "@/services/position/position.repository";
+import { PositionStatus } from "@api/enums/position.status";
+import { defineMutationOp, defineQueryOp } from "@api/lib/core/business-op";
+import * as positionRepository from "@api/services/position/position.repository";
 import {
   PositionCreateDtoSchema,
   PositionPaginationQueryDtoSchema,
   PositionUpdateDtoSchema,
-} from "@/services/position/position.schema";
-import * as positionService from "@/services/position/position.service";
-import { paginate } from "@/utils/page.util";
+} from "@api/services/position/position.schema";
+import * as positionService from "@api/services/position/position.service";
+import { paginate } from "@api/utils/page.util";
+import { z } from "zod";
 import { PositionVoConverterSchema } from "./position.schema";
 
 export const searchPositionOp = defineQueryOp({

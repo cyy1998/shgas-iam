@@ -1,9 +1,9 @@
+import type { PrismaTransaction } from "@api/db";
+import type { Prettify } from "@api/utils/lint.util";
 import type { PrivilegeDelegationCreateDto, PrivilegeDelegationQueryDto } from "./privilegeDelegation.type";
-import type { PrismaTransaction } from "@/db";
-import type { Prettify } from "@/utils/lint.util";
-import { prisma } from "@/db";
-import { Status } from "@/enums/status";
-import { CustomError } from "@/errors/CustomError";
+import { prisma } from "@api/db";
+import { Status } from "@api/enums/status";
+import { CustomError } from "@api/errors/CustomError";
 
 export async function getDelegationsByUserAndOrganizationScopeAndPrivilege(
   usernames: string[],

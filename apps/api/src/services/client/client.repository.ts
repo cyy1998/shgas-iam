@@ -1,6 +1,6 @@
+import type { PrismaTransaction } from "@api/db";
 import type { ClientCreateDto, ClientInputDto } from "./client.type";
-import type { PrismaTransaction } from "@/db";
-import { prisma } from "@/db";
+import { prisma } from "@api/db";
 
 export async function getClientByCode(clientCode: string, tx: PrismaTransaction = prisma) {
   return await tx.client.findFirst({
