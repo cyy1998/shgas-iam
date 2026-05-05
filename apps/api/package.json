@@ -5,7 +5,7 @@
   "private": true,
   "exports": {
     ".": "./src/app.ts",
-    "./trpc": "./src/trpc/app.router.ts"
+    "./trpc": "./src/trpc/trpc.router.ts"
   },
   "module": "index.ts",
   "devEngines": {
@@ -19,7 +19,7 @@
     "lint": "eslint src/",
     "lint:fix": "eslint --fix src/",
     "migrate:mysql-to-postgres": "bun scripts/migrate-mysql-to-postgres.ts",
-    "typecheck": "bunx tsc --noEmit"
+    "typecheck": "NODE_OPTIONS=--max-old-space-size=8192 tsc --noEmit"
   },
   "dependencies": {
     "@hono/zod-openapi": "^1.1.4",
@@ -53,6 +53,6 @@
     "eslint-plugin-format": "^2.0.1",
     "prisma": "7",
     "prisma-zod-generator": "^2.1.4",
-    "typescript": "^5.7"
+    "typescript": "^6.0.3"
   }
 }

@@ -1,4 +1,4 @@
-import { router } from "@/routes/trpc/trpc";
+import { router } from "@/trpc/trpc";
 import { adminRouter } from "./routers/admin";
 
 export const appRouter = router({
