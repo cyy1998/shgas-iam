@@ -19,7 +19,7 @@
     "lint": "eslint src/",
     "lint:fix": "eslint --fix src/",
     "migrate:mysql-to-postgres": "bun scripts/migrate-mysql-to-postgres.ts",
-    "typecheck": "NODE_OPTIONS=--max-old-space-size=8192 tsc --noEmit"
+    "typecheck": "pnpm exec tsgo --noEmit"
   },
   "dependencies": {
     "@hono/zod-openapi": "^1.1.4",
@@ -49,6 +49,7 @@
     "@antfu/eslint-config": "^8.0.0",
     "@types/bun": "latest",
     "@types/sm-crypto": "^0.3.4",
+    "@typescript/native-preview": "7.0.0-dev.20260504.1",
     "eslint": "^10.0.0",
     "eslint-plugin-format": "^2.0.1",
     "prisma": "7",

@@ -9,7 +9,7 @@
     "postinstall": "max setup",
     "setup": "max setup",
     "start": "npm run dev",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "pnpm exec tsgo --noEmit"
   },
   "dependencies": {
     "@ant-design/icons": "^5.0.1",
@@ -23,6 +23,7 @@
   "devDependencies": {
     "@types/react": "^18.0.33",
     "@types/react-dom": "^18.0.11",
+    "@typescript/native-preview": "7.0.0-dev.20260504.1",
     "lint-staged": "^13.2.0",
     "prettier": "^2.8.7",
     "prettier-plugin-organize-imports": "^3.2.2",
