@@ -1,5 +1,5 @@
 import type { PositionCreateDto, PositionFuzzyQueryDto } from "./position.type";
-import { prisma } from "@api/db";
+import db from "@api/db";
 import { CustomError } from "@api/errors/CustomError";
 import { PositionHasEmploymentError } from "@api/errors/PositionHasEmploymentError";
 import { paginate } from "@api/utils/page.util";
@@ -7,7 +7,7 @@ import * as positionRepository from "./position.repository";
 import { PositionDtoSchema } from "./position.schema";
 
 export async function setPosition(positionCreateDto: PositionCreateDto) {
-  return await prisma.$transaction(async (tx) => {
+  return await db.transaction(async (tx) => {
     const existingPos = await positionRepository.getAnyPositionByCode(positionCreateDto.posCode, tx);
     if (existingPos !== null) {
       throw new CustomError("重复岗位code代码");
@@ -18,7 +18,7 @@ export async function setPosition(positionCreateDto: PositionCreateDto) {
 }
 
 export async function setPositions(positionCreateDtos: PositionCreateDto[]) {
-  return await prisma.$transaction(async (tx) => {
+  return await db.transaction(async (tx) => {
     const existingPositions = await positionRepository.searchPositions({
       posCodes: positionCreateDtos.map(e => e.posCode),
     }, tx);
@@ -48,7 +48,7 @@ export async function updatePosition(
   posCode: string,
   data: { posName?: string; description?: string | null; status?: number },
 ) {
-  return await prisma.$transaction(async (tx) => {
+  return await db.transaction(async (tx) => {
     const existing = await positionRepository.getPositionByCode(posCode, tx);
     if (existing === null) {
       throw new CustomError("岗位不存在", 404);
@@ -63,7 +63,7 @@ export async function updatePositionStatus(posCode: string, status: number) {
 }
 
 export async function deletePosition(posCode: string) {
-  return await prisma.$transaction(async (tx) => {
+  return await db.transaction(async (tx) => {
     const existing = await positionRepository.getPositionByCode(posCode, tx);
     if (existing === null) {
       throw new CustomError("岗位不存在", 404);

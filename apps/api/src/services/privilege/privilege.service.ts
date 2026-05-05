@@ -1,4 +1,4 @@
-import { prisma } from "@api/db";
+import db from "@api/db";
 import { CustomError } from "@api/errors/CustomError";
 import * as privilegeRepository from "@api/services/privilege/privilege.repository";
 import { PrivilegeDtoSchema } from "./privilege.schema";
@@ -8,7 +8,7 @@ export async function getPrivilegesByRoleIds(roleIds: number[]) {
   return privileges;
 }
 export async function setPrivilege(privCode: string, privName: string) {
-  return await prisma.$transaction(async (tx) => {
+  return await db.transaction(async (tx) => {
     const existingPriv = await privilegeRepository.getPrivilegeByCode(privCode, tx);
     if (existingPriv !== null) {
       throw new CustomError("重复权限code代码");

@@ -1,241 +1,255 @@
-import type { PrismaTransaction } from "@api/db";
-import type { Organization } from "@api/db/generated/prisma/client";
+import type { DbClient } from "@api/db";
+import type { Organization } from "@api/db/schema";
 import type { OrganizationCreateDto, OrganizationQueryDto } from "@api/services/organization/organization.type";
-import { prisma } from "@api/db";
-import { Prisma } from "@api/db/generated/prisma/client";
+import db from "@api/db";
+import { compactUpdate, firstRow, ilikeContainsIf, inArrayIf } from "@api/db/query-utils";
+import { employments, organizationClosures, organizations } from "@api/db/schema";
 import { OrganizationType } from "@api/enums/organization.type";
 import { Status } from "@api/enums/status";
+import { and, count, eq, exists, getTableColumns, gt, inArray, notInArray, or, sql } from "drizzle-orm";
+import { alias } from "drizzle-orm/pg-core";
 
-export async function searchFormalOrganizations(orgCode: string, orgLevel: number, tx: PrismaTransaction = prisma) {
-  return await tx.organization.findMany({
-    where: {
-      descendantClosures: {
-        some: {
-          ancestor: {
-            orgCode,
-          },
-        },
-      },
-      orgType: {
-        notIn: [OrganizationType.Virtual, OrganizationType.External],
-      },
-      level: orgLevel,
-      status: Status.Enable,
-      isDelete: false,
-    },
-    include: {
-      parent: true,
-      children: true,
-    },
-  });
+type OrganizationWithRelations = Organization & {
+  parent: Organization | null;
+  children: Organization[];
+};
+
+async function attachOrganizationRelations(
+  rows: Organization[],
+  tx: DbClient,
+  options: { activeChildrenOnly?: boolean } = {},
+): Promise<OrganizationWithRelations[]> {
+  if (rows.length === 0) {
+    return [];
+  }
+
+  const parentIds = [...new Set(rows.map(row => row.parentId).filter(id => id > 0))];
+  const rowIds = rows.map(row => row.id);
+
+  const [parents, children] = await Promise.all([
+    parentIds.length === 0
+      ? Promise.resolve([])
+      : tx.select().from(organizations).where(inArray(organizations.id, parentIds)),
+    tx.select().from(organizations).where(and(
+      inArray(organizations.parentId, rowIds),
+      options.activeChildrenOnly ? eq(organizations.isDelete, false) : undefined,
+    )),
+  ]);
+
+  const parentMap = new Map(parents.map(parent => [parent.id, parent]));
+  const childrenMap = new Map<number, Organization[]>();
+  for (const child of children) {
+    const orgChildren = childrenMap.get(child.parentId) ?? [];
+    orgChildren.push(child);
+    childrenMap.set(child.parentId, orgChildren);
+  }
+
+  return rows.map(row => ({
+    ...row,
+    parent: parentMap.get(row.parentId) ?? null,
+    children: childrenMap.get(row.id) ?? [],
+  }));
 }
-export async function getOrganizationByCode(orgCode: string, tx: PrismaTransaction = prisma) {
-  return await tx.organization.findFirst({
-    where: {
-      orgCode,
-      status: Status.Enable,
-      isDelete: false,
-    },
-    include: {
-      parent: true,
-      children: true,
-    },
-  });
+
+function descendantOfAncestorCondition(orgCode: string, depth?: number[]) {
+  const ancestor = alias(organizations, "ancestor");
+  return exists(
+    db
+      .select({ value: sql`1` })
+      .from(organizationClosures)
+      .innerJoin(ancestor, eq(organizationClosures.ancestorId, ancestor.id))
+      .where(and(
+        eq(organizationClosures.descendantId, organizations.id),
+        eq(ancestor.orgCode, orgCode),
+        inArrayIf(organizationClosures.depth, depth),
+      )),
+  );
 }
-export async function getOrganizationById(id: number, tx: PrismaTransaction = prisma) {
-  return await tx.organization.findFirst({
-    where: {
-      id,
-      status: Status.Enable,
-      isDelete: false,
-    },
-    include: {
-      parent: true,
-      children: true,
-    },
-  });
+
+export async function searchFormalOrganizations(orgCode: string, orgLevel: number, tx: DbClient = db) {
+  const rows = await tx.select().from(organizations).where(and(
+    descendantOfAncestorCondition(orgCode),
+    notInArray(organizations.orgType, [OrganizationType.Virtual, OrganizationType.External]),
+    eq(organizations.level, orgLevel),
+    eq(organizations.status, Status.Enable),
+    eq(organizations.isDelete, false),
+  ));
+  return await attachOrganizationRelations(rows, tx);
 }
+
+export async function getOrganizationByCode(orgCode: string, tx: DbClient = db) {
+  const rows = await tx.select().from(organizations).where(and(
+    eq(organizations.orgCode, orgCode),
+    eq(organizations.status, Status.Enable),
+    eq(organizations.isDelete, false),
+  )).limit(1);
+  return firstRow(await attachOrganizationRelations(rows, tx)) ?? null;
+}
+
+export async function getOrganizationById(id: number, tx: DbClient = db) {
+  const rows = await tx.select().from(organizations).where(and(
+    eq(organizations.id, id),
+    eq(organizations.status, Status.Enable),
+    eq(organizations.isDelete, false),
+  )).limit(1);
+  return firstRow(await attachOrganizationRelations(rows, tx)) ?? null;
+}
+
 export async function searchOrganizations(
   query: OrganizationQueryDto,
-  tx: PrismaTransaction = prisma,
+  tx: DbClient = db,
 ) {
-  return await tx.organization.findMany({
-    where: {
-      descendantClosures: {
-        some: {
-          ancestor: {
-            orgCode: {
-              in: query.ancestorCodes,
-            },
-          },
-          depth: {
-            in: query.ancestorDepths,
-          },
-        },
-      },
-      ancestorClosures: {
-        some: {
-          descendant: {
-            orgCode: {
-              in: query.descendantCodes,
-            },
-          },
-          depth: {
-            in: query.descendantDepths,
-          },
-        },
-      },
-      level: {
-        in: query.orgLevels,
-      },
-      orgType: {
-        in: query.orgTypes,
-      },
-      orgCode: {
-        in: query.orgCodes,
-      },
-      status: Status.Enable,
-      isDelete: false,
-    },
-    include: {
-      parent: true,
-      children: true,
-    },
-  });
+  const ancestor = alias(organizations, "ancestor_filter");
+  const descendant = alias(organizations, "descendant_filter");
+  const rows = await tx.select().from(organizations).where(and(
+    query.ancestorCodes === undefined
+      ? undefined
+      : exists(
+          db.select({ value: sql`1` })
+            .from(organizationClosures)
+            .innerJoin(ancestor, eq(organizationClosures.ancestorId, ancestor.id))
+            .where(and(
+              eq(organizationClosures.descendantId, organizations.id),
+              inArrayIf(ancestor.orgCode, query.ancestorCodes),
+              inArrayIf(organizationClosures.depth, query.ancestorDepths),
+            )),
+        ),
+    query.descendantCodes === undefined
+      ? undefined
+      : exists(
+          db.select({ value: sql`1` })
+            .from(organizationClosures)
+            .innerJoin(descendant, eq(organizationClosures.descendantId, descendant.id))
+            .where(and(
+              eq(organizationClosures.ancestorId, organizations.id),
+              inArrayIf(descendant.orgCode, query.descendantCodes),
+              inArrayIf(organizationClosures.depth, query.descendantDepths),
+            )),
+        ),
+    inArrayIf(organizations.level, query.orgLevels),
+    inArrayIf(organizations.orgType, query.orgTypes),
+    inArrayIf(organizations.orgCode, query.orgCodes),
+    eq(organizations.status, Status.Enable),
+    eq(organizations.isDelete, false),
+  ));
+  return await attachOrganizationRelations(rows, tx);
 }
-export async function getOrganizationsByParentId(parentId: number, tx: PrismaTransaction = prisma) {
-  return await tx.organization.findMany({
-    where: {
-      parentId,
-      status: Status.Enable,
-      isDelete: false,
-    },
-    include: {
-      parent: true,
-      children: true,
-    },
-  });
+
+export async function getOrganizationsByParentId(parentId: number, tx: DbClient = db) {
+  const rows = await tx.select().from(organizations).where(and(
+    eq(organizations.parentId, parentId),
+    eq(organizations.status, Status.Enable),
+    eq(organizations.isDelete, false),
+  ));
+  return await attachOrganizationRelations(rows, tx);
 }
-export async function getOrganizationsByParentsCode(parentCodes: string[], tx: PrismaTransaction = prisma) {
-  return await tx.organization.findMany({
-    where: {
-      parent: {
-        orgCode: {
-          in: parentCodes,
-        },
-      },
-      status: Status.Enable,
-      isDelete: false,
-    },
-    include: {
-      parent: true,
-      children: true,
-    },
-  });
+
+export async function getOrganizationsByParentsCode(parentCodes: string[], tx: DbClient = db) {
+  const parent = alias(organizations, "parent_by_code");
+  const rows = await tx
+    .select({ ...getTableColumns(organizations) })
+    .from(organizations)
+    .innerJoin(parent, eq(organizations.parentId, parent.id))
+    .where(and(
+      inArrayIf(parent.orgCode, parentCodes),
+      eq(organizations.status, Status.Enable),
+      eq(organizations.isDelete, false),
+    ));
+  return await attachOrganizationRelations(rows, tx);
 }
+
 export async function setOrganization(
   organizationCreateDto: OrganizationCreateDto,
   parentOrganization: Organization | null,
-  tx: PrismaTransaction = prisma,
+  tx: DbClient = db,
 ) {
   const { parentCode, ...org } = organizationCreateDto;
-  const newOrganization = await tx.organization.create({
-    data: org,
-  });
+  const newOrganization = firstRow(await tx.insert(organizations).values(org).returning())!;
   const path = `${parentOrganization ? parentOrganization.path : ""}/${newOrganization.id}`;
   const level = parentOrganization ? parentOrganization.level + 1 : 1;
-  const updatedOrganization = await tx.organization.update({
-    where: {
-      id: newOrganization.id,
-      status: Status.Enable,
-      isDelete: false,
-    },
-    data: {
+  const updatedOrganization = firstRow(await tx
+    .update(organizations)
+    .set({
       path,
       level,
-      parentId: parentOrganization?.id,
-    },
-  });
-  const closureRelations = [];
-  const parentAncestors = await tx.organizationClosure.findMany({
-    where: {
-      descendantId: parentOrganization?.id,
-    },
-    select: { ancestorId: true, depth: true },
-  });
-  parentAncestors.forEach((rel) => {
-    closureRelations.push({
-      ancestorId: rel.ancestorId,
-      descendantId: newOrganization.id,
-      depth: rel.depth + 1,
-    });
-  });
+      parentId: parentOrganization?.id ?? -1,
+    })
+    .where(and(
+      eq(organizations.id, newOrganization.id),
+      eq(organizations.status, Status.Enable),
+      eq(organizations.isDelete, false),
+    ))
+    .returning())!;
+
+  const parentAncestors = parentOrganization === null
+    ? []
+    : await tx
+        .select({
+          ancestorId: organizationClosures.ancestorId,
+          depth: organizationClosures.depth,
+        })
+        .from(organizationClosures)
+        .where(eq(organizationClosures.descendantId, parentOrganization.id));
+
+  const closureRelations = parentAncestors.map(rel => ({
+    ancestorId: rel.ancestorId,
+    descendantId: newOrganization.id,
+    depth: rel.depth + 1,
+  }));
   closureRelations.push({
     ancestorId: newOrganization.id,
     descendantId: newOrganization.id,
     depth: 0,
   });
-  if (closureRelations.length > 0) {
-    await tx.organizationClosure.createMany({
-      data: closureRelations,
-      skipDuplicates: true,
-    });
-  }
-  return updatedOrganization;
+
+  await tx.insert(organizationClosures).values(closureRelations).onConflictDoNothing();
+  return firstRow(await attachOrganizationRelations([updatedOrganization], tx))!;
 }
 
-/**
- * Admin: 按页返回指定父节点的直接子组织。
- * parentOrgCode 为 null 时返回根组织（parentId = -1）。
- */
 export async function listOrgChildrenByParentCode(
   parentOrgCode: string | null,
   pageNum: number,
   pageSize: number,
-  tx: PrismaTransaction = prisma,
+  tx: DbClient = db,
 ) {
   let parentId: number;
   if (parentOrgCode === null) {
     parentId = -1;
   }
   else {
-    const parent = await tx.organization.findFirst({
+    const parent = await tx.query.organizations.findFirst({
+      columns: { id: true },
       where: { orgCode: parentOrgCode, isDelete: false },
-      select: { id: true },
     });
-    if (parent === null) {
+    if (parent === undefined) {
       return { rows: [], total: 0 };
     }
     parentId = parent.id;
   }
 
-  const where = { isDelete: false, parentId };
-  const [rows, total] = await Promise.all([
-    tx.organization.findMany({
-      where,
-      skip: (pageNum - 1) * pageSize,
-      take: pageSize,
-      orderBy: [
-        { orderNum: "asc" },
-        { id: "asc" },
-      ],
-    }),
-    tx.organization.count({ where }),
+  const where = and(eq(organizations.isDelete, false), eq(organizations.parentId, parentId));
+  const [rows, totalRows] = await Promise.all([
+    tx
+      .select()
+      .from(organizations)
+      .where(where)
+      .orderBy(organizations.orderNum, organizations.id)
+      .limit(pageSize)
+      .offset((pageNum - 1) * pageSize),
+    tx.select({ value: count() }).from(organizations).where(where),
   ]);
+  const total = firstRow(totalRows)?.value ?? 0;
 
   if (rows.length === 0) {
     return { rows: [], total };
   }
 
-  const grandchildCounts = await tx.organization.groupBy({
-    by: ["parentId"],
-    where: {
-      isDelete: false,
-      parentId: { in: rows.map(r => r.id) },
-    },
-    _count: { _all: true },
-  });
-  const countMap = new Map(grandchildCounts.map(c => [c.parentId, c._count._all]));
+  const grandchildCounts = await tx
+    .select({ parentId: organizations.parentId, value: count() })
+    .from(organizations)
+    .where(and(eq(organizations.isDelete, false), inArray(organizations.parentId, rows.map(r => r.id))))
+    .groupBy(organizations.parentId);
+  const countMap = new Map(grandchildCounts.map(c => [c.parentId, c.value]));
 
   return {
     rows: rows.map(r => ({
@@ -246,18 +260,14 @@ export async function listOrgChildrenByParentCode(
   };
 }
 
-/** Admin: 按 orgCode 查询（不过滤 status） */
-export async function getOrganizationByCodeForAdmin(orgCode: string, tx: PrismaTransaction = prisma) {
-  return await tx.organization.findFirst({
-    where: { orgCode, isDelete: false },
-    include: {
-      parent: true,
-      children: { where: { isDelete: false } },
-    },
-  });
+export async function getOrganizationByCodeForAdmin(orgCode: string, tx: DbClient = db) {
+  const rows = await tx.select().from(organizations).where(and(
+    eq(organizations.orgCode, orgCode),
+    eq(organizations.isDelete, false),
+  )).limit(1);
+  return firstRow(await attachOrganizationRelations(rows, tx, { activeChildrenOnly: true })) ?? null;
 }
 
-/** Admin: 扁平分页搜索（多维过滤，支持关键字模糊） */
 export async function searchOrganizationsForAdmin(
   query: {
     conditions: {
@@ -270,85 +280,93 @@ export async function searchOrganizationsForAdmin(
       };
     };
   },
-  tx: PrismaTransaction = prisma,
+  tx: DbClient = db,
 ) {
   const { fuzzyConditions, exactConditions } = query.conditions;
-  return await tx.organization.findMany({
-    where: {
-      isDelete: false,
-      ...(exactConditions.orgType ? { orgType: exactConditions.orgType } : {}),
-      ...(exactConditions.status !== undefined ? { status: exactConditions.status } : {}),
-      ...(exactConditions.parentOrgCode
-        ? { parent: { orgCode: exactConditions.parentOrgCode } }
-        : {}),
-      ...(exactConditions.ancestorOrgCode
-        ? {
-            descendantClosures: {
-              some: {
-                depth: { gt: 0 },
-                ancestor: { orgCode: exactConditions.ancestorOrgCode },
-              },
-            },
-          }
-        : {}),
-      ...(fuzzyConditions.text
-        ? {
-            OR: [
-              { orgCode: { contains: fuzzyConditions.text, mode: Prisma.QueryMode.insensitive } },
-              { orgName: { contains: fuzzyConditions.text, mode: Prisma.QueryMode.insensitive } },
-            ],
-          }
-        : {}),
-    },
-    include: {
-      parent: true,
-      children: { where: { isDelete: false } },
-    },
-    orderBy: [
-      { level: "asc" },
-      { orderNum: "asc" },
-      { id: "asc" },
-    ],
-  });
+  const parent = alias(organizations, "admin_parent");
+  const ancestor = alias(organizations, "admin_ancestor");
+
+  const rows = await tx.select().from(organizations).where(and(
+    eq(organizations.isDelete, false),
+    exactConditions.orgType ? eq(organizations.orgType, exactConditions.orgType) : undefined,
+    exactConditions.status !== undefined ? eq(organizations.status, exactConditions.status) : undefined,
+    exactConditions.parentOrgCode
+      ? exists(
+          db.select({ value: sql`1` }).from(parent).where(and(
+            eq(parent.id, organizations.parentId),
+            eq(parent.orgCode, exactConditions.parentOrgCode),
+          )),
+        )
+      : undefined,
+    exactConditions.ancestorOrgCode
+      ? exists(
+          db.select({ value: sql`1` })
+            .from(organizationClosures)
+            .innerJoin(ancestor, eq(organizationClosures.ancestorId, ancestor.id))
+            .where(and(
+              eq(organizationClosures.descendantId, organizations.id),
+              gt(organizationClosures.depth, 0),
+              eq(ancestor.orgCode, exactConditions.ancestorOrgCode),
+            )),
+        )
+      : undefined,
+    fuzzyConditions.text
+      ? or(
+          ilikeContainsIf(organizations.orgCode, fuzzyConditions.text),
+          ilikeContainsIf(organizations.orgName, fuzzyConditions.text),
+        )
+      : undefined,
+  )).orderBy(organizations.level, organizations.orderNum, organizations.id);
+
+  return await attachOrganizationRelations(rows, tx, { activeChildrenOnly: true });
 }
 
 export async function updateOrganizationByCode(
   orgCode: string,
   data: { orgCode?: string; orgName?: string; orgType?: string; status?: number },
-  tx: PrismaTransaction = prisma,
+  tx: DbClient = db,
 ) {
-  return await tx.organization.updateMany({
-    where: { orgCode, isDelete: false },
-    data,
-  });
+  return await tx
+    .update(organizations)
+    .set(compactUpdate(data))
+    .where(and(eq(organizations.orgCode, orgCode), eq(organizations.isDelete, false)));
 }
 
-export async function softDeleteOrganizationByCode(orgCode: string, tx: PrismaTransaction = prisma) {
-  return await tx.organization.updateMany({
-    where: { orgCode, isDelete: false },
-    data: { isDelete: true },
-  });
+export async function softDeleteOrganizationByCode(orgCode: string, tx: DbClient = db) {
+  return await tx
+    .update(organizations)
+    .set({ isDelete: true })
+    .where(and(eq(organizations.orgCode, orgCode), eq(organizations.isDelete, false)));
 }
 
-/** 直接子节点数量（不考虑更深后代） */
-export async function countActiveChildrenByOrgCode(orgCode: string, tx: PrismaTransaction = prisma) {
-  return await tx.organization.count({
-    where: {
-      isDelete: false,
-      parent: { orgCode, isDelete: false },
-    },
-  });
+export async function countActiveChildrenByOrgCode(orgCode: string, tx: DbClient = db) {
+  const parent = alias(organizations, "child_count_parent");
+  const rows = await tx
+    .select({ value: count() })
+    .from(organizations)
+    .innerJoin(parent, eq(organizations.parentId, parent.id))
+    .where(and(
+      eq(organizations.isDelete, false),
+      eq(parent.orgCode, orgCode),
+      eq(parent.isDelete, false),
+    ));
+  return firstRow(rows)?.value ?? 0;
 }
 
-/** 组织作为 dept 或 comp 关联的未结束雇佣数 */
-export async function countActiveEmploymentsByOrgCode(orgCode: string, tx: PrismaTransaction = prisma) {
-  return await tx.employment.count({
-    where: {
-      isDelete: false,
-      OR: [
-        { deptartment: { orgCode, isDelete: false } },
-        { company: { orgCode, isDelete: false } },
-      ],
-    },
-  });
+export async function countActiveEmploymentsByOrgCode(orgCode: string, tx: DbClient = db) {
+  const dept = alias(organizations, "employment_dept_count");
+  const company = alias(organizations, "employment_company_count");
+  const rows = await tx
+    .select({ value: count() })
+    .from(employments)
+    .leftJoin(dept, eq(employments.orgId, dept.id))
+    .leftJoin(company, eq(employments.compId, company.id))
+    .where(and(
+      eq(employments.isDelete, false),
+      or(
+        and(eq(dept.orgCode, orgCode), eq(dept.isDelete, false)),
+        and(eq(company.orgCode, orgCode), eq(company.isDelete, false)),
+      ),
+    ));
+  return firstRow(rows)?.value ?? 0;
 }

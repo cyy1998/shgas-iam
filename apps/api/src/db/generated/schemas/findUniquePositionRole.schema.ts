@@ -1,7 +1,0 @@
-import type { Prisma } from '../prisma/client';
-import * as z from 'zod';
-import { PositionRoleWhereUniqueInputObjectSchema as PositionRoleWhereUniqueInputObjectSchema } from './objects/PositionRoleWhereUniqueInput.schema';
-
-export const PositionRoleFindUniqueSchema: z.ZodType<Prisma.PositionRoleFindUniqueArgs> = z.object({   where: PositionRoleWhereUniqueInputObjectSchema }).strict() as unknown as z.ZodType<Prisma.PositionRoleFindUniqueArgs>;
-
-export const PositionRoleFindUniqueZodSchema = z.object({   where: PositionRoleWhereUniqueInputObjectSchema }).strict();

@@ -1,10 +1,10 @@
-import { UserSchema as PrismaUserSchema } from "@api/db/generated/schemas";
+import { selectUserSchema } from "@api/db/schema";
 import { UserStatus } from "@api/enums/user.status";
 import { createPageQuerySchema } from "@api/lib/core/pagination/schema";
 import { z } from "@hono/zod-openapi";
 import { EmploymentDetailDtoSchema } from "../employment/employment.schema";
 
-export const UserSchema = z.object(PrismaUserSchema.shape);
+export const UserSchema = z.object(selectUserSchema.shape);
 
 export const UserDtoSchema = UserSchema.omit({
   password: true,

@@ -1,31 +1,33 @@
-import type { PrismaTransaction } from "@api/db";
+import type { DbClient } from "@api/db";
 import type { ClientCreateDto, ClientInputDto } from "./client.type";
-import { prisma } from "@api/db";
+import db from "@api/db";
+import { compactUpdate, firstRow } from "@api/db/query-utils";
+import { clients } from "@api/db/schema";
+import { eq } from "drizzle-orm";
 
-export async function getClientByCode(clientCode: string, tx: PrismaTransaction = prisma) {
-  return await tx.client.findFirst({
-    where: {
-      clientCode,
-    },
-  });
+export async function getClientByCode(clientCode: string, tx: DbClient = db) {
+  return await tx.query.clients.findFirst({
+    where: { clientCode },
+  }) ?? null;
 }
-export async function getClientBySecret(clientSecret: string, tx: PrismaTransaction = prisma) {
-  return await tx.client.findFirst({
-    where: {
-      clientSecret,
-    },
-  });
+
+export async function getClientBySecret(clientSecret: string, tx: DbClient = db) {
+  return await tx.query.clients.findFirst({
+    where: { clientSecret },
+  }) ?? null;
 }
-export async function createClient(clientDto: ClientCreateDto, tx: PrismaTransaction = prisma) {
-  return await tx.client.create({
-    data: clientDto,
-  });
+
+export async function createClient(clientDto: ClientCreateDto, tx: DbClient = db) {
+  const rows = await tx.insert(clients).values(clientDto).returning();
+  return firstRow(rows)!;
 }
-export async function updateClient(clientDto: ClientInputDto, tx: PrismaTransaction = prisma) {
-  return await tx.client.update({
-    data: clientDto,
-    where: {
-      id: clientDto.id,
-    },
-  });
+
+export async function updateClient(clientDto: ClientInputDto, tx: DbClient = db) {
+  const { id, ...data } = clientDto;
+  const rows = await tx
+    .update(clients)
+    .set(compactUpdate(data))
+    .where(eq(clients.id, id))
+    .returning();
+  return firstRow(rows)!;
 }

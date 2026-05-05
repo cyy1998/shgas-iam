@@ -1,5 +1,5 @@
 import type { ClientCreateDto, ClientDto, ClientInputDto } from "./client.type";
-import { prisma } from "@api/db";
+import db from "@api/db";
 import redis from "@api/lib/clients/redis";
 import * as clientRepository from "@api/services/client/client.repository";
 import { ClientDtoSchema } from "@api/services/client/client.schema";
@@ -62,7 +62,7 @@ export async function getClientBySecret(clientSecret: string): Promise<ClientDto
 }
 
 export async function createClient(clientDto: ClientCreateDto) {
-  return await prisma.$transaction(async (tx) => {
+  return await db.transaction(async (tx) => {
     const client = await clientRepository.createClient(clientDto, tx);
     const createdClientDto = ClientDtoSchema.parse(client);
     await setClientCache(createdClientDto);
@@ -71,7 +71,7 @@ export async function createClient(clientDto: ClientCreateDto) {
 }
 
 export async function updateClient(clientDto: ClientInputDto) {
-  return await prisma.$transaction(async (tx) => {
+  return await db.transaction(async (tx) => {
     const client = await clientRepository.updateClient(clientDto, tx);
     const updatedClientDto = ClientDtoSchema.parse(client);
     await setClientCache(updatedClientDto);

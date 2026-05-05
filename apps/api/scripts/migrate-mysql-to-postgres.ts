@@ -1,5 +1,6 @@
 import mysql from "mysql2/promise";
-import { prisma } from "../src/db";
+import db, { closeDb } from "../src/db";
+import { sql } from "drizzle-orm";
 
 const sourceUrl = process.env.MYSQL_DATABASE_URL;
 const targetUrl = process.env.DATABASE_URL;
@@ -87,17 +88,18 @@ async function copyTable(tableName: string) {
 
   const firstRow = data[0]!;
   const columns = Object.keys(firstRow);
-  const quotedColumns = columns.map(column => `"${column}"`).join(", ");
+  const columnSql = sql.join(columns.map(column => sql.identifier(column)), sql`, `);
 
   for (const batch of chunkRows(data, batchSize)) {
-    await prisma.$transaction(async (tx) => {
+    await db.transaction(async (tx) => {
       for (const row of batch) {
         const values = columns.map(column => row[column]);
-        const placeholders = values.map((_, index) => `$${index + 1}`).join(", ");
-        await tx.$executeRawUnsafe(
-          `INSERT INTO "${tableName}" (${quotedColumns}) VALUES (${placeholders}) ON CONFLICT DO NOTHING`,
-          ...values,
-        );
+        const valueSql = sql.join(values.map(value => sql`${value}`), sql`, `);
+        await tx.execute(sql`
+          INSERT INTO ${sql.identifier(tableName)} (${columnSql})
+          VALUES (${valueSql})
+          ON CONFLICT DO NOTHING
+        `);
       }
     });
   }
@@ -106,11 +108,11 @@ async function copyTable(tableName: string) {
 }
 
 async function resetSequence(tableName: string) {
-  await prisma.$executeRawUnsafe(`
+  await db.execute(sql`
     SELECT setval(
-      pg_get_serial_sequence('"${tableName}"', 'id'),
-      COALESCE((SELECT MAX(id) FROM "${tableName}"), 1),
-      (SELECT COUNT(*) > 0 FROM "${tableName}")
+      pg_get_serial_sequence(${"\"" + tableName + "\""}, 'id'),
+      COALESCE((SELECT MAX(id) FROM ${sql.identifier(tableName)}), 1),
+      (SELECT COUNT(*) > 0 FROM ${sql.identifier(tableName)})
     )
   `);
 }
@@ -126,5 +128,5 @@ try {
 }
 finally {
   await source.end();
-  await prisma.$disconnect();
+  await closeDb();
 }

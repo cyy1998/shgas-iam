@@ -1,77 +1,62 @@
-import type { PrismaTransaction } from "@api/db";
+import type { DbClient } from "@api/db";
 import type { PositionCreateDto, PositionFuzzyQueryDto, PositionQueryDto } from "./position.type";
-import { prisma } from "@api/db";
-import { Prisma } from "@api/db/generated/prisma/client";
+import db from "@api/db";
+import { compactUpdate, firstRow, inArrayIf } from "@api/db/query-utils";
+import { employments, positions } from "@api/db/schema";
+import { and, count, eq } from "drizzle-orm";
 
-export async function getPositionByCode(posCode: string, tx: PrismaTransaction = prisma) {
-  return await tx.position.findFirst({
-    where: {
-      posCode,
-      isDelete: false,
-    },
-  });
-}
-export async function getPositionById(posId: number, tx: PrismaTransaction = prisma) {
-  return await tx.position.findFirst({
-    where: {
-      id: posId,
-    },
-  });
+export async function getPositionByCode(posCode: string, tx: DbClient = db) {
+  return await tx.query.positions.findFirst({
+    where: { posCode, isDelete: false },
+  }) ?? null;
 }
 
-export async function setPosition(positionCreateDto: PositionCreateDto, tx: PrismaTransaction = prisma) {
-  await tx.position.create({
-    data: positionCreateDto,
-  });
+export async function getPositionById(posId: number, tx: DbClient = db) {
+  return await tx.query.positions.findFirst({
+    where: { id: posId },
+  }) ?? null;
 }
 
-export async function setPositions(positionCreateDtos: PositionCreateDto[], tx: PrismaTransaction = prisma) {
-  return await tx.position.createMany({
-    data: positionCreateDtos,
-  });
+export async function setPosition(positionCreateDto: PositionCreateDto, tx: DbClient = db) {
+  await tx.insert(positions).values(positionCreateDto);
+}
+
+export async function setPositions(positionCreateDtos: PositionCreateDto[], tx: DbClient = db) {
+  if (positionCreateDtos.length === 0) {
+    return { count: 0 };
+  }
+  await tx.insert(positions).values(positionCreateDtos);
+  return { count: positionCreateDtos.length };
 }
 
 export async function searchPositions(
   positionQueryDto: PositionQueryDto,
-  tx: PrismaTransaction = prisma,
+  tx: DbClient = db,
 ) {
-  return await tx.position.findMany({
-    where: {
-      posCode: {
-        in: positionQueryDto.posCodes,
-      },
-      posName: {
-        in: positionQueryDto.posNames,
-      },
-    },
-  });
+  return await tx.select().from(positions).where(and(
+    inArrayIf(positions.posCode, positionQueryDto.posCodes),
+    inArrayIf(positions.posName, positionQueryDto.posNames),
+  ));
 }
 
 export async function searchPositionsFuzzy(
   positionAdminQueryDto: PositionFuzzyQueryDto,
-  tx: PrismaTransaction = prisma,
+  tx: DbClient = db,
 ) {
-  return await tx.position.findMany({
+  const text = positionAdminQueryDto.conditions.fuzzyConditions.text;
+  return await tx.query.positions.findMany({
     where: {
-      OR: positionAdminQueryDto.conditions.fuzzyConditions.text !== undefined
-        ? [
-            {
-              posName: {
-                contains: positionAdminQueryDto.conditions.fuzzyConditions.text,
-                mode: Prisma.QueryMode.insensitive,
-              },
-            },
-            {
-              posCode: {
-                contains: positionAdminQueryDto.conditions.fuzzyConditions.text,
-                mode: Prisma.QueryMode.insensitive,
-              },
-            },
-          ]
-        : undefined,
       isDelete: false,
+      ...(text !== undefined
+        ? {
+            OR: [
+              { posName: { ilike: `%${text}%` } },
+              { posCode: { ilike: `%${text}%` } },
+            ],
+          }
+        : {}),
     },
-    include: {
+    with: {
       employments: true,
     },
   });
@@ -80,38 +65,42 @@ export async function searchPositionsFuzzy(
 export async function updatePositionByCode(
   posCode: string,
   data: { posName?: string; description?: string | null; status?: number },
-  tx: PrismaTransaction = prisma,
+  tx: DbClient = db,
 ) {
-  return await tx.position.updateMany({
-    where: { posCode, isDelete: false },
-    data,
-  });
+  return await tx
+    .update(positions)
+    .set(compactUpdate(data))
+    .where(and(eq(positions.posCode, posCode), eq(positions.isDelete, false)));
 }
 
 export async function softDeletePositionByCode(
   posCode: string,
-  tx: PrismaTransaction = prisma,
+  tx: DbClient = db,
 ) {
-  return await tx.position.updateMany({
-    where: { posCode, isDelete: false },
-    data: { isDelete: true },
-  });
+  return await tx
+    .update(positions)
+    .set({ isDelete: true })
+    .where(and(eq(positions.posCode, posCode), eq(positions.isDelete, false)));
 }
 
 export async function countActiveEmploymentsByPosCode(
   posCode: string,
-  tx: PrismaTransaction = prisma,
+  tx: DbClient = db,
 ) {
-  return await tx.employment.count({
-    where: {
-      isDelete: false,
-      position: { posCode, isDelete: false },
-    },
-  });
+  const rows = await tx
+    .select({ value: count() })
+    .from(employments)
+    .innerJoin(positions, eq(employments.posId, positions.id))
+    .where(and(
+      eq(employments.isDelete, false),
+      eq(positions.posCode, posCode),
+      eq(positions.isDelete, false),
+    ));
+  return firstRow(rows)?.value ?? 0;
 }
 
-export async function getAnyPositionByCode(posCode: string, tx: PrismaTransaction = prisma) {
-  return await tx.position.findFirst({
+export async function getAnyPositionByCode(posCode: string, tx: DbClient = db) {
+  return await tx.query.positions.findFirst({
     where: { posCode },
-  });
+  }) ?? null;
 }

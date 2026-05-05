@@ -1,17 +1,33 @@
-import { PrismaClient } from "@api/db/generated/prisma/client";
+import { normalizeDatabaseUrl } from "@api/db/connection-url";
+import { relations } from "@api/db/relations";
 import { createSingleton } from "@api/lib/core/singleton";
-import { PrismaPg } from "@prisma/adapter-pg";
+import { drizzle } from "drizzle-orm/postgres-js";
+import postgres from "postgres";
 
-function createPrismaClient() {
-  const adapter = new PrismaPg({
-    connectionString: process.env.DATABASE_URL as string,
-  });
-  return new PrismaClient({ adapter });
+function createQueryClient() {
+  const connectionString = process.env.DATABASE_URL;
+  if (!connectionString) {
+    throw new Error("DATABASE_URL is required");
+  }
+
+  const { url, schema } = normalizeDatabaseUrl(connectionString);
+  return postgres(url, schema ? { connection: { search_path: schema } } : undefined);
 }
 
-export const prisma = createSingleton<PrismaClient>(
-  "prisma",
-  createPrismaClient,
-);
+const queryClient = createSingleton("postgres:drizzle", createQueryClient, {
+  destroy: client => client.end(),
+});
 
-export type PrismaTransaction = Omit<typeof prisma, "$connect" | "$disconnect" | "$on" | "$transaction" | "$use" | "$extends">;
+export const db = drizzle({
+  client: queryClient,
+  relations,
+});
+
+export default db;
+
+export type DbTransaction = Parameters<Parameters<typeof db.transaction>[0]>[0];
+export type DbClient = typeof db | DbTransaction;
+
+export async function closeDb() {
+  await queryClient.end();
+}

@@ -1,5 +1,5 @@
 import type { UserRouteHandler } from "./user.type";
-import { prisma } from "@api/db";
+import db from "@api/db";
 import { UserType } from "@api/enums/user.type";
 import config from "@api/env";
 import { CustomError } from "@api/errors/CustomError";
@@ -31,7 +31,7 @@ export const usersSearchWithPrivilegeDelegation: UserRouteHandler<"usersSearchWi
 
 export const contactRegister: UserRouteHandler<"contactRegister"> = async (c) => {
   const { username, mobile, name, orgCode } = c.req.valid("json");
-  await prisma.$transaction(async (tx) => {
+  await db.transaction(async (tx) => {
     const existingUser = await userRepository.getUserByMobile(mobile, tx);
     const [pos, comp, org] = await Promise.all([
       positionRepository.getPositionByCode("P001", tx),

@@ -1,8 +1,11 @@
-import { prisma } from "@api/db";
+import db from "@api/db";
+import { firstRow } from "@api/db/query-utils";
+import { users } from "@api/db/schema";
 import { VerificationCodeUsage } from "@api/enums/verificationCode.usage";
 import { CustomError } from "@api/errors/CustomError";
 import redis from "@api/lib/clients/redis";
 import smsClient from "@api/lib/integrations/sms";
+import { count, eq } from "drizzle-orm";
 
 const MOBILE_REGEX = /^1[3-9]\d{9}$/;
 
@@ -41,12 +44,8 @@ export function getPurveyorWelcomeMessage(name: string): string {
 }
 
 export async function checkExistingPhoneNumber(phone: string): Promise<boolean> {
-  const userCount = await prisma.user.count({
-    where: {
-      mobile: phone,
-    },
-  });
-  return userCount !== 0;
+  const rows = await db.select({ value: count() }).from(users).where(eq(users.mobile, phone));
+  return (firstRow(rows)?.value ?? 0) !== 0;
 }
 
 export async function cehckVerificationCode(usage: string, phone: string, code: string): Promise<boolean> {

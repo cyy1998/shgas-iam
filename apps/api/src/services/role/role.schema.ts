@@ -1,7 +1,7 @@
-import { RoleSchema as PrismaRoleSchema } from "@api/db/generated/schemas";
+import { selectRoleSchema } from "@api/db/schema";
 import { z } from "@hono/zod-openapi";
 
-export const RoleDtoSchema = z.object(PrismaRoleSchema.shape).openapi("RoleDto");
+export const RoleDtoSchema = z.object(selectRoleSchema.shape).openapi("RoleDto");
 
 // export const RoleDtoSchema = z.object({
 //   id: z.number().openapi({ example: 1 }),

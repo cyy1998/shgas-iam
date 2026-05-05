@@ -1,352 +1,272 @@
-import type { PrismaTransaction } from "@api/db";
+import type { DbClient } from "@api/db";
 import type { UserCreateDto, UserPaginationQueryDto, UserQueryDto } from "@api/services/user/user.type";
 import type { Prettify } from "@api/utils/lint.util";
-import { prisma } from "@api/db";
-import { Prisma } from "@api/db/generated/prisma/client";
+import db from "@api/db";
+import { compactUpdate, firstRow, ilikeContainsIf, inArrayIf } from "@api/db/query-utils";
+import {
+  employmentRoles,
+  employments,
+  organizationClosures,
+  organizationRoles,
+  organizations,
+  positionRoles,
+  positions,
+  roles,
+  users,
+} from "@api/db/schema";
 import { Status } from "@api/enums/status";
+import { and, count, eq, exists, gt, or, sql } from "drizzle-orm";
+import { alias } from "drizzle-orm/pg-core";
 
-export async function getUserById(userId: number, tx: PrismaTransaction = prisma) {
-  return await tx.user.findFirst({
+export async function getUserById(userId: number, tx: DbClient = db) {
+  return await tx.query.users.findFirst({
     where: {
       id: userId,
       status: Status.Enable,
       isDelete: false,
     },
-  });
+  }) ?? null;
 }
-export async function getUserByUsername(username: string, tx: PrismaTransaction = prisma) {
-  return await tx.user.findFirst({
+
+export async function getUserByUsername(username: string, tx: DbClient = db) {
+  return await tx.query.users.findFirst({
     where: {
       username,
       status: Status.Enable,
       isDelete: false,
     },
-  });
+  }) ?? null;
 }
-export async function getUserByWxId(wxId: string, tx: PrismaTransaction = prisma) {
-  return await tx.user.findFirst({
+
+export async function getUserByWxId(wxId: string, tx: DbClient = db) {
+  return await tx.query.users.findFirst({
     where: {
       wxId,
       status: Status.Enable,
       isDelete: false,
     },
-  });
+  }) ?? null;
 }
-export async function getUserByMobile(mobile: string, tx: PrismaTransaction = prisma) {
-  return await tx.user.findFirst({
+
+export async function getUserByMobile(mobile: string, tx: DbClient = db) {
+  return await tx.query.users.findFirst({
     where: {
       mobile,
       status: Status.Enable,
       isDelete: false,
     },
-  });
+  }) ?? null;
 }
+
+function activeRoleCondition(roleCodes: string[] | undefined) {
+  return and(
+    eq(roles.status, Status.Enable),
+    eq(roles.isDelete, false),
+    inArrayIf(roles.roleCode, roleCodes),
+  );
+}
+
+function employmentHasRoleCondition(employmentTable: any, roleCodes: string[] | undefined) {
+  const closure = alias(organizationClosures, "user_role_org_closure");
+  return or(
+    exists(
+      db.select({ value: sql`1` })
+        .from(positionRoles)
+        .innerJoin(roles, eq(positionRoles.roleId, roles.id))
+        .where(and(
+          eq(positionRoles.positionId, employmentTable.posId),
+          activeRoleCondition(roleCodes),
+        )),
+    ),
+    exists(
+      db.select({ value: sql`1` })
+        .from(employmentRoles)
+        .innerJoin(roles, eq(employmentRoles.roleId, roles.id))
+        .where(and(
+          eq(employmentRoles.employmentId, employmentTable.id),
+          activeRoleCondition(roleCodes),
+        )),
+    ),
+    exists(
+      db.select({ value: sql`1` })
+        .from(closure)
+        .innerJoin(organizationRoles, eq(organizationRoles.organizationId, closure.ancestorId))
+        .innerJoin(roles, eq(organizationRoles.roleId, roles.id))
+        .where(and(
+          eq(closure.descendantId, employmentTable.orgId),
+          or(
+            and(eq(closure.depth, 0), activeRoleCondition(roleCodes)),
+            and(gt(closure.depth, 0), eq(organizationRoles.isAllSub, true), activeRoleCondition(roleCodes)),
+          ),
+        )),
+    ),
+  );
+}
+
+function userSearchEmploymentExists(query: UserQueryDto) {
+  const employment = alias(employments, "user_search_employment");
+  const ancestor = alias(organizations, "user_search_ancestor");
+  return exists(
+    db.select({ value: sql`1` })
+      .from(employment)
+      .where(and(
+        eq(employment.userId, users.id),
+        eq(employment.status, Status.Enable),
+        eq(employment.isDelete, false),
+        exists(
+          db.select({ value: sql`1` })
+            .from(organizationClosures)
+            .innerJoin(ancestor, eq(organizationClosures.ancestorId, ancestor.id))
+            .where(and(
+              eq(organizationClosures.descendantId, employment.orgId),
+              inArrayIf(ancestor.orgCode, query.ancestorOrgCodes),
+              inArrayIf(organizationClosures.depth, query.ancestorOrgDepths),
+            )),
+        ),
+        exists(
+          db.select({ value: sql`1` })
+            .from(positions)
+            .where(and(
+              eq(positions.id, employment.posId),
+              eq(positions.status, Status.Enable),
+              eq(positions.isDelete, false),
+              inArrayIf(positions.posCode, query.positionCodes),
+            )),
+        ),
+        employmentHasRoleCondition(employment, query.roleCodes),
+      )),
+  );
+}
+
 export async function searchUsers(
   query: UserQueryDto,
-  tx: PrismaTransaction = prisma,
+  tx: DbClient = db,
 ) {
-  return await tx.user.findMany({
-    where: {
-      username: {
-        in: query.usernames,
-      },
-      mobile: {
-        in: query.phones,
-      },
-      wxId: {
-        in: query.wxIds,
-      },
-      employments: {
-        some: {
-          status: Status.Enable,
-          isDelete: false,
-          deptartment: {
-            descendantClosures: {
-              some: {
-                ancestor: {
-                  orgCode: {
-                    in: query.ancestorOrgCodes,
-                  },
-                },
-                depth: {
-                  in: query.ancestorOrgDepths,
-                },
-              },
-            },
-          },
-          position: {
-            status: Status.Enable,
-            isDelete: false,
-            posCode: {
-              in: query.positionCodes,
-            },
-          },
-          OR: [
-            {
-              position: {
-                roles: {
-                  some: {
-                    role: {
-                      status: Status.Enable,
-                      isDelete: false,
-                      roleCode: {
-                        in: query.roleCodes,
-                      },
-                    },
-                  },
-                },
-              },
-            },
-            {
-              roles: {
-                some: {
-                  role: {
-                    status: Status.Enable,
-                    isDelete: false,
-                    roleCode: {
-                      in: query.roleCodes,
-                    },
-                  },
-                },
-              },
-            },
-            {
-              deptartment: {
-                descendantClosures: {
-                  some: {
-                    OR: [
-                      {
-                        depth: 0,
-                        ancestor: {
-                          roles: {
-                            some: {
-                              role: {
-                                status: Status.Enable,
-                                isDelete: false,
-                                roleCode: {
-                                  in: query.roleCodes,
-                                },
-                              },
-                            },
-                          },
-                        },
-                      },
-                      {
-                        depth: {
-                          gt: 0,
-                        },
-                        ancestor: {
-                          roles: {
-                            some: {
-                              isAllSub: true,
-                              role: {
-                                status: Status.Enable,
-                                isDelete: false,
-                                roleCode: {
-                                  in: query.roleCodes,
-                                },
-                              },
-                            },
-                          },
-                        },
-                      },
-                    ],
-                  },
-                },
-              },
-            },
-          ],
-        },
-      },
-      status: Status.Enable,
-      isDelete: false,
-    },
-  });
+  return await tx.select().from(users).where(and(
+    inArrayIf(users.username, query.usernames),
+    inArrayIf(users.mobile, query.phones),
+    inArrayIf(users.wxId, query.wxIds),
+    userSearchEmploymentExists(query),
+    eq(users.status, Status.Enable),
+    eq(users.isDelete, false),
+  ));
 }
+
+function usersFuzzyWhere(userPaginationQueryDto: UserPaginationQueryDto) {
+  const text = userPaginationQueryDto.conditions.fuzzyConditions.text;
+  return and(
+    text !== undefined
+      ? or(
+          ilikeContainsIf(users.username, text),
+          ilikeContainsIf(users.name, text),
+          ilikeContainsIf(users.mobile, text),
+          ilikeContainsIf(users.wxId, text),
+        )
+      : undefined,
+    inArrayIf(users.userType, userPaginationQueryDto.conditions.exactConditions.userTypes),
+    inArrayIf(users.username, userPaginationQueryDto.conditions.exactConditions.usernames),
+    inArrayIf(users.mobile, userPaginationQueryDto.conditions.exactConditions.phones),
+    inArrayIf(users.wxId, userPaginationQueryDto.conditions.exactConditions.wxIds),
+    inArrayIf(users.status, userPaginationQueryDto.conditions.exactConditions.statuses),
+    eq(users.isDelete, false),
+  );
+}
+
 export async function searchUsersFuzzy(
   userPaginationQueryDto: UserPaginationQueryDto,
-  tx: PrismaTransaction = prisma,
+  tx: DbClient = db,
 ) {
-  return await tx.user.findMany({
-    where: {
-      OR: userPaginationQueryDto.conditions.fuzzyConditions.text !== undefined
-        ? [
-            {
-              username: {
-                contains: userPaginationQueryDto.conditions.fuzzyConditions.text,
-                mode: Prisma.QueryMode.insensitive,
-              },
-            },
-            {
-              name: {
-                contains: userPaginationQueryDto.conditions.fuzzyConditions.text,
-                mode: Prisma.QueryMode.insensitive,
-              },
-            },
-            {
-              mobile: {
-                contains: userPaginationQueryDto.conditions.fuzzyConditions.text,
-                mode: Prisma.QueryMode.insensitive,
-              },
-            },
-            {
-              wxId: {
-                contains: userPaginationQueryDto.conditions.fuzzyConditions.text,
-                mode: Prisma.QueryMode.insensitive,
-              },
-            },
-          ]
-        : undefined,
-      userType: {
-        in: userPaginationQueryDto.conditions.exactConditions.userTypes,
-      },
-      username: {
-        in: userPaginationQueryDto.conditions.exactConditions.usernames,
-      },
-      mobile: {
-        in: userPaginationQueryDto.conditions.exactConditions.phones,
-      },
-      wxId: {
-        in: userPaginationQueryDto.conditions.exactConditions.wxIds,
-      },
-      status: {
-        in: userPaginationQueryDto.conditions.exactConditions.statuses,
-      },
-      isDelete: false,
-    },
-  });
+  return await tx.select().from(users).where(usersFuzzyWhere(userPaginationQueryDto));
 }
-export async function setPassword(userId: number, password: string, tx: PrismaTransaction = prisma) {
-  return await tx.user.update({
-    where: {
-      id: userId,
-      status: Status.Enable,
-      isDelete: false,
-    },
-    data: {
-      password,
-    },
-  });
+
+export async function setPassword(userId: number, password: string, tx: DbClient = db) {
+  return firstRow(await tx
+    .update(users)
+    .set({ password })
+    .where(and(eq(users.id, userId), eq(users.status, Status.Enable), eq(users.isDelete, false)))
+    .returning())!;
 }
-export async function setMobile(userId: number, phoneNumber: string, tx: PrismaTransaction = prisma) {
-  return await tx.user.update({
-    where: {
-      id: userId,
-      status: Status.Enable,
-      isDelete: false,
-    },
-    data: {
-      mobile: phoneNumber,
-    },
-  });
+
+export async function setMobile(userId: number, phoneNumber: string, tx: DbClient = db) {
+  return firstRow(await tx
+    .update(users)
+    .set({ mobile: phoneNumber })
+    .where(and(eq(users.id, userId), eq(users.status, Status.Enable), eq(users.isDelete, false)))
+    .returning())!;
 }
-export async function setUser(userCreateDto: UserCreateDto, tx: PrismaTransaction = prisma) {
-  return await tx.user.create({
-    data: userCreateDto,
-  });
+
+export async function setUser(userCreateDto: UserCreateDto, tx: DbClient = db) {
+  return firstRow(await tx.insert(users).values(userCreateDto).returning())!;
 }
 
 export async function setUsers(
   userCreateDtos: Prettify<UserCreateDto>[],
-  tx: PrismaTransaction = prisma,
+  tx: DbClient = db,
 ) {
-  return await tx.user.createMany({
-    data: userCreateDtos,
-  });
+  if (userCreateDtos.length === 0) {
+    return { count: 0 };
+  }
+  await tx.insert(users).values(userCreateDtos);
+  return { count: userCreateDtos.length };
 }
 
-export async function getOtherUsersByOrgAndAllSub(userId: number, orgCode: string, tx: PrismaTransaction = prisma) {
-  return await tx.user.findMany({
-    where: {
-      employments: {
-        some: {
-          deptartment: {
-            descendantClosures: {
-              some: {
-                ancestor: {
-                  orgCode,
-                },
-              },
-            },
-          },
-        },
-      },
-      NOT: {
-        id: userId,
-      },
-      status: Status.Enable,
-      isDelete: false,
-    },
-  });
+export async function getOtherUsersByOrgAndAllSub(userId: number, orgCode: string, tx: DbClient = db) {
+  const employment = alias(employments, "other_user_employment");
+  const ancestor = alias(organizations, "other_user_ancestor");
+  return await tx.select().from(users).where(and(
+    exists(
+      db.select({ value: sql`1` })
+        .from(employment)
+        .innerJoin(organizationClosures, eq(organizationClosures.descendantId, employment.orgId))
+        .innerJoin(ancestor, eq(organizationClosures.ancestorId, ancestor.id))
+        .where(and(
+          eq(employment.userId, users.id),
+          eq(ancestor.orgCode, orgCode),
+        )),
+    ),
+    sql`${users.id} <> ${userId}`,
+    eq(users.status, Status.Enable),
+    eq(users.isDelete, false),
+  ));
 }
 
 export async function getUserByUsernameForAdmin(
   username: string,
-  tx: PrismaTransaction = prisma,
+  tx: DbClient = db,
 ) {
-  return await tx.user.findFirst({
+  return await tx.query.users.findFirst({
     where: {
       username,
       isDelete: false,
     },
-  });
+  }) ?? null;
 }
 
 export async function countUsersFuzzy(
   userPaginationQueryDto: UserPaginationQueryDto,
-  tx: PrismaTransaction = prisma,
+  tx: DbClient = db,
 ) {
-  return await tx.user.count({
-    where: {
-      OR: userPaginationQueryDto.conditions.fuzzyConditions.text !== undefined
-        ? [
-            { username: { contains: userPaginationQueryDto.conditions.fuzzyConditions.text, mode: "insensitive" } },
-            { name: { contains: userPaginationQueryDto.conditions.fuzzyConditions.text, mode: "insensitive" } },
-            { mobile: { contains: userPaginationQueryDto.conditions.fuzzyConditions.text, mode: "insensitive" } },
-            { wxId: { contains: userPaginationQueryDto.conditions.fuzzyConditions.text, mode: "insensitive" } },
-          ]
-        : undefined,
-      userType: { in: userPaginationQueryDto.conditions.exactConditions.userTypes },
-      username: { in: userPaginationQueryDto.conditions.exactConditions.usernames },
-      mobile: { in: userPaginationQueryDto.conditions.exactConditions.phones },
-      wxId: { in: userPaginationQueryDto.conditions.exactConditions.wxIds },
-      status: { in: userPaginationQueryDto.conditions.exactConditions.statuses },
-      isDelete: false,
-    },
-  });
+  const rows = await tx.select({ value: count() }).from(users).where(usersFuzzyWhere(userPaginationQueryDto));
+  return firstRow(rows)?.value ?? 0;
 }
 
 export async function searchUsersFuzzyPaged(
   userPaginationQueryDto: UserPaginationQueryDto,
-  tx: PrismaTransaction = prisma,
+  tx: DbClient = db,
 ) {
   const { pageNum, pageSize } = userPaginationQueryDto;
-  const where = {
-    OR: userPaginationQueryDto.conditions.fuzzyConditions.text !== undefined
-      ? [
-          { username: { contains: userPaginationQueryDto.conditions.fuzzyConditions.text } },
-          { name: { contains: userPaginationQueryDto.conditions.fuzzyConditions.text } },
-          { mobile: { contains: userPaginationQueryDto.conditions.fuzzyConditions.text } },
-          { wxId: { contains: userPaginationQueryDto.conditions.fuzzyConditions.text } },
-        ]
-      : undefined,
-    userType: { in: userPaginationQueryDto.conditions.exactConditions.userTypes },
-    username: { in: userPaginationQueryDto.conditions.exactConditions.usernames },
-    mobile: { in: userPaginationQueryDto.conditions.exactConditions.phones },
-    wxId: { in: userPaginationQueryDto.conditions.exactConditions.wxIds },
-    status: { in: userPaginationQueryDto.conditions.exactConditions.statuses },
-    isDelete: false,
-  };
-  const [rows, total] = await Promise.all([
-    tx.user.findMany({
-      where,
-      skip: (pageNum - 1) * pageSize,
-      take: pageSize,
-      orderBy: [{ orderNum: "asc" }, { id: "asc" }],
-    }),
-    tx.user.count({ where }),
+  const where = usersFuzzyWhere(userPaginationQueryDto);
+  const [rows, totalRows] = await Promise.all([
+    tx
+      .select()
+      .from(users)
+      .where(where)
+      .orderBy(users.orderNum, users.id)
+      .limit(pageSize)
+      .offset((pageNum - 1) * pageSize),
+    tx.select({ value: count() }).from(users).where(where),
   ]);
-  return { rows, total };
+  return { rows, total: firstRow(totalRows)?.value ?? 0 };
 }
 
 export async function updateUserByUsername(
@@ -359,45 +279,46 @@ export async function updateUserByUsername(
     status?: number;
     orderNum?: number;
   },
-  tx: PrismaTransaction = prisma,
+  tx: DbClient = db,
 ) {
-  return await tx.user.update({
-    where: { username },
-    data,
-  });
+  return firstRow(await tx
+    .update(users)
+    .set(compactUpdate(data))
+    .where(eq(users.username, username))
+    .returning())!;
 }
 
 export async function softDeleteUserByUsername(
   username: string,
-  tx: PrismaTransaction = prisma,
+  tx: DbClient = db,
 ) {
-  return await tx.user.update({
-    where: { username },
-    data: { isDelete: true },
-  });
+  return firstRow(await tx
+    .update(users)
+    .set({ isDelete: true })
+    .where(eq(users.username, username))
+    .returning())!;
 }
 
 export async function countActiveEmploymentsByUsername(
   username: string,
-  tx: PrismaTransaction = prisma,
+  tx: DbClient = db,
 ) {
-  return await tx.employment.count({
-    where: {
-      isDelete: false,
-      status: Status.Enable,
-      user: {
-        username,
-        isDelete: false,
-      },
-    },
-  });
+  const rows = await tx
+    .select({ value: count() })
+    .from(employments)
+    .innerJoin(users, eq(employments.userId, users.id))
+    .where(and(
+      eq(employments.isDelete, false),
+      eq(employments.status, Status.Enable),
+      eq(users.username, username),
+      eq(users.isDelete, false),
+    ));
+  return firstRow(rows)?.value ?? 0;
 }
 
 export async function setUserForAdmin(
   userCreateDto: UserCreateDto,
-  tx: PrismaTransaction = prisma,
+  tx: DbClient = db,
 ) {
-  return await tx.user.create({
-    data: userCreateDto,
-  });
+  return firstRow(await tx.insert(users).values(userCreateDto).returning())!;
 }

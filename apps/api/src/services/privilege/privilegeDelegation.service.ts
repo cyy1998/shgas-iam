@@ -1,6 +1,6 @@
 import type { Prettify } from "@api/utils/lint.util";
 import type { PrivilegeDelegationCreateDto, PrivilegeDelegationQueryDto, PrivilegeDelegationUpdateDto } from "./privilegeDelegation.type";
-import { prisma } from "@api/db";
+import db from "@api/db";
 import { Status } from "@api/enums/status";
 import { CustomError } from "@api/errors/CustomError";
 import * as organizationRepository from "@api/services/organization/organization.repository";
@@ -15,8 +15,8 @@ export async function queryPrivilegeDelegations(query: PrivilegeDelegationQueryD
 }
 
 export async function updateDelegationStatus(id: number, status: Status) {
-  return await prisma.$transaction(async (tx) => {
-    const existing = await tx.privilegeDelegation.findUnique({ where: { id } });
+  return await db.transaction(async (tx) => {
+    const existing = await tx.query.privilegeDelegations.findFirst({ where: { id } });
     if (!existing) {
       throw new CustomError(`委托记录不存在: ${id}`);
     }
@@ -29,8 +29,8 @@ export async function updateDelegationStatus(id: number, status: Status) {
 }
 
 export async function updateDelegation(id: number, dto: PrivilegeDelegationUpdateDto) {
-  return await prisma.$transaction(async (tx) => {
-    const existing = await tx.privilegeDelegation.findUnique({ where: { id } });
+  return await db.transaction(async (tx) => {
+    const existing = await tx.query.privilegeDelegations.findFirst({ where: { id } });
     if (!existing) {
       throw new CustomError(`委托记录不存在: ${id}`);
     }
@@ -45,7 +45,7 @@ export async function updateDelegation(id: number, dto: PrivilegeDelegationUpdat
 export async function createPrivilegeDelegation(
   dto: Prettify<PrivilegeDelegationCreateDto>,
 ) {
-  return await prisma.$transaction(async (tx) => {
+  return await db.transaction(async (tx) => {
     const delegator = await userRepository.getUserByUsername(dto.delegatorUsername, tx);
     if (!delegator) {
       throw new CustomError(`委托人不存在: ${dto.delegatorUsername}`);

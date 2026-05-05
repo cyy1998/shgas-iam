@@ -6,7 +6,7 @@ import type {
   EmploymentTransferDto,
   EmploymentUpdateDto,
 } from "./employment.type";
-import { prisma } from "@api/db";
+import db from "@api/db";
 import { Status } from "@api/enums/status";
 import { CustomError } from "@api/errors/CustomError";
 import { EmploymentNotEditableError } from "@api/errors/EmploymentNotEditableError";
@@ -107,7 +107,7 @@ export async function searchEmploymentsFuzzyForAdmin(dto: EmploymentAdminPaginat
 }
 
 export async function createEmploymentForAdmin(dto: EmploymentAdminCreateDto) {
-  return await prisma.$transaction(async (tx) => {
+  return await db.transaction(async (tx) => {
     const [user, dept, company, position] = await Promise.all([
       userRepository.getUserByUsernameForAdmin(dto.username, tx),
       organizationRepository.getOrganizationByCode(dto.deptOrgCode, tx),
@@ -156,7 +156,7 @@ export async function createEmploymentForAdmin(dto: EmploymentAdminCreateDto) {
 }
 
 export async function updateEmployment(id: number, dto: EmploymentUpdateDto) {
-  return await prisma.$transaction(async (tx) => {
+  return await db.transaction(async (tx) => {
     const existing = await employmentRepository.getEmploymentByIdForAdmin(id, tx);
     if (existing === null)
       throw new EmploymentNotFoundError();
@@ -182,7 +182,7 @@ export async function updateEmployment(id: number, dto: EmploymentUpdateDto) {
 }
 
 export async function updateEmploymentStatus(id: number, status: number) {
-  return await prisma.$transaction(async (tx) => {
+  return await db.transaction(async (tx) => {
     const existing = await employmentRepository.getEmploymentByIdForAdmin(id, tx);
     if (existing === null)
       throw new EmploymentNotFoundError();
@@ -202,7 +202,7 @@ export async function updateEmploymentStatus(id: number, status: number) {
 }
 
 export async function deleteEmployment(id: number) {
-  return await prisma.$transaction(async (tx) => {
+  return await db.transaction(async (tx) => {
     const existing = await employmentRepository.getEmploymentByIdForAdmin(id, tx);
     if (existing === null)
       throw new EmploymentNotFoundError();
@@ -212,7 +212,7 @@ export async function deleteEmployment(id: number) {
 }
 
 export async function transferEmployment(id: number, dto: EmploymentTransferDto) {
-  return await prisma.$transaction(async (tx) => {
+  return await db.transaction(async (tx) => {
     const existing = await employmentRepository.getEmploymentByIdForAdmin(id, tx);
     if (existing === null)
       throw new EmploymentNotFoundError();
@@ -266,7 +266,7 @@ export async function transferEmployment(id: number, dto: EmploymentTransferDto)
 }
 
 export async function setPrimaryEmployment(id: number) {
-  return await prisma.$transaction(async (tx) => {
+  return await db.transaction(async (tx) => {
     const existing = await employmentRepository.getEmploymentByIdForAdmin(id, tx);
     if (existing === null)
       throw new EmploymentNotFoundError();
@@ -280,7 +280,7 @@ export async function setPrimaryEmployment(id: number) {
 }
 
 export async function resignUser(username: string) {
-  return await prisma.$transaction(async (tx) => {
+  return await db.transaction(async (tx) => {
     const user = await userRepository.getUserByUsernameForAdmin(username, tx);
     if (user === null)
       throw new UserNotFoundError("用户不存在");

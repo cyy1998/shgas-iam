@@ -1,5 +1,4 @@
-import { prisma } from "@api/db";
-import { Prisma } from "@api/db/generated/prisma/client";
+import db from "@api/db";
 import { CustomError } from "@api/errors/CustomError";
 import * as employmentRepository from "@api/services/employment/employment.repository";
 import * as organizationRepository from "@api/services/organization/organization.repository";
@@ -8,6 +7,10 @@ import * as privilegeRepository from "@api/services/privilege/privilege.reposito
 import * as roleRepository from "@api/services/role/role.repository";
 import { mergeAndDedupe } from "@api/utils/common.utils";
 import { RoleDtoSchema } from "./role.schema";
+
+function isUniqueViolation(err: unknown) {
+  return typeof err === "object" && err !== null && "code" in err && err.code === "23505";
+}
 
 export async function getRolesByOrganization(orgId: number) {
   const org = await organizationRepository.getOrganizationById(orgId);
@@ -41,7 +44,7 @@ export async function getRolesByUserId(userId: number) {
   return roles;
 }
 export async function setRole(roleCode: string, roleName: string) {
-  return await prisma.$transaction(async (tx) => {
+  return await db.transaction(async (tx) => {
     const existingRole = await roleRepository.getRoleByCode(roleCode, tx);
     if (existingRole !== null) {
       throw new CustomError("重复角色code代码");
@@ -51,7 +54,7 @@ export async function setRole(roleCode: string, roleName: string) {
   });
 }
 export async function setRolePrivilege(roleCode: string, privCode: string) {
-  return await prisma.$transaction(async (tx) => {
+  return await db.transaction(async (tx) => {
     const [role, priv] = await Promise.all([
       roleRepository.getRoleByCode(roleCode, tx),
       privilegeRepository.getPrivilegeByCode(privCode, tx),
@@ -63,7 +66,7 @@ export async function setRolePrivilege(roleCode: string, privCode: string) {
       await roleRepository.setRolePrivilege(role.id, priv.id, tx);
     }
     catch (err) {
-      if (err instanceof Prisma.PrismaClientKnownRequestError) {
+      if (isUniqueViolation(err)) {
         throw new CustomError("对应关系已存在");
       }
       else {
@@ -74,7 +77,7 @@ export async function setRolePrivilege(roleCode: string, privCode: string) {
   });
 }
 export async function setRoleForEmployment(username: string, posCode: string, orgCode: string, roleCode: string) {
-  return await prisma.$transaction(async (tx) => {
+  return await db.transaction(async (tx) => {
     const [employment, role] = await Promise.all([
       employmentRepository.getEmploymentByUserOrgPosCode(username, orgCode, posCode, tx),
       roleRepository.getRoleByCode(roleCode, tx),
@@ -86,7 +89,7 @@ export async function setRoleForEmployment(username: string, posCode: string, or
       await roleRepository.setRoleForEmployment(role.id, employment.id, tx);
     }
     catch (err) {
-      if (err instanceof Prisma.PrismaClientKnownRequestError) {
+      if (isUniqueViolation(err)) {
         throw new CustomError("对应关系已存在");
       }
       else {
@@ -97,7 +100,7 @@ export async function setRoleForEmployment(username: string, posCode: string, or
   });
 }
 export async function setRoleForOrganization(orgCode: string, roleCode: string) {
-  return await prisma.$transaction(async (tx) => {
+  return await db.transaction(async (tx) => {
     const [org, role] = await Promise.all([
       organizationRepository.getOrganizationByCode(orgCode, tx),
       roleRepository.getRoleByCode(roleCode, tx),
@@ -109,7 +112,7 @@ export async function setRoleForOrganization(orgCode: string, roleCode: string) 
       await roleRepository.setRoleForOrganization(role.id, org.id, tx);
     }
     catch (err) {
-      if (err instanceof Prisma.PrismaClientKnownRequestError) {
+      if (isUniqueViolation(err)) {
         throw new CustomError("对应关系已存在");
       }
       else {
@@ -120,7 +123,7 @@ export async function setRoleForOrganization(orgCode: string, roleCode: string) 
   });
 }
 export async function setRoleForPosition(posCode: string, roleCode: string) {
-  return await prisma.$transaction(async (tx) => {
+  return await db.transaction(async (tx) => {
     const [pos, role] = await Promise.all([
       positionRepository.getPositionByCode(posCode, tx),
       roleRepository.getRoleByCode(roleCode, tx),
@@ -132,7 +135,7 @@ export async function setRoleForPosition(posCode: string, roleCode: string) {
       await roleRepository.setRoleForPosition(role.id, pos.id, tx);
     }
     catch (err) {
-      if (err instanceof Prisma.PrismaClientKnownRequestError) {
+      if (isUniqueViolation(err)) {
         throw new CustomError("对应关系已存在");
       }
       else {
@@ -143,7 +146,7 @@ export async function setRoleForPosition(posCode: string, roleCode: string) {
   });
 }
 // export async function setRoleForPosOrg(orgCode: string, posCode: string, roleCode: string) {
-//   return await prisma.$transaction(async (tx) => {
+//   return await db.transaction(async (tx) => {
 //     const [role, org, pos] = await Promise.all([
 //       roleRepository.getRoleByCode(roleCode, tx),
 //       organizationRepository.getOrganizationByCode(orgCode, tx),
@@ -160,7 +163,7 @@ export async function setRoleForPosition(posCode: string, roleCode: string) {
 //       await roleRepository.setRoleForPosOrg(role.id, posOrg.id, tx);
 //     }
 //     catch (err) {
-//       if (err instanceof Prisma.PrismaClientKnownRequestError) {
+//       if (isUniqueViolation(err)) {
 //         throw new CustomError("对应关系已存在");
 //       }
 //       else {
@@ -171,7 +174,7 @@ export async function setRoleForPosition(posCode: string, roleCode: string) {
 //   });
 // }
 // export async function deleteRoleForPosOrg(orgCode: string, posCode: string, roleCode: string) {
-//   return await prisma.$transaction(async (tx) => {
+//   return await db.transaction(async (tx) => {
 //     const [role, org, pos] = await Promise.all([
 //       roleRepository.getRoleByCode(roleCode, tx),
 //       organizationRepository.getOrganizationByCode(orgCode, tx),
@@ -189,7 +192,7 @@ export async function setRoleForPosition(posCode: string, roleCode: string) {
 //   });
 // }
 export async function deleteRoleForEmployment(username: string, posCode: string, orgCode: string, roleCode: string) {
-  return await prisma.$transaction(async (tx) => {
+  return await db.transaction(async (tx) => {
     const [employment, role] = await Promise.all([
       employmentRepository.getEmploymentByUserOrgPosCode(username, orgCode, posCode, tx),
       roleRepository.getRoleByCode(roleCode, tx),

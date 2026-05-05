@@ -1,23 +1,34 @@
-import * as PrismaSchema from "@api/db/generated/schemas";
+import {
+  selectDelegationDetailSchema,
+  selectOrganizationSchema,
+  selectPrivilegeDelegationSchema,
+  selectPrivilegeSchema,
+  selectUserSchema,
+} from "@api/db/schema";
 import { Status } from "@api/enums/status";
 import { z } from "@hono/zod-openapi";
 import { OrganizationDtoConverterSchema, OrganizationDtoSchema } from "../organization/organization.schema";
 import { UserDtoSchema } from "../user/user.schema";
 import { PrivilegeDtoSchema } from "./privilege.schema";
 
-export const PrivilegeDelegationSchema = z.object(PrismaSchema.PrivilegeDelegationSchema.shape).extend({
+const DbUserSchema = z.object(selectUserSchema.shape);
+const DbOrganizationSchema = z.object(selectOrganizationSchema.shape);
+const DbPrivilegeSchema = z.object(selectPrivilegeSchema.shape);
+const DbDelegationDetailSchema = z.object(selectDelegationDetailSchema.shape);
+
+export const PrivilegeDelegationSchema = z.object(selectPrivilegeDelegationSchema.shape).extend({
   status: z.enum(Status),
 });
 
 export const PrivilegeDelegationDetailSchema = PrivilegeDelegationSchema.extend({
-  delegatorUser: PrismaSchema.UserSchema,
-  delegateeUser: PrismaSchema.UserSchema,
-  organizationScope: PrismaSchema.OrganizationSchema.extend({
-    parent: PrismaSchema.OrganizationSchema.nullable(),
-    children: z.array(PrismaSchema.OrganizationSchema),
+  delegatorUser: DbUserSchema,
+  delegateeUser: DbUserSchema,
+  organizationScope: DbOrganizationSchema.extend({
+    parent: DbOrganizationSchema.nullable(),
+    children: z.array(DbOrganizationSchema),
   }),
-  delegationDetails: z.array(PrismaSchema.DelegationDetailSchema.extend({
-    privilege: PrismaSchema.PrivilegeSchema,
+  delegationDetails: z.array(DbDelegationDetailSchema.extend({
+    privilege: DbPrivilegeSchema,
   })),
 });
 
@@ -63,9 +74,9 @@ export const PrivilegeDelegationDetailDtoConverterSchema = PrivilegeDelegationDe
     delegatorUser: UserDtoSchema.parse(e.delegatorUser),
     delegateeUser: UserDtoSchema.parse(e.delegateeUser),
     organizationScope: OrganizationDtoConverterSchema.parse(e.organizationScope),
-    privileges: e.delegationDetails.map(detail => PrivilegeDtoSchema.parse(detail.privilege)),
+    privileges: e.delegationDetails.map(detail => detail.privilege),
   };
-}).pipe(PrivilegeDelegationDetailDtoSchema);
+}).pipe(PrivilegeDelegationDetailDtoSchema as any);
 
 export const PrivilegeDelegationQueryDtoSchema = z.object({
   delegatorUsernames: z.array(z.string()).optional().describe("授权人用户名列表").openapi({ example: ["138550", "136163"] }),

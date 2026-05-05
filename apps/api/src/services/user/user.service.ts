@@ -1,8 +1,8 @@
-import type { User } from "@api/db/generated/prisma/client";
+import type { User } from "@api/db/schema";
 
 import type { Prettify } from "@api/utils/lint.util";
 import type { UserCreateDto, UserDetailDto, UserDto, UserPaginationQueryDto, UserQueryDto, UserQueryWithPrivilegeDelegationDto } from "./user.type";
-import { prisma } from "@api/db";
+import db from "@api/db";
 import { Status } from "@api/enums/status";
 import { VerificationCodeUsage } from "@api/enums/verificationCode.usage";
 import config from "@api/env";
@@ -63,7 +63,7 @@ function _validatePasswordStrength(password: string): boolean {
 }
 
 export async function setPassword(username: string, oldPassword: string, newPassword: string) {
-  return await prisma.$transaction(async (tx) => {
+  return await db.transaction(async (tx) => {
     const user = await userRepository.getUserByUsername(username, tx);
     if (user === null) {
       throw new UserNotFoundError("用户名不存在");
@@ -85,7 +85,7 @@ export async function setPassword(username: string, oldPassword: string, newPass
 }
 
 export async function resetPassword(username: string, phone: string, code: string, newPassword: string) {
-  return await prisma.$transaction(async (tx) => {
+  return await db.transaction(async (tx) => {
     const user = await userRepository.getUserByUsername(username, tx);
     if (user === null) {
       throw new UserNotFoundError("用户不存在");
@@ -114,7 +114,7 @@ export async function checkPassword(username: string, inputPassword: string) {
 }
 
 export async function setMobile(userId: number, phoneNumber: string, code: string) {
-  await prisma.$transaction(async (tx) => {
+  await db.transaction(async (tx) => {
     if (!mobileService.checkValidPhoneNumber(phoneNumber)) {
       throw new CustomError("无效手机号");
     }
@@ -190,7 +190,7 @@ export async function getOtherUsersByOrg(orgCode: string, userId: number) {
 }
 
 export async function setUsers(userCreateDtos: Prettify<UserCreateDto>[]) {
-  return await prisma.$transaction(async (tx) => {
+  return await db.transaction(async (tx) => {
     const existingUsers = await userRepository.searchUsers({ usernames: userCreateDtos.map(u => u.username) }, tx);
     if (existingUsers.length !== 0) {
       throw new CustomError("相同用户名已被注册");
@@ -250,7 +250,7 @@ export async function setUserForAdmin(dto: {
   status?: number;
   orderNum?: number;
 }): Promise<{ username: string; generatedPassword: string | null }> {
-  return await prisma.$transaction(async (tx) => {
+  return await db.transaction(async (tx) => {
     const existing = await userRepository.getUserByUsernameForAdmin(dto.username, tx);
     if (existing !== null) {
       throw new CustomError("用户名已存在");
@@ -288,7 +288,7 @@ export async function updateUser(
     orderNum?: number;
   },
 ) {
-  return await prisma.$transaction(async (tx) => {
+  return await db.transaction(async (tx) => {
     const existing = await userRepository.getUserByUsernameForAdmin(username, tx);
     if (existing === null) {
       throw new UserNotFoundError("用户不存在");
@@ -303,7 +303,7 @@ export async function updateUserStatus(username: string, status: number) {
 }
 
 export async function deleteUser(username: string) {
-  return await prisma.$transaction(async (tx) => {
+  return await db.transaction(async (tx) => {
     const existing = await userRepository.getUserByUsernameForAdmin(username, tx);
     if (existing === null) {
       throw new UserNotFoundError("用户不存在");
@@ -318,7 +318,7 @@ export async function deleteUser(username: string) {
 }
 
 export async function resetPasswordByUsername(username: string): Promise<string> {
-  return await prisma.$transaction(async (tx) => {
+  return await db.transaction(async (tx) => {
     const user = await userRepository.getUserByUsernameForAdmin(username, tx);
     if (user === null) {
       throw new UserNotFoundError("用户不存在");

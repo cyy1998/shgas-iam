@@ -19,12 +19,10 @@ ENV HTTP_PROXY="http://176.169.105.96:3928"
 ENV HTTPS_PROXY="http://176.169.105.96:3928"
 RUN pnpm install --frozen-lockfile
 
-# ── Stage 3: Generate Prisma client & create deploy bundle ───────────────────
+# ── Stage 3: Create deploy bundle ────────────────────────────────────────────
 # FROM deps AS builder
 # COPY packages/shared/ ./packages/shared/
 # COPY apps/api/        ./apps/api/
-# # Prisma client outputs to apps/api/src/db/generated/prisma
-# RUN pnpm --filter @iam/api exec prisma generate
 # # Flatten monorepo → self-contained bundle (prod deps + source, no devDeps)
 # RUN pnpm --filter @iam/api deploy --prod /deploy/api
 

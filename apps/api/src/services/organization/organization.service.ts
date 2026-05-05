@@ -6,7 +6,7 @@ import type {
   OrganizationTreeNodeDto,
   OrganizationUpdateDto,
 } from "@api/services/organization/organization.type";
-import { prisma } from "@api/db";
+import db from "@api/db";
 import { statusToString } from "@api/enums/status";
 import { CustomError } from "@api/errors/CustomError";
 import { OrganizationHasChildrenError } from "@api/errors/OrganizationHasChildrenError";
@@ -34,7 +34,7 @@ export async function searchOrganizations(organizationQueryDto: OrganizationQuer
 }
 
 export async function setOrganization(organizationCreateDto: OrganizationCreateDto) {
-  return await prisma.$transaction(async (tx) => {
+  return await db.transaction(async (tx) => {
     const newOrg = await organizationRepository.getOrganizationByCode(organizationCreateDto.orgCode, tx);
     const parentOrg = organizationCreateDto.parentCode
       ? await organizationRepository.getOrganizationByCode(organizationCreateDto.parentCode, tx)
@@ -105,7 +105,7 @@ export async function searchOrganizationsForAdmin(query: OrganizationPaginationQ
 }
 
 export async function updateOrganization(orgCode: string, data: OrganizationUpdateDto) {
-  return await prisma.$transaction(async (tx) => {
+  return await db.transaction(async (tx) => {
     const existing = await organizationRepository.getOrganizationByCodeForAdmin(orgCode, tx);
     if (existing === null) {
       throw new CustomError("组织不存在", 404);
@@ -126,7 +126,7 @@ export async function updateOrganizationStatus(orgCode: string, status: number) 
 }
 
 export async function deleteOrganization(orgCode: string) {
-  return await prisma.$transaction(async (tx) => {
+  return await db.transaction(async (tx) => {
     const existing = await organizationRepository.getOrganizationByCodeForAdmin(orgCode, tx);
     if (existing === null) {
       throw new CustomError("组织不存在", 404);

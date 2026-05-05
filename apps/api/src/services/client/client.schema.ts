@@ -1,8 +1,8 @@
-import { ClientSchema as PrismaClientSchema } from "@api/db/generated/schemas";
+import { selectClientSchema } from "@api/db/schema";
 import { ClientManagementLevel } from "@api/enums/client.managementLevel";
 import { z } from "@hono/zod-openapi";
 
-export const ClientSchema = z.object(PrismaClientSchema.shape);
+export const ClientSchema = z.object(selectClientSchema.shape);
 
 export const ClientExtAttributesDtoSchema = z.object({
   userExcluding: z.array(z.string()).default([]),

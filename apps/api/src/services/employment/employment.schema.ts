@@ -1,14 +1,15 @@
-import { EmploymentSchema as PrismaEmploymentSchema, UserSchema } from "@api/db/generated/schemas";
+import { selectEmploymentSchema, selectUserSchema } from "@api/db/schema";
 import { EmploymentStatus } from "@api/enums/employment.status";
 import { createPageQuerySchema } from "@api/lib/core/pagination/schema";
 import { z } from "@hono/zod-openapi";
 import { OrganizationSchema } from "../organization/organization.schema";
 import { PositionSchema } from "../position/position.schema";
 
-export const EmploymentSchema = z.object(PrismaEmploymentSchema.shape);
+export const EmploymentSchema = z.object(selectEmploymentSchema.shape);
+const DbUserSchema = z.object(selectUserSchema.shape);
 
 export const EmploymentDetailSchema = EmploymentSchema.extend({
-  user: UserSchema,
+  user: DbUserSchema,
   deptartment: OrganizationSchema,
   company: OrganizationSchema,
   position: z.lazy(() => PositionSchema),
