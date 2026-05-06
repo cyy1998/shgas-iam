@@ -1,275 +1,320 @@
 # IAM (Identity and Access Management) Monorepo
 
-一个基于 pnpm workspace + Turborepo 组织的身份与访问管理平台，包含后端服务（Hono + Bun）与管理后台前端（UMI Max + React），提供用户认证、授权、组织管理、角色权限等核心 IAM 能力。
+基于 pnpm workspace + Turborepo 的身份与访问管理平台。仓库同时包含 Bun + Hono 后端、管理后台前端和 SSO 门户前端，覆盖用户、组织、职位、雇佣关系、角色权限、客户端管理和单点登录等 IAM 核心能力。
 
 ## ✨ 特性
 
-- **Monorepo 一体化开发**：pnpm workspace 管理依赖，Turborepo 编排构建/开发/检查任务
-- **后端 + 前端同仓**：`apps/api` 提供 RESTful/OIDC 服务，`apps/admin` 提供管理后台 UI
-- **端到端类型安全**：管理后台通过 `hono/client` 直接引入 `@iam/api` 的 `AppType`，请求与响应全程类型推导
-- **共享代码包**：`packages/shared` 收敛跨端共用的枚举/常量（如 `ServiceStatusCode`）
-- **现代化技术栈**：Bun 运行时、Hono 框架、Prisma ORM、Zod 校验、OpenAPI/Scalar 文档
-- **完整的 IAM 能力**：用户/组织/职位/雇佣关系/角色/权限/客户端管理、OIDC 单点登录
-- **企业级集成**：企业微信、短信验证、数据导入导出、权限委托
+- **Monorepo 一体化开发**：pnpm workspace 管理依赖，Turborepo 编排开发、构建和检查任务
+- **三端同仓**：`apps/api` 提供 REST / tRPC / OpenAPI 服务，`apps/admin` 提供管理后台，`apps/sso` 提供登录与用户自助门户
+- **类型安全调用**：管理后台通过 `@trpc/client` 消费 `@iam/api/trpc` 暴露的 `AppRouter` 类型
+- **声明式后端装配**：`apps/api/app.config.ts` 声明 API tier，路由和 tier 中间件通过 Bun glob 自动发现
+- **Drizzle + PostgreSQL**：后端使用 Drizzle ORM v1 relations 和 PostgreSQL，schema 与 relations 拆分在 `apps/api/src/db/`
+- **共享代码包**：`packages/shared` 收敛跨端共用枚举和状态码
+- **企业集成能力**：企业微信、短信服务、ORCAS 集成、导入导出、权限委托和 MySQL 到 PostgreSQL 迁移脚本
 
 ## 📦 仓库结构
 
-```
+```text
 iam-service/
 ├── apps/
-│   ├── api/                        # 后端服务（@iam/api）
-│   │   ├── src/                    # 源代码（详见下文）
-│   │   ├── static/                 # Scalar / Swagger 静态资源
-│   │   ├── scripts/                # 维护脚本
-│   │   ├── app.config.ts           # 应用/Tier 声明式配置（defineConfig）
-│   │   ├── Dockerfile              # 多阶段镜像（pnpm install → Bun runtime）
-│   │   ├── prisma.config.ts
-│   │   ├── eslint.config.js
-│   │   ├── tsconfig.json
-│   │   ├── .env.example            # 后端环境变量模板
-│   │   └── package.json
-│   └── admin/                      # 管理后台前端（@iam/admin）
-│       ├── src/
-│       │   ├── pages/              # 页面：users / organizations / positions / employments / 403
-│       │   ├── components/
-│       │   ├── models/             # UMI Max 数据流模型
-│       │   ├── services/
-│       │   ├── lib/api-client.ts   # 基于 hono/client 的类型安全 API 客户端
-│       │   ├── access.ts           # 权限策略
-│       │   └── app.ts              # UMI 运行时配置
-│       ├── mock/
-│       ├── .umirc.ts               # UMI 配置与路由定义
-│       └── package.json
+│   ├── api/                         # 后端服务（@iam/api）
+│   │   ├── src/
+│   │   │   ├── routes/              # public/open/admin/internal/sso/auth/trpc 分组路由
+│   │   │   ├── services/            # 领域服务、repository、schema、type
+│   │   │   ├── db/                  # Drizzle schema、relations、SQL 脚本和连接
+│   │   │   ├── trpc/                # tRPC root router 与上下文
+│   │   │   ├── lib/                 # 框架胶水、日志、外部集成、分页/OpenAPI 工具
+│   │   │   ├── middlewares/         # 认证、错误处理、404 等中间件
+│   │   │   └── env.ts               # 环境变量 Zod 校验
+│   │   ├── static/                  # Scalar / Swagger 静态资源
+│   │   ├── scripts/                 # 维护和迁移脚本
+│   │   ├── app.config.ts            # API tier、OpenAPI、Scalar 配置
+│   │   ├── drizzle.config.ts        # Drizzle Kit 配置
+│   │   ├── Dockerfile
+│   │   └── .env.example
+│   ├── admin/                       # 管理后台（@iam/admin）
+│   │   ├── src/pages/               # users / organizations / positions / employments / 403
+│   │   ├── src/lib/api-client.ts    # tRPC client
+│   │   ├── src/services/            # 页面侧服务封装
+│   │   ├── src/models/              # Umi Max model
+│   │   ├── .umirc.ts                # 路由、base、proxy 配置
+│   │   └── .env.example
+│   └── sso/                         # SSO 门户（@iam/sso）
+│       ├── src/pages/               # login / reset-password / user-info / system-maintenance
+│       ├── src/services/            # auth/open/public API 调用
+│       ├── src/assets/              # 登录页和密码页图片素材
+│       ├── .umirc.ts
+│       └── .env.example
 ├── packages/
-│   └── shared/                     # 前后端共享代码（@iam/shared）
-│       └── src/
-│           ├── enums/service.status.ts
-│           └── index.ts
-├── docs/
-├── pnpm-workspace.yaml             # 工作区配置
-├── turbo.json                      # Turborepo 流水线
-└── package.json                    # 根脚本（turbo dev/build/lint/typecheck）
+│   └── shared/                      # 跨端共享枚举与工具（@iam/shared）
+├── docker/                          # 本地依赖栈和开发 compose 文件
+├── docs/                            # 架构评审、设计稿和实施计划
+├── pnpm-workspace.yaml
+├── turbo.json
+└── package.json
 ```
 
-### `apps/api/src` 内部结构
+### 后端装配模型
 
-```
-src/
-├── app.ts                # 一行装配：createApp(appConfig)，导出 AppType
-├── index.ts              # 服务入口（Bun server 配置）
-├── env.ts                # 环境变量 Zod 校验
-├── routes/               # 按访问级别分组：admin / auth / internal / open / public / sso
-│                         # 每组可放 _middleware.ts（defineMiddleware）；*.index.ts 由框架自动发现
-├── services/             # 业务逻辑层（每模块 *.service / *.repository / *.schema / *.type）
-├── trpc/                 # tRPC 装配（trpc.ts、app.router.ts、routers/<group>/index.ts）
-├── db/                   # schema.prisma、生成产物、SQL 脚本
-├── lib/
-│   ├── clients/          # Redis 等外部客户端
-│   ├── logger/           # Pino logger
-│   ├── integrations/     # 第三方集成（orcas / sms / wechat）
-│   └── core/             # 框架胶水：create-app、create-router、define-config、business-op、openapi/、pagination/
-├── middlewares/          # 认证、错误处理等 Hono 中间件
-├── utils/                # HTTP、Zod、分页工具；tools/glob.ts（Bun glob 自动加载）
-├── enums/                # 服务状态码等枚举
-├── errors/               # 继承 CustomError 的自定义错误
-└── types/                # lib.d.ts（Hono Bindings/路由助手）、global.d.ts
-```
+`apps/api/app.config.ts` 中的 `tiers` 决定根路径和文档分组。当前 tier 为：
 
-> 应用装配采用**声明式配置 + 自动发现**：在 `apps/api/app.config.ts` 中通过 `defineConfig` 声明 tier；`createApp` 通过 `Bun.Glob` 扫描 `routes/**/*.index.ts` 与 `routes/*/_middleware.ts` 自动挂载。新增同组域名无需改动 `app.config.ts`，仅新增 tier 时才需追加配置。
+- `/public`：通用用户 API
+- `/open`：公开 API
+- `/admin`：管理端 API
+- `/internal`：内部 API
+- `/sso`：单点登录 API
+- `/auth`：认证 API
+- `/rpc`：tRPC API
+
+`createApp` 会自动扫描 `apps/api/src/routes/**/*.index.ts` 并挂载到对应 tier；`apps/api/src/routes/*/_middleware.ts` 会作为 tier 级中间件加载。新增普通 REST 路由时通常不需要手动改入口文件，新增 tier 或 tRPC root 组合时才需要更新配置/组合器。
 
 ## 🛠️ 技术栈
 
 ### 后端（`apps/api`）
 
-- **运行时**：[Bun](https://bun.sh/)
-- **Web 框架**：[Hono](https://hono.dev/) + [`@hono/zod-openapi`](https://github.com/honojs/middleware/tree/main/packages/zod-openapi)
-- **API 文档**：[`@scalar/hono-api-reference`](https://github.com/scalar/scalar)（Scalar UI）
-- **ORM**：[Prisma 7](https://www.prisma.io/) + `@prisma/adapter-mariadb`
-- **Schema 生成**：[`prisma-zod-generator`](https://github.com/omar-dulaimi/prisma-zod-generator)
-- **认证/加密**：`oidc-provider`、`bcrypt-ts`、`sm-crypto`
-- **基础设施**：`ioredis`、`pino` / `hono-pino`、`axios`、`luxon`
+- **运行时**：Bun
+- **Web 框架**：Hono + `@hono/zod-openapi`
+- **RPC**：tRPC v11
+- **API 文档**：Scalar UI + OpenAPI 3.1
+- **数据库**：PostgreSQL + Drizzle ORM v1 / Drizzle Kit
+- **缓存**：Redis / ioredis
+- **验证与错误**：Zod、自定义 `CustomError`、统一响应封装
+- **认证/加密**：bcrypt / bcrypt-ts、sm-crypto
+- **基础设施**：Pino、hono-pino、axios、CSV/XLSX 导入导出工具
 - **代码检查**：ESLint（Antfu 配置）
 
-### 前端（`apps/admin`）
+### 前端（`apps/admin`、`apps/sso`）
 
-- **框架**：[UMI Max](https://umijs.org/) + React 18
-- **UI**：[Ant Design](https://ant.design/) + [`@ant-design/pro-components`](https://procomponents.ant.design/)
-- **API 客户端**：`hono/client`，直接消费 `@iam/api` 暴露的 `AppType` 实现类型推导
-- **代码格式化**：Prettier + `prettier-plugin-organize-imports`
+- **框架**：Umi Max + React 18
+- **UI**：Ant Design + `@ant-design/pro-components`
+- **管理后台 API**：`@trpc/client` + `@iam/api/trpc` 类型推导
+- **SSO 门户 API**：封装 `fetch`，统一处理 cookie、业务状态码和跳转
+- **格式化**：Prettier + `prettier-plugin-organize-imports`
 
-### 工程协作
+### 工程
 
-- **包管理**：[pnpm](https://pnpm.io/) workspace（见 `pnpm-workspace.yaml`）
-- **任务编排**：[Turborepo](https://turbo.build/)（见 `turbo.json`）
-- **验证**：[Zod](https://zod.dev/)
+- **包管理**：pnpm workspace（根 `packageManager` 为 `pnpm@10.33.2`）
+- **任务编排**：Turborepo
+- **语言**：TypeScript 6 / native preview 工具链
 
 ## 🚀 快速开始
 
 ### 环境要求
 
-- **Bun** ≥ 1.0（供 `apps/api` 使用）
-- **Node.js** ≥ 18（UMI Max 构建所需）
-- **pnpm** ≥ 10（根 `packageManager` 字段为 `pnpm@10.33.0`）
-- **MySQL** ≥ 8.0
-- **Redis** ≥ 6.0
+- Bun 1.x
+- Node.js 18+（前端和工具链使用；Dockerfile 当前基于 Node 24 镜像安装依赖）
+- pnpm 10.x
+- PostgreSQL（本地 compose 使用 `postgres:18`）
+- Redis
 
-### 安装与启动
+### 安装依赖
 
 ```bash
-# 克隆仓库
-git clone <repository-url>
-cd iam-service
-
-# 在仓库根目录安装所有工作区依赖
 pnpm install
+```
 
-# 配置后端环境变量
+### 启动本地依赖
+
+推荐先启动 PostgreSQL 与 Redis：
+
+```bash
+docker compose -f docker/docker-compose-dependency.yml up -d db redis
+```
+
+该 compose 文件也包含 `db-mysql`，主要用于历史数据迁移或对照调试；当前后端运行时主线使用 PostgreSQL。
+
+### 配置环境变量
+
+```bash
 cp apps/api/.env.example apps/api/.env
-# 按需编辑 apps/api/.env
-
-# 配置前端环境变量（可选，UMI 只注入 UMI_APP_ 前缀）
 cp apps/admin/.env.example apps/admin/.env.local
+cp apps/sso/.env.example apps/sso/.env.local
+```
 
-# 初始化数据库（在 apps/api 下执行）
-pnpm --filter @iam/api exec prisma generate
-pnpm --filter @iam/api exec prisma migrate dev
+本地 PostgreSQL 对应的后端连接串可设置为：
 
-# 一键启动所有应用（turbo 并行）
+```dotenv
+DATABASE_URL=postgresql://iam:iam_password@localhost:5432/iam_db?schema=public
+```
+
+### 初始化数据库
+
+快速同步本地库：
+
+```bash
+pnpm --filter @iam/api db:push
+```
+
+需要生成并执行迁移时：
+
+```bash
+pnpm --filter @iam/api db:generate
+pnpm --filter @iam/api db:migrate
+```
+
+### 启动应用
+
+```bash
 pnpm dev
 ```
 
-启动后：
+常用访问地址：
 
 - 后端服务：<http://localhost:30000>
-- API 文档（Scalar UI）：<http://localhost:30000/doc/scalar>
-- 管理后台：UMI 开发服务器默认监听 `http://localhost:8000`，已在 `.umirc.ts` 中将 `/admin`、`/auth`、`/public`、`/sso`、`/internal`、`/open` 等路径代理至后端
+- Scalar API 文档首页：<http://localhost:30000>
+- 管理后台：默认 `http://localhost:8001/iam-admin`（复制 `apps/admin/.env.example` 后）
+- SSO 门户：默认 `http://localhost:8000/iam-sso`（复制 `apps/sso/.env.example` 后）
 
-### 仅启动某个子项目
+### 单独启动子项目
 
 ```bash
-# 只启动后端
 pnpm --filter @iam/api dev
-
-# 只启动管理后台
 pnpm --filter @iam/admin dev
+pnpm --filter @iam/sso dev
 ```
 
-## 🧭 开发指南
+## 🧭 开发命令
 
-### 根级脚本（Turborepo 编排）
+### 根目录
 
 ```bash
-pnpm dev          # 并行启动所有包的 dev 任务
-pnpm build        # 按依赖顺序执行所有包的 build
-pnpm lint         # 执行各包的 lint
-pnpm typecheck    # 执行各包的 typecheck
+pnpm dev
+pnpm build
+pnpm lint
+pnpm typecheck
 ```
 
-### 后端常用命令（`apps/api`）
+### 后端
 
 ```bash
-pnpm --filter @iam/api dev         # bun --hot src/index.ts
-pnpm --filter @iam/api serve       # 生产模式启动
-pnpm --filter @iam/api lint        # eslint src/
+pnpm --filter @iam/api dev
+pnpm --filter @iam/api serve
+pnpm --filter @iam/api lint
 pnpm --filter @iam/api lint:fix
-pnpm --filter @iam/api typecheck   # bunx tsc --noEmit
+pnpm --filter @iam/api typecheck
 
-# 数据库
-pnpm --filter @iam/api exec prisma generate
-pnpm --filter @iam/api exec prisma migrate dev --name <name>
-pnpm --filter @iam/api exec prisma studio
+pnpm --filter @iam/api db:generate
+pnpm --filter @iam/api db:migrate
+pnpm --filter @iam/api db:push
+pnpm --filter @iam/api migrate:mysql-to-postgres
 ```
 
-### 前端常用命令（`apps/admin`）
+### 前端
 
 ```bash
-pnpm --filter @iam/admin dev        # max dev
-pnpm --filter @iam/admin build      # max build
-pnpm --filter @iam/admin format     # prettier
+pnpm --filter @iam/admin dev
+pnpm --filter @iam/admin build
+pnpm --filter @iam/admin format
+pnpm --filter @iam/admin typecheck
+
+pnpm --filter @iam/sso dev
+pnpm --filter @iam/sso build
+pnpm --filter @iam/sso format
+pnpm --filter @iam/sso typecheck
 ```
 
-### 添加新 API 端点
+## 🧩 开发指南
 
-1. 在 `apps/api/src/services/<domain>/*.schema.ts` 中补充 Zod schema
-2. 在 `apps/api/src/services/<domain>/*.service.ts` 实现业务逻辑，必要时新增 repository
-3. 在 `apps/api/src/routes/<group>/<domain>/` 下补齐 `*.routes.ts` / `*.handlers.ts` / `*.ops.ts` / `*.trpc.ts` / `*.index.ts`
-4. **无需手动挂载** —— `*.index.ts` 由 `createApp` 通过 glob 自动发现；新增 tier 才需要在 `apps/api/app.config.ts` 的 `tiers` 中追加，并在 `apps/api/src/trpc/routers/<group>/` 下放置组合器
-5. Tier 级中间件放置在 `routes/<group>/_middleware.ts`，使用 `defineMiddleware([...])` 导出
-6. 前端可直接通过 `apiClient.xxx.$get(...)` 或 `trpcClient.<group>.<domain>.<op>.query/mutate(...)` 调用，类型自动同步
+### 添加 REST API
+
+1. 在 `apps/api/src/services/<domain>/` 中补充 `*.schema.ts`、`*.repository.ts`、`*.service.ts` 和 `*.type.ts`
+2. 在 `apps/api/src/routes/<tier>/<domain>/` 下新增或更新 `*.routes.ts`、`*.handlers.ts`、`*.index.ts`
+3. 如需业务操作封装或 tRPC 复用，可补充 `*.ops.ts`
+4. `*.index.ts` 会被 `createApp` 自动发现；只有新增 tier 时才需要改 `apps/api/app.config.ts`
+5. tier 级中间件放在 `apps/api/src/routes/<tier>/_middleware.ts`
+
+### 添加 tRPC API
+
+1. 在对应路由目录新增或更新 `*.trpc.ts`
+2. 在 `apps/api/src/trpc/routers/<group>/index.ts` 中组合到 group router
+3. 管理后台通过 `apps/admin/src/lib/api-client.ts` 中的 `apiClient` 调用，类型来自 `@iam/api/trpc`
 
 ### 修改数据库 Schema
 
-1. 编辑 `apps/api/src/db/schema.prisma`
-2. `pnpm --filter @iam/api exec prisma generate`
-3. `pnpm --filter @iam/api exec prisma migrate dev --name <name>`
-4. Zod schema 由 `prisma-zod-generator` 自动产出
+1. 编辑 `apps/api/src/db/schema/core/*.ts`
+2. 如有关联查询，更新 `apps/api/src/db/relations/core/*.ts`
+3. 确保 schema / relations 被对应 `index.ts` 导出
+4. 本地快速同步：`pnpm --filter @iam/api db:push`
+5. 迁移式变更：`pnpm --filter @iam/api db:generate && pnpm --filter @iam/api db:migrate`
 
-### 代码风格
-
-- 后端使用 ESLint（Antfu 配置）：双引号、分号必须、最大行长 120
-- 前端使用 Prettier + ESLint，`.prettierrc` 为准
-- 保存时由 `.vscode/settings.json` 触发自动修复
-- 导入路径：后端优先使用 `@/`、`@services/` 等别名（见 `apps/api/tsconfig.json`）
+核心表覆盖 `user`、`organization`、`organization_closure`、`position`、`employment`、`role`、`privilege`、`client`、`login_log` 以及多类角色、组织、职位和委托关联表；登录会话主要存储在 Redis。
 
 ## ⚙️ 环境变量
 
 ### 后端（`apps/api/.env`）
 
-详见 `apps/api/.env.example` 及 `apps/api/src/env.ts` 中的 Zod schema：
+以 `apps/api/.env.example` 和 `apps/api/src/env.ts` 为准：
 
-| 变量名                   | 说明                                  | 默认值   | 必需 |
-| ------------------------ | ------------------------------------- | -------- | ---- |
-| `DATABASE_URL`           | MySQL 连接字符串（Prisma 使用）       | -        | 是   |
-| `REDIS_URL`              | Redis 服务器地址                      | -        | 是   |
-| `REDIS_PORT`             | Redis 端口                            | -        | 是   |
-| `REDIS_DB`               | Redis 数据库编号                      | -        | 是   |
-| `PORT`                   | 服务监听端口                          | `30000`  | 否   |
-| `IAM_SECRET_KEY`         | JWT / 签名密钥                        | -        | 是   |
-| `WX_CORPID`              | 企业微信 CorpID                       | -        | 是   |
-| `WX_CORPSECRET`          | 企业微信 CorpSecret                   | -        | 是   |
-| `SMS_URL`                | 短信服务地址                          | -        | 是   |
-| `SMS_SIGNATURE_KEY`      | 短信签名密钥                          | -        | 是   |
-| `ORCAS_URL`              | 外部 ORCAS 服务地址                   | -        | 是   |
-| `LOG_LEVEL`              | 日志级别                              | `"info"` | 否   |
-| `LOGIN_ENDPOINT`         | 登录端点                              | -        | 是   |
-| `AUTHORIZATION_ENDPOINT` | 授权端点                              | -        | 是   |
-| `LOGOUT_ENDPOINT`        | 登出端点                              | -        | 是   |
-| `THIRDPARTY_OA_ENDPOINT` | 第三方 OA 端点                        | -        | 是   |
+| 变量名                          | 说明                                         | 默认值/示例          |
+| ------------------------------- | -------------------------------------------- | -------------------- |
+| `DATABASE_URL`                  | PostgreSQL 连接字符串，可带 `?schema=public` | `postgresql://...`   |
+| `REDIS_URL`                     | Redis 地址                                   | `localhost`          |
+| `REDIS_PORT`                    | Redis 端口                                   | `6379`               |
+| `REDIS_DB`                      | Redis DB 编号                                | `0`                  |
+| `PORT`                          | API 监听端口                                 | `30000`              |
+| `NODE_ENV`                      | 运行环境；生产环境会关闭 OpenAPI 文档        | `development`        |
+| `LOG_LEVEL`                     | Pino 日志级别                                | `info`               |
+| `IAM_SECRET_KEY`                | 签名/加密密钥                                | 必填                 |
+| `PASSWORD_HASH_ROUNDS`          | 密码哈希轮数                                 | `10`                 |
+| `DEFAULT_USER_PASSWORD`         | 默认用户密码                                 | `default123`         |
+| `MAGIC_CODE`                    | 特殊操作验证码                               | 必填                 |
+| `WX_CORPID` / `WX_CORPSECRET`   | 企业微信配置                                 | 必填                 |
+| `SMS_URL` / `SMS_SIGNATURE_KEY` | 短信服务配置                                 | 必填                 |
+| `ORCAS_URL`                     | ORCAS 服务地址                               | 必填                 |
+| `PURVEYOR_PARENT_ORG`           | 供应商父组织 ID                              | 必填                 |
+| `REDIS_EXPIRE_TIME`             | Redis 默认过期时间（秒）                     | `86400`              |
+| `AUTH_CODE_EXPIRE_TIME`         | 授权码过期时间（秒）                         | `300`                |
+| `LOGIN_ENDPOINT`                | 登录端点                                     | `/auth/login`        |
+| `AUTHORIZATION_ENDPOINT`        | 授权端点                                     | `/auth/authorize`    |
+| `LOGOUT_ENDPOINT`               | 登出端点                                     | `/auth/logout`       |
+| `THIRDPARTY_OA_ENDPOINT`        | 第三方 OA 端点                               | `/sso/thirdparty/oa` |
 
-### 前端（`apps/admin/.env` / `.env.local`）
+### 管理后台（`apps/admin/.env.local`）
 
-UMI Max 只会将前缀为 `UMI_APP_` 的变量注入到客户端：
+| 变量名                      | 说明                       | 默认值           |
+| --------------------------- | -------------------------- | ---------------- |
+| `PORT`                      | Umi dev server 端口        | `8001`           |
+| `UMI_APP_SSO_AUTHORIZE_URL` | SSO 授权端点               | `/sso/authorize` |
+| `UMI_APP_SSO_LOGOUT_URL`    | SSO 登出端点               | `/sso/logout`    |
+| `UMI_APP_SSO_CLIENT_CODE`   | 当前应用注册的 client code | `iam`            |
+| `UMI_APP_ADMIN_ROLE_CODE`   | 允许访问后台的角色码       | `iam:admin`      |
 
-| 变量名                      | 说明                            |
-| --------------------------- | ------------------------------- |
-| `UMI_APP_SSO_AUTHORIZE_URL` | SSO 授权端点（默认 `/sso/authorize`） |
-| `UMI_APP_SSO_CLIENT_CODE`   | 当前应用注册的 client code（默认 `iam`） |
-| `UMI_APP_ADMIN_ROLE_CODE`   | 允许访问后台的角色码（默认 `iam:admin`） |
+### SSO 门户（`apps/sso/.env.local`）
 
-> `.env` 与 `.env.local` 均不会被提交，参考对应目录下的 `.env.example` 按需复制。
+| 变量名                    | 说明                               | 默认值                                          |
+| ------------------------- | ---------------------------------- | ----------------------------------------------- |
+| `PORT`                    | Umi dev server 端口                | `8000`                                          |
+| `UMI_APP_API_PREFIX`      | API 前缀；开发环境通常走同域 proxy | `/api/iam` 示例                                 |
+| `UMI_APP_SSO_CLIENT_CODE` | SSO 客户端代码                     | `iam`                                           |
+| `UMI_APP_WELL_KNOWN_URL`  | authentication configuration 端点  | `/sso/.well-known/authentication-configuration` |
 
 ## 📚 API 文档
 
-- 启动后端后访问 <http://localhost:30000/doc/scalar>（Scalar UI）
-- 路由分组：
-  - `/admin/*` — 后台管理接口
-  - `/auth/*` — 认证接口
-  - `/sso/*` — OIDC 单点登录
-  - `/public/*` — 公共接口
-  - `/open/*` — 对外开放接口
-  - `/internal/*` — 服务间内部接口
+开发环境启动后访问 <http://localhost:30000> 打开 Scalar 文档首页。各 tier 的 OpenAPI JSON 位于对应路径的 `/doc`，例如：
+
+- <http://localhost:30000/public/doc>
+- <http://localhost:30000/admin/doc>
+- <http://localhost:30000/sso/doc>
+- <http://localhost:30000/rpc/doc>
+
+`NODE_ENV=production` 时 OpenAPI/Scalar 默认关闭。
 
 ## 🗄️ 数据库
 
-核心模型：`User`、`Organization`（闭包表）、`Position`、`Employment`、`Role`、`Privilege`、`Client`、`Session`。
+当前主库为 PostgreSQL，Drizzle schema 位于 `apps/api/src/db/schema/`，relations 位于 `apps/api/src/db/relations/`，SQL 辅助脚本位于 `apps/api/src/db/sql/`。
+
+常用命令：
 
 ```bash
-# 修改 apps/api/src/db/schema.prisma 后：
-pnpm --filter @iam/api exec prisma generate
-pnpm --filter @iam/api exec prisma migrate dev --name <name>
+pnpm --filter @iam/api db:push
+pnpm --filter @iam/api db:generate
+pnpm --filter @iam/api db:migrate
+```
 
-# 生产环境
-pnpm --filter @iam/api exec prisma migrate deploy
+历史 MySQL 数据迁移脚本：
+
+```bash
+pnpm --filter @iam/api migrate:mysql-to-postgres
 ```
 
 ## 🚢 部署
@@ -278,45 +323,59 @@ pnpm --filter @iam/api exec prisma migrate deploy
 
 ```bash
 pnpm install --frozen-lockfile
-pnpm --filter @iam/api exec prisma generate
-pnpm --filter @iam/api exec prisma migrate deploy
-pnpm --filter @iam/api serve    # 或 bun run apps/api/src/index.ts
+pnpm --filter @iam/api db:migrate
+pnpm --filter @iam/api serve
 ```
 
 ### 前端
 
 ```bash
-pnpm --filter @iam/admin build  # 产物在 apps/admin/dist
+pnpm --filter @iam/admin build
+pnpm --filter @iam/sso build
 ```
 
-将 `apps/admin/dist` 产物部署到静态服务器（Nginx/CDN），并将 `/admin`、`/auth`、`/public`、`/sso`、`/internal`、`/open` 反向代理至后端。
+构建产物分别位于：
+
+- `apps/admin/dist`，默认 base 为 `/iam-admin`
+- `apps/sso/dist`，默认 base 为 `/iam-sso`
+
+静态服务器需要把 `/public`、`/open`、`/admin`、`/internal`、`/sso`、`/auth`、`/rpc` 等后端路径反向代理到 API 服务。
 
 ### Docker
 
-仓库已提供多阶段 `apps/api/Dockerfile`（pnpm 安装依赖 → Bun 运行时）。**构建上下文为仓库根目录**：
+仓库提供后端镜像构建文件，构建上下文为仓库根目录：
 
 ```bash
 docker build -f apps/api/Dockerfile -t iam-api .
 docker run --rm -p 30000:30000 --env-file apps/api/.env iam-api
 ```
 
-## 🔧 调试与故障排除
+本地依赖栈：
 
-- 日志：Pino（`LOG_LEVEL` 控制级别：`trace` / `debug` / `info` / `warn` / `error` / `fatal`）
-- API 调试：Scalar UI
-- 数据调试：`prisma studio`
-- UMI 运行时调试：浏览器 DevTools + `.umirc.ts` 中的 `proxy` 配置
+```bash
+docker compose -f docker/docker-compose-dependency.yml up -d
+```
+
+`docker/docker-compose-dev.yml` 当前包含 MySQL 主从和 API 编排，更适合历史 MySQL 场景或迁移验证；用于当前 PostgreSQL 主线前请先核对 `DATABASE_URL`。
+
+## 🔧 调试与排障
+
+- 日志：`LOG_LEVEL` 控制 Pino 输出级别
+- API 调试：开发环境访问 Scalar 文档首页 <http://localhost:30000>
+- 数据调试：Drizzle Kit 命令或直接连接本地 PostgreSQL
+- 前端代理：查看 `apps/admin/.umirc.ts` 和 `apps/sso/.umirc.ts`
+- 类型检查：`pnpm typecheck`
 
 ## 🤝 贡献指南
 
 1. Fork 并创建功能分支
-2. 遵守代码规范（ESLint / Prettier）
-3. 必要时补充文档与类型
-4. 提交 Pull Request 描述变更
+2. 遵守代码规范（后端 ESLint，前端 Prettier）
+3. 必要时补充文档、类型和迁移
+4. 提交 Pull Request 描述变更范围、环境变量或数据库变更
 
-约定式提交（Conventional Commits）：
+提交信息使用 Conventional Commits：
 
-```
+```text
 <类型>[可选作用域]: <描述>
 ```
 
@@ -324,8 +383,8 @@ docker run --rm -p 30000:30000 --env-file apps/api/.env iam-api
 
 ## 📄 许可证
 
-[根据项目实际情况添加]
+待补充。
 
 ---
 
-**最后更新**：2026-04-26
+**最后更新**：2026-05-06
