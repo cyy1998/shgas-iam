@@ -15,10 +15,6 @@ export function rolesRelations(r: RelationsHelper) {
         from: r.roles.id,
         to: r.organizationRoles.roleId,
       }),
-      positionOrganizations: r.many.posOrgRoles({
-        from: r.roles.id,
-        to: r.posOrgRoles.roleId,
-      }),
       employments: r.many.employmentRoles({
         from: r.roles.id,
         to: r.employmentRoles.roleId,

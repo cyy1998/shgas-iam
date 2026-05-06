@@ -27,14 +27,6 @@ export async function getRolesByPosition(posId: number) {
   const roles = (await roleRepository.getRolesByPosition(posId)).map(r => RoleDtoSchema.parse(r));
   return roles;
 }
-// export async function getRolesByOrgPosition(posId: number, orgId: number) {
-//   const posOrg = await posorgRepository.getPosOrgById(posId, orgId);
-//   if (posOrg === null) {
-//     return [];
-//   }
-//   const roles = (await roleRepository.getRolesByPosOrg(posOrg.id)).map(r => RoleDtoSchema.parse(r));
-//   return roles;
-// }
 export async function getRolesByEmployment(employmentId: number) {
   const roles = (await roleRepository.getRolesByEmployment(employmentId)).map(r => RoleDtoSchema.parse(r));
   return roles;
@@ -145,52 +137,6 @@ export async function setRoleForPosition(posCode: string, roleCode: string) {
     return true;
   });
 }
-// export async function setRoleForPosOrg(orgCode: string, posCode: string, roleCode: string) {
-//   return await db.transaction(async (tx) => {
-//     const [role, org, pos] = await Promise.all([
-//       roleRepository.getRoleByCode(roleCode, tx),
-//       organizationRepository.getOrganizationByCode(orgCode, tx),
-//       positionRepository.getPositionByCode(posCode, tx),
-//     ]);
-//     if (org === null || role === null || pos === null) {
-//       throw new CustomError(`对应实体不存在`);
-//     }
-//     let posOrg = await posorgRepository.getPosOrgById(pos.id, org.id, tx);
-//     if (posOrg === null) {
-//       posOrg = await posorgRepository.setPosOrg(pos.id, org.id, tx);
-//     }
-//     try {
-//       await roleRepository.setRoleForPosOrg(role.id, posOrg.id, tx);
-//     }
-//     catch (err) {
-//       if (isUniqueViolation(err)) {
-//         throw new CustomError("对应关系已存在");
-//       }
-//       else {
-//         throw err;
-//       }
-//     }
-//     return true;
-//   });
-// }
-// export async function deleteRoleForPosOrg(orgCode: string, posCode: string, roleCode: string) {
-//   return await db.transaction(async (tx) => {
-//     const [role, org, pos] = await Promise.all([
-//       roleRepository.getRoleByCode(roleCode, tx),
-//       organizationRepository.getOrganizationByCode(orgCode, tx),
-//       positionRepository.getPositionByCode(posCode, tx),
-//     ]);
-//     if (org === null || role === null || pos === null) {
-//       throw new CustomError("对应实体不存在");
-//     }
-//     const posOrg = await posorgRepository.getPosOrgById(pos.id, org.id, tx);
-//     if (posOrg === null) {
-//       throw new CustomError(`对应实体不存在: ${orgCode}, ${posCode}`);
-//     }
-//     await roleRepository.deleteRoleForPosOrg(role.id, posOrg.id, tx);
-//     return true;
-//   });
-// }
 export async function deleteRoleForEmployment(username: string, posCode: string, orgCode: string, roleCode: string) {
   return await db.transaction(async (tx) => {
     const [employment, role] = await Promise.all([

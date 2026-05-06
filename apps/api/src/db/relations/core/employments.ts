@@ -21,10 +21,6 @@ export function employmentsRelations(r: RelationsHelper) {
         from: r.employments.posId,
         to: r.positions.id,
       }),
-      posOrg: r.one.posOrgCompositions({
-        from: [r.employments.posId, r.employments.orgId],
-        to: [r.posOrgCompositions.posId, r.posOrgCompositions.orgId],
-      }),
       roles: r.many.employmentRoles({
         from: r.employments.id,
         to: r.employmentRoles.employmentId,

@@ -11,8 +11,6 @@ import {
   organizations,
   positionRoles,
   positions,
-  posOrgCompositions,
-  posOrgRoles,
   privileges,
   rolePrivileges,
   roles,
@@ -180,18 +178,6 @@ function employmentHasPrivilegeCondition(privilegeCodes: string[]) {
         .innerJoin(privileges, eq(rolePrivileges.privilegeId, privileges.id))
         .where(and(
           eq(positionRoles.positionId, employments.posId),
-          inArrayIf(privileges.privilegeCode, privilegeCodes),
-        )),
-    ),
-    exists(
-      db.select({ value: sql`1` })
-        .from(posOrgCompositions)
-        .innerJoin(posOrgRoles, eq(posOrgRoles.posOrgId, posOrgCompositions.id))
-        .innerJoin(rolePrivileges, eq(posOrgRoles.roleId, rolePrivileges.roleId))
-        .innerJoin(privileges, eq(rolePrivileges.privilegeId, privileges.id))
-        .where(and(
-          eq(posOrgCompositions.posId, employments.posId),
-          eq(posOrgCompositions.orgId, employments.orgId),
           inArrayIf(privileges.privilegeCode, privilegeCodes),
         )),
     ),

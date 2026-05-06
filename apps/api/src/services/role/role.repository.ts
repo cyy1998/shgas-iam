@@ -7,8 +7,6 @@ import {
   organizationClosures,
   organizationRoles,
   positionRoles,
-  posOrgCompositions,
-  posOrgRoles,
   rolePrivileges,
   roles,
 } from "@api/db/schema";
@@ -40,20 +38,6 @@ function roleAssignedToUserWhere(userId: number) {
         ))
         .where(and(
           eq(organizationRoles.roleId, roles.id),
-          eq(employments.userId, userId),
-          eq(employments.status, Status.Enable),
-        )),
-    ),
-    exists(
-      db.select({ value: sql`1` })
-        .from(posOrgRoles)
-        .innerJoin(posOrgCompositions, eq(posOrgRoles.posOrgId, posOrgCompositions.id))
-        .innerJoin(employments, and(
-          eq(employments.posId, posOrgCompositions.posId),
-          eq(employments.orgId, posOrgCompositions.orgId),
-        ))
-        .where(and(
-          eq(posOrgRoles.roleId, roles.id),
           eq(employments.userId, userId),
           eq(employments.status, Status.Enable),
         )),
@@ -104,20 +88,6 @@ function roleAssignedToEmploymentWhere(employmentId: number) {
               ),
             ),
           ),
-        )),
-    ),
-    exists(
-      db.select({ value: sql`1` })
-        .from(posOrgRoles)
-        .innerJoin(posOrgCompositions, eq(posOrgRoles.posOrgId, posOrgCompositions.id))
-        .innerJoin(employments, and(
-          eq(employments.posId, posOrgCompositions.posId),
-          eq(employments.orgId, posOrgCompositions.orgId),
-        ))
-        .where(and(
-          eq(posOrgRoles.roleId, roles.id),
-          eq(employments.id, employmentId),
-          eq(employments.status, Status.Enable),
         )),
     ),
     exists(
@@ -181,15 +151,6 @@ export async function getRolesByPosition(posId: number, tx: DbClient = db) {
     .then(rows => rows.map(row => row.role));
 }
 
-export async function getRolesByPosOrg(posOrgId: number, tx: DbClient = db) {
-  return await tx
-    .select()
-    .from(roles)
-    .innerJoin(posOrgRoles, eq(posOrgRoles.roleId, roles.id))
-    .where(and(eq(posOrgRoles.posOrgId, posOrgId), activeRoleWhere()))
-    .then(rows => rows.map(row => row.role));
-}
-
 export async function getRolesByEmployment(employmentId: number, tx: DbClient = db) {
   return await tx
     .select()
@@ -235,14 +196,6 @@ export async function setRoleForOrganization(roleId: number, orgId: number, tx: 
 
 export async function setRoleForPosition(roleId: number, posId: number, tx: DbClient = db) {
   return firstRow(await tx.insert(positionRoles).values({ roleId, positionId: posId }).returning())!;
-}
-
-export async function setRoleForPosOrg(roleId: number, posOrgId: number, tx: DbClient = db) {
-  return firstRow(await tx.insert(posOrgRoles).values({ roleId, posOrgId }).returning())!;
-}
-
-export async function deleteRoleForPosOrg(roleId: number, posOrgId: number, tx: DbClient = db) {
-  return await tx.delete(posOrgRoles).where(and(eq(posOrgRoles.roleId, roleId), eq(posOrgRoles.posOrgId, posOrgId)));
 }
 
 export async function deleteRoleForEmployment(roleId: number, employmentId: number, tx: DbClient = db) {

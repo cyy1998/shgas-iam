@@ -28,10 +28,6 @@ export function organizationsRelations(r: RelationsHelper) {
         from: r.organizations.id,
         to: r.organizationRoles.organizationId,
       }),
-      posOrgComposition: r.many.posOrgCompositions({
-        from: r.organizations.id,
-        to: r.posOrgCompositions.orgId,
-      }),
       ancestorClosures: r.many.organizationClosures({
         from: r.organizations.id,
         to: r.organizationClosures.descendantId,

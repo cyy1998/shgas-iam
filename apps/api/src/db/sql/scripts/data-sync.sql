@@ -28,12 +28,6 @@ INSERT INTO iam2.employment
 SELECT id, user_id, pos_id, status, description, is_delete, create_time, update_time, comp_id, dept_id, end_time, start_time, is_primary
 FROM iam.employment
 ;
-truncate TABLE iam2.pos_org_composition
-;
-INSERT INTO iam2.pos_org_composition
-SELECT id, pos_id, org_id, status, description, is_delete, create_time, update_time
-FROM iam.pos_org_composition
-;
 truncate TABLE iam2.`role`
 ;
 insert INTO iam2.`role`
@@ -57,12 +51,6 @@ TRUNCATE TABLE iam2.employment_role
 INSERT INTO iam2.employment_role
 SELECT employment_id, role_id
 FROM iam.employment_role
-;
-truncate TABLE iam2.position_organization_role 
-;
-INSERT INTO iam2.position_organization_role
-SELECT role_id, pos_org_id
-FROM iam.position_organization_role
 ;
 truncate TABLE iam2.privilege
 ;

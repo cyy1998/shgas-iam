@@ -11,10 +11,6 @@ export function positionsRelations(r: RelationsHelper) {
         from: r.positions.id,
         to: r.positionRoles.positionId,
       }),
-      posOrgComposition: r.many.posOrgCompositions({
-        from: r.positions.id,
-        to: r.posOrgCompositions.posId,
-      }),
     },
   } satisfies RelationsConfig;
 }

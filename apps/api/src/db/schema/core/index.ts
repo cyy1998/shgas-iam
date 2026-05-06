@@ -6,8 +6,6 @@ export * from "./login-logs";
 export * from "./organization-closures";
 export * from "./organization-roles";
 export * from "./organizations";
-export * from "./pos-org-compositions";
-export * from "./pos-org-roles";
 export * from "./position-roles";
 export * from "./positions";
 export * from "./privilege-delegations";

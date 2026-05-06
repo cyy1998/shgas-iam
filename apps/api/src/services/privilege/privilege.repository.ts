@@ -8,8 +8,6 @@ import {
   employments,
   organizationRoles,
   positionRoles,
-  posOrgCompositions,
-  posOrgRoles,
   privileges,
   rolePrivileges,
   roles,
@@ -37,21 +35,6 @@ export async function getPrivilegesByUserId(userId: number, tx: DbClient = db) {
         .innerJoin(employments, or(
           eq(organizationRoles.organizationId, employments.orgId),
           eq(organizationRoles.organizationId, employments.compId),
-        ))
-        .where(and(
-          eq(rolePrivileges.privilegeId, privileges.id),
-          eq(employments.userId, userId),
-          eq(employments.status, Status.Enable),
-        )),
-    ),
-    exists(
-      db.select({ value: sql`1` })
-        .from(rolePrivileges)
-        .innerJoin(posOrgRoles, eq(posOrgRoles.roleId, rolePrivileges.roleId))
-        .innerJoin(posOrgCompositions, eq(posOrgRoles.posOrgId, posOrgCompositions.id))
-        .innerJoin(employments, and(
-          eq(employments.posId, posOrgCompositions.posId),
-          eq(employments.orgId, posOrgCompositions.orgId),
         ))
         .where(and(
           eq(rolePrivileges.privilegeId, privileges.id),
