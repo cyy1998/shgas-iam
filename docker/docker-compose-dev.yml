@@ -1,126 +1,20 @@
 services:
-  db-primary:
-    image: docker.xuanyuan.run/mysql:8.0.39
+  db:
+    image: docker.xuanyuan.run/postgres:18
     restart: unless-stopped
-    command:
-      - --server-id=1
-      - --log-bin=mysql-bin
-      - --binlog-format=ROW
-      - --gtid-mode=ON
-      - --enforce-gtid-consistency=ON
     environment:
-      MYSQL_ROOT_PASSWORD: root
-      MYSQL_DATABASE: iam_db
-      MYSQL_USER: iam
-      MYSQL_PASSWORD: iam_password
+      POSTGRES_USER: iam
+      POSTGRES_PASSWORD: iam_password
+      POSTGRES_DB: iam_db
     ports:
-      - "5455:3306"
+      - "5432:5432"
     volumes:
-      - db_data:/var/lib/mysql
+      - db_data:/var/lib/postgresql
     healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      test: ["CMD-SHELL", "pg_isready -U iam -d iam_db"]
       interval: 10s
       timeout: 5s
       retries: 5
-
-  db-replica:
-    image: docker.xuanyuan.run/mysql:8.0.39
-    restart: unless-stopped
-    command:
-      - --server-id=2
-      - --log-bin=mysql-bin
-      - --binlog-format=ROW
-      - --gtid-mode=ON
-      - --enforce-gtid-consistency=ON
-      - --read-only=ON
-      # - --super-read-only=ON
-    environment:
-      MYSQL_ROOT_PASSWORD: root
-      MYSQL_DATABASE: iam_db
-      MYSQL_USER: iam
-      MYSQL_PASSWORD: iam_password
-    ports:
-      - "5456:3306"
-    volumes:
-      - db_replica_data:/var/lib/mysql
-    depends_on:
-      db-primary:
-        condition: service_healthy
-    healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-
-  # 一次性容器：在主备库就绪后配置 GTID 复制
-  db-replication-setup:
-    image: docker.xuanyuan.run/mysql:8.0.39
-    restart: "no"
-    depends_on:
-      db-primary:
-        condition: service_healthy
-      db-replica:
-        condition: service_healthy
-    entrypoint:
-      - bash
-      - -c
-      - |
-        set -e
-        MYSQL="mysql --get-server-public-key --connect-timeout=5 --protocol=TCP"
-        MYSQLDUMP="mysqldump --get-server-public-key --protocol=TCP"
-
-        for i in $$(seq 1 60); do
-          $$MYSQL -h db-primary -uroot -proot -e 'SELECT 1' &>/dev/null && break
-          echo "waiting for primary..."; sleep 3
-        done
-        for i in $$(seq 1 60); do
-          $$MYSQL -h db-replica -uroot -proot -e 'SELECT 1' &>/dev/null && break
-          echo "waiting for replica..."; sleep 3
-        done
-
-        # 幂等：已经在复制就跳过
-        if $$MYSQL -h db-replica -uroot -proot -e "SHOW REPLICA STATUS\G" 2>/dev/null | grep -q "Replica_IO_Running: Yes"; then
-          echo "replica already syncing, skip"; exit 0
-        fi
-
-        # 1. 主库创建复制账号
-        $$MYSQL -h db-primary -uroot -proot -e "
-          CREATE USER IF NOT EXISTS 'replicator'@'%'
-            IDENTIFIED WITH mysql_native_password BY 'replicator_password';
-          GRANT REPLICATION SLAVE ON *.* TO 'replicator'@'%';
-          FLUSH PRIVILEGES;
-        "
-
-        # 2. 从主库导出基线数据（含 GTID 位置）
-        echo "dumping primary baseline..."
-        $$MYSQLDUMP -h db-primary -uroot -proot \
-          --databases iam_db \
-          --add-drop-database \
-          --triggers --routines --events \
-          --single-transaction \
-          --set-gtid-purged=ON \
-          > /tmp/dump.sql
-
-        # 3. 备库清空 GTID 状态后导入基线
-        echo "loading baseline into replica..."
-        $$MYSQL -h db-replica -uroot -proot -e "
-          STOP REPLICA;
-          RESET REPLICA ALL;
-          RESET MASTER;
-        " 2>/dev/null || true
-        $$MYSQL -h db-replica -uroot -proot < /tmp/dump.sql
-
-        # 4. 启动复制（GTID 自动定位）
-        $$MYSQL -h db-replica -uroot -proot -e "
-          CHANGE REPLICATION SOURCE TO
-            SOURCE_HOST='db-primary',
-            SOURCE_PORT=3306,
-            SOURCE_USER='replicator',
-            SOURCE_PASSWORD='replicator_password',
-            SOURCE_AUTO_POSITION=1;
-          START REPLICA;
-        "
-        echo "replication setup complete"
 
   redis:
     image: docker.xuanyuan.run/library/redis:latest
@@ -174,5 +68,4 @@ services:
 
 volumes:
   db_data:
-  db_replica_data:
   redis_data:
