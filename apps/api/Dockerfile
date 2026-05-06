@@ -7,7 +7,7 @@ ENV PNPM_HOME="/pnpm"
 ENV PATH="$PNPM_HOME:$PATH"
 ENV HTTP_PROXY="http://176.169.105.96:3928"
 ENV HTTPS_PROXY="http://176.169.105.96:3928"
-RUN corepack enable && corepack prepare pnpm@10.33.0 --activate
+RUN corepack enable && corepack prepare pnpm@10.33.3 --activate
 
 # ── Stage 2: Install dependencies ────────────────────────────────────────────
 FROM base AS deps
@@ -35,5 +35,6 @@ COPY --from=deps /app/node_modules              ./node_modules
 COPY --from=deps /app/apps/api/node_modules    ./apps/api/node_modules
 COPY packages/shared/ ./packages/shared/
 COPY apps/api/        ./apps/api/
+WORKDIR /app/apps/api
 EXPOSE 30000
-CMD ["bun", "run", "apps/api/src/index.ts"]
+CMD ["bun", "run", "src/index.ts"]

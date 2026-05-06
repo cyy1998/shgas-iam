@@ -20,7 +20,7 @@ services:
     image: docker.xuanyuan.run/library/redis:latest
     restart: unless-stopped
     ports:
-      - "6379:6379"
+      - "6390:6379"
     volumes:
       - redis_data:/data
     healthcheck:
@@ -35,33 +35,33 @@ services:
       dockerfile: apps/api/Dockerfile
     restart: unless-stopped
     ports:
-      - "30000:30000"
+      - "30011:30000"
     environment:
-      DATABASE_URL: mysql://iam:iam_password@db-primary:3306/iam_db
+      DATABASE_URL: postgresql://iam:iam_password@db:5432/iam_db
       REDIS_URL: redis
       REDIS_PORT: 6379
       REDIS_DB: 0
       PORT: 30000
       NODE_ENV: production
       LOG_LEVEL: info
-      IAM_SECRET_KEY: change-me-in-production
+      IAM_SECRET_KEY: shenergy2020
       PASSWORD_HASH_ROUNDS: 10
       DEFAULT_USER_PASSWORD: default123
-      MAGIC_CODE: change-me-in-production
-      WX_CORPID: ""
-      WX_CORPSECRET: ""
-      SMS_URL: ""
-      SMS_SIGNATURE_KEY: ""
-      ORCAS_URL: ""
-      PURVEYOR_PARENT_ORG: ""
+      MAGIC_CODE: 1234
+      WX_CORPID: "wwddf8d65300d53eb1"
+      WX_CORPSECRET: "L41cYOgd-wmFEmoHPHXIL6ZHiP-hMzuXT_wsWINjAes"
+      SMS_URL: "http://176.169.86.35:17111/v1/thirdparty/common/sms/sendMsg3"
+      SMS_SIGNATURE_KEY: "aa8099eb32c945f39157f339d8fd702c"
+      ORCAS_URL: "http://176.169.99.150:18091/orcas/login"
+      PURVEYOR_PARENT_ORG: "GY"
       REDIS_EXPIRE_TIME: 86400
       AUTH_CODE_EXPIRE_TIME: 300
-      LOGIN_ENDPOINT: /auth/login
-      AUTHORIZATION_ENDPOINT: /auth/authorize
-      LOGOUT_ENDPOINT: /auth/logout
+      LOGIN_ENDPOINT: /portal/login
+      AUTHORIZATION_ENDPOINT: /sso/authorize
+      LOGOUT_ENDPOINT: /sso/logout
       THIRDPARTY_OA_ENDPOINT: /sso/thirdparty/oa
     depends_on:
-      db-primary:
+      db:
         condition: service_healthy
       redis:
         condition: service_healthy

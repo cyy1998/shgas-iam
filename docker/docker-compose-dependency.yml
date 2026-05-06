@@ -1,27 +1,4 @@
 services:
-  db-mysql:
-    image: docker.xuanyuan.run/mysql:8.0.39
-    restart: unless-stopped
-    command:
-      - --server-id=1
-      - --log-bin=mysql-bin
-      - --binlog-format=ROW
-      - --gtid-mode=ON
-      - --enforce-gtid-consistency=ON
-    environment:
-      MYSQL_ROOT_PASSWORD: root
-      MYSQL_DATABASE: iam_db
-      MYSQL_USER: iam
-      MYSQL_PASSWORD: iam_password
-    ports:
-      - "5455:3306"
-    volumes:
-      - mysql_data:/var/lib/mysql
-    healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
   db:
     image: docker.xuanyuan.run/postgres:18
     restart: unless-stopped
