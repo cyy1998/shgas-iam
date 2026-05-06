@@ -1,6 +1,6 @@
+import { sql } from "drizzle-orm";
 import mysql from "mysql2/promise";
 import db, { closeDb } from "../src/db";
-import { sql } from "drizzle-orm";
 
 const sourceUrl = process.env.MYSQL_DATABASE_URL;
 const targetUrl = process.env.DATABASE_URL;
@@ -14,7 +14,10 @@ if (!targetUrl) {
   throw new Error("DATABASE_URL is required");
 }
 
-const source = await mysql.createConnection(sourceUrl);
+const source = await mysql.createConnection({
+  uri: sourceUrl,
+  dateStrings: true,
+});
 
 const tableOrder = [
   "user",
@@ -59,11 +62,61 @@ function normalizeRow(row: Record<string, unknown>) {
   return Object.fromEntries(
     Object.entries(row).map(([key, value]) => {
       if (booleanColumns.has(key)) {
-        return [key, Boolean(value)];
+        return [key, normalizeBoolean(value)];
       }
-      return [key, value];
+      return [key, normalizeValue(value)];
     }),
   );
+}
+
+function normalizeBoolean(value: unknown) {
+  if (value === null) {
+    return null;
+  }
+  if (typeof value === "boolean") {
+    return value;
+  }
+  if (typeof value === "number") {
+    return value !== 0;
+  }
+  if (typeof value === "bigint") {
+    return value !== 0n;
+  }
+  if (typeof value === "string") {
+    const normalized = value.trim().toLowerCase();
+    return normalized !== "" && normalized !== "0" && normalized !== "false";
+  }
+  return Boolean(value);
+}
+
+function normalizeValue(value: unknown) {
+  if (value instanceof Date) {
+    return formatDate(value);
+  }
+  if (typeof value === "bigint") {
+    return value.toString();
+  }
+  if (value && typeof value === "object" && !Buffer.isBuffer(value)) {
+    return JSON.stringify(value);
+  }
+  return value;
+}
+
+function formatDate(value: Date) {
+  const pad = (part: number, length = 2) => part.toString().padStart(length, "0");
+  const date = [
+    value.getFullYear(),
+    pad(value.getMonth() + 1),
+    pad(value.getDate()),
+  ].join("-");
+  const time = [
+    pad(value.getHours()),
+    pad(value.getMinutes()),
+    pad(value.getSeconds()),
+  ].join(":");
+  const milliseconds = value.getMilliseconds();
+
+  return milliseconds === 0 ? `${date} ${time}` : `${date} ${time}.${pad(milliseconds, 3)}`;
 }
 
 function chunkRows<T>(rows: T[], size: number) {
@@ -105,9 +158,11 @@ async function copyTable(tableName: string) {
 }
 
 async function resetSequence(tableName: string) {
+  const serialSequenceTableName = `"${tableName}"`;
+
   await db.execute(sql`
     SELECT setval(
-      pg_get_serial_sequence(${"\"" + tableName + "\""}, 'id'),
+      pg_get_serial_sequence(${serialSequenceTableName}, 'id'),
       COALESCE((SELECT MAX(id) FROM ${sql.identifier(tableName)}), 1),
       (SELECT COUNT(*) > 0 FROM ${sql.identifier(tableName)})
     )

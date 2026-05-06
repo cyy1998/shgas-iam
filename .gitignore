@@ -41,3 +41,5 @@ package-lock.json
 
 # superpowers brainstorming session artifacts
 .superpowers/
+
+tmp/
