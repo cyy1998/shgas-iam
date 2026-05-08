@@ -1,4 +1,3 @@
-import { normalizeDatabaseUrl } from "@api/db/connection-url";
 import { relations } from "@api/db/relations";
 import { createSingleton } from "@api/lib/core/singleton";
 import { drizzle } from "drizzle-orm/postgres-js";
@@ -10,8 +9,7 @@ function createQueryClient() {
     throw new Error("DATABASE_URL is required");
   }
 
-  const { url, schema } = normalizeDatabaseUrl(connectionString);
-  return postgres(url, schema ? { connection: { search_path: schema } } : undefined);
+  return postgres(connectionString);
 }
 
 const queryClient = createSingleton("postgres:drizzle", createQueryClient, {
