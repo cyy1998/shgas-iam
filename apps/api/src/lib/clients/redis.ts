@@ -6,6 +6,7 @@ function createRedisClient() {
   return new Redis({
     host: config.REDIS_URL,
     port: config.REDIS_PORT,
+    password: config.REDIS_PASSWORD,
     db: config.REDIS_DB,
   });
 }

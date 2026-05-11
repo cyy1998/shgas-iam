@@ -17,6 +17,7 @@ const EnvSchema = z.object({
   PURVEYOR_PARENT_ORG: z.string(),
   REDIS_URL: z.string(),
   REDIS_PORT: z.coerce.number(),
+  REDIS_PASSWORD: z.string().optional().transform(value => value || undefined),
   REDIS_DB: z.coerce.number(),
   LOGIN_ENDPOINT: z.string(),
   AUTHORIZATION_ENDPOINT: z.string(),
