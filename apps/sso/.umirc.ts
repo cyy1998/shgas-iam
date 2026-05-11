@@ -18,7 +18,7 @@ export default defineConfig({
     { path: '/', redirect: '/login' },
     { path: '/login', component: './login' },
     { path: '/reset-password', component: './reset-password' },
-    { path: '/user-info', component: './user-info' },
+    { path: '/userInfo', component: './user-info' },
     { path: '/system-maintenance', component: './system-maintenance' },
   ],
   npmClient: 'pnpm',
