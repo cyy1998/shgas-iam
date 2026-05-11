@@ -71,10 +71,10 @@ x-postgres-replica-common: &postgres-replica-common
           -Fp \
           -Xs \
           -P
-        cat > "$${PGDATA}/postgresql.auto.conf" <<EOF
-      primary_conninfo = 'host=$${POSTGRES_PRIMARY_HOST} port=$${POSTGRES_PRIMARY_PORT} user=$${POSTGRES_REPLICATION_USER} password=$${POSTGRES_REPLICATION_PASSWORD} application_name=$${POSTGRES_REPLICATION_SLOT}'
-      primary_slot_name = '$${POSTGRES_REPLICATION_SLOT}'
-      EOF
+        {
+          printf "%s\n" "primary_conninfo = 'host=$${POSTGRES_PRIMARY_HOST} port=$${POSTGRES_PRIMARY_PORT} user=$${POSTGRES_REPLICATION_USER} password=$${POSTGRES_REPLICATION_PASSWORD} application_name=$${POSTGRES_REPLICATION_SLOT}'"
+          printf "%s\n" "primary_slot_name = '$${POSTGRES_REPLICATION_SLOT}'"
+        } > "$${PGDATA}/postgresql.auto.conf"
         touch "$${PGDATA}/standby.signal"
         chown -R postgres:postgres "$${PGDATA}"
         chmod 0700 "$${PGDATA}"
@@ -99,22 +99,22 @@ services:
           echo "$${repl_hba}" >> "$${PGDATA}/pg_hba.conf"
         fi
         mkdir -p /docker-entrypoint-initdb.d
-        cat > /docker-entrypoint-initdb.d/10-replication.sh <<'EOF'
-        #!/usr/bin/env bash
-        set -euo pipefail
-        psql \
-          -v ON_ERROR_STOP=1 \
-          -v repl_user="$${POSTGRES_REPLICATION_USER}" \
-          -v repl_password="$${POSTGRES_REPLICATION_PASSWORD}" \
-          --username "$${POSTGRES_USER}" \
-          --dbname "$${POSTGRES_DB}" <<EOSQL
-        SELECT format('CREATE ROLE %I WITH REPLICATION LOGIN PASSWORD %L', :'repl_user', :'repl_password')
-        WHERE NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = :'repl_user')\gexec
-        SELECT format('ALTER ROLE %I WITH REPLICATION LOGIN PASSWORD %L', :'repl_user', :'repl_password')\gexec
-        EOSQL
-        repl_hba="host replication $${POSTGRES_REPLICATION_USER} $${POSTGRES_REPLICATION_CIDR} scram-sha-256"
-        grep -Fqx "$${repl_hba}" "$${PGDATA}/pg_hba.conf" || echo "$${repl_hba}" >> "$${PGDATA}/pg_hba.conf"
-        EOF
+        {
+          printf "%s\n" "#!/usr/bin/env bash"
+          printf "%s\n" "set -euo pipefail"
+          printf "%s\n" "psql \\"
+          printf "%s\n" "  -v ON_ERROR_STOP=1 \\"
+          printf "%s\n" "  -v repl_user=\"$${POSTGRES_REPLICATION_USER}\" \\"
+          printf "%s\n" "  -v repl_password=\"$${POSTGRES_REPLICATION_PASSWORD}\" \\"
+          printf "%s\n" "  --username \"$${POSTGRES_USER}\" \\"
+          printf "%s\n" "  --dbname \"$${POSTGRES_DB}\" <<EOSQL"
+          printf "%s\n" "SELECT format('CREATE ROLE %I WITH REPLICATION LOGIN PASSWORD %L', :'repl_user', :'repl_password')"
+          printf "%s\n" "WHERE NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = :'repl_user')\gexec"
+          printf "%s\n" "SELECT format('ALTER ROLE %I WITH REPLICATION LOGIN PASSWORD %L', :'repl_user', :'repl_password')\gexec"
+          printf "%s\n" "EOSQL"
+          printf "%s\n" "repl_hba=\"host replication $${POSTGRES_REPLICATION_USER} $${POSTGRES_REPLICATION_CIDR} scram-sha-256\""
+          printf "%s\n" "grep -Fqx \"$${repl_hba}\" \"$${PGDATA}/pg_hba.conf\" || echo \"$${repl_hba}\" >> \"$${PGDATA}/pg_hba.conf\""
+        } > /docker-entrypoint-initdb.d/10-replication.sh
         chmod +x /docker-entrypoint-initdb.d/10-replication.sh
         exec docker-entrypoint.sh postgres \
           -c wal_level=replica \
