@@ -127,6 +127,16 @@ function chunkRows<T>(rows: T[], size: number) {
   return chunks;
 }
 
+async function clearTargetDatabase() {
+  const tablesSql = sql.join(tableOrder.map(tableName => sql.identifier(tableName)), sql`, `);
+
+  await db.execute(sql`
+    TRUNCATE TABLE ${tablesSql} RESTART IDENTITY CASCADE
+  `);
+
+  console.log(`[clear] postgres: ${tableOrder.length} tables`);
+}
+
 async function copyTable(tableName: string) {
   const [rows] = await source.query(`SELECT * FROM \`${tableName}\``);
   const data = (rows as Record<string, unknown>[]).map(normalizeRow);
@@ -170,6 +180,8 @@ async function resetSequence(tableName: string) {
 }
 
 try {
+  await clearTargetDatabase();
+
   for (const tableName of tableOrder) {
     await copyTable(tableName);
   }
