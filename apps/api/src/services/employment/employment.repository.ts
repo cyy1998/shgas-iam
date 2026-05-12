@@ -1,24 +1,16 @@
 import type { DbClient } from "@api/db";
 import type { Employment, Organization, User } from "@api/db/schema";
-import type { EmploymentAdminPaginationQueryDto, EmploymentQueryDto } from "./employment.type";
+import type { EmploymentAdminPaginationQueryDto } from "./employment.type";
 import db from "@api/db";
 import { compactUpdate, firstRow, ilikeContainsIf, inArrayIf } from "@api/db/query-utils";
 import {
-  employmentRoles,
   employments,
-  organizationClosures,
-  organizationRoles,
   organizations,
-  positionRoles,
   positions,
-  privileges,
-  rolePrivileges,
-  roles,
   users,
 } from "@api/db/schema";
 import { Status } from "@api/enums/status";
-import { and, count, desc, eq, exists, getTableColumns, gt, inArray, or, sql } from "drizzle-orm";
-import { alias } from "drizzle-orm/pg-core";
+import { and, count, desc, eq, exists, inArray, or, sql } from "drizzle-orm";
 
 type Position = typeof positions.$inferSelect;
 type EmploymentWithRelations = Employment & {
@@ -63,156 +55,12 @@ async function attachEmploymentRelations(rows: Employment[], tx: DbClient): Prom
     );
 }
 
-function activeRoleCondition(roleCodes: string[] | undefined) {
-  return and(
-    eq(roles.status, Status.Enable),
-    eq(roles.isDelete, false),
-    inArrayIf(roles.roleCode, roleCodes),
-  );
-}
-
-function employmentHasRoleCondition(roleCodes: string[] | undefined) {
-  const ancestorClosure = alias(organizationClosures, "role_org_closure");
-  return or(
-    exists(
-      db.select({ value: sql`1` })
-        .from(positionRoles)
-        .innerJoin(roles, eq(positionRoles.roleId, roles.id))
-        .where(and(
-          eq(positionRoles.positionId, employments.posId),
-          activeRoleCondition(roleCodes),
-        )),
-    ),
-    exists(
-      db.select({ value: sql`1` })
-        .from(employmentRoles)
-        .innerJoin(roles, eq(employmentRoles.roleId, roles.id))
-        .where(and(
-          eq(employmentRoles.employmentId, employments.id),
-          activeRoleCondition(roleCodes),
-        )),
-    ),
-    exists(
-      db.select({ value: sql`1` })
-        .from(ancestorClosure)
-        .innerJoin(organizationRoles, eq(organizationRoles.organizationId, ancestorClosure.ancestorId))
-        .innerJoin(roles, eq(organizationRoles.roleId, roles.id))
-        .where(and(
-          eq(ancestorClosure.descendantId, employments.orgId),
-          or(
-            and(eq(ancestorClosure.depth, 0), activeRoleCondition(roleCodes)),
-            and(gt(ancestorClosure.depth, 0), eq(organizationRoles.isAllSub, true), activeRoleCondition(roleCodes)),
-          ),
-        )),
-    ),
-  );
-}
-
-function employmentSearchWhere(employmentQueryDto: EmploymentQueryDto) {
-  const ancestor = alias(organizations, "employment_ancestor_filter");
-  return and(
-    exists(
-      db.select({ value: sql`1` })
-        .from(users)
-        .where(and(
-          eq(users.id, employments.userId),
-          inArrayIf(users.username, employmentQueryDto.usernames),
-          inArrayIf(users.mobile, employmentQueryDto.phones),
-          inArrayIf(users.wxId, employmentQueryDto.wxIds),
-          eq(users.status, Status.Enable),
-          eq(users.isDelete, false),
-        )),
-    ),
-    exists(
-      db.select({ value: sql`1` })
-        .from(organizationClosures)
-        .innerJoin(ancestor, eq(organizationClosures.ancestorId, ancestor.id))
-        .where(and(
-          eq(organizationClosures.descendantId, employments.orgId),
-          inArrayIf(ancestor.orgCode, employmentQueryDto.ancestorOrgCodes),
-          inArrayIf(organizationClosures.depth, employmentQueryDto.ancestorOrgDepths),
-        )),
-    ),
-    exists(
-      db.select({ value: sql`1` })
-        .from(positions)
-        .where(and(
-          eq(positions.id, employments.posId),
-          eq(positions.status, Status.Enable),
-          eq(positions.isDelete, false),
-          inArrayIf(positions.posCode, employmentQueryDto.positionCodes),
-        )),
-    ),
-    employmentHasRoleCondition(employmentQueryDto.roleCodes),
-    eq(employments.status, Status.Enable),
-    eq(employments.isDelete, false),
-  );
-}
-
-function employmentHasPrivilegeCondition(privilegeCodes: string[]) {
-  return or(
-    exists(
-      db.select({ value: sql`1` })
-        .from(organizationRoles)
-        .innerJoin(rolePrivileges, eq(organizationRoles.roleId, rolePrivileges.roleId))
-        .innerJoin(privileges, eq(rolePrivileges.privilegeId, privileges.id))
-        .where(and(
-          eq(organizationRoles.organizationId, employments.orgId),
-          inArrayIf(privileges.privilegeCode, privilegeCodes),
-        )),
-    ),
-    exists(
-      db.select({ value: sql`1` })
-        .from(organizationRoles)
-        .innerJoin(rolePrivileges, eq(organizationRoles.roleId, rolePrivileges.roleId))
-        .innerJoin(privileges, eq(rolePrivileges.privilegeId, privileges.id))
-        .where(and(
-          eq(organizationRoles.organizationId, employments.compId),
-          inArrayIf(privileges.privilegeCode, privilegeCodes),
-        )),
-    ),
-    exists(
-      db.select({ value: sql`1` })
-        .from(positionRoles)
-        .innerJoin(rolePrivileges, eq(positionRoles.roleId, rolePrivileges.roleId))
-        .innerJoin(privileges, eq(rolePrivileges.privilegeId, privileges.id))
-        .where(and(
-          eq(positionRoles.positionId, employments.posId),
-          inArrayIf(privileges.privilegeCode, privilegeCodes),
-        )),
-    ),
-    exists(
-      db.select({ value: sql`1` })
-        .from(employmentRoles)
-        .innerJoin(rolePrivileges, eq(employmentRoles.roleId, rolePrivileges.roleId))
-        .innerJoin(privileges, eq(rolePrivileges.privilegeId, privileges.id))
-        .where(and(
-          eq(employmentRoles.employmentId, employments.id),
-          inArrayIf(privileges.privilegeCode, privilegeCodes),
-        )),
-    ),
-  );
-}
-
 export async function getEmploymentsByUserId(userId: number, tx: DbClient = db) {
   const rows = await tx.select().from(employments).where(and(
     eq(employments.userId, userId),
     eq(employments.status, Status.Enable),
     eq(employments.isDelete, false),
   ));
-  return await attachEmploymentRelations(rows, tx);
-}
-
-export async function getEmploymentsByUsername(username: string, tx: DbClient = db) {
-  const rows = await tx
-    .select({ ...getTableColumns(employments) })
-    .from(employments)
-    .innerJoin(users, eq(employments.userId, users.id))
-    .where(and(
-      eq(users.username, username),
-      eq(employments.status, Status.Enable),
-      eq(employments.isDelete, false),
-    ));
   return await attachEmploymentRelations(rows, tx);
 }
 
@@ -232,48 +80,6 @@ export async function getEmploymentByUserOrgPosId(
   return firstRow(await attachEmploymentRelations(rows, tx)) ?? null;
 }
 
-export async function getEmploymentByUserOrgPosCode(
-  username: string,
-  orgCode: string,
-  posCode: string,
-  tx: DbClient = db,
-) {
-  const rows = await tx
-    .select({ ...getTableColumns(employments) })
-    .from(employments)
-    .innerJoin(users, eq(employments.userId, users.id))
-    .innerJoin(organizations, eq(employments.orgId, organizations.id))
-    .innerJoin(positions, eq(employments.posId, positions.id))
-    .where(and(
-      eq(users.username, username),
-      eq(organizations.orgCode, orgCode),
-      eq(positions.posCode, posCode),
-      eq(employments.status, Status.Enable),
-      eq(employments.isDelete, false),
-    ))
-    .limit(1);
-  return firstRow(rows) ?? null;
-}
-
-export async function getEmploymentsByUserAndPrivilege(
-  username: string,
-  privCondition: string | string[],
-  tx: DbClient = db,
-) {
-  const privilegeCodes = Array.isArray(privCondition) ? privCondition : [privCondition];
-  const rows = await tx
-    .select({ ...getTableColumns(employments) })
-    .from(employments)
-    .innerJoin(users, eq(employments.userId, users.id))
-    .where(and(
-      eq(users.username, username),
-      eq(employments.status, Status.Enable),
-      eq(employments.isDelete, false),
-      employmentHasPrivilegeCondition(privilegeCodes),
-    ));
-  return await attachEmploymentRelations(rows, tx);
-}
-
 export async function setEmployment(
   userId: number,
   posId: number,
@@ -289,14 +95,6 @@ export async function setEmployment(
   }).returning())!;
 }
 
-export async function searchEmployments(
-  employmentQueryDto: EmploymentQueryDto,
-  tx: DbClient = db,
-) {
-  const rows = await tx.select().from(employments).where(employmentSearchWhere(employmentQueryDto));
-  return await attachEmploymentRelations(rows, tx);
-}
-
 export async function getEmploymentByIdForAdmin(
   id: number,
   tx: DbClient = db,
@@ -306,17 +104,6 @@ export async function getEmploymentByIdForAdmin(
     eq(employments.isDelete, false),
   )).limit(1);
   return firstRow(await attachEmploymentRelations(rows, tx)) ?? null;
-}
-
-export async function getEmploymentsByUserIdForAdmin(
-  userId: number,
-  tx: DbClient = db,
-) {
-  const rows = await tx.select().from(employments).where(and(
-    eq(employments.userId, userId),
-    eq(employments.isDelete, false),
-  ));
-  return await attachEmploymentRelations(rows, tx);
 }
 
 function buildEmploymentAdminWhere(dto: EmploymentAdminPaginationQueryDto) {

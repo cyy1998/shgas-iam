@@ -1,7 +1,7 @@
 import type { DbClient } from "@api/db";
-import type { PositionCreateDto, PositionFuzzyQueryDto, PositionQueryDto } from "./position.type";
+import type { PositionCreateDto, PositionFuzzyQueryDto } from "./position.type";
 import db from "@api/db";
-import { compactUpdate, firstRow, inArrayIf } from "@api/db/query-utils";
+import { compactUpdate, firstRow } from "@api/db/query-utils";
 import { employments, positions } from "@api/db/schema";
 import { and, count, eq } from "drizzle-orm";
 
@@ -11,32 +11,8 @@ export async function getPositionByCode(posCode: string, tx: DbClient = db) {
   }) ?? null;
 }
 
-export async function getPositionById(posId: number, tx: DbClient = db) {
-  return await tx.query.positions.findFirst({
-    where: { id: posId },
-  }) ?? null;
-}
-
 export async function setPosition(positionCreateDto: PositionCreateDto, tx: DbClient = db) {
   await tx.insert(positions).values(positionCreateDto);
-}
-
-export async function setPositions(positionCreateDtos: PositionCreateDto[], tx: DbClient = db) {
-  if (positionCreateDtos.length === 0) {
-    return { count: 0 };
-  }
-  await tx.insert(positions).values(positionCreateDtos);
-  return { count: positionCreateDtos.length };
-}
-
-export async function searchPositions(
-  positionQueryDto: PositionQueryDto,
-  tx: DbClient = db,
-) {
-  return await tx.select().from(positions).where(and(
-    inArrayIf(positions.posCode, positionQueryDto.posCodes),
-    inArrayIf(positions.posName, positionQueryDto.posNames),
-  ));
 }
 
 export async function searchPositionsFuzzy(

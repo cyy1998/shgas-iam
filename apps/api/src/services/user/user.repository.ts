@@ -1,6 +1,5 @@
 import type { DbClient } from "@api/db";
 import type { UserCreateDto, UserPaginationQueryDto, UserQueryDto } from "@api/services/user/user.type";
-import type { Prettify } from "@api/utils/lint.util";
 import db from "@api/db";
 import { compactUpdate, firstRow, ilikeContainsIf, inArrayIf } from "@api/db/query-utils";
 import {
@@ -172,13 +171,6 @@ function usersFuzzyWhere(userPaginationQueryDto: UserPaginationQueryDto) {
   );
 }
 
-export async function searchUsersFuzzy(
-  userPaginationQueryDto: UserPaginationQueryDto,
-  tx: DbClient = db,
-) {
-  return await tx.select().from(users).where(usersFuzzyWhere(userPaginationQueryDto));
-}
-
 export async function setPassword(userId: number, password: string, tx: DbClient = db) {
   return firstRow(await tx
     .update(users)
@@ -199,37 +191,6 @@ export async function setUser(userCreateDto: UserCreateDto, tx: DbClient = db) {
   return firstRow(await tx.insert(users).values(userCreateDto).returning())!;
 }
 
-export async function setUsers(
-  userCreateDtos: Prettify<UserCreateDto>[],
-  tx: DbClient = db,
-) {
-  if (userCreateDtos.length === 0) {
-    return { count: 0 };
-  }
-  await tx.insert(users).values(userCreateDtos);
-  return { count: userCreateDtos.length };
-}
-
-export async function getOtherUsersByOrgAndAllSub(userId: number, orgCode: string, tx: DbClient = db) {
-  const employment = alias(employments, "other_user_employment");
-  const ancestor = alias(organizations, "other_user_ancestor");
-  return await tx.select().from(users).where(and(
-    exists(
-      db.select({ value: sql`1` })
-        .from(employment)
-        .innerJoin(organizationClosures, eq(organizationClosures.descendantId, employment.orgId))
-        .innerJoin(ancestor, eq(organizationClosures.ancestorId, ancestor.id))
-        .where(and(
-          eq(employment.userId, users.id),
-          eq(ancestor.orgCode, orgCode),
-        )),
-    ),
-    sql`${users.id} <> ${userId}`,
-    eq(users.status, Status.Enable),
-    eq(users.isDelete, false),
-  ));
-}
-
 export async function getUserByUsernameForAdmin(
   username: string,
   tx: DbClient = db,
@@ -240,14 +201,6 @@ export async function getUserByUsernameForAdmin(
       isDelete: false,
     },
   }) ?? null;
-}
-
-export async function countUsersFuzzy(
-  userPaginationQueryDto: UserPaginationQueryDto,
-  tx: DbClient = db,
-) {
-  const rows = await tx.select({ value: count() }).from(users).where(usersFuzzyWhere(userPaginationQueryDto));
-  return firstRow(rows)?.value ?? 0;
 }
 
 export async function searchUsersFuzzyPaged(

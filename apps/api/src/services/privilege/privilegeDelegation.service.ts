@@ -14,20 +14,6 @@ export async function queryPrivilegeDelegations(query: PrivilegeDelegationQueryD
   return delegations.map(d => PrivilegeDelegationDetailDtoConverterSchema.parse(d));
 }
 
-export async function updateDelegationStatus(id: number, status: Status) {
-  return await db.transaction(async (tx) => {
-    const existing = await tx.query.privilegeDelegations.findFirst({ where: { id } });
-    if (!existing) {
-      throw new CustomError(`委托记录不存在: ${id}`);
-    }
-    if (existing.status === Status.Disable) {
-      throw new CustomError("该委托已结束，不允许再修改状态");
-    }
-    await delegationRepository.updateDelegationStatus(id, status, tx);
-    return true;
-  });
-}
-
 export async function updateDelegation(id: number, dto: PrivilegeDelegationUpdateDto) {
   return await db.transaction(async (tx) => {
     const existing = await tx.query.privilegeDelegations.findFirst({ where: { id } });

@@ -1,8 +1,7 @@
-import type { PositionCreateDto, PositionFuzzyQueryDto } from "./position.type";
+import type { PositionCreateDto } from "./position.type";
 import db from "@api/db";
 import { CustomError } from "@api/errors/CustomError";
 import { PositionHasEmploymentError } from "@api/errors/PositionHasEmploymentError";
-import { paginate } from "@api/utils/page.util";
 import * as positionRepository from "./position.repository";
 import { PositionDtoSchema } from "./position.schema";
 
@@ -15,25 +14,6 @@ export async function setPosition(positionCreateDto: PositionCreateDto) {
     await positionRepository.setPosition(positionCreateDto, tx);
     return true;
   });
-}
-
-export async function setPositions(positionCreateDtos: PositionCreateDto[]) {
-  return await db.transaction(async (tx) => {
-    const existingPositions = await positionRepository.searchPositions({
-      posCodes: positionCreateDtos.map(e => e.posCode),
-    }, tx);
-    if (existingPositions.length !== 0) {
-      throw new CustomError("重复岗位code代码");
-    }
-    await positionRepository.setPositions(positionCreateDtos, tx);
-    return true;
-  });
-}
-
-export async function searchPositionsFuzzy(positionPaginationQuery: PositionFuzzyQueryDto) {
-  const positions = await positionRepository.searchPositionsFuzzy(positionPaginationQuery);
-  const positionDtos = positions.map(p => PositionDtoSchema.parse(p));
-  return paginate(positionDtos, positionPaginationQuery);
 }
 
 export async function getPositionDetailByCode(posCode: string) {

@@ -1,6 +1,5 @@
 import type { User } from "@api/db/schema";
 
-import type { Prettify } from "@api/utils/lint.util";
 import type { UserCreateDto, UserDetailDto, UserDto, UserPaginationQueryDto, UserQueryDto, UserQueryWithPrivilegeDelegationDto } from "./user.type";
 import db from "@api/db";
 import { Status } from "@api/enums/status";
@@ -21,7 +20,6 @@ import {
   UserDtoSchema,
 } from "@api/services/user/user.schema";
 import { generateRandomPassword } from "@api/utils/encryption.utils";
-import { paginate } from "@api/utils/page.util";
 import { compare, hash } from "bcrypt-ts";
 import { PrivilegeDelegationDtoConverterSchema } from "../privilege/privilegeDelegation.schema";
 
@@ -134,12 +132,6 @@ export async function searchUsers(userQueryDto: UserQueryDto): Promise<UserDto[]
   return userDtos;
 }
 
-export async function searchUsersFuzzy(userPageQuery: UserPaginationQueryDto) {
-  const users = await userRepository.searchUsersFuzzy(userPageQuery);
-  const userDtos = users.map(u => UserDtoSchema.parse(u));
-  return paginate(userDtos, userPageQuery);
-}
-
 export async function searchUsersWithPrivilegeDelegation(query: UserQueryWithPrivilegeDelegationDto) {
   if (query.ancestorOrgCodes.length !== 1) {
     throw new CustomError("该接口ancestorOrgCodes元素数量只支持为1");
@@ -181,28 +173,6 @@ export async function getUserDetailByWxId(wxId: string): Promise<UserDetailDto> 
   const user = await userRepository.getUserByWxId(wxId);
   const userDetail = await _getUserDetail(user);
   return userDetail;
-}
-
-export async function getOtherUsersByOrg(orgCode: string, userId: number) {
-  const users = await userRepository.getOtherUsersByOrgAndAllSub(userId, orgCode);
-  const userDtos = users.map(u => UserDtoSchema.parse(u));
-  return userDtos;
-}
-
-export async function setUsers(userCreateDtos: Prettify<UserCreateDto>[]) {
-  return await db.transaction(async (tx) => {
-    const existingUsers = await userRepository.searchUsers({ usernames: userCreateDtos.map(u => u.username) }, tx);
-    if (existingUsers.length !== 0) {
-      throw new CustomError("相同用户名已被注册");
-    }
-    for (const u of userCreateDtos) {
-      if (u.password !== null) {
-        u.password = await hash(u.password, config.PASSWORD_HASH_ROUNDS);
-      }
-    }
-    await userRepository.setUsers(userCreateDtos, tx);
-    return true;
-  });
 }
 
 export async function getUserDetailByUsernameForAdmin(username: string): Promise<UserDetailDto> {

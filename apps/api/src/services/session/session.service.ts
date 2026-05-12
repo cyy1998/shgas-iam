@@ -2,21 +2,11 @@ import type { UserDetailDto } from "../user/user.type";
 import type { LocalSessionAbstract } from "./session.type";
 import { ClientManagementLevel } from "@api/enums/client.managementLevel";
 import config from "@api/env";
-import { AuthzUnauthorizedError } from "@api/errors/AuthzUnauthorizedError";
 import redis from "@api/lib/clients/redis";
 import * as clientService from "@api/services/client/client.service";
 import * as sessionRepository from "@api/services/session/session.repository";
-import { UserDetailDtoSchema } from "@api/services/user/user.schema";
 import { reviveIsoDates } from "@api/utils/common.utils";
 import { LocalSessionAbstractSchema } from "./session.schema";
-
-export async function getSessionById(sessionId: string): Promise<UserDetailDto> {
-  const session = await redis.get(`global_session:${sessionId}`);
-  if (session === null) {
-    throw new AuthzUnauthorizedError("未登录");
-  }
-  return UserDetailDtoSchema.parse(JSON.parse(session, reviveIsoDates));
-}
 
 export async function updateSession(sessionId: string, userInfo: string) {
   await redis.set(`global_session:${sessionId}`, userInfo, "EX", config.REDIS_EXPIRE_TIME);

@@ -201,18 +201,6 @@ export async function getActiveDelegationsByDelegatorAndPrivileges(
   return await attachDelegationRelations(rows, tx);
 }
 
-export async function updateDelegationStatus(
-  id: number,
-  status: Status,
-  tx: DbClient = db,
-) {
-  return firstRow(await tx
-    .update(privilegeDelegations)
-    .set({ status })
-    .where(eq(privilegeDelegations.id, id))
-    .returning())!;
-}
-
 export async function updateDelegation(
   id: number,
   data: { startTime?: Date; endTime?: Date; status?: Status; description?: string | null },

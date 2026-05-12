@@ -4,9 +4,8 @@ import type { OrganizationCreateDto, OrganizationQueryDto } from "@api/services/
 import db from "@api/db";
 import { compactUpdate, firstRow, ilikeContainsIf, inArrayIf } from "@api/db/query-utils";
 import { employments, organizationClosures, organizations } from "@api/db/schema";
-import { OrganizationType } from "@api/enums/organization.type";
 import { Status } from "@api/enums/status";
-import { and, count, eq, exists, getTableColumns, gt, inArray, notInArray, or, sql } from "drizzle-orm";
+import { and, count, eq, exists, gt, inArray, or, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 
 type OrganizationWithRelations = Organization & {
@@ -51,44 +50,9 @@ async function attachOrganizationRelations(
   }));
 }
 
-function descendantOfAncestorCondition(orgCode: string, depth?: number[]) {
-  const ancestor = alias(organizations, "ancestor");
-  return exists(
-    db
-      .select({ value: sql`1` })
-      .from(organizationClosures)
-      .innerJoin(ancestor, eq(organizationClosures.ancestorId, ancestor.id))
-      .where(and(
-        eq(organizationClosures.descendantId, organizations.id),
-        eq(ancestor.orgCode, orgCode),
-        inArrayIf(organizationClosures.depth, depth),
-      )),
-  );
-}
-
-export async function searchFormalOrganizations(orgCode: string, orgLevel: number, tx: DbClient = db) {
-  const rows = await tx.select().from(organizations).where(and(
-    descendantOfAncestorCondition(orgCode),
-    notInArray(organizations.orgType, [OrganizationType.Virtual, OrganizationType.External]),
-    eq(organizations.level, orgLevel),
-    eq(organizations.status, Status.Enable),
-    eq(organizations.isDelete, false),
-  ));
-  return await attachOrganizationRelations(rows, tx);
-}
-
 export async function getOrganizationByCode(orgCode: string, tx: DbClient = db) {
   const rows = await tx.select().from(organizations).where(and(
     eq(organizations.orgCode, orgCode),
-    eq(organizations.status, Status.Enable),
-    eq(organizations.isDelete, false),
-  )).limit(1);
-  return firstRow(await attachOrganizationRelations(rows, tx)) ?? null;
-}
-
-export async function getOrganizationById(id: number, tx: DbClient = db) {
-  const rows = await tx.select().from(organizations).where(and(
-    eq(organizations.id, id),
     eq(organizations.status, Status.Enable),
     eq(organizations.isDelete, false),
   )).limit(1);
@@ -132,29 +96,6 @@ export async function searchOrganizations(
     eq(organizations.status, Status.Enable),
     eq(organizations.isDelete, false),
   ));
-  return await attachOrganizationRelations(rows, tx);
-}
-
-export async function getOrganizationsByParentId(parentId: number, tx: DbClient = db) {
-  const rows = await tx.select().from(organizations).where(and(
-    eq(organizations.parentId, parentId),
-    eq(organizations.status, Status.Enable),
-    eq(organizations.isDelete, false),
-  ));
-  return await attachOrganizationRelations(rows, tx);
-}
-
-export async function getOrganizationsByParentsCode(parentCodes: string[], tx: DbClient = db) {
-  const parent = alias(organizations, "parent_by_code");
-  const rows = await tx
-    .select({ ...getTableColumns(organizations) })
-    .from(organizations)
-    .innerJoin(parent, eq(organizations.parentId, parent.id))
-    .where(and(
-      inArrayIf(parent.orgCode, parentCodes),
-      eq(organizations.status, Status.Enable),
-      eq(organizations.isDelete, false),
-    ));
   return await attachOrganizationRelations(rows, tx);
 }
 

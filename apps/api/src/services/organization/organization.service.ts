@@ -15,11 +15,6 @@ import * as organizationRepository from "@api/services/organization/organization
 import { OrganizationDtoConverterSchema } from "@api/services/organization/organization.schema";
 import { paginate } from "@api/utils/page.util";
 
-export async function getFormalOrganizationsByCode(orgCode: string, orgLevel: number) {
-  const organizations = await organizationRepository.searchFormalOrganizations(orgCode, orgLevel);
-  const orgDtos = organizations.map(o => OrganizationDtoConverterSchema.parse(o));
-  return orgDtos;
-}
 export async function getOrganizationByCode(orgCode: string) {
   const organization = await organizationRepository.getOrganizationByCode(orgCode);
   if (organization === null) {
