@@ -35,5 +35,6 @@ export default antfu({
   },
   ignores: [
     "src/db/generated",
+    "scripts/**",
   ],
 });
