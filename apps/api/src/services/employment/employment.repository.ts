@@ -20,6 +20,13 @@ type EmploymentWithRelations = Employment & {
   position: Position;
 };
 
+const employmentRelations = {
+  user: true,
+  deptartment: true,
+  company: true,
+  position: true,
+} as const;
+
 async function attachEmploymentRelations(rows: Employment[], tx: DbClient): Promise<EmploymentWithRelations[]> {
   if (rows.length === 0) {
     return [];
@@ -56,12 +63,14 @@ async function attachEmploymentRelations(rows: Employment[], tx: DbClient): Prom
 }
 
 export async function getEmploymentsByUserId(userId: number, tx: DbClient = db) {
-  const rows = await tx.select().from(employments).where(and(
-    eq(employments.userId, userId),
-    eq(employments.status, Status.Enable),
-    eq(employments.isDelete, false),
-  ));
-  return await attachEmploymentRelations(rows, tx);
+  return await tx.query.employments.findMany({
+    where: {
+      userId,
+      status: Status.Enable,
+      isDelete: false,
+    },
+    with: employmentRelations,
+  });
 }
 
 export async function getEmploymentByUserOrgPosId(
@@ -70,14 +79,16 @@ export async function getEmploymentByUserOrgPosId(
   posId: number,
   tx: DbClient = db,
 ) {
-  const rows = await tx.select().from(employments).where(and(
-    eq(employments.userId, userId),
-    eq(employments.orgId, orgId),
-    eq(employments.posId, posId),
-    eq(employments.status, Status.Enable),
-    eq(employments.isDelete, false),
-  )).limit(1);
-  return firstRow(await attachEmploymentRelations(rows, tx)) ?? null;
+  return await tx.query.employments.findFirst({
+    where: {
+      userId,
+      orgId,
+      posId,
+      status: Status.Enable,
+      isDelete: false,
+    },
+    with: employmentRelations,
+  }) ?? null;
 }
 
 export async function setEmployment(
@@ -99,11 +110,13 @@ export async function getEmploymentByIdForAdmin(
   id: number,
   tx: DbClient = db,
 ) {
-  const rows = await tx.select().from(employments).where(and(
-    eq(employments.id, id),
-    eq(employments.isDelete, false),
-  )).limit(1);
-  return firstRow(await attachEmploymentRelations(rows, tx)) ?? null;
+  return await tx.query.employments.findFirst({
+    where: {
+      id,
+      isDelete: false,
+    },
+    with: employmentRelations,
+  }) ?? null;
 }
 
 function buildEmploymentAdminWhere(dto: EmploymentAdminPaginationQueryDto) {
