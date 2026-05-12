@@ -89,7 +89,7 @@ export const logout = createRoute({
 
 export const loginOA = createRoute({
   method: "get",
-  path: `${routePrefix}/third-party/:clientCode`,
+  path: `${routePrefix}/thirdparty/:clientCode`,
   tags,
   request: {
     params: z.object({
@@ -112,7 +112,7 @@ export const loginOA = createRoute({
 
 export const loginWX = createRoute({
   method: "get",
-  path: `${routePrefix}/third-party/wx`,
+  path: `${routePrefix}/thirdparty/wx`,
   tags,
   request: {
     query: z.object({
