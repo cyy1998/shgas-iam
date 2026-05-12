@@ -112,6 +112,7 @@ export default function LoginPage() {
   };
 
   const handleSubmit = () => {
+    if (submitting) return;
     if (mode === 'PWD') return handlePwdLogin();
     if (mode === 'SMS') return handleSmsLogin();
     return handleBindMobile();
@@ -252,6 +253,7 @@ export default function LoginPage() {
                 size="large"
                 placeholder="请输入登录密码"
                 prefix={<LockOutlined style={{ color: '#9ca3af' }} />}
+                onPressEnter={handleSubmit}
               />
             </Form.Item>
           </Form>
@@ -290,6 +292,7 @@ export default function LoginPage() {
                 size="large"
                 placeholder="验证码"
                 prefix={<LockOutlined style={{ color: '#9ca3af' }} />}
+                onPressEnter={handleSubmit}
                 addonAfter={
                   <span style={{ cursor: 'pointer' }} onClick={sendSms}>
                     {countdown <= 0 ? '获取验证码' : `${countdown} s`}

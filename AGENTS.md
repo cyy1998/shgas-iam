@@ -65,4 +65,6 @@ There is no committed automated test framework yet. Minimum validation before a 
 ## Commit & Pull Request Guidelines
 Recent history uses Conventional Commits with scopes, for example `feat(db): ...`, `fix(auth): ...`, `refactor(api): ...`, and `style(sso): ...`. Keep commits focused and describe the changed area explicitly.
 
+After each completed feature or behavior change, automatically create a focused git commit using the Conventional Commits format. Write commit messages in Chinese unless the user explicitly requests another language.
+
 PRs should summarize affected apps/packages, call out env or migration changes, link the related issue, and include screenshots for UI work. Keep schema, API, and frontend changes synchronized in one reviewable branch when they ship together.
