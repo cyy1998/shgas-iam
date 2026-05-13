@@ -1,5 +1,4 @@
-import type { UserType } from "@iam/contracts";
-import type { UserCreateDto, UserDetailDto, UserPaginationQueryDto } from "./user.type";
+import type { UserAdminCreateDto, UserDetailDto, UserPaginationQueryDto, UserUpdateDto } from "./user.type";
 import config from "@admin-api/env";
 import * as employmentRepository from "@admin-api/services/employment/employment.repository";
 import { EmploymentDetailDtoSchema, EmploymentDtoConverterSchema } from "@admin-api/services/employment/employment.schema";
@@ -53,16 +52,9 @@ export async function searchUsersFuzzyForAdmin(userPageQuery: UserPaginationQuer
   };
 }
 
-export async function setUserForAdmin(dto: {
-  username: string;
-  name: string;
-  userType: UserType;
-  password?: string;
-  mobile?: string | null;
-  wxId?: string | null;
-  status?: UserStatus;
-  orderNum?: number;
-}): Promise<{ username: string; generatedPassword: string | null }> {
+export async function setUserForAdmin(
+  dto: UserAdminCreateDto,
+): Promise<{ username: string; generatedPassword: string | null }> {
   return await db.transaction(async (tx) => {
     const existing = await userRepository.getUserByUsernameForAdmin(dto.username, tx);
     if (existing !== null) {
@@ -80,7 +72,7 @@ export async function setUserForAdmin(dto: {
         wxId: dto.wxId ?? null,
         status: dto.status ?? UserStatus.Enable,
         orderNum: dto.orderNum ?? 0,
-      } as UserCreateDto,
+      },
       tx,
     );
     return {
@@ -92,14 +84,7 @@ export async function setUserForAdmin(dto: {
 
 export async function updateUser(
   username: string,
-  data: {
-    name?: string;
-    mobile?: string | null;
-    wxId?: string | null;
-    userType?: UserType;
-    status?: UserStatus;
-    orderNum?: number;
-  },
+  data: UserUpdateDto,
 ) {
   return await db.transaction(async (tx) => {
     const existing = await userRepository.getUserByUsernameForAdmin(username, tx);

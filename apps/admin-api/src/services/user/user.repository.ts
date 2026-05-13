@@ -1,5 +1,4 @@
-import type { UserCreateDto, UserPaginationQueryDto } from "@admin-api/services/user/user.type";
-import type { UserType } from "@iam/contracts";
+import type { UserCreateDto, UserPaginationQueryDto, UserUpdateDto } from "@admin-api/services/user/user.type";
 import type { DbClient } from "@iam/db";
 import { EmploymentStatus, UserStatus } from "@iam/contracts";
 import db from "@iam/db";
@@ -71,14 +70,7 @@ export async function searchUsersFuzzyPaged(
 
 export async function updateUserByUsername(
   username: string,
-  data: {
-    name?: string;
-    mobile?: string | null;
-    wxId?: string | null;
-    userType?: UserType;
-    status?: UserStatus;
-    orderNum?: number;
-  },
+  data: UserUpdateDto,
   tx: DbClient = db,
 ) {
   return firstRow(await tx
