@@ -1,6 +1,6 @@
 import type { UserCreateDto, UserQueryDto } from "@api/services/user/user.type";
 import type { DbClient } from "@iam/db";
-import { Status } from "@api/enums/status";
+import { Status } from "@iam/contracts";
 import db from "@iam/db";
 import { firstRow, inArrayIf } from "@iam/db/query-utils";
 import {

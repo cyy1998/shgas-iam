@@ -1,5 +1,4 @@
 import type { ClientDto } from "@api/services/client/client.type";
-import { Status } from "@api/enums/status";
 import { VerificationCodeUsage } from "@api/enums/verificationCode.usage";
 import config from "@api/env";
 import redis from "@api/lib/clients/redis";
@@ -11,6 +10,7 @@ import { AuthzMaintaincingError } from "@iam/api-core/errors/AuthzMaintaincingEr
 import { AuthzUnauthorizedError } from "@iam/api-core/errors/AuthzUnauthorizedError";
 import { CustomError } from "@iam/api-core/errors/CustomError";
 import { reviveIsoDates } from "@iam/api-core/utils";
+import { Status } from "@iam/contracts";
 
 export async function loginPassword(username: string, password: string) {
   const userDetailDto = await userService.getUserDetailByUsername(username);

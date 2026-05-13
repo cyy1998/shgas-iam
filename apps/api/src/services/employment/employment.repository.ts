@@ -1,5 +1,5 @@
 import type { DbClient } from "@iam/db";
-import { Status } from "@api/enums/status";
+import { Status } from "@iam/contracts";
 import db from "@iam/db";
 import { firstRow } from "@iam/db/query-utils";
 import {

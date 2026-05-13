@@ -1,5 +1,4 @@
 import type { UserRouteHandler } from "./user.type";
-import { UserType } from "@api/enums/user.type";
 import config from "@api/env";
 import * as employmentRepository from "@api/services/employment/employment.repository";
 import * as mobileService from "@api/services/mobile/mobile.service";
@@ -9,6 +8,7 @@ import * as userRepository from "@api/services/user/user.repository";
 import * as userService from "@api/services/user/user.service";
 import { CustomError } from "@iam/api-core/errors/CustomError";
 import * as resp from "@iam/api-core/http";
+import { UserType } from "@iam/contracts";
 import db from "@iam/db";
 
 export const userInfo: UserRouteHandler<"userInfo"> = async (c) => {

@@ -1,7 +1,7 @@
 import type { OrganizationCreateDto, OrganizationQueryDto } from "@api/services/organization/organization.type";
 import type { DbClient } from "@iam/db";
 import type { Organization } from "@iam/db/schema";
-import { Status } from "@api/enums/status";
+import { Status } from "@iam/contracts";
 import db from "@iam/db";
 import { compactUpdate, firstRow, inArrayIf } from "@iam/db/query-utils";
 import { organizationClosures, organizations } from "@iam/db/schema";
