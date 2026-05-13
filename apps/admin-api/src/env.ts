@@ -9,7 +9,7 @@ const EnvSchema = z.object({
   REDIS_PASSWORD: z.string().optional().transform(value => value || undefined),
   REDIS_DB: z.coerce.number(),
   LOG_LEVEL: z.string().default("info"),
-  ADMIN_CLIENT_CODES: z.string().default("iam"),
+  ADMIN_CLIENT_CODES: z.string().default("iam-admin"),
   ADMIN_ROLE_CODES: z.string().default("iam:admin"),
 });
 
