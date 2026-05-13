@@ -1,4 +1,4 @@
-import { UserStatus } from "@iam/contracts";
+import { UserStatus, UserType } from "@iam/contracts";
 import { boolean, integer, serial, snakeCase, timestamp, varchar } from "drizzle-orm/pg-core";
 import { createSelectSchema } from "drizzle-orm/zod";
 import { z } from "zod";
@@ -10,7 +10,7 @@ export const users = snakeCase.table("user", {
   name: varchar({ length: 64 }).notNull(),
   password: varchar({ length: 255 }),
   mobile: varchar("mobile_phone", { length: 20 }),
-  userType: varchar({ length: 20 }).notNull().default("正式员工"),
+  userType: varchar({ length: 20 }).$type<UserType>().notNull().default(UserType.Formal),
   orderNum: integer().notNull().default(999999),
   status: integer().$type<UserStatus>().notNull().default(UserStatus.Enable),
   isDelete: boolean().notNull().default(false),
@@ -19,6 +19,7 @@ export const users = snakeCase.table("user", {
 });
 
 export const selectUserSchema = createSelectSchema(users, {
+  userType: () => z.enum(UserType),
   status: () => z.enum(UserStatus),
 });
 

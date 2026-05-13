@@ -1,4 +1,4 @@
-import { OrganizationStatus } from "@iam/contracts";
+import { OrganizationLevel, OrganizationStatus, OrganizationType } from "@iam/contracts";
 import { boolean, index, integer, serial, snakeCase, text } from "drizzle-orm/pg-core";
 import { createSelectSchema } from "drizzle-orm/zod";
 import { z } from "zod";
@@ -11,8 +11,8 @@ export const organizations = snakeCase.table("organization", {
   parentId: integer().notNull().default(-1),
   businessParentId: integer().notNull().default(-1),
   path: text().notNull(),
-  level: integer().notNull(),
-  orgType: text().notNull(),
+  level: integer().$type<OrganizationLevel>().notNull(),
+  orgType: text().$type<OrganizationType>().notNull(),
   orderNum: integer().notNull().default(0),
   isVirtual: boolean().notNull().default(false),
   isEntity: boolean().notNull().default(false),
@@ -24,6 +24,8 @@ export const organizations = snakeCase.table("organization", {
 ]);
 
 export const selectOrganizationSchema = createSelectSchema(organizations, {
+  level: () => z.enum(OrganizationLevel),
+  orgType: () => z.enum(OrganizationType),
   status: () => z.enum(OrganizationStatus),
 });
 

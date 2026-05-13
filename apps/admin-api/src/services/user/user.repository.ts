@@ -1,4 +1,5 @@
 import type { UserCreateDto, UserPaginationQueryDto } from "@admin-api/services/user/user.type";
+import type { UserType } from "@iam/contracts";
 import type { DbClient } from "@iam/db";
 import { EmploymentStatus, UserStatus } from "@iam/contracts";
 import db from "@iam/db";
@@ -74,7 +75,7 @@ export async function updateUserByUsername(
     name?: string;
     mobile?: string | null;
     wxId?: string | null;
-    userType?: string;
+    userType?: UserType;
     status?: UserStatus;
     orderNum?: number;
   },

@@ -1,6 +1,6 @@
 import { z } from "@hono/zod-openapi";
 import { createPageQuerySchema } from "@iam/api-core/core/pagination/schema";
-import { OrganizationStatus } from "@iam/contracts";
+import { OrganizationLevel, OrganizationStatus, OrganizationType } from "@iam/contracts";
 import { selectOrganizationSchema } from "@iam/db/schema";
 
 export const OrganizationSchema = z.object(selectOrganizationSchema.shape);
@@ -33,7 +33,7 @@ export const OrganizationCreateDtoSchema = OrganizationSchema.partial().required
   // parentCode: true,
 }).extend({
   path: z.string().default(""),
-  level: z.number().default(0),
+  level: z.enum(OrganizationLevel).default(OrganizationLevel.One),
   parentCode: z.string().nullish().openapi({ example: "SR" }),
 }).omit({
   id: true,
@@ -44,8 +44,12 @@ export const OrganizationCreateDtoSchema = OrganizationSchema.partial().required
 }).openapi("OrganizationCreateDto");
 
 export const OrganizationQueryDtoSchema = z.object({
-  orgTypes: z.array(z.string()).optional().openapi({ example: ["部门", "分公司"] }),
-  orgLevels: z.array(z.number()).optional().openapi({ example: [1, 2] }),
+  orgTypes: z.array(z.enum(OrganizationType)).optional().openapi({
+    example: [OrganizationType.Department, OrganizationType.Company],
+  }),
+  orgLevels: z.array(z.enum(OrganizationLevel)).optional().openapi({
+    example: [OrganizationLevel.One, OrganizationLevel.Two],
+  }),
   ancestorCodes: z.array(z.string()).optional().openapi({ example: ["SR", "SB"] }),
   ancestorDepths: z.array(z.number()).optional().openapi({ example: [1, 2] }),
   descendantCodes: z.array(z.string()).optional().openapi({ example: ["SR01", "SB01"] }),
@@ -59,7 +63,7 @@ export const OrganizationPaginationQueryDtoSchema = createPageQuerySchema(
       text: z.string().optional().openapi({ example: "上海" }),
     }),
     exactConditions: z.object({
-      orgType: z.string().optional().openapi({ example: "部门" }),
+      orgType: z.enum(OrganizationType).optional().openapi({ example: OrganizationType.Department }),
       status: z.enum(OrganizationStatus).optional().openapi({ example: OrganizationStatus.Enable }),
       parentOrgCode: z.string().optional().openapi({ example: "SR" }),
       ancestorOrgCode: z.string().optional().openapi({
@@ -73,7 +77,7 @@ export const OrganizationPaginationQueryDtoSchema = createPageQuerySchema(
 export const OrganizationUpdateDtoSchema = z.object({
   orgCode: z.string().min(1).optional(),
   orgName: z.string().min(1).optional(),
-  orgType: z.string().min(1).optional(),
+  orgType: z.enum(OrganizationType).optional(),
   status: z.enum(OrganizationStatus).optional(),
 }).openapi("OrganizationUpdateDto");
 
@@ -85,9 +89,9 @@ export const OrganizationTreeNodeDtoSchema = z.object({
   id: z.number(),
   orgCode: z.string(),
   orgName: z.string(),
-  orgType: z.string(),
+  orgType: z.enum(OrganizationType),
   status: z.enum(OrganizationStatus),
-  level: z.number(),
+  level: z.enum(OrganizationLevel),
   parentId: z.number(),
   orderNum: z.number(),
   isLeaf: z.boolean(),

@@ -1,6 +1,6 @@
 import { z } from "@hono/zod-openapi";
 import { createPageQuerySchema } from "@iam/api-core/core/pagination/schema";
-import { EmploymentStatus } from "@iam/contracts";
+import { EmploymentStatus, OrganizationType } from "@iam/contracts";
 import { selectEmploymentSchema, selectUserSchema } from "@iam/db/schema";
 import { OrganizationSchema } from "../organization/organization.schema";
 import { PositionSchema } from "../position/position.schema";
@@ -23,7 +23,7 @@ export const EmploymentDtoSchema = EmploymentSchema.extend({
   posCode: z.string().openapi({ example: "E033" }),
   posName: z.string().openapi({ example: "职员" }),
   orgCode: z.string().openapi({ example: "SR23" }),
-  orgType: z.string().openapi({ example: "部门" }),
+  orgType: z.enum(OrganizationType).openapi({ example: OrganizationType.Department }),
   orgName: z.string().openapi({ example: "信息中心" }),
   compCode: z.string().openapi({ example: "SR" }),
   compName: z.string().openapi({ example: "上海燃气" }),

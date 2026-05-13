@@ -15,7 +15,7 @@ import {
   type ProColumns,
   ProTable,
 } from '@ant-design/pro-components';
-import { getUserStatusOptions, getUserTypeOptions } from '@iam/contracts';
+import { getUserStatusOptions, getUserTypeOptions, type UserType } from '@iam/contracts';
 import { Button, Dropdown, message, Modal } from 'antd';
 import { useRef, useState } from 'react';
 
@@ -152,7 +152,7 @@ export default function UsersPage() {
               username?: string;
               name?: string;
               status?: string | number;
-              userType?: string;
+              userType?: UserType;
             };
             const text = (username || name || '') as string;
             const statusNum

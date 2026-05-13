@@ -1,6 +1,6 @@
 import { z } from "@hono/zod-openapi";
 import { createPageQuerySchema } from "@iam/api-core/core/pagination/schema";
-import { UserStatus } from "@iam/contracts";
+import { UserStatus, UserType } from "@iam/contracts";
 import { selectUserSchema } from "@iam/db/schema";
 import { EmploymentDetailDtoSchema } from "../employment/employment.schema";
 
@@ -35,7 +35,7 @@ export const UserPaginationQueryDtoSchema = createPageQuerySchema(
       text: z.string().optional().openapi({ example: "138550" }),
     }),
     exactConditions: z.object({
-      userTypes: z.array(z.string()).optional().openapi({ example: ["正式员工"] }),
+      userTypes: z.array(z.enum(UserType)).optional().openapi({ example: [UserType.Formal] }),
       usernames: z.array(z.string()).optional().openapi({ example: ["138550", "136163"] }),
       phones: z.array(z.string()).optional().openapi({ example: ["17721462865"] }),
       wxIds: z.array(z.string()).optional().openapi({ example: ["1592677631"] }),

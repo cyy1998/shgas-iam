@@ -1,3 +1,4 @@
+import type { UserType } from "@iam/contracts";
 import type { UserCreateDto, UserDetailDto, UserPaginationQueryDto } from "./user.type";
 import config from "@admin-api/env";
 import * as employmentRepository from "@admin-api/services/employment/employment.repository";
@@ -55,7 +56,7 @@ export async function searchUsersFuzzyForAdmin(userPageQuery: UserPaginationQuer
 export async function setUserForAdmin(dto: {
   username: string;
   name: string;
-  userType: string;
+  userType: UserType;
   password?: string;
   mobile?: string | null;
   wxId?: string | null;
@@ -95,7 +96,7 @@ export async function updateUser(
     name?: string;
     mobile?: string | null;
     wxId?: string | null;
-    userType?: string;
+    userType?: UserType;
     status?: UserStatus;
     orderNum?: number;
   },
