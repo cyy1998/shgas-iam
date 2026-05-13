@@ -1,5 +1,8 @@
-import type { OrganizationCreateDto } from "@admin-api/services/organization/organization.type";
-import type { OrganizationType } from "@iam/contracts";
+import type {
+  OrganizationCreateDto,
+  OrganizationPaginationQueryDto,
+  OrganizationUpdateDto,
+} from "@admin-api/services/organization/organization.type";
 import type { DbClient } from "@iam/db";
 import type { Organization } from "@iam/db/schema";
 import { OrganizationLevel, OrganizationStatus } from "@iam/contracts";
@@ -171,17 +174,7 @@ export async function getOrganizationByCodeForAdmin(orgCode: string, tx: DbClien
 }
 
 export async function searchOrganizationsForAdmin(
-  query: {
-    conditions: {
-      fuzzyConditions: { text?: string };
-      exactConditions: {
-        orgType?: OrganizationType;
-        status?: OrganizationStatus;
-        parentOrgCode?: string;
-        ancestorOrgCode?: string;
-      };
-    };
-  },
+  query: OrganizationPaginationQueryDto,
   tx: DbClient = db,
 ) {
   const { fuzzyConditions, exactConditions } = query.conditions;
@@ -225,7 +218,7 @@ export async function searchOrganizationsForAdmin(
 
 export async function updateOrganizationByCode(
   orgCode: string,
-  data: { orgCode?: string; orgName?: string; orgType?: OrganizationType; status?: OrganizationStatus },
+  data: OrganizationUpdateDto,
   tx: DbClient = db,
 ) {
   return await tx

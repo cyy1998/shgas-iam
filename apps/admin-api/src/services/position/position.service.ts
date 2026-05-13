@@ -1,5 +1,5 @@
 import type { PositionStatus } from "@iam/contracts";
-import type { PositionCreateDto } from "./position.type";
+import type { PositionCreateDto, PositionUpdateDto } from "./position.type";
 import { CustomError } from "@iam/api-core/errors/CustomError";
 import { PositionHasEmploymentError } from "@iam/api-core/errors/PositionHasEmploymentError";
 import db from "@iam/db";
@@ -27,7 +27,7 @@ export async function getPositionDetailByCode(posCode: string) {
 
 export async function updatePosition(
   posCode: string,
-  data: { posName?: string; description?: string | null; status?: PositionStatus },
+  data: PositionUpdateDto,
 ) {
   return await db.transaction(async (tx) => {
     const existing = await positionRepository.getPositionByCode(posCode, tx);

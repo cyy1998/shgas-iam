@@ -1,7 +1,11 @@
 import type { Prettify } from "@api/utils/lint.util";
 import type { DbClient } from "@iam/db";
 import type { Organization, User } from "@iam/db/schema";
-import type { PrivilegeDelegationCreateDto, PrivilegeDelegationQueryDto } from "./privilegeDelegation.type";
+import type {
+  PrivilegeDelegationCreateDto,
+  PrivilegeDelegationQueryDto,
+  PrivilegeDelegationUpdateDto,
+} from "./privilegeDelegation.type";
 import { CustomError } from "@iam/api-core/errors/CustomError";
 import { PrivilegeDelegationStatus } from "@iam/contracts";
 import db from "@iam/db";
@@ -203,7 +207,7 @@ export async function getActiveDelegationsByDelegatorAndPrivileges(
 
 export async function updateDelegation(
   id: number,
-  data: { startTime?: Date; endTime?: Date; status?: PrivilegeDelegationStatus; description?: string | null },
+  data: PrivilegeDelegationUpdateDto,
   tx: DbClient = db,
 ) {
   return firstRow(await tx
