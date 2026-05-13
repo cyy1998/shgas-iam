@@ -13,7 +13,10 @@ import {
   type UserDetailVo,
 } from '@admin/services/user';
 import { ProDescriptions } from '@ant-design/pro-components';
-import { getEmploymentStatusOptions, getUserStatusOptions } from '@iam/contracts';
+import {
+  getEmploymentStatusOptions,
+  getUserStatusOptions,
+} from '@iam/contracts';
 import {
   Button,
   Drawer,
@@ -28,10 +31,26 @@ import {
   Tag,
 } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
+import type { CSSProperties } from 'react';
 import { useEffect, useState } from 'react';
 import { confirmResetPassword } from './ResetPasswordModal';
 
 type EmploymentRow = UserDetailVo['employments'][number];
+
+const roleListStyle: CSSProperties = {
+  display: 'flex',
+  flexWrap: 'wrap',
+  gap: 6,
+  maxWidth: '100%',
+  minWidth: 0,
+};
+
+const roleTagStyle: CSSProperties = {
+  marginInlineEnd: 0,
+  maxWidth: '100%',
+  whiteSpace: 'normal',
+  wordBreak: 'break-all',
+};
 
 type Props = {
   open: boolean;
@@ -50,7 +69,9 @@ export default function UserDetailDrawer({
 }: Props) {
   const [detail, setDetail] = useState<UserDetailVo | null>(null);
   const [loading, setLoading] = useState(false);
-  const [transferTarget, setTransferTarget] = useState<EmploymentVo | null>(null);
+  const [transferTarget, setTransferTarget] = useState<EmploymentVo | null>(
+    null,
+  );
   const [employmentFormOpen, setEmploymentFormOpen] = useState(false);
 
   useEffect(() => {
@@ -112,7 +133,10 @@ export default function UserDetailDrawer({
     });
   };
 
-  const onEmploymentStatusChange = async (row: EmploymentRow, status: 1 | 2 | 3) => {
+  const onEmploymentStatusChange = async (
+    row: EmploymentRow,
+    status: 1 | 2 | 3,
+  ) => {
     try {
       await updateEmploymentStatus(row.id, status);
       message.success('状态已更新');
@@ -179,7 +203,9 @@ export default function UserDetailDrawer({
         if (row.status === 3) return null;
         return (
           <Space size="middle">
-            <a onClick={() => setTransferTarget(row as unknown as EmploymentVo)}>
+            <a
+              onClick={() => setTransferTarget(row as unknown as EmploymentVo)}
+            >
               转岗
             </a>
             <Dropdown
@@ -189,13 +215,17 @@ export default function UserDetailDrawer({
                   .map((o) => ({
                     key: String(o.value),
                     label: `切为「${o.label}」`,
-                    onClick: () => onEmploymentStatusChange(row, o.value as 1 | 2 | 3),
+                    onClick: () =>
+                      onEmploymentStatusChange(row, o.value as 1 | 2 | 3),
                   })),
               }}
             >
               <a>状态</a>
             </Dropdown>
-            <a style={{ color: '#d4380d' }} onClick={() => onEmploymentDelete(row)}>
+            <a
+              style={{ color: '#d4380d' }}
+              onClick={() => onEmploymentDelete(row)}
+            >
               删除
             </a>
           </Space>
@@ -206,173 +236,193 @@ export default function UserDetailDrawer({
 
   return (
     <>
-    <EmploymentFormModal
-      open={employmentFormOpen}
-      presetUsername={detail?.username}
-      presetName={detail?.name}
-      onOpenChange={setEmploymentFormOpen}
-      onSuccess={async () => { setEmploymentFormOpen(false); await refresh(); }}
-    />
-    <TransferModal
-      open={transferTarget !== null}
-      employment={transferTarget}
-      onOpenChange={(open) => { if (!open) setTransferTarget(null); }}
-      onSuccess={async () => { setTransferTarget(null); await refresh(); }}
-    />
-    <Drawer
-      width={640}
-      open={open}
-      onClose={onClose}
-      destroyOnClose
-      title={
-        detail ? (
-          <Space>
-            <span>{detail.name}</span>
-            <span style={{ color: '#999', fontSize: 12 }}>
-              {detail.username}
-            </span>
-            <StatusTag domain="user" status={detail.status} />
-          </Space>
-        ) : (
-          '用户详情'
-        )
-      }
-      extra={
-        detail && (
-          <Space>
-            <Button onClick={() => onEdit(detail)}>编辑</Button>
-            <Dropdown
-              menu={{
-                items: getUserStatusOptions()
-                  .filter((o) => o.value !== detail.status)
-                  .map((o) => ({
-                    key: String(o.value),
-                    label: `切为「${o.label}」`,
-                    onClick: () => onStatusChange(o.value),
-                  })),
-              }}
-            >
-              <Button>状态</Button>
-            </Dropdown>
-            <Button
-              onClick={() =>
-                confirmResetPassword({
-                  username: detail.username,
-                  name: detail.name,
-                })
-              }
-            >
-              重置密码
-            </Button>
-            <Button danger onClick={onDelete}>
-              删除
-            </Button>
-          </Space>
-        )
-      }
-    >
-      {loading && !detail ? <Skeleton active /> : null}
-      {!loading && !detail ? <Empty /> : null}
-      {detail && (
-        <Tabs
-          items={[
-            {
-              key: 'basic',
-              label: '基本信息',
-              children: (
-                <ProDescriptions<UserDetailVo>
-                  column={2}
-                  dataSource={detail}
-                  columns={[
-                    { title: '用户名', dataIndex: 'username' },
-                    { title: '姓名', dataIndex: 'name' },
-                    {
-                      title: '手机',
-                      dataIndex: 'mobile',
-                      render: (_, r) => r.mobile ?? '—',
-                    },
-                    {
-                      title: '微信 ID',
-                      dataIndex: 'wxId',
-                      render: (_, r) => r.wxId ?? '—',
-                    },
-                    {
-                      title: '用户类型',
-                      dataIndex: 'userType',
-                      render: (_, r) => r.userType ?? '—',
-                    },
-                    {
-                      title: '状态',
-                      dataIndex: 'status',
-                      render: (_, r) => (
-                        <StatusTag domain="user" status={r.status} />
-                      ),
-                    },
-                    {
-                      title: '角色',
-                      dataIndex: 'roles',
-                      span: 2,
-                      render: (_, r) =>
-                        r.roles.length === 0
-                          ? '—'
-                          : r.roles.map((code: string) => (
-                              <Tag key={code}>{code}</Tag>
-                            )),
-                    },
-                    {
-                      title: '权限数',
-                      dataIndex: 'privileges',
-                      render: (_, r) => r.privileges.length,
-                    },
-                    {
-                      title: '雇佣数',
-                      dataIndex: 'employments',
-                      render: (_, r) => r.employments.length,
-                    },
-                    {
-                      title: '创建时间',
-                      dataIndex: 'createTime',
-                      render: (_, r) => new Date(r.createTime).toLocaleString(),
-                    },
-                    {
-                      title: '更新时间',
-                      dataIndex: 'updateTime',
-                      render: (_, r) => new Date(r.updateTime).toLocaleString(),
-                    },
-                  ]}
-                />
-              ),
-            },
-            {
-              key: 'employments',
-              label: `雇佣（${detail.employments.length}）`,
-              children: (
-                <div>
-                  <div style={{ marginBottom: 12, textAlign: 'right' }}>
-                    <Button type="primary" onClick={() => setEmploymentFormOpen(true)}>
-                      + 新增雇佣
-                    </Button>
-                  </div>
-                  <Table<EmploymentRow>
-                    rowKey="id"
-                    size="small"
-                    columns={employmentColumns}
-                    dataSource={detail.employments}
-                    pagination={false}
-                    locale={{ emptyText: '暂无雇佣' }}
+      <EmploymentFormModal
+        open={employmentFormOpen}
+        presetUsername={detail?.username}
+        presetName={detail?.name}
+        onOpenChange={setEmploymentFormOpen}
+        onSuccess={async () => {
+          setEmploymentFormOpen(false);
+          await refresh();
+        }}
+      />
+      <TransferModal
+        open={transferTarget !== null}
+        employment={transferTarget}
+        onOpenChange={(open) => {
+          if (!open) setTransferTarget(null);
+        }}
+        onSuccess={async () => {
+          setTransferTarget(null);
+          await refresh();
+        }}
+      />
+      <Drawer
+        width={640}
+        open={open}
+        onClose={onClose}
+        destroyOnClose
+        title={
+          detail ? (
+            <Space>
+              <span>{detail.name}</span>
+              <span style={{ color: '#999', fontSize: 12 }}>
+                {detail.username}
+              </span>
+              <StatusTag domain="user" status={detail.status} />
+            </Space>
+          ) : (
+            '用户详情'
+          )
+        }
+        extra={
+          detail && (
+            <Space>
+              <Button onClick={() => onEdit(detail)}>编辑</Button>
+              <Dropdown
+                menu={{
+                  items: getUserStatusOptions()
+                    .filter((o) => o.value !== detail.status)
+                    .map((o) => ({
+                      key: String(o.value),
+                      label: `切为「${o.label}」`,
+                      onClick: () => onStatusChange(o.value),
+                    })),
+                }}
+              >
+                <Button>状态</Button>
+              </Dropdown>
+              <Button
+                onClick={() =>
+                  confirmResetPassword({
+                    username: detail.username,
+                    name: detail.name,
+                  })
+                }
+              >
+                重置密码
+              </Button>
+              <Button danger onClick={onDelete}>
+                删除
+              </Button>
+            </Space>
+          )
+        }
+      >
+        {loading && !detail ? <Skeleton active /> : null}
+        {!loading && !detail ? <Empty /> : null}
+        {detail && (
+          <Tabs
+            items={[
+              {
+                key: 'basic',
+                label: '基本信息',
+                children: (
+                  <ProDescriptions<UserDetailVo>
+                    column={2}
+                    dataSource={detail}
+                    columns={[
+                      { title: '用户名', dataIndex: 'username' },
+                      { title: '姓名', dataIndex: 'name' },
+                      {
+                        title: '手机',
+                        dataIndex: 'mobile',
+                        render: (_, r) => r.mobile ?? '—',
+                      },
+                      {
+                        title: '微信 ID',
+                        dataIndex: 'wxId',
+                        render: (_, r) => r.wxId ?? '—',
+                      },
+                      {
+                        title: '用户类型',
+                        dataIndex: 'userType',
+                        render: (_, r) => r.userType ?? '—',
+                      },
+                      {
+                        title: '状态',
+                        dataIndex: 'status',
+                        render: (_, r) => (
+                          <StatusTag domain="user" status={r.status} />
+                        ),
+                      },
+                      {
+                        title: '角色',
+                        dataIndex: 'roles',
+                        span: 2,
+                        contentStyle: { minWidth: 0 },
+                        render: (_, r) =>
+                          r.roles.length === 0 ? (
+                            '—'
+                          ) : (
+                            <div style={roleListStyle}>
+                              {r.roles.map((code: string) => (
+                                <Tag key={code} style={roleTagStyle}>
+                                  {code}
+                                </Tag>
+                              ))}
+                            </div>
+                          ),
+                      },
+                      {
+                        title: '权限数',
+                        dataIndex: 'privileges',
+                        render: (_, r) => r.privileges.length,
+                      },
+                      {
+                        title: '雇佣数',
+                        dataIndex: 'employments',
+                        render: (_, r) => r.employments.length,
+                      },
+                      {
+                        title: '创建时间',
+                        dataIndex: 'createTime',
+                        render: (_, r) =>
+                          new Date(r.createTime).toLocaleString(),
+                      },
+                      {
+                        title: '更新时间',
+                        dataIndex: 'updateTime',
+                        render: (_, r) =>
+                          new Date(r.updateTime).toLocaleString(),
+                      },
+                    ]}
                   />
-                </div>
-              ),
-            },
-            {
-              key: 'logs',
-              label: '操作日志',
-              children: <Empty description="日志功能尚未接入" />,
-            },
-          ]}
-        />
-      )}
-    </Drawer>
+                ),
+              },
+              {
+                key: 'employments',
+                label: `雇佣（${detail.employments.length}）`,
+                children: (
+                  <div>
+                    <div style={{ marginBottom: 12, textAlign: 'right' }}>
+                      <Button
+                        type="primary"
+                        onClick={() => setEmploymentFormOpen(true)}
+                      >
+                        + 新增雇佣
+                      </Button>
+                    </div>
+                    <Table<EmploymentRow>
+                      rowKey="id"
+                      size="small"
+                      columns={employmentColumns}
+                      dataSource={detail.employments}
+                      pagination={false}
+                      locale={{ emptyText: '暂无雇佣' }}
+                    />
+                  </div>
+                ),
+              },
+              {
+                key: 'logs',
+                label: '操作日志',
+                children: <Empty description="日志功能尚未接入" />,
+              },
+            ]}
+          />
+        )}
+      </Drawer>
     </>
   );
 }
