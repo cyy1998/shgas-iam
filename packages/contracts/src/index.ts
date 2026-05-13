@@ -1,3 +1,4 @@
+export * from "./enums/client.managementLevel";
 export * from "./enums/employment.status";
 export * from "./enums/organization.level";
 export * from "./enums/organization.status";

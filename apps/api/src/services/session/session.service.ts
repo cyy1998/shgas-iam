@@ -1,11 +1,11 @@
 import type { UserDetailDto } from "../user/user.type";
 import type { LocalSessionAbstract } from "./session.type";
-import { ClientManagementLevel } from "@api/enums/client.managementLevel";
 import config from "@api/env";
 import redis from "@api/lib/clients/redis";
 import * as clientService from "@api/services/client/client.service";
 import * as sessionRepository from "@api/services/session/session.repository";
 import { reviveIsoDates } from "@iam/api-core/utils";
+import { ClientManagementLevel } from "@iam/contracts";
 import { LocalSessionAbstractSchema } from "./session.schema";
 
 export async function updateSession(sessionId: string, userInfo: string) {

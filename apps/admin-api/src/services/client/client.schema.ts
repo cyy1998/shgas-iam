@@ -1,5 +1,5 @@
-import { ClientManagementLevel } from "@admin-api/enums/client.managementLevel";
 import { z } from "@hono/zod-openapi";
+import { ClientManagementLevel } from "@iam/contracts";
 import { selectClientSchema } from "@iam/db/schema";
 
 export const ClientSchema = z.object(selectClientSchema.shape);

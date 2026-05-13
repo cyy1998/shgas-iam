@@ -1,4 +1,3 @@
-import { ClientManagementLevel } from "@api/enums/client.managementLevel";
 import config from "@api/env";
 import redis from "@api/lib/clients/redis";
 import orcasClient from "@api/lib/integrations/orcas";
@@ -12,6 +11,7 @@ import * as userService from "@api/services/user/user.service";
 import { AuthzUnauthorizedError } from "@iam/api-core/errors/AuthzUnauthorizedError";
 import { CustomError } from "@iam/api-core/errors/CustomError";
 import { reviveIsoDates } from "@iam/api-core/utils";
+import { ClientManagementLevel } from "@iam/contracts";
 import { sleep } from "bun";
 import { sm3 } from "sm-crypto";
 

@@ -1,11 +1,11 @@
 import type { SsoRouteHandler } from "./sso.type";
-import { ClientManagementLevel } from "@api/enums/client.managementLevel";
 import config from "@api/env";
 import * as clientService from "@api/services/client/client.service";
 import * as sessionService from "@api/services/session/session.service";
 import { AuthzUnauthorizedError } from "@iam/api-core/errors/AuthzUnauthorizedError";
 import * as resp from "@iam/api-core/http";
 import { getProtocolAndHost } from "@iam/api-core/utils";
+import { ClientManagementLevel } from "@iam/contracts";
 import { deleteCookie, getCookie, setCookie } from "hono/cookie";
 import * as ssoService from "./sso.service";
 
