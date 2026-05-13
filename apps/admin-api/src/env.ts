@@ -17,4 +17,12 @@ export type Env = z.infer<typeof EnvSchema>;
 
 const env = EnvSchema.parse(process.env);
 
+export const adminClientCodes = env.ADMIN_CLIENT_CODES.split(",")
+  .map(code => code.trim())
+  .filter(Boolean);
+
+export const adminRoleCodes = env.ADMIN_ROLE_CODES.split(",")
+  .map(code => code.trim())
+  .filter(Boolean);
+
 export default env;
