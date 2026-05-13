@@ -82,7 +82,7 @@ services:
       NODE_ENV: production
       LOG_LEVEL: info
       PASSWORD_HASH_ROUNDS: 10
-      ADMIN_CLIENT_CODES: iam
+      ADMIN_CLIENT_CODES: iam-admin
       ADMIN_ROLE_CODES: iam:admin
     depends_on:
       db:
