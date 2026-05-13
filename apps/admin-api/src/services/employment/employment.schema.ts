@@ -54,24 +54,6 @@ export const EmploymentDetailDtoSchema = EmploymentDtoSchema.extend({
   roles: z.array(z.string()).default([]).openapi({ example: ["tender:default-user"] }),
 }).openapi("EmploymentDetailDto");
 
-export const EmploymentQueryDtoSchema = z.object({
-  usernames: z.array(z.string()).optional().openapi({ example: ["138550", "136163"] }),
-  phones: z.array(z.string()).optional().openapi({ example: ["17721462865"] }),
-  wxIds: z.array(z.string()).optional().openapi({ example: ["1592677631"] }),
-  ancestorOrgCodes: z.array(z.string()).optional().openapi({ example: ["SR", "SB"] }),
-  ancestorOrgDepths: z.array(z.number()).optional().openapi({ example: [1, 2] }),
-  positionCodes: z.array(z.string()).optional().openapi({ example: ["E033", "E034"] }),
-  roleCodes: z.array(z.string()).optional().openapi({ example: ["tender:default-user"] }),
-}).openapi("EmploymentQueryDto");
-
-export const EmploymentPaginationQueryDtoSchema = createPageQuerySchema(EmploymentQueryDtoSchema);
-
-export const EmploymentCreateDtoSchema = EmploymentDtoSchema.pick({
-  username: true,
-  orgCode: true,
-  posCode: true,
-}).openapi("EmploymentCreateDto");
-
 export const EmploymentAdminPaginationQueryDtoSchema = createPageQuerySchema(
   z.object({
     fuzzyConditions: z.object({

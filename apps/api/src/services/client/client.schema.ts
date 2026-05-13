@@ -16,27 +16,3 @@ export const ClientExtAttributesDtoSchema = z.object({
 export const ClientDtoSchema = ClientSchema.extend({
   extAttributes: ClientExtAttributesDtoSchema,
 });
-
-export const ClientInputDtoSchema = ClientDtoSchema.partial().required({
-  id: true,
-});
-
-export const ClientCreateDtoSchema = ClientDtoSchema.partial().required({
-  clientCode: true,
-  clientName: true,
-  clientSecret: true,
-}).omit({
-  id: true,
-  isDelete: true,
-  createTime: true,
-  updateTime: true,
-}).extend({
-  extAttributes: ClientExtAttributesDtoSchema.default({
-    userExcluding: [],
-    requireOrcas: false,
-    validRedirectUrls: [],
-    managementLevel: ClientManagementLevel.None,
-    logoutEndpoint: "http://localhost:8888",
-    callbackEndpoint: "http://localhost:8888",
-  }),
-}).openapi("ClientCreateDto");

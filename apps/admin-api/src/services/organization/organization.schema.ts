@@ -43,20 +43,6 @@ export const OrganizationCreateDtoSchema = OrganizationSchema.partial().required
   parentId: true,
 }).openapi("OrganizationCreateDto");
 
-export const OrganizationQueryDtoSchema = z.object({
-  orgTypes: z.array(z.enum(OrganizationType)).optional().openapi({
-    example: [OrganizationType.Department, OrganizationType.Company],
-  }),
-  orgLevels: z.array(z.enum(OrganizationLevel)).optional().openapi({
-    example: [OrganizationLevel.One, OrganizationLevel.Two],
-  }),
-  ancestorCodes: z.array(z.string()).optional().openapi({ example: ["SR", "SB"] }),
-  ancestorDepths: z.array(z.number()).optional().openapi({ example: [1, 2] }),
-  descendantCodes: z.array(z.string()).optional().openapi({ example: ["SR01", "SB01"] }),
-  descendantDepths: z.array(z.number()).optional().openapi({ example: [1, 2] }),
-  orgCodes: z.array(z.string()).optional().openapi({ example: ["SR", "SB"] }),
-}).openapi("OrganizationQueryDto");
-
 export const OrganizationPaginationQueryDtoSchema = createPageQuerySchema(
   z.object({
     fuzzyConditions: z.object({

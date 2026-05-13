@@ -24,11 +24,6 @@ export const PositionCreateDtoSchema = PositionSchema.omit({
   posName: true,
 });
 
-export const PositionQueryDtoSchema = z.object({
-  posCodes: z.array(z.string()).openapi({ example: ["E001", "E002"] }),
-  posNames: z.array(z.string()).openapi({ example: ["董事长", "总经理"] }),
-}).partial().openapi("PositionQueryDto");
-
 export const PositionPaginationQueryDtoSchema = createPageQuerySchema(
   z.object({
     fuzzyConditions: z.object({
