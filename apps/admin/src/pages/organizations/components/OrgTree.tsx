@@ -2,7 +2,7 @@ import type {
   OrganizationChildrenPage,
   OrganizationTreeNode,
 } from '@admin/services/organization';
-import { getOrganizationStatusOptions } from '@iam/shared';
+import { getOrganizationStatusOptions } from '@iam/contracts';
 import { Badge, Empty, Spin, Tree } from 'antd';
 import type { DataNode } from 'antd/es/tree';
 import type { ReactNode } from 'react';

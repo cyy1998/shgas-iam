@@ -10,11 +10,11 @@ export const organizationStatusToString: Record<OrganizationStatus, string> = {
   [OrganizationStatus.Disable]: "停用",
 };
 
-export type StatusOption = {
+export interface StatusOption {
   label: string;
   value: number;
   color: "success" | "warning" | "default";
-};
+}
 
 export function getOrganizationStatusOptions(): StatusOption[] {
   return [

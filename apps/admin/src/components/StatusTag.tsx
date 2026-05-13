@@ -3,7 +3,7 @@ import {
   getOrganizationStatusOptions,
   getPositionStatusOptions,
   getUserStatusOptions,
-} from '@iam/shared';
+} from '@iam/contracts';
 import { Tag } from 'antd';
 
 type Domain = 'user' | 'org' | 'position' | 'employment';

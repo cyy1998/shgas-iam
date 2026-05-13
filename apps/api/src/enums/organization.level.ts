@@ -1,1 +1,1 @@
-export { OrganizationLevel } from "@iam/shared";
+export { OrganizationLevel } from "@iam/contracts";

@@ -1,1 +1,1 @@
-export { ServiceStatusCode } from "@iam/shared";
+export { ServiceStatusCode } from "@iam/contracts";

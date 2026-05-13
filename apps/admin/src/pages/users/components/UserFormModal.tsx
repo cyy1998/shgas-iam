@@ -4,7 +4,7 @@ import {
   ProFormSelect,
   ProFormText,
 } from '@ant-design/pro-components';
-import { getUserStatusOptions, getUserTypeOptions } from '@iam/shared';
+import { getUserStatusOptions, getUserTypeOptions } from '@iam/contracts';
 import { message, Modal } from 'antd';
 
 type Mode = 'create' | 'edit';

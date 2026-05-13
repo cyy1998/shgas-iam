@@ -1,1 +1,1 @@
-export { OrganizationType } from "@iam/shared";
+export { OrganizationType } from "@iam/contracts";

@@ -1,4 +1,4 @@
-import { ServiceStatusCode } from '@iam/shared';
+import { ServiceStatusCode } from '@iam/contracts';
 import { message } from 'antd';
 
 export class ServiceError extends Error {

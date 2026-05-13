@@ -13,7 +13,7 @@ RUN corepack enable && corepack prepare pnpm@10.33.3 --activate
 FROM base AS deps
 WORKDIR /app
 COPY pnpm-workspace.yaml package.json pnpm-lock.yaml ./
-COPY packages/shared/package.json ./packages/shared/
+COPY packages/contracts/package.json ./packages/contracts/
 COPY apps/api/package.json           ./apps/api/
 ENV HTTP_PROXY="http://176.169.105.96:3928"
 ENV HTTPS_PROXY="http://176.169.105.96:3928"
@@ -21,7 +21,7 @@ RUN pnpm install --frozen-lockfile
 
 # ── Stage 3: Create deploy bundle ────────────────────────────────────────────
 # FROM deps AS builder
-# COPY packages/shared/ ./packages/shared/
+# COPY packages/contracts/ ./packages/contracts/
 # COPY apps/api/        ./apps/api/
 # # Flatten monorepo → self-contained bundle (prod deps + source, no devDeps)
 # RUN pnpm --filter @iam/api deploy --prod /deploy/api
@@ -31,9 +31,9 @@ FROM docker.xuanyuan.run/oven/bun:1-alpine AS runner
 ENV NODE_ENV=production
 WORKDIR /app
 COPY --from=deps /app/node_modules              ./node_modules
-# COPY --from=deps /app/packages/shared/node_modules ./packages/shared/node_modules
+# COPY --from=deps /app/packages/contracts/node_modules ./packages/contracts/node_modules
 COPY --from=deps /app/apps/api/node_modules    ./apps/api/node_modules
-COPY packages/shared/ ./packages/shared/
+COPY packages/contracts/ ./packages/contracts/
 COPY apps/api/        ./apps/api/
 WORKDIR /app/apps/api
 EXPOSE 30000

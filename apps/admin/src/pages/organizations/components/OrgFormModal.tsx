@@ -8,7 +8,7 @@ import {
   ProFormSelect,
   ProFormText,
 } from '@ant-design/pro-components';
-import { getOrganizationStatusOptions, OrganizationType } from '@iam/shared';
+import { getOrganizationStatusOptions, OrganizationType } from '@iam/contracts';
 import { message } from 'antd';
 
 type Props = {

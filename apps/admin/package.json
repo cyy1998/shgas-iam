@@ -14,7 +14,7 @@
   "dependencies": {
     "@ant-design/icons": "^5.0.1",
     "@ant-design/pro-components": "^2.4.4",
-    "@iam/shared": "workspace:*",
+    "@iam/contracts": "workspace:*",
     "@trpc/client": "^11.16.0",
     "@trpc/server": "^11.16.0",
     "@umijs/max": "^4.6.45",

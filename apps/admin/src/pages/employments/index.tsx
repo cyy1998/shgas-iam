@@ -17,7 +17,7 @@ import {
   ProTable,
 } from '@ant-design/pro-components';
 import { apiClient } from '@admin/lib/api-client';
-import { getEmploymentStatusOptions, OrganizationType } from '@iam/shared';
+import { getEmploymentStatusOptions, OrganizationType } from '@iam/contracts';
 import { useLocation } from '@umijs/max';
 import type { AppRouter } from '@iam/api/trpc';
 import type { inferRouterOutputs } from '@trpc/server';

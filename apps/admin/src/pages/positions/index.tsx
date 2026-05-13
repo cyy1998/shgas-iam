@@ -12,7 +12,7 @@ import {
   ProColumns,
   ProTable,
 } from '@ant-design/pro-components';
-import { getPositionStatusOptions } from '@iam/shared';
+import { getPositionStatusOptions } from '@iam/contracts';
 import { Button, Dropdown, message, Modal } from 'antd';
 import { useRef, useState } from 'react';
 

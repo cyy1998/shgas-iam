@@ -1,1 +1,1 @@
-export { Status, statusToString } from "@iam/shared";
+export { Status, statusToString } from "@iam/contracts";

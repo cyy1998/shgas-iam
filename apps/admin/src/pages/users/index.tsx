@@ -15,7 +15,7 @@ import {
   type ProColumns,
   ProTable,
 } from '@ant-design/pro-components';
-import { getUserStatusOptions, getUserTypeOptions } from '@iam/shared';
+import { getUserStatusOptions, getUserTypeOptions } from '@iam/contracts';
 import { Button, Dropdown, message, Modal } from 'antd';
 import { useRef, useState } from 'react';
 

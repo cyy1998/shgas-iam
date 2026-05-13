@@ -1,1 +1,1 @@
-export { EmploymentStatus, employmentStatusToString } from "@iam/shared";
+export { EmploymentStatus, employmentStatusToString } from "@iam/contracts";

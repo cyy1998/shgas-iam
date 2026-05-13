@@ -13,7 +13,7 @@ import {
   type UserDetailVo,
 } from '@admin/services/user';
 import { ProDescriptions } from '@ant-design/pro-components';
-import { getEmploymentStatusOptions, getUserStatusOptions } from '@iam/shared';
+import { getEmploymentStatusOptions, getUserStatusOptions } from '@iam/contracts';
 import {
   Button,
   Drawer,

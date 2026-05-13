@@ -1,0 +1,20 @@
+{
+  "name": "@iam/contracts",
+  "version": "0.0.1",
+  "type": "module",
+  "private": true,
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "lint": "eslint src/",
+    "typecheck": "pnpm exec tsgo --noEmit"
+  },
+  "devDependencies": {
+    "@antfu/eslint-config": "^8.0.0",
+    "@typescript/native-preview": "7.0.0-dev.20260504.1",
+    "eslint": "^10.0.0",
+    "eslint-plugin-format": "^2.0.1",
+    "typescript": "^6.0.3"
+  }
+}

@@ -1,1 +1,1 @@
-export { UserType } from "@iam/shared";
+export { UserType } from "@iam/contracts";

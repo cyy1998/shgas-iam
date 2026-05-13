@@ -9,7 +9,7 @@ import {
   ProFormText,
   ProFormTextArea,
 } from '@ant-design/pro-components';
-import { getPositionStatusOptions } from '@iam/shared';
+import { getPositionStatusOptions } from '@iam/contracts';
 import { message } from 'antd';
 
 type Props = {

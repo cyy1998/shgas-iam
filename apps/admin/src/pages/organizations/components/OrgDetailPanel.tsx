@@ -7,7 +7,7 @@ import {
   updateOrganizationStatus,
 } from '@admin/services/organization';
 import { ProDescriptions } from '@ant-design/pro-components';
-import { getOrganizationStatusOptions } from '@iam/shared';
+import { getOrganizationStatusOptions } from '@iam/contracts';
 import {
   Button,
   Dropdown,
