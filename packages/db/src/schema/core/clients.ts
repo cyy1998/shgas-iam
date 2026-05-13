@@ -1,10 +1,10 @@
 import { ClientManagementLevel, ClientStatus } from "@iam/contracts";
 import { boolean, integer, jsonb, serial, snakeCase, varchar } from "drizzle-orm/pg-core";
-import { createSelectSchema } from "drizzle-orm/zod";
+import { createInsertSchema, createSelectSchema, createUpdateSchema } from "drizzle-orm/zod";
 import { z } from "zod";
 import { timestampColumns } from "../_shard/base-columns";
 
-const clientExtAttributesSchema = z.object({
+export const clientExtAttributesSchema = z.object({
   userExcluding: z.array(z.string()).default([]),
   requireOrcas: z.boolean().default(false),
   validRedirectUrls: z.array(z.string()).default([]),
@@ -29,6 +29,14 @@ export const clients = snakeCase.table("client", {
 });
 
 export const selectClientSchema = createSelectSchema(clients, {
+  status: () => z.enum(ClientStatus),
+  extAttributes: () => clientExtAttributesSchema,
+});
+export const insertClientSchema = createInsertSchema(clients, {
+  status: () => z.enum(ClientStatus),
+  extAttributes: () => clientExtAttributesSchema,
+});
+export const updateClientSchema = createUpdateSchema(clients, {
   status: () => z.enum(ClientStatus),
   extAttributes: () => clientExtAttributesSchema,
 });

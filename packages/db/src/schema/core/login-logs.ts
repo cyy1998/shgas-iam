@@ -1,5 +1,5 @@
 import { index, integer, serial, snakeCase, timestamp, varchar } from "drizzle-orm/pg-core";
-import { createSelectSchema } from "drizzle-orm/zod";
+import { createInsertSchema, createSelectSchema, createUpdateSchema } from "drizzle-orm/zod";
 
 export const loginLogs = snakeCase.table("login_log", {
   id: serial().primaryKey(),
@@ -17,3 +17,5 @@ export const loginLogs = snakeCase.table("login_log", {
 ]);
 
 export const selectLoginLogSchema = createSelectSchema(loginLogs);
+export const insertLoginLogSchema = createInsertSchema(loginLogs);
+export const updateLoginLogSchema = createUpdateSchema(loginLogs);

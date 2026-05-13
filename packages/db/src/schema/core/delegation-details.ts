@@ -1,5 +1,5 @@
 import { index, integer, primaryKey, snakeCase } from "drizzle-orm/pg-core";
-import { createSelectSchema } from "drizzle-orm/zod";
+import { createInsertSchema, createSelectSchema, createUpdateSchema } from "drizzle-orm/zod";
 
 export const delegationDetails = snakeCase.table("delegation_detail", {
   delegationId: integer().notNull(),
@@ -10,3 +10,5 @@ export const delegationDetails = snakeCase.table("delegation_detail", {
 ]);
 
 export const selectDelegationDetailSchema = createSelectSchema(delegationDetails);
+export const insertDelegationDetailSchema = createInsertSchema(delegationDetails);
+export const updateDelegationDetailSchema = createUpdateSchema(delegationDetails);

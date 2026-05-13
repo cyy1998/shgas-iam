@@ -1,6 +1,6 @@
 import { PositionStatus } from "@iam/contracts";
 import { boolean, integer, serial, snakeCase, varchar } from "drizzle-orm/pg-core";
-import { createSelectSchema } from "drizzle-orm/zod";
+import { createInsertSchema, createSelectSchema, createUpdateSchema } from "drizzle-orm/zod";
 import { z } from "zod";
 import { timestampColumns } from "../_shard/base-columns";
 
@@ -15,5 +15,11 @@ export const positions = snakeCase.table("position", {
 });
 
 export const selectPositionSchema = createSelectSchema(positions, {
+  status: () => z.enum(PositionStatus),
+});
+export const insertPositionSchema = createInsertSchema(positions, {
+  status: () => z.enum(PositionStatus),
+});
+export const updatePositionSchema = createUpdateSchema(positions, {
   status: () => z.enum(PositionStatus),
 });

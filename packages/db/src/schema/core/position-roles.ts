@@ -1,5 +1,5 @@
 import { index, integer, primaryKey, snakeCase } from "drizzle-orm/pg-core";
-import { createSelectSchema } from "drizzle-orm/zod";
+import { createInsertSchema, createSelectSchema, createUpdateSchema } from "drizzle-orm/zod";
 
 export const positionRoles = snakeCase.table("position_role", {
   positionId: integer().notNull(),
@@ -10,3 +10,5 @@ export const positionRoles = snakeCase.table("position_role", {
 ]);
 
 export const selectPositionRoleSchema = createSelectSchema(positionRoles);
+export const insertPositionRoleSchema = createInsertSchema(positionRoles);
+export const updatePositionRoleSchema = createUpdateSchema(positionRoles);

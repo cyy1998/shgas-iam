@@ -1,6 +1,6 @@
 import { UserStatus, UserType } from "@iam/contracts";
 import { boolean, integer, serial, snakeCase, timestamp, varchar } from "drizzle-orm/pg-core";
-import { createSelectSchema } from "drizzle-orm/zod";
+import { createInsertSchema, createSelectSchema, createUpdateSchema } from "drizzle-orm/zod";
 import { z } from "zod";
 
 export const users = snakeCase.table("user", {
@@ -19,6 +19,14 @@ export const users = snakeCase.table("user", {
 });
 
 export const selectUserSchema = createSelectSchema(users, {
+  userType: () => z.enum(UserType),
+  status: () => z.enum(UserStatus),
+});
+export const insertUserSchema = createInsertSchema(users, {
+  userType: () => z.enum(UserType),
+  status: () => z.enum(UserStatus),
+});
+export const updateUserSchema = createUpdateSchema(users, {
   userType: () => z.enum(UserType),
   status: () => z.enum(UserStatus),
 });

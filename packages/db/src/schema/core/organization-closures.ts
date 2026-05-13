@@ -1,5 +1,5 @@
 import { index, integer, serial, snakeCase, uniqueIndex } from "drizzle-orm/pg-core";
-import { createSelectSchema } from "drizzle-orm/zod";
+import { createInsertSchema, createSelectSchema, createUpdateSchema } from "drizzle-orm/zod";
 
 export const organizationClosures = snakeCase.table("organization_closure", {
   id: serial().primaryKey(),
@@ -13,3 +13,5 @@ export const organizationClosures = snakeCase.table("organization_closure", {
 ]);
 
 export const selectOrganizationClosureSchema = createSelectSchema(organizationClosures);
+export const insertOrganizationClosureSchema = createInsertSchema(organizationClosures);
+export const updateOrganizationClosureSchema = createUpdateSchema(organizationClosures);
