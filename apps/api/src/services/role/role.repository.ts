@@ -1,5 +1,6 @@
-import type { DbClient } from "@api/db";
-import db from "@api/db";
+import type { DbClient } from "@iam/db";
+import { Status } from "@api/enums/status";
+import db from "@iam/db";
 import {
   employmentRoles,
   employments,
@@ -7,8 +8,7 @@ import {
   organizationRoles,
   positionRoles,
   roles,
-} from "@api/db/schema";
-import { Status } from "@api/enums/status";
+} from "@iam/db/schema";
 import { and, eq, exists, or, sql } from "drizzle-orm";
 
 function activeRoleWhere() {

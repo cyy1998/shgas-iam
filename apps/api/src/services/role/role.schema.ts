@@ -1,5 +1,5 @@
-import { selectRoleSchema } from "@api/db/schema";
 import { z } from "@hono/zod-openapi";
+import { selectRoleSchema } from "@iam/db/schema";
 
 export const RoleDtoSchema = z.object(selectRoleSchema.shape).openapi("RoleDto");
 

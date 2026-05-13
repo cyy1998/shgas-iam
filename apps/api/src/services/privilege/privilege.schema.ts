@@ -1,6 +1,6 @@
-import { selectPrivilegeSchema } from "@api/db/schema";
 import { Status } from "@api/enums/status";
 import { z } from "@hono/zod-openapi";
+import { selectPrivilegeSchema } from "@iam/db/schema";
 
 export const PrivilegeSchema = z.object(selectPrivilegeSchema.shape);
 

@@ -1,10 +1,10 @@
-import db from "@api/db";
-import { firstRow } from "@api/db/query-utils";
-import { users } from "@api/db/schema";
 import { VerificationCodeUsage } from "@api/enums/verificationCode.usage";
 import { CustomError } from "@api/errors/CustomError";
 import redis from "@api/lib/clients/redis";
 import smsClient from "@api/lib/integrations/sms";
+import db from "@iam/db";
+import { firstRow } from "@iam/db/query-utils";
+import { users } from "@iam/db/schema";
 import { count, eq } from "drizzle-orm";
 
 const MOBILE_REGEX = /^1[3-9]\d{9}$/;

@@ -81,6 +81,9 @@ importers:
       '@iam/contracts':
         specifier: workspace:*
         version: link:../../packages/contracts
+      '@iam/db':
+        specifier: workspace:*
+        version: link:../../packages/db
       '@scalar/hono-api-reference':
         specifier: ^0.10.7
         version: 0.10.7(hono@4.12.8)
@@ -104,7 +107,7 @@ importers:
         version: 3.2.0
       drizzle-orm:
         specifier: 1.0.0-rc.1
-        version: 1.0.0-rc.1(bun-types@1.3.12)(mysql2@3.15.3)(postgres@3.4.9)(zod@4.3.6)
+        version: 1.0.0-rc.1(bun-types@1.3.13)(mysql2@3.15.3)(postgres@3.4.9)(zod@4.3.6)
       hono:
         specifier: ^4.12.8
         version: 4.12.8
@@ -224,6 +227,43 @@ importers:
       '@typescript/native-preview':
         specifier: 7.0.0-dev.20260504.1
         version: 7.0.0-dev.20260504.1
+      eslint:
+        specifier: ^10.0.0
+        version: 10.0.2(jiti@2.6.1)
+      eslint-plugin-format:
+        specifier: ^2.0.1
+        version: 2.0.1(eslint@10.0.2(jiti@2.6.1))
+      typescript:
+        specifier: 6.0.3
+        version: 6.0.3
+
+  packages/db:
+    dependencies:
+      '@iam/contracts':
+        specifier: workspace:*
+        version: link:../contracts
+      drizzle-orm:
+        specifier: 1.0.0-rc.1
+        version: 1.0.0-rc.1(bun-types@1.3.13)(mysql2@3.15.3)(postgres@3.4.9)(zod@4.3.6)
+      postgres:
+        specifier: ^3.4.9
+        version: 3.4.9
+      zod:
+        specifier: ^4.3.6
+        version: 4.3.6
+    devDependencies:
+      '@antfu/eslint-config':
+        specifier: ^8.0.0
+        version: 8.0.0(@typescript-eslint/rule-tester@8.58.0(eslint@10.0.2(jiti@2.6.1))(typescript@6.0.3))(@typescript-eslint/typescript-estree@8.58.0(typescript@6.0.3))(@typescript-eslint/utils@8.58.0(eslint@10.0.2(jiti@2.6.1))(typescript@6.0.3))(@vue/compiler-sfc@3.5.29)(eslint-plugin-format@2.0.1(eslint@10.0.2(jiti@2.6.1)))(eslint@10.0.2(jiti@2.6.1))(typescript@6.0.3)
+      '@types/bun':
+        specifier: latest
+        version: 1.3.13
+      '@typescript/native-preview':
+        specifier: 7.0.0-dev.20260504.1
+        version: 7.0.0-dev.20260504.1
+      drizzle-kit:
+        specifier: 1.0.0-rc.1
+        version: 1.0.0-rc.1
       eslint:
         specifier: ^10.0.0
         version: 10.0.2(jiti@2.6.1)
@@ -2027,6 +2067,9 @@ packages:
   '@types/bun@1.3.12':
     resolution: {integrity: sha512-DBv81elK+/VSwXHDlnH3Qduw+KxkTIWi7TXkAeh24zpi5l0B2kUg9Ga3tb4nJaPcOFswflgi/yAvMVBPrxMB+A==}
 
+  '@types/bun@1.3.13':
+    resolution: {integrity: sha512-9fqXWk5YIHGGnUau9TEi+qdlTYDAnOj+xLCmSTwXfAIqXr2x4tytJb43E9uCvt09zJURKXwAtkoH4nLQfzeTXw==}
+
   '@types/debug@4.1.13':
     resolution: {integrity: sha512-KSVgmQmzMwPlmtljOomayoR89W4FynCAi3E8PPs7vmDVPe84hT+vGPKkJfThkmXs0x0jAaa9U8uW8bbfyS2fWw==}
 
@@ -3085,6 +3128,9 @@ packages:
 
   bun-types@1.3.12:
     resolution: {integrity: sha512-HqOLj5PoFajAQciOMRiIZGNoKxDJSr6qigAttOX40vJuSp6DN/CxWp9s3C1Xwm4oH7ybueITwiaOcWXoYVoRkA==}
+
+  bun-types@1.3.13:
+    resolution: {integrity: sha512-QXKeHLlOLqQX9LgYaHJfzdBaV21T63HhFJnvuRCcjZiaUDpbs5ED1MgxbMra71CsryN/1dAoXuJJJwIv/2drVA==}
 
   bundle-name@3.0.0:
     resolution: {integrity: sha512-PKA4BeSvBpQKQ8iPOGCSiell+N8P+Tf1DlwqmYhpe2gAhKPHn8EYOxVT+ShuGmhg8lN8XiSlS80yiExKXrURlw==}
@@ -10437,6 +10483,10 @@ snapshots:
     dependencies:
       bun-types: 1.3.12
 
+  '@types/bun@1.3.13':
+    dependencies:
+      bun-types: 1.3.13
+
   '@types/debug@4.1.13':
     dependencies:
       '@types/ms': 2.1.0
@@ -12085,6 +12135,10 @@ snapshots:
     dependencies:
       '@types/node': 25.3.0
 
+  bun-types@1.3.13:
+    dependencies:
+      '@types/node': 25.3.0
+
   bundle-name@3.0.0:
     dependencies:
       run-applescript: 5.0.0
@@ -12700,9 +12754,9 @@ snapshots:
       get-tsconfig: 4.13.7
       jiti: 2.6.1
 
-  drizzle-orm@1.0.0-rc.1(bun-types@1.3.12)(mysql2@3.15.3)(postgres@3.4.9)(zod@4.3.6):
+  drizzle-orm@1.0.0-rc.1(bun-types@1.3.13)(mysql2@3.15.3)(postgres@3.4.9)(zod@4.3.6):
     optionalDependencies:
-      bun-types: 1.3.12
+      bun-types: 1.3.13
       mysql2: 3.15.3
       postgres: 3.4.9
       zod: 4.3.6

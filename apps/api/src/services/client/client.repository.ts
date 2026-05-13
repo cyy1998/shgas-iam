@@ -1,8 +1,8 @@
-import type { DbClient } from "@api/db";
+import type { DbClient } from "@iam/db";
 import type { ClientCreateDto, ClientInputDto } from "./client.type";
-import db from "@api/db";
-import { compactUpdate, firstRow } from "@api/db/query-utils";
-import { clients } from "@api/db/schema";
+import db from "@iam/db";
+import { compactUpdate, firstRow } from "@iam/db/query-utils";
+import { clients } from "@iam/db/schema";
 import { eq } from "drizzle-orm";
 
 export async function getClientByCode(clientCode: string, tx: DbClient = db) {

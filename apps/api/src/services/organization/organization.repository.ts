@@ -1,10 +1,10 @@
-import type { DbClient } from "@api/db";
-import type { Organization } from "@api/db/schema";
 import type { OrganizationCreateDto, OrganizationQueryDto } from "@api/services/organization/organization.type";
-import db from "@api/db";
-import { compactUpdate, firstRow, ilikeContainsIf, inArrayIf } from "@api/db/query-utils";
-import { employments, organizationClosures, organizations } from "@api/db/schema";
+import type { DbClient } from "@iam/db";
+import type { Organization } from "@iam/db/schema";
 import { Status } from "@api/enums/status";
+import db from "@iam/db";
+import { compactUpdate, firstRow, ilikeContainsIf, inArrayIf } from "@iam/db/query-utils";
+import { employments, organizationClosures, organizations } from "@iam/db/schema";
 import { and, count, eq, exists, gt, inArray, or, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 

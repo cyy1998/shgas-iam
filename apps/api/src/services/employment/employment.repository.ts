@@ -1,15 +1,15 @@
-import type { DbClient } from "@api/db";
-import type { Employment, Organization, User } from "@api/db/schema";
+import type { DbClient } from "@iam/db";
+import type { Employment, Organization, User } from "@iam/db/schema";
 import type { EmploymentAdminPaginationQueryDto } from "./employment.type";
-import db from "@api/db";
-import { compactUpdate, firstRow, ilikeContainsIf, inArrayIf } from "@api/db/query-utils";
+import { Status } from "@api/enums/status";
+import db from "@iam/db";
+import { compactUpdate, firstRow, ilikeContainsIf, inArrayIf } from "@iam/db/query-utils";
 import {
   employments,
   organizations,
   positions,
   users,
-} from "@api/db/schema";
-import { Status } from "@api/enums/status";
+} from "@iam/db/schema";
 import { and, count, desc, eq, exists, inArray, or, sql } from "drizzle-orm";
 
 type Position = typeof positions.$inferSelect;

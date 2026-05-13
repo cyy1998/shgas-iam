@@ -6,7 +6,6 @@ import type {
   OrganizationTreeNodeDto,
   OrganizationUpdateDto,
 } from "@api/services/organization/organization.type";
-import db from "@api/db";
 import { statusToString } from "@api/enums/status";
 import { CustomError } from "@api/errors/CustomError";
 import { OrganizationHasChildrenError } from "@api/errors/OrganizationHasChildrenError";
@@ -14,6 +13,7 @@ import { OrganizationHasEmploymentError } from "@api/errors/OrganizationHasEmplo
 import * as organizationRepository from "@api/services/organization/organization.repository";
 import { OrganizationDtoConverterSchema } from "@api/services/organization/organization.schema";
 import { paginate } from "@api/utils/page.util";
+import db from "@iam/db";
 
 export async function getOrganizationByCode(orgCode: string) {
   const organization = await organizationRepository.getOrganizationByCode(orgCode);

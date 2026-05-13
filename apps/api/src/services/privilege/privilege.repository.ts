@@ -1,13 +1,13 @@
-import type { DbClient } from "@api/db";
 import type { Prettify } from "@api/utils/lint.util";
+import type { DbClient } from "@iam/db";
 import type { PrivilegeQueryDto } from "./privilege.type";
-import db from "@api/db";
-import { inArrayIf } from "@api/db/query-utils";
+import db from "@iam/db";
+import { inArrayIf } from "@iam/db/query-utils";
 import {
   privileges,
   rolePrivileges,
   roles,
-} from "@api/db/schema";
+} from "@iam/db/schema";
 import { and, eq, exists, inArray, sql } from "drizzle-orm";
 
 export async function getPrivilegesByRoleIds(roleIds: number[], tx: DbClient = db) {

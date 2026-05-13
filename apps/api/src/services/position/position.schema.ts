@@ -1,7 +1,7 @@
-import { selectPositionSchema } from "@api/db/schema";
 import { PositionStatus } from "@api/enums/position.status";
 import { EmploymentSchema } from "@api/services/employment/employment.schema";
 import { z } from "@hono/zod-openapi";
+import { selectPositionSchema } from "@iam/db/schema";
 import { createPageQuerySchema } from "../../lib/core/pagination/schema";
 
 export const PositionSchema = z.object(selectPositionSchema.shape);

@@ -1,7 +1,8 @@
-import type { DbClient } from "@api/db";
 import type { UserCreateDto, UserPaginationQueryDto, UserQueryDto } from "@api/services/user/user.type";
-import db from "@api/db";
-import { compactUpdate, firstRow, ilikeContainsIf, inArrayIf } from "@api/db/query-utils";
+import type { DbClient } from "@iam/db";
+import { Status } from "@api/enums/status";
+import db from "@iam/db";
+import { compactUpdate, firstRow, ilikeContainsIf, inArrayIf } from "@iam/db/query-utils";
 import {
   employmentRoles,
   employments,
@@ -12,8 +13,7 @@ import {
   positions,
   roles,
   users,
-} from "@api/db/schema";
-import { Status } from "@api/enums/status";
+} from "@iam/db/schema";
 import { and, count, eq, exists, gt, or, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 

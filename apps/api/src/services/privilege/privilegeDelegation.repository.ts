@@ -1,9 +1,11 @@
-import type { DbClient } from "@api/db";
-import type { Organization, User } from "@api/db/schema";
 import type { Prettify } from "@api/utils/lint.util";
+import type { DbClient } from "@iam/db";
+import type { Organization, User } from "@iam/db/schema";
 import type { PrivilegeDelegationCreateDto, PrivilegeDelegationQueryDto } from "./privilegeDelegation.type";
-import db from "@api/db";
-import { compactUpdate, firstRow, inArrayIf } from "@api/db/query-utils";
+import { Status } from "@api/enums/status";
+import { CustomError } from "@api/errors/CustomError";
+import db from "@iam/db";
+import { compactUpdate, firstRow, inArrayIf } from "@iam/db/query-utils";
 import {
   delegationDetails,
   organizationClosures,
@@ -11,9 +13,7 @@ import {
   privilegeDelegations,
   privileges,
   users,
-} from "@api/db/schema";
-import { Status } from "@api/enums/status";
-import { CustomError } from "@api/errors/CustomError";
+} from "@iam/db/schema";
 import { and, eq, exists, gte, inArray, lte, ne, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 

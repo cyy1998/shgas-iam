@@ -1,7 +1,6 @@
-import type { User } from "@api/db/schema";
+import type { User } from "@iam/db/schema";
 
 import type { UserCreateDto, UserDetailDto, UserDto, UserPaginationQueryDto, UserQueryDto, UserQueryWithPrivilegeDelegationDto } from "./user.type";
-import db from "@api/db";
 import { Status } from "@api/enums/status";
 import { VerificationCodeUsage } from "@api/enums/verificationCode.usage";
 import config from "@api/env";
@@ -20,6 +19,7 @@ import {
   UserDtoSchema,
 } from "@api/services/user/user.schema";
 import { generateRandomPassword } from "@api/utils/encryption.utils";
+import db from "@iam/db";
 import { compare, hash } from "bcrypt-ts";
 import { PrivilegeDelegationDtoConverterSchema } from "../privilege/privilegeDelegation.schema";
 

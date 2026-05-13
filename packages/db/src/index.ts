@@ -1,7 +1,7 @@
-import { relations } from "@api/db/relations";
-import { createSingleton } from "@api/lib/core/singleton";
 import { drizzle } from "drizzle-orm/postgres-js";
 import postgres from "postgres";
+import { relations } from "./relations";
+import { createSingleton } from "./singleton";
 
 function createQueryClient() {
   const connectionString = process.env.DATABASE_URL;

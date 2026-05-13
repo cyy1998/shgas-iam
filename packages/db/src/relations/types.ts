@@ -1,5 +1,5 @@
-import type * as schema from "@api/db/schema";
 import type { ExtractTablesFromSchema, RelationsBuilder, RelationsBuilderConfig } from "drizzle-orm";
+import type * as schema from "../schema";
 
 export type Schema = ExtractTablesFromSchema<typeof schema>;
 export type RelationsConfig = RelationsBuilderConfig<Schema>;

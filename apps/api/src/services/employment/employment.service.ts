@@ -4,7 +4,6 @@ import type {
   EmploymentTransferDto,
   EmploymentUpdateDto,
 } from "./employment.type";
-import db from "@api/db";
 import { Status } from "@api/enums/status";
 import { CustomError } from "@api/errors/CustomError";
 import { EmploymentNotEditableError } from "@api/errors/EmploymentNotEditableError";
@@ -17,6 +16,7 @@ import * as positionRepository from "@api/services/position/position.repository"
 import * as privilegeRepository from "@api/services/privilege/privilege.repository";
 import * as roleRepository from "@api/services/role/role.repository";
 import * as userRepository from "@api/services/user/user.repository";
+import db from "@iam/db";
 
 export async function getEmploymentDetailByIdForAdmin(id: number) {
   const employment = await employmentRepository.getEmploymentByIdForAdmin(id);

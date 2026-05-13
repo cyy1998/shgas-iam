@@ -1,5 +1,5 @@
-import * as schema from "@api/db/schema";
 import { defineRelations } from "drizzle-orm";
+import * as schema from "../schema";
 import { coreRelations } from "./core";
 
 export const relations = defineRelations(schema, r => ({

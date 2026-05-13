@@ -1,12 +1,12 @@
+import { Status } from "@api/enums/status";
+import { z } from "@hono/zod-openapi";
 import {
   selectDelegationDetailSchema,
   selectOrganizationSchema,
   selectPrivilegeDelegationSchema,
   selectPrivilegeSchema,
   selectUserSchema,
-} from "@api/db/schema";
-import { Status } from "@api/enums/status";
-import { z } from "@hono/zod-openapi";
+} from "@iam/db/schema";
 import { OrganizationDtoConverterSchema, OrganizationDtoSchema } from "../organization/organization.schema";
 import { UserDtoSchema } from "../user/user.schema";
 import { PrivilegeDtoSchema } from "./privilege.schema";

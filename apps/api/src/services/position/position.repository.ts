@@ -1,8 +1,8 @@
-import type { DbClient } from "@api/db";
+import type { DbClient } from "@iam/db";
 import type { PositionCreateDto, PositionFuzzyQueryDto } from "./position.type";
-import db from "@api/db";
-import { compactUpdate, firstRow } from "@api/db/query-utils";
-import { employments, positions } from "@api/db/schema";
+import db from "@iam/db";
+import { compactUpdate, firstRow } from "@iam/db/query-utils";
+import { employments, positions } from "@iam/db/schema";
 import { and, count, eq } from "drizzle-orm";
 
 export async function getPositionByCode(posCode: string, tx: DbClient = db) {

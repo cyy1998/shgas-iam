@@ -1,6 +1,6 @@
-import { selectOrganizationSchema } from "@api/db/schema";
 import { OrganizationStatus } from "@api/enums/organization.status";
 import { z } from "@hono/zod-openapi";
+import { selectOrganizationSchema } from "@iam/db/schema";
 import { createPageQuerySchema } from "../../lib/core/pagination/schema";
 
 export const OrganizationSchema = z.object(selectOrganizationSchema.shape);

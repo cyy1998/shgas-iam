@@ -1,5 +1,4 @@
 import type { UserRouteHandler } from "./user.type";
-import db from "@api/db";
 import { UserType } from "@api/enums/user.type";
 import config from "@api/env";
 import { CustomError } from "@api/errors/CustomError";
@@ -10,6 +9,7 @@ import * as positionRepository from "@api/services/position/position.repository"
 import * as userRepository from "@api/services/user/user.repository";
 import * as userService from "@api/services/user/user.service";
 import * as resp from "@api/utils/http/response";
+import db from "@iam/db";
 
 export const userInfo: UserRouteHandler<"userInfo"> = async (c) => {
   const { username } = c.req.valid("param");

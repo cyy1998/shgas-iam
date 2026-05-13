@@ -1,7 +1,7 @@
-import type { DbClient } from "@api/db";
+import type { DbClient } from "@iam/db";
 import type { UserDetailDto } from "../user/user.type";
-import db from "@api/db";
-import { loginLogs } from "@api/db/schema";
+import db from "@iam/db";
+import { loginLogs } from "@iam/db/schema";
 
 export async function loginLog(
   userDetailDto: UserDetailDto,
