@@ -1,4 +1,5 @@
 import type { z } from "zod";
+import { EmploymentStatus } from "@iam/contracts";
 import { boolean, index, integer, serial, snakeCase, timestamp, varchar } from "drizzle-orm/pg-core";
 import { createSelectSchema } from "drizzle-orm/zod";
 import { timestampColumns } from "../_shard/base-columns";
@@ -10,7 +11,7 @@ export const employments = snakeCase.table("employment", {
   orgId: integer("dept_id").notNull(),
   compId: integer().notNull(),
   isPrimary: boolean().notNull().default(false),
-  status: integer().notNull().default(1),
+  status: integer().$type<EmploymentStatus>().notNull().default(EmploymentStatus.Enable),
   startTime: timestamp().notNull().defaultNow(),
   endTime: timestamp(),
   description: varchar({ length: 500 }),

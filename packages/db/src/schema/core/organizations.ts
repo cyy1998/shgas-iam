@@ -1,4 +1,5 @@
 import type { z } from "zod";
+import { OrganizationStatus } from "@iam/contracts";
 import { boolean, index, integer, serial, snakeCase, text } from "drizzle-orm/pg-core";
 import { createSelectSchema } from "drizzle-orm/zod";
 import { timestampColumns } from "../_shard/base-columns";
@@ -15,7 +16,7 @@ export const organizations = snakeCase.table("organization", {
   orderNum: integer().notNull().default(0),
   isVirtual: boolean().notNull().default(false),
   isEntity: boolean().notNull().default(false),
-  status: integer().notNull().default(1),
+  status: integer().$type<OrganizationStatus>().notNull().default(OrganizationStatus.Enable),
   isDelete: boolean().notNull().default(false),
   ...timestampColumns(),
 }, table => [

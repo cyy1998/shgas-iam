@@ -1,3 +1,4 @@
+import { PrivilegeDelegationStatus } from "@iam/contracts";
 import { boolean, index, integer, serial, snakeCase, timestamp, varchar } from "drizzle-orm/pg-core";
 import { createSelectSchema } from "drizzle-orm/zod";
 import { timestampColumns } from "../_shard/base-columns";
@@ -9,7 +10,7 @@ export const privilegeDelegations = snakeCase.table("privilege_delegation", {
   organizationScopeId: integer().notNull(),
   startTime: timestamp().notNull(),
   endTime: timestamp().notNull(),
-  status: integer().notNull().default(1),
+  status: integer().$type<PrivilegeDelegationStatus>().notNull().default(PrivilegeDelegationStatus.Enable),
   description: varchar({ length: 500 }),
   isDelete: boolean().notNull().default(false),
   ...timestampColumns(),

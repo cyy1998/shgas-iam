@@ -1,3 +1,4 @@
+import { ClientStatus } from "@iam/contracts";
 import { boolean, integer, jsonb, serial, snakeCase, varchar } from "drizzle-orm/pg-core";
 import { createSelectSchema } from "drizzle-orm/zod";
 import { timestampColumns } from "../_shard/base-columns";
@@ -8,7 +9,7 @@ export const clients = snakeCase.table("client", {
   clientName: varchar({ length: 128 }).notNull(),
   clientSecret: varchar({ length: 255 }).notNull(),
   url: varchar({ length: 128 }),
-  status: integer().notNull().default(1),
+  status: integer().$type<ClientStatus>().notNull().default(ClientStatus.Enable),
   description: varchar({ length: 500 }),
   isDelete: boolean().notNull().default(false),
   ...timestampColumns(),
