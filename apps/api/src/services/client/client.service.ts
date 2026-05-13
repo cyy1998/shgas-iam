@@ -1,9 +1,8 @@
-import type { ClientCreateDto, ClientDto, ClientInputDto } from "./client.type";
+import type { ClientDto } from "./client.type";
 import redis from "@api/lib/clients/redis";
 import * as clientRepository from "@api/services/client/client.repository";
 import { ClientDtoSchema } from "@api/services/client/client.schema";
 import { reviveIsoDates } from "@iam/api-core/utils";
-import db from "@iam/db";
 import { ZodError } from "zod";
 
 async function setClientCache(clientDto: ClientDto) {
@@ -59,22 +58,4 @@ export async function getClientBySecret(clientSecret: string): Promise<ClientDto
   const clientDto = ClientDtoSchema.parse(client);
   await setClientCache(clientDto);
   return clientDto;
-}
-
-export async function createClient(clientDto: ClientCreateDto) {
-  return await db.transaction(async (tx) => {
-    const client = await clientRepository.createClient(clientDto, tx);
-    const createdClientDto = ClientDtoSchema.parse(client);
-    await setClientCache(createdClientDto);
-    return createdClientDto;
-  });
-}
-
-export async function updateClient(clientDto: ClientInputDto) {
-  return await db.transaction(async (tx) => {
-    const client = await clientRepository.updateClient(clientDto, tx);
-    const updatedClientDto = ClientDtoSchema.parse(client);
-    await setClientCache(updatedClientDto);
-    return updatedClientDto;
-  });
 }

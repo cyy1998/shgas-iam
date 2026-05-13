@@ -1,18 +1,11 @@
-import type { Status } from "@api/enums/status";
 import type {
   OrganizationCreateDto,
-  OrganizationPaginationQueryDto,
   OrganizationQueryDto,
-  OrganizationTreeNodeDto,
   OrganizationUpdateDto,
 } from "@api/services/organization/organization.type";
-import { statusToString } from "@api/enums/status";
 import * as organizationRepository from "@api/services/organization/organization.repository";
 import { OrganizationDtoConverterSchema } from "@api/services/organization/organization.schema";
 import { CustomError } from "@iam/api-core/errors/CustomError";
-import { OrganizationHasChildrenError } from "@iam/api-core/errors/OrganizationHasChildrenError";
-import { OrganizationHasEmploymentError } from "@iam/api-core/errors/OrganizationHasEmploymentError";
-import { paginate } from "@iam/api-core/utils";
 import db from "@iam/db";
 
 export async function getOrganizationByCode(orgCode: string) {
@@ -46,59 +39,6 @@ export async function setOrganization(organizationCreateDto: OrganizationCreateD
   });
 }
 
-export async function getOrganizationChildrenForAdmin(
-  parentOrgCode: string | null,
-  pageNum: number,
-  pageSize: number,
-) {
-  const { rows, total } = await organizationRepository.listOrgChildrenByParentCode(
-    parentOrgCode,
-    pageNum,
-    pageSize,
-  );
-  const result: OrganizationTreeNodeDto[] = rows.map(r => ({
-    id: r.id,
-    orgCode: r.orgCode,
-    orgName: r.orgName,
-    orgType: r.orgType,
-    status: r.status,
-    level: r.level,
-    parentId: r.parentId,
-    orderNum: r.orderNum,
-    isLeaf: r.childCount === 0,
-  }));
-  const pages = total === 0 ? 0 : Math.ceil(total / pageSize);
-  return { result, total, pageNum, pageSize, pages };
-}
-
-export async function getOrganizationDetailByCodeForAdmin(orgCode: string) {
-  const org = await organizationRepository.getOrganizationByCodeForAdmin(orgCode);
-  if (org === null) {
-    throw new CustomError("组织不存在", 404);
-  }
-  const employmentCount = await organizationRepository.countActiveEmploymentsByOrgCode(orgCode);
-  const dto = OrganizationDtoConverterSchema.parse(org);
-  return {
-    ...dto,
-    statusText: statusToString[dto.status as Status] ?? "未知",
-    childrenCount: org.children.length,
-    employmentCount,
-  };
-}
-
-export async function searchOrganizationsForAdmin(query: OrganizationPaginationQueryDto) {
-  const orgs = await organizationRepository.searchOrganizationsForAdmin(query);
-  const vos = orgs.map((o) => {
-    const dto = OrganizationDtoConverterSchema.parse(o);
-    return {
-      ...dto,
-      statusText: statusToString[dto.status as Status] ?? "未知",
-      childrenCount: o.children.length,
-    };
-  });
-  return paginate(vos, query);
-}
-
 export async function updateOrganization(orgCode: string, data: OrganizationUpdateDto) {
   return await db.transaction(async (tx) => {
     const existing = await organizationRepository.getOrganizationByCodeForAdmin(orgCode, tx);
@@ -112,29 +52,6 @@ export async function updateOrganization(orgCode: string, data: OrganizationUpda
       }
     }
     await organizationRepository.updateOrganizationByCode(orgCode, data, tx);
-    return true;
-  });
-}
-
-export async function updateOrganizationStatus(orgCode: string, status: number) {
-  return await updateOrganization(orgCode, { status });
-}
-
-export async function deleteOrganization(orgCode: string) {
-  return await db.transaction(async (tx) => {
-    const existing = await organizationRepository.getOrganizationByCodeForAdmin(orgCode, tx);
-    if (existing === null) {
-      throw new CustomError("组织不存在", 404);
-    }
-    const childrenCount = await organizationRepository.countActiveChildrenByOrgCode(orgCode, tx);
-    if (childrenCount > 0) {
-      throw new OrganizationHasChildrenError();
-    }
-    const employmentCount = await organizationRepository.countActiveEmploymentsByOrgCode(orgCode, tx);
-    if (employmentCount > 0) {
-      throw new OrganizationHasEmploymentError();
-    }
-    await organizationRepository.softDeleteOrganizationByCode(orgCode, tx);
     return true;
   });
 }
