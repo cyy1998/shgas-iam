@@ -1,18 +1,19 @@
 import { RoleStatus } from "@iam/contracts";
-import { boolean, index, integer, serial, snakeCase, varchar } from "drizzle-orm/pg-core";
+import { index, integer, snakeCase, varchar } from "drizzle-orm/pg-core";
 import { createInsertSchema, createSelectSchema, createUpdateSchema } from "drizzle-orm/zod";
 import { z } from "zod";
-import { timestampColumns } from "../_shard/base-columns";
+import { baseColumns } from "../_shard/base-columns";
 
 export const roles = snakeCase.table("role", {
-  id: serial().primaryKey(),
+  id: baseColumns.id,
   roleCode: varchar({ length: 64 }).notNull().unique(),
   roleName: varchar({ length: 128 }).notNull(),
   clientId: integer().notNull(),
   status: integer().$type<RoleStatus>().notNull().default(RoleStatus.Enable),
   description: varchar({ length: 500 }),
-  isDelete: boolean().notNull().default(false),
-  ...timestampColumns(),
+  isDelete: baseColumns.isDelete,
+  createTime: baseColumns.createTime,
+  updateTime: baseColumns.updateTime,
 }, table => [
   index("idx_client_id").on(table.clientId),
 ]);

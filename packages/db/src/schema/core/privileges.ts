@@ -1,21 +1,22 @@
 import type { Json } from "drizzle-orm";
 import { PrivilegeStatus } from "@iam/contracts";
-import { boolean, integer, jsonb, serial, snakeCase, text, varchar } from "drizzle-orm/pg-core";
+import { integer, jsonb, snakeCase, text, varchar } from "drizzle-orm/pg-core";
 import { createInsertSchema, createSelectSchema, createUpdateSchema, jsonSchema } from "drizzle-orm/zod";
 import { z } from "zod";
-import { timestampColumns } from "../_shard/base-columns";
+import { baseColumns } from "../_shard/base-columns";
 
 export const privilegeFieldValuesSchema = jsonSchema;
 
 export const privileges = snakeCase.table("privilege", {
-  id: serial().primaryKey(),
+  id: baseColumns.id,
   privilegeCode: text().notNull().unique(),
   privilegeName: text().notNull(),
   fieldValues: jsonb().$type<Json>(),
   status: integer().$type<PrivilegeStatus>().notNull().default(PrivilegeStatus.Enable),
   description: varchar({ length: 500 }),
-  isDelete: boolean().notNull().default(false),
-  ...timestampColumns(),
+  isDelete: baseColumns.isDelete,
+  createTime: baseColumns.createTime,
+  updateTime: baseColumns.updateTime,
 });
 
 export const selectPrivilegeSchema = createSelectSchema(privileges, {

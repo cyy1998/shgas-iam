@@ -1,11 +1,11 @@
 import { EmploymentStatus } from "@iam/contracts";
-import { boolean, index, integer, serial, snakeCase, timestamp, varchar } from "drizzle-orm/pg-core";
+import { boolean, index, integer, snakeCase, timestamp, varchar } from "drizzle-orm/pg-core";
 import { createInsertSchema, createSelectSchema, createUpdateSchema } from "drizzle-orm/zod";
 import { z } from "zod";
-import { timestampColumns } from "../_shard/base-columns";
+import { baseColumns } from "../_shard/base-columns";
 
 export const employments = snakeCase.table("employment", {
-  id: serial().primaryKey(),
+  id: baseColumns.id,
   userId: integer().notNull(),
   posId: integer().notNull(),
   orgId: integer("dept_id").notNull(),
@@ -15,8 +15,9 @@ export const employments = snakeCase.table("employment", {
   startTime: timestamp().notNull().defaultNow(),
   endTime: timestamp(),
   description: varchar({ length: 500 }),
-  isDelete: boolean().notNull().default(false),
-  ...timestampColumns(),
+  isDelete: baseColumns.isDelete,
+  createTime: baseColumns.createTime,
+  updateTime: baseColumns.updateTime,
 }, table => [
   index("idx_employment_user_id").on(table.userId),
   index("idx_dept_id").on(table.orgId),

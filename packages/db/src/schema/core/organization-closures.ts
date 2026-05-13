@@ -1,8 +1,9 @@
-import { index, integer, serial, snakeCase, uniqueIndex } from "drizzle-orm/pg-core";
+import { index, integer, snakeCase, uniqueIndex } from "drizzle-orm/pg-core";
 import { createInsertSchema, createSelectSchema, createUpdateSchema } from "drizzle-orm/zod";
+import { baseColumns } from "../_shard/base-columns";
 
 export const organizationClosures = snakeCase.table("organization_closure", {
-  id: serial().primaryKey(),
+  id: baseColumns.id,
   ancestorId: integer().notNull(),
   descendantId: integer().notNull(),
   depth: integer().notNull(),

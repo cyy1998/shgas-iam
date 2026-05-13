@@ -1,10 +1,11 @@
 import { UserStatus, UserType } from "@iam/contracts";
-import { boolean, integer, serial, snakeCase, timestamp, varchar } from "drizzle-orm/pg-core";
+import { integer, snakeCase, varchar } from "drizzle-orm/pg-core";
 import { createInsertSchema, createSelectSchema, createUpdateSchema } from "drizzle-orm/zod";
 import { z } from "zod";
+import { baseColumns } from "../_shard/base-columns";
 
 export const users = snakeCase.table("user", {
-  id: serial().primaryKey(),
+  id: baseColumns.id,
   username: varchar({ length: 64 }).notNull().unique(),
   wxId: varchar("wxId", { length: 255 }),
   name: varchar({ length: 64 }).notNull(),
@@ -13,9 +14,9 @@ export const users = snakeCase.table("user", {
   userType: varchar({ length: 20 }).$type<UserType>().notNull().default(UserType.Formal),
   orderNum: integer().notNull().default(999999),
   status: integer().$type<UserStatus>().notNull().default(UserStatus.Enable),
-  isDelete: boolean().notNull().default(false),
-  createTime: timestamp({ precision: 0 }).notNull().defaultNow(),
-  updateTime: timestamp({ precision: 0 }).notNull().defaultNow().$onUpdate(() => new Date()),
+  isDelete: baseColumns.isDelete,
+  createTime: baseColumns.createTime,
+  updateTime: baseColumns.updateTime,
 });
 
 export const selectUserSchema = createSelectSchema(users, {

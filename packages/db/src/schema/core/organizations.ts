@@ -1,11 +1,11 @@
 import { OrganizationLevel, OrganizationStatus, OrganizationType } from "@iam/contracts";
-import { boolean, index, integer, serial, snakeCase, text } from "drizzle-orm/pg-core";
+import { boolean, index, integer, snakeCase, text } from "drizzle-orm/pg-core";
 import { createInsertSchema, createSelectSchema, createUpdateSchema } from "drizzle-orm/zod";
 import { z } from "zod";
-import { timestampColumns } from "../_shard/base-columns";
+import { baseColumns } from "../_shard/base-columns";
 
 export const organizations = snakeCase.table("organization", {
-  id: serial().primaryKey(),
+  id: baseColumns.id,
   orgCode: text().notNull().unique(),
   orgName: text().notNull(),
   parentId: integer().notNull().default(-1),
@@ -17,8 +17,9 @@ export const organizations = snakeCase.table("organization", {
   isVirtual: boolean().notNull().default(false),
   isEntity: boolean().notNull().default(false),
   status: integer().$type<OrganizationStatus>().notNull().default(OrganizationStatus.Enable),
-  isDelete: boolean().notNull().default(false),
-  ...timestampColumns(),
+  isDelete: baseColumns.isDelete,
+  createTime: baseColumns.createTime,
+  updateTime: baseColumns.updateTime,
 }, table => [
   index("idx_parentId").on(table.parentId),
 ]);

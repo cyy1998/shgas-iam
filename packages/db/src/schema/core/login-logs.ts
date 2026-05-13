@@ -1,8 +1,9 @@
-import { index, integer, serial, snakeCase, timestamp, varchar } from "drizzle-orm/pg-core";
+import { index, integer, snakeCase, timestamp, varchar } from "drizzle-orm/pg-core";
 import { createInsertSchema, createSelectSchema, createUpdateSchema } from "drizzle-orm/zod";
+import { baseColumns } from "../_shard/base-columns";
 
 export const loginLogs = snakeCase.table("login_log", {
-  id: serial().primaryKey(),
+  id: baseColumns.id,
   userId: integer().notNull(),
   username: varchar({ length: 64 }).notNull(),
   name: varchar({ length: 64 }).notNull(),
