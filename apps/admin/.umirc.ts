@@ -55,7 +55,7 @@ export default defineConfig({
       changeOrigin: true,
     },
     '/admin': {
-      target: 'http://localhost:30000',
+      target: 'http://localhost:30001',
       changeOrigin: true,
     },
     '/auth': {
@@ -75,7 +75,7 @@ export default defineConfig({
       changeOrigin: true,
     },
     '/rpc': {
-      target: 'http://localhost:30000',
+      target: 'http://localhost:30001',
       changeOrigin: true,
     },
   },

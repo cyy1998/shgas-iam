@@ -23,7 +23,7 @@
     "react-dom": "^18.0.0"
   },
   "devDependencies": {
-    "@iam/api": "workspace:*",
+    "@iam/admin-api": "workspace:*",
     "@types/react": "^18.0.33",
     "@types/react-dom": "^18.0.11",
     "@typescript/native-preview": "7.0.0-dev.20260504.1",

@@ -19,7 +19,7 @@ import {
 import { apiClient } from '@admin/lib/api-client';
 import { getEmploymentStatusOptions, OrganizationType } from '@iam/contracts';
 import { useLocation } from '@umijs/max';
-import type { AppRouter } from '@iam/api/trpc';
+import type { AppRouter } from '@iam/admin-api/trpc';
 import type { inferRouterOutputs } from '@trpc/server';
 import { Button, Dropdown, Form, message, Modal, Select, Space, Tag } from 'antd';
 import type { FormInstance } from 'antd';

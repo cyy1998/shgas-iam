@@ -45,9 +45,9 @@ importers:
         specifier: ^18.0.0
         version: 18.3.1(react@18.3.1)
     devDependencies:
-      '@iam/api':
+      '@iam/admin-api':
         specifier: workspace:*
-        version: link:../api
+        version: link:../admin-api
       '@types/react':
         specifier: ^18.0.33
         version: 18.3.28

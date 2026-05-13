@@ -9,7 +9,7 @@ import {
   ProFormTextArea,
 } from '@ant-design/pro-components';
 import type { ProFormInstance } from '@ant-design/pro-components';
-import type { AppRouter } from '@iam/api/trpc';
+import type { AppRouter } from '@iam/admin-api/trpc';
 import { OrganizationType } from '@iam/contracts';
 import type { inferRouterOutputs } from '@trpc/server';
 import { Descriptions, message } from 'antd';

@@ -5,6 +5,8 @@
       "@admin/*": ["./src/*"],
       "~admin/*": ["./*"],
       "@@/*": ["./src/.umi/*"],
+      "@admin-api/*": ["../admin-api/src/*"],
+      "~admin-api/*": ["../admin-api/*"],
       "@api/*": ["../api/src/*"],
       "~api/*": ["../api/*"],
       "@umijs/max": ["./node_modules/@umijs/max"],

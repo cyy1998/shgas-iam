@@ -1,5 +1,5 @@
 import { apiClient } from '@admin/lib/api-client';
-import type { AppRouter } from '@iam/api/trpc';
+import type { AppRouter } from '@iam/admin-api/trpc';
 import type { inferRouterInputs, inferRouterOutputs } from '@trpc/server';
 
 type AdminUserInputs = inferRouterInputs<AppRouter>['admin']['user'];
