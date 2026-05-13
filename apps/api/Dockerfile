@@ -22,25 +22,19 @@ ENV HTTPS_PROXY="http://176.169.105.96:3928"
 RUN pnpm install --frozen-lockfile
 
 # ── Stage 3: Create deploy bundle ────────────────────────────────────────────
-# FROM deps AS builder
-# COPY packages/contracts/ ./packages/contracts/
-# COPY packages/db/ ./packages/db/
-# COPY packages/api-core/ ./packages/api-core/
-# COPY apps/api/        ./apps/api/
-# # Flatten monorepo → self-contained bundle (prod deps + source, no devDeps)
-# RUN pnpm --filter @iam/api deploy --prod /deploy/api
+FROM deps AS builder
+COPY packages/contracts/ ./packages/contracts/
+COPY packages/db/ ./packages/db/
+COPY packages/api-core/ ./packages/api-core/
+COPY apps/api/        ./apps/api/
+# Flatten monorepo -> self-contained bundle (prod deps + source, no devDeps).
+# pnpm v10 requires --legacy unless inject-workspace-packages is enabled.
+RUN pnpm --filter @iam/api deploy --prod --legacy /deploy/api
 
 # ── Stage 4: Production runtime (Bun) ────────────────────────────────────────
 FROM docker.xuanyuan.run/oven/bun:1-alpine AS runner
 ENV NODE_ENV=production
 WORKDIR /app
-COPY --from=deps /app/node_modules              ./node_modules
-# COPY --from=deps /app/packages/contracts/node_modules ./packages/contracts/node_modules
-COPY --from=deps /app/apps/api/node_modules    ./apps/api/node_modules
-COPY packages/contracts/ ./packages/contracts/
-COPY packages/db/ ./packages/db/
-COPY packages/api-core/ ./packages/api-core/
-COPY apps/api/        ./apps/api/
-WORKDIR /app/apps/api
+COPY --from=builder /deploy/api ./
 EXPOSE 30000
 CMD ["bun", "run", "src/index.ts"]
