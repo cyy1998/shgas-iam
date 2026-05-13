@@ -1,7 +1,7 @@
 import type { OrganizationCreateDto } from "@admin-api/services/organization/organization.type";
 import type { DbClient } from "@iam/db";
 import type { Organization } from "@iam/db/schema";
-import { Status } from "@iam/contracts";
+import { OrganizationStatus } from "@iam/contracts";
 import db from "@iam/db";
 import { compactUpdate, firstRow, ilikeContainsIf } from "@iam/db/query-utils";
 import { employments, organizationClosures, organizations } from "@iam/db/schema";
@@ -53,7 +53,7 @@ async function attachOrganizationRelations(
 export async function getOrganizationByCode(orgCode: string, tx: DbClient = db) {
   const rows = await tx.select().from(organizations).where(and(
     eq(organizations.orgCode, orgCode),
-    eq(organizations.status, Status.Enable),
+    eq(organizations.status, OrganizationStatus.Enable),
     eq(organizations.isDelete, false),
   )).limit(1);
   return firstRow(await attachOrganizationRelations(rows, tx)) ?? null;
@@ -77,7 +77,7 @@ export async function setOrganization(
     })
     .where(and(
       eq(organizations.id, newOrganization.id),
-      eq(organizations.status, Status.Enable),
+      eq(organizations.status, OrganizationStatus.Enable),
       eq(organizations.isDelete, false),
     ))
     .returning())!;
@@ -175,7 +175,7 @@ export async function searchOrganizationsForAdmin(
       fuzzyConditions: { text?: string };
       exactConditions: {
         orgType?: string;
-        status?: number;
+        status?: OrganizationStatus;
         parentOrgCode?: string;
         ancestorOrgCode?: string;
       };
@@ -224,7 +224,7 @@ export async function searchOrganizationsForAdmin(
 
 export async function updateOrganizationByCode(
   orgCode: string,
-  data: { orgCode?: string; orgName?: string; orgType?: string; status?: number },
+  data: { orgCode?: string; orgName?: string; orgType?: string; status?: OrganizationStatus },
   tx: DbClient = db,
 ) {
   return await tx

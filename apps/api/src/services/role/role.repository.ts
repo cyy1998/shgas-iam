@@ -1,5 +1,5 @@
 import type { DbClient } from "@iam/db";
-import { Status } from "@iam/contracts";
+import { EmploymentStatus, RoleStatus } from "@iam/contracts";
 import db from "@iam/db";
 import {
   employmentRoles,
@@ -12,7 +12,7 @@ import {
 import { and, eq, exists, or, sql } from "drizzle-orm";
 
 function activeRoleWhere() {
-  return and(eq(roles.status, Status.Enable), eq(roles.isDelete, false));
+  return and(eq(roles.status, RoleStatus.Enable), eq(roles.isDelete, false));
 }
 
 function roleAssignedToEmploymentWhere(employmentId: number) {
@@ -24,7 +24,7 @@ function roleAssignedToEmploymentWhere(employmentId: number) {
         .where(and(
           eq(positionRoles.roleId, roles.id),
           eq(employments.id, employmentId),
-          eq(employments.status, Status.Enable),
+          eq(employments.status, EmploymentStatus.Enable),
         )),
     ),
     exists(
@@ -33,7 +33,7 @@ function roleAssignedToEmploymentWhere(employmentId: number) {
         .innerJoin(employments, eq(employments.id, employmentId))
         .where(and(
           eq(organizationRoles.roleId, roles.id),
-          eq(employments.status, Status.Enable),
+          eq(employments.status, EmploymentStatus.Enable),
           or(
             and(eq(organizationRoles.isAllSub, false), eq(organizationRoles.organizationId, employments.orgId)),
             and(
@@ -57,7 +57,7 @@ function roleAssignedToEmploymentWhere(employmentId: number) {
         .where(and(
           eq(employmentRoles.roleId, roles.id),
           eq(employments.id, employmentId),
-          eq(employments.status, Status.Enable),
+          eq(employments.status, EmploymentStatus.Enable),
         )),
     ),
   );

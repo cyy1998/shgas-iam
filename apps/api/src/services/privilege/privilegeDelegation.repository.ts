@@ -3,7 +3,7 @@ import type { DbClient } from "@iam/db";
 import type { Organization, User } from "@iam/db/schema";
 import type { PrivilegeDelegationCreateDto, PrivilegeDelegationQueryDto } from "./privilegeDelegation.type";
 import { CustomError } from "@iam/api-core/errors/CustomError";
-import { Status } from "@iam/contracts";
+import { PrivilegeDelegationStatus } from "@iam/contracts";
 import db from "@iam/db";
 import { compactUpdate, firstRow, inArrayIf } from "@iam/db/query-utils";
 import {
@@ -143,7 +143,7 @@ export async function getDelegationsByUserAndOrganizationScopeAndPrivilege(
         inArrayIf(users.username, usernames),
       )),
     ),
-    eq(privilegeDelegations.status, Status.Enable),
+    eq(privilegeDelegations.status, PrivilegeDelegationStatus.Enable),
     lte(privilegeDelegations.startTime, now),
     gte(privilegeDelegations.endTime, now),
   ));
@@ -189,7 +189,7 @@ export async function getActiveDelegationsByDelegatorAndPrivileges(
   const rows = await tx.select().from(privilegeDelegations).where(and(
     eq(privilegeDelegations.delegatorUserId, delegatorUserId),
     eq(privilegeDelegations.isDelete, false),
-    ne(privilegeDelegations.status, Status.Disable),
+    ne(privilegeDelegations.status, PrivilegeDelegationStatus.Disable),
     sql`not (${privilegeDelegations.endTime} < ${startTime} or ${privilegeDelegations.startTime} > ${endTime})`,
     exists(
       db.select({ value: sql`1` }).from(delegationDetails).where(and(
@@ -203,7 +203,7 @@ export async function getActiveDelegationsByDelegatorAndPrivileges(
 
 export async function updateDelegation(
   id: number,
-  data: { startTime?: Date; endTime?: Date; status?: Status; description?: string | null },
+  data: { startTime?: Date; endTime?: Date; status?: PrivilegeDelegationStatus; description?: string | null },
   tx: DbClient = db,
 ) {
   return firstRow(await tx
@@ -226,7 +226,7 @@ export async function setPrivilegeDelegation(
     organizationScopeId: dto.organizationScopeId,
     startTime: dto.startTime,
     endTime: dto.endTime,
-    status: Status.Enable,
+    status: PrivilegeDelegationStatus.Enable,
     description: dto.description,
   }).returning())!;
 

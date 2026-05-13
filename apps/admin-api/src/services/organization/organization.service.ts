@@ -4,14 +4,14 @@ import type {
   OrganizationTreeNodeDto,
   OrganizationUpdateDto,
 } from "@admin-api/services/organization/organization.type";
-import type { Status } from "@iam/contracts";
+import type { OrganizationStatus } from "@iam/contracts";
 import * as organizationRepository from "@admin-api/services/organization/organization.repository";
 import { OrganizationDtoConverterSchema } from "@admin-api/services/organization/organization.schema";
 import { CustomError } from "@iam/api-core/errors/CustomError";
 import { OrganizationHasChildrenError } from "@iam/api-core/errors/OrganizationHasChildrenError";
 import { OrganizationHasEmploymentError } from "@iam/api-core/errors/OrganizationHasEmploymentError";
 import { paginate } from "@iam/api-core/utils";
-import { statusToString } from "@iam/contracts";
+import { organizationStatusToString } from "@iam/contracts";
 import db from "@iam/db";
 
 export async function setOrganization(organizationCreateDto: OrganizationCreateDto) {
@@ -66,7 +66,7 @@ export async function getOrganizationDetailByCodeForAdmin(orgCode: string) {
   const dto = OrganizationDtoConverterSchema.parse(org);
   return {
     ...dto,
-    statusText: statusToString[dto.status as Status] ?? "未知",
+    statusText: organizationStatusToString[dto.status as OrganizationStatus] ?? "未知",
     childrenCount: org.children.length,
     employmentCount,
   };
@@ -78,7 +78,7 @@ export async function searchOrganizationsForAdmin(query: OrganizationPaginationQ
     const dto = OrganizationDtoConverterSchema.parse(o);
     return {
       ...dto,
-      statusText: statusToString[dto.status as Status] ?? "未知",
+      statusText: organizationStatusToString[dto.status as OrganizationStatus] ?? "未知",
       childrenCount: o.children.length,
     };
   });
@@ -102,7 +102,7 @@ export async function updateOrganization(orgCode: string, data: OrganizationUpda
   });
 }
 
-export async function updateOrganizationStatus(orgCode: string, status: number) {
+export async function updateOrganizationStatus(orgCode: string, status: OrganizationStatus) {
   return await updateOrganization(orgCode, { status });
 }
 

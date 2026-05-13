@@ -1,11 +1,11 @@
 import { z } from "@hono/zod-openapi";
-import { Status } from "@iam/contracts";
+import { PrivilegeStatus } from "@iam/contracts";
 import { selectPrivilegeSchema } from "@iam/db/schema";
 
 export const PrivilegeSchema = z.object(selectPrivilegeSchema.shape);
 
 export const PrivilegeDtoSchema = PrivilegeSchema.extend({
-  status: z.enum(Status),
+  status: z.enum(PrivilegeStatus),
 }).required().openapi("PrivilegeDto");
 
 export const PrivilegeQueryDtoSchema = z.object({

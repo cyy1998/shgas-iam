@@ -1,5 +1,5 @@
 import type { DbClient } from "@iam/db";
-import { Status } from "@iam/contracts";
+import { EmploymentStatus } from "@iam/contracts";
 import db from "@iam/db";
 import { firstRow } from "@iam/db/query-utils";
 import {
@@ -17,7 +17,7 @@ export async function getEmploymentsByUserId(userId: number, tx: DbClient = db) 
   return await tx.query.employments.findMany({
     where: {
       userId,
-      status: Status.Enable,
+      status: EmploymentStatus.Enable,
       isDelete: false,
     },
     with: employmentRelations,
@@ -35,7 +35,7 @@ export async function getEmploymentByUserOrgPosId(
       userId,
       orgId,
       posId,
-      status: Status.Enable,
+      status: EmploymentStatus.Enable,
       isDelete: false,
     },
     with: employmentRelations,

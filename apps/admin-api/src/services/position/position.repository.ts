@@ -1,3 +1,4 @@
+import type { PositionStatus } from "@iam/contracts";
 import type { DbClient } from "@iam/db";
 import type { PositionCreateDto, PositionFuzzyQueryDto } from "./position.type";
 import db from "@iam/db";
@@ -40,7 +41,7 @@ export async function searchPositionsFuzzy(
 
 export async function updatePositionByCode(
   posCode: string,
-  data: { posName?: string; description?: string | null; status?: number },
+  data: { posName?: string; description?: string | null; status?: PositionStatus },
   tx: DbClient = db,
 ) {
   return await tx

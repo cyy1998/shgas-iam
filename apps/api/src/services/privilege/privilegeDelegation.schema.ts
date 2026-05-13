@@ -1,5 +1,5 @@
 import { z } from "@hono/zod-openapi";
-import { Status } from "@iam/contracts";
+import { PrivilegeDelegationStatus } from "@iam/contracts";
 import {
   selectDelegationDetailSchema,
   selectOrganizationSchema,
@@ -17,7 +17,7 @@ const DbPrivilegeSchema = z.object(selectPrivilegeSchema.shape);
 const DbDelegationDetailSchema = z.object(selectDelegationDetailSchema.shape);
 
 export const PrivilegeDelegationSchema = z.object(selectPrivilegeDelegationSchema.shape).extend({
-  status: z.enum(Status),
+  status: z.enum(PrivilegeDelegationStatus),
 });
 
 export const PrivilegeDelegationDetailSchema = PrivilegeDelegationSchema.extend({
@@ -89,7 +89,7 @@ export const PrivilegeDelegationQueryDtoSchema = z.object({
 export const PrivilegeDelegationUpdateDtoSchema = z.object({
   startTime: z.coerce.date().describe("授权开始时间").optional().openapi({ example: "2024-01-01T00:00:00Z" }),
   endTime: z.coerce.date().describe("授权结束时间").optional().openapi({ example: "2024-01-31T23:59:59Z" }),
-  status: z.enum(Status).describe("状态(正常1、暂停2、结束3)").optional(),
+  status: z.enum(PrivilegeDelegationStatus).describe("状态(正常1、暂停2、结束3)").optional(),
   description: z.string().describe("描述").nullish(),
 }).openapi("PrivilegeDelegationUpdateDto");
 

@@ -60,7 +60,7 @@ export const OrganizationPaginationQueryDtoSchema = createPageQuerySchema(
     }),
     exactConditions: z.object({
       orgType: z.string().optional().openapi({ example: "部门" }),
-      status: z.number().optional().openapi({ example: 1 }),
+      status: z.enum(OrganizationStatus).optional().openapi({ example: OrganizationStatus.Enable }),
       parentOrgCode: z.string().optional().openapi({ example: "SR" }),
       ancestorOrgCode: z.string().optional().openapi({
         example: "SR",
@@ -86,7 +86,7 @@ export const OrganizationTreeNodeDtoSchema = z.object({
   orgCode: z.string(),
   orgName: z.string(),
   orgType: z.string(),
-  status: z.number(),
+  status: z.enum(OrganizationStatus),
   level: z.number(),
   parentId: z.number(),
   orderNum: z.number(),

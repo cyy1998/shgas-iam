@@ -1,6 +1,6 @@
 import type { UserCreateDto, UserPaginationQueryDto } from "@admin-api/services/user/user.type";
 import type { DbClient } from "@iam/db";
-import { Status } from "@iam/contracts";
+import { EmploymentStatus, UserStatus } from "@iam/contracts";
 import db from "@iam/db";
 import { compactUpdate, firstRow, ilikeContainsIf, inArrayIf } from "@iam/db/query-utils";
 import {
@@ -33,7 +33,7 @@ export async function setPassword(userId: number, password: string, tx: DbClient
   return firstRow(await tx
     .update(users)
     .set({ password })
-    .where(and(eq(users.id, userId), eq(users.status, Status.Enable), eq(users.isDelete, false)))
+    .where(and(eq(users.id, userId), eq(users.status, UserStatus.Enable), eq(users.isDelete, false)))
     .returning())!;
 }
 
@@ -75,7 +75,7 @@ export async function updateUserByUsername(
     mobile?: string | null;
     wxId?: string | null;
     userType?: string;
-    status?: number;
+    status?: UserStatus;
     orderNum?: number;
   },
   tx: DbClient = db,
@@ -108,7 +108,7 @@ export async function countActiveEmploymentsByUsername(
     .innerJoin(users, eq(employments.userId, users.id))
     .where(and(
       eq(employments.isDelete, false),
-      eq(employments.status, Status.Enable),
+      eq(employments.status, EmploymentStatus.Enable),
       eq(users.username, username),
       eq(users.isDelete, false),
     ));

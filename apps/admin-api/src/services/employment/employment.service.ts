@@ -15,7 +15,7 @@ import { CustomError } from "@iam/api-core/errors/CustomError";
 import { EmploymentNotEditableError } from "@iam/api-core/errors/EmploymentNotEditableError";
 import { EmploymentNotFoundError } from "@iam/api-core/errors/EmploymentNotFoundError";
 import { UserNotFoundError } from "@iam/api-core/errors/UserNotFoundError";
-import { Status } from "@iam/contracts";
+import { EmploymentStatus, UserStatus } from "@iam/contracts";
 import db from "@iam/db";
 
 export async function getEmploymentDetailByIdForAdmin(id: number) {
@@ -85,7 +85,7 @@ export async function createEmploymentForAdmin(dto: EmploymentAdminCreateDto) {
         isPrimary: newIsPrimary,
         startTime: dto.startTime,
         description: dto.description ?? null,
-        status: Status.Enable,
+        status: EmploymentStatus.Enable,
       },
       tx,
     );
@@ -98,7 +98,7 @@ export async function updateEmployment(id: number, dto: EmploymentUpdateDto) {
     const existing = await employmentRepository.getEmploymentByIdForAdmin(id, tx);
     if (existing === null)
       throw new EmploymentNotFoundError();
-    if (existing.status === Status.Disable)
+    if (existing.status === EmploymentStatus.Disable)
       throw new EmploymentNotEditableError();
 
     // 若把当前置为主岗，先清同用户其它 primary
@@ -119,17 +119,17 @@ export async function updateEmployment(id: number, dto: EmploymentUpdateDto) {
   });
 }
 
-export async function updateEmploymentStatus(id: number, status: number) {
+export async function updateEmploymentStatus(id: number, status: EmploymentStatus) {
   return await db.transaction(async (tx) => {
     const existing = await employmentRepository.getEmploymentByIdForAdmin(id, tx);
     if (existing === null)
       throw new EmploymentNotFoundError();
 
-    const patch: { status: number; endTime?: Date | null } = { status };
-    if (status === Status.Disable) {
+    const patch: { status: EmploymentStatus; endTime?: Date | null } = { status };
+    if (status === EmploymentStatus.Disable) {
       patch.endTime = new Date();
     }
-    else if (existing.status === Status.Disable) {
+    else if (existing.status === EmploymentStatus.Disable) {
       // 从已结束恢复 → 清空 endTime
       patch.endTime = null;
     }
@@ -154,7 +154,7 @@ export async function transferEmployment(id: number, dto: EmploymentTransferDto)
     const existing = await employmentRepository.getEmploymentByIdForAdmin(id, tx);
     if (existing === null)
       throw new EmploymentNotFoundError();
-    if (existing.status === Status.Disable)
+    if (existing.status === EmploymentStatus.Disable)
       throw new EmploymentNotEditableError();
 
     const [dept, company, position] = await Promise.all([
@@ -176,7 +176,7 @@ export async function transferEmployment(id: number, dto: EmploymentTransferDto)
     const now = new Date();
     await employmentRepository.updateEmploymentRecord(
       id,
-      { status: Status.Disable, endTime: now, isPrimary: false },
+      { status: EmploymentStatus.Disable, endTime: now, isPrimary: false },
       tx,
     );
 
@@ -195,7 +195,7 @@ export async function transferEmployment(id: number, dto: EmploymentTransferDto)
         isPrimary: newIsPrimary,
         startTime: dto.startTime ?? now,
         description: dto.description ?? null,
-        status: Status.Enable,
+        status: EmploymentStatus.Enable,
       },
       tx,
     );
@@ -208,7 +208,7 @@ export async function setPrimaryEmployment(id: number) {
     const existing = await employmentRepository.getEmploymentByIdForAdmin(id, tx);
     if (existing === null)
       throw new EmploymentNotFoundError();
-    if (existing.status === Status.Disable)
+    if (existing.status === EmploymentStatus.Disable)
       throw new EmploymentNotEditableError();
 
     await employmentRepository.unsetPrimariesByUserId(existing.userId, id, tx);
@@ -226,7 +226,7 @@ export async function resignUser(username: string) {
     await employmentRepository.endActiveEmploymentsByUserId(user.id, tx);
     await userRepository.updateUserByUsername(
       username,
-      { status: Status.Disable },
+      { status: UserStatus.Disable },
       tx,
     );
     return true;

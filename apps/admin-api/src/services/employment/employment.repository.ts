@@ -1,7 +1,7 @@
 import type { DbClient } from "@iam/db";
 import type { Employment, Organization, User } from "@iam/db/schema";
 import type { EmploymentAdminPaginationQueryDto } from "./employment.type";
-import { Status } from "@iam/contracts";
+import { EmploymentStatus } from "@iam/contracts";
 import db from "@iam/db";
 import { compactUpdate, firstRow, ilikeContainsIf, inArrayIf } from "@iam/db/query-utils";
 import {
@@ -66,7 +66,7 @@ export async function getEmploymentsByUserId(userId: number, tx: DbClient = db) 
   return await tx.query.employments.findMany({
     where: {
       userId,
-      status: Status.Enable,
+      status: EmploymentStatus.Enable,
       isDelete: false,
     },
     with: employmentRelations,
@@ -84,7 +84,7 @@ export async function getEmploymentByUserOrgPosId(
       userId,
       orgId,
       posId,
-      status: Status.Enable,
+      status: EmploymentStatus.Enable,
       isDelete: false,
     },
     with: employmentRelations,
@@ -174,7 +174,7 @@ export async function createEmploymentRecord(
     isPrimary?: boolean;
     startTime?: Date;
     description?: string | null;
-    status?: number;
+    status?: EmploymentStatus;
   },
   tx: DbClient = db,
 ) {
@@ -186,7 +186,7 @@ export async function createEmploymentRecord(
     isPrimary: data.isPrimary ?? false,
     startTime: data.startTime ?? new Date(),
     description: data.description ?? null,
-    status: data.status ?? Status.Enable,
+    status: data.status ?? EmploymentStatus.Enable,
   }).returning())!;
 }
 
@@ -197,7 +197,7 @@ export async function updateEmploymentRecord(
     startTime?: Date;
     endTime?: Date | null;
     description?: string | null;
-    status?: number;
+    status?: EmploymentStatus;
   },
   tx: DbClient = db,
 ) {
@@ -241,12 +241,12 @@ export async function endActiveEmploymentsByUserId(
   return await tx
     .update(employments)
     .set({
-      status: Status.Disable,
+      status: EmploymentStatus.Disable,
       endTime: new Date(),
     })
     .where(and(
       eq(employments.userId, userId),
       eq(employments.isDelete, false),
-      inArray(employments.status, [Status.Enable, Status.Pause]),
+      inArray(employments.status, [EmploymentStatus.Enable, EmploymentStatus.Pause]),
     ));
 }

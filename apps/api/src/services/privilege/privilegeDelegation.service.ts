@@ -5,7 +5,7 @@ import * as privilegeRepository from "@api/services/privilege/privilege.reposito
 import * as delegationRepository from "@api/services/privilege/privilegeDelegation.repository";
 import * as userRepository from "@api/services/user/user.repository";
 import { CustomError } from "@iam/api-core/errors/CustomError";
-import { Status } from "@iam/contracts";
+import { PrivilegeDelegationStatus } from "@iam/contracts";
 import db from "@iam/db";
 import { PrivilegeDelegationDetailDtoConverterSchema } from "./privilegeDelegation.schema";
 
@@ -20,7 +20,7 @@ export async function updateDelegation(id: number, dto: PrivilegeDelegationUpdat
     if (!existing) {
       throw new CustomError(`委托记录不存在: ${id}`);
     }
-    if (existing.status === Status.Disable) {
+    if (existing.status === PrivilegeDelegationStatus.Disable) {
       throw new CustomError("该委托已结束，不允许再修改");
     }
     await delegationRepository.updateDelegation(id, dto, tx);

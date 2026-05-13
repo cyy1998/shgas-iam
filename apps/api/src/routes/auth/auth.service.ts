@@ -10,7 +10,7 @@ import { AuthzMaintaincingError } from "@iam/api-core/errors/AuthzMaintaincingEr
 import { AuthzUnauthorizedError } from "@iam/api-core/errors/AuthzUnauthorizedError";
 import { CustomError } from "@iam/api-core/errors/CustomError";
 import { reviveIsoDates } from "@iam/api-core/utils";
-import { Status } from "@iam/contracts";
+import { ClientStatus } from "@iam/contracts";
 
 export async function loginPassword(username: string, password: string) {
   const userDetailDto = await userService.getUserDetailByUsername(username);
@@ -58,7 +58,7 @@ export async function authz(sessionId: string, client: ClientDto) {
     && client.extAttributes.userExcluding.includes(userDto.username)) {
     userInExcludingList = true;
   }
-  if (client.status === Status.Pause && !userInExcludingList) {
+  if (client.status === ClientStatus.Maintance && !userInExcludingList) {
     throw new AuthzMaintaincingError("系统维护中");
   }
   const userAbstract = {

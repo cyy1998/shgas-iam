@@ -1,6 +1,6 @@
 import type { UserCreateDto, UserQueryDto } from "@api/services/user/user.type";
 import type { DbClient } from "@iam/db";
-import { Status } from "@iam/contracts";
+import { EmploymentStatus, PositionStatus, RoleStatus, UserStatus } from "@iam/contracts";
 import db from "@iam/db";
 import { firstRow, inArrayIf } from "@iam/db/query-utils";
 import {
@@ -21,7 +21,7 @@ export async function getUserById(userId: number, tx: DbClient = db) {
   return await tx.query.users.findFirst({
     where: {
       id: userId,
-      status: Status.Enable,
+      status: UserStatus.Enable,
       isDelete: false,
     },
   }) ?? null;
@@ -31,7 +31,7 @@ export async function getUserByUsername(username: string, tx: DbClient = db) {
   return await tx.query.users.findFirst({
     where: {
       username,
-      status: Status.Enable,
+      status: UserStatus.Enable,
       isDelete: false,
     },
   }) ?? null;
@@ -41,7 +41,7 @@ export async function getUserByWxId(wxId: string, tx: DbClient = db) {
   return await tx.query.users.findFirst({
     where: {
       wxId,
-      status: Status.Enable,
+      status: UserStatus.Enable,
       isDelete: false,
     },
   }) ?? null;
@@ -51,7 +51,7 @@ export async function getUserByMobile(mobile: string, tx: DbClient = db) {
   return await tx.query.users.findFirst({
     where: {
       mobile,
-      status: Status.Enable,
+      status: UserStatus.Enable,
       isDelete: false,
     },
   }) ?? null;
@@ -59,7 +59,7 @@ export async function getUserByMobile(mobile: string, tx: DbClient = db) {
 
 function activeRoleCondition(roleCodes: string[] | undefined) {
   return and(
-    eq(roles.status, Status.Enable),
+    eq(roles.status, RoleStatus.Enable),
     eq(roles.isDelete, false),
     inArrayIf(roles.roleCode, roleCodes),
   );
@@ -110,7 +110,7 @@ function userSearchEmploymentExists(query: UserQueryDto) {
       .from(employment)
       .where(and(
         eq(employment.userId, users.id),
-        eq(employment.status, Status.Enable),
+        eq(employment.status, EmploymentStatus.Enable),
         eq(employment.isDelete, false),
         exists(
           db.select({ value: sql`1` })
@@ -127,7 +127,7 @@ function userSearchEmploymentExists(query: UserQueryDto) {
             .from(positions)
             .where(and(
               eq(positions.id, employment.posId),
-              eq(positions.status, Status.Enable),
+              eq(positions.status, PositionStatus.Enable),
               eq(positions.isDelete, false),
               inArrayIf(positions.posCode, query.positionCodes),
             )),
@@ -146,7 +146,7 @@ export async function searchUsers(
     inArrayIf(users.mobile, query.phones),
     inArrayIf(users.wxId, query.wxIds),
     userSearchEmploymentExists(query),
-    eq(users.status, Status.Enable),
+    eq(users.status, UserStatus.Enable),
     eq(users.isDelete, false),
   ));
 }
@@ -155,7 +155,7 @@ export async function setPassword(userId: number, password: string, tx: DbClient
   return firstRow(await tx
     .update(users)
     .set({ password })
-    .where(and(eq(users.id, userId), eq(users.status, Status.Enable), eq(users.isDelete, false)))
+    .where(and(eq(users.id, userId), eq(users.status, UserStatus.Enable), eq(users.isDelete, false)))
     .returning())!;
 }
 
@@ -163,7 +163,7 @@ export async function setMobile(userId: number, phoneNumber: string, tx: DbClien
   return firstRow(await tx
     .update(users)
     .set({ mobile: phoneNumber })
-    .where(and(eq(users.id, userId), eq(users.status, Status.Enable), eq(users.isDelete, false)))
+    .where(and(eq(users.id, userId), eq(users.status, UserStatus.Enable), eq(users.isDelete, false)))
     .returning())!;
 }
 

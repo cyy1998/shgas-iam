@@ -13,7 +13,7 @@ import { CustomError } from "@iam/api-core/errors/CustomError";
 import { UserHasActiveEmploymentError } from "@iam/api-core/errors/UserHasActiveEmploymentError";
 import { UserNotFoundError } from "@iam/api-core/errors/UserNotFoundError";
 import { generateRandomPassword } from "@iam/api-core/utils";
-import { Status } from "@iam/contracts";
+import { UserStatus } from "@iam/contracts";
 import db from "@iam/db";
 import { hash } from "bcrypt-ts";
 
@@ -59,7 +59,7 @@ export async function setUserForAdmin(dto: {
   password?: string;
   mobile?: string | null;
   wxId?: string | null;
-  status?: number;
+  status?: UserStatus;
   orderNum?: number;
 }): Promise<{ username: string; generatedPassword: string | null }> {
   return await db.transaction(async (tx) => {
@@ -77,7 +77,7 @@ export async function setUserForAdmin(dto: {
         password: passwordHash,
         mobile: dto.mobile ?? null,
         wxId: dto.wxId ?? null,
-        status: dto.status ?? Status.Enable,
+        status: dto.status ?? UserStatus.Enable,
         orderNum: dto.orderNum ?? 0,
       } as UserCreateDto,
       tx,
@@ -96,7 +96,7 @@ export async function updateUser(
     mobile?: string | null;
     wxId?: string | null;
     userType?: string;
-    status?: number;
+    status?: UserStatus;
     orderNum?: number;
   },
 ) {
@@ -110,7 +110,7 @@ export async function updateUser(
   });
 }
 
-export async function updateUserStatus(username: string, status: number) {
+export async function updateUserStatus(username: string, status: UserStatus) {
   return await updateUser(username, { status });
 }
 
