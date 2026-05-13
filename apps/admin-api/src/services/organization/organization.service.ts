@@ -1,7 +1,6 @@
 import type {
   OrganizationCreateDto,
   OrganizationPaginationQueryDto,
-  OrganizationQueryDto,
   OrganizationTreeNodeDto,
   OrganizationUpdateDto,
 } from "@admin-api/services/organization/organization.type";
@@ -14,19 +13,6 @@ import { OrganizationHasEmploymentError } from "@iam/api-core/errors/Organizatio
 import { paginate } from "@iam/api-core/utils";
 import { statusToString } from "@iam/contracts";
 import db from "@iam/db";
-
-export async function getOrganizationByCode(orgCode: string) {
-  const organization = await organizationRepository.getOrganizationByCode(orgCode);
-  if (organization === null) {
-    throw new CustomError("组织不存在");
-  }
-  return OrganizationDtoConverterSchema.parse(organization);
-}
-export async function searchOrganizations(organizationQueryDto: OrganizationQueryDto) {
-  const organizations = await organizationRepository.searchOrganizations(organizationQueryDto);
-  const orgDtos = organizations.map(o => OrganizationDtoConverterSchema.parse(o));
-  return orgDtos;
-}
 
 export async function setOrganization(organizationCreateDto: OrganizationCreateDto) {
   return await db.transaction(async (tx) => {

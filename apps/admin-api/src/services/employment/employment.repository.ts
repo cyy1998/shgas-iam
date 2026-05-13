@@ -91,21 +91,6 @@ export async function getEmploymentByUserOrgPosId(
   }) ?? null;
 }
 
-export async function setEmployment(
-  userId: number,
-  posId: number,
-  orgId: number,
-  compId: number,
-  tx: DbClient = db,
-) {
-  return firstRow(await tx.insert(employments).values({
-    userId,
-    posId,
-    orgId,
-    compId,
-  }).returning())!;
-}
-
 export async function getEmploymentByIdForAdmin(
   id: number,
   tx: DbClient = db,
