@@ -1,6 +1,7 @@
 import { PrivilegeDelegationStatus } from "@iam/contracts";
 import { boolean, index, integer, serial, snakeCase, timestamp, varchar } from "drizzle-orm/pg-core";
 import { createSelectSchema } from "drizzle-orm/zod";
+import { z } from "zod";
 import { timestampColumns } from "../_shard/base-columns";
 
 export const privilegeDelegations = snakeCase.table("privilege_delegation", {
@@ -20,4 +21,6 @@ export const privilegeDelegations = snakeCase.table("privilege_delegation", {
   index("idx_organizationScopeId").on(table.organizationScopeId),
 ]);
 
-export const selectPrivilegeDelegationSchema = createSelectSchema(privilegeDelegations);
+export const selectPrivilegeDelegationSchema = createSelectSchema(privilegeDelegations, {
+  status: () => z.enum(PrivilegeDelegationStatus),
+});

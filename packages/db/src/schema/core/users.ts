@@ -1,7 +1,7 @@
-import type { z } from "zod";
 import { UserStatus } from "@iam/contracts";
 import { boolean, integer, serial, snakeCase, timestamp, varchar } from "drizzle-orm/pg-core";
 import { createSelectSchema } from "drizzle-orm/zod";
+import { z } from "zod";
 
 export const users = snakeCase.table("user", {
   id: serial().primaryKey(),
@@ -18,6 +18,8 @@ export const users = snakeCase.table("user", {
   updateTime: timestamp({ precision: 0 }).notNull().defaultNow().$onUpdate(() => new Date()),
 });
 
-export const selectUserSchema = createSelectSchema(users);
+export const selectUserSchema = createSelectSchema(users, {
+  status: () => z.enum(UserStatus),
+});
 
 export type User = z.infer<typeof selectUserSchema>;

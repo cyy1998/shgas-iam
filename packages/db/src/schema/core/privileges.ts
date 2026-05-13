@@ -2,6 +2,7 @@ import type { Json } from "drizzle-orm";
 import { PrivilegeStatus } from "@iam/contracts";
 import { boolean, integer, jsonb, serial, snakeCase, text, varchar } from "drizzle-orm/pg-core";
 import { createSelectSchema } from "drizzle-orm/zod";
+import { z } from "zod";
 import { timestampColumns } from "../_shard/base-columns";
 
 export const privileges = snakeCase.table("privilege", {
@@ -15,4 +16,6 @@ export const privileges = snakeCase.table("privilege", {
   ...timestampColumns(),
 });
 
-export const selectPrivilegeSchema = createSelectSchema(privileges);
+export const selectPrivilegeSchema = createSelectSchema(privileges, {
+  status: () => z.enum(PrivilegeStatus),
+});

@@ -1,6 +1,7 @@
 import { ClientStatus } from "@iam/contracts";
 import { boolean, integer, jsonb, serial, snakeCase, varchar } from "drizzle-orm/pg-core";
 import { createSelectSchema } from "drizzle-orm/zod";
+import { z } from "zod";
 import { timestampColumns } from "../_shard/base-columns";
 
 export const clients = snakeCase.table("client", {
@@ -16,4 +17,6 @@ export const clients = snakeCase.table("client", {
   extAttributes: jsonb().$type<unknown>().notNull(),
 });
 
-export const selectClientSchema = createSelectSchema(clients);
+export const selectClientSchema = createSelectSchema(clients, {
+  status: () => z.enum(ClientStatus),
+});
