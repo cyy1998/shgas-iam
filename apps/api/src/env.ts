@@ -1,6 +1,7 @@
 import { z } from "@hono/zod-openapi";
 
 const EnvSchema = z.object({
+  DATABASE_URL: z.string().min(1),
   PASSWORD_HASH_ROUNDS: z.coerce.number().default(10),
   SMS_SIGNATURE_KEY: z.string(),
   SMS_URL: z.string(),
