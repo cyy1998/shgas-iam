@@ -18,15 +18,16 @@ ENV HTTP_PROXY="http://176.169.105.96:3928"
 ENV HTTPS_PROXY="http://176.169.105.96:3928"
 RUN pnpm install --frozen-lockfile
 
-FROM docker.xuanyuan.run/oven/bun:1-alpine AS runner
-ENV NODE_ENV=production
-WORKDIR /app
-COPY --from=deps /app/node_modules ./node_modules
-COPY --from=deps /app/apps/admin-api/node_modules ./apps/admin-api/node_modules
+FROM deps AS builder
 COPY packages/contracts/ ./packages/contracts/
 COPY packages/db/ ./packages/db/
 COPY packages/api-core/ ./packages/api-core/
 COPY apps/admin-api/ ./apps/admin-api/
-WORKDIR /app/apps/admin-api
+RUN pnpm --filter @iam/admin-api deploy --prod --legacy /deploy/admin-api
+
+FROM docker.xuanyuan.run/oven/bun:1-alpine AS runner
+ENV NODE_ENV=production
+WORKDIR /app
+COPY --from=builder /deploy/admin-api ./
 EXPOSE 30001
 CMD ["bun", "run", "src/index.ts"]
