@@ -4,8 +4,7 @@
   "version": "1.0.0",
   "private": true,
   "exports": {
-    ".": "./src/app.ts",
-    "./trpc": "./src/trpc/trpc.router.ts"
+    ".": "./src/app.ts"
   },
   "module": "index.ts",
   "devEngines": {

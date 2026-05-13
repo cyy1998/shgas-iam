@@ -17,10 +17,8 @@ export default defineConfig({
   tiers: [
     { name: "public", title: "通用用户API" },
     { name: "open", title: "公开API" },
-    { name: "admin", title: "管理端API" },
     { name: "internal", title: "内部API" },
     { name: "sso", title: "单点登录API" },
     { name: "auth", title: "认证API" },
-    { name: "rpc", title: "RPC API", routeDir: "trpc" },
   ],
 });
