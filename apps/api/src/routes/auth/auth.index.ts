@@ -1,4 +1,4 @@
-import { createRouter } from "@api/lib/core/create-router";
+import { createRouter } from "@iam/api-core/core/create-router";
 import * as handlers from "./auth.handlers";
 import * as routes from "./auth.routes";
 

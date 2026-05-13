@@ -3,7 +3,7 @@ import { VerificationCodeUsage } from "@api/enums/verificationCode.usage";
 import * as clientService from "@api/services/client/client.service";
 import * as mobileService from "@api/services/mobile/mobile.service";
 import * as userService from "@api/services/user/user.service";
-import * as resp from "@api/utils/http/response";
+import * as resp from "@iam/api-core/http";
 import { maskMobile, requirePhoneNumber, resolveResetPasswordMobile } from "./open.service";
 
 export const clientStatus: OpenRouteHandler<"clientStatus"> = async (c) => {

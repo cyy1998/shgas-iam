@@ -4,9 +4,6 @@ import type { UserCreateDto, UserDetailDto, UserDto, UserPaginationQueryDto, Use
 import { Status } from "@api/enums/status";
 import { VerificationCodeUsage } from "@api/enums/verificationCode.usage";
 import config from "@api/env";
-import { CustomError } from "@api/errors/CustomError";
-import { UserHasActiveEmploymentError } from "@api/errors/UserHasActiveEmploymentError";
-import { UserNotFoundError } from "@api/errors/UserNotFoundError";
 import * as employmentRepository from "@api/services/employment/employment.repository";
 import { EmploymentDetailDtoSchema, EmploymentDtoConverterSchema } from "@api/services/employment/employment.schema";
 import * as mobileService from "@api/services/mobile/mobile.service";
@@ -18,7 +15,10 @@ import {
   UserDetailDtoSchema,
   UserDtoSchema,
 } from "@api/services/user/user.schema";
-import { generateRandomPassword } from "@api/utils/encryption.utils";
+import { CustomError } from "@iam/api-core/errors/CustomError";
+import { UserHasActiveEmploymentError } from "@iam/api-core/errors/UserHasActiveEmploymentError";
+import { UserNotFoundError } from "@iam/api-core/errors/UserNotFoundError";
+import { generateRandomPassword } from "@iam/api-core/utils";
 import db from "@iam/db";
 import { compare, hash } from "bcrypt-ts";
 import { PrivilegeDelegationDtoConverterSchema } from "../privilege/privilegeDelegation.schema";

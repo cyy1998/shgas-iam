@@ -1,5 +1,4 @@
 import { EmploymentStatus } from "@api/enums/employment.status";
-import { defineMutationOp, defineQueryOp } from "@api/lib/core/business-op";
 import {
   EmploymentAdminCreateDtoSchema,
   EmploymentAdminPaginationQueryDtoSchema,
@@ -8,6 +7,7 @@ import {
   EmploymentUpdateDtoSchema,
 } from "@api/services/employment/employment.schema";
 import * as employmentService from "@api/services/employment/employment.service";
+import { defineMutationOp, defineQueryOp } from "@iam/api-core/core/business-op";
 import { z } from "zod";
 import { EmploymentDetailVoConverterSchema, EmploymentVoConverterSchema } from "./employment.schema";
 

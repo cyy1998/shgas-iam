@@ -1,6 +1,6 @@
-import { createRouter } from "@api/lib/core/create-router";
-import { createTRPCContext } from "@api/trpc/trpc";
 import { appRouter } from "@api/trpc/trpc.router";
+import { createRouter } from "@iam/api-core/core/create-router";
+import { createTRPCContext } from "@iam/api-core/trpc";
 import { fetchRequestHandler } from "@trpc/server/adapters/fetch";
 
 const router = createRouter().all("/*", async (c) => {

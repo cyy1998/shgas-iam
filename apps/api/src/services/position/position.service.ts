@@ -1,6 +1,6 @@
 import type { PositionCreateDto } from "./position.type";
-import { CustomError } from "@api/errors/CustomError";
-import { PositionHasEmploymentError } from "@api/errors/PositionHasEmploymentError";
+import { CustomError } from "@iam/api-core/errors/CustomError";
+import { PositionHasEmploymentError } from "@iam/api-core/errors/PositionHasEmploymentError";
 import db from "@iam/db";
 import * as positionRepository from "./position.repository";
 import { PositionDtoSchema } from "./position.schema";

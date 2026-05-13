@@ -1,7 +1,7 @@
 import { VerificationCodeUsage } from "@api/enums/verificationCode.usage";
-import { CustomError } from "@api/errors/CustomError";
 import redis from "@api/lib/clients/redis";
 import smsClient from "@api/lib/integrations/sms";
+import { CustomError } from "@iam/api-core/errors/CustomError";
 import db from "@iam/db";
 import { firstRow } from "@iam/db/query-utils";
 import { users } from "@iam/db/schema";

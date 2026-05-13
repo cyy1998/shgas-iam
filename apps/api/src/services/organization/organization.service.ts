@@ -7,12 +7,12 @@ import type {
   OrganizationUpdateDto,
 } from "@api/services/organization/organization.type";
 import { statusToString } from "@api/enums/status";
-import { CustomError } from "@api/errors/CustomError";
-import { OrganizationHasChildrenError } from "@api/errors/OrganizationHasChildrenError";
-import { OrganizationHasEmploymentError } from "@api/errors/OrganizationHasEmploymentError";
 import * as organizationRepository from "@api/services/organization/organization.repository";
 import { OrganizationDtoConverterSchema } from "@api/services/organization/organization.schema";
-import { paginate } from "@api/utils/page.util";
+import { CustomError } from "@iam/api-core/errors/CustomError";
+import { OrganizationHasChildrenError } from "@iam/api-core/errors/OrganizationHasChildrenError";
+import { OrganizationHasEmploymentError } from "@iam/api-core/errors/OrganizationHasEmploymentError";
+import { paginate } from "@iam/api-core/utils";
 import db from "@iam/db";
 
 export async function getOrganizationByCode(orgCode: string) {

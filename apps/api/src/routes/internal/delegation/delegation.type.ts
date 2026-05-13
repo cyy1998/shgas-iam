@@ -1,4 +1,4 @@
-import type { BaseRouteHandler } from "@api/types/lib";
+import type { BaseRouteHandler } from "@iam/api-core/types";
 import type * as routes from "./delegation.routes";
 
 type RouteTypes = {

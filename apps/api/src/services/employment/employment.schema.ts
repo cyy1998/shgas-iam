@@ -1,6 +1,6 @@
 import { EmploymentStatus } from "@api/enums/employment.status";
-import { createPageQuerySchema } from "@api/lib/core/pagination/schema";
 import { z } from "@hono/zod-openapi";
+import { createPageQuerySchema } from "@iam/api-core/core/pagination/schema";
 import { selectEmploymentSchema, selectUserSchema } from "@iam/db/schema";
 import { OrganizationSchema } from "../organization/organization.schema";
 import { PositionSchema } from "../position/position.schema";

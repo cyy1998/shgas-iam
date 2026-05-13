@@ -1,5 +1,4 @@
 import { PositionStatus } from "@api/enums/position.status";
-import { defineMutationOp, defineQueryOp } from "@api/lib/core/business-op";
 import * as positionRepository from "@api/services/position/position.repository";
 import {
   PositionCreateDtoSchema,
@@ -7,7 +6,8 @@ import {
   PositionUpdateDtoSchema,
 } from "@api/services/position/position.schema";
 import * as positionService from "@api/services/position/position.service";
-import { paginate } from "@api/utils/page.util";
+import { defineMutationOp, defineQueryOp } from "@iam/api-core/core/business-op";
+import { paginate } from "@iam/api-core/utils";
 import { z } from "zod";
 import { PositionVoConverterSchema } from "./position.schema";
 

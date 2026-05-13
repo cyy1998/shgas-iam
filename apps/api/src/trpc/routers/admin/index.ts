@@ -2,7 +2,7 @@ import { employmentAdminRouter } from "@api/routes/admin/employment/employment.t
 import { organizationAdminRouter } from "@api/routes/admin/organization/organization.trpc";
 import { positionAdminRouter } from "@api/routes/admin/position/position.trpc";
 import { userAdminRouter } from "@api/routes/admin/user/user.trpc";
-import { router } from "@api/trpc/trpc";
+import { router } from "@iam/api-core/trpc";
 
 export const adminRouter = router({
   organization: organizationAdminRouter,

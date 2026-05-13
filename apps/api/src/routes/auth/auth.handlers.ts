@@ -1,9 +1,9 @@
 import type { AuthRouteHandler } from "./auth.types";
 import config from "@api/env";
-import { AuthzUnauthorizedError } from "@api/errors/AuthzUnauthorizedError";
 import { logger } from "@api/lib/logger";
 import * as clientService from "@api/services/client/client.service";
-import * as resp from "@api/utils/http/response";
+import { AuthzUnauthorizedError } from "@iam/api-core/errors/AuthzUnauthorizedError";
+import * as resp from "@iam/api-core/http";
 import { getCookie, setCookie } from "hono/cookie";
 import * as authService from "./auth.service";
 

@@ -1,20 +1,11 @@
-import config from "@api/env";
-import Redis from "ioredis";
-import { createSingleton } from "../core/singleton";
+import env from "@api/env";
+import { createRedisClient } from "@iam/api-core/redis";
 
-function createRedisClient() {
-  return new Redis({
-    host: config.REDIS_URL,
-    port: config.REDIS_PORT,
-    password: config.REDIS_PASSWORD,
-    db: config.REDIS_DB,
-  });
-}
+const redis = createRedisClient({
+  host: env.REDIS_URL,
+  port: env.REDIS_PORT,
+  password: env.REDIS_PASSWORD,
+  db: env.REDIS_DB,
+});
 
-const redisClient = createSingleton<Redis>(
-  "redis",
-  createRedisClient,
-  { destroy: async client => void await client.quit() },
-);
-
-export default redisClient;
+export default redis;

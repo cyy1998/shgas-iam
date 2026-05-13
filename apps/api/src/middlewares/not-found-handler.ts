@@ -1,9 +1,9 @@
 import type { NotFoundHandler } from "hono";
 
-import { NOT_FOUND } from "@api/lib/core/http-status-codes";
+import { NOT_FOUND } from "@iam/api-core/core/http-status-codes";
 
-import { NOT_FOUND as NOT_FOUND_MESSAGE } from "@api/lib/core/http-status-phrases";
-import * as resp from "@api/utils/http/response";
+import { NOT_FOUND as NOT_FOUND_MESSAGE } from "@iam/api-core/core/http-status-phrases";
+import * as resp from "@iam/api-core/http";
 import { ServiceStatusCode } from "@iam/contracts";
 
 const notFound: NotFoundHandler = (c) => {

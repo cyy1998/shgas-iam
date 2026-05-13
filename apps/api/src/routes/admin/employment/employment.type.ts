@@ -1,4 +1,4 @@
-import type { PublicRouteHandler } from "@api/types/lib";
+import type { PublicRouteHandler } from "@iam/api-core/types";
 import type * as routes from "./employment.routes";
 
 // export type UserTokenInfo = {

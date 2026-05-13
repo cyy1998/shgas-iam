@@ -1,7 +1,7 @@
 import type { OrcasLoginInput } from "./orcas.type";
 import config from "@api/env";
-import { CustomError } from "@api/errors/CustomError";
-import { createSingleton } from "@api/lib/core/singleton";
+import { createSingleton } from "@iam/api-core/core/singleton";
+import { CustomError } from "@iam/api-core/errors/CustomError";
 import axios from "axios";
 
 const ORCAS_SESSION_REGEX = /orcas_sso_sessionid=([^;]+)/;

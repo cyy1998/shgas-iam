@@ -1,4 +1,4 @@
-import { router } from "@api/trpc/trpc";
+import { router } from "@iam/api-core/trpc";
 import * as ops from "./organization.ops";
 
 export const organizationAdminRouter = router({

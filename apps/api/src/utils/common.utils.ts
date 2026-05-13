@@ -1,4 +1,4 @@
-import { CustomError } from "@api/errors/CustomError";
+import { CustomError } from "@iam/api-core/errors/CustomError";
 
 const ISO_DATE_REGEX = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,3})?(?:Z|[+-]\d{2}:\d{2})$/;
 

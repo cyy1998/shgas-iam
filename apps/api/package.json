@@ -26,6 +26,7 @@
   },
   "dependencies": {
     "@hono/zod-openapi": "^1.1.4",
+    "@iam/api-core": "workspace:*",
     "@iam/contracts": "workspace:*",
     "@iam/db": "workspace:*",
     "@scalar/hono-api-reference": "^0.10.7",

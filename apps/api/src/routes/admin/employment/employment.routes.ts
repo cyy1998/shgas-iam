@@ -1,8 +1,3 @@
-import * as HttpStatusCodes from "@api/lib/core/http-status-codes";
-import jsonContent from "@api/lib/core/openapi/helpers/json-content";
-import jsonContentRequired from "@api/lib/core/openapi/helpers/json-content-required";
-import createSuccessResponseSchema from "@api/lib/core/openapi/schemas/create-success-schema";
-import { createPageResultSchema } from "@api/lib/core/pagination/schema";
 import { EmploymentDetailVoSchema, EmploymentVoSchema } from "@api/routes/admin/employment/employment.schema";
 import {
   EmploymentAdminCreateDtoSchema,
@@ -12,6 +7,11 @@ import {
   EmploymentUpdateDtoSchema,
 } from "@api/services/employment/employment.schema";
 import { createRoute, z } from "@hono/zod-openapi";
+import * as HttpStatusCodes from "@iam/api-core/core/http-status-codes";
+import jsonContent from "@iam/api-core/core/openapi/helpers/json-content";
+import jsonContentRequired from "@iam/api-core/core/openapi/helpers/json-content-required";
+import createSuccessResponseSchema from "@iam/api-core/core/openapi/schemas/create-success-schema";
+import { createPageResultSchema } from "@iam/api-core/core/pagination/schema";
 
 const tags = ["Admin/Employment"];
 

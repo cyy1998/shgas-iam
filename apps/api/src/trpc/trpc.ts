@@ -1,5 +1,5 @@
 import type { Context as HonoContext } from "hono";
-import { CustomError } from "@api/errors/CustomError";
+import { CustomError } from "@iam/api-core/errors/CustomError";
 import { initTRPC, TRPCError } from "@trpc/server";
 
 export interface TRPCAppContext {

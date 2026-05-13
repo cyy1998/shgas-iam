@@ -78,6 +78,9 @@ importers:
       '@hono/zod-openapi':
         specifier: ^1.1.4
         version: 1.2.2(hono@4.12.8)(zod@4.3.6)
+      '@iam/api-core':
+        specifier: workspace:*
+        version: link:../../packages/api-core
       '@iam/contracts':
         specifier: workspace:*
         version: link:../../packages/contracts
@@ -215,6 +218,64 @@ importers:
       prettier-plugin-packagejson:
         specifier: ^2.4.3
         version: 2.5.22(prettier@2.8.8)
+      typescript:
+        specifier: 6.0.3
+        version: 6.0.3
+
+  packages/api-core:
+    dependencies:
+      '@hono/zod-openapi':
+        specifier: ^1.1.4
+        version: 1.2.2(hono@4.12.8)(zod@4.3.6)
+      '@iam/contracts':
+        specifier: workspace:*
+        version: link:../contracts
+      '@scalar/hono-api-reference':
+        specifier: ^0.10.7
+        version: 0.10.7(hono@4.12.8)
+      '@trpc/server':
+        specifier: ^11.16.0
+        version: 11.16.0(typescript@6.0.3)
+      hono:
+        specifier: ^4.12.8
+        version: 4.12.8
+      hono-pino:
+        specifier: ^0.10.3
+        version: 0.10.3(hono@4.12.8)(pino@10.3.1)
+      ioredis:
+        specifier: ^5.8.1
+        version: 5.9.3
+      pino:
+        specifier: ^10.3.1
+        version: 10.3.1
+      pino-pretty:
+        specifier: ^13.1.3
+        version: 13.1.3
+      sm-crypto:
+        specifier: ^0.3.13
+        version: 0.3.14
+      zod:
+        specifier: ^4.3.6
+        version: 4.3.6
+    devDependencies:
+      '@antfu/eslint-config':
+        specifier: ^8.0.0
+        version: 8.0.0(@typescript-eslint/rule-tester@8.58.0(eslint@10.0.2(jiti@2.6.1))(typescript@6.0.3))(@typescript-eslint/typescript-estree@8.58.0(typescript@6.0.3))(@typescript-eslint/utils@8.58.0(eslint@10.0.2(jiti@2.6.1))(typescript@6.0.3))(@vue/compiler-sfc@3.5.29)(eslint-plugin-format@2.0.1(eslint@10.0.2(jiti@2.6.1)))(eslint@10.0.2(jiti@2.6.1))(typescript@6.0.3)
+      '@types/bun':
+        specifier: latest
+        version: 1.3.13
+      '@types/sm-crypto':
+        specifier: ^0.3.4
+        version: 0.3.4
+      '@typescript/native-preview':
+        specifier: 7.0.0-dev.20260504.1
+        version: 7.0.0-dev.20260504.1
+      eslint:
+        specifier: ^10.0.0
+        version: 10.0.2(jiti@2.6.1)
+      eslint-plugin-format:
+        specifier: ^2.0.1
+        version: 2.0.1(eslint@10.0.2(jiti@2.6.1))
       typescript:
         specifier: 6.0.3
         version: 6.0.3

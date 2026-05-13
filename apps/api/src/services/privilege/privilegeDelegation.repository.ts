@@ -3,7 +3,7 @@ import type { DbClient } from "@iam/db";
 import type { Organization, User } from "@iam/db/schema";
 import type { PrivilegeDelegationCreateDto, PrivilegeDelegationQueryDto } from "./privilegeDelegation.type";
 import { Status } from "@api/enums/status";
-import { CustomError } from "@api/errors/CustomError";
+import { CustomError } from "@iam/api-core/errors/CustomError";
 import db from "@iam/db";
 import { compactUpdate, firstRow, inArrayIf } from "@iam/db/query-utils";
 import {

@@ -1,6 +1,6 @@
 import config from "@api/env";
-import { createSingleton } from "@api/lib/core/singleton";
-import { hmacSha256 } from "@api/utils/encryption.utils";
+import { createSingleton } from "@iam/api-core/core/singleton";
+import { hmacSha256 } from "@iam/api-core/utils";
 
 interface SMSServiceResult {
   resultCode: string;

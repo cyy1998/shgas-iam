@@ -2,7 +2,7 @@ import type { PublicRouteHandler } from "./public.types";
 import * as organizationService from "@api/services/organization/organization.service";
 import * as sessionService from "@api/services/session/session.service";
 import * as userService from "@api/services/user/user.service";
-import * as resp from "@api/utils/http/response";
+import * as resp from "@iam/api-core/http";
 import { getCookie } from "hono/cookie";
 
 export const userInfo: PublicRouteHandler<"userInfo"> = async (c) => {

@@ -3,7 +3,7 @@ import { OrganizationType } from "@api/enums/organization.type";
 import * as organizationRepository from "@api/services/organization/organization.repository";
 import { OrganizationCreateDtoSchema } from "@api/services/organization/organization.schema";
 import * as organizationService from "@api/services/organization/organization.service";
-import * as resp from "@api/utils/http/response";
+import * as resp from "@iam/api-core/http";
 
 export const organizationsSearch: OrganizationRouteHandler<"organizationsSearch"> = async (c) => {
   const organizationQueryDto = c.req.valid("json");

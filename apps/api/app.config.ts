@@ -1,4 +1,4 @@
-import { defineConfig } from "@api/lib/core/define-config";
+import { defineConfig } from "@iam/api-core/core";
 
 export default defineConfig({
   prefix: "",

@@ -1,7 +1,19 @@
-import createApp from "@api/lib/core/create-app";
+/* eslint-disable antfu/no-top-level-await */
+import createApp from "@iam/api-core/core/create-app";
+import { globImport } from "@iam/api-core/utils";
 import appConfig from "~api/app.config";
+import env from "./env";
+import { logger } from "./lib/logger";
 
-const app = createApp(appConfig);
+const routes = await globImport<{ default: any }>("./src/routes/**/*.index.ts");
+const middlewares = await globImport<{ default: any[] }>("./src/routes/*/_middleware.ts");
+
+const app = createApp(appConfig, {
+  env,
+  logger,
+  routes,
+  middlewares,
+});
 
 export type AppType = typeof app;
 export default app;

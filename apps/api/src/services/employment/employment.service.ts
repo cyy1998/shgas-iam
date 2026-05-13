@@ -5,10 +5,6 @@ import type {
   EmploymentUpdateDto,
 } from "./employment.type";
 import { Status } from "@api/enums/status";
-import { CustomError } from "@api/errors/CustomError";
-import { EmploymentNotEditableError } from "@api/errors/EmploymentNotEditableError";
-import { EmploymentNotFoundError } from "@api/errors/EmploymentNotFoundError";
-import { UserNotFoundError } from "@api/errors/UserNotFoundError";
 import * as employmentRepository from "@api/services/employment/employment.repository";
 import { EmploymentDetailDtoSchema, EmploymentDtoConverterSchema } from "@api/services/employment/employment.schema";
 import * as organizationRepository from "@api/services/organization/organization.repository";
@@ -16,6 +12,10 @@ import * as positionRepository from "@api/services/position/position.repository"
 import * as privilegeRepository from "@api/services/privilege/privilege.repository";
 import * as roleRepository from "@api/services/role/role.repository";
 import * as userRepository from "@api/services/user/user.repository";
+import { CustomError } from "@iam/api-core/errors/CustomError";
+import { EmploymentNotEditableError } from "@iam/api-core/errors/EmploymentNotEditableError";
+import { EmploymentNotFoundError } from "@iam/api-core/errors/EmploymentNotFoundError";
+import { UserNotFoundError } from "@iam/api-core/errors/UserNotFoundError";
 import db from "@iam/db";
 
 export async function getEmploymentDetailByIdForAdmin(id: number) {

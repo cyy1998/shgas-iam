@@ -1,5 +1,5 @@
-import type { PublicBindings } from "@api/types/lib";
-import { createRouter } from "@api/lib/core/create-router";
+import type { PublicBindings } from "@iam/api-core/types";
+import { createRouter } from "@iam/api-core/core/create-router";
 import * as handlers from "./organization.handlers";
 import * as routes from "./organization.routes";
 

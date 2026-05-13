@@ -1,6 +1,6 @@
 import type { z } from "zod";
-import { mapCustomErrorToTRPCError, publicProcedure } from "@api/trpc/trpc";
-import * as resp from "@api/utils/http/response";
+import * as resp from "@iam/api-core/http";
+import { mapCustomErrorToTRPCError, publicProcedure } from "@iam/api-core/trpc";
 
 type Handler<TSchema extends z.ZodTypeAny, TOutput> = (
   input: z.infer<TSchema>,

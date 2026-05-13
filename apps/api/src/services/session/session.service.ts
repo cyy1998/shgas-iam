@@ -5,7 +5,7 @@ import config from "@api/env";
 import redis from "@api/lib/clients/redis";
 import * as clientService from "@api/services/client/client.service";
 import * as sessionRepository from "@api/services/session/session.repository";
-import { reviveIsoDates } from "@api/utils/common.utils";
+import { reviveIsoDates } from "@iam/api-core/utils";
 import { LocalSessionAbstractSchema } from "./session.schema";
 
 export async function updateSession(sessionId: string, userInfo: string) {

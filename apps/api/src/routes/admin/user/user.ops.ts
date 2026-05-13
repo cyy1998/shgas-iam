@@ -1,12 +1,12 @@
 import { UserStatus } from "@api/enums/user.status";
-import { defineMutationOp, defineQueryOp } from "@api/lib/core/business-op";
 import {
   UserAdminCreateDtoSchema,
   UserPaginationQueryDtoSchema,
   UserUpdateDtoSchema,
 } from "@api/services/user/user.schema";
 import * as userService from "@api/services/user/user.service";
-import { generateRandomPassword } from "@api/utils/encryption.utils";
+import { defineMutationOp, defineQueryOp } from "@iam/api-core/core/business-op";
+import { generateRandomPassword } from "@iam/api-core/utils";
 import { z } from "zod";
 import { UserDetailVoConverterSchema, UserVoConverterSchema } from "./user.schema";
 

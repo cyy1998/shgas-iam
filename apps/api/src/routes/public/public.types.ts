@@ -1,4 +1,4 @@
-import type { PublicRouteHandler as Public2RouteHandler } from "@api/types/lib";
+import type { PublicRouteHandler as Public2RouteHandler } from "@iam/api-core/types";
 import type * as routes from "./public.routes";
 
 // export type UserTokenInfo = {
