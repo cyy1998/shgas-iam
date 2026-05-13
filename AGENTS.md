@@ -1,36 +1,47 @@
 # Repository Guidelines
 
 ## Project Structure & Module Organization
-This repository is a `pnpm` workspace + Turborepo monorepo. Runtime code lives under `apps/` and shared code under `packages/`.
+This repository is a `pnpm` workspace + Turborepo monorepo. Runtime apps live under `apps/` and shared workspace packages live under `packages/`.
 
-- `apps/api`: Bun + Hono backend. Main code is in `src/`, with tiered routes under `src/routes/`, domain logic under `src/services/`, Drizzle schema under `src/db/schema/`, Drizzle relations under `src/db/relations/`, and tRPC composition under `src/trpc/`.
+- `apps/api`: Bun + Hono public IAM backend (`@iam/api`). Main code is in `src/`, with public/open/internal/sso/auth routes under `src/routes/`, app-side domain logic under `src/services/`, app-specific utilities under `src/lib/`, and env validation in `src/env.ts`.
+- `apps/admin-api`: Bun + Hono admin backend (`@iam/admin-api`). Admin REST routes live under `src/routes/admin/`, tRPC entry routes under `src/routes/trpc/`, admin domain logic under `src/services/`, and tRPC router composition under `src/trpc/`.
 - `apps/admin`: Umi Max + React management frontend. Pages live in `src/pages/`, reusable UI in `src/components/`, tRPC client setup in `src/lib/api-client.ts`, and page-side API wrappers in `src/services/`.
 - `apps/sso`: Umi Max + React SSO portal. Pages live in `src/pages/`, assets in `src/assets/`, API wrappers in `src/services/`, and shared browser helpers in `src/lib/` and `src/utils/`.
-- `packages/shared/src`: shared enums and helpers consumed across apps.
-- `docker/`: local dependency stacks and dev compose files.
-- `docs/`: architecture notes, plans, and design specs. Older plans may mention Prisma; the current API database layer is Drizzle + PostgreSQL.
+- `packages/api-core/src`: shared backend infrastructure such as `createApp`, route factories, OpenAPI helpers, response helpers, errors, middlewares, Redis, logging, and tRPC utilities.
+- `packages/contracts/src`: shared enums and stable contracts consumed across apps and packages.
+- `packages/db/src`: Drizzle schema, relations, migrations, singleton client, and query helpers.
+- `docker/`: local dependency stacks plus dev/prod compose files.
+- `docs/`: architecture notes, plans, specs, audits, and remediation docs. Older plans may mention previous layouts; current database code is Drizzle + PostgreSQL in `packages/db`.
+- `scripts/`: repo-level utility scripts.
 
-Do not hand-edit generated frontend directories such as `apps/admin/src/.umi/` or `apps/sso/src/.umi/`. Avoid editing vendored API documentation assets in `apps/api/static/` unless the task is specifically about those assets.
+Do not hand-edit generated frontend directories such as `apps/admin/src/.umi/`, `apps/admin/src/.umi-production/`, or `apps/sso/src/.umi/`. Avoid editing frontend build outputs under `apps/admin/dist/` and `apps/sso/dist/`. Avoid editing vendored API documentation assets in `apps/api/static/` or `apps/admin-api/static/` unless the task is specifically about those assets.
 
 ## Backend Architecture Notes
-- API tiers are declared in `apps/api/app.config.ts`; routes are grouped under `src/routes/<tier>/`.
-- `createApp` auto-discovers `*.index.ts` route modules and tier-level `_middleware.ts` files.
-- Admin REST and tRPC endpoints commonly share `*.ops.ts` definitions; handlers and `*.trpc.ts` files should stay thin.
-- Repositories use Drizzle and accept an optional `tx: DbClient = db` for transaction-friendly calls.
-- Drizzle table definitions belong in `apps/api/src/db/schema/core/*.ts`; relation definitions belong in `apps/api/src/db/relations/core/*.ts`.
-- Keep schema exports in `apps/api/src/db/schema/core/index.ts` and relation registration in `apps/api/src/db/relations/core/index.ts` synchronized.
+- API tiers are declared per backend app in `apps/api/app.config.ts` and `apps/admin-api/app.config.ts`.
+- `apps/api` currently owns `/public`, `/open`, `/internal`, `/sso`, and `/auth`.
+- `apps/admin-api` currently owns `/admin` and `/rpc`; `/rpc` maps to the `src/routes/trpc` route directory.
+- `createApp` lives in `packages/api-core` and auto-discovers `*.index.ts` route modules plus tier-level `_middleware.ts` files.
+- Admin REST and tRPC endpoints commonly share `*.ops.ts` definitions in `apps/admin-api/src/routes/admin/<domain>/`; handlers and `*.trpc.ts` files should stay thin.
+- Repositories use Drizzle from `@iam/db` and accept an optional `tx: DbClient = db` for transaction-friendly calls.
+- Drizzle table definitions belong in `packages/db/src/schema/core/*.ts`; relation definitions belong in `packages/db/src/relations/core/*.ts`; migrations belong in `packages/db/src/migrations/`.
+- Keep schema exports in `packages/db/src/schema/core/index.ts` and relation registration in `packages/db/src/relations/core/index.ts` synchronized.
+- Put cross-app enums and stable business contracts in `packages/contracts`, not duplicated inside app folders. App-private enums may stay inside the owning app.
 
 ## Build, Test, and Development Commands
 - `pnpm dev`: start all workspace dev tasks through Turbo.
 - `pnpm build`: build all packages in dependency order.
 - `pnpm lint`: run workspace lint tasks.
 - `pnpm typecheck`: run workspace type checks.
-- `pnpm --filter @iam/api dev`: run the API with Bun hot reload.
-- `pnpm --filter @iam/api serve`: run the API without hot reload.
-- `pnpm --filter @iam/api lint` / `pnpm --filter @iam/api typecheck`: validate API code.
-- `pnpm --filter @iam/api db:push`: quickly sync Drizzle schema to a local development database.
-- `pnpm --filter @iam/api db:generate`: generate Drizzle migration files.
-- `pnpm --filter @iam/api db:migrate`: apply Drizzle migrations.
+- `pnpm --filter @iam/api dev`: run the public API with Bun hot reload on the app-configured port.
+- `pnpm --filter @iam/api serve`: run the public API without hot reload.
+- `pnpm --filter @iam/admin-api dev`: run the admin API with Bun hot reload.
+- `pnpm --filter @iam/admin-api serve`: run the admin API without hot reload.
+- `pnpm --filter @iam/api lint` / `pnpm --filter @iam/api typecheck`: validate public API code.
+- `pnpm --filter @iam/admin-api lint` / `pnpm --filter @iam/admin-api typecheck`: validate admin API code.
+- `pnpm --filter @iam/db db:push`: quickly sync Drizzle schema to a local development database.
+- `pnpm --filter @iam/db db:generate`: generate Drizzle migration files.
+- `pnpm --filter @iam/db db:migrate`: apply Drizzle migrations.
+- `pnpm --filter @iam/api db:push` / `db:generate` / `db:migrate`: compatibility wrappers that delegate to `@iam/db`.
 - `pnpm --filter @iam/api migrate:mysql-to-postgres`: run the historical MySQL to PostgreSQL migration script.
 - `pnpm --filter @iam/admin dev` / `pnpm --filter @iam/sso dev`: run a frontend locally.
 - `pnpm --filter @iam/admin build` / `pnpm --filter @iam/sso build`: build a frontend.
@@ -38,29 +49,31 @@ Do not hand-edit generated frontend directories such as `apps/admin/src/.umi/` o
 - `pnpm --filter @iam/admin format` / `pnpm --filter @iam/sso format`: format a frontend.
 
 ## Coding Style & Naming Conventions
-Use TypeScript throughout and keep 2-space indentation. Follow the formatter already configured in each app:
+Use TypeScript throughout and keep 2-space indentation. Follow the formatter already configured in each app or package:
 
-- API (`apps/api`): ESLint uses the Antfu config with double quotes, semicolons, and a 120-character soft limit.
-- Admin/SSO (`apps/admin`, `apps/sso`): Prettier uses single quotes, trailing commas, and 80-character wrap.
+- API/backend packages (`apps/api`, `apps/admin-api`, `packages/api-core`, `packages/contracts`, `packages/db`): ESLint uses the Antfu config with double quotes, semicolons, and a 120-character soft limit.
+- Admin/SSO frontends (`apps/admin`, `apps/sso`): Prettier uses single quotes, trailing commas, and 80-character wrap.
 
-Preserve existing domain file naming: `user.service.ts`, `user.repository.ts`, `user.schema.ts`, `user.routes.ts`, `user.handlers.ts`, `user.trpc.ts`, and `user.type.ts`. Use PascalCase for React components and pages, and prefer existing `@/` or `@api/` import aliases where they are already used.
+Preserve existing domain file naming: `user.service.ts`, `user.repository.ts`, `user.schema.ts`, `user.routes.ts`, `user.handlers.ts`, `user.trpc.ts`, and `user.type.ts`. Use PascalCase for React components and pages, and prefer existing import aliases such as `@admin`, `@sso`, or workspace package imports where they are already used.
 
 For Drizzle schema work:
 
 - Use `snakeCase.table` / `snakeCase.schema`; do not rely on runtime casing conversion.
 - Keep TypeScript property names camelCase and database table/column names snake_case.
 - Use `drizzle-orm/zod` for table-derived Zod schemas.
-- Put relations in `src/db/relations/`, not in table definition files.
+- Put relations in `packages/db/src/relations/`, not in table definition files.
 - Keep join-table primary keys, indexes, and uniqueness constraints explicit.
 
 ## Testing Guidelines
 There is no committed automated test framework yet. Minimum validation before a PR:
 
-- run `pnpm lint` and `pnpm typecheck`, or the narrower filtered commands for the touched app
-- for Drizzle schema changes, run the appropriate Drizzle command: `db:push` for local sync or `db:generate` + `db:migrate` when producing migrations
-- smoke-test API endpoints via the Scalar UI at the API root or each tier's `/doc` endpoint
+- run `pnpm lint` and `pnpm typecheck`, or the narrower filtered commands for the touched app/package
+- for Drizzle schema changes, run the appropriate `@iam/db` command: `db:push` for local sync or `db:generate` + `db:migrate` when producing migrations
+- smoke-test public API endpoints via the public API Scalar UI at `http://localhost:30000` or each public tier's `/doc` endpoint
+- smoke-test admin API endpoints via the admin API Scalar UI at `http://localhost:30001` or `/admin/doc` and `/rpc/doc`
 - smoke-test affected UI flows in `admin` or `sso`
-- for tRPC changes consumed by `admin`, run type checks for both `@iam/api` and `@iam/admin`
+- for tRPC changes consumed by `admin`, run type checks for both `@iam/admin-api` and `@iam/admin`
+- for changes in `packages/contracts`, `packages/api-core`, or `packages/db`, run type checks for the shared package and all directly affected apps
 
 ## Commit & Pull Request Guidelines
 Recent history uses Conventional Commits with scopes, for example `feat(db): ...`, `fix(auth): ...`, `refactor(api): ...`, and `style(sso): ...`. Keep commits focused and describe the changed area explicitly.
