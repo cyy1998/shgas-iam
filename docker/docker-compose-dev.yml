@@ -66,6 +66,30 @@ services:
       redis:
         condition: service_healthy
 
+  admin-api:
+    build:
+      context: ..
+      dockerfile: apps/admin-api/Dockerfile
+    restart: unless-stopped
+    ports:
+      - "30012:30001"
+    environment:
+      DATABASE_URL: postgresql://iam:iam_password@db:5432/iam_db
+      REDIS_URL: redis
+      REDIS_PORT: 6379
+      REDIS_DB: 0
+      PORT: 30001
+      NODE_ENV: production
+      LOG_LEVEL: info
+      PASSWORD_HASH_ROUNDS: 10
+      ADMIN_CLIENT_CODES: iam
+      ADMIN_ROLE_CODES: iam:admin
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
 volumes:
   db_data:
   redis_data:

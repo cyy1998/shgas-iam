@@ -8,6 +8,7 @@
 #   docker compose -f docker-compose-prod.yml up -d postgres-replica-2
 #   docker compose -f docker-compose-prod.yml up -d redis
 #   docker compose -f docker-compose-prod.yml up -d api
+#   docker compose -f docker-compose-prod.yml up -d admin-api
 #
 # Cross-server services must use reachable hostnames or IP addresses through
 # POSTGRES_PRIMARY_HOST, REDIS_HOST, and DATABASE_URL.
@@ -201,3 +202,24 @@ services:
       AUTHORIZATION_ENDPOINT: ${AUTHORIZATION_ENDPOINT:-/sso/authorize}
       LOGOUT_ENDPOINT: ${LOGOUT_ENDPOINT:-/sso/logout}
       THIRDPARTY_OA_ENDPOINT: ${THIRDPARTY_OA_ENDPOINT:-/sso/thirdparty/oa}
+
+  admin-api:
+    image: ${IAM_ADMIN_API_IMAGE:-iam-admin-api:latest}
+    build:
+      context: ..
+      dockerfile: apps/admin-api/Dockerfile
+    restart: unless-stopped
+    ports:
+      - "${ADMIN_API_PUBLISHED_PORT:-30001}:30001"
+    environment:
+      DATABASE_URL: ${DATABASE_URL:-postgresql://${POSTGRES_USER:-iam}:${POSTGRES_PASSWORD}@${POSTGRES_PRIMARY_HOST}:${POSTGRES_PRIMARY_PORT:-5432}/${POSTGRES_DB:-iam_db}}
+      REDIS_URL: ${REDIS_HOST:?set REDIS_HOST}
+      REDIS_PORT: ${REDIS_PORT:-6379}
+      REDIS_PASSWORD: ${REDIS_PASSWORD:?set REDIS_PASSWORD}
+      REDIS_DB: ${REDIS_DB:-0}
+      PORT: 30001
+      NODE_ENV: production
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      PASSWORD_HASH_ROUNDS: ${PASSWORD_HASH_ROUNDS:-10}
+      ADMIN_CLIENT_CODES: ${ADMIN_CLIENT_CODES:-iam}
+      ADMIN_ROLE_CODES: ${ADMIN_ROLE_CODES:-iam:admin}
