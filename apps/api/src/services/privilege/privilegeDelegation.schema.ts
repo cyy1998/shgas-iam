@@ -1,6 +1,7 @@
 import { z } from "@hono/zod-openapi";
 import { PrivilegeDelegationStatus } from "@iam/contracts";
 import {
+  insertPrivilegeDelegationSchema,
   selectDelegationDetailSchema,
   selectOrganizationSchema,
   selectPrivilegeDelegationSchema,
@@ -93,11 +94,8 @@ export const PrivilegeDelegationUpdateDtoSchema = z.object({
   description: z.string().describe("描述").nullish(),
 }).openapi("PrivilegeDelegationUpdateDto");
 
-export const PrivilegeDelegationCreateDtoSchema = PrivilegeDelegationSchema.omit({
-  id: true,
-  createTime: true,
-  updateTime: true,
-  isDelete: true,
+export const PrivilegeDelegationCreateDtoSchema = z.object(insertPrivilegeDelegationSchema.shape).omit({
+  status: true,
 }).partial({
   delegateeUserId: true,
   delegatorUserId: true,

@@ -1,6 +1,6 @@
 import { z } from "@hono/zod-openapi";
 import { ClientManagementLevel } from "@iam/contracts";
-import { clientExtAttributesSchema, selectClientSchema } from "@iam/db/schema";
+import { clientExtAttributesSchema, selectClientSchema, updateClientSchema } from "@iam/db/schema";
 
 export const ClientSchema = z.object(selectClientSchema.shape);
 
@@ -10,9 +10,9 @@ export const ClientDtoSchema = ClientSchema.extend({
   extAttributes: ClientExtAttributesDtoSchema,
 });
 
-export const ClientInputDtoSchema = ClientDtoSchema.partial().required({
-  id: true,
-});
+export const ClientInputDtoSchema = z.object(updateClientSchema.shape).extend({
+  id: ClientSchema.shape.id,
+}).openapi("ClientInputDto");
 
 export const ClientCreateDtoSchema = ClientDtoSchema.partial().required({
   clientCode: true,

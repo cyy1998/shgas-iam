@@ -2,7 +2,7 @@ import { EmploymentSchema } from "@admin-api/services/employment/employment.sche
 import { z } from "@hono/zod-openapi";
 import { createPageQuerySchema } from "@iam/api-core/core/pagination/schema";
 import { PositionStatus } from "@iam/contracts";
-import { selectPositionSchema } from "@iam/db/schema";
+import { insertPositionSchema, selectPositionSchema } from "@iam/db/schema";
 
 export const PositionSchema = z.object(selectPositionSchema.shape);
 
@@ -14,15 +14,7 @@ export const PositionDtoSchema = PositionSchema.extend({
   status: z.enum(PositionStatus),
 }).required().openapi("PositionDto");
 
-export const PositionCreateDtoSchema = PositionSchema.omit({
-  id: true,
-  createTime: true,
-  updateTime: true,
-  isDelete: true,
-}).partial().required({
-  posCode: true,
-  posName: true,
-});
+export const PositionCreateDtoSchema = z.object(insertPositionSchema.shape).openapi("PositionCreateDto");
 
 export const PositionPaginationQueryDtoSchema = createPageQuerySchema(
   z.object({
