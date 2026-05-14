@@ -1,4 +1,5 @@
 import type { PositionStatus } from "@iam/contracts";
+import type { DbClient } from "@iam/db";
 import type { PositionCreateDto, PositionUpdateDto } from "./position.type";
 import { CustomError } from "@iam/api-core/errors/CustomError";
 import { PositionHasEmploymentError } from "@iam/api-core/errors/PositionHasEmploymentError";
@@ -34,9 +35,25 @@ export async function updatePosition(
     if (existing === null) {
       throw new CustomError("岗位不存在", 404);
     }
+    await assertRenamedPositionCodeAvailable(posCode, data.posCode, tx);
     await positionRepository.updatePositionByCode(posCode, data, tx);
     return true;
   });
+}
+
+async function assertRenamedPositionCodeAvailable(
+  currentPosCode: string,
+  nextPosCode: string | undefined,
+  tx: DbClient,
+) {
+  if (nextPosCode === undefined || nextPosCode === currentPosCode) {
+    return;
+  }
+
+  const existingPos = await positionRepository.getAnyPositionByCode(nextPosCode, tx);
+  if (existingPos !== null) {
+    throw new CustomError("重命名岗位编码失败：岗位编码已存在");
+  }
 }
 
 export async function updatePositionStatus(posCode: string, status: PositionStatus) {
