@@ -1,5 +1,5 @@
 import { z } from "@hono/zod-openapi";
-import { EmploymentStatus, OrganizationType } from "@iam/contracts";
+import { OrganizationType } from "@iam/contracts";
 import { selectEmploymentSchema, selectUserSchema } from "@iam/db/schema";
 import { OrganizationSchema } from "../organization/organization.schema";
 import { PositionSchema } from "../position/position.schema";
@@ -26,8 +26,6 @@ export const EmploymentDtoSchema = EmploymentSchema.extend({
   orgName: z.string().openapi({ example: "信息中心" }),
   compCode: z.string().openapi({ example: "SR" }),
   compName: z.string().openapi({ example: "上海燃气" }),
-}).extend({
-  status: z.enum(EmploymentStatus),
 }).required().openapi("EmploymentDto");
 
 export const EmploymentDtoConverterSchema = EmploymentDetailSchema.transform((e) => {

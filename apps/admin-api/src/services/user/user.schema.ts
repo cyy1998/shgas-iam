@@ -10,7 +10,6 @@ export const UserDtoSchema = UserSchema.omit({
   password: true,
 }).extend({
   orcasId: z.string().nullable().default(null).openapi({ example: "ada8wf89w83b2" }),
-  status: z.enum(UserStatus),
 }).required().openapi("UserDto");
 
 export const UserDetailDtoSchema = UserDtoSchema.extend({
@@ -72,8 +71,6 @@ export const UserUpdateDtoSchema = UserSchema.partial().pick({
   userType: true,
   status: true,
   orderNum: true,
-}).extend({
-  status: z.enum(UserStatus).optional(),
 }).openapi("UserUpdateDto");
 
 export const UserStatusUpdateDtoSchema = z.object({

@@ -3,7 +3,7 @@ import { createPageQuerySchema } from "@iam/api-core/core/pagination/schema";
 import { EmploymentStatus, OrganizationType } from "@iam/contracts";
 import { selectEmploymentSchema, selectUserSchema } from "@iam/db/schema";
 import { OrganizationSchema } from "../organization/organization.schema";
-import { PositionSchema } from "../position/position.schema";
+import { PositionDtoSchema } from "../position/position.schema";
 
 export const EmploymentSchema = z.object(selectEmploymentSchema.shape);
 const DbUserSchema = z.object(selectUserSchema.shape);
@@ -12,7 +12,7 @@ export const EmploymentDetailSchema = EmploymentSchema.extend({
   user: DbUserSchema,
   deptartment: OrganizationSchema,
   company: OrganizationSchema,
-  position: z.lazy(() => PositionSchema),
+  position: z.lazy(() => PositionDtoSchema),
 });
 
 export const EmploymentDtoSchema = EmploymentSchema.extend({
@@ -27,8 +27,6 @@ export const EmploymentDtoSchema = EmploymentSchema.extend({
   orgName: z.string().openapi({ example: "信息中心" }),
   compCode: z.string().openapi({ example: "SR" }),
   compName: z.string().openapi({ example: "上海燃气" }),
-}).extend({
-  status: z.enum(EmploymentStatus),
 }).required().openapi("EmploymentDto");
 
 export const EmploymentDtoConverterSchema = EmploymentDetailSchema.transform((e) => {

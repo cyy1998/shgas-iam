@@ -4,15 +4,11 @@ import { createPageQuerySchema } from "@iam/api-core/core/pagination/schema";
 import { PositionStatus } from "@iam/contracts";
 import { insertPositionSchema, selectPositionSchema } from "@iam/db/schema";
 
-export const PositionSchema = z.object(selectPositionSchema.shape);
+export const PositionDtoSchema = z.object(selectPositionSchema.shape).required().openapi("PositionDto");
 
-export const PositionDetailSchema = PositionSchema.extend({
+export const PositionDetailSchema = PositionDtoSchema.extend({
   employments: z.lazy(() => z.array(EmploymentSchema)),
 });
-
-export const PositionDtoSchema = PositionSchema.extend({
-  status: z.enum(PositionStatus),
-}).required().openapi("PositionDto");
 
 export const PositionCreateDtoSchema = z.object(insertPositionSchema.shape).openapi("PositionCreateDto");
 

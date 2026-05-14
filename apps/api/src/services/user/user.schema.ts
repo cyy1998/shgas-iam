@@ -1,5 +1,4 @@
 import { z } from "@hono/zod-openapi";
-import { UserStatus } from "@iam/contracts";
 import { selectUserSchema } from "@iam/db/schema";
 import { EmploymentDetailDtoSchema } from "../employment/employment.schema";
 
@@ -9,7 +8,6 @@ export const UserDtoSchema = UserSchema.omit({
   password: true,
 }).extend({
   orcasId: z.string().nullable().default(null).openapi({ example: "ada8wf89w83b2" }),
-  status: z.enum(UserStatus),
 }).required().openapi("UserDto");
 
 export const UserDetailDtoSchema = UserDtoSchema.extend({

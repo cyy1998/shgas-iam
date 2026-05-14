@@ -17,9 +17,7 @@ const DbOrganizationSchema = z.object(selectOrganizationSchema.shape);
 const DbPrivilegeSchema = z.object(selectPrivilegeSchema.shape);
 const DbDelegationDetailSchema = z.object(selectDelegationDetailSchema.shape);
 
-export const PrivilegeDelegationSchema = z.object(selectPrivilegeDelegationSchema.shape).extend({
-  status: z.enum(PrivilegeDelegationStatus),
-});
+export const PrivilegeDelegationSchema = z.object(selectPrivilegeDelegationSchema.shape);
 
 export const PrivilegeDelegationDetailSchema = PrivilegeDelegationSchema.extend({
   delegatorUser: DbUserSchema,
