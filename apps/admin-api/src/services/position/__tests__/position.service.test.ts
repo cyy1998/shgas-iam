@@ -14,9 +14,9 @@ const positionRepository = {
   updatePositionByCode: mock(),
 };
 
-mock.module("./position.repository", () => positionRepository);
+mock.module("../position.repository", () => positionRepository);
 
-const positionService = await import("./position.service");
+const positionService = await import("../position.service");
 
 describe("positionService.updatePosition", () => {
   beforeEach(() => {

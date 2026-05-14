@@ -67,6 +67,7 @@ For Drizzle schema work:
 ## Testing Guidelines
 There is no committed automated test framework yet. Minimum validation before a PR:
 
+- Place test files in a `__tests__/` directory next to the code under test, for example `src/services/position/__tests__/position.service.test.ts`.
 - run `pnpm lint` and `pnpm typecheck`, or the narrower filtered commands for the touched app/package
 - for Drizzle schema changes, run the appropriate `@iam/db` command: `db:push` for local sync or `db:generate` + `db:migrate` when producing migrations
 - smoke-test public API endpoints via the public API Scalar UI at `http://localhost:30000` or each public tier's `/doc` endpoint
