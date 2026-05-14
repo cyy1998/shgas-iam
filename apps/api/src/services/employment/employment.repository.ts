@@ -8,7 +8,7 @@ import {
 
 const employmentRelations = {
   user: true,
-  deptartment: true,
+  department: true,
   company: true,
   position: true,
 } as const;

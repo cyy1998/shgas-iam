@@ -46,18 +46,15 @@
 
 | # | 问题 | 位置 | 说明 |
 |---|------|------|------|
-| 1 | **字段名拼写错误 `deptartment`** | `schema.prisma:146` | 影响 12+ 个文件，应为 `department`，属历史遗留 |
-| 2 | **函数名拼写错误 `cehckVerificationCode`** | `mobile.service.ts:52`, `session.service.ts:92` | 应为 `checkVerificationCode` |
-| 3 | **文件名拼写错误 `authenication`** | `src/middlewares/authenication.handler.ts` | 应为 `authentication` |
-| 4 | **查询构造逻辑重复约 260 行** | `user.repository.ts:57-163` 与 `employment.repository.ts:7-121` | 几乎相同的 OR 条件构造和角色过滤逻辑，应抽取共享函数 |
-| 5 | **验证码校验函数重复** | `mobile.service.ts` 和 `session.service.ts` | 相同逻辑存在两处定义 |
-| 6 | **Prisma 错误处理不检查错误码** | `role.service.ts:62-74,88-94,111-119,134-142` | 捕获 `PrismaClientKnownRequestError` 后不检查 `err.code`，将所有错误当作唯一约束冲突处理 |
+| 1 | **查询构造逻辑重复约 260 行** | `user.repository.ts:57-163` 与 `employment.repository.ts:7-121` | 几乎相同的 OR 条件构造和角色过滤逻辑，应抽取共享函数 |
+| 2 | **验证码校验函数重复** | `mobile.service.ts` 和 `session.service.ts` | 相同逻辑存在两处定义 |
+| 3 | **Prisma 错误处理不检查错误码** | `role.service.ts:62-74,88-94,111-119,134-142` | 捕获 `PrismaClientKnownRequestError` 后不检查 `err.code`，将所有错误当作唯一约束冲突处理 |
 
 ### 2.4 架构设计问题
 
 | # | 问题 | 说明 |
 |---|------|------|
-| 1 | **认证中间件分散注册** | 每个 admin 路由模块都重复 `router.use(prefix, publicAuthenicationHandler)`，应在路由组级别集中配置 |
+| 1 | **认证中间件分散注册** | 每个 admin 路由模块都重复 `router.use(prefix, publicAuthenticationHandler)`，应在路由组级别集中配置 |
 | 2 | **错误处理用 `console.error`** | `error.handler.ts:20` 未使用项目配置的 pino logger，生产环境应统一日志 |
 | 3 | **HTTP 客户端不统一** | 部分用 `axios`（orcas.ts），部分用 `fetch`（wechat.ts），增加维护成本 |
 | 4 | **环境变量校验不完整** | `DATABASE_URL` 等数据库连接参数不在 `env.ts` 的 Zod schema 中验证 |
@@ -97,8 +94,7 @@
 
 8. **抽取公共查询构造逻辑** — 将 user/employment repository 中重复的 ~260 行查询条件提取为共享函数
 9. **统一错误处理** — error handler 使用 pino logger；Prisma 错误检查具体 error code
-10. **修复拼写错误** — `deptartment` -> `department`（需数据库迁移），`cehck` -> `check`，`authenication` -> `authentication`
-11. **清理冗余依赖** — 移除 `bcrypt`（保留 `bcrypt-ts`）和未使用的 `oidc-provider`
+10. **清理冗余依赖** — 移除 `bcrypt`（保留 `bcrypt-ts`）和未使用的 `oidc-provider`
 
 ### P3 — 架构优化
 

@@ -88,7 +88,7 @@ export async function resetPassword(username: string, phone: string, code: strin
     if (user.mobile !== phone) {
       throw new UserNotFoundError("用户名与手机号不匹配");
     }
-    if (!await mobileService.cehckVerificationCode("resetPassword", phone, code)) {
+    if (!await mobileService.checkVerificationCode("resetPassword", phone, code)) {
       throw new UserNotFoundError("验证码错误");
     }
     const newPasswordHash = await hash(newPassword, config.PASSWORD_HASH_ROUNDS);
@@ -116,7 +116,7 @@ export async function setMobile(userId: number, phoneNumber: string, code: strin
     if (await mobileService.checkExistingPhoneNumber(phoneNumber)) {
       throw new CustomError("手机号已存在");
     }
-    if (!await mobileService.cehckVerificationCode(VerificationCodeUsage.BindPhone, phoneNumber, code)) {
+    if (!await mobileService.checkVerificationCode(VerificationCodeUsage.BindPhone, phoneNumber, code)) {
       throw new CustomError("验证码错误");
     }
     await userRepository.setMobile(userId, phoneNumber, tx);

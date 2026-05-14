@@ -7,7 +7,7 @@ export function employmentsRelations(r: RelationsHelper) {
         from: r.employments.userId,
         to: r.users.id,
       }),
-      deptartment: r.one.organizations({
+      department: r.one.organizations({
         from: r.employments.orgId,
         to: r.organizations.id,
         alias: "employment_dept",

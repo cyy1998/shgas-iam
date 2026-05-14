@@ -357,7 +357,7 @@ export async function countActiveEmploymentsByOrgCode(orgCode: string, tx: Prism
     where: {
       isDelete: false,
       OR: [
-        { deptartment: { orgCode, isDelete: false } },
+        { department: { orgCode, isDelete: false } },
         { company: { orgCode, isDelete: false } },
       ],
     },
@@ -368,7 +368,7 @@ export async function countActiveEmploymentsByOrgCode(orgCode: string, tx: Prism
 - [ ] **Step 2: typecheck**
 
 Run: `pnpm --filter @iam/api typecheck`
-Expected: 无错误。若报 `deptartment` 不存在说明 prisma 别名拼写需对照 schema.prisma（已确认为 `deptartment`，即代码里保留的拼写）。
+Expected: 无错误。若报 `department` 不存在说明 prisma 别名拼写需对照 schema.prisma（已确认为 `department`，即代码里保留的拼写）。
 
 - [ ] **Step 3: Commit**
 
@@ -801,13 +801,13 @@ Replace the entire content of `apps/api/src/routes/admin/organization/organizati
 
 ```ts
 import { createRouter } from "@lib/core/create-router";
-import { publicAuthenicationHandler } from "@middlewares/authenication.handler";
+import { publicAuthenticationHandler } from "@middlewares/authentication.handler";
 import * as handlers from "./organization.handlers";
 import * as routes from "./organization.routes";
 
 const router = createRouter();
 
-router.use(`*`, publicAuthenicationHandler);
+router.use(`*`, publicAuthenticationHandler);
 
 router
   .openapi(routes.organizationsSearch, handlers.organizationsSearch)

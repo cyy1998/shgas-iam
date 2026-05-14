@@ -15,14 +15,14 @@ import { and, count, desc, eq, exists, inArray, or, sql } from "drizzle-orm";
 type Position = typeof positions.$inferSelect;
 type EmploymentWithRelations = Employment & {
   user: User;
-  deptartment: Organization;
+  department: Organization;
   company: Organization;
   position: Position;
 };
 
 const employmentRelations = {
   user: true,
-  deptartment: true,
+  department: true,
   company: true,
   position: true,
 } as const;
@@ -50,13 +50,13 @@ async function attachEmploymentRelations(rows: Employment[], tx: DbClient): Prom
     .map(row => ({
       ...row,
       user: userMap.get(row.userId),
-      deptartment: orgMap.get(row.orgId),
+      department: orgMap.get(row.orgId),
       company: orgMap.get(row.compId),
       position: posMap.get(row.posId),
     }))
     .filter((row): row is EmploymentWithRelations =>
       row.user !== undefined
-      && row.deptartment !== undefined
+      && row.department !== undefined
       && row.company !== undefined
       && row.position !== undefined,
     );

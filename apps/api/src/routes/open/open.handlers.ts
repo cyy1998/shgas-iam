@@ -36,7 +36,7 @@ export const codeVerify: OpenRouteHandler<"codeVerify"> = async (c) => {
   const targetPhoneNumber = usage === VerificationCodeUsage.ResetPassword
     ? await resolveResetPasswordMobile(username, phoneNumber)
     : requirePhoneNumber(phoneNumber);
-  const data = await mobileService.cehckVerificationCode(usage, targetPhoneNumber, code);
+  const data = await mobileService.checkVerificationCode(usage, targetPhoneNumber, code);
   return c.json(resp.ok({ result: data }));
 };
 

@@ -1165,7 +1165,7 @@ Expected: imports now point to `@iam/api-core`, except app-level wrappers `@api/
 
 - [ ] **Step 13: Replace authentication middleware implementation in `apps/api`**
 
-Edit `apps/api/src/middlewares/authenication.handler.ts`:
+Edit `apps/api/src/middlewares/authentication.handler.ts`:
 
 ```ts
 import redis from "@api/lib/clients/redis";
@@ -1176,12 +1176,12 @@ import {
   createPublicAuthenticationHandler,
 } from "@iam/api-core/middlewares";
 
-export const publicAuthenicationHandler = createPublicAuthenticationHandler({
+export const publicAuthenticationHandler = createPublicAuthenticationHandler({
   redis,
   userSchema: UserDetailDtoSchema,
 });
 
-export const internalAuthenicationHandler = createInternalAuthenticationHandler({
+export const internalAuthenticationHandler = createInternalAuthenticationHandler({
   getClientBySecret: clientService.getClientBySecret,
 });
 ```

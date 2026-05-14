@@ -48,7 +48,7 @@ export async function checkExistingPhoneNumber(phone: string): Promise<boolean> 
   return (firstRow(rows)?.value ?? 0) !== 0;
 }
 
-export async function cehckVerificationCode(usage: string, phone: string, code: string): Promise<boolean> {
+export async function checkVerificationCode(usage: string, phone: string, code: string): Promise<boolean> {
   const savedCode = await redis.get(`mobile-code:${usage}:${phone}`);
   return savedCode === code;
 }

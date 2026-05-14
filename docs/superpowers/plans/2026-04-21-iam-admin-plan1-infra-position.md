@@ -656,13 +656,13 @@ Replace the entire content of `apps/api/src/routes/admin/position/position.index
 
 ```ts
 import { createRouter } from "@lib/core/create-router";
-import { publicAuthenicationHandler } from "@middlewares/authenication.handler";
+import { publicAuthenticationHandler } from "@middlewares/authentication.handler";
 import * as handlers from "./position.handlers";
 import * as routes from "./position.routes";
 
 const router = createRouter();
 
-router.use(`*`, publicAuthenicationHandler);
+router.use(`*`, publicAuthenticationHandler);
 
 router
   .openapi(routes.positionsSearch, handlers.positionsSearch)

@@ -95,7 +95,7 @@
    - 必须使用全局 session 或明确的 admin client session。
    - `Client` 头必须是 `iam` 或配置中的 admin client allowlist。
    - 当前用户必须具备管理端基础权限，例如 `iam:admin:access`。
-2. 在 `apps/api/src/routes/admin/_middleware.ts` 和 `apps/api/src/routes/trpc/_middleware.ts` 使用该中间件替代 `publicAuthenicationHandler`。
+2. 在 `apps/api/src/routes/admin/_middleware.ts` 和 `apps/api/src/routes/trpc/_middleware.ts` 使用该中间件替代 `publicAuthenticationHandler`。
 3. 扩展 `defineQueryOp` / `defineMutationOp`，支持声明 `requiredPrivileges`。
 4. 对高危 mutation 增加更细权限：
    - 用户创建、删除、禁用、重置密码：`iam:user:write`
@@ -241,7 +241,7 @@
    - `status`
    - `isDelete`
 2. session 中保存 `userId`、`sessionVersion`、`issuedAt`，不要长期信任登录时完整用户快照。
-3. `publicAuthenicationHandler` 每次请求校验：
+3. `publicAuthenticationHandler` 每次请求校验：
    - 用户仍启用且未删除。
    - sessionVersion 一致。
    - session 签发时间晚于 `passwordChangedAt`。

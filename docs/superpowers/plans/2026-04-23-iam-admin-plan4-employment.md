@@ -307,7 +307,7 @@ export async function getEmploymentByIdForAdmin(
     },
     include: {
       user: true,
-      deptartment: true,
+      department: true,
       company: true,
       position: true,
     },
@@ -325,7 +325,7 @@ export async function getEmploymentsByUserIdForAdmin(
     },
     include: {
       user: true,
-      deptartment: true,
+      department: true,
       company: true,
       position: true,
     },
@@ -354,7 +354,7 @@ function buildEmploymentAdminWhere(dto: EmploymentAdminPaginationQueryDto) {
       isDelete: false,
       orgCode: { in: dto.conditions.exactConditions.companyOrgCodes },
     },
-    deptartment: {
+    department: {
       isDelete: false,
       orgCode: { in: dto.conditions.exactConditions.deptOrgCodes },
     },
@@ -379,7 +379,7 @@ export async function searchEmploymentsFuzzyForAdminPaged(
       orderBy: [{ isPrimary: "desc" }, { id: "desc" }],
       include: {
         user: true,
-        deptartment: true,
+        department: true,
         company: true,
         position: true,
       },
@@ -1121,13 +1121,13 @@ git commit -m "feat(api): employment handlers 改为薄壳调用 business-op"
 
 ```ts
 import { createRouter } from "@lib/core/create-router";
-import { publicAuthenicationHandler } from "@middlewares/authenication.handler";
+import { publicAuthenticationHandler } from "@middlewares/authentication.handler";
 import * as handlers from "./employment.handlers";
 import * as routes from "./employment.routes";
 
 const router = createRouter();
 
-router.use("*", publicAuthenicationHandler);
+router.use("*", publicAuthenticationHandler);
 
 router
   .openapi(routes.employmentsSearch, handlers.employmentsSearch)

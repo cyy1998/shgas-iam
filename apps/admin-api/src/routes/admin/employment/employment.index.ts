@@ -5,7 +5,7 @@ import * as routes from "./employment.routes";
 
 const router = createRouter<PublicBindings>().basePath("/employments");
 
-// router.use("*", publicAuthenicationHandler);
+// router.use("*", publicAuthenticationHandler);
 
 router
   .openapi(routes.employmentsSearch, handlers.employmentsSearch)

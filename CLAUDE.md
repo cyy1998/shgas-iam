@@ -192,9 +192,9 @@ export default defineConfig({
 ```ts
 // routes/admin/_middleware.ts
 import { defineMiddleware } from "@/lib/core/define-config";
-import { publicAuthenicationHandler } from "@/middlewares/authenication.handler";
+import { publicAuthenticationHandler } from "@/middlewares/authentication.handler";
 
-export default defineMiddleware([publicAuthenicationHandler]);
+export default defineMiddleware([publicAuthenticationHandler]);
 ```
 
 **How it ties together (`@/lib/core/create-app.ts`)**

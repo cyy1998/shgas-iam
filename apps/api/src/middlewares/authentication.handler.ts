@@ -6,11 +6,11 @@ import {
   createPublicAuthenticationHandler,
 } from "@iam/api-core/middlewares";
 
-export const publicAuthenicationHandler = createPublicAuthenticationHandler({
+export const publicAuthenticationHandler = createPublicAuthenticationHandler({
   redis,
   userSchema: UserDetailDtoSchema,
 });
 
-export const internalAuthenicationHandler = createInternalAuthenticationHandler({
+export const internalAuthenticationHandler = createInternalAuthenticationHandler({
   getClientBySecret: clientService.getClientBySecret,
 });

@@ -882,13 +882,13 @@ git commit -m "feat(api): user handlers 改为薄壳调用 business-op"
 
 ```ts
 import { createRouter } from "@lib/core/create-router";
-import { publicAuthenicationHandler } from "@middlewares/authenication.handler";
+import { publicAuthenticationHandler } from "@middlewares/authentication.handler";
 import * as handlers from "./user.handlers";
 import * as routes from "./user.routes";
 
 const router = createRouter();
 
-router.use("*", publicAuthenicationHandler);
+router.use("*", publicAuthenticationHandler);
 
 router
   .openapi(routes.usersSearch, handlers.usersSearch)
@@ -980,7 +980,7 @@ pnpm --filter @iam/api dev
 
 - [ ] **Step 2：手测清单**
 
-在 Scalar 或 curl 下逐项验证（每项都要带上 `Cookie` / 认证头以通过 `publicAuthenicationHandler`，按已有方式登录后复制 cookie）：
+在 Scalar 或 curl 下逐项验证（每项都要带上 `Cookie` / 认证头以通过 `publicAuthenticationHandler`，按已有方式登录后复制 cookie）：
 
 1. **POST /admin/users/search**：`{ pageNum:1, pageSize:10, conditions:{ fuzzyConditions:{text:"蔡"}, exactConditions:{} } }` → 返回 `{code:200, data:{result, total, pageNum, pageSize, pages}}`；`result[0]` 含 `statusText`
 2. **POST /admin/users/search** with `exactConditions.statuses:[2]` → 只返回状态=2 的用户
@@ -1609,12 +1609,12 @@ export default function UserDetailDrawer({
 
 Run: `pnpm --filter @iam/admin typecheck`
 
-若 TS 报 `Property 'companyName' does not exist`，把列配置里的 `dataIndex` 替换为实际字段名（参考 `EmploymentDtoConverterSchema` 的输出形状，常见为 `company?.orgName` / `deptartment?.orgName` / `position?.posName`）。例：
+若 TS 报 `Property 'companyName' does not exist`，把列配置里的 `dataIndex` 替换为实际字段名（参考 `EmploymentDtoConverterSchema` 的输出形状，常见为 `company?.orgName` / `department?.orgName` / `position?.posName`）。例：
 
 ```tsx
 const employmentColumns: ColumnsType<EmploymentRow> = [
   { title: "公司", render: (_, row) => row.company?.orgName ?? "—" },
-  { title: "部门", render: (_, row) => row.deptartment?.orgName ?? "—" },
+  { title: "部门", render: (_, row) => row.department?.orgName ?? "—" },
   { title: "岗位", render: (_, row) => row.position?.posName ?? "—" },
   // ...
 ];

@@ -1,4 +1,4 @@
-import { publicAuthenicationHandler } from "@api/middlewares/authenication.handler";
+import { publicAuthenticationHandler } from "@api/middlewares/authentication.handler";
 import { defineMiddleware } from "@iam/api-core/core/define-config";
 
-export default defineMiddleware([publicAuthenicationHandler]);
+export default defineMiddleware([publicAuthenticationHandler]);

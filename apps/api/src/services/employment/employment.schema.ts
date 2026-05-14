@@ -9,7 +9,7 @@ const DbUserSchema = z.object(selectUserSchema.shape);
 
 export const EmploymentDetailSchema = EmploymentSchema.extend({
   user: DbUserSchema,
-  deptartment: OrganizationSchema,
+  department: OrganizationSchema,
   company: OrganizationSchema,
   position: z.lazy(() => PositionSchema),
 });
@@ -29,7 +29,7 @@ export const EmploymentDtoSchema = EmploymentSchema.extend({
 }).required().openapi("EmploymentDto");
 
 export const EmploymentDtoConverterSchema = EmploymentDetailSchema.transform((e) => {
-  const { user, position, deptartment, company, ...employment } = e;
+  const { user, position, department, company, ...employment } = e;
   return {
     ...employment,
     username: user.username,
@@ -38,9 +38,9 @@ export const EmploymentDtoConverterSchema = EmploymentDetailSchema.transform((e)
     wxId: user.wxId,
     posCode: position.posCode,
     posName: position.posName,
-    orgCode: deptartment.orgCode,
-    orgType: deptartment.orgType,
-    orgName: deptartment.orgName,
+    orgCode: department.orgCode,
+    orgType: department.orgType,
+    orgName: department.orgName,
     compCode: company.orgCode,
     compName: company.orgName,
   };

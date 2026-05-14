@@ -87,11 +87,11 @@
 
 问题：
 
-`admin` 和 `rpc` tier 复用 `publicAuthenicationHandler`，只验证 session 是否存在。业务操作层 `defineQueryOp` / `defineMutationOp` 也没有接收当前用户上下文或做权限校验。当前任意已登录用户在携带有效 session 后，可以调用用户创建、禁用、删除、重置密码、组织/岗位/任职管理、客户端创建/更新等管理接口。
+`admin` 和 `rpc` tier 复用 `publicAuthenticationHandler`，只验证 session 是否存在。业务操作层 `defineQueryOp` / `defineMutationOp` 也没有接收当前用户上下文或做权限校验。当前任意已登录用户在携带有效 session 后，可以调用用户创建、禁用、删除、重置密码、组织/岗位/任职管理、客户端创建/更新等管理接口。
 
 额外风险：
 
-`publicAuthenicationHandler` 根据请求头 `Client` 决定读 `global_session` 还是 `local_<client>_session`（`apps/api/src/middlewares/authenication.handler.ts:10-23`）。因此拥有任意客户端本地 session 的用户，也可能通过伪造 `Client` 头访问 `admin`。
+`publicAuthenticationHandler` 根据请求头 `Client` 决定读 `global_session` 还是 `local_<client>_session`（`apps/api/src/middlewares/authentication.handler.ts:10-23`）。因此拥有任意客户端本地 session 的用户，也可能通过伪造 `Client` 头访问 `admin`。
 
 影响：
 
@@ -215,11 +215,11 @@ SSO 只用 `redirectUrl.startsWith(allowedUrl)` 判断回调地址是否合法�
 位置：
 
 - `apps/api/src/services/client/client.repository.ts:8-17`
-- `apps/api/src/middlewares/authenication.handler.ts:37-46`
+- `apps/api/src/middlewares/authentication.handler.ts:37-46`
 
 问题：
 
-`getClientByCode` / `getClientBySecret` 只按 code 或 secret 查询，没有过滤 `status`、`isDelete`。`internalAuthenicationHandler` 只判断是否查到 client。
+`getClientByCode` / `getClientBySecret` 只按 code 或 secret 查询，没有过滤 `status`、`isDelete`。`internalAuthenticationHandler` 只判断是否查到 client。
 
 影响：
 
@@ -234,7 +234,7 @@ SSO 只用 `redirectUrl.startsWith(allowedUrl)` 判断回调地址是否合法�
 
 位置：
 
-- `apps/api/src/middlewares/authenication.handler.ts:21-33`
+- `apps/api/src/middlewares/authentication.handler.ts:21-33`
 - `apps/api/src/services/session/session.service.ts:77-89`
 - `apps/api/src/services/user/user.service.ts:65-103`
 - `apps/api/src/services/user/user.service.ts:301-329`
