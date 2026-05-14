@@ -23,7 +23,7 @@ export const selectRoleSchema = createSelectSchema(roles, {
 });
 export const insertRoleSchema = createInsertSchema(roles, {
   status: () => z.enum(RoleStatus),
-});
+}).omit({ id: true, createTime: true, updateTime: true, isDelete: true });
 export const updateRoleSchema = createUpdateSchema(roles, {
   status: () => z.enum(RoleStatus),
-});
+}).omit({ id: true, createTime: true, updateTime: true, isDelete: true });

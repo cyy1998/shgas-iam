@@ -18,5 +18,5 @@ export const loginLogs = snakeCase.table("login_log", {
 ]);
 
 export const selectLoginLogSchema = createSelectSchema(loginLogs);
-export const insertLoginLogSchema = createInsertSchema(loginLogs);
-export const updateLoginLogSchema = createUpdateSchema(loginLogs);
+export const insertLoginLogSchema = createInsertSchema(loginLogs).omit({ id: true });
+export const updateLoginLogSchema = createUpdateSchema(loginLogs).omit({ id: true });

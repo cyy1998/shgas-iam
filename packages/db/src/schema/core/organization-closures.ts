@@ -14,5 +14,5 @@ export const organizationClosures = snakeCase.table("organization_closure", {
 ]);
 
 export const selectOrganizationClosureSchema = createSelectSchema(organizationClosures);
-export const insertOrganizationClosureSchema = createInsertSchema(organizationClosures);
-export const updateOrganizationClosureSchema = createUpdateSchema(organizationClosures);
+export const insertOrganizationClosureSchema = createInsertSchema(organizationClosures).omit({ id: true });
+export const updateOrganizationClosureSchema = createUpdateSchema(organizationClosures).omit({ id: true });

@@ -27,7 +27,7 @@ export const selectPrivilegeDelegationSchema = createSelectSchema(privilegeDeleg
 });
 export const insertPrivilegeDelegationSchema = createInsertSchema(privilegeDelegations, {
   status: () => z.enum(PrivilegeDelegationStatus),
-});
+}).omit({ id: true, createTime: true, updateTime: true, isDelete: true });
 export const updatePrivilegeDelegationSchema = createUpdateSchema(privilegeDelegations, {
   status: () => z.enum(PrivilegeDelegationStatus),
-});
+}).omit({ id: true, createTime: true, updateTime: true, isDelete: true });

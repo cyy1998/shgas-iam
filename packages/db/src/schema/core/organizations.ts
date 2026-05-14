@@ -33,11 +33,11 @@ export const insertOrganizationSchema = createInsertSchema(organizations, {
   level: () => z.enum(OrganizationLevel),
   orgType: () => z.enum(OrganizationType),
   status: () => z.enum(OrganizationStatus),
-});
+}).omit({ id: true, createTime: true, updateTime: true, isDelete: true });
 export const updateOrganizationSchema = createUpdateSchema(organizations, {
   level: () => z.enum(OrganizationLevel),
   orgType: () => z.enum(OrganizationType),
   status: () => z.enum(OrganizationStatus),
-});
+}).omit({ id: true, createTime: true, updateTime: true, isDelete: true });
 
 export type Organization = z.infer<typeof selectOrganizationSchema>;

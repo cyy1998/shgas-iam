@@ -20,7 +20,7 @@ export const selectPositionSchema = createSelectSchema(positions, {
 });
 export const insertPositionSchema = createInsertSchema(positions, {
   status: () => z.enum(PositionStatus),
-});
+}).omit({ id: true, createTime: true, updateTime: true, isDelete: true });
 export const updatePositionSchema = createUpdateSchema(positions, {
   status: () => z.enum(PositionStatus),
-});
+}).omit({ id: true, createTime: true, updateTime: true, isDelete: true });

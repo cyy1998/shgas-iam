@@ -31,9 +31,9 @@ export const selectEmploymentSchema = createSelectSchema(employments, {
 });
 export const insertEmploymentSchema = createInsertSchema(employments, {
   status: () => z.enum(EmploymentStatus),
-});
+}).omit({ id: true, createTime: true, updateTime: true, isDelete: true });
 export const updateEmploymentSchema = createUpdateSchema(employments, {
   status: () => z.enum(EmploymentStatus),
-});
+}).omit({ id: true, createTime: true, updateTime: true, isDelete: true });
 
 export type Employment = z.infer<typeof selectEmploymentSchema>;

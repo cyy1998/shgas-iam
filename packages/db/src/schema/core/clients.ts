@@ -36,8 +36,8 @@ export const selectClientSchema = createSelectSchema(clients, {
 export const insertClientSchema = createInsertSchema(clients, {
   status: () => z.enum(ClientStatus),
   extAttributes: () => clientExtAttributesSchema,
-});
+}).omit({ id: true, createTime: true, updateTime: true, isDelete: true });
 export const updateClientSchema = createUpdateSchema(clients, {
   status: () => z.enum(ClientStatus),
   extAttributes: () => clientExtAttributesSchema,
-});
+}).omit({ id: true, createTime: true, updateTime: true, isDelete: true });

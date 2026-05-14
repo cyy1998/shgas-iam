@@ -26,10 +26,10 @@ export const selectUserSchema = createSelectSchema(users, {
 export const insertUserSchema = createInsertSchema(users, {
   userType: () => z.enum(UserType),
   status: () => z.enum(UserStatus),
-});
+}).omit({ id: true, createTime: true, updateTime: true, isDelete: true });
 export const updateUserSchema = createUpdateSchema(users, {
   userType: () => z.enum(UserType),
   status: () => z.enum(UserStatus),
-});
+}).omit({ id: true, createTime: true, updateTime: true, isDelete: true });
 
 export type User = z.infer<typeof selectUserSchema>;

@@ -26,8 +26,8 @@ export const selectPrivilegeSchema = createSelectSchema(privileges, {
 export const insertPrivilegeSchema = createInsertSchema(privileges, {
   fieldValues: () => privilegeFieldValuesSchema,
   status: () => z.enum(PrivilegeStatus),
-});
+}).omit({ id: true, createTime: true, updateTime: true, isDelete: true });
 export const updatePrivilegeSchema = createUpdateSchema(privileges, {
   fieldValues: () => privilegeFieldValuesSchema,
   status: () => z.enum(PrivilegeStatus),
-});
+}).omit({ id: true, createTime: true, updateTime: true, isDelete: true });
