@@ -5,7 +5,7 @@ ENV PNPM_HOME="/pnpm"
 ENV PATH="$PNPM_HOME:$PATH"
 ENV HTTP_PROXY="http://176.169.105.96:3928"
 ENV HTTPS_PROXY="http://176.169.105.96:3928"
-RUN corepack enable && corepack prepare pnpm@10.33.3 --activate
+RUN corepack enable && corepack prepare pnpm@11.1.2 --activate
 
 FROM base AS deps
 WORKDIR /app
@@ -25,7 +25,7 @@ COPY packages/api-core/ ./packages/api-core/
 COPY apps/admin-api/ ./apps/admin-api/
 RUN pnpm --filter @iam/admin-api deploy --prod --legacy /deploy/admin-api
 
-FROM docker.xuanyuan.run/oven/bun:1-alpine AS runner
+FROM docker.xuanyuan.run/oven/bun:1.3.14-alpine AS runner
 ENV NODE_ENV=production
 WORKDIR /app
 COPY --from=builder /deploy/admin-api ./

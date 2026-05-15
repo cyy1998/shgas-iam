@@ -7,7 +7,7 @@ ENV PNPM_HOME="/pnpm"
 ENV PATH="$PNPM_HOME:$PATH"
 ENV HTTP_PROXY="http://176.169.105.96:3928"
 ENV HTTPS_PROXY="http://176.169.105.96:3928"
-RUN corepack enable && corepack prepare pnpm@10.33.3 --activate
+RUN corepack enable && corepack prepare pnpm@11.1.2 --activate
 
 # ── Stage 2: Install dependencies ────────────────────────────────────────────
 FROM base AS deps
@@ -32,7 +32,7 @@ COPY apps/api/        ./apps/api/
 RUN pnpm --filter @iam/api deploy --prod --legacy /deploy/api
 
 # ── Stage 4: Production runtime (Bun) ────────────────────────────────────────
-FROM docker.xuanyuan.run/oven/bun:1-alpine AS runner
+FROM docker.xuanyuan.run/oven/bun:1.3.14-alpine AS runner
 ENV NODE_ENV=production
 WORKDIR /app
 COPY --from=builder /deploy/api ./

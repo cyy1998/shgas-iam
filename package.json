@@ -1,6 +1,6 @@
 {
   "name": "iam-monorepo",
-  "packageManager": "pnpm@10.33.2",
+  "packageManager": "pnpm@11.1.2",
   "private": true,
   "scripts": {
     "dev": "turbo dev",
@@ -9,7 +9,7 @@
     "typecheck": "turbo typecheck"
   },
   "devDependencies": {
-    "turbo": "^2.5.0"
+    "turbo": "^2.9.14"
   },
   "pnpm": {
     "overrides": {

@@ -1,9 +1,21 @@
 packages:
   - 'apps/*'
   - 'packages/*'
+allowBuilds:
+  bcrypt: true
+  core-js: false
+  core-js-pure: false
+  es5-ext: false
+  esbuild: true
+peerDependencyRules:
+  allowedVersions:
+    dva-core: '2'
+    less-loader: '11 || 12'
+    postcss: '8'
+    react: '18'
+    react-dom: '18'
 ignoredBuiltDependencies:
   - '@prisma/engines'
   - '@scarf/scarf'
-  - bcrypt
   - prisma
   - prisma-zod-generator

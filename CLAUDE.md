@@ -12,7 +12,7 @@ This repository is a **pnpm + Turborepo monorepo** for an IAM (Identity and Acce
 
 Key characteristics:
 
-- **Package manager**: pnpm (`packageManager: pnpm@10.33.0` at the root `package.json`)
+- **Package manager**: pnpm (`packageManager: pnpm@11.1.2` at the root `package.json`)
 - **Task runner**: [Turborepo](https://turbo.build/) — `turbo dev / build / lint / typecheck`
 - **End-to-end type safety**: `apps/admin` imports `AppType` from `@iam/api` through `hono/client` (`apps/admin/src/lib/api-client.ts`), giving the frontend typed request/response for every route
 - **Workspace layout**: `apps/*` and `packages/*` declared in `pnpm-workspace.yaml`
@@ -59,8 +59,8 @@ iam-service/
 ### Prerequisites
 
 - **Bun** (matches `apps/api` `devEngines.runtime`) — used to run the API
-- **Node.js ≥ 18** — required by UMI Max build
-- **pnpm ≥ 10** — `packageManager` pinned at `pnpm@10.33.0`
+- **Node.js ≥ 22.13** — required by pnpm 11 and the current build toolchain
+- **pnpm ≥ 11** — `packageManager` pinned at `pnpm@11.1.2`
 - **MySQL** reachable via `DATABASE_URL`
 - **Redis** configured via `REDIS_URL` / `REDIS_PORT` / `REDIS_DB`
 

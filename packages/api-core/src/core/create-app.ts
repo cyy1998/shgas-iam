@@ -37,7 +37,6 @@ function resolveTierRoutes(tier: TierConfig, allRoutes: Record<string, { default
     return tier.routes;
   const dirName = tier.routeDir ?? tier.name;
   return Object.fromEntries(Object.entries(allRoutes).filter(([path]) => {
-    // eslint-disable-next-line e18e/prefer-static-regex
     const match = path.match(/[/\\]+routes[/\\]+([^/\\]+)[/\\]+/);
     return match?.[1] === dirName;
   }));
@@ -53,7 +52,6 @@ function resolveTierMiddlewares(
   }
   const dirName = tier.routeDir ?? tier.name;
   return Object.values(Object.fromEntries(Object.entries(allMiddlewares).filter(([path]) => {
-    // eslint-disable-next-line e18e/prefer-static-regex
     const match = path.match(/[/\\]+routes[/\\]+([^/\\]+)[/\\]+/);
     return match?.[1] === dirName;
   }))).flatMap(mod => mod.default);
