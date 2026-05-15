@@ -73,9 +73,9 @@ export const PrivilegeDelegationDetailDtoConverterSchema = PrivilegeDelegationDe
     delegatorUser: UserDtoSchema.parse(e.delegatorUser),
     delegateeUser: UserDtoSchema.parse(e.delegateeUser),
     organizationScope: OrganizationDtoConverterSchema.parse(e.organizationScope),
-    privileges: e.delegationDetails.map(detail => detail.privilege),
+    privileges: e.delegationDetails.map(detail => PrivilegeDtoSchema.parse(detail.privilege)),
   };
-}).pipe(PrivilegeDelegationDetailDtoSchema as any);
+}).transform(value => PrivilegeDelegationDetailDtoSchema.parse(value));
 
 export const PrivilegeDelegationQueryDtoSchema = z.object({
   delegatorUsernames: z.array(z.string()).optional().describe("授权人用户名列表").openapi({ example: ["138550", "136163"] }),

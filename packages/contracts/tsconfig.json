@@ -3,11 +3,12 @@
     "target": "ESNext",
     "module": "Preserve",
     "moduleResolution": "bundler",
+    "types": ["bun"],
+    "allowImportingTsExtensions": true,
     "strict": true,
     "noEmit": true,
     "verbatimModuleSyntax": true,
-    "skipLibCheck": true,
-    "allowImportingTsExtensions": true
+    "skipLibCheck": true
   },
   "include": ["src/**/*"]
 }

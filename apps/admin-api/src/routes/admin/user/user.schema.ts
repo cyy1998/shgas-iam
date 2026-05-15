@@ -26,33 +26,3 @@ export const UserDetailVoConverterSchema = UserDetailDtoSchema.transform((e) => 
     statusText: userStatusToString[e.status],
   };
 }).pipe(UserDetailVoSchema);
-
-// export const UserAdminDtoSchema = z.object({
-//   id: z.number().openapi({ example: 1 }),
-//   username: z.string().openapi({ example: "138550" }),
-//   name: z.string().openapi({ example: "蔡奕阳" }),
-//   mobile: z.string().nullable().openapi({ example: "17721462865" }),
-//   wxId: z.string().nullable().openapi({ example: "1592677631" }),
-//   userType: z.string().nullable().openapi({ example: "正式员工" }),
-//   orcasId: z.string().nullable().openapi({ example: "ada8wf89w83b2" }),
-//   status: z.enum(UserStatus).openapi({ example: 1 }),
-//   orderNum: z.number().openapi({ example: 1 }),
-//   createTime: z.iso.datetime(),
-//   updateTime: z.iso.datetime(),
-// }).openapi("UserAdminDto");
-
-// export type UserAdminDto = z.infer<typeof UserAdminDtoSchema>;
-
-// export const UserAdminDetailDtoSchema = UserAdminDtoSchema.extend({
-//   employments: z.array(EmploymentAdminDtoSchema).optional(),
-// });
-
-// export const UserAdminVoSchema = UserAdminDtoSchema.extend({
-//   statusText: z.string().openapi({ example: "正常" }),
-// }).openapi("UserAdminVo");
-
-// export type UserAdminVo = z.infer<typeof UserAdminVoSchema>;
-
-// export const UserAdminDetailVoSchema = UserAdminVoSchema.extend({
-//   employments: z.array(EmploymentAdminVoSchema).optional(),
-// });

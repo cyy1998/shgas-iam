@@ -1,12 +1,19 @@
 import config from "@api/env";
+import { z } from "@hono/zod-openapi";
 import { createSingleton } from "@iam/api-core/core/singleton";
 import { hmacSha256 } from "@iam/api-core/utils";
 
-interface SMSServiceResult {
-  resultCode: string;
-  resultInfo: string;
-  result: string;
-}
+const SMSServiceResultSchema = z.object({
+  resultCode: z.string(),
+  resultInfo: z.string(),
+  result: z.string(),
+});
+
+const SMS_SERVICE_RESULT_FALLBACK = {
+  resultCode: "-1",
+  resultInfo: "短信服务返回格式异常",
+  result: "",
+};
 
 function createSmsClient() {
   return {
@@ -23,12 +30,14 @@ function createSmsClient() {
         origin,
         signature: hmacSha256(data, config.SMS_SIGNATURE_KEY),
       };
-      const res = await fetch(process.env.SMS_URL as string, {
+      const res = await fetch(config.SMS_URL, {
         method: "POST",
         body: JSON.stringify(request_data),
         headers: { "Content-Type": "application/json", "Accept": "application/json" },
       });
-      const smsResult: SMSServiceResult = await res.json() as SMSServiceResult;
+      const smsResult = SMSServiceResultSchema
+        .catch(SMS_SERVICE_RESULT_FALLBACK)
+        .parse(await res.json().catch(() => null));
       if (smsResult.resultCode !== "0000") {
         return {
           success: false,

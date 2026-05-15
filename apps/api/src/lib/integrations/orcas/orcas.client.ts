@@ -1,16 +1,17 @@
 import type { OrcasLoginInput } from "./orcas.type";
 import config from "@api/env";
+import { z } from "@hono/zod-openapi";
 import { createSingleton } from "@iam/api-core/core/singleton";
 import { CustomError } from "@iam/api-core/errors/CustomError";
 
 const ORCAS_SESSION_REGEX = /orcas_sso_sessionid=([^;]+)/;
 
-interface OrcasLoginResponse {
-  code?: number;
-  data?: {
-    id?: string;
-  };
-}
+const OrcasLoginResponseSchema = z.object({
+  code: z.number().optional(),
+  data: z.object({
+    id: z.string().optional(),
+  }).optional(),
+});
 
 function createOrcasClient() {
   return {
@@ -29,7 +30,7 @@ function createOrcasClient() {
         }),
       });
 
-      const data = await resp.json().catch(() => null) as OrcasLoginResponse | null;
+      const data = OrcasLoginResponseSchema.nullable().catch(null).parse(await resp.json().catch(() => null));
       const setCookies = resp.headers.getSetCookie();
       if (resp.status !== 200 || data?.code !== 200 || !data.data?.id || setCookies.length === 0) {
         throw new CustomError("Orcas登录失败");

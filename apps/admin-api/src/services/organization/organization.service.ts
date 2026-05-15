@@ -66,7 +66,7 @@ export async function getOrganizationDetailByCodeForAdmin(orgCode: string) {
   const dto = OrganizationDtoConverterSchema.parse(org);
   return {
     ...dto,
-    statusText: organizationStatusToString[dto.status as OrganizationStatus] ?? "未知",
+    statusText: organizationStatusToString[dto.status] ?? "未知",
     childrenCount: org.children.length,
     employmentCount,
   };
@@ -78,7 +78,7 @@ export async function searchOrganizationsForAdmin(query: OrganizationPaginationQ
     const dto = OrganizationDtoConverterSchema.parse(o);
     return {
       ...dto,
-      statusText: organizationStatusToString[dto.status as OrganizationStatus] ?? "未知",
+      statusText: organizationStatusToString[dto.status] ?? "未知",
       childrenCount: o.children.length,
     };
   });

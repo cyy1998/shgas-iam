@@ -5,7 +5,7 @@ import type {
 } from "@api/services/organization/organization.type";
 import type { DbClient } from "@iam/db";
 import type { Organization } from "@iam/db/schema";
-import { OrganizationLevel, OrganizationStatus } from "@iam/contracts";
+import { getChildOrganizationLevel, OrganizationStatus } from "@iam/contracts";
 import db from "@iam/db";
 import { compactUpdate, firstRow, inArrayIf } from "@iam/db/query-utils";
 import { organizationClosures, organizations } from "@iam/db/schema";
@@ -111,7 +111,7 @@ export async function setOrganization(
   const { parentCode, ...org } = organizationCreateDto;
   const newOrganization = firstRow(await tx.insert(organizations).values(org).returning())!;
   const path = `${parentOrganization ? parentOrganization.path : ""}/${newOrganization.id}`;
-  const level = (parentOrganization ? parentOrganization.level + 1 : OrganizationLevel.One) as OrganizationLevel;
+  const level = getChildOrganizationLevel(parentOrganization?.level ?? null);
   const updatedOrganization = firstRow(await tx
     .update(organizations)
     .set({
