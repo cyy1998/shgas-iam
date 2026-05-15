@@ -1,0 +1,39 @@
+{
+  "name": "@iam/domain",
+  "version": "0.0.1",
+  "type": "module",
+  "private": true,
+  "exports": {
+    ".": "./src/index.ts",
+    "./client": "./src/client/index.ts",
+    "./client/*": "./src/client/*.ts",
+    "./employment": "./src/employment/index.ts",
+    "./employment/*": "./src/employment/*.ts",
+    "./organization": "./src/organization/index.ts",
+    "./organization/*": "./src/organization/*.ts",
+    "./position": "./src/position/index.ts",
+    "./position/*": "./src/position/*.ts",
+    "./privilege": "./src/privilege/index.ts",
+    "./privilege/*": "./src/privilege/*.ts",
+    "./user": "./src/user/index.ts",
+    "./user/*": "./src/user/*.ts"
+  },
+  "scripts": {
+    "lint": "eslint src/",
+    "typecheck": "pnpm exec tsgo --noEmit"
+  },
+  "dependencies": {
+    "@hono/zod-openapi": "^1.4.0",
+    "@iam/contracts": "workspace:*",
+    "@iam/db": "workspace:*",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@antfu/eslint-config": "^9.0.0",
+    "@types/bun": "latest",
+    "@typescript/native-preview": "7.0.0-dev.20260514.1",
+    "eslint": "^10.3.0",
+    "eslint-plugin-format": "^2.0.1",
+    "typescript": "^6.0.3"
+  }
+}

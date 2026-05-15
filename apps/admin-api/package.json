@@ -26,6 +26,7 @@
     "@iam/api-core": "workspace:*",
     "@iam/contracts": "workspace:*",
     "@iam/db": "workspace:*",
+    "@iam/domain": "workspace:*",
     "@scalar/hono-api-reference": "^0.10.16",
     "@trpc/server": "^11.17.0",
     "bcrypt-ts": "^8.0.1",

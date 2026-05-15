@@ -1,22 +1,14 @@
 import { z } from "@hono/zod-openapi";
 import { createPageQuerySchema } from "@iam/api-core/core/pagination/schema";
 import { UserStatus, UserType } from "@iam/contracts";
-import { selectUserSchema } from "@iam/db/schema";
-import { EmploymentDetailDtoSchema } from "../employment/employment.schema";
+import { UserSchema as SharedUserSchema } from "@iam/domain/user";
 
-export const UserSchema = z.object(selectUserSchema.shape);
-
-export const UserDtoSchema = UserSchema.omit({
-  password: true,
-}).extend({
-  orcasId: z.string().nullable().default(null).openapi({ example: "ada8wf89w83b2" }),
-}).openapi("UserDto");
-
-export const UserDetailDtoSchema = UserDtoSchema.extend({
-  employments: z.array(EmploymentDetailDtoSchema).default([]),
-  privileges: z.array(z.string()).default([]).openapi({ example: ["ui:button:tender:create-GYBG"] }),
-  roles: z.array(z.string()).default([]).openapi({ example: ["tender:default-user"] }),
-}).openapi("UserDetailDto");
+export {
+  UserCreateDtoSchema,
+  UserDetailDtoSchema,
+  UserDtoSchema,
+  UserSchema,
+} from "@iam/domain/user";
 
 export const UserPaginationQueryDtoSchema = createPageQuerySchema(
   z.object({
@@ -34,19 +26,7 @@ export const UserPaginationQueryDtoSchema = createPageQuerySchema(
   }),
 ).openapi("UserPaginationQueryDto");
 
-export const UserCreateDtoSchema = UserSchema.partial().required({
-  username: true,
-  name: true,
-  userType: true,
-  password: true,
-}).omit({
-  id: true,
-  isDelete: true,
-  createTime: true,
-  updateTime: true,
-}).openapi("UserCreateDto");
-
-export const UserAdminCreateDtoSchema = UserSchema.partial().required({
+export const UserAdminCreateDtoSchema = SharedUserSchema.partial().required({
   username: true,
   name: true,
   userType: true,
@@ -64,7 +44,7 @@ export const UserAdminCreateDtoSchema = UserSchema.partial().required({
   status: z.enum(UserStatus).optional().openapi({ example: UserStatus.Enable }),
 }).openapi("UserAdminCreateDto");
 
-export const UserUpdateDtoSchema = UserSchema.partial().pick({
+export const UserUpdateDtoSchema = SharedUserSchema.partial().pick({
   name: true,
   mobile: true,
   wxId: true,
