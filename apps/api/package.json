@@ -30,7 +30,6 @@
     "@iam/db": "workspace:*",
     "@scalar/hono-api-reference": "^0.10.7",
     "@trpc/server": "^11.16.0",
-    "axios": "^1.12.2",
     "bcrypt": "^6.0.0",
     "bcrypt-ts": "^7.1.0",
     "csv-parse": "^6.1.0",
