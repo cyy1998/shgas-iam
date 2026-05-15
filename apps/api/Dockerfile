@@ -16,6 +16,7 @@ COPY pnpm-workspace.yaml package.json pnpm-lock.yaml ./
 COPY packages/contracts/package.json ./packages/contracts/
 COPY packages/db/package.json ./packages/db/
 COPY packages/api-core/package.json ./packages/api-core/
+COPY packages/domain/package.json ./packages/domain/
 COPY apps/api/package.json           ./apps/api/
 ENV HTTP_PROXY="http://176.169.105.96:3928"
 ENV HTTPS_PROXY="http://176.169.105.96:3928"
@@ -26,6 +27,7 @@ FROM deps AS builder
 COPY packages/contracts/ ./packages/contracts/
 COPY packages/db/ ./packages/db/
 COPY packages/api-core/ ./packages/api-core/
+COPY packages/domain/ ./packages/domain/
 COPY apps/api/        ./apps/api/
 # Flatten monorepo -> self-contained bundle (prod deps + source, no devDeps).
 # pnpm v10 requires --legacy unless inject-workspace-packages is enabled.
