@@ -27,11 +27,11 @@ export const EmploymentDtoSchema = EmploymentSchema.extend({
   orgName: z.string().openapi({ example: "信息中心" }),
   compCode: z.string().openapi({ example: "SR" }),
   compName: z.string().openapi({ example: "上海燃气" }),
-}).required().openapi("EmploymentDto");
+}).openapi("EmploymentDto");
 
-export const EmploymentDtoConverterSchema = EmploymentDetailSchema.transform((e) => {
-  const { user, position, department, company, ...employment } = e;
-  return {
+export function toEmploymentDto(input: unknown) {
+  const { user, position, department, company, ...employment } = EmploymentDetailSchema.parse(input);
+  return EmploymentDtoSchema.parse({
     ...employment,
     username: user.username,
     name: user.name,
@@ -44,8 +44,8 @@ export const EmploymentDtoConverterSchema = EmploymentDetailSchema.transform((e)
     orgName: department.orgName,
     compCode: company.orgCode,
     compName: company.orgName,
-  };
-}).pipe(EmploymentDtoSchema);
+  });
+}
 
 export const EmploymentDetailDtoSchema = EmploymentDtoSchema.extend({
   privileges: z.array(z.string()).default([]).openapi({ example: ["ui:button:tender:create-GYBG"] }),

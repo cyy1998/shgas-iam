@@ -7,11 +7,12 @@ export const PositionVoSchema = PositionDtoSchema.extend({
   memberNumber: z.number().openapi({ example: 10 }),
 }).openapi("PositionVo");
 
-export const PositionVoConverterSchema = PositionDetailSchema.transform((e) => {
+export function toPositionVo(input: unknown) {
+  const e = PositionDetailSchema.parse(input);
   const dto = PositionDtoSchema.parse(e);
-  return {
+  return PositionVoSchema.parse({
     ...dto,
     statusText: positionStatusToString[dto.status],
     memberNumber: e.employments.length,
-  };
-}).pipe(PositionVoSchema);
+  });
+}

@@ -4,7 +4,7 @@ import type {
   OrganizationUpdateDto,
 } from "@api/services/organization/organization.type";
 import * as organizationRepository from "@api/services/organization/organization.repository";
-import { OrganizationDtoConverterSchema } from "@api/services/organization/organization.schema";
+import { toOrganizationDto } from "@api/services/organization/organization.schema";
 import { CustomError } from "@iam/api-core/errors/CustomError";
 import db from "@iam/db";
 
@@ -13,11 +13,11 @@ export async function getOrganizationByCode(orgCode: string) {
   if (organization === null) {
     throw new CustomError("组织不存在");
   }
-  return OrganizationDtoConverterSchema.parse(organization);
+  return toOrganizationDto(organization);
 }
 export async function searchOrganizations(organizationQueryDto: OrganizationQueryDto) {
   const organizations = await organizationRepository.searchOrganizations(organizationQueryDto);
-  const orgDtos = organizations.map(o => OrganizationDtoConverterSchema.parse(o));
+  const orgDtos = organizations.map(o => toOrganizationDto(o));
   return orgDtos;
 }
 

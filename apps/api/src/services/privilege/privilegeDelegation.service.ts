@@ -7,11 +7,11 @@ import * as userRepository from "@api/services/user/user.repository";
 import { CustomError } from "@iam/api-core/errors/CustomError";
 import { PrivilegeDelegationStatus } from "@iam/contracts";
 import db from "@iam/db";
-import { PrivilegeDelegationDetailDtoConverterSchema } from "./privilegeDelegation.schema";
+import { toPrivilegeDelegationDetailDto } from "./privilegeDelegation.schema";
 
 export async function queryPrivilegeDelegations(query: PrivilegeDelegationQueryDto) {
   const delegations = await delegationRepository.searchDelegations(query);
-  return delegations.map(d => PrivilegeDelegationDetailDtoConverterSchema.parse(d));
+  return delegations.map(d => toPrivilegeDelegationDetailDto(d));
 }
 
 export async function updateDelegation(id: number, dto: PrivilegeDelegationUpdateDto) {
@@ -75,6 +75,6 @@ export async function createPrivilegeDelegation(
       organizationScopeId: organization.id,
       privilegeIds: privileges.map(p => p.id),
     }, tx);
-    return PrivilegeDelegationDetailDtoConverterSchema.parse(delegation);
+    return toPrivilegeDelegationDetailDto(delegation);
   });
 }

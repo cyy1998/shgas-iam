@@ -9,14 +9,14 @@ import * as employmentService from "@admin-api/services/employment/employment.se
 import { defineMutationOp, defineQueryOp } from "@iam/api-core/core/business-op";
 import { EmploymentStatus } from "@iam/contracts";
 import { z } from "zod";
-import { EmploymentDetailVoConverterSchema, EmploymentVoConverterSchema } from "./employment.schema";
+import { toEmploymentDetailVo, toEmploymentVo } from "./employment.schema";
 
 export const searchEmploymentOp = defineQueryOp({
   input: EmploymentAdminPaginationQueryDtoSchema,
   handler: async (input) => {
     const { result, ...rest } = await employmentService.searchEmploymentsFuzzyForAdmin(input);
     return {
-      result: result.map(e => EmploymentVoConverterSchema.parse(e)),
+      result: result.map(e => toEmploymentVo(e)),
       ...rest,
     };
   },
@@ -26,7 +26,7 @@ export const getEmploymentOp = defineQueryOp({
   input: z.object({ id: z.coerce.number().int().positive() }),
   handler: async ({ id }) => {
     const detail = await employmentService.getEmploymentDetailByIdForAdmin(id);
-    return EmploymentDetailVoConverterSchema.parse(detail);
+    return toEmploymentDetailVo(detail);
   },
 });
 

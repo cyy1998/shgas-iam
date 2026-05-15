@@ -6,7 +6,7 @@ import type {
 } from "@admin-api/services/organization/organization.type";
 import type { OrganizationStatus } from "@iam/contracts";
 import * as organizationRepository from "@admin-api/services/organization/organization.repository";
-import { OrganizationDtoConverterSchema } from "@admin-api/services/organization/organization.schema";
+import { toOrganizationDto } from "@admin-api/services/organization/organization.schema";
 import { CustomError } from "@iam/api-core/errors/CustomError";
 import { OrganizationHasChildrenError } from "@iam/api-core/errors/OrganizationHasChildrenError";
 import { OrganizationHasEmploymentError } from "@iam/api-core/errors/OrganizationHasEmploymentError";
@@ -63,7 +63,7 @@ export async function getOrganizationDetailByCodeForAdmin(orgCode: string) {
     throw new CustomError("组织不存在", 404);
   }
   const employmentCount = await organizationRepository.countActiveEmploymentsByOrgCode(orgCode);
-  const dto = OrganizationDtoConverterSchema.parse(org);
+  const dto = toOrganizationDto(org);
   return {
     ...dto,
     statusText: organizationStatusToString[dto.status] ?? "未知",
@@ -75,7 +75,7 @@ export async function getOrganizationDetailByCodeForAdmin(orgCode: string) {
 export async function searchOrganizationsForAdmin(query: OrganizationPaginationQueryDto) {
   const orgs = await organizationRepository.searchOrganizationsForAdmin(query);
   const vos = orgs.map((o) => {
-    const dto = OrganizationDtoConverterSchema.parse(o);
+    const dto = toOrganizationDto(o);
     return {
       ...dto,
       statusText: organizationStatusToString[dto.status] ?? "未知",

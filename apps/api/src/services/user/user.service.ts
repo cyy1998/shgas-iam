@@ -4,7 +4,7 @@ import type { UserDetailDto, UserDto, UserQueryDto, UserQueryWithPrivilegeDelega
 import { VerificationCodeUsage } from "@api/enums/verificationCode.usage";
 import config from "@api/env";
 import * as employmentRepository from "@api/services/employment/employment.repository";
-import { EmploymentDetailDtoSchema, EmploymentDtoConverterSchema } from "@api/services/employment/employment.schema";
+import { EmploymentDetailDtoSchema, toEmploymentDto } from "@api/services/employment/employment.schema";
 import * as mobileService from "@api/services/mobile/mobile.service";
 import * as privilegeRepository from "@api/services/privilege/privilege.repository";
 import * as privilegeDelegationRepository from "@api/services/privilege/privilegeDelegation.repository";
@@ -18,7 +18,7 @@ import { CustomError } from "@iam/api-core/errors/CustomError";
 import { UserNotFoundError } from "@iam/api-core/errors/UserNotFoundError";
 import db from "@iam/db";
 import { compare, hash } from "bcrypt-ts";
-import { PrivilegeDelegationDtoConverterSchema } from "../privilege/privilegeDelegation.schema";
+import { toPrivilegeDelegationDto } from "../privilege/privilegeDelegation.schema";
 
 async function _getUserDetail(user: User | null): Promise<UserDetailDto> {
   if (user === null) {
@@ -30,7 +30,7 @@ async function _getUserDetail(user: User | null): Promise<UserDetailDto> {
   for (const employment of employments) {
     const roles = await roleRepository.getRolesByEmploymentId(employment.id);
     const privileges = await privilegeRepository.getPrivilegesByRoleIds(roles.map(r => r.id));
-    const employmentDto = EmploymentDetailDtoSchema.parse(EmploymentDtoConverterSchema.parse(employment));
+    const employmentDto = EmploymentDetailDtoSchema.parse(toEmploymentDto(employment));
     employmentDto.roles = roles.map(r => r.roleCode);
     employmentDto.privileges = privileges.map(p => p.privilegeCode);
     employmentDtos.push(employmentDto);
@@ -141,7 +141,7 @@ export async function searchUsersWithPrivilegeDelegation(query: UserQueryWithPri
     userDtos.map(u => u.username),
     orgCode,
     privCode,
-  )).map(pd => PrivilegeDelegationDtoConverterSchema.parse(pd));
+  )).map(pd => toPrivilegeDelegationDto(pd));
   return {
     users: userDtos,
     delegations,

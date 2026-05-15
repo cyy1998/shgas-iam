@@ -5,7 +5,7 @@ import type {
   EmploymentUpdateDto,
 } from "./employment.type";
 import * as employmentRepository from "@admin-api/services/employment/employment.repository";
-import { EmploymentDetailDtoSchema, EmploymentDtoConverterSchema } from "@admin-api/services/employment/employment.schema";
+import { EmploymentDetailDtoSchema, toEmploymentDto } from "@admin-api/services/employment/employment.schema";
 import * as organizationRepository from "@admin-api/services/organization/organization.repository";
 import * as positionRepository from "@admin-api/services/position/position.repository";
 import * as privilegeRepository from "@admin-api/services/privilege/privilege.repository";
@@ -25,7 +25,7 @@ export async function getEmploymentDetailByIdForAdmin(id: number) {
   }
   const roles = await roleRepository.getRolesByEmploymentId(employment.id);
   const privileges = await privilegeRepository.getPrivilegesByRoleIds(roles.map(r => r.id));
-  const dto = EmploymentDetailDtoSchema.parse(EmploymentDtoConverterSchema.parse(employment));
+  const dto = EmploymentDetailDtoSchema.parse(toEmploymentDto(employment));
   dto.roles = roles.map(r => r.roleCode);
   dto.privileges = privileges.map(p => p.privilegeCode);
   return dto;
@@ -33,7 +33,7 @@ export async function getEmploymentDetailByIdForAdmin(id: number) {
 
 export async function searchEmploymentsFuzzyForAdmin(dto: EmploymentAdminPaginationQueryDto) {
   const { rows, total } = await employmentRepository.searchEmploymentsFuzzyForAdminPaged(dto);
-  const result = rows.map(e => EmploymentDtoConverterSchema.parse(e));
+  const result = rows.map(e => toEmploymentDto(e));
   const pages = total === 0 ? 0 : Math.ceil(total / dto.pageSize);
   return {
     result,

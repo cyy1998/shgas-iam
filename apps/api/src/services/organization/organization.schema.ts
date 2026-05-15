@@ -15,15 +15,15 @@ export const OrganizationDtoSchema = OrganizationSchema.extend({
   parentName: z.string().nullable().openapi({ example: "上海燃气有限公司" }),
 }).required().openapi("OrganizationDto");
 
-export const OrganizationDtoConverterSchema = OrganizationDetailSchema.transform((e) => {
-  const { parent, children, ...org } = e;
-  return {
+export function toOrganizationDto(input: unknown) {
+  const { parent, children, ...org } = OrganizationDetailSchema.parse(input);
+  return OrganizationDtoSchema.parse({
     ...org,
-    isLeaf: e.children.length === 0,
-    parentCode: e.parent?.orgCode ?? null,
-    parentName: e.parent?.orgName ?? null,
-  };
-}).pipe(OrganizationDtoSchema);
+    isLeaf: children.length === 0,
+    parentCode: parent?.orgCode ?? null,
+    parentName: parent?.orgName ?? null,
+  });
+}
 
 export const OrganizationCreateDtoSchema = OrganizationSchema.partial().required({
   orgCode: true,

@@ -1,7 +1,7 @@
 import type { UserAdminCreateDto, UserDetailDto, UserPaginationQueryDto, UserUpdateDto } from "./user.type";
 import config from "@admin-api/env";
 import * as employmentRepository from "@admin-api/services/employment/employment.repository";
-import { EmploymentDetailDtoSchema, EmploymentDtoConverterSchema } from "@admin-api/services/employment/employment.schema";
+import { EmploymentDetailDtoSchema, toEmploymentDto } from "@admin-api/services/employment/employment.schema";
 import * as privilegeRepository from "@admin-api/services/privilege/privilege.repository";
 import * as roleRepository from "@admin-api/services/role/role.repository";
 import * as userRepository from "@admin-api/services/user/user.repository";
@@ -28,7 +28,7 @@ export async function getUserDetailByUsernameForAdmin(username: string): Promise
   for (const employment of employments) {
     const roles = await roleRepository.getRolesByEmploymentId(employment.id);
     const privileges = await privilegeRepository.getPrivilegesByRoleIds(roles.map(r => r.id));
-    const employmentDto = EmploymentDetailDtoSchema.parse(EmploymentDtoConverterSchema.parse(employment));
+    const employmentDto = EmploymentDetailDtoSchema.parse(toEmploymentDto(employment));
     employmentDto.roles = roles.map(r => r.roleCode);
     employmentDto.privileges = privileges.map(p => p.privilegeCode);
     employmentDtos.push(employmentDto);

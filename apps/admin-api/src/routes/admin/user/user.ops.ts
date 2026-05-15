@@ -8,14 +8,14 @@ import { defineMutationOp, defineQueryOp } from "@iam/api-core/core/business-op"
 import { generateRandomPassword } from "@iam/api-core/utils";
 import { UserStatus } from "@iam/contracts";
 import { z } from "zod";
-import { UserDetailVoConverterSchema, UserVoConverterSchema } from "./user.schema";
+import { toUserDetailVo, toUserVo } from "./user.schema";
 
 export const searchUserOp = defineQueryOp({
   input: UserPaginationQueryDtoSchema,
   handler: async (input) => {
     const { result, ...rest } = await userService.searchUsersFuzzyForAdmin(input);
     return {
-      result: result.map(u => UserVoConverterSchema.parse(u)),
+      result: result.map(u => toUserVo(u)),
       ...rest,
     };
   },
@@ -25,7 +25,7 @@ export const getUserOp = defineQueryOp({
   input: z.object({ username: z.string() }),
   handler: async ({ username }) => {
     const detail = await userService.getUserDetailByUsernameForAdmin(username);
-    return UserDetailVoConverterSchema.parse(detail);
+    return toUserDetailVo(detail);
   },
 });
 

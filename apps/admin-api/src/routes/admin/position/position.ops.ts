@@ -9,13 +9,13 @@ import { defineMutationOp, defineQueryOp } from "@iam/api-core/core/business-op"
 import { paginate } from "@iam/api-core/utils";
 import { PositionStatus } from "@iam/contracts";
 import { z } from "zod";
-import { PositionVoConverterSchema } from "./position.schema";
+import { toPositionVo } from "./position.schema";
 
 export const searchPositionOp = defineQueryOp({
   input: PositionPaginationQueryDtoSchema,
   handler: async (input) => {
     const positions = await positionRepository.searchPositionsFuzzy(input);
-    const vos = positions.map(p => PositionVoConverterSchema.parse(p));
+    const vos = positions.map(p => toPositionVo(p));
     return paginate(vos, input);
   },
 });

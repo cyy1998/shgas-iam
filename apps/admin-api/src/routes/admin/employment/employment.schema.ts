@@ -6,10 +6,13 @@ export const EmploymentVoSchema = EmploymentDtoSchema.extend({
   statusText: z.string().openapi({ example: "正常" }),
 }).openapi("EmploymentVo");
 
-export const EmploymentVoConverterSchema = EmploymentDtoSchema.transform(dto => ({
-  ...dto,
-  statusText: employmentStatusToString[dto.status],
-})).pipe(EmploymentVoSchema);
+export function toEmploymentVo(input: unknown) {
+  const parsed = EmploymentDtoSchema.parse(input);
+  return EmploymentVoSchema.parse({
+    ...parsed,
+    statusText: employmentStatusToString[parsed.status],
+  });
+}
 
 export const EmploymentDetailVoSchema = EmploymentDetailDtoSchema.extend({
   statusText: z.string().openapi({ example: "正常" }),
@@ -17,9 +20,12 @@ export const EmploymentDetailVoSchema = EmploymentDetailDtoSchema.extend({
   roles: z.array(z.string()).openapi({ example: ["tender:default-user"] }),
 }).openapi("EmploymentDetailVo");
 
-export const EmploymentDetailVoConverterSchema = EmploymentDetailDtoSchema.transform(dto => ({
-  ...dto,
-  privileges: dto.privileges ?? [],
-  roles: dto.roles ?? [],
-  statusText: employmentStatusToString[dto.status],
-})).pipe(EmploymentDetailVoSchema);
+export function toEmploymentDetailVo(input: unknown) {
+  const parsed = EmploymentDetailDtoSchema.parse(input);
+  return EmploymentDetailVoSchema.parse({
+    ...parsed,
+    privileges: parsed.privileges ?? [],
+    roles: parsed.roles ?? [],
+    statusText: employmentStatusToString[parsed.status],
+  });
+}
