@@ -8,6 +8,7 @@ import {
 import { redirectToLogin } from '@admin/utils/auth';
 import { history } from '@umijs/max';
 import { createElement, type ReactElement } from 'react';
+import './global.less';
 
 type InitialState = { currentUser?: { username: string; roles: string[] } };
 
@@ -76,12 +77,36 @@ export const request = {
 
 export const layout = ({ initialState }: { initialState?: InitialState }) => {
   return {
-    logo: 'https://img.alicdn.com/tfs/TB1YHEpwUT1gK0jSZFhXXaAtVXa-28-27.svg',
+    title: '上海燃气 IAM',
+    logo: false,
     menu: {
       locale: false,
     },
+    menuHeaderRender: () =>
+      createElement('div', { className: 'iam-admin-brand' }, [
+        createElement(
+          'div',
+          { className: 'iam-admin-brand-mark', key: 'mark' },
+          'IAM',
+        ),
+        createElement(
+          'div',
+          { className: 'iam-admin-brand-copy', key: 'copy' },
+          [
+            createElement(
+              'div',
+              { className: 'iam-admin-brand-title', key: 'title' },
+              '上海燃气 IAM',
+            ),
+            createElement(
+              'div',
+              { className: 'iam-admin-brand-subtitle', key: 'subtitle' },
+              'Admin Console',
+            ),
+          ],
+        ),
+      ]),
     avatarProps: {
-      src: 'https://gw.alipayobjects.com/zos/antfincdn/XAosXuNZyF/BiazfanxmamNRoxxVxka.png',
       size: 'small' as const,
       title: initialState?.currentUser?.username ?? '',
       render: (_: unknown, dom: ReactElement) =>
