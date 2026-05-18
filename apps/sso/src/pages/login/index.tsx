@@ -1,3 +1,11 @@
+import {
+  CheckCircleOutlined,
+  LockOutlined,
+  LoginOutlined,
+  MobileOutlined,
+  SafetyCertificateOutlined,
+  UserOutlined,
+} from '@ant-design/icons';
 import logo from '@sso/assets/logo.png';
 import { buildAuthorizeUrl } from '@sso/lib/sso';
 import { login, mobileLogin } from '@sso/services/auth';
@@ -5,7 +13,6 @@ import { sendMessage } from '@sso/services/open';
 import { mobileSet } from '@sso/services/public';
 import { ServiceError } from '@sso/utils/request';
 import { decodeRedirect, getQuery } from '@sso/utils/url';
-import { LockOutlined, UserOutlined } from '@ant-design/icons';
 import { history, useModel } from '@umijs/max';
 import { Button, Form, Input, Tabs, message } from 'antd';
 import { useEffect, useMemo, useRef, useState } from 'react';
@@ -24,6 +31,7 @@ export default function LoginPage() {
 
   const client = getQuery('client');
   const redirectUrl = decodeRedirect(getQuery('redirectUrl')) ?? '';
+  const clientLabel = client === 'iam-admin' ? 'IAM Admin' : client || 'SSO';
 
   useEffect(() => {
     const loginType = getQuery('loginType');
@@ -170,18 +178,34 @@ export default function LoginPage() {
   if (!client) {
     return (
       <div className="login-page">
-        <div className="tip-card">
-          <div className="tip-bar" />
-          <div className="tip-title">提示：</div>
-          <div className="tip-title">
-            您使用的登录地址存在安全风险，请在浏览器中重新输入应用系统地址进行登录。
+        <div className="login-shell">
+          <section className="brand-panel" aria-label="上海燃气身份认证平台">
+            <div className="brand-top">
+              <img src={logo} alt="上海燃气" />
+              <span>SHANGHAI GAS IAM</span>
+            </div>
+            <div className="brand-copy">
+              <div className="brand-kicker">Unified Access</div>
+              <h1>统一身份认证</h1>
+              <p>面向业务系统的安全访问入口</p>
+            </div>
+          </section>
+
+          <div className="tip-card">
+            <div className="tip-icon">
+              <SafetyCertificateOutlined />
+            </div>
+            <div className="tip-title">登录地址校验未通过</div>
+            <div className="tip-desc">
+              您使用的登录地址存在安全风险，请在浏览器中重新输入应用系统地址进行登录。
+            </div>
+            {tipBlock && (
+              <>
+                <div className="tip-link-label">例如</div>
+                <div className="tip-link">{tipBlock}</div>
+              </>
+            )}
           </div>
-          {tipBlock && (
-            <>
-              <div className="tip-link">例如：</div>
-              <div className="tip-link">{tipBlock}</div>
-            </>
-          )}
         </div>
       </div>
     );
@@ -189,139 +213,188 @@ export default function LoginPage() {
 
   return (
     <div className="login-page">
-      <div className="login-card">
-        <div className="login-header">
-          <img src={logo} alt="logo" />
-          <div className="title-zh">上海燃气身份认证平台</div>
-          <div className="title-en">SHANGHAI GAS IAM</div>
+      <div className="login-shell">
+        <section className="brand-panel" aria-label="上海燃气身份认证平台">
+          <div className="brand-top">
+            <img src={logo} alt="上海燃气" />
+            <span>SHANGHAI GAS IAM</span>
+          </div>
+
+          <div className="brand-copy">
+            <div className="brand-kicker">Enterprise SSO</div>
+            <h1>统一身份认证</h1>
+            <p>面向员工与业务系统的安全访问入口</p>
+          </div>
+
+          <div className="trust-strip">
+            <div className="trust-item">
+              <SafetyCertificateOutlined />
+              <span>组织级安全</span>
+            </div>
+            <div className="trust-item">
+              <CheckCircleOutlined />
+              <span>集中授权</span>
+            </div>
+            <div className="trust-item">
+              <MobileOutlined />
+              <span>多方式认证</span>
+            </div>
+          </div>
+        </section>
+
+        <div className="login-card">
+          <div className="client-badge">
+            <SafetyCertificateOutlined />
+            <span>{clientLabel}</span>
+          </div>
+
+          <div className="login-header">
+            <img src={logo} alt="上海燃气" />
+            <div>
+              <div className="title-zh">欢迎登录</div>
+              <div className="title-en">上海燃气身份认证平台</div>
+            </div>
+          </div>
+
           {mode === 'BMN' && (
             <div className="bmn-tip">
-              您的账号尚未绑定手机号，为保障账户安全并及时接收重要通知，强烈建议您立即绑定手机号。
+              您的账号尚未绑定手机号，为保障账户安全并及时接收重要通知，建议先完成绑定。
             </div>
           )}
-        </div>
 
-        {mode !== 'BMN' && (
-          <Tabs
-            activeKey={mode}
-            onChange={(k) => setMode(k as LoginMode)}
-            centered
-            items={[
-              { key: 'PWD', label: '密码登录' },
-              { key: 'SMS', label: '手机登录' },
-            ]}
-          />
-        )}
-
-        {mode === 'PWD' && (
-          <Form
-            form={pwdForm}
-            layout="vertical"
-            onFinish={handleSubmit}
-            requiredMark={false}
-          >
-            <Form.Item
-              label="工号 / 账号"
-              name="username"
-              rules={[{ required: true, message: '请输入您的工号' }]}
-            >
-              <Input
-                size="large"
-                placeholder="请输入您的工号"
-                prefix={<UserOutlined style={{ color: '#9ca3af' }} />}
-              />
-            </Form.Item>
-            <div className="login-actions">
-              <span className="login-actions-label">登录密码</span>
-              <span
-                className="forgot-link"
-                onClick={() => {
-                  const params = new URLSearchParams(window.location.search);
-                  const username = pwdForm.getFieldValue('username');
-                  if (username) params.set('username', username);
-                  history.push(`/reset-password?${params.toString()}`);
-                }}
-              >
-                忘记密码？
-              </span>
-            </div>
-            <Form.Item
-              name="password"
-              rules={[{ required: true, message: '请输入登录密码' }]}
-            >
-              <Input.Password
-                size="large"
-                placeholder="请输入登录密码"
-                prefix={<LockOutlined style={{ color: '#9ca3af' }} />}
-                onPressEnter={handleSubmit}
-              />
-            </Form.Item>
-          </Form>
-        )}
-
-        {(mode === 'SMS' || mode === 'BMN') && (
-          <Form
-            form={smsForm}
-            layout="vertical"
-            onFinish={handleSubmit}
-            requiredMark={false}
-          >
-            <Form.Item
-              label="手机号"
-              name="phoneNumber"
-              rules={[
-                { required: true, message: '请输入手机号' },
-                {
-                  pattern: /^1\d{10}$/,
-                  message: '请输入正确的手机号',
-                },
+          {mode !== 'BMN' && (
+            <Tabs
+              activeKey={mode}
+              onChange={(k) => setMode(k as LoginMode)}
+              centered
+              items={[
+                { key: 'PWD', label: '密码登录' },
+                { key: 'SMS', label: '手机登录' },
               ]}
-            >
-              <Input
-                size="large"
-                placeholder="请输入手机号"
-                prefix={<UserOutlined style={{ color: '#9ca3af' }} />}
-              />
-            </Form.Item>
-            <Form.Item
-              label="验证码"
-              name="code"
-              rules={[{ required: true, message: '请输入验证码' }]}
-            >
-              <Input
-                size="large"
-                placeholder="验证码"
-                prefix={<LockOutlined style={{ color: '#9ca3af' }} />}
-                onPressEnter={handleSubmit}
-                addonAfter={
-                  <span style={{ cursor: 'pointer' }} onClick={sendSms}>
-                    {countdown <= 0 ? '获取验证码' : `${countdown} s`}
-                  </span>
-                }
-              />
-            </Form.Item>
-          </Form>
-        )}
+            />
+          )}
 
-        <Button
-          className="login-submit"
-          type="primary"
-          size="large"
-          loading={submitting}
-          onClick={handleSubmit}
-        >
-          {mode === 'BMN' ? '绑定手机号' : '安全登录'}
-        </Button>
+          {mode === 'PWD' && (
+            <Form
+              form={pwdForm}
+              layout="vertical"
+              onFinish={handleSubmit}
+              requiredMark={false}
+            >
+              <Form.Item
+                label="工号 / 账号"
+                name="username"
+                rules={[{ required: true, message: '请输入您的工号' }]}
+              >
+                <Input
+                  size="large"
+                  placeholder="请输入您的工号"
+                  prefix={<UserOutlined />}
+                />
+              </Form.Item>
+              <div className="login-actions">
+                <span className="login-actions-label">登录密码</span>
+                <span
+                  className="forgot-link"
+                  onClick={() => {
+                    const params = new URLSearchParams(window.location.search);
+                    const username = pwdForm.getFieldValue('username');
+                    if (username) params.set('username', username);
+                    history.push(`/reset-password?${params.toString()}`);
+                  }}
+                >
+                  忘记密码？
+                </span>
+              </div>
+              <Form.Item
+                name="password"
+                rules={[{ required: true, message: '请输入登录密码' }]}
+              >
+                <Input.Password
+                  size="large"
+                  placeholder="请输入登录密码"
+                  prefix={<LockOutlined />}
+                  onPressEnter={handleSubmit}
+                />
+              </Form.Item>
+            </Form>
+          )}
 
-        {mode === 'BMN' && (
+          {(mode === 'SMS' || mode === 'BMN') && (
+            <Form
+              form={smsForm}
+              layout="vertical"
+              onFinish={handleSubmit}
+              requiredMark={false}
+            >
+              <Form.Item
+                label="手机号"
+                name="phoneNumber"
+                rules={[
+                  { required: true, message: '请输入手机号' },
+                  {
+                    pattern: /^1\d{10}$/,
+                    message: '请输入正确的手机号',
+                  },
+                ]}
+              >
+                <Input
+                  size="large"
+                  placeholder="请输入手机号"
+                  prefix={<MobileOutlined />}
+                />
+              </Form.Item>
+              <Form.Item
+                label="验证码"
+                name="code"
+                rules={[{ required: true, message: '请输入验证码' }]}
+              >
+                <Input
+                  size="large"
+                  placeholder="验证码"
+                  prefix={<LockOutlined />}
+                  onPressEnter={handleSubmit}
+                  addonAfter={
+                    <button
+                      className="sms-code-btn"
+                      type="button"
+                      disabled={countdown > 0}
+                      onClick={sendSms}
+                    >
+                      {countdown <= 0 ? '获取验证码' : `${countdown} s`}
+                    </button>
+                  }
+                />
+              </Form.Item>
+            </Form>
+          )}
+
           <Button
-            className="skip-btn"
-            type="link"
-            onClick={redirectToAuthorize}
+            className="login-submit"
+            type="primary"
+            size="large"
+            icon={mode === 'BMN' ? <MobileOutlined /> : <LoginOutlined />}
+            loading={submitting}
+            onClick={handleSubmit}
           >
-            跳过
+            {mode === 'BMN' ? '绑定手机号' : '安全登录'}
           </Button>
-        )}
+
+          {mode === 'BMN' && (
+            <Button
+              className="skip-btn"
+              type="link"
+              onClick={redirectToAuthorize}
+            >
+              跳过
+            </Button>
+          )}
+
+          <div className="login-footnote">
+            <LockOutlined />
+            <span>受保护的组织访问</span>
+          </div>
+        </div>
       </div>
     </div>
   );

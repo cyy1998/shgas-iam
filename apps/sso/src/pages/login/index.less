@@ -1,227 +1,583 @@
 .login-page {
+  position: relative;
   width: 100%;
   min-height: 100vh;
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  background-image: url('~@/assets/bg.jpg');
-  background-size: cover;
-  background-position: center;
-  background-repeat: repeat;
+  overflow: hidden;
+  color: #14213d;
+  background: #eef3f7 url('~@/assets/bg.jpg') center / cover no-repeat;
 
-  .login-card {
-    width: 25vw;
-    min-width: 380px;
-    max-width: 480px;
-    min-height: 500px;
-    margin-right: 10vw;
-    padding: 2rem;
-    background: #ffffff;
-    backdrop-filter: blur(12px);
-    border: 1px solid rgba(255, 255, 255, 0.2);
-    border-radius: 19px;
-    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.08);
+  &::before {
+    position: absolute;
+    inset: 0;
+    content: '';
+    background:
+      linear-gradient(
+        105deg,
+        rgba(8, 25, 49, 0.9) 0%,
+        rgba(15, 43, 78, 0.78) 46%,
+        rgba(238, 243, 247, 0.64) 100%
+      ),
+      radial-gradient(
+        circle at 78% 18%,
+        rgba(40, 116, 240, 0.2),
+        transparent 28%
+      );
+  }
+
+  &::after {
+    position: absolute;
+    right: max(36px, 8vw);
+    bottom: -90px;
+    width: 340px;
+    height: 340px;
+    content: '';
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    border-radius: 50%;
+  }
+
+  .login-shell {
+    position: relative;
+    z-index: 1;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(360px, 440px);
+    gap: clamp(40px, 7vw, 108px);
+    align-items: center;
+    width: min(1180px, calc(100% - 64px));
+    min-height: 100vh;
+    margin: 0 auto;
+    padding: 52px 0;
+    box-sizing: border-box;
+  }
+
+  .brand-panel {
+    max-width: 610px;
+    color: #fff;
+  }
+
+  .brand-top {
     display: flex;
-    flex-flow: column nowrap;
+    align-items: center;
+    gap: 14px;
+    font-size: 13px;
+    font-weight: 700;
+    letter-spacing: 0;
+    color: rgba(255, 255, 255, 0.78);
 
-    .login-header {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      margin-bottom: 24px;
-
-      img {
-        width: 13rem;
-        margin-bottom: 12px;
-      }
-
-      .title-zh {
-        font-size: 30px;
-        font-weight: 600;
-        color: #1f2937;
-      }
-
-      .title-en {
-        font-size: 14px;
-        color: #6b7280;
-        margin-top: 4px;
-      }
-
-      .bmn-tip {
-        font-size: 12px;
-        color: #ff1313;
-        margin-top: 12px;
-        text-align: center;
-      }
-    }
-
-    .login-actions {
-      width: 100%;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      margin-bottom: 8px;
-
-      .login-actions-label {
-        font-size: 12px;
-        color: #6b7280;
-        font-weight: 600;
-      }
-
-      .forgot-link {
-        color: #2563eb;
-        font-weight: 600;
-        cursor: pointer;
-        font-size: 12px;
-
-        &:hover {
-          text-decoration: underline;
-        }
-      }
-    }
-
-    // Antd Form label
-    .ant-form-item-label > label {
-      font-size: 12px;
-      color: #6b7280;
-      font-weight: 600;
+    img {
+      width: 152px;
       height: auto;
-    }
-
-    // Tabs: 50/50 split, gray inactive, blue active
-    .ant-tabs-nav {
-      margin-bottom: 16px;
-
-      &::before {
-        border-bottom-color: #f0f0f0;
-      }
-    }
-
-    .ant-tabs-nav-list {
-      width: 100%;
-    }
-
-    .ant-tabs-tab {
-      flex: 1;
-      justify-content: center;
-      margin: 0 !important;
-      color: #9ca3af;
-      font-weight: 600;
-    }
-
-    .ant-tabs-tab.ant-tabs-tab-active .ant-tabs-tab-btn {
-      color: #2563eb !important;
-    }
-
-    .ant-tabs-tab-btn:hover {
-      color: #2563eb;
-    }
-
-    .ant-tabs-ink-bar {
-      background: #2563eb;
-    }
-
-    // Inputs: light gray bg, rounded, blue focus ring
-    .ant-input-affix-wrapper,
-    .ant-input {
-      background: #f9fafb;
-      border: 2px solid #efefef !important;
-      border-radius: 12px;
-      padding-top: 7px;
-      padding-bottom: 7px;
-      box-shadow: 0 0 0 4px transparent;
-      transition: border-color 0.2s ease, box-shadow 0.2s ease;
-    }
-
-    .ant-input-affix-wrapper-focused,
-    .ant-input-affix-wrapper:focus-within,
-    .ant-input:focus,
-    .ant-input-focused {
-      border-color: #3b82f6 !important;
-      box-shadow: 0 0 0 4px #dbeafe !important;
-    }
-
-    .ant-input-affix-wrapper > .ant-input {
-      background: transparent;
-      border: none !important;
-      padding: 0;
-      box-shadow: none !important;
-    }
-
-    .ant-input-group-addon {
-      background: transparent;
-      border: 2px solid #efefef;
-      border-left: none;
-      border-radius: 0 12px 12px 0;
-      cursor: pointer;
-      color: #2563eb;
-      font-weight: 600;
-    }
-
-    .ant-input-group .ant-input {
-      border-radius: 12px 0 0 12px;
-    }
-
-    .login-submit {
-      width: 100%;
-      height: 52px;
-      margin-top: 1rem;
-      background: #454ce6;
-      color: #fff;
-      border-radius: 12px;
-      font-size: 16px;
-      font-weight: 600;
-      border: none;
-      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-      transform-origin: center;
-
-      &:hover:not(:disabled) {
-        background: #454ce6 !important;
-        transform: scale(1.03);
-        box-shadow: 0 8px 12px rgba(59, 130, 246, 0.5);
-      }
-    }
-
-    .skip-btn {
-      width: 100%;
-      margin-top: 24px;
-      color: #ccc;
+      filter: brightness(0) invert(1);
     }
   }
 
+  .brand-copy {
+    margin-top: clamp(72px, 13vh, 138px);
+
+    .brand-kicker {
+      display: inline-flex;
+      align-items: center;
+      height: 28px;
+      padding: 0 12px;
+      margin-bottom: 22px;
+      font-size: 13px;
+      font-weight: 700;
+      color: #9bd3ff;
+      background: rgba(155, 211, 255, 0.12);
+      border: 1px solid rgba(155, 211, 255, 0.28);
+      border-radius: 999px;
+    }
+
+    h1 {
+      margin: 0;
+      font-size: 56px;
+      font-weight: 750;
+      line-height: 1.1;
+      letter-spacing: 0;
+    }
+
+    p {
+      max-width: 480px;
+      margin: 20px 0 0;
+      font-size: 18px;
+      line-height: 1.8;
+      color: rgba(255, 255, 255, 0.78);
+    }
+  }
+
+  .trust-strip {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 14px;
+    margin-top: clamp(58px, 10vh, 104px);
+  }
+
+  .trust-item {
+    display: inline-flex;
+    align-items: center;
+    gap: 9px;
+    height: 38px;
+    padding: 0 14px;
+    font-size: 13px;
+    font-weight: 600;
+    color: rgba(255, 255, 255, 0.86);
+    background: rgba(255, 255, 255, 0.1);
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    border-radius: 999px;
+    backdrop-filter: blur(12px);
+
+    .anticon {
+      color: #6fd2ff;
+    }
+  }
+
+  .login-card,
   .tip-card {
-    width: 25vw;
-    min-width: 380px;
-    max-width: 480px;
-    min-height: 500px;
-    background: #fff;
-    border-radius: 19px;
-    padding: 2rem;
-    margin-right: 10vw;
     position: relative;
+    width: 100%;
+    box-sizing: border-box;
+    background: rgba(255, 255, 255, 0.96);
+    border: 1px solid rgba(219, 228, 238, 0.9);
+    border-radius: 8px;
+    box-shadow: 0 24px 80px rgba(8, 25, 49, 0.24);
+    backdrop-filter: blur(18px);
+  }
+
+  .login-card {
+    min-height: 548px;
+    padding: 30px;
+  }
+
+  .client-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    height: 30px;
+    padding: 0 11px;
+    margin-bottom: 22px;
+    font-size: 12px;
+    font-weight: 700;
+    color: #1554ad;
+    background: #edf5ff;
+    border: 1px solid #d8e9ff;
+    border-radius: 999px;
+
+    .anticon {
+      color: #2874f0;
+    }
+  }
+
+  .login-header {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    margin-bottom: 26px;
+
+    img {
+      width: 116px;
+      height: auto;
+      flex: 0 0 auto;
+    }
+
+    .title-zh {
+      font-size: 28px;
+      font-weight: 750;
+      line-height: 1.2;
+      color: #102033;
+    }
+
+    .title-en {
+      margin-top: 6px;
+      font-size: 13px;
+      font-weight: 600;
+      color: #6c7a89;
+    }
+  }
+
+  .bmn-tip {
+    padding: 12px 14px;
+    margin: -8px 0 18px;
+    font-size: 13px;
+    line-height: 1.7;
+    color: #9f3a0c;
+    background: #fff6ed;
+    border: 1px solid #ffd7ae;
+    border-radius: 8px;
+  }
+
+  .login-actions {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+    margin-bottom: 8px;
+
+    .login-actions-label {
+      font-size: 13px;
+      font-weight: 700;
+      color: #596879;
+    }
+
+    .forgot-link {
+      font-size: 13px;
+      font-weight: 700;
+      color: #1f65d6;
+      cursor: pointer;
+      transition: color 0.2s ease;
+
+      &:hover {
+        color: #0e4cad;
+      }
+    }
+  }
+
+  .ant-form-item {
+    margin-bottom: 18px;
+  }
+
+  .ant-form-item-label {
+    padding-bottom: 7px;
+  }
+
+  .ant-form-item-label > label {
+    height: auto;
+    font-size: 13px;
+    font-weight: 700;
+    color: #596879;
+  }
+
+  .ant-tabs {
+    margin-bottom: 18px;
+  }
+
+  .ant-tabs-nav {
+    margin-bottom: 0;
+    padding: 4px;
+    background: #f2f6fa;
+    border: 1px solid #e2eaf2;
+    border-radius: 8px;
+
+    &::before {
+      display: none;
+    }
+  }
+
+  .ant-tabs-nav-list {
+    width: 100%;
+    gap: 4px;
+  }
+
+  .ant-tabs-tab {
+    flex: 1;
+    justify-content: center;
+    height: 38px;
+    margin: 0 !important;
+    color: #637488;
+    font-size: 14px;
+    font-weight: 700;
+    border-radius: 6px;
+    transition:
+      background 0.2s ease,
+      color 0.2s ease,
+      box-shadow 0.2s ease;
+  }
+
+  .ant-tabs-tab.ant-tabs-tab-active {
+    background: #fff;
+    box-shadow: 0 8px 18px rgba(16, 32, 51, 0.08);
+
+    .ant-tabs-tab-btn {
+      color: #1554ad !important;
+    }
+  }
+
+  .ant-tabs-tab-btn:hover {
+    color: #1554ad;
+  }
+
+  .ant-tabs-ink-bar {
+    display: none;
+  }
+
+  .ant-input-affix-wrapper,
+  .ant-input {
+    min-height: 46px;
+    color: #102033;
+    background: #fbfdff;
+    border: 1px solid #d9e3ee !important;
+    border-radius: 8px;
+    box-shadow: none;
+    transition:
+      border-color 0.2s ease,
+      box-shadow 0.2s ease,
+      background 0.2s ease;
+  }
+
+  .ant-input-affix-wrapper {
+    padding: 9px 12px;
+
+    .anticon {
+      color: #7b8da0;
+      transition: color 0.2s ease;
+    }
+  }
+
+  .ant-input-affix-wrapper-focused,
+  .ant-input-affix-wrapper:focus-within,
+  .ant-input:focus,
+  .ant-input-focused {
+    background: #fff;
+    border-color: #2874f0 !important;
+    box-shadow: 0 0 0 3px rgba(40, 116, 240, 0.14) !important;
+
+    .anticon {
+      color: #2874f0;
+    }
+  }
+
+  .ant-input-affix-wrapper > .ant-input {
+    min-height: auto;
+    padding: 0;
+    background: transparent;
+    border: none !important;
+    box-shadow: none !important;
+  }
+
+  .ant-input-group {
+    display: flex;
+  }
+
+  .ant-input-group .ant-input {
+    border-radius: 8px 0 0 8px;
+  }
+
+  .ant-input-group-addon {
+    width: 112px;
+    padding: 0;
+    overflow: hidden;
+    background: #fbfdff;
+    border: 1px solid #d9e3ee;
+    border-left: 0;
+    border-radius: 0 8px 8px 0;
+  }
+
+  .sms-code-btn {
+    width: 100%;
+    height: 46px;
+    padding: 0 12px;
+    font-size: 13px;
+    font-weight: 700;
+    color: #1554ad;
+    cursor: pointer;
+    background: transparent;
+    border: 0;
+
+    &:disabled {
+      color: #8b98a8;
+      cursor: not-allowed;
+    }
+  }
+
+  .login-submit {
+    width: 100%;
+    height: 48px;
+    margin-top: 6px;
+    font-size: 15px;
+    font-weight: 750;
+    color: #fff;
+    background: #1554ad;
+    border: none;
+    border-radius: 8px;
+    box-shadow: 0 12px 24px rgba(21, 84, 173, 0.24);
+    transition:
+      background 0.2s ease,
+      transform 0.2s ease,
+      box-shadow 0.2s ease;
+
+    &:hover:not(:disabled) {
+      background: #0f4696 !important;
+      box-shadow: 0 14px 28px rgba(21, 84, 173, 0.28);
+      transform: translateY(-1px);
+    }
+  }
+
+  .skip-btn {
+    width: 100%;
+    margin-top: 16px;
+    color: #6c7a89;
+  }
+
+  .login-footnote {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding-top: 18px;
+    margin-top: 20px;
+    font-size: 12px;
+    font-weight: 700;
+    color: #7b8da0;
+    border-top: 1px solid #edf1f6;
+  }
+
+  .tip-card {
+    min-height: 420px;
+    padding: 34px;
     display: flex;
     flex-direction: column;
     justify-content: center;
+  }
 
-    .tip-bar {
-      position: absolute;
-      top: 2rem;
-      left: 0;
-      width: 30%;
-      height: 4px;
-      background: #ff1313;
+  .tip-icon {
+    display: grid;
+    place-items: center;
+    width: 50px;
+    height: 50px;
+    margin-bottom: 22px;
+    font-size: 22px;
+    color: #b42318;
+    background: #fff1f0;
+    border: 1px solid #ffd7d3;
+    border-radius: 8px;
+  }
+
+  .tip-title {
+    margin-bottom: 10px;
+    font-size: 24px;
+    font-weight: 750;
+    color: #102033;
+  }
+
+  .tip-desc {
+    font-size: 14px;
+    line-height: 1.8;
+    color: #596879;
+  }
+
+  .tip-link-label {
+    margin-top: 26px;
+    font-size: 13px;
+    font-weight: 700;
+    color: #9b2c22;
+  }
+
+  .tip-link {
+    margin-top: 8px;
+    font-size: 13px;
+    line-height: 1.7;
+    color: #1554ad;
+    word-break: break-all;
+  }
+}
+
+@media (max-width: 980px) {
+  .login-page {
+    overflow: auto;
+
+    .login-shell {
+      grid-template-columns: 1fr;
+      gap: 30px;
+      width: min(520px, calc(100% - 32px));
+      min-height: 100vh;
+      padding: 32px 0;
     }
 
-    .tip-title {
-      color: #ff1313;
-      font-weight: 600;
-      margin-bottom: 8px;
+    .brand-panel {
+      max-width: none;
     }
 
-    .tip-link {
-      color: #3b82f6;
-      word-break: break-all;
-      margin-top: 12px;
+    .brand-copy {
+      margin-top: 44px;
+
+      h1 {
+        font-size: 40px;
+      }
+
+      p {
+        font-size: 16px;
+      }
+    }
+
+    .trust-strip {
+      margin-top: 32px;
+    }
+  }
+}
+
+@media (max-width: 560px) {
+  .login-page {
+    .login-shell {
+      width: calc(100% - 24px);
+      padding: 20px 0;
+    }
+
+    .brand-top {
+      img {
+        width: 128px;
+      }
+
+      span {
+        display: none;
+      }
+    }
+
+    .brand-copy {
+      margin-top: 30px;
+
+      .brand-kicker {
+        height: 26px;
+        font-size: 12px;
+      }
+
+      h1 {
+        font-size: 34px;
+      }
+
+      p {
+        margin-top: 14px;
+        font-size: 15px;
+      }
+    }
+
+    .trust-strip {
+      gap: 8px;
+      margin-top: 24px;
+    }
+
+    .trust-item {
+      height: 34px;
+      padding: 0 10px;
+      font-size: 12px;
+    }
+
+    .login-card,
+    .tip-card {
+      padding: 22px;
+    }
+
+    .login-card {
+      min-height: auto;
+    }
+
+    .login-header {
+      align-items: flex-start;
+      gap: 12px;
+
+      img {
+        width: 96px;
+      }
+
+      .title-zh {
+        font-size: 24px;
+      }
+    }
+
+    .ant-input-group-addon {
+      width: 98px;
+    }
+
+    .sms-code-btn {
+      padding: 0 8px;
+      font-size: 12px;
     }
   }
 }
