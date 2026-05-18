@@ -28,9 +28,8 @@ async function readSessionUser<TUser extends SessionUser>(
   options: SessionAuthOptions<TUser>,
 ): Promise<TUser> {
   const clientCode = c.req.header("Client");
-  const sessionId = clientCode === "iam"
-    ? getCookie(c, "global_session") ?? c.req.header("Authorization") ?? null
-    : getCookie(c, `local_${clientCode}_session`) ?? c.req.header("Authorization") ?? null;
+  const sessionCookieName = clientCode === "iam" ? "global_session" : `local_${clientCode}_session`;
+  const sessionId = getCookie(c, sessionCookieName) ?? c.req.header("Authorization") ?? null;
 
   if (!clientCode) {
     throw new CustomError("非法请求");
@@ -38,13 +37,12 @@ async function readSessionUser<TUser extends SessionUser>(
   if (!sessionId) {
     throw new AuthzUnauthorizedError("未登录");
   }
-
   const redisKey = clientCode === "iam"
     ? `global_session:${sessionId}`
     : `local_${clientCode}_session:${sessionId}`;
   const userString = await options.redis.get(redisKey);
   if (!userString) {
-    deleteCookie(c, clientCode === "iam" ? `global_session:${sessionId}` : `local_${clientCode}_session:${sessionId}`);
+    deleteCookie(c, sessionCookieName);
     deleteCookie(c, "orcas_sso_sessionid");
     throw new AuthzUnauthorizedError("未登录");
   }
