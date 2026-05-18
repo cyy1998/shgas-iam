@@ -1,3 +1,4 @@
+import { LogoutOutlined } from '@ant-design/icons';
 import logo from '@sso/assets/logo.png';
 import { buildLogoutUrl } from '@sso/lib/sso';
 import { decodeRedirect, getQuery } from '@sso/utils/url';
@@ -19,14 +20,25 @@ export default function TopBar() {
 
   return (
     <div className="topbar">
-      <img className="topbar-logo" src={logo} alt="logo" />
+      <div className="topbar-brand">
+        <img className="topbar-logo" src={logo} alt="上海燃气" />
+        <div>
+          <div className="topbar-title">上海燃气身份认证平台</div>
+          <div className="topbar-subtitle">SHANGHAI GAS IAM</div>
+        </div>
+      </div>
       {userInfo && (
         <Dropdown
           menu={{
             items: [
               {
                 key: 'logout',
-                label: <span style={{ color: '#ff1313' }}>退出登录</span>,
+                label: (
+                  <span className="logout-text">
+                    <LogoutOutlined />
+                    退出登录
+                  </span>
+                ),
               },
             ],
             onClick: ({ key }) => {
@@ -45,7 +57,7 @@ export default function TopBar() {
             >
               {userInfo.name?.[0] ?? ''}
             </Avatar>
-            {userInfo.name}
+            <span>{userInfo.name}</span>
           </div>
         </Dropdown>
       )}

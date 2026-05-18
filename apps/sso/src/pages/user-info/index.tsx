@@ -1,3 +1,12 @@
+import {
+  ArrowLeftOutlined,
+  BankOutlined,
+  IdcardOutlined,
+  LockOutlined,
+  MobileOutlined,
+  SafetyCertificateOutlined,
+  UserOutlined,
+} from '@ant-design/icons';
 import { selfMobileSendMsg } from '@sso/services/open';
 import { mobileSet, passwordChange } from '@sso/services/public';
 import {
@@ -8,16 +17,7 @@ import {
 import { ServiceError } from '@sso/utils/request';
 import { decodeRedirect, getQuery } from '@sso/utils/url';
 import { history, useModel } from '@umijs/max';
-import {
-  Button,
-  Card,
-  Form,
-  Input,
-  Spin,
-  Table,
-  Tabs,
-  message,
-} from 'antd';
+import { Button, Form, Input, Spin, Table, Tabs, message } from 'antd';
 import { useEffect, useRef, useState } from 'react';
 import TopBar from './_components/TopBar';
 import './index.less';
@@ -121,112 +121,220 @@ export default function UserInfoPage() {
   return (
     <div className="user-info-page">
       <TopBar />
-      <div className="user-info-body">
-        <Button type="link" className="back-btn" onClick={back}>
-          返回
-        </Button>
-        <Card title="个人信息">
-          <Spin spinning={!userInfo}>
-            <div className="section-title">岗位信息</div>
-            <Table
-              rowKey="id"
-              size="small"
-              pagination={false}
-              dataSource={userInfo?.employments ?? []}
-              columns={[
-                { title: '公司', dataIndex: 'compName' },
-                { title: '部门', dataIndex: 'orgName' },
-                { title: '岗位', dataIndex: 'posName' },
-              ]}
-            />
-
-            <Tabs
-              type="card"
-              style={{ marginTop: 24 }}
-              activeKey={activeKey}
-              onChange={(k) => setActiveKey(k as TabKey)}
-              items={[
-                { key: 'password', label: '更改密码' },
-                { key: 'mobile', label: '绑定手机号' },
-              ]}
-            />
-
-            {activeKey === 'password' && (
-              <Form form={pwdForm} layout="vertical" requiredMark={false}>
-                <Form.Item
-                  label="密码"
-                  name="oldPassword"
-                  rules={[{ required: true, message: '请输入密码' }]}
-                >
-                  <Input.Password />
-                </Form.Item>
-                <Form.Item
-                  label="新密码"
-                  name="newPassword"
-                  rules={[passwordRule]}
-                >
-                  <Input.Password />
-                </Form.Item>
-                <Form.Item
-                  label="确认密码"
-                  name="newCopyPassword"
-                  dependencies={['newPassword']}
-                  rules={[
-                    confirmPasswordRule(() =>
-                      pwdForm.getFieldValue('newPassword'),
-                    ),
-                  ]}
-                >
-                  <Input.Password />
-                </Form.Item>
-              </Form>
-            )}
-
-            {activeKey === 'mobile' && (
-              <Form form={mobileForm} layout="vertical" requiredMark={false}>
-                <Form.Item label="当前手机号">
-                  {userInfo?.mobile || '-'}
-                </Form.Item>
-                <Form.Item
-                  label="手机号"
-                  name="phoneNumber"
-                  rules={[phoneRule]}
-                >
-                  <Input />
-                </Form.Item>
-                <Form.Item
-                  label="验证码"
-                  name="code"
-                  rules={[{ required: true, message: '请输入验证码' }]}
-                >
-                  <Input
-                    placeholder="请输入验证码"
-                    addonAfter={
-                      <Button
-                        type="link"
-                        disabled={countdown > 0}
-                        onClick={sendCode}
-                      >
-                        {countdown <= 0 ? '获取验证码' : `${countdown} s`}
-                      </Button>
-                    }
-                  />
-                </Form.Item>
-              </Form>
-            )}
-
-            <div className="submit-row">
-              <Button
-                type="primary"
-                loading={submitting}
-                onClick={handleSubmit}
-              >
-                提交
-              </Button>
+      <main className="user-info-body">
+        <section className="profile-hero">
+          <Button
+            type="text"
+            className="back-btn"
+            icon={<ArrowLeftOutlined />}
+            onClick={back}
+          >
+            返回
+          </Button>
+          <div className="hero-content">
+            <div>
+              <div className="hero-kicker">Account Center</div>
+              <h1>个人信息与账户安全</h1>
+              <p>查看组织岗位信息，维护登录密码与绑定手机号。</p>
             </div>
-          </Spin>
-        </Card>
-      </div>
+            <div className="hero-badge">
+              <SafetyCertificateOutlined />
+              <span>受保护的组织账号</span>
+            </div>
+          </div>
+        </section>
+
+        <Spin spinning={!userInfo}>
+          <div className="info-grid">
+            <aside className="profile-panel">
+              <div className="avatar-ring">
+                {userInfo?.name?.[0] ?? <UserOutlined />}
+              </div>
+              <div className="profile-name">{userInfo?.name ?? '-'}</div>
+              <div className="profile-username">
+                {userInfo?.username ?? '-'}
+              </div>
+
+              <div className="profile-meta">
+                <div className="meta-item">
+                  <MobileOutlined />
+                  <div>
+                    <span>绑定手机号</span>
+                    <strong>{userInfo?.mobile || '未绑定'}</strong>
+                  </div>
+                </div>
+                <div className="meta-item">
+                  <IdcardOutlined />
+                  <div>
+                    <span>岗位数量</span>
+                    <strong>{userInfo?.employments?.length ?? 0}</strong>
+                  </div>
+                </div>
+              </div>
+            </aside>
+
+            <section className="workspace-panel">
+              <div className="panel-heading">
+                <div>
+                  <div className="section-kicker">
+                    <BankOutlined />
+                    岗位信息
+                  </div>
+                  <h2>组织任职</h2>
+                </div>
+              </div>
+
+              <Table
+                rowKey="id"
+                size="middle"
+                pagination={false}
+                dataSource={userInfo?.employments ?? []}
+                columns={[
+                  { title: '公司', dataIndex: 'compName' },
+                  { title: '部门', dataIndex: 'orgName' },
+                  { title: '岗位', dataIndex: 'posName' },
+                ]}
+              />
+
+              <div className="security-panel">
+                <div className="panel-heading">
+                  <div>
+                    <div className="section-kicker">
+                      <LockOutlined />
+                      账户安全
+                    </div>
+                    <h2>安全设置</h2>
+                  </div>
+                </div>
+
+                <Tabs
+                  activeKey={activeKey}
+                  onChange={(k) => setActiveKey(k as TabKey)}
+                  items={[
+                    {
+                      key: 'password',
+                      label: (
+                        <span className="tab-label">
+                          <LockOutlined />
+                          更改密码
+                        </span>
+                      ),
+                    },
+                    {
+                      key: 'mobile',
+                      label: (
+                        <span className="tab-label">
+                          <MobileOutlined />
+                          绑定手机号
+                        </span>
+                      ),
+                    },
+                  ]}
+                />
+
+                {activeKey === 'password' && (
+                  <Form form={pwdForm} layout="vertical" requiredMark={false}>
+                    <Form.Item
+                      label="当前密码"
+                      name="oldPassword"
+                      rules={[{ required: true, message: '请输入密码' }]}
+                    >
+                      <Input.Password
+                        size="large"
+                        placeholder="请输入当前密码"
+                        prefix={<LockOutlined />}
+                      />
+                    </Form.Item>
+                    <Form.Item
+                      label="新密码"
+                      name="newPassword"
+                      rules={[passwordRule]}
+                    >
+                      <Input.Password
+                        size="large"
+                        placeholder="请输入新密码"
+                        prefix={<LockOutlined />}
+                      />
+                    </Form.Item>
+                    <Form.Item
+                      label="确认密码"
+                      name="newCopyPassword"
+                      dependencies={['newPassword']}
+                      rules={[
+                        confirmPasswordRule(() =>
+                          pwdForm.getFieldValue('newPassword'),
+                        ),
+                      ]}
+                    >
+                      <Input.Password
+                        size="large"
+                        placeholder="请再次输入新密码"
+                        prefix={<LockOutlined />}
+                      />
+                    </Form.Item>
+                  </Form>
+                )}
+
+                {activeKey === 'mobile' && (
+                  <Form
+                    form={mobileForm}
+                    layout="vertical"
+                    requiredMark={false}
+                  >
+                    <div className="current-mobile">
+                      <span>当前手机号</span>
+                      <strong>{userInfo?.mobile || '-'}</strong>
+                    </div>
+                    <Form.Item
+                      label="新手机号"
+                      name="phoneNumber"
+                      rules={[phoneRule]}
+                    >
+                      <Input
+                        size="large"
+                        placeholder="请输入手机号"
+                        prefix={<MobileOutlined />}
+                      />
+                    </Form.Item>
+                    <Form.Item
+                      label="验证码"
+                      name="code"
+                      rules={[{ required: true, message: '请输入验证码' }]}
+                    >
+                      <Input
+                        size="large"
+                        placeholder="请输入验证码"
+                        prefix={<LockOutlined />}
+                        addonAfter={
+                          <button
+                            className="profile-code-btn"
+                            type="button"
+                            disabled={countdown > 0}
+                            onClick={sendCode}
+                          >
+                            {countdown <= 0 ? '获取验证码' : `${countdown} s`}
+                          </button>
+                        }
+                      />
+                    </Form.Item>
+                  </Form>
+                )}
+
+                <div className="submit-row">
+                  <Button
+                    type="primary"
+                    size="large"
+                    loading={submitting}
+                    onClick={handleSubmit}
+                  >
+                    保存设置
+                  </Button>
+                </div>
+              </div>
+            </section>
+          </div>
+        </Spin>
+      </main>
     </div>
   );
 }

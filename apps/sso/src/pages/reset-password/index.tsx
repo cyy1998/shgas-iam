@@ -1,4 +1,18 @@
-import { codeVerify, passwordReset, sendMessage, usersUserInfo } from '@sso/services/open';
+import {
+  CheckCircleOutlined,
+  KeyOutlined,
+  LockOutlined,
+  MobileOutlined,
+  SafetyCertificateOutlined,
+  UserOutlined,
+} from '@ant-design/icons';
+import logo from '@sso/assets/logo.png';
+import {
+  codeVerify,
+  passwordReset,
+  sendMessage,
+  usersUserInfo,
+} from '@sso/services/open';
 import { confirmPasswordRule, passwordRule } from '@sso/utils/form-check';
 import { ServiceError } from '@sso/utils/request';
 import { getQuery } from '@sso/utils/url';
@@ -8,19 +22,44 @@ import { useEffect, useRef, useState } from 'react';
 import './index.less';
 
 function StepBar({ current }: { current: 0 | 1 | 2 }) {
+  const steps = [
+    {
+      title: '确认账号',
+      desc: '识别您的身份',
+      icon: <UserOutlined />,
+    },
+    {
+      title: '安全验证',
+      desc: '校验绑定手机',
+      icon: <MobileOutlined />,
+    },
+    {
+      title: '设置密码',
+      desc: '更新登录凭证',
+      icon: <KeyOutlined />,
+    },
+  ];
+
   return (
     <div className="step-bar">
-      <div className="step-item step-1-active">确认账号</div>
-      <div
-        className={`step-item ${current >= 1 ? 'step-2-active' : 'step-2-inactive'}`}
-      >
-        安全验证
-      </div>
-      <div
-        className={`step-item ${current >= 2 ? 'step-3-active' : 'step-3-inactive'}`}
-      >
-        设置密码
-      </div>
+      {steps.map((step, index) => {
+        const isDone = current > index;
+        const isActive = current === index;
+        return (
+          <div
+            className={`step-item${isActive ? ' is-active' : ''}${isDone ? ' is-done' : ''}`}
+            key={step.title}
+          >
+            <div className="step-index">
+              {isDone ? <CheckCircleOutlined /> : step.icon}
+            </div>
+            <div>
+              <div className="step-title">{step.title}</div>
+              <div className="step-desc">{step.desc}</div>
+            </div>
+          </div>
+        );
+      })}
     </div>
   );
 }
@@ -165,122 +204,175 @@ export default function ResetPasswordPage() {
 
   return (
     <div className="reset-page">
-      <Spin spinning={loading}>
-        <div className="reset-card">
-          <StepBar current={current as 0 | 1 | 2} />
-
-          <div className="reset-form">
-            {current === 0 && (
-              <Form
-                form={form1}
-                layout="vertical"
-                initialValues={{ type: '用户名' }}
-              >
-                <Form.Item
-                  label="请选择类型"
-                  name="type"
-                  rules={[{ required: true, message: '请选择类型' }]}
-                >
-                  <Select options={[{ label: '用户名', value: '用户名' }]} />
-                </Form.Item>
-                <Form.Item
-                  label="用户名"
-                  name="username"
-                  rules={[{ required: true, message: '请输入用户名' }]}
-                >
-                  <Input placeholder="请输入用户名" allowClear />
-                </Form.Item>
-              </Form>
-            )}
-
-            {current === 1 && (
-              <Form form={form2} layout="vertical">
-                <Form.Item
-                  label="验证方式"
-                  name="phoneNumber"
-                  rules={[{ required: true, message: '请选择验证方式' }]}
-                >
-                  <Select options={mobileOptions} />
-                </Form.Item>
-                <Form.Item
-                  label="验证码"
-                  name="code"
-                  rules={[{ required: true, message: '请输入验证码' }]}
-                >
-                  <Input
-                    placeholder="请输入验证码"
-                    addonAfter={
-                      <Button
-                        type="link"
-                        disabled={countdown > 0}
-                        onClick={sendCode}
-                      >
-                        {countdown <= 0 ? '获取验证码' : `${countdown} 秒后重新获取`}
-                      </Button>
-                    }
-                  />
-                </Form.Item>
-              </Form>
-            )}
-
-            {current === 2 && (
-              <Form form={form3} layout="vertical">
-                <Form.Item
-                  label="新密码"
-                  name="newPassword"
-                  rules={[passwordRule]}
-                >
-                  <Input.Password placeholder="请输入新密码" />
-                </Form.Item>
-                <Form.Item
-                  label="确认新密码"
-                  name="newPasswordCopy"
-                  dependencies={['newPassword']}
-                  rules={[
-                    confirmPasswordRule(() =>
-                      form3.getFieldValue('newPassword'),
-                    ),
-                  ]}
-                >
-                  <Input.Password placeholder="请再次输入新密码" />
-                </Form.Item>
-              </Form>
-            )}
+      <div className="reset-shell">
+        <section className="reset-hero" aria-label="密码安全">
+          <div className="brand-top">
+            <img src={logo} alt="上海燃气" />
+            <span>SHANGHAI GAS IAM</span>
           </div>
-
-          <div className="form-actions">
-            {current > 0 && (
-              <Button danger onClick={handlePrev}>
-                上一步
-              </Button>
-            )}
-            {current < 2 && (
-              <Button type="primary" danger onClick={handleNext}>
-                下一步
-              </Button>
-            )}
-            {current === 2 && (
-              <Button type="primary" danger onClick={handleNext}>
-                确定
-              </Button>
-            )}
+          <div className="hero-copy">
+            <div className="hero-kicker">Account Recovery</div>
+            <h1>重置登录密码</h1>
+            <p>通过已绑定手机号完成身份校验，安全恢复您的统一身份账号访问。</p>
           </div>
-        </div>
-      </Spin>
+          <div className="security-note">
+            <SafetyCertificateOutlined />
+            <span>密码重置完成后，请使用新密码重新登录相关业务系统。</span>
+          </div>
+        </section>
+
+        <Spin spinning={loading}>
+          <div className="reset-card">
+            <div className="reset-card-header">
+              <div>
+                <div className="reset-title">找回密码</div>
+                <div className="reset-subtitle">
+                  按步骤完成账号验证与密码更新
+                </div>
+              </div>
+              <div className="reset-badge">
+                <LockOutlined />
+                <span>安全流程</span>
+              </div>
+            </div>
+
+            <StepBar current={current as 0 | 1 | 2} />
+
+            <div className="reset-form">
+              {current === 0 && (
+                <Form
+                  form={form1}
+                  layout="vertical"
+                  initialValues={{ type: '用户名' }}
+                >
+                  <Form.Item
+                    label="请选择类型"
+                    name="type"
+                    rules={[{ required: true, message: '请选择类型' }]}
+                  >
+                    <Select
+                      size="large"
+                      options={[{ label: '用户名', value: '用户名' }]}
+                    />
+                  </Form.Item>
+                  <Form.Item
+                    label="用户名"
+                    name="username"
+                    rules={[{ required: true, message: '请输入用户名' }]}
+                  >
+                    <Input
+                      size="large"
+                      placeholder="请输入用户名"
+                      prefix={<UserOutlined />}
+                      allowClear
+                    />
+                  </Form.Item>
+                </Form>
+              )}
+
+              {current === 1 && (
+                <Form form={form2} layout="vertical">
+                  <Form.Item
+                    label="验证方式"
+                    name="phoneNumber"
+                    rules={[{ required: true, message: '请选择验证方式' }]}
+                  >
+                    <Select size="large" options={mobileOptions} />
+                  </Form.Item>
+                  <Form.Item
+                    label="验证码"
+                    name="code"
+                    rules={[{ required: true, message: '请输入验证码' }]}
+                  >
+                    <Input
+                      size="large"
+                      placeholder="请输入验证码"
+                      prefix={<LockOutlined />}
+                      addonAfter={
+                        <button
+                          className="reset-code-btn"
+                          type="button"
+                          disabled={countdown > 0}
+                          onClick={sendCode}
+                        >
+                          {countdown <= 0
+                            ? '获取验证码'
+                            : `${countdown} 秒后重试`}
+                        </button>
+                      }
+                    />
+                  </Form.Item>
+                </Form>
+              )}
+
+              {current === 2 && (
+                <Form form={form3} layout="vertical">
+                  <Form.Item
+                    label="新密码"
+                    name="newPassword"
+                    rules={[passwordRule]}
+                  >
+                    <Input.Password
+                      size="large"
+                      placeholder="请输入新密码"
+                      prefix={<LockOutlined />}
+                    />
+                  </Form.Item>
+                  <Form.Item
+                    label="确认新密码"
+                    name="newPasswordCopy"
+                    dependencies={['newPassword']}
+                    rules={[
+                      confirmPasswordRule(() =>
+                        form3.getFieldValue('newPassword'),
+                      ),
+                    ]}
+                  >
+                    <Input.Password
+                      size="large"
+                      placeholder="请再次输入新密码"
+                      prefix={<LockOutlined />}
+                    />
+                  </Form.Item>
+                </Form>
+              )}
+            </div>
+
+            <div className="form-actions">
+              {current > 0 && (
+                <Button size="large" onClick={handlePrev}>
+                  上一步
+                </Button>
+              )}
+              {current < 2 && (
+                <Button type="primary" size="large" onClick={handleNext}>
+                  下一步
+                </Button>
+              )}
+              {current === 2 && (
+                <Button type="primary" size="large" onClick={handleNext}>
+                  确定
+                </Button>
+              )}
+            </div>
+          </div>
+        </Spin>
+      </div>
 
       <Modal
+        className="reset-done-modal"
         open={done}
-        title="提示"
+        title="密码重置完成"
         closable={false}
         maskClosable={false}
         keyboard={false}
         footer={
-          <Button type="primary" danger onClick={goLogin}>
+          <Button type="primary" onClick={goLogin}>
             去登录
           </Button>
         }
       >
-        已完成密码重置，请点击下方按钮！
+        已完成密码重置，请使用新密码重新登录。
       </Modal>
     </div>
   );
