@@ -1,7 +1,7 @@
 import { ADMIN_ROLE_CODE } from '@admin/constants/config';
 
 export default function access(initialState: {
-  currentUser?: { username: string; roles: string[] };
+  currentUser?: { username: string; name: string; roles: string[] };
 }) {
   const roles = initialState?.currentUser?.roles ?? [];
 

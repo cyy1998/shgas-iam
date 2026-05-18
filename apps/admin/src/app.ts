@@ -10,7 +10,9 @@ import { history } from '@umijs/max';
 import { createElement, type ReactElement } from 'react';
 import './global.less';
 
-type InitialState = { currentUser?: { username: string; roles: string[] } };
+type InitialState = {
+  currentUser?: { username: string; name: string; roles: string[] };
+};
 
 // 全局初始化数据配置，用于 Layout 用户信息和权限初始化
 // 更多信息见文档：https://umijs.org/docs/api/runtime-config#getinitialstate
@@ -33,6 +35,7 @@ export async function getInitialState(): Promise<InitialState> {
       const roles = (body.data.roles as string[]) ?? [];
       const currentUser = {
         username: body.data.username as string,
+        name: (body.data.name as string | undefined) ?? '',
         roles,
       };
 
@@ -76,6 +79,11 @@ export const request = {
 };
 
 export const layout = ({ initialState }: { initialState?: InitialState }) => {
+  const username = initialState?.currentUser?.username ?? '';
+  const name = initialState?.currentUser?.name || username;
+  const displayName = username && name ? `${name}(${username})` : username;
+  const avatarText = name?.[0] ?? username?.[0] ?? '';
+
   return {
     title: '上海燃气 IAM',
     logo: false,
@@ -108,7 +116,9 @@ export const layout = ({ initialState }: { initialState?: InitialState }) => {
       ]),
     avatarProps: {
       size: 'small' as const,
-      title: initialState?.currentUser?.username ?? '',
+      title: displayName,
+      children: avatarText,
+      className: 'iam-admin-user-avatar',
       render: (_: unknown, dom: ReactElement) =>
         createElement(AvatarDropdown, { children: dom }),
     },
