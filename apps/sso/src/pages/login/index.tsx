@@ -20,6 +20,14 @@ import './index.less';
 
 type LoginMode = 'PWD' | 'SMS' | 'BMN';
 
+function LogoMark() {
+  return (
+    <span className="logo-mark" role="img" aria-label="上海燃气">
+      <img src={logo} alt="" />
+    </span>
+  );
+}
+
 export default function LoginPage() {
   const { authConfig } = useModel('sso');
   const [mode, setMode] = useState<LoginMode>('PWD');
@@ -181,7 +189,7 @@ export default function LoginPage() {
         <div className="login-shell">
           <section className="brand-panel" aria-label="上海燃气身份认证平台">
             <div className="brand-top">
-              <img src={logo} alt="上海燃气" />
+              <LogoMark />
               <span>SHANGHAI GAS IAM</span>
             </div>
             <div className="brand-copy">
@@ -216,7 +224,7 @@ export default function LoginPage() {
       <div className="login-shell">
         <section className="brand-panel" aria-label="上海燃气身份认证平台">
           <div className="brand-top">
-            <img src={logo} alt="上海燃气" />
+            <LogoMark />
             <span>SHANGHAI GAS IAM</span>
           </div>
 
@@ -249,7 +257,7 @@ export default function LoginPage() {
           </div>
 
           <div className="login-header">
-            <img src={logo} alt="上海燃气" />
+            <LogoMark />
             <div>
               <div className="title-zh">欢迎登录</div>
               <div className="title-en">上海燃气身份认证平台</div>

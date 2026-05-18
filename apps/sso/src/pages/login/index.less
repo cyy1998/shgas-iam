@@ -62,11 +62,26 @@
     font-weight: 700;
     letter-spacing: 0;
     color: rgba(255, 255, 255, 0.78);
+  }
+
+  .logo-mark {
+    position: relative;
+    display: inline-block;
+    flex: 0 0 auto;
+    width: 160px;
+    height: 44px;
+    overflow: hidden;
+    background: rgba(255, 255, 255, 0.94);
+    border: 1px solid rgba(255, 255, 255, 0.55);
+    border-radius: 6px;
 
     img {
-      width: 152px;
+      position: absolute;
+      top: -34px;
+      left: -138px;
+      width: 354px;
+      max-width: none;
       height: auto;
-      filter: brightness(0) invert(1);
     }
   }
 
@@ -172,10 +187,18 @@
     gap: 16px;
     margin-bottom: 26px;
 
-    img {
-      width: 116px;
-      height: auto;
-      flex: 0 0 auto;
+    .logo-mark {
+      width: 128px;
+      height: 36px;
+      background: transparent;
+      border: 0;
+      border-radius: 0;
+
+      img {
+        top: -27px;
+        left: -111px;
+        width: 286px;
+      }
     }
 
     .title-zh {
@@ -511,8 +534,15 @@
     }
 
     .brand-top {
-      img {
+      .logo-mark {
         width: 128px;
+        height: 36px;
+
+        img {
+          top: -27px;
+          left: -111px;
+          width: 286px;
+        }
       }
 
       span {
@@ -562,8 +592,15 @@
       align-items: flex-start;
       gap: 12px;
 
-      img {
-        width: 96px;
+      .logo-mark {
+        width: 112px;
+        height: 32px;
+
+        img {
+          top: -24px;
+          left: -97px;
+          width: 250px;
+        }
       }
 
       .title-zh {
