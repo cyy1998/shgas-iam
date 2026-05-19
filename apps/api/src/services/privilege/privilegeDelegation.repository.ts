@@ -194,7 +194,8 @@ export async function getActiveDelegationsByDelegatorAndPrivileges(
     eq(privilegeDelegations.delegatorUserId, delegatorUserId),
     eq(privilegeDelegations.isDelete, false),
     ne(privilegeDelegations.status, PrivilegeDelegationStatus.Disable),
-    sql`not (${privilegeDelegations.endTime} < ${startTime} or ${privilegeDelegations.startTime} > ${endTime})`,
+    gte(privilegeDelegations.endTime, startTime),
+    lte(privilegeDelegations.startTime, endTime),
     exists(
       db.select({ value: sql`1` }).from(delegationDetails).where(and(
         eq(delegationDetails.delegationId, privilegeDelegations.id),
