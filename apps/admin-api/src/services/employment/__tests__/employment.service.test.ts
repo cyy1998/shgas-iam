@@ -12,7 +12,15 @@ mock.module("@iam/db", () => ({
   },
 }));
 
-const employmentRepository = {
+const employmentRepository = (Reflect.get(globalThis, "__adminEmploymentRepositoryMock") as {
+  createEmploymentRecord: ReturnType<typeof mock>;
+  endActiveEmploymentsByUserId: ReturnType<typeof mock>;
+  getEmploymentByIdForAdmin: ReturnType<typeof mock>;
+  getEmploymentByUserOrgPosId: ReturnType<typeof mock>;
+  softDeleteEmployment: ReturnType<typeof mock>;
+  unsetPrimariesByUserId: ReturnType<typeof mock>;
+  updateEmploymentRecord: ReturnType<typeof mock>;
+} | undefined) ?? {
   getEmploymentByUserOrgPosId: mock(),
   getEmploymentByIdForAdmin: mock(),
   createEmploymentRecord: mock(),
@@ -22,7 +30,10 @@ const employmentRepository = {
   endActiveEmploymentsByUserId: mock(),
 };
 
-const userRepository = {
+const userRepository = (Reflect.get(globalThis, "__adminUserRepositoryMock") as {
+  getUserByUsernameForAdmin: ReturnType<typeof mock>;
+  updateUserByUsername: ReturnType<typeof mock>;
+} | undefined) ?? {
   getUserByUsernameForAdmin: mock(),
   updateUserByUsername: mock(),
 };
@@ -35,13 +46,22 @@ const positionRepository = {
   getPositionByCode: mock(),
 };
 
-const roleRepository = {
+const roleRepository = (Reflect.get(globalThis, "__adminRoleRepositoryMock") as {
+  getRolesByEmploymentId: ReturnType<typeof mock>;
+} | undefined) ?? {
   getRolesByEmploymentId: mock(),
 };
 
-const privilegeRepository = {
+const privilegeRepository = (Reflect.get(globalThis, "__adminPrivilegeRepositoryMock") as {
+  getPrivilegesByRoleIds: ReturnType<typeof mock>;
+} | undefined) ?? {
   getPrivilegesByRoleIds: mock(),
 };
+
+Reflect.set(globalThis, "__adminUserRepositoryMock", userRepository);
+Reflect.set(globalThis, "__adminEmploymentRepositoryMock", employmentRepository);
+Reflect.set(globalThis, "__adminRoleRepositoryMock", roleRepository);
+Reflect.set(globalThis, "__adminPrivilegeRepositoryMock", privilegeRepository);
 
 mock.module("@admin-api/services/employment/employment.repository", () => employmentRepository);
 mock.module("@admin-api/services/user/user.repository", () => userRepository);
