@@ -16,6 +16,7 @@ import {
 } from "@api/services/user/user.schema";
 import { CustomError } from "@iam/api-core/errors/CustomError";
 import { UserNotFoundError } from "@iam/api-core/errors/UserNotFoundError";
+import { UserStatus } from "@iam/contracts";
 import db from "@iam/db";
 import { compare, hash } from "bcrypt-ts";
 import { toPrivilegeDelegationDto } from "../privilege/privilegeDelegation.schema";
@@ -106,6 +107,14 @@ export async function checkPassword(username: string, inputPassword: string) {
     return false;
   }
   return user.password ? await compare(inputPassword, user.password ?? "") : inputPassword === config.DEFAULT_USER_PASSWORD;
+}
+
+export async function getActiveUserByMobile(mobile: string) {
+  return await userRepository.getUserByMobile(mobile);
+}
+
+export async function pauseEnabledUser(userId: number) {
+  return await userRepository.updateEnabledUserStatus(userId, UserStatus.Pause);
 }
 
 export async function setMobile(userId: number, phoneNumber: string, code: string) {

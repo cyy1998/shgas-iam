@@ -167,6 +167,14 @@ export async function setMobile(userId: number, phoneNumber: string, tx: DbClien
     .returning())!;
 }
 
+export async function updateEnabledUserStatus(userId: number, status: UserStatus, tx: DbClient = db) {
+  return firstRow(await tx
+    .update(users)
+    .set({ status })
+    .where(and(eq(users.id, userId), eq(users.status, UserStatus.Enable), eq(users.isDelete, false)))
+    .returning()) ?? null;
+}
+
 export async function setUser(userCreateDto: UserCreateDto, tx: DbClient = db) {
   return firstRow(await tx.insert(users).values(userCreateDto).returning())!;
 }
