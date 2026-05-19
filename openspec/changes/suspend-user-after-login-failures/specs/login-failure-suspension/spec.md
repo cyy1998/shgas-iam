@@ -30,6 +30,21 @@ The system SHALL set an enabled user's status to `UserStatus.Pause` when the use
 - **WHEN** a failed login attempt triggers the user suspension threshold
 - **THEN** the system SHALL reject that login attempt with the existing credential failure behavior
 
+### Requirement: Report failure count and remaining attempts
+The system SHALL include the current consecutive failure count and remaining attempts before suspension in the password or mobile login failure message for tracked enabled users.
+
+#### Scenario: Failed password login reports remaining attempts
+- **WHEN** an enabled user submits an incorrect password before reaching the suspension threshold
+- **THEN** the system SHALL reject the login attempt with a message containing the current consecutive failure count and remaining attempts before account suspension
+
+#### Scenario: Failed mobile login reports remaining attempts
+- **WHEN** an enabled user submits an incorrect login verification code before reaching the suspension threshold
+- **THEN** the system SHALL reject the login attempt with a message containing the current consecutive failure count and remaining attempts before account suspension
+
+#### Scenario: Threshold failure reports suspension
+- **WHEN** a failed login attempt reaches the suspension threshold
+- **THEN** the system SHALL reject the login attempt with a message containing the current consecutive failure count, zero remaining attempts, and that the account has been suspended
+
 ### Requirement: Reset failure streak after successful login
 The system SHALL clear a user's tracked consecutive failed login attempts after a successful password login or successful mobile verification-code login.
 

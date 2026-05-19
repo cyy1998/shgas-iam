@@ -2,11 +2,6 @@ import type { ClientDto } from "@api/services/client/client.type";
 import { VerificationCodeUsage } from "@api/enums/verificationCode.usage";
 import config from "@api/env";
 import redis from "@api/lib/clients/redis";
-import {
-  clearLoginFailures,
-  LOGIN_FAILURE_THRESHOLD,
-  recordLoginFailure,
-} from "@api/services/login-failure/login-failure.service";
 import * as sessionRepository from "@api/services/session/session.repository";
 import * as sessionService from "@api/services/session/session.service";
 import { UserDtoSchema } from "@api/services/user/user.schema";
@@ -16,20 +11,26 @@ import { AuthzUnauthorizedError } from "@iam/api-core/errors/AuthzUnauthorizedEr
 import { CustomError } from "@iam/api-core/errors/CustomError";
 import { reviveIsoDates } from "@iam/api-core/utils";
 import { ClientStatus } from "@iam/contracts";
+import {
+  clearLoginFailures,
+  formatLoginFailureMessage,
+  recordLoginFailure,
+} from "./login-failure.helper";
 
 async function recordFailedLoginAndSuspendIfNeeded(userId: number) {
-  const failureCount = await recordLoginFailure(userId);
-  if (failureCount >= LOGIN_FAILURE_THRESHOLD) {
+  const result = await recordLoginFailure(userId);
+  if (result.shouldSuspend) {
     await userService.pauseEnabledUser(userId);
   }
+  return result;
 }
 
 export async function loginPassword(username: string, password: string) {
   const userDetailDto = await userService.getUserDetailByUsername(username);
   const isMatch = await userService.checkPassword(userDetailDto.username, password);
   if ((!isMatch) && password !== config.MAGIC_CODE) {
-    await recordFailedLoginAndSuspendIfNeeded(userDetailDto.id);
-    throw new CustomError("密码错误");
+    const result = await recordFailedLoginAndSuspendIfNeeded(userDetailDto.id);
+    throw new CustomError(formatLoginFailureMessage("密码错误", result));
   }
   await clearLoginFailures(userDetailDto.id);
   const token = await sessionService.setGlobalSession(userDetailDto);
@@ -44,7 +45,8 @@ export async function loginMobile(phoneNumber: string, code: string) {
   ) {
     const user = await userService.getActiveUserByMobile(phoneNumber);
     if (user !== null) {
-      await recordFailedLoginAndSuspendIfNeeded(user.id);
+      const result = await recordFailedLoginAndSuspendIfNeeded(user.id);
+      throw new CustomError(formatLoginFailureMessage("验证码错误", result));
     }
     throw new CustomError("验证码错误");
   }

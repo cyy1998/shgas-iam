@@ -9,6 +9,7 @@ The new behavior must suspend an enabled user after repeated consecutive credent
 **Goals:**
 - Count failed password and login verification-code attempts per user across both supported global login methods.
 - Suspend the user when the consecutive failure count reaches 5 within a rolling 30-minute window.
+- Include the current consecutive failure count and remaining attempts in the login failure message so the SSO frontend can display the warning.
 - Clear the failure streak after a successful password or mobile verification-code login.
 - Keep storage short-lived and operationally simple by reusing Redis.
 - Keep user status updates in the user service/repository boundary.
@@ -43,9 +44,17 @@ The new behavior must suspend an enabled user after repeated consecutive credent
 
    Rationale: current login logic accepts `config.MAGIC_CODE`. This change should preserve that behavior unless a separate policy change removes or restricts it.
 
-5. Return the existing credential error for the triggering attempt after applying suspension.
+5. Keep login-failure tracking as an auth route helper.
 
-   Rationale: this avoids adding a new public error contract for this proposal. After suspension, subsequent login attempts fail because enabled-user lookup no longer returns the paused user.
+   Rationale: the Redis failure streak is private to the password/mobile auth flows and does not need to be a reusable domain service. Keeping it under `apps/api/src/routes/auth/login-failure.helper.ts` makes the ownership clear.
+
+   Alternative considered: place the helper under `apps/api/src/services/login-failure`. That would make it look like a cross-route domain service even though no other route should use it.
+
+6. Return the credential error with count and remaining-attempt details.
+
+   Rationale: the SSO frontend already displays API envelope messages through its request helper. Returning a user-facing message such as current failure count and remaining attempts adds the requested warning without creating a separate response contract for failed login.
+
+   Alternative considered: return structured failure metadata. That is cleaner for rich UI states, but it would require expanding error envelopes and frontend parsing for a small warning.
 
 ## Risks / Trade-offs
 

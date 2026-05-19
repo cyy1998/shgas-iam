@@ -141,7 +141,7 @@ mock.module("@api/services/session/session.service", () => ({
 }));
 
 const authService = await import("../auth.service");
-const loginFailureService = await import("@api/services/login-failure/login-failure.service");
+const loginFailureHelper = await import("../login-failure.helper");
 
 async function expectCredentialError(promise: Promise<unknown>, message: string) {
   await expect(promise).rejects.toThrow(message);
@@ -159,18 +159,24 @@ beforeEach(() => {
 describe("auth login failure suspension", () => {
   test("pauses a user on the fifth password failure within the window", async () => {
     for (let attempt = 1; attempt <= 4; attempt += 1) {
-      await expectCredentialError(authService.loginPassword(userDetail.username, "wrong-password"), "密码错误");
+      await expectCredentialError(
+        authService.loginPassword(userDetail.username, "wrong-password"),
+        `密码错误，当前已连续失败 ${attempt} 次，距离账号暂停还有 ${5 - attempt} 次`,
+      );
       expect(pausedUserIds).toHaveLength(0);
     }
 
-    await expectCredentialError(authService.loginPassword(userDetail.username, "wrong-password"), "密码错误");
+    await expectCredentialError(
+      authService.loginPassword(userDetail.username, "wrong-password"),
+      "密码错误，当前已连续失败 5 次，距离账号暂停还有 0 次，账号已暂停",
+    );
 
     expect(pausedUserIds).toEqual([USER_ID]);
   });
 
   test("successful password login clears tracked failures", async () => {
-    await expectCredentialError(authService.loginPassword(userDetail.username, "wrong-password"), "密码错误");
-    await expectCredentialError(authService.loginPassword(userDetail.username, "wrong-password"), "密码错误");
+    await expectCredentialError(authService.loginPassword(userDetail.username, "wrong-password"), "当前已连续失败 1 次");
+    await expectCredentialError(authService.loginPassword(userDetail.username, "wrong-password"), "当前已连续失败 2 次");
     expect(fakeRedis.countFailures(USER_ID)).toBe(2);
 
     passwordMatches = true;
@@ -182,7 +188,7 @@ describe("auth login failure suspension", () => {
     expect(fakeRedis.countFailures(USER_ID)).toBe(0);
 
     passwordMatches = false;
-    await expectCredentialError(authService.loginPassword(userDetail.username, "wrong-password"), "密码错误");
+    await expectCredentialError(authService.loginPassword(userDetail.username, "wrong-password"), "当前已连续失败 1 次");
     expect(pausedUserIds).toHaveLength(0);
   });
 
@@ -190,15 +196,19 @@ describe("auth login failure suspension", () => {
     const baseTime = 1_800_000_000_000;
 
     for (let offset = 0; offset < 4; offset += 1) {
-      await loginFailureService.recordLoginFailure(USER_ID, baseTime + offset);
+      await loginFailureHelper.recordLoginFailure(USER_ID, baseTime + offset);
     }
 
-    const count = await loginFailureService.recordLoginFailure(
+    const result = await loginFailureHelper.recordLoginFailure(
       USER_ID,
-      baseTime + loginFailureService.LOGIN_FAILURE_WINDOW_SECONDS * 1000 + 4,
+      baseTime + loginFailureHelper.LOGIN_FAILURE_WINDOW_SECONDS * 1000 + 4,
     );
 
-    expect(count).toBe(1);
+    expect(result).toEqual({
+      failureCount: 1,
+      remainingAttempts: 4,
+      shouldSuspend: false,
+    });
   });
 
   test("mobile verification failures share the password failure streak", async () => {
@@ -206,10 +216,16 @@ describe("auth login failure suspension", () => {
       await expectCredentialError(authService.loginPassword(userDetail.username, "wrong-password"), "密码错误");
     }
 
-    await expectCredentialError(authService.loginMobile(MOBILE, "0000"), "验证码错误");
+    await expectCredentialError(
+      authService.loginMobile(MOBILE, "0000"),
+      "验证码错误，当前已连续失败 4 次，距离账号暂停还有 1 次",
+    );
     expect(pausedUserIds).toHaveLength(0);
 
-    await expectCredentialError(authService.loginMobile(MOBILE, "0000"), "验证码错误");
+    await expectCredentialError(
+      authService.loginMobile(MOBILE, "0000"),
+      "验证码错误，当前已连续失败 5 次，距离账号暂停还有 0 次，账号已暂停",
+    );
     expect(pausedUserIds).toEqual([USER_ID]);
   });
 

@@ -14,6 +14,7 @@
 - [x] 3.2 Update mobile verification-code login to resolve the enabled user by mobile number, record wrong login-code attempts, suspend at the threshold, and clear the streak after successful login.
 - [x] 3.3 Preserve existing `MAGIC_CODE` behavior without recording a failed attempt.
 - [x] 3.4 Keep OA login, WeChat login, password reset, mobile binding, and other verification-code usages outside the failure tracking flow.
+- [x] 3.5 Keep login-failure tracking as an auth route helper and include current failure count plus remaining attempts in the user-facing login failure message.
 
 ## 4. Validation
 

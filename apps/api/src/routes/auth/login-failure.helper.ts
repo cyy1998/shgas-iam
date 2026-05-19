@@ -5,6 +5,12 @@ export const LOGIN_FAILURE_WINDOW_SECONDS = 30 * 60;
 
 const LOGIN_FAILURE_WINDOW_MS = LOGIN_FAILURE_WINDOW_SECONDS * 1000;
 
+export type LoginFailureResult = {
+  failureCount: number;
+  remainingAttempts: number;
+  shouldSuspend: boolean;
+};
+
 function loginFailureKey(userId: number) {
   return `login-failures:user:${userId}`;
 }
@@ -21,7 +27,14 @@ function getPipelineValue<T>(results: Array<[Error | null, unknown]> | null, ind
   return value as T;
 }
 
-export async function recordLoginFailure(userId: number, now = Date.now()) {
+export function formatLoginFailureMessage(prefix: string, result: LoginFailureResult) {
+  const suffix = `当前已连续失败 ${result.failureCount} 次，距离账号暂停还有 ${result.remainingAttempts} 次`;
+  return result.shouldSuspend
+    ? `${prefix}，${suffix}，账号已暂停`
+    : `${prefix}，${suffix}`;
+}
+
+export async function recordLoginFailure(userId: number, now = Date.now()): Promise<LoginFailureResult> {
   const key = loginFailureKey(userId);
   const windowStart = now - LOGIN_FAILURE_WINDOW_MS;
   const member = `${now}:${crypto.randomUUID()}`;
@@ -34,7 +47,14 @@ export async function recordLoginFailure(userId: number, now = Date.now()) {
     .expire(key, LOGIN_FAILURE_WINDOW_SECONDS)
     .exec();
 
-  return getPipelineValue<number>(results, 2);
+  const failureCount = getPipelineValue<number>(results, 2);
+  const remainingAttempts = Math.max(LOGIN_FAILURE_THRESHOLD - failureCount, 0);
+
+  return {
+    failureCount,
+    remainingAttempts,
+    shouldSuspend: failureCount >= LOGIN_FAILURE_THRESHOLD,
+  };
 }
 
 export async function clearLoginFailures(userId: number) {
