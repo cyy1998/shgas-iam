@@ -14,7 +14,8 @@
     "typecheck": "pnpm exec tsgo --noEmit",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
-    "db:push": "drizzle-kit push"
+    "db:push": "drizzle-kit push",
+    "db:check": "drizzle-kit check"
   },
   "dependencies": {
     "@iam/contracts": "workspace:*",
