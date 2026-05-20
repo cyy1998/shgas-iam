@@ -4,6 +4,7 @@ import config from "@api/env";
 import redis from "@api/lib/clients/redis";
 import { logger } from "@api/lib/logger";
 import Cap from "@cap.js/server";
+import { createSingleton } from "@iam/api-core/core/singleton";
 import * as riskService from "./human-risk.service";
 import { HumanVerificationRequiredError } from "./human-verification.error";
 import { HumanVerificationAction } from "./human-verification.type";
@@ -45,39 +46,40 @@ function parseChallenge(value: string | null): ChallengeData | null {
   return data;
 }
 
-export const cap = new Cap({
-  storage: {
-    challenges: {
-      async store(token, challengeData) {
-        await redis.set(challengeKey(token), JSON.stringify(challengeData), "EX", ttlSeconds(challengeData.expires));
+export const cap = createSingleton("api:human-verification:cap", () =>
+  new Cap({
+    storage: {
+      challenges: {
+        async store(token, challengeData) {
+          await redis.set(challengeKey(token), JSON.stringify(challengeData), "EX", ttlSeconds(challengeData.expires));
+        },
+        async read(token) {
+          return parseChallenge(await redis.get(challengeKey(token)));
+        },
+        async delete(token) {
+          await redis.del(challengeKey(token));
+        },
+        async deleteExpired() {
+          // Redis TTL removes expired challenges.
+        },
       },
-      async read(token) {
-        return parseChallenge(await redis.get(challengeKey(token)));
-      },
-      async delete(token) {
-        await redis.del(challengeKey(token));
-      },
-      async deleteExpired() {
-        // Redis TTL removes expired challenges.
+      tokens: {
+        async store(key, expires) {
+          await redis.set(tokenKey(key), String(expires), "EX", ttlSeconds(expires));
+        },
+        async get(key) {
+          const expires = Number(await redis.get(tokenKey(key)));
+          return Number.isFinite(expires) && expires > Date.now() ? expires : null;
+        },
+        async delete(key) {
+          await redis.del(tokenKey(key));
+        },
+        async deleteExpired() {
+          // Redis TTL removes expired tokens.
+        },
       },
     },
-    tokens: {
-      async store(key, expires) {
-        await redis.set(tokenKey(key), String(expires), "EX", ttlSeconds(expires));
-      },
-      async get(key) {
-        const expires = Number(await redis.get(tokenKey(key)));
-        return Number.isFinite(expires) && expires > Date.now() ? expires : null;
-      },
-      async delete(key) {
-        await redis.del(tokenKey(key));
-      },
-      async deleteExpired() {
-        // Redis TTL removes expired tokens.
-      },
-    },
-  },
-});
+  }));
 
 export function isValidSiteKey(siteKey: string) {
   return siteKey === config.CAP_SITE_KEY;
