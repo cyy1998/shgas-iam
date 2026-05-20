@@ -14,6 +14,7 @@ import {
 } from '@admin/services/user';
 import { ProDescriptions } from '@ant-design/pro-components';
 import {
+  EmploymentStatus,
   getEmploymentStatusOptions,
   getUserStatusOptions,
 } from '@iam/contracts';
@@ -51,6 +52,9 @@ const roleTagStyle: CSSProperties = {
   whiteSpace: 'normal',
   wordBreak: 'break-all',
 };
+
+const formatDate = (value: Date | string | null | undefined) =>
+  value ? new Date(value).toLocaleDateString() : '—';
 
 type Props = {
   open: boolean;
@@ -196,11 +200,23 @@ export default function UserDetailDrawer({
       width: 90,
     },
     {
+      title: '开始',
+      dataIndex: 'startTime',
+      render: (val: EmploymentRow['startTime']) => formatDate(val),
+      width: 110,
+    },
+    {
+      title: '结束',
+      dataIndex: 'endTime',
+      render: (val: EmploymentRow['endTime']) => formatDate(val),
+      width: 110,
+    },
+    {
       title: '操作',
       key: 'action',
       width: 160,
       render: (_: unknown, row: EmploymentRow) => {
-        if (row.status === 3) return null;
+        if (row.status === EmploymentStatus.Disable) return null;
         return (
           <Space size="middle">
             <a
@@ -409,6 +425,7 @@ export default function UserDetailDrawer({
                       columns={employmentColumns}
                       dataSource={detail.employments}
                       pagination={false}
+                      scroll={{ x: 780 }}
                       locale={{ emptyText: '暂无雇佣' }}
                     />
                   </div>

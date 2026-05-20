@@ -34,6 +34,7 @@ const userRepository = {
 const employmentRepository = {
   createEmploymentRecord: mock(),
   endActiveEmploymentsByUserId: mock(),
+  getAllEmploymentsByUserIdForAdmin: mock(),
   getEmploymentByIdForAdmin: mock(),
   getEmploymentByUserOrgPosId: mock(),
   getEmploymentsByUserId: mock(),
@@ -209,6 +210,7 @@ beforeEach(() => {
   userRepository.setUserForAdmin.mockReset();
   userRepository.softDeleteUserByUsername.mockReset();
   userRepository.updateUserByUsername.mockReset();
+  employmentRepository.getAllEmploymentsByUserIdForAdmin.mockReset();
   employmentRepository.getEmploymentsByUserId.mockReset();
   roleRepository.getRolesByEmploymentId.mockReset();
   privilegeRepository.getPrivilegesByRoleIds.mockReset();
@@ -220,6 +222,7 @@ beforeEach(() => {
   userRepository.countActiveEmploymentsByUsername.mockResolvedValue(0);
   userRepository.softDeleteUserByUsername.mockResolvedValue(makeUser({ isDelete: true }));
   userRepository.setPassword.mockResolvedValue(makeUser({ password: "new-hash" }));
+  employmentRepository.getAllEmploymentsByUserIdForAdmin.mockResolvedValue([]);
   employmentRepository.getEmploymentsByUserId.mockResolvedValue([]);
   roleRepository.getRolesByEmploymentId.mockResolvedValue([]);
   privilegeRepository.getPrivilegesByRoleIds.mockResolvedValue([]);
@@ -436,26 +439,43 @@ describe("admin userService.getUserDetailByUsernameForAdmin", () => {
 
     await expect(userService.getUserDetailByUsernameForAdmin("missing")).rejects.toThrow("用户不存在");
 
-    expect(employmentRepository.getEmploymentsByUserId).not.toHaveBeenCalled();
+    expect(employmentRepository.getAllEmploymentsByUserIdForAdmin).not.toHaveBeenCalled();
   });
 
-  test("aggregates employments, roles, and privileges with deduplicated summaries", async () => {
+  test("returns all non-deleted employments and summarizes only enabled roles and privileges", async () => {
     const employmentOne = makeEmployment({ id: 4001 });
     const employmentTwo = makeEmployment({
       id: 4002,
+      status: EmploymentStatus.Pause,
       position: makePosition({ id: 3002, posCode: "POS002", posName: "经理" }),
+    });
+    const employmentThree = makeEmployment({
+      id: 4003,
+      status: EmploymentStatus.Disable,
+      endTime: new Date("2026-02-01T00:00:00.000Z"),
+      position: makePosition({ id: 3003, posCode: "POS003", posName: "顾问" }),
     });
     const roleDefault = makeRole({ id: 5001, roleCode: "role:default" });
     const roleAdmin = makeRole({ id: 5002, roleCode: "role:admin" });
+    const rolePaused = makeRole({ id: 5003, roleCode: "role:paused" });
+    const roleEnded = makeRole({ id: 5004, roleCode: "role:ended" });
     const readPrivilege = makePrivilege({ id: 6001, privilegeCode: "priv:read" });
     const writePrivilege = makePrivilege({ id: 6002, privilegeCode: "priv:write" });
-    employmentRepository.getEmploymentsByUserId.mockResolvedValue([employmentOne, employmentTwo]);
+    const pausedPrivilege = makePrivilege({ id: 6003, privilegeCode: "priv:paused" });
+    const endedPrivilege = makePrivilege({ id: 6004, privilegeCode: "priv:ended" });
+    employmentRepository.getAllEmploymentsByUserIdForAdmin.mockResolvedValue([
+      employmentOne,
+      employmentTwo,
+      employmentThree,
+    ]);
     roleRepository.getRolesByEmploymentId
       .mockResolvedValueOnce([roleDefault, roleAdmin])
-      .mockResolvedValueOnce([roleDefault]);
+      .mockResolvedValueOnce([rolePaused])
+      .mockResolvedValueOnce([roleEnded]);
     privilegeRepository.getPrivilegesByRoleIds
       .mockResolvedValueOnce([readPrivilege, writePrivilege])
-      .mockResolvedValueOnce([readPrivilege]);
+      .mockResolvedValueOnce([pausedPrivilege])
+      .mockResolvedValueOnce([endedPrivilege]);
 
     await expect(userService.getUserDetailByUsernameForAdmin("zhangsan")).resolves.toMatchObject({
       id: 1001,
@@ -474,20 +494,32 @@ describe("admin userService.getUserDetailByUsernameForAdmin", () => {
         },
         {
           id: 4002,
+          status: EmploymentStatus.Pause,
           posCode: "POS002",
           posName: "经理",
-          roles: ["role:default"],
-          privileges: ["priv:read"],
+          roles: ["role:paused"],
+          privileges: ["priv:paused"],
+        },
+        {
+          id: 4003,
+          status: EmploymentStatus.Disable,
+          posCode: "POS003",
+          posName: "顾问",
+          roles: ["role:ended"],
+          privileges: ["priv:ended"],
         },
       ],
       roles: ["role:default", "role:admin"],
       privileges: ["priv:read", "priv:write"],
     });
 
-    expect(employmentRepository.getEmploymentsByUserId).toHaveBeenCalledWith(1001);
+    expect(employmentRepository.getAllEmploymentsByUserIdForAdmin).toHaveBeenCalledWith(1001);
+    expect(employmentRepository.getEmploymentsByUserId).not.toHaveBeenCalled();
     expect(roleRepository.getRolesByEmploymentId).toHaveBeenNthCalledWith(1, 4001);
     expect(roleRepository.getRolesByEmploymentId).toHaveBeenNthCalledWith(2, 4002);
+    expect(roleRepository.getRolesByEmploymentId).toHaveBeenNthCalledWith(3, 4003);
     expect(privilegeRepository.getPrivilegesByRoleIds).toHaveBeenNthCalledWith(1, [5001, 5002]);
-    expect(privilegeRepository.getPrivilegesByRoleIds).toHaveBeenNthCalledWith(2, [5001]);
+    expect(privilegeRepository.getPrivilegesByRoleIds).toHaveBeenNthCalledWith(2, [5003]);
+    expect(privilegeRepository.getPrivilegesByRoleIds).toHaveBeenNthCalledWith(3, [5004]);
   });
 });

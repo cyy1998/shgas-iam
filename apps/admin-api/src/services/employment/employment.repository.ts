@@ -73,6 +73,16 @@ export async function getEmploymentsByUserId(userId: number, tx: DbClient = db) 
   });
 }
 
+export async function getAllEmploymentsByUserIdForAdmin(userId: number, tx: DbClient = db) {
+  return await tx.query.employments.findMany({
+    where: {
+      userId,
+      isDelete: false,
+    },
+    with: employmentRelations,
+  });
+}
+
 export async function getEmploymentByUserOrgPosId(
   userId: number,
   orgId: number,

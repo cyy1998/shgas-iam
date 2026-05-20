@@ -13,7 +13,7 @@ import { CustomError } from "@iam/api-core/errors/CustomError";
 import { UserHasActiveEmploymentError } from "@iam/api-core/errors/UserHasActiveEmploymentError";
 import { UserNotFoundError } from "@iam/api-core/errors/UserNotFoundError";
 import { generateRandomPassword } from "@iam/api-core/utils";
-import { UserStatus } from "@iam/contracts";
+import { EmploymentStatus, UserStatus } from "@iam/contracts";
 import db from "@iam/db";
 import { hash } from "bcrypt-ts";
 
@@ -23,7 +23,7 @@ export async function getUserDetailByUsernameForAdmin(username: string): Promise
     throw new UserNotFoundError("用户不存在");
   }
   const userDto = UserDetailDtoSchema.parse(user);
-  const employments = await employmentRepository.getEmploymentsByUserId(userDto.id);
+  const employments = await employmentRepository.getAllEmploymentsByUserIdForAdmin(userDto.id);
   const employmentDtos = [];
   for (const employment of employments) {
     const roles = await roleRepository.getRolesByEmploymentId(employment.id);
@@ -34,8 +34,9 @@ export async function getUserDetailByUsernameForAdmin(username: string): Promise
     employmentDtos.push(employmentDto);
   }
   userDto.employments = employmentDtos;
-  userDto.roles = [...new Set(employmentDtos.flatMap(e => e.roles))];
-  userDto.privileges = [...new Set(employmentDtos.flatMap(e => e.privileges))];
+  const currentEmploymentDtos = employmentDtos.filter(e => e.status === EmploymentStatus.Enable);
+  userDto.roles = [...new Set(currentEmploymentDtos.flatMap(e => e.roles))];
+  userDto.privileges = [...new Set(currentEmploymentDtos.flatMap(e => e.privileges))];
   return userDto;
 }
 
