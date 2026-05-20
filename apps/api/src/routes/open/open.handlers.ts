@@ -1,4 +1,3 @@
-import type { Context } from "hono";
 import type { OpenRouteHandler } from "./open.type";
 import { VerificationCodeUsage } from "@api/enums/verificationCode.usage";
 import * as clientService from "@api/services/client/client.service";
@@ -8,23 +7,8 @@ import * as mobileService from "@api/services/mobile/mobile.service";
 import * as userService from "@api/services/user/user.service";
 import { CustomError } from "@iam/api-core/errors/CustomError";
 import * as resp from "@iam/api-core/http";
+import { getVerificationContext } from "../human-verification-context";
 import { maskMobile, requirePhoneNumber, resolveResetPasswordMobile } from "./open.service";
-
-function getRequestIp(c: Context) {
-  const forwardedFor = c.req.header("x-forwarded-for")?.split(",")[0]?.trim();
-  return forwardedFor
-    ?? c.req.header("x-real-ip")
-    ?? c.req.header("cf-connecting-ip")
-    ?? undefined;
-}
-
-function getVerificationContext(c: Context, subject?: string) {
-  return {
-    subject,
-    ip: getRequestIp(c),
-    client: c.req.header("Client"),
-  };
-}
 
 export const clientStatus: OpenRouteHandler<"clientStatus"> = async (c) => {
   const { clientCode } = c.req.valid("query");

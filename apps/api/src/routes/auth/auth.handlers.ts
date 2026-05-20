@@ -1,4 +1,3 @@
-import type { Context } from "hono";
 import type { AuthRouteHandler } from "./auth.types";
 import config from "@api/env";
 import { logger } from "@api/lib/logger";
@@ -6,23 +5,8 @@ import * as clientService from "@api/services/client/client.service";
 import { AuthzUnauthorizedError } from "@iam/api-core/errors/AuthzUnauthorizedError";
 import * as resp from "@iam/api-core/http";
 import { getCookie, setCookie } from "hono/cookie";
+import { getVerificationContext } from "../human-verification-context";
 import * as authService from "./auth.service";
-
-function getRequestIp(c: Context) {
-  const forwardedFor = c.req.header("x-forwarded-for")?.split(",")[0]?.trim();
-  return forwardedFor
-    ?? c.req.header("x-real-ip")
-    ?? c.req.header("cf-connecting-ip")
-    ?? undefined;
-}
-
-function getVerificationContext(c: Context, subject?: string) {
-  return {
-    subject,
-    ip: getRequestIp(c),
-    client: c.req.header("Client"),
-  };
-}
 
 export const loginPassword: AuthRouteHandler<"loginPassword"> = async (c) => {
   const { username, password, capToken } = c.req.valid("json");
