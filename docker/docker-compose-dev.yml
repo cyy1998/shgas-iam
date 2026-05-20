@@ -48,6 +48,7 @@ services:
       PASSWORD_HASH_ROUNDS: 10
       DEFAULT_USER_PASSWORD: default123
       MAGIC_CODE: 1234
+      CAP_ENABLED: true
       WX_CORPID: "wwddf8d65300d53eb1"
       WX_CORPSECRET: "L41cYOgd-wmFEmoHPHXIL6ZHiP-hMzuXT_wsWINjAes"
       SMS_URL: "http://176.169.86.35:17111/v1/thirdparty/common/sms/sendMsg3"
