@@ -1,3 +1,4 @@
+import type { Context } from "hono";
 import type { OpenRouteHandler } from "./open.type";
 import { VerificationCodeUsage } from "@api/enums/verificationCode.usage";
 import * as clientService from "@api/services/client/client.service";
@@ -9,13 +10,7 @@ import { CustomError } from "@iam/api-core/errors/CustomError";
 import * as resp from "@iam/api-core/http";
 import { maskMobile, requirePhoneNumber, resolveResetPasswordMobile } from "./open.service";
 
-type HeaderContext = {
-  req: {
-    header: (name: string) => string | undefined;
-  };
-};
-
-function getRequestIp(c: HeaderContext) {
+function getRequestIp(c: Context) {
   const forwardedFor = c.req.header("x-forwarded-for")?.split(",")[0]?.trim();
   return forwardedFor
     ?? c.req.header("x-real-ip")
@@ -23,7 +18,7 @@ function getRequestIp(c: HeaderContext) {
     ?? undefined;
 }
 
-function getVerificationContext(c: HeaderContext, subject?: string) {
+function getVerificationContext(c: Context, subject?: string) {
   return {
     subject,
     ip: getRequestIp(c),

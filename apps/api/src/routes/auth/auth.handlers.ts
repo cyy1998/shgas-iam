@@ -1,3 +1,4 @@
+import type { Context } from "hono";
 import type { AuthRouteHandler } from "./auth.types";
 import config from "@api/env";
 import { logger } from "@api/lib/logger";
@@ -7,13 +8,7 @@ import * as resp from "@iam/api-core/http";
 import { getCookie, setCookie } from "hono/cookie";
 import * as authService from "./auth.service";
 
-type HeaderContext = {
-  req: {
-    header: (name: string) => string | undefined;
-  };
-};
-
-function getRequestIp(c: HeaderContext) {
+function getRequestIp(c: Context) {
   const forwardedFor = c.req.header("x-forwarded-for")?.split(",")[0]?.trim();
   return forwardedFor
     ?? c.req.header("x-real-ip")
@@ -21,7 +16,7 @@ function getRequestIp(c: HeaderContext) {
     ?? undefined;
 }
 
-function getVerificationContext(c: HeaderContext, subject?: string) {
+function getVerificationContext(c: Context, subject?: string) {
   return {
     subject,
     ip: getRequestIp(c),
