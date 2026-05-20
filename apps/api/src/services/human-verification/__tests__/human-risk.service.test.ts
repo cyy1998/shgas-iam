@@ -71,7 +71,7 @@ mock.module("@api/env", () => ({ default: config }));
 mock.module("@api/lib/clients/redis", () => ({ default: fakeRedis }));
 
 const riskService = await import("../human-risk.service");
-const { HumanVerificationAction } = await import("../human-verification.type");
+const { HumanVerificationAction } = await import("@api/enums/humanVerification.action");
 
 beforeEach(() => {
   fakeRedis.reset();

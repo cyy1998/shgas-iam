@@ -1,5 +1,6 @@
 import type { HumanVerificationContext } from "./human-verification.type";
 import { createHmac } from "node:crypto";
+import { HumanVerificationAction } from "@api/enums/humanVerification.action";
 import config from "@api/env";
 import redis from "@api/lib/clients/redis";
 import { logger } from "@api/lib/logger";
@@ -7,7 +8,6 @@ import Cap from "@cap.js/server";
 import { createSingleton } from "@iam/api-core/core/singleton";
 import * as riskService from "./human-risk.service";
 import { HumanVerificationRequiredError } from "./human-verification.error";
-import { HumanVerificationAction } from "./human-verification.type";
 
 type ChallengeData = {
   challenge: {
