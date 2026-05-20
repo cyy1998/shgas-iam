@@ -1,5 +1,5 @@
 import config from "@api/env";
-import redis from "@api/lib/clients/redis";
+import redis from "@api/lib/infra/redis";
 import orcasClient from "@api/lib/integrations/orcas";
 import wechatClient from "@api/lib/integrations/wechat";
 import * as clientService from "@api/services/client/client.service";

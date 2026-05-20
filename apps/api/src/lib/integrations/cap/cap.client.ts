@@ -1,4 +1,4 @@
-import redis from "@api/lib/clients/redis";
+import redis from "@api/lib/infra/redis";
 import Cap from "@cap.js/server";
 import { createSingleton } from "@iam/api-core/core/singleton";
 

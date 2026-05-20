@@ -68,7 +68,7 @@ const config = {
 const fakeRedis = new FakeRedis();
 
 mock.module("@api/env", () => ({ default: config }));
-mock.module("@api/lib/clients/redis", () => ({ default: fakeRedis }));
+mock.module("@api/lib/infra/redis", () => ({ default: fakeRedis }));
 
 const riskService = await import("../human-risk.service");
 const { HumanVerificationAction } = await import("@api/enums/humanVerification.action");

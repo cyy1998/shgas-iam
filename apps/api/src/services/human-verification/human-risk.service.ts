@@ -1,7 +1,7 @@
 import type { HumanVerificationContext } from "./human-verification.type";
 import { HumanVerificationAction } from "@api/enums/humanVerification.action";
 import config from "@api/env";
-import redis from "@api/lib/clients/redis";
+import redis from "@api/lib/infra/redis";
 
 type Dimension = "subject" | "ip" | "client";
 

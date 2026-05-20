@@ -1,4 +1,4 @@
-import redis from "@api/lib/clients/redis";
+import redis from "@api/lib/infra/redis";
 import * as clientService from "@api/services/client/client.service";
 import { UserDetailDtoSchema } from "@api/services/user/user.schema";
 import {

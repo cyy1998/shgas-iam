@@ -1,5 +1,5 @@
 import type { ClientCreateDto, ClientDto, ClientInputDto } from "./client.type";
-import redis from "@admin-api/lib/clients/redis";
+import redis from "@admin-api/lib/infra/redis";
 import * as clientRepository from "@admin-api/services/client/client.repository";
 import { ClientDtoSchema } from "@admin-api/services/client/client.schema";
 import db from "@iam/db";

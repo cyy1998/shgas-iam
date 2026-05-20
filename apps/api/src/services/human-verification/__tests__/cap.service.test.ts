@@ -57,7 +57,7 @@ class FakeCap {
 }
 
 mock.module("@api/env", () => ({ default: config }));
-mock.module("@api/lib/clients/redis", () => ({ default: fakeRedis }));
+mock.module("@api/lib/infra/redis", () => ({ default: fakeRedis }));
 mock.module("@cap.js/server", () => ({ default: FakeCap }));
 
 const capService = await import("../cap.service");

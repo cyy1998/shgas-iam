@@ -107,7 +107,7 @@ mock.module("@api/env", () => ({
   },
 }));
 
-mock.module("@api/lib/clients/redis", () => ({
+mock.module("@api/lib/infra/redis", () => ({
   default: fakeRedis,
 }));
 

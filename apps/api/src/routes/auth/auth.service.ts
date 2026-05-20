@@ -2,7 +2,7 @@ import type { ClientDto } from "@api/services/client/client.type";
 import type { HumanVerificationContext } from "@api/services/human-verification/human-verification.type";
 import { VerificationCodeUsage } from "@api/enums/verificationCode.usage";
 import config from "@api/env";
-import redis from "@api/lib/clients/redis";
+import redis from "@api/lib/infra/redis";
 import * as humanVerification from "@api/services/human-verification/cap.service";
 import * as humanRiskService from "@api/services/human-verification/human-risk.service";
 import { isHumanVerificationRequiredError } from "@api/services/human-verification/human-verification.error";

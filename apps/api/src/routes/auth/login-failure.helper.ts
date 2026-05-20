@@ -1,4 +1,4 @@
-import redis from "@api/lib/clients/redis";
+import redis from "@api/lib/infra/redis";
 
 export const LOGIN_FAILURE_THRESHOLD = 5;
 export const LOGIN_FAILURE_WINDOW_SECONDS = 30 * 60;

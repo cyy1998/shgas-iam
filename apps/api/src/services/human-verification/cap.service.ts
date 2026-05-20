@@ -2,7 +2,7 @@ import type { HumanVerificationContext } from "./human-verification.type";
 import { createHmac } from "node:crypto";
 import { HumanVerificationAction } from "@api/enums/humanVerification.action";
 import config from "@api/env";
-import redis from "@api/lib/clients/redis";
+import redis from "@api/lib/infra/redis";
 import capClient from "@api/lib/integrations/cap";
 import { logger } from "@api/lib/logger";
 import * as riskService from "./human-risk.service";

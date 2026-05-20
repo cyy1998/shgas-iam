@@ -1,5 +1,5 @@
 import config from "@api/env";
-import redis from "@api/lib/clients/redis";
+import redis from "@api/lib/infra/redis";
 import { z } from "@hono/zod-openapi";
 import { createSingleton } from "@iam/api-core/core/singleton";
 

@@ -1,5 +1,5 @@
 import type { ClientDto } from "./client.type";
-import redis from "@api/lib/clients/redis";
+import redis from "@api/lib/infra/redis";
 import * as clientRepository from "@api/services/client/client.repository";
 import { ClientDtoSchema } from "@api/services/client/client.schema";
 import { reviveIsoDates } from "@iam/api-core/utils";
