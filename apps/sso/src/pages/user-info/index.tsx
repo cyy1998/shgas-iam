@@ -7,6 +7,7 @@ import {
   SafetyCertificateOutlined,
   UserOutlined,
 } from '@ant-design/icons';
+import { withHumanVerification } from '@sso/lib/human-verification';
 import { selfMobileSendMsg } from '@sso/services/open';
 import { mobileSet, passwordChange } from '@sso/services/public';
 import {
@@ -28,6 +29,7 @@ export default function UserInfoPage() {
   const { userInfo, loadUserInfo } = useModel('sso');
   const [activeKey, setActiveKey] = useState<TabKey>('password');
   const [submitting, setSubmitting] = useState(false);
+  const [smsSending, setSmsSending] = useState(false);
   const [countdown, setCountdown] = useState(0);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const [pwdForm] = Form.useForm();
@@ -65,10 +67,18 @@ export default function UserInfoPage() {
     }
     if (countdown > 0) return;
     try {
-      await selfMobileSendMsg({ phoneNumber, usage: 'bindPhone' });
+      setSmsSending(true);
+      const body = { phoneNumber, usage: 'bindPhone' } as const;
+      await withHumanVerification(
+        'sendSmsCode',
+        () => selfMobileSendMsg(body),
+        (capToken) => selfMobileSendMsg({ ...body, capToken }),
+      );
       startCountdown();
     } catch (e) {
       if (!(e instanceof ServiceError)) throw e;
+    } finally {
+      setSmsSending(false);
     }
   };
 
@@ -309,10 +319,14 @@ export default function UserInfoPage() {
                           <button
                             className="profile-code-btn"
                             type="button"
-                            disabled={countdown > 0}
+                            disabled={countdown > 0 || smsSending}
                             onClick={sendCode}
                           >
-                            {countdown <= 0 ? '获取验证码' : `${countdown} s`}
+                            {smsSending
+                              ? '校验中'
+                              : countdown <= 0
+                                ? '获取验证码'
+                                : `${countdown} s`}
                           </button>
                         }
                       />

@@ -7,6 +7,7 @@ import {
   UserOutlined,
 } from '@ant-design/icons';
 import logo from '@sso/assets/logo.png';
+import { withHumanVerification } from '@sso/lib/human-verification';
 import { buildAuthorizeUrl } from '@sso/lib/sso';
 import { login, mobileLogin } from '@sso/services/auth';
 import { sendMessage } from '@sso/services/open';
@@ -24,6 +25,7 @@ export default function LoginPage() {
   const { authConfig } = useModel('sso');
   const [mode, setMode] = useState<LoginMode>('PWD');
   const [submitting, setSubmitting] = useState(false);
+  const [smsSending, setSmsSending] = useState(false);
   const [countdown, setCountdown] = useState(0);
   const [pwdForm] = Form.useForm();
   const [smsForm] = Form.useForm();
@@ -70,10 +72,15 @@ export default function LoginPage() {
     const values = await pwdForm.validateFields();
     setSubmitting(true);
     try {
-      const data = await login({
+      const body = {
         username: values.username.trim(),
         password: values.password.trim(),
-      });
+      };
+      const data = await withHumanVerification(
+        'passwordLogin',
+        () => login(body),
+        (capToken) => login({ ...body, capToken }),
+      );
       if (!data.isMobileSet) {
         setMode('BMN');
         smsForm.resetFields();
@@ -91,10 +98,15 @@ export default function LoginPage() {
     const values = await smsForm.validateFields();
     setSubmitting(true);
     try {
-      await mobileLogin({
+      const body = {
         phoneNumber: values.phoneNumber.trim(),
         code: values.code.trim(),
-      });
+      };
+      await withHumanVerification(
+        'mobileLogin',
+        () => mobileLogin(body),
+        (capToken) => mobileLogin({ ...body, capToken }),
+      );
       redirectToAuthorize();
     } catch (e) {
       if (!(e instanceof ServiceError)) throw e;
@@ -134,13 +146,21 @@ export default function LoginPage() {
       return;
     }
     try {
-      await sendMessage({
+      setSmsSending(true);
+      const body = {
         phoneNumber: phoneNumber.trim(),
         usage: mode === 'BMN' ? 'bindPhone' : 'login',
-      });
+      } as const;
+      await withHumanVerification(
+        'sendSmsCode',
+        () => sendMessage(body),
+        (capToken) => sendMessage({ ...body, capToken }),
+      );
       startCountdown();
     } catch (e) {
       if (!(e instanceof ServiceError)) throw e;
+    } finally {
+      setSmsSending(false);
     }
   };
 
@@ -358,10 +378,14 @@ export default function LoginPage() {
                     <button
                       className="sms-code-btn"
                       type="button"
-                      disabled={countdown > 0}
+                      disabled={countdown > 0 || smsSending}
                       onClick={sendSms}
                     >
-                      {countdown <= 0 ? '获取验证码' : `${countdown} s`}
+                      {smsSending
+                        ? '校验中'
+                        : countdown <= 0
+                          ? '获取验证码'
+                          : `${countdown} s`}
                     </button>
                   }
                 />

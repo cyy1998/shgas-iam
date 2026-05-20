@@ -31,6 +31,7 @@ export const userInfo = createRoute({
   request: {
     query: z.object({
       username: z.string(),
+      capToken: z.string().optional(),
     }),
   },
   responses: {
@@ -47,6 +48,7 @@ export const codeSend = createRoute({
       phoneNumber: z.string().optional().openapi({ example: "138****1234" }),
       username: z.string().optional().openapi({ example: "zhangsan" }),
       usage: z.enum(Object.values(VerificationCodeUsage)).openapi({ example: "login" }),
+      capToken: z.string().optional(),
     }), "发送短信验证码参数"),
   },
   responses: {
@@ -85,5 +87,50 @@ export const passwordReset = createRoute({
   },
   responses: {
     [HttpStatusCodes.OK]: jsonContent(createSuccessResponseSchema(z.boolean()), "密码重置结果"),
+  },
+});
+
+export const capChallenge = createRoute({
+  method: "post",
+  path: `${routePrefix}/cap/{siteKey}/challenge`,
+  tags,
+  request: {
+    params: z.object({
+      siteKey: z.string(),
+    }),
+  },
+  responses: {
+    [HttpStatusCodes.OK]: jsonContent(z.object({
+      challenge: z.object({
+        c: z.number(),
+        s: z.number(),
+        d: z.number(),
+      }),
+      token: z.string().optional(),
+      expires: z.number(),
+    }), "Cap challenge"),
+  },
+});
+
+export const capRedeem = createRoute({
+  method: "post",
+  path: `${routePrefix}/cap/{siteKey}/redeem`,
+  tags,
+  request: {
+    params: z.object({
+      siteKey: z.string(),
+    }),
+    body: jsonContentRequired(z.object({
+      token: z.string().optional(),
+      solutions: z.array(z.number()).optional(),
+    }), "Cap challenge solution"),
+  },
+  responses: {
+    [HttpStatusCodes.OK]: jsonContent(z.object({
+      success: z.boolean(),
+      message: z.string().optional(),
+      token: z.string().optional(),
+      expires: z.number().optional(),
+    }), "Cap token redeem result"),
   },
 });

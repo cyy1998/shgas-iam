@@ -1,5 +1,8 @@
-import { UserStatus, UserType } from "@iam/contracts";
+import { CustomError } from "@iam/api-core/errors/CustomError";
+import { ServiceStatusCode, UserStatus, UserType } from "@iam/contracts";
 import { beforeEach, describe, expect, mock, test } from "bun:test";
+
+mock.restore();
 
 type RedisResult = [Error | null, unknown];
 type RedisOperation = () => unknown;
@@ -69,6 +72,8 @@ const fakeRedis = new FakeRedis();
 const SESSION_ID = "00000000-0000-4000-8000-000000000000";
 const loginLogs: unknown[] = [];
 const pausedUserIds: number[] = [];
+const humanRiskLoginFailures: unknown[] = [];
+const ensureActionAllowed = mock(async () => undefined);
 
 let passwordMatches = false;
 let verificationCodeMatches = false;
@@ -140,6 +145,26 @@ mock.module("@api/services/session/session.service", () => ({
   },
 }));
 
+mock.module("@api/services/human-verification/cap.service", () => ({
+  HumanVerificationAction: {
+    MobileLogin: "mobileLogin",
+    PasswordLogin: "passwordLogin",
+  },
+  ensureActionAllowed,
+}));
+
+mock.module("@api/services/human-verification/human-verification.error", () => ({
+  isHumanVerificationRequiredError(error: unknown) {
+    return error instanceof CustomError && error.code === ServiceStatusCode.HumanVerificationRequired;
+  },
+}));
+
+mock.module("@api/services/human-verification/human-risk.service", () => ({
+  async recordLoginFailure(...args: unknown[]) {
+    humanRiskLoginFailures.push(args);
+  },
+}));
+
 const authService = await import("../auth.service");
 const loginFailureHelper = await import("../login-failure.helper");
 
@@ -151,6 +176,9 @@ beforeEach(() => {
   fakeRedis.reset();
   loginLogs.length = 0;
   pausedUserIds.length = 0;
+  humanRiskLoginFailures.length = 0;
+  ensureActionAllowed.mockReset();
+  ensureActionAllowed.mockResolvedValue(undefined);
   passwordMatches = false;
   verificationCodeMatches = false;
   activeMobileUser = { id: USER_ID };
@@ -227,6 +255,44 @@ describe("auth login failure suspension", () => {
       "验证码错误，当前已连续失败 5 次，距离账号暂停还有 0 次，账号已暂停",
     );
     expect(pausedUserIds).toEqual([USER_ID]);
+  });
+
+  test("records human verification risk state for credential failures", async () => {
+    await expectCredentialError(authService.loginPassword(userDetail.username, "wrong-password"), "密码错误");
+    await expectCredentialError(authService.loginMobile(MOBILE, "0000"), "验证码错误");
+
+    expect(humanRiskLoginFailures).toEqual([
+      ["passwordLogin", { subject: userDetail.username }],
+      ["mobileLogin", { subject: MOBILE }],
+    ]);
+  });
+
+  test("stops password login when human verification is required", async () => {
+    ensureActionAllowed.mockRejectedValue(
+      new CustomError("需要人机校验", ServiceStatusCode.HumanVerificationRequired),
+    );
+
+    await expect(authService.loginPassword(userDetail.username, "wrong-password")).rejects.toHaveProperty(
+      "code",
+      ServiceStatusCode.HumanVerificationRequired,
+    );
+
+    expect(humanRiskLoginFailures).toHaveLength(0);
+    expect(fakeRedis.countFailures(USER_ID)).toBe(0);
+  });
+
+  test("stops mobile login when human verification is required", async () => {
+    ensureActionAllowed.mockRejectedValue(
+      new CustomError("需要人机校验", ServiceStatusCode.HumanVerificationRequired),
+    );
+
+    await expect(authService.loginMobile(MOBILE, "0000")).rejects.toHaveProperty(
+      "code",
+      ServiceStatusCode.HumanVerificationRequired,
+    );
+
+    expect(humanRiskLoginFailures).toHaveLength(0);
+    expect(fakeRedis.countFailures(USER_ID)).toBe(0);
   });
 
   test("magic code login does not record a failure", async () => {

@@ -7,9 +7,34 @@ import * as resp from "@iam/api-core/http";
 import { getCookie, setCookie } from "hono/cookie";
 import * as authService from "./auth.service";
 
+type HeaderContext = {
+  req: {
+    header: (name: string) => string | undefined;
+  };
+};
+
+function getRequestIp(c: HeaderContext) {
+  const forwardedFor = c.req.header("x-forwarded-for")?.split(",")[0]?.trim();
+  return forwardedFor
+    ?? c.req.header("x-real-ip")
+    ?? c.req.header("cf-connecting-ip")
+    ?? undefined;
+}
+
+function getVerificationContext(c: HeaderContext, subject?: string) {
+  return {
+    subject,
+    ip: getRequestIp(c),
+    client: c.req.header("Client"),
+  };
+}
+
 export const loginPassword: AuthRouteHandler<"loginPassword"> = async (c) => {
-  const { username, password } = c.req.valid("json");
-  const data = await authService.loginPassword(username, password);
+  const { username, password, capToken } = c.req.valid("json");
+  const data = await authService.loginPassword(username, password, {
+    capToken,
+    context: getVerificationContext(c, username),
+  });
   setCookie(c, "global_session", data.token, {
     httpOnly: true,
     sameSite: "Lax", // 防 CSRF；Lax 允许顶级导航带上 cookie，SSO 跨站跳回时会话不丢
@@ -20,8 +45,11 @@ export const loginPassword: AuthRouteHandler<"loginPassword"> = async (c) => {
 };
 
 export const loginMobile: AuthRouteHandler<"loginMobile"> = async (c) => {
-  const { code, phoneNumber } = c.req.valid("json");
-  const data = await authService.loginMobile(phoneNumber, code);
+  const { code, phoneNumber, capToken } = c.req.valid("json");
+  const data = await authService.loginMobile(phoneNumber, code, {
+    capToken,
+    context: getVerificationContext(c, phoneNumber),
+  });
   setCookie(c, "global_session", data.token, {
     httpOnly: true,
     sameSite: "Lax", // 防 CSRF；Lax 允许顶级导航带上 cookie，SSO 跨站跳回时会话不丢

@@ -25,6 +25,7 @@
     "typecheck": "pnpm exec tsgo --noEmit"
   },
   "dependencies": {
+    "@cap.js/server": "^4.0.5",
     "@hono/zod-openapi": "^1.4.0",
     "@iam/api-core": "workspace:*",
     "@iam/contracts": "workspace:*",

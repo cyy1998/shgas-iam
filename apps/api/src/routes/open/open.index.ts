@@ -5,6 +5,8 @@ import * as routes from "./open.routes";
 const router = createRouter();
 
 router.openapi(routes.clientStatus, handlers.clientStatus)
+  .openapi(routes.capChallenge, handlers.capChallenge)
+  .openapi(routes.capRedeem, handlers.capRedeem)
   .openapi(routes.userInfo, handlers.userInfo)
   .openapi(routes.codeSend, handlers.codeSend)
   .openapi(routes.codeVerify, handlers.codeVerify)

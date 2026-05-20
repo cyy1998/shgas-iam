@@ -8,3 +8,14 @@ export const SSO_CLIENT_CODE = process.env.UMI_APP_SSO_CLIENT_CODE || 'iam';
 export const WELL_KNOWN_URL =
   process.env.UMI_APP_WELL_KNOWN_URL ||
   '/sso/.well-known/authentication-configuration';
+
+export const CAP_SITE_KEY = process.env.UMI_APP_CAP_SITE_KEY || 'iam-sso';
+
+function withTrailingSlash(value: string) {
+  return value.endsWith('/') ? value : `${value}/`;
+}
+
+export const CAP_API_ENDPOINT = withTrailingSlash(
+  process.env.UMI_APP_CAP_ENDPOINT ||
+    `${API_PREFIX}/open/cap/${CAP_SITE_KEY}/`,
+);

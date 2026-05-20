@@ -79,6 +79,9 @@ export async function request<T>(
 
   if (body.code !== ServiceStatusCode.Success) {
     const msg = body.message || '请求失败';
+    if (body.code === ServiceStatusCode.HumanVerificationRequired) {
+      throw new ServiceError(msg, body.code);
+    }
     message.error(msg);
     throw new ServiceError(msg, body.code);
   }

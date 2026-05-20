@@ -26,6 +26,12 @@ export type UserInfo = {
 
 export type SmsUsage = 'login' | 'resetPassword' | 'bindPhone';
 
+export type HumanVerificationAction =
+  | 'sendSmsCode'
+  | 'passwordLogin'
+  | 'mobileLogin'
+  | 'openUserInfoLookup';
+
 export type LoginPasswordResult = {
   isMobileSet: boolean;
 };

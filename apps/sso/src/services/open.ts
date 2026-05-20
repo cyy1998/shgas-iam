@@ -6,6 +6,7 @@ export function sendMessage(body: {
   phoneNumber?: string;
   username?: string;
   usage: SmsUsage;
+  capToken?: string;
 }) {
   return request<void>('/open/code/send', {
     method: 'POST',
@@ -16,8 +17,9 @@ export function sendMessage(body: {
 export function selfMobileSendMsg(body: {
   phoneNumber: string;
   usage: SmsUsage;
+  capToken?: string;
 }) {
-  return request<void>('/open/sendMessage', {
+  return request<void>('/open/code/send', {
     method: 'POST',
     body: JSON.stringify(body),
   });
@@ -54,7 +56,7 @@ export function clientStatus(params: { clientCode: string }) {
   });
 }
 
-export function usersUserInfo(params: { username: string }) {
+export function usersUserInfo(params: { username: string; capToken?: string }) {
   const qs = toQueryString(params);
   return request<Pick<UserInfo, 'username' | 'name' | 'mobile'>>(
     `/open/users/userInfo?${qs}`,

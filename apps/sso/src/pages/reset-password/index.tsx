@@ -7,6 +7,7 @@ import {
   UserOutlined,
 } from '@ant-design/icons';
 import logo from '@sso/assets/logo.png';
+import { withHumanVerification } from '@sso/lib/human-verification';
 import {
   codeVerify,
   passwordReset,
@@ -111,7 +112,12 @@ export default function ResetPasswordPage() {
     try {
       if (current === 0) {
         const v = await form1.validateFields();
-        const data = await usersUserInfo({ username: v.username });
+        const body = { username: v.username };
+        const data = await withHumanVerification(
+          'openUserInfoLookup',
+          () => usersUserInfo(body),
+          (capToken) => usersUserInfo({ ...body, capToken }),
+        );
         if (data.mobile) {
           setMobileOptions([
             { label: `手机号：${data.mobile}`, value: data.mobile },
@@ -183,11 +189,16 @@ export default function ResetPasswordPage() {
     if (countdown > 0) return;
     setLoading(true);
     try {
-      await sendMessage({
+      const body = {
         username: form1.getFieldValue('username'),
         phoneNumber,
         usage: 'resetPassword',
-      });
+      } as const;
+      await withHumanVerification(
+        'sendSmsCode',
+        () => sendMessage(body),
+        (capToken) => sendMessage({ ...body, capToken }),
+      );
       startCountdown();
     } catch (e) {
       if (!(e instanceof ServiceError)) throw e;

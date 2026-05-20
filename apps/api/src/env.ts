@@ -1,5 +1,14 @@
 import { z } from "@hono/zod-openapi";
 
+function booleanString(defaultValue: boolean) {
+  return z.string().optional().transform((value) => {
+    if (value === undefined || value.trim() === "") {
+      return defaultValue;
+    }
+    return ["1", "true", "yes", "on"].includes(value.trim().toLowerCase());
+  });
+}
+
 const EnvSchema = z.object({
   DATABASE_URL: z.string().min(1),
   PASSWORD_HASH_ROUNDS: z.coerce.number().default(10),
@@ -25,6 +34,14 @@ const EnvSchema = z.object({
   LOGOUT_ENDPOINT: z.string(),
   THIRDPARTY_OA_ENDPOINT: z.string(),
   LOG_LEVEL: z.string().default("info"),
+  CAP_ENABLED: booleanString(false),
+  CAP_SITE_KEY: z.string().default("iam-sso"),
+  CAP_SECRET: z.string().default("dev-cap-secret-change-me"),
+  CAP_CHALLENGE_TTL_MS: z.coerce.number().default(10 * 60 * 1000),
+  CAP_TOKEN_TTL_SECONDS: z.coerce.number().default(10 * 60),
+  HUMAN_VERIFICATION_WINDOW_SECONDS: z.coerce.number().default(10 * 60),
+  HUMAN_VERIFICATION_LOGIN_FAILURE_THRESHOLD: z.coerce.number().default(3),
+  HUMAN_VERIFICATION_LOOKUP_THRESHOLD: z.coerce.number().default(20),
 });
 
 export type Env = z.infer<typeof EnvSchema>;

@@ -15,6 +15,7 @@ export const loginPassword = createRoute({
     body: jsonContentRequired(z.object({
       username: z.string().openapi({ example: "138550" }),
       password: z.string().openapi({ example: "1234" }),
+      capToken: z.string().optional(),
     }), "用户名密码登录参数"),
   },
   responses: {
@@ -38,6 +39,7 @@ export const loginMobile = createRoute({
     body: jsonContentRequired(z.object({
       phoneNumber: z.string().openapi({ example: "17721462865" }),
       code: z.string().openapi({ example: "1234" }),
+      capToken: z.string().optional(),
     }), "手机登录参数"),
   },
   responses: {
