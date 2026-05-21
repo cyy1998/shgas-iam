@@ -7,6 +7,7 @@ import {
   UserOutlined,
 } from '@ant-design/icons';
 import logo from '@sso/assets/logo.png';
+import logoWhite from '@sso/assets/logo-white.png';
 import { withHumanVerification } from '@sso/lib/human-verification';
 import { buildAuthorizeUrl } from '@sso/lib/sso';
 import { login, mobileLogin } from '@sso/services/auth';
@@ -201,7 +202,7 @@ export default function LoginPage() {
         <div className="login-shell">
           <section className="brand-panel" aria-label="上海燃气身份认证平台">
             <div className="brand-top">
-              <img src={logo} alt="上海燃气" />
+              <img src={logoWhite} alt="上海燃气" />
               <span>SHANGHAI GAS IAM</span>
             </div>
             <div className="brand-copy">
@@ -236,7 +237,7 @@ export default function LoginPage() {
       <div className="login-shell">
         <section className="brand-panel" aria-label="上海燃气身份认证平台">
           <div className="brand-top">
-            <img src={logo} alt="上海燃气" />
+            <img src={logoWhite} alt="上海燃气" />
             <span>SHANGHAI GAS IAM</span>
           </div>
 
