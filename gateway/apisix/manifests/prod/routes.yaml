@@ -1,0 +1,77 @@
+routes:
+  - id: iam-api-prod
+    name: iam-api-prod
+    desc: Compatibility route matching the current production /api/iam/* APISIX prefix
+    hosts:
+      - app.shgas.com
+      - tender.shgas.com.cn
+      - jsc.shgas.com.cn
+    uri: /api/iam/*
+    service_id: iam-api-prod
+    plugins:
+      proxy-rewrite:
+        regex_uri:
+          - ^/api/iam/(.*)
+          - /$1
+        use_real_request_uri_unsafe: false
+    labels:
+      managed_by: shgas-iam
+      source: repo-manifest
+      env: prod
+
+  - id: iam-sso-prod
+    name: iam-sso-prod
+    desc: IAM SSO route matching the current production /sso/* APISIX prefix
+    hosts:
+      - app.shgas.com
+      - tender.shgas.com.cn
+      - jsc.shgas.com.cn
+    uri: /sso/*
+    service_id: iam-api-prod
+    plugin_config_id: iam-sso-cors-prod
+    labels:
+      managed_by: shgas-iam
+      source: repo-manifest
+      env: prod
+
+  - id: iam-admin-rpc-prod
+    name: iam-admin-rpc-prod
+    desc: Compatibility route matching the current production /api/iam/rpc/* APISIX prefix
+    hosts:
+      - app.shgas.com
+    uri: /api/iam/rpc/*
+    service_id: iam-admin-api-prod
+    plugins:
+      proxy-rewrite:
+        regex_uri:
+          - ^/api/iam/(.*)
+          - /$1
+        use_real_request_uri_unsafe: false
+    labels:
+      managed_by: shgas-iam
+      source: repo-manifest
+      env: prod
+
+  - id: iam-admin-rest-prod
+    name: iam-admin-rest-prod
+    desc: Canonical IAM admin REST route for production
+    hosts:
+      - ${IAM_ADMIN_HOST}
+    uri: /admin/*
+    service_id: iam-admin-api-prod
+    labels:
+      managed_by: shgas-iam
+      source: repo-manifest
+      env: prod
+
+  - id: iam-admin-rpc-canonical-prod
+    name: iam-admin-rpc-canonical-prod
+    desc: Canonical IAM admin RPC route for production
+    hosts:
+      - ${IAM_ADMIN_HOST}
+    uri: /rpc/*
+    service_id: iam-admin-api-prod
+    labels:
+      managed_by: shgas-iam
+      source: repo-manifest
+      env: prod

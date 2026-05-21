@@ -29,6 +29,34 @@ services:
       timeout: 5s
       retries: 5
 
+  apisix-etcd:
+    image: ${APISIX_ETCD_IMAGE:-bitnamilegacy/etcd:3.5.11}
+    restart: unless-stopped
+    environment:
+      ALLOW_NONE_AUTHENTICATION: "yes"
+      ETCD_ADVERTISE_CLIENT_URLS: http://apisix-etcd:2379
+      ETCD_LISTEN_CLIENT_URLS: http://0.0.0.0:2379
+    volumes:
+      - apisix_etcd_data:/bitnami/etcd
+    healthcheck:
+      test: ["CMD", "etcdctl", "endpoint", "health", "--endpoints=http://127.0.0.1:2379"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  apisix:
+    image: docker.xuanyuan.run/apache/apisix:3.16.0-debian
+    restart: unless-stopped
+    ports:
+      - "9080:9080"
+      - "9443:9443"
+      - "127.0.0.1:9180:9180"
+    volumes:
+      - ../gateway/apisix/config/config.dev.yaml:/usr/local/apisix/conf/config.yaml:ro
+    depends_on:
+      apisix-etcd:
+        condition: service_healthy
+
   api:
     build:
       context: ..
@@ -97,3 +125,4 @@ services:
 volumes:
   db_data:
   redis_data:
+  apisix_etcd_data:

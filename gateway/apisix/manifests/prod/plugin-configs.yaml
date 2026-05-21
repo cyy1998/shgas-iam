@@ -1,0 +1,42 @@
+plugin_configs:
+  - id: iam-sso-cors-prod
+    desc: Default CORS policy for IAM SSO browser endpoints
+    plugins:
+      cors:
+        allow_credential: false
+        allow_headers: "*"
+        allow_methods: "*"
+        allow_origins: ${IAM_SSO_CORS_ALLOW_ORIGINS}
+        max_age: 5
+    labels:
+      managed_by: shgas-iam
+      source: repo-manifest
+      env: prod
+      template: cors-sso
+
+  - id: iam-forward-auth-template-prod
+    desc: Template reference for IAM-managed dynamic third-party application auth
+    plugins:
+      forward-auth:
+        allow_degradation: false
+        client_headers:
+          - Forbidden-Reason
+        keepalive: true
+        keepalive_pool: 5
+        keepalive_timeout: 60000
+        request_headers:
+          - Cookie
+          - Client
+          - Authorization
+        request_method: GET
+        ssl_verify: false
+        status_on_error: 403
+        timeout: 3000
+        upstream_headers:
+          - X-User-Info
+        uri: ${IAM_FORWARD_AUTH_URL}
+    labels:
+      managed_by: shgas-iam
+      source: repo-manifest
+      env: prod
+      template: forward-auth

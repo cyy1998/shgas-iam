@@ -1,0 +1,21 @@
+services:
+  - id: iam-api-dev
+    name: iam-api-dev
+    desc: IAM public API service baseline
+    upstream_id: iam-api-dev
+    plugins:
+      prometheus:
+        prefer_name: true
+    labels:
+      managed_by: shgas-iam
+      source: repo-manifest
+      env: dev
+
+  - id: iam-admin-api-dev
+    name: iam-admin-api-dev
+    desc: IAM admin API service baseline
+    upstream_id: iam-admin-api-dev
+    labels:
+      managed_by: shgas-iam
+      source: repo-manifest
+      env: dev

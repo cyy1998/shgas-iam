@@ -1,0 +1,29 @@
+deployment:
+  role: traditional
+  role_traditional:
+    config_provider: etcd
+  admin:
+    allow_admin:
+      - ${APISIX_ADMIN_ALLOW_CIDR}
+    admin_key:
+      - name: admin
+        key: ${APISIX_ADMIN_KEY}
+        role: admin
+  etcd:
+    host:
+      - ${APISIX_ETCD_ENDPOINT}
+    prefix: /apisix
+    timeout: 30
+
+apisix:
+  node_listen: 9080
+  enable_admin: true
+  enable_admin_cors: false
+  ssl:
+    enable: true
+    listen:
+      - port: 9443
+
+plugin_attr:
+  prometheus:
+    export_uri: /apisix/prometheus/metrics
