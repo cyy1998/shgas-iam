@@ -19,6 +19,7 @@
     "serve": "bun run src/index.ts",
     "lint": "eslint src/",
     "lint:fix": "eslint --fix src/",
+    "test": "bun test --parallel",
     "typecheck": "pnpm exec tsgo --noEmit"
   },
   "dependencies": {

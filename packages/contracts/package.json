@@ -8,6 +8,7 @@
   },
   "scripts": {
     "lint": "eslint src/",
+    "test": "bun test --parallel",
     "typecheck": "pnpm exec tsgo --noEmit"
   },
   "devDependencies": {

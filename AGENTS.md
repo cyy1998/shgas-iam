@@ -31,13 +31,14 @@ Do not hand-edit generated frontend directories such as `apps/admin/src/.umi/`, 
 - `pnpm dev`: start all workspace dev tasks through Turbo.
 - `pnpm build`: build all packages in dependency order.
 - `pnpm lint`: run workspace lint tasks.
+- `pnpm test`: run workspace tests through Turbo; backend/shared package test scripts use `bun test --parallel` for per-file isolation, while frontend packages should use their own configured test runner when one is added.
 - `pnpm typecheck`: run workspace type checks.
 - `pnpm --filter @iam/api dev`: run the public API with Bun hot reload on the app-configured port.
 - `pnpm --filter @iam/api serve`: run the public API without hot reload.
 - `pnpm --filter @iam/admin-api dev`: run the admin API with Bun hot reload.
 - `pnpm --filter @iam/admin-api serve`: run the admin API without hot reload.
-- `pnpm --filter @iam/api lint` / `pnpm --filter @iam/api typecheck`: validate public API code.
-- `pnpm --filter @iam/admin-api lint` / `pnpm --filter @iam/admin-api typecheck`: validate admin API code.
+- `pnpm --filter @iam/api lint` / `pnpm --filter @iam/api test` / `pnpm --filter @iam/api typecheck`: validate public API code.
+- `pnpm --filter @iam/admin-api lint` / `pnpm --filter @iam/admin-api test` / `pnpm --filter @iam/admin-api typecheck`: validate admin API code.
 - `pnpm --filter @iam/db db:push`: quickly sync Drizzle schema to a local development database.
 - `pnpm --filter @iam/db db:generate`: generate Drizzle migration files.
 - `pnpm --filter @iam/db db:migrate`: apply Drizzle migrations.
@@ -65,10 +66,12 @@ For Drizzle schema work:
 - Keep join-table primary keys, indexes, and uniqueness constraints explicit.
 
 ## Testing Guidelines
-There is no committed automated test framework yet. Minimum validation before a PR:
+Bun tests are available through package-level `test` scripts. Minimum validation before a PR:
 
 - Place test files in a `__tests__/` directory next to the code under test, for example `src/services/position/__tests__/position.service.test.ts`.
-- run `pnpm lint` and `pnpm typecheck`, or the narrower filtered commands for the touched app/package
+- run `pnpm test`, `pnpm lint`, and `pnpm typecheck`, or the narrower filtered commands for the touched app/package
+- backend/shared package test scripts use `bun test --parallel`; keep module mocks local to each test file and prefer the package script over raw `bun test` when running several files together
+- frontend packages should use their own configured test runner rather than inheriting Bun test semantics
 - for Drizzle schema changes, run the appropriate `@iam/db` command: `db:push` for local sync or `db:generate` + `db:migrate` when producing migrations
 - smoke-test public API endpoints via the public API Scalar UI at `http://localhost:30000` or each public tier's `/doc` endpoint
 - smoke-test admin API endpoints via the admin API Scalar UI at `http://localhost:30001` or `/admin/doc` and `/rpc/doc`

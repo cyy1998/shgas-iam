@@ -22,6 +22,7 @@
     "db:migrate": "pnpm --filter @iam/db db:migrate",
     "db:push": "pnpm --filter @iam/db db:push",
     "migrate:mysql-to-postgres": "bun scripts/migrate-mysql-to-postgres.ts",
+    "test": "bun test --parallel",
     "typecheck": "pnpm exec tsgo --noEmit"
   },
   "dependencies": {

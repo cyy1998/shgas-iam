@@ -211,6 +211,7 @@ pnpm --filter @iam/sso dev
 pnpm dev
 pnpm build
 pnpm lint
+pnpm test
 pnpm typecheck
 ```
 
@@ -221,6 +222,7 @@ pnpm --filter @iam/api dev
 pnpm --filter @iam/api serve
 pnpm --filter @iam/api lint
 pnpm --filter @iam/api lint:fix
+pnpm --filter @iam/api test
 pnpm --filter @iam/api typecheck
 pnpm --filter @iam/api migrate:mysql-to-postgres
 ```
@@ -232,6 +234,7 @@ pnpm --filter @iam/admin-api dev
 pnpm --filter @iam/admin-api serve
 pnpm --filter @iam/admin-api lint
 pnpm --filter @iam/admin-api lint:fix
+pnpm --filter @iam/admin-api test
 pnpm --filter @iam/admin-api typecheck
 ```
 
@@ -239,6 +242,7 @@ pnpm --filter @iam/admin-api typecheck
 
 ```bash
 pnpm --filter @iam/db lint
+pnpm --filter @iam/db test
 pnpm --filter @iam/db typecheck
 pnpm --filter @iam/db db:generate
 pnpm --filter @iam/db db:migrate
@@ -249,8 +253,10 @@ pnpm --filter @iam/db db:push
 
 ```bash
 pnpm --filter @iam/api-core lint
+pnpm --filter @iam/api-core test
 pnpm --filter @iam/api-core typecheck
 pnpm --filter @iam/contracts lint
+pnpm --filter @iam/contracts test
 pnpm --filter @iam/contracts typecheck
 ```
 
@@ -472,6 +478,7 @@ docker compose -f docker/docker-compose-dev.yml up -d
 - API 调试：开发环境分别访问 <http://localhost:30000> 和 <http://localhost:30001>
 - 数据调试：Drizzle Kit 命令或直接连接本地 PostgreSQL
 - 前端代理：查看 `apps/admin/.umirc.ts` 和 `apps/sso/.umirc.ts`
+- 测试：`pnpm test`，已配置 Bun 测试的后端/共享包通过 `bun test --parallel` 隔离测试文件间的 module mock；前端若接入测试 runner，应在各自 package 中定义自己的 `test` 脚本
 - 类型检查：`pnpm typecheck`
 
 ## 🤝 贡献指南
