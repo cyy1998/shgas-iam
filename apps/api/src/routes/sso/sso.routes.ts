@@ -112,7 +112,7 @@ export const loginOA = createRoute({
 
 export const loginWX = createRoute({
   method: "get",
-  path: `${routePrefix}/thirdparty/wx`,
+  path: `${routePrefix}/third-party/wx`,
   tags,
   request: {
     query: z.object({
