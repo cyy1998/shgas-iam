@@ -19,3 +19,9 @@ export const CAP_API_ENDPOINT = withTrailingSlash(
   process.env.UMI_APP_CAP_ENDPOINT ||
     `${API_PREFIX}/open/cap/${CAP_SITE_KEY}/`,
 );
+
+export const CAP_WASM_URL =
+  process.env.UMI_APP_CAP_WASM_URL || '/portal/cap/cap_wasm_bg.wasm';
+
+export const CAP_PAKO_URL =
+  process.env.UMI_APP_CAP_PAKO_URL || '/portal/cap/pako_inflate.min.js';

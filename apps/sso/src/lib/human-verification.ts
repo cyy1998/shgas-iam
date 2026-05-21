@@ -1,14 +1,24 @@
-import { CAP_API_ENDPOINT } from '@sso/constants/config';
+import {
+  CAP_API_ENDPOINT,
+  CAP_PAKO_URL,
+  CAP_WASM_URL,
+} from '@sso/constants/config';
 import type { HumanVerificationAction } from '@sso/types/api';
 import { ServiceError } from '@sso/utils/request';
 import { ServiceStatusCode } from '@iam/contracts';
 import { message } from 'antd';
-import Cap from 'cap-widget';
 
 type Operation<T> = () => Promise<T>;
 type RetryOperation<T> = (capToken: string) => Promise<T>;
 
+function configureCapAssetUrls() {
+  window.CAP_CUSTOM_WASM_URL = CAP_WASM_URL;
+  window.CAP_PAKO_URL = CAP_PAKO_URL;
+}
+
 async function solveCap(action: HumanVerificationAction): Promise<string> {
+  configureCapAssetUrls();
+  const { default: Cap } = await import('cap-widget');
   const previousFetch = window.CAP_CUSTOM_FETCH;
 
   window.CAP_CUSTOM_FETCH = (input, init = {}) => {

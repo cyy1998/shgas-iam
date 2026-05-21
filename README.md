@@ -374,12 +374,18 @@ pnpm --filter @iam/sso typecheck
 
 ### SSO 门户（`apps/sso/.env.local`）
 
-| 变量名                    | 说明                               | 默认值                                          |
-| ------------------------- | ---------------------------------- | ----------------------------------------------- |
-| `PORT`                    | Umi dev server 端口                | `8000`                                          |
-| `UMI_APP_API_PREFIX`      | API 前缀；为空时使用同域相对路径   | 空                                              |
-| `UMI_APP_SSO_CLIENT_CODE` | SSO 客户端代码                     | `iam`                                           |
-| `UMI_APP_WELL_KNOWN_URL`  | authentication configuration 端点  | `/sso/.well-known/authentication-configuration` |
+| 变量名                    | 说明                                                    | 默认值                                          |
+| ------------------------- | ------------------------------------------------------- | ----------------------------------------------- |
+| `PORT`                    | Umi dev server 端口                                     | `8000`                                          |
+| `UMI_APP_API_PREFIX`      | API 前缀；为空时使用同域相对路径                        | 空                                              |
+| `UMI_APP_SSO_CLIENT_CODE` | SSO 客户端代码                                          | `iam`                                           |
+| `UMI_APP_WELL_KNOWN_URL`  | authentication configuration 端点                       | `/sso/.well-known/authentication-configuration` |
+| `UMI_APP_CAP_SITE_KEY`    | Cap 站点 key                                            | `iam-sso`                                       |
+| `UMI_APP_CAP_ENDPOINT`    | 内嵌 Cap challenge/redeem 端点                          | `/open/cap/iam-sso/`                            |
+| `UMI_APP_CAP_WASM_URL`    | 本地 Cap WASM 资源；避免浏览器请求 jsDelivr CDN         | `/portal/cap/cap_wasm_bg.wasm`                  |
+| `UMI_APP_CAP_PAKO_URL`    | 本地 pako fallback 资源；避免旧浏览器请求 jsDelivr CDN  | `/portal/cap/pako_inflate.min.js`               |
+
+Cap 前端资源已放在 `apps/sso/public/cap/`，构建时会复制到 SSO 产物的 `cap/` 目录。生产环境若调整 `base` / `publicPath`，需要同步覆盖 `UMI_APP_CAP_WASM_URL` 和 `UMI_APP_CAP_PAKO_URL`。
 
 ## 📚 API 文档
 
