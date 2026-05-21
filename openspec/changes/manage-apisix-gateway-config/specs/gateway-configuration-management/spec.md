@@ -1,0 +1,116 @@
+## ADDED Requirements
+
+### Requirement: Gateway manifests are repository managed
+
+系统 SHALL 在仓库中提供 APISIX manifest 目录，用于声明各环境的 routes、upstreams、services、plugin-configs、consumers 和 ssl 配置。
+
+#### Scenario: Manifest directory exists
+
+- **WHEN** 开发者查看 `gateway/apisix/manifests`
+- **THEN** 系统 SHALL 提供按环境分层的 manifest 目录
+- **AND** 每个环境 SHALL 能表达 APISIX 路由、upstream、service、插件配置、consumer 和证书对象
+
+#### Scenario: Manifest excludes secrets
+
+- **WHEN** manifest 中出现 Admin API key、JWT secret、TLS private key、数据库密码或第三方系统密钥
+- **THEN** 校验 SHALL 失败
+- **AND** 错误信息 SHALL 指出敏感字段所在文件和路径
+
+### Requirement: Gateway sync validates manifests
+
+系统 SHALL 提供 APISIX manifest 校验能力，在同步前验证文件格式、必填字段、对象 ID、引用关系和环境约束。
+
+#### Scenario: Valid manifest passes validation
+
+- **WHEN** 开发者对合法 manifest 执行校验命令
+- **THEN** 系统 SHALL 返回校验成功
+- **AND** 不 SHALL 调用 APISIX Admin API 修改远端配置
+
+#### Scenario: Broken reference fails validation
+
+- **WHEN** route 引用了不存在的 upstream、service 或 plugin-config
+- **THEN** 校验 SHALL 失败
+- **AND** 错误信息 SHALL 包含引用方对象 ID 和缺失目标 ID
+
+### Requirement: Gateway sync diffs repository and remote state
+
+系统 SHALL 提供 diff 能力，对比仓库 manifest 与目标 APISIX Admin API 返回的远端配置。
+
+#### Scenario: Diff shows changed managed objects
+
+- **WHEN** 远端 APISIX 中受仓库管理的对象与 manifest 不一致
+- **THEN** diff SHALL 展示新增、修改和删除候选对象
+- **AND** diff SHALL 标明对象类型、对象 ID 和目标环境
+
+#### Scenario: Diff ignores unmanaged objects by default
+
+- **WHEN** 远端 APISIX 存在未带仓库归属标记的对象
+- **THEN** diff 默认 SHALL 不将这些对象列为待删除对象
+- **AND** 输出 SHALL 提示这些对象不由当前仓库 manifest 管理
+
+### Requirement: Gateway sync applies manifests through APISIX Admin API
+
+系统 SHALL 通过 APISIX Admin API 将通过校验的 manifest 同步到目标 APISIX。
+
+#### Scenario: Dry run does not modify APISIX
+
+- **WHEN** 开发者执行 dry-run apply
+- **THEN** 系统 SHALL 完成校验并展示计划变更
+- **AND** 系统 MUST NOT 向 APISIX Admin API 发送写入或删除请求
+
+#### Scenario: Apply updates managed objects
+
+- **WHEN** 开发者执行 apply 且 manifest 通过校验
+- **THEN** 系统 SHALL 通过 APISIX Admin API 创建或更新受仓库管理的对象
+- **AND** 写入对象 SHALL 包含仓库归属标记
+
+#### Scenario: Prune requires explicit opt-in
+
+- **WHEN** manifest 删除了一个远端已存在的受仓库管理对象
+- **THEN** apply 默认 MUST NOT 删除该远端对象
+- **AND** 只有显式启用 prune 时系统 SHALL 删除该对象
+
+### Requirement: Local development runs through APISIX
+
+系统 SHALL 在本地开发编排中提供 APISIX 和 etcd 服务，使开发者能够通过网关入口访问 IAM 公共 API 和管理 API。
+
+#### Scenario: Public API routes through gateway
+
+- **WHEN** 本地开发环境启动 APISIX、etcd、`api` 和 `admin-api`
+- **THEN** `/public/*`、`/open/*`、`/internal/*`、`/sso/*` 和 `/auth/*` 请求 SHALL 经 APISIX 转发到 `api`
+
+#### Scenario: Admin API routes through gateway
+
+- **WHEN** 本地开发环境启动 APISIX、etcd、`api` 和 `admin-api`
+- **THEN** `/admin/*` 和 `/rpc/*` 请求 SHALL 经 APISIX 转发到 `admin-api`
+
+### Requirement: Production gateway deployment is externally configurable
+
+系统 SHALL 提供生产 APISIX 部署模板，并要求生产密钥、Admin API key、TLS 私钥和环境差异通过外部环境变量或 secret 注入。
+
+#### Scenario: Production template avoids hard-coded secrets
+
+- **WHEN** 开发者查看生产 APISIX compose 模板和配置示例
+- **THEN** 文件 MUST NOT 包含真实 Admin API key、TLS private key、JWT secret 或第三方系统密钥
+- **AND** 文件 SHALL 使用占位符、环境变量或 secret 引用表达这些值
+
+#### Scenario: Admin API access is constrained
+
+- **WHEN** 生产 APISIX 配置启用 Admin API
+- **THEN** 配置 SHALL 明确 Admin API key 来源
+- **AND** 配置 SHALL 提供限制监听地址或允许来源的方式
+
+### Requirement: Gateway documentation defines operating workflow
+
+系统 SHALL 提供网关配置管理文档，说明 manifest 编写、校验、diff、apply、dry-run、prune、密钥边界和回滚流程。
+
+#### Scenario: Developer follows documented sync workflow
+
+- **WHEN** 开发者需要新增或修改第三方业务应用网关规则
+- **THEN** 文档 SHALL 指导其修改 manifest、执行校验、查看 diff、执行 dry-run 和提交 review
+
+#### Scenario: Operator follows rollback workflow
+
+- **WHEN** 网关配置发布后出现异常
+- **THEN** 文档 SHALL 提供基于 Git 回滚和重新 apply 的恢复步骤
+- **AND** 文档 SHALL 说明如何使用 APISIX 远端配置导出作为应急恢复输入
