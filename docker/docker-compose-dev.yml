@@ -61,6 +61,9 @@ services:
       AUTHORIZATION_ENDPOINT: /sso/authorize
       LOGOUT_ENDPOINT: /sso/logout
       THIRDPARTY_OA_ENDPOINT: /sso/thirdparty/oa
+      HTTP_PROXY: http://176.169.105.96:3928
+      HTTPS_PROXY: http://176.169.105.96:3928
+      NO_PROXY: localhost,127.0.0.1,176.169.99.191,176.169.99.95,180.50.65.131,192.168.0.0/16,176.169.99.125,176.169.86.35
     depends_on:
       db:
         condition: service_healthy
