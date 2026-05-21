@@ -13,6 +13,5 @@ export function getVerificationContext(c: Context, subject?: string): HumanVerif
   return {
     subject,
     ip: getRequestIp(c),
-    client: c.req.header("Client"),
   };
 }

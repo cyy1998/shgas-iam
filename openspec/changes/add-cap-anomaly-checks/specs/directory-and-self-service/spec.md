@@ -55,4 +55,4 @@
 
 #### Scenario: 脱敏用户查询更新 Cap 异常状态
 - **WHEN** `/open/users/userInfo` 被调用
-- **THEN** 系统 SHALL 更新 `openUserInfoLookup` action 在 IP 和 Client header 维度的短窗口查询状态
+- **THEN** 系统 SHALL 更新 `openUserInfoLookup` action 在 IP 维度的短窗口查询状态

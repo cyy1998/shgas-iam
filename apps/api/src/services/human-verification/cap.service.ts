@@ -79,7 +79,6 @@ export async function ensureActionAllowed(
   if (await riskService.shouldRequireVerification(action, context)) {
     logger.info({
       action,
-      client: context.client,
       hasToken: token !== undefined,
       ip: context.ip,
       subject: context.subject,

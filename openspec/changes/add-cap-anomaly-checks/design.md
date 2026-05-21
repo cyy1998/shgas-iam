@@ -54,7 +54,7 @@ Cap 缺失、无效或异常触发时，API 返回统一业务错误码，例如
 - 前端可以在不同页面复用同一个“请求需要 Cap -> solve -> retry”的 helper。
 - 比仅靠 message 文案判断更稳定。
 
-### 风险判定按 action + subject + IP/client 组合建模
+### 风险判定按 action + subject + IP 组合建模
 
 后端为每类动作定义 action：
 - `sendSmsCode` 对应 `/open/code/send`
@@ -62,13 +62,13 @@ Cap 缺失、无效或异常触发时，API 返回统一业务错误码，例如
 - `mobileLogin` 对应 `/auth/login/mobile`
 - `openUserInfoLookup` 对应 `/open/users/userInfo`
 
-风险状态存入 Redis，维度包括 action、username 或 phoneNumber、IP、Client header。建议策略：
+风险状态存入 Redis，维度包括 action、username 或 phoneNumber、IP。建议策略：
 - `sendSmsCode`: 总是要求 Cap；另外保留手机号、IP、usage 维度频率限制。
-- `passwordLogin`: 同一 username、IP 或 Client 在短窗口内失败达到阈值后，下一次请求要求 Cap。
-- `mobileLogin`: 同一 phoneNumber、IP 或 Client 在短窗口内验证码错误达到阈值后，下一次请求要求 Cap。
-- `openUserInfoLookup`: 同一 IP 或 Client 在短窗口内查询不同 username 数量达到阈值后，下一次请求要求 Cap。
+- `passwordLogin`: 同一 username 或 IP 在短窗口内失败达到阈值后，下一次请求要求 Cap。
+- `mobileLogin`: 同一 phoneNumber 或 IP 在短窗口内验证码错误达到阈值后，下一次请求要求 Cap。
+- `openUserInfoLookup`: 同一 IP 在短窗口内查询不同 username 数量达到阈值后，下一次请求要求 Cap。
 
-风险判定应在不泄露用户存在性的前提下尽量记录统一状态。对于不存在用户导致的异常，也应记录 IP/client 维度的查询或登录尝试。
+风险判定应在不泄露用户存在性的前提下尽量记录统一状态。对于不存在用户导致的异常，也应记录 IP 维度的查询或登录尝试。
 
 ### Cap token 一次性消费并绑定动作
 
@@ -98,5 +98,5 @@ Cap 缺失、无效或异常触发时，API 返回统一业务错误码，例如
 ## Open Questions
 
 - `HumanVerificationRequired` 的业务码具体取值是否需要预留在 `packages/contracts` 的错误码区间中？
-- `/open/users/userInfo` 的异常阈值应按 IP、Client 还是两者组合优先触发，需要结合网关是否能提供可信源 IP。
+- `/open/users/userInfo` 的异常阈值依赖可信源 IP，需要结合生产网关转发头确认部署前提。
 - 是否需要对 Cap 触发和失败事件接入集中审计日志，本变更先要求应用日志可观测。

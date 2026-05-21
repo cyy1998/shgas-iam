@@ -3,10 +3,10 @@ import { HumanVerificationAction } from "@api/enums/humanVerification.action";
 import config from "@api/env";
 import redis from "@api/lib/infra/redis";
 
-type Dimension = "subject" | "ip" | "client";
+type Dimension = "subject" | "ip";
 
-const LOOKUP_USERNAMES_DIMENSIONS: Dimension[] = ["ip", "client"];
-const LOGIN_FAILURE_DIMENSIONS: Dimension[] = ["subject", "ip", "client"];
+const LOOKUP_USERNAMES_DIMENSIONS: Dimension[] = ["ip"];
+const LOGIN_FAILURE_DIMENSIONS: Dimension[] = ["subject", "ip"];
 
 function normalizeValue(value: string | undefined): string | null {
   const normalized = value?.trim();

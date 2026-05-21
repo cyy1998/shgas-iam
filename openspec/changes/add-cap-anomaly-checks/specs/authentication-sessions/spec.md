@@ -30,5 +30,5 @@
 
 #### Scenario: 登录失败更新 Cap 异常状态
 - **WHEN** 密码登录失败或手机验证码登录失败
-- **THEN** 系统 SHALL 更新对应 action、subject、IP 和 Client header 的短窗口风险状态
+- **THEN** 系统 SHALL 更新对应 action、subject 和 IP 的短窗口风险状态
 - **AND** 系统 SHALL 保持既有用户维度登录失败计数和账号暂停规则

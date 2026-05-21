@@ -19,22 +19,22 @@
 - **AND** 响应 SHALL 使用可被前端稳定识别的业务码表示需要人机校验
 
 ### Requirement: Cap 异常触发策略
-系统 SHALL 对公开认证入口维护短窗口风险状态，并基于 action、subject、IP 和 Client header 判断请求是否需要 Cap。
+系统 SHALL 对公开认证入口维护短窗口风险状态，并基于 action、subject 和 IP 判断请求是否需要 Cap。
 
 #### Scenario: 短信发送总是要求 Cap
 - **WHEN** 请求 action 为 `sendSmsCode`
 - **THEN** 系统 SHALL 要求请求携带有效 Cap token
 
 #### Scenario: 密码登录异常后要求 Cap
-- **WHEN** 同一 username、IP 或 Client header 在配置窗口内密码登录失败次数达到配置阈值
+- **WHEN** 同一 username 或 IP 在配置窗口内密码登录失败次数达到配置阈值
 - **THEN** 系统 SHALL 要求后续 `passwordLogin` 请求携带有效 Cap token
 
 #### Scenario: 手机验证码登录异常后要求 Cap
-- **WHEN** 同一 phoneNumber、IP 或 Client header 在配置窗口内手机验证码登录失败次数达到配置阈值
+- **WHEN** 同一 phoneNumber 或 IP 在配置窗口内手机验证码登录失败次数达到配置阈值
 - **THEN** 系统 SHALL 要求后续 `mobileLogin` 请求携带有效 Cap token
 
 #### Scenario: 脱敏用户查询异常后要求 Cap
-- **WHEN** 同一 IP 或 Client header 在配置窗口内查询不同 username 的数量达到配置阈值
+- **WHEN** 同一 IP 在配置窗口内查询不同 username 的数量达到配置阈值
 - **THEN** 系统 SHALL 要求后续 `openUserInfoLookup` 请求携带有效 Cap token
 
 #### Scenario: 未触发异常的低风险请求

@@ -3,7 +3,7 @@
 - [x] 1.1 为 `apps/api` 增加 cap.js 相关依赖和环境变量校验，包括启用开关、site key、secret、异常阈值和 TTL。
 - [x] 1.2 在 `packages/contracts` 中新增可被前端稳定识别的人机校验业务码，并同步前端类型使用。
 - [x] 1.3 新增 `apps/api` 人机校验服务模块，封装 Cap token 校验、action 绑定、一次性消费和关闭开关行为。
-- [x] 1.4 新增 `apps/api` 风险判定服务模块，基于 Redis 维护 action、subject、IP 和 Client header 的短窗口异常状态。
+- [x] 1.4 新增 `apps/api` 风险判定服务模块，基于 Redis 维护 action、subject 和 IP 的短窗口异常状态。
 - [x] 1.5 新增内嵌 Cap challenge/redeem 路由并接入现有 Hono app。
 
 ## 2. 后端业务入口接入
@@ -35,6 +35,6 @@
 ## 5. 部署与回滚检查
 
 - [x] 5.1 更新 `.env.example`、部署文档或 compose 配置，说明内嵌 Cap 服务相关环境变量。
-- [x] 5.2 确认生产网关能提供可信 IP 信息；若不能，风险判定 SHALL 退化为 Client header 和 subject 维度。
+- [x] 5.2 确认生产网关能提供可信 IP 信息；若不能，登录风险判定 SHALL 退化为 subject 维度，脱敏查询异常策略 SHALL 暂停或另行引入可信维度。
 - [x] 5.3 上线前以宽松阈值启用日志观察，并记录 Cap 触发、校验失败和短信拦截事件。
 - [x] 5.4 准备回滚方式：关闭 `CAP_ENABLED` 或调高异常阈值，确保不需要回滚数据库迁移。

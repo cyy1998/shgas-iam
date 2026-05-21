@@ -88,7 +88,6 @@ describe("human verification risk service", () => {
 
   test("requires verification after login failures reach the threshold", async () => {
     const context = {
-      client: "iam",
       ip: "127.0.0.1",
       subject: "zhangsan",
     };
@@ -113,7 +112,7 @@ describe("human verification risk service", () => {
   });
 
   test("requires verification after querying too many distinct usernames", async () => {
-    const context = { client: "iam", ip: "127.0.0.1" };
+    const context = { ip: "127.0.0.1" };
 
     await riskService.recordOpenUserInfoLookup("zhangsan", context);
     await expect(riskService.shouldRequireVerification(
