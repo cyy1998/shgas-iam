@@ -1,4 +1,5 @@
 import {
+  ArrowLeftOutlined,
   CheckCircleOutlined,
   KeyOutlined,
   LockOutlined,
@@ -6,7 +7,7 @@ import {
   SafetyCertificateOutlined,
   UserOutlined,
 } from '@ant-design/icons';
-import logo from '@sso/assets/logo.png';
+import logoWhite from '@sso/assets/logo-white.png';
 import { withHumanVerification } from '@sso/lib/human-verification';
 import {
   codeVerify,
@@ -210,7 +211,8 @@ export default function ResetPasswordPage() {
   const goLogin = () => {
     const usp = new URLSearchParams(window.location.search);
     usp.delete('username');
-    history.push(`/login?${usp.toString()}`);
+    const query = usp.toString();
+    history.push(query ? `/login?${query}` : '/login');
   };
 
   return (
@@ -218,7 +220,7 @@ export default function ResetPasswordPage() {
       <div className="reset-shell">
         <section className="reset-hero" aria-label="密码安全">
           <div className="brand-top">
-            <img src={logo} alt="上海燃气" />
+            <img src={logoWhite} alt="上海燃气" />
             <span>SHANGHAI GAS IAM</span>
           </div>
           <div className="hero-copy">
@@ -241,9 +243,19 @@ export default function ResetPasswordPage() {
                   按步骤完成账号验证与密码更新
                 </div>
               </div>
-              <div className="reset-badge">
-                <LockOutlined />
-                <span>安全流程</span>
+              <div className="reset-header-actions">
+                <Button
+                  className="reset-back-login"
+                  icon={<ArrowLeftOutlined />}
+                  onClick={goLogin}
+                  type="text"
+                >
+                  返回登录
+                </Button>
+                <div className="reset-badge">
+                  <LockOutlined />
+                  <span>安全流程</span>
+                </div>
               </div>
             </div>
 

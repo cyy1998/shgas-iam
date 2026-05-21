@@ -54,7 +54,6 @@
     img {
       width: 152px;
       height: auto;
-      filter: brightness(0) invert(1);
     }
   }
 
@@ -168,6 +167,27 @@
 
     .anticon {
       color: #2874f0;
+    }
+  }
+
+  .reset-header-actions {
+    display: flex;
+    flex: 0 0 auto;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .reset-back-login {
+    height: 30px;
+    padding: 0 8px;
+    font-size: 12px;
+    font-weight: 700;
+    color: #1554ad;
+    border-radius: 8px;
+
+    &:hover {
+      color: #0f4696 !important;
+      background: #edf5ff !important;
     }
   }
 
@@ -461,6 +481,11 @@
     .reset-card-header {
       flex-direction: column;
       margin-bottom: 22px;
+    }
+
+    .reset-header-actions {
+      width: 100%;
+      justify-content: space-between;
     }
 
     .reset-title {
