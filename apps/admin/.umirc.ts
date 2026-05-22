@@ -91,6 +91,41 @@ export default defineConfig({
   ],
   npmClient: 'pnpm',
   proxy: {
+    '/api/iam/public': {
+      target: 'http://localhost:30000',
+      changeOrigin: true,
+      pathRewrite: { '^/api/iam': '' },
+    },
+    '/api/iam/open': {
+      target: 'http://localhost:30000',
+      changeOrigin: true,
+      pathRewrite: { '^/api/iam': '' },
+    },
+    '/api/iam/internal': {
+      target: 'http://localhost:30000',
+      changeOrigin: true,
+      pathRewrite: { '^/api/iam': '' },
+    },
+    '/api/iam/sso': {
+      target: 'http://localhost:30000',
+      changeOrigin: true,
+      pathRewrite: { '^/api/iam': '' },
+    },
+    '/api/iam/auth': {
+      target: 'http://localhost:30000',
+      changeOrigin: true,
+      pathRewrite: { '^/api/iam': '' },
+    },
+    '/api/iam/admin': {
+      target: 'http://localhost:30001',
+      changeOrigin: true,
+      pathRewrite: { '^/api/iam': '' },
+    },
+    '/api/iam/rpc': {
+      target: 'http://localhost:30001',
+      changeOrigin: true,
+      pathRewrite: { '^/api/iam': '' },
+    },
     '/public': {
       target: 'http://localhost:30000',
       changeOrigin: true,

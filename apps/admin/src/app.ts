@@ -2,7 +2,7 @@
 import AvatarDropdown from '@admin/components/RightContent/AvatarDropdown';
 import {
   ADMIN_ROLE_CODE,
-  API_BASE,
+  API_PREFIX,
   SSO_CLIENT_CODE,
 } from '@admin/constants/config';
 import { redirectToLogin } from '@admin/utils/auth';
@@ -18,7 +18,7 @@ type InitialState = {
 // 更多信息见文档：https://umijs.org/docs/api/runtime-config#getinitialstate
 export async function getInitialState(): Promise<InitialState> {
   try {
-    const res = await fetch(`${API_BASE}/public/user-info`, {
+    const res = await fetch(`${API_PREFIX}/public/user-info`, {
       credentials: 'include',
       headers: {
         Client: SSO_CLIENT_CODE,

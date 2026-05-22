@@ -1,4 +1,4 @@
-import { API_BASE, SSO_CLIENT_CODE } from '@admin/constants/config';
+import { API_PREFIX, SSO_CLIENT_CODE } from '@admin/constants/config';
 import { redirectToLogin } from '@admin/utils/auth';
 import type { AppRouter } from '@iam/admin-api/trpc';
 import { createTRPCClient, httpBatchLink } from '@trpc/client';
@@ -6,7 +6,7 @@ import { createTRPCClient, httpBatchLink } from '@trpc/client';
 export const apiClient = createTRPCClient<AppRouter>({
   links: [
     httpBatchLink({
-      url: `${API_BASE}/rpc`,
+      url: `${API_PREFIX}/rpc`,
       fetch: async (input: RequestInfo | URL, init?: RequestInit) => {
         const response = await fetch(input, {
           ...init,
