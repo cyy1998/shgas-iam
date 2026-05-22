@@ -6,6 +6,7 @@ import {
 import {
   ModalForm,
   ProFormGroup,
+  ProFormList,
   ProFormSelect,
   ProFormSwitch,
   ProFormText,
@@ -35,23 +36,22 @@ type FormValues = {
   description?: string;
   managementLevel: ClientManagementLevel;
   requireOrcas?: boolean;
-  validRedirectUrlsText?: string;
-  userExcludingText?: string;
+  validRedirectUrls?: { value?: string }[];
+  userExcluding?: { value?: string }[];
   logoutEndpoint: string;
   callbackEndpoint: string;
 };
 
 const defaultEndpoint = 'http://localhost:8888';
 
-function splitLines(value: string | undefined) {
-  return (value ?? '')
-    .split('\n')
-    .map((item) => item.trim())
-    .filter(Boolean);
+function toListItems(value: string[] | undefined) {
+  return (value ?? []).map((item) => ({ value: item }));
 }
 
-function joinLines(value: string[] | undefined) {
-  return (value ?? []).join('\n');
+function fromListItems(value: { value?: string }[] | undefined) {
+  return (value ?? [])
+    .map((item) => item.value?.trim())
+    .filter((item): item is string => !!item);
 }
 
 function toInitialValues(initialValues: ClientDetailVo | null | undefined) {
@@ -73,10 +73,10 @@ function toInitialValues(initialValues: ClientDetailVo | null | undefined) {
     description: initialValues.description ?? undefined,
     managementLevel: initialValues.extAttributes.managementLevel,
     requireOrcas: initialValues.extAttributes.requireOrcas,
-    validRedirectUrlsText: joinLines(
+    validRedirectUrls: toListItems(
       initialValues.extAttributes.validRedirectUrls,
     ),
-    userExcludingText: joinLines(initialValues.extAttributes.userExcluding),
+    userExcluding: toListItems(initialValues.extAttributes.userExcluding),
     logoutEndpoint: initialValues.extAttributes.logoutEndpoint,
     callbackEndpoint: initialValues.extAttributes.callbackEndpoint,
   };
@@ -105,9 +105,9 @@ export default function ClientFormModal({
           status: values.status,
           description: values.description || null,
           extAttributes: {
-            userExcluding: splitLines(values.userExcludingText),
+            userExcluding: fromListItems(values.userExcluding),
             requireOrcas: values.requireOrcas ?? false,
-            validRedirectUrls: splitLines(values.validRedirectUrlsText),
+            validRedirectUrls: fromListItems(values.validRedirectUrls),
             managementLevel: values.managementLevel,
             logoutEndpoint: values.logoutEndpoint,
             callbackEndpoint: values.callbackEndpoint,
@@ -178,16 +178,28 @@ export default function ClientFormModal({
         />
       </ProFormGroup>
       <ProFormSwitch name="requireOrcas" label="需要 ORCAS" />
-      <ProFormTextArea
-        name="validRedirectUrlsText"
+      <ProFormList
+        name="validRedirectUrls"
         label="允许重定向地址"
-        fieldProps={{ rows: 3 }}
-      />
-      <ProFormTextArea
-        name="userExcludingText"
+        creatorButtonProps={{ creatorButtonText: '新增地址' }}
+        copyIconProps={false}
+      >
+        <ProFormText
+          name="value"
+          fieldProps={{ style: { width: '100%' } }}
+        />
+      </ProFormList>
+      <ProFormList
+        name="userExcluding"
         label="维护白名单用户"
-        fieldProps={{ rows: 3 }}
-      />
+        creatorButtonProps={{ creatorButtonText: '新增用户' }}
+        copyIconProps={false}
+      >
+        <ProFormText
+          name="value"
+          fieldProps={{ style: { width: '100%' } }}
+        />
+      </ProFormList>
       <ProFormGroup>
         <ProFormText
           name="logoutEndpoint"
