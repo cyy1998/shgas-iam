@@ -30,7 +30,7 @@ services:
       retries: 5
 
   apisix-etcd:
-    image: ${APISIX_ETCD_IMAGE:-bitnamilegacy/etcd:3.5.11}
+    image: docker.xuanyuan.run/bitnamilegacy/etcd:3.5.11
     restart: unless-stopped
     environment:
       ALLOW_NONE_AUTHENTICATION: "yes"

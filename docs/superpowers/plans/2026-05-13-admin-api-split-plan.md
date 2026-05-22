@@ -1949,7 +1949,7 @@ Create `apps/admin-api/Dockerfile` based on `apps/api/Dockerfile`, changing API 
 ```dockerfile
 # Build context: monorepo root
 
-FROM docker.xuanyuan.run/node:24-bookworm AS base
+FROM docker.xuanyuan.run/node:24-alpine AS base
 ENV PNPM_HOME="/pnpm"
 ENV PATH="$PNPM_HOME:$PATH"
 ENV HTTP_PROXY="http://176.169.105.96:3928"
