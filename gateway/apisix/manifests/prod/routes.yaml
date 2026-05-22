@@ -1,4 +1,34 @@
 routes:
+  - id: iam-sso-frontend-prod
+    name: iam-sso-frontend-prod
+    desc: IAM SSO frontend through APISIX
+    hosts:
+      - app.shgas.com
+      - tender.shgas.com.cn
+      - jsc.shgas.com.cn
+    uris:
+      - /portal
+      - /portal/*
+    service_id: iam-sso-frontend-prod
+    labels:
+      managed_by: shgas-iam
+      source: repo-manifest
+      env: prod
+
+  - id: iam-admin-frontend-prod
+    name: iam-admin-frontend-prod
+    desc: IAM admin frontend through APISIX
+    hosts:
+      - ${IAM_ADMIN_HOST}
+    uris:
+      - /iam-admin
+      - /iam-admin/*
+    service_id: iam-admin-frontend-prod
+    labels:
+      managed_by: shgas-iam
+      source: repo-manifest
+      env: prod
+
   - id: iam-public-prod
     name: iam-public-prod
     desc: IAM public tier through APISIX with /api/iam prefix

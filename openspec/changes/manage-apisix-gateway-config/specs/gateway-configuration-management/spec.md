@@ -106,17 +106,43 @@
 
 ### Requirement: Local development runs through APISIX
 
-系统 SHALL 在本地开发编排中提供 APISIX 和 etcd 服务，使开发者能够通过网关入口访问 IAM 公共 API 和管理 API。
+系统 SHALL 在本地开发编排中提供 APISIX 和 etcd 服务，使开发者能够通过网关入口访问 IAM 公共 API、管理 API、SSO 前端和管理前端。
 
 #### Scenario: Public API routes through gateway
 
 - **WHEN** 本地开发环境启动 APISIX、etcd、`api` 和 `admin-api`
-- **THEN** `/public/*`、`/open/*`、`/internal/*`、`/sso/*` 和 `/auth/*` 请求 SHALL 经 APISIX 转发到 `api`
+- **THEN** `/api/iam/public/*`、`/api/iam/open/*`、`/api/iam/internal/*`、`/sso/*` 和 `/api/iam/auth/*` 请求 SHALL 经 APISIX 转发到 `api`
 
 #### Scenario: Admin API routes through gateway
 
 - **WHEN** 本地开发环境启动 APISIX、etcd、`api` 和 `admin-api`
-- **THEN** `/admin/*` 和 `/rpc/*` 请求 SHALL 经 APISIX 转发到 `admin-api`
+- **THEN** `/api/iam/admin/*` 和 `/api/iam/rpc/*` 请求 SHALL 经 APISIX 转发到 `admin-api`
+
+#### Scenario: SSO frontend routes through gateway
+
+- **WHEN** 本地开发环境启动 APISIX、etcd 和 `sso`
+- **THEN** `/portal` 和 `/portal/*` 请求 SHALL 经 APISIX 转发到 `sso`
+
+#### Scenario: Admin frontend routes through gateway
+
+- **WHEN** 本地开发环境启动 APISIX、etcd 和 `admin`
+- **THEN** `/iam-admin` 和 `/iam-admin/*` 请求 SHALL 经 APISIX 转发到 `admin`
+
+### Requirement: Frontends are packaged as nginx static containers
+
+系统 SHALL 将 SSO 前端和管理前端构建为 nginx 静态容器，并保持前端根路径与 Umi 配置一致。
+
+#### Scenario: SSO frontend container serves portal root
+
+- **WHEN** `apps/sso` 镜像构建完成并运行
+- **THEN** 容器 SHALL 在 `/portal` 和 `/portal/*` 服务 SSO 前端
+- **AND** 容器 SHALL 为 SPA 子路径 fallback 到 `/portal/index.html`
+
+#### Scenario: Admin frontend container serves admin root
+
+- **WHEN** `apps/admin` 镜像构建完成并运行
+- **THEN** 容器 SHALL 在 `/iam-admin` 和 `/iam-admin/*` 服务管理前端
+- **AND** 容器 SHALL 为 SPA 子路径 fallback 到 `/iam-admin/index.html`
 
 ### Requirement: Production gateway deployment is externally configurable
 

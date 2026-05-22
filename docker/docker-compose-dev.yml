@@ -57,6 +57,22 @@ services:
       apisix-etcd:
         condition: service_healthy
 
+  sso:
+    build:
+      context: ..
+      dockerfile: apps/sso/Dockerfile
+    restart: unless-stopped
+    ports:
+      - "30013:80"
+
+  admin:
+    build:
+      context: ..
+      dockerfile: apps/admin/Dockerfile
+    restart: unless-stopped
+    ports:
+      - "30014:80"
+
   api:
     build:
       context: ..

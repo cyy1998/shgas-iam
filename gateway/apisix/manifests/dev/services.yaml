@@ -19,3 +19,21 @@ services:
       managed_by: shgas-iam
       source: repo-manifest
       env: dev
+
+  - id: iam-sso-frontend-dev
+    name: iam-sso-frontend-dev
+    desc: IAM SSO frontend service baseline
+    upstream_id: iam-sso-frontend-dev
+    labels:
+      managed_by: shgas-iam
+      source: repo-manifest
+      env: dev
+
+  - id: iam-admin-frontend-dev
+    name: iam-admin-frontend-dev
+    desc: IAM admin frontend service baseline
+    upstream_id: iam-admin-frontend-dev
+    labels:
+      managed_by: shgas-iam
+      source: repo-manifest
+      env: dev

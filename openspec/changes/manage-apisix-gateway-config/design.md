@@ -13,7 +13,8 @@ APISIX 既可以通过 Admin API + etcd 动态管理，也可以通过 standalon
 - 在仓库中新增 `gateway/apisix/`，作为 APISIX 配置、同步脚本和说明文档的归属目录。
 - 定义环境分层的 manifest，覆盖 routes、upstreams、services、plugin-configs、consumers、ssl 等 APISIX 对象。
 - 提供同步工具，通过 APISIX Admin API 执行 `validate`、`diff`、`apply`，并支持 dry-run。
-- 在开发 compose 中加入 APISIX 和 etcd，使本地可通过网关访问 `apps/api` 与 `apps/admin-api`。
+- 在开发 compose 中加入 APISIX 和 etcd，使本地可通过网关访问 `apps/api`、`apps/admin-api`、`apps/sso` 与 `apps/admin`。
+- 将 `apps/sso` 与 `apps/admin` 打包为 nginx 静态容器，由 APISIX 根据前端根路径进行代理。
 - 在生产 compose 模板中提供 APISIX 和 etcd 的可选部署入口，并明确密钥、TLS、Admin API 访问控制的外部化方式。
 - 明确仓库 manifest 是 IAM 网关基线的长期可信来源，第三方业务应用实例不通过 Git manifest 逐个管理。
 - 为 IAM 动态注册对象与仓库基线对象定义来源标签、管理边界和同步避让规则。
@@ -95,10 +96,21 @@ gateway/apisix/
 
 本地网关初始路由应覆盖：
 
-- `/public/*`、`/open/*`、`/internal/*`、`/sso/*`、`/auth/*` -> `api:30000`
-- `/admin/*`、`/rpc/*` -> `admin-api:30001`
+- `/api/iam/public/*`、`/api/iam/open/*`、`/api/iam/internal/*`、`/sso/*`、`/api/iam/auth/*` -> `api:30000`
+- `/api/iam/admin/*`、`/api/iam/rpc/*` -> `admin-api:30001`
+- `/portal`、`/portal/*` -> `sso:80`
+- `/iam-admin`、`/iam-admin/*` -> `admin:80`
 
 生产 compose 中提供 APISIX 和 etcd 的模板，但是否单机、主从或独立控制面/数据面部署由部署环境决定。生产 Admin API 必须限制监听地址、访问来源和密钥来源。
+
+### Decision 4a: 前端容器只负责静态资源和 SPA fallback
+
+`apps/sso` 使用现有 Umi 根路径 `/portal`，`apps/admin` 使用现有 Umi 根路径 `/iam-admin`。两个前端分别构建为 nginx 容器：
+
+- `sso` 容器将构建产物放在 `/usr/share/nginx/html/portal/`，服务 `/portal` 和 `/portal/*`。
+- `admin` 容器将构建产物放在 `/usr/share/nginx/html/iam-admin/`，服务 `/iam-admin` 和 `/iam-admin/*`。
+
+nginx 容器只做静态文件服务、健康检查和 SPA fallback，不代理后端 API。前后端统一入口由 APISIX 负责，避免 nginx 容器里重复维护 API 路由。
 
 ### Decision 5: 同步策略采用受控覆盖，不默认删除未知远端对象
 
@@ -152,7 +164,7 @@ labels:
 
 1. 新增 `gateway/apisix/` 目录结构、配置示例和同步脚本文档。
 2. 在开发 compose 中加入 APISIX 和 etcd，验证 APISIX 可启动并访问 Admin API。
-3. 创建开发环境基础 manifest，将 IAM 公共 API 和管理 API 路由纳入网关。
+3. 创建开发环境基础 manifest，将 IAM 公共 API、管理 API、SSO 前端和 Admin 前端路由纳入网关。
 4. 实现同步工具的 `validate`、`diff`、`apply --dry-run` 和 `apply`，并确保只管理 `source=repo-manifest`。
 5. 将生产 compose 模板和 README 补齐，说明密钥、TLS、Admin API 访问控制、动态注册边界和回滚方式。
 6. 在文档中描述 IAM 动态注册对象如何使用 `source=dynamic-registry`、`app_code` 和 `config_version` 与仓库基线共存。

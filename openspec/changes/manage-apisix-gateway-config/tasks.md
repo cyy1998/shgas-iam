@@ -46,3 +46,11 @@
 - [x] 6.3 运行 compose 配置检查，验证开发和生产 compose YAML 可解析
 - [x] 6.4 本地启动 APISIX 开发编排并通过网关 smoke-test IAM 公共 API 和管理 API 路由
 - [x] 6.5 运行受影响 workspace 的 lint、typecheck 和测试命令
+
+## 7. 前端网关代理
+
+- [x] 7.1 为 `apps/sso` 增加 nginx 静态容器构建，服务 `/portal` 和 `/portal/*`
+- [x] 7.2 为 `apps/admin` 增加 nginx 静态容器构建，服务 `/iam-admin` 和 `/iam-admin/*`
+- [x] 7.3 在开发和生产 compose 中新增 `sso` 与 `admin` 前端容器服务
+- [x] 7.4 在 APISIX manifest 中新增前端 upstream、service 和根路径 routes
+- [x] 7.5 更新 OpenSpec 设计和规格，明确 APISIX 同时代理前端和后端

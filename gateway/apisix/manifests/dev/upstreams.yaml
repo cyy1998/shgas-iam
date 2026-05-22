@@ -24,3 +24,29 @@ upstreams:
       managed_by: shgas-iam
       source: repo-manifest
       env: dev
+
+  - id: iam-sso-frontend-dev
+    name: iam-sso-frontend-dev
+    desc: IAM SSO frontend nginx upstream for local development
+    type: roundrobin
+    scheme: http
+    pass_host: pass
+    nodes:
+      sso:80: 1
+    labels:
+      managed_by: shgas-iam
+      source: repo-manifest
+      env: dev
+
+  - id: iam-admin-frontend-dev
+    name: iam-admin-frontend-dev
+    desc: IAM admin frontend nginx upstream for local development
+    type: roundrobin
+    scheme: http
+    pass_host: pass
+    nodes:
+      admin:80: 1
+    labels:
+      managed_by: shgas-iam
+      source: repo-manifest
+      env: dev

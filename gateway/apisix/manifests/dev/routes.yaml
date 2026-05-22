@@ -1,4 +1,28 @@
 routes:
+  - id: iam-sso-frontend-dev
+    name: iam-sso-frontend-dev
+    desc: IAM SSO frontend through APISIX
+    uris:
+      - /portal
+      - /portal/*
+    service_id: iam-sso-frontend-dev
+    labels:
+      managed_by: shgas-iam
+      source: repo-manifest
+      env: dev
+
+  - id: iam-admin-frontend-dev
+    name: iam-admin-frontend-dev
+    desc: IAM admin frontend through APISIX
+    uris:
+      - /iam-admin
+      - /iam-admin/*
+    service_id: iam-admin-frontend-dev
+    labels:
+      managed_by: shgas-iam
+      source: repo-manifest
+      env: dev
+
   - id: iam-public-dev
     name: iam-public-dev
     desc: IAM public tier through APISIX with /api/iam prefix

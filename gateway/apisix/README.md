@@ -99,10 +99,10 @@ pnpm gateway:apisix:apply -- --env dev --prune
 
 ## 本地开发
 
-启动依赖、后端和 APISIX：
+启动依赖、后端、前端和 APISIX：
 
 ```bash
-docker compose -f docker/docker-compose-dev.yml up -d db redis api admin-api apisix-etcd apisix
+docker compose -f docker/docker-compose-dev.yml up -d db redis api admin-api sso admin apisix-etcd apisix
 ```
 
 初始化或更新本地网关基线：
@@ -118,11 +118,14 @@ pnpm gateway:apisix:apply -- --env dev
 - APISIX HTTPS: `https://localhost:9443`
 - APISIX Admin API: `http://127.0.0.1:9180/apisix/admin`
 - API 直连调试端口仍保留：`api` 映射到 `30011`，`admin-api` 映射到 `30012`
+- 前端直连调试端口仍保留：`sso` 映射到 `30013`，`admin` 映射到 `30014`
 
 本地基线路由统一使用 `/api/iam` 外部前缀，并在 APISIX 中通过 `proxy-rewrite` 去掉该前缀后转发给后端：
 
 - `/api/iam/public/*`、`/api/iam/open/*`、`/api/iam/internal/*`、`/api/iam/sso/*`、`/api/iam/auth/*` -> `api:30000`
 - `/api/iam/admin/*`、`/api/iam/rpc/*` -> `admin-api:30001`
+- `/portal`、`/portal/*` -> `sso:80`
+- `/iam-admin`、`/iam-admin/*` -> `admin:80`
 
 这些路由参考了仓库根目录的 `apisix-dump.yaml`，其中 `iam-prod`、`iam-test`、`iam-admin-prod`、`iam-admin-test` 属于 IAM 基础入口；`tender-*`、`gds-*` 属于第三方业务应用，应由 IAM 动态注册流程管理。旧的通用 `/api/iam/*` 泛路由不再纳入 Git manifest，避免它吞掉更明确的 admin、rpc 或分层 API 路由。
 
