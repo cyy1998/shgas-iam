@@ -7,6 +7,10 @@ ENV PNPM_HOME="/pnpm"
 ENV PATH="$PNPM_HOME:$PATH"
 ENV HTTP_PROXY="http://176.169.105.96:3928"
 ENV HTTPS_PROXY="http://176.169.105.96:3928"
+ENV COREPACK_ENABLE_DOWNLOAD_PROMPT=0
+ENV NODE_USE_ENV_PROXY=1
+ENV COREPACK_NPM_REGISTRY="https://registry.npmmirror.com"
+ENV npm_config_registry="https://registry.npmmirror.com"
 RUN corepack enable && corepack prepare pnpm@11.1.2 --activate
 
 # ── Stage 2: Install dependencies ────────────────────────────────────────────

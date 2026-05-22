@@ -48,8 +48,8 @@ services:
     image: docker.xuanyuan.run/apache/apisix:3.16.0-debian
     restart: unless-stopped
     ports:
-      - "80:9080"
-      - "443:9443"
+      - "30080:9080"
+      - "30443:9443"
       - "127.0.0.1:9180:9180"
     volumes:
       - ../gateway/apisix/config/config.dev.yaml:/usr/local/apisix/conf/config.yaml:ro
