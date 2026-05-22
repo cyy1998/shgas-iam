@@ -26,8 +26,8 @@
 ## 4. Docker 编排
 
 - [x] 4.1 在开发 compose 中新增 APISIX 和 etcd 服务，并暴露本地代理端口和受限 Admin API 端口
-- [x] 4.2 配置开发 APISIX，使 `/public/*`、`/open/*`、`/internal/*`、`/sso/*`、`/auth/*` 转发到 `api`
-- [x] 4.3 配置开发 APISIX，使 `/admin/*` 和 `/rpc/*` 转发到 `admin-api`
+- [x] 4.2 配置开发 APISIX，使 `/api/iam/public/*`、`/api/iam/open/*`、`/api/iam/internal/*`、`/api/iam/sso/*`、`/api/iam/auth/*` 转发到 `api`
+- [x] 4.3 配置开发 APISIX，使 `/api/iam/admin/*` 和 `/api/iam/rpc/*` 转发到 `admin-api`
 - [x] 4.4 在生产 compose 模板中新增 APISIX/etcd 可选服务配置，所有密钥和生产差异通过环境变量或 secret 注入
 - [x] 4.5 确认后端直连端口仍可用于调试，网关入口作为 smoke-test 入口
 

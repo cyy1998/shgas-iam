@@ -119,14 +119,12 @@ pnpm gateway:apisix:apply -- --env dev
 - APISIX Admin API: `http://127.0.0.1:9180/apisix/admin`
 - API 直连调试端口仍保留：`api` 映射到 `30011`，`admin-api` 映射到 `30012`
 
-本地基线路由：
+本地基线路由统一使用 `/api/iam` 外部前缀，并在 APISIX 中通过 `proxy-rewrite` 去掉该前缀后转发给后端：
 
-- `/public/*`、`/open/*`、`/internal/*`、`/sso/*`、`/auth/*` -> `api:30000`
-- `/admin/*`、`/rpc/*` -> `admin-api:30001`
-- `/api/iam/*` -> `api:30000`，并通过 `proxy-rewrite` 去掉 `/api/iam/` 前缀
-- `/api/iam/admin/*`、`/api/iam/rpc/*` -> `admin-api:30001`，并通过 `proxy-rewrite` 去掉 `/api/iam/` 前缀
+- `/api/iam/public/*`、`/api/iam/open/*`、`/api/iam/internal/*`、`/api/iam/sso/*`、`/api/iam/auth/*` -> `api:30000`
+- `/api/iam/admin/*`、`/api/iam/rpc/*` -> `admin-api:30001`
 
-这些兼容路由参考了仓库根目录的 `apisix-dump.yaml`，其中 `iam-prod`、`iam-test`、`iam-admin-prod`、`iam-admin-test` 属于 IAM 基础入口；`tender-*`、`gds-*` 属于第三方业务应用，应由 IAM 动态注册流程管理。
+这些路由参考了仓库根目录的 `apisix-dump.yaml`，其中 `iam-prod`、`iam-test`、`iam-admin-prod`、`iam-admin-test` 属于 IAM 基础入口；`tender-*`、`gds-*` 属于第三方业务应用，应由 IAM 动态注册流程管理。旧的通用 `/api/iam/*` 泛路由不再纳入 Git manifest，避免它吞掉更明确的 admin、rpc 或分层 API 路由。
 
 ## 生产发布
 

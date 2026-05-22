@@ -1,9 +1,15 @@
 routes:
   - id: iam-public-dev
     name: iam-public-dev
-    desc: IAM public tier through APISIX
-    uri: /public/*
+    desc: IAM public tier through APISIX with /api/iam prefix
+    uri: /api/iam/public/*
     service_id: iam-api-dev
+    plugins:
+      proxy-rewrite:
+        regex_uri:
+          - ^/api/iam/(.*)
+          - /$1
+        use_real_request_uri_unsafe: false
     labels:
       managed_by: shgas-iam
       source: repo-manifest
@@ -11,9 +17,15 @@ routes:
 
   - id: iam-open-dev
     name: iam-open-dev
-    desc: IAM open tier through APISIX
-    uri: /open/*
+    desc: IAM open tier through APISIX with /api/iam prefix
+    uri: /api/iam/open/*
     service_id: iam-api-dev
+    plugins:
+      proxy-rewrite:
+        regex_uri:
+          - ^/api/iam/(.*)
+          - /$1
+        use_real_request_uri_unsafe: false
     labels:
       managed_by: shgas-iam
       source: repo-manifest
@@ -21,9 +33,15 @@ routes:
 
   - id: iam-internal-dev
     name: iam-internal-dev
-    desc: IAM internal tier through APISIX
-    uri: /internal/*
+    desc: IAM internal tier through APISIX with /api/iam prefix
+    uri: /api/iam/internal/*
     service_id: iam-api-dev
+    plugins:
+      proxy-rewrite:
+        regex_uri:
+          - ^/api/iam/(.*)
+          - /$1
+        use_real_request_uri_unsafe: false
     labels:
       managed_by: shgas-iam
       source: repo-manifest
@@ -31,7 +49,7 @@ routes:
 
   - id: iam-sso-dev
     name: iam-sso-dev
-    desc: IAM SSO tier through APISIX
+    desc: IAM SSO tier through APISIX with /api/iam prefix
     uri: /sso/*
     service_id: iam-api-dev
     plugin_config_id: iam-open-cors-dev
@@ -42,18 +60,8 @@ routes:
 
   - id: iam-auth-dev
     name: iam-auth-dev
-    desc: IAM auth tier through APISIX
-    uri: /auth/*
-    service_id: iam-api-dev
-    labels:
-      managed_by: shgas-iam
-      source: repo-manifest
-      env: dev
-
-  - id: iam-api-compat-dev
-    name: iam-api-compat-dev
-    desc: Compatibility route matching the current /api/iam/* APISIX prefix
-    uri: /api/iam/*
+    desc: IAM auth tier through APISIX with /api/iam prefix
+    uri: /api/iam/auth/*
     service_id: iam-api-dev
     plugins:
       proxy-rewrite:
@@ -68,27 +76,7 @@ routes:
 
   - id: iam-admin-rest-dev
     name: iam-admin-rest-dev
-    desc: IAM admin REST tier through APISIX
-    uri: /admin/*
-    service_id: iam-admin-api-dev
-    labels:
-      managed_by: shgas-iam
-      source: repo-manifest
-      env: dev
-
-  - id: iam-admin-rpc-dev
-    name: iam-admin-rpc-dev
-    desc: IAM admin RPC tier through APISIX
-    uri: /rpc/*
-    service_id: iam-admin-api-dev
-    labels:
-      managed_by: shgas-iam
-      source: repo-manifest
-      env: dev
-
-  - id: iam-admin-rest-compat-dev
-    name: iam-admin-rest-compat-dev
-    desc: Compatibility route for /api/iam/admin/*
+    desc: IAM admin REST tier through APISIX with /api/iam prefix
     uri: /api/iam/admin/*
     service_id: iam-admin-api-dev
     plugins:
@@ -102,9 +90,9 @@ routes:
       source: repo-manifest
       env: dev
 
-  - id: iam-admin-rpc-compat-dev
-    name: iam-admin-rpc-compat-dev
-    desc: Compatibility route for /api/iam/rpc/*
+  - id: iam-admin-rpc-dev
+    name: iam-admin-rpc-dev
+    desc: IAM admin RPC tier through APISIX with /api/iam prefix
     uri: /api/iam/rpc/*
     service_id: iam-admin-api-dev
     plugins:
