@@ -80,6 +80,13 @@ export default defineConfig({
       component: './employments/index',
       access: 'isAdmin',
     },
+    {
+      path: '/clients',
+      name: '应用管理',
+      icon: 'appstore',
+      component: './clients/index',
+      access: 'isAdmin',
+    },
     { path: '/403', component: './403', hideInMenu: true },
   ],
   npmClient: 'pnpm',

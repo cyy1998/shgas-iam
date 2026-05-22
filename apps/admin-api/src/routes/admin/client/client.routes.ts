@@ -1,33 +1,117 @@
-import { ClientCreateDtoSchema, ClientDtoSchema, ClientInputDtoSchema } from "@admin-api/services/client/client.schema";
-import { createRoute } from "@hono/zod-openapi";
+import {
+  ClientCreateDtoSchema,
+  ClientDtoSchema,
+  ClientInputDtoSchema,
+  ClientPaginationQueryDtoSchema,
+  ClientStatusUpdateDtoSchema,
+  ClientUpdateDtoSchema,
+} from "@admin-api/services/client/client.schema";
+import { createRoute, z } from "@hono/zod-openapi";
 import * as HttpStatusCodes from "@iam/api-core/core/http-status-codes";
 import jsonContent from "@iam/api-core/core/openapi/helpers/json-content";
 import jsonContentRequired from "@iam/api-core/core/openapi/helpers/json-content-required";
 import createSuccessResponseSchema from "@iam/api-core/core/openapi/schemas/create-success-schema";
+import { createPageResultSchema } from "@iam/api-core/core/pagination/schema";
 
-const routePrefix = "";
 const tags = ["Admin/Client"];
 
-export const clientUpdate = createRoute({
+export const clientsSearch = createRoute({
   method: "post",
-  path: `${routePrefix}/update`,
+  path: "/search",
   tags,
   request: {
-    body: jsonContentRequired(ClientInputDtoSchema, "客户端更新参数"),
+    body: jsonContentRequired(ClientPaginationQueryDtoSchema, "客户端分页查询参数"),
   },
   responses: {
-    [HttpStatusCodes.OK]: jsonContent(createSuccessResponseSchema(ClientDtoSchema), "更新客户端成功"),
+    [HttpStatusCodes.OK]: jsonContent(
+      createSuccessResponseSchema(createPageResultSchema(z.array(ClientDtoSchema))),
+      "分页客户端列表",
+    ),
   },
 });
 
 export const clientCreate = createRoute({
   method: "post",
-  path: `${routePrefix}/create`,
+  path: "/",
   tags,
   request: {
     body: jsonContentRequired(ClientCreateDtoSchema, "客户端创建参数"),
   },
   responses: {
     [HttpStatusCodes.OK]: jsonContent(createSuccessResponseSchema(ClientDtoSchema), "创建客户端成功"),
+  },
+});
+
+export const clientDetail = createRoute({
+  method: "get",
+  path: "/:clientCode",
+  tags,
+  request: {
+    params: z.object({ clientCode: z.string().openapi({ example: "portal" }) }),
+  },
+  responses: {
+    [HttpStatusCodes.OK]: jsonContent(createSuccessResponseSchema(ClientDtoSchema), "客户端详情"),
+  },
+});
+
+export const clientUpdate = createRoute({
+  method: "put",
+  path: "/:clientCode",
+  tags,
+  request: {
+    params: z.object({ clientCode: z.string() }),
+    body: jsonContentRequired(ClientUpdateDtoSchema, "客户端更新参数"),
+  },
+  responses: {
+    [HttpStatusCodes.OK]: jsonContent(createSuccessResponseSchema(ClientDtoSchema), "更新客户端成功"),
+  },
+});
+
+export const clientStatusUpdate = createRoute({
+  method: "patch",
+  path: "/:clientCode/status",
+  tags,
+  request: {
+    params: z.object({ clientCode: z.string() }),
+    body: jsonContentRequired(ClientStatusUpdateDtoSchema, "客户端状态变更"),
+  },
+  responses: {
+    [HttpStatusCodes.OK]: jsonContent(createSuccessResponseSchema(z.boolean()), "状态更新成功"),
+  },
+});
+
+export const clientDelete = createRoute({
+  method: "delete",
+  path: "/:clientCode",
+  tags,
+  request: {
+    params: z.object({ clientCode: z.string() }),
+  },
+  responses: {
+    [HttpStatusCodes.OK]: jsonContent(createSuccessResponseSchema(z.boolean()), "软删除成功"),
+  },
+});
+
+export const clientCreateLegacy = createRoute({
+  method: "post",
+  path: "/create",
+  tags,
+  request: {
+    body: jsonContentRequired(ClientCreateDtoSchema, "客户端创建参数"),
+  },
+  responses: {
+    [HttpStatusCodes.OK]: jsonContent(createSuccessResponseSchema(ClientDtoSchema), "创建客户端成功"),
+  },
+});
+
+export const clientUpdateLegacy = createRoute({
+  method: "post",
+  path: "/update",
+  tags,
+  request: {
+    body: jsonContentRequired(ClientInputDtoSchema, "客户端更新参数"),
+  },
+  responses: {
+    [HttpStatusCodes.OK]: jsonContent(createSuccessResponseSchema(ClientDtoSchema), "更新客户端成功"),
   },
 });

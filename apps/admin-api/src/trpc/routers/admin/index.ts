@@ -1,3 +1,4 @@
+import { clientAdminRouter } from "@admin-api/routes/admin/client/client.trpc";
 import { employmentAdminRouter } from "@admin-api/routes/admin/employment/employment.trpc";
 import { organizationAdminRouter } from "@admin-api/routes/admin/organization/organization.trpc";
 import { positionAdminRouter } from "@admin-api/routes/admin/position/position.trpc";
@@ -9,4 +10,5 @@ export const adminRouter = router({
   position: positionAdminRouter,
   user: userAdminRouter,
   employment: employmentAdminRouter,
+  client: clientAdminRouter,
 });
