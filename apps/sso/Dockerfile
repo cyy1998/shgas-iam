@@ -12,12 +12,13 @@ ARG no_proxy
 ENV COREPACK_ENABLE_DOWNLOAD_PROMPT=0
 ENV NODE_USE_ENV_PROXY=1
 ENV COREPACK_NPM_REGISTRY="https://registry.npmmirror.com"
+ENV NPM_CONFIG_REGISTRY="https://registry.npmmirror.com"
 ENV npm_config_registry="https://registry.npmmirror.com"
 RUN corepack enable && corepack prepare pnpm@11.1.2 --activate
 
 FROM base AS deps
 WORKDIR /app
-COPY pnpm-workspace.yaml package.json pnpm-lock.yaml ./
+COPY .npmrc pnpm-workspace.yaml package.json pnpm-lock.yaml ./
 COPY packages/contracts/package.json ./packages/contracts/
 COPY apps/sso/package.json ./apps/sso/
 ARG HTTP_PROXY
