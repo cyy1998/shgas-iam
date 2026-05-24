@@ -3,8 +3,12 @@
 FROM docker.xuanyuan.run/node:24-alpine AS base
 ENV PNPM_HOME="/pnpm"
 ENV PATH="$PNPM_HOME:$PATH"
-ENV HTTP_PROXY="http://176.169.105.96:3928"
-ENV HTTPS_PROXY="http://176.169.105.96:3928"
+ARG HTTP_PROXY
+ARG HTTPS_PROXY
+ARG NO_PROXY
+ARG http_proxy
+ARG https_proxy
+ARG no_proxy
 ENV COREPACK_ENABLE_DOWNLOAD_PROMPT=0
 ENV NODE_USE_ENV_PROXY=1
 ENV COREPACK_NPM_REGISTRY="https://registry.npmmirror.com"
@@ -16,6 +20,12 @@ WORKDIR /app
 COPY pnpm-workspace.yaml package.json pnpm-lock.yaml ./
 COPY packages/contracts/package.json ./packages/contracts/
 COPY apps/sso/package.json ./apps/sso/
+ARG HTTP_PROXY
+ARG HTTPS_PROXY
+ARG NO_PROXY
+ARG http_proxy
+ARG https_proxy
+ARG no_proxy
 RUN pnpm install --frozen-lockfile
 
 FROM deps AS builder

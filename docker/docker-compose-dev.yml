@@ -1,3 +1,11 @@
+x-build-proxy-args: &build-proxy-args
+  HTTP_PROXY: ${HTTP_PROXY:-}
+  HTTPS_PROXY: ${HTTPS_PROXY:-}
+  NO_PROXY: ${NO_PROXY:-}
+  http_proxy: ${http_proxy:-}
+  https_proxy: ${https_proxy:-}
+  no_proxy: ${no_proxy:-}
+
 services:
   db:
     image: docker.xuanyuan.run/postgres:18
@@ -61,6 +69,7 @@ services:
     build:
       context: ..
       dockerfile: apps/sso/Dockerfile
+      args: *build-proxy-args
     restart: unless-stopped
     ports:
       - "30013:80"
@@ -69,6 +78,7 @@ services:
     build:
       context: ..
       dockerfile: apps/admin/Dockerfile
+      args: *build-proxy-args
     restart: unless-stopped
     ports:
       - "30014:80"
@@ -77,6 +87,7 @@ services:
     build:
       context: ..
       dockerfile: apps/api/Dockerfile
+      args: *build-proxy-args
     restart: unless-stopped
     ports:
       - "30011:30000"
@@ -118,6 +129,7 @@ services:
     build:
       context: ..
       dockerfile: apps/admin-api/Dockerfile
+      args: *build-proxy-args
     restart: unless-stopped
     ports:
       - "30012:30001"

@@ -25,6 +25,14 @@
 
 name: iam-service-prod
 
+x-build-proxy-args: &build-proxy-args
+  HTTP_PROXY: ${HTTP_PROXY:-}
+  HTTPS_PROXY: ${HTTPS_PROXY:-}
+  NO_PROXY: ${NO_PROXY:-}
+  http_proxy: ${http_proxy:-}
+  https_proxy: ${https_proxy:-}
+  no_proxy: ${no_proxy:-}
+
 x-postgres-environment: &postgres-environment
   POSTGRES_USER: ${POSTGRES_USER:-iam}
   POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}
@@ -181,6 +189,7 @@ services:
     build:
       context: ..
       dockerfile: apps/api/Dockerfile
+      args: *build-proxy-args
     restart: unless-stopped
     ports:
       - "${API_PUBLISHED_PORT:-30000}:30000"
@@ -226,6 +235,7 @@ services:
     build:
       context: ..
       dockerfile: apps/admin-api/Dockerfile
+      args: *build-proxy-args
     restart: unless-stopped
     ports:
       - "${ADMIN_API_PUBLISHED_PORT:-30001}:30001"
@@ -247,6 +257,7 @@ services:
     build:
       context: ..
       dockerfile: apps/sso/Dockerfile
+      args: *build-proxy-args
     restart: unless-stopped
     ports:
       - "${SSO_PUBLISHED_PORT:-30013}:80"
@@ -256,6 +267,7 @@ services:
     build:
       context: ..
       dockerfile: apps/admin/Dockerfile
+      args: *build-proxy-args
     restart: unless-stopped
     ports:
       - "${ADMIN_PUBLISHED_PORT:-30014}:80"
