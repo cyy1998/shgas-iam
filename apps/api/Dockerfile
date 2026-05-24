@@ -32,7 +32,7 @@ ARG NO_PROXY
 ARG http_proxy
 ARG https_proxy
 ARG no_proxy
-RUN pnpm install --frozen-lockfile
+RUN pnpm install --frozen-lockfile --prod
 
 # ── Stage 3: Create deploy bundle ────────────────────────────────────────────
 FROM deps AS builder
