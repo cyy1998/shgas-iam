@@ -40,6 +40,10 @@ COPY packages/api-core/ ./packages/api-core/
 COPY packages/domain/ ./packages/domain/
 COPY apps/admin-api/ ./apps/admin-api/
 COPY apps/admin/ ./apps/admin/
+ENV NODE_USE_ENV_PROXY=1
+ENV COREPACK_NPM_REGISTRY="https://registry.npmmirror.com"
+ENV NPM_CONFIG_REGISTRY="https://registry.npmmirror.com"
+ENV npm_config_registry="https://registry.npmmirror.com"
 RUN pnpm --filter @iam/admin build
 
 FROM docker.xuanyuan.run/nginx:1.27-alpine AS runner
