@@ -7,12 +7,15 @@
 #   docker compose -f docker-compose-prod.yml up -d postgres-replica-1
 #   docker compose -f docker-compose-prod.yml up -d postgres-replica-2
 #   docker compose -f docker-compose-prod.yml up -d redis
-#   docker compose -f docker-compose-prod.yml up -d apisix-etcd
-#   docker compose -f docker-compose-prod.yml up -d apisix
 #   docker compose -f docker-compose-prod.yml up -d api
 #   docker compose -f docker-compose-prod.yml up -d admin-api
 #   docker compose -f docker-compose-prod.yml up -d sso
 #   docker compose -f docker-compose-prod.yml up -d admin
+#
+# Gateway services are managed separately:
+#
+#   docker compose -f docker-compose-gateway-prod.yml up -d apisix-etcd
+#   docker compose -f docker-compose-gateway-prod.yml up -d apisix
 #
 # Cross-server services must use reachable hostnames or IP addresses through
 # POSTGRES_PRIMARY_HOST, REDIS_HOST, and DATABASE_URL.
@@ -256,39 +259,3 @@ services:
     restart: unless-stopped
     ports:
       - "${ADMIN_PUBLISHED_PORT:-30014}:80"
-
-  apisix-etcd:
-    image: ${APISIX_ETCD_IMAGE:-bitnamilegacy/etcd:3.5.11}
-    restart: unless-stopped
-    environment:
-      ALLOW_NONE_AUTHENTICATION: ${APISIX_ETCD_ALLOW_NONE_AUTHENTICATION:-no}
-      ETCD_ROOT_PASSWORD: ${APISIX_ETCD_ROOT_PASSWORD:?set APISIX_ETCD_ROOT_PASSWORD}
-      ETCD_ADVERTISE_CLIENT_URLS: ${APISIX_ETCD_ADVERTISE_CLIENT_URLS:-http://apisix-etcd:2379}
-      ETCD_LISTEN_CLIENT_URLS: ${APISIX_ETCD_LISTEN_CLIENT_URLS:-http://0.0.0.0:2379}
-    ports:
-      - "${APISIX_ETCD_PUBLISHED_PORT:-2379}:2379"
-    volumes:
-      - "${APISIX_ETCD_DATA_PATH:-/data/apisix-etcd}:/bitnami/etcd"
-    healthcheck:
-      test: ["CMD-SHELL", "etcdctl endpoint health --endpoints=http://127.0.0.1:2379"]
-      interval: 10s
-      timeout: 5s
-      retries: 10
-      start_period: 15s
-
-  apisix:
-    image: ${APISIX_IMAGE:-apache/apisix:3.13.0-debian}
-    restart: unless-stopped
-    ports:
-      - "${APISIX_HTTP_PUBLISHED_PORT:-9080}:9080"
-      - "${APISIX_HTTPS_PUBLISHED_PORT:-9443}:9443"
-      - "${APISIX_ADMIN_PUBLISHED_HOST:-127.0.0.1}:${APISIX_ADMIN_PUBLISHED_PORT:-9180}:9180"
-    environment:
-      APISIX_ADMIN_KEY: ${APISIX_ADMIN_KEY:?set APISIX_ADMIN_KEY}
-      APISIX_ADMIN_ALLOW_CIDR: ${APISIX_ADMIN_ALLOW_CIDR:?set APISIX_ADMIN_ALLOW_CIDR}
-      APISIX_ETCD_ENDPOINT: ${APISIX_ETCD_ENDPOINT:-http://apisix-etcd:2379}
-    volumes:
-      - "${APISIX_CONFIG_PATH:-../gateway/apisix/config/config.prod.example.yaml}:/usr/local/apisix/conf/config.yaml:ro"
-    depends_on:
-      apisix-etcd:
-        condition: service_healthy

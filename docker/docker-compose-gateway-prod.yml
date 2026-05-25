@@ -1,0 +1,48 @@
+# Production compose for APISIX gateway deployment.
+#
+# Copy this file to the gateway server and start APISIX with its etcd backend:
+#
+#   docker compose -f docker-compose-gateway-prod.yml up -d apisix-etcd
+#   docker compose -f docker-compose-gateway-prod.yml up -d apisix
+#
+# It uses the same compose project name as docker-compose-prod.yml so services
+# can share the default network when they are deployed on the same host.
+
+name: iam-service-prod
+
+services:
+  apisix-etcd:
+    image: ${APISIX_ETCD_IMAGE:-docker.xuanyuan.run/bitnamilegacy/etcd:3.5.11}
+    restart: unless-stopped
+    environment:
+      ALLOW_NONE_AUTHENTICATION: ${APISIX_ETCD_ALLOW_NONE_AUTHENTICATION:-no}
+      ETCD_ROOT_PASSWORD: ${APISIX_ETCD_ROOT_PASSWORD:?set APISIX_ETCD_ROOT_PASSWORD}
+      ETCD_ADVERTISE_CLIENT_URLS: ${APISIX_ETCD_ADVERTISE_CLIENT_URLS:-http://apisix-etcd:2379}
+      ETCD_LISTEN_CLIENT_URLS: ${APISIX_ETCD_LISTEN_CLIENT_URLS:-http://0.0.0.0:2379}
+    ports:
+      - "${APISIX_ETCD_PUBLISHED_PORT:-2379}:2379"
+    volumes:
+      - "${APISIX_ETCD_DATA_PATH:-/data/apisix-etcd}:/bitnami/etcd"
+    healthcheck:
+      test: ["CMD-SHELL", "etcdctl endpoint health --endpoints=http://127.0.0.1:2379"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 15s
+
+  apisix:
+    image: ${APISIX_IMAGE:-docker.xuanyuan.run/apache/apisix:3.13.0-debian}
+    restart: unless-stopped
+    ports:
+      - "${APISIX_HTTP_PUBLISHED_PORT:-9080}:9080"
+      - "${APISIX_HTTPS_PUBLISHED_PORT:-9443}:9443"
+      - "${APISIX_ADMIN_PUBLISHED_HOST:-127.0.0.1}:${APISIX_ADMIN_PUBLISHED_PORT:-9180}:9180"
+    environment:
+      APISIX_ADMIN_KEY: ${APISIX_ADMIN_KEY:?set APISIX_ADMIN_KEY}
+      APISIX_ADMIN_ALLOW_CIDR: ${APISIX_ADMIN_ALLOW_CIDR:?set APISIX_ADMIN_ALLOW_CIDR}
+      APISIX_ETCD_ENDPOINT: ${APISIX_ETCD_ENDPOINT:-http://apisix-etcd:2379}
+    volumes:
+      - "${APISIX_CONFIG_PATH:-../gateway/apisix/config/config.prod.example.yaml}:/usr/local/apisix/conf/config.yaml:ro"
+    depends_on:
+      apisix-etcd:
+        condition: service_healthy
