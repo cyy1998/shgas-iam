@@ -8,6 +8,7 @@ export default defineConfig({
   },
   base: '/portal',
   publicPath: '/portal/',
+  esbuildMinifyIIFE: true,
   antd: {},
   access: {},
   model: {},
@@ -19,7 +20,7 @@ export default defineConfig({
     { path: '/login', component: './login' },
     { path: '/reset-password', component: './reset-password' },
     { path: '/userInfo', component: './user-info' },
-    { path: '/system-maintenance', component: './system-maintenance' },
+    { path: '/systemMaintenance', component: './system-maintenance' },
   ],
   npmClient: 'pnpm',
   proxy: {

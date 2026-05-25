@@ -1,7 +1,7 @@
+import { ServiceStatusCode } from '@iam/contracts';
 import { API_PREFIX, SSO_CLIENT_CODE } from '@sso/constants/config';
 import type { ApiEnvelope } from '@sso/types/api';
 import { currentSearchParams } from '@sso/utils/url';
-import { ServiceStatusCode } from '@iam/contracts';
 import { history } from '@umijs/max';
 import { message } from 'antd';
 
@@ -27,7 +27,7 @@ function gotoLogin() {
 }
 
 function gotoMaintenance() {
-  history.replace(`/system-maintenance${preserveQuery()}`);
+  history.replace(`/systemMaintenance${preserveQuery()}`);
 }
 
 export async function request<T>(
@@ -69,10 +69,7 @@ export async function request<T>(
 
   const body = (await res.json()) as ApiEnvelope<T>;
 
-  if (
-    body.code === ServiceStatusCode.Unauthorized &&
-    !init.skipAuthRedirect
-  ) {
+  if (body.code === ServiceStatusCode.Unauthorized && !init.skipAuthRedirect) {
     gotoLogin();
     return new Promise<T>(() => {});
   }
