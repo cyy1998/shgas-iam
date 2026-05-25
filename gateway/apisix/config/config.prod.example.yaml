@@ -4,14 +4,16 @@ deployment:
     config_provider: etcd
   admin:
     allow_admin:
-      - ${APISIX_ADMIN_ALLOW_CIDR}
+      - ${{APISIX_ADMIN_ALLOW_CIDR}}
     admin_key:
       - name: admin
-        key: ${APISIX_ADMIN_KEY}
+        key: ${{APISIX_ADMIN_KEY}}
         role: admin
   etcd:
     host:
-      - ${APISIX_ETCD_ENDPOINT}
+      - ${{APISIX_ETCD_ENDPOINT}}
+    user: ${{APISIX_ETCD_USER:=root}}
+    password: ${{APISIX_ETCD_PASSWORD}}
     prefix: /apisix
     timeout: 30
 

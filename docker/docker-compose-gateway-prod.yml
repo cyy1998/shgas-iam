@@ -11,6 +11,19 @@
 name: iam-service-prod
 
 services:
+  apisix-etcd-init:
+    image: ${APISIX_ETCD_IMAGE:-docker.xuanyuan.run/bitnamilegacy/etcd:3.5.11}
+    user: "0"
+    restart: "no"
+    entrypoint:
+      - sh
+      - -ec
+      - |
+        install -d -m 0775 -o 1001 -g 0 /bitnami/etcd /bitnami/etcd/data
+        chown -R 1001:0 /bitnami/etcd
+    volumes:
+      - "${APISIX_ETCD_DATA_PATH:-/data/apisix-etcd}:/bitnami/etcd"
+
   apisix-etcd:
     image: ${APISIX_ETCD_IMAGE:-docker.xuanyuan.run/bitnamilegacy/etcd:3.5.11}
     restart: unless-stopped
@@ -23,15 +36,22 @@ services:
       - "${APISIX_ETCD_PUBLISHED_PORT:-2379}:2379"
     volumes:
       - "${APISIX_ETCD_DATA_PATH:-/data/apisix-etcd}:/bitnami/etcd"
+    depends_on:
+      apisix-etcd-init:
+        condition: service_completed_successfully
     healthcheck:
-      test: ["CMD-SHELL", "etcdctl endpoint health --endpoints=http://127.0.0.1:2379"]
+      test:
+        [
+          "CMD-SHELL",
+          "etcdctl endpoint health --endpoints=http://127.0.0.1:2379 --user \"root:$${ETCD_ROOT_PASSWORD}\"",
+        ]
       interval: 10s
       timeout: 5s
       retries: 10
       start_period: 15s
 
   apisix:
-    image: ${APISIX_IMAGE:-docker.xuanyuan.run/apache/apisix:3.13.0-debian}
+    image: ${APISIX_IMAGE:-docker.xuanyuan.run/apache/apisix:3.16.0-debian}
     restart: unless-stopped
     ports:
       - "${APISIX_HTTP_PUBLISHED_PORT:-9080}:9080"
@@ -41,6 +61,8 @@ services:
       APISIX_ADMIN_KEY: ${APISIX_ADMIN_KEY:?set APISIX_ADMIN_KEY}
       APISIX_ADMIN_ALLOW_CIDR: ${APISIX_ADMIN_ALLOW_CIDR:?set APISIX_ADMIN_ALLOW_CIDR}
       APISIX_ETCD_ENDPOINT: ${APISIX_ETCD_ENDPOINT:-http://apisix-etcd:2379}
+      APISIX_ETCD_USER: ${APISIX_ETCD_USER:-root}
+      APISIX_ETCD_PASSWORD: ${APISIX_ETCD_PASSWORD:-${APISIX_ETCD_ROOT_PASSWORD:?set APISIX_ETCD_ROOT_PASSWORD}}
     volumes:
       - "${APISIX_CONFIG_PATH:-../gateway/apisix/config/config.prod.example.yaml}:/usr/local/apisix/conf/config.yaml:ro"
     depends_on:
