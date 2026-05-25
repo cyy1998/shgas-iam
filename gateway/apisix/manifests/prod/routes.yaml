@@ -6,6 +6,7 @@ routes:
       - app.shgas.com
       - tender.shgas.com.cn
       - jsc.shgas.com.cn
+      - 176.169.89.64
     uris:
       - /portal
       - /portal/*
@@ -36,6 +37,7 @@ routes:
       - app.shgas.com
       - tender.shgas.com.cn
       - jsc.shgas.com.cn
+      - 176.169.89.64
     uri: /api/iam/public/*
     service_id: iam-api-prod
     plugins:
@@ -56,6 +58,7 @@ routes:
       - app.shgas.com
       - tender.shgas.com.cn
       - jsc.shgas.com.cn
+      - 176.169.89.64
     uri: /api/iam/open/*
     service_id: iam-api-prod
     plugins:
@@ -76,6 +79,7 @@ routes:
       - app.shgas.com
       - tender.shgas.com.cn
       - jsc.shgas.com.cn
+      - 176.169.89.64
     uri: /api/iam/internal/*
     service_id: iam-api-prod
     plugins:
@@ -96,15 +100,10 @@ routes:
       - app.shgas.com
       - tender.shgas.com.cn
       - jsc.shgas.com.cn
-    uri: /api/iam/sso/*
+      - 176.169.89.64
+    uri: /sso/*
     service_id: iam-api-prod
     plugin_config_id: iam-sso-cors-prod
-    plugins:
-      proxy-rewrite:
-        regex_uri:
-          - ^/api/iam/(.*)
-          - /$1
-        use_real_request_uri_unsafe: false
     labels:
       managed_by: shgas-iam
       source: repo-manifest
@@ -117,6 +116,7 @@ routes:
       - app.shgas.com
       - tender.shgas.com.cn
       - jsc.shgas.com.cn
+      - 176.169.89.64
     uri: /api/iam/auth/*
     service_id: iam-api-prod
     plugins:

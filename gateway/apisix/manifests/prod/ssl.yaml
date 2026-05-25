@@ -1,12 +1,1 @@
-ssls:
-  - id: iam-prod-cert-placeholder
-    desc: Production certificate placeholder; inject real certificate material outside Git
-    snis:
-      - ${IAM_TLS_SNI}
-    cert: ${IAM_TLS_CERT_REF}
-    key: ${IAM_TLS_KEY_REF}
-    labels:
-      managed_by: shgas-iam
-      source: repo-manifest
-      env: prod
-      placeholder: "true"
+ssls: []
