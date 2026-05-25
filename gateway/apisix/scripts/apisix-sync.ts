@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -6,6 +7,7 @@ import { parse as parseYaml } from "yaml";
 type ResourceKind = "routes" | "upstreams" | "services" | "plugin_configs" | "consumers" | "ssls";
 
 type ManifestObject = Record<string, unknown>;
+type EnvMap = Record<string, string | undefined>;
 
 interface ResourceDefinition {
   kind: ResourceKind;
@@ -56,6 +58,8 @@ interface ApplyResult {
 interface CliOptions {
   env: string;
   manifestDir?: string;
+  envFile?: string;
+  renderEnv: boolean;
   adminUrl: string;
   adminKey?: string;
   dryRun: boolean;
@@ -122,12 +126,16 @@ const apisixDefaultFields: Record<string, unknown> = {
 const writeOrder: ResourceKind[] = ["upstreams", "plugin_configs", "services", "consumers", "ssls", "routes"];
 const deleteOrder: ResourceKind[] = [...writeOrder].reverse();
 
-export async function loadManifest(env: string, manifestDir = defaultManifestDir(env)): Promise<LoadedManifest> {
+export async function loadManifest(
+  env: string,
+  manifestDir = defaultManifestDir(env),
+  options: { renderEnv?: boolean; env?: EnvMap } = {},
+): Promise<LoadedManifest> {
   const resources = emptyResources();
 
   for (const definition of resourceDefinitions) {
     const filePath = path.join(manifestDir, definition.fileName);
-    const parsed = await readYamlFile(filePath);
+    const parsed = await readYamlFile(filePath, options);
     const value = parsed[definition.topKey] ?? [];
 
     if (!Array.isArray(value)) {
@@ -374,7 +382,11 @@ async function main(): Promise<void> {
     throw new Error(`Unknown command: ${command}`);
   }
 
-  const manifest = await loadManifest(options.env, options.manifestDir);
+  if (options.envFile) {
+    loadEnvFile(options.envFile);
+  }
+
+  const manifest = await loadManifest(options.env, options.manifestDir, { renderEnv: options.renderEnv });
   const issues = validateManifest(manifest);
 
   if (issues.length > 0) {
@@ -418,6 +430,7 @@ async function main(): Promise<void> {
 function parseCliOptions(args: string[]): CliOptions {
   const options: CliOptions = {
     env: process.env.APISIX_MANIFEST_ENV ?? "dev",
+    renderEnv: false,
     adminUrl: process.env.APISIX_ADMIN_URL ?? "http://127.0.0.1:9180/apisix/admin",
     adminKey: process.env.APISIX_ADMIN_KEY,
     dryRun: false,
@@ -439,6 +452,14 @@ function parseCliOptions(args: string[]): CliOptions {
     else if (arg === "--manifest-dir") {
       options.manifestDir = requireValue(arg, next);
       index += 1;
+    }
+    else if (arg === "--env-file") {
+      options.envFile = requireValue(arg, next);
+      options.renderEnv = true;
+      index += 1;
+    }
+    else if (arg === "--render-env") {
+      options.renderEnv = true;
     }
     else if (arg === "--admin-url") {
       options.adminUrl = requireValue(arg, next);
@@ -476,15 +497,87 @@ function defaultManifestDir(env: string): string {
   return path.join(repoRoot, "gateway/apisix/manifests", env);
 }
 
-async function readYamlFile(filePath: string): Promise<ManifestObject> {
+async function readYamlFile(
+  filePath: string,
+  options: { renderEnv?: boolean; env?: EnvMap } = {},
+): Promise<ManifestObject> {
   const content = await readFile(filePath, "utf8");
   const parsed = parseYaml(content) ?? {};
+  const rendered = options.renderEnv
+    ? renderEnvValue(parsed, options.env ?? process.env, relativePath(filePath))
+    : parsed;
 
-  if (!isRecord(parsed)) {
+  if (!isRecord(rendered)) {
     throw new Error(`${relativePath(filePath)} must contain a YAML object`);
   }
 
-  return parsed;
+  return rendered;
+}
+
+export function renderEnvPlaceholders(
+  content: string,
+  env: EnvMap = process.env,
+  source = "manifest",
+): string {
+  return content.replace(/\$\{([A-Z0-9_]+)\}/g, (_placeholder, name: string) => {
+    const value = env[name];
+    if (value === undefined) {
+      throw new Error(`${source} references missing environment variable ${name}`);
+    }
+    return value;
+  });
+}
+
+function renderEnvValue(value: unknown, env: EnvMap, source: string): unknown {
+  if (typeof value === "string") {
+    return renderEnvPlaceholders(value, env, source);
+  }
+
+  if (Array.isArray(value)) {
+    return value.map(item => renderEnvValue(item, env, source));
+  }
+
+  if (!isRecord(value)) {
+    return value;
+  }
+
+  return Object.fromEntries(
+    Object.entries(value).map(([key, child]) => [
+      renderEnvPlaceholders(key, env, source),
+      renderEnvValue(child, env, source),
+    ]),
+  );
+}
+
+function loadEnvFile(filePath: string): void {
+  const absolutePath = path.resolve(process.cwd(), filePath);
+  const content = readFileSync(absolutePath, "utf8");
+
+  for (const [lineIndex, rawLine] of content.split(/\r?\n/).entries()) {
+    const line = rawLine.trim();
+    if (!line || line.startsWith("#")) {
+      continue;
+    }
+
+    const match = /^(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)=(.*)$/.exec(line);
+    if (!match) {
+      throw new Error(`${filePath}:${lineIndex + 1} is not a valid env assignment`);
+    }
+
+    const [, key, rawValue] = match;
+    process.env[key] = parseEnvValue(rawValue);
+  }
+}
+
+function parseEnvValue(value: string): string {
+  const trimmed = value.trim();
+  if (
+    (trimmed.startsWith("\"") && trimmed.endsWith("\""))
+    || (trimmed.startsWith("'") && trimmed.endsWith("'"))
+  ) {
+    return trimmed.slice(1, -1);
+  }
+  return trimmed;
 }
 
 function validateReferences(
@@ -879,6 +972,8 @@ function printHelp(): void {
 Options:
   --env <name>             Manifest environment, default: dev
   --manifest-dir <path>    Override manifest directory
+  --env-file <path>        Load env vars from a file and render \${VAR} placeholders
+  --render-env             Render \${VAR} placeholders from current environment
   --admin-url <url>        APISIX Admin API base URL
   --admin-key <key>        APISIX Admin API key, or use APISIX_ADMIN_KEY
   --dry-run                Plan apply without writes

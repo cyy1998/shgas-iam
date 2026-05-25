@@ -135,17 +135,35 @@ pnpm gateway:apisix:apply -- --env dev
 
 - `APISIX_ADMIN_KEY`、TLS 私钥、JWT secret、第三方系统密钥不得写入 manifest。
 - Admin API 必须限制监听地址或来源网段，默认建议只暴露在内网运维网络或本机。
+- `gateway/apisix/manifests/prod/*.yaml` 支持 `${VAR}` 占位符；发布时使用 `--env-file` 或 `--render-env` 渲染。
 - 生产发布前必须先执行 `validate` 和 `apply --dry-run`。
 - 生产删除必须显式使用 `--prune`，并确认待删除对象均为 `source=repo-manifest`。
 
 发布流程：
 
 1. 修改 `gateway/apisix/manifests/<env>/` 中的 IAM 基线对象。
-2. 运行 `pnpm gateway:apisix:validate -- --env <env>`。
-3. 运行 `pnpm gateway:apisix:diff -- --env <env>` 检查远端差异。
-4. 运行 `pnpm gateway:apisix:apply -- --env <env> --dry-run`。
-5. 提交 Git review。
-6. 合并后由部署流程执行 `apply`。
+2. 准备生产环境变量文件，例如 `.env.prod`。
+3. 运行 `pnpm gateway:apisix:validate -- --env <env> --env-file .env.prod`。
+4. 运行 `pnpm gateway:apisix:diff -- --env <env> --env-file .env.prod` 检查远端差异。
+5. 运行 `pnpm gateway:apisix:apply -- --env <env> --env-file .env.prod --dry-run`。
+6. 运行 `pnpm gateway:apisix:apply -- --env <env> --env-file .env.prod`。
+7. 提交 Git review。
+8. 合并后由部署流程执行 `apply`。
+
+如果环境变量已经由 CI/CD 或 shell 注入，也可以用 `--render-env` 代替 `--env-file .env.prod`：
+
+```bash
+APISIX_ADMIN_KEY=prod-admin-key \
+pnpm gateway:apisix:apply -- --env prod --render-env --admin-url http://127.0.0.1:9180/apisix/admin
+```
+
+如果运维终端配置了代理，访问内网 Admin API 时建议显式设置 `NO_PROXY`：
+
+```bash
+NO_PROXY=176.169.89.64,localhost,127.0.0.1 \
+no_proxy=176.169.89.64,localhost,127.0.0.1 \
+pnpm gateway:apisix:apply -- --env prod --env-file .env.prod --admin-url http://176.169.89.64:9180/apisix/admin
+```
 
 回滚流程：
 

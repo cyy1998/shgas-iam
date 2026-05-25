@@ -6,6 +6,7 @@ import {
   applyPlan,
   loadManifest,
   planChanges,
+  renderEnvPlaceholders,
   validateManifest,
 } from "../apisix-sync";
 
@@ -67,6 +68,34 @@ describe("apisix manifest validation", () => {
 
     const issues = validateManifest(manifest);
     expect(issues.some(issue => issue.path.includes(".credentials[0].config.key"))).toBe(true);
+  });
+
+  it("renders environment placeholders before parsing manifest YAML", async () => {
+    const manifest = await loadManifest("test", await createManifestDir({
+      upstreams: [
+        repoObject({
+          id: "api",
+          nodes: {
+            "${IAM_API_HOST}:${IAM_API_PORT}": 1,
+          },
+        }),
+      ],
+    }), {
+      renderEnv: true,
+      env: {
+        IAM_API_HOST: "api.internal",
+        IAM_API_PORT: "30000",
+      },
+    });
+
+    expect(manifest.resources.upstreams[0].nodes).toEqual({
+      "api.internal:30000": 1,
+    });
+  });
+
+  it("rejects missing environment placeholders when rendering is enabled", () => {
+    expect(() => renderEnvPlaceholders("host: ${MISSING_HOST}", {}, "routes.yaml"))
+      .toThrow("routes.yaml references missing environment variable MISSING_HOST");
   });
 });
 
