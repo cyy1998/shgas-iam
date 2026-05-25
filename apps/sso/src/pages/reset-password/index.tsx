@@ -7,7 +7,7 @@ import {
   SafetyCertificateOutlined,
   UserOutlined,
 } from '@ant-design/icons';
-import logoWhite from '@sso/assets/logo-white.png';
+import logoColorfulTextWhite from '@sso/assets/logo-colorful-text-white.png';
 import { withHumanVerification } from '@sso/lib/human-verification';
 import {
   codeVerify,
@@ -220,7 +220,7 @@ export default function ResetPasswordPage() {
       <div className="reset-shell">
         <section className="reset-hero" aria-label="密码安全">
           <div className="brand-top">
-            <img src={logoWhite} alt="上海燃气" />
+            <img src={logoColorfulTextWhite} alt="上海燃气" />
             <span>SHANGHAI GAS IAM</span>
           </div>
           <div className="hero-copy">
