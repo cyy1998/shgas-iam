@@ -71,17 +71,3 @@ export const usersSearch = createRoute({
     [HttpStatusCodes.OK]: jsonContent(createSuccessResponseSchema(z.array(UserDtoSchema)), "用户查询结果"),
   },
 });
-
-export const usersQueryByOrg = createRoute({
-  method: "get",
-  path: `${routePrefix}/users/by-org`,
-  tags,
-  request: {
-    query: z.object({
-      orgCode: z.string().openapi({ example: "123" }),
-    }),
-  },
-  responses: {
-    [HttpStatusCodes.OK]: jsonContent(createSuccessResponseSchema(z.array(UserDtoSchema)), "用户查询结果"),
-  },
-});
