@@ -1,0 +1,41 @@
+# Production compose for frontend deployment.
+#
+# Copy this file to the frontend server and start only the frontend service
+# assigned to that server, for example:
+#
+#   docker compose -f docker-compose-frontend-prod.yml up -d sso
+#   docker compose -f docker-compose-frontend-prod.yml up -d admin
+#
+# It uses the same compose project name as docker-compose-prod.yml so services
+# can share the default network when they are deployed on the same host.
+
+name: iam-service-prod
+
+x-build-proxy-args: &build-proxy-args
+  HTTP_PROXY: ${HTTP_PROXY:-}
+  HTTPS_PROXY: ${HTTPS_PROXY:-}
+  NO_PROXY: ${NO_PROXY:-}
+  http_proxy: ${http_proxy:-}
+  https_proxy: ${https_proxy:-}
+  no_proxy: ${no_proxy:-}
+
+services:
+  sso:
+    image: ${IAM_SSO_IMAGE:-iam-sso:latest}
+    build:
+      context: ..
+      dockerfile: apps/sso/Dockerfile
+      args: *build-proxy-args
+    restart: unless-stopped
+    ports:
+      - "${SSO_PUBLISHED_PORT:-30013}:80"
+
+  admin:
+    image: ${IAM_ADMIN_IMAGE:-iam-admin:latest}
+    build:
+      context: ..
+      dockerfile: apps/admin/Dockerfile
+      args: *build-proxy-args
+    restart: unless-stopped
+    ports:
+      - "${ADMIN_PUBLISHED_PORT:-30014}:80"

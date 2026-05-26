@@ -9,8 +9,11 @@
 #   docker compose -f docker-compose-prod.yml up -d redis
 #   docker compose -f docker-compose-prod.yml up -d api
 #   docker compose -f docker-compose-prod.yml up -d admin-api
-#   docker compose -f docker-compose-prod.yml up -d sso
-#   docker compose -f docker-compose-prod.yml up -d admin
+#
+# Frontend services are managed separately:
+#
+#   docker compose -f docker-compose-frontend-prod.yml up -d sso
+#   docker compose -f docker-compose-frontend-prod.yml up -d admin
 #
 # Gateway services are managed separately:
 #
@@ -251,23 +254,3 @@ services:
       PASSWORD_HASH_ROUNDS: ${PASSWORD_HASH_ROUNDS:-10}
       ADMIN_CLIENT_CODES: ${ADMIN_CLIENT_CODES:-iam}
       ADMIN_ROLE_CODES: ${ADMIN_ROLE_CODES:-iam:admin}
-
-  sso:
-    image: ${IAM_SSO_IMAGE:-iam-sso:latest}
-    build:
-      context: ..
-      dockerfile: apps/sso/Dockerfile
-      args: *build-proxy-args
-    restart: unless-stopped
-    ports:
-      - "${SSO_PUBLISHED_PORT:-30013}:80"
-
-  admin:
-    image: ${IAM_ADMIN_IMAGE:-iam-admin:latest}
-    build:
-      context: ..
-      dockerfile: apps/admin/Dockerfile
-      args: *build-proxy-args
-    restart: unless-stopped
-    ports:
-      - "${ADMIN_PUBLISHED_PORT:-30014}:80"
