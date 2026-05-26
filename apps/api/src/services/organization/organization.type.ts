@@ -1,10 +1,5 @@
 import type { z } from "@hono/zod-openapi";
-import type {
-  OrganizationCreateDtoSchema,
-  OrganizationQueryDtoSchema,
-  OrganizationUpdateDtoSchema,
-} from "./organization.schema";
+import type { OrganizationQueryDtoSchema } from "./organization.schema";
 
-export type OrganizationCreateDto = z.infer<typeof OrganizationCreateDtoSchema>;
+export type { OrganizationCreateDto, OrganizationUpdateDto } from "@iam/domain/organization";
 export type OrganizationQueryDto = z.infer<typeof OrganizationQueryDtoSchema>;
-export type OrganizationUpdateDto = z.infer<typeof OrganizationUpdateDtoSchema>;
