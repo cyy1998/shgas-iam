@@ -65,6 +65,32 @@ For Drizzle schema work:
 - Put relations in `packages/db/src/relations/`, not in table definition files.
 - Keep join-table primary keys, indexes, and uniqueness constraints explicit.
 
+## Backend Implementation Conventions
+- Route handlers should return shared response envelopes from `@iam/api-core/http`, for example `c.json(resp.ok(data))` for successful JSON responses and `resp.fail(...)` for explicit failure envelopes. Prefer throwing domain/API errors when the existing error middleware already maps them correctly.
+- Use `@iam/api-core/core/http-status-codes` constants in OpenAPI route definitions and explicit non-200 responses rather than numeric literals.
+- Use the app logger (`@api/lib/logger`, admin app logger, or `createLogger`) for runtime diagnostics. Prefer structured Pino calls with the data object first and the message second, for example `logger.info({ userId }, "user synced")`.
+- Avoid `console.log`, `console.warn`, and `console.error` in application code. Acceptable exceptions are env validation, singleton/process lifecycle code, tests, one-off scripts, and the centralized error handler.
+- Prefer enums and constants from `packages/contracts` or the owning module over magic strings/numbers in business queries, especially for status, type, and role-like fields.
+- Prefer deriving TypeScript types from Zod schemas with `z.infer<typeof Schema>` when a schema is already the source of truth.
+- Keep simple guard clauses concise when they return a single obvious value, for example `if (!entity) return null;`.
+
+## Workflow Orchestration
+- For non-trivial work, start with a short plan or OpenSpec task list before implementation.
+- Re-plan when new findings invalidate assumptions, expand scope, or make the current approach brittle.
+- Use sub-agents when a task has independent workstreams, such as code archaeology, impact analysis, failing-test triage, API/schema contract review, security review, or UI smoke-checking.
+- Keep each sub-agent focused on one bounded question and ask for concrete evidence: relevant files, line references, observed behavior, risks, and recommended next steps.
+- The main agent remains responsible for the final plan, code integration, verification, and commit. Do not let parallel investigations produce conflicting edits without reconciling them first.
+- For bug reports, reproduce or inspect the failing signal first, then fix the root cause and verify it.
+- Before marking work complete, prove it with the narrowest meaningful validation: focused tests, type checks, lint, schema commands, logs, or a quick UI/API smoke test as appropriate.
+- When a solution feels hacky, pause and look for a simpler design that fits existing patterns; avoid extra abstraction for obvious small fixes.
+- Capture recurring lessons in AGENTS.md, OpenSpec docs, or nearby project documentation when they would prevent future mistakes.
+
+## Engineering Principles
+- Start by reading nearby code and following existing package patterns before adding new abstractions.
+- Keep changes as small as the problem allows. Touch the minimum code needed, and avoid unrelated refactors or formatting churn.
+- Fix root causes rather than layering temporary workarounds. If a solution feels brittle, pause and look for the simpler, more coherent design.
+- When behavior is subtle or risky, compare against the existing branch behavior or surrounding implementations before changing the contract.
+
 ## Testing Guidelines
 Bun tests are available through package-level `test` scripts. Minimum validation before a PR:
 
