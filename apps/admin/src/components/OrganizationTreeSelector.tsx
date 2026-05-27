@@ -3,11 +3,12 @@ import {
   type OrganizationSelectorNode,
 } from '@admin/services/organization';
 import { OrganizationStatus, type OrganizationType } from '@iam/contracts';
-import { TreeSelect, message } from 'antd';
 import type { TreeSelectProps } from 'antd';
+import { TreeSelect, message } from 'antd';
 import { useEffect, useMemo, useState } from 'react';
 
 type TreeNode = NonNullable<TreeSelectProps['treeData']>[number];
+const DEFAULT_SELECTABLE_STATUSES = [OrganizationStatus.Enable];
 
 type Props = {
   value?: string;
@@ -40,7 +41,11 @@ function mergeChildren(
     if (node.children) {
       return {
         ...node,
-        children: mergeChildren(node.children as TreeNode[], parentOrgCode, children),
+        children: mergeChildren(
+          node.children as TreeNode[],
+          parentOrgCode,
+          children,
+        ),
       };
     }
     return node;
@@ -53,15 +58,27 @@ export default function OrganizationTreeSelector({
   placeholder = '请选择组织',
   disabled,
   selectableOrgTypes,
-  selectableStatuses = [OrganizationStatus.Enable],
+  selectableStatuses,
 }: Props) {
   const [treeData, setTreeData] = useState<TreeNode[]>([]);
   const [searchData, setSearchData] = useState<TreeNode[] | null>(null);
   const [loading, setLoading] = useState(false);
 
+  const selectableOrgTypesKey = selectableOrgTypes?.join('|') ?? '';
+  const selectableStatusesKey = (
+    selectableStatuses ?? DEFAULT_SELECTABLE_STATUSES
+  ).join('|');
+
   const baseQuery = useMemo(
-    () => ({ selectableOrgTypes, selectableStatuses }),
-    [selectableOrgTypes, selectableStatuses],
+    () => ({
+      selectableOrgTypes: selectableOrgTypes
+        ? [...selectableOrgTypes]
+        : undefined,
+      selectableStatuses: [
+        ...(selectableStatuses ?? DEFAULT_SELECTABLE_STATUSES),
+      ],
+    }),
+    [selectableOrgTypesKey, selectableStatusesKey],
   );
 
   useEffect(() => {
@@ -94,7 +111,9 @@ export default function OrganizationTreeSelector({
       parentOrgCode: String(node.value),
       pageSize: 200,
     });
-    setTreeData((prev) => mergeChildren(prev, String(node.value), children.map(toTreeNode)));
+    setTreeData((prev) =>
+      mergeChildren(prev, String(node.value), children.map(toTreeNode)),
+    );
   };
 
   const onSearch = async (text: string) => {
