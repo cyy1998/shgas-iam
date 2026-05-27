@@ -21,7 +21,7 @@ type Props = {
 
 function toTreeNode(node: OrganizationSelectorNode): TreeNode {
   return {
-    title: node.pathText || `${node.orgName} (${node.orgCode})`,
+    title: `${node.orgName} (${node.orgCode})`,
     value: node.orgCode,
     key: node.orgCode,
     isLeaf: node.isLeaf,

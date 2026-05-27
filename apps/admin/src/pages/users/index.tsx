@@ -60,8 +60,14 @@ export default function UsersPage() {
   };
 
   const columns: ProColumns<UserVo>[] = [
-    { title: '工号', dataIndex: 'username', width: 120 },
-    { title: '姓名', dataIndex: 'name', width: 120 },
+    {
+      title: '用户',
+      dataIndex: 'user',
+      hideInTable: true,
+      fieldProps: { placeholder: '工号或姓名' },
+    },
+    { title: '工号', dataIndex: 'username', width: 120, search: false },
+    { title: '姓名', dataIndex: 'name', width: 120, search: false },
     { title: '手机', dataIndex: 'mobile', width: 140, search: false },
     {
       title: '类型',
@@ -142,19 +148,17 @@ export default function UsersPage() {
             const {
               current = 1,
               pageSize = 20,
-              username,
-              name,
+              user,
               status,
               userType,
             } = params as {
               current?: number;
               pageSize?: number;
-              username?: string;
-              name?: string;
+              user?: string;
               status?: string | number;
               userType?: UserType;
             };
-            const text = (username || name || '') as string;
+            const text = (user ?? '').trim();
             const statusNum
               = status === undefined || status === null || status === ''
                 ? undefined

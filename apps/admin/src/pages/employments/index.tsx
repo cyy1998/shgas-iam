@@ -124,13 +124,6 @@ export default function EmploymentsPage() {
       renderFormItem: () => <OrganizationTreeSelector placeholder="请选择组织范围" />,
     },
     {
-      title: '公司',
-      dataIndex: 'compName',
-      width: 140,
-      search: false,
-      render: (_, r) => r.compName ?? '—',
-    },
-    {
       title: '组织路径',
       dataIndex: 'orgName',
       width: 260,
