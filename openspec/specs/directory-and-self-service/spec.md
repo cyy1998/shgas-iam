@@ -2,7 +2,6 @@
 
 ## Purpose
 描述当前 public、open 和 internal API 中已实现的用户自助、短信验证码、公开脱敏查询、组织/用户目录查询，以及供应商组织和联系人注册行为。该 baseline 不替代认证/SSO spec，也不新增用户枚举治理策略。
-
 ## Requirements
 ### Requirement: 已登录用户自助查看与修改资料
 系统 SHALL 允许通过 public tier 的已认证用户读取当前用户详情、修改密码和绑定手机号。
@@ -10,6 +9,8 @@
 #### Scenario: 读取当前用户详情
 - **WHEN** 已认证请求访问 `/public/user-info`
 - **THEN** 系统 SHALL 返回 middleware 写入上下文的 userDetailDto
+- **AND** userDetailDto 中的 employments SHALL 使用新的 Employment DTO 组织上下文
+- **AND** userDetailDto 中的 employments SHALL 保留 deprecated 扁平字段用于兼容既有 SSO 和第三方调用方
 
 #### Scenario: 修改密码
 - **WHEN** 已认证用户提交 oldPassword 和 newPassword
@@ -112,11 +113,21 @@
 #### Scenario: 注册供应商联系人已有用户
 - **WHEN** internal API 注册联系人且 mobile 匹配启用用户
 - **THEN** 系统 SHALL 若该用户在供应商组织和默认岗位下没有 active employment，则创建该 employment
+- **AND** 新 employment SHALL 只写入供应商组织作为实际任职组织
+- **AND** 系统 SHALL NOT 将供应商父组织作为 `employment.compId` 写入
 
 #### Scenario: 注册供应商联系人新用户
 - **WHEN** internal API 注册联系人且 mobile 未匹配启用用户
 - **THEN** 系统 SHALL 创建 `UserType.External`、password 为 null 的用户
 - **AND** 系统 SHALL 为该用户创建供应商组织和默认岗位下的 employment
+- **AND** 新 employment SHALL 只写入供应商组织作为实际任职组织
+- **AND** 系统 SHALL NOT 将供应商父组织作为 `employment.compId` 写入
+
+#### Scenario: 供应商 employment 返回兼容字段
+- **WHEN** public 或 internal API 返回供应商联系人 employment
+- **THEN** 系统 SHALL 返回结构化 organization 上下文
+- **AND** 系统 SHALL 保留 deprecated 扁平字段
+- **AND** 当供应商组织链中没有 Company 节点时 compCode 和 compName SHALL 为 null
 
 ### Requirement: public 用户凭据与手机号服务规则具备单元测试覆盖
 系统 SHALL 为 public API 用户服务中的密码修改、找回密码和手机号绑定规则提供 Bun 单元测试覆盖，且测试不得依赖真实数据库、Redis、短信服务、bcrypt 计算或网络。
