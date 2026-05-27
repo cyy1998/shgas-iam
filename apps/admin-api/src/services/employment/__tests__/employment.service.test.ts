@@ -40,6 +40,7 @@ const userRepository = (Reflect.get(globalThis, "__adminUserRepositoryMock") as 
 
 const organizationRepository = {
   getOrganizationByCode: mock(),
+  isOrganizationDescendantOf: mock(),
 };
 
 const positionRepository = {
@@ -115,7 +116,6 @@ const activeEmployment = {
   id: 100,
   userId: user.id,
   orgId: dept.id,
-  compId: company.id,
   posId: position.id,
   isPrimary: false,
   startTime,
@@ -163,6 +163,7 @@ function applyDefaultMocks() {
     return positions.get(posCode) ?? null;
   });
 
+  organizationRepository.isOrganizationDescendantOf.mockResolvedValue(true);
   employmentRepository.getEmploymentByUserOrgPosId.mockResolvedValue(null);
   employmentRepository.getEmploymentByIdForAdmin.mockResolvedValue(activeEmployment);
   employmentRepository.createEmploymentRecord.mockResolvedValue(createdEmployment);
@@ -228,23 +229,21 @@ describe("employmentService.createEmploymentForAdmin", () => {
     expect(employmentRepository.createEmploymentRecord).not.toHaveBeenCalled();
   });
 
-  test("rejects when the department does not exist", async () => {
+  test("rejects when the organization does not exist", async () => {
     organizationRepository.getOrganizationByCode.mockImplementation(async (orgCode: string) =>
-      orgCode === dept.orgCode ? null : company,
+      orgCode === dept.orgCode ? null : dept,
     );
 
-    await expect(employmentService.createEmploymentForAdmin(createDto())).rejects.toThrow("部门不存在");
+    await expect(employmentService.createEmploymentForAdmin(createDto())).rejects.toThrow("组织不存在");
 
     expect(employmentRepository.getEmploymentByUserOrgPosId).not.toHaveBeenCalled();
     expect(employmentRepository.createEmploymentRecord).not.toHaveBeenCalled();
   });
 
-  test("rejects when the company does not exist", async () => {
-    organizationRepository.getOrganizationByCode.mockImplementation(async (orgCode: string) =>
-      orgCode === company.orgCode ? null : dept,
-    );
+  test("rejects when the expected ancestor does not contain the organization", async () => {
+    organizationRepository.isOrganizationDescendantOf.mockResolvedValue(false);
 
-    await expect(employmentService.createEmploymentForAdmin(createDto())).rejects.toThrow("公司不存在");
+    await expect(employmentService.createEmploymentForAdmin(createDto())).rejects.toThrow("任职组织不属于期望组织范围");
 
     expect(employmentRepository.getEmploymentByUserOrgPosId).not.toHaveBeenCalled();
     expect(employmentRepository.createEmploymentRecord).not.toHaveBeenCalled();
@@ -281,7 +280,7 @@ describe("employmentService.createEmploymentForAdmin", () => {
     expect(transaction).toHaveBeenCalledTimes(1);
     expect(userRepository.getUserByUsernameForAdmin).toHaveBeenCalledWith(user.username, tx);
     expect(organizationRepository.getOrganizationByCode).toHaveBeenCalledWith(dept.orgCode, tx);
-    expect(organizationRepository.getOrganizationByCode).toHaveBeenCalledWith(company.orgCode, tx);
+    expect(organizationRepository.isOrganizationDescendantOf).toHaveBeenCalledWith(dept.orgCode, company.orgCode, tx);
     expect(positionRepository.getPositionByCode).toHaveBeenCalledWith(position.posCode, tx);
     expect(employmentRepository.unsetPrimariesByUserId).toHaveBeenCalledWith(user.id, null, tx);
     expect(employmentRepository.createEmploymentRecord).toHaveBeenCalledWith(
@@ -289,7 +288,6 @@ describe("employmentService.createEmploymentForAdmin", () => {
         userId: user.id,
         posId: position.id,
         orgId: dept.id,
-        compId: company.id,
         isPrimary: true,
         startTime,
         description: "backend engineer",
@@ -312,7 +310,6 @@ describe("employmentService.createEmploymentForAdmin", () => {
         userId: user.id,
         posId: position.id,
         orgId: dept.id,
-        compId: company.id,
         isPrimary: false,
         startTime,
         description: null,
@@ -474,25 +471,23 @@ describe("employmentService.transferEmployment", () => {
     expect(employmentRepository.createEmploymentRecord).not.toHaveBeenCalled();
   });
 
-  test("rejects when the new department does not exist", async () => {
+  test("rejects when the new organization does not exist", async () => {
     organizationRepository.getOrganizationByCode.mockImplementation(async (orgCode: string) =>
       orgCode === newDept.orgCode ? null : newCompany,
     );
 
     await expect(employmentService.transferEmployment(activeEmployment.id, transferDto())).rejects.toThrow(
-      "新部门不存在",
+      "新任职组织不存在",
     );
 
     expect(employmentRepository.createEmploymentRecord).not.toHaveBeenCalled();
   });
 
-  test("rejects when the new company does not exist", async () => {
-    organizationRepository.getOrganizationByCode.mockImplementation(async (orgCode: string) =>
-      orgCode === newCompany.orgCode ? null : newDept,
-    );
+  test("rejects when the new expected ancestor does not contain the organization", async () => {
+    organizationRepository.isOrganizationDescendantOf.mockResolvedValue(false);
 
     await expect(employmentService.transferEmployment(activeEmployment.id, transferDto())).rejects.toThrow(
-      "新公司不存在",
+      "新任职组织不属于期望组织范围",
     );
 
     expect(employmentRepository.createEmploymentRecord).not.toHaveBeenCalled();
@@ -537,7 +532,6 @@ describe("employmentService.transferEmployment", () => {
         userId: user.id,
         posId: newPosition.id,
         orgId: newDept.id,
-        compId: newCompany.id,
         isPrimary: true,
         startTime: oldPatch.endTime,
         description: "transfer to lead",
@@ -563,7 +557,6 @@ describe("employmentService.transferEmployment", () => {
         userId: user.id,
         posId: newPosition.id,
         orgId: newDept.id,
-        compId: newCompany.id,
         isPrimary: false,
         startTime: transferStartTime,
         description: null,

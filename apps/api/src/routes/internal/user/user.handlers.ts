@@ -33,15 +33,14 @@ export const contactRegister: UserRouteHandler<"contactRegister"> = async (c) =>
   const { username, mobile, name, orgCode } = c.req.valid("json");
   await db.transaction(async (tx) => {
     const existingUser = await userRepository.getUserByMobile(mobile, tx);
-    const [pos, comp, org] = await Promise.all([
+    const [pos, org] = await Promise.all([
       positionRepository.getPositionByCode("P001", tx),
-      organizationRepository.getOrganizationByCode(config.PURVEYOR_PARENT_ORG, tx),
       organizationRepository.getOrganizationByCode(orgCode, tx),
     ]);
     if (org === null) {
       throw new CustomError("供应商尚未注册");
     }
-    if (pos === null || comp === null) {
+    if (pos === null) {
       throw new CustomError("系统基本信息缺失");
     }
     if (existingUser !== null) {
@@ -52,7 +51,7 @@ export const contactRegister: UserRouteHandler<"contactRegister"> = async (c) =>
         tx,
       );
       if (existingEmployment === null) {
-        await employmentRepository.setEmployment(existingUser.id, pos.id, org.id, comp.id, tx);
+        await employmentRepository.setEmployment(existingUser.id, pos.id, org.id, tx);
       }
     }
     else {
@@ -63,7 +62,7 @@ export const contactRegister: UserRouteHandler<"contactRegister"> = async (c) =>
         userType: UserType.External,
         password: null,
       }, tx);
-      await employmentRepository.setEmployment(user.id, pos.id, org.id, comp.id, tx);
+      await employmentRepository.setEmployment(user.id, pos.id, org.id, tx);
     }
   });
   if (config.NODE_ENV === "production") {

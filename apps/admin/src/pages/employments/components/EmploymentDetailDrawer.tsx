@@ -10,6 +10,12 @@ type Props = {
   onClose: () => void;
 };
 
+function formatOrgPath(detail: EmploymentDetailVo) {
+  return detail.organization?.fullOrgPath
+    ?.map(node => node.orgName)
+    .join(' / ') || `${detail.orgName} (${detail.orgCode})`;
+}
+
 export default function EmploymentDetailDrawer({
   open,
   employmentId,
@@ -81,12 +87,16 @@ export default function EmploymentDetailDrawer({
                     {
                       title: '公司',
                       dataIndex: 'compName',
-                      render: (_, r) => `${r.compName} (${r.compCode})`,
+                      render: (_, r) =>
+                        r.compName && r.compCode
+                          ? `${r.compName} (${r.compCode})`
+                          : '—',
                     },
                     {
-                      title: '部门',
+                      title: '组织路径',
                       dataIndex: 'orgName',
-                      render: (_, r) => `${r.orgName} (${r.orgCode})`,
+                      span: 2,
+                      render: (_, r) => formatOrgPath(r),
                     },
                     {
                       title: '岗位',

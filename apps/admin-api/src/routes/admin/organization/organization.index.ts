@@ -10,6 +10,7 @@ const router = createRouter<PublicBindings>().basePath("/organizations");
 router
   .openapi(routes.organizationsSearch, handlers.organizationsSearch)
   .openapi(routes.organizationsChildren, handlers.organizationsChildren)
+  .openapi(routes.organizationsSelector, handlers.organizationsSelector)
   .openapi(routes.organizationDetail, handlers.organizationDetail)
   .openapi(routes.organizationCreate, handlers.organizationCreate)
   .openapi(routes.organizationUpdate, handlers.organizationUpdate)

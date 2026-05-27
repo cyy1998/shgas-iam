@@ -9,7 +9,6 @@ export const employments = snakeCase.table("employment", {
   userId: integer().notNull(),
   posId: integer().notNull(),
   orgId: integer("dept_id").notNull(),
-  compId: integer().notNull(),
   isPrimary: boolean().notNull().default(false),
   status: integer().$type<EmploymentStatus>().notNull().default(EmploymentStatus.Enable),
   startTime: timestamp().notNull().defaultNow(),
@@ -21,7 +20,6 @@ export const employments = snakeCase.table("employment", {
 }, table => [
   index("idx_employment_user_id").on(table.userId),
   index("idx_dept_id").on(table.orgId),
-  index("idx_comp_id").on(table.compId),
   index("idx_pos_id").on(table.posId),
   index("idx_pos_dept_id").on(table.posId, table.orgId),
 ]);

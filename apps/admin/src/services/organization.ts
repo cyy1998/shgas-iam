@@ -8,8 +8,10 @@ export type OrganizationVo = AdminOrgOutputs['search']['result'][number];
 export type OrganizationDetailVo = AdminOrgOutputs['detail'];
 export type OrganizationChildrenPage = AdminOrgOutputs['children'];
 export type OrganizationTreeNode = OrganizationChildrenPage['result'][number];
+export type OrganizationSelectorNode = AdminOrgOutputs['selector'][number];
 
 export type OrganizationSearchParams = AdminOrgInputs['search'];
+export type OrganizationSelectorParams = AdminOrgInputs['selector'];
 
 export function searchOrganizations(params: OrganizationSearchParams) {
   return apiClient.admin.organization.search.query(params);
@@ -25,6 +27,10 @@ export function getOrganizationChildren(
     pageNum,
     pageSize,
   });
+}
+
+export function getOrganizationSelectorNodes(params: OrganizationSelectorParams) {
+  return apiClient.admin.organization.selector.query(params);
 }
 
 export function getOrganization(orgCode: string) {

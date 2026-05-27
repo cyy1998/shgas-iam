@@ -56,6 +56,11 @@ const roleTagStyle: CSSProperties = {
 const formatDate = (value: Date | string | null | undefined) =>
   value ? new Date(value).toLocaleDateString() : '—';
 
+const formatEmploymentOrgPath = (row: EmploymentRow) =>
+  row.organization?.fullOrgPath?.map(node => node.orgName).join(' / ')
+  || row.orgName
+  || '—';
+
 type Props = {
   open: boolean;
   username: string | null;
@@ -167,8 +172,6 @@ export default function UserDetailDrawer({
     });
   };
 
-  // EmploymentDetailDtoSchema extends EmploymentDtoSchema which has flat fields:
-  // compName (company name), orgName (dept name), posName (position name), isPrimary, status
   const employmentColumns: ColumnsType<EmploymentRow> = [
     {
       title: '公司',
@@ -176,9 +179,9 @@ export default function UserDetailDrawer({
       render: (val: string | undefined) => val ?? '—',
     },
     {
-      title: '部门',
+      title: '组织路径',
       dataIndex: 'orgName',
-      render: (val: string | undefined) => val ?? '—',
+      render: (_val: string | undefined, row) => formatEmploymentOrgPath(row),
     },
     {
       title: '岗位',

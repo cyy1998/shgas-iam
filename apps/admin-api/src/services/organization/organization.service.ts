@@ -1,6 +1,7 @@
 import type {
   OrganizationCreateDto,
   OrganizationPaginationQueryDto,
+  OrganizationSelectorQueryDto,
   OrganizationTreeNodeDto,
   OrganizationUpdateDto,
 } from "@admin-api/services/organization/organization.type";
@@ -83,6 +84,10 @@ export async function searchOrganizationsForAdmin(query: OrganizationPaginationQ
     };
   });
   return paginate(vos, query);
+}
+
+export async function getOrganizationSelectorNodesForAdmin(query: OrganizationSelectorQueryDto) {
+  return await organizationRepository.getOrganizationSelectorNodesForAdmin(query);
 }
 
 export async function updateOrganization(orgCode: string, data: OrganizationUpdateDto) {

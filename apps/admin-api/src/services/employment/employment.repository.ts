@@ -1,31 +1,38 @@
 import type { DbClient } from "@iam/db";
 import type { Employment, Organization, User } from "@iam/db/schema";
+import type { SQLWrapper } from "drizzle-orm";
 import type { EmploymentAdminPaginationQueryDto } from "./employment.type";
-import { EmploymentStatus } from "@iam/contracts";
+import { EmploymentStatus, OrganizationType } from "@iam/contracts";
 import db from "@iam/db";
 import { compactUpdate, firstRow, ilikeContainsIf, inArrayIf } from "@iam/db/query-utils";
 import {
   employments,
+  organizationClosures,
   organizations,
   positions,
   users,
 } from "@iam/db/schema";
 import { and, count, desc, eq, exists, inArray, or, sql } from "drizzle-orm";
+import { alias } from "drizzle-orm/pg-core";
 
 type Position = typeof positions.$inferSelect;
 type EmploymentWithRelations = Employment & {
   user: User;
-  department: Organization;
-  company: Organization;
+  organization: {
+    assignedOrg: EmploymentOrgNode;
+    fullOrgPath: EmploymentOrgNode[];
+    companyNodes: EmploymentOrgNode[];
+  };
   position: Position;
 };
 
-const employmentRelations = {
-  user: true,
-  department: true,
-  company: true,
-  position: true,
-} as const;
+type EmploymentOrgNode = Pick<
+  Organization,
+  "id" | "orgCode" | "orgName" | "orgType" | "level" | "parentId" | "isVirtual" | "isEntity"
+> & {
+  pathIndex: number;
+  distanceToAssignedOrg: number;
+};
 
 async function attachEmploymentRelations(rows: Employment[], tx: DbClient): Promise<EmploymentWithRelations[]> {
   if (rows.length === 0) {
@@ -33,54 +40,99 @@ async function attachEmploymentRelations(rows: Employment[], tx: DbClient): Prom
   }
 
   const userIds = [...new Set(rows.map(row => row.userId))];
-  const orgIds = [...new Set(rows.flatMap(row => [row.orgId, row.compId]))];
+  const orgIds = [...new Set(rows.map(row => row.orgId))];
   const posIds = [...new Set(rows.map(row => row.posId))];
+  const ancestor = alias(organizations, "employment_org_ancestor");
 
-  const [userRows, orgRows, posRows] = await Promise.all([
+  const [userRows, orgPathRows, posRows] = await Promise.all([
     tx.select().from(users).where(inArray(users.id, userIds)),
-    tx.select().from(organizations).where(inArray(organizations.id, orgIds)),
+    tx
+      .select({
+        descendantId: organizationClosures.descendantId,
+        depth: organizationClosures.depth,
+        id: ancestor.id,
+        orgCode: ancestor.orgCode,
+        orgName: ancestor.orgName,
+        orgType: ancestor.orgType,
+        level: ancestor.level,
+        parentId: ancestor.parentId,
+        isVirtual: ancestor.isVirtual,
+        isEntity: ancestor.isEntity,
+      })
+      .from(organizationClosures)
+      .innerJoin(ancestor, eq(organizationClosures.ancestorId, ancestor.id))
+      .where(and(
+        inArray(organizationClosures.descendantId, orgIds),
+        eq(ancestor.isDelete, false),
+      )),
     tx.select().from(positions).where(inArray(positions.id, posIds)),
   ]);
 
   const userMap = new Map(userRows.map(user => [user.id, user]));
-  const orgMap = new Map(orgRows.map(org => [org.id, org]));
   const posMap = new Map(posRows.map(pos => [pos.id, pos]));
+  const orgPathMap = new Map<number, EmploymentOrgNode[]>();
+  for (const { descendantId, depth, ...org } of orgPathRows) {
+    const path = orgPathMap.get(descendantId) ?? [];
+    path.push({
+      ...org,
+      pathIndex: 0,
+      distanceToAssignedOrg: depth,
+    });
+    orgPathMap.set(descendantId, path);
+  }
+
+  for (const [orgId, path] of orgPathMap) {
+    orgPathMap.set(
+      orgId,
+      path
+        .sort((a, b) => b.distanceToAssignedOrg - a.distanceToAssignedOrg || a.id - b.id)
+        .map((node, pathIndex) => ({ ...node, pathIndex })),
+    );
+  }
 
   return rows
-    .map(row => ({
-      ...row,
-      user: userMap.get(row.userId),
-      department: orgMap.get(row.orgId),
-      company: orgMap.get(row.compId),
-      position: posMap.get(row.posId),
-    }))
+    .map((row) => {
+      const fullOrgPath = orgPathMap.get(row.orgId) ?? [];
+      const assignedOrg = fullOrgPath.find(node => node.id === row.orgId);
+      return {
+        ...row,
+        user: userMap.get(row.userId),
+        organization: assignedOrg === undefined
+          ? undefined
+          : {
+              assignedOrg,
+              fullOrgPath,
+              companyNodes: fullOrgPath.filter(node => node.orgType === OrganizationType.Company),
+            },
+        position: posMap.get(row.posId),
+      };
+    })
     .filter((row): row is EmploymentWithRelations =>
       row.user !== undefined
-      && row.department !== undefined
-      && row.company !== undefined
+      && row.organization !== undefined
       && row.position !== undefined,
     );
 }
 
 export async function getEmploymentsByUserId(userId: number, tx: DbClient = db) {
-  return await tx.query.employments.findMany({
+  const rows = await tx.query.employments.findMany({
     where: {
       userId,
       status: EmploymentStatus.Enable,
       isDelete: false,
     },
-    with: employmentRelations,
   });
+  return await attachEmploymentRelations(rows, tx);
 }
 
 export async function getAllEmploymentsByUserIdForAdmin(userId: number, tx: DbClient = db) {
-  return await tx.query.employments.findMany({
+  const rows = await tx.query.employments.findMany({
     where: {
       userId,
       isDelete: false,
     },
-    with: employmentRelations,
   });
+  return await attachEmploymentRelations(rows, tx);
 }
 
 export async function getEmploymentByUserOrgPosId(
@@ -89,7 +141,7 @@ export async function getEmploymentByUserOrgPosId(
   posId: number,
   tx: DbClient = db,
 ) {
-  return await tx.query.employments.findFirst({
+  const row = await tx.query.employments.findFirst({
     where: {
       userId,
       orgId,
@@ -97,25 +149,100 @@ export async function getEmploymentByUserOrgPosId(
       status: EmploymentStatus.Enable,
       isDelete: false,
     },
-    with: employmentRelations,
-  }) ?? null;
+  });
+  return (await attachEmploymentRelations(row === undefined ? [] : [row], tx))[0] ?? null;
 }
 
 export async function getEmploymentByIdForAdmin(
   id: number,
   tx: DbClient = db,
 ) {
-  return await tx.query.employments.findFirst({
+  const row = await tx.query.employments.findFirst({
     where: {
       id,
       isDelete: false,
     },
-    with: employmentRelations,
-  }) ?? null;
+  });
+  return (await attachEmploymentRelations(row === undefined ? [] : [row], tx))[0] ?? null;
+}
+
+function buildOrganizationFilterCondition(
+  organization: EmploymentAdminPaginationQueryDto["conditions"]["exactConditions"]["organization"],
+): SQLWrapper | undefined {
+  if (organization === undefined) {
+    return undefined;
+  }
+
+  const orgCodes = organization.orgCodes;
+  const orgTypes = organization.orgTypes;
+  if ((orgCodes === undefined || orgCodes.length === 0) && (orgTypes === undefined || orgTypes.length === 0)) {
+    return undefined;
+  }
+
+  const assigned = alias(organizations, "employment_filter_assigned_org");
+  const ancestor = alias(organizations, "employment_filter_ancestor_org");
+  const assignedTypeCondition = orgTypes === undefined
+    ? undefined
+    : exists(
+        db.select({ value: sql`1` }).from(assigned).where(and(
+          eq(assigned.id, employments.orgId),
+          eq(assigned.isDelete, false),
+          inArrayIf(assigned.orgType, orgTypes),
+        )),
+      );
+
+  if (organization.matchMode === "exact") {
+    return and(
+      exists(
+        db.select({ value: sql`1` }).from(assigned).where(and(
+          eq(assigned.id, employments.orgId),
+          eq(assigned.isDelete, false),
+          inArrayIf(assigned.orgCode, orgCodes),
+        )),
+      ),
+      assignedTypeCondition,
+    );
+  }
+
+  return and(
+    exists(
+      db.select({ value: sql`1` })
+        .from(organizationClosures)
+        .innerJoin(ancestor, eq(organizationClosures.ancestorId, ancestor.id))
+        .where(and(
+          eq(organizationClosures.descendantId, employments.orgId),
+          eq(ancestor.isDelete, false),
+          organization.matchMode === "company" ? eq(ancestor.orgType, OrganizationType.Company) : undefined,
+          inArrayIf(ancestor.orgCode, orgCodes),
+        )),
+    ),
+    assignedTypeCondition,
+  );
+}
+
+function buildLegacyOrganizationFilterCondition(dto: EmploymentAdminPaginationQueryDto): SQLWrapper | undefined {
+  const { companyOrgCodes, deptOrgCodes } = dto.conditions.exactConditions;
+  if (companyOrgCodes === undefined && deptOrgCodes === undefined) {
+    return undefined;
+  }
+  return and(
+    buildOrganizationFilterCondition(
+      deptOrgCodes === undefined
+        ? undefined
+        : { orgCodes: deptOrgCodes, matchMode: "exact" },
+    ),
+    buildOrganizationFilterCondition(
+      companyOrgCodes === undefined
+        ? undefined
+        : { orgCodes: companyOrgCodes, matchMode: "company" },
+    ),
+  );
 }
 
 function buildEmploymentAdminWhere(dto: EmploymentAdminPaginationQueryDto) {
   const text = dto.conditions.fuzzyConditions.text;
+  const organizationCondition = buildOrganizationFilterCondition(dto.conditions.exactConditions.organization)
+    ?? buildLegacyOrganizationFilterCondition(dto);
   return and(
     eq(employments.isDelete, false),
     inArrayIf(employments.status, dto.conditions.exactConditions.statuses),
@@ -132,20 +259,7 @@ function buildEmploymentAdminWhere(dto: EmploymentAdminPaginationQueryDto) {
           : undefined,
       )),
     ),
-    exists(
-      db.select({ value: sql`1` }).from(organizations).where(and(
-        eq(organizations.id, employments.compId),
-        eq(organizations.isDelete, false),
-        inArrayIf(organizations.orgCode, dto.conditions.exactConditions.companyOrgCodes),
-      )),
-    ),
-    exists(
-      db.select({ value: sql`1` }).from(organizations).where(and(
-        eq(organizations.id, employments.orgId),
-        eq(organizations.isDelete, false),
-        inArrayIf(organizations.orgCode, dto.conditions.exactConditions.deptOrgCodes),
-      )),
-    ),
+    organizationCondition,
     exists(
       db.select({ value: sql`1` }).from(positions).where(and(
         eq(positions.id, employments.posId),
@@ -180,7 +294,6 @@ export async function createEmploymentRecord(
     userId: number;
     posId: number;
     orgId: number;
-    compId: number;
     isPrimary?: boolean;
     startTime?: Date;
     description?: string | null;
@@ -192,7 +305,6 @@ export async function createEmploymentRecord(
     userId: data.userId,
     posId: data.posId,
     orgId: data.orgId,
-    compId: data.compId,
     isPrimary: data.isPrimary ?? false,
     startTime: data.startTime ?? new Date(),
     description: data.description ?? null,

@@ -141,12 +141,19 @@ function makePosition(overrides: Record<string, unknown> = {}) {
 }
 
 function makeEmployment(overrides: Record<string, unknown> = {}) {
+  const company = makeOrganization({
+    id: 2002,
+    orgCode: "COMP001",
+    orgName: "上海燃气",
+    orgType: OrganizationType.Company,
+    level: OrganizationLevel.One,
+  });
+  const assignedOrg = makeOrganization();
   return {
     id: 4001,
     userId: 1001,
     posId: 3001,
     orgId: 2001,
-    compId: 2002,
     isPrimary: true,
     status: EmploymentStatus.Enable,
     startTime: fixedDate,
@@ -156,13 +163,14 @@ function makeEmployment(overrides: Record<string, unknown> = {}) {
     createTime: fixedDate,
     updateTime: fixedDate,
     user: makeUser(),
-    department: makeOrganization(),
-    company: makeOrganization({
-      id: 2002,
-      orgCode: "COMP001",
-      orgName: "上海燃气",
-      orgType: OrganizationType.Company,
-    }),
+    organization: {
+      assignedOrg: { ...assignedOrg, pathIndex: 1, distanceToAssignedOrg: 0 },
+      fullOrgPath: [
+        { ...company, pathIndex: 0, distanceToAssignedOrg: 1 },
+        { ...assignedOrg, pathIndex: 1, distanceToAssignedOrg: 0 },
+      ],
+      companyNodes: [{ ...company, pathIndex: 0, distanceToAssignedOrg: 1 }],
+    },
     position: makePosition(),
     ...overrides,
   };
@@ -483,6 +491,10 @@ describe("admin userService.getUserDetailByUsernameForAdmin", () => {
       employments: [
         {
           id: 4001,
+          organization: {
+            assignedOrg: { orgCode: "ORG001" },
+            companyNodes: [{ orgCode: "COMP001" }],
+          },
           posCode: "POS001",
           posName: "工程师",
           orgCode: "ORG001",

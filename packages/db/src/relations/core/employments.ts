@@ -12,11 +12,6 @@ export function employmentsRelations(r: RelationsHelper) {
         to: r.organizations.id,
         alias: "employment_dept",
       }),
-      company: r.one.organizations({
-        from: r.employments.compId,
-        to: r.organizations.id,
-        alias: "employment_comp",
-      }),
       position: r.one.positions({
         from: r.employments.posId,
         to: r.positions.id,

@@ -1,9 +1,10 @@
+import OrganizationTreeSelector from '@admin/components/OrganizationTreeSelector';
 import { apiClient } from '@admin/lib/api-client';
 import { createEmployment } from '@admin/services/employment';
 import {
   ModalForm,
   ProFormDatePicker,
-  ProFormDependency,
+  ProForm,
   ProFormSelect,
   ProFormSwitch,
   ProFormTextArea,
@@ -15,8 +16,6 @@ import type { inferRouterOutputs } from '@trpc/server';
 import { message } from 'antd';
 import { useRef } from 'react';
 
-type OrgVo =
-  inferRouterOutputs<AppRouter>['admin']['organization']['search']['result'][number];
 type PosVo =
   inferRouterOutputs<AppRouter>['admin']['position']['search']['result'][number];
 type UserVo =
@@ -61,8 +60,8 @@ export default function EmploymentFormModal({
         try {
           await createEmployment({
             username: values.username,
-            companyOrgCode: values.companyOrgCode,
-            deptOrgCode: values.deptOrgCode,
+            orgCode: values.orgCode,
+            expectedAncestorOrgCode: values.expectedAncestorOrgCode,
             posCode: values.posCode,
             isPrimary: values.isPrimary,
             startTime: values.startTime
@@ -114,63 +113,24 @@ export default function EmploymentFormModal({
           }));
         }}
       />
-      <ProFormSelect
-        name="companyOrgCode"
-        label="公司"
-        showSearch
-        rules={[{ required: true, message: '请选择公司' }]}
-        fieldProps={{
-          onChange: () =>
-            formRef.current?.setFieldValue('deptOrgCode', undefined),
-        }}
-        request={async (params) => {
-          const res = await apiClient.admin.organization.search.query({
-            pageNum: 1,
-            pageSize: 50,
-            conditions: {
-              fuzzyConditions: { text: params.keyWords || undefined },
-              exactConditions: { orgType: OrganizationType.Company },
-            },
-          });
-          return res.result.map((o: OrgVo) => ({
-            label: `${o.orgName} (${o.orgCode})`,
-            value: o.orgCode,
-          }));
-        }}
-      />
-      <ProFormDependency name={['companyOrgCode']}>
-        {({ companyOrgCode }: { companyOrgCode?: string }) => (
-          <ProFormSelect
-            name="deptOrgCode"
-            label="部门"
-            showSearch
-            disabled={!companyOrgCode}
-            placeholder={companyOrgCode ? '请选择部门' : '请先选择公司'}
-            rules={[{ required: true, message: '请选择部门' }]}
-            params={{ companyOrgCode }}
-            request={async (params) => {
-              if (!companyOrgCode) return [];
-              const res = await apiClient.admin.organization.search.query({
-                pageNum: 1,
-                pageSize: 200,
-                conditions: {
-                  fuzzyConditions: {
-                    text: (params.keyWords as string | undefined) || undefined,
-                  },
-                  exactConditions: {
-                    orgType: OrganizationType.Department,
-                    ancestorOrgCode: companyOrgCode,
-                  },
-                },
-              });
-              return res.result.map((o: OrgVo) => ({
-                label: `${o.orgName} (${o.orgCode})`,
-                value: o.orgCode,
-              }));
-            }}
-          />
-        )}
-      </ProFormDependency>
+      <ProForm.Item
+        name="orgCode"
+        label="任职组织"
+        rules={[{ required: true, message: '请选择任职组织' }]}
+      >
+        <OrganizationTreeSelector
+          placeholder="请选择实际任职组织"
+          selectableOrgTypes={[
+            OrganizationType.Department,
+            OrganizationType.TempDepartment,
+            OrganizationType.External,
+            OrganizationType.IndividualExternal,
+          ]}
+        />
+      </ProForm.Item>
+      <ProForm.Item name="expectedAncestorOrgCode" label="期望上级组织">
+        <OrganizationTreeSelector placeholder="可选，用于校验组织范围" />
+      </ProForm.Item>
       <ProFormSelect
         name="posCode"
         label="岗位"

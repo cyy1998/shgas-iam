@@ -65,20 +65,27 @@ function position(id = 1) {
 }
 
 function employment() {
+  const company = organization(20, "COMP", OrganizationType.Company);
+  const dept = organization(10, "DEPT", OrganizationType.Department);
   return {
     ...baseRecord(1),
     userId: 1,
     posId: 1,
     orgId: 10,
-    compId: 20,
     isPrimary: true,
     status: EmploymentStatus.Enable,
     startTime: createdAt,
     endTime: null,
     description: null,
     user: user(1),
-    department: organization(10, "DEPT", OrganizationType.Department),
-    company: organization(20, "COMP", OrganizationType.Company),
+    organization: {
+      assignedOrg: { ...dept, pathIndex: 1, distanceToAssignedOrg: 0 },
+      fullOrgPath: [
+        { ...company, pathIndex: 0, distanceToAssignedOrg: 1 },
+        { ...dept, pathIndex: 1, distanceToAssignedOrg: 0 },
+      ],
+      companyNodes: [{ ...company, pathIndex: 0, distanceToAssignedOrg: 1 }],
+    },
     position: position(1),
   };
 }
@@ -143,12 +150,26 @@ describe("API DTO mappers", () => {
 
     expect(typeof schemaModule.toEmploymentDto).toBe("function");
     expect(schemaModule.toEmploymentDto(employment())).toMatchObject({
+      organization: {
+        assignedOrg: { orgCode: "DEPT" },
+        companyNodes: [{ orgCode: "COMP" }],
+      },
       username: "user1",
       name: "User 1",
       posCode: "POS1",
       posName: "Position 1",
       orgCode: "DEPT",
       compCode: "COMP",
+    });
+    expect(schemaModule.toEmploymentDto({
+      ...employment(),
+      organization: {
+        ...employment().organization,
+        companyNodes: [],
+      },
+    })).toMatchObject({
+      compCode: null,
+      compName: null,
     });
   });
 

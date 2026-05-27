@@ -17,7 +17,6 @@ const r = {
     id: "employments.id",
     userId: "employments.userId",
     orgId: "employments.orgId",
-    compId: "employments.compId",
     posId: "employments.posId",
   },
   users: {
@@ -40,6 +39,7 @@ describe("employmentsRelations", () => {
     const previousMisspelling = ["dept", "artment"].join("");
 
     expect(relationNames).toContain("department");
+    expect(relationNames).not.toContain("company");
     expect(relationNames).not.toContain(previousMisspelling);
   });
 });

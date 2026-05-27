@@ -1,3 +1,4 @@
+import type { DbClient } from "@iam/db";
 import type {
   EmploymentAdminCreateDto,
   EmploymentAdminPaginationQueryDto,
@@ -17,6 +18,35 @@ import { EmploymentNotFoundError } from "@iam/api-core/errors/EmploymentNotFound
 import { UserNotFoundError } from "@iam/api-core/errors/UserNotFoundError";
 import { EmploymentStatus, UserStatus } from "@iam/contracts";
 import db from "@iam/db";
+
+function resolveCreateOrganizationInput(dto: EmploymentAdminCreateDto) {
+  return {
+    orgCode: dto.orgCode ?? dto.deptOrgCode,
+    expectedAncestorOrgCode: dto.expectedAncestorOrgCode ?? dto.companyOrgCode,
+  };
+}
+
+function resolveTransferOrganizationInput(dto: EmploymentTransferDto) {
+  return {
+    orgCode: dto.newOrgCode ?? dto.newDeptOrgCode,
+    expectedAncestorOrgCode: dto.expectedAncestorOrgCode ?? dto.newCompanyOrgCode,
+  };
+}
+
+async function assertExpectedAncestor(
+  orgCode: string,
+  expectedAncestorOrgCode: string | undefined,
+  message: string,
+  tx: DbClient,
+) {
+  if (expectedAncestorOrgCode === undefined) {
+    return;
+  }
+  const matches = await organizationRepository.isOrganizationDescendantOf(orgCode, expectedAncestorOrgCode, tx);
+  if (!matches) {
+    throw new CustomError(message);
+  }
+}
 
 export async function getEmploymentDetailByIdForAdmin(id: number) {
   const employment = await employmentRepository.getEmploymentByIdForAdmin(id);
@@ -46,24 +76,27 @@ export async function searchEmploymentsFuzzyForAdmin(dto: EmploymentAdminPaginat
 
 export async function createEmploymentForAdmin(dto: EmploymentAdminCreateDto) {
   return await db.transaction(async (tx) => {
-    const [user, dept, company, position] = await Promise.all([
+    const { orgCode, expectedAncestorOrgCode } = resolveCreateOrganizationInput(dto);
+    if (orgCode === undefined) {
+      throw new CustomError("组织不存在");
+    }
+
+    const [user, org, position] = await Promise.all([
       userRepository.getUserByUsernameForAdmin(dto.username, tx),
-      organizationRepository.getOrganizationByCode(dto.deptOrgCode, tx),
-      organizationRepository.getOrganizationByCode(dto.companyOrgCode, tx),
+      organizationRepository.getOrganizationByCode(orgCode, tx),
       positionRepository.getPositionByCode(dto.posCode, tx),
     ]);
     if (user === null)
       throw new UserNotFoundError("用户不存在");
-    if (dept === null)
-      throw new CustomError("部门不存在");
-    if (company === null)
-      throw new CustomError("公司不存在");
+    if (org === null)
+      throw new CustomError("组织不存在");
     if (position === null)
       throw new CustomError("岗位不存在");
+    await assertExpectedAncestor(org.orgCode, expectedAncestorOrgCode, "任职组织不属于期望组织范围", tx);
 
     const existing = await employmentRepository.getEmploymentByUserOrgPosId(
       user.id,
-      dept.id,
+      org.id,
       position.id,
       tx,
     );
@@ -80,8 +113,7 @@ export async function createEmploymentForAdmin(dto: EmploymentAdminCreateDto) {
       {
         userId: user.id,
         posId: position.id,
-        orgId: dept.id,
-        compId: company.id,
+        orgId: org.id,
         isPrimary: newIsPrimary,
         startTime: dto.startTime,
         description: dto.description ?? null,
@@ -157,17 +189,20 @@ export async function transferEmployment(id: number, dto: EmploymentTransferDto)
     if (existing.status === EmploymentStatus.Disable)
       throw new EmploymentNotEditableError();
 
-    const [dept, company, position] = await Promise.all([
-      organizationRepository.getOrganizationByCode(dto.newDeptOrgCode, tx),
-      organizationRepository.getOrganizationByCode(dto.newCompanyOrgCode, tx),
+    const { orgCode, expectedAncestorOrgCode } = resolveTransferOrganizationInput(dto);
+    if (orgCode === undefined) {
+      throw new CustomError("新任职组织不存在");
+    }
+
+    const [org, position] = await Promise.all([
+      organizationRepository.getOrganizationByCode(orgCode, tx),
       positionRepository.getPositionByCode(dto.newPosCode, tx),
     ]);
-    if (dept === null)
-      throw new CustomError("新部门不存在");
-    if (company === null)
-      throw new CustomError("新公司不存在");
+    if (org === null)
+      throw new CustomError("新任职组织不存在");
     if (position === null)
       throw new CustomError("新岗位不存在");
+    await assertExpectedAncestor(org.orgCode, expectedAncestorOrgCode, "新任职组织不属于期望组织范围", tx);
 
     const inheritPrimary = dto.inheritPrimary ?? true;
     const newIsPrimary = inheritPrimary ? existing.isPrimary : false;
@@ -190,8 +225,7 @@ export async function transferEmployment(id: number, dto: EmploymentTransferDto)
       {
         userId: existing.userId,
         posId: position.id,
-        orgId: dept.id,
-        compId: company.id,
+        orgId: org.id,
         isPrimary: newIsPrimary,
         startTime: dto.startTime ?? now,
         description: dto.description ?? null,

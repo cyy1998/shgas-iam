@@ -1,6 +1,6 @@
 import { z } from "@hono/zod-openapi";
 import { createPageQuerySchema } from "@iam/api-core/core/pagination/schema";
-import { EmploymentStatus } from "@iam/contracts";
+import { EmploymentStatus, OrganizationType } from "@iam/contracts";
 
 export {
   EmploymentDetailDtoSchema,
@@ -20,8 +20,23 @@ export const EmploymentAdminPaginationQueryDtoSchema = createPageQuerySchema(
     }),
     exactConditions: z.object({
       usernames: z.array(z.string()).optional().openapi({ example: ["138550"] }),
-      companyOrgCodes: z.array(z.string()).optional().openapi({ example: ["SR"] }),
-      deptOrgCodes: z.array(z.string()).optional().openapi({ example: ["SR23"] }),
+      organization: z.object({
+        orgCodes: z.array(z.string()).optional().openapi({ example: ["SR23"] }),
+        matchMode: z.enum(["exact", "subtree", "company"]).default("exact").openapi({ example: "subtree" }),
+        orgTypes: z.array(z.enum(OrganizationType)).optional().openapi({ example: [OrganizationType.Department] }),
+      }).optional().openapi({
+        description: "统一组织过滤；exact 匹配实际任职组织，subtree 匹配任意祖先子树，company 匹配 Company 祖先。",
+      }),
+      companyOrgCodes: z.array(z.string()).optional().openapi({
+        example: ["SR"],
+        description: "Deprecated compatibility input. Prefer exactConditions.organization with matchMode=company.",
+        deprecated: true,
+      }),
+      deptOrgCodes: z.array(z.string()).optional().openapi({
+        example: ["SR23"],
+        description: "Deprecated compatibility input. Prefer exactConditions.organization with matchMode=exact.",
+        deprecated: true,
+      }),
       posCodes: z.array(z.string()).optional().openapi({ example: ["E033"] }),
       isPrimary: z.boolean().optional().openapi({ example: true }),
       statuses: z.array(z.enum(EmploymentStatus)).optional().openapi({
@@ -34,8 +49,21 @@ export const EmploymentAdminPaginationQueryDtoSchema = createPageQuerySchema(
 
 export const EmploymentAdminCreateDtoSchema = z.object({
   username: z.string().openapi({ example: "138550" }),
-  companyOrgCode: z.string().openapi({ example: "SR" }),
-  deptOrgCode: z.string().openapi({ example: "SR23" }),
+  orgCode: z.string().optional().openapi({ example: "SR23", description: "实际任职组织编码" }),
+  expectedAncestorOrgCode: z.string().optional().openapi({
+    example: "SR",
+    description: "可选祖先组织校验；不入库",
+  }),
+  companyOrgCode: z.string().optional().openapi({
+    example: "SR",
+    description: "Deprecated compatibility input. Used as expectedAncestorOrgCode when provided.",
+    deprecated: true,
+  }),
+  deptOrgCode: z.string().optional().openapi({
+    example: "SR23",
+    description: "Deprecated compatibility input. Used as orgCode when orgCode is omitted.",
+    deprecated: true,
+  }),
   posCode: z.string().openapi({ example: "E033" }),
   isPrimary: z.boolean().optional().openapi({ example: false }),
   startTime: z.coerce.date().optional().openapi({
@@ -43,6 +71,8 @@ export const EmploymentAdminCreateDtoSchema = z.object({
     description: "缺省则由后端写入 now()",
   }),
   description: z.string().max(500).nullable().optional(),
+}).refine(dto => dto.orgCode !== undefined || dto.deptOrgCode !== undefined, {
+  message: "orgCode 或 deptOrgCode 至少提供一个",
 }).openapi("EmploymentAdminCreateDto");
 
 export const EmploymentUpdateDtoSchema = z.object({
@@ -56,8 +86,21 @@ export const EmploymentStatusUpdateDtoSchema = z.object({
 }).openapi("EmploymentStatusUpdateDto");
 
 export const EmploymentTransferDtoSchema = z.object({
-  newCompanyOrgCode: z.string().openapi({ example: "SB" }),
-  newDeptOrgCode: z.string().openapi({ example: "SB01" }),
+  newOrgCode: z.string().optional().openapi({ example: "SB01", description: "新的实际任职组织编码" }),
+  expectedAncestorOrgCode: z.string().optional().openapi({
+    example: "SB",
+    description: "可选祖先组织校验；不入库",
+  }),
+  newCompanyOrgCode: z.string().optional().openapi({
+    example: "SB",
+    description: "Deprecated compatibility input. Used as expectedAncestorOrgCode when provided.",
+    deprecated: true,
+  }),
+  newDeptOrgCode: z.string().optional().openapi({
+    example: "SB01",
+    description: "Deprecated compatibility input. Used as newOrgCode when newOrgCode is omitted.",
+    deprecated: true,
+  }),
   newPosCode: z.string().openapi({ example: "E034" }),
   startTime: z.coerce.date().optional().openapi({
     description: "新雇佣的 startTime；缺省 now()",
@@ -67,4 +110,6 @@ export const EmploymentTransferDtoSchema = z.object({
     description: "是否继承原雇佣的 isPrimary；缺省 true",
   }),
   description: z.string().max(500).nullable().optional(),
+}).refine(dto => dto.newOrgCode !== undefined || dto.newDeptOrgCode !== undefined, {
+  message: "newOrgCode 或 newDeptOrgCode 至少提供一个",
 }).openapi("EmploymentTransferDto");

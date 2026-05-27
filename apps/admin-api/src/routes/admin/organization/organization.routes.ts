@@ -1,6 +1,8 @@
 import {
   OrganizationCreateDtoSchema,
   OrganizationPaginationQueryDtoSchema,
+  OrganizationSelectorNodeSchema,
+  OrganizationSelectorQueryDtoSchema,
   OrganizationStatusUpdateDtoSchema,
   OrganizationTreeNodeDtoSchema,
   OrganizationUpdateDtoSchema,
@@ -42,6 +44,21 @@ export const organizationsChildren = createRoute({
     [HttpStatusCodes.OK]: jsonContent(
       createSuccessResponseSchema(createPageResultSchema(z.array(OrganizationTreeNodeDtoSchema))),
       "指定父节点的直接子组织（分页）",
+    ),
+  },
+});
+
+export const organizationsSelector = createRoute({
+  method: "post",
+  path: "/selector",
+  tags,
+  request: {
+    body: jsonContentRequired(OrganizationSelectorQueryDtoSchema, "组织选择器查询参数"),
+  },
+  responses: {
+    [HttpStatusCodes.OK]: jsonContent(
+      createSuccessResponseSchema(z.array(OrganizationSelectorNodeSchema)),
+      "组织选择器节点",
     ),
   },
 });

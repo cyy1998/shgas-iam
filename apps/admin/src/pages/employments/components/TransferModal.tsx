@@ -1,9 +1,10 @@
+import OrganizationTreeSelector from '@admin/components/OrganizationTreeSelector';
 import { apiClient } from '@admin/lib/api-client';
 import { type EmploymentVo, transferEmployment } from '@admin/services/employment';
 import {
   ModalForm,
   ProFormDatePicker,
-  ProFormDependency,
+  ProForm,
   ProFormSelect,
   ProFormSwitch,
   ProFormTextArea,
@@ -15,8 +16,6 @@ import type { inferRouterOutputs } from '@trpc/server';
 import { Descriptions, message } from 'antd';
 import { useRef } from 'react';
 
-type OrgVo =
-  inferRouterOutputs<AppRouter>['admin']['organization']['search']['result'][number];
 type PosVo =
   inferRouterOutputs<AppRouter>['admin']['position']['search']['result'][number];
 
@@ -50,8 +49,8 @@ export default function TransferModal({
         if (!employment) return false;
         try {
           await transferEmployment(employment.id, {
-            newCompanyOrgCode: values.newCompanyOrgCode,
-            newDeptOrgCode: values.newDeptOrgCode,
+            newOrgCode: values.newOrgCode,
+            expectedAncestorOrgCode: values.expectedAncestorOrgCode,
             newPosCode: values.newPosCode,
             inheritPrimary: values.inheritPrimary,
             startTime: values.startTime
@@ -76,12 +75,11 @@ export default function TransferModal({
           style={{ marginBottom: 16 }}
           items={[
             {
-              label: '原公司',
-              children: `${employment.compName} (${employment.compCode})`,
-            },
-            {
-              label: '原部门',
-              children: `${employment.orgName} (${employment.orgCode})`,
+              label: '原组织路径',
+              children:
+                employment.organization?.fullOrgPath
+                  ?.map(node => node.orgName)
+                  .join(' / ') || `${employment.orgName} (${employment.orgCode})`,
             },
             {
               label: '原岗位',
@@ -91,63 +89,24 @@ export default function TransferModal({
           ]}
         />
       )}
-      <ProFormSelect
-        name="newCompanyOrgCode"
-        label="新公司"
-        showSearch
-        rules={[{ required: true }]}
-        fieldProps={{
-          onChange: () =>
-            formRef.current?.setFieldValue('newDeptOrgCode', undefined),
-        }}
-        request={async (params) => {
-          const res = await apiClient.admin.organization.search.query({
-            pageNum: 1,
-            pageSize: 50,
-            conditions: {
-              fuzzyConditions: { text: params.keyWords || undefined },
-              exactConditions: { orgType: OrganizationType.Company },
-            },
-          });
-          return res.result.map((o: OrgVo) => ({
-            label: `${o.orgName} (${o.orgCode})`,
-            value: o.orgCode,
-          }));
-        }}
-      />
-      <ProFormDependency name={['newCompanyOrgCode']}>
-        {({ newCompanyOrgCode }: { newCompanyOrgCode?: string }) => (
-          <ProFormSelect
-            name="newDeptOrgCode"
-            label="新部门"
-            showSearch
-            disabled={!newCompanyOrgCode}
-            placeholder={newCompanyOrgCode ? '请选择部门' : '请先选择新公司'}
-            rules={[{ required: true }]}
-            params={{ newCompanyOrgCode }}
-            request={async (params) => {
-              if (!newCompanyOrgCode) return [];
-              const res = await apiClient.admin.organization.search.query({
-                pageNum: 1,
-                pageSize: 200,
-                conditions: {
-                  fuzzyConditions: {
-                    text: (params.keyWords as string | undefined) || undefined,
-                  },
-                  exactConditions: {
-                    orgType: OrganizationType.Department,
-                    ancestorOrgCode: newCompanyOrgCode,
-                  },
-                },
-              });
-              return res.result.map((o: OrgVo) => ({
-                label: `${o.orgName} (${o.orgCode})`,
-                value: o.orgCode,
-              }));
-            }}
-          />
-        )}
-      </ProFormDependency>
+      <ProForm.Item
+        name="newOrgCode"
+        label="新任职组织"
+        rules={[{ required: true, message: '请选择新任职组织' }]}
+      >
+        <OrganizationTreeSelector
+          placeholder="请选择新的实际任职组织"
+          selectableOrgTypes={[
+            OrganizationType.Department,
+            OrganizationType.TempDepartment,
+            OrganizationType.External,
+            OrganizationType.IndividualExternal,
+          ]}
+        />
+      </ProForm.Item>
+      <ProForm.Item name="expectedAncestorOrgCode" label="期望上级组织">
+        <OrganizationTreeSelector placeholder="可选，用于校验组织范围" />
+      </ProForm.Item>
       <ProFormSelect
         name="newPosCode"
         label="新岗位"

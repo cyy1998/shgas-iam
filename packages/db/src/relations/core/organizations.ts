@@ -19,11 +19,6 @@ export function organizationsRelations(r: RelationsHelper) {
         to: r.employments.orgId,
         alias: "employment_dept",
       }),
-      compEmployments: r.many.employments({
-        from: r.organizations.id,
-        to: r.employments.compId,
-        alias: "employment_comp",
-      }),
       roles: r.many.organizationRoles({
         from: r.organizations.id,
         to: r.organizationRoles.organizationId,

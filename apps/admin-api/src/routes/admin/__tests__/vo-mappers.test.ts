@@ -42,7 +42,6 @@ function employmentRecord() {
     userId: 1,
     posId: 1,
     orgId: 10,
-    compId: 20,
     isPrimary: true,
     status: EmploymentStatus.Enable,
     startTime: createdAt,
@@ -52,8 +51,49 @@ function employmentRecord() {
 }
 
 function employmentDto() {
+  const companyNode = {
+    id: 20,
+    orgCode: "COMP",
+    orgName: "Company",
+    orgType: OrganizationType.Company,
+    level: 1,
+    parentId: -1,
+    isVirtual: false,
+    isEntity: true,
+    pathIndex: 0,
+    distanceToAssignedOrg: 1,
+  };
+  const deptNode = {
+    id: 10,
+    orgCode: "DEPT",
+    orgName: "Department",
+    orgType: OrganizationType.Department,
+    level: 2,
+    parentId: 20,
+    isVirtual: false,
+    isEntity: true,
+    pathIndex: 1,
+    distanceToAssignedOrg: 0,
+  };
   return {
     ...employmentRecord(),
+    user: {
+      id: 1,
+      username: "user1",
+      name: "User 1",
+      mobile: "13800000001",
+      wxId: null,
+    },
+    position: {
+      id: 1,
+      posCode: "POS1",
+      posName: "Position 1",
+    },
+    organization: {
+      assignedOrg: deptNode,
+      fullOrgPath: [companyNode, deptNode],
+      companyNodes: [companyNode],
+    },
     username: "user1",
     name: "User 1",
     mobile: "13800000001",

@@ -2,6 +2,7 @@ import {
   OrganizationChildrenQueryDtoSchema,
   OrganizationCreateDtoSchema,
   OrganizationPaginationQueryDtoSchema,
+  OrganizationSelectorQueryDtoSchema,
   OrganizationUpdateDtoSchema,
 } from "@admin-api/services/organization/organization.schema";
 import * as organizationService from "@admin-api/services/organization/organization.service";
@@ -18,6 +19,11 @@ export const getOrganizationChildrenOp = defineQueryOp({
   input: OrganizationChildrenQueryDtoSchema,
   handler: ({ parentOrgCode, pageNum, pageSize }) =>
     organizationService.getOrganizationChildrenForAdmin(parentOrgCode ?? null, pageNum, pageSize),
+});
+
+export const getOrganizationSelectorOp = defineQueryOp({
+  input: OrganizationSelectorQueryDtoSchema,
+  handler: input => organizationService.getOrganizationSelectorNodesForAdmin(input),
 });
 
 export const getOrganizationOp = defineQueryOp({

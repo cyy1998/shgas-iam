@@ -44,6 +44,40 @@ export const OrganizationTreeNodeDtoSchema = z.object({
   isLeaf: z.boolean(),
 }).openapi("OrganizationTreeNodeDto");
 
+export const OrganizationPathNodeSchema = z.object({
+  id: z.number(),
+  orgCode: z.string(),
+  orgName: z.string(),
+  orgType: z.enum(OrganizationType),
+  status: z.enum(OrganizationStatus),
+  level: z.enum(OrganizationLevel),
+  parentId: z.number(),
+  pathIndex: z.number().int().nonnegative(),
+}).openapi("OrganizationPathNode");
+
+export const OrganizationSelectorNodeSchema = z.object({
+  id: z.number(),
+  orgCode: z.string(),
+  orgName: z.string(),
+  orgType: z.enum(OrganizationType),
+  status: z.enum(OrganizationStatus),
+  level: z.enum(OrganizationLevel),
+  parentId: z.number(),
+  isLeaf: z.boolean(),
+  fullPath: z.array(OrganizationPathNodeSchema),
+  pathText: z.string(),
+  selectable: z.boolean(),
+}).openapi("OrganizationSelectorNode");
+
+export const OrganizationSelectorQueryDtoSchema = z.object({
+  parentOrgCode: z.string().nullish().openapi({ example: "SR" }),
+  text: z.string().optional().openapi({ example: "信息中心" }),
+  orgCode: z.string().optional().openapi({ example: "SR23" }),
+  selectableOrgTypes: z.array(z.enum(OrganizationType)).optional().openapi({ example: [OrganizationType.Department] }),
+  selectableStatuses: z.array(z.enum(OrganizationStatus)).optional().openapi({ example: [OrganizationStatus.Enable] }),
+  pageSize: z.int().positive().max(200).default(50),
+}).openapi("OrganizationSelectorQueryDto");
+
 export const OrganizationChildrenQueryDtoSchema = z.object({
   parentOrgCode: z.string().nullish().openapi({ example: "SR" }),
   pageNum: z.int().positive().default(1),

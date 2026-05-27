@@ -7,6 +7,9 @@ export const organizationsSearch: OrganizationRouteHandler<"organizationsSearch"
 export const organizationsChildren: OrganizationRouteHandler<"organizationsChildren"> = async c =>
   c.json(await ops.getOrganizationChildrenOp.run(c.req.valid("query")));
 
+export const organizationsSelector: OrganizationRouteHandler<"organizationsSelector"> = async c =>
+  c.json(await ops.getOrganizationSelectorOp.run(c.req.valid("json")));
+
 export const organizationDetail: OrganizationRouteHandler<"organizationDetail"> = async c =>
   c.json(await ops.getOrganizationOp.run(c.req.valid("param")));
 

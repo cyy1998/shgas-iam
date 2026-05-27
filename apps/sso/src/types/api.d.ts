@@ -11,9 +11,12 @@ export type AuthConfig = {
 
 export type Employment = {
   id: string;
-  compName: string;
+  compName: string | null;
   orgName: string;
   posName: string;
+  organization?: {
+    fullOrgPath?: { orgName: string }[];
+  };
 };
 
 export type UserInfo = {

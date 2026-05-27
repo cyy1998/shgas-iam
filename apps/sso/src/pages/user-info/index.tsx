@@ -200,8 +200,19 @@ export default function UserInfoPage() {
                 pagination={false}
                 dataSource={userInfo?.employments ?? []}
                 columns={[
-                  { title: '公司', dataIndex: 'compName' },
-                  { title: '部门', dataIndex: 'orgName' },
+                  {
+                    title: '公司',
+                    dataIndex: 'compName',
+                    render: (value: string | null) => value ?? '—',
+                  },
+                  {
+                    title: '组织',
+                    dataIndex: 'orgName',
+                    render: (_value, row) =>
+                      row.organization?.fullOrgPath
+                        ?.map(node => node.orgName)
+                        .join(' / ') || row.orgName,
+                  },
                   { title: '岗位', dataIndex: 'posName' },
                 ]}
               />
