@@ -333,6 +333,10 @@ pnpm --filter @iam/sso typecheck
 | `PASSWORD_HASH_ROUNDS`          | 密码哈希轮数                                     | `10`               |
 | `DEFAULT_USER_PASSWORD`         | 默认用户密码                                     | `default123`       |
 | `MAGIC_CODE`                    | 特殊操作验证码                                   | 必填               |
+| `LOGIN_CREDENTIAL_ACTIVE_KID`   | 当前密码登录 SM2 密钥编号                        | `2026-05-primary`  |
+| `LOGIN_CREDENTIAL_PRIVATE_KEYS_JSON` | 密码登录 SM2 私钥映射 JSON                 | `{"kid":"private"}` |
+| `LOGIN_CREDENTIAL_MAX_SKEW_MS`  | 密码登录凭证时间戳允许偏差（毫秒）                | `300000`           |
+| `LOGIN_CREDENTIAL_NONCE_TTL_SECONDS` | 密码登录 nonce 防重放 TTL（秒）             | `360`              |
 | `WX_CORPID` / `WX_CORPSECRET`   | 企业微信配置                                     | 必填               |
 | `SMS_URL` / `SMS_SIGNATURE_KEY` | 短信服务配置                                     | 必填               |
 | `ORCAS_URL`                     | ORCAS 服务地址                                   | 必填               |
@@ -384,6 +388,9 @@ pnpm --filter @iam/sso typecheck
 | `UMI_APP_CAP_ENDPOINT`    | 内嵌 Cap challenge/redeem 端点                          | `/open/cap/iam-sso/`                            |
 | `UMI_APP_CAP_WASM_URL`    | 本地 Cap WASM 资源；避免浏览器请求 jsDelivr CDN         | `/portal/cap/cap_wasm_bg.wasm`                  |
 | `UMI_APP_CAP_PAKO_URL`    | 本地 pako fallback 资源；避免旧浏览器请求 jsDelivr CDN  | `/portal/cap/pako_inflate.min.js`               |
+| `UMI_APP_LOGIN_CREDENTIAL_ALG` | 密码登录凭证算法标识                                 | `SM2-SM4-CBC`                                   |
+| `UMI_APP_LOGIN_CREDENTIAL_KID` | 密码登录 SM2 公钥编号                                | `2026-05-primary`                               |
+| `UMI_APP_LOGIN_CREDENTIAL_PUBLIC_KEY` | 密码登录 SM2 公钥；与后端私钥映射匹配        | 必填                                            |
 
 Cap 前端资源已放在 `apps/sso/public/cap/`，构建时会复制到 SSO 产物的 `cap/` 目录。生产环境若调整 `base` / `publicPath`，需要同步覆盖 `UMI_APP_CAP_WASM_URL` 和 `UMI_APP_CAP_PAKO_URL`。
 

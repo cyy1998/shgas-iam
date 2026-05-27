@@ -30,3 +30,12 @@ export const CAP_WASM_URL =
 
 export const CAP_PAKO_URL =
   process.env.UMI_APP_CAP_PAKO_URL || '/portal/cap/pako_inflate.min.js';
+
+export const LOGIN_CREDENTIAL_KID =
+  process.env.UMI_APP_LOGIN_CREDENTIAL_KID || '';
+
+export const LOGIN_CREDENTIAL_PUBLIC_KEY =
+  process.env.UMI_APP_LOGIN_CREDENTIAL_PUBLIC_KEY || '';
+
+export const LOGIN_CREDENTIAL_ALG =
+  process.env.UMI_APP_LOGIN_CREDENTIAL_ALG || 'SM2-SM4-CBC';

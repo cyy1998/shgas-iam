@@ -69,7 +69,11 @@ services:
     build:
       context: ..
       dockerfile: apps/sso/Dockerfile
-      args: *build-proxy-args
+      args:
+        <<: *build-proxy-args
+        UMI_APP_LOGIN_CREDENTIAL_ALG: SM2-SM4-CBC
+        UMI_APP_LOGIN_CREDENTIAL_KID: 2026-05-primary
+        UMI_APP_LOGIN_CREDENTIAL_PUBLIC_KEY: 04112ddd8854e8262db2520bba112535844884c03348a45fcf4ee0f9a967979be52bd46caf43be697ae557ed2e4fa5b4dca8d2dbfa08c0f2f710c0f61591bb17dc
     restart: unless-stopped
     ports:
       - "30013:80"
@@ -104,6 +108,10 @@ services:
       DEFAULT_USER_PASSWORD: default123
       MAGIC_CODE: 1234
       CAP_ENABLED: true
+      LOGIN_CREDENTIAL_ACTIVE_KID: 2026-05-primary
+      LOGIN_CREDENTIAL_PRIVATE_KEYS_JSON: '{"2026-05-primary":"319b4e59ca80d7b4cc35955b63da4edf1ed51772ec8f33c0a4f769dda7b9fc65"}'
+      LOGIN_CREDENTIAL_MAX_SKEW_MS: 300000
+      LOGIN_CREDENTIAL_NONCE_TTL_SECONDS: 360
       WX_CORPID: "wwddf8d65300d53eb1"
       WX_CORPSECRET: "L41cYOgd-wmFEmoHPHXIL6ZHiP-hMzuXT_wsWINjAes"
       SMS_URL: "http://176.169.86.35:17111/v1/thirdparty/common/sms/sendMsg3"

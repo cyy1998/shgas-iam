@@ -25,7 +25,11 @@ services:
     build:
       context: ..
       dockerfile: apps/sso/Dockerfile
-      args: *build-proxy-args
+      args:
+        <<: *build-proxy-args
+        UMI_APP_LOGIN_CREDENTIAL_ALG: ${UMI_APP_LOGIN_CREDENTIAL_ALG:-SM2-SM4-CBC}
+        UMI_APP_LOGIN_CREDENTIAL_KID: ${UMI_APP_LOGIN_CREDENTIAL_KID:?set UMI_APP_LOGIN_CREDENTIAL_KID}
+        UMI_APP_LOGIN_CREDENTIAL_PUBLIC_KEY: ${UMI_APP_LOGIN_CREDENTIAL_PUBLIC_KEY:?set UMI_APP_LOGIN_CREDENTIAL_PUBLIC_KEY}
     restart: unless-stopped
     ports:
       - "${SSO_PUBLISHED_PORT:-30013}:80"

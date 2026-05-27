@@ -7,9 +7,11 @@ import * as resp from "@iam/api-core/http";
 import { getCookie, setCookie } from "hono/cookie";
 import { getVerificationContext } from "../human-verification-context";
 import * as authService from "./auth.service";
+import { parseLoginPasswordCredential } from "./login-credential.service";
 
 export const loginPassword: AuthRouteHandler<"loginPassword"> = async (c) => {
-  const { username, password, capToken } = c.req.valid("json");
+  const { credential, capToken } = c.req.valid("json");
+  const { username, password } = await parseLoginPasswordCredential(credential);
   const data = await authService.loginPassword(username, password, {
     capToken,
     context: getVerificationContext(c, username),

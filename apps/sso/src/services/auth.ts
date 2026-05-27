@@ -1,4 +1,5 @@
 import type { LoginPasswordResult } from '@sso/types/api';
+import { createPasswordLoginCredential } from '@sso/lib/login-credential';
 import { request } from '@sso/utils/request';
 
 export function login(body: {
@@ -8,7 +9,13 @@ export function login(body: {
 }) {
   return request<LoginPasswordResult>('/auth/login/password', {
     method: 'POST',
-    body: JSON.stringify(body),
+    body: JSON.stringify({
+      credential: createPasswordLoginCredential({
+        username: body.username,
+        password: body.password,
+      }),
+      capToken: body.capToken,
+    }),
   });
 }
 

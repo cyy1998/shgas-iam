@@ -9,6 +9,28 @@ function booleanString(defaultValue: boolean) {
   });
 }
 
+function jsonRecordString(description: string) {
+  return z.string().transform((value, ctx) => {
+    try {
+      const parsed = JSON.parse(value) as unknown;
+      if (
+        typeof parsed !== "object"
+        || parsed === null
+        || Array.isArray(parsed)
+        || !Object.values(parsed).every(item => typeof item === "string" && item.trim() !== "")
+      ) {
+        ctx.addIssue({ code: "custom", message: `${description} must be a JSON object of strings` });
+        return z.NEVER;
+      }
+      return parsed as Record<string, string>;
+    }
+    catch {
+      ctx.addIssue({ code: "custom", message: `${description} must be valid JSON` });
+      return z.NEVER;
+    }
+  });
+}
+
 const EnvSchema = z.object({
   DATABASE_URL: z.string().min(1),
   PASSWORD_HASH_ROUNDS: z.coerce.number().default(10),
@@ -42,6 +64,18 @@ const EnvSchema = z.object({
   HUMAN_VERIFICATION_WINDOW_SECONDS: z.coerce.number().default(10 * 60),
   HUMAN_VERIFICATION_LOGIN_FAILURE_THRESHOLD: z.coerce.number().default(3),
   HUMAN_VERIFICATION_LOOKUP_THRESHOLD: z.coerce.number().default(20),
+  LOGIN_CREDENTIAL_ACTIVE_KID: z.string().min(1),
+  LOGIN_CREDENTIAL_PRIVATE_KEYS_JSON: jsonRecordString("LOGIN_CREDENTIAL_PRIVATE_KEYS_JSON"),
+  LOGIN_CREDENTIAL_MAX_SKEW_MS: z.coerce.number().int().positive().default(5 * 60 * 1000),
+  LOGIN_CREDENTIAL_NONCE_TTL_SECONDS: z.coerce.number().int().positive().default(6 * 60),
+}).superRefine((env, ctx) => {
+  if (env.LOGIN_CREDENTIAL_PRIVATE_KEYS_JSON[env.LOGIN_CREDENTIAL_ACTIVE_KID] === undefined) {
+    ctx.addIssue({
+      code: "custom",
+      path: ["LOGIN_CREDENTIAL_ACTIVE_KID"],
+      message: "LOGIN_CREDENTIAL_ACTIVE_KID must exist in LOGIN_CREDENTIAL_PRIVATE_KEYS_JSON",
+    });
+  }
 });
 
 export type Env = z.infer<typeof EnvSchema>;

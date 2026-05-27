@@ -13,8 +13,9 @@ export const loginPassword = createRoute({
   tags,
   request: {
     body: jsonContentRequired(z.object({
-      username: z.string().openapi({ example: "138550" }),
-      password: z.string().openapi({ example: "1234" }),
+      credential: z.string().openapi({
+        example: "iam-login-v1.eyJ2IjoxLCJhbGciOiJT...",
+      }),
       capToken: z.string().optional(),
     }), "用户名密码登录参数"),
   },

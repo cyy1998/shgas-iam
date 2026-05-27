@@ -7,6 +7,9 @@ declare const process: {
     UMI_APP_CAP_PAKO_URL?: string;
     UMI_APP_CAP_SITE_KEY?: string;
     UMI_APP_CAP_WASM_URL?: string;
+    UMI_APP_LOGIN_CREDENTIAL_ALG?: string;
+    UMI_APP_LOGIN_CREDENTIAL_KID?: string;
+    UMI_APP_LOGIN_CREDENTIAL_PUBLIC_KEY?: string;
     UMI_APP_SSO_CLIENT_CODE?: string;
     UMI_APP_WELL_KNOWN_URL?: string;
     [key: string]: string | undefined;
