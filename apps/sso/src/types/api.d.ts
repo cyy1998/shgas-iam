@@ -1,8 +1,7 @@
-import type { ApiErrorCode, ServiceStatusCode } from '@iam/contracts';
+import type { ApiErrorCode } from '@iam/contracts';
 
 export type ApiEnvelope<T> = {
-  code: ApiErrorCode | ServiceStatusCode | number | string;
-  legacyCode?: ServiceStatusCode | number;
+  code: ApiErrorCode | number | string;
   message: string;
   data: T;
 };

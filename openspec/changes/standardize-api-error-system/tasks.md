@@ -1,8 +1,8 @@
 ## 1. Error Contract Foundation
 
-- [x] 1.1 决定兼容期响应字段策略：`code + legacyCode` 或 `errorCode + code`，并更新 design 中的 Open Questions 结论
-- [x] 1.2 在 `packages/contracts` 中新增字符串业务错误码定义，保留旧数字 `ServiceStatusCode` 的兼容出口
-- [x] 1.3 扩展 `CustomError`，支持字符串业务 code、HTTP status、默认 message 和兼容旧 code
+- [x] 1.1 决定错误响应字段策略：错误响应直接返回字符串 `code`，不保留 `legacyCode` 或旧数字兼容字段，并更新 design 中的 Open Questions 结论
+- [x] 1.2 在 `packages/contracts` 中新增字符串业务错误码定义，移除旧数字 `ServiceStatusCode` 出口
+- [x] 1.3 扩展 `CustomError`，支持字符串业务 code、HTTP status 和默认 message
 - [x] 1.4 调整 Hono `errorHandler`，统一从 `CustomError` 读取业务 code、message 和 HTTP status
 - [x] 1.5 调整 `packages/api-core/src/trpc` 和 `apps/admin-api/src/trpc` 的错误格式化与映射，移除基于数字 HTTP code 的业务判断
 
@@ -38,8 +38,8 @@
 
 ## 5. Frontend Compatibility
 
-- [x] 5.1 更新 `apps/sso/src/utils/request.ts`，兼容新的字符串错误码和旧数字 code
-- [x] 5.2 更新 `apps/admin/src/utils/request.ts`，兼容新的字符串错误码和旧数字 code
+- [x] 5.1 更新 `apps/sso/src/utils/request.ts`，使用新的字符串错误码分支
+- [x] 5.2 更新 `apps/admin/src/utils/request.ts`，使用新的字符串错误码分支
 - [x] 5.3 更新 SSO 登录、重置密码、用户信息页面中对未登录、人机校验和维护状态的错误分支判断
 - [x] 5.4 确认前端展示文案仍优先使用后端 message，并避免把 HTTP status 当作业务错误原因
 

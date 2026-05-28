@@ -1,7 +1,7 @@
 import type { Context } from "hono";
 import type { HTTPResponseError } from "hono/types";
 import type { ContentfulStatusCode } from "hono/utils/http-status";
-import { ApiErrorCode, ServiceStatusCode } from "@iam/contracts";
+import { ApiErrorCode } from "@iam/contracts";
 import { HTTPException } from "hono/http-exception";
 import { CustomError } from "../errors/CustomError";
 import { makeResponse } from "../http";
@@ -18,13 +18,13 @@ function getErrorSourceLocation(err: Error): string {
 
 export function errorHandler(err: Error | HTTPResponseError, c: Context) {
   if (err instanceof CustomError) {
-    return c.json(makeResponse(err.code, null, err.message, err.legacyCode), err.httpStatus as ContentfulStatusCode);
+    return c.json(makeResponse(err.code, null, err.message), err.httpStatus as ContentfulStatusCode);
   }
   else if (err instanceof HTTPException) {
-    return c.json(makeResponse(ApiErrorCode.InternalError, null, err.message, err.status), err.status);
+    return c.json(makeResponse(ApiErrorCode.InternalError, null, err.message), err.status);
   }
   else {
     console.error(`[error] ${getErrorSourceLocation(err)}`, err);
-    return c.json(makeResponse(ApiErrorCode.InternalError, null, "服务器内部错误", ServiceStatusCode.Failure));
+    return c.json(makeResponse(ApiErrorCode.InternalError, null, "服务器内部错误"));
   }
 }

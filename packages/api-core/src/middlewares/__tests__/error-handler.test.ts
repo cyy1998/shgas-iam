@@ -1,4 +1,4 @@
-import { ApiErrorCode, ServiceStatusCode } from "@iam/contracts";
+import { ApiErrorCode } from "@iam/contracts";
 import { describe, expect, spyOn, test } from "bun:test";
 import { Hono } from "hono";
 import { BAD_REQUEST } from "../../core/http-status-codes";
@@ -6,13 +6,12 @@ import { CustomError } from "../../errors/CustomError";
 import { errorHandler } from "../error-handler";
 
 describe("errorHandler", () => {
-  test("serializes CustomError code, legacyCode, and HTTP status separately", async () => {
+  test("serializes CustomError code and HTTP status separately", async () => {
     const app = new Hono();
     app.get("/custom", () => {
       throw new CustomError("登录凭证无效", {
         code: ApiErrorCode.InvalidLoginCredential,
         httpStatus: BAD_REQUEST,
-        legacyCode: ServiceStatusCode.Failure,
       });
     });
     app.onError(errorHandler);
@@ -23,7 +22,6 @@ describe("errorHandler", () => {
     await expect(res.json()).resolves.toEqual({
       code: ApiErrorCode.InvalidLoginCredential,
       data: null,
-      legacyCode: ServiceStatusCode.Failure,
       message: "登录凭证无效",
     });
   });

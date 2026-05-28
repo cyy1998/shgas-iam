@@ -1,4 +1,4 @@
-import { ApiErrorCode, ServiceStatusCode } from "@iam/contracts";
+import { ApiErrorCode } from "@iam/contracts";
 import { INTERNAL_SERVER_ERROR } from "../core/http-status-codes";
 import { CustomError } from "./CustomError";
 
@@ -8,9 +8,8 @@ export class AuthzError extends CustomError {
     message: string,
     code: ApiErrorCode | string = ApiErrorCode.InternalError,
     httpStatus: number = INTERNAL_SERVER_ERROR,
-    legacyCode: ServiceStatusCode | number = ServiceStatusCode.Failure,
   ) {
-    super(message, { code, httpStatus, legacyCode });
+    super(message, { code, httpStatus });
     this.name = "AuthzError";
     this.httpCode = httpStatus;
   }

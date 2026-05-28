@@ -1,4 +1,4 @@
-import { ApiErrorCode, ServiceStatusCode } from "@iam/contracts";
+import { ApiErrorCode } from "@iam/contracts";
 import { BAD_REQUEST } from "../core/http-status-codes";
 import { CustomError } from "./CustomError";
 
@@ -7,7 +7,6 @@ export class InvalidVerificationCodeError extends CustomError {
     super(message, {
       code: ApiErrorCode.InvalidVerificationCode,
       httpStatus: BAD_REQUEST,
-      legacyCode: ServiceStatusCode.Failure,
     });
     this.name = "InvalidVerificationCodeError";
   }

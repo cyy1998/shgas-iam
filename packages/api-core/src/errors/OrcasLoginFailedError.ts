@@ -1,4 +1,4 @@
-import { ApiErrorCode, ServiceStatusCode } from "@iam/contracts";
+import { ApiErrorCode } from "@iam/contracts";
 import { BAD_GATEWAY } from "../core/http-status-codes";
 import { CustomError } from "./CustomError";
 
@@ -7,7 +7,6 @@ export class OrcasLoginFailedError extends CustomError {
     super(message, {
       code: ApiErrorCode.OrcasLoginFailed,
       httpStatus: BAD_GATEWAY,
-      legacyCode: ServiceStatusCode.Failure,
     });
     this.name = "OrcasLoginFailedError";
   }

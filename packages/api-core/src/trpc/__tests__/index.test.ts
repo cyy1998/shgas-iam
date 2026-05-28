@@ -1,4 +1,4 @@
-import { ApiErrorCode, ServiceStatusCode } from "@iam/contracts";
+import { ApiErrorCode } from "@iam/contracts";
 import { TRPCError } from "@trpc/server";
 import { describe, expect, test } from "bun:test";
 import { NOT_FOUND } from "../../core/http-status-codes";
@@ -10,7 +10,6 @@ describe("mapCustomErrorToTRPCError", () => {
     const err = new CustomError("组织不存在", {
       code: ApiErrorCode.OrganizationNotFound,
       httpStatus: NOT_FOUND,
-      legacyCode: ServiceStatusCode.NotFound,
     });
 
     try {

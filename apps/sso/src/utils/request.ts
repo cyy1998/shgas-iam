@@ -1,4 +1,4 @@
-import { ApiErrorCode, ServiceStatusCode } from '@iam/contracts';
+import { ApiErrorCode } from '@iam/contracts';
 import { API_PREFIX, SSO_CLIENT_CODE } from '@sso/constants/config';
 import type { ApiEnvelope } from '@sso/types/api';
 import { currentSearchParams } from '@sso/utils/url';
@@ -6,17 +6,14 @@ import { history } from '@umijs/max';
 import { message } from 'antd';
 
 export class ServiceError extends Error {
-  public code: ApiErrorCode | ServiceStatusCode | number | string;
-  public legacyCode?: ServiceStatusCode | number;
+  public code: ApiErrorCode | number | string;
   constructor(
     msg: string,
-    code: ApiErrorCode | ServiceStatusCode | number | string,
-    legacyCode?: ServiceStatusCode | number,
+    code: ApiErrorCode | number | string,
   ) {
     super(msg);
     this.name = 'ServiceError';
     this.code = code;
-    this.legacyCode = legacyCode;
   }
 }
 
@@ -37,10 +34,10 @@ function gotoMaintenance() {
 }
 
 function isCode(
-  body: Pick<ApiEnvelope<unknown>, 'code' | 'legacyCode'>,
-  code: ApiErrorCode | ServiceStatusCode,
+  body: Pick<ApiEnvelope<unknown>, 'code'>,
+  code: ApiErrorCode,
 ) {
-  return body.code === code || body.legacyCode === code;
+  return body.code === code;
 }
 
 async function readEnvelope<T>(res: Response): Promise<ApiEnvelope<T> | null> {
@@ -89,30 +86,26 @@ export async function request<T>(
     }
     const msg = errorBody?.message || `网络错误 (${res.status})`;
     message.error(msg);
-    throw new ServiceError(msg, errorBody?.code ?? res.status, errorBody?.legacyCode);
+    throw new ServiceError(msg, errorBody?.code ?? res.status);
   }
 
   const body = (await res.json()) as ApiEnvelope<T>;
 
   if (
-    (isCode(body, ApiErrorCode.Unauthorized) ||
-      isCode(body, ServiceStatusCode.Unauthorized)) &&
+    isCode(body, ApiErrorCode.Unauthorized) &&
     !init.skipAuthRedirect
   ) {
     gotoLogin();
     return new Promise<T>(() => {});
   }
 
-  if (body.code !== ServiceStatusCode.Success) {
+  if (body.code !== 200) {
     const msg = body.message || '请求失败';
-    if (
-      isCode(body, ApiErrorCode.HumanVerificationRequired) ||
-      isCode(body, ServiceStatusCode.HumanVerificationRequired)
-    ) {
-      throw new ServiceError(msg, body.code, body.legacyCode);
+    if (isCode(body, ApiErrorCode.HumanVerificationRequired)) {
+      throw new ServiceError(msg, body.code);
     }
     message.error(msg);
-    throw new ServiceError(msg, body.code, body.legacyCode);
+    throw new ServiceError(msg, body.code);
   }
 
   return body.data;

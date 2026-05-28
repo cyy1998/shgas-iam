@@ -1,4 +1,4 @@
-import { ApiErrorCode, ServiceStatusCode } from "@iam/contracts";
+import { ApiErrorCode } from "@iam/contracts";
 import { CONFLICT } from "../core/http-status-codes";
 import { CustomError } from "./CustomError";
 
@@ -7,7 +7,6 @@ export class EmploymentNotEditableError extends CustomError {
     super(message, {
       code: ApiErrorCode.EmploymentNotEditable,
       httpStatus: CONFLICT,
-      legacyCode: ServiceStatusCode.Failure,
     });
     this.name = "EmploymentNotEditableError";
   }

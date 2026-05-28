@@ -1,4 +1,4 @@
-import { ApiErrorCode, ServiceStatusCode } from "@iam/contracts";
+import { ApiErrorCode } from "@iam/contracts";
 import { UNAUTHORIZED } from "../core/http-status-codes";
 import { CustomError } from "./CustomError";
 
@@ -7,7 +7,6 @@ export class InvalidAuthCodeError extends CustomError {
     super(message, {
       code: ApiErrorCode.InvalidAuthCode,
       httpStatus: UNAUTHORIZED,
-      legacyCode: ServiceStatusCode.Unauthorized,
     });
     this.name = "InvalidAuthCodeError";
   }

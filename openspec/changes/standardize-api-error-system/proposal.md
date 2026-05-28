@@ -9,8 +9,8 @@
 - 为当前高频裸 `CustomError` 场景补充独立错误类，包括认证登录、SSO/client、组织、岗位、用户、任职、权限委托、人机校验和外部集成相关错误。
 - 保留 `packages/contracts` 中的 `LoginCredentialError` 作为底层凭证解析错误，并在 API 层转换为 `api-core/errors` 中的 `InvalidLoginCredentialError`。
 - 重新设计错误码为字符串业务码，并将业务错误码与 HTTP status 分离。
-- 兼容现有响应 envelope，迁移期间避免一次性破坏前端对旧数字 code 的判断。
-- **BREAKING**: 完成兼容期后，API 响应中的业务 `code` 将从数字错误码迁移为字符串错误码。
+- 错误响应 envelope 的业务 `code` 直接迁移为字符串错误码，不保留旧数字 `ServiceStatusCode` 兼容字段。
+- **BREAKING**: API 错误响应中的业务 `code` 将从数字错误码迁移为字符串错误码。
 
 ## Capabilities
 
@@ -31,7 +31,7 @@
 
 ## Impact
 
-- 影响 `packages/api-core/src/errors/`、`packages/api-core/src/middlewares/error-handler.ts`、`packages/api-core/src/trpc/`、`packages/contracts/src/enums/service.status.ts`。
+- 影响 `packages/api-core/src/errors/`、`packages/api-core/src/middlewares/error-handler.ts`、`packages/api-core/src/trpc/`、`packages/contracts/src/enums/api-error-code.ts`，并移除 `packages/contracts/src/enums/service.status.ts`。
 - 影响 `apps/api` 与 `apps/admin-api` 中直接抛出 `CustomError` 或 `AuthzError` 的 service、route handler、repository。
 - 影响前端 `apps/admin`、`apps/sso` 对响应 `code` 的判断逻辑，尤其是未登录、维护、人机校验等分支。
 - 需要更新或新增错误处理、登录凭证、人机校验、认证授权、业务 service 的单元测试。

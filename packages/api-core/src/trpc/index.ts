@@ -24,7 +24,6 @@ const t = initTRPC.context<TRPCAppContext>().create({
         data: {
           ...shape.data,
           serviceCode: error.cause.code,
-          legacyServiceCode: error.cause.legacyCode,
           serviceMessage: error.cause.message,
           httpStatus: error.cause.httpStatus,
         },

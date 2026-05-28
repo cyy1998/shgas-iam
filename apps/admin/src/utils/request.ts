@@ -1,24 +1,20 @@
-import { ApiErrorCode, ServiceStatusCode } from '@iam/contracts';
+import { ApiErrorCode } from '@iam/contracts';
 import { message } from 'antd';
 
 export class ServiceError extends Error {
-  public code: ApiErrorCode | ServiceStatusCode | number | string;
-  public legacyCode?: ServiceStatusCode | number;
+  public code: ApiErrorCode | number | string;
   constructor(
     msg: string,
-    code: ApiErrorCode | ServiceStatusCode | number | string,
-    legacyCode?: ServiceStatusCode | number,
+    code: ApiErrorCode | number | string,
   ) {
     super(msg);
     this.name = 'ServiceError';
     this.code = code;
-    this.legacyCode = legacyCode;
   }
 }
 
 type ApiEnvelope<T> = {
-  code: ApiErrorCode | ServiceStatusCode | number | string;
-  legacyCode?: ServiceStatusCode | number;
+  code: ApiErrorCode | number | string;
   message: string;
   data: T;
 };
@@ -35,12 +31,11 @@ export async function unwrap<T>(
     throw new ServiceError(
       body?.message || `HTTP ${res.status}`,
       body?.code ?? res.status,
-      body?.legacyCode,
     );
   }
   const body = (await res.json()) as ApiEnvelope<T>;
-  if (body.code !== ServiceStatusCode.Success) {
-    throw new ServiceError(body.message || '请求失败', body.code, body.legacyCode);
+  if (body.code !== 200) {
+    throw new ServiceError(body.message || '请求失败', body.code);
   }
   return body.data;
 }

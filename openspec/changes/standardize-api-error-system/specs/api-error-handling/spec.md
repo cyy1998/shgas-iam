@@ -38,15 +38,16 @@ The system SHALL represent business error reasons with stable string error codes
 - **THEN** it SHALL map transport status from the error HTTP status
 - **AND** it SHALL expose the business error code without numeric HTTP-status comparisons
 
-### Requirement: Compatibility during error code migration
-The system SHALL preserve compatibility for existing clients while migrating from numeric service codes to string business error codes.
+### Requirement: No legacy numeric service code compatibility
+The system SHALL not expose legacy numeric service error codes after migrating to string business error codes.
 
-#### Scenario: Existing frontend branch checks a legacy numeric code
-- **WHEN** a frontend flow still depends on an existing numeric service code
-- **THEN** the API response or request layer SHALL provide a compatibility path until that flow is migrated
+#### Scenario: Error response is returned
+- **WHEN** a backend API error is serialized
+- **THEN** the API response SHALL expose the string business error code in `code`
+- **AND** the response SHALL NOT include `legacyCode` or another legacy numeric business-code field
 
-#### Scenario: New code consumes standardized error code
-- **WHEN** new backend or frontend code branches on an API error
+#### Scenario: Frontend code consumes standardized error code
+- **WHEN** frontend code branches on an API error
 - **THEN** it SHALL use the string business error code instead of relying on HTTP status numbers as business codes
 
 ### Requirement: Login credential parsing error boundary

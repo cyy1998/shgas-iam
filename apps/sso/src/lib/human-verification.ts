@@ -5,7 +5,7 @@ import {
 } from '@sso/constants/config';
 import type { HumanVerificationAction } from '@sso/types/api';
 import { ServiceError } from '@sso/utils/request';
-import { ApiErrorCode, ServiceStatusCode } from '@iam/contracts';
+import { ApiErrorCode } from '@iam/contracts';
 import { message } from 'antd';
 
 type Operation<T> = () => Promise<T>;
@@ -52,9 +52,7 @@ export async function withHumanVerification<T>(
   } catch (error) {
     if (
       !(error instanceof ServiceError) ||
-      (error.code !== ApiErrorCode.HumanVerificationRequired &&
-        error.legacyCode !== ServiceStatusCode.HumanVerificationRequired &&
-        error.code !== ServiceStatusCode.HumanVerificationRequired)
+      error.code !== ApiErrorCode.HumanVerificationRequired
     ) {
       throw error;
     }
@@ -71,7 +69,6 @@ export async function withHumanVerification<T>(
     throw new ServiceError(
       '安全校验失败，请重试',
       ApiErrorCode.HumanVerificationRequired,
-      ServiceStatusCode.HumanVerificationRequired,
     );
   }
   return await retryOperation(capToken);

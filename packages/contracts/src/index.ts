@@ -10,6 +10,5 @@ export * from "./enums/position.status";
 export * from "./enums/privilege.status";
 export * from "./enums/privilegeDelegation.status";
 export * from "./enums/role.status";
-export * from "./enums/service.status";
 export * from "./enums/user.status";
 export * from "./enums/user.type";

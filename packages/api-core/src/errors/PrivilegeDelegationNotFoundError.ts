@@ -1,4 +1,4 @@
-import { ApiErrorCode, ServiceStatusCode } from "@iam/contracts";
+import { ApiErrorCode } from "@iam/contracts";
 import { NOT_FOUND } from "../core/http-status-codes";
 import { CustomError } from "./CustomError";
 
@@ -7,7 +7,6 @@ export class PrivilegeDelegationNotFoundError extends CustomError {
     super(message, {
       code: ApiErrorCode.PrivilegeDelegationNotFound,
       httpStatus: NOT_FOUND,
-      legacyCode: ServiceStatusCode.NotFound,
     });
     this.name = "PrivilegeDelegationNotFoundError";
   }

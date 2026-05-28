@@ -1,4 +1,4 @@
-import { ApiErrorCode, ServiceStatusCode } from "@iam/contracts";
+import { ApiErrorCode } from "@iam/contracts";
 import { afterAll, beforeEach, describe, expect, mock, test } from "bun:test";
 
 type ValidTarget = "json" | "query" | "param";
@@ -79,7 +79,6 @@ describe("open handlers human verification", () => {
   test("does not send an SMS code when Cap verification is required", async () => {
     ensureActionAllowed.mockRejectedValue(Object.assign(new Error("需要人机校验"), {
       code: ApiErrorCode.HumanVerificationRequired,
-      legacyCode: ServiceStatusCode.HumanVerificationRequired,
     }));
 
     await expect(handlers.codeSend(makeContext({
@@ -103,7 +102,7 @@ describe("open handlers human verification", () => {
     }) as never, undefined as never);
 
     expect(result as unknown).toEqual({
-      code: ServiceStatusCode.Success,
+      code: 200,
       data: true,
       message: "success",
     });
@@ -115,7 +114,6 @@ describe("open handlers human verification", () => {
   test("does not query user info when Cap verification is required", async () => {
     ensureActionAllowed.mockRejectedValue(Object.assign(new Error("需要人机校验"), {
       code: ApiErrorCode.HumanVerificationRequired,
-      legacyCode: ServiceStatusCode.HumanVerificationRequired,
     }));
 
     await expect(handlers.userInfo(makeContext({
@@ -137,7 +135,7 @@ describe("open handlers human verification", () => {
     }) as never, undefined as never);
 
     expect(result as unknown).toEqual({
-      code: ServiceStatusCode.Success,
+      code: 200,
       data: {
         mobile: "177****2865",
         name: "张三",

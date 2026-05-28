@@ -1,5 +1,5 @@
 import { CustomError } from "@iam/api-core/errors/CustomError";
-import { ApiErrorCode, ServiceStatusCode, UserStatus, UserType } from "@iam/contracts";
+import { ApiErrorCode, UserStatus, UserType } from "@iam/contracts";
 import { beforeEach, describe, expect, mock, test } from "bun:test";
 
 mock.restore();
@@ -156,8 +156,7 @@ mock.module("@api/services/human-verification/cap.service", () => ({
 mock.module("@api/services/human-verification/human-verification.error", () => ({
   isHumanVerificationRequiredError(error: unknown) {
     return error instanceof CustomError
-      && (error.code === ApiErrorCode.HumanVerificationRequired
-        || error.legacyCode === ServiceStatusCode.HumanVerificationRequired);
+      && error.code === ApiErrorCode.HumanVerificationRequired;
   },
 }));
 
@@ -273,7 +272,6 @@ describe("auth login failure suspension", () => {
     ensureActionAllowed.mockRejectedValue(
       new CustomError("需要人机校验", {
         code: ApiErrorCode.HumanVerificationRequired,
-        legacyCode: ServiceStatusCode.HumanVerificationRequired,
       }),
     );
 
@@ -290,7 +288,6 @@ describe("auth login failure suspension", () => {
     ensureActionAllowed.mockRejectedValue(
       new CustomError("需要人机校验", {
         code: ApiErrorCode.HumanVerificationRequired,
-        legacyCode: ServiceStatusCode.HumanVerificationRequired,
       }),
     );
 

@@ -4,7 +4,7 @@
 
 业务代码中还有大量直接 `throw new CustomError(...)` 的场景，错误名称、错误码和 HTTP status 缺乏统一来源。`HumanVerificationRequiredError` 已经是独立错误类但定义在 `apps/api` 内；`LoginCredentialError` 定义在 `packages/contracts`，它是加解密/解析层异常，不适合承载 API 响应语义。
 
-当前 `ServiceStatusCode` 使用数字值，同时包含 `200/401/403/404`、`4281/4031/4001` 和 `99999`，混合了 HTTP status、业务错误码和兼容分支码。后续需要将业务错误码改为字符串，并保留可控兼容路径。
+当前 `ServiceStatusCode` 使用数字值，同时包含 `200/401/403/404`、`4281/4031/4001` 和 `99999`，混合了 HTTP status、业务错误码和兼容分支码。后续需要将业务错误码改为字符串，并移除旧数字业务码出口。
 
 ## Goals / Non-Goals
 
@@ -14,7 +14,7 @@
 - 将可复用业务错误集中到 `packages/api-core/src/errors/`，减少 app 内散落错误定义和裸 `CustomError`。
 - 将业务错误码改为字符串错误码，并与 HTTP status 分离。
 - 保留 `LoginCredentialError` 在 `packages/contracts`，由 API 层转换为 `InvalidLoginCredentialError`。
-- 提供兼容迁移路径，避免前端一次性被字符串错误码切断。
+- 前端分支直接迁移到字符串业务码，不再保留旧数字业务码兼容出口。
 
 **Non-Goals:**
 
@@ -33,7 +33,7 @@
 
 ### Decision: `CustomError` 表达业务错误码和 HTTP status
 
-`CustomError` SHALL 以字符串 `code` 表达业务错误原因，以 `httpStatus` 表达传输层状态。默认 HTTP status 可以保持兼容策略，但具名错误类 MUST 显式声明对应状态。
+`CustomError` SHALL 以字符串 `code` 表达业务错误原因，以 `httpStatus` 表达传输层状态。具名错误类 MUST 显式声明对应状态。
 
 响应 envelope 的业务 `code` 不再被当作 HTTP status 使用。tRPC 映射也不再通过 `err.code === 404` 这种数字比较判断错误类别。
 
@@ -57,14 +57,11 @@
 
 字符串码比数字分段更容易读、查找和审查，也能避免 `404` 同时代表 HTTP status 和业务错误的歧义。
 
-### Decision: 保留兼容字段或兼容映射
+### Decision: 不保留旧数字业务码兼容字段
 
-迁移期 SHALL 保留旧数字 code 的兼容能力。可以采用以下任一实现方式：
+错误响应 envelope SHALL 直接返回字符串业务 `code`，不返回 `legacyCode`、`errorCode` 或旧数字 `ServiceStatusCode` 兼容字段。成功响应仍保持现有 envelope 形状并返回 `code: 200`，但该值不再依赖 `ServiceStatusCode`。
 
-- 在错误类中维护 `legacyCode`，响应 envelope 同时返回 `code` 和 `legacyCode`。
-- 在响应构造层对指定字符串 code 映射旧数字 code，并由前端逐步迁移。
-
-实现时应优先选择最小破坏路径；完成前端迁移后再移除旧数字分支。
+这样可以避免前后端继续维护双码分支，也能让新增错误判断只围绕字符串业务码展开。
 
 ### Decision: `LoginCredentialError` 仍在 `contracts`
 
@@ -78,24 +75,24 @@
 
 ## Risks / Trade-offs
 
-- [Risk] 字符串错误码会影响前端对 `body.code` 的判断 → 通过兼容字段或映射分阶段迁移，并先覆盖未登录、维护、人机校验等关键分支。
+- [Risk] 字符串错误码会影响前端对 `body.code` 的判断 → 本变更同步迁移前端未登录、维护、人机校验等关键分支到字符串业务码。
 - [Risk] 一次性新增过多错误类会产生命名不一致 → 先按现有域分组，集中从 `api-core/errors/index.ts` 导出，并在任务中列出优先级。
 - [Risk] Hono 与 tRPC 响应形状不一致 → 统一通过 `CustomError` 的 `code/message/httpStatus` 映射，并补充两侧测试。
-- [Risk] `ServiceStatusCode` 当前被前后端共同使用 → 新增字符串错误码时保留旧枚举或兼容别名，待前端迁移完成再清理。
+- [Risk] `ServiceStatusCode` 当前被前后端共同使用 → 本变更移除旧枚举出口，并把剩余成功响应判断改为数字 `200`。
 - [Risk] `AuthzMaintaincingError` 拼写修正可能影响导入路径 → 新增正确拼写 `AuthzMaintenanceError`，保留旧导出作为兼容别名。
 
 ## Migration Plan
 
-1. 扩展错误基础类型：让 `CustomError` 支持字符串 `code`、`httpStatus` 和兼容旧 code 的能力。
+1. 扩展错误基础类型：让 `CustomError` 支持字符串 `code` 和 `httpStatus`。
 2. 调整 `AuthzError` 继承关系，并更新 Hono/tRPC 的错误映射。
 3. 新增第一批集中错误类，优先覆盖登录、授权、人机校验、client/SSO、组织、岗位、任职、用户和权限委托。
 4. 将 `LoginCredentialError` 在 API 层转换为 `InvalidLoginCredentialError`。
 5. 替换高频裸 `CustomError` 使用点，保留低价值通用失败作为后续清理候选。
-6. 更新前端请求层对未登录、维护、人机校验等 code 的兼容判断。
-7. 补充后端单元测试和前端类型检查，确认兼容期响应仍可被现有流程处理。
+6. 更新前端请求层对未登录、维护、人机校验等 code 的字符串判断。
+7. 补充后端单元测试和前端类型检查，确认新错误响应契约可被现有流程处理。
 
 ## Open Questions
 
-- 已决定：兼容期响应 envelope 使用 `{ code: string, legacyCode?: number }`。成功响应继续返回旧 `ServiceStatusCode.Success`，错误响应的 `code` 迁移为字符串业务码，`legacyCode` 提供旧数字分支兼容。
-- 旧数字 `ServiceStatusCode` 暂作为兼容出口保留，迁移窗口到前端与外部调用方全部切换到字符串业务码后再单独清理。
+- 已决定：错误响应 envelope 使用 `{ code: string, data: null, message: string }`，不提供旧数字业务码兼容字段。成功响应继续返回 `code: 200`。
+- 旧数字 `ServiceStatusCode` 不再作为兼容出口保留，前后端分支直接使用 `ApiErrorCode`。
 - 先保持 `packages/api-core/src/errors` 单层文件结构，降低本次迁移冲突与导入 churn；后续若错误类继续增长，再按 domain 拆分。
