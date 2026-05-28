@@ -11,7 +11,6 @@ import {
 } from '@ant-design/pro-components';
 import type { ProFormInstance } from '@ant-design/pro-components';
 import type { AppRouter } from '@iam/admin-api/trpc';
-import { OrganizationType } from '@iam/contracts';
 import type { inferRouterOutputs } from '@trpc/server';
 import { Descriptions, message } from 'antd';
 import { useRef } from 'react';
@@ -96,12 +95,6 @@ export default function TransferModal({
       >
         <OrganizationTreeSelector
           placeholder="请选择新的实际任职组织"
-          selectableOrgTypes={[
-            OrganizationType.Department,
-            OrganizationType.TempDepartment,
-            OrganizationType.External,
-            OrganizationType.IndividualExternal,
-          ]}
         />
       </ProForm.Item>
       <ProForm.Item name="expectedAncestorOrgCode" label="期望上级组织">
