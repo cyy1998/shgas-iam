@@ -3,11 +3,60 @@
 ## Purpose
 描述当前 IAM 公共 API 中已经实现的登录、SSO 授权、全局/局部会话、网关鉴权与内部鉴权行为。该 baseline 仅记录现状，不表示这些行为已经完成安全整改或代表目标态。
 ## Requirements
+### Requirement: 密码登录加密凭证传输
+系统 SHALL 要求 `/auth/login/password` 使用 SM2 + SM4 加密凭证块传输用户名、密码、传输时间戳和 nonce，并在进入既有密码登录业务逻辑前完成解密、完整性校验、时间戳校验和 nonce 防重放。
+
+#### Scenario: 密码登录请求使用 credential
+- **WHEN** 客户端调用 `/auth/login/password`
+- **THEN** 请求体 SHALL 只接受 `credential` 和可选 `capToken`
+- **AND** 请求体 SHALL NOT 接受明文 `username` 或 `password` 字段作为登录输入
+
+#### Scenario: credential 文本块结构有效
+- **WHEN** 后端收到 `credential`
+- **THEN** 系统 SHALL 解析协议版本、`kid`、算法标识、SM2 加密后的 key material、SM4 IV、SM4 密文和完整性标签
+- **AND** 系统 SHALL 根据 `kid` 选择对应 SM2 私钥
+
+#### Scenario: credential 解密成功
+- **WHEN** `credential` 使用受支持算法、有效 `kid` 和正确密钥生成，且完整性标签校验通过
+- **THEN** 系统 SHALL 使用 SM2 私钥解密 key material
+- **AND** 系统 SHALL 使用解出的 key material 验证完整性标签
+- **AND** 系统 SHALL 使用 SM4 解密登录凭证明文 JSON
+- **AND** 登录凭证明文 JSON SHALL 包含 `v`、`typ=password-login`、`username`、`password`、`ts` 和 `nonce`
+
+#### Scenario: credential 时间戳有效
+- **WHEN** 登录凭证明文 JSON 的 `ts` 与服务端当前时间差在配置允许窗口内
+- **THEN** 系统 SHALL 允许凭证继续进行 nonce 防重放校验
+
+#### Scenario: credential 时间戳无效
+- **WHEN** 登录凭证明文 JSON 的 `ts` 已过期或显著晚于服务端当前时间
+- **THEN** 系统 SHALL 拒绝继续执行密码校验和全局会话创建
+- **AND** 响应 SHALL 使用统一业务错误表示登录凭证无效
+
+#### Scenario: credential nonce 首次使用
+- **WHEN** 登录凭证明文 JSON 的 `nonce` 在当前有效窗口内未被使用
+- **THEN** 系统 SHALL 在 Redis 中记录该 nonce 的防重放标记
+- **AND** 系统 SHALL 允许凭证继续进入既有密码登录业务逻辑
+
+#### Scenario: credential nonce 重放
+- **WHEN** 登录凭证明文 JSON 的 `nonce` 在当前有效窗口内已经存在防重放标记
+- **THEN** 系统 SHALL 拒绝继续执行密码校验和全局会话创建
+- **AND** 响应 SHALL 使用统一业务错误表示登录凭证无效
+
+#### Scenario: credential 无效
+- **WHEN** `credential` 缺失、格式错误、协议版本不支持、算法不支持、`kid` 不存在、SM2 解密失败、完整性标签校验失败、SM4 解密失败或明文 JSON 结构无效
+- **THEN** 系统 SHALL 拒绝继续执行密码校验和全局会话创建
+- **AND** 响应 SHALL 使用统一业务错误表示登录凭证无效
+
+#### Scenario: credential 校验通过后保持登录语义
+- **WHEN** `credential` 解密、完整性校验、时间戳校验和 nonce 防重放均通过
+- **THEN** 系统 SHALL 使用解密出的 `username` 与 `password` 执行既有密码登录逻辑
+- **AND** 系统 SHALL 保持既有 Cap 人机校验、密码校验、登录失败计数、账号暂停、全局 session 创建、cookie 写入和登录日志行为
+
 ### Requirement: 全局登录创建会话
-系统 SHALL 在密码登录、手机验证码登录或受支持的第三方登录成功后创建 Redis 全局会话，并向调用方返回会话 token 与 `isMobileSet`。
+系统 SHALL 在加密凭证密码登录、手机验证码登录或受支持的第三方登录成功后创建 Redis 全局会话，并向调用方返回会话 token 与 `isMobileSet`。
 
 #### Scenario: 密码登录成功
-- **WHEN** 用户名对应的用户详情存在，并且输入密码匹配用户密码或输入值等于配置的 `MAGIC_CODE`
+- **WHEN** `/auth/login/password` 请求提供有效 `credential`，该凭证解密出的用户名对应用户详情存在，并且解密出的密码匹配用户密码或输入值等于配置的 `MAGIC_CODE`
 - **THEN** 系统 SHALL 创建 `global_session:<token>` Redis 记录
 - **AND** 系统 SHALL 返回 `{ token, isMobileSet }`
 - **AND** HTTP handler SHALL 写入名为 `global_session` 的 HttpOnly、SameSite=Lax cookie
@@ -192,6 +241,7 @@ Authentication and session flows SHALL use centralized API errors with string bu
 - `/auth/internal-authz` 的 `IP-Chain` header 信任边界依赖部署网关，代码本身无法证明该 header 一定可信。
 
 ## Evidence Review
+- 密码登录加密凭证传输: 证据 `apps/api/src/routes/auth/login-credential.ts`, `apps/api/src/routes/auth/auth.handlers.ts`, `apps/sso/src/services/auth.ts`, `apps/sso/src/lib/login-credential.ts`。状态: 有代码和测试证据。
 - 全局登录创建会话: 证据 `apps/api/src/routes/auth/auth.routes.ts`, `apps/api/src/routes/auth/auth.handlers.ts`, `apps/api/src/routes/auth/auth.service.ts`, `apps/api/src/routes/sso/sso.service.ts`, `apps/api/src/services/session/session.service.ts`。状态: 有证据；含安全风险 `MAGIC_CODE`。
 - 登录失败计数与账号暂停: 证据 `apps/api/src/routes/auth/login-failure.helper.ts`, `apps/api/src/routes/auth/auth.service.ts`, `apps/api/src/routes/auth/__tests__/auth.service.test.ts`。状态: 有代码和测试证据；未覆盖所有第三方失败路径。
 - SSO 授权码与局部会话: 证据 `apps/api/src/routes/sso/sso.routes.ts`, `apps/api/src/routes/sso/sso.handlers.ts`, `apps/api/src/routes/sso/sso.service.ts`, `apps/api/src/services/session/session.service.ts`, `packages/db/src/schema/core/clients.ts`。状态: 有代码证据；redirect/token 传输存在已知安全风险。
