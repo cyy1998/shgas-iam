@@ -15,12 +15,13 @@ import {
   type ActionType,
   PageContainer,
   type ProColumns,
+  type ProFormInstance,
   ProTable,
 } from '@ant-design/pro-components';
 import { getEmploymentStatusOptions } from '@iam/contracts';
 import { useLocation } from '@umijs/max';
 import { Button, Dropdown, message, Modal, Space, Tag } from 'antd';
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 type PresetFromUrl = { username?: string; name?: string };
 
@@ -40,6 +41,7 @@ function formatOrgPath(row: EmploymentVo) {
 
 export default function EmploymentsPage() {
   const actionRef = useRef<ActionType>();
+  const searchFormRef = useRef<ProFormInstance>();
   const location = useLocation();
 
   const [formOpen, setFormOpen] = useState(false);
@@ -47,11 +49,19 @@ export default function EmploymentsPage() {
     null,
   );
   const [formPresetName, setFormPresetName] = useState<string | null>(null);
+  const [formPresetOrgCode, setFormPresetOrgCode] = useState<string | null>(
+    null,
+  );
   const [transferTarget, setTransferTarget] = useState<EmploymentVo | null>(
     null,
   );
   const [drawerId, setDrawerId] = useState<number | null>(null);
   const [resignOpen, setResignOpen] = useState(false);
+
+  const getSearchOrgCode = useCallback(() => {
+    const value = searchFormRef.current?.getFieldValue('organizationOrgCode');
+    return typeof value === 'string' && value ? value : null;
+  }, []);
 
   // URL ?username=xxx → 自动打开新增 Modal
   useEffect(() => {
@@ -59,9 +69,10 @@ export default function EmploymentsPage() {
     if (preset.username) {
       setFormPresetUsername(preset.username);
       setFormPresetName(preset.name ?? null);
+      setFormPresetOrgCode(getSearchOrgCode());
       setFormOpen(true);
     }
-  }, [location.search]);
+  }, [getSearchOrgCode, location.search]);
 
   const handleError = (err: unknown) =>
     message.error(err instanceof Error ? err.message : '操作失败');
@@ -219,6 +230,7 @@ export default function EmploymentsPage() {
     <PageContainer title="雇佣关系">
       <ProTable<EmploymentVo>
         actionRef={actionRef}
+        formRef={searchFormRef}
         rowKey="id"
         columns={columns}
         search={{ labelWidth: 'auto' }}
@@ -280,6 +292,7 @@ export default function EmploymentsPage() {
               type="primary"
               onClick={() => {
                 setFormPresetUsername(null);
+                setFormPresetOrgCode(getSearchOrgCode());
                 setFormOpen(true);
               }}
             >
@@ -296,17 +309,20 @@ export default function EmploymentsPage() {
         open={formOpen}
         presetUsername={formPresetUsername}
         presetName={formPresetName}
+        presetOrgCode={formPresetOrgCode}
         onOpenChange={(open) => {
           setFormOpen(open);
           if (!open) {
             setFormPresetUsername(null);
             setFormPresetName(null);
+            setFormPresetOrgCode(null);
           }
         }}
         onSuccess={() => {
           setFormOpen(false);
           setFormPresetUsername(null);
           setFormPresetName(null);
+          setFormPresetOrgCode(null);
           actionRef.current?.reload();
         }}
       />

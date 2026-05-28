@@ -24,6 +24,7 @@ type Props = {
   open: boolean;
   presetUsername?: string | null;
   presetName?: string | null;
+  presetOrgCode?: string | null;
   onOpenChange: (open: boolean) => void;
   onSuccess?: () => void;
 };
@@ -32,6 +33,7 @@ export default function EmploymentFormModal({
   open,
   presetUsername,
   presetName,
+  presetOrgCode,
   onOpenChange,
   onSuccess,
 }: Props) {
@@ -52,6 +54,7 @@ export default function EmploymentFormModal({
       formRef={formRef}
       initialValues={{
         username: presetUsername ?? undefined,
+        orgCode: presetOrgCode ?? undefined,
         isPrimary: false,
       }}
       modalProps={{ destroyOnClose: true, maskClosable: false }}
@@ -117,9 +120,7 @@ export default function EmploymentFormModal({
         label="任职组织"
         rules={[{ required: true, message: '请选择任职组织' }]}
       >
-        <OrganizationTreeSelector
-          placeholder="请选择实际任职组织"
-        />
+        <OrganizationTreeSelector placeholder="请选择实际任职组织" />
       </ProForm.Item>
       <ProForm.Item name="expectedAncestorOrgCode" label="期望上级组织">
         <OrganizationTreeSelector placeholder="可选，用于校验组织范围" />

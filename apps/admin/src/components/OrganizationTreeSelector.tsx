@@ -52,6 +52,45 @@ function mergeChildren(
   });
 }
 
+function findTreeNode(nodes: TreeNode[], value: string): TreeNode | null {
+  for (const node of nodes) {
+    if (node.value === value) return node;
+    if (node.children) {
+      const child = findTreeNode(node.children as TreeNode[], value);
+      if (child) return child;
+    }
+  }
+  return null;
+}
+
+function replaceTreeNode(
+  nodes: TreeNode[],
+  nextNode: TreeNode,
+): { nodes: TreeNode[]; replaced: boolean } {
+  let replaced = false;
+  const nextNodes = nodes.map((node) => {
+    if (node.value === nextNode.value) {
+      replaced = true;
+      return { ...nextNode, children: node.children };
+    }
+    if (node.children) {
+      const result = replaceTreeNode(node.children as TreeNode[], nextNode);
+      if (result.replaced) {
+        replaced = true;
+        return { ...node, children: result.nodes };
+      }
+    }
+    return node;
+  });
+
+  return { nodes: nextNodes, replaced };
+}
+
+function upsertTreeNode(nodes: TreeNode[], nextNode: TreeNode): TreeNode[] {
+  const result = replaceTreeNode(nodes, nextNode);
+  return result.replaced ? result.nodes : [nextNode, ...nodes];
+}
+
 export default function OrganizationTreeSelector({
   value,
   onChange,
@@ -90,7 +129,15 @@ export default function OrganizationTreeSelector({
       pageSize: 100,
     })
       .then((nodes) => {
-        if (!cancelled) setTreeData(nodes.map(toTreeNode));
+        if (!cancelled) {
+          const rootNodes = nodes.map(toTreeNode);
+          setTreeData((prev) => {
+            const selectedNode = value ? findTreeNode(prev, value) : null;
+            return selectedNode
+              ? upsertTreeNode(rootNodes, selectedNode)
+              : rootNodes;
+          });
+        }
       })
       .catch((err: unknown) => {
         if (!cancelled) {
@@ -103,7 +150,32 @@ export default function OrganizationTreeSelector({
     return () => {
       cancelled = true;
     };
-  }, [baseQuery]);
+  }, [baseQuery, value]);
+
+  useEffect(() => {
+    if (!value) return;
+
+    let cancelled = false;
+    getOrganizationSelectorNodes({
+      ...baseQuery,
+      orgCode: value,
+      pageSize: 1,
+    })
+      .then((nodes) => {
+        if (cancelled || nodes.length === 0) return;
+        const selectedNode = toTreeNode(nodes[0]);
+        setTreeData((prev) => upsertTreeNode(prev, selectedNode));
+      })
+      .catch((err: unknown) => {
+        if (!cancelled) {
+          message.error(err instanceof Error ? err.message : '加载组织失败');
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [baseQuery, value]);
 
   const loadData: TreeSelectProps['loadData'] = async (node) => {
     const children = await getOrganizationSelectorNodes({
