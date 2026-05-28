@@ -174,11 +174,6 @@ export default function UserDetailDrawer({
 
   const employmentColumns: ColumnsType<EmploymentRow> = [
     {
-      title: '公司',
-      dataIndex: 'compName',
-      render: (val: string | undefined) => val ?? '—',
-    },
-    {
       title: '组织路径',
       dataIndex: 'orgName',
       render: (_val: string | undefined, row) => formatEmploymentOrgPath(row),
