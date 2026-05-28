@@ -2,7 +2,6 @@
 
 ## Purpose
 描述当前 IAM 公共 API 中已经实现的登录、SSO 授权、全局/局部会话、网关鉴权与内部鉴权行为。该 baseline 仅记录现状，不表示这些行为已经完成安全整改或代表目标态。
-
 ## Requirements
 ### Requirement: 全局登录创建会话
 系统 SHALL 在密码登录、手机验证码登录或受支持的第三方登录成功后创建 Redis 全局会话，并向调用方返回会话 token 与 `isMobileSet`。
@@ -169,6 +168,21 @@
 - **THEN** 单元测试 SHALL 验证服务调用 `userRepository.updateEnabledUserStatus(userId, UserStatus.Pause)`
 - **AND** 单元测试 SHALL 验证 repository 返回暂停后的用户时服务透传该用户
 - **AND** 单元测试 SHALL 验证 repository 返回 null 时服务透传 null
+
+### Requirement: Authentication errors use standardized API error contract
+Authentication and session flows SHALL use centralized API errors with string business error codes for stable login, credential, session, and maintenance failures.
+
+#### Scenario: Encrypted login credential is invalid
+- **WHEN** password login receives an invalid encrypted credential
+- **THEN** the backend SHALL return the standardized invalid login credential error
+
+#### Scenario: Session is missing or expired
+- **WHEN** authentication requires a valid session but none exists
+- **THEN** the backend SHALL return the standardized unauthorized error with a distinct business error code and HTTP status
+
+#### Scenario: Client is under maintenance
+- **WHEN** an authz check rejects access because the target client is under maintenance
+- **THEN** the backend SHALL return the standardized maintenance error code
 
 ## Open Questions
 - `MAGIC_CODE` 是当前已实现行为和已有测试覆盖点，但安全审计将其标为 Critical；是否继续作为目标行为需要后续单独确认。

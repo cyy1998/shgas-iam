@@ -2,7 +2,6 @@
 
 ## Purpose
 描述当前客户端应用注册表行为，包括 client 数据结构、管理端创建/更新、Redis 缓存，以及公共 API、SSO、网关鉴权和内部鉴权对 client 的读取方式。该 baseline 只记录现状，不代表密钥治理目标态。
-
 ## Requirements
 ### Requirement: 客户端记录包含 SSO 和会话管理属性
 系统 SHALL 将客户端代码、名称、密钥、状态、描述和扩展属性保存在 client 记录中。
@@ -75,6 +74,21 @@
 #### Scenario: 维护状态鉴权
 - **WHEN** client.status 为 `ClientStatus.Maintance` 且当前用户不在 userExcluding 列表中
 - **THEN** 网关鉴权 SHALL 拒绝请求并报告系统维护中
+
+### Requirement: Client and SSO errors use centralized API errors
+Client registry and SSO flows SHALL use centralized named errors for stable client and SSO validation failures.
+
+#### Scenario: Client does not exist
+- **WHEN** a client operation targets a missing client
+- **THEN** the backend SHALL throw a centralized client not found error
+
+#### Scenario: Client code already exists
+- **WHEN** creating or renaming a client would duplicate a client code
+- **THEN** the backend SHALL throw a centralized client code exists error
+
+#### Scenario: SSO request has invalid client or redirect URI
+- **WHEN** an SSO request contains an invalid client code or redirect URI
+- **THEN** the backend SHALL return the corresponding centralized SSO validation error
 
 ## Open Questions
 - 当前公开 `/open/client/status` 返回完整 ClientDto，可能包含 clientSecret；安全审计已将其标为风险，是否保留为目标行为需要单独整改确认。

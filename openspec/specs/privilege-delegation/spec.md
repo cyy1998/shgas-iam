@@ -2,7 +2,6 @@
 
 ## Purpose
 描述当前内部 API 的权限委托能力，包括委托查询、创建、更新、委托权限明细、组织范围匹配和有效期冲突检测。该 baseline 记录现状，不新增审批、撤销或通知流程。
-
 ## Requirements
 ### Requirement: 内部 API 暴露权限委托操作
 系统 SHALL 通过 internal delegation API 暴露权限委托搜索、更新和创建操作。
@@ -106,6 +105,21 @@
 - **AND** 单元测试 SHALL 验证服务调用 `privilegeDelegationRepository.getDelegationsByUserAndOrganizationScopeAndPrivilege(usernames, orgCode, privilegeCode)`
 - **AND** 单元测试 SHALL 验证返回结构包含 `users` 和 `delegations`
 - **AND** 单元测试 SHALL 验证用户 DTO 和权限委托 DTO 映射正确
+
+### Requirement: Privilege delegation errors use centralized API errors
+Privilege delegation SHALL use centralized named errors for stable delegation failure cases.
+
+#### Scenario: Delegation record does not exist
+- **WHEN** an operation targets a missing privilege delegation record
+- **THEN** the backend SHALL throw a centralized privilege delegation not found error
+
+#### Scenario: Delegation is ended
+- **WHEN** an operation attempts to modify an ended delegation
+- **THEN** the backend SHALL throw a centralized privilege delegation ended error
+
+#### Scenario: Delegated privilege already exists
+- **WHEN** creating delegation would duplicate already delegated privilege codes
+- **THEN** the backend SHALL throw a centralized privilege already delegated error
 
 ## Open Questions
 - 创建委托时使用 `getUserByUsername`、`getOrganizationByCode` 和 `searchPrivileges`；其中 privilege 查询没有显式过滤 status/isDelete，权限有效性语义需要确认。

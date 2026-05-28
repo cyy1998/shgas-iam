@@ -125,6 +125,21 @@
 - **THEN** 系统 SHALL 返回匹配节点及其 fullPath
 - **AND** 前端 SHALL 能使用 fullPath 展开或回显被选组织
 
+### Requirement: Organization domain errors use centralized API errors
+Organization management SHALL use centralized named errors for stable organization failure cases.
+
+#### Scenario: Organization does not exist
+- **WHEN** an organization operation targets a missing organization
+- **THEN** the backend SHALL throw a centralized organization not found error
+
+#### Scenario: Organization code already exists
+- **WHEN** creating or renaming an organization would duplicate an organization code
+- **THEN** the backend SHALL throw a centralized organization code exists error
+
+#### Scenario: Organization cannot be deleted
+- **WHEN** an organization has child organizations or active employment relationships
+- **THEN** the backend SHALL throw the corresponding centralized conflict error
+
 ## Open Questions
 - 创建组织时，如果请求包含 `parentCode` 但该父组织查不到，当前代码会按无父组织路径继续创建；这是代码行为但未写入 Requirement，需要人工确认是否为目标语义。
 - 更新组织时如果变更父组织、层级或 path，代码没有同步重算闭包表；baseline 未声明“支持移动组织树”，需要人工确认是否禁止或尚未实现。

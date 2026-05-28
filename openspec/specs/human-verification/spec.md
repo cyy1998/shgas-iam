@@ -2,7 +2,6 @@
 
 ## Purpose
 描述 IAM 在公开认证入口使用 cap.js 进行人机挑战、Cap token 校验、异常触发和前端重试协作的目标行为。
-
 ## Requirements
 ### Requirement: Cap 人机挑战服务
 系统 SHALL 提供基于 cap.js 的人机挑战能力，用于公开认证入口在发送高成本请求或识别到异常请求时校验调用方为真实用户。
@@ -63,3 +62,15 @@ SSO 前端 SHALL 在认证相关请求被后端要求人机校验时触发 cap.j
 - **WHEN** 前端正在求解 Cap challenge 或携带 Cap token 重试请求
 - **THEN** 前端 SHALL 阻止同一动作重复提交
 - **AND** 前端 SHALL 使用加载状态反馈当前操作正在进行
+
+### Requirement: Human verification errors are centralized
+Human verification failures SHALL use centralized API error classes and standardized string business error codes.
+
+#### Scenario: Verification token is required
+- **WHEN** risk rules require human verification and the request has no valid token
+- **THEN** the backend SHALL throw the centralized human verification required error
+
+#### Scenario: Verification site key is invalid
+- **WHEN** a public human verification endpoint receives an invalid site key
+- **THEN** the backend SHALL return a named invalid human verification site error instead of a generic `CustomError`
+

@@ -255,6 +255,21 @@
 - **THEN** TypeScript type SHALL 通过 `z.infer<typeof XxxSchema>` 从对应 Zod schema 推导
 - **AND** 系统 SHALL NOT 手写与 schema 重复的 DTO 结构 type
 
+### Requirement: Employment domain errors use centralized API errors
+Employment management SHALL use centralized named errors for stable employment failure cases.
+
+#### Scenario: Employment does not exist
+- **WHEN** an employment operation targets a missing employment record
+- **THEN** the backend SHALL throw the centralized employment not found error
+
+#### Scenario: Employment is not editable
+- **WHEN** an operation attempts to modify an employment record that is no longer editable
+- **THEN** the backend SHALL throw the centralized employment not editable error
+
+#### Scenario: Employment relationship already exists
+- **WHEN** creating an employment relationship would duplicate an existing relationship
+- **THEN** the backend SHALL throw a centralized employment already exists error
+
 ## Open Questions
 - 创建雇佣时重复校验只查 status=Enable；如果存在 Pause 状态同一任职关系，是否允许重复创建需要人工确认。
 - 创建雇佣和转岗引用用户/岗位时，当前代码主要按未软删除查询，不统一要求用户或岗位 status=Enable；是否应收紧需要确认。

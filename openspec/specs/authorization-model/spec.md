@@ -2,7 +2,6 @@
 
 ## Purpose
 描述当前系统已经实现的数据层角色/权限模型、用户详情权限聚合、用户搜索角色过滤，以及管理端 tier 的 admin client/admin role 鉴权。该 baseline 不声明尚未实现的细粒度路由权限策略。
-
 ## Requirements
 ### Requirement: 角色和权限通过显式关联表建模
 系统 SHALL 使用显式 join table 表达角色到权限、岗位到角色、组织到角色和任职到角色的关系。
@@ -89,6 +88,18 @@
 #### Scenario: 管理端鉴权通过
 - **WHEN** 请求 Client 在允许列表中，且 session 用户拥有任一 admin role
 - **THEN** 系统 SHALL 将 userId、username 和 userDetailDto 写入请求上下文
+
+### Requirement: Authorization errors use unified CustomError model
+Authorization failures SHALL be represented by centralized errors that inherit from `CustomError` and preserve HTTP status.
+
+#### Scenario: User lacks admin access
+- **WHEN** an admin route rejects a user due to missing admin permission
+- **THEN** the backend SHALL throw a centralized forbidden authorization error
+- **AND** Hono and tRPC SHALL expose the same business error semantics
+
+#### Scenario: Internal client secret is invalid
+- **WHEN** an internal route rejects a missing or invalid client secret
+- **THEN** the backend SHALL throw a centralized unauthorized authorization error
 
 ## Open Questions
 - 角色/权限本身目前只看到 repository 查询和 schema，没有管理端 CRUD 路由；角色权限管理能力是否外部维护需要确认。

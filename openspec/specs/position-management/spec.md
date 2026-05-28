@@ -2,7 +2,6 @@
 
 ## Purpose
 描述当前管理端岗位主数据能力，包括岗位搜索、详情、创建、更新、状态变更和软删除约束。该 baseline 只记录已有 admin-api 行为，不声明岗位权限分配的管理能力。
-
 ## Requirements
 ### Requirement: 管理端暴露岗位管理操作
 系统 SHALL 通过管理端 REST 和 tRPC 暴露岗位搜索、详情、创建、更新、状态变更和删除操作。
@@ -77,6 +76,21 @@
 - **WHEN** 待删除岗位存在且没有未软删除 employment
 - **THEN** 系统 SHALL 将该岗位 `isDelete` 更新为 `true`
 - **AND** 响应 SHALL 返回 true
+
+### Requirement: Position domain errors use centralized API errors
+Position management SHALL use centralized named errors for stable position failure cases.
+
+#### Scenario: Position does not exist
+- **WHEN** a position operation targets a missing position
+- **THEN** the backend SHALL throw a centralized position not found error
+
+#### Scenario: Position code already exists
+- **WHEN** creating or renaming a position would duplicate a position code
+- **THEN** the backend SHALL throw a centralized position code exists error
+
+#### Scenario: Position cannot be deleted
+- **WHEN** a position has active employment relationships
+- **THEN** the backend SHALL throw the centralized position has employment error
 
 ## Open Questions
 - 删除岗位的计数函数不按 employment status 过滤，只按 `isDelete=false` 过滤；暂停或结束的未软删除 employment 也会阻止删除，这是当前行为，是否符合目标语义需要确认。
