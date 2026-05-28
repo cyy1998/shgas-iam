@@ -485,38 +485,34 @@ describe("admin userService.getUserDetailByUsernameForAdmin", () => {
       .mockResolvedValueOnce([pausedPrivilege])
       .mockResolvedValueOnce([endedPrivilege]);
 
-    await expect(userService.getUserDetailByUsernameForAdmin("zhangsan")).resolves.toMatchObject({
+    const detail = await userService.getUserDetailByUsernameForAdmin("zhangsan");
+
+    expect(detail).toMatchObject({
       id: 1001,
       username: "zhangsan",
       employments: [
         {
           id: 4001,
+          user: { username: "zhangsan", name: "张三" },
+          position: { posCode: "POS001", posName: "工程师" },
           organization: {
             assignedOrg: { orgCode: "ORG001" },
             companyNodes: [{ orgCode: "COMP001" }],
           },
-          posCode: "POS001",
-          posName: "工程师",
-          orgCode: "ORG001",
-          orgName: "信息中心",
-          compCode: "COMP001",
-          compName: "上海燃气",
           roles: ["role:default", "role:admin"],
           privileges: ["priv:read", "priv:write"],
         },
         {
           id: 4002,
           status: EmploymentStatus.Pause,
-          posCode: "POS002",
-          posName: "经理",
+          position: { posCode: "POS002", posName: "经理" },
           roles: ["role:paused"],
           privileges: ["priv:paused"],
         },
         {
           id: 4003,
           status: EmploymentStatus.Disable,
-          posCode: "POS003",
-          posName: "顾问",
+          position: { posCode: "POS003", posName: "顾问" },
           roles: ["role:ended"],
           privileges: ["priv:ended"],
         },
@@ -524,6 +520,23 @@ describe("admin userService.getUserDetailByUsernameForAdmin", () => {
       roles: ["role:default", "role:admin"],
       privileges: ["priv:read", "priv:write"],
     });
+    for (const employment of detail.employments) {
+      for (const field of [
+        "username",
+        "name",
+        "mobile",
+        "wxId",
+        "posCode",
+        "posName",
+        "orgCode",
+        "orgName",
+        "orgType",
+        "compCode",
+        "compName",
+      ]) {
+        expect(employment).not.toHaveProperty(field);
+      }
+    }
 
     expect(employmentRepository.getAllEmploymentsByUserIdForAdmin).toHaveBeenCalledWith(1001);
     expect(employmentRepository.getEmploymentsByUserId).not.toHaveBeenCalled();

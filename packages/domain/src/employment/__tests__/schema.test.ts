@@ -85,23 +85,36 @@ function employmentInput(companyNodes = [
 }
 
 describe("toEmploymentDto", () => {
-  test("maps structured summaries, full path, company nodes, and deprecated fields", () => {
+  test("maps structured summaries, full path, and company nodes", () => {
     const dto = toEmploymentDto(employmentInput());
 
     expect(dto.user).toMatchObject({ username: "u001", name: "用户" });
     expect(dto.position).toMatchObject({ posCode: "POS", posName: "岗位" });
     expect(dto.organization.fullOrgPath.map(node => node.orgCode)).toEqual(["ROOT", "COMP", "DEPT"]);
     expect(dto.organization.companyNodes.map(node => node.orgCode)).toEqual(["ROOT", "COMP"]);
-    expect(dto.orgCode).toBe("DEPT");
-    expect(dto.compCode).toBe("COMP");
-    expect(dto.compName).toBe("公司");
+    expect(dto.organization.assignedOrg.orgCode).toBe("DEPT");
+    for (const field of [
+      "username",
+      "name",
+      "mobile",
+      "wxId",
+      "posCode",
+      "posName",
+      "orgCode",
+      "orgName",
+      "orgType",
+      "compCode",
+      "compName",
+    ]) {
+      expect(dto).not.toHaveProperty(field);
+    }
   });
 
-  test("returns nullable deprecated company fields when no Company ancestor exists", () => {
+  test("returns empty company nodes when no Company ancestor exists", () => {
     const dto = toEmploymentDto(employmentInput([]));
 
     expect(dto.organization.companyNodes).toEqual([]);
-    expect(dto.compCode).toBeNull();
-    expect(dto.compName).toBeNull();
+    expect(dto).not.toHaveProperty("compCode");
+    expect(dto).not.toHaveProperty("compName");
   });
 });

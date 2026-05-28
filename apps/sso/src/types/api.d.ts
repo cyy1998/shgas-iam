@@ -13,11 +13,14 @@ export type AuthConfig = {
 
 export type Employment = {
   id: string;
-  compName: string | null;
-  orgName: string;
-  posName: string;
+  position: {
+    posCode: string;
+    posName: string;
+  };
   organization?: {
-    fullOrgPath?: { orgName: string }[];
+    assignedOrg?: { orgCode: string; orgName: string };
+    fullOrgPath?: { orgCode: string; orgName: string }[];
+    companyNodes?: { orgCode: string; orgName: string }[];
   };
 };
 

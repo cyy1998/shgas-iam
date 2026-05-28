@@ -1,5 +1,4 @@
 import { z } from "@hono/zod-openapi";
-import { OrganizationType } from "@iam/contracts";
 import { selectEmploymentSchema, selectUserSchema } from "@iam/db/schema";
 import { OrganizationSchema } from "../organization";
 import { PositionDtoSchema } from "../position";
@@ -47,40 +46,14 @@ export const EmploymentDetailSchema = EmploymentSchema.extend({
   position: z.lazy(() => PositionDtoSchema),
 });
 
-const DeprecatedStringSchema = z.string().openapi({
-  description: "Deprecated compatibility field. Prefer the structured user, position, or organization field.",
-  deprecated: true,
-});
-
-const DeprecatedNullableStringSchema = z.string().nullable().openapi({
-  description: "Deprecated compatibility field. Prefer organization.companyNodes; null when no Company ancestor exists.",
-  deprecated: true,
-});
-
 export const EmploymentDtoSchema = EmploymentSchema.extend({
   user: EmploymentUserSummarySchema,
   position: EmploymentPositionSummarySchema,
   organization: EmploymentOrganizationContextSchema,
-  username: DeprecatedStringSchema.openapi({ example: "138550" }),
-  name: DeprecatedStringSchema.openapi({ example: "蔡奕阳" }),
-  mobile: DeprecatedNullableStringSchema.openapi({ example: "17721462865" }),
-  wxId: DeprecatedNullableStringSchema.openapi({ example: "1592677631" }),
-  posCode: DeprecatedStringSchema.openapi({ example: "E033" }),
-  posName: DeprecatedStringSchema.openapi({ example: "职员" }),
-  orgCode: DeprecatedStringSchema.openapi({ example: "SR23" }),
-  orgType: z.enum(OrganizationType).openapi({
-    example: OrganizationType.Department,
-    description: "Deprecated compatibility field. Prefer organization.assignedOrg.orgType.",
-    deprecated: true,
-  }),
-  orgName: DeprecatedStringSchema.openapi({ example: "信息中心" }),
-  compCode: DeprecatedNullableStringSchema.openapi({ example: "SR" }),
-  compName: DeprecatedNullableStringSchema.openapi({ example: "上海燃气" }),
 }).required().openapi("EmploymentDto");
 
 export function toEmploymentDto(input: unknown) {
   const { user, position, organization, ...employment } = EmploymentDetailSchema.parse(input);
-  const nearestCompany = organization.companyNodes.at(-1) ?? null;
   return EmploymentDtoSchema.parse({
     ...employment,
     user: {
@@ -96,17 +69,6 @@ export function toEmploymentDto(input: unknown) {
       posName: position.posName,
     },
     organization,
-    username: user.username,
-    name: user.name,
-    mobile: user.mobile,
-    wxId: user.wxId,
-    posCode: position.posCode,
-    posName: position.posName,
-    orgCode: organization.assignedOrg.orgCode,
-    orgType: organization.assignedOrg.orgType,
-    orgName: organization.assignedOrg.orgName,
-    compCode: nearestCompany?.orgCode ?? null,
-    compName: nearestCompany?.orgName ?? null,
   });
 }
 

@@ -94,17 +94,6 @@ function employmentDto() {
       fullOrgPath: [companyNode, deptNode],
       companyNodes: [companyNode],
     },
-    username: "user1",
-    name: "User 1",
-    mobile: "13800000001",
-    wxId: null,
-    posCode: "POS1",
-    posName: "Position 1",
-    orgCode: "DEPT",
-    orgType: OrganizationType.Department,
-    orgName: "Department",
-    compCode: "COMP",
-    compName: "Company",
   };
 }
 
@@ -147,10 +136,15 @@ describe("admin route VO mappers", () => {
 
     expect(typeof schemaModule.toEmploymentVo).toBe("function");
     expect(typeof schemaModule.toEmploymentDetailVo).toBe("function");
-    expect(schemaModule.toEmploymentVo(employmentDto())).toMatchObject({
-      username: "user1",
+    const vo = schemaModule.toEmploymentVo(employmentDto());
+    expect(vo).toMatchObject({
+      user: { username: "user1" },
       statusText: employmentStatusToString[EmploymentStatus.Enable],
     });
+    expect(vo).not.toHaveProperty("username");
+    expect(vo).not.toHaveProperty("posCode");
+    expect(vo).not.toHaveProperty("orgCode");
+    expect(vo).not.toHaveProperty("compCode");
     expect(schemaModule.toEmploymentDetailVo(employmentDto())).toMatchObject({
       privileges: [],
       roles: [],

@@ -1,15 +1,18 @@
 import OrganizationTreeSelector from '@admin/components/OrganizationTreeSelector';
 import { apiClient } from '@admin/lib/api-client';
-import { type EmploymentVo, transferEmployment } from '@admin/services/employment';
+import {
+  type EmploymentVo,
+  transferEmployment,
+} from '@admin/services/employment';
+import type { ProFormInstance } from '@ant-design/pro-components';
 import {
   ModalForm,
-  ProFormDatePicker,
   ProForm,
+  ProFormDatePicker,
   ProFormSelect,
   ProFormSwitch,
   ProFormTextArea,
 } from '@ant-design/pro-components';
-import type { ProFormInstance } from '@ant-design/pro-components';
 import type { AppRouter } from '@iam/admin-api/trpc';
 import type { inferRouterOutputs } from '@trpc/server';
 import { Descriptions, message } from 'antd';
@@ -25,6 +28,22 @@ type Props = {
   onSuccess?: () => void;
 };
 
+function formatOrgPath(employment: EmploymentVo) {
+  return (
+    employment.organization?.fullOrgPath
+      ?.map((node) => node.orgName)
+      .join(' / ') || employment.organization.assignedOrg.orgName
+  );
+}
+
+function formatUser(employment: EmploymentVo) {
+  return `${employment.user.name} (${employment.user.username})`;
+}
+
+function formatPosition(employment: EmploymentVo) {
+  return `${employment.position.posName} (${employment.position.posCode})`;
+}
+
 export default function TransferModal({
   open,
   employment,
@@ -38,7 +57,7 @@ export default function TransferModal({
 
   return (
     <ModalForm
-      title={`转岗 — ${employment?.name ?? ''} (${employment?.username ?? ''})`}
+      title={employment ? `转岗 — ${formatUser(employment)}` : '转岗'}
       open={open}
       onOpenChange={onOpenChange}
       formRef={formRef}
@@ -75,14 +94,11 @@ export default function TransferModal({
           items={[
             {
               label: '原组织路径',
-              children:
-                employment.organization?.fullOrgPath
-                  ?.map(node => node.orgName)
-                  .join(' / ') || `${employment.orgName} (${employment.orgCode})`,
+              children: formatOrgPath(employment),
             },
             {
               label: '原岗位',
-              children: `${employment.posName} (${employment.posCode})`,
+              children: formatPosition(employment),
             },
             { label: '原主岗', children: employment.isPrimary ? '是' : '否' },
           ]}
@@ -93,9 +109,7 @@ export default function TransferModal({
         label="新任职组织"
         rules={[{ required: true, message: '请选择新任职组织' }]}
       >
-        <OrganizationTreeSelector
-          placeholder="请选择新的实际任职组织"
-        />
+        <OrganizationTreeSelector placeholder="请选择新的实际任职组织" />
       </ProForm.Item>
       <ProForm.Item name="expectedAncestorOrgCode" label="期望上级组织">
         <OrganizationTreeSelector placeholder="可选，用于校验组织范围" />

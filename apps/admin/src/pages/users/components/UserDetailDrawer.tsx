@@ -57,9 +57,12 @@ const formatDate = (value: Date | string | null | undefined) =>
   value ? new Date(value).toLocaleDateString() : '—';
 
 const formatEmploymentOrgPath = (row: EmploymentRow) =>
-  row.organization?.fullOrgPath?.map(node => node.orgName).join(' / ')
-  || row.orgName
-  || '—';
+  row.organization?.fullOrgPath?.map((node) => node.orgName).join(' / ') ||
+  row.organization.assignedOrg.orgName ||
+  '—';
+
+const formatEmploymentPosition = (row: EmploymentRow) =>
+  `${row.position.posName} (${row.position.posCode})`;
 
 type Props = {
   open: boolean;
@@ -157,7 +160,7 @@ export default function UserDetailDrawer({
 
   const onEmploymentDelete = (row: EmploymentRow) => {
     Modal.confirm({
-      title: `删除雇佣 ${row.posName}？`,
+      title: `删除雇佣 ${row.position.posName}？`,
       content: '软删除后该雇佣记录不再可见。',
       okType: 'danger',
       onOk: async () => {
@@ -175,13 +178,13 @@ export default function UserDetailDrawer({
   const employmentColumns: ColumnsType<EmploymentRow> = [
     {
       title: '组织路径',
-      dataIndex: 'orgName',
+      dataIndex: ['organization', 'assignedOrg', 'orgName'],
       render: (_val: string | undefined, row) => formatEmploymentOrgPath(row),
     },
     {
       title: '岗位',
-      dataIndex: 'posName',
-      render: (val: string | undefined) => val ?? '—',
+      dataIndex: ['position', 'posName'],
+      render: (_val: string | undefined, row) => formatEmploymentPosition(row),
     },
     {
       title: '主岗',

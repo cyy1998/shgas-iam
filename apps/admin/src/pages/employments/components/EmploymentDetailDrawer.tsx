@@ -1,5 +1,8 @@
 import StatusTag from '@admin/components/StatusTag';
-import { type EmploymentDetailVo, getEmployment } from '@admin/services/employment';
+import {
+  type EmploymentDetailVo,
+  getEmployment,
+} from '@admin/services/employment';
 import { ProDescriptions } from '@ant-design/pro-components';
 import { Drawer, Empty, message, Skeleton, Space, Tabs, Tag } from 'antd';
 import { useEffect, useState } from 'react';
@@ -11,9 +14,24 @@ type Props = {
 };
 
 function formatOrgPath(detail: EmploymentDetailVo) {
-  return detail.organization?.fullOrgPath
-    ?.map(node => node.orgName)
-    .join(' / ') || `${detail.orgName} (${detail.orgCode})`;
+  return (
+    detail.organization?.fullOrgPath?.map((node) => node.orgName).join(' / ') ||
+    detail.organization.assignedOrg.orgName
+  );
+}
+
+function formatCompany(detail: EmploymentDetailVo) {
+  const companyNodes = detail.organization.companyNodes;
+  const company = companyNodes[companyNodes.length - 1];
+  return company ? `${company.orgName} (${company.orgCode})` : '—';
+}
+
+function formatUser(detail: EmploymentDetailVo) {
+  return `${detail.user.name} (${detail.user.username})`;
+}
+
+function formatPosition(detail: EmploymentDetailVo) {
+  return `${detail.position.posName} (${detail.position.posCode})`;
 }
 
 export default function EmploymentDetailDrawer({
@@ -47,9 +65,9 @@ export default function EmploymentDetailDrawer({
       title={
         detail ? (
           <Space>
-            <span>{detail.name}</span>
+            <span>{detail.user.name}</span>
             <span style={{ color: '#999', fontSize: 12 }}>
-              {detail.username}
+              {detail.user.username}
             </span>
             {detail.isPrimary ? <Tag color="blue">主岗</Tag> : null}
             <StatusTag domain="employment" status={detail.status} />
@@ -74,8 +92,8 @@ export default function EmploymentDetailDrawer({
                   columns={[
                     {
                       title: '用户',
-                      dataIndex: 'name',
-                      render: (_, r) => `${r.name} (${r.username})`,
+                      dataIndex: ['user', 'name'],
+                      render: (_, r) => formatUser(r),
                     },
                     {
                       title: '状态',
@@ -86,22 +104,19 @@ export default function EmploymentDetailDrawer({
                     },
                     {
                       title: '公司',
-                      dataIndex: 'compName',
-                      render: (_, r) =>
-                        r.compName && r.compCode
-                          ? `${r.compName} (${r.compCode})`
-                          : '—',
+                      dataIndex: ['organization', 'companyNodes'],
+                      render: (_, r) => formatCompany(r),
                     },
                     {
                       title: '组织路径',
-                      dataIndex: 'orgName',
+                      dataIndex: ['organization', 'assignedOrg', 'orgName'],
                       span: 2,
                       render: (_, r) => formatOrgPath(r),
                     },
                     {
                       title: '岗位',
-                      dataIndex: 'posName',
-                      render: (_, r) => `${r.posName} (${r.posCode})`,
+                      dataIndex: ['position', 'posName'],
+                      render: (_, r) => formatPosition(r),
                     },
                     {
                       title: '主岗',

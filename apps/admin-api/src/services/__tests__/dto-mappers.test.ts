@@ -105,22 +105,34 @@ describe("admin API DTO mappers", () => {
     });
   });
 
-  test("maps employment details to a flat DTO", async () => {
+  test("maps employment details to a structured DTO", async () => {
     const schemaModule = await import("../employment/employment.schema") as any;
 
     expect(typeof schemaModule.toEmploymentDto).toBe("function");
-    expect(schemaModule.toEmploymentDto(employment())).toMatchObject({
-      user: { username: "user1" },
+    const dto = schemaModule.toEmploymentDto(employment());
+
+    expect(dto).toMatchObject({
+      user: { username: "user1", name: "User 1" },
+      position: { posCode: "POS1", posName: "Position 1" },
       organization: {
         assignedOrg: { orgCode: "DEPT" },
         companyNodes: [{ orgCode: "COMP" }],
       },
-      username: "user1",
-      name: "User 1",
-      posCode: "POS1",
-      posName: "Position 1",
-      orgCode: "DEPT",
-      compCode: "COMP",
     });
+    for (const field of [
+      "username",
+      "name",
+      "mobile",
+      "wxId",
+      "posCode",
+      "posName",
+      "orgCode",
+      "orgName",
+      "orgType",
+      "compCode",
+      "compName",
+    ]) {
+      expect(dto).not.toHaveProperty(field);
+    }
   });
 });

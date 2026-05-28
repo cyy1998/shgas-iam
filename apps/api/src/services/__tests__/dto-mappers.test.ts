@@ -145,32 +145,46 @@ describe("API DTO mappers", () => {
     });
   });
 
-  test("maps employment details to a flat DTO", async () => {
+  test("maps employment details to a structured DTO", async () => {
     const schemaModule = await import("../employment/employment.schema") as any;
 
     expect(typeof schemaModule.toEmploymentDto).toBe("function");
-    expect(schemaModule.toEmploymentDto(employment())).toMatchObject({
+    const dto = schemaModule.toEmploymentDto(employment());
+
+    expect(dto).toMatchObject({
+      user: { username: "user1", name: "User 1" },
+      position: { posCode: "POS1", posName: "Position 1" },
       organization: {
         assignedOrg: { orgCode: "DEPT" },
         companyNodes: [{ orgCode: "COMP" }],
       },
-      username: "user1",
-      name: "User 1",
-      posCode: "POS1",
-      posName: "Position 1",
-      orgCode: "DEPT",
-      compCode: "COMP",
     });
-    expect(schemaModule.toEmploymentDto({
+    for (const field of [
+      "username",
+      "name",
+      "mobile",
+      "wxId",
+      "posCode",
+      "posName",
+      "orgCode",
+      "orgName",
+      "orgType",
+      "compCode",
+      "compName",
+    ]) {
+      expect(dto).not.toHaveProperty(field);
+    }
+
+    const withoutCompany = schemaModule.toEmploymentDto({
       ...employment(),
       organization: {
         ...employment().organization,
         companyNodes: [],
       },
-    })).toMatchObject({
-      compCode: null,
-      compName: null,
     });
+    expect(withoutCompany.organization.companyNodes).toEqual([]);
+    expect(withoutCompany).not.toHaveProperty("compCode");
+    expect(withoutCompany).not.toHaveProperty("compName");
   });
 
   test("maps privilege delegation details to summary and detail DTOs", async () => {

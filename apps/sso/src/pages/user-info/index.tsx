@@ -10,6 +10,7 @@ import {
 import { withHumanVerification } from '@sso/lib/human-verification';
 import { selfMobileSendMsg } from '@sso/services/open';
 import { mobileSet, passwordChange } from '@sso/services/public';
+import type { Employment } from '@sso/types/api';
 import {
   confirmPasswordRule,
   passwordRule,
@@ -24,6 +25,26 @@ import TopBar from './_components/TopBar';
 import './index.less';
 
 type TabKey = 'password' | 'mobile';
+
+function formatCompany(row: Employment) {
+  const companyNodes = row.organization?.companyNodes ?? [];
+  const company = companyNodes[companyNodes.length - 1];
+  return company?.orgName ?? '—';
+}
+
+function formatOrgPath(row: Employment) {
+  return (
+    row.organization?.fullOrgPath?.map((node) => node.orgName).join(' / ') ||
+    row.organization?.assignedOrg?.orgName ||
+    '—'
+  );
+}
+
+function formatPosition(row: Employment) {
+  return row.position
+    ? `${row.position.posName} (${row.position.posCode})`
+    : '—';
+}
 
 export default function UserInfoPage() {
   const { userInfo, loadUserInfo } = useModel('sso');
@@ -202,18 +223,19 @@ export default function UserInfoPage() {
                 columns={[
                   {
                     title: '公司',
-                    dataIndex: 'compName',
-                    render: (value: string | null) => value ?? '—',
+                    dataIndex: ['organization', 'companyNodes'],
+                    render: (_value, row) => formatCompany(row),
                   },
                   {
                     title: '组织',
-                    dataIndex: 'orgName',
-                    render: (_value, row) =>
-                      row.organization?.fullOrgPath
-                        ?.map(node => node.orgName)
-                        .join(' / ') || row.orgName,
+                    dataIndex: ['organization', 'assignedOrg', 'orgName'],
+                    render: (_value, row) => formatOrgPath(row),
                   },
-                  { title: '岗位', dataIndex: 'posName' },
+                  {
+                    title: '岗位',
+                    dataIndex: ['position', 'posName'],
+                    render: (_value, row) => formatPosition(row),
+                  },
                 ]}
               />
 

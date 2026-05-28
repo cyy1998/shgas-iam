@@ -36,7 +36,15 @@ function formatOrgPath(row: EmploymentVo) {
   const path = row.organization?.fullOrgPath
     ?.map((node) => node.orgName)
     .join(' / ');
-  return path || row.orgName || '—';
+  return path || row.organization?.assignedOrg?.orgName || '—';
+}
+
+function formatUser(row: EmploymentVo) {
+  return `${row.user.name} (${row.user.username})`;
+}
+
+function formatPosition(row: EmploymentVo) {
+  return `${row.position.posName} (${row.position.posCode})`;
 }
 
 export default function EmploymentsPage() {
@@ -79,7 +87,7 @@ export default function EmploymentsPage() {
 
   const onDelete = (row: EmploymentVo) => {
     Modal.confirm({
-      title: `删除雇佣 ${row.name} / ${row.posName}？`,
+      title: `删除雇佣 ${formatUser(row)} / ${formatPosition(row)}？`,
       content: '软删除后该雇佣记录不再可见。',
       okType: 'danger',
       onOk: async () => {
@@ -106,7 +114,7 @@ export default function EmploymentsPage() {
 
   const onSetPrimary = (row: EmploymentVo) => {
     Modal.confirm({
-      title: `将 ${row.name} 的主岗设为 ${row.posName}？`,
+      title: `将 ${row.user.name} 的主岗设为 ${row.position.posName}？`,
       content: '该用户的其它主岗将被自动置为非主。',
       onOk: async () => {
         try {
@@ -124,7 +132,7 @@ export default function EmploymentsPage() {
     {
       title: '用户',
       dataIndex: 'name',
-      render: (_, r) => `${r.name} (${r.username})`,
+      render: (_, r) => formatUser(r),
       width: 160,
       fieldProps: { placeholder: '工号或姓名' },
     },
@@ -132,16 +140,24 @@ export default function EmploymentsPage() {
       title: '组织',
       dataIndex: 'organizationOrgCode',
       hideInTable: true,
-      renderFormItem: () => <OrganizationTreeSelector placeholder="请选择组织范围" />,
+      renderFormItem: () => (
+        <OrganizationTreeSelector placeholder="请选择组织范围" />
+      ),
     },
     {
       title: '组织路径',
-      dataIndex: 'orgName',
+      dataIndex: ['organization', 'assignedOrg', 'orgName'],
       width: 260,
       search: false,
       render: (_, r) => formatOrgPath(r),
     },
-    { title: '岗位', dataIndex: 'posName', width: 140, search: false },
+    {
+      title: '岗位',
+      dataIndex: ['position', 'posName'],
+      width: 140,
+      search: false,
+      render: (_, r) => formatPosition(r),
+    },
     {
       title: '主岗',
       dataIndex: 'isPrimary',
@@ -252,12 +268,12 @@ export default function EmploymentsPage() {
               organizationOrgCode?: string;
             };
             const text = (name ?? '').trim();
-            const statusNum
-              = status === undefined || status === null || status === ''
+            const statusNum =
+              status === undefined || status === null || status === ''
                 ? undefined
                 : (Number(status) as 1 | 2 | 3);
-            const isPrimaryBool
-              = isPrimary === undefined
+            const isPrimaryBool =
+              isPrimary === undefined
                 ? undefined
                 : typeof isPrimary === 'boolean'
                   ? isPrimary
