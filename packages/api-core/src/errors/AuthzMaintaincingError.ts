@@ -1,12 +1,8 @@
-import { ServiceStatusCode } from "@iam/contracts";
-import { HttpStatusCode } from "../http/status";
-import { AuthzError } from "./AuthzError";
+import { AuthzMaintenanceError } from "./AuthzMaintenanceError";
 
-export class AuthzMaintaincingError extends AuthzError {
-  constructor(message: string) {
+export class AuthzMaintaincingError extends AuthzMaintenanceError {
+  constructor(message: string = "系统维护中") {
     super(message);
     this.name = "AuthzMaintaincingError";
-    this.code = ServiceStatusCode.Maintancing;
-    this.httpCode = HttpStatusCode.Forbidden;
   }
 }

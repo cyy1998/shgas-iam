@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import config from "@api/env";
 import redis from "@api/lib/infra/redis";
 import { CustomError } from "@iam/api-core/errors/CustomError";
+import { InvalidLoginCredentialError } from "@iam/api-core/errors/InvalidLoginCredentialError";
 import {
   decryptLoginCredential,
   LOGIN_CREDENTIAL_TYPE,
@@ -39,7 +40,7 @@ const LoginCredentialPayloadSchema = z.object({
 });
 
 function invalidCredential(): never {
-  throw new CustomError(INVALID_CREDENTIAL_MESSAGE);
+  throw new InvalidLoginCredentialError(INVALID_CREDENTIAL_MESSAGE);
 }
 
 function nonceKey(kid: string, nonce: string) {

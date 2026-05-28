@@ -9,8 +9,8 @@ import {
   UserDetailDtoSchema,
   UserDtoSchema,
 } from "@admin-api/services/user/user.schema";
-import { CustomError } from "@iam/api-core/errors/CustomError";
 import { UserHasActiveEmploymentError } from "@iam/api-core/errors/UserHasActiveEmploymentError";
+import { UsernameAlreadyExistsError } from "@iam/api-core/errors/UsernameAlreadyExistsError";
 import { UserNotFoundError } from "@iam/api-core/errors/UserNotFoundError";
 import { generateRandomPassword } from "@iam/api-core/utils";
 import { EmploymentStatus, UserStatus } from "@iam/contracts";
@@ -59,7 +59,7 @@ export async function setUserForAdmin(
   return await db.transaction(async (tx) => {
     const existing = await userRepository.getUserByUsernameForAdmin(dto.username, tx);
     if (existing !== null) {
-      throw new CustomError("用户名已存在");
+      throw new UsernameAlreadyExistsError("用户名已存在");
     }
     const plainPassword = dto.password ?? generateRandomPassword(8);
     const passwordHash = await hash(plainPassword, config.PASSWORD_HASH_ROUNDS);

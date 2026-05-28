@@ -13,8 +13,11 @@ import * as privilegeRepository from "@admin-api/services/privilege/privilege.re
 import * as roleRepository from "@admin-api/services/role/role.repository";
 import * as userRepository from "@admin-api/services/user/user.repository";
 import { CustomError } from "@iam/api-core/errors/CustomError";
+import { EmploymentAlreadyExistsError } from "@iam/api-core/errors/EmploymentAlreadyExistsError";
 import { EmploymentNotEditableError } from "@iam/api-core/errors/EmploymentNotEditableError";
 import { EmploymentNotFoundError } from "@iam/api-core/errors/EmploymentNotFoundError";
+import { OrganizationNotFoundError } from "@iam/api-core/errors/OrganizationNotFoundError";
+import { PositionNotFoundError } from "@iam/api-core/errors/PositionNotFoundError";
 import { UserNotFoundError } from "@iam/api-core/errors/UserNotFoundError";
 import { EmploymentStatus, UserStatus } from "@iam/contracts";
 import db from "@iam/db";
@@ -78,7 +81,7 @@ export async function createEmploymentForAdmin(dto: EmploymentAdminCreateDto) {
   return await db.transaction(async (tx) => {
     const { orgCode, expectedAncestorOrgCode } = resolveCreateOrganizationInput(dto);
     if (orgCode === undefined) {
-      throw new CustomError("组织不存在");
+      throw new OrganizationNotFoundError("组织不存在");
     }
 
     const [user, org, position] = await Promise.all([
@@ -89,9 +92,9 @@ export async function createEmploymentForAdmin(dto: EmploymentAdminCreateDto) {
     if (user === null)
       throw new UserNotFoundError("用户不存在");
     if (org === null)
-      throw new CustomError("组织不存在");
+      throw new OrganizationNotFoundError("组织不存在");
     if (position === null)
-      throw new CustomError("岗位不存在");
+      throw new PositionNotFoundError("岗位不存在");
     await assertExpectedAncestor(org.orgCode, expectedAncestorOrgCode, "任职组织不属于期望组织范围", tx);
 
     const existing = await employmentRepository.getEmploymentByUserOrgPosId(
@@ -101,7 +104,7 @@ export async function createEmploymentForAdmin(dto: EmploymentAdminCreateDto) {
       tx,
     );
     if (existing !== null) {
-      throw new CustomError("相同任职关系已存在");
+      throw new EmploymentAlreadyExistsError("相同任职关系已存在");
     }
 
     const newIsPrimary = dto.isPrimary ?? false;
@@ -191,7 +194,7 @@ export async function transferEmployment(id: number, dto: EmploymentTransferDto)
 
     const { orgCode, expectedAncestorOrgCode } = resolveTransferOrganizationInput(dto);
     if (orgCode === undefined) {
-      throw new CustomError("新任职组织不存在");
+      throw new OrganizationNotFoundError("新任职组织不存在");
     }
 
     const [org, position] = await Promise.all([
@@ -199,9 +202,9 @@ export async function transferEmployment(id: number, dto: EmploymentTransferDto)
       positionRepository.getPositionByCode(dto.newPosCode, tx),
     ]);
     if (org === null)
-      throw new CustomError("新任职组织不存在");
+      throw new OrganizationNotFoundError("新任职组织不存在");
     if (position === null)
-      throw new CustomError("新岗位不存在");
+      throw new PositionNotFoundError("新岗位不存在");
     await assertExpectedAncestor(org.orgCode, expectedAncestorOrgCode, "新任职组织不属于期望组织范围", tx);
 
     const inheritPrimary = dto.inheritPrimary ?? true;

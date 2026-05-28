@@ -4,7 +4,12 @@ import * as organizationRepository from "@api/services/organization/organization
 import * as privilegeRepository from "@api/services/privilege/privilege.repository";
 import * as delegationRepository from "@api/services/privilege/privilegeDelegation.repository";
 import * as userRepository from "@api/services/user/user.repository";
-import { CustomError } from "@iam/api-core/errors/CustomError";
+import { OrganizationNotFoundError } from "@iam/api-core/errors/OrganizationNotFoundError";
+import { PrivilegeAlreadyDelegatedError } from "@iam/api-core/errors/PrivilegeAlreadyDelegatedError";
+import { PrivilegeDelegationEndedError } from "@iam/api-core/errors/PrivilegeDelegationEndedError";
+import { PrivilegeDelegationNotFoundError } from "@iam/api-core/errors/PrivilegeDelegationNotFoundError";
+import { PrivilegeNotFoundError } from "@iam/api-core/errors/PrivilegeNotFoundError";
+import { UserNotFoundError } from "@iam/api-core/errors/UserNotFoundError";
 import { PrivilegeDelegationStatus } from "@iam/contracts";
 import db from "@iam/db";
 import { toPrivilegeDelegationDetailDto } from "./privilegeDelegation.schema";
@@ -18,10 +23,10 @@ export async function updateDelegation(id: number, dto: PrivilegeDelegationUpdat
   return await db.transaction(async (tx) => {
     const existing = await tx.query.privilegeDelegations.findFirst({ where: { id } });
     if (!existing) {
-      throw new CustomError(`委托记录不存在: ${id}`);
+      throw new PrivilegeDelegationNotFoundError(`委托记录不存在: ${id}`);
     }
     if (existing.status === PrivilegeDelegationStatus.Disable) {
-      throw new CustomError("该委托已结束，不允许再修改");
+      throw new PrivilegeDelegationEndedError("该委托已结束，不允许再修改");
     }
     await delegationRepository.updateDelegation(id, dto, tx);
     return true;
@@ -34,16 +39,16 @@ export async function createPrivilegeDelegation(
   return await db.transaction(async (tx) => {
     const delegator = await userRepository.getUserByUsername(dto.delegatorUsername, tx);
     if (!delegator) {
-      throw new CustomError(`委托人不存在: ${dto.delegatorUsername}`);
+      throw new UserNotFoundError(`委托人不存在: ${dto.delegatorUsername}`);
     }
     const delegatee = await userRepository.getUserByUsername(dto.delegateeUsername, tx);
     if (!delegatee) {
-      throw new CustomError(`受托人不存在: ${dto.delegateeUsername}`);
+      throw new UserNotFoundError(`受托人不存在: ${dto.delegateeUsername}`);
     }
 
     const organization = await organizationRepository.getOrganizationByCode(dto.orgCode, tx);
     if (!organization) {
-      throw new CustomError(`组织不存在: ${dto.orgCode}`);
+      throw new OrganizationNotFoundError(`组织不存在: ${dto.orgCode}`);
     }
     const privileges = await privilegeRepository.searchPrivileges({
       privilegeCodes: dto.privilegeCodes,
@@ -51,7 +56,7 @@ export async function createPrivilegeDelegation(
     if (privileges.length !== dto.privilegeCodes.length) {
       const foundCodes = privileges.map(p => p.privilegeCode);
       const notFound = dto.privilegeCodes.filter(c => !foundCodes.includes(c));
-      throw new CustomError(`权限不存在: ${notFound.join(", ")}`);
+      throw new PrivilegeNotFoundError(`权限不存在: ${notFound.join(", ")}`);
     }
 
     const conflicting = await delegationRepository.getActiveDelegationsByDelegatorAndPrivileges(
@@ -65,7 +70,7 @@ export async function createPrivilegeDelegation(
       const delegatedCodes = [...new Set(
         conflicting.flatMap(d => d.delegationDetails.map(dd => dd.privilege.privilegeCode)),
       )].filter(code => dto.privilegeCodes.includes(code));
-      throw new CustomError(`以下权限已被授权: ${delegatedCodes.join(", ")}`);
+      throw new PrivilegeAlreadyDelegatedError(`以下权限已被授权: ${delegatedCodes.join(", ")}`);
     }
 
     const delegation = await delegationRepository.setPrivilegeDelegation({

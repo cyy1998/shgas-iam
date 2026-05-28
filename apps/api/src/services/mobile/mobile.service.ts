@@ -2,6 +2,8 @@ import { VerificationCodeUsage } from "@api/enums/verificationCode.usage";
 import redis from "@api/lib/infra/redis";
 import smsClient from "@api/lib/integrations/sms";
 import { CustomError } from "@iam/api-core/errors/CustomError";
+import { InvalidMobileError } from "@iam/api-core/errors/InvalidMobileError";
+import { UserNotFoundError } from "@iam/api-core/errors/UserNotFoundError";
 import db from "@iam/db";
 import { firstRow } from "@iam/db/query-utils";
 import { users } from "@iam/db/schema";
@@ -11,10 +13,10 @@ const MOBILE_REGEX = /^1[3-9]\d{9}$/;
 
 export async function sendCode(phoneNumber: string, usage: string) {
   if (!checkValidPhoneNumber(phoneNumber)) {
-    throw new CustomError("无效手机号");
+    throw new InvalidMobileError("无效手机号");
   }
   if (!await checkExistingPhoneNumber(phoneNumber) && usage !== VerificationCodeUsage.BindPhone) {
-    throw new CustomError("手机号不存在");
+    throw new UserNotFoundError("手机号不存在");
   }
   const result = await smsClient.sendVerificationCode(phoneNumber);
   if (result.success === false) {

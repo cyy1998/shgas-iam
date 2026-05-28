@@ -5,13 +5,15 @@ import type {
 } from "@api/services/organization/organization.type";
 import * as organizationRepository from "@api/services/organization/organization.repository";
 import { toOrganizationDto } from "@api/services/organization/organization.schema";
-import { CustomError } from "@iam/api-core/errors/CustomError";
+import { OrganizationAlreadyExistsError } from "@iam/api-core/errors/OrganizationAlreadyExistsError";
+import { OrganizationCodeExistsError } from "@iam/api-core/errors/OrganizationCodeExistsError";
+import { OrganizationNotFoundError } from "@iam/api-core/errors/OrganizationNotFoundError";
 import db from "@iam/db";
 
 export async function getOrganizationByCode(orgCode: string) {
   const organization = await organizationRepository.getOrganizationByCode(orgCode);
   if (organization === null) {
-    throw new CustomError("组织不存在");
+    throw new OrganizationNotFoundError("组织不存在");
   }
   return toOrganizationDto(organization);
 }
@@ -28,7 +30,7 @@ export async function setOrganization(organizationCreateDto: OrganizationCreateD
       ? await organizationRepository.getOrganizationByCode(organizationCreateDto.parentCode, tx)
       : null;
     if (newOrg !== null) {
-      throw new CustomError("待创建组织已存在");
+      throw new OrganizationAlreadyExistsError("待创建组织已存在");
     }
     await organizationRepository.setOrganization(
       organizationCreateDto,
@@ -43,12 +45,12 @@ export async function updateOrganization(orgCode: string, data: OrganizationUpda
   return await db.transaction(async (tx) => {
     const existing = await organizationRepository.getOrganizationByCodeForAdmin(orgCode, tx);
     if (existing === null) {
-      throw new CustomError("组织不存在", 404);
+      throw new OrganizationNotFoundError("组织不存在");
     }
     if (data.orgCode && data.orgCode !== orgCode) {
       const conflict = await organizationRepository.getOrganizationByCode(data.orgCode, tx);
       if (conflict !== null) {
-        throw new CustomError(`组织编码已存在: ${data.orgCode}`);
+        throw new OrganizationCodeExistsError(`组织编码已存在: ${data.orgCode}`);
       }
     }
     await organizationRepository.updateOrganizationByCode(orgCode, data, tx);

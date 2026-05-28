@@ -1,4 +1,4 @@
-import { ServiceStatusCode } from "@iam/contracts";
+import { ApiErrorCode } from "@iam/contracts";
 import { beforeEach, describe, expect, mock, test } from "bun:test";
 
 class FakeRedis {
@@ -86,14 +86,14 @@ describe("human verification cap service", () => {
     await expect(capService.verifyTokenForAction(
       capService.HumanVerificationAction.SendSmsCode,
       "redeemed-token",
-    )).rejects.toHaveProperty("code", ServiceStatusCode.HumanVerificationRequired);
+    )).rejects.toHaveProperty("code", ApiErrorCode.HumanVerificationRequired);
   });
 
   test("rejects missing, invalid, consumed, expired, or action-mismatched tokens", async () => {
     await expect(capService.verifyTokenForAction(
       capService.HumanVerificationAction.SendSmsCode,
       undefined,
-    )).rejects.toHaveProperty("code", ServiceStatusCode.HumanVerificationRequired);
+    )).rejects.toHaveProperty("code", ApiErrorCode.HumanVerificationRequired);
 
     await capService.redeemChallenge(
       { token: "challenge-token", solutions: [1] },
@@ -102,7 +102,7 @@ describe("human verification cap service", () => {
     await expect(capService.verifyTokenForAction(
       capService.HumanVerificationAction.SendSmsCode,
       "redeemed-token",
-    )).rejects.toHaveProperty("code", ServiceStatusCode.HumanVerificationRequired);
+    )).rejects.toHaveProperty("code", ApiErrorCode.HumanVerificationRequired);
 
     await capService.redeemChallenge(
       { token: "challenge-token", solutions: [1] },
@@ -112,7 +112,7 @@ describe("human verification cap service", () => {
     await expect(capService.verifyTokenForAction(
       capService.HumanVerificationAction.SendSmsCode,
       "redeemed-token",
-    )).rejects.toHaveProperty("code", ServiceStatusCode.HumanVerificationRequired);
+    )).rejects.toHaveProperty("code", ApiErrorCode.HumanVerificationRequired);
   });
 
   test("skips token validation when Cap is disabled", async () => {
@@ -138,6 +138,6 @@ describe("human verification cap service", () => {
     await expect(capService.verifyTokenForAction(
       capService.HumanVerificationAction.SendSmsCode,
       "redeemed-token",
-    )).rejects.toHaveProperty("code", ServiceStatusCode.HumanVerificationRequired);
+    )).rejects.toHaveProperty("code", ApiErrorCode.HumanVerificationRequired);
   });
 });

@@ -1,5 +1,5 @@
 import { CustomError } from "@iam/api-core/errors/CustomError";
-import { ServiceStatusCode, UserStatus, UserType } from "@iam/contracts";
+import { ApiErrorCode, ServiceStatusCode, UserStatus, UserType } from "@iam/contracts";
 import { beforeEach, describe, expect, mock, test } from "bun:test";
 
 mock.restore();
@@ -155,7 +155,9 @@ mock.module("@api/services/human-verification/cap.service", () => ({
 
 mock.module("@api/services/human-verification/human-verification.error", () => ({
   isHumanVerificationRequiredError(error: unknown) {
-    return error instanceof CustomError && error.code === ServiceStatusCode.HumanVerificationRequired;
+    return error instanceof CustomError
+      && (error.code === ApiErrorCode.HumanVerificationRequired
+        || error.legacyCode === ServiceStatusCode.HumanVerificationRequired);
   },
 }));
 
@@ -269,12 +271,15 @@ describe("auth login failure suspension", () => {
 
   test("stops password login when human verification is required", async () => {
     ensureActionAllowed.mockRejectedValue(
-      new CustomError("需要人机校验", ServiceStatusCode.HumanVerificationRequired),
+      new CustomError("需要人机校验", {
+        code: ApiErrorCode.HumanVerificationRequired,
+        legacyCode: ServiceStatusCode.HumanVerificationRequired,
+      }),
     );
 
     await expect(authService.loginPassword(userDetail.username, "wrong-password")).rejects.toHaveProperty(
       "code",
-      ServiceStatusCode.HumanVerificationRequired,
+      ApiErrorCode.HumanVerificationRequired,
     );
 
     expect(humanRiskLoginFailures).toHaveLength(0);
@@ -283,12 +288,15 @@ describe("auth login failure suspension", () => {
 
   test("stops mobile login when human verification is required", async () => {
     ensureActionAllowed.mockRejectedValue(
-      new CustomError("需要人机校验", ServiceStatusCode.HumanVerificationRequired),
+      new CustomError("需要人机校验", {
+        code: ApiErrorCode.HumanVerificationRequired,
+        legacyCode: ServiceStatusCode.HumanVerificationRequired,
+      }),
     );
 
     await expect(authService.loginMobile(MOBILE, "0000")).rejects.toHaveProperty(
       "code",
-      ServiceStatusCode.HumanVerificationRequired,
+      ApiErrorCode.HumanVerificationRequired,
     );
 
     expect(humanRiskLoginFailures).toHaveLength(0);

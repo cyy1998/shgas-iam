@@ -67,7 +67,7 @@ function makeCredential(overrides: Partial<Parameters<typeof createLoginCredenti
 
 async function expectInvalidCredential(promise: Promise<unknown>) {
   await expect(promise).rejects.toMatchObject({
-    name: "CustomError",
+    name: "InvalidLoginCredentialError",
     message: "登录凭证无效",
   } satisfies Partial<CustomError>);
 }

@@ -1,4 +1,4 @@
-import { ServiceStatusCode } from "@iam/contracts";
+import { ApiErrorCode, ServiceStatusCode } from "@iam/contracts";
 import { afterAll, beforeEach, describe, expect, mock, test } from "bun:test";
 
 type ValidTarget = "json" | "query" | "param";
@@ -78,7 +78,8 @@ beforeEach(() => {
 describe("open handlers human verification", () => {
   test("does not send an SMS code when Cap verification is required", async () => {
     ensureActionAllowed.mockRejectedValue(Object.assign(new Error("需要人机校验"), {
-      code: ServiceStatusCode.HumanVerificationRequired,
+      code: ApiErrorCode.HumanVerificationRequired,
+      legacyCode: ServiceStatusCode.HumanVerificationRequired,
     }));
 
     await expect(handlers.codeSend(makeContext({
@@ -87,7 +88,7 @@ describe("open handlers human verification", () => {
         phoneNumber: "17721462865",
         usage: "login",
       },
-    }) as never, undefined as never)).rejects.toHaveProperty("code", ServiceStatusCode.HumanVerificationRequired);
+    }) as never, undefined as never)).rejects.toHaveProperty("code", ApiErrorCode.HumanVerificationRequired);
 
     expect(sendCode).not.toHaveBeenCalled();
   });
@@ -113,14 +114,15 @@ describe("open handlers human verification", () => {
 
   test("does not query user info when Cap verification is required", async () => {
     ensureActionAllowed.mockRejectedValue(Object.assign(new Error("需要人机校验"), {
-      code: ServiceStatusCode.HumanVerificationRequired,
+      code: ApiErrorCode.HumanVerificationRequired,
+      legacyCode: ServiceStatusCode.HumanVerificationRequired,
     }));
 
     await expect(handlers.userInfo(makeContext({
       query: {
         username: "zhangsan",
       },
-    }) as never, undefined as never)).rejects.toHaveProperty("code", ServiceStatusCode.HumanVerificationRequired);
+    }) as never, undefined as never)).rejects.toHaveProperty("code", ApiErrorCode.HumanVerificationRequired);
 
     expect(getUserDetailByUsername).not.toHaveBeenCalled();
     expect(recordOpenUserInfoLookup).not.toHaveBeenCalled();

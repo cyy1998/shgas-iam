@@ -1,4 +1,4 @@
-import { ServiceStatusCode } from '@iam/contracts';
+import { ApiErrorCode, ServiceStatusCode } from '@iam/contracts';
 import { API_PREFIX, SSO_CLIENT_CODE } from '@sso/constants/config';
 import type { ApiEnvelope } from '@sso/types/api';
 import { currentSearchParams } from '@sso/utils/url';
@@ -6,11 +6,17 @@ import { history } from '@umijs/max';
 import { message } from 'antd';
 
 export class ServiceError extends Error {
-  public code: number;
-  constructor(msg: string, code: number) {
+  public code: ApiErrorCode | ServiceStatusCode | number | string;
+  public legacyCode?: ServiceStatusCode | number;
+  constructor(
+    msg: string,
+    code: ApiErrorCode | ServiceStatusCode | number | string,
+    legacyCode?: ServiceStatusCode | number,
+  ) {
     super(msg);
     this.name = 'ServiceError';
     this.code = code;
+    this.legacyCode = legacyCode;
   }
 }
 
@@ -28,6 +34,17 @@ function gotoLogin() {
 
 function gotoMaintenance() {
   history.replace(`/systemMaintenance${preserveQuery()}`);
+}
+
+function isCode(
+  body: Pick<ApiEnvelope<unknown>, 'code' | 'legacyCode'>,
+  code: ApiErrorCode | ServiceStatusCode,
+) {
+  return body.code === code || body.legacyCode === code;
+}
+
+async function readEnvelope<T>(res: Response): Promise<ApiEnvelope<T> | null> {
+  return ((await res.clone().json()) as ApiEnvelope<T>) ?? null;
 }
 
 export async function request<T>(
@@ -62,25 +79,40 @@ export async function request<T>(
   }
 
   if (!res.ok) {
-    const msg = `网络错误 (${res.status})`;
+    const errorBody = await readEnvelope<T>(res).catch(() => null);
+    if (
+      errorBody &&
+      isCode(errorBody, ApiErrorCode.Maintenance)
+    ) {
+      gotoMaintenance();
+      return new Promise<T>(() => {});
+    }
+    const msg = errorBody?.message || `网络错误 (${res.status})`;
     message.error(msg);
-    throw new ServiceError(msg, res.status);
+    throw new ServiceError(msg, errorBody?.code ?? res.status, errorBody?.legacyCode);
   }
 
   const body = (await res.json()) as ApiEnvelope<T>;
 
-  if (body.code === ServiceStatusCode.Unauthorized && !init.skipAuthRedirect) {
+  if (
+    (isCode(body, ApiErrorCode.Unauthorized) ||
+      isCode(body, ServiceStatusCode.Unauthorized)) &&
+    !init.skipAuthRedirect
+  ) {
     gotoLogin();
     return new Promise<T>(() => {});
   }
 
   if (body.code !== ServiceStatusCode.Success) {
     const msg = body.message || '请求失败';
-    if (body.code === ServiceStatusCode.HumanVerificationRequired) {
-      throw new ServiceError(msg, body.code);
+    if (
+      isCode(body, ApiErrorCode.HumanVerificationRequired) ||
+      isCode(body, ServiceStatusCode.HumanVerificationRequired)
+    ) {
+      throw new ServiceError(msg, body.code, body.legacyCode);
     }
     message.error(msg);
-    throw new ServiceError(msg, body.code);
+    throw new ServiceError(msg, body.code, body.legacyCode);
   }
 
   return body.data;

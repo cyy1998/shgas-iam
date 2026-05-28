@@ -1,5 +1,11 @@
 import type { Context as HonoContext } from "hono";
 import { initTRPC, TRPCError } from "@trpc/server";
+import {
+  CONFLICT,
+  FORBIDDEN,
+  NOT_FOUND,
+  UNAUTHORIZED,
+} from "../core/http-status-codes";
 import { CustomError } from "../errors/CustomError";
 
 export interface TRPCAppContext {
@@ -18,7 +24,9 @@ const t = initTRPC.context<TRPCAppContext>().create({
         data: {
           ...shape.data,
           serviceCode: error.cause.code,
+          legacyServiceCode: error.cause.legacyCode,
           serviceMessage: error.cause.message,
+          httpStatus: error.cause.httpStatus,
         },
       };
     }
@@ -29,19 +37,22 @@ const t = initTRPC.context<TRPCAppContext>().create({
 export const router = t.router;
 export const publicProcedure = t.procedure;
 
+function mapHttpStatusToTRPCCode(status: number): TRPCError["code"] {
+  if (status === NOT_FOUND)
+    return "NOT_FOUND";
+  if (status === CONFLICT)
+    return "CONFLICT";
+  if (status === FORBIDDEN)
+    return "FORBIDDEN";
+  if (status === UNAUTHORIZED)
+    return "UNAUTHORIZED";
+  return "INTERNAL_SERVER_ERROR";
+}
+
 export function mapCustomErrorToTRPCError(err: unknown): never {
   if (err instanceof CustomError) {
-    const httpCode = err.code === 404
-      ? "NOT_FOUND"
-      : err.code === 409
-        ? "CONFLICT"
-        : err.code === 403
-          ? "FORBIDDEN"
-          : err.code === 401
-            ? "UNAUTHORIZED"
-            : "INTERNAL_SERVER_ERROR";
     throw new TRPCError({
-      code: httpCode,
+      code: mapHttpStatusToTRPCCode(err.httpStatus),
       message: err.message,
       cause: err,
     });

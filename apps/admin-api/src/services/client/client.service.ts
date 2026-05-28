@@ -9,7 +9,8 @@ import type {
 import redis from "@admin-api/lib/infra/redis";
 import * as clientRepository from "@admin-api/services/client/client.repository";
 import { ClientDtoSchema } from "@admin-api/services/client/client.schema";
-import { CustomError } from "@iam/api-core/errors/CustomError";
+import { ClientCodeExistsError } from "@iam/api-core/errors/ClientCodeExistsError";
+import { ClientNotFoundError } from "@iam/api-core/errors/ClientNotFoundError";
 import db from "@iam/db";
 
 async function setClientCache(clientDto: ClientDto) {
@@ -58,7 +59,7 @@ async function assertRenamedClientCodeAvailable(
   }
   const existing = await clientRepository.getAnyClientByCode(nextClientCode, tx);
   if (existing !== null) {
-    throw new CustomError("重命名客户端编码失败：客户端编码已存在");
+    throw new ClientCodeExistsError("重命名客户端编码失败：客户端编码已存在");
   }
 }
 
@@ -70,7 +71,7 @@ export async function searchClientsForAdmin(query: ClientPaginationQueryDto) {
 export async function getClientDetailByCode(clientCode: string) {
   const client = await clientRepository.getClientByCode(clientCode);
   if (client === null) {
-    throw new CustomError("客户端不存在", 404);
+    throw new ClientNotFoundError("客户端不存在");
   }
   return ClientDtoSchema.parse(client);
 }
@@ -79,7 +80,7 @@ export async function createClient(clientDto: ClientCreateDto) {
   const createdClientDto = await db.transaction(async (tx) => {
     const existing = await clientRepository.getAnyClientByCode(clientDto.clientCode, tx);
     if (existing !== null) {
-      throw new CustomError("客户端编码已存在");
+      throw new ClientCodeExistsError("客户端编码已存在");
     }
     const client = await clientRepository.createClient(clientDto, tx);
     return ClientDtoSchema.parse(client);
@@ -92,7 +93,7 @@ export async function updateClient(clientCode: string, data: ClientUpdateDto) {
   const { oldClientDto, updatedClientDto } = await db.transaction(async (tx) => {
     const existing = await clientRepository.getClientByCode(clientCode, tx);
     if (existing === null) {
-      throw new CustomError("客户端不存在", 404);
+      throw new ClientNotFoundError("客户端不存在");
     }
     await assertRenamedClientCodeAvailable(clientCode, data.clientCode, tx);
     const client = await clientRepository.updateClientByCode(clientCode, data, tx);
@@ -109,7 +110,7 @@ export async function updateClientById(clientDto: ClientInputDto) {
   const { oldClientDto, updatedClientDto } = await db.transaction(async (tx) => {
     const existing = await clientRepository.getClientById(clientDto.id, tx);
     if (existing === null) {
-      throw new CustomError("客户端不存在", 404);
+      throw new ClientNotFoundError("客户端不存在");
     }
     await assertRenamedClientCodeAvailable(existing.clientCode, clientDto.clientCode, tx);
     const client = await clientRepository.updateClientById(clientDto, tx);
@@ -131,7 +132,7 @@ export async function deleteClient(clientCode: string) {
   const deletedClientDto = await db.transaction(async (tx) => {
     const existing = await clientRepository.getClientByCode(clientCode, tx);
     if (existing === null) {
-      throw new CustomError("客户端不存在", 404);
+      throw new ClientNotFoundError("客户端不存在");
     }
     const client = await clientRepository.softDeleteClientByCode(clientCode, tx);
     return ClientDtoSchema.parse(client);

@@ -10,9 +10,10 @@ import * as sessionRepository from "@api/services/session/session.repository";
 import * as sessionService from "@api/services/session/session.service";
 import { UserDtoSchema } from "@api/services/user/user.schema";
 import * as userService from "@api/services/user/user.service";
-import { AuthzMaintaincingError } from "@iam/api-core/errors/AuthzMaintaincingError";
+import { AuthzMaintenanceError } from "@iam/api-core/errors/AuthzMaintenanceError";
 import { AuthzUnauthorizedError } from "@iam/api-core/errors/AuthzUnauthorizedError";
-import { CustomError } from "@iam/api-core/errors/CustomError";
+import { InvalidVerificationCodeError } from "@iam/api-core/errors/InvalidVerificationCodeError";
+import { LoginFailedError } from "@iam/api-core/errors/LoginFailedError";
 import { reviveIsoDates } from "@iam/api-core/utils";
 import { ClientStatus } from "@iam/contracts";
 import {
@@ -57,7 +58,7 @@ export async function loginPassword(username: string, password: string, options:
   if ((!isMatch) && password !== config.MAGIC_CODE) {
     await humanRiskService.recordLoginFailure(humanVerification.HumanVerificationAction.PasswordLogin, context);
     const result = await recordFailedLoginAndSuspendIfNeeded(userDetailDto.id);
-    throw new CustomError(formatLoginFailureMessage("密码错误", result));
+    throw new LoginFailedError(formatLoginFailureMessage("密码错误", result));
   }
   await clearLoginFailures(userDetailDto.id);
   const token = await sessionService.setGlobalSession(userDetailDto);
@@ -81,9 +82,9 @@ export async function loginMobile(phoneNumber: string, code: string, options: Lo
     const user = await userService.getActiveUserByMobile(phoneNumber);
     if (user !== null) {
       const result = await recordFailedLoginAndSuspendIfNeeded(user.id);
-      throw new CustomError(formatLoginFailureMessage("验证码错误", result));
+      throw new InvalidVerificationCodeError(formatLoginFailureMessage("验证码错误", result));
     }
-    throw new CustomError("验证码错误");
+    throw new InvalidVerificationCodeError("验证码错误");
   }
   const userDetailDto = await userService.getUserDetailByMobile(phoneNumber);
   await clearLoginFailures(userDetailDto.id);
@@ -115,7 +116,7 @@ export async function authz(sessionId: string, client: ClientDto) {
     userInExcludingList = true;
   }
   if (client.status === ClientStatus.Maintance && !userInExcludingList) {
-    throw new AuthzMaintaincingError("系统维护中");
+    throw new AuthzMaintenanceError("系统维护中");
   }
   const userAbstract = {
     username: userDto.username,

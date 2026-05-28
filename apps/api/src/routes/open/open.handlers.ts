@@ -5,7 +5,7 @@ import * as humanVerification from "@api/services/human-verification/cap.service
 import * as humanRiskService from "@api/services/human-verification/human-risk.service";
 import * as mobileService from "@api/services/mobile/mobile.service";
 import * as userService from "@api/services/user/user.service";
-import { CustomError } from "@iam/api-core/errors/CustomError";
+import { InvalidHumanVerificationSiteError } from "@iam/api-core/errors/InvalidHumanVerificationSiteError";
 import * as resp from "@iam/api-core/http";
 import { getVerificationContext } from "../human-verification-context";
 import { maskMobile, requirePhoneNumber, resolveResetPasswordMobile } from "./open.service";
@@ -66,7 +66,7 @@ export const passwordReset: OpenRouteHandler<"passwordReset"> = async (c) => {
 export const capChallenge: OpenRouteHandler<"capChallenge"> = async (c) => {
   const { siteKey } = c.req.valid("param");
   if (!humanVerification.isValidSiteKey(siteKey)) {
-    throw new CustomError("无效人机校验站点");
+    throw new InvalidHumanVerificationSiteError("无效人机校验站点");
   }
   return c.json(await humanVerification.createChallenge());
 };
@@ -74,7 +74,7 @@ export const capChallenge: OpenRouteHandler<"capChallenge"> = async (c) => {
 export const capRedeem: OpenRouteHandler<"capRedeem"> = async (c) => {
   const { siteKey } = c.req.valid("param");
   if (!humanVerification.isValidSiteKey(siteKey)) {
-    throw new CustomError("无效人机校验站点");
+    throw new InvalidHumanVerificationSiteError("无效人机校验站点");
   }
   const action = c.req.header("X-Cap-Action");
   const result = await humanVerification.redeemChallenge(c.req.valid("json"), action);

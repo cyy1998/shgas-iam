@@ -2,7 +2,7 @@ import type { OrcasLoginInput } from "./orcas.type";
 import config from "@api/env";
 import { z } from "@hono/zod-openapi";
 import { createSingleton } from "@iam/api-core/core/singleton";
-import { CustomError } from "@iam/api-core/errors/CustomError";
+import { OrcasLoginFailedError } from "@iam/api-core/errors/OrcasLoginFailedError";
 
 const ORCAS_SESSION_REGEX = /orcas_sso_sessionid=([^;]+)/;
 
@@ -33,14 +33,14 @@ function createOrcasClient() {
       const data = OrcasLoginResponseSchema.nullable().catch(null).parse(await resp.json().catch(() => null));
       const setCookies = resp.headers.getSetCookie();
       if (resp.status !== 200 || data?.code !== 200 || !data.data?.id || setCookies.length === 0) {
-        throw new CustomError("Orcas登录失败");
+        throw new OrcasLoginFailedError("Orcas登录失败");
       }
 
       const cookieStr = setCookies.find(cookie => ORCAS_SESSION_REGEX.test(cookie)) ?? "";
       const match = cookieStr.match(ORCAS_SESSION_REGEX);
       const orcasSessionId = match ? match[1] : null;
       if (!orcasSessionId) {
-        throw new CustomError("Orcas登录失败");
+        throw new OrcasLoginFailedError("Orcas登录失败");
       }
       return {
         orcasSessionId,

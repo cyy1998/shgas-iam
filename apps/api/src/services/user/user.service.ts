@@ -15,7 +15,12 @@ import {
   UserDtoSchema,
 } from "@api/services/user/user.schema";
 import { CustomError } from "@iam/api-core/errors/CustomError";
+import { InvalidMobileError } from "@iam/api-core/errors/InvalidMobileError";
+import { InvalidOldPasswordError } from "@iam/api-core/errors/InvalidOldPasswordError";
+import { InvalidVerificationCodeError } from "@iam/api-core/errors/InvalidVerificationCodeError";
+import { MobileAlreadyExistsError } from "@iam/api-core/errors/MobileAlreadyExistsError";
 import { UserNotFoundError } from "@iam/api-core/errors/UserNotFoundError";
+import { WeakPasswordError } from "@iam/api-core/errors/WeakPasswordError";
 import { UserStatus } from "@iam/contracts";
 import db from "@iam/db";
 import { compare, hash } from "bcrypt-ts";
@@ -69,10 +74,10 @@ export async function setPassword(username: string, oldPassword: string, newPass
     }
     const isMatch = await checkPassword(user.username, oldPassword);
     if (!isMatch) {
-      throw new CustomError("旧密码错误");
+      throw new InvalidOldPasswordError("旧密码错误");
     }
     if (!_validatePasswordStrength(newPassword)) {
-      throw new CustomError("新密码强度过低");
+      throw new WeakPasswordError("新密码强度过低");
     }
     const newPasswordHash = await hash(newPassword, config.PASSWORD_HASH_ROUNDS);
     await userRepository.setPassword(user.id, newPasswordHash, tx);
@@ -90,7 +95,7 @@ export async function resetPassword(username: string, phone: string, code: strin
       throw new UserNotFoundError("用户名与手机号不匹配");
     }
     if (!await mobileService.checkVerificationCode("resetPassword", phone, code)) {
-      throw new UserNotFoundError("验证码错误");
+      throw new InvalidVerificationCodeError("验证码错误");
     }
     const newPasswordHash = await hash(newPassword, config.PASSWORD_HASH_ROUNDS);
     await userRepository.setPassword(user.id, newPasswordHash, tx);
@@ -120,13 +125,13 @@ export async function pauseEnabledUser(userId: number) {
 export async function setMobile(userId: number, phoneNumber: string, code: string) {
   await db.transaction(async (tx) => {
     if (!mobileService.checkValidPhoneNumber(phoneNumber)) {
-      throw new CustomError("无效手机号");
+      throw new InvalidMobileError("无效手机号");
     }
     if (await mobileService.checkExistingPhoneNumber(phoneNumber)) {
-      throw new CustomError("手机号已存在");
+      throw new MobileAlreadyExistsError("手机号已存在");
     }
     if (!await mobileService.checkVerificationCode(VerificationCodeUsage.BindPhone, phoneNumber, code)) {
-      throw new CustomError("验证码错误");
+      throw new InvalidVerificationCodeError("验证码错误");
     }
     await userRepository.setMobile(userId, phoneNumber, tx);
   });
