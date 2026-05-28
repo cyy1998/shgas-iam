@@ -1,4 +1,5 @@
 // 运行时配置
+import shanghaiGasLogo from '@admin/assets/logo.png';
 import AvatarDropdown from '@admin/components/RightContent/AvatarDropdown';
 import {
   ADMIN_ROLE_CODE,
@@ -92,25 +93,18 @@ export const layout = ({ initialState }: { initialState?: InitialState }) => {
     },
     menuHeaderRender: () =>
       createElement('div', { className: 'iam-admin-brand' }, [
+        createElement('img', {
+          alt: '上海燃气',
+          className: 'iam-admin-brand-logo',
+          key: 'logo',
+          src: shanghaiGasLogo,
+        }),
         createElement(
           'div',
-          { className: 'iam-admin-brand-mark', key: 'mark' },
-          'IAM',
-        ),
-        createElement(
-          'div',
-          { className: 'iam-admin-brand-copy', key: 'copy' },
+          { className: 'iam-admin-brand-title', key: 'title' },
           [
-            createElement(
-              'div',
-              { className: 'iam-admin-brand-title', key: 'title' },
-              '上海燃气 IAM',
-            ),
-            createElement(
-              'div',
-              { className: 'iam-admin-brand-subtitle', key: 'subtitle' },
-              'Admin Console',
-            ),
+            createElement('span', { key: 'iam' }, 'IAM'),
+            createElement('span', { key: 'console' }, '控制台'),
           ],
         ),
       ]),
