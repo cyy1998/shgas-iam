@@ -113,8 +113,10 @@ class FakeRedis {
 
   async ttl(key: string) {
     const expiresAt = this.expires.get(key);
-    if (!this.values.has(key)) return -2;
-    if (expiresAt === undefined) return -1;
+    if (!this.values.has(key))
+      return -2;
+    if (expiresAt === undefined)
+      return -1;
     const ttl = Math.ceil((expiresAt - this.now) / 1000);
     if (ttl <= 0) {
       this.values.delete(key);
@@ -129,7 +131,7 @@ const USER_ID = 1001;
 const MOBILE = "17721462865";
 const fakeRedis = new FakeRedis();
 const SESSION_ID = "00000000-0000-4000-8000-000000000000";
-const loginLogs: unknown[] = [];
+const auditLogs: unknown[][] = [];
 const pausedUserIds: number[] = [];
 const humanRiskLoginFailures: unknown[] = [];
 const ensureActionAllowed = mock(async () => undefined);
@@ -189,9 +191,9 @@ mock.module("@api/services/user/user.service", () => ({
   },
 }));
 
-mock.module("@api/services/session/session.repository", () => ({
-  async loginLog(...args: unknown[]) {
-    loginLogs.push(args);
+mock.module("@api/services/audit/audit.service", () => ({
+  async recordAuditLog(...args: unknown[]) {
+    auditLogs.push(args);
   },
 }));
 
@@ -234,7 +236,7 @@ async function expectCredentialError(promise: Promise<unknown>, message: string)
 
 beforeEach(() => {
   fakeRedis.reset();
-  loginLogs.length = 0;
+  auditLogs.length = 0;
   pausedUserIds.length = 0;
   humanRiskLoginFailures.length = 0;
   ensureActionAllowed.mockReset();
@@ -337,7 +339,12 @@ describe("auth login failure temporary blacklist", () => {
     );
 
     expect(fakeRedis.countFailures(USER_ID)).toBe(0);
-    expect(loginLogs).toHaveLength(0);
+    expect(auditLogs).toHaveLength(1);
+    expect(auditLogs[0]?.[0]).toMatchObject({
+      action: "auth.login.password.failure",
+      outcome: "failure",
+      details: { reason: "blacklisted" },
+    });
   });
 
   test("rejects mobile login while user is temporarily blacklisted", async () => {
@@ -351,7 +358,12 @@ describe("auth login failure temporary blacklist", () => {
     );
 
     expect(fakeRedis.countFailures(USER_ID)).toBe(0);
-    expect(loginLogs).toHaveLength(0);
+    expect(auditLogs).toHaveLength(1);
+    expect(auditLogs[0]?.[0]).toMatchObject({
+      action: "auth.login.mobile.failure",
+      outcome: "failure",
+      details: { reason: "blacklisted" },
+    });
   });
 
   test("records human verification risk state for credential failures", async () => {

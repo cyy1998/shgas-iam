@@ -1,0 +1,152 @@
+import type { AuditLogVo } from '@admin/services/audit';
+import { Descriptions, Divider, Drawer, Space, Tag, Typography } from 'antd';
+
+const actorTypeLabels: Record<string, string> = {
+  admin: '管理员',
+  user: '用户',
+  client: '客户端',
+  system: '系统',
+  anonymous: '匿名',
+};
+
+const outcomeLabels: Record<string, string> = {
+  success: '成功',
+  failure: '失败',
+};
+
+function formatDate(value: AuditLogVo['eventTime']) {
+  return value ? new Date(value).toLocaleString() : '—';
+}
+
+function stringifyJson(value: unknown) {
+  return JSON.stringify(value ?? {}, null, 2);
+}
+
+function getActorName(row: AuditLogVo) {
+  if (row.actorUsername) return row.actorUsername;
+  if (row.actorUserId) return `#${row.actorUserId}`;
+  if (row.actorClientCode) return row.actorClientCode;
+  if (row.actorSystemKey) return row.actorSystemKey;
+  return '—';
+}
+
+function getTargetName(row: AuditLogVo) {
+  if (row.targetCode) return row.targetCode;
+  if (row.targetId) return `#${row.targetId}`;
+  return '—';
+}
+
+function getErrorSummary(details: Record<string, unknown>) {
+  const code = details.errorCode;
+  const message = details.errorMessage ?? details.message;
+  if (!code && !message) return '—';
+  return [code, message].filter(Boolean).join(' / ');
+}
+
+type Props = {
+  open: boolean;
+  auditLog: AuditLogVo | null;
+  onClose: () => void;
+};
+
+export default function AuditLogDetailDrawer({
+  open,
+  auditLog,
+  onClose,
+}: Props) {
+  const details = (auditLog?.details ?? {}) as Record<string, unknown>;
+
+  return (
+    <Drawer
+      width={720}
+      open={open}
+      onClose={onClose}
+      destroyOnClose
+      title="审计日志详情"
+    >
+      {!auditLog ? null : (
+        <>
+          <Descriptions column={2} size="small" bordered>
+            <Descriptions.Item label="时间">
+              {formatDate(auditLog.eventTime)}
+            </Descriptions.Item>
+            <Descriptions.Item label="结果">
+              <Tag color={auditLog.outcome === 'success' ? 'green' : 'red'}>
+                {outcomeLabels[auditLog.outcome] ?? auditLog.outcome}
+              </Tag>
+            </Descriptions.Item>
+            <Descriptions.Item label="Action" span={2}>
+              <Typography.Text code copyable>
+                {auditLog.action}
+              </Typography.Text>
+            </Descriptions.Item>
+            <Descriptions.Item label="操作者">
+              <Space size={6} wrap>
+                <Tag>{actorTypeLabels[auditLog.actorType]}</Tag>
+                <Typography.Text>{getActorName(auditLog)}</Typography.Text>
+              </Space>
+            </Descriptions.Item>
+            <Descriptions.Item label="目标对象">
+              <Space size={6} wrap>
+                <Tag>{auditLog.targetType}</Tag>
+                <Typography.Text>{getTargetName(auditLog)}</Typography.Text>
+              </Space>
+            </Descriptions.Item>
+            <Descriptions.Item label="来源应用">
+              {auditLog.sourceApp}
+            </Descriptions.Item>
+            <Descriptions.Item label="IP">
+              {auditLog.ip ?? '—'}
+            </Descriptions.Item>
+            <Descriptions.Item label="Request ID">
+              {auditLog.requestId ? (
+                <Typography.Text code copyable>
+                  {auditLog.requestId}
+                </Typography.Text>
+              ) : (
+                '—'
+              )}
+            </Descriptions.Item>
+            <Descriptions.Item label="Trace ID">
+              {auditLog.traceId ? (
+                <Typography.Text code copyable>
+                  {auditLog.traceId}
+                </Typography.Text>
+              ) : (
+                '—'
+              )}
+            </Descriptions.Item>
+            <Descriptions.Item label="路由">
+              {auditLog.route ?? '—'}
+            </Descriptions.Item>
+            <Descriptions.Item label="方法">
+              {auditLog.method ?? '—'}
+            </Descriptions.Item>
+            <Descriptions.Item label="User Agent" span={2}>
+              <Typography.Text style={{ wordBreak: 'break-all' }}>
+                {auditLog.userAgent ?? '—'}
+              </Typography.Text>
+            </Descriptions.Item>
+            <Descriptions.Item label="错误摘要" span={2}>
+              {getErrorSummary(details)}
+            </Descriptions.Item>
+          </Descriptions>
+
+          <Divider orientation="left">Details</Divider>
+          <Typography.Paragraph
+            style={{
+              background: '#f6f8fa',
+              borderRadius: 8,
+              marginBottom: 0,
+              padding: 12,
+              whiteSpace: 'pre-wrap',
+              wordBreak: 'break-word',
+            }}
+          >
+            <Typography.Text code>{stringifyJson(details)}</Typography.Text>
+          </Typography.Paragraph>
+        </>
+      )}
+    </Drawer>
+  );
+}

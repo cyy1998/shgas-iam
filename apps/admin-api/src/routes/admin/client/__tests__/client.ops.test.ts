@@ -48,7 +48,7 @@ describe("admin client ops", () => {
       status: ClientStatus.Disable,
     })).resolves.toBe(true);
 
-    expect(clientService.updateClientStatus).toHaveBeenCalledWith("portal", ClientStatus.Disable);
+    expect(clientService.updateClientStatus).toHaveBeenCalledWith("portal", ClientStatus.Disable, undefined);
   });
 
   test("delegates delete input to client service", async () => {
@@ -56,6 +56,6 @@ describe("admin client ops", () => {
 
     await expect(ops.deleteClientOp.handler({ clientCode: "portal" })).resolves.toBe(true);
 
-    expect(clientService.deleteClient).toHaveBeenCalledWith("portal");
+    expect(clientService.deleteClient).toHaveBeenCalledWith("portal", undefined);
   });
 });

@@ -1,3 +1,4 @@
+import type { AdminAuditContext } from "@admin-api/services/audit/audit.service";
 import type {
   OrganizationCreateDto,
   OrganizationPaginationQueryDto,
@@ -6,6 +7,7 @@ import type {
   OrganizationUpdateDto,
 } from "@admin-api/services/organization/organization.type";
 import type { OrganizationStatus } from "@iam/contracts";
+import * as auditService from "@admin-api/services/audit/audit.service";
 import * as organizationRepository from "@admin-api/services/organization/organization.repository";
 import { toOrganizationDto } from "@admin-api/services/organization/organization.schema";
 import { OrganizationAlreadyExistsError } from "@iam/api-core/errors/OrganizationAlreadyExistsError";
@@ -17,7 +19,30 @@ import { paginate } from "@iam/api-core/utils";
 import { organizationStatusToString } from "@iam/contracts";
 import db from "@iam/db";
 
-export async function setOrganization(organizationCreateDto: OrganizationCreateDto) {
+async function recordOrganizationAudit(
+  action: string,
+  organization: { id: number; orgCode: string; orgName: string; status?: OrganizationStatus },
+  details: Record<string, unknown>,
+  tx: Parameters<typeof auditService.recordAuditLog>[1],
+  auditContext?: AdminAuditContext,
+) {
+  await auditService.recordAuditLog({
+    ...auditService.resolveAdminAuditContext(auditContext),
+    action,
+    outcome: "success",
+    targetType: "organization",
+    targetId: organization.id,
+    targetCode: organization.orgCode,
+    details: {
+      orgCode: organization.orgCode,
+      orgName: organization.orgName,
+      status: organization.status,
+      ...details,
+    },
+  }, tx);
+}
+
+export async function setOrganization(organizationCreateDto: OrganizationCreateDto, auditContext?: AdminAuditContext) {
   return await db.transaction(async (tx) => {
     const newOrg = await organizationRepository.getOrganizationByCode(organizationCreateDto.orgCode, tx);
     const parentOrg = organizationCreateDto.parentCode
@@ -26,11 +51,15 @@ export async function setOrganization(organizationCreateDto: OrganizationCreateD
     if (newOrg !== null) {
       throw new OrganizationAlreadyExistsError("待创建组织已存在");
     }
-    await organizationRepository.setOrganization(
+    const created = await organizationRepository.setOrganization(
       organizationCreateDto,
       parentOrg,
       tx,
     );
+    await recordOrganizationAudit("admin.organization.create", created, {
+      parentCode: organizationCreateDto.parentCode ?? null,
+      orgType: organizationCreateDto.orgType,
+    }, tx, auditContext);
     return true;
   });
 }
@@ -92,7 +121,12 @@ export async function getOrganizationSelectorNodesForAdmin(query: OrganizationSe
   return await organizationRepository.getOrganizationSelectorNodesForAdmin(query);
 }
 
-export async function updateOrganization(orgCode: string, data: OrganizationUpdateDto) {
+export async function updateOrganization(
+  orgCode: string,
+  data: OrganizationUpdateDto,
+  auditContext?: AdminAuditContext,
+  action = "admin.organization.update",
+) {
   return await db.transaction(async (tx) => {
     const existing = await organizationRepository.getOrganizationByCodeForAdmin(orgCode, tx);
     if (existing === null) {
@@ -105,15 +139,28 @@ export async function updateOrganization(orgCode: string, data: OrganizationUpda
       }
     }
     await organizationRepository.updateOrganizationByCode(orgCode, data, tx);
+    await recordOrganizationAudit(action, {
+      ...existing,
+      orgCode: data.orgCode ?? existing.orgCode,
+      orgName: data.orgName ?? existing.orgName,
+      status: data.status ?? existing.status,
+    }, {
+      patch: data,
+      previousOrgCode: orgCode,
+    }, tx, auditContext);
     return true;
   });
 }
 
-export async function updateOrganizationStatus(orgCode: string, status: OrganizationStatus) {
-  return await updateOrganization(orgCode, { status });
+export async function updateOrganizationStatus(
+  orgCode: string,
+  status: OrganizationStatus,
+  auditContext?: AdminAuditContext,
+) {
+  return await updateOrganization(orgCode, { status }, auditContext, "admin.organization.status_update");
 }
 
-export async function deleteOrganization(orgCode: string) {
+export async function deleteOrganization(orgCode: string, auditContext?: AdminAuditContext) {
   return await db.transaction(async (tx) => {
     const existing = await organizationRepository.getOrganizationByCodeForAdmin(orgCode, tx);
     if (existing === null) {
@@ -128,6 +175,9 @@ export async function deleteOrganization(orgCode: string) {
       throw new OrganizationHasEmploymentError();
     }
     await organizationRepository.softDeleteOrganizationByCode(orgCode, tx);
+    await recordOrganizationAudit("admin.organization.delete", existing, {
+      deleted: true,
+    }, tx, auditContext);
     return true;
   });
 }

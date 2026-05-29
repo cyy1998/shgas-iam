@@ -8,19 +8,19 @@ export const positionDetail: PositionRouteHandler<"positionDetail"> = async c =>
   c.json(await ops.getPositionOp.run(c.req.valid("param")));
 
 export const positionCreate: PositionRouteHandler<"positionCreate"> = async c =>
-  c.json(await ops.createPositionOp.run(c.req.valid("json")));
+  c.json(await ops.createPositionOp.run(c.req.valid("json"), { hono: c }));
 
 export const positionUpdate: PositionRouteHandler<"positionUpdate"> = async c =>
   c.json(await ops.updatePositionOp.run({
     posCode: c.req.valid("param").posCode,
     data: c.req.valid("json"),
-  }));
+  }, { hono: c }));
 
 export const positionStatusUpdate: PositionRouteHandler<"positionStatusUpdate"> = async c =>
   c.json(await ops.updatePositionStatusOp.run({
     posCode: c.req.valid("param").posCode,
     status: c.req.valid("json").status,
-  }));
+  }, { hono: c }));
 
 export const positionDelete: PositionRouteHandler<"positionDelete"> = async c =>
-  c.json(await ops.deletePositionOp.run(c.req.valid("param")));
+  c.json(await ops.deletePositionOp.run(c.req.valid("param"), { hono: c }));

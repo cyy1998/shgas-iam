@@ -5,6 +5,12 @@ const organizationRepository = {
   getOrganizationSelectorNodesForAdmin: mock(),
 };
 
+const auditService = {
+  recordAuditLog: mock(),
+  resolveAdminAuditContext: mock((context?: unknown) => context ?? { actorType: "system", actorSystemKey: "admin-api" }),
+};
+
+mock.module("@admin-api/services/audit/audit.service", () => auditService);
 mock.module("@admin-api/services/organization/organization.repository", () => organizationRepository);
 
 const organizationService = await import("../organization.service");
@@ -46,6 +52,8 @@ function selectorNode(overrides: Record<string, unknown> = {}) {
 
 beforeEach(() => {
   organizationRepository.getOrganizationSelectorNodesForAdmin.mockReset();
+  auditService.recordAuditLog.mockReset();
+  auditService.resolveAdminAuditContext.mockClear();
 });
 
 describe("organizationService.getOrganizationSelectorNodesForAdmin", () => {

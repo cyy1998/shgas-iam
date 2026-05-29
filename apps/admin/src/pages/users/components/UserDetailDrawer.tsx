@@ -1,4 +1,5 @@
 import StatusTag from '@admin/components/StatusTag';
+import AuditLogTable from '@admin/pages/audit-logs/components/AuditLogTable';
 import EmploymentFormModal from '@admin/pages/employments/components/EmploymentFormModal';
 import TransferModal from '@admin/pages/employments/components/TransferModal';
 import {
@@ -435,7 +436,17 @@ export default function UserDetailDrawer({
               {
                 key: 'logs',
                 label: '操作日志',
-                children: <Empty description="日志功能尚未接入" />,
+                children: (
+                  <AuditLogTable
+                    fixedConditions={{
+                      targetType: 'user',
+                      targetCode: detail.username,
+                    }}
+                    pageSize={10}
+                    search={false}
+                    size="small"
+                  />
+                ),
               },
             ]}
           />

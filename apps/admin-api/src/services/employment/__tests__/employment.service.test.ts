@@ -59,12 +59,18 @@ const privilegeRepository = (Reflect.get(globalThis, "__adminPrivilegeRepository
   getPrivilegesByRoleIds: mock(),
 };
 
+const auditService = {
+  recordAuditLog: mock(),
+  resolveAdminAuditContext: mock((context?: unknown) => context ?? { actorType: "system", actorSystemKey: "admin-api" }),
+};
+
 Reflect.set(globalThis, "__adminUserRepositoryMock", userRepository);
 Reflect.set(globalThis, "__adminEmploymentRepositoryMock", employmentRepository);
 Reflect.set(globalThis, "__adminRoleRepositoryMock", roleRepository);
 Reflect.set(globalThis, "__adminPrivilegeRepositoryMock", privilegeRepository);
 
 mock.module("@admin-api/services/employment/employment.repository", () => employmentRepository);
+mock.module("@admin-api/services/audit/audit.service", () => auditService);
 mock.module("@admin-api/services/user/user.repository", () => userRepository);
 mock.module("@admin-api/services/organization/organization.repository", () => organizationRepository);
 mock.module("@admin-api/services/position/position.repository", () => positionRepository);
@@ -189,6 +195,8 @@ function resetAllMocks() {
       repositoryMock.mockReset();
     }
   }
+  auditService.recordAuditLog.mockReset();
+  auditService.resolveAdminAuditContext.mockClear();
 
   applyDefaultMocks();
 }

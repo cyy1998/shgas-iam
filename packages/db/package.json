@@ -16,7 +16,8 @@
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
     "db:push": "drizzle-kit push",
-    "db:check": "drizzle-kit check"
+    "db:check": "drizzle-kit check",
+    "migrate:login-log-audit": "bun scripts/migrate-login-log-to-audit.ts"
   },
   "dependencies": {
     "@iam/contracts": "workspace:*",

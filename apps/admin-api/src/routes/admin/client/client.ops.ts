@@ -1,3 +1,5 @@
+import type { Context } from "hono";
+import * as auditService from "@admin-api/services/audit/audit.service";
 import {
   ClientCreateDtoSchema,
   ClientInputDtoSchema,
@@ -8,6 +10,17 @@ import {
 import * as clientService from "@admin-api/services/client/client.service";
 import { defineMutationOp, defineQueryOp } from "@iam/api-core/core/business-op";
 import { z } from "zod";
+
+function resolveAuditContext(context?: unknown) {
+  const hono = (context as { hono?: Context } | undefined)?.hono;
+  if (!hono) {
+    return undefined;
+  }
+  return {
+    ...auditService.getAdminAuditActor(hono),
+    ...auditService.getAdminAuditRequestContext(hono),
+  };
+}
 
 export const searchClientOp = defineQueryOp({
   input: ClientPaginationQueryDtoSchema,
@@ -21,7 +34,7 @@ export const getClientOp = defineQueryOp({
 
 export const createClientOp = defineMutationOp({
   input: ClientCreateDtoSchema,
-  handler: input => clientService.createClient(input),
+  handler: (input, context) => clientService.createClient(input, resolveAuditContext(context)),
 });
 
 export const updateClientOp = defineMutationOp({
@@ -29,12 +42,13 @@ export const updateClientOp = defineMutationOp({
     clientCode: z.string(),
     data: ClientUpdateDtoSchema,
   }),
-  handler: ({ clientCode, data }) => clientService.updateClient(clientCode, data),
+  handler: ({ clientCode, data }, context) =>
+    clientService.updateClient(clientCode, data, resolveAuditContext(context)),
 });
 
 export const updateClientByIdOp = defineMutationOp({
   input: ClientInputDtoSchema,
-  handler: input => clientService.updateClientById(input),
+  handler: (input, context) => clientService.updateClientById(input, resolveAuditContext(context)),
 });
 
 export const updateClientStatusOp = defineMutationOp({
@@ -42,10 +56,11 @@ export const updateClientStatusOp = defineMutationOp({
     clientCode: z.string(),
     status: ClientStatusUpdateDtoSchema.shape.status,
   }),
-  handler: ({ clientCode, status }) => clientService.updateClientStatus(clientCode, status),
+  handler: ({ clientCode, status }, context) =>
+    clientService.updateClientStatus(clientCode, status, resolveAuditContext(context)),
 });
 
 export const deleteClientOp = defineMutationOp({
   input: z.object({ clientCode: z.string() }),
-  handler: ({ clientCode }) => clientService.deleteClient(clientCode),
+  handler: ({ clientCode }, context) => clientService.deleteClient(clientCode, resolveAuditContext(context)),
 });

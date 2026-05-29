@@ -1,3 +1,4 @@
+import * as auditService from "@admin-api/services/audit/audit.service";
 import * as positionRepository from "@admin-api/services/position/position.repository";
 import {
   PositionCreateDtoSchema,
@@ -27,7 +28,7 @@ export const getPositionOp = defineQueryOp({
 
 export const createPositionOp = defineMutationOp({
   input: PositionCreateDtoSchema,
-  handler: input => positionService.setPosition(input),
+  handler: (input, context) => positionService.setPosition(input, auditService.resolveAdminAuditContext(context)),
 });
 
 export const updatePositionOp = defineMutationOp({
@@ -35,7 +36,8 @@ export const updatePositionOp = defineMutationOp({
     posCode: z.string(),
     data: PositionUpdateDtoSchema,
   }),
-  handler: ({ posCode, data }) => positionService.updatePosition(posCode, data),
+  handler: ({ posCode, data }, context) =>
+    positionService.updatePosition(posCode, data, auditService.resolveAdminAuditContext(context)),
 });
 
 export const updatePositionStatusOp = defineMutationOp({
@@ -43,10 +45,12 @@ export const updatePositionStatusOp = defineMutationOp({
     posCode: z.string(),
     status: z.enum(PositionStatus),
   }),
-  handler: ({ posCode, status }) => positionService.updatePositionStatus(posCode, status),
+  handler: ({ posCode, status }, context) =>
+    positionService.updatePositionStatus(posCode, status, auditService.resolveAdminAuditContext(context)),
 });
 
 export const deletePositionOp = defineMutationOp({
   input: z.object({ posCode: z.string() }),
-  handler: ({ posCode }) => positionService.deletePosition(posCode),
+  handler: ({ posCode }, context) =>
+    positionService.deletePosition(posCode, auditService.resolveAdminAuditContext(context)),
 });

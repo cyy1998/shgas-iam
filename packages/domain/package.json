@@ -5,6 +5,8 @@
   "private": true,
   "exports": {
     ".": "./src/index.ts",
+    "./audit": "./src/audit/index.ts",
+    "./audit/*": "./src/audit/*.ts",
     "./client": "./src/client/index.ts",
     "./client/*": "./src/client/*.ts",
     "./employment": "./src/employment/index.ts",

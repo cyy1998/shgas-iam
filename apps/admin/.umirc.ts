@@ -87,6 +87,13 @@ export default defineConfig({
       component: './clients/index',
       access: 'isAdmin',
     },
+    {
+      path: '/audit-logs',
+      name: '审计日志',
+      icon: 'fileSearch',
+      component: './audit-logs/index',
+      access: 'isAdmin',
+    },
     { path: '/403', component: './403', hideInMenu: true },
   ],
   npmClient: 'pnpm',

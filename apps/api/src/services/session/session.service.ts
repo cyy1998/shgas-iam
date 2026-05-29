@@ -2,8 +2,8 @@ import type { UserDetailDto } from "../user/user.type";
 import type { LocalSessionAbstract } from "./session.type";
 import config from "@api/env";
 import redis from "@api/lib/infra/redis";
+import * as auditService from "@api/services/audit/audit.service";
 import * as clientService from "@api/services/client/client.service";
-import * as sessionRepository from "@api/services/session/session.repository";
 import { reviveIsoDates } from "@iam/api-core/utils";
 import { ClientManagementLevel } from "@iam/contracts";
 import { LocalSessionAbstractSchema } from "./session.schema";
@@ -26,7 +26,21 @@ export async function setLocalSession(
     redis.set(`local_session_reverse:${localSessionId}`, globalSessionId, "EX", ttl),
     redis.zadd(`local_session_set:${globalSessionId}`, Date.now() + ttl * 1000, JSON.stringify({ clientCode, localSessionId, mode })),
     redis.expire(`local_session_set:${globalSessionId}`, config.REDIS_EXPIRE_TIME),
-    sessionRepository.loginLog(userDetailDto, clientCode, "局部系统登录"),
+    auditService.recordAuditLog({
+      action: "auth.login.local.success",
+      outcome: "success",
+      actorType: "user",
+      actorUserId: userDetailDto.id,
+      actorUsername: userDetailDto.username,
+      targetType: "user",
+      targetId: userDetailDto.id,
+      targetCode: userDetailDto.username,
+      details: {
+        clientCode,
+        loginType: "local",
+        managementLevel: mode,
+      },
+    }),
   ]);
   return { localSessionId, ttl };
 }

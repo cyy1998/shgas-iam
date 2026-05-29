@@ -14,19 +14,19 @@ export const organizationDetail: OrganizationRouteHandler<"organizationDetail"> 
   c.json(await ops.getOrganizationOp.run(c.req.valid("param")));
 
 export const organizationCreate: OrganizationRouteHandler<"organizationCreate"> = async c =>
-  c.json(await ops.createOrganizationOp.run(c.req.valid("json")));
+  c.json(await ops.createOrganizationOp.run(c.req.valid("json"), { hono: c }));
 
 export const organizationUpdate: OrganizationRouteHandler<"organizationUpdate"> = async c =>
   c.json(await ops.updateOrganizationOp.run({
     orgCode: c.req.valid("param").orgCode,
     data: c.req.valid("json"),
-  }));
+  }, { hono: c }));
 
 export const organizationStatusUpdate: OrganizationRouteHandler<"organizationStatusUpdate"> = async c =>
   c.json(await ops.updateOrganizationStatusOp.run({
     orgCode: c.req.valid("param").orgCode,
     status: c.req.valid("json").status,
-  }));
+  }, { hono: c }));
 
 export const organizationDelete: OrganizationRouteHandler<"organizationDelete"> = async c =>
-  c.json(await ops.deleteOrganizationOp.run(c.req.valid("param")));
+  c.json(await ops.deleteOrganizationOp.run(c.req.valid("param"), { hono: c }));

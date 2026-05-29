@@ -3,6 +3,7 @@ import type { User } from "@iam/db/schema";
 import type { UserDetailDto, UserDto, UserQueryDto, UserQueryWithPrivilegeDelegationDto } from "./user.type";
 import { VerificationCodeUsage } from "@api/enums/verificationCode.usage";
 import config from "@api/env";
+import * as auditService from "@api/services/audit/audit.service";
 import * as employmentRepository from "@api/services/employment/employment.repository";
 import { EmploymentDetailDtoSchema, toEmploymentDto } from "@api/services/employment/employment.schema";
 import * as mobileService from "@api/services/mobile/mobile.service";
@@ -51,6 +52,10 @@ async function _getUserDetail(user: User | null): Promise<UserDetailDto> {
 const LETTER_CHECK_REGEX = /[a-z]/i;
 const DIGIT_CHECK_REGEX = /\d/;
 
+function maskMobileForAudit(phoneNumber: string) {
+  return phoneNumber.replace(/^(\d{3})\d{4}(\d{4})$/, "$1****$2");
+}
+
 function _validatePasswordStrength(password: string): boolean {
   // 检查长度是否至少为8
   if (password.length < 8) {
@@ -74,6 +79,19 @@ export async function setPassword(username: string, oldPassword: string, newPass
     }
     const isMatch = await checkPassword(user.username, oldPassword);
     if (!isMatch) {
+      await auditService.recordAuditLog({
+        action: "self.password.change",
+        outcome: "failure",
+        actorType: "user",
+        actorUserId: user.id,
+        actorUsername: user.username,
+        targetType: "user",
+        targetId: user.id,
+        targetCode: user.username,
+        details: {
+          reason: "invalid_old_password",
+        },
+      }, tx);
       throw new InvalidOldPasswordError("旧密码错误");
     }
     if (!_validatePasswordStrength(newPassword)) {
@@ -81,6 +99,19 @@ export async function setPassword(username: string, oldPassword: string, newPass
     }
     const newPasswordHash = await hash(newPassword, config.PASSWORD_HASH_ROUNDS);
     await userRepository.setPassword(user.id, newPasswordHash, tx);
+    await auditService.recordAuditLog({
+      action: "self.password.change",
+      outcome: "success",
+      actorType: "user",
+      actorUserId: user.id,
+      actorUsername: user.username,
+      targetType: "user",
+      targetId: user.id,
+      targetCode: user.username,
+      details: {
+        passwordChanged: true,
+      },
+    }, tx);
     return true;
   });
 }
@@ -92,13 +123,49 @@ export async function resetPassword(username: string, phone: string, code: strin
       throw new UserNotFoundError("用户不存在");
     }
     if (user.mobile !== phone) {
+      await auditService.recordAuditLog({
+        action: "auth.password.reset",
+        outcome: "failure",
+        actorType: "anonymous",
+        targetType: "user",
+        targetId: user.id,
+        targetCode: user.username,
+        details: {
+          phoneNumber: maskMobileForAudit(phone),
+          reason: "mobile_mismatch",
+        },
+      }, tx);
       throw new UserNotFoundError("用户名与手机号不匹配");
     }
     if (!await mobileService.checkVerificationCode("resetPassword", phone, code)) {
+      await auditService.recordAuditLog({
+        action: "auth.password.reset",
+        outcome: "failure",
+        actorType: "anonymous",
+        targetType: "user",
+        targetId: user.id,
+        targetCode: user.username,
+        details: {
+          phoneNumber: maskMobileForAudit(phone),
+          reason: "invalid_verification_code",
+        },
+      }, tx);
       throw new InvalidVerificationCodeError("验证码错误");
     }
     const newPasswordHash = await hash(newPassword, config.PASSWORD_HASH_ROUNDS);
     await userRepository.setPassword(user.id, newPasswordHash, tx);
+    await auditService.recordAuditLog({
+      action: "auth.password.reset",
+      outcome: "success",
+      actorType: "anonymous",
+      targetType: "user",
+      targetId: user.id,
+      targetCode: user.username,
+      details: {
+        phoneNumber: maskMobileForAudit(phone),
+        passwordReset: true,
+      },
+    }, tx);
     return true;
   });
 }
@@ -131,9 +198,34 @@ export async function setMobile(userId: number, phoneNumber: string, code: strin
       throw new MobileAlreadyExistsError("手机号已存在");
     }
     if (!await mobileService.checkVerificationCode(VerificationCodeUsage.BindPhone, phoneNumber, code)) {
+      await auditService.recordAuditLog({
+        action: "self.mobile.bind",
+        outcome: "failure",
+        actorType: "user",
+        actorUserId: userId,
+        targetType: "user",
+        targetId: userId,
+        targetCode: maskMobileForAudit(phoneNumber),
+        details: {
+          phoneNumber: maskMobileForAudit(phoneNumber),
+          reason: "invalid_verification_code",
+        },
+      }, tx);
       throw new InvalidVerificationCodeError("验证码错误");
     }
     await userRepository.setMobile(userId, phoneNumber, tx);
+    await auditService.recordAuditLog({
+      action: "self.mobile.bind",
+      outcome: "success",
+      actorType: "user",
+      actorUserId: userId,
+      targetType: "user",
+      targetId: userId,
+      targetCode: maskMobileForAudit(phoneNumber),
+      details: {
+        phoneNumber: maskMobileForAudit(phoneNumber),
+      },
+    }, tx);
   });
   return await getUserDetailById(userId);
 }

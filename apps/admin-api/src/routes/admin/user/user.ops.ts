@@ -1,3 +1,5 @@
+import type { Context } from "hono";
+import * as auditService from "@admin-api/services/audit/audit.service";
 import {
   UserAdminCreateDtoSchema,
   UserPaginationQueryDtoSchema,
@@ -9,6 +11,17 @@ import { generateRandomPassword } from "@iam/api-core/utils";
 import { UserStatus } from "@iam/contracts";
 import { z } from "zod";
 import { toUserDetailVo, toUserVo } from "./user.schema";
+
+function resolveAuditContext(context?: unknown) {
+  const hono = (context as { hono?: Context } | undefined)?.hono;
+  if (!hono) {
+    return undefined;
+  }
+  return {
+    ...auditService.getAdminAuditActor(hono),
+    ...auditService.getAdminAuditRequestContext(hono),
+  };
+}
 
 export const searchUserOp = defineQueryOp({
   input: UserPaginationQueryDtoSchema,
@@ -31,7 +44,7 @@ export const getUserOp = defineQueryOp({
 
 export const createUserOp = defineMutationOp({
   input: UserAdminCreateDtoSchema,
-  handler: input => userService.setUserForAdmin(input),
+  handler: (input, context) => userService.setUserForAdmin(input, resolveAuditContext(context)),
 });
 
 export const updateUserOp = defineMutationOp({
@@ -39,7 +52,7 @@ export const updateUserOp = defineMutationOp({
     username: z.string(),
     data: UserUpdateDtoSchema,
   }),
-  handler: ({ username, data }) => userService.updateUser(username, data),
+  handler: ({ username, data }, context) => userService.updateUser(username, data, resolveAuditContext(context)),
 });
 
 export const updateUserStatusOp = defineMutationOp({
@@ -47,17 +60,18 @@ export const updateUserStatusOp = defineMutationOp({
     username: z.string(),
     status: z.enum(UserStatus),
   }),
-  handler: ({ username, status }) => userService.updateUserStatus(username, status),
+  handler: ({ username, status }, context) =>
+    userService.updateUserStatus(username, status, resolveAuditContext(context)),
 });
 
 export const deleteUserOp = defineMutationOp({
   input: z.object({ username: z.string() }),
-  handler: ({ username }) => userService.deleteUser(username),
+  handler: ({ username }, context) => userService.deleteUser(username, resolveAuditContext(context)),
 });
 
 export const resetPasswordOp = defineMutationOp({
   input: z.object({ username: z.string() }),
-  handler: ({ username }) => userService.resetPasswordByUsername(username),
+  handler: ({ username }, context) => userService.resetPasswordByUsername(username, resolveAuditContext(context)),
 });
 
 export const generatePasswordOp = defineQueryOp({

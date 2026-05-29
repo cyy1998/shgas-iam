@@ -20,6 +20,10 @@ const redis = {
   set: mock(async () => "OK"),
 };
 
+const auditService = {
+  recordAuditLog: mock(),
+};
+
 mock.module("@iam/db", () => ({
   default: {
     transaction,
@@ -30,6 +34,7 @@ mock.module("@admin-api/lib/infra/redis", () => ({
   default: redis,
 }));
 
+mock.module("@admin-api/services/audit/audit.service", () => auditService);
 mock.module("@admin-api/services/client/client.repository", () => clientRepository);
 
 const clientService = await import("../client.service");
@@ -64,6 +69,7 @@ beforeEach(() => {
   transaction.mockClear();
   redis.del.mockClear();
   redis.set.mockClear();
+  auditService.recordAuditLog.mockReset();
   clientRepository.createClient.mockReset();
   clientRepository.getAnyClientByCode.mockReset();
   clientRepository.getClientByCode.mockReset();
@@ -81,6 +87,7 @@ beforeEach(() => {
   clientRepository.softDeleteClientByCode.mockResolvedValue(makeClient({ isDelete: true }));
   clientRepository.updateClientByCode.mockResolvedValue(makeClient());
   clientRepository.updateClientById.mockResolvedValue(makeClient());
+  auditService.recordAuditLog.mockResolvedValue(undefined);
 });
 
 describe("admin clientService.searchClientsForAdmin", () => {
@@ -141,6 +148,16 @@ describe("admin clientService.createClient", () => {
     })).resolves.toMatchObject({ clientCode: "portal" });
 
     expect(clientRepository.createClient).toHaveBeenCalledWith(expect.objectContaining({ clientCode: "portal" }), tx);
+    expect(auditService.recordAuditLog).toHaveBeenCalledWith(expect.objectContaining({
+      action: "admin.client.create",
+      outcome: "success",
+      actorType: "system",
+      targetType: "client",
+      targetCode: "portal",
+      details: expect.objectContaining({
+        clientSecretProvided: true,
+      }),
+    }), tx);
     expect(redis.set).toHaveBeenCalledWith("cache:client:code:portal", expect.any(String));
     expect(redis.set).toHaveBeenCalledWith("cache:client:secret:secret-1", expect.any(String));
   });
@@ -184,6 +201,14 @@ describe("admin clientService.updateClient", () => {
     expect(redis.del).toHaveBeenCalledWith("cache:client:secret:old-secret");
     expect(redis.set).toHaveBeenCalledWith("cache:client:code:new-portal", expect.any(String));
     expect(redis.set).toHaveBeenCalledWith("cache:client:secret:new-secret", expect.any(String));
+    expect(auditService.recordAuditLog).toHaveBeenCalledWith(expect.objectContaining({
+      action: "admin.client.rotate_secret",
+      details: expect.objectContaining({
+        patch: expect.objectContaining({
+          clientSecretRotated: true,
+        }),
+      }),
+    }), tx);
   });
 });
 
@@ -194,6 +219,12 @@ describe("admin clientService.updateClientStatus", () => {
     await expect(clientService.updateClientStatus("portal", ClientStatus.Disable)).resolves.toBe(true);
 
     expect(clientRepository.updateClientByCode).toHaveBeenCalledWith("portal", { status: ClientStatus.Disable }, tx);
+    expect(auditService.recordAuditLog).toHaveBeenCalledWith(expect.objectContaining({
+      action: "admin.client.status_update",
+      details: expect.objectContaining({
+        patch: { status: ClientStatus.Disable },
+      }),
+    }), tx);
     expect(redis.set).toHaveBeenCalledWith("cache:client:code:portal", expect.any(String));
     expect(redis.set).toHaveBeenCalledWith("cache:client:secret:secret-1", expect.any(String));
   });
@@ -204,6 +235,12 @@ describe("admin clientService.deleteClient", () => {
     await expect(clientService.deleteClient("portal")).resolves.toBe(true);
 
     expect(clientRepository.softDeleteClientByCode).toHaveBeenCalledWith("portal", tx);
+    expect(auditService.recordAuditLog).toHaveBeenCalledWith(expect.objectContaining({
+      action: "admin.client.delete",
+      details: expect.objectContaining({
+        deleted: true,
+      }),
+    }), tx);
     expect(redis.del).toHaveBeenCalledWith("cache:client:code:portal");
     expect(redis.del).toHaveBeenCalledWith("cache:client:secret:secret-1");
   });

@@ -1,3 +1,4 @@
+import * as auditService from "@admin-api/services/audit/audit.service";
 import {
   EmploymentAdminCreateDtoSchema,
   EmploymentAdminPaginationQueryDtoSchema,
@@ -32,7 +33,8 @@ export const getEmploymentOp = defineQueryOp({
 
 export const createEmploymentOp = defineMutationOp({
   input: EmploymentAdminCreateDtoSchema,
-  handler: input => employmentService.createEmploymentForAdmin(input),
+  handler: (input, context) =>
+    employmentService.createEmploymentForAdmin(input, auditService.resolveAdminAuditContext(context)),
 });
 
 export const updateEmploymentOp = defineMutationOp({
@@ -40,7 +42,8 @@ export const updateEmploymentOp = defineMutationOp({
     id: z.coerce.number().int().positive(),
     data: EmploymentUpdateDtoSchema,
   }),
-  handler: ({ id, data }) => employmentService.updateEmployment(id, data),
+  handler: ({ id, data }, context) =>
+    employmentService.updateEmployment(id, data, auditService.resolveAdminAuditContext(context)),
 });
 
 export const updateEmploymentStatusOp = defineMutationOp({
@@ -48,12 +51,14 @@ export const updateEmploymentStatusOp = defineMutationOp({
     id: z.coerce.number().int().positive(),
     status: z.enum(EmploymentStatus),
   }),
-  handler: ({ id, status }) => employmentService.updateEmploymentStatus(id, status),
+  handler: ({ id, status }, context) =>
+    employmentService.updateEmploymentStatus(id, status, auditService.resolveAdminAuditContext(context)),
 });
 
 export const deleteEmploymentOp = defineMutationOp({
   input: z.object({ id: z.coerce.number().int().positive() }),
-  handler: ({ id }) => employmentService.deleteEmployment(id),
+  handler: ({ id }, context) =>
+    employmentService.deleteEmployment(id, auditService.resolveAdminAuditContext(context)),
 });
 
 export const transferEmploymentOp = defineMutationOp({
@@ -61,17 +66,20 @@ export const transferEmploymentOp = defineMutationOp({
     id: z.coerce.number().int().positive(),
     data: EmploymentTransferDtoSchema,
   }),
-  handler: ({ id, data }) => employmentService.transferEmployment(id, data),
+  handler: ({ id, data }, context) =>
+    employmentService.transferEmployment(id, data, auditService.resolveAdminAuditContext(context)),
 });
 
 export const setPrimaryEmploymentOp = defineMutationOp({
   input: z.object({ id: z.coerce.number().int().positive() }),
-  handler: ({ id }) => employmentService.setPrimaryEmployment(id),
+  handler: ({ id }, context) =>
+    employmentService.setPrimaryEmployment(id, auditService.resolveAdminAuditContext(context)),
 });
 
 export const resignUserOp = defineMutationOp({
   input: z.object({ username: z.string() }),
-  handler: ({ username }) => employmentService.resignUser(username),
+  handler: ({ username }, context) =>
+    employmentService.resignUser(username, auditService.resolveAdminAuditContext(context)),
 });
 
 // re-export for handler body schemas

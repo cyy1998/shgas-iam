@@ -1,4 +1,5 @@
 import type { OrganizationRouteHandler } from "./organization.type";
+import * as auditService from "@api/services/audit/audit.service";
 import * as organizationRepository from "@api/services/organization/organization.repository";
 import { OrganizationCreateDtoSchema } from "@api/services/organization/organization.schema";
 import * as organizationService from "@api/services/organization/organization.service";
@@ -38,5 +39,18 @@ export const purveyorRegister: OrganizationRouteHandler<"purveyorRegister"> = as
     parentCode: parentOrg,
   });
   await organizationService.setOrganization(organizationCreateDto);
+  await auditService.recordAuditLogFromContext(c, {
+    action: "internal.purveyor.register",
+    outcome: "success",
+    ...auditService.getInternalAuditActor(c),
+    targetType: "organization",
+    targetCode: orgCode,
+    details: {
+      orgCode,
+      orgName,
+      parentOrg,
+      orgType: OrganizationType.External,
+    },
+  });
   return c.json(resp.ok(true));
 };

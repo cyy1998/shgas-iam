@@ -1,6 +1,8 @@
+import type { AdminAuditContext } from "@admin-api/services/audit/audit.service";
 import type { PositionStatus } from "@iam/contracts";
 import type { DbClient } from "@iam/db";
 import type { PositionCreateDto, PositionUpdateDto } from "./position.type";
+import * as auditService from "@admin-api/services/audit/audit.service";
 import { PositionCodeExistsError } from "@iam/api-core/errors/PositionCodeExistsError";
 import { PositionHasEmploymentError } from "@iam/api-core/errors/PositionHasEmploymentError";
 import { PositionNotFoundError } from "@iam/api-core/errors/PositionNotFoundError";
@@ -8,13 +10,39 @@ import db from "@iam/db";
 import * as positionRepository from "./position.repository";
 import { PositionDtoSchema } from "./position.schema";
 
-export async function setPosition(positionCreateDto: PositionCreateDto) {
+async function recordPositionAudit(
+  action: string,
+  position: { id?: number | null; posCode: string; posName: string; status?: PositionStatus },
+  details: Record<string, unknown>,
+  tx: Parameters<typeof auditService.recordAuditLog>[1],
+  auditContext?: AdminAuditContext,
+) {
+  await auditService.recordAuditLog({
+    ...auditService.resolveAdminAuditContext(auditContext),
+    action,
+    outcome: "success",
+    targetType: "position",
+    targetId: position.id ?? null,
+    targetCode: position.posCode,
+    details: {
+      posCode: position.posCode,
+      posName: position.posName,
+      status: position.status,
+      ...details,
+    },
+  }, tx);
+}
+
+export async function setPosition(positionCreateDto: PositionCreateDto, auditContext?: AdminAuditContext) {
   return await db.transaction(async (tx) => {
     const existingPos = await positionRepository.getAnyPositionByCode(positionCreateDto.posCode, tx);
     if (existingPos !== null) {
       throw new PositionCodeExistsError("重复岗位code代码");
     }
     await positionRepository.setPosition(positionCreateDto, tx);
+    await recordPositionAudit("admin.position.create", positionCreateDto, {
+      description: positionCreateDto.description ?? null,
+    }, tx, auditContext);
     return true;
   });
 }
@@ -30,6 +58,8 @@ export async function getPositionDetailByCode(posCode: string) {
 export async function updatePosition(
   posCode: string,
   data: PositionUpdateDto,
+  auditContext?: AdminAuditContext,
+  action = "admin.position.update",
 ) {
   return await db.transaction(async (tx) => {
     const existing = await positionRepository.getPositionByCode(posCode, tx);
@@ -38,6 +68,15 @@ export async function updatePosition(
     }
     await assertRenamedPositionCodeAvailable(posCode, data.posCode, tx);
     await positionRepository.updatePositionByCode(posCode, data, tx);
+    await recordPositionAudit(action, {
+      ...existing,
+      posCode: data.posCode ?? existing.posCode,
+      posName: data.posName ?? existing.posName,
+      status: data.status ?? existing.status,
+    }, {
+      patch: data,
+      previousPosCode: posCode,
+    }, tx, auditContext);
     return true;
   });
 }
@@ -57,11 +96,11 @@ async function assertRenamedPositionCodeAvailable(
   }
 }
 
-export async function updatePositionStatus(posCode: string, status: PositionStatus) {
-  return await updatePosition(posCode, { status });
+export async function updatePositionStatus(posCode: string, status: PositionStatus, auditContext?: AdminAuditContext) {
+  return await updatePosition(posCode, { status }, auditContext, "admin.position.status_update");
 }
 
-export async function deletePosition(posCode: string) {
+export async function deletePosition(posCode: string, auditContext?: AdminAuditContext) {
   return await db.transaction(async (tx) => {
     const existing = await positionRepository.getPositionByCode(posCode, tx);
     if (existing === null) {
@@ -72,6 +111,9 @@ export async function deletePosition(posCode: string) {
       throw new PositionHasEmploymentError();
     }
     await positionRepository.softDeletePositionByCode(posCode, tx);
+    await recordPositionAudit("admin.position.delete", existing, {
+      deleted: true,
+    }, tx, auditContext);
     return true;
   });
 }

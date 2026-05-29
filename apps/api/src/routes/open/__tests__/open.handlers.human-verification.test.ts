@@ -9,9 +9,14 @@ function makeContext(input: Partial<Record<ValidTarget, unknown>>) {
       header(name: string) {
         return name.toLowerCase() === "client" ? "iam" : undefined;
       },
+      method: "POST",
+      path: "/open/code/send",
       valid(target: ValidTarget) {
         return input[target];
       },
+    },
+    get(name: string) {
+      return name === "requestId" ? "req-1" : undefined;
     },
     json(data: unknown) {
       return data;
@@ -22,6 +27,7 @@ function makeContext(input: Partial<Record<ValidTarget, unknown>>) {
 const ensureActionAllowed = mock(async () => undefined);
 const recordOpenUserInfoLookup = mock(async () => undefined);
 const sendCode = mock(async () => true);
+const recordAuditLogFromContext = mock(async () => undefined);
 const getUserDetailByUsername = mock(async () => ({
   mobile: "17721462865",
   name: "张三",
@@ -41,7 +47,12 @@ mock.module("@api/services/human-verification/human-risk.service", () => ({
 }));
 
 mock.module("@api/services/mobile/mobile.service", () => ({
+  checkVerificationCode: mock(async () => true),
   sendCode,
+}));
+
+mock.module("@api/services/audit/audit.service", () => ({
+  recordAuditLogFromContext,
 }));
 
 mock.module("@api/services/user/user.service", () => ({
@@ -67,6 +78,8 @@ beforeEach(() => {
   recordOpenUserInfoLookup.mockResolvedValue(undefined);
   sendCode.mockReset();
   sendCode.mockResolvedValue(true);
+  recordAuditLogFromContext.mockReset();
+  recordAuditLogFromContext.mockResolvedValue(undefined);
   getUserDetailByUsername.mockReset();
   getUserDetailByUsername.mockResolvedValue({
     mobile: "17721462865",
@@ -109,6 +122,15 @@ describe("open handlers human verification", () => {
 
     expect(ensureActionAllowed).toHaveBeenCalled();
     expect(sendCode).toHaveBeenCalledWith("17721462865", "login");
+    expect(recordAuditLogFromContext).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({
+      action: "auth.sms_code.send",
+      outcome: "success",
+      details: {
+        phoneNumber: "177****2865",
+        usage: "login",
+        username: undefined,
+      },
+    }));
   });
 
   test("does not query user info when Cap verification is required", async () => {

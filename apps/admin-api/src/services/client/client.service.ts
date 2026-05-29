@@ -1,3 +1,4 @@
+import type { AuditLogInput } from "@admin-api/services/audit/audit.service";
 import type { ClientStatus } from "@iam/contracts";
 import type {
   ClientCreateDto,
@@ -7,11 +8,44 @@ import type {
   ClientUpdateDto,
 } from "./client.type";
 import redis from "@admin-api/lib/infra/redis";
+import * as auditService from "@admin-api/services/audit/audit.service";
 import * as clientRepository from "@admin-api/services/client/client.repository";
 import { ClientDtoSchema } from "@admin-api/services/client/client.schema";
 import { ClientCodeExistsError } from "@iam/api-core/errors/ClientCodeExistsError";
 import { ClientNotFoundError } from "@iam/api-core/errors/ClientNotFoundError";
 import db from "@iam/db";
+
+type AdminAuditContext = Pick<AuditLogInput, "actorType"> & Partial<AuditLogInput>;
+
+function resolveAuditContext(auditContext?: AdminAuditContext): AdminAuditContext {
+  return auditContext ?? {
+    actorType: "system",
+    actorSystemKey: "admin-api",
+  };
+}
+
+async function recordAdminClientAudit(
+  action: string,
+  clientDto: ClientDto,
+  details: Record<string, unknown>,
+  tx: Parameters<typeof auditService.recordAuditLog>[1],
+  auditContext?: AdminAuditContext,
+) {
+  await auditService.recordAuditLog({
+    ...resolveAuditContext(auditContext),
+    action,
+    outcome: "success",
+    targetType: "client",
+    targetId: clientDto.id,
+    targetCode: clientDto.clientCode,
+    details: {
+      clientCode: clientDto.clientCode,
+      clientName: clientDto.clientName,
+      status: clientDto.status,
+      ...details,
+    },
+  }, tx);
+}
 
 async function setClientCache(clientDto: ClientDto) {
   await Promise.all([
@@ -76,20 +110,30 @@ export async function getClientDetailByCode(clientCode: string) {
   return ClientDtoSchema.parse(client);
 }
 
-export async function createClient(clientDto: ClientCreateDto) {
+export async function createClient(clientDto: ClientCreateDto, auditContext?: AdminAuditContext) {
   const createdClientDto = await db.transaction(async (tx) => {
     const existing = await clientRepository.getAnyClientByCode(clientDto.clientCode, tx);
     if (existing !== null) {
       throw new ClientCodeExistsError("客户端编码已存在");
     }
     const client = await clientRepository.createClient(clientDto, tx);
-    return ClientDtoSchema.parse(client);
+    const created = ClientDtoSchema.parse(client);
+    await recordAdminClientAudit("admin.client.create", created, {
+      clientSecretProvided: clientDto.clientSecret !== undefined,
+      managementLevel: clientDto.extAttributes.managementLevel,
+    }, tx, auditContext);
+    return created;
   });
   await setClientCache(createdClientDto);
   return createdClientDto;
 }
 
-export async function updateClient(clientCode: string, data: ClientUpdateDto) {
+export async function updateClient(
+  clientCode: string,
+  data: ClientUpdateDto,
+  auditContext?: AdminAuditContext,
+  actionOverride?: string,
+) {
   const { oldClientDto, updatedClientDto } = await db.transaction(async (tx) => {
     const existing = await clientRepository.getClientByCode(clientCode, tx);
     if (existing === null) {
@@ -97,16 +141,34 @@ export async function updateClient(clientCode: string, data: ClientUpdateDto) {
     }
     await assertRenamedClientCodeAvailable(clientCode, data.clientCode, tx);
     const client = await clientRepository.updateClientByCode(clientCode, data, tx);
+    const parsedExisting = ClientDtoSchema.parse(existing);
+    const parsedUpdated = ClientDtoSchema.parse(client);
+    const secretRotated = data.clientSecret !== undefined && data.clientSecret !== parsedExisting.clientSecret;
+    const patch: Record<string, unknown> = { ...data };
+    if ("clientSecret" in patch) {
+      delete patch.clientSecret;
+      patch.clientSecretRotated = secretRotated;
+    }
+    await recordAdminClientAudit(
+      actionOverride ?? (secretRotated ? "admin.client.rotate_secret" : "admin.client.update"),
+      parsedUpdated,
+      {
+        previousClientCode: parsedExisting.clientCode,
+        patch,
+      },
+      tx,
+      auditContext,
+    );
     return {
-      oldClientDto: ClientDtoSchema.parse(existing),
-      updatedClientDto: ClientDtoSchema.parse(client),
+      oldClientDto: parsedExisting,
+      updatedClientDto: parsedUpdated,
     };
   });
   await syncUpdatedClientCache(oldClientDto, updatedClientDto);
   return updatedClientDto;
 }
 
-export async function updateClientById(clientDto: ClientInputDto) {
+export async function updateClientById(clientDto: ClientInputDto, auditContext?: AdminAuditContext) {
   const { oldClientDto, updatedClientDto } = await db.transaction(async (tx) => {
     const existing = await clientRepository.getClientById(clientDto.id, tx);
     if (existing === null) {
@@ -114,28 +176,43 @@ export async function updateClientById(clientDto: ClientInputDto) {
     }
     await assertRenamedClientCodeAvailable(existing.clientCode, clientDto.clientCode, tx);
     const client = await clientRepository.updateClientById(clientDto, tx);
+    const parsedExisting = ClientDtoSchema.parse(existing);
+    const parsedUpdated = ClientDtoSchema.parse(client);
+    const secretRotated = clientDto.clientSecret !== parsedExisting.clientSecret;
+    const patch: Record<string, unknown> = { ...clientDto };
+    delete patch.id;
+    delete patch.clientSecret;
+    patch.clientSecretRotated = secretRotated;
+    await recordAdminClientAudit(secretRotated ? "admin.client.rotate_secret" : "admin.client.update", parsedUpdated, {
+      previousClientCode: parsedExisting.clientCode,
+      patch,
+    }, tx, auditContext);
     return {
-      oldClientDto: ClientDtoSchema.parse(existing),
-      updatedClientDto: ClientDtoSchema.parse(client),
+      oldClientDto: parsedExisting,
+      updatedClientDto: parsedUpdated,
     };
   });
   await syncUpdatedClientCache(oldClientDto, updatedClientDto);
   return updatedClientDto;
 }
 
-export async function updateClientStatus(clientCode: string, status: ClientStatus) {
-  await updateClient(clientCode, { status });
+export async function updateClientStatus(clientCode: string, status: ClientStatus, auditContext?: AdminAuditContext) {
+  await updateClient(clientCode, { status }, auditContext, "admin.client.status_update");
   return true;
 }
 
-export async function deleteClient(clientCode: string) {
+export async function deleteClient(clientCode: string, auditContext?: AdminAuditContext) {
   const deletedClientDto = await db.transaction(async (tx) => {
     const existing = await clientRepository.getClientByCode(clientCode, tx);
     if (existing === null) {
       throw new ClientNotFoundError("客户端不存在");
     }
     const client = await clientRepository.softDeleteClientByCode(clientCode, tx);
-    return ClientDtoSchema.parse(client);
+    const deleted = ClientDtoSchema.parse(client);
+    await recordAdminClientAudit("admin.client.delete", deleted, {
+      deleted: true,
+    }, tx, auditContext);
+    return deleted;
   });
   await deleteClientCache(deletedClientDto);
   return true;

@@ -51,6 +51,10 @@ const privilegeRepository = {
   getPrivilegesByRoleIds: mock(),
 };
 
+const auditService = {
+  recordAuditLog: mock(),
+};
+
 Reflect.set(globalThis, "__adminUserRepositoryMock", userRepository);
 Reflect.set(globalThis, "__adminEmploymentRepositoryMock", employmentRepository);
 Reflect.set(globalThis, "__adminRoleRepositoryMock", roleRepository);
@@ -78,6 +82,7 @@ mock.module("@admin-api/services/user/user.repository", () => userRepository);
 mock.module("@admin-api/services/employment/employment.repository", () => employmentRepository);
 mock.module("@admin-api/services/role/role.repository", () => roleRepository);
 mock.module("@admin-api/services/privilege/privilege.repository", () => privilegeRepository);
+mock.module("@admin-api/services/audit/audit.service", () => auditService);
 
 const userService = await import("../user.service");
 
@@ -222,6 +227,7 @@ beforeEach(() => {
   employmentRepository.getEmploymentsByUserId.mockReset();
   roleRepository.getRolesByEmploymentId.mockReset();
   privilegeRepository.getPrivilegesByRoleIds.mockReset();
+  auditService.recordAuditLog.mockReset();
 
   userRepository.getUserByUsernameForAdmin.mockResolvedValue(makeUser());
   userRepository.searchUsersFuzzyPaged.mockResolvedValue({ rows: [makeUser()], total: 1 });
@@ -234,6 +240,7 @@ beforeEach(() => {
   employmentRepository.getEmploymentsByUserId.mockResolvedValue([]);
   roleRepository.getRolesByEmploymentId.mockResolvedValue([]);
   privilegeRepository.getPrivilegesByRoleIds.mockResolvedValue([]);
+  auditService.recordAuditLog.mockResolvedValue(undefined);
 });
 
 describe("admin userService.setUserForAdmin", () => {
@@ -283,6 +290,16 @@ describe("admin userService.setUserForAdmin", () => {
       },
       tx,
     );
+    expect(auditService.recordAuditLog).toHaveBeenCalledWith(expect.objectContaining({
+      action: "admin.user.create",
+      outcome: "success",
+      actorType: "system",
+      targetType: "user",
+      targetCode: "zhangsan",
+      details: expect.objectContaining({
+        passwordProvided: true,
+      }),
+    }), tx);
   });
 
   test("generates a password and applies create defaults when password and optional fields are omitted", async () => {
@@ -314,6 +331,12 @@ describe("admin userService.setUserForAdmin", () => {
       },
       tx,
     );
+    expect(auditService.recordAuditLog).toHaveBeenCalledWith(expect.objectContaining({
+      action: "admin.user.create",
+      details: expect.objectContaining({
+        passwordProvided: false,
+      }),
+    }), tx);
   });
 });
 
@@ -332,6 +355,12 @@ describe("admin userService.updateUser", () => {
     await expect(userService.updateUser("zhangsan", data)).resolves.toBe(true);
 
     expect(userRepository.updateUserByUsername).toHaveBeenCalledWith("zhangsan", data, tx);
+    expect(auditService.recordAuditLog).toHaveBeenCalledWith(expect.objectContaining({
+      action: "admin.user.update",
+      details: expect.objectContaining({
+        patch: data,
+      }),
+    }), tx);
   });
 
   test("updates user status through updateUser", async () => {
@@ -342,6 +371,12 @@ describe("admin userService.updateUser", () => {
       { status: UserStatus.Disable },
       tx,
     );
+    expect(auditService.recordAuditLog).toHaveBeenCalledWith(expect.objectContaining({
+      action: "admin.user.status_update",
+      details: expect.objectContaining({
+        patch: { status: UserStatus.Disable },
+      }),
+    }), tx);
   });
 });
 
@@ -368,6 +403,12 @@ describe("admin userService.deleteUser", () => {
 
     expect(userRepository.countActiveEmploymentsByUsername).toHaveBeenCalledWith("zhangsan", tx);
     expect(userRepository.softDeleteUserByUsername).toHaveBeenCalledWith("zhangsan", tx);
+    expect(auditService.recordAuditLog).toHaveBeenCalledWith(expect.objectContaining({
+      action: "admin.user.delete",
+      details: expect.objectContaining({
+        deleted: true,
+      }),
+    }), tx);
   });
 });
 
@@ -386,6 +427,12 @@ describe("admin userService.resetPasswordByUsername", () => {
     expect(generateRandomPassword).toHaveBeenCalledWith(8);
     expect(hash).toHaveBeenCalledWith("Rand1234", config.PASSWORD_HASH_ROUNDS);
     expect(userRepository.setPassword).toHaveBeenCalledWith(1001, "hashed:Rand1234:4", tx);
+    expect(auditService.recordAuditLog).toHaveBeenCalledWith(expect.objectContaining({
+      action: "admin.user.reset_password",
+      details: expect.objectContaining({
+        passwordReset: true,
+      }),
+    }), tx);
   });
 });
 

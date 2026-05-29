@@ -1,5 +1,7 @@
+import type { AuditLogInput } from "@admin-api/services/audit/audit.service";
 import type { UserAdminCreateDto, UserDetailDto, UserPaginationQueryDto, UserUpdateDto } from "./user.type";
 import config from "@admin-api/env";
+import * as auditService from "@admin-api/services/audit/audit.service";
 import * as employmentRepository from "@admin-api/services/employment/employment.repository";
 import { EmploymentDetailDtoSchema, toEmploymentDto } from "@admin-api/services/employment/employment.schema";
 import * as privilegeRepository from "@admin-api/services/privilege/privilege.repository";
@@ -16,6 +18,49 @@ import { generateRandomPassword } from "@iam/api-core/utils";
 import { EmploymentStatus, UserStatus } from "@iam/contracts";
 import db from "@iam/db";
 import { hash } from "bcrypt-ts";
+
+type AdminAuditContext = Pick<AuditLogInput, "actorType"> & Partial<AuditLogInput>;
+type UserAuditTarget = {
+  id: number;
+  username: string;
+  name?: string | null;
+  mobile?: string | null;
+  status?: UserStatus;
+};
+
+function maskMobileForAudit(phoneNumber: string | null | undefined) {
+  return phoneNumber?.replace(/^(\d{3})\d{4}(\d{4})$/, "$1****$2") ?? null;
+}
+
+function resolveAuditContext(auditContext?: AdminAuditContext): AdminAuditContext {
+  return auditContext ?? {
+    actorType: "system",
+    actorSystemKey: "admin-api",
+  };
+}
+
+async function recordAdminUserAudit(
+  action: string,
+  user: UserAuditTarget,
+  details: Record<string, unknown>,
+  tx: Parameters<typeof auditService.recordAuditLog>[1],
+  auditContext?: AdminAuditContext,
+) {
+  await auditService.recordAuditLog({
+    ...resolveAuditContext(auditContext),
+    action,
+    outcome: "success",
+    targetType: "user",
+    targetId: user.id,
+    targetCode: user.username,
+    details: {
+      targetUsername: user.username,
+      targetName: user.name,
+      targetMobile: maskMobileForAudit(user.mobile),
+      ...details,
+    },
+  }, tx);
+}
 
 export async function getUserDetailByUsernameForAdmin(username: string): Promise<UserDetailDto> {
   const user = await userRepository.getUserByUsernameForAdmin(username);
@@ -55,6 +100,7 @@ export async function searchUsersFuzzyForAdmin(userPageQuery: UserPaginationQuer
 
 export async function setUserForAdmin(
   dto: UserAdminCreateDto,
+  auditContext?: AdminAuditContext,
 ): Promise<{ username: string; generatedPassword: string | null }> {
   return await db.transaction(async (tx) => {
     const existing = await userRepository.getUserByUsernameForAdmin(dto.username, tx);
@@ -63,7 +109,7 @@ export async function setUserForAdmin(
     }
     const plainPassword = dto.password ?? generateRandomPassword(8);
     const passwordHash = await hash(plainPassword, config.PASSWORD_HASH_ROUNDS);
-    await userRepository.setUserForAdmin(
+    const createdUser = await userRepository.setUserForAdmin(
       {
         username: dto.username,
         name: dto.name,
@@ -76,6 +122,12 @@ export async function setUserForAdmin(
       },
       tx,
     );
+    await recordAdminUserAudit("admin.user.create", createdUser, {
+      userType: dto.userType,
+      status: dto.status ?? UserStatus.Enable,
+      orderNum: dto.orderNum ?? 0,
+      passwordProvided: dto.password !== undefined,
+    }, tx, auditContext);
     return {
       username: dto.username,
       generatedPassword: dto.password ? null : plainPassword,
@@ -86,22 +138,31 @@ export async function setUserForAdmin(
 export async function updateUser(
   username: string,
   data: UserUpdateDto,
+  auditContext?: AdminAuditContext,
+  action = "admin.user.update",
 ) {
   return await db.transaction(async (tx) => {
     const existing = await userRepository.getUserByUsernameForAdmin(username, tx);
     if (existing === null) {
       throw new UserNotFoundError("用户不存在");
     }
-    await userRepository.updateUserByUsername(username, data, tx);
+    const updatedUser = await userRepository.updateUserByUsername(username, data, tx);
+    const patch: Record<string, unknown> = { ...data };
+    if ("mobile" in data) {
+      patch.mobile = maskMobileForAudit(data.mobile);
+    }
+    await recordAdminUserAudit(action, updatedUser, {
+      patch,
+    }, tx, auditContext);
     return true;
   });
 }
 
-export async function updateUserStatus(username: string, status: UserStatus) {
-  return await updateUser(username, { status });
+export async function updateUserStatus(username: string, status: UserStatus, auditContext?: AdminAuditContext) {
+  return await updateUser(username, { status }, auditContext, "admin.user.status_update");
 }
 
-export async function deleteUser(username: string) {
+export async function deleteUser(username: string, auditContext?: AdminAuditContext) {
   return await db.transaction(async (tx) => {
     const existing = await userRepository.getUserByUsernameForAdmin(username, tx);
     if (existing === null) {
@@ -111,12 +172,15 @@ export async function deleteUser(username: string) {
     if (activeEmps > 0) {
       throw new UserHasActiveEmploymentError();
     }
-    await userRepository.softDeleteUserByUsername(username, tx);
+    const deletedUser = await userRepository.softDeleteUserByUsername(username, tx);
+    await recordAdminUserAudit("admin.user.delete", deletedUser, {
+      deleted: true,
+    }, tx, auditContext);
     return true;
   });
 }
 
-export async function resetPasswordByUsername(username: string): Promise<string> {
+export async function resetPasswordByUsername(username: string, auditContext?: AdminAuditContext): Promise<string> {
   return await db.transaction(async (tx) => {
     const user = await userRepository.getUserByUsernameForAdmin(username, tx);
     if (user === null) {
@@ -125,6 +189,9 @@ export async function resetPasswordByUsername(username: string): Promise<string>
     const newPassword = generateRandomPassword(8);
     const newPasswordHash = await hash(newPassword, config.PASSWORD_HASH_ROUNDS);
     await userRepository.setPassword(user.id, newPasswordHash, tx);
+    await recordAdminUserAudit("admin.user.reset_password", user, {
+      passwordReset: true,
+    }, tx, auditContext);
     return newPassword;
   });
 }

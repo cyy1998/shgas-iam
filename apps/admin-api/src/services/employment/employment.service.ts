@@ -1,3 +1,4 @@
+import type { AdminAuditContext } from "@admin-api/services/audit/audit.service";
 import type { DbClient } from "@iam/db";
 import type {
   EmploymentAdminCreateDto,
@@ -5,6 +6,7 @@ import type {
   EmploymentTransferDto,
   EmploymentUpdateDto,
 } from "./employment.type";
+import * as auditService from "@admin-api/services/audit/audit.service";
 import * as employmentRepository from "@admin-api/services/employment/employment.repository";
 import { EmploymentDetailDtoSchema, toEmploymentDto } from "@admin-api/services/employment/employment.schema";
 import * as organizationRepository from "@admin-api/services/organization/organization.repository";
@@ -51,6 +53,43 @@ async function assertExpectedAncestor(
   }
 }
 
+async function recordEmploymentAudit(
+  action: string,
+  target: {
+    id: number;
+    userId?: number;
+    posId?: number;
+    orgId?: number;
+    isPrimary?: boolean;
+    status?: EmploymentStatus;
+    user?: { username: string };
+    organization?: { assignedOrg?: { orgCode: string } };
+    position?: { posCode: string };
+  },
+  details: Record<string, unknown>,
+  tx: Parameters<typeof auditService.recordAuditLog>[1],
+  auditContext?: AdminAuditContext,
+) {
+  await auditService.recordAuditLog({
+    ...auditService.resolveAdminAuditContext(auditContext),
+    action,
+    outcome: "success",
+    targetType: "employment",
+    targetId: target.id,
+    details: {
+      userId: target.userId,
+      username: target.user?.username,
+      posId: target.posId,
+      posCode: target.position?.posCode,
+      orgId: target.orgId,
+      orgCode: target.organization?.assignedOrg?.orgCode,
+      isPrimary: target.isPrimary,
+      status: target.status,
+      ...details,
+    },
+  }, tx);
+}
+
 export async function getEmploymentDetailByIdForAdmin(id: number) {
   const employment = await employmentRepository.getEmploymentByIdForAdmin(id);
   if (employment === null) {
@@ -77,7 +116,7 @@ export async function searchEmploymentsFuzzyForAdmin(dto: EmploymentAdminPaginat
   };
 }
 
-export async function createEmploymentForAdmin(dto: EmploymentAdminCreateDto) {
+export async function createEmploymentForAdmin(dto: EmploymentAdminCreateDto, auditContext?: AdminAuditContext) {
   return await db.transaction(async (tx) => {
     const { orgCode, expectedAncestorOrgCode } = resolveCreateOrganizationInput(dto);
     if (orgCode === undefined) {
@@ -124,11 +163,25 @@ export async function createEmploymentForAdmin(dto: EmploymentAdminCreateDto) {
       },
       tx,
     );
+    await recordEmploymentAudit("admin.employment.create", {
+      id: created.id,
+      userId: user.id,
+      posId: position.id,
+      orgId: org.id,
+      isPrimary: newIsPrimary,
+      status: EmploymentStatus.Enable,
+      user: { username: user.username },
+      organization: { assignedOrg: { orgCode: org.orgCode } },
+      position: { posCode: position.posCode },
+    }, {
+      startTime: dto.startTime,
+      description: dto.description ?? null,
+    }, tx, auditContext);
     return { id: created.id };
   });
 }
 
-export async function updateEmployment(id: number, dto: EmploymentUpdateDto) {
+export async function updateEmployment(id: number, dto: EmploymentUpdateDto, auditContext?: AdminAuditContext) {
   return await db.transaction(async (tx) => {
     const existing = await employmentRepository.getEmploymentByIdForAdmin(id, tx);
     if (existing === null)
@@ -150,11 +203,14 @@ export async function updateEmployment(id: number, dto: EmploymentUpdateDto) {
       },
       tx,
     );
+    await recordEmploymentAudit("admin.employment.update", existing, {
+      patch: dto,
+    }, tx, auditContext);
     return true;
   });
 }
 
-export async function updateEmploymentStatus(id: number, status: EmploymentStatus) {
+export async function updateEmploymentStatus(id: number, status: EmploymentStatus, auditContext?: AdminAuditContext) {
   return await db.transaction(async (tx) => {
     const existing = await employmentRepository.getEmploymentByIdForAdmin(id, tx);
     if (existing === null)
@@ -170,21 +226,27 @@ export async function updateEmploymentStatus(id: number, status: EmploymentStatu
     }
 
     await employmentRepository.updateEmploymentRecord(id, patch, tx);
+    await recordEmploymentAudit("admin.employment.status_update", existing, {
+      patch,
+    }, tx, auditContext);
     return true;
   });
 }
 
-export async function deleteEmployment(id: number) {
+export async function deleteEmployment(id: number, auditContext?: AdminAuditContext) {
   return await db.transaction(async (tx) => {
     const existing = await employmentRepository.getEmploymentByIdForAdmin(id, tx);
     if (existing === null)
       throw new EmploymentNotFoundError();
     await employmentRepository.softDeleteEmployment(id, tx);
+    await recordEmploymentAudit("admin.employment.delete", existing, {
+      deleted: true,
+    }, tx, auditContext);
     return true;
   });
 }
 
-export async function transferEmployment(id: number, dto: EmploymentTransferDto) {
+export async function transferEmployment(id: number, dto: EmploymentTransferDto, auditContext?: AdminAuditContext) {
   return await db.transaction(async (tx) => {
     const existing = await employmentRepository.getEmploymentByIdForAdmin(id, tx);
     if (existing === null)
@@ -236,11 +298,19 @@ export async function transferEmployment(id: number, dto: EmploymentTransferDto)
       },
       tx,
     );
+    await recordEmploymentAudit("admin.employment.transfer", existing, {
+      newEmploymentId: created.id,
+      newOrgCode: org.orgCode,
+      newPosCode: position.posCode,
+      inheritPrimary,
+      newIsPrimary,
+      startTime: dto.startTime ?? now,
+    }, tx, auditContext);
     return { newEmploymentId: created.id };
   });
 }
 
-export async function setPrimaryEmployment(id: number) {
+export async function setPrimaryEmployment(id: number, auditContext?: AdminAuditContext) {
   return await db.transaction(async (tx) => {
     const existing = await employmentRepository.getEmploymentByIdForAdmin(id, tx);
     if (existing === null)
@@ -250,11 +320,14 @@ export async function setPrimaryEmployment(id: number) {
 
     await employmentRepository.unsetPrimariesByUserId(existing.userId, id, tx);
     await employmentRepository.updateEmploymentRecord(id, { isPrimary: true }, tx);
+    await recordEmploymentAudit("admin.employment.set_primary", existing, {
+      primary: true,
+    }, tx, auditContext);
     return true;
   });
 }
 
-export async function resignUser(username: string) {
+export async function resignUser(username: string, auditContext?: AdminAuditContext) {
   return await db.transaction(async (tx) => {
     const user = await userRepository.getUserByUsernameForAdmin(username, tx);
     if (user === null)
@@ -266,6 +339,18 @@ export async function resignUser(username: string) {
       { status: UserStatus.Disable },
       tx,
     );
+    await auditService.recordAuditLog({
+      ...auditService.resolveAdminAuditContext(auditContext),
+      action: "admin.employment.resign_user",
+      outcome: "success",
+      targetType: "user",
+      targetId: user.id,
+      targetCode: username,
+      details: {
+        username,
+        resigned: true,
+      },
+    }, tx);
     return true;
   });
 }

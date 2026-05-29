@@ -4,14 +4,15 @@ import { mapCustomErrorToTRPCError, publicProcedure } from "../trpc";
 
 type Handler<TSchema extends z.ZodTypeAny, TOutput> = (
   input: z.infer<TSchema>,
+  context?: unknown,
 ) => Promise<TOutput>;
 
 function buildResolver<TSchema extends z.ZodTypeAny, TOutput>(
   handler: Handler<TSchema, TOutput>,
 ) {
-  return async (opts: { input: unknown }) => {
+  return async (opts: { input: unknown; ctx?: unknown }) => {
     try {
-      return await handler(opts.input as z.infer<TSchema>);
+      return await handler(opts.input as z.infer<TSchema>, opts.ctx);
     }
     catch (err) {
       mapCustomErrorToTRPCError(err);
@@ -22,8 +23,8 @@ function buildResolver<TSchema extends z.ZodTypeAny, TOutput>(
 function buildRun<TSchema extends z.ZodTypeAny, TOutput>(
   handler: Handler<TSchema, TOutput>,
 ) {
-  return async (input: z.infer<TSchema>) => {
-    const data = await handler(input);
+  return async (input: z.infer<TSchema>, context?: unknown) => {
+    const data = await handler(input, context);
     return resp.ok(data);
   };
 }

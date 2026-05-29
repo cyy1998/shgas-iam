@@ -1,4 +1,5 @@
 import StatusTag from '@admin/components/StatusTag';
+import AuditLogTable from '@admin/pages/audit-logs/components/AuditLogTable';
 import {
   type EmploymentDetailVo,
   getEmployment,
@@ -173,7 +174,17 @@ export default function EmploymentDetailDrawer({
             {
               key: 'logs',
               label: '操作日志',
-              children: <Empty description="日志功能尚未接入" />,
+              children: (
+                <AuditLogTable
+                  fixedConditions={{
+                    targetType: 'employment',
+                    targetId: detail.id,
+                  }}
+                  pageSize={10}
+                  search={false}
+                  size="small"
+                />
+              ),
             },
           ]}
         />

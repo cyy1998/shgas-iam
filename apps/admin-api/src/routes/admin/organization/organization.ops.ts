@@ -1,3 +1,4 @@
+import * as auditService from "@admin-api/services/audit/audit.service";
 import {
   OrganizationChildrenQueryDtoSchema,
   OrganizationCreateDtoSchema,
@@ -33,7 +34,8 @@ export const getOrganizationOp = defineQueryOp({
 
 export const createOrganizationOp = defineMutationOp({
   input: OrganizationCreateDtoSchema,
-  handler: input => organizationService.setOrganization(input),
+  handler: (input, context) =>
+    organizationService.setOrganization(input, auditService.resolveAdminAuditContext(context)),
 });
 
 export const updateOrganizationOp = defineMutationOp({
@@ -41,7 +43,8 @@ export const updateOrganizationOp = defineMutationOp({
     orgCode: z.string(),
     data: OrganizationUpdateDtoSchema,
   }),
-  handler: ({ orgCode, data }) => organizationService.updateOrganization(orgCode, data),
+  handler: ({ orgCode, data }, context) =>
+    organizationService.updateOrganization(orgCode, data, auditService.resolveAdminAuditContext(context)),
 });
 
 export const updateOrganizationStatusOp = defineMutationOp({
@@ -49,10 +52,12 @@ export const updateOrganizationStatusOp = defineMutationOp({
     orgCode: z.string(),
     status: z.enum(OrganizationStatus),
   }),
-  handler: ({ orgCode, status }) => organizationService.updateOrganizationStatus(orgCode, status),
+  handler: ({ orgCode, status }, context) =>
+    organizationService.updateOrganizationStatus(orgCode, status, auditService.resolveAdminAuditContext(context)),
 });
 
 export const deleteOrganizationOp = defineMutationOp({
   input: z.object({ orgCode: z.string() }),
-  handler: ({ orgCode }) => organizationService.deleteOrganization(orgCode),
+  handler: ({ orgCode }, context) =>
+    organizationService.deleteOrganization(orgCode, auditService.resolveAdminAuditContext(context)),
 });

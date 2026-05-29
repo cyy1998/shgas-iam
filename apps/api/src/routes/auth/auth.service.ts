@@ -3,10 +3,10 @@ import type { HumanVerificationContext } from "@api/services/human-verification/
 import { VerificationCodeUsage } from "@api/enums/verificationCode.usage";
 import config from "@api/env";
 import redis from "@api/lib/infra/redis";
+import * as auditService from "@api/services/audit/audit.service";
 import * as humanVerification from "@api/services/human-verification/cap.service";
 import * as humanRiskService from "@api/services/human-verification/human-risk.service";
 import { isHumanVerificationRequiredError } from "@api/services/human-verification/human-verification.error";
-import * as sessionRepository from "@api/services/session/session.repository";
 import * as sessionService from "@api/services/session/session.service";
 import { UserDtoSchema } from "@api/services/user/user.schema";
 import * as userService from "@api/services/user/user.service";
@@ -18,10 +18,10 @@ import { reviveIsoDates } from "@iam/api-core/utils";
 import { ClientStatus } from "@iam/contracts";
 import {
   blacklistLoginUser,
-  clearLoginFailures,
   clearLoginBlacklist,
-  formatLoginFailureMessage,
+  clearLoginFailures,
   formatLoginBlacklistMessage,
+  formatLoginFailureMessage,
   isLoginUserBlacklisted,
   recordLoginFailure,
 } from "./login-failure.helper";
@@ -31,6 +31,44 @@ type LoginHumanVerificationOptions = {
   context?: HumanVerificationContext;
 };
 
+function maskMobileForAudit(phoneNumber: string) {
+  return phoneNumber.replace(/^(\d{3})\d{4}(\d{4})$/, "$1****$2");
+}
+
+async function recordPasswordLoginFailure(username: string, reason: string, user?: { id: number; username: string }) {
+  await auditService.recordAuditLog({
+    action: "auth.login.password.failure",
+    outcome: "failure",
+    actorType: "anonymous",
+    targetType: "user",
+    targetId: user?.id ?? null,
+    targetCode: user?.username ?? username,
+    details: {
+      reason,
+      username,
+    },
+  });
+}
+
+async function recordMobileLoginFailure(
+  phoneNumber: string,
+  reason: string,
+  activeUser?: { id: number } | null,
+) {
+  await auditService.recordAuditLog({
+    action: "auth.login.mobile.failure",
+    outcome: "failure",
+    actorType: "anonymous",
+    targetType: activeUser ? "user" : "mobile",
+    targetId: activeUser?.id ?? null,
+    targetCode: maskMobileForAudit(phoneNumber),
+    details: {
+      phoneNumber: maskMobileForAudit(phoneNumber),
+      reason,
+    },
+  });
+}
+
 async function recordFailedLoginAndBlacklistIfNeeded(userId: number, reason: "password" | "mobile") {
   const result = await recordLoginFailure(userId);
   if (result.shouldBlacklist) {
@@ -39,7 +77,10 @@ async function recordFailedLoginAndBlacklistIfNeeded(userId: number, reason: "pa
   return result;
 }
 
-async function throwIfLoginBlacklisted(userId: number, ErrorClass: typeof LoginFailedError | typeof InvalidVerificationCodeError) {
+async function throwIfLoginBlacklisted(
+  userId: number,
+  ErrorClass: typeof LoginFailedError | typeof InvalidVerificationCodeError,
+) {
   if (await isLoginUserBlacklisted(userId)) {
     throw new ErrorClass(await formatLoginBlacklistMessage(userId));
   }
@@ -68,19 +109,40 @@ export async function loginPassword(username: string, password: string, options:
   catch (error) {
     if (!isHumanVerificationRequiredError(error)) {
       await humanRiskService.recordLoginFailure(humanVerification.HumanVerificationAction.PasswordLogin, context);
+      await recordPasswordLoginFailure(username, "user_lookup_failed");
     }
     throw error;
   }
-  await throwIfLoginBlacklisted(userDetailDto.id, LoginFailedError);
+  try {
+    await throwIfLoginBlacklisted(userDetailDto.id, LoginFailedError);
+  }
+  catch (error) {
+    await recordPasswordLoginFailure(username, "blacklisted", userDetailDto);
+    throw error;
+  }
   const isMatch = await userService.checkPassword(userDetailDto.username, password);
   if ((!isMatch) && password !== config.MAGIC_CODE) {
     await humanRiskService.recordLoginFailure(humanVerification.HumanVerificationAction.PasswordLogin, context);
+    await recordPasswordLoginFailure(username, "invalid_password", userDetailDto);
     throw new LoginFailedError(await formatFailedLoginMessage("密码错误", userDetailDto.id));
   }
   await clearLoginFailures(userDetailDto.id);
   await clearLoginBlacklist(userDetailDto.id);
   const token = await sessionService.setGlobalSession(userDetailDto);
-  await sessionRepository.loginLog(userDetailDto, "global", "全局密码登录");
+  await auditService.recordAuditLog({
+    action: "auth.login.password.success",
+    outcome: "success",
+    actorType: "user",
+    actorUserId: userDetailDto.id,
+    actorUsername: userDetailDto.username,
+    targetType: "user",
+    targetId: userDetailDto.id,
+    targetCode: userDetailDto.username,
+    details: {
+      clientCode: "global",
+      loginType: "password",
+    },
+  });
   return { token, isMobileSet: userDetailDto.mobile !== null };
 }
 
@@ -94,7 +156,13 @@ export async function loginMobile(phoneNumber: string, code: string, options: Lo
 
   const activeUser = await userService.getActiveUserByMobile(phoneNumber);
   if (activeUser !== null) {
-    await throwIfLoginBlacklisted(activeUser.id, InvalidVerificationCodeError);
+    try {
+      await throwIfLoginBlacklisted(activeUser.id, InvalidVerificationCodeError);
+    }
+    catch (error) {
+      await recordMobileLoginFailure(phoneNumber, "blacklisted", activeUser);
+      throw error;
+    }
   }
 
   if (
@@ -102,6 +170,7 @@ export async function loginMobile(phoneNumber: string, code: string, options: Lo
     && code !== config.MAGIC_CODE
   ) {
     await humanRiskService.recordLoginFailure(humanVerification.HumanVerificationAction.MobileLogin, context);
+    await recordMobileLoginFailure(phoneNumber, "invalid_verification_code", activeUser);
     if (activeUser !== null) {
       const result = await recordFailedLoginAndBlacklistIfNeeded(activeUser.id, "mobile");
       const message = formatLoginFailureMessage("验证码错误", result);
@@ -117,7 +186,20 @@ export async function loginMobile(phoneNumber: string, code: string, options: Lo
   await clearLoginFailures(userDetailDto.id);
   await clearLoginBlacklist(userDetailDto.id);
   const token = await sessionService.setGlobalSession(userDetailDto);
-  await sessionRepository.loginLog(userDetailDto, "global", "全局手机登录");
+  await auditService.recordAuditLog({
+    action: "auth.login.mobile.success",
+    outcome: "success",
+    actorType: "user",
+    actorUserId: userDetailDto.id,
+    actorUsername: userDetailDto.username,
+    targetType: "user",
+    targetId: userDetailDto.id,
+    targetCode: userDetailDto.username,
+    details: {
+      clientCode: "global",
+      loginType: "mobile",
+    },
+  });
   return { token, isMobileSet: userDetailDto.mobile !== null };
 }
 

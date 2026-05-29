@@ -14,6 +14,12 @@ const positionRepository = {
   updatePositionByCode: mock(),
 };
 
+const auditService = {
+  recordAuditLog: mock(),
+  resolveAdminAuditContext: mock((context?: unknown) => context ?? { actorType: "system", actorSystemKey: "admin-api" }),
+};
+
+mock.module("@admin-api/services/audit/audit.service", () => auditService);
 mock.module("../position.repository", () => positionRepository);
 
 const positionService = await import("../position.service");
@@ -24,6 +30,8 @@ describe("positionService.updatePosition", () => {
     positionRepository.getAnyPositionByCode.mockReset();
     positionRepository.getPositionByCode.mockReset();
     positionRepository.updatePositionByCode.mockReset();
+    auditService.recordAuditLog.mockReset();
+    auditService.resolveAdminAuditContext.mockClear();
   });
 
   test("rejects renaming a position code to one that already exists", async () => {

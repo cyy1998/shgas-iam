@@ -52,6 +52,10 @@ const mobileService = {
   checkVerificationCode: mock(),
 };
 
+const auditService = {
+  recordAuditLog: mock(),
+};
+
 mock.module("@api/env", () => ({
   default: config,
 }));
@@ -73,6 +77,7 @@ mock.module("@api/services/role/role.repository", () => roleRepository);
 mock.module("@api/services/privilege/privilege.repository", () => privilegeRepository);
 mock.module("@api/services/privilege/privilegeDelegation.repository", () => privilegeDelegationRepository);
 mock.module("@api/services/mobile/mobile.service", () => mobileService);
+mock.module("@api/services/audit/audit.service", () => auditService);
 
 const userService = await import("../user.service");
 
@@ -189,6 +194,7 @@ beforeEach(() => {
   mobileService.checkExistingPhoneNumber.mockReset();
   mobileService.checkValidPhoneNumber.mockReset();
   mobileService.checkVerificationCode.mockReset();
+  auditService.recordAuditLog.mockReset();
 
   userRepository.getUserByUsername.mockResolvedValue(makeUser());
   userRepository.getUserById.mockResolvedValue(makeUser());
@@ -203,6 +209,7 @@ beforeEach(() => {
   mobileService.checkValidPhoneNumber.mockReturnValue(true);
   mobileService.checkExistingPhoneNumber.mockResolvedValue(false);
   mobileService.checkVerificationCode.mockResolvedValue(true);
+  auditService.recordAuditLog.mockResolvedValue(undefined);
 });
 
 describe("userService.setPassword", () => {
@@ -229,6 +236,11 @@ describe("userService.setPassword", () => {
     await expect(userService.setPassword("zhangsan", "wrong-password", "Newpass1")).rejects.toThrow("旧密码错误");
 
     expect(compare).toHaveBeenCalledWith("wrong-password", "old-hash");
+    expect(auditService.recordAuditLog).toHaveBeenCalledWith(expect.objectContaining({
+      action: "self.password.change",
+      outcome: "failure",
+      details: { reason: "invalid_old_password" },
+    }), tx);
     expect(userRepository.setPassword).not.toHaveBeenCalled();
   });
 
@@ -252,6 +264,11 @@ describe("userService.setPassword", () => {
 
     expect(hash).toHaveBeenCalledWith("Newpass1", config.PASSWORD_HASH_ROUNDS);
     expect(userRepository.setPassword).toHaveBeenCalledWith(1001, "hashed:Newpass1:4", tx);
+    expect(auditService.recordAuditLog).toHaveBeenCalledWith(expect.objectContaining({
+      action: "self.password.change",
+      outcome: "success",
+      details: { passwordChanged: true },
+    }), tx);
   });
 });
 
@@ -264,6 +281,7 @@ describe("userService.resetPassword", () => {
     );
 
     expect(mobileService.checkVerificationCode).not.toHaveBeenCalled();
+    expect(auditService.recordAuditLog).not.toHaveBeenCalled();
   });
 
   test("rejects when the user's mobile does not match the input mobile", async () => {
@@ -272,6 +290,14 @@ describe("userService.resetPassword", () => {
     );
 
     expect(mobileService.checkVerificationCode).not.toHaveBeenCalled();
+    expect(auditService.recordAuditLog).toHaveBeenCalledWith(expect.objectContaining({
+      action: "auth.password.reset",
+      outcome: "failure",
+      details: {
+        phoneNumber: "177****1111",
+        reason: "mobile_mismatch",
+      },
+    }), tx);
   });
 
   test("rejects when the reset password verification code is wrong", async () => {
@@ -282,6 +308,14 @@ describe("userService.resetPassword", () => {
     );
 
     expect(userRepository.setPassword).not.toHaveBeenCalled();
+    expect(auditService.recordAuditLog).toHaveBeenCalledWith(expect.objectContaining({
+      action: "auth.password.reset",
+      outcome: "failure",
+      details: {
+        phoneNumber: "177****2865",
+        reason: "invalid_verification_code",
+      },
+    }), tx);
   });
 
   test("hashes and saves the new password when verification succeeds", async () => {
@@ -290,6 +324,14 @@ describe("userService.resetPassword", () => {
     expect(mobileService.checkVerificationCode).toHaveBeenCalledWith("resetPassword", "17721462865", "123456");
     expect(hash).toHaveBeenCalledWith("Newpass1", config.PASSWORD_HASH_ROUNDS);
     expect(userRepository.setPassword).toHaveBeenCalledWith(1001, "hashed:Newpass1:4", tx);
+    expect(auditService.recordAuditLog).toHaveBeenCalledWith(expect.objectContaining({
+      action: "auth.password.reset",
+      outcome: "success",
+      details: {
+        phoneNumber: "177****2865",
+        passwordReset: true,
+      },
+    }), tx);
   });
 
   test("documents current behavior: resetPassword does not enforce setPassword strength rules", async () => {
@@ -397,6 +439,14 @@ describe("userService.setMobile", () => {
     await expect(userService.setMobile(1001, "17700001111", "000000")).rejects.toThrow("验证码错误");
 
     expect(calls).toEqual(["valid", "existing", "code"]);
+    expect(auditService.recordAuditLog).toHaveBeenCalledWith(expect.objectContaining({
+      action: "self.mobile.bind",
+      outcome: "failure",
+      details: {
+        phoneNumber: "177****1111",
+        reason: "invalid_verification_code",
+      },
+    }), tx);
     expect(userRepository.setMobile).not.toHaveBeenCalled();
   });
 
@@ -433,6 +483,13 @@ describe("userService.setMobile", () => {
     expect(calls).toEqual(["valid", "existing", "code", "write"]);
     expect(mobileService.checkVerificationCode).toHaveBeenCalledWith("bindPhone", "17700001111", "123456");
     expect(userRepository.setMobile).toHaveBeenCalledWith(1001, "17700001111", tx);
+    expect(auditService.recordAuditLog).toHaveBeenCalledWith(expect.objectContaining({
+      action: "self.mobile.bind",
+      outcome: "success",
+      details: {
+        phoneNumber: "177****1111",
+      },
+    }), tx);
     expect(userRepository.getUserById).toHaveBeenCalledWith(1001);
   });
 });
