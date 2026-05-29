@@ -2,6 +2,7 @@ import type { DbClient } from "@iam/db";
 import type { AuditActorType, AuditDetails, AuditOutcome, AuditRequestContext } from "@iam/domain/audit";
 import type { Context } from "hono";
 import type { AuditLogPaginationQueryDto } from "./audit.type";
+import { getRequestIp, getTraceId } from "@iam/api-core/core/request-context";
 import {
   AuditLogDtoSchema,
   AuditLogWriteDtoSchema,
@@ -33,20 +34,6 @@ export type AuditLogInput = {
 };
 
 export type AdminAuditContext = Pick<AuditLogInput, "actorType"> & Partial<AuditLogInput>;
-
-function getRequestIp(c: Context): string | null {
-  return c.req.header("x-forwarded-for")?.split(",")[0]?.trim()
-    ?? c.req.header("x-real-ip")
-    ?? c.req.header("cf-connecting-ip")
-    ?? null;
-}
-
-function getTraceId(c: Context): string | null {
-  return c.req.header("x-trace-id")
-    ?? c.req.header("x-b3-traceid")
-    ?? c.req.header("traceparent")
-    ?? null;
-}
 
 export function getAdminAuditRequestContext(c: Context): AuditRequestContext {
   return {
