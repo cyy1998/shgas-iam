@@ -356,7 +356,7 @@ export default function UserInfoPage() {
                             onClick={sendCode}
                           >
                             {smsSending
-                              ? '校验中'
+                              ? '发送中'
                               : countdown <= 0
                                 ? '获取验证码'
                                 : `${countdown} s`}
