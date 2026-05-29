@@ -12,6 +12,7 @@
     "typecheck": "pnpm exec tsgo --noEmit"
   },
   "dependencies": {
+    "@ant-design/cssinjs": "^1.23.0",
     "@ant-design/icons": "^6.2.3",
     "@ant-design/pro-components": "^2.8.10",
     "@iam/contracts": "workspace:*",
