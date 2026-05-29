@@ -88,6 +88,12 @@ export async function request<T>(
       return new Promise<T>(() => {});
     }
     const msg = errorBody?.message || `网络错误 (${res.status})`;
+    if (
+      errorBody &&
+      isCode(errorBody, ApiErrorCode.HumanVerificationRequired)
+    ) {
+      throw new ServiceError(msg, errorBody.code);
+    }
     if (!init.suppressErrorMessage) message.error(msg);
     throw new ServiceError(msg, errorBody?.code ?? res.status);
   }
