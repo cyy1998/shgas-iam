@@ -13,6 +13,7 @@
 }
 
 .topbar {
+  position: -webkit-sticky;
   position: sticky;
   top: 0;
   z-index: 10;
@@ -20,11 +21,12 @@
   align-items: center;
   justify-content: space-between;
   width: 100%;
-  padding: 14px max(24px, 5vw);
+  padding: 14px 5vw;
   box-sizing: border-box;
   background: rgba(255, 255, 255, 0.94);
   border-bottom: 1px solid rgba(219, 228, 238, 0.9);
   box-shadow: 0 10px 30px rgba(8, 25, 49, 0.08);
+  -webkit-backdrop-filter: blur(18px);
   backdrop-filter: blur(18px);
 
   .topbar-brand {
@@ -85,7 +87,8 @@
 }
 
 .user-info-body {
-  width: min(1180px, calc(100% - 64px));
+  width: calc(100% - 64px);
+  max-width: 1180px;
   margin: 0 auto;
   padding: 34px 0 56px;
 
@@ -158,6 +161,7 @@
     background: rgba(255, 255, 255, 0.1);
     border: 1px solid rgba(255, 255, 255, 0.18);
     border-radius: 999px;
+    -webkit-backdrop-filter: blur(12px);
     backdrop-filter: blur(12px);
 
     .anticon {
@@ -179,10 +183,12 @@
     border: 1px solid rgba(219, 228, 238, 0.9);
     border-radius: 8px;
     box-shadow: 0 18px 60px rgba(8, 25, 49, 0.14);
+    -webkit-backdrop-filter: blur(18px);
     backdrop-filter: blur(18px);
   }
 
   .profile-panel {
+    position: -webkit-sticky;
     position: sticky;
     top: 92px;
     padding: 26px;
@@ -373,7 +379,7 @@
   }
 
   .ant-form {
-    width: min(460px, 100%);
+    width: 100%;
     max-width: 460px;
     margin-left: auto;
     margin-right: auto;
@@ -399,7 +405,7 @@
     align-items: center;
     justify-content: space-between;
     gap: 12px;
-    width: min(460px, 100%);
+    width: 100%;
     max-width: 460px;
     padding: 12px 14px;
     margin-left: auto;
@@ -506,7 +512,8 @@
   .submit-row {
     display: flex;
     justify-content: center;
-    width: min(460px, 100%);
+    width: 100%;
+    max-width: 460px;
     margin-left: auto;
     margin-right: auto;
     margin-top: 22px;
@@ -539,7 +546,8 @@
   }
 
   .user-info-body {
-    width: min(720px, calc(100% - 32px));
+    width: calc(100% - 32px);
+    max-width: 720px;
 
     .hero-content {
       flex-direction: column;
@@ -562,6 +570,8 @@
 
 @media (max-width: 560px) {
   .topbar {
+    padding: 12px 24px;
+
     .topbar-logo {
       width: 112px;
     }
