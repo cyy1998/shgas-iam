@@ -9,8 +9,8 @@
 #### Scenario: 读取当前用户详情
 - **WHEN** 已认证请求访问 `/public/user-info`
 - **THEN** 系统 SHALL 返回 middleware 写入上下文的 userDetailDto
-- **AND** userDetailDto 中的 employments SHALL 使用新的 Employment DTO 组织上下文
-- **AND** userDetailDto 中的 employments SHALL 保留 deprecated 扁平字段用于兼容既有 SSO 和第三方调用方
+- **AND** userDetailDto 中的 employments SHALL 使用 Employment DTO 结构化 `user`、`position` 和 `organization` 上下文
+- **AND** userDetailDto 中的 employments SHALL NOT 返回 username、name、mobile、wxId、posCode、posName、orgCode、orgName、orgType、compCode 和 compName deprecated 顶层扁平字段
 
 #### Scenario: 修改密码
 - **WHEN** 已认证用户提交 oldPassword 和 newPassword
@@ -123,11 +123,11 @@
 - **AND** 新 employment SHALL 只写入供应商组织作为实际任职组织
 - **AND** 系统 SHALL NOT 将供应商父组织作为 `employment.compId` 写入
 
-#### Scenario: 供应商 employment 返回兼容字段
+#### Scenario: 供应商 employment 返回结构化上下文
 - **WHEN** public 或 internal API 返回供应商联系人 employment
-- **THEN** 系统 SHALL 返回结构化 organization 上下文
-- **AND** 系统 SHALL 保留 deprecated 扁平字段
-- **AND** 当供应商组织链中没有 Company 节点时 compCode 和 compName SHALL 为 null
+- **THEN** 系统 SHALL 返回结构化 `user`、`position` 和 `organization` 上下文
+- **AND** 系统 SHALL NOT 返回 username、name、mobile、wxId、posCode、posName、orgCode、orgName、orgType、compCode 和 compName deprecated 顶层扁平字段
+- **AND** 当供应商组织链中没有 Company 节点时 `organization.companyNodes` SHALL 为空数组
 
 ### Requirement: public 用户凭据与手机号服务规则具备单元测试覆盖
 系统 SHALL 为 public API 用户服务中的密码修改、找回密码和手机号绑定规则提供 Bun 单元测试覆盖，且测试不得依赖真实数据库、Redis、短信服务、bcrypt 计算或网络。

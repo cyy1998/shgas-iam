@@ -31,7 +31,7 @@
 #### Scenario: 查询雇佣详情
 - **WHEN** 管理端按 id 查询到未软删除雇佣
 - **THEN** 系统 SHALL 返回包含 `user`、`position` 和 `organization` 上下文的雇佣 DTO/VO
-- **AND** 系统 SHALL 返回 deprecated 扁平字段用于兼容旧调用方
+- **AND** 系统 SHALL NOT 在雇佣顶层返回 username、name、mobile、wxId、posCode、posName、orgCode、orgName、orgType、compCode 和 compName deprecated 扁平字段
 - **AND** 系统 SHALL 聚合该雇佣通过岗位、组织和任职直接关联得到的 active roles 与 privileges
 
 #### Scenario: 雇佣不存在
@@ -206,11 +206,11 @@
 - **AND** 单元测试 SHALL 验证随后调用 `updateUserByUsername(username, { status: UserStatus.Disable }, tx)`
 - **AND** 单元测试 SHALL 验证成功响应为 true
 
-#### Scenario: Employment DTO mapper 返回组织上下文和兼容字段
+#### Scenario: Employment DTO mapper 返回结构化上下文
 - **WHEN** 单元测试映射包含用户、岗位和组织链的 employment 记录
 - **THEN** 单元测试 SHALL 验证 DTO 包含 user、position、organization.assignedOrg、organization.fullOrgPath 和 organization.companyNodes
-- **AND** 单元测试 SHALL 验证 deprecated 扁平字段从新结构派生
-- **AND** 单元测试 SHALL 验证无 Company 节点时 compCode 和 compName 为 null
+- **AND** 单元测试 SHALL 验证 DTO 不包含 username、name、mobile、wxId、posCode、posName、orgCode、orgName、orgType、compCode 和 compName 顶层字段
+- **AND** 单元测试 SHALL 验证无 Company 节点时 `organization.companyNodes` 为空数组
 
 ### Requirement: Employment 仅持久化实际任职组织
 系统 SHALL 将 Employment 的组织事实收敛为实际任职组织，且 SHALL NOT 在目标态继续持久化公司组织字段。
@@ -226,7 +226,7 @@
 - **AND** 系统 SHALL NOT 使用独立公司外键作为公司事实来源
 
 ### Requirement: Employment DTO 暴露结构化组织上下文
-系统 SHALL 通过 Zod schema 定义 Employment DTO 的结构化用户、岗位和组织上下文，并保留 deprecated 扁平字段用于兼容。
+系统 SHALL 通过 Zod schema 定义 Employment DTO 的结构化用户、岗位和组织上下文，且 SHALL NOT 继续暴露 deprecated 顶层扁平兼容字段。
 
 #### Scenario: Employment DTO 包含 summary 与组织上下文
 - **WHEN** 系统返回 Employment DTO
@@ -242,13 +242,10 @@
 - **AND** 每个节点 SHALL 包含 `pathIndex`
 - **AND** 每个节点 SHALL 包含 `distanceToAssignedOrg`
 
-#### Scenario: deprecated 扁平字段保持兼容
+#### Scenario: deprecated 扁平字段已移除
 - **WHEN** 系统返回 Employment DTO
-- **THEN** DTO SHALL 继续返回 username、name、mobile、wxId、posCode、posName、orgCode、orgName、orgType、compCode 和 compName
-- **AND** 这些字段 SHALL 在 schema 或 OpenAPI 描述中标记为 deprecated
-- **AND** orgCode、orgName 和 orgType SHALL 来自 `organization.assignedOrg`
-- **AND** compCode 和 compName SHALL 从 `organization.companyNodes` 中距离 assignedOrg 最近的 Company 节点派生
-- **AND** 当没有 Company 节点时 compCode 和 compName SHALL 返回 null
+- **THEN** DTO SHALL NOT 包含 username、name、mobile、wxId、posCode、posName、orgCode、orgName、orgType、compCode 和 compName 顶层字段
+- **AND** 调用方 SHALL 通过 `user`、`position`、`organization.assignedOrg` 和 `organization.companyNodes` 读取对应信息
 
 #### Scenario: DTO type 从 schema 推导
 - **WHEN** 系统定义 Employment DTO、组织节点、组织上下文、用户 summary 或岗位 summary type

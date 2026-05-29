@@ -39,7 +39,8 @@
 - **WHEN** 管理端按 username 查询到用户
 - **THEN** 系统 SHALL 查询该用户 status 为 Enable、Pause 或 Disable 且未软删除的 employments
 - **AND** 用户详情 SHALL 在 employments 中返回这些任职的岗位、实际任职组织、完整组织链、公司节点、状态、起止时间、角色和权限信息
-- **AND** 用户详情 SHALL 在每条 employment 中保留 deprecated 扁平字段用于兼容旧前端和第三方
+- **AND** 用户详情 SHALL 在每条 employment 中使用结构化 `user`、`position` 和 `organization` 字段表达用户、岗位和组织上下文
+- **AND** 用户详情 SHALL NOT 在每条 employment 顶层返回 username、name、mobile、wxId、posCode、posName、orgCode、orgName、orgType、compCode 和 compName deprecated 扁平字段
 
 #### Scenario: 用户级角色权限只统计正常任职
 - **WHEN** 管理端按 username 查询到用户且该用户存在多个状态的任职
@@ -166,7 +167,7 @@
 - **AND** 单元测试 SHALL 验证用户存在时返回正常、暂停和结束状态的未软删除 employments
 - **AND** 单元测试 SHALL 验证用户级 roles 和 privileges 只从正常任职聚合并去重
 - **AND** 单元测试 SHALL 验证暂停或结束任职的 roles 和 privileges 不计入用户级 roles 和 privileges
-- **AND** 单元测试 SHALL 验证 employment detail 中包含岗位、实际任职组织、完整组织链、公司节点、deprecated 扁平字段、状态、起止时间、角色和权限信息
+- **AND** 单元测试 SHALL 验证 employment detail 中包含结构化 user、position、organization 上下文、状态、起止时间、角色和权限信息，且不包含 deprecated 顶层扁平字段
 
 ## Open Questions
 - 创建用户时只校验 username 重复，没有显式校验 mobile 或 wxId 唯一性；是否需要作为业务约束需要人工确认。
