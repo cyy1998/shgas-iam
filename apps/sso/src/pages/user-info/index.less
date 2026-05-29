@@ -1,4 +1,6 @@
 .user-info-page {
+  --profile-hero-bg-height: 380px;
+
   width: 100%;
   min-height: 100vh;
   color: #14213d;
@@ -6,8 +8,8 @@
     linear-gradient(
       180deg,
       rgba(8, 25, 49, 0.96) 0,
-      rgba(15, 43, 78, 0.9) 300px,
-      #eef3f7 300px
+      rgba(15, 43, 78, 0.9) var(--profile-hero-bg-height),
+      #eef3f7 var(--profile-hero-bg-height)
     ),
     url('~@/assets/bg.jpg') center top / cover no-repeat;
 }
@@ -545,6 +547,10 @@
 }
 
 @media (max-width: 980px) {
+  .user-info-page {
+    --profile-hero-bg-height: 430px;
+  }
+
   .topbar {
     padding: 12px 18px;
 
