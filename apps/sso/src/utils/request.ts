@@ -17,7 +17,10 @@ export class ServiceError extends Error {
   }
 }
 
-type RequestInitExt = RequestInit & { skipAuthRedirect?: boolean };
+type RequestInitExt = RequestInit & {
+  skipAuthRedirect?: boolean;
+  suppressErrorMessage?: boolean;
+};
 
 function preserveQuery(): string {
   const usp = currentSearchParams();
@@ -85,7 +88,7 @@ export async function request<T>(
       return new Promise<T>(() => {});
     }
     const msg = errorBody?.message || `网络错误 (${res.status})`;
-    message.error(msg);
+    if (!init.suppressErrorMessage) message.error(msg);
     throw new ServiceError(msg, errorBody?.code ?? res.status);
   }
 
@@ -104,7 +107,7 @@ export async function request<T>(
     if (isCode(body, ApiErrorCode.HumanVerificationRequired)) {
       throw new ServiceError(msg, body.code);
     }
-    message.error(msg);
+    if (!init.suppressErrorMessage) message.error(msg);
     throw new ServiceError(msg, body.code);
   }
 

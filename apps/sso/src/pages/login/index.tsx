@@ -14,9 +14,10 @@ import { login, mobileLogin } from '@sso/services/auth';
 import { sendMessage } from '@sso/services/open';
 import { mobileSet } from '@sso/services/public';
 import { ServiceError } from '@sso/utils/request';
+import { ApiErrorCode } from '@iam/contracts';
 import { decodeRedirect, getQuery } from '@sso/utils/url';
 import { history, useModel } from '@umijs/max';
-import { Button, Form, Input, Tabs, message } from 'antd';
+import { Button, Form, Input, Modal, Tabs, message } from 'antd';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import './index.less';
 
@@ -31,6 +32,15 @@ export default function LoginPage() {
   const [pwdForm] = Form.useForm();
   const [smsForm] = Form.useForm();
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  const showLoginFailureModal = (msg: string) => {
+    Modal.error({
+      centered: true,
+      title: '登录失败',
+      content: msg,
+      okText: '确定',
+    });
+  };
 
   const client = getQuery('client');
   const redirectUrl = decodeRedirect(getQuery('redirectUrl')) ?? '';
@@ -79,8 +89,8 @@ export default function LoginPage() {
       };
       const data = await withHumanVerification(
         'passwordLogin',
-        () => login(body),
-        (capToken) => login({ ...body, capToken }),
+        () => login(body, { suppressErrorMessage: true }),
+        (capToken) => login({ ...body, capToken }, { suppressErrorMessage: true }),
       );
       if (!data.isMobileSet) {
         setMode('BMN');
@@ -90,6 +100,14 @@ export default function LoginPage() {
       redirectToAuthorize();
     } catch (e) {
       if (!(e instanceof ServiceError)) throw e;
+      if (
+        e.code === ApiErrorCode.LoginFailed ||
+        e.code === ApiErrorCode.InvalidLoginCredential
+      ) {
+        showLoginFailureModal(e.message);
+      } else {
+        message.error(e.message);
+      }
     } finally {
       setSubmitting(false);
     }
@@ -105,12 +123,21 @@ export default function LoginPage() {
       };
       await withHumanVerification(
         'mobileLogin',
-        () => mobileLogin(body),
-        (capToken) => mobileLogin({ ...body, capToken }),
+        () => mobileLogin(body, { suppressErrorMessage: true }),
+        (capToken) => mobileLogin({ ...body, capToken }, { suppressErrorMessage: true }),
       );
       redirectToAuthorize();
     } catch (e) {
       if (!(e instanceof ServiceError)) throw e;
+      if (
+        e.code === ApiErrorCode.InvalidVerificationCode ||
+        e.code === ApiErrorCode.LoginFailed ||
+        e.code === ApiErrorCode.InvalidLoginCredential
+      ) {
+        showLoginFailureModal(e.message);
+      } else {
+        message.error(e.message);
+      }
     } finally {
       setSubmitting(false);
     }

@@ -17,8 +17,12 @@ import { LoginFailedError } from "@iam/api-core/errors/LoginFailedError";
 import { reviveIsoDates } from "@iam/api-core/utils";
 import { ClientStatus } from "@iam/contracts";
 import {
+  blacklistLoginUser,
   clearLoginFailures,
+  clearLoginBlacklist,
   formatLoginFailureMessage,
+  formatLoginBlacklistMessage,
+  isLoginUserBlacklisted,
   recordLoginFailure,
 } from "./login-failure.helper";
 
@@ -27,12 +31,26 @@ type LoginHumanVerificationOptions = {
   context?: HumanVerificationContext;
 };
 
-async function recordFailedLoginAndSuspendIfNeeded(userId: number) {
+async function recordFailedLoginAndBlacklistIfNeeded(userId: number, reason: "password" | "mobile") {
   const result = await recordLoginFailure(userId);
-  if (result.shouldSuspend) {
-    await userService.pauseEnabledUser(userId);
+  if (result.shouldBlacklist) {
+    await blacklistLoginUser(userId, reason);
   }
   return result;
+}
+
+async function throwIfLoginBlacklisted(userId: number, ErrorClass: typeof LoginFailedError | typeof InvalidVerificationCodeError) {
+  if (await isLoginUserBlacklisted(userId)) {
+    throw new ErrorClass(await formatLoginBlacklistMessage(userId));
+  }
+}
+
+async function formatFailedLoginMessage(prefix: string, userId: number) {
+  const result = await recordFailedLoginAndBlacklistIfNeeded(userId, "password");
+  const message = formatLoginFailureMessage(prefix, result);
+  return result.shouldBlacklist
+    ? `${message}，${await formatLoginBlacklistMessage(userId)}`
+    : message;
 }
 
 export async function loginPassword(username: string, password: string, options: LoginHumanVerificationOptions = {}) {
@@ -44,10 +62,8 @@ export async function loginPassword(username: string, password: string, options:
   );
 
   let userDetailDto: Awaited<ReturnType<typeof userService.getUserDetailByUsername>>;
-  let isMatch: boolean;
   try {
     userDetailDto = await userService.getUserDetailByUsername(username);
-    isMatch = await userService.checkPassword(userDetailDto.username, password);
   }
   catch (error) {
     if (!isHumanVerificationRequiredError(error)) {
@@ -55,12 +71,14 @@ export async function loginPassword(username: string, password: string, options:
     }
     throw error;
   }
+  await throwIfLoginBlacklisted(userDetailDto.id, LoginFailedError);
+  const isMatch = await userService.checkPassword(userDetailDto.username, password);
   if ((!isMatch) && password !== config.MAGIC_CODE) {
     await humanRiskService.recordLoginFailure(humanVerification.HumanVerificationAction.PasswordLogin, context);
-    const result = await recordFailedLoginAndSuspendIfNeeded(userDetailDto.id);
-    throw new LoginFailedError(formatLoginFailureMessage("密码错误", result));
+    throw new LoginFailedError(await formatFailedLoginMessage("密码错误", userDetailDto.id));
   }
   await clearLoginFailures(userDetailDto.id);
+  await clearLoginBlacklist(userDetailDto.id);
   const token = await sessionService.setGlobalSession(userDetailDto);
   await sessionRepository.loginLog(userDetailDto, "global", "全局密码登录");
   return { token, isMobileSet: userDetailDto.mobile !== null };
@@ -74,20 +92,30 @@ export async function loginMobile(phoneNumber: string, code: string, options: Lo
     context,
   );
 
+  const activeUser = await userService.getActiveUserByMobile(phoneNumber);
+  if (activeUser !== null) {
+    await throwIfLoginBlacklisted(activeUser.id, InvalidVerificationCodeError);
+  }
+
   if (
     !await sessionService.checkVerificationCode(VerificationCodeUsage.Login, phoneNumber, code)
     && code !== config.MAGIC_CODE
   ) {
     await humanRiskService.recordLoginFailure(humanVerification.HumanVerificationAction.MobileLogin, context);
-    const user = await userService.getActiveUserByMobile(phoneNumber);
-    if (user !== null) {
-      const result = await recordFailedLoginAndSuspendIfNeeded(user.id);
-      throw new InvalidVerificationCodeError(formatLoginFailureMessage("验证码错误", result));
+    if (activeUser !== null) {
+      const result = await recordFailedLoginAndBlacklistIfNeeded(activeUser.id, "mobile");
+      const message = formatLoginFailureMessage("验证码错误", result);
+      throw new InvalidVerificationCodeError(
+        result.shouldBlacklist
+          ? `${message}，${await formatLoginBlacklistMessage(activeUser.id)}`
+          : message,
+      );
     }
     throw new InvalidVerificationCodeError("验证码错误");
   }
   const userDetailDto = await userService.getUserDetailByMobile(phoneNumber);
   await clearLoginFailures(userDetailDto.id);
+  await clearLoginBlacklist(userDetailDto.id);
   const token = await sessionService.setGlobalSession(userDetailDto);
   await sessionRepository.loginLog(userDetailDto, "global", "全局手机登录");
   return { token, isMobileSet: userDetailDto.mobile !== null };

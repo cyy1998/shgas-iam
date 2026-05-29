@@ -6,9 +6,10 @@ export function login(body: {
   username: string;
   password: string;
   capToken?: string;
-}) {
+}, options: { suppressErrorMessage?: boolean } = {}) {
   return request<LoginPasswordResult>('/auth/login/password', {
     method: 'POST',
+    suppressErrorMessage: options.suppressErrorMessage,
     body: JSON.stringify({
       credential: createPasswordLoginCredential({
         username: body.username,
@@ -23,9 +24,10 @@ export function mobileLogin(body: {
   phoneNumber: string;
   code: string;
   capToken?: string;
-}) {
+}, options: { suppressErrorMessage?: boolean } = {}) {
   return request<LoginPasswordResult>('/auth/login/mobile', {
     method: 'POST',
+    suppressErrorMessage: options.suppressErrorMessage,
     body: JSON.stringify(body),
   });
 }
