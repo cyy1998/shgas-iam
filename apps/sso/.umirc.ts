@@ -8,6 +8,7 @@ export default defineConfig({
   },
   base: '/portal',
   publicPath: '/portal/',
+  hash: true,
   esbuildMinifyIIFE: true,
   antd: {},
   access: {},

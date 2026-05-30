@@ -8,6 +8,7 @@ export default defineConfig({
   },
   base: '/iam-admin',
   publicPath: '/iam-admin/',
+  hash: true,
   antd: {
     theme: {
       token: {
