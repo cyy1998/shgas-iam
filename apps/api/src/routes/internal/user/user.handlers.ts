@@ -1,6 +1,6 @@
 import type { UserRouteHandler } from "./user.type";
 import config from "@api/env";
-import * as auditService from "@api/services/audit/audit.service";
+import * as internalAudit from "@api/services/audit/events/internal.audit";
 import * as employmentRepository from "@api/services/employment/employment.repository";
 import * as mobileService from "@api/services/mobile/mobile.service";
 import * as organizationRepository from "@api/services/organization/organization.repository";
@@ -11,10 +11,6 @@ import { CustomError } from "@iam/api-core/errors/CustomError";
 import * as resp from "@iam/api-core/http";
 import { UserType } from "@iam/contracts";
 import db from "@iam/db";
-
-function maskMobileForAudit(phoneNumber: string) {
-  return phoneNumber.replace(/^(\d{3})\d{4}(\d{4})$/, "$1****$2");
-}
 
 export const userInfo: UserRouteHandler<"userInfo"> = async (c) => {
   const { username } = c.req.valid("param");
@@ -75,20 +71,13 @@ export const contactRegister: UserRouteHandler<"contactRegister"> = async (c) =>
       await employmentRepository.setEmployment(user.id, pos.id, org.id, tx);
     }
   });
-  await auditService.recordAuditLogFromContext(c, {
-    action: "internal.purveyor_contact.register",
-    outcome: "success",
-    ...auditService.getInternalAuditActor(c),
-    targetType: "user",
-    targetId: targetUserId,
-    targetCode: username,
-    details: {
-      username,
-      name,
-      mobile: maskMobileForAudit(mobile),
-      orgCode,
-      existingContact,
-    },
+  await internalAudit.recordInternalPurveyorContactRegister(c, {
+    targetUserId,
+    username,
+    name,
+    mobile,
+    orgCode,
+    existingContact,
   });
   if (config.NODE_ENV === "production") {
     await mobileService.sendMessage(mobile, mobileService.getPurveyorWelcomeMessage(name));

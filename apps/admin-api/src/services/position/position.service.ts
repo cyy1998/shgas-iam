@@ -2,37 +2,13 @@ import type { AdminAuditContext } from "@admin-api/services/audit/audit.service"
 import type { PositionStatus } from "@iam/contracts";
 import type { DbClient } from "@iam/db";
 import type { PositionCreateDto, PositionUpdateDto } from "./position.type";
-import * as auditService from "@admin-api/services/audit/audit.service";
+import { recordPositionAudit } from "@admin-api/services/audit/events/position.audit";
 import { PositionCodeExistsError } from "@iam/api-core/errors/PositionCodeExistsError";
 import { PositionHasEmploymentError } from "@iam/api-core/errors/PositionHasEmploymentError";
 import { PositionNotFoundError } from "@iam/api-core/errors/PositionNotFoundError";
 import db from "@iam/db";
 import * as positionRepository from "./position.repository";
 import { PositionDtoSchema } from "./position.schema";
-
-async function recordPositionAudit(
-  action: string,
-  position: { id?: number | null; posCode: string; posName: string; status?: PositionStatus },
-  details: Record<string, unknown>,
-  tx: Parameters<typeof auditService.recordAuditLog>[1],
-  auditContext?: AdminAuditContext,
-) {
-  await auditService.recordAuditLog({
-    ...auditService.resolveAdminAuditContext(auditContext),
-    action,
-    outcome: "success",
-    targetType: "position",
-    targetId: position.id ?? null,
-    targetCode: position.posCode,
-    targetName: position.posName,
-    details: {
-      posCode: position.posCode,
-      posName: position.posName,
-      status: position.status,
-      ...details,
-    },
-  }, tx);
-}
 
 export async function setPosition(positionCreateDto: PositionCreateDto, auditContext?: AdminAuditContext) {
   return await db.transaction(async (tx) => {

@@ -1,7 +1,7 @@
-import type { AuditLogInput } from "@admin-api/services/audit/audit.service";
+import type { AdminAuditContext } from "@admin-api/services/audit/audit.service";
 import type { UserAdminCreateDto, UserDetailDto, UserPaginationQueryDto, UserUpdateDto } from "./user.type";
 import config from "@admin-api/env";
-import * as auditService from "@admin-api/services/audit/audit.service";
+import { recordAdminUserAudit } from "@admin-api/services/audit/events/user.audit";
 import * as employmentRepository from "@admin-api/services/employment/employment.repository";
 import { EmploymentDetailDtoSchema, toEmploymentDto } from "@admin-api/services/employment/employment.schema";
 import * as privilegeRepository from "@admin-api/services/privilege/privilege.repository";
@@ -18,50 +18,6 @@ import { generateRandomPassword } from "@iam/api-core/utils";
 import { EmploymentStatus, UserStatus } from "@iam/contracts";
 import db from "@iam/db";
 import { hash } from "bcrypt-ts";
-
-type AdminAuditContext = Pick<AuditLogInput, "actorType"> & Partial<AuditLogInput>;
-type UserAuditTarget = {
-  id: number;
-  username: string;
-  name?: string | null;
-  mobile?: string | null;
-  status?: UserStatus;
-};
-
-function maskMobileForAudit(phoneNumber: string | null | undefined) {
-  return phoneNumber?.replace(/^(\d{3})\d{4}(\d{4})$/, "$1****$2") ?? null;
-}
-
-function resolveAuditContext(auditContext?: AdminAuditContext): AdminAuditContext {
-  return auditContext ?? {
-    actorType: "system",
-    actorSystemKey: "admin-api",
-  };
-}
-
-async function recordAdminUserAudit(
-  action: string,
-  user: UserAuditTarget,
-  details: Record<string, unknown>,
-  tx: Parameters<typeof auditService.recordAuditLog>[1],
-  auditContext?: AdminAuditContext,
-) {
-  await auditService.recordAuditLog({
-    ...resolveAuditContext(auditContext),
-    action,
-    outcome: "success",
-    targetType: "user",
-    targetId: user.id,
-    targetCode: user.username,
-    targetName: user.name,
-    details: {
-      targetUsername: user.username,
-      targetName: user.name,
-      targetMobile: maskMobileForAudit(user.mobile),
-      ...details,
-    },
-  }, tx);
-}
 
 export async function getUserDetailByUsernameForAdmin(username: string): Promise<UserDetailDto> {
   const user = await userRepository.getUserByUsernameForAdmin(username);
@@ -148,12 +104,8 @@ export async function updateUser(
       throw new UserNotFoundError("用户不存在");
     }
     const updatedUser = await userRepository.updateUserByUsername(username, data, tx);
-    const patch: Record<string, unknown> = { ...data };
-    if ("mobile" in data) {
-      patch.mobile = maskMobileForAudit(data.mobile);
-    }
     await recordAdminUserAudit(action, updatedUser, {
-      patch,
+      patch: data,
     }, tx, auditContext);
     return true;
   });

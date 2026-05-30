@@ -3,7 +3,7 @@ import type { HumanVerificationContext } from "@api/services/human-verification/
 import { VerificationCodeUsage } from "@api/enums/verificationCode.usage";
 import config from "@api/env";
 import redis from "@api/lib/infra/redis";
-import * as auditService from "@api/services/audit/audit.service";
+import * as authAudit from "@api/services/audit/events/auth.audit";
 import * as humanVerification from "@api/services/human-verification/cap.service";
 import * as humanRiskService from "@api/services/human-verification/human-risk.service";
 import { isHumanVerificationRequiredError } from "@api/services/human-verification/human-verification.error";
@@ -30,50 +30,6 @@ type LoginHumanVerificationOptions = {
   capToken?: string;
   context?: HumanVerificationContext;
 };
-
-function maskMobileForAudit(phoneNumber: string) {
-  return phoneNumber.replace(/^(\d{3})\d{4}(\d{4})$/, "$1****$2");
-}
-
-async function recordPasswordLoginFailure(
-  username: string,
-  reason: string,
-  user?: { id: number; name?: string | null; username: string },
-) {
-  await auditService.recordAuditLog({
-    action: "auth.login.password.failure",
-    outcome: "failure",
-    actorType: "anonymous",
-    targetType: "user",
-    targetId: user?.id ?? null,
-    targetCode: user?.username ?? username,
-    targetName: user?.name ?? null,
-    details: {
-      reason,
-      username,
-    },
-  });
-}
-
-async function recordMobileLoginFailure(
-  phoneNumber: string,
-  reason: string,
-  activeUser?: { id: number; name?: string | null } | null,
-) {
-  await auditService.recordAuditLog({
-    action: "auth.login.mobile.failure",
-    outcome: "failure",
-    actorType: "anonymous",
-    targetType: activeUser ? "user" : "mobile",
-    targetId: activeUser?.id ?? null,
-    targetCode: maskMobileForAudit(phoneNumber),
-    targetName: activeUser?.name ?? null,
-    details: {
-      phoneNumber: maskMobileForAudit(phoneNumber),
-      reason,
-    },
-  });
-}
 
 async function recordFailedLoginAndBlacklistIfNeeded(userId: number, reason: "password" | "mobile") {
   const result = await recordLoginFailure(userId);
@@ -115,7 +71,7 @@ export async function loginPassword(username: string, password: string, options:
   catch (error) {
     if (!isHumanVerificationRequiredError(error)) {
       await humanRiskService.recordLoginFailure(humanVerification.HumanVerificationAction.PasswordLogin, context);
-      await recordPasswordLoginFailure(username, "user_lookup_failed");
+      await authAudit.recordPasswordLoginFailure(username, "user_lookup_failed");
     }
     throw error;
   }
@@ -123,33 +79,19 @@ export async function loginPassword(username: string, password: string, options:
     await throwIfLoginBlacklisted(userDetailDto.id, LoginFailedError);
   }
   catch (error) {
-    await recordPasswordLoginFailure(username, "blacklisted", userDetailDto);
+    await authAudit.recordPasswordLoginFailure(username, "blacklisted", userDetailDto);
     throw error;
   }
   const isMatch = await userService.checkPassword(userDetailDto.username, password);
   if ((!isMatch) && password !== config.MAGIC_CODE) {
     await humanRiskService.recordLoginFailure(humanVerification.HumanVerificationAction.PasswordLogin, context);
-    await recordPasswordLoginFailure(username, "invalid_password", userDetailDto);
+    await authAudit.recordPasswordLoginFailure(username, "invalid_password", userDetailDto);
     throw new LoginFailedError(await formatFailedLoginMessage("密码错误", userDetailDto.id));
   }
   await clearLoginFailures(userDetailDto.id);
   await clearLoginBlacklist(userDetailDto.id);
   const token = await sessionService.setGlobalSession(userDetailDto);
-  await auditService.recordAuditLog({
-    action: "auth.login.password.success",
-    outcome: "success",
-    actorType: "user",
-    actorUserId: userDetailDto.id,
-    actorUsername: userDetailDto.username,
-    targetType: "user",
-    targetId: userDetailDto.id,
-    targetCode: userDetailDto.username,
-    targetName: userDetailDto.name,
-    details: {
-      clientCode: "global",
-      loginType: "password",
-    },
-  });
+  await authAudit.recordPasswordLoginSuccess(userDetailDto);
   return { token, isMobileSet: userDetailDto.mobile !== null };
 }
 
@@ -167,7 +109,7 @@ export async function loginMobile(phoneNumber: string, code: string, options: Lo
       await throwIfLoginBlacklisted(activeUser.id, InvalidVerificationCodeError);
     }
     catch (error) {
-      await recordMobileLoginFailure(phoneNumber, "blacklisted", activeUser);
+      await authAudit.recordMobileLoginFailure(phoneNumber, "blacklisted", activeUser);
       throw error;
     }
   }
@@ -177,7 +119,7 @@ export async function loginMobile(phoneNumber: string, code: string, options: Lo
     && code !== config.MAGIC_CODE
   ) {
     await humanRiskService.recordLoginFailure(humanVerification.HumanVerificationAction.MobileLogin, context);
-    await recordMobileLoginFailure(phoneNumber, "invalid_verification_code", activeUser);
+    await authAudit.recordMobileLoginFailure(phoneNumber, "invalid_verification_code", activeUser);
     if (activeUser !== null) {
       const result = await recordFailedLoginAndBlacklistIfNeeded(activeUser.id, "mobile");
       const message = formatLoginFailureMessage("验证码错误", result);
@@ -193,21 +135,7 @@ export async function loginMobile(phoneNumber: string, code: string, options: Lo
   await clearLoginFailures(userDetailDto.id);
   await clearLoginBlacklist(userDetailDto.id);
   const token = await sessionService.setGlobalSession(userDetailDto);
-  await auditService.recordAuditLog({
-    action: "auth.login.mobile.success",
-    outcome: "success",
-    actorType: "user",
-    actorUserId: userDetailDto.id,
-    actorUsername: userDetailDto.username,
-    targetType: "user",
-    targetId: userDetailDto.id,
-    targetCode: userDetailDto.username,
-    targetName: userDetailDto.name,
-    details: {
-      clientCode: "global",
-      loginType: "mobile",
-    },
-  });
+  await authAudit.recordMobileLoginSuccess(userDetailDto);
   return { token, isMobileSet: userDetailDto.mobile !== null };
 }
 

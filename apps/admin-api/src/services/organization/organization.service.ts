@@ -7,7 +7,7 @@ import type {
   OrganizationUpdateDto,
 } from "@admin-api/services/organization/organization.type";
 import type { OrganizationStatus } from "@iam/contracts";
-import * as auditService from "@admin-api/services/audit/audit.service";
+import { recordOrganizationAudit } from "@admin-api/services/audit/events/organization.audit";
 import * as organizationRepository from "@admin-api/services/organization/organization.repository";
 import { toOrganizationDto } from "@admin-api/services/organization/organization.schema";
 import { OrganizationAlreadyExistsError } from "@iam/api-core/errors/OrganizationAlreadyExistsError";
@@ -18,30 +18,6 @@ import { OrganizationNotFoundError } from "@iam/api-core/errors/OrganizationNotF
 import { paginate } from "@iam/api-core/utils";
 import { organizationStatusToString } from "@iam/contracts";
 import db from "@iam/db";
-
-async function recordOrganizationAudit(
-  action: string,
-  organization: { id: number; orgCode: string; orgName: string; status?: OrganizationStatus },
-  details: Record<string, unknown>,
-  tx: Parameters<typeof auditService.recordAuditLog>[1],
-  auditContext?: AdminAuditContext,
-) {
-  await auditService.recordAuditLog({
-    ...auditService.resolveAdminAuditContext(auditContext),
-    action,
-    outcome: "success",
-    targetType: "organization",
-    targetId: organization.id,
-    targetCode: organization.orgCode,
-    targetName: organization.orgName,
-    details: {
-      orgCode: organization.orgCode,
-      orgName: organization.orgName,
-      status: organization.status,
-      ...details,
-    },
-  }, tx);
-}
 
 export async function setOrganization(organizationCreateDto: OrganizationCreateDto, auditContext?: AdminAuditContext) {
   return await db.transaction(async (tx) => {

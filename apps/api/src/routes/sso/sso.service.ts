@@ -2,7 +2,7 @@ import config from "@api/env";
 import redis from "@api/lib/infra/redis";
 import orcasClient from "@api/lib/integrations/orcas";
 import wechatClient from "@api/lib/integrations/wechat";
-import * as auditService from "@api/services/audit/audit.service";
+import * as authAudit from "@api/services/audit/events/auth.audit";
 import * as clientService from "@api/services/client/client.service";
 import { SessionObjectSchema } from "@api/services/session/session.schema";
 import * as sessionService from "@api/services/session/session.service";
@@ -137,21 +137,7 @@ export async function loginOA(clientCode: string, loginid: string, ts: string, t
     throw new LoginFailedError("用户类别不支持OA登录");
   }
   const sessionId = await sessionService.setGlobalSession(userDetailDto);
-  await auditService.recordAuditLog({
-    action: "auth.login.oa.success",
-    outcome: "success",
-    actorType: "user",
-    actorUserId: userDetailDto.id,
-    actorUsername: userDetailDto.username,
-    targetType: "user",
-    targetId: userDetailDto.id,
-    targetCode: userDetailDto.username,
-    targetName: userDetailDto.name,
-    details: {
-      clientCode,
-      loginType: "oa",
-    },
-  });
+  await authAudit.recordOaLoginSuccess(userDetailDto, clientCode);
   return { token: sessionId, isMobileSet: userDetailDto.mobile !== null };
 }
 
@@ -182,20 +168,7 @@ export async function loginWX(code: string) {
   const wxId = await wechatClient.getWxUserId(code);
   const userDetailDto = await userService.getUserDetailByWxId(wxId);
   const token = await sessionService.setGlobalSession(userDetailDto);
-  await auditService.recordAuditLog({
-    action: "auth.login.wechat.success",
-    outcome: "success",
-    actorType: "user",
-    actorUserId: userDetailDto.id,
-    actorUsername: userDetailDto.username,
-    targetType: "user",
-    targetId: userDetailDto.id,
-    targetCode: userDetailDto.username,
-    targetName: userDetailDto.name,
-    details: {
-      loginType: "wechat",
-    },
-  });
+  await authAudit.recordWechatLoginSuccess(userDetailDto);
   await redis.set(`wx-code:${code}`, JSON.stringify(userDetailDto), "EX", 600);
   return { token, isMobileSet: userDetailDto.mobile !== null };
 }

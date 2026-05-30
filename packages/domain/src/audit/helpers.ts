@@ -28,7 +28,7 @@ const SENSITIVE_KEYS = new Set([
 ]);
 
 function normalizeKey(key: string) {
-  return key.replace(/[^a-zA-Z0-9_-]/g, "").toLowerCase();
+  return key.replace(/[^\w-]/g, "").toLowerCase();
 }
 
 function shouldRedactKey(key: string) {

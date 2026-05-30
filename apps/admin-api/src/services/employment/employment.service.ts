@@ -6,7 +6,10 @@ import type {
   EmploymentTransferDto,
   EmploymentUpdateDto,
 } from "./employment.type";
-import * as auditService from "@admin-api/services/audit/audit.service";
+import {
+  recordEmploymentAudit,
+  recordEmploymentResignUserAudit,
+} from "@admin-api/services/audit/events/employment.audit";
 import * as employmentRepository from "@admin-api/services/employment/employment.repository";
 import { EmploymentDetailDtoSchema, toEmploymentDto } from "@admin-api/services/employment/employment.schema";
 import * as organizationRepository from "@admin-api/services/organization/organization.repository";
@@ -51,47 +54,6 @@ async function assertExpectedAncestor(
   if (!matches) {
     throw new CustomError(message);
   }
-}
-
-async function recordEmploymentAudit(
-  action: string,
-  target: {
-    id: number;
-    userId?: number;
-    posId?: number;
-    orgId?: number;
-    isPrimary?: boolean;
-    status?: EmploymentStatus;
-    user?: { name?: string | null; username: string };
-    organization?: { assignedOrg?: { orgCode: string; orgName?: string | null } };
-    position?: { posCode: string; posName?: string | null };
-  },
-  details: Record<string, unknown>,
-  tx: Parameters<typeof auditService.recordAuditLog>[1],
-  auditContext?: AdminAuditContext,
-) {
-  await auditService.recordAuditLog({
-    ...auditService.resolveAdminAuditContext(auditContext),
-    action,
-    outcome: "success",
-    targetType: "employment",
-    targetId: target.id,
-    targetName: target.user?.name ?? target.position?.posName ?? null,
-    details: {
-      userId: target.userId,
-      userName: target.user?.name,
-      username: target.user?.username,
-      posId: target.posId,
-      posCode: target.position?.posCode,
-      posName: target.position?.posName,
-      orgId: target.orgId,
-      orgCode: target.organization?.assignedOrg?.orgCode,
-      orgName: target.organization?.assignedOrg?.orgName,
-      isPrimary: target.isPrimary,
-      status: target.status,
-      ...details,
-    },
-  }, tx);
 }
 
 export async function getEmploymentDetailByIdForAdmin(id: number) {
@@ -343,18 +305,7 @@ export async function resignUser(username: string, auditContext?: AdminAuditCont
       { status: UserStatus.Disable },
       tx,
     );
-    await auditService.recordAuditLog({
-      ...auditService.resolveAdminAuditContext(auditContext),
-      action: "admin.employment.resign_user",
-      outcome: "success",
-      targetType: "user",
-      targetId: user.id,
-      targetCode: username,
-      details: {
-        username,
-        resigned: true,
-      },
-    }, tx);
+    await recordEmploymentResignUserAudit(user, tx, auditContext);
     return true;
   });
 }

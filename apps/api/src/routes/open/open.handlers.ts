@@ -1,6 +1,6 @@
 import type { OpenRouteHandler } from "./open.type";
 import { VerificationCodeUsage } from "@api/enums/verificationCode.usage";
-import * as auditService from "@api/services/audit/audit.service";
+import * as authAudit from "@api/services/audit/events/auth.audit";
 import * as clientService from "@api/services/client/client.service";
 import * as humanVerification from "@api/services/human-verification/cap.service";
 import * as humanRiskService from "@api/services/human-verification/human-risk.service";
@@ -45,18 +45,7 @@ export const codeSend: OpenRouteHandler<"codeSend"> = async (c) => {
     ? await resolveResetPasswordMobile(username, phoneNumber)
     : requirePhoneNumber(phoneNumber);
   const data = await mobileService.sendCode(targetPhoneNumber, usage);
-  await auditService.recordAuditLogFromContext(c, {
-    action: "auth.sms_code.send",
-    outcome: "success",
-    actorType: "anonymous",
-    targetType: "mobile",
-    targetCode: maskMobile(targetPhoneNumber),
-    details: {
-      phoneNumber: maskMobile(targetPhoneNumber),
-      usage,
-      username,
-    },
-  });
+  await authAudit.recordSmsCodeSend(c, { phoneNumber: targetPhoneNumber, usage, username });
   return c.json(resp.ok(data));
 };
 
@@ -66,18 +55,7 @@ export const codeVerify: OpenRouteHandler<"codeVerify"> = async (c) => {
     ? await resolveResetPasswordMobile(username, phoneNumber)
     : requirePhoneNumber(phoneNumber);
   const data = await mobileService.checkVerificationCode(usage, targetPhoneNumber, code);
-  await auditService.recordAuditLogFromContext(c, {
-    action: "auth.sms_code.verify",
-    outcome: data ? "success" : "failure",
-    actorType: "anonymous",
-    targetType: "mobile",
-    targetCode: maskMobile(targetPhoneNumber),
-    details: {
-      phoneNumber: maskMobile(targetPhoneNumber),
-      usage,
-      username,
-    },
-  });
+  await authAudit.recordSmsCodeVerify(c, { phoneNumber: targetPhoneNumber, usage, username, verified: data });
   return c.json(resp.ok({ result: data }));
 };
 

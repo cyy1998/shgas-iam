@@ -1,4 +1,4 @@
-import type { AuditLogInput } from "@admin-api/services/audit/audit.service";
+import type { AdminAuditContext } from "@admin-api/services/audit/audit.service";
 import type { ClientStatus } from "@iam/contracts";
 import type {
   ClientCreateDto,
@@ -8,45 +8,12 @@ import type {
   ClientUpdateDto,
 } from "./client.type";
 import redis from "@admin-api/lib/infra/redis";
-import * as auditService from "@admin-api/services/audit/audit.service";
+import { recordAdminClientAudit } from "@admin-api/services/audit/events/client.audit";
 import * as clientRepository from "@admin-api/services/client/client.repository";
 import { ClientDtoSchema } from "@admin-api/services/client/client.schema";
 import { ClientCodeExistsError } from "@iam/api-core/errors/ClientCodeExistsError";
 import { ClientNotFoundError } from "@iam/api-core/errors/ClientNotFoundError";
 import db from "@iam/db";
-
-type AdminAuditContext = Pick<AuditLogInput, "actorType"> & Partial<AuditLogInput>;
-
-function resolveAuditContext(auditContext?: AdminAuditContext): AdminAuditContext {
-  return auditContext ?? {
-    actorType: "system",
-    actorSystemKey: "admin-api",
-  };
-}
-
-async function recordAdminClientAudit(
-  action: string,
-  clientDto: ClientDto,
-  details: Record<string, unknown>,
-  tx: Parameters<typeof auditService.recordAuditLog>[1],
-  auditContext?: AdminAuditContext,
-) {
-  await auditService.recordAuditLog({
-    ...resolveAuditContext(auditContext),
-    action,
-    outcome: "success",
-    targetType: "client",
-    targetId: clientDto.id,
-    targetCode: clientDto.clientCode,
-    targetName: clientDto.clientName,
-    details: {
-      clientCode: clientDto.clientCode,
-      clientName: clientDto.clientName,
-      status: clientDto.status,
-      ...details,
-    },
-  }, tx);
-}
 
 async function setClientCache(clientDto: ClientDto) {
   await Promise.all([
