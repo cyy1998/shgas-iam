@@ -7,7 +7,7 @@ import * as resp from "@iam/api-core/http";
 import { getCookie, setCookie } from "hono/cookie";
 import { getVerificationContext } from "../human-verification-context";
 import * as authService from "./auth.service";
-import { parseLoginPasswordCredential } from "./login-credential.service";
+import { parseLoginPasswordCredential } from "./login-credential.helper";
 
 export const loginPassword: AuthRouteHandler<"loginPassword"> = async (c) => {
   const { credential, capToken } = c.req.valid("json");

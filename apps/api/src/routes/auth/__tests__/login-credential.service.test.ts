@@ -48,7 +48,7 @@ mock.module("@api/lib/infra/redis", () => ({
   default: fakeNonceStore,
 }));
 
-const { parseLoginPasswordCredential } = await import("../login-credential.service");
+const { parseLoginPasswordCredential } = await import("../login-credential.helper");
 
 function makeCredential(overrides: Partial<Parameters<typeof createLoginCredential>[0]> = {}) {
   return createLoginCredential({
