@@ -52,6 +52,6 @@
 - [x] 7.2 运行 `pnpm --filter @iam/api test`、`pnpm --filter @iam/api typecheck`，验证认证、自助和 internal 接入点。
 - [x] 7.3 运行 `pnpm --filter @iam/admin-api test`、`pnpm --filter @iam/admin-api typecheck`，验证管理端 mutation 和查询入口。
 - [x] 7.4 运行 `pnpm --filter @iam/admin typecheck`，验证审计日志管理页面和详情 Tab 接入。
-- [ ] 7.5 使用浏览器 smoke-test 审计日志管理页、用户详情日志 Tab 和任职详情日志 Tab。
+- [x] 7.5 使用浏览器 smoke-test 审计日志管理页、用户详情日志 Tab 和任职详情日志 Tab。
 - [x] 7.6 执行迁移脚本 dry-run，记录待迁移数量和样例映射结果。
 - [x] 7.7 更新相关文档，说明审计日志与普通系统日志的边界、敏感字段禁止项和 `login_log` 退役计划。
