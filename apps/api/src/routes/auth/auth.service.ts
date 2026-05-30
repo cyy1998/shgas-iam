@@ -7,6 +7,7 @@ import * as authAudit from "@api/services/audit/events/auth.audit";
 import * as humanVerification from "@api/services/human-verification/cap.service";
 import * as humanRiskService from "@api/services/human-verification/human-risk.service";
 import { isHumanVerificationRequiredError } from "@api/services/human-verification/human-verification.error";
+import * as mobileService from "@api/services/mobile/mobile.service";
 import * as sessionService from "@api/services/session/session.service";
 import { UserDtoSchema } from "@api/services/user/user.schema";
 import * as userService from "@api/services/user/user.service";
@@ -114,10 +115,10 @@ export async function loginMobile(phoneNumber: string, code: string, options: Lo
     }
   }
 
-  if (
-    !await sessionService.checkVerificationCode(VerificationCodeUsage.Login, phoneNumber, code)
-    && code !== config.MAGIC_CODE
-  ) {
+  const verificationCodeValid = code === config.MAGIC_CODE
+    || await mobileService.consumeVerificationCode(VerificationCodeUsage.Login, phoneNumber, code);
+
+  if (!verificationCodeValid) {
     await humanRiskService.recordLoginFailure(humanVerification.HumanVerificationAction.MobileLogin, context);
     await authAudit.recordMobileLoginFailure(phoneNumber, "invalid_verification_code", activeUser);
     if (activeUser !== null) {

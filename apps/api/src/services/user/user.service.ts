@@ -1,4 +1,5 @@
 import type { UserDetailDto, UserDto, UserQueryDto, UserQueryWithPrivilegeDelegationDto } from "./user.type";
+import { VerificationCodeUsage } from "@api/enums/verificationCode.usage";
 import * as selfUserAudit from "@api/services/audit/events/self-user.audit";
 import * as mobileService from "@api/services/mobile/mobile.service";
 import * as userRepository from "@api/services/user/user.repository";
@@ -46,7 +47,7 @@ export async function resetPassword(username: string, phone: string, code: strin
       await selfUserAudit.recordPasswordResetFailure(user, phone, "mobile_mismatch", tx);
       throw new UserNotFoundError("用户名与手机号不匹配");
     }
-    if (!await mobileService.checkVerificationCode("resetPassword", phone, code)) {
+    if (!await mobileService.consumeVerificationCode(VerificationCodeUsage.ResetPassword, phone, code)) {
       await selfUserAudit.recordPasswordResetFailure(user, phone, "invalid_verification_code", tx);
       throw new InvalidVerificationCodeError("验证码错误");
     }

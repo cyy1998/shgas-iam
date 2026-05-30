@@ -10,6 +10,21 @@ import { users } from "@iam/db/schema";
 import { count, eq } from "drizzle-orm";
 
 const MOBILE_REGEX = /^1[3-9]\d{9}$/;
+const consumeVerificationCodeScript = `
+local saved = redis.call("GET", KEYS[1])
+if not saved then
+  return 0
+end
+if saved ~= ARGV[1] then
+  return 0
+end
+redis.call("DEL", KEYS[1])
+return 1
+`;
+
+function mobileCodeKey(usage: string, phone: string) {
+  return `mobile-code:${usage}:${phone}`;
+}
 
 export async function sendCode(phoneNumber: string, usage: string) {
   if (!checkValidPhoneNumber(phoneNumber)) {
@@ -22,7 +37,7 @@ export async function sendCode(phoneNumber: string, usage: string) {
   if (result.success === false) {
     throw new CustomError(`短信发送失败:${phoneNumber}`);
   }
-  await redis.set(`mobile-code:${usage}:${phoneNumber}`, result.code, "EX", 180);
+  await redis.set(mobileCodeKey(usage, phoneNumber), result.code, "EX", 180);
   return true;
 }
 
@@ -51,6 +66,11 @@ export async function checkExistingPhoneNumber(phone: string): Promise<boolean> 
 }
 
 export async function checkVerificationCode(usage: string, phone: string, code: string): Promise<boolean> {
-  const savedCode = await redis.get(`mobile-code:${usage}:${phone}`);
+  const savedCode = await redis.get(mobileCodeKey(usage, phone));
   return savedCode === code;
+}
+
+export async function consumeVerificationCode(usage: string, phone: string, code: string): Promise<boolean> {
+  const result = await redis.eval(consumeVerificationCodeScript, 1, mobileCodeKey(usage, phone), code);
+  return result === 1;
 }

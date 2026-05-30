@@ -50,6 +50,7 @@ const mobileService = {
   checkExistingPhoneNumber: mock(),
   checkValidPhoneNumber: mock(),
   checkVerificationCode: mock(),
+  consumeVerificationCode: mock(),
 };
 
 const auditService = {
@@ -194,6 +195,7 @@ beforeEach(() => {
   mobileService.checkExistingPhoneNumber.mockReset();
   mobileService.checkValidPhoneNumber.mockReset();
   mobileService.checkVerificationCode.mockReset();
+  mobileService.consumeVerificationCode.mockReset();
   auditService.recordAuditLog.mockReset();
 
   userRepository.getUserByUsername.mockResolvedValue(makeUser());
@@ -209,6 +211,7 @@ beforeEach(() => {
   mobileService.checkValidPhoneNumber.mockReturnValue(true);
   mobileService.checkExistingPhoneNumber.mockResolvedValue(false);
   mobileService.checkVerificationCode.mockResolvedValue(true);
+  mobileService.consumeVerificationCode.mockResolvedValue(true);
   auditService.recordAuditLog.mockResolvedValue(undefined);
 });
 
@@ -280,7 +283,7 @@ describe("userService.resetPassword", () => {
       "用户不存在",
     );
 
-    expect(mobileService.checkVerificationCode).not.toHaveBeenCalled();
+    expect(mobileService.consumeVerificationCode).not.toHaveBeenCalled();
     expect(auditService.recordAuditLog).not.toHaveBeenCalled();
   });
 
@@ -289,7 +292,7 @@ describe("userService.resetPassword", () => {
       "用户名与手机号不匹配",
     );
 
-    expect(mobileService.checkVerificationCode).not.toHaveBeenCalled();
+    expect(mobileService.consumeVerificationCode).not.toHaveBeenCalled();
     expect(auditService.recordAuditLog).toHaveBeenCalledWith(expect.objectContaining({
       action: "auth.password.reset",
       outcome: "failure",
@@ -301,12 +304,13 @@ describe("userService.resetPassword", () => {
   });
 
   test("rejects when the reset password verification code is wrong", async () => {
-    mobileService.checkVerificationCode.mockResolvedValue(false);
+    mobileService.consumeVerificationCode.mockResolvedValue(false);
 
     await expect(userService.resetPassword("zhangsan", "17721462865", "000000", "Newpass1")).rejects.toThrow(
       "验证码错误",
     );
 
+    expect(mobileService.consumeVerificationCode).toHaveBeenCalledWith("resetPassword", "17721462865", "000000");
     expect(userRepository.setPassword).not.toHaveBeenCalled();
     expect(auditService.recordAuditLog).toHaveBeenCalledWith(expect.objectContaining({
       action: "auth.password.reset",
@@ -321,7 +325,7 @@ describe("userService.resetPassword", () => {
   test("hashes and saves the new password when verification succeeds", async () => {
     await expect(userService.resetPassword("zhangsan", "17721462865", "123456", "Newpass1")).resolves.toBe(true);
 
-    expect(mobileService.checkVerificationCode).toHaveBeenCalledWith("resetPassword", "17721462865", "123456");
+    expect(mobileService.consumeVerificationCode).toHaveBeenCalledWith("resetPassword", "17721462865", "123456");
     expect(hash).toHaveBeenCalledWith("Newpass1", config.PASSWORD_HASH_ROUNDS);
     expect(userRepository.setPassword).toHaveBeenCalledWith(1001, "hashed:Newpass1:4", tx);
     expect(auditService.recordAuditLog).toHaveBeenCalledWith(expect.objectContaining({
@@ -332,6 +336,20 @@ describe("userService.resetPassword", () => {
         passwordReset: true,
       },
     }), tx);
+  });
+
+  test("rejects repeated reset password submissions after the code is consumed", async () => {
+    mobileService.consumeVerificationCode
+      .mockResolvedValueOnce(true)
+      .mockResolvedValueOnce(false);
+
+    await expect(userService.resetPassword("zhangsan", "17721462865", "123456", "Newpass1")).resolves.toBe(true);
+    await expect(userService.resetPassword("zhangsan", "17721462865", "123456", "Otherpass1")).rejects.toThrow(
+      "验证码错误",
+    );
+
+    expect(userRepository.setPassword).toHaveBeenCalledTimes(1);
+    expect(mobileService.consumeVerificationCode).toHaveBeenCalledTimes(2);
   });
 
   test("documents current behavior: resetPassword does not enforce setPassword strength rules", async () => {
@@ -389,7 +407,7 @@ describe("userService.setMobile", () => {
       calls.push("existing");
       return false;
     });
-    mobileService.checkVerificationCode.mockImplementation(async () => {
+    mobileService.consumeVerificationCode.mockImplementation(async () => {
       calls.push("code");
       return true;
     });
@@ -410,7 +428,7 @@ describe("userService.setMobile", () => {
       calls.push("existing");
       return true;
     });
-    mobileService.checkVerificationCode.mockImplementation(async () => {
+    mobileService.consumeVerificationCode.mockImplementation(async () => {
       calls.push("code");
       return true;
     });
@@ -431,7 +449,7 @@ describe("userService.setMobile", () => {
       calls.push("existing");
       return false;
     });
-    mobileService.checkVerificationCode.mockImplementation(async () => {
+    mobileService.consumeVerificationCode.mockImplementation(async () => {
       calls.push("code");
       return false;
     });
@@ -463,7 +481,7 @@ describe("userService.setMobile", () => {
       calls.push("existing");
       return false;
     });
-    mobileService.checkVerificationCode.mockImplementation(async () => {
+    mobileService.consumeVerificationCode.mockImplementation(async () => {
       calls.push("code");
       return true;
     });
@@ -481,7 +499,7 @@ describe("userService.setMobile", () => {
     });
 
     expect(calls).toEqual(["valid", "existing", "code", "write"]);
-    expect(mobileService.checkVerificationCode).toHaveBeenCalledWith("bindPhone", "17700001111", "123456");
+    expect(mobileService.consumeVerificationCode).toHaveBeenCalledWith("bindPhone", "17700001111", "123456");
     expect(userRepository.setMobile).toHaveBeenCalledWith(1001, "17700001111", tx);
     expect(auditService.recordAuditLog).toHaveBeenCalledWith(expect.objectContaining({
       action: "self.mobile.bind",
@@ -491,6 +509,22 @@ describe("userService.setMobile", () => {
       },
     }), tx);
     expect(userRepository.getUserById).toHaveBeenCalledWith(1001);
+  });
+
+  test("rejects repeated mobile binding submissions after the code is consumed", async () => {
+    mobileService.consumeVerificationCode
+      .mockResolvedValueOnce(true)
+      .mockResolvedValueOnce(false);
+
+    userRepository.getUserById.mockResolvedValue(makeUser({ mobile: "17700001111" }));
+
+    await expect(userService.setMobile(1001, "17700001111", "123456")).resolves.toMatchObject({
+      mobile: "17700001111",
+    });
+    await expect(userService.setMobile(1001, "17700001111", "123456")).rejects.toThrow("验证码错误");
+
+    expect(userRepository.setMobile).toHaveBeenCalledTimes(1);
+    expect(mobileService.consumeVerificationCode).toHaveBeenCalledTimes(2);
   });
 });
 

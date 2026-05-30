@@ -18,7 +18,7 @@ export async function assertCanBindMobile(
   if (await mobileService.checkExistingPhoneNumber(phoneNumber)) {
     throw new MobileAlreadyExistsError("手机号已存在");
   }
-  if (!await mobileService.checkVerificationCode(VerificationCodeUsage.BindPhone, phoneNumber, code)) {
+  if (!await mobileService.consumeVerificationCode(VerificationCodeUsage.BindPhone, phoneNumber, code)) {
     await selfUserAudit.recordMobileBindInvalidCode(userId, phoneNumber, tx);
     throw new InvalidVerificationCodeError("验证码错误");
   }

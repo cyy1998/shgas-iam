@@ -26,6 +26,8 @@ function makeContext(input: Partial<Record<ValidTarget, unknown>>) {
 
 const ensureActionAllowed = mock(async () => undefined);
 const recordOpenUserInfoLookup = mock(async () => undefined);
+const checkVerificationCode = mock(async () => true);
+const consumeVerificationCode = mock(async () => true);
 const sendCode = mock(async () => true);
 const recordAuditLogFromContext = mock(async () => undefined);
 const getUserDetailByUsername = mock(async () => ({
@@ -47,7 +49,8 @@ mock.module("@api/services/human-verification/human-risk.service", () => ({
 }));
 
 mock.module("@api/services/mobile/mobile.service", () => ({
-  checkVerificationCode: mock(async () => true),
+  checkVerificationCode,
+  consumeVerificationCode,
   sendCode,
 }));
 
@@ -76,6 +79,10 @@ beforeEach(() => {
   ensureActionAllowed.mockResolvedValue(undefined);
   recordOpenUserInfoLookup.mockReset();
   recordOpenUserInfoLookup.mockResolvedValue(undefined);
+  checkVerificationCode.mockReset();
+  checkVerificationCode.mockResolvedValue(true);
+  consumeVerificationCode.mockReset();
+  consumeVerificationCode.mockResolvedValue(true);
   sendCode.mockReset();
   sendCode.mockResolvedValue(true);
   recordAuditLogFromContext.mockReset();
@@ -168,5 +175,24 @@ describe("open handlers human verification", () => {
 
     expect(recordOpenUserInfoLookup).toHaveBeenCalled();
     expect(getUserDetailByUsername).toHaveBeenCalledWith("zhangsan");
+  });
+
+  test("verifies SMS codes without consuming them", async () => {
+    const result = await handlers.codeVerify(makeContext({
+      json: {
+        code: "123456",
+        phoneNumber: "17721462865",
+        username: "zhangsan",
+        usage: "resetPassword",
+      },
+    }) as never, undefined as never);
+
+    expect(result as unknown).toEqual({
+      code: 200,
+      data: { result: true },
+      message: "success",
+    });
+    expect(checkVerificationCode).toHaveBeenCalledWith("resetPassword", "17721462865", "123456");
+    expect(consumeVerificationCode).not.toHaveBeenCalled();
   });
 });

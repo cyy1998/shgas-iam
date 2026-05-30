@@ -78,8 +78,3 @@ export async function removeGlobalSession(globalSessionId: string) {
     redis.del(`local_session_set:${globalSessionId}`),
   ]);
 }
-
-export async function checkVerificationCode(usage: string, phone: string, code: string): Promise<boolean> {
-  const savedCode = await redis.get(`mobile-code:${usage}:${phone}`);
-  return savedCode === code;
-}

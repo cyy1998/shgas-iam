@@ -18,6 +18,7 @@ const mobileService = {
   checkExistingPhoneNumber: mock(),
   checkValidPhoneNumber: mock(),
   checkVerificationCode: mock(),
+  consumeVerificationCode: mock(),
 };
 
 const privilegeDelegationRepository = {
@@ -100,6 +101,7 @@ beforeEach(() => {
   mobileService.checkExistingPhoneNumber.mockReset();
   mobileService.checkValidPhoneNumber.mockReset();
   mobileService.checkVerificationCode.mockReset();
+  mobileService.consumeVerificationCode.mockReset();
   privilegeDelegationRepository.getDelegationsByUserAndOrganizationScopeAndPrivilege.mockReset();
   privilegeDelegationSchema.toPrivilegeDelegationDto.mockClear();
   roleRepository.getRolesByEmploymentId.mockReset();
@@ -111,6 +113,7 @@ beforeEach(() => {
   mobileService.checkValidPhoneNumber.mockReturnValue(true);
   mobileService.checkExistingPhoneNumber.mockResolvedValue(false);
   mobileService.checkVerificationCode.mockResolvedValue(true);
+  mobileService.consumeVerificationCode.mockResolvedValue(true);
   privilegeDelegationRepository.getDelegationsByUserAndOrganizationScopeAndPrivilege.mockResolvedValue([]);
   userRepository.searchUsers.mockResolvedValue([makeUser()]);
 });
@@ -162,7 +165,7 @@ describe("user mobile binding helper", () => {
       calls.push("existing");
       return false;
     });
-    mobileService.checkVerificationCode.mockImplementation(async () => {
+    mobileService.consumeVerificationCode.mockImplementation(async () => {
       calls.push("code");
       return false;
     });

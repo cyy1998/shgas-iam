@@ -139,6 +139,7 @@ const ensureActionAllowed = mock(async () => undefined);
 let passwordMatches = false;
 let verificationCodeMatches = false;
 let activeMobileUser: { id: number } | null = { id: USER_ID };
+const consumeVerificationCode = mock(async () => verificationCodeMatches);
 
 const userDetail = {
   id: USER_ID,
@@ -198,12 +199,13 @@ mock.module("@api/services/audit/audit.service", () => ({
 }));
 
 mock.module("@api/services/session/session.service", () => ({
-  async checkVerificationCode() {
-    return verificationCodeMatches;
-  },
   async setGlobalSession() {
     return SESSION_ID;
   },
+}));
+
+mock.module("@api/services/mobile/mobile.service", () => ({
+  consumeVerificationCode,
 }));
 
 mock.module("@api/services/human-verification/cap.service", () => ({
@@ -241,6 +243,8 @@ beforeEach(() => {
   humanRiskLoginFailures.length = 0;
   ensureActionAllowed.mockReset();
   ensureActionAllowed.mockResolvedValue(undefined);
+  consumeVerificationCode.mockReset();
+  consumeVerificationCode.mockImplementation(async () => verificationCodeMatches);
   passwordMatches = false;
   verificationCodeMatches = false;
   activeMobileUser = { id: USER_ID };
@@ -287,6 +291,22 @@ describe("auth login failure temporary blacklist", () => {
     passwordMatches = false;
     await expectCredentialError(authService.loginPassword(userDetail.username, "wrong-password"), "当前已连续失败 1 次");
     expect(pausedUserIds).toHaveLength(0);
+  });
+
+  test("successful mobile login consumes the verification code and rejects replay", async () => {
+    consumeVerificationCode
+      .mockResolvedValueOnce(true)
+      .mockResolvedValueOnce(false);
+
+    await expect(authService.loginMobile(MOBILE, "1234")).resolves.toEqual({
+      isMobileSet: true,
+      token: SESSION_ID,
+    });
+
+    await expectCredentialError(authService.loginMobile(MOBILE, "1234"), "验证码错误");
+
+    expect(consumeVerificationCode).toHaveBeenCalledTimes(2);
+    expect(consumeVerificationCode).toHaveBeenCalledWith("login", MOBILE, "1234");
   });
 
   test("failures outside the thirty-minute window do not count toward suspension", async () => {
