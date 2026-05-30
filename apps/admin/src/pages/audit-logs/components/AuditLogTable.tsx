@@ -5,7 +5,7 @@ import type {
 import { searchAuditLogs } from '@admin/services/audit';
 import type { ProColumns } from '@ant-design/pro-components';
 import { ProTable } from '@ant-design/pro-components';
-import { Checkbox, message, Space, Tag, Typography } from 'antd';
+import { Checkbox, message, Select, Space, Tag, Typography } from 'antd';
 import { useState } from 'react';
 import AuditLogDetailDrawer from './AuditLogDetailDrawer';
 import {
@@ -156,24 +156,27 @@ export default function AuditLogTable({
       hideInSearch: !search,
     },
     {
-      title: 'Action',
+      title: '动作',
       dataIndex: 'actions',
       hideInTable: true,
       hideInSearch: !search,
       renderFormItem: () => (
-        <Checkbox.Group
+        <Select
+          allowClear
+          showSearch
+          mode="multiple"
           options={auditActionOptions}
-          style={{
-            display: 'grid',
-            gap: 8,
-            gridTemplateColumns: 'repeat(3, minmax(120px, 1fr))',
-            maxWidth: 640,
-          }}
+          placeholder="请选择动作"
+          maxTagCount="responsive"
+          optionFilterProp="label"
+          menuItemSelectedIcon={({ isSelected }) => (
+            <Checkbox checked={isSelected} style={{ pointerEvents: 'none' }} />
+          )}
         />
       ),
     },
     {
-      title: 'Action',
+      title: '动作',
       dataIndex: 'action',
       width: 240,
       search: false,
