@@ -1,38 +1,128 @@
 import type { EmploymentRouteHandler } from "./employment.type";
-import * as ops from "./employment.ops";
+import { defineAdminApiMutationOperation, defineAdminApiQueryOperation } from "@admin-api/lib/admin-api-adapter";
+import * as auditService from "@admin-api/services/audit/audit.service";
+import {
+  EmploymentAdminCreateDtoSchema,
+  EmploymentAdminPaginationQueryDtoSchema,
+  EmploymentTransferDtoSchema,
+  EmploymentUpdateDtoSchema,
+} from "@admin-api/services/employment/employment.schema";
+import * as employmentService from "@admin-api/services/employment/employment.service";
+import { router } from "@iam/api-core/trpc";
+import { EmploymentStatus } from "@iam/contracts";
+import { z } from "zod";
+import { toEmploymentDetailVo, toEmploymentVo } from "./employment.schema";
 
-export const employmentsSearch: EmploymentRouteHandler<"employmentsSearch"> = async c =>
-  c.json(await ops.searchEmploymentOp.run(c.req.valid("json")));
+const idInput = z.object({ id: z.coerce.number().int().positive() });
 
-export const employmentsDetail: EmploymentRouteHandler<"employmentsDetail"> = async c =>
-  c.json(await ops.getEmploymentOp.run(c.req.valid("param")));
+const searchEmployment = defineAdminApiQueryOperation({
+  input: EmploymentAdminPaginationQueryDtoSchema,
+  restInput: c => c.req.valid("json") as z.infer<typeof EmploymentAdminPaginationQueryDtoSchema>,
+  handler: async (input) => {
+    const { result, ...rest } = await employmentService.searchEmploymentsFuzzyForAdmin(input);
+    return {
+      result: result.map(e => toEmploymentVo(e)),
+      ...rest,
+    };
+  },
+});
 
-export const employmentsCreate: EmploymentRouteHandler<"employmentsCreate"> = async c =>
-  c.json(await ops.createEmploymentOp.run(c.req.valid("json"), { hono: c }));
+const getEmployment = defineAdminApiQueryOperation({
+  input: idInput,
+  restInput: c => c.req.valid("param") as z.infer<typeof idInput>,
+  handler: async ({ id }) => {
+    const detail = await employmentService.getEmploymentDetailByIdForAdmin(id);
+    return toEmploymentDetailVo(detail);
+  },
+});
 
-export const employmentsUpdate: EmploymentRouteHandler<"employmentsUpdate"> = async c =>
-  c.json(await ops.updateEmploymentOp.run({
-    id: c.req.valid("param").id,
-    data: c.req.valid("json"),
-  }, { hono: c }));
+const createEmployment = defineAdminApiMutationOperation({
+  input: EmploymentAdminCreateDtoSchema,
+  restInput: c => c.req.valid("json") as z.infer<typeof EmploymentAdminCreateDtoSchema>,
+  handler: (input, context) =>
+    employmentService.createEmploymentForAdmin(input, auditService.resolveAdminAuditContext(context)),
+});
 
-export const employmentsStatusUpdate: EmploymentRouteHandler<"employmentsStatusUpdate"> = async c =>
-  c.json(await ops.updateEmploymentStatusOp.run({
-    id: c.req.valid("param").id,
-    status: c.req.valid("json").status,
-  }, { hono: c }));
+const updateEmployment = defineAdminApiMutationOperation({
+  input: z.object({
+    id: z.coerce.number().int().positive(),
+    data: EmploymentUpdateDtoSchema,
+  }),
+  restInput: c => ({
+    id: (c.req.valid("param") as { id: number }).id,
+    data: c.req.valid("json") as z.infer<typeof EmploymentUpdateDtoSchema>,
+  }),
+  handler: ({ id, data }, context) =>
+    employmentService.updateEmployment(id, data, auditService.resolveAdminAuditContext(context)),
+});
 
-export const employmentsDelete: EmploymentRouteHandler<"employmentsDelete"> = async c =>
-  c.json(await ops.deleteEmploymentOp.run(c.req.valid("param"), { hono: c }));
+const updateEmploymentStatus = defineAdminApiMutationOperation({
+  input: z.object({
+    id: z.coerce.number().int().positive(),
+    status: z.enum(EmploymentStatus),
+  }),
+  restInput: c => ({
+    id: (c.req.valid("param") as { id: number }).id,
+    status: (c.req.valid("json") as { status: EmploymentStatus }).status,
+  }),
+  handler: ({ id, status }, context) =>
+    employmentService.updateEmploymentStatus(id, status, auditService.resolveAdminAuditContext(context)),
+});
 
-export const employmentsTransfer: EmploymentRouteHandler<"employmentsTransfer"> = async c =>
-  c.json(await ops.transferEmploymentOp.run({
-    id: c.req.valid("param").id,
-    data: c.req.valid("json"),
-  }, { hono: c }));
+const deleteEmployment = defineAdminApiMutationOperation({
+  input: idInput,
+  restInput: c => c.req.valid("param") as z.infer<typeof idInput>,
+  handler: ({ id }, context) =>
+    employmentService.deleteEmployment(id, auditService.resolveAdminAuditContext(context)),
+});
 
-export const employmentsSetPrimary: EmploymentRouteHandler<"employmentsSetPrimary"> = async c =>
-  c.json(await ops.setPrimaryEmploymentOp.run(c.req.valid("param"), { hono: c }));
+const transferEmployment = defineAdminApiMutationOperation({
+  input: z.object({
+    id: z.coerce.number().int().positive(),
+    data: EmploymentTransferDtoSchema,
+  }),
+  restInput: c => ({
+    id: (c.req.valid("param") as { id: number }).id,
+    data: c.req.valid("json") as z.infer<typeof EmploymentTransferDtoSchema>,
+  }),
+  handler: ({ id, data }, context) =>
+    employmentService.transferEmployment(id, data, auditService.resolveAdminAuditContext(context)),
+});
 
-export const employmentsResignUser: EmploymentRouteHandler<"employmentsResignUser"> = async c =>
-  c.json(await ops.resignUserOp.run(c.req.valid("param"), { hono: c }));
+const setPrimaryEmployment = defineAdminApiMutationOperation({
+  input: idInput,
+  restInput: c => c.req.valid("param") as z.infer<typeof idInput>,
+  handler: ({ id }, context) =>
+    employmentService.setPrimaryEmployment(id, auditService.resolveAdminAuditContext(context)),
+});
+
+const resignUser = defineAdminApiMutationOperation({
+  input: z.object({ username: z.string() }),
+  restInput: c => c.req.valid("param") as { username: string },
+  handler: ({ username }, context) =>
+    employmentService.resignUser(username, auditService.resolveAdminAuditContext(context)),
+});
+
+export const employmentsSearch = searchEmployment.toHandler<EmploymentRouteHandler<"employmentsSearch">>();
+export const employmentsDetail = getEmployment.toHandler<EmploymentRouteHandler<"employmentsDetail">>();
+export const employmentsCreate = createEmployment.toHandler<EmploymentRouteHandler<"employmentsCreate">>();
+export const employmentsUpdate = updateEmployment.toHandler<EmploymentRouteHandler<"employmentsUpdate">>();
+export const employmentsStatusUpdate
+  = updateEmploymentStatus.toHandler<EmploymentRouteHandler<"employmentsStatusUpdate">>();
+export const employmentsDelete = deleteEmployment.toHandler<EmploymentRouteHandler<"employmentsDelete">>();
+export const employmentsTransfer = transferEmployment.toHandler<EmploymentRouteHandler<"employmentsTransfer">>();
+export const employmentsSetPrimary
+  = setPrimaryEmployment.toHandler<EmploymentRouteHandler<"employmentsSetPrimary">>();
+export const employmentsResignUser = resignUser.toHandler<EmploymentRouteHandler<"employmentsResignUser">>();
+
+export const employmentAdminRouter = router({
+  search: searchEmployment.toTRPC(),
+  detail: getEmployment.toTRPC(),
+  create: createEmployment.toTRPC(),
+  update: updateEmployment.toTRPC(),
+  updateStatus: updateEmploymentStatus.toTRPC(),
+  delete: deleteEmployment.toTRPC(),
+  transfer: transferEmployment.toTRPC(),
+  setPrimary: setPrimaryEmployment.toTRPC(),
+  resignUser: resignUser.toTRPC(),
+});

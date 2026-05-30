@@ -1,33 +1,99 @@
+import type { Context } from "hono";
 import type { ClientRouteHandler } from "./client.type";
-import * as ops from "./client.ops";
+import { defineAdminApiMutationOperation, defineAdminApiQueryOperation } from "@admin-api/lib/admin-api-adapter";
+import * as auditService from "@admin-api/services/audit/audit.service";
+import {
+  ClientCreateDtoSchema,
+  ClientInputDtoSchema,
+  ClientPaginationQueryDtoSchema,
+  ClientStatusUpdateDtoSchema,
+  ClientUpdateDtoSchema,
+} from "@admin-api/services/client/client.schema";
+import * as clientService from "@admin-api/services/client/client.service";
+import { router } from "@iam/api-core/trpc";
+import { z } from "zod";
 
-export const clientsSearch: ClientRouteHandler<"clientsSearch"> = async c =>
-  c.json(await ops.searchClientOp.run(c.req.valid("json")));
+function resolveAuditContext(context?: unknown) {
+  const hono = (context as { hono?: Context } | undefined)?.hono;
+  if (!hono) {
+    return undefined;
+  }
+  return {
+    ...auditService.getAdminAuditActor(hono),
+    ...auditService.getAdminAuditRequestContext(hono),
+  };
+}
 
-export const clientDetail: ClientRouteHandler<"clientDetail"> = async c =>
-  c.json(await ops.getClientOp.run(c.req.valid("param")));
+const searchClient = defineAdminApiQueryOperation({
+  input: ClientPaginationQueryDtoSchema,
+  restInput: c => c.req.valid("json") as z.infer<typeof ClientPaginationQueryDtoSchema>,
+  handler: input => clientService.searchClientsForAdmin(input),
+});
 
-export const clientCreate: ClientRouteHandler<"clientCreate"> = async (c) => {
-  return c.json(await ops.createClientOp.run(c.req.valid("json"), { hono: c }));
-};
+const getClient = defineAdminApiQueryOperation({
+  input: z.object({ clientCode: z.string() }),
+  restInput: c => c.req.valid("param") as { clientCode: string },
+  handler: ({ clientCode }) => clientService.getClientDetailByCode(clientCode),
+});
 
-export const clientUpdate: ClientRouteHandler<"clientUpdate"> = async c =>
-  c.json(await ops.updateClientOp.run({
-    clientCode: c.req.valid("param").clientCode,
-    data: c.req.valid("json"),
-  }, { hono: c }));
+const createClient = defineAdminApiMutationOperation({
+  input: ClientCreateDtoSchema,
+  restInput: c => c.req.valid("json") as z.infer<typeof ClientCreateDtoSchema>,
+  handler: (input, context) => clientService.createClient(input, resolveAuditContext(context)),
+});
 
-export const clientStatusUpdate: ClientRouteHandler<"clientStatusUpdate"> = async c =>
-  c.json(await ops.updateClientStatusOp.run({
-    clientCode: c.req.valid("param").clientCode,
-    status: c.req.valid("json").status,
-  }, { hono: c }));
+const updateClient = defineAdminApiMutationOperation({
+  input: z.object({
+    clientCode: z.string(),
+    data: ClientUpdateDtoSchema,
+  }),
+  restInput: c => ({
+    clientCode: (c.req.valid("param") as { clientCode: string }).clientCode,
+    data: c.req.valid("json") as z.infer<typeof ClientUpdateDtoSchema>,
+  }),
+  handler: ({ clientCode, data }, context) =>
+    clientService.updateClient(clientCode, data, resolveAuditContext(context)),
+});
 
-export const clientDelete: ClientRouteHandler<"clientDelete"> = async c =>
-  c.json(await ops.deleteClientOp.run(c.req.valid("param"), { hono: c }));
+const updateClientById = defineAdminApiMutationOperation({
+  input: ClientInputDtoSchema,
+  restInput: c => c.req.valid("json") as z.infer<typeof ClientInputDtoSchema>,
+  handler: (input, context) => clientService.updateClientById(input, resolveAuditContext(context)),
+});
 
-export const clientCreateLegacy: ClientRouteHandler<"clientCreateLegacy"> = async c =>
-  c.json(await ops.createClientOp.run(c.req.valid("json"), { hono: c }));
+const updateClientStatus = defineAdminApiMutationOperation({
+  input: z.object({
+    clientCode: z.string(),
+    status: ClientStatusUpdateDtoSchema.shape.status,
+  }),
+  restInput: c => ({
+    clientCode: (c.req.valid("param") as { clientCode: string }).clientCode,
+    status: (c.req.valid("json") as z.infer<typeof ClientStatusUpdateDtoSchema>).status,
+  }),
+  handler: ({ clientCode, status }, context) =>
+    clientService.updateClientStatus(clientCode, status, resolveAuditContext(context)),
+});
 
-export const clientUpdateLegacy: ClientRouteHandler<"clientUpdateLegacy"> = async c =>
-  c.json(await ops.updateClientByIdOp.run(c.req.valid("json"), { hono: c }));
+const deleteClient = defineAdminApiMutationOperation({
+  input: z.object({ clientCode: z.string() }),
+  restInput: c => c.req.valid("param") as { clientCode: string },
+  handler: ({ clientCode }, context) => clientService.deleteClient(clientCode, resolveAuditContext(context)),
+});
+
+export const clientsSearch = searchClient.toHandler<ClientRouteHandler<"clientsSearch">>();
+export const clientDetail = getClient.toHandler<ClientRouteHandler<"clientDetail">>();
+export const clientCreate = createClient.toHandler<ClientRouteHandler<"clientCreate">>();
+export const clientUpdate = updateClient.toHandler<ClientRouteHandler<"clientUpdate">>();
+export const clientStatusUpdate = updateClientStatus.toHandler<ClientRouteHandler<"clientStatusUpdate">>();
+export const clientDelete = deleteClient.toHandler<ClientRouteHandler<"clientDelete">>();
+export const clientCreateLegacy = createClient.toHandler<ClientRouteHandler<"clientCreateLegacy">>();
+export const clientUpdateLegacy = updateClientById.toHandler<ClientRouteHandler<"clientUpdateLegacy">>();
+
+export const clientAdminRouter = router({
+  search: searchClient.toTRPC(),
+  detail: getClient.toTRPC(),
+  create: createClient.toTRPC(),
+  update: updateClient.toTRPC(),
+  updateStatus: updateClientStatus.toTRPC(),
+  delete: deleteClient.toTRPC(),
+});
