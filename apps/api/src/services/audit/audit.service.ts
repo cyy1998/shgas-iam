@@ -33,7 +33,7 @@ export type AuditLogInput = {
 
 export function getApiAuditRequestContext(c: Context): AuditRequestContext {
   return {
-    sourceApp: "api",
+    sourceApp: "iam",
     requestId: c.get("requestId") ?? c.req.header("x-request-id") ?? null,
     traceId: getTraceId(c),
     ip: getRequestIp(c),
@@ -83,7 +83,7 @@ export async function recordAuditLog(input: AuditLogInput, tx?: DbClient) {
   const auditLog = AuditLogWriteDtoSchema.parse({
     ...input,
     ...actor,
-    sourceApp: input.sourceApp ?? "api",
+    sourceApp: input.sourceApp ?? "iam",
     targetId: input.targetId ?? null,
     targetCode: input.targetCode ?? null,
     requestId: input.requestId ?? null,

@@ -70,7 +70,7 @@ describe("login_log audit migration helpers", () => {
       targetType: "user",
       targetId: 1001,
       targetCode: "zhangsan",
-      sourceApp: "api",
+      sourceApp: "iam",
       details: {
         migrationSource: "login_log",
         legacyLoginLogId: 12,

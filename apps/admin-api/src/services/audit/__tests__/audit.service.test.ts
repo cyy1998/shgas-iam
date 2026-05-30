@@ -55,7 +55,7 @@ function auditRow(overrides: Record<string, unknown> = {}) {
     targetType: "user",
     targetId: 1001,
     targetCode: "zhangsan",
-    sourceApp: "admin-api",
+    sourceApp: "iam-admin",
     requestId: "req-1",
     traceId: null,
     ip: null,
@@ -68,7 +68,7 @@ function auditRow(overrides: Record<string, unknown> = {}) {
 }
 
 describe("admin auditService.recordAuditLog", () => {
-  test("writes redacted audit logs with admin-api source app", async () => {
+  test("writes redacted audit logs with iam-admin source app", async () => {
     await auditService.recordAuditLog({
       action: "admin.client.rotate_secret",
       outcome: "success",
@@ -92,7 +92,7 @@ describe("admin auditService.recordAuditLog", () => {
       actorUsername: "admin",
       actorClientCode: null,
       actorSystemKey: null,
-      sourceApp: "admin-api",
+      sourceApp: "iam-admin",
       details: {
         clientSecret: "[REDACTED]",
         secretRotated: true,

@@ -140,7 +140,7 @@
 - `outcome = "success"`。
 - `actorType = "user"`。
 - `actorUserId/actorUsername/target*` 从原记录映射。
-- `sourceApp = "api"`。
+- `sourceApp = "iam"`。
 - `details` 记录 `loginType`、`clientCode`、`migrationSource = "login_log"`、`legacyLoginLogId`。
 - `eventTime = loginTime`。
 

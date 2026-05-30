@@ -19,7 +19,7 @@ beforeEach(() => {
 });
 
 describe("api auditService.recordAuditLog", () => {
-  test("writes redacted audit logs with api source app", async () => {
+  test("writes redacted audit logs with iam source app", async () => {
     await auditService.recordAuditLog({
       action: "auth.password.reset",
       outcome: "success",
@@ -38,7 +38,7 @@ describe("api auditService.recordAuditLog", () => {
       action: "auth.password.reset",
       outcome: "success",
       actorType: "anonymous",
-      sourceApp: "api",
+      sourceApp: "iam",
       targetType: "user",
       targetCode: "13800000000",
       details: {

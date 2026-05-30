@@ -26,7 +26,7 @@ export type AuditLogMigrationValue = {
   targetType: "user";
   targetId: number;
   targetCode: string;
-  sourceApp: "api";
+  sourceApp: "iam";
   requestId: null;
   traceId: null;
   ip: null;
@@ -144,7 +144,7 @@ export function mapLoginLogToAuditLog(row: LegacyLoginLog): AuditLogMigrationVal
     targetType: "user",
     targetId: row.userId,
     targetCode: row.username,
-    sourceApp: "api",
+    sourceApp: "iam",
     requestId: null,
     traceId: null,
     ip: null,

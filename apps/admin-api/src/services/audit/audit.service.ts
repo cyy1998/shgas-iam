@@ -37,7 +37,7 @@ export type AdminAuditContext = Pick<AuditLogInput, "actorType"> & Partial<Audit
 
 export function getAdminAuditRequestContext(c: Context): AuditRequestContext {
   return {
-    sourceApp: "admin-api",
+    sourceApp: "iam-admin",
     requestId: c.get("requestId") ?? c.req.header("x-request-id") ?? null,
     traceId: getTraceId(c),
     ip: getRequestIp(c),
@@ -86,7 +86,7 @@ export async function recordAuditLog(input: AuditLogInput, tx?: DbClient) {
   const auditLog = AuditLogWriteDtoSchema.parse({
     ...input,
     ...actor,
-    sourceApp: input.sourceApp ?? "admin-api",
+    sourceApp: input.sourceApp ?? "iam-admin",
     targetId: input.targetId ?? null,
     targetCode: input.targetCode ?? null,
     requestId: input.requestId ?? null,
