@@ -1,1 +1,1 @@
-export { auditAdminRouter } from "./audit.handlers";
+export { auditAdminRouter } from "./audit.adapter";

@@ -14,7 +14,7 @@ const clientService = {
 
 mock.module("@admin-api/services/client/client.service", () => clientService);
 
-const handlers = await import("../client.handlers");
+const handlers = await import("../client.adapter");
 
 beforeEach(() => {
   clientService.createClient.mockReset();
@@ -51,7 +51,7 @@ function createContext(valid: Record<string, unknown>) {
   };
 }
 
-describe("admin client handlers", () => {
+describe("admin client adapter", () => {
   test("delegates search input to client service", async () => {
     const query = {
       conditions: {

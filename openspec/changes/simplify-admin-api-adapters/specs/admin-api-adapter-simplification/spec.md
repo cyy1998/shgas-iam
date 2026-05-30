@@ -44,6 +44,12 @@ admin-api 模块 SHALL 允许在复杂 REST/tRPC 复用场景保留显式 `*.ops
 - **THEN** 每个模块的 REST 路径、HTTP method、请求/响应 schema、tRPC router key 和业务语义 MUST 保持等价
 - **THEN** 系统 SHALL 不再要求任何一个当前模块保留仅为透传而存在的薄 `*.ops.ts` 结构
 
+#### Scenario: Naming the combined adapter entry
+
+- **WHEN** 一个 admin 模块同时从同一份 operation 声明导出 REST handler 和 tRPC router
+- **THEN** 该模块 SHALL 使用 `<domain>.adapter.ts` 承载这些适配定义
+- **THEN** 该模块的 `<domain>.trpc.ts` SHALL 只作为 tRPC router 的稳定 re-export
+
 ### Requirement: Adapter migration preserves external contracts
 
 迁移 admin-api REST/tRPC 适配层时，系统 MUST 保持现有 REST 路径、HTTP method、请求 schema、响应 schema、tRPC router key 和业务语义不变。

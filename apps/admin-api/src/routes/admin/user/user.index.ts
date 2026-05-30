@@ -1,6 +1,6 @@
 import type { PublicBindings } from "@iam/api-core/types";
 import { createRouter } from "@iam/api-core/core/create-router";
-import * as handlers from "./user.handlers";
+import * as handlers from "./user.adapter";
 import * as routes from "./user.routes";
 
 const router = createRouter<PublicBindings>().basePath("/users");

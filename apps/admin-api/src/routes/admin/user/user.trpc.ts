@@ -1,1 +1,1 @@
-export { userAdminRouter } from "./user.handlers";
+export { userAdminRouter } from "./user.adapter";

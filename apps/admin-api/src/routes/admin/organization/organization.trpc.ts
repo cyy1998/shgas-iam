@@ -1,1 +1,1 @@
-export { organizationAdminRouter } from "./organization.handlers";
+export { organizationAdminRouter } from "./organization.adapter";

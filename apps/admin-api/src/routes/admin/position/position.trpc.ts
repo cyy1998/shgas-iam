@@ -1,1 +1,1 @@
-export { positionAdminRouter } from "./position.handlers";
+export { positionAdminRouter } from "./position.adapter";

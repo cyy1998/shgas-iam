@@ -1,1 +1,1 @@
-export { employmentAdminRouter } from "./employment.handlers";
+export { employmentAdminRouter } from "./employment.adapter";

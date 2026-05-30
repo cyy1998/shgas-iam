@@ -1,1 +1,1 @@
-export { clientAdminRouter } from "./client.handlers";
+export { clientAdminRouter } from "./client.adapter";

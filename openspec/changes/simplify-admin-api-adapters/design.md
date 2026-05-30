@@ -44,13 +44,21 @@
    - 理由：REST 的参数可能来自 `param`、`query`、`json` 的组合，而 tRPC 输入通常已经是单个对象；显式输入映射能避免隐式魔法。
    - 替代方案：从 OpenAPI route schema 自动推导所有输入。该方案实现复杂，且容易在 param/body 合并规则上产生不透明行为。
 
-3. `ops` 层变为可选层，只服务复杂复用。
+3. 每个双入口 admin 模块使用 `<domain>.adapter.ts` 作为统一适配入口。
+
+   - 选择：`<domain>.adapter.ts` 承载 operation 声明、REST handler 导出和 tRPC router 定义；`<domain>.index.ts`
+     从 adapter 导入 REST handler；`<domain>.trpc.ts` 只做 router re-export，保持既有 tRPC 聚合入口稳定。
+   - 理由：文件职责不再只是 REST handlers，继续命名为 `*.handlers.ts` 会误导读者；完全删除 `*.trpc.ts`
+     又会扩大 tRPC 聚合层改动面。
+   - 替代方案：继续把 router 放在 `*.handlers.ts`。该方案改动更小，但命名与真实职责不匹配。
+
+4. `ops` 层变为可选层，只服务复杂复用。
 
    - 选择：简单 CRUD 可直接使用 adapter helper 连接 service；存在复杂输出转换、跨 service 编排、特殊上下文解析或多入口差异时保留 `*.ops.ts`。
    - 理由：保留抽象逃生口，避免为减少文件数而把复杂逻辑塞进 helper 配置。
    - 替代方案：完全移除 `ops` 层。该方案会让复杂模块缺少清晰的复用承载位置。
 
-4. 一次性迁移所有当前双入口模块。
+5. 一次性迁移所有当前双入口模块。
 
    - 选择：对 user、position、organization、employment、client、audit 六个模块统一套用 helper 体系。
    - 理由：这些模块的 REST/tRPC 入口形态高度相似，统一迁移能消除同一变更中并存两套组织方式的问题，也避免后续重复返工。
@@ -66,7 +74,7 @@
 ## Migration Plan
 
 1. 新增 admin API adapter helper 和针对 helper 的单元测试。
-2. 依次迁移 user、position、organization、employment、client、audit 六个模块到新 helper，保持 REST/tRPC contract 不变。
+2. 依次迁移 user、position、organization、employment、client、audit 六个模块到新 helper，并统一命名为 `<domain>.adapter.ts`，保持 REST/tRPC contract 不变。
 3. 在每个模块迁移后运行对应 focused tests 和 typecheck，必要时补充 handler/tRPC registration 测试。
 4. 全部模块完成后做一次全量 admin-api 验证，确认没有遗留旧入口组织方式。
 5. 回滚策略：保留原 service 调用和 route schema，若 helper 行为不符合预期，可按模块回退到原 `handlers.ts` / `trpc.ts` / `ops.ts` 结构。

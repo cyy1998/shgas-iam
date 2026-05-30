@@ -14,10 +14,11 @@
 - [x] 2.5 迁移 `client` 模块到新 helper，保持其 REST route、tRPC router key、ID/code 更新路径和状态变更语义等价。
 - [x] 2.6 迁移 `audit` 模块到新 helper，保持其 REST route、tRPC router key 和日志查询语义等价。
 - [x] 2.7 移除或简化各模块中仅做透传的旧 `*.ops.ts` 结构，复杂复用逻辑若仍保留则必须有明确的跨入口职责。
+- [x] 2.8 将承载 operation 声明、REST handler 和 tRPC router 的模块统一命名为 `<domain>.adapter.ts`，`<domain>.trpc.ts` 仅保留 re-export。
 
 ## 3. Compatibility And Documentation
 
-- [x] 3.1 记录新 helper 的适用边界：简单 CRUD 使用 helper，复杂 REST/tRPC 复用继续允许显式 `*.ops.ts`。
+- [x] 3.1 记录新 helper 和 `<domain>.adapter.ts` 命名方案的适用边界：简单 CRUD 使用 helper，复杂 REST/tRPC 复用继续允许显式 `*.ops.ts`。
 - [x] 3.2 确认所有当前 admin 双入口模块都已切换到统一 adapter 体系，不再保留“只迁移一部分模块”的中间状态。
 - [x] 3.3 确认迁移不改变 REST 路径、HTTP method、请求/响应 schema、tRPC router key 或业务返回语义。
 
