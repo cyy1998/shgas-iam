@@ -66,6 +66,12 @@
 - **THEN** 系统 SHALL 创建 `global_session:<token>` Redis 记录
 - **AND** 系统 SHALL 返回 `{ token, isMobileSet }`
 - **AND** HTTP handler SHALL 写入名为 `global_session` 的 HttpOnly、SameSite=Lax cookie
+- **AND** 当使用 Redis 中保存的登录用途验证码时，系统 SHALL 原子消费该 `mobile-code:login:<phone>` 验证码
+
+#### Scenario: 手机验证码重复登录被拒绝
+- **WHEN** 同一登录用途验证码已经被一次成功手机验证码登录消费
+- **THEN** 后续使用相同手机号和验证码登录 SHALL 视为验证码错误
+- **AND** 系统 SHALL NOT 创建新的 `global_session:<token>` Redis 记录
 
 #### Scenario: 第三方登录成功
 - **WHEN** OA 或 WeChat 登录校验通过并解析到用户详情
