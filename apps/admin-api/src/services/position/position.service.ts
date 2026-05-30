@@ -24,6 +24,7 @@ async function recordPositionAudit(
     targetType: "position",
     targetId: position.id ?? null,
     targetCode: position.posCode,
+    targetName: position.posName,
     details: {
       posCode: position.posCode,
       posName: position.posName,

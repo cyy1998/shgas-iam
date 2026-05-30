@@ -38,6 +38,7 @@ async function recordAdminClientAudit(
     targetType: "client",
     targetId: clientDto.id,
     targetCode: clientDto.clientCode,
+    targetName: clientDto.clientName,
     details: {
       clientCode: clientDto.clientCode,
       clientName: clientDto.clientName,

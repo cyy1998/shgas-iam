@@ -35,7 +35,11 @@ function maskMobileForAudit(phoneNumber: string) {
   return phoneNumber.replace(/^(\d{3})\d{4}(\d{4})$/, "$1****$2");
 }
 
-async function recordPasswordLoginFailure(username: string, reason: string, user?: { id: number; username: string }) {
+async function recordPasswordLoginFailure(
+  username: string,
+  reason: string,
+  user?: { id: number; name?: string | null; username: string },
+) {
   await auditService.recordAuditLog({
     action: "auth.login.password.failure",
     outcome: "failure",
@@ -43,6 +47,7 @@ async function recordPasswordLoginFailure(username: string, reason: string, user
     targetType: "user",
     targetId: user?.id ?? null,
     targetCode: user?.username ?? username,
+    targetName: user?.name ?? null,
     details: {
       reason,
       username,
@@ -53,7 +58,7 @@ async function recordPasswordLoginFailure(username: string, reason: string, user
 async function recordMobileLoginFailure(
   phoneNumber: string,
   reason: string,
-  activeUser?: { id: number } | null,
+  activeUser?: { id: number; name?: string | null } | null,
 ) {
   await auditService.recordAuditLog({
     action: "auth.login.mobile.failure",
@@ -62,6 +67,7 @@ async function recordMobileLoginFailure(
     targetType: activeUser ? "user" : "mobile",
     targetId: activeUser?.id ?? null,
     targetCode: maskMobileForAudit(phoneNumber),
+    targetName: activeUser?.name ?? null,
     details: {
       phoneNumber: maskMobileForAudit(phoneNumber),
       reason,
@@ -138,6 +144,7 @@ export async function loginPassword(username: string, password: string, options:
     targetType: "user",
     targetId: userDetailDto.id,
     targetCode: userDetailDto.username,
+    targetName: userDetailDto.name,
     details: {
       clientCode: "global",
       loginType: "password",
@@ -195,6 +202,7 @@ export async function loginMobile(phoneNumber: string, code: string, options: Lo
     targetType: "user",
     targetId: userDetailDto.id,
     targetCode: userDetailDto.username,
+    targetName: userDetailDto.name,
     details: {
       clientCode: "global",
       loginType: "mobile",

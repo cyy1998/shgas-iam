@@ -35,6 +35,7 @@ export async function setLocalSession(
       targetType: "user",
       targetId: userDetailDto.id,
       targetCode: userDetailDto.username,
+      targetName: userDetailDto.name,
       details: {
         clientCode,
         loginType: "local",

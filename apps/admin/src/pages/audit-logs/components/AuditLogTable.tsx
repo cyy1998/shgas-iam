@@ -5,37 +5,47 @@ import type {
 import { searchAuditLogs } from '@admin/services/audit';
 import type { ProColumns } from '@ant-design/pro-components';
 import { ProTable } from '@ant-design/pro-components';
-import { message, Space, Tag, Typography } from 'antd';
+import { Checkbox, message, Space, Tag, Typography } from 'antd';
 import { useState } from 'react';
 import AuditLogDetailDrawer from './AuditLogDetailDrawer';
+import {
+  actorTypeLabels,
+  auditActionOptions,
+  getActionLabel,
+  getActorDisplay,
+  getTargetDisplay,
+  outcomeLabels,
+  targetTypeLabels,
+} from './auditLogDisplay';
 
 type AuditLogTableRow = AuditLogVo & {
   actorKeyword?: string;
+  actions?: string[];
   eventTimeRange?: [string, string];
   targetKeyword?: string;
 };
 
 const actorTypeValueEnum: Record<string, { text: string }> = {
-  admin: { text: '管理员' },
-  user: { text: '用户' },
-  client: { text: '客户端' },
-  system: { text: '系统' },
-  anonymous: { text: '匿名' },
+  admin: { text: actorTypeLabels.admin },
+  user: { text: actorTypeLabels.user },
+  client: { text: actorTypeLabels.client },
+  system: { text: actorTypeLabels.system },
+  anonymous: { text: actorTypeLabels.anonymous },
 };
 
 const outcomeValueEnum: Record<string, { status: string; text: string }> = {
-  success: { text: '成功', status: 'Success' },
-  failure: { text: '失败', status: 'Error' },
+  success: { text: outcomeLabels.success, status: 'Success' },
+  failure: { text: outcomeLabels.failure, status: 'Error' },
 };
 
 const targetTypeValueEnum: Record<string, { text: string }> = {
-  user: { text: '用户' },
-  employment: { text: '任职' },
-  organization: { text: '组织' },
-  position: { text: '岗位' },
-  client: { text: '客户端' },
-  delegation: { text: '权限委派' },
-  mobile: { text: '手机号' },
+  user: { text: targetTypeLabels.user },
+  employment: { text: targetTypeLabels.employment },
+  organization: { text: targetTypeLabels.organization },
+  position: { text: targetTypeLabels.position },
+  client: { text: targetTypeLabels.client },
+  delegation: { text: targetTypeLabels.delegation },
+  mobile: { text: targetTypeLabels.mobile },
 };
 
 function trimValue(value: unknown) {
@@ -55,29 +65,39 @@ function formatDate(value: AuditLogVo['eventTime']) {
 }
 
 function renderActor(row: AuditLogVo) {
-  const text =
-    row.actorUsername ??
-    row.actorClientCode ??
-    row.actorSystemKey ??
-    (row.actorUserId ? `#${row.actorUserId}` : '—');
+  const actor = getActorDisplay(row);
   return (
     <Space size={6} wrap>
-      <Tag>{actorTypeValueEnum[row.actorType]?.text ?? row.actorType}</Tag>
-      <Typography.Text style={{ wordBreak: 'break-all' }}>
-        {text}
-      </Typography.Text>
+      <Tag>{actor.typeLabel}</Tag>
+      <Space direction="vertical" size={0}>
+        <Typography.Text style={{ wordBreak: 'break-all' }}>
+          {actor.name ?? actor.code}
+        </Typography.Text>
+        {actor.name && actor.code !== actor.name ? (
+          <Typography.Text type="secondary" style={{ wordBreak: 'break-all' }}>
+            {actor.code}
+          </Typography.Text>
+        ) : null}
+      </Space>
     </Space>
   );
 }
 
 function renderTarget(row: AuditLogVo) {
-  const text = row.targetCode ?? (row.targetId ? `#${row.targetId}` : '—');
+  const target = getTargetDisplay(row);
   return (
     <Space size={6} wrap>
-      <Tag>{targetTypeValueEnum[row.targetType]?.text ?? row.targetType}</Tag>
-      <Typography.Text style={{ wordBreak: 'break-all' }}>
-        {text}
-      </Typography.Text>
+      <Tag>{target.typeLabel}</Tag>
+      <Space direction="vertical" size={0}>
+        <Typography.Text style={{ wordBreak: 'break-all' }}>
+          {target.name ?? target.code}
+        </Typography.Text>
+        {target.name && target.code !== target.name ? (
+          <Typography.Text type="secondary" style={{ wordBreak: 'break-all' }}>
+            {target.code}
+          </Typography.Text>
+        ) : null}
+      </Space>
     </Space>
   );
 }
@@ -88,9 +108,14 @@ function buildConditions(
 ) {
   const range = params.eventTimeRange;
   const [from, to] = Array.isArray(range) ? range : [];
+  const actions = Array.isArray(params.actions)
+    ? params.actions.filter(
+        (value): value is string => typeof value === 'string',
+      )
+    : undefined;
 
   return compactConditions({
-    action: trimValue(params.action),
+    actions: actions && actions.length > 0 ? actions : undefined,
     outcome: trimValue(params.outcome) as AuditLogSearchConditions['outcome'],
     actorType: trimValue(
       params.actorType,
@@ -132,12 +157,37 @@ export default function AuditLogTable({
     },
     {
       title: 'Action',
+      dataIndex: 'actions',
+      hideInTable: true,
+      hideInSearch: !search,
+      renderFormItem: () => (
+        <Checkbox.Group
+          options={auditActionOptions}
+          style={{
+            display: 'grid',
+            gap: 8,
+            gridTemplateColumns: 'repeat(3, minmax(120px, 1fr))',
+            maxWidth: 640,
+          }}
+        />
+      ),
+    },
+    {
+      title: 'Action',
       dataIndex: 'action',
       width: 240,
+      search: false,
       render: (_, row) => (
-        <Typography.Text code style={{ whiteSpace: 'normal' }}>
-          {row.action}
-        </Typography.Text>
+        <Space direction="vertical" size={0}>
+          <Typography.Text>{getActionLabel(row.action)}</Typography.Text>
+          <Typography.Text
+            code
+            type="secondary"
+            style={{ whiteSpace: 'normal' }}
+          >
+            {row.action}
+          </Typography.Text>
+        </Space>
       ),
     },
     {

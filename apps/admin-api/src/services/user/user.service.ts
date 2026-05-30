@@ -53,6 +53,7 @@ async function recordAdminUserAudit(
     targetType: "user",
     targetId: user.id,
     targetCode: user.username,
+    targetName: user.name,
     details: {
       targetUsername: user.username,
       targetName: user.name,

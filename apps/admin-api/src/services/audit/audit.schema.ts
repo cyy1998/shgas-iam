@@ -1,9 +1,16 @@
 import { z } from "@hono/zod-openapi";
 import { createPageQuerySchema } from "@iam/api-core/core/pagination/schema";
-import { AuditActorTypeSchema, AuditLogDtoSchema, AuditOutcomeSchema, AuditTargetTypeSchema } from "@iam/domain/audit";
+import {
+  AuditActionSchema,
+  AuditActorTypeSchema,
+  AuditLogDtoSchema,
+  AuditOutcomeSchema,
+  AuditTargetTypeSchema,
+} from "@iam/domain/audit";
 
 export const AuditLogQueryConditionsSchema = z.object({
-  action: z.string().min(1).max(128).optional(),
+  action: AuditActionSchema.optional(),
+  actions: z.array(AuditActionSchema).min(1).max(50).optional(),
   outcome: AuditOutcomeSchema.optional(),
   actorType: AuditActorTypeSchema.optional(),
   actorUserId: z.number().int().positive().optional(),

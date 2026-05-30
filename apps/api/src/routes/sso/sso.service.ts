@@ -146,6 +146,7 @@ export async function loginOA(clientCode: string, loginid: string, ts: string, t
     targetType: "user",
     targetId: userDetailDto.id,
     targetCode: userDetailDto.username,
+    targetName: userDetailDto.name,
     details: {
       clientCode,
       loginType: "oa",
@@ -190,6 +191,7 @@ export async function loginWX(code: string) {
     targetType: "user",
     targetId: userDetailDto.id,
     targetCode: userDetailDto.username,
+    targetName: userDetailDto.name,
     details: {
       loginType: "wechat",
     },

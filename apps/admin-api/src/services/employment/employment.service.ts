@@ -62,9 +62,9 @@ async function recordEmploymentAudit(
     orgId?: number;
     isPrimary?: boolean;
     status?: EmploymentStatus;
-    user?: { username: string };
-    organization?: { assignedOrg?: { orgCode: string } };
-    position?: { posCode: string };
+    user?: { name?: string | null; username: string };
+    organization?: { assignedOrg?: { orgCode: string; orgName?: string | null } };
+    position?: { posCode: string; posName?: string | null };
   },
   details: Record<string, unknown>,
   tx: Parameters<typeof auditService.recordAuditLog>[1],
@@ -76,13 +76,17 @@ async function recordEmploymentAudit(
     outcome: "success",
     targetType: "employment",
     targetId: target.id,
+    targetName: target.user?.name ?? target.position?.posName ?? null,
     details: {
       userId: target.userId,
+      userName: target.user?.name,
       username: target.user?.username,
       posId: target.posId,
       posCode: target.position?.posCode,
+      posName: target.position?.posName,
       orgId: target.orgId,
       orgCode: target.organization?.assignedOrg?.orgCode,
+      orgName: target.organization?.assignedOrg?.orgName,
       isPrimary: target.isPrimary,
       status: target.status,
       ...details,

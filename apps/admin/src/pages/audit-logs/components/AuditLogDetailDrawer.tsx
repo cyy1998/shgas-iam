@@ -1,18 +1,11 @@
 import type { AuditLogVo } from '@admin/services/audit';
 import { Descriptions, Divider, Drawer, Space, Tag, Typography } from 'antd';
-
-const actorTypeLabels: Record<string, string> = {
-  admin: '管理员',
-  user: '用户',
-  client: '客户端',
-  system: '系统',
-  anonymous: '匿名',
-};
-
-const outcomeLabels: Record<string, string> = {
-  success: '成功',
-  failure: '失败',
-};
+import {
+  getActionLabel,
+  getActorDisplay,
+  getTargetDisplay,
+  outcomeLabels,
+} from './auditLogDisplay';
 
 function formatDate(value: AuditLogVo['eventTime']) {
   return value ? new Date(value).toLocaleString() : '—';
@@ -20,20 +13,6 @@ function formatDate(value: AuditLogVo['eventTime']) {
 
 function stringifyJson(value: unknown) {
   return JSON.stringify(value ?? {}, null, 2);
-}
-
-function getActorName(row: AuditLogVo) {
-  if (row.actorUsername) return row.actorUsername;
-  if (row.actorUserId) return `#${row.actorUserId}`;
-  if (row.actorClientCode) return row.actorClientCode;
-  if (row.actorSystemKey) return row.actorSystemKey;
-  return '—';
-}
-
-function getTargetName(row: AuditLogVo) {
-  if (row.targetCode) return row.targetCode;
-  if (row.targetId) return `#${row.targetId}`;
-  return '—';
 }
 
 function getErrorSummary(details: Record<string, unknown>) {
@@ -55,6 +34,8 @@ export default function AuditLogDetailDrawer({
   onClose,
 }: Props) {
   const details = (auditLog?.details ?? {}) as Record<string, unknown>;
+  const actor = auditLog ? getActorDisplay(auditLog) : null;
+  const target = auditLog ? getTargetDisplay(auditLog) : null;
 
   return (
     <Drawer
@@ -76,21 +57,48 @@ export default function AuditLogDetailDrawer({
               </Tag>
             </Descriptions.Item>
             <Descriptions.Item label="Action" span={2}>
-              <Typography.Text code copyable>
-                {auditLog.action}
-              </Typography.Text>
+              <Space direction="vertical" size={0}>
+                <Typography.Text>
+                  {getActionLabel(auditLog.action)}
+                </Typography.Text>
+                <Typography.Text code copyable type="secondary">
+                  {auditLog.action}
+                </Typography.Text>
+              </Space>
             </Descriptions.Item>
             <Descriptions.Item label="操作者">
-              <Space size={6} wrap>
-                <Tag>{actorTypeLabels[auditLog.actorType]}</Tag>
-                <Typography.Text>{getActorName(auditLog)}</Typography.Text>
-              </Space>
+              {actor ? (
+                <Space size={6} wrap>
+                  <Tag>{actor.typeLabel}</Tag>
+                  <Space direction="vertical" size={0}>
+                    <Typography.Text>
+                      {actor.name ?? actor.code}
+                    </Typography.Text>
+                    {actor.name && actor.code !== actor.name ? (
+                      <Typography.Text type="secondary">
+                        {actor.code}
+                      </Typography.Text>
+                    ) : null}
+                  </Space>
+                </Space>
+              ) : null}
             </Descriptions.Item>
             <Descriptions.Item label="目标对象">
-              <Space size={6} wrap>
-                <Tag>{auditLog.targetType}</Tag>
-                <Typography.Text>{getTargetName(auditLog)}</Typography.Text>
-              </Space>
+              {target ? (
+                <Space size={6} wrap>
+                  <Tag>{target.typeLabel}</Tag>
+                  <Space direction="vertical" size={0}>
+                    <Typography.Text>
+                      {target.name ?? target.code}
+                    </Typography.Text>
+                    {target.name && target.code !== target.name ? (
+                      <Typography.Text type="secondary">
+                        {target.code}
+                      </Typography.Text>
+                    ) : null}
+                  </Space>
+                </Space>
+              ) : null}
             </Descriptions.Item>
             <Descriptions.Item label="来源应用">
               {auditLog.sourceApp}

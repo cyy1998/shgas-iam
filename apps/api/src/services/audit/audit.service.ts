@@ -15,12 +15,14 @@ export type AuditLogInput = {
   outcome: AuditOutcome;
   actorType: AuditActorType;
   actorUserId?: number | null;
+  actorName?: string | null;
   actorUsername?: string | null;
   actorClientCode?: string | null;
   actorSystemKey?: string | null;
   targetType: string;
   targetId?: number | null;
   targetCode?: string | null;
+  targetName?: string | null;
   sourceApp?: string;
   requestId?: string | null;
   traceId?: string | null;
@@ -30,6 +32,32 @@ export type AuditLogInput = {
   method?: string | null;
   details?: AuditDetails;
 };
+
+function getContextUserName(c: Context): string | null {
+  const user = c.get("userDetailDto") as { name?: unknown } | undefined;
+  return typeof user?.name === "string" && user.name.trim() ? user.name.trim() : null;
+}
+
+function enrichAuditDetails(input: AuditLogInput): AuditDetails {
+  const details = { ...(input.details ?? {}) };
+  const actorName = input.actorName
+    ?? (
+      input.actorType === "user"
+      && input.targetType === "user"
+      && input.actorUserId !== undefined
+      && input.actorUserId !== null
+      && input.actorUserId === input.targetId
+        ? input.targetName
+        : null
+    );
+  if (actorName) {
+    details.actorName = actorName;
+  }
+  if (input.targetName) {
+    details.targetName = input.targetName;
+  }
+  return details;
+}
 
 export function getApiAuditRequestContext(c: Context): AuditRequestContext {
   return {
@@ -44,13 +72,16 @@ export function getApiAuditRequestContext(c: Context): AuditRequestContext {
 }
 
 export function getApiUserAuditActor(c: Context) {
-  return normalizeAuditActor({
-    actorType: "user",
-    actorUserId: c.get("userId") ?? null,
-    actorUsername: c.get("username") ?? null,
-    actorClientCode: null,
-    actorSystemKey: null,
-  });
+  return {
+    ...normalizeAuditActor({
+      actorType: "user",
+      actorUserId: c.get("userId") ?? null,
+      actorUsername: c.get("username") ?? null,
+      actorClientCode: null,
+      actorSystemKey: null,
+    }),
+    actorName: getContextUserName(c),
+  };
 }
 
 export function getInternalAuditActor(c: Context) {
@@ -92,7 +123,7 @@ export async function recordAuditLog(input: AuditLogInput, tx?: DbClient) {
     userAgent: input.userAgent ?? null,
     route: input.route ?? null,
     method: input.method ?? null,
-    details: redactAuditDetails(input.details),
+    details: redactAuditDetails(enrichAuditDetails(input)),
   });
   await auditRepository.createAuditLog(auditLog, tx);
 }

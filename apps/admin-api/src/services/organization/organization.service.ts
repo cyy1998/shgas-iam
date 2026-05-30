@@ -33,6 +33,7 @@ async function recordOrganizationAudit(
     targetType: "organization",
     targetId: organization.id,
     targetCode: organization.orgCode,
+    targetName: organization.orgName,
     details: {
       orgCode: organization.orgCode,
       orgName: organization.orgName,

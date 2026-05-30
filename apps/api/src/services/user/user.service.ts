@@ -88,6 +88,7 @@ export async function setPassword(username: string, oldPassword: string, newPass
         targetType: "user",
         targetId: user.id,
         targetCode: user.username,
+        targetName: user.name,
         details: {
           reason: "invalid_old_password",
         },
@@ -108,6 +109,7 @@ export async function setPassword(username: string, oldPassword: string, newPass
       targetType: "user",
       targetId: user.id,
       targetCode: user.username,
+      targetName: user.name,
       details: {
         passwordChanged: true,
       },
@@ -130,6 +132,7 @@ export async function resetPassword(username: string, phone: string, code: strin
         targetType: "user",
         targetId: user.id,
         targetCode: user.username,
+        targetName: user.name,
         details: {
           phoneNumber: maskMobileForAudit(phone),
           reason: "mobile_mismatch",
@@ -145,6 +148,7 @@ export async function resetPassword(username: string, phone: string, code: strin
         targetType: "user",
         targetId: user.id,
         targetCode: user.username,
+        targetName: user.name,
         details: {
           phoneNumber: maskMobileForAudit(phone),
           reason: "invalid_verification_code",
@@ -161,6 +165,7 @@ export async function resetPassword(username: string, phone: string, code: strin
       targetType: "user",
       targetId: user.id,
       targetCode: user.username,
+      targetName: user.name,
       details: {
         phoneNumber: maskMobileForAudit(phone),
         passwordReset: true,

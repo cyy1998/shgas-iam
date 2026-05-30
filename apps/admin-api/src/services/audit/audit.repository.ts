@@ -5,7 +5,7 @@ import type { AuditLogPaginationQueryDto } from "./audit.type";
 import db from "@iam/db";
 import { firstRow, ilikeContainsIf } from "@iam/db/query-utils";
 import { auditLogs } from "@iam/db/schema";
-import { and, count, desc, eq, gte, lte, or } from "drizzle-orm";
+import { and, count, desc, eq, gte, inArray, lte, or } from "drizzle-orm";
 
 export async function createAuditLog(input: AuditLogWriteDto, tx: DbClient = db) {
   const values: typeof auditLogs.$inferInsert = {
@@ -38,6 +38,7 @@ function auditLogWhere(query: AuditLogPaginationQueryDto) {
   const conditions = query.conditions;
   return and(
     conditions.action === undefined ? undefined : eq(auditLogs.action, conditions.action),
+    conditions.actions === undefined ? undefined : inArray(auditLogs.action, conditions.actions),
     conditions.outcome === undefined ? undefined : eq(auditLogs.outcome, conditions.outcome),
     conditions.actorType === undefined ? undefined : eq(auditLogs.actorType, conditions.actorType),
     conditions.actorUserId === undefined ? undefined : eq(auditLogs.actorUserId, conditions.actorUserId),
