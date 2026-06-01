@@ -1,9 +1,6 @@
 services:
-  - id: "00000000000000000677"
-    name: gds-test
-    hosts:
-      - 176.169.99.150
-      - 176.169.99.95
+  - id: gds-api-dev
+    name: gds-api-dev
     upstream:
       hash_on: vars
       nodes:

@@ -27,7 +27,7 @@ describe("apisix manifest validation", () => {
 
     expect(manifest.manifestDir.endsWith("gateway/apisix/manifests/prod/tender")).toBe(true);
     expect(validateManifest(manifest)).toEqual([]);
-    expect(manifest.resources.services.map(service => service.name)).toEqual(["tender-prod"]);
+    expect(manifest.resources.services.map(service => service.name)).toEqual(["tender-api-prod"]);
   });
 
   it("rejects broken route references", async () => {

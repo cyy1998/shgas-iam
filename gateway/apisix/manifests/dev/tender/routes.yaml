@@ -1,11 +1,11 @@
 routes:
-  - id: "00000000000000000432"
-    name: /test/tender
+  - id: tender-api-dev
+    name: tender-api-dev
     uri: /api/tender/*
-    service_id: "00000000000000000436"
+    service_id: tender-api-dev
     plugins:
       forward-auth:
-        uri: http://176.169.99.150/api/iam/auth/authz
+        uri: http://localhost/api/iam/auth/authz
         allow_degradation: false
         client_headers:
           - Forbidden-Reason
@@ -32,12 +32,12 @@ routes:
       source: repo-manifest
       env: dev
       app: tender
-  - id: "00000000000000000782"
-    name: /test/tender/public
+  - id: tender-public-dev
+    name: tender-public-dev
     uris:
       - /api/tender/public/*
       - /api/tender/weaver/*
-    service_id: "00000000000000000436"
+    service_id: tender-api-dev
     priority: 0
     status: 1
     enable_websocket: false
@@ -46,13 +46,13 @@ routes:
       source: repo-manifest
       env: dev
       app: tender
-  - id: "00000000000000001194"
-    name: /test/tender/thirdparty
+  - id: tender-thirdparty-dev
+    name: tender-thirdparty-dev
     uri: /thirdparty/tender/*
-    service_id: "00000000000000000436"
+    service_id: tender-api-dev
     plugins:
       forward-auth:
-        uri: http://176.169.99.150/api/iam/auth/internal-authz
+        uri: http://localhost/api/iam/auth/internal-authz
         allow_degradation: false
         client_headers:
           - Forbidden-Reason

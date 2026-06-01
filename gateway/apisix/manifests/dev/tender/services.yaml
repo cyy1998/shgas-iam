@@ -1,6 +1,6 @@
 services:
-  - id: "00000000000000000436"
-    name: tender-test
+  - id: tender-api-dev
+    name: tender-api-dev
     hosts:
       - 176.169.99.95
       - 176.169.99.150

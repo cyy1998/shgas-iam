@@ -1,10 +1,6 @@
 services:
-  - id: "00000000000000000567"
-    name: tender-prod
-    hosts:
-      - app.shgas.com
-      - 176.169.99.125
-      - tender.shgas.com.cn
+  - id: tender-api-prod
+    name: tender-api-prod
     upstream:
       hash_on: vars
       nodes:

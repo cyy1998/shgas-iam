@@ -1,9 +1,6 @@
 services:
-  - id: "00000000000000000466"
-    name: gds-prod
-    hosts:
-      - app.shgas.com
-      - tender.shgas.com.cn
+  - id: gds-api-prod
+    name: gds-api-prod
     upstream:
       hash_on: vars
       nodes:

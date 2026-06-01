@@ -1,11 +1,11 @@
 routes:
-  - id: "00000000000000000018"
-    name: /prod/gds
+  - id: gds-api-prod
+    name: gds-api-prod
     uri: /api/v1/*
-    service_id: "00000000000000000466"
+    service_id: gds-api-prod
     plugins:
       forward-auth:
-        uri: http://176.169.99.125/api/iam/auth/authz
+        uri: http://localhost/api/iam/auth/authz
         allow_degradation: false
         client_headers:
           - Forbidden-Reason
@@ -29,10 +29,10 @@ routes:
       source: repo-manifest
       env: prod
       app: gds
-  - id: "00000000000000000885"
-    name: /prod/gds/no-login
+  - id: gds-no-login-prod
+    name: gds-no-login-prod
     uri: /api/v1/dashboard/oa_portal
-    service_id: "00000000000000000466"
+    service_id: gds-api-prod
     priority: 0
     status: 1
     enable_websocket: false
