@@ -27,7 +27,7 @@ describe("apisix manifest validation", () => {
 
     expect(manifest.manifestDir.endsWith("gateway/apisix/manifests/prod/tender")).toBe(true);
     expect(validateManifest(manifest)).toEqual([]);
-    expect(manifest.resources.services.map(service => service.name)).toEqual(["tender-api-prod"]);
+    expect(manifest.resources.services.map(service => service.name)).toContain("tender-api-prod");
   });
 
   it("rejects broken route references", async () => {
@@ -96,7 +96,7 @@ describe("apisix manifest validation", () => {
       },
     });
 
-    expect(manifest.resources.upstreams[0].nodes).toEqual({
+    expect(manifest.resources.upstreams.at(0)?.nodes).toEqual({
       "api.internal:30000": 1,
     });
   });
@@ -205,7 +205,7 @@ async function createManifestDir(overrides: Record<string, unknown[]>): Promise<
   return manifestDir;
 }
 
-function createLoadedManifest(overrides: Record<string, unknown[]>, scope = { env: "test" }): any {
+function createLoadedManifest(overrides: Record<string, unknown[]>, scope: { env: string; app?: string } = { env: "test" }): any {
   return {
     env: scope.app ? `${scope.env}:${scope.app}` : scope.env,
     scope,

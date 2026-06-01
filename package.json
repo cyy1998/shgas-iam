@@ -8,14 +8,13 @@
     "lint": "turbo lint",
     "test": "turbo test",
     "typecheck": "turbo typecheck",
-    "gateway:apisix": "bun gateway/apisix/scripts/apisix-sync.ts",
-    "gateway:apisix:validate": "bun gateway/apisix/scripts/apisix-sync.ts validate",
-    "gateway:apisix:diff": "bun gateway/apisix/scripts/apisix-sync.ts diff",
-    "gateway:apisix:apply": "bun gateway/apisix/scripts/apisix-sync.ts apply"
+    "gateway:apisix": "pnpm --filter @iam/gateway-apisix apisix",
+    "gateway:apisix:validate": "pnpm --filter @iam/gateway-apisix validate",
+    "gateway:apisix:diff": "pnpm --filter @iam/gateway-apisix diff",
+    "gateway:apisix:apply": "pnpm --filter @iam/gateway-apisix apply"
   },
   "devDependencies": {
-    "turbo": "^2.9.14",
-    "yaml": "^2.8.2"
+    "turbo": "^2.9.14"
   },
   "pnpm": {
     "overrides": {

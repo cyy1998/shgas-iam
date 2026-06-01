@@ -1,0 +1,26 @@
+{
+  "name": "@iam/gateway-apisix",
+  "version": "0.0.1",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "apisix": "bun scripts/apisix-sync.ts",
+    "validate": "bun scripts/apisix-sync.ts validate",
+    "diff": "bun scripts/apisix-sync.ts diff",
+    "apply": "bun scripts/apisix-sync.ts apply",
+    "lint": "eslint scripts/",
+    "test": "bun test --parallel",
+    "typecheck": "pnpm exec tsgo --noEmit"
+  },
+  "dependencies": {
+    "yaml": "^2.8.2"
+  },
+  "devDependencies": {
+    "@antfu/eslint-config": "^9.0.0",
+    "@types/bun": "latest",
+    "@typescript/native-preview": "7.0.0-dev.20260514.1",
+    "eslint": "^10.3.0",
+    "eslint-plugin-format": "^2.0.1",
+    "typescript": "^6.0.3"
+  }
+}

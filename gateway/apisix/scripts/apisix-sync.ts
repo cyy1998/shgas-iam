@@ -253,7 +253,9 @@ export function planChanges(manifest: LoadedManifest, remote: Record<ResourceKin
         continue;
       }
 
-      if (stableStringify(normalizeForCompare(desiredResource)) !== stableStringify(normalizeForCompare(remoteResource))) {
+      const desiredNormalized = stableStringify(normalizeForCompare(desiredResource));
+      const remoteNormalized = stableStringify(normalizeForCompare(remoteResource));
+      if (desiredNormalized !== remoteNormalized) {
         plan.updates.push({ kind: definition.kind, id, desired: desiredResource, remote: remoteResource });
       }
     }
@@ -412,7 +414,11 @@ async function main(): Promise<void> {
 
   if (command === "validate") {
     if (options.json) {
-      console.log(JSON.stringify({ ok: true, env: manifest.env, resources: countResources(manifest.resources) }, null, 2));
+      console.log(JSON.stringify({
+        ok: true,
+        env: manifest.env,
+        resources: countResources(manifest.resources),
+      }, null, 2));
     }
     else {
       console.log(`APISIX manifest validation passed for env=${manifest.env}`);
@@ -521,7 +527,12 @@ function parseManifestScope(env: string): ManifestScope {
     throw new Error(`Invalid manifest environment: ${env}. Use <env> or <env>:<app>, for example prod:iam.`);
   }
 
-  const [stage, app] = parts;
+  const stage = parts[0];
+  const app = parts[1];
+  if (!stage) {
+    throw new Error(`Invalid manifest environment: ${env}. Use <env> or <env>:<app>, for example prod:iam.`);
+  }
+
   return { env: stage, app };
 }
 
@@ -592,7 +603,12 @@ function loadEnvFile(filePath: string): void {
       throw new Error(`${filePath}:${lineIndex + 1} is not a valid env assignment`);
     }
 
-    const [, key, rawValue] = match;
+    const key = match[1];
+    const rawValue = match[2];
+    if (!key || rawValue === undefined) {
+      throw new Error(`${filePath}:${lineIndex + 1} is not a valid env assignment`);
+    }
+
     process.env[key] = parseEnvValue(rawValue);
   }
 }
@@ -898,8 +914,9 @@ function unwrapApisixList(definition: ResourceDefinition, body: unknown): Manife
       const value = isRecord(item.value) ? { ...item.value } : { ...item };
       if (!getResourceId(definition, value) && typeof item.key === "string") {
         const id = item.key.split("/").filter(Boolean).at(-1);
-        if (id) {
-          value[definition.idFields[0]] = id;
+        const idField = definition.idFields[0];
+        if (id && idField) {
+          value[idField] = id;
         }
       }
       return value;

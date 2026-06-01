@@ -74,12 +74,15 @@ labels:
 
 ## 常用命令
 
+`gateway/apisix` 是 workspace package `@iam/gateway-apisix`。仓库根目录保留 `gateway:apisix:*` 兼容命令；需要直接操作该 package 时，也可以使用 `pnpm --filter @iam/gateway-apisix <script>`。
+
 校验 manifest：
 
 ```bash
 pnpm gateway:apisix:validate -- --env dev:iam
 pnpm gateway:apisix:validate -- --env prod:iam
 pnpm gateway:apisix:validate -- --env prod:tender
+pnpm --filter @iam/gateway-apisix validate -- --env dev:iam
 ```
 
 查看与远端 APISIX 的差异：
