@@ -10,6 +10,7 @@ routes:
       managed_by: shgas-iam
       source: repo-manifest
       env: prod
+      app: iam
 
   - id: iam-admin-frontend-prod
     name: iam-admin-frontend-prod
@@ -22,6 +23,7 @@ routes:
       managed_by: shgas-iam
       source: repo-manifest
       env: prod
+      app: iam
 
   - id: iam-public-prod
     name: iam-public-prod
@@ -38,6 +40,7 @@ routes:
       managed_by: shgas-iam
       source: repo-manifest
       env: prod
+      app: iam
 
   - id: iam-open-prod
     name: iam-open-prod
@@ -54,6 +57,7 @@ routes:
       managed_by: shgas-iam
       source: repo-manifest
       env: prod
+      app: iam
 
   - id: iam-internal-prod
     name: iam-internal-prod
@@ -70,6 +74,7 @@ routes:
       managed_by: shgas-iam
       source: repo-manifest
       env: prod
+      app: iam
 
   - id: iam-sso-prod
     name: iam-sso-prod
@@ -81,6 +86,7 @@ routes:
       managed_by: shgas-iam
       source: repo-manifest
       env: prod
+      app: iam
 
   - id: iam-auth-prod
     name: iam-auth-prod
@@ -97,6 +103,7 @@ routes:
       managed_by: shgas-iam
       source: repo-manifest
       env: prod
+      app: iam
 
   - id: iam-admin-rest-prod
     name: iam-admin-rest-prod
@@ -113,6 +120,7 @@ routes:
       managed_by: shgas-iam
       source: repo-manifest
       env: prod
+      app: iam
 
   - id: iam-admin-rpc-prod
     name: iam-admin-rpc-prod
@@ -129,3 +137,4 @@ routes:
       managed_by: shgas-iam
       source: repo-manifest
       env: prod
+      app: iam

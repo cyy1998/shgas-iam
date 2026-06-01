@@ -11,6 +11,7 @@ upstreams:
       managed_by: shgas-iam
       source: repo-manifest
       env: prod
+      app: iam
 
   - id: iam-admin-api-prod
     name: iam-admin-api-prod
@@ -24,6 +25,7 @@ upstreams:
       managed_by: shgas-iam
       source: repo-manifest
       env: prod
+      app: iam
 
   - id: iam-sso-frontend-prod
     name: iam-sso-frontend-prod
@@ -37,6 +39,7 @@ upstreams:
       managed_by: shgas-iam
       source: repo-manifest
       env: prod
+      app: iam
 
   - id: iam-admin-frontend-prod
     name: iam-admin-frontend-prod
@@ -50,3 +53,4 @@ upstreams:
       managed_by: shgas-iam
       source: repo-manifest
       env: prod
+      app: iam

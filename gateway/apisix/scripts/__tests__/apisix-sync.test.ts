@@ -17,9 +17,17 @@ afterEach(() => {
 });
 
 describe("apisix manifest validation", () => {
-  it("accepts the checked-in dev manifest", async () => {
-    const manifest = await loadManifest("dev");
+  it("accepts the checked-in dev IAM manifest", async () => {
+    const manifest = await loadManifest("dev:iam");
     expect(validateManifest(manifest)).toEqual([]);
+  });
+
+  it("loads app-scoped manifests from env:app directories", async () => {
+    const manifest = await loadManifest("prod:tender");
+
+    expect(manifest.manifestDir.endsWith("gateway/apisix/manifests/prod/tender")).toBe(true);
+    expect(validateManifest(manifest)).toEqual([]);
+    expect(manifest.resources.services.map(service => service.name)).toEqual(["tender-prod"]);
   });
 
   it("rejects broken route references", async () => {
@@ -133,6 +141,7 @@ describe("apisix sync planning", () => {
       updates: [{ kind: "routes", id: "route-b", desired: repoObject({ id: "route-b" }) }],
       deletes: [{ kind: "routes", id: "route-c", remote: repoObject({ id: "route-c" }) }],
       ignoredDynamic: [],
+      ignoredOutOfScope: [],
       ignoredUnmanaged: [],
     } as any;
 
@@ -155,12 +164,30 @@ describe("apisix sync planning", () => {
       updates: [],
       deletes: [{ kind: "routes", id: "route-b", remote: repoObject({ id: "route-b" }) }],
       ignoredDynamic: [{ kind: "routes", id: "route-c", remote: dynamicObject({ id: "route-c" }) }],
+      ignoredOutOfScope: [],
       ignoredUnmanaged: [{ kind: "routes", id: "route-d", remote: { id: "route-d" } }],
     } as any;
 
     await applyPlan(client as any, plan, { dryRun: false, prune: true });
 
     expect(calls).toEqual(["upsert:route-a", "delete:route-b"]);
+  });
+
+  it("does not plan deletes for repo-managed objects outside the selected app scope", () => {
+    const desiredRoute = repoObject({ id: "route-a", uri: "/a/*", labels: { env: "prod", app: "tender" } });
+    const manifest = createLoadedManifest({
+      routes: [desiredRoute],
+    }, { env: "prod", app: "tender" });
+
+    const plan = planChanges(manifest, createRemoteState({
+      routes: [
+        repoObject({ id: "route-a", uri: "/a/*", labels: { env: "prod", app: "tender" } }),
+        repoObject({ id: "route-b", uri: "/iam/*", labels: { env: "prod", app: "iam" } }),
+      ],
+    }));
+
+    expect(plan.deletes).toHaveLength(0);
+    expect(plan.ignoredOutOfScope.map(change => change.id)).toEqual(["route-b"]);
   });
 });
 
@@ -178,9 +205,10 @@ async function createManifestDir(overrides: Record<string, unknown[]>): Promise<
   return manifestDir;
 }
 
-function createLoadedManifest(overrides: Record<string, unknown[]>): any {
+function createLoadedManifest(overrides: Record<string, unknown[]>, scope = { env: "test" }): any {
   return {
-    env: "test",
+    env: scope.app ? `${scope.env}:${scope.app}` : scope.env,
+    scope,
     manifestDir: "/tmp/manifest",
     resources: createRemoteState(overrides),
   };
@@ -203,6 +231,7 @@ function repoObject(value: Record<string, unknown>): Record<string, unknown> {
     labels: {
       managed_by: "shgas-iam",
       source: "repo-manifest",
+      env: "test",
       ...(value.labels as Record<string, unknown> | undefined),
     },
   };

@@ -1,0 +1,24 @@
+services:
+  - id: "00000000000000000677"
+    name: gds-test
+    hosts:
+      - 176.169.99.150
+      - 176.169.99.95
+    upstream:
+      hash_on: vars
+      nodes:
+        - priority: 0
+          host: 176.169.99.191
+          port: 7001
+          weight: 0
+      pass_host: pass
+      scheme: http
+      tls:
+        verify: false
+      type: roundrobin
+    enable_websocket: false
+    labels:
+      managed_by: shgas-iam
+      source: repo-manifest
+      env: dev
+      app: gds

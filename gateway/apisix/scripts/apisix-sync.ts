@@ -19,8 +19,14 @@ interface ResourceDefinition {
 
 interface LoadedManifest {
   env: string;
+  scope: ManifestScope;
   manifestDir: string;
   resources: Record<ResourceKind, ManifestObject[]>;
+}
+
+interface ManifestScope {
+  env: string;
+  app?: string;
 }
 
 interface ValidationIssue {
@@ -41,6 +47,7 @@ interface ChangePlan {
   updates: PlannedChange[];
   deletes: PlannedChange[];
   ignoredDynamic: PlannedChange[];
+  ignoredOutOfScope: PlannedChange[];
   ignoredUnmanaged: PlannedChange[];
 }
 
@@ -150,7 +157,7 @@ export async function loadManifest(
     });
   }
 
-  return { env, manifestDir, resources };
+  return { env, scope: parseManifestScope(env), manifestDir, resources };
 }
 
 export function validateManifest(manifest: LoadedManifest): ValidationIssue[] {
@@ -200,6 +207,8 @@ export function validateManifest(manifest: LoadedManifest): ValidationIssue[] {
         });
       }
 
+      validateResourceScope(file, basePath, resource, manifest.scope, issues);
+
       collectSensitiveIssues(file, basePath, resource, issues);
     }
   }
@@ -215,6 +224,7 @@ export function planChanges(manifest: LoadedManifest, remote: Record<ResourceKin
     updates: [],
     deletes: [],
     ignoredDynamic: [],
+    ignoredOutOfScope: [],
     ignoredUnmanaged: [],
   };
 
@@ -257,7 +267,12 @@ export function planChanges(manifest: LoadedManifest, remote: Record<ResourceKin
         plan.ignoredDynamic.push({ kind: definition.kind, id, remote: remoteResource });
       }
       else if (isRepoManaged(remoteResource)) {
-        plan.deletes.push({ kind: definition.kind, id, remote: remoteResource });
+        if (isInManifestScope(remoteResource, manifest.scope)) {
+          plan.deletes.push({ kind: definition.kind, id, remote: remoteResource });
+        }
+        else {
+          plan.ignoredOutOfScope.push({ kind: definition.kind, id, remote: remoteResource });
+        }
       }
       else {
         plan.ignoredUnmanaged.push({ kind: definition.kind, id, remote: remoteResource });
@@ -429,7 +444,7 @@ async function main(): Promise<void> {
 
 function parseCliOptions(args: string[]): CliOptions {
   const options: CliOptions = {
-    env: process.env.APISIX_MANIFEST_ENV ?? "dev",
+    env: process.env.APISIX_MANIFEST_ENV ?? "dev:iam",
     renderEnv: false,
     adminUrl: process.env.APISIX_ADMIN_URL ?? "http://127.0.0.1:9180/apisix/admin",
     adminKey: process.env.APISIX_ADMIN_KEY,
@@ -494,7 +509,20 @@ function requireValue(option: string, value: string | undefined): string {
 }
 
 function defaultManifestDir(env: string): string {
-  return path.join(repoRoot, "gateway/apisix/manifests", env);
+  const scope = parseManifestScope(env);
+  return scope.app
+    ? path.join(repoRoot, "gateway/apisix/manifests", scope.env, scope.app)
+    : path.join(repoRoot, "gateway/apisix/manifests", scope.env);
+}
+
+function parseManifestScope(env: string): ManifestScope {
+  const parts = env.split(":");
+  if (parts.length > 2 || parts.some(part => part.length === 0)) {
+    throw new Error(`Invalid manifest environment: ${env}. Use <env> or <env>:<app>, for example prod:iam.`);
+  }
+
+  const [stage, app] = parts;
+  return { env: stage, app };
 }
 
 async function readYamlFile(
@@ -638,6 +666,30 @@ function validateReferences(
   }
 }
 
+function validateResourceScope(
+  file: string,
+  basePath: string,
+  resource: ManifestObject,
+  scope: ManifestScope,
+  issues: ValidationIssue[],
+): void {
+  if (getLabel(resource, "env") !== scope.env) {
+    issues.push({
+      file,
+      path: `${basePath}.labels.env`,
+      message: `repo manifest objects for ${formatScope(scope)} must include labels.env=${scope.env}`,
+    });
+  }
+
+  if (scope.app && getLabel(resource, "app") !== scope.app) {
+    issues.push({
+      file,
+      path: `${basePath}.labels.app`,
+      message: `repo manifest objects for ${formatScope(scope)} must include labels.app=${scope.app}`,
+    });
+  }
+}
+
 function addMissingReferenceIssue(options: {
   file: string;
   path: string;
@@ -724,6 +776,7 @@ function isKnownNonSecretKeyPath(currentPath: string): boolean {
   return currentPath.endsWith(".labels.source")
     || currentPath.endsWith(".labels.managed_by")
     || currentPath.endsWith(".labels.env")
+    || currentPath.endsWith(".labels.app")
     || currentPath.endsWith(".labels.template")
     || currentPath.endsWith(".plugins.prometheus.prefer_name");
 }
@@ -754,6 +807,18 @@ function isRepoManaged(resource: ManifestObject): boolean {
 
 function isDynamicRegistryManaged(resource: ManifestObject): boolean {
   return getLabel(resource, "managed_by") === managedBy && getLabel(resource, "source") === dynamicSource;
+}
+
+function isInManifestScope(resource: ManifestObject, scope: ManifestScope): boolean {
+  if (scope.app) {
+    return getLabel(resource, "env") === scope.env && getLabel(resource, "app") === scope.app;
+  }
+
+  return true;
+}
+
+function formatScope(scope: ManifestScope): string {
+  return scope.app ? `${scope.env}:${scope.app}` : scope.env;
 }
 
 function normalizeForCompare(value: unknown): unknown {
@@ -897,6 +962,7 @@ function printPlan(plan: ChangePlan, asJson: boolean): void {
   printChangeGroup("update", plan.updates);
   printChangeGroup("delete candidates", plan.deletes);
   printChangeGroup("ignored dynamic-registry", plan.ignoredDynamic);
+  printChangeGroup("ignored out-of-scope repo-manifest", plan.ignoredOutOfScope);
   printChangeGroup("ignored unmanaged", plan.ignoredUnmanaged);
 }
 
@@ -916,6 +982,7 @@ function printApplyResult(result: ApplyResult, asJson: boolean): void {
   printChangeGroup("planned update", result.plan.updates);
   printChangeGroup(result.prune ? "planned delete" : "delete candidates (use --prune)", result.plan.deletes);
   printChangeGroup("ignored dynamic-registry", result.plan.ignoredDynamic);
+  printChangeGroup("ignored out-of-scope repo-manifest", result.plan.ignoredOutOfScope);
   printChangeGroup("ignored unmanaged", result.plan.ignoredUnmanaged);
 
   if (!result.dryRun) {
@@ -938,6 +1005,7 @@ function serializePlan(plan: ChangePlan): Record<string, unknown> {
     updates: serializeChanges(plan.updates),
     deletes: serializeChanges(plan.deletes),
     ignoredDynamic: serializeChanges(plan.ignoredDynamic),
+    ignoredOutOfScope: serializeChanges(plan.ignoredOutOfScope),
     ignoredUnmanaged: serializeChanges(plan.ignoredUnmanaged),
   };
 }
@@ -964,13 +1032,13 @@ function serializeIssues(issues: ValidationIssue[]): Array<{ file: string; path:
 
 function printHelp(): void {
   console.log(`Usage:
-  bun gateway/apisix/scripts/apisix-sync.ts validate [--env dev]
-  bun gateway/apisix/scripts/apisix-sync.ts diff --env dev --admin-url http://127.0.0.1:9180/apisix/admin
-  bun gateway/apisix/scripts/apisix-sync.ts apply --env dev --dry-run
-  bun gateway/apisix/scripts/apisix-sync.ts apply --env dev --prune
+  bun gateway/apisix/scripts/apisix-sync.ts validate [--env dev:iam]
+  bun gateway/apisix/scripts/apisix-sync.ts diff --env prod:tender --admin-url http://127.0.0.1:9180/apisix/admin
+  bun gateway/apisix/scripts/apisix-sync.ts apply --env dev:iam --dry-run
+  bun gateway/apisix/scripts/apisix-sync.ts apply --env prod:tender --prune
 
 Options:
-  --env <name>             Manifest environment, default: dev
+  --env <env[:app]>        Manifest scope, default: dev:iam
   --manifest-dir <path>    Override manifest directory
   --env-file <path>        Load env vars from a file and render \${VAR} placeholders
   --render-env             Render \${VAR} placeholders from current environment

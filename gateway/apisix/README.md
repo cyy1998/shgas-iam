@@ -17,24 +17,36 @@ gateway/apisix/
     config.prod.example.yaml
   manifests/
     dev/
-      routes.yaml
-      upstreams.yaml
-      services.yaml
-      plugin-configs.yaml
-      consumers.yaml
-      ssl.yaml
+      iam/
+        routes.yaml
+        upstreams.yaml
+        services.yaml
+        plugin-configs.yaml
+        consumers.yaml
+        ssl.yaml
+      tender/
+        routes.yaml
+        upstreams.yaml
+        services.yaml
+        plugin-configs.yaml
+        consumers.yaml
+        ssl.yaml
+      gds/
+        routes.yaml
+        upstreams.yaml
+        services.yaml
+        plugin-configs.yaml
+        consumers.yaml
+        ssl.yaml
     prod/
-      routes.yaml
-      upstreams.yaml
-      services.yaml
-      plugin-configs.yaml
-      consumers.yaml
-      ssl.yaml
+      iam/
+      tender/
+      gds/
   scripts/
     apisix-sync.ts
 ```
 
-`dev` manifest 用于本地 APISIX。`prod` manifest 是生产基线示例，生产地址、证书和密钥引用必须在部署环境中替换或注入。
+manifest 采用 `<env>/<app>/` 两级目录。`dev:iam` manifest 用于本地 IAM 基线；`prod:iam` 是生产 IAM 基线示例，生产地址、证书和密钥引用必须在部署环境中替换或注入。`prod:tender`、`prod:gds`、`dev:tender`、`dev:gds` 存放对应业务系统的 APISIX 配置。
 
 ## 来源标签
 
@@ -44,6 +56,8 @@ gateway/apisix/
 labels:
   managed_by: shgas-iam
   source: repo-manifest
+  env: prod
+  app: iam
 ```
 
 IAM 动态注册对象必须使用独立来源：
@@ -63,39 +77,40 @@ labels:
 校验 manifest：
 
 ```bash
-pnpm gateway:apisix:validate -- --env dev
-pnpm gateway:apisix:validate -- --env prod
+pnpm gateway:apisix:validate -- --env dev:iam
+pnpm gateway:apisix:validate -- --env prod:iam
+pnpm gateway:apisix:validate -- --env prod:tender
 ```
 
 查看与远端 APISIX 的差异：
 
 ```bash
 APISIX_ADMIN_KEY=dev-local-admin-key-change-me \
-pnpm gateway:apisix:diff -- --env dev --admin-url http://127.0.0.1:9180/apisix/admin
+pnpm gateway:apisix:diff -- --env dev:iam --admin-url http://127.0.0.1:9180/apisix/admin
 ```
 
 dry-run 发布：
 
 ```bash
 APISIX_ADMIN_KEY=dev-local-admin-key-change-me \
-pnpm gateway:apisix:apply -- --env dev --dry-run
+pnpm gateway:apisix:apply -- --env dev:iam --dry-run
 ```
 
 发布基线配置：
 
 ```bash
 APISIX_ADMIN_KEY=dev-local-admin-key-change-me \
-pnpm gateway:apisix:apply -- --env dev
+pnpm gateway:apisix:apply -- --env dev:iam
 ```
 
 删除已经从 Git manifest 移除的 `repo-manifest` 远端对象：
 
 ```bash
 APISIX_ADMIN_KEY=dev-local-admin-key-change-me \
-pnpm gateway:apisix:apply -- --env dev --prune
+pnpm gateway:apisix:apply -- --env dev:iam --prune
 ```
 
-`--prune` 不会删除 `source=dynamic-registry` 对象。
+`--prune` 不会删除 `source=dynamic-registry` 对象；使用 `--env prod:tender` 这类 app 作用域时，也不会删除其他 `labels.app` 的 `repo-manifest` 对象。
 
 ## 本地开发
 
@@ -109,7 +124,7 @@ docker compose -f docker/docker-compose-dev.yml up -d db redis api admin-api sso
 
 ```bash
 APISIX_ADMIN_KEY=dev-local-admin-key-change-me \
-pnpm gateway:apisix:apply -- --env dev
+pnpm gateway:apisix:apply -- --env dev:iam
 ```
 
 本地入口：
@@ -127,7 +142,7 @@ pnpm gateway:apisix:apply -- --env dev
 - `/portal`、`/portal/*` -> `sso:80`
 - `/iam-admin`、`/iam-admin/*` -> `admin:80`
 
-这些路由参考了仓库根目录的 `apisix-dump.yaml`，其中 `iam-prod`、`iam-test`、`iam-admin-prod`、`iam-admin-test` 属于 IAM 基础入口；`tender-*`、`gds-*` 属于第三方业务应用，应由 IAM 动态注册流程管理。旧的通用 `/api/iam/*` 泛路由不再纳入 Git manifest，避免它吞掉更明确的 admin、rpc 或分层 API 路由。
+这些路由参考了仓库根目录的 `apisix-dump.yaml`，其中 `iam-prod`、`iam-test`、`iam-admin-prod`、`iam-admin-test` 属于 IAM 基础入口；`tender-*`、`gds-*` 属于业务系统入口，分别放在对应 app manifest 中。旧的通用 `/api/iam/*` 泛路由不再纳入 Git manifest，避免它吞掉更明确的 admin、rpc 或分层 API 路由。
 
 ## 生产发布
 
@@ -141,12 +156,12 @@ pnpm gateway:apisix:apply -- --env dev
 
 发布流程：
 
-1. 修改 `gateway/apisix/manifests/<env>/` 中的 IAM 基线对象。
+1. 修改 `gateway/apisix/manifests/<env>/<app>/` 中的对象。
 2. 准备生产环境变量文件，例如 `.env.prod`。
-3. 运行 `pnpm gateway:apisix:validate -- --env <env> --env-file .env.prod`。
-4. 运行 `pnpm gateway:apisix:diff -- --env <env> --env-file .env.prod` 检查远端差异。
-5. 运行 `pnpm gateway:apisix:apply -- --env <env> --env-file .env.prod --dry-run`。
-6. 运行 `pnpm gateway:apisix:apply -- --env <env> --env-file .env.prod`。
+3. 运行 `pnpm gateway:apisix:validate -- --env <env>:<app> --env-file .env.prod`。
+4. 运行 `pnpm gateway:apisix:diff -- --env <env>:<app> --env-file .env.prod` 检查远端差异。
+5. 运行 `pnpm gateway:apisix:apply -- --env <env>:<app> --env-file .env.prod --dry-run`。
+6. 运行 `pnpm gateway:apisix:apply -- --env <env>:<app> --env-file .env.prod`。
 7. 提交 Git review。
 8. 合并后由部署流程执行 `apply`。
 
@@ -154,7 +169,7 @@ pnpm gateway:apisix:apply -- --env dev
 
 ```bash
 APISIX_ADMIN_KEY=prod-admin-key \
-pnpm gateway:apisix:apply -- --env prod --render-env --admin-url http://127.0.0.1:9180/apisix/admin
+pnpm gateway:apisix:apply -- --env prod:iam --render-env --admin-url http://127.0.0.1:9180/apisix/admin
 ```
 
 如果运维终端配置了代理，访问内网 Admin API 时建议显式设置 `NO_PROXY`：
@@ -162,7 +177,7 @@ pnpm gateway:apisix:apply -- --env prod --render-env --admin-url http://127.0.0.
 ```bash
 NO_PROXY=176.169.89.64,localhost,127.0.0.1 \
 no_proxy=176.169.89.64,localhost,127.0.0.1 \
-pnpm gateway:apisix:apply -- --env prod --env-file .env.prod --admin-url http://176.169.89.64:9180/apisix/admin
+pnpm gateway:apisix:apply -- --env prod:iam --env-file .env.prod --admin-url http://176.169.89.64:9180/apisix/admin
 ```
 
 回滚流程：
@@ -174,7 +189,7 @@ pnpm gateway:apisix:apply -- --env prod --env-file .env.prod --admin-url http://
 
 ## 第三方业务应用动态注册
 
-第三方业务应用实例不在 Git manifest 中逐个登记。它们应由 IAM 运行时管理：
+业务应用实例可以按 app 目录纳入 Git manifest，也可以由 IAM 运行时管理：
 
 ```text
 第三方应用申请

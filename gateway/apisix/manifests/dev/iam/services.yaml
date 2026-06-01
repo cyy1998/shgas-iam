@@ -10,6 +10,7 @@ services:
       managed_by: shgas-iam
       source: repo-manifest
       env: dev
+      app: iam
 
   - id: iam-admin-api-dev
     name: iam-admin-api-dev
@@ -19,6 +20,7 @@ services:
       managed_by: shgas-iam
       source: repo-manifest
       env: dev
+      app: iam
 
   - id: iam-sso-frontend-dev
     name: iam-sso-frontend-dev
@@ -28,6 +30,7 @@ services:
       managed_by: shgas-iam
       source: repo-manifest
       env: dev
+      app: iam
 
   - id: iam-admin-frontend-dev
     name: iam-admin-frontend-dev
@@ -37,3 +40,4 @@ services:
       managed_by: shgas-iam
       source: repo-manifest
       env: dev
+      app: iam

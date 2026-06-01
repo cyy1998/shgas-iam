@@ -12,6 +12,7 @@ plugin_configs:
       managed_by: shgas-iam
       source: repo-manifest
       env: dev
+      app: iam
       template: cors-open
 
   - id: iam-forward-auth-template-dev
@@ -39,4 +40,5 @@ plugin_configs:
       managed_by: shgas-iam
       source: repo-manifest
       env: dev
+      app: iam
       template: forward-auth
