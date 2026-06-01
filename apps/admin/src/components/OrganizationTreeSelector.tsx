@@ -5,7 +5,7 @@ import {
 import { OrganizationStatus, type OrganizationType } from '@iam/contracts';
 import type { TreeSelectProps } from 'antd';
 import { TreeSelect, message } from 'antd';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 
 type TreeNode = NonNullable<TreeSelectProps['treeData']>[number];
 const DEFAULT_SELECTABLE_STATUSES = [OrganizationStatus.Enable];
@@ -63,6 +63,22 @@ function findTreeNode(nodes: TreeNode[], value: string): TreeNode | null {
   return null;
 }
 
+function preserveLoadedChildren(
+  nextNodes: TreeNode[],
+  previousNodes: TreeNode[],
+): TreeNode[] {
+  const previousNodeMap = new Map(
+    previousNodes.map((node) => [node.value, node]),
+  );
+
+  return nextNodes.map((node) => {
+    const previousNode = previousNodeMap.get(node.value);
+    return previousNode?.children
+      ? { ...node, children: previousNode.children }
+      : node;
+  });
+}
+
 function replaceTreeNode(
   nodes: TreeNode[],
   nextNode: TreeNode,
@@ -102,6 +118,7 @@ export default function OrganizationTreeSelector({
   const [treeData, setTreeData] = useState<TreeNode[]>([]);
   const [searchData, setSearchData] = useState<TreeNode[] | null>(null);
   const [loading, setLoading] = useState(false);
+  const valueRef = useRef(value);
 
   const selectableOrgTypesKey = selectableOrgTypes?.join('|') ?? '';
   const selectableStatusesKey = (
@@ -121,6 +138,10 @@ export default function OrganizationTreeSelector({
   );
 
   useEffect(() => {
+    valueRef.current = value;
+  }, [value]);
+
+  useEffect(() => {
     let cancelled = false;
     setLoading(true);
     getOrganizationSelectorNodes({
@@ -132,10 +153,13 @@ export default function OrganizationTreeSelector({
         if (!cancelled) {
           const rootNodes = nodes.map(toTreeNode);
           setTreeData((prev) => {
-            const selectedNode = value ? findTreeNode(prev, value) : null;
+            const nextNodes = preserveLoadedChildren(rootNodes, prev);
+            const selectedNode = valueRef.current
+              ? findTreeNode(prev, valueRef.current)
+              : null;
             return selectedNode
-              ? upsertTreeNode(rootNodes, selectedNode)
-              : rootNodes;
+              ? upsertTreeNode(nextNodes, selectedNode)
+              : nextNodes;
           });
         }
       })
@@ -150,7 +174,7 @@ export default function OrganizationTreeSelector({
     return () => {
       cancelled = true;
     };
-  }, [baseQuery, value]);
+  }, [baseQuery]);
 
   useEffect(() => {
     if (!value) return;
