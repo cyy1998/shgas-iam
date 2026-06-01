@@ -4,7 +4,7 @@ routes:
     uris:
       - /data-platform
       - /data-platform/*
-    service_id: gds-api-prod
+    service_id: gds-frontend-prod
     priority: 0
     status: 1
     enable_websocket: false
@@ -20,7 +20,7 @@ routes:
     service_id: gds-api-prod
     plugins:
       forward-auth:
-        uri: http://localhost/api/iam/auth/authz
+        uri: http://176.169.99.124/api/iam/auth/authz
         allow_degradation: false
         client_headers:
           - Forbidden-Reason
