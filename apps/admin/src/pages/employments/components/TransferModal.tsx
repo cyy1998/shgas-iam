@@ -68,7 +68,6 @@ export default function TransferModal({
         try {
           await transferEmployment(employment.id, {
             newOrgCode: values.newOrgCode,
-            expectedAncestorOrgCode: values.expectedAncestorOrgCode,
             newPosCode: values.newPosCode,
             inheritPrimary: values.inheritPrimary,
             startTime: values.startTime
@@ -110,9 +109,6 @@ export default function TransferModal({
         rules={[{ required: true, message: '请选择新任职组织' }]}
       >
         <OrganizationTreeSelector placeholder="请选择新的实际任职组织" />
-      </ProForm.Item>
-      <ProForm.Item name="expectedAncestorOrgCode" label="期望上级组织">
-        <OrganizationTreeSelector placeholder="可选，用于校验组织范围" />
       </ProForm.Item>
       <ProFormSelect
         name="newPosCode"

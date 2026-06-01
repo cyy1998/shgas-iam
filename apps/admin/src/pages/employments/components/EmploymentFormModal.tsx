@@ -63,7 +63,6 @@ export default function EmploymentFormModal({
           await createEmployment({
             username: values.username,
             orgCode: values.orgCode,
-            expectedAncestorOrgCode: values.expectedAncestorOrgCode,
             posCode: values.posCode,
             isPrimary: values.isPrimary,
             startTime: values.startTime
@@ -121,9 +120,6 @@ export default function EmploymentFormModal({
         rules={[{ required: true, message: '请选择任职组织' }]}
       >
         <OrganizationTreeSelector placeholder="请选择实际任职组织" />
-      </ProForm.Item>
-      <ProForm.Item name="expectedAncestorOrgCode" label="期望上级组织">
-        <OrganizationTreeSelector placeholder="可选，用于校验组织范围" />
       </ProForm.Item>
       <ProFormSelect
         name="posCode"
