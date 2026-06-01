@@ -1,4 +1,19 @@
 routes:
+  - id: tender-frontend-prod
+    name: tender-frontend-prod
+    uris:
+      - /tender
+      - /tender/*
+    service_id: tender-api-prod
+    priority: 0
+    status: 1
+    enable_websocket: false
+    labels:
+      managed_by: shgas-iam
+      source: repo-manifest
+      env: prod
+      app: tender
+
   - id: tender-api-prod
     name: tender-api-prod
     uri: /api/tender/*
