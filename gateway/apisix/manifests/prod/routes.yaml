@@ -2,11 +2,6 @@ routes:
   - id: iam-sso-frontend-prod
     name: iam-sso-frontend-prod
     desc: IAM SSO frontend through APISIX
-    hosts:
-      - app.shgas.com
-      - tender.shgas.com.cn
-      - jsc.shgas.com.cn
-      - 176.169.89.64
     uris:
       - /portal
       - /portal/*
@@ -19,8 +14,6 @@ routes:
   - id: iam-admin-frontend-prod
     name: iam-admin-frontend-prod
     desc: IAM admin frontend through APISIX
-    hosts:
-      - ${IAM_ADMIN_HOST}
     uris:
       - /iam-admin
       - /iam-admin/*
@@ -33,11 +26,6 @@ routes:
   - id: iam-public-prod
     name: iam-public-prod
     desc: IAM public tier through APISIX with /api/iam prefix
-    hosts:
-      - app.shgas.com
-      - tender.shgas.com.cn
-      - jsc.shgas.com.cn
-      - 176.169.89.64
     uri: /api/iam/public/*
     service_id: iam-api-prod
     plugins:
@@ -54,11 +42,6 @@ routes:
   - id: iam-open-prod
     name: iam-open-prod
     desc: IAM open tier through APISIX with /api/iam prefix
-    hosts:
-      - app.shgas.com
-      - tender.shgas.com.cn
-      - jsc.shgas.com.cn
-      - 176.169.89.64
     uri: /api/iam/open/*
     service_id: iam-api-prod
     plugins:
@@ -75,11 +58,6 @@ routes:
   - id: iam-internal-prod
     name: iam-internal-prod
     desc: IAM internal tier through APISIX with /api/iam prefix
-    hosts:
-      - app.shgas.com
-      - tender.shgas.com.cn
-      - jsc.shgas.com.cn
-      - 176.169.89.64
     uri: /api/iam/internal/*
     service_id: iam-api-prod
     plugins:
@@ -96,11 +74,6 @@ routes:
   - id: iam-sso-prod
     name: iam-sso-prod
     desc: IAM SSO tier through APISIX with /api/iam prefix
-    hosts:
-      - app.shgas.com
-      - tender.shgas.com.cn
-      - jsc.shgas.com.cn
-      - 176.169.89.64
     uri: /sso/*
     service_id: iam-api-prod
     plugin_config_id: iam-sso-cors-prod
@@ -112,11 +85,6 @@ routes:
   - id: iam-auth-prod
     name: iam-auth-prod
     desc: IAM auth tier through APISIX with /api/iam prefix
-    hosts:
-      - app.shgas.com
-      - tender.shgas.com.cn
-      - jsc.shgas.com.cn
-      - 176.169.89.64
     uri: /api/iam/auth/*
     service_id: iam-api-prod
     plugins:
@@ -133,8 +101,6 @@ routes:
   - id: iam-admin-rest-prod
     name: iam-admin-rest-prod
     desc: IAM admin REST tier through APISIX with /api/iam prefix
-    hosts:
-      - ${IAM_ADMIN_HOST}
     uri: /api/iam/admin/*
     service_id: iam-admin-api-prod
     plugins:
@@ -151,8 +117,6 @@ routes:
   - id: iam-admin-rpc-prod
     name: iam-admin-rpc-prod
     desc: IAM admin RPC tier through APISIX with /api/iam prefix
-    hosts:
-      - ${IAM_ADMIN_HOST}
     uri: /api/iam/rpc/*
     service_id: iam-admin-api-prod
     plugins:
