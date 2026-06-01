@@ -1,0 +1,54 @@
+services:
+  - id: "00000000000000000466"
+    name: gds-prod
+    hosts:
+      - app.shgas.com
+      - tender.shgas.com.cn
+    upstream:
+      hash_on: vars
+      nodes:
+        - priority: 0
+          host: 176.169.99.95
+          port: 6002
+          weight: 0
+      pass_host: pass
+      scheme: http
+      timeout:
+        connect: 300
+        read: 300
+        send: 300
+      tls:
+        verify: false
+      type: roundrobin
+    enable_websocket: false
+  - id: "00000000000000000567"
+    name: tender-prod
+    hosts:
+      - app.shgas.com
+      - 176.169.99.125
+      - tender.shgas.com.cn
+    upstream:
+      hash_on: vars
+      nodes:
+        - priority: 0
+          host: 176.169.99.125
+          port: 18091
+          weight: 0
+      pass_host: pass
+      scheme: http
+      timeout:
+        connect: 300
+        read: 300
+        send: 300
+      tls:
+        verify: false
+      type: roundrobin
+    plugins:
+      client-control:
+        max_body_size: 0
+      proxy-rewrite:
+        regex_uri:
+          - ^/api/tender/(.*)
+          - /$1
+        use_real_request_uri_unsafe: false
+    enable_websocket: false
