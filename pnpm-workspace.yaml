@@ -2,6 +2,8 @@ packages:
   - 'apps/*'
   - 'gateway/*'
   - 'packages/*'
+overrides:
+  typescript: 6.0.3
 allowBuilds:
   bcrypt: true
   core-js: false
