@@ -3,13 +3,13 @@
     "target": "ESNext",
     "jsx": "react-jsx",
     "lib": ["ESNext"],
-    "types": ["bun"],
     "moduleDetection": "force",
     "module": "Preserve",
     "moduleResolution": "bundler",
     "paths": {
       "@api-core/*": ["./src/*"]
     },
+    "types": ["bun"],
     "allowImportingTsExtensions": true,
     "allowJs": true,
     "strict": true,

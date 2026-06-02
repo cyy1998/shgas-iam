@@ -17,8 +17,8 @@
   "scripts": {
     "dev": "bun --hot src/index.ts",
     "serve": "bun run src/index.ts",
-    "lint": "eslint src/",
-    "lint:fix": "eslint --fix src/",
+    "lint": "eslint src eslint.config.js",
+    "lint:fix": "eslint --fix src eslint.config.js",
     "test": "bun test --parallel",
     "typecheck": "pnpm exec tsgo --noEmit"
   },

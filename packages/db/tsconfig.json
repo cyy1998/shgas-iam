@@ -2,13 +2,13 @@
   "compilerOptions": {
     "target": "ESNext",
     "lib": ["ESNext"],
-    "types": ["bun"],
     "moduleDetection": "force",
     "module": "Preserve",
     "moduleResolution": "bundler",
     "paths": {
       "@db/*": ["./src/*"]
     },
+    "types": ["bun"],
     "allowImportingTsExtensions": true,
     "strict": true,
     "noFallthroughCasesInSwitch": true,

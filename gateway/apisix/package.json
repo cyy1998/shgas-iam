@@ -9,6 +9,7 @@
     "diff": "bun scripts/apisix-sync.ts diff",
     "apply": "bun scripts/apisix-sync.ts apply",
     "lint": "eslint scripts/",
+    "lint:fix": "eslint --fix scripts/",
     "test": "bun test --parallel",
     "typecheck": "pnpm exec tsgo --noEmit"
   },

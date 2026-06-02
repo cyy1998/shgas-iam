@@ -1,7 +1,7 @@
 {
   "name": "@iam/db",
-  "version": "0.0.1",
   "type": "module",
+  "version": "0.0.1",
   "private": true,
   "exports": {
     ".": "./src/index.ts",
@@ -10,7 +10,8 @@
     "./query-utils": "./src/query-utils.ts"
   },
   "scripts": {
-    "lint": "eslint src/ drizzle.config.ts",
+    "lint": "eslint src scripts drizzle.config.ts eslint.config.js",
+    "lint:fix": "eslint --fix src scripts drizzle.config.ts eslint.config.js",
     "test": "bun test --parallel",
     "typecheck": "pnpm exec tsgo --noEmit",
     "db:generate": "drizzle-kit generate",

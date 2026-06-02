@@ -1,7 +1,7 @@
 {
   "name": "@iam/domain",
-  "version": "0.0.1",
   "type": "module",
+  "version": "0.0.1",
   "private": true,
   "exports": {
     ".": "./src/index.ts",
@@ -21,7 +21,8 @@
     "./user/*": "./src/user/*.ts"
   },
   "scripts": {
-    "lint": "eslint src/",
+    "lint": "eslint src eslint.config.js",
+    "lint:fix": "eslint --fix src eslint.config.js",
     "test": "bun test --parallel",
     "typecheck": "pnpm exec tsgo --noEmit"
   },

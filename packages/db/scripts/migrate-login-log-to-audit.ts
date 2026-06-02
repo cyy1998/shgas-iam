@@ -16,7 +16,8 @@ const migratedCondition = sql`
 `;
 
 function rowsFromResult(result: unknown): QueryRow[] {
-  if (Array.isArray(result)) return result as QueryRow[];
+  if (Array.isArray(result))
+    return result as QueryRow[];
   if (result && typeof result === "object" && "rows" in result) {
     return (result as { rows: QueryRow[] }).rows;
   }
@@ -118,7 +119,8 @@ async function executeMigration(batchSize: number) {
 
   while (true) {
     const batch = await fetchPendingLoginLogs(batchSize);
-    if (batch.length === 0) break;
+    if (batch.length === 0)
+      break;
 
     await db.transaction(async (tx) => {
       await tx.insert(auditLogs).values(batch.map(mapLoginLogToAuditLog));

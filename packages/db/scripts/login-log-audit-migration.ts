@@ -1,4 +1,4 @@
-export type LegacyLoginLog = {
+export interface LegacyLoginLog {
   id: number;
   userId: number;
   username: string;
@@ -6,15 +6,15 @@ export type LegacyLoginLog = {
   clientCode: string;
   loginType: string;
   loginTime: Date | string;
-};
+}
 
-export type LoginLogAuditMigrationOptions = {
+export interface LoginLogAuditMigrationOptions {
   dryRun: boolean;
   batchSize: number;
   sampleSize: number;
-};
+}
 
-export type AuditLogMigrationValue = {
+export interface AuditLogMigrationValue {
   eventTime: Date;
   action: string;
   outcome: "success";
@@ -39,7 +39,7 @@ export type AuditLogMigrationValue = {
     loginType: string;
     clientCode: string;
   };
-};
+}
 
 const DEFAULT_BATCH_SIZE = 500;
 const DEFAULT_SAMPLE_SIZE = 5;
