@@ -95,3 +95,31 @@ routes:
       source: repo-manifest
       env: prod
       app: tender
+  - id: tender-minio-prod
+    name: tender-minio-prod
+    uri: /minio/*
+    service_id: tender-api-prod
+    upstream:
+      hash_on: vars
+      nodes:
+        - priority: 0
+          host: 176.169.99.125
+          port: 9000
+          weight: 0
+      pass_host: pass
+      scheme: http
+      timeout:
+        connect: 300
+        read: 300
+        send: 300
+      tls:
+        verify: false
+      type: roundrobin
+    priority: 0
+    status: 1
+    enable_websocket: false
+    labels:
+      managed_by: shgas-iam
+      source: repo-manifest
+      env: prod
+      app: tender

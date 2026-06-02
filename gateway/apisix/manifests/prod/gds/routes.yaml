@@ -56,3 +56,31 @@ routes:
       source: repo-manifest
       env: prod
       app: gds
+  - id: gds-dashboard-prod
+    name: gds-dashboard-prod
+    uri: /webroot/*
+    service_id: gds-api-prod
+    priority: 0
+    status: 1
+    enable_websocket: false
+    upstream:
+      hash_on: vars
+      nodes:
+        - priority: 0
+          host: 176.169.99.109
+          port: 8080
+          weight: 0
+      pass_host: pass
+      scheme: http
+      timeout:
+        connect: 300
+        read: 300
+        send: 300
+      tls:
+        verify: false
+      type: roundrobin
+    labels:
+      managed_by: shgas-iam
+      source: repo-manifest
+      env: prod
+      app: gds
