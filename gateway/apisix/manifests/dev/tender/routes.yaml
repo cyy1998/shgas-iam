@@ -1,11 +1,27 @@
 routes:
+  - id: tender-frontend-dev
+    name: tender-frontend-dev
+    uris:
+      - /tender
+      - /tender/*
+      - /tender-portal
+      - /tender-portal/*
+    service_id: tender-frontend-dev
+    priority: 0
+    status: 1
+    enable_websocket: false
+    labels:
+      managed_by: shgas-iam
+      source: repo-manifest
+      env: dev
+      app: tender
   - id: tender-api-dev
     name: tender-api-dev
     uri: /api/tender/*
     service_id: tender-api-dev
     plugins:
       forward-auth:
-        uri: http://176.169.99.191:9080/api/iam/auth/authz
+        uri: http://176.169.99.191:30080/api/iam/auth/authz
         allow_degradation: false
         client_headers:
           - Forbidden-Reason
@@ -52,7 +68,7 @@ routes:
     service_id: tender-api-dev
     plugins:
       forward-auth:
-        uri: http://176.169.99.191:9080/api/iam/auth/internal-authz
+        uri: http://176.169.99.191:30080/api/iam/auth/internal-authz
         allow_degradation: false
         client_headers:
           - Forbidden-Reason
