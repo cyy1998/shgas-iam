@@ -32,7 +32,7 @@ mock.module("@api/lib/infra/redis", () => ({
 
 mock.module("@api/services/client/client.service", () => ({}));
 
-mock.module("../login-credential.service", () => ({
+mock.module("../login-credential.helper", () => ({
   parseLoginPasswordCredential,
 }));
 

@@ -23,6 +23,17 @@ export type AdminAuthOptions<TUser extends SessionUser> = SessionAuthOptions<TUs
   adminRoleCodes: string[];
 };
 
+async function bestEffortDelete(redis: Redis, keys: string[]) {
+  await Promise.all(keys.map(async (key) => {
+    try {
+      await redis.del(key);
+    }
+    catch {
+      // Authentication must fail closed even if stale-session cleanup fails.
+    }
+  }));
+}
+
 async function readSessionUser<TUser extends SessionUser>(
   c: Context,
   options: SessionAuthOptions<TUser>,
@@ -45,6 +56,24 @@ async function readSessionUser<TUser extends SessionUser>(
     deleteCookie(c, sessionCookieName);
     deleteCookie(c, "orcas_sso_sessionid");
     throw new AuthzUnauthorizedError("未登录");
+  }
+  if (clientCode !== "iam") {
+    const reverseKey = `local_session_reverse:${sessionId}`;
+    const globalSessionId = await options.redis.get(reverseKey);
+    if (!globalSessionId) {
+      await bestEffortDelete(options.redis, [redisKey, reverseKey]);
+      deleteCookie(c, sessionCookieName);
+      deleteCookie(c, "orcas_sso_sessionid");
+      throw new AuthzUnauthorizedError("未登录");
+    }
+
+    const globalSession = await options.redis.get(`global_session:${globalSessionId}`);
+    if (!globalSession) {
+      await bestEffortDelete(options.redis, [redisKey, reverseKey]);
+      deleteCookie(c, sessionCookieName);
+      deleteCookie(c, "orcas_sso_sessionid");
+      throw new AuthzUnauthorizedError("未登录");
+    }
   }
 
   return options.userSchema.parse(JSON.parse(userString, reviveIsoDates));

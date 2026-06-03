@@ -2,7 +2,6 @@ import type { ClientDto } from "@api/services/client/client.type";
 import type { HumanVerificationContext } from "@api/services/human-verification/human-verification.type";
 import { VerificationCodeUsage } from "@api/enums/verificationCode.usage";
 import config from "@api/env";
-import redis from "@api/lib/infra/redis";
 import * as authAudit from "@api/services/audit/events/auth.audit";
 import * as humanVerification from "@api/services/human-verification/cap.service";
 import * as humanRiskService from "@api/services/human-verification/human-risk.service";
@@ -151,7 +150,7 @@ export async function authz(sessionId: string, client: ClientDto) {
   // if (!sessionId) {
   //   throw new AuthzUnauthorizedError("未登录");
   // }
-  const userString = await redis.get(`local_${client.clientCode}_session:${sessionId}`);
+  const userString = await sessionService.getValidatedLocalSessionUserString(client.clientCode, sessionId);
   if (!userString) {
     throw new AuthzUnauthorizedError("未登录");
   }

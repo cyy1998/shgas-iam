@@ -18,6 +18,14 @@ import { ClientManagementLevel } from "@iam/contracts";
 import { sleep } from "bun";
 import { sm3 } from "sm-crypto";
 
+async function consumeAuthCode(code: string) {
+  const authObjectString = await redis.getdel(`auth_code:${code}`);
+  if (authObjectString === null) {
+    return null;
+  }
+  return SessionObjectSchema.parse(JSON.parse(authObjectString, reviveIsoDates));
+}
+
 export async function callback(code: string, clientCode: string, redirectUrl: string) {
   const client = await clientService.getClientByCode(clientCode);
   if (client === null) {
@@ -26,11 +34,10 @@ export async function callback(code: string, clientCode: string, redirectUrl: st
   if (!client.extAttributes.validRedirectUrls.some(u => redirectUrl.startsWith(u))) {
     throw new InvalidRedirectUriError("非法重定向地址");
   }
-  const authObjectString = await redis.get(`auth_code:${code}`);
-  if (authObjectString === null) {
+  const authObject = await consumeAuthCode(code);
+  if (authObject === null) {
     throw new AuthzUnauthorizedError("非法code");
   }
-  const authObject = SessionObjectSchema.parse(JSON.parse(authObjectString, reviveIsoDates));
   const userString = authObject.data;
   const globalSessionId = authObject.sessionId;
   const userDetailDto = UserDetailDtoSchema.parse(JSON.parse(userString, reviveIsoDates));
@@ -60,11 +67,10 @@ export async function setToken(code: string, clientCode: string, clientSecret: s
   if (client === null || clientSecret !== client.clientSecret) {
     throw new InvalidSsoClientError("非法Client");
   }
-  const authObjectString = await redis.get(`auth_code:${code}`);
-  if (authObjectString === null) {
+  const authObject = await consumeAuthCode(code);
+  if (authObject === null) {
     throw new InvalidAuthCodeError("非法Code");
   }
-  const authObject = SessionObjectSchema.parse(JSON.parse(authObjectString, reviveIsoDates));
   const userString = authObject.data;
   const globalSessionId = authObject.sessionId;
   const userDetailDto = UserDetailDtoSchema.parse(JSON.parse(userString, reviveIsoDates));
@@ -74,7 +80,7 @@ export async function setToken(code: string, clientCode: string, clientSecret: s
     userDetailDto,
     ClientManagementLevel.Independent,
   );
-  return { sid: localSessionId, ttl, userInfo: UserDetailDtoSchema.parse(userString) };
+  return { sid: localSessionId, ttl, userInfo: userDetailDto };
 }
 
 export async function authorize(globalSessionId: string | undefined, clientCode: string, redirectUrl: string) {
@@ -114,7 +120,7 @@ export async function logout(globalSessionId: string) {
     return true;
   }
   const localSessionSet = await sessionService.getValidLocalSessions(globalSessionId);
-  await Promise.all(localSessionSet.map(e => sessionService.removeLocalSession(e)));
+  await Promise.all(localSessionSet.map(e => sessionService.removeLocalSession(e, globalSessionId)));
   await sessionService.removeGlobalSession(globalSessionId);
   return true;
 }
