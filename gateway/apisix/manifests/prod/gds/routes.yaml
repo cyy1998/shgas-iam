@@ -20,7 +20,7 @@ routes:
     service_id: gds-api-prod
     plugins:
       forward-auth:
-        uri: http://176.169.99.124/api/iam/auth/authz
+        uri: http://176.169.99.95/api/iam/auth/authz
         allow_degradation: false
         client_headers:
           - Forbidden-Reason

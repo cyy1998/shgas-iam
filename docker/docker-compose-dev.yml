@@ -58,7 +58,7 @@ services:
     ports:
       - "30080:9080"
       - "30443:9443"
-      - "127.0.0.1:9180:9180"
+      - "9180:9180"
     volumes:
       - ../gateway/apisix/config/config.dev.yaml:/usr/local/apisix/conf/config.yaml:ro
     depends_on:

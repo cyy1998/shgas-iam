@@ -187,7 +187,7 @@ Edit `packages/contracts/package.json` so it is exactly:
     ".": "./src/index.ts"
   },
   "scripts": {
-    "lint": "eslint src/",
+    "lint": "eslint .",
     "typecheck": "pnpm exec tsgo --noEmit"
   },
   "devDependencies": {
@@ -354,7 +354,7 @@ Create `packages/db/package.json`:
     "./query-utils": "./src/query-utils.ts"
   },
   "scripts": {
-    "lint": "eslint src/ drizzle.config.ts",
+    "lint": "eslint . drizzle.config.ts",
     "typecheck": "pnpm exec tsgo --noEmit",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
@@ -690,7 +690,7 @@ Create `packages/api-core/package.json`:
     "./utils": "./src/utils/index.ts"
   },
   "scripts": {
-    "lint": "eslint src/",
+    "lint": "eslint .",
     "typecheck": "pnpm exec tsgo --noEmit"
   },
   "dependencies": {
@@ -1258,7 +1258,7 @@ Create `apps/admin-api/package.json`:
   "scripts": {
     "dev": "bun --hot src/index.ts",
     "serve": "bun run src/index.ts",
-    "lint": "eslint src/",
+    "lint": "eslint .",
     "lint:fix": "eslint --fix src/",
     "typecheck": "pnpm exec tsgo --noEmit"
   },

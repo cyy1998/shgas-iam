@@ -26,7 +26,7 @@ services:
       hash_on: vars
       nodes:
         - priority: 0
-          host: 176.169.99.95
+          host: 176.169.99.124
           port: 6002
           weight: 0
       pass_host: pass

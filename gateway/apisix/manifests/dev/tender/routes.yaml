@@ -5,7 +5,7 @@ routes:
     service_id: tender-api-dev
     plugins:
       forward-auth:
-        uri: http://localhost/api/iam/auth/authz
+        uri: http://176.169.99.191:9080/api/iam/auth/authz
         allow_degradation: false
         client_headers:
           - Forbidden-Reason
@@ -52,7 +52,7 @@ routes:
     service_id: tender-api-dev
     plugins:
       forward-auth:
-        uri: http://localhost/api/iam/auth/internal-authz
+        uri: http://176.169.99.191:9080/api/iam/auth/internal-authz
         allow_degradation: false
         client_headers:
           - Forbidden-Reason

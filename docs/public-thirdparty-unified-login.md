@@ -1,4 +1,4 @@
-# 第三方系统通过 `/public/thirdparty/:clientCode` 接入统一登录方法
+# 第三方系统通过 `/sso/thirdparty/:clientCode` 接入统一登录方法
 
 ## 1. 适用场景
 
@@ -11,17 +11,43 @@
 - 第三方系统希望通过浏览器跳转方式让用户进入 IAM 统一登录态。
 - IAM 中存在同名用户，且该用户为启用状态的“正式员工”。
 
-当前后端代码中该能力注册在 SSO tier，默认应用路径为：
+### 1.1 概念说明
+
+为了避免接入时把“发起登录的一方”和“最终落地的一方”混为一谈，本文把这两个系统分开说明：
+
+| 概念 | 说明 | 在本文中的对应参数 |
+|---|---|---|
+| 第三方系统 | 已经有自己用户体系的外部业务系统。它先完成用户认证，再把用户带到 IAM。它通常负责生成签名、发起跳转、提供 `loginid`。 | 路径参数 `clientCode`，表示第三方系统自己的 IAM 客户端编码。 |
+| 目标业务系统 | 用户通过 IAM 统一登录后，最终要进入的业务系统。它使用 IAM 授权码或局部会话继续完成自己的登录态。 | 查询参数 `client`，表示最终要登录的目标业务系统客户端编码。 |
+
+两者可以是同一个系统，也可以是不同系统：
+
+- 如果第三方系统只是作为统一身份入口，且登录后还要回到自己对应的业务系统，那么 `clientCode` 和 `client` 可以写成同一个值。
+- 如果某个平台系统只是代为认证用户，然后把用户导向另一个业务系统，那么 `clientCode` 表示“认证入口系统”，`client` 表示“最终业务系统”。
+- 只要最终目标不变，`redirectUrl` 就应该始终属于目标业务系统允许的回跳地址，而不是第三方系统自己的地址。
+
+接入时最容易混淆的点有两个：
+
+1. `clientCode` 是“谁在调用 IAM 第三方入口”，用于 IAM 查签名密钥。
+2. `client` 是“登录完成后要落到谁那里”，用于后续 `/sso/authorize` 和回调流程。
+
+可以把整个过程理解成：
 
 ```text
-{IAM_ORIGIN}/sso/thirdparty/:clientCode
+第三方系统登录态 -> IAM 全局登录态 -> 目标业务系统局部登录态
 ```
 
-如果部署网关对外暴露为 `/public/thirdparty/:clientCode`，请确认网关已将请求转发到上述 SSO 入口。下文以对外路径 `/public/thirdparty/:clientCode` 说明接入方法；本地或直连 API 时可将路径替换为 `/sso/thirdparty/:clientCode`。
+第三方系统负责把“外部身份”可靠地转换成 IAM 可识别的用户身份；目标业务系统负责把 IAM 的统一身份再转换成自己的会话。
+
+第三方接入API应用路径为：
+
+```text
+http://app.shgas.com/sso/thirdparty/:clientCode
+```
 
 ## 2. 整体流程
 
-1. 第三方系统完成自己的登录认证，得到当前用户账号 `loginid`。
+1. 第三方系统完成自己的登录认证，得到当前用户工号 `loginid`。
 2. 第三方系统使用 IAM 分配的 `clientSecret` 生成签名 `token`。
 3. 第三方系统将浏览器 302 跳转到 IAM 第三方登录入口。
 4. IAM 校验 `clientCode`、时间戳、签名和用户状态。
@@ -44,20 +70,14 @@
 
 用户侧还需要满足：
 
-- `loginid` 对应 IAM 用户表中的 `username`。
+- `loginid` 对应员工工号。
 - 用户未删除、未停用。
 - 用户类型为“正式员工”；外部用户不允许通过该入口登录。
 
 ## 4. 调用入口
 
 ```http
-GET {IAM_ORIGIN}/public/thirdparty/{clientCode}?loginid={loginid}&ts={timestamp_ms}&token={signature}&client={targetClientCode}&redirectUrl={urlencoded_redirect_url}
-```
-
-直连 API 默认路径：
-
-```http
-GET {IAM_ORIGIN}/sso/thirdparty/{clientCode}?loginid={loginid}&ts={timestamp_ms}&token={signature}&client={targetClientCode}&redirectUrl={urlencoded_redirect_url}
+GET http://app.shgas.com/sso/thirdparty/{clientCode}?loginid={loginid}&ts={timestamp_ms}&token={signature}&client={targetClientCode}&redirectUrl={urlencoded_redirect_url}
 ```
 
 参数说明：
@@ -203,7 +223,6 @@ return redirect(url.toString());
 ## 10. 联调清单
 
 - IAM 已为第三方系统创建客户端并提供 `clientCode`、`clientSecret`。
-- 如对外使用 `/public/thirdparty/:clientCode`，网关已转发到 IAM `/sso/thirdparty/:clientCode`。
 - IAM 已为目标业务系统创建客户端，并配置 `validRedirectUrls`。
 - 第三方系统能生成与 IAM 一致的 SM3 + Base64 签名。
 - `ts` 使用毫秒级时间戳，服务器时间已同步。

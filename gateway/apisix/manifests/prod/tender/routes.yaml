@@ -4,7 +4,39 @@ routes:
     uris:
       - /tender
       - /tender/*
+      - /tender-portal
+      - /tender-portal/*
     service_id: tender-frontend-prod
+    priority: 0
+    status: 1
+    enable_websocket: false
+    labels:
+      managed_by: shgas-iam
+      source: repo-manifest
+      env: prod
+      app: tender
+  - id: tender-frontend-external-prod
+    name: tender-frontend-external-prod
+    hosts:
+      - tender.shgas.com.cn
+    uris:
+      - /tender
+      - /tender/*
+      - /tender-portal
+      - /tender-portal/*
+    service_id: tender-frontend-prod
+    upstream:
+      hash_on: vars
+      nodes:
+        - priority: 0
+          host: 176.169.99.125
+          port: 81
+          weight: 0
+      pass_host: pass
+      scheme: http
+      tls:
+        verify: false
+      type: roundrobin
     priority: 0
     status: 1
     enable_websocket: false
@@ -20,7 +52,7 @@ routes:
     service_id: tender-api-prod
     plugins:
       forward-auth:
-        uri: http://176.169.99.124/api/iam/auth/authz
+        uri: http://176.169.99.95/api/iam/auth/authz
         allow_degradation: false
         client_headers:
           - Forbidden-Reason
@@ -51,7 +83,7 @@ routes:
     service_id: tender-api-prod
     plugins:
       forward-auth:
-        uri: http://176.169.99.124/api/iam/auth/internal-authz
+        uri: http://176.169.99.95/api/iam/auth/internal-authz
         allow_degradation: false
         client_headers:
           - Forbidden-Reason
