@@ -116,7 +116,7 @@ iam-service/
 
 ### 工程
 
-- **包管理**：pnpm workspace（根 `packageManager` 为 `pnpm@11.1.2`）
+- **包管理**：pnpm workspace（根 `packageManager` 为 `pnpm@11.5.0`）
 - **任务编排**：Turborepo
 - **语言**：TypeScript 6 / native preview 工具链
 
