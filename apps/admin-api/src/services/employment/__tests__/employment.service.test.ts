@@ -1,6 +1,5 @@
-import { EmploymentNotEditableError } from "@iam/api-core/errors/EmploymentNotEditableError";
-import { EmploymentNotFoundError } from "@iam/api-core/errors/EmploymentNotFoundError";
 import { EmploymentStatus, UserStatus } from "@iam/contracts";
+import { EmploymentNotEditableError, EmploymentNotFoundError } from "@iam/domain/employment";
 import { beforeEach, describe, expect, mock, test } from "bun:test";
 
 const tx = { name: "employment-service-test-tx" };

@@ -6,7 +6,7 @@ import {
   NOT_FOUND,
   UNAUTHORIZED,
 } from "../core/http-status-codes";
-import { CustomError } from "../errors/CustomError";
+import { isApiRuntimeError } from "../errors/api-runtime-error";
 
 export interface TRPCAppContext {
   hono: HonoContext;
@@ -18,14 +18,13 @@ export async function createTRPCContext(opts: { honoCtx: HonoContext }): Promise
 
 const t = initTRPC.context<TRPCAppContext>().create({
   errorFormatter({ shape, error }) {
-    if (error.cause instanceof CustomError) {
+    const apiRuntimeErrorData = getApiRuntimeErrorFormatterData(error.cause);
+    if (apiRuntimeErrorData) {
       return {
         ...shape,
         data: {
           ...shape.data,
-          serviceCode: error.cause.code,
-          serviceMessage: error.cause.message,
-          httpStatus: error.cause.httpStatus,
+          ...apiRuntimeErrorData,
         },
       };
     }
@@ -48,8 +47,19 @@ function mapHttpStatusToTRPCCode(status: number): TRPCError["code"] {
   return "INTERNAL_SERVER_ERROR";
 }
 
+export function getApiRuntimeErrorFormatterData(err: unknown) {
+  if (!isApiRuntimeError(err))
+    return null;
+
+  return {
+    serviceCode: err.code,
+    serviceMessage: err.message,
+    httpStatus: err.httpStatus,
+  };
+}
+
 export function mapCustomErrorToTRPCError(err: unknown): never {
-  if (err instanceof CustomError) {
+  if (isApiRuntimeError(err)) {
     throw new TRPCError({
       code: mapHttpStatusToTRPCCode(err.httpStatus),
       message: err.message,

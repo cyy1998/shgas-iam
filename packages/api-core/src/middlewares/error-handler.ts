@@ -3,7 +3,7 @@ import type { HTTPResponseError } from "hono/types";
 import type { ContentfulStatusCode } from "hono/utils/http-status";
 import { ApiErrorCode } from "@iam/contracts";
 import { HTTPException } from "hono/http-exception";
-import { CustomError } from "../errors/CustomError";
+import { isApiRuntimeError } from "../errors/api-runtime-error";
 import { makeResponse } from "../http";
 
 function getErrorSourceLocation(err: Error): string {
@@ -17,7 +17,7 @@ function getErrorSourceLocation(err: Error): string {
 }
 
 export function errorHandler(err: Error | HTTPResponseError, c: Context) {
-  if (err instanceof CustomError) {
+  if (isApiRuntimeError(err)) {
     return c.json(makeResponse(err.code, null, err.message), err.httpStatus as ContentfulStatusCode);
   }
   else if (err instanceof HTTPException) {

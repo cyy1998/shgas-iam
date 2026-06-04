@@ -3,10 +3,12 @@ import type { PositionStatus } from "@iam/contracts";
 import type { DbClient } from "@iam/db";
 import type { PositionCreateDto, PositionUpdateDto } from "./position.type";
 import { recordPositionAudit } from "@admin-api/services/audit/events/position.audit";
-import { PositionCodeExistsError } from "@iam/api-core/errors/PositionCodeExistsError";
-import { PositionHasEmploymentError } from "@iam/api-core/errors/PositionHasEmploymentError";
-import { PositionNotFoundError } from "@iam/api-core/errors/PositionNotFoundError";
 import db from "@iam/db";
+import {
+  PositionCodeExistsError,
+  PositionHasEmploymentError,
+  PositionNotFoundError,
+} from "@iam/domain/position";
 import * as positionRepository from "./position.repository";
 import { PositionDtoSchema } from "./position.schema";
 

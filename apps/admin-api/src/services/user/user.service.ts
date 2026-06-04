@@ -11,12 +11,14 @@ import {
   UserDetailDtoSchema,
   UserDtoSchema,
 } from "@admin-api/services/user/user.schema";
-import { UserHasActiveEmploymentError } from "@iam/api-core/errors/UserHasActiveEmploymentError";
-import { UsernameAlreadyExistsError } from "@iam/api-core/errors/UsernameAlreadyExistsError";
-import { UserNotFoundError } from "@iam/api-core/errors/UserNotFoundError";
 import { generateRandomPassword } from "@iam/api-core/utils";
 import { EmploymentStatus, UserStatus } from "@iam/contracts";
 import db from "@iam/db";
+import {
+  UserHasActiveEmploymentError,
+  UsernameAlreadyExistsError,
+  UserNotFoundError,
+} from "@iam/domain/user";
 import { hash } from "bcrypt-ts";
 
 export async function getUserDetailByUsernameForAdmin(username: string): Promise<UserDetailDto> {

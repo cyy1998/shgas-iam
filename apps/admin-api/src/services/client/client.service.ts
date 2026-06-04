@@ -11,9 +11,8 @@ import redis from "@admin-api/lib/infra/redis";
 import { recordAdminClientAudit } from "@admin-api/services/audit/events/client.audit";
 import * as clientRepository from "@admin-api/services/client/client.repository";
 import { ClientDtoSchema } from "@admin-api/services/client/client.schema";
-import { ClientCodeExistsError } from "@iam/api-core/errors/ClientCodeExistsError";
-import { ClientNotFoundError } from "@iam/api-core/errors/ClientNotFoundError";
 import db from "@iam/db";
+import { ClientCodeExistsError, ClientNotFoundError } from "@iam/domain/client";
 
 async function setClientCache(clientDto: ClientDto) {
   await Promise.all([

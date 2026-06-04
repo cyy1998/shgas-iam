@@ -2,9 +2,8 @@ import type { DbClient } from "@iam/db";
 import { VerificationCodeUsage } from "@api/enums/verificationCode.usage";
 import * as selfUserAudit from "@api/services/audit/events/self-user.audit";
 import * as mobileService from "@api/services/mobile/mobile.service";
-import { InvalidMobileError } from "@iam/api-core/errors/InvalidMobileError";
 import { InvalidVerificationCodeError } from "@iam/api-core/errors/InvalidVerificationCodeError";
-import { MobileAlreadyExistsError } from "@iam/api-core/errors/MobileAlreadyExistsError";
+import { InvalidMobileError, MobileAlreadyExistsError } from "@iam/domain/user";
 
 export async function assertCanBindMobile(
   userId: number,

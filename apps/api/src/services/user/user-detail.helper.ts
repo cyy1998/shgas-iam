@@ -4,7 +4,7 @@ import * as employmentRepository from "@api/services/employment/employment.repos
 import { EmploymentDetailDtoSchema, toEmploymentDto } from "@api/services/employment/employment.schema";
 import * as privilegeRepository from "@api/services/privilege/privilege.repository";
 import * as roleRepository from "@api/services/role/role.repository";
-import { UserNotFoundError } from "@iam/api-core/errors/UserNotFoundError";
+import { UserNotFoundError } from "@iam/domain/user";
 import { UserDetailDtoSchema } from "./user.schema";
 
 export async function buildUserDetail(user: User | null): Promise<UserDetailDto> {

@@ -5,10 +5,12 @@ import type {
 } from "@api/services/organization/organization.type";
 import * as organizationRepository from "@api/services/organization/organization.repository";
 import { toOrganizationDto } from "@api/services/organization/organization.schema";
-import { OrganizationAlreadyExistsError } from "@iam/api-core/errors/OrganizationAlreadyExistsError";
-import { OrganizationCodeExistsError } from "@iam/api-core/errors/OrganizationCodeExistsError";
-import { OrganizationNotFoundError } from "@iam/api-core/errors/OrganizationNotFoundError";
 import db from "@iam/db";
+import {
+  OrganizationAlreadyExistsError,
+  OrganizationCodeExistsError,
+  OrganizationNotFoundError,
+} from "@iam/domain/organization";
 
 export async function getOrganizationByCode(orgCode: string) {
   const organization = await organizationRepository.getOrganizationByCode(orgCode);

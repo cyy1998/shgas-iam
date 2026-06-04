@@ -1,6 +1,6 @@
 import type { User } from "@iam/db/schema";
 import config from "@api/env";
-import { WeakPasswordError } from "@iam/api-core/errors/WeakPasswordError";
+import { WeakPasswordError } from "@iam/domain/user";
 import { compare, hash } from "bcrypt-ts";
 
 const LETTER_CHECK_REGEX = /[a-z]/i;

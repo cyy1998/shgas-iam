@@ -18,14 +18,16 @@ import * as privilegeRepository from "@admin-api/services/privilege/privilege.re
 import * as roleRepository from "@admin-api/services/role/role.repository";
 import * as userRepository from "@admin-api/services/user/user.repository";
 import { CustomError } from "@iam/api-core/errors/CustomError";
-import { EmploymentAlreadyExistsError } from "@iam/api-core/errors/EmploymentAlreadyExistsError";
-import { EmploymentNotEditableError } from "@iam/api-core/errors/EmploymentNotEditableError";
-import { EmploymentNotFoundError } from "@iam/api-core/errors/EmploymentNotFoundError";
-import { OrganizationNotFoundError } from "@iam/api-core/errors/OrganizationNotFoundError";
-import { PositionNotFoundError } from "@iam/api-core/errors/PositionNotFoundError";
-import { UserNotFoundError } from "@iam/api-core/errors/UserNotFoundError";
 import { EmploymentStatus, UserStatus } from "@iam/contracts";
 import db from "@iam/db";
+import {
+  EmploymentAlreadyExistsError,
+  EmploymentNotEditableError,
+  EmploymentNotFoundError,
+} from "@iam/domain/employment";
+import { OrganizationNotFoundError } from "@iam/domain/organization";
+import { PositionNotFoundError } from "@iam/domain/position";
+import { UserNotFoundError } from "@iam/domain/user";
 
 function resolveCreateOrganizationInput(dto: EmploymentAdminCreateDto) {
   return {

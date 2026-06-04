@@ -10,14 +10,16 @@ import type { OrganizationStatus } from "@iam/contracts";
 import { recordOrganizationAudit } from "@admin-api/services/audit/events/organization.audit";
 import * as organizationRepository from "@admin-api/services/organization/organization.repository";
 import { toOrganizationDto } from "@admin-api/services/organization/organization.schema";
-import { OrganizationAlreadyExistsError } from "@iam/api-core/errors/OrganizationAlreadyExistsError";
-import { OrganizationCodeExistsError } from "@iam/api-core/errors/OrganizationCodeExistsError";
-import { OrganizationHasChildrenError } from "@iam/api-core/errors/OrganizationHasChildrenError";
-import { OrganizationHasEmploymentError } from "@iam/api-core/errors/OrganizationHasEmploymentError";
-import { OrganizationNotFoundError } from "@iam/api-core/errors/OrganizationNotFoundError";
 import { paginate } from "@iam/api-core/utils";
 import { organizationStatusToString } from "@iam/contracts";
 import db from "@iam/db";
+import {
+  OrganizationAlreadyExistsError,
+  OrganizationCodeExistsError,
+  OrganizationHasChildrenError,
+  OrganizationHasEmploymentError,
+  OrganizationNotFoundError,
+} from "@iam/domain/organization";
 
 export async function setOrganization(organizationCreateDto: OrganizationCreateDto, auditContext?: AdminAuditContext) {
   return await db.transaction(async (tx) => {

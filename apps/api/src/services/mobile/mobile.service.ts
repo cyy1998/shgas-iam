@@ -2,11 +2,10 @@ import { VerificationCodeUsage } from "@api/enums/verificationCode.usage";
 import redis from "@api/lib/infra/redis";
 import smsClient from "@api/lib/integrations/sms";
 import { CustomError } from "@iam/api-core/errors/CustomError";
-import { InvalidMobileError } from "@iam/api-core/errors/InvalidMobileError";
-import { UserNotFoundError } from "@iam/api-core/errors/UserNotFoundError";
 import db from "@iam/db";
 import { firstRow } from "@iam/db/query-utils";
 import { users } from "@iam/db/schema";
+import { InvalidMobileError, UserNotFoundError } from "@iam/domain/user";
 import { count, eq } from "drizzle-orm";
 
 const MOBILE_REGEX = /^1[3-9]\d{9}$/;

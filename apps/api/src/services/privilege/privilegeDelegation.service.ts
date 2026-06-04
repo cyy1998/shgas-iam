@@ -4,14 +4,16 @@ import * as organizationRepository from "@api/services/organization/organization
 import * as privilegeRepository from "@api/services/privilege/privilege.repository";
 import * as delegationRepository from "@api/services/privilege/privilegeDelegation.repository";
 import * as userRepository from "@api/services/user/user.repository";
-import { OrganizationNotFoundError } from "@iam/api-core/errors/OrganizationNotFoundError";
-import { PrivilegeAlreadyDelegatedError } from "@iam/api-core/errors/PrivilegeAlreadyDelegatedError";
-import { PrivilegeDelegationEndedError } from "@iam/api-core/errors/PrivilegeDelegationEndedError";
-import { PrivilegeDelegationNotFoundError } from "@iam/api-core/errors/PrivilegeDelegationNotFoundError";
-import { PrivilegeNotFoundError } from "@iam/api-core/errors/PrivilegeNotFoundError";
-import { UserNotFoundError } from "@iam/api-core/errors/UserNotFoundError";
 import { PrivilegeDelegationStatus } from "@iam/contracts";
 import db from "@iam/db";
+import { OrganizationNotFoundError } from "@iam/domain/organization";
+import {
+  PrivilegeAlreadyDelegatedError,
+  PrivilegeDelegationEndedError,
+  PrivilegeDelegationNotFoundError,
+  PrivilegeNotFoundError,
+} from "@iam/domain/privilege";
+import { UserNotFoundError } from "@iam/domain/user";
 import { toPrivilegeDelegationDetailDto } from "./privilegeDelegation.schema";
 
 export async function queryPrivilegeDelegations(query: PrivilegeDelegationQueryDto) {

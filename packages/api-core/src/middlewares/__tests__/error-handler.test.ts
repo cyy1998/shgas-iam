@@ -1,9 +1,19 @@
 import { ApiErrorCode } from "@iam/contracts";
 import { describe, expect, spyOn, test } from "bun:test";
 import { Hono } from "hono";
-import { BAD_REQUEST } from "../../core/http-status-codes";
+import { BAD_REQUEST, NOT_FOUND } from "../../core/http-status-codes";
 import { CustomError } from "../../errors/CustomError";
 import { errorHandler } from "../error-handler";
+
+class DomainLikeBusinessError extends Error {
+  public code = ApiErrorCode.OrganizationNotFound;
+  public httpStatus = NOT_FOUND;
+
+  constructor() {
+    super("组织不存在");
+    this.name = "OrganizationNotFoundError";
+  }
+}
 
 describe("errorHandler", () => {
   test("serializes CustomError code and HTTP status separately", async () => {
@@ -26,6 +36,23 @@ describe("errorHandler", () => {
     });
   });
 
+  test("serializes domain business error shape", async () => {
+    const app = new Hono();
+    app.get("/domain", () => {
+      throw new DomainLikeBusinessError();
+    });
+    app.onError(errorHandler);
+
+    const res = await app.request("http://localhost/domain");
+
+    expect(res.status).toBe(NOT_FOUND);
+    await expect(res.json()).resolves.toEqual({
+      code: ApiErrorCode.OrganizationNotFound,
+      data: null,
+      message: "组织不存在",
+    });
+  });
+
   test("prints the source file location when logging unexpected errors", async () => {
     const app = new Hono();
     const error = new Error("boom");
@@ -43,7 +70,7 @@ describe("errorHandler", () => {
     app.onError(errorHandler);
 
     try {
-      await app.request("http://localhost/boom?trace=1");
+      const res = await app.request("http://localhost/boom?trace=1");
 
       expect(consoleError).toHaveBeenCalledTimes(1);
       const [firstCall] = consoleError.mock.calls;
@@ -54,6 +81,12 @@ describe("errorHandler", () => {
 
       expect(firstCall[0]).toContain(sourceLocation);
       expect(firstCall[1]).toBe(error);
+      expect(res.status).toBe(200);
+      await expect(res.json()).resolves.toEqual({
+        code: ApiErrorCode.InternalError,
+        data: null,
+        message: "服务器内部错误",
+      });
     }
     finally {
       consoleError.mockRestore();
