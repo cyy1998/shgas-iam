@@ -1,4 +1,4 @@
-import type { AuditActor, AuditDetails } from "./audit.type";
+import type { AuditActor, AuditDetails } from "./type";
 import { AuditActorSchema, AuditDetailsSchema } from "./schema";
 
 const REDACTED = "[REDACTED]";

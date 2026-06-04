@@ -17,15 +17,15 @@ TBD - created by archiving change define-domain-dto-types. Update Purpose after 
 - **AND** 系统 SHALL NOT 手写重复的 DTO 字段结构
 
 ### Requirement: 领域 DTO type 使用独立 type 文件
-系统 SHALL 将领域稳定 DTO 的 TypeScript type 定义在对应 domain 子目录的独立 `.type.ts` 文件中。
+系统 SHALL 将领域稳定 DTO 的 TypeScript type 定义在对应 domain 子目录的独立 `type.ts` 文件中。
 
 #### Scenario: 新增领域 DTO type
 - **WHEN** `packages/domain/src/<domain>/schema.ts` 新增跨 app 稳定复用的 `XxxDtoSchema`
-- **THEN** 对应 `XxxDto` type SHALL 定义在 `packages/domain/src/<domain>/<domain>.type.ts`
+- **THEN** 对应 `XxxDto` type SHALL 定义在 `packages/domain/src/<domain>/type.ts`
 - **AND** `schema.ts` SHALL NOT 混入该 DTO 的 type 声明
 
 #### Scenario: 导出领域 DTO type
-- **WHEN** domain 子模块存在 `<domain>.type.ts`
+- **WHEN** domain 子模块存在 `type.ts`
 - **THEN** `packages/domain/src/<domain>/index.ts` SHALL 导出该 type 文件
 - **AND** `packages/domain/src/index.ts` SHALL 继续聚合导出该 domain 子模块
 
@@ -47,4 +47,3 @@ TBD - created by archiving change define-domain-dto-types. Update Purpose after 
 #### Scenario: 类型归属迁移后接口响应不变
 - **WHEN** 领域 DTO type 从 app 本地定义迁移到 `packages/domain`
 - **THEN** DTO schema 的字段、OpenAPI schema 名称、mapper 输出和 REST/tRPC 响应结构 SHALL 保持不变
-
