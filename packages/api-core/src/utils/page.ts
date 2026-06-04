@@ -10,21 +10,6 @@ export function paginate<T>(
 
   const rawData = [...items];
 
-  // // 应用过滤条件
-  // const filteredData = filter ? rawData.filter(filter) : rawData;
-
-  // // 应用排序
-  // if (pageQuery.sortBy) {
-  //     filteredData.sort((a, b) => {
-  //         const aValue = (a as any)[pageQuery.sortBy!];
-  //         const bValue = (b as any)[pageQuery.sortBy!];
-
-  //         if (aValue < bValue) return pageQuery.sortOrder === 'desc' ? 1 : -1;
-  //         if (aValue > bValue) return pageQuery.sortOrder === 'desc' ? -1 : 1;
-  //         return 0;
-  //     });
-  // }
-
   // 计算分页数据
   const total = rawData.length;
   const pages = Math.max(1, Math.ceil(total / pageSize));

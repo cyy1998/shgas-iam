@@ -140,16 +140,6 @@ export async function loginMobile(phoneNumber: string, code: string, options: Lo
 }
 
 export async function authz(sessionId: string, client: ClientDto) {
-  // if (!path || !clientCode) {
-  //   throw new AuthzUnauthorizedError("非法访问");
-  // }
-  // const client = await clientService.getClientByCode(clientCode);
-  // if (client === null) {
-  //   throw new AuthzUnauthorizedError("非法访问");
-  // }
-  // if (!sessionId) {
-  //   throw new AuthzUnauthorizedError("未登录");
-  // }
   const userString = await sessionService.getValidatedLocalSessionUserString(client.clientCode, sessionId);
   if (!userString) {
     throw new AuthzUnauthorizedError("未登录");
