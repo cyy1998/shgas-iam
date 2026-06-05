@@ -1,4 +1,4 @@
-import type { PublicRouteHandler } from "./public.types";
+import type { PublicRouteHandler } from "./public.type";
 import * as organizationService from "@api/services/organization/organization.service";
 import * as sessionService from "@api/services/session/session.service";
 import * as userService from "@api/services/user/user.service";

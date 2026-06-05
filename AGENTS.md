@@ -21,7 +21,11 @@ Do not hand-edit generated frontend directories such as `apps/admin/src/.umi/`, 
 - `apps/api` currently owns `/public`, `/open`, `/internal`, `/sso`, and `/auth`.
 - `apps/admin-api` currently owns `/admin` and `/rpc`; `/rpc` maps to the `src/routes/trpc` route directory.
 - `createApp` lives in `packages/api-core` and auto-discovers `*.index.ts` route modules plus tier-level `_middleware.ts` files.
-- Admin REST and tRPC endpoints commonly share `*.ops.ts` definitions in `apps/admin-api/src/routes/admin/<domain>/`; handlers and `*.trpc.ts` files should stay thin.
+- Keep backend `src/app.ts` files focused on app assembly: import env, app config, app-local logger, discovered routes, and tier middlewares, then call `createApp`.
+- App-local infrastructure singletons belong under `src/lib/`, for example `@api/lib/logger`, `@admin-api/lib/logger`, and `src/lib/infra/redis.ts`.
+- Tier-level `_middleware.ts` files should stay thin and compose middleware arrays; shared authentication handlers belong in app-level `src/middlewares/*.handler.ts` files.
+- REST-only route modules should use `*.routes.ts`, `*.handlers.ts`, and `*.type.ts`. Admin REST + tRPC route modules should share `*.adapter.ts` operations and expose thin `*.trpc.ts` modules.
+- Backend app `tsconfig.json` files should include Bun runtime types and exclude `scripts`; backend app ESLint configs should ignore `scripts/**`.
 - Repositories use Drizzle from `@iam/db` and accept an optional `tx: DbClient = db` for transaction-friendly calls.
 - Drizzle table definitions belong in `packages/db/src/schema/core/*.ts`; relation definitions belong in `packages/db/src/relations/core/*.ts`; migrations belong in `packages/db/src/migrations/`.
 - Keep schema exports in `packages/db/src/schema/core/index.ts` and relation registration in `packages/db/src/relations/core/index.ts` synchronized.
@@ -68,7 +72,7 @@ For Drizzle schema work:
 ## Backend Implementation Conventions
 - Route handlers should return shared response envelopes from `@iam/api-core/http`, for example `c.json(resp.ok(data))` for successful JSON responses and `resp.fail(...)` for explicit failure envelopes. Prefer throwing domain/API errors when the existing error middleware already maps them correctly.
 - Use `@iam/api-core/core/http-status-codes` constants in OpenAPI route definitions and explicit non-200 responses rather than numeric literals.
-- Use the app logger (`@api/lib/logger`, admin app logger, or `createLogger`) for runtime diagnostics. Prefer structured Pino calls with the data object first and the message second, for example `logger.info({ userId }, "user synced")`.
+- Use the app logger (`@api/lib/logger` or `@admin-api/lib/logger`) for runtime diagnostics. Prefer structured Pino calls with the data object first and the message second, for example `logger.info({ userId }, "user synced")`.
 - Avoid `console.log`, `console.warn`, and `console.error` in application code. Acceptable exceptions are env validation, singleton/process lifecycle code, tests, one-off scripts, and the centralized error handler.
 - Prefer enums and constants from `packages/contracts` or the owning module over magic strings/numbers in business queries, especially for status, type, and role-like fields.
 - Prefer deriving TypeScript types from Zod schemas with `z.infer<typeof Schema>` when a schema is already the source of truth.

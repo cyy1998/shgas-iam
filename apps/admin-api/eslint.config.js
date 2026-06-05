@@ -22,5 +22,7 @@ export default antfu({
       },
     ],
   },
-  ignores: [],
+  ignores: [
+    "scripts/**",
+  ],
 });

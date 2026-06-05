@@ -1,4 +1,4 @@
-import type { AuthRouteHandler } from "./auth.types";
+import type { AuthRouteHandler } from "./auth.type";
 import config from "@api/env";
 import { logger } from "@api/lib/logger";
 import * as clientService from "@api/services/client/client.service";
