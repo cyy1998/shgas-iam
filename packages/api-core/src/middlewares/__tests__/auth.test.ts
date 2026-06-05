@@ -1,9 +1,14 @@
 import type { Redis } from "ioredis";
-import { describe, expect, test } from "bun:test";
+import { describe, expect, mock, test } from "bun:test";
 import { Hono } from "hono";
 import { z } from "zod";
 import { createPublicAuthenticationHandler } from "../auth";
-import { errorHandler } from "../error-handler";
+import { createErrorHandler } from "../error-handler";
+
+function createMockLogger() {
+  const error = mock((..._args: unknown[]) => undefined);
+  return { error } as Parameters<typeof createErrorHandler>[0];
+}
 
 describe("createPublicAuthenticationHandler", () => {
   test("deletes the local session cookie by cookie name when the Redis session is expired", async () => {
@@ -25,7 +30,7 @@ describe("createPublicAuthenticationHandler", () => {
       }),
     }));
     app.get("/public/user-info", c => c.json({ ok: true }));
-    app.onError(errorHandler);
+    app.onError(createErrorHandler(createMockLogger()));
 
     const response = await app.request("http://localhost/public/user-info", {
       headers: {
@@ -66,7 +71,7 @@ describe("createPublicAuthenticationHandler", () => {
       }),
     }));
     app.get("/public/user-info", c => c.json({ ok: true }));
-    app.onError(errorHandler);
+    app.onError(createErrorHandler(createMockLogger()));
 
     const response = await app.request("http://localhost/public/user-info", {
       headers: {

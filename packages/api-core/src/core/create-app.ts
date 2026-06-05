@@ -7,7 +7,7 @@ import { pinoLogger } from "hono-pino";
 import { serveStatic } from "hono/bun";
 import { except } from "hono/combine";
 import { requestId } from "hono/request-id";
-import { errorHandler } from "../middlewares/error-handler";
+import { createErrorHandler } from "../middlewares/error-handler";
 import notFound from "../middlewares/not-found-handler";
 import { createRouter } from "./create-router";
 
@@ -121,7 +121,7 @@ export default function createApp(config: AppConfig, options: CreateAppOptions) 
   app.use(requestLogger);
 
   app.notFound(notFound);
-  app.onError(errorHandler);
+  app.onError(createErrorHandler(options.logger));
   app.use(requestId());
 
   const openapiEnabled = resolveEnabled(config.openapi?.enabled, options.env);
