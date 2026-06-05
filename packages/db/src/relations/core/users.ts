@@ -17,10 +17,6 @@ export function usersRelations(r: RelationsHelper) {
         to: r.privilegeDelegations.delegateeUserId,
         alias: "delegationFrom",
       }),
-      loginLogs: r.many.loginLogs({
-        from: r.users.id,
-        to: r.loginLogs.userId,
-      }),
     },
   } satisfies RelationsConfig;
 }

@@ -18,20 +18,20 @@
 
 需要表达敏感字段变化时，只记录字段发生变化、脱敏值或安全摘要，例如 `passwordReset: true`、`mobileMasked`、`changedFields`。
 
-## `login_log` 退役计划
+## `login_log` 已退役
 
-新登录事件已经写入 `audit_log`。旧 `login_log` 仅作为历史来源保留，迁移完成并验收后，后续独立变更再移除旧表和相关兼容逻辑。
+新登录事件只写入 `audit_log`，`packages/db` 不再导出 legacy `login_log` schema 或 relations。删除 `login_log` 的数据库迁移属于破坏性迁移；生产执行前必须确认历史登录记录已经迁移到 `audit_log`，或确认当前环境没有需要保留的 legacy 登录记录。
 
-生产迁移必须先 dry-run：
+历史迁移验收可先 dry-run：
 
 ```bash
 pnpm --filter @iam/db migrate:login-log-audit -- --dry-run --batch-size 500 --sample-size 5
 ```
 
-确认待迁移数量和样例映射后再执行：
+确认待迁移数量和样例映射后再执行历史迁移：
 
 ```bash
 pnpm --filter @iam/db migrate:login-log-audit -- --execute --batch-size 500
 ```
 
-迁移脚本通过 `details.migrationSource = "login_log"` 和 `details.legacyLoginLogId` 跳过已迁移记录，可重复执行；执行完成后应确认 pending 数量为 0。
+迁移脚本通过 `details.migrationSource = "login_log"` 和 `details.legacyLoginLogId` 跳过已迁移记录，可重复执行；执行完成后应确认 pending 数量为 0。只有完成该验收后，才应应用删除 `login_log` 表的 Drizzle migration。
