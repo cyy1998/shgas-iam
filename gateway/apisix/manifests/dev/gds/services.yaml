@@ -1,4 +1,24 @@
 services:
+  - id: gds-frontend-dev
+    name: gds-frontend-dev
+    upstream:
+      hash_on: vars
+      nodes:
+        - priority: 0
+          host: 176.169.99.150
+          port: 80
+          weight: 0
+      pass_host: pass
+      scheme: http
+      tls:
+        verify: false
+      type: roundrobin
+    enable_websocket: false
+    labels:
+      managed_by: shgas-iam
+      source: repo-manifest
+      env: dev
+      app: gds
   - id: gds-api-dev
     name: gds-api-dev
     upstream:

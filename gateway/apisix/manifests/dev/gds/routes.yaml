@@ -1,11 +1,25 @@
 routes:
+  - id: gds-frontend-dev
+    name: gds-frontend-dev
+    uris:
+      - /data-platform
+      - /data-platform/*
+    service_id: gds-frontend-dev
+    priority: 0
+    status: 1
+    enable_websocket: false
+    labels:
+      managed_by: shgas-iam
+      source: repo-manifest
+      env: dev
+      app: gds
   - id: gds-api-dev
     name: gds-api-dev
     uri: /api/v1/*
     service_id: gds-api-dev
     plugins:
       forward-auth:
-        uri: http://176.169.99.191:9080/api/iam/auth/authz
+        uri: http://176.169.99.191:30080/api/iam/auth/authz
         allow_degradation: false
         client_headers:
           - Forbidden-Reason
@@ -37,6 +51,34 @@ routes:
     priority: 0
     status: 1
     enable_websocket: false
+    labels:
+      managed_by: shgas-iam
+      source: repo-manifest
+      env: dev
+      app: gds
+  - id: gds-dashboard-dev
+    name: gds-dashboard-dev
+    uri: /webroot/*
+    service_id: gds-api-dev
+    priority: 0
+    status: 1
+    enable_websocket: false
+    upstream:
+      hash_on: vars
+      nodes:
+        - priority: 0
+          host: 176.169.99.109
+          port: 8080
+          weight: 0
+      pass_host: pass
+      scheme: http
+      timeout:
+        connect: 300
+        read: 300
+        send: 300
+      tls:
+        verify: false
+      type: roundrobin
     labels:
       managed_by: shgas-iam
       source: repo-manifest
