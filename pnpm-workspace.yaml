@@ -10,6 +10,7 @@ allowBuilds:
   core-js-pure: false
   es5-ext: false
   esbuild: true
+  nice-napi: true
 peerDependencyRules:
   allowedVersions:
     dva-core: '2'

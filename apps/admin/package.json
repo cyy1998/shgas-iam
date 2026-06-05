@@ -12,22 +12,22 @@
     "typecheck": "pnpm exec tsgo --noEmit"
   },
   "dependencies": {
-    "@ant-design/icons": "^6.2.3",
+    "@ant-design/icons": "^6.2.5",
     "@ant-design/pro-components": "^2.8.10",
     "@iam/contracts": "workspace:*",
     "@trpc/client": "^11.17.0",
     "@trpc/server": "^11.17.0",
-    "@umijs/max": "^4.6.54",
+    "@umijs/max": "^4.6.58",
     "antd": "^5.29.3",
     "react": "^18.3.1",
     "react-dom": "^18.3.1"
   },
   "devDependencies": {
     "@iam/admin-api": "workspace:*",
-    "@types/react": "^18.3.28",
+    "@types/react": "^18.3.30",
     "@types/react-dom": "^18.3.7",
-    "@typescript/native-preview": "7.0.0-dev.20260514.1",
-    "lint-staged": "^17.0.4",
+    "@typescript/native-preview": "7.0.0-dev.20260603.1",
+    "lint-staged": "^17.0.7",
     "prettier": "^3.8.3",
     "prettier-plugin-organize-imports": "^4.3.0",
     "prettier-plugin-packagejson": "^3.0.2",
