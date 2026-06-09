@@ -78,6 +78,49 @@ describe("apisix manifest validation", () => {
     expect(issues.some(issue => issue.path.includes(".credentials[0].config.key"))).toBe(true);
   });
 
+  it("accepts APISIX limit-req variable key selectors", async () => {
+    const manifest = await loadManifest("test", await createManifestDir({
+      plugin_configs: [
+        repoObject({
+          id: "api-limit",
+          plugins: {
+            "limit-req": {
+              rate: 5,
+              burst: 0,
+              rejected_code: 429,
+              key_type: "var",
+              key: "remote_addr",
+              policy: "local",
+            },
+          },
+        }),
+      ],
+    }));
+
+    const issues = validateManifest(manifest);
+    expect(issues.some(issue => issue.path.includes(".plugins.limit-req.key"))).toBe(false);
+  });
+
+  it("rejects real-ip trusted_addresses that trust every source", async () => {
+    const manifest = await loadManifest("test", await createManifestDir({
+      plugin_configs: [
+        repoObject({
+          id: "api-real-ip",
+          plugins: {
+            "real-ip": {
+              source: "http_x_forwarded_for",
+              trusted_addresses: ["0.0.0.0/0"],
+              recursive: true,
+            },
+          },
+        }),
+      ],
+    }));
+
+    const issues = validateManifest(manifest);
+    expect(issues.some(issue => issue.message.includes("must not trust all source addresses"))).toBe(true);
+  });
+
   it("renders environment placeholders before parsing manifest YAML", async () => {
     const manifest = await loadManifest("test", await createManifestDir({
       upstreams: [

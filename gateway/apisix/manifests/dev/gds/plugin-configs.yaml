@@ -1,1 +1,22 @@
-plugin_configs: []
+plugin_configs:
+  - id: gds-api-ip-rate-limit-dev
+    desc: GDS API IP smooth rate limit for local and dev APISIX
+    plugins:
+      real-ip:
+        source: http_x_forwarded_for
+        trusted_addresses:
+          - 127.0.0.1/32
+        recursive: true
+      limit-req:
+        rate: 10
+        burst: 20
+        rejected_code: 429
+        key_type: var
+        key: remote_addr
+        policy: local
+    labels:
+      managed_by: shgas-iam
+      source: repo-manifest
+      env: dev
+      app: gds
+      template: api-ip-rate-limit

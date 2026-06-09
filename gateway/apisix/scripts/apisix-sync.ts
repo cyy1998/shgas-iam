@@ -210,6 +210,7 @@ export function validateManifest(manifest: LoadedManifest): ValidationIssue[] {
       validateResourceScope(file, basePath, resource, manifest.scope, issues);
 
       collectSensitiveIssues(file, basePath, resource, issues);
+      collectTrustedProxyIssues(file, basePath, resource, issues);
     }
   }
 
@@ -756,6 +757,22 @@ function collectSensitiveIssues(file: string, basePath: string, value: unknown, 
   });
 }
 
+function collectTrustedProxyIssues(file: string, basePath: string, value: unknown, issues: ValidationIssue[]): void {
+  walkValue(value, basePath, (currentPath, currentValue) => {
+    if (
+      typeof currentValue === "string"
+      && /\.plugins\.real-ip\.trusted_addresses\[\d+\]$/.test(currentPath)
+      && isAllAddressesCidr(currentValue)
+    ) {
+      issues.push({
+        file,
+        path: currentPath,
+        message: "real-ip trusted_addresses must not trust all source addresses",
+      });
+    }
+  });
+}
+
 function walkValue(value: unknown, currentPath: string, visitor: (path: string, value: unknown) => void): void {
   visitor(currentPath, value);
 
@@ -776,6 +793,10 @@ function containsSecretMaterial(value: string): boolean {
     || /(?:password|secret|private[_-]?key|admin[_-]?key|jwt[_-]?secret|signature[_-]?key)\s*[:=]/i.test(value);
 }
 
+function isAllAddressesCidr(value: string): boolean {
+  return value === "0.0.0.0/0" || value === "::/0";
+}
+
 function isSensitiveKeyName(key: string): boolean {
   return /^(?:password|secret|private[_-]?key|admin[_-]?key|jwt[_-]?secret|signature[_-]?key|apikey|api[_-]?key|key)$/i.test(key);
 }
@@ -794,6 +815,7 @@ function isKnownNonSecretKeyPath(currentPath: string): boolean {
     || currentPath.endsWith(".labels.env")
     || currentPath.endsWith(".labels.app")
     || currentPath.endsWith(".labels.template")
+    || currentPath.endsWith(".plugins.limit-req.key")
     || currentPath.endsWith(".plugins.prometheus.prefer_name");
 }
 

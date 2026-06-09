@@ -80,8 +80,11 @@ labels:
 
 ```bash
 pnpm gateway:apisix:validate -- --env dev:iam
+pnpm gateway:apisix:validate -- --env dev:tender
+pnpm gateway:apisix:validate -- --env dev:gds
 pnpm gateway:apisix:validate -- --env prod:iam
 pnpm gateway:apisix:validate -- --env prod:tender
+pnpm gateway:apisix:validate -- --env prod:gds
 pnpm --filter @iam/gateway-apisix validate -- --env dev:iam
 ```
 
@@ -147,6 +150,29 @@ pnpm gateway:apisix:apply -- --env dev:iam
 
 这些路由参考了仓库根目录的 `apisix-dump.yaml`，其中 `iam-prod`、`iam-test`、`iam-admin-prod`、`iam-admin-test` 属于 IAM 基础入口；`tender-*`、`gds-*` 属于业务系统入口，分别放在对应 app manifest 中。旧的通用 `/api/iam/*` 泛路由不再纳入 Git manifest，避免它吞掉更明确的 admin、rpc 或分层 API 路由。
 
+## API IP 限流
+
+仓库基线对 `dev` 和 `prod` 的 IAM、Tender、GDS API routes 通过 route 级 `plugin_config_id` 绑定 APISIX `limit-req` 平滑限流。普通 API 使用 `rate: 10`、`burst: 20`、`key_type: var`、`key: remote_addr`、`policy: local`，超过平滑限流阈值时返回 `429`。IAM internal route 使用独立策略，`rate: 50`、`burst: 100`，用于内部系统互调的短峰值缓冲。
+
+限流策略只覆盖 API routes，不绑定前端、静态资源或文件入口。`/portal`、`/portal/*`、`/iam-admin`、`/iam-admin/*`、`/tender`、`/tender/*`、`/tender-portal`、`/tender-portal/*`、`/data-platform`、`/data-platform/*`、Tender `/minio/*` 和 GDS `/webroot/*` 不使用本 API IP 限流策略。
+
+API 限流 `plugin_config` 同时启用 `real-ip`，从可信腾讯云 Nginx 的 `X-Forwarded-For` 解析真实客户端 IP。生产 manifest 使用 `${TENCENT_NGINX_TRUSTED_CIDR}` 注入可信腾讯云 Nginx 出口 CIDR；该网段必须固定、最小化，禁止配置为 `0.0.0.0/0`。请求不来自可信出口 CIDR 时，APISIX 不信任请求自带的 `X-Forwarded-For`，继续按直接来源 IP 限流。
+
+当前生产 APISIX 按单节点部署，限流策略使用 `policy: local` 本地计数。APISIX 横向扩容前必须重新评估并切换到 Redis 或 redis-cluster 策略，否则多节点下每 IP 实际额度会按节点数放大。
+
+修改 API IP 限流相关 manifest 后，至少分别校验六个环境作用域：
+
+```bash
+pnpm gateway:apisix:validate -- --env dev:iam
+pnpm gateway:apisix:validate -- --env dev:tender
+pnpm gateway:apisix:validate -- --env dev:gds
+pnpm gateway:apisix:validate -- --env prod:iam --env-file .env.prod
+pnpm gateway:apisix:validate -- --env prod:tender --env-file .env.prod
+pnpm gateway:apisix:validate -- --env prod:gds --env-file .env.prod
+```
+
+生产发布前还必须执行 `diff` 和 `apply --dry-run`，确认渲染后的 `${TENCENT_NGINX_TRUSTED_CIDR}` 不是全网段，并复核 SSO CORS、`forward-auth`、`proxy-rewrite` 等既有 route 插件没有被改写。
+
 ## 生产发布
 
 生产配置要求：
@@ -154,6 +180,7 @@ pnpm gateway:apisix:apply -- --env dev:iam
 - `APISIX_ADMIN_KEY`、TLS 私钥、JWT secret、第三方系统密钥不得写入 manifest。
 - Admin API 必须限制监听地址或来源网段，默认建议只暴露在内网运维网络或本机。
 - `gateway/apisix/manifests/prod/*.yaml` 支持 `${VAR}` 占位符；发布时使用 `--env-file` 或 `--render-env` 渲染。
+- API IP 限流必须配置 `TENCENT_NGINX_TRUSTED_CIDR`，且不得使用 `0.0.0.0/0`。
 - 生产发布前必须先执行 `validate` 和 `apply --dry-run`。
 - 生产删除必须显式使用 `--prune`，并确认待删除对象均为 `source=repo-manifest`。
 

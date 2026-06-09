@@ -19,6 +19,7 @@ routes:
     name: tender-api-dev
     uri: /api/tender/*
     service_id: tender-api-dev
+    plugin_config_id: tender-api-ip-rate-limit-dev
     plugins:
       forward-auth:
         uri: http://176.169.99.191:30080/api/iam/auth/authz
@@ -54,6 +55,7 @@ routes:
       - /api/tender/public/*
       - /api/tender/weaver/*
     service_id: tender-api-dev
+    plugin_config_id: tender-api-ip-rate-limit-dev
     priority: 0
     status: 1
     enable_websocket: false
@@ -66,6 +68,7 @@ routes:
     name: tender-thirdparty-dev
     uri: /thirdparty/tender/*
     service_id: tender-api-dev
+    plugin_config_id: tender-api-ip-rate-limit-dev
     plugins:
       forward-auth:
         uri: http://176.169.99.191:30080/api/iam/auth/internal-authz

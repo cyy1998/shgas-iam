@@ -1,1 +1,22 @@
-plugin_configs: []
+plugin_configs:
+  - id: gds-api-ip-rate-limit-prod
+    desc: GDS API IP smooth rate limit for production APISIX
+    plugins:
+      real-ip:
+        source: http_x_forwarded_for
+        trusted_addresses:
+          - ${TENCENT_NGINX_TRUSTED_CIDR}
+        recursive: true
+      limit-req:
+        rate: 10
+        burst: 20
+        rejected_code: 429
+        key_type: var
+        key: remote_addr
+        policy: local
+    labels:
+      managed_by: shgas-iam
+      source: repo-manifest
+      env: prod
+      app: gds
+      template: api-ip-rate-limit

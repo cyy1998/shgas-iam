@@ -17,6 +17,7 @@ routes:
     name: gds-api-dev
     uri: /api/v1/*
     service_id: gds-api-dev
+    plugin_config_id: gds-api-ip-rate-limit-dev
     plugins:
       forward-auth:
         uri: http://176.169.99.191:30080/api/iam/auth/authz
@@ -48,6 +49,7 @@ routes:
     name: gds-no-login-dev
     uri: /api/v1/dashboard/oa_portal
     service_id: gds-api-dev
+    plugin_config_id: gds-api-ip-rate-limit-dev
     priority: 0
     status: 1
     enable_websocket: false

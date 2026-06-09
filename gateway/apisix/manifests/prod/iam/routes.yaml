@@ -30,6 +30,7 @@ routes:
     desc: IAM public tier through APISIX with /api/iam prefix
     uri: /api/iam/public/*
     service_id: iam-api-prod
+    plugin_config_id: iam-api-ip-rate-limit-prod
     plugins:
       proxy-rewrite:
         regex_uri:
@@ -47,6 +48,7 @@ routes:
     desc: IAM open tier through APISIX with /api/iam prefix
     uri: /api/iam/open/*
     service_id: iam-api-prod
+    plugin_config_id: iam-api-ip-rate-limit-prod
     plugins:
       proxy-rewrite:
         regex_uri:
@@ -64,6 +66,7 @@ routes:
     desc: IAM internal tier through APISIX with /api/iam prefix
     uri: /api/iam/internal/*
     service_id: iam-api-prod
+    plugin_config_id: iam-internal-api-ip-rate-limit-prod
     plugins:
       proxy-rewrite:
         regex_uri:
@@ -81,7 +84,7 @@ routes:
     desc: IAM SSO tier through APISIX with /api/iam prefix
     uri: /sso/*
     service_id: iam-api-prod
-    plugin_config_id: iam-sso-cors-prod
+    plugin_config_id: iam-sso-api-policy-prod
     labels:
       managed_by: shgas-iam
       source: repo-manifest
@@ -93,6 +96,7 @@ routes:
     desc: IAM auth tier through APISIX with /api/iam prefix
     uri: /api/iam/auth/*
     service_id: iam-api-prod
+    plugin_config_id: iam-api-ip-rate-limit-prod
     plugins:
       proxy-rewrite:
         regex_uri:
@@ -110,6 +114,7 @@ routes:
     desc: IAM admin REST tier through APISIX with /api/iam prefix
     uri: /api/iam/admin/*
     service_id: iam-admin-api-prod
+    plugin_config_id: iam-api-ip-rate-limit-prod
     plugins:
       proxy-rewrite:
         regex_uri:
@@ -127,6 +132,7 @@ routes:
     desc: IAM admin RPC tier through APISIX with /api/iam prefix
     uri: /api/iam/rpc/*
     service_id: iam-admin-api-prod
+    plugin_config_id: iam-api-ip-rate-limit-prod
     plugins:
       proxy-rewrite:
         regex_uri:

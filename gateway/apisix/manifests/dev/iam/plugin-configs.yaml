@@ -1,4 +1,76 @@
 plugin_configs:
+  - id: iam-api-ip-rate-limit-dev
+    desc: IAM ordinary API IP smooth rate limit for local and dev APISIX
+    plugins:
+      real-ip:
+        source: http_x_forwarded_for
+        trusted_addresses:
+          - 127.0.0.1/32
+        recursive: true
+      limit-req:
+        rate: 10
+        burst: 20
+        rejected_code: 429
+        key_type: var
+        key: remote_addr
+        policy: local
+    labels:
+      managed_by: shgas-iam
+      source: repo-manifest
+      env: dev
+      app: iam
+      template: api-ip-rate-limit
+
+  - id: iam-internal-api-ip-rate-limit-dev
+    desc: IAM internal API relaxed IP smooth rate limit for local and dev APISIX
+    plugins:
+      real-ip:
+        source: http_x_forwarded_for
+        trusted_addresses:
+          - 127.0.0.1/32
+        recursive: true
+      limit-req:
+        rate: 50
+        burst: 100
+        rejected_code: 429
+        key_type: var
+        key: remote_addr
+        policy: local
+    labels:
+      managed_by: shgas-iam
+      source: repo-manifest
+      env: dev
+      app: iam
+      template: internal-api-ip-rate-limit
+
+  - id: iam-sso-api-policy-dev
+    desc: IAM SSO API CORS and IP smooth rate limit policy for local and dev APISIX
+    plugins:
+      cors:
+        allow_credential: false
+        allow_headers: "*"
+        allow_methods: "*"
+        allow_origins: "*"
+        max_age: 5
+      real-ip:
+        source: http_x_forwarded_for
+        trusted_addresses:
+          - 127.0.0.1/32
+        recursive: true
+      limit-req:
+        rate: 10
+        burst: 20
+        rejected_code: 429
+        key_type: var
+        key: remote_addr
+        policy: local
+    labels:
+      managed_by: shgas-iam
+      source: repo-manifest
+      env: dev
+      app: iam
+      template: sso-api-policy
+
   - id: iam-open-cors-dev
     desc: Default permissive CORS policy for local SSO/browser testing
     plugins:
