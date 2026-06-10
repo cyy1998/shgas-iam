@@ -42,31 +42,3 @@ plugin_configs:
       env: prod
       app: iam
       template: internal-api-ip-rate-limit
-
-  - id: iam-sso-api-policy-prod
-    desc: IAM SSO API CORS and IP smooth rate limit policy for production APISIX
-    plugins:
-      cors:
-        allow_credential: false
-        allow_headers: "*"
-        allow_methods: "*"
-        allow_origins: ${IAM_SSO_CORS_ALLOW_ORIGINS}
-        max_age: 5
-      real-ip:
-        source: http_x_forwarded_for
-        trusted_addresses:
-          - ${TENCENT_NGINX_TRUSTED_CIDR}
-        recursive: true
-      limit-req:
-        rate: 10
-        burst: 0
-        rejected_code: 429
-        key_type: var
-        key: remote_addr
-        policy: local
-    labels:
-      managed_by: shgas-iam
-      source: repo-manifest
-      env: prod
-      app: iam
-      template: sso-api-policy

@@ -66,9 +66,9 @@ limit-req:
 
 对于已有 `plugins` 的 route，APISIX 会将 route 直接插件与 `plugin_config` 合并；同名插件以 route 直接配置优先。因此为 API route 绑定 `plugin_config_id` 不会覆盖已有 `forward-auth` 或 `proxy-rewrite`。
 
-### SSO API 合并 CORS 与限流
+### SSO API 将 CORS 放在 route 插件
 
-APISIX route 只能引用一个 `plugin_config_id`。`iam-sso-*` 现有 CORS 不能与独立限流 `plugin_config` 同时引用，因此改为 SSO 专用策略，例如 `iam-sso-api-policy-prod/dev`，在同一个 `plugin_config` 内同时声明 `cors`、`real-ip` 和 `limit-req`。
+APISIX route 只能引用一个 `plugin_config_id`，但 route 直接声明的 `plugins` 会与 `plugin_config` 合并。因此 `iam-sso-*` 复用普通 API 限流 `plugin_config`，并将 SSO 专属 `cors` 保留在 route 插件中，避免为 CORS 复制一份限流与 `real-ip` 配置。
 
 ### 在 API `plugin_config` 中配置 `real-ip`
 

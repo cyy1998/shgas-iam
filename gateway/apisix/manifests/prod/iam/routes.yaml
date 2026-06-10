@@ -84,7 +84,14 @@ routes:
     desc: IAM SSO tier through APISIX with /api/iam prefix
     uri: /sso/*
     service_id: iam-api-prod
-    plugin_config_id: iam-sso-api-policy-prod
+    plugin_config_id: iam-api-ip-rate-limit-prod
+    plugins:
+      cors:
+        allow_credential: false
+        allow_headers: "*"
+        allow_methods: "*"
+        allow_origins: ${IAM_SSO_CORS_ALLOW_ORIGINS}
+        max_age: 5
     labels:
       managed_by: shgas-iam
       source: repo-manifest
