@@ -42,8 +42,12 @@ gateway/apisix/
       iam/
       tender/
       gds/
-  scripts/
-    apisix-sync.ts
+  src/
+    cli.ts
+    commands.ts
+    resources.ts
+    manifest.ts
+    validators/
 ```
 
 manifest 采用 `<env>/<app>/` 两级目录。`dev:iam` manifest 用于本地 IAM 基线；`prod:iam` 是生产 IAM 基线示例，生产地址、证书和密钥引用必须在部署环境中替换或注入。`prod:tender`、`prod:gds`、`dev:tender`、`dev:gds` 存放对应业务系统的 APISIX 配置。
@@ -76,6 +80,8 @@ labels:
 
 `gateway/apisix` 是 workspace package `@iam/gateway-apisix`。仓库根目录保留 `gateway:apisix:*` 兼容命令；需要直接操作该 package 时，也可以使用 `pnpm --filter @iam/gateway-apisix <script>`。
 
+同步命令必须显式指定 app scope。优先使用 `--env <env:app>`；也可以通过 `APISIX_MANIFEST_ENV=<env:app>` 注入。`--env dev` 这类 env-only scope 不再支持，旧的 `scripts/apisix-sync.ts` 直接执行路径也已移除。
+
 校验 manifest：
 
 ```bash
@@ -86,6 +92,7 @@ pnpm gateway:apisix:validate -- --env prod:iam
 pnpm gateway:apisix:validate -- --env prod:tender
 pnpm gateway:apisix:validate -- --env prod:gds
 pnpm --filter @iam/gateway-apisix validate -- --env dev:iam
+APISIX_MANIFEST_ENV=dev:iam pnpm gateway:apisix:validate
 ```
 
 查看与远端 APISIX 的差异：
@@ -117,6 +124,13 @@ pnpm gateway:apisix:apply -- --env dev:iam --prune
 ```
 
 `--prune` 不会删除 `source=dynamic-registry` 对象；使用 `--env prod:tender` 这类 app 作用域时，也不会删除其他 `labels.app` 的 `repo-manifest` 对象。
+
+JSON 输出的变更：
+
+- `diff --json` 和 `apply --json` 输出 `ignored: []`，每项包含 `kind`、`id`、`reason`；`reason` 为 `dynamic`、`out_of_scope` 或 `unmanaged`。
+- 旧字段 `ignoredDynamic`、`ignoredOutOfScope`、`ignoredUnmanaged` 已移除。
+- `apply --json` 输出 `applied: []`，每项包含 `kind`、`id`、`action`；`action` 为 `create`、`update` 或 `delete`。
+- `apply --json --dry-run` 永远输出 `applied: []`。
 
 ## 本地开发
 

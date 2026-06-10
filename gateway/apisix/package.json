@@ -1,19 +1,20 @@
 {
   "name": "@iam/gateway-apisix",
-  "version": "0.0.1",
   "type": "module",
+  "version": "0.0.1",
   "private": true,
   "scripts": {
-    "apisix": "bun scripts/apisix-sync.ts",
-    "validate": "bun scripts/apisix-sync.ts validate",
-    "diff": "bun scripts/apisix-sync.ts diff",
-    "apply": "bun scripts/apisix-sync.ts apply",
-    "lint": "eslint scripts/",
-    "lint:fix": "eslint --fix scripts/",
+    "apisix": "bun src/cli.ts",
+    "validate": "bun src/cli.ts validate",
+    "diff": "bun src/cli.ts diff",
+    "apply": "bun src/cli.ts apply",
+    "lint": "eslint src/",
+    "lint:fix": "eslint --fix src/",
     "test": "bun test --parallel",
     "typecheck": "pnpm exec tsgo --noEmit"
   },
   "dependencies": {
+    "commander": "^15.0.0",
     "yaml": "^2.8.2"
   },
   "devDependencies": {
