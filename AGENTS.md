@@ -121,9 +121,19 @@ Bun tests are available through package-level `test` scripts. Minimum validation
 - for tRPC changes consumed by `admin`, run type checks for both `@iam/admin-api` and `@iam/admin`
 - for changes in `packages/contracts`, `packages/api-core`, `packages/domain`, or `packages/db`, run type checks for the shared package and all directly affected apps
 
-## Commit & Pull Request Guidelines
+## Commit Guidelines
 Recent history uses Conventional Commits with scopes, for example `feat(db): ...`, `fix(auth): ...`, `refactor(api): ...`, and `style(sso): ...`. Keep commits focused and describe the changed area explicitly.
 
-After each completed feature or behavior change, automatically create a focused git commit using the Conventional Commits format. Write commit messages in Chinese unless the user explicitly requests another language.
+This is a personal project, so pull requests are optional and not part of the default workflow. Keep `main` history clean by making each commit represent a completed, reviewable, and reasonably easy-to-revert unit of work.
 
-PRs should summarize affected apps/packages, call out env or migration changes, link the related issue, and include screenshots for UI work. Keep schema, API, and frontend changes synchronized in one reviewable branch when they ship together.
+For each non-trivial feature, fix, refactor, or behavior change, create a short-lived working branch before implementation, for example `work/<topic>`, `feat/<topic>`, or `fix/<topic>`. Tiny documentation or instruction-only edits may stay on the current branch when opening a branch would add more process than value.
+
+Do not automatically create git commits by default, and never create an automatic process/WIP commit on `main`. Complete the requested code changes and validation first; create a commit only when the user explicitly asks for one.
+
+When the user asks for a commit:
+
+- inspect the current branch and `git diff` before staging anything;
+- stage only files that belong to the completed task, leaving unrelated user changes untouched;
+- if currently on `main`, create one focused aggregate commit for the completed task;
+- if working on a temporary branch, process/WIP commits are acceptable locally, but squash them before merging into `main`, for example with `git merge --squash`;
+- use the Conventional Commits format and write commit messages in Chinese unless the user explicitly requests another language.
