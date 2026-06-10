@@ -125,6 +125,42 @@ pnpm gateway:apisix:apply -- --env dev:iam --prune
 
 `--prune` 不会删除 `source=dynamic-registry` 对象；使用 `--env prod:tender` 这类 app 作用域时，也不会删除其他 `labels.app` 的 `repo-manifest` 对象。
 
+## 环境变量配置
+
+同步脚本当前直接识别以下环境变量：
+
+| 变量 | 适用命令 | 说明 |
+| --- | --- | --- |
+| `APISIX_MANIFEST_ENV` | `validate`、`diff`、`apply` | manifest scope，格式必须是 `<env>:<app>`，例如 `dev:iam`。当未传 `--env` 时使用。 |
+| `APISIX_ADMIN_URL` | `diff`、`apply` | APISIX Admin API 地址。当未传 `--admin-url` 时使用；再未配置则默认 `http://127.0.0.1:9180/apisix/admin`。 |
+| `APISIX_ADMIN_KEY` | `diff`、`apply` | APISIX Admin API key。当未传 `--admin-key` 时使用；`diff` 和 `apply` 缺少 key 会失败。 |
+
+参数优先级：
+
+- scope：`--env <env:app>` > `APISIX_MANIFEST_ENV`。
+- Admin API 地址：`--admin-url` > `APISIX_ADMIN_URL` > 默认本地地址。
+- Admin API key：`--admin-key` > `APISIX_ADMIN_KEY`。
+
+manifest 中的 `${VAR}` 占位符不会默认渲染；只有传入 `--render-env` 或 `--env-file <path>` 时才会递归渲染字符串值和对象 key。`--env-file` 支持最小 env assignment 语法，例如：
+
+```bash
+TENCENT_NGINX_TRUSTED_CIDR=10.0.0.0/24
+export IAM_API_HOST=api.internal
+IAM_API_PORT="30000"
+```
+
+使用示例：
+
+```bash
+APISIX_MANIFEST_ENV=dev:iam \
+APISIX_ADMIN_URL=http://127.0.0.1:9180/apisix/admin \
+APISIX_ADMIN_KEY=dev-local-admin-key-change-me \
+pnpm gateway:apisix:apply
+
+pnpm gateway:apisix:validate -- --env prod:iam --env-file .env.prod
+pnpm gateway:apisix:validate -- --env prod:iam --render-env
+```
+
 JSON 输出的变更：
 
 - `diff --json` 和 `apply --json` 输出 `ignored: []`，每项包含 `kind`、`id`、`reason`；`reason` 为 `dynamic`、`out_of_scope` 或 `unmanaged`。
