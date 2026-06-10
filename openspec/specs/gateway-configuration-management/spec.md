@@ -16,8 +16,9 @@
 #### Scenario: Package provides gateway sync commands
 
 - **WHEN** 开发者进入 APISIX gateway package 或使用 pnpm filter 调用 package 脚本
-- **THEN** package SHALL 提供 `validate`、`diff` 和 `apply` 脚本来执行现有 APISIX manifest 同步 CLI
-- **AND** 这些脚本 SHALL 保持现有 CLI 参数和默认行为不变
+- **THEN** package SHALL 提供 `apisix`、`validate`、`diff` 和 `apply` 脚本来执行 APISIX manifest 同步 CLI
+- **AND** `validate`、`diff` 和 `apply` SHALL 分别调用同名 CLI 子命令
+- **AND** 这些脚本 SHALL 支持 `--` 后参数透传方式
 
 #### Scenario: Package participates in validation lifecycle
 
@@ -30,6 +31,65 @@
 - **WHEN** 开发者运行根级 `pnpm gateway:apisix:validate`、`pnpm gateway:apisix:diff` 或 `pnpm gateway:apisix:apply`
 - **THEN** 命令 SHALL 委托到 APISIX gateway package
 - **AND** 命令 SHALL 继续支持现有 `--` 后参数透传方式
+
+### Requirement: Gateway sync CLI requires explicit app scope
+
+系统 SHALL 要求 APISIX sync CLI 的 `validate`、`diff` 和 `apply` 命令在运行时使用显式 app scope，scope MUST 使用 `<env>:<app>` 格式。
+
+#### Scenario: Command uses explicit CLI scope
+
+- **WHEN** 开发者运行 APISIX sync CLI 并传入 `--env prod:iam`
+- **THEN** 系统 SHALL 使用 `prod:iam` 作为 manifest scope
+- **AND** 系统 SHALL 从 `gateway/apisix/manifests/prod/iam` 或显式 `--manifest-dir` 加载 manifest
+
+#### Scenario: Command uses environment scope
+
+- **WHEN** 开发者未传入 `--env` 但设置了 `APISIX_MANIFEST_ENV=prod:tender`
+- **THEN** 系统 SHALL 使用 `prod:tender` 作为 manifest scope
+
+#### Scenario: Missing scope fails
+
+- **WHEN** 开发者运行 `validate`、`diff` 或 `apply` 且未传入 `--env` 也未设置 `APISIX_MANIFEST_ENV`
+- **THEN** 命令 MUST 失败
+- **AND** 错误信息 SHALL 指出必须提供 `--env <env:app>` 或 `APISIX_MANIFEST_ENV`
+
+#### Scenario: Env-only scope fails
+
+- **WHEN** 开发者传入 `--env dev`
+- **THEN** 命令 MUST 失败
+- **AND** 错误信息 SHALL 指出 scope 必须使用 `<env>:<app>` 格式
+
+#### Scenario: Invalid scope segment fails
+
+- **WHEN** 开发者传入包含大写字母、空片段、路径片段或非法字符的 scope
+- **THEN** 命令 MUST 失败
+- **AND** 错误信息 SHALL 指出 `env` 和 `app` 只能使用小写字母、数字和短横线
+
+### Requirement: Gateway sync JSON output uses normalized change lists
+
+系统 SHALL 为 APISIX sync CLI 的 JSON 输出提供统一、可程序消费的 change list 结构。
+
+#### Scenario: Diff JSON reports ignored changes with reasons
+
+- **WHEN** 开发者运行 `diff --json`
+- **THEN** 输出 SHALL 包含 `creates`、`updates`、`deletes` 和 `ignored` 数组
+- **AND** `ignored` 中的每一项 SHALL 包含 `kind`、`id` 和 `reason`
+- **AND** `reason` MUST 为 `dynamic`、`out_of_scope` 或 `unmanaged`
+- **AND** 输出 MUST NOT 包含 `ignoredDynamic`、`ignoredOutOfScope` 或 `ignoredUnmanaged`
+
+#### Scenario: Apply JSON reports applied actions as a list
+
+- **WHEN** 开发者运行 `apply --json`
+- **THEN** 输出 SHALL 包含 `creates`、`updates`、`deletes`、`ignored`、`dryRun`、`prune` 和 `applied`
+- **AND** `applied` SHALL 是数组
+- **AND** `applied` 中的每一项 SHALL 包含 `kind`、`id` 和 `action`
+- **AND** `action` MUST 为 `create`、`update` 或 `delete`
+
+#### Scenario: Dry-run apply reports no applied actions
+
+- **WHEN** 开发者运行 `apply --json --dry-run`
+- **THEN** 输出 SHALL 包含 `dryRun: true`
+- **AND** 输出 SHALL 包含 `applied: []`
 
 ### Requirement: Gateway manifests are repository managed
 
@@ -118,6 +178,89 @@
 - **WHEN** 远端 APISIX 对象包含 `labels.source=dynamic-registry`
 - **THEN** 仓库 apply MUST NOT 更新或删除该对象
 - **AND** 该对象 SHALL 由 IAM 动态注册流程通过 APISIX Admin API 管理
+
+### Requirement: Repository API routes SHALL use IP-based smooth rate limiting
+
+系统 SHALL 在仓库管理的 `dev` 和 `prod` APISIX manifest 中，为 `iam`、`tender` 和 `gds` 的 API routes 绑定基于 `plugin_config` 的 IP 平滑限流策略。
+
+#### Scenario: Ordinary API routes have default IP limit
+
+- **WHEN** 开发者查看 `dev` 或 `prod` 的 `iam`、`tender`、`gds` API route manifest
+- **THEN** 普通 API route SHALL 绑定包含 `limit-req` 的 `plugin_config_id`
+- **AND** 该 `limit-req` SHALL 使用 `rate: 10`、`burst: 20`、`rejected_code: 429`、`key_type: var`、`key: remote_addr` 和 `policy: local`
+
+#### Scenario: API route plugins are preserved
+
+- **WHEN** API route 已经直接配置 `forward-auth`、`proxy-rewrite` 或其他 route 级 `plugins`
+- **THEN** 新增限流策略 SHALL 通过 `plugin_config_id` 合并到该 route
+- **AND** 实施 MUST NOT 删除或改写既有认证、转发改写或上游配置
+
+### Requirement: Gateway API limiting SHALL normalize real client IPs from trusted proxy
+
+系统 SHALL 在 API 限流 `plugin_config` 中配置真实 IP 解析，使外网经腾讯云 Nginx 访问时按真实客户端 IP 限流，内网直连访问时按 APISIX 看到的来源 IP 限流。
+
+#### Scenario: External proxy supplies X-Forwarded-For
+
+- **WHEN** 请求来自可信腾讯云 Nginx 出口 CIDR 并携带 `X-Forwarded-For`
+- **THEN** API 限流策略 SHALL 通过 `real-ip.source: http_x_forwarded_for` 解析真实客户端 IP
+- **AND** `limit-req` SHALL 按解析后的 `remote_addr` 计数
+
+#### Scenario: Direct internal access keeps peer address
+
+- **WHEN** 请求不来自可信腾讯云 Nginx 出口 CIDR
+- **THEN** API 限流策略 MUST NOT 信任请求自带的 `X-Forwarded-For`
+- **AND** `limit-req` SHALL 按 APISIX 看到的直接来源 IP 计数
+
+#### Scenario: Trusted proxy CIDR is constrained
+
+- **WHEN** 生产 manifest 渲染 API 限流策略
+- **THEN** `real-ip.trusted_addresses` SHALL 由生产环境变量或 secret 注入
+- **AND** `real-ip.trusted_addresses` MUST NOT 使用 `0.0.0.0/0` 作为可信代理范围
+
+### Requirement: IAM internal API route SHALL use relaxed IP limit
+
+系统 SHALL 对 `iam` 内部互调 API route 使用独立的、更宽松的 IP 平滑限流策略。
+
+#### Scenario: Internal route uses relaxed limit
+
+- **WHEN** 开发者查看 `iam-internal-dev` 或 `iam-internal-prod` route
+- **THEN** route SHALL 绑定内部 API 专用 `plugin_config_id`
+- **AND** 该 `plugin_config` SHALL 使用 `limit-req` 的 `rate: 50`、`burst: 100`、`rejected_code: 429`、`key_type: var`、`key: remote_addr` 和 `policy: local`
+
+#### Scenario: Internal route does not require source whitelist
+
+- **WHEN** 内部系统调用 `/api/iam/internal/*`
+- **THEN** 仓库基线限流策略 SHALL NOT 要求来源 IP 白名单
+- **AND** 该 route SHALL 继续通过内部认证或已有安全边界控制访问权限
+
+### Requirement: SSO API policy SHALL combine CORS and rate limiting
+
+系统 SHALL 为 IAM SSO API route 使用合并后的专用 `plugin_config`，同时保留 CORS 策略并启用 API IP 限流。
+
+#### Scenario: SSO route has one combined plugin config
+
+- **WHEN** 开发者查看 `iam-sso-dev` 或 `iam-sso-prod` route
+- **THEN** route SHALL 只引用一个 SSO 专用 `plugin_config_id`
+- **AND** 该 `plugin_config` SHALL 同时包含原有 `cors` 策略、`real-ip` 策略和普通 API `limit-req` 策略
+
+#### Scenario: SSO CORS behavior is preserved
+
+- **WHEN** SSO 浏览器端点需要跨域访问
+- **THEN** 合并后的 SSO `plugin_config` SHALL 保留原 manifest 中的 CORS allow origins、headers、methods、credentials 和 max age 语义
+
+### Requirement: Non-API gateway routes SHALL be excluded from API IP limiting
+
+系统 SHALL 只对 API routes 启用本变更的 IP 限流策略，避免影响前端页面、静态资源、文件服务或 Webroot 入口。
+
+#### Scenario: Frontend routes are not rate limited by API policy
+
+- **WHEN** 开发者查看 `/portal`、`/portal/*`、`/iam-admin`、`/iam-admin/*`、`/tender`、`/tender/*`、`/tender-portal`、`/tender-portal/*`、`/data-platform` 或 `/data-platform/*` routes
+- **THEN** 这些 routes SHALL NOT 绑定本变更新增的 API IP 限流 `plugin_config_id`
+
+#### Scenario: File and webroot routes are not rate limited by API policy
+
+- **WHEN** 开发者查看 Tender `/minio/*` route 或 GDS `/webroot/*` route
+- **THEN** 这些 routes SHALL NOT 绑定本变更新增的 API IP 限流 `plugin_config_id`
 
 ### Requirement: Dynamic third-party gateway ownership is separated
 
@@ -211,3 +354,19 @@
 - **WHEN** 网关配置发布后出现异常
 - **THEN** 文档 SHALL 提供基于 Git 回滚和重新 apply 的恢复步骤
 - **AND** 文档 SHALL 说明如何使用 APISIX 远端配置导出作为应急恢复输入
+
+### Requirement: Gateway documentation SHALL describe API IP rate limiting operations
+
+系统 SHALL 在 APISIX 网关配置管理文档中说明 API IP 限流策略、真实 IP 解析要求、验证命令和多节点注意事项。
+
+#### Scenario: Developer follows documented validation workflow
+
+- **WHEN** 开发者修改 API IP 限流相关 manifest
+- **THEN** 文档 SHALL 指导其分别对 `dev` 和 `prod` 的 `iam`、`tender`、`gds` 执行 `validate`
+- **AND** 生产发布前 SHALL 执行 `diff` 和 `apply --dry-run`
+
+#### Scenario: Operator reviews production proxy prerequisites
+
+- **WHEN** 运维人员准备发布生产 API IP 限流策略
+- **THEN** 文档 SHALL 要求确认腾讯云 Nginx 出口 CIDR 固定且最小化
+- **AND** 文档 SHALL 说明 APISIX 多节点部署前必须从 `policy: local` 重新评估为 Redis 或 redis-cluster 策略
