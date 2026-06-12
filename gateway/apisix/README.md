@@ -145,8 +145,11 @@ manifest 中的 `${VAR}` 占位符不会默认渲染；只有传入 `--render-en
 
 ```bash
 TENCENT_NGINX_TRUSTED_CIDR=10.0.0.0/24
-export IAM_API_HOST=api.internal
-IAM_API_PORT="30000"
+IAM_API_UPSTREAM_HOST=api.internal
+IAM_API_UPSTREAM_PORT="30000"
+IAM_SSO_EXTERNAL_HOST=iam.example.com
+IAM_SSO_INTERNAL_HOST=iam.internal.example.com
+IAM_SSO_CORS_ALLOW_ORIGINS=https://iam.example.com
 ```
 
 使用示例：
@@ -190,10 +193,13 @@ pnpm gateway:apisix:apply -- --env dev:iam
 - APISIX Admin API: `http://127.0.0.1:9180/apisix/admin`
 - API 直连调试端口仍保留：`api` 映射到 `30011`，`admin-api` 映射到 `30012`
 - 前端直连调试端口仍保留：`sso` 映射到 `30013`，`admin` 映射到 `30014`
+- SSO API host routes: 外网 `iam-sso.localhost`、内网 `iam-sso.internal.localhost` 均转发到 `api:30000`，
+  并分别覆盖注入 `X-IAM-Entry-Network: external` / `internal`
 
 本地基线路由统一使用 `/api/iam` 外部前缀，并在 APISIX 中通过 `proxy-rewrite` 去掉该前缀后转发给后端：
 
-- `/api/iam/public/*`、`/api/iam/open/*`、`/api/iam/internal/*`、`/api/iam/sso/*`、`/api/iam/auth/*` -> `api:30000`
+- `/api/iam/public/*`、`/api/iam/open/*`、`/api/iam/internal/*`、`/api/iam/auth/*` -> `api:30000`
+- `Host: iam-sso.localhost` + `/sso/*`、`Host: iam-sso.internal.localhost` + `/sso/*` -> `api:30000`
 - `/api/iam/admin/*`、`/api/iam/rpc/*` -> `admin-api:30001`
 - `/portal`、`/portal/*` -> `sso:80`
 - `/iam-admin`、`/iam-admin/*` -> `admin:80`
@@ -231,6 +237,8 @@ pnpm gateway:apisix:validate -- --env prod:gds --env-file .env.prod
 - Admin API 必须限制监听地址或来源网段，默认建议只暴露在内网运维网络或本机。
 - `gateway/apisix/manifests/prod/*.yaml` 支持 `${VAR}` 占位符；发布时使用 `--env-file` 或 `--render-env` 渲染。
 - API IP 限流必须配置 `TENCENT_NGINX_TRUSTED_CIDR`，且不得使用 `0.0.0.0/0`。
+- IAM SSO API routes 必须配置 `IAM_SSO_EXTERNAL_HOST` 和 `IAM_SSO_INTERNAL_HOST`；这两个 host
+  分别注入 `X-IAM-Entry-Network: external` 与 `internal`，不保留无 host 限制的 `/sso/*` 兜底 route。
 - 生产发布前必须先执行 `validate` 和 `apply --dry-run`。
 - 生产删除必须显式使用 `--prune`，并确认待删除对象均为 `source=repo-manifest`。
 

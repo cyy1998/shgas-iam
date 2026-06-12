@@ -2,6 +2,7 @@ import config from "@api/env";
 import redis from "@api/lib/infra/redis";
 import orcasClient from "@api/lib/integrations/orcas";
 import wechatClient from "@api/lib/integrations/wechat";
+import { logger } from "@api/lib/logger";
 import * as authAudit from "@api/services/audit/events/auth.audit";
 import * as clientService from "@api/services/client/client.service";
 import { SessionObjectSchema } from "@api/services/session/session.schema";
@@ -15,6 +16,7 @@ import { InvalidSsoClientError } from "@iam/api-core/errors/InvalidSsoClientErro
 import { LoginFailedError } from "@iam/api-core/errors/LoginFailedError";
 import { reviveIsoDates } from "@iam/api-core/utils";
 import { ClientManagementLevel } from "@iam/contracts";
+import { matchRedirectUrlPattern } from "@iam/domain/client";
 import { sleep } from "bun";
 import { sm3 } from "sm-crypto";
 
@@ -26,12 +28,41 @@ async function consumeAuthCode(code: string) {
   return SessionObjectSchema.parse(JSON.parse(authObjectString, reviveIsoDates));
 }
 
+function hasSupportedRedirectUrlSyntax(redirectUrl: string) {
+  try {
+    const url = new URL(redirectUrl);
+    return url.protocol === "http:" || url.protocol === "https:";
+  }
+  catch {
+    return false;
+  }
+}
+
+function isRedirectUrlAllowed(clientCode: string, redirectUrl: string, patterns: string[]) {
+  if (!hasSupportedRedirectUrlSyntax(redirectUrl)) {
+    return false;
+  }
+
+  for (const pattern of patterns) {
+    try {
+      if (matchRedirectUrlPattern(redirectUrl, pattern)) {
+        return true;
+      }
+    }
+    catch (err) {
+      logger.warn({ err, clientCode, pattern }, "invalid client redirect url pattern");
+    }
+  }
+
+  return false;
+}
+
 export async function callback(code: string, clientCode: string, redirectUrl: string) {
   const client = await clientService.getClientByCode(clientCode);
   if (client === null) {
     throw new InvalidSsoClientError("非法client代码");
   }
-  if (!client.extAttributes.validRedirectUrls.some(u => redirectUrl.startsWith(u))) {
+  if (!isRedirectUrlAllowed(clientCode, redirectUrl, client.extAttributes.validRedirectUrls)) {
     throw new InvalidRedirectUriError("非法重定向地址");
   }
   const authObject = await consumeAuthCode(code);
@@ -88,7 +119,7 @@ export async function authorize(globalSessionId: string | undefined, clientCode:
   if (client === null) {
     throw new InvalidSsoClientError("非法client代码");
   }
-  if (!client.extAttributes.validRedirectUrls.some(u => redirectUrl.startsWith(u))) {
+  if (!isRedirectUrlAllowed(clientCode, redirectUrl, client.extAttributes.validRedirectUrls)) {
     throw new InvalidRedirectUriError("非法重定向地址");
   }
   const userString = await redis.get(`global_session:${globalSessionId}`);

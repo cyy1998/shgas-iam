@@ -7,6 +7,9 @@
 #
 # It uses the same compose project name as docker-compose-prod.yml so services
 # can share the default network when they are deployed on the same host.
+#
+# The IAM SSO APISIX manifest also requires these env-file values when rendered:
+# IAM_SSO_EXTERNAL_HOST, IAM_SSO_INTERNAL_HOST and IAM_SSO_CORS_ALLOW_ORIGINS.
 
 name: iam-service-prod
 

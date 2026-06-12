@@ -1,6 +1,7 @@
 import type { Context as HonoContext } from "hono";
 import { initTRPC, TRPCError } from "@trpc/server";
 import {
+  BAD_REQUEST,
   CONFLICT,
   FORBIDDEN,
   NOT_FOUND,
@@ -36,6 +37,8 @@ export const router = t.router;
 export const publicProcedure = t.procedure;
 
 function mapHttpStatusToTRPCCode(status: number): TRPCError["code"] {
+  if (status === BAD_REQUEST)
+    return "BAD_REQUEST";
   if (status === NOT_FOUND)
     return "NOT_FOUND";
   if (status === CONFLICT)

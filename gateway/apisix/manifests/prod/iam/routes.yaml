@@ -79,19 +79,40 @@ routes:
       env: prod
       app: iam
 
-  - id: iam-sso-prod
-    name: iam-sso-prod
-    desc: IAM SSO tier through APISIX with /api/iam prefix
+  - id: iam-sso-external-prod
+    name: iam-sso-external-prod
+    desc: IAM SSO tier through external production host
     uri: /sso/*
+    hosts:
+      - ${IAM_SSO_EXTERNAL_HOST}
     service_id: iam-api-prod
-    plugin_config_id: iam-api-ip-rate-limit-prod
+    plugin_config_id: iam-sso-api-plugin-prod
     plugins:
-      cors:
-        allow_credential: false
-        allow_headers: "*"
-        allow_methods: "*"
-        allow_origins: ${IAM_SSO_CORS_ALLOW_ORIGINS}
-        max_age: 5
+      proxy-rewrite:
+        headers:
+          set:
+            X-IAM-Entry-Network: external
+        use_real_request_uri_unsafe: false
+    labels:
+      managed_by: shgas-iam
+      source: repo-manifest
+      env: prod
+      app: iam
+
+  - id: iam-sso-internal-prod
+    name: iam-sso-internal-prod
+    desc: IAM SSO tier through internal production host
+    uri: /sso/*
+    hosts:
+      - ${IAM_SSO_INTERNAL_HOST}
+    service_id: iam-api-prod
+    plugin_config_id: iam-sso-api-plugin-prod
+    plugins:
+      proxy-rewrite:
+        headers:
+          set:
+            X-IAM-Entry-Network: internal
+        use_real_request_uri_unsafe: false
     labels:
       managed_by: shgas-iam
       source: repo-manifest

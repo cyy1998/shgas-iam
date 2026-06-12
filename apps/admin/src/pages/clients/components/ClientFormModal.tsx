@@ -174,10 +174,12 @@ export default function ClientFormModal({
       <ProFormSelect
         name="validRedirectUrls"
         label="允许重定向地址"
+        tooltip="支持 origin、一级子域 wildcard，以及 path 末尾 /*。"
         mode="tags"
         fieldProps={{
           open: false,
-          placeholder: '输入地址后按 Enter 添加',
+          placeholder:
+            '如 https://app.example.com、https://*.example.com、https://app.example.com/path/*',
           style: { width: '100%' },
           tokenSeparators: ['\n'],
         }}

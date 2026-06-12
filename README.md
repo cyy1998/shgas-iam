@@ -344,6 +344,8 @@ pnpm --filter @iam/sso typecheck
 | `REDIS_EXPIRE_TIME`             | Redis 默认过期时间（秒）                         | `86400`            |
 | `AUTH_CODE_EXPIRE_TIME`         | 授权码过期时间（秒）                             | `300`              |
 | `LOGIN_ENDPOINT`                | 登录端点                                         | `/portal/login`    |
+| `SSO_INTERNAL_ORIGIN`           | 内网 SSO 入口 origin，用于 discovery URL 拼接     | 必填               |
+| `SSO_EXTERNAL_ORIGIN`           | 外网 SSO 入口 origin，用于 discovery URL 拼接     | 必填               |
 | `AUTHORIZATION_ENDPOINT`        | 授权端点                                         | `/sso/authorize`   |
 | `LOGOUT_ENDPOINT`               | 登出端点                                         | `/sso/logout`      |
 | `THIRDPARTY_OA_ENDPOINT`        | 第三方 OA 端点                                   | `/sso/thirdparty/oa` |

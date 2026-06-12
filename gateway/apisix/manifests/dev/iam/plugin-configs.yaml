@@ -21,6 +21,34 @@ plugin_configs:
       app: iam
       template: api-ip-rate-limit
 
+  - id: iam-sso-api-plugin-dev
+    desc: IAM SSO API CORS, real IP and IP smooth rate limit for local and dev APISIX
+    plugins:
+      real-ip:
+        source: http_x_forwarded_for
+        trusted_addresses:
+          - 127.0.0.1/32
+        recursive: true
+      limit-req:
+        rate: 10
+        burst: 20
+        rejected_code: 429
+        key_type: var
+        key: remote_addr
+        policy: local
+      cors:
+        allow_credential: false
+        allow_headers: "*"
+        allow_methods: "*"
+        allow_origins: "*"
+        max_age: 5
+    labels:
+      managed_by: shgas-iam
+      source: repo-manifest
+      env: dev
+      app: iam
+      template: sso-api-plugin
+
   - id: iam-internal-api-ip-rate-limit-dev
     desc: IAM internal API relaxed IP smooth rate limit for local and dev APISIX
     plugins:

@@ -65,7 +65,7 @@ http://app.shgas.com/sso/thirdparty/:clientCode
 | `clientSecret` | 第三方系统签名密钥，只能保存在服务端。 |
 | `status` | 客户端必须处于启用状态。 |
 | 目标业务系统 `client` | 登录完成后要进入的业务系统客户端编码，用于查询参数 `client`。可以与路径中的 `clientCode` 相同，也可以不同。 |
-| 目标业务系统 `validRedirectUrls` | `redirectUrl` 必须命中目标业务系统客户端允许的地址前缀。 |
+| 目标业务系统 `validRedirectUrls` | `redirectUrl` 必须命中目标业务系统客户端允许的地址 pattern；支持 origin、一级子域 wildcard（如 `https://*.example.com`）和 path 末尾 `/*`。 |
 | 目标业务系统 `managementLevel` | 决定后续授权码回调方式，常用值为 `Gateway`（网关托管）或 `Independent`（独立应用）。 |
 
 用户侧还需要满足：
@@ -89,7 +89,7 @@ GET http://app.shgas.com/sso/thirdparty/{clientCode}?loginid={loginid}&ts={times
 | `ts` | query | 是 | 毫秒级 Unix 时间戳，例如 `1717046400000`。生产环境要求与 IAM 服务器时间偏差小于 5 分钟。 |
 | `token` | query | 是 | 按本文第 5 节算法生成的签名。 |
 | `client` | query | 是 | 最终要登录的目标业务系统客户端编码。 |
-| `redirectUrl` | query | 是 | 登录成功后最终回到业务系统的地址，必须 URL 编码，且命中目标客户端 `validRedirectUrls`。 |
+| `redirectUrl` | query | 是 | 登录成功后最终回到业务系统的地址，必须 URL 编码，且命中目标客户端 `validRedirectUrls` pattern。 |
 
 示例：
 
@@ -157,7 +157,7 @@ Set-Cookie: global_session={globalSessionId}; HttpOnly; SameSite=Lax; Path=/
 `/sso/authorize` 会继续执行标准 SSO 授权：
 
 1. 校验目标客户端 `client` 是否存在。
-2. 校验 `redirectUrl` 是否命中目标客户端 `validRedirectUrls`。
+2. 校验 `redirectUrl` 是否命中目标客户端 `validRedirectUrls` pattern。
 3. 校验全局会话是否有效。
 4. 生成一次性授权码 `code`。
 5. 根据目标客户端 `managementLevel` 跳转到回调地址。
@@ -207,7 +207,7 @@ return redirect(url.toString());
 | `token校验失败` | 签名算法不一致、`clientSecret` 错误、Base64 或 URL 编码错误 | 对照第 5 节检查摘要字节、Base64 和 URL 编码。 |
 | `该用户不存在` | `loginid` 未匹配到启用的 IAM 用户 | 确认第三方账号与 IAM `username` 的映射关系。 |
 | `用户类别不支持OA登录` | IAM 用户类型不是“正式员工” | 调整用户类型或改用其他接入方式。 |
-| `非法重定向地址` | `redirectUrl` 未命中目标客户端 `validRedirectUrls` | 在目标客户端配置允许的 HTTPS 地址前缀。 |
+| `非法重定向地址` | `redirectUrl` 未命中目标客户端 `validRedirectUrls` pattern | 在目标客户端配置允许的 HTTPS origin、一级子域 wildcard 或 path 末尾 `/*` pattern。 |
 | 登录后仍跳统一登录页 | Cookie 域、网关转发路径或 `/public/thirdparty` 转发配置不一致 | 检查网关是否转发到 `/sso/thirdparty/:clientCode`，以及 Cookie 所属域。 |
 
 ## 9. 安全要求
@@ -217,7 +217,7 @@ return redirect(url.toString());
 3. `token`、`clientSecret`、`globalSessionId`、授权码 `code` 等敏感值需要在日志中脱敏。
 4. 生产环境应使用 HTTPS。
 5. 第三方系统服务器与 IAM 服务器应保持时间同步。
-6. `redirectUrl` 应使用明确的业务地址，不建议使用开放跳转页或过宽的地址前缀。
+6. `redirectUrl` 应使用明确的业务地址，不建议使用开放跳转页或过宽的 wildcard pattern。
 7. 如外部身份源退出登录，应同步调用 IAM `/sso/logout` 或清理业务系统本地会话，避免残留登录态。
 
 ## 10. 联调清单

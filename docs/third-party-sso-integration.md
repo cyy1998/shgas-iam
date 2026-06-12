@@ -14,6 +14,7 @@
 ## 2. 基础地址与端点
 
 生产或测试环境的 IAM 基础地址由部署环境提供，以下使用 `{IAM_ORIGIN}` 表示，例如 `https://iam.example.com`。
+IAM 会按入口网络返回内网或外网 SSO 端点；业务系统应从实际访问的入口域名调用 well-known 端点。
 
 可先访问 well-known 端点获取当前环境的 SSO 端点：
 
@@ -54,7 +55,7 @@ GET {IAM_ORIGIN}/sso/.well-known/authentication-configuration
 |---|---|
 | `clientCode` | 业务系统唯一编码。发起授权时作为 `client` 参数传入，例如 `tender`。 |
 | `clientSecret` | 客户端密钥。仅独立应用模式换取 token 时使用，必须保存在服务端。 |
-| `validRedirectUrls` | 允许登录完成后返回的业务地址前缀列表。`redirectUrl` 必须命中该列表。 |
+| `validRedirectUrls` | 允许登录完成后返回的业务地址 pattern 列表。支持 origin、一级子域 wildcard（如 `https://*.example.com`）和 path 末尾 `/*`。 |
 | `managementLevel` | 接入模式。常用值为网关托管或独立应用。 |
 | `callbackEndpoint` | 独立应用模式下接收授权码的业务系统后端回调地址。 |
 | `logoutEndpoint` | 独立应用模式下 IAM 全局登出时通知业务系统清理局部会话的地址。 |
@@ -95,7 +96,7 @@ https://iam.example.com/sso/authorize?client=tender&redirectUrl=https%3A%2F%2Fbi
 IAM 处理逻辑：
 
 1. 校验 `client` 是否存在。
-2. 校验 `redirectUrl` 是否匹配客户端的 `validRedirectUrls`。
+2. 校验 `redirectUrl` 是否命中客户端的 `validRedirectUrls` pattern；匹配按 URL 结构比较协议、host、端口和 path segment 边界。
 3. 如果浏览器没有有效 `global_session`，重定向到统一登录页。
 4. 登录成功后重新进入 `/sso/authorize`，签发一次性 `code`。
 5. 根据客户端接入模式跳转到回调地址。
@@ -257,7 +258,7 @@ Content-Type: application/json
 | 现象 | 常见原因 | 处理建议 |
 |---|---|---|
 | 跳转 `/sso/authorize` 后报“非法client代码” | `client` 未注册或传错 | 核对 IAM 管理端 `clientCode`。 |
-| 报“非法重定向地址” | `redirectUrl` 未命中 `validRedirectUrls` | 在 IAM 客户端配置中加入正确的业务地址前缀。 |
+| 报“非法重定向地址” | `redirectUrl` 未命中 `validRedirectUrls` pattern | 在 IAM 客户端配置中加入正确的 HTTPS origin、一级子域 wildcard 或 path 末尾 `/*` pattern。 |
 | 回调换取 token 报“非法Code” | 授权码过期、重复使用或 code 传错 | 重新发起登录，不要缓存或复用授权码。 |
 | `/public/user-info` 返回 401 | 缺少 `Client`、缺少局部会话或会话过期 | 重新发起 SSO 授权登录。 |
 | 登出后业务系统仍显示已登录 | 业务系统未清理自己的 session | 实现 `logoutEndpoint`，并在前端退出时同步清理本地状态。 |

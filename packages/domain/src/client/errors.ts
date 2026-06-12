@@ -18,3 +18,12 @@ export class ClientCodeExistsError extends DomainBusinessError {
     });
   }
 }
+
+export class ClientInvalidRedirectUrlPatternError extends DomainBusinessError {
+  constructor(message: string = "存在非法 redirect URL pattern") {
+    super(message, {
+      code: ApiErrorCode.BadRequest,
+      httpStatus: DomainHttpStatus.BadRequest,
+    });
+  }
+}

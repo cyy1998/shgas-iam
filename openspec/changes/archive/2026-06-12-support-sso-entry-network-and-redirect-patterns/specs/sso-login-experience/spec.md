@@ -1,9 +1,5 @@
-# sso-login-experience Specification
+## ADDED Requirements
 
-## Purpose
-描述 SSO 前端登录交互中密码失败强提示与临时限制提示的当前目标行为。
-
-## Requirements
 ### Requirement: SSO endpoint discovery selects origin by entry network
 系统 SHALL 根据可信网关注入的入口网络类型返回对应内网或外网 SSO endpoint URL。
 
@@ -39,23 +35,3 @@ API 服务 SHALL 在启动时校验内外网 SSO public origin 配置。
 - **WHEN** API 使用 `SSO_INTERNAL_ORIGIN` 或 `SSO_EXTERNAL_ORIGIN` 拼接 endpoint URL
 - **THEN** 系统 SHALL 按 URL 语义规范化 origin
 - **AND** 系统 SHALL 避免因 origin 尾斜杠和 endpoint path 前斜杠产生重复斜杠
-
-### Requirement: SSO 密码错误强提示
-SSO 前端 SHALL 在密码登录失败时展示需要用户手动确认的强提示，并明确告知剩余尝试次数。
-
-#### Scenario: 密码登录返回失败次数信息
-- **WHEN** SSO 前端收到密码登录失败响应且响应包含当前失败次数或剩余次数
-- **THEN** 前端 SHALL 以强提示方式展示错误信息
-- **AND** 前端 SHALL 明确告知剩余尝试次数或临时限制剩余时间
-- **AND** 前端 SHALL 要求用户手动点击确认后才能关闭提示并继续操作
-
-#### Scenario: 密码登录进入临时限制
-- **WHEN** SSO 前端收到后端表示账号已被临时限制 30 分钟的密码登录响应
-- **THEN** 前端 SHALL 以强提示方式展示临时限制状态
-- **AND** 前端 SHALL 告知用户需要等待限制期结束后重新尝试
-- **AND** 前端 SHALL 要求用户手动确认后才能返回登录表单
-
-#### Scenario: 其他认证错误保持原有交互
-- **WHEN** SSO 前端收到非密码失败类认证错误
-- **THEN** 前端 SHALL 保持原有错误展示方式
-- **AND** 前端 SHALL NOT 因此改变其他认证流程的提交逻辑

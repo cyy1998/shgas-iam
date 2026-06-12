@@ -7,7 +7,9 @@ import { baseColumns } from "../_shard/base-columns";
 export const clientExtAttributesSchema = z.object({
   userExcluding: z.array(z.string()).default([]),
   requireOrcas: z.boolean().default(false),
-  validRedirectUrls: z.array(z.string()).default([]),
+  validRedirectUrls: z.array(
+    z.string().describe("Redirect URL pattern, e.g. https://app.example.com, https://*.example.com, or https://app.example.com/path/*"),
+  ).default([]).describe("Allowed redirect URL patterns for SSO authorize and callback validation"),
   managementLevel: z.enum(ClientManagementLevel).default(ClientManagementLevel.None),
   logoutEndpoint: z.url().default("http://localhost:8888"),
   callbackEndpoint: z.url().default("http://localhost:8888"),

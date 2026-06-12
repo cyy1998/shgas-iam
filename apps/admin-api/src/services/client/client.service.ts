@@ -12,7 +12,7 @@ import { recordAdminClientAudit } from "@admin-api/services/audit/events/client.
 import * as clientRepository from "@admin-api/services/client/client.repository";
 import { ClientDtoSchema } from "@admin-api/services/client/client.schema";
 import db from "@iam/db";
-import { ClientCodeExistsError, ClientNotFoundError } from "@iam/domain/client";
+import { ClientCodeExistsError, ClientInvalidRedirectUrlPatternError, ClientNotFoundError, validateRedirectUrlPattern } from "@iam/domain/client";
 
 async function setClientCache(clientDto: ClientDto) {
   await Promise.all([
@@ -64,6 +64,20 @@ async function assertRenamedClientCodeAvailable(
   }
 }
 
+function assertValidRedirectUrlPatterns(data: Pick<ClientCreateDto | ClientInputDto | ClientUpdateDto, "extAttributes">) {
+  const patterns = data.extAttributes?.validRedirectUrls;
+  if (patterns === undefined) {
+    return;
+  }
+
+  for (const pattern of patterns) {
+    const result = validateRedirectUrlPattern(pattern);
+    if (!result.ok) {
+      throw new ClientInvalidRedirectUrlPatternError(`存在非法 redirect URL pattern: ${pattern}`);
+    }
+  }
+}
+
 export async function searchClientsForAdmin(query: ClientPaginationQueryDto) {
   const { rows, total } = await clientRepository.searchClientsPaged(query);
   return toPageResult(rows.map(row => ClientDtoSchema.parse(row)), total, query);
@@ -78,6 +92,7 @@ export async function getClientDetailByCode(clientCode: string) {
 }
 
 export async function createClient(clientDto: ClientCreateDto, auditContext?: AdminAuditContext) {
+  assertValidRedirectUrlPatterns(clientDto);
   const createdClientDto = await db.transaction(async (tx) => {
     const existing = await clientRepository.getAnyClientByCode(clientDto.clientCode, tx);
     if (existing !== null) {
@@ -101,6 +116,7 @@ export async function updateClient(
   auditContext?: AdminAuditContext,
   actionOverride?: string,
 ) {
+  assertValidRedirectUrlPatterns(data);
   const { oldClientDto, updatedClientDto } = await db.transaction(async (tx) => {
     const existing = await clientRepository.getClientByCode(clientCode, tx);
     if (existing === null) {
@@ -136,6 +152,7 @@ export async function updateClient(
 }
 
 export async function updateClientById(clientDto: ClientInputDto, auditContext?: AdminAuditContext) {
+  assertValidRedirectUrlPatterns(clientDto);
   const { oldClientDto, updatedClientDto } = await db.transaction(async (tx) => {
     const existing = await clientRepository.getClientById(clientDto.id, tx);
     if (existing === null) {

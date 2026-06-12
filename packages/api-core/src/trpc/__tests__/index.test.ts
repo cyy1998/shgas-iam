@@ -1,7 +1,7 @@
 import { ApiErrorCode } from "@iam/contracts";
 import { TRPCError } from "@trpc/server";
 import { describe, expect, test } from "bun:test";
-import { NOT_FOUND } from "../../core/http-status-codes";
+import { BAD_REQUEST, NOT_FOUND } from "../../core/http-status-codes";
 import { CustomError } from "../../errors/CustomError";
 import { getApiRuntimeErrorFormatterData, mapCustomErrorToTRPCError } from "../index";
 
@@ -51,6 +51,20 @@ describe("mapCustomErrorToTRPCError", () => {
       serviceMessage: "组织不存在",
       httpStatus: NOT_FOUND,
     });
+  });
+
+  test("maps bad requests to BAD_REQUEST", () => {
+    const err = new CustomError("bad input", { httpStatus: BAD_REQUEST });
+
+    try {
+      mapCustomErrorToTRPCError(err);
+      throw new Error("expected TRPCError");
+    }
+    catch (error) {
+      expect(error).toBeInstanceOf(TRPCError);
+      expect((error as TRPCError).code).toBe("BAD_REQUEST");
+      expect((error as TRPCError).cause).toBe(err);
+    }
   });
 
   test("leaves unknown errors untouched and out of formatter data", () => {

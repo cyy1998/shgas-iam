@@ -31,6 +31,10 @@ function jsonRecordString(description: string) {
   });
 }
 
+function originString() {
+  return z.url().transform(value => new URL(value).origin);
+}
+
 const EnvSchema = z.object({
   DATABASE_URL: z.string().min(1),
   PASSWORD_HASH_ROUNDS: z.coerce.number().default(10),
@@ -52,6 +56,8 @@ const EnvSchema = z.object({
   REDIS_PASSWORD: z.string().optional().transform(value => value || undefined),
   REDIS_DB: z.coerce.number(),
   LOGIN_ENDPOINT: z.string(),
+  SSO_INTERNAL_ORIGIN: originString(),
+  SSO_EXTERNAL_ORIGIN: originString(),
   AUTHORIZATION_ENDPOINT: z.string(),
   LOGOUT_ENDPOINT: z.string(),
   THIRDPARTY_OA_ENDPOINT: z.string(),

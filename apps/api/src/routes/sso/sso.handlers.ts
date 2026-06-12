@@ -1,20 +1,47 @@
 import type { SsoRouteHandler } from "./sso.type";
 import config from "@api/env";
+import { logger } from "@api/lib/logger";
 import * as clientService from "@api/services/client/client.service";
 import * as sessionService from "@api/services/session/session.service";
+import * as HttpStatusCodes from "@iam/api-core/core/http-status-codes";
 import { AuthzUnauthorizedError } from "@iam/api-core/errors/AuthzUnauthorizedError";
 import * as resp from "@iam/api-core/http";
 import { getProtocolAndHost } from "@iam/api-core/utils";
-import { ClientManagementLevel } from "@iam/contracts";
+import { ApiErrorCode, ClientManagementLevel } from "@iam/contracts";
 import { deleteCookie, getCookie, setCookie } from "hono/cookie";
 import * as ssoService from "./sso.service";
 
+type SsoEntryNetwork = "internal" | "external";
+
+function joinOriginPath(origin: string, path: string) {
+  return `${origin.replace(/\/+$/, "")}/${path.replace(/^\/+/, "")}`;
+}
+
+function resolveSsoOrigin(entryNetwork: string | undefined) {
+  if (entryNetwork === "internal") {
+    return config.SSO_INTERNAL_ORIGIN;
+  }
+  if (entryNetwork === "external") {
+    return config.SSO_EXTERNAL_ORIGIN;
+  }
+  return null;
+}
+
 export const endpointsConfiguration: SsoRouteHandler<"endpointsConfiguration"> = async (c) => {
-  const origin = (new URL(c.req.url)).origin;
+  const entryNetwork = c.req.header("X-IAM-Entry-Network") as SsoEntryNetwork | undefined;
+  const origin = resolveSsoOrigin(entryNetwork);
+  if (origin === null) {
+    logger.warn({ entryNetwork }, "invalid sso entry network header");
+    return c.json(
+      resp.fail(ApiErrorCode.BadRequest, "非法 SSO 入口"),
+      HttpStatusCodes.BAD_REQUEST,
+    );
+  }
+
   return c.json(resp.ok({
-    authorizationEndpoint: `${origin}${config.AUTHORIZATION_ENDPOINT}`,
-    logoutEndpoint: `${origin}${config.LOGOUT_ENDPOINT}`,
-    thirdPartyOAEndpoint: `${origin}${config.THIRDPARTY_OA_ENDPOINT}`,
+    authorizationEndpoint: joinOriginPath(origin, config.AUTHORIZATION_ENDPOINT),
+    logoutEndpoint: joinOriginPath(origin, config.LOGOUT_ENDPOINT),
+    thirdPartyOAEndpoint: joinOriginPath(origin, config.THIRDPARTY_OA_ENDPOINT),
   }));
 };
 

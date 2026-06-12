@@ -66,7 +66,8 @@ function makeClient(overrides: Record<string, unknown> = {}) {
 }
 
 beforeEach(() => {
-  transaction.mockClear();
+  transaction.mockReset();
+  transaction.mockImplementation(async (callback: (txArg: unknown) => Promise<unknown>) => callback(tx));
   redis.del.mockClear();
   redis.set.mockClear();
   auditService.recordAuditLog.mockReset();
@@ -144,7 +145,10 @@ describe("admin clientService.createClient", () => {
       clientName: "Portal",
       clientSecret: "secret-1",
       status: ClientStatus.Enable,
-      extAttributes: makeClient().extAttributes,
+      extAttributes: {
+        ...makeClient().extAttributes,
+        validRedirectUrls: ["https://portal.example.com", "https://*.example.com/app/*"],
+      },
     })).resolves.toMatchObject({ clientCode: "portal" });
 
     expect(clientRepository.createClient).toHaveBeenCalledWith(expect.objectContaining({ clientCode: "portal" }), tx);
@@ -160,6 +164,23 @@ describe("admin clientService.createClient", () => {
     }), tx);
     expect(redis.set).toHaveBeenCalledWith("cache:client:code:portal", expect.any(String));
     expect(redis.set).toHaveBeenCalledWith("cache:client:secret:secret-1", expect.any(String));
+  });
+
+  test("rejects invalid redirect URL patterns before writing or refreshing cache", async () => {
+    await expect(clientService.createClient({
+      clientCode: "portal",
+      clientName: "Portal",
+      clientSecret: "secret-1",
+      status: ClientStatus.Enable,
+      extAttributes: {
+        ...makeClient().extAttributes,
+        validRedirectUrls: ["https://portal.example.com/*/callback"],
+      },
+    })).rejects.toThrow("存在非法 redirect URL pattern");
+
+    expect(transaction).not.toHaveBeenCalled();
+    expect(clientRepository.createClient).not.toHaveBeenCalled();
+    expect(redis.set).not.toHaveBeenCalled();
   });
 });
 
@@ -209,6 +230,36 @@ describe("admin clientService.updateClient", () => {
         }),
       }),
     }), tx);
+  });
+
+  test("accepts valid redirect URL patterns on update", async () => {
+    await expect(clientService.updateClient("portal", {
+      extAttributes: {
+        ...makeClient().extAttributes,
+        validRedirectUrls: ["https://*.example.com/sso/*", "http://localhost:8080"],
+      },
+    })).resolves.toMatchObject({ clientCode: "portal" });
+
+    expect(clientRepository.updateClientByCode).toHaveBeenCalledWith("portal", expect.objectContaining({
+      extAttributes: expect.objectContaining({
+        validRedirectUrls: ["https://*.example.com/sso/*", "http://localhost:8080"],
+      }),
+    }), tx);
+    expect(redis.set).toHaveBeenCalledWith("cache:client:code:portal", expect.any(String));
+  });
+
+  test("rejects invalid redirect URL patterns on update without refreshing cache", async () => {
+    await expect(clientService.updateClient("portal", {
+      extAttributes: {
+        ...makeClient().extAttributes,
+        validRedirectUrls: ["https://*.com/callback"],
+      },
+    })).rejects.toThrow("存在非法 redirect URL pattern");
+
+    expect(transaction).not.toHaveBeenCalled();
+    expect(clientRepository.updateClientByCode).not.toHaveBeenCalled();
+    expect(redis.del).not.toHaveBeenCalled();
+    expect(redis.set).not.toHaveBeenCalled();
   });
 });
 

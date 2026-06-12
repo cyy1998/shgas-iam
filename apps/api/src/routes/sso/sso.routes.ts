@@ -11,8 +11,19 @@ export const endpointsConfiguration = createRoute({
   method: "get",
   path: `${routePrefix}/.well-known/authentication-configuration`,
   tags,
+  request: {
+    headers: z.object({
+      "X-IAM-Entry-Network": z.enum(["internal", "external"]).openapi({
+        description: "Trusted entry network injected by APISIX according to the matched SSO host.",
+        example: "external",
+      }),
+    }),
+  },
   responses: {
     [HttpStatusCodes.OK]: jsonContent(createSuccessResponseSchema(SSOMetaInfoSchema), "单点登录端点信息"),
+    [HttpStatusCodes.BAD_REQUEST]: {
+      description: "非法 SSO 入口",
+    },
   },
 });
 

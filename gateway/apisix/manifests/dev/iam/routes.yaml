@@ -79,19 +79,40 @@ routes:
       env: dev
       app: iam
 
-  - id: iam-sso-dev
-    name: iam-sso-dev
-    desc: IAM SSO tier through APISIX with /api/iam prefix
+  - id: iam-sso-external-dev
+    name: iam-sso-external-dev
+    desc: IAM SSO tier through external dev host
     uri: /sso/*
+    hosts:
+      - ${IAM_SSO_EXTERNAL_HOST}
     service_id: iam-api-dev
-    plugin_config_id: iam-api-ip-rate-limit-dev
+    plugin_config_id: iam-sso-api-plugin-dev
     plugins:
-      cors:
-        allow_credential: false
-        allow_headers: "*"
-        allow_methods: "*"
-        allow_origins: "*"
-        max_age: 5
+      proxy-rewrite:
+        headers:
+          set:
+            X-IAM-Entry-Network: external
+        use_real_request_uri_unsafe: false
+    labels:
+      managed_by: shgas-iam
+      source: repo-manifest
+      env: dev
+      app: iam
+
+  - id: iam-sso-internal-dev
+    name: iam-sso-internal-dev
+    desc: IAM SSO tier through internal dev host
+    uri: /sso/*
+    hosts:
+      - ${IAM_SSO_INTERNAL_HOST}
+    service_id: iam-api-dev
+    plugin_config_id: iam-sso-api-plugin-dev
+    plugins:
+      proxy-rewrite:
+        headers:
+          set:
+            X-IAM-Entry-Network: internal
+        use_real_request_uri_unsafe: false
     labels:
       managed_by: shgas-iam
       source: repo-manifest
