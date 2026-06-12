@@ -1,4 +1,20 @@
 routes:
+  - id: iam-root-redirect-prod
+    name: iam-root-redirect-prod
+    desc: Redirect IAM gateway root to SSO login
+    uri: /
+    plugins:
+      redirect:
+        uri: /portal/login
+        ret_code: 302
+    priority: 100
+    status: 1
+    labels:
+      managed_by: shgas-iam
+      source: repo-manifest
+      env: prod
+      app: iam
+
   - id: iam-sso-frontend-prod
     name: iam-sso-frontend-prod
     desc: IAM SSO frontend through APISIX

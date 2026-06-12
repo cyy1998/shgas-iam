@@ -8,6 +8,22 @@ function getSsoRoutes(manifest: Awaited<ReturnType<typeof loadManifest>>) {
   return manifest.resources.routes.filter(route => route.uri === "/sso/*");
 }
 
+function expectRootRedirectToSsoLogin(manifest: Awaited<ReturnType<typeof loadManifest>>) {
+  const route = manifest.resources.routes.find(route => route.id === `iam-root-redirect-${manifest.scope.env}`);
+  const redirect = (route?.plugins as Record<string, unknown> | undefined)?.redirect;
+
+  expect(route).toMatchObject({
+    name: `iam-root-redirect-${manifest.scope.env}`,
+    uri: "/",
+    priority: 100,
+    status: 1,
+  });
+  expect(redirect).toEqual({
+    uri: "/portal/login",
+    ret_code: 302,
+  });
+}
+
 function getEntryNetwork(route: Record<string, unknown>) {
   return (((route.plugins as Record<string, unknown> | undefined)?.["proxy-rewrite"] as Record<string, unknown> | undefined)
     ?.headers as Record<string, unknown> | undefined)?.set as Record<string, unknown> | undefined;
@@ -39,14 +55,15 @@ describe("apisix manifest validation", () => {
   it("accepts the checked-in dev IAM manifest", async () => {
     const manifest = await loadManifest("dev:iam");
     expect(validateManifest(manifest)).toEqual([]);
+    expectRootRedirectToSsoLogin(manifest);
   });
 
   it("splits dev IAM SSO routes by host and injects entry network", async () => {
     const manifest = await loadManifest("dev:iam");
 
     expectSsoRoutesClassifyEntryNetwork(manifest, [
-      "iam-sso.localhost",
-      "iam-sso.internal.localhost",
+      "${IAM_SSO_EXTERNAL_HOST}",
+      "${IAM_SSO_INTERNAL_HOST}",
     ]);
   });
 
@@ -70,6 +87,7 @@ describe("apisix manifest validation", () => {
     });
 
     expect(validateManifest(manifest)).toEqual([]);
+    expectRootRedirectToSsoLogin(manifest);
     expectSsoRoutesClassifyEntryNetwork(manifest, [
       "iam.example.com",
       "iam.internal.example.com",
