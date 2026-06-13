@@ -74,7 +74,31 @@ Preserve existing domain file naming: `user.service.ts`, `user.repository.ts`, `
 - The main agent remains responsible for the final plan, code integration, verification, and commit. Do not let parallel investigations produce conflicting edits without reconciling them first.
 - For bug reports, reproduce or inspect the failing signal first, then fix the root cause and verify it.
 - Before marking work complete, prove it with the narrowest meaningful validation: focused tests, type checks, lint, schema commands, logs, or a quick UI/API smoke test as appropriate.
+- OpenSpec work must follow the target-branch, proposal, archive, and integration lifecycle defined in **Branch, OpenSpec, and Commit Workflow** below.
 - Capture recurring lessons in AGENTS.md, OpenSpec docs, or nearby project documentation when they would prevent future mistakes.
+
+## Branch, OpenSpec, and Commit Workflow
+Recent history uses Conventional Commits with scopes, for example `feat(db): ...`, `fix(auth): ...`, `refactor(api): ...`, and `style(sso): ...`. Keep commits focused, reviewable, and reasonably easy to revert.
+
+Treat an OpenSpec change and its Git branch as one lifecycle:
+
+- **Propose:** before running `openspec new change <change-name>` or creating proposal artifacts, inspect the current branch and worktree, then create and switch to `work/<change-name>` from the change's target branch. The target is `main` for an independent change and `feature/<feature-name>` for a child change in a larger feature. Keep the OpenSpec change name and working-branch suffix identical. If already on that change's branch, continue there. Do not carry unrelated dirty changes onto the new branch; if the worktree, target branch, or correct base is ambiguous, resolve that with the user first.
+- **Apply and continue:** perform artifact updates, implementation, tests, and verification on `work/<change-name>`. Process/WIP commits are allowed on this branch when useful, but are not required and must never be created automatically on `main`.
+- **Verify:** complete the relevant OpenSpec verification and the narrowest meaningful repository checks before archiving. Archive is a finalization step, not a substitute for validation.
+- **Archive and merge:** an explicit request to archive an OpenSpec change also authorizes finalizing that change's Git history and merging it into its target branch. First sync delta specs when applicable and move the change into `openspec/changes/archive/` on its working branch. Then inspect the full diff, stage only files belonging to the change, create a focused Conventional Commit, switch to the clean target branch, squash-merge the working branch with `git merge --squash`, and create the final commit there. Delete the local working branch only after the squash commit succeeds. Do not push the target branch or delete any remote branch unless the user explicitly asks.
+- **Archive blockers:** do not merge when artifacts or tasks are incomplete, required validation fails, the worktree contains inseparable unrelated changes, or the target branch cannot accept the merge cleanly. Report the blocker and preserve the working branch.
+
+For a large feature intentionally split across multiple OpenSpec changes, use a two-level branch model:
+
+- Create `feature/<feature-name>` from `main` before proposing its first child change. Use an umbrella OpenSpec change when the feature needs a durable record of overall scope, child-change inventory, dependency order, cross-change decisions, and integration acceptance criteria; it coordinates the children but does not replace their artifacts or verification.
+- Create every child `work/<change-name>` branch from `feature/<feature-name>`, and record that target branch in the child's proposal or design. Child changes may depend on earlier child changes already archived into the feature branch; make such ordering explicit in the umbrella artifacts.
+- Archive each child independently into `feature/<feature-name>` using the normal squash workflow, producing one focused commit per child. Never merge a child change directly into `main` while its larger feature is still in progress.
+- Keep the feature branch integration-ready: after each child merge, run the meaningful cross-change checks and resolve integration failures on a dedicated OpenSpec change when they require non-trivial code or contract changes.
+- Finalize the feature only after every required child is archived, the umbrella tasks and acceptance criteria are complete, and full integration validation passes. Archive the umbrella change on the feature branch when one exists, then merge `feature/<feature-name>` into a clean `main` with `git merge --no-ff` so the per-change commits remain visible. Delete the local feature branch only after the merge commit succeeds; pushing and remote branch deletion still require explicit user approval.
+
+For non-OpenSpec work, create a short-lived `feat/<topic>`, `fix/<topic>`, or `work/<topic>` branch before each non-trivial feature, fix, refactor, or behavior change. Tiny documentation or instruction-only edits may stay on the current branch when opening a branch would add more process than value.
+
+Outside the OpenSpec archive workflow, do not automatically create commits. Create a commit only when the user explicitly asks. Whenever committing, inspect the current branch and `git diff`, stage only task-owned files, leave unrelated user changes untouched, and use a Conventional Commit message written in Chinese unless the user requests another language.
 
 ## Testing Guidelines
 Bun tests are available through package-level `test` scripts. Minimum validation before a PR:
@@ -87,18 +111,3 @@ Bun tests are available through package-level `test` scripts. Minimum validation
 - APISIX gateway manifest/script changes require `pnpm gateway:apisix:validate -- --env <env>:<app>` plus `pnpm --filter @iam/gateway-apisix typecheck` or `test` when scripts changed.
 - Smoke-test affected surfaces: public API Scalar UI at `http://localhost:30000` or public tier `/doc`; admin API Scalar UI at `http://localhost:30001` or `/admin/doc` and `/rpc/doc`; affected `admin` or `sso` UI flows.
 - With `docker/docker-compose-dev.yml`, direct backend host ports are `http://localhost:30011` for `api` and `http://localhost:30012` for `admin-api`; APISIX gateway host ports are `http://localhost:30080` and `https://localhost:30443`.
-
-## Commit Guidelines
-Recent history uses Conventional Commits with scopes, for example `feat(db): ...`, `fix(auth): ...`, `refactor(api): ...`, and `style(sso): ...`. Keep commits focused, reviewable, and reasonably easy to revert.
-
-For each non-trivial feature, fix, refactor, or behavior change, create a short-lived working branch before implementation, for example `work/<topic>`, `feat/<topic>`, or `fix/<topic>`. Tiny documentation or instruction-only edits may stay on the current branch when opening a branch would add more process than value.
-
-Do not automatically create git commits by default, and never create an automatic process/WIP commit on `main`. Complete the requested code changes and validation first; create a commit only when the user explicitly asks for one.
-
-When the user asks for a commit:
-
-- inspect the current branch and `git diff` before staging anything;
-- stage only files that belong to the completed task, leaving unrelated user changes untouched;
-- if currently on `main`, create one focused aggregate commit for the completed task;
-- if working on a temporary branch, process/WIP commits are acceptable locally, but squash them before merging into `main`, for example with `git merge --squash`;
-- use the Conventional Commits format and write commit messages in Chinese unless the user explicitly requests another language.
