@@ -20,7 +20,7 @@ export const mobileSet: PublicRouteHandler<"mobileSet"> = async (c) => {
   const { phoneNumber, code } = c.req.valid("json");
   const sessionId = getCookie(c, "global_session") ?? c.req.header("Authorization") ?? "";
   const newUserDto = await userService.setMobile(c.get("userId"), phoneNumber, code);
-  const data = await sessionService.updateSession(sessionId, JSON.stringify(newUserDto));
+  const data = await sessionService.updateSession(sessionId, newUserDto);
   return c.json(resp.ok(data));
 };
 

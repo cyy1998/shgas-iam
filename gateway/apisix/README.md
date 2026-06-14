@@ -113,7 +113,9 @@ pnpm gateway:apisix:apply -- --env dev:iam --dry-run
 
 ```bash
 APISIX_ADMIN_KEY=dev-local-admin-key-change-me \
-pnpm gateway:apisix:apply -- --env dev:iam
+env -u HTTP_PROXY -u HTTPS_PROXY -u ALL_PROXY \
+  -u http_proxy -u https_proxy -u all_proxy \
+  pnpm gateway:apisix:apply -- --env dev:iam --env-file ../../docker/.env
 ```
 
 删除已经从 Git manifest 移除的 `repo-manifest` 远端对象：

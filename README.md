@@ -442,6 +442,7 @@ pnpm install --frozen-lockfile
 pnpm --filter @iam/db db:migrate
 pnpm --filter @iam/api serve
 pnpm --filter @iam/admin-api serve
+pnpm --filter @iam/oidc-provider serve
 ```
 
 ### 前端
@@ -456,21 +457,24 @@ pnpm --filter @iam/sso build
 - `apps/admin/dist`，默认 base 为 `/iam-admin`
 - `apps/sso/dist`，默认 base 为 `/portal`
 
-静态服务器需要把后端路径按服务拆分反向代理：
+静态服务器或 APISIX 需要把后端路径按服务拆分反向代理：
 
 - `/public`、`/open`、`/internal`、`/sso`、`/auth` 代理到公共 API 服务
 - `/admin`、`/rpc` 代理到管理端 API 服务
+- `/oidc` 代理到 Node.js OIDC Provider，并保留外部 Host 与协议转发头
 
 ### Docker
 
-仓库提供两个后端镜像构建文件，构建上下文为仓库根目录：
+仓库提供三个后端镜像构建文件，构建上下文为仓库根目录：
 
 ```bash
 docker build -f apps/api/Dockerfile -t iam-api .
 docker build -f apps/admin-api/Dockerfile -t iam-admin-api .
+docker build -f apps/oidc-provider/Dockerfile -t iam-oidc-provider .
 
 docker run --rm -p 30000:30000 --env-file apps/api/.env iam-api
 docker run --rm -p 30001:30001 --env-file apps/admin-api/.env iam-admin-api
+docker run --rm -p 30002:30002 --env-file apps/oidc-provider/.env iam-oidc-provider
 ```
 
 本地依赖栈：
@@ -485,7 +489,23 @@ docker compose -f docker/docker-compose-dependency.yml up -d
 docker compose -f docker/docker-compose-dev.yml up -d
 ```
 
-`docker/docker-compose-dev.yml` 会同时编排 PostgreSQL、Redis、公共 API 和管理端 API；`docker/docker-compose-prod.yml` 提供 PostgreSQL 主从、Redis、公共 API 和管理端 API 的生产部署模板，使用前请补齐生产环境变量。
+`docker/docker-compose-dev.yml` 会同时编排 PostgreSQL、Redis、APISIX、公共 API、管理端 API 和 OIDC Provider。
+首次启动 provider 前必须设置 `OIDC_COOKIE_KEYS` 和 `OIDC_CURRENT_JWK_JSON`：
+
+```bash
+docker compose -f docker/docker-compose-dev.yml up -d --build oidc-provider apisix-etcd apisix
+pnpm gateway:apisix:validate -- --env dev:iam
+APISIX_ADMIN_KEY=dev-local-admin-key-change-me pnpm gateway:apisix:diff -- --env dev:iam
+```
+
+若 Docker 构建需要使用宿主机代理，请在 `docker/.env` 中配置 `DOCKER_BUILD_HTTP_PROXY`、
+`DOCKER_BUILD_HTTPS_PROXY` 和 `DOCKER_BUILD_NO_PROXY`。代理监听在宿主机回环地址时，应将地址写为
+`host.docker.internal`，不能使用容器自身的 `127.0.0.1`。访问 APISIX Admin API 时还需确保
+`127.0.0.1` 在宿主机 `NO_PROXY` 中。生产模板还包含
+OIDC Provider，使用前必须补齐 issuer、current/previous RS256 JWK、cookie keys、Redis 和限流参数。
+
+OIDC 接入见 [docs/oidc-integration.md](docs/oidc-integration.md)，发布与回滚见
+[docs/oidc-release-runbook.md](docs/oidc-release-runbook.md)。
 
 ## 🔧 调试与排障
 
@@ -517,4 +537,4 @@ docker compose -f docker/docker-compose-dev.yml up -d
 
 ---
 
-**最后更新**：2026-05-13
+**最后更新**：2026-06-14

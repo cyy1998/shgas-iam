@@ -2,7 +2,11 @@ import { z } from "@hono/zod-openapi";
 import { selectUserSchema } from "@iam/db/schema";
 import { EmploymentDetailDtoSchema } from "../employment";
 
-export const UserSchema = z.object(selectUserSchema.shape);
+const DbUserSchema = z.object(selectUserSchema.shape);
+
+export const UserSchema = DbUserSchema.omit({
+  oidcSubject: true,
+});
 
 export const UserDtoSchema = UserSchema.omit({
   password: true,
@@ -27,3 +31,13 @@ export const UserCreateDtoSchema = UserSchema.partial().required({
   createTime: true,
   updateTime: true,
 }).openapi("UserCreateDto");
+
+export const OidcAccountDtoSchema = DbUserSchema.pick({
+  id: true,
+  oidcSubject: true,
+  username: true,
+  name: true,
+  mobile: true,
+  status: true,
+  isDelete: true,
+}).openapi("OidcAccountDto");

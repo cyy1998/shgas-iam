@@ -1,11 +1,16 @@
 import type { Context } from "hono";
-import { ClientStatus } from "@iam/contracts";
+import { ClientStatus, OidcClientType, OidcScope, OidcTokenEndpointAuthMethod } from "@iam/contracts";
 import { beforeEach, describe, expect, mock, test } from "bun:test";
 
 const clientService = {
   createClient: mock(),
+  configureClientOidc: mock(),
   deleteClient: mock(),
+  disableClientOidc: mock(),
+  enableClientOidc: mock(),
   getClientDetailByCode: mock(),
+  removeClientOidc: mock(),
+  rotateClientOidcSecret: mock(),
   searchClientsForAdmin: mock(),
   updateClient: mock(),
   updateClientById: mock(),
@@ -18,8 +23,13 @@ const handlers = await import("../client.adapter");
 
 beforeEach(() => {
   clientService.createClient.mockReset();
+  clientService.configureClientOidc.mockReset();
   clientService.deleteClient.mockReset();
+  clientService.disableClientOidc.mockReset();
+  clientService.enableClientOidc.mockReset();
   clientService.getClientDetailByCode.mockReset();
+  clientService.removeClientOidc.mockReset();
+  clientService.rotateClientOidcSecret.mockReset();
   clientService.searchClientsForAdmin.mockReset();
   clientService.updateClient.mockReset();
   clientService.updateClientById.mockReset();
@@ -98,6 +108,26 @@ describe("admin client adapter", () => {
 
     expect(clientService.deleteClient).toHaveBeenCalledWith(
       "portal",
+      expect.objectContaining({ actorUserId: 1001, actorUsername: "admin", requestId: "req-1" }),
+    );
+  });
+
+  test("delegates OIDC configure input with audit context", async () => {
+    const data = {
+      clientType: OidcClientType.Public,
+      redirectUris: ["https://portal.example.com/callback"],
+      postLogoutRedirectUris: [],
+      allowedScopes: [OidcScope.OpenId],
+      tokenEndpointAuthMethod: OidcTokenEndpointAuthMethod.None,
+    };
+    clientService.configureClientOidc.mockResolvedValue({ client: {} });
+
+    const context = createContext({ json: data, param: { clientCode: "portal" } });
+    await expect(handlers.clientOidcConfigure(context, async () => {})).resolves.toMatchObject({ code: 200 });
+
+    expect(clientService.configureClientOidc).toHaveBeenCalledWith(
+      "portal",
+      data,
       expect.objectContaining({ actorUserId: 1001, actorUsername: "admin", requestId: "req-1" }),
     );
   });

@@ -1,12 +1,13 @@
 import StatusTag from '@admin/components/StatusTag';
 import ClientFormModal from '@admin/pages/clients/components/ClientFormModal';
+import OidcConfigModal from '@admin/pages/clients/components/OidcConfigModal';
 import {
+  type ClientDetailVo,
+  type ClientVo,
   deleteClient,
   getClient,
   searchClients,
   updateClientStatus,
-  type ClientDetailVo,
-  type ClientVo,
 } from '@admin/services/client';
 import { PlusOutlined } from '@ant-design/icons';
 import {
@@ -19,13 +20,18 @@ import {
   ClientManagementLevel,
   getClientManagementLevelOptions,
   getClientStatusOptions,
+  OidcClientState,
+  OidcClientType,
+  OidcScope,
 } from '@iam/contracts';
-import { Button, Dropdown, message, Modal } from 'antd';
+import { Button, Dropdown, message, Modal, Tag } from 'antd';
 import { useRef, useState } from 'react';
 
 type FormState =
   | { open: false }
   | { open: true; initialValues: ClientDetailVo | null };
+
+type OidcFormState = { open: false } | { open: true; client: ClientDetailVo };
 
 const managementLevelText = Object.fromEntries(
   getClientManagementLevelOptions().map((o) => [o.value, o.label]),
@@ -34,6 +40,9 @@ const managementLevelText = Object.fromEntries(
 export default function ClientsPage() {
   const actionRef = useRef<ActionType>();
   const [formState, setFormState] = useState<FormState>({ open: false });
+  const [oidcFormState, setOidcFormState] = useState<OidcFormState>({
+    open: false,
+  });
 
   const handleError = (err: unknown) =>
     message.error(err instanceof Error ? err.message : '操作失败');
@@ -62,6 +71,15 @@ export default function ClientsPage() {
         }
       },
     });
+  };
+
+  const onOidc = async (row: ClientVo) => {
+    try {
+      const client = await getClient(row.clientCode);
+      setOidcFormState({ open: true, client });
+    } catch (err) {
+      handleError(err);
+    }
   };
 
   const onStatusChange = async (row: ClientVo, status: number) => {
@@ -103,6 +121,48 @@ export default function ClientsPage() {
         managementLevelText[row.extAttributes.managementLevel] ?? '未知',
     },
     {
+      title: 'OIDC',
+      dataIndex: 'oidcState',
+      width: 130,
+      valueType: 'select',
+      valueEnum: {
+        [OidcClientState.Unconfigured]: { text: '未配置' },
+        [OidcClientState.Disabled]: { text: '已配置/禁用' },
+        [OidcClientState.Enabled]: { text: '已启用' },
+      },
+      render: (_, row) => {
+        const config = {
+          [OidcClientState.Unconfigured]: { color: 'default', text: '未配置' },
+          [OidcClientState.Disabled]: { color: 'orange', text: '已禁用' },
+          [OidcClientState.Enabled]: { color: 'green', text: '已启用' },
+        }[row.oidcState];
+        return <Tag color={config.color}>{config.text}</Tag>;
+      },
+    },
+    {
+      title: 'OIDC Client 类型',
+      dataIndex: 'oidcClientType',
+      valueType: 'select',
+      hideInTable: true,
+      valueEnum: {
+        [OidcClientType.Public]: { text: 'Public' },
+        [OidcClientType.Confidential]: { text: 'Confidential' },
+      },
+    },
+    {
+      title: 'OIDC Scopes',
+      dataIndex: 'oidcAllowedScopes',
+      valueType: 'select',
+      hideInTable: true,
+      fieldProps: { mode: 'multiple' },
+      valueEnum: {
+        [OidcScope.OpenId]: { text: 'openid' },
+        [OidcScope.Profile]: { text: 'profile' },
+        [OidcScope.Phone]: { text: 'phone' },
+        [OidcScope.IamAuthorization]: { text: 'iam:authorization' },
+      },
+    },
+    {
       title: '创建时间',
       dataIndex: 'createTime',
       width: 170,
@@ -112,10 +172,13 @@ export default function ClientsPage() {
     {
       title: '操作',
       valueType: 'option',
-      width: 220,
+      width: 270,
       render: (_, row) => [
         <a key="edit" onClick={() => onEdit(row)}>
           编辑
+        </a>,
+        <a key="oidc" onClick={() => onOidc(row)}>
+          OIDC
         </a>,
         <Dropdown
           key="status"
@@ -158,6 +221,9 @@ export default function ClientsPage() {
               clientName,
               status,
               managementLevel,
+              oidcState,
+              oidcClientType,
+              oidcAllowedScopes,
             } = params as {
               current?: number;
               pageSize?: number;
@@ -165,6 +231,9 @@ export default function ClientsPage() {
               clientName?: string;
               status?: string | number;
               managementLevel?: ClientManagementLevel;
+              oidcState?: OidcClientState;
+              oidcClientType?: OidcClientType;
+              oidcAllowedScopes?: OidcScope[];
             };
             const text = (clientCode || clientName || '') as string;
             const statusNum =
@@ -181,6 +250,14 @@ export default function ClientsPage() {
                   managementLevels: managementLevel
                     ? [managementLevel]
                     : undefined,
+                  oidcStates: oidcState ? [oidcState] : undefined,
+                  oidcClientTypes: oidcClientType
+                    ? [oidcClientType]
+                    : undefined,
+                  oidcAllowedScopes:
+                    oidcAllowedScopes && oidcAllowedScopes.length > 0
+                      ? oidcAllowedScopes
+                      : undefined,
                 },
               },
             });
@@ -215,6 +292,26 @@ export default function ClientsPage() {
         onSuccess={() => {
           setFormState({ open: false });
           actionRef.current?.reload();
+        }}
+      />
+
+      <OidcConfigModal
+        open={oidcFormState.open}
+        client={oidcFormState.open ? oidcFormState.client : null}
+        onOpenChange={(open) => {
+          if (!open) setOidcFormState({ open: false });
+        }}
+        onSuccess={async () => {
+          actionRef.current?.reload();
+          if (oidcFormState.open) {
+            try {
+              const client = await getClient(oidcFormState.client.clientCode);
+              setOidcFormState({ open: true, client });
+            } catch (err) {
+              handleError(err);
+              setOidcFormState({ open: false });
+            }
+          }
         }}
       />
     </PageContainer>

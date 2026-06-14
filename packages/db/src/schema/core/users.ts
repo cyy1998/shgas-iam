@@ -1,11 +1,12 @@
 import { UserStatus, UserType } from "@iam/contracts";
-import { integer, snakeCase, varchar } from "drizzle-orm/pg-core";
+import { integer, snakeCase, uuid, varchar } from "drizzle-orm/pg-core";
 import { createInsertSchema, createSelectSchema, createUpdateSchema } from "drizzle-orm/zod";
 import { z } from "zod";
 import { baseColumns } from "../_shard/base-columns";
 
 export const users = snakeCase.table("user", {
   id: baseColumns.id,
+  oidcSubject: uuid().defaultRandom().notNull().unique(),
   username: varchar({ length: 64 }).notNull().unique(),
   wxId: varchar("wxId", { length: 255 }),
   name: varchar({ length: 64 }).notNull(),
@@ -26,10 +27,10 @@ export const selectUserSchema = createSelectSchema(users, {
 export const insertUserSchema = createInsertSchema(users, {
   userType: () => z.enum(UserType),
   status: () => z.enum(UserStatus),
-}).omit({ id: true, createTime: true, updateTime: true, isDelete: true });
+}).omit({ id: true, oidcSubject: true, createTime: true, updateTime: true, isDelete: true });
 export const updateUserSchema = createUpdateSchema(users, {
   userType: () => z.enum(UserType),
   status: () => z.enum(UserStatus),
-}).omit({ id: true, createTime: true, updateTime: true, isDelete: true });
+}).omit({ id: true, oidcSubject: true, createTime: true, updateTime: true, isDelete: true });
 
 export type User = z.infer<typeof selectUserSchema>;

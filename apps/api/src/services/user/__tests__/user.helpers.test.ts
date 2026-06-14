@@ -77,6 +77,7 @@ const fixedDate = new Date("2026-01-01T00:00:00.000Z");
 function makeUser(overrides: Record<string, unknown> = {}) {
   return {
     id: 1001,
+    oidcSubject: "11111111-1111-4111-8111-111111111111",
     username: "zhangsan",
     wxId: null,
     name: "张三",

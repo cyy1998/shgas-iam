@@ -274,7 +274,11 @@ const ssoService = await import("../sso.service");
 const sessionService = await import("@api/services/session/session.service");
 
 async function createGlobalSession(globalSessionId = "global-session") {
-  await fakeRedis.set(`global_session:${globalSessionId}`, JSON.stringify(userDetail), "EX", 3600);
+  await fakeRedis.set(`global_session:${globalSessionId}`, JSON.stringify({
+    version: 1,
+    authTime: 1_700_000_000,
+    user: userDetail,
+  }), "EX", 3600);
   return globalSessionId;
 }
 

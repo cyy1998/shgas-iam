@@ -22,6 +22,16 @@ services:
       env: dev
       app: iam
 
+  - id: iam-oidc-provider-dev
+    name: iam-oidc-provider-dev
+    desc: IAM OIDC provider service baseline
+    upstream_id: iam-oidc-provider-dev
+    labels:
+      managed_by: shgas-iam
+      source: repo-manifest
+      env: dev
+      app: iam
+
   - id: iam-sso-frontend-dev
     name: iam-sso-frontend-dev
     desc: IAM SSO frontend service baseline

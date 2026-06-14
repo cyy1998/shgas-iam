@@ -22,6 +22,16 @@ services:
       env: prod
       app: iam
 
+  - id: iam-oidc-provider-prod
+    name: iam-oidc-provider-prod
+    desc: IAM OIDC provider production baseline
+    upstream_id: iam-oidc-provider-prod
+    labels:
+      managed_by: shgas-iam
+      source: repo-manifest
+      env: prod
+      app: iam
+
   - id: iam-sso-frontend-prod
     name: iam-sso-frontend-prod
     desc: IAM SSO frontend production baseline

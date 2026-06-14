@@ -1,7 +1,11 @@
 import {
+  ClientAdminDetailDtoSchema,
+  ClientAdminListDtoSchema,
   ClientCreateDtoSchema,
   ClientDtoSchema,
   ClientInputDtoSchema,
+  ClientOidcConfigureDtoSchema,
+  ClientOidcMutationResultSchema,
   ClientPaginationQueryDtoSchema,
   ClientStatusUpdateDtoSchema,
   ClientUpdateDtoSchema,
@@ -24,7 +28,7 @@ export const clientsSearch = createRoute({
   },
   responses: {
     [HttpStatusCodes.OK]: jsonContent(
-      createSuccessResponseSchema(createPageResultSchema(z.array(ClientDtoSchema))),
+      createSuccessResponseSchema(createPageResultSchema(z.array(ClientAdminListDtoSchema))),
       "分页客户端列表",
     ),
   },
@@ -50,7 +54,7 @@ export const clientDetail = createRoute({
     params: z.object({ clientCode: z.string().openapi({ example: "portal" }) }),
   },
   responses: {
-    [HttpStatusCodes.OK]: jsonContent(createSuccessResponseSchema(ClientDtoSchema), "客户端详情"),
+    [HttpStatusCodes.OK]: jsonContent(createSuccessResponseSchema(ClientAdminDetailDtoSchema), "客户端详情"),
   },
 });
 
@@ -91,6 +95,42 @@ export const clientDelete = createRoute({
     [HttpStatusCodes.OK]: jsonContent(createSuccessResponseSchema(z.boolean()), "软删除成功"),
   },
 });
+
+export const clientOidcConfigure = createRoute({
+  method: "put",
+  path: "/:clientCode/oidc/configure",
+  tags,
+  request: {
+    params: z.object({ clientCode: z.string() }),
+    body: jsonContentRequired(ClientOidcConfigureDtoSchema, "OIDC 配置"),
+  },
+  responses: {
+    [HttpStatusCodes.OK]: jsonContent(
+      createSuccessResponseSchema(ClientOidcMutationResultSchema),
+      "OIDC 配置成功",
+    ),
+  },
+});
+
+function createOidcActionRoute(path: string, description: string) {
+  return createRoute({
+    method: "post",
+    path,
+    tags,
+    request: { params: z.object({ clientCode: z.string() }) },
+    responses: {
+      [HttpStatusCodes.OK]: jsonContent(createSuccessResponseSchema(ClientOidcMutationResultSchema), description),
+    },
+  });
+}
+
+export const clientOidcEnable = createOidcActionRoute("/:clientCode/oidc/enable", "OIDC 启用成功");
+export const clientOidcDisable = createOidcActionRoute("/:clientCode/oidc/disable", "OIDC 禁用成功");
+export const clientOidcRemove = createOidcActionRoute("/:clientCode/oidc/remove", "OIDC 配置移除成功");
+export const clientOidcRotateSecret = createOidcActionRoute(
+  "/:clientCode/oidc/rotate-secret",
+  "OIDC secret 轮换成功",
+);
 
 export const clientCreateLegacy = createRoute({
   method: "post",

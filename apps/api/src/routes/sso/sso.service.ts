@@ -122,8 +122,14 @@ export async function authorize(globalSessionId: string | undefined, clientCode:
   if (!isRedirectUrlAllowed(clientCode, redirectUrl, client.extAttributes.validRedirectUrls)) {
     throw new InvalidRedirectUriError("非法重定向地址");
   }
-  const userString = await redis.get(`global_session:${globalSessionId}`);
-  if (!userString || !globalSessionId) {
+  if (!globalSessionId) {
+    return {
+      isLogin: false,
+      code: null,
+    };
+  }
+  const globalSession = await sessionService.getGlobalSession(globalSessionId);
+  if (globalSession === null) {
     return {
       isLogin: false,
       code: null,
@@ -131,11 +137,11 @@ export async function authorize(globalSessionId: string | undefined, clientCode:
   }
   const code = crypto.randomUUID();
   await Promise.all([
-    redis.expire(`global_session:${globalSessionId}`, config.REDIS_EXPIRE_TIME),
+    sessionService.renewGlobalSession(globalSessionId),
     redis.set(`auth_code:${code}`, JSON.stringify(
       {
         sessionId: globalSessionId,
-        data: userString,
+        data: JSON.stringify(globalSession.user),
       },
     ), "EX", config.AUTH_CODE_EXPIRE_TIME),
   ]);
@@ -146,10 +152,8 @@ export async function authorize(globalSessionId: string | undefined, clientCode:
 }
 
 export async function logout(globalSessionId: string) {
-  const existSession = await redis.exists(`global_session:${globalSessionId}`);
-  if (existSession === 0) {
+  if (await sessionService.getGlobalSession(globalSessionId) === null)
     return true;
-  }
   const localSessionSet = await sessionService.getValidLocalSessions(globalSessionId);
   await Promise.all(localSessionSet.map(e => sessionService.removeLocalSession(e, globalSessionId)));
   await sessionService.removeGlobalSession(globalSessionId);

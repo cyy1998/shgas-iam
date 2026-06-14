@@ -41,6 +41,28 @@ routes:
       env: prod
       app: iam
 
+  - id: iam-oidc-provider-prod
+    name: iam-oidc-provider-prod
+    desc: IAM OIDC provider through same-origin /oidc issuer
+    uris:
+      - /oidc
+      - /oidc/*
+    service_id: iam-oidc-provider-prod
+    plugin_config_id: iam-oidc-provider-ip-rate-limit-prod
+    plugins:
+      proxy-rewrite:
+        headers:
+          set:
+            X-Forwarded-Host: $http_host
+            X-Forwarded-Proto: $scheme
+        use_real_request_uri_unsafe: false
+    priority: 200
+    labels:
+      managed_by: shgas-iam
+      source: repo-manifest
+      env: prod
+      app: iam
+
   - id: iam-public-prod
     name: iam-public-prod
     desc: IAM public tier through APISIX with /api/iam prefix

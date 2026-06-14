@@ -12,7 +12,9 @@ import { OrganizationDtoSchema, toOrganizationDto } from "../organization/organi
 import { UserDtoSchema } from "../user/user.schema";
 import { PrivilegeDtoSchema } from "./privilege.schema";
 
-const DbUserSchema = z.object(selectUserSchema.shape);
+const DbUserSchema = z.object(selectUserSchema.shape).omit({
+  oidcSubject: true,
+});
 const DbOrganizationSchema = z.object(selectOrganizationSchema.shape);
 const DbPrivilegeSchema = z.object(selectPrivilegeSchema.shape);
 const DbDelegationDetailSchema = z.object(selectDelegationDetailSchema.shape);

@@ -1,7 +1,7 @@
 import {
   createClient,
-  type ClientDetailVo,
   updateClient,
+  type ClientDetailVo,
 } from '@admin/services/client';
 import {
   ModalForm,
@@ -131,6 +131,10 @@ export default function ClientFormModal({
           name="clientCode"
           label="应用编码"
           disabled={isEdit}
+          tooltip="创建后不可修改；启用 OIDC 后该值直接作为 client_id"
+          extra={
+            isEdit ? '应用编码已锁定，也是不可变的 OIDC client_id。' : undefined
+          }
           width="md"
           rules={[{ required: true, message: '请输入应用编码' }]}
         />

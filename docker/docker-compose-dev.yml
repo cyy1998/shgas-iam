@@ -1,10 +1,10 @@
 x-build-proxy-args: &build-proxy-args
-  HTTP_PROXY: ${HTTP_PROXY:-}
-  HTTPS_PROXY: ${HTTPS_PROXY:-}
-  NO_PROXY: ${NO_PROXY:-}
-  http_proxy: ${http_proxy:-}
-  https_proxy: ${https_proxy:-}
-  no_proxy: ${no_proxy:-}
+  HTTP_PROXY: ${DOCKER_BUILD_HTTP_PROXY:-}
+  HTTPS_PROXY: ${DOCKER_BUILD_HTTPS_PROXY:-}
+  NO_PROXY: ${DOCKER_BUILD_NO_PROXY:-}
+  http_proxy: ${DOCKER_BUILD_HTTP_PROXY:-}
+  https_proxy: ${DOCKER_BUILD_HTTPS_PROXY:-}
+  no_proxy: ${DOCKER_BUILD_NO_PROXY:-}
 
 services:
   db:
@@ -154,6 +154,33 @@ services:
       PASSWORD_HASH_ROUNDS: 10
       ADMIN_CLIENT_CODES: iam-admin
       ADMIN_ROLE_CODES: iam:admin
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  oidc-provider:
+    build:
+      context: ..
+      dockerfile: apps/oidc-provider/Dockerfile
+      args: *build-proxy-args
+    restart: unless-stopped
+    ports:
+      - "30015:30002"
+    environment:
+      DATABASE_URL: postgresql://iam:iam_password@db:5432/iam_db
+      REDIS_URL: redis
+      REDIS_PORT: 6379
+      REDIS_DB: 0
+      PORT: 30002
+      NODE_ENV: development
+      LOG_LEVEL: info
+      OIDC_ISSUER: ${OIDC_ISSUER:-http://localhost:30080/oidc}
+      OIDC_PUBLIC_ORIGIN: ${OIDC_PUBLIC_ORIGIN:-http://localhost:30080}
+      OIDC_COOKIE_KEYS: ${OIDC_COOKIE_KEYS:?set OIDC_COOKIE_KEYS}
+      OIDC_CURRENT_JWK_JSON: ${OIDC_CURRENT_JWK_JSON:?set OIDC_CURRENT_JWK_JSON}
+      OIDC_PREVIOUS_JWK_JSON: ${OIDC_PREVIOUS_JWK_JSON:-}
     depends_on:
       db:
         condition: service_healthy

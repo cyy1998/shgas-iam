@@ -1,4 +1,26 @@
 plugin_configs:
+  - id: iam-oidc-provider-ip-rate-limit-dev
+    desc: IAM OIDC provider real IP and base rate limit for local development
+    plugins:
+      real-ip:
+        source: http_x_forwarded_for
+        trusted_addresses:
+          - 127.0.0.1/32
+        recursive: true
+      limit-req:
+        rate: 20
+        burst: 40
+        rejected_code: 429
+        key_type: var
+        key: remote_addr
+        policy: local
+    labels:
+      managed_by: shgas-iam
+      source: repo-manifest
+      env: dev
+      app: iam
+      template: oidc-provider-ip-rate-limit
+
   - id: iam-api-ip-rate-limit-dev
     desc: IAM ordinary API IP smooth rate limit for local and dev APISIX
     plugins:

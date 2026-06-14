@@ -14,6 +14,11 @@ router
   .openapi(routes.clientUpdate, handlers.clientUpdate)
   .openapi(routes.clientStatusUpdate, handlers.clientStatusUpdate)
   .openapi(routes.clientDelete, handlers.clientDelete)
+  .openapi(routes.clientOidcConfigure, handlers.clientOidcConfigure)
+  .openapi(routes.clientOidcEnable, handlers.clientOidcEnable)
+  .openapi(routes.clientOidcDisable, handlers.clientOidcDisable)
+  .openapi(routes.clientOidcRemove, handlers.clientOidcRemove)
+  .openapi(routes.clientOidcRotateSecret, handlers.clientOidcRotateSecret)
   .openapi(routes.clientCreateLegacy, handlers.clientCreateLegacy)
   .openapi(routes.clientUpdateLegacy, handlers.clientUpdateLegacy);
 

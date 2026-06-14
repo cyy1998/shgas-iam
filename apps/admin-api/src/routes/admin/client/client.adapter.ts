@@ -5,6 +5,7 @@ import * as auditService from "@admin-api/services/audit/audit.service";
 import {
   ClientCreateDtoSchema,
   ClientInputDtoSchema,
+  ClientOidcConfigureDtoSchema,
   ClientPaginationQueryDtoSchema,
   ClientStatusUpdateDtoSchema,
   ClientUpdateDtoSchema,
@@ -80,12 +81,46 @@ const deleteClient = defineAdminApiMutationOperation({
   handler: ({ clientCode }, context) => clientService.deleteClient(clientCode, resolveAuditContext(context)),
 });
 
+const configureClientOidc = defineAdminApiMutationOperation({
+  input: z.object({
+    clientCode: z.string(),
+    data: ClientOidcConfigureDtoSchema,
+  }),
+  restInput: c => ({
+    clientCode: (c.req.valid("param") as { clientCode: string }).clientCode,
+    data: c.req.valid("json") as z.infer<typeof ClientOidcConfigureDtoSchema>,
+  }),
+  handler: ({ clientCode, data }, context) =>
+    clientService.configureClientOidc(clientCode, data, resolveAuditContext(context)),
+});
+
+function defineClientOidcAction<TResult>(
+  handler: (clientCode: string, auditContext: ReturnType<typeof resolveAuditContext>) => Promise<TResult>,
+) {
+  return defineAdminApiMutationOperation({
+    input: z.object({ clientCode: z.string() }),
+    restInput: c => c.req.valid("param") as { clientCode: string },
+    handler: ({ clientCode }, context) => handler(clientCode, resolveAuditContext(context)),
+  });
+}
+
+const enableClientOidc = defineClientOidcAction(clientService.enableClientOidc);
+const disableClientOidc = defineClientOidcAction(clientService.disableClientOidc);
+const removeClientOidc = defineClientOidcAction(clientService.removeClientOidc);
+const rotateClientOidcSecret = defineClientOidcAction(clientService.rotateClientOidcSecret);
+
 export const clientsSearch = searchClient.toHandler<ClientRouteHandler<"clientsSearch">>();
 export const clientDetail = getClient.toHandler<ClientRouteHandler<"clientDetail">>();
 export const clientCreate = createClient.toHandler<ClientRouteHandler<"clientCreate">>();
 export const clientUpdate = updateClient.toHandler<ClientRouteHandler<"clientUpdate">>();
 export const clientStatusUpdate = updateClientStatus.toHandler<ClientRouteHandler<"clientStatusUpdate">>();
 export const clientDelete = deleteClient.toHandler<ClientRouteHandler<"clientDelete">>();
+export const clientOidcConfigure = configureClientOidc.toHandler<ClientRouteHandler<"clientOidcConfigure">>();
+export const clientOidcEnable = enableClientOidc.toHandler<ClientRouteHandler<"clientOidcEnable">>();
+export const clientOidcDisable = disableClientOidc.toHandler<ClientRouteHandler<"clientOidcDisable">>();
+export const clientOidcRemove = removeClientOidc.toHandler<ClientRouteHandler<"clientOidcRemove">>();
+export const clientOidcRotateSecret = rotateClientOidcSecret
+  .toHandler<ClientRouteHandler<"clientOidcRotateSecret">>();
 export const clientCreateLegacy = createClient.toHandler<ClientRouteHandler<"clientCreateLegacy">>();
 export const clientUpdateLegacy = updateClientById.toHandler<ClientRouteHandler<"clientUpdateLegacy">>();
 
@@ -96,4 +131,9 @@ export const clientAdminRouter = router({
   update: updateClient.toTRPC(),
   updateStatus: updateClientStatus.toTRPC(),
   delete: deleteClient.toTRPC(),
+  oidcConfigure: configureClientOidc.toTRPC(),
+  oidcEnable: enableClientOidc.toTRPC(),
+  oidcDisable: disableClientOidc.toTRPC(),
+  oidcRemove: removeClientOidc.toTRPC(),
+  oidcRotateSecret: rotateClientOidcSecret.toTRPC(),
 });

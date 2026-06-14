@@ -77,6 +77,8 @@ describe("apisix manifest validation", () => {
         IAM_ADMIN_FRONTEND_UPSTREAM_PORT: "80",
         IAM_API_UPSTREAM_HOST: "iam-api.internal",
         IAM_API_UPSTREAM_PORT: "30000",
+        IAM_OIDC_PROVIDER_UPSTREAM_HOST: "iam-oidc-provider.internal",
+        IAM_OIDC_PROVIDER_UPSTREAM_PORT: "30002",
         IAM_SSO_CORS_ALLOW_ORIGINS: "https://iam.example.com",
         IAM_SSO_EXTERNAL_HOST: "iam.example.com",
         IAM_SSO_FRONTEND_UPSTREAM_HOST: "iam-sso.internal",

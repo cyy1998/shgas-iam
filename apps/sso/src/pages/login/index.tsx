@@ -6,15 +6,15 @@ import {
   SafetyCertificateOutlined,
   UserOutlined,
 } from '@ant-design/icons';
-import logo from '@sso/assets/logo.png';
+import { ApiErrorCode } from '@iam/contracts';
 import logoColorfulTextWhite from '@sso/assets/logo-colorful-text-white.png';
+import logo from '@sso/assets/logo.png';
 import { withHumanVerification } from '@sso/lib/human-verification';
 import { buildAuthorizeUrl } from '@sso/lib/sso';
 import { login, mobileLogin } from '@sso/services/auth';
 import { sendMessage } from '@sso/services/open';
 import { mobileSet } from '@sso/services/public';
 import { ServiceError } from '@sso/utils/request';
-import { ApiErrorCode } from '@iam/contracts';
 import { decodeRedirect, getQuery } from '@sso/utils/url';
 import { history, useModel } from '@umijs/max';
 import { Button, Form, Input, Modal, Tabs, message } from 'antd';
@@ -43,8 +43,13 @@ export default function LoginPage() {
   };
 
   const client = getQuery('client');
+  const oidcReturn = getQuery('oidcReturn') ?? '';
   const redirectUrl = decodeRedirect(getQuery('redirectUrl')) ?? '';
-  const clientLabel = client === 'iam-admin' ? 'IAM Admin' : client || 'SSO';
+  const clientLabel = oidcReturn
+    ? 'OIDC'
+    : client === 'iam-admin'
+      ? 'IAM Admin'
+      : client || 'SSO';
 
   useEffect(() => {
     const loginType = getQuery('loginType');
@@ -71,7 +76,15 @@ export default function LoginPage() {
     }, 1000);
   };
 
-  const redirectToAuthorize = () => {
+  const redirectAfterLogin = () => {
+    if (oidcReturn) {
+      if (!/^[A-Za-z0-9_-]{43}$/.test(oidcReturn)) {
+        message.error('OIDC 登录请求已失效，请返回应用重新发起登录');
+        return;
+      }
+      window.location.href = `/oidc/resume?oidcReturn=${encodeURIComponent(oidcReturn)}`;
+      return;
+    }
     if (!authConfig || !client) {
       message.error('SSO 配置未就绪，请刷新重试');
       return;
@@ -90,14 +103,15 @@ export default function LoginPage() {
       const data = await withHumanVerification(
         'passwordLogin',
         () => login(body, { suppressErrorMessage: true }),
-        (capToken) => login({ ...body, capToken }, { suppressErrorMessage: true }),
+        (capToken) =>
+          login({ ...body, capToken }, { suppressErrorMessage: true }),
       );
       if (!data.isMobileSet) {
         setMode('BMN');
         smsForm.resetFields();
         return;
       }
-      redirectToAuthorize();
+      redirectAfterLogin();
     } catch (e) {
       if (!(e instanceof ServiceError)) throw e;
       if (
@@ -124,9 +138,10 @@ export default function LoginPage() {
       await withHumanVerification(
         'mobileLogin',
         () => mobileLogin(body, { suppressErrorMessage: true }),
-        (capToken) => mobileLogin({ ...body, capToken }, { suppressErrorMessage: true }),
+        (capToken) =>
+          mobileLogin({ ...body, capToken }, { suppressErrorMessage: true }),
       );
-      redirectToAuthorize();
+      redirectAfterLogin();
     } catch (e) {
       if (!(e instanceof ServiceError)) throw e;
       if (
@@ -151,7 +166,7 @@ export default function LoginPage() {
         phoneNumber: values.phoneNumber.trim(),
         code: values.code.trim(),
       });
-      redirectToAuthorize();
+      redirectAfterLogin();
     } catch (e) {
       if (!(e instanceof ServiceError)) throw e;
     } finally {
@@ -436,7 +451,7 @@ export default function LoginPage() {
             <Button
               className="skip-btn"
               type="link"
-              onClick={redirectToAuthorize}
+              onClick={redirectAfterLogin}
             >
               跳过
             </Button>

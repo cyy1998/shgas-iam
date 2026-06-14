@@ -20,6 +20,8 @@ const config = {
 
 const hash = mock(async (password: string, rounds: number) => `hashed:${password}:${rounds}`);
 const generateRandomPassword = mock(() => "Rand1234");
+const revokeOidcAccessTokensForUser = mock(async () => 0);
+const redis = { name: "admin-user-service-test-redis" };
 
 const userRepository = {
   countActiveEmploymentsByUsername: mock(),
@@ -76,6 +78,14 @@ mock.module("bcrypt-ts", () => ({
 
 mock.module("@iam/api-core/utils", () => ({
   generateRandomPassword,
+}));
+
+mock.module("@iam/api-core/oidc", () => ({
+  revokeOidcAccessTokensForUser,
+}));
+
+mock.module("@admin-api/lib/infra/redis", () => ({
+  default: redis,
 }));
 
 mock.module("@admin-api/services/user/user.repository", () => userRepository);
@@ -215,6 +225,7 @@ beforeEach(() => {
   transaction.mockClear();
   hash.mockClear();
   generateRandomPassword.mockClear();
+  revokeOidcAccessTokensForUser.mockClear();
 
   userRepository.countActiveEmploymentsByUsername.mockReset();
   userRepository.getUserByUsernameForAdmin.mockReset();
@@ -361,6 +372,13 @@ describe("admin userService.updateUser", () => {
         patch: data,
       }),
     }), tx);
+    expect(revokeOidcAccessTokensForUser).toHaveBeenCalledWith(redis, 1001);
+  });
+
+  test("does not revoke OIDC tokens for display-only updates", async () => {
+    await expect(userService.updateUser("zhangsan", { name: "新名字" })).resolves.toBe(true);
+
+    expect(revokeOidcAccessTokensForUser).not.toHaveBeenCalled();
   });
 
   test("updates user status through updateUser", async () => {
@@ -377,6 +395,7 @@ describe("admin userService.updateUser", () => {
         patch: { status: UserStatus.Disable },
       }),
     }), tx);
+    expect(revokeOidcAccessTokensForUser).toHaveBeenCalledWith(redis, 1001);
   });
 });
 
@@ -409,6 +428,7 @@ describe("admin userService.deleteUser", () => {
         deleted: true,
       }),
     }), tx);
+    expect(revokeOidcAccessTokensForUser).toHaveBeenCalledWith(redis, 1001);
   });
 });
 

@@ -1,6 +1,7 @@
 import type { AdminAuditContext } from "@admin-api/services/audit/audit.service";
 import type { UserAdminCreateDto, UserDetailDto, UserPaginationQueryDto, UserUpdateDto } from "./user.type";
 import config from "@admin-api/env";
+import redis from "@admin-api/lib/infra/redis";
 import { recordAdminUserAudit } from "@admin-api/services/audit/events/user.audit";
 import * as employmentRepository from "@admin-api/services/employment/employment.repository";
 import { EmploymentDetailDtoSchema, toEmploymentDto } from "@admin-api/services/employment/employment.schema";
@@ -11,6 +12,7 @@ import {
   UserDetailDtoSchema,
   UserDtoSchema,
 } from "@admin-api/services/user/user.schema";
+import { revokeOidcAccessTokensForUser } from "@iam/api-core/oidc";
 import { generateRandomPassword } from "@iam/api-core/utils";
 import { EmploymentStatus, UserStatus } from "@iam/contracts";
 import db from "@iam/db";
@@ -100,7 +102,7 @@ export async function updateUser(
   auditContext?: AdminAuditContext,
   action = "admin.user.update",
 ) {
-  return await db.transaction(async (tx) => {
+  const userId = await db.transaction(async (tx) => {
     const existing = await userRepository.getUserByUsernameForAdmin(username, tx);
     if (existing === null) {
       throw new UserNotFoundError("用户不存在");
@@ -109,8 +111,11 @@ export async function updateUser(
     await recordAdminUserAudit(action, updatedUser, {
       patch: data,
     }, tx, auditContext);
-    return true;
+    return existing.id;
   });
+  if (data.status !== undefined && data.status !== UserStatus.Enable)
+    await revokeOidcAccessTokensForUser(redis, userId);
+  return true;
 }
 
 export async function updateUserStatus(username: string, status: UserStatus, auditContext?: AdminAuditContext) {
@@ -118,7 +123,7 @@ export async function updateUserStatus(username: string, status: UserStatus, aud
 }
 
 export async function deleteUser(username: string, auditContext?: AdminAuditContext) {
-  return await db.transaction(async (tx) => {
+  const userId = await db.transaction(async (tx) => {
     const existing = await userRepository.getUserByUsernameForAdmin(username, tx);
     if (existing === null) {
       throw new UserNotFoundError("用户不存在");
@@ -131,8 +136,10 @@ export async function deleteUser(username: string, auditContext?: AdminAuditCont
     await recordAdminUserAudit("admin.user.delete", deletedUser, {
       deleted: true,
     }, tx, auditContext);
-    return true;
+    return existing.id;
   });
+  await revokeOidcAccessTokensForUser(redis, userId);
+  return true;
 }
 
 export async function resetPasswordByUsername(username: string, auditContext?: AdminAuditContext): Promise<string> {

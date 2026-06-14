@@ -4,7 +4,9 @@ import { OrganizationSchema } from "../organization";
 import { PositionDtoSchema } from "../position";
 
 export const EmploymentSchema = z.object(selectEmploymentSchema.shape);
-const DbUserSchema = z.object(selectUserSchema.shape);
+const DbUserSchema = z.object(selectUserSchema.shape).omit({
+  oidcSubject: true,
+});
 
 export const EmploymentUserSummarySchema = DbUserSchema.pick({
   id: true,

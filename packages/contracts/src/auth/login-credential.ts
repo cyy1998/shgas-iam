@@ -1,4 +1,6 @@
-import { sm2, sm3, sm4 } from "sm-crypto";
+import smCrypto from "sm-crypto";
+
+const { sm2, sm3, sm4 } = smCrypto;
 
 export const LOGIN_CREDENTIAL_PREFIX = "iam-login-v1";
 export const LOGIN_CREDENTIAL_VERSION = 1;

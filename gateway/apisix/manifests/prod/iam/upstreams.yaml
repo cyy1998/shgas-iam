@@ -27,6 +27,20 @@ upstreams:
       env: prod
       app: iam
 
+  - id: iam-oidc-provider-prod
+    name: iam-oidc-provider-prod
+    desc: IAM OIDC provider upstream for production
+    type: roundrobin
+    scheme: http
+    pass_host: pass
+    nodes:
+      ${IAM_OIDC_PROVIDER_UPSTREAM_HOST}:${IAM_OIDC_PROVIDER_UPSTREAM_PORT}: 1
+    labels:
+      managed_by: shgas-iam
+      source: repo-manifest
+      env: prod
+      app: iam
+
   - id: iam-sso-frontend-prod
     name: iam-sso-frontend-prod
     desc: IAM SSO frontend nginx upstream for production

@@ -1,4 +1,26 @@
 plugin_configs:
+  - id: iam-oidc-provider-ip-rate-limit-prod
+    desc: IAM OIDC provider real IP and base rate limit for production
+    plugins:
+      real-ip:
+        source: http_x_forwarded_for
+        trusted_addresses:
+          - ${TENCENT_NGINX_TRUSTED_CIDR}
+        recursive: true
+      limit-req:
+        rate: 20
+        burst: 40
+        rejected_code: 429
+        key_type: var
+        key: remote_addr
+        policy: local
+    labels:
+      managed_by: shgas-iam
+      source: repo-manifest
+      env: prod
+      app: iam
+      template: oidc-provider-ip-rate-limit
+
   - id: iam-api-ip-rate-limit-prod
     desc: IAM ordinary API IP smooth rate limit for production APISIX
     plugins:

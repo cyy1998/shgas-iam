@@ -1,0 +1,94 @@
+import type { Adapter } from "oidc-provider";
+import type { SigningKey } from "../security/signing-keys.ts";
+import assert from "node:assert/strict";
+import { interactionPolicy } from "oidc-provider";
+import { describe, it } from "vitest";
+import { createProviderConfiguration } from "../provider/configuration.ts";
+
+const env = {
+  OIDC_COOKIE_KEYS: ["a".repeat(32), "b".repeat(32)],
+  NODE_ENV: "test",
+  OIDC_ACCESS_TOKEN_TTL_SECONDS: 3600,
+  OIDC_AUTHORIZATION_CODE_TTL_SECONDS: 300,
+  OIDC_ID_TOKEN_TTL_SECONDS: 3600,
+  OIDC_INTERACTION_TTL_SECONDS: 600,
+  OIDC_GLOBAL_SESSION_TTL_SECONDS: 86400,
+} as const;
+
+const emptyAdapter: Adapter = {
+  async consume() {},
+  async destroy() {},
+  async find() {},
+  async findByUid() {},
+  async findByUserCode() {},
+  async revokeByGrantId() {},
+  async upsert() {},
+};
+
+describe("oIDC provider configuration", () => {
+  it("exposes only the approved first-version protocol capabilities", () => {
+    const configuration = createProviderConfiguration(env as never, {
+      adapter: () => emptyAdapter,
+      claims: {
+        createAccessTokenExtra: async () => undefined,
+        findAccount: async () => undefined,
+      } as never,
+      currentSigningKey: { jwk: { kty: "RSA", kid: "current", alg: "RS256" } } as SigningKey,
+      interactionPolicy: interactionPolicy.base(),
+    });
+
+    assert.deepEqual(configuration.responseTypes, ["code"]);
+    assert.deepEqual(configuration.subjectTypes, ["public"]);
+    assert.deepEqual(configuration.clientAuthMethods, ["none", "client_secret_basic"]);
+    assert.deepEqual(configuration.enabledJWA?.idTokenSigningAlgValues, ["RS256"]);
+    assert.equal(configuration.pkce?.required?.(null as never, null as never), true);
+    assert.equal(configuration.features?.devInteractions?.enabled, false);
+    assert.equal(configuration.features?.userinfo?.enabled, true);
+    assert.equal(configuration.features?.jwtUserinfo?.enabled, false);
+    assert.equal(configuration.features?.rpInitiatedLogout?.enabled, true);
+    assert.equal(configuration.scopes?.includes("offline_access"), false);
+    assert.deepEqual(configuration.claims?.["iam:authorization"], ["iam:authorization"]);
+  });
+
+  it("limits token TTL to the remaining global session and enforces client-aware CORS", () => {
+    const configuration = createProviderConfiguration(env as never, {
+      adapter: () => emptyAdapter,
+      claims: {
+        createAccessTokenExtra: async () => undefined,
+        findAccount: async () => undefined,
+      } as never,
+      currentSigningKey: { jwk: { kty: "RSA", kid: "current", alg: "RS256" } } as SigningKey,
+      interactionPolicy: interactionPolicy.base(),
+    });
+    const accessTokenTtl = configuration.ttl?.AccessToken as (ctx: unknown) => number;
+    const boundedTtl = accessTokenTtl({
+      oidc: { entities: { AuthorizationCode: { globalSessionExpiresAt: Math.floor(Date.now() / 1000) + 90 } } },
+    });
+    assert.ok(boundedTtl >= 89 && boundedTtl <= 90);
+    assert.equal(accessTokenTtl({ oidc: { entities: {} } }), 3600);
+
+    const publicClient = {
+      clientAuthMethod: "none",
+      redirectUris: ["https://client.example/callback"],
+    };
+    const confidentialClient = {
+      clientAuthMethod: "client_secret_basic",
+      redirectUris: ["https://client.example/callback"],
+    };
+    assert.equal(configuration.clientBasedCORS?.(
+      { oidc: { route: "token" } } as never,
+      "https://client.example",
+      publicClient as never,
+    ), true);
+    assert.equal(configuration.clientBasedCORS?.(
+      { oidc: { route: "token" } } as never,
+      "https://client.example",
+      confidentialClient as never,
+    ), false);
+    assert.equal(configuration.clientBasedCORS?.(
+      { oidc: { route: "userinfo" } } as never,
+      "https://evil.example",
+      publicClient as never,
+    ), false);
+  });
+});
