@@ -504,8 +504,8 @@ APISIX_ADMIN_KEY=dev-local-admin-key-change-me pnpm gateway:apisix:diff -- --env
 `127.0.0.1` 在宿主机 `NO_PROXY` 中。生产模板还包含
 OIDC Provider，使用前必须补齐 issuer、current/previous RS256 JWK、cookie keys、Redis 和限流参数。
 
-OIDC 接入见 [docs/oidc-integration.md](docs/oidc-integration.md)，发布与回滚见
-[docs/oidc-release-runbook.md](docs/oidc-release-runbook.md)。
+OIDC 接入见 [docs/features/oidc/oidc-integration.md](docs/features/oidc/oidc-integration.md)，发布与回滚见
+[docs/releases/oidc-release-runbook.md](docs/releases/oidc-release-runbook.md)。
 
 ## 🔧 调试与排障
 

@@ -1,6 +1,6 @@
 ## Context
 
-当前 `packages/db` 中 `audit_log` 和 legacy `login_log` 都定义在 `packages/db/src/schema/core`，其中 `audit_log` 已成为统一审计事实表，`login_log` 只剩历史迁移来源。现有 `openspec/specs/audit-logging/spec.md` 仍描述“提供一次性迁移脚本”，`docs/audit-logging.md` 也说明 `login_log` 等待后续独立变更移除。
+当前 `packages/db` 中 `audit_log` 和 legacy `login_log` 都定义在 `packages/db/src/schema/core`，其中 `audit_log` 已成为统一审计事实表，`login_log` 只剩历史迁移来源。现有 `openspec/specs/audit-logging/spec.md` 仍描述“提供一次性迁移脚本”，`docs/features/audit/audit-logging.md` 也说明 `login_log` 等待后续独立变更移除。
 
 这次变更要完成这个后续独立变更：退役 `login_log`，并把审计日志表定义移入新的日志域路径。约束是 `audit_log` 的数据库表名、列、索引和现有服务导入路径应保持稳定，避免把目录整理变成运行时审计契约变化。
 

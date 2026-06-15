@@ -22,7 +22,7 @@ pnpm gateway:apisix:diff -- --env prod:iam --render-env
 
 1. 部署数据库、API、管理端 API/UI、SSO Portal 和 Provider 代码，但暂不开放 APISIX `/oidc` 路由。
 2. 在维护窗口内停止 login、authorize、callback、token 和 session refresh 流量。
-3. 按照 [OIDC Session 迁移说明](oidc-session-migration.md) 删除全部旧 global/local session key。
+3. 按照 [OIDC Session 迁移说明](../features/oidc/oidc-session-migration.md) 删除全部旧 global/local session key。
 4. 启动 Provider，通过内部直连端口验证 `/health`。
 5. 配置一个保持禁用的测试 client，检查 redirect URI 和 scope；如为 confidential client，生成 secret，
    然后只启用该测试 client。

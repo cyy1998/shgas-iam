@@ -1,7 +1,7 @@
 # apps/api 漏洞解决方案报告
 
 日期：2026-05-08  
-关联审计报告：`docs/API_SECURITY_AUDIT_2026-05-08.md`  
+关联审计报告：`docs/security/API_SECURITY_AUDIT_2026-05-08.md`  
 适用范围：`apps/api` 认证、SSO、internal/admin 权限、会话、验证码、依赖与部署配置。
 
 ## 目标

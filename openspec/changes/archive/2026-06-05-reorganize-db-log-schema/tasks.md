@@ -24,7 +24,7 @@
 
 ## 5. Documentation And Specs
 
-- [x] 5.1 更新 `docs/audit-logging.md`，将 `login_log` 退役计划改为已退役说明，并保留历史迁移验收要求。
+- [x] 5.1 更新 `docs/features/audit/audit-logging.md`，将 `login_log` 退役计划改为已退役说明，并保留历史迁移验收要求。
 - [x] 5.2 检查 OpenSpec delta 与实现一致，必要时同步补充任务或 spec 细节。
 
 ## 6. Verification
