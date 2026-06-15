@@ -62,7 +62,7 @@ plugin_configs:
         allow_credential: false
         allow_headers: "*"
         allow_methods: "*"
-        allow_origins: ${IAM_SSO_CORS_ALLOW_ORIGINS}
+        allow_origins: "*"
         max_age: 5
     labels:
       managed_by: shgas-iam

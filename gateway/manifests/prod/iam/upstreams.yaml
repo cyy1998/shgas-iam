@@ -6,7 +6,7 @@ upstreams:
     scheme: http
     pass_host: pass
     nodes:
-      ${IAM_API_UPSTREAM_HOST}:${IAM_API_UPSTREAM_PORT}: 1
+      176.169.89.71:30000: 1
     labels:
       managed_by: shgas-iam
       source: repo-manifest
@@ -20,7 +20,7 @@ upstreams:
     scheme: http
     pass_host: pass
     nodes:
-      ${IAM_ADMIN_API_UPSTREAM_HOST}:${IAM_ADMIN_API_UPSTREAM_PORT}: 1
+      176.169.89.71:30001: 1
     labels:
       managed_by: shgas-iam
       source: repo-manifest
@@ -34,7 +34,7 @@ upstreams:
     scheme: http
     pass_host: pass
     nodes:
-      ${IAM_OIDC_PROVIDER_UPSTREAM_HOST}:${IAM_OIDC_PROVIDER_UPSTREAM_PORT}: 1
+      176.169.89.71:30002: 1
     labels:
       managed_by: shgas-iam
       source: repo-manifest
@@ -48,7 +48,7 @@ upstreams:
     scheme: http
     pass_host: pass
     nodes:
-      ${IAM_SSO_FRONTEND_UPSTREAM_HOST}:${IAM_SSO_FRONTEND_UPSTREAM_PORT}: 1
+      176.169.89.71:30013: 1
     labels:
       managed_by: shgas-iam
       source: repo-manifest
@@ -62,7 +62,7 @@ upstreams:
     scheme: http
     pass_host: pass
     nodes:
-      ${IAM_ADMIN_FRONTEND_UPSTREAM_HOST}:${IAM_ADMIN_FRONTEND_UPSTREAM_PORT}: 1
+      176.169.89.71:30014: 1
     labels:
       managed_by: shgas-iam
       source: repo-manifest
