@@ -182,7 +182,7 @@ describe("apisix manifest validation", () => {
           id: "api-real-ip",
           plugins: {
             "real-ip": {
-              source: "http_x_forwarded_for",
+              source: "http_x_real_ip",
               trusted_addresses: ["0.0.0.0/0"],
               recursive: true,
             },
@@ -202,7 +202,7 @@ describe("apisix manifest validation", () => {
           id: "api-real-ip",
           plugins: {
             "real-ip": {
-              source: "http_x_forwarded_for",
+              source: "http_x_real_ip",
               trusted_addresses: ["${TENCENT_NGINX_TRUSTED_CIDR}"],
               recursive: true,
             },

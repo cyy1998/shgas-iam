@@ -202,7 +202,7 @@
 #### Scenario: External proxy supplies X-Forwarded-For
 
 - **WHEN** 请求来自可信腾讯云 Nginx 出口 CIDR 并携带 `X-Forwarded-For`
-- **THEN** API 限流策略 SHALL 通过 `real-ip.source: http_x_forwarded_for` 解析真实客户端 IP
+- **THEN** API 限流策略 SHALL 通过 `real-ip.source: http_x_real_ip` 解析真实客户端 IP
 - **AND** `limit-req` SHALL 按解析后的 `remote_addr` 计数
 
 #### Scenario: Direct internal access keeps peer address

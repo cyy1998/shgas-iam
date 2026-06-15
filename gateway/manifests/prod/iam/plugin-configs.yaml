@@ -3,7 +3,7 @@ plugin_configs:
     desc: IAM OIDC provider real IP and base rate limit for production
     plugins:
       real-ip:
-        source: http_x_forwarded_for
+        source: http_x_real_ip
         trusted_addresses:
           - ${TENCENT_NGINX_TRUSTED_CIDR}
         recursive: true
@@ -25,7 +25,7 @@ plugin_configs:
     desc: IAM ordinary API IP smooth rate limit for production APISIX
     plugins:
       real-ip:
-        source: http_x_forwarded_for
+        source: http_x_real_ip
         trusted_addresses:
           - ${TENCENT_NGINX_TRUSTED_CIDR}
         recursive: true
@@ -47,7 +47,7 @@ plugin_configs:
     desc: IAM SSO API CORS, real IP and IP smooth rate limit for production APISIX
     plugins:
       real-ip:
-        source: http_x_forwarded_for
+        source: http_x_real_ip
         trusted_addresses:
           - ${TENCENT_NGINX_TRUSTED_CIDR}
         recursive: true
@@ -75,7 +75,7 @@ plugin_configs:
     desc: IAM internal API relaxed IP smooth rate limit for production APISIX
     plugins:
       real-ip:
-        source: http_x_forwarded_for
+        source: http_x_real_ip
         trusted_addresses:
           - ${TENCENT_NGINX_TRUSTED_CIDR}
         recursive: true

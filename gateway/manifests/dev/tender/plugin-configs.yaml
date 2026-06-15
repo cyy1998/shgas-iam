@@ -3,7 +3,7 @@ plugin_configs:
     desc: Tender API IP smooth rate limit for local and dev APISIX
     plugins:
       real-ip:
-        source: http_x_forwarded_for
+        source: http_x_real_ip
         trusted_addresses:
           - 127.0.0.1/32
         recursive: true

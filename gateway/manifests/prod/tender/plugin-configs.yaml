@@ -3,7 +3,7 @@ plugin_configs:
     desc: Tender API IP smooth rate limit for production APISIX
     plugins:
       real-ip:
-        source: http_x_forwarded_for
+        source: http_x_real_ip
         trusted_addresses:
           - ${TENCENT_NGINX_TRUSTED_CIDR}
         recursive: true
