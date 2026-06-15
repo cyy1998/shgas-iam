@@ -79,10 +79,7 @@ routes:
         keepalive_pool: 5
         keepalive_timeout: 60000
         request_headers:
-          - Cookie
           - apikey
-          - IP-Chain
-          - Authorization
         request_method: GET
         ssl_verify: false
         status_on_error: 403

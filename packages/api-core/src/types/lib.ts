@@ -16,6 +16,11 @@ export type UserVariables<TUserDetail = unknown> = {
   userDetailDto: TUserDetail;
 };
 
+export type InternalClientVariables<TClient = unknown> = {
+  clientCode: string;
+  clientDto: TClient;
+};
+
 export type BaseBindings = {
   Variables: BaseVariables;
 };
@@ -26,6 +31,12 @@ export type AuthenticatedBindings<TUserDetail = unknown> = {
 
 export type PublicBindings<TUserDetail = unknown> = AuthenticatedBindings<TUserDetail>;
 
+export type InternalBindings<TClient = unknown> = {
+  Variables: InternalClientVariables<TClient> & BaseVariables;
+};
+
 export type PublicRouteHandler<R extends HonoRouteConfig, TUserDetail = unknown>
   = RouteHandler<R, PublicBindings<TUserDetail>>;
 export type BaseRouteHandler<R extends HonoRouteConfig> = RouteHandler<R, BaseBindings>;
+export type InternalRouteHandler<R extends HonoRouteConfig, TClient = unknown>
+  = RouteHandler<R, InternalBindings<TClient>>;

@@ -70,6 +70,6 @@ export const internalAuthz = createRoute({
   path: `${routePrefix}/internal-authz`,
   tags,
   responses: {
-    [HttpStatusCodes.OK]: jsonContent(createSuccessResponseSchema(z.object()), "准许"),
+    [HttpStatusCodes.OK]: jsonContent(createSuccessResponseSchema(z.boolean()), "准许"),
   },
 });

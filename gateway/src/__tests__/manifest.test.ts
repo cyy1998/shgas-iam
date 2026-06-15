@@ -51,6 +51,19 @@ function expectSsoRoutesClassifyEntryNetwork(manifest: Awaited<ReturnType<typeof
   });
 }
 
+function getForwardAuthConfig(route: Record<string, unknown>) {
+  return (route.plugins as Record<string, unknown> | undefined)?.["forward-auth"] as Record<string, unknown> | undefined;
+}
+
+function getTenderInternalAuthzRequestHeaders(manifest: Awaited<ReturnType<typeof loadManifest>>) {
+  const route = manifest.resources.routes.find((candidate) => {
+    const forwardAuth = getForwardAuthConfig(candidate);
+    return typeof forwardAuth?.uri === "string" && forwardAuth.uri.endsWith("/auth/internal-authz");
+  });
+
+  return getForwardAuthConfig(route ?? {})?.request_headers;
+}
+
 describe("apisix manifest validation", () => {
   it("accepts the checked-in dev IAM manifest", async () => {
     const manifest = await loadManifest("dev:iam");
@@ -102,6 +115,22 @@ describe("apisix manifest validation", () => {
     expect(manifest.manifestDir.endsWith("gateway/manifests/prod/tender")).toBe(true);
     expect(validateManifest(manifest)).toEqual([]);
     expect(manifest.resources.services.map(service => service.name)).toContain("tender-api-prod");
+  });
+
+  it("forwards only apikey to tender internal authz routes", async () => {
+    const manifests = await Promise.all([
+      loadManifest("dev:tender"),
+      loadManifest("prod:tender"),
+    ]);
+
+    for (const manifest of manifests) {
+      const requestHeaders = getTenderInternalAuthzRequestHeaders(manifest);
+
+      expect(requestHeaders).toEqual(["apikey"]);
+      expect(requestHeaders).not.toContain("IP-Chain");
+      expect(requestHeaders).not.toContain("Cookie");
+      expect(requestHeaders).not.toContain("Authorization");
+    }
   });
 
   it("rejects broken route references", async () => {

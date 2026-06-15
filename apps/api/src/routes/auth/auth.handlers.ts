@@ -1,9 +1,9 @@
 import type { AuthRouteHandler } from "./auth.type";
 import config from "@api/env";
-import { logger } from "@api/lib/logger";
 import * as clientService from "@api/services/client/client.service";
 import { AuthzUnauthorizedError } from "@iam/api-core/errors/AuthzUnauthorizedError";
 import * as resp from "@iam/api-core/http";
+import { verifyInternalClient } from "@iam/api-core/middlewares";
 import { getCookie, setCookie } from "hono/cookie";
 import { getVerificationContext } from "../human-verification-context";
 import * as authService from "./auth.service";
@@ -59,18 +59,8 @@ export const authz: AuthRouteHandler<"authz"> = async (c) => {
 };
 
 export const internalAuthz: AuthRouteHandler<"internalAuthz"> = async (c) => {
-  const clientSecret = c.req.header("apikey");
-  const sourceIp = c.req.header("IP-Chain");
-  logger.info(sourceIp);
-  if (["192.168.93.", "192.168.73.88"].some(key => sourceIp?.includes(key))) {
-    return c.json(resp.ok(true));
-  }
-  if (!clientSecret) {
-    throw new AuthzUnauthorizedError("非法访问");
-  }
-  const clientDto = await clientService.getClientBySecret(clientSecret);
-  if (!clientDto) {
-    throw new AuthzUnauthorizedError("无效secret");
-  }
+  await verifyInternalClient(c, {
+    getClientBySecret: clientService.getClientBySecret,
+  });
   return c.json(resp.ok(true));
 };

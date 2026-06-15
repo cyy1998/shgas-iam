@@ -225,18 +225,28 @@
 - **THEN** 系统 SHALL 拒绝请求并报告系统维护中
 
 ### Requirement: 内部服务鉴权
-系统 SHALL 对 `/auth/internal-authz` 使用 `IP-Chain` 白名单或 `apikey` 客户端密钥作为当前准入判断。
+系统 SHALL 对 `/auth/internal-authz` 和 `/internal/*` 使用统一 internal client 身份校验。系统 MUST 仅将 `apikey` header 作为当前 internal client secret 准入凭据，且认证出的 client MUST 存在、未软删除并且 `status` 为 `ClientStatus.Enable`。系统 MUST NOT 因 `IP-Chain` header 命中任何内网片段而放行请求。
 
-#### Scenario: IP-Chain 命中白名单片段
-- **WHEN** `IP-Chain` header 包含 `192.168.93.` 或 `192.168.73.88`
-- **THEN** 系统 SHALL 直接返回准许
-
-#### Scenario: apikey 匹配客户端密钥
-- **WHEN** 请求未命中 `IP-Chain` 白名单，但提供的 `apikey` 能解析到客户端
+#### Scenario: apikey 匹配 active client
+- **WHEN** `/auth/internal-authz` 请求提供的 `apikey` 能解析到未软删除且状态为 `ClientStatus.Enable` 的 client
 - **THEN** 系统 SHALL 返回准许
+- **AND** 成功响应 SHALL 使用 boolean data 表示准许结果
+
+#### Scenario: internal middleware 写入认证上下文
+- **WHEN** `/internal/*` 请求通过统一 internal client 身份校验
+- **THEN** 系统 SHALL 在 Hono context 中提供认证出的 `clientCode`
+- **AND** 系统 SHALL 在 Hono context 中提供认证出的 `clientDto`
+
+#### Scenario: IP-Chain 不产生准入效果
+- **WHEN** `/auth/internal-authz` 请求携带包含 `192.168.93.` 或 `192.168.73.88` 的 `IP-Chain` header，但缺少有效 `apikey`
+- **THEN** 系统 SHALL 拒绝请求
 
 #### Scenario: 缺少或无效服务凭据
-- **WHEN** 请求未命中 `IP-Chain` 白名单，并且缺少 `apikey` 或 `apikey` 不能解析到客户端
+- **WHEN** `/auth/internal-authz` 或 `/internal/*` 请求缺少 `apikey`，或 `apikey` 不能解析到 client
+- **THEN** 系统 SHALL 拒绝请求
+
+#### Scenario: inactive client 不得通过内部服务鉴权
+- **WHEN** `/auth/internal-authz` 或 `/internal/*` 请求提供的 `apikey` 解析到软删除 client、`ClientStatus.Maintance` client 或 `ClientStatus.Disable` client
 - **THEN** 系统 SHALL 拒绝请求
 
 ### Requirement: public 用户密码校验与账号暂停服务规则具备单元测试覆盖
@@ -280,7 +290,6 @@ Authentication and session flows SHALL use centralized API errors with string bu
 - `MAGIC_CODE` 是当前已实现行为和已有测试覆盖点，但安全审计将其标为 Critical；是否继续作为目标行为需要后续单独确认。
 - `redirectUrl` 当前使用字符串 `startsWith` 前缀校验；baseline 只记录当前合法性判断，不声明其安全充分性。
 - `local session` 读取的是登录时用户快照；用户状态变化后的会话实时失效行为没有从代码证据中确认。
-- `/auth/internal-authz` 的 `IP-Chain` header 信任边界依赖部署网关，代码本身无法证明该 header 一定可信。
 
 ## Evidence Review
 - 密码登录加密凭证传输: 证据 `apps/api/src/routes/auth/login-credential.ts`, `apps/api/src/routes/auth/auth.handlers.ts`, `apps/sso/src/services/auth.ts`, `apps/sso/src/lib/login-credential.ts`。状态: 有代码和测试证据。
@@ -289,4 +298,4 @@ Authentication and session flows SHALL use centralized API errors with string bu
 - SSO 授权码与局部会话: 证据 `apps/api/src/routes/sso/sso.routes.ts`, `apps/api/src/routes/sso/sso.handlers.ts`, `apps/api/src/routes/sso/sso.service.ts`, `apps/api/src/services/session/session.service.ts`, `packages/db/src/schema/core/clients.ts`。状态: 有代码和测试证据；redirect/token 传输存在已知安全风险。
 - SSO 登出清理会话: 证据 `apps/api/src/routes/sso/sso.handlers.ts`, `apps/api/src/routes/sso/sso.service.ts`, `apps/api/src/services/session/session.service.ts`。状态: 有代码和测试证据。
 - 网关鉴权返回用户摘要: 证据 `apps/api/src/routes/auth/auth.handlers.ts`, `apps/api/src/routes/auth/auth.service.ts`, `apps/api/src/services/client/client.service.ts`。状态: 有代码和测试证据；未证明 path/method 权限校验。
-- 内部服务鉴权: 证据 `apps/api/src/routes/auth/auth.handlers.ts`, `apps/api/src/services/client/client.service.ts`, `docs/API_SECURITY_AUDIT_2026-05-08.md`。状态: 有代码证据；`IP-Chain` 白名单属于需要人工确认的部署假设。
+- 内部服务鉴权: 证据 `packages/api-core/src/middlewares/auth.ts`, `apps/api/src/routes/auth/auth.handlers.ts`, `apps/api/src/services/client/client.service.ts`, `gateway/manifests/dev/tender/routes.yaml`, `gateway/manifests/prod/tender/routes.yaml`。状态: 有代码和测试证据；内部服务鉴权统一依赖 active client `apikey`，不再接受 `IP-Chain` 白名单绕过。
