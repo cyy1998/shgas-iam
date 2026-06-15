@@ -99,7 +99,7 @@ describe("apisix manifest validation", () => {
   it("loads app-scoped manifests from env:app directories", async () => {
     const manifest = await loadManifest("prod:tender");
 
-    expect(manifest.manifestDir.endsWith("gateway/apisix/manifests/prod/tender")).toBe(true);
+    expect(manifest.manifestDir.endsWith("gateway/manifests/prod/tender")).toBe(true);
     expect(validateManifest(manifest)).toEqual([]);
     expect(manifest.resources.services.map(service => service.name)).toContain("tender-api-prod");
   });

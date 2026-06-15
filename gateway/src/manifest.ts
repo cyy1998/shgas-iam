@@ -7,7 +7,7 @@ import { renderEnvValue } from "./env";
 import { createEmptyResourceMap, resourceDefinitions } from "./resources";
 
 export const packageRoot = path.resolve(fileURLToPath(new URL("../", import.meta.url)));
-export const repoRoot = path.resolve(packageRoot, "../..");
+export const repoRoot = path.resolve(packageRoot, "..");
 
 const scopeSegmentPattern = /^[a-z0-9][a-z0-9-]*$/;
 

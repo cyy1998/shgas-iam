@@ -60,7 +60,7 @@ services:
       - "30443:9443"
       - "9180:9180"
     volumes:
-      - ../gateway/apisix/config/config.dev.yaml:/usr/local/apisix/conf/config.yaml:ro
+      - ../gateway/config/config.dev.yaml:/usr/local/apisix/conf/config.yaml:ro
     depends_on:
       apisix-etcd:
         condition: service_healthy

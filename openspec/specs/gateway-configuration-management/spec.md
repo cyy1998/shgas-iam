@@ -5,12 +5,12 @@
 ## Requirements
 ### Requirement: APISIX gateway tools are managed as a workspace package
 
-系统 SHALL 将 `gateway/apisix` 作为私有 pnpm workspace package 管理，使 APISIX manifest 同步工具拥有明确的脚本入口、依赖声明和验证生命周期。
+系统 SHALL 将 `gateway` 作为私有 pnpm workspace package 管理，使 APISIX manifest 同步工具拥有明确的脚本入口、依赖声明和验证生命周期。
 
 #### Scenario: Workspace discovers APISIX gateway package
 
 - **WHEN** 开发者查看 workspace package 配置
-- **THEN** `gateway/apisix` SHALL 被 pnpm workspace 发现为 package
+- **THEN** `gateway` SHALL 被 pnpm workspace 发现为 package
 - **AND** 该 package SHALL 使用私有 package 名称标识 APISIX gateway 工具边界
 
 #### Scenario: Package provides gateway sync commands
@@ -40,7 +40,7 @@
 
 - **WHEN** 开发者运行 APISIX sync CLI 并传入 `--env prod:iam`
 - **THEN** 系统 SHALL 使用 `prod:iam` 作为 manifest scope
-- **AND** 系统 SHALL 从 `gateway/apisix/manifests/prod/iam` 或显式 `--manifest-dir` 加载 manifest
+- **AND** 系统 SHALL 从 `gateway/manifests/prod/iam` 或显式 `--manifest-dir` 加载 manifest
 
 #### Scenario: Command uses environment scope
 
@@ -97,7 +97,7 @@
 
 #### Scenario: Manifest directory exists
 
-- **WHEN** 开发者查看 `gateway/apisix/manifests`
+- **WHEN** 开发者查看 `gateway/manifests`
 - **THEN** 系统 SHALL 提供按环境分层的 manifest 目录
 - **AND** 每个环境 SHALL 能表达 APISIX 基础路由、upstream、service、插件配置、consumer、证书对象和策略模板
 

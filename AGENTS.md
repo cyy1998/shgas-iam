@@ -11,7 +11,7 @@ This repository is a `pnpm` workspace + Turborepo monorepo. Runtime apps live un
 - `packages/contracts/src`: shared enums and stable contracts consumed across apps and packages.
 - `packages/domain/src`: shared domain DTO schemas, DTO types, audit helpers, and reusable domain/business errors consumed by backend apps.
 - `packages/db/src`: Drizzle schema, relations, migrations, singleton client, and query helpers. Schema and relation domains currently include `core` and `log`, with shared column helpers under `schema/_shard/`.
-- `gateway/apisix`: APISIX gateway manifest package (`@iam/gateway-apisix`) with dev/prod manifests, config templates, and sync/validate/diff/apply scripts.
+- `gateway`: APISIX gateway manifest package (`@iam/gateway-apisix`) with dev/prod manifests, config templates, and sync/validate/diff/apply scripts.
 - `docker/`: local dependency stacks plus dev/prod compose files.
 - `docs/`: architecture notes, plans, specs, audits, and remediation docs. Older plans may mention previous layouts; current database code is Drizzle + PostgreSQL in `packages/db`.
 - `openspec/`: active OpenSpec changes, archived changes, main specs, and OpenSpec project configuration.
@@ -50,7 +50,7 @@ Do not hand-edit generated frontend directories such as `apps/admin/src/.umi/`, 
 ## Coding Style & Naming Conventions
 Use TypeScript throughout and keep 2-space indentation. Follow the formatter already configured in each app or package:
 
-- API/backend/shared/gateway packages (`apps/api`, `apps/admin-api`, `packages/api-core`, `packages/contracts`, `packages/db`, `packages/domain`, `gateway/apisix`): ESLint uses the Antfu config with double quotes, semicolons, and a 120-character soft limit.
+- API/backend/shared/gateway packages (`apps/api`, `apps/admin-api`, `packages/api-core`, `packages/contracts`, `packages/db`, `packages/domain`, `gateway`): ESLint uses the Antfu config with double quotes, semicolons, and a 120-character soft limit.
 - Admin/SSO frontends (`apps/admin`, `apps/sso`): Prettier uses single quotes, trailing commas, and 80-character wrap.
 
 Preserve existing domain file naming: `user.service.ts`, `user.repository.ts`, `user.schema.ts`, `user.routes.ts`, `user.handlers.ts`, `user.trpc.ts`, and `user.type.ts`. Use PascalCase for React components and pages, and prefer existing import aliases such as `@admin`, `@sso`, or workspace package imports where they are already used.

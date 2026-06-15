@@ -11,7 +11,7 @@
 ## 目录结构
 
 ```text
-gateway/apisix/
+gateway/
   config/
     config.dev.yaml
     config.prod.example.yaml
@@ -78,7 +78,7 @@ labels:
 
 ## 常用命令
 
-`gateway/apisix` 是 workspace package `@iam/gateway-apisix`。仓库根目录保留 `gateway:apisix:*` 兼容命令；需要直接操作该 package 时，也可以使用 `pnpm --filter @iam/gateway-apisix <script>`。
+`gateway` 是 workspace package `@iam/gateway-apisix`。仓库根目录保留 `gateway:apisix:*` 兼容命令；需要直接操作该 package 时，也可以使用 `pnpm --filter @iam/gateway-apisix <script>`。
 
 同步命令必须显式指定 app scope。优先使用 `--env <env:app>`；也可以通过 `APISIX_MANIFEST_ENV=<env:app>` 注入。`--env dev` 这类 env-only scope 不再支持，旧的 `scripts/apisix-sync.ts` 直接执行路径也已移除。
 
@@ -115,7 +115,7 @@ pnpm gateway:apisix:apply -- --env dev:iam --dry-run
 APISIX_ADMIN_KEY=dev-local-admin-key-change-me \
 env -u HTTP_PROXY -u HTTPS_PROXY -u ALL_PROXY \
   -u http_proxy -u https_proxy -u all_proxy \
-  pnpm gateway:apisix:apply -- --env dev:iam --env-file ../../docker/.env
+  pnpm gateway:apisix:apply -- --env dev:iam --env-file docker/.env
 ```
 
 删除已经从 Git manifest 移除的 `repo-manifest` 远端对象：
@@ -237,7 +237,7 @@ pnpm gateway:apisix:validate -- --env prod:gds --env-file .env.prod
 
 - `APISIX_ADMIN_KEY`、TLS 私钥、JWT secret、第三方系统密钥不得写入 manifest。
 - Admin API 必须限制监听地址或来源网段，默认建议只暴露在内网运维网络或本机。
-- `gateway/apisix/manifests/prod/*.yaml` 支持 `${VAR}` 占位符；发布时使用 `--env-file` 或 `--render-env` 渲染。
+- `gateway/manifests/prod/*.yaml` 支持 `${VAR}` 占位符；发布时使用 `--env-file` 或 `--render-env` 渲染。
 - API IP 限流必须配置 `TENCENT_NGINX_TRUSTED_CIDR`，且不得使用 `0.0.0.0/0`。
 - IAM SSO API routes 必须配置 `IAM_SSO_EXTERNAL_HOST` 和 `IAM_SSO_INTERNAL_HOST`；这两个 host
   分别注入 `X-IAM-Entry-Network: external` 与 `internal`，不保留无 host 限制的 `/sso/*` 兜底 route。
@@ -246,7 +246,7 @@ pnpm gateway:apisix:validate -- --env prod:gds --env-file .env.prod
 
 发布流程：
 
-1. 修改 `gateway/apisix/manifests/<env>/<app>/` 中的对象。
+1. 修改 `gateway/manifests/<env>/<app>/` 中的对象。
 2. 准备生产环境变量文件，例如 `.env.prod`。
 3. 运行 `pnpm gateway:apisix:validate -- --env <env>:<app> --env-file .env.prod`。
 4. 运行 `pnpm gateway:apisix:diff -- --env <env>:<app> --env-file .env.prod` 检查远端差异。
