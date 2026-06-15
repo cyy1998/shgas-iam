@@ -27,7 +27,7 @@ ARG NO_PROXY
 ARG http_proxy
 ARG https_proxy
 ARG no_proxy
-RUN pnpm install --frozen-lockfile
+RUN pnpm install --frozen-lockfile --ignore-scripts
 
 FROM deps AS builder
 ARG UMI_APP_LOGIN_CREDENTIAL_ALG
@@ -38,7 +38,7 @@ ENV UMI_APP_LOGIN_CREDENTIAL_KID=$UMI_APP_LOGIN_CREDENTIAL_KID
 ENV UMI_APP_LOGIN_CREDENTIAL_PUBLIC_KEY=$UMI_APP_LOGIN_CREDENTIAL_PUBLIC_KEY
 COPY packages/contracts/ ./packages/contracts/
 COPY apps/sso/ ./apps/sso/
-RUN pnpm --filter @iam/sso build
+RUN pnpm rebuild && pnpm --filter @iam/sso run setup && pnpm --filter @iam/sso run build
 
 FROM docker.xuanyuan.run/nginx:1.27-alpine AS runner
 COPY apps/sso/nginx.conf /etc/nginx/conf.d/default.conf
