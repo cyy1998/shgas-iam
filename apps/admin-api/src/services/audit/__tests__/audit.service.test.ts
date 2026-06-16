@@ -102,6 +102,45 @@ describe("admin auditService.recordAuditLog", () => {
 });
 
 describe("admin auditService.searchAuditLogsForAdmin", () => {
+  test("expands canonical login action queries to canonical and legacy actions", () => {
+    expect(auditService.normalizeAuditLogQueryActions({
+      conditions: { action: "auth.login.password" },
+      pageNum: 1,
+      pageSize: 10,
+    })).toMatchObject({
+      conditions: {
+        actions: [
+          "auth.login.password",
+          "auth.login.password.success",
+          "auth.login.password.failure",
+        ],
+      },
+    });
+  });
+
+  test("deduplicates multiple action queries while keeping non-login actions exact", () => {
+    expect(auditService.normalizeAuditLogQueryActions({
+      conditions: {
+        actions: [
+          "auth.login.password",
+          "auth.login.password.failure",
+          "admin.user.update",
+        ],
+      },
+      pageNum: 1,
+      pageSize: 10,
+    })).toMatchObject({
+      conditions: {
+        actions: [
+          "auth.login.password",
+          "auth.login.password.success",
+          "auth.login.password.failure",
+          "admin.user.update",
+        ],
+      },
+    });
+  });
+
   test("returns target user audit records", async () => {
     selectedRows = [auditRow()];
 

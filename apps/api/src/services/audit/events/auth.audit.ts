@@ -1,7 +1,7 @@
 import type { AuditLogInput } from "@api/services/audit/audit.service";
 import type { UserDetailDto } from "@api/services/user/user.type";
-import type { ClientManagementLevel } from "@iam/contracts";
 import type { Context } from "hono";
+import { AuditActions, type ClientManagementLevel } from "@iam/contracts";
 import { maskMobileForAudit } from "@iam/domain/audit";
 import * as auditService from "../audit.service";
 
@@ -17,7 +17,7 @@ export async function recordPasswordLoginFailure(
   user?: UserAuditTarget,
 ) {
   await auditService.recordAuditLog({
-    action: "auth.login.password.failure",
+    action: AuditActions["auth.login.password"],
     outcome: "failure",
     actorType: "anonymous",
     targetType: "user",
@@ -37,7 +37,7 @@ export async function recordMobileLoginFailure(
   activeUser?: Pick<UserAuditTarget, "id" | "name"> | null,
 ) {
   await auditService.recordAuditLog({
-    action: "auth.login.mobile.failure",
+    action: AuditActions["auth.login.mobile"],
     outcome: "failure",
     actorType: "anonymous",
     targetType: activeUser ? "user" : "mobile",
@@ -52,14 +52,14 @@ export async function recordMobileLoginFailure(
 }
 
 export async function recordPasswordLoginSuccess(user: UserDetailDto) {
-  await recordUserLoginSuccess("auth.login.password.success", user, {
+  await recordUserLoginSuccess(AuditActions["auth.login.password"], user, {
     clientCode: "global",
     loginType: "password",
   });
 }
 
 export async function recordMobileLoginSuccess(user: UserDetailDto) {
-  await recordUserLoginSuccess("auth.login.mobile.success", user, {
+  await recordUserLoginSuccess(AuditActions["auth.login.mobile"], user, {
     clientCode: "global",
     loginType: "mobile",
   });
@@ -70,7 +70,7 @@ export async function recordLocalLoginSuccess(
   clientCode: string,
   managementLevel: ClientManagementLevel,
 ) {
-  await recordUserLoginSuccess("auth.login.local.success", user, {
+  await recordUserLoginSuccess(AuditActions["auth.login.local"], user, {
     clientCode,
     loginType: "local",
     managementLevel,
@@ -78,14 +78,14 @@ export async function recordLocalLoginSuccess(
 }
 
 export async function recordOaLoginSuccess(user: UserDetailDto, clientCode: string) {
-  await recordUserLoginSuccess("auth.login.oa.success", user, {
+  await recordUserLoginSuccess(AuditActions["auth.login.oa"], user, {
     clientCode,
     loginType: "oa",
   });
 }
 
 export async function recordWechatLoginSuccess(user: UserDetailDto) {
-  await recordUserLoginSuccess("auth.login.wechat.success", user, {
+  await recordUserLoginSuccess(AuditActions["auth.login.wechat"], user, {
     loginType: "wechat",
   });
 }

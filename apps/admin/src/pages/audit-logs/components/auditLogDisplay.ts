@@ -1,53 +1,10 @@
 import type { AuditLogVo } from '@admin/services/audit';
+import {
+  auditActionOptions as sharedAuditActionOptions,
+  getAuditActionLabel,
+} from '@iam/contracts';
 
-export const auditActionLabels: Record<string, string> = {
-  'auth.login.success': '登录成功',
-  'auth.login.password.success': '密码登录成功',
-  'auth.login.password.failure': '密码登录失败',
-  'auth.login.mobile.success': '手机登录成功',
-  'auth.login.mobile.failure': '手机登录失败',
-  'auth.login.oa.success': 'OA 登录成功',
-  'auth.login.wechat.success': '微信登录成功',
-  'auth.login.local.success': '本地会话登录',
-  'auth.sms_code.send': '发送验证码',
-  'auth.sms_code.verify': '校验验证码',
-  'auth.password.reset': '重置密码',
-  'self.password.change': '自助改密',
-  'self.mobile.bind': '绑定手机号',
-  'admin.user.create': '创建用户',
-  'admin.user.update': '更新用户',
-  'admin.user.status_update': '更新用户状态',
-  'admin.user.delete': '删除用户',
-  'admin.user.reset_password': '管理员重置密码',
-  'admin.client.create': '创建应用',
-  'admin.client.update': '更新应用',
-  'admin.client.status_update': '更新应用状态',
-  'admin.client.delete': '删除应用',
-  'admin.client.rotate_secret': '轮换应用密钥',
-  'admin.organization.create': '创建组织',
-  'admin.organization.update': '更新组织',
-  'admin.organization.status_update': '更新组织状态',
-  'admin.organization.delete': '删除组织',
-  'admin.position.create': '创建职位',
-  'admin.position.update': '更新职位',
-  'admin.position.status_update': '更新职位状态',
-  'admin.position.delete': '删除职位',
-  'admin.employment.create': '创建任职',
-  'admin.employment.update': '更新任职',
-  'admin.employment.status_update': '更新任职状态',
-  'admin.employment.delete': '删除任职',
-  'admin.employment.transfer': '转岗',
-  'admin.employment.set_primary': '设置主岗',
-  'admin.employment.resign_user': '办理离职',
-  'internal.delegation.create': '创建权限委派',
-  'internal.delegation.update': '更新权限委派',
-  'internal.purveyor.register': '注册供应商组织',
-  'internal.purveyor_contact.register': '注册供应商联系人',
-};
-
-export const auditActionOptions = Object.entries(auditActionLabels).map(
-  ([value, label]) => ({ label, value }),
-);
+export const auditActionOptions = sharedAuditActionOptions;
 
 export const actorTypeLabels: Record<string, string> = {
   admin: '管理员',
@@ -85,7 +42,7 @@ function readString(details: Record<string, unknown>, keys: string[]) {
 }
 
 export function getActionLabel(action: string) {
-  return auditActionLabels[action] ?? action;
+  return getAuditActionLabel(action);
 }
 
 export function getActorCode(row: AuditLogVo) {

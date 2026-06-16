@@ -1,3 +1,4 @@
+export * from "./audit/actions";
 export * from "./auth/login-credential";
 export * from "./enums/api-error-code";
 export * from "./enums/client.managementLevel";

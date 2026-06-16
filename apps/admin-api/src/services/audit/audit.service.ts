@@ -3,6 +3,7 @@ import type { AuditActorType, AuditDetails, AuditOutcome, AuditRequestContext } 
 import type { Context } from "hono";
 import type { AuditLogPaginationQueryDto } from "./audit.type";
 import { getRequestIp, getTraceId } from "@iam/api-core/core/request-context";
+import { expandAuditActionAliases } from "@iam/contracts";
 import {
   AuditLogDtoSchema,
   AuditLogWriteDtoSchema,
@@ -138,8 +139,28 @@ export async function recordAuditLogFromContext(c: Context, input: AuditLogInput
   }, tx);
 }
 
+export function normalizeAuditLogQueryActions(query: AuditLogPaginationQueryDto): AuditLogPaginationQueryDto {
+  const { action, actions, ...conditions } = query.conditions;
+  const requestedActions = [
+    action,
+    ...(actions ?? []),
+  ].filter((value): value is string => value !== undefined);
+
+  if (requestedActions.length === 0) {
+    return query;
+  }
+
+  return {
+    ...query,
+    conditions: {
+      ...conditions,
+      actions: expandAuditActionAliases(requestedActions),
+    },
+  };
+}
+
 export async function searchAuditLogsForAdmin(query: AuditLogPaginationQueryDto) {
-  const { rows, total } = await auditRepository.searchAuditLogsPaged(query);
+  const { rows, total } = await auditRepository.searchAuditLogsPaged(normalizeAuditLogQueryActions(query));
   return {
     result: rows.map(row => AuditLogDtoSchema.parse(row)),
     total,

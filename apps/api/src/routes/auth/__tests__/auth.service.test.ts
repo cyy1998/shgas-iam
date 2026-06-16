@@ -361,7 +361,7 @@ describe("auth login failure temporary blacklist", () => {
     expect(fakeRedis.countFailures(USER_ID)).toBe(0);
     expect(auditLogs).toHaveLength(1);
     expect(auditLogs[0]?.[0]).toMatchObject({
-      action: "auth.login.password.failure",
+      action: "auth.login.password",
       outcome: "failure",
       details: { reason: "blacklisted" },
     });
@@ -380,7 +380,7 @@ describe("auth login failure temporary blacklist", () => {
     expect(fakeRedis.countFailures(USER_ID)).toBe(0);
     expect(auditLogs).toHaveLength(1);
     expect(auditLogs[0]?.[0]).toMatchObject({
-      action: "auth.login.mobile.failure",
+      action: "auth.login.mobile",
       outcome: "failure",
       details: { reason: "blacklisted" },
     });
