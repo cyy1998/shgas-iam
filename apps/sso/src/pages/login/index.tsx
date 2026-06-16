@@ -238,7 +238,7 @@ export default function LoginPage() {
     return null;
   }, []);
 
-  if (!client) {
+  if (!client && !oidcReturn) {
     return (
       <div className="login-page">
         <div className="login-shell">

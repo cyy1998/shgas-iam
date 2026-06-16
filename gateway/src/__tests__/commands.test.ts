@@ -34,7 +34,16 @@ describe("apisix sync commands", () => {
     process.env.APISIX_MANIFEST_ENV = "test:iam";
     const manifestDir = await createManifestDir({
       routes: [
-        repoObject({ id: "route-a", uri: "/a/*" }),
+        repoObject({
+          id: "route-a",
+          uri: "/a/*",
+          plugins: {
+            "request-id": {
+              header_name: "X-Request-Id",
+              include_in_response: true,
+            },
+          },
+        }),
       ],
     });
     const { reporter, logs } = createReporter();

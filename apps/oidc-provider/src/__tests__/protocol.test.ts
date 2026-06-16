@@ -76,6 +76,7 @@ describe("oIDC discovery and JWKS", () => {
     });
     const discovery = await discoveryResponse.json() as Record<string, unknown>;
     expect(discoveryResponse.headers.get("access-control-allow-origin")).toBe("https://client.example");
+    expect(discoveryResponse.headers.get("x-request-id")).toBeTruthy();
     expect(discovery).toMatchObject({
       issuer,
       authorization_endpoint: `${issuer}/auth`,

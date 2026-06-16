@@ -21,3 +21,15 @@ export const SSO_CLIENT_CODE = process.env.UMI_APP_SSO_CLIENT_CODE || 'iam';
 // 允许访问管理后台的角色码。
 export const ADMIN_ROLE_CODE =
   process.env.UMI_APP_ADMIN_ROLE_CODE || 'iam:admin';
+
+function normalizeExternalUrl(value?: string) {
+  const url = value?.trim() ?? '';
+  return url.endsWith('/') ? url.slice(0, -1) : url;
+}
+
+// Grafana system-log entry. Admin links out to Grafana; it does not embed or proxy Loki.
+export const GRAFANA_URL = normalizeExternalUrl(
+  process.env.UMI_APP_GRAFANA_URL || 'http://localhost:30030',
+);
+
+export const SYSTEM_LOG_ENV = process.env.UMI_APP_SYSTEM_LOG_ENV || 'dev';

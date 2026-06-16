@@ -4,9 +4,11 @@ declare const process: {
     NODE_ENV?: string;
     UMI_APP_ADMIN_ROLE_CODE?: string;
     UMI_APP_API_PREFIX?: string;
+    UMI_APP_GRAFANA_URL?: string;
     UMI_APP_SSO_AUTHORIZE_URL?: string;
     UMI_APP_SSO_CLIENT_CODE?: string;
     UMI_APP_SSO_LOGOUT_URL?: string;
+    UMI_APP_SYSTEM_LOG_ENV?: string;
     [key: string]: string | undefined;
   };
 };

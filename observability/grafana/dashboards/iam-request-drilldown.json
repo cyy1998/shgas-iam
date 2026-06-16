@@ -1,0 +1,38 @@
+{
+  "uid": "iam-request-drilldown",
+  "title": "IAM Request Drilldown",
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "10s",
+  "timezone": "browser",
+  "tags": ["iam", "logs", "request"],
+  "templating": {
+    "list": [
+      { "name": "env", "type": "textbox", "current": { "text": "dev", "value": "dev" } },
+      { "name": "service", "type": "textbox", "current": { "text": ".*", "value": ".*" } },
+      { "name": "requestId", "type": "textbox", "current": { "text": ".*", "value": ".*" } },
+      { "name": "traceId", "type": "textbox", "current": { "text": ".*", "value": ".*" } }
+    ]
+  },
+  "panels": [
+    {
+      "id": 1,
+      "title": "Request timeline",
+      "type": "logs",
+      "datasource": { "type": "loki", "uid": "iam-loki" },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "{env=\"$env\", service=~\"$service\"} | json | requestId=~\"$requestId\" | traceId=~\"$traceId\""
+        }
+      ],
+      "options": {
+        "showTime": true,
+        "showLabels": false,
+        "wrapLogMessage": true,
+        "sortOrder": "Ascending"
+      },
+      "gridPos": { "h": 18, "w": 24, "x": 0, "y": 0 }
+    }
+  ]
+}

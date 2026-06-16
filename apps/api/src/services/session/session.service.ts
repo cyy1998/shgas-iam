@@ -7,6 +7,7 @@ import * as authAudit from "@api/services/audit/events/auth.audit";
 import * as clientService from "@api/services/client/client.service";
 import { UserDetailDtoSchema } from "@api/services/user/user.schema";
 import { AuthzUnauthorizedError } from "@iam/api-core/errors/AuthzUnauthorizedError";
+import { SystemLogEvent } from "@iam/api-core/logger";
 import { revokeOidcAccessTokensForGlobalSession } from "@iam/api-core/oidc";
 import {
   createGlobalSession,
@@ -67,6 +68,7 @@ export async function removeLocalSession(reference: LocalSessionAbstract, global
     });
     if (!response.ok) {
       logger.warn({
+        event: SystemLogEvent.SessionNotificationUnexpectedResponse,
         clientCode: reference.clientCode,
         localSessionId: reference.localSessionId,
         status: response.status,
@@ -75,6 +77,7 @@ export async function removeLocalSession(reference: LocalSessionAbstract, global
   }
   catch (error) {
     logger.warn({
+      event: SystemLogEvent.SessionNotificationFailed,
       err: error,
       clientCode: reference.clientCode,
       localSessionId: reference.localSessionId,

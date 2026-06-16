@@ -1,0 +1,70 @@
+{
+  "uid": "iam-error-center",
+  "title": "IAM Error Center",
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "30s",
+  "timezone": "browser",
+  "tags": ["iam", "logs", "errors"],
+  "templating": {
+    "list": [
+      {
+        "name": "env",
+        "type": "query",
+        "datasource": { "type": "loki", "uid": "iam-loki" },
+        "query": "label_values(env)",
+        "current": { "text": "dev", "value": "dev" }
+      },
+      {
+        "name": "service",
+        "type": "query",
+        "datasource": { "type": "loki", "uid": "iam-loki" },
+        "query": "label_values({env=\"$env\"}, service)",
+        "includeAll": true,
+        "current": { "text": "All", "value": "$__all" }
+      }
+    ]
+  },
+  "panels": [
+    {
+      "id": 1,
+      "title": "Error trend",
+      "type": "timeseries",
+      "datasource": { "type": "loki", "uid": "iam-loki" },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (service) (count_over_time({env=\"$env\", service=~\"$service\", level=~\"error|fatal\"}[5m]))"
+        }
+      ],
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 0 }
+    },
+    {
+      "id": 2,
+      "title": "Errors by service/event/name",
+      "type": "table",
+      "datasource": { "type": "loki", "uid": "iam-loki" },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (service, event, errorName) (count_over_time({env=\"$env\", service=~\"$service\", level=~\"error|fatal\"} | json [30m]))",
+          "format": "table"
+        }
+      ],
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 8 }
+    },
+    {
+      "id": 3,
+      "title": "Recent errors",
+      "type": "logs",
+      "datasource": { "type": "loki", "uid": "iam-loki" },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "{env=\"$env\", service=~\"$service\", level=~\"error|fatal\"} | json"
+        }
+      ],
+      "gridPos": { "h": 10, "w": 24, "x": 0, "y": 16 }
+    }
+  ]
+}

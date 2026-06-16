@@ -56,6 +56,11 @@ services:
   apisix:
     image: ${APISIX_IMAGE:-docker.xuanyuan.run/apache/apisix:3.16.0-debian}
     restart: unless-stopped
+    labels:
+      shgas-iam.logs.enabled: "true"
+      shgas-iam.logs.env: ${IAM_LOG_ENV:-prod}
+      shgas-iam.logs.service: apisix
+      shgas-iam.logs.component: gateway
     ports:
       - "${APISIX_HTTP_PUBLISHED_PORT:-9080}:9080"
       - "${APISIX_HTTPS_PUBLISHED_PORT:-9443}:9443"

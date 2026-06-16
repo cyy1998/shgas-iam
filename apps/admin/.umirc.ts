@@ -95,6 +95,13 @@ export default defineConfig({
       component: './audit-logs/index',
       access: 'isAdmin',
     },
+    {
+      path: '/system-logs',
+      name: '系统日志',
+      icon: 'bug',
+      component: './system-logs/index',
+      access: 'isAdmin',
+    },
     { path: '/403', component: './403', hideInMenu: true },
   ],
   npmClient: 'pnpm',

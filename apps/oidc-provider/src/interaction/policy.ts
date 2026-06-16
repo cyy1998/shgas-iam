@@ -11,8 +11,6 @@ export type AuthorizationRequestClient = {
 export function validateAuthorizationRequest(params: UnknownObject, client: AuthorizationRequestClient | undefined) {
   if (typeof params.state !== "string" || !params.state)
     throw new errors.InvalidRequest("state is required");
-  if (typeof params.nonce !== "string" || !params.nonce)
-    throw new errors.InvalidRequest("nonce is required");
   if (typeof params.code_challenge !== "string" || !params.code_challenge)
     throw new errors.InvalidRequest("code_challenge is required");
   if (params.code_challenge_method !== "S256")

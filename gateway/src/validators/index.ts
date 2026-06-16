@@ -13,6 +13,7 @@ const validators: Validator[] = [
   validateReferences,
   validateSensitiveValues,
   validateTrustedProxy,
+  validateIamLoggingPolicy,
 ];
 
 const knownNonSecretKeyPaths = [
@@ -170,6 +171,82 @@ function validateTrustedProxy(manifest: LoadedManifest): ValidationIssue[] {
   }
 
   return issues;
+}
+
+function validateIamLoggingPolicy(manifest: LoadedManifest): ValidationIssue[] {
+  if (manifest.scope.app !== "iam") {
+    return [];
+  }
+
+  const issues: ValidationIssue[] = [];
+  const pluginConfigsById = new Map(
+    manifest.resources.plugin_configs
+      .filter(config => typeof config.id === "string")
+      .map(config => [config.id as string, config]),
+  );
+
+  for (const [index, route] of manifest.resources.routes.entries()) {
+    const routeId = typeof route.id === "string" ? route.id : `routes[${index}]`;
+    const routePlugins = getPlugins(route);
+    collectForbiddenLoggerPluginIssues(
+      path.join(manifest.manifestDir, "routes.yaml"),
+      `routes[${index}].plugins`,
+      routePlugins,
+      issues,
+    );
+
+    const pluginConfig = typeof route.plugin_config_id === "string"
+      ? pluginConfigsById.get(route.plugin_config_id)
+      : undefined;
+    if (!hasPlugin(routePlugins, "request-id") && !hasPlugin(getPlugins(pluginConfig), "request-id")) {
+      issues.push({
+        file: path.join(manifest.manifestDir, "routes.yaml"),
+        path: `routes[${index}]`,
+        message: `${routeId} must enable request-id through route plugins or plugin_config_id`,
+      });
+    }
+  }
+
+  for (const [index, pluginConfig] of manifest.resources.plugin_configs.entries()) {
+    collectForbiddenLoggerPluginIssues(
+      path.join(manifest.manifestDir, "plugin-configs.yaml"),
+      `plugin_configs[${index}].plugins`,
+      getPlugins(pluginConfig),
+      issues,
+    );
+  }
+
+  return issues;
+}
+
+function getPlugins(resource: unknown): Record<string, unknown> | undefined {
+  if (!isRecord(resource))
+    return undefined;
+  const plugins = resource.plugins;
+  return isRecord(plugins) ? plugins : undefined;
+}
+
+function hasPlugin(plugins: Record<string, unknown> | undefined, pluginName: string): boolean {
+  return plugins !== undefined && Object.prototype.hasOwnProperty.call(plugins, pluginName);
+}
+
+function collectForbiddenLoggerPluginIssues(
+  file: string,
+  basePath: string,
+  plugins: Record<string, unknown> | undefined,
+  issues: ValidationIssue[],
+) {
+  if (!plugins)
+    return;
+  for (const pluginName of ["loki-logger", "http-logger", "file-logger"]) {
+    if (hasPlugin(plugins, pluginName)) {
+      issues.push({
+        file,
+        path: `${basePath}.${pluginName}`,
+        message: `${pluginName} must not be used for IAM system logs; use stdout/stderr collection through Alloy`,
+      });
+    }
+  }
 }
 
 function collectSensitiveIssues(file: string, basePath: string, value: unknown, issues: ValidationIssue[]): void {

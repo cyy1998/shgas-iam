@@ -1,8 +1,10 @@
 import type { AuthRouteHandler } from "./auth.type";
 import config from "@api/env";
+import { logger } from "@api/lib/logger";
 import * as clientService from "@api/services/client/client.service";
 import { AuthzUnauthorizedError } from "@iam/api-core/errors/AuthzUnauthorizedError";
 import * as resp from "@iam/api-core/http";
+import { SystemLogEvent } from "@iam/api-core/logger";
 import { verifyInternalClient } from "@iam/api-core/middlewares";
 import { getCookie, setCookie } from "hono/cookie";
 import { getVerificationContext } from "../human-verification-context";
@@ -59,6 +61,14 @@ export const authz: AuthRouteHandler<"authz"> = async (c) => {
 };
 
 export const internalAuthz: AuthRouteHandler<"internalAuthz"> = async (c) => {
+  const clientSecret = c.req.header("apikey");
+  const sourceIp = c.req.header("IP-Chain");
+  logger.info({
+    event: SystemLogEvent.InternalAuthzChecked,
+    requestId: c.get("requestId"),
+    sourceIp,
+    hasClientSecret: clientSecret !== undefined,
+  }, "internal authorization checked");
   await verifyInternalClient(c, {
     getClientBySecret: clientService.getClientBySecret,
   });

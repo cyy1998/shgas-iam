@@ -1,4 +1,7 @@
 import { describe, expect, it } from "bun:test";
+import { readFile } from "node:fs/promises";
+import path from "node:path";
+import { parse as parseYaml } from "yaml";
 import { renderEnvPlaceholders } from "../env";
 import { loadManifest } from "../manifest";
 import { validateManifest } from "../validators";
@@ -45,6 +48,10 @@ function expectSsoRoutesClassifyEntryNetwork(manifest: Awaited<ReturnType<typeof
     config => config.id === `iam-sso-api-plugin-${manifest.scope.env}`,
   );
   expect(ssoPluginConfig?.plugins).toMatchObject({
+    "request-id": expect.objectContaining({
+      header_name: "X-Request-Id",
+      include_in_response: true,
+    }),
     "limit-req": expect.any(Object),
     "real-ip": expect.any(Object),
     "cors": expect.any(Object),
@@ -69,6 +76,12 @@ describe("apisix manifest validation", () => {
     const manifest = await loadManifest("dev:iam");
     expect(validateManifest(manifest)).toEqual([]);
     expectRootRedirectToSsoLogin(manifest);
+    expect(manifest.resources.routes.every((route) => {
+      const routePlugins = route.plugins as Record<string, unknown> | undefined;
+      const pluginConfig = manifest.resources.plugin_configs.find(config => config.id === route.plugin_config_id);
+      const configPlugins = pluginConfig?.plugins as Record<string, unknown> | undefined;
+      return routePlugins?.["request-id"] !== undefined || configPlugins?.["request-id"] !== undefined;
+    })).toBe(true);
   });
 
   it("splits dev IAM SSO routes by host and injects entry network", async () => {
@@ -241,6 +254,68 @@ describe("apisix manifest validation", () => {
     }));
 
     expect(validateManifest(manifest)).toEqual([]);
+  });
+
+  it("rejects IAM routes without request-id", async () => {
+    const manifest = await loadManifest("test:iam", await createManifestDir({
+      routes: [
+        repoObject({
+          id: "route-a",
+          uri: "/a/*",
+        }),
+      ],
+    }));
+
+    const issues = validateManifest(manifest);
+    expect(issues.some(issue => issue.message.includes("must enable request-id"))).toBe(true);
+  });
+
+  it("rejects IAM Loki/http/file logger plugins", async () => {
+    const manifest = await loadManifest("test:iam", await createManifestDir({
+      plugin_configs: [
+        repoObject({
+          id: "api-logger",
+          plugins: {
+            "request-id": { header_name: "X-Request-Id", include_in_response: true },
+            "loki-logger": { endpoint_addr: "http://loki:3100" },
+          },
+        }),
+      ],
+      routes: [
+        repoObject({
+          id: "route-a",
+          uri: "/a/*",
+          plugin_config_id: "api-logger",
+        }),
+      ],
+    }));
+
+    const issues = validateManifest(manifest);
+    expect(issues.some(issue => issue.message.includes("loki-logger must not be used"))).toBe(true);
+  });
+
+  it("configures APISIX JSON stdout access logs without sensitive fields", async () => {
+    for (const configPath of ["config.dev.yaml", "config.prod.example.yaml"]) {
+      const parsed = parseYaml(await readFile(path.join(process.cwd(), "config", configPath), "utf8"));
+      const httpConfig = parsed.nginx_config.http;
+      const format = httpConfig.access_log_format as string;
+
+      expect(httpConfig.access_log).toBe("/dev/stdout");
+      for (const field of [
+        "event",
+        "sourceApp",
+        "requestId",
+        "method",
+        "path",
+        "statusCode",
+        "durationMs",
+        "upstreamStatus",
+        "upstreamAddr",
+      ]) {
+        expect(format).toContain(`"${field}"`);
+      }
+      expect(format).not.toMatch(/request_body|resp_body|authorization|cookie|set_cookie|\$args/i);
+    }
   });
 
   it("renders environment placeholders after parsing manifest YAML", async () => {

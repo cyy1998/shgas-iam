@@ -1,0 +1,13 @@
+apiVersion: 1
+
+datasources:
+  - name: IAM Loki
+    uid: iam-loki
+    type: loki
+    access: proxy
+    url: ${GRAFANA_LOKI_URL}
+    isDefault: true
+    editable: false
+    jsonData:
+      timeout: 60
+      maxLines: 1000

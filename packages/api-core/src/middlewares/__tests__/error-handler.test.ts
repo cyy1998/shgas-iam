@@ -3,6 +3,7 @@ import { describe, expect, mock, spyOn, test } from "bun:test";
 import { Hono } from "hono";
 import { BAD_REQUEST, NOT_FOUND } from "../../core/http-status-codes";
 import { CustomError } from "../../errors/CustomError";
+import { SystemLogEvent } from "../../logger";
 import { createErrorHandler } from "../error-handler";
 
 class DomainLikeBusinessError extends Error {
@@ -91,7 +92,13 @@ describe("errorHandler", () => {
         throw new Error("logger.error was not called");
       }
 
-      expect(firstCall[0]).toEqual({ err: error, source: sourceLocation });
+      expect(firstCall[0]).toEqual({
+        event: SystemLogEvent.ApiErrorUnhandled,
+        requestId: undefined,
+        source: sourceLocation,
+        errorName: "Error",
+        errorMessage: "boom",
+      });
       expect(firstCall[1]).toBe("unhandled request error");
       expect(res.status).toBe(200);
       await expect(res.json()).resolves.toEqual({
@@ -136,7 +143,13 @@ describe("errorHandler", () => {
       throw new Error("request logger.error was not called");
     }
 
-    expect(firstCall[0]).toEqual({ err: error, source: sourceLocation });
+    expect(firstCall[0]).toEqual({
+      event: SystemLogEvent.ApiErrorUnhandled,
+      requestId: undefined,
+      source: sourceLocation,
+      errorName: "Error",
+      errorMessage: "boom",
+    });
     expect(firstCall[1]).toBe("unhandled request error");
     expect(res.status).toBe(200);
     await expect(res.json()).resolves.toEqual({

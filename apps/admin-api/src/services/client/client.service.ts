@@ -16,6 +16,7 @@ import { logger } from "@admin-api/lib/logger";
 import { recordAdminClientAudit } from "@admin-api/services/audit/events/client.audit";
 import * as clientRepository from "@admin-api/services/client/client.repository";
 import { ClientDtoSchema } from "@admin-api/services/client/client.schema";
+import { SystemLogEvent } from "@iam/api-core/logger";
 import { invalidateOidcClient } from "@iam/api-core/oidc";
 import { hashSecret } from "@iam/api-core/security";
 import { ClientStatus as ClientStatusValue, OidcClientType } from "@iam/contracts";
@@ -112,7 +113,12 @@ async function bestEffortInvalidateOidcClient(client: {
     });
   }
   catch (error) {
-    logger.warn({ err: error, clientCode: client.clientCode }, "failed to invalidate OIDC client runtime");
+    logger.warn({
+      event: SystemLogEvent.IntegrationCallFailed,
+      err: error,
+      clientCode: client.clientCode,
+      integration: "oidc-provider",
+    }, "failed to invalidate OIDC client runtime");
   }
 }
 

@@ -1,3 +1,4 @@
+import { SystemLogEvent } from "@iam/api-core/logger";
 import { closeDb } from "@iam/db";
 import { createOidcHttpServer, createOidcProvider } from "./app.ts";
 import { parseOidcProviderEnv } from "./env.ts";
@@ -16,11 +17,20 @@ async function main() {
   const invalidationSubscriber = startClientInvalidationSubscriber(redis, logger);
 
   server.listen(env.PORT, () => {
-    logger.info({ issuer: env.OIDC_ISSUER, port: env.PORT }, "OIDC provider listening");
+    logger.info({
+      event: SystemLogEvent.OidcProviderStarted,
+      sourceApp: "iam-oidc-provider",
+      issuer: env.OIDC_ISSUER,
+      port: env.PORT,
+    }, "OIDC provider listening");
   });
 
   async function shutdown(signal: string) {
-    logger.info({ signal }, "OIDC provider shutting down");
+    logger.info({
+      event: SystemLogEvent.OidcProviderStopping,
+      sourceApp: "iam-oidc-provider",
+      signal,
+    }, "OIDC provider shutting down");
     server.close();
     await Promise.allSettled([invalidationSubscriber.quit(), redis.quit(), closeDb()]);
   }

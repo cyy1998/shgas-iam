@@ -1,0 +1,110 @@
+logging {
+  level  = env("ALLOY_LOG_LEVEL")
+  format = "logfmt"
+}
+
+discovery.docker "iam" {
+  host             = "unix:///var/run/docker.sock"
+  refresh_interval = "5s"
+}
+
+discovery.relabel "iam_logs" {
+  targets = discovery.docker.iam.targets
+
+  rule {
+    source_labels = ["__meta_docker_container_label_shgas_iam_logs_enabled"]
+    regex         = "true"
+    action        = "keep"
+  }
+
+  rule {
+    source_labels = ["__meta_docker_container_label_shgas_iam_logs_env"]
+    target_label  = "env"
+  }
+
+  rule {
+    source_labels = ["__meta_docker_container_label_shgas_iam_logs_service"]
+    target_label  = "service"
+  }
+
+  rule {
+    source_labels = ["__meta_docker_container_label_shgas_iam_logs_component"]
+    target_label  = "component"
+  }
+
+  rule {
+    replacement   = env("IAM_LOG_HOST")
+    target_label  = "host"
+  }
+}
+
+loki.source.docker "iam" {
+  host       = "unix:///var/run/docker.sock"
+  targets    = discovery.relabel.iam_logs.output
+  forward_to = [loki.process.iam.receiver]
+}
+
+loki.process "iam" {
+  stage.docker {}
+
+  stage.replace {
+    expression = "(?i)\"(?:authorization|cookie|set-cookie|password|token|secret|clientSecret|privateKey|verificationCode)\"\\s*:\\s*\"([^\"]*)\""
+    replace    = "[REDACTED]"
+  }
+
+  stage.replace {
+    expression = "(?i)(?:authorization|cookie|set-cookie|password|token|secret|clientSecret|privateKey|verificationCode)\\s*[:=]\\s*([^,\\s]+)"
+    replace    = "[REDACTED]"
+  }
+
+  stage.json {
+    expressions = {
+      event          = "event",
+      sourceApp      = "sourceApp",
+      requestId      = "requestId",
+      traceId        = "traceId",
+      route          = "route",
+      clientIp       = "clientIp",
+      userAgent      = "userAgent",
+      userId         = "userId",
+      username       = "username",
+      level          = "level",
+      method         = "method",
+      path           = "path",
+      statusCode     = "statusCode",
+      durationMs     = "durationMs",
+      upstreamStatus = "upstreamStatus",
+      upstreamAddr   = "upstreamAddr",
+      errorName      = "errorName",
+      errorCode      = "errorCode",
+    }
+  }
+
+  stage.template {
+    source   = "level"
+    template = "{{ if eq .Value \"10\" }}trace{{ else if eq .Value \"20\" }}debug{{ else if eq .Value \"30\" }}info{{ else if eq .Value \"40\" }}warn{{ else if eq .Value \"50\" }}error{{ else if eq .Value \"60\" }}fatal{{ else if .Value }}{{ .Value }}{{ else if eq .stream \"stderr\" }}error{{ else }}info{{ end }}"
+  }
+
+  stage.template {
+    source   = "event"
+    template = "{{ if .Value }}{{ .Value }}{{ else if eq .stream \"stderr\" }}runtime.stderr{{ else }}runtime.stdout{{ end }}"
+  }
+
+  stage.labels {
+    values = {
+      level = "",
+    }
+  }
+
+  stage.label_drop {
+    values = ["service_name"]
+  }
+
+  forward_to = [loki.write.default.receiver]
+}
+
+loki.write "default" {
+  endpoint {
+    url = env("LOKI_PUSH_URL")
+  }
+}

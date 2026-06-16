@@ -4,6 +4,10 @@ routes:
     desc: Redirect IAM gateway root to SSO login
     uri: /
     plugins:
+      request-id:
+        header_name: X-Request-Id
+        include_in_response: true
+        algorithm: uuid
       redirect:
         uri: /portal/login
         ret_code: 302
@@ -22,6 +26,11 @@ routes:
       - /portal
       - /portal/*
     service_id: iam-sso-frontend-dev
+    plugins:
+      request-id:
+        header_name: X-Request-Id
+        include_in_response: true
+        algorithm: uuid
     labels:
       managed_by: shgas-iam
       source: repo-manifest
@@ -35,6 +44,11 @@ routes:
       - /iam-admin
       - /iam-admin/*
     service_id: iam-admin-frontend-dev
+    plugins:
+      request-id:
+        header_name: X-Request-Id
+        include_in_response: true
+        algorithm: uuid
     labels:
       managed_by: shgas-iam
       source: repo-manifest

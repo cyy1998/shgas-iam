@@ -1,0 +1,95 @@
+{
+  "uid": "iam-overview",
+  "title": "IAM Overview",
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "30s",
+  "timezone": "browser",
+  "tags": ["iam", "logs"],
+  "templating": {
+    "list": [
+      {
+        "name": "env",
+        "type": "query",
+        "datasource": { "type": "loki", "uid": "iam-loki" },
+        "query": "label_values(env)",
+        "current": { "text": "dev", "value": "dev" }
+      },
+      {
+        "name": "service",
+        "type": "query",
+        "datasource": { "type": "loki", "uid": "iam-loki" },
+        "query": "label_values({env=\"$env\"}, service)",
+        "includeAll": true,
+        "current": { "text": "All", "value": "$__all" }
+      }
+    ]
+  },
+  "panels": [
+    {
+      "id": 1,
+      "title": "Log volume by service",
+      "type": "timeseries",
+      "datasource": { "type": "loki", "uid": "iam-loki" },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (service) (count_over_time({env=\"$env\", service=~\"$service\"}[5m]))"
+        }
+      ],
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 }
+    },
+    {
+      "id": 2,
+      "title": "Warn and error trend",
+      "type": "timeseries",
+      "datasource": { "type": "loki", "uid": "iam-loki" },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (level) (count_over_time({env=\"$env\", service=~\"$service\", level=~\"warn|error|fatal\"}[5m]))"
+        }
+      ],
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 }
+    },
+    {
+      "id": 3,
+      "title": "HTTP 4xx/5xx",
+      "type": "timeseries",
+      "datasource": { "type": "loki", "uid": "iam-loki" },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (service) (count_over_time({env=\"$env\", service=~\"$service\"} | json | statusCode >= 400 [5m]))"
+        }
+      ],
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 8 }
+    },
+    {
+      "id": 4,
+      "title": "APISIX upstream status",
+      "type": "timeseries",
+      "datasource": { "type": "loki", "uid": "iam-loki" },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (upstreamStatus) (count_over_time({env=\"$env\", service=\"apisix\"} | json | upstreamStatus != \"\" [5m]))"
+        }
+      ],
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 8 }
+    },
+    {
+      "id": 5,
+      "title": "Recent error logs",
+      "type": "logs",
+      "datasource": { "type": "loki", "uid": "iam-loki" },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "{env=\"$env\", service=~\"$service\", level=~\"error|fatal\"} | json"
+        }
+      ],
+      "gridPos": { "h": 10, "w": 24, "x": 0, "y": 16 }
+    }
+  ]
+}

@@ -3,8 +3,10 @@ import { describe, expect, it } from "vitest";
 import { ClientAuthRateLimiter, parseBasicClientId } from "../security/client-auth-rate-limit.ts";
 import {
   bindProviderSession,
+  consumeStagedProviderSessionBinding,
   providerSessionBindingKey,
   readProviderSessionBinding,
+  stageProviderSessionBinding,
 } from "../session/provider-session.ts";
 
 class SecurityRedis {
@@ -63,6 +65,28 @@ describe("provider session binding", () => {
       userId: 7,
       accountId: "57b0e34d-bf33-4671-87ea-4ed2f1b0e420",
     })).resolves.toBeNull();
+  });
+
+  it("promotes a staged first-login binding when the provider session uid is created", async () => {
+    const redis = new SecurityRedis();
+    redis.ttls.set("global_session:global-1", 120);
+    const accountId = "57b0e34d-bf33-4671-87ea-4ed2f1b0e420";
+    const staged = await stageProviderSessionBinding(redis as unknown as Redis, {
+      sessionId: "global-1",
+      authTime: 123,
+      userId: 7,
+      accountId,
+    });
+
+    expect(staged).toMatchObject({ globalSessionId: "global-1", userId: 7, authTime: 123 });
+    await expect(
+      consumeStagedProviderSessionBinding(redis as unknown as Redis, accountId, "provider-1"),
+    ).resolves.toMatchObject({ globalSessionId: "global-1", userId: 7, authTime: 123 });
+    await expect(readProviderSessionBinding(redis as unknown as Redis, "provider-1")).resolves.toMatchObject({
+      globalSessionId: "global-1",
+      userId: 7,
+      authTime: 123,
+    });
   });
 });
 

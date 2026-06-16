@@ -6,6 +6,7 @@ import { ApiErrorCode } from "@iam/contracts";
 import { HTTPException } from "hono/http-exception";
 import { isApiRuntimeError } from "../errors/api-runtime-error";
 import { makeResponse } from "../http";
+import { SystemLogEvent } from "../logger";
 
 type ErrorLogger = Pick<Logger, "error">;
 
@@ -28,6 +29,15 @@ function getRequestLogger(c: Context): ErrorLogger | undefined {
   }
 }
 
+function getRequestId(c: Context): string | undefined {
+  try {
+    return c.get("requestId" as never) as string | undefined;
+  }
+  catch {
+    return undefined;
+  }
+}
+
 export function createErrorHandler(appLogger: ErrorLogger) {
   return function errorHandler(err: Error | HTTPResponseError, c: Context) {
     if (isApiRuntimeError(err)) {
@@ -38,7 +48,13 @@ export function createErrorHandler(appLogger: ErrorLogger) {
     }
     else {
       const logger = getRequestLogger(c) ?? appLogger;
-      logger.error({ err, source: getErrorSourceLocation(err) }, "unhandled request error");
+      logger.error({
+        event: SystemLogEvent.ApiErrorUnhandled,
+        requestId: getRequestId(c),
+        source: getErrorSourceLocation(err),
+        errorName: err.name,
+        errorMessage: err.message,
+      }, "unhandled request error");
       return c.json(makeResponse(ApiErrorCode.InternalError, null, "服务器内部错误"));
     }
   };

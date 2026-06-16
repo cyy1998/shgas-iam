@@ -1,5 +1,6 @@
 import type { Redis } from "ioredis";
 import type { OidcLogger } from "../lib/logger.ts";
+import { SystemLogEvent } from "@iam/api-core/logger";
 import {
   OIDC_CLIENT_INVALIDATION_CHANNEL,
   revokeOidcAccessTokensForClient,
@@ -18,7 +19,11 @@ export function startClientInvalidationSubscriber(redis: Redis, logger: OidcLogg
         await revokeClientProtocolObjects(redis, event.clientCode);
       }
       catch (error) {
-        logger.warn({ err: error }, "OIDC client invalidation cleanup failed");
+        logger.warn({
+          event: SystemLogEvent.OidcClientInvalidationCleanupFailed,
+          err: error,
+          sourceApp: "iam-oidc-provider",
+        }, "OIDC client invalidation cleanup failed");
       }
     })();
   });

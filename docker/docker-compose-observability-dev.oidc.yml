@@ -1,0 +1,28 @@
+# Optional local override for debugging Grafana IAM OIDC login.
+#
+# Usage:
+#   GRAFANA_OIDC_CLIENT_SECRET=<secret> \
+#   docker compose -f docker/docker-compose-observability-dev.yml \
+#     -f docker/docker-compose-observability-dev.oidc.yml up -d --force-recreate grafana
+
+services:
+  grafana:
+    environment:
+      GF_SERVER_ROOT_URL: ${GRAFANA_ROOT_URL:-http://localhost:30030}
+      GF_AUTH_ANONYMOUS_ENABLED: "false"
+      GF_AUTH_DISABLE_LOGIN_FORM: ${GRAFANA_AUTH_DISABLE_LOGIN_FORM:-false}
+      GF_AUTH_GENERIC_OAUTH_ENABLED: "true"
+      GF_AUTH_GENERIC_OAUTH_NAME: ${GRAFANA_OIDC_NAME:-IAM}
+      GF_AUTH_GENERIC_OAUTH_ALLOW_SIGN_UP: "true"
+      GF_AUTH_GENERIC_OAUTH_CLIENT_ID: ${GRAFANA_OIDC_CLIENT_ID:-grafana}
+      GF_AUTH_GENERIC_OAUTH_CLIENT_SECRET: ${GRAFANA_OIDC_CLIENT_SECRET:?set GRAFANA_OIDC_CLIENT_SECRET}
+      GF_AUTH_GENERIC_OAUTH_SCOPES: ${GRAFANA_OIDC_SCOPES:-openid profile}
+      GF_AUTH_GENERIC_OAUTH_AUTH_URL: ${GRAFANA_OIDC_AUTH_URL:-http://localhost:30080/oidc/auth}
+      GF_AUTH_GENERIC_OAUTH_TOKEN_URL: ${GRAFANA_OIDC_TOKEN_URL:-http://host.docker.internal:30080/oidc/token}
+      GF_AUTH_GENERIC_OAUTH_API_URL: ${GRAFANA_OIDC_USERINFO_URL:-http://host.docker.internal:30080/oidc/me}
+      GF_AUTH_GENERIC_OAUTH_USE_PKCE: "true"
+      GF_AUTH_GENERIC_OAUTH_LOGIN_ATTRIBUTE_PATH: ${GRAFANA_OIDC_LOGIN_ATTRIBUTE_PATH:-preferred_username}
+      GF_AUTH_GENERIC_OAUTH_NAME_ATTRIBUTE_PATH: ${GRAFANA_OIDC_NAME_ATTRIBUTE_PATH:-name}
+      GF_AUTH_GENERIC_OAUTH_EMAIL_ATTRIBUTE_PATH: ${GRAFANA_OIDC_EMAIL_ATTRIBUTE_PATH:-preferred_username}
+      GF_USERS_ALLOW_SIGN_UP: "true"
+      GF_USERS_AUTO_ASSIGN_ORG_ROLE: ${GRAFANA_AUTO_ASSIGN_ORG_ROLE:-Admin}

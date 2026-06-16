@@ -5,6 +5,7 @@ import config from "@api/env";
 import redis from "@api/lib/infra/redis";
 import capClient from "@api/lib/integrations/cap";
 import { logger } from "@api/lib/logger";
+import { SystemLogEvent } from "@iam/api-core/logger";
 import * as riskService from "./human-risk.service";
 import { HumanVerificationRequiredError } from "./human-verification.error";
 
@@ -50,7 +51,7 @@ export async function verifyTokenForAction(action: HumanVerificationAction, toke
     return;
   }
   if (!token) {
-    logger.warn({ action }, "human verification token missing");
+    logger.warn({ event: SystemLogEvent.HumanVerificationMissing, action }, "human verification token missing");
     throw new HumanVerificationRequiredError();
   }
 
@@ -58,17 +59,17 @@ export async function verifyTokenForAction(action: HumanVerificationAction, toke
   const storedAction = await redis.get(actionKey);
   if (storedAction !== action) {
     await redis.del(actionKey);
-    logger.warn({ action, storedAction }, "human verification token action mismatch");
+    logger.warn({ event: SystemLogEvent.HumanVerificationMismatch, action, storedAction }, "human verification token action mismatch");
     throw new HumanVerificationRequiredError();
   }
 
   const result = await capClient.validateToken(token);
   await redis.del(actionKey);
   if (!result.success) {
-    logger.warn({ action }, "human verification token validation failed");
+    logger.warn({ event: SystemLogEvent.HumanVerificationFailed, action }, "human verification token validation failed");
     throw new HumanVerificationRequiredError();
   }
-  logger.info({ action }, "human verification token validated");
+  logger.info({ event: SystemLogEvent.HumanVerificationValidated, action }, "human verification token validated");
 }
 
 export async function ensureActionAllowed(
@@ -78,6 +79,7 @@ export async function ensureActionAllowed(
 ) {
   if (await riskService.shouldRequireVerification(action, context)) {
     logger.info({
+      event: SystemLogEvent.HumanVerificationRequired,
       action,
       hasToken: token !== undefined,
       ip: context.ip,

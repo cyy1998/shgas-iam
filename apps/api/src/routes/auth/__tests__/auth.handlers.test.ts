@@ -20,6 +20,7 @@ const loginPasswordService = mock(async () => ({
   isMobileSet: true,
 }));
 const getClientBySecret = mock(async (_secret: string): Promise<InternalTestClient | null> => null);
+const loggerInfo = mock((..._args: unknown[]) => undefined);
 const cookieCalls: unknown[][] = [];
 
 mock.module("hono/cookie", () => ({
@@ -38,6 +39,12 @@ mock.module("@api/env", () => ({
 
 mock.module("@api/lib/infra/redis", () => ({
   default: {},
+}));
+
+mock.module("@api/lib/logger", () => ({
+  logger: {
+    info: loggerInfo,
+  },
 }));
 
 mock.module("@api/services/client/client.service", () => ({
@@ -68,6 +75,9 @@ function makeLoginContext() {
       },
     },
     json: mock((body: unknown) => body),
+    get(key: string) {
+      return key === "requestId" ? "req-1" : undefined;
+    },
   };
 }
 
@@ -79,6 +89,9 @@ function makeHeaderContext(headers: Record<string, string>) {
       },
     },
     json: mock((body: unknown) => body),
+    get(key: string) {
+      return key === "requestId" ? "req-1" : undefined;
+    },
   };
 }
 
@@ -87,6 +100,7 @@ beforeEach(() => {
   parseLoginPasswordCredential.mockClear();
   loginPasswordService.mockClear();
   getClientBySecret.mockClear();
+  loggerInfo.mockClear();
   getClientBySecret.mockImplementation(async () => null);
 });
 

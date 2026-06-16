@@ -1,5 +1,7 @@
 import type { AuditLogVo } from '@admin/services/audit';
-import { Descriptions, Divider, Drawer, Space, Tag, Typography } from 'antd';
+import { buildAuditLogGrafanaUrl } from '@admin/lib/grafana';
+import { ExportOutlined } from '@ant-design/icons';
+import { Button, Descriptions, Divider, Drawer, Space, Tag, Typography } from 'antd';
 import {
   getActionLabel,
   getActorDisplay,
@@ -36,6 +38,14 @@ export default function AuditLogDetailDrawer({
   const details = (auditLog?.details ?? {}) as Record<string, unknown>;
   const actor = auditLog ? getActorDisplay(auditLog) : null;
   const target = auditLog ? getTargetDisplay(auditLog) : null;
+  const grafanaUrl = auditLog
+    ? buildAuditLogGrafanaUrl({
+        requestId: auditLog.requestId,
+        traceId: auditLog.traceId,
+        sourceApp: auditLog.sourceApp,
+        eventTime: auditLog.eventTime,
+      })
+    : null;
 
   return (
     <Drawer
@@ -44,6 +54,18 @@ export default function AuditLogDetailDrawer({
       onClose={onClose}
       destroyOnClose
       title="审计日志详情"
+      extra={
+        grafanaUrl ? (
+          <Button
+            icon={<ExportOutlined />}
+            href={grafanaUrl}
+            target="_blank"
+            rel="noreferrer"
+          >
+            系统日志
+          </Button>
+        ) : null
+      }
     >
       {!auditLog ? null : (
         <>

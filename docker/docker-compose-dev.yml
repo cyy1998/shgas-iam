@@ -55,6 +55,11 @@ services:
   apisix:
     image: docker.xuanyuan.run/apache/apisix:3.16.0-debian
     restart: unless-stopped
+    labels:
+      shgas-iam.logs.enabled: "true"
+      shgas-iam.logs.env: dev
+      shgas-iam.logs.service: apisix
+      shgas-iam.logs.component: gateway
     ports:
       - "30080:9080"
       - "30443:9443"
@@ -93,6 +98,11 @@ services:
       dockerfile: apps/api/Dockerfile
       args: *build-proxy-args
     restart: unless-stopped
+    labels:
+      shgas-iam.logs.enabled: "true"
+      shgas-iam.logs.env: dev
+      shgas-iam.logs.service: api
+      shgas-iam.logs.component: backend
     ports:
       - "30011:30000"
     environment:
@@ -141,6 +151,11 @@ services:
       dockerfile: apps/admin-api/Dockerfile
       args: *build-proxy-args
     restart: unless-stopped
+    labels:
+      shgas-iam.logs.enabled: "true"
+      shgas-iam.logs.env: dev
+      shgas-iam.logs.service: admin-api
+      shgas-iam.logs.component: backend
     ports:
       - "30012:30001"
     environment:
@@ -166,6 +181,11 @@ services:
       dockerfile: apps/oidc-provider/Dockerfile
       args: *build-proxy-args
     restart: unless-stopped
+    labels:
+      shgas-iam.logs.enabled: "true"
+      shgas-iam.logs.env: dev
+      shgas-iam.logs.service: oidc-provider
+      shgas-iam.logs.component: backend
     ports:
       - "30015:30002"
     environment:

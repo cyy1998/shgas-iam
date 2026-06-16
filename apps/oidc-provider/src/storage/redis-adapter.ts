@@ -5,7 +5,7 @@ import {
   registerOidcAccessToken,
   revokeOidcAccessToken,
 } from "@iam/api-core/oidc";
-import { readProviderSessionBinding } from "../session/provider-session.ts";
+import { consumeStagedProviderSessionBinding, readProviderSessionBinding } from "../session/provider-session.ts";
 
 const GRANTABLE_MODELS = new Set([
   "AccessToken",
@@ -50,12 +50,12 @@ function userCodeKey(userCode: string) {
 }
 
 function payloadClientId(payload: AdapterPayload) {
+  if (typeof payload.params?.client_id === "string")
+    return payload.params.client_id;
   if (typeof payload.clientId === "string")
     return payload.clientId;
   if (typeof payload.cid === "string")
     return payload.cid;
-  if (typeof payload.params?.client_id === "string")
-    return payload.params.client_id;
   return undefined;
 }
 
@@ -91,6 +91,8 @@ export class RedisOidcAdapter implements Adapter {
     const sessionBinding = this.model === "AuthorizationCode" && payload.sessionUid
       ? await readProviderSessionBinding(this.redis, payload.sessionUid)
       : null;
+    if (this.model === "Session" && payload.uid && typeof payload.accountId === "string")
+      await consumeStagedProviderSessionBinding(this.redis, payload.accountId, payload.uid);
     const stored: AdapterPayload = {
       ...payload,
       ...(clientId ? { clientId, oidcConfigVersion: oidcConfigVersions[clientId] } : {}),

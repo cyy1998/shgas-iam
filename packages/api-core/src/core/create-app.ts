@@ -1,5 +1,6 @@
 import type { OpenAPIHono } from "@hono/zod-openapi";
 import type { ApiReferenceConfiguration } from "@scalar/hono-api-reference";
+import type { Context, MiddlewareHandler } from "hono";
 import type { Logger } from "pino";
 import type { AppConfig, MiddlewareWithExcept, OpenAPIConfig, TierConfig, TierMiddleware } from "./define-config";
 import { Scalar as ScalarHonoAPIReference } from "@scalar/hono-api-reference";
@@ -7,6 +8,7 @@ import { pinoLogger } from "hono-pino";
 import { serveStatic } from "hono/bun";
 import { except } from "hono/combine";
 import { requestId } from "hono/request-id";
+import { SystemLogEvent } from "../logger";
 import { createErrorHandler } from "../middlewares/error-handler";
 import notFound from "../middlewares/not-found-handler";
 import { createRouter } from "./create-router";
@@ -71,6 +73,68 @@ function resolveEnabled(enabled: OpenAPIConfig["enabled"], env: Record<string, u
   return env.NODE_ENV !== "production";
 }
 
+function getHeader(c: Context, name: string): string | undefined {
+  return c.req.header(name) ?? c.req.header(name.toLowerCase());
+}
+
+function getClientIp(c: Context): string | undefined {
+  const forwardedFor = getHeader(c, "x-forwarded-for");
+  return forwardedFor?.split(",")[0]?.trim() || getHeader(c, "x-real-ip");
+}
+
+function getTraceId(c: Context): string | undefined {
+  const traceparent = getHeader(c, "traceparent");
+  const traceId = traceparent?.match(/^[\da-f]{2}-([\da-f]{32})-[\da-f]{16}-[\da-f]{2}$/i)?.[1];
+  return traceId ?? getHeader(c, "x-b3-traceid") ?? getHeader(c, "x-trace-id");
+}
+
+function getSourceApp(logger: Logger) {
+  const sourceApp = logger.bindings?.().sourceApp;
+  return typeof sourceApp === "string" ? sourceApp : "iam-api";
+}
+
+function getRoutePath(c: Context) {
+  const request = c.req as typeof c.req & { routePath?: string };
+  return request.routePath ?? c.req.path;
+}
+
+function getStatusLogLevel(statusCode: number) {
+  if (statusCode >= 500)
+    return "error";
+  if (statusCode >= 400)
+    return "warn";
+  return "info";
+}
+
+function getResponseStatus(c: Context) {
+  return (c.res as { status?: number }).status ?? 200;
+}
+
+function createIamRequestLogger(rootLogger: Logger, sourceApp: string): MiddlewareHandler {
+  return async (c, next) => {
+    const startedAt = performance.now();
+    await next();
+    const durationMs = Math.round(performance.now() - startedAt);
+    const statusCode = getResponseStatus(c);
+    const logger = c.get("logger" as never) as Pick<Logger, "info" | "warn" | "error">;
+    const level = getStatusLogLevel(statusCode);
+
+    logger[level]({
+      event: SystemLogEvent.HttpRequestCompleted,
+      sourceApp,
+      requestId: c.get("requestId" as never),
+      traceId: getTraceId(c),
+      method: c.req.method,
+      path: c.req.path,
+      route: getRoutePath(c),
+      statusCode,
+      durationMs,
+      clientIp: getClientIp(c),
+      userAgent: getHeader(c, "user-agent"),
+    }, "HTTP request completed");
+  };
+}
+
 /** Configure OpenAPI doc for a single tier / 配置单个 tier 的 OpenAPI 文档 */
 function configureAppDoc(router: AnyRouter, tier: TierConfig, config: AppConfig, docEndpoint: string) {
   const version = config.openapi?.version ?? "3.1.0";
@@ -117,12 +181,12 @@ export default function createApp(config: AppConfig, options: CreateAppOptions) 
 
   app.use("/static/*", serveStatic({ root: "./" }));
 
-  const requestLogger = pinoLogger({ pino: options.logger });
-  app.use(requestLogger);
+  app.use(requestId());
+  app.use(pinoLogger({ pino: options.logger, http: false }));
+  app.use(createIamRequestLogger(options.logger, getSourceApp(options.logger)));
 
   app.notFound(notFound);
   app.onError(createErrorHandler(options.logger));
-  app.use(requestId());
 
   const openapiEnabled = resolveEnabled(config.openapi?.enabled, options.env);
   const docEndpoint = config.openapi?.docEndpoint ?? "/doc";

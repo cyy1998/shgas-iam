@@ -1,9 +1,11 @@
 import type { Redis } from "ioredis";
+import type { IncomingMessage, ServerResponse } from "node:http";
 import type { errors, KoaContextWithOIDC } from "oidc-provider";
 import type { OidcProviderEnv } from "./env.ts";
 import type { OidcLogger } from "./lib/logger.ts";
 import type { SigningKey } from "./security/signing-keys.ts";
 import { createServer } from "node:http";
+import { SystemLogEvent } from "@iam/api-core/logger";
 import { revokeOidcAccessTokensForGlobalSession } from "@iam/api-core/oidc";
 import { removeGlobalSession } from "@iam/api-core/session";
 import Provider from "oidc-provider";
@@ -17,6 +19,14 @@ import { OidcAuthorizationRepository } from "./repositories/authorization.reposi
 import { OidcClientRepository, OidcClientSecretRepository } from "./repositories/client.repository.ts";
 import { ClientAuthRateLimiter, parseBasicClientId } from "./security/client-auth-rate-limit.ts";
 import { createOidcAdapterFactory } from "./storage/redis-adapter.ts";
+
+function ensureRequestId(request: IncomingMessage, response: ServerResponse) {
+  const incoming = request.headers["x-request-id"];
+  const requestId = (Array.isArray(incoming) ? incoming[0] : incoming) || crypto.randomUUID();
+  request.headers["x-request-id"] = requestId;
+  response.setHeader("x-request-id", requestId);
+  return requestId;
+}
 
 export type CreateOidcProviderOptions = {
   env: OidcProviderEnv;
@@ -92,7 +102,7 @@ export function createOidcProvider(options: CreateOidcProviderOptions) {
       else if (ctx.status >= 200 && ctx.status < 300)
         await clientAuthRateLimiter.clear(basicClientId, ctx.ip);
     }
-    if (ctx.oidc.route === "end_session_confirm" && ctx.status < 400 && globalSessionId) {
+    if (ctx.oidc?.route === "end_session_confirm" && ctx.status < 400 && globalSessionId) {
       await removeGlobalSession(options.redis, globalSessionId);
       await revokeOidcAccessTokensForGlobalSession(options.redis, globalSessionId);
       ctx.cookies.set(options.env.OIDC_GLOBAL_SESSION_COOKIE, null, {
@@ -105,11 +115,23 @@ export function createOidcProvider(options: CreateOidcProviderOptions) {
   });
 
   provider.on("server_error", (ctx, error) => {
-    options.logger.error({ err: error, requestId: ctx.state.requestId }, "OIDC provider server error");
+    options.logger.error({
+      event: SystemLogEvent.OidcProviderServerError,
+      err: error,
+      sourceApp: "iam-oidc-provider",
+      requestId: ctx.state.requestId,
+      errorName: error.name,
+      errorMessage: error.message,
+    }, "OIDC provider server error");
   });
   const logProtocolError = (event: string) => (ctx: KoaContextWithOIDC, error: errors.OIDCProviderError) => {
     options.logger.warn({
-      error: error.error,
+      event: SystemLogEvent.OidcProviderProtocolError,
+      sourceApp: "iam-oidc-provider",
+      oidcEvent: event,
+      errorCode: error.error,
+      errorName: error.name,
+      errorMessage: error.message,
       requestId: ctx.state.requestId,
       statusCode: error.statusCode,
     }, `OIDC ${event}`);
@@ -135,6 +157,7 @@ export function createOidcHttpServer(
   const callback = provider.callback();
   const publicOrigin = new URL(env.OIDC_PUBLIC_ORIGIN);
   return createServer(async (request, response) => {
+    const requestId = ensureRequestId(request, response);
     try {
       if (request.url === "/health") {
         await redis.ping();
@@ -174,7 +197,14 @@ export function createOidcHttpServer(
       callback(request, response);
     }
     catch (error) {
-      logger.error({ err: error }, "OIDC HTTP request failed");
+      logger.error({
+        event: SystemLogEvent.OidcProviderHttpRequestFailed,
+        err: error,
+        sourceApp: "iam-oidc-provider",
+        requestId,
+        errorName: error instanceof Error ? error.name : "UnknownError",
+        errorMessage: error instanceof Error ? error.message : "Unknown OIDC HTTP request failure",
+      }, "OIDC HTTP request failed");
       if (!response.headersSent) {
         response.writeHead(request.url === "/health" ? 503 : 500, {
           "cache-control": "no-store",

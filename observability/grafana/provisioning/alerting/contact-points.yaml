@@ -1,0 +1,12 @@
+apiVersion: 1
+
+contactPoints:
+  - orgId: 1
+    name: iam-dev-null
+    receivers:
+      - uid: iam-dev-null
+        type: webhook
+        settings:
+          url: ${GRAFANA_DEV_ALERT_WEBHOOK_URL}
+          httpMethod: POST
+        disableResolveMessage: true

@@ -194,6 +194,11 @@ services:
       dockerfile: apps/api/Dockerfile
       args: *build-proxy-args
     restart: unless-stopped
+    labels:
+      shgas-iam.logs.enabled: "true"
+      shgas-iam.logs.env: ${IAM_LOG_ENV:-prod}
+      shgas-iam.logs.service: api
+      shgas-iam.logs.component: backend
     ports:
       - "${API_PUBLISHED_PORT:-30000}:30000"
     environment:
@@ -246,6 +251,11 @@ services:
       dockerfile: apps/admin-api/Dockerfile
       args: *build-proxy-args
     restart: unless-stopped
+    labels:
+      shgas-iam.logs.enabled: "true"
+      shgas-iam.logs.env: ${IAM_LOG_ENV:-prod}
+      shgas-iam.logs.service: admin-api
+      shgas-iam.logs.component: backend
     ports:
       - "${ADMIN_API_PUBLISHED_PORT:-30001}:30001"
     environment:
@@ -268,6 +278,11 @@ services:
       dockerfile: apps/oidc-provider/Dockerfile
       args: *build-proxy-args
     restart: unless-stopped
+    labels:
+      shgas-iam.logs.enabled: "true"
+      shgas-iam.logs.env: ${IAM_LOG_ENV:-prod}
+      shgas-iam.logs.service: oidc-provider
+      shgas-iam.logs.component: backend
     ports:
       - "${OIDC_PROVIDER_PUBLISHED_PORT:-30002}:30002"
     environment:

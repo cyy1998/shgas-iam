@@ -4,7 +4,7 @@ import type Provider from "oidc-provider";
 import type { OidcProviderEnv } from "../env.ts";
 import type { OidcClientRepository } from "../repositories/client.repository.ts";
 import type { GlobalSessionResolver } from "./global-session.ts";
-import { bindProviderSession } from "../session/provider-session.ts";
+import { bindProviderSession, stageProviderSessionBinding } from "../session/provider-session.ts";
 import { getCookieValue, requestNeedsReauthentication } from "./global-session.ts";
 import {
   consumeOidcReturnHandle,
@@ -52,8 +52,13 @@ export class OidcInteractionHandler {
     const session = await this.globalSessions.resolve(request);
     if (session && !requestNeedsReauthentication(details.params, session.authTime)) {
       await this.globalSessions.renew(session.sessionId);
-      if (!details.session?.uid || !await bindProviderSession(this.redis, details.session.uid, session))
+      if (details.session?.uid) {
+        if (!await bindProviderSession(this.redis, details.session.uid, session))
+          return failClosed(response);
+      }
+      else if (!await stageProviderSessionBinding(this.redis, session)) {
         return failClosed(response);
+      }
       await this.provider.interactionFinished(request, response, {
         login: {
           accountId: session.accountId,
@@ -94,23 +99,13 @@ export class OidcInteractionHandler {
     const client = await this.clients.findRuntime(payload.clientId);
     if (!client || client.oidc_config_version !== payload.oidcConfigVersion)
       return failClosed(response);
-    const details = await this.provider.interactionDetails(request, response);
-    const interactionClientId = typeof details.params.client_id === "string" ? details.params.client_id : null;
-    if (details.uid !== payload.interactionUid || interactionClientId !== payload.clientId)
-      return failClosed(response);
     const session = await this.globalSessions.resolve(request);
     if (!session)
       return failClosed(response);
 
-    await this.globalSessions.renew(session.sessionId);
-    if (!details.session?.uid || !await bindProviderSession(this.redis, details.session.uid, session))
-      return failClosed(response);
-    await this.provider.interactionFinished(request, response, {
-      login: {
-        accountId: session.accountId,
-        ts: session.authTime,
-        amr: ["iam"],
-      },
-    });
+    const interactionUrl = new URL(
+      `${this.env.OIDC_ISSUER}/interaction/${payload.interactionUid}`,
+    );
+    redirect(response, interactionUrl.href);
   }
 }

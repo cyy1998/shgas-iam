@@ -1,0 +1,206 @@
+# system-log-observability Specification
+
+## Purpose
+描述 IAM 系统日志观测能力，包括基于 Grafana Alloy、Loki 和 Grafana 的采集、存储、查询、dashboard、告警、OIDC 登录和 admin deep link 集成。
+
+## Requirements
+### Requirement: System Log Observability Stack
+系统 SHALL 提供基于 Grafana Alloy、Loki 和 Grafana 的系统日志观测栈，用于集中采集、存储、查询和告警 IAM 运行时系统日志；该能力 SHALL 独立于 PostgreSQL `audit_log` 审计事实表。
+
+#### Scenario: Dev observability stack is opt-in
+- **WHEN** 开发者启动默认开发环境
+- **THEN** Loki、Grafana 和 Alloy SHALL NOT 默认启动
+- **AND** 开发者 SHALL 能通过独立 observability compose 或 profile 按需启动日志观测栈
+
+#### Scenario: Production uses centralized Loki and Grafana
+- **WHEN** 生产环境部署系统日志观测能力
+- **THEN** 系统 SHALL 使用集中 Loki 和 Grafana 实例
+- **AND** 每台运行 IAM 目标容器的业务机 SHALL 部署 Alloy agent 将本机日志推送到集中 Loki
+
+#### Scenario: Loki retention is separate from audit retention
+- **WHEN** Loki 存储系统日志
+- **THEN** 默认 retention SHALL 为 30 天
+- **AND** retention SHALL 可通过部署配置调整
+- **AND** PostgreSQL `audit_log` 的长期保存策略 SHALL 不受 Loki retention 影响
+
+#### Scenario: Runtime system logs are not persisted in PostgreSQL
+- **WHEN** 系统日志观测能力启用
+- **THEN** 系统 MUST NOT 创建 PostgreSQL `system_log` 表
+- **AND** 系统 MUST NOT 将运行时系统日志写入 PostgreSQL 作为事实存储
+
+### Requirement: Alloy Docker Log Collection Scope
+系统 SHALL 通过 Docker labels 标识 Alloy 采集目标，并 SHALL 仅采集 `api`、`admin-api`、`oidc-provider` 和 `apisix` 容器的 stdout/stderr。
+
+#### Scenario: Target containers are selected by labels
+- **WHEN** Alloy 发现 Docker 容器
+- **THEN** Alloy SHALL 仅采集带有 `shgas-iam.logs.enabled=true` 的容器
+- **AND** `api`、`admin-api`、`oidc-provider` 和 `apisix` SHALL 声明稳定的 service、component 和 env labels
+
+#### Scenario: Frontend containers are excluded in phase one
+- **WHEN** `admin` 或 `sso` 前端容器运行
+- **THEN** Alloy SHALL NOT 默认采集这些前端容器日志
+
+#### Scenario: Stdout and stderr are both collected
+- **WHEN** 目标容器向 stdout 或 stderr 输出日志
+- **THEN** Alloy SHALL 将 stdout 和 stderr 都发送到 Loki
+- **AND** 无法解析为 IAM JSON 的 stderr 日志 SHALL 使用 `event = "runtime.stderr"` 兜底
+
+### Requirement: Loki Label Discipline
+系统 SHALL 只将低基数、稳定、常用于第一层过滤的字段作为 Loki labels。
+
+#### Scenario: Allowed labels
+- **WHEN** Alloy 向 Loki 写入 IAM 系统日志
+- **THEN** Loki labels SHALL 仅包含 `env`、`service`、`component`、`level` 和 `host`
+- **AND** 可选容器标识 MUST NOT 替代稳定的 `service` label
+
+#### Scenario: High-cardinality fields are not labels
+- **WHEN** 系统日志包含 requestId、traceId、route、userId、username、clientIp 或 userAgent
+- **THEN** 这些字段 MUST NOT 作为 Loki labels
+- **AND** 这些字段 SHALL 保留在日志正文或 structured metadata 中供 LogQL pipeline 过滤
+
+#### Scenario: Query by requestId uses JSON filtering
+- **WHEN** 用户在 Grafana 中按 requestId 查询系统日志
+- **THEN** 查询 SHALL 先用低基数 labels 缩小范围
+- **AND** 再通过 JSON 字段过滤 `requestId`
+
+### Requirement: IAM System Log JSON Contract
+后端应用和 APISIX 网关 SHALL 输出符合 IAM 系统日志合同的 JSON 日志字段，以便 Grafana 统一检索、dashboard 展示和告警。
+
+#### Scenario: Backend HTTP request log fields
+- **WHEN** `api` 或 `admin-api` 完成 HTTP 请求
+- **THEN** 系统日志 SHALL 包含 `event`、`sourceApp`、`requestId`、`method`、`path`、`route`、`statusCode`、`durationMs` 和 `msg`
+- **AND** `event` SHALL 使用 `http.request.completed` 或等价稳定事件名
+
+#### Scenario: OIDC provider protocol log fields
+- **WHEN** `oidc-provider` 输出协议错误、server error 或生命周期日志
+- **THEN** 系统日志 SHALL 包含 `event`、`sourceApp = "iam-oidc-provider"`、`requestId` 和稳定错误摘要字段
+- **AND** OIDC access token、ID token、refresh token、authorization code、client secret 和 cookie MUST NOT 明文输出
+
+#### Scenario: APISIX access log fields
+- **WHEN** APISIX 完成网关请求
+- **THEN** access log SHALL 是 JSON
+- **AND** access log SHALL 包含 `event = "gateway.request.completed"`、`sourceApp = "apisix"`、`requestId`、`method`、`path`、`statusCode`、`durationMs`、`upstreamStatus` 和 `upstreamAddr`
+
+#### Scenario: Event names are stable
+- **WHEN** 代码输出系统日志
+- **THEN** `event` SHALL 使用小写点分层命名
+- **AND** requestId、traceId、用户标识、clientCode 或动态业务值 MUST NOT 拼入 `event`
+
+#### Scenario: Pino numeric levels are normalized
+- **WHEN** Alloy 处理 Pino JSON 日志
+- **THEN** Pino numeric level SHALL 映射为 `trace`、`debug`、`info`、`warn`、`error` 或 `fatal`
+- **AND** Loki `level` label SHALL 使用字符串级别
+
+### Requirement: Request Correlation
+系统 SHALL 使用 `X-Request-Id` 作为网关、后端系统日志和审计日志之间的主要关联字段。
+
+#### Scenario: APISIX generates missing requestId
+- **WHEN** 进入 APISIX 的 IAM 请求没有合法 `X-Request-Id`
+- **THEN** APISIX SHALL 生成 requestId
+- **AND** APISIX SHALL 将该 requestId 传给上游服务并写入响应头
+
+#### Scenario: APISIX preserves incoming requestId
+- **WHEN** 进入 APISIX 的 IAM 请求携带合法 `X-Request-Id`
+- **THEN** APISIX SHALL 复用该 requestId
+- **AND** 后端系统日志和审计日志 SHALL 使用同一 requestId
+
+#### Scenario: Backend direct access falls back
+- **WHEN** 请求绕过 APISIX 直接访问 `api`、`admin-api` 或 `oidc-provider`
+- **THEN** 后端 SHALL 生成 requestId 兜底
+- **AND** 后端 SHALL 将 requestId 写入响应头
+
+#### Scenario: Trace id is optional
+- **WHEN** 请求包含 `traceparent`、B3 trace id 或其他已支持 trace header
+- **THEN** 系统日志 MAY 记录 `traceId`
+- **AND** 系统 MUST NOT 为本变更强制创建 OpenTelemetry span
+
+### Requirement: Sensitive Data Protection In System Logs
+系统日志 MUST 在应用输出前执行敏感字段脱敏，并在 Alloy 处理阶段提供二次兜底；系统日志一期 MUST NOT 采集 request body 或 response body。
+
+#### Scenario: Application logger redacts sensitive fields
+- **WHEN** 后端代码输出包含 password、token、cookie、authorization、secret、clientSecret、验证码或 private key 等字段的日志对象
+- **THEN** 应用 logger SHALL 在输出前将这些字段替换为安全占位值
+
+#### Scenario: Request headers are whitelisted
+- **WHEN** 后端 HTTP 请求日志输出请求上下文
+- **THEN** 系统 SHALL 仅输出白名单 header 或派生字段
+- **AND** `authorization`、`cookie` 和 `set-cookie` MUST NOT 明文输出
+
+#### Scenario: APISIX does not log bodies or sensitive headers
+- **WHEN** APISIX 输出 access log
+- **THEN** access log MUST NOT 包含 request body、response body、authorization header、cookie header 或完整 query 中的敏感凭据
+
+#### Scenario: Alloy provides secondary redaction
+- **WHEN** Alloy 处理目标容器日志
+- **THEN** Alloy SHALL 对仍可能出现的敏感字段执行二次 drop 或 redact
+- **AND** 端到端验证 SHALL 证明 Loki 中查询不到测试用 Authorization、Cookie、password 或 token 原文
+
+### Requirement: Grafana Integration And Deep Links
+系统 SHALL 使用 Grafana 作为系统日志查询、dashboard 和告警入口；admin SHALL 只提供 Grafana 入口和安全 deep link，不代理 Loki 查询。
+
+#### Scenario: Grafana uses IAM OIDC login
+- **WHEN** 用户访问生产 Grafana
+- **THEN** Grafana SHALL 使用 IAM OIDC provider 进行登录
+- **AND** Grafana 对日志 datasource 和 dashboard 的最终访问授权 SHALL 由 Grafana 自身管理
+
+#### Scenario: Admin only exposes links
+- **WHEN** 管理员在 admin 中打开系统日志入口
+- **THEN** admin SHALL 跳转到 Grafana dashboard 或 Explore
+- **AND** admin MUST NOT iframe 嵌入 Grafana
+- **AND** admin-api MUST NOT 代理 Loki 查询
+
+#### Scenario: Deep links avoid business identifiers
+- **WHEN** admin 生成 Grafana deep link
+- **THEN** deep link SHALL 只携带 requestId、traceId、service、env 和时间范围等技术关联字段
+- **AND** deep link MUST NOT 携带 username、userId、mobile、clientSecret、token、审计 details、完整业务 URL query 或错误堆栈原文
+
+#### Scenario: Grafana and Loki exposure
+- **WHEN** 系统部署到生产环境
+- **THEN** Grafana SHALL 通过独立域名或受控入口对用户开放
+- **AND** Loki SHALL 仅允许 Grafana 和 Alloy 通过内网访问
+
+### Requirement: Grafana Provisioning
+系统 SHALL 将 Grafana datasource、dashboard 和 alert rules 通过仓库文件 provision，而不是依赖 Grafana UI 手工配置。
+
+#### Scenario: Datasource is provisioned
+- **WHEN** Grafana 启动
+- **THEN** Loki datasource SHALL 通过 provisioning 自动创建
+- **AND** datasource 配置 MUST NOT 将 secret 明文提交到仓库
+
+#### Scenario: Dashboards are provisioned
+- **WHEN** Grafana 启动
+- **THEN** 系统 SHALL provision `IAM Overview`、`IAM Request Drilldown` 和 `IAM Error Center` 三个 dashboard
+- **AND** dashboard UID SHALL 稳定以支持 admin deep link
+
+#### Scenario: Strong-signal alerts are provisioned
+- **WHEN** Grafana alerting provisioning 加载 IAM 日志规则
+- **THEN** 系统 SHALL 提供服务 error 突增、APISIX 5xx 突增、OIDC provider server error 和 Loki/Alloy 采集异常告警
+- **AND** 开发环境 MAY 静默通知渠道但 SHALL 保留规则定义
+
+### Requirement: Observability Runtime Configuration
+系统 SHALL 使用版本化配置管理 observability 组件，并 SHALL 支持生产环境替换内网镜像和地址。
+
+#### Scenario: Images use fixed default versions
+- **WHEN** 开发者查看 observability compose
+- **THEN** Grafana、Loki 和 Alloy 镜像 MUST NOT 使用 `latest`
+- **AND** 镜像 SHALL 使用固定默认版本并允许通过环境变量覆盖
+
+#### Scenario: URLs are configurable
+- **WHEN** admin 生成 Grafana deep link 或 Alloy 写入 Loki
+- **THEN** Grafana URL 和 Loki push URL SHALL 来自环境配置
+- **AND** 这些 URL MUST NOT 在应用代码中硬编码为生产地址
+
+### Requirement: System Log Smoke Verification
+系统 SHALL 提供端到端 smoke 验证，证明系统日志采集、查询、脱敏、dashboard 和 deep link 能工作。
+
+#### Scenario: Request appears in Loki by requestId
+- **WHEN** 开发者启动 dev observability stack 并通过 APISIX 调用 IAM 后端
+- **THEN** Grafana/Loki SHALL 能用 requestId 查询到 APISIX 与对应后端日志
+
+#### Scenario: Sensitive test values are absent
+- **WHEN** 测试请求携带 Authorization、Cookie、password 或 token 测试值
+- **THEN** Loki 查询结果 MUST NOT 包含这些测试原文
+
+#### Scenario: Admin deep link opens Grafana context
+- **WHEN** 管理员从审计日志详情点击 Grafana deep link
+- **THEN** Grafana SHALL 打开围绕该 requestId 和时间范围的日志查询上下文

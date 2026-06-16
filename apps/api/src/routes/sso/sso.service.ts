@@ -14,6 +14,7 @@ import { InvalidAuthCodeError } from "@iam/api-core/errors/InvalidAuthCodeError"
 import { InvalidRedirectUriError } from "@iam/api-core/errors/InvalidRedirectUriError";
 import { InvalidSsoClientError } from "@iam/api-core/errors/InvalidSsoClientError";
 import { LoginFailedError } from "@iam/api-core/errors/LoginFailedError";
+import { SystemLogEvent } from "@iam/api-core/logger";
 import { reviveIsoDates } from "@iam/api-core/utils";
 import { ClientManagementLevel } from "@iam/contracts";
 import { matchRedirectUrlPattern } from "@iam/domain/client";
@@ -50,7 +51,7 @@ function isRedirectUrlAllowed(clientCode: string, redirectUrl: string, patterns:
       }
     }
     catch (err) {
-      logger.warn({ err, clientCode, pattern }, "invalid client redirect url pattern");
+      logger.warn({ event: SystemLogEvent.RedirectPatternInvalid, err, clientCode, pattern }, "invalid client redirect url pattern");
     }
   }
 
