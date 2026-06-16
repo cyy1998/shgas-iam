@@ -1,7 +1,8 @@
 # sso-login-experience Specification
 
 ## Purpose
-描述 SSO 前端登录交互中密码失败强提示与临时限制提示的当前目标行为。
+描述 SSO 登录体验的当前目标行为，覆盖登录 endpoint 发现、内外网 public origin 选择、密码失败强提示、临时限制提示，以及 OIDC login return handle 回跳安全约束。
+
 ## Requirements
 ### Requirement: SSO endpoint discovery selects origin by entry network
 系统 SHALL 根据可信网关注入的入口网络类型返回对应内网或外网 SSO endpoint URL。
