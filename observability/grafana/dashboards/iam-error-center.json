@@ -2,69 +2,884 @@
   "uid": "iam-error-center",
   "title": "IAM Error Center",
   "schemaVersion": 39,
-  "version": 1,
+  "version": 2,
   "refresh": "30s",
   "timezone": "browser",
-  "tags": ["iam", "logs", "errors"],
+  "tags": [
+    "iam",
+    "logs",
+    "errors"
+  ],
+  "links": [
+    {
+      "asDropdown": false,
+      "icon": "external link",
+      "includeVars": true,
+      "keepTime": true,
+      "tags": [],
+      "targetBlank": false,
+      "title": "Open Overview",
+      "tooltip": "Return to IAM log health overview",
+      "type": "link",
+      "url": "/d/iam-overview/iam-overview?orgId=1&${__url_time_range}&var-env=$env&var-service=$service"
+    },
+    {
+      "asDropdown": false,
+      "icon": "external link",
+      "includeVars": true,
+      "keepTime": true,
+      "tags": [],
+      "targetBlank": false,
+      "title": "Open Request Drilldown",
+      "tooltip": "Open request-level log drilldown",
+      "type": "link",
+      "url": "/d/iam-request-drilldown/iam-request-drilldown?orgId=1&${__url_time_range}&var-env=$env&var-service=$service&var-requestId=.*&var-traceId=.*"
+    }
+  ],
   "templating": {
     "list": [
       {
         "name": "env",
         "type": "query",
-        "datasource": { "type": "loki", "uid": "iam-loki" },
+        "datasource": {
+          "type": "loki",
+          "uid": "iam-loki"
+        },
         "query": "label_values(env)",
-        "current": { "text": "dev", "value": "dev" }
+        "current": {
+          "text": "dev",
+          "value": "dev"
+        }
       },
       {
         "name": "service",
         "type": "query",
-        "datasource": { "type": "loki", "uid": "iam-loki" },
+        "datasource": {
+          "type": "loki",
+          "uid": "iam-loki"
+        },
         "query": "label_values({env=\"$env\"}, service)",
         "includeAll": true,
-        "current": { "text": "All", "value": "$__all" }
+        "current": {
+          "text": "All",
+          "value": "$__all"
+        },
+        "allValue": ".*"
       }
     ]
   },
   "panels": [
     {
       "id": 1,
-      "title": "Error trend",
-      "type": "timeseries",
-      "datasource": { "type": "loki", "uid": "iam-loki" },
+      "title": "Error log lines",
+      "type": "stat",
+      "datasource": {
+        "type": "loki",
+        "uid": "iam-loki"
+      },
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by (service) (count_over_time({env=\"$env\", service=~\"$service\", level=~\"error|fatal\"}[5m]))"
+          "expr": "sum(count_over_time({env=\"$env\", service=~\"$service\", level=~\"error|fatal\"}[$__range]))"
         }
       ],
-      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 0 }
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "unit": "short",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 1
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "values": false,
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": ""
+        },
+        "orientation": "auto",
+        "textMode": "auto",
+        "wideLayout": true,
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "showPercentChange": false
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 0,
+        "y": 0
+      }
     },
     {
       "id": 2,
-      "title": "Errors by service/event/name",
-      "type": "table",
-      "datasource": { "type": "loki", "uid": "iam-loki" },
+      "title": "Affected services",
+      "type": "stat",
+      "datasource": {
+        "type": "loki",
+        "uid": "iam-loki"
+      },
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by (service, event, errorName) (count_over_time({env=\"$env\", service=~\"$service\", level=~\"error|fatal\"} | json [30m]))",
-          "format": "table"
+          "expr": "count(sum by (service) (count_over_time({env=\"$env\", service=~\"$service\", level=~\"error|fatal\"}[$__range])))"
         }
       ],
-      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 8 }
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "unit": "short",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 0
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "values": false,
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": ""
+        },
+        "orientation": "auto",
+        "textMode": "auto",
+        "wideLayout": true,
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "showPercentChange": false
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 6,
+        "y": 0
+      }
     },
     {
       "id": 3,
-      "title": "Recent errors",
-      "type": "logs",
-      "datasource": { "type": "loki", "uid": "iam-loki" },
+      "title": "OIDC provider errors",
+      "type": "stat",
+      "datasource": {
+        "type": "loki",
+        "uid": "iam-loki"
+      },
       "targets": [
         {
           "refId": "A",
-          "expr": "{env=\"$env\", service=~\"$service\", level=~\"error|fatal\"} | json"
+          "expr": "sum(count_over_time({env=\"$env\", service=\"oidc-provider\", level=~\"error|fatal\"}[$__range]))"
         }
       ],
-      "gridPos": { "h": 10, "w": 24, "x": 0, "y": 16 }
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "unit": "short",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 1
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "values": false,
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": ""
+        },
+        "orientation": "auto",
+        "textMode": "auto",
+        "wideLayout": true,
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "showPercentChange": false
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 12,
+        "y": 0
+      }
+    },
+    {
+      "id": 4,
+      "title": "Error groups",
+      "type": "stat",
+      "datasource": {
+        "type": "loki",
+        "uid": "iam-loki"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "count(sum by (service, event, errorName, errorCode) (count_over_time({env=\"$env\", service=~\"$service\", level=~\"error|fatal\"} | json | __error__=\"\" [$__range])))"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "unit": "short",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "purple",
+                "value": 0
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "values": false,
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": ""
+        },
+        "orientation": "auto",
+        "textMode": "auto",
+        "wideLayout": true,
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "showPercentChange": false
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 18,
+        "y": 0
+      }
+    },
+    {
+      "id": 5,
+      "title": "Error trend by service",
+      "type": "timeseries",
+      "datasource": {
+        "type": "loki",
+        "uid": "iam-loki"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (service) (count_over_time({env=\"$env\", service=~\"$service\", level=~\"error|fatal\"}[5m]))",
+          "legendFormat": "{{service}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "linear",
+            "barAlignment": 0,
+            "lineWidth": 1,
+            "fillOpacity": 8,
+            "gradientMode": "none",
+            "spanNulls": false,
+            "insertNulls": false,
+            "showPoints": "never",
+            "pointSize": 5,
+            "stacking": {
+              "mode": "none",
+              "group": "A"
+            },
+            "axisPlacement": "auto",
+            "axisLabel": "",
+            "axisColorMode": "text",
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "hideFrom": {
+              "tooltip": false,
+              "viz": false,
+              "legend": false
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "errors"
+        },
+        "overrides": []
+      },
+      "options": {
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        },
+        "legend": {
+          "showLegend": true,
+          "displayMode": "list",
+          "placement": "bottom",
+          "calcs": []
+        }
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 4
+      }
+    },
+    {
+      "id": 6,
+      "title": "Error trend by event",
+      "type": "timeseries",
+      "datasource": {
+        "type": "loki",
+        "uid": "iam-loki"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (event) (count_over_time({env=\"$env\", service=~\"$service\", level=~\"error|fatal\"} | json | __error__=\"\" [5m]))",
+          "legendFormat": "{{event}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "linear",
+            "barAlignment": 0,
+            "lineWidth": 1,
+            "fillOpacity": 8,
+            "gradientMode": "none",
+            "spanNulls": false,
+            "insertNulls": false,
+            "showPoints": "never",
+            "pointSize": 5,
+            "stacking": {
+              "mode": "none",
+              "group": "A"
+            },
+            "axisPlacement": "auto",
+            "axisLabel": "",
+            "axisColorMode": "text",
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "hideFrom": {
+              "tooltip": false,
+              "viz": false,
+              "legend": false
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "errors"
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": ".*error.*"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "red"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        },
+        "legend": {
+          "showLegend": true,
+          "displayMode": "list",
+          "placement": "bottom",
+          "calcs": []
+        }
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 4
+      }
+    },
+    {
+      "id": 7,
+      "title": "Top error groups (30m)",
+      "type": "table",
+      "datasource": {
+        "type": "loki",
+        "uid": "iam-loki"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "topk(20, sum by (service, event, errorName, errorCode, errorMessage) (count_over_time({env=\"$env\", service=~\"$service\", level=~\"error|fatal\"} | json | __error__=\"\" [30m])))",
+          "format": "table"
+        }
+      ],
+      "transformations": [
+        {
+          "id": "labelsToFields",
+          "options": {
+            "mode": "columns"
+          }
+        },
+        {
+          "id": "organize",
+          "options": {
+            "indexByName": {
+              "service": 0,
+              "event": 1,
+              "errorName": 2,
+              "errorCode": 3,
+              "errorMessage": 4,
+              "Value": 5
+            },
+            "renameByName": {
+              "service": "Service",
+              "event": "Event",
+              "errorName": "Error type",
+              "errorCode": "Error code",
+              "errorMessage": "Example message",
+              "Value": "Count"
+            },
+            "excludeByName": {
+              "Time": true
+            }
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "custom": {
+            "align": "auto",
+            "cellOptions": {
+              "type": "auto"
+            },
+            "inspect": false
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Count"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "short"
+              },
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "red"
+                }
+              },
+              {
+                "id": "custom.width",
+                "value": 90
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Service"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 130
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Event"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 220
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Error type"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 160
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Error code"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 140
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm",
+        "footer": {
+          "show": false,
+          "reducer": [
+            "sum"
+          ],
+          "countRows": false,
+          "fields": ""
+        }
+      },
+      "gridPos": {
+        "h": 9,
+        "w": 24,
+        "x": 0,
+        "y": 12
+      }
+    },
+    {
+      "id": 8,
+      "title": "Recent error examples",
+      "type": "table",
+      "datasource": {
+        "type": "loki",
+        "uid": "iam-loki"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "{env=\"$env\", service=~\"$service\", level=~\"error|fatal\"} | json | __error__=\"\"",
+          "format": "logs"
+        }
+      ],
+      "transformations": [
+        {
+          "id": "extractFields",
+          "options": {
+            "source": "Line",
+            "format": "json",
+            "replace": false
+          }
+        },
+        {
+          "id": "organize",
+          "options": {
+            "indexByName": {
+              "Time": 0,
+              "service": 1,
+              "event": 2,
+              "errorName": 3,
+              "errorCode": 4,
+              "requestId": 5,
+              "traceId": 6,
+              "errorMessage": 7,
+              "msg": 8
+            },
+            "renameByName": {
+              "Time": "Recent time",
+              "service": "Service",
+              "event": "Event",
+              "errorName": "Error type",
+              "errorCode": "Error code",
+              "requestId": "Request ID",
+              "traceId": "Trace ID",
+              "errorMessage": "Error message",
+              "msg": "Message"
+            },
+            "excludeByName": {
+              "Line": true,
+              "labels": true,
+              "id": true,
+              "Time_ns": true,
+              "tsNs": true
+            }
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "custom": {
+            "align": "auto",
+            "cellOptions": {
+              "type": "auto"
+            },
+            "inspect": false
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Recent time"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 180
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Service"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 130
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Event"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 220
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Request ID"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 260
+              },
+              {
+                "id": "links",
+                "value": [
+                  {
+                    "title": "Open request drilldown",
+                    "url": "/d/iam-request-drilldown/iam-request-drilldown?orgId=1&${__url_time_range}&var-env=$env&var-service=${__data.fields.service}&var-requestId=${__value.raw}&var-traceId=.*",
+                    "targetBlank": false
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Trace ID"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 220
+              },
+              {
+                "id": "links",
+                "value": [
+                  {
+                    "title": "Open trace drilldown",
+                    "url": "/d/iam-request-drilldown/iam-request-drilldown?orgId=1&${__url_time_range}&var-env=$env&var-service=${__data.fields.service}&var-requestId=.*&var-traceId=${__value.raw}",
+                    "targetBlank": false
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Error message"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 420
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm",
+        "footer": {
+          "show": false,
+          "reducer": [
+            "sum"
+          ],
+          "countRows": false,
+          "fields": ""
+        }
+      },
+      "gridPos": {
+        "h": 10,
+        "w": 24,
+        "x": 0,
+        "y": 21
+      }
+    },
+    {
+      "id": 9,
+      "title": "Raw recent errors",
+      "type": "logs",
+      "datasource": {
+        "type": "loki",
+        "uid": "iam-loki"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "{env=\"$env\", service=~\"$service\", level=~\"error|fatal\"} | json | __error__=\"\""
+        }
+      ],
+      "options": {
+        "showTime": true,
+        "showLabels": false,
+        "showCommonLabels": false,
+        "wrapLogMessage": false,
+        "prettifyLogMessage": false,
+        "enableLogDetails": true,
+        "dedupStrategy": "none",
+        "sortOrder": "Descending"
+      },
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 24,
+        "x": 0,
+        "y": 31
+      }
     }
   ]
 }

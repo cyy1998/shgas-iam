@@ -84,6 +84,28 @@ Grafana provisioning files live under `observability/grafana/provisioning/`.
 
 Development alerts use a null webhook default to avoid local notification noise. Production notification routing should replace the default contact point through environment-managed Grafana provisioning.
 
+## Dashboard Workflow
+
+Use the provisioned dashboards as a three-step troubleshooting flow:
+
+- `IAM Overview`: start here to decide whether the current time window is healthy. The first row summarizes total log volume, error logs, HTTP 4xx/5xx, APISIX 5xx, request duration, and active services. The trend panels explain which service or status family changed.
+- `IAM Error Center`: use this when Overview shows errors. It groups errors by service, event, and error type/code, then shows recent examples with request and trace identifiers for drilldown.
+- `IAM Request Drilldown`: use this for a specific `requestId` or `traceId`. It shows correlation details, request-level summary signals, a structured timeline, a readable timeline, and raw JSON logs for evidence.
+
+Dashboard colors use stable operational semantics: red for `error`/`fatal` or 5xx, yellow for `warn` or latency risk, green for healthy/2xx signals, and blue for traffic or totals. Dashboard legends and table columns should use readable names such as service, event, status, request ID, and duration rather than raw `{label="value"}` expressions.
+
+Grafana data links and admin deep links may carry only technical correlation fields:
+
+- `env`
+- `service`
+- `requestId`
+- `traceId`
+- time range
+
+Do not put usernames, user IDs, mobile numbers, client secrets, tokens, audit details, business query strings, stack traces, full request URLs, request bodies, or response bodies into dashboard links.
+
+Dashboard screenshots are not currently committed as visual baselines. If a release needs screenshot review, generate them from the dev observability stack after provisioning loads and keep the screenshot artifacts outside the repo unless a dedicated review process asks for them.
+
 ## Log Contract
 
 System logs use JSON fields such as:
