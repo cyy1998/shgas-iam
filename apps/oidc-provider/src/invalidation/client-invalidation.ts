@@ -22,7 +22,6 @@ export function startClientInvalidationSubscriber(redis: Redis, logger: OidcLogg
         logger.warn({
           event: SystemLogEvent.OidcClientInvalidationCleanupFailed,
           err: error,
-          sourceApp: "iam-oidc-provider",
         }, "OIDC client invalidation cleanup failed");
       }
     })();

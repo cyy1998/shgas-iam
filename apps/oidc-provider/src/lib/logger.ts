@@ -1,9 +1,7 @@
 import type { OidcProviderEnv } from "../env.ts";
-import { IAM_LOG_REDACT_PATHS } from "@iam/api-core/logger";
-import pino from "pino";
+import { createLogger as createIamLogger, LoggerSourceApp } from "@iam/api-core/logger";
 
-export const OIDC_LOG_REDACT_PATHS = [
-  ...IAM_LOG_REDACT_PATHS,
+export const OIDC_EXTRA_LOG_REDACT_PATHS = [
   "*.secret",
   "*.secretHash",
   "*.oidcSecretHash",
@@ -22,14 +20,14 @@ export const OIDC_LOG_REDACT_PATHS = [
   "res.headers.set-cookie",
 ];
 
-export function createLogger(env: Pick<OidcProviderEnv, "LOG_LEVEL">) {
-  return pino({
-    level: env.LOG_LEVEL,
-    redact: {
-      paths: OIDC_LOG_REDACT_PATHS,
-      censor: "[REDACTED]",
-    },
-  }).child({ sourceApp: "iam-oidc-provider" });
+export function createLogger(env: Pick<OidcProviderEnv, "LOG_LEVEL" | "LOG_FORMAT" | "NODE_ENV">) {
+  return createIamLogger({
+    nodeEnv: env.NODE_ENV,
+    logLevel: env.LOG_LEVEL,
+    logFormat: env.LOG_FORMAT,
+    sourceApp: LoggerSourceApp.OidcProvider,
+    extraRedactPaths: OIDC_EXTRA_LOG_REDACT_PATHS,
+  });
 }
 
 export type OidcLogger = ReturnType<typeof createLogger>;

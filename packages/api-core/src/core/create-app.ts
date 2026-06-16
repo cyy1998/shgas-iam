@@ -8,7 +8,7 @@ import { pinoLogger } from "hono-pino";
 import { serveStatic } from "hono/bun";
 import { except } from "hono/combine";
 import { requestId } from "hono/request-id";
-import { SystemLogEvent } from "../logger";
+import { buildHttpRequestLogFields, getStatusLogLevel, LoggerSourceApp } from "../logger";
 import { createErrorHandler } from "../middlewares/error-handler";
 import notFound from "../middlewares/not-found-handler";
 import { createRouter } from "./create-router";
@@ -77,33 +77,14 @@ function getHeader(c: Context, name: string): string | undefined {
   return c.req.header(name) ?? c.req.header(name.toLowerCase());
 }
 
-function getClientIp(c: Context): string | undefined {
-  const forwardedFor = getHeader(c, "x-forwarded-for");
-  return forwardedFor?.split(",")[0]?.trim() || getHeader(c, "x-real-ip");
-}
-
-function getTraceId(c: Context): string | undefined {
-  const traceparent = getHeader(c, "traceparent");
-  const traceId = traceparent?.match(/^[\da-f]{2}-([\da-f]{32})-[\da-f]{16}-[\da-f]{2}$/i)?.[1];
-  return traceId ?? getHeader(c, "x-b3-traceid") ?? getHeader(c, "x-trace-id");
-}
-
 function getSourceApp(logger: Logger) {
   const sourceApp = logger.bindings?.().sourceApp;
-  return typeof sourceApp === "string" ? sourceApp : "iam-api";
+  return typeof sourceApp === "string" ? sourceApp : LoggerSourceApp.Api;
 }
 
 function getRoutePath(c: Context) {
   const request = c.req as typeof c.req & { routePath?: string };
   return request.routePath ?? c.req.path;
-}
-
-function getStatusLogLevel(statusCode: number) {
-  if (statusCode >= 500)
-    return "error";
-  if (statusCode >= 400)
-    return "warn";
-  return "info";
 }
 
 function getResponseStatus(c: Context) {
@@ -119,19 +100,16 @@ function createIamRequestLogger(rootLogger: Logger, sourceApp: string): Middlewa
     const logger = c.get("logger" as never) as Pick<Logger, "info" | "warn" | "error">;
     const level = getStatusLogLevel(statusCode);
 
-    logger[level]({
-      event: SystemLogEvent.HttpRequestCompleted,
+    logger[level](buildHttpRequestLogFields({
       sourceApp,
       requestId: c.get("requestId" as never),
-      traceId: getTraceId(c),
+      readHeader: name => getHeader(c, name),
       method: c.req.method,
       path: c.req.path,
       route: getRoutePath(c),
       statusCode,
       durationMs,
-      clientIp: getClientIp(c),
-      userAgent: getHeader(c, "user-agent"),
-    }, "HTTP request completed");
+    }), "HTTP request completed");
   };
 }
 

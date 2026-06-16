@@ -5,7 +5,12 @@ import type { OidcProviderEnv } from "./env.ts";
 import type { OidcLogger } from "./lib/logger.ts";
 import type { SigningKey } from "./security/signing-keys.ts";
 import { createServer } from "node:http";
-import { SystemLogEvent } from "@iam/api-core/logger";
+import {
+  buildHttpRequestLogFields,
+  getStatusLogLevel,
+  LoggerSourceApp,
+  SystemLogEvent,
+} from "@iam/api-core/logger";
 import { revokeOidcAccessTokensForGlobalSession } from "@iam/api-core/oidc";
 import { removeGlobalSession } from "@iam/api-core/session";
 import Provider from "oidc-provider";
@@ -20,12 +25,61 @@ import { OidcClientRepository, OidcClientSecretRepository } from "./repositories
 import { ClientAuthRateLimiter, parseBasicClientId } from "./security/client-auth-rate-limit.ts";
 import { createOidcAdapterFactory } from "./storage/redis-adapter.ts";
 
+export const OIDC_REQUEST_ROUTE_SYMBOL = Symbol("iam.oidcRoute");
+
 function ensureRequestId(request: IncomingMessage, response: ServerResponse) {
   const incoming = request.headers["x-request-id"];
   const requestId = (Array.isArray(incoming) ? incoming[0] : incoming) || crypto.randomUUID();
   request.headers["x-request-id"] = requestId;
   response.setHeader("x-request-id", requestId);
   return requestId;
+}
+
+function getOriginalPath(requestUrl: string | undefined, publicOrigin: string) {
+  return new URL(requestUrl ?? "/", publicOrigin).pathname;
+}
+
+function classifyOidcHttpRoute(pathname: string) {
+  if (pathname === "/health")
+    return "/health";
+  if (pathname.startsWith("/oidc/interaction/"))
+    return "/oidc/interaction/:uid";
+  if (pathname === "/oidc/resume")
+    return "/oidc/resume";
+  if (pathname === "/oidc" || pathname.startsWith("/oidc/"))
+    return "/oidc/*";
+  return "not_found";
+}
+
+function getOidcRoute(request: IncomingMessage) {
+  return (request as IncomingMessage & { [OIDC_REQUEST_ROUTE_SYMBOL]?: string })[OIDC_REQUEST_ROUTE_SYMBOL];
+}
+
+function logHttpRequestCompleted(
+  logger: Pick<OidcLogger, "info" | "warn" | "error">,
+  request: IncomingMessage,
+  route: string,
+  requestId: string,
+  startedAt: number,
+  statusCode: number,
+  aborted?: boolean,
+) {
+  const level = getStatusLogLevel(statusCode);
+  logger[level](buildHttpRequestLogFields({
+    sourceApp: LoggerSourceApp.OidcProvider,
+    requestId,
+    readHeader: name => request.headers[name.toLowerCase()],
+    method: request.method ?? "GET",
+    path: getOriginalPath(
+      (request as IncomingMessage & { originalUrl?: string }).originalUrl ?? request.url,
+      "http://localhost",
+    ),
+    route,
+    statusCode,
+    durationMs: Math.round(performance.now() - startedAt),
+    aborted,
+    oidcRoute: getOidcRoute(request),
+  }), "HTTP request completed");
 }
 
 export type CreateOidcProviderOptions = {
@@ -95,6 +149,10 @@ export function createOidcProvider(options: CreateOidcProviderOptions) {
 
     if (ctx.response.get("access-control-allow-origin") === "*")
       ctx.remove("access-control-allow-origin");
+    if (ctx.oidc?.route) {
+      const requestWithOidcRoute = ctx.req as IncomingMessage & { [OIDC_REQUEST_ROUTE_SYMBOL]?: string };
+      requestWithOidcRoute[OIDC_REQUEST_ROUTE_SYMBOL] = ctx.oidc.route;
+    }
     if (basicClientId) {
       const body = ctx.body as { error?: string } | undefined;
       if (body?.error === "invalid_client")
@@ -118,7 +176,6 @@ export function createOidcProvider(options: CreateOidcProviderOptions) {
     options.logger.error({
       event: SystemLogEvent.OidcProviderServerError,
       err: error,
-      sourceApp: "iam-oidc-provider",
       requestId: ctx.state.requestId,
       errorName: error.name,
       errorMessage: error.message,
@@ -127,7 +184,6 @@ export function createOidcProvider(options: CreateOidcProviderOptions) {
   const logProtocolError = (event: string) => (ctx: KoaContextWithOIDC, error: errors.OIDCProviderError) => {
     options.logger.warn({
       event: SystemLogEvent.OidcProviderProtocolError,
-      sourceApp: "iam-oidc-provider",
       oidcEvent: event,
       errorCode: error.error,
       errorName: error.name,
@@ -157,7 +213,35 @@ export function createOidcHttpServer(
   const callback = provider.callback();
   const publicOrigin = new URL(env.OIDC_PUBLIC_ORIGIN);
   return createServer(async (request, response) => {
+    const startedAt = performance.now();
     const requestId = ensureRequestId(request, response);
+    const originalUrl = request.url;
+    const route = classifyOidcHttpRoute(getOriginalPath(originalUrl, env.OIDC_PUBLIC_ORIGIN));
+    let finished = false;
+    let logged = false;
+    const logCompleted = (aborted?: boolean) => {
+      if (logged)
+        return;
+      logged = true;
+      logHttpRequestCompleted(
+        logger,
+        request,
+        route,
+        requestId,
+        startedAt,
+        response.statusCode || 200,
+        aborted,
+      );
+    };
+    response.once("finish", () => {
+      finished = true;
+      logCompleted();
+    });
+    response.once("close", () => {
+      if (!finished)
+        logCompleted(true);
+    });
+
     try {
       if (request.url === "/health") {
         await redis.ping();
@@ -200,7 +284,6 @@ export function createOidcHttpServer(
       logger.error({
         event: SystemLogEvent.OidcProviderHttpRequestFailed,
         err: error,
-        sourceApp: "iam-oidc-provider",
         requestId,
         errorName: error instanceof Error ? error.name : "UnknownError",
         errorMessage: error instanceof Error ? error.message : "Unknown OIDC HTTP request failure",

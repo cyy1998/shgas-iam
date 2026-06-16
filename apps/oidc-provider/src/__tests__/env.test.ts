@@ -18,6 +18,14 @@ describe("oIDC provider environment", () => {
     const env = parseOidcProviderEnv(validEnv());
     assert.equal(env.OIDC_ISSUER, "https://iam.example.com/oidc");
     assert.equal(env.OIDC_AUTHORIZATION_CODE_TTL_SECONDS, 300);
+    assert.equal(env.LOG_FORMAT, "auto");
+  });
+
+  it("accepts only known LOG_FORMAT values", () => {
+    const env = parseOidcProviderEnv({ ...validEnv(), LOG_FORMAT: "pretty" });
+    assert.equal(env.LOG_FORMAT, "pretty");
+
+    assert.throws(() => parseOidcProviderEnv({ ...validEnv(), LOG_FORMAT: "text" }), /LOG_FORMAT/);
   });
 
   it("rejects an issuer outside /oidc", () => {

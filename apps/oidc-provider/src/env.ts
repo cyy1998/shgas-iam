@@ -11,6 +11,7 @@ export const OidcProviderEnvSchema = z.object({
   PORT: z.coerce.number().int().min(1).max(65535).default(30002),
   NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
   LOG_LEVEL: z.string().default("info"),
+  LOG_FORMAT: z.enum(["auto", "json", "pretty"]).default("auto"),
   OIDC_ISSUER: z.string().url().refine(value => new URL(value).pathname === "/oidc", {
     message: "OIDC_ISSUER must use the /oidc path",
   }),

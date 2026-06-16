@@ -19,7 +19,6 @@ async function main() {
   server.listen(env.PORT, () => {
     logger.info({
       event: SystemLogEvent.OidcProviderStarted,
-      sourceApp: "iam-oidc-provider",
       issuer: env.OIDC_ISSUER,
       port: env.PORT,
     }, "OIDC provider listening");
@@ -28,7 +27,6 @@ async function main() {
   async function shutdown(signal: string) {
     logger.info({
       event: SystemLogEvent.OidcProviderStopping,
-      sourceApp: "iam-oidc-provider",
       signal,
     }, "OIDC provider shutting down");
     server.close();

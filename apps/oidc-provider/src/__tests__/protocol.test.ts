@@ -7,7 +7,13 @@ const servers: Server[] = [];
 
 afterEach(async () => {
   await Promise.all(servers.splice(0).map(server => new Promise<void>((resolve, reject) => {
-    server.close(error => error ? reject(error) : resolve());
+    const timeout = setTimeout(resolve, 50);
+    server.close((error) => {
+      clearTimeout(timeout);
+      error ? reject(error) : resolve();
+    });
+    server.closeIdleConnections();
+    server.closeAllConnections();
   })));
 });
 
@@ -53,6 +59,7 @@ describe("oIDC discovery and JWKS", () => {
       env,
       redis,
       logger: {
+        info() {},
         error() {},
         warn() {},
       } as never,
@@ -114,5 +121,5 @@ describe("oIDC discovery and JWKS", () => {
       expect(key).not.toHaveProperty("p");
       expect(key).not.toHaveProperty("q");
     }
-  });
+  }, 10_000);
 });

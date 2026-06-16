@@ -111,8 +111,9 @@ services:
       REDIS_PORT: 6379
       REDIS_DB: 0
       PORT: 30000
-      NODE_ENV: development
+      NODE_ENV: production
       LOG_LEVEL: info
+      LOG_FORMAT: json
       IAM_SECRET_KEY: shenergy2020
       PASSWORD_HASH_ROUNDS: 10
       DEFAULT_USER_PASSWORD: default123

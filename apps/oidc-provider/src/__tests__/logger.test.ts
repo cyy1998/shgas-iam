@@ -1,10 +1,14 @@
 import assert from "node:assert/strict";
+import { LoggerSourceApp, mergeRedactPaths } from "@iam/api-core/logger";
 import { describe, it } from "vitest";
-import { OIDC_LOG_REDACT_PATHS } from "../lib/logger.ts";
+import { createLogger, OIDC_EXTRA_LOG_REDACT_PATHS } from "../lib/logger.ts";
 
-describe("OIDC logger", () => {
-  it("keeps the IAM sensitive-field redact baseline", () => {
+describe("oIDC logger", () => {
+  it("keeps IAM baseline redaction and OIDC sensitive-field extensions", () => {
+    const redactPaths = mergeRedactPaths(OIDC_EXTRA_LOG_REDACT_PATHS);
+
     for (const path of [
+      "*.password",
       "*.accessToken",
       "*.idToken",
       "*.refreshToken",
@@ -15,7 +19,17 @@ describe("OIDC logger", () => {
       "req.headers.cookie",
       "res.headers.set-cookie",
     ]) {
-      assert.ok(OIDC_LOG_REDACT_PATHS.includes(path), `missing redact path: ${path}`);
+      assert.ok(redactPaths.includes(path), `missing redact path: ${path}`);
     }
+  });
+
+  it("uses the shared sourceApp binding", () => {
+    const logger = createLogger({
+      NODE_ENV: "test",
+      LOG_LEVEL: "info",
+      LOG_FORMAT: "json",
+    });
+
+    assert.equal(logger.bindings().sourceApp, LoggerSourceApp.OidcProvider);
   });
 });

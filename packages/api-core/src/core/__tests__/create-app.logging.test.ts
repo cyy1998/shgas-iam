@@ -38,8 +38,10 @@ describe("createApp request logging", () => {
     const res = await app.request("http://localhost/public/ping", {
       headers: {
         "X-Request-Id": "req-test-1",
+        "Traceparent": "00-11111111111111111111111111111111-2222222222222222-01",
+        "X-Forwarded-For": "203.0.113.10, 10.0.0.1",
         "User-Agent": "api-core-test",
-        Authorization: "Bearer should-not-log",
+        "Authorization": "Bearer should-not-log",
       },
     });
 
@@ -54,7 +56,10 @@ describe("createApp request logging", () => {
       requestId: "req-test-1",
       method: "GET",
       path: "/public/ping",
+      route: "/public/ping",
       statusCode: 200,
+      traceId: "11111111111111111111111111111111",
+      clientIp: "203.0.113.10",
       userAgent: "api-core-test",
       msg: "HTTP request completed",
     });

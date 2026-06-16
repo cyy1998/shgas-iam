@@ -62,6 +62,7 @@ const EnvSchema = z.object({
   LOGOUT_ENDPOINT: z.string(),
   THIRDPARTY_OA_ENDPOINT: z.string(),
   LOG_LEVEL: z.string().default("info"),
+  LOG_FORMAT: z.enum(["auto", "json", "pretty"]).default("auto"),
   CAP_ENABLED: booleanString(false),
   CAP_SITE_KEY: z.string().default("iam-sso"),
   CAP_SECRET: z.string().default("dev-cap-secret-change-me"),
