@@ -237,10 +237,10 @@ export const AuditActions = Object.fromEntries(
   auditActionCatalog.map(item => [item.action, item.action]),
 ) as { readonly [Action in CanonicalAuditAction]: Action };
 
-export type AuditActionOption = {
+export interface AuditActionOption {
   label: string;
   value: CanonicalAuditAction;
-};
+}
 
 export const auditActionLabels = Object.fromEntries(
   auditActionCatalog.map(item => [item.action, item.label]),

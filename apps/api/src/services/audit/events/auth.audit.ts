@@ -1,7 +1,8 @@
 import type { AuditLogInput } from "@api/services/audit/audit.service";
 import type { UserDetailDto } from "@api/services/user/user.type";
+import type { ClientManagementLevel } from "@iam/contracts";
 import type { Context } from "hono";
-import { AuditActions, type ClientManagementLevel } from "@iam/contracts";
+import { AuditActions } from "@iam/contracts";
 import { maskMobileForAudit } from "@iam/domain/audit";
 import * as auditService from "../audit.service";
 

@@ -114,7 +114,7 @@ export const layout = ({ initialState }: { initialState?: InitialState }) => {
       children: avatarText,
       className: 'iam-admin-user-avatar',
       render: (_: unknown, dom: ReactElement) =>
-        createElement(AvatarDropdown, { children: dom }),
+        createElement(AvatarDropdown, null, dom),
     },
   };
 };

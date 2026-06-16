@@ -1,6 +1,6 @@
-import { describe, expect, it } from "bun:test";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
+import { describe, expect, it } from "bun:test";
 import { parse as parseYaml } from "yaml";
 import { renderEnvPlaceholders } from "../env";
 import { loadManifest } from "../manifest";

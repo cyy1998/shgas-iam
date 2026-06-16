@@ -57,6 +57,9 @@ importers:
       '@typescript/native-preview':
         specifier: 7.0.0-dev.20260603.1
         version: 7.0.0-dev.20260603.1
+      eslint:
+        specifier: 8.35.0
+        version: 8.35.0
       lint-staged:
         specifier: ^17.0.7
         version: 17.0.7
@@ -69,6 +72,9 @@ importers:
       prettier-plugin-packagejson:
         specifier: ^3.0.2
         version: 3.0.2(prettier@3.8.3)
+      stylelint:
+        specifier: 14.8.2
+        version: 14.8.2
       typescript:
         specifier: 6.0.3
         version: 6.0.3
@@ -340,6 +346,9 @@ importers:
       '@typescript/native-preview':
         specifier: 7.0.0-dev.20260603.1
         version: 7.0.0-dev.20260603.1
+      eslint:
+        specifier: 8.35.0
+        version: 8.35.0
       lint-staged:
         specifier: ^17.0.7
         version: 17.0.7
@@ -352,6 +361,9 @@ importers:
       prettier-plugin-packagejson:
         specifier: ^3.0.2
         version: 3.0.2(prettier@3.8.3)
+      stylelint:
+        specifier: 14.8.2
+        version: 14.8.2
       typescript:
         specifier: 6.0.3
         version: 6.0.3

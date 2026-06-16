@@ -46,4 +46,3 @@ describe("audit action catalog", () => {
     expect(values).not.toContain("auth.login.password.failure");
   });
 });
-

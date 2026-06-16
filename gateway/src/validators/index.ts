@@ -227,7 +227,7 @@ function getPlugins(resource: unknown): Record<string, unknown> | undefined {
 }
 
 function hasPlugin(plugins: Record<string, unknown> | undefined, pluginName: string): boolean {
-  return plugins !== undefined && Object.prototype.hasOwnProperty.call(plugins, pluginName);
+  return plugins !== undefined && Object.hasOwn(plugins, pluginName);
 }
 
 function collectForbiddenLoggerPluginIssues(

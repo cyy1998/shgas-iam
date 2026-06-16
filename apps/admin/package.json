@@ -6,6 +6,10 @@
     "build": "max build",
     "dev": "max dev",
     "format": "prettier --cache --write .",
+    "lint": "pnpm run lint:eslint && pnpm run lint:style",
+    "lint:eslint": "eslint \"{src,test}/**/*.{js,jsx,ts,tsx}\"",
+    "lint:fix": "pnpm run lint:eslint -- --fix && pnpm run lint:style -- --fix",
+    "lint:style": "stylelint \"{src,test}/**/*.{less,css}\"",
     "postinstall": "max setup",
     "setup": "max setup",
     "start": "npm run dev",
@@ -27,10 +31,12 @@
     "@types/react": "^18.3.30",
     "@types/react-dom": "^18.3.7",
     "@typescript/native-preview": "7.0.0-dev.20260603.1",
+    "eslint": "8.35.0",
     "lint-staged": "^17.0.7",
     "prettier": "^3.8.3",
     "prettier-plugin-organize-imports": "^4.3.0",
     "prettier-plugin-packagejson": "^3.0.2",
+    "stylelint": "14.8.2",
     "typescript": "^6.0.3"
   }
 }
