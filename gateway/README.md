@@ -98,31 +98,27 @@ APISIX_MANIFEST_ENV=dev:iam pnpm gateway:apisix:validate
 查看与远端 APISIX 的差异：
 
 ```bash
-APISIX_ADMIN_KEY=dev-local-admin-key-change-me \
-pnpm gateway:apisix:diff -- --env dev:iam --admin-url http://127.0.0.1:9180/apisix/admin
+pnpm gateway:apisix:diff -- --env dev:iam --env-file .env
 ```
 
 dry-run 发布：
 
 ```bash
-APISIX_ADMIN_KEY=dev-local-admin-key-change-me \
-pnpm gateway:apisix:apply -- --env dev:iam --dry-run
+pnpm gateway:apisix:apply -- --env dev:iam --env-file .env --dry-run
 ```
 
 发布基线配置：
 
 ```bash
-APISIX_ADMIN_KEY=dev-local-admin-key-change-me \
 env -u HTTP_PROXY -u HTTPS_PROXY -u ALL_PROXY \
   -u http_proxy -u https_proxy -u all_proxy \
-  pnpm gateway:apisix:apply -- --env dev:iam --env-file docker/.env
+  pnpm gateway:apisix:apply -- --env dev:iam --env-file .env
 ```
 
 删除已经从 Git manifest 移除的 `repo-manifest` 远端对象：
 
 ```bash
-APISIX_ADMIN_KEY=dev-local-admin-key-change-me \
-pnpm gateway:apisix:apply -- --env dev:iam --prune
+pnpm gateway:apisix:apply -- --env dev:iam --env-file .env --prune
 ```
 
 `--prune` 不会删除 `source=dynamic-registry` 对象；使用 `--env prod:tender` 这类 app 作用域时，也不会删除其他 `labels.app` 的 `repo-manifest` 对象。
@@ -157,10 +153,7 @@ IAM_SSO_CORS_ALLOW_ORIGINS=https://iam.example.com
 使用示例：
 
 ```bash
-APISIX_MANIFEST_ENV=dev:iam \
-APISIX_ADMIN_URL=http://127.0.0.1:9180/apisix/admin \
-APISIX_ADMIN_KEY=dev-local-admin-key-change-me \
-pnpm gateway:apisix:apply
+pnpm gateway:apisix:apply -- --env-file .env
 
 pnpm gateway:apisix:validate -- --env prod:iam --env-file .env.prod
 pnpm gateway:apisix:validate -- --env prod:iam --render-env
@@ -181,17 +174,20 @@ JSON 输出的变更：
 docker compose -f docker/docker-compose-dev.yml up -d db redis api admin-api sso admin apisix-etcd apisix
 ```
 
+开发 compose 的环境变量模板位于 `docker/.env.dev.example`，本地使用前可复制为 `docker/.env`。
+Gateway CLI 的环境变量模板位于 `gateway/.env.example`，本地使用前可复制为 `gateway/.env`。
+通过 `pnpm gateway:apisix:*` 运行时，`--env-file .env` 会相对 gateway package 目录解析。
+
 初始化或更新本地网关基线：
 
 ```bash
-APISIX_ADMIN_KEY=dev-local-admin-key-change-me \
-pnpm gateway:apisix:apply -- --env dev:iam
+pnpm gateway:apisix:apply -- --env dev:iam --env-file .env
 ```
 
 本地入口：
 
-- APISIX HTTP: `http://localhost:9080`
-- APISIX HTTPS: `https://localhost:9443`
+- APISIX HTTP: `http://localhost:30080`
+- APISIX HTTPS: `https://localhost:30443`
 - APISIX Admin API: `http://127.0.0.1:9180/apisix/admin`
 - API 直连调试端口仍保留：`api` 映射到 `30011`，`admin-api` 映射到 `30012`
 - 前端直连调试端口仍保留：`sso` 映射到 `30013`，`admin` 映射到 `30014`

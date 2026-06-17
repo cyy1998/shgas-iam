@@ -141,10 +141,12 @@ pnpm install
 推荐先启动 PostgreSQL 与 Redis：
 
 ```bash
-docker compose -f docker/docker-compose-dependency.yml up -d db redis
+docker compose -f docker/docker-compose-dev.yml up -d db redis
 ```
 
-`docker/docker-compose-dependency.yml` 中 PostgreSQL 暴露在 `localhost:5432`，Redis 暴露在 `localhost:6390`。如果在宿主机直接运行 Bun 服务，本地环境变量请使用 `REDIS_URL=localhost`、`REDIS_PORT=6390`。
+`docker/docker-compose-dev.yml` 中 PostgreSQL 默认暴露在 `localhost:5432`，Redis 默认暴露在
+`localhost:6390`。如果在宿主机直接运行 Bun 服务，本地环境变量请使用 `REDIS_URL=localhost`、
+`REDIS_PORT=6390`。
 
 ### 配置环境变量
 
@@ -154,6 +156,8 @@ cp apps/api/.env.example apps/api/.env
 cp apps/admin-api/.env.example apps/admin-api/.env
 cp apps/admin/.env.example apps/admin/.env.local
 cp apps/sso/.env.example apps/sso/.env.local
+cp docker/.env.dev.example docker/.env
+cp gateway/.env.example gateway/.env
 ```
 
 本地 PostgreSQL 对应的连接串可设置为：
@@ -480,7 +484,7 @@ docker run --rm -p 30002:30002 --env-file apps/oidc-provider/.env iam-oidc-provi
 本地依赖栈：
 
 ```bash
-docker compose -f docker/docker-compose-dependency.yml up -d
+docker compose -f docker/docker-compose-dev.yml up -d db redis
 ```
 
 开发编排：
@@ -489,19 +493,23 @@ docker compose -f docker/docker-compose-dependency.yml up -d
 docker compose -f docker/docker-compose-dev.yml up -d
 ```
 
-`docker/docker-compose-dev.yml` 会同时编排 PostgreSQL、Redis、APISIX、公共 API、管理端 API 和 OIDC Provider。
-首次启动 provider 前必须设置 `OIDC_COOKIE_KEYS` 和 `OIDC_CURRENT_JWK_JSON`：
+`docker/docker-compose-dev.yml` 是唯一的开发编排入口，会同时编排 PostgreSQL、Redis、APISIX、公共 API、
+管理端 API、OIDC Provider、SSO 前端和管理端前端。开发环境变量模板在
+`docker/.env.dev.example`，复制为 `docker/.env` 后按需替换本地端口、代理、第三方服务和开发密钥。
+如需同时启动 Loki、Grafana 和 Alloy，追加 `--profile observability`。
 
 ```bash
 docker compose -f docker/docker-compose-dev.yml up -d --build oidc-provider apisix-etcd apisix
 pnpm gateway:apisix:validate -- --env dev:iam
-APISIX_ADMIN_KEY=dev-local-admin-key-change-me pnpm gateway:apisix:diff -- --env dev:iam
+pnpm gateway:apisix:diff -- --env dev:iam --env-file .env
 ```
 
 若 Docker 构建需要使用宿主机代理，请在 `docker/.env` 中配置 `DOCKER_BUILD_HTTP_PROXY`、
 `DOCKER_BUILD_HTTPS_PROXY` 和 `DOCKER_BUILD_NO_PROXY`。代理监听在宿主机回环地址时，应将地址写为
 `host.docker.internal`，不能使用容器自身的 `127.0.0.1`。访问 APISIX Admin API 时还需确保
-`127.0.0.1` 在宿主机 `NO_PROXY` 中。生产模板还包含
+`127.0.0.1` 在宿主机 `NO_PROXY` 中。Gateway CLI 的 APISIX Admin API 地址和 key 配置在
+`gateway/.env`，模板见 `gateway/.env.example`；通过 `pnpm gateway:apisix:*` 执行时，`--env-file .env`
+会解析到 gateway package 目录下的 `.env`。生产模板还包含
 OIDC Provider，使用前必须补齐 issuer、current/previous RS256 JWK、cookie keys、Redis 和限流参数。
 
 OIDC 接入见 [docs/features/oidc/oidc-integration.md](docs/features/oidc/oidc-integration.md)，发布与回滚见
