@@ -1,0 +1,4 @@
+interface:
+  display_name: "Quick Change"
+  short_description: "Fast branch, implement, confirm, merge"
+  default_prompt: "Use $quick-change to make a small focused change, then wait for my confirmation before committing and merging."
