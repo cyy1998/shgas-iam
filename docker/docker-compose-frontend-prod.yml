@@ -27,9 +27,16 @@ services:
       dockerfile: apps/sso/Dockerfile
       args:
         <<: *build-proxy-args
+        UMI_APP_API_PREFIX: ${UMI_APP_API_PREFIX:-/api/iam}
+        UMI_APP_SSO_CLIENT_CODE: ${SSO_UMI_APP_SSO_CLIENT_CODE:-iam}
+        UMI_APP_CAP_SITE_KEY: ${UMI_APP_CAP_SITE_KEY:-iam-sso}
+        UMI_APP_CAP_ENDPOINT: ${UMI_APP_CAP_ENDPOINT:-/api/iam/open/cap/iam-sso/}
+        UMI_APP_CAP_WASM_URL: ${UMI_APP_CAP_WASM_URL:-/portal/cap/cap_wasm_bg.wasm}
+        UMI_APP_CAP_PAKO_URL: ${UMI_APP_CAP_PAKO_URL:-/portal/cap/pako_inflate.min.js}
         UMI_APP_LOGIN_CREDENTIAL_ALG: ${UMI_APP_LOGIN_CREDENTIAL_ALG:-SM2-SM4-CBC}
         UMI_APP_LOGIN_CREDENTIAL_KID: ${UMI_APP_LOGIN_CREDENTIAL_KID:?set UMI_APP_LOGIN_CREDENTIAL_KID}
         UMI_APP_LOGIN_CREDENTIAL_PUBLIC_KEY: ${UMI_APP_LOGIN_CREDENTIAL_PUBLIC_KEY:?set UMI_APP_LOGIN_CREDENTIAL_PUBLIC_KEY}
+        UMI_APP_WELL_KNOWN_URL: ${UMI_APP_WELL_KNOWN_URL:-/sso/.well-known/authentication-configuration}
     restart: unless-stopped
     ports:
       - "${SSO_PUBLISHED_PORT:-30013}:80"
@@ -39,7 +46,15 @@ services:
     build:
       context: ..
       dockerfile: apps/admin/Dockerfile
-      args: *build-proxy-args
+      args:
+        <<: *build-proxy-args
+        UMI_APP_API_PREFIX: ${UMI_APP_API_PREFIX:-/api/iam}
+        UMI_APP_SSO_AUTHORIZE_URL: ${UMI_APP_SSO_AUTHORIZE_URL:-/sso/authorize}
+        UMI_APP_SSO_LOGOUT_URL: ${UMI_APP_SSO_LOGOUT_URL:-/sso/logout}
+        UMI_APP_SSO_CLIENT_CODE: ${UMI_APP_SSO_CLIENT_CODE:-iam-admin}
+        UMI_APP_ADMIN_ROLE_CODE: ${UMI_APP_ADMIN_ROLE_CODE:-iam:admin}
+        UMI_APP_GRAFANA_URL: ${UMI_APP_GRAFANA_URL:?set UMI_APP_GRAFANA_URL}
+        UMI_APP_SYSTEM_LOG_ENV: ${UMI_APP_SYSTEM_LOG_ENV:-prod}
     restart: unless-stopped
     ports:
       - "${ADMIN_PUBLISHED_PORT:-30014}:80"

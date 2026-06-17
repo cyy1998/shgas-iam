@@ -377,10 +377,13 @@ pnpm --filter @iam/sso typecheck
 | 变量名                      | 说明                       | 默认值           |
 | --------------------------- | -------------------------- | ---------------- |
 | `PORT`                      | Umi dev server 端口        | `8001`           |
+| `UMI_APP_API_PREFIX`        | 管理端 API 前缀            | `/api/iam`       |
 | `UMI_APP_SSO_AUTHORIZE_URL` | SSO 授权端点               | `/sso/authorize` |
 | `UMI_APP_SSO_LOGOUT_URL`    | SSO 登出端点               | `/sso/logout`    |
 | `UMI_APP_SSO_CLIENT_CODE`   | 当前应用注册的 client code | `iam-admin`      |
 | `UMI_APP_ADMIN_ROLE_CODE`   | 允许访问后台的角色码       | `iam:admin`      |
+| `UMI_APP_GRAFANA_URL`       | Grafana 系统日志入口       | `http://localhost:30030` |
+| `UMI_APP_SYSTEM_LOG_ENV`    | Grafana dashboard 环境变量 | `dev`            |
 
 ### SSO 门户（`apps/sso/.env.local`）
 
