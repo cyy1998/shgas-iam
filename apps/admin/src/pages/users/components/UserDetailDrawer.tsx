@@ -18,6 +18,7 @@ import {
   EmploymentStatus,
   getEmploymentStatusOptions,
   getUserStatusOptions,
+  UserStatus,
 } from '@iam/contracts';
 import {
   Button,
@@ -116,10 +117,10 @@ export default function UserDetailDrawer({
     onChanged();
   };
 
-  const onStatusChange = async (status: number) => {
+  const onStatusChange = async (status: UserStatus) => {
     if (!detail) return;
     try {
-      await updateUserStatus(detail.username, status as 1 | 2 | 3);
+      await updateUserStatus(detail.username, status);
       message.success('状态已更新');
       await refresh();
     } catch (err) {
@@ -148,7 +149,7 @@ export default function UserDetailDrawer({
 
   const onEmploymentStatusChange = async (
     row: EmploymentRow,
-    status: 1 | 2 | 3,
+    status: EmploymentStatus,
   ) => {
     try {
       await updateEmploymentStatus(row.id, status);
@@ -234,7 +235,10 @@ export default function UserDetailDrawer({
                     key: String(o.value),
                     label: `切为「${o.label}」`,
                     onClick: () =>
-                      onEmploymentStatusChange(row, o.value as 1 | 2 | 3),
+                      onEmploymentStatusChange(
+                        row,
+                        o.value as EmploymentStatus,
+                      ),
                   })),
               }}
             >
@@ -304,7 +308,7 @@ export default function UserDetailDrawer({
                     .map((o) => ({
                       key: String(o.value),
                       label: `切为「${o.label}」`,
-                      onClick: () => onStatusChange(o.value),
+                      onClick: () => onStatusChange(o.value as UserStatus),
                     })),
                 }}
               >

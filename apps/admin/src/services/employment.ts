@@ -34,7 +34,10 @@ export function updateEmployment(
   return apiClient.admin.employment.update.mutate({ id, data });
 }
 
-export function updateEmploymentStatus(id: number, status: 1 | 2 | 3) {
+export function updateEmploymentStatus(
+  id: number,
+  status: AdminEmploymentInputs['updateStatus']['status'],
+) {
   return apiClient.admin.employment.updateStatus.mutate({ id, status });
 }
 

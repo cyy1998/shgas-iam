@@ -1,4 +1,4 @@
-import type { ApiErrorCode } from '@iam/contracts';
+import type { ApiErrorCode, ClientStatus } from '@iam/contracts';
 
 export type ApiEnvelope<T> = {
   code: ApiErrorCode | number | string;
@@ -44,7 +44,7 @@ export type LoginPasswordResult = {
   isMobileSet: boolean;
 };
 
-export type ClientStatus = {
-  status: number;
+export type ClientStatusResult = {
+  status: ClientStatus;
   extAttributes?: Record<string, unknown> | null;
 };

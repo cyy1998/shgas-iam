@@ -3,10 +3,11 @@ import {
   SafetyCertificateOutlined,
   ToolOutlined,
 } from '@ant-design/icons';
+import { ClientStatus } from '@iam/contracts';
 import logoColorfulTextWhite from '@sso/assets/logo-colorful-text-white.png';
 import { clientStatus } from '@sso/services/open';
 import { decodeRedirect, getQuery } from '@sso/utils/url';
-import { Button, Spin } from 'antd';
+import { Button, message, Spin } from 'antd';
 import { useState } from 'react';
 import './index.less';
 
@@ -14,10 +15,16 @@ export default function SystemMaintenancePage() {
   const [loading, setLoading] = useState(false);
 
   const handleRetry = async () => {
+    const clientCode = getQuery('client')?.trim();
+    if (!clientCode) {
+      message.warning('缺少应用上下文，请从业务系统重新发起登录。');
+      return;
+    }
+
     setLoading(true);
     try {
-      const data = await clientStatus({ clientCode: 'tender' });
-      if (data.status !== 2) {
+      const data = await clientStatus({ clientCode });
+      if (data.status !== ClientStatus.Maintance) {
         const redirectUrl = decodeRedirect(getQuery('redirectUrl'));
         if (redirectUrl) {
           window.location.href = redirectUrl;

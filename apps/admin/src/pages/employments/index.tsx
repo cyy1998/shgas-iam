@@ -18,7 +18,7 @@ import {
   type ProFormInstance,
   ProTable,
 } from '@ant-design/pro-components';
-import { getEmploymentStatusOptions } from '@iam/contracts';
+import { EmploymentStatus, getEmploymentStatusOptions } from '@iam/contracts';
 import { useLocation } from '@umijs/max';
 import { Button, Dropdown, message, Modal, Space, Tag } from 'antd';
 import { useCallback, useEffect, useRef, useState } from 'react';
@@ -102,7 +102,7 @@ export default function EmploymentsPage() {
     });
   };
 
-  const onStatusChange = async (row: EmploymentVo, status: 1 | 2 | 3) => {
+  const onStatusChange = async (row: EmploymentVo, status: EmploymentStatus) => {
     try {
       await updateEmploymentStatus(row.id, status);
       message.success('状态已更新');
@@ -196,7 +196,7 @@ export default function EmploymentsPage() {
       valueType: 'option',
       width: 260,
       render: (_, row) => {
-        const ended = row.status === 3;
+        const ended = row.status === EmploymentStatus.Disable;
         if (ended) {
           return [
             <a key="view" onClick={() => setDrawerId(row.id)}>
@@ -224,7 +224,8 @@ export default function EmploymentsPage() {
                 .map((o) => ({
                   key: String(o.value),
                   label: `切为「${o.label}」`,
-                  onClick: () => onStatusChange(row, o.value as 1 | 2 | 3),
+                  onClick: () =>
+                    onStatusChange(row, o.value as EmploymentStatus),
                 })),
             }}
           >
@@ -271,7 +272,7 @@ export default function EmploymentsPage() {
             const statusNum =
               status === undefined || status === null || status === ''
                 ? undefined
-                : (Number(status) as 1 | 2 | 3);
+                : (Number(status) as EmploymentStatus);
             const isPrimaryBool =
               isPrimary === undefined
                 ? undefined
@@ -284,7 +285,10 @@ export default function EmploymentsPage() {
               conditions: {
                 fuzzyConditions: text ? { text } : {},
                 exactConditions: {
-                  statuses: statusNum !== undefined ? [statusNum] : [1, 2],
+                  statuses:
+                    statusNum !== undefined
+                      ? [statusNum]
+                      : [EmploymentStatus.Enable, EmploymentStatus.Pause],
                   isPrimary: isPrimaryBool,
                   organization: organizationOrgCode
                     ? { orgCodes: [organizationOrgCode], matchMode: 'subtree' }

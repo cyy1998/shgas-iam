@@ -15,7 +15,12 @@ import {
   type ProColumns,
   ProTable,
 } from '@ant-design/pro-components';
-import { getUserStatusOptions, getUserTypeOptions, type UserType } from '@iam/contracts';
+import {
+  getUserStatusOptions,
+  getUserTypeOptions,
+  UserStatus,
+  type UserType,
+} from '@iam/contracts';
 import { Button, Dropdown, message, Modal } from 'antd';
 import { useRef, useState } from 'react';
 
@@ -49,9 +54,9 @@ export default function UsersPage() {
     });
   };
 
-  const onStatusChange = async (row: UserVo, status: number) => {
+  const onStatusChange = async (row: UserVo, status: UserStatus) => {
     try {
-      await updateUserStatus(row.username, status as 1 | 2 | 3);
+      await updateUserStatus(row.username, status);
       message.success('状态已更新');
       actionRef.current?.reload();
     } catch (err) {
@@ -119,7 +124,7 @@ export default function UsersPage() {
               .map((o) => ({
                 key: String(o.value),
                 label: `切为「${o.label}」`,
-                onClick: () => onStatusChange(row, o.value),
+                onClick: () => onStatusChange(row, o.value as UserStatus),
               })),
           }}
         >
@@ -162,7 +167,7 @@ export default function UsersPage() {
             const statusNum
               = status === undefined || status === null || status === ''
                 ? undefined
-                : (Number(status) as 1 | 2 | 3);
+                : (Number(status) as UserStatus);
             const data = await searchUsers({
               pageNum: current,
               pageSize,

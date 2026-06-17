@@ -1,4 +1,4 @@
-import type { ClientStatus, SmsUsage, UserInfo } from '@sso/types/api';
+import type { ClientStatusResult, SmsUsage, UserInfo } from '@sso/types/api';
 import { request } from '@sso/utils/request';
 import { toQueryString } from '@sso/utils/url';
 
@@ -51,7 +51,7 @@ export function passwordReset(body: {
 
 export function clientStatus(params: { clientCode: string }) {
   const qs = toQueryString(params);
-  return request<ClientStatus>(`/open/client/status?${qs}`, {
+  return request<ClientStatusResult>(`/open/client/status?${qs}`, {
     skipAuthRedirect: true,
   });
 }

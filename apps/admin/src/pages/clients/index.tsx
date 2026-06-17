@@ -17,6 +17,7 @@ import {
   ProTable,
 } from '@ant-design/pro-components';
 import {
+  ClientStatus,
   ClientManagementLevel,
   getClientManagementLevelOptions,
   getClientStatusOptions,
@@ -82,9 +83,9 @@ export default function ClientsPage() {
     }
   };
 
-  const onStatusChange = async (row: ClientVo, status: number) => {
+  const onStatusChange = async (row: ClientVo, status: ClientStatus) => {
     try {
-      await updateClientStatus(row.clientCode, status as 1 | 2 | 3);
+      await updateClientStatus(row.clientCode, status);
       message.success('状态已更新');
       actionRef.current?.reload();
     } catch (err) {
@@ -188,7 +189,7 @@ export default function ClientsPage() {
               .map((o) => ({
                 key: String(o.value),
                 label: `切为「${o.label}」`,
-                onClick: () => onStatusChange(row, o.value),
+                onClick: () => onStatusChange(row, o.value as ClientStatus),
               })),
           }}
         >
@@ -239,7 +240,7 @@ export default function ClientsPage() {
             const statusNum =
               status === undefined || status === null || status === ''
                 ? undefined
-                : (Number(status) as 1 | 2 | 3);
+                : (Number(status) as ClientStatus);
             const data = await searchClients({
               pageNum: current,
               pageSize,
