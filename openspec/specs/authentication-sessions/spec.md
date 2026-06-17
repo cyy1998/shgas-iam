@@ -255,9 +255,7 @@
 #### Scenario: 密码校验处理用户不存在和无密码用户
 - **WHEN** `checkPassword` 被调用且用户不存在
 - **THEN** 单元测试 SHALL 验证服务抛出“用户不存在”
-- **AND** 单元测试 SHALL 验证用户没有密码且 `NODE_ENV=production` 时返回 false
-- **AND** 单元测试 SHALL 验证用户没有密码且非 production 时，输入 `DEFAULT_USER_PASSWORD` 返回 true
-- **AND** 单元测试 SHALL 验证用户没有密码且输入非默认密码返回 false
+- **AND** 单元测试 SHALL 验证用户没有密码时返回 false
 
 #### Scenario: 密码校验透传 bcrypt compare 结果
 - **WHEN** `checkPassword` 被调用且用户有密码

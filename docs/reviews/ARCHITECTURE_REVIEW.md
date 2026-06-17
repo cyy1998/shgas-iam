@@ -58,7 +58,7 @@
 | 2 | **错误处理用 `console.error`** | `error.handler.ts:20` 未使用项目配置的 pino logger，生产环境应统一日志 |
 | 3 | **HTTP 客户端不统一** | 部分用 `axios`（orcas.ts），部分用 `fetch`（wechat.ts），增加维护成本 |
 | 4 | **环境变量校验不完整** | `DATABASE_URL` 等数据库连接参数不在 `env.ts` 的 Zod schema 中验证 |
-| 5 | **`DEFAULT_USER_PASSWORD` 机制** | `user.service.ts:110` — 密码为 null 时用默认密码验证，存在安全隐患 |
+| 5 | **默认密码机制** | 已移除；密码为 null 的用户不再通过默认密码验证 |
 | 6 | **魔法数字 `-1`** | `schema.prisma:44-45` — `parentId: -1` 表示根节点，应使用 `null` |
 | 7 | **`oidc-provider` 已安装未使用** | `package.json` 中存在依赖但代码中未引用，SSO 采用自定义实现 |
 | 8 | **`bcrypt` 和 `bcrypt-ts` 双重依赖** | `package.json` 同时存在两个 bcrypt 库 |

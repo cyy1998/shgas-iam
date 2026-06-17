@@ -11,7 +11,6 @@ Backend `apps/api`:
 
 Frontend `apps/sso` build:
 
-- `UMI_APP_LOGIN_CREDENTIAL_ALG=SM2-SM4-CBC`.
 - `UMI_APP_LOGIN_CREDENTIAL_KID` matches a backend private key entry.
 - `UMI_APP_LOGIN_CREDENTIAL_PUBLIC_KEY` is the SM2 public key paired with the backend private key.
 

@@ -27,10 +27,7 @@ export async function verifyUserPassword(
   user: Pick<User, "password">,
   inputPassword: string,
 ) {
-  if (user.password === null && config.NODE_ENV === "production") {
-    return false;
-  }
   return user.password
     ? await compare(inputPassword, user.password)
-    : inputPassword === config.DEFAULT_USER_PASSWORD;
+    : false;
 }

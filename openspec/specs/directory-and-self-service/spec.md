@@ -217,7 +217,7 @@
 - resetPassword 保存新密码时没有调用自助改密的密码强度校验；是否允许弱密码需要确认。
 - public/internal 目录查询 schema 中多个数组字段是 optional；空数组和 undefined 的过滤差异由 `inArrayIf` 决定，未在 baseline 中细化。
 - 供应商联系人注册用手机号判断已有用户，而新建用户使用请求 username；username 冲突但 mobile 不冲突时的行为依赖数据库约束，需要确认。
-- 供应商注册依赖配置 `PURVEYOR_PARENT_ORG` 和固定岗位 `P001`，这些基础数据缺失时会报错。
+- 供应商注册依赖请求中的父组织编码和固定岗位 `P001`，这些基础数据缺失时会报错。
 
 ## Evidence Review
 - 已登录用户自助查看与修改资料: 证据 `apps/api/src/routes/public/public.routes.ts`, `public.handlers.ts`, `apps/api/src/services/user/user.service.ts`, `apps/api/src/services/mobile/mobile.service.ts`, `apps/api/src/services/session/session.service.ts`。状态: 有代码证据。

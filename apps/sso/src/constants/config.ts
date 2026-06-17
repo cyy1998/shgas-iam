@@ -36,6 +36,3 @@ export const LOGIN_CREDENTIAL_KID =
 
 export const LOGIN_CREDENTIAL_PUBLIC_KEY =
   process.env.UMI_APP_LOGIN_CREDENTIAL_PUBLIC_KEY || '';
-
-export const LOGIN_CREDENTIAL_ALG =
-  process.env.UMI_APP_LOGIN_CREDENTIAL_ALG || 'SM2-SM4-CBC';

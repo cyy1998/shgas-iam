@@ -2,7 +2,6 @@ import { UserStatus, UserType } from "@iam/contracts";
 import { afterAll, beforeEach, describe, expect, mock, test } from "bun:test";
 
 const config = {
-  DEFAULT_USER_PASSWORD: "default-password",
   NODE_ENV: "test",
   PASSWORD_HASH_ROUNDS: 4,
 };
@@ -129,12 +128,8 @@ describe("user password helper", () => {
     expect(hash).toHaveBeenCalledWith("Newpass1", 4);
   });
 
-  test("verifies bcrypt and default passwords without querying users", async () => {
+  test("verifies bcrypt passwords and rejects passwordless users", async () => {
     await expect(passwordHelper.verifyUserPassword(makeUser(), "old-password")).resolves.toBe(true);
-    await expect(passwordHelper.verifyUserPassword(makeUser({ password: null }), "default-password")).resolves.toBe(
-      true,
-    );
-    config.NODE_ENV = "production";
     await expect(passwordHelper.verifyUserPassword(makeUser({ password: null }), "default-password")).resolves.toBe(
       false,
     );

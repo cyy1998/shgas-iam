@@ -13,7 +13,6 @@ const tx = { name: "api-user-service-test-tx" };
 const transaction = mock(async (callback: (txArg: unknown) => Promise<unknown>) => callback(tx));
 
 const config = {
-  DEFAULT_USER_PASSWORD: "default-password",
   NODE_ENV: "test",
   PASSWORD_HASH_ROUNDS: 4,
 };
@@ -368,20 +367,10 @@ describe("userService.checkPassword", () => {
     await expect(userService.checkPassword("missing", "password")).rejects.toThrow("用户不存在");
   });
 
-  test("returns false for passwordless users in production", async () => {
-    config.NODE_ENV = "production";
+  test("returns false for passwordless users", async () => {
     userRepository.getUserByUsername.mockResolvedValue(makeUser({ password: null }));
 
-    await expect(userService.checkPassword("zhangsan", config.DEFAULT_USER_PASSWORD)).resolves.toBe(false);
-
-    expect(compare).not.toHaveBeenCalled();
-  });
-
-  test("accepts the default password for passwordless users outside production", async () => {
-    userRepository.getUserByUsername.mockResolvedValue(makeUser({ password: null }));
-
-    await expect(userService.checkPassword("zhangsan", config.DEFAULT_USER_PASSWORD)).resolves.toBe(true);
-    await expect(userService.checkPassword("zhangsan", "other-password")).resolves.toBe(false);
+    await expect(userService.checkPassword("zhangsan", "any-password")).resolves.toBe(false);
 
     expect(compare).not.toHaveBeenCalled();
   });

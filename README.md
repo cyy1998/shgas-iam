@@ -333,9 +333,7 @@ pnpm --filter @iam/sso typecheck
 | `PORT`                          | 公共 API 监听端口                                | `30000`            |
 | `NODE_ENV`                      | 运行环境；生产环境会关闭 OpenAPI 文档            | `development`      |
 | `LOG_LEVEL`                     | Pino 日志级别                                    | `info`             |
-| `IAM_SECRET_KEY`                | 签名/加密密钥                                    | 必填               |
 | `PASSWORD_HASH_ROUNDS`          | 密码哈希轮数                                     | `10`               |
-| `DEFAULT_USER_PASSWORD`         | 默认用户密码                                     | `default123`       |
 | `MAGIC_CODE`                    | 特殊操作验证码                                   | 必填               |
 | `LOGIN_CREDENTIAL_ACTIVE_KID`   | 当前密码登录 SM2 密钥编号                        | `2026-05-primary`  |
 | `LOGIN_CREDENTIAL_PRIVATE_KEYS_JSON` | 密码登录 SM2 私钥映射 JSON                 | `{"kid":"private"}` |
@@ -344,7 +342,6 @@ pnpm --filter @iam/sso typecheck
 | `WX_CORPID` / `WX_CORPSECRET`   | 企业微信配置                                     | 必填               |
 | `SMS_URL` / `SMS_SIGNATURE_KEY` | 短信服务配置                                     | 必填               |
 | `ORCAS_URL`                     | ORCAS 服务地址                                   | 必填               |
-| `PURVEYOR_PARENT_ORG`           | 供应商父组织 ID                                  | 必填               |
 | `REDIS_EXPIRE_TIME`             | Redis 默认过期时间（秒）                         | `86400`            |
 | `AUTH_CODE_EXPIRE_TIME`         | 授权码过期时间（秒）                             | `300`              |
 | `LOGIN_ENDPOINT`                | 登录端点                                         | `/portal/login`    |
@@ -397,7 +394,6 @@ pnpm --filter @iam/sso typecheck
 | `UMI_APP_CAP_ENDPOINT`    | 内嵌 Cap challenge/redeem 端点                          | `/open/cap/iam-sso/`                            |
 | `UMI_APP_CAP_WASM_URL`    | 本地 Cap WASM 资源；避免浏览器请求 jsDelivr CDN         | `/portal/cap/cap_wasm_bg.wasm`                  |
 | `UMI_APP_CAP_PAKO_URL`    | 本地 pako fallback 资源；避免旧浏览器请求 jsDelivr CDN  | `/portal/cap/pako_inflate.min.js`               |
-| `UMI_APP_LOGIN_CREDENTIAL_ALG` | 密码登录凭证算法标识                                 | `SM2-SM4-CBC`                                   |
 | `UMI_APP_LOGIN_CREDENTIAL_KID` | 密码登录 SM2 公钥编号                                | `2026-05-primary`                               |
 | `UMI_APP_LOGIN_CREDENTIAL_PUBLIC_KEY` | 密码登录 SM2 公钥；与后端私钥映射匹配        | 必填                                            |
 

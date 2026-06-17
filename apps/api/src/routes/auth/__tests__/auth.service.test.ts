@@ -161,7 +161,6 @@ const userDetail = {
 
 mock.module("@api/env", () => ({
   default: {
-    DEFAULT_USER_PASSWORD: "default-password",
     MAGIC_CODE: "MAGIC",
     NODE_ENV: "test",
     PASSWORD_HASH_ROUNDS: 4,
