@@ -143,12 +143,16 @@ manifest 中的 `${VAR}` 占位符不会默认渲染；只有传入 `--render-en
 
 ```bash
 TENCENT_NGINX_TRUSTED_CIDR=10.0.0.0/24
-IAM_API_UPSTREAM_HOST=api.internal
-IAM_API_UPSTREAM_PORT="30000"
+PROD_IAM_API_UPSTREAM_HOST=api.internal
+PROD_IAM_API_UPSTREAM_PORT="30000"
 IAM_SSO_EXTERNAL_HOST=iam.example.com
 IAM_SSO_INTERNAL_HOST=iam.internal.example.com
 IAM_SSO_CORS_ALLOW_ORIGINS=https://iam.example.com
 ```
+
+上游节点统一在 `manifests/<env>/<app>/upstreams.yaml` 中声明，并通过
+`<ENV>_<APP>_<UPSTREAM>_UPSTREAM_HOST` / `<ENV>_<APP>_<UPSTREAM>_UPSTREAM_PORT`
+占位符配置；完整示例见 `gateway/.env.example`。
 
 使用示例：
 

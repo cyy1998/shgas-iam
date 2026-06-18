@@ -1,18 +1,7 @@
 services:
   - id: tender-frontend-dev
     name: tender-frontend-dev
-    upstream:
-      hash_on: vars
-      nodes:
-        - priority: 0
-          host: 176.169.99.150
-          port: 80
-          weight: 0
-      pass_host: pass
-      scheme: http
-      tls:
-        verify: false
-      type: roundrobin
+    upstream_id: tender-frontend-dev
     enable_websocket: false
     labels:
       managed_by: shgas-iam
@@ -21,18 +10,7 @@ services:
       app: tender
   - id: tender-api-dev
     name: tender-api-dev
-    upstream:
-      hash_on: vars
-      nodes:
-        - priority: 0
-          host: 176.169.99.150
-          port: 18091
-          weight: 0
-      pass_host: pass
-      scheme: http
-      tls:
-        verify: false
-      type: roundrobin
+    upstream_id: tender-api-dev
     plugins:
       proxy-rewrite:
         regex_uri:

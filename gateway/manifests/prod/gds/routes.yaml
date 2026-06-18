@@ -14,6 +14,24 @@ routes:
       env: prod
       app: gds
 
+  - id: gds-external-frontend-prod
+    name: gds-external-frontend-prod
+    uris:
+      - /data-platform
+      - /data-platform/*
+    hosts:
+      - jsc.shgas.com.cn
+    service_id: gds-frontend-prod
+    upstream_id: gds-external-frontend-prod
+    priority: 0
+    status: 1
+    enable_websocket: false
+    labels:
+      managed_by: shgas-iam
+      source: repo-manifest
+      env: prod
+      app: gds
+
   - id: gds-api-prod
     name: gds-api-prod
     uri: /api/v1/*
@@ -65,22 +83,7 @@ routes:
     priority: 0
     status: 1
     enable_websocket: false
-    upstream:
-      hash_on: vars
-      nodes:
-        - priority: 0
-          host: 176.169.99.109
-          port: 8080
-          weight: 0
-      pass_host: pass
-      scheme: http
-      timeout:
-        connect: 300
-        read: 300
-        send: 300
-      tls:
-        verify: false
-      type: roundrobin
+    upstream_id: gds-dashboard-prod
     labels:
       managed_by: shgas-iam
       source: repo-manifest

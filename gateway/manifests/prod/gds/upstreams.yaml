@@ -1,1 +1,72 @@
-upstreams: []
+upstreams:
+  - id: gds-frontend-prod
+    name: gds-frontend-prod
+    type: roundrobin
+    scheme: http
+    pass_host: pass
+    hash_on: vars
+    tls:
+      verify: false
+    nodes:
+      "${PROD_GDS_FRONTEND_UPSTREAM_HOST}:${PROD_GDS_FRONTEND_UPSTREAM_PORT}": 0
+    labels:
+      managed_by: shgas-iam
+      source: repo-manifest
+      env: prod
+      app: gds
+
+  - id: gds-external-frontend-prod
+    name: gds-external-frontend-prod
+    type: roundrobin
+    scheme: http
+    pass_host: pass
+    hash_on: vars
+    tls:
+      verify: false
+    nodes:
+      "${PROD_GDS_EXTERNAL_FRONTEND_UPSTREAM_HOST}:${PROD_GDS_EXTERNAL_FRONTEND_UPSTREAM_PORT}": 0
+    labels:
+      managed_by: shgas-iam
+      source: repo-manifest
+      env: prod
+      app: gds
+
+  - id: gds-api-prod
+    name: gds-api-prod
+    type: roundrobin
+    scheme: http
+    pass_host: pass
+    hash_on: vars
+    timeout:
+      connect: 300
+      read: 300
+      send: 300
+    tls:
+      verify: false
+    nodes:
+      "${PROD_GDS_API_UPSTREAM_HOST}:${PROD_GDS_API_UPSTREAM_PORT}": 0
+    labels:
+      managed_by: shgas-iam
+      source: repo-manifest
+      env: prod
+      app: gds
+
+  - id: gds-dashboard-prod
+    name: gds-dashboard-prod
+    type: roundrobin
+    scheme: http
+    pass_host: pass
+    hash_on: vars
+    timeout:
+      connect: 300
+      read: 300
+      send: 300
+    tls:
+      verify: false
+    nodes:
+      "${PROD_GDS_DASHBOARD_UPSTREAM_HOST}:${PROD_GDS_DASHBOARD_UPSTREAM_PORT}": 0
+    labels:
+      managed_by: shgas-iam
+      source: repo-manifest
+      env: prod
+      app: gds

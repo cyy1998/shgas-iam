@@ -1,18 +1,7 @@
 services:
   - id: gds-frontend-prod
     name: gds-frontend-prod
-    upstream:
-      hash_on: vars
-      nodes:
-        - priority: 0
-          host: 176.169.99.125
-          port: 80
-          weight: 0
-      pass_host: pass
-      scheme: http
-      tls:
-        verify: false
-      type: roundrobin
+    upstream_id: gds-frontend-prod
     enable_websocket: false
     labels:
       managed_by: shgas-iam
@@ -22,22 +11,7 @@ services:
 
   - id: gds-api-prod
     name: gds-api-prod
-    upstream:
-      hash_on: vars
-      nodes:
-        - priority: 0
-          host: 176.169.99.124
-          port: 6002
-          weight: 0
-      pass_host: pass
-      scheme: http
-      timeout:
-        connect: 300
-        read: 300
-        send: 300
-      tls:
-        verify: false
-      type: roundrobin
+    upstream_id: gds-api-prod
     enable_websocket: false
     labels:
       managed_by: shgas-iam

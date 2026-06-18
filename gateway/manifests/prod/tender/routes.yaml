@@ -25,18 +25,7 @@ routes:
       - /tender-portal
       - /tender-portal/*
     service_id: tender-frontend-prod
-    upstream:
-      hash_on: vars
-      nodes:
-        - priority: 0
-          host: 176.169.99.125
-          port: 81
-          weight: 0
-      pass_host: pass
-      scheme: http
-      tls:
-        verify: false
-      type: roundrobin
+    upstream_id: tender-frontend-external-prod
     priority: 0
     status: 1
     enable_websocket: false
@@ -131,22 +120,7 @@ routes:
     name: tender-minio-prod
     uri: /minio/*
     service_id: tender-api-prod
-    upstream:
-      hash_on: vars
-      nodes:
-        - priority: 0
-          host: 176.169.99.125
-          port: 9000
-          weight: 0
-      pass_host: pass
-      scheme: http
-      timeout:
-        connect: 300
-        read: 300
-        send: 300
-      tls:
-        verify: false
-      type: roundrobin
+    upstream_id: tender-minio-prod
     priority: 0
     status: 1
     enable_websocket: false
