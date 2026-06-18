@@ -3,7 +3,6 @@ import type { Employment, Organization, User } from "@iam/db/schema";
 import type { SQLWrapper } from "drizzle-orm";
 import type { EmploymentAdminPaginationQueryDto } from "./employment.type";
 import { EmploymentStatus, OrganizationType } from "@iam/contracts";
-import db from "@iam/db";
 import { compactUpdate, firstRow, ilikeContainsIf, inArrayIf } from "@iam/db/query-utils";
 import {
   employments,
@@ -14,6 +13,57 @@ import {
 } from "@iam/db/schema";
 import { and, count, desc, eq, exists, inArray, or, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
+
+export function createEmploymentRepository(db: DbClient) {
+  return {
+    getEmploymentsByUserId(userId: number) {
+      return getEmploymentsByUserId(userId, db);
+    },
+    getAllEmploymentsByUserIdForAdmin(userId: number) {
+      return getAllEmploymentsByUserIdForAdmin(userId, db);
+    },
+    getEmploymentByUserOrgPosId(userId: number, orgId: number, posId: number) {
+      return getEmploymentByUserOrgPosId(userId, orgId, posId, db);
+    },
+    getEmploymentByIdForAdmin(id: number) {
+      return getEmploymentByIdForAdmin(id, db);
+    },
+    searchEmploymentsFuzzyForAdminPaged(dto: EmploymentAdminPaginationQueryDto) {
+      return searchEmploymentsFuzzyForAdminPaged(dto, db);
+    },
+    createEmploymentRecord(data: {
+      userId: number;
+      posId: number;
+      orgId: number;
+      isPrimary?: boolean;
+      startTime?: Date;
+      description?: string | null;
+      status?: EmploymentStatus;
+    }) {
+      return createEmploymentRecord(data, db);
+    },
+    updateEmploymentRecord(id: number, data: {
+      isPrimary?: boolean;
+      startTime?: Date;
+      endTime?: Date | null;
+      description?: string | null;
+      status?: EmploymentStatus;
+    }) {
+      return updateEmploymentRecord(id, data, db);
+    },
+    unsetPrimariesByUserId(userId: number, exceptEmploymentId: number | null) {
+      return unsetPrimariesByUserId(userId, exceptEmploymentId, db);
+    },
+    softDeleteEmployment(id: number) {
+      return softDeleteEmployment(id, db);
+    },
+    endActiveEmploymentsByUserId(userId: number) {
+      return endActiveEmploymentsByUserId(userId, db);
+    },
+  };
+}
+
+export type EmploymentRepository = ReturnType<typeof createEmploymentRepository>;
 
 type Position = typeof positions.$inferSelect;
 type EmploymentWithRelations = Employment & {
@@ -114,7 +164,7 @@ async function attachEmploymentRelations(rows: Employment[], tx: DbClient): Prom
     );
 }
 
-export async function getEmploymentsByUserId(userId: number, tx: DbClient = db) {
+async function getEmploymentsByUserId(userId: number, tx: DbClient) {
   const rows = await tx.query.employments.findMany({
     where: {
       userId,
@@ -125,7 +175,7 @@ export async function getEmploymentsByUserId(userId: number, tx: DbClient = db) 
   return await attachEmploymentRelations(rows, tx);
 }
 
-export async function getAllEmploymentsByUserIdForAdmin(userId: number, tx: DbClient = db) {
+async function getAllEmploymentsByUserIdForAdmin(userId: number, tx: DbClient) {
   const rows = await tx.query.employments.findMany({
     where: {
       userId,
@@ -135,11 +185,11 @@ export async function getAllEmploymentsByUserIdForAdmin(userId: number, tx: DbCl
   return await attachEmploymentRelations(rows, tx);
 }
 
-export async function getEmploymentByUserOrgPosId(
+async function getEmploymentByUserOrgPosId(
   userId: number,
   orgId: number,
   posId: number,
-  tx: DbClient = db,
+  tx: DbClient,
 ) {
   const row = await tx.query.employments.findFirst({
     where: {
@@ -153,9 +203,9 @@ export async function getEmploymentByUserOrgPosId(
   return (await attachEmploymentRelations(row === undefined ? [] : [row], tx))[0] ?? null;
 }
 
-export async function getEmploymentByIdForAdmin(
+async function getEmploymentByIdForAdmin(
   id: number,
-  tx: DbClient = db,
+  tx: DbClient,
 ) {
   const row = await tx.query.employments.findFirst({
     where: {
@@ -168,6 +218,7 @@ export async function getEmploymentByIdForAdmin(
 
 function buildOrganizationFilterCondition(
   organization: EmploymentAdminPaginationQueryDto["conditions"]["exactConditions"]["organization"],
+  tx: DbClient,
 ): SQLWrapper | undefined {
   if (organization === undefined) {
     return undefined;
@@ -184,7 +235,7 @@ function buildOrganizationFilterCondition(
   const assignedTypeCondition = orgTypes === undefined
     ? undefined
     : exists(
-        db.select({ value: sql`1` }).from(assigned).where(and(
+        tx.select({ value: sql`1` }).from(assigned).where(and(
           eq(assigned.id, employments.orgId),
           eq(assigned.isDelete, false),
           inArrayIf(assigned.orgType, orgTypes),
@@ -194,7 +245,7 @@ function buildOrganizationFilterCondition(
   if (organization.matchMode === "exact") {
     return and(
       exists(
-        db.select({ value: sql`1` }).from(assigned).where(and(
+        tx.select({ value: sql`1` }).from(assigned).where(and(
           eq(assigned.id, employments.orgId),
           eq(assigned.isDelete, false),
           inArrayIf(assigned.orgCode, orgCodes),
@@ -206,7 +257,7 @@ function buildOrganizationFilterCondition(
 
   return and(
     exists(
-      db.select({ value: sql`1` })
+      tx.select({ value: sql`1` })
         .from(organizationClosures)
         .innerJoin(ancestor, eq(organizationClosures.ancestorId, ancestor.id))
         .where(and(
@@ -220,7 +271,10 @@ function buildOrganizationFilterCondition(
   );
 }
 
-function buildLegacyOrganizationFilterCondition(dto: EmploymentAdminPaginationQueryDto): SQLWrapper | undefined {
+function buildLegacyOrganizationFilterCondition(
+  dto: EmploymentAdminPaginationQueryDto,
+  tx: DbClient,
+): SQLWrapper | undefined {
   const { companyOrgCodes, deptOrgCodes } = dto.conditions.exactConditions;
   if (companyOrgCodes === undefined && deptOrgCodes === undefined) {
     return undefined;
@@ -230,19 +284,21 @@ function buildLegacyOrganizationFilterCondition(dto: EmploymentAdminPaginationQu
       deptOrgCodes === undefined
         ? undefined
         : { orgCodes: deptOrgCodes, matchMode: "exact" },
+      tx,
     ),
     buildOrganizationFilterCondition(
       companyOrgCodes === undefined
         ? undefined
         : { orgCodes: companyOrgCodes, matchMode: "company" },
+      tx,
     ),
   );
 }
 
-function buildEmploymentAdminWhere(dto: EmploymentAdminPaginationQueryDto) {
+function buildEmploymentAdminWhere(dto: EmploymentAdminPaginationQueryDto, tx: DbClient) {
   const text = dto.conditions.fuzzyConditions.text;
-  const organizationCondition = buildOrganizationFilterCondition(dto.conditions.exactConditions.organization)
-    ?? buildLegacyOrganizationFilterCondition(dto);
+  const organizationCondition = buildOrganizationFilterCondition(dto.conditions.exactConditions.organization, tx)
+    ?? buildLegacyOrganizationFilterCondition(dto, tx);
   return and(
     eq(employments.isDelete, false),
     inArrayIf(employments.status, dto.conditions.exactConditions.statuses),
@@ -250,7 +306,7 @@ function buildEmploymentAdminWhere(dto: EmploymentAdminPaginationQueryDto) {
       ? undefined
       : eq(employments.isPrimary, dto.conditions.exactConditions.isPrimary),
     exists(
-      db.select({ value: sql`1` }).from(users).where(and(
+      tx.select({ value: sql`1` }).from(users).where(and(
         eq(users.id, employments.userId),
         eq(users.isDelete, false),
         inArrayIf(users.username, dto.conditions.exactConditions.usernames),
@@ -261,7 +317,7 @@ function buildEmploymentAdminWhere(dto: EmploymentAdminPaginationQueryDto) {
     ),
     organizationCondition,
     exists(
-      db.select({ value: sql`1` }).from(positions).where(and(
+      tx.select({ value: sql`1` }).from(positions).where(and(
         eq(positions.id, employments.posId),
         eq(positions.isDelete, false),
         inArrayIf(positions.posCode, dto.conditions.exactConditions.posCodes),
@@ -270,12 +326,12 @@ function buildEmploymentAdminWhere(dto: EmploymentAdminPaginationQueryDto) {
   );
 }
 
-export async function searchEmploymentsFuzzyForAdminPaged(
+async function searchEmploymentsFuzzyForAdminPaged(
   dto: EmploymentAdminPaginationQueryDto,
-  tx: DbClient = db,
+  tx: DbClient,
 ) {
   const { pageNum, pageSize } = dto;
-  const where = buildEmploymentAdminWhere(dto);
+  const where = buildEmploymentAdminWhere(dto, tx);
   const [rows, totalRows] = await Promise.all([
     tx
       .select()
@@ -289,7 +345,7 @@ export async function searchEmploymentsFuzzyForAdminPaged(
   return { rows: await attachEmploymentRelations(rows, tx), total: firstRow(totalRows)?.value ?? 0 };
 }
 
-export async function createEmploymentRecord(
+async function createEmploymentRecord(
   data: {
     userId: number;
     posId: number;
@@ -299,7 +355,7 @@ export async function createEmploymentRecord(
     description?: string | null;
     status?: EmploymentStatus;
   },
-  tx: DbClient = db,
+  tx: DbClient,
 ) {
   return firstRow(await tx.insert(employments).values({
     userId: data.userId,
@@ -312,7 +368,7 @@ export async function createEmploymentRecord(
   }).returning())!;
 }
 
-export async function updateEmploymentRecord(
+async function updateEmploymentRecord(
   id: number,
   data: {
     isPrimary?: boolean;
@@ -321,7 +377,7 @@ export async function updateEmploymentRecord(
     description?: string | null;
     status?: EmploymentStatus;
   },
-  tx: DbClient = db,
+  tx: DbClient,
 ) {
   return firstRow(await tx
     .update(employments)
@@ -330,10 +386,10 @@ export async function updateEmploymentRecord(
     .returning())!;
 }
 
-export async function unsetPrimariesByUserId(
+async function unsetPrimariesByUserId(
   userId: number,
   exceptEmploymentId: number | null,
-  tx: DbClient = db,
+  tx: DbClient,
 ) {
   return await tx
     .update(employments)
@@ -346,9 +402,9 @@ export async function unsetPrimariesByUserId(
     ));
 }
 
-export async function softDeleteEmployment(
+async function softDeleteEmployment(
   id: number,
-  tx: DbClient = db,
+  tx: DbClient,
 ) {
   return await tx
     .update(employments)
@@ -356,9 +412,9 @@ export async function softDeleteEmployment(
     .where(eq(employments.id, id));
 }
 
-export async function endActiveEmploymentsByUserId(
+async function endActiveEmploymentsByUserId(
   userId: number,
-  tx: DbClient = db,
+  tx: DbClient,
 ) {
   return await tx
     .update(employments)

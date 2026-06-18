@@ -7,10 +7,53 @@ import type {
   ClientUpdateDto,
 } from "./client.type";
 import { OidcClientState } from "@iam/contracts";
-import db from "@iam/db";
 import { compactUpdate, firstRow, ilikeContainsIf, inArrayIf } from "@iam/db/query-utils";
 import { clients } from "@iam/db/schema";
 import { and, count, eq, isNotNull, isNull, or, sql } from "drizzle-orm";
+
+export function createClientRepository(db: DbClient) {
+  return {
+    createClient(clientDto: ClientCreateDto) {
+      return createClient(clientDto, db);
+    },
+    getClientByCode(clientCode: string) {
+      return getClientByCode(clientCode, db);
+    },
+    getAnyClientByCode(clientCode: string) {
+      return getAnyClientByCode(clientCode, db);
+    },
+    getClientById(id: number) {
+      return getClientById(id, db);
+    },
+    searchClientsPaged(dto: ClientPaginationQueryDto) {
+      return searchClientsPaged(dto, db);
+    },
+    updateClientByCode(clientCode: string, data: ClientUpdateDto) {
+      return updateClientByCode(clientCode, data, db);
+    },
+    updateClientByCodeWithOidcVersion(clientCode: string, data: ClientUpdateDto) {
+      return updateClientByCodeWithOidcVersion(clientCode, data, db);
+    },
+    updateClientById(clientDto: ClientInputDto) {
+      return updateClientById(clientDto, db);
+    },
+    updateClientByIdWithOidcVersion(clientDto: ClientInputDto) {
+      return updateClientByIdWithOidcVersion(clientDto, db);
+    },
+    updateClientOidcByCode(clientCode: string, data: {
+      oidcEnabled?: boolean;
+      oidcConfig?: ClientOidcConfigureDto | null;
+      oidcSecretHash?: string | null;
+    }) {
+      return updateClientOidcByCode(clientCode, data, db);
+    },
+    softDeleteClientByCode(clientCode: string) {
+      return softDeleteClientByCode(clientCode, db);
+    },
+  };
+}
+
+export type ClientRepository = ReturnType<typeof createClientRepository>;
 
 function managementLevelsWhere(values: ClientPaginationQueryDto["conditions"]["exactConditions"]["managementLevels"]) {
   if (values === undefined) {
@@ -74,12 +117,12 @@ function clientsSearchWhere(dto: ClientPaginationQueryDto) {
   );
 }
 
-export async function createClient(clientDto: ClientCreateDto, tx: DbClient = db) {
+async function createClient(clientDto: ClientCreateDto, tx: DbClient) {
   const rows = await tx.insert(clients).values(clientDto).returning();
   return firstRow(rows)!;
 }
 
-export async function getClientByCode(clientCode: string, tx: DbClient = db) {
+async function getClientByCode(clientCode: string, tx: DbClient) {
   return await tx.query.clients.findFirst({
     where: {
       clientCode,
@@ -88,13 +131,13 @@ export async function getClientByCode(clientCode: string, tx: DbClient = db) {
   }) ?? null;
 }
 
-export async function getAnyClientByCode(clientCode: string, tx: DbClient = db) {
+async function getAnyClientByCode(clientCode: string, tx: DbClient) {
   return await tx.query.clients.findFirst({
     where: { clientCode },
   }) ?? null;
 }
 
-export async function getClientById(id: number, tx: DbClient = db) {
+async function getClientById(id: number, tx: DbClient) {
   return await tx.query.clients.findFirst({
     where: {
       id,
@@ -103,7 +146,7 @@ export async function getClientById(id: number, tx: DbClient = db) {
   }) ?? null;
 }
 
-export async function searchClientsPaged(dto: ClientPaginationQueryDto, tx: DbClient = db) {
+async function searchClientsPaged(dto: ClientPaginationQueryDto, tx: DbClient) {
   const where = clientsSearchWhere(dto);
   const [rows, totalRows] = await Promise.all([
     tx
@@ -118,10 +161,10 @@ export async function searchClientsPaged(dto: ClientPaginationQueryDto, tx: DbCl
   return { rows, total: firstRow(totalRows)?.value ?? 0 };
 }
 
-export async function updateClientByCode(
+async function updateClientByCode(
   clientCode: string,
   data: ClientUpdateDto,
-  tx: DbClient = db,
+  tx: DbClient,
 ) {
   const rows = await tx
     .update(clients)
@@ -131,10 +174,10 @@ export async function updateClientByCode(
   return firstRow(rows)!;
 }
 
-export async function updateClientByCodeWithOidcVersion(
+async function updateClientByCodeWithOidcVersion(
   clientCode: string,
   data: ClientUpdateDto,
-  tx: DbClient = db,
+  tx: DbClient,
 ) {
   const rows = await tx
     .update(clients)
@@ -144,7 +187,7 @@ export async function updateClientByCodeWithOidcVersion(
   return firstRow(rows)!;
 }
 
-export async function updateClientById(clientDto: ClientInputDto, tx: DbClient = db) {
+async function updateClientById(clientDto: ClientInputDto, tx: DbClient) {
   const { id, clientCode: _clientCode, ...data } = clientDto;
   const rows = await tx
     .update(clients)
@@ -154,7 +197,7 @@ export async function updateClientById(clientDto: ClientInputDto, tx: DbClient =
   return firstRow(rows)!;
 }
 
-export async function updateClientByIdWithOidcVersion(clientDto: ClientInputDto, tx: DbClient = db) {
+async function updateClientByIdWithOidcVersion(clientDto: ClientInputDto, tx: DbClient) {
   const { id, clientCode: _clientCode, ...data } = clientDto;
   const rows = await tx
     .update(clients)
@@ -164,14 +207,14 @@ export async function updateClientByIdWithOidcVersion(clientDto: ClientInputDto,
   return firstRow(rows)!;
 }
 
-export async function updateClientOidcByCode(
+async function updateClientOidcByCode(
   clientCode: string,
   data: {
     oidcEnabled?: boolean;
     oidcConfig?: ClientOidcConfigureDto | null;
     oidcSecretHash?: string | null;
   },
-  tx: DbClient = db,
+  tx: DbClient,
 ) {
   const rows = await tx
     .update(clients)
@@ -181,7 +224,7 @@ export async function updateClientOidcByCode(
   return firstRow(rows)!;
 }
 
-export async function softDeleteClientByCode(clientCode: string, tx: DbClient = db) {
+async function softDeleteClientByCode(clientCode: string, tx: DbClient) {
   const rows = await tx
     .update(clients)
     .set({ isDelete: true, oidcConfigVersion: sql`${clients.oidcConfigVersion} + 1` })

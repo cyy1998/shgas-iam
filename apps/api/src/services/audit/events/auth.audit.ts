@@ -1,10 +1,8 @@
 import type { AuditLogInput } from "@api/services/audit/audit.service";
 import type { UserDetailDto } from "@api/services/user/user.type";
 import type { ClientManagementLevel } from "@iam/contracts";
-import type { Context } from "hono";
 import { AuditActions } from "@iam/contracts";
 import { maskMobileForAudit } from "@iam/domain/audit";
-import * as auditService from "../audit.service";
 
 type UserAuditTarget = {
   id: number;
@@ -12,12 +10,12 @@ type UserAuditTarget = {
   name?: string | null;
 };
 
-export async function recordPasswordLoginFailure(
+export function buildPasswordLoginFailureAudit(
   username: string,
   reason: string,
   user?: UserAuditTarget,
-) {
-  await auditService.recordAuditLog({
+): AuditLogInput {
+  return {
     action: AuditActions["auth.login.password"],
     outcome: "failure",
     actorType: "anonymous",
@@ -29,15 +27,15 @@ export async function recordPasswordLoginFailure(
       reason,
       username,
     },
-  });
+  };
 }
 
-export async function recordMobileLoginFailure(
+export function buildMobileLoginFailureAudit(
   phoneNumber: string,
   reason: string,
   activeUser?: Pick<UserAuditTarget, "id" | "name"> | null,
-) {
-  await auditService.recordAuditLog({
+): AuditLogInput {
+  return {
     action: AuditActions["auth.login.mobile"],
     outcome: "failure",
     actorType: "anonymous",
@@ -49,53 +47,52 @@ export async function recordMobileLoginFailure(
       phoneNumber: maskMobileForAudit(phoneNumber),
       reason,
     },
-  });
+  };
 }
 
-export async function recordPasswordLoginSuccess(user: UserDetailDto) {
-  await recordUserLoginSuccess(AuditActions["auth.login.password"], user, {
+export function buildPasswordLoginSuccessAudit(user: UserDetailDto) {
+  return buildUserLoginSuccessAudit(AuditActions["auth.login.password"], user, {
     clientCode: "global",
     loginType: "password",
   });
 }
 
-export async function recordMobileLoginSuccess(user: UserDetailDto) {
-  await recordUserLoginSuccess(AuditActions["auth.login.mobile"], user, {
+export function buildMobileLoginSuccessAudit(user: UserDetailDto) {
+  return buildUserLoginSuccessAudit(AuditActions["auth.login.mobile"], user, {
     clientCode: "global",
     loginType: "mobile",
   });
 }
 
-export async function recordLocalLoginSuccess(
+export function buildLocalLoginSuccessAudit(
   user: UserDetailDto,
   clientCode: string,
   managementLevel: ClientManagementLevel,
 ) {
-  await recordUserLoginSuccess(AuditActions["auth.login.local"], user, {
+  return buildUserLoginSuccessAudit(AuditActions["auth.login.local"], user, {
     clientCode,
     loginType: "local",
     managementLevel,
   });
 }
 
-export async function recordOaLoginSuccess(user: UserDetailDto, clientCode: string) {
-  await recordUserLoginSuccess(AuditActions["auth.login.oa"], user, {
+export function buildOaLoginSuccessAudit(user: UserDetailDto, clientCode: string) {
+  return buildUserLoginSuccessAudit(AuditActions["auth.login.oa"], user, {
     clientCode,
     loginType: "oa",
   });
 }
 
-export async function recordWechatLoginSuccess(user: UserDetailDto) {
-  await recordUserLoginSuccess(AuditActions["auth.login.wechat"], user, {
+export function buildWechatLoginSuccessAudit(user: UserDetailDto) {
+  return buildUserLoginSuccessAudit(AuditActions["auth.login.wechat"], user, {
     loginType: "wechat",
   });
 }
 
-export async function recordSmsCodeSend(
-  c: Context,
+export function buildSmsCodeSendAudit(
   input: { phoneNumber: string; usage: string; username?: string },
-) {
-  await auditService.recordAuditLogFromContext(c, {
+): AuditLogInput {
+  return {
     action: "auth.sms_code.send",
     outcome: "success",
     actorType: "anonymous",
@@ -106,14 +103,13 @@ export async function recordSmsCodeSend(
       usage: input.usage,
       username: input.username,
     },
-  });
+  };
 }
 
-export async function recordSmsCodeVerify(
-  c: Context,
+export function buildSmsCodeVerifyAudit(
   input: { phoneNumber: string; usage: string; username?: string; verified: boolean },
-) {
-  await auditService.recordAuditLogFromContext(c, {
+): AuditLogInput {
+  return {
     action: "auth.sms_code.verify",
     outcome: input.verified ? "success" : "failure",
     actorType: "anonymous",
@@ -124,15 +120,15 @@ export async function recordSmsCodeVerify(
       usage: input.usage,
       username: input.username,
     },
-  });
+  };
 }
 
-async function recordUserLoginSuccess(
+function buildUserLoginSuccessAudit(
   action: string,
   user: UserDetailDto,
   details: AuditLogInput["details"],
-) {
-  await auditService.recordAuditLog({
+): AuditLogInput {
+  return {
     action,
     outcome: "success",
     actorType: "user",
@@ -143,5 +139,5 @@ async function recordUserLoginSuccess(
     targetCode: user.username,
     targetName: user.name,
     details,
-  });
+  };
 }

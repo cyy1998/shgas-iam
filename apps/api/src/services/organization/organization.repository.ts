@@ -6,11 +6,32 @@ import type {
 import type { DbClient } from "@iam/db";
 import type { Organization } from "@iam/db/schema";
 import { getChildOrganizationLevel, OrganizationStatus } from "@iam/contracts";
-import db from "@iam/db";
 import { compactUpdate, firstRow, inArrayIf } from "@iam/db/query-utils";
 import { organizationClosures, organizations } from "@iam/db/schema";
 import { and, eq, exists, inArray, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
+
+export function createOrganizationRepository(db: DbClient) {
+  return {
+    getOrganizationByCode(orgCode: string) {
+      return getOrganizationByCode(orgCode, db);
+    },
+    searchOrganizations(query: OrganizationQueryDto) {
+      return searchOrganizations(query, db);
+    },
+    setOrganization(organizationCreateDto: OrganizationCreateDto, parentOrganization: Organization | null) {
+      return setOrganization(organizationCreateDto, parentOrganization, db);
+    },
+    getOrganizationByCodeForAdmin(orgCode: string) {
+      return getOrganizationByCodeForAdmin(orgCode, db);
+    },
+    updateOrganizationByCode(orgCode: string, data: OrganizationUpdateDto) {
+      return updateOrganizationByCode(orgCode, data, db);
+    },
+  };
+}
+
+export type OrganizationRepository = ReturnType<typeof createOrganizationRepository>;
 
 type OrganizationWithRelations = Organization & {
   parent: Organization | null;
@@ -54,7 +75,7 @@ async function attachOrganizationRelations(
   }));
 }
 
-export async function getOrganizationByCode(orgCode: string, tx: DbClient = db) {
+async function getOrganizationByCode(orgCode: string, tx: DbClient) {
   const rows = await tx.select().from(organizations).where(and(
     eq(organizations.orgCode, orgCode),
     eq(organizations.status, OrganizationStatus.Enable),
@@ -63,9 +84,9 @@ export async function getOrganizationByCode(orgCode: string, tx: DbClient = db) 
   return firstRow(await attachOrganizationRelations(rows, tx)) ?? null;
 }
 
-export async function searchOrganizations(
+async function searchOrganizations(
   query: OrganizationQueryDto,
-  tx: DbClient = db,
+  tx: DbClient,
 ) {
   const ancestor = alias(organizations, "ancestor_filter");
   const descendant = alias(organizations, "descendant_filter");
@@ -73,7 +94,7 @@ export async function searchOrganizations(
     query.ancestorCodes === undefined
       ? undefined
       : exists(
-          db.select({ value: sql`1` })
+          tx.select({ value: sql`1` })
             .from(organizationClosures)
             .innerJoin(ancestor, eq(organizationClosures.ancestorId, ancestor.id))
             .where(and(
@@ -85,7 +106,7 @@ export async function searchOrganizations(
     query.descendantCodes === undefined
       ? undefined
       : exists(
-          db.select({ value: sql`1` })
+          tx.select({ value: sql`1` })
             .from(organizationClosures)
             .innerJoin(descendant, eq(organizationClosures.descendantId, descendant.id))
             .where(and(
@@ -103,10 +124,10 @@ export async function searchOrganizations(
   return await attachOrganizationRelations(rows, tx);
 }
 
-export async function setOrganization(
+async function setOrganization(
   organizationCreateDto: OrganizationCreateDto,
   parentOrganization: Organization | null,
-  tx: DbClient = db,
+  tx: DbClient,
 ) {
   const { parentCode, ...org } = organizationCreateDto;
   const newOrganization = firstRow(await tx.insert(organizations).values(org).returning())!;
@@ -151,7 +172,7 @@ export async function setOrganization(
   return firstRow(await attachOrganizationRelations([updatedOrganization], tx))!;
 }
 
-export async function getOrganizationByCodeForAdmin(orgCode: string, tx: DbClient = db) {
+async function getOrganizationByCodeForAdmin(orgCode: string, tx: DbClient) {
   const rows = await tx.select().from(organizations).where(and(
     eq(organizations.orgCode, orgCode),
     eq(organizations.isDelete, false),
@@ -159,10 +180,10 @@ export async function getOrganizationByCodeForAdmin(orgCode: string, tx: DbClien
   return firstRow(await attachOrganizationRelations(rows, tx, { activeChildrenOnly: true })) ?? null;
 }
 
-export async function updateOrganizationByCode(
+async function updateOrganizationByCode(
   orgCode: string,
   data: OrganizationUpdateDto,
-  tx: DbClient = db,
+  tx: DbClient,
 ) {
   return await tx
     .update(organizations)

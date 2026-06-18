@@ -2,12 +2,24 @@ import type { DbClient } from "@iam/db";
 import type { AuditLogWriteDto } from "@iam/domain/audit";
 import type { Json } from "drizzle-orm";
 import type { AuditLogPaginationQueryDto } from "./audit.type";
-import db from "@iam/db";
 import { firstRow, ilikeContainsIf } from "@iam/db/query-utils";
 import { auditLogs } from "@iam/db/schema";
 import { and, count, desc, eq, gte, inArray, lte, or } from "drizzle-orm";
 
-export async function createAuditLog(input: AuditLogWriteDto, tx: DbClient = db) {
+export function createAuditRepository(db: DbClient) {
+  return {
+    createAuditLog(input: AuditLogWriteDto) {
+      return createAuditLog(input, db);
+    },
+    searchAuditLogsPaged(query: AuditLogPaginationQueryDto) {
+      return searchAuditLogsPaged(query, db);
+    },
+  };
+}
+
+export type AuditRepository = ReturnType<typeof createAuditRepository>;
+
+async function createAuditLog(input: AuditLogWriteDto, tx: DbClient) {
   const values: typeof auditLogs.$inferInsert = {
     action: input.action,
     outcome: input.outcome,
@@ -64,7 +76,7 @@ function auditLogWhere(query: AuditLogPaginationQueryDto) {
   );
 }
 
-export async function searchAuditLogsPaged(query: AuditLogPaginationQueryDto, tx: DbClient = db) {
+async function searchAuditLogsPaged(query: AuditLogPaginationQueryDto, tx: DbClient) {
   const where = auditLogWhere(query);
   const [rows, totalRows] = await Promise.all([
     tx

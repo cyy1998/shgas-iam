@@ -1,8 +1,8 @@
 import type { AdminAuditContext } from "@admin-api/services/audit/audit.service";
 import type { UserStatus } from "@iam/contracts";
-import type { DbClient } from "@iam/db";
+import type { AuditLogInput } from "../audit.service";
 import { maskMobileForAudit } from "@iam/domain/audit";
-import { recordAdminResourceAudit } from "../admin-resource-audit";
+import { buildAdminResourceAudit } from "../admin-resource-audit";
 
 type UserAuditTarget = {
   id: number;
@@ -26,14 +26,13 @@ function maskUserAuditDetails(details: Record<string, unknown>) {
   };
 }
 
-export async function recordAdminUserAudit(
+export function buildAdminUserAudit(
   action: string,
   user: UserAuditTarget,
   details: Record<string, unknown>,
-  tx?: DbClient,
   auditContext?: AdminAuditContext,
-) {
-  await recordAdminResourceAudit(
+): AuditLogInput {
+  return buildAdminResourceAudit(
     action,
     {
       type: "user",
@@ -47,7 +46,6 @@ export async function recordAdminUserAudit(
       targetMobile: maskMobileForAudit(user.mobile),
       ...maskUserAuditDetails(details),
     },
-    tx,
     auditContext,
   );
 }

@@ -1,7 +1,6 @@
 import type { User } from "@iam/db/schema";
-import config from "@api/env";
+import type { UserPasswordHelperDeps } from "./user.port";
 import { WeakPasswordError } from "@iam/domain/user";
-import { compare, hash } from "bcrypt-ts";
 
 const LETTER_CHECK_REGEX = /[a-z]/i;
 const DIGIT_CHECK_REGEX = /\d/;
@@ -19,15 +18,25 @@ export function assertStrongPassword(password: string) {
   }
 }
 
-export async function hashUserPassword(password: string) {
-  return await hash(password, config.PASSWORD_HASH_ROUNDS);
+export function createUserPasswordHelper(deps: UserPasswordHelperDeps) {
+  async function hashUserPassword(password: string) {
+    return await deps.passwordHasher.hashPassword(password);
+  }
+
+  async function verifyUserPassword(
+    user: Pick<User, "password">,
+    inputPassword: string,
+  ) {
+    return user.password
+      ? await deps.passwordHasher.verifyPassword(inputPassword, user.password)
+      : false;
+  }
+
+  return {
+    assertStrongPassword,
+    hashUserPassword,
+    verifyUserPassword,
+  };
 }
 
-export async function verifyUserPassword(
-  user: Pick<User, "password">,
-  inputPassword: string,
-) {
-  return user.password
-    ? await compare(inputPassword, user.password)
-    : false;
-}
+export type UserPasswordHelper = ReturnType<typeof createUserPasswordHelper>;

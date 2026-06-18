@@ -1,7 +1,7 @@
 import type { AdminAuditContext } from "@admin-api/services/audit/audit.service";
 import type { EmploymentStatus } from "@iam/contracts";
-import type { DbClient } from "@iam/db";
-import { recordAdminResourceAudit } from "../admin-resource-audit";
+import type { AuditLogInput } from "../audit.service";
+import { buildAdminResourceAudit } from "../admin-resource-audit";
 
 type EmploymentAuditTarget = {
   id: number;
@@ -15,14 +15,13 @@ type EmploymentAuditTarget = {
   position?: { posCode: string; posName?: string | null };
 };
 
-export async function recordEmploymentAudit(
+export function buildEmploymentAudit(
   action: string,
   target: EmploymentAuditTarget,
   details: Record<string, unknown>,
-  tx?: DbClient,
   auditContext?: AdminAuditContext,
-) {
-  await recordAdminResourceAudit(
+): AuditLogInput {
+  return buildAdminResourceAudit(
     action,
     {
       type: "employment",
@@ -43,17 +42,15 @@ export async function recordEmploymentAudit(
       status: target.status,
       ...details,
     },
-    tx,
     auditContext,
   );
 }
 
-export async function recordEmploymentResignUserAudit(
+export function buildEmploymentResignUserAudit(
   user: { id: number; username: string; name?: string | null },
-  tx?: DbClient,
   auditContext?: AdminAuditContext,
-) {
-  await recordAdminResourceAudit(
+): AuditLogInput {
+  return buildAdminResourceAudit(
     "admin.employment.resign_user",
     {
       type: "user",
@@ -64,7 +61,6 @@ export async function recordEmploymentResignUserAudit(
       username: user.username,
       resigned: true,
     },
-    tx,
     auditContext,
   );
 }

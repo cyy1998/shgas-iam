@@ -1,23 +1,50 @@
 import type { DbClient } from "@iam/db";
 import type { PositionCreateDto, PositionFuzzyQueryDto, PositionUpdateDto } from "./position.type";
-import db from "@iam/db";
 import { compactUpdate, firstRow } from "@iam/db/query-utils";
 import { employments, positions } from "@iam/db/schema";
 import { and, count, eq } from "drizzle-orm";
 
-export async function getPositionByCode(posCode: string, tx: DbClient = db) {
+export function createPositionRepository(db: DbClient) {
+  return {
+    getPositionByCode(posCode: string) {
+      return getPositionByCode(posCode, db);
+    },
+    setPosition(positionCreateDto: PositionCreateDto) {
+      return setPosition(positionCreateDto, db);
+    },
+    searchPositionsFuzzy(positionAdminQueryDto: PositionFuzzyQueryDto) {
+      return searchPositionsFuzzy(positionAdminQueryDto, db);
+    },
+    updatePositionByCode(posCode: string, data: PositionUpdateDto) {
+      return updatePositionByCode(posCode, data, db);
+    },
+    softDeletePositionByCode(posCode: string) {
+      return softDeletePositionByCode(posCode, db);
+    },
+    countActiveEmploymentsByPosCode(posCode: string) {
+      return countActiveEmploymentsByPosCode(posCode, db);
+    },
+    getAnyPositionByCode(posCode: string) {
+      return getAnyPositionByCode(posCode, db);
+    },
+  };
+}
+
+export type PositionRepository = ReturnType<typeof createPositionRepository>;
+
+async function getPositionByCode(posCode: string, tx: DbClient) {
   return await tx.query.positions.findFirst({
     where: { posCode, isDelete: false },
   }) ?? null;
 }
 
-export async function setPosition(positionCreateDto: PositionCreateDto, tx: DbClient = db) {
+async function setPosition(positionCreateDto: PositionCreateDto, tx: DbClient) {
   await tx.insert(positions).values(positionCreateDto);
 }
 
-export async function searchPositionsFuzzy(
+async function searchPositionsFuzzy(
   positionAdminQueryDto: PositionFuzzyQueryDto,
-  tx: DbClient = db,
+  tx: DbClient,
 ) {
   const text = positionAdminQueryDto.conditions.fuzzyConditions.text;
   return await tx.query.positions.findMany({
@@ -38,10 +65,10 @@ export async function searchPositionsFuzzy(
   });
 }
 
-export async function updatePositionByCode(
+async function updatePositionByCode(
   posCode: string,
   data: PositionUpdateDto,
-  tx: DbClient = db,
+  tx: DbClient,
 ) {
   return await tx
     .update(positions)
@@ -49,9 +76,9 @@ export async function updatePositionByCode(
     .where(and(eq(positions.posCode, posCode), eq(positions.isDelete, false)));
 }
 
-export async function softDeletePositionByCode(
+async function softDeletePositionByCode(
   posCode: string,
-  tx: DbClient = db,
+  tx: DbClient,
 ) {
   return await tx
     .update(positions)
@@ -59,9 +86,9 @@ export async function softDeletePositionByCode(
     .where(and(eq(positions.posCode, posCode), eq(positions.isDelete, false)));
 }
 
-export async function countActiveEmploymentsByPosCode(
+async function countActiveEmploymentsByPosCode(
   posCode: string,
-  tx: DbClient = db,
+  tx: DbClient,
 ) {
   const rows = await tx
     .select({ value: count() })
@@ -75,7 +102,7 @@ export async function countActiveEmploymentsByPosCode(
   return firstRow(rows)?.value ?? 0;
 }
 
-export async function getAnyPositionByCode(posCode: string, tx: DbClient = db) {
+async function getAnyPositionByCode(posCode: string, tx: DbClient) {
   return await tx.query.positions.findFirst({
     where: { posCode },
   }) ?? null;

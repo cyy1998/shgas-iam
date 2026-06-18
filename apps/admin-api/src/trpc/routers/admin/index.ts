@@ -1,16 +1,29 @@
-import { auditAdminRouter } from "@admin-api/routes/admin/audit/audit.trpc";
-import { clientAdminRouter } from "@admin-api/routes/admin/client/client.trpc";
-import { employmentAdminRouter } from "@admin-api/routes/admin/employment/employment.trpc";
-import { organizationAdminRouter } from "@admin-api/routes/admin/organization/organization.trpc";
-import { positionAdminRouter } from "@admin-api/routes/admin/position/position.trpc";
-import { userAdminRouter } from "@admin-api/routes/admin/user/user.trpc";
+import type { AuditAdapter } from "@admin-api/routes/admin/audit/audit.adapter";
+import type { ClientAdapter } from "@admin-api/routes/admin/client/client.adapter";
+import type { EmploymentAdapter } from "@admin-api/routes/admin/employment/employment.adapter";
+import type { OrganizationAdapter } from "@admin-api/routes/admin/organization/organization.adapter";
+import type { PositionAdapter } from "@admin-api/routes/admin/position/position.adapter";
+import type { UserAdapter } from "@admin-api/routes/admin/user/user.adapter";
 import { router } from "@iam/api-core/trpc";
 
-export const adminRouter = router({
-  audit: auditAdminRouter,
-  organization: organizationAdminRouter,
-  position: positionAdminRouter,
-  user: userAdminRouter,
-  employment: employmentAdminRouter,
-  client: clientAdminRouter,
-});
+export interface CreateAdminRouterDeps {
+  audit: AuditAdapter["auditAdminRouter"];
+  client: ClientAdapter["clientAdminRouter"];
+  employment: EmploymentAdapter["employmentAdminRouter"];
+  organization: OrganizationAdapter["organizationAdminRouter"];
+  position: PositionAdapter["positionAdminRouter"];
+  user: UserAdapter["userAdminRouter"];
+}
+
+export function createAdminRouter(deps: CreateAdminRouterDeps) {
+  return router({
+    audit: deps.audit,
+    organization: deps.organization,
+    position: deps.position,
+    user: deps.user,
+    employment: deps.employment,
+    client: deps.client,
+  });
+}
+
+export type AdminRouter = ReturnType<typeof createAdminRouter>;

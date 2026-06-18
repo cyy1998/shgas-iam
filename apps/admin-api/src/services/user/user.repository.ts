@@ -1,13 +1,40 @@
 import type { UserCreateDto, UserPaginationQueryDto, UserUpdateDto } from "@admin-api/services/user/user.type";
 import type { DbClient } from "@iam/db";
 import { EmploymentStatus, UserStatus } from "@iam/contracts";
-import db from "@iam/db";
 import { compactUpdate, firstRow, ilikeContainsIf, inArrayIf } from "@iam/db/query-utils";
 import {
   employments,
   users,
 } from "@iam/db/schema";
 import { and, count, eq, or } from "drizzle-orm";
+
+export function createUserRepository(db: DbClient) {
+  return {
+    setPassword(userId: number, password: string) {
+      return setPassword(userId, password, db);
+    },
+    getUserByUsernameForAdmin(username: string) {
+      return getUserByUsernameForAdmin(username, db);
+    },
+    searchUsersFuzzyPaged(userPaginationQueryDto: UserPaginationQueryDto) {
+      return searchUsersFuzzyPaged(userPaginationQueryDto, db);
+    },
+    updateUserByUsername(username: string, data: UserUpdateDto) {
+      return updateUserByUsername(username, data, db);
+    },
+    softDeleteUserByUsername(username: string) {
+      return softDeleteUserByUsername(username, db);
+    },
+    countActiveEmploymentsByUsername(username: string) {
+      return countActiveEmploymentsByUsername(username, db);
+    },
+    setUserForAdmin(userCreateDto: UserCreateDto) {
+      return setUserForAdmin(userCreateDto, db);
+    },
+  };
+}
+
+export type UserRepository = ReturnType<typeof createUserRepository>;
 
 function usersFuzzyWhere(userPaginationQueryDto: UserPaginationQueryDto) {
   const text = userPaginationQueryDto.conditions.fuzzyConditions.text;
@@ -29,7 +56,7 @@ function usersFuzzyWhere(userPaginationQueryDto: UserPaginationQueryDto) {
   );
 }
 
-export async function setPassword(userId: number, password: string, tx: DbClient = db) {
+async function setPassword(userId: number, password: string, tx: DbClient) {
   return firstRow(await tx
     .update(users)
     .set({ password })
@@ -37,9 +64,9 @@ export async function setPassword(userId: number, password: string, tx: DbClient
     .returning())!;
 }
 
-export async function getUserByUsernameForAdmin(
+async function getUserByUsernameForAdmin(
   username: string,
-  tx: DbClient = db,
+  tx: DbClient,
 ) {
   return await tx.query.users.findFirst({
     where: {
@@ -49,9 +76,9 @@ export async function getUserByUsernameForAdmin(
   }) ?? null;
 }
 
-export async function searchUsersFuzzyPaged(
+async function searchUsersFuzzyPaged(
   userPaginationQueryDto: UserPaginationQueryDto,
-  tx: DbClient = db,
+  tx: DbClient,
 ) {
   const { pageNum, pageSize } = userPaginationQueryDto;
   const where = usersFuzzyWhere(userPaginationQueryDto);
@@ -68,10 +95,10 @@ export async function searchUsersFuzzyPaged(
   return { rows, total: firstRow(totalRows)?.value ?? 0 };
 }
 
-export async function updateUserByUsername(
+async function updateUserByUsername(
   username: string,
   data: UserUpdateDto,
-  tx: DbClient = db,
+  tx: DbClient,
 ) {
   return firstRow(await tx
     .update(users)
@@ -80,9 +107,9 @@ export async function updateUserByUsername(
     .returning())!;
 }
 
-export async function softDeleteUserByUsername(
+async function softDeleteUserByUsername(
   username: string,
-  tx: DbClient = db,
+  tx: DbClient,
 ) {
   return firstRow(await tx
     .update(users)
@@ -91,9 +118,9 @@ export async function softDeleteUserByUsername(
     .returning())!;
 }
 
-export async function countActiveEmploymentsByUsername(
+async function countActiveEmploymentsByUsername(
   username: string,
-  tx: DbClient = db,
+  tx: DbClient,
 ) {
   const rows = await tx
     .select({ value: count() })
@@ -108,9 +135,9 @@ export async function countActiveEmploymentsByUsername(
   return firstRow(rows)?.value ?? 0;
 }
 
-export async function setUserForAdmin(
+async function setUserForAdmin(
   userCreateDto: UserCreateDto,
-  tx: DbClient = db,
+  tx: DbClient,
 ) {
   return firstRow(await tx.insert(users).values(userCreateDto).returning())!;
 }

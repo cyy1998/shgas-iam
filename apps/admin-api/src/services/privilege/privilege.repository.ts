@@ -1,12 +1,21 @@
 import type { DbClient } from "@iam/db";
-import db from "@iam/db";
 import {
   privileges,
   rolePrivileges,
 } from "@iam/db/schema";
 import { eq, inArray } from "drizzle-orm";
 
-export async function getPrivilegesByRoleIds(roleIds: number[], tx: DbClient = db) {
+export function createPrivilegeRepository(db: DbClient) {
+  return {
+    getPrivilegesByRoleIds(roleIds: number[]) {
+      return getPrivilegesByRoleIds(roleIds, db);
+    },
+  };
+}
+
+export type PrivilegeRepository = ReturnType<typeof createPrivilegeRepository>;
+
+async function getPrivilegesByRoleIds(roleIds: number[], tx: DbClient) {
   if (roleIds.length === 0) {
     return [];
   }

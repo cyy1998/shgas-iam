@@ -1,20 +1,8 @@
 import type { PublicBindings } from "@iam/api-core/types";
+import type { UserAdapter } from "./user.adapter";
 import { createRouter } from "@iam/api-core/core/create-router";
-import * as handlers from "./user.adapter";
 import * as routes from "./user.routes";
 
-const router = createRouter<PublicBindings>().basePath("/users");
-
-// router.use("*", publicAuthenticationHandler);
-
-router
-  .openapi(routes.usersSearch, handlers.usersSearch)
-  .openapi(routes.usersDetail, handlers.usersDetail)
-  .openapi(routes.usersCreate, handlers.usersCreate)
-  .openapi(routes.usersUpdate, handlers.usersUpdate)
-  .openapi(routes.usersStatusUpdate, handlers.usersStatusUpdate)
-  .openapi(routes.usersDelete, handlers.usersDelete)
-  .openapi(routes.usersResetPassword, handlers.usersResetPassword)
-  .openapi(routes.usersGeneratePassword, handlers.usersGeneratePassword);
-
-export default router;
+export function createUserRoute(adapter: UserAdapter) {
+  return createRouter<PublicBindings>().basePath("/users").openapi(routes.usersSearch, adapter.usersSearch).openapi(routes.usersDetail, adapter.usersDetail).openapi(routes.usersCreate, adapter.usersCreate).openapi(routes.usersUpdate, adapter.usersUpdate).openapi(routes.usersStatusUpdate, adapter.usersStatusUpdate).openapi(routes.usersDelete, adapter.usersDelete).openapi(routes.usersResetPassword, adapter.usersResetPassword).openapi(routes.usersGeneratePassword, adapter.usersGeneratePassword);
+}

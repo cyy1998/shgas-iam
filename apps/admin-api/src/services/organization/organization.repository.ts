@@ -9,11 +9,50 @@ import type {
 import type { DbClient } from "@iam/db";
 import type { Organization } from "@iam/db/schema";
 import { getChildOrganizationLevel, OrganizationStatus } from "@iam/contracts";
-import db from "@iam/db";
 import { compactUpdate, firstRow, ilikeContainsIf } from "@iam/db/query-utils";
 import { employments, organizationClosures, organizations } from "@iam/db/schema";
 import { and, count, eq, exists, gt, inArray, or, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
+
+export function createOrganizationRepository(db: DbClient) {
+  return {
+    getOrganizationByCode(orgCode: string) {
+      return getOrganizationByCode(orgCode, db);
+    },
+    setOrganization(organizationCreateDto: OrganizationCreateDto, parentOrganization: Organization | null) {
+      return setOrganization(organizationCreateDto, parentOrganization, db);
+    },
+    listOrgChildrenByParentCode(parentOrgCode: string | null, pageNum: number, pageSize: number) {
+      return listOrgChildrenByParentCode(parentOrgCode, pageNum, pageSize, db);
+    },
+    getOrganizationByCodeForAdmin(orgCode: string) {
+      return getOrganizationByCodeForAdmin(orgCode, db);
+    },
+    searchOrganizationsForAdmin(query: OrganizationPaginationQueryDto) {
+      return searchOrganizationsForAdmin(query, db);
+    },
+    getOrganizationSelectorNodesForAdmin(query: OrganizationSelectorQueryDto) {
+      return getOrganizationSelectorNodesForAdmin(query, db);
+    },
+    isOrganizationDescendantOf(descendantOrgCode: string, ancestorOrgCode: string) {
+      return isOrganizationDescendantOf(descendantOrgCode, ancestorOrgCode, db);
+    },
+    updateOrganizationByCode(orgCode: string, data: OrganizationUpdateDto) {
+      return updateOrganizationByCode(orgCode, data, db);
+    },
+    softDeleteOrganizationByCode(orgCode: string) {
+      return softDeleteOrganizationByCode(orgCode, db);
+    },
+    countActiveChildrenByOrgCode(orgCode: string) {
+      return countActiveChildrenByOrgCode(orgCode, db);
+    },
+    countActiveEmploymentsByOrgCode(orgCode: string) {
+      return countActiveEmploymentsByOrgCode(orgCode, db);
+    },
+  };
+}
+
+export type OrganizationRepository = ReturnType<typeof createOrganizationRepository>;
 
 type OrganizationWithRelations = Organization & {
   parent: Organization | null;
@@ -57,7 +96,7 @@ async function attachOrganizationRelations(
   }));
 }
 
-export async function getOrganizationByCode(orgCode: string, tx: DbClient = db) {
+async function getOrganizationByCode(orgCode: string, tx: DbClient) {
   const rows = await tx.select().from(organizations).where(and(
     eq(organizations.orgCode, orgCode),
     eq(organizations.status, OrganizationStatus.Enable),
@@ -66,10 +105,10 @@ export async function getOrganizationByCode(orgCode: string, tx: DbClient = db) 
   return firstRow(await attachOrganizationRelations(rows, tx)) ?? null;
 }
 
-export async function setOrganization(
+async function setOrganization(
   organizationCreateDto: OrganizationCreateDto,
   parentOrganization: Organization | null,
-  tx: DbClient = db,
+  tx: DbClient,
 ) {
   const { parentCode, ...org } = organizationCreateDto;
   const newOrganization = firstRow(await tx.insert(organizations).values(org).returning())!;
@@ -114,11 +153,11 @@ export async function setOrganization(
   return firstRow(await attachOrganizationRelations([updatedOrganization], tx))!;
 }
 
-export async function listOrgChildrenByParentCode(
+async function listOrgChildrenByParentCode(
   parentOrgCode: string | null,
   pageNum: number,
   pageSize: number,
-  tx: DbClient = db,
+  tx: DbClient,
 ) {
   let parentId: number;
   if (parentOrgCode === null) {
@@ -168,7 +207,7 @@ export async function listOrgChildrenByParentCode(
   };
 }
 
-export async function getOrganizationByCodeForAdmin(orgCode: string, tx: DbClient = db) {
+async function getOrganizationByCodeForAdmin(orgCode: string, tx: DbClient) {
   const rows = await tx.select().from(organizations).where(and(
     eq(organizations.orgCode, orgCode),
     eq(organizations.isDelete, false),
@@ -176,9 +215,9 @@ export async function getOrganizationByCodeForAdmin(orgCode: string, tx: DbClien
   return firstRow(await attachOrganizationRelations(rows, tx, { activeChildrenOnly: true })) ?? null;
 }
 
-export async function searchOrganizationsForAdmin(
+async function searchOrganizationsForAdmin(
   query: OrganizationPaginationQueryDto,
-  tx: DbClient = db,
+  tx: DbClient,
 ) {
   const { fuzzyConditions, exactConditions } = query.conditions;
   const parent = alias(organizations, "admin_parent");
@@ -190,7 +229,7 @@ export async function searchOrganizationsForAdmin(
     exactConditions.status !== undefined ? eq(organizations.status, exactConditions.status) : undefined,
     exactConditions.parentOrgCode
       ? exists(
-          db.select({ value: sql`1` }).from(parent).where(and(
+          tx.select({ value: sql`1` }).from(parent).where(and(
             eq(parent.id, organizations.parentId),
             eq(parent.orgCode, exactConditions.parentOrgCode),
           )),
@@ -198,7 +237,7 @@ export async function searchOrganizationsForAdmin(
       : undefined,
     exactConditions.ancestorOrgCode
       ? exists(
-          db.select({ value: sql`1` })
+          tx.select({ value: sql`1` })
             .from(organizationClosures)
             .innerJoin(ancestor, eq(organizationClosures.ancestorId, ancestor.id))
             .where(and(
@@ -300,9 +339,9 @@ async function attachSelectorNodeContext(
   }));
 }
 
-export async function getOrganizationSelectorNodesForAdmin(
+async function getOrganizationSelectorNodesForAdmin(
   query: OrganizationSelectorQueryDto,
-  tx: DbClient = db,
+  tx: DbClient,
 ) {
   let parentId: number | undefined;
   if (query.parentOrgCode !== undefined && query.parentOrgCode !== null) {
@@ -340,10 +379,10 @@ export async function getOrganizationSelectorNodesForAdmin(
   return await attachSelectorNodeContext(rows, query, tx);
 }
 
-export async function isOrganizationDescendantOf(
+async function isOrganizationDescendantOf(
   descendantOrgCode: string,
   ancestorOrgCode: string,
-  tx: DbClient = db,
+  tx: DbClient,
 ) {
   const descendant = alias(organizations, "ancestor_check_descendant");
   const ancestor = alias(organizations, "ancestor_check_ancestor");
@@ -362,10 +401,10 @@ export async function isOrganizationDescendantOf(
   return rows.length > 0;
 }
 
-export async function updateOrganizationByCode(
+async function updateOrganizationByCode(
   orgCode: string,
   data: OrganizationUpdateDto,
-  tx: DbClient = db,
+  tx: DbClient,
 ) {
   return await tx
     .update(organizations)
@@ -373,14 +412,14 @@ export async function updateOrganizationByCode(
     .where(and(eq(organizations.orgCode, orgCode), eq(organizations.isDelete, false)));
 }
 
-export async function softDeleteOrganizationByCode(orgCode: string, tx: DbClient = db) {
+async function softDeleteOrganizationByCode(orgCode: string, tx: DbClient) {
   return await tx
     .update(organizations)
     .set({ isDelete: true })
     .where(and(eq(organizations.orgCode, orgCode), eq(organizations.isDelete, false)));
 }
 
-export async function countActiveChildrenByOrgCode(orgCode: string, tx: DbClient = db) {
+async function countActiveChildrenByOrgCode(orgCode: string, tx: DbClient) {
   const parent = alias(organizations, "child_count_parent");
   const rows = await tx
     .select({ value: count() })
@@ -394,7 +433,7 @@ export async function countActiveChildrenByOrgCode(orgCode: string, tx: DbClient
   return firstRow(rows)?.value ?? 0;
 }
 
-export async function countActiveEmploymentsByOrgCode(orgCode: string, tx: DbClient = db) {
+async function countActiveEmploymentsByOrgCode(orgCode: string, tx: DbClient) {
   const ancestor = alias(organizations, "employment_org_count_ancestor");
   const rows = await tx
     .select({ value: count() })
@@ -402,7 +441,7 @@ export async function countActiveEmploymentsByOrgCode(orgCode: string, tx: DbCli
     .where(and(
       eq(employments.isDelete, false),
       exists(
-        db.select({ value: sql`1` })
+        tx.select({ value: sql`1` })
           .from(organizationClosures)
           .innerJoin(ancestor, eq(organizationClosures.ancestorId, ancestor.id))
           .where(and(

@@ -1,7 +1,6 @@
 import type { DbClient } from "@iam/db";
 import type { Employment, Organization, User } from "@iam/db/schema";
 import { EmploymentStatus, OrganizationType } from "@iam/contracts";
-import db from "@iam/db";
 import { firstRow } from "@iam/db/query-utils";
 import {
   employments,
@@ -12,6 +11,22 @@ import {
 } from "@iam/db/schema";
 import { and, eq, inArray } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
+
+export function createEmploymentRepository(db: DbClient) {
+  return {
+    getEmploymentsByUserId(userId: number) {
+      return getEmploymentsByUserId(userId, db);
+    },
+    getEmploymentByUserOrgPosId(userId: number, orgId: number, posId: number) {
+      return getEmploymentByUserOrgPosId(userId, orgId, posId, db);
+    },
+    setEmployment(userId: number, posId: number, orgId: number) {
+      return setEmployment(userId, posId, orgId, db);
+    },
+  };
+}
+
+export type EmploymentRepository = ReturnType<typeof createEmploymentRepository>;
 
 type Position = typeof positions.$inferSelect;
 type EmploymentOrgNode = Pick<
@@ -111,7 +126,7 @@ async function attachEmploymentRelations(rows: Employment[], tx: DbClient): Prom
     );
 }
 
-export async function getEmploymentsByUserId(userId: number, tx: DbClient = db) {
+async function getEmploymentsByUserId(userId: number, tx: DbClient) {
   const rows = await tx.query.employments.findMany({
     where: {
       userId,
@@ -122,11 +137,11 @@ export async function getEmploymentsByUserId(userId: number, tx: DbClient = db) 
   return await attachEmploymentRelations(rows, tx);
 }
 
-export async function getEmploymentByUserOrgPosId(
+async function getEmploymentByUserOrgPosId(
   userId: number,
   orgId: number,
   posId: number,
-  tx: DbClient = db,
+  tx: DbClient,
 ) {
   const row = await tx.query.employments.findFirst({
     where: {
@@ -140,11 +155,11 @@ export async function getEmploymentByUserOrgPosId(
   return (await attachEmploymentRelations(row === undefined ? [] : [row], tx))[0] ?? null;
 }
 
-export async function setEmployment(
+async function setEmployment(
   userId: number,
   posId: number,
   orgId: number,
-  tx: DbClient = db,
+  tx: DbClient,
 ) {
   return firstRow(await tx.insert(employments).values({
     userId,

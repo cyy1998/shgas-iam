@@ -1,7 +1,9 @@
+import { createSessionService } from "@api/services/session/session.service";
 import { AuthzUnauthorizedError } from "@iam/api-core/errors/AuthzUnauthorizedError";
 import { InvalidAuthCodeError } from "@iam/api-core/errors/InvalidAuthCodeError";
 import { ClientManagementLevel, ClientStatus, UserStatus, UserType } from "@iam/contracts";
 import { beforeEach, describe, expect, mock, test } from "bun:test";
+import { createSsoService } from "../sso.service";
 
 type RedisResult = [Error | null, unknown];
 type RedisOperation = () => unknown;
@@ -167,13 +169,18 @@ class FakeRedis {
 }
 
 const fakeRedis = new FakeRedis();
-const auditLogs: unknown[][] = [];
+const auditLogs: unknown[] = [];
 const logoutNotifications: unknown[] = [];
 const logger = {
+  child: mock(() => logger),
+  debug: mock(() => undefined),
+  error: mock(() => undefined),
   info: mock(() => undefined),
   warn: mock(() => undefined),
 };
+
 let fetchShouldFail = false;
+let localSessionSequence = 0;
 
 const userDetail = {
   id: 1001,
@@ -181,7 +188,6 @@ const userDetail = {
   wxId: null,
   orcasId: null,
   name: "测试用户",
-  password: null,
   mobile: "17721462865",
   userType: UserType.Formal,
   orderNum: 1,
@@ -238,40 +244,61 @@ function getMockClientByCode(clientCode: string) {
   return clientCode === client.clientCode ? client : null;
 }
 
-mock.module("@api/env", () => ({
-  default: {
-    AUTH_CODE_EXPIRE_TIME: 60,
-    LOG_LEVEL: "silent",
-    NODE_ENV: "test",
-    REDIS_EXPIRE_TIME: 3600,
-  },
-}));
+function createServices() {
+  const clientService = {
+    getClientByCode: mock(async (clientCode: string) => getMockClientByCode(clientCode)),
+  };
+  const auditLogWriter = {
+    recordAuditLog: mock(async (event: unknown) => {
+      auditLogs.push(event);
+    }),
+    recordAuditLogFromContext: mock(async () => undefined),
+  };
+  const sessionService = createSessionService({
+    redis: fakeRedis as any,
+    logger,
+    random: {
+      uuid: mock(() => `local-session-${++localSessionSequence}`),
+    },
+    clientService,
+    auditLogWriter,
+    tokenRevoker: {
+      revokeOidcAccessTokensForGlobalSession: mock(async () => undefined),
+    },
+    config: {
+      redisExpireSeconds: 3600,
+    },
+  } as any);
+  const ssoService = createSsoService({
+    redis: fakeRedis as any,
+    logger,
+    random: {
+      uuid: mock(() => "auth-code"),
+    },
+    clock: {
+      now: mock(() => 1_700_000_000_000),
+    },
+    orcasClient: {
+      orcasLogin: mock(async () => ({ orcasId: "orcas", orcasSessionId: "orcas-session" })),
+    },
+    wechatClient: {
+      getWxUserId: mock(async () => "wx-id"),
+    },
+    clientService,
+    sessionService,
+    userService: {
+      getUserDetailByUsername: mock(async () => userDetail),
+      getUserDetailByWxId: mock(async () => userDetail),
+    },
+    auditLogWriter,
+    config: {
+      authCodeExpireSeconds: 60,
+      nodeEnv: "test",
+    },
+  } as any);
 
-mock.module("@api/lib/infra/redis", () => ({ default: fakeRedis }));
-mock.module("@api/lib/logger", () => ({ logger }));
-mock.module("@api/services/audit/events/auth.audit", () => ({
-  async recordLocalLoginSuccess(...args: unknown[]) {
-    auditLogs.push(args);
-  },
-}));
-mock.module("@api/services/client/client.service", () => ({
-  async getClientByCode(clientCode: string) {
-    return getMockClientByCode(clientCode);
-  },
-}));
-mock.module("@api/lib/integrations/orcas", () => ({ default: { orcasLogin: mock(async () => ({ orcasId: "orcas", orcasSessionId: "orcas-session" })) } }));
-mock.module("@api/lib/integrations/wechat", () => ({ default: { getWxUserId: mock(async () => "wx-id") } }));
-mock.module("@api/services/user/user.service", () => ({
-  async getUserDetailByUsername() {
-    return userDetail;
-  },
-  async getUserDetailByWxId() {
-    return userDetail;
-  },
-}));
-
-const ssoService = await import("../sso.service");
-const sessionService = await import("@api/services/session/session.service");
+  return { sessionService, ssoService };
+}
 
 async function createGlobalSession(globalSessionId = "global-session") {
   await fakeRedis.set(`global_session:${globalSessionId}`, JSON.stringify({
@@ -295,6 +322,7 @@ beforeEach(() => {
   logoutNotifications.length = 0;
   logger.warn.mockClear();
   fetchShouldFail = false;
+  localSessionSequence = 0;
   globalThis.fetch = mock(async (_input: string | URL | Request, init?: RequestInit) => {
     logoutNotifications.push(init?.body);
     if (fetchShouldFail) {
@@ -304,8 +332,9 @@ beforeEach(() => {
   }) as unknown as typeof fetch;
 });
 
-describe("SSO redirect pattern validation", () => {
+describe("createSsoService redirect pattern validation", () => {
   test("callback accepts redirect URLs matching a valid wildcard pattern", async () => {
+    const { ssoService } = createServices();
     const globalSessionId = await createGlobalSession();
     await createAuthCode("code-pattern", globalSessionId);
 
@@ -317,6 +346,7 @@ describe("SSO redirect pattern validation", () => {
   });
 
   test("authorize skips invalid historical patterns and accepts a later valid match", async () => {
+    const { ssoService } = createServices();
     const globalSessionId = await createGlobalSession();
 
     await expect(ssoService.authorize(
@@ -332,6 +362,8 @@ describe("SSO redirect pattern validation", () => {
   });
 
   test("authorize rejects when no valid pattern matches", async () => {
+    const { ssoService } = createServices();
+
     await expect(ssoService.authorize(
       "global-session",
       "pattern-no-match",
@@ -340,6 +372,8 @@ describe("SSO redirect pattern validation", () => {
   });
 
   test("path patterns respect segment boundaries", async () => {
+    const { ssoService } = createServices();
+
     await expect(ssoService.authorize(
       "global-session",
       "pattern-path-boundary",
@@ -348,6 +382,8 @@ describe("SSO redirect pattern validation", () => {
   });
 
   test("host wildcard patterns do not match the root domain", async () => {
+    const { ssoService } = createServices();
+
     await expect(ssoService.authorize(
       "global-session",
       "pattern-root-domain",
@@ -358,6 +394,7 @@ describe("SSO redirect pattern validation", () => {
 
 describe("SSO Redis session consistency", () => {
   test("consumes an auth code once for Independent token exchange", async () => {
+    const { ssoService } = createServices();
     const globalSessionId = await createGlobalSession();
     await createAuthCode("code-1", globalSessionId);
 
@@ -371,20 +408,17 @@ describe("SSO Redis session consistency", () => {
     expect(fakeRedis.zsetSize(`local_session_set:${globalSessionId}`)).toBe(1);
     await expect(
       ssoService.setToken("code-1", client.clientCode, client.clientSecret),
-    )
-      .rejects
-      .toBeInstanceOf(InvalidAuthCodeError);
+    ).rejects.toBeInstanceOf(InvalidAuthCodeError);
     expect(fakeRedis.localSessionKeys()).toHaveLength(1);
   });
 
   test("rejects token exchange when the referenced global session is expired", async () => {
+    const { ssoService } = createServices();
     await createAuthCode("code-2", "missing-global-session");
 
     await expect(
       ssoService.setToken("code-2", client.clientCode, client.clientSecret),
-    )
-      .rejects
-      .toBeInstanceOf(AuthzUnauthorizedError);
+    ).rejects.toBeInstanceOf(AuthzUnauthorizedError);
 
     expect(fakeRedis.localSessionKeys()).toHaveLength(0);
     expect(fakeRedis.reverseKeys()).toHaveLength(0);
@@ -392,6 +426,7 @@ describe("SSO Redis session consistency", () => {
   });
 
   test("does not leave a usable local session when Redis transaction fails", async () => {
+    const { sessionService } = createServices();
     const globalSessionId = await createGlobalSession();
     fakeRedis.failNextExec = true;
 
@@ -409,6 +444,7 @@ describe("SSO Redis session consistency", () => {
   });
 
   test("cleans IAM Redis sessions even when Independent logout notification fails", async () => {
+    const { sessionService, ssoService } = createServices();
     const globalSessionId = await createGlobalSession();
     await sessionService.setLocalSession(
       globalSessionId,

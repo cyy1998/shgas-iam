@@ -1,6 +1,4 @@
-import type { DbClient } from "@iam/db";
 import type { AdminAuditContext, AuditLogInput } from "./audit.service";
-import * as auditService from "./audit.service";
 
 type AdminAuditTarget = {
   type: string;
@@ -16,14 +14,13 @@ function resolveAuditContext(auditContext?: AdminAuditContext): AdminAuditContex
   };
 }
 
-export async function recordAdminResourceAudit(
+export function buildAdminResourceAudit(
   action: string,
   target: AdminAuditTarget,
   details: AuditLogInput["details"],
-  tx?: DbClient,
   auditContext?: AdminAuditContext,
-) {
-  await auditService.recordAuditLog({
+): AuditLogInput {
+  return {
     ...resolveAuditContext(auditContext),
     action,
     outcome: "success",
@@ -32,5 +29,5 @@ export async function recordAdminResourceAudit(
     targetCode: target.code ?? null,
     targetName: target.name ?? null,
     details,
-  }, tx);
+  };
 }

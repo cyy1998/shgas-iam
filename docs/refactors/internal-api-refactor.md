@@ -183,5 +183,5 @@ Request body（不变）：`PrivilegeDelegationCreateDto`
 |------|----------|
 | `privilegeDelegation.schema.ts` | `PrivilegeDelegationUpdateDtoSchema` |
 | `privilegeDelegation.type.ts` | `PrivilegeDelegationUpdateDto` 接口 |
-| `privilegeDelegation.repository.ts` | `updateDelegation(id, data, tx?)` |
+| `privilegeDelegation.repository.ts` | `createPrivilegeDelegationRepository(db).updateDelegation(id, data)` |
 | `privilegeDelegation.service.ts` | `updateDelegation(id, dto)` |

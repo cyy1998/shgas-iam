@@ -1,48 +1,72 @@
-import { beforeEach, describe, expect, mock, test } from "bun:test";
+import { createImmediateUnitOfWork } from "@admin-api/test/fakes";
+import { PositionStatus } from "@iam/contracts";
+import { describe, expect, mock, test } from "bun:test";
+import { createPositionService } from "../position.service";
 
-const transaction = mock(async (callback: (tx: unknown) => Promise<unknown>) => callback({}));
+function position(overrides: Record<string, unknown> = {}) {
+  return {
+    id: 1,
+    posCode: "DEV",
+    posName: "Developer",
+    status: PositionStatus.Enable,
+    description: null,
+    isDelete: false,
+    createTime: new Date("2026-01-01T00:00:00Z"),
+    updateTime: new Date("2026-01-01T00:00:00Z"),
+    ...overrides,
+  };
+}
 
-mock.module("@iam/db", () => ({
-  default: {
-    transaction,
-  },
-}));
+function createService(overrides: Record<string, unknown> = {}) {
+  const tx = {
+    auditService: { recordAuditLog: mock(async () => undefined) },
+    positionRepository: {
+      countActiveEmploymentsByPosCode: mock(async () => 0),
+      getAnyPositionByCode: mock(async () => null),
+      getPositionByCode: mock(async () => position()),
+      setPosition: mock(async () => position()),
+      softDeletePositionByCode: mock(async () => position({ isDelete: true })),
+      updatePositionByCode: mock(async () => position()),
+    },
+  };
+  const deps = {
+    positionRepository: {
+      getPositionByCode: mock(async () => position()),
+    },
+    uow: createImmediateUnitOfWork(tx),
+    ...overrides,
+  } as any;
+  return { service: createPositionService(deps), tx, deps };
+}
 
-const positionRepository = {
-  getAnyPositionByCode: mock(),
-  getPositionByCode: mock(),
-  updatePositionByCode: mock(),
-};
+describe("createPositionService", () => {
+  test("updates a position inside a unit of work and records audit", async () => {
+    const { service, tx } = createService();
 
-const auditService = {
-  recordAuditLog: mock(),
-  resolveAdminAuditContext: mock((context?: unknown) => context ?? { actorType: "system", actorSystemKey: "admin-api" }),
-};
+    await expect(service.updatePosition("DEV", { posName: "Senior Developer" })).resolves.toBe(true);
 
-mock.module("@admin-api/services/audit/audit.service", () => auditService);
-mock.module("../position.repository", () => positionRepository);
-
-const positionService = await import("../position.service");
-
-describe("positionService.updatePosition", () => {
-  beforeEach(() => {
-    transaction.mockClear();
-    positionRepository.getAnyPositionByCode.mockReset();
-    positionRepository.getPositionByCode.mockReset();
-    positionRepository.updatePositionByCode.mockReset();
-    auditService.recordAuditLog.mockReset();
-    auditService.resolveAdminAuditContext.mockClear();
+    expect(tx.positionRepository.updatePositionByCode).toHaveBeenCalledWith("DEV", { posName: "Senior Developer" });
+    expect(tx.auditService.recordAuditLog).toHaveBeenCalledWith(expect.objectContaining({
+      action: "admin.position.update",
+      targetCode: "DEV",
+    }));
   });
 
-  test("rejects renaming a position code to one that already exists", async () => {
-    positionRepository.getPositionByCode.mockResolvedValue({ posCode: "OLD" });
-    positionRepository.getAnyPositionByCode.mockResolvedValue({ posCode: "NEW" });
+  test("rejects renaming to an existing position code", async () => {
+    const { service, tx } = createService();
+    (tx.positionRepository.getAnyPositionByCode as any).mockResolvedValue(position({ id: 2, posCode: "OPS" }));
 
-    await expect(positionService.updatePosition("OLD", { posCode: "NEW" })).rejects.toThrow(
-      "重命名岗位编码失败",
-    );
+    await expect(service.updatePosition("DEV", { posCode: "OPS" })).rejects.toThrow("岗位编码已存在");
 
-    expect(positionRepository.getAnyPositionByCode).toHaveBeenCalledWith("NEW", {});
-    expect(positionRepository.updatePositionByCode).not.toHaveBeenCalled();
+    expect(tx.positionRepository.updatePositionByCode).not.toHaveBeenCalled();
+  });
+
+  test("rejects deleting a position with active employments", async () => {
+    const { service, tx } = createService();
+    tx.positionRepository.countActiveEmploymentsByPosCode.mockResolvedValue(1);
+
+    await expect(service.deletePosition("DEV")).rejects.toThrow();
+
+    expect(tx.positionRepository.softDeletePositionByCode).not.toHaveBeenCalled();
   });
 });

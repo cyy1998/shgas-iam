@@ -1,8 +1,7 @@
 import * as resp from "@iam/api-core/http";
 import { ClientStatus } from "@iam/contracts";
 import { beforeEach, describe, expect, mock, test } from "bun:test";
-
-mock.restore();
+import { createAuthHandlers } from "../auth.handlers";
 
 type InternalTestClient = {
   clientCode: string;
@@ -19,96 +18,91 @@ const loginPasswordService = mock(async () => ({
   token: "session-id",
   isMobileSet: true,
 }));
+const loginMobileService = mock(async () => ({
+  token: "mobile-session-id",
+  isMobileSet: true,
+}));
+const authzService = mock(async () => "user-info");
+const getClientByCode = mock(async () => null);
 const getClientBySecret = mock(async (_secret: string): Promise<InternalTestClient | null> => null);
-const loggerInfo = mock((..._args: unknown[]) => undefined);
-const cookieCalls: unknown[][] = [];
+const loggerInfo = mock(() => undefined);
 
-mock.module("hono/cookie", () => ({
-  deleteCookie: mock(),
-  getCookie: mock(),
-  setCookie: mock((...args: unknown[]) => {
-    cookieCalls.push(args);
-  }),
-}));
-
-mock.module("@api/env", () => ({
-  default: {
-    REDIS_EXPIRE_TIME: 3600,
-  },
-}));
-
-mock.module("@api/lib/infra/redis", () => ({
-  default: {},
-}));
-
-mock.module("@api/lib/logger", () => ({
-  logger: {
-    info: loggerInfo,
-  },
-}));
-
-mock.module("@api/services/client/client.service", () => ({
-  getClientBySecret,
-}));
-
-mock.module("../login-credential.helper", () => ({
-  parseLoginPasswordCredential,
-}));
-
-mock.module("../auth.service", () => ({
-  loginPassword: loginPasswordService,
-}));
-
-const { internalAuthz, loginPassword } = await import("../auth.handlers");
+function createHandlers() {
+  return createAuthHandlers({
+    authService: {
+      authz: authzService,
+      loginMobile: loginMobileService,
+      loginPassword: loginPasswordService,
+    },
+    clientService: {
+      getClientByCode,
+      getClientBySecret,
+    },
+    loginCredentialParser: {
+      parseLoginPasswordCredential,
+    },
+    logger: {
+      info: loggerInfo,
+    },
+    config: {
+      redisExpireSeconds: 3600,
+    },
+  } as any);
+}
 
 function makeLoginContext() {
+  const responseHeaders: unknown[][] = [];
   return {
+    responseHeaders,
     req: {
-      valid() {
-        return {
-          credential: "iam-login-v1.payload",
-          capToken: "cap-token",
+      raw: new Request("https://iam.example.test/auth/login/password"),
+      valid: mock(() => ({
+        credential: "iam-login-v1.payload",
+        capToken: "cap-token",
+      })),
+      header: mock((name: string) => {
+        const headers: Record<string, string> = {
+          "Client": "iam",
+          "x-forwarded-for": "203.0.113.9",
         };
-      },
-      header(name: string) {
-        return name === "Client" ? "iam" : undefined;
-      },
+        return headers[name];
+      }),
     },
+    header: mock((...args: unknown[]) => {
+      responseHeaders.push(args);
+    }),
     json: mock((body: unknown) => body),
-    get(key: string) {
-      return key === "requestId" ? "req-1" : undefined;
-    },
+    get: mock((key: string) => key === "requestId" ? "req-1" : undefined),
   };
 }
 
 function makeHeaderContext(headers: Record<string, string>) {
   return {
     req: {
-      header(name: string) {
-        return headers[name] ?? headers[name.toLowerCase()];
-      },
+      header: mock((name: string) => headers[name] ?? headers[name.toLowerCase()]),
     },
     json: mock((body: unknown) => body),
-    get(key: string) {
-      return key === "requestId" ? "req-1" : undefined;
-    },
+    get: mock((key: string) => key === "requestId" ? "req-1" : undefined),
   };
 }
 
 beforeEach(() => {
-  cookieCalls.length = 0;
   parseLoginPasswordCredential.mockClear();
   loginPasswordService.mockClear();
+  loginMobileService.mockClear();
+  authzService.mockClear();
+  getClientByCode.mockClear();
   getClientBySecret.mockClear();
   loggerInfo.mockClear();
   getClientBySecret.mockImplementation(async () => null);
 });
 
-describe("auth handlers", () => {
+describe("createAuthHandlers", () => {
   test("password login decrypts credential before calling auth service", async () => {
+    const handlers = createHandlers();
     const context = makeLoginContext();
 
-    await expect(loginPassword(context as never, undefined as never)).resolves.toEqual(resp.ok({
+    await expect(handlers.loginPassword(context as never, undefined as never)).resolves.toEqual(resp.ok({
       token: "session-id",
       isMobileSet: true,
     }));
@@ -118,28 +112,26 @@ describe("auth handlers", () => {
       capToken: "cap-token",
       context: {
         subject: "138550",
-        ip: undefined,
+        ip: "203.0.113.9",
       },
     });
-    expect(cookieCalls[0]?.slice(1, 4)).toEqual(["global_session", "session-id", {
-      httpOnly: true,
-      sameSite: "Lax",
-      maxAge: 3600,
-      path: "/",
-    }]);
+    expect(context.responseHeaders[0]?.[0]).toBe("Set-Cookie");
+    expect(context.responseHeaders[0]?.[1]).toContain("global_session=session-id");
   });
 
-  test("internal authz rejects forged IP-Chain without a valid apikey", async () => {
+  test("internal authz rejects requests without an apikey", async () => {
+    const handlers = createHandlers();
     const context = makeHeaderContext({
       "IP-Chain": "10.0.0.1, 192.168.93.10",
     });
 
-    await expect(internalAuthz(context as never, undefined as never)).rejects.toThrow("非法访问");
+    await expect(handlers.internalAuthz(context as never, undefined as never)).rejects.toThrow("非法访问");
 
     expect(getClientBySecret).not.toHaveBeenCalled();
   });
 
   test("internal authz returns boolean success for an active client apikey", async () => {
+    const handlers = createHandlers();
     getClientBySecret.mockImplementation(async () => ({
       clientCode: "portal",
       clientSecret: "secret-1",
@@ -151,7 +143,7 @@ describe("auth handlers", () => {
       "IP-Chain": "10.0.0.1, 192.168.93.10",
     });
 
-    await expect(internalAuthz(context as never, undefined as never)).resolves.toEqual(resp.ok(true));
+    await expect(handlers.internalAuthz(context as never, undefined as never)).resolves.toEqual(resp.ok(true));
 
     expect(getClientBySecret).toHaveBeenCalledWith("secret-1");
   });

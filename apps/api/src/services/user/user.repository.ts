@@ -1,7 +1,6 @@
 import type { UserCreateDto, UserQueryDto } from "@api/services/user/user.type";
 import type { DbClient } from "@iam/db";
 import { EmploymentStatus, PositionStatus, RoleStatus, UserStatus } from "@iam/contracts";
-import db from "@iam/db";
 import { firstRow, inArrayIf } from "@iam/db/query-utils";
 import {
   employmentRoles,
@@ -17,7 +16,41 @@ import {
 import { and, eq, exists, gt, or, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 
-export async function getUserById(userId: number, tx: DbClient = db) {
+export function createUserRepository(db: DbClient) {
+  return {
+    getUserById(userId: number) {
+      return getUserById(userId, db);
+    },
+    getUserByUsername(username: string) {
+      return getUserByUsername(username, db);
+    },
+    getUserByWxId(wxId: string) {
+      return getUserByWxId(wxId, db);
+    },
+    getUserByMobile(mobile: string) {
+      return getUserByMobile(mobile, db);
+    },
+    searchUsers(query: UserQueryDto) {
+      return searchUsers(query, db);
+    },
+    setPassword(userId: number, password: string) {
+      return setPassword(userId, password, db);
+    },
+    setMobile(userId: number, phoneNumber: string) {
+      return setMobile(userId, phoneNumber, db);
+    },
+    updateEnabledUserStatus(userId: number, status: UserStatus) {
+      return updateEnabledUserStatus(userId, status, db);
+    },
+    setUser(userCreateDto: UserCreateDto) {
+      return setUser(userCreateDto, db);
+    },
+  };
+}
+
+export type UserRepository = ReturnType<typeof createUserRepository>;
+
+async function getUserById(userId: number, tx: DbClient) {
   return await tx.query.users.findFirst({
     where: {
       id: userId,
@@ -27,7 +60,7 @@ export async function getUserById(userId: number, tx: DbClient = db) {
   }) ?? null;
 }
 
-export async function getUserByUsername(username: string, tx: DbClient = db) {
+async function getUserByUsername(username: string, tx: DbClient) {
   return await tx.query.users.findFirst({
     where: {
       username,
@@ -37,7 +70,7 @@ export async function getUserByUsername(username: string, tx: DbClient = db) {
   }) ?? null;
 }
 
-export async function getUserByWxId(wxId: string, tx: DbClient = db) {
+async function getUserByWxId(wxId: string, tx: DbClient) {
   return await tx.query.users.findFirst({
     where: {
       wxId,
@@ -47,7 +80,7 @@ export async function getUserByWxId(wxId: string, tx: DbClient = db) {
   }) ?? null;
 }
 
-export async function getUserByMobile(mobile: string, tx: DbClient = db) {
+async function getUserByMobile(mobile: string, tx: DbClient) {
   return await tx.query.users.findFirst({
     where: {
       mobile,
@@ -65,11 +98,11 @@ function activeRoleCondition(roleCodes: string[] | undefined) {
   );
 }
 
-function employmentHasRoleCondition(employmentTable: any, roleCodes: string[] | undefined) {
+function employmentHasRoleCondition(employmentTable: any, roleCodes: string[] | undefined, tx: DbClient) {
   const closure = alias(organizationClosures, "user_role_org_closure");
   return or(
     exists(
-      db.select({ value: sql`1` })
+      tx.select({ value: sql`1` })
         .from(positionRoles)
         .innerJoin(roles, eq(positionRoles.roleId, roles.id))
         .where(and(
@@ -78,7 +111,7 @@ function employmentHasRoleCondition(employmentTable: any, roleCodes: string[] | 
         )),
     ),
     exists(
-      db.select({ value: sql`1` })
+      tx.select({ value: sql`1` })
         .from(employmentRoles)
         .innerJoin(roles, eq(employmentRoles.roleId, roles.id))
         .where(and(
@@ -87,7 +120,7 @@ function employmentHasRoleCondition(employmentTable: any, roleCodes: string[] | 
         )),
     ),
     exists(
-      db.select({ value: sql`1` })
+      tx.select({ value: sql`1` })
         .from(closure)
         .innerJoin(organizationRoles, eq(organizationRoles.organizationId, closure.ancestorId))
         .innerJoin(roles, eq(organizationRoles.roleId, roles.id))
@@ -102,18 +135,18 @@ function employmentHasRoleCondition(employmentTable: any, roleCodes: string[] | 
   );
 }
 
-function userSearchEmploymentExists(query: UserQueryDto) {
+function userSearchEmploymentExists(query: UserQueryDto, tx: DbClient) {
   const employment = alias(employments, "user_search_employment");
   const ancestor = alias(organizations, "user_search_ancestor");
   return exists(
-    db.select({ value: sql`1` })
+    tx.select({ value: sql`1` })
       .from(employment)
       .where(and(
         eq(employment.userId, users.id),
         eq(employment.status, EmploymentStatus.Enable),
         eq(employment.isDelete, false),
         exists(
-          db.select({ value: sql`1` })
+          tx.select({ value: sql`1` })
             .from(organizationClosures)
             .innerJoin(ancestor, eq(organizationClosures.ancestorId, ancestor.id))
             .where(and(
@@ -123,7 +156,7 @@ function userSearchEmploymentExists(query: UserQueryDto) {
             )),
         ),
         exists(
-          db.select({ value: sql`1` })
+          tx.select({ value: sql`1` })
             .from(positions)
             .where(and(
               eq(positions.id, employment.posId),
@@ -132,26 +165,26 @@ function userSearchEmploymentExists(query: UserQueryDto) {
               inArrayIf(positions.posCode, query.positionCodes),
             )),
         ),
-        employmentHasRoleCondition(employment, query.roleCodes),
+        employmentHasRoleCondition(employment, query.roleCodes, tx),
       )),
   );
 }
 
-export async function searchUsers(
+async function searchUsers(
   query: UserQueryDto,
-  tx: DbClient = db,
+  tx: DbClient,
 ) {
   return await tx.select().from(users).where(and(
     inArrayIf(users.username, query.usernames),
     inArrayIf(users.mobile, query.phones),
     inArrayIf(users.wxId, query.wxIds),
-    userSearchEmploymentExists(query),
+    userSearchEmploymentExists(query, tx),
     eq(users.status, UserStatus.Enable),
     eq(users.isDelete, false),
   ));
 }
 
-export async function setPassword(userId: number, password: string, tx: DbClient = db) {
+async function setPassword(userId: number, password: string, tx: DbClient) {
   return firstRow(await tx
     .update(users)
     .set({ password })
@@ -159,7 +192,7 @@ export async function setPassword(userId: number, password: string, tx: DbClient
     .returning())!;
 }
 
-export async function setMobile(userId: number, phoneNumber: string, tx: DbClient = db) {
+async function setMobile(userId: number, phoneNumber: string, tx: DbClient) {
   return firstRow(await tx
     .update(users)
     .set({ mobile: phoneNumber })
@@ -167,7 +200,7 @@ export async function setMobile(userId: number, phoneNumber: string, tx: DbClien
     .returning())!;
 }
 
-export async function updateEnabledUserStatus(userId: number, status: UserStatus, tx: DbClient = db) {
+async function updateEnabledUserStatus(userId: number, status: UserStatus, tx: DbClient) {
   return firstRow(await tx
     .update(users)
     .set({ status })
@@ -175,6 +208,6 @@ export async function updateEnabledUserStatus(userId: number, status: UserStatus
     .returning()) ?? null;
 }
 
-export async function setUser(userCreateDto: UserCreateDto, tx: DbClient = db) {
+async function setUser(userCreateDto: UserCreateDto, tx: DbClient) {
   return firstRow(await tx.insert(users).values(userCreateDto).returning())!;
 }

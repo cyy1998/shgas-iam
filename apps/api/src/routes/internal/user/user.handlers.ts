@@ -1,86 +1,119 @@
+import type { AuditLogWriterPort } from "@api/services/audit/audit.service";
+import type { EmploymentRepository } from "@api/services/employment/employment.repository";
+import type { MobileService } from "@api/services/mobile/mobile.service";
+import type { OrganizationRepository } from "@api/services/organization/organization.repository";
+import type { PositionRepository } from "@api/services/position/position.repository";
+import type { UserRepository } from "@api/services/user/user.repository";
+import type { UserService } from "@api/services/user/user.service";
 import type { UserRouteHandler } from "./user.type";
-import config from "@api/env";
-import * as internalAudit from "@api/services/audit/events/internal.audit";
-import * as employmentRepository from "@api/services/employment/employment.repository";
-import * as mobileService from "@api/services/mobile/mobile.service";
-import * as organizationRepository from "@api/services/organization/organization.repository";
-import * as positionRepository from "@api/services/position/position.repository";
-import * as userRepository from "@api/services/user/user.repository";
-import * as userService from "@api/services/user/user.service";
+import { getInternalAuditActor } from "@api/services/audit/audit.service";
+import { buildInternalPurveyorContactRegisterAudit } from "@api/services/audit/events/internal.audit";
 import { CustomError } from "@iam/api-core/errors/CustomError";
 import * as resp from "@iam/api-core/http";
 import { UserType } from "@iam/contracts";
-import db from "@iam/db";
 
-export const userInfo: UserRouteHandler<"userInfo"> = async (c) => {
-  const { username } = c.req.valid("param");
-  const data = await userService.getUserDetailByUsername(username);
-  return c.json(resp.ok(data));
-};
+export interface ContactRegistrationTransactionPorts {
+  employmentRepository: Pick<EmploymentRepository, "getEmploymentByUserOrgPosId" | "setEmployment">;
+  organizationRepository: Pick<OrganizationRepository, "getOrganizationByCode">;
+  positionRepository: Pick<PositionRepository, "getPositionByCode">;
+  userRepository: Pick<UserRepository, "getUserByMobile" | "setUser">;
+}
 
-export const usersSearch: UserRouteHandler<"usersSearch"> = async (c) => {
-  const userQueryDto = c.req.valid("json");
-  const data = await userService.searchUsers(userQueryDto);
-  return c.json(resp.ok(data));
-};
+export interface ContactRegistrationUnitOfWorkPort {
+  transaction: <T>(callback: (tx: ContactRegistrationTransactionPorts) => Promise<T>) => Promise<T>;
+}
 
-export const usersSearchWithPrivilegeDelegation: UserRouteHandler<"usersSearchWithPrivilegeDelegation"> = async (c) => {
-  const userQueryDto = c.req.valid("json");
-  const data = await userService.searchUsersWithPrivilegeDelegation(userQueryDto);
-  return c.json(resp.ok(data));
-};
+export interface CreateUserHandlersDeps {
+  auditLogWriter: AuditLogWriterPort;
+  config: {
+    nodeEnv: string;
+  };
+  mobileService: Pick<MobileService, "getPurveyorWelcomeMessage" | "sendMessage">;
+  userService: Pick<
+    UserService,
+    "getUserDetailByUsername" | "searchUsers" | "searchUsersWithPrivilegeDelegation"
+  >;
+  uow: ContactRegistrationUnitOfWorkPort;
+}
 
-export const contactRegister: UserRouteHandler<"contactRegister"> = async (c) => {
-  const { username, mobile, name, orgCode } = c.req.valid("json");
-  let targetUserId: number | null = null;
-  let existingContact = false;
-  await db.transaction(async (tx) => {
-    const existingUser = await userRepository.getUserByMobile(mobile, tx);
-    const [pos, org] = await Promise.all([
-      positionRepository.getPositionByCode("P001", tx),
-      organizationRepository.getOrganizationByCode(orgCode, tx),
-    ]);
-    if (org === null) {
-      throw new CustomError("供应商尚未注册");
-    }
-    if (pos === null) {
-      throw new CustomError("系统基本信息缺失");
-    }
-    if (existingUser !== null) {
-      targetUserId = existingUser.id;
-      existingContact = true;
-      const existingEmployment = await employmentRepository.getEmploymentByUserOrgPosId(
-        existingUser.id,
-        org.id,
-        pos.id,
-        tx,
-      );
-      if (existingEmployment === null) {
-        await employmentRepository.setEmployment(existingUser.id, pos.id, org.id, tx);
+export function createUserHandlers(deps: CreateUserHandlersDeps) {
+  const userInfo: UserRouteHandler<"userInfo"> = async (c) => {
+    const { username } = c.req.valid("param");
+    const data = await deps.userService.getUserDetailByUsername(username);
+    return c.json(resp.ok(data));
+  };
+
+  const usersSearch: UserRouteHandler<"usersSearch"> = async (c) => {
+    const userQueryDto = c.req.valid("json");
+    const data = await deps.userService.searchUsers(userQueryDto);
+    return c.json(resp.ok(data));
+  };
+
+  const usersSearchWithPrivilegeDelegation: UserRouteHandler<"usersSearchWithPrivilegeDelegation"> = async (c) => {
+    const userQueryDto = c.req.valid("json");
+    const data = await deps.userService.searchUsersWithPrivilegeDelegation(userQueryDto);
+    return c.json(resp.ok(data));
+  };
+
+  const contactRegister: UserRouteHandler<"contactRegister"> = async (c) => {
+    const { username, mobile, name, orgCode } = c.req.valid("json");
+    const registration = await deps.uow.transaction(async (tx) => {
+      const existingUser = await tx.userRepository.getUserByMobile(mobile);
+      const [pos, org] = await Promise.all([
+        tx.positionRepository.getPositionByCode("P001"),
+        tx.organizationRepository.getOrganizationByCode(orgCode),
+      ]);
+      if (org === null) {
+        throw new CustomError("供应商尚未注册");
       }
-    }
-    else {
-      const user = await userRepository.setUser({
+      if (pos === null) {
+        throw new CustomError("系统基本信息缺失");
+      }
+      if (existingUser !== null) {
+        const existingEmployment = await tx.employmentRepository.getEmploymentByUserOrgPosId(
+          existingUser.id,
+          org.id,
+          pos.id,
+        );
+        if (existingEmployment === null) {
+          await tx.employmentRepository.setEmployment(existingUser.id, pos.id, org.id);
+        }
+        return { targetUserId: existingUser.id, existingContact: true };
+      }
+
+      const user = await tx.userRepository.setUser({
         username,
         name,
         mobile,
         userType: UserType.External,
         password: null,
-      }, tx);
-      targetUserId = user.id;
-      await employmentRepository.setEmployment(user.id, pos.id, org.id, tx);
+      });
+      await tx.employmentRepository.setEmployment(user.id, pos.id, org.id);
+      return { targetUserId: user.id, existingContact: false };
+    });
+    await deps.auditLogWriter.recordAuditLogFromContext(
+      c,
+      buildInternalPurveyorContactRegisterAudit(getInternalAuditActor(c), {
+        targetUserId: registration.targetUserId,
+        username,
+        name,
+        mobile,
+        orgCode,
+        existingContact: registration.existingContact,
+      }),
+    );
+    if (deps.config.nodeEnv === "production") {
+      await deps.mobileService.sendMessage(mobile, deps.mobileService.getPurveyorWelcomeMessage(name));
     }
-  });
-  await internalAudit.recordInternalPurveyorContactRegister(c, {
-    targetUserId,
-    username,
-    name,
-    mobile,
-    orgCode,
-    existingContact,
-  });
-  if (config.NODE_ENV === "production") {
-    await mobileService.sendMessage(mobile, mobileService.getPurveyorWelcomeMessage(name));
-  }
-  return c.json(resp.ok(true));
-};
+    return c.json(resp.ok(true));
+  };
+
+  return {
+    contactRegister,
+    userInfo,
+    usersSearch,
+    usersSearchWithPrivilegeDelegation,
+  };
+}
+
+export type UserHandlers = ReturnType<typeof createUserHandlers>;

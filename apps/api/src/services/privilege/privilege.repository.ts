@@ -1,7 +1,6 @@
 import type { Prettify } from "@api/utils/lint.util";
 import type { DbClient } from "@iam/db";
 import type { PrivilegeQueryDto } from "./privilege.type";
-import db from "@iam/db";
 import { inArrayIf } from "@iam/db/query-utils";
 import {
   privileges,
@@ -10,7 +9,20 @@ import {
 } from "@iam/db/schema";
 import { and, eq, exists, inArray, sql } from "drizzle-orm";
 
-export async function getPrivilegesByRoleIds(roleIds: number[], tx: DbClient = db) {
+export function createPrivilegeRepository(db: DbClient) {
+  return {
+    getPrivilegesByRoleIds(roleIds: number[]) {
+      return getPrivilegesByRoleIds(roleIds, db);
+    },
+    searchPrivileges(query: Prettify<PrivilegeQueryDto>) {
+      return searchPrivileges(query, db);
+    },
+  };
+}
+
+export type PrivilegeRepository = ReturnType<typeof createPrivilegeRepository>;
+
+async function getPrivilegesByRoleIds(roleIds: number[], tx: DbClient) {
   if (roleIds.length === 0) {
     return [];
   }
@@ -22,16 +34,16 @@ export async function getPrivilegesByRoleIds(roleIds: number[], tx: DbClient = d
     .then(rows => rows.map(row => row.privilege));
 }
 
-export async function searchPrivileges(
+async function searchPrivileges(
   query: Prettify<PrivilegeQueryDto>,
-  tx: DbClient = db,
+  tx: DbClient,
 ) {
   return await tx.select().from(privileges).where(and(
     inArrayIf(privileges.privilegeCode, query.privilegeCodes),
     query.roleCodes === undefined
       ? undefined
       : exists(
-          db.select({ value: sql`1` })
+          tx.select({ value: sql`1` })
             .from(rolePrivileges)
             .innerJoin(roles, eq(rolePrivileges.roleId, roles.id))
             .where(and(

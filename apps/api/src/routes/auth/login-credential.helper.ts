@@ -1,6 +1,5 @@
+import type { ClockPort, RedisPort } from "@api/composition/runtime";
 import { createHash } from "node:crypto";
-import config from "@api/env";
-import redis from "@api/lib/infra/redis";
 import { CustomError } from "@iam/api-core/errors/CustomError";
 import { InvalidLoginCredentialError } from "@iam/api-core/errors/InvalidLoginCredentialError";
 import {
@@ -19,6 +18,16 @@ export type LoginPasswordCredential = {
 type RedisNonceStore = {
   set: (...args: [string, string, "EX", number, "NX"]) => Promise<unknown>;
 };
+
+export interface LoginCredentialParserDeps {
+  clock: Pick<ClockPort, "now">;
+  nonceStore: Pick<RedisPort, "set">;
+  config: {
+    privateKeysByKid: Record<string, string>;
+    maxSkewMs: number;
+    nonceTtlSeconds: number;
+  };
+}
 
 type ParseCredentialOptions = {
   now?: number;
@@ -69,36 +78,42 @@ async function recordNonce(
   }
 }
 
-export async function parseLoginPasswordCredential(
-  credential: string,
-  options: ParseCredentialOptions = {},
-): Promise<LoginPasswordCredential> {
-  try {
-    const parsed = decryptLoginCredential(
-      credential,
-      options.privateKeys ?? config.LOGIN_CREDENTIAL_PRIVATE_KEYS_JSON,
-    );
-    const now = options.now ?? Date.now();
-    const maxSkewMs = options.maxSkewMs ?? config.LOGIN_CREDENTIAL_MAX_SKEW_MS;
-    const nonceTtlSeconds = options.nonceTtlSeconds ?? config.LOGIN_CREDENTIAL_NONCE_TTL_SECONDS;
-    const nonceStore = options.nonceStore ?? redis;
-    const payload = LoginCredentialPayloadSchema.parse(parsed.payload);
+export function createLoginCredentialParser(deps: LoginCredentialParserDeps) {
+  async function parseLoginPasswordCredential(
+    credential: string,
+    options: ParseCredentialOptions = {},
+  ): Promise<LoginPasswordCredential> {
+    try {
+      const parsed = decryptLoginCredential(
+        credential,
+        options.privateKeys ?? deps.config.privateKeysByKid,
+      );
+      const now = options.now ?? deps.clock.now();
+      const maxSkewMs = options.maxSkewMs ?? deps.config.maxSkewMs;
+      const nonceTtlSeconds = options.nonceTtlSeconds ?? deps.config.nonceTtlSeconds;
+      const nonceStore = options.nonceStore ?? deps.nonceStore;
+      const payload = LoginCredentialPayloadSchema.parse(parsed.payload);
 
-    assertTimestampInWindow(payload.ts, now, maxSkewMs);
-    await recordNonce(parsed.kid, payload.nonce, nonceStore, nonceTtlSeconds);
+      assertTimestampInWindow(payload.ts, now, maxSkewMs);
+      await recordNonce(parsed.kid, payload.nonce, nonceStore, nonceTtlSeconds);
 
-    return {
-      username: payload.username,
-      password: payload.password,
-    };
-  }
-  catch (error) {
-    if (error instanceof CustomError) {
-      throw error;
+      return {
+        username: payload.username,
+        password: payload.password,
+      };
     }
-    if (error instanceof LoginCredentialError) {
+    catch (error) {
+      if (error instanceof CustomError) {
+        throw error;
+      }
+      if (error instanceof LoginCredentialError) {
+        invalidCredential();
+      }
       invalidCredential();
     }
-    invalidCredential();
   }
+
+  return { parseLoginPasswordCredential };
 }
+
+export type LoginCredentialParser = ReturnType<typeof createLoginCredentialParser>;
