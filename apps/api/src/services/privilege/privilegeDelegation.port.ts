@@ -2,6 +2,7 @@ import type { OrganizationRepository } from "@api/services/organization/organiza
 import type { PrivilegeRepository } from "@api/services/privilege/privilege.repository";
 import type { PrivilegeDelegationRepository } from "@api/services/privilege/privilegeDelegation.repository";
 import type { UserRepository } from "@api/services/user/user.repository";
+import type { UnitOfWorkPort } from "@iam/api-core/uow";
 
 export interface PrivilegeDelegationTransactionPorts {
   userRepository: Pick<UserRepository, "getUserByUsername">;
@@ -16,9 +17,7 @@ export interface PrivilegeDelegationTransactionPorts {
   >;
 }
 
-export interface PrivilegeDelegationUnitOfWorkPort {
-  transaction: <T>(callback: (tx: PrivilegeDelegationTransactionPorts) => Promise<T>) => Promise<T>;
-}
+export type PrivilegeDelegationUnitOfWorkPort = UnitOfWorkPort<PrivilegeDelegationTransactionPorts>;
 
 export interface PrivilegeDelegationServiceDeps {
   privilegeDelegationRepository: Pick<PrivilegeDelegationRepository, "searchDelegations">;

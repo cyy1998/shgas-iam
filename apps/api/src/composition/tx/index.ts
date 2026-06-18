@@ -1,16 +1,12 @@
 import type { ApiAuditLogWriter } from "@api/services/audit/audit.service";
+import type { UnitOfWorkPort } from "@iam/api-core/uow";
+import type { DbClient } from "@iam/db";
 import type { ApiRepositories } from "../repositories";
 import type { AfterCommitLoggerPort } from "../runtime";
-import type { UnitOfWork } from "./unit-of-work";
 import { createApiAuditLogWriter } from "@api/services/audit/audit.service";
+import { createUnitOfWork } from "@iam/api-core/uow";
 import db from "@iam/db";
 import { createApiRepositories } from "../repositories";
-import { createUnitOfWork } from "./unit-of-work";
-
-export interface ApiRootPorts {
-  repositories: ApiRepositories;
-  auditLogWriter: ApiAuditLogWriter;
-}
 
 export interface ApiTxPorts {
   repositories: ApiRepositories;
@@ -19,14 +15,12 @@ export interface ApiTxPorts {
 
 export interface CreateApiUnitOfWorkOptions {
   logger: AfterCommitLoggerPort;
-  rootPorts: ApiRootPorts;
 }
 
-export function createApiUnitOfWork(options: CreateApiUnitOfWorkOptions): UnitOfWork<ApiTxPorts, ApiRootPorts> {
-  return createUnitOfWork({
+export function createApiUnitOfWork(options: CreateApiUnitOfWorkOptions): UnitOfWorkPort<ApiTxPorts> {
+  return createUnitOfWork<DbClient, ApiTxPorts>({
     db,
     logger: options.logger,
-    rootPorts: options.rootPorts,
     createTxPorts: (tx) => {
       const repositories = createApiRepositories(tx);
       return {
@@ -37,4 +31,4 @@ export function createApiUnitOfWork(options: CreateApiUnitOfWorkOptions): UnitOf
   });
 }
 
-export * from "./unit-of-work";
+export type { UnitOfWorkPort } from "@iam/api-core/uow";

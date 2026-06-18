@@ -1,16 +1,12 @@
 import type { AdminAuditService } from "@admin-api/services/audit/audit.service";
+import type { UnitOfWorkPort } from "@iam/api-core/uow";
+import type { DbClient } from "@iam/db";
 import type { AdminApiRepositories } from "../repositories";
 import type { AfterCommitLoggerPort } from "../runtime";
-import type { UnitOfWork } from "./unit-of-work";
 import { createAdminAuditService } from "@admin-api/services/audit/audit.service";
+import { createUnitOfWork } from "@iam/api-core/uow";
 import db from "@iam/db";
 import { createAdminApiRepositories } from "../repositories";
-import { createUnitOfWork } from "./unit-of-work";
-
-export interface AdminApiRootPorts {
-  repositories: AdminApiRepositories;
-  auditService: AdminAuditService;
-}
 
 export interface AdminApiTxPorts {
   repositories: AdminApiRepositories;
@@ -19,16 +15,14 @@ export interface AdminApiTxPorts {
 
 export interface CreateAdminApiUnitOfWorkOptions {
   logger: AfterCommitLoggerPort;
-  rootPorts: AdminApiRootPorts;
 }
 
 export function createAdminApiUnitOfWork(
   options: CreateAdminApiUnitOfWorkOptions,
-): UnitOfWork<AdminApiTxPorts, AdminApiRootPorts> {
-  return createUnitOfWork({
+): UnitOfWorkPort<AdminApiTxPorts> {
+  return createUnitOfWork<DbClient, AdminApiTxPorts>({
     db,
     logger: options.logger,
-    rootPorts: options.rootPorts,
     createTxPorts: (tx) => {
       const repositories = createAdminApiRepositories(tx);
       return {
@@ -39,4 +33,4 @@ export function createAdminApiUnitOfWork(
   });
 }
 
-export * from "./unit-of-work";
+export type { UnitOfWorkPort } from "@iam/api-core/uow";

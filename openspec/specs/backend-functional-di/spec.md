@@ -61,6 +61,24 @@ repository implementation SHALL be created through factories that bind a root or
 - **THEN** it SHALL create tx-bound repositories with the transaction `DbClient`
 - **AND** service code inside the transaction SHALL call those tx-bound repository methods without passing `tx`
 
+### Requirement: Shared UnitOfWork Infrastructure
+后端 app SHALL 使用共享 UnitOfWork 基础设施表达 DB transaction、tx-bound ports 映射和 after-commit 副作用注册。共享 UoW MUST remain app-agnostic and MUST NOT depend on app-local repository, runtime, logger singleton, Redis singleton, or `@iam/db` concrete types.
+
+#### Scenario: App composition wires shared UoW
+- **WHEN** `api` 或 `admin-api` composition root 创建 production UnitOfWork
+- **THEN** composition SHALL pass the app-local transaction executor and tx port factory to shared UoW infrastructure
+- **AND** shared UoW SHALL create transaction context from app-local tx-bound ports without importing app-local modules
+
+#### Scenario: Mapped UnitOfWork preserves afterCommit
+- **WHEN** composition maps app-wide tx ports to a service-owned transaction port shape
+- **THEN** mapped UnitOfWork SHALL expose only the mapped tx-bound business ports plus `afterCommit`
+- **AND** mapped UnitOfWork MUST NOT drop or replace the `afterCommit` registration API
+
+#### Scenario: Service transaction ports stay consumer-owned
+- **WHEN** a service declares its UnitOfWork dependency
+- **THEN** the service SHALL declare its own transaction port shape
+- **AND** the service MAY use a shared `UnitOfWorkPort<TxPorts>` or equivalent type alias to include `afterCommit`
+
 ### Requirement: UnitOfWork Provides Tx-Bound Ports
 业务事务 SHALL be expressed through `UnitOfWork` callbacks that receive tx-bound ports. Transaction callbacks SHALL NOT directly perform non-transactional side effects such as Redis/cache/OIDC/SMS/fetch operations.
 
@@ -74,18 +92,56 @@ repository implementation SHALL be created through factories that bind a root or
 - **THEN** the side effect SHALL be executed outside the transaction callback or registered with `afterCommit`
 - **AND** the transaction callback MUST NOT directly call the non-transactional side-effect port
 
-### Requirement: AfterCommit Is Best Effort And Observable
-`afterCommit` callbacks SHALL run after successful transaction commit. 第一阶段所有 `afterCommit` callbacks SHALL be best-effort: failures SHALL be logged with structured fields and MUST NOT change the already committed primary operation result.
+### Requirement: AfterCommit Supports Required And Best-Effort Effects
+`afterCommit` callbacks SHALL run only after a successful DB transaction commit and SHALL support explicit `required` and `bestEffort` modes. Required after-commit failures SHALL affect the request result after commit, while best-effort failures SHALL be logged and ignored for the primary operation result.
 
-#### Scenario: AfterCommit succeeds
-- **WHEN** a transaction commits and registered `afterCommit` callbacks complete successfully
-- **THEN** the service SHALL return the primary operation result
-- **AND** tests SHALL be able to observe that registered callbacks were awaited
+#### Scenario: Transaction commit runs queued effects
+- **WHEN** a transaction callback completes successfully and the DB transaction commits
+- **THEN** UoW SHALL execute registered after-commit tasks after commit
+- **AND** UoW SHALL await tasks in registration order
+- **AND** UoW SHALL preserve required and best-effort task ordering when they are mixed
 
-#### Scenario: AfterCommit fails
-- **WHEN** a transaction commits and an `afterCommit` callback throws
-- **THEN** the service SHALL keep the primary operation result successful
-- **AND** the system SHALL log the callback name and error through the injected logger
+#### Scenario: Transaction failure discards queued effects
+- **WHEN** a transaction callback throws or the DB transaction fails before commit
+- **THEN** UoW SHALL NOT execute registered after-commit tasks
+- **AND** UoW SHALL let the original transaction failure propagate
+
+#### Scenario: Required effect failure is reported
+- **WHEN** a required after-commit task throws after the DB transaction has committed
+- **THEN** UoW SHALL log the failure through the injected after-commit logger
+- **AND** UoW SHALL continue attempting remaining registered after-commit tasks
+- **AND** UoW SHALL throw a structured API runtime error after all tasks have been attempted
+- **AND** the error response SHALL use `ApiErrorCode.InternalError` without exposing internal integration details
+
+#### Scenario: Best-effort effect failure is logged only
+- **WHEN** a best-effort after-commit task throws after the DB transaction has committed
+- **THEN** UoW SHALL log the failure through the injected after-commit logger
+- **AND** UoW SHALL continue attempting remaining registered after-commit tasks
+- **AND** UoW SHALL keep the primary operation result successful unless a required task failed
+
+#### Scenario: AfterCommit task registration is synchronous
+- **WHEN** service code calls `tx.afterCommit.required(name, task)` or `tx.afterCommit.bestEffort(name, task)`
+- **THEN** the registration function SHALL return `void`
+- **AND** the task MAY be synchronous or asynchronous
+- **AND** the task name SHALL be included in structured after-commit logs
+
+#### Scenario: Nested UoW is not supported
+- **WHEN** a business workflow already owns an active UnitOfWork transaction
+- **THEN** service code MUST NOT start another independent `uow.transaction(...)` for the same workflow
+- **AND** shared UoW SHALL document that nested transaction ownership is unsupported for after-commit semantics
+
+### Requirement: AfterCommit Test Fakes Match Runtime Semantics
+Backend unit tests SHALL use shared UnitOfWork test fakes that preserve transaction callback and after-commit behavior closely enough to verify service logic without real DB, Redis, OIDC provider, or network dependencies.
+
+#### Scenario: Immediate fake executes effects after callback success
+- **WHEN** a service test uses an immediate UnitOfWork fake and the transaction callback succeeds
+- **THEN** the fake SHALL execute registered after-commit tasks after the callback returns
+- **AND** tests SHALL be able to assert that required and best-effort tasks were attempted
+
+#### Scenario: Immediate fake preserves failure modes
+- **WHEN** a required after-commit task throws in a service test
+- **THEN** the fake SHALL throw after attempting remaining tasks
+- **AND** when a best-effort after-commit task throws, the fake SHALL record or log the failure without failing the service result
 
 ### Requirement: Integration Adapters Expose Business Ports
 第三方 integration client SHALL be created by adapter factories in composition root and exposed to service code through business semantic Ports rather than concrete third-party APIs.

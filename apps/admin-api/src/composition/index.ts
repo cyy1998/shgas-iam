@@ -36,7 +36,6 @@ export async function createAdminApiComposition(
   const auditService = createAdminAuditService({ auditRepository: repositories.audit });
   const unitOfWork = createAdminApiUnitOfWork({
     logger: runtime.afterCommitLogger,
-    rootPorts: { repositories, auditService },
   });
   const services = createAdminApiServices({ runtime, repositories, unitOfWork });
 

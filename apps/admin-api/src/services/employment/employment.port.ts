@@ -6,6 +6,7 @@ import type { PositionRepository } from "@admin-api/services/position/position.r
 import type { PrivilegeRepository } from "@admin-api/services/privilege/privilege.repository";
 import type { RoleRepository } from "@admin-api/services/role/role.repository";
 import type { UserRepository } from "@admin-api/services/user/user.repository";
+import type { UnitOfWorkPort } from "@iam/api-core/uow";
 
 export interface AdminEmploymentTransactionPorts {
   employmentRepository: Pick<
@@ -24,9 +25,7 @@ export interface AdminEmploymentTransactionPorts {
   auditService: AuditLogWriterPort;
 }
 
-export interface AdminEmploymentUnitOfWorkPort {
-  transaction: <T>(callback: (tx: AdminEmploymentTransactionPorts) => Promise<T>) => Promise<T>;
-}
+export type AdminEmploymentUnitOfWorkPort = UnitOfWorkPort<AdminEmploymentTransactionPorts>;
 
 export interface AdminEmploymentServiceDeps {
   employmentRepository: Pick<

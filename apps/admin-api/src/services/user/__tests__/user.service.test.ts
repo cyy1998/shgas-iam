@@ -1,4 +1,5 @@
 import { createFakePasswordHasher, createFakeRandom, createImmediateUnitOfWork } from "@admin-api/test/fakes";
+import { AfterCommitRequiredTaskError } from "@iam/api-core/uow";
 import { UserStatus, UserType } from "@iam/contracts";
 import { describe, expect, mock, test } from "bun:test";
 import { createUserService } from "../user.service";
@@ -110,6 +111,31 @@ describe("createUserService", () => {
     expect(deps.tokenRevocation.revokeUserTokens).toHaveBeenCalledWith(1);
   });
 
+  test("reports required token revocation failures after disabling a user", async () => {
+    const { service, deps, tx } = createService();
+    (tx.userRepository.getUserByUsernameForAdmin as any).mockResolvedValue(user());
+    deps.tokenRevocation.revokeUserTokens.mockRejectedValueOnce(new Error("revocation failed"));
+
+    await expect(service.updateUser("zhangsan", { status: UserStatus.Disable }))
+      .rejects
+      .toBeInstanceOf(AfterCommitRequiredTaskError);
+
+    expect(tx.userRepository.updateUserByUsername).toHaveBeenCalledWith("zhangsan", {
+      status: UserStatus.Disable,
+    });
+    expect(deps.tokenRevocation.revokeUserTokens).toHaveBeenCalledWith(1);
+  });
+
+  test("revokes user tokens when deleting a user", async () => {
+    const { service, deps, tx } = createService();
+    (tx.userRepository.getUserByUsernameForAdmin as any).mockResolvedValue(user());
+
+    await expect(service.deleteUser("zhangsan")).resolves.toBe(true);
+
+    expect(tx.userRepository.softDeleteUserByUsername).toHaveBeenCalledWith("zhangsan");
+    expect(deps.tokenRevocation.revokeUserTokens).toHaveBeenCalledWith(1);
+  });
+
   test("rejects deleting a user with active employments", async () => {
     const { service, tx } = createService();
     (tx.userRepository.getUserByUsernameForAdmin as any).mockResolvedValue(user());
@@ -128,5 +154,6 @@ describe("createUserService", () => {
 
     expect(deps.passwordHasher.hashPassword).toHaveBeenCalledWith("Rand1234");
     expect(tx.userRepository.setPassword).toHaveBeenCalledWith(1, "hashed:Rand1234");
+    expect(deps.tokenRevocation.revokeUserTokens).not.toHaveBeenCalled();
   });
 });

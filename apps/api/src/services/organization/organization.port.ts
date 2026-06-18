@@ -1,3 +1,4 @@
+import type { UnitOfWorkPort } from "@iam/api-core/uow";
 import type { OrganizationRepository } from "./organization.repository";
 
 export interface OrganizationTransactionPorts {
@@ -10,9 +11,7 @@ export interface OrganizationTransactionPorts {
   >;
 }
 
-export interface OrganizationUnitOfWorkPort {
-  transaction: <T>(callback: (tx: OrganizationTransactionPorts) => Promise<T>) => Promise<T>;
-}
+export type OrganizationUnitOfWorkPort = UnitOfWorkPort<OrganizationTransactionPorts>;
 
 export interface OrganizationServiceDeps {
   organizationRepository: Pick<OrganizationRepository, "getOrganizationByCode" | "searchOrganizations">;

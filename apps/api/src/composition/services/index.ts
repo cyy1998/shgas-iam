@@ -1,7 +1,7 @@
 import type { ApiAuditLogWriter } from "@api/services/audit/audit.service";
 import type { ApiRepositories } from "../repositories";
 import type { ApiRuntimePorts } from "../runtime";
-import type { ApiTxPorts, createApiUnitOfWork } from "../tx";
+import type { createApiUnitOfWork } from "../tx";
 import { createAuthService } from "@api/routes/auth/auth.service";
 import { createLoginCredentialParser } from "@api/routes/auth/login-credential.helper";
 import { createLoginFailureService } from "@api/routes/auth/login-failure.helper";
@@ -20,6 +20,7 @@ import { createUserMobileBinding } from "@api/services/user/user-mobile-binding.
 import { createUserPasswordHelper } from "@api/services/user/user-password.helper";
 import { createUserService } from "@api/services/user/user.service";
 import { revokeOidcAccessTokensForGlobalSession } from "@iam/api-core/oidc";
+import { mapUnitOfWork } from "@iam/api-core/uow";
 
 type ApiUnitOfWork = ReturnType<typeof createApiUnitOfWork>;
 
@@ -28,17 +29,6 @@ export interface CreateApiServicesOptions {
   repositories: ApiRepositories;
   auditLogWriter: ApiAuditLogWriter;
   unitOfWork: ApiUnitOfWork;
-}
-
-function createMappedUnitOfWork<TxPort>(
-  unitOfWork: ApiUnitOfWork,
-  map: (tx: ApiTxPorts) => TxPort,
-): { transaction: <T>(callback: (tx: TxPort) => Promise<T>) => Promise<T> } {
-  return {
-    async transaction(callback) {
-      return await unitOfWork.transaction(async tx => await callback(map(tx)));
-    },
-  };
 }
 
 export function createApiServices(options: CreateApiServicesOptions) {
@@ -110,7 +100,7 @@ export function createApiServices(options: CreateApiServicesOptions) {
     userDelegationQuery,
     mobileBinding: userMobileBinding,
     passwordHelper: userPasswordHelper,
-    uow: createMappedUnitOfWork(unitOfWork, tx => ({
+    uow: mapUnitOfWork(unitOfWork, tx => ({
       userRepository: tx.repositories.user,
       auditLogWriter: tx.auditLogWriter,
     })),
@@ -118,14 +108,14 @@ export function createApiServices(options: CreateApiServicesOptions) {
 
   const organizationService = createOrganizationService({
     organizationRepository: repositories.organization,
-    uow: createMappedUnitOfWork(unitOfWork, tx => ({
+    uow: mapUnitOfWork(unitOfWork, tx => ({
       organizationRepository: tx.repositories.organization,
     })),
   });
 
   const privilegeDelegationService = createPrivilegeDelegationService({
     privilegeDelegationRepository: repositories.privilegeDelegation,
-    uow: createMappedUnitOfWork(unitOfWork, tx => ({
+    uow: mapUnitOfWork(unitOfWork, tx => ({
       userRepository: tx.repositories.user,
       organizationRepository: tx.repositories.organization,
       privilegeRepository: tx.repositories.privilege,

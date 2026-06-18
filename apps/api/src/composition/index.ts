@@ -34,7 +34,6 @@ export async function createApiComposition(options: CreateApiCompositionOptions 
   const auditLogWriter = createApiAuditLogWriter({ auditRepository: repositories.audit });
   const unitOfWork = createApiUnitOfWork({
     logger: runtime.afterCommitLogger,
-    rootPorts: { repositories, auditLogWriter },
   });
   const services = createApiServices({
     runtime,

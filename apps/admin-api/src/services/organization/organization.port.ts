@@ -1,4 +1,5 @@
 import type { AuditLogWriterPort } from "@admin-api/services/audit/audit.service";
+import type { UnitOfWorkPort } from "@iam/api-core/uow";
 import type { OrganizationRepository } from "./organization.repository";
 
 export interface AdminOrganizationTransactionPorts {
@@ -15,9 +16,7 @@ export interface AdminOrganizationTransactionPorts {
   auditService: AuditLogWriterPort;
 }
 
-export interface AdminOrganizationUnitOfWorkPort {
-  transaction: <T>(callback: (tx: AdminOrganizationTransactionPorts) => Promise<T>) => Promise<T>;
-}
+export type AdminOrganizationUnitOfWorkPort = UnitOfWorkPort<AdminOrganizationTransactionPorts>;
 
 export interface AdminOrganizationServiceDeps {
   organizationRepository: Pick<

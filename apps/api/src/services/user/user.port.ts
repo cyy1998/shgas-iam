@@ -6,6 +6,7 @@ import type { PrivilegeRepository } from "@api/services/privilege/privilege.repo
 import type { PrivilegeDelegationRepository } from "@api/services/privilege/privilegeDelegation.repository";
 import type { RoleRepository } from "@api/services/role/role.repository";
 import type { UserRepository } from "@api/services/user/user.repository";
+import type { UnitOfWorkPort } from "@iam/api-core/uow";
 import type { User } from "@iam/db/schema";
 import type { UserDetailDto, UserQueryWithPrivilegeDelegationDto } from "./user.type";
 
@@ -34,9 +35,7 @@ export interface UserTransactionPorts {
   auditLogWriter: AuditLogWriterPort;
 }
 
-export interface UserUnitOfWorkPort {
-  transaction: <T>(callback: (tx: UserTransactionPorts) => Promise<T>) => Promise<T>;
-}
+export type UserUnitOfWorkPort = UnitOfWorkPort<UserTransactionPorts>;
 
 export interface UserServiceDeps {
   userRepository: Pick<

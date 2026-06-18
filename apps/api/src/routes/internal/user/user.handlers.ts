@@ -5,6 +5,7 @@ import type { OrganizationRepository } from "@api/services/organization/organiza
 import type { PositionRepository } from "@api/services/position/position.repository";
 import type { UserRepository } from "@api/services/user/user.repository";
 import type { UserService } from "@api/services/user/user.service";
+import type { UnitOfWorkPort } from "@iam/api-core/uow";
 import type { UserRouteHandler } from "./user.type";
 import { getInternalAuditActor } from "@api/services/audit/audit.service";
 import { buildInternalPurveyorContactRegisterAudit } from "@api/services/audit/events/internal.audit";
@@ -19,9 +20,7 @@ export interface ContactRegistrationTransactionPorts {
   userRepository: Pick<UserRepository, "getUserByMobile" | "setUser">;
 }
 
-export interface ContactRegistrationUnitOfWorkPort {
-  transaction: <T>(callback: (tx: ContactRegistrationTransactionPorts) => Promise<T>) => Promise<T>;
-}
+export type ContactRegistrationUnitOfWorkPort = UnitOfWorkPort<ContactRegistrationTransactionPorts>;
 
 export interface CreateUserHandlersDeps {
   auditLogWriter: AuditLogWriterPort;

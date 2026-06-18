@@ -1,4 +1,5 @@
 import type { AuditLogWriterPort } from "@admin-api/services/audit/audit.service";
+import type { UnitOfWorkPort } from "@iam/api-core/uow";
 import type { PositionRepository } from "./position.repository";
 
 export interface AdminPositionTransactionPorts {
@@ -14,9 +15,7 @@ export interface AdminPositionTransactionPorts {
   auditService: AuditLogWriterPort;
 }
 
-export interface AdminPositionUnitOfWorkPort {
-  transaction: <T>(callback: (tx: AdminPositionTransactionPorts) => Promise<T>) => Promise<T>;
-}
+export type AdminPositionUnitOfWorkPort = UnitOfWorkPort<AdminPositionTransactionPorts>;
 
 export interface AdminPositionServiceDeps {
   positionRepository: Pick<PositionRepository, "getPositionByCode">;

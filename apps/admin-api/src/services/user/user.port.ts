@@ -3,6 +3,7 @@ import type { AuditLogWriterPort } from "@admin-api/services/audit/audit.service
 import type { EmploymentRepository } from "@admin-api/services/employment/employment.repository";
 import type { PrivilegeRepository } from "@admin-api/services/privilege/privilege.repository";
 import type { RoleRepository } from "@admin-api/services/role/role.repository";
+import type { UnitOfWorkPort } from "@iam/api-core/uow";
 import type { UserRepository } from "./user.repository";
 
 export interface AdminUserTransactionPorts {
@@ -18,9 +19,7 @@ export interface AdminUserTransactionPorts {
   auditService: AuditLogWriterPort;
 }
 
-export interface AdminUserUnitOfWorkPort {
-  transaction: <T>(callback: (tx: AdminUserTransactionPorts) => Promise<T>) => Promise<T>;
-}
+export type AdminUserUnitOfWorkPort = UnitOfWorkPort<AdminUserTransactionPorts>;
 
 export interface AdminUserServiceDeps {
   userRepository: Pick<UserRepository, "getUserByUsernameForAdmin" | "searchUsersFuzzyPaged">;

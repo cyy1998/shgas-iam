@@ -91,7 +91,7 @@ export function createUserService(deps: AdminUserServiceDeps) {
     auditContext?: AdminAuditContext,
     action = "admin.user.update",
   ) {
-    const userId = await deps.uow.transaction(async (tx) => {
+    await deps.uow.transaction(async (tx) => {
       const existing = await tx.userRepository.getUserByUsernameForAdmin(username);
       if (existing === null) {
         throw new UserNotFoundError("用户不存在");
@@ -100,10 +100,12 @@ export function createUserService(deps: AdminUserServiceDeps) {
       await tx.auditService.recordAuditLog(buildAdminUserAudit(action, updatedUser, {
         patch: data,
       }, auditContext));
-      return existing.id;
+      if (data.status !== undefined && data.status !== UserStatus.Enable) {
+        tx.afterCommit.required("admin.user.tokens.revoke", async () => {
+          await deps.tokenRevocation.revokeUserTokens(existing.id);
+        });
+      }
     });
-    if (data.status !== undefined && data.status !== UserStatus.Enable)
-      await deps.tokenRevocation.revokeUserTokens(userId);
     return true;
   }
 
@@ -112,7 +114,7 @@ export function createUserService(deps: AdminUserServiceDeps) {
   }
 
   async function deleteUser(username: string, auditContext?: AdminAuditContext) {
-    const userId = await deps.uow.transaction(async (tx) => {
+    await deps.uow.transaction(async (tx) => {
       const existing = await tx.userRepository.getUserByUsernameForAdmin(username);
       if (existing === null) {
         throw new UserNotFoundError("用户不存在");
@@ -125,9 +127,10 @@ export function createUserService(deps: AdminUserServiceDeps) {
       await tx.auditService.recordAuditLog(buildAdminUserAudit("admin.user.delete", deletedUser, {
         deleted: true,
       }, auditContext));
-      return existing.id;
+      tx.afterCommit.required("admin.user.tokens.revoke", async () => {
+        await deps.tokenRevocation.revokeUserTokens(existing.id);
+      });
     });
-    await deps.tokenRevocation.revokeUserTokens(userId);
     return true;
   }
 

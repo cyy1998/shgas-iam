@@ -20,6 +20,7 @@
     "./session": "./src/session/index.ts",
     "./trpc": "./src/trpc/index.ts",
     "./types": "./src/types/lib.ts",
+    "./uow": "./src/uow/index.ts",
     "./utils": "./src/utils/index.ts",
     "./utils/*": "./src/utils/*.ts"
   },

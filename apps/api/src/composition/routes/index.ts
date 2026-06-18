@@ -3,7 +3,7 @@ import type { CreateAppOptions } from "@iam/api-core/core/create-app";
 import type { ApiRepositories } from "../repositories";
 import type { ApiRuntimePorts } from "../runtime";
 import type { ApiServices } from "../services";
-import type { ApiTxPorts, createApiUnitOfWork } from "../tx";
+import type { createApiUnitOfWork } from "../tx";
 import { createAuthHandlers } from "@api/routes/auth/auth.handlers";
 import { createAuthRoute } from "@api/routes/auth/auth.index";
 import { createDelegationHandlers } from "@api/routes/internal/delegation/delegation.handlers";
@@ -18,6 +18,7 @@ import { createPublicHandlers } from "@api/routes/public/public.handlers";
 import { createPublicRoute } from "@api/routes/public/public.index";
 import { createSsoHandlers } from "@api/routes/sso/sso.handlers";
 import { createSsoRoute } from "@api/routes/sso/sso.index";
+import { mapUnitOfWork } from "@iam/api-core/uow";
 
 type ApiUnitOfWork = ReturnType<typeof createApiUnitOfWork>;
 
@@ -27,17 +28,6 @@ export interface CreateApiRoutesOptions {
   runtime: ApiRuntimePorts;
   services: ApiServices;
   unitOfWork: ApiUnitOfWork;
-}
-
-function createMappedUnitOfWork<TxPort>(
-  unitOfWork: ApiUnitOfWork,
-  map: (tx: ApiTxPorts) => TxPort,
-): { transaction: <T>(callback: (tx: TxPort) => Promise<T>) => Promise<T> } {
-  return {
-    async transaction(callback) {
-      return await unitOfWork.transaction(async tx => await callback(map(tx)));
-    },
-  };
 }
 
 export async function createApiRoutes(options: CreateApiRoutesOptions): Promise<CreateAppOptions["routes"]> {
@@ -103,7 +93,7 @@ export async function createApiRoutes(options: CreateApiRoutesOptions): Promise<
     },
     mobileService: services.mobile,
     userService: services.user,
-    uow: createMappedUnitOfWork(unitOfWork, tx => ({
+    uow: mapUnitOfWork(unitOfWork, tx => ({
       employmentRepository: tx.repositories.employment,
       organizationRepository: tx.repositories.organization,
       positionRepository: tx.repositories.position,

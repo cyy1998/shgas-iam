@@ -11,7 +11,6 @@ import type {
 } from "./client.type";
 import { buildAdminClientAudit } from "@admin-api/services/audit/events/client.audit";
 import { ClientDtoSchema } from "@admin-api/services/client/client.schema";
-import { SystemLogEvent } from "@iam/api-core/logger";
 import { ClientStatus as ClientStatusValue, OidcClientType } from "@iam/contracts";
 import { oidcClientConfigSchema, oidcClientSecretStateSchema } from "@iam/db/schema";
 import {
@@ -63,24 +62,6 @@ function assertValidOidcStorageState(client: { oidcConfig: unknown; oidcSecretHa
 }
 
 export function createClientService(deps: AdminClientServiceDeps) {
-  async function bestEffortInvalidateOidcClient(client: {
-    id: number;
-    clientCode: string;
-    oidcConfigVersion: number;
-  }) {
-    try {
-      await deps.oidcInvalidation.invalidateClient(client);
-    }
-    catch (error) {
-      deps.logger.warn({
-        event: SystemLogEvent.IntegrationCallFailed,
-        err: error,
-        clientCode: client.clientCode,
-        integration: "oidc-provider",
-      }, "failed to invalidate OIDC client runtime");
-    }
-  }
-
   async function searchClientsForAdmin(query: ClientPaginationQueryDto) {
     const { rows, total } = await deps.clientRepository.searchClientsPaged(query);
     return toPageResult(rows.map(toClientAdminListDto), total, query);
@@ -95,7 +76,7 @@ export function createClientService(deps: AdminClientServiceDeps) {
 
   async function createClient(clientDto: ClientCreateDto, auditContext?: AdminAuditContext) {
     assertValidRedirectUrlPatterns(clientDto);
-    const createdClientDto = await deps.uow.transaction(async (tx) => {
+    return await deps.uow.transaction(async (tx) => {
       const existing = await tx.clientRepository.getAnyClientByCode(clientDto.clientCode);
       if (existing !== null)
         throw new ClientCodeExistsError("客户端编码已存在");
@@ -105,10 +86,11 @@ export function createClientService(deps: AdminClientServiceDeps) {
         clientSecretProvided: clientDto.clientSecret !== undefined,
         managementLevel: clientDto.extAttributes.managementLevel,
       }, auditContext));
+      tx.afterCommit.required("admin.client.cache.set", async () => {
+        await deps.clientCache.setClient(created);
+      });
       return created;
     });
-    await deps.clientCache.setClient(createdClientDto);
-    return createdClientDto;
   }
 
   async function updateClient(
@@ -118,7 +100,7 @@ export function createClientService(deps: AdminClientServiceDeps) {
     actionOverride?: string,
   ) {
     assertValidRedirectUrlPatterns(data);
-    const result = await deps.uow.transaction(async (tx) => {
+    return await deps.uow.transaction(async (tx) => {
       const existing = await tx.clientRepository.getClientByCode(clientCode);
       if (existing === null)
         throw new ClientNotFoundError("客户端不存在");
@@ -140,17 +122,21 @@ export function createClientService(deps: AdminClientServiceDeps) {
         { previousClientCode: parsedExisting.clientCode, patch: auditPatch },
         auditContext,
       ));
-      return { oldClientDto: parsedExisting, updatedClientDto: parsedUpdated, client, statusChanged };
+      tx.afterCommit.required("admin.client.cache.sync", async () => {
+        await deps.clientCache.syncUpdatedClient(parsedExisting, parsedUpdated);
+      });
+      if (statusChanged) {
+        tx.afterCommit.bestEffort("admin.client.oidc.invalidate", async () => {
+          await deps.oidcInvalidation.invalidateClient(client);
+        });
+      }
+      return parsedUpdated;
     });
-    await deps.clientCache.syncUpdatedClient(result.oldClientDto, result.updatedClientDto);
-    if (result.statusChanged)
-      await bestEffortInvalidateOidcClient(result.client);
-    return result.updatedClientDto;
   }
 
   async function updateClientById(clientDto: ClientInputDto, auditContext?: AdminAuditContext) {
     assertValidRedirectUrlPatterns(clientDto);
-    const result = await deps.uow.transaction(async (tx) => {
+    return await deps.uow.transaction(async (tx) => {
       const existing = await tx.clientRepository.getClientById(clientDto.id);
       if (existing === null)
         throw new ClientNotFoundError("客户端不存在");
@@ -176,12 +162,16 @@ export function createClientService(deps: AdminClientServiceDeps) {
         },
         auditContext,
       ));
-      return { oldClientDto: parsedExisting, updatedClientDto: parsedUpdated, client, statusChanged };
+      tx.afterCommit.required("admin.client.cache.sync", async () => {
+        await deps.clientCache.syncUpdatedClient(parsedExisting, parsedUpdated);
+      });
+      if (statusChanged) {
+        tx.afterCommit.bestEffort("admin.client.oidc.invalidate", async () => {
+          await deps.oidcInvalidation.invalidateClient(client);
+        });
+      }
+      return parsedUpdated;
     });
-    await deps.clientCache.syncUpdatedClient(result.oldClientDto, result.updatedClientDto);
-    if (result.statusChanged)
-      await bestEffortInvalidateOidcClient(result.client);
-    return result.updatedClientDto;
   }
 
   async function updateClientStatus(clientCode: string, status: ClientStatus, auditContext?: AdminAuditContext) {
@@ -190,7 +180,7 @@ export function createClientService(deps: AdminClientServiceDeps) {
   }
 
   async function deleteClient(clientCode: string, auditContext?: AdminAuditContext) {
-    const result = await deps.uow.transaction(async (tx) => {
+    await deps.uow.transaction(async (tx) => {
       const existing = await tx.clientRepository.getClientByCode(clientCode);
       if (existing === null)
         throw new ClientNotFoundError("客户端不存在");
@@ -202,12 +192,13 @@ export function createClientService(deps: AdminClientServiceDeps) {
         { deleted: true },
         auditContext,
       ));
-      return { deleted, client };
+      tx.afterCommit.required("admin.client.cache.delete", async () => {
+        await deps.clientCache.deleteClient(deleted);
+      });
+      tx.afterCommit.bestEffort("admin.client.oidc.invalidate", async () => {
+        await deps.oidcInvalidation.invalidateClient(client);
+      });
     });
-    await Promise.all([
-      deps.clientCache.deleteClient(result.deleted),
-      bestEffortInvalidateOidcClient(result.client),
-    ]);
     return true;
   }
 
@@ -246,9 +237,11 @@ export function createClientService(deps: AdminClientServiceDeps) {
         oidcEnabled: client.oidcEnabled,
         oidcConfigVersion: client.oidcConfigVersion,
       }, auditContext));
+      tx.afterCommit.bestEffort("admin.client.oidc.invalidate", async () => {
+        await deps.oidcInvalidation.invalidateClient(client);
+      });
       return { client, clientSecret };
     });
-    await bestEffortInvalidateOidcClient(result.client);
     return { client: toClientAdminDetailDto(result.client), clientSecret: result.clientSecret };
   }
 
@@ -277,9 +270,11 @@ export function createClientService(deps: AdminClientServiceDeps) {
         { oidcEnabled: enabled, oidcConfigVersion: client.oidcConfigVersion },
         auditContext,
       ));
+      tx.afterCommit.bestEffort("admin.client.oidc.invalidate", async () => {
+        await deps.oidcInvalidation.invalidateClient(client);
+      });
       return client;
     });
-    await bestEffortInvalidateOidcClient(result);
     return { client: toClientAdminDetailDto(result) };
   }
 
@@ -308,9 +303,11 @@ export function createClientService(deps: AdminClientServiceDeps) {
       await tx.auditService.recordAuditLog(buildAdminClientAudit("admin.client.oidc.remove", ClientDtoSchema.parse(client), {
         oidcConfigVersion: client.oidcConfigVersion,
       }, auditContext));
+      tx.afterCommit.bestEffort("admin.client.oidc.invalidate", async () => {
+        await deps.oidcInvalidation.invalidateClient(client);
+      });
       return client;
     });
-    await bestEffortInvalidateOidcClient(result);
     return { client: toClientAdminDetailDto(result) };
   }
 
@@ -328,9 +325,11 @@ export function createClientService(deps: AdminClientServiceDeps) {
       await tx.auditService.recordAuditLog(buildAdminClientAudit("admin.client.oidc.rotate_secret", ClientDtoSchema.parse(client), {
         oidcConfigVersion: client.oidcConfigVersion,
       }, auditContext));
+      tx.afterCommit.bestEffort("admin.client.oidc.invalidate", async () => {
+        await deps.oidcInvalidation.invalidateClient(client);
+      });
       return { client, clientSecret };
     });
-    await bestEffortInvalidateOidcClient(result.client);
     return { client: toClientAdminDetailDto(result.client), clientSecret: result.clientSecret };
   }
 

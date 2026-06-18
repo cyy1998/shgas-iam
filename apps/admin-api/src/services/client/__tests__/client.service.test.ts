@@ -1,4 +1,5 @@
-import { createFakeLogger, createFakePasswordHasher, createFakeRandom, createImmediateUnitOfWork } from "@admin-api/test/fakes";
+import { createFakePasswordHasher, createFakeRandom, createImmediateUnitOfWork } from "@admin-api/test/fakes";
+import { AfterCommitRequiredTaskError } from "@iam/api-core/uow";
 import {
   ClientManagementLevel,
   ClientStatus,
@@ -37,7 +38,14 @@ function client(overrides: Record<string, unknown> = {}) {
   };
 }
 
-function createService() {
+function createAfterCommitLogger() {
+  return {
+    warn: mock((_obj: Record<string, unknown>, _msg: string) => undefined),
+    error: mock((_obj: Record<string, unknown>, _msg: string) => undefined),
+  };
+}
+
+function createService(options: { afterCommitLogger?: ReturnType<typeof createAfterCommitLogger> } = {}) {
   const tx = {
     auditService: { recordAuditLog: mock(async () => undefined) },
     clientRepository: {
@@ -66,13 +74,12 @@ function createService() {
       setClient: mock(async () => undefined),
       syncUpdatedClient: mock(async () => undefined),
     },
-    logger: createFakeLogger(),
     oidcInvalidation: {
       invalidateClient: mock(async () => undefined),
     },
     passwordHasher: createFakePasswordHasher(),
     random: createFakeRandom(),
-    uow: createImmediateUnitOfWork(tx),
+    uow: createImmediateUnitOfWork(tx, { logger: options.afterCommitLogger }),
   } as any;
   return { service: createClientService(deps), deps, tx };
 }
@@ -115,6 +122,25 @@ describe("createClientService", () => {
     expect(deps.clientCache.setClient).toHaveBeenCalledWith(expect.objectContaining({ clientCode: "portal" }));
   });
 
+  test("reports required cache failures after creating a client", async () => {
+    const { service, deps, tx } = createService();
+    deps.clientCache.setClient.mockRejectedValueOnce(new Error("cache down"));
+
+    await expect(service.createClient({
+      clientCode: "portal",
+      clientName: "Portal",
+      clientSecret: "secret",
+      url: "https://portal.example.com",
+      status: ClientStatus.Enable,
+      description: null,
+      extAttributes: client().extAttributes,
+    } as any)).rejects.toBeInstanceOf(AfterCommitRequiredTaskError);
+
+    expect(tx.clientRepository.createClient).toHaveBeenCalled();
+    expect(tx.auditService.recordAuditLog).toHaveBeenCalled();
+    expect(deps.clientCache.setClient).toHaveBeenCalled();
+  });
+
   test("rejects duplicate client codes before creating", async () => {
     const { service, tx } = createService();
     (tx.clientRepository.getAnyClientByCode as any).mockResolvedValue(client());
@@ -142,6 +168,24 @@ describe("createClientService", () => {
       clientCode: "portal",
       oidcConfigVersion: 2,
     }));
+  });
+
+  test("keeps status update successful when best-effort OIDC invalidation fails", async () => {
+    const afterCommitLogger = createAfterCommitLogger();
+    const { service, deps } = createService({ afterCommitLogger });
+    const invalidationFailure = new Error("oidc down");
+    deps.oidcInvalidation.invalidateClient.mockRejectedValueOnce(invalidationFailure);
+
+    await expect(service.updateClientStatus("portal", ClientStatus.Disable)).resolves.toBe(true);
+
+    expect(deps.clientCache.syncUpdatedClient).toHaveBeenCalled();
+    expect(deps.oidcInvalidation.invalidateClient).toHaveBeenCalled();
+    expect(afterCommitLogger.warn).toHaveBeenCalledWith({
+      afterCommit: "admin.client.oidc.invalidate",
+      mode: "bestEffort",
+      err: invalidationFailure,
+    }, "best-effort afterCommit task failed");
+    expect(afterCommitLogger.error).not.toHaveBeenCalled();
   });
 
   test("configures confidential OIDC clients with a generated secret", async () => {
