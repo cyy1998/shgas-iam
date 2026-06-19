@@ -22,28 +22,101 @@ import { alias } from "drizzle-orm/pg-core";
 
 export function createPrivilegeDelegationRepository(db: DbClient) {
   return {
-    getDelegationById(id: number) {
-      return getDelegationById(id, db);
+    async getDelegationById(id: number) {
+      return await db.query.privilegeDelegations.findFirst({ where: { id } }) ?? null;
     },
-    getDelegationsByUserAndOrganizationScopeAndPrivilege(usernames: string[], orgCode: string, privCode: string) {
-      return getDelegationsByUserAndOrganizationScopeAndPrivilege(usernames, orgCode, privCode, db);
+    async getDelegationsByUserAndOrganizationScopeAndPrivilege(usernames: string[], orgCode: string, privCode: string) {
+      const now = new Date();
+      const rows = await db.select().from(privilegeDelegations).where(and(
+        delegationHasPrivileges([privCode], db),
+        organizationScopeContainsOrg([orgCode], db),
+        exists(
+          db.select({ value: sql`1` }).from(users).where(and(
+            eq(users.id, privilegeDelegations.delegatorUserId),
+            inArrayIf(users.username, usernames),
+          )),
+        ),
+        eq(privilegeDelegations.status, PrivilegeDelegationStatus.Enable),
+        lte(privilegeDelegations.startTime, now),
+        gte(privilegeDelegations.endTime, now),
+      ));
+      return await attachDelegationRelations(rows, db);
     },
-    searchDelegations(query: Prettify<PrivilegeDelegationQueryDto>) {
-      return searchDelegations(query, db);
+    async searchDelegations(query: Prettify<PrivilegeDelegationQueryDto>) {
+      const rows = await db.select().from(privilegeDelegations).where(and(
+        query.delegateeUsernames === undefined
+          ? undefined
+          : exists(db.select({ value: sql`1` }).from(users).where(and(
+              eq(users.id, privilegeDelegations.delegateeUserId),
+              inArrayIf(users.username, query.delegateeUsernames),
+            ))),
+        query.delegatorUsernames === undefined
+          ? undefined
+          : exists(db.select({ value: sql`1` }).from(users).where(and(
+              eq(users.id, privilegeDelegations.delegatorUserId),
+              inArrayIf(users.username, query.delegatorUsernames),
+            ))),
+        organizationScopeContainsOrg(query.orgCodes, db),
+        query.validTime === undefined ? undefined : lte(privilegeDelegations.startTime, new Date(query.validTime)),
+        query.validTime === undefined ? undefined : gte(privilegeDelegations.endTime, new Date(query.validTime)),
+        delegationHasPrivileges(query.privCodes, db),
+        eq(privilegeDelegations.isDelete, false),
+      ));
+      return await attachDelegationRelations(rows, db);
     },
-    getActiveDelegationsByDelegatorAndPrivileges(
+    async getActiveDelegationsByDelegatorAndPrivileges(
       delegatorUserId: number,
       privilegeIds: number[],
       startTime: Date,
       endTime: Date,
     ) {
-      return getActiveDelegationsByDelegatorAndPrivileges(delegatorUserId, privilegeIds, startTime, endTime, db);
+      if (privilegeIds.length === 0) {
+        return [];
+      }
+      const rows = await db.select().from(privilegeDelegations).where(and(
+        eq(privilegeDelegations.delegatorUserId, delegatorUserId),
+        eq(privilegeDelegations.isDelete, false),
+        ne(privilegeDelegations.status, PrivilegeDelegationStatus.Disable),
+        gte(privilegeDelegations.endTime, startTime),
+        lte(privilegeDelegations.startTime, endTime),
+        exists(
+          db.select({ value: sql`1` }).from(delegationDetails).where(and(
+            eq(delegationDetails.delegationId, privilegeDelegations.id),
+            inArray(delegationDetails.privilegeId, privilegeIds),
+          )),
+        ),
+      ));
+      return await attachDelegationRelations(rows, db);
     },
-    updateDelegation(id: number, data: PrivilegeDelegationUpdateDto) {
-      return updateDelegation(id, data, db);
+    async updateDelegation(id: number, data: PrivilegeDelegationUpdateDto) {
+      return firstRow(await db
+        .update(privilegeDelegations)
+        .set(compactUpdate(data))
+        .where(eq(privilegeDelegations.id, id))
+        .returning())!;
     },
-    setPrivilegeDelegation(dto: Prettify<PrivilegeDelegationCreateDto>) {
-      return setPrivilegeDelegation(dto, db);
+    async setPrivilegeDelegation(dto: Prettify<PrivilegeDelegationCreateDto>) {
+      if (!dto.delegateeUserId || !dto.delegatorUserId || !dto.organizationScopeId || !dto.privilegeIds) {
+        throw new CustomError("缺少必要参数");
+      }
+      const delegation = firstRow(await db.insert(privilegeDelegations).values({
+        delegatorUserId: dto.delegatorUserId,
+        delegateeUserId: dto.delegateeUserId,
+        organizationScopeId: dto.organizationScopeId,
+        startTime: dto.startTime,
+        endTime: dto.endTime,
+        status: PrivilegeDelegationStatus.Enable,
+        description: dto.description,
+      }).returning())!;
+
+      if (dto.privilegeIds.length > 0) {
+        await db.insert(delegationDetails).values(dto.privilegeIds.map(privilegeId => ({
+          delegationId: delegation.id,
+          privilegeId,
+        })));
+      }
+
+      return firstRow(await attachDelegationRelations([delegation], db))!;
     },
   };
 }
@@ -60,10 +133,6 @@ type DelegationWithRelations = Delegation & {
   organizationScope: OrganizationWithRelations;
   delegationDetails: DelegationDetail[];
 };
-
-async function getDelegationById(id: number, tx: DbClient) {
-  return await tx.query.privilegeDelegations.findFirst({ where: { id } }) ?? null;
-}
 
 async function attachOrganizationRelations(rows: Organization[], tx: DbClient): Promise<OrganizationWithRelations[]> {
   if (rows.length === 0) {
@@ -162,118 +231,4 @@ function delegationHasPrivileges(privCodes: string[] | undefined, tx: DbClient) 
         inArrayIf(privileges.privilegeCode, privCodes),
       )),
   );
-}
-
-async function getDelegationsByUserAndOrganizationScopeAndPrivilege(
-  usernames: string[],
-  orgCode: string,
-  privCode: string,
-  tx: DbClient,
-) {
-  const now = new Date();
-  const rows = await tx.select().from(privilegeDelegations).where(and(
-    delegationHasPrivileges([privCode], tx),
-    organizationScopeContainsOrg([orgCode], tx),
-    exists(
-      tx.select({ value: sql`1` }).from(users).where(and(
-        eq(users.id, privilegeDelegations.delegatorUserId),
-        inArrayIf(users.username, usernames),
-      )),
-    ),
-    eq(privilegeDelegations.status, PrivilegeDelegationStatus.Enable),
-    lte(privilegeDelegations.startTime, now),
-    gte(privilegeDelegations.endTime, now),
-  ));
-  return await attachDelegationRelations(rows, tx);
-}
-
-async function searchDelegations(
-  query: Prettify<PrivilegeDelegationQueryDto>,
-  tx: DbClient,
-) {
-  const rows = await tx.select().from(privilegeDelegations).where(and(
-    query.delegateeUsernames === undefined
-      ? undefined
-      : exists(tx.select({ value: sql`1` }).from(users).where(and(
-          eq(users.id, privilegeDelegations.delegateeUserId),
-          inArrayIf(users.username, query.delegateeUsernames),
-        ))),
-    query.delegatorUsernames === undefined
-      ? undefined
-      : exists(tx.select({ value: sql`1` }).from(users).where(and(
-          eq(users.id, privilegeDelegations.delegatorUserId),
-          inArrayIf(users.username, query.delegatorUsernames),
-        ))),
-    organizationScopeContainsOrg(query.orgCodes, tx),
-    query.validTime === undefined ? undefined : lte(privilegeDelegations.startTime, new Date(query.validTime)),
-    query.validTime === undefined ? undefined : gte(privilegeDelegations.endTime, new Date(query.validTime)),
-    delegationHasPrivileges(query.privCodes, tx),
-    eq(privilegeDelegations.isDelete, false),
-  ));
-  return await attachDelegationRelations(rows, tx);
-}
-
-async function getActiveDelegationsByDelegatorAndPrivileges(
-  delegatorUserId: number,
-  privilegeIds: number[],
-  startTime: Date,
-  endTime: Date,
-  tx: DbClient,
-) {
-  if (privilegeIds.length === 0) {
-    return [];
-  }
-  const rows = await tx.select().from(privilegeDelegations).where(and(
-    eq(privilegeDelegations.delegatorUserId, delegatorUserId),
-    eq(privilegeDelegations.isDelete, false),
-    ne(privilegeDelegations.status, PrivilegeDelegationStatus.Disable),
-    gte(privilegeDelegations.endTime, startTime),
-    lte(privilegeDelegations.startTime, endTime),
-    exists(
-      tx.select({ value: sql`1` }).from(delegationDetails).where(and(
-        eq(delegationDetails.delegationId, privilegeDelegations.id),
-        inArray(delegationDetails.privilegeId, privilegeIds),
-      )),
-    ),
-  ));
-  return await attachDelegationRelations(rows, tx);
-}
-
-async function updateDelegation(
-  id: number,
-  data: PrivilegeDelegationUpdateDto,
-  tx: DbClient,
-) {
-  return firstRow(await tx
-    .update(privilegeDelegations)
-    .set(compactUpdate(data))
-    .where(eq(privilegeDelegations.id, id))
-    .returning())!;
-}
-
-async function setPrivilegeDelegation(
-  dto: Prettify<PrivilegeDelegationCreateDto>,
-  tx: DbClient,
-) {
-  if (!dto.delegateeUserId || !dto.delegatorUserId || !dto.organizationScopeId || !dto.privilegeIds) {
-    throw new CustomError("缺少必要参数");
-  }
-  const delegation = firstRow(await tx.insert(privilegeDelegations).values({
-    delegatorUserId: dto.delegatorUserId,
-    delegateeUserId: dto.delegateeUserId,
-    organizationScopeId: dto.organizationScopeId,
-    startTime: dto.startTime,
-    endTime: dto.endTime,
-    status: PrivilegeDelegationStatus.Enable,
-    description: dto.description,
-  }).returning())!;
-
-  if (dto.privilegeIds.length > 0) {
-    await tx.insert(delegationDetails).values(dto.privilegeIds.map(privilegeId => ({
-      delegationId: delegation.id,
-      privilegeId,
-    })));
-  }
-
-  return firstRow(await attachDelegationRelations([delegation], tx))!;
 }

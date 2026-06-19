@@ -2,25 +2,17 @@ import type { DbClient } from "@iam/db";
 
 export function createClientRepository(db: DbClient) {
   return {
-    getClientByCode(clientCode: string) {
-      return getClientByCode(clientCode, db);
+    async getClientByCode(clientCode: string) {
+      return await db.query.clients.findFirst({
+        where: { clientCode },
+      }) ?? null;
     },
-    getClientBySecret(clientSecret: string) {
-      return getClientBySecret(clientSecret, db);
+    async getClientBySecret(clientSecret: string) {
+      return await db.query.clients.findFirst({
+        where: { clientSecret },
+      }) ?? null;
     },
   };
 }
 
 export type ClientRepository = ReturnType<typeof createClientRepository>;
-
-async function getClientByCode(clientCode: string, tx: DbClient) {
-  return await tx.query.clients.findFirst({
-    where: { clientCode },
-  }) ?? null;
-}
-
-async function getClientBySecret(clientSecret: string, tx: DbClient) {
-  return await tx.query.clients.findFirst({
-    where: { clientSecret },
-  }) ?? null;
-}

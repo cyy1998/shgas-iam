@@ -18,77 +18,80 @@ import { alias } from "drizzle-orm/pg-core";
 
 export function createUserRepository(db: DbClient) {
   return {
-    getUserById(userId: number) {
-      return getUserById(userId, db);
+    async getUserById(userId: number) {
+      return await db.query.users.findFirst({
+        where: {
+          id: userId,
+          status: UserStatus.Enable,
+          isDelete: false,
+        },
+      }) ?? null;
     },
-    getUserByUsername(username: string) {
-      return getUserByUsername(username, db);
+    async getUserByUsername(username: string) {
+      return await db.query.users.findFirst({
+        where: {
+          username,
+          status: UserStatus.Enable,
+          isDelete: false,
+        },
+      }) ?? null;
     },
-    getUserByWxId(wxId: string) {
-      return getUserByWxId(wxId, db);
+    async getUserByWxId(wxId: string) {
+      return await db.query.users.findFirst({
+        where: {
+          wxId,
+          status: UserStatus.Enable,
+          isDelete: false,
+        },
+      }) ?? null;
     },
-    getUserByMobile(mobile: string) {
-      return getUserByMobile(mobile, db);
+    async getUserByMobile(mobile: string) {
+      return await db.query.users.findFirst({
+        where: {
+          mobile,
+          status: UserStatus.Enable,
+          isDelete: false,
+        },
+      }) ?? null;
     },
-    searchUsers(query: UserQueryDto) {
-      return searchUsers(query, db);
+    async searchUsers(query: UserQueryDto) {
+      return await db.select().from(users).where(and(
+        inArrayIf(users.username, query.usernames),
+        inArrayIf(users.mobile, query.phones),
+        inArrayIf(users.wxId, query.wxIds),
+        userSearchEmploymentExists(query, db),
+        eq(users.status, UserStatus.Enable),
+        eq(users.isDelete, false),
+      ));
     },
-    setPassword(userId: number, password: string) {
-      return setPassword(userId, password, db);
+    async setPassword(userId: number, password: string) {
+      return firstRow(await db
+        .update(users)
+        .set({ password })
+        .where(and(eq(users.id, userId), eq(users.status, UserStatus.Enable), eq(users.isDelete, false)))
+        .returning())!;
     },
-    setMobile(userId: number, phoneNumber: string) {
-      return setMobile(userId, phoneNumber, db);
+    async setMobile(userId: number, phoneNumber: string) {
+      return firstRow(await db
+        .update(users)
+        .set({ mobile: phoneNumber })
+        .where(and(eq(users.id, userId), eq(users.status, UserStatus.Enable), eq(users.isDelete, false)))
+        .returning())!;
     },
-    updateEnabledUserStatus(userId: number, status: UserStatus) {
-      return updateEnabledUserStatus(userId, status, db);
+    async updateEnabledUserStatus(userId: number, status: UserStatus) {
+      return firstRow(await db
+        .update(users)
+        .set({ status })
+        .where(and(eq(users.id, userId), eq(users.status, UserStatus.Enable), eq(users.isDelete, false)))
+        .returning()) ?? null;
     },
-    setUser(userCreateDto: UserCreateDto) {
-      return setUser(userCreateDto, db);
+    async setUser(userCreateDto: UserCreateDto) {
+      return firstRow(await db.insert(users).values(userCreateDto).returning())!;
     },
   };
 }
 
 export type UserRepository = ReturnType<typeof createUserRepository>;
-
-async function getUserById(userId: number, tx: DbClient) {
-  return await tx.query.users.findFirst({
-    where: {
-      id: userId,
-      status: UserStatus.Enable,
-      isDelete: false,
-    },
-  }) ?? null;
-}
-
-async function getUserByUsername(username: string, tx: DbClient) {
-  return await tx.query.users.findFirst({
-    where: {
-      username,
-      status: UserStatus.Enable,
-      isDelete: false,
-    },
-  }) ?? null;
-}
-
-async function getUserByWxId(wxId: string, tx: DbClient) {
-  return await tx.query.users.findFirst({
-    where: {
-      wxId,
-      status: UserStatus.Enable,
-      isDelete: false,
-    },
-  }) ?? null;
-}
-
-async function getUserByMobile(mobile: string, tx: DbClient) {
-  return await tx.query.users.findFirst({
-    where: {
-      mobile,
-      status: UserStatus.Enable,
-      isDelete: false,
-    },
-  }) ?? null;
-}
 
 function activeRoleCondition(roleCodes: string[] | undefined) {
   return and(
@@ -168,46 +171,4 @@ function userSearchEmploymentExists(query: UserQueryDto, tx: DbClient) {
         employmentHasRoleCondition(employment, query.roleCodes, tx),
       )),
   );
-}
-
-async function searchUsers(
-  query: UserQueryDto,
-  tx: DbClient,
-) {
-  return await tx.select().from(users).where(and(
-    inArrayIf(users.username, query.usernames),
-    inArrayIf(users.mobile, query.phones),
-    inArrayIf(users.wxId, query.wxIds),
-    userSearchEmploymentExists(query, tx),
-    eq(users.status, UserStatus.Enable),
-    eq(users.isDelete, false),
-  ));
-}
-
-async function setPassword(userId: number, password: string, tx: DbClient) {
-  return firstRow(await tx
-    .update(users)
-    .set({ password })
-    .where(and(eq(users.id, userId), eq(users.status, UserStatus.Enable), eq(users.isDelete, false)))
-    .returning())!;
-}
-
-async function setMobile(userId: number, phoneNumber: string, tx: DbClient) {
-  return firstRow(await tx
-    .update(users)
-    .set({ mobile: phoneNumber })
-    .where(and(eq(users.id, userId), eq(users.status, UserStatus.Enable), eq(users.isDelete, false)))
-    .returning())!;
-}
-
-async function updateEnabledUserStatus(userId: number, status: UserStatus, tx: DbClient) {
-  return firstRow(await tx
-    .update(users)
-    .set({ status })
-    .where(and(eq(users.id, userId), eq(users.status, UserStatus.Enable), eq(users.isDelete, false)))
-    .returning()) ?? null;
-}
-
-async function setUser(userCreateDto: UserCreateDto, tx: DbClient) {
-  return firstRow(await tx.insert(users).values(userCreateDto).returning())!;
 }

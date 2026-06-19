@@ -10,26 +10,65 @@ import { and, count, eq, or } from "drizzle-orm";
 
 export function createUserRepository(db: DbClient) {
   return {
-    setPassword(userId: number, password: string) {
-      return setPassword(userId, password, db);
+    async setPassword(userId: number, password: string) {
+      return firstRow(await db
+        .update(users)
+        .set({ password })
+        .where(and(eq(users.id, userId), eq(users.status, UserStatus.Enable), eq(users.isDelete, false)))
+        .returning())!;
     },
-    getUserByUsernameForAdmin(username: string) {
-      return getUserByUsernameForAdmin(username, db);
+    async getUserByUsernameForAdmin(username: string) {
+      return await db.query.users.findFirst({
+        where: {
+          username,
+          isDelete: false,
+        },
+      }) ?? null;
     },
-    searchUsersFuzzyPaged(userPaginationQueryDto: UserPaginationQueryDto) {
-      return searchUsersFuzzyPaged(userPaginationQueryDto, db);
+    async searchUsersFuzzyPaged(userPaginationQueryDto: UserPaginationQueryDto) {
+      const { pageNum, pageSize } = userPaginationQueryDto;
+      const where = usersFuzzyWhere(userPaginationQueryDto);
+      const [rows, totalRows] = await Promise.all([
+        db
+          .select()
+          .from(users)
+          .where(where)
+          .orderBy(users.orderNum, users.id)
+          .limit(pageSize)
+          .offset((pageNum - 1) * pageSize),
+        db.select({ value: count() }).from(users).where(where),
+      ]);
+      return { rows, total: firstRow(totalRows)?.value ?? 0 };
     },
-    updateUserByUsername(username: string, data: UserUpdateDto) {
-      return updateUserByUsername(username, data, db);
+    async updateUserByUsername(username: string, data: UserUpdateDto) {
+      return firstRow(await db
+        .update(users)
+        .set(compactUpdate(data))
+        .where(eq(users.username, username))
+        .returning())!;
     },
-    softDeleteUserByUsername(username: string) {
-      return softDeleteUserByUsername(username, db);
+    async softDeleteUserByUsername(username: string) {
+      return firstRow(await db
+        .update(users)
+        .set({ isDelete: true })
+        .where(eq(users.username, username))
+        .returning())!;
     },
-    countActiveEmploymentsByUsername(username: string) {
-      return countActiveEmploymentsByUsername(username, db);
+    async countActiveEmploymentsByUsername(username: string) {
+      const rows = await db
+        .select({ value: count() })
+        .from(employments)
+        .innerJoin(users, eq(employments.userId, users.id))
+        .where(and(
+          eq(employments.isDelete, false),
+          eq(employments.status, EmploymentStatus.Enable),
+          eq(users.username, username),
+          eq(users.isDelete, false),
+        ));
+      return firstRow(rows)?.value ?? 0;
     },
-    setUserForAdmin(userCreateDto: UserCreateDto) {
-      return setUserForAdmin(userCreateDto, db);
+    async setUserForAdmin(userCreateDto: UserCreateDto) {
+      return firstRow(await db.insert(users).values(userCreateDto).returning())!;
     },
   };
 }
@@ -54,90 +93,4 @@ function usersFuzzyWhere(userPaginationQueryDto: UserPaginationQueryDto) {
     inArrayIf(users.status, userPaginationQueryDto.conditions.exactConditions.statuses),
     eq(users.isDelete, false),
   );
-}
-
-async function setPassword(userId: number, password: string, tx: DbClient) {
-  return firstRow(await tx
-    .update(users)
-    .set({ password })
-    .where(and(eq(users.id, userId), eq(users.status, UserStatus.Enable), eq(users.isDelete, false)))
-    .returning())!;
-}
-
-async function getUserByUsernameForAdmin(
-  username: string,
-  tx: DbClient,
-) {
-  return await tx.query.users.findFirst({
-    where: {
-      username,
-      isDelete: false,
-    },
-  }) ?? null;
-}
-
-async function searchUsersFuzzyPaged(
-  userPaginationQueryDto: UserPaginationQueryDto,
-  tx: DbClient,
-) {
-  const { pageNum, pageSize } = userPaginationQueryDto;
-  const where = usersFuzzyWhere(userPaginationQueryDto);
-  const [rows, totalRows] = await Promise.all([
-    tx
-      .select()
-      .from(users)
-      .where(where)
-      .orderBy(users.orderNum, users.id)
-      .limit(pageSize)
-      .offset((pageNum - 1) * pageSize),
-    tx.select({ value: count() }).from(users).where(where),
-  ]);
-  return { rows, total: firstRow(totalRows)?.value ?? 0 };
-}
-
-async function updateUserByUsername(
-  username: string,
-  data: UserUpdateDto,
-  tx: DbClient,
-) {
-  return firstRow(await tx
-    .update(users)
-    .set(compactUpdate(data))
-    .where(eq(users.username, username))
-    .returning())!;
-}
-
-async function softDeleteUserByUsername(
-  username: string,
-  tx: DbClient,
-) {
-  return firstRow(await tx
-    .update(users)
-    .set({ isDelete: true })
-    .where(eq(users.username, username))
-    .returning())!;
-}
-
-async function countActiveEmploymentsByUsername(
-  username: string,
-  tx: DbClient,
-) {
-  const rows = await tx
-    .select({ value: count() })
-    .from(employments)
-    .innerJoin(users, eq(employments.userId, users.id))
-    .where(and(
-      eq(employments.isDelete, false),
-      eq(employments.status, EmploymentStatus.Enable),
-      eq(users.username, username),
-      eq(users.isDelete, false),
-    ));
-  return firstRow(rows)?.value ?? 0;
-}
-
-async function setUserForAdmin(
-  userCreateDto: UserCreateDto,
-  tx: DbClient,
-) {
-  return firstRow(await tx.insert(users).values(userCreateDto).returning())!;
 }

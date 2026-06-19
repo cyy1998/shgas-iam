@@ -14,14 +14,34 @@ import { alias } from "drizzle-orm/pg-core";
 
 export function createEmploymentRepository(db: DbClient) {
   return {
-    getEmploymentsByUserId(userId: number) {
-      return getEmploymentsByUserId(userId, db);
+    async getEmploymentsByUserId(userId: number) {
+      const rows = await db.query.employments.findMany({
+        where: {
+          userId,
+          status: EmploymentStatus.Enable,
+          isDelete: false,
+        },
+      });
+      return await attachEmploymentRelations(rows, db);
     },
-    getEmploymentByUserOrgPosId(userId: number, orgId: number, posId: number) {
-      return getEmploymentByUserOrgPosId(userId, orgId, posId, db);
+    async getEmploymentByUserOrgPosId(userId: number, orgId: number, posId: number) {
+      const row = await db.query.employments.findFirst({
+        where: {
+          userId,
+          orgId,
+          posId,
+          status: EmploymentStatus.Enable,
+          isDelete: false,
+        },
+      });
+      return (await attachEmploymentRelations(row === undefined ? [] : [row], db))[0] ?? null;
     },
-    setEmployment(userId: number, posId: number, orgId: number) {
-      return setEmployment(userId, posId, orgId, db);
+    async setEmployment(userId: number, posId: number, orgId: number) {
+      return firstRow(await db.insert(employments).values({
+        userId,
+        posId,
+        orgId,
+      }).returning())!;
     },
   };
 }
@@ -124,46 +144,4 @@ async function attachEmploymentRelations(rows: Employment[], tx: DbClient): Prom
       && row.organization !== undefined
       && row.position !== undefined,
     );
-}
-
-async function getEmploymentsByUserId(userId: number, tx: DbClient) {
-  const rows = await tx.query.employments.findMany({
-    where: {
-      userId,
-      status: EmploymentStatus.Enable,
-      isDelete: false,
-    },
-  });
-  return await attachEmploymentRelations(rows, tx);
-}
-
-async function getEmploymentByUserOrgPosId(
-  userId: number,
-  orgId: number,
-  posId: number,
-  tx: DbClient,
-) {
-  const row = await tx.query.employments.findFirst({
-    where: {
-      userId,
-      orgId,
-      posId,
-      status: EmploymentStatus.Enable,
-      isDelete: false,
-    },
-  });
-  return (await attachEmploymentRelations(row === undefined ? [] : [row], tx))[0] ?? null;
-}
-
-async function setEmployment(
-  userId: number,
-  posId: number,
-  orgId: number,
-  tx: DbClient,
-) {
-  return firstRow(await tx.insert(employments).values({
-    userId,
-    posId,
-    orgId,
-  }).returning())!;
 }

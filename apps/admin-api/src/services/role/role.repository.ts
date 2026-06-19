@@ -12,8 +12,11 @@ import { and, eq, exists, or, sql } from "drizzle-orm";
 
 export function createRoleRepository(db: DbClient) {
   return {
-    getRolesByEmploymentId(employmentId: number) {
-      return getRolesByEmploymentId(employmentId, db);
+    async getRolesByEmploymentId(employmentId: number) {
+      return await db
+        .select()
+        .from(roles)
+        .where(and(activeRoleWhere(), roleAssignedToEmploymentWhere(employmentId, db)));
     },
   };
 }
@@ -70,8 +73,4 @@ function roleAssignedToEmploymentWhere(employmentId: number, tx: DbClient) {
         )),
     ),
   );
-}
-
-async function getRolesByEmploymentId(employmentId: number, tx: DbClient) {
-  return await tx.select().from(roles).where(and(activeRoleWhere(), roleAssignedToEmploymentWhere(employmentId, tx)));
 }

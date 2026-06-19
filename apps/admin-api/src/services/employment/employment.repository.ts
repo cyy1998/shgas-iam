@@ -16,22 +16,62 @@ import { alias } from "drizzle-orm/pg-core";
 
 export function createEmploymentRepository(db: DbClient) {
   return {
-    getEmploymentsByUserId(userId: number) {
-      return getEmploymentsByUserId(userId, db);
+    async getEmploymentsByUserId(userId: number) {
+      const rows = await db.query.employments.findMany({
+        where: {
+          userId,
+          status: EmploymentStatus.Enable,
+          isDelete: false,
+        },
+      });
+      return await attachEmploymentRelations(rows, db);
     },
-    getAllEmploymentsByUserIdForAdmin(userId: number) {
-      return getAllEmploymentsByUserIdForAdmin(userId, db);
+    async getAllEmploymentsByUserIdForAdmin(userId: number) {
+      const rows = await db.query.employments.findMany({
+        where: {
+          userId,
+          isDelete: false,
+        },
+      });
+      return await attachEmploymentRelations(rows, db);
     },
-    getEmploymentByUserOrgPosId(userId: number, orgId: number, posId: number) {
-      return getEmploymentByUserOrgPosId(userId, orgId, posId, db);
+    async getEmploymentByUserOrgPosId(userId: number, orgId: number, posId: number) {
+      const row = await db.query.employments.findFirst({
+        where: {
+          userId,
+          orgId,
+          posId,
+          status: EmploymentStatus.Enable,
+          isDelete: false,
+        },
+      });
+      return (await attachEmploymentRelations(row === undefined ? [] : [row], db))[0] ?? null;
     },
-    getEmploymentByIdForAdmin(id: number) {
-      return getEmploymentByIdForAdmin(id, db);
+    async getEmploymentByIdForAdmin(id: number) {
+      const row = await db.query.employments.findFirst({
+        where: {
+          id,
+          isDelete: false,
+        },
+      });
+      return (await attachEmploymentRelations(row === undefined ? [] : [row], db))[0] ?? null;
     },
-    searchEmploymentsFuzzyForAdminPaged(dto: EmploymentAdminPaginationQueryDto) {
-      return searchEmploymentsFuzzyForAdminPaged(dto, db);
+    async searchEmploymentsFuzzyForAdminPaged(dto: EmploymentAdminPaginationQueryDto) {
+      const { pageNum, pageSize } = dto;
+      const where = buildEmploymentAdminWhere(dto, db);
+      const [rows, totalRows] = await Promise.all([
+        db
+          .select()
+          .from(employments)
+          .where(where)
+          .orderBy(desc(employments.isPrimary), desc(employments.id))
+          .limit(pageSize)
+          .offset((pageNum - 1) * pageSize),
+        db.select({ value: count() }).from(employments).where(where),
+      ]);
+      return { rows: await attachEmploymentRelations(rows, db), total: firstRow(totalRows)?.value ?? 0 };
     },
-    createEmploymentRecord(data: {
+    async createEmploymentRecord(data: {
       userId: number;
       posId: number;
       orgId: number;
@@ -40,25 +80,58 @@ export function createEmploymentRepository(db: DbClient) {
       description?: string | null;
       status?: EmploymentStatus;
     }) {
-      return createEmploymentRecord(data, db);
+      return firstRow(await db.insert(employments).values({
+        userId: data.userId,
+        posId: data.posId,
+        orgId: data.orgId,
+        isPrimary: data.isPrimary ?? false,
+        startTime: data.startTime ?? new Date(),
+        description: data.description ?? null,
+        status: data.status ?? EmploymentStatus.Enable,
+      }).returning())!;
     },
-    updateEmploymentRecord(id: number, data: {
+    async updateEmploymentRecord(id: number, data: {
       isPrimary?: boolean;
       startTime?: Date;
       endTime?: Date | null;
       description?: string | null;
       status?: EmploymentStatus;
     }) {
-      return updateEmploymentRecord(id, data, db);
+      return firstRow(await db
+        .update(employments)
+        .set(compactUpdate(data))
+        .where(eq(employments.id, id))
+        .returning())!;
     },
-    unsetPrimariesByUserId(userId: number, exceptEmploymentId: number | null) {
-      return unsetPrimariesByUserId(userId, exceptEmploymentId, db);
+    async unsetPrimariesByUserId(userId: number, exceptEmploymentId: number | null) {
+      return await db
+        .update(employments)
+        .set({ isPrimary: false })
+        .where(and(
+          eq(employments.userId, userId),
+          eq(employments.isPrimary, true),
+          eq(employments.isDelete, false),
+          exceptEmploymentId === null ? undefined : sql`${employments.id} <> ${exceptEmploymentId}`,
+        ));
     },
-    softDeleteEmployment(id: number) {
-      return softDeleteEmployment(id, db);
+    async softDeleteEmployment(id: number) {
+      return await db
+        .update(employments)
+        .set({ isDelete: true })
+        .where(eq(employments.id, id));
     },
-    endActiveEmploymentsByUserId(userId: number) {
-      return endActiveEmploymentsByUserId(userId, db);
+    async endActiveEmploymentsByUserId(userId: number) {
+      return await db
+        .update(employments)
+        .set({
+          status: EmploymentStatus.Disable,
+          endTime: new Date(),
+        })
+        .where(and(
+          eq(employments.userId, userId),
+          eq(employments.isDelete, false),
+          inArray(employments.status, [EmploymentStatus.Enable, EmploymentStatus.Pause]),
+        ));
     },
   };
 }
@@ -162,58 +235,6 @@ async function attachEmploymentRelations(rows: Employment[], tx: DbClient): Prom
       && row.organization !== undefined
       && row.position !== undefined,
     );
-}
-
-async function getEmploymentsByUserId(userId: number, tx: DbClient) {
-  const rows = await tx.query.employments.findMany({
-    where: {
-      userId,
-      status: EmploymentStatus.Enable,
-      isDelete: false,
-    },
-  });
-  return await attachEmploymentRelations(rows, tx);
-}
-
-async function getAllEmploymentsByUserIdForAdmin(userId: number, tx: DbClient) {
-  const rows = await tx.query.employments.findMany({
-    where: {
-      userId,
-      isDelete: false,
-    },
-  });
-  return await attachEmploymentRelations(rows, tx);
-}
-
-async function getEmploymentByUserOrgPosId(
-  userId: number,
-  orgId: number,
-  posId: number,
-  tx: DbClient,
-) {
-  const row = await tx.query.employments.findFirst({
-    where: {
-      userId,
-      orgId,
-      posId,
-      status: EmploymentStatus.Enable,
-      isDelete: false,
-    },
-  });
-  return (await attachEmploymentRelations(row === undefined ? [] : [row], tx))[0] ?? null;
-}
-
-async function getEmploymentByIdForAdmin(
-  id: number,
-  tx: DbClient,
-) {
-  const row = await tx.query.employments.findFirst({
-    where: {
-      id,
-      isDelete: false,
-    },
-  });
-  return (await attachEmploymentRelations(row === undefined ? [] : [row], tx))[0] ?? null;
 }
 
 function buildOrganizationFilterCondition(
@@ -324,107 +345,4 @@ function buildEmploymentAdminWhere(dto: EmploymentAdminPaginationQueryDto, tx: D
       )),
     ),
   );
-}
-
-async function searchEmploymentsFuzzyForAdminPaged(
-  dto: EmploymentAdminPaginationQueryDto,
-  tx: DbClient,
-) {
-  const { pageNum, pageSize } = dto;
-  const where = buildEmploymentAdminWhere(dto, tx);
-  const [rows, totalRows] = await Promise.all([
-    tx
-      .select()
-      .from(employments)
-      .where(where)
-      .orderBy(desc(employments.isPrimary), desc(employments.id))
-      .limit(pageSize)
-      .offset((pageNum - 1) * pageSize),
-    tx.select({ value: count() }).from(employments).where(where),
-  ]);
-  return { rows: await attachEmploymentRelations(rows, tx), total: firstRow(totalRows)?.value ?? 0 };
-}
-
-async function createEmploymentRecord(
-  data: {
-    userId: number;
-    posId: number;
-    orgId: number;
-    isPrimary?: boolean;
-    startTime?: Date;
-    description?: string | null;
-    status?: EmploymentStatus;
-  },
-  tx: DbClient,
-) {
-  return firstRow(await tx.insert(employments).values({
-    userId: data.userId,
-    posId: data.posId,
-    orgId: data.orgId,
-    isPrimary: data.isPrimary ?? false,
-    startTime: data.startTime ?? new Date(),
-    description: data.description ?? null,
-    status: data.status ?? EmploymentStatus.Enable,
-  }).returning())!;
-}
-
-async function updateEmploymentRecord(
-  id: number,
-  data: {
-    isPrimary?: boolean;
-    startTime?: Date;
-    endTime?: Date | null;
-    description?: string | null;
-    status?: EmploymentStatus;
-  },
-  tx: DbClient,
-) {
-  return firstRow(await tx
-    .update(employments)
-    .set(compactUpdate(data))
-    .where(eq(employments.id, id))
-    .returning())!;
-}
-
-async function unsetPrimariesByUserId(
-  userId: number,
-  exceptEmploymentId: number | null,
-  tx: DbClient,
-) {
-  return await tx
-    .update(employments)
-    .set({ isPrimary: false })
-    .where(and(
-      eq(employments.userId, userId),
-      eq(employments.isPrimary, true),
-      eq(employments.isDelete, false),
-      exceptEmploymentId === null ? undefined : sql`${employments.id} <> ${exceptEmploymentId}`,
-    ));
-}
-
-async function softDeleteEmployment(
-  id: number,
-  tx: DbClient,
-) {
-  return await tx
-    .update(employments)
-    .set({ isDelete: true })
-    .where(eq(employments.id, id));
-}
-
-async function endActiveEmploymentsByUserId(
-  userId: number,
-  tx: DbClient,
-) {
-  return await tx
-    .update(employments)
-    .set({
-      status: EmploymentStatus.Disable,
-      endTime: new Date(),
-    })
-    .where(and(
-      eq(employments.userId, userId),
-      eq(employments.isDelete, false),
-      inArray(employments.status, [EmploymentStatus.Enable, EmploymentStatus.Pause]),
-    ));
 }
