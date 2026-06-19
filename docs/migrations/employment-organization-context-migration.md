@@ -1,17 +1,17 @@
-# Employment Organization Context Migration
+# 任职组织上下文迁移
 
-## Summary
+## 概要
 
-Employment now stores only the actual assignment organization in `employment.dept_id` / `orgId`. Company display and compatibility fields are derived from the assigned organization's `organization_closure` ancestor path.
+任职现在只在 `employment.dept_id` / `orgId` 中保存实际任职组织。公司展示字段和兼容字段都从任职组织在 `organization_closure` 中的祖先路径派生。
 
-The migration `20260526090204_lucky_ben_parker` drops `employment.comp_id` and `idx_comp_id`.
+迁移 `20260526090204_lucky_ben_parker` 会删除 `employment.comp_id` 和 `idx_comp_id`。
 
-## Pre-Migration Audit
+## 迁移前审计
 
-Run these checks before applying the drop-column migration in any persistent environment.
+在任何持久化环境应用删除列迁移前，请先执行以下检查。
 
 ```sql
--- Employments whose stored comp_id does not match the nearest Company ancestor.
+-- 存储的 comp_id 与最近的分公司祖先不匹配的任职。
 with company_ancestors as (
   select
     e.id as employment_id,
@@ -42,7 +42,7 @@ where e.is_delete = false
 order by e.id
 limit 100;
 
--- Employments whose assigned organization has no Company ancestor.
+-- 任职组织没有分公司祖先的任职。
 select
   e.id,
   e.user_id,
@@ -65,22 +65,22 @@ order by e.id
 limit 100;
 ```
 
-Record and resolve mismatch rows before applying the migration. Rows without a Company ancestor are allowed for supplier, external, individual external, virtual, or temporary organizations; their deprecated `compCode` and `compName` fields return `null`.
+应用迁移前，请记录并处理不匹配的行。没有分公司祖先的行允许存在于供应商、外部、个人外部、虚拟或临时组织中；它们废弃的 `compCode` 和 `compName` 字段会返回 `null`。
 
-## Audit Result On 2026-05-27
+## 2026-05-27 审计结果
 
-Using the configured `packages/db/.env` database, the pre-migration audit found:
+使用 `packages/db/.env` 中配置的数据库执行迁移前审计，结果如下：
 
-- `2078` active employment rows where stored `comp_id` differs from the nearest Company ancestor derived from `dept_id`.
-- `1908` active employment rows whose assigned organization has no Company ancestor.
+- `2078` 条有效任职记录中，已存储的 `comp_id` 与从 `dept_id` 派生出的最近分公司祖先不同。
+- `1908` 条有效任职记录的任职组织没有分公司祖先。
 
-Mismatch samples were concentrated around employments assigned to `org_id=80`, where the stored company was `2` but the nearest derived Company ancestor was `80` / `SB51` / `嘉定分公司`. Example employment ids: `218`, `236`, `1373`, `1374`, `1375`.
+不匹配样例集中在分配到 `org_id=80` 的任职附近，其中存储的公司为 `2`，但最近派生出的分公司祖先为 `80` / `SB51` / `嘉定分公司`。示例任职 ID：`218`、`236`、`1373`、`1374`、`1375`。
 
-No-Company samples were external organizations such as `91310115132249289B` / `上海燃气浦东销售有限公司`, `913101157031458200` / `上海世昕软件股份有限公司`, and `91310230756971042J` / `上海勘察设计研究院（集团）股份有限公司`. These rows are expected to return `compCode=null` and `compName=null` after migration.
+无分公司样例为外部组织，例如 `91310115132249289B` / `上海燃气浦东销售有限公司`、`913101157031458200` / `上海世昕软件股份有限公司`，以及 `91310230756971042J` / `上海勘察设计研究院（集团）股份有限公司`。这些行在迁移后预期返回 `compCode=null` 和 `compName=null`。
 
-## Backup And Rollback
+## 备份与回滚
 
-Before applying the migration, take a database backup or at minimum export the current employment company mapping:
+应用迁移前，请先备份数据库，或至少导出当前任职与公司的映射：
 
 ```sql
 create table if not exists employment_comp_id_backup_20260526 as
@@ -88,7 +88,7 @@ select id as employment_id, comp_id, now() as backed_up_at
 from employment;
 ```
 
-Rollback before the drop-column migration is applied by reverting the application deployment. Rollback after the column is dropped requires restoring the column and repopulating it from backup:
+在删除列迁移应用前，可以通过回滚应用部署完成回滚。列删除后回滚，需要恢复该列并从备份重新填充：
 
 ```sql
 alter table employment add column comp_id integer;
@@ -100,4 +100,4 @@ alter table employment alter column comp_id set not null;
 create index idx_comp_id on employment (comp_id);
 ```
 
-If the backup table is unavailable, `comp_id` can only be reconstructed from the current organization tree, which may not match historical stored values.
+如果备份表不可用，`comp_id` 只能从当前组织树重建，这可能与历史存储值不一致。

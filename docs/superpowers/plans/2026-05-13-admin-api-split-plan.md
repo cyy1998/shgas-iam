@@ -1,18 +1,18 @@
-# Admin API Split Implementation Plan
+# Admin API 拆分实施计划
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **对于代理工作人员：** 所需的子技能：使用 superpowers:subagent-driven-development（推荐）或 superpowers:executing-plans 逐个任务地实施此计划。步骤使用复选框 ( `- [ ]` ) 语法进行跟踪。
 
-**Goal:** Split the current `apps/api` admin backend into an independent `apps/admin-api` service while extracting shared contracts, database schema, and backend infrastructure packages.
+**目标：** 将当前的 `apps/api` 管理后端拆分为独立的 `apps/admin-api` 服务，同时提取共享合约、数据库架构和后端基础设施包。
 
-**Architecture:** The migration is phased. First rename the existing shared enum package to `@iam/contracts`, then extract Drizzle schema/migrations into `@iam/db`, then extract Hono/tRPC/OpenAPI infrastructure into `@iam/api-core`. After the existing `apps/api` is stable on the new packages, create `apps/admin-api`, migrate admin REST/tRPC and admin-owned service/repository code, switch `apps/admin` type imports to `@iam/admin-api/trpc`, and finally remove admin exposure from `apps/api`.
+**架构：** 迁移是分阶段进行的。首先将现有的共享枚举包重命名为 `@iam/contracts` ，然后将 Drizzle 架构/迁移提取到 `@iam/db` 中，然后将 Hono/tRPC/OpenAPI 基础设施提取到 `@iam/api-core` 中。现有 `apps/api` 在新包上稳定后，创建 `apps/admin-api` ，迁移管理员 REST/tRPC 和管理员拥有的服务/存储库代码，将 `apps/admin` 类型导入切换到 `@iam/admin-api/trpc` ，最后从 `apps/api` 中删除管理员暴露。
 
-**Tech Stack:** pnpm workspace, Turborepo, Bun, Hono, `@hono/zod-openapi`, tRPC v11, Drizzle ORM v1 RC, PostgreSQL, Redis, Umi Max, TypeScript.
+**技术堆栈：** pnpm 工作区、Turborepo、Bun、Hono、`@hono/zod-openapi`、tRPC v11、Drizzle ORM v1 RC、PostgreSQL、Redis、Umi Max、TypeScript。
 
 ---
 
-## File Structure
+## 文件结构
 
-The final structure should be:
+最终的结构应该是：
 
 ```text
 apps/
@@ -94,24 +94,24 @@ packages/
       utils/
 ```
 
-Responsibility rules:
+责任规则：
 
-- `@iam/contracts` is the only frontend-safe shared package. It may export enums, status codes, and UI option helpers.
-- `@iam/db` is backend-only and owns Drizzle schema, relations, migrations, `db`, `DbClient`, `DbTransaction`, and query helpers.
-- `@iam/api-core` is backend-only and owns Hono/tRPC/OpenAPI infrastructure. It must not import `apps/*` or app service modules.
-- `apps/admin-api` may copy code from the old admin implementation, but after migration it must not import `@api/services/*`, `@api/routes/admin/*`, or `@api/trpc/*`.
+- `@iam/contracts` 是唯一前端安全的共享包。它可以导出枚举、状态代码和 UI 选项帮助程序。
+- `@iam/db` 仅限后端，拥有 Drizzle 架构、关系、迁移、 `db` 、 `DbClient` 、 `DbTransaction` 和查询助手。
+- `@iam/api-core` 仅限后端，拥有 Hono/tRPC/OpenAPI 基础设施。它不得导入 `apps/*` 或应用服务模块。
+- `apps/admin-api` 可以从旧的管理实现中复制代码，但迁移后不得导入 `@api/services/*` 、 `@api/routes/admin/*` 或 `@api/trpc/*` 。
 
 ---
 
-## Task 0: Baseline Checks
+## 任务 0：基线检查
 
-**Files:**
-- Read: `docs/superpowers/specs/2026-05-12-admin-api-split-design.md`
-- Read: `package.json`
-- Read: `pnpm-workspace.yaml`
-- Read: `turbo.json`
+**文件：**
+- 读取：`docs/superpowers/specs/2026-05-12-admin-api-split-design.md`
+- 读取：`package.json`
+- 读取：`pnpm-workspace.yaml`
+- 读取：`turbo.json`
 
-- [ ] **Step 1: Confirm the worktree is clean**
+- [ ] **第 1 步：确认工作树是干净的**
 
 Run:
 
@@ -119,9 +119,9 @@ Run:
 git status --short
 ```
 
-Expected: no output. If output exists, inspect it and avoid overwriting user changes.
+预期：无输出。如果输出存在，​​请检查它并避免覆盖用户更改。
 
-- [ ] **Step 2: Run baseline type checks**
+- [ ] **步骤 2：运行基线类型检查**
 
 Run:
 
@@ -131,9 +131,9 @@ pnpm --filter @iam/admin typecheck
 pnpm --filter @iam/sso typecheck
 ```
 
-Expected: each command exits with code 0. If a command fails before any edit, record the failure in the task notes and continue only after deciding whether it is unrelated.
+预期：每个命令都以代码 0 退出。如果命令在任何编辑之前失败，请在任务注释中记录失败，并仅在确定是否不相关后继续。
 
-- [ ] **Step 3: Run baseline lint for the current API**
+- [ ] **第 3 步：为当前 API 运行基线 lint**
 
 Run:
 
@@ -141,29 +141,29 @@ Run:
 pnpm --filter @iam/api lint
 ```
 
-Expected: exits with code 0 or only reports pre-existing warnings. Do not fix unrelated lint issues in this task.
+预期：以代码 0 退出或仅报告预先存在的警告。不要修复此任务中不相关的 lint 问题。
 
-- [ ] **Step 4: Commit**
+- [ ] **第 4 步：提交**
 
-No commit is needed if no files changed.
+如果没有文件更改，则无需提交。
 
 ---
 
-## Task 1: Rename `@iam/shared` To `@iam/contracts`
+## 任务 1：将 `@iam/shared` 重命名为 `@iam/contracts`
 
-**Files:**
-- Move: `packages/shared/` -> `packages/contracts/`
-- Modify: `packages/contracts/package.json`
-- Create: `packages/contracts/eslint.config.js`
-- Modify: `packages/contracts/tsconfig.json`
-- Modify: `apps/api/package.json`
-- Modify: `apps/admin/package.json`
-- Modify: `apps/sso/package.json`
-- Modify: imports under `apps/api/src/`, `apps/admin/src/`, `apps/sso/src/`, `packages/contracts/src/`
-- Modify: `apps/api/Dockerfile`
-- Modify: `pnpm-lock.yaml`
+**文件：**
+- 移动：`packages/shared/` -> `packages/contracts/`
+- 修改：`packages/contracts/package.json`
+- 创建：`packages/contracts/eslint.config.js`
+- 修改：`packages/contracts/tsconfig.json`
+- 修改：`apps/api/package.json`
+- 修改：`apps/admin/package.json`
+- 修改：`apps/sso/package.json`
+- 修改：在 `apps/api/src/` 、 `apps/admin/src/` 、 `apps/sso/src/` 、 `packages/contracts/src/` 下导入
+- 修改：`apps/api/Dockerfile`
+- 修改：`pnpm-lock.yaml`
 
-- [ ] **Step 1: Move the package directory**
+- [ ] **第1步：移动包目录**
 
 Run:
 
@@ -171,11 +171,11 @@ Run:
 git mv packages/shared packages/contracts
 ```
 
-Expected: `packages/contracts/package.json` exists and `packages/shared` no longer exists.
+预期：`packages/contracts/package.json` 存在且 `packages/shared` 不再存在。
 
-- [ ] **Step 2: Rename the package**
+- [ ] **第 2 步：重命名包**
 
-Edit `packages/contracts/package.json` so it is exactly:
+编辑 `packages/contracts/package.json` 使其完全正确：
 
 ```json
 {
@@ -200,9 +200,9 @@ Edit `packages/contracts/package.json` so it is exactly:
 }
 ```
 
-- [ ] **Step 3: Add lint config for contracts**
+- [ ] **第 3 步：为合约添加 lint 配置**
 
-Create `packages/contracts/eslint.config.js`:
+创建 `packages/contracts/eslint.config.js` ：
 
 ```js
 import antfu from "@antfu/eslint-config";
@@ -228,15 +228,15 @@ export default antfu({
 });
 ```
 
-Keep `packages/contracts/tsconfig.json` from the old shared package. If it lacks an `include`, set:
+保留旧共享包中的 `packages/contracts/tsconfig.json` 。如果缺少 `include` ，请设置：
 
 ```json
 "include": ["src/**/*"]
 ```
 
-- [ ] **Step 4: Update workspace dependencies**
+- [ ] **第 4 步：更新工作区依赖项**
 
-Replace `@iam/shared` with `@iam/contracts` in:
+将 `@iam/shared` 替换为 `@iam/contracts`：
 
 ```text
 apps/api/package.json
@@ -244,13 +244,13 @@ apps/admin/package.json
 apps/sso/package.json
 ```
 
-The dependency entry should be:
+依赖项应该是：
 
 ```json
 "@iam/contracts": "workspace:*"
 ```
 
-- [ ] **Step 5: Update TypeScript imports**
+- [ ] **第 5 步：更新 TypeScript 导入**
 
 Run:
 
@@ -258,20 +258,20 @@ Run:
 rg -l '@iam/shared' apps packages | xargs perl -pi -e 's#@iam/shared#@iam/contracts#g'
 ```
 
-Expected: import sites now reference `@iam/contracts`.
+预期：导入站点现在引用 `@iam/contracts` 。
 
-- [ ] **Step 6: Update the API Dockerfile package copy paths**
+- [ ] **第6步：更新API Dockerfile包复制路径**
 
-In `apps/api/Dockerfile`, replace package paths:
+在 `apps/api/Dockerfile` 中，替换包路径：
 
 ```dockerfile
 COPY packages/contracts/package.json ./packages/contracts/
 COPY packages/contracts/ ./packages/contracts/
 ```
 
-Remove the old `packages/shared` copy paths from the Dockerfile.
+从 Dockerfile 中删除旧的 `packages/shared` 复制路径。
 
-- [ ] **Step 7: Refresh the lockfile**
+- [ ] **第 7 步：刷新锁定文件**
 
 Run:
 
@@ -279,9 +279,9 @@ Run:
 pnpm install --lockfile-only
 ```
 
-Expected: `pnpm-lock.yaml` references `@iam/contracts` instead of `@iam/shared`.
+预期： `pnpm-lock.yaml` 引用 `@iam/contracts` 而不是 `@iam/shared` 。
 
-- [ ] **Step 8: Verify old package name is gone**
+- [ ] **第 8 步：验证旧包名称是否已消失**
 
 Run:
 
@@ -289,9 +289,9 @@ Run:
 rg '@iam/shared|packages/shared' apps packages package.json pnpm-lock.yaml
 ```
 
-Expected: no output.
+预期：无输出。
 
-- [ ] **Step 9: Verify type checks**
+- [ ] **步骤 9：验证类型检查**
 
 Run:
 
@@ -303,9 +303,9 @@ pnpm --filter @iam/admin typecheck
 pnpm --filter @iam/sso typecheck
 ```
 
-Expected: all three commands exit with code 0.
+预期：所有三个命令均以代码 0 退出。
 
-- [ ] **Step 10: Commit**
+- [ ] **第 10 步：提交**
 
 Run:
 
@@ -315,31 +315,31 @@ git add -u packages/shared apps/api apps/admin apps/sso
 git commit -m "refactor(contracts): 重命名共享契约包"
 ```
 
-Expected: one focused commit containing only the package rename and import updates.
+预期：一次集中提交仅包含包重命名和导入更新。
 
 ---
 
-## Task 2: Extract Drizzle Database Layer Into `@iam/db`
+## 任务 2：将 Drizzle 数据库层提取到 `@iam/db` 中
 
-**Files:**
-- Create: `packages/db/package.json`
-- Create: `packages/db/tsconfig.json`
-- Create: `packages/db/eslint.config.js`
-- Create: `packages/db/src/singleton.ts`
-- Move: `apps/api/src/db/schema/` -> `packages/db/src/schema/`
-- Move: `apps/api/src/db/relations/` -> `packages/db/src/relations/`
-- Move: `apps/api/src/db/migrations/` -> `packages/db/src/migrations/`
-- Move: `apps/api/src/db/index.ts` -> `packages/db/src/index.ts`
-- Move: `apps/api/src/db/query-utils.ts` -> `packages/db/src/query-utils.ts`
-- Move: `apps/api/drizzle.config.ts` -> `packages/db/drizzle.config.ts`
-- Modify: `apps/api/package.json`
-- Modify: imports under `apps/api/src/`
-- Modify: `apps/api/Dockerfile`
-- Modify: `pnpm-lock.yaml`
+**文件：**
+- 创建：`packages/db/package.json`
+- 创建：`packages/db/tsconfig.json`
+- 创建：`packages/db/eslint.config.js`
+- 创建：`packages/db/src/singleton.ts`
+- 移动：`apps/api/src/db/schema/` -> `packages/db/src/schema/`
+- 移动：`apps/api/src/db/relations/` -> `packages/db/src/relations/`
+- 移动：`apps/api/src/db/migrations/` -> `packages/db/src/migrations/`
+- 移动：`apps/api/src/db/index.ts` -> `packages/db/src/index.ts`
+- 移动：`apps/api/src/db/query-utils.ts` -> `packages/db/src/query-utils.ts`
+- 移动：`apps/api/drizzle.config.ts` -> `packages/db/drizzle.config.ts`
+- 修改：`apps/api/package.json`
+- 修改：在`apps/api/src/`下导入
+- 修改：`apps/api/Dockerfile`
+- 修改：`pnpm-lock.yaml`
 
-- [ ] **Step 1: Create the package shell**
+- [ ] **第 1 步：创建包 shell**
 
-Create `packages/db/package.json`:
+创建 `packages/db/package.json` ：
 
 ```json
 {
@@ -378,7 +378,7 @@ Create `packages/db/package.json`:
 }
 ```
 
-Create `packages/db/tsconfig.json`:
+创建 `packages/db/tsconfig.json` ：
 
 ```json
 {
@@ -407,7 +407,7 @@ Create `packages/db/tsconfig.json`:
 }
 ```
 
-Create `packages/db/eslint.config.js`:
+创建 `packages/db/eslint.config.js` ：
 
 ```js
 import antfu from "@antfu/eslint-config";
@@ -434,7 +434,7 @@ export default antfu({
 });
 ```
 
-- [ ] **Step 2: Move database files**
+- [ ] **第 2 步：移动数据库文件**
 
 Run:
 
@@ -448,11 +448,11 @@ git mv apps/api/src/db/index.ts packages/db/src/index.ts
 git mv apps/api/drizzle.config.ts packages/db/drizzle.config.ts
 ```
 
-Expected: `apps/api/src/db` has no schema, relations, migrations, index, or query-utils files left.
+预期：`apps/api/src/db` 没有留下架构、关系、迁移、索引或查询实用程序文件。
 
-- [ ] **Step 3: Add DB-local singleton**
+- [ ] **第3步：添加数据库本地单例**
 
-Create `packages/db/src/singleton.ts`:
+创建 `packages/db/src/singleton.ts` ：
 
 ```ts
 type Destroy<T> = (value: T) => void | Promise<void>;
@@ -488,9 +488,9 @@ export function createSingleton<T>(
 }
 ```
 
-- [ ] **Step 4: Update DB package imports**
+- [ ] **第 4 步：更新数据库包导入**
 
-Edit `packages/db/src/index.ts`:
+编辑 `packages/db/src/index.ts` ：
 
 ```ts
 import { relations } from "./relations";
@@ -526,13 +526,13 @@ export async function closeDb() {
 }
 ```
 
-Edit `packages/db/src/relations/index.ts` so its schema import is:
+编辑 `packages/db/src/relations/index.ts` 使其架构导入为：
 
 ```ts
 import * as schema from "../schema";
 ```
 
-Edit `packages/db/src/relations/types.ts` so its schema import is:
+编辑 `packages/db/src/relations/types.ts` 使其架构导入为：
 
 ```ts
 import type * as schema from "../schema";
@@ -545,11 +545,11 @@ rg -l '@api/db/schema' packages/db/src | xargs -r perl -pi -e 's#@api/db/schema#
 rg -l '@api/enums' packages/db/src | xargs -r perl -pi -e 's#@api/enums#@iam/contracts#g'
 ```
 
-Expected: `rg '@api/' packages/db/src` returns no output.
+预期：`rg '@api/' packages/db/src` 不返回任何输出。
 
-- [ ] **Step 5: Update Drizzle config**
+- [ ] **第 5 步：更新 Drizzle 配置**
 
-Edit `packages/db/drizzle.config.ts`:
+编辑 `packages/db/drizzle.config.ts` ：
 
 ```ts
 import { defineConfig } from "drizzle-kit";
@@ -566,7 +566,7 @@ export default defineConfig({
 });
 ```
 
-- [ ] **Step 6: Update API imports to use `@iam/db`**
+- [ ] **第 6 步：更新 API 导入以使用 `@iam/db` **
 
 Run:
 
@@ -576,17 +576,17 @@ rg -l '@api/db/query-utils' apps/api/src | xargs -r perl -pi -e 's#@api/db/query
 rg -l '@api/db"' apps/api/src | xargs -r perl -pi -e 's#@api/db"#@iam/db"#g'
 ```
 
-Expected: `rg '@api/db' apps/api/src` returns no output.
+预期：`rg '@api/db' apps/api/src` 不返回任何输出。
 
-- [ ] **Step 7: Update API package scripts and dependencies**
+- [ ] **第 7 步：更新 API 包脚本和依赖项**
 
-In `apps/api/package.json`, add:
+在 `apps/api/package.json` 中，添加：
 
 ```json
 "@iam/db": "workspace:*"
 ```
 
-Change DB scripts to forward to `@iam/db`:
+更改数据库脚本以转发到 `@iam/db` ：
 
 ```json
 "db:generate": "pnpm --filter @iam/db db:generate",
@@ -594,20 +594,20 @@ Change DB scripts to forward to `@iam/db`:
 "db:push": "pnpm --filter @iam/db db:push"
 ```
 
-Keep `drizzle-orm`, `postgres`, and `drizzle-kit` in `apps/api/package.json` until all direct `drizzle-orm` imports in API services are reviewed. The services still import SQL helpers such as `eq`, `and`, and `count`.
+将 `drizzle-orm` 、 `postgres` 和 `drizzle-kit` 保留在 `apps/api/package.json` 中，直到审核 API 服务中的所有直接 `drizzle-orm` 导入。这些服务仍然导入 SQL 帮助程序，例如 `eq` 、 `and` 和 `count` 。
 
-- [ ] **Step 8: Update Dockerfile workspace package copy**
+- [ ] **步骤 8：更新 Dockerfile 工作区包副本**
 
-In `apps/api/Dockerfile`, add package metadata and source copy lines for `packages/db`:
+在 `apps/api/Dockerfile` 中，为 `packages/db` 添加包元数据和源代码复制行：
 
 ```dockerfile
 COPY packages/db/package.json ./packages/db/
 COPY packages/db/ ./packages/db/
 ```
 
-Keep the `packages/contracts` copy lines from Task 1.
+保留任务 1 中的 `packages/contracts` 复制行。
 
-- [ ] **Step 9: Refresh lockfile and verify**
+- [ ] **步骤 9：刷新锁定文件并验证**
 
 Run:
 
@@ -619,9 +619,9 @@ pnpm --filter @iam/db lint
 pnpm --filter @iam/api lint
 ```
 
-Expected: all commands exit with code 0.
+预期：所有命令均以代码 0 退出。
 
-- [ ] **Step 10: Verify Drizzle command wiring**
+- [ ] **步骤 10：验证 Drizzle 命令接线**
 
 Run:
 
@@ -629,9 +629,9 @@ Run:
 pnpm --filter @iam/db exec drizzle-kit --config drizzle.config.ts check
 ```
 
-Expected: drizzle-kit loads `packages/db/drizzle.config.ts` and does not fail due to missing schema path. If `check` is unavailable in this drizzle-kit version, run `pnpm --filter @iam/db db:generate --help` and verify the package command resolves.
+预期：drizzle-kit 加载 `packages/db/drizzle.config.ts` 并且不会因缺少架构路径而失败。如果 `check` 在此 drizzle-kit 版本中不可用，请运行 `pnpm --filter @iam/db db:generate --help` 并验证包命令是否解析。
 
-- [ ] **Step 11: Commit**
+- [ ] **第 11 步：提交**
 
 Run:
 
@@ -643,33 +643,33 @@ git commit -m "refactor(db): 抽取数据库契约包"
 
 ---
 
-## Task 3: Extract API Core Infrastructure Package
+## 任务3：提取API核心基础设施包
 
-**Files:**
-- Create: `packages/api-core/package.json`
-- Create: `packages/api-core/tsconfig.json`
-- Create: `packages/api-core/eslint.config.js`
-- Create directories under `packages/api-core/src/`
-- Move or copy from `apps/api/src/lib/core/`
-- Move or copy from `apps/api/src/errors/`
-- Move or copy from `apps/api/src/middlewares/error.handler.ts`
-- Move or copy from `apps/api/src/middlewares/not-found-handler.ts`
-- Move or copy from `apps/api/src/utils/http/response.ts`
-- Move or copy from `apps/api/src/utils/common.utils.ts`
-- Move or copy from `apps/api/src/utils/encryption.utils.ts`
-- Move or copy from `apps/api/src/utils/page.util.ts`
-- Move or copy from `apps/api/src/utils/tools/glob.ts`
-- Move or copy from `apps/api/src/utils/zod/env-validator.ts`
-- Move or copy from `apps/api/src/lib/logger/index.ts`
-- Move or copy from `apps/api/src/lib/clients/redis.ts`
-- Move or copy from `apps/api/src/trpc/trpc.ts`
-- Modify: `apps/api/package.json`
-- Modify: imports under `apps/api/src/`
-- Modify: `pnpm-lock.yaml`
+**文件：**
+- 创建：`packages/api-core/package.json`
+- 创建：`packages/api-core/tsconfig.json`
+- 创建：`packages/api-core/eslint.config.js`
+- 在`packages/api-core/src/`下创建目录
+- 从 `apps/api/src/lib/core/` 移动或复制
+- 从 `apps/api/src/errors/` 移动或复制
+- 从 `apps/api/src/middlewares/error.handler.ts` 移动或复制
+- 从 `apps/api/src/middlewares/not-found-handler.ts` 移动或复制
+- 从 `apps/api/src/utils/http/response.ts` 移动或复制
+- 从 `apps/api/src/utils/common.utils.ts` 移动或复制
+- 从 `apps/api/src/utils/encryption.utils.ts` 移动或复制
+- 从 `apps/api/src/utils/page.util.ts` 移动或复制
+- 从 `apps/api/src/utils/tools/glob.ts` 移动或复制
+- 从 `apps/api/src/utils/zod/env-validator.ts` 移动或复制
+- 从 `apps/api/src/lib/logger/index.ts` 移动或复制
+- 从 `apps/api/src/lib/clients/redis.ts` 移动或复制
+- 从 `apps/api/src/trpc/trpc.ts` 移动或复制
+- 修改：`apps/api/package.json`
+- 修改：在`apps/api/src/`下导入
+- 修改：`pnpm-lock.yaml`
 
-- [ ] **Step 1: Create package metadata**
+- [ ] **第 1 步：创建包元数据**
 
-Create `packages/api-core/package.json`:
+创建 `packages/api-core/package.json` ：
 
 ```json
 {
@@ -718,7 +718,7 @@ Create `packages/api-core/package.json`:
 }
 ```
 
-Create `packages/api-core/tsconfig.json` with the same compiler options as `apps/api/tsconfig.json`, replacing paths with:
+使用与 `apps/api/tsconfig.json` 相同的编译器选项创建 `packages/api-core/tsconfig.json` ，并将路径替换为：
 
 ```json
 "paths": {
@@ -726,13 +726,13 @@ Create `packages/api-core/tsconfig.json` with the same compiler options as `apps
 }
 ```
 
-Create `packages/api-core/eslint.config.js` by copying `apps/api/eslint.config.js` and changing `ignores` to:
+通过复制 `apps/api/eslint.config.js` 并将 `ignores` 更改为以下内容来创建 `packages/api-core/eslint.config.js`：
 
 ```js
 ignores: []
 ```
 
-- [ ] **Step 2: Move pure infrastructure files**
+- [ ] **第 2 步：移动纯基础设施文件**
 
 Run:
 
@@ -754,11 +754,11 @@ cp apps/api/src/trpc/trpc.ts packages/api-core/src/trpc/index.ts
 cp apps/api/src/types/lib.d.ts packages/api-core/src/types/lib.ts
 ```
 
-Expected: files are copied, not removed from `apps/api` yet. Keeping copies until `apps/api` import updates pass makes rollback easier.
+预期：文件已复制，尚未从 `apps/api` 中删除。保留副本直到 `apps/api` 导入更新通过可以使回滚更容易。
 
-- [ ] **Step 3: Add package barrel exports**
+- [ ] **第3步：添加包桶导出**
 
-Create `packages/api-core/src/index.ts`:
+创建 `packages/api-core/src/index.ts` ：
 
 ```ts
 export * from "./core";
@@ -771,7 +771,7 @@ export * from "./trpc";
 export * from "./utils";
 ```
 
-Create `packages/api-core/src/core/index.ts`:
+创建 `packages/api-core/src/core/index.ts` ：
 
 ```ts
 export * from "./business-op";
@@ -785,7 +785,7 @@ export * from "./pagination/type";
 export * from "./singleton";
 ```
 
-Create `packages/api-core/src/errors/index.ts`:
+创建 `packages/api-core/src/errors/index.ts` ：
 
 ```ts
 export * from "./AuthzError";
@@ -802,13 +802,13 @@ export * from "./UserHasActiveEmploymentError";
 export * from "./UserNotFoundError";
 ```
 
-Create `packages/api-core/src/http/index.ts`:
+创建 `packages/api-core/src/http/index.ts` ：
 
 ```ts
 export * from "./response";
 ```
 
-Create `packages/api-core/src/middlewares/index.ts`:
+创建 `packages/api-core/src/middlewares/index.ts` ：
 
 ```ts
 export * from "./auth";
@@ -816,7 +816,7 @@ export * from "./error-handler";
 export { default as notFound } from "./not-found-handler";
 ```
 
-Create `packages/api-core/src/utils/index.ts`:
+创建 `packages/api-core/src/utils/index.ts` ：
 
 ```ts
 export * from "./common";
@@ -826,9 +826,9 @@ export * from "./glob";
 export * from "./page";
 ```
 
-- [ ] **Step 4: Make logger and Redis env-injected**
+- [ ] **第 4 步：使记录器和 Redis 环境注入**
 
-Edit `packages/api-core/src/logger/index.ts` to remove `@api/env` and export a factory:
+编辑 `packages/api-core/src/logger/index.ts` 以删除 `@api/env` 并导出工厂：
 
 ```ts
 import type { TransportTargetOptions } from "pino";
@@ -854,7 +854,7 @@ export function createLogger(config: LoggerConfig) {
 }
 ```
 
-Edit `packages/api-core/src/redis/index.ts` to remove `@api/env` and export a factory:
+编辑 `packages/api-core/src/redis/index.ts` 以删除 `@api/env` 并导出工厂：
 
 ```ts
 import Redis from "ioredis";
@@ -881,9 +881,9 @@ export function createRedisClient(config: RedisConfig) {
 }
 ```
 
-- [ ] **Step 5: Make core types app-neutral**
+- [ ] **第 5 步：使核心类型与应用程序无关**
 
-Edit `packages/api-core/src/types/lib.ts`:
+编辑 `packages/api-core/src/types/lib.ts` ：
 
 ```ts
 import type { RouteConfig as HonoRouteConfig, RouteHandler } from "@hono/zod-openapi";
@@ -916,9 +916,9 @@ export type PublicRouteHandler<R extends HonoRouteConfig, TUserDetail = unknown>
 export type BaseRouteHandler<R extends HonoRouteConfig> = RouteHandler<R, BaseBindings>;
 ```
 
-- [ ] **Step 6: Make `define-config` env-neutral**
+- [ ] **第 6 步：使 `define-config` 环境中性**
 
-Edit `packages/api-core/src/core/define-config.ts` so `OpenAPIConfig.enabled` accepts `Record<string, unknown>`:
+编辑 `packages/api-core/src/core/define-config.ts` 使 `OpenAPIConfig.enabled` 接受 `Record<string, unknown>` ：
 
 ```ts
 export type OpenAPIConfig = {
@@ -929,11 +929,11 @@ export type OpenAPIConfig = {
 };
 ```
 
-Keep the remaining `TierConfig`, `RpcConfig`, and `AppConfig` exports unchanged.
+保持其余 `TierConfig` 、 `RpcConfig` 和 `AppConfig` 导出不变。
 
-- [ ] **Step 7: Make `createApp` app-supplied**
+- [ ] **第 7 步：使 `createApp` 应用程序提供**
 
-Edit `packages/api-core/src/core/create-app.ts` so it exports:
+编辑 `packages/api-core/src/core/create-app.ts` 以便导出：
 
 ```ts
 export type CreateAppOptions = {
@@ -951,11 +951,11 @@ export default function createApp(config: AppConfig, options: CreateAppOptions) 
 }
 ```
 
-The implementation must not call `globImport` internally. Each app passes `import.meta.glob` results from its own source tree.
+实现不得在内部调用 `globImport`。每个应用程序都会从​​其自己的源树传递 `import.meta.glob` 结果。
 
-- [ ] **Step 8: Add injectable auth middleware factories**
+- [ ] **步骤 8：添加可注入的身份验证中间件工厂**
 
-Create `packages/api-core/src/middlewares/auth.ts`:
+创建 `packages/api-core/src/middlewares/auth.ts` ：
 
 ```ts
 import type { Context, Next } from "hono";
@@ -1063,7 +1063,7 @@ export function createInternalAuthenticationHandler<TClient>(
 }
 ```
 
-- [ ] **Step 9: Update copied imports inside `@iam/api-core`**
+- [ ] **第 9 步：更新 `@iam/api-core` 内复制的导入 **
 
 Run:
 
@@ -1075,23 +1075,23 @@ rg -l '@api/lib/core' packages/api-core/src | xargs -r perl -pi -e 's#@api/lib/c
 rg -l '@api/trpc/trpc' packages/api-core/src | xargs -r perl -pi -e 's#@api/trpc/trpc#@iam/api-core/trpc#g'
 ```
 
-Then fix remaining relative imports by running:
+然后通过运行以下命令修复剩余的相对导入：
 
 ```bash
 rg '@api/' packages/api-core/src
 ```
 
-Expected: no output.
+预期：无输出。
 
-- [ ] **Step 10: Update `apps/api` to consume `@iam/api-core`**
+- [ ] **第 10 步：更新 `apps/api` 以使用 `@iam/api-core` **
 
-In `apps/api/package.json`, add:
+在 `apps/api/package.json` 中，添加：
 
 ```json
 "@iam/api-core": "workspace:*"
 ```
 
-Create `apps/api/src/lib/logger/index.ts` as the app-level logger wrapper:
+创建 `apps/api/src/lib/logger/index.ts` 作为应用程序级记录器包装器：
 
 ```ts
 import env from "@api/env";
@@ -1103,7 +1103,7 @@ export const logger = createLogger({
 });
 ```
 
-Create `apps/api/src/lib/clients/redis.ts` as the app-level Redis wrapper:
+创建 `apps/api/src/lib/clients/redis.ts` 作为应用程序级 Redis 包装器：
 
 ```ts
 import env from "@api/env";
@@ -1119,11 +1119,11 @@ const redis = createRedisClient({
 export default redis;
 ```
 
-Keep these wrappers so existing app services can import `@api/lib/logger` and `@api/lib/clients/redis` until later cleanup.
+保留这些包装器，以便现有应用程序服务可以导入 `@api/lib/logger` 和 `@api/lib/clients/redis` 直到稍后清理。
 
-- [ ] **Step 11: Update app-level `createApp` wiring**
+- [ ] **步骤 11：更新应用程序级 `createApp` 接线**
 
-Edit `apps/api/src/app.ts`:
+编辑 `apps/api/src/app.ts` ：
 
 ```ts
 /* eslint-disable antfu/no-top-level-await */
@@ -1146,7 +1146,7 @@ export type AppType = typeof app;
 export default app;
 ```
 
-- [ ] **Step 12: Update imports from extracted infrastructure**
+- [ ] **步骤 12：更新提取的基础设施的导入**
 
 Run:
 
@@ -1161,11 +1161,11 @@ rg -l '@api/types/lib' apps/api/src | xargs -r perl -pi -e 's#@api/types/lib#@ia
 rg -l '@api/trpc/trpc' apps/api/src | xargs -r perl -pi -e 's#@api/trpc/trpc#@iam/api-core/trpc#g'
 ```
 
-Expected: imports now point to `@iam/api-core`, except app-level wrappers `@api/lib/logger` and `@api/lib/clients/redis`.
+预期：导入现在指向 `@iam/api-core` ，但应用程序级包装器 `@api/lib/logger` 和 `@api/lib/clients/redis` 除外。
 
-- [ ] **Step 13: Replace authentication middleware implementation in `apps/api`**
+- [ ] **步骤 13：替换 `apps/api` 中的身份验证中间件实现 **
 
-Edit `apps/api/src/middlewares/authentication.handler.ts`:
+编辑 `apps/api/src/middlewares/authentication.handler.ts` ：
 
 ```ts
 import redis from "@api/lib/clients/redis";
@@ -1186,7 +1186,7 @@ export const internalAuthenticationHandler = createInternalAuthenticationHandler
 });
 ```
 
-- [ ] **Step 14: Verify package boundaries**
+- [ ] **步骤 14：验证包边界**
 
 Run:
 
@@ -1195,9 +1195,9 @@ rg '@api/' packages/api-core/src
 rg 'apps/' packages/api-core/src
 ```
 
-Expected: both commands produce no output.
+预期：两个命令都不会产生输出。
 
-- [ ] **Step 15: Refresh lockfile and verify**
+- [ ] **第 15 步：刷新锁定文件并验证**
 
 Run:
 
@@ -1209,9 +1209,9 @@ pnpm --filter @iam/api-core lint
 pnpm --filter @iam/api lint
 ```
 
-Expected: all commands exit with code 0.
+预期：所有命令均以代码 0 退出。
 
-- [ ] **Step 16: Commit**
+- [ ] **第 16 步：提交**
 
 Run:
 
@@ -1222,22 +1222,22 @@ git commit -m "refactor(api-core): 抽取后端基础设施包"
 
 ---
 
-## Task 4: Scaffold `apps/admin-api`
+## 任务 4：脚手架 `apps/admin-api`
 
-**Files:**
-- Create: `apps/admin-api/package.json`
-- Create: `apps/admin-api/tsconfig.json`
-- Create: `apps/admin-api/eslint.config.js`
-- Create: `apps/admin-api/app.config.ts`
-- Create: `apps/admin-api/src/env.ts`
-- Create: `apps/admin-api/src/app.ts`
-- Create: `apps/admin-api/src/index.ts`
-- Create: `apps/admin-api/src/types/lib.d.ts`
-- Modify: `pnpm-lock.yaml`
+**文件：**
+- 创建：`apps/admin-api/package.json`
+- 创建：`apps/admin-api/tsconfig.json`
+- 创建：`apps/admin-api/eslint.config.js`
+- 创建：`apps/admin-api/app.config.ts`
+- 创建：`apps/admin-api/src/env.ts`
+- 创建：`apps/admin-api/src/app.ts`
+- 创建：`apps/admin-api/src/index.ts`
+- 创建：`apps/admin-api/src/types/lib.d.ts`
+- 修改：`pnpm-lock.yaml`
 
-- [ ] **Step 1: Create package metadata**
+- [ ] **第 1 步：创建包元数据**
 
-Create `apps/admin-api/package.json`:
+创建 `apps/admin-api/package.json` ：
 
 ```json
 {
@@ -1290,9 +1290,9 @@ Create `apps/admin-api/package.json`:
 }
 ```
 
-- [ ] **Step 2: Create TypeScript and ESLint config**
+- [ ] **第 2 步：创建 TypeScript 和 ESLint 配置**
 
-Create `apps/admin-api/tsconfig.json`:
+创建 `apps/admin-api/tsconfig.json` ：
 
 ```json
 {
@@ -1323,11 +1323,11 @@ Create `apps/admin-api/tsconfig.json`:
 }
 ```
 
-Create `apps/admin-api/eslint.config.js` by copying `apps/api/eslint.config.js`, keeping double quotes and semicolons.
+通过复制 `apps/api/eslint.config.js` 创建 `apps/admin-api/eslint.config.js` ，保留双引号和分号。
 
-- [ ] **Step 3: Create admin API env schema**
+- [ ] **第 3 步：创建管理 API 环境架构**
 
-Create `apps/admin-api/src/env.ts`:
+创建 `apps/admin-api/src/env.ts` ：
 
 ```ts
 import { z } from "@hono/zod-openapi";
@@ -1352,9 +1352,9 @@ const env = EnvSchema.parse(process.env);
 export default env;
 ```
 
-- [ ] **Step 4: Create app config**
+- [ ] **第 4 步：创建应用程序配置**
 
-Create `apps/admin-api/app.config.ts`:
+创建 `apps/admin-api/app.config.ts` ：
 
 ```ts
 import { defineConfig } from "@iam/api-core/core";
@@ -1379,9 +1379,9 @@ export default defineConfig({
 });
 ```
 
-- [ ] **Step 5: Create app and entrypoint**
+- [ ] **第 5 步：创建应用程序和入口点**
 
-Create `apps/admin-api/src/app.ts`:
+创建 `apps/admin-api/src/app.ts` ：
 
 ```ts
 /* eslint-disable antfu/no-top-level-await */
@@ -1409,7 +1409,7 @@ export type AdminApiAppType = typeof app;
 export default app;
 ```
 
-Create `apps/admin-api/src/index.ts`:
+创建 `apps/admin-api/src/index.ts` ：
 
 ```ts
 import app from "./app";
@@ -1421,9 +1421,9 @@ export default {
 };
 ```
 
-- [ ] **Step 6: Add app-specific binding types**
+- [ ] **第 6 步：添加特定于应用程序的绑定类型**
 
-Create `apps/admin-api/src/types/lib.d.ts`:
+创建 `apps/admin-api/src/types/lib.d.ts` ：
 
 ```ts
 import type { PublicBindings as CorePublicBindings, PublicRouteHandler as CorePublicRouteHandler } from "@iam/api-core/types";
@@ -1433,7 +1433,7 @@ export type AdminBindings = CorePublicBindings;
 export type AdminRouteHandler<R extends HonoRouteConfig> = CorePublicRouteHandler<R>;
 ```
 
-- [ ] **Step 7: Refresh lockfile and verify scaffold**
+- [ ] **第 7 步：刷新锁定文件并验证脚手架**
 
 Run:
 
@@ -1443,9 +1443,9 @@ pnpm --filter @iam/admin-api typecheck
 pnpm --filter @iam/admin-api lint
 ```
 
-Expected: both commands exit with code 0.
+预期：两个命令均以代码 0 退出。
 
-- [ ] **Step 8: Commit**
+- [ ] **第 8 步：提交**
 
 ```bash
 git add apps/admin-api pnpm-lock.yaml
@@ -1454,22 +1454,22 @@ git commit -m "feat(admin-api): 初始化管理后端服务"
 
 ---
 
-## Task 5: Migrate Admin Routes, tRPC, And Admin-Owned Services
+## 任务 5：迁移管理路由、tRPC 和管理员拥有的服务
 
-**Files:**
-- Create: `apps/admin-api/src/routes/admin/**`
-- Create: `apps/admin-api/src/routes/trpc/**`
-- Create: `apps/admin-api/src/trpc/**`
-- Create: `apps/admin-api/src/services/client/**`
-- Create: `apps/admin-api/src/services/user/**`
-- Create: `apps/admin-api/src/services/organization/**`
-- Create: `apps/admin-api/src/services/position/**`
-- Create: `apps/admin-api/src/services/employment/**`
-- Create: `apps/admin-api/src/services/role/**`
-- Create: `apps/admin-api/src/services/privilege/**`
-- Modify imports under `apps/admin-api/src/`
+**文件：**
+- 创建：`apps/admin-api/src/routes/admin/**`
+- 创建：`apps/admin-api/src/routes/trpc/**`
+- 创建：`apps/admin-api/src/trpc/**`
+- 创建：`apps/admin-api/src/services/client/**`
+- 创建：`apps/admin-api/src/services/user/**`
+- 创建：`apps/admin-api/src/services/organization/**`
+- 创建：`apps/admin-api/src/services/position/**`
+- 创建：`apps/admin-api/src/services/employment/**`
+- 创建：`apps/admin-api/src/services/role/**`
+- 创建：`apps/admin-api/src/services/privilege/**`
+- 修改 `apps/admin-api/src/` 下的导入
 
-- [ ] **Step 1: Copy admin route and tRPC files**
+- [ ] **第 1 步：复制管理路由和 tRPC 文件**
 
 Run:
 
@@ -1480,9 +1480,9 @@ cp -R apps/api/src/routes/trpc apps/admin-api/src/routes/trpc
 cp -R apps/api/src/trpc/* apps/admin-api/src/trpc/
 ```
 
-Expected: `apps/admin-api/src/routes/admin` contains `client`, `user`, `organization`, `position`, `employment`.
+预期： `apps/admin-api/src/routes/admin` 包含 `client` 、 `user` 、 `organization` 、 `position` 、 `employment` 。
 
-- [ ] **Step 2: Copy admin-required service files**
+- [ ] **步骤 2：复制管理员所需的服务文件**
 
 Run:
 
@@ -1497,11 +1497,11 @@ cp -R apps/api/src/services/role apps/admin-api/src/services/role
 cp -R apps/api/src/services/privilege apps/admin-api/src/services/privilege
 ```
 
-Expected: admin-api has its own copy of admin service/repository code and no runtime dependency on `apps/api/src/services`.
+预期： admin-api 有自己的管理服务/存储库代码副本，并且对 `apps/api/src/services` 没有运行时依赖性。
 
-- [ ] **Step 3: Update admin-api imports**
+- [ ] **第 3 步：更新 admin-api 导入**
 
-Run these replacements inside `apps/admin-api/src`:
+在 `apps/admin-api/src` 内运行这些替换：
 
 ```bash
 rg -l '@api/db/schema' apps/admin-api/src | xargs -r perl -pi -e 's#@api/db/schema#@iam/db/schema#g'
@@ -1521,17 +1521,17 @@ rg -l '@api/trpc/trpc' apps/admin-api/src | xargs -r perl -pi -e 's#@api/trpc/tr
 rg -l '@api/trpc' apps/admin-api/src | xargs -r perl -pi -e 's#@api/trpc#@admin-api/trpc#g'
 ```
 
-Then inspect:
+然后检查：
 
 ```bash
 rg '@api/' apps/admin-api/src
 ```
 
-Expected: no output after manual fixes.
+预期：手动修复后没有输出。
 
-- [ ] **Step 4: Tighten admin-api binding types**
+- [ ] **第 4 步：加强 admin-api 绑定类型**
 
-Edit `apps/admin-api/src/types/lib.d.ts`:
+编辑 `apps/admin-api/src/types/lib.d.ts` ：
 
 ```ts
 import type { PublicBindings as CorePublicBindings, PublicRouteHandler as CorePublicRouteHandler } from "@iam/api-core/types";
@@ -1542,9 +1542,9 @@ export type AdminBindings = CorePublicBindings<UserDetailDto>;
 export type AdminRouteHandler<R extends HonoRouteConfig> = CorePublicRouteHandler<R, UserDetailDto>;
 ```
 
-- [ ] **Step 5: Remove non-admin service dependencies**
+- [ ] **步骤 5：删除非管理服务依赖项**
 
-Edit `apps/admin-api/src/services/user/user.service.ts` so it does not import `mobile.service`, `session.service`, or other core-only services. Keep the admin functions used by `routes/admin/user/user.ops.ts`:
+编辑 `apps/admin-api/src/services/user/user.service.ts` ，使其不导入 `mobile.service` 、 `session.service` 或其他仅限核心的服务。保留 `routes/admin/user/user.ops.ts` 使用的管理功能：
 
 ```ts
 export async function getUserDetailByUsernameForAdmin(username: string): Promise<UserDetailDto>;
@@ -1572,19 +1572,19 @@ export async function deleteUser(username: string): Promise<boolean>;
 export async function resetPasswordByUsername(username: string): Promise<string>;
 ```
 
-Remove functions that only support public password reset, mobile binding, or SSO login flows from this admin copy.
+从此管理副本中删除仅支持公共密码重置、移动设备绑定或 SSO 登录流程的功能。
 
-- [ ] **Step 6: Keep admin ops as the shared REST/tRPC layer**
+- [ ] **第 6 步：将管理操作保留为共享 REST/tRPC 层**
 
-Verify these files import local admin-api services:
+验证这些文件是否导入本地 admin-api 服务：
 
 ```bash
 rg '@admin-api/services' apps/admin-api/src/routes/admin
 ```
 
-Expected: matches in `*.ops.ts` and `client.handlers.ts`.
+预期：匹配 `*.ops.ts` 和 `client.handlers.ts` 。
 
-- [ ] **Step 7: Verify no old API service imports remain**
+- [ ] **步骤 7：验证没有保留旧的 API 服务导入**
 
 Run:
 
@@ -1592,9 +1592,9 @@ Run:
 rg '@api/services|@api/routes/admin|@api/trpc|@api/db|@api/lib/core|@api/errors' apps/admin-api/src
 ```
 
-Expected: no output.
+预期：无输出。
 
-- [ ] **Step 8: Typecheck admin-api**
+- [ ] **第 8 步：类型检查 admin-api**
 
 Run:
 
@@ -1602,9 +1602,9 @@ Run:
 pnpm --filter @iam/admin-api typecheck
 ```
 
-Expected: exits with code 0. Fix remaining import and type errors inside `apps/admin-api` without changing `apps/api`.
+预期：以代码 0 退出。修复 `apps/admin-api` 内剩余的导入和类型错误，而不更改 `apps/api` 。
 
-- [ ] **Step 9: Lint admin-api**
+- [ ] **第 9 步：Lint admin-api**
 
 Run:
 
@@ -1612,9 +1612,9 @@ Run:
 pnpm --filter @iam/admin-api lint
 ```
 
-Expected: exits with code 0 or only warning-level `max-len` messages matching the existing API style.
+预期：退出时显示代码 0 或仅与现有 API 样式匹配的警告级别 `max-len` 消息。
 
-- [ ] **Step 10: Commit**
+- [ ] **第 10 步：提交**
 
 Run:
 
@@ -1625,17 +1625,17 @@ git commit -m "feat(admin-api): 迁移管理端路由和服务"
 
 ---
 
-## Task 6: Add Admin Authentication To Admin API
+## 任务 6：将管理员身份验证添加到管理 API
 
-**Files:**
-- Modify: `apps/admin-api/src/routes/admin/_middleware.ts`
-- Modify: `apps/admin-api/src/routes/trpc/_middleware.ts`
-- Create or modify: `apps/admin-api/src/lib/clients/redis.ts`
-- Modify: `apps/admin-api/src/env.ts`
+**文件：**
+- 修改：`apps/admin-api/src/routes/admin/_middleware.ts`
+- 修改：`apps/admin-api/src/routes/trpc/_middleware.ts`
+- 创建或修改：`apps/admin-api/src/lib/clients/redis.ts`
+- 修改：`apps/admin-api/src/env.ts`
 
-- [ ] **Step 1: Add Redis wrapper for admin-api**
+- [ ] **第 1 步：为 admin-api 添加 Redis 包装器**
 
-Create `apps/admin-api/src/lib/clients/redis.ts`:
+创建 `apps/admin-api/src/lib/clients/redis.ts` ：
 
 ```ts
 import env from "@admin-api/env";
@@ -1651,9 +1651,9 @@ const redis = createRedisClient({
 export default redis;
 ```
 
-- [ ] **Step 2: Add env helpers for allowlists**
+- [ ] **第 2 步：为白名单添加环境帮助程序**
 
-Edit `apps/admin-api/src/env.ts` to export:
+编辑 `apps/admin-api/src/env.ts` 导出：
 
 ```ts
 export const adminClientCodes = env.ADMIN_CLIENT_CODES.split(",")
@@ -1665,30 +1665,9 @@ export const adminRoleCodes = env.ADMIN_ROLE_CODES.split(",")
   .filter(Boolean);
 ```
 
-- [ ] **Step 3: Protect `/admin/*`**
+- [ ] **第 3 步：保护 `/admin/*` **
 
-Edit `apps/admin-api/src/routes/admin/_middleware.ts`:
-
-```ts
-import redis from "@admin-api/lib/clients/redis";
-import { UserDetailDtoSchema } from "@admin-api/services/user/user.schema";
-import { adminClientCodes, adminRoleCodes } from "@admin-api/env";
-import { defineMiddleware } from "@iam/api-core/core";
-import { createAdminAuthenticationHandler } from "@iam/api-core/middlewares";
-
-export default defineMiddleware([
-  createAdminAuthenticationHandler({
-    redis,
-    userSchema: UserDetailDtoSchema,
-    allowedClientCodes: adminClientCodes,
-    adminRoleCodes,
-  }),
-]);
-```
-
-- [ ] **Step 4: Protect `/rpc`**
-
-Edit `apps/admin-api/src/routes/trpc/_middleware.ts`:
+编辑 `apps/admin-api/src/routes/admin/_middleware.ts` ：
 
 ```ts
 import redis from "@admin-api/lib/clients/redis";
@@ -1707,7 +1686,28 @@ export default defineMiddleware([
 ]);
 ```
 
-- [ ] **Step 5: Verify auth behavior by typecheck**
+- [ ] **第 4 步：保护 `/rpc` **
+
+编辑 `apps/admin-api/src/routes/trpc/_middleware.ts` ：
+
+```ts
+import redis from "@admin-api/lib/clients/redis";
+import { UserDetailDtoSchema } from "@admin-api/services/user/user.schema";
+import { adminClientCodes, adminRoleCodes } from "@admin-api/env";
+import { defineMiddleware } from "@iam/api-core/core";
+import { createAdminAuthenticationHandler } from "@iam/api-core/middlewares";
+
+export default defineMiddleware([
+  createAdminAuthenticationHandler({
+    redis,
+    userSchema: UserDetailDtoSchema,
+    allowedClientCodes: adminClientCodes,
+    adminRoleCodes,
+  }),
+]);
+```
+
+- [ ] **步骤 5：通过类型检查验证身份验证行为**
 
 Run:
 
@@ -1716,26 +1716,26 @@ pnpm --filter @iam/admin-api typecheck
 pnpm --filter @iam/admin-api lint
 ```
 
-Expected: both commands exit with code 0.
+预期：两个命令均以代码 0 退出。
 
-- [ ] **Step 6: Optional local smoke test**
+- [ ] **第 6 步：可选的局部烟雾测试**
 
-If Redis and the development database are running, start admin-api:
+如果 Redis 和开发数据库正在运行，请启动 admin-api：
 
 ```bash
 pnpm --filter @iam/admin-api dev
 ```
 
-Then in another terminal run:
+然后在另一个终端运行：
 
 ```bash
 curl -i -H 'Client: iam' http://localhost:30001/admin/doc
 curl -i -H 'Client: iam' http://localhost:30001/rpc
 ```
 
-Expected: protected route requests without a valid session return 401. The OpenAPI doc endpoint may remain unauthenticated if `createApp` registers docs before tier middleware; record the observed behavior and keep route handlers protected.
+预期：没有有效会话的受保护路由请求返回 401。如果 `createApp` 在层中间件之前注册文档，则 OpenAPI 文档端点可能保持未经身份验证的状态；记录观察到的行为并保护路由处理程序。
 
-- [ ] **Step 7: Commit**
+- [ ] **第 7 步：提交**
 
 Run:
 
@@ -1746,27 +1746,27 @@ git commit -m "feat(admin-api): 增加管理端鉴权"
 
 ---
 
-## Task 7: Switch Admin Frontend Type Contract And Dev Proxy
+## 任务 7：切换管理前端类型合约和开发代理
 
-**Files:**
-- Modify: `apps/admin/package.json`
-- Modify: `apps/admin/src/lib/api-client.ts`
-- Modify: `apps/admin/src/services/*.ts`
-- Modify: `apps/admin/src/pages/**/*.tsx`
-- Modify: `apps/admin/.umirc.ts`
-- Modify: `pnpm-lock.yaml`
+**文件：**
+- 修改：`apps/admin/package.json`
+- 修改：`apps/admin/src/lib/api-client.ts`
+- 修改：`apps/admin/src/services/*.ts`
+- 修改：`apps/admin/src/pages/**/*.tsx`
+- 修改：`apps/admin/.umirc.ts`
+- 修改：`pnpm-lock.yaml`
 
-- [ ] **Step 1: Update frontend dependency**
+- [ ] **第 1 步：更新前端依赖项**
 
-In `apps/admin/package.json`, replace the dev dependency:
+在 `apps/admin/package.json` 中，替换 dev 依赖项：
 
 ```json
 "@iam/admin-api": "workspace:*"
 ```
 
-Remove `@iam/api` from `apps/admin/devDependencies` if it is only used for tRPC types.
+如果 `@iam/api` 仅用于 tRPC 类型，请将其从 `apps/admin/devDependencies` 中删除。
 
-- [ ] **Step 2: Update type imports**
+- [ ] **第 2 步：更新类型导入**
 
 Run:
 
@@ -1774,11 +1774,11 @@ Run:
 rg -l '@iam/api/trpc' apps/admin/src | xargs -r perl -pi -e 's#@iam/api/trpc#@iam/admin-api/trpc#g'
 ```
 
-Expected: `apps/admin` imports `AppRouter` from `@iam/admin-api/trpc`.
+预期： `apps/admin` 从 `@iam/admin-api/trpc` 导入 `AppRouter` 。
 
-- [ ] **Step 3: Update admin dev proxy**
+- [ ] **第 3 步：更新管理开发代理**
 
-In `apps/admin/.umirc.ts`, point `/rpc` and `/admin` to admin-api:
+在 `apps/admin/.umirc.ts` 中，将 `/rpc` 和 `/admin` 指向 admin-api：
 
 ```ts
 proxy: {
@@ -1813,7 +1813,7 @@ proxy: {
 }
 ```
 
-- [ ] **Step 4: Refresh lockfile and verify frontend**
+- [ ] **第 4 步：刷新锁定文件并验证前端**
 
 Run:
 
@@ -1823,9 +1823,9 @@ pnpm --filter @iam/admin typecheck
 pnpm --filter @iam/admin-api typecheck
 ```
 
-Expected: both commands exit with code 0.
+预期：两个命令均以代码 0 退出。
 
-- [ ] **Step 5: Verify old type dependency is gone**
+- [ ] **第 5 步：验证旧类型依赖关系是否已消失**
 
 Run:
 
@@ -1833,9 +1833,9 @@ Run:
 rg '@iam/api/trpc' apps/admin
 ```
 
-Expected: no output.
+预期：无输出。
 
-- [ ] **Step 6: Commit**
+- [ ] **第 6 步：提交**
 
 Run:
 
@@ -1846,24 +1846,24 @@ git commit -m "refactor(admin): 切换管理端后端契约"
 
 ---
 
-## Task 8: Remove Admin Exposure From `apps/api`
+## 任务 8：从 `apps/api` 中删除管理员暴露的信息
 
-**Files:**
-- Modify: `apps/api/app.config.ts`
-- Delete: `apps/api/src/trpc/`
-- Delete: `apps/api/src/routes/trpc/`
-- Delete: `apps/api/src/routes/admin/`
-- Modify: `apps/api/package.json` if `./trpc` export is no longer consumed outside core API
+**文件：**
+- 修改：`apps/api/app.config.ts`
+- 删除：`apps/api/src/trpc/`
+- 删除：`apps/api/src/routes/trpc/`
+- 删除：`apps/api/src/routes/admin/`
+- 修改：`apps/api/package.json` 如果 `./trpc` 导出不再在核心 API 之外使用
 
-- [ ] **Step 1: Remove admin tier from API config**
+- [ ] **第 1 步：从 API 配置中删除管理层**
 
-Edit `apps/api/app.config.ts` so `tiers` no longer contains:
+编辑 `apps/api/app.config.ts` 使 `tiers` 不再包含：
 
 ```ts
 { name: "admin", title: "管理端API" }
 ```
 
-Keep:
+保持：
 
 ```ts
 { name: "public", title: "通用用户API" },
@@ -1873,18 +1873,18 @@ Keep:
 { name: "auth", title: "认证API" }
 ```
 
-Remove the `rpc` tier as well. The current core API RPC router only contains admin procedures, and the admin RPC entry now belongs to `apps/admin-api`.
+同时删除 `rpc` 层。当前的核心 API RPC 路由器仅包含管理程序，并且管理 RPC 条目现在属于 `apps/admin-api` 。
 
-- [ ] **Step 2: Remove admin tRPC router from core API**
+- [ ] **第 2 步：从核心 API 中删除管理 tRPC 路由器**
 
-Delete the core API tRPC files because they only serve the old admin router:
+删除核心 API tRPC 文件，因为它们仅服务于旧的管理路由器：
 
 ```bash
 git rm -r apps/api/src/trpc
 git rm -r apps/api/src/routes/trpc
 ```
 
-Remove `./trpc` from `apps/api/package.json` exports so the export block only exposes:
+从 `apps/api/package.json` 导出中删除 `./trpc` ，以便导出块仅公开：
 
 ```json
 "exports": {
@@ -1892,7 +1892,7 @@ Remove `./trpc` from `apps/api/package.json` exports so the export block only ex
 }
 ```
 
-- [ ] **Step 3: Remove old admin route directory**
+- [ ] **第 3 步：删除旧的管理路由目录**
 
 Run:
 
@@ -1900,7 +1900,7 @@ Run:
 git rm -r apps/api/src/routes/admin
 ```
 
-- [ ] **Step 4: Verify no admin exposure remains in core API**
+- [ ] **第 4 步：验证核心 API 中不存在任何管理员暴露**
 
 Run:
 
@@ -1908,9 +1908,9 @@ Run:
 rg 'routes/admin|routers/admin|name: "admin"|title: "管理端API"' apps/api
 ```
 
-Expected: no output.
+预期：无输出。
 
-- [ ] **Step 5: Verify core API and admin API**
+- [ ] **第 5 步：验证核心 API 和管理 API**
 
 Run:
 
@@ -1921,9 +1921,9 @@ pnpm --filter @iam/api lint
 pnpm --filter @iam/admin-api lint
 ```
 
-Expected: all commands exit with code 0.
+预期：所有命令均以代码 0 退出。
 
-- [ ] **Step 6: Commit**
+- [ ] **第 6 步：提交**
 
 Run:
 
@@ -1934,17 +1934,17 @@ git commit -m "refactor(api): 移除核心服务管理端入口"
 
 ---
 
-## Task 9: Update Docker And Local Runtime Wiring
+## 任务 9：更新 Docker 和本地运行时连接
 
-**Files:**
-- Create: `apps/admin-api/Dockerfile`
-- Modify: `docker/docker-compose-dev.yml`
-- Modify: `docker/docker-compose-prod.yml`
-- Modify: `apps/api/Dockerfile`
+**文件：**
+- 创建：`apps/admin-api/Dockerfile`
+- 修改：`docker/docker-compose-dev.yml`
+- 修改：`docker/docker-compose-prod.yml`
+- 修改：`apps/api/Dockerfile`
 
-- [ ] **Step 1: Create admin-api Dockerfile**
+- [ ] **第 1 步：创建 admin-api Dockerfile**
 
-Create `apps/admin-api/Dockerfile` based on `apps/api/Dockerfile`, changing API paths to admin-api paths:
+基于 `apps/api/Dockerfile` 创建 `apps/admin-api/Dockerfile` ，将 API 路径更改为 admin-api 路径：
 
 ```dockerfile
 # Build context: monorepo root
@@ -1981,9 +1981,9 @@ EXPOSE 30001
 CMD ["bun", "run", "src/index.ts"]
 ```
 
-- [ ] **Step 2: Update API Dockerfile package copies**
+- [ ] **步骤 2：更新 API Dockerfile 包副本**
 
-Ensure `apps/api/Dockerfile` copies:
+确保 `apps/api/Dockerfile` 副本：
 
 ```dockerfile
 COPY packages/contracts/package.json ./packages/contracts/
@@ -1994,9 +1994,9 @@ COPY packages/db/ ./packages/db/
 COPY packages/api-core/ ./packages/api-core/
 ```
 
-- [ ] **Step 3: Add admin-api to development compose**
+- [ ] **第3步：将admin-api添加到开发撰写**
 
-In `docker/docker-compose-dev.yml`, add service `admin-api`:
+在 `docker/docker-compose-dev.yml` 中，添加服务 `admin-api` ：
 
 ```yaml
   admin-api:
@@ -2024,9 +2024,9 @@ In `docker/docker-compose-dev.yml`, add service `admin-api`:
         condition: service_healthy
 ```
 
-- [ ] **Step 4: Add admin-api to production compose**
+- [ ] **第 4 步：将 admin-api 添加到生产组合**
 
-In `docker/docker-compose-prod.yml`, add service `admin-api` with the same database and Redis environment style as `api`, using:
+在 `docker/docker-compose-prod.yml` 中，添加与 `api` 具有相同数据库和 Redis 环境风格的服务 `admin-api` ，使用：
 
 ```yaml
       PORT: 30001
@@ -2034,14 +2034,14 @@ In `docker/docker-compose-prod.yml`, add service `admin-api` with the same datab
       ADMIN_ROLE_CODES: ${ADMIN_ROLE_CODES:-iam:admin}
 ```
 
-Publish it with:
+发布它：
 
 ```yaml
     ports:
       - "${ADMIN_API_PUBLISHED_PORT:-30001}:30001"
 ```
 
-- [ ] **Step 5: Validate compose syntax**
+- [ ] **第 5 步：验证撰写语法**
 
 Run:
 
@@ -2050,9 +2050,9 @@ docker compose -f docker/docker-compose-dev.yml config >/tmp/iam-compose-dev.yml
 docker compose -f docker/docker-compose-prod.yml config >/tmp/iam-compose-prod.yml
 ```
 
-Expected: both commands exit with code 0.
+预期：两个命令均以代码 0 退出。
 
-- [ ] **Step 6: Commit**
+- [ ] **第 6 步：提交**
 
 Run:
 
@@ -2063,12 +2063,12 @@ git commit -m "chore(docker): 增加管理后端服务部署配置"
 
 ---
 
-## Task 10: Full Verification And Cleanup
+## 任务 10：全面验证和清理
 
-**Files:**
-- Modify only files needed to fix verification failures from prior tasks.
+**文件：**
+- 仅修改修复先前任务验证失败所需的文件。
 
-- [ ] **Step 1: Run workspace checks**
+- [ ] **第 1 步：运行工作区检查**
 
 Run:
 
@@ -2077,9 +2077,9 @@ pnpm typecheck
 pnpm lint
 ```
 
-Expected: both commands exit with code 0.
+预期：两个命令均以代码 0 退出。
 
-- [ ] **Step 2: Run focused package checks**
+- [ ] **第 2 步：运行重点包检查**
 
 Run:
 
@@ -2093,9 +2093,9 @@ pnpm --filter @iam/admin typecheck
 pnpm --filter @iam/sso typecheck
 ```
 
-Expected: all commands exit with code 0.
+预期：所有命令均以代码 0 退出。
 
-- [ ] **Step 3: Verify forbidden dependencies**
+- [ ] **第 3 步：验证禁止的依赖项**
 
 Run:
 
@@ -2106,9 +2106,9 @@ rg 'routes/admin|routers/admin|name: "admin"|title: "管理端API"' apps/api
 rg '@api/' packages/db/src packages/api-core/src
 ```
 
-Expected: all four commands produce no output.
+预期：所有四个命令均不产生输出。
 
-- [ ] **Step 4: Verify Drizzle package commands**
+- [ ] **步骤 4：验证 Drizzle 包命令**
 
 Run:
 
@@ -2118,18 +2118,18 @@ pnpm --filter @iam/db db:migrate --help
 pnpm --filter @iam/db db:push --help
 ```
 
-Expected: all commands print drizzle-kit help text and exit with code 0.
+预期：所有命令都会打印 drizzle-kit 帮助文本并以代码 0 退出。
 
-- [ ] **Step 5: Optional local runtime smoke test**
+- [ ] **第 5 步：可选的本地运行时冒烟测试**
 
-If Postgres and Redis are available, run:
+如果 Postgres 和 Redis 可用，请运行：
 
 ```bash
 pnpm --filter @iam/api dev
 pnpm --filter @iam/admin-api dev
 ```
 
-Then smoke endpoints:
+然后烟雾端点：
 
 ```bash
 curl -i http://localhost:30000/
@@ -2137,30 +2137,30 @@ curl -i -H 'Client: iam' http://localhost:30001/admin/doc
 curl -i -H 'Client: iam' http://localhost:30001/rpc
 ```
 
-Expected:
+预期的：
 
-- core API root returns Scalar UI or configured API reference when OpenAPI is enabled.
-- admin REST docs are served when OpenAPI is enabled.
-- unauthenticated protected admin calls return 401.
+- 启用 OpenAPI 时，核心 API 根返回标量 UI 或配置的 API 引用。
+- 启用 OpenAPI 时提供管理 REST 文档。
+- 未经身份验证的受保护管理调用返回 401。
 
-- [ ] **Step 6: Commit final cleanup**
+- [ ] **第 6 步：进行最终清理**
 
-If Step 1 through Step 5 required fixes, commit them:
+如果步骤 1 到步骤 5 需要修复，请提交它们：
 
 ```bash
 git add .
 git commit -m "chore(admin-api): 完成拆分验证清理"
 ```
 
-If no files changed, no commit is needed.
+如果没有文件更改，则不需要提交。
 
 ---
 
-## Execution Notes
+## 执行注意事项
 
-- Prefer one task per commit.
-- Keep generated frontend directories such as `apps/admin/src/.umi/` untouched.
-- Do not edit `apps/api/static/` unless a Docker/runtime check requires static assets to be copied differently.
-- Keep `apps/api/src/services/*` for core API behavior until a later, separate service cleanup task.
-- Keep admin-api service code local to `apps/admin-api/src/services`; do not import service code from `apps/api`.
-- If a package extraction reveals a circular dependency, move the smaller utility into the lower-level package only when it does not introduce app-specific semantics.
+- 更喜欢每次提交一个任务。
+- 保持生成的前端目录（例如 `apps/admin/src/.umi/` ）不变。
+- 不要编辑 `apps/api/static/` ，除非 Docker/运行时检查需要以不同方式复制静态资产。
+- 保留核心 API 行为的 `apps/api/src/services/*`，直到稍后执行单独的服务清理任务。
+- 将 admin-api 服务代码保留在 `apps/admin-api/src/services` 本地；不要从 `apps/api` 导入服务代码。
+- 如果包提取显示循环依赖关系，则仅当较小的实用程序不引入特定于应用程序的语义时，才将其移至较低级别的包中。

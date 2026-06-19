@@ -1,70 +1,69 @@
-# IAM System Log Observability Runbook
+# IAM 系统日志可观测性运行手册
 
-## Scope
+## 范围
 
-This stack collects runtime system logs for `api`, `admin-api`, `oidc-provider`, and `apisix` through Docker stdout/stderr, Grafana Alloy, Loki, and Grafana. It does not replace PostgreSQL audit logs and does not create a `system_log` table.
+该栈通过 Docker stdout/stderr、Grafana Alloy、Loki 和 Grafana 收集 `api`、`admin-api`、`oidc-provider` 与 `apisix` 的运行时系统日志。它不替代 PostgreSQL 审计日志，也不会创建 `system_log` 表。
 
-Frontend `admin` and `sso` containers are intentionally excluded from phase one.
+第一阶段有意排除前端 `admin` 和 `sso` 容器。
 
-## Development
+## 开发环境
 
-Start the normal development stack as before. Loki, Grafana, and Alloy live in the same compose file and are opt-in
-through the `observability` profile:
+照常启动普通开发栈。Loki、Grafana 和 Alloy 位于同一个 compose 文件中，并通过 `observability` profile 按需启用：
 
 ```bash
 docker compose -f docker/docker-compose-dev.yml up -d
 docker compose -f docker/docker-compose-dev.yml --profile observability up -d loki grafana alloy
 ```
 
-Default development ports:
+默认开发端口：
 
-- Loki: `http://localhost:3100`
-- Grafana: `http://localhost:30030`
-- Alloy: `http://localhost:12345`
+- Loki：`http://localhost:3100`
+- Grafana：`http://localhost:30030`
+- Alloy：`http://localhost:12345`
 
-Stop the observability stack without stopping IAM:
+在不停止 IAM 的情况下停止可观测性栈：
 
 ```bash
 docker compose -f docker/docker-compose-dev.yml stop loki grafana alloy
 docker compose -f docker/docker-compose-dev.yml rm -f loki grafana alloy
 ```
 
-## Production
+## 生产环境
 
-Run one centralized Loki and Grafana pair, and run one Alloy agent on each host that runs IAM target containers:
+运行一组集中式 Loki 与 Grafana，并在每台运行 IAM 目标容器的主机上运行一个 Alloy agent：
 
 ```bash
 docker compose -f docker/docker-compose-observability-prod.yml up -d loki grafana
 docker compose -f docker/docker-compose-observability-prod.yml up -d alloy
 ```
 
-Important environment variables:
+重要环境变量：
 
-- `LOKI_IMAGE`, `GRAFANA_IMAGE`, `GRAFANA_ALLOY_IMAGE`: override pinned default images for internal registries.
-- `LOKI_PUSH_URL`: Alloy push endpoint, for example `http://loki.internal:3100/loki/api/v1/push`.
-- `GRAFANA_LOKI_URL`: Grafana datasource URL for Loki.
-- `IAM_LOG_ENV`: Loki `env` label, default `prod` in production compose.
-- `IAM_LOG_HOST`: stable host label for the local Alloy agent.
-- `LOKI_DATA_PATH`, `GRAFANA_DATA_PATH`, `ALLOY_DATA_PATH`: persistent data directories.
+- `LOKI_IMAGE`、`GRAFANA_IMAGE`、`GRAFANA_ALLOY_IMAGE`：为内部镜像仓库覆盖固定的默认镜像。
+- `LOKI_PUSH_URL`：Alloy 推送端点，例如 `http://loki.internal:3100/loki/api/v1/push`。
+- `GRAFANA_LOKI_URL`：Grafana 中 Loki 数据源的 URL。
+- `IAM_LOG_ENV`：Loki `env` 标签，生产 compose 中默认为 `prod`。
+- `IAM_LOG_HOST`：本地 Alloy agent 的稳定主机标签。
+- `LOKI_DATA_PATH`、`GRAFANA_DATA_PATH`、`ALLOY_DATA_PATH`：持久化数据目录。
 
-Loki is configured for 30 day retention by default (`720h`). Override `LOKI_RETENTION_PERIOD` if an environment needs a different retention window. Monitor the Loki data directory and alert before disk usage reaches unsafe levels; the bundled Grafana alert rules include a collection-failure signal, but disk watermarks should also be monitored by the host platform.
+Loki 默认配置为保留 30 天（`720h`）。如果某个环境需要不同的保留窗口，可覆盖 `LOKI_RETENTION_PERIOD`。监控 Loki 数据目录，并在磁盘使用率达到危险水位前告警；随附的 Grafana 告警规则包含采集失败信号，但磁盘水位也应由宿主平台监控。
 
-Backup Loki and Grafana by snapshotting `LOKI_DATA_PATH` and `GRAFANA_DATA_PATH`. To roll back this stack, stop the observability compose services; IAM applications continue writing stdout/stderr logs.
+通过快照 `LOKI_DATA_PATH` 和 `GRAFANA_DATA_PATH` 备份 Loki 与 Grafana。回滚该栈时，停止可观测性 compose 服务即可；IAM 应用会继续写 stdout/stderr 日志。
 
 ## Grafana OIDC
 
-Create a confidential IAM OIDC client with client code `grafana` through the existing client registry/admin client management flow.
+通过现有客户端注册表或管理端客户端管理流程，创建一个客户端编码为 `grafana` 的 confidential IAM OIDC client。
 
-Use these settings:
+使用以下设置：
 
-- Client type: confidential.
-- Redirect URI: `${GRAFANA_ROOT_URL}/login/generic_oauth`.
-- Scopes: `openid profile`.
-- Save the generated client secret once and provide it as `GRAFANA_OIDC_CLIENT_SECRET`; do not commit it.
-- Configure `GRAFANA_OIDC_AUTH_URL`, `GRAFANA_OIDC_TOKEN_URL`, and `GRAFANA_OIDC_USERINFO_URL` from the IAM OIDC issuer.
-- Keep Grafana login/name/email attribute paths on `preferred_username`, `name`, and `preferred_username` unless IAM starts issuing an `email` claim.
+- 客户端类型：confidential。
+- Redirect URI：`${GRAFANA_ROOT_URL}/login/generic_oauth`。
+- Scopes：`openid profile`。
+- 只保存一次生成的 client secret，并通过 `GRAFANA_OIDC_CLIENT_SECRET` 提供；不要提交到仓库。
+- 从 IAM OIDC issuer 配置 `GRAFANA_OIDC_AUTH_URL`、`GRAFANA_OIDC_TOKEN_URL` 和 `GRAFANA_OIDC_USERINFO_URL`。
+- 除非 IAM 开始签发 `email` claim，否则 Grafana 的 login/name/email attribute path 保持为 `preferred_username`、`name` 和 `preferred_username`。
 
-For local debugging, enable Grafana OIDC through `docker/.env`:
+本地调试时，可通过 `docker/.env` 启用 Grafana OIDC：
 
 ```dotenv
 GRAFANA_AUTH_ANONYMOUS_ENABLED=false
@@ -72,37 +71,37 @@ GRAFANA_OIDC_ENABLED=true
 GRAFANA_OIDC_CLIENT_SECRET=<secret>
 ```
 
-Then recreate Grafana from the unified dev compose file:
+然后从统一开发 compose 文件重新创建 Grafana：
 
 ```bash
 docker compose -f docker/docker-compose-dev.yml --profile observability up -d --force-recreate grafana
 ```
 
-The browser-facing authorization URL uses `http://localhost:30080/oidc/auth`; Grafana's server-side token and userinfo calls use `http://host.docker.internal:30080` so they can reach APISIX from inside the container.
+面向浏览器的授权 URL 使用 `http://localhost:30080/oidc/auth`；Grafana 服务端 token 和 userinfo 调用使用 `http://host.docker.internal:30080`，这样容器内部可以访问 APISIX。
 
-Grafana owns final dashboard and datasource authorization. The admin frontend only links to Grafana and never embeds it with an iframe. The admin-api does not proxy Loki queries.
+Grafana 自己负责最终的 dashboard 和 datasource 授权。管理端前端只链接到 Grafana，绝不通过 iframe 嵌入。`admin-api` 不代理 Loki 查询。
 
 ## Provisioning
 
-Grafana provisioning files live under `observability/grafana/provisioning/`.
+Grafana provisioning 文件位于 `observability/grafana/provisioning/`。
 
-- Datasource UID: `iam-loki`.
-- Dashboard UIDs: `iam-overview`, `iam-request-drilldown`, `iam-error-center`.
-- Alert rules cover service error spikes, APISIX 5xx spikes, OIDC provider server/protocol errors, and collection failures.
+- Datasource UID：`iam-loki`。
+- Dashboard UID：`iam-overview`、`iam-request-drilldown`、`iam-error-center`。
+- 告警规则覆盖 service error spike、APISIX 5xx spike、OIDC provider server/protocol error，以及采集失败。
 
-Development alerts use a null webhook default to avoid local notification noise. Production notification routing should replace the default contact point through environment-managed Grafana provisioning.
+开发环境告警默认使用 null webhook，以避免本地通知噪音。生产通知路由应通过环境管理的 Grafana provisioning 替换默认 contact point。
 
-## Dashboard Workflow
+## Dashboard 工作流
 
-Use the provisioned dashboards as a three-step troubleshooting flow:
+使用已 provision 的 dashboard，按三步排查问题：
 
-- `IAM Overview`: start here to decide whether the current time window is healthy. The first row summarizes total log volume, error logs, HTTP 4xx/5xx, APISIX 5xx, request duration, and active services. The trend panels explain which service or status family changed.
-- `IAM Error Center`: use this when Overview shows errors. It groups errors by service, event, and error type/code, then shows recent examples with request and trace identifiers for drilldown.
-- `IAM Request Drilldown`: use this for a specific `requestId` or `traceId`. It shows correlation details, request-level summary signals, a structured timeline, a readable timeline, and raw JSON logs for evidence.
+- `IAM Overview`：从这里开始判断当前时间窗口是否健康。第一行汇总总日志量、错误日志、HTTP 4xx/5xx、APISIX 5xx、请求耗时和活跃服务。趋势面板说明哪个服务或状态族发生变化。
+- `IAM Error Center`：当 Overview 显示错误时使用。它按服务、事件和错误类型/代码聚合错误，然后展示带 request 和 trace 标识的近期样例，便于下钻。
+- `IAM Request Drilldown`：用于指定 `requestId` 或 `traceId`。它展示关联详情、请求级汇总信号、结构化时间线、可读时间线，以及用于留证的原始 JSON 日志。
 
-Dashboard colors use stable operational semantics: red for `error`/`fatal` or 5xx, yellow for `warn` or latency risk, green for healthy/2xx signals, and blue for traffic or totals. Dashboard legends and table columns should use readable names such as service, event, status, request ID, and duration rather than raw `{label="value"}` expressions.
+Dashboard 颜色使用稳定的运维语义：红色表示 `error`/`fatal` 或 5xx，黄色表示 `warn` 或延迟风险，绿色表示健康/2xx 信号，蓝色表示流量或总量。Dashboard 图例和表格列应使用可读名称，例如 service、event、status、request ID 和 duration，而不是原始 `{label="value"}` 表达式。
 
-Grafana data links and admin deep links may carry only technical correlation fields:
+Grafana data link 和管理端深链只能携带技术关联字段：
 
 - `env`
 - `service`
@@ -110,37 +109,37 @@ Grafana data links and admin deep links may carry only technical correlation fie
 - `traceId`
 - time range
 
-Do not put usernames, user IDs, mobile numbers, client secrets, tokens, audit details, business query strings, stack traces, full request URLs, request bodies, or response bodies into dashboard links.
+不要把用户名、用户 ID、手机号、client secret、token、审计详情、业务查询字符串、堆栈、完整请求 URL、请求体或响应体放进 dashboard link。
 
-Dashboard screenshots are not currently committed as visual baselines. If a release needs screenshot review, generate them from the dev observability stack after provisioning loads and keep the screenshot artifacts outside the repo unless a dedicated review process asks for them.
+当前没有把 dashboard 截图作为视觉基线提交到仓库。如果某次发布需要截图评审，请在 provisioning 加载后从开发可观测性栈生成截图，并将截图产物保留在仓库外，除非有专门评审流程要求纳入。
 
-## Log Contract
+## 日志契约
 
-System logs use JSON fields such as:
+系统日志使用如下 JSON 字段：
 
-- `event`: stable lower-case dotted event name.
-- `sourceApp`: `iam-api`, `iam-admin-api`, `iam-oidc-provider`, or `apisix`.
-- `requestId`: primary correlation ID from `X-Request-Id`.
-- `traceId`: optional trace header value when present.
-- `method`, `path`, `route`, `statusCode`, `durationMs`.
-- `clientIp`, `userAgent`.
-- `errorName`, `errorCode`, `errorMessage`, `source`.
+- `event`：稳定的小写点分事件名。
+- `sourceApp`：`iam-api`、`iam-admin-api`、`iam-oidc-provider` 或 `apisix`。
+- `requestId`：来自 `X-Request-Id` 的主要关联 ID。
+- `traceId`：存在时记录可选 trace header 值。
+- `method`、`path`、`route`、`statusCode`、`durationMs`。
+- `clientIp`、`userAgent`。
+- `errorName`、`errorCode`、`errorMessage`、`source`。
 
-Do not put requestId, traceId, route, userId, username, clientIp, or userAgent into Loki labels. Alloy labels are limited to `env`, `service`, `component`, `level`, and `host`. Loki `service_name` auto-discovery is disabled to keep the label set explicit.
+不要把 requestId、traceId、route、userId、username、clientIp 或 userAgent 放入 Loki 标签。Alloy 标签仅限于 `env`、`service`、`component`、`level` 和 `host`。Loki `service_name` 自动发现已禁用，以保持标签集合显式可控。
 
-Event names must not contain request IDs, user identifiers, client codes, dynamic business values, or raw URLs.
+事件名不得包含请求 ID、用户标识、client code、动态业务值或原始 URL。
 
-## Sensitive Data Rules
+## 敏感数据规则
 
-System logs must not collect request bodies or response bodies.
+系统日志不得采集请求体或响应体。
 
-Application loggers redact common sensitive fields before stdout:
+应用 logger 在输出到 stdout 前会脱敏常见敏感字段：
 
-- `authorization`, `cookie`, `set-cookie`
-- `password`, `token`, `accessToken`, `idToken`, `refreshToken`
-- `secret`, `clientSecret`, `privateKey`
-- verification codes and OIDC authorization codes
+- `authorization`、`cookie`、`set-cookie`
+- `password`、`token`、`accessToken`、`idToken`、`refreshToken`
+- `secret`、`clientSecret`、`privateKey`
+- 验证码和 OIDC authorization code
 
-Alloy applies a secondary redact pass for common sensitive key names. APISIX access logs do not include bodies, sensitive headers, or raw query strings.
+Alloy 会对常见敏感 key name 执行二次脱敏。APISIX 访问日志不包含 body、敏感 header 或原始查询字符串。
 
-Admin Grafana deep links only include requestId, traceId, service, env, and a time range around the audit event. They must not include username, userId, mobile, client secrets, tokens, audit details, business query strings, or stack traces.
+管理端 Grafana 深链只包含 requestId、traceId、service、env，以及围绕审计事件的时间范围。不得包含 username、userId、mobile、client secret、token、审计详情、业务查询字符串或堆栈。

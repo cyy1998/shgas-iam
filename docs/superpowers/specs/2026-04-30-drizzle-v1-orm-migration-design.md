@@ -1,17 +1,17 @@
-# Drizzle v1 ORM Migration Design
+# Drizzle v1 ORM 迁移设计
 
-## Goal
+## 目标
 
-Migrate `apps/api` from Prisma to Drizzle v1 completely. The final state removes Prisma runtime, Prisma schema, Prisma-generated client and Zod schemas, and Prisma migration tooling. Drizzle becomes the single source for database schema definitions, runtime queries, migrations, and table-derived Zod schemas.
+将 `apps/api` 从 Prisma 完整迁移到 Drizzle v1。最终状态会移除 Prisma runtime、Prisma schema、Prisma 生成的 client 与 Zod schema，以及 Prisma migration 工具。Drizzle 将成为数据库 schema 定义、运行时查询、迁移和基于表派生的 Zod schema 的唯一来源。
 
-## Decisions
+## 决策
 
-- Migration style: complete replacement, implemented in phases.
-- Schema source: code-first from the current `apps/api/src/db/schema.prisma`.
-- Data policy: preserve existing database data. The first Drizzle migration is a baseline and must not recreate existing tables.
-- Query style: mixed. Simple CRUD can use Drizzle relational queries or query builder helpers; complex authorization, organization, employment, and nested relation filters use explicit SQL builder queries.
+- 迁移方式：分阶段完成整体替换。
+- Schema 来源：基于当前 `apps/api/src/db/schema.prisma` 采用 code-first。
+- 数据策略：保留现有数据库数据。第一份 Drizzle migration 是 baseline，不得重建现有表。
+- 查询风格：混合模式。简单 CRUD 可使用 Drizzle relational queries 或 query builder helper；复杂的授权、组织、任职和嵌套关系过滤使用显式 SQL builder 查询。
 
-## Target Structure
+## 目标结构
 
 ```text
 apps/api/
@@ -29,53 +29,53 @@ apps/api/
       0000_baseline.sql
 ```
 
-`src/db/index.ts` exports the Drizzle database singleton and transaction/executor types. Business code imports only from `@/db`, keeping driver initialization out of services and repositories.
+`src/db/index.ts` 导出 Drizzle database singleton 和 transaction/executor 类型。业务代码只从 `@/db` 导入，避免服务和仓储感知 driver 初始化。
 
-`src/db/schema/iam.ts` defines all existing tables from `schema.prisma`: users, organizations, organization closure, positions, employment, clients, roles, role join tables, privileges, privilege delegation, delegation detail, and login logs. TypeScript property names keep current business naming such as `orgCode` and `createTime`, while database columns keep existing names such as `org_code` and `create_time`.
+`src/db/schema/iam.ts` 定义 `schema.prisma` 中所有现有表：users、organizations、organization closure、positions、employment、clients、roles、role join tables、privileges、privilege delegation、delegation detail 和 login logs。TypeScript 属性名保留当前业务命名，例如 `orgCode` 和 `createTime`；数据库列名保留现有名称，例如 `org_code` 和 `create_time`。
 
-`src/db/schema/relations.ts` defines Drizzle relations separately from table definitions. `src/db/schema/zod.ts` exports `createSelectSchema`, `createInsertSchema`, and `createUpdateSchema` outputs that replace imports from `@/db/generated/schemas`.
+`src/db/schema/relations.ts` 将 Drizzle relations 与表定义分开。`src/db/schema/zod.ts` 导出 `createSelectSchema`、`createInsertSchema` 和 `createUpdateSchema` 的结果，用来替代从 `@/db/generated/schemas` 导入的 schema。
 
-## Migration Phases
+## 迁移阶段
 
-### Phase 1: Drizzle Foundation
+### 阶段 1：Drizzle 基础设施
 
-Add Drizzle dependencies and configuration. Create code-first table definitions, relations, the Drizzle client singleton, and the baseline migration. The baseline migration records the current schema state and must not perform destructive DDL against existing environments.
+增加 Drizzle 依赖与配置。创建 code-first 表定义、relations、Drizzle client singleton 和 baseline migration。Baseline migration 只记录当前 schema 状态，不得对现有环境执行破坏性 DDL。
 
-### Phase 2: Zod Schema Replacement
+### 阶段 2：替换 Zod Schema
 
-Replace service-level imports from `@/db/generated/schemas` with Drizzle-derived Zod schemas. Keep existing service DTO files such as `user.schema.ts` and `organization.schema.ts` as the stable OpenAPI and route validation layer. Only their base schema imports change.
+将 service 层对 `@/db/generated/schemas` 的导入替换为 Drizzle 派生的 Zod schema。继续保留现有 service DTO 文件，例如 `user.schema.ts` 和 `organization.schema.ts`，作为稳定的 OpenAPI 与 route validation 层。只有它们的基础 schema 导入来源发生变化。
 
-### Phase 3: Repository Migration
+### 阶段 3：迁移 Repository
 
-Migrate repositories by risk:
+按风险迁移 repository：
 
-1. Low-risk modules: `client`, `session`, `position`, `privilege`.
-2. Medium-risk modules: `organization`, `employment`, `user`.
-3. Highest-risk modules: `role` and permission aggregation queries.
+1. 低风险模块：`client`、`session`、`position`、`privilege`。
+2. 中风险模块：`organization`、`employment`、`user`。
+3. 最高风险模块：`role` 和 permission aggregation queries。
 
-Repository functions continue to accept an optional executor argument, now typed as a Drizzle executor or transaction. Simple reads and writes use `select`, `insert`, `update`, `delete`, or `db.query.*` with `with`. Complex Prisma nested filters, `some` clauses, relation counts, `groupBy`, and permission inheritance are rewritten as explicit SQL using joins, `exists`, `and`, `or`, `inArray`, `ilike`, and `sql`.
+Repository 函数继续接受可选 executor 参数，现在类型为 Drizzle executor 或 transaction。简单读写使用 `select`、`insert`、`update`、`delete` 或带 `with` 的 `db.query.*`。复杂 Prisma nested filters、`some` 条件、relation counts、`groupBy` 和 permission inheritance 会改写为使用 joins、`exists`、`and`、`or`、`inArray`、`ilike` 与 `sql` 的显式 SQL。
 
-### Phase 4: Prisma Removal
+### 阶段 4：移除 Prisma
 
-After all repositories and services compile and smoke tests pass, remove `prisma`, `@prisma/client`, `@prisma/adapter-pg`, `prisma-zod-generator`, `schema.prisma`, `src/db/generated`, and Prisma commands from docs and scripts.
+所有 repositories 和 services 编译通过且冒烟测试通过后，移除 `prisma`、`@prisma/client`、`@prisma/adapter-pg`、`prisma-zod-generator`、`schema.prisma`、`src/db/generated`，以及 docs 和 scripts 中的 Prisma 命令。
 
-## Transactions
+## 事务
 
-Service transaction boundaries remain unchanged conceptually. Calls like `prisma.$transaction(async tx => ...)` become `db.transaction(async tx => ...)`. Repository functions receive the transaction object when called inside a service transaction. Nested transaction support may use Drizzle savepoints when required, but the first migration should not introduce new transaction nesting.
+Service 的事务边界在概念上保持不变。类似 `prisma.$transaction(async tx => ...)` 的调用会变成 `db.transaction(async tx => ...)`。Repository 函数在 service transaction 内调用时接收 transaction 对象。需要时可使用 Drizzle savepoint 支持嵌套事务，但第一轮迁移不应引入新的事务嵌套。
 
-## Error Handling
+## 错误处理
 
-Replace Prisma-specific error handling with PostgreSQL error helpers in `src/db/errors.ts`. Business services should call helpers such as `isUniqueViolation(err)`, `isForeignKeyViolation(err)`, `isNotNullViolation(err)`, and `isCheckViolation(err)`. These helpers map PostgreSQL SQLSTATE codes including `23505`, `23503`, `23502`, and `23514`.
+使用 `src/db/errors.ts` 中的 PostgreSQL error helper 替换 Prisma 特定错误处理。业务 service 应调用 `isUniqueViolation(err)`、`isForeignKeyViolation(err)`、`isNotNullViolation(err)` 和 `isCheckViolation(err)` 等 helper。这些 helper 映射 PostgreSQL SQLSTATE code，包括 `23505`、`23503`、`23502` 和 `23514`。
 
-## Validation And Rollout
+## 验证与发布
 
-Every phase must pass:
+每个阶段都必须通过：
 
 - `pnpm --filter @iam/api typecheck`
 - `pnpm --filter @iam/api lint`
 
-Each migrated module needs smoke coverage through the affected REST or tRPC endpoints in Scalar UI. High-risk paths require fixed sample checks for user search, organization tree and closure queries, employment pagination, role inheritance, and privilege delegation.
+每个已迁移模块都需要通过 Scalar UI 中受影响的 REST 或 tRPC endpoint 做冒烟覆盖。高风险路径需要固定样例检查，包括用户搜索、组织树和 closure 查询、任职分页、角色继承与权限委托。
 
-Before applying the baseline, compare the current production schema with `schema.prisma`. If the live database differs, update Drizzle table definitions intentionally before declaring the baseline. The first deployment should apply only Drizzle metadata and no table-recreating DDL.
+应用 baseline 前，请将当前生产 schema 与 `schema.prisma` 比对。如果线上数据库存在差异，应有意更新 Drizzle 表定义后再声明 baseline。首次部署只应应用 Drizzle metadata，不应执行重建表的 DDL。
 
-Integration tests are recommended for repository behavior against PostgreSQL. Mock-only tests are not sufficient for this migration because the main risk is SQL semantics.
+建议为 repository 行为补充基于 PostgreSQL 的集成测试。仅使用 mock 的测试不足以覆盖本次迁移，因为主要风险在 SQL 语义。
