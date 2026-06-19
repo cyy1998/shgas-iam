@@ -1,6 +1,8 @@
 import type { Server } from "node:http";
 import type { AddressInfo } from "node:net";
+import type { Adapter } from "oidc-provider";
 import { exportJWK, generateKeyPair } from "jose";
+import { interactionPolicy } from "oidc-provider";
 import { afterEach, describe, expect, it } from "vitest";
 
 const servers: Server[] = [];
@@ -21,6 +23,16 @@ async function createSigningJwk(kid: string) {
   const { privateKey } = await generateKeyPair("RS256", { modulusLength: 2048, extractable: true });
   return { ...await exportJWK(privateKey), alg: "RS256", kid, use: "sig" };
 }
+
+const emptyAdapter: Adapter = {
+  async consume() {},
+  async destroy() {},
+  async find() {},
+  async findByUid() {},
+  async findByUserCode() {},
+  async revokeByGrantId() {},
+  async upsert() {},
+};
 
 describe("oIDC discovery and JWKS", () => {
   it("serves fixed discovery metadata and only public current/previous keys under the issuer path", async () => {
@@ -54,21 +66,49 @@ describe("oIDC discovery and JWKS", () => {
       OIDC_CLIENT_AUTH_FAILURE_WINDOW_SECONDS: 60,
       OIDC_TRUST_PROXY: true,
     } as never;
-    const redis = {} as never;
-    const runtime = createOidcProvider({
+    const logger = {
+      info() {},
+      error() {},
+      warn() {},
+    } as never;
+    const provider = createOidcProvider({
       env,
-      redis,
-      logger: {
-        info() {},
-        error() {},
-        warn() {},
-      } as never,
+      logger,
       signingKeys: {
         current: { jwk: current } as never,
         previous: { jwk: previous } as never,
       },
+      adapter: () => emptyAdapter,
+      claims: {
+        createAccessTokenExtra: async () => undefined,
+        findAccount: async () => undefined,
+      } as never,
+      interactionPolicy: interactionPolicy.base(),
+      clientSecretVerifier: {
+        verify: async () => false,
+      },
+      clientAuthRateLimiter: {
+        clear: async () => {},
+        isBlocked: async () => false,
+        recordFailure: async () => 0,
+      },
+      globalSessions: {
+        remove: async () => {},
+      },
+      tokens: {
+        revokeGlobalSessionAccessTokens: async () => 0,
+      },
     });
-    const server = createOidcHttpServer(runtime, redis);
+    const server = createOidcHttpServer({
+      provider,
+      env,
+      logger,
+      health: { ping: async () => "PONG" },
+      interactions: {
+        async handleInteraction() {},
+        async handleResume() {},
+      },
+    } as never);
     servers.push(server);
     await new Promise<void>(resolve => server.listen(0, "127.0.0.1", resolve));
     const { port } = server.address() as AddressInfo;

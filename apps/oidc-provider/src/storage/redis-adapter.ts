@@ -1,11 +1,17 @@
 import type { Redis } from "ioredis";
 import type { Adapter, AdapterPayload } from "oidc-provider";
-import type { OidcClientRepository } from "../repositories/client.repository.ts";
-import {
-  registerOidcAccessToken,
-  revokeOidcAccessToken,
-} from "@iam/api-core/oidc";
-import { consumeStagedProviderSessionBinding, readProviderSessionBinding } from "../session/provider-session.ts";
+import type {
+  AdapterClientRuntimeReader,
+  AdapterClientVersionReader,
+  AdapterProviderSessionBindingStore,
+  AdapterTokenRegistry,
+} from "./redis-adapter.port.ts";
+
+export interface RedisOidcAdapterDeps {
+  clientVersions: AdapterClientVersionReader;
+  providerSessions: AdapterProviderSessionBindingStore;
+  tokens: AdapterTokenRegistry;
+}
 
 const GRANTABLE_MODELS = new Set([
   "AccessToken",
@@ -73,7 +79,7 @@ export class RedisOidcAdapter implements Adapter {
   constructor(
     private readonly model: string,
     private readonly redis: Redis,
-    private readonly clients: OidcClientRepository,
+    private readonly deps: RedisOidcAdapterDeps,
   ) {}
 
   async upsert(id: string, payload: AdapterPayload, expiresIn: number) {
@@ -81,7 +87,7 @@ export class RedisOidcAdapter implements Adapter {
     const expiresAt = Date.now() + expiresIn * 1000;
     const clientIds = payloadClientIds(payload);
     const oidcConfigVersions = Object.fromEntries(await Promise.all(clientIds.map(async (clientId) => {
-      const version = await this.clients.findActiveVersion(clientId);
+      const version = await this.deps.clientVersions.findActiveVersion(clientId);
       if (version === null)
         throw new Error("OIDC client is not available");
       return [clientId, version] as const;
@@ -89,10 +95,10 @@ export class RedisOidcAdapter implements Adapter {
     const clientId = payloadClientId(payload);
 
     const sessionBinding = this.model === "AuthorizationCode" && payload.sessionUid
-      ? await readProviderSessionBinding(this.redis, payload.sessionUid)
+      ? await this.deps.providerSessions.read(payload.sessionUid)
       : null;
     if (this.model === "Session" && payload.uid && typeof payload.accountId === "string")
-      await consumeStagedProviderSessionBinding(this.redis, payload.accountId, payload.uid);
+      await this.deps.providerSessions.consumeStaged(payload.accountId, payload.uid);
     const stored: AdapterPayload = {
       ...payload,
       ...(clientId ? { clientId, oidcConfigVersion: oidcConfigVersions[clientId] } : {}),
@@ -122,7 +128,7 @@ export class RedisOidcAdapter implements Adapter {
       ? stored.globalSessionId
       : typeof stored.extra?.globalSessionId === "string" ? stored.extra.globalSessionId : undefined;
     if (this.model === "AccessToken" && clientId && userId !== undefined && globalSessionId) {
-      await registerOidcAccessToken(this.redis, {
+      await this.deps.tokens.registerAccessToken({
         tokenKey: key,
         userId,
         clientId,
@@ -144,7 +150,7 @@ export class RedisOidcAdapter implements Adapter {
     };
     for (const clientId of payloadClientIds(payload)) {
       const expectedVersion = payload.oidcConfigVersions?.[clientId] ?? payload.oidcConfigVersion;
-      const currentVersion = await this.clients.findActiveVersion(clientId);
+      const currentVersion = await this.deps.clientVersions.findActiveVersion(clientId);
       if (currentVersion === null || currentVersion !== expectedVersion) {
         await this.redis.del(key, consumedKey(this.model, id));
         return undefined;
@@ -180,7 +186,7 @@ export class RedisOidcAdapter implements Adapter {
   async destroy(id: string) {
     const key = artifactKey(this.model, id);
     if (this.model === "AccessToken")
-      await revokeOidcAccessToken(this.redis, key);
+      await this.deps.tokens.revokeAccessToken(key);
     else
       await this.redis.del(key, consumedKey(this.model, id));
   }
@@ -191,7 +197,7 @@ export class RedisOidcAdapter implements Adapter {
     const keys = await this.redis.zrange(indexKey, 0, -1);
     const accessTokenKeys = keys.filter(key => key.includes(":AccessToken:"));
     const otherKeys = keys.filter(key => !key.includes(":AccessToken:"));
-    await Promise.all(accessTokenKeys.map(async key => await revokeOidcAccessToken(this.redis, key)));
+    await Promise.all(accessTokenKeys.map(async key => await this.deps.tokens.revokeAccessToken(key)));
     if (otherKeys.length)
       await this.redis.del(...otherKeys, ...otherKeys.map(key => key.replace("oidc:model:", "oidc:consumed:")));
     await this.redis.del(indexKey);
@@ -199,7 +205,7 @@ export class RedisOidcAdapter implements Adapter {
 }
 
 class DynamicClientAdapter implements Adapter {
-  constructor(private readonly clients: OidcClientRepository) {}
+  constructor(private readonly clients: AdapterClientRuntimeReader) {}
 
   async find(id: string) {
     return await this.clients.findRuntime(id) ?? undefined;
@@ -213,19 +219,33 @@ class DynamicClientAdapter implements Adapter {
   async revokeByGrantId() {}
 }
 
-export function createOidcAdapterFactory(redis: Redis, clients: OidcClientRepository) {
-  return (model: string): Adapter => model === "Client"
-    ? new DynamicClientAdapter(clients)
-    : new RedisOidcAdapter(model, redis, clients);
+export interface CreateOidcAdapterFactoryDeps extends RedisOidcAdapterDeps {
+  clients: AdapterClientRuntimeReader;
 }
 
-export async function revokeClientProtocolObjects(redis: Redis, clientId: string) {
+export function createOidcAdapterFactory(redis: Redis, deps: CreateOidcAdapterFactoryDeps) {
+  return (model: string): Adapter => model === "Client"
+    ? new DynamicClientAdapter(deps.clients)
+    : new RedisOidcAdapter(model, redis, deps);
+}
+
+export function createOidcProtocolObjectStore(redis: Redis, tokens: AdapterTokenRegistry) {
+  return {
+    revokeClient(clientId: string) {
+      return revokeClientProtocolObjects(redis, tokens, clientId);
+    },
+  };
+}
+
+export type OidcProtocolObjectStore = ReturnType<typeof createOidcProtocolObjectStore>;
+
+export async function revokeClientProtocolObjects(redis: Redis, tokens: AdapterTokenRegistry, clientId: string) {
   const indexKey = clientObjectIndexKey(clientId);
   await redis.zremrangebyscore(indexKey, "-inf", Date.now());
   const keys = await redis.zrange(indexKey, 0, -1);
   const accessTokenKeys = keys.filter(key => key.includes(":AccessToken:"));
   const otherKeys = keys.filter(key => !key.includes(":AccessToken:"));
-  await Promise.all(accessTokenKeys.map(async key => await revokeOidcAccessToken(redis, key)));
+  await Promise.all(accessTokenKeys.map(async key => await tokens.revokeAccessToken(key)));
   if (otherKeys.length)
     await redis.del(...otherKeys, ...otherKeys.map(key => key.replace("oidc:model:", "oidc:consumed:")));
   await redis.del(indexKey);

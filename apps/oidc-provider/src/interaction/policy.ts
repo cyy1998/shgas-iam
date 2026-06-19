@@ -1,5 +1,5 @@
 import type { UnknownObject } from "oidc-provider";
-import type { GlobalSessionResolver } from "./global-session.ts";
+import type { InteractionGlobalSessionResolver } from "./interaction.port.ts";
 import { errors, interactionPolicy } from "oidc-provider";
 import { requestNeedsReauthentication } from "./global-session.ts";
 
@@ -28,7 +28,7 @@ export function validateAuthorizationRequest(params: UnknownObject, client: Auth
   }
 }
 
-export function createIamInteractionPolicy(globalSessions: GlobalSessionResolver) {
+export function createIamInteractionPolicy(globalSessions: InteractionGlobalSessionResolver) {
   const policy = interactionPolicy.base();
   policy.remove("consent");
   const login = policy.get("login");

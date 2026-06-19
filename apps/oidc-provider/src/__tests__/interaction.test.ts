@@ -3,10 +3,12 @@ import { describe, expect, it } from "vitest";
 import { requestNeedsReauthentication } from "../interaction/global-session.ts";
 import { validateAuthorizationRequest } from "../interaction/policy.ts";
 import {
-  consumeOidcReturnHandle,
-  createOidcReturnHandle,
   secureStringEqual,
 } from "../interaction/return-handle.ts";
+import {
+  consumeOidcReturnHandle,
+  createOidcReturnHandle,
+} from "../stores/return-handle.store.ts";
 
 class ReturnHandleRedis {
   values = new Map<string, string>();

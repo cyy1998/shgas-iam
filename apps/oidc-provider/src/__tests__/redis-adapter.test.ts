@@ -12,6 +12,7 @@ import {
 import { describe, expect, it } from "vitest";
 import { toOidcClientRuntimeMetadata } from "../repositories/client-metadata.ts";
 import { RedisOidcAdapter, revokeClientProtocolObjects } from "../storage/redis-adapter.ts";
+import { createOidcTokenStore } from "../stores/token.store.ts";
 
 class FakeRedis {
   strings = new Map<string, string>();
@@ -103,15 +104,31 @@ class FakeRedis {
 }
 
 function createAdapter(model: string, redis: FakeRedis, version: { value: number | null }) {
+  const tokens = createOidcTokenStore(redis as unknown as Redis);
   return new RedisOidcAdapter(model, redis as unknown as Redis, {
-    findActiveVersion: async () => version.value,
-  } as never);
+    clientVersions: {
+      findActiveVersion: async () => version.value,
+    },
+    providerSessions: {
+      consumeStaged: async () => null,
+      read: async () => null,
+    },
+    tokens,
+  });
 }
 
 function createMultiClientAdapter(model: string, redis: FakeRedis, versions: Map<string, number | null>) {
+  const tokens = createOidcTokenStore(redis as unknown as Redis);
   return new RedisOidcAdapter(model, redis as unknown as Redis, {
-    findActiveVersion: async (clientId: string) => versions.get(clientId) ?? null,
-  } as never);
+    clientVersions: {
+      findActiveVersion: async (clientId: string) => versions.get(clientId) ?? null,
+    },
+    providerSessions: {
+      consumeStaged: async () => null,
+      read: async () => null,
+    },
+    tokens,
+  });
 }
 
 describe("redis OIDC adapter", () => {
@@ -193,7 +210,11 @@ describe("redis OIDC adapter", () => {
       600,
     );
 
-    await revokeClientProtocolObjects(redis as unknown as Redis, "client-a");
+    await revokeClientProtocolObjects(
+      redis as unknown as Redis,
+      createOidcTokenStore(redis as unknown as Redis),
+      "client-a",
+    );
 
     expect(redis.strings.has("oidc:model:AuthorizationCode:code-1")).toBe(false);
     expect(redis.strings.has("oidc:model:Interaction:interaction-1")).toBe(false);

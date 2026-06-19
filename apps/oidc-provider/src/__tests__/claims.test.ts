@@ -1,6 +1,5 @@
-import type { Redis } from "ioredis";
 import { describe, expect, it } from "vitest";
-import { OidcClaimsService } from "../provider/claims.ts";
+import { createOidcClaimsService } from "../provider/claims.ts";
 import { providerSessionBindingKey } from "../session/provider-session.ts";
 
 class ClaimsRedis {
@@ -46,25 +45,35 @@ function createFixture() {
     authTime: session.authTime,
     expiresAt: Math.floor(Date.now() / 1000) + 300,
   }));
-  const service = new OidcClaimsService(
-    redis as unknown as Redis,
-    {
+  const service = createOidcClaimsService({
+    accounts: {
       findBySubject: async (subject: string) => subject === account.oidcSubject ? account : null,
-    } as never,
-    {
+    },
+    authorization: {
       buildClaim: async () => ({
         employments: [],
         roles: ["app:user"],
         privileges: ["app:read"],
       }),
-    } as never,
-    {
+    },
+    clients: {
       findRuntime: async () => client,
-    } as never,
-    {
+    },
+    globalSessions: {
       resolveById: async (sessionId: string) => sessionId === session.sessionId ? session : null,
-    } as never,
-  );
+    },
+    providerSessions: {
+      read: async (sessionUid: string) => {
+        const value = redis.values.get(providerSessionBindingKey(sessionUid));
+        return value ? JSON.parse(value) : null;
+      },
+    },
+    tokens: {
+      revokeAccessToken: async (tokenKey: string) => {
+        redis.values.delete(tokenKey);
+      },
+    },
+  });
   return { account, client, redis, service };
 }
 

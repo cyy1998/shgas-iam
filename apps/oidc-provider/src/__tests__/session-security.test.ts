@@ -1,13 +1,14 @@
 import type { Redis } from "ioredis";
 import { describe, expect, it } from "vitest";
-import { ClientAuthRateLimiter, parseBasicClientId } from "../security/client-auth-rate-limit.ts";
+import { createClientAuthRateLimiter, parseBasicClientId } from "../security/client-auth-rate-limit.ts";
+import { providerSessionBindingKey } from "../session/provider-session.ts";
+import { createClientAuthFailureStore } from "../stores/client-auth-failure.store.ts";
 import {
   bindProviderSession,
   consumeStagedProviderSessionBinding,
-  providerSessionBindingKey,
   readProviderSessionBinding,
   stageProviderSessionBinding,
-} from "../session/provider-session.ts";
+} from "../stores/provider-session-binding.store.ts";
 
 class SecurityRedis {
   values = new Map<string, string>();
@@ -99,7 +100,7 @@ describe("confidential client authentication rate limiting", () => {
 
   it("blocks a client and IP after the configured failure count and can clear it", async () => {
     const redis = new SecurityRedis();
-    const limiter = new ClientAuthRateLimiter(redis as unknown as Redis, 2, 60);
+    const limiter = createClientAuthRateLimiter(createClientAuthFailureStore(redis as unknown as Redis, 60), 2);
 
     expect(await limiter.isBlocked("client-a", "127.0.0.1")).toBe(false);
     await limiter.recordFailure("client-a", "127.0.0.1");
