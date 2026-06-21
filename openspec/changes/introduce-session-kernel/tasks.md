@@ -4,22 +4,22 @@
 - [x] 1.2 为 `session-kernel-core`、`custom-sso-session-kernel-adapter`、`oidc-session-kernel-adapter`、`admin-session-revocation` 和 `session-kernel-release-hardening` 创建 child OpenSpec change。
 - [x] 1.3 在 umbrella design 中持续记录跨 child 的决策变更、风险和验收状态。
 - [ ] 1.4 每个 child 合并到 `feature/session-kernel` 后运行对应跨模块 smoke check，并记录结果。
-  - 已在 umbrella design 中建立 smoke check 记录表；待 child 合并到 `feature/session-kernel` 后逐项运行并填写结果。
+  - 已记录 `session-kernel-core` 的 `@iam/api-core` lint/test/typecheck 结果；其余 child 待合并后逐项运行并填写结果。
 
 ## 2. Session Kernel Core
 
-- [ ] 2.1 在 `packages/api-core/src/session` 下新增 kernel 模块结构，并保留 legacy session helper 导出。
-- [ ] 2.2 定义 PrincipalSession、ClientBinding、IssuedCredential、ProtocolArtifact、RevokedTombstone、CleanupRef、RevocationReason 和 result union 类型。
-- [ ] 2.3 实现 `sess:v2:` Redis key builder、zset index member 编码、JSON/Zod schema 校验和 namespace 配置。
-- [ ] 2.4 实现 high-entropy external token generator、HMAC lookup、current/previous key 解析和 secret 启动校验。
-- [ ] 2.5 实现 create/resolve PrincipalSession，包括 lookup tombstone first、idle/absolute TTL、PrincipalSnapshot 和 clientContext。
-- [ ] 2.6 实现 create ClientBinding、issue IssuedCredential、create/consume ProtocolArtifact 的原子状态转换。
-- [ ] 2.7 实现 revoked tombstone 写入、lookup tombstone、consumed tombstone、TTL 计算和 tombstone first resolve。
-- [ ] 2.8 实现 renew PrincipalSession、renewal policy、freshness evaluation 和重认证旧 session 撤销入口。
-- [ ] 2.9 实现幂等 revoke API、批量 revoke summary、causedBy 传播、adapter cleanup 分组和 cleanup failure 结果。
-- [ ] 2.10 实现 validation hooks 与 lazy revoke 编排，但不在 kernel 中引入 DB 或 app-local service。
-- [ ] 2.11 覆盖 `@iam/api-core` kernel 单元测试：HMAC lookup、previous key、issue/resolve/revoke、artifact consume/replay、tombstone、TTL、zset 懒清理和 fail closed。
-- [ ] 2.12 运行 `pnpm --filter @iam/api-core test` 和 `pnpm --filter @iam/api-core typecheck`。
+- [x] 2.1 在 `packages/api-core/src/session` 下新增 kernel 模块结构，并保留 legacy session helper 导出。
+- [x] 2.2 定义 PrincipalSession、ClientBinding、IssuedCredential、ProtocolArtifact、RevokedTombstone、CleanupRef、RevocationReason 和 result union 类型。
+- [x] 2.3 实现 `sess:v2:` Redis key builder、zset index member 编码、JSON/Zod schema 校验和 namespace 配置。
+- [x] 2.4 实现 high-entropy external token generator、HMAC lookup、current/previous key 解析和 secret 启动校验。
+- [x] 2.5 实现 create/resolve PrincipalSession，包括 lookup tombstone first、idle/absolute TTL、PrincipalSnapshot 和 clientContext。
+- [x] 2.6 实现 create ClientBinding、issue IssuedCredential、create/consume ProtocolArtifact 的原子状态转换。
+- [x] 2.7 实现 revoked tombstone 写入、lookup tombstone、consumed tombstone、TTL 计算和 tombstone first resolve。
+- [x] 2.8 实现 renew PrincipalSession、renewal policy、freshness evaluation 和重认证旧 session 撤销入口。
+- [x] 2.9 实现幂等 revoke API、批量 revoke summary、causedBy 传播、adapter cleanup 分组和 cleanup failure 结果。
+- [x] 2.10 实现 validation hooks 与 lazy revoke 编排，但不在 kernel 中引入 DB 或 app-local service。
+- [x] 2.11 覆盖 `@iam/api-core` kernel 单元测试：HMAC lookup、previous key、issue/resolve/revoke、artifact consume/replay、tombstone、TTL、zset 懒清理和 fail closed。
+- [x] 2.12 运行 `pnpm --filter @iam/api-core test` 和 `pnpm --filter @iam/api-core typecheck`。
 
 ## 3. Custom SSO Adapter
 

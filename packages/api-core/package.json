@@ -18,6 +18,7 @@
     "./redis": "./src/redis/index.ts",
     "./security": "./src/security/index.ts",
     "./session": "./src/session/index.ts",
+    "./session/kernel": "./src/session/kernel/index.ts",
     "./trpc": "./src/trpc/index.ts",
     "./types": "./src/types/lib.ts",
     "./uow": "./src/uow/index.ts",

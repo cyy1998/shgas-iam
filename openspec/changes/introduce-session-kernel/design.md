@@ -424,12 +424,13 @@ Child change 顺序与目标分支：
 | 2026-06-21 | `session-kernel-core` 必须先落地，协议 adapter 不在自己的 child 中复制 lifecycle、lookup、tombstone 或通用索引。 | custom SSO、OIDC 与 admin revoke child 只能消费 Kernel public API。 | 已记录 |
 | 2026-06-21 | custom SSO 与 OIDC 的协议 payload 仍归 adapter 私有，Kernel 只保存 lifecycle object 与 cleanupRef。 | 防止 Kernel model 被 `UserDetailDto`、OIDC claims 或 provider model 污染。 | 已记录 |
 | 2026-06-21 | `session-kernel-release-hardening` 在 runtime child 之后执行。 | env、runbook、架构测试和 smoke test 以稳定 contract 为准，减少重复修订。 | 已记录 |
+| 2026-06-21 | `session-kernel-core` 已完成并归档，主规格已同步 `session-kernel-core` capability。 | 后续 adapter child 可从 `@iam/api-core/session/kernel` 依赖稳定 core API。 | 已归档 |
 
 跨 child 风险与验收状态：
 
 | 风险/验收项 | Owner child | 当前状态 | 验收证据 |
 | --- | --- | --- | --- |
-| Kernel API 不足导致 adapter 绕过 lifecycle key。 | `session-kernel-core` | Open | API 设计评审、架构测试、adapter child diff 检查。 |
+| Kernel API 不足导致 adapter 绕过 lifecycle key。 | `session-kernel-core` | Core complete；adapter diff 检查待后续 child 执行 | `@iam/api-core` kernel 架构测试、lint/test/typecheck 已通过。 |
 | custom SSO 与 OIDC 对同一 PrincipalSession 的 revoke cleanup 顺序不一致。 | `custom-sso-session-kernel-adapter` / `oidc-session-kernel-adapter` | Open | logout、user disabled、client disabled 的跨模块 smoke check。 |
 | Admin afterCommit revoke 与协议 adapter cleanup failure 语义不一致。 | `admin-session-revocation` | Open | revoke summary system log 与 best-effort failure 测试。 |
 | 发布时旧 Redis session key 与新 `sess:v2:` key 混用。 | `session-kernel-release-hardening` | Open | 清理 runbook/script、维护窗口步骤和回滚步骤通过 review。 |
@@ -438,7 +439,7 @@ Child 合并 smoke check 记录：
 
 | Child merged into `feature/session-kernel` | Required smoke check | Result | Notes |
 | --- | --- | --- | --- |
-| `session-kernel-core` | `pnpm --filter @iam/api-core test`；`pnpm --filter @iam/api-core typecheck` | Pending | 待 child 合并后运行。 |
+| `session-kernel-core` | `pnpm --filter @iam/api-core lint`；`pnpm --filter @iam/api-core test`；`pnpm --filter @iam/api-core typecheck` | Passed | 2026-06-21 已通过；change 归档至 `openspec/changes/archive/2026-06-21-session-kernel-core/`。 |
 | `custom-sso-session-kernel-adapter` | `pnpm --filter @iam/api test`；`pnpm --filter @iam/api typecheck`；custom SSO 登录、authorize、callback/token、authz、logout smoke。 | Pending | 待 child 合并后运行。 |
 | `oidc-session-kernel-adapter` | `pnpm --filter @iam/oidc-provider test`；`pnpm --filter @iam/oidc-provider typecheck`；OIDC authorize、token、UserInfo、logout smoke。 | Pending | 待 child 合并后运行。 |
 | `admin-session-revocation` | `pnpm --filter @iam/admin-api test`；`pnpm --filter @iam/admin-api typecheck`；user/client/password/status revoke smoke。 | Pending | 待 child 合并后运行。 |

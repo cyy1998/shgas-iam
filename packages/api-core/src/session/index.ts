@@ -6,6 +6,8 @@ import { z as zod } from "zod";
 import { AuthzUnauthorizedError } from "../errors/AuthzUnauthorizedError";
 import { reviveIsoDates } from "../utils/common";
 
+export * as kernel from "./kernel";
+
 export interface LocalSessionReference {
   clientCode: string;
   localSessionId: string;
