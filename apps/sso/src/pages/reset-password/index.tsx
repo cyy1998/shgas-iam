@@ -8,6 +8,7 @@ import {
   UserOutlined,
 } from '@ant-design/icons';
 import logoColorfulTextWhite from '@sso/assets/logo-colorful-text-white.png';
+import { useSmsCodeCountdown } from '@sso/hooks/useSmsCodeCountdown';
 import { withHumanVerification } from '@sso/lib/human-verification';
 import {
   codeVerify,
@@ -20,7 +21,7 @@ import { ServiceError } from '@sso/utils/request';
 import { getQuery } from '@sso/utils/url';
 import { history } from '@umijs/max';
 import { Button, Form, Input, Modal, Select, Spin, message } from 'antd';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import './index.less';
 
 function StepBar({ current }: { current: 0 | 1 | 2 }) {
@@ -77,8 +78,8 @@ export default function ResetPasswordPage() {
   const [mobileOptions, setMobileOptions] = useState<
     { label: string; value: string }[]
   >([]);
-  const [countdown, setCountdown] = useState(0);
-  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const { countdown, isCounting, startCountdown, resetCountdown } =
+    useSmsCodeCountdown();
   const [form1] = Form.useForm<Step1>();
   const [form2] = Form.useForm<Step2>();
   const [form3] = Form.useForm<Step3>();
@@ -87,26 +88,6 @@ export default function ResetPasswordPage() {
     const username = getQuery('username');
     if (username) form1.setFieldValue('username', username);
   }, [form1]);
-
-  useEffect(
-    () => () => {
-      if (timerRef.current) clearInterval(timerRef.current);
-    },
-    [],
-  );
-
-  const startCountdown = () => {
-    setCountdown(60);
-    timerRef.current = setInterval(() => {
-      setCountdown((v) => {
-        if (v <= 1) {
-          if (timerRef.current) clearInterval(timerRef.current);
-          return 0;
-        }
-        return v - 1;
-      });
-    }, 1000);
-  };
 
   const handleNext = async () => {
     setLoading(true);
@@ -173,11 +154,7 @@ export default function ResetPasswordPage() {
     if (current === 1) setCurrent(0);
     else if (current === 2) {
       setCurrent(1);
-      if (timerRef.current) {
-        clearInterval(timerRef.current);
-        timerRef.current = null;
-      }
-      setCountdown(0);
+      resetCountdown();
     }
   };
 
@@ -187,7 +164,7 @@ export default function ResetPasswordPage() {
       message.warning('请先绑定手机号！');
       return;
     }
-    if (countdown > 0) return;
+    if (isCounting) return;
     setLoading(true);
     try {
       const body = {
@@ -315,7 +292,7 @@ export default function ResetPasswordPage() {
                         <button
                           className="reset-code-btn"
                           type="button"
-                          disabled={countdown > 0}
+                          disabled={isCounting}
                           onClick={sendCode}
                         >
                           {countdown <= 0

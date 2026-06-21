@@ -7,6 +7,7 @@ import {
   SafetyCertificateOutlined,
   UserOutlined,
 } from '@ant-design/icons';
+import { useSmsCodeCountdown } from '@sso/hooks/useSmsCodeCountdown';
 import { withHumanVerification } from '@sso/lib/human-verification';
 import { selfMobileSendMsg } from '@sso/services/open';
 import { mobileSet, passwordChange } from '@sso/services/public';
@@ -20,7 +21,7 @@ import { ServiceError } from '@sso/utils/request';
 import { decodeRedirect, getQuery } from '@sso/utils/url';
 import { history, useModel } from '@umijs/max';
 import { Button, Form, Input, Spin, Table, Tabs, message } from 'antd';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import TopBar from './_components/TopBar';
 import './index.less';
 
@@ -51,8 +52,7 @@ export default function UserInfoPage() {
   const [activeKey, setActiveKey] = useState<TabKey>('password');
   const [submitting, setSubmitting] = useState(false);
   const [smsSending, setSmsSending] = useState(false);
-  const [countdown, setCountdown] = useState(0);
-  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const { countdown, isCounting, startCountdown } = useSmsCodeCountdown();
   const [pwdForm] = Form.useForm();
   const [mobileForm] = Form.useForm();
 
@@ -60,33 +60,13 @@ export default function UserInfoPage() {
     if (!userInfo) void loadUserInfo();
   }, [userInfo, loadUserInfo]);
 
-  useEffect(
-    () => () => {
-      if (timerRef.current) clearInterval(timerRef.current);
-    },
-    [],
-  );
-
-  const startCountdown = () => {
-    setCountdown(60);
-    timerRef.current = setInterval(() => {
-      setCountdown((v) => {
-        if (v <= 1) {
-          if (timerRef.current) clearInterval(timerRef.current);
-          return 0;
-        }
-        return v - 1;
-      });
-    }, 1000);
-  };
-
   const sendCode = async () => {
     const phoneNumber = mobileForm.getFieldValue('phoneNumber');
     if (!phoneNumber) {
       message.error('请填写手机号');
       return;
     }
-    if (countdown > 0) return;
+    if (isCounting) return;
     try {
       setSmsSending(true);
       const body = { phoneNumber, usage: 'bindPhone' } as const;
@@ -352,7 +332,7 @@ export default function UserInfoPage() {
                           <button
                             className="profile-code-btn"
                             type="button"
-                            disabled={countdown > 0 || smsSending}
+                            disabled={isCounting || smsSending}
                             onClick={sendCode}
                           >
                             {smsSending
