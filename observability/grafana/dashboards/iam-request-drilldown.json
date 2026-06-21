@@ -2,7 +2,7 @@
   "uid": "iam-request-drilldown",
   "title": "IAM Request Drilldown",
   "schemaVersion": 39,
-  "version": 5,
+  "version": 6,
   "refresh": "10s",
   "timezone": "browser",
   "tags": [
@@ -77,6 +77,15 @@
           "text": ".*",
           "value": ".*"
         }
+      },
+      {
+        "name": "status",
+        "type": "custom",
+        "query": "All : .*,2xx : 2..,3xx : 3..,4xx : 4..,5xx : 5..,200 : 200,201 : 201,204 : 204,301 : 301,302 : 302,304 : 304,400 : 400,401 : 401,403 : 403,404 : 404,409 : 409,422 : 422,429 : 429,500 : 500,502 : 502,503 : 503,504 : 504",
+        "current": {
+          "text": "All",
+          "value": ".*"
+        }
       }
     ]
   },
@@ -91,7 +100,7 @@
       },
       "options": {
         "mode": "markdown",
-        "content": "**Request ID:** `$requestId`\n\n**Trace ID:** `$traceId`\n\n**Environment:** `$env`    **Service filter:** `$service`"
+        "content": "**Request ID:** `$requestId`\n\n**Trace ID:** `$traceId`\n\n**Environment:** `$env`    **Service filter:** `$service`    **Status filter:** `${status:text}`"
       },
       "fieldConfig": {
         "defaults": {},
@@ -115,7 +124,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum(count_over_time({env=\"$env\", service=~\"$service\"} | json | __error__=\"\" | requestId=~\"$requestId\" | traceId=~\"$traceId\" [$__range]))"
+          "expr": "sum(count_over_time({env=\"$env\", service=~\"$service\"} | json | __error__=\"\" | requestId=~\"$requestId\" | traceId=~\"$traceId\" | statusCode=~\"${status:raw}\" [$__range]))"
         }
       ],
       "fieldConfig": {
@@ -174,7 +183,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "count(sum by (service) (count_over_time({env=\"$env\", service=~\"$service\"} | json | __error__=\"\" | requestId=~\"$requestId\" | traceId=~\"$traceId\" [$__range])))"
+          "expr": "count(sum by (service) (count_over_time({env=\"$env\", service=~\"$service\"} | json | __error__=\"\" | requestId=~\"$requestId\" | traceId=~\"$traceId\" | statusCode=~\"${status:raw}\" [$__range])))"
         }
       ],
       "fieldConfig": {
@@ -233,7 +242,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum(count_over_time({env=\"$env\", service=~\"$service\", level=~\"error|fatal\"} | json | __error__=\"\" | requestId=~\"$requestId\" | traceId=~\"$traceId\" [$__range]))"
+          "expr": "sum(count_over_time({env=\"$env\", service=~\"$service\", level=~\"error|fatal\"} | json | __error__=\"\" | requestId=~\"$requestId\" | traceId=~\"$traceId\" | statusCode=~\"${status:raw}\" [$__range]))"
         }
       ],
       "fieldConfig": {
@@ -292,7 +301,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "max(max_over_time({env=\"$env\", service=~\"$service\"} | json | __error__=\"\" | requestId=~\"$requestId\" | traceId=~\"$traceId\" | durationMs != \"\" | unwrap durationMs | __error__=\"\" [$__range]))"
+          "expr": "max(max_over_time({env=\"$env\", service=~\"$service\"} | json | __error__=\"\" | requestId=~\"$requestId\" | traceId=~\"$traceId\" | statusCode=~\"${status:raw}\" | durationMs != \"\" | unwrap durationMs | __error__=\"\" [$__range]))"
         }
       ],
       "fieldConfig": {
@@ -355,7 +364,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "{env=\"$env\", service=~\"$service\"} | json | __error__=\"\" | requestId=~\"$requestId\" | traceId=~\"$traceId\"",
+          "expr": "{env=\"$env\", service=~\"$service\"} | json | __error__=\"\" | requestId=~\"$requestId\" | traceId=~\"$traceId\" | statusCode=~\"${status:raw}\"",
           "format": "logs"
         }
       ],
@@ -373,25 +382,27 @@
           "options": {
             "indexByName": {
               "Time": 0,
-              "service": 1,
-              "event": 2,
-              "method": 3,
-              "path": 4,
-              "route": 5,
+              "sourceApp": 1,
+              "requestId": 2,
+              "event": 3,
+              "method": 4,
+              "path": 5,
               "statusCode": 6,
               "durationMs": 7,
               "upstreamStatus": 8,
-              "upstreamAddr": 9,
-              "errorName": 10,
-              "errorCode": 11,
-              "errorMessage": 12,
-              "msg": 13,
-              "requestId": 14,
-              "traceId": 15
+              "errorName": 9,
+              "errorMessage": 10,
+              "traceId": 11,
+              "service": 12,
+              "route": 13,
+              "upstreamAddr": 14,
+              "errorCode": 15,
+              "msg": 16
             },
             "renameByName": {
               "Time": "Time",
               "service": "Service",
+              "sourceApp": "Source app",
               "event": "Event",
               "method": "Method",
               "path": "Path",
@@ -409,6 +420,11 @@
             },
             "excludeByName": {
               "Line": true,
+              "service": true,
+              "route": true,
+              "upstreamAddr": true,
+              "errorCode": true,
+              "msg": true,
               "labels": true,
               "id": true,
               "Time_ns": true,
@@ -456,12 +472,12 @@
           {
             "matcher": {
               "id": "byName",
-              "options": "Service"
+              "options": "Source app"
             },
             "properties": [
               {
                 "id": "custom.width",
-                "value": 130
+                "value": 120
               }
             ]
           },
@@ -548,7 +564,7 @@
                 "value": [
                   {
                     "title": "Open this request",
-                    "url": "/d/iam-request-drilldown/iam-request-drilldown?orgId=1&${__url_time_range}&var-env=$env&var-service=${__data.fields.service}&var-requestId=${__data.fields.requestId}&var-traceId=${__data.fields.traceId}",
+                    "url": "/d/iam-request-drilldown/iam-request-drilldown?orgId=1&${__url_time_range}&var-env=$env&var-service=$service&var-requestId=${__data.fields.requestId}&var-traceId=${__data.fields.traceId}&var-status=${status:raw}",
                     "targetBlank": false
                   }
                 ]
@@ -570,7 +586,7 @@
                 "value": [
                   {
                     "title": "Open this trace",
-                    "url": "/d/iam-request-drilldown/iam-request-drilldown?orgId=1&${__url_time_range}&var-env=$env&var-service=${__data.fields.service}&var-requestId=${__data.fields.requestId}&var-traceId=${__data.fields.traceId}",
+                    "url": "/d/iam-request-drilldown/iam-request-drilldown?orgId=1&${__url_time_range}&var-env=$env&var-service=$service&var-requestId=${__data.fields.requestId}&var-traceId=${__data.fields.traceId}&var-status=${status:raw}",
                     "targetBlank": false
                   }
                 ]
@@ -587,6 +603,130 @@
                 "id": "custom.cellOptions",
                 "value": {
                   "type": "color-background"
+                }
+              },
+              {
+                "id": "mappings",
+                "value": [
+                  {
+                    "options": {
+                      "match": "empty",
+                      "result": {
+                        "color": "gray",
+                        "index": 0,
+                        "text": "-"
+                      }
+                    },
+                    "type": "special"
+                  },
+                  {
+                    "options": {
+                      "from": 200,
+                      "result": {
+                        "color": "green",
+                        "index": 1
+                      },
+                      "to": 299
+                    },
+                    "type": "range"
+                  },
+                  {
+                    "options": {
+                      "from": 300,
+                      "result": {
+                        "color": "blue",
+                        "index": 2
+                      },
+                      "to": 399
+                    },
+                    "type": "range"
+                  },
+                  {
+                    "options": {
+                      "from": 400,
+                      "result": {
+                        "color": "orange",
+                        "index": 3
+                      },
+                      "to": 499
+                    },
+                    "type": "range"
+                  },
+                  {
+                    "options": {
+                      "from": 500,
+                      "result": {
+                        "color": "red",
+                        "index": 4
+                      },
+                      "to": 599
+                    },
+                    "type": "range"
+                  },
+                  {
+                    "options": {
+                      "pattern": "^2\\d\\d$",
+                      "result": {
+                        "color": "green",
+                        "index": 5
+                      }
+                    },
+                    "type": "regex"
+                  },
+                  {
+                    "options": {
+                      "pattern": "^3\\d\\d$",
+                      "result": {
+                        "color": "blue",
+                        "index": 6
+                      }
+                    },
+                    "type": "regex"
+                  },
+                  {
+                    "options": {
+                      "pattern": "^4\\d\\d$",
+                      "result": {
+                        "color": "orange",
+                        "index": 7
+                      }
+                    },
+                    "type": "regex"
+                  },
+                  {
+                    "options": {
+                      "pattern": "^5\\d\\d$",
+                      "result": {
+                        "color": "red",
+                        "index": 8
+                      }
+                    },
+                    "type": "regex"
+                  }
+                ]
+              },
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": [
+                    {
+                      "color": "green",
+                      "value": null
+                    },
+                    {
+                      "color": "blue",
+                      "value": 300
+                    },
+                    {
+                      "color": "orange",
+                      "value": 400
+                    },
+                    {
+                      "color": "red",
+                      "value": 500
+                    }
+                  ]
                 }
               }
             ]
@@ -623,7 +763,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "{env=\"$env\", service=~\"$service\"} | json | __error__=\"\" | requestId=~\"$requestId\" | traceId=~\"$traceId\" | line_format \"{{.service}} | {{.event}} | {{.method}} {{.path}} | status={{.statusCode}} duration={{.durationMs}}ms | upstream={{.upstreamStatus}} {{.upstreamAddr}} | error={{.errorName}}{{.errorCode}} {{.errorMessage}}{{.msg}}\""
+          "expr": "{env=\"$env\", service=~\"$service\"} | json | __error__=\"\" | requestId=~\"$requestId\" | traceId=~\"$traceId\" | statusCode=~\"${status:raw}\" | line_format \"{{.service}} | {{.event}} | {{.method}} {{.path}} | status={{.statusCode}} duration={{.durationMs}}ms | upstream={{.upstreamStatus}} {{.upstreamAddr}} | error={{.errorName}}{{.errorCode}} {{.errorMessage}}{{.msg}}\""
         }
       ],
       "options": {
@@ -658,7 +798,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "{env=\"$env\", service=~\"$service\"} | json | __error__=\"\" | requestId=~\"$requestId\" | traceId=~\"$traceId\""
+          "expr": "{env=\"$env\", service=~\"$service\"} | json | __error__=\"\" | requestId=~\"$requestId\" | traceId=~\"$traceId\" | statusCode=~\"${status:raw}\""
         }
       ],
       "options": {
