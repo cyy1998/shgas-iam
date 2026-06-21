@@ -1,5 +1,6 @@
 import { createRoute, z } from "@hono/zod-openapi";
 import * as HttpStatusCodes from "@iam/api-core/core/http-status-codes";
+import { commonErrorResponses } from "@iam/api-core/core/openapi/helpers/common-error-responses";
 import jsonContent from "@iam/api-core/core/openapi/helpers/json-content";
 import createSuccessResponseSchema from "@iam/api-core/core/openapi/schemas/create-success-schema";
 import { SSOMetaInfoSchema } from "./sso.schema";
@@ -20,10 +21,8 @@ export const endpointsConfiguration = createRoute({
     }),
   },
   responses: {
+    ...commonErrorResponses,
     [HttpStatusCodes.OK]: jsonContent(createSuccessResponseSchema(SSOMetaInfoSchema), "单点登录端点信息"),
-    [HttpStatusCodes.BAD_REQUEST]: {
-      description: "非法 SSO 入口",
-    },
   },
 });
 
@@ -39,6 +38,7 @@ export const callback = createRoute({
     }),
   },
   responses: {
+    ...commonErrorResponses,
     [HttpStatusCodes.MOVED_TEMPORARILY]: {
       description: "本地会话回调成功",
     },
@@ -57,6 +57,7 @@ export const token = createRoute({
     }),
   },
   responses: {
+    ...commonErrorResponses,
     [HttpStatusCodes.MOVED_TEMPORARILY]: {
       description: "本地会话回调成功",
     },
@@ -75,6 +76,7 @@ export const authorize = createRoute({
     }),
   },
   responses: {
+    ...commonErrorResponses,
     [HttpStatusCodes.MOVED_TEMPORARILY]: {
       description: "全局未登录，跳转登录页面",
     },
@@ -92,6 +94,7 @@ export const logout = createRoute({
     }),
   },
   responses: {
+    ...commonErrorResponses,
     [HttpStatusCodes.MOVED_TEMPORARILY]: {
       description: "登出成功",
     },
@@ -115,6 +118,7 @@ export const loginOA = createRoute({
     }),
   },
   responses: {
+    ...commonErrorResponses,
     [HttpStatusCodes.MOVED_TEMPORARILY]: {
       description: "OA登录成功",
     },
@@ -133,6 +137,7 @@ export const loginWX = createRoute({
     }),
   },
   responses: {
+    ...commonErrorResponses,
     [HttpStatusCodes.MOVED_TEMPORARILY]: {
       description: "微信登录成功",
     },

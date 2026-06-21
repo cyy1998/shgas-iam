@@ -16,6 +16,6 @@ export function ok(data: unknown = null) {
   return makeResponse(200, data, "success");
 }
 
-export function fail(code: ResponseCode, message: string = "fail") {
-  return makeResponse(code, null, message);
+export function fail(code: ResponseCode, message: string = "fail", data: unknown = null) {
+  return makeResponse(code, data, message);
 }

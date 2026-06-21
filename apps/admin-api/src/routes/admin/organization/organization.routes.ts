@@ -9,6 +9,7 @@ import {
 } from "@admin-api/services/organization/organization.schema";
 import { createRoute, z } from "@hono/zod-openapi";
 import * as HttpStatusCodes from "@iam/api-core/core/http-status-codes";
+import { commonErrorResponses } from "@iam/api-core/core/openapi/helpers/common-error-responses";
 import jsonContent from "@iam/api-core/core/openapi/helpers/json-content";
 import jsonContentRequired from "@iam/api-core/core/openapi/helpers/json-content-required";
 import createSuccessResponseSchema from "@iam/api-core/core/openapi/schemas/create-success-schema";
@@ -25,6 +26,7 @@ export const organizationsSearch = createRoute({
     body: jsonContentRequired(OrganizationPaginationQueryDtoSchema, "组织分页查询参数"),
   },
   responses: {
+    ...commonErrorResponses,
     [HttpStatusCodes.OK]: jsonContent(createSuccessResponseSchema(z.array(OrganizationVoSchema)), "符合条件组织列表"),
   },
 });
@@ -41,6 +43,7 @@ export const organizationsChildren = createRoute({
     }),
   },
   responses: {
+    ...commonErrorResponses,
     [HttpStatusCodes.OK]: jsonContent(
       createSuccessResponseSchema(createPageResultSchema(z.array(OrganizationTreeNodeDtoSchema))),
       "指定父节点的直接子组织（分页）",
@@ -56,6 +59,7 @@ export const organizationsSelector = createRoute({
     body: jsonContentRequired(OrganizationSelectorQueryDtoSchema, "组织选择器查询参数"),
   },
   responses: {
+    ...commonErrorResponses,
     [HttpStatusCodes.OK]: jsonContent(
       createSuccessResponseSchema(z.array(OrganizationSelectorNodeSchema)),
       "组织选择器节点",
@@ -71,6 +75,7 @@ export const organizationDetail = createRoute({
     params: z.object({ orgCode: z.string().openapi({ example: "SR" }) }),
   },
   responses: {
+    ...commonErrorResponses,
     [HttpStatusCodes.OK]: jsonContent(createSuccessResponseSchema(OrganizationDetailVoSchema), "组织详情"),
   },
 });
@@ -83,6 +88,7 @@ export const organizationCreate = createRoute({
     body: jsonContentRequired(OrganizationCreateDtoSchema, "组织创建参数"),
   },
   responses: {
+    ...commonErrorResponses,
     [HttpStatusCodes.OK]: jsonContent(createSuccessResponseSchema(z.boolean()), "组织创建成功"),
   },
 });
@@ -96,6 +102,7 @@ export const organizationUpdate = createRoute({
     body: jsonContentRequired(OrganizationUpdateDtoSchema, "组织更新参数"),
   },
   responses: {
+    ...commonErrorResponses,
     [HttpStatusCodes.OK]: jsonContent(createSuccessResponseSchema(z.boolean()), "组织更新成功"),
   },
 });
@@ -109,6 +116,7 @@ export const organizationStatusUpdate = createRoute({
     body: jsonContentRequired(OrganizationStatusUpdateDtoSchema, "组织状态变更"),
   },
   responses: {
+    ...commonErrorResponses,
     [HttpStatusCodes.OK]: jsonContent(createSuccessResponseSchema(z.boolean()), "状态更新成功"),
   },
 });
@@ -121,6 +129,7 @@ export const organizationDelete = createRoute({
     params: z.object({ orgCode: z.string() }),
   },
   responses: {
+    ...commonErrorResponses,
     [HttpStatusCodes.OK]: jsonContent(createSuccessResponseSchema(z.boolean()), "组织删除成功"),
   },
 });

@@ -1,6 +1,7 @@
 import { AuditLogDtoSchema, AuditLogPaginationQueryDtoSchema } from "@admin-api/services/audit/audit.schema";
 import { createRoute, z } from "@hono/zod-openapi";
 import * as HttpStatusCodes from "@iam/api-core/core/http-status-codes";
+import { commonErrorResponses } from "@iam/api-core/core/openapi/helpers/common-error-responses";
 import jsonContent from "@iam/api-core/core/openapi/helpers/json-content";
 import jsonContentRequired from "@iam/api-core/core/openapi/helpers/json-content-required";
 import createSuccessResponseSchema from "@iam/api-core/core/openapi/schemas/create-success-schema";
@@ -16,6 +17,7 @@ export const auditLogsSearch = createRoute({
     body: jsonContentRequired(AuditLogPaginationQueryDtoSchema, "审计日志分页查询参数"),
   },
   responses: {
+    ...commonErrorResponses,
     [HttpStatusCodes.OK]: jsonContent(
       createSuccessResponseSchema(createPageResultSchema(z.array(AuditLogDtoSchema))),
       "分页审计日志列表",

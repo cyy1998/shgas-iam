@@ -2,6 +2,7 @@ import { VerificationCodeUsage } from "@api/enums/verificationCode.usage";
 import { ClientDtoSchema } from "@api/services/client/client.schema";
 import { createRoute, z } from "@hono/zod-openapi";
 import * as HttpStatusCodes from "@iam/api-core/core/http-status-codes";
+import { commonErrorResponses } from "@iam/api-core/core/openapi/helpers/common-error-responses";
 import jsonContent from "@iam/api-core/core/openapi/helpers/json-content";
 import jsonContentRequired from "@iam/api-core/core/openapi/helpers/json-content-required";
 import createSuccessResponseSchema from "@iam/api-core/core/openapi/schemas/create-success-schema";
@@ -20,6 +21,7 @@ export const clientStatus = createRoute({
     }),
   },
   responses: {
+    ...commonErrorResponses,
     [HttpStatusCodes.OK]: jsonContent(createSuccessResponseSchema(ClientDtoSchema), "应用信息"),
   },
 });
@@ -35,6 +37,7 @@ export const userInfo = createRoute({
     }),
   },
   responses: {
+    ...commonErrorResponses,
     [HttpStatusCodes.OK]: jsonContent(createSuccessResponseSchema(OpenUserInfoSchema), "用户脱敏信息"),
   },
 });
@@ -52,6 +55,7 @@ export const codeSend = createRoute({
     }), "发送短信验证码参数"),
   },
   responses: {
+    ...commonErrorResponses,
     [HttpStatusCodes.OK]: jsonContent(createSuccessResponseSchema(z.boolean()), "短信发送结果"),
   },
 });
@@ -69,6 +73,7 @@ export const codeVerify = createRoute({
     }), "验证短信验证码参数"),
   },
   responses: {
+    ...commonErrorResponses,
     [HttpStatusCodes.OK]: jsonContent(createSuccessResponseSchema(z.object({ result: z.boolean() })), "短信验证结果"),
   },
 });
@@ -86,6 +91,7 @@ export const passwordReset = createRoute({
     }), "重置密码参数"),
   },
   responses: {
+    ...commonErrorResponses,
     [HttpStatusCodes.OK]: jsonContent(createSuccessResponseSchema(z.boolean()), "密码重置结果"),
   },
 });
@@ -100,6 +106,7 @@ export const capChallenge = createRoute({
     }),
   },
   responses: {
+    ...commonErrorResponses,
     [HttpStatusCodes.OK]: jsonContent(z.object({
       challenge: z.object({
         c: z.number(),
@@ -126,6 +133,7 @@ export const capRedeem = createRoute({
     }), "Cap challenge solution"),
   },
   responses: {
+    ...commonErrorResponses,
     [HttpStatusCodes.OK]: jsonContent(z.object({
       success: z.boolean(),
       message: z.string().optional(),

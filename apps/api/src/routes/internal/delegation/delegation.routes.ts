@@ -1,6 +1,7 @@
 import { PrivilegeDelegationCreateDtoSchema, PrivilegeDelegationDetailDtoSchema, PrivilegeDelegationQueryDtoSchema, PrivilegeDelegationUpdateDtoSchema } from "@api/services/privilege/privilegeDelegation.schema";
 import { createRoute, z } from "@hono/zod-openapi";
 import * as HttpStatusCodes from "@iam/api-core/core/http-status-codes";
+import { commonErrorResponses } from "@iam/api-core/core/openapi/helpers/common-error-responses";
 import jsonContent from "@iam/api-core/core/openapi/helpers/json-content";
 import jsonContentRequired from "@iam/api-core/core/openapi/helpers/json-content-required";
 import createSuccessResponseSchema from "@iam/api-core/core/openapi/schemas/create-success-schema";
@@ -15,6 +16,7 @@ export const privilegeDelegationsQuery = createRoute({
     body: jsonContentRequired(PrivilegeDelegationQueryDtoSchema, "权限代理搜索参数"),
   },
   responses: {
+    ...commonErrorResponses,
     [HttpStatusCodes.OK]: jsonContent(createSuccessResponseSchema(z.array(PrivilegeDelegationDetailDtoSchema)), "权限Delegation列表"),
   },
 });
@@ -30,6 +32,7 @@ export const privilegeDelegationUpdate = createRoute({
     body: jsonContentRequired(PrivilegeDelegationUpdateDtoSchema, "权限Delegation更新参数"),
   },
   responses: {
+    ...commonErrorResponses,
     [HttpStatusCodes.OK]: jsonContent(createSuccessResponseSchema(z.boolean()), "权限Delegation更新结果"),
   },
 });
@@ -42,6 +45,7 @@ export const privilegeDelegationSet = createRoute({
     body: jsonContentRequired(PrivilegeDelegationCreateDtoSchema, "权限Delegation设置参数"),
   },
   responses: {
+    ...commonErrorResponses,
     [HttpStatusCodes.OK]: jsonContent(createSuccessResponseSchema(PrivilegeDelegationDetailDtoSchema), "权限Delegation设置结果"),
   },
 });

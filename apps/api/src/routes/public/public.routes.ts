@@ -2,6 +2,7 @@ import { OrganizationDtoSchema, OrganizationQueryDtoSchema } from "@api/services
 import { UserDetailDtoSchema, UserDtoSchema, UserQueryDtoSchema } from "@api/services/user/user.schema";
 import { createRoute, z } from "@hono/zod-openapi";
 import * as HttpStatusCodes from "@iam/api-core/core/http-status-codes";
+import { commonErrorResponses } from "@iam/api-core/core/openapi/helpers/common-error-responses";
 import jsonContent from "@iam/api-core/core/openapi/helpers/json-content";
 import jsonContentRequired from "@iam/api-core/core/openapi/helpers/json-content-required";
 import createSuccessResponseSchema from "@iam/api-core/core/openapi/schemas/create-success-schema";
@@ -14,6 +15,7 @@ export const userInfo = createRoute({
   path: `${routePrefix}/user-info`,
   tags,
   responses: {
+    ...commonErrorResponses,
     [HttpStatusCodes.OK]: jsonContent(createSuccessResponseSchema(UserDetailDtoSchema), "本用户基本信息"),
   },
 });
@@ -29,6 +31,7 @@ export const passwordChange = createRoute({
     }), "更换密码请求参数"),
   },
   responses: {
+    ...commonErrorResponses,
     [HttpStatusCodes.OK]: jsonContent(createSuccessResponseSchema(z.boolean()), "密码更换成功"),
   },
 });
@@ -44,6 +47,7 @@ export const mobileSet = createRoute({
     }), "移动电话设置请求参数"),
   },
   responses: {
+    ...commonErrorResponses,
     [HttpStatusCodes.OK]: jsonContent(createSuccessResponseSchema(z.boolean()), "移动电话设置成功"),
   },
 });
@@ -56,6 +60,7 @@ export const organizationsSearch = createRoute({
     body: jsonContentRequired(OrganizationQueryDtoSchema, "组织查询请求参数"),
   },
   responses: {
+    ...commonErrorResponses,
     [HttpStatusCodes.OK]: jsonContent(createSuccessResponseSchema(z.array(OrganizationDtoSchema)), "组织查询结果"),
   },
 });
@@ -68,6 +73,7 @@ export const usersSearch = createRoute({
     body: jsonContentRequired(UserQueryDtoSchema, "用户查询参数"),
   },
   responses: {
+    ...commonErrorResponses,
     [HttpStatusCodes.OK]: jsonContent(createSuccessResponseSchema(z.array(UserDtoSchema)), "用户查询结果"),
   },
 });

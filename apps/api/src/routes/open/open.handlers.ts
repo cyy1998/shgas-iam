@@ -12,6 +12,7 @@ import {
   buildSmsCodeSendAudit,
   buildSmsCodeVerifyAudit,
 } from "@api/services/audit/events/auth.audit";
+import { OK } from "@iam/api-core/core/http-status-codes";
 import { InvalidHumanVerificationSiteError } from "@iam/api-core/errors/InvalidHumanVerificationSiteError";
 import * as resp from "@iam/api-core/http";
 import { getVerificationContext } from "../human-verification-context";
@@ -99,7 +100,7 @@ export function createOpenHandlers(deps: CreateOpenHandlersDeps) {
     if (!deps.humanVerification.isValidSiteKey(siteKey)) {
       throw new InvalidHumanVerificationSiteError("无效人机校验站点");
     }
-    return c.json(await deps.humanVerification.createChallenge());
+    return c.json(await deps.humanVerification.createChallenge(), OK);
   };
 
   const capRedeem: OpenRouteHandler<"capRedeem"> = async (c) => {
@@ -109,7 +110,7 @@ export function createOpenHandlers(deps: CreateOpenHandlersDeps) {
     }
     const action = c.req.header("X-Cap-Action");
     const result = await deps.humanVerification.redeemChallenge(c.req.valid("json"), action);
-    return c.json(result);
+    return c.json(result, OK);
   };
 
   return {

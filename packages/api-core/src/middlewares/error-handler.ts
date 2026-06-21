@@ -4,9 +4,10 @@ import type { ContentfulStatusCode } from "hono/utils/http-status";
 import type { Logger } from "pino";
 import { ApiErrorCode } from "@iam/contracts";
 import { HTTPException } from "hono/http-exception";
+import { INTERNAL_SERVER_ERROR } from "../core/http-status-codes";
 import { isApiRuntimeError } from "../errors/api-runtime-error";
-import { makeResponse } from "../http";
-import { SystemLogEvent } from "../logger";
+import * as resp from "../http";
+import { getTraceIdFromHeaders, SystemLogEvent } from "../logger";
 
 type ErrorLogger = Pick<Logger, "error">;
 
@@ -38,24 +39,51 @@ function getRequestId(c: Context): string | undefined {
   }
 }
 
+function getHeader(c: Context, name: string): string | undefined {
+  return c.req.header(name) ?? c.req.header(name.toLowerCase());
+}
+
+function getRoutePath(c: Context) {
+  const request = c.req as typeof c.req & { routePath?: string };
+  return request.routePath ?? c.req.path;
+}
+
+function createRequestIdData(requestId: string | undefined) {
+  return requestId ? { requestId } : {};
+}
+
+function getInternalErrorMessage(requestId: string | undefined) {
+  return requestId ? "服务器内部错误，请联系管理员并提供 requestId" : "服务器内部错误";
+}
+
 export function createErrorHandler(appLogger: ErrorLogger) {
   return function errorHandler(err: Error | HTTPResponseError, c: Context) {
     if (isApiRuntimeError(err)) {
-      return c.json(makeResponse(err.code, null, err.message), err.httpStatus as ContentfulStatusCode);
+      return c.json(resp.fail(err.code, err.message), err.httpStatus as ContentfulStatusCode);
     }
     else if (err instanceof HTTPException) {
-      return c.json(makeResponse(ApiErrorCode.InternalError, null, err.message), err.status);
+      const requestId = getRequestId(c);
+      return c.json(resp.fail(ApiErrorCode.InternalError, err.message, createRequestIdData(requestId)), err.status);
     }
     else {
+      const requestId = getRequestId(c);
       const logger = getRequestLogger(c) ?? appLogger;
       logger.error({
         event: SystemLogEvent.ApiErrorUnhandled,
-        requestId: getRequestId(c),
+        requestId,
+        traceId: getTraceIdFromHeaders(name => getHeader(c, name)),
+        method: c.req.method,
+        path: c.req.path,
+        route: getRoutePath(c),
         source: getErrorSourceLocation(err),
         errorName: err.name,
         errorMessage: err.message,
+        err,
       }, "unhandled request error");
-      return c.json(makeResponse(ApiErrorCode.InternalError, null, "服务器内部错误"));
+      return c.json(
+        resp.fail(ApiErrorCode.InternalError, getInternalErrorMessage(requestId), createRequestIdData(requestId)),
+        INTERNAL_SERVER_ERROR,
+      );
     }
   };
 }

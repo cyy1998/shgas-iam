@@ -1,7 +1,8 @@
 import { ApiErrorCode } from "@iam/contracts";
 import { describe, expect, mock, spyOn, test } from "bun:test";
 import { Hono } from "hono";
-import { BAD_REQUEST, NOT_FOUND } from "../../core/http-status-codes";
+import { HTTPException } from "hono/http-exception";
+import { BAD_REQUEST, INTERNAL_SERVER_ERROR, NOT_FOUND } from "../../core/http-status-codes";
 import { CustomError } from "../../errors/CustomError";
 import { SystemLogEvent } from "../../logger";
 import { createErrorHandler } from "../error-handler";
@@ -64,6 +65,29 @@ describe("errorHandler", () => {
     });
   });
 
+  test("serializes HTTPException with preserved status and requestId data", async () => {
+    const app = new Hono();
+    const appLogger = createMockLogger();
+    app.use("*", async (c, next) => {
+      c.set("requestId" as never, "req-http" as never);
+      await next();
+    });
+    app.get("/http-exception", () => {
+      throw new HTTPException(BAD_REQUEST, { message: "bad request" });
+    });
+    app.onError(createErrorHandler(appLogger.logger));
+
+    const res = await app.request("http://localhost/http-exception");
+
+    expect(res.status).toBe(BAD_REQUEST);
+    expect(appLogger.error).toHaveBeenCalledTimes(0);
+    await expect(res.json()).resolves.toEqual({
+      code: ApiErrorCode.InternalError,
+      data: { requestId: "req-http" },
+      message: "bad request",
+    });
+  });
+
   test("logs the source file location with the app logger when request logger is unavailable", async () => {
     const app = new Hono();
     const error = new Error("boom");
@@ -76,13 +100,21 @@ describe("errorHandler", () => {
     const appLogger = createMockLogger();
     const consoleError = spyOn(console, "error").mockImplementation(() => {});
 
+    app.use("*", async (c, next) => {
+      c.set("requestId" as never, "req-app" as never);
+      await next();
+    });
     app.get("/boom", () => {
       throw error;
     });
     app.onError(createErrorHandler(appLogger.logger));
 
     try {
-      const res = await app.request("http://localhost/boom?trace=1");
+      const res = await app.request("http://localhost/boom?trace=1", {
+        headers: {
+          traceparent: "00-11111111111111111111111111111111-2222222222222222-01",
+        },
+      });
 
       expect(consoleError).toHaveBeenCalledTimes(0);
       expect(appLogger.error).toHaveBeenCalledTimes(1);
@@ -92,19 +124,24 @@ describe("errorHandler", () => {
         throw new Error("logger.error was not called");
       }
 
-      expect(firstCall[0]).toEqual({
+      expect(firstCall[0]).toMatchObject({
         event: SystemLogEvent.ApiErrorUnhandled,
-        requestId: undefined,
+        requestId: "req-app",
+        traceId: "11111111111111111111111111111111",
+        method: "GET",
+        path: "/boom",
+        route: "/boom",
         source: sourceLocation,
         errorName: "Error",
         errorMessage: "boom",
+        err: error,
       });
       expect(firstCall[1]).toBe("unhandled request error");
-      expect(res.status).toBe(200);
+      expect(res.status).toBe(INTERNAL_SERVER_ERROR);
       await expect(res.json()).resolves.toEqual({
         code: ApiErrorCode.InternalError,
-        data: null,
-        message: "服务器内部错误",
+        data: { requestId: "req-app" },
+        message: "服务器内部错误，请联系管理员并提供 requestId",
       });
     }
     finally {
@@ -126,6 +163,7 @@ describe("errorHandler", () => {
 
     app.use("*", async (c, next) => {
       c.set("logger", requestLogger.logger);
+      c.set("requestId" as never, "req-request" as never);
       await next();
     });
     app.get("/boom", () => {
@@ -133,7 +171,11 @@ describe("errorHandler", () => {
     });
     app.onError(createErrorHandler(appLogger.logger));
 
-    const res = await app.request("http://localhost/boom?trace=1");
+    const res = await app.request("http://localhost/boom?trace=1", {
+      headers: {
+        "x-b3-traceid": "22222222222222222222222222222222",
+      },
+    });
 
     expect(appLogger.error).toHaveBeenCalledTimes(0);
     expect(requestLogger.error).toHaveBeenCalledTimes(1);
@@ -143,19 +185,24 @@ describe("errorHandler", () => {
       throw new Error("request logger.error was not called");
     }
 
-    expect(firstCall[0]).toEqual({
+    expect(firstCall[0]).toMatchObject({
       event: SystemLogEvent.ApiErrorUnhandled,
-      requestId: undefined,
+      requestId: "req-request",
+      traceId: "22222222222222222222222222222222",
+      method: "GET",
+      path: "/boom",
+      route: "/boom",
       source: sourceLocation,
       errorName: "Error",
       errorMessage: "boom",
+      err: error,
     });
     expect(firstCall[1]).toBe("unhandled request error");
-    expect(res.status).toBe(200);
+    expect(res.status).toBe(INTERNAL_SERVER_ERROR);
     await expect(res.json()).resolves.toEqual({
       code: ApiErrorCode.InternalError,
-      data: null,
-      message: "服务器内部错误",
+      data: { requestId: "req-request" },
+      message: "服务器内部错误，请联系管理员并提供 requestId",
     });
   });
 });
