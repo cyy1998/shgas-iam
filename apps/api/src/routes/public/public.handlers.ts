@@ -1,13 +1,10 @@
 import type { OrganizationService } from "@api/services/organization/organization.service";
-import type { SessionService } from "@api/services/session/session.service";
 import type { UserService } from "@api/services/user/user.service";
 import type { PublicRouteHandler } from "./public.type";
 import * as resp from "@iam/api-core/http";
-import { getCookie } from "hono/cookie";
 
 export interface CreatePublicHandlersDeps {
   organizationService: Pick<OrganizationService, "searchOrganizations">;
-  sessionService: Pick<SessionService, "updateSession">;
   userService: Pick<UserService, "searchUsers" | "setMobile" | "setPassword">;
 }
 
@@ -25,10 +22,8 @@ export function createPublicHandlers(deps: CreatePublicHandlersDeps) {
 
   const mobileSet: PublicRouteHandler<"mobileSet"> = async (c) => {
     const { phoneNumber, code } = c.req.valid("json");
-    const sessionId = getCookie(c, "global_session") ?? c.req.header("Authorization") ?? "";
-    const newUserDto = await deps.userService.setMobile(c.get("userId"), phoneNumber, code);
-    const data = await deps.sessionService.updateSession(sessionId, newUserDto);
-    return c.json(resp.ok(data));
+    await deps.userService.setMobile(c.get("userId"), phoneNumber, code);
+    return c.json(resp.ok(true));
   };
 
   const organizationsSearch: PublicRouteHandler<"organizationsSearch"> = async (c) => {

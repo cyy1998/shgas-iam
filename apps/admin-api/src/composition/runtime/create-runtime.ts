@@ -62,6 +62,27 @@ export function createAdminApiRuntime(options: CreateAdminApiRuntimeOptions = {}
         adminClientCodes: adminAuthClientCodes,
         adminRoleCodes: adminAuthRoleCodes,
       },
+      sessionKernel: {
+        namespace: runtimeEnv.SESSION_KERNEL_NAMESPACE,
+        principalIdleTtlMs: runtimeEnv.SESSION_KERNEL_PRINCIPAL_IDLE_TTL_SECONDS * 1000,
+        principalAbsoluteTtlMs: runtimeEnv.SESSION_KERNEL_PRINCIPAL_ABSOLUTE_TTL_SECONDS * 1000,
+        lookupHmacKeys: {
+          current: {
+            id: runtimeEnv.SESSION_LOOKUP_HMAC_CURRENT_ID,
+            secret: runtimeEnv.SESSION_LOOKUP_HMAC_CURRENT_SECRET,
+          },
+          ...(runtimeEnv.SESSION_LOOKUP_HMAC_PREVIOUS_ID && runtimeEnv.SESSION_LOOKUP_HMAC_PREVIOUS_SECRET
+            ? {
+                previous: {
+                  id: runtimeEnv.SESSION_LOOKUP_HMAC_PREVIOUS_ID,
+                  secret: runtimeEnv.SESSION_LOOKUP_HMAC_PREVIOUS_SECRET,
+                },
+              }
+            : {}),
+        },
+        tombstoneTtlMs: runtimeEnv.SESSION_KERNEL_TOMBSTONE_TTL_SECONDS * 1000,
+        tombstoneGraceMs: runtimeEnv.SESSION_KERNEL_TOMBSTONE_GRACE_SECONDS * 1000,
+      },
     },
     integrations: {
       clientCache: {

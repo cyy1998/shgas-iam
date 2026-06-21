@@ -173,9 +173,12 @@ function createService() {
       getUserDetailByMobile: mock(async () => userDetail),
       getUserDetailByUsername: mock(async () => userDetail),
     },
-    sessionService: {
-      getValidatedLocalSessionUserString: mock(async () => null),
-      setGlobalSession: mock(async () => SESSION_ID),
+    customSsoSession: {
+      authorizeLocalSession: mock(async () => ""),
+      createPrincipalSession: mock(async () => ({
+        token: SESSION_ID,
+        principalSession: {} as never,
+      })),
     },
     mobileService: {
       consumeVerificationCode,

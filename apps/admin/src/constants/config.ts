@@ -16,7 +16,8 @@ export const SSO_LOGOUT_URL =
   process.env.UMI_APP_SSO_LOGOUT_URL || '/sso/logout';
 
 // 当前应用在 SSO 系统中注册的 client code。
-export const SSO_CLIENT_CODE = process.env.UMI_APP_SSO_CLIENT_CODE || 'iam';
+export const SSO_CLIENT_CODE =
+  process.env.UMI_APP_SSO_CLIENT_CODE || 'iam-admin';
 
 // 允许访问管理后台的角色码。
 export const ADMIN_ROLE_CODE =

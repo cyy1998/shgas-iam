@@ -1,9 +1,7 @@
-import type { SsoServiceDeps } from "./sso.port";
+import type { CustomSsoPrincipalTokenSource, SsoServiceDeps } from "./sso.port";
 import { buildOaLoginSuccessAudit, buildWechatLoginSuccessAudit } from "@api/services/audit/events/auth.audit";
-import { SessionObjectSchema } from "@api/services/session/session.schema";
 import { UserDetailDtoSchema } from "@api/services/user/user.schema";
 import { AuthzUnauthorizedError } from "@iam/api-core/errors/AuthzUnauthorizedError";
-import { InvalidAuthCodeError } from "@iam/api-core/errors/InvalidAuthCodeError";
 import { InvalidRedirectUriError } from "@iam/api-core/errors/InvalidRedirectUriError";
 import { InvalidSsoClientError } from "@iam/api-core/errors/InvalidSsoClientError";
 import { LoginFailedError } from "@iam/api-core/errors/LoginFailedError";
@@ -25,14 +23,6 @@ function hasSupportedRedirectUrlSyntax(redirectUrl: string) {
 }
 
 export function createSsoService(deps: SsoServiceDeps) {
-  async function consumeAuthCode(code: string) {
-    const authObjectString = await deps.redis.getdel(`auth_code:${code}`);
-    if (authObjectString === null) {
-      return null;
-    }
-    return SessionObjectSchema.parse(JSON.parse(authObjectString, reviveIsoDates));
-  }
-
   function isRedirectUrlAllowed(clientCode: string, redirectUrl: string, patterns: string[]) {
     if (!hasSupportedRedirectUrlSyntax(redirectUrl)) {
       return false;
@@ -60,31 +50,29 @@ export function createSsoService(deps: SsoServiceDeps) {
     if (!isRedirectUrlAllowed(clientCode, redirectUrl, client.extAttributes.validRedirectUrls)) {
       throw new InvalidRedirectUriError("非法重定向地址");
     }
-    const authObject = await consumeAuthCode(code);
-    if (authObject === null) {
-      throw new AuthzUnauthorizedError("非法code");
-    }
-    const userString = authObject.data;
-    const globalSessionId = authObject.sessionId;
-    const userDetailDto = UserDetailDtoSchema.parse(JSON.parse(userString, reviveIsoDates));
-    if (!globalSessionId) {
-      throw new AuthzUnauthorizedError("全局session不存在");
-    }
+    const authCode = await deps.customSsoSession.consumeAuthCode({
+      code,
+      clientCode,
+      redirectUrl,
+      invalidCodeError: "unauthorized",
+    });
+    const userDetailDto = { ...authCode.userDetail };
     let globalOrcasSessionId = null;
     if (client.extAttributes.requireOrcas === true) {
       const { orcasSessionId, orcasId } = await deps.orcasClient.orcasLogin(userDetailDto);
       globalOrcasSessionId = orcasSessionId;
       userDetailDto.orcasId = orcasId;
     }
-    const { localSessionId } = await deps.sessionService.setLocalSession(
-      globalSessionId,
-      clientCode,
-      userDetailDto,
-      ClientManagementLevel.Gateway,
-    );
+    const { token } = await deps.customSsoSession.createLocalSession({
+      authCode,
+      client,
+      mode: ClientManagementLevel.Gateway,
+      userDetail: userDetailDto,
+      orcasSessionId: globalOrcasSessionId,
+    });
     return {
       orcasSessionId: globalOrcasSessionId,
-      token: localSessionId,
+      token,
     };
   }
 
@@ -93,23 +81,26 @@ export function createSsoService(deps: SsoServiceDeps) {
     if (client === null || clientSecret !== client.clientSecret) {
       throw new InvalidSsoClientError("非法Client");
     }
-    const authObject = await consumeAuthCode(code);
-    if (authObject === null) {
-      throw new InvalidAuthCodeError("非法Code");
-    }
-    const userString = authObject.data;
-    const globalSessionId = authObject.sessionId;
-    const userDetailDto = UserDetailDtoSchema.parse(JSON.parse(userString, reviveIsoDates));
-    const { localSessionId, ttl } = await deps.sessionService.setLocalSession(
-      globalSessionId,
+    const authCode = await deps.customSsoSession.consumeAuthCode({
+      code,
       clientCode,
-      userDetailDto,
-      ClientManagementLevel.Independent,
-    );
-    return { sid: localSessionId, ttl, userInfo: userDetailDto };
+      invalidCodeError: "invalid_auth_code",
+    });
+    const { token, ttl, userInfo } = await deps.customSsoSession.createLocalSession({
+      authCode,
+      client,
+      mode: ClientManagementLevel.Independent,
+      userDetail: authCode.userDetail,
+    });
+    return { sid: token, ttl, userInfo };
   }
 
-  async function authorize(globalSessionId: string | undefined, clientCode: string, redirectUrl: string) {
+  async function authorize(
+    globalSessionToken: string | undefined,
+    tokenSource: CustomSsoPrincipalTokenSource,
+    clientCode: string,
+    redirectUrl: string,
+  ) {
     const client = await deps.clientService.getClientByCode(clientCode);
     if (client === null) {
       throw new InvalidSsoClientError("非法client代码");
@@ -117,41 +108,16 @@ export function createSsoService(deps: SsoServiceDeps) {
     if (!isRedirectUrlAllowed(clientCode, redirectUrl, client.extAttributes.validRedirectUrls)) {
       throw new InvalidRedirectUriError("非法重定向地址");
     }
-    if (!globalSessionId) {
-      return {
-        isLogin: false,
-        code: null,
-      };
-    }
-    const globalSession = await deps.sessionService.getGlobalSession(globalSessionId);
-    if (globalSession === null) {
-      return {
-        isLogin: false,
-        code: null,
-      };
-    }
-    const code = deps.random.uuid();
-    await Promise.all([
-      deps.sessionService.renewGlobalSession(globalSessionId),
-      deps.redis.set(`auth_code:${code}`, JSON.stringify(
-        {
-          sessionId: globalSessionId,
-          data: JSON.stringify(globalSession.user),
-        },
-      ), "EX", deps.config.authCodeExpireSeconds),
-    ]);
-    return {
-      isLogin: true,
-      code,
-    };
+    return await deps.customSsoSession.authorize({
+      token: globalSessionToken,
+      tokenSource,
+      clientCode,
+      redirectUrl,
+    });
   }
 
-  async function logout(globalSessionId: string) {
-    if (await deps.sessionService.getGlobalSession(globalSessionId) === null)
-      return true;
-    const localSessionSet = await deps.sessionService.getValidLocalSessions(globalSessionId);
-    await Promise.all(localSessionSet.map(e => deps.sessionService.removeLocalSession(e, globalSessionId)));
-    await deps.sessionService.removeGlobalSession(globalSessionId);
+  async function logout(sessionToken: string | undefined) {
+    await deps.customSsoSession.logout(sessionToken);
     return true;
   }
 
@@ -172,7 +138,7 @@ export function createSsoService(deps: SsoServiceDeps) {
     if (userDetailDto.userType !== "正式员工") {
       throw new LoginFailedError("用户类别不支持OA登录");
     }
-    const sessionId = await deps.sessionService.setGlobalSession(userDetailDto);
+    const { token: sessionId } = await deps.customSsoSession.createPrincipalSession(userDetailDto, { amr: ["oa"] });
     await deps.auditLogWriter.recordAuditLog(buildOaLoginSuccessAudit(userDetailDto, clientCode));
     return { token: sessionId, isMobileSet: userDetailDto.mobile !== null };
   }
@@ -194,7 +160,7 @@ export function createSsoService(deps: SsoServiceDeps) {
       return wxRetry(code, retryTimes + 1);
     }
     const userDetailDto = UserDetailDtoSchema.parse(JSON.parse(codeCache, reviveIsoDates));
-    const token = await deps.sessionService.setGlobalSession(userDetailDto);
+    const { token } = await deps.customSsoSession.createPrincipalSession(userDetailDto, { amr: ["wechat"] });
     return { token, isMobileSet: userDetailDto.mobile !== null };
   }
 
@@ -206,7 +172,7 @@ export function createSsoService(deps: SsoServiceDeps) {
     await deps.redis.set(`wx-code:${code}`, "Processing", "EX", 600);
     const wxId = await deps.wechatClient.getWxUserId(code);
     const userDetailDto = await deps.userService.getUserDetailByWxId(wxId);
-    const token = await deps.sessionService.setGlobalSession(userDetailDto);
+    const { token } = await deps.customSsoSession.createPrincipalSession(userDetailDto, { amr: ["wechat"] });
     await deps.auditLogWriter.recordAuditLog(buildWechatLoginSuccessAudit(userDetailDto));
     await deps.redis.set(`wx-code:${code}`, JSON.stringify(userDetailDto), "EX", 600);
     return { token, isMobileSet: userDetailDto.mobile !== null };

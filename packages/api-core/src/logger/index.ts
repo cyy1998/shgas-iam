@@ -69,6 +69,7 @@ export const SystemLogEvent = {
   IntegrationCallFailed: "integration.call.failed",
   IntegrationUnexpectedResponse: "integration.call.unexpected_response",
   RedirectPatternInvalid: "sso.redirect_pattern.invalid",
+  SsoLegacyBearerSourceUsed: "sso.legacy_bearer_source.used",
   SessionNotificationFailed: "session.notification.failed",
   SessionNotificationUnexpectedResponse: "session.notification.unexpected_response",
   InternalAuthzChecked: "auth.internal_authorization.checked",

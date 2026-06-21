@@ -3,7 +3,7 @@ import type { CapService } from "@api/services/human-verification/cap.service";
 import type { HumanRiskService } from "@api/services/human-verification/human-risk.service";
 import type { HumanVerificationContext } from "@api/services/human-verification/human-verification.type";
 import type { MobileService } from "@api/services/mobile/mobile.service";
-import type { SessionService } from "@api/services/session/session.service";
+import type { CustomSsoSessionKernelAdapter } from "@api/services/session/custom-sso-session-kernel.adapter";
 import type { UserService } from "@api/services/user/user.service";
 import type { InvalidVerificationCodeError } from "@iam/api-core/errors/InvalidVerificationCodeError";
 import type { LoginFailedError } from "@iam/api-core/errors/LoginFailedError";
@@ -31,7 +31,10 @@ export interface AuthServiceDeps {
     UserService,
     "getUserDetailByUsername" | "checkPassword" | "getActiveUserByMobile" | "getUserDetailByMobile"
   >;
-  sessionService: Pick<SessionService, "setGlobalSession" | "getValidatedLocalSessionUserString">;
+  customSsoSession: Pick<
+    CustomSsoSessionKernelAdapter,
+    "authorizeLocalSession" | "createPrincipalSession"
+  >;
   mobileService: Pick<MobileService, "consumeVerificationCode">;
   humanVerification: Pick<CapService, "ensureActionAllowed" | "HumanVerificationAction">;
   humanRiskService: Pick<HumanRiskService, "recordLoginFailure">;

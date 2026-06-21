@@ -78,6 +78,22 @@ function isApprovedAuditHelperImport(moduleSpecifier: string) {
   return moduleSpecifier === "@api/services/audit/audit.service";
 }
 
+const customSsoRuntimeFiles = [
+  "middlewares/authentication.handler.ts",
+  "routes/auth/auth.service.ts",
+  "routes/sso/sso.handlers.ts",
+  "routes/sso/sso.service.ts",
+  "services/session/custom-sso-session-kernel.adapter.ts",
+];
+
+const legacyCustomSsoAuthorityKeyPatterns = [
+  /global_session:/u,
+  /auth_code:/u,
+  /local_[^`'"]+_session:/u,
+  /local_session_reverse:/u,
+  /local_session_set:/u,
+];
+
 describe("API DI architecture", () => {
   test("keeps production service, repository, db, redis, and logger value imports behind composition", () => {
     const violations = collectImports()
@@ -117,5 +133,16 @@ describe("API DI architecture", () => {
       .map(({ file, moduleSpecifier }) => `${file} imports ${moduleSpecifier}`);
 
     expect(routeFactoryViolations).toEqual([]);
+  });
+
+  test("keeps custom SSO runtime off legacy Redis authority keys", () => {
+    const violations = customSsoRuntimeFiles.flatMap((file) => {
+      const content = readFileSync(join(sourceRoot, file), "utf8");
+      return legacyCustomSsoAuthorityKeyPatterns
+        .filter(pattern => pattern.test(content))
+        .map(pattern => `${file} contains ${pattern}`);
+    });
+
+    expect(violations).toEqual([]);
   });
 });

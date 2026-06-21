@@ -48,6 +48,6 @@ export async function createAdminApiComposition(
     unitOfWork,
     services,
     routes: await createAdminApiRoutes({ auditService, repositories, runtime, services }),
-    middlewares: await createAdminApiMiddlewares({ runtime }),
+    middlewares: await createAdminApiMiddlewares({ runtime, services }),
   };
 }

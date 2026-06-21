@@ -1,4 +1,5 @@
 import type { ApiAuditLogWriter } from "@api/services/audit/audit.service";
+import type { SessionKernelRedis } from "@iam/api-core/session/kernel";
 import type { ApiRepositories } from "../repositories";
 import type { ApiRuntimePorts } from "../runtime";
 import type { createApiUnitOfWork } from "../tx";
@@ -13,6 +14,10 @@ import { createHumanRiskService } from "@api/services/human-verification/human-r
 import { createMobileService } from "@api/services/mobile/mobile.service";
 import { createOrganizationService } from "@api/services/organization/organization.service";
 import { createPrivilegeDelegationService } from "@api/services/privilege/privilegeDelegation.service";
+import {
+  createCustomSsoCleanupAdapter,
+  createCustomSsoSessionKernelAdapter,
+} from "@api/services/session/custom-sso-session-kernel.adapter";
 import { createSessionService } from "@api/services/session/session.service";
 import { createUserDelegationQuery } from "@api/services/user/user-delegation-query.helper";
 import { createUserDetailBuilder } from "@api/services/user/user-detail.helper";
@@ -20,6 +25,7 @@ import { createUserMobileBinding } from "@api/services/user/user-mobile-binding.
 import { createUserPasswordHelper } from "@api/services/user/user-password.helper";
 import { createUserService } from "@api/services/user/user.service";
 import { revokeOidcAccessTokensForGlobalSession } from "@iam/api-core/oidc";
+import { createSessionKernel } from "@iam/api-core/session/kernel";
 import { mapUnitOfWork } from "@iam/api-core/uow";
 
 type ApiUnitOfWork = ReturnType<typeof createApiUnitOfWork>;
@@ -33,6 +39,22 @@ export interface CreateApiServicesOptions {
 
 export function createApiServices(options: CreateApiServicesOptions) {
   const { runtime, repositories, auditLogWriter, unitOfWork } = options;
+
+  const customSsoCleanupAdapter = createCustomSsoCleanupAdapter({
+    redis: runtime.redis,
+    logger: runtime.logger,
+    fetch: globalThis.fetch.bind(globalThis),
+  });
+
+  const sessionKernel = createSessionKernel({
+    redis: runtime.redis as SessionKernelRedis,
+    config: {
+      ...runtime.config.sessionKernel,
+      clock: runtime.clock,
+    },
+    cleanupAdapters: [customSsoCleanupAdapter],
+    logger: runtime.logger,
+  });
 
   const clientService = createClientService({
     redis: runtime.redis,
@@ -135,6 +157,19 @@ export function createApiServices(options: CreateApiServicesOptions) {
     },
   });
 
+  const customSsoSession = createCustomSsoSessionKernelAdapter({
+    kernel: sessionKernel,
+    redis: runtime.redis,
+    logger: runtime.logger,
+    userService,
+    auditLogWriter,
+    clock: runtime.clock,
+    config: {
+      authCodeExpireSeconds: runtime.config.auth.authCodeExpireSeconds,
+      localSessionTtlSeconds: runtime.config.auth.redisExpireSeconds,
+    },
+  });
+
   const loginFailureService = createLoginFailureService({
     redis: runtime.redis,
     clock: runtime.clock,
@@ -153,7 +188,7 @@ export function createApiServices(options: CreateApiServicesOptions) {
 
   const authService = createAuthService({
     userService,
-    sessionService,
+    customSsoSession,
     mobileService,
     humanVerification: capService,
     humanRiskService,
@@ -174,7 +209,7 @@ export function createApiServices(options: CreateApiServicesOptions) {
     orcasClient: runtime.integrations.orcas,
     wechatClient: runtime.integrations.wechat,
     clientService,
-    sessionService,
+    customSsoSession,
     userService,
     auditLogWriter,
     config: {
@@ -187,6 +222,7 @@ export function createApiServices(options: CreateApiServicesOptions) {
     auth: authService,
     cap: capService,
     client: clientService,
+    customSsoSession,
     humanRisk: humanRiskService,
     loginCredential: loginCredentialParser,
     mobile: mobileService,

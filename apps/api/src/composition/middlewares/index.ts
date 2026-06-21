@@ -13,6 +13,7 @@ export interface CreateApiMiddlewaresOptions {
 export async function createApiMiddlewares(options: CreateApiMiddlewaresOptions): Promise<CreateAppOptions["middlewares"]> {
   const authenticationHandlers = createApiAuthenticationHandlers({
     clientService: options.services.client,
+    customSsoSession: options.services.customSsoSession,
     redis: options.runtime.redis,
   });
 

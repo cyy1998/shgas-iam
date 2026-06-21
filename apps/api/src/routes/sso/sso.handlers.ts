@@ -1,10 +1,9 @@
 import type { LoggerPort } from "@api/composition/runtime";
 import type { ClientService } from "@api/services/client/client.service";
-import type { SessionService } from "@api/services/session/session.service";
+import type { CustomSsoPrincipalTokenSource } from "./sso.port";
 import type { SsoService } from "./sso.service";
 import type { SsoRouteHandler } from "./sso.type";
 import * as HttpStatusCodes from "@iam/api-core/core/http-status-codes";
-import { AuthzUnauthorizedError } from "@iam/api-core/errors/AuthzUnauthorizedError";
 import * as resp from "@iam/api-core/http";
 import { getProtocolAndHost } from "@iam/api-core/utils";
 import { ApiErrorCode, ClientManagementLevel } from "@iam/contracts";
@@ -15,7 +14,6 @@ type SsoEntryNetwork = "internal" | "external";
 export interface CreateSsoHandlersDeps {
   clientService: Pick<ClientService, "getClientByCode">;
   logger: Pick<LoggerPort, "warn">;
-  sessionService: Pick<SessionService, "getGlobalSessionIdByLocalSession">;
   ssoService: Pick<
     SsoService,
     "authorize" | "callback" | "loginOA" | "loginWX" | "logout" | "setToken"
@@ -44,6 +42,23 @@ function resolveSsoOrigin(deps: CreateSsoHandlersDeps, entryNetwork: string | un
     return deps.config.ssoExternalOrigin;
   }
   return null;
+}
+
+function resolvePrincipalToken(
+  cookieToken: string | undefined,
+  authorizationHeader: string | undefined,
+  queryToken: string | undefined,
+): { token?: string; source: CustomSsoPrincipalTokenSource } {
+  if (cookieToken) {
+    return { token: cookieToken, source: "cookie" };
+  }
+  if (authorizationHeader) {
+    return { token: authorizationHeader, source: "authorization_header" };
+  }
+  if (queryToken) {
+    return { token: queryToken, source: "query" };
+  }
+  return { source: "none" };
 }
 
 export function createSsoHandlers(deps: CreateSsoHandlersDeps) {
@@ -97,9 +112,9 @@ export function createSsoHandlers(deps: CreateSsoHandlersDeps) {
   const authorize: SsoRouteHandler<"authorize"> = async (c) => {
     const { client, redirectUrl, token } = c.req.valid("query");
     const searchParams = new URLSearchParams(c.req.query());
-    const sessionId = getCookie(c, "global_session") ?? c.req.header("Authorization") ?? token;
+    const principalToken = resolvePrincipalToken(getCookie(c, "global_session"), c.req.header("Authorization"), token);
     const clientDto = await deps.clientService.getClientByCode(client);
-    const data = await deps.ssoService.authorize(sessionId, client, redirectUrl);
+    const data = await deps.ssoService.authorize(principalToken.token, principalToken.source, client, redirectUrl);
     if (data.isLogin === false) {
       return c.redirect(`${deps.config.loginEndpoint}?${searchParams.toString()}`);
     }
@@ -111,12 +126,8 @@ export function createSsoHandlers(deps: CreateSsoHandlersDeps) {
 
   const logout: SsoRouteHandler<"logout"> = async (c) => {
     const { redirectUrl, token } = c.req.valid("query");
-    const sessionId = getCookie(c, "global_session")
-      ?? await deps.sessionService.getGlobalSessionIdByLocalSession(token ?? "");
-    if (!sessionId) {
-      throw new AuthzUnauthorizedError("缺少有效SessionId");
-    }
-    await deps.ssoService.logout(sessionId);
+    const sessionToken = getCookie(c, "global_session") ?? token;
+    await deps.ssoService.logout(sessionToken);
     deleteCookie(c, "global_session");
     return c.redirect(redirectUrl ?? deps.config.loginEndpoint);
   };

@@ -4,7 +4,8 @@
 - [x] 1.2 为 `session-kernel-core`、`custom-sso-session-kernel-adapter`、`oidc-session-kernel-adapter`、`admin-session-revocation` 和 `session-kernel-release-hardening` 创建 child OpenSpec change。
 - [x] 1.3 在 umbrella design 中持续记录跨 child 的决策变更、风险和验收状态。
 - [ ] 1.4 每个 child 合并到 `feature/session-kernel` 后运行对应跨模块 smoke check，并记录结果。
-  - 已记录 `session-kernel-core` 的 `@iam/api-core` lint/test/typecheck 结果；其余 child 待合并后逐项运行并填写结果。
+  - 已记录 `session-kernel-core` 的 `@iam/api-core` lint/test/typecheck 结果。
+  - 已记录 `custom-sso-session-kernel-adapter` 的 `@iam/api`、`@iam/admin-api` 与管理端兼容验证结果；其余 child 待合并后逐项运行并填写结果。
 
 ## 2. Session Kernel Core
 
@@ -23,17 +24,17 @@
 
 ## 3. Custom SSO Adapter
 
-- [ ] 3.1 在 `apps/api` composition 中创建 custom SSO Session Kernel adapter 和 revoker，接入 app-local Redis、logger、client/user service 与 audit/system log 端口。
-- [ ] 3.2 将密码、手机、OA、WeChat 登录成功后的 global session 创建迁移为 Kernel PrincipalSession，同时保持 `{ token, isMobileSet }` 与 `global_session` cookie。
-- [ ] 3.3 将 `/sso/authorize` 迁移为 Kernel PrincipalSession resolve + custom SSO auth code ProtocolArtifact 创建。
-- [ ] 3.4 保留 `/sso/authorize` 对 cookie、`Authorization` header 和 query `token` 的 legacy token 来源兼容，并记录脱敏 legacy usage system log。
-- [ ] 3.5 将 `/sso/callback` 和 `/sso/token` 迁移为 Kernel artifact consume + ClientBinding + local session IssuedCredential。
-- [ ] 3.6 将 custom SSO local session payload 移到 adapter 私有 key，继续保存并返回兼容的 `UserDetailDto`。
-- [ ] 3.7 将 `/auth/authz` 迁移为 local session HMAC lookup、tombstone first、binding/principal 校验、user/client 实时校验和 custom payload 摘要返回。
-- [ ] 3.8 将 `/sso/logout` 迁移为 Kernel revoke 当前 PrincipalSession，并由 custom SSO adapter best-effort 通知 Independent client logout endpoint。
-- [ ] 3.9 移除 custom SSO 对 `global_session:*`、`auth_code:*`、`local_<client>_session:*`、`local_session_reverse:*`、`local_session_set:*` 作为权威 key 的依赖。
-- [ ] 3.10 覆盖 custom SSO authorize、callback、token、authz、logout、auth code replay、local session tombstone、maintenance 拒绝不撤销和 Independent logout failure 测试。
-- [ ] 3.11 运行 `pnpm --filter @iam/api test` 和 `pnpm --filter @iam/api typecheck`。
+- [x] 3.1 在 `apps/api` composition 中创建 custom SSO Session Kernel adapter 和 revoker，接入 app-local Redis、logger、client/user service 与 audit/system log 端口。
+- [x] 3.2 将密码、手机、OA、WeChat 登录成功后的 global session 创建迁移为 Kernel PrincipalSession，同时保持 `{ token, isMobileSet }` 与 `global_session` cookie。
+- [x] 3.3 将 `/sso/authorize` 迁移为 Kernel PrincipalSession resolve + custom SSO auth code ProtocolArtifact 创建。
+- [x] 3.4 保留 `/sso/authorize` 对 cookie、`Authorization` header 和 query `token` 的 legacy token 来源兼容，并记录脱敏 legacy usage system log。
+- [x] 3.5 将 `/sso/callback` 和 `/sso/token` 迁移为 Kernel artifact consume + ClientBinding + local session IssuedCredential。
+- [x] 3.6 将 custom SSO local session payload 移到 adapter 私有 key，继续保存并返回兼容的 `UserDetailDto`。
+- [x] 3.7 将 `/auth/authz` 迁移为 local session HMAC lookup、tombstone first、binding/principal 校验、user/client 实时校验和 custom payload 摘要返回。
+- [x] 3.8 将 `/sso/logout` 迁移为 Kernel revoke 当前 PrincipalSession，并由 custom SSO adapter best-effort 通知 Independent client logout endpoint。
+- [x] 3.9 移除 custom SSO 对 `global_session:*`、`auth_code:*`、`local_<client>_session:*`、`local_session_reverse:*`、`local_session_set:*` 作为权威 key 的依赖。
+- [x] 3.10 覆盖 custom SSO authorize、callback、token、authz、logout、auth code replay、local session tombstone、maintenance 拒绝不撤销和 Independent logout failure 测试。
+- [x] 3.11 运行 `pnpm --filter @iam/api test` 和 `pnpm --filter @iam/api typecheck`。
 
 ## 4. OIDC Adapter
 

@@ -31,6 +31,23 @@ export interface AdminApiRuntimeConfig {
     adminClientCodes: string[];
     adminRoleCodes: string[];
   };
+  sessionKernel: {
+    namespace: string;
+    principalIdleTtlMs: number;
+    principalAbsoluteTtlMs: number;
+    lookupHmacKeys: {
+      current: {
+        id: string;
+        secret: string;
+      };
+      previous?: {
+        id: string;
+        secret: string;
+      };
+    };
+    tombstoneTtlMs: number;
+    tombstoneGraceMs: number;
+  };
 }
 
 export interface ClientCachePort {

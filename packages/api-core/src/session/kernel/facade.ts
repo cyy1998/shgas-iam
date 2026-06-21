@@ -234,6 +234,14 @@ export function createSessionKernel(deps: SessionKernelDependencies) {
     }
   }
 
+  async function resolveClientBindingById(bindingId: string) {
+    const result = await store.resolveObject("client_binding", bindingId);
+    if (result.status !== "resolved")
+      return result;
+    const validation = await validateLifecycleObject(result.value);
+    return validation.ok ? result : validation;
+  }
+
   async function issueCredential(input: IssueCredentialInput): Promise<CreateResult<IssuedCredential>> {
     try {
       const principal = await store.resolveObject("principal_session", input.principalSessionId);
@@ -680,6 +688,7 @@ export function createSessionKernel(deps: SessionKernelDependencies) {
     resolvePrincipalSessionById,
     renewPrincipalSession,
     createClientBinding,
+    resolveClientBindingById,
     issueCredential,
     resolveCredential,
     createProtocolArtifact,

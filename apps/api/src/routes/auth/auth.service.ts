@@ -9,13 +9,8 @@ import {
   buildPasswordLoginSuccessAudit,
 } from "@api/services/audit/events/auth.audit";
 import { isHumanVerificationRequiredError } from "@api/services/human-verification/human-verification.error";
-import { UserDtoSchema } from "@api/services/user/user.schema";
-import { AuthzMaintenanceError } from "@iam/api-core/errors/AuthzMaintenanceError";
-import { AuthzUnauthorizedError } from "@iam/api-core/errors/AuthzUnauthorizedError";
 import { InvalidVerificationCodeError } from "@iam/api-core/errors/InvalidVerificationCodeError";
 import { LoginFailedError } from "@iam/api-core/errors/LoginFailedError";
-import { reviveIsoDates } from "@iam/api-core/utils";
-import { ClientStatus } from "@iam/contracts";
 
 export function createAuthService(deps: AuthServiceDeps) {
   async function recordFailedLoginAndBlacklistIfNeeded(userId: number, reason: "password" | "mobile") {
@@ -74,7 +69,7 @@ export function createAuthService(deps: AuthServiceDeps) {
     }
     await deps.loginFailure.clearLoginFailures(userDetailDto.id);
     await deps.loginFailure.clearLoginBlacklist(userDetailDto.id);
-    const token = await deps.sessionService.setGlobalSession(userDetailDto);
+    const { token } = await deps.customSsoSession.createPrincipalSession(userDetailDto, { amr: ["pwd"] });
     await deps.auditLogWriter.recordAuditLog(buildPasswordLoginSuccessAudit(userDetailDto));
     return { token, isMobileSet: userDetailDto.mobile !== null };
   }
@@ -118,32 +113,13 @@ export function createAuthService(deps: AuthServiceDeps) {
     const userDetailDto = await deps.userService.getUserDetailByMobile(phoneNumber);
     await deps.loginFailure.clearLoginFailures(userDetailDto.id);
     await deps.loginFailure.clearLoginBlacklist(userDetailDto.id);
-    const token = await deps.sessionService.setGlobalSession(userDetailDto);
+    const { token } = await deps.customSsoSession.createPrincipalSession(userDetailDto, { amr: ["sms"] });
     await deps.auditLogWriter.recordAuditLog(buildMobileLoginSuccessAudit(userDetailDto));
     return { token, isMobileSet: userDetailDto.mobile !== null };
   }
 
   async function authz(sessionId: string, client: ClientDto) {
-    const userString = await deps.sessionService.getValidatedLocalSessionUserString(client.clientCode, sessionId);
-    if (!userString) {
-      throw new AuthzUnauthorizedError("未登录");
-    }
-    const userDto = UserDtoSchema.parse(JSON.parse(userString, reviveIsoDates));
-    let userInExcludingList = false;
-    if (client.extAttributes.userExcluding !== undefined
-      && client.extAttributes.userExcluding !== null
-      && client.extAttributes.userExcluding.includes(userDto.username)) {
-      userInExcludingList = true;
-    }
-    if (client.status === ClientStatus.Maintance && !userInExcludingList) {
-      throw new AuthzMaintenanceError("系统维护中");
-    }
-    const userAbstract = {
-      username: userDto.username,
-      id: userDto.id,
-    };
-    const userAbstractString = Buffer.from(JSON.stringify(userAbstract), "utf8").toString("base64");
-    return userAbstractString;
+    return await deps.customSsoSession.authorizeLocalSession(sessionId, client);
   }
 
   return {

@@ -56,7 +56,6 @@ export async function createApiRoutes(options: CreateApiRoutesOptions): Promise<
   const ssoHandlers = createSsoHandlers({
     clientService: services.client,
     logger: runtime.logger,
-    sessionService: services.session,
     ssoService: services.sso,
     config: {
       authorizationEndpoint: runtime.config.env.AUTHORIZATION_ENDPOINT,
@@ -72,7 +71,6 @@ export async function createApiRoutes(options: CreateApiRoutesOptions): Promise<
 
   const publicHandlers = createPublicHandlers({
     organizationService: services.organization,
-    sessionService: services.session,
     userService: services.user,
   });
 
