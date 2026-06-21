@@ -1,12 +1,13 @@
 import type { errors, KoaContextWithOIDC } from "oidc-provider";
 import type Provider from "oidc-provider";
 import type { OidcLogger } from "../lib/logger.ts";
-import { SystemLogEvent } from "@iam/api-core/logger";
+import { LoggerSourceApp, SystemLogEvent } from "@iam/api-core/logger";
 
 export function registerProviderEvents(provider: Provider, logger: OidcLogger) {
   provider.on("server_error", (ctx, error) => {
     logger.error({
       event: SystemLogEvent.OidcProviderServerError,
+      sourceApp: LoggerSourceApp.OidcProvider,
       err: error,
       requestId: ctx.state.requestId,
       errorName: error.name,
@@ -16,6 +17,7 @@ export function registerProviderEvents(provider: Provider, logger: OidcLogger) {
   const logProtocolError = (event: string) => (ctx: KoaContextWithOIDC, error: errors.OIDCProviderError) => {
     logger.warn({
       event: SystemLogEvent.OidcProviderProtocolError,
+      sourceApp: LoggerSourceApp.OidcProvider,
       oidcEvent: event,
       errorCode: error.error,
       errorName: error.name,

@@ -15,9 +15,15 @@ type TestClient = {
 };
 
 function createMockLogger() {
+  const info = mock((..._args: unknown[]) => undefined);
   const error = mock((..._args: unknown[]) => undefined);
   const warn = mock((..._args: unknown[]) => undefined);
-  return { error, warn };
+  return {
+    info,
+    error,
+    warn,
+    bindings: () => ({ sourceApp: "iam-api-test" }),
+  };
 }
 
 function createClient(overrides: Partial<TestClient> = {}): TestClient {

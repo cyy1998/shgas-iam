@@ -143,7 +143,7 @@ describe("oIDC HTTP access logging", () => {
         requestId: "req-missing",
         route: "not_found",
         statusCode: 404,
-        level: "warn",
+        level: "info",
       }),
     ]));
   }, 10_000);
@@ -170,6 +170,7 @@ describe("oIDC HTTP access logging", () => {
     expect(lines).toEqual(expect.arrayContaining([
       expect.objectContaining({
         event: SystemLogEvent.OidcProviderHttpRequestFailed,
+        sourceApp: LoggerSourceApp.OidcProvider,
         requestId: "req-failed",
         level: "error",
       }),
@@ -178,7 +179,7 @@ describe("oIDC HTTP access logging", () => {
         requestId: "req-failed",
         route: "/health",
         statusCode: 503,
-        level: "error",
+        level: "info",
       }),
     ]));
   }, 10_000);

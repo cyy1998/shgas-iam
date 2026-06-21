@@ -18,10 +18,19 @@ class DomainLikeBusinessError extends Error {
 }
 
 function createMockLogger() {
+  const info = mock((..._args: unknown[]) => undefined);
+  const warn = mock((..._args: unknown[]) => undefined);
   const error = mock((..._args: unknown[]) => undefined);
   return {
+    info,
+    warn,
     error,
-    logger: { error } as Parameters<typeof createErrorHandler>[0],
+    logger: {
+      info,
+      warn,
+      error,
+      bindings: () => ({ sourceApp: "iam-api-test" }),
+    } as Parameters<typeof createErrorHandler>[0],
   };
 }
 
@@ -40,6 +49,21 @@ describe("errorHandler", () => {
     const res = await app.request("http://localhost/custom");
 
     expect(res.status).toBe(BAD_REQUEST);
+    expect(appLogger.info).toHaveBeenCalledTimes(1);
+    const [firstCall] = appLogger.info.mock.calls;
+    expect(firstCall?.[0]).toMatchObject({
+      event: SystemLogEvent.ApiErrorHandled,
+      surface: "rest",
+      sourceApp: "iam-api-test",
+      method: "GET",
+      path: "/custom",
+      route: "/custom",
+      statusCode: BAD_REQUEST,
+      errorCode: ApiErrorCode.InvalidLoginCredential,
+      errorName: "CustomError",
+      errorMessage: "登录凭证无效",
+    });
+    expect(firstCall?.[0]).not.toHaveProperty("err");
     await expect(res.json()).resolves.toEqual({
       code: ApiErrorCode.InvalidLoginCredential,
       data: null,
@@ -58,6 +82,15 @@ describe("errorHandler", () => {
     const res = await app.request("http://localhost/domain");
 
     expect(res.status).toBe(NOT_FOUND);
+    expect(appLogger.info).toHaveBeenCalledTimes(1);
+    expect(appLogger.info.mock.calls[0]?.[0]).toMatchObject({
+      event: SystemLogEvent.ApiErrorHandled,
+      surface: "rest",
+      statusCode: NOT_FOUND,
+      errorCode: ApiErrorCode.OrganizationNotFound,
+      errorName: "OrganizationNotFoundError",
+      errorMessage: "组织不存在",
+    });
     await expect(res.json()).resolves.toEqual({
       code: ApiErrorCode.OrganizationNotFound,
       data: null,
@@ -80,7 +113,17 @@ describe("errorHandler", () => {
     const res = await app.request("http://localhost/http-exception");
 
     expect(res.status).toBe(BAD_REQUEST);
+    expect(appLogger.info).toHaveBeenCalledTimes(1);
     expect(appLogger.error).toHaveBeenCalledTimes(0);
+    expect(appLogger.info.mock.calls[0]?.[0]).toMatchObject({
+      event: SystemLogEvent.ApiErrorHandled,
+      surface: "rest",
+      requestId: "req-http",
+      statusCode: BAD_REQUEST,
+      errorCode: ApiErrorCode.InternalError,
+      errorName: "HTTPException",
+      errorMessage: "bad request",
+    });
     await expect(res.json()).resolves.toEqual({
       code: ApiErrorCode.InternalError,
       data: { requestId: "req-http" },
@@ -126,11 +169,15 @@ describe("errorHandler", () => {
 
       expect(firstCall[0]).toMatchObject({
         event: SystemLogEvent.ApiErrorUnhandled,
+        surface: "rest",
+        sourceApp: "iam-api-test",
         requestId: "req-app",
         traceId: "11111111111111111111111111111111",
         method: "GET",
         path: "/boom",
         route: "/boom",
+        statusCode: INTERNAL_SERVER_ERROR,
+        errorCode: ApiErrorCode.InternalError,
         source: sourceLocation,
         errorName: "Error",
         errorMessage: "boom",
@@ -187,11 +234,15 @@ describe("errorHandler", () => {
 
     expect(firstCall[0]).toMatchObject({
       event: SystemLogEvent.ApiErrorUnhandled,
+      surface: "rest",
+      sourceApp: "iam-api-test",
       requestId: "req-request",
       traceId: "22222222222222222222222222222222",
       method: "GET",
       path: "/boom",
       route: "/boom",
+      statusCode: INTERNAL_SERVER_ERROR,
+      errorCode: ApiErrorCode.InternalError,
       source: sourceLocation,
       errorName: "Error",
       errorMessage: "boom",

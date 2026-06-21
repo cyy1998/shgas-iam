@@ -152,6 +152,7 @@ export function createOidcHttpServer(runtime: OidcHttpRuntime) {
     catch (error) {
       logger.error({
         event: SystemLogEvent.OidcProviderHttpRequestFailed,
+        sourceApp: LoggerSourceApp.OidcProvider,
         err: error,
         requestId,
         errorName: error instanceof Error ? error.name : "UnknownError",
