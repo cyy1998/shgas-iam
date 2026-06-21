@@ -12,6 +12,7 @@ import {
   NOT_FOUND,
   UNAUTHORIZED,
 } from "@iam/api-core/core/http-status-codes";
+import { getRequestId } from "@iam/api-core/core/request-context";
 import { isApiRuntimeError } from "@iam/api-core/errors";
 import {
   buildApiErrorLogFields,
@@ -32,15 +33,6 @@ type TrpcErrorLogger = Pick<Logger, "info" | "warn" | "error"> & {
 function getRequestLogger(c: Context): TrpcErrorLogger | undefined {
   try {
     return c.get("logger" as never) as TrpcErrorLogger | undefined;
-  }
-  catch {
-    return undefined;
-  }
-}
-
-function getRequestId(c: Context): string | undefined {
-  try {
-    return c.get("requestId" as never) as string | undefined;
   }
   catch {
     return undefined;

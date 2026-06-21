@@ -5,6 +5,7 @@ import type { z } from "zod";
 import type { InternalBindings } from "../types/lib";
 import { ClientStatus } from "@iam/contracts";
 import { deleteCookie, getCookie } from "hono/cookie";
+import { getContextValue, getRequestId } from "../core/request-context";
 import { AuthzForbiddenError } from "../errors/AuthzForbiddenError";
 import { AuthzUnauthorizedError } from "../errors/AuthzUnauthorizedError";
 import { CustomError } from "../errors/CustomError";
@@ -38,15 +39,6 @@ export type InternalAuthOptions<TClient extends InternalClientIdentity> = {
 
 type InternalAuthLogger = Pick<Logger, "warn">;
 
-function getContextValue<T>(c: Context, key: string): T | undefined {
-  try {
-    return c.get(key as never) as T | undefined;
-  }
-  catch {
-    return undefined;
-  }
-}
-
 function getInternalAuthLogger(c: Context): InternalAuthLogger | undefined {
   const logger = getContextValue<InternalAuthLogger>(c, "logger");
   return typeof logger?.warn === "function" ? logger : undefined;
@@ -59,7 +51,7 @@ function warnInternalAuthFailure(
 ) {
   getInternalAuthLogger(c)?.warn({
     reason,
-    requestId: getContextValue<string>(c, "requestId"),
+    requestId: getRequestId(c),
     ...metadata,
   }, "internal client authentication failed");
 }

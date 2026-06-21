@@ -12,19 +12,11 @@ import {
   SystemLogEvent,
 } from "../../logger";
 import { UNPROCESSABLE_ENTITY } from "../http-status-codes";
+import { getRequestId } from "../request-context";
 
 type ValidationLogger = Pick<Logger, "info"> & {
   bindings?: () => Record<string, unknown>;
 };
-
-function getRequestId(c: Context): string | undefined {
-  try {
-    return c.get("requestId" as never) as string | undefined;
-  }
-  catch {
-    return undefined;
-  }
-}
 
 function getRequestLogger(c: Context): ValidationLogger | undefined {
   try {

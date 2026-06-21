@@ -1,7 +1,7 @@
 import type { AuditActorType, AuditDetails, AuditOutcome, AuditRequestContext } from "@iam/domain/audit";
 import type { Context } from "hono";
 import type { AuditRepository } from "./audit.repository";
-import { getRequestIp, getTraceId } from "@iam/api-core/core/request-context";
+import { getRequestId, getRequestIp, getTraceId } from "@iam/api-core/core/request-context";
 import {
   AuditLogWriteDtoSchema,
   normalizeAuditActor,
@@ -61,7 +61,7 @@ function enrichAuditDetails(input: AuditLogInput): AuditDetails {
 export function getApiAuditRequestContext(c: Context): AuditRequestContext {
   return {
     sourceApp: "iam",
-    requestId: c.get("requestId") ?? c.req.header("x-request-id") ?? null,
+    requestId: getRequestId(c) ?? c.req.header("x-request-id") ?? null,
     traceId: getTraceId(c),
     ip: getRequestIp(c),
     userAgent: c.req.header("user-agent") ?? null,

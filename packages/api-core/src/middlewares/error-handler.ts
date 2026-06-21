@@ -5,6 +5,7 @@ import type { Logger } from "pino";
 import { ApiErrorCode } from "@iam/contracts";
 import { HTTPException } from "hono/http-exception";
 import { INTERNAL_SERVER_ERROR } from "../core/http-status-codes";
+import { getRequestId } from "../core/request-context";
 import { isApiRuntimeError } from "../errors/api-runtime-error";
 import * as resp from "../http";
 import {
@@ -32,15 +33,6 @@ function getErrorSourceLocation(err: Error): string {
 function getRequestLogger(c: Context): ErrorLogger | undefined {
   try {
     return c.get("logger" as never) as ErrorLogger | undefined;
-  }
-  catch {
-    return undefined;
-  }
-}
-
-function getRequestId(c: Context): string | undefined {
-  try {
-    return c.get("requestId" as never) as string | undefined;
   }
   catch {
     return undefined;
