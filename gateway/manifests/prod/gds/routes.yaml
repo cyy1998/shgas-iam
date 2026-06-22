@@ -1,9 +1,23 @@
 routes:
+  - id: gds-frontend-root-redirect-prod
+    name: gds-frontend-root-redirect-prod
+    uri: /data-platform
+    plugins:
+      redirect:
+        uri: /data-platform/
+        ret_code: 301
+    priority: 100
+    status: 1
+    enable_websocket: false
+    labels:
+      managed_by: shgas-iam
+      source: repo-manifest
+      env: prod
+      app: gds
+
   - id: gds-frontend-prod
     name: gds-frontend-prod
-    uris:
-      - /data-platform
-      - /data-platform/*
+    uri: /data-platform/*
     service_id: gds-frontend-prod
     priority: 0
     status: 1
@@ -16,9 +30,7 @@ routes:
 
   - id: gds-external-frontend-prod
     name: gds-external-frontend-prod
-    uris:
-      - /data-platform
-      - /data-platform/*
+    uri: /data-platform/*
     hosts:
       - jsc.shgas.com.cn
     service_id: gds-frontend-prod
