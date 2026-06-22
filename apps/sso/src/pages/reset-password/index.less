@@ -181,16 +181,30 @@
     display: flex;
     flex: 0 0 auto;
     align-items: center;
-    gap: 10px;
+  }
+
+  .reset-header-actions > * + * {
+    margin-left: 10px;
   }
 
   .reset-back-login {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
     height: 30px;
     padding: 0 8px;
     font-size: 12px;
     font-weight: 700;
     color: #1554ad;
+    cursor: pointer;
+    background: transparent;
+    border: 1px solid transparent;
     border-radius: 8px;
+
+    .anticon + span,
+    span + .anticon {
+      margin-left: 6px;
+    }
 
     &:hover {
       color: #0f4696 !important;
@@ -209,7 +223,6 @@
     position: relative;
     display: flex;
     align-items: center;
-    gap: 12px;
     min-height: 72px;
     padding: 14px;
     color: #6c7a89;
@@ -260,6 +273,10 @@
     border-radius: 8px;
   }
 
+  .step-index + div {
+    margin-left: 12px;
+  }
+
   .step-title {
     font-size: 14px;
     font-weight: 750;
@@ -289,6 +306,13 @@
     margin-bottom: 18px;
   }
 
+  .ant-form-item-row,
+  .ant-form-item-control-input,
+  .ant-form-item-control-input-content {
+    display: block;
+    width: 100%;
+  }
+
   .ant-form-item-label {
     padding-bottom: 7px;
   }
@@ -303,6 +327,7 @@
   .ant-input-affix-wrapper,
   .ant-input,
   .ant-select-selector {
+    width: 100%;
     min-height: 46px;
     color: #102033;
     background: #fbfdff !important;
@@ -316,12 +341,29 @@
   }
 
   .ant-input-affix-wrapper {
+    display: inline-flex;
+    align-items: center;
     padding: 9px 12px;
 
     .anticon {
       color: #7b8da0;
       transition: color 0.2s ease;
     }
+  }
+
+  .ant-input-prefix,
+  .ant-input-suffix {
+    display: flex;
+    flex: 0 0 auto;
+    align-items: center;
+  }
+
+  .ant-input-prefix {
+    margin-right: 8px;
+  }
+
+  .ant-input-suffix {
+    margin-left: 8px;
   }
 
   .ant-input-affix-wrapper-focused,
@@ -339,22 +381,85 @@
   }
 
   .ant-input-affix-wrapper > .ant-input {
+    flex: 1;
+    width: 0;
+    min-width: 0;
     min-height: auto;
     padding: 0;
     background: transparent !important;
     border: none !important;
+    outline: none;
     box-shadow: none !important;
   }
 
+  .ant-select {
+    position: relative;
+    display: inline-block;
+    width: 100%;
+  }
+
   .ant-select-single .ant-select-selector {
+    position: relative;
+    display: flex !important;
     align-items: center;
+    padding: 0 38px 0 12px !important;
+    box-sizing: border-box;
+  }
+
+  .ant-select-selection-search {
+    position: absolute;
+    top: 0;
+    right: 38px;
+    bottom: 0;
+    left: 12px;
+  }
+
+  .ant-select-selection-search-input {
+    width: 100%;
+    height: 44px;
+    padding: 0;
+    line-height: 44px;
+    background: transparent;
+    border: 0;
+    outline: none;
+  }
+
+  .ant-select-selection-item,
+  .ant-select-selection-placeholder {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    line-height: 44px;
+    text-align: left;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .ant-select-arrow {
+    position: absolute;
+    top: 50%;
+    right: 12px;
+    display: flex;
+    align-items: center;
+    height: 12px;
+    margin-top: -6px;
+    color: #7b8da0;
+  }
+
+  .ant-input-group-wrapper {
+    display: block;
+    width: 100%;
   }
 
   .ant-input-group {
     display: flex;
+    width: 100%;
   }
 
-  .ant-input-group .ant-input {
+  .ant-input-group .ant-input,
+  .ant-input-group .ant-input-affix-wrapper {
+    flex: 1;
+    min-width: 0;
     border-radius: 8px 0 0 8px !important;
   }
 
@@ -395,10 +500,12 @@
 
   .form-actions {
     display: flex;
-    gap: 12px;
     margin-top: 20px;
 
     button {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
       flex: 1;
       height: 48px;
       font-size: 15px;
@@ -406,7 +513,12 @@
       border-radius: 8px;
     }
 
+    button + button {
+      margin-left: 12px;
+    }
+
     .ant-btn-primary {
+      color: #fff;
       background: #1554ad;
       border-color: #1554ad;
       box-shadow: 0 12px 24px rgba(21, 84, 173, 0.24);
