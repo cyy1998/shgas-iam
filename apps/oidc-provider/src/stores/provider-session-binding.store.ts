@@ -11,11 +11,11 @@ import {
 
 export function createProviderSessionBindingStore(redis: Redis) {
   return {
-    bind(sessionUid: string, session: ResolvedGlobalSession) {
-      return bindProviderSession(redis, sessionUid, session);
+    bind(sessionUid: string, session: ResolvedGlobalSession, context = { oidcConfigVersion: 0 }) {
+      return bindProviderSession(redis, sessionUid, session, context);
     },
-    stage(session: ResolvedGlobalSession) {
-      return stageProviderSessionBinding(redis, session);
+    stage(session: ResolvedGlobalSession, context = { oidcConfigVersion: 0 }) {
+      return stageProviderSessionBinding(redis, session, context);
     },
     consumeStaged(accountId: string, sessionUid: string) {
       return consumeStagedProviderSessionBinding(redis, accountId, sessionUid);
@@ -32,15 +32,19 @@ export async function bindProviderSession(
   redis: Redis,
   sessionUid: string,
   session: ResolvedGlobalSession,
+  context: { oidcConfigVersion: number } = { oidcConfigVersion: 0 },
 ): Promise<ProviderSessionBinding | null> {
   const ttl = await redis.ttl(globalSessionKey(session.sessionId));
   if (ttl <= 0)
     return null;
   const binding: ProviderSessionBinding = {
     globalSessionId: session.sessionId,
+    principalSessionId: session.sessionId,
+    bindingId: `legacy:${sessionUid}`,
     userId: session.userId,
     accountId: session.accountId,
     authTime: session.authTime,
+    oidcConfigVersion: context.oidcConfigVersion,
     expiresAt: Math.floor(Date.now() / 1000) + ttl,
   };
   await redis.set(providerSessionBindingKey(sessionUid), JSON.stringify(binding), "EX", ttl);
@@ -50,15 +54,19 @@ export async function bindProviderSession(
 export async function stageProviderSessionBinding(
   redis: Redis,
   session: ResolvedGlobalSession,
+  context: { oidcConfigVersion: number } = { oidcConfigVersion: 0 },
 ): Promise<ProviderSessionBinding | null> {
   const ttl = await redis.ttl(globalSessionKey(session.sessionId));
   if (ttl <= 0)
     return null;
   const binding: ProviderSessionBinding = {
     globalSessionId: session.sessionId,
+    principalSessionId: session.sessionId,
+    bindingId: "legacy:pending",
     userId: session.userId,
     accountId: session.accountId,
     authTime: session.authTime,
+    oidcConfigVersion: context.oidcConfigVersion,
     expiresAt: Math.floor(Date.now() / 1000) + ttl,
   };
   await redis.set(
@@ -98,6 +106,8 @@ export async function consumeStagedProviderSessionBinding(
     userId: parsed.data.userId,
     accountId: parsed.data.accountId,
     authTime: parsed.data.authTime,
+  }, {
+    oidcConfigVersion: parsed.data.oidcConfigVersion,
   });
 }
 

@@ -35,6 +35,7 @@ describe("oIDC login return handle", () => {
       clientId: "client-a",
       oidcConfigVersion: 3,
       browserBinding: "binding-a",
+      returnTarget: "https://issuer.example/oidc/resume",
     };
     const handle = await createOidcReturnHandle(redis as unknown as Redis, payload, 600);
 
@@ -78,6 +79,7 @@ describe("oIDC authorization request validation", () => {
 
   it.each([
     [{ ...valid, state: undefined }, "state is required"],
+    [{ ...valid, nonce: undefined }, "nonce is required"],
     [{ ...valid, code_challenge: undefined }, "code_challenge is required"],
     [{ ...valid, code_challenge_method: "plain" }, "code_challenge_method must be S256"],
     [{ ...valid, redirect_uri: "https://client.example/callback" }, "redirect_uri must exactly match"],
@@ -94,9 +96,5 @@ describe("oIDC authorization request validation", () => {
 
   it("accepts a complete request with exact redirect URI and allowed scopes", () => {
     expect(() => validateAuthorizationRequest(valid, client)).not.toThrow();
-  });
-
-  it("accepts authorization code requests without nonce", () => {
-    expect(() => validateAuthorizationRequest({ ...valid, nonce: undefined }, client)).not.toThrow();
   });
 });

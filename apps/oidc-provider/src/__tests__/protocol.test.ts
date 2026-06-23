@@ -92,11 +92,8 @@ describe("oIDC discovery and JWKS", () => {
         isBlocked: async () => false,
         recordFailure: async () => 0,
       },
-      globalSessions: {
-        remove: async () => {},
-      },
-      tokens: {
-        revokeGlobalSessionAccessTokens: async () => 0,
+      oidcSession: {
+        logoutPrincipalSession: async () => true,
       },
     });
     const server = createOidcHttpServer({

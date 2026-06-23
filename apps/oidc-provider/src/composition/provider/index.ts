@@ -3,6 +3,7 @@ import type { OidcProviderEnv } from "../../env.ts";
 import type { OidcLogger } from "../../lib/logger.ts";
 import type { SigningKey } from "../../security/signing-keys.ts";
 import type { OidcProviderServices } from "../services/index.ts";
+import type { OidcProviderSession } from "../session/index.ts";
 import type { OidcProviderStores } from "../stores/index.ts";
 import { createOidcInteractionHandler } from "../../interaction/handler.ts";
 import { createOidcProvider } from "../../provider/create-provider.ts";
@@ -16,15 +17,13 @@ export interface CreateOidcProviderRuntimeDeps {
     current: SigningKey;
     previous?: SigningKey;
   };
+  session: Pick<OidcProviderSession, "oidcSession">;
   services: Pick<OidcProviderServices, | "claims"
   | "clientAuthRateLimiter"
   | "clientSecretVerifier"
   | "globalSessionResolver"
   | "interactionPolicy">;
   stores: Pick<OidcProviderStores, | "clientRuntime"
-  | "globalSessions"
-  | "providerSessions"
-  | "returnHandles"
   | "tokens">;
 }
 
@@ -32,7 +31,8 @@ export function createOidcProviderRuntime(deps: CreateOidcProviderRuntimeDeps) {
   const adapter = createOidcAdapterFactory(deps.redis, {
     clients: deps.stores.clientRuntime,
     clientVersions: deps.stores.clientRuntime,
-    providerSessions: deps.stores.providerSessions,
+    oidcSession: deps.session.oidcSession,
+    providerSessions: deps.session.oidcSession,
     tokens: deps.stores.tokens,
   });
   const provider = createOidcProvider({
@@ -44,15 +44,14 @@ export function createOidcProviderRuntime(deps: CreateOidcProviderRuntimeDeps) {
     interactionPolicy: deps.services.interactionPolicy,
     clientAuthRateLimiter: deps.services.clientAuthRateLimiter,
     clientSecretVerifier: deps.services.clientSecretVerifier,
-    globalSessions: deps.stores.globalSessions,
-    tokens: deps.stores.tokens,
+    oidcSession: deps.session.oidcSession,
   });
   const interactions = createOidcInteractionHandler({
     provider,
     clients: deps.stores.clientRuntime,
     globalSessions: deps.services.globalSessionResolver,
-    providerSessions: deps.stores.providerSessions,
-    returnHandles: deps.stores.returnHandles,
+    providerSessions: deps.session.oidcSession,
+    returnHandles: deps.session.oidcSession,
     env: deps.env,
   });
 

@@ -11,9 +11,14 @@ export interface ClientInvalidationProtocolObjectStore {
   revokeClient: (clientId: string) => Promise<unknown>;
 }
 
+export interface ClientInvalidationOidcSessionAdapter {
+  revokeClientProtocol: (clientId: string, reason: "client_config_changed") => Promise<unknown>;
+}
+
 export interface ClientInvalidationSubscriberDeps {
   tokens: ClientInvalidationTokenStore;
   protocolObjects: ClientInvalidationProtocolObjectStore;
+  oidcSession: ClientInvalidationOidcSessionAdapter;
 }
 
 export function startClientInvalidationSubscriber(
@@ -28,6 +33,7 @@ export function startClientInvalidationSubscriber(
         const event = JSON.parse(message) as { clientCode?: string };
         if (!event.clientCode)
           return;
+        await deps.oidcSession.revokeClientProtocol(event.clientCode, "client_config_changed");
         await deps.tokens.revokeClientAccessTokens(event.clientCode);
         await deps.protocolObjects.revokeClient(event.clientCode);
       }

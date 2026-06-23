@@ -25,5 +25,18 @@ export interface ClaimsProviderSessionBindingStore {
 }
 
 export interface ClaimsTokenRevoker {
-  revokeAccessToken: (tokenKey: string) => Promise<void>;
+  resolveAccessTokenCredential: (externalToken: string) => Promise<{
+    credential: {
+      credentialId: string;
+      principalSessionId: string;
+      bindingId?: string;
+      clientCode: string;
+    };
+    metadata: {
+      providerTokenKey: string;
+      providerTokenId: string;
+      oidcConfigVersion: number;
+    };
+  } | null>;
+  revokeAccessTokenCredential: (credentialId: string) => Promise<unknown>;
 }

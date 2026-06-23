@@ -54,11 +54,15 @@ export function createOidcInteractionHandler(deps: CreateOidcInteractionHandlerD
       const session = await deps.globalSessions.resolve(request);
       if (session && !requestNeedsReauthentication(details.params, session.authTime)) {
         await deps.globalSessions.renew(session.sessionId);
+        const bindingContext = {
+          clientId,
+          oidcConfigVersion: client.oidc_config_version,
+        };
         if (details.session?.uid) {
-          if (!await deps.providerSessions.bind(details.session.uid, session))
+          if (!await deps.providerSessions.bind(details.session.uid, session, bindingContext))
             return failClosed(response);
         }
-        else if (!await deps.providerSessions.stage(session)) {
+        else if (!await deps.providerSessions.stage(session, bindingContext)) {
           return failClosed(response);
         }
         await deps.provider.interactionFinished(request, response, {
@@ -72,12 +76,16 @@ export function createOidcInteractionHandler(deps: CreateOidcInteractionHandlerD
       }
 
       const browserBinding = createOpaqueValue();
+      const returnTarget = new URL("/oidc/resume", deps.env.OIDC_ISSUER).href;
       const handle = await deps.returnHandles.create({
         interactionUid: details.uid,
         clientId,
         oidcConfigVersion: client.oidc_config_version,
         browserBinding,
+        returnTarget,
       }, deps.env.OIDC_INTERACTION_TTL_SECONDS);
+      if (!handle)
+        return failClosed(response);
       const loginUrl = new URL(deps.env.OIDC_SSO_LOGIN_PATH, deps.env.OIDC_PUBLIC_ORIGIN);
       loginUrl.searchParams.set("oidcReturn", handle);
       const secure = deps.env.NODE_ENV === "production" ? "; Secure" : "";

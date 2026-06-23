@@ -5,7 +5,8 @@
 - [x] 1.3 在 umbrella design 中持续记录跨 child 的决策变更、风险和验收状态。
 - [ ] 1.4 每个 child 合并到 `feature/session-kernel` 后运行对应跨模块 smoke check，并记录结果。
   - 已记录 `session-kernel-core` 的 `@iam/api-core` lint/test/typecheck 结果。
-  - 已记录 `custom-sso-session-kernel-adapter` 的 `@iam/api`、`@iam/admin-api` 与管理端兼容验证结果；其余 child 待合并后逐项运行并填写结果。
+  - 已记录 `custom-sso-session-kernel-adapter` 的 `@iam/api`、`@iam/admin-api` 与管理端兼容验证结果。
+  - 已记录 `oidc-session-kernel-adapter` 的 `@iam/oidc-provider` lint/typecheck/test 与 OpenSpec 全量校验结果；其余 child 待合并后逐项运行并填写结果。
 
 ## 2. Session Kernel Core
 
@@ -38,17 +39,17 @@
 
 ## 4. OIDC Adapter
 
-- [ ] 4.1 在 `apps/oidc-provider` composition 中创建 OIDC Session Kernel adapter 和 revoker，接入 provider stores、Redis adapter、token store、client runtime 和 account repository。
-- [ ] 4.2 将 OIDC global session resolver 改为通过 Kernel PrincipalSession external token lookup 解析浏览器登录态。
-- [ ] 4.3 将 OIDC provider session binding 并入 Kernel ClientBinding，并保留 provider session uid 到 bindingId 的私有映射。
-- [ ] 4.4 将 OIDC login return handle 迁移为 Kernel ProtocolArtifact，并在 resume 成功后写 consumed tombstone。
-- [ ] 4.5 将 OIDC authorization code 安全边界登记为 Kernel artifact ref，保留 `oidc-provider` 原子 consume 语义并覆盖 replay tombstone。
-- [ ] 4.6 将 OIDC access token 注册为 Kernel IssuedCredential，迁移 user/client/PrincipalSession/binding/protocol 反向索引。
-- [ ] 4.7 更新 UserInfo 校验路径，使 Bearer token 先经过 Kernel tombstone/credential/binding/principal 校验，再返回 OIDC UserInfo snapshot。
-- [ ] 4.8 更新 OIDC RP-Initiated Logout，使其通过 Kernel 撤销当前 PrincipalSession 并清理 custom SSO 与 OIDC 派生对象。
-- [ ] 4.9 实现 OIDC maintenance、client config version、client disabled、user disabled 的 active revoke 和 lazy revoke 行为。
-- [ ] 4.10 覆盖 OIDC authorize、prompt/max_age、return handle replay、token exchange、UserInfo tombstone、client config changed、maintenance revoke 和 logout 回归测试。
-- [ ] 4.11 运行 `pnpm --filter @iam/oidc-provider test` 和 `pnpm --filter @iam/oidc-provider typecheck`。
+- [x] 4.1 在 `apps/oidc-provider` composition 中创建 OIDC Session Kernel adapter 和 revoker，接入 provider stores、Redis adapter、token store、client runtime 和 account repository。
+- [x] 4.2 将 OIDC global session resolver 改为通过 Kernel PrincipalSession external token lookup 解析浏览器登录态。
+- [x] 4.3 将 OIDC provider session binding 并入 Kernel ClientBinding，并保留 provider session uid 到 bindingId 的私有映射。
+- [x] 4.4 将 OIDC login return handle 迁移为 Kernel ProtocolArtifact，并在 resume 成功后写 consumed tombstone。
+- [x] 4.5 将 OIDC authorization code 安全边界登记为 Kernel artifact ref，保留 `oidc-provider` 原子 consume 语义并覆盖 replay tombstone。
+- [x] 4.6 将 OIDC access token 注册为 Kernel IssuedCredential，迁移 user/client/PrincipalSession/binding/protocol 反向索引。
+- [x] 4.7 更新 UserInfo 校验路径，使 Bearer token 先经过 Kernel tombstone/credential/binding/principal 校验，再返回 OIDC UserInfo snapshot。
+- [x] 4.8 更新 OIDC RP-Initiated Logout，使其通过 Kernel 撤销当前 PrincipalSession 并清理 custom SSO 与 OIDC 派生对象。
+- [x] 4.9 实现 OIDC maintenance、client config version、client disabled、user disabled 的 active revoke 和 lazy revoke 行为。
+- [x] 4.10 覆盖 OIDC authorize、prompt/max_age、return handle replay、token exchange、UserInfo tombstone、client config changed、maintenance revoke 和 logout 回归测试。
+- [x] 4.11 运行 `pnpm --filter @iam/oidc-provider test` 和 `pnpm --filter @iam/oidc-provider typecheck`。
 
 ## 5. Admin 触发撤销
 

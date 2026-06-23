@@ -1,28 +1,4 @@
-# oidc-provider Specification
-
-## Purpose
-TBD - created by archiving change add-oidc-provider. Update Purpose after archive.
-## Requirements
-### Requirement: Provider 发布固定 issuer Metadata 与 RS256 JWKS
-系统 SHALL 在同一 IAM origin 的 `/oidc` issuer 下发布标准 Discovery metadata 和 RS256 JWKS。
-
-#### Scenario: 查询 Discovery metadata
-- **WHEN** client 请求 OIDC well-known endpoint
-- **THEN** 响应 SHALL 包含 issuer、authorization、token、userinfo、jwks 和 end session endpoint
-- **AND** SHALL 声明仅支持 `code`、`authorization_code`、`public` subject、`RS256` 和 PKCE `S256`
-- **AND** SHALL 声明 scopes `openid`、`profile`、`phone` 和 `iam:authorization`
-- **AND** issuer SHALL 与 ID Token `iss` 完全一致
-
-#### Scenario: 查询 JWKS
-- **WHEN** client 请求 `jwks_uri`
-- **THEN** 响应 SHALL 返回 current signing key 的 public JWK
-- **AND** MAY 返回仍需验证未过期 ID Token 的 previous public JWK
-- **AND** SHALL NOT 返回 private key material
-
-#### Scenario: Signing key 配置非法
-- **WHEN** current/previous JWK 缺少唯一 `kid`、不是可用 RS256 key 或包含冲突配置
-- **THEN** provider SHALL 启动失败
-- **AND** SHALL NOT 降级为临时或内存 signing key
+## MODIFIED Requirements
 
 ### Requirement: Global session 使用统一 envelope
 系统 SHALL 使用 Session Kernel PrincipalSession 作为 IAM 浏览器登录态权威来源，并 SHALL 由 OIDC provider 通过 Kernel resolver 解析、校验和续期该登录态。
@@ -119,14 +95,6 @@ TBD - created by archiving change add-oidc-provider. Update Purpose after archiv
 - **THEN** provider SHALL 要求重新认证
 - **AND** `max_age=0` SHALL 始终要求重新认证
 
-### Requirement: 内部可信 client 自动批准授权
-系统 SHALL 对管理员预配置的内部 client 自动批准合法 requested scopes，并 SHALL NOT 展示 consent 页面。
-
-#### Scenario: Requested scopes 合法
-- **WHEN** 用户已登录且 requested scopes 均在 allowedScopes 中
-- **THEN** provider SHALL 自动完成 consent prompt
-- **AND** SHALL NOT 保存长期用户 consent 记录
-
 ### Requirement: Token endpoint 签发不透明 Access Token 与 RS256 ID Token
 系统 SHALL 通过 POST token endpoint 原子兑换 Authorization Code，并 SHALL 将签发的不透明 Access Token 登记为 Session Kernel IssuedCredential。
 
@@ -178,26 +146,6 @@ TBD - created by archiving change add-oidc-provider. Update Purpose after archiv
 - **AND** provider SHALL NOT 向 client 返回可用 Access Token 或 ID Token
 - **AND** provider SHALL best-effort 清理本次创建的 OIDC 私有 token payload
 
-### Requirement: ID Token 使用稳定 public subject
-系统 SHALL 使用 `user.oidcSubject` 作为单 issuer 下稳定、随机、不透明的 public `sub`。
-
-#### Scenario: 签发 ID Token
-- **WHEN** token exchange 成功
-- **THEN** ID Token SHALL 包含 `iss`、`sub`、`aud`、`exp`、`iat`、`auth_time` 和原始 `nonce`
-- **AND** `sub` SHALL 等于用户不可变 `oidcSubject`
-- **AND** SHALL NOT 使用 user id、username、手机号或员工号作为 `sub`
-
-#### Scenario: Profile 和 phone claims
-- **WHEN** 实际 scope 包含 `profile`
-- **THEN** claims MAY 包含 `name` 和 `preferred_username`
-- **AND** `preferred_username` SHALL 映射现有 username但不得被定义为稳定主键
-- **WHEN** 实际 scope 包含 `phone`
-- **THEN** claims MAY 包含 `phone_number`
-
-#### Scenario: Authorization claim
-- **WHEN** 实际 scope 包含 `iam:authorization`
-- **THEN** provider SHALL NOT 将任职、角色或权限写入 ID Token
-
 ### Requirement: UserInfo 返回 scope 控制的 Redis 快照
 系统 SHALL 使用 opaque Access Token 通过 Session Kernel credential lookup 校验运行时状态，并在通过后读取签发时保存的 OIDC 专用 UserInfo 快照。
 
@@ -228,31 +176,6 @@ TBD - created by archiving change add-oidc-provider. Update Purpose after archiv
 - **THEN** 响应 SHALL 使用 `application/json`
 - **AND** SHALL NOT 返回签名或加密 JWT UserInfo
 
-### Requirement: iam:authorization 返回任职和当前 client 授权
-系统 SHALL 通过 `iam:authorization` claim 返回全部有效 employments，并将 roles/privileges 严格限制为当前 client。
-
-#### Scenario: 返回全部有效任职
-- **WHEN** Access Token 包含 `iam:authorization` scope
-- **THEN** claim SHALL 返回用户全部有效 employments
-- **AND** SHALL NOT 因某个 employment 没有当前 client role 而删除该 employment
-
-#### Scenario: 按 client 过滤授权
-- **WHEN** provider 构造某个 employment 的 roles
-- **THEN** SHALL 只包含 `roles.clientId` 等于当前 client id 的有效角色
-- **AND** privileges SHALL 只由这些角色派生
-- **AND** 其他 client 的 roles/privileges SHALL NOT 返回
-
-#### Scenario: 返回精简任职结构
-- **WHEN** 返回 employment
-- **THEN** SHALL 仅返回组织业务编码、名称、类型、根到叶组织路径、岗位编码和岗位名称
-- **AND** SHALL NOT 返回数据库 ID、user 副本、状态、软删除或时间戳字段
-
-#### Scenario: 返回聚合授权
-- **WHEN** claim 包含多个 employments
-- **THEN** 顶层 roles/privileges SHALL 由各 employment 中当前 client 授权去重聚合
-- **AND** roles/privileges SHALL 按 code 字典序稳定排序
-- **AND** employments SHALL 按 orderNum、orgCode、posCode 稳定排序
-
 ### Requirement: Redis 支持版本校验和主动撤销
 系统 SHALL 使用 Session Kernel credential index 维护 OIDC Access Token 的 user、client、PrincipalSession、binding 和 protocol 反向索引，并 SHALL 使用配置版本作为协议对象有效性的最终判断。
 
@@ -277,37 +200,6 @@ TBD - created by archiving change add-oidc-provider. Update Purpose after archiv
 - **WHEN** Kernel 已为 OIDC credential、artifact 或 binding 写入 tombstone，但 OIDC 私有 payload cleanup 失败
 - **THEN** 系统 SHALL 在 revoke summary 或 system log 中记录 cleanup failure
 - **AND** 后续 resolve SHALL 因 tombstone 拒绝对应 external bearer
-
-### Requirement: Provider 实施受控 CORS 和 token endpoint 限流
-系统 SHALL 对不同 OIDC endpoint 使用最小 CORS 策略，并对 confidential client 认证失败实施双层限流。
-
-#### Scenario: Discovery 和 JWKS CORS
-- **WHEN** 浏览器跨域请求 Discovery 或 JWKS
-- **THEN** provider MAY 允许公开读取
-
-#### Scenario: UserInfo CORS
-- **WHEN** 浏览器跨域请求 UserInfo
-- **THEN** Origin SHALL 与 Bearer token 所属 client 某个 redirect URI 的 origin 完全一致
-- **AND** SHALL NOT 返回通配 `Access-Control-Allow-Origin`
-
-#### Scenario: Public client Token endpoint CORS
-- **WHEN** public client 从浏览器跨域请求 token endpoint
-- **AND** Origin 与该 client 某个 redirect URI 的 origin 完全一致
-- **THEN** provider SHALL 允许该 Origin
-- **AND** SHALL NOT 返回通配 `Access-Control-Allow-Origin`
-
-#### Scenario: Confidential client Token endpoint CORS
-- **WHEN** confidential client 从浏览器跨域请求 token endpoint
-- **THEN** provider SHALL 拒绝 CORS
-
-#### Scenario: Public client Origin 不匹配
-- **WHEN** public client 的 Token 请求 Origin 未匹配任一注册 redirect URI origin
-- **THEN** provider SHALL 拒绝 CORS
-
-#### Scenario: Client authentication 重复失败
-- **WHEN** 同一 `client_id + IP` 多次 confidential authentication 失败
-- **THEN** provider SHALL 根据环境配置执行短期失败限流
-- **AND** APISIX SHALL 同时实施基础 IP 限流
 
 ### Requirement: RP-Initiated Logout 执行全局单点退出
 系统 SHALL 支持 `id_token_hint`、`post_logout_redirect_uri` 和可选 state，并 SHALL 通过 Session Kernel 清理当前浏览器 PrincipalSession。
@@ -335,94 +227,3 @@ TBD - created by archiving change add-oidc-provider. Update Purpose after archiv
 - **THEN** provider SHALL 保留已写 tombstone
 - **AND** provider SHALL 记录 cleanup failure
 - **AND** provider SHALL 按安全退出路径完成 cookie 清理或默认安全页面响应
-
-### Requirement: OIDC 与 custom SSO 保持隔离
-系统 SHALL 保持标准 OIDC 与既有 `/sso` 协议端点、secret、redirect 和 runtime cache 语义隔离。
-
-#### Scenario: 既有 custom SSO 使用
-- **WHEN** 业务系统继续调用 `/sso/authorize`、`/sso/callback`、`/sso/token` 或 `/sso/logout`
-- **THEN** 系统 SHALL 保持现有响应结构和 local session 行为
-- **AND** SHALL NOT 使用 `oidcSecretHash`、`oidcConfig` 或 OIDC token response 替代旧行为
-
-#### Scenario: Client DTO 和缓存隔离
-- **WHEN** custom SSO 读取 client DTO 或 Redis cache
-- **THEN** SHALL NOT 包含 `oidcSecretHash`
-- **AND** OIDC provider SHALL 使用专用 runtime DTO 和 cache namespace
-
-### Requirement: Provider 后端使用 app-local composition root
-`apps/oidc-provider` SHALL 使用 app-local composition root 创建 provider runtime、Node HTTP server、workers 和 lifecycle resources，并 SHALL 保持 entrypoint thin。
-
-#### Scenario: Entry delegates production wiring
-- **WHEN** 维护者查看 `apps/oidc-provider/src/index.ts`
-- **THEN** entrypoint SHALL parse env, create the OIDC provider composition, call `server.listen`, and bind shutdown signals
-- **AND** entrypoint SHALL NOT directly construct repositories, services, stores, `oidc-provider` hooks, or Redis-backed workers
-
-#### Scenario: Composition returns lifecycle resources
-- **WHEN** composition creates production OIDC provider resources
-- **THEN** it SHALL return the materialized HTTP server, provider runtime, workers or subscribers, and a shutdown function
-- **AND** shutdown SHALL close the HTTP server, Redis resources, DB resources, and workers owned by the composition
-
-### Requirement: Provider repositories are DbClient-bound and DB-only
-OIDC provider repositories SHALL be created through factories that bind a `DbClient`; repository implementations SHALL access PostgreSQL only through the injected client.
-
-#### Scenario: Repository factory binds DbClient
-- **WHEN** composition creates OIDC account, authorization, or client repositories
-- **THEN** it SHALL call `createXRepository(dbClient)` or an equivalent factory
-- **AND** returned repository methods SHALL NOT require callers to pass `tx`
-
-#### Scenario: Repository does not import DB singleton
-- **WHEN** 维护者查看 `apps/oidc-provider/src/repositories`
-- **THEN** repository implementations SHALL NOT value import the `@iam/db` singleton
-- **AND** repository implementations MAY import DB schema, query helpers, DTO schemas, and `DbClient` types needed for queries
-
-### Requirement: Provider runtime modules depend on consumer-owned Ports
-OIDC provider protocol and business modules SHALL depend on consumer-owned Ports that describe the minimal behavior they consume.
-
-#### Scenario: Claims service uses claims-owned ports
-- **WHEN** claims service needs accounts, authorization claims, client runtime metadata, session validation, or token revocation
-- **THEN** claims service SHALL define or import claims-owned Port shapes for those behaviors
-- **AND** claims service SHALL NOT depend on concrete repository classes, Redis singleton, or production runtime modules
-
-#### Scenario: Interaction handler uses interaction-owned ports
-- **WHEN** interaction handling needs client runtime lookup, global session resolution, provider session binding, or return handle operations
-- **THEN** interaction module SHALL depend on interaction-owned Port shapes
-- **AND** tests SHALL be able to inject fakes without mocking app-local production modules
-
-### Requirement: Redis protocol state uses semantic stores
-OIDC provider business and protocol modules SHALL access Redis protocol state through semantic stores or Ports, except inside Redis-backed infrastructure implementations.
-
-#### Scenario: Business module avoids concrete Redis
-- **WHEN** claims, interaction, global session, client auth rate limiting, or provider middleware needs Redis-backed behavior
-- **THEN** the module SHALL depend on semantic stores or Ports such as session store, provider session binding store, return handle store, token registry, token revocation port, client runtime cache, or client auth failure store
-- **AND** the module SHALL NOT directly depend on concrete `ioredis.Redis`
-
-#### Scenario: Redis adapter may use concrete Redis
-- **WHEN** Redis-backed stores or `oidc-provider` Redis Adapter implementations persist protocol objects
-- **THEN** those infrastructure modules MAY depend on concrete `ioredis.Redis`
-- **AND** their collaborators such as client version lookup, provider session binding, and token registry SHALL be expressed as narrow Ports rather than concrete repository classes
-
-### Requirement: Provider wiring centralizes oidc-provider extension points
-OIDC provider SHALL centralize `oidc-provider` extension point wiring under provider wiring modules.
-
-#### Scenario: Provider hooks are grouped
-- **WHEN** production provider is created
-- **THEN** composition SHALL call provider wiring modules for client authentication, redirect URI checks, protocol model payload extensions, Koa middleware, and provider event handlers
-- **AND** HTTP server and business services SHALL NOT directly patch `oidc-provider` prototypes or protocol models
-
-#### Scenario: Configuration remains dependency-driven
-- **WHEN** provider configuration is created
-- **THEN** configuration SHALL receive adapter, claims, signing keys, interaction policy, and minimal config slices as dependencies
-- **AND** configuration SHALL NOT construct production repositories, Redis clients, loggers, or signing key loaders internally
-
-### Requirement: Provider DI architecture is guarded by tests
-`apps/oidc-provider` SHALL include architecture tests that enforce its DI boundaries.
-
-#### Scenario: Forbidden singleton regression is detected
-- **WHEN** protocol/business modules statically import DB singleton, app-local Redis singleton, app-local logger singleton, or concrete production repository/service modules
-- **THEN** OIDC provider architecture tests SHALL fail
-- **AND** failure output SHALL identify the offending file and import specifier
-
-#### Scenario: Public protocol behavior remains unchanged
-- **WHEN** DI migration completes
-- **THEN** existing OIDC protocol behavior tests SHALL continue to cover Discovery, JWKS, authorize, token, UserInfo, CORS, logout, Redis adapter, interaction, claims, signing keys, and HTTP logging behavior
-- **AND** migration SHALL NOT intentionally change public endpoint semantics

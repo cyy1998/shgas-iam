@@ -10,6 +10,7 @@ function validEnv(): NodeJS.ProcessEnv {
     OIDC_PUBLIC_ORIGIN: "https://iam.example.com",
     OIDC_COOKIE_KEYS: `${"a".repeat(32)},${"b".repeat(32)}`,
     OIDC_CURRENT_JWK_JSON: "{}",
+    SESSION_LOOKUP_HMAC_CURRENT_SECRET: "c".repeat(32),
   };
 }
 

@@ -5,26 +5,21 @@ import { getCookieValue } from "../interaction/global-session.ts";
 import { parseBasicClientId } from "../security/client-auth-rate-limit.ts";
 import { setOidcRoute } from "./request-route.ts";
 
-export interface ProviderMiddlewareGlobalSessionStore {
-  remove: (sessionId: string) => Promise<void>;
-}
-
-export interface ProviderMiddlewareTokenStore {
-  revokeGlobalSessionAccessTokens: (globalSessionId: string) => Promise<unknown>;
+export interface ProviderMiddlewareOidcSessionAdapter {
+  logoutPrincipalSession: (token: string | undefined) => Promise<unknown>;
 }
 
 export interface RegisterProviderMiddlewareDeps {
   env: OidcProviderEnv;
   clientAuthRateLimiter: ClientAuthRateLimiter;
-  globalSessions: ProviderMiddlewareGlobalSessionStore;
-  tokens: ProviderMiddlewareTokenStore;
+  oidcSession: ProviderMiddlewareOidcSessionAdapter;
 }
 
 export function registerProviderMiddleware(provider: Provider, deps: RegisterProviderMiddlewareDeps) {
   provider.middleware.unshift(async (ctx, next) => {
     ctx.state.requestId = ctx.get("x-request-id") || crypto.randomUUID();
     ctx.set("x-request-id", ctx.state.requestId);
-    const globalSessionId = getCookieValue(ctx.get("cookie"), deps.env.OIDC_GLOBAL_SESSION_COOKIE);
+    const principalSessionToken = getCookieValue(ctx.get("cookie"), deps.env.OIDC_GLOBAL_SESSION_COOKIE) ?? undefined;
     const basicClientId = ctx.path === "/token"
       ? parseBasicClientId(ctx.get("authorization"))
       : null;
@@ -48,9 +43,8 @@ export function registerProviderMiddleware(provider: Provider, deps: RegisterPro
       else if (ctx.status >= 200 && ctx.status < 300)
         await deps.clientAuthRateLimiter.clear(basicClientId, ctx.ip);
     }
-    if (ctx.oidc?.route === "end_session_confirm" && ctx.status < 400 && globalSessionId) {
-      await deps.globalSessions.remove(globalSessionId);
-      await deps.tokens.revokeGlobalSessionAccessTokens(globalSessionId);
+    if (ctx.oidc?.route === "end_session_confirm" && ctx.status < 400 && principalSessionToken) {
+      await deps.oidcSession.logoutPrincipalSession(principalSessionToken);
       ctx.cookies.set(deps.env.OIDC_GLOBAL_SESSION_COOKIE, null, {
         httpOnly: true,
         overwrite: true,

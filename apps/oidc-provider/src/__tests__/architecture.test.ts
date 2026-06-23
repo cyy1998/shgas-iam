@@ -124,4 +124,30 @@ describe("oIDC provider DI architecture", () => {
 
     expect(violations).toEqual([]);
   });
+
+  it("keeps Session Kernel Redis lifecycle keys behind the Kernel public API", () => {
+    const forbiddenKernelKeyPatterns = [
+      /sess:v2:(?:active|lookup|revoked|index):/,
+      /active:[pcba]:/,
+      /lookup:[pca]:/,
+      /revoked:[pca]:/,
+      /index:(?:user|client|client-protocol|principal|binding|protocol):/,
+    ];
+    const allowedFiles = new Set([
+      "env.ts",
+      "__tests__/architecture.test.ts",
+    ]);
+
+    const violations = collectSourceFiles(sourceRoot).flatMap((file) => {
+      const relativeFile = toPosixPath(relative(sourceRoot, file));
+      if (allowedFiles.has(relativeFile))
+        return [];
+      const source = readFileSync(file, "utf8");
+      return forbiddenKernelKeyPatterns.some(pattern => pattern.test(source))
+        ? [relativeFile]
+        : [];
+    });
+
+    expect(violations).toEqual([]);
+  });
 });

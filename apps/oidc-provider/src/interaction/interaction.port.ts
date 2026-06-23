@@ -14,11 +14,20 @@ export interface InteractionGlobalSessionResolver {
 }
 
 export interface InteractionProviderSessionBindingStore {
-  bind: (sessionUid: string, session: ResolvedGlobalSession) => Promise<ProviderSessionBinding | null>;
-  stage: (session: ResolvedGlobalSession) => Promise<ProviderSessionBinding | null>;
+  bind: (
+    sessionUid: string,
+    session: ResolvedGlobalSession,
+    context: { clientId: string; oidcConfigVersion: number },
+  ) => Promise<ProviderSessionBinding | null>;
+  stage: (
+    session: ResolvedGlobalSession,
+    context: { clientId: string; oidcConfigVersion: number },
+  ) => Promise<ProviderSessionBinding | null>;
 }
 
 export interface InteractionReturnHandleStore {
-  create: (payload: OidcReturnHandlePayload, ttlSeconds: number) => Promise<string>;
+  createReturnHandle?: (payload: OidcReturnHandlePayload, ttlSeconds: number) => Promise<string | null>;
+  create: (payload: OidcReturnHandlePayload, ttlSeconds: number) => Promise<string | null>;
   consume: (handle: string) => Promise<OidcReturnHandlePayload | null>;
+  consumeReturnHandle?: (handle: string) => Promise<OidcReturnHandlePayload | null>;
 }

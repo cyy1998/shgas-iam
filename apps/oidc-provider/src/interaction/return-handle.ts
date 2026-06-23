@@ -5,6 +5,7 @@ export type OidcReturnHandlePayload = {
   clientId: string;
   oidcConfigVersion: number;
   browserBinding: string;
+  returnTarget: string;
 };
 
 export function createOpaqueValue() {

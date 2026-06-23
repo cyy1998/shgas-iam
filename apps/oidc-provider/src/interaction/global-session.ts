@@ -4,6 +4,7 @@ import type { UnknownObject } from "oidc-provider";
 
 export type ResolvedGlobalSession = {
   sessionId: string;
+  externalToken?: string;
   authTime: number;
   userId: number;
   accountId: string;

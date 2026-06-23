@@ -30,6 +30,7 @@ export type OidcAccessTokenExtra = UnknownObject & {
   scopes: string[];
   oidcConfigVersion: number;
   userInfoSnapshot: OidcUserInfoSnapshot;
+  kernelCredentialId?: string;
 };
 
 function tokenScopes(token: ProtocolToken) {
@@ -50,6 +51,8 @@ function tokenExtra(token: AccessToken): OidcAccessTokenExtra | null {
     || typeof extra.userInfoSnapshot.sub !== "string") {
     return null;
   }
+  if (extra.kernelCredentialId !== undefined && typeof extra.kernelCredentialId !== "string")
+    return null;
   return extra as OidcAccessTokenExtra;
 }
 
@@ -137,6 +140,11 @@ export function createOidcClaimsService(deps: CreateOidcClaimsServiceDeps) {
         ...(account.mobile ? { phone_number: account.mobile } : {}),
       };
       if (token?.kind === "AccessToken") {
+        const credential = token.jti
+          ? await deps.tokens.resolveAccessTokenCredential(token.jti)
+          : null;
+        if (!credential)
+          return undefined;
         const extra = tokenExtra(token);
         const client = token.clientId ? await deps.clients.findRuntime(token.clientId) : null;
         const validBinding = extra && token.sessionUid
@@ -144,12 +152,16 @@ export function createOidcClaimsService(deps: CreateOidcClaimsServiceDeps) {
           : null;
         if (!extra
           || !client
+          || credential.credential.credentialId !== extra.kernelCredentialId
+          || credential.credential.principalSessionId !== extra.globalSessionId
+          || credential.credential.bindingId !== validBinding?.bindingId
+          || credential.credential.clientCode !== token.clientId
           || client.oidc_config_version !== extra.oidcConfigVersion
+          || credential.metadata.oidcConfigVersion !== extra.oidcConfigVersion
           || account.id !== extra.userId
           || account.oidcSubject !== extra.userInfoSnapshot.sub
           || !validBinding) {
-          if (token.jti)
-            await deps.tokens.revokeAccessToken(`oidc:model:AccessToken:${token.jti}`);
+          await deps.tokens.revokeAccessTokenCredential(credential.credential.credentialId);
           return undefined;
         }
         claims = extra.userInfoSnapshot;

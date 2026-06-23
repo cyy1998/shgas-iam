@@ -12,6 +12,7 @@ import { createOidcHttpServer } from "./http/index.ts";
 import { createOidcProviderRuntime } from "./provider/index.ts";
 import { createOidcProviderRepositories } from "./repositories/index.ts";
 import { createOidcProviderServices } from "./services/index.ts";
+import { createOidcProviderSession } from "./session/index.ts";
 import { createOidcProviderStores } from "./stores/index.ts";
 import { createOidcProviderWorkers } from "./workers/index.ts";
 
@@ -33,12 +34,14 @@ export async function createOidcProviderComposition(options: CreateOidcProviderC
     ?? await loadSigningKeys(options.env.OIDC_CURRENT_JWK_JSON, options.env.OIDC_PREVIOUS_JWK_JSON);
   const repositories = createOidcProviderRepositories(options.dbClient);
   const stores = createOidcProviderStores({ env: options.env, redis, repositories });
-  const services = createOidcProviderServices({ env: options.env, repositories, stores });
+  const session = createOidcProviderSession({ env: options.env, redis, logger, repositories, stores });
+  const services = createOidcProviderServices({ env: options.env, repositories, stores, session });
   const providerRuntime = createOidcProviderRuntime({
     env: options.env,
     logger,
     redis,
     signingKeys,
+    session,
     services,
     stores,
   });
@@ -49,7 +52,7 @@ export async function createOidcProviderComposition(options: CreateOidcProviderC
     logger,
     health: redis,
   });
-  const workers = createOidcProviderWorkers({ redis, logger, stores });
+  const workers = createOidcProviderWorkers({ redis, logger, stores, session });
 
   async function shutdown(signal: string) {
     logger.info({
@@ -72,6 +75,7 @@ export async function createOidcProviderComposition(options: CreateOidcProviderC
     redis,
     repositories,
     stores,
+    session,
     services,
     providerRuntime,
     provider: providerRuntime.provider,

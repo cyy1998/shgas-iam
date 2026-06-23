@@ -6,8 +6,7 @@ import type { SigningKey } from "../security/signing-keys.ts";
 import type { OidcClaimsService } from "./claims.ts";
 import type { ProviderClientSecretVerifier } from "./client-auth.ts";
 import type {
-  ProviderMiddlewareGlobalSessionStore,
-  ProviderMiddlewareTokenStore,
+  ProviderMiddlewareOidcSessionAdapter,
 } from "./middleware.ts";
 import Provider from "oidc-provider";
 import { registerClientAuthentication } from "./client-auth.ts";
@@ -28,8 +27,7 @@ export interface CreateOidcProviderOptions {
   interactionPolicy: interactionPolicy.Prompt[];
   clientSecretVerifier: ProviderClientSecretVerifier;
   clientAuthRateLimiter: ClientAuthRateLimiter;
-  globalSessions: ProviderMiddlewareGlobalSessionStore;
-  tokens: ProviderMiddlewareTokenStore;
+  oidcSession: ProviderMiddlewareOidcSessionAdapter;
 }
 
 export function createOidcProvider(options: CreateOidcProviderOptions) {
@@ -47,8 +45,7 @@ export function createOidcProvider(options: CreateOidcProviderOptions) {
   registerProviderMiddleware(provider, {
     env: options.env,
     clientAuthRateLimiter: options.clientAuthRateLimiter,
-    globalSessions: options.globalSessions,
-    tokens: options.tokens,
+    oidcSession: options.oidcSession,
   });
   registerProviderEvents(provider, options.logger);
 
