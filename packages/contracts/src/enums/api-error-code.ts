@@ -2,6 +2,7 @@ export enum ApiErrorCode {
   InternalError = "COMMON.INTERNAL_ERROR",
   NotFound = "COMMON.NOT_FOUND",
   BadRequest = "COMMON.BAD_REQUEST",
+  ValidationFailed = "COMMON.VALIDATION_FAILED",
 
   Unauthorized = "AUTH.UNAUTHORIZED",
   Forbidden = "AUTH.FORBIDDEN",

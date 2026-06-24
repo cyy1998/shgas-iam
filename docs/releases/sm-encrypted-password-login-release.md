@@ -1,31 +1,31 @@
-# SM Encrypted Password Login Release Checklist
+# SM 加密密码登录发布检查清单
 
-## Required Configuration
+## 必需配置
 
-Backend `apps/api`:
+后端 `apps/api`：
 
-- `LOGIN_CREDENTIAL_ACTIVE_KID` matches the public key used by `apps/sso`.
-- `LOGIN_CREDENTIAL_PRIVATE_KEYS_JSON` contains the active `kid` and SM2 private key.
-- `LOGIN_CREDENTIAL_MAX_SKEW_MS` is set to the accepted client clock skew window.
-- `LOGIN_CREDENTIAL_NONCE_TTL_SECONDS` is at least as long as the timestamp skew window in seconds.
+- `LOGIN_CREDENTIAL_ACTIVE_KID` 与 `apps/sso` 使用的公钥匹配。
+- `LOGIN_CREDENTIAL_PRIVATE_KEYS_JSON` 包含当前启用的 `kid` 和 SM2 私钥。
+- `LOGIN_CREDENTIAL_MAX_SKEW_MS` 设置为可接受的客户端时钟偏移窗口。
+- `LOGIN_CREDENTIAL_NONCE_TTL_SECONDS` 至少不短于以秒计的时间戳偏移窗口。
 
-Frontend `apps/sso` build:
+前端 `apps/sso` 构建：
 
-- `UMI_APP_LOGIN_CREDENTIAL_KID` matches a backend private key entry.
-- `UMI_APP_LOGIN_CREDENTIAL_PUBLIC_KEY` is the SM2 public key paired with the backend private key.
+- `UMI_APP_LOGIN_CREDENTIAL_KID` 与后端私钥条目匹配。
+- `UMI_APP_LOGIN_CREDENTIAL_PUBLIC_KEY` 是与后端私钥配对的 SM2 公钥。
 
-## Synchronized Release
+## 同步发布
 
-1. Build `apps/api` and `apps/sso` from the same change set.
-2. Deploy `apps/api` with the SM2 private key mapping and nonce settings.
-3. Deploy `apps/sso` built with the matching public key and `kid`.
-4. Smoke-test password login success, wrong password, Cap retry, expired credential, and repeated credential.
-5. Confirm `/auth/login/password` rejects legacy `{ username, password }` requests.
+1. 从同一变更集构建 `apps/api` 和 `apps/sso`。
+2. 使用 SM2 私钥映射和 nonce 配置部署 `apps/api`。
+3. 部署使用匹配公钥和 `kid` 构建的 `apps/sso`。
+4. 对密码登录成功、密码错误、Cap 重试、凭证过期和凭证重复使用执行冒烟测试。
+5. 确认 `/auth/login/password` 拒绝 legacy `{ username, password }` 请求。
 
-## Rollback
+## 回滚
 
-This is a breaking request contract change. Roll back `apps/api` and `apps/sso` together.
+这是一次破坏性的请求契约变更。必须同时回滚 `apps/api` 和 `apps/sso`。
 
-- If only key material is wrong, fix environment variables and redeploy/restart the affected service.
-- If the frontend has already shipped encrypted credentials, rolling back only `apps/api` will break password login.
-- If the backend has already shipped credential-only login, rolling back only `apps/sso` will break password login.
+- 如果只有密钥材料错误，修正环境变量并重新部署或重启受影响的服务。
+- 如果前端已经发布加密凭证，只回滚 `apps/api` 会导致密码登录不可用。
+- 如果后端已经发布只接受凭证的登录，只回滚 `apps/sso` 会导致密码登录不可用。

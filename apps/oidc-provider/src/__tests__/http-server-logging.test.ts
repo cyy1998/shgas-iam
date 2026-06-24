@@ -87,7 +87,7 @@ function createRuntime(lines: LogLine[], providerCallback?: ProviderCallback) {
         });
       },
     },
-  } as never;
+  };
 }
 
 function createRedis(ping: () => Promise<unknown> = async () => "PONG") {
@@ -98,7 +98,7 @@ describe("oIDC HTTP access logging", () => {
   it("logs health, interaction, resume, provider callback, and not_found routes", async () => {
     const { createOidcHttpServer } = await loadApp();
     const lines: LogLine[] = [];
-    const server = createOidcHttpServer(createRuntime(lines), createRedis());
+    const server = createOidcHttpServer({ ...createRuntime(lines), health: createRedis() } as never);
     const port = await listen(server);
 
     await fetch(`http://127.0.0.1:${port}/health`, { headers: { "x-request-id": "req-health" } });
@@ -143,7 +143,7 @@ describe("oIDC HTTP access logging", () => {
         requestId: "req-missing",
         route: "not_found",
         statusCode: 404,
-        level: "warn",
+        level: "info",
       }),
     ]));
   }, 10_000);
@@ -152,10 +152,12 @@ describe("oIDC HTTP access logging", () => {
     const { createOidcHttpServer } = await loadApp();
     const lines: LogLine[] = [];
     const server = createOidcHttpServer(
-      createRuntime(lines),
-      createRedis(async () => {
-        throw new Error("redis down");
-      }),
+      {
+        ...createRuntime(lines),
+        health: createRedis(async () => {
+          throw new Error("redis down");
+        }),
+      } as never,
     );
     const port = await listen(server);
 
@@ -168,6 +170,7 @@ describe("oIDC HTTP access logging", () => {
     expect(lines).toEqual(expect.arrayContaining([
       expect.objectContaining({
         event: SystemLogEvent.OidcProviderHttpRequestFailed,
+        sourceApp: LoggerSourceApp.OidcProvider,
         requestId: "req-failed",
         level: "error",
       }),
@@ -176,7 +179,7 @@ describe("oIDC HTTP access logging", () => {
         requestId: "req-failed",
         route: "/health",
         statusCode: 503,
-        level: "error",
+        level: "info",
       }),
     ]));
   }, 10_000);
@@ -184,7 +187,7 @@ describe("oIDC HTTP access logging", () => {
   it("marks requests closed before finish as aborted", async () => {
     const { createOidcHttpServer } = await loadApp();
     const lines: LogLine[] = [];
-    const server = createOidcHttpServer(createRuntime(lines, () => {}), createRedis());
+    const server = createOidcHttpServer({ ...createRuntime(lines, () => {}), health: createRedis() } as never);
     const port = await listen(server);
 
     await new Promise<void>((resolve) => {

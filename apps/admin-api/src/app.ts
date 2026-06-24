@@ -1,18 +1,17 @@
 /* eslint-disable antfu/no-top-level-await */
 import createApp from "@iam/api-core/core/create-app";
-import { globImport } from "@iam/api-core/utils";
 import appConfig from "~admin-api/app.config";
+import { createAdminApiComposition } from "./composition";
 import env from "./env";
 import { logger } from "./lib/logger";
 
-const routes = await globImport<{ default: any }>("./src/routes/**/*.index.ts");
-const middlewares = await globImport<{ default: any[] }>("./src/routes/*/_middleware.ts");
+const composition = await createAdminApiComposition({ env, logger });
 
 const app = createApp(appConfig, {
   env,
   logger,
-  routes,
-  middlewares,
+  routes: composition.routes,
+  middlewares: composition.middlewares,
 });
 
 export type AdminApiAppType = typeof app;

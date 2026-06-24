@@ -85,7 +85,7 @@ GET {IAM_ORIGIN}/sso/.well-known/authentication-configuration
 |---|---|---|
 | `client` | 是 | IAM 中注册的 `clientCode`。 |
 | `redirectUrl` | 是 | 登录成功后最终回到业务系统的地址，需要 URL 编码。 |
-| `token` | 否 | 已有 IAM 全局会话 token 时可传入。浏览器场景通常依赖 `global_session` Cookie，不需要传。 |
+| `token` | 否 | 已有 IAM PrincipalSession token 时可传入。该 query 参数仅为 legacy 兼容路径，新 client 不应使用 URL query 传递 PrincipalSession token。浏览器场景通常依赖 HttpOnly Cookie。 |
 
 示例：
 
@@ -163,6 +163,28 @@ GET {IAM_ORIGIN}/sso/token?code={code}&client={clientCode}&clientSecret={clientS
 4. 302 跳转回 `redirectUrl`。
 
 `clientSecret` 不得出现在浏览器地址、前端代码、日志、移动端包或第三方可见配置中。
+
+### 4.4 Session Kernel 会话边界
+
+当前 custom SSO 通过 Session Kernel 管理 PrincipalSession、授权码、客户端绑定和局部会话：
+
+- PrincipalSession token、auth code 和 local session sid 都是 opaque bearer，业务系统不得解析、拼接或依赖其中格式。
+- `/sso/authorize` 解析 PrincipalSession 的首选来源是 HttpOnly Cookie。
+- `Authorization` header 和 query `token` 作为 PrincipalSession 来源仅保留 legacy 兼容和过渡观测；新接入不要把 PrincipalSession 放到 URL query。
+- Gateway 模式的 `local_{clientCode}_session` Cookie 和 Independent 模式的 `sid` 都是局部会话 bearer，只能按本 client 使用。
+- auth code 一次性使用，重放会命中 Session Kernel artifact tombstone 并被拒绝。
+
+发布 Session Kernel 版本前，运维会在维护窗口内清理旧 custom SSO Redis key：
+
+- `global_session:*`
+- `auth_code:*`
+- `local_*_session:*`
+- `local_session_reverse:*`
+- `local_session_set:*`
+
+清理后，所有用户和 custom SSO client 都需要重新登录或重新发起授权。业务系统应把 401、非法 code、局部会话过期视为重新发起 `/sso/authorize` 的信号。
+
+如发布需要回滚到旧 custom SSO session 实现，必须先停止 login、authorize、callback、token 和 authz 流量，并清理新版本 `sess:v2:` active/lookup/revoked/index key 以及 `custom-sso:local-session-payload:*` 私有 payload key。回滚后必须重新执行 custom SSO 登录、网关鉴权和退出 smoke。
 
 ## 5. 获取当前用户信息
 
@@ -272,6 +294,7 @@ Content-Type: application/json
 4. 服务端日志需要脱敏 `code`、`sid`、`clientSecret`、手机号等敏感信息。
 5. 业务系统应在收到 401 后立即清理本地登录态，避免用失效会话继续请求。
 6. 独立应用必须实现 `logoutEndpoint`，否则无法完整支持单点退出。
+7. 新接入不得通过 URL query 传递 PrincipalSession token；legacy query token 只允许在过渡期使用，并会被系统日志标记来源。
 
 ## 10. 最小接入清单
 

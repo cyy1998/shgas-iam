@@ -3,8 +3,8 @@
 ## Project Structure & Module Organization
 This repository is a `pnpm` workspace + Turborepo monorepo. Runtime apps live under `apps/`, shared workspace packages live under `packages/`, and gateway tooling lives under `gateway/`.
 
-- `apps/api`: Bun + Hono public IAM backend (`@iam/api`). Main code is in `src/`, with public/open/internal/sso/auth routes under `src/routes/`, app-side domain logic under `src/services/`, app-specific utilities under `src/lib/`, and env validation in `src/env.ts`.
-- `apps/admin-api`: Bun + Hono admin backend (`@iam/admin-api`). Admin REST routes live under `src/routes/admin/`, tRPC entry routes under `src/routes/trpc/`, admin domain logic under `src/services/`, and tRPC router composition under `src/trpc/`.
+- `apps/api`: Bun + Hono public IAM backend (`@iam/api`). Main code is in `src/`, with public/open/internal/sso/auth routes under `src/routes/`, app-side domain logic under `src/services/`, app-specific utilities under `src/lib/`, app composition wiring under `src/composition/`, and env validation in `src/env.ts`.
+- `apps/admin-api`: Bun + Hono admin backend (`@iam/admin-api`). Admin REST routes live under `src/routes/admin/`, tRPC entry routes under `src/routes/trpc/`, admin domain logic under `src/services/`, app composition wiring under `src/composition/`, and tRPC router composition under `src/trpc/`.
 - `apps/admin`: Umi Max + React management frontend. Pages live in `src/pages/`, reusable UI in `src/components/`, tRPC client setup in `src/lib/api-client.ts`, and page-side API wrappers in `src/services/`.
 - `apps/sso`: Umi Max + React SSO portal. Pages live in `src/pages/`, assets in `src/assets/`, API wrappers in `src/services/`, and shared browser helpers in `src/lib/` and `src/utils/`.
 - `packages/api-core/src`: shared backend infrastructure such as `createApp`, route factories, OpenAPI helpers, response helpers, errors, middlewares, Redis, logging, and tRPC utilities.
@@ -23,16 +23,20 @@ Do not hand-edit generated frontend directories such as `apps/admin/src/.umi/`, 
 - API tiers are declared per backend app in `apps/api/app.config.ts` and `apps/admin-api/app.config.ts`.
 - `apps/api` currently owns `/public`, `/open`, `/internal`, `/sso`, and `/auth`.
 - `apps/admin-api` currently owns `/admin` and `/rpc`; `/rpc` maps to the `src/routes/trpc` route directory.
-- `createApp` lives in `packages/api-core` and auto-discovers `*.index.ts` route modules plus tier-level `_middleware.ts` files.
-- Keep backend `src/app.ts` files focused on app assembly: import env, app config, app-local logger, discovered routes, and tier middlewares, then call `createApp`.
+- `createApp` lives in `packages/api-core` and mounts materialized route and middleware records supplied by each app composition root. It remains app-agnostic and does not own app-specific DI wiring.
+- Keep backend `src/app.ts` files focused on app assembly: import env, app config, app-local logger, call the app-local composition root, and pass materialized routes and middlewares to `createApp`.
 - App-local infrastructure singletons belong under `src/lib/`, for example `@api/lib/logger`, `@admin-api/lib/logger`, and `src/lib/infra/redis.ts`.
-- Tier-level `_middleware.ts` files should stay thin and compose middleware arrays; shared authentication handlers belong in app-level `src/middlewares/*.handler.ts` files.
-- REST-only route modules should use `*.routes.ts`, `*.handlers.ts`, and `*.type.ts`. Admin REST + tRPC route modules should share `*.adapter.ts` operations and expose thin `*.trpc.ts` modules.
+- Production runtime, repository, service, route, middleware, and integration instances are created under app-local `src/composition/` modules, organized by `runtime`, `repositories`, `tx`, `services`, `routes`, and `middlewares`.
+- Backend replaceable modules should export factories and return types, for example `createUserService(deps)` and `type UserService = ReturnType<typeof createUserService>`. Do not reintroduce bound production service/repository singletons.
+- Consumer-owned `*.port.ts` files define outbound behavior a service/use-case consumes. Keep enums, DTO schemas, domain errors, business constants, and pure helpers as static imports rather than DI deps.
+- Tier-level `_middleware.ts` files should stay thin and expose middleware factories or compose injected middleware arrays; shared authentication handlers belong in app-level `src/middlewares/*.handler.ts` files and are materialized by composition.
+- REST-only route modules should use `*.routes.ts`, `*.handlers.ts`, and `*.type.ts`. Route `*.index.ts` files should expose router factories that receive materialized handlers/adapters. Admin REST + tRPC route modules should share `*.adapter.ts` operation factories and expose thin `*.trpc.ts` modules.
 - Backend app `tsconfig.json` files should include Bun runtime types and exclude `scripts`; backend app ESLint configs should ignore `scripts/**`.
 
 ## Shared Contracts & Database
 - Put cross-app enums and stable constants in `packages/contracts`; put shared DTO schemas, DTO types, audit helpers, and reusable business errors in `packages/domain`. App-private enums, schemas, and errors may stay inside the owning app.
-- Repositories use Drizzle from `@iam/db` and accept an optional `tx: DbClient = db` for transaction-friendly calls.
+- Repositories use Drizzle from `@iam/db` and are created through `createXRepository(db)` factories bound to either the root `DbClient` or a transaction `DbClient`; business service methods should not pass `tx` arguments to repository calls.
+- Transactional backend workflows should use the app-local `UnitOfWork`. Transaction callbacks receive tx-bound repository and audit writer ports; Redis/cache/OIDC/SMS/fetch side effects must run outside the callback or through best-effort `afterCommit`.
 - Drizzle table definitions belong in `packages/db/src/schema/<domain>/*.ts`; relation definitions belong in `packages/db/src/relations/<domain>/*.ts`; migrations belong in `packages/db/src/migrations/`.
 - Keep domain and top-level schema/relation exports synchronized, for example `packages/db/src/schema/core/index.ts`, `packages/db/src/relations/core/index.ts`, `schema/index.ts`, and `relations/index.ts`.
 - Use `snakeCase.table` / `snakeCase.schema`; keep TypeScript property names camelCase and database table/column names snake_case.
@@ -63,6 +67,8 @@ Preserve existing domain file naming: `user.service.ts`, `user.repository.ts`, `
 - Prefer enums and constants from `packages/contracts` or the owning module over magic strings/numbers in business queries, especially for status, type, and role-like fields.
 - Prefer deriving TypeScript types from Zod schemas with `z.infer<typeof Schema>` when a schema is already the source of truth.
 - Keep simple guard clauses concise when they return a single obvious value, for example `if (!entity) return null;`.
+- Backend audit event helpers under `services/audit/events` should be pure payload builders. Services and handlers write those payloads through injected root or tx audit writer ports.
+- Architecture guard tests in `apps/api/src/__tests__/architecture.test.ts` and `apps/admin-api/src/__tests__/architecture.test.ts` intentionally fail on forbidden production imports. Update allowlists deliberately when a new exception is justified.
 
 ## Workflow Orchestration
 - Use Serena MCP by default for codebase analysis, architecture checks, symbol lookup, references, and targeted code reading. Start from Serena memories and symbol/search tools when they fit the task; use shell commands such as `rg`, `find`, and `sed` for workspace manifests, non-code files, command output, or broad file lists.
@@ -105,7 +111,7 @@ Bun tests are available through package-level `test` scripts. Minimum validation
 
 - Place test files in a `__tests__/` directory next to the code under test, for example `src/services/position/__tests__/position.service.test.ts`.
 - Run `pnpm test`, `pnpm lint`, and `pnpm typecheck`, or the narrower filtered commands for touched apps/packages.
-- Backend/shared package tests use `bun test --parallel`; keep module mocks local to each test file and prefer package scripts over raw `bun test` when running several files together. Frontends should use their own configured test runner.
+- Backend/shared package tests use `bun test --parallel`; prefer package scripts over raw `bun test` when running several files together. Backend service/handler/adapter tests should construct factories with DI fakes instead of using `mock.module` for app-local service/repository/db/redis/logger modules.
 - Drizzle schema changes need the appropriate `@iam/db` command: `db:push` for local sync or `db:generate` + `db:migrate` when producing migrations.
 - Shared package changes (`packages/contracts`, `packages/api-core`, `packages/domain`, `packages/db`) require type checks for the package and directly affected apps; tRPC changes consumed by `admin` require both `@iam/admin-api` and `@iam/admin` type checks.
 - APISIX gateway manifest/script changes require `pnpm gateway:apisix:validate -- --env <env>:<app>` plus `pnpm --filter @iam/gateway-apisix typecheck` or `test` when scripts changed.

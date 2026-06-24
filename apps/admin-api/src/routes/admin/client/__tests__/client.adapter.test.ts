@@ -1,6 +1,7 @@
 import type { Context } from "hono";
 import { ClientStatus, OidcClientType, OidcScope, OidcTokenEndpointAuthMethod } from "@iam/contracts";
 import { beforeEach, describe, expect, mock, test } from "bun:test";
+import { createClientAdapter } from "../client.adapter";
 
 const clientService = {
   createClient: mock(),
@@ -17,9 +18,9 @@ const clientService = {
   updateClientStatus: mock(),
 };
 
-mock.module("@admin-api/services/client/client.service", () => clientService);
-
-const handlers = await import("../client.adapter");
+const handlers = createClientAdapter({
+  clientService,
+} as any);
 
 beforeEach(() => {
   clientService.createClient.mockReset();

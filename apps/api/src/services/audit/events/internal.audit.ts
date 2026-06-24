@@ -1,22 +1,30 @@
-import type { Context } from "hono";
+import type { AuditLogInput } from "@api/services/audit/audit.service";
 import { maskMobileForAudit } from "@iam/domain/audit";
-import * as auditService from "../audit.service";
 
-export async function recordInternalDelegationUpdate(c: Context, id: number, patch: Record<string, unknown>) {
-  await auditService.recordAuditLogFromContext(c, {
+export type InternalAuditActor = Pick<
+  AuditLogInput,
+  "actorType" | "actorUserId" | "actorUsername" | "actorClientCode" | "actorSystemKey"
+>;
+
+export function buildInternalDelegationUpdateAudit(
+  actor: InternalAuditActor,
+  id: number,
+  patch: Record<string, unknown>,
+): AuditLogInput {
+  return {
     action: "internal.delegation.update",
     outcome: "success",
-    ...auditService.getInternalAuditActor(c),
+    ...actor,
     targetType: "delegation",
     targetId: id,
     details: {
       patch,
     },
-  });
+  };
 }
 
-export async function recordInternalDelegationCreate(
-  c: Context,
+export function buildInternalDelegationCreateAudit(
+  actor: InternalAuditActor,
   input: {
     id: number;
     delegatorUsername: string;
@@ -26,11 +34,11 @@ export async function recordInternalDelegationCreate(
     startTime: Date;
     endTime: Date;
   },
-) {
-  await auditService.recordAuditLogFromContext(c, {
+): AuditLogInput {
+  return {
     action: "internal.delegation.create",
     outcome: "success",
-    ...auditService.getInternalAuditActor(c),
+    ...actor,
     targetType: "delegation",
     targetId: input.id,
     details: {
@@ -41,25 +49,25 @@ export async function recordInternalDelegationCreate(
       startTime: input.startTime,
       endTime: input.endTime,
     },
-  });
+  };
 }
 
-export async function recordInternalPurveyorRegister(
-  c: Context,
+export function buildInternalPurveyorRegisterAudit(
+  actor: InternalAuditActor,
   input: { orgCode: string; orgName: string; parentOrg: string | null; orgType: string },
-) {
-  await auditService.recordAuditLogFromContext(c, {
+): AuditLogInput {
+  return {
     action: "internal.purveyor.register",
     outcome: "success",
-    ...auditService.getInternalAuditActor(c),
+    ...actor,
     targetType: "organization",
     targetCode: input.orgCode,
     details: input,
-  });
+  };
 }
 
-export async function recordInternalPurveyorContactRegister(
-  c: Context,
+export function buildInternalPurveyorContactRegisterAudit(
+  actor: InternalAuditActor,
   input: {
     targetUserId: number | null;
     username: string;
@@ -68,11 +76,11 @@ export async function recordInternalPurveyorContactRegister(
     orgCode: string;
     existingContact: boolean;
   },
-) {
-  await auditService.recordAuditLogFromContext(c, {
+): AuditLogInput {
+  return {
     action: "internal.purveyor_contact.register",
     outcome: "success",
-    ...auditService.getInternalAuditActor(c),
+    ...actor,
     targetType: "user",
     targetId: input.targetUserId,
     targetCode: input.username,
@@ -83,5 +91,5 @@ export async function recordInternalPurveyorContactRegister(
       orgCode: input.orgCode,
       existingContact: input.existingContact,
     },
-  });
+  };
 }

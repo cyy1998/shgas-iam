@@ -1,44 +1,28 @@
 import { beforeEach, describe, expect, mock, test } from "bun:test";
+import { createAdminAuditService, normalizeAuditLogQueryActions } from "../audit.service";
 
 const insertedValues: unknown[] = [];
-const values = mock(async (value: unknown) => {
+let selectedRows: unknown[] = [];
+const createAuditLog = mock(async (value: unknown) => {
   insertedValues.push(value);
 });
-const insert = mock(() => ({ values }));
-let selectedRows: unknown[] = [];
-const select = mock((projection?: unknown) => {
-  if (projection !== undefined) {
-    return {
-      from: mock(() => ({
-        where: mock(async () => [{ value: selectedRows.length }]),
-      })),
-    };
-  }
-  return {
-    from: mock(() => ({
-      where: mock(() => ({
-        orderBy: mock(() => ({
-          limit: mock(() => ({
-            offset: mock(async () => selectedRows),
-          })),
-        })),
-      })),
-    })),
-  };
-});
-
-mock.module("@iam/db", () => ({
-  default: { insert, select },
+const searchAuditLogsPaged = mock(async () => ({
+  rows: selectedRows,
+  total: selectedRows.length,
 }));
 
-const auditService = await import("../audit.service");
+const auditService = createAdminAuditService({
+  auditRepository: {
+    createAuditLog,
+    searchAuditLogsPaged: searchAuditLogsPaged as any,
+  },
+});
 
 beforeEach(() => {
   insertedValues.length = 0;
   selectedRows = [];
-  insert.mockClear();
-  select.mockClear();
-  values.mockClear();
+  createAuditLog.mockClear();
+  searchAuditLogsPaged.mockClear();
 });
 
 function auditRow(overrides: Record<string, unknown> = {}) {
@@ -67,7 +51,7 @@ function auditRow(overrides: Record<string, unknown> = {}) {
   };
 }
 
-describe("admin auditService.recordAuditLog", () => {
+describe("admin audit writer", () => {
   test("writes redacted audit logs with iam-admin source app", async () => {
     await auditService.recordAuditLog({
       action: "admin.client.rotate_secret",
@@ -103,7 +87,7 @@ describe("admin auditService.recordAuditLog", () => {
 
 describe("admin auditService.searchAuditLogsForAdmin", () => {
   test("expands canonical login action queries to canonical and legacy actions", () => {
-    expect(auditService.normalizeAuditLogQueryActions({
+    expect(normalizeAuditLogQueryActions({
       conditions: { action: "auth.login.password" },
       pageNum: 1,
       pageSize: 10,
@@ -119,7 +103,7 @@ describe("admin auditService.searchAuditLogsForAdmin", () => {
   });
 
   test("deduplicates multiple action queries while keeping non-login actions exact", () => {
-    expect(auditService.normalizeAuditLogQueryActions({
+    expect(normalizeAuditLogQueryActions({
       conditions: {
         actions: [
           "auth.login.password",

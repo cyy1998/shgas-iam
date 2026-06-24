@@ -339,6 +339,14 @@ pnpm --filter @iam/sso typecheck
 | `LOGIN_CREDENTIAL_PRIVATE_KEYS_JSON` | 密码登录 SM2 私钥映射 JSON                 | `{"kid":"private"}` |
 | `LOGIN_CREDENTIAL_MAX_SKEW_MS`  | 密码登录凭证时间戳允许偏差（毫秒）                | `300000`           |
 | `LOGIN_CREDENTIAL_NONCE_TTL_SECONDS` | 密码登录 nonce 防重放 TTL（秒）             | `360`              |
+| `SESSION_KERNEL_NAMESPACE`      | Session Kernel Redis key namespace             | `sess:v2:`         |
+| `SESSION_KERNEL_PRINCIPAL_IDLE_TTL_SECONDS` | PrincipalSession idle TTL；默认跟随 `REDIS_EXPIRE_TIME` | `86400` |
+| `SESSION_KERNEL_PRINCIPAL_ABSOLUTE_TTL_SECONDS` | PrincipalSession absolute TTL；默认跟随 `REDIS_EXPIRE_TIME` | `86400` |
+| `SESSION_KERNEL_TOMBSTONE_TTL_SECONDS` | Session Kernel tombstone 保留时间（秒）   | `86400`            |
+| `SESSION_KERNEL_TOMBSTONE_GRACE_SECONDS` | Session Kernel tombstone grace 时间（秒） | `300`              |
+| `SESSION_LOOKUP_HMAC_CURRENT_ID` | 当前 Session lookup HMAC key id                 | `2026-06-primary`  |
+| `SESSION_LOOKUP_HMAC_CURRENT_SECRET` | 当前 Session lookup HMAC secret；生产必填且至少 32 字符 | 必填 |
+| `SESSION_LOOKUP_HMAC_PREVIOUS_ID` / `SESSION_LOOKUP_HMAC_PREVIOUS_SECRET` | 上一个 lookup HMAC key，用于轮换窗口 | 可选 |
 | `WX_CORPID` / `WX_CORPSECRET`   | 企业微信配置                                     | 必填               |
 | `SMS_URL` / `SMS_SIGNATURE_KEY` | 短信服务配置                                     | 必填               |
 | `ORCAS_URL`                     | ORCAS 服务地址                                   | 必填               |
@@ -368,6 +376,13 @@ pnpm --filter @iam/sso typecheck
 | `PASSWORD_HASH_ROUNDS` | 密码哈希轮数                                     | `10`               |
 | `ADMIN_CLIENT_CODES`   | 允许访问管理端 API 的 client code，逗号分隔      | `iam-admin`        |
 | `ADMIN_ROLE_CODES`     | 允许访问管理端 API 的角色码，逗号分隔            | `iam:admin`        |
+| `SESSION_KERNEL_NAMESPACE` | Session Kernel Redis key namespace；需与公共 API 一致 | `sess:v2:` |
+| `SESSION_KERNEL_PRINCIPAL_IDLE_TTL_SECONDS` | PrincipalSession idle TTL（秒） | `86400` |
+| `SESSION_KERNEL_PRINCIPAL_ABSOLUTE_TTL_SECONDS` | PrincipalSession absolute TTL（秒） | `86400` |
+| `SESSION_KERNEL_TOMBSTONE_TTL_SECONDS` | Session Kernel tombstone 保留时间（秒） | `86400` |
+| `SESSION_KERNEL_TOMBSTONE_GRACE_SECONDS` | Session Kernel tombstone grace 时间（秒） | `300` |
+| `SESSION_LOOKUP_HMAC_CURRENT_ID` / `SESSION_LOOKUP_HMAC_CURRENT_SECRET` | 当前 Session lookup HMAC key；需与公共 API 一致 | 必填 |
+| `SESSION_LOOKUP_HMAC_PREVIOUS_ID` / `SESSION_LOOKUP_HMAC_PREVIOUS_SECRET` | 上一个 lookup HMAC key，用于轮换窗口 | 可选 |
 
 ### 管理后台（`apps/admin/.env.local`）
 

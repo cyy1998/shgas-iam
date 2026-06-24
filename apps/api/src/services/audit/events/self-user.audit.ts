@@ -1,7 +1,5 @@
 import type { AuditLogInput } from "@api/services/audit/audit.service";
-import type { DbClient } from "@iam/db";
 import { maskMobileForAudit } from "@iam/domain/audit";
-import * as auditService from "../audit.service";
 
 type UserAuditTarget = {
   id: number;
@@ -9,8 +7,8 @@ type UserAuditTarget = {
   name?: string | null;
 };
 
-export async function recordSelfPasswordChangeFailure(user: UserAuditTarget, tx?: DbClient) {
-  await auditService.recordAuditLog({
+export function buildSelfPasswordChangeFailureAudit(user: UserAuditTarget): AuditLogInput {
+  return {
     action: "self.password.change",
     outcome: "failure",
     actorType: "user",
@@ -23,11 +21,11 @@ export async function recordSelfPasswordChangeFailure(user: UserAuditTarget, tx?
     details: {
       reason: "invalid_old_password",
     },
-  }, tx);
+  };
 }
 
-export async function recordSelfPasswordChangeSuccess(user: UserAuditTarget, tx?: DbClient) {
-  await auditService.recordAuditLog({
+export function buildSelfPasswordChangeSuccessAudit(user: UserAuditTarget): AuditLogInput {
+  return {
     action: "self.password.change",
     outcome: "success",
     actorType: "user",
@@ -40,16 +38,15 @@ export async function recordSelfPasswordChangeSuccess(user: UserAuditTarget, tx?
     details: {
       passwordChanged: true,
     },
-  }, tx);
+  };
 }
 
-export async function recordPasswordResetFailure(
+export function buildPasswordResetFailureAudit(
   user: UserAuditTarget,
   phoneNumber: string,
   reason: "mobile_mismatch" | "invalid_verification_code",
-  tx?: DbClient,
-) {
-  await auditService.recordAuditLog({
+): AuditLogInput {
+  return {
     action: "auth.password.reset",
     outcome: "failure",
     actorType: "anonymous",
@@ -61,11 +58,11 @@ export async function recordPasswordResetFailure(
       phoneNumber: maskMobileForAudit(phoneNumber),
       reason,
     },
-  }, tx);
+  };
 }
 
-export async function recordPasswordResetSuccess(user: UserAuditTarget, phoneNumber: string, tx?: DbClient) {
-  await auditService.recordAuditLog({
+export function buildPasswordResetSuccessAudit(user: UserAuditTarget, phoneNumber: string): AuditLogInput {
+  return {
     action: "auth.password.reset",
     outcome: "success",
     actorType: "anonymous",
@@ -77,11 +74,11 @@ export async function recordPasswordResetSuccess(user: UserAuditTarget, phoneNum
       phoneNumber: maskMobileForAudit(phoneNumber),
       passwordReset: true,
     },
-  }, tx);
+  };
 }
 
-export async function recordMobileBindInvalidCode(userId: number, phoneNumber: string, tx?: DbClient) {
-  await auditService.recordAuditLog({
+export function buildMobileBindInvalidCodeAudit(userId: number, phoneNumber: string): AuditLogInput {
+  return {
     action: "self.mobile.bind",
     outcome: "failure",
     actorType: "user",
@@ -93,11 +90,11 @@ export async function recordMobileBindInvalidCode(userId: number, phoneNumber: s
       phoneNumber: maskMobileForAudit(phoneNumber),
       reason: "invalid_verification_code",
     },
-  } satisfies AuditLogInput, tx);
+  };
 }
 
-export async function recordMobileBindSuccess(userId: number, phoneNumber: string, tx?: DbClient) {
-  await auditService.recordAuditLog({
+export function buildMobileBindSuccessAudit(userId: number, phoneNumber: string): AuditLogInput {
+  return {
     action: "self.mobile.bind",
     outcome: "success",
     actorType: "user",
@@ -108,5 +105,5 @@ export async function recordMobileBindSuccess(userId: number, phoneNumber: strin
     details: {
       phoneNumber: maskMobileForAudit(phoneNumber),
     },
-  } satisfies AuditLogInput, tx);
+  };
 }

@@ -1,29 +1,39 @@
-import type { Redis } from "ioredis";
+import type { OidcAccountDto } from "@iam/domain/user";
 import type { IncomingMessage } from "node:http";
 import type { UnknownObject } from "oidc-provider";
-import type { OidcProviderEnv } from "../env.ts";
-import type { OidcAccountRepository } from "../repositories/account.repository.ts";
-import { readGlobalSession, renewGlobalSession } from "@iam/api-core/session";
-import { ClientManagementLevel } from "@iam/contracts";
-import { z } from "zod";
-
-const GlobalSessionUserSchema = z.object({
-  id: z.number().int().positive(),
-  username: z.string().min(1),
-}).passthrough();
-
-const LocalSessionReferenceSchema = z.object({
-  clientCode: z.string().min(1),
-  localSessionId: z.string().min(1),
-  mode: z.enum(ClientManagementLevel),
-});
 
 export type ResolvedGlobalSession = {
   sessionId: string;
+  externalToken?: string;
   authTime: number;
   userId: number;
   accountId: string;
 };
+
+export type GlobalSessionEnvelopeUser = {
+  id: number;
+  username: string;
+};
+
+export type GlobalSessionEnvelope = {
+  authTime: number;
+  user: GlobalSessionEnvelopeUser;
+};
+
+export interface GlobalSessionAccountReader {
+  findById: (id: number) => Promise<OidcAccountDto | null>;
+}
+
+export interface GlobalSessionStore {
+  read: (sessionId: string) => Promise<GlobalSessionEnvelope | null>;
+  renew: (sessionId: string) => Promise<boolean>;
+}
+
+export interface CreateGlobalSessionResolverDeps {
+  accounts: GlobalSessionAccountReader;
+  sessions: GlobalSessionStore;
+  cookieName: string;
+}
 
 export function getCookieValue(cookieHeader: string | undefined, name: string) {
   if (!cookieHeader)
@@ -53,25 +63,12 @@ export function requestNeedsReauthentication(
   return Number.isFinite(maxAge) && (maxAge === 0 || now - authTime > maxAge);
 }
 
-export class GlobalSessionResolver {
-  constructor(
-    private readonly redis: Redis,
-    private readonly accounts: OidcAccountRepository,
-    private readonly env: OidcProviderEnv,
-  ) {}
-
-  async resolve(request: Pick<IncomingMessage, "headers">): Promise<ResolvedGlobalSession | null> {
-    const sessionId = getCookieValue(request.headers.cookie, this.env.OIDC_GLOBAL_SESSION_COOKIE);
-    if (!sessionId)
-      return null;
-    return await this.resolveById(sessionId);
-  }
-
-  async resolveById(sessionId: string): Promise<ResolvedGlobalSession | null> {
-    const envelope = await readGlobalSession(this.redis, sessionId, GlobalSessionUserSchema);
+export function createGlobalSessionResolver(deps: CreateGlobalSessionResolverDeps) {
+  async function resolveById(sessionId: string): Promise<ResolvedGlobalSession | null> {
+    const envelope = await deps.sessions.read(sessionId);
     if (!envelope)
       return null;
-    const account = await this.accounts.findById(envelope.user.id);
+    const account = await deps.accounts.findById(envelope.user.id);
     if (!account)
       return null;
     return {
@@ -82,12 +79,16 @@ export class GlobalSessionResolver {
     };
   }
 
-  async renew(sessionId: string) {
-    return await renewGlobalSession(
-      this.redis,
-      sessionId,
-      this.env.OIDC_GLOBAL_SESSION_TTL_SECONDS,
-      LocalSessionReferenceSchema,
-    );
-  }
+  return {
+    async resolve(request: Pick<IncomingMessage, "headers">): Promise<ResolvedGlobalSession | null> {
+      const sessionId = getCookieValue(request.headers.cookie, deps.cookieName);
+      if (!sessionId)
+        return null;
+      return await resolveById(sessionId);
+    },
+    resolveById,
+    renew: deps.sessions.renew,
+  };
 }
+
+export type GlobalSessionResolver = ReturnType<typeof createGlobalSessionResolver>;

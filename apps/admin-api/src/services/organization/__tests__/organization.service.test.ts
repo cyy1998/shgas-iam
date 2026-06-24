@@ -1,94 +1,95 @@
+import { createImmediateUnitOfWork } from "@admin-api/test/fakes";
 import { OrganizationLevel, OrganizationStatus, OrganizationType } from "@iam/contracts";
-import { afterAll, beforeEach, describe, expect, mock, test } from "bun:test";
+import { describe, expect, mock, test } from "bun:test";
+import { createOrganizationService } from "../organization.service";
 
-const organizationRepository = {
-  getOrganizationSelectorNodesForAdmin: mock(),
-};
-
-const auditService = {
-  recordAuditLog: mock(),
-  resolveAdminAuditContext: mock((context?: unknown) => context ?? { actorType: "system", actorSystemKey: "admin-api" }),
-};
-
-mock.module("@admin-api/services/audit/audit.service", () => auditService);
-mock.module("@admin-api/services/organization/organization.repository", () => organizationRepository);
-
-const organizationService = await import("../organization.service");
-
-afterAll(() => {
-  mock.restore();
-});
-
-function selectorNode(overrides: Record<string, unknown> = {}) {
-  const root = {
-    id: 1,
-    orgCode: "SR",
-    orgName: "上海燃气",
-    orgType: OrganizationType.Company,
-    status: OrganizationStatus.Enable,
-    level: OrganizationLevel.One,
-    parentId: -1,
-    pathIndex: 0,
-  };
-  const node = {
-    id: 2,
-    orgCode: "SR23",
-    orgName: "信息中心",
-    orgType: OrganizationType.Department,
-    status: OrganizationStatus.Enable,
-    level: OrganizationLevel.Two,
-    parentId: 1,
-    pathIndex: 1,
-  };
+function organization(overrides: Record<string, unknown> = {}) {
   return {
-    ...node,
-    isLeaf: true,
-    fullPath: [root, node],
-    pathText: "上海燃气 / 信息中心",
-    selectable: true,
+    id: 1,
+    orgCode: "ORG",
+    orgName: "Organization",
+    parentId: -1,
+    businessParentId: -1,
+    path: "/ORG",
+    level: OrganizationLevel.One,
+    orgType: OrganizationType.Company,
+    orderNum: 0,
+    isVirtual: false,
+    isEntity: true,
+    status: OrganizationStatus.Enable,
+    isDelete: false,
+    createTime: new Date("2026-01-01T00:00:00Z"),
+    updateTime: new Date("2026-01-01T00:00:00Z"),
+    children: [],
     ...overrides,
   };
 }
 
-beforeEach(() => {
-  organizationRepository.getOrganizationSelectorNodesForAdmin.mockReset();
-  auditService.recordAuditLog.mockReset();
-  auditService.resolveAdminAuditContext.mockClear();
-});
+function createService() {
+  const selectorNodes = [{
+    id: 1,
+    orgCode: "ORG",
+    orgName: "Organization",
+    orgType: OrganizationType.Company,
+    status: OrganizationStatus.Enable,
+    level: OrganizationLevel.One,
+    parentId: -1,
+    isLeaf: true,
+    fullPath: [],
+    pathText: "Organization",
+    selectable: true,
+  }];
+  const tx = {
+    auditService: { recordAuditLog: mock(async () => undefined) },
+    organizationRepository: {
+      countActiveChildrenByOrgCode: mock(async () => 0),
+      countActiveEmploymentsByOrgCode: mock(async () => 0),
+      getOrganizationByCode: mock(async () => null),
+      getOrganizationByCodeForAdmin: mock(async () => organization()),
+      setOrganization: mock(async () => organization()),
+      softDeleteOrganizationByCode: mock(async () => organization({ isDelete: true })),
+      updateOrganizationByCode: mock(async () => organization()),
+    },
+  };
+  const deps = {
+    organizationRepository: {
+      countActiveEmploymentsByOrgCode: mock(async () => 0),
+      getOrganizationByCodeForAdmin: mock(async () => organization()),
+      getOrganizationSelectorNodesForAdmin: mock(async () => selectorNodes),
+      listOrgChildrenByParentCode: mock(async () => ({ rows: [], total: 0 })),
+      searchOrganizationsForAdmin: mock(async () => []),
+    },
+    uow: createImmediateUnitOfWork(tx),
+  } as any;
+  return { service: createOrganizationService(deps), tx, deps, selectorNodes };
+}
 
-describe("organizationService.getOrganizationSelectorNodesForAdmin", () => {
-  test("returns lazy-loaded selector children with full path and selectable state", async () => {
-    const child = selectorNode();
-    const query = {
-      parentOrgCode: "SR",
-      pageSize: 50,
-      selectableOrgTypes: [OrganizationType.Department],
-      selectableStatuses: [OrganizationStatus.Enable],
-    };
-    organizationRepository.getOrganizationSelectorNodesForAdmin.mockResolvedValue([child]);
+describe("createOrganizationService", () => {
+  test("forwards selector queries to the root repository", async () => {
+    const { service, deps, selectorNodes } = createService();
+    const query = { parentOrgCode: "ROOT", pageSize: 50 };
 
-    await expect(organizationService.getOrganizationSelectorNodesForAdmin(query)).resolves.toEqual([child]);
-    expect(organizationRepository.getOrganizationSelectorNodesForAdmin).toHaveBeenCalledWith(query);
+    await expect(service.getOrganizationSelectorNodesForAdmin(query as any)).resolves.toBe(selectorNodes);
+
+    expect(deps.organizationRepository.getOrganizationSelectorNodesForAdmin).toHaveBeenCalledWith(query);
   });
 
-  test("returns search echo nodes for text or orgCode including non-selectable nodes", async () => {
-    const match = selectorNode({ selectable: false, isLeaf: false });
-    const query = {
-      text: "信息",
-      orgCode: "SR23",
-      pageSize: 20,
-      selectableOrgTypes: [OrganizationType.Company],
-    };
-    organizationRepository.getOrganizationSelectorNodesForAdmin.mockResolvedValue([match]);
+  test("rejects deleting an organization with active children", async () => {
+    const { service, tx } = createService();
+    tx.organizationRepository.countActiveChildrenByOrgCode.mockResolvedValue(1);
 
-    await expect(organizationService.getOrganizationSelectorNodesForAdmin(query)).resolves.toMatchObject([
-      {
-        orgCode: "SR23",
-        fullPath: [{ orgCode: "SR" }, { orgCode: "SR23" }],
-        pathText: "上海燃气 / 信息中心",
-        selectable: false,
-      },
-    ]);
-    expect(organizationRepository.getOrganizationSelectorNodesForAdmin).toHaveBeenCalledWith(query);
+    await expect(service.deleteOrganization("ORG")).rejects.toThrow();
+
+    expect(tx.organizationRepository.softDeleteOrganizationByCode).not.toHaveBeenCalled();
+  });
+
+  test("rejects updating to an existing organization code", async () => {
+    const { service, tx } = createService();
+    (tx.organizationRepository.getOrganizationByCode as any)
+      .mockResolvedValue(organization({ id: 2, orgCode: "OTHER" }));
+
+    await expect(service.updateOrganization("ORG", { orgCode: "OTHER" } as any)).rejects.toThrow("组织编码已存在");
+
+    expect(tx.organizationRepository.updateOrganizationByCode).not.toHaveBeenCalled();
   });
 });

@@ -1,11 +1,19 @@
 import type { Redis } from "ioredis";
 import type { Adapter, AdapterPayload } from "oidc-provider";
-import type { OidcClientRepository } from "../repositories/client.repository.ts";
-import {
-  registerOidcAccessToken,
-  revokeOidcAccessToken,
-} from "@iam/api-core/oidc";
-import { consumeStagedProviderSessionBinding, readProviderSessionBinding } from "../session/provider-session.ts";
+import type {
+  AdapterClientRuntimeReader,
+  AdapterClientVersionReader,
+  AdapterOidcSessionKernel,
+  AdapterProviderSessionBindingStore,
+  AdapterTokenRegistry,
+} from "./redis-adapter.port.ts";
+
+export interface RedisOidcAdapterDeps {
+  clientVersions: AdapterClientVersionReader;
+  oidcSession: AdapterOidcSessionKernel;
+  providerSessions: AdapterProviderSessionBindingStore;
+  tokens: AdapterTokenRegistry;
+}
 
 const GRANTABLE_MODELS = new Set([
   "AccessToken",
@@ -69,35 +77,92 @@ function payloadClientIds(payload: AdapterPayload) {
   return [...ids];
 }
 
+function payloadSessionUid(payload: AdapterPayload) {
+  return typeof payload.sessionUid === "string" ? payload.sessionUid : undefined;
+}
+
+function payloadAccountId(payload: AdapterPayload) {
+  return typeof payload.accountId === "string" ? payload.accountId : undefined;
+}
+
 export class RedisOidcAdapter implements Adapter {
   constructor(
     private readonly model: string,
     private readonly redis: Redis,
-    private readonly clients: OidcClientRepository,
+    private readonly deps: RedisOidcAdapterDeps,
   ) {}
+
+  private async resolveProviderSessionBinding(payload: AdapterPayload) {
+    const sessionUid = payloadSessionUid(payload);
+    if (!sessionUid)
+      return null;
+
+    const existing = await this.deps.providerSessions.read(sessionUid);
+    if (existing)
+      return existing;
+
+    const accountId = payloadAccountId(payload);
+    return accountId
+      ? await this.deps.providerSessions.consumeStaged(accountId, sessionUid)
+      : null;
+  }
 
   async upsert(id: string, payload: AdapterPayload, expiresIn: number) {
     const key = artifactKey(this.model, id);
     const expiresAt = Date.now() + expiresIn * 1000;
     const clientIds = payloadClientIds(payload);
     const oidcConfigVersions = Object.fromEntries(await Promise.all(clientIds.map(async (clientId) => {
-      const version = await this.clients.findActiveVersion(clientId);
+      const version = await this.deps.clientVersions.findActiveVersion(clientId);
       if (version === null)
         throw new Error("OIDC client is not available");
       return [clientId, version] as const;
     })));
     const clientId = payloadClientId(payload);
 
-    const sessionBinding = this.model === "AuthorizationCode" && payload.sessionUid
-      ? await readProviderSessionBinding(this.redis, payload.sessionUid)
+    const sessionBinding = this.model === "AuthorizationCode"
+      ? await this.resolveProviderSessionBinding(payload)
+      : null;
+    const accessTokenBinding = this.model === "AccessToken"
+      ? await this.resolveProviderSessionBinding(payload)
       : null;
     if (this.model === "Session" && payload.uid && typeof payload.accountId === "string")
-      await consumeStagedProviderSessionBinding(this.redis, payload.accountId, payload.uid);
+      await this.deps.providerSessions.consumeStaged(payload.accountId, payload.uid);
+    const tokenKey = key;
+    const issuedCredential = this.model === "AccessToken"
+      ? await this.deps.oidcSession.registerAccessTokenCredential({
+          providerTokenId: id,
+          providerTokenKey: tokenKey,
+          payload,
+          expiresIn,
+          binding: accessTokenBinding,
+        })
+      : null;
+    if (this.model === "AccessToken" && !issuedCredential)
+      throw new Error("OIDC access token Kernel credential registration failed");
+    if (this.model === "AuthorizationCode") {
+      const registered = await this.deps.oidcSession.registerAuthorizationCodeArtifact({
+        providerCodeId: id,
+        payload,
+        expiresIn,
+        binding: sessionBinding,
+      });
+      if (!registered)
+        throw new Error("OIDC authorization code Kernel artifact registration failed");
+    }
     const stored: AdapterPayload = {
       ...payload,
       ...(clientId ? { clientId, oidcConfigVersion: oidcConfigVersions[clientId] } : {}),
       ...(clientIds.length ? { oidcConfigVersions } : {}),
       ...(sessionBinding ? { globalSessionExpiresAt: sessionBinding.expiresAt } : {}),
+      ...(issuedCredential
+        ? {
+            kernelCredentialId: issuedCredential.credentialId,
+            extra: {
+              ...(payload.extra ?? {}),
+              kernelCredentialId: issuedCredential.credentialId,
+            },
+          }
+        : {}),
     };
     const transaction = this.redis.multi().set(key, JSON.stringify(stored), "EX", expiresIn);
 
@@ -114,26 +179,16 @@ export class RedisOidcAdapter implements Adapter {
       transaction.expire(clientObjectIndexKey(indexedClientId), expiresIn);
     }
     await transaction.exec();
-
-    const userId = typeof stored.userId === "number"
-      ? stored.userId
-      : typeof stored.extra?.userId === "number" ? stored.extra.userId : undefined;
-    const globalSessionId = typeof stored.globalSessionId === "string"
-      ? stored.globalSessionId
-      : typeof stored.extra?.globalSessionId === "string" ? stored.extra.globalSessionId : undefined;
-    if (this.model === "AccessToken" && clientId && userId !== undefined && globalSessionId) {
-      await registerOidcAccessToken(this.redis, {
-        tokenKey: key,
-        userId,
-        clientId,
-        globalSessionId,
-        expiresAt,
-      });
-    }
   }
 
   async find(id: string) {
-    const key = artifactKey(this.model, id);
+    const resolvedCredential = this.model === "AccessToken"
+      ? await this.deps.oidcSession.resolveAccessTokenCredential(id)
+      : null;
+    if (this.model === "AccessToken" && !resolvedCredential)
+      return undefined;
+
+    const key = resolvedCredential?.metadata.providerTokenKey ?? artifactKey(this.model, id);
     const [value, consumed] = await this.redis.mget(key, consumedKey(this.model, id));
     if (!value)
       return undefined;
@@ -144,7 +199,7 @@ export class RedisOidcAdapter implements Adapter {
     };
     for (const clientId of payloadClientIds(payload)) {
       const expectedVersion = payload.oidcConfigVersions?.[clientId] ?? payload.oidcConfigVersion;
-      const currentVersion = await this.clients.findActiveVersion(clientId);
+      const currentVersion = await this.deps.clientVersions.findActiveVersion(clientId);
       if (currentVersion === null || currentVersion !== expectedVersion) {
         await this.redis.del(key, consumedKey(this.model, id));
         return undefined;
@@ -152,6 +207,11 @@ export class RedisOidcAdapter implements Adapter {
     }
     if (consumed)
       payload.consumed = Number(consumed);
+    if (resolvedCredential) {
+      const credentialId = readKernelCredentialId(value);
+      if (credentialId !== resolvedCredential.credential.credentialId)
+        return undefined;
+    }
     return payload;
   }
 
@@ -175,14 +235,25 @@ export class RedisOidcAdapter implements Adapter {
     );
     if (result === -1)
       throw new Error(`${this.model} has already been consumed`);
+    if (result === 1 && this.model === "AuthorizationCode") {
+      const consumed = await this.deps.oidcSession.consumeAuthorizationCodeArtifact(id);
+      if (!consumed)
+        throw new Error("OIDC authorization code Kernel artifact consume failed");
+    }
   }
 
   async destroy(id: string) {
     const key = artifactKey(this.model, id);
-    if (this.model === "AccessToken")
-      await revokeOidcAccessToken(this.redis, key);
-    else
+    if (this.model === "AccessToken") {
+      const serialized = await this.redis.get(key);
+      const credentialId = readKernelCredentialId(serialized);
+      if (credentialId)
+        await this.deps.oidcSession.revokeAccessTokenCredential(credentialId);
+      await this.deps.tokens.revokeAccessToken(key);
+    }
+    else {
       await this.redis.del(key, consumedKey(this.model, id));
+    }
   }
 
   async revokeByGrantId(grantId: string) {
@@ -191,7 +262,7 @@ export class RedisOidcAdapter implements Adapter {
     const keys = await this.redis.zrange(indexKey, 0, -1);
     const accessTokenKeys = keys.filter(key => key.includes(":AccessToken:"));
     const otherKeys = keys.filter(key => !key.includes(":AccessToken:"));
-    await Promise.all(accessTokenKeys.map(async key => await revokeOidcAccessToken(this.redis, key)));
+    await Promise.all(accessTokenKeys.map(async key => await this.deps.tokens.revokeAccessToken(key)));
     if (otherKeys.length)
       await this.redis.del(...otherKeys, ...otherKeys.map(key => key.replace("oidc:model:", "oidc:consumed:")));
     await this.redis.del(indexKey);
@@ -199,7 +270,7 @@ export class RedisOidcAdapter implements Adapter {
 }
 
 class DynamicClientAdapter implements Adapter {
-  constructor(private readonly clients: OidcClientRepository) {}
+  constructor(private readonly clients: AdapterClientRuntimeReader) {}
 
   async find(id: string) {
     return await this.clients.findRuntime(id) ?? undefined;
@@ -213,20 +284,60 @@ class DynamicClientAdapter implements Adapter {
   async revokeByGrantId() {}
 }
 
-export function createOidcAdapterFactory(redis: Redis, clients: OidcClientRepository) {
-  return (model: string): Adapter => model === "Client"
-    ? new DynamicClientAdapter(clients)
-    : new RedisOidcAdapter(model, redis, clients);
+export interface CreateOidcAdapterFactoryDeps extends RedisOidcAdapterDeps {
+  clients: AdapterClientRuntimeReader;
 }
 
-export async function revokeClientProtocolObjects(redis: Redis, clientId: string) {
+export function createOidcAdapterFactory(redis: Redis, deps: CreateOidcAdapterFactoryDeps) {
+  return (model: string): Adapter => model === "Client"
+    ? new DynamicClientAdapter(deps.clients)
+    : new RedisOidcAdapter(model, redis, deps);
+}
+
+export function createOidcProtocolObjectStore(
+  redis: Redis,
+  tokens: AdapterTokenRegistry,
+  oidcSession?: Pick<AdapterOidcSessionKernel, "revokeClientProtocol">,
+) {
+  return {
+    revokeClient(clientId: string) {
+      return revokeClientProtocolObjects(redis, tokens, clientId, oidcSession);
+    },
+  };
+}
+
+export type OidcProtocolObjectStore = ReturnType<typeof createOidcProtocolObjectStore>;
+
+export async function revokeClientProtocolObjects(
+  redis: Redis,
+  tokens: AdapterTokenRegistry,
+  clientId: string,
+  oidcSession?: Pick<AdapterOidcSessionKernel, "revokeClientProtocol">,
+) {
+  await oidcSession?.revokeClientProtocol(clientId, "client_config_changed");
   const indexKey = clientObjectIndexKey(clientId);
   await redis.zremrangebyscore(indexKey, "-inf", Date.now());
   const keys = await redis.zrange(indexKey, 0, -1);
   const accessTokenKeys = keys.filter(key => key.includes(":AccessToken:"));
   const otherKeys = keys.filter(key => !key.includes(":AccessToken:"));
-  await Promise.all(accessTokenKeys.map(async key => await revokeOidcAccessToken(redis, key)));
+  await Promise.all(accessTokenKeys.map(async key => await tokens.revokeAccessToken(key)));
   if (otherKeys.length)
     await redis.del(...otherKeys, ...otherKeys.map(key => key.replace("oidc:model:", "oidc:consumed:")));
   await redis.del(indexKey);
+}
+
+function readKernelCredentialId(serialized: string | null) {
+  if (!serialized)
+    return null;
+  try {
+    const payload = JSON.parse(serialized) as {
+      kernelCredentialId?: unknown;
+      extra?: { kernelCredentialId?: unknown };
+    };
+    const credentialId = payload.kernelCredentialId ?? payload.extra?.kernelCredentialId;
+    return typeof credentialId === "string" ? credentialId : null;
+  }
+  catch {
+    return null;
+  }
 }

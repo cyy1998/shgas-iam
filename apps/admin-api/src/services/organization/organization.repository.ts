@@ -9,11 +9,260 @@ import type {
 import type { DbClient } from "@iam/db";
 import type { Organization } from "@iam/db/schema";
 import { getChildOrganizationLevel, OrganizationStatus } from "@iam/contracts";
-import db from "@iam/db";
 import { compactUpdate, firstRow, ilikeContainsIf } from "@iam/db/query-utils";
 import { employments, organizationClosures, organizations } from "@iam/db/schema";
 import { and, count, eq, exists, gt, inArray, or, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
+
+export function createOrganizationRepository(db: DbClient) {
+  return {
+    async getOrganizationByCode(orgCode: string) {
+      const rows = await db.select().from(organizations).where(and(
+        eq(organizations.orgCode, orgCode),
+        eq(organizations.status, OrganizationStatus.Enable),
+        eq(organizations.isDelete, false),
+      )).limit(1);
+      return firstRow(await attachOrganizationRelations(rows, db)) ?? null;
+    },
+    async setOrganization(organizationCreateDto: OrganizationCreateDto, parentOrganization: Organization | null) {
+      const { parentCode, ...org } = organizationCreateDto;
+      const newOrganization = firstRow(await db.insert(organizations).values(org).returning())!;
+      const path = `${parentOrganization ? parentOrganization.path : ""}/${newOrganization.id}`;
+      const level = getChildOrganizationLevel(parentOrganization?.level ?? null);
+      const updatedOrganization = firstRow(await db
+        .update(organizations)
+        .set({
+          path,
+          level,
+          parentId: parentOrganization?.id ?? -1,
+        })
+        .where(and(
+          eq(organizations.id, newOrganization.id),
+          eq(organizations.status, OrganizationStatus.Enable),
+          eq(organizations.isDelete, false),
+        ))
+        .returning())!;
+
+      const parentAncestors = parentOrganization === null
+        ? []
+        : await db
+            .select({
+              ancestorId: organizationClosures.ancestorId,
+              depth: organizationClosures.depth,
+            })
+            .from(organizationClosures)
+            .where(eq(organizationClosures.descendantId, parentOrganization.id));
+
+      const closureRelations = parentAncestors.map(rel => ({
+        ancestorId: rel.ancestorId,
+        descendantId: newOrganization.id,
+        depth: rel.depth + 1,
+      }));
+      closureRelations.push({
+        ancestorId: newOrganization.id,
+        descendantId: newOrganization.id,
+        depth: 0,
+      });
+
+      await db.insert(organizationClosures).values(closureRelations).onConflictDoNothing();
+      return firstRow(await attachOrganizationRelations([updatedOrganization], db))!;
+    },
+    async listOrgChildrenByParentCode(parentOrgCode: string | null, pageNum: number, pageSize: number) {
+      let parentId: number;
+      if (parentOrgCode === null) {
+        parentId = -1;
+      }
+      else {
+        const parent = await db.query.organizations.findFirst({
+          columns: { id: true },
+          where: { orgCode: parentOrgCode, isDelete: false },
+        });
+        if (parent === undefined) {
+          return { rows: [], total: 0 };
+        }
+        parentId = parent.id;
+      }
+
+      const where = and(eq(organizations.isDelete, false), eq(organizations.parentId, parentId));
+      const [rows, totalRows] = await Promise.all([
+        db
+          .select()
+          .from(organizations)
+          .where(where)
+          .orderBy(organizations.orderNum, organizations.id)
+          .limit(pageSize)
+          .offset((pageNum - 1) * pageSize),
+        db.select({ value: count() }).from(organizations).where(where),
+      ]);
+      const total = firstRow(totalRows)?.value ?? 0;
+
+      if (rows.length === 0) {
+        return { rows: [], total };
+      }
+
+      const grandchildCounts = await db
+        .select({ parentId: organizations.parentId, value: count() })
+        .from(organizations)
+        .where(and(eq(organizations.isDelete, false), inArray(organizations.parentId, rows.map(r => r.id))))
+        .groupBy(organizations.parentId);
+      const countMap = new Map(grandchildCounts.map(c => [c.parentId, c.value]));
+
+      return {
+        rows: rows.map(r => ({
+          ...r,
+          childCount: countMap.get(r.id) ?? 0,
+        })),
+        total,
+      };
+    },
+    async getOrganizationByCodeForAdmin(orgCode: string) {
+      const rows = await db.select().from(organizations).where(and(
+        eq(organizations.orgCode, orgCode),
+        eq(organizations.isDelete, false),
+      )).limit(1);
+      return firstRow(await attachOrganizationRelations(rows, db, { activeChildrenOnly: true })) ?? null;
+    },
+    async searchOrganizationsForAdmin(query: OrganizationPaginationQueryDto) {
+      const { fuzzyConditions, exactConditions } = query.conditions;
+      const parent = alias(organizations, "admin_parent");
+      const ancestor = alias(organizations, "admin_ancestor");
+
+      const rows = await db.select().from(organizations).where(and(
+        eq(organizations.isDelete, false),
+        exactConditions.orgType ? eq(organizations.orgType, exactConditions.orgType) : undefined,
+        exactConditions.status !== undefined ? eq(organizations.status, exactConditions.status) : undefined,
+        exactConditions.parentOrgCode
+          ? exists(
+              db.select({ value: sql`1` }).from(parent).where(and(
+                eq(parent.id, organizations.parentId),
+                eq(parent.orgCode, exactConditions.parentOrgCode),
+              )),
+            )
+          : undefined,
+        exactConditions.ancestorOrgCode
+          ? exists(
+              db.select({ value: sql`1` })
+                .from(organizationClosures)
+                .innerJoin(ancestor, eq(organizationClosures.ancestorId, ancestor.id))
+                .where(and(
+                  eq(organizationClosures.descendantId, organizations.id),
+                  gt(organizationClosures.depth, 0),
+                  eq(ancestor.orgCode, exactConditions.ancestorOrgCode),
+                )),
+            )
+          : undefined,
+        fuzzyConditions.text
+          ? or(
+              ilikeContainsIf(organizations.orgCode, fuzzyConditions.text),
+              ilikeContainsIf(organizations.orgName, fuzzyConditions.text),
+            )
+          : undefined,
+      )).orderBy(organizations.level, organizations.orderNum, organizations.id);
+
+      return await attachOrganizationRelations(rows, db, { activeChildrenOnly: true });
+    },
+    async getOrganizationSelectorNodesForAdmin(query: OrganizationSelectorQueryDto) {
+      let parentId: number | undefined;
+      if (query.parentOrgCode !== undefined && query.parentOrgCode !== null) {
+        const parent = await db.query.organizations.findFirst({
+          columns: { id: true },
+          where: { orgCode: query.parentOrgCode, isDelete: false },
+        });
+        if (parent === undefined) {
+          return [];
+        }
+        parentId = parent.id;
+      }
+
+      const rows = await db
+        .select()
+        .from(organizations)
+        .where(and(
+          eq(organizations.isDelete, false),
+          parentId !== undefined
+            ? eq(organizations.parentId, parentId)
+            : query.text === undefined && query.orgCode === undefined
+              ? eq(organizations.parentId, -1)
+              : undefined,
+          query.orgCode === undefined ? undefined : eq(organizations.orgCode, query.orgCode),
+          query.text === undefined
+            ? undefined
+            : or(
+                ilikeContainsIf(organizations.orgCode, query.text),
+                ilikeContainsIf(organizations.orgName, query.text),
+              ),
+        ))
+        .orderBy(organizations.level, organizations.orderNum, organizations.id)
+        .limit(query.pageSize);
+
+      return await attachSelectorNodeContext(rows, query, db);
+    },
+    async isOrganizationDescendantOf(descendantOrgCode: string, ancestorOrgCode: string) {
+      const descendant = alias(organizations, "ancestor_check_descendant");
+      const ancestor = alias(organizations, "ancestor_check_ancestor");
+      const rows = await db
+        .select({ value: sql`1` })
+        .from(organizationClosures)
+        .innerJoin(descendant, eq(organizationClosures.descendantId, descendant.id))
+        .innerJoin(ancestor, eq(organizationClosures.ancestorId, ancestor.id))
+        .where(and(
+          eq(descendant.orgCode, descendantOrgCode),
+          eq(descendant.isDelete, false),
+          eq(ancestor.orgCode, ancestorOrgCode),
+          eq(ancestor.isDelete, false),
+        ))
+        .limit(1);
+      return rows.length > 0;
+    },
+    async updateOrganizationByCode(orgCode: string, data: OrganizationUpdateDto) {
+      return await db
+        .update(organizations)
+        .set(compactUpdate(data))
+        .where(and(eq(organizations.orgCode, orgCode), eq(organizations.isDelete, false)));
+    },
+    async softDeleteOrganizationByCode(orgCode: string) {
+      return await db
+        .update(organizations)
+        .set({ isDelete: true })
+        .where(and(eq(organizations.orgCode, orgCode), eq(organizations.isDelete, false)));
+    },
+    async countActiveChildrenByOrgCode(orgCode: string) {
+      const parent = alias(organizations, "child_count_parent");
+      const rows = await db
+        .select({ value: count() })
+        .from(organizations)
+        .innerJoin(parent, eq(organizations.parentId, parent.id))
+        .where(and(
+          eq(organizations.isDelete, false),
+          eq(parent.orgCode, orgCode),
+          eq(parent.isDelete, false),
+        ));
+      return firstRow(rows)?.value ?? 0;
+    },
+    async countActiveEmploymentsByOrgCode(orgCode: string) {
+      const ancestor = alias(organizations, "employment_org_count_ancestor");
+      const rows = await db
+        .select({ value: count() })
+        .from(employments)
+        .where(and(
+          eq(employments.isDelete, false),
+          exists(
+            db.select({ value: sql`1` })
+              .from(organizationClosures)
+              .innerJoin(ancestor, eq(organizationClosures.ancestorId, ancestor.id))
+              .where(and(
+                eq(organizationClosures.descendantId, employments.orgId),
+                eq(ancestor.orgCode, orgCode),
+                eq(ancestor.isDelete, false),
+              )),
+          ),
+        ));
+      return firstRow(rows)?.value ?? 0;
+    },
+  };
+}
+
+export type OrganizationRepository = ReturnType<typeof createOrganizationRepository>;
 
 type OrganizationWithRelations = Organization & {
   parent: Organization | null;
@@ -55,168 +304,6 @@ async function attachOrganizationRelations(
     parent: parentMap.get(row.parentId) ?? null,
     children: childrenMap.get(row.id) ?? [],
   }));
-}
-
-export async function getOrganizationByCode(orgCode: string, tx: DbClient = db) {
-  const rows = await tx.select().from(organizations).where(and(
-    eq(organizations.orgCode, orgCode),
-    eq(organizations.status, OrganizationStatus.Enable),
-    eq(organizations.isDelete, false),
-  )).limit(1);
-  return firstRow(await attachOrganizationRelations(rows, tx)) ?? null;
-}
-
-export async function setOrganization(
-  organizationCreateDto: OrganizationCreateDto,
-  parentOrganization: Organization | null,
-  tx: DbClient = db,
-) {
-  const { parentCode, ...org } = organizationCreateDto;
-  const newOrganization = firstRow(await tx.insert(organizations).values(org).returning())!;
-  const path = `${parentOrganization ? parentOrganization.path : ""}/${newOrganization.id}`;
-  const level = getChildOrganizationLevel(parentOrganization?.level ?? null);
-  const updatedOrganization = firstRow(await tx
-    .update(organizations)
-    .set({
-      path,
-      level,
-      parentId: parentOrganization?.id ?? -1,
-    })
-    .where(and(
-      eq(organizations.id, newOrganization.id),
-      eq(organizations.status, OrganizationStatus.Enable),
-      eq(organizations.isDelete, false),
-    ))
-    .returning())!;
-
-  const parentAncestors = parentOrganization === null
-    ? []
-    : await tx
-        .select({
-          ancestorId: organizationClosures.ancestorId,
-          depth: organizationClosures.depth,
-        })
-        .from(organizationClosures)
-        .where(eq(organizationClosures.descendantId, parentOrganization.id));
-
-  const closureRelations = parentAncestors.map(rel => ({
-    ancestorId: rel.ancestorId,
-    descendantId: newOrganization.id,
-    depth: rel.depth + 1,
-  }));
-  closureRelations.push({
-    ancestorId: newOrganization.id,
-    descendantId: newOrganization.id,
-    depth: 0,
-  });
-
-  await tx.insert(organizationClosures).values(closureRelations).onConflictDoNothing();
-  return firstRow(await attachOrganizationRelations([updatedOrganization], tx))!;
-}
-
-export async function listOrgChildrenByParentCode(
-  parentOrgCode: string | null,
-  pageNum: number,
-  pageSize: number,
-  tx: DbClient = db,
-) {
-  let parentId: number;
-  if (parentOrgCode === null) {
-    parentId = -1;
-  }
-  else {
-    const parent = await tx.query.organizations.findFirst({
-      columns: { id: true },
-      where: { orgCode: parentOrgCode, isDelete: false },
-    });
-    if (parent === undefined) {
-      return { rows: [], total: 0 };
-    }
-    parentId = parent.id;
-  }
-
-  const where = and(eq(organizations.isDelete, false), eq(organizations.parentId, parentId));
-  const [rows, totalRows] = await Promise.all([
-    tx
-      .select()
-      .from(organizations)
-      .where(where)
-      .orderBy(organizations.orderNum, organizations.id)
-      .limit(pageSize)
-      .offset((pageNum - 1) * pageSize),
-    tx.select({ value: count() }).from(organizations).where(where),
-  ]);
-  const total = firstRow(totalRows)?.value ?? 0;
-
-  if (rows.length === 0) {
-    return { rows: [], total };
-  }
-
-  const grandchildCounts = await tx
-    .select({ parentId: organizations.parentId, value: count() })
-    .from(organizations)
-    .where(and(eq(organizations.isDelete, false), inArray(organizations.parentId, rows.map(r => r.id))))
-    .groupBy(organizations.parentId);
-  const countMap = new Map(grandchildCounts.map(c => [c.parentId, c.value]));
-
-  return {
-    rows: rows.map(r => ({
-      ...r,
-      childCount: countMap.get(r.id) ?? 0,
-    })),
-    total,
-  };
-}
-
-export async function getOrganizationByCodeForAdmin(orgCode: string, tx: DbClient = db) {
-  const rows = await tx.select().from(organizations).where(and(
-    eq(organizations.orgCode, orgCode),
-    eq(organizations.isDelete, false),
-  )).limit(1);
-  return firstRow(await attachOrganizationRelations(rows, tx, { activeChildrenOnly: true })) ?? null;
-}
-
-export async function searchOrganizationsForAdmin(
-  query: OrganizationPaginationQueryDto,
-  tx: DbClient = db,
-) {
-  const { fuzzyConditions, exactConditions } = query.conditions;
-  const parent = alias(organizations, "admin_parent");
-  const ancestor = alias(organizations, "admin_ancestor");
-
-  const rows = await tx.select().from(organizations).where(and(
-    eq(organizations.isDelete, false),
-    exactConditions.orgType ? eq(organizations.orgType, exactConditions.orgType) : undefined,
-    exactConditions.status !== undefined ? eq(organizations.status, exactConditions.status) : undefined,
-    exactConditions.parentOrgCode
-      ? exists(
-          db.select({ value: sql`1` }).from(parent).where(and(
-            eq(parent.id, organizations.parentId),
-            eq(parent.orgCode, exactConditions.parentOrgCode),
-          )),
-        )
-      : undefined,
-    exactConditions.ancestorOrgCode
-      ? exists(
-          db.select({ value: sql`1` })
-            .from(organizationClosures)
-            .innerJoin(ancestor, eq(organizationClosures.ancestorId, ancestor.id))
-            .where(and(
-              eq(organizationClosures.descendantId, organizations.id),
-              gt(organizationClosures.depth, 0),
-              eq(ancestor.orgCode, exactConditions.ancestorOrgCode),
-            )),
-        )
-      : undefined,
-    fuzzyConditions.text
-      ? or(
-          ilikeContainsIf(organizations.orgCode, fuzzyConditions.text),
-          ilikeContainsIf(organizations.orgName, fuzzyConditions.text),
-        )
-      : undefined,
-  )).orderBy(organizations.level, organizations.orderNum, organizations.id);
-
-  return await attachOrganizationRelations(rows, tx, { activeChildrenOnly: true });
 }
 
 function toPathText(fullPath: OrganizationPathNode[]) {
@@ -298,119 +385,4 @@ async function attachSelectorNodeContext(
     pathText: toPathText(pathMap.get(row.id) ?? []),
     selectable: isSelectable(row, query),
   }));
-}
-
-export async function getOrganizationSelectorNodesForAdmin(
-  query: OrganizationSelectorQueryDto,
-  tx: DbClient = db,
-) {
-  let parentId: number | undefined;
-  if (query.parentOrgCode !== undefined && query.parentOrgCode !== null) {
-    const parent = await tx.query.organizations.findFirst({
-      columns: { id: true },
-      where: { orgCode: query.parentOrgCode, isDelete: false },
-    });
-    if (parent === undefined) {
-      return [];
-    }
-    parentId = parent.id;
-  }
-
-  const rows = await tx
-    .select()
-    .from(organizations)
-    .where(and(
-      eq(organizations.isDelete, false),
-      parentId !== undefined
-        ? eq(organizations.parentId, parentId)
-        : query.text === undefined && query.orgCode === undefined
-          ? eq(organizations.parentId, -1)
-          : undefined,
-      query.orgCode === undefined ? undefined : eq(organizations.orgCode, query.orgCode),
-      query.text === undefined
-        ? undefined
-        : or(
-            ilikeContainsIf(organizations.orgCode, query.text),
-            ilikeContainsIf(organizations.orgName, query.text),
-          ),
-    ))
-    .orderBy(organizations.level, organizations.orderNum, organizations.id)
-    .limit(query.pageSize);
-
-  return await attachSelectorNodeContext(rows, query, tx);
-}
-
-export async function isOrganizationDescendantOf(
-  descendantOrgCode: string,
-  ancestorOrgCode: string,
-  tx: DbClient = db,
-) {
-  const descendant = alias(organizations, "ancestor_check_descendant");
-  const ancestor = alias(organizations, "ancestor_check_ancestor");
-  const rows = await tx
-    .select({ value: sql`1` })
-    .from(organizationClosures)
-    .innerJoin(descendant, eq(organizationClosures.descendantId, descendant.id))
-    .innerJoin(ancestor, eq(organizationClosures.ancestorId, ancestor.id))
-    .where(and(
-      eq(descendant.orgCode, descendantOrgCode),
-      eq(descendant.isDelete, false),
-      eq(ancestor.orgCode, ancestorOrgCode),
-      eq(ancestor.isDelete, false),
-    ))
-    .limit(1);
-  return rows.length > 0;
-}
-
-export async function updateOrganizationByCode(
-  orgCode: string,
-  data: OrganizationUpdateDto,
-  tx: DbClient = db,
-) {
-  return await tx
-    .update(organizations)
-    .set(compactUpdate(data))
-    .where(and(eq(organizations.orgCode, orgCode), eq(organizations.isDelete, false)));
-}
-
-export async function softDeleteOrganizationByCode(orgCode: string, tx: DbClient = db) {
-  return await tx
-    .update(organizations)
-    .set({ isDelete: true })
-    .where(and(eq(organizations.orgCode, orgCode), eq(organizations.isDelete, false)));
-}
-
-export async function countActiveChildrenByOrgCode(orgCode: string, tx: DbClient = db) {
-  const parent = alias(organizations, "child_count_parent");
-  const rows = await tx
-    .select({ value: count() })
-    .from(organizations)
-    .innerJoin(parent, eq(organizations.parentId, parent.id))
-    .where(and(
-      eq(organizations.isDelete, false),
-      eq(parent.orgCode, orgCode),
-      eq(parent.isDelete, false),
-    ));
-  return firstRow(rows)?.value ?? 0;
-}
-
-export async function countActiveEmploymentsByOrgCode(orgCode: string, tx: DbClient = db) {
-  const ancestor = alias(organizations, "employment_org_count_ancestor");
-  const rows = await tx
-    .select({ value: count() })
-    .from(employments)
-    .where(and(
-      eq(employments.isDelete, false),
-      exists(
-        db.select({ value: sql`1` })
-          .from(organizationClosures)
-          .innerJoin(ancestor, eq(organizationClosures.ancestorId, ancestor.id))
-          .where(and(
-            eq(organizationClosures.descendantId, employments.orgId),
-            eq(ancestor.orgCode, orgCode),
-            eq(ancestor.isDelete, false),
-          )),
-      ),
-    ));
-  return firstRow(rows)?.value ?? 0;
 }

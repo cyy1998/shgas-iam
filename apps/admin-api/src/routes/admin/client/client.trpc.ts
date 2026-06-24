@@ -1,1 +1,5 @@
-export { clientAdminRouter } from "./client.adapter";
+import type { ClientAdapter } from "./client.adapter";
+
+export function createClientAdminRouter(adapter: ClientAdapter) {
+  return adapter.clientAdminRouter;
+}

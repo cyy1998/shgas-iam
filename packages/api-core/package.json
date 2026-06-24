@@ -18,14 +18,17 @@
     "./redis": "./src/redis/index.ts",
     "./security": "./src/security/index.ts",
     "./session": "./src/session/index.ts",
+    "./session/kernel": "./src/session/kernel/index.ts",
     "./trpc": "./src/trpc/index.ts",
     "./types": "./src/types/lib.ts",
+    "./uow": "./src/uow/index.ts",
     "./utils": "./src/utils/index.ts",
     "./utils/*": "./src/utils/*.ts"
   },
   "scripts": {
     "lint": "eslint src eslint.config.js",
     "lint:fix": "eslint --fix src eslint.config.js",
+    "session:cleanup-legacy-keys": "bun scripts/cleanup-legacy-session-keys.ts",
     "test": "bun test --parallel",
     "typecheck": "pnpm exec tsgo --noEmit"
   },

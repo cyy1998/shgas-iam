@@ -1,1 +1,2 @@
-export { default } from "./cap.client";
+export { createCapClient } from "./cap.client";
+export type { CapClient, CreateCapClientDeps } from "./cap.client";

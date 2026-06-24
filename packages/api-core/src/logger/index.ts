@@ -2,6 +2,8 @@ import type { LoggerOptions, TransportTargetOptions } from "pino";
 import { randomUUID } from "node:crypto";
 import pino from "pino";
 
+export type LogLevel = "info" | "warn" | "error";
+
 export const LoggerSourceApp = {
   Api: "iam-api",
   AdminApi: "iam-admin-api",
@@ -56,6 +58,7 @@ export const IAM_LOG_REDACT_PATHS = [
 ] as const;
 
 export const SystemLogEvent = {
+  ApiErrorHandled: "api.error.handled",
   ApiErrorUnhandled: "api.error.unhandled",
   HttpRequestCompleted: "http.request.completed",
   HumanVerificationMissing: "human_verification.token.missing",
@@ -66,8 +69,18 @@ export const SystemLogEvent = {
   IntegrationCallFailed: "integration.call.failed",
   IntegrationUnexpectedResponse: "integration.call.unexpected_response",
   RedirectPatternInvalid: "sso.redirect_pattern.invalid",
+  SsoLegacyBearerSourceUsed: "sso.legacy_bearer_source.used",
   SessionNotificationFailed: "session.notification.failed",
   SessionNotificationUnexpectedResponse: "session.notification.unexpected_response",
+  SessionKernelCleanupLegacyKeysCompleted: "session_kernel.cleanup_legacy_keys.completed",
+  SessionKernelCleanupLegacyKeysFailed: "session_kernel.cleanup_legacy_keys.failed",
+  SessionKernelSchemaCorrupted: "session_kernel.schema_corrupted",
+  SessionKernelTombstoneReplayDetected: "session_kernel.tombstone_replay.detected",
+  SessionKernelRevokeCleanupFailed: "session_kernel.revoke.cleanup_failed",
+  AdminSessionRevokeUser: "admin.session_revoke.user",
+  AdminSessionRevokeClientProtocol: "admin.session_revoke.client_protocol",
+  AdminSessionRevokeClientAllProtocols: "admin.session_revoke.client_all_protocols",
+  AdminSessionRevokeCleanupFailed: "admin.session_revoke.cleanup_failed",
   InternalAuthzChecked: "auth.internal_authorization.checked",
   OidcProviderStarted: "oidc.provider.started",
   OidcProviderStopping: "oidc.provider.stopping",
@@ -113,6 +126,18 @@ export function createLogger(config: LoggerConfig) {
   return config.sourceApp ? logger.child({ sourceApp: config.sourceApp }) : logger;
 }
 
+export type LoggerBindingsReader = {
+  bindings?: () => Record<string, unknown>;
+};
+
+export function getLoggerSourceApp(
+  logger: LoggerBindingsReader | undefined,
+  fallback: LoggerSourceAppValue | string = LoggerSourceApp.Api,
+) {
+  const sourceApp = logger?.bindings?.().sourceApp;
+  return typeof sourceApp === "string" ? sourceApp : fallback;
+}
+
 export type RequestHeaderValue = string | string[] | undefined | null;
 export type RequestHeaderReader = (name: string) => RequestHeaderValue;
 
@@ -148,11 +173,7 @@ export function getUserAgentFromHeaders(readHeader: RequestHeaderReader) {
   return getHeaderValue(readHeader, "user-agent");
 }
 
-export function getStatusLogLevel(statusCode: number) {
-  if (statusCode >= 500)
-    return "error";
-  if (statusCode >= 400)
-    return "warn";
+export function getStatusLogLevel(_statusCode: number): LogLevel {
   return "info";
 }
 
@@ -184,5 +205,101 @@ export function buildHttpRequestLogFields(input: HttpRequestLogFieldInput) {
     userAgent: getUserAgentFromHeaders(input.readHeader),
     aborted: input.aborted || undefined,
     oidcRoute: input.oidcRoute,
+  };
+}
+
+export type ApiErrorLogSurface = "rest" | "trpc";
+
+export type ApiErrorLogEvent = typeof SystemLogEvent.ApiErrorHandled | typeof SystemLogEvent.ApiErrorUnhandled;
+
+export type ApiErrorLogLevelInput = {
+  event: ApiErrorLogEvent;
+  statusCode?: number;
+  path?: string;
+  route?: string;
+};
+
+function isInternalRoute(value: string | undefined) {
+  return value === "/internal" || value?.startsWith("/internal/");
+}
+
+export function getApiErrorLogLevel(input: ApiErrorLogLevelInput): LogLevel {
+  if (input.event === SystemLogEvent.ApiErrorUnhandled)
+    return "error";
+  if ((input.statusCode ?? 0) >= 500)
+    return "error";
+  if (input.statusCode === 403)
+    return "warn";
+  if (input.statusCode === 401 && (isInternalRoute(input.path) || isInternalRoute(input.route)))
+    return "warn";
+  return "info";
+}
+
+export type ApiErrorLogFieldInput = {
+  event: ApiErrorLogEvent;
+  surface: ApiErrorLogSurface;
+  sourceApp?: LoggerSourceAppValue | string;
+  requestId?: string;
+  traceId?: string;
+  method?: string;
+  path?: string;
+  route?: string;
+  statusCode: number;
+  errorCode?: string;
+  errorName: string;
+  errorMessage: string;
+  err?: unknown;
+  source?: string;
+  procedurePath?: string;
+  procedureType?: string;
+  issueCount?: number;
+  issuePaths?: string[];
+};
+
+function shouldIncludeErrorObject(input: ApiErrorLogFieldInput) {
+  return input.err !== undefined
+    && (input.event === SystemLogEvent.ApiErrorUnhandled || input.statusCode >= 500);
+}
+
+export function buildApiErrorLogFields(input: ApiErrorLogFieldInput) {
+  const fields = {
+    event: input.event,
+    surface: input.surface,
+    sourceApp: input.sourceApp,
+    requestId: input.requestId,
+    traceId: input.traceId,
+    method: input.method,
+    path: input.path,
+    route: input.route,
+    statusCode: input.statusCode,
+    errorCode: input.errorCode,
+    errorName: input.errorName,
+    errorMessage: input.errorMessage,
+    source: input.source,
+    procedurePath: input.procedurePath,
+    procedureType: input.procedureType,
+    issueCount: input.issueCount,
+    issuePaths: input.issuePaths,
+  };
+
+  return shouldIncludeErrorObject(input) ? { ...fields, err: input.err } : fields;
+}
+
+export type ValidationIssueLike = {
+  path?: string | readonly unknown[];
+};
+
+function formatValidationIssuePath(path: ValidationIssueLike["path"]) {
+  if (Array.isArray(path))
+    return path.length > 0 ? path.map(segment => String(segment)).join(".") : "<root>";
+  if (typeof path === "string" && path.trim() !== "")
+    return path;
+  return "<unknown>";
+}
+
+export function summarizeValidationIssues(issues: readonly ValidationIssueLike[]) {
+  return {
+    issueCount: issues.length,
+    issuePaths: issues.map(issue => formatValidationIssuePath(issue.path)),
   };
 }

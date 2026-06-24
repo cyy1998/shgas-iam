@@ -1,5 +1,5 @@
 import type { UnknownObject } from "oidc-provider";
-import type { GlobalSessionResolver } from "./global-session.ts";
+import type { InteractionGlobalSessionResolver } from "./interaction.port.ts";
 import { errors, interactionPolicy } from "oidc-provider";
 import { requestNeedsReauthentication } from "./global-session.ts";
 
@@ -11,6 +11,8 @@ export type AuthorizationRequestClient = {
 export function validateAuthorizationRequest(params: UnknownObject, client: AuthorizationRequestClient | undefined) {
   if (typeof params.state !== "string" || !params.state)
     throw new errors.InvalidRequest("state is required");
+  if (typeof params.nonce !== "string" || !params.nonce)
+    throw new errors.InvalidRequest("nonce is required");
   if (typeof params.code_challenge !== "string" || !params.code_challenge)
     throw new errors.InvalidRequest("code_challenge is required");
   if (params.code_challenge_method !== "S256")
@@ -28,7 +30,7 @@ export function validateAuthorizationRequest(params: UnknownObject, client: Auth
   }
 }
 
-export function createIamInteractionPolicy(globalSessions: GlobalSessionResolver) {
+export function createIamInteractionPolicy(globalSessions: InteractionGlobalSessionResolver) {
   const policy = interactionPolicy.base();
   policy.remove("consent");
   const login = policy.get("login");

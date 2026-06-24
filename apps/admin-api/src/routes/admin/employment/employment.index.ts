@@ -1,21 +1,8 @@
 import type { PublicBindings } from "@iam/api-core/types";
+import type { EmploymentAdapter } from "./employment.adapter";
 import { createRouter } from "@iam/api-core/core/create-router";
-import * as handlers from "./employment.adapter";
 import * as routes from "./employment.routes";
 
-const router = createRouter<PublicBindings>().basePath("/employments");
-
-// router.use("*", publicAuthenticationHandler);
-
-router
-  .openapi(routes.employmentsSearch, handlers.employmentsSearch)
-  .openapi(routes.employmentsDetail, handlers.employmentsDetail)
-  .openapi(routes.employmentsCreate, handlers.employmentsCreate)
-  .openapi(routes.employmentsUpdate, handlers.employmentsUpdate)
-  .openapi(routes.employmentsStatusUpdate, handlers.employmentsStatusUpdate)
-  .openapi(routes.employmentsDelete, handlers.employmentsDelete)
-  .openapi(routes.employmentsTransfer, handlers.employmentsTransfer)
-  .openapi(routes.employmentsSetPrimary, handlers.employmentsSetPrimary)
-  .openapi(routes.employmentsResignUser, handlers.employmentsResignUser);
-
-export default router;
+export function createEmploymentRoute(adapter: EmploymentAdapter) {
+  return createRouter<PublicBindings>().basePath("/employments").openapi(routes.employmentsSearch, adapter.employmentsSearch).openapi(routes.employmentsDetail, adapter.employmentsDetail).openapi(routes.employmentsCreate, adapter.employmentsCreate).openapi(routes.employmentsUpdate, adapter.employmentsUpdate).openapi(routes.employmentsStatusUpdate, adapter.employmentsStatusUpdate).openapi(routes.employmentsDelete, adapter.employmentsDelete).openapi(routes.employmentsTransfer, adapter.employmentsTransfer).openapi(routes.employmentsSetPrimary, adapter.employmentsSetPrimary).openapi(routes.employmentsResignUser, adapter.employmentsResignUser);
+}

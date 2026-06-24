@@ -1,116 +1,136 @@
+import type { UserServiceDeps } from "./user.port";
 import type { UserDetailDto, UserDto, UserQueryDto, UserQueryWithPrivilegeDelegationDto } from "./user.type";
 import { VerificationCodeUsage } from "@api/enums/verificationCode.usage";
-import * as selfUserAudit from "@api/services/audit/events/self-user.audit";
-import * as mobileService from "@api/services/mobile/mobile.service";
-import * as userRepository from "@api/services/user/user.repository";
+import {
+  buildMobileBindSuccessAudit,
+  buildPasswordResetFailureAudit,
+  buildPasswordResetSuccessAudit,
+  buildSelfPasswordChangeFailureAudit,
+  buildSelfPasswordChangeSuccessAudit,
+} from "@api/services/audit/events/self-user.audit";
 import { UserDtoSchema } from "@api/services/user/user.schema";
 import { CustomError } from "@iam/api-core/errors/CustomError";
 import { InvalidVerificationCodeError } from "@iam/api-core/errors/InvalidVerificationCodeError";
 import { UserStatus } from "@iam/contracts";
-import db from "@iam/db";
 import { InvalidOldPasswordError, UserNotFoundError } from "@iam/domain/user";
-import { searchUsersWithDelegations } from "./user-delegation-query.helper";
-import { buildUserDetail } from "./user-detail.helper";
-import { assertCanBindMobile } from "./user-mobile-binding.helper";
-import { assertStrongPassword, hashUserPassword, verifyUserPassword } from "./user-password.helper";
 
-export async function setPassword(username: string, oldPassword: string, newPassword: string) {
-  return await db.transaction(async (tx) => {
-    const user = await userRepository.getUserByUsername(username, tx);
-    if (user === null) {
-      throw new UserNotFoundError("用户名不存在");
-    }
-    if (oldPassword === newPassword) {
-      throw new CustomError("旧密码与新密码相同");
-    }
-    const isMatch = await verifyUserPassword(user, oldPassword);
-    if (!isMatch) {
-      await selfUserAudit.recordSelfPasswordChangeFailure(user, tx);
-      throw new InvalidOldPasswordError("旧密码错误");
-    }
-    assertStrongPassword(newPassword);
-    const newPasswordHash = await hashUserPassword(newPassword);
-    await userRepository.setPassword(user.id, newPasswordHash, tx);
-    await selfUserAudit.recordSelfPasswordChangeSuccess(user, tx);
-    return true;
-  });
-}
+export function createUserService(deps: UserServiceDeps) {
+  async function setPassword(username: string, oldPassword: string, newPassword: string) {
+    return await deps.uow.transaction(async (tx) => {
+      const user = await tx.userRepository.getUserByUsername(username);
+      if (user === null) {
+        throw new UserNotFoundError("用户名不存在");
+      }
+      if (oldPassword === newPassword) {
+        throw new CustomError("旧密码与新密码相同");
+      }
+      const isMatch = await deps.passwordHelper.verifyUserPassword(user, oldPassword);
+      if (!isMatch) {
+        await tx.auditLogWriter.recordAuditLog(buildSelfPasswordChangeFailureAudit(user));
+        throw new InvalidOldPasswordError("旧密码错误");
+      }
+      deps.passwordHelper.assertStrongPassword(newPassword);
+      const newPasswordHash = await deps.passwordHelper.hashUserPassword(newPassword);
+      await tx.userRepository.setPassword(user.id, newPasswordHash);
+      await tx.auditLogWriter.recordAuditLog(buildSelfPasswordChangeSuccessAudit(user));
+      return true;
+    });
+  }
 
-export async function resetPassword(username: string, phone: string, code: string, newPassword: string) {
-  return await db.transaction(async (tx) => {
-    const user = await userRepository.getUserByUsername(username, tx);
+  async function resetPassword(username: string, phone: string, code: string, newPassword: string) {
+    const user = await deps.userRepository.getUserByUsername(username);
     if (user === null) {
       throw new UserNotFoundError("用户不存在");
     }
     if (user.mobile !== phone) {
-      await selfUserAudit.recordPasswordResetFailure(user, phone, "mobile_mismatch", tx);
+      await deps.auditLogWriter.recordAuditLog(buildPasswordResetFailureAudit(user, phone, "mobile_mismatch"));
       throw new UserNotFoundError("用户名与手机号不匹配");
     }
-    if (!await mobileService.consumeVerificationCode(VerificationCodeUsage.ResetPassword, phone, code)) {
-      await selfUserAudit.recordPasswordResetFailure(user, phone, "invalid_verification_code", tx);
+    if (!await deps.mobileService.consumeVerificationCode(VerificationCodeUsage.ResetPassword, phone, code)) {
+      await deps.auditLogWriter.recordAuditLog(buildPasswordResetFailureAudit(user, phone, "invalid_verification_code"));
       throw new InvalidVerificationCodeError("验证码错误");
     }
-    const newPasswordHash = await hashUserPassword(newPassword);
-    await userRepository.setPassword(user.id, newPasswordHash, tx);
-    await selfUserAudit.recordPasswordResetSuccess(user, phone, tx);
-    return true;
-  });
-}
-
-export async function checkPassword(username: string, inputPassword: string) {
-  const user = await userRepository.getUserByUsername(username);
-  if (user === null) {
-    throw new UserNotFoundError("用户不存在");
+    const newPasswordHash = await deps.passwordHelper.hashUserPassword(newPassword);
+    return await deps.uow.transaction(async (tx) => {
+      await tx.userRepository.setPassword(user.id, newPasswordHash);
+      await tx.auditLogWriter.recordAuditLog(buildPasswordResetSuccessAudit(user, phone));
+      return true;
+    });
   }
-  return await verifyUserPassword(user, inputPassword);
+
+  async function checkPassword(username: string, inputPassword: string) {
+    const user = await deps.userRepository.getUserByUsername(username);
+    if (user === null) {
+      throw new UserNotFoundError("用户不存在");
+    }
+    return await deps.passwordHelper.verifyUserPassword(user, inputPassword);
+  }
+
+  async function getActiveUserByMobile(mobile: string) {
+    return await deps.userRepository.getUserByMobile(mobile);
+  }
+
+  async function pauseEnabledUser(userId: number) {
+    return await deps.userRepository.updateEnabledUserStatus(userId, UserStatus.Pause);
+  }
+
+  async function setMobile(userId: number, phoneNumber: string, code: string) {
+    await deps.mobileBinding.assertCanBindMobile(userId, phoneNumber, code);
+    await deps.uow.transaction(async (tx) => {
+      await tx.userRepository.setMobile(userId, phoneNumber);
+      await tx.auditLogWriter.recordAuditLog(buildMobileBindSuccessAudit(userId, phoneNumber));
+    });
+    return await getUserDetailById(userId);
+  }
+
+  async function searchUsers(userQueryDto: UserQueryDto): Promise<UserDto[]> {
+    const users = await deps.userRepository.searchUsers(userQueryDto);
+    const userDtos = users.map(u => UserDtoSchema.parse(u));
+    return userDtos;
+  }
+
+  async function searchUsersWithPrivilegeDelegation(query: UserQueryWithPrivilegeDelegationDto) {
+    return await deps.userDelegationQuery.searchUsersWithDelegations(query);
+  }
+
+  async function getUserDetailById(userId: number): Promise<UserDetailDto> {
+    const user = await deps.userRepository.getUserById(userId);
+    const userDetail = await deps.userDetailBuilder.buildUserDetail(user);
+    return userDetail;
+  }
+
+  async function getUserDetailByUsername(username: string): Promise<UserDetailDto> {
+    const user = await deps.userRepository.getUserByUsername(username);
+    const userDetail = await deps.userDetailBuilder.buildUserDetail(user);
+    return userDetail;
+  }
+
+  async function getUserDetailByMobile(mobile: string): Promise<UserDetailDto> {
+    const user = await deps.userRepository.getUserByMobile(mobile);
+    const userDetail = await deps.userDetailBuilder.buildUserDetail(user);
+    return userDetail;
+  }
+
+  async function getUserDetailByWxId(wxId: string): Promise<UserDetailDto> {
+    const user = await deps.userRepository.getUserByWxId(wxId);
+    const userDetail = await deps.userDetailBuilder.buildUserDetail(user);
+    return userDetail;
+  }
+
+  return {
+    setPassword,
+    resetPassword,
+    checkPassword,
+    getActiveUserByMobile,
+    pauseEnabledUser,
+    setMobile,
+    searchUsers,
+    searchUsersWithPrivilegeDelegation,
+    getUserDetailById,
+    getUserDetailByUsername,
+    getUserDetailByMobile,
+    getUserDetailByWxId,
+  };
 }
 
-export async function getActiveUserByMobile(mobile: string) {
-  return await userRepository.getUserByMobile(mobile);
-}
-
-export async function pauseEnabledUser(userId: number) {
-  return await userRepository.updateEnabledUserStatus(userId, UserStatus.Pause);
-}
-
-export async function setMobile(userId: number, phoneNumber: string, code: string) {
-  await db.transaction(async (tx) => {
-    await assertCanBindMobile(userId, phoneNumber, code, tx);
-    await userRepository.setMobile(userId, phoneNumber, tx);
-    await selfUserAudit.recordMobileBindSuccess(userId, phoneNumber, tx);
-  });
-  return await getUserDetailById(userId);
-}
-export async function searchUsers(userQueryDto: UserQueryDto): Promise<UserDto[]> {
-  const users = await userRepository.searchUsers(userQueryDto);
-  const userDtos = users.map(u => UserDtoSchema.parse(u));
-  return userDtos;
-}
-
-export async function searchUsersWithPrivilegeDelegation(query: UserQueryWithPrivilegeDelegationDto) {
-  return await searchUsersWithDelegations(query);
-}
-
-export async function getUserDetailById(userId: number): Promise<UserDetailDto> {
-  const user = await userRepository.getUserById(userId);
-  const userDetail = await buildUserDetail(user);
-  return userDetail;
-}
-
-export async function getUserDetailByUsername(username: string): Promise<UserDetailDto> {
-  const user = await userRepository.getUserByUsername(username);
-  const userDetail = await buildUserDetail(user);
-  return userDetail;
-}
-
-export async function getUserDetailByMobile(mobile: string): Promise<UserDetailDto> {
-  const user = await userRepository.getUserByMobile(mobile);
-  const userDetail = await buildUserDetail(user);
-  return userDetail;
-}
-
-export async function getUserDetailByWxId(wxId: string): Promise<UserDetailDto> {
-  const user = await userRepository.getUserByWxId(wxId);
-  const userDetail = await buildUserDetail(user);
-  return userDetail;
-}
+export type UserService = ReturnType<typeof createUserService>;

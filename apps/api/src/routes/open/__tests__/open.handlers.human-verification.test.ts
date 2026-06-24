@@ -1,33 +1,13 @@
+import { VerificationCodeUsage } from "@api/enums/verificationCode.usage";
 import { ApiErrorCode } from "@iam/contracts";
-import { afterAll, beforeEach, describe, expect, mock, test } from "bun:test";
+import { beforeEach, describe, expect, mock, test } from "bun:test";
+import { createOpenHandlers } from "../open.handlers";
 
 type ValidTarget = "json" | "query" | "param";
-
-function makeContext(input: Partial<Record<ValidTarget, unknown>>) {
-  return {
-    req: {
-      header(name: string) {
-        return name.toLowerCase() === "client" ? "iam" : undefined;
-      },
-      method: "POST",
-      path: "/open/code/send",
-      valid(target: ValidTarget) {
-        return input[target];
-      },
-    },
-    get(name: string) {
-      return name === "requestId" ? "req-1" : undefined;
-    },
-    json(data: unknown) {
-      return data;
-    },
-  };
-}
 
 const ensureActionAllowed = mock(async () => undefined);
 const recordOpenUserInfoLookup = mock(async () => undefined);
 const checkVerificationCode = mock(async () => true);
-const consumeVerificationCode = mock(async () => true);
 const sendCode = mock(async () => true);
 const recordAuditLogFromContext = mock(async () => undefined);
 const getUserDetailByUsername = mock(async () => ({
@@ -35,44 +15,61 @@ const getUserDetailByUsername = mock(async () => ({
   name: "张三",
   username: "zhangsan",
 }));
-
-mock.module("@api/services/human-verification/cap.service", () => ({
-  HumanVerificationAction: {
-    OpenUserInfoLookup: "openUserInfoLookup",
-    SendSmsCode: "sendSmsCode",
-  },
-  ensureActionAllowed,
-}));
-
-mock.module("@api/services/human-verification/human-risk.service", () => ({
-  recordOpenUserInfoLookup,
-}));
-
-mock.module("@api/services/mobile/mobile.service", () => ({
-  checkVerificationCode,
-  consumeVerificationCode,
-  sendCode,
-}));
-
-mock.module("@api/services/audit/audit.service", () => ({
-  recordAuditLogFromContext,
-}));
-
-mock.module("@api/services/user/user.service", () => ({
-  getUserDetailByUsername,
-}));
-
-mock.module("@api/services/client/client.service", () => ({
-  async getClientByCode() {
-    return null;
-  },
-}));
-
-const handlers = await import("../open.handlers");
-
-afterAll(() => {
-  mock.restore();
+const resetPassword = mock(async () => true);
+const resolveResetPasswordMobile = mock(async (_username: string, phoneNumber?: string) => phoneNumber ?? "17721462865");
+const requirePhoneNumber = mock((phoneNumber?: string) => {
+  if (!phoneNumber)
+    throw new Error("手机号不能为空");
+  return phoneNumber;
 });
+
+function createHandlers() {
+  return createOpenHandlers({
+    auditLogWriter: {
+      recordAuditLog: mock(async () => undefined),
+      recordAuditLogFromContext,
+    },
+    clientService: {
+      getClientByCode: mock(async () => null),
+    },
+    humanVerification: {
+      createChallenge: mock(async () => ({ challenge: { c: 1, s: 2, d: 3 }, expires: 1000 })),
+      ensureActionAllowed,
+      isValidSiteKey: mock(() => true),
+      redeemChallenge: mock(async () => ({ success: true })),
+    },
+    humanRiskService: {
+      recordOpenUserInfoLookup,
+    },
+    mobileService: {
+      checkVerificationCode,
+      sendCode,
+    },
+    openService: {
+      maskMobile: mock((mobile: string | null) => mobile?.replace(/^(\d{3})\d{4}(\d{4})$/, "$1****$2") ?? null),
+      requirePhoneNumber,
+      resolveResetPasswordMobile,
+    },
+    userService: {
+      getUserDetailByUsername,
+      resetPassword,
+    },
+  } as any);
+}
+
+function makeContext(input: Partial<Record<ValidTarget, unknown>>) {
+  return {
+    req: {
+      header: mock((name: string) => name.toLowerCase() === "client" ? "iam" : undefined),
+      method: "POST",
+      path: "/open/code/send",
+      raw: new Request("https://iam.example.test/open/code/send"),
+      valid: mock((target: ValidTarget) => input[target]),
+    },
+    get: mock((name: string) => name === "requestId" ? "req-1" : undefined),
+    json: mock((data: unknown) => data),
+  };
+}
 
 beforeEach(() => {
   ensureActionAllowed.mockReset();
@@ -81,8 +78,6 @@ beforeEach(() => {
   recordOpenUserInfoLookup.mockResolvedValue(undefined);
   checkVerificationCode.mockReset();
   checkVerificationCode.mockResolvedValue(true);
-  consumeVerificationCode.mockReset();
-  consumeVerificationCode.mockResolvedValue(true);
   sendCode.mockReset();
   sendCode.mockResolvedValue(true);
   recordAuditLogFromContext.mockReset();
@@ -93,10 +88,14 @@ beforeEach(() => {
     name: "张三",
     username: "zhangsan",
   });
+  resetPassword.mockClear();
+  resolveResetPasswordMobile.mockClear();
+  requirePhoneNumber.mockClear();
 });
 
-describe("open handlers human verification", () => {
+describe("createOpenHandlers human verification", () => {
   test("does not send an SMS code when Cap verification is required", async () => {
+    const handlers = createHandlers();
     ensureActionAllowed.mockRejectedValue(Object.assign(new Error("需要人机校验"), {
       code: ApiErrorCode.HumanVerificationRequired,
     }));
@@ -105,7 +104,7 @@ describe("open handlers human verification", () => {
       json: {
         capToken: undefined,
         phoneNumber: "17721462865",
-        usage: "login",
+        usage: VerificationCodeUsage.Login,
       },
     }) as never, undefined as never)).rejects.toHaveProperty("code", ApiErrorCode.HumanVerificationRequired);
 
@@ -113,11 +112,13 @@ describe("open handlers human verification", () => {
   });
 
   test("sends an SMS code after Cap verification succeeds", async () => {
+    const handlers = createHandlers();
+
     const result = await handlers.codeSend(makeContext({
       json: {
         capToken: "cap-token",
         phoneNumber: "17721462865",
-        usage: "login",
+        usage: VerificationCodeUsage.Login,
       },
     }) as never, undefined as never);
 
@@ -126,21 +127,21 @@ describe("open handlers human verification", () => {
       data: true,
       message: "success",
     });
-
     expect(ensureActionAllowed).toHaveBeenCalled();
-    expect(sendCode).toHaveBeenCalledWith("17721462865", "login");
+    expect(sendCode).toHaveBeenCalledWith("17721462865", VerificationCodeUsage.Login);
     expect(recordAuditLogFromContext).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({
       action: "auth.sms_code.send",
       outcome: "success",
       details: {
         phoneNumber: "177****2865",
-        usage: "login",
+        usage: VerificationCodeUsage.Login,
         username: undefined,
       },
     }));
   });
 
   test("does not query user info when Cap verification is required", async () => {
+    const handlers = createHandlers();
     ensureActionAllowed.mockRejectedValue(Object.assign(new Error("需要人机校验"), {
       code: ApiErrorCode.HumanVerificationRequired,
     }));
@@ -156,6 +157,8 @@ describe("open handlers human verification", () => {
   });
 
   test("returns masked user info after Cap verification succeeds", async () => {
+    const handlers = createHandlers();
+
     const result = await handlers.userInfo(makeContext({
       query: {
         capToken: "cap-token",
@@ -172,18 +175,19 @@ describe("open handlers human verification", () => {
       },
       message: "success",
     });
-
     expect(recordOpenUserInfoLookup).toHaveBeenCalled();
     expect(getUserDetailByUsername).toHaveBeenCalledWith("zhangsan");
   });
 
   test("verifies SMS codes without consuming them", async () => {
+    const handlers = createHandlers();
+
     const result = await handlers.codeVerify(makeContext({
       json: {
         code: "123456",
         phoneNumber: "17721462865",
         username: "zhangsan",
-        usage: "resetPassword",
+        usage: VerificationCodeUsage.ResetPassword,
       },
     }) as never, undefined as never);
 
@@ -192,7 +196,7 @@ describe("open handlers human verification", () => {
       data: { result: true },
       message: "success",
     });
-    expect(checkVerificationCode).toHaveBeenCalledWith("resetPassword", "17721462865", "123456");
-    expect(consumeVerificationCode).not.toHaveBeenCalled();
+    expect(checkVerificationCode).toHaveBeenCalledWith(VerificationCodeUsage.ResetPassword, "17721462865", "123456");
+    expect(sendCode).not.toHaveBeenCalled();
   });
 });

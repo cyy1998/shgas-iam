@@ -2,6 +2,10 @@ import { z } from "zod";
 
 const positiveSeconds = z.coerce.number().int().positive();
 
+function optionalNonEmptyString() {
+  return z.string().optional().transform(value => value?.trim() || undefined);
+}
+
 export const OidcProviderEnvSchema = z.object({
   DATABASE_URL: z.string().min(1),
   REDIS_URL: z.string().min(1),
@@ -43,6 +47,32 @@ export const OidcProviderEnvSchema = z.object({
   OIDC_CLIENT_AUTH_FAILURE_LIMIT: z.coerce.number().int().positive().default(5),
   OIDC_CLIENT_AUTH_FAILURE_WINDOW_SECONDS: positiveSeconds.default(60),
   OIDC_TRUST_PROXY: z.coerce.boolean().default(true),
+  SESSION_KERNEL_NAMESPACE: z.string().default("sess:v2:"),
+  SESSION_KERNEL_PRINCIPAL_IDLE_TTL_SECONDS: positiveSeconds.optional(),
+  SESSION_KERNEL_PRINCIPAL_ABSOLUTE_TTL_SECONDS: positiveSeconds.optional(),
+  SESSION_KERNEL_TOMBSTONE_TTL_SECONDS: positiveSeconds.default(86400),
+  SESSION_KERNEL_TOMBSTONE_GRACE_SECONDS: positiveSeconds.default(300),
+  SESSION_LOOKUP_HMAC_CURRENT_ID: z.string().min(1).default("current"),
+  SESSION_LOOKUP_HMAC_CURRENT_SECRET: z.string().min(32),
+  SESSION_LOOKUP_HMAC_PREVIOUS_ID: optionalNonEmptyString(),
+  SESSION_LOOKUP_HMAC_PREVIOUS_SECRET: optionalNonEmptyString(),
+}).superRefine((env, ctx) => {
+  const hasPreviousId = env.SESSION_LOOKUP_HMAC_PREVIOUS_ID !== undefined;
+  const hasPreviousSecret = env.SESSION_LOOKUP_HMAC_PREVIOUS_SECRET !== undefined;
+  if (hasPreviousId !== hasPreviousSecret) {
+    ctx.addIssue({
+      code: "custom",
+      path: ["SESSION_LOOKUP_HMAC_PREVIOUS_ID"],
+      message: "SESSION_LOOKUP_HMAC_PREVIOUS_ID and SESSION_LOOKUP_HMAC_PREVIOUS_SECRET must be configured together",
+    });
+  }
+  if (env.SESSION_LOOKUP_HMAC_PREVIOUS_SECRET !== undefined && env.SESSION_LOOKUP_HMAC_PREVIOUS_SECRET.length < 32) {
+    ctx.addIssue({
+      code: "custom",
+      path: ["SESSION_LOOKUP_HMAC_PREVIOUS_SECRET"],
+      message: "SESSION_LOOKUP_HMAC_PREVIOUS_SECRET must be at least 32 characters",
+    });
+  }
 });
 
 export type OidcProviderEnv = z.infer<typeof OidcProviderEnvSchema>;

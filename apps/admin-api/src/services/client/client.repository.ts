@@ -7,10 +7,109 @@ import type {
   ClientUpdateDto,
 } from "./client.type";
 import { OidcClientState } from "@iam/contracts";
-import db from "@iam/db";
 import { compactUpdate, firstRow, ilikeContainsIf, inArrayIf } from "@iam/db/query-utils";
 import { clients } from "@iam/db/schema";
 import { and, count, eq, isNotNull, isNull, or, sql } from "drizzle-orm";
+
+export function createClientRepository(db: DbClient) {
+  return {
+    async createClient(clientDto: ClientCreateDto) {
+      const rows = await db.insert(clients).values(clientDto).returning();
+      return firstRow(rows)!;
+    },
+    async getClientByCode(clientCode: string) {
+      return await db.query.clients.findFirst({
+        where: {
+          clientCode,
+          isDelete: false,
+        },
+      }) ?? null;
+    },
+    async getAnyClientByCode(clientCode: string) {
+      return await db.query.clients.findFirst({
+        where: { clientCode },
+      }) ?? null;
+    },
+    async getClientById(id: number) {
+      return await db.query.clients.findFirst({
+        where: {
+          id,
+          isDelete: false,
+        },
+      }) ?? null;
+    },
+    async searchClientsPaged(dto: ClientPaginationQueryDto) {
+      const where = clientsSearchWhere(dto);
+      const [rows, totalRows] = await Promise.all([
+        db
+          .select()
+          .from(clients)
+          .where(where)
+          .orderBy(clients.id)
+          .limit(dto.pageSize)
+          .offset((dto.pageNum - 1) * dto.pageSize),
+        db.select({ value: count() }).from(clients).where(where),
+      ]);
+      return { rows, total: firstRow(totalRows)?.value ?? 0 };
+    },
+    async updateClientByCode(clientCode: string, data: ClientUpdateDto) {
+      const rows = await db
+        .update(clients)
+        .set(compactUpdate(data))
+        .where(and(eq(clients.clientCode, clientCode), eq(clients.isDelete, false)))
+        .returning();
+      return firstRow(rows)!;
+    },
+    async updateClientByCodeWithOidcVersion(clientCode: string, data: ClientUpdateDto) {
+      const rows = await db
+        .update(clients)
+        .set({ ...compactUpdate(data), oidcConfigVersion: sql`${clients.oidcConfigVersion} + 1` })
+        .where(and(eq(clients.clientCode, clientCode), eq(clients.isDelete, false)))
+        .returning();
+      return firstRow(rows)!;
+    },
+    async updateClientById(clientDto: ClientInputDto) {
+      const { id, clientCode: _clientCode, ...data } = clientDto;
+      const rows = await db
+        .update(clients)
+        .set(compactUpdate(data))
+        .where(and(eq(clients.id, id), eq(clients.isDelete, false)))
+        .returning();
+      return firstRow(rows)!;
+    },
+    async updateClientByIdWithOidcVersion(clientDto: ClientInputDto) {
+      const { id, clientCode: _clientCode, ...data } = clientDto;
+      const rows = await db
+        .update(clients)
+        .set({ ...compactUpdate(data), oidcConfigVersion: sql`${clients.oidcConfigVersion} + 1` })
+        .where(and(eq(clients.id, id), eq(clients.isDelete, false)))
+        .returning();
+      return firstRow(rows)!;
+    },
+    async updateClientOidcByCode(clientCode: string, data: {
+      oidcEnabled?: boolean;
+      oidcConfig?: ClientOidcConfigureDto | null;
+      oidcSecretHash?: string | null;
+    }) {
+      const rows = await db
+        .update(clients)
+        .set({ ...data, oidcConfigVersion: sql`${clients.oidcConfigVersion} + 1` })
+        .where(and(eq(clients.clientCode, clientCode), eq(clients.isDelete, false)))
+        .returning();
+      return firstRow(rows)!;
+    },
+    async softDeleteClientByCode(clientCode: string) {
+      const rows = await db
+        .update(clients)
+        .set({ isDelete: true, oidcConfigVersion: sql`${clients.oidcConfigVersion} + 1` })
+        .where(and(eq(clients.clientCode, clientCode), eq(clients.isDelete, false)))
+        .returning();
+      return firstRow(rows)!;
+    },
+  };
+}
+
+export type ClientRepository = ReturnType<typeof createClientRepository>;
 
 function managementLevelsWhere(values: ClientPaginationQueryDto["conditions"]["exactConditions"]["managementLevels"]) {
   if (values === undefined) {
@@ -72,120 +171,4 @@ function clientsSearchWhere(dto: ClientPaginationQueryDto) {
     oidcAllowedScopesWhere(exactConditions.oidcAllowedScopes),
     eq(clients.isDelete, false),
   );
-}
-
-export async function createClient(clientDto: ClientCreateDto, tx: DbClient = db) {
-  const rows = await tx.insert(clients).values(clientDto).returning();
-  return firstRow(rows)!;
-}
-
-export async function getClientByCode(clientCode: string, tx: DbClient = db) {
-  return await tx.query.clients.findFirst({
-    where: {
-      clientCode,
-      isDelete: false,
-    },
-  }) ?? null;
-}
-
-export async function getAnyClientByCode(clientCode: string, tx: DbClient = db) {
-  return await tx.query.clients.findFirst({
-    where: { clientCode },
-  }) ?? null;
-}
-
-export async function getClientById(id: number, tx: DbClient = db) {
-  return await tx.query.clients.findFirst({
-    where: {
-      id,
-      isDelete: false,
-    },
-  }) ?? null;
-}
-
-export async function searchClientsPaged(dto: ClientPaginationQueryDto, tx: DbClient = db) {
-  const where = clientsSearchWhere(dto);
-  const [rows, totalRows] = await Promise.all([
-    tx
-      .select()
-      .from(clients)
-      .where(where)
-      .orderBy(clients.id)
-      .limit(dto.pageSize)
-      .offset((dto.pageNum - 1) * dto.pageSize),
-    tx.select({ value: count() }).from(clients).where(where),
-  ]);
-  return { rows, total: firstRow(totalRows)?.value ?? 0 };
-}
-
-export async function updateClientByCode(
-  clientCode: string,
-  data: ClientUpdateDto,
-  tx: DbClient = db,
-) {
-  const rows = await tx
-    .update(clients)
-    .set(compactUpdate(data))
-    .where(and(eq(clients.clientCode, clientCode), eq(clients.isDelete, false)))
-    .returning();
-  return firstRow(rows)!;
-}
-
-export async function updateClientByCodeWithOidcVersion(
-  clientCode: string,
-  data: ClientUpdateDto,
-  tx: DbClient = db,
-) {
-  const rows = await tx
-    .update(clients)
-    .set({ ...compactUpdate(data), oidcConfigVersion: sql`${clients.oidcConfigVersion} + 1` })
-    .where(and(eq(clients.clientCode, clientCode), eq(clients.isDelete, false)))
-    .returning();
-  return firstRow(rows)!;
-}
-
-export async function updateClientById(clientDto: ClientInputDto, tx: DbClient = db) {
-  const { id, clientCode: _clientCode, ...data } = clientDto;
-  const rows = await tx
-    .update(clients)
-    .set(compactUpdate(data))
-    .where(and(eq(clients.id, id), eq(clients.isDelete, false)))
-    .returning();
-  return firstRow(rows)!;
-}
-
-export async function updateClientByIdWithOidcVersion(clientDto: ClientInputDto, tx: DbClient = db) {
-  const { id, clientCode: _clientCode, ...data } = clientDto;
-  const rows = await tx
-    .update(clients)
-    .set({ ...compactUpdate(data), oidcConfigVersion: sql`${clients.oidcConfigVersion} + 1` })
-    .where(and(eq(clients.id, id), eq(clients.isDelete, false)))
-    .returning();
-  return firstRow(rows)!;
-}
-
-export async function updateClientOidcByCode(
-  clientCode: string,
-  data: {
-    oidcEnabled?: boolean;
-    oidcConfig?: ClientOidcConfigureDto | null;
-    oidcSecretHash?: string | null;
-  },
-  tx: DbClient = db,
-) {
-  const rows = await tx
-    .update(clients)
-    .set({ ...data, oidcConfigVersion: sql`${clients.oidcConfigVersion} + 1` })
-    .where(and(eq(clients.clientCode, clientCode), eq(clients.isDelete, false)))
-    .returning();
-  return firstRow(rows)!;
-}
-
-export async function softDeleteClientByCode(clientCode: string, tx: DbClient = db) {
-  const rows = await tx
-    .update(clients)
-    .set({ isDelete: true, oidcConfigVersion: sql`${clients.oidcConfigVersion} + 1` })
-    .where(and(eq(clients.clientCode, clientCode), eq(clients.isDelete, false)))
-    .returning();
-  return firstRow(rows)!;
 }

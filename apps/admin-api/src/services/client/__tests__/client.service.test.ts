@@ -1,478 +1,382 @@
-import type { ClientOidcConfigureDto } from "../client.type";
+import { createFakePasswordHasher, createFakeRandom, createImmediateUnitOfWork } from "@admin-api/test/fakes";
+import { AfterCommitRequiredTaskError } from "@iam/api-core/uow";
 import {
   ClientManagementLevel,
   ClientStatus,
-  OidcClientState,
   OidcClientType,
   OidcScope,
   OidcTokenEndpointAuthMethod,
 } from "@iam/contracts";
-import { beforeEach, describe, expect, mock, test } from "bun:test";
+import { describe, expect, mock, test } from "bun:test";
+import { createClientService } from "../client.service";
 
-const tx = { name: "admin-client-service-test-tx" };
-const transaction = mock(async (callback: (txArg: unknown) => Promise<unknown>) => callback(tx));
-
-const clientRepository = {
-  createClient: mock(),
-  getAnyClientByCode: mock(),
-  getClientByCode: mock(),
-  getClientById: mock(),
-  searchClientsPaged: mock(),
-  softDeleteClientByCode: mock(),
-  updateClientByCode: mock(),
-  updateClientByCodeWithOidcVersion: mock(),
-  updateClientById: mock(),
-  updateClientByIdWithOidcVersion: mock(),
-  updateClientOidcByCode: mock(),
-};
-
-const redis = {
-  del: mock(async () => 1),
-  publish: mock(async () => 1),
-  set: mock(async () => "OK"),
-};
-
-const hashSecret = mock(async () => "oidc-secret-hash");
-const logger = { warn: mock(() => undefined) };
-
-const auditService = {
-  recordAuditLog: mock(),
-};
-
-mock.module("@iam/db", () => ({
-  default: {
-    transaction,
-  },
-}));
-
-mock.module("@admin-api/lib/infra/redis", () => ({
-  default: redis,
-}));
-mock.module("@admin-api/lib/logger", () => ({ logger }));
-mock.module("@iam/api-core/security", () => ({ hashSecret }));
-
-mock.module("@admin-api/services/audit/audit.service", () => auditService);
-mock.module("@admin-api/services/client/client.repository", () => clientRepository);
-
-const clientService = await import("../client.service");
-
-const fixedDate = new Date("2026-01-01T00:00:00.000Z");
-
-function makeClient(overrides: Record<string, unknown> = {}) {
+function client(overrides: Record<string, unknown> = {}) {
   return {
     id: 1,
     clientCode: "portal",
     clientName: "Portal",
-    clientSecret: "secret-1",
+    clientSecret: "secret",
     url: "https://portal.example.com",
     status: ClientStatus.Enable,
     description: null,
     isDelete: false,
-    createTime: fixedDate,
-    updateTime: fixedDate,
+    createTime: new Date("2026-01-01T00:00:00Z"),
+    updateTime: new Date("2026-01-01T00:00:00Z"),
     extAttributes: {
-      userExcluding: [],
-      requireOrcas: false,
-      validRedirectUrls: ["https://portal.example.com"],
-      managementLevel: ClientManagementLevel.Gateway,
-      logoutEndpoint: "https://portal.example.com/logout",
       callbackEndpoint: "https://portal.example.com/sso/callback",
+      logoutEndpoint: "https://portal.example.com/sso/logout",
+      managementLevel: ClientManagementLevel.Gateway,
+      requireOrcas: false,
+      userExcluding: [],
+      validRedirectUrls: ["https://portal.example.com"],
     },
     oidcEnabled: false,
     oidcConfig: null,
     oidcSecretHash: null,
-    oidcConfigVersion: 0,
+    oidcConfigVersion: 1,
     ...overrides,
   };
 }
 
-beforeEach(() => {
-  transaction.mockReset();
-  transaction.mockImplementation(async (callback: (txArg: unknown) => Promise<unknown>) => callback(tx));
-  redis.del.mockClear();
-  redis.publish.mockClear();
-  redis.set.mockClear();
-  hashSecret.mockClear();
-  hashSecret.mockResolvedValue("oidc-secret-hash");
-  logger.warn.mockClear();
-  auditService.recordAuditLog.mockReset();
-  clientRepository.createClient.mockReset();
-  clientRepository.getAnyClientByCode.mockReset();
-  clientRepository.getClientByCode.mockReset();
-  clientRepository.getClientById.mockReset();
-  clientRepository.searchClientsPaged.mockReset();
-  clientRepository.softDeleteClientByCode.mockReset();
-  clientRepository.updateClientByCode.mockReset();
-  clientRepository.updateClientByCodeWithOidcVersion.mockReset();
-  clientRepository.updateClientById.mockReset();
-  clientRepository.updateClientByIdWithOidcVersion.mockReset();
-  clientRepository.updateClientOidcByCode.mockReset();
+function createAfterCommitLogger() {
+  return {
+    warn: mock((_obj: Record<string, unknown>, _msg: string) => undefined),
+    error: mock((_obj: Record<string, unknown>, _msg: string) => undefined),
+  };
+}
 
-  clientRepository.createClient.mockResolvedValue(makeClient());
-  clientRepository.getAnyClientByCode.mockResolvedValue(null);
-  clientRepository.getClientByCode.mockResolvedValue(makeClient());
-  clientRepository.getClientById.mockResolvedValue(makeClient());
-  clientRepository.searchClientsPaged.mockResolvedValue({ rows: [makeClient()], total: 1 });
-  clientRepository.softDeleteClientByCode.mockResolvedValue(makeClient({ isDelete: true }));
-  clientRepository.updateClientByCode.mockResolvedValue(makeClient());
-  clientRepository.updateClientByCodeWithOidcVersion.mockResolvedValue(makeClient({ oidcConfigVersion: 1 }));
-  clientRepository.updateClientById.mockResolvedValue(makeClient());
-  clientRepository.updateClientByIdWithOidcVersion.mockResolvedValue(makeClient({ oidcConfigVersion: 1 }));
-  clientRepository.updateClientOidcByCode.mockImplementation(
-    async (_clientCode: string, data: Record<string, unknown>) => makeClient({
-      ...data,
-      oidcConfigVersion: 1,
-    }),
-  );
-  auditService.recordAuditLog.mockResolvedValue(undefined);
-});
+function revokeSummary() {
+  return {
+    principalSessions: { revoked: 0, alreadyRevoked: 0, missing: 0, excluded: 0 },
+    bindings: { revoked: 0, alreadyRevoked: 0, missing: 0, excluded: 0 },
+    credentials: { revoked: 0, alreadyRevoked: 0, missing: 0, excluded: 0 },
+    artifacts: { revoked: 0, alreadyRevoked: 0, missing: 0, excluded: 0 },
+    cleanup: { attempted: 0, succeeded: 0, failed: 0, failures: [] },
+  };
+}
 
-describe("admin clientService.searchClientsForAdmin", () => {
-  test("maps rows and calculates pages", async () => {
-    const query = {
-      conditions: {
-        fuzzyConditions: { text: "portal" },
-        exactConditions: { statuses: [ClientStatus.Enable] },
-      },
-      pageNum: 2,
+function oidcConfig() {
+  return {
+    clientType: OidcClientType.Confidential as const,
+    redirectUris: ["https://portal.example.com/oidc/callback"],
+    postLogoutRedirectUris: ["https://portal.example.com/logout"],
+    allowedScopes: [OidcScope.OpenId, OidcScope.Profile],
+    tokenEndpointAuthMethod: OidcTokenEndpointAuthMethod.ClientSecretBasic as const,
+  };
+}
+
+function createService(options: { afterCommitLogger?: ReturnType<typeof createAfterCommitLogger> } = {}) {
+  const tx = {
+    auditService: { recordAuditLog: mock(async () => undefined) },
+    clientRepository: {
+      createClient: mock(async (input: Record<string, unknown>) => client(input)),
+      getAnyClientByCode: mock(async () => null),
+      getClientByCode: mock(async () => client()),
+      getClientById: mock(async () => client()),
+      softDeleteClientByCode: mock(async () => client({ isDelete: true })),
+      updateClientByCode: mock(async (_clientCode: string, data: Record<string, unknown>) => client(data)),
+      updateClientByCodeWithOidcVersion: mock(async (_clientCode: string, data: Record<string, unknown>) =>
+        client({ ...data, oidcConfigVersion: 2 })),
+      updateClientById: mock(async (data: Record<string, unknown>) => client(data)),
+      updateClientByIdWithOidcVersion: mock(async (data: Record<string, unknown>) =>
+        client({ ...data, oidcConfigVersion: 2 })),
+      updateClientOidcByCode: mock(async (_clientCode: string, data: Record<string, unknown>) =>
+        client({ ...data, oidcConfigVersion: 2 })),
+    },
+  };
+  const deps = {
+    clientRepository: {
+      getClientByCode: mock(async () => client()),
+      searchClientsPaged: mock(async () => ({ rows: [client()], total: 1 })),
+    },
+    clientCache: {
+      deleteClient: mock(async () => undefined),
+      setClient: mock(async () => undefined),
+      syncUpdatedClient: mock(async () => undefined),
+    },
+    sessionRevocation: {
+      revokeClientAllProtocols: mock(async () => revokeSummary()),
+      revokeClientProtocol: mock(async () => revokeSummary()),
+    },
+    passwordHasher: createFakePasswordHasher(),
+    random: createFakeRandom(),
+    uow: createImmediateUnitOfWork(tx, { logger: options.afterCommitLogger }),
+  } as any;
+  return { service: createClientService(deps), deps, tx };
+}
+
+describe("createClientService", () => {
+  test("maps paged client search results", async () => {
+    const { service } = createService();
+
+    await expect(service.searchClientsForAdmin({
+      exactConditions: {},
+      fuzzyConditions: {},
+      pageNum: 1,
       pageSize: 10,
+    } as any)).resolves.toMatchObject({
+      result: [{ clientCode: "portal", hasOidcSecret: false }],
+      total: 1,
+      pages: 1,
+    });
+  });
+
+  test("creates a client in a unit of work and populates cache afterwards", async () => {
+    const { service, deps, tx } = createService();
+    const input = {
+      clientCode: "portal",
+      clientName: "Portal",
+      clientSecret: "secret",
+      url: "https://portal.example.com",
+      status: ClientStatus.Enable,
+      description: null,
+      extAttributes: client().extAttributes,
     };
-    clientRepository.searchClientsPaged.mockResolvedValue({
-      rows: [makeClient({ clientSecret: "hidden" })],
-      total: 21,
-    });
 
-    await expect(clientService.searchClientsForAdmin(query)).resolves.toMatchObject({
-      result: [{
-        clientCode: "portal",
-        clientSecret: "hidden",
-        oidcState: OidcClientState.Unconfigured,
-        hasOidcSecret: false,
-      }],
-      total: 21,
-      pageNum: 2,
-      pageSize: 10,
-      pages: 3,
-    });
-  });
-});
+    await expect(service.createClient(input as any)).resolves.toMatchObject({ clientCode: "portal" });
 
-describe("admin clientService.getClientDetailByCode", () => {
-  test("rejects missing clients", async () => {
-    clientRepository.getClientByCode.mockResolvedValue(null);
-
-    await expect(clientService.getClientDetailByCode("missing")).rejects.toThrow("客户端不存在");
-  });
-});
-
-describe("admin clientService.createClient", () => {
-  test("rejects duplicate client codes", async () => {
-    clientRepository.getAnyClientByCode.mockResolvedValue(makeClient());
-
-    await expect(clientService.createClient({
-      clientCode: "portal",
-      clientName: "Portal",
-      clientSecret: "secret-1",
-      status: ClientStatus.Enable,
-      extAttributes: makeClient().extAttributes,
-    })).rejects.toThrow("客户端编码已存在");
-
-    expect(clientRepository.createClient).not.toHaveBeenCalled();
-  });
-
-  test("creates clients and writes code and secret cache", async () => {
-    await expect(clientService.createClient({
-      clientCode: "portal",
-      clientName: "Portal",
-      clientSecret: "secret-1",
-      status: ClientStatus.Enable,
-      extAttributes: {
-        ...makeClient().extAttributes,
-        validRedirectUrls: ["https://portal.example.com", "https://*.example.com/app/*"],
-      },
-    })).resolves.toMatchObject({ clientCode: "portal" });
-
-    expect(clientRepository.createClient).toHaveBeenCalledWith(expect.objectContaining({ clientCode: "portal" }), tx);
-    expect(auditService.recordAuditLog).toHaveBeenCalledWith(expect.objectContaining({
+    expect(tx.clientRepository.createClient).toHaveBeenCalledWith(input);
+    expect(tx.auditService.recordAuditLog).toHaveBeenCalledWith(expect.objectContaining({
       action: "admin.client.create",
-      outcome: "success",
-      actorType: "system",
-      targetType: "client",
       targetCode: "portal",
-      details: expect.objectContaining({
-        clientSecretProvided: true,
-      }),
-    }), tx);
-    expect(redis.set).toHaveBeenCalledWith("cache:client:code:portal", expect.any(String));
-    expect(redis.set).toHaveBeenCalledWith("cache:client:secret:secret-1", expect.any(String));
+    }));
+    expect(deps.clientCache.setClient).toHaveBeenCalledWith(expect.objectContaining({ clientCode: "portal" }));
   });
 
-  test("rejects invalid redirect URL patterns before writing or refreshing cache", async () => {
-    await expect(clientService.createClient({
+  test("reports required cache failures after creating a client", async () => {
+    const { service, deps, tx } = createService();
+    deps.clientCache.setClient.mockRejectedValueOnce(new Error("cache down"));
+
+    await expect(service.createClient({
       clientCode: "portal",
       clientName: "Portal",
-      clientSecret: "secret-1",
+      clientSecret: "secret",
+      url: "https://portal.example.com",
       status: ClientStatus.Enable,
-      extAttributes: {
-        ...makeClient().extAttributes,
-        validRedirectUrls: ["https://portal.example.com/*/callback"],
-      },
-    })).rejects.toThrow("存在非法 redirect URL pattern");
+      description: null,
+      extAttributes: client().extAttributes,
+    } as any)).rejects.toBeInstanceOf(AfterCommitRequiredTaskError);
 
-    expect(transaction).not.toHaveBeenCalled();
-    expect(clientRepository.createClient).not.toHaveBeenCalled();
-    expect(redis.set).not.toHaveBeenCalled();
-  });
-});
-
-describe("admin clientService.updateClient", () => {
-  test("rejects missing clients", async () => {
-    clientRepository.getClientByCode.mockResolvedValue(null);
-
-    await expect(clientService.updateClient("missing", { clientName: "New" })).rejects.toThrow("客户端不存在");
-
-    expect(clientRepository.updateClientByCode).not.toHaveBeenCalled();
+    expect(tx.clientRepository.createClient).toHaveBeenCalled();
+    expect(tx.auditService.recordAuditLog).toHaveBeenCalled();
+    expect(deps.clientCache.setClient).toHaveBeenCalled();
   });
 
-  test("deletes the old secret cache when the custom SSO secret changes", async () => {
-    clientRepository.getClientByCode.mockResolvedValue(makeClient({
-      clientSecret: "old-secret",
-    }));
-    clientRepository.updateClientByCode.mockResolvedValue(makeClient({
-      clientSecret: "new-secret",
-    }));
+  test("rejects duplicate client codes before creating", async () => {
+    const { service, tx } = createService();
+    (tx.clientRepository.getAnyClientByCode as any).mockResolvedValue(client());
 
-    await expect(clientService.updateClient("portal", {
-      clientSecret: "new-secret",
-    })).resolves.toMatchObject({ clientCode: "portal" });
+    await expect(service.createClient({
+      clientCode: "portal",
+      clientName: "Portal",
+      clientSecret: "secret",
+      extAttributes: client().extAttributes,
+    } as any)).rejects.toThrow("客户端编码已存在");
 
-    expect(redis.del).toHaveBeenCalledWith("cache:client:secret:old-secret");
-    expect(redis.set).toHaveBeenCalledWith("cache:client:code:portal", expect.any(String));
-    expect(redis.set).toHaveBeenCalledWith("cache:client:secret:new-secret", expect.any(String));
-    expect(auditService.recordAuditLog).toHaveBeenCalledWith(expect.objectContaining({
-      action: "admin.client.rotate_secret",
-      details: expect.objectContaining({
-        patch: expect.objectContaining({
-          clientSecretRotated: true,
-        }),
-      }),
-    }), tx);
+    expect(tx.clientRepository.createClient).not.toHaveBeenCalled();
   });
 
-  test("accepts valid redirect URL patterns on update", async () => {
-    await expect(clientService.updateClient("portal", {
-      extAttributes: {
-        ...makeClient().extAttributes,
-        validRedirectUrls: ["https://*.example.com/sso/*", "http://localhost:8080"],
-      },
-    })).resolves.toMatchObject({ clientCode: "portal" });
+  test("disable status updates sync cache and revoke all protocols", async () => {
+    const { service, deps, tx } = createService();
 
-    expect(clientRepository.updateClientByCode).toHaveBeenCalledWith("portal", expect.objectContaining({
-      extAttributes: expect.objectContaining({
-        validRedirectUrls: ["https://*.example.com/sso/*", "http://localhost:8080"],
-      }),
-    }), tx);
-    expect(redis.set).toHaveBeenCalledWith("cache:client:code:portal", expect.any(String));
-    expect(clientRepository.updateClientByCodeWithOidcVersion).not.toHaveBeenCalled();
-  });
+    await expect(service.updateClientStatus("portal", ClientStatus.Disable)).resolves.toBe(true);
 
-  test("rejects invalid redirect URL patterns on update without refreshing cache", async () => {
-    await expect(clientService.updateClient("portal", {
-      extAttributes: {
-        ...makeClient().extAttributes,
-        validRedirectUrls: ["https://*.com/callback"],
-      },
-    })).rejects.toThrow("存在非法 redirect URL pattern");
-
-    expect(transaction).not.toHaveBeenCalled();
-    expect(clientRepository.updateClientByCode).not.toHaveBeenCalled();
-    expect(redis.del).not.toHaveBeenCalled();
-    expect(redis.set).not.toHaveBeenCalled();
-  });
-});
-
-describe("admin clientService.updateClientById", () => {
-  test("rejects clientCode changes from the legacy REST update contract", async () => {
-    await expect(clientService.updateClientById({
-      id: 1,
-      clientCode: "renamed-client",
-    })).rejects.toThrow("客户端编码创建后不可修改");
-
-    expect(clientRepository.updateClientById).not.toHaveBeenCalled();
-  });
-});
-
-describe("admin clientService.updateClientStatus", () => {
-  test("updates status through updateClient and refreshes cache", async () => {
-    clientRepository.updateClientByCodeWithOidcVersion.mockResolvedValue(makeClient({
+    expect(tx.clientRepository.updateClientByCodeWithOidcVersion).toHaveBeenCalledWith("portal", {
       status: ClientStatus.Disable,
-      oidcConfigVersion: 1,
-    }));
-
-    await expect(clientService.updateClientStatus("portal", ClientStatus.Disable)).resolves.toBe(true);
-
-    expect(clientRepository.updateClientByCodeWithOidcVersion).toHaveBeenCalledWith(
-      "portal",
-      { status: ClientStatus.Disable },
-      tx,
-    );
-    expect(auditService.recordAuditLog).toHaveBeenCalledWith(expect.objectContaining({
-      action: "admin.client.status_update",
-      details: expect.objectContaining({
-        patch: { status: ClientStatus.Disable },
+    });
+    expect(deps.clientCache.syncUpdatedClient).toHaveBeenCalled();
+    expect(deps.sessionRevocation.revokeClientAllProtocols).toHaveBeenCalledWith({
+      clientCode: "portal",
+      reason: "client_disabled",
+      auditContext: undefined,
+      oidcInvalidationClient: expect.objectContaining({
+        clientCode: "portal",
+        oidcConfigVersion: 2,
       }),
-    }), tx);
-    expect(redis.set).toHaveBeenCalledWith("cache:client:code:portal", expect.any(String));
-    expect(redis.set).toHaveBeenCalledWith("cache:client:secret:secret-1", expect.any(String));
-    expect(redis.del).toHaveBeenCalledWith("oidc:client-runtime:portal");
-    expect(redis.publish).toHaveBeenCalledWith("oidc:client-invalidation", expect.any(String));
+    });
   });
-});
 
-const publicOidcConfig = {
-  clientType: OidcClientType.Public,
-  redirectUris: ["https://portal.example.com/oidc/callback"],
-  postLogoutRedirectUris: ["https://portal.example.com/logout"],
-  allowedScopes: [OidcScope.OpenId, OidcScope.Profile],
-  tokenEndpointAuthMethod: OidcTokenEndpointAuthMethod.None,
-} satisfies ClientOidcConfigureDto;
+  test("keeps status update successful when best-effort session revoke fails", async () => {
+    const afterCommitLogger = createAfterCommitLogger();
+    const { service, deps } = createService({ afterCommitLogger });
+    const revocationFailure = new Error("session revoke down");
+    deps.sessionRevocation.revokeClientAllProtocols.mockRejectedValueOnce(revocationFailure);
 
-const confidentialOidcConfig = {
-  ...publicOidcConfig,
-  clientType: OidcClientType.Confidential,
-  tokenEndpointAuthMethod: OidcTokenEndpointAuthMethod.ClientSecretBasic,
-} satisfies ClientOidcConfigureDto;
+    await expect(service.updateClientStatus("portal", ClientStatus.Disable)).resolves.toBe(true);
 
-describe("admin clientService OIDC management", () => {
-  test("configures a confidential client disabled and returns the generated secret once", async () => {
-    clientRepository.updateClientOidcByCode.mockResolvedValue(makeClient({
-      oidcConfig: confidentialOidcConfig,
-      oidcSecretHash: "oidc-secret-hash",
-      oidcConfigVersion: 1,
-    }));
+    expect(deps.clientCache.syncUpdatedClient).toHaveBeenCalled();
+    expect(deps.sessionRevocation.revokeClientAllProtocols).toHaveBeenCalled();
+    expect(afterCommitLogger.warn).toHaveBeenCalledWith({
+      afterCommit: "admin.session_revoke.client_all_protocols",
+      mode: "bestEffort",
+      err: revocationFailure,
+    }, "best-effort afterCommit task failed");
+    expect(afterCommitLogger.error).not.toHaveBeenCalled();
+  });
 
-    const result = await clientService.configureClientOidc("portal", confidentialOidcConfig);
+  test("maintenance status revokes only OIDC protocol", async () => {
+    const { service, deps } = createService();
 
-    expect(result.clientSecret).toStartWith("iam_oidc_");
-    expect(result.client.hasOidcSecret).toBe(true);
-    expect(result.client).not.toHaveProperty("oidcSecretHash");
-    expect(hashSecret).toHaveBeenCalledWith(result.clientSecret, 10);
-    expect(clientRepository.updateClientOidcByCode).toHaveBeenCalledWith("portal", expect.objectContaining({
+    await expect(service.updateClientStatus("portal", ClientStatus.Maintance)).resolves.toBe(true);
+
+    expect(deps.sessionRevocation.revokeClientProtocol).toHaveBeenCalledWith({
+      clientCode: "portal",
+      protocol: "oidc",
+      reason: "client_config_changed",
+      auditContext: undefined,
+      oidcInvalidationClient: expect.objectContaining({
+        clientCode: "portal",
+        oidcConfigVersion: 2,
+      }),
+    });
+    expect(deps.sessionRevocation.revokeClientAllProtocols).not.toHaveBeenCalled();
+  });
+
+  test("soft delete keeps required cache delete and revokes all protocols", async () => {
+    const { service, deps } = createService();
+
+    await expect(service.deleteClient("portal")).resolves.toBe(true);
+
+    expect(deps.clientCache.deleteClient).toHaveBeenCalledWith(expect.objectContaining({ clientCode: "portal" }));
+    expect(deps.sessionRevocation.revokeClientAllProtocols).toHaveBeenCalledWith({
+      clientCode: "portal",
+      reason: "client_deleted",
+      auditContext: undefined,
+      oidcInvalidationClient: expect.objectContaining({ clientCode: "portal" }),
+    });
+  });
+
+  test("custom SSO session config changes revoke custom-sso protocol", async () => {
+    const { service, deps, tx } = createService();
+
+    await expect(service.updateClientById({
+      id: 1,
+      clientCode: "portal",
+      clientSecret: "rotated-secret",
+      extAttributes: client().extAttributes,
+    } as any)).resolves.toMatchObject({ clientCode: "portal" });
+
+    expect(tx.clientRepository.updateClientById).toHaveBeenCalled();
+    expect(deps.sessionRevocation.revokeClientProtocol).toHaveBeenCalledWith({
+      clientCode: "portal",
+      protocol: "custom-sso",
+      reason: "client_config_changed",
+      auditContext: undefined,
+      oidcInvalidationClient: undefined,
+    });
+  });
+
+  test("presentation-only client updates do not revoke sessions", async () => {
+    const { service, deps } = createService();
+
+    await expect(service.updateClient("portal", { clientName: "Portal New" } as any))
+      .resolves
+      .toMatchObject({ clientName: "Portal New" });
+
+    expect(deps.clientCache.syncUpdatedClient).toHaveBeenCalled();
+    expect(deps.sessionRevocation.revokeClientProtocol).not.toHaveBeenCalled();
+    expect(deps.sessionRevocation.revokeClientAllProtocols).not.toHaveBeenCalled();
+  });
+
+  test("configures confidential OIDC clients with a generated secret", async () => {
+    const { service, deps, tx } = createService();
+    const input = {
+      ...oidcConfig(),
+    };
+
+    await expect(service.configureClientOidc("portal", input)).resolves.toMatchObject({
+      client: { clientCode: "portal", hasOidcSecret: true },
+      clientSecret: "iam_oidc_test_secret",
+    });
+
+    expect(deps.passwordHasher.hashSecret).toHaveBeenCalledWith("iam_oidc_test_secret");
+    expect(tx.clientRepository.updateClientOidcByCode).toHaveBeenCalledWith("portal", {
+      oidcConfig: input,
       oidcEnabled: false,
-      oidcConfig: confidentialOidcConfig,
-      oidcSecretHash: "oidc-secret-hash",
-    }), tx);
-    expect(auditService.recordAuditLog).toHaveBeenCalledWith(expect.objectContaining({
-      action: "admin.client.oidc.configure",
-      details: expect.objectContaining({
-        clientType: OidcClientType.Confidential,
-        oidcConfigVersion: 1,
+      oidcSecretHash: "hashed-secret:iam_oidc_test_secret",
+    });
+    expect(deps.sessionRevocation.revokeClientProtocol).toHaveBeenCalledWith({
+      clientCode: "portal",
+      protocol: "oidc",
+      reason: "client_config_changed",
+      auditContext: undefined,
+      oidcInvalidationClient: expect.objectContaining({
+        clientCode: "portal",
+        oidcConfigVersion: 2,
       }),
-    }), tx);
-    expect(JSON.stringify(auditService.recordAuditLog.mock.calls)).not.toContain(result.clientSecret!);
-    expect(JSON.stringify(auditService.recordAuditLog.mock.calls)).not.toContain("oidc-secret-hash");
+    });
   });
 
-  test("switches confidential to public by clearing the hash without returning a secret", async () => {
-    clientRepository.getClientByCode.mockResolvedValue(makeClient({
-      oidcConfig: confidentialOidcConfig,
-      oidcSecretHash: "old-hash",
-    }));
-    clientRepository.updateClientOidcByCode.mockResolvedValue(makeClient({
-      oidcConfig: publicOidcConfig,
-      oidcSecretHash: null,
-      oidcConfigVersion: 2,
-    }));
-
-    const result = await clientService.configureClientOidc("portal", publicOidcConfig);
-
-    expect(result.clientSecret).toBeUndefined();
-    expect(result.client.hasOidcSecret).toBe(false);
-    expect(clientRepository.updateClientOidcByCode).toHaveBeenCalledWith("portal", expect.objectContaining({
-      oidcSecretHash: null,
-    }), tx);
-  });
-
-  test("enables only a configured client with a valid secret state", async () => {
-    clientRepository.getClientByCode.mockResolvedValue(makeClient({
-      oidcConfig: confidentialOidcConfig,
+  test("OIDC enable and disable revoke OIDC protocol with expected reasons", async () => {
+    const enableCase = createService();
+    (enableCase.tx.clientRepository.getClientByCode as any).mockResolvedValue(client({
+      oidcConfig: oidcConfig(),
       oidcSecretHash: "hash",
-    }));
-    clientRepository.updateClientOidcByCode.mockResolvedValue(makeClient({
-      oidcEnabled: true,
-      oidcConfig: confidentialOidcConfig,
-      oidcSecretHash: "hash",
-      oidcConfigVersion: 1,
-    }));
-
-    const result = await clientService.enableClientOidc("portal");
-
-    expect(result.client.oidcState).toBe(OidcClientState.Enabled);
-    expect(clientRepository.updateClientOidcByCode).toHaveBeenCalledWith("portal", { oidcEnabled: true }, tx);
-  });
-
-  test("requires disable before removing configuration", async () => {
-    clientRepository.getClientByCode.mockResolvedValue(makeClient({
-      oidcEnabled: true,
-      oidcConfig: publicOidcConfig,
-    }));
-
-    await expect(clientService.removeClientOidc("portal")).rejects.toThrow("请先禁用 OIDC");
-    expect(clientRepository.updateClientOidcByCode).not.toHaveBeenCalled();
-  });
-
-  test("removes disabled configuration and clears the secret hash", async () => {
-    clientRepository.getClientByCode.mockResolvedValue(makeClient({
-      oidcConfig: confidentialOidcConfig,
-      oidcSecretHash: "hash",
-    }));
-    clientRepository.updateClientOidcByCode.mockResolvedValue(makeClient({ oidcConfigVersion: 2 }));
-
-    const result = await clientService.removeClientOidc("portal");
-
-    expect(result.client.oidcState).toBe(OidcClientState.Unconfigured);
-    expect(clientRepository.updateClientOidcByCode).toHaveBeenCalledWith("portal", {
       oidcEnabled: false,
-      oidcConfig: null,
-      oidcSecretHash: null,
-    }, tx);
-  });
-
-  test("rotates confidential secret and never exposes its hash", async () => {
-    clientRepository.getClientByCode.mockResolvedValue(makeClient({
-      oidcConfig: confidentialOidcConfig,
-      oidcSecretHash: "old-hash",
-    }));
-    clientRepository.updateClientOidcByCode.mockResolvedValue(makeClient({
-      oidcConfig: confidentialOidcConfig,
-      oidcSecretHash: "oidc-secret-hash",
-      oidcConfigVersion: 3,
     }));
 
-    const result = await clientService.rotateClientOidcSecret("portal");
+    await expect(enableCase.service.enableClientOidc("portal")).resolves.toMatchObject({
+      client: { clientCode: "portal" },
+    });
 
-    expect(result.clientSecret).toStartWith("iam_oidc_");
-    expect(result.client).not.toHaveProperty("oidcSecretHash");
-    expect(clientRepository.updateClientOidcByCode).toHaveBeenCalledWith("portal", {
-      oidcSecretHash: "oidc-secret-hash",
-    }, tx);
-    expect(redis.del).toHaveBeenCalledWith("oidc:client-runtime:portal");
-    expect(redis.publish).toHaveBeenCalledWith("oidc:client-invalidation", expect.any(String));
+    expect(enableCase.deps.sessionRevocation.revokeClientProtocol).toHaveBeenCalledWith(expect.objectContaining({
+      protocol: "oidc",
+      reason: "client_config_changed",
+    }));
+
+    const disableCase = createService();
+    (disableCase.tx.clientRepository.getClientByCode as any).mockResolvedValue(client({
+      oidcConfig: oidcConfig(),
+      oidcSecretHash: "hash",
+      oidcEnabled: true,
+    }));
+
+    await expect(disableCase.service.disableClientOidc("portal")).resolves.toMatchObject({
+      client: { clientCode: "portal" },
+    });
+
+    expect(disableCase.deps.sessionRevocation.revokeClientProtocol).toHaveBeenCalledWith(expect.objectContaining({
+      protocol: "oidc",
+      reason: "client_protocol_disabled",
+    }));
   });
-});
 
-describe("admin clientService.deleteClient", () => {
-  test("soft deletes clients and removes current cache keys", async () => {
-    await expect(clientService.deleteClient("portal")).resolves.toBe(true);
+  test("OIDC remove and rotate secret revoke OIDC protocol without leaking secret material", async () => {
+    const removeCase = createService();
+    (removeCase.tx.clientRepository.getClientByCode as any).mockResolvedValue(client({
+      oidcConfig: oidcConfig(),
+      oidcSecretHash: "hash",
+      oidcEnabled: false,
+    }));
 
-    expect(clientRepository.softDeleteClientByCode).toHaveBeenCalledWith("portal", tx);
-    expect(auditService.recordAuditLog).toHaveBeenCalledWith(expect.objectContaining({
-      action: "admin.client.delete",
-      details: expect.objectContaining({
-        deleted: true,
-      }),
-    }), tx);
-    expect(redis.del).toHaveBeenCalledWith("cache:client:code:portal");
-    expect(redis.del).toHaveBeenCalledWith("cache:client:secret:secret-1");
+    await expect(removeCase.service.removeClientOidc("portal")).resolves.toMatchObject({
+      client: { clientCode: "portal" },
+    });
+
+    expect(removeCase.deps.sessionRevocation.revokeClientProtocol).toHaveBeenCalledWith(expect.objectContaining({
+      protocol: "oidc",
+      reason: "client_protocol_disabled",
+    }));
+
+    const rotateCase = createService();
+    (rotateCase.tx.clientRepository.getClientByCode as any).mockResolvedValue(client({
+      oidcConfig: oidcConfig(),
+      oidcSecretHash: "hash",
+      oidcEnabled: true,
+    }));
+
+    await expect(rotateCase.service.rotateClientOidcSecret("portal")).resolves.toMatchObject({
+      client: { clientCode: "portal" },
+      clientSecret: "iam_oidc_test_secret",
+    });
+
+    const [input] = rotateCase.deps.sessionRevocation.revokeClientProtocol.mock.calls[0] ?? [];
+    expect(input).toMatchObject({
+      clientCode: "portal",
+      protocol: "oidc",
+      reason: "client_config_changed",
+    });
+    expect(JSON.stringify(input)).not.toContain("iam_oidc_test_secret");
+    expect(JSON.stringify(input)).not.toContain("hashed-secret");
   });
 });

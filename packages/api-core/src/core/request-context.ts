@@ -6,6 +6,19 @@ function firstHeaderValue(value: string | undefined): string | null {
   return normalized || null;
 }
 
+export function getContextValue<T>(c: Context, key: string): T | undefined {
+  try {
+    return c.get(key as never) as T | undefined;
+  }
+  catch {
+    return undefined;
+  }
+}
+
+export function getRequestId(c: Context): string | undefined {
+  return getContextValue<string>(c, "requestId");
+}
+
 export function getRequestIp(c: Context): string | null {
   return firstHeaderValue(c.req.header("x-forwarded-for"))
     ?? firstHeaderValue(c.req.header("x-real-ip"))

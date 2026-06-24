@@ -1,16 +1,15 @@
 import type { AdminAuditContext } from "@admin-api/services/audit/audit.service";
 import type { OrganizationStatus } from "@iam/contracts";
-import type { DbClient } from "@iam/db";
-import { recordAdminResourceAudit } from "../admin-resource-audit";
+import type { AuditLogInput } from "../audit.service";
+import { buildAdminResourceAudit } from "../admin-resource-audit";
 
-export async function recordOrganizationAudit(
+export function buildOrganizationAudit(
   action: string,
   organization: { id: number; orgCode: string; orgName: string; status?: OrganizationStatus },
   details: Record<string, unknown>,
-  tx?: DbClient,
   auditContext?: AdminAuditContext,
-) {
-  await recordAdminResourceAudit(
+): AuditLogInput {
+  return buildAdminResourceAudit(
     action,
     {
       type: "organization",
@@ -24,7 +23,6 @@ export async function recordOrganizationAudit(
       status: organization.status,
       ...details,
     },
-    tx,
     auditContext,
   );
 }

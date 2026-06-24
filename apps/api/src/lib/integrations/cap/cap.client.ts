@@ -1,6 +1,5 @@
-import redis from "@api/lib/infra/redis";
+import type { ClockPort, RedisPort } from "@api/composition/runtime";
 import Cap from "@cap.js/server";
-import { createSingleton } from "@iam/api-core/core/singleton";
 
 type ChallengeData = {
   challenge: {
@@ -11,41 +10,46 @@ type ChallengeData = {
   expires: number;
 };
 
+export interface CreateCapClientDeps {
+  redis: Pick<RedisPort, "get" | "set" | "del">;
+  clock: Pick<ClockPort, "now">;
+}
+
 const challengeKey = (token: string) => `cap:challenge:${token}`;
 const tokenKey = (key: string) => `cap:token:${key}`;
 
-function ttlSeconds(expires: number) {
-  return Math.max(1, Math.ceil((expires - Date.now()) / 1000));
+function ttlSeconds(expires: number, now: number) {
+  return Math.max(1, Math.ceil((expires - now) / 1000));
 }
 
-function parseChallenge(value: string | null): ChallengeData | null {
+function parseChallenge(value: string | null, now: number): ChallengeData | null {
   if (value === null) {
     return null;
   }
   const data = JSON.parse(value) as ChallengeData;
-  if (data.expires <= Date.now()) {
+  if (data.expires <= now) {
     return null;
   }
   return data;
 }
 
-const capClient = createSingleton("api:human-verification:cap", () =>
-  new Cap({
+export function createCapClient(deps: CreateCapClientDeps) {
+  return new Cap({
     storage: {
       challenges: {
         async store(token, challengeData) {
-          await redis.set(
+          await deps.redis.set(
             challengeKey(token),
             JSON.stringify(challengeData),
             "EX",
-            ttlSeconds(challengeData.expires),
+            ttlSeconds(challengeData.expires, deps.clock.now()),
           );
         },
         async read(token) {
-          return parseChallenge(await redis.get(challengeKey(token)));
+          return parseChallenge(await deps.redis.get(challengeKey(token)), deps.clock.now());
         },
         async delete(token) {
-          await redis.del(challengeKey(token));
+          await deps.redis.del(challengeKey(token));
         },
         async deleteExpired() {
           // Redis TTL removes expired challenges.
@@ -53,20 +57,21 @@ const capClient = createSingleton("api:human-verification:cap", () =>
       },
       tokens: {
         async store(key, expires) {
-          await redis.set(tokenKey(key), String(expires), "EX", ttlSeconds(expires));
+          await deps.redis.set(tokenKey(key), String(expires), "EX", ttlSeconds(expires, deps.clock.now()));
         },
         async get(key) {
-          const expires = Number(await redis.get(tokenKey(key)));
-          return Number.isFinite(expires) && expires > Date.now() ? expires : null;
+          const expires = Number(await deps.redis.get(tokenKey(key)));
+          return Number.isFinite(expires) && expires > deps.clock.now() ? expires : null;
         },
         async delete(key) {
-          await redis.del(tokenKey(key));
+          await deps.redis.del(tokenKey(key));
         },
         async deleteExpired() {
           // Redis TTL removes expired tokens.
         },
       },
     },
-  }));
+  });
+}
 
-export default capClient;
+export type CapClient = ReturnType<typeof createCapClient>;

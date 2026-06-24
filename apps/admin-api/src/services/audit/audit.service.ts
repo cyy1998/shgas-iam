@@ -1,8 +1,8 @@
-import type { DbClient } from "@iam/db";
 import type { AuditActorType, AuditDetails, AuditOutcome, AuditRequestContext } from "@iam/domain/audit";
 import type { Context } from "hono";
+import type { AuditRepository } from "./audit.repository";
 import type { AuditLogPaginationQueryDto } from "./audit.type";
-import { getRequestIp, getTraceId } from "@iam/api-core/core/request-context";
+import { getRequestId, getRequestIp, getTraceId } from "@iam/api-core/core/request-context";
 import { expandAuditActionAliases } from "@iam/contracts";
 import {
   AuditLogDtoSchema,
@@ -10,7 +10,6 @@ import {
   normalizeAuditActor,
   redactAuditDetails,
 } from "@iam/domain/audit";
-import * as auditRepository from "./audit.repository";
 
 export type AuditLogInput = {
   eventTime?: Date;
@@ -36,7 +35,9 @@ export type AuditLogInput = {
   details?: AuditDetails;
 };
 
-export type AdminAuditContext = Pick<AuditLogInput, "actorType"> & Partial<AuditLogInput>;
+export type AdminAuditContext = Pick<AuditLogInput, "actorType"> & Partial<AuditLogInput> & {
+  principalSessionId?: string | null;
+};
 
 function getContextUserName(c: Context): string | null {
   const user = c.get("userDetailDto") as { name?: unknown } | undefined;
@@ -64,15 +65,16 @@ function enrichAuditDetails(input: AuditLogInput): AuditDetails {
   return details;
 }
 
-export function getAdminAuditRequestContext(c: Context): AuditRequestContext {
+export function getAdminAuditRequestContext(c: Context): AuditRequestContext & Pick<AdminAuditContext, "principalSessionId"> {
   return {
     sourceApp: "iam-admin",
-    requestId: c.get("requestId") ?? c.req.header("x-request-id") ?? null,
+    requestId: getRequestId(c) ?? c.req.header("x-request-id") ?? null,
     traceId: getTraceId(c),
     ip: getRequestIp(c),
     userAgent: c.req.header("user-agent") ?? null,
     route: c.req.path,
     method: c.req.method,
+    principalSessionId: c.get("principalSessionId") ?? null,
   };
 }
 
@@ -107,38 +109,6 @@ export function resolveAdminAuditContext(context?: unknown): AdminAuditContext {
   };
 }
 
-export async function recordAuditLog(input: AuditLogInput, tx?: DbClient) {
-  const actor = normalizeAuditActor({
-    actorType: input.actorType,
-    actorUserId: input.actorUserId ?? null,
-    actorUsername: input.actorUsername ?? null,
-    actorClientCode: input.actorClientCode ?? null,
-    actorSystemKey: input.actorSystemKey ?? null,
-  });
-  const auditLog = AuditLogWriteDtoSchema.parse({
-    ...input,
-    ...actor,
-    sourceApp: input.sourceApp ?? "iam-admin",
-    targetId: input.targetId ?? null,
-    targetCode: input.targetCode ?? null,
-    requestId: input.requestId ?? null,
-    traceId: input.traceId ?? null,
-    ip: input.ip ?? null,
-    userAgent: input.userAgent ?? null,
-    route: input.route ?? null,
-    method: input.method ?? null,
-    details: redactAuditDetails(enrichAuditDetails(input)),
-  });
-  await auditRepository.createAuditLog(auditLog, tx);
-}
-
-export async function recordAuditLogFromContext(c: Context, input: AuditLogInput, tx?: DbClient) {
-  await recordAuditLog({
-    ...getAdminAuditRequestContext(c),
-    ...input,
-  }, tx);
-}
-
 export function normalizeAuditLogQueryActions(query: AuditLogPaginationQueryDto): AuditLogPaginationQueryDto {
   const { action, actions, ...conditions } = query.conditions;
   const requestedActions = [
@@ -159,13 +129,60 @@ export function normalizeAuditLogQueryActions(query: AuditLogPaginationQueryDto)
   };
 }
 
-export async function searchAuditLogsForAdmin(query: AuditLogPaginationQueryDto) {
-  const { rows, total } = await auditRepository.searchAuditLogsPaged(normalizeAuditLogQueryActions(query));
+export interface CreateAdminAuditServiceDeps {
+  auditRepository: AuditRepository;
+}
+
+export function createAdminAuditService(deps: CreateAdminAuditServiceDeps) {
+  async function recordAuditLog(input: AuditLogInput) {
+    const actor = normalizeAuditActor({
+      actorType: input.actorType,
+      actorUserId: input.actorUserId ?? null,
+      actorUsername: input.actorUsername ?? null,
+      actorClientCode: input.actorClientCode ?? null,
+      actorSystemKey: input.actorSystemKey ?? null,
+    });
+    const auditLog = AuditLogWriteDtoSchema.parse({
+      ...input,
+      ...actor,
+      sourceApp: input.sourceApp ?? "iam-admin",
+      targetId: input.targetId ?? null,
+      targetCode: input.targetCode ?? null,
+      requestId: input.requestId ?? null,
+      traceId: input.traceId ?? null,
+      ip: input.ip ?? null,
+      userAgent: input.userAgent ?? null,
+      route: input.route ?? null,
+      method: input.method ?? null,
+      details: redactAuditDetails(enrichAuditDetails(input)),
+    });
+    await deps.auditRepository.createAuditLog(auditLog);
+  }
+
+  async function recordAuditLogFromContext(c: Context, input: AuditLogInput) {
+    await recordAuditLog({
+      ...getAdminAuditRequestContext(c),
+      ...input,
+    });
+  }
+
+  async function searchAuditLogsForAdmin(query: AuditLogPaginationQueryDto) {
+    const { rows, total } = await deps.auditRepository.searchAuditLogsPaged(normalizeAuditLogQueryActions(query));
+    return {
+      result: rows.map(row => AuditLogDtoSchema.parse(row)),
+      total,
+      pageNum: query.pageNum,
+      pageSize: query.pageSize,
+      pages: total === 0 ? 0 : Math.ceil(total / query.pageSize),
+    };
+  }
+
   return {
-    result: rows.map(row => AuditLogDtoSchema.parse(row)),
-    total,
-    pageNum: query.pageNum,
-    pageSize: query.pageSize,
-    pages: total === 0 ? 0 : Math.ceil(total / query.pageSize),
+    recordAuditLog,
+    recordAuditLogFromContext,
+    searchAuditLogsForAdmin,
   };
 }
+
+export type AdminAuditService = ReturnType<typeof createAdminAuditService>;
+export type AuditLogWriterPort = Pick<AdminAuditService, "recordAuditLog" | "recordAuditLogFromContext">;

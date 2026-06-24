@@ -4,34 +4,37 @@ import {
   LoginOutlined,
   MobileOutlined,
   SafetyCertificateOutlined,
-  UserOutlined,
 } from '@ant-design/icons';
 import { ApiErrorCode } from '@iam/contracts';
 import logoColorfulTextWhite from '@sso/assets/logo-colorful-text-white.png';
 import logo from '@sso/assets/logo.png';
+import { useSmsCodeCountdown } from '@sso/hooks/useSmsCodeCountdown';
 import { withHumanVerification } from '@sso/lib/human-verification';
-import { buildAuthorizeUrl } from '@sso/lib/sso';
 import { login, mobileLogin } from '@sso/services/auth';
 import { sendMessage } from '@sso/services/open';
 import { mobileSet } from '@sso/services/public';
 import { ServiceError } from '@sso/utils/request';
-import { decodeRedirect, getQuery } from '@sso/utils/url';
-import { history, useModel } from '@umijs/max';
-import { Button, Form, Input, Modal, Tabs, message } from 'antd';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { history } from '@umijs/max';
+import { Button, Form, Modal, Tabs, message } from 'antd';
+import { useEffect, useState } from 'react';
+import {
+  PasswordLoginForm,
+  type PasswordLoginValues,
+} from './_components/PasswordLoginForm';
+import { SmsLoginForm, type SmsLoginValues } from './_components/SmsLoginForm';
+import { UnsafeEntryNotice } from './_components/UnsafeEntryNotice';
+import { useLoginRedirect } from './_hooks/useLoginRedirect';
 import './index.less';
 
 type LoginMode = 'PWD' | 'SMS' | 'BMN';
 
 export default function LoginPage() {
-  const { authConfig } = useModel('sso');
   const [mode, setMode] = useState<LoginMode>('PWD');
   const [submitting, setSubmitting] = useState(false);
   const [smsSending, setSmsSending] = useState(false);
-  const [countdown, setCountdown] = useState(0);
-  const [pwdForm] = Form.useForm();
-  const [smsForm] = Form.useForm();
-  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const [pwdForm] = Form.useForm<PasswordLoginValues>();
+  const { countdown, isCounting, startCountdown } = useSmsCodeCountdown();
+  const { clientLabel, isUnsafeEntry, redirectAfterLogin } = useLoginRedirect();
 
   const showLoginFailureModal = (msg: string) => {
     Modal.error({
@@ -42,58 +45,22 @@ export default function LoginPage() {
     });
   };
 
-  const client = getQuery('client');
-  const oidcReturn = getQuery('oidcReturn') ?? '';
-  const redirectUrl = decodeRedirect(getQuery('redirectUrl')) ?? '';
-  const clientLabel = oidcReturn
-    ? 'OIDC'
-    : client === 'iam-admin'
-      ? 'IAM Admin'
-      : client || 'SSO';
-
   useEffect(() => {
-    const loginType = getQuery('loginType');
+    const loginType = new URLSearchParams(window.location.search).get(
+      'loginType',
+    );
     if (loginType === 'SMS' || loginType === 'PWD') setMode(loginType);
   }, []);
 
-  useEffect(
-    () => () => {
-      if (timerRef.current) clearInterval(timerRef.current);
-    },
-    [],
-  );
-
-  const startCountdown = () => {
-    setCountdown(60);
-    timerRef.current = setInterval(() => {
-      setCountdown((v) => {
-        if (v <= 1) {
-          if (timerRef.current) clearInterval(timerRef.current);
-          return 0;
-        }
-        return v - 1;
-      });
-    }, 1000);
+  const handleForgotPassword = () => {
+    const params = new URLSearchParams(window.location.search);
+    const username = pwdForm.getFieldValue('username');
+    if (username) params.set('username', username);
+    history.push(`/reset-password?${params.toString()}`);
   };
 
-  const redirectAfterLogin = () => {
-    if (oidcReturn) {
-      if (!/^[A-Za-z0-9_-]{43}$/.test(oidcReturn)) {
-        message.error('OIDC 登录请求已失效，请返回应用重新发起登录');
-        return;
-      }
-      window.location.href = `/oidc/resume?oidcReturn=${encodeURIComponent(oidcReturn)}`;
-      return;
-    }
-    if (!authConfig || !client) {
-      message.error('SSO 配置未就绪，请刷新重试');
-      return;
-    }
-    window.location.href = buildAuthorizeUrl(authConfig, redirectUrl, client);
-  };
-
-  const handlePwdLogin = async () => {
-    const values = await pwdForm.validateFields();
+  const handlePwdLogin = async (values: PasswordLoginValues) => {
+    if (submitting) return;
     setSubmitting(true);
     try {
       const body = {
@@ -108,7 +75,6 @@ export default function LoginPage() {
       );
       if (!data.isMobileSet) {
         setMode('BMN');
-        smsForm.resetFields();
         return;
       }
       redirectAfterLogin();
@@ -127,8 +93,8 @@ export default function LoginPage() {
     }
   };
 
-  const handleSmsLogin = async () => {
-    const values = await smsForm.validateFields();
+  const handleSmsLogin = async (values: SmsLoginValues) => {
+    if (submitting) return;
     setSubmitting(true);
     try {
       const body = {
@@ -158,8 +124,8 @@ export default function LoginPage() {
     }
   };
 
-  const handleBindMobile = async () => {
-    const values = await smsForm.validateFields();
+  const handleBindMobile = async (values: SmsLoginValues) => {
+    if (submitting) return;
     setSubmitting(true);
     try {
       await mobileSet({
@@ -174,16 +140,13 @@ export default function LoginPage() {
     }
   };
 
-  const handleSubmit = () => {
-    if (submitting) return;
-    if (mode === 'PWD') return handlePwdLogin();
-    if (mode === 'SMS') return handleSmsLogin();
-    return handleBindMobile();
+  const handleSmsSubmit = (values: SmsLoginValues) => {
+    if (mode === 'SMS') return handleSmsLogin(values);
+    return handleBindMobile(values);
   };
 
-  const sendSms = async () => {
-    if (countdown > 0) return;
-    const phoneNumber = smsForm.getFieldValue('phoneNumber');
+  const sendSms = async (phoneNumber?: string) => {
+    if (isCounting) return;
     if (!phoneNumber || !/^1\d{10}$/.test(phoneNumber)) {
       message.error('请填写正确的手机号');
       return;
@@ -207,71 +170,8 @@ export default function LoginPage() {
     }
   };
 
-  const tipBlock = useMemo(() => {
-    const origin = window.location.origin;
-    if (origin === 'http://176.169.99.150') {
-      return (
-        <>
-          <div>上海燃气采招平台：</div>
-          <div>http://176.169.99.150/tender/</div>
-        </>
-      );
-    }
-    if (origin === 'http://app.shgas.com') {
-      return (
-        <>
-          <div>上海燃气数据服务平台：</div>
-          <div>http://app.shgas.com/data-platform</div>
-          <div className="tip-link">上海燃气采招平台：</div>
-          <div>http://app.shgas.com/tender/</div>
-        </>
-      );
-    }
-    if (origin === 'https://tender.shgas.com.cn') {
-      return (
-        <>
-          <div>上海燃气采招平台：</div>
-          <div>https://tender.shgas.com.cn/tender/</div>
-        </>
-      );
-    }
-    return null;
-  }, []);
-
-  if (!client && !oidcReturn) {
-    return (
-      <div className="login-page">
-        <div className="login-shell">
-          <section className="brand-panel" aria-label="上海燃气身份认证平台">
-            <div className="brand-top">
-              <img src={logoColorfulTextWhite} alt="上海燃气" />
-              <span>SHANGHAI GAS IAM</span>
-            </div>
-            <div className="brand-copy">
-              <div className="brand-kicker">Unified Access</div>
-              <h1>统一身份认证</h1>
-              <p>面向业务系统的安全访问入口</p>
-            </div>
-          </section>
-
-          <div className="tip-card">
-            <div className="tip-icon">
-              <SafetyCertificateOutlined />
-            </div>
-            <div className="tip-title">登录地址校验未通过</div>
-            <div className="tip-desc">
-              您使用的登录地址存在安全风险，请在浏览器中重新输入应用系统地址进行登录。
-            </div>
-            {tipBlock && (
-              <>
-                <div className="tip-link-label">例如</div>
-                <div className="tip-link">{tipBlock}</div>
-              </>
-            )}
-          </div>
-        </div>
-      </div>
-    );
+  if (isUnsafeEntry) {
+    return <UnsafeEntryNotice />;
   }
 
   return (
@@ -328,7 +228,7 @@ export default function LoginPage() {
           {mode !== 'BMN' && (
             <Tabs
               activeKey={mode}
-              onChange={(k) => setMode(k as LoginMode)}
+              onChange={(key) => setMode(key as LoginMode)}
               centered
               items={[
                 { key: 'PWD', label: '密码登录' },
@@ -338,114 +238,29 @@ export default function LoginPage() {
           )}
 
           {mode === 'PWD' && (
-            <Form
+            <PasswordLoginForm
               form={pwdForm}
-              layout="vertical"
-              onFinish={handleSubmit}
-              requiredMark={false}
-            >
-              <Form.Item
-                label="工号 / 账号"
-                name="username"
-                rules={[{ required: true, message: '请输入您的工号' }]}
-              >
-                <Input
-                  size="large"
-                  placeholder="请输入您的工号"
-                  prefix={<UserOutlined />}
-                />
-              </Form.Item>
-              <div className="login-actions">
-                <span className="login-actions-label">登录密码</span>
-                <span
-                  className="forgot-link"
-                  onClick={() => {
-                    const params = new URLSearchParams(window.location.search);
-                    const username = pwdForm.getFieldValue('username');
-                    if (username) params.set('username', username);
-                    history.push(`/reset-password?${params.toString()}`);
-                  }}
-                >
-                  忘记密码？
-                </span>
-              </div>
-              <Form.Item
-                name="password"
-                rules={[{ required: true, message: '请输入登录密码' }]}
-              >
-                <Input.Password
-                  size="large"
-                  placeholder="请输入登录密码"
-                  prefix={<LockOutlined />}
-                  onPressEnter={handleSubmit}
-                />
-              </Form.Item>
-            </Form>
+              submitting={submitting}
+              onForgotPassword={handleForgotPassword}
+              onSubmit={handlePwdLogin}
+            />
           )}
 
           {(mode === 'SMS' || mode === 'BMN') && (
-            <Form
-              form={smsForm}
-              layout="vertical"
-              onFinish={handleSubmit}
-              requiredMark={false}
-            >
-              <Form.Item
-                label="手机号"
-                name="phoneNumber"
-                rules={[
-                  { required: true, message: '请输入手机号' },
-                  {
-                    pattern: /^1\d{10}$/,
-                    message: '请输入正确的手机号',
-                  },
-                ]}
-              >
-                <Input
-                  size="large"
-                  placeholder="请输入手机号"
-                  prefix={<MobileOutlined />}
-                />
-              </Form.Item>
-              <Form.Item
-                label="验证码"
-                name="code"
-                rules={[{ required: true, message: '请输入验证码' }]}
-              >
-                <Input
-                  size="large"
-                  placeholder="验证码"
-                  prefix={<LockOutlined />}
-                  onPressEnter={handleSubmit}
-                  addonAfter={
-                    <button
-                      className="sms-code-btn"
-                      type="button"
-                      disabled={countdown > 0 || smsSending}
-                      onClick={sendSms}
-                    >
-                      {smsSending
-                        ? '发送中'
-                        : countdown <= 0
-                          ? '获取验证码'
-                          : `${countdown} s`}
-                    </button>
-                  }
-                />
-              </Form.Item>
-            </Form>
+            <SmsLoginForm
+              key={mode}
+              countdown={countdown}
+              isCounting={isCounting}
+              smsSending={smsSending}
+              submitting={submitting}
+              submitIcon={
+                mode === 'BMN' ? <MobileOutlined /> : <LoginOutlined />
+              }
+              submitText={mode === 'BMN' ? '绑定手机号' : '安全登录'}
+              onSendCode={sendSms}
+              onSubmit={handleSmsSubmit}
+            />
           )}
-
-          <Button
-            className="login-submit"
-            type="primary"
-            size="large"
-            icon={mode === 'BMN' ? <MobileOutlined /> : <LoginOutlined />}
-            loading={submitting}
-            onClick={handleSubmit}
-          >
-            {mode === 'BMN' ? '绑定手机号' : '安全登录'}
-          </Button>
 
           {mode === 'BMN' && (
             <Button

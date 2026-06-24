@@ -1,8 +1,13 @@
 import type { DbClient } from "@iam/db";
-import db from "@iam/db";
 
-export async function getPositionByCode(posCode: string, tx: DbClient = db) {
-  return await tx.query.positions.findFirst({
-    where: { posCode, isDelete: false },
-  }) ?? null;
+export function createPositionRepository(db: DbClient) {
+  return {
+    async getPositionByCode(posCode: string) {
+      return await db.query.positions.findFirst({
+        where: { posCode, isDelete: false },
+      }) ?? null;
+    },
+  };
 }
+
+export type PositionRepository = ReturnType<typeof createPositionRepository>;

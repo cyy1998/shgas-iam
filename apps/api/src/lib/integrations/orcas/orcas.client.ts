@@ -1,7 +1,5 @@
 import type { OrcasLoginInput } from "./orcas.type";
-import config from "@api/env";
 import { z } from "@hono/zod-openapi";
-import { createSingleton } from "@iam/api-core/core/singleton";
 import { OrcasLoginFailedError } from "@iam/api-core/errors/OrcasLoginFailedError";
 
 const ORCAS_SESSION_REGEX = /orcas_sso_sessionid=([^;]+)/;
@@ -13,11 +11,19 @@ const OrcasLoginResponseSchema = z.object({
   }).optional(),
 });
 
-function createOrcasClient() {
+export interface CreateOrcasClientDeps {
+  config: {
+    orcasUrl: string;
+  };
+  fetch?: typeof fetch;
+}
+
+export function createOrcasClient(deps: CreateOrcasClientDeps) {
+  const fetchFn = deps.fetch ?? fetch;
+
   return {
     async orcasLogin(input: OrcasLoginInput) {
-      const orcasUri = config.ORCAS_URL;
-      const resp = await fetch(orcasUri, {
+      const resp = await fetchFn(deps.config.orcasUrl, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -50,9 +56,4 @@ function createOrcasClient() {
   };
 }
 
-const orcasClient = createSingleton(
-  "orcas",
-  createOrcasClient,
-);
-
-export default orcasClient;
+export type OrcasClient = ReturnType<typeof createOrcasClient>;

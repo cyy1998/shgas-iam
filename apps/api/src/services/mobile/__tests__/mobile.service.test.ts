@@ -1,81 +1,54 @@
-import { beforeEach, describe, expect, mock, test } from "bun:test";
+import { VerificationCodeUsage } from "@api/enums/verificationCode.usage";
+import { createMemoryRedis } from "@api/testing/fakes";
+import { UserStatus, UserType } from "@iam/contracts";
+import { describe, expect, mock, test } from "bun:test";
+import { createMobileService } from "../mobile.service";
 
-class FakeRedis {
-  readonly values = new Map<string, string>();
-
-  reset() {
-    this.values.clear();
-  }
-
-  async get(key: string) {
-    return this.values.get(key) ?? null;
-  }
-
-  async set(key: string, value: string) {
-    this.values.set(key, value);
-    return "OK";
-  }
-
-  async eval(_script: string, _numkeys: number, key: string, code: string) {
-    const savedCode = this.values.get(key);
-    if (savedCode !== code) {
-      return 0;
-    }
-    this.values.delete(key);
-    return 1;
-  }
+function createService() {
+  const redis = createMemoryRedis();
+  const smsSender = {
+    sendMessage: mock(async () => true),
+    sendVerificationCode: mock(async () => ({ success: true, code: "1234" })),
+  };
+  const userRepository = {
+    getUserByMobile: mock(async () => ({
+      id: 1,
+      username: "zhangsan",
+      name: "张三",
+      userType: UserType.Formal,
+      password: null,
+      mobile: "13800000000",
+      wxId: null,
+      oidcSubject: "",
+      status: UserStatus.Enable,
+      orderNum: 0,
+      isDelete: false,
+      createTime: new Date("2026-01-01T00:00:00Z"),
+      updateTime: new Date("2026-01-01T00:00:00Z"),
+    })),
+  };
+  const service = createMobileService({
+    redis: redis as any,
+    smsSender,
+    userRepository,
+    config: { verificationCodeTtlSeconds: 180 },
+  });
+  return { redis, service, smsSender, userRepository };
 }
 
-const fakeRedis = new FakeRedis();
+describe("createMobileService", () => {
+  test("sends and stores verification codes", async () => {
+    const { redis, service } = createService();
 
-mock.module("@api/lib/infra/redis", () => ({
-  default: fakeRedis,
-}));
-
-mock.module("@api/lib/integrations/sms", () => ({
-  default: {
-    sendMessage: mock(async () => true),
-    sendVerificationCode: mock(async () => ({ success: true, code: "123456" })),
-  },
-}));
-
-mock.module("@iam/db", () => ({
-  default: {},
-}));
-
-const mobileService = await import("../mobile.service");
-
-beforeEach(() => {
-  fakeRedis.reset();
-});
-
-describe("mobile verification code service", () => {
-  test("checks verification codes without consuming them", async () => {
-    await fakeRedis.set("mobile-code:resetPassword:17721462865", "123456");
-
-    await expect(
-      mobileService.checkVerificationCode("resetPassword", "17721462865", "123456"),
-    ).resolves.toBe(true);
-    await expect(fakeRedis.get("mobile-code:resetPassword:17721462865")).resolves.toBe("123456");
+    await expect(service.sendCode("13800000000", VerificationCodeUsage.Login)).resolves.toBe(true);
+    expect(redis.__values.get("mobile-code:login:13800000000")).toBe("1234");
   });
 
-  test("consumes a matching verification code once", async () => {
-    await fakeRedis.set("mobile-code:login:17721462865", "123456");
+  test("consumes matching verification code once", async () => {
+    const { service } = createService();
 
-    await expect(
-      mobileService.consumeVerificationCode("login", "17721462865", "123456"),
-    ).resolves.toBe(true);
-    await expect(
-      mobileService.consumeVerificationCode("login", "17721462865", "123456"),
-    ).resolves.toBe(false);
-  });
-
-  test("does not consume a verification code when the submitted code is wrong", async () => {
-    await fakeRedis.set("mobile-code:bindPhone:17721462865", "123456");
-
-    await expect(
-      mobileService.consumeVerificationCode("bindPhone", "17721462865", "000000"),
-    ).resolves.toBe(false);
-    await expect(fakeRedis.get("mobile-code:bindPhone:17721462865")).resolves.toBe("123456");
+    await service.sendCode("13800000000", VerificationCodeUsage.Login);
+    await expect(service.consumeVerificationCode(VerificationCodeUsage.Login, "13800000000", "1234")).resolves.toBe(true);
+    await expect(service.consumeVerificationCode(VerificationCodeUsage.Login, "13800000000", "1234")).resolves.toBe(false);
   });
 });

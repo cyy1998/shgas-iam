@@ -2,6 +2,7 @@ import { PrivilegeDelegationDtoSchema } from "@api/services/privilege/privilegeD
 import { UserDetailDtoSchema, UserDtoSchema, UserQueryDtoSchema, UserQueryWithPrivilegeDelegationDtoSchema } from "@api/services/user/user.schema";
 import { createRoute, z } from "@hono/zod-openapi";
 import * as HttpStatusCodes from "@iam/api-core/core/http-status-codes";
+import { commonErrorResponses } from "@iam/api-core/core/openapi/helpers/common-error-responses";
 import jsonContent from "@iam/api-core/core/openapi/helpers/json-content";
 import jsonContentRequired from "@iam/api-core/core/openapi/helpers/json-content-required";
 import createSuccessResponseSchema from "@iam/api-core/core/openapi/schemas/create-success-schema";
@@ -18,6 +19,7 @@ export const userInfo = createRoute({
     }),
   },
   responses: {
+    ...commonErrorResponses,
     [HttpStatusCodes.OK]: jsonContent(createSuccessResponseSchema(UserDetailDtoSchema), "用户详细信息"),
   },
 });
@@ -30,6 +32,7 @@ export const usersSearch = createRoute({
     body: jsonContentRequired(UserQueryDtoSchema, "用户搜索条件"),
   },
   responses: {
+    ...commonErrorResponses,
     [HttpStatusCodes.OK]: jsonContent(createSuccessResponseSchema(z.array(UserDtoSchema)), "用户搜索结果"),
   },
 });
@@ -42,6 +45,7 @@ export const usersSearchWithPrivilegeDelegation = createRoute({
     body: jsonContent(UserQueryWithPrivilegeDelegationDtoSchema, "用户搜索条件"),
   },
   responses: {
+    ...commonErrorResponses,
     [HttpStatusCodes.OK]: jsonContent(createSuccessResponseSchema(
       z.object({
         users: z.array(UserDtoSchema),
@@ -64,6 +68,7 @@ export const contactRegister = createRoute({
     }), "用户创建参数"),
   },
   responses: {
+    ...commonErrorResponses,
     [HttpStatusCodes.OK]: jsonContent(createSuccessResponseSchema(z.boolean()), "联系人注册结果"),
   },
 });

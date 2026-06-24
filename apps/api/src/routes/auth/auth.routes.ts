@@ -1,5 +1,6 @@
 import { createRoute, z } from "@hono/zod-openapi";
 import * as HttpStatusCodes from "@iam/api-core/core/http-status-codes";
+import { commonErrorResponses } from "@iam/api-core/core/openapi/helpers/common-error-responses";
 import jsonContent from "@iam/api-core/core/openapi/helpers/json-content";
 import jsonContentRequired from "@iam/api-core/core/openapi/helpers/json-content-required";
 import createSuccessResponseSchema from "@iam/api-core/core/openapi/schemas/create-success-schema";
@@ -20,6 +21,7 @@ export const loginPassword = createRoute({
     }), "用户名密码登录参数"),
   },
   responses: {
+    ...commonErrorResponses,
     [HttpStatusCodes.OK]: jsonContent(
       createSuccessResponseSchema(
         z.object({
@@ -44,6 +46,7 @@ export const loginMobile = createRoute({
     }), "手机登录参数"),
   },
   responses: {
+    ...commonErrorResponses,
     [HttpStatusCodes.OK]: jsonContent(
       createSuccessResponseSchema(
         z.object({
@@ -61,6 +64,7 @@ export const authz = createRoute({
   path: `${routePrefix}/authz`,
   tags,
   responses: {
+    ...commonErrorResponses,
     [HttpStatusCodes.OK]: jsonContent(createSuccessResponseSchema(z.object()), "准许"),
   },
 });
@@ -70,6 +74,7 @@ export const internalAuthz = createRoute({
   path: `${routePrefix}/internal-authz`,
   tags,
   responses: {
+    ...commonErrorResponses,
     [HttpStatusCodes.OK]: jsonContent(createSuccessResponseSchema(z.boolean()), "准许"),
   },
 });

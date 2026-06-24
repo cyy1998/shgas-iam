@@ -1,1 +1,2 @@
-export { default } from "./sms.client";
+export { createSmsClient } from "./sms.client";
+export type { CreateSmsClientDeps, SmsClient } from "./sms.client";

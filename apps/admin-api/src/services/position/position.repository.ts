@@ -1,82 +1,68 @@
 import type { DbClient } from "@iam/db";
 import type { PositionCreateDto, PositionFuzzyQueryDto, PositionUpdateDto } from "./position.type";
-import db from "@iam/db";
 import { compactUpdate, firstRow } from "@iam/db/query-utils";
 import { employments, positions } from "@iam/db/schema";
 import { and, count, eq } from "drizzle-orm";
 
-export async function getPositionByCode(posCode: string, tx: DbClient = db) {
-  return await tx.query.positions.findFirst({
-    where: { posCode, isDelete: false },
-  }) ?? null;
-}
-
-export async function setPosition(positionCreateDto: PositionCreateDto, tx: DbClient = db) {
-  await tx.insert(positions).values(positionCreateDto);
-}
-
-export async function searchPositionsFuzzy(
-  positionAdminQueryDto: PositionFuzzyQueryDto,
-  tx: DbClient = db,
-) {
-  const text = positionAdminQueryDto.conditions.fuzzyConditions.text;
-  return await tx.query.positions.findMany({
-    where: {
-      isDelete: false,
-      ...(text !== undefined
-        ? {
-            OR: [
-              { posName: { ilike: `%${text}%` } },
-              { posCode: { ilike: `%${text}%` } },
-            ],
-          }
-        : {}),
+export function createPositionRepository(db: DbClient) {
+  return {
+    async getPositionByCode(posCode: string) {
+      return await db.query.positions.findFirst({
+        where: { posCode, isDelete: false },
+      }) ?? null;
     },
-    with: {
-      employments: true,
+    async setPosition(positionCreateDto: PositionCreateDto) {
+      await db.insert(positions).values(positionCreateDto);
     },
-  });
+    async searchPositionsFuzzy(positionAdminQueryDto: PositionFuzzyQueryDto) {
+      const text = positionAdminQueryDto.conditions.fuzzyConditions.text;
+      return await db.query.positions.findMany({
+        where: {
+          isDelete: false,
+          ...(text !== undefined
+            ? {
+                OR: [
+                  { posName: { ilike: `%${text}%` } },
+                  { posCode: { ilike: `%${text}%` } },
+                ],
+              }
+            : {}),
+        },
+        with: {
+          employments: true,
+        },
+      });
+    },
+    async updatePositionByCode(posCode: string, data: PositionUpdateDto) {
+      return await db
+        .update(positions)
+        .set(compactUpdate(data))
+        .where(and(eq(positions.posCode, posCode), eq(positions.isDelete, false)));
+    },
+    async softDeletePositionByCode(posCode: string) {
+      return await db
+        .update(positions)
+        .set({ isDelete: true })
+        .where(and(eq(positions.posCode, posCode), eq(positions.isDelete, false)));
+    },
+    async countActiveEmploymentsByPosCode(posCode: string) {
+      const rows = await db
+        .select({ value: count() })
+        .from(employments)
+        .innerJoin(positions, eq(employments.posId, positions.id))
+        .where(and(
+          eq(employments.isDelete, false),
+          eq(positions.posCode, posCode),
+          eq(positions.isDelete, false),
+        ));
+      return firstRow(rows)?.value ?? 0;
+    },
+    async getAnyPositionByCode(posCode: string) {
+      return await db.query.positions.findFirst({
+        where: { posCode },
+      }) ?? null;
+    },
+  };
 }
 
-export async function updatePositionByCode(
-  posCode: string,
-  data: PositionUpdateDto,
-  tx: DbClient = db,
-) {
-  return await tx
-    .update(positions)
-    .set(compactUpdate(data))
-    .where(and(eq(positions.posCode, posCode), eq(positions.isDelete, false)));
-}
-
-export async function softDeletePositionByCode(
-  posCode: string,
-  tx: DbClient = db,
-) {
-  return await tx
-    .update(positions)
-    .set({ isDelete: true })
-    .where(and(eq(positions.posCode, posCode), eq(positions.isDelete, false)));
-}
-
-export async function countActiveEmploymentsByPosCode(
-  posCode: string,
-  tx: DbClient = db,
-) {
-  const rows = await tx
-    .select({ value: count() })
-    .from(employments)
-    .innerJoin(positions, eq(employments.posId, positions.id))
-    .where(and(
-      eq(employments.isDelete, false),
-      eq(positions.posCode, posCode),
-      eq(positions.isDelete, false),
-    ));
-  return firstRow(rows)?.value ?? 0;
-}
-
-export async function getAnyPositionByCode(posCode: string, tx: DbClient = db) {
-  return await tx.query.positions.findFirst({
-    where: { posCode },
-  }) ?? null;
-}
+export type PositionRepository = ReturnType<typeof createPositionRepository>;

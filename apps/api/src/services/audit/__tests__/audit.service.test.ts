@@ -1,26 +1,23 @@
 import { beforeEach, describe, expect, mock, test } from "bun:test";
+import { createApiAuditLogWriter } from "../audit.service";
 
 const insertedValues: unknown[] = [];
-const values = mock(async (value: unknown) => {
+const createAuditLog = mock(async (value: unknown) => {
   insertedValues.push(value);
 });
-const insert = mock(() => ({ values }));
 
-mock.module("@iam/db", () => ({
-  default: { insert },
-}));
-
-const auditService = await import("../audit.service");
+const auditWriter = createApiAuditLogWriter({
+  auditRepository: { createAuditLog },
+});
 
 beforeEach(() => {
   insertedValues.length = 0;
-  insert.mockClear();
-  values.mockClear();
+  createAuditLog.mockClear();
 });
 
-describe("api auditService.recordAuditLog", () => {
+describe("api audit writer", () => {
   test("writes redacted audit logs with iam source app", async () => {
-    await auditService.recordAuditLog({
+    await auditWriter.recordAuditLog({
       action: "auth.password.reset",
       outcome: "success",
       actorType: "anonymous",
@@ -50,7 +47,7 @@ describe("api auditService.recordAuditLog", () => {
   });
 
   test("rejects invalid client actors before writing", async () => {
-    await expect(auditService.recordAuditLog({
+    await expect(auditWriter.recordAuditLog({
       action: "internal.delegation.create",
       outcome: "success",
       actorType: "client",
@@ -58,6 +55,6 @@ describe("api auditService.recordAuditLog", () => {
       targetId: 1,
     })).rejects.toThrow("client actor requires actorClientCode");
 
-    expect(values).not.toHaveBeenCalled();
+    expect(createAuditLog).not.toHaveBeenCalled();
   });
 });

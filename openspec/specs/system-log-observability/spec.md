@@ -91,6 +91,49 @@
 - **THEN** Pino numeric level SHALL 映射为 `trace`、`debug`、`info`、`warn`、`error` 或 `fatal`
 - **AND** Loki `level` label SHALL 使用字符串级别
 
+### Requirement: API Error Event Log Contract
+后端 REST 和 tRPC 错误事件日志 SHALL 使用稳定的 IAM 系统日志字段合同，以便 Grafana/Loki 聚合错误原因并与 request log 关联。
+
+#### Scenario: API error event fields are emitted
+- **WHEN** `api` 或 `admin-api` 输出 `api.error.handled` 或 `api.error.unhandled`
+- **THEN** 日志 SHALL 包含 `event`、`surface`、`sourceApp`、`requestId`、`statusCode`、`errorName`、`errorMessage` 和 `msg`
+- **AND** 日志 SHALL 在可用时包含 `traceId`、`method`、`path`、`route` 和 `errorCode`
+- **AND** tRPC 错误事件 SHALL 在可用时包含 `procedurePath`
+- **AND** `surface` SHALL 使用 `rest` 或 `trpc`
+
+#### Scenario: API error event level is actionable
+- **WHEN** 后端输出 API 错误事件
+- **THEN** 未知异常 SHALL 使用 `error` level
+- **AND** 已知 `statusCode >= 500` 错误 SHALL 使用 `error` level
+- **AND** 403 和 `/internal` 入口认证失败 SHALL 使用 `warn` level
+- **AND** 普通 400、401、404、409 和 422 错误 SHALL 使用 `info` level
+
+#### Scenario: Error object is included only for diagnostic failures
+- **WHEN** 后端输出 API 错误事件
+- **THEN** 未知异常和已知 5xx 错误 SHALL 包含原始 `err`
+- **AND** 普通已知 4xx 错误 SHALL NOT 包含原始 `err`
+- **AND** 扁平摘要字段 `errorName` 和 `errorMessage` SHALL 保留用于 dashboard 展示和聚合
+
+#### Scenario: API error logs avoid sensitive request payloads
+- **WHEN** 后端输出 API 错误事件
+- **THEN** 日志 MUST NOT 包含 request body、response body、完整 request headers、authorization header、cookie header 或 set-cookie header
+- **AND** 日志 MUST NOT 明文包含 token、password、secret、clientSecret、privateKey 或 verificationCode 值
+- **AND** 需要排查请求输入时 SHALL 通过 requestId 关联受控证据，而不是把原始输入写入系统日志
+
+### Requirement: OIDC Provider Error Events Remain Domain Specific
+`oidc-provider` SHALL 保留现有领域化错误事件名，同时遵守 IAM 系统日志公共字段和敏感数据保护要求。
+
+#### Scenario: OIDC provider error event names are retained
+- **WHEN** `oidc-provider` 输出 protocol error、server error 或 HTTP request failed 事件
+- **THEN** 日志 MAY 使用 `oidc.provider.*` 事件名
+- **AND** 系统 SHALL NOT 要求这些 OIDC 事件重命名为 `api.error.handled` 或 `api.error.unhandled`
+
+#### Scenario: OIDC provider error event fields are stable
+- **WHEN** `oidc-provider` 输出 protocol error、server error 或 HTTP request failed 事件
+- **THEN** 日志 SHALL 包含 `event`、`sourceApp = "iam-oidc-provider"`、`requestId` 和稳定错误摘要字段
+- **AND** 日志 SHALL 在可用时包含 `statusCode`、`errorName`、`errorMessage` 和 `err`
+- **AND** OIDC access token、ID token、refresh token、authorization code、PKCE verifier、client secret、cookie 和 private key MUST NOT 明文输出
+
 ### Requirement: Request Correlation
 系统 SHALL 使用 `X-Request-Id` 作为网关、后端系统日志和审计日志之间的主要关联字段。
 
@@ -315,11 +358,11 @@
 ### Requirement: Shared Backend Request Log Helpers
 系统 SHALL 使用共享 helper 构造后端 HTTP request/access log 字段和等级，框架 adapter 只负责采集上下文。
 
-#### Scenario: Status code maps to log level
+#### Scenario: Request log level is stable
 - **WHEN** 后端 HTTP 请求完成
-- **THEN** `statusCode < 400` 的 request log SHALL 使用 `info`
-- **AND** `400 <= statusCode < 500` 的 request log SHALL 使用 `warn`
-- **AND** `statusCode >= 500` 的 request log SHALL 使用 `error`
+- **THEN** `http.request.completed` request log SHALL 使用 `info` level
+- **AND** request log SHALL 保留最终 `statusCode` 字段用于查询、dashboard 和告警聚合
+- **AND** 系统 SHALL NOT 仅因为 `statusCode >= 400` 将 `http.request.completed` 提升为 `warn` 或 `error`
 
 #### Scenario: Trace id extraction is consistent
 - **WHEN** 请求包含 `traceparent`、`x-b3-traceid` 或 `x-trace-id`
@@ -334,7 +377,7 @@
 #### Scenario: Request log fields are built from shared contract
 - **WHEN** Hono 后端或 OIDC provider 输出 `http.request.completed`
 - **THEN** request log 字段 SHALL 由共享 helper 或等价共享合同构造
-- **AND** Hono 与 OIDC adapter MUST NOT 各自复制互相漂移的事件名、字段名或 status level 规则
+- **AND** Hono 与 OIDC adapter MUST NOT 各自复制互相漂移的事件名、字段名或 request log level 规则
 
 ### Requirement: OIDC Provider Access Logging
 `oidc-provider` SHALL 为所有外层 HTTP server 请求输出统一 `http.request.completed` access log。
@@ -383,3 +426,106 @@
 - **WHEN** 后端 app 需要复用 logger
 - **THEN** app-local logger module MAY 通过顶层 `export const logger = createLogger(...)` 暴露单例
 - **AND** 共享 logger factory MUST NOT 要求所有 app 共用同一个 global singleton key
+
+### Requirement: 管理端会话撤销输出结构化系统日志
+系统 SHALL 为 admin-api 触发的 Session Kernel 主动撤销输出结构化系统日志，使 revoke summary、cleanup failure 和 afterCommit best-effort failure 可被 Loki/Grafana 检索。
+
+#### Scenario: 用户会话撤销记录 summary
+- **WHEN** admin-api 用户状态、删除或重置密码 afterCommit 撤销任务完成
+- **THEN** 系统 SHALL 输出 `event="admin.session_revoke.user"` 的 JSON system log
+- **AND** 日志 SHALL 包含 `sourceApp="iam-admin-api"`、requestId、traceId、actorUserId、targetUserId、reason 和 RevokeSummary counters
+- **AND** 日志 SHALL NOT 包含 password、password hash、cookie、Authorization 或 external token
+
+#### Scenario: client protocol 撤销记录 summary
+- **WHEN** admin-api client 或 OIDC 配置变更 afterCommit 撤销任务完成
+- **THEN** 系统 SHALL 输出 `event="admin.session_revoke.client_protocol"` 或 `event="admin.session_revoke.client_all_protocols"` 的 JSON system log
+- **AND** 日志 SHALL 包含 clientCode、protocol、reason、revoke counters 和 cleanup counters
+- **AND** 日志 SHALL NOT 包含 clientSecret、OIDC secret hash、local session token、access token 或完整 cleanup payload
+
+#### Scenario: cleanup failure 单独可检索
+- **WHEN** RevokeSummary cleanup failed 计数大于 0
+- **THEN** 系统 SHALL 输出 `event="admin.session_revoke.cleanup_failed"` 的 warning system log
+- **AND** 日志 SHALL 包含 protocol、kind、ref 计数、failure message 摘要、requestId 和 clientCode 或 targetUserId
+- **AND** 日志 MUST NOT 把 cleanup payload、token、secret 或 cookie 写入日志
+
+#### Scenario: afterCommit revoke 失败可观测
+- **WHEN** best-effort afterCommit revoke task 抛出未被 RevokeSummary 捕获的异常
+- **THEN** 系统 SHALL 保留现有 afterCommit warning log
+- **AND** 系统 SHALL 输出或关联稳定 afterCommit task name，例如 `admin.session_revoke.user` 或 `admin.session_revoke.client_protocol`
+- **AND** 管理端业务响应 SHALL 不因该 best-effort failure 改为失败
+
+#### Scenario: 系统日志测试覆盖敏感字段
+- **WHEN** 执行 admin-api session revocation logger 单元测试
+- **THEN** 测试 SHALL 验证 summary 日志包含 counters、actor、target、reason 和 protocol 字段
+- **AND** 测试 SHALL 验证日志不会包含 password、clientSecret、Authorization、Cookie、external token 或 secret hash
+
+### Requirement: Session Kernel release hardening logs must be structured
+系统 SHALL 为 Session Kernel 发布硬化输出稳定 JSON system log，使 legacy cleanup、schema corruption、tombstone replay 和 cleanup failure 可被 Loki/Grafana 检索。
+
+#### Scenario: legacy key cleanup 完成
+- **WHEN** 旧 Redis session key cleanup dry-run 或 apply 完成
+- **THEN** 系统 SHALL 输出 `event="session_kernel.cleanup_legacy_keys.completed"` 的 JSON system log
+- **AND** 日志 SHALL 包含 sourceApp、mode、patternCounts、deletedCounts、durationMs 和 result
+- **AND** 日志 MUST NOT 包含完整 Redis key、session token、authorization code、access token、cookie 或 secret
+
+#### Scenario: legacy key cleanup 失败
+- **WHEN** 旧 Redis session key cleanup dry-run 或 apply 失败
+- **THEN** 系统 SHALL 输出 `event="session_kernel.cleanup_legacy_keys.failed"` 的 warning 或 error system log
+- **AND** 日志 SHALL 包含 sourceApp、mode、failedPattern、errorName、errorMessage 和已完成的 pattern summary
+- **AND** 日志 MUST NOT 包含 Redis password、完整 Redis URL、完整 key、token 或 secret
+
+#### Scenario: Kernel schema corrupted
+- **WHEN** Session Kernel resolve、consume、renew 或 revoke 读取到不符合 Zod schema 的 lifecycle payload
+- **THEN** 系统 SHALL 输出 `event="session_kernel.schema_corrupted"` 的 warning system log
+- **AND** 日志 SHALL 包含 sourceApp、objectType、protocol、clientCode、reason、requestId 或 traceId 中可用字段
+- **AND** 日志 MUST NOT 包含 corrupted payload 原文、external bearer token 或完整 Redis key
+
+#### Scenario: tombstone replay detected
+- **WHEN** Session Kernel 检测到已消费 artifact 或已撤销 credential/principal/binding 的 replay
+- **THEN** 系统 SHALL 输出 `event="session_kernel.tombstone_replay.detected"` 的 info 或 warning system log
+- **AND** 日志 SHALL 包含 sourceApp、objectType、protocol、credentialType 或 artifactType、clientCode、reason 和 requestId 中可用字段
+- **AND** 日志 MUST NOT 包含被重放的 token、code、sid、Authorization header 或 Cookie
+
+#### Scenario: runtime cleanup failure 可检索
+- **WHEN** Session Kernel revoke summary 包含 cleanup failed 计数
+- **THEN** 系统 SHALL 输出稳定 cleanup failure system log
+- **AND** 日志 SHALL 包含 sourceApp、protocol、kind、refType、failure count、reason、clientCode 或 targetUserId 中可用字段
+- **AND** 日志 MUST NOT 包含 cleanup payload、adapter 私有 payload、external token、clientSecret 或 cookie
+
+### Requirement: Session Kernel 日志敏感字段必须有测试覆盖
+系统 SHALL 为 Session Kernel 发布硬化日志提供敏感字段测试，证明系统日志不会泄露 bearer token、secret、cookie 或私有 payload。
+
+#### Scenario: cleanup 日志不泄露 key 明文
+- **WHEN** 执行 cleanup logging 测试
+- **THEN** 测试 SHALL 构造包含 token-like Redis key 的 dry-run/apply 结果
+- **AND** 输出日志 SHALL 包含 pattern summary 和 count
+- **AND** 输出日志 MUST NOT 包含 token-like key 明文
+
+#### Scenario: runtime 日志不泄露 bearer
+- **WHEN** 执行 Session Kernel runtime logging 测试
+- **THEN** 测试 SHALL 覆盖 schema corrupted、tombstone replay 和 cleanup failure 日志
+- **AND** 输出日志 MUST NOT 包含 PrincipalSession token、custom SSO auth code、local session sid、OIDC authorization code、access token、Authorization header 或 Cookie
+
+#### Scenario: admin revoke 日志保留 summary
+- **WHEN** 执行 admin-api session revoke logger 测试
+- **THEN** 输出日志 SHALL 包含 revoke counters、cleanup counters、actor、target、clientCode、protocol 和 reason 中适用字段
+- **AND** 输出日志 MUST NOT 包含 password、clientSecret、secret hash、external token 或 cleanup payload
+
+### Requirement: Session Kernel release smoke logs must be queryable
+系统 SHALL 在发布 smoke 期间产生可用于验收记录的系统日志证据，并 SHALL 保持 event name 稳定。
+
+#### Scenario: custom SSO smoke 日志可查询
+- **WHEN** custom SSO smoke 使用 legacy bearer source、auth code replay 或 logout cleanup failure 路径
+- **THEN** Loki/Grafana SHALL 能通过稳定 event name、sourceApp、clientCode、requestId 和时间范围查询到对应系统日志
+- **AND** 查询结果 MUST NOT 暴露 bearer token、auth code、sid 或 cookie
+
+#### Scenario: OIDC smoke 日志可查询
+- **WHEN** OIDC smoke 使用 authorization code replay、UserInfo tombstone 或 logout cleanup failure 路径
+- **THEN** Loki/Grafana SHALL 能通过稳定 event name、sourceApp、clientCode、requestId 和时间范围查询到对应系统日志
+- **AND** 查询结果 MUST NOT 暴露 authorization code、access token、ID Token、PKCE verifier、clientSecret 或 cookie
+
+#### Scenario: admin revoke smoke 日志可查询
+- **WHEN** admin 用户或 client 变更触发 Session Kernel revoke
+- **THEN** Loki/Grafana SHALL 能通过 `admin.session_revoke.*` event、sourceApp、targetUserId 或 clientCode、reason 和时间范围查询到 revoke summary
+- **AND** 查询结果 SHALL 包含 cleanup counters
+- **AND** 查询结果 MUST NOT 暴露 external token、secret 或 cleanup payload

@@ -1,10 +1,5 @@
 import type { Redis } from "ioredis";
 import {
-  oidcClientTokenIndexKey,
-  oidcGlobalSessionTokenIndexKey,
-  oidcUserTokenIndexKey,
-} from "@iam/api-core/oidc";
-import {
   OidcClientType,
   OidcScope,
   OidcTokenEndpointAuthMethod,
@@ -12,16 +7,19 @@ import {
 import { describe, expect, it } from "vitest";
 import { toOidcClientRuntimeMetadata } from "../repositories/client-metadata.ts";
 import { RedisOidcAdapter, revokeClientProtocolObjects } from "../storage/redis-adapter.ts";
+import { createOidcTokenStore } from "../stores/token.store.ts";
 
 class FakeRedis {
   strings = new Map<string, string>();
   sortedSets = new Map<string, Map<string, number>>();
+  mgetCalls: string[][] = [];
 
   async get(key: string) {
     return this.strings.get(key) ?? null;
   }
 
   async mget(...keys: string[]) {
+    this.mgetCalls.push(keys);
     return keys.map(key => this.strings.get(key) ?? null);
   }
 
@@ -103,15 +101,61 @@ class FakeRedis {
 }
 
 function createAdapter(model: string, redis: FakeRedis, version: { value: number | null }) {
+  const tokens = createOidcTokenStore(redis as unknown as Redis);
+  const oidcSession = createOidcSessionMock();
   return new RedisOidcAdapter(model, redis as unknown as Redis, {
-    findActiveVersion: async () => version.value,
-  } as never);
+    clientVersions: {
+      findActiveVersion: async () => version.value,
+    },
+    oidcSession,
+    providerSessions: {
+      consumeStaged: async () => null,
+      read: async () => null,
+    },
+    tokens,
+  });
 }
 
 function createMultiClientAdapter(model: string, redis: FakeRedis, versions: Map<string, number | null>) {
+  const tokens = createOidcTokenStore(redis as unknown as Redis);
+  const oidcSession = createOidcSessionMock();
   return new RedisOidcAdapter(model, redis as unknown as Redis, {
-    findActiveVersion: async (clientId: string) => versions.get(clientId) ?? null,
-  } as never);
+    clientVersions: {
+      findActiveVersion: async (clientId: string) => versions.get(clientId) ?? null,
+    },
+    oidcSession,
+    providerSessions: {
+      consumeStaged: async () => null,
+      read: async () => null,
+    },
+    tokens,
+  });
+}
+
+function createOidcSessionMock() {
+  return {
+    registerAuthorizationCodeArtifact: async () => true,
+    consumeAuthorizationCodeArtifact: async () => ({ artifact: { artifactId: "artifact-a" } }),
+    registerAccessTokenCredential: async () => ({
+      credentialId: "credential-a",
+      principalSessionId: "principal-a",
+      clientCode: "client-a",
+    } as never),
+    resolveAccessTokenCredential: async (externalToken: string) => ({
+      credential: {
+        credentialId: "credential-a",
+        principalSessionId: "principal-a",
+        clientCode: "client-a",
+      },
+      metadata: {
+        providerTokenKey: `oidc:model:AccessToken:${externalToken}`,
+        providerTokenId: externalToken,
+        oidcConfigVersion: 3,
+      },
+    } as never),
+    revokeAccessTokenCredential: async () => undefined,
+    revokeClientProtocol: async () => undefined,
+  };
 }
 
 describe("redis OIDC adapter", () => {
@@ -131,6 +175,61 @@ describe("redis OIDC adapter", () => {
     expect(results.filter(result => result.status === "fulfilled")).toHaveLength(1);
     expect(results.filter(result => result.status === "rejected")).toHaveLength(1);
     await expect(adapter.find("code-1")).resolves.toMatchObject({ consumed: expect.any(Number) });
+  });
+
+  it("consumes staged provider session bindings before authorization code registration", async () => {
+    const redis = new FakeRedis();
+    const tokens = createOidcTokenStore(redis as unknown as Redis);
+    const stagedBinding = {
+      globalSessionId: "principal-a",
+      principalSessionId: "principal-a",
+      bindingId: "binding-a",
+      userId: 42,
+      accountId: "57b0e34d-bf33-4671-87ea-4ed2f1b0e420",
+      authTime: 1_782_260_000,
+      oidcConfigVersion: 3,
+      expiresAt: 1_782_263_600,
+    };
+    let readSessionUid: string | undefined;
+    let consumeStagedInput: { accountId: string; sessionUid: string } | undefined;
+    let registeredBinding: unknown;
+
+    const adapter = new RedisOidcAdapter("AuthorizationCode", redis as unknown as Redis, {
+      clientVersions: {
+        findActiveVersion: async () => 3,
+      },
+      oidcSession: {
+        ...createOidcSessionMock(),
+        registerAuthorizationCodeArtifact: async (input) => {
+          registeredBinding = input.binding;
+          return true;
+        },
+      },
+      providerSessions: {
+        read: async (sessionUid) => {
+          readSessionUid = sessionUid;
+          return null;
+        },
+        consumeStaged: async (accountId, sessionUid) => {
+          consumeStagedInput = { accountId, sessionUid };
+          return stagedBinding;
+        },
+      },
+      tokens,
+    });
+
+    await adapter.upsert("code-1", {
+      clientId: "client-a",
+      accountId: "57b0e34d-bf33-4671-87ea-4ed2f1b0e420",
+      sessionUid: "provider-session-a",
+    }, 300);
+
+    expect(readSessionUid).toBe("provider-session-a");
+    expect(consumeStagedInput).toEqual({
+      accountId: "57b0e34d-bf33-4671-87ea-4ed2f1b0e420",
+      sessionUid: "provider-session-a",
+    });
+    expect(registeredBinding).toBe(stagedBinding);
   });
 
   it("rejects artifacts after the client configuration version changes", async () => {
@@ -162,7 +261,7 @@ describe("redis OIDC adapter", () => {
     await expect(adapter.find("session-1")).resolves.toBeUndefined();
   });
 
-  it("registers and removes user, client, and global session token indexes", async () => {
+  it("keeps access token reverse indexes in Kernel and removes provider token payload", async () => {
     const redis = new FakeRedis();
     const adapter = createAdapter("AccessToken", redis, { value: 3 });
     await adapter.upsert("token-1", {
@@ -172,15 +271,38 @@ describe("redis OIDC adapter", () => {
     }, 3600);
 
     const tokenKey = "oidc:model:AccessToken:token-1";
-    expect(await redis.zrange(oidcUserTokenIndexKey(42))).toEqual([tokenKey]);
-    expect(await redis.zrange(oidcClientTokenIndexKey("client-a"))).toEqual([tokenKey]);
-    expect(await redis.zrange(oidcGlobalSessionTokenIndexKey("global-a"))).toEqual([tokenKey]);
+    expect(redis.strings.has(tokenKey)).toBe(true);
+    expect([...redis.sortedSets.keys()].filter(key => key.includes("-tokens:"))).toEqual([]);
 
     await adapter.destroy("token-1");
 
-    expect(await redis.zrange(oidcUserTokenIndexKey(42))).toEqual([]);
-    expect(await redis.zrange(oidcClientTokenIndexKey("client-a"))).toEqual([]);
-    expect(await redis.zrange(oidcGlobalSessionTokenIndexKey("global-a"))).toEqual([]);
+    expect(redis.strings.has(tokenKey)).toBe(false);
+  });
+
+  it("does not read provider access token payload when Kernel credential lookup fails", async () => {
+    const redis = new FakeRedis();
+    redis.strings.set("oidc:model:AccessToken:token-1", JSON.stringify({
+      clientId: "client-a",
+      extra: { kernelCredentialId: "credential-a" },
+    }));
+    const tokens = createOidcTokenStore(redis as unknown as Redis);
+    const adapter = new RedisOidcAdapter("AccessToken", redis as unknown as Redis, {
+      clientVersions: {
+        findActiveVersion: async () => 3,
+      },
+      oidcSession: {
+        ...createOidcSessionMock(),
+        resolveAccessTokenCredential: async () => null,
+      },
+      providerSessions: {
+        consumeStaged: async () => null,
+        read: async () => null,
+      },
+      tokens,
+    });
+
+    await expect(adapter.find("token-1")).resolves.toBeUndefined();
+    expect(redis.mgetCalls).toEqual([]);
   });
 
   it("revokes all indexed protocol objects for an invalidated client", async () => {
@@ -193,7 +315,11 @@ describe("redis OIDC adapter", () => {
       600,
     );
 
-    await revokeClientProtocolObjects(redis as unknown as Redis, "client-a");
+    await revokeClientProtocolObjects(
+      redis as unknown as Redis,
+      createOidcTokenStore(redis as unknown as Redis),
+      "client-a",
+    );
 
     expect(redis.strings.has("oidc:model:AuthorizationCode:code-1")).toBe(false);
     expect(redis.strings.has("oidc:model:Interaction:interaction-1")).toBe(false);

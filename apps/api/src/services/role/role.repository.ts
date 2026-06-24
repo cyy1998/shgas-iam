@@ -1,6 +1,5 @@
 import type { DbClient } from "@iam/db";
 import { EmploymentStatus, RoleStatus } from "@iam/contracts";
-import db from "@iam/db";
 import {
   employmentRoles,
   employments,
@@ -11,14 +10,27 @@ import {
 } from "@iam/db/schema";
 import { and, eq, exists, or, sql } from "drizzle-orm";
 
+export function createRoleRepository(db: DbClient) {
+  return {
+    async getRolesByEmploymentId(employmentId: number) {
+      return await db
+        .select()
+        .from(roles)
+        .where(and(activeRoleWhere(), roleAssignedToEmploymentWhere(employmentId, db)));
+    },
+  };
+}
+
+export type RoleRepository = ReturnType<typeof createRoleRepository>;
+
 function activeRoleWhere() {
   return and(eq(roles.status, RoleStatus.Enable), eq(roles.isDelete, false));
 }
 
-function roleAssignedToEmploymentWhere(employmentId: number) {
+function roleAssignedToEmploymentWhere(employmentId: number, tx: DbClient) {
   return or(
     exists(
-      db.select({ value: sql`1` })
+      tx.select({ value: sql`1` })
         .from(positionRoles)
         .innerJoin(employments, eq(positionRoles.positionId, employments.posId))
         .where(and(
@@ -28,7 +40,7 @@ function roleAssignedToEmploymentWhere(employmentId: number) {
         )),
     ),
     exists(
-      db.select({ value: sql`1` })
+      tx.select({ value: sql`1` })
         .from(organizationRoles)
         .innerJoin(employments, eq(employments.id, employmentId))
         .where(and(
@@ -39,7 +51,7 @@ function roleAssignedToEmploymentWhere(employmentId: number) {
             and(
               eq(organizationRoles.isAllSub, true),
               exists(
-                db.select({ value: sql`1` })
+                tx.select({ value: sql`1` })
                   .from(organizationClosures)
                   .where(and(
                     eq(organizationClosures.ancestorId, organizationRoles.organizationId),
@@ -51,7 +63,7 @@ function roleAssignedToEmploymentWhere(employmentId: number) {
         )),
     ),
     exists(
-      db.select({ value: sql`1` })
+      tx.select({ value: sql`1` })
         .from(employmentRoles)
         .innerJoin(employments, eq(employmentRoles.employmentId, employments.id))
         .where(and(
@@ -61,8 +73,4 @@ function roleAssignedToEmploymentWhere(employmentId: number) {
         )),
     ),
   );
-}
-
-export async function getRolesByEmploymentId(employmentId: number, tx: DbClient = db) {
-  return await tx.select().from(roles).where(and(activeRoleWhere(), roleAssignedToEmploymentWhere(employmentId)));
 }

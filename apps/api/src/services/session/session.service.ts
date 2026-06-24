@@ -1,14 +1,10 @@
 import type { UserDetailDto } from "../user/user.type";
+import type { SessionServiceDeps } from "./session.port";
 import type { LocalSessionAbstract } from "./session.type";
-import config from "@api/env";
-import redis from "@api/lib/infra/redis";
-import { logger } from "@api/lib/logger";
-import * as authAudit from "@api/services/audit/events/auth.audit";
-import * as clientService from "@api/services/client/client.service";
+import { buildLocalLoginSuccessAudit } from "@api/services/audit/events/auth.audit";
 import { UserDetailDtoSchema } from "@api/services/user/user.schema";
 import { AuthzUnauthorizedError } from "@iam/api-core/errors/AuthzUnauthorizedError";
 import { SystemLogEvent } from "@iam/api-core/logger";
-import { revokeOidcAccessTokensForGlobalSession } from "@iam/api-core/oidc";
 import {
   createGlobalSession,
   getGlobalSessionIdByLocalSession as getSharedGlobalSessionIdByLocalSession,
@@ -24,102 +20,125 @@ import {
 import { ClientManagementLevel } from "@iam/contracts";
 import { LocalSessionAbstractSchema } from "./session.schema";
 
-export async function updateSession(sessionId: string, user: UserDetailDto) {
-  return await replaceGlobalSessionUser(
-    redis,
-    sessionId,
-    user,
-    UserDetailDtoSchema,
-    config.REDIS_EXPIRE_TIME,
-    logger,
-  );
-}
-
-export async function setLocalSession(
-  globalSessionId: string,
-  clientCode: string,
-  userDetailDto: UserDetailDto,
-  mode: ClientManagementLevel,
-) {
-  if (await getGlobalSession(globalSessionId) === null) {
-    throw new AuthzUnauthorizedError("全局session不存在或已过期");
+export function createSessionService(deps: SessionServiceDeps) {
+  async function updateSession(sessionId: string, user: UserDetailDto) {
+    return await replaceGlobalSessionUser(
+      deps.redis,
+      sessionId,
+      user,
+      UserDetailDtoSchema,
+      deps.config.redisExpireSeconds,
+      deps.logger,
+    );
   }
-  const localSessionId = crypto.randomUUID();
-  const reference = { clientCode, localSessionId, mode };
-  const ttl = await writeLocalSession(redis, globalSessionId, reference, userDetailDto, logger);
-  await authAudit.recordLocalLoginSuccess(userDetailDto, clientCode, mode);
-  return { localSessionId, ttl };
-}
 
-export async function removeLocalSession(reference: LocalSessionAbstract, globalSessionId?: string) {
-  await removeSharedLocalSession(redis, reference, globalSessionId);
+  async function setLocalSession(
+    globalSessionId: string,
+    clientCode: string,
+    userDetailDto: UserDetailDto,
+    mode: ClientManagementLevel,
+  ) {
+    if (await getGlobalSession(globalSessionId) === null) {
+      throw new AuthzUnauthorizedError("全局session不存在或已过期");
+    }
+    const localSessionId = deps.random.uuid();
+    const reference = { clientCode, localSessionId, mode };
+    const ttl = await writeLocalSession(deps.redis, globalSessionId, reference, userDetailDto, deps.logger);
+    await deps.auditLogWriter.recordAuditLog(buildLocalLoginSuccessAudit(userDetailDto, clientCode, mode));
+    return { localSessionId, ttl };
+  }
 
-  if (reference.mode !== ClientManagementLevel.Independent)
-    return;
-  const client = await clientService.getClientByCode(reference.clientCode);
-  if (!client)
-    return;
+  async function removeLocalSession(reference: LocalSessionAbstract, globalSessionId?: string) {
+    await removeSharedLocalSession(deps.redis, reference, globalSessionId);
 
-  try {
-    const response = await fetch(client.extAttributes.logoutEndpoint, {
-      method: "POST",
-      body: JSON.stringify({ sid: reference.localSessionId }),
-      headers: { "Content-Type": "application/json", "Accept": "application/json" },
-    });
-    if (!response.ok) {
-      logger.warn({
-        event: SystemLogEvent.SessionNotificationUnexpectedResponse,
+    if (reference.mode !== ClientManagementLevel.Independent)
+      return;
+    const client = await deps.clientService.getClientByCode(reference.clientCode);
+    if (!client)
+      return;
+
+    try {
+      const response = await fetch(client.extAttributes.logoutEndpoint, {
+        method: "POST",
+        body: JSON.stringify({ sid: reference.localSessionId }),
+        headers: { "Content-Type": "application/json", "Accept": "application/json" },
+      });
+      if (!response.ok) {
+        deps.logger.warn({
+          event: SystemLogEvent.SessionNotificationUnexpectedResponse,
+          clientCode: reference.clientCode,
+          localSessionId: reference.localSessionId,
+          status: response.status,
+        }, "independent client logout endpoint returned non-OK response");
+      }
+    }
+    catch (error) {
+      deps.logger.warn({
+        event: SystemLogEvent.SessionNotificationFailed,
+        err: error,
         clientCode: reference.clientCode,
         localSessionId: reference.localSessionId,
-        status: response.status,
-      }, "independent client logout endpoint returned non-OK response");
+      }, "independent client logout endpoint failed");
     }
   }
-  catch (error) {
-    logger.warn({
-      event: SystemLogEvent.SessionNotificationFailed,
-      err: error,
-      clientCode: reference.clientCode,
-      localSessionId: reference.localSessionId,
-    }, "independent client logout endpoint failed");
+
+  async function getGlobalSessionIdByLocalSession(localSessionId: string) {
+    return await getSharedGlobalSessionIdByLocalSession(deps.redis, localSessionId);
   }
+
+  async function getValidLocalSessions(globalSessionId: string) {
+    return await listLocalSessions(deps.redis, globalSessionId, LocalSessionAbstractSchema, deps.logger);
+  }
+
+  async function getValidatedLocalSessionUserString(clientCode: string, localSessionId: string) {
+    const user = await readValidatedLocalSessionUser(
+      deps.redis,
+      clientCode,
+      localSessionId,
+      UserDetailDtoSchema,
+      deps.logger,
+    );
+    return user === null ? null : JSON.stringify(user);
+  }
+
+  async function getGlobalSession(globalSessionId: string) {
+    return await readGlobalSession(deps.redis, globalSessionId, UserDetailDtoSchema, deps.logger);
+  }
+
+  async function renewGlobalSession(globalSessionId: string) {
+    return await renewSharedGlobalSession(
+      deps.redis,
+      globalSessionId,
+      deps.config.redisExpireSeconds,
+      LocalSessionAbstractSchema,
+      deps.logger,
+    );
+  }
+
+  async function setGlobalSession(user: UserDetailDto) {
+    const { sessionId } = await createGlobalSession(deps.redis, user, deps.config.redisExpireSeconds);
+    return sessionId;
+  }
+
+  async function removeGlobalSession(globalSessionId: string) {
+    await Promise.all([
+      removeSharedGlobalSession(deps.redis, globalSessionId),
+      deps.tokenRevoker.revokeOidcAccessTokensForGlobalSession(deps.redis, globalSessionId),
+    ]);
+  }
+
+  return {
+    updateSession,
+    setLocalSession,
+    removeLocalSession,
+    getGlobalSessionIdByLocalSession,
+    getValidLocalSessions,
+    getValidatedLocalSessionUserString,
+    getGlobalSession,
+    renewGlobalSession,
+    setGlobalSession,
+    removeGlobalSession,
+  };
 }
 
-export async function getGlobalSessionIdByLocalSession(localSessionId: string) {
-  return await getSharedGlobalSessionIdByLocalSession(redis, localSessionId);
-}
-
-export async function getValidLocalSessions(globalSessionId: string) {
-  return await listLocalSessions(redis, globalSessionId, LocalSessionAbstractSchema, logger);
-}
-
-export async function getValidatedLocalSessionUserString(clientCode: string, localSessionId: string) {
-  const user = await readValidatedLocalSessionUser(redis, clientCode, localSessionId, UserDetailDtoSchema, logger);
-  return user === null ? null : JSON.stringify(user);
-}
-
-export async function getGlobalSession(globalSessionId: string) {
-  return await readGlobalSession(redis, globalSessionId, UserDetailDtoSchema, logger);
-}
-
-export async function renewGlobalSession(globalSessionId: string) {
-  return await renewSharedGlobalSession(
-    redis,
-    globalSessionId,
-    config.REDIS_EXPIRE_TIME,
-    LocalSessionAbstractSchema,
-    logger,
-  );
-}
-
-export async function setGlobalSession(user: UserDetailDto) {
-  const { sessionId } = await createGlobalSession(redis, user, config.REDIS_EXPIRE_TIME);
-  return sessionId;
-}
-
-export async function removeGlobalSession(globalSessionId: string) {
-  await Promise.all([
-    removeSharedGlobalSession(redis, globalSessionId),
-    revokeOidcAccessTokensForGlobalSession(redis, globalSessionId),
-  ]);
-}
+export type SessionService = ReturnType<typeof createSessionService>;
