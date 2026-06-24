@@ -658,6 +658,7 @@ describe("SSO Kernel session consistency", () => {
     const encoded = await services.customSsoSession.authorizeLocalSession(result.sid, client);
     expect(JSON.parse(Buffer.from(encoded, "base64").toString("utf8"))).toEqual({
       id: userDetail.id,
+      name: userDetail.name,
       username: userDetail.username,
     });
 

@@ -23,7 +23,7 @@ const loginMobileService = mock(async () => ({
   isMobileSet: true,
 }));
 const authzService = mock(async () => "user-info");
-const getClientByCode = mock(async () => null);
+const getClientByCode = mock(async (_code: string): Promise<InternalTestClient | null> => null);
 const getClientBySecret = mock(async (_secret: string): Promise<InternalTestClient | null> => null);
 const loggerInfo = mock(() => undefined);
 
@@ -79,6 +79,9 @@ function makeLoginContext() {
 function makeHeaderContext(headers: Record<string, string>) {
   return {
     req: {
+      raw: new Request("https://iam.example.test/authz", {
+        headers,
+      }),
       header: mock((name: string) => headers[name] ?? headers[name.toLowerCase()]),
     },
     json: mock((body: unknown) => body),
@@ -94,10 +97,40 @@ beforeEach(() => {
   getClientByCode.mockClear();
   getClientBySecret.mockClear();
   loggerInfo.mockClear();
+  getClientByCode.mockImplementation(async () => null);
   getClientBySecret.mockImplementation(async () => null);
 });
 
 describe("createAuthHandlers", () => {
+  test("authz writes encoded user info response header", async () => {
+    const handlers = createHandlers();
+    const responseHeaders: unknown[][] = [];
+    getClientByCode.mockImplementation(async () => ({
+      clientCode: "portal",
+      clientSecret: "secret-1",
+      isDelete: false,
+      status: ClientStatus.Enable,
+    }));
+    const context = {
+      ...makeHeaderContext({
+        "Authorization": "local-session-token",
+        "Client": "portal",
+        "X-Forwarded-Uri": "/app",
+      }),
+      header: mock((...args: unknown[]) => {
+        responseHeaders.push(args);
+      }),
+    };
+
+    await expect(handlers.authz(context as never, undefined as never)).resolves.toEqual(resp.ok("user-info"));
+
+    expect(getClientByCode).toHaveBeenCalledWith("portal");
+    expect(authzService).toHaveBeenCalledWith("local-session-token", expect.objectContaining({
+      clientCode: "portal",
+    }));
+    expect(responseHeaders).toContainEqual(["X-User-Info", "user-info"]);
+  });
+
   test("password login decrypts credential before calling auth service", async () => {
     const handlers = createHandlers();
     const context = makeLoginContext();
