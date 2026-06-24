@@ -8,6 +8,7 @@
     "module": "Preserve",
     "moduleResolution": "bundler",
     "paths": {
+      "@admin-api/test/*": ["./src/testing/*"],
       "@admin-api/*": ["./src/*"],
       "~admin-api/*": ["./*"]
     },

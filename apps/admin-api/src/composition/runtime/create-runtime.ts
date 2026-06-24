@@ -3,7 +3,7 @@ import { randomBytes, randomInt, randomUUID } from "node:crypto";
 import env, { adminClientCodes, adminRoleCodes } from "@admin-api/env";
 import redis from "@admin-api/lib/infra/redis";
 import { logger } from "@admin-api/lib/logger";
-import { invalidateOidcClient, revokeOidcAccessTokensForUser } from "@iam/api-core/oidc";
+import { invalidateOidcClient } from "@iam/api-core/oidc";
 import { hashSecret } from "@iam/api-core/security";
 import { generateRandomPassword } from "@iam/api-core/utils";
 import { hash } from "bcrypt-ts";
@@ -117,11 +117,6 @@ export function createAdminApiRuntime(options: CreateAdminApiRuntimeOptions = {}
             clientCode: client.clientCode,
             oidcConfigVersion: client.oidcConfigVersion,
           });
-        },
-      },
-      tokenRevocation: {
-        async revokeUserTokens(userId) {
-          await revokeOidcAccessTokensForUser(runtimeRedis, userId);
         },
       },
     },

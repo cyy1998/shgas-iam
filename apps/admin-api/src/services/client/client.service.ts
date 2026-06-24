@@ -1,9 +1,11 @@
 import type { AdminAuditContext } from "@admin-api/services/audit/audit.service";
 import type { ClientStatus } from "@iam/contracts";
+import type { OidcRuntimeInvalidationTarget } from "../session-revocation/session-revocation.port";
 import type { AdminClientServiceDeps } from "./client.port";
 import type {
   ClientAdminListDto,
   ClientCreateDto,
+  ClientDto,
   ClientInputDto,
   ClientOidcConfigureDto,
   ClientPaginationQueryDto,
@@ -61,7 +63,114 @@ function assertValidOidcStorageState(client: { oidcConfig: unknown; oidcSecretHa
   }
 }
 
+const customSsoSessionExtAttributeKeys = [
+  "validRedirectUrls",
+  "callbackEndpoint",
+  "logoutEndpoint",
+  "managementLevel",
+  "requireOrcas",
+] as const;
+
+type AdminClientTransactionContext = Parameters<Parameters<AdminClientServiceDeps["uow"]["transaction"]>[0]>[0];
+
+type ClientSessionRevocationDecision
+  = | { scope: "all-protocols"; reason: "client_disabled" | "client_deleted" | "client_config_changed" }
+    | { scope: "protocol"; protocol: "custom-sso" | "oidc"; reason: "client_protocol_disabled" | "client_config_changed" };
+
+function resolveClientUpdateSessionRevocations(
+  existing: ClientDto,
+  updated: ClientDto,
+  data: Pick<ClientUpdateDto | ClientInputDto, "clientSecret" | "extAttributes" | "status">,
+): ClientSessionRevocationDecision[] {
+  const statusChanged = data.status !== undefined && data.status !== existing.status;
+  if (statusChanged && updated.status === ClientStatusValue.Disable) {
+    return [{ scope: "all-protocols", reason: "client_disabled" }];
+  }
+
+  const decisions: ClientSessionRevocationDecision[] = [];
+  if (statusChanged && updated.status === ClientStatusValue.Maintance) {
+    decisions.push({ scope: "protocol", protocol: "oidc", reason: "client_config_changed" });
+  }
+  if (hasCustomSsoSessionConfigChange(existing, data)) {
+    decisions.push({ scope: "protocol", protocol: "custom-sso", reason: "client_config_changed" });
+  }
+  return decisions;
+}
+
+function hasCustomSsoSessionConfigChange(
+  existing: ClientDto,
+  data: Pick<ClientUpdateDto | ClientInputDto, "clientSecret" | "extAttributes">,
+) {
+  if (data.clientSecret !== undefined && data.clientSecret !== existing.clientSecret)
+    return true;
+  const extAttributes = data.extAttributes;
+  if (!extAttributes)
+    return false;
+
+  return customSsoSessionExtAttributeKeys.some((key) => {
+    if (!Object.hasOwn(extAttributes, key))
+      return false;
+    return JSON.stringify(extAttributes[key]) !== JSON.stringify(existing.extAttributes[key]);
+  });
+}
+
+function toOidcRuntimeInvalidationTarget(client: OidcRuntimeInvalidationTarget): OidcRuntimeInvalidationTarget {
+  return {
+    id: client.id,
+    clientCode: client.clientCode,
+    oidcConfigVersion: client.oidcConfigVersion,
+  };
+}
+
 export function createClientService(deps: AdminClientServiceDeps) {
+  async function txClientProtocolRevocation(
+    client: OidcRuntimeInvalidationTarget,
+    protocol: "custom-sso" | "oidc",
+    reason: "client_protocol_disabled" | "client_config_changed",
+    auditContext?: AdminAuditContext,
+  ) {
+    await deps.sessionRevocation.revokeClientProtocol({
+      clientCode: client.clientCode,
+      protocol,
+      reason,
+      auditContext,
+      oidcInvalidationClient: protocol === "oidc" ? toOidcRuntimeInvalidationTarget(client) : undefined,
+    });
+  }
+
+  async function txClientAllProtocolsRevocation(
+    client: OidcRuntimeInvalidationTarget,
+    reason: "client_disabled" | "client_deleted" | "client_config_changed",
+    auditContext?: AdminAuditContext,
+  ) {
+    await deps.sessionRevocation.revokeClientAllProtocols({
+      clientCode: client.clientCode,
+      reason,
+      auditContext,
+      oidcInvalidationClient: toOidcRuntimeInvalidationTarget(client),
+    });
+  }
+
+  function registerClientSessionRevocations(
+    tx: AdminClientTransactionContext,
+    decisions: ClientSessionRevocationDecision[],
+    client: OidcRuntimeInvalidationTarget,
+    auditContext?: AdminAuditContext,
+  ) {
+    for (const decision of decisions) {
+      if (decision.scope === "all-protocols") {
+        tx.afterCommit.bestEffort("admin.session_revoke.client_all_protocols", async () => {
+          await txClientAllProtocolsRevocation(client, decision.reason, auditContext);
+        });
+        continue;
+      }
+
+      tx.afterCommit.bestEffort("admin.session_revoke.client_protocol", async () => {
+        await txClientProtocolRevocation(client, decision.protocol, decision.reason, auditContext);
+      });
+    }
+  }
+
   async function searchClientsForAdmin(query: ClientPaginationQueryDto) {
     const { rows, total } = await deps.clientRepository.searchClientsPaged(query);
     return toPageResult(rows.map(toClientAdminListDto), total, query);
@@ -125,11 +234,12 @@ export function createClientService(deps: AdminClientServiceDeps) {
       tx.afterCommit.required("admin.client.cache.sync", async () => {
         await deps.clientCache.syncUpdatedClient(parsedExisting, parsedUpdated);
       });
-      if (statusChanged) {
-        tx.afterCommit.bestEffort("admin.client.oidc.invalidate", async () => {
-          await deps.oidcInvalidation.invalidateClient(client);
-        });
-      }
+      registerClientSessionRevocations(
+        tx,
+        resolveClientUpdateSessionRevocations(parsedExisting, parsedUpdated, data),
+        client,
+        auditContext,
+      );
       return parsedUpdated;
     });
   }
@@ -165,11 +275,12 @@ export function createClientService(deps: AdminClientServiceDeps) {
       tx.afterCommit.required("admin.client.cache.sync", async () => {
         await deps.clientCache.syncUpdatedClient(parsedExisting, parsedUpdated);
       });
-      if (statusChanged) {
-        tx.afterCommit.bestEffort("admin.client.oidc.invalidate", async () => {
-          await deps.oidcInvalidation.invalidateClient(client);
-        });
-      }
+      registerClientSessionRevocations(
+        tx,
+        resolveClientUpdateSessionRevocations(parsedExisting, parsedUpdated, clientDto),
+        client,
+        auditContext,
+      );
       return parsedUpdated;
     });
   }
@@ -195,8 +306,8 @@ export function createClientService(deps: AdminClientServiceDeps) {
       tx.afterCommit.required("admin.client.cache.delete", async () => {
         await deps.clientCache.deleteClient(deleted);
       });
-      tx.afterCommit.bestEffort("admin.client.oidc.invalidate", async () => {
-        await deps.oidcInvalidation.invalidateClient(client);
+      tx.afterCommit.bestEffort("admin.session_revoke.client_all_protocols", async () => {
+        await txClientAllProtocolsRevocation(client, "client_deleted", auditContext);
       });
     });
     return true;
@@ -237,8 +348,8 @@ export function createClientService(deps: AdminClientServiceDeps) {
         oidcEnabled: client.oidcEnabled,
         oidcConfigVersion: client.oidcConfigVersion,
       }, auditContext));
-      tx.afterCommit.bestEffort("admin.client.oidc.invalidate", async () => {
-        await deps.oidcInvalidation.invalidateClient(client);
+      tx.afterCommit.bestEffort("admin.session_revoke.client_protocol", async () => {
+        await txClientProtocolRevocation(client, "oidc", "client_config_changed", auditContext);
       });
       return { client, clientSecret };
     });
@@ -270,8 +381,13 @@ export function createClientService(deps: AdminClientServiceDeps) {
         { oidcEnabled: enabled, oidcConfigVersion: client.oidcConfigVersion },
         auditContext,
       ));
-      tx.afterCommit.bestEffort("admin.client.oidc.invalidate", async () => {
-        await deps.oidcInvalidation.invalidateClient(client);
+      tx.afterCommit.bestEffort("admin.session_revoke.client_protocol", async () => {
+        await txClientProtocolRevocation(
+          client,
+          "oidc",
+          enabled ? "client_config_changed" : "client_protocol_disabled",
+          auditContext,
+        );
       });
       return client;
     });
@@ -303,8 +419,8 @@ export function createClientService(deps: AdminClientServiceDeps) {
       await tx.auditService.recordAuditLog(buildAdminClientAudit("admin.client.oidc.remove", ClientDtoSchema.parse(client), {
         oidcConfigVersion: client.oidcConfigVersion,
       }, auditContext));
-      tx.afterCommit.bestEffort("admin.client.oidc.invalidate", async () => {
-        await deps.oidcInvalidation.invalidateClient(client);
+      tx.afterCommit.bestEffort("admin.session_revoke.client_protocol", async () => {
+        await txClientProtocolRevocation(client, "oidc", "client_protocol_disabled", auditContext);
       });
       return client;
     });
@@ -325,8 +441,8 @@ export function createClientService(deps: AdminClientServiceDeps) {
       await tx.auditService.recordAuditLog(buildAdminClientAudit("admin.client.oidc.rotate_secret", ClientDtoSchema.parse(client), {
         oidcConfigVersion: client.oidcConfigVersion,
       }, auditContext));
-      tx.afterCommit.bestEffort("admin.client.oidc.invalidate", async () => {
-        await deps.oidcInvalidation.invalidateClient(client);
+      tx.afterCommit.bestEffort("admin.session_revoke.client_protocol", async () => {
+        await txClientProtocolRevocation(client, "oidc", "client_config_changed", auditContext);
       });
       return { client, clientSecret };
     });

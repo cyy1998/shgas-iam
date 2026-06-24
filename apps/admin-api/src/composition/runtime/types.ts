@@ -60,14 +60,9 @@ export interface OidcInvalidationPort {
   invalidateClient: (client: { id: number; clientCode: string; oidcConfigVersion: number }) => Promise<unknown>;
 }
 
-export interface TokenRevocationPort {
-  revokeUserTokens: (userId: number) => Promise<unknown>;
-}
-
 export interface AdminApiIntegrationPorts {
   clientCache: ClientCachePort;
   oidcInvalidation: OidcInvalidationPort;
-  tokenRevocation: TokenRevocationPort;
 }
 
 export interface AdminApiRuntimePorts {

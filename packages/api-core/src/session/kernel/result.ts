@@ -64,7 +64,7 @@ export function failClosed(message: string, cause?: unknown): FailClosedResult {
 }
 
 function emptyCounter(): RevokeObjectCounter {
-  return { revoked: 0, alreadyRevoked: 0, missing: 0 };
+  return { revoked: 0, alreadyRevoked: 0, missing: 0, excluded: 0 };
 }
 
 export function createEmptyRevokeSummary(): RevokeSummary {
@@ -98,6 +98,7 @@ function mergeCounter(target: RevokeObjectCounter, source: RevokeObjectCounter) 
   target.revoked += source.revoked;
   target.alreadyRevoked += source.alreadyRevoked;
   target.missing += source.missing;
+  target.excluded += source.excluded;
 }
 
 export function counterForKind(summary: RevokeSummary, kind: LifecycleObjectKind): RevokeObjectCounter {

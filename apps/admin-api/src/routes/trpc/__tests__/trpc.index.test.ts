@@ -18,6 +18,15 @@ type TrpcErrorResponse = {
   };
 };
 
+type TestResponse = {
+  status: number;
+  json: () => Promise<unknown>;
+};
+
+function asTestResponse(response: unknown): TestResponse {
+  return response as TestResponse;
+}
+
 function createMockLogger() {
   const info = mock((..._args: unknown[]) => undefined);
   const warn = mock((..._args: unknown[]) => undefined);
@@ -67,11 +76,11 @@ describe("createTrpcRoute error logging", () => {
     const logger = createMockLogger();
     const app = createTestApp(logger.logger);
 
-    const res = await app.request("http://localhost/rpc/known", {
+    const res = asTestResponse(await app.request("http://localhost/rpc/known", {
       headers: {
         traceparent: "00-11111111111111111111111111111111-2222222222222222-01",
       },
-    });
+    }));
     const body = await res.json() as TrpcErrorResponse;
 
     expect(res.status).toBe(NOT_FOUND);
@@ -109,7 +118,7 @@ describe("createTrpcRoute error logging", () => {
     const unknownError = new Error("boom");
     const app = createTestApp(logger.logger, unknownError);
 
-    const res = await app.request("http://localhost/rpc/unknown");
+    const res = asTestResponse(await app.request("http://localhost/rpc/unknown"));
 
     expect(res.status).toBe(500);
     expect(logger.error).toHaveBeenCalledTimes(1);

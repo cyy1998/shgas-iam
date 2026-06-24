@@ -107,6 +107,11 @@ export type CreateProtocolArtifactInput = {
   tokenKind?: Extract<KernelTokenKind, "artifact" | "authCode" | "localSession" | "oidcReturnHandle">;
 };
 
+export type RevokeUserSessionsOptions = {
+  exceptPrincipalSessionId?: string;
+  excludePrincipalSessionIds?: string[];
+};
+
 export type SessionKernel = ReturnType<typeof createSessionKernel>;
 
 export function createSessionKernel(deps: SessionKernelDependencies) {
@@ -355,13 +360,7 @@ export function createSessionKernel(deps: SessionKernelDependencies) {
 
   async function revokePrincipalSession(principalSessionId: string, reason: RevocationReason = "logout") {
     const summary = createEmptyRevokeSummary();
-    const members = await store.readIndex(keys.index.principal(principalSessionId));
-    for (const member of members) {
-      const parsed = parseIndexMember(member);
-      if (!parsed || parsed.kind === "principal_session")
-        continue;
-      mergeRevokeSummary(summary, await revokeObject(parsed.kind, parsed.id, reason));
-    }
+    mergeRevokeSummary(summary, await revokePrincipalChildObjects(principalSessionId, reason));
     mergeRevokeSummary(summary, await revokeObject("principal_session", principalSessionId, reason));
     return summary;
   }
@@ -387,8 +386,33 @@ export function createSessionKernel(deps: SessionKernelDependencies) {
     return await revokeObject("artifact", artifactId, reason);
   }
 
-  async function revokeUserSessions(principal: PrincipalRef, reason: RevocationReason = "admin_revoke") {
-    return await revokeByIndex(keys.index.user(principal), reason, kind => kind === "principal_session");
+  async function revokeUserSessions(
+    principal: PrincipalRef,
+    reason: RevocationReason = "admin_revoke",
+    options: RevokeUserSessionsOptions = {},
+  ) {
+    const summary = createEmptyRevokeSummary();
+    const excludedPrincipalSessionIds = new Set([
+      ...(options.excludePrincipalSessionIds ?? []),
+      options.exceptPrincipalSessionId,
+    ].filter((value): value is string => typeof value === "string" && value.length > 0));
+    const members = await store.readIndex(keys.index.user(principal));
+
+    for (const member of members) {
+      const parsed = parseIndexMember(member);
+      if (!parsed || parsed.kind !== "principal_session")
+        continue;
+
+      if (excludedPrincipalSessionIds.has(parsed.id)) {
+        summary.principalSessions.excluded += 1;
+        mergeRevokeSummary(summary, await revokePrincipalChildObjects(parsed.id, reason));
+        continue;
+      }
+
+      mergeRevokeSummary(summary, await revokePrincipalSession(parsed.id, reason));
+    }
+
+    return summary;
   }
 
   async function revokeClientProtocol(clientCode: string, protocol: string, reason: RevocationReason = "admin_revoke") {
@@ -401,6 +425,13 @@ export function createSessionKernel(deps: SessionKernelDependencies) {
 
   async function revokePrincipalObjects(principalSessionId: string, reason: RevocationReason = "admin_revoke") {
     return await revokeByIndex(keys.index.principal(principalSessionId), reason);
+  }
+
+  async function revokePrincipalChildObjects(
+    principalSessionId: string,
+    reason: RevocationReason = "admin_revoke",
+  ) {
+    return await revokeByIndex(keys.index.principal(principalSessionId), reason, kind => kind !== "principal_session");
   }
 
   async function revokeBindingObjects(bindingId: string, reason: RevocationReason = "admin_revoke") {

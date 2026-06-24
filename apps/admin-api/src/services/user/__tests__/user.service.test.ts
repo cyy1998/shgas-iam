@@ -1,5 +1,4 @@
 import { createFakePasswordHasher, createFakeRandom, createImmediateUnitOfWork } from "@admin-api/test/fakes";
-import { AfterCommitRequiredTaskError } from "@iam/api-core/uow";
 import { UserStatus, UserType } from "@iam/contracts";
 import { describe, expect, mock, test } from "bun:test";
 import { createUserService } from "../user.service";
@@ -25,7 +24,24 @@ function user(overrides: Record<string, unknown> = {}) {
   };
 }
 
-function createService() {
+function revokeSummary() {
+  return {
+    principalSessions: { revoked: 0, alreadyRevoked: 0, missing: 0, excluded: 0 },
+    bindings: { revoked: 0, alreadyRevoked: 0, missing: 0, excluded: 0 },
+    credentials: { revoked: 0, alreadyRevoked: 0, missing: 0, excluded: 0 },
+    artifacts: { revoked: 0, alreadyRevoked: 0, missing: 0, excluded: 0 },
+    cleanup: { attempted: 0, succeeded: 0, failed: 0, failures: [] },
+  };
+}
+
+function createAfterCommitLogger() {
+  return {
+    warn: mock((_obj: Record<string, unknown>, _msg: string) => undefined),
+    error: mock((_obj: Record<string, unknown>, _msg: string) => undefined),
+  };
+}
+
+function createService(options: { afterCommitLogger?: ReturnType<typeof createAfterCommitLogger> } = {}) {
   const tx = {
     auditService: { recordAuditLog: mock(async () => undefined) },
     userRepository: {
@@ -49,10 +65,10 @@ function createService() {
     roleRepository: {
       getRolesByEmploymentId: mock(async () => []),
     },
-    tokenRevocation: {
-      revokeUserTokens: mock(async () => undefined),
+    sessionRevocation: {
+      revokeUserSessions: mock(async () => revokeSummary()),
     },
-    uow: createImmediateUnitOfWork(tx),
+    uow: createImmediateUnitOfWork(tx, { logger: options.afterCommitLogger }),
     userRepository: {
       getUserByUsernameForAdmin: mock(async () => user()),
       searchUsersFuzzyPaged: mock(async () => ({ rows: [user()], total: 1 })),
@@ -99,7 +115,7 @@ describe("createUserService", () => {
     expect(tx.userRepository.setUserForAdmin).not.toHaveBeenCalled();
   });
 
-  test("revokes user tokens when disabling a user", async () => {
+  test("revokes user sessions when disabling a user", async () => {
     const { service, deps, tx } = createService();
     (tx.userRepository.getUserByUsernameForAdmin as any).mockResolvedValue(user());
 
@@ -108,45 +124,60 @@ describe("createUserService", () => {
     expect(tx.userRepository.updateUserByUsername).toHaveBeenCalledWith("zhangsan", {
       status: UserStatus.Disable,
     });
-    expect(deps.tokenRevocation.revokeUserTokens).toHaveBeenCalledWith(1);
+    expect(deps.sessionRevocation.revokeUserSessions).toHaveBeenCalledWith({
+      userId: 1,
+      reason: "user_disabled",
+      auditContext: undefined,
+    });
   });
 
-  test("reports required token revocation failures after disabling a user", async () => {
-    const { service, deps, tx } = createService();
+  test("keeps user status update successful when session revocation fails", async () => {
+    const afterCommitLogger = createAfterCommitLogger();
+    const { service, deps, tx } = createService({ afterCommitLogger });
     (tx.userRepository.getUserByUsernameForAdmin as any).mockResolvedValue(user());
-    deps.tokenRevocation.revokeUserTokens.mockRejectedValueOnce(new Error("revocation failed"));
+    const revocationFailure = new Error("revocation failed");
+    deps.sessionRevocation.revokeUserSessions.mockRejectedValueOnce(revocationFailure);
 
-    await expect(service.updateUser("zhangsan", { status: UserStatus.Disable }))
-      .rejects
-      .toBeInstanceOf(AfterCommitRequiredTaskError);
+    await expect(service.updateUser("zhangsan", { status: UserStatus.Disable })).resolves.toBe(true);
 
     expect(tx.userRepository.updateUserByUsername).toHaveBeenCalledWith("zhangsan", {
       status: UserStatus.Disable,
     });
-    expect(deps.tokenRevocation.revokeUserTokens).toHaveBeenCalledWith(1);
+    expect(deps.sessionRevocation.revokeUserSessions).toHaveBeenCalled();
+    expect(afterCommitLogger.warn).toHaveBeenCalledWith({
+      afterCommit: "admin.session_revoke.user",
+      mode: "bestEffort",
+      err: revocationFailure,
+    }, "best-effort afterCommit task failed");
+    expect(afterCommitLogger.error).not.toHaveBeenCalled();
   });
 
-  test("revokes user tokens when deleting a user", async () => {
+  test("revokes user sessions when deleting a user", async () => {
     const { service, deps, tx } = createService();
     (tx.userRepository.getUserByUsernameForAdmin as any).mockResolvedValue(user());
 
     await expect(service.deleteUser("zhangsan")).resolves.toBe(true);
 
     expect(tx.userRepository.softDeleteUserByUsername).toHaveBeenCalledWith("zhangsan");
-    expect(deps.tokenRevocation.revokeUserTokens).toHaveBeenCalledWith(1);
+    expect(deps.sessionRevocation.revokeUserSessions).toHaveBeenCalledWith({
+      userId: 1,
+      reason: "user_deleted",
+      auditContext: undefined,
+    });
   });
 
   test("rejects deleting a user with active employments", async () => {
-    const { service, tx } = createService();
+    const { service, deps, tx } = createService();
     (tx.userRepository.getUserByUsernameForAdmin as any).mockResolvedValue(user());
     tx.userRepository.countActiveEmploymentsByUsername.mockResolvedValue(1);
 
     await expect(service.deleteUser("zhangsan")).rejects.toThrow();
 
     expect(tx.userRepository.softDeleteUserByUsername).not.toHaveBeenCalled();
+    expect(deps.sessionRevocation.revokeUserSessions).not.toHaveBeenCalled();
   });
 
-  test("resets a user password with the injected random password", async () => {
+  test("resets a user password with the injected random password and revokes sessions", async () => {
     const { service, deps, tx } = createService();
     (tx.userRepository.getUserByUsernameForAdmin as any).mockResolvedValue(user());
 
@@ -154,6 +185,30 @@ describe("createUserService", () => {
 
     expect(deps.passwordHasher.hashPassword).toHaveBeenCalledWith("Rand1234");
     expect(tx.userRepository.setPassword).toHaveBeenCalledWith(1, "hashed:Rand1234");
-    expect(deps.tokenRevocation.revokeUserTokens).not.toHaveBeenCalled();
+    expect(deps.sessionRevocation.revokeUserSessions).toHaveBeenCalledWith({
+      userId: 1,
+      reason: "admin_revoke",
+      exceptPrincipalSessionId: undefined,
+      auditContext: undefined,
+    });
+  });
+
+  test("keeps current PrincipalSession when an admin resets their own password", async () => {
+    const { service, deps, tx } = createService();
+    (tx.userRepository.getUserByUsernameForAdmin as any).mockResolvedValue(user());
+    const auditContext = {
+      actorType: "admin" as const,
+      actorUserId: 1,
+      principalSessionId: "ps-current",
+    };
+
+    await expect(service.resetPasswordByUsername("zhangsan", auditContext)).resolves.toBe("Rand1234");
+
+    expect(deps.sessionRevocation.revokeUserSessions).toHaveBeenCalledWith({
+      userId: 1,
+      reason: "admin_revoke",
+      exceptPrincipalSessionId: "ps-current",
+      auditContext,
+    });
   });
 });

@@ -5,6 +5,19 @@ import { UserStatus, UserType } from "@iam/contracts";
 import { describe, expect, mock, test } from "bun:test";
 import { Hono } from "hono";
 
+type TestResponse = {
+  status: number;
+  json: () => Promise<unknown>;
+  text: () => Promise<string>;
+  headers: {
+    get: (name: string) => string | null;
+  };
+};
+
+function asTestResponse(response: unknown): TestResponse {
+  return response as TestResponse;
+}
+
 function createProtectedApp(options: {
   resolvePrincipalSession: (token: string) => Promise<{ status: string; value?: PrincipalSession }>;
   getUserDetailByUsernameForAdmin: (username: string) => Promise<UserDetailDto>;
@@ -46,12 +59,12 @@ describe("admin authentication handler", () => {
       getUserDetailByUsernameForAdmin,
     });
 
-    const res = await app.request("http://localhost/rpc/admin.user.search", {
+    const res = asTestResponse(await app.request("http://localhost/rpc/admin.user.search", {
       headers: {
         Client: "iam",
         Cookie: "global_session=iam_ps_valid",
       },
-    });
+    }));
 
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ ok: true });
@@ -67,12 +80,12 @@ describe("admin authentication handler", () => {
       getUserDetailByUsernameForAdmin,
     });
 
-    const res = await app.request("http://localhost/rpc/admin.user.search", {
+    const res = asTestResponse(await app.request("http://localhost/rpc/admin.user.search", {
       headers: {
         Client: "iam",
         Cookie: "global_session=iam_ps_missing",
       },
-    });
+    }));
 
     expect(res.status).toBe(401);
     expect(await res.text()).toBe("未登录");
@@ -91,12 +104,12 @@ describe("admin authentication handler", () => {
       getUserDetailByUsernameForAdmin,
     });
 
-    const res = await app.request("http://localhost/rpc/admin.user.search", {
+    const res = asTestResponse(await app.request("http://localhost/rpc/admin.user.search", {
       headers: {
         Client: "iam",
         Cookie: "global_session=iam_ps_valid",
       },
-    });
+    }));
 
     expect(res.status).toBe(403);
     expect(await res.text()).toBe("无管理端访问权限");

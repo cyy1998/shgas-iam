@@ -70,6 +70,7 @@ export function createAdminAuthenticationHandlers(deps: CreateAdminAuthenticatio
     c.set("userId", user.id);
     c.set("username", user.username);
     c.set("userDetailDto", user);
+    c.set("principalSessionId", principal.value.principalSessionId);
     return await next();
   }
 

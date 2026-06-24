@@ -1,10 +1,10 @@
 import type {
   ClientCachePort,
-  OidcInvalidationPort,
   PasswordHasherPort,
   RandomPort,
 } from "@admin-api/composition/runtime";
 import type { AuditLogWriterPort } from "@admin-api/services/audit/audit.service";
+import type { AdminSessionRevocationPort } from "@admin-api/services/session-revocation/session-revocation.port";
 import type { UnitOfWorkPort } from "@iam/api-core/uow";
 import type { ClientRepository } from "./client.repository";
 
@@ -30,7 +30,7 @@ export type AdminClientUnitOfWorkPort = UnitOfWorkPort<AdminClientTransactionPor
 export interface AdminClientServiceDeps {
   clientRepository: Pick<ClientRepository, "searchClientsPaged" | "getClientByCode">;
   clientCache: ClientCachePort;
-  oidcInvalidation: OidcInvalidationPort;
+  sessionRevocation: Pick<AdminSessionRevocationPort, "revokeClientProtocol" | "revokeClientAllProtocols">;
   passwordHasher: Pick<PasswordHasherPort, "hashSecret">;
   random: Pick<RandomPort, "oidcClientSecret">;
   uow: AdminClientUnitOfWorkPort;

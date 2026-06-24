@@ -15,6 +15,12 @@ import {
 } from "@iam/domain/user";
 
 export function createUserService(deps: AdminUserServiceDeps) {
+  function currentPrincipalSessionException(userId: number, auditContext?: AdminAuditContext) {
+    if (auditContext?.actorType !== "admin" || auditContext.actorUserId !== userId)
+      return undefined;
+    return auditContext.principalSessionId ?? undefined;
+  }
+
   async function getUserDetailByUsernameForAdmin(username: string): Promise<UserDetailDto> {
     const user = await deps.userRepository.getUserByUsernameForAdmin(username);
     if (user === null) {
@@ -100,9 +106,13 @@ export function createUserService(deps: AdminUserServiceDeps) {
       await tx.auditService.recordAuditLog(buildAdminUserAudit(action, updatedUser, {
         patch: data,
       }, auditContext));
-      if (data.status !== undefined && data.status !== UserStatus.Enable) {
-        tx.afterCommit.required("admin.user.tokens.revoke", async () => {
-          await deps.tokenRevocation.revokeUserTokens(existing.id);
+      if (data.status !== undefined && data.status !== existing.status && data.status !== UserStatus.Enable) {
+        tx.afterCommit.bestEffort("admin.session_revoke.user", async () => {
+          await deps.sessionRevocation.revokeUserSessions({
+            userId: existing.id,
+            reason: "user_disabled",
+            auditContext,
+          });
         });
       }
     });
@@ -127,8 +137,12 @@ export function createUserService(deps: AdminUserServiceDeps) {
       await tx.auditService.recordAuditLog(buildAdminUserAudit("admin.user.delete", deletedUser, {
         deleted: true,
       }, auditContext));
-      tx.afterCommit.required("admin.user.tokens.revoke", async () => {
-        await deps.tokenRevocation.revokeUserTokens(existing.id);
+      tx.afterCommit.bestEffort("admin.session_revoke.user", async () => {
+        await deps.sessionRevocation.revokeUserSessions({
+          userId: existing.id,
+          reason: "user_deleted",
+          auditContext,
+        });
       });
     });
     return true;
@@ -146,6 +160,14 @@ export function createUserService(deps: AdminUserServiceDeps) {
       await tx.auditService.recordAuditLog(buildAdminUserAudit("admin.user.reset_password", user, {
         passwordReset: true,
       }, auditContext));
+      tx.afterCommit.bestEffort("admin.session_revoke.user", async () => {
+        await deps.sessionRevocation.revokeUserSessions({
+          userId: user.id,
+          reason: "admin_revoke",
+          exceptPrincipalSessionId: currentPrincipalSessionException(user.id, auditContext),
+          auditContext,
+        });
+      });
       return newPassword;
     });
   }

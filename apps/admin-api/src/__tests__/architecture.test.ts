@@ -78,6 +78,18 @@ function isApprovedAuditHelperImport(moduleSpecifier: string) {
   return moduleSpecifier === "@admin-api/services/audit/audit.service";
 }
 
+function isUserOrClientServiceModule(file: string) {
+  return file.startsWith("services/user/") || file.startsWith("services/client/");
+}
+
+function forbiddenSessionRevocationBypass(moduleSpecifier: string) {
+  return moduleSpecifier === "@iam/api-core/oidc"
+    || moduleSpecifier.includes("session/kernel/keys")
+    || moduleSpecifier.includes("custom-sso-session-kernel.adapter")
+    || moduleSpecifier.includes("oidc-session-kernel.adapter")
+    || moduleSpecifier === "@admin-api/lib/infra/redis";
+}
+
 describe("Admin API DI architecture", () => {
   test("keeps production service, repository, db, redis, and logger value imports behind composition", () => {
     const violations = collectImports()
@@ -114,5 +126,14 @@ describe("Admin API DI architecture", () => {
       .map(({ file, moduleSpecifier }) => `${file} imports ${moduleSpecifier}`);
 
     expect(routeFactoryViolations).toEqual([]);
+  });
+
+  test("keeps admin user and client services behind the Session Revocation port", () => {
+    const violations = collectImports()
+      .filter(({ file }) => isUserOrClientServiceModule(file))
+      .filter(({ moduleSpecifier }) => forbiddenSessionRevocationBypass(moduleSpecifier))
+      .map(({ file, moduleSpecifier }) => `${file} imports ${moduleSpecifier}`);
+
+    expect(violations).toEqual([]);
   });
 });

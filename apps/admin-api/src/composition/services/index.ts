@@ -1,5 +1,6 @@
 import type { AdminApiRepositories } from "../repositories";
 import type { AdminApiRuntimePorts } from "../runtime";
+import type { AdminApiSession } from "../session";
 import type { createAdminApiUnitOfWork } from "../tx";
 import { createClientService } from "@admin-api/services/client/client.service";
 import { createEmploymentService } from "@admin-api/services/employment/employment.service";
@@ -13,11 +14,12 @@ type AdminApiUnitOfWork = ReturnType<typeof createAdminApiUnitOfWork>;
 export interface CreateAdminApiServicesOptions {
   runtime: AdminApiRuntimePorts;
   repositories: AdminApiRepositories;
+  session: Pick<AdminApiSession, "revocation">;
   unitOfWork: AdminApiUnitOfWork;
 }
 
 export function createAdminApiServices(options: CreateAdminApiServicesOptions) {
-  const { runtime, repositories, unitOfWork } = options;
+  const { runtime, repositories, session, unitOfWork } = options;
 
   const userService = createUserService({
     userRepository: repositories.user,
@@ -26,7 +28,7 @@ export function createAdminApiServices(options: CreateAdminApiServicesOptions) {
     privilegeRepository: repositories.privilege,
     passwordHasher: runtime.passwordHasher,
     random: runtime.random,
-    tokenRevocation: runtime.integrations.tokenRevocation,
+    sessionRevocation: session.revocation,
     uow: mapUnitOfWork(unitOfWork, tx => ({
       userRepository: tx.repositories.user,
       auditService: tx.auditService,
@@ -36,7 +38,7 @@ export function createAdminApiServices(options: CreateAdminApiServicesOptions) {
   const clientService = createClientService({
     clientRepository: repositories.client,
     clientCache: runtime.integrations.clientCache,
-    oidcInvalidation: runtime.integrations.oidcInvalidation,
+    sessionRevocation: session.revocation,
     passwordHasher: runtime.passwordHasher,
     random: runtime.random,
     uow: mapUnitOfWork(unitOfWork, tx => ({

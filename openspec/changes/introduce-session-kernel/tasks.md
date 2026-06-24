@@ -6,7 +6,8 @@
 - [ ] 1.4 每个 child 合并到 `feature/session-kernel` 后运行对应跨模块 smoke check，并记录结果。
   - 已记录 `session-kernel-core` 的 `@iam/api-core` lint/test/typecheck 结果。
   - 已记录 `custom-sso-session-kernel-adapter` 的 `@iam/api`、`@iam/admin-api` 与管理端兼容验证结果。
-  - 已记录 `oidc-session-kernel-adapter` 的 `@iam/oidc-provider` lint/typecheck/test 与 OpenSpec 全量校验结果；其余 child 待合并后逐项运行并填写结果。
+  - 已记录 `oidc-session-kernel-adapter` 的 `@iam/oidc-provider` lint/typecheck/test 与 OpenSpec 全量校验结果。
+  - 已记录 `admin-session-revocation` 的 `@iam/api-core` lint/test/typecheck、`@iam/admin-api` lint/test/typecheck 与 OpenSpec 全量校验结果；其余 child 待合并后逐项运行并填写结果。
 
 ## 2. Session Kernel Core
 
@@ -53,14 +54,14 @@
 
 ## 5. Admin 触发撤销
 
-- [ ] 5.1 为 admin-api 定义 Session Revocation port，支持 revoke user sessions、revoke client protocol、revoke client all protocols 和 revoke except current session。
-- [ ] 5.2 在用户禁用、删除、管理员重置密码和用户改密码流程后通过 afterCommit 触发对应 Kernel revoke。
-- [ ] 5.3 在 client Disable/Delete 状态变化后撤销该 client 所有协议会话对象。
-- [ ] 5.4 在 custom SSO 协议配置、client secret、callback/logout/managementLevel 变化后撤销该 client 的 custom-sso 对象。
-- [ ] 5.5 在 OIDC 配置、secret、enabled、maintenance、status 和 delete 变化后撤销该 client 的 OIDC 对象。
-- [ ] 5.6 记录 revoke summary system log，确保 adapter cleanup failure 不阻断原业务事务。
-- [ ] 5.7 覆盖 user/client/password/status afterCommit revoke 测试和 best-effort failure 测试。
-- [ ] 5.8 运行 `pnpm --filter @iam/admin-api test` 和 `pnpm --filter @iam/admin-api typecheck`。
+- [x] 5.1 为 admin-api 定义 Session Revocation port，支持 revoke user sessions、revoke client protocol、revoke client all protocols 和 revoke except current session。
+- [x] 5.2 在用户禁用、删除、管理员重置密码和用户改密码流程后通过 afterCommit 触发对应 Kernel revoke。
+- [x] 5.3 在 client Disable/Delete 状态变化后撤销该 client 所有协议会话对象。
+- [x] 5.4 在 custom SSO 协议配置、client secret、callback/logout/managementLevel 变化后撤销该 client 的 custom-sso 对象。
+- [x] 5.5 在 OIDC 配置、secret、enabled、maintenance、status 和 delete 变化后撤销该 client 的 OIDC 对象。
+- [x] 5.6 记录 revoke summary system log，确保 adapter cleanup failure 不阻断原业务事务。
+- [x] 5.7 覆盖 user/client/password/status afterCommit revoke 测试和 best-effort failure 测试。
+- [x] 5.8 运行 `pnpm --filter @iam/admin-api test` 和 `pnpm --filter @iam/admin-api typecheck`。
 
 ## 6. 发布加固与文档
 

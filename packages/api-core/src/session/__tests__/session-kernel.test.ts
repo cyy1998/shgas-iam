@@ -467,6 +467,130 @@ describe("session kernel tombstone, cleanup, validation, and fail closed behavio
     );
   });
 
+  test("revokes user sessions with an excluded PrincipalSession while cascading its child objects", async () => {
+    const { kernel } = createKernel();
+    const keptSession = await kernel.createPrincipalSession({ principal, snapshot });
+    const revokedSession = await kernel.createPrincipalSession({ principal, snapshot });
+    expect(keptSession.status).toBe("created");
+    expect(revokedSession.status).toBe("created");
+    if (keptSession.status !== "created" || revokedSession.status !== "created")
+      return;
+
+    const keptBinding = await kernel.createClientBinding({
+      principalSessionId: keptSession.value.principalSessionId,
+      protocol: "oidc",
+      clientCode: "portal",
+      ttlMs: 30_000,
+    });
+    const keptCredential = await kernel.issueCredential({
+      principalSessionId: keptSession.value.principalSessionId,
+      protocol: "oidc",
+      clientCode: "portal",
+      credentialType: "access_token",
+      ttlMs: 30_000,
+    });
+    const revokedBinding = await kernel.createClientBinding({
+      principalSessionId: revokedSession.value.principalSessionId,
+      protocol: "custom-sso",
+      clientCode: "portal",
+      ttlMs: 30_000,
+    });
+    expect(keptBinding.status).toBe("created");
+    expect(keptCredential.status).toBe("created");
+    expect(revokedBinding.status).toBe("created");
+    if (keptBinding.status !== "created" || keptCredential.status !== "created" || revokedBinding.status !== "created")
+      return;
+
+    const summary = await kernel.revokeUserSessions(principal, "admin_revoke", {
+      exceptPrincipalSessionId: keptSession.value.principalSessionId,
+    });
+
+    expect(summary.principalSessions).toMatchObject({ revoked: 1, excluded: 1 });
+    expect(summary.bindings.revoked).toBe(2);
+    expect(summary.credentials.revoked).toBe(1);
+    await expect(kernel.resolvePrincipalSession(keptSession.externalToken!)).resolves.toMatchObject({
+      status: "resolved",
+    });
+    await expect(kernel.resolvePrincipalSession(revokedSession.externalToken!)).resolves.toMatchObject({
+      status: "revoked",
+    });
+    await expect(kernel.resolveClientBindingById(keptBinding.value.bindingId)).resolves.toMatchObject({
+      status: "revoked",
+    });
+    await expect(kernel.resolveCredential(keptCredential.externalToken!)).resolves.toMatchObject({ status: "revoked" });
+  });
+
+  test("revokes client protocol and all protocols with cleanup adapter missing summary", async () => {
+    const { kernel } = createKernel();
+    const session = await kernel.createPrincipalSession({ principal, snapshot });
+    expect(session.status).toBe("created");
+    if (session.status !== "created")
+      return;
+
+    const oidcBinding = await kernel.createClientBinding({
+      principalSessionId: session.value.principalSessionId,
+      protocol: "oidc",
+      clientCode: "portal",
+      ttlMs: 30_000,
+    });
+    const oidcCredential = await kernel.issueCredential({
+      principalSessionId: session.value.principalSessionId,
+      protocol: "oidc",
+      clientCode: "portal",
+      credentialType: "access_token",
+      ttlMs: 30_000,
+      cleanupRefs: [{ protocol: "oidc", kind: "payload", ref: "payload:1" }],
+    });
+    const customBinding = await kernel.createClientBinding({
+      principalSessionId: session.value.principalSessionId,
+      protocol: "custom-sso",
+      clientCode: "portal",
+      ttlMs: 30_000,
+    });
+    const customCredential = await kernel.issueCredential({
+      principalSessionId: session.value.principalSessionId,
+      protocol: "custom-sso",
+      clientCode: "portal",
+      credentialType: "local_sid",
+      ttlMs: 30_000,
+    });
+    expect(oidcBinding.status).toBe("created");
+    expect(oidcCredential.status).toBe("created");
+    expect(customBinding.status).toBe("created");
+    expect(customCredential.status).toBe("created");
+    if (
+      oidcBinding.status !== "created"
+      || oidcCredential.status !== "created"
+      || customBinding.status !== "created"
+      || customCredential.status !== "created"
+    ) {
+      return;
+    }
+
+    const protocolSummary = await kernel.revokeClientProtocol("portal", "oidc", "client_config_changed");
+
+    expect(protocolSummary.bindings.revoked).toBe(1);
+    expect(protocolSummary.credentials.revoked).toBe(1);
+    expect(protocolSummary.cleanup).toMatchObject({ attempted: 1, succeeded: 0, failed: 1 });
+    expect(protocolSummary.cleanup.failures).toEqual([{
+      protocol: "oidc",
+      kind: "payload",
+      ref: "payload:1",
+      error: "cleanup adapter not configured",
+    }]);
+    await expect(kernel.resolveClientBindingById(customBinding.value.bindingId)).resolves.toMatchObject({
+      status: "resolved",
+    });
+
+    const allProtocolsSummary = await kernel.revokeClient("portal", "client_deleted");
+
+    expect(allProtocolsSummary.bindings.revoked).toBe(1);
+    expect(allProtocolsSummary.credentials.revoked).toBe(1);
+    await expect(kernel.resolveCredential(customCredential.externalToken!)).resolves.toMatchObject({
+      status: "revoked",
+    });
+  });
+
   test("lazy-cleans expired zset members and does not write tombstones for natural expiry", async () => {
     const { redis, kernel } = createKernel();
     const session = await kernel.createPrincipalSession({ principal, snapshot });

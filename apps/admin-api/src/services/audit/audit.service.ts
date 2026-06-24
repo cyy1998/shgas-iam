@@ -35,7 +35,9 @@ export type AuditLogInput = {
   details?: AuditDetails;
 };
 
-export type AdminAuditContext = Pick<AuditLogInput, "actorType"> & Partial<AuditLogInput>;
+export type AdminAuditContext = Pick<AuditLogInput, "actorType"> & Partial<AuditLogInput> & {
+  principalSessionId?: string | null;
+};
 
 function getContextUserName(c: Context): string | null {
   const user = c.get("userDetailDto") as { name?: unknown } | undefined;
@@ -63,7 +65,7 @@ function enrichAuditDetails(input: AuditLogInput): AuditDetails {
   return details;
 }
 
-export function getAdminAuditRequestContext(c: Context): AuditRequestContext {
+export function getAdminAuditRequestContext(c: Context): AuditRequestContext & Pick<AdminAuditContext, "principalSessionId"> {
   return {
     sourceApp: "iam-admin",
     requestId: getRequestId(c) ?? c.req.header("x-request-id") ?? null,
@@ -72,6 +74,7 @@ export function getAdminAuditRequestContext(c: Context): AuditRequestContext {
     userAgent: c.req.header("user-agent") ?? null,
     route: c.req.path,
     method: c.req.method,
+    principalSessionId: c.get("principalSessionId") ?? null,
   };
 }
 

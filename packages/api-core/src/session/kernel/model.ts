@@ -177,6 +177,7 @@ export type RevokeObjectCounter = {
   revoked: number;
   alreadyRevoked: number;
   missing: number;
+  excluded: number;
 };
 
 export type CleanupFailure = {
