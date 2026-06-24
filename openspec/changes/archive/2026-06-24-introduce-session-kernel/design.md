@@ -425,6 +425,8 @@ Child change 顺序与目标分支：
 | 2026-06-21 | custom SSO 与 OIDC 的协议 payload 仍归 adapter 私有，Kernel 只保存 lifecycle object 与 cleanupRef。 | 防止 Kernel model 被 `UserDetailDto`、OIDC claims 或 provider model 污染。 | 已记录 |
 | 2026-06-21 | `session-kernel-release-hardening` 在 runtime child 之后执行。 | env、runbook、架构测试和 smoke test 以稳定 contract 为准，减少重复修订。 | 已记录 |
 | 2026-06-21 | `session-kernel-core` 已完成并归档，主规格已同步 `session-kernel-core` capability。 | 后续 adapter child 可从 `@iam/api-core/session/kernel` 依赖稳定 core API。 | 已归档 |
+| 2026-06-24 | `session-kernel-release-hardening` 已完成并归档，release smoke 记录成为 umbrella 最终验收输入。 | 所有 child changes 已 squash 合并到 `feature/session-kernel`，umbrella 仅剩最终验收与合并回 `main`。 | 已归档 |
+| 2026-06-24 | umbrella 最终验收完成，准备归档 `introduce-session-kernel` 并将 `feature/session-kernel` no-ff 合并回 `main`。 | 保留 feature branch 上每个 child 的独立提交历史，main 使用一次 merge commit 接收完整 Session Kernel feature。 | 已完成 |
 
 跨 child 风险与验收状态：
 
@@ -432,8 +434,8 @@ Child change 顺序与目标分支：
 | --- | --- | --- | --- |
 | Kernel API 不足导致 adapter 绕过 lifecycle key。 | `session-kernel-core` | Core complete；adapter diff 检查待后续 child 执行 | `@iam/api-core` kernel 架构测试、lint/test/typecheck 已通过。 |
 | custom SSO 与 OIDC 对同一 PrincipalSession 的 revoke cleanup 顺序不一致。 | `custom-sso-session-kernel-adapter` / `oidc-session-kernel-adapter` | Custom SSO complete；OIDC child archived into feature branch | Custom SSO logout、payload cleanup、Independent logout failure、PrincipalSession revoke 与管理端 `/rpc` 兼容回归测试已通过；OIDC child 已通过 `pnpm --filter @iam/oidc-provider lint`、`pnpm --filter @iam/oidc-provider typecheck`、`pnpm --filter @iam/oidc-provider test` 与 `openspec validate --all --strict`。 |
-| Admin afterCommit revoke 与协议 adapter cleanup failure 语义不一致。 | `admin-session-revocation` | Open | revoke summary system log 与 best-effort failure 测试。 |
-| 发布时旧 Redis session key 与新 `sess:v2:` key 混用。 | `session-kernel-release-hardening` | Open | 清理 runbook/script、维护窗口步骤和回滚步骤通过 review。 |
+| Admin afterCommit revoke 与协议 adapter cleanup failure 语义不一致。 | `admin-session-revocation` / `session-kernel-release-hardening` | Complete | admin revoke summary、cleanup failure、best-effort failure 测试已通过；release smoke 记录了 `admin.session_revoke.client_protocol` 可查询证据。 |
+| 发布时旧 Redis session key 与新 `sess:v2:` key 混用。 | `session-kernel-release-hardening` | Complete | 旧 Redis key cleanup script/runbook 已落地；dev Redis cleanup dry-run、custom SSO/OIDC/admin revoke smoke 和回滚前置条件已记录在 release smoke。 |
 
 Child 合并 smoke check 记录：
 
@@ -443,7 +445,7 @@ Child 合并 smoke check 记录：
 | `custom-sso-session-kernel-adapter` | `pnpm --filter @iam/api test`；`pnpm --filter @iam/api typecheck`；custom SSO 登录、authorize、callback/token、authz、logout smoke。 | Passed | 2026-06-21 已通过 `pnpm --filter @iam/api lint`、`pnpm --filter @iam/api test`、`pnpm --filter @iam/api typecheck`；补充通过 `pnpm --filter @iam/admin-api test/lint/typecheck` 与 `pnpm --filter @iam/admin typecheck` 验证管理端 `/rpc` 使用 Kernel `global_session`。 |
 | `oidc-session-kernel-adapter` | `pnpm --filter @iam/oidc-provider test`；`pnpm --filter @iam/oidc-provider typecheck`；OIDC authorize、token、UserInfo、logout smoke。 | Passed | 2026-06-23 已归档并 squash 合并到 `feature/session-kernel`；通过 `pnpm --filter @iam/oidc-provider lint`、`pnpm --filter @iam/oidc-provider typecheck`、`pnpm --filter @iam/oidc-provider test` 和 `openspec validate --all --strict`；覆盖 provider wiring、interaction、session-security、token-flow、redis-adapter、claims/UserInfo、HTTP logging 和 architecture guard。 |
 | `admin-session-revocation` | `pnpm --filter @iam/admin-api test`；`pnpm --filter @iam/admin-api typecheck`；user/client/password/status revoke smoke。 | Passed on child branch | 2026-06-23 在 `work/admin-session-revocation` 通过 `pnpm --filter @iam/api-core lint/test/typecheck`、`pnpm --filter @iam/admin-api lint/test/typecheck` 和 `openspec validate admin-session-revocation --strict`；覆盖 user status/delete/reset password、client Disable/Maintance/delete/custom SSO config、OIDC configure/enable/disable/remove/rotate-secret、summary logger、cleanup failure 与 architecture guard。admin-api 当前不导入 app-local cleanup adapter，Kernel tombstone 先行，缺失 cleanup adapter 将进入 RevokeSummary 与 `admin.session_revoke.cleanup_failed` system log。 |
-| `session-kernel-release-hardening` | 受影响 package/app 必要 test/typecheck/lint；旧 Redis key 清理 dry-run；custom SSO、OIDC 与 admin revoke 集成 smoke。 | Pending | 待 child 合并后运行。 |
+| `session-kernel-release-hardening` | 受影响 package/app 必要 test/typecheck/lint；旧 Redis key 清理 dry-run；custom SSO、OIDC 与 admin revoke 集成 smoke。 | Passed | 2026-06-24 已归档并 squash 合并到 `feature/session-kernel`；通过 `openspec validate --all --strict --no-interactive`；release smoke 记录覆盖 custom SSO Gateway/Independent/replay/logout、OIDC authorize/token/UserInfo/logout/replay、admin client protocol revoke、cleanup dry-run 和系统日志脱敏证据。 |
 
 ## Risks / Trade-offs
 

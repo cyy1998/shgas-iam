@@ -3,11 +3,12 @@
 - [x] 1.1 从 `main` 创建 `feature/session-kernel` 集成分支，并记录 child change 顺序与目标分支。
 - [x] 1.2 为 `session-kernel-core`、`custom-sso-session-kernel-adapter`、`oidc-session-kernel-adapter`、`admin-session-revocation` 和 `session-kernel-release-hardening` 创建 child OpenSpec change。
 - [x] 1.3 在 umbrella design 中持续记录跨 child 的决策变更、风险和验收状态。
-- [ ] 1.4 每个 child 合并到 `feature/session-kernel` 后运行对应跨模块 smoke check，并记录结果。
+- [x] 1.4 每个 child 合并到 `feature/session-kernel` 后运行对应跨模块 smoke check，并记录结果。
   - 已记录 `session-kernel-core` 的 `@iam/api-core` lint/test/typecheck 结果。
   - 已记录 `custom-sso-session-kernel-adapter` 的 `@iam/api`、`@iam/admin-api` 与管理端兼容验证结果。
   - 已记录 `oidc-session-kernel-adapter` 的 `@iam/oidc-provider` lint/typecheck/test 与 OpenSpec 全量校验结果。
-  - 已记录 `admin-session-revocation` 的 `@iam/api-core` lint/test/typecheck、`@iam/admin-api` lint/test/typecheck 与 OpenSpec 全量校验结果；其余 child 待合并后逐项运行并填写结果。
+  - 已记录 `admin-session-revocation` 的 `@iam/api-core` lint/test/typecheck、`@iam/admin-api` lint/test/typecheck 与 OpenSpec 全量校验结果。
+  - 已记录 `session-kernel-release-hardening` 的受影响 package/app 验证、旧 Redis cleanup dry-run、custom SSO/OIDC/admin revoke smoke 与 OpenSpec 全量校验结果。
 
 ## 2. Session Kernel Core
 
@@ -65,11 +66,24 @@
 
 ## 6. 发布加固与文档
 
-- [ ] 6.1 新增统一 Session Kernel env schema 和配置映射，覆盖 apps/api 与 apps/oidc-provider。
-- [ ] 6.2 编写旧 Redis session key 清理脚本或 runbook，覆盖 global/local/custom auth code 和旧 OIDC token index。
-- [ ] 6.3 更新 OIDC 发布回滚手册和 SSO 接入文档，说明维护窗口、强制重新登录、opaque token 和 legacy query/header token 风险。
-- [ ] 6.4 增加系统日志事件：legacy bearer source、revoke summary、cleanup failure、schema corrupted、tombstone replay。
-- [ ] 6.5 增加架构测试，禁止协议 adapter 绕过 Kernel lifecycle key、lookup、tombstone 和通用索引。
-- [ ] 6.6 运行受影响共享包、`@iam/api`、`@iam/admin-api`、`@iam/oidc-provider`、`@iam/admin` 和 `@iam/sso` 的必要 test/typecheck/lint。
-- [ ] 6.7 在开发环境完成 custom SSO 登录、网关鉴权、OIDC authorize/token/UserInfo/logout 和用户/client 禁用撤销 smoke test。
-- [ ] 6.8 归档所有 child changes 后，完成 umbrella 验收并将 `feature/session-kernel` 合并回 `main`。
+- [x] 6.1 新增统一 Session Kernel env schema 和配置映射，覆盖 apps/api、apps/admin-api 与 apps/oidc-provider。
+  - 已在 `packages/api-core/src/session/kernel/env-config.ts` 统一 namespace、TTL、tombstone、current/previous HMAC key 映射。
+  - 已接入 `apps/api`、`apps/admin-api` 和 `apps/oidc-provider` env validation 与 composition runtime。
+- [x] 6.2 编写旧 Redis session key 清理脚本或 runbook，覆盖 global/local/custom auth code 和旧 OIDC token index。
+  - 已新增 `packages/api-core/scripts/cleanup-legacy-session-keys.ts` 与 `packages/api-core/src/session/kernel/legacy-cleanup.ts`。
+  - 已在 release runbook 和 smoke 记录中覆盖 dry-run、apply、rollback cleanup 与强制重新登录要求。
+- [x] 6.3 更新 OIDC 发布回滚手册和 SSO 接入文档，说明维护窗口、强制重新登录、opaque token 和 legacy query/header token 风险。
+  - 已更新 `docs/releases/oidc-release-runbook.md`、`docs/features/oidc/oidc-session-migration.md` 和 `docs/features/sso/third-party-sso-integration.md`。
+- [x] 6.4 增加系统日志事件：legacy bearer source、revoke summary、cleanup failure、schema corrupted、tombstone replay。
+  - 已覆盖 legacy bearer source、admin revoke summary/cleanup failure、cleanup legacy keys、schema corrupted 和 tombstone replay system log。
+  - 已补充敏感字段不泄露测试与 release smoke 日志查询证据。
+- [x] 6.5 增加架构测试，禁止协议 adapter 绕过 Kernel lifecycle key、lookup、tombstone 和通用索引。
+  - 已加强 `apps/api`、`apps/admin-api` 和 `apps/oidc-provider` 架构测试，并为 cleanup tooling、文档和 Kernel 内部实现保留明确 allowlist。
+- [x] 6.6 运行受影响共享包、`@iam/api`、`@iam/admin-api`、`@iam/oidc-provider`、`@iam/admin` 和 `@iam/sso` 的必要 test/typecheck/lint。
+  - 已在 `session-kernel-release-hardening` child tasks 与 `docs/releases/session-kernel-release-smoke.md` 中记录验证结果。
+  - 归档前后均通过 `openspec validate --all --strict --no-interactive`。
+- [x] 6.7 在开发环境完成 custom SSO 登录、网关鉴权、OIDC authorize/token/UserInfo/logout 和用户/client 禁用撤销 smoke test。
+  - 已在 `docs/releases/session-kernel-release-smoke.md` 记录 custom SSO、OIDC、admin revoke、cleanup dry-run 和系统日志证据。
+- [x] 6.8 归档所有 child changes 后，完成 umbrella 验收并将 `feature/session-kernel` 合并回 `main`。
+  - 所有 child changes 已归档并 squash 合并到 `feature/session-kernel`。
+  - umbrella 最终验收通过后，按 feature workflow 归档本 change，并通过 `git merge --no-ff feature/session-kernel` 合并回 `main`。
