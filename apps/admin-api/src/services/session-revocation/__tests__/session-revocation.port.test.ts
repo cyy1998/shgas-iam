@@ -1,3 +1,4 @@
+import { SystemLogEvent } from "@iam/api-core/logger";
 import { describe, expect, mock, test } from "bun:test";
 import { createAdminSessionRevocationLogger } from "../session-revocation.logger";
 import { createAdminSessionRevocationPort } from "../session-revocation.port";
@@ -115,7 +116,7 @@ describe("createAdminSessionRevocationLogger", () => {
     });
 
     expect(logger.info).toHaveBeenCalledWith(expect.objectContaining({
-      event: "admin.session_revoke.user",
+      event: SystemLogEvent.AdminSessionRevokeUser,
       sourceApp: "iam-admin-api",
       requestId: "req-1",
       traceId: "trace-1",
@@ -152,9 +153,15 @@ describe("createAdminSessionRevocationLogger", () => {
     });
 
     expect(logger.warn).toHaveBeenCalledWith(expect.objectContaining({
-      event: "admin.session_revoke.cleanup_failed",
+      event: SystemLogEvent.AdminSessionRevokeCleanupFailed,
       clientCode: "portal",
       protocol: "oidc",
+      reason: "client_config_changed",
+      cleanup: {
+        attempted: 1,
+        succeeded: 0,
+        failed: 1,
+      },
       cleanupFailures: [{
         protocol: "oidc",
         kind: "payload",

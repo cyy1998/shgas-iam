@@ -7,6 +7,7 @@ export type CleanupAdapter = {
 };
 
 export type SessionKernelLogger = {
+  info?: (data: Record<string, unknown>, message: string) => void;
   warn?: (data: Record<string, unknown>, message: string) => void;
 };
 
@@ -40,7 +41,11 @@ export async function runCleanupRefs(
       summary.cleanup.succeeded += groupRefs.length;
     }
     catch (error) {
-      logger?.warn?.({ err: error, protocol, kind }, "session kernel cleanup failed");
+      logger?.warn?.({
+        protocol,
+        kind,
+        errorName: error instanceof Error ? error.name : "Error",
+      }, "session kernel cleanup failed");
       summary.cleanup.failed += groupRefs.length;
       for (const ref of groupRefs) {
         summary.cleanup.failures.push({

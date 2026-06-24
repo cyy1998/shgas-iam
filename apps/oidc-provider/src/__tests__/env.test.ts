@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "vitest";
+import { createOidcProviderSessionKernelConfig } from "../composition/session/index.ts";
 import { parseOidcProviderEnv } from "../env.ts";
 
 function validEnv(): NodeJS.ProcessEnv {
@@ -45,5 +46,41 @@ describe("oIDC provider environment", () => {
     const source = validEnv();
     source.OIDC_COOKIE_KEYS = "short";
     assert.throws(() => parseOidcProviderEnv(source), /at least two comma-separated keys/);
+  });
+
+  it("requires previous Session Kernel HMAC id and secret to be configured together", () => {
+    const env = parseOidcProviderEnv({
+      ...validEnv(),
+      SESSION_LOOKUP_HMAC_PREVIOUS_ID: "",
+      SESSION_LOOKUP_HMAC_PREVIOUS_SECRET: "",
+    });
+    assert.equal(env.SESSION_LOOKUP_HMAC_PREVIOUS_ID, undefined);
+    assert.equal(env.SESSION_LOOKUP_HMAC_PREVIOUS_SECRET, undefined);
+
+    assert.throws(() => parseOidcProviderEnv({
+      ...validEnv(),
+      SESSION_LOOKUP_HMAC_PREVIOUS_ID: "previous",
+    }), /must be configured together/);
+    assert.throws(() => parseOidcProviderEnv({
+      ...validEnv(),
+      SESSION_LOOKUP_HMAC_PREVIOUS_SECRET: "p".repeat(32),
+    }), /must be configured together/);
+  });
+
+  it("rejects ambiguous previous Session Kernel HMAC rotation config", () => {
+    const duplicateId = parseOidcProviderEnv({
+      ...validEnv(),
+      SESSION_LOOKUP_HMAC_CURRENT_ID: "same",
+      SESSION_LOOKUP_HMAC_PREVIOUS_ID: "same",
+      SESSION_LOOKUP_HMAC_PREVIOUS_SECRET: "p".repeat(32),
+    });
+    assert.throws(() => createOidcProviderSessionKernelConfig(duplicateId), /ids must be different/);
+
+    const duplicateSecret = parseOidcProviderEnv({
+      ...validEnv(),
+      SESSION_LOOKUP_HMAC_PREVIOUS_ID: "previous",
+      SESSION_LOOKUP_HMAC_PREVIOUS_SECRET: "c".repeat(32),
+    });
+    assert.throws(() => createOidcProviderSessionKernelConfig(duplicateSecret), /secrets must be different/);
   });
 });

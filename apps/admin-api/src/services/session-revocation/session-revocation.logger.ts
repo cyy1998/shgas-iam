@@ -6,9 +6,13 @@ import type {
   AdminSessionRevocationReason,
   OidcInvalidationSummary,
 } from "./session-revocation.port";
+import { SystemLogEvent } from "@iam/api-core/logger";
 
 type SummaryLogInput = {
-  event: "admin.session_revoke.user" | "admin.session_revoke.client_protocol" | "admin.session_revoke.client_all_protocols";
+  event:
+    | typeof SystemLogEvent.AdminSessionRevokeUser
+    | typeof SystemLogEvent.AdminSessionRevokeClientProtocol
+    | typeof SystemLogEvent.AdminSessionRevokeClientAllProtocols;
   auditContext?: AdminAuditContext;
   targetUserId?: number;
   clientCode?: string;
@@ -30,7 +34,8 @@ export function createAdminSessionRevocationLogger(deps: CreateAdminSessionRevoc
     if (input.summary.cleanup.failed > 0) {
       deps.logger.warn({
         ...toBaseLogFields(input),
-        event: "admin.session_revoke.cleanup_failed",
+        event: SystemLogEvent.AdminSessionRevokeCleanupFailed,
+        cleanup: summaryCounters(input.summary).cleanup,
         cleanupFailures: summarizeCleanupFailures(input.summary.cleanup.failures),
       }, "admin session revoke cleanup failed");
     }
@@ -40,21 +45,21 @@ export function createAdminSessionRevocationLogger(deps: CreateAdminSessionRevoc
     logUserRevocation(input: Omit<SummaryLogInput, "event" | "clientCode" | "protocol">) {
       logSummary({
         ...input,
-        event: "admin.session_revoke.user",
+        event: SystemLogEvent.AdminSessionRevokeUser,
       });
     },
 
     logClientProtocolRevocation(input: Omit<SummaryLogInput, "event" | "targetUserId">) {
       logSummary({
         ...input,
-        event: "admin.session_revoke.client_protocol",
+        event: SystemLogEvent.AdminSessionRevokeClientProtocol,
       });
     },
 
     logClientAllProtocolsRevocation(input: Omit<SummaryLogInput, "event" | "targetUserId" | "protocol">) {
       logSummary({
         ...input,
-        event: "admin.session_revoke.client_all_protocols",
+        event: SystemLogEvent.AdminSessionRevokeClientAllProtocols,
       });
     },
   };

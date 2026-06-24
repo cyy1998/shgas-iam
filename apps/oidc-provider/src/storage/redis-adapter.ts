@@ -77,12 +77,35 @@ function payloadClientIds(payload: AdapterPayload) {
   return [...ids];
 }
 
+function payloadSessionUid(payload: AdapterPayload) {
+  return typeof payload.sessionUid === "string" ? payload.sessionUid : undefined;
+}
+
+function payloadAccountId(payload: AdapterPayload) {
+  return typeof payload.accountId === "string" ? payload.accountId : undefined;
+}
+
 export class RedisOidcAdapter implements Adapter {
   constructor(
     private readonly model: string,
     private readonly redis: Redis,
     private readonly deps: RedisOidcAdapterDeps,
   ) {}
+
+  private async resolveProviderSessionBinding(payload: AdapterPayload) {
+    const sessionUid = payloadSessionUid(payload);
+    if (!sessionUid)
+      return null;
+
+    const existing = await this.deps.providerSessions.read(sessionUid);
+    if (existing)
+      return existing;
+
+    const accountId = payloadAccountId(payload);
+    return accountId
+      ? await this.deps.providerSessions.consumeStaged(accountId, sessionUid)
+      : null;
+  }
 
   async upsert(id: string, payload: AdapterPayload, expiresIn: number) {
     const key = artifactKey(this.model, id);
@@ -96,11 +119,11 @@ export class RedisOidcAdapter implements Adapter {
     })));
     const clientId = payloadClientId(payload);
 
-    const sessionBinding = this.model === "AuthorizationCode" && payload.sessionUid
-      ? await this.deps.providerSessions.read(payload.sessionUid)
+    const sessionBinding = this.model === "AuthorizationCode"
+      ? await this.resolveProviderSessionBinding(payload)
       : null;
-    const accessTokenBinding = this.model === "AccessToken" && payload.sessionUid
-      ? await this.deps.providerSessions.read(payload.sessionUid)
+    const accessTokenBinding = this.model === "AccessToken"
+      ? await this.resolveProviderSessionBinding(payload)
       : null;
     if (this.model === "Session" && payload.uid && typeof payload.accountId === "string")
       await this.deps.providerSessions.consumeStaged(payload.accountId, payload.uid);

@@ -1,4 +1,4 @@
-import { createImmediateUnitOfWork } from "@api/test/fakes";
+import { createImmediateUnitOfWork } from "@api/testing/fakes";
 import { describe, expect, mock, test } from "bun:test";
 import { createUserService } from "../user.service";
 

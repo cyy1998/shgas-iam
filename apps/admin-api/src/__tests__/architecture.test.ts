@@ -84,6 +84,7 @@ function isUserOrClientServiceModule(file: string) {
 
 function forbiddenSessionRevocationBypass(moduleSpecifier: string) {
   return moduleSpecifier === "@iam/api-core/oidc"
+    || moduleSpecifier === "@iam/api-core/session/kernel"
     || moduleSpecifier.includes("session/kernel/keys")
     || moduleSpecifier.includes("custom-sso-session-kernel.adapter")
     || moduleSpecifier.includes("oidc-session-kernel.adapter")

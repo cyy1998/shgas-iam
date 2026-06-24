@@ -1,5 +1,5 @@
 import { HumanVerificationAction } from "@api/enums/humanVerification.action";
-import { createFakeLogger, createMemoryRedis } from "@api/test/fakes";
+import { createFakeLogger, createMemoryRedis } from "@api/testing/fakes";
 import { describe, expect, mock, test } from "bun:test";
 import { createCapService } from "../cap.service";
 

@@ -177,6 +177,61 @@ describe("redis OIDC adapter", () => {
     await expect(adapter.find("code-1")).resolves.toMatchObject({ consumed: expect.any(Number) });
   });
 
+  it("consumes staged provider session bindings before authorization code registration", async () => {
+    const redis = new FakeRedis();
+    const tokens = createOidcTokenStore(redis as unknown as Redis);
+    const stagedBinding = {
+      globalSessionId: "principal-a",
+      principalSessionId: "principal-a",
+      bindingId: "binding-a",
+      userId: 42,
+      accountId: "57b0e34d-bf33-4671-87ea-4ed2f1b0e420",
+      authTime: 1_782_260_000,
+      oidcConfigVersion: 3,
+      expiresAt: 1_782_263_600,
+    };
+    let readSessionUid: string | undefined;
+    let consumeStagedInput: { accountId: string; sessionUid: string } | undefined;
+    let registeredBinding: unknown;
+
+    const adapter = new RedisOidcAdapter("AuthorizationCode", redis as unknown as Redis, {
+      clientVersions: {
+        findActiveVersion: async () => 3,
+      },
+      oidcSession: {
+        ...createOidcSessionMock(),
+        registerAuthorizationCodeArtifact: async (input) => {
+          registeredBinding = input.binding;
+          return true;
+        },
+      },
+      providerSessions: {
+        read: async (sessionUid) => {
+          readSessionUid = sessionUid;
+          return null;
+        },
+        consumeStaged: async (accountId, sessionUid) => {
+          consumeStagedInput = { accountId, sessionUid };
+          return stagedBinding;
+        },
+      },
+      tokens,
+    });
+
+    await adapter.upsert("code-1", {
+      clientId: "client-a",
+      accountId: "57b0e34d-bf33-4671-87ea-4ed2f1b0e420",
+      sessionUid: "provider-session-a",
+    }, 300);
+
+    expect(readSessionUid).toBe("provider-session-a");
+    expect(consumeStagedInput).toEqual({
+      accountId: "57b0e34d-bf33-4671-87ea-4ed2f1b0e420",
+      sessionUid: "provider-session-a",
+    });
+    expect(registeredBinding).toBe(stagedBinding);
+  });
+
   it("rejects artifacts after the client configuration version changes", async () => {
     const redis = new FakeRedis();
     const version = { value: 3 };

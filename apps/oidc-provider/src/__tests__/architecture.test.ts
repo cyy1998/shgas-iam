@@ -86,6 +86,11 @@ function isConcreteRepositoryModule(resolvedModule: string) {
   return resolvedModule.startsWith("repositories/") && resolvedModule.endsWith(".repository.ts");
 }
 
+function isAllowedKernelLifecyclePatternFile(file: string) {
+  return file === "env.ts"
+    || file === "__tests__/architecture.test.ts";
+}
+
 describe("oIDC provider DI architecture", () => {
   it("keeps DB, Redis, logger, and concrete repository value imports behind approved boundaries", () => {
     const violations = collectImports()
@@ -127,20 +132,16 @@ describe("oIDC provider DI architecture", () => {
 
   it("keeps Session Kernel Redis lifecycle keys behind the Kernel public API", () => {
     const forbiddenKernelKeyPatterns = [
-      /sess:v2:(?:active|lookup|revoked|index):/,
+      /sess:v2:(?:active|lookup|revoked|revoked_lookup|index):/,
       /active:[pcba]:/,
       /lookup:[pca]:/,
-      /revoked:[pca]:/,
+      /revoked(?:_lookup)?:[pca]:/,
       /index:(?:user|client|client-protocol|principal|binding|protocol):/,
     ];
-    const allowedFiles = new Set([
-      "env.ts",
-      "__tests__/architecture.test.ts",
-    ]);
 
     const violations = collectSourceFiles(sourceRoot).flatMap((file) => {
       const relativeFile = toPosixPath(relative(sourceRoot, file));
-      if (allowedFiles.has(relativeFile))
+      if (isAllowedKernelLifecyclePatternFile(relativeFile))
         return [];
       const source = readFileSync(file, "utf8");
       return forbiddenKernelKeyPatterns.some(pattern => pattern.test(source))

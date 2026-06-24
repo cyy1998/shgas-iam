@@ -1,5 +1,5 @@
 import { VerificationCodeUsage } from "@api/enums/verificationCode.usage";
-import { createMemoryRedis } from "@api/test/fakes";
+import { createMemoryRedis } from "@api/testing/fakes";
 import { UserStatus, UserType } from "@iam/contracts";
 import { describe, expect, mock, test } from "bun:test";
 import { createMobileService } from "../mobile.service";

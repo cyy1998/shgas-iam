@@ -1,4 +1,4 @@
-import { createFakePasswordHasher } from "@api/test/fakes";
+import { createFakePasswordHasher } from "@api/testing/fakes";
 import { describe, expect, mock, test } from "bun:test";
 import { createUserDelegationQuery } from "../user-delegation-query.helper";
 import { createUserMobileBinding } from "../user-mobile-binding.helper";

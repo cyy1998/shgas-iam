@@ -5,6 +5,7 @@ import redis from "@admin-api/lib/infra/redis";
 import { logger } from "@admin-api/lib/logger";
 import { invalidateOidcClient } from "@iam/api-core/oidc";
 import { hashSecret } from "@iam/api-core/security";
+import { createSessionKernelConfigFromEnv } from "@iam/api-core/session/kernel";
 import { generateRandomPassword } from "@iam/api-core/utils";
 import { hash } from "bcrypt-ts";
 
@@ -62,27 +63,18 @@ export function createAdminApiRuntime(options: CreateAdminApiRuntimeOptions = {}
         adminClientCodes: adminAuthClientCodes,
         adminRoleCodes: adminAuthRoleCodes,
       },
-      sessionKernel: {
+      sessionKernel: createSessionKernelConfigFromEnv({
         namespace: runtimeEnv.SESSION_KERNEL_NAMESPACE,
-        principalIdleTtlMs: runtimeEnv.SESSION_KERNEL_PRINCIPAL_IDLE_TTL_SECONDS * 1000,
-        principalAbsoluteTtlMs: runtimeEnv.SESSION_KERNEL_PRINCIPAL_ABSOLUTE_TTL_SECONDS * 1000,
-        lookupHmacKeys: {
-          current: {
-            id: runtimeEnv.SESSION_LOOKUP_HMAC_CURRENT_ID,
-            secret: runtimeEnv.SESSION_LOOKUP_HMAC_CURRENT_SECRET,
-          },
-          ...(runtimeEnv.SESSION_LOOKUP_HMAC_PREVIOUS_ID && runtimeEnv.SESSION_LOOKUP_HMAC_PREVIOUS_SECRET
-            ? {
-                previous: {
-                  id: runtimeEnv.SESSION_LOOKUP_HMAC_PREVIOUS_ID,
-                  secret: runtimeEnv.SESSION_LOOKUP_HMAC_PREVIOUS_SECRET,
-                },
-              }
-            : {}),
-        },
-        tombstoneTtlMs: runtimeEnv.SESSION_KERNEL_TOMBSTONE_TTL_SECONDS * 1000,
-        tombstoneGraceMs: runtimeEnv.SESSION_KERNEL_TOMBSTONE_GRACE_SECONDS * 1000,
-      },
+        principalIdleTtlSeconds: runtimeEnv.SESSION_KERNEL_PRINCIPAL_IDLE_TTL_SECONDS,
+        principalAbsoluteTtlSeconds: runtimeEnv.SESSION_KERNEL_PRINCIPAL_ABSOLUTE_TTL_SECONDS,
+        tombstoneTtlSeconds: runtimeEnv.SESSION_KERNEL_TOMBSTONE_TTL_SECONDS,
+        tombstoneGraceSeconds: runtimeEnv.SESSION_KERNEL_TOMBSTONE_GRACE_SECONDS,
+        lookupHmacCurrentId: runtimeEnv.SESSION_LOOKUP_HMAC_CURRENT_ID,
+        lookupHmacCurrentSecret: runtimeEnv.SESSION_LOOKUP_HMAC_CURRENT_SECRET,
+        lookupHmacPreviousId: runtimeEnv.SESSION_LOOKUP_HMAC_PREVIOUS_ID,
+        lookupHmacPreviousSecret: runtimeEnv.SESSION_LOOKUP_HMAC_PREVIOUS_SECRET,
+        nodeEnv: runtimeEnv.NODE_ENV,
+      }),
     },
     integrations: {
       clientCache: {

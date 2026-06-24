@@ -6,6 +6,7 @@ import { createSessionService } from "@api/services/session/session.service";
 import { AuthzMaintenanceError } from "@iam/api-core/errors/AuthzMaintenanceError";
 import { AuthzUnauthorizedError } from "@iam/api-core/errors/AuthzUnauthorizedError";
 import { InvalidAuthCodeError } from "@iam/api-core/errors/InvalidAuthCodeError";
+import { LoggerSourceApp, SystemLogEvent } from "@iam/api-core/logger";
 import { createSessionKernel } from "@iam/api-core/session/kernel";
 import { ClientManagementLevel, ClientStatus, UserStatus, UserType } from "@iam/contracts";
 import { beforeEach, describe, expect, mock, test } from "bun:test";
@@ -447,6 +448,7 @@ beforeEach(() => {
   liveUserAvailable = true;
   localSessionSequence = 0;
   orcasShouldFail = false;
+  logger.info.mockClear();
   globalThis.fetch = mock(async (_input: string | URL | Request, init?: RequestInit) => {
     logoutNotifications.push(init?.body);
     if (fetchShouldFail) {
@@ -521,6 +523,46 @@ describe("createSsoService redirect pattern validation", () => {
 });
 
 describe("SSO Kernel session consistency", () => {
+  test("logs legacy PrincipalSession bearer sources without leaking bearer values", async () => {
+    const services = createServices();
+    const principalToken = await createPrincipalToken(services.customSsoSession);
+
+    await services.ssoService.authorize(
+      principalToken,
+      "authorization_header",
+      client.clientCode,
+      "https://app.example.com/callback",
+      "req-authz-header",
+    );
+    await services.ssoService.authorize(
+      principalToken,
+      "query",
+      client.clientCode,
+      "https://app.example.com/callback",
+      "req-query-token",
+    );
+
+    expect(logger.info).toHaveBeenCalledWith(expect.objectContaining({
+      event: SystemLogEvent.SsoLegacyBearerSourceUsed,
+      sourceApp: LoggerSourceApp.Api,
+      source: "authorization_header",
+      clientCode: client.clientCode,
+      requestId: "req-authz-header",
+    }), "legacy principal session bearer source used");
+    expect(logger.info).toHaveBeenCalledWith(expect.objectContaining({
+      event: SystemLogEvent.SsoLegacyBearerSourceUsed,
+      sourceApp: LoggerSourceApp.Api,
+      source: "query",
+      clientCode: client.clientCode,
+      requestId: "req-query-token",
+    }), "legacy principal session bearer source used");
+
+    const output = JSON.stringify(logger.info.mock.calls);
+    expect(output).not.toContain(principalToken);
+    expect(output).not.toContain("Authorization");
+    expect(output).not.toContain("redirectUrl");
+  });
+
   test("OA and WeChat login create Kernel PrincipalSession tokens", async () => {
     const services = createServices();
     const ts = String(fakeRedis.now());

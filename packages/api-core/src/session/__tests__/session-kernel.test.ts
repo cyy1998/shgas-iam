@@ -12,6 +12,7 @@ import {
   generateKernelToken,
   parseIndexMember,
 } from "@iam/api-core/session/kernel";
+import { SystemLogEvent } from "@iam/api-core/logger";
 import { describe, expect, test } from "bun:test";
 import { createGlobalSession, globalSessionKey } from "../index";
 
@@ -199,6 +200,21 @@ function createConfig(
 function createKernel(redis = new KernelFakeRedis(), overrides: Partial<Parameters<typeof createConfig>[1]> = {}) {
   const config = createConfig(redis, overrides);
   return { redis, config, kernel: createSessionKernel({ redis, config }) };
+}
+
+function createKernelLogCapture() {
+  const entries: Array<{ data: Record<string, unknown>; message: string; level: "info" | "warn" }> = [];
+  return {
+    entries,
+    logger: {
+      info(data: Record<string, unknown>, message: string) {
+        entries.push({ data, message, level: "info" });
+      },
+      warn(data: Record<string, unknown>, message: string) {
+        entries.push({ data, message, level: "warn" });
+      },
+    },
+  };
 }
 
 const principal = { principalType: "user", subjectId: "u-1", displayName: "Alice" };
@@ -428,16 +444,82 @@ describe("session kernel lifecycle", () => {
 });
 
 describe("session kernel tombstone, cleanup, validation, and fail closed behavior", () => {
+  test("logs schema corruption without external bearer or Redis key material", async () => {
+    const redis = new KernelFakeRedis();
+    const config = createConfig(redis);
+    const { logger, entries } = createKernelLogCapture();
+    const kernel = createSessionKernel({ redis, config, logger, sourceApp: "test-kernel" });
+    const session = await kernel.createPrincipalSession({ principal, snapshot });
+    expect(session.status).toBe("created");
+    if (session.status !== "created")
+      return;
+
+    redis.values.set(kernel.keys.active("principal_session", session.value.principalSessionId), "{not-json");
+    await expect(kernel.resolvePrincipalSession(session.externalToken!)).resolves.toMatchObject({
+      status: "schema_invalid",
+    });
+
+    const output = JSON.stringify(entries);
+    expect(output).toContain(SystemLogEvent.SessionKernelSchemaCorrupted);
+    expect(output).toContain("test-kernel");
+    expect(output).not.toContain(session.externalToken!);
+    expect(output).not.toContain(kernel.keys.active("principal_session", session.value.principalSessionId));
+  });
+
+  test("logs tombstone replay with protocol summary and without replayed token", async () => {
+    const redis = new KernelFakeRedis();
+    const config = createConfig(redis);
+    const { logger, entries } = createKernelLogCapture();
+    const kernel = createSessionKernel({ redis, config, logger, sourceApp: "test-kernel" });
+    const session = await kernel.createPrincipalSession({ principal, snapshot });
+    expect(session.status).toBe("created");
+    if (session.status !== "created")
+      return;
+    const replayedCode = "authorization-code-secret-12345678901234567890";
+    const artifact = await kernel.createProtocolArtifact({
+      principalSessionId: session.value.principalSessionId,
+      protocol: "oidc",
+      clientCode: "portal",
+      artifactType: "authorization_code",
+      ttlMs: 5_000,
+      externalToken: replayedCode,
+    });
+    expect(artifact.status).toBe("created");
+    if (artifact.status !== "created")
+      return;
+
+    await kernel.consumeProtocolArtifact(replayedCode);
+    entries.length = 0;
+    await expect(kernel.consumeProtocolArtifact(replayedCode)).resolves.toMatchObject({
+      status: "consumed_replay",
+    });
+
+    const output = JSON.stringify(entries);
+    expect(output).toContain(SystemLogEvent.SessionKernelTombstoneReplayDetected);
+    expect(output).toContain("authorization_code");
+    expect(output).toContain("portal");
+    expect(output).not.toContain(replayedCode);
+  });
+
   test("keeps tombstone-first revocation and records cleanup success and failure", async () => {
     const redis = new KernelFakeRedis();
     const config = createConfig(redis);
+    const { logger, entries } = createKernelLogCapture();
     const kernel = createSessionKernel({
       redis,
       config,
       cleanupAdapters: [
         { protocol: "oidc", kind: "payload", cleanup: async () => {} },
-        { protocol: "oidc", kind: "notify", cleanup: async () => { throw new Error("notify failed"); } },
+        {
+          protocol: "oidc",
+          kind: "notify",
+          cleanup: async () => {
+            throw new Error("notify failed for token-secret-12345678901234567890");
+          },
+        },
       ],
+      logger,
+      sourceApp: "test-kernel",
     });
     const session = await kernel.createPrincipalSession({ principal, snapshot });
     expect(session.status).toBe("created");
@@ -461,6 +543,11 @@ describe("session kernel tombstone, cleanup, validation, and fail closed behavio
     const revoked = await kernel.revokeCredential(credential.value.credentialId, "admin_revoke");
     expect(revoked.credentials.revoked).toBe(1);
     expect(revoked.cleanup).toMatchObject({ attempted: 2, succeeded: 1, failed: 1 });
+    const output = JSON.stringify(entries);
+    expect(output).toContain(SystemLogEvent.SessionKernelRevokeCleanupFailed);
+    expect(output).toContain("\"failureCount\":1");
+    expect(output).not.toContain("client:portal");
+    expect(output).not.toContain("token-secret-12345678901234567890");
     expect(await kernel.resolveCredential(credential.externalToken!)).toMatchObject({ status: "revoked" });
     expect(redis.expiresAt.get(kernel.keys.lookupTombstone("credential", credential.value.lookupHash))).toBe(
       credential.value.expiresAt + 5_000,

@@ -1,4 +1,8 @@
 import { z } from "@hono/zod-openapi";
+import {
+  DEFAULT_SESSION_LOOKUP_HMAC_CURRENT_ID,
+  DEFAULT_SESSION_LOOKUP_HMAC_CURRENT_SECRET,
+} from "@iam/api-core/session/kernel";
 
 function optionalNonEmptyString() {
   return z.string().optional().transform(value => value?.trim() || undefined);
@@ -22,8 +26,8 @@ const EnvSchema = z.object({
   SESSION_KERNEL_PRINCIPAL_ABSOLUTE_TTL_SECONDS: z.coerce.number().int().positive().default(24 * 60 * 60),
   SESSION_KERNEL_TOMBSTONE_TTL_SECONDS: z.coerce.number().int().positive().default(24 * 60 * 60),
   SESSION_KERNEL_TOMBSTONE_GRACE_SECONDS: z.coerce.number().int().positive().default(5 * 60),
-  SESSION_LOOKUP_HMAC_CURRENT_ID: z.string().min(1).default("dev-current"),
-  SESSION_LOOKUP_HMAC_CURRENT_SECRET: z.string().min(32).default("dev-session-lookup-hmac-secret-32-bytes"),
+  SESSION_LOOKUP_HMAC_CURRENT_ID: z.string().min(1).default(DEFAULT_SESSION_LOOKUP_HMAC_CURRENT_ID),
+  SESSION_LOOKUP_HMAC_CURRENT_SECRET: z.string().min(32).default(DEFAULT_SESSION_LOOKUP_HMAC_CURRENT_SECRET),
   SESSION_LOOKUP_HMAC_PREVIOUS_ID: optionalNonEmptyString(),
   SESSION_LOOKUP_HMAC_PREVIOUS_SECRET: optionalNonEmptyString(),
 }).superRefine((env, ctx) => {
@@ -43,7 +47,7 @@ const EnvSchema = z.object({
       message: "SESSION_LOOKUP_HMAC_PREVIOUS_SECRET must be at least 32 characters",
     });
   }
-  if (env.NODE_ENV === "production" && !process.env.SESSION_LOOKUP_HMAC_CURRENT_SECRET?.trim()) {
+  if (env.NODE_ENV === "production" && env.SESSION_LOOKUP_HMAC_CURRENT_SECRET === DEFAULT_SESSION_LOOKUP_HMAC_CURRENT_SECRET) {
     ctx.addIssue({
       code: "custom",
       path: ["SESSION_LOOKUP_HMAC_CURRENT_SECRET"],
@@ -54,7 +58,11 @@ const EnvSchema = z.object({
 
 export type Env = z.infer<typeof EnvSchema>;
 
-const env = EnvSchema.parse(process.env);
+export function parseAdminApiEnv(source: NodeJS.ProcessEnv): Env {
+  return EnvSchema.parse(source);
+}
+
+const env = parseAdminApiEnv(process.env);
 
 export const adminClientCodes = env.ADMIN_CLIENT_CODES.split(",")
   .map(code => code.trim())

@@ -28,6 +28,7 @@
   "scripts": {
     "lint": "eslint src eslint.config.js",
     "lint:fix": "eslint --fix src eslint.config.js",
+    "session:cleanup-legacy-keys": "bun scripts/cleanup-legacy-session-keys.ts",
     "test": "bun test --parallel",
     "typecheck": "pnpm exec tsgo --noEmit"
   },

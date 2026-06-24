@@ -7,6 +7,7 @@ import { createOrcasClient } from "@api/lib/integrations/orcas";
 import { createSmsClient } from "@api/lib/integrations/sms";
 import { createWechatClient } from "@api/lib/integrations/wechat";
 import { logger } from "@api/lib/logger";
+import { createSessionKernelConfigFromEnv } from "@iam/api-core/session/kernel";
 import { compare, hash } from "bcrypt-ts";
 
 export interface CreateApiRuntimeOptions {
@@ -72,29 +73,19 @@ export function createApiRuntime(options: CreateApiRuntimeOptions = {}): ApiRunt
         maxSkewMs: runtimeEnv.LOGIN_CREDENTIAL_MAX_SKEW_MS,
         nonceTtlSeconds: runtimeEnv.LOGIN_CREDENTIAL_NONCE_TTL_SECONDS,
       },
-      sessionKernel: {
+      sessionKernel: createSessionKernelConfigFromEnv({
         namespace: runtimeEnv.SESSION_KERNEL_NAMESPACE,
-        principalIdleTtlMs:
-          (runtimeEnv.SESSION_KERNEL_PRINCIPAL_IDLE_TTL_SECONDS ?? runtimeEnv.REDIS_EXPIRE_TIME) * 1000,
-        principalAbsoluteTtlMs:
-          (runtimeEnv.SESSION_KERNEL_PRINCIPAL_ABSOLUTE_TTL_SECONDS ?? runtimeEnv.REDIS_EXPIRE_TIME) * 1000,
-        lookupHmacKeys: {
-          current: {
-            id: runtimeEnv.SESSION_LOOKUP_HMAC_CURRENT_ID,
-            secret: runtimeEnv.SESSION_LOOKUP_HMAC_CURRENT_SECRET,
-          },
-          ...(runtimeEnv.SESSION_LOOKUP_HMAC_PREVIOUS_ID && runtimeEnv.SESSION_LOOKUP_HMAC_PREVIOUS_SECRET
-            ? {
-                previous: {
-                  id: runtimeEnv.SESSION_LOOKUP_HMAC_PREVIOUS_ID,
-                  secret: runtimeEnv.SESSION_LOOKUP_HMAC_PREVIOUS_SECRET,
-                },
-              }
-            : {}),
-        },
-        tombstoneTtlMs: runtimeEnv.SESSION_KERNEL_TOMBSTONE_TTL_SECONDS * 1000,
-        tombstoneGraceMs: runtimeEnv.SESSION_KERNEL_TOMBSTONE_GRACE_SECONDS * 1000,
-      },
+        principalIdleTtlSeconds: runtimeEnv.SESSION_KERNEL_PRINCIPAL_IDLE_TTL_SECONDS,
+        principalAbsoluteTtlSeconds: runtimeEnv.SESSION_KERNEL_PRINCIPAL_ABSOLUTE_TTL_SECONDS,
+        defaultPrincipalTtlSeconds: runtimeEnv.REDIS_EXPIRE_TIME,
+        tombstoneTtlSeconds: runtimeEnv.SESSION_KERNEL_TOMBSTONE_TTL_SECONDS,
+        tombstoneGraceSeconds: runtimeEnv.SESSION_KERNEL_TOMBSTONE_GRACE_SECONDS,
+        lookupHmacCurrentId: runtimeEnv.SESSION_LOOKUP_HMAC_CURRENT_ID,
+        lookupHmacCurrentSecret: runtimeEnv.SESSION_LOOKUP_HMAC_CURRENT_SECRET,
+        lookupHmacPreviousId: runtimeEnv.SESSION_LOOKUP_HMAC_PREVIOUS_ID,
+        lookupHmacPreviousSecret: runtimeEnv.SESSION_LOOKUP_HMAC_PREVIOUS_SECRET,
+        nodeEnv: runtimeEnv.NODE_ENV,
+      }),
     },
     integrations: {
       cap: createCapClient({

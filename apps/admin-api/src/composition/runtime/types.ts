@@ -1,5 +1,6 @@
 import type { Env } from "@admin-api/env";
 import type { ClientDto } from "@admin-api/services/client/client.type";
+import type { SessionKernelConfig } from "@iam/api-core/session/kernel";
 import type Redis from "ioredis";
 import type { Logger } from "pino";
 
@@ -31,23 +32,7 @@ export interface AdminApiRuntimeConfig {
     adminClientCodes: string[];
     adminRoleCodes: string[];
   };
-  sessionKernel: {
-    namespace: string;
-    principalIdleTtlMs: number;
-    principalAbsoluteTtlMs: number;
-    lookupHmacKeys: {
-      current: {
-        id: string;
-        secret: string;
-      };
-      previous?: {
-        id: string;
-        secret: string;
-      };
-    };
-    tombstoneTtlMs: number;
-    tombstoneGraceMs: number;
-  };
+  sessionKernel: SessionKernelConfig;
 }
 
 export interface ClientCachePort {

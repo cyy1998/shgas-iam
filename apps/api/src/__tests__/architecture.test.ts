@@ -78,13 +78,12 @@ function isApprovedAuditHelperImport(moduleSpecifier: string) {
   return moduleSpecifier === "@api/services/audit/audit.service";
 }
 
-const customSsoRuntimeFiles = [
-  "middlewares/authentication.handler.ts",
-  "routes/auth/auth.service.ts",
-  "routes/sso/sso.handlers.ts",
-  "routes/sso/sso.service.ts",
-  "services/session/custom-sso-session-kernel.adapter.ts",
-];
+function isCustomSsoRuntimeBoundary(file: string) {
+  return file === "middlewares/authentication.handler.ts"
+    || file.startsWith("routes/auth/")
+    || file.startsWith("routes/sso/")
+    || file.startsWith("services/session/");
+}
 
 const legacyCustomSsoAuthorityKeyPatterns = [
   /global_session:/u,
@@ -136,6 +135,10 @@ describe("API DI architecture", () => {
   });
 
   test("keeps custom SSO runtime off legacy Redis authority keys", () => {
+    const customSsoRuntimeFiles = collectSourceFiles(sourceRoot)
+      .map(file => toPosixPath(relative(sourceRoot, file)))
+      .filter(isCustomSsoRuntimeBoundary);
+
     const violations = customSsoRuntimeFiles.flatMap((file) => {
       const content = readFileSync(join(sourceRoot, file), "utf8");
       return legacyCustomSsoAuthorityKeyPatterns

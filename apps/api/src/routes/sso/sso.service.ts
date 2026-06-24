@@ -100,6 +100,7 @@ export function createSsoService(deps: SsoServiceDeps) {
     tokenSource: CustomSsoPrincipalTokenSource,
     clientCode: string,
     redirectUrl: string,
+    requestId?: string,
   ) {
     const client = await deps.clientService.getClientByCode(clientCode);
     if (client === null) {
@@ -113,6 +114,7 @@ export function createSsoService(deps: SsoServiceDeps) {
       tokenSource,
       clientCode,
       redirectUrl,
+      requestId,
     });
   }
 

@@ -8,7 +8,11 @@ import type { OidcLogger } from "../../lib/logger.ts";
 import type { OidcSessionKernelRedis } from "../../session/oidc-session-kernel.adapter.ts";
 import type { OidcProviderRepositories } from "../repositories/index.ts";
 import type { OidcProviderStores } from "../stores/index.ts";
-import { createSessionKernel } from "@iam/api-core/session/kernel";
+import { LoggerSourceApp } from "@iam/api-core/logger";
+import {
+  createSessionKernel,
+  createSessionKernelConfigFromEnv,
+} from "@iam/api-core/session/kernel";
 import {
   createOidcSessionKernelAdapter,
   createOidcSessionKernelCleanupAdapter,
@@ -20,6 +24,25 @@ export interface CreateOidcProviderSessionDeps {
   logger: OidcLogger;
   repositories: Pick<OidcProviderRepositories, "account">;
   stores: Pick<OidcProviderStores, "clientRuntime">;
+}
+
+export function createOidcProviderSessionKernelConfig(env: OidcProviderEnv) {
+  return {
+    ...createSessionKernelConfigFromEnv({
+      namespace: env.SESSION_KERNEL_NAMESPACE,
+      principalIdleTtlSeconds: env.SESSION_KERNEL_PRINCIPAL_IDLE_TTL_SECONDS,
+      principalAbsoluteTtlSeconds: env.SESSION_KERNEL_PRINCIPAL_ABSOLUTE_TTL_SECONDS,
+      defaultPrincipalTtlSeconds: env.OIDC_GLOBAL_SESSION_TTL_SECONDS,
+      tombstoneTtlSeconds: env.SESSION_KERNEL_TOMBSTONE_TTL_SECONDS,
+      tombstoneGraceSeconds: env.SESSION_KERNEL_TOMBSTONE_GRACE_SECONDS,
+      lookupHmacCurrentId: env.SESSION_LOOKUP_HMAC_CURRENT_ID,
+      lookupHmacCurrentSecret: env.SESSION_LOOKUP_HMAC_CURRENT_SECRET,
+      lookupHmacPreviousId: env.SESSION_LOOKUP_HMAC_PREVIOUS_ID,
+      lookupHmacPreviousSecret: env.SESSION_LOOKUP_HMAC_PREVIOUS_SECRET,
+      nodeEnv: env.NODE_ENV,
+    }),
+    clock: { now: Date.now },
+  };
 }
 
 export function createOidcProviderSession(deps: CreateOidcProviderSessionDeps) {
@@ -56,33 +79,11 @@ export function createOidcProviderSession(deps: CreateOidcProviderSessionDeps) {
 
   const kernel = createSessionKernel({
     redis: deps.redis as SessionKernelRedis,
-    config: {
-      namespace: deps.env.SESSION_KERNEL_NAMESPACE,
-      principalIdleTtlMs:
-        (deps.env.SESSION_KERNEL_PRINCIPAL_IDLE_TTL_SECONDS ?? deps.env.OIDC_GLOBAL_SESSION_TTL_SECONDS) * 1000,
-      principalAbsoluteTtlMs:
-        (deps.env.SESSION_KERNEL_PRINCIPAL_ABSOLUTE_TTL_SECONDS ?? deps.env.OIDC_GLOBAL_SESSION_TTL_SECONDS) * 1000,
-      lookupHmacKeys: {
-        current: {
-          id: deps.env.SESSION_LOOKUP_HMAC_CURRENT_ID,
-          secret: deps.env.SESSION_LOOKUP_HMAC_CURRENT_SECRET,
-        },
-        ...(deps.env.SESSION_LOOKUP_HMAC_PREVIOUS_ID && deps.env.SESSION_LOOKUP_HMAC_PREVIOUS_SECRET
-          ? {
-              previous: {
-                id: deps.env.SESSION_LOOKUP_HMAC_PREVIOUS_ID,
-                secret: deps.env.SESSION_LOOKUP_HMAC_PREVIOUS_SECRET,
-              },
-            }
-          : {}),
-      },
-      tombstoneTtlMs: deps.env.SESSION_KERNEL_TOMBSTONE_TTL_SECONDS * 1000,
-      tombstoneGraceMs: deps.env.SESSION_KERNEL_TOMBSTONE_GRACE_SECONDS * 1000,
-      clock: { now: Date.now },
-    },
+    config: createOidcProviderSessionKernelConfig(deps.env),
     cleanupAdapters: createOidcSessionKernelCleanupAdapter({ redis: deps.redis }),
     validationHooks,
     logger: deps.logger,
+    sourceApp: LoggerSourceApp.OidcProvider,
   });
 
   const adapter = createOidcSessionKernelAdapter({

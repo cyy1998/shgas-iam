@@ -24,6 +24,7 @@ import { createUserDetailBuilder } from "@api/services/user/user-detail.helper";
 import { createUserMobileBinding } from "@api/services/user/user-mobile-binding.helper";
 import { createUserPasswordHelper } from "@api/services/user/user-password.helper";
 import { createUserService } from "@api/services/user/user.service";
+import { LoggerSourceApp } from "@iam/api-core/logger";
 import { revokeOidcAccessTokensForGlobalSession } from "@iam/api-core/oidc";
 import { createSessionKernel } from "@iam/api-core/session/kernel";
 import { mapUnitOfWork } from "@iam/api-core/uow";
@@ -54,6 +55,7 @@ export function createApiServices(options: CreateApiServicesOptions) {
     },
     cleanupAdapters: [customSsoCleanupAdapter],
     logger: runtime.logger,
+    sourceApp: LoggerSourceApp.Api,
   });
 
   const clientService = createClientService({

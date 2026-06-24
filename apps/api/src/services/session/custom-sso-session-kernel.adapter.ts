@@ -10,14 +10,14 @@ import type {
   RevokeSummary,
   SessionKernel,
 } from "@iam/api-core/session/kernel";
-import { createHash, randomUUID } from "node:crypto";
+import { randomUUID } from "node:crypto";
 import { buildLocalLoginSuccessAudit } from "@api/services/audit/events/auth.audit";
 import { UserDetailDtoSchema } from "@api/services/user/user.schema";
 import { AuthzMaintenanceError } from "@iam/api-core/errors/AuthzMaintenanceError";
 import { AuthzUnauthorizedError } from "@iam/api-core/errors/AuthzUnauthorizedError";
 import { CustomError } from "@iam/api-core/errors/CustomError";
 import { InvalidAuthCodeError } from "@iam/api-core/errors/InvalidAuthCodeError";
-import { SystemLogEvent } from "@iam/api-core/logger";
+import { LoggerSourceApp, SystemLogEvent } from "@iam/api-core/logger";
 import { reviveIsoDates } from "@iam/api-core/utils";
 import { ClientManagementLevel, ClientStatus } from "@iam/contracts";
 import { z } from "zod";
@@ -145,6 +145,7 @@ export function createCustomSsoSessionKernelAdapter(deps: CustomSsoSessionKernel
     tokenSource: CustomSsoPrincipalTokenSource;
     clientCode: string;
     redirectUrl: string;
+    requestId?: string;
   }) {
     if (!input.token) {
       return { isLogin: false as const, code: null };
@@ -154,7 +155,7 @@ export function createCustomSsoSessionKernelAdapter(deps: CustomSsoSessionKernel
     if (principal.status !== "resolved") {
       return { isLogin: false as const, code: null };
     }
-    logLegacyBearerSource(input.token, input.tokenSource, input.clientCode);
+    logLegacyBearerSource(input.tokenSource, input.clientCode, input.requestId);
 
     const renewed = await deps.kernel.renewPrincipalSession(principal.value.principalSessionId);
     if (renewed.status !== "resolved") {
@@ -457,14 +458,15 @@ export function createCustomSsoSessionKernelAdapter(deps: CustomSsoSessionKernel
     }
   }
 
-  function logLegacyBearerSource(token: string, source: CustomSsoPrincipalTokenSource, clientCode: string) {
+  function logLegacyBearerSource(source: CustomSsoPrincipalTokenSource, clientCode: string, requestId?: string) {
     if (source !== "authorization_header" && source !== "query")
       return;
     deps.logger.info({
       event: SystemLogEvent.SsoLegacyBearerSourceUsed,
+      sourceApp: LoggerSourceApp.Api,
       source,
       clientCode,
-      tokenDigest: createHash("sha256").update(token).digest("hex").slice(0, 16),
+      requestId,
     }, "legacy principal session bearer source used");
   }
 

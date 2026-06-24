@@ -20,6 +20,7 @@ import type { CreateResult, ResolveResult } from "./result";
 import type { SessionKernelRedis, StoreIndexWrite } from "./store";
 import type { KernelTokenKind } from "./token";
 import { randomUUID } from "node:crypto";
+import { SystemLogEvent } from "../../logger";
 import { runCleanupRefs } from "./cleanup";
 import { normalizeSessionKernelConfig } from "./config";
 import { createCurrentLookupHash } from "./hmac";
@@ -53,6 +54,7 @@ export type SessionKernelDependencies = {
   validationHooks?: SessionKernelValidationHooks;
   cleanupAdapters?: CleanupAdapter[];
   logger?: SessionKernelLogger;
+  sourceApp?: string;
 };
 
 export type CreatePrincipalSessionInput = {
@@ -164,16 +166,19 @@ export function createSessionKernel(deps: SessionKernelDependencies) {
 
   async function resolvePrincipalSession(externalToken: string) {
     const result = await store.resolveByExternalToken("principal_session", externalToken);
+    observeResolveResult(result, { operation: "resolve", objectType: "principal_session" });
     return await applyPrincipalValidation(result);
   }
 
   async function resolvePrincipalSessionById(principalSessionId: string) {
     const result = await store.resolveObject("principal_session", principalSessionId);
+    observeResolveResult(result, { operation: "resolve_by_id", objectType: "principal_session" });
     return await applyPrincipalValidation(result);
   }
 
   async function renewPrincipalSession(principalSessionId: string): Promise<ResolveResult<PrincipalSession>> {
     const result = await store.resolveObject("principal_session", principalSessionId);
+    observeResolveResult(result, { operation: "renew", objectType: "principal_session" });
     if (result.status !== "resolved")
       return result;
     const now = config.clock.now();
@@ -241,6 +246,7 @@ export function createSessionKernel(deps: SessionKernelDependencies) {
 
   async function resolveClientBindingById(bindingId: string) {
     const result = await store.resolveObject("client_binding", bindingId);
+    observeResolveResult(result, { operation: "resolve_by_id", objectType: "client_binding" });
     if (result.status !== "resolved")
       return result;
     const validation = await validateLifecycleObject(result.value);
@@ -296,6 +302,7 @@ export function createSessionKernel(deps: SessionKernelDependencies) {
 
   async function resolveCredential(externalToken: string) {
     const result = await store.resolveByExternalToken("credential", externalToken);
+    observeResolveResult(result, { operation: "resolve", objectType: "credential" });
     return await applyCredentialValidation(result);
   }
 
@@ -341,13 +348,17 @@ export function createSessionKernel(deps: SessionKernelDependencies) {
 
   async function resolveProtocolArtifact(externalToken: string) {
     const result = await store.resolveByExternalToken("artifact", externalToken);
+    observeResolveResult(result, { operation: "resolve", objectType: "artifact" });
     return await applyArtifactValidation(result);
   }
 
   async function consumeProtocolArtifact(externalToken: string): Promise<ResolveResult<ProtocolArtifact>> {
-    const result = await resolveProtocolArtifact(externalToken);
-    if (result.status !== "resolved")
+    const resolved = await store.resolveByExternalToken("artifact", externalToken);
+    observeResolveResult(resolved, { operation: "consume", objectType: "artifact" });
+    const result = await applyArtifactValidation(resolved);
+    if (result.status !== "resolved") {
       return result;
+    }
     const now = config.clock.now();
     const tombstone = createTombstone("artifact", result.value, "consumed", now);
     try {
@@ -489,7 +500,9 @@ export function createSessionKernel(deps: SessionKernelDependencies) {
 
     if (revokeResult.status === "revoked") {
       counterForKind(summary, kind).revoked += 1;
+      const failedBeforeCleanup = summary.cleanup.failed;
       await runCleanupRefs(tombstone.cleanupRefs, cleanupAdapters, summary, deps.logger);
+      logCleanupFailureSummary(tombstone, summary.cleanup.failed - failedBeforeCleanup);
     }
     else if (revokeResult.status === "already_revoked") {
       counterForKind(summary, kind).alreadyRevoked += 1;
@@ -708,7 +721,57 @@ export function createSessionKernel(deps: SessionKernelDependencies) {
       clientCode: "clientCode" in object ? object.clientCode : undefined,
       protocol: "protocol" in object ? object.protocol : undefined,
       cleanupRefs: object.cleanupRefs ?? [],
+      metadata: tombstoneMetadata(kind, object),
     };
+  }
+
+  function observeResolveResult<T>(
+    result: ResolveResult<T>,
+    context: { operation: string; objectType: LifecycleObjectKind },
+  ) {
+    if (result.status === "schema_invalid") {
+      deps.logger?.warn?.({
+        event: SystemLogEvent.SessionKernelSchemaCorrupted,
+        sourceApp: deps.sourceApp ?? "session-kernel",
+        operation: context.operation,
+        objectType: result.objectKind,
+        objectId: result.objectId,
+        reason: "schema_invalid",
+      }, "session kernel lifecycle payload schema corrupted");
+      return;
+    }
+
+    if (result.status !== "revoked" && result.status !== "consumed_replay")
+      return;
+
+    const tombstone = result.tombstone;
+    deps.logger?.warn?.({
+      event: SystemLogEvent.SessionKernelTombstoneReplayDetected,
+      sourceApp: deps.sourceApp ?? "session-kernel",
+      operation: context.operation,
+      objectType: tombstone.objectKind,
+      protocol: tombstone.protocol,
+      clientCode: tombstone.clientCode,
+      credentialType: readTombstoneMetadataString(tombstone, "credentialType"),
+      artifactType: readTombstoneMetadataString(tombstone, "artifactType"),
+      reason: tombstone.reason,
+    }, "session kernel tombstone replay detected");
+  }
+
+  function logCleanupFailureSummary(tombstone: RevokedTombstone, failureCount: number) {
+    if (failureCount <= 0)
+      return;
+    deps.logger?.warn?.({
+      event: SystemLogEvent.SessionKernelRevokeCleanupFailed,
+      sourceApp: deps.sourceApp ?? "session-kernel",
+      protocol: tombstone.protocol,
+      kind: "revoke_cleanup",
+      refType: tombstone.objectKind,
+      failureCount,
+      reason: tombstone.reason,
+      clientCode: tombstone.clientCode,
+      principalSessionId: tombstone.principalSessionId,
+    }, "session kernel revoke cleanup failed");
   }
 
   return {
@@ -757,4 +820,23 @@ function lookupHashForObject(object: LifecycleObject) {
   if ("lookupHash" in object)
     return object.lookupHash;
   return undefined;
+}
+
+function tombstoneMetadata(kind: LifecycleObjectKind, object: LifecycleObject) {
+  if (kind === "credential") {
+    return {
+      credentialType: (object as IssuedCredential).credentialType,
+    };
+  }
+  if (kind === "artifact") {
+    return {
+      artifactType: (object as ProtocolArtifact).artifactType,
+    };
+  }
+  return undefined;
+}
+
+function readTombstoneMetadataString(tombstone: RevokedTombstone, key: string) {
+  const value = tombstone.metadata?.[key];
+  return typeof value === "string" ? value : undefined;
 }

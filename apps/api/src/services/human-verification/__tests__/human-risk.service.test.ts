@@ -1,5 +1,5 @@
 import { HumanVerificationAction } from "@api/enums/humanVerification.action";
-import { createMemoryRedis } from "@api/test/fakes";
+import { createMemoryRedis } from "@api/testing/fakes";
 import { describe, expect, test } from "bun:test";
 import { createHumanRiskService } from "../human-risk.service";
 

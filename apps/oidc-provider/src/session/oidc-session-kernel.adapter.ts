@@ -247,14 +247,30 @@ export function createOidcSessionKernelAdapter(deps: OidcSessionKernelAdapterDep
     if (!lookup)
       return null;
     const parsedLookup = parseJson(lookup, ProviderSessionBindingLookupSchema);
-    if (!parsedLookup)
+    if (!parsedLookup) {
+      deps.logger.warn({
+        sessionUidFingerprint: fingerprintForLog(sessionUid),
+      }, "invalid OIDC provider session binding lookup");
       return null;
+    }
     const binding = await deps.kernel.resolveClientBindingById(parsedLookup.bindingId);
-    if (binding.status !== "resolved")
+    if (binding.status !== "resolved") {
+      deps.logger.warn({
+        sessionUidFingerprint: fingerprintForLog(sessionUid),
+        bindingId: parsedLookup.bindingId,
+        status: binding.status,
+      }, "failed to resolve OIDC provider session binding");
       return null;
+    }
     const principal = await resolveById(binding.value.principalSessionId);
-    if (!principal)
+    if (!principal) {
+      deps.logger.warn({
+        sessionUidFingerprint: fingerprintForLog(sessionUid),
+        bindingId: parsedLookup.bindingId,
+        principalSessionId: binding.value.principalSessionId,
+      }, "failed to resolve OIDC provider session principal");
       return null;
+    }
     const providerBinding = toProviderSessionBinding(binding.value, principal);
     await writeProviderSessionMapping(sessionUid, providerBinding);
     return providerBinding;
@@ -284,14 +300,33 @@ export function createOidcSessionKernelAdapter(deps: OidcSessionKernelAdapterDep
   }
 
   async function registerAuthorizationCodeArtifact(input: RegisterAuthorizationCodeArtifactInput) {
-    if (!input.binding)
+    if (!input.binding) {
+      deps.logger.warn({
+        hasSessionUid: typeof input.payload.sessionUid === "string",
+        sessionUidFingerprint: typeof input.payload.sessionUid === "string"
+          ? fingerprintForLog(input.payload.sessionUid)
+          : undefined,
+        clientId: payloadClientId(input.payload),
+      }, "missing OIDC provider session binding for authorization code");
       return false;
+    }
     const clientId = payloadClientId(input.payload);
-    if (!clientId)
+    if (!clientId) {
+      deps.logger.warn({
+        bindingId: input.binding.bindingId,
+      }, "missing OIDC client id for authorization code");
       return false;
+    }
     const version = await deps.clients.findActiveVersion(clientId);
-    if (version === null || version !== input.binding.oidcConfigVersion)
+    if (version === null || version !== input.binding.oidcConfigVersion) {
+      deps.logger.warn({
+        clientId,
+        activeVersion: version,
+        bindingVersion: input.binding.oidcConfigVersion,
+        bindingId: input.binding.bindingId,
+      }, "OIDC client config version mismatch for authorization code");
       return false;
+    }
     const artifact = await deps.kernel.createProtocolArtifact({
       principalSessionId: input.binding.principalSessionId,
       bindingId: input.binding.bindingId,
@@ -319,6 +354,14 @@ export function createOidcSessionKernelAdapter(deps: OidcSessionKernelAdapterDep
         metadata: { clientId },
       }],
     });
+    if (artifact.status !== "created") {
+      deps.logger.warn({
+        status: artifact.status,
+        message: artifact.status === "fail_closed" ? artifact.message : undefined,
+        clientId,
+        bindingId: input.binding.bindingId,
+      }, "failed to register OIDC authorization code Kernel artifact");
+    }
     return artifact.status === "created";
   }
 
@@ -513,6 +556,10 @@ function payloadScopes(payload: AdapterPayload) {
 function fingerprintPayloadValue(payload: AdapterPayload, key: string) {
   const value = payloadString(payload, key);
   return value ? createHash("sha256").update(value).digest("base64url") : undefined;
+}
+
+function fingerprintForLog(value: string) {
+  return createHash("sha256").update(value).digest("base64url").slice(0, 12);
 }
 
 function providerModelKey(model: string, id: string) {

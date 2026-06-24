@@ -1,4 +1,4 @@
-import { createMemoryRedis } from "@api/test/fakes";
+import { createMemoryRedis } from "@api/testing/fakes";
 import { createLoginCredential } from "@iam/contracts";
 import { describe, expect, test } from "bun:test";
 import { createLoginCredentialParser } from "../login-credential.helper";

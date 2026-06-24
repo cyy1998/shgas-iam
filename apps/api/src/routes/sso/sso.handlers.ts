@@ -114,7 +114,13 @@ export function createSsoHandlers(deps: CreateSsoHandlersDeps) {
     const searchParams = new URLSearchParams(c.req.query());
     const principalToken = resolvePrincipalToken(getCookie(c, "global_session"), c.req.header("Authorization"), token);
     const clientDto = await deps.clientService.getClientByCode(client);
-    const data = await deps.ssoService.authorize(principalToken.token, principalToken.source, client, redirectUrl);
+    const data = await deps.ssoService.authorize(
+      principalToken.token,
+      principalToken.source,
+      client,
+      redirectUrl,
+      c.get("requestId"),
+    );
     if (data.isLogin === false) {
       return c.redirect(`${deps.config.loginEndpoint}?${searchParams.toString()}`);
     }
