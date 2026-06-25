@@ -25,7 +25,6 @@ function createProtectedApp(options: {
   adminRoleCodes?: string[];
 }) {
   const handlers = createAdminAuthenticationHandlers({
-    redis: {} as never,
     sessionKernel: {
       resolvePrincipalSession: options.resolvePrincipalSession as never,
     },
@@ -48,6 +47,31 @@ function createProtectedApp(options: {
 }
 
 describe("admin authentication handler", () => {
+  test("rejects missing Kernel PrincipalSession tokens without legacy fallback", async () => {
+    const resolvePrincipalSession = mock(async () => ({
+      status: "resolved",
+      value: principalSession(),
+    }));
+    const getUserDetailByUsernameForAdmin = mock(async () => adminUser());
+    const app = createProtectedApp({
+      resolvePrincipalSession,
+      getUserDetailByUsernameForAdmin,
+    });
+
+    const res = asTestResponse(await app.request("http://localhost/rpc/admin.user.search", {
+      headers: {
+        Client: "iam",
+      },
+    }));
+
+    expect(res.status).toBe(401);
+    expect(await res.text()).toBe("未登录");
+    expect(resolvePrincipalSession).toHaveBeenCalledTimes(0);
+    expect(getUserDetailByUsernameForAdmin).toHaveBeenCalledTimes(0);
+    expect(res.headers.get("set-cookie")).toContain("global_session=");
+    expect(res.headers.get("set-cookie")).toContain("orcas_sso_sessionid=");
+  });
+
   test("accepts Kernel PrincipalSession global_session cookies for admin RPC routes", async () => {
     const resolvePrincipalSession = mock(async () => ({
       status: "resolved",
@@ -83,14 +107,16 @@ describe("admin authentication handler", () => {
     const res = asTestResponse(await app.request("http://localhost/rpc/admin.user.search", {
       headers: {
         Client: "iam",
-        Cookie: "global_session=iam_ps_missing",
+        Cookie: "global_session=legacy-session-id; orcas_sso_sessionid=legacy-orcas",
       },
     }));
 
     expect(res.status).toBe(401);
     expect(await res.text()).toBe("未登录");
+    expect(resolvePrincipalSession).toHaveBeenCalledWith("legacy-session-id");
     expect(getUserDetailByUsernameForAdmin).toHaveBeenCalledTimes(0);
     expect(res.headers.get("set-cookie")).toContain("global_session=");
+    expect(res.headers.get("set-cookie")).toContain("orcas_sso_sessionid=");
   });
 
   test("rejects Kernel PrincipalSession users without an admin role", async () => {

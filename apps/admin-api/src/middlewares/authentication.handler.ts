@@ -1,11 +1,8 @@
-import type { RedisPort } from "@admin-api/composition/runtime";
 import type { UserService } from "@admin-api/services/user/user.service";
 import type { SessionKernel } from "@iam/api-core/session/kernel";
 import type { Context, Next } from "hono";
-import { UserDetailDtoSchema } from "@admin-api/services/user/user.schema";
 import { AuthzForbiddenError } from "@iam/api-core/errors/AuthzForbiddenError";
 import { AuthzUnauthorizedError } from "@iam/api-core/errors/AuthzUnauthorizedError";
-import { createAdminAuthenticationHandler } from "@iam/api-core/middlewares";
 import { UserStatus } from "@iam/contracts";
 import { deleteCookie, getCookie } from "hono/cookie";
 
@@ -13,7 +10,6 @@ const GLOBAL_SESSION_COOKIE = "global_session";
 const ORCAS_SESSION_COOKIE = "orcas_sso_sessionid";
 
 export interface CreateAdminAuthenticationHandlersDeps {
-  redis: RedisPort;
   sessionKernel: Pick<SessionKernel, "resolvePrincipalSession">;
   userService: Pick<UserService, "getUserDetailByUsernameForAdmin">;
   config: {
@@ -23,13 +19,6 @@ export interface CreateAdminAuthenticationHandlersDeps {
 }
 
 export function createAdminAuthenticationHandlers(deps: CreateAdminAuthenticationHandlersDeps) {
-  const legacyAdminAuthenticationHandler = createAdminAuthenticationHandler({
-    redis: deps.redis,
-    userSchema: UserDetailDtoSchema,
-    allowedClientCodes: deps.config.allowedClientCodes,
-    adminRoleCodes: deps.config.adminRoleCodes,
-  });
-
   async function adminAuthenticationHandler(c: Context, next: Next) {
     const clientCode = c.req.header("Client");
     if (!clientCode || !deps.config.allowedClientCodes.includes(clientCode)) {
@@ -38,16 +27,14 @@ export function createAdminAuthenticationHandlers(deps: CreateAdminAuthenticatio
 
     const token = getCookie(c, GLOBAL_SESSION_COOKIE) ?? c.req.header("Authorization") ?? null;
     if (!token) {
-      return await legacyAdminAuthenticationHandler(c, next);
+      clearGlobalSessionCookies(c);
+      throw new AuthzUnauthorizedError("未登录");
     }
 
     const principal = await deps.sessionKernel.resolvePrincipalSession(token);
     if (principal.status !== "resolved") {
-      if (isKernelPrincipalToken(token)) {
-        clearGlobalSessionCookies(c);
-        throw new AuthzUnauthorizedError("未登录");
-      }
-      return await legacyAdminAuthenticationHandler(c, next);
+      clearGlobalSessionCookies(c);
+      throw new AuthzUnauthorizedError("未登录");
     }
 
     if (principal.value.principal.principalType !== "user" || !principal.value.snapshot.username) {
@@ -82,10 +69,6 @@ export function createAdminAuthenticationHandlers(deps: CreateAdminAuthenticatio
 function clearGlobalSessionCookies(c: Context) {
   deleteCookie(c, GLOBAL_SESSION_COOKIE);
   deleteCookie(c, ORCAS_SESSION_COOKIE);
-}
-
-function isKernelPrincipalToken(token: string) {
-  return token.startsWith("iam_ps_");
 }
 
 export type AdminAuthenticationHandlers = ReturnType<typeof createAdminAuthenticationHandlers>;

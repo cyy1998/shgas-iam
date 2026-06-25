@@ -4,9 +4,6 @@ import type { OidcProviderRepositories } from "../repositories/index.ts";
 import { createOidcProtocolObjectStore } from "../../storage/redis-adapter.ts";
 import { createClientAuthFailureStore } from "../../stores/client-auth-failure.store.ts";
 import { createOidcClientRuntimeCache, createOidcClientRuntimeStore } from "../../stores/client-runtime.store.ts";
-import { createGlobalSessionStore } from "../../stores/global-session.store.ts";
-import { createProviderSessionBindingStore } from "../../stores/provider-session-binding.store.ts";
-import { createOidcReturnHandleStore } from "../../stores/return-handle.store.ts";
 import { createOidcTokenStore } from "../../stores/token.store.ts";
 
 export interface CreateOidcProviderStoresDeps {
@@ -30,10 +27,7 @@ export function createOidcProviderStores(deps: CreateOidcProviderStoresDeps) {
       deps.redis,
       deps.env.OIDC_CLIENT_AUTH_FAILURE_WINDOW_SECONDS,
     ),
-    globalSessions: createGlobalSessionStore(deps.redis, deps.env),
     protocolObjects: createOidcProtocolObjectStore(deps.redis, tokens),
-    providerSessions: createProviderSessionBindingStore(deps.redis),
-    returnHandles: createOidcReturnHandleStore(deps.redis),
     tokens,
   };
 }

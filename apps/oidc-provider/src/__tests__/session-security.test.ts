@@ -1,14 +1,7 @@
 import type { Redis } from "ioredis";
 import { describe, expect, it } from "vitest";
 import { createClientAuthRateLimiter, parseBasicClientId } from "../security/client-auth-rate-limit.ts";
-import { providerSessionBindingKey } from "../session/provider-session.ts";
 import { createClientAuthFailureStore } from "../stores/client-auth-failure.store.ts";
-import {
-  bindProviderSession,
-  consumeStagedProviderSessionBinding,
-  readProviderSessionBinding,
-  stageProviderSessionBinding,
-} from "../stores/provider-session-binding.store.ts";
 
 class SecurityRedis {
   values = new Map<string, string>();
@@ -41,55 +34,6 @@ class SecurityRedis {
     return count;
   }
 }
-
-describe("provider session binding", () => {
-  it("binds the provider session to the remaining global session TTL", async () => {
-    const redis = new SecurityRedis();
-    redis.ttls.set("global_session:global-1", 120);
-    const binding = await bindProviderSession(redis as unknown as Redis, "provider-1", {
-      sessionId: "global-1",
-      authTime: 123,
-      userId: 7,
-      accountId: "57b0e34d-bf33-4671-87ea-4ed2f1b0e420",
-    });
-
-    expect(binding).toMatchObject({ globalSessionId: "global-1", userId: 7, authTime: 123 });
-    expect(redis.ttls.get(providerSessionBindingKey("provider-1"))).toBe(120);
-    await expect(readProviderSessionBinding(redis as unknown as Redis, "provider-1")).resolves.toEqual(binding);
-  });
-
-  it("fails closed when the global session is already gone", async () => {
-    const redis = new SecurityRedis();
-    await expect(bindProviderSession(redis as unknown as Redis, "provider-1", {
-      sessionId: "missing",
-      authTime: 123,
-      userId: 7,
-      accountId: "57b0e34d-bf33-4671-87ea-4ed2f1b0e420",
-    })).resolves.toBeNull();
-  });
-
-  it("promotes a staged first-login binding when the provider session uid is created", async () => {
-    const redis = new SecurityRedis();
-    redis.ttls.set("global_session:global-1", 120);
-    const accountId = "57b0e34d-bf33-4671-87ea-4ed2f1b0e420";
-    const staged = await stageProviderSessionBinding(redis as unknown as Redis, {
-      sessionId: "global-1",
-      authTime: 123,
-      userId: 7,
-      accountId,
-    });
-
-    expect(staged).toMatchObject({ globalSessionId: "global-1", userId: 7, authTime: 123 });
-    await expect(
-      consumeStagedProviderSessionBinding(redis as unknown as Redis, accountId, "provider-1"),
-    ).resolves.toMatchObject({ globalSessionId: "global-1", userId: 7, authTime: 123 });
-    await expect(readProviderSessionBinding(redis as unknown as Redis, "provider-1")).resolves.toMatchObject({
-      globalSessionId: "global-1",
-      userId: 7,
-      authTime: 123,
-    });
-  });
-});
 
 describe("confidential client authentication rate limiting", () => {
   it("parses client_secret_basic without retaining the secret", () => {

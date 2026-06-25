@@ -12,9 +12,6 @@ function createHandlers() {
       getClientByCode: mock(async () => null),
     },
     logger,
-    sessionService: {
-      getGlobalSessionIdByLocalSession: mock(async () => null),
-    },
     ssoService: {
       authorize: mock(async () => ({ isLogin: false, code: null })),
       callback: mock(async () => ({ token: "local-session", orcasSessionId: null })),

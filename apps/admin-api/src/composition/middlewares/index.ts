@@ -16,7 +16,6 @@ export async function createAdminApiMiddlewares(
   options: CreateAdminApiMiddlewaresOptions,
 ): Promise<CreateAppOptions["middlewares"]> {
   const authenticationHandlers = createAdminAuthenticationHandlers({
-    redis: options.runtime.redis,
     sessionKernel: options.sessionKernel,
     userService: options.services.user,
     config: {

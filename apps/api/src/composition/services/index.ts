@@ -18,14 +18,12 @@ import {
   createCustomSsoCleanupAdapter,
   createCustomSsoSessionKernelAdapter,
 } from "@api/services/session/custom-sso-session-kernel.adapter";
-import { createSessionService } from "@api/services/session/session.service";
 import { createUserDelegationQuery } from "@api/services/user/user-delegation-query.helper";
 import { createUserDetailBuilder } from "@api/services/user/user-detail.helper";
 import { createUserMobileBinding } from "@api/services/user/user-mobile-binding.helper";
 import { createUserPasswordHelper } from "@api/services/user/user-password.helper";
 import { createUserService } from "@api/services/user/user.service";
 import { LoggerSourceApp } from "@iam/api-core/logger";
-import { revokeOidcAccessTokensForGlobalSession } from "@iam/api-core/oidc";
 import { createSessionKernel } from "@iam/api-core/session/kernel";
 import { mapUnitOfWork } from "@iam/api-core/uow";
 
@@ -147,18 +145,6 @@ export function createApiServices(options: CreateApiServicesOptions) {
     })),
   });
 
-  const sessionService = createSessionService({
-    redis: runtime.redis,
-    logger: runtime.logger,
-    random: runtime.random,
-    clientService,
-    auditLogWriter,
-    tokenRevoker: { revokeOidcAccessTokensForGlobalSession },
-    config: {
-      redisExpireSeconds: runtime.config.auth.redisExpireSeconds,
-    },
-  });
-
   const customSsoSession = createCustomSsoSessionKernelAdapter({
     kernel: sessionKernel,
     redis: runtime.redis,
@@ -231,7 +217,6 @@ export function createApiServices(options: CreateApiServicesOptions) {
     open: openService,
     organization: organizationService,
     privilegeDelegation: privilegeDelegationService,
-    session: sessionService,
     sso: ssoService,
     user: userService,
   };

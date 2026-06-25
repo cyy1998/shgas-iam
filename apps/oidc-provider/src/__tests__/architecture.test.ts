@@ -151,4 +151,24 @@ describe("oIDC provider DI architecture", () => {
 
     expect(violations).toEqual([]);
   });
+
+  it("keeps production wiring off legacy OIDC session stores and binding ids", () => {
+    const deletedStoreModules = new Set([
+      "stores/global-session.store.ts",
+      "stores/provider-session-binding.store.ts",
+      "stores/return-handle.store.ts",
+    ]);
+    const importViolations = collectImports()
+      .filter(({ resolvedModule }) => deletedStoreModules.has(resolvedModule))
+      .map(({ file, moduleSpecifier }) => `${file} imports ${moduleSpecifier}`);
+    const bindingIdViolations = collectSourceFiles(sourceRoot).flatMap((file) => {
+      const relativeFile = toPosixPath(relative(sourceRoot, file));
+      const source = readFileSync(file, "utf8");
+      return source.includes("legacy:")
+        ? [`${relativeFile} contains legacy binding id literal`]
+        : [];
+    });
+
+    expect([...importViolations, ...bindingIdViolations]).toEqual([]);
+  });
 });

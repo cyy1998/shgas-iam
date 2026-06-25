@@ -1,52 +1,20 @@
-import type { Redis } from "ioredis";
 import { describe, expect, it } from "vitest";
 import { requestNeedsReauthentication } from "../interaction/global-session.ts";
 import { validateAuthorizationRequest } from "../interaction/policy.ts";
 import {
+  createOpaqueValue,
   secureStringEqual,
 } from "../interaction/return-handle.ts";
-import {
-  consumeOidcReturnHandle,
-  createOidcReturnHandle,
-} from "../stores/return-handle.store.ts";
-
-class ReturnHandleRedis {
-  values = new Map<string, string>();
-
-  async set(key: string, value: string) {
-    this.values.set(key, value);
-    return "OK";
-  }
-
-  async eval(_script: string, _keyCount: number, key: string) {
-    const value = this.values.get(key);
-    if (!value)
-      return null;
-    this.values.delete(key);
-    return value;
-  }
-}
 
 describe("oIDC login return handle", () => {
-  it("is opaque and can only be consumed once", async () => {
-    const redis = new ReturnHandleRedis();
-    const payload = {
-      interactionUid: "interaction-1",
-      clientId: "client-a",
-      oidcConfigVersion: 3,
-      browserBinding: "binding-a",
-      returnTarget: "https://issuer.example/oidc/resume",
-    };
-    const handle = await createOidcReturnHandle(redis as unknown as Redis, payload, 600);
+  it("creates opaque browser binding values", () => {
+    const handle = createOpaqueValue();
 
     expect(handle).toMatch(/^[\w-]{43}$/);
-    await expect(consumeOidcReturnHandle(redis as unknown as Redis, handle)).resolves.toEqual(payload);
-    await expect(consumeOidcReturnHandle(redis as unknown as Redis, handle)).resolves.toBeNull();
+    expect(createOpaqueValue()).not.toBe(handle);
   });
 
-  it("rejects malformed handles and mismatched browser bindings", async () => {
-    const redis = new ReturnHandleRedis();
-    await expect(consumeOidcReturnHandle(redis as unknown as Redis, "https://evil.example/callback")).resolves.toBeNull();
+  it("compares browser bindings in constant-time-safe shape", () => {
     expect(secureStringEqual("binding-a", "binding-b")).toBe(false);
     expect(secureStringEqual("binding-a", "binding-a")).toBe(true);
   });

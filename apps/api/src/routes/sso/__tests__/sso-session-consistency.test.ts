@@ -2,7 +2,6 @@ import {
   createCustomSsoCleanupAdapter,
   createCustomSsoSessionKernelAdapter,
 } from "@api/services/session/custom-sso-session-kernel.adapter";
-import { createSessionService } from "@api/services/session/session.service";
 import { AuthzMaintenanceError } from "@iam/api-core/errors/AuthzMaintenanceError";
 import { AuthzUnauthorizedError } from "@iam/api-core/errors/AuthzUnauthorizedError";
 import { InvalidAuthCodeError } from "@iam/api-core/errors/InvalidAuthCodeError";
@@ -21,7 +20,6 @@ class FakeRedis {
   readonly zsets = new Map<string, Array<{ member: string; score: number }>>();
   private readonly expires = new Map<string, number>();
   private timestamp = 1_700_000_000_000;
-  failNextExec = false;
   failNextPayloadWrite = false;
 
   reset() {
@@ -29,7 +27,6 @@ class FakeRedis {
     this.zsets.clear();
     this.expires.clear();
     this.timestamp = 1_700_000_000_000;
-    this.failNextExec = false;
     this.failNextPayloadWrite = false;
   }
 
@@ -51,10 +48,6 @@ class FakeRedis {
 
   reverseKeys() {
     return this.keysStartingWith("local_session_reverse:");
-  }
-
-  zsetSize(key: string) {
-    return this.zsets.get(key)?.length ?? 0;
   }
 
   async set(key: string, value: string, mode?: string, ttl?: number) {
@@ -198,10 +191,6 @@ class FakeRedis {
         return pipeline;
       },
       exec: async (): Promise<RedisResult[]> => {
-        if (this.failNextExec) {
-          this.failNextExec = false;
-          throw new Error("redis transaction failed");
-        }
         const results: RedisResult[] = [];
         for (const operation of operations) {
           results.push([null, await operation()]);
@@ -232,7 +221,6 @@ const logger = {
 
 let fetchShouldFail = false;
 let liveUserAvailable = true;
-let localSessionSequence = 0;
 let orcasShouldFail = false;
 
 const userDetail = {
@@ -365,21 +353,6 @@ function createServices() {
       localSessionTtlSeconds: 3600,
     },
   });
-  const sessionService = createSessionService({
-    redis: fakeRedis as any,
-    logger,
-    random: {
-      uuid: mock(() => `local-session-${++localSessionSequence}`),
-    },
-    clientService,
-    auditLogWriter,
-    tokenRevoker: {
-      revokeOidcAccessTokensForGlobalSession: mock(async () => undefined),
-    },
-    config: {
-      redisExpireSeconds: 3600,
-    },
-  } as any);
   const ssoService = createSsoService({
     redis: fakeRedis as any,
     logger,
@@ -410,7 +383,7 @@ function createServices() {
     },
   } as any);
 
-  return { customSsoSession, kernel, sessionService, ssoService };
+  return { customSsoSession, kernel, ssoService };
 }
 
 async function createPrincipalToken(customSsoSession: ReturnType<typeof createServices>["customSsoSession"]) {
@@ -446,7 +419,6 @@ beforeEach(() => {
   logger.warn.mockClear();
   fetchShouldFail = false;
   liveUserAvailable = true;
-  localSessionSequence = 0;
   orcasShouldFail = false;
   logger.info.mockClear();
   globalThis.fetch = mock(async (_input: string | URL | Request, init?: RequestInit) => {
@@ -743,26 +715,4 @@ describe("SSO Kernel session consistency", () => {
     }), "independent client logout endpoint failed");
   });
 
-  test("legacy SessionService helper remains available and fail-closes Redis transaction errors", async () => {
-    const { sessionService } = createServices();
-    const globalSessionId = "legacy-global-session";
-    await fakeRedis.set(`global_session:${globalSessionId}`, JSON.stringify({
-      version: 1,
-      authTime: 1_700_000_000,
-      user: userDetail,
-    }), "EX", 3600);
-    fakeRedis.failNextExec = true;
-
-    await expect(sessionService.setLocalSession(
-      globalSessionId,
-      client.clientCode,
-      userDetail,
-      ClientManagementLevel.Independent,
-    )).rejects.toThrow("redis transaction failed");
-
-    expect(fakeRedis.legacyLocalSessionKeys()).toHaveLength(0);
-    expect(fakeRedis.reverseKeys()).toHaveLength(0);
-    expect(fakeRedis.zsetSize(`local_session_set:${globalSessionId}`)).toBe(0);
-    expect(auditLogs).toHaveLength(0);
-  });
 });

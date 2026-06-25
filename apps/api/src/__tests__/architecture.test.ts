@@ -139,13 +139,17 @@ describe("API DI architecture", () => {
       .map(file => toPosixPath(relative(sourceRoot, file)))
       .filter(isCustomSsoRuntimeBoundary);
 
-    const violations = customSsoRuntimeFiles.flatMap((file) => {
+    const keyViolations = customSsoRuntimeFiles.flatMap((file) => {
       const content = readFileSync(join(sourceRoot, file), "utf8");
       return legacyCustomSsoAuthorityKeyPatterns
         .filter(pattern => pattern.test(content))
         .map(pattern => `${file} contains ${pattern}`);
     });
+    const importViolations = collectImports()
+      .filter(({ file }) => isCustomSsoRuntimeBoundary(file))
+      .filter(({ moduleSpecifier }) => moduleSpecifier === "@iam/api-core/session")
+      .map(({ file, moduleSpecifier }) => `${file} imports ${moduleSpecifier}`);
 
-    expect(violations).toEqual([]);
+    expect([...keyViolations, ...importViolations]).toEqual([]);
   });
 });

@@ -26,8 +26,6 @@ export interface InteractionProviderSessionBindingStore {
 }
 
 export interface InteractionReturnHandleStore {
-  createReturnHandle?: (payload: OidcReturnHandlePayload, ttlSeconds: number) => Promise<string | null>;
   create: (payload: OidcReturnHandlePayload, ttlSeconds: number) => Promise<string | null>;
   consume: (handle: string) => Promise<OidcReturnHandlePayload | null>;
-  consumeReturnHandle?: (handle: string) => Promise<OidcReturnHandlePayload | null>;
 }

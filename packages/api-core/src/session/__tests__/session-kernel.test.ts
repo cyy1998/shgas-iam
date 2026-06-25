@@ -1,4 +1,3 @@
-import type { Redis } from "ioredis";
 import type { SessionKernelRedis, SessionKernelRedisTransaction } from "../kernel";
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
@@ -14,7 +13,6 @@ import {
 } from "@iam/api-core/session/kernel";
 import { SystemLogEvent } from "@iam/api-core/logger";
 import { describe, expect, test } from "bun:test";
-import { createGlobalSession, globalSessionKey } from "../index";
 
 type RedisResult = [Error | null, unknown];
 
@@ -221,13 +219,10 @@ const principal = { principalType: "user", subjectId: "u-1", displayName: "Alice
 const snapshot = { subjectId: "u-1", username: "alice", displayName: "Alice" };
 
 describe("session kernel module boundaries", () => {
-  test("exports the package subpath while legacy session helpers keep working", async () => {
+  test("exports the package subpath without relying on legacy session helpers", () => {
     const redis = new KernelFakeRedis();
     const token = generateKernelToken(createConfig(redis), "principalSession");
     expect(token.startsWith("iam_ps_")).toBe(true);
-
-    const legacy = await createGlobalSession(redis as unknown as Redis, { id: 1 }, 60);
-    expect(await redis.get(globalSessionKey(legacy.sessionId))).not.toBeNull();
   });
 
   test("keeps kernel source free of app-local and protocol runtime imports", () => {
