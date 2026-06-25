@@ -186,7 +186,7 @@
 
 #### Scenario: 修改密码成功保存哈希密码
 - **WHEN** `setPassword` 被调用且用户存在、旧密码匹配、新密码满足强度要求
-- **THEN** 单元测试 SHALL 验证服务调用 `hash(newPassword, PASSWORD_HASH_ROUNDS)`
+- **THEN** 单元测试 SHALL 验证服务使用 configured password hash rounds 调用 `hash(newPassword, rounds)`
 - **AND** 单元测试 SHALL 验证服务调用 `userRepository.setPassword(user.id, hashedPassword, tx)`
 - **AND** 单元测试 SHALL 验证成功响应为 true
 
@@ -198,7 +198,7 @@
 
 #### Scenario: 找回密码成功保存新密码
 - **WHEN** `resetPassword` 被调用且用户、手机号和验证码校验通过
-- **THEN** 单元测试 SHALL 验证服务调用 `hash(newPassword, PASSWORD_HASH_ROUNDS)`
+- **THEN** 单元测试 SHALL 验证服务使用 configured password hash rounds 调用 `hash(newPassword, rounds)`
 - **AND** 单元测试 SHALL 验证服务调用 `userRepository.setPassword(user.id, hashedPassword, tx)`
 - **AND** 单元测试 SHALL 验证成功响应为 true
 - **AND** 单元测试 SHALL 记录当前实现不会复用 `setPassword` 的密码强度校验作为待确认风险

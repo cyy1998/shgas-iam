@@ -76,28 +76,28 @@ export function createOidcInteractionHandler(deps: CreateOidcInteractionHandlerD
       }
 
       const browserBinding = createOpaqueValue();
-      const returnTarget = new URL("/oidc/resume", deps.env.OIDC_ISSUER).href;
+      const returnTarget = new URL("/oidc/resume", deps.env.oidc.issuer).href;
       const handle = await deps.returnHandles.create({
         interactionUid: details.uid,
         clientId,
         oidcConfigVersion: client.oidc_config_version,
         browserBinding,
         returnTarget,
-      }, deps.env.OIDC_INTERACTION_TTL_SECONDS);
+      }, deps.env.oidc.interactionTtlSeconds);
       if (!handle)
         return failClosed(response);
-      const loginUrl = new URL(deps.env.OIDC_SSO_LOGIN_PATH, deps.env.OIDC_PUBLIC_ORIGIN);
+      const loginUrl = new URL(deps.env.oidc.ssoLoginPath, deps.env.oidc.publicOrigin);
       loginUrl.searchParams.set("oidcReturn", handle);
-      const secure = deps.env.NODE_ENV === "production" ? "; Secure" : "";
+      const secure = deps.env.nodeEnv === "production" ? "; Secure" : "";
       redirect(
         response,
         loginUrl.href,
-        `${BROWSER_BINDING_COOKIE}=${browserBinding}; Path=/oidc; HttpOnly; SameSite=Lax; Max-Age=${deps.env.OIDC_INTERACTION_TTL_SECONDS}${secure}`,
+        `${BROWSER_BINDING_COOKIE}=${browserBinding}; Path=/oidc; HttpOnly; SameSite=Lax; Max-Age=${deps.env.oidc.interactionTtlSeconds}${secure}`,
       );
     },
 
     async handleResume(request: IncomingMessage, response: ServerResponse) {
-      const url = new URL(request.url ?? "/", deps.env.OIDC_PUBLIC_ORIGIN);
+      const url = new URL(request.url ?? "/", deps.env.oidc.publicOrigin);
       const handle = url.searchParams.get("oidcReturn");
       if (!handle)
         return failClosed(response);
@@ -114,7 +114,7 @@ export function createOidcInteractionHandler(deps: CreateOidcInteractionHandlerD
         return failClosed(response);
 
       const interactionUrl = new URL(
-        `${deps.env.OIDC_ISSUER}/interaction/${payload.interactionUid}`,
+        `${deps.env.oidc.issuer}/interaction/${payload.interactionUid}`,
       );
       redirect(response, interactionUrl.href);
     },

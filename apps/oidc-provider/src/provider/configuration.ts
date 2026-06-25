@@ -45,18 +45,18 @@ export function createProviderConfiguration(
     },
     clientAuthMethods: ["none", "client_secret_basic"],
     cookies: {
-      keys: env.OIDC_COOKIE_KEYS,
+      keys: env.oidc.cookieKeys,
       long: {
         httpOnly: true,
         overwrite: true,
         sameSite: "lax",
-        secure: env.NODE_ENV === "production",
+        secure: env.nodeEnv === "production",
       },
       short: {
         httpOnly: true,
         overwrite: true,
         sameSite: "lax",
-        secure: env.NODE_ENV === "production",
+        secure: env.nodeEnv === "production",
       },
     },
     enabledJWA: {
@@ -97,7 +97,7 @@ export function createProviderConfiguration(
     findAccount: async (_ctx, subject, token) => await dependencies.claims.findAccount(subject, token),
     interactions: {
       policy: dependencies.interactionPolicy,
-      url: (_ctx, interaction) => `${env.OIDC_ISSUER}/interaction/${interaction.uid}`,
+      url: (_ctx, interaction) => `${env.oidc.issuer}/interaction/${interaction.uid}`,
     },
     loadExistingGrant: async (ctx) => {
       const accountId = ctx.oidc.account?.accountId;
@@ -121,12 +121,12 @@ export function createProviderConfiguration(
     scopes: [...OIDC_SUPPORTED_SCOPES],
     subjectTypes: ["public"],
     ttl: {
-      AccessToken: tokenTtl(env.OIDC_ACCESS_TOKEN_TTL_SECONDS),
-      AuthorizationCode: env.OIDC_AUTHORIZATION_CODE_TTL_SECONDS,
-      IdToken: tokenTtl(env.OIDC_ID_TOKEN_TTL_SECONDS),
-      Interaction: env.OIDC_INTERACTION_TTL_SECONDS,
-      Grant: env.OIDC_ACCESS_TOKEN_TTL_SECONDS,
-      Session: env.OIDC_GLOBAL_SESSION_TTL_SECONDS,
+      AccessToken: tokenTtl(env.oidc.accessTokenTtlSeconds),
+      AuthorizationCode: env.oidc.authorizationCodeTtlSeconds,
+      IdToken: tokenTtl(env.oidc.idTokenTtlSeconds),
+      Interaction: env.oidc.interactionTtlSeconds,
+      Grant: env.oidc.accessTokenTtlSeconds,
+      Session: env.oidc.globalSessionTtlSeconds,
     },
     acceptQueryParamAccessTokens: false,
     allowOmittingSingleRegisteredRedirectUri: false,

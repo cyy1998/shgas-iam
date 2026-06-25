@@ -57,7 +57,7 @@
 | 1 | **认证中间件分散注册** | 每个 admin 路由模块都重复 `router.use(prefix, publicAuthenticationHandler)`，应在路由组级别集中配置 |
 | 2 | **错误处理用 `console.error`** | `error.handler.ts:20` 未使用项目配置的 pino logger，生产环境应统一日志 |
 | 3 | **HTTP 客户端不统一** | 部分用 `axios`（orcas.ts），部分用 `fetch`（wechat.ts），增加维护成本 |
-| 4 | **环境变量校验不完整** | `DATABASE_URL` 等数据库连接参数不在 `env.ts` 的 Zod schema 中验证 |
+| 4 | **环境变量校验不完整** | `IAM_API_DATABASE_URL` 等 app 数据库连接参数不在 `env.ts` 的 Zod schema 中验证 |
 | 5 | **默认密码机制** | 已移除；密码为 null 的用户不再通过默认密码验证 |
 | 6 | **魔法数字 `-1`** | `schema.prisma:44-45` — `parentId: -1` 表示根节点，应使用 `null` |
 | 7 | **`oidc-provider` 已安装未使用** | `package.json` 中存在依赖但代码中未引用，SSO 采用自定义实现 |
@@ -100,7 +100,7 @@
 
 12. **中间件集中注册** — 在路由组级别统一应用认证中间件，而非每个模块重复配置
 13. **统一 HTTP 客户端** — 全部使用 `fetch` 或全部使用 `axios`
-14. **补全环境变量校验** — 将 `DATABASE_URL` 等加入 `env.ts` 的 Zod schema
+14. **补全环境变量校验** — 将 `IAM_<APP>_DATABASE_URL` 等加入各 app 的 `env.ts` Zod schema
 15. **统一命名规范** — 文件名统一用 `.type.ts`（单数）；Converter schema 采用统一命名模式
 16. **添加安全头和 CORS** — 配置 Hono 的 CORS 中间件和安全头中间件
 

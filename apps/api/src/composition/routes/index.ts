@@ -58,14 +58,14 @@ export async function createApiRoutes(options: CreateApiRoutesOptions): Promise<
     logger: runtime.logger,
     ssoService: services.sso,
     config: {
-      authorizationEndpoint: runtime.config.env.AUTHORIZATION_ENDPOINT,
+      authorizationEndpoint: runtime.config.env.sso.authorizationEndpoint,
       authCodeExpireSeconds: runtime.config.auth.authCodeExpireSeconds,
-      loginEndpoint: runtime.config.env.LOGIN_ENDPOINT,
-      logoutEndpoint: runtime.config.env.LOGOUT_ENDPOINT,
+      loginEndpoint: runtime.config.env.sso.loginEndpoint,
+      logoutEndpoint: runtime.config.env.sso.logoutEndpoint,
       redisExpireSeconds: runtime.config.auth.redisExpireSeconds,
-      ssoExternalOrigin: runtime.config.env.SSO_EXTERNAL_ORIGIN,
-      ssoInternalOrigin: runtime.config.env.SSO_INTERNAL_ORIGIN,
-      thirdPartyOAEndpoint: runtime.config.env.THIRDPARTY_OA_ENDPOINT,
+      ssoExternalOrigin: runtime.config.env.sso.externalOrigin,
+      ssoInternalOrigin: runtime.config.env.sso.internalOrigin,
+      thirdPartyOAEndpoint: runtime.config.env.sso.thirdPartyOAEndpoint,
     },
   });
 
@@ -87,7 +87,7 @@ export async function createApiRoutes(options: CreateApiRoutesOptions): Promise<
   const userHandlers = createUserHandlers({
     auditLogWriter,
     config: {
-      nodeEnv: runtime.config.env.NODE_ENV,
+      nodeEnv: runtime.config.env.nodeEnv,
     },
     mobileService: services.mobile,
     userService: services.user,

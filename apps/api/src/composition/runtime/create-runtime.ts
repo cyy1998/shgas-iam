@@ -40,7 +40,7 @@ export function createApiRuntime(options: CreateApiRuntimeOptions = {}): ApiRunt
     redis: runtimeRedis,
     passwordHasher: {
       async hashPassword(password) {
-        return await hash(password, runtimeEnv.PASSWORD_HASH_ROUNDS);
+        return await hash(password, runtimeEnv.passwordHashRounds);
       },
       async verifyPassword(password, hashedPassword) {
         return await compare(password, hashedPassword);
@@ -51,40 +51,40 @@ export function createApiRuntime(options: CreateApiRuntimeOptions = {}): ApiRunt
     config: {
       env: runtimeEnv,
       auth: {
-        magicCode: runtimeEnv.MAGIC_CODE,
-        authCodeExpireSeconds: runtimeEnv.AUTH_CODE_EXPIRE_TIME,
-        redisExpireSeconds: runtimeEnv.REDIS_EXPIRE_TIME,
+        magicCode: runtimeEnv.auth.magicCode,
+        authCodeExpireSeconds: runtimeEnv.auth.authCodeTtlSeconds,
+        redisExpireSeconds: runtimeEnv.auth.sessionDefaultTtlSeconds,
       },
       cap: {
-        enabled: runtimeEnv.CAP_ENABLED,
-        siteKey: runtimeEnv.CAP_SITE_KEY,
-        secret: runtimeEnv.CAP_SECRET,
-        challengeTtlMs: runtimeEnv.CAP_CHALLENGE_TTL_MS,
-        tokenTtlSeconds: runtimeEnv.CAP_TOKEN_TTL_SECONDS,
+        enabled: runtimeEnv.cap.enabled,
+        siteKey: runtimeEnv.cap.siteKey,
+        secret: runtimeEnv.cap.secret,
+        challengeTtlMs: runtimeEnv.cap.challengeTtlMs,
+        tokenTtlSeconds: runtimeEnv.cap.tokenTtlSeconds,
       },
       humanVerification: {
-        windowSeconds: runtimeEnv.HUMAN_VERIFICATION_WINDOW_SECONDS,
-        loginFailureThreshold: runtimeEnv.HUMAN_VERIFICATION_LOGIN_FAILURE_THRESHOLD,
-        lookupThreshold: runtimeEnv.HUMAN_VERIFICATION_LOOKUP_THRESHOLD,
+        windowSeconds: runtimeEnv.humanVerification.windowSeconds,
+        loginFailureThreshold: runtimeEnv.humanVerification.loginFailureThreshold,
+        lookupThreshold: runtimeEnv.humanVerification.lookupThreshold,
       },
       loginCredential: {
-        activeKid: runtimeEnv.LOGIN_CREDENTIAL_ACTIVE_KID,
-        privateKeysByKid: runtimeEnv.LOGIN_CREDENTIAL_PRIVATE_KEYS_JSON,
-        maxSkewMs: runtimeEnv.LOGIN_CREDENTIAL_MAX_SKEW_MS,
-        nonceTtlSeconds: runtimeEnv.LOGIN_CREDENTIAL_NONCE_TTL_SECONDS,
+        activeKid: runtimeEnv.loginCredential.activeKid,
+        privateKeysByKid: runtimeEnv.loginCredential.privateKeysByKid,
+        maxSkewMs: runtimeEnv.loginCredential.maxSkewMs,
+        nonceTtlSeconds: runtimeEnv.loginCredential.nonceTtlSeconds,
       },
       sessionKernel: createSessionKernelConfigFromEnv({
-        namespace: runtimeEnv.SESSION_KERNEL_NAMESPACE,
-        principalIdleTtlSeconds: runtimeEnv.SESSION_KERNEL_PRINCIPAL_IDLE_TTL_SECONDS,
-        principalAbsoluteTtlSeconds: runtimeEnv.SESSION_KERNEL_PRINCIPAL_ABSOLUTE_TTL_SECONDS,
-        defaultPrincipalTtlSeconds: runtimeEnv.REDIS_EXPIRE_TIME,
-        tombstoneTtlSeconds: runtimeEnv.SESSION_KERNEL_TOMBSTONE_TTL_SECONDS,
-        tombstoneGraceSeconds: runtimeEnv.SESSION_KERNEL_TOMBSTONE_GRACE_SECONDS,
-        lookupHmacCurrentId: runtimeEnv.SESSION_LOOKUP_HMAC_CURRENT_ID,
-        lookupHmacCurrentSecret: runtimeEnv.SESSION_LOOKUP_HMAC_CURRENT_SECRET,
-        lookupHmacPreviousId: runtimeEnv.SESSION_LOOKUP_HMAC_PREVIOUS_ID,
-        lookupHmacPreviousSecret: runtimeEnv.SESSION_LOOKUP_HMAC_PREVIOUS_SECRET,
-        nodeEnv: runtimeEnv.NODE_ENV,
+        namespace: runtimeEnv.sessionKernel.namespace,
+        principalIdleTtlSeconds: runtimeEnv.sessionKernel.principalIdleTtlSeconds,
+        principalAbsoluteTtlSeconds: runtimeEnv.sessionKernel.principalAbsoluteTtlSeconds,
+        defaultPrincipalTtlSeconds: runtimeEnv.auth.sessionDefaultTtlSeconds,
+        tombstoneTtlSeconds: runtimeEnv.sessionKernel.tombstoneTtlSeconds,
+        tombstoneGraceSeconds: runtimeEnv.sessionKernel.tombstoneGraceSeconds,
+        lookupHmacCurrentId: runtimeEnv.sessionKernel.lookupHmacCurrentId,
+        lookupHmacCurrentSecret: runtimeEnv.sessionKernel.lookupHmacCurrentSecret,
+        lookupHmacPreviousId: runtimeEnv.sessionKernel.lookupHmacPreviousId,
+        lookupHmacPreviousSecret: runtimeEnv.sessionKernel.lookupHmacPreviousSecret,
+        nodeEnv: runtimeEnv.nodeEnv,
       }),
     },
     integrations: {
@@ -94,22 +94,22 @@ export function createApiRuntime(options: CreateApiRuntimeOptions = {}): ApiRunt
       }),
       orcas: createOrcasClient({
         config: {
-          orcasUrl: runtimeEnv.ORCAS_URL,
+          orcasUrl: runtimeEnv.integrations.orcas.url,
         },
       }),
       sms: createSmsClient({
         clock: runtimeClock,
         random: runtimeRandom,
         config: {
-          smsUrl: runtimeEnv.SMS_URL,
-          signatureKey: runtimeEnv.SMS_SIGNATURE_KEY,
+          smsUrl: runtimeEnv.integrations.sms.url,
+          signatureKey: runtimeEnv.integrations.sms.signatureKey,
         },
       }),
       wechat: createWechatClient({
         redis: runtimeRedis,
         config: {
-          corpId: runtimeEnv.WX_CORPID,
-          corpSecret: runtimeEnv.WX_CORPSECRET,
+          corpId: runtimeEnv.integrations.wechat.corpId,
+          corpSecret: runtimeEnv.integrations.wechat.corpSecret,
         },
       }),
     },

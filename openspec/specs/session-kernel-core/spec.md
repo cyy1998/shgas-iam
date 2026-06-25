@@ -318,12 +318,12 @@
 - **AND** app composition SHALL NOT 手写与共享映射规则冲突的 TTL 或 HMAC 结构
 
 #### Scenario: 生产环境缺少 current HMAC secret
-- **WHEN** `NODE_ENV=production` 且未显式配置 `SESSION_LOOKUP_HMAC_CURRENT_SECRET`
+- **WHEN** `NODE_ENV=production` 且未显式配置 app-specific `*_SESSION_LOOKUP_HMAC_CURRENT_SECRET`
 - **THEN** app env validation SHALL fail closed
 - **AND** app SHALL NOT 以开发默认 secret 启动
 
 #### Scenario: previous HMAC key 配置不成对
-- **WHEN** 只配置 `SESSION_LOOKUP_HMAC_PREVIOUS_ID` 或只配置 `SESSION_LOOKUP_HMAC_PREVIOUS_SECRET`
+- **WHEN** 只配置 app-specific `*_SESSION_LOOKUP_HMAC_PREVIOUS_ID` 或只配置 `*_SESSION_LOOKUP_HMAC_PREVIOUS_SECRET`
 - **THEN** app env validation SHALL fail closed
 - **AND** 错误 SHALL 指向缺失的 previous key 配置
 

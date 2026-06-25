@@ -11,11 +11,13 @@ OIDC Provider、custom SSO 和 admin revoke 现在统一通过 Session Kernel �
 
 三个后端 app 使用同一套 Session Kernel 配置规则：
 
-- `SESSION_KERNEL_NAMESPACE` 默认是 `sess:v2:`。
-- `SESSION_KERNEL_PRINCIPAL_IDLE_TTL_SECONDS` 和 `SESSION_KERNEL_PRINCIPAL_ABSOLUTE_TTL_SECONDS` 以秒配置，进入 Kernel 前转换为毫秒。
-- `SESSION_KERNEL_TOMBSTONE_TTL_SECONDS` 和 `SESSION_KERNEL_TOMBSTONE_GRACE_SECONDS` 控制 tombstone 保留窗口。
-- `SESSION_LOOKUP_HMAC_CURRENT_ID` 和 `SESSION_LOOKUP_HMAC_CURRENT_SECRET` 用于生成当前 lookup hash。
-- `SESSION_LOOKUP_HMAC_PREVIOUS_ID` 和 `SESSION_LOOKUP_HMAC_PREVIOUS_SECRET` 只用于平滑 lookup rotation，必须成对配置。
+- 直接运行 app 时使用 `IAM_API_SESSION_*`、`IAM_ADMIN_API_SESSION_*` 和 `IAM_OIDC_PROVIDER_SESSION_*`。
+- Docker compose 示例使用共享 `IAM_SESSION_*` 源变量，再 fan-out 到各 app 的 raw env。
+- `*_SESSION_KERNEL_NAMESPACE` 默认是 `sess:v2:`。
+- `*_SESSION_KERNEL_PRINCIPAL_IDLE_TTL_SECONDS` 和 `*_SESSION_KERNEL_PRINCIPAL_ABSOLUTE_TTL_SECONDS` 以秒配置，进入 Kernel 前转换为毫秒。
+- `*_SESSION_KERNEL_TOMBSTONE_TTL_SECONDS` 和 `*_SESSION_KERNEL_TOMBSTONE_GRACE_SECONDS` 控制 tombstone 保留窗口。
+- `*_SESSION_LOOKUP_HMAC_CURRENT_ID` 和 `*_SESSION_LOOKUP_HMAC_CURRENT_SECRET` 用于生成当前 lookup hash。
+- `*_SESSION_LOOKUP_HMAC_PREVIOUS_ID` 和 `*_SESSION_LOOKUP_HMAC_PREVIOUS_SECRET` 只用于平滑 lookup rotation，必须成对配置。
 - 生产环境不得使用开发默认 HMAC secret；current 和 previous 的 id、secret 都不得冲突。
 
 HMAC rotation 的发布顺序是：先把旧 current 配为 previous、新 key 配为 current；确认旧 session TTL 全部过期后，再移除 previous。

@@ -29,17 +29,17 @@ export interface CreateOidcProviderSessionDeps {
 export function createOidcProviderSessionKernelConfig(env: OidcProviderEnv) {
   return {
     ...createSessionKernelConfigFromEnv({
-      namespace: env.SESSION_KERNEL_NAMESPACE,
-      principalIdleTtlSeconds: env.SESSION_KERNEL_PRINCIPAL_IDLE_TTL_SECONDS,
-      principalAbsoluteTtlSeconds: env.SESSION_KERNEL_PRINCIPAL_ABSOLUTE_TTL_SECONDS,
-      defaultPrincipalTtlSeconds: env.OIDC_GLOBAL_SESSION_TTL_SECONDS,
-      tombstoneTtlSeconds: env.SESSION_KERNEL_TOMBSTONE_TTL_SECONDS,
-      tombstoneGraceSeconds: env.SESSION_KERNEL_TOMBSTONE_GRACE_SECONDS,
-      lookupHmacCurrentId: env.SESSION_LOOKUP_HMAC_CURRENT_ID,
-      lookupHmacCurrentSecret: env.SESSION_LOOKUP_HMAC_CURRENT_SECRET,
-      lookupHmacPreviousId: env.SESSION_LOOKUP_HMAC_PREVIOUS_ID,
-      lookupHmacPreviousSecret: env.SESSION_LOOKUP_HMAC_PREVIOUS_SECRET,
-      nodeEnv: env.NODE_ENV,
+      namespace: env.sessionKernel.namespace,
+      principalIdleTtlSeconds: env.sessionKernel.principalIdleTtlSeconds,
+      principalAbsoluteTtlSeconds: env.sessionKernel.principalAbsoluteTtlSeconds,
+      defaultPrincipalTtlSeconds: env.oidc.globalSessionTtlSeconds,
+      tombstoneTtlSeconds: env.sessionKernel.tombstoneTtlSeconds,
+      tombstoneGraceSeconds: env.sessionKernel.tombstoneGraceSeconds,
+      lookupHmacCurrentId: env.sessionKernel.lookupHmacCurrentId,
+      lookupHmacCurrentSecret: env.sessionKernel.lookupHmacCurrentSecret,
+      lookupHmacPreviousId: env.sessionKernel.lookupHmacPreviousId,
+      lookupHmacPreviousSecret: env.sessionKernel.lookupHmacPreviousSecret,
+      nodeEnv: env.nodeEnv,
     }),
     clock: { now: Date.now },
   };
@@ -92,7 +92,7 @@ export function createOidcProviderSession(deps: CreateOidcProviderSessionDeps) {
     logger: deps.logger,
     accounts: deps.repositories.account,
     clients: deps.stores.clientRuntime,
-    cookieName: deps.env.OIDC_GLOBAL_SESSION_COOKIE,
+    cookieName: deps.env.oidc.globalSessionCookie,
     clock: { now: Date.now },
   });
 

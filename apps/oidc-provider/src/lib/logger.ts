@@ -20,11 +20,11 @@ export const OIDC_EXTRA_LOG_REDACT_PATHS = [
   "res.headers.set-cookie",
 ];
 
-export function createLogger(env: Pick<OidcProviderEnv, "LOG_LEVEL" | "LOG_FORMAT" | "NODE_ENV">) {
+export function createLogger(env: Pick<OidcProviderEnv, "log" | "nodeEnv">) {
   return createIamLogger({
-    nodeEnv: env.NODE_ENV,
-    logLevel: env.LOG_LEVEL,
-    logFormat: env.LOG_FORMAT,
+    nodeEnv: env.nodeEnv,
+    logLevel: env.log.level,
+    logFormat: env.log.format,
     sourceApp: LoggerSourceApp.OidcProvider,
     extraRedactPaths: OIDC_EXTRA_LOG_REDACT_PATHS,
   });

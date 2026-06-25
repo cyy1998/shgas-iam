@@ -31,7 +31,7 @@ export interface CreateOidcProviderOptions {
 }
 
 export function createOidcProvider(options: CreateOidcProviderOptions) {
-  const provider = new Provider(options.env.OIDC_ISSUER, createProviderConfiguration(options.env, {
+  const provider = new Provider(options.env.oidc.issuer, createProviderConfiguration(options.env, {
     adapter: options.adapter,
     claims: options.claims,
     currentSigningKey: options.signingKeys.current,
@@ -39,7 +39,7 @@ export function createOidcProvider(options: CreateOidcProviderOptions) {
     interactionPolicy: options.interactionPolicy,
   }));
 
-  provider.proxy = options.env.OIDC_TRUST_PROXY;
+  provider.proxy = options.env.oidc.trustProxy;
   registerClientAuthentication(provider, options.clientSecretVerifier);
   registerProtocolModelPayloadExtensions(provider);
   registerProviderMiddleware(provider, {

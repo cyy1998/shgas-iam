@@ -13,7 +13,7 @@ export interface CreateOidcProviderStoresDeps {
 }
 
 export function createOidcProviderStores(deps: CreateOidcProviderStoresDeps) {
-  const clientRuntimeCache = createOidcClientRuntimeCache(deps.redis, deps.env.OIDC_CLIENT_CACHE_TTL_SECONDS);
+  const clientRuntimeCache = createOidcClientRuntimeCache(deps.redis, deps.env.oidc.clientCacheTtlSeconds);
   const clientRuntime = createOidcClientRuntimeStore({
     repository: deps.repositories.client,
     cache: clientRuntimeCache,
@@ -25,7 +25,7 @@ export function createOidcProviderStores(deps: CreateOidcProviderStoresDeps) {
     clientRuntime,
     clientAuthFailures: createClientAuthFailureStore(
       deps.redis,
-      deps.env.OIDC_CLIENT_AUTH_FAILURE_WINDOW_SECONDS,
+      deps.env.oidc.clientAuthFailureWindowSeconds,
     ),
     protocolObjects: createOidcProtocolObjectStore(deps.redis, tokens),
     tokens,

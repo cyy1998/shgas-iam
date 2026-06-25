@@ -1,6 +1,6 @@
 import type { AdminApiRuntimePorts } from "./types";
 import { randomBytes, randomInt, randomUUID } from "node:crypto";
-import env, { adminClientCodes, adminRoleCodes } from "@admin-api/env";
+import env from "@admin-api/env";
 import redis from "@admin-api/lib/infra/redis";
 import { logger } from "@admin-api/lib/logger";
 import { invalidateOidcClient } from "@iam/api-core/oidc";
@@ -19,12 +19,6 @@ export function createAdminApiRuntime(options: CreateAdminApiRuntimeOptions = {}
   const runtimeEnv = options.env ?? env;
   const runtimeLogger = options.logger ?? logger;
   const runtimeRedis = options.redis ?? redis;
-  const adminAuthClientCodes = options.env === undefined
-    ? adminClientCodes
-    : runtimeEnv.ADMIN_CLIENT_CODES.split(",").map(code => code.trim()).filter(Boolean);
-  const adminAuthRoleCodes = options.env === undefined
-    ? adminRoleCodes
-    : runtimeEnv.ADMIN_ROLE_CODES.split(",").map(code => code.trim()).filter(Boolean);
 
   return {
     logger: runtimeLogger,
@@ -32,10 +26,10 @@ export function createAdminApiRuntime(options: CreateAdminApiRuntimeOptions = {}
     redis: runtimeRedis,
     passwordHasher: {
       async hashPassword(password) {
-        return await hash(password, runtimeEnv.PASSWORD_HASH_ROUNDS);
+        return await hash(password, runtimeEnv.passwordHashRounds);
       },
       async hashSecret(secret) {
-        return await hashSecret(secret, runtimeEnv.PASSWORD_HASH_ROUNDS);
+        return await hashSecret(secret, runtimeEnv.passwordHashRounds);
       },
     },
     random: {
@@ -60,20 +54,20 @@ export function createAdminApiRuntime(options: CreateAdminApiRuntimeOptions = {}
     config: {
       env: runtimeEnv,
       auth: {
-        adminClientCodes: adminAuthClientCodes,
-        adminRoleCodes: adminAuthRoleCodes,
+        adminClientCodes: runtimeEnv.auth.adminClientCodes,
+        adminRoleCodes: runtimeEnv.auth.adminRoleCodes,
       },
       sessionKernel: createSessionKernelConfigFromEnv({
-        namespace: runtimeEnv.SESSION_KERNEL_NAMESPACE,
-        principalIdleTtlSeconds: runtimeEnv.SESSION_KERNEL_PRINCIPAL_IDLE_TTL_SECONDS,
-        principalAbsoluteTtlSeconds: runtimeEnv.SESSION_KERNEL_PRINCIPAL_ABSOLUTE_TTL_SECONDS,
-        tombstoneTtlSeconds: runtimeEnv.SESSION_KERNEL_TOMBSTONE_TTL_SECONDS,
-        tombstoneGraceSeconds: runtimeEnv.SESSION_KERNEL_TOMBSTONE_GRACE_SECONDS,
-        lookupHmacCurrentId: runtimeEnv.SESSION_LOOKUP_HMAC_CURRENT_ID,
-        lookupHmacCurrentSecret: runtimeEnv.SESSION_LOOKUP_HMAC_CURRENT_SECRET,
-        lookupHmacPreviousId: runtimeEnv.SESSION_LOOKUP_HMAC_PREVIOUS_ID,
-        lookupHmacPreviousSecret: runtimeEnv.SESSION_LOOKUP_HMAC_PREVIOUS_SECRET,
-        nodeEnv: runtimeEnv.NODE_ENV,
+        namespace: runtimeEnv.sessionKernel.namespace,
+        principalIdleTtlSeconds: runtimeEnv.sessionKernel.principalIdleTtlSeconds,
+        principalAbsoluteTtlSeconds: runtimeEnv.sessionKernel.principalAbsoluteTtlSeconds,
+        tombstoneTtlSeconds: runtimeEnv.sessionKernel.tombstoneTtlSeconds,
+        tombstoneGraceSeconds: runtimeEnv.sessionKernel.tombstoneGraceSeconds,
+        lookupHmacCurrentId: runtimeEnv.sessionKernel.lookupHmacCurrentId,
+        lookupHmacCurrentSecret: runtimeEnv.sessionKernel.lookupHmacCurrentSecret,
+        lookupHmacPreviousId: runtimeEnv.sessionKernel.lookupHmacPreviousId,
+        lookupHmacPreviousSecret: runtimeEnv.sessionKernel.lookupHmacPreviousSecret,
+        nodeEnv: runtimeEnv.nodeEnv,
       }),
     },
     integrations: {

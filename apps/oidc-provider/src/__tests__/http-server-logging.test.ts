@@ -22,7 +22,6 @@ afterEach(async () => {
 });
 
 async function loadApp() {
-  process.env.DATABASE_URL = "postgres://unused";
   const app = await import("../app.ts");
   oidcRequestRouteSymbol = app.OIDC_REQUEST_ROUTE_SYMBOL;
   return app;
@@ -41,7 +40,9 @@ function createMemoryLogger(lines: LogLine[]) {
 
 function createEnv() {
   return {
-    OIDC_PUBLIC_ORIGIN: "http://issuer.test",
+    oidc: {
+      publicOrigin: "http://issuer.test",
+    },
   };
 }
 

@@ -21,7 +21,7 @@ export interface OidcHttpHealthCheck {
 export interface OidcHttpRuntime {
   provider: Pick<Provider, "callback">;
   interactions: OidcInteractionHandler;
-  env: Pick<OidcProviderEnv, "OIDC_PUBLIC_ORIGIN">;
+  env: Pick<OidcProviderEnv, "oidc">;
   logger: Pick<OidcLogger, "info" | "warn" | "error">;
   health: OidcHttpHealthCheck;
 }
@@ -80,12 +80,12 @@ function logHttpRequestCompleted(
 export function createOidcHttpServer(runtime: OidcHttpRuntime) {
   const { provider, interactions, env, logger, health } = runtime;
   const callback = provider.callback();
-  const publicOrigin = new URL(env.OIDC_PUBLIC_ORIGIN);
+  const publicOrigin = new URL(env.oidc.publicOrigin);
   return createServer(async (request, response) => {
     const startedAt = performance.now();
     const requestId = ensureRequestId(request, response);
     const originalUrl = request.url;
-    const route = classifyOidcHttpRoute(getOriginalPath(originalUrl, env.OIDC_PUBLIC_ORIGIN));
+    const route = classifyOidcHttpRoute(getOriginalPath(originalUrl, env.oidc.publicOrigin));
     let finished = false;
     let logged = false;
     const logCompleted = (aborted?: boolean) => {
@@ -118,7 +118,7 @@ export function createOidcHttpServer(runtime: OidcHttpRuntime) {
         response.end(JSON.stringify({ status: "ok" }));
         return;
       }
-      const url = new URL(request.url ?? "/", env.OIDC_PUBLIC_ORIGIN);
+      const url = new URL(request.url ?? "/", env.oidc.publicOrigin);
       if (url.pathname === "/oidc/session/end"
         && url.searchParams.has("post_logout_redirect_uri")
         && !url.searchParams.has("id_token_hint")) {

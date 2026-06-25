@@ -27,7 +27,7 @@ export function createOidcProviderServices(deps: CreateOidcProviderServicesDeps)
   });
   const clientAuthRateLimiter = createClientAuthRateLimiter(
     deps.stores.clientAuthFailures,
-    deps.env.OIDC_CLIENT_AUTH_FAILURE_LIMIT,
+    deps.env.oidc.clientAuthFailureLimit,
   );
 
   return {

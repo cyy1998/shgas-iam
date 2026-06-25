@@ -31,7 +31,7 @@ export async function createOidcProviderComposition(options: CreateOidcProviderC
   const logger = options.logger ?? createLogger(options.env);
   const redis = options.redis ?? createProviderRedis(options.env);
   const signingKeys = options.signingKeys
-    ?? await loadSigningKeys(options.env.OIDC_CURRENT_JWK_JSON, options.env.OIDC_PREVIOUS_JWK_JSON);
+    ?? await loadSigningKeys(options.env.oidc.currentJwkJson, options.env.oidc.previousJwkJson);
   const repositories = createOidcProviderRepositories(options.dbClient);
   const stores = createOidcProviderStores({ env: options.env, redis, repositories });
   const session = createOidcProviderSession({ env: options.env, redis, logger, repositories, stores });

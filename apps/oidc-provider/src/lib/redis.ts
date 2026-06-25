@@ -3,9 +3,9 @@ import { createRedisClient } from "@iam/api-core/redis";
 
 export function createProviderRedis(env: OidcProviderEnv) {
   return createRedisClient({
-    host: env.REDIS_URL,
-    port: env.REDIS_PORT,
-    password: env.REDIS_PASSWORD,
-    db: env.REDIS_DB,
+    host: env.redis.host,
+    port: env.redis.port,
+    password: env.redis.password,
+    db: env.redis.db,
   });
 }

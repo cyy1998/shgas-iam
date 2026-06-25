@@ -4,15 +4,15 @@
 
 后端 `apps/api`：
 
-- `LOGIN_CREDENTIAL_ACTIVE_KID` 与 `apps/sso` 使用的公钥匹配。
-- `LOGIN_CREDENTIAL_PRIVATE_KEYS_JSON` 包含当前启用的 `kid` 和 SM2 私钥。
-- `LOGIN_CREDENTIAL_MAX_SKEW_MS` 设置为可接受的客户端时钟偏移窗口。
-- `LOGIN_CREDENTIAL_NONCE_TTL_SECONDS` 至少不短于以秒计的时间戳偏移窗口。
+- `IAM_API_LOGIN_CREDENTIAL_ACTIVE_KID` 与 `apps/sso` 使用的公钥匹配。
+- `IAM_API_LOGIN_CREDENTIAL_PRIVATE_KEYS_JSON` 包含当前启用的 `kid` 和 SM2 私钥。
+- `IAM_API_LOGIN_CREDENTIAL_MAX_SKEW_MS` 设置为可接受的客户端时钟偏移窗口。
+- `IAM_API_LOGIN_CREDENTIAL_NONCE_TTL_SECONDS` 至少不短于以秒计的时间戳偏移窗口。
 
 前端 `apps/sso` 构建：
 
-- `UMI_APP_LOGIN_CREDENTIAL_KID` 与后端私钥条目匹配。
-- `UMI_APP_LOGIN_CREDENTIAL_PUBLIC_KEY` 是与后端私钥配对的 SM2 公钥。
+- `UMI_APP_SSO_LOGIN_CREDENTIAL_KID` 与后端私钥条目匹配。
+- `UMI_APP_SSO_LOGIN_CREDENTIAL_PUBLIC_KEY` 是与后端私钥配对的 SM2 公钥。
 
 ## 同步发布
 

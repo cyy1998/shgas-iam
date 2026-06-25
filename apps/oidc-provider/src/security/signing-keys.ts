@@ -42,9 +42,9 @@ async function validateSigningKey(value: string, name: string): Promise<SigningK
 }
 
 export async function loadSigningKeys(currentJson: string, previousJson?: string) {
-  const current = await validateSigningKey(currentJson, "OIDC_CURRENT_JWK_JSON");
+  const current = await validateSigningKey(currentJson, "current OIDC signing JWK");
   const previous = previousJson
-    ? await validateSigningKey(previousJson, "OIDC_PREVIOUS_JWK_JSON")
+    ? await validateSigningKey(previousJson, "previous OIDC signing JWK")
     : undefined;
   if (previous?.jwk.kid === current.jwk.kid)
     throw new Error("OIDC current and previous signing keys must have unique kid values");

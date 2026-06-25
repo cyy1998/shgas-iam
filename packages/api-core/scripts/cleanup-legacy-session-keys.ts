@@ -16,10 +16,10 @@ const logger = {
 try {
   const options = parseLegacySessionCleanupArgs(process.argv.slice(2));
   const redis = new Redis({
-    host: process.env.REDIS_URL ?? "localhost",
-    port: Number(process.env.REDIS_PORT ?? 6379),
-    password: process.env.REDIS_PASSWORD || undefined,
-    db: Number(process.env.REDIS_DB ?? 0),
+    host: process.env.IAM_REDIS_HOST ?? process.env.REDIS_URL ?? "localhost",
+    port: Number(process.env.IAM_REDIS_PORT ?? process.env.REDIS_PORT ?? 6379),
+    password: process.env.IAM_REDIS_PASSWORD || process.env.REDIS_PASSWORD || undefined,
+    db: Number(process.env.IAM_REDIS_DB ?? process.env.REDIS_DB ?? 0),
   });
 
   try {

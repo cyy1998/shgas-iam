@@ -201,7 +201,7 @@ export function createApiServices(options: CreateApiServicesOptions) {
     userService,
     auditLogWriter,
     config: {
-      nodeEnv: runtime.config.env.NODE_ENV,
+      nodeEnv: runtime.config.env.nodeEnv,
       authCodeExpireSeconds: runtime.config.auth.authCodeExpireSeconds,
     },
   });

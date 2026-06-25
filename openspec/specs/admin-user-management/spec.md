@@ -168,7 +168,7 @@
 - **WHEN** `resetPasswordByUsername` 被调用且目标用户不存在
 - **THEN** 单元测试 SHALL 验证服务抛出“用户不存在”
 - **AND** 单元测试 SHALL 验证用户存在时调用 `generateRandomPassword(8)`
-- **AND** 单元测试 SHALL 验证服务调用 `hash(newPassword, PASSWORD_HASH_ROUNDS)`
+- **AND** 单元测试 SHALL 验证服务使用 configured password hash rounds 调用 `hash(newPassword, rounds)`
 - **AND** 单元测试 SHALL 验证服务调用 `userRepository.setPassword(user.id, newPasswordHash, tx)`
 - **AND** 单元测试 SHALL 验证成功响应为新的明文密码
 

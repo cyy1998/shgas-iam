@@ -37,7 +37,7 @@ Previous task validation for api-core, api, admin-api, admin, and sso is recorde
 Command used:
 
 ```bash
-REDIS_URL=127.0.0.1 REDIS_PORT=6390 REDIS_DB=0 pnpm --filter @iam/api-core session:cleanup-legacy-keys -- --dry-run --batch-size 500
+IAM_REDIS_HOST=127.0.0.1 IAM_REDIS_PORT=6390 IAM_REDIS_DB=0 pnpm --filter @iam/api-core session:cleanup-legacy-keys -- --dry-run --batch-size 500
 ```
 
 ## custom SSO Smoke
@@ -98,7 +98,7 @@ System log evidence:
 
 | Finding | Fix | Validation |
 |---|---|---|
-| Empty `SESSION_LOOKUP_HMAC_PREVIOUS_ID` / `SESSION_LOOKUP_HMAC_PREVIOUS_SECRET` values caused oidc-provider env parsing to fail in dev Docker | Treat empty previous HMAC env values as unset and keep paired/length validation when present | OIDC env tests passed |
+| Empty `IAM_OIDC_PROVIDER_SESSION_LOOKUP_HMAC_PREVIOUS_ID` / `IAM_OIDC_PROVIDER_SESSION_LOOKUP_HMAC_PREVIOUS_SECRET` values caused oidc-provider env parsing to fail in dev Docker | Treat empty previous HMAC env values as unset and keep paired/length validation when present | OIDC env tests passed |
 | First OIDC authorization after login saved AuthorizationCode before provider Session mapping consumed staged binding, causing fail-closed 500 | OIDC Redis adapter now falls back to `consumeStaged(accountId, sessionUid)` when binding read misses before AuthorizationCode/AccessToken registration | OIDC redis adapter test added; full OIDC smoke passed |
 
 ## Final Decision

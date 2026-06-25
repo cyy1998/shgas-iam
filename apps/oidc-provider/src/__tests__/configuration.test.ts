@@ -6,13 +6,16 @@ import { describe, it } from "vitest";
 import { createProviderConfiguration } from "../provider/configuration.ts";
 
 const env = {
-  OIDC_COOKIE_KEYS: ["a".repeat(32), "b".repeat(32)],
-  NODE_ENV: "test",
-  OIDC_ACCESS_TOKEN_TTL_SECONDS: 3600,
-  OIDC_AUTHORIZATION_CODE_TTL_SECONDS: 300,
-  OIDC_ID_TOKEN_TTL_SECONDS: 3600,
-  OIDC_INTERACTION_TTL_SECONDS: 600,
-  OIDC_GLOBAL_SESSION_TTL_SECONDS: 86400,
+  nodeEnv: "test",
+  oidc: {
+    issuer: "http://issuer.test/oidc",
+    cookieKeys: ["a".repeat(32), "b".repeat(32)],
+    accessTokenTtlSeconds: 3600,
+    authorizationCodeTtlSeconds: 300,
+    idTokenTtlSeconds: 3600,
+    interactionTtlSeconds: 600,
+    globalSessionTtlSeconds: 86400,
+  },
 } as const;
 
 const emptyAdapter: Adapter = {

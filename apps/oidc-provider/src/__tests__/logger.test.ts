@@ -25,9 +25,11 @@ describe("oIDC logger", () => {
 
   it("uses the shared sourceApp binding", () => {
     const logger = createLogger({
-      NODE_ENV: "test",
-      LOG_LEVEL: "info",
-      LOG_FORMAT: "json",
+      nodeEnv: "test",
+      log: {
+        level: "info",
+        format: "json",
+      },
     });
 
     assert.equal(logger.bindings().sourceApp, LoggerSourceApp.OidcProvider);

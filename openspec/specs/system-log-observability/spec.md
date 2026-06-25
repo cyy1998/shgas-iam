@@ -299,19 +299,19 @@
 ### Requirement: Backend Logger Policy
 后端应用 SHALL 通过统一 logger factory 创建运行时 logger，并 SHALL 对 `api`、`admin-api` 和 `oidc-provider` 使用一致的日志级别、格式、脱敏和 `sourceApp` 规则。
 
-#### Scenario: LOG_FORMAT auto resolves by NODE_ENV
-- **WHEN** 后端应用未显式配置 `LOG_FORMAT` 或配置为 `auto`
+#### Scenario: App log format auto resolves by NODE_ENV
+- **WHEN** 后端应用未显式配置 app-specific `*_LOG_FORMAT` 或配置为 `auto`
 - **THEN** `NODE_ENV = "development"` 时 logger SHALL 使用 pretty 输出
 - **AND** 其他 `NODE_ENV` 值下 logger SHALL 输出 JSON 行日志
 
-#### Scenario: LOG_FORMAT explicit override is honored
-- **WHEN** 后端应用配置 `LOG_FORMAT = "json"` 或 `LOG_FORMAT = "pretty"`
-- **THEN** logger SHALL 按显式 `LOG_FORMAT` 输出日志
+#### Scenario: App log format explicit override is honored
+- **WHEN** 后端应用配置 app-specific `*_LOG_FORMAT = "json"` 或 `*_LOG_FORMAT = "pretty"`
+- **THEN** logger SHALL 按显式 app log format 输出日志
 - **AND** 该显式配置 SHALL 优先于 `NODE_ENV`
 
-#### Scenario: LOG_FORMAT is validated
+#### Scenario: App log format is validated
 - **WHEN** `api`、`admin-api` 或 `oidc-provider` 解析环境变量
-- **THEN** `LOG_FORMAT` SHALL 只接受 `auto`、`json` 或 `pretty`
+- **THEN** app-specific `*_LOG_FORMAT` SHALL 只接受 `auto`、`json` 或 `pretty`
 - **AND** 缺省值 SHALL 为 `auto`
 
 #### Scenario: JSON mode writes structured stdout
@@ -419,7 +419,7 @@
 
 #### Scenario: Different source apps can create independent loggers
 - **WHEN** 同一进程中先后创建 `iam-api`、`iam-admin-api` 或 `iam-oidc-provider` logger
-- **THEN** 每个 logger SHALL 保留自身 `sourceApp`、`LOG_FORMAT`、`LOG_LEVEL` 和额外脱敏配置
+- **THEN** 每个 logger SHALL 保留自身 `sourceApp`、app-specific log format、app-specific log level 和额外脱敏配置
 - **AND** 后创建的 logger MUST NOT 复用第一个 logger 的固定全局实例
 
 #### Scenario: App module still exposes app-local singleton

@@ -36,7 +36,6 @@ const emptyAdapter: Adapter = {
 
 describe("oIDC discovery and JWKS", () => {
   it("serves fixed discovery metadata and only public current/previous keys under the issuer path", async () => {
-    process.env.DATABASE_URL = "postgres://unused";
     const { createOidcHttpServer, createOidcProvider } = await import("../app.ts");
     const [current, previous] = await Promise.all([
       createSigningJwk("current"),
@@ -44,27 +43,24 @@ describe("oIDC discovery and JWKS", () => {
     ]);
     const issuer = "http://issuer.test/oidc";
     const env = {
-      DATABASE_URL: "postgres://unused",
-      REDIS_URL: "redis://unused",
-      REDIS_PORT: 6379,
-      REDIS_DB: 0,
-      PORT: 30002,
-      OIDC_COOKIE_KEYS: ["a".repeat(32), "b".repeat(32)],
-      NODE_ENV: "test",
-      OIDC_ISSUER: issuer,
-      OIDC_PUBLIC_ORIGIN: "http://issuer.test",
-      OIDC_SSO_LOGIN_PATH: "/portal/login",
-      OIDC_GLOBAL_SESSION_COOKIE: "global_session",
-      OIDC_ACCESS_TOKEN_TTL_SECONDS: 3600,
-      OIDC_AUTHORIZATION_CODE_TTL_SECONDS: 300,
-      OIDC_ID_TOKEN_TTL_SECONDS: 3600,
-      OIDC_INTERACTION_TTL_SECONDS: 600,
-      OIDC_GLOBAL_SESSION_TTL_SECONDS: 86400,
-      OIDC_CLIENT_CACHE_TTL_SECONDS: 60,
-      OIDC_BCRYPT_COST: 12,
-      OIDC_CLIENT_AUTH_FAILURE_LIMIT: 5,
-      OIDC_CLIENT_AUTH_FAILURE_WINDOW_SECONDS: 60,
-      OIDC_TRUST_PROXY: true,
+      nodeEnv: "test",
+      oidc: {
+        issuer,
+        publicOrigin: "http://issuer.test",
+        ssoLoginPath: "/portal/login",
+        cookieKeys: ["a".repeat(32), "b".repeat(32)],
+        globalSessionCookie: "global_session",
+        accessTokenTtlSeconds: 3600,
+        authorizationCodeTtlSeconds: 300,
+        idTokenTtlSeconds: 3600,
+        interactionTtlSeconds: 600,
+        globalSessionTtlSeconds: 86400,
+        clientCacheTtlSeconds: 60,
+        bcryptCost: 12,
+        clientAuthFailureLimit: 5,
+        clientAuthFailureWindowSeconds: 60,
+        trustProxy: true,
+      },
     } as never;
     const logger = {
       info() {},

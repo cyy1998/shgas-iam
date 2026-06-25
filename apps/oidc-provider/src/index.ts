@@ -1,16 +1,16 @@
 import { SystemLogEvent } from "@iam/api-core/logger";
-import { createOidcProviderComposition } from "./composition/index.ts";
 import { parseOidcProviderEnv } from "./env.ts";
 
 async function main() {
   const env = parseOidcProviderEnv(process.env);
+  const { createOidcProviderComposition } = await import("./composition/index.ts");
   const composition = await createOidcProviderComposition({ env });
 
-  composition.server.listen(env.PORT, () => {
+  composition.server.listen(env.port, () => {
     composition.logger.info({
       event: SystemLogEvent.OidcProviderStarted,
-      issuer: env.OIDC_ISSUER,
-      port: env.PORT,
+      issuer: env.oidc.issuer,
+      port: env.port,
     }, "OIDC provider listening");
   });
 

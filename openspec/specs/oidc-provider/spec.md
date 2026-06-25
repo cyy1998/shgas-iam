@@ -432,7 +432,7 @@ OIDC provider SHALL centralize `oidc-provider` extension point wiring under prov
 
 #### Scenario: 发布前提包含 Session Kernel 配置
 - **WHEN** 维护者查看 OIDC 发布前提
-- **THEN** 手册 SHALL 要求配置 `SESSION_KERNEL_NAMESPACE`、principal TTL、tombstone TTL、tombstone grace、`SESSION_LOOKUP_HMAC_CURRENT_ID` 和 `SESSION_LOOKUP_HMAC_CURRENT_SECRET`
+- **THEN** 手册 SHALL 要求配置 `IAM_OIDC_PROVIDER_SESSION_KERNEL_NAMESPACE`、principal TTL、tombstone TTL、tombstone grace、`IAM_OIDC_PROVIDER_SESSION_LOOKUP_HMAC_CURRENT_ID` 和 `IAM_OIDC_PROVIDER_SESSION_LOOKUP_HMAC_CURRENT_SECRET`
 - **AND** 手册 SHALL 说明 previous HMAC key 只用于平滑 lookup rotation
 - **AND** 生产环境 SHALL NOT 使用开发默认 HMAC secret
 

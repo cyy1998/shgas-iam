@@ -19,7 +19,7 @@ export function registerProviderMiddleware(provider: Provider, deps: RegisterPro
   provider.middleware.unshift(async (ctx, next) => {
     ctx.state.requestId = ctx.get("x-request-id") || crypto.randomUUID();
     ctx.set("x-request-id", ctx.state.requestId);
-    const principalSessionToken = getCookieValue(ctx.get("cookie"), deps.env.OIDC_GLOBAL_SESSION_COOKIE) ?? undefined;
+    const principalSessionToken = getCookieValue(ctx.get("cookie"), deps.env.oidc.globalSessionCookie) ?? undefined;
     const basicClientId = ctx.path === "/token"
       ? parseBasicClientId(ctx.get("authorization"))
       : null;
@@ -45,11 +45,11 @@ export function registerProviderMiddleware(provider: Provider, deps: RegisterPro
     }
     if (ctx.oidc?.route === "end_session_confirm" && ctx.status < 400 && principalSessionToken) {
       await deps.oidcSession.logoutPrincipalSession(principalSessionToken);
-      ctx.cookies.set(deps.env.OIDC_GLOBAL_SESSION_COOKIE, null, {
+      ctx.cookies.set(deps.env.oidc.globalSessionCookie, null, {
         httpOnly: true,
         overwrite: true,
         sameSite: "lax",
-        secure: deps.env.NODE_ENV === "production",
+        secure: deps.env.nodeEnv === "production",
       });
     }
   });

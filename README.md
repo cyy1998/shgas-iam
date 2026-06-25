@@ -145,8 +145,10 @@ docker compose -f docker/docker-compose-dev.yml up -d db redis
 ```
 
 `docker/docker-compose-dev.yml` 中 PostgreSQL 默认暴露在 `localhost:5432`，Redis 默认暴露在
-`localhost:6390`。如果在宿主机直接运行 Bun 服务，本地环境变量请使用 `REDIS_URL=localhost`、
-`REDIS_PORT=6390`。
+`localhost:6390`。如果在宿主机直接运行 Bun 服务，本地环境变量请按应用使用
+`IAM_API_REDIS_HOST=localhost` / `IAM_API_REDIS_PORT=6390`、
+`IAM_ADMIN_API_REDIS_HOST=localhost` / `IAM_ADMIN_API_REDIS_PORT=6390` 或
+`IAM_OIDC_PROVIDER_REDIS_HOST=localhost` / `IAM_OIDC_PROVIDER_REDIS_PORT=6390`。
 
 ### 配置环境变量
 
@@ -163,8 +165,11 @@ cp gateway/.env.example gateway/.env
 本地 PostgreSQL 对应的连接串可设置为：
 
 ```dotenv
-DATABASE_URL=postgresql://iam:iam_password@localhost:5432/iam_db
+IAM_API_DATABASE_URL=postgresql://iam:iam_password@localhost:5432/iam_db
 ```
+
+`packages/db` 的 Drizzle CLI 仍使用包内 `DATABASE_URL`；运行 app 时使用各 app 自己的
+`IAM_<APP>_DATABASE_URL`。
 
 ### 初始化数据库
 
@@ -325,39 +330,40 @@ pnpm --filter @iam/sso typecheck
 
 | 变量名                          | 说明                                             | 默认值/示例        |
 | ------------------------------- | ------------------------------------------------ | ------------------ |
-| `DATABASE_URL`                  | PostgreSQL 连接字符串，可带 `?schema=public`     | `postgresql://...` |
-| `REDIS_URL`                     | Redis 地址                                       | `localhost`        |
-| `REDIS_PORT`                    | Redis 端口；使用本地 compose 时宿主机端口为 6390 | `6379` / `6390`    |
-| `REDIS_PASSWORD`                | Redis 密码；空字符串会转换为未设置               | 空                 |
-| `REDIS_DB`                      | Redis DB 编号                                    | `0`                |
-| `PORT`                          | 公共 API 监听端口                                | `30000`            |
+| `IAM_API_DATABASE_URL`          | PostgreSQL 连接字符串，可带 `?schema=public`     | `postgresql://...` |
+| `IAM_API_REDIS_HOST`            | Redis 地址                                       | `localhost`        |
+| `IAM_API_REDIS_PORT`            | Redis 端口；使用本地 compose 时宿主机端口为 6390 | `6379` / `6390`    |
+| `IAM_API_REDIS_PASSWORD`        | Redis 密码；空字符串会转换为未设置               | 空                 |
+| `IAM_API_REDIS_DB`              | Redis DB 编号                                    | `0`                |
+| `IAM_API_PORT`                  | 公共 API 监听端口                                | `30000`            |
 | `NODE_ENV`                      | 运行环境；生产环境会关闭 OpenAPI 文档            | `development`      |
-| `LOG_LEVEL`                     | Pino 日志级别                                    | `info`             |
-| `PASSWORD_HASH_ROUNDS`          | 密码哈希轮数                                     | `10`               |
-| `MAGIC_CODE`                    | 特殊操作验证码                                   | 必填               |
-| `LOGIN_CREDENTIAL_ACTIVE_KID`   | 当前密码登录 SM2 密钥编号                        | `2026-05-primary`  |
-| `LOGIN_CREDENTIAL_PRIVATE_KEYS_JSON` | 密码登录 SM2 私钥映射 JSON                 | `{"kid":"private"}` |
-| `LOGIN_CREDENTIAL_MAX_SKEW_MS`  | 密码登录凭证时间戳允许偏差（毫秒）                | `300000`           |
-| `LOGIN_CREDENTIAL_NONCE_TTL_SECONDS` | 密码登录 nonce 防重放 TTL（秒）             | `360`              |
-| `SESSION_KERNEL_NAMESPACE`      | Session Kernel Redis key namespace             | `sess:v2:`         |
-| `SESSION_KERNEL_PRINCIPAL_IDLE_TTL_SECONDS` | PrincipalSession idle TTL；默认跟随 `REDIS_EXPIRE_TIME` | `86400` |
-| `SESSION_KERNEL_PRINCIPAL_ABSOLUTE_TTL_SECONDS` | PrincipalSession absolute TTL；默认跟随 `REDIS_EXPIRE_TIME` | `86400` |
-| `SESSION_KERNEL_TOMBSTONE_TTL_SECONDS` | Session Kernel tombstone 保留时间（秒）   | `86400`            |
-| `SESSION_KERNEL_TOMBSTONE_GRACE_SECONDS` | Session Kernel tombstone grace 时间（秒） | `300`              |
-| `SESSION_LOOKUP_HMAC_CURRENT_ID` | 当前 Session lookup HMAC key id                 | `2026-06-primary`  |
-| `SESSION_LOOKUP_HMAC_CURRENT_SECRET` | 当前 Session lookup HMAC secret；生产必填且至少 32 字符 | 必填 |
-| `SESSION_LOOKUP_HMAC_PREVIOUS_ID` / `SESSION_LOOKUP_HMAC_PREVIOUS_SECRET` | 上一个 lookup HMAC key，用于轮换窗口 | 可选 |
-| `WX_CORPID` / `WX_CORPSECRET`   | 企业微信配置                                     | 必填               |
-| `SMS_URL` / `SMS_SIGNATURE_KEY` | 短信服务配置                                     | 必填               |
-| `ORCAS_URL`                     | ORCAS 服务地址                                   | 必填               |
-| `REDIS_EXPIRE_TIME`             | Redis 默认过期时间（秒）                         | `86400`            |
-| `AUTH_CODE_EXPIRE_TIME`         | 授权码过期时间（秒）                             | `300`              |
-| `LOGIN_ENDPOINT`                | 登录端点                                         | `/portal/login`    |
-| `SSO_INTERNAL_ORIGIN`           | 内网 SSO 入口 origin，用于 discovery URL 拼接     | 必填               |
-| `SSO_EXTERNAL_ORIGIN`           | 外网 SSO 入口 origin，用于 discovery URL 拼接     | 必填               |
-| `AUTHORIZATION_ENDPOINT`        | 授权端点                                         | `/sso/authorize`   |
-| `LOGOUT_ENDPOINT`               | 登出端点                                         | `/sso/logout`      |
-| `THIRDPARTY_OA_ENDPOINT`        | 第三方 OA 端点                                   | `/sso/thirdparty/oa` |
+| `IAM_API_LOG_LEVEL`             | Pino 日志级别                                    | `info`             |
+| `IAM_API_LOG_FORMAT`            | Pino 日志格式                                    | `auto`             |
+| `IAM_API_PASSWORD_HASH_ROUNDS`  | 密码哈希轮数                                     | `10`               |
+| `IAM_API_MAGIC_CODE`            | 特殊操作验证码                                   | 必填               |
+| `IAM_API_LOGIN_CREDENTIAL_ACTIVE_KID` | 当前密码登录 SM2 密钥编号                 | `2026-05-primary`  |
+| `IAM_API_LOGIN_CREDENTIAL_PRIVATE_KEYS_JSON` | 密码登录 SM2 私钥映射 JSON         | `{"kid":"private"}` |
+| `IAM_API_LOGIN_CREDENTIAL_MAX_SKEW_MS` | 密码登录凭证时间戳允许偏差（毫秒）       | `300000`           |
+| `IAM_API_LOGIN_CREDENTIAL_NONCE_TTL_SECONDS` | 密码登录 nonce 防重放 TTL（秒）   | `360`              |
+| `IAM_API_SESSION_KERNEL_NAMESPACE` | Session Kernel Redis key namespace           | `sess:v2:`         |
+| `IAM_API_SESSION_KERNEL_PRINCIPAL_IDLE_TTL_SECONDS` | PrincipalSession idle TTL（秒） | `86400` |
+| `IAM_API_SESSION_KERNEL_PRINCIPAL_ABSOLUTE_TTL_SECONDS` | PrincipalSession absolute TTL（秒） | `86400` |
+| `IAM_API_SESSION_KERNEL_TOMBSTONE_TTL_SECONDS` | Session Kernel tombstone 保留时间（秒） | `86400` |
+| `IAM_API_SESSION_KERNEL_TOMBSTONE_GRACE_SECONDS` | Session Kernel tombstone grace 时间（秒） | `300` |
+| `IAM_API_SESSION_LOOKUP_HMAC_CURRENT_ID` | 当前 Session lookup HMAC key id        | `2026-06-primary`  |
+| `IAM_API_SESSION_LOOKUP_HMAC_CURRENT_SECRET` | 当前 Session lookup HMAC secret；生产必填且至少 32 字符 | 必填 |
+| `IAM_API_SESSION_LOOKUP_HMAC_PREVIOUS_ID` / `IAM_API_SESSION_LOOKUP_HMAC_PREVIOUS_SECRET` | 上一个 lookup HMAC key，用于轮换窗口 | 可选 |
+| `IAM_API_WECHAT_CORP_ID` / `IAM_API_WECHAT_CORP_SECRET` | 企业微信配置             | 必填               |
+| `IAM_API_SMS_URL` / `IAM_API_SMS_SIGNATURE_KEY` | 短信服务配置                    | 必填               |
+| `IAM_API_ORCAS_URL`             | ORCAS 服务地址                                   | 必填               |
+| `IAM_API_SESSION_DEFAULT_TTL_SECONDS` | Redis 默认过期时间（秒）                  | `86400`            |
+| `IAM_API_AUTH_CODE_TTL_SECONDS` | 授权码过期时间（秒）                             | `300`              |
+| `IAM_API_LOGIN_ENDPOINT`        | 登录端点                                         | `/portal/login`    |
+| `IAM_API_SSO_INTERNAL_ORIGIN`   | 内网 SSO 入口 origin，用于 discovery URL 拼接     | 必填               |
+| `IAM_API_SSO_EXTERNAL_ORIGIN`   | 外网 SSO 入口 origin，用于 discovery URL 拼接     | 必填               |
+| `IAM_API_AUTHORIZATION_ENDPOINT` | 授权端点                                        | `/sso/authorize`   |
+| `IAM_API_LOGOUT_ENDPOINT`       | 登出端点                                         | `/sso/logout`      |
+| `IAM_API_THIRDPARTY_OA_ENDPOINT` | 第三方 OA 端点                                  | `/sso/thirdparty/oa` |
 
 ### 管理端 API（`apps/admin-api/.env`）
 
@@ -365,54 +371,55 @@ pnpm --filter @iam/sso typecheck
 
 | 变量名                 | 说明                                             | 默认值/示例        |
 | ---------------------- | ------------------------------------------------ | ------------------ |
-| `DATABASE_URL`         | PostgreSQL 连接字符串                            | `postgresql://...` |
-| `REDIS_URL`            | Redis 地址                                       | `localhost`        |
-| `REDIS_PORT`           | Redis 端口；使用本地 compose 时宿主机端口为 6390 | `6379` / `6390`    |
-| `REDIS_PASSWORD`       | Redis 密码；空字符串会转换为未设置               | 空                 |
-| `REDIS_DB`             | Redis DB 编号                                    | `0`                |
-| `PORT`                 | 管理端 API 监听端口                              | `30001`            |
+| `IAM_ADMIN_API_DATABASE_URL` | PostgreSQL 连接字符串                       | `postgresql://...` |
+| `IAM_ADMIN_API_REDIS_HOST`   | Redis 地址                                  | `localhost`        |
+| `IAM_ADMIN_API_REDIS_PORT`   | Redis 端口；使用本地 compose 时宿主机端口为 6390 | `6379` / `6390` |
+| `IAM_ADMIN_API_REDIS_PASSWORD` | Redis 密码；空字符串会转换为未设置         | 空                 |
+| `IAM_ADMIN_API_REDIS_DB`     | Redis DB 编号                               | `0`                |
+| `IAM_ADMIN_API_PORT`         | 管理端 API 监听端口                         | `30001`            |
 | `NODE_ENV`             | 运行环境                                         | `development`      |
-| `LOG_LEVEL`            | Pino 日志级别                                    | `info`             |
-| `PASSWORD_HASH_ROUNDS` | 密码哈希轮数                                     | `10`               |
-| `ADMIN_CLIENT_CODES`   | 允许访问管理端 API 的 client code，逗号分隔      | `iam-admin`        |
-| `ADMIN_ROLE_CODES`     | 允许访问管理端 API 的角色码，逗号分隔            | `iam:admin`        |
-| `SESSION_KERNEL_NAMESPACE` | Session Kernel Redis key namespace；需与公共 API 一致 | `sess:v2:` |
-| `SESSION_KERNEL_PRINCIPAL_IDLE_TTL_SECONDS` | PrincipalSession idle TTL（秒） | `86400` |
-| `SESSION_KERNEL_PRINCIPAL_ABSOLUTE_TTL_SECONDS` | PrincipalSession absolute TTL（秒） | `86400` |
-| `SESSION_KERNEL_TOMBSTONE_TTL_SECONDS` | Session Kernel tombstone 保留时间（秒） | `86400` |
-| `SESSION_KERNEL_TOMBSTONE_GRACE_SECONDS` | Session Kernel tombstone grace 时间（秒） | `300` |
-| `SESSION_LOOKUP_HMAC_CURRENT_ID` / `SESSION_LOOKUP_HMAC_CURRENT_SECRET` | 当前 Session lookup HMAC key；需与公共 API 一致 | 必填 |
-| `SESSION_LOOKUP_HMAC_PREVIOUS_ID` / `SESSION_LOOKUP_HMAC_PREVIOUS_SECRET` | 上一个 lookup HMAC key，用于轮换窗口 | 可选 |
+| `IAM_ADMIN_API_LOG_LEVEL`    | Pino 日志级别                               | `info`             |
+| `IAM_ADMIN_API_LOG_FORMAT`   | Pino 日志格式                               | `auto`             |
+| `IAM_ADMIN_API_PASSWORD_HASH_ROUNDS` | 密码哈希轮数                        | `10`               |
+| `IAM_ADMIN_API_ADMIN_CLIENT_CODES` | 允许访问管理端 API 的 client code，逗号分隔 | `iam-admin` |
+| `IAM_ADMIN_API_ADMIN_ROLE_CODES` | 允许访问管理端 API 的角色码，逗号分隔   | `iam:admin`        |
+| `IAM_ADMIN_API_SESSION_KERNEL_NAMESPACE` | Session Kernel Redis key namespace；需与公共 API 一致 | `sess:v2:` |
+| `IAM_ADMIN_API_SESSION_KERNEL_PRINCIPAL_IDLE_TTL_SECONDS` | PrincipalSession idle TTL（秒） | `86400` |
+| `IAM_ADMIN_API_SESSION_KERNEL_PRINCIPAL_ABSOLUTE_TTL_SECONDS` | PrincipalSession absolute TTL（秒） | `86400` |
+| `IAM_ADMIN_API_SESSION_KERNEL_TOMBSTONE_TTL_SECONDS` | Session Kernel tombstone 保留时间（秒） | `86400` |
+| `IAM_ADMIN_API_SESSION_KERNEL_TOMBSTONE_GRACE_SECONDS` | Session Kernel tombstone grace 时间（秒） | `300` |
+| `IAM_ADMIN_API_SESSION_LOOKUP_HMAC_CURRENT_ID` / `IAM_ADMIN_API_SESSION_LOOKUP_HMAC_CURRENT_SECRET` | 当前 Session lookup HMAC key；需与公共 API 一致 | 必填 |
+| `IAM_ADMIN_API_SESSION_LOOKUP_HMAC_PREVIOUS_ID` / `IAM_ADMIN_API_SESSION_LOOKUP_HMAC_PREVIOUS_SECRET` | 上一个 lookup HMAC key，用于轮换窗口 | 可选 |
 
 ### 管理后台（`apps/admin/.env.local`）
 
 | 变量名                      | 说明                       | 默认值           |
 | --------------------------- | -------------------------- | ---------------- |
 | `PORT`                      | Umi dev server 端口        | `8001`           |
-| `UMI_APP_API_PREFIX`        | 管理端 API 前缀            | `/api/iam`       |
-| `UMI_APP_SSO_AUTHORIZE_URL` | SSO 授权端点               | `/sso/authorize` |
-| `UMI_APP_SSO_LOGOUT_URL`    | SSO 登出端点               | `/sso/logout`    |
-| `UMI_APP_SSO_CLIENT_CODE`   | 当前应用注册的 client code | `iam-admin`      |
+| `UMI_APP_ADMIN_API_PREFIX`  | 管理端 API 前缀            | `/api/iam`       |
+| `UMI_APP_ADMIN_SSO_AUTHORIZE_URL` | SSO 授权端点         | `/sso/authorize` |
+| `UMI_APP_ADMIN_SSO_LOGOUT_URL` | SSO 登出端点            | `/sso/logout`    |
+| `UMI_APP_ADMIN_CLIENT_CODE` | 当前应用注册的 client code | `iam-admin`      |
 | `UMI_APP_ADMIN_ROLE_CODE`   | 允许访问后台的角色码       | `iam:admin`      |
-| `UMI_APP_GRAFANA_URL`       | Grafana 系统日志入口       | `http://localhost:30030` |
-| `UMI_APP_SYSTEM_LOG_ENV`    | Grafana dashboard 环境变量 | `dev`            |
+| `UMI_APP_ADMIN_GRAFANA_URL` | Grafana 系统日志入口       | `http://localhost:30030` |
+| `UMI_APP_ADMIN_SYSTEM_LOG_ENV` | Grafana dashboard 环境变量 | `dev`         |
 
 ### SSO 门户（`apps/sso/.env.local`）
 
 | 变量名                    | 说明                                                    | 默认值                                          |
 | ------------------------- | ------------------------------------------------------- | ----------------------------------------------- |
 | `PORT`                    | Umi dev server 端口                                     | `8000`                                          |
-| `UMI_APP_API_PREFIX`      | API 前缀；为空时使用同域相对路径                        | 空                                              |
+| `UMI_APP_SSO_API_PREFIX`  | API 前缀；为空时使用同域相对路径                        | 空                                              |
 | `UMI_APP_SSO_CLIENT_CODE` | SSO 客户端代码                                          | `iam`                                           |
-| `UMI_APP_WELL_KNOWN_URL`  | authentication configuration 端点                       | `/sso/.well-known/authentication-configuration` |
-| `UMI_APP_CAP_SITE_KEY`    | Cap 站点 key                                            | `iam-sso`                                       |
-| `UMI_APP_CAP_ENDPOINT`    | 内嵌 Cap challenge/redeem 端点                          | `/open/cap/iam-sso/`                            |
-| `UMI_APP_CAP_WASM_URL`    | 本地 Cap WASM 资源；避免浏览器请求 jsDelivr CDN         | `/portal/cap/cap_wasm_bg.wasm`                  |
-| `UMI_APP_CAP_PAKO_URL`    | 本地 pako fallback 资源；避免旧浏览器请求 jsDelivr CDN  | `/portal/cap/pako_inflate.min.js`               |
-| `UMI_APP_LOGIN_CREDENTIAL_KID` | 密码登录 SM2 公钥编号                                | `2026-05-primary`                               |
-| `UMI_APP_LOGIN_CREDENTIAL_PUBLIC_KEY` | 密码登录 SM2 公钥；与后端私钥映射匹配        | 必填                                            |
+| `UMI_APP_SSO_WELL_KNOWN_URL` | authentication configuration 端点                    | `/sso/.well-known/authentication-configuration` |
+| `UMI_APP_SSO_CAP_SITE_KEY` | Cap 站点 key                                           | `iam-sso`                                       |
+| `UMI_APP_SSO_CAP_ENDPOINT` | 内嵌 Cap challenge/redeem 端点                         | `/open/cap/iam-sso/`                            |
+| `UMI_APP_SSO_CAP_WASM_URL` | 本地 Cap WASM 资源；避免浏览器请求 jsDelivr CDN        | `/portal/cap/cap_wasm_bg.wasm`                  |
+| `UMI_APP_SSO_CAP_PAKO_URL` | 本地 pako fallback 资源；避免旧浏览器请求 jsDelivr CDN | `/portal/cap/pako_inflate.min.js`               |
+| `UMI_APP_SSO_LOGIN_CREDENTIAL_KID` | 密码登录 SM2 公钥编号                          | `2026-05-primary`                               |
+| `UMI_APP_SSO_LOGIN_CREDENTIAL_PUBLIC_KEY` | 密码登录 SM2 公钥；与后端私钥映射匹配 | 必填                                            |
 
-Cap 前端资源已放在 `apps/sso/public/cap/`，构建时会复制到 SSO 产物的 `cap/` 目录。生产环境若调整 `base` / `publicPath`，需要同步覆盖 `UMI_APP_CAP_WASM_URL` 和 `UMI_APP_CAP_PAKO_URL`。
+Cap 前端资源已放在 `apps/sso/public/cap/`，构建时会复制到 SSO 产物的 `cap/` 目录。生产环境若调整 `base` / `publicPath`，需要同步覆盖 `UMI_APP_SSO_CAP_WASM_URL` 和 `UMI_APP_SSO_CAP_PAKO_URL`。
 
 ## 📚 API 文档
 
@@ -531,7 +538,7 @@ OIDC 接入见 [docs/features/oidc/oidc-integration.md](docs/features/oidc/oidc-
 
 ## 🔧 调试与排障
 
-- 日志：`LOG_LEVEL` 控制 Pino 输出级别
+- 日志：`IAM_API_LOG_LEVEL`、`IAM_ADMIN_API_LOG_LEVEL` 或 `IAM_OIDC_PROVIDER_LOG_LEVEL` 控制 Pino 输出级别
 - API 调试：开发环境分别访问 <http://localhost:30000> 和 <http://localhost:30001>
 - 数据调试：Drizzle Kit 命令或直接连接本地 PostgreSQL
 - 前端代理：查看 `apps/admin/.umirc.ts` 和 `apps/sso/.umirc.ts`
