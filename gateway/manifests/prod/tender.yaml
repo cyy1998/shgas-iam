@@ -1,0 +1,164 @@
+service:
+  desc: Tender gateway app service
+  plugin_configs:
+    - key: api-ip-rate-limit
+      desc: Tender API IP smooth rate limit for production APISIX
+      plugins:
+        real-ip:
+          source: http_x_real_ip
+          trusted_addresses:
+            - ${TENCENT_NGINX_TRUSTED_CIDR}
+          recursive: true
+        limit-req:
+          rate: 10
+          burst: 20
+          rejected_code: 429
+          key_type: var
+          key: remote_addr
+          policy: local
+      labels:
+        template: api-ip-rate-limit
+upstreams:
+  - key: frontend
+    type: roundrobin
+    scheme: http
+    pass_host: pass
+    hash_on: vars
+    tls:
+      verify: false
+    nodes:
+      ${PROD_TENDER_FRONTEND_UPSTREAM_HOST}:${PROD_TENDER_FRONTEND_UPSTREAM_PORT}: 0
+  - key: frontend-external
+    type: roundrobin
+    scheme: http
+    pass_host: pass
+    hash_on: vars
+    tls:
+      verify: false
+    nodes:
+      ${PROD_TENDER_FRONTEND_EXTERNAL_UPSTREAM_HOST}:${PROD_TENDER_FRONTEND_EXTERNAL_UPSTREAM_PORT}: 0
+  - key: api
+    type: roundrobin
+    scheme: http
+    pass_host: pass
+    hash_on: vars
+    timeout:
+      connect: 300
+      read: 300
+      send: 300
+    tls:
+      verify: false
+    nodes:
+      ${PROD_TENDER_API_UPSTREAM_HOST}:${PROD_TENDER_API_UPSTREAM_PORT}: 0
+  - key: minio
+    type: roundrobin
+    scheme: http
+    pass_host: pass
+    hash_on: vars
+    timeout:
+      connect: 300
+      read: 300
+      send: 300
+    tls:
+      verify: false
+    nodes:
+      ${PROD_TENDER_MINIO_UPSTREAM_HOST}:${PROD_TENDER_MINIO_UPSTREAM_PORT}: 0
+routes:
+  - key: frontend
+    uris:
+      - /tender
+      - /tender/*
+      - /tender-portal
+      - /tender-portal/*
+    upstream: frontend
+  - key: frontend-external
+    hosts:
+      - tender.shgas.com.cn
+    uris:
+      - /tender
+      - /tender/*
+      - /tender-portal
+      - /tender-portal/*
+    upstream: frontend-external
+  - key: api
+    uri: /api/tender/*
+    plugins:
+      client-control:
+        max_body_size: 0
+      proxy-rewrite:
+        regex_uri:
+          - ^/api/tender/(.*)
+          - /$1
+        use_real_request_uri_unsafe: false
+      forward-auth:
+        uri: http://176.169.99.95/api/iam/auth/authz
+        allow_degradation: false
+        client_headers:
+          - Forbidden-Reason
+        keepalive: true
+        keepalive_pool: 5
+        keepalive_timeout: 60000
+        request_headers:
+          - Cookie
+          - Client
+          - Authorization
+        request_method: GET
+        ssl_verify: false
+        status_on_error: 403
+        timeout: 3000
+        upstream_headers:
+          - X-User-Info
+    upstream: api
+    plugin_config: api-ip-rate-limit
+  - key: thirdparty
+    uri: /thirdparty/tender/*
+    plugins:
+      client-control:
+        max_body_size: 0
+      proxy-rewrite:
+        regex_uri:
+          - ^/thirdparty/tender/(.*)
+          - /thirdparty/$1
+        use_real_request_uri_unsafe: false
+      forward-auth:
+        uri: http://176.169.99.95/api/iam/auth/internal-authz
+        allow_degradation: false
+        client_headers:
+          - Forbidden-Reason
+        keepalive: true
+        keepalive_pool: 5
+        keepalive_timeout: 60000
+        request_headers:
+          - apikey
+        request_method: GET
+        ssl_verify: false
+        status_on_error: 403
+        timeout: 3000
+        upstream_headers: {}
+    upstream: api
+    plugin_config: api-ip-rate-limit
+  - key: public
+    uris:
+      - /api/tender/public/*
+      - /api/tender/weaver/*
+    plugins:
+      client-control:
+        max_body_size: 0
+      proxy-rewrite:
+        regex_uri:
+          - ^/api/tender/(.*)
+          - /$1
+        use_real_request_uri_unsafe: false
+    upstream: api
+    plugin_config: api-ip-rate-limit
+  - key: minio
+    uri: /minio/*
+    plugins:
+      client-control:
+        max_body_size: 0
+      proxy-rewrite:
+        regex_uri:
+          - ^/api/tender/(.*)
+          - /$1
+        use_real_request_uri_unsafe: false
+    upstream: minio

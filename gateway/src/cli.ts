@@ -26,7 +26,7 @@ addRemoteOptions(addCommonOptions(program.command("apply")))
 function addCommonOptions(command: Command): Command {
   return command
     .option("--env <env:app>", "Manifest scope")
-    .option("--manifest-dir <path>", "Override manifest directory")
+    .option("--manifest <path>", "Override manifest file")
     .option("--env-file <path>", "Load env vars from a file and render ${VAR} placeholders")
     .option("--render-env", "Render ${VAR} placeholders from current environment")
     .option("--json", "Print machine-readable output");

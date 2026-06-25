@@ -1,0 +1,111 @@
+service:
+  desc: GDS gateway app service
+  plugin_configs:
+    - key: api-ip-rate-limit
+      desc: GDS API IP smooth rate limit for production APISIX
+      plugins:
+        real-ip:
+          source: http_x_real_ip
+          trusted_addresses:
+            - ${TENCENT_NGINX_TRUSTED_CIDR}
+          recursive: true
+        limit-req:
+          rate: 10
+          burst: 20
+          rejected_code: 429
+          key_type: var
+          key: remote_addr
+          policy: local
+      labels:
+        template: api-ip-rate-limit
+upstreams:
+  - key: frontend
+    type: roundrobin
+    scheme: http
+    pass_host: pass
+    hash_on: vars
+    tls:
+      verify: false
+    nodes:
+      ${PROD_GDS_FRONTEND_UPSTREAM_HOST}:${PROD_GDS_FRONTEND_UPSTREAM_PORT}: 0
+  - key: external-frontend
+    type: roundrobin
+    scheme: http
+    pass_host: pass
+    hash_on: vars
+    tls:
+      verify: false
+    nodes:
+      ${PROD_GDS_EXTERNAL_FRONTEND_UPSTREAM_HOST}:${PROD_GDS_EXTERNAL_FRONTEND_UPSTREAM_PORT}: 0
+  - key: api
+    type: roundrobin
+    scheme: http
+    pass_host: pass
+    hash_on: vars
+    timeout:
+      connect: 300
+      read: 300
+      send: 300
+    tls:
+      verify: false
+    nodes:
+      ${PROD_GDS_API_UPSTREAM_HOST}:${PROD_GDS_API_UPSTREAM_PORT}: 0
+  - key: dashboard
+    type: roundrobin
+    scheme: http
+    pass_host: pass
+    hash_on: vars
+    timeout:
+      connect: 300
+      read: 300
+      send: 300
+    tls:
+      verify: false
+    nodes:
+      ${PROD_GDS_DASHBOARD_UPSTREAM_HOST}:${PROD_GDS_DASHBOARD_UPSTREAM_PORT}: 0
+routes:
+  - key: frontend-root-redirect
+    uri: /data-platform
+    plugins:
+      redirect:
+        uri: /data-platform/
+        ret_code: 301
+    priority: 100
+    terminal: true
+  - key: frontend
+    uri: /data-platform/*
+    upstream: frontend
+  - key: external-frontend
+    uri: /data-platform/*
+    hosts:
+      - jsc.shgas.com.cn
+    upstream: external-frontend
+  - key: api
+    uri: /api/v1/*
+    plugins:
+      forward-auth:
+        uri: http://176.169.99.95/api/iam/auth/authz
+        allow_degradation: false
+        client_headers:
+          - Forbidden-Reason
+        keepalive: true
+        keepalive_pool: 5
+        keepalive_timeout: 60000
+        request_headers:
+          - Cookie
+          - Client
+        request_method: GET
+        ssl_verify: false
+        status_on_error: 403
+        timeout: 3000
+        upstream_headers:
+          - X-User-Info
+    upstream: api
+    plugin_config: api-ip-rate-limit
+  - key: no-login
+    uri: /api/v1/dashboard/oa_portal
+    upstream: api
+    plugin_config: api-ip-rate-limit
+  - key: dashboard
+    uri: /webroot/*
+    upstream: dashboard

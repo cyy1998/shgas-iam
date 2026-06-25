@@ -10,7 +10,6 @@ const commonCompare = {
 export const resourceDefinitions = [
   {
     kind: "upstreams",
-    fileName: "upstreams.yaml",
     topKey: "upstreams",
     endpoint: "upstreams",
     idFields: ["id"],
@@ -25,7 +24,6 @@ export const resourceDefinitions = [
   },
   {
     kind: "plugin_configs",
-    fileName: "plugin-configs.yaml",
     topKey: "plugin_configs",
     endpoint: "plugin_configs",
     idFields: ["id"],
@@ -35,7 +33,6 @@ export const resourceDefinitions = [
   },
   {
     kind: "services",
-    fileName: "services.yaml",
     topKey: "services",
     endpoint: "services",
     idFields: ["id"],
@@ -47,7 +44,6 @@ export const resourceDefinitions = [
   },
   {
     kind: "consumers",
-    fileName: "consumers.yaml",
     topKey: "consumers",
     endpoint: "consumers",
     idFields: ["username", "id"],
@@ -57,7 +53,6 @@ export const resourceDefinitions = [
   },
   {
     kind: "ssls",
-    fileName: "ssl.yaml",
     topKey: "ssls",
     endpoint: "ssls",
     idFields: ["id"],
@@ -67,7 +62,6 @@ export const resourceDefinitions = [
   },
   {
     kind: "routes",
-    fileName: "routes.yaml",
     topKey: "routes",
     endpoint: "routes",
     idFields: ["id"],

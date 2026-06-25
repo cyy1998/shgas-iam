@@ -1,0 +1,284 @@
+service:
+  desc: IAM gateway app service
+  plugin_configs:
+    - key: oidc-provider-ip-rate-limit
+      desc: IAM OIDC provider real IP and base rate limit for local development
+      plugins:
+        request-id:
+          header_name: X-Request-Id
+          include_in_response: true
+          algorithm: uuid
+        real-ip:
+          source: http_x_real_ip
+          trusted_addresses:
+            - 127.0.0.1/32
+          recursive: true
+        limit-req:
+          rate: 20
+          burst: 40
+          rejected_code: 429
+          key_type: var
+          key: remote_addr
+          policy: local
+      labels:
+        template: oidc-provider-ip-rate-limit
+    - key: api-ip-rate-limit
+      desc: IAM ordinary API IP smooth rate limit for local and dev APISIX
+      plugins:
+        request-id:
+          header_name: X-Request-Id
+          include_in_response: true
+          algorithm: uuid
+        real-ip:
+          source: http_x_real_ip
+          trusted_addresses:
+            - 127.0.0.1/32
+          recursive: true
+        limit-req:
+          rate: 10
+          burst: 20
+          rejected_code: 429
+          key_type: var
+          key: remote_addr
+          policy: local
+      labels:
+        template: api-ip-rate-limit
+    - key: sso-api-plugin
+      desc: IAM SSO API CORS, real IP and IP smooth rate limit for local and dev APISIX
+      plugins:
+        request-id:
+          header_name: X-Request-Id
+          include_in_response: true
+          algorithm: uuid
+        real-ip:
+          source: http_x_real_ip
+          trusted_addresses:
+            - 127.0.0.1/32
+          recursive: true
+        limit-req:
+          rate: 10
+          burst: 20
+          rejected_code: 429
+          key_type: var
+          key: remote_addr
+          policy: local
+        cors:
+          allow_credential: false
+          allow_headers: "*"
+          allow_methods: "*"
+          allow_origins: "*"
+          max_age: 5
+      labels:
+        template: sso-api-plugin
+    - key: internal-api-ip-rate-limit
+      desc: IAM internal API relaxed IP smooth rate limit for local and dev APISIX
+      plugins:
+        request-id:
+          header_name: X-Request-Id
+          include_in_response: true
+          algorithm: uuid
+        real-ip:
+          source: http_x_real_ip
+          trusted_addresses:
+            - 127.0.0.1/32
+          recursive: true
+        limit-req:
+          rate: 50
+          burst: 100
+          rejected_code: 429
+          key_type: var
+          key: remote_addr
+          policy: local
+      labels:
+        template: internal-api-ip-rate-limit
+upstreams:
+  - key: api
+    desc: IAM public API upstream for local development
+    type: roundrobin
+    scheme: http
+    pass_host: pass
+    nodes:
+      ${DEV_IAM_API_UPSTREAM_HOST}:${DEV_IAM_API_UPSTREAM_PORT}: 1
+  - key: admin-api
+    desc: IAM admin API upstream for local development
+    type: roundrobin
+    scheme: http
+    pass_host: pass
+    nodes:
+      ${DEV_IAM_ADMIN_API_UPSTREAM_HOST}:${DEV_IAM_ADMIN_API_UPSTREAM_PORT}: 1
+  - key: oidc-provider
+    desc: IAM OIDC provider upstream for local development
+    type: roundrobin
+    scheme: http
+    pass_host: pass
+    nodes:
+      ${DEV_IAM_OIDC_PROVIDER_UPSTREAM_HOST}:${DEV_IAM_OIDC_PROVIDER_UPSTREAM_PORT}: 1
+  - key: sso-frontend
+    desc: IAM SSO frontend nginx upstream for local development
+    type: roundrobin
+    scheme: http
+    pass_host: pass
+    nodes:
+      ${DEV_IAM_SSO_FRONTEND_UPSTREAM_HOST}:${DEV_IAM_SSO_FRONTEND_UPSTREAM_PORT}: 1
+  - key: admin-frontend
+    desc: IAM admin frontend nginx upstream for local development
+    type: roundrobin
+    scheme: http
+    pass_host: pass
+    nodes:
+      ${DEV_IAM_ADMIN_FRONTEND_UPSTREAM_HOST}:${DEV_IAM_ADMIN_FRONTEND_UPSTREAM_PORT}: 1
+routes:
+  - key: root-redirect
+    desc: Redirect IAM gateway root to SSO login
+    uri: /
+    plugins:
+      request-id:
+        header_name: X-Request-Id
+        include_in_response: true
+        algorithm: uuid
+      redirect:
+        uri: /portal/login
+        ret_code: 302
+    priority: 100
+    terminal: true
+  - key: sso-frontend
+    desc: IAM SSO frontend through APISIX
+    uris:
+      - /portal
+      - /portal/*
+    plugins:
+      request-id:
+        header_name: X-Request-Id
+        include_in_response: true
+        algorithm: uuid
+    upstream: sso-frontend
+  - key: admin-frontend
+    desc: IAM admin frontend through APISIX
+    uris:
+      - /iam-admin
+      - /iam-admin/*
+    plugins:
+      request-id:
+        header_name: X-Request-Id
+        include_in_response: true
+        algorithm: uuid
+    upstream: admin-frontend
+  - key: oidc-provider
+    desc: IAM OIDC provider through same-origin /oidc issuer
+    uris:
+      - /oidc
+      - /oidc/*
+    plugins:
+      proxy-rewrite:
+        headers:
+          set:
+            X-Forwarded-Host: $http_host
+            X-Forwarded-Proto: $scheme
+        use_real_request_uri_unsafe: false
+    priority: 200
+    upstream: oidc-provider
+    plugin_config: oidc-provider-ip-rate-limit
+  - key: public
+    desc: IAM public tier through APISIX with /api/iam prefix
+    uri: /api/iam/public/*
+    plugins:
+      prometheus:
+        prefer_name: true
+      proxy-rewrite:
+        regex_uri:
+          - ^/api/iam/(.*)
+          - /$1
+        use_real_request_uri_unsafe: false
+    upstream: api
+    plugin_config: api-ip-rate-limit
+  - key: open
+    desc: IAM open tier through APISIX with /api/iam prefix
+    uri: /api/iam/open/*
+    plugins:
+      prometheus:
+        prefer_name: true
+      proxy-rewrite:
+        regex_uri:
+          - ^/api/iam/(.*)
+          - /$1
+        use_real_request_uri_unsafe: false
+    upstream: api
+    plugin_config: api-ip-rate-limit
+  - key: internal
+    desc: IAM internal tier through APISIX with /api/iam prefix
+    uri: /api/iam/internal/*
+    plugins:
+      prometheus:
+        prefer_name: true
+      proxy-rewrite:
+        regex_uri:
+          - ^/api/iam/(.*)
+          - /$1
+        use_real_request_uri_unsafe: false
+    upstream: api
+    plugin_config: internal-api-ip-rate-limit
+  - key: sso-external
+    desc: IAM SSO tier through external dev host
+    uri: /sso/*
+    hosts:
+      - ${IAM_SSO_EXTERNAL_HOST}
+    plugins:
+      prometheus:
+        prefer_name: true
+      proxy-rewrite:
+        headers:
+          set:
+            X-IAM-Entry-Network: external
+        use_real_request_uri_unsafe: false
+    upstream: api
+    plugin_config: sso-api-plugin
+  - key: sso-internal
+    desc: IAM SSO tier through internal dev host
+    uri: /sso/*
+    hosts:
+      - ${IAM_SSO_INTERNAL_HOST}
+    plugins:
+      prometheus:
+        prefer_name: true
+      proxy-rewrite:
+        headers:
+          set:
+            X-IAM-Entry-Network: internal
+        use_real_request_uri_unsafe: false
+    upstream: api
+    plugin_config: sso-api-plugin
+  - key: auth
+    desc: IAM auth tier through APISIX with /api/iam prefix
+    uri: /api/iam/auth/*
+    plugins:
+      prometheus:
+        prefer_name: true
+      proxy-rewrite:
+        regex_uri:
+          - ^/api/iam/(.*)
+          - /$1
+        use_real_request_uri_unsafe: false
+    upstream: api
+    plugin_config: api-ip-rate-limit
+  - key: admin-rest
+    desc: IAM admin REST tier through APISIX with /api/iam prefix
+    uri: /api/iam/admin/*
+    plugins:
+      proxy-rewrite:
+        regex_uri:
+          - ^/api/iam/(.*)
+          - /$1
+        use_real_request_uri_unsafe: false
+    upstream: admin-api
+    plugin_config: api-ip-rate-limit
+  - key: admin-rpc
+    desc: IAM admin RPC tier through APISIX with /api/iam prefix
+    uri: /api/iam/rpc/*
+    plugins:
+      proxy-rewrite:
+        regex_uri:
+          - ^/api/iam/(.*)
+          - /$1
+        use_real_request_uri_unsafe: false
+    upstream: admin-api
+    plugin_config: api-ip-rate-limit

@@ -1,5 +1,4 @@
-import type { LoadedManifest, ResourceKind, ValidationIssue } from "../types";
-import path from "node:path";
+import type { LoadedManifest, ManifestObject, ResourceKind, ValidationIssue } from "../types";
 import { isRecord } from "../manifest";
 import { getLabel, isRepoManaged, ownershipPolicy, validateResourceScope } from "../ownership-policy";
 import { getResourceId, resourceDefinitions } from "../resources";
@@ -7,6 +6,7 @@ import { getResourceId, resourceDefinitions } from "../resources";
 type Validator = (manifest: LoadedManifest) => ValidationIssue[];
 
 const validators: Validator[] = [
+  validateSourceSchema,
   validateIds,
   validateOwnershipLabels,
   validateScopeLabels,
@@ -26,8 +26,202 @@ const knownNonSecretKeyPaths = [
   ".plugins.prometheus.prefer_name",
 ];
 
+const generatedSourceFields = ["id", "name", "service_id", "upstream_id", "plugin_config_id"];
+const reservedSourceLabels = ["managed_by", "source", "env", "app"];
+const localKeyPattern = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
+
 export function validateManifest(manifest: LoadedManifest): ValidationIssue[] {
   return validators.flatMap(validator => validator(manifest));
+}
+
+function validateSourceSchema(manifest: LoadedManifest): ValidationIssue[] {
+  const issues: ValidationIssue[] = [];
+  const source = manifest.source;
+  const service = source.service;
+  const serviceIsRecord = isRecord(service);
+
+  if (!serviceIsRecord) {
+    issues.push({
+      file: manifest.manifest,
+      path: "service",
+      message: "source manifest must contain exactly one service object",
+    });
+  }
+
+  if (Object.hasOwn(source, "plugin_configs")) {
+    issues.push({
+      file: manifest.manifest,
+      path: "plugin_configs",
+      message: "top-level plugin_configs are not allowed; use service.plugin_configs",
+    });
+  }
+
+  if (serviceIsRecord) {
+    validateGeneratedFields(manifest.manifest, "service", service, issues);
+    validateReservedLabels(manifest.manifest, "service", service, issues);
+  }
+
+  for (const sourceList of getSourceLists(manifest)) {
+    validateLocalKeys(manifest.manifest, sourceList.path, sourceList.items, issues);
+    for (const [index, item] of sourceList.items.entries()) {
+      const basePath = `${sourceList.path}[${index}]`;
+      validateGeneratedFields(manifest.manifest, basePath, item, issues);
+      validateReservedLabels(manifest.manifest, basePath, item, issues);
+    }
+  }
+
+  validateRouteSourceReferences(manifest, issues);
+
+  return issues;
+}
+
+function validateLocalKeys(
+  file: string,
+  sourcePath: string,
+  items: ManifestObject[],
+  issues: ValidationIssue[],
+): void {
+  const seen = new Map<string, number>();
+
+  for (const [index, item] of items.entries()) {
+    const key = item.key;
+    const keyPath = `${sourcePath}[${index}].key`;
+
+    if (typeof key !== "string") {
+      issues.push({
+        file,
+        path: keyPath,
+        message: `${sourcePath}[${index}] must declare a string key`,
+      });
+      continue;
+    }
+
+    if (!localKeyPattern.test(key)) {
+      issues.push({
+        file,
+        path: keyPath,
+        message: `key ${key} must be a kebab-case segment`,
+      });
+    }
+
+    const previous = seen.get(key);
+    if (previous !== undefined) {
+      issues.push({
+        file,
+        path: keyPath,
+        message: `duplicate ${sourcePath} key ${key}; first declared at ${sourcePath}[${previous}].key`,
+      });
+      continue;
+    }
+
+    seen.set(key, index);
+  }
+}
+
+function validateGeneratedFields(
+  file: string,
+  basePath: string,
+  resource: ManifestObject,
+  issues: ValidationIssue[],
+): void {
+  for (const field of generatedSourceFields) {
+    if (Object.hasOwn(resource, field)) {
+      issues.push({
+        file,
+        path: `${basePath}.${field}`,
+        message: `${field} is generated and must not be declared in source manifests`,
+      });
+    }
+  }
+}
+
+function validateReservedLabels(
+  file: string,
+  basePath: string,
+  resource: ManifestObject,
+  issues: ValidationIssue[],
+): void {
+  if (!isRecord(resource.labels)) {
+    return;
+  }
+
+  for (const label of reservedSourceLabels) {
+    if (Object.hasOwn(resource.labels, label)) {
+      issues.push({
+        file,
+        path: `${basePath}.labels.${label}`,
+        message: `reserved label ${label} cannot be overridden in source manifests`,
+      });
+    }
+  }
+}
+
+function validateRouteSourceReferences(manifest: LoadedManifest, issues: ValidationIssue[]): void {
+  const upstreamKeys = new Set(
+    getSourceListItems(manifest.source.upstreams)
+      .map(item => item.key)
+      .filter((key): key is string => typeof key === "string"),
+  );
+  const pluginConfigKeys = new Set(
+    getSourceListItems(isRecord(manifest.source.service) ? manifest.source.service.plugin_configs : undefined)
+      .map(item => item.key)
+      .filter((key): key is string => typeof key === "string"),
+  );
+
+  for (const [index, route] of getSourceListItems(manifest.source.routes).entries()) {
+    const routeKey = typeof route.key === "string" ? route.key : `routes[${index}]`;
+
+    if (route.terminal !== true) {
+      if (typeof route.upstream !== "string") {
+        issues.push({
+          file: manifest.manifest,
+          path: `routes[${index}].upstream`,
+          message: `${routeKey} must declare upstream unless terminal is true`,
+        });
+      }
+      else if (!upstreamKeys.has(route.upstream)) {
+        issues.push({
+          file: manifest.manifest,
+          path: `routes[${index}].upstream`,
+          message: `${routeKey} references missing upstream ${route.upstream}`,
+        });
+      }
+    }
+
+    if (route.plugin_config !== undefined) {
+      if (typeof route.plugin_config !== "string") {
+        issues.push({
+          file: manifest.manifest,
+          path: `routes[${index}].plugin_config`,
+          message: `${routeKey} plugin_config must reference a service.plugin_configs key`,
+        });
+      }
+      else if (!pluginConfigKeys.has(route.plugin_config)) {
+        issues.push({
+          file: manifest.manifest,
+          path: `routes[${index}].plugin_config`,
+          message: `${routeKey} references missing service plugin_config ${route.plugin_config}`,
+        });
+      }
+    }
+  }
+}
+
+function getSourceLists(manifest: LoadedManifest): Array<{ path: string; items: ManifestObject[] }> {
+  return [
+    { path: "upstreams", items: getSourceListItems(manifest.source.upstreams) },
+    { path: "routes", items: getSourceListItems(manifest.source.routes) },
+    {
+      path: "service.plugin_configs",
+      items: getSourceListItems(isRecord(manifest.source.service) ? manifest.source.service.plugin_configs : undefined),
+    },
+    { path: "consumers", items: getSourceListItems(manifest.source.consumers) },
+    { path: "ssls", items: getSourceListItems(manifest.source.ssls) },
+  ];
+}
+
+function getSourceListItems(value: unknown): ManifestObject[] {
+  return Array.isArray(value) ? value.filter(isRecord) : [];
 }
 
 function validateIds(manifest: LoadedManifest): ValidationIssue[] {
@@ -35,7 +229,7 @@ function validateIds(manifest: LoadedManifest): ValidationIssue[] {
 
   for (const definition of resourceDefinitions) {
     const ids = new Set<string>();
-    const file = path.join(manifest.manifestDir, definition.fileName);
+    const file = manifest.manifest;
 
     for (const [index, resource] of manifest.resources[definition.kind].entries()) {
       const basePath = `${definition.topKey}[${index}]`;
@@ -68,7 +262,7 @@ function validateOwnershipLabels(manifest: LoadedManifest): ValidationIssue[] {
   const issues: ValidationIssue[] = [];
 
   for (const definition of resourceDefinitions) {
-    const file = path.join(manifest.manifestDir, definition.fileName);
+    const file = manifest.manifest;
     for (const [index, resource] of manifest.resources[definition.kind].entries()) {
       const basePath = `${definition.topKey}[${index}]`;
 
@@ -97,7 +291,7 @@ function validateScopeLabels(manifest: LoadedManifest): ValidationIssue[] {
   const issues: ValidationIssue[] = [];
 
   for (const definition of resourceDefinitions) {
-    const file = path.join(manifest.manifestDir, definition.fileName);
+    const file = manifest.manifest;
     for (const [index, resource] of manifest.resources[definition.kind].entries()) {
       validateResourceScope(file, `${definition.topKey}[${index}]`, resource, manifest.scope, issues);
     }
@@ -122,7 +316,7 @@ function validateReferences(manifest: LoadedManifest): ValidationIssue[] {
   }
 
   for (const definition of resourceDefinitions) {
-    const file = path.join(manifest.manifestDir, definition.fileName);
+    const file = manifest.manifest;
     for (const [index, resource] of manifest.resources[definition.kind].entries()) {
       const ownerId = getResourceId(definition, resource) ?? `${definition.topKey}[${index}]`;
 
@@ -151,7 +345,7 @@ function validateSensitiveValues(manifest: LoadedManifest): ValidationIssue[] {
   const issues: ValidationIssue[] = [];
 
   for (const definition of resourceDefinitions) {
-    const file = path.join(manifest.manifestDir, definition.fileName);
+    const file = manifest.manifest;
     for (const [index, resource] of manifest.resources[definition.kind].entries()) {
       collectSensitiveIssues(file, `${definition.topKey}[${index}]`, resource, issues);
     }
@@ -164,7 +358,7 @@ function validateTrustedProxy(manifest: LoadedManifest): ValidationIssue[] {
   const issues: ValidationIssue[] = [];
 
   for (const definition of resourceDefinitions) {
-    const file = path.join(manifest.manifestDir, definition.fileName);
+    const file = manifest.manifest;
     for (const [index, resource] of manifest.resources[definition.kind].entries()) {
       collectTrustedProxyIssues(file, `${definition.topKey}[${index}]`, resource, issues);
     }
@@ -189,7 +383,7 @@ function validateIamLoggingPolicy(manifest: LoadedManifest): ValidationIssue[] {
     const routeId = typeof route.id === "string" ? route.id : `routes[${index}]`;
     const routePlugins = getPlugins(route);
     collectForbiddenLoggerPluginIssues(
-      path.join(manifest.manifestDir, "routes.yaml"),
+      manifest.manifest,
       `routes[${index}].plugins`,
       routePlugins,
       issues,
@@ -200,7 +394,7 @@ function validateIamLoggingPolicy(manifest: LoadedManifest): ValidationIssue[] {
       : undefined;
     if (!hasPlugin(routePlugins, "request-id") && !hasPlugin(getPlugins(pluginConfig), "request-id")) {
       issues.push({
-        file: path.join(manifest.manifestDir, "routes.yaml"),
+        file: manifest.manifest,
         path: `routes[${index}]`,
         message: `${routeId} must enable request-id through route plugins or plugin_config_id`,
       });
@@ -209,7 +403,7 @@ function validateIamLoggingPolicy(manifest: LoadedManifest): ValidationIssue[] {
 
   for (const [index, pluginConfig] of manifest.resources.plugin_configs.entries()) {
     collectForbiddenLoggerPluginIssues(
-      path.join(manifest.manifestDir, "plugin-configs.yaml"),
+      manifest.manifest,
       `plugin_configs[${index}].plugins`,
       getPlugins(pluginConfig),
       issues,

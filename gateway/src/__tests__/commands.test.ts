@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from "bun:test";
 import { runValidate } from "../commands";
-import { createManifestDir, createReporter, repoObject } from "./test-helpers";
+import { createManifestFile, createReporter, sourceRoute, sourceUpstream } from "./test-helpers";
 
 const originalManifestEnv = process.env.APISIX_MANIFEST_ENV;
 
@@ -32,11 +32,12 @@ describe("apisix sync commands", () => {
 
   it("uses APISIX_MANIFEST_ENV fallback", async () => {
     process.env.APISIX_MANIFEST_ENV = "test:iam";
-    const manifestDir = await createManifestDir({
+    const manifest = await createManifestFile({
+      upstreams: [
+        sourceUpstream(),
+      ],
       routes: [
-        repoObject({
-          id: "route-a",
-          uri: "/a/*",
+        sourceRoute({
           plugins: {
             "request-id": {
               header_name: "X-Request-Id",
@@ -48,7 +49,7 @@ describe("apisix sync commands", () => {
     });
     const { reporter, logs } = createReporter();
 
-    await runValidate({ manifestDir }, { reporter });
+    await runValidate({ manifest }, { reporter });
 
     expect(logs.at(0)).toBe("APISIX manifest validation passed for env=test:iam");
   });

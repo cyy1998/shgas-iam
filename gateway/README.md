@@ -17,31 +17,15 @@ gateway/
     config.prod.example.yaml
   manifests/
     dev/
-      iam/
-        routes.yaml
-        upstreams.yaml
-        services.yaml
-        plugin-configs.yaml
-        consumers.yaml
-        ssl.yaml
-      tender/
-        routes.yaml
-        upstreams.yaml
-        services.yaml
-        plugin-configs.yaml
-        consumers.yaml
-        ssl.yaml
-      gds/
-        routes.yaml
-        upstreams.yaml
-        services.yaml
-        plugin-configs.yaml
-        consumers.yaml
-        ssl.yaml
+      iam.yaml
+      tender.yaml
+      gds.yaml
     prod/
-      iam/
-      tender/
-      gds/
+      iam.yaml
+      tender.yaml
+      gds.yaml
+  .env.example
+  package.json
   src/
     cli.ts
     commands.ts
@@ -50,11 +34,54 @@ gateway/
     validators/
 ```
 
-manifest 采用 `<env>/<app>/` 两级目录。`dev:iam` manifest 用于本地 IAM 基线；`prod:iam` 是生产 IAM 基线示例，生产地址、证书和密钥引用必须在部署环境中替换或注入。`prod:tender`、`prod:gds`、`dev:tender`、`dev:gds` 存放对应业务系统的 APISIX 配置。
+manifest 采用 app-centric 单文件源结构：`gateway/manifests/<env>/<app>.yaml`。`dev:iam` manifest 用于本地 IAM 基线；`prod:iam` 是生产 IAM 基线示例，生产地址、证书和密钥引用必须在部署环境中替换或注入。`prod:tender`、`prod:gds`、`dev:tender`、`dev:gds` 存放对应业务系统的 APISIX 配置。
+
+推荐文件内顺序为：
+
+```text
+service
+upstreams
+routes
+consumers
+ssls
+```
+
+源 manifest 使用本地 `key`，同步工具 materialize 时生成 APISIX 平级 resources：
+
+```yaml
+service:
+  desc: Tender gateway app service
+  plugin_configs:
+    - key: api-ip-rate-limit
+      plugins:
+        limit-req:
+          rate: 10
+          burst: 20
+
+upstreams:
+  - key: api
+    nodes:
+      ${DEV_TENDER_API_UPSTREAM_HOST}:${DEV_TENDER_API_UPSTREAM_PORT}: 1
+
+routes:
+  - key: api
+    uri: /api/tender/*
+    upstream: api
+    plugin_config: api-ip-rate-limit
+```
+
+生成规则：
+
+- app service 的 `id` / `name` 为 `<app>.<env>`，例如 `tender.dev`。
+- route、upstream、service plugin_config 的 `id` / `name` 为 `<app>.<key>.<env>`，例如 `tender.api.dev`。
+- 非 terminal route 必须声明 `upstream: <key>`；同步工具会注入 `service_id` 和 `upstream_id`。
+- route 通过 `plugin_config: <key>` 引用同一文件内的 `service.plugin_configs`。
+- `terminal: true` route 不会注入 `service_id` / `upstream_id`，适用于 redirect 等不转发路由。
+- 源文件不得手写 `id`、`name`、`service_id`、`upstream_id`、`plugin_config_id`。
 
 ## 来源标签
 
-仓库基线对象必须包含：
+同步工具会为每个 materialized APISIX 对象自动注入基础标签：
 
 ```yaml
 labels:
@@ -62,6 +89,20 @@ labels:
   source: repo-manifest
   env: prod
   app: iam
+```
+
+源 manifest 可以声明业务自定义 label，但不能覆盖 `managed_by`、`source`、`env`、`app`：
+
+```yaml
+service:
+  desc: IAM gateway app service
+  labels:
+    owner: platform
+  plugin_configs:
+    - key: api-ip-rate-limit
+      labels:
+        template: api-ip-rate-limit
+      plugins: {}
 ```
 
 IAM 动态注册对象必须使用独立来源：
@@ -93,6 +134,12 @@ pnpm gateway:apisix:validate -- --env prod:tender
 pnpm gateway:apisix:validate -- --env prod:gds
 pnpm --filter @iam/gateway-apisix validate -- --env dev:iam
 APISIX_MANIFEST_ENV=dev:iam pnpm gateway:apisix:validate
+```
+
+使用非默认 manifest 文件：
+
+```bash
+pnpm gateway:apisix:validate -- --env dev:iam --manifest ./manifests/dev/iam.yaml
 ```
 
 查看与远端 APISIX 的差异：
@@ -150,7 +197,7 @@ IAM_SSO_INTERNAL_HOST=iam.internal.example.com
 IAM_SSO_CORS_ALLOW_ORIGINS=https://iam.example.com
 ```
 
-上游节点统一在 `manifests/<env>/<app>/upstreams.yaml` 中声明，并通过
+上游节点统一在 `manifests/<env>/<app>.yaml` 的 `upstreams` 中声明，并通过
 `<ENV>_<APP>_<UPSTREAM>_UPSTREAM_HOST` / `<ENV>_<APP>_<UPSTREAM>_UPSTREAM_PORT`
 占位符配置；完整示例见 `gateway/.env.example`。
 
@@ -231,6 +278,16 @@ pnpm gateway:apisix:validate -- --env prod:gds --env-file .env.prod
 
 生产发布前还必须执行 `diff` 和 `apply --dry-run`，确认渲染后的 `${TENCENT_NGINX_TRUSTED_CIDR}` 不是全网段，并复核 SSO CORS、`forward-auth`、`proxy-rewrite` 等既有 route 插件没有被改写。
 
+本次 app-centric manifest 迁移会将 repo-managed 对象从旧 kebab id 重命名为 dot id。首次发布迁移时必须显式启用 prune：
+
+```bash
+pnpm gateway:apisix:diff -- --env <env>:<app> --env-file .env.prod
+pnpm gateway:apisix:apply -- --env <env>:<app> --env-file .env.prod --dry-run --prune
+pnpm gateway:apisix:apply -- --env <env>:<app> --env-file .env.prod --prune
+```
+
+迁移 dry-run 中看到新 dot id 对象 create/update、旧 kebab id 对象 delete 是预期结果；不带 `--prune` 的 apply 不会删除旧对象。
+
 ## 生产发布
 
 生产配置要求：
@@ -246,12 +303,12 @@ pnpm gateway:apisix:validate -- --env prod:gds --env-file .env.prod
 
 发布流程：
 
-1. 修改 `gateway/manifests/<env>/<app>/` 中的对象。
+1. 修改 `gateway/manifests/<env>/<app>.yaml` 中的对象。
 2. 准备生产环境变量文件，例如 `.env.prod`。
 3. 运行 `pnpm gateway:apisix:validate -- --env <env>:<app> --env-file .env.prod`。
 4. 运行 `pnpm gateway:apisix:diff -- --env <env>:<app> --env-file .env.prod` 检查远端差异。
-5. 运行 `pnpm gateway:apisix:apply -- --env <env>:<app> --env-file .env.prod --dry-run`。
-6. 运行 `pnpm gateway:apisix:apply -- --env <env>:<app> --env-file .env.prod`。
+5. 运行 `pnpm gateway:apisix:apply -- --env <env>:<app> --env-file .env.prod --dry-run`。首次 dot id 迁移发布时使用 `--dry-run --prune`。
+6. 运行 `pnpm gateway:apisix:apply -- --env <env>:<app> --env-file .env.prod`。首次 dot id 迁移发布时使用 `--prune`。
 7. 提交 Git review。
 8. 合并后由部署流程执行 `apply`。
 
@@ -279,7 +336,7 @@ pnpm gateway:apisix:apply -- --env prod:iam --env-file .env.prod --admin-url htt
 
 ## 第三方业务应用动态注册
 
-业务应用实例可以按 app 目录纳入 Git manifest，也可以由 IAM 运行时管理：
+业务应用实例可以按 app manifest 纳入 Git manifest，也可以由 IAM 运行时管理：
 
 ```text
 第三方应用申请

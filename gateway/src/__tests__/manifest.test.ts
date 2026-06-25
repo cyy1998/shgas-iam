@@ -5,22 +5,23 @@ import { parse as parseYaml } from "yaml";
 import { renderEnvPlaceholders } from "../env";
 import { loadManifest } from "../manifest";
 import { validateManifest } from "../validators";
-import { createManifestDir, repoObject } from "./test-helpers";
+import { createManifestFile, sourcePluginConfig, sourceRoute, sourceUpstream } from "./test-helpers";
 
 function getSsoRoutes(manifest: Awaited<ReturnType<typeof loadManifest>>) {
   return manifest.resources.routes.filter(route => route.uri === "/sso/*");
 }
 
 function expectRootRedirectToSsoLogin(manifest: Awaited<ReturnType<typeof loadManifest>>) {
-  const route = manifest.resources.routes.find(route => route.id === `iam-root-redirect-${manifest.scope.env}`);
+  const route = manifest.resources.routes.find(route => route.id === `iam.root-redirect.${manifest.scope.env}`);
   const redirect = (route?.plugins as Record<string, unknown> | undefined)?.redirect;
 
   expect(route).toMatchObject({
-    name: `iam-root-redirect-${manifest.scope.env}`,
+    name: `iam.root-redirect.${manifest.scope.env}`,
     uri: "/",
     priority: 100,
-    status: 1,
   });
+  expect(route).not.toHaveProperty("service_id");
+  expect(route).not.toHaveProperty("upstream_id");
   expect(redirect).toEqual({
     uri: "/portal/login",
     ret_code: 302,
@@ -37,15 +38,16 @@ function expectSsoRoutesClassifyEntryNetwork(manifest: Awaited<ReturnType<typeof
 
   expect(routes).toHaveLength(2);
   expect(routes.map(route => route.hosts).flat().sort()).toEqual([...hosts].sort());
-  expect(routes.every(route => route.service_id === `iam-api-${manifest.scope.env}`)).toBe(true);
-  expect(routes.every(route => route.plugin_config_id === `iam-sso-api-plugin-${manifest.scope.env}`)).toBe(true);
-  expect(routes.some(route => route.id === `iam-sso-${manifest.scope.env}`)).toBe(false);
+  expect(routes.every(route => route.service_id === `iam.${manifest.scope.env}`)).toBe(true);
+  expect(routes.every(route => route.upstream_id === `iam.api.${manifest.scope.env}`)).toBe(true);
+  expect(routes.every(route => route.plugin_config_id === `iam.sso-api-plugin.${manifest.scope.env}`)).toBe(true);
+  expect(routes.some(route => route.id === `iam.sso.${manifest.scope.env}`)).toBe(false);
   expect(routes.some(route => route.hosts === undefined)).toBe(false);
   expect(routes.map(route => getEntryNetwork(route)?.["X-IAM-Entry-Network"]).sort()).toEqual(["external", "internal"]);
   expect(routes.every(route => (route.plugins as Record<string, unknown> | undefined)?.cors === undefined)).toBe(true);
 
   const ssoPluginConfig = manifest.resources.plugin_configs.find(
-    config => config.id === `iam-sso-api-plugin-${manifest.scope.env}`,
+    config => config.id === `iam.sso-api-plugin.${manifest.scope.env}`,
   );
   expect(ssoPluginConfig?.plugins).toMatchObject({
     "request-id": expect.objectContaining({
@@ -97,19 +99,19 @@ describe("apisix manifest validation", () => {
     const manifest = await loadManifest("prod:iam", undefined, {
       renderEnv: true,
       env: {
-        IAM_ADMIN_API_UPSTREAM_HOST: "iam-admin-api.internal",
-        IAM_ADMIN_API_UPSTREAM_PORT: "30001",
-        IAM_ADMIN_FRONTEND_UPSTREAM_HOST: "iam-admin.internal",
-        IAM_ADMIN_FRONTEND_UPSTREAM_PORT: "80",
-        IAM_API_UPSTREAM_HOST: "iam-api.internal",
-        IAM_API_UPSTREAM_PORT: "30000",
-        IAM_OIDC_PROVIDER_UPSTREAM_HOST: "iam-oidc-provider.internal",
-        IAM_OIDC_PROVIDER_UPSTREAM_PORT: "30002",
         IAM_SSO_CORS_ALLOW_ORIGINS: "https://iam.example.com",
         IAM_SSO_EXTERNAL_HOST: "iam.example.com",
-        IAM_SSO_FRONTEND_UPSTREAM_HOST: "iam-sso.internal",
-        IAM_SSO_FRONTEND_UPSTREAM_PORT: "80",
         IAM_SSO_INTERNAL_HOST: "iam.internal.example.com",
+        PROD_IAM_ADMIN_API_UPSTREAM_HOST: "iam-admin-api.internal",
+        PROD_IAM_ADMIN_API_UPSTREAM_PORT: "30001",
+        PROD_IAM_ADMIN_FRONTEND_UPSTREAM_HOST: "iam-admin.internal",
+        PROD_IAM_ADMIN_FRONTEND_UPSTREAM_PORT: "80",
+        PROD_IAM_API_UPSTREAM_HOST: "iam-api.internal",
+        PROD_IAM_API_UPSTREAM_PORT: "30000",
+        PROD_IAM_OIDC_PROVIDER_UPSTREAM_HOST: "iam-oidc-provider.internal",
+        PROD_IAM_OIDC_PROVIDER_UPSTREAM_PORT: "30002",
+        PROD_IAM_SSO_FRONTEND_UPSTREAM_HOST: "iam-sso.internal",
+        PROD_IAM_SSO_FRONTEND_UPSTREAM_PORT: "80",
         TENCENT_NGINX_TRUSTED_CIDR: "10.0.0.0/24",
       },
     });
@@ -122,12 +124,111 @@ describe("apisix manifest validation", () => {
     ]);
   });
 
-  it("loads app-scoped manifests from env:app directories", async () => {
+  it("loads app-scoped manifests from env:app single files", async () => {
     const manifest = await loadManifest("prod:tender");
 
-    expect(manifest.manifestDir.endsWith("gateway/manifests/prod/tender")).toBe(true);
+    expect(manifest.manifest.endsWith("gateway/manifests/prod/tender.yaml")).toBe(true);
     expect(validateManifest(manifest)).toEqual([]);
-    expect(manifest.resources.services.map(service => service.name)).toContain("tender-api-prod");
+    expect(manifest.resources.services).toHaveLength(1);
+    expect(manifest.resources.services.at(0)).toMatchObject({
+      id: "tender.prod",
+      name: "tender.prod",
+    });
+    expect(manifest.resources.services.at(0)).not.toHaveProperty("upstream_id");
+  });
+
+  it("rejects old app manifest directories passed as overrides", async () => {
+    await expect(
+      loadManifest("prod:tender", path.join(process.cwd(), "manifests", "prod")),
+    ).rejects.toThrow();
+  });
+
+  it("materializes local keys into dot ids, references, labels, and terminal routes", async () => {
+    const manifest = await loadManifest("test:iam", await createManifestFile({
+      service: {
+        labels: {
+          team: "platform",
+        },
+      },
+      upstreams: [
+        sourceUpstream({
+          key: "api",
+          labels: {
+            tier: "backend",
+          },
+        }),
+      ],
+      plugin_configs: [
+        sourcePluginConfig({
+          key: "api-plugin",
+          labels: {
+            template: "api-plugin",
+          },
+        }),
+      ],
+      routes: [
+        sourceRoute({
+          key: "api",
+          plugin_config: "api-plugin",
+        }),
+        sourceRoute({
+          key: "redirect",
+          upstream: undefined,
+          terminal: true,
+          plugins: {
+            "request-id": {
+              header_name: "X-Request-Id",
+              include_in_response: true,
+            },
+            "redirect": {
+              uri: "/login",
+              ret_code: 302,
+            },
+          },
+        }),
+      ],
+    }));
+
+    expect(validateManifest(manifest)).toEqual([]);
+    expect(manifest.resources.services.at(0)).toMatchObject({
+      id: "iam.test",
+      name: "iam.test",
+      labels: {
+        managed_by: "shgas-iam",
+        source: "repo-manifest",
+        env: "test",
+        app: "iam",
+        team: "platform",
+      },
+    });
+    expect(manifest.resources.upstreams.at(0)).toMatchObject({
+      id: "iam.api.test",
+      name: "iam.api.test",
+      labels: {
+        tier: "backend",
+      },
+    });
+    expect(manifest.resources.plugin_configs.at(0)).toMatchObject({
+      id: "iam.api-plugin.test",
+      name: "iam.api-plugin.test",
+      labels: {
+        template: "api-plugin",
+      },
+    });
+    expect(manifest.resources.routes.at(0)).toMatchObject({
+      id: "iam.api.test",
+      name: "iam.api.test",
+      service_id: "iam.test",
+      upstream_id: "iam.api.test",
+      plugin_config_id: "iam.api-plugin.test",
+    });
+    expect(manifest.resources.routes.at(1)).toMatchObject({
+      id: "iam.redirect.test",
+      name: "iam.redirect.test",
+    });
+    expect(manifest.resources.routes.at(1)).not.toHaveProperty("service_id");
+    expect(manifest.resources.routes.at(1)).not.toHaveProperty("upstream_id");
+    expect(manifest.resources.routes.at(1)).not.toHaveProperty("terminal");
   });
 
   it("forwards only apikey to tender internal authz routes", async () => {
@@ -146,38 +247,134 @@ describe("apisix manifest validation", () => {
     }
   });
 
+  it("preserves tender forward-auth and proxy-rewrite behavior after materialization", async () => {
+    const manifest = await loadManifest("prod:tender");
+    const apiRoute = manifest.resources.routes.find(route => route.id === "tender.api.prod");
+    const publicRoute = manifest.resources.routes.find(route => route.id === "tender.public.prod");
+    const thirdpartyRoute = manifest.resources.routes.find(route => route.id === "tender.thirdparty.prod");
+
+    expect(apiRoute).toMatchObject({
+      service_id: "tender.prod",
+      upstream_id: "tender.api.prod",
+      plugin_config_id: "tender.api-ip-rate-limit.prod",
+    });
+    expect(getForwardAuthConfig(apiRoute ?? {})?.request_headers).toEqual(["Cookie", "Client", "Authorization"]);
+    expect((apiRoute?.plugins as Record<string, unknown> | undefined)?.["proxy-rewrite"]).toMatchObject({
+      regex_uri: ["^/api/tender/(.*)", "/$1"],
+    });
+    expect((publicRoute?.plugins as Record<string, unknown> | undefined)?.["proxy-rewrite"]).toMatchObject({
+      regex_uri: ["^/api/tender/(.*)", "/$1"],
+    });
+    expect(getForwardAuthConfig(thirdpartyRoute ?? {})?.request_headers).toEqual(["apikey"]);
+    expect((thirdpartyRoute?.plugins as Record<string, unknown> | undefined)?.["proxy-rewrite"]).toMatchObject({
+      regex_uri: ["^/thirdparty/tender/(.*)", "/thirdparty/$1"],
+    });
+  });
+
+  it("preserves Tender and GDS special upstream overrides", async () => {
+    const [tender, gds] = await Promise.all([
+      loadManifest("prod:tender"),
+      loadManifest("prod:gds"),
+    ]);
+
+    expect(tender.resources.routes.find(route => route.id === "tender.frontend-external.prod")).toMatchObject({
+      service_id: "tender.prod",
+      upstream_id: "tender.frontend-external.prod",
+    });
+    expect(tender.resources.routes.find(route => route.id === "tender.minio.prod")).toMatchObject({
+      service_id: "tender.prod",
+      upstream_id: "tender.minio.prod",
+    });
+    expect(gds.resources.routes.find(route => route.id === "gds.external-frontend.prod")).toMatchObject({
+      service_id: "gds.prod",
+      upstream_id: "gds.external-frontend.prod",
+    });
+    expect(gds.resources.routes.find(route => route.id === "gds.dashboard.prod")).toMatchObject({
+      service_id: "gds.prod",
+      upstream_id: "gds.dashboard.prod",
+    });
+  });
+
   it("rejects broken route references", async () => {
-    const manifest = await loadManifest("test:iam", await createManifestDir({
+    const manifest = await loadManifest("test:iam", await createManifestFile({
+      upstreams: [
+        sourceUpstream(),
+      ],
       routes: [
-        repoObject({
-          id: "route-a",
-          uri: "/a/*",
-          service_id: "missing-service",
+        sourceRoute({
+          upstream: "missing-upstream",
         }),
       ],
     }));
 
     const issues = validateManifest(manifest);
-    expect(issues.some(issue => issue.message.includes("missing service missing-service"))).toBe(true);
+    expect(issues.some(issue => issue.message.includes("references missing upstream missing-upstream"))).toBe(true);
   });
 
-  it("rejects duplicate ids", async () => {
-    const manifest = await loadManifest("test:iam", await createManifestDir({
+  it("rejects missing service plugin_config references", async () => {
+    const manifest = await loadManifest("test:iam", await createManifestFile({
+      upstreams: [
+        sourceUpstream(),
+      ],
       routes: [
-        repoObject({ id: "route-a", uri: "/a/*" }),
-        repoObject({ id: "route-a", uri: "/b/*" }),
+        sourceRoute({
+          plugin_config: "missing-plugin",
+        }),
       ],
     }));
 
     const issues = validateManifest(manifest);
-    expect(issues.some(issue => issue.message.includes("duplicate routes id route-a"))).toBe(true);
+    expect(issues.some(issue => issue.message.includes("missing service plugin_config missing-plugin"))).toBe(true);
+  });
+
+  it("rejects duplicate and invalid source keys", async () => {
+    const manifest = await loadManifest("test:iam", await createManifestFile({
+      upstreams: [
+        sourceUpstream({ key: "api" }),
+        sourceUpstream({ key: "api" }),
+      ],
+      routes: [
+        sourceRoute({ key: "Route.A" }),
+      ],
+    }));
+
+    const issues = validateManifest(manifest);
+    expect(issues.some(issue => issue.message.includes("duplicate upstreams key api"))).toBe(true);
+    expect(issues.some(issue => issue.message.includes("key Route.A must be a kebab-case segment"))).toBe(true);
+  });
+
+  it("rejects generated source fields and reserved label overrides", async () => {
+    const manifest = await loadManifest("test:iam", await createManifestFile({
+      service: {
+        id: "manual-service-id",
+      },
+      upstreams: [
+        sourceUpstream({
+          name: "manual-upstream-name",
+          labels: {
+            managed_by: "someone-else",
+          },
+        }),
+      ],
+      routes: [
+        sourceRoute({
+          service_id: "manual-service",
+        }),
+      ],
+    }));
+
+    const issues = validateManifest(manifest);
+    expect(issues.some(issue => issue.path === "service.id")).toBe(true);
+    expect(issues.some(issue => issue.path === "upstreams[0].name")).toBe(true);
+    expect(issues.some(issue => issue.path === "routes[0].service_id")).toBe(true);
+    expect(issues.some(issue => issue.path === "upstreams[0].labels.managed_by")).toBe(true);
   });
 
   it("rejects secret-looking fields in manifests", async () => {
-    const manifest = await loadManifest("test:iam", await createManifestDir({
+    const manifest = await loadManifest("test:iam", await createManifestFile({
       consumers: [
-        repoObject({
-          username: "internal",
+        {
+          key: "internal",
           credentials: [
             {
               type: "key-auth",
@@ -186,7 +383,7 @@ describe("apisix manifest validation", () => {
               },
             },
           ],
-        }),
+        },
       ],
     }));
 
@@ -195,10 +392,10 @@ describe("apisix manifest validation", () => {
   });
 
   it("accepts APISIX limit-req variable key selectors", async () => {
-    const manifest = await loadManifest("test:iam", await createManifestDir({
+    const manifest = await loadManifest("test:iam", await createManifestFile({
       plugin_configs: [
-        repoObject({
-          id: "api-limit",
+        sourcePluginConfig({
+          key: "api-limit",
           plugins: {
             "limit-req": {
               rate: 5,
@@ -218,10 +415,10 @@ describe("apisix manifest validation", () => {
   });
 
   it("rejects rendered real-ip trusted_addresses that trust every source", async () => {
-    const manifest = await loadManifest("test:iam", await createManifestDir({
+    const manifest = await loadManifest("test:iam", await createManifestFile({
       plugin_configs: [
-        repoObject({
-          id: "api-real-ip",
+        sourcePluginConfig({
+          key: "api-real-ip",
           plugins: {
             "real-ip": {
               source: "http_x_real_ip",
@@ -238,11 +435,15 @@ describe("apisix manifest validation", () => {
   });
 
   it("allows unresolved real-ip trusted_addresses placeholders", async () => {
-    const manifest = await loadManifest("test:iam", await createManifestDir({
+    const manifest = await loadManifest("test:iam", await createManifestFile({
       plugin_configs: [
-        repoObject({
-          id: "api-real-ip",
+        sourcePluginConfig({
+          key: "api-real-ip",
           plugins: {
+            "request-id": {
+              header_name: "X-Request-Id",
+              include_in_response: true,
+            },
             "real-ip": {
               source: "http_x_real_ip",
               trusted_addresses: ["${TENCENT_NGINX_TRUSTED_CIDR}"],
@@ -257,12 +458,12 @@ describe("apisix manifest validation", () => {
   });
 
   it("rejects IAM routes without request-id", async () => {
-    const manifest = await loadManifest("test:iam", await createManifestDir({
+    const manifest = await loadManifest("test:iam", await createManifestFile({
+      upstreams: [
+        sourceUpstream(),
+      ],
       routes: [
-        repoObject({
-          id: "route-a",
-          uri: "/a/*",
-        }),
+        sourceRoute(),
       ],
     }));
 
@@ -271,10 +472,13 @@ describe("apisix manifest validation", () => {
   });
 
   it("rejects IAM Loki/http/file logger plugins", async () => {
-    const manifest = await loadManifest("test:iam", await createManifestDir({
+    const manifest = await loadManifest("test:iam", await createManifestFile({
+      upstreams: [
+        sourceUpstream(),
+      ],
       plugin_configs: [
-        repoObject({
-          id: "api-logger",
+        sourcePluginConfig({
+          key: "api-logger",
           plugins: {
             "request-id": { header_name: "X-Request-Id", include_in_response: true },
             "loki-logger": { endpoint_addr: "http://loki:3100" },
@@ -282,10 +486,8 @@ describe("apisix manifest validation", () => {
         }),
       ],
       routes: [
-        repoObject({
-          id: "route-a",
-          uri: "/a/*",
-          plugin_config_id: "api-logger",
+        sourceRoute({
+          plugin_config: "api-logger",
         }),
       ],
     }));
@@ -319,10 +521,9 @@ describe("apisix manifest validation", () => {
   });
 
   it("renders environment placeholders after parsing manifest YAML", async () => {
-    const manifest = await loadManifest("test:iam", await createManifestDir({
+    const manifest = await loadManifest("test:iam", await createManifestFile({
       upstreams: [
-        repoObject({
-          id: "api",
+        sourceUpstream({
           nodes: {
             "${IAM_API_HOST}:${IAM_API_PORT}": 1,
           },
@@ -342,7 +543,7 @@ describe("apisix manifest validation", () => {
   });
 
   it("rejects missing environment placeholders when rendering is enabled", () => {
-    expect(() => renderEnvPlaceholders("host: ${MISSING_HOST}", {}, "routes.yaml"))
-      .toThrow("routes.yaml references missing environment variable MISSING_HOST");
+    expect(() => renderEnvPlaceholders("host: ${MISSING_HOST}", {}, "manifest.yaml"))
+      .toThrow("manifest.yaml references missing environment variable MISSING_HOST");
   });
 });

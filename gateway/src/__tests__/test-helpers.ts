@@ -2,22 +2,45 @@ import type { LoadedManifest, ManifestObject, ResourceKind } from "../types";
 import { mkdtemp, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import { stringify } from "yaml";
 import { createEmptyResourceMap } from "../resources";
 
-export async function createManifestDir(overrides: Partial<Record<ResourceKind, unknown[]>>): Promise<string> {
-  const manifestDir = await mkdtemp(path.join(tmpdir(), "apisix-manifest-"));
+interface SourceManifestOverrides {
+  service?: ManifestObject | false;
+  upstreams?: ManifestObject[];
+  routes?: ManifestObject[];
+  plugin_configs?: ManifestObject[];
+  consumers?: ManifestObject[];
+  ssls?: ManifestObject[];
+}
 
-  await writeFile(path.join(manifestDir, "routes.yaml"), toYaml("routes", overrides.routes ?? []));
-  await writeFile(path.join(manifestDir, "upstreams.yaml"), toYaml("upstreams", overrides.upstreams ?? []));
-  await writeFile(path.join(manifestDir, "services.yaml"), toYaml("services", overrides.services ?? []));
-  await writeFile(
-    path.join(manifestDir, "plugin-configs.yaml"),
-    toYaml("plugin_configs", overrides.plugin_configs ?? []),
-  );
-  await writeFile(path.join(manifestDir, "consumers.yaml"), toYaml("consumers", overrides.consumers ?? []));
-  await writeFile(path.join(manifestDir, "ssl.yaml"), toYaml("ssls", overrides.ssls ?? []));
+export async function createManifestFile(overrides: SourceManifestOverrides): Promise<string> {
+  const tempDir = await mkdtemp(path.join(tmpdir(), "apisix-manifest-"));
+  const manifest = path.join(tempDir, "iam.yaml");
+  const source: ManifestObject = {};
 
-  return manifestDir;
+  if (overrides.service !== false) {
+    source.service = {
+      desc: "Test gateway app service",
+      plugin_configs: overrides.plugin_configs ?? [],
+      ...(overrides.service ?? {}),
+    };
+  }
+
+  source.upstreams = overrides.upstreams ?? [];
+  source.routes = overrides.routes ?? [];
+
+  if (overrides.consumers !== undefined) {
+    source.consumers = overrides.consumers;
+  }
+
+  if (overrides.ssls !== undefined) {
+    source.ssls = overrides.ssls;
+  }
+
+  await writeFile(manifest, stringify(source, { lineWidth: 0 }), "utf8");
+
+  return manifest;
 }
 
 export function createLoadedManifest(
@@ -27,7 +50,15 @@ export function createLoadedManifest(
   return {
     env: `${scope.env}:${scope.app}`,
     scope,
-    manifestDir: "/tmp/manifest",
+    manifest: "/tmp/manifest.yaml",
+    source: {
+      service: {
+        desc: "Test gateway app service",
+        plugin_configs: [],
+      },
+      upstreams: [],
+      routes: [],
+    },
     resources: createResourceState(overrides),
   };
 }
@@ -51,6 +82,38 @@ export function repoObject(value: Record<string, unknown>): ManifestObject {
       app: "iam",
       ...(value.labels as Record<string, unknown> | undefined),
     },
+  };
+}
+
+export function sourceUpstream(value: Record<string, unknown> = {}): ManifestObject {
+  return {
+    key: "api",
+    nodes: {
+      "127.0.0.1:3000": 1,
+    },
+    ...value,
+  };
+}
+
+export function sourceRoute(value: Record<string, unknown> = {}): ManifestObject {
+  return {
+    key: "route-a",
+    uri: "/a/*",
+    upstream: "api",
+    ...value,
+  };
+}
+
+export function sourcePluginConfig(value: Record<string, unknown> = {}): ManifestObject {
+  return {
+    key: "api-plugin",
+    plugins: {
+      "request-id": {
+        header_name: "X-Request-Id",
+        include_in_response: true,
+      },
+    },
+    ...value,
   };
 }
 
@@ -79,8 +142,4 @@ export function createReporter() {
       error: (message: string) => errors.push(message),
     },
   };
-}
-
-function toYaml(key: string, value: unknown[]): string {
-  return `${key}: ${JSON.stringify(value, null, 2)}\n`;
 }

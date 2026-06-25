@@ -16,7 +16,6 @@ export interface ResourceCompareRules {
 
 export interface ResourceDefinition {
   kind: ResourceKind;
-  fileName: string;
   topKey: string;
   endpoint: string;
   idFields: string[];
@@ -33,7 +32,8 @@ export interface ManifestScope {
 export interface LoadedManifest {
   env: string;
   scope: ManifestScope;
-  manifestDir: string;
+  manifest: string;
+  source: ManifestObject;
   resources: Record<ResourceKind, ManifestObject[]>;
 }
 
@@ -78,7 +78,7 @@ export interface ApplyResult {
 
 export interface CommandOptions {
   env?: string;
-  manifestDir?: string;
+  manifest?: string;
   envFile?: string;
   renderEnv?: boolean;
   json?: boolean;

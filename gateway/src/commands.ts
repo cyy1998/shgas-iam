@@ -113,7 +113,7 @@ async function loadManifestForCommand(options: CommandOptions) {
   }
 
   const env = resolveManifestScope(options.env);
-  return loadManifest(env, options.manifestDir, {
+  return loadManifest(env, options.manifest, {
     renderEnv: Boolean(options.renderEnv) || Boolean(options.envFile),
   });
 }
