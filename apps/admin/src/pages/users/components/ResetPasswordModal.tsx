@@ -1,5 +1,5 @@
 import { resetUserPassword } from '@admin/services/user';
-import { message, Modal } from 'antd';
+import { message, Modal, Space, Typography } from 'antd';
 
 type Args = {
   username: string;
@@ -17,13 +17,26 @@ export function confirmResetPassword({ username, name }: Args) {
         const newPassword = await resetUserPassword(username);
         Modal.info({
           title: '新密码已生成',
+          width: 620,
           content: (
-            <div>
-              <p>请将下列密码复制并转交给用户，关闭后不再显示：</p>
-              <pre style={{ fontSize: 16, background: '#f5f5f5', padding: 8 }}>
+            <Space direction="vertical" style={{ width: '100%' }}>
+              <Typography.Text>
+                请将下列密码复制并转交给用户，关闭后不再显示：
+              </Typography.Text>
+              <Typography.Paragraph
+                code
+                copyable={{ text: newPassword }}
+                style={{
+                  marginBottom: 0,
+                  padding: '8px 12px',
+                  fontSize: 16,
+                  lineHeight: 1.6,
+                  wordBreak: 'break-all',
+                }}
+              >
                 {newPassword}
-              </pre>
-            </div>
+              </Typography.Paragraph>
+            </Space>
           ),
           okText: '我已复制',
         });
