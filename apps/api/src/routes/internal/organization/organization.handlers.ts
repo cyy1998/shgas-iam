@@ -11,7 +11,11 @@ export interface CreateOrganizationHandlersDeps {
   auditLogWriter: AuditLogWriterPort;
   organizationService: Pick<
     OrganizationService,
-    "getOrganizationByCode" | "searchOrganizations" | "setOrganization" | "updateOrganization"
+    | "findOrganizationByCode"
+    | "getOrganizationByCode"
+    | "searchOrganizations"
+    | "setOrganization"
+    | "updateOrganization"
   >;
 }
 
@@ -37,8 +41,8 @@ export function createOrganizationHandlers(deps: CreateOrganizationHandlersDeps)
 
   const purveyorRegister: OrganizationRouteHandler<"purveyorRegister"> = async (c) => {
     const { orgCode, orgName, parentOrg } = c.req.valid("json");
-    const exisitngOrg = await deps.organizationService.getOrganizationByCode(orgCode);
-    if (exisitngOrg !== null) {
+    const existingOrg = await deps.organizationService.findOrganizationByCode(orgCode);
+    if (existingOrg !== null) {
       return c.json(resp.ok(true));
     }
     const organizationCreateDto = OrganizationCreateDtoSchema.parse({

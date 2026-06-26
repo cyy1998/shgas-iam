@@ -12,12 +12,20 @@ import {
 } from "@iam/domain/organization";
 
 export function createOrganizationService(deps: OrganizationServiceDeps) {
-  async function getOrganizationByCode(orgCode: string) {
+  async function findOrganizationByCode(orgCode: string) {
     const organization = await deps.organizationRepository.getOrganizationByCode(orgCode);
+    if (organization === null) {
+      return null;
+    }
+    return toOrganizationDto(organization);
+  }
+
+  async function getOrganizationByCode(orgCode: string) {
+    const organization = await findOrganizationByCode(orgCode);
     if (organization === null) {
       throw new OrganizationNotFoundError("组织不存在");
     }
-    return toOrganizationDto(organization);
+    return organization;
   }
 
   async function searchOrganizations(organizationQueryDto: OrganizationQueryDto) {
@@ -61,6 +69,7 @@ export function createOrganizationService(deps: OrganizationServiceDeps) {
   }
 
   return {
+    findOrganizationByCode,
     getOrganizationByCode,
     searchOrganizations,
     setOrganization,
