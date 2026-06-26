@@ -662,7 +662,8 @@
         {
           "refId": "A",
           "expr": "{env=\"$env\", service=~\"$service\", level=~\"error|fatal\"} | json | __error__=\"\"",
-          "format": "logs"
+          "format": "logs",
+          "maxLines": 500
         }
       ],
       "transformations": [
@@ -857,7 +858,8 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "{env=\"$env\", service=~\"$service\", level=~\"error|fatal\"} | json | __error__=\"\""
+          "expr": "{env=\"$env\", service=~\"$service\", level=~\"error|fatal\"} | json | __error__=\"\"",
+          "maxLines": 500
         }
       ],
       "options": {

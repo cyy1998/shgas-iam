@@ -365,7 +365,8 @@
         {
           "refId": "A",
           "expr": "{env=\"$env\", service=~\"$service\"} | json | __error__=\"\" | requestId=~\"$requestId\" | traceId=~\"$traceId\" | statusCode=~\"${status:raw}\"",
-          "format": "logs"
+          "format": "logs",
+          "maxLines": 500
         }
       ],
       "transformations": [
@@ -763,7 +764,8 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "{env=\"$env\", service=~\"$service\"} | json | __error__=\"\" | requestId=~\"$requestId\" | traceId=~\"$traceId\" | statusCode=~\"${status:raw}\" | line_format \"{{.service}} | {{.event}} | {{.method}} {{.path}} | status={{.statusCode}} duration={{.durationMs}}ms | upstream={{.upstreamStatus}} {{.upstreamAddr}} | error={{.errorName}}{{.errorCode}} {{.errorMessage}}{{.msg}}\""
+          "expr": "{env=\"$env\", service=~\"$service\"} | json | __error__=\"\" | requestId=~\"$requestId\" | traceId=~\"$traceId\" | statusCode=~\"${status:raw}\" | line_format \"{{.service}} | {{.event}} | {{.method}} {{.path}} | status={{.statusCode}} duration={{.durationMs}}ms | upstream={{.upstreamStatus}} {{.upstreamAddr}} | error={{.errorName}}{{.errorCode}} {{.errorMessage}}{{.msg}}\"",
+          "maxLines": 500
         }
       ],
       "options": {
@@ -798,7 +800,8 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "{env=\"$env\", service=~\"$service\"} | json | __error__=\"\" | requestId=~\"$requestId\" | traceId=~\"$traceId\" | statusCode=~\"${status:raw}\""
+          "expr": "{env=\"$env\", service=~\"$service\"} | json | __error__=\"\" | requestId=~\"$requestId\" | traceId=~\"$traceId\" | statusCode=~\"${status:raw}\"",
+          "maxLines": 500
         }
       ],
       "options": {

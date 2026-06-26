@@ -880,7 +880,8 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "{env=\"$env\", service=~\"$service\", level=~\"error|fatal\"} | json | __error__=\"\" | line_format \"{{.service}} | {{.event}} | {{.errorName}}{{.errorCode}} | requestId={{.requestId}} traceId={{.traceId}} | {{.errorMessage}}{{.msg}}\""
+          "expr": "{env=\"$env\", service=~\"$service\", level=~\"error|fatal\"} | json | __error__=\"\" | line_format \"{{.service}} | {{.event}} | {{.errorName}}{{.errorCode}} | requestId={{.requestId}} traceId={{.traceId}} | {{.errorMessage}}{{.msg}}\"",
+          "maxLines": 500
         }
       ],
       "options": {
@@ -915,7 +916,8 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "{env=\"$env\", service=~\"$service\", level=~\"error|fatal\"} | json | __error__=\"\""
+          "expr": "{env=\"$env\", service=~\"$service\", level=~\"error|fatal\"} | json | __error__=\"\"",
+          "maxLines": 500
         }
       ],
       "options": {

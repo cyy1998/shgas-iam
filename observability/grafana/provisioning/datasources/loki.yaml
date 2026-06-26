@@ -10,4 +10,4 @@ datasources:
     editable: false
     jsonData:
       timeout: 60
-      maxLines: 1000
+      maxLines: 500
