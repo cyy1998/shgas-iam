@@ -21,7 +21,7 @@
       "title": "Open Overview",
       "tooltip": "Return to IAM log health overview",
       "type": "link",
-      "url": "/d/iam-overview/iam-overview?orgId=1&${__url_time_range}&var-env=$env&var-service=$service"
+      "url": "/d/iam-overview/iam-overview?orgId=1&${__url_time_range}&var-env=$env&${service:queryparam}"
     },
     {
       "asDropdown": false,
@@ -33,7 +33,7 @@
       "title": "Open Request Drilldown",
       "tooltip": "Open request-level log drilldown",
       "type": "link",
-      "url": "/d/iam-request-drilldown/iam-request-drilldown?orgId=1&${__url_time_range}&var-env=$env&var-service=$service&var-requestId=.*&var-traceId=.*"
+      "url": "/d/iam-request-drilldown/iam-request-drilldown?orgId=1&${__url_time_range}&var-env=$env&${service:queryparam}&var-requestId=.*&var-traceId=.*"
     }
   ],
   "templating": {

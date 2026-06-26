@@ -21,7 +21,7 @@
       "title": "Open Overview",
       "tooltip": "Return to IAM log health overview",
       "type": "link",
-      "url": "/d/iam-overview/iam-overview?orgId=1&${__url_time_range}&var-env=$env&var-service=$service"
+      "url": "/d/iam-overview/iam-overview?orgId=1&${__url_time_range}&var-env=$env&${service:queryparam}"
     },
     {
       "asDropdown": false,
@@ -33,7 +33,7 @@
       "title": "Open Error Center",
       "tooltip": "Open grouped IAM errors for the same environment and service filter",
       "type": "link",
-      "url": "/d/iam-error-center/iam-error-center?orgId=1&${__url_time_range}&var-env=$env&var-service=$service"
+      "url": "/d/iam-error-center/iam-error-center?orgId=1&${__url_time_range}&var-env=$env&${service:queryparam}"
     }
   ],
   "templating": {
@@ -564,7 +564,7 @@
                 "value": [
                   {
                     "title": "Open this request",
-                    "url": "/d/iam-request-drilldown/iam-request-drilldown?orgId=1&${__url_time_range}&var-env=$env&var-service=$service&var-requestId=${__data.fields.requestId}&var-traceId=${__data.fields.traceId}&var-status=${status:raw}",
+                    "url": "/d/iam-request-drilldown/iam-request-drilldown?orgId=1&${__url_time_range}&var-env=$env&${service:queryparam}&var-requestId=${__data.fields.requestId}&var-traceId=${__data.fields.traceId}&var-status=${status:raw}",
                     "targetBlank": false
                   }
                 ]
@@ -586,7 +586,7 @@
                 "value": [
                   {
                     "title": "Open this trace",
-                    "url": "/d/iam-request-drilldown/iam-request-drilldown?orgId=1&${__url_time_range}&var-env=$env&var-service=$service&var-requestId=${__data.fields.requestId}&var-traceId=${__data.fields.traceId}&var-status=${status:raw}",
+                    "url": "/d/iam-request-drilldown/iam-request-drilldown?orgId=1&${__url_time_range}&var-env=$env&${service:queryparam}&var-requestId=${__data.fields.requestId}&var-traceId=${__data.fields.traceId}&var-status=${status:raw}",
                     "targetBlank": false
                   }
                 ]

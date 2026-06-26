@@ -10,7 +10,7 @@ function normalizeService(sourceApp?: string | null) {
   if (sourceApp === 'iam-admin-api') return 'admin-api';
   if (sourceApp === 'iam-oidc-provider') return 'oidc-provider';
   if (sourceApp === 'apisix') return 'apisix';
-  return '.*';
+  return 'All';
 }
 
 function buildGrafanaUrl(path: string) {

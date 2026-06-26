@@ -20,7 +20,7 @@
       "title": "Open Error Center",
       "tooltip": "Open grouped IAM errors for the same environment and service filter",
       "type": "link",
-      "url": "/d/iam-error-center/iam-error-center?orgId=1&${__url_time_range}&var-env=$env&var-service=$service"
+      "url": "/d/iam-error-center/iam-error-center?orgId=1&${__url_time_range}&var-env=$env&${service:queryparam}"
     },
     {
       "asDropdown": false,
@@ -32,7 +32,7 @@
       "title": "Open Request Drilldown",
       "tooltip": "Open request-level log drilldown",
       "type": "link",
-      "url": "/d/iam-request-drilldown/iam-request-drilldown?orgId=1&${__url_time_range}&var-env=$env&var-service=$service&var-requestId=.*&var-traceId=.*"
+      "url": "/d/iam-request-drilldown/iam-request-drilldown?orgId=1&${__url_time_range}&var-env=$env&${service:queryparam}&var-requestId=.*&var-traceId=.*"
     }
   ],
   "templating": {
