@@ -1,8 +1,8 @@
-import { z } from "zod";
 import {
   DEFAULT_SESSION_LOOKUP_HMAC_CURRENT_ID,
   DEFAULT_SESSION_LOOKUP_HMAC_CURRENT_SECRET,
 } from "@iam/api-core/session/kernel";
+import { z } from "zod";
 
 const positiveSeconds = z.coerce.number().int().positive();
 
@@ -10,6 +10,14 @@ function booleanString(defaultValue: boolean) {
   return z.string().optional().transform((value) => {
     if (value === undefined || value.trim() === "")
       return defaultValue;
+    return ["1", "true", "yes", "on"].includes(value.trim().toLowerCase());
+  });
+}
+
+function optionalBooleanString() {
+  return z.string().optional().transform((value) => {
+    if (value === undefined || value.trim() === "")
+      return undefined;
     return ["1", "true", "yes", "on"].includes(value.trim().toLowerCase());
   });
 }
@@ -59,6 +67,7 @@ const RawOidcProviderEnvSchema = z.object({
   IAM_OIDC_PROVIDER_CLIENT_AUTH_FAILURE_LIMIT: z.coerce.number().int().positive().default(5),
   IAM_OIDC_PROVIDER_CLIENT_AUTH_FAILURE_WINDOW_SECONDS: positiveSeconds.default(60),
   IAM_OIDC_PROVIDER_TRUST_PROXY: booleanString(true),
+  IAM_OIDC_PROVIDER_COOKIE_SECURE: optionalBooleanString(),
   IAM_OIDC_PROVIDER_SESSION_KERNEL_NAMESPACE: z.string().default("sess:v2:"),
   IAM_OIDC_PROVIDER_SESSION_KERNEL_PRINCIPAL_IDLE_TTL_SECONDS: positiveSeconds.optional(),
   IAM_OIDC_PROVIDER_SESSION_KERNEL_PRINCIPAL_ABSOLUTE_TTL_SECONDS: positiveSeconds.optional(),
@@ -136,6 +145,7 @@ export interface OidcProviderEnv {
     clientAuthFailureLimit: number;
     clientAuthFailureWindowSeconds: number;
     trustProxy: boolean;
+    cookieSecure: boolean;
   };
   sessionKernel: {
     namespace: string;
@@ -183,6 +193,7 @@ function toOidcProviderEnv(raw: RawOidcProviderEnv): OidcProviderEnv {
       clientAuthFailureLimit: raw.IAM_OIDC_PROVIDER_CLIENT_AUTH_FAILURE_LIMIT,
       clientAuthFailureWindowSeconds: raw.IAM_OIDC_PROVIDER_CLIENT_AUTH_FAILURE_WINDOW_SECONDS,
       trustProxy: raw.IAM_OIDC_PROVIDER_TRUST_PROXY,
+      cookieSecure: raw.IAM_OIDC_PROVIDER_COOKIE_SECURE ?? (raw.NODE_ENV === "production"),
     },
     sessionKernel: {
       namespace: raw.IAM_OIDC_PROVIDER_SESSION_KERNEL_NAMESPACE,

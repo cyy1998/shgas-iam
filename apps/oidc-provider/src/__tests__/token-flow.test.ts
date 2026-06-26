@@ -97,6 +97,7 @@ async function createRuntime() {
     oidc: {
       issuer: "http://issuer.test/oidc",
       cookieKeys: ["a".repeat(32), "b".repeat(32)],
+      cookieSecure: false,
       accessTokenTtlSeconds: 3600,
       authorizationCodeTtlSeconds: 300,
       idTokenTtlSeconds: 3600,

@@ -49,7 +49,7 @@ export function registerProviderMiddleware(provider: Provider, deps: RegisterPro
         httpOnly: true,
         overwrite: true,
         sameSite: "lax",
-        secure: deps.env.nodeEnv === "production",
+        secure: deps.env.oidc.cookieSecure,
       });
     }
   });

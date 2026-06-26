@@ -20,7 +20,22 @@ describe("oIDC provider environment", () => {
     const env = parseOidcProviderEnv(validEnv());
     assert.equal(env.oidc.issuer, "https://iam.example.com/oidc");
     assert.equal(env.oidc.authorizationCodeTtlSeconds, 300);
+    assert.equal(env.oidc.cookieSecure, false);
     assert.equal(env.log.format, "auto");
+  });
+
+  it("defaults secure cookies for production and allows an explicit HTTP deployment override", () => {
+    const secureProduction = parseOidcProviderEnv({ ...validEnv(), NODE_ENV: "production" });
+    assert.equal(secureProduction.oidc.cookieSecure, true);
+
+    const httpProduction = parseOidcProviderEnv({
+      ...validEnv(),
+      NODE_ENV: "production",
+      IAM_OIDC_PROVIDER_ISSUER: "http://iam.example.com/oidc",
+      IAM_OIDC_PROVIDER_PUBLIC_ORIGIN: "http://iam.example.com",
+      IAM_OIDC_PROVIDER_COOKIE_SECURE: "false",
+    });
+    assert.equal(httpProduction.oidc.cookieSecure, false);
   });
 
   it("accepts only known log format values", () => {

@@ -49,6 +49,7 @@ describe("oIDC discovery and JWKS", () => {
         publicOrigin: "http://issuer.test",
         ssoLoginPath: "/portal/login",
         cookieKeys: ["a".repeat(32), "b".repeat(32)],
+        cookieSecure: false,
         globalSessionCookie: "global_session",
         accessTokenTtlSeconds: 3600,
         authorizationCodeTtlSeconds: 300,

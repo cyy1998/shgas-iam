@@ -50,13 +50,13 @@ export function createProviderConfiguration(
         httpOnly: true,
         overwrite: true,
         sameSite: "lax",
-        secure: env.nodeEnv === "production",
+        secure: env.oidc.cookieSecure,
       },
       short: {
         httpOnly: true,
         overwrite: true,
         sameSite: "lax",
-        secure: env.nodeEnv === "production",
+        secure: env.oidc.cookieSecure,
       },
     },
     enabledJWA: {

@@ -10,6 +10,7 @@ const env = {
   oidc: {
     issuer: "http://issuer.test/oidc",
     cookieKeys: ["a".repeat(32), "b".repeat(32)],
+    cookieSecure: false,
     accessTokenTtlSeconds: 3600,
     authorizationCodeTtlSeconds: 300,
     idTokenTtlSeconds: 3600,
@@ -51,6 +52,8 @@ describe("oIDC provider configuration", () => {
     assert.equal(configuration.features?.rpInitiatedLogout?.enabled, true);
     assert.equal(configuration.scopes?.includes("offline_access"), false);
     assert.deepEqual(configuration.claims?.["iam:authorization"], ["iam:authorization"]);
+    assert.equal(configuration.cookies?.long?.secure, false);
+    assert.equal(configuration.cookies?.short?.secure, false);
   });
 
   it("limits token TTL to the remaining global session and enforces client-aware CORS", () => {
