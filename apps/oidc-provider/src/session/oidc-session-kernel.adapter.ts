@@ -327,6 +327,7 @@ export function createOidcSessionKernelAdapter(deps: OidcSessionKernelAdapterDep
       }, "OIDC client config version mismatch for authorization code");
       return false;
     }
+    const nonce = payloadString(input.payload, "nonce");
     const artifact = await deps.kernel.createProtocolArtifact({
       principalSessionId: input.binding.principalSessionId,
       bindingId: input.binding.bindingId,
@@ -344,7 +345,7 @@ export function createOidcSessionKernelAdapter(deps: OidcSessionKernelAdapterDep
         bindingId: input.binding.bindingId,
         redirectUriFingerprint: fingerprintPayloadValue(input.payload, "redirectUri"),
         scopes: payloadScopes(input.payload),
-        nonce: payloadString(input.payload, "nonce"),
+        ...(nonce ? { nonce } : {}),
         oidcConfigVersion: version,
       },
       cleanupRefs: [{

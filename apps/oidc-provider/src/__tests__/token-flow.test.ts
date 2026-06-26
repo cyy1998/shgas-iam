@@ -136,7 +136,12 @@ async function createRuntime() {
   return { provider, publicKey: await importJWK(publicJwk, "RS256"), url: `http://127.0.0.1:${port}` };
 }
 
-async function issueCode(provider: Provider, clientId: string, redirectUri: string) {
+async function issueCode(
+  provider: Provider,
+  clientId: string,
+  redirectUri: string,
+  input: { nonce?: string } = {},
+) {
   const client = await provider.Client.find(clientId);
   if (!client)
     throw new Error("test client not found");
@@ -153,7 +158,7 @@ async function issueCode(provider: Provider, clientId: string, redirectUri: stri
     expiresWithSession: false,
     grantId,
     gty: "authorization_code",
-    nonce: "nonce-a",
+    ...(typeof input.nonce === "string" ? { nonce: input.nonce } : {}),
     redirectUri,
     scope: "openid profile",
   });
@@ -178,10 +183,10 @@ async function exchangeCode(
 }
 
 describe("authorization code token flow", () => {
-  it("enforces PKCE, issues a verifiable RS256 ID Token, and rejects code replay", async () => {
+  it("enforces PKCE, echoes nonce in a verifiable RS256 ID Token, and rejects code replay", async () => {
     const { provider, publicKey, url } = await createRuntime();
     const redirectUri = "https://public.example/callback?from=iam";
-    const code = await issueCode(provider, "public-client", redirectUri);
+    const code = await issueCode(provider, "public-client", redirectUri, { nonce: "nonce-a" });
 
     const mismatch = await exchangeCode(url, {
       clientId: "public-client",
@@ -224,6 +229,32 @@ describe("authorization code token flow", () => {
     });
     expect(replay.status).toBe(400);
     expect(await replay.json()).toMatchObject({ error: "invalid_grant" });
+  });
+
+  it("omits nonce from the ID Token when the authorization code has no nonce", async () => {
+    const { provider, publicKey, url } = await createRuntime();
+    const redirectUri = "https://public.example/callback?from=iam";
+    const code = await issueCode(provider, "public-client", redirectUri);
+
+    const response = await exchangeCode(url, {
+      clientId: "public-client",
+      code,
+      redirectUri,
+      verifier,
+    });
+    expect(response.status).toBe(200);
+    const tokens = await response.json() as { id_token: string };
+    const verified = await jwtVerify(tokens.id_token, publicKey, {
+      algorithms: ["RS256"],
+      audience: "public-client",
+      issuer: "http://issuer.test/oidc",
+    });
+    expect(verified.payload).toMatchObject({
+      sub: subject,
+      aud: "public-client",
+      auth_time: 123,
+    });
+    expect(verified.payload).not.toHaveProperty("nonce");
   });
 
   it("requires client_secret_basic for a confidential client in addition to PKCE", async () => {
