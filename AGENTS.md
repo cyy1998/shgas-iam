@@ -107,13 +107,15 @@ For non-OpenSpec work, create a short-lived `feat/<topic>`, `fix/<topic>`, or `w
 Outside the OpenSpec archive workflow, do not automatically create commits. Create a commit only when the user explicitly asks. Whenever committing, inspect the current branch and `git diff`, stage only task-owned files, leave unrelated user changes untouched, and use a Conventional Commit message written in Chinese unless the user requests another language.
 
 ## Testing Guidelines
-Bun tests are available through package-level `test` scripts. Minimum validation before a PR:
+Package-level `test` scripts are available throughout the workspace. Backend/shared/gateway packages generally use Bun (`bun test --parallel`), while `apps/admin`, `apps/sso`, and `apps/oidc-provider` use Vitest. Minimum validation before a PR:
 
 - Place test files in a `__tests__/` directory next to the code under test, for example `src/services/position/__tests__/position.service.test.ts`.
 - Run `pnpm test`, `pnpm lint`, and `pnpm typecheck`, or the narrower filtered commands for touched apps/packages.
-- Backend/shared package tests use `bun test --parallel`; prefer package scripts over raw `bun test` when running several files together. Backend service/handler/adapter tests should construct factories with DI fakes instead of using `mock.module` for app-local service/repository/db/redis/logger modules.
+- Prefer package scripts over raw runner commands when running several files together. Backend service/handler/adapter tests should construct factories with DI fakes instead of using `mock.module` for app-local service/repository/db/redis/logger modules.
+- Frontend unit tests use Vitest through package scripts; run affected `@iam/admin` or `@iam/sso` `test`/`typecheck`, and run filtered `e2e` (`pnpm --filter @iam/admin e2e` or `pnpm --filter @iam/sso e2e`) when user flows change.
+- OIDC provider changes use Node.js 24.x and require the narrowest relevant filtered checks from `pnpm --filter @iam/oidc-provider test`, `lint`, and `typecheck`.
 - Drizzle schema changes need the appropriate `@iam/db` command: `db:push` for local sync or `db:generate` + `db:migrate` when producing migrations.
-- Shared package changes (`packages/contracts`, `packages/api-core`, `packages/domain`, `packages/db`) require type checks for the package and directly affected apps; tRPC changes consumed by `admin` require both `@iam/admin-api` and `@iam/admin` type checks.
+- Shared package changes (`packages/contracts`, `packages/api-core`, `packages/domain`, `packages/db`) require type checks for the package and directly affected apps, including `@iam/oidc-provider` when session, OIDC, logging, or database contracts it consumes are touched; tRPC changes consumed by `admin` require both `@iam/admin-api` and `@iam/admin` type checks.
 - APISIX gateway manifest/script changes require `pnpm gateway:apisix:validate -- --env <env>:<app>` plus `pnpm --filter @iam/gateway-apisix typecheck` or `test` when scripts changed.
-- Smoke-test affected surfaces: public API Scalar UI at `http://localhost:30000` or public tier `/doc`; admin API Scalar UI at `http://localhost:30001` or `/admin/doc` and `/rpc/doc`; affected `admin` or `sso` UI flows.
-- With `docker/docker-compose-dev.yml`, direct backend host ports are `http://localhost:30011` for `api` and `http://localhost:30012` for `admin-api`; APISIX gateway host ports are `http://localhost:30080` and `https://localhost:30443`.
+- Smoke-test affected surfaces: public API Scalar UI at `http://localhost:30000` or public tier `/doc`; admin API Scalar UI at `http://localhost:30001` or `/admin/doc` and `/rpc/doc`; OIDC provider discovery/JWKS/authorization/token/UserInfo flows through gateway `http://localhost:30080/oidc` or direct dev port `http://localhost:30015`; affected `admin` or `sso` UI flows.
+- With `docker/docker-compose-dev.yml`, direct backend host ports are `http://localhost:30011` for `api`, `http://localhost:30012` for `admin-api`, and `http://localhost:30015` for `oidc-provider`; APISIX gateway host ports are `http://localhost:30080` and `https://localhost:30443`.
