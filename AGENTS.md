@@ -44,6 +44,7 @@ Do not hand-edit generated frontend directories such as `apps/admin/src/.umi/`, 
 
 ## Build, Test, and Development Commands
 - Workspace: `pnpm dev`, `pnpm build`, `pnpm lint`, `pnpm test`, and `pnpm typecheck`.
+- Documentation index/freshness guard: `pnpm check:docs`.
 - Backend apps: `pnpm --filter @iam/api <dev|serve|lint|test|typecheck>` and `pnpm --filter @iam/admin-api <dev|serve|lint|test|typecheck>`.
 - Shared packages: use the same filtered `lint`, `test`, and `typecheck` pattern, for example `pnpm --filter @iam/domain typecheck`.
 - Database: `pnpm --filter @iam/db <db:push|db:generate|db:migrate|db:check>`; `@iam/api` keeps compatibility wrappers for `db:push`, `db:generate`, and `db:migrate`.
