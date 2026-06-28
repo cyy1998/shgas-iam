@@ -1,12 +1,12 @@
 # Core
 
-- Monorepo: `pnpm` workspace + Turborepo at `/home/caiyi/projects/iam-service`.
-- Workspace roots: `apps/*`, `packages/*`, `gateway/*`.
-- Runtime apps: public IAM backend `apps/api`; admin backend `apps/admin-api`; admin frontend `apps/admin`; SSO portal `apps/sso`.
+- Canonical repo guidance lives in `AGENTS.md`; Serena memories are compact entry points and stale-fact traps, not full copies.
+- Monorepo: `pnpm` workspace + Turborepo at `D:/projects/iam-service`.
+- Workspace packages: `apps/*`, `packages/*`, and `gateway`.
+- Runtime apps: public IAM backend `apps/api`; admin backend `apps/admin-api`; OIDC provider `apps/oidc-provider`; admin frontend `apps/admin`; SSO portal `apps/sso`.
 - Shared packages: `packages/api-core` for backend infrastructure; `packages/contracts` for stable cross-app enums/contracts; `packages/db` for Drizzle/PostgreSQL schema/client/query helpers; `packages/domain` for shared domain modules.
-- Gateway package: `gateway/apisix` manages APISIX manifests and sync scripts.
-- Avoid editing generated/frontend output: `apps/admin/src/.umi/`, `apps/admin/src/.umi-production/`, `apps/sso/src/.umi/`, `apps/admin/dist/`, `apps/sso/dist/`.
-- Avoid vendored API docs assets under `apps/api/static/` and `apps/admin-api/static/` unless the task is explicitly about those assets.
+- Gateway package: `gateway` (`@iam/gateway-apisix`).
+- Avoid generated/vendor output unless the task is explicitly about it: Umi `.umi`/`.umi-production`, frontend `dist/`, and backend static API docs assets.
 - For backend app/tier/route structure, read `mem:backend/core`.
 - For admin/SSO frontend layout and validation expectations, read `mem:frontend/core`.
 - For Drizzle schema, migrations, relations, and query conventions, read `mem:db/core`.

@@ -1,15 +1,18 @@
 # Backend Core
 
-- Backend apps are Bun + Hono with app-local assembly in `src/app.ts`.
+- Backend surfaces include Bun + Hono API apps and the Node-based OIDC provider app.
 - `apps/api` owns public IAM tiers: `/public`, `/open`, `/internal`, `/sso`, `/auth`.
 - `apps/admin-api` owns admin tiers: `/admin`, `/rpc`; `/rpc` maps to `src/routes/trpc`.
+- `apps/oidc-provider` is `@iam/oidc-provider`, a Node 24 app using `oidc-provider`; main code lives under `src/composition`, `src/provider`, `src/session`, `src/storage`, `src/stores`, plus `src/app.ts`, `src/env.ts`, and `src/index.ts`.
 - API tiers are declared in `apps/api/app.config.ts` and `apps/admin-api/app.config.ts`.
-- `packages/api-core` provides `createApp`, route factories, OpenAPI helpers, response helpers, errors, middleware, Redis, logging, and tRPC utilities.
-- `createApp` auto-discovers `*.index.ts` route modules and tier-level `_middleware.ts` files.
-- Keep backend `src/app.ts` focused on env import, app config, app-local logger, discovered routes, tier middleware, and `createApp`.
+- `createApp` lives in `packages/api-core` and mounts materialized route/middleware records supplied by app composition roots; keep it app-agnostic and free of app-specific DI wiring.
+- API app `src/app.ts` files should stay focused on app assembly: env, app config, logger, composition root, and `createApp` inputs.
+- App-local composition creates production runtime, repository, tx, service, route, middleware, and integration instances under `src/composition/`.
+- Backend replaceable modules export factories and return types, e.g. `createUserService(deps)` and `type UserService = ReturnType<typeof createUserService>`; do not reintroduce bound production service/repository singletons.
 - App-local infrastructure singletons belong under `src/lib/`, e.g. logger aliases and `src/lib/infra/redis.ts`.
-- Tier-level `_middleware.ts` files stay thin and compose middleware arrays; shared auth handlers live in app-level `src/middlewares/*.handler.ts` files.
-- REST route modules use `*.routes.ts`, `*.handlers.ts`, `*.type.ts`.
-- Admin REST + tRPC route modules share `*.adapter.ts` operations and expose thin `*.trpc.ts` modules.
-- Backend app `tsconfig.json` files include Bun runtime types and exclude `scripts`; backend ESLint configs ignore `scripts/**`.
-- Place focused backend tests in nearby `__tests__/`, e.g. `src/services/position/__tests__/position.service.test.ts`.
+- Consumer-owned `*.port.ts` files define outbound behavior consumed by services/use-cases; keep enums, DTO schemas, domain errors, constants, and pure helpers as static imports.
+- Tier-level `_middleware.ts` files stay thin; shared auth handlers live in app-level `src/middlewares/*.handler.ts` files and are materialized by composition.
+- REST route modules use `*.routes.ts`, `*.handlers.ts`, and `*.type.ts`; route `*.index.ts` files expose router factories that receive materialized handlers/adapters.
+- Admin REST + tRPC route modules share `*.adapter.ts` operation factories and expose thin `*.trpc.ts` modules.
+- Bun API app `tsconfig.json` files include Bun runtime types and exclude `scripts`; backend ESLint configs ignore `scripts/**`.
+- Architecture guard tests in `apps/api/src/__tests__/architecture.test.ts` and `apps/admin-api/src/__tests__/architecture.test.ts` intentionally fail on forbidden production imports.

@@ -1,11 +1,12 @@
 # Tech Stack
 
 - Root package manager pin: `pnpm@11.5.0`; Turbo orchestrates workspace tasks (`turbo@^2.9.16`).
-- Workspace override pins `typescript: 6.0.3`; packages use `@typescript/native-preview` and `pnpm exec tsgo --noEmit` for typecheck.
-- Backend/shared/gateway runtime is Bun; backend app `devEngines.runtime.version` is `1.3.14`.
-- Public/admin APIs: Hono 4, `@hono/zod-openapi`, Scalar API Reference, tRPC server v11, Zod v4, Pino/hono-pino, ioredis where needed.
+- Workspace override pins `typescript: 6.0.3`; packages use `@typescript/native-preview` and `pnpm exec tsgo --noEmit` where package scripts opt into tsgo.
+- Public/admin API apps, shared backend packages, and gateway tooling run on Bun; `apps/oidc-provider` runs on Node 24 with `tsx`.
+- Public/admin APIs: Hono `^4.12.23`, `@hono/zod-openapi` `^1.4.0`, Scalar API Reference, tRPC server `^11.17.0`, Zod `^4.4.3`, Pino/hono-pino, ioredis where needed.
+- OIDC provider app: `oidc-provider` `9.8.4`, `jose` `^6.1.3`, Node 24, `vitest` `0.34.6`.
 - Database: Drizzle ORM `1.0.0-rc.2`, Drizzle Kit `1.0.0-rc.2`, PostgreSQL via `postgres` driver; historical MySQL migration script remains in `apps/api`.
-- Frontends: Umi Max `^4.6.58`, React/ReactDOM 18.3, Ant Design 5, Ant Design Pro Components, `@ant-design/icons` 6.
+- Frontends: Umi Max `^4.6.58`, React/ReactDOM `^18.3.1`, Ant Design `^5.29.3`, Ant Design Pro Components `^2.8.10`, `@ant-design/icons` `^6.2.5`.
 - Admin frontend consumes admin-api tRPC types via workspace dependency on `@iam/admin-api`.
 - SSO frontend includes `cap-widget` for human verification.
-- Gateway/APISIX package uses Bun scripts plus `yaml` parser.
+- Gateway/APISIX package uses Bun scripts plus `yaml` parser `^2.8.2`.
