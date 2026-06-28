@@ -221,6 +221,7 @@ pnpm dev
 pnpm build
 pnpm lint
 pnpm test
+pnpm e2e
 pnpm typecheck
 ```
 
@@ -275,13 +276,32 @@ pnpm --filter @iam/contracts typecheck
 pnpm --filter @iam/admin dev
 pnpm --filter @iam/admin build
 pnpm --filter @iam/admin format
+pnpm --filter @iam/admin test
+pnpm --filter @iam/admin test:watch
+pnpm --filter @iam/admin test:coverage
+pnpm --filter @iam/admin e2e
 pnpm --filter @iam/admin typecheck
 
 pnpm --filter @iam/sso dev
 pnpm --filter @iam/sso build
 pnpm --filter @iam/sso format
+pnpm --filter @iam/sso test
+pnpm --filter @iam/sso test:watch
+pnpm --filter @iam/sso test:coverage
+pnpm --filter @iam/sso e2e
 pnpm --filter @iam/sso typecheck
 ```
+
+`pnpm test` 通过 Turborepo 调度后端、shared、gateway 与两个前端的包级 `test` 任务。前端 `test` 使用
+Vitest + React Testing Library + MSW，`test:coverage` 生成覆盖率报告但第一期不设置全局覆盖率硬阈值。
+`pnpm e2e` 是独立的 Playwright mocked smoke 流程，只调度 `@iam/admin#e2e` 与 `@iam/sso#e2e`，不会混入
+常规 `pnpm test`。
+
+后续 OpenSpec 前端变更的验收规则：
+
+- 修改纯逻辑、请求封装、service wrapper 或 API 契约消费时，应新增或更新对应 Vitest 测试；如不自动化覆盖，需要在任务或设计中说明原因。
+- 修改登录、重置密码、管理端核心 CRUD、客户端配置等关键页面流程时，应新增或更新 mocked E2E smoke；如不自动化覆盖，需要明确豁免原因。
+- 仅调整样式、布局或文案且不改变业务逻辑时，可用 lint、build、截图 smoke 或人工 smoke 作为合理验证，不强制补低价值单测。
 
 ## 🧩 开发指南
 

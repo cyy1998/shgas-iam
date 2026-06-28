@@ -8,6 +8,7 @@
     "lint": "turbo lint",
     "lint:fix": "turbo lint:fix",
     "test": "turbo test",
+    "e2e": "turbo e2e",
     "typecheck": "turbo typecheck",
     "check:env-names": "bun scripts/check-env-names.ts",
     "gateway:apisix": "pnpm --filter @iam/gateway-apisix apisix",

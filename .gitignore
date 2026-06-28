@@ -10,6 +10,9 @@ dist
 coverage
 *.lcov
 
+# test artifacts
+test-results/
+
 # logs
 logs
 _.log
@@ -36,7 +39,6 @@ docker/.env.dev
 # Finder (MacOS) folder config
 .DS_Store
 
-test
 debug
 
 .turbo

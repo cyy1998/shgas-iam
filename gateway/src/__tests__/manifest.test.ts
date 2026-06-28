@@ -127,7 +127,7 @@ describe("apisix manifest validation", () => {
   it("loads app-scoped manifests from env:app single files", async () => {
     const manifest = await loadManifest("prod:tender");
 
-    expect(manifest.manifest.endsWith("gateway/manifests/prod/tender.yaml")).toBe(true);
+    expect(manifest.manifest.replaceAll("\\", "/").endsWith("gateway/manifests/prod/tender.yaml")).toBe(true);
     expect(validateManifest(manifest)).toEqual([]);
     expect(manifest.resources.services).toHaveLength(1);
     expect(manifest.resources.services.at(0)).toMatchObject({
