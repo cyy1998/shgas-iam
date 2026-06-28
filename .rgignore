@@ -1,0 +1,25 @@
+# Build outputs, caches, and generated reports.
+dist/
+out/
+coverage/
+test-results/
+playwright-report/
+.turbo/
+.cache/
+tmp/
+
+# Generated frontend framework files.
+apps/admin/src/.umi/
+apps/admin/src/.umi-production/
+apps/sso/src/.umi/
+apps/sso/src/.umi-production/
+
+# Vendored or generated browser assets.
+apps/api/static/
+apps/admin-api/static/
+apps/sso/public/cap/*.min.js
+**/*.min.js
+**/*.map
+
+# Dependency lockfile noise; inspect explicitly for dependency changes.
+pnpm-lock.yaml
