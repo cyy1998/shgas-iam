@@ -225,6 +225,15 @@ pnpm e2e
 pnpm typecheck
 ```
 
+首次在 Linux/WSL 环境运行 Playwright E2E 前，先安装浏览器与 Chromium 系统依赖：
+
+```bash
+pnpm e2e:install
+```
+
+如果当前环境不能使用 `sudo`，可以先运行 `pnpm e2e:install:browsers` 安装浏览器，再让有 sudo 权限的
+WSL 用户执行 `pnpm e2e:install` 补齐系统依赖。
+
 ### 公共 API
 
 ```bash
@@ -295,7 +304,8 @@ pnpm --filter @iam/sso typecheck
 `pnpm test` 通过 Turborepo 调度后端、shared、gateway 与两个前端的包级 `test` 任务。前端 `test` 使用
 Vitest + React Testing Library + MSW，`test:coverage` 生成覆盖率报告但第一期不设置全局覆盖率硬阈值。
 `pnpm e2e` 是独立的 Playwright mocked smoke 流程，只调度 `@iam/admin#e2e` 与 `@iam/sso#e2e`，不会混入
-常规 `pnpm test`。
+常规 `pnpm test`。Linux/WSL 下包级 `e2e` 会先检查 Playwright Chromium 的系统依赖，缺失时会提示运行
+`pnpm e2e:install`。
 
 后续 OpenSpec 前端变更的验收规则：
 

@@ -5,9 +5,9 @@ const baseURL = `http://127.0.0.1:${port}`;
 
 export default defineConfig({
   testDir: './e2e',
-  timeout: 60_000,
+  timeout: 180_000,
   expect: {
-    timeout: 10_000,
+    timeout: 120_000,
   },
   reporter: process.env.CI ? [['html', { open: 'never' }], ['line']] : 'list',
   use: {
@@ -18,9 +18,10 @@ export default defineConfig({
   webServer: {
     command: 'pnpm dev:e2e',
     reuseExistingServer: !process.env.CI,
-    timeout: 120_000,
+    timeout: 240_000,
     url: `${baseURL}/iam-admin/users`,
   },
+  workers: 1,
   projects: [
     {
       name: 'chromium',

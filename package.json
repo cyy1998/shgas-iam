@@ -9,6 +9,8 @@
     "lint:fix": "turbo lint:fix",
     "test": "turbo test",
     "e2e": "turbo e2e",
+    "e2e:install": "pnpm --filter @iam/admin exec playwright install --with-deps chromium",
+    "e2e:install:browsers": "pnpm --filter @iam/admin exec playwright install chromium",
     "typecheck": "turbo typecheck",
     "check:docs": "bun scripts/check-docs-index.ts",
     "check:env-names": "bun scripts/check-env-names.ts",
