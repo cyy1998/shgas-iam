@@ -38,6 +38,7 @@ type ParseCredentialOptions = {
 };
 
 const INVALID_CREDENTIAL_MESSAGE = "登录凭证无效";
+const INVALID_CREDENTIAL_TIMESTAMP_MESSAGE = "登录凭证已过期或设备时间不正确，请校正设备时间后重试";
 
 const LoginCredentialPayloadSchema = z.object({
   v: z.literal(LOGIN_CREDENTIAL_VERSION),
@@ -52,6 +53,10 @@ function invalidCredential(): never {
   throw new InvalidLoginCredentialError(INVALID_CREDENTIAL_MESSAGE);
 }
 
+function invalidCredentialTimestamp(): never {
+  throw new InvalidLoginCredentialError(INVALID_CREDENTIAL_TIMESTAMP_MESSAGE);
+}
+
 function nonceKey(kid: string, nonce: string) {
   const digest = createHash("sha256")
     .update(`${kid}:${nonce}`)
@@ -62,7 +67,7 @@ function nonceKey(kid: string, nonce: string) {
 
 function assertTimestampInWindow(ts: number, now: number, maxSkewMs: number) {
   if (Math.abs(now - ts) > maxSkewMs) {
-    invalidCredential();
+    invalidCredentialTimestamp();
   }
 }
 

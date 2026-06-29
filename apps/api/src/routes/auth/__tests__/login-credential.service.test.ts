@@ -50,4 +50,16 @@ describe("createLoginCredentialParser", () => {
     await parser.parseLoginPasswordCredential(credential);
     await expect(parser.parseLoginPasswordCredential(credential)).rejects.toThrow("登录凭证无效");
   });
+
+  test("rejects credentials outside the timestamp window with a clear message", async () => {
+    const parser = createParser();
+    const credential = createLoginCredential({
+      ...input,
+      now: input.now - 300_001,
+    });
+
+    await expect(parser.parseLoginPasswordCredential(credential)).rejects.toThrow(
+      "登录凭证已过期或设备时间不正确，请校正设备时间后重试",
+    );
+  });
 });
