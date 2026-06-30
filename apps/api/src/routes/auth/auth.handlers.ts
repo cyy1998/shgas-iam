@@ -8,7 +8,7 @@ import * as resp from "@iam/api-core/http";
 import { SystemLogEvent } from "@iam/api-core/logger";
 import { verifyInternalClient } from "@iam/api-core/middlewares";
 import { getCookie, setCookie } from "hono/cookie";
-import { getVerificationContext } from "../human-verification-context";
+import { getApiAuditRequestContext } from "@api/services/audit/audit.service";
 
 export interface CreateAuthHandlersDeps {
   authService: Pick<AuthService, "loginPassword" | "loginMobile" | "authz">;
@@ -24,9 +24,10 @@ export function createAuthHandlers(deps: CreateAuthHandlersDeps) {
   const loginPassword: AuthRouteHandler<"loginPassword"> = async (c) => {
     const { credential, capToken } = c.req.valid("json");
     const { username, password } = await deps.loginCredentialParser.parseLoginPasswordCredential(credential);
+    const requestContext = getApiAuditRequestContext(c);
     const data = await deps.authService.loginPassword(username, password, {
       capToken,
-      context: getVerificationContext(c, username),
+      requestContext,
     });
     setCookie(c, "global_session", data.token, {
       httpOnly: true,
@@ -39,9 +40,10 @@ export function createAuthHandlers(deps: CreateAuthHandlersDeps) {
 
   const loginMobile: AuthRouteHandler<"loginMobile"> = async (c) => {
     const { code, phoneNumber, capToken } = c.req.valid("json");
+    const requestContext = getApiAuditRequestContext(c);
     const data = await deps.authService.loginMobile(phoneNumber, code, {
       capToken,
-      context: getVerificationContext(c, phoneNumber),
+      requestContext,
     });
     setCookie(c, "global_session", data.token, {
       httpOnly: true,

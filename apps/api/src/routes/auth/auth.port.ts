@@ -1,7 +1,6 @@
-import type { AuditLogWriterPort } from "@api/services/audit/audit.service";
+import type { ApiRequestContext, AuditLogWriterPort } from "@api/services/audit/audit.service";
 import type { CapService } from "@api/services/human-verification/cap.service";
 import type { HumanRiskService } from "@api/services/human-verification/human-risk.service";
-import type { HumanVerificationContext } from "@api/services/human-verification/human-verification.type";
 import type { MobileService } from "@api/services/mobile/mobile.service";
 import type { CustomSsoSessionKernelAdapter } from "@api/services/session/custom-sso-session-kernel.adapter";
 import type { UserService } from "@api/services/user/user.service";
@@ -47,7 +46,7 @@ export interface AuthServiceDeps {
 
 export type LoginHumanVerificationOptions = {
   capToken?: string;
-  context?: HumanVerificationContext;
+  requestContext?: ApiRequestContext;
 };
 
 export type LoginErrorClass = typeof LoginFailedError | typeof InvalidVerificationCodeError;

@@ -1,6 +1,7 @@
 import type { OrganizationService } from "@api/services/organization/organization.service";
 import type { UserService } from "@api/services/user/user.service";
 import type { PublicRouteHandler } from "./public.type";
+import { getApiAuditRequestContext } from "@api/services/audit/audit.service";
 import * as resp from "@iam/api-core/http";
 
 export interface CreatePublicHandlersDeps {
@@ -16,13 +17,17 @@ export function createPublicHandlers(deps: CreatePublicHandlersDeps) {
 
   const passwordChange: PublicRouteHandler<"passwordChange"> = async (c) => {
     const { oldPassword, newPassword } = c.req.valid("json");
-    const data = await deps.userService.setPassword(c.get("username"), oldPassword, newPassword);
+    const data = await deps.userService.setPassword(c.get("username"), oldPassword, newPassword, {
+      requestContext: getApiAuditRequestContext(c),
+    });
     return c.json(resp.ok(data));
   };
 
   const mobileSet: PublicRouteHandler<"mobileSet"> = async (c) => {
     const { phoneNumber, code } = c.req.valid("json");
-    await deps.userService.setMobile(c.get("userId"), phoneNumber, code);
+    await deps.userService.setMobile(c.get("userId"), phoneNumber, code, {
+      requestContext: getApiAuditRequestContext(c),
+    });
     return c.json(resp.ok(true));
   };
 

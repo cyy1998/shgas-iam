@@ -23,6 +23,7 @@ export const AuditLogQueryConditionsSchema = z.object({
   targetCode: z.string().min(1).max(128).optional(),
   targetKeyword: z.string().min(1).max(128).optional(),
   requestId: z.string().min(1).max(128).optional(),
+  traceId: z.string().min(1).max(128).optional(),
   eventTimeFrom: z.coerce.date().optional(),
   eventTimeTo: z.coerce.date().optional(),
 }).openapi("AuditLogQueryConditions");

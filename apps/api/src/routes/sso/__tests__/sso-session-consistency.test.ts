@@ -390,6 +390,18 @@ async function createPrincipalToken(customSsoSession: ReturnType<typeof createSe
   return (await customSsoSession.createPrincipalSession(userDetail, { amr: ["pwd"] })).token;
 }
 
+function requestContext(requestId: string) {
+  return {
+    sourceApp: "iam",
+    requestId,
+    traceId: "11111111111111111111111111111111",
+    ip: "203.0.113.10",
+    userAgent: "api-test",
+    route: "/sso/authorize",
+    method: "GET",
+  };
+}
+
 async function createAuthorizedCode(
   services: ReturnType<typeof createServices>,
   clientCode = client.clientCode,
@@ -406,6 +418,13 @@ async function createAuthorizedCode(
 async function exchangeIndependentLocalSession(services: ReturnType<typeof createServices>) {
   const { code } = await createAuthorizedCode(services);
   return await services.ssoService.setToken(code, client.clientCode, client.clientSecret);
+}
+
+async function exchangeIndependentLocalSessionWithRequestContext(services: ReturnType<typeof createServices>) {
+  const { code } = await createAuthorizedCode(services);
+  return await services.ssoService.setToken(code, client.clientCode, client.clientSecret, {
+    requestContext: requestContext("req-local-session"),
+  });
 }
 
 function createOaToken(loginid: string, ts: string, clientSecret = client.clientSecret) {
@@ -504,14 +523,14 @@ describe("SSO Kernel session consistency", () => {
       "authorization_header",
       client.clientCode,
       "https://app.example.com/callback",
-      "req-authz-header",
+      { requestContext: requestContext("req-authz-header") },
     );
     await services.ssoService.authorize(
       principalToken,
       "query",
       client.clientCode,
       "https://app.example.com/callback",
-      "req-query-token",
+      { requestContext: requestContext("req-query-token") },
     );
 
     expect(logger.info).toHaveBeenCalledWith(expect.objectContaining({
@@ -520,6 +539,7 @@ describe("SSO Kernel session consistency", () => {
       source: "authorization_header",
       clientCode: client.clientCode,
       requestId: "req-authz-header",
+      traceId: "11111111111111111111111111111111",
     }), "legacy principal session bearer source used");
     expect(logger.info).toHaveBeenCalledWith(expect.objectContaining({
       event: SystemLogEvent.SsoLegacyBearerSourceUsed,
@@ -527,6 +547,7 @@ describe("SSO Kernel session consistency", () => {
       source: "query",
       clientCode: client.clientCode,
       requestId: "req-query-token",
+      traceId: "11111111111111111111111111111111",
     }), "legacy principal session bearer source used");
 
     const output = JSON.stringify(logger.info.mock.calls);
@@ -560,12 +581,19 @@ describe("SSO Kernel session consistency", () => {
     const services = createServices();
     const { code } = await createAuthorizedCode(services);
 
-    const result = await services.ssoService.setToken(code, client.clientCode, client.clientSecret);
+    const result = await services.ssoService.setToken(code, client.clientCode, client.clientSecret, {
+      requestContext: requestContext("req-local-session"),
+    });
 
     expect(result.sid).toContain("iam_ls_");
     expect(result.ttl).toBeGreaterThan(0);
     expect(result.userInfo.username).toBe(userDetail.username);
     expect(auditLogs).toHaveLength(1);
+    expect(auditLogs[0]).toMatchObject({
+      action: "auth.login.local",
+      requestId: "req-local-session",
+      traceId: "11111111111111111111111111111111",
+    });
     expect(fakeRedis.payloadKeys()).toHaveLength(1);
     expect(fakeRedis.legacyLocalSessionKeys()).toHaveLength(0);
     expect(fakeRedis.reverseKeys()).toHaveLength(0);
@@ -597,10 +625,17 @@ describe("SSO Kernel session consistency", () => {
     fakeRedis.failNextPayloadWrite = true;
 
     await expect(
-      services.ssoService.setToken(code, client.clientCode, client.clientSecret),
+      services.ssoService.setToken(code, client.clientCode, client.clientSecret, {
+        requestContext: requestContext("req-payload-failure"),
+      }),
     ).rejects.toBeInstanceOf(AuthzUnauthorizedError);
 
     expect(fakeRedis.payloadKeys()).toHaveLength(0);
+    expect(logger.warn).toHaveBeenCalledWith(expect.objectContaining({
+      clientCode: client.clientCode,
+      requestId: "req-payload-failure",
+      traceId: "11111111111111111111111111111111",
+    }), "failed to write custom sso local session payload");
     await expect(
       services.ssoService.setToken(code, client.clientCode, client.clientSecret),
     ).rejects.toBeInstanceOf(InvalidAuthCodeError);
@@ -666,7 +701,7 @@ describe("SSO Kernel session consistency", () => {
       services.customSsoSession.authorizeLocalSession(result.sid, client),
     ).rejects.toBeInstanceOf(AuthzUnauthorizedError);
 
-    const second = await exchangeIndependentLocalSession(services);
+    const second = await exchangeIndependentLocalSessionWithRequestContext(services);
     liveUserAvailable = false;
     await expect(
       services.customSsoSession.authorizeLocalSession(second.sid, client),

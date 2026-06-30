@@ -1,6 +1,7 @@
 import type Provider from "oidc-provider";
 import type { OidcProviderEnv } from "../env.ts";
 import type { ClientAuthRateLimiter } from "../security/client-auth-rate-limit.ts";
+import { getTraceIdFromHeaders } from "@iam/api-core/logger";
 import { getCookieValue } from "../interaction/global-session.ts";
 import { parseBasicClientId } from "../security/client-auth-rate-limit.ts";
 import { setOidcRoute } from "./request-route.ts";
@@ -18,6 +19,7 @@ export interface RegisterProviderMiddlewareDeps {
 export function registerProviderMiddleware(provider: Provider, deps: RegisterProviderMiddlewareDeps) {
   provider.middleware.unshift(async (ctx, next) => {
     ctx.state.requestId = ctx.get("x-request-id") || crypto.randomUUID();
+    ctx.state.traceId = getTraceIdFromHeaders(name => ctx.get(name)) ?? null;
     ctx.set("x-request-id", ctx.state.requestId);
     const principalSessionToken = getCookieValue(ctx.get("cookie"), deps.env.oidc.globalSessionCookie) ?? undefined;
     const basicClientId = ctx.path === "/token"

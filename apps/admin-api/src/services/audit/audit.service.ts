@@ -1,8 +1,10 @@
 import type { AuditActorType, AuditDetails, AuditOutcome, AuditRequestContext } from "@iam/domain/audit";
+import type { UnitOfWorkTransactionOptions } from "@iam/api-core/uow";
 import type { Context } from "hono";
 import type { AuditRepository } from "./audit.repository";
 import type { AuditLogPaginationQueryDto } from "./audit.type";
 import { getRequestId, getRequestIp, getTraceId } from "@iam/api-core/core/request-context";
+import { pickObservabilityContext } from "@iam/api-core/observability";
 import { expandAuditActionAliases } from "@iam/contracts";
 import {
   AuditLogDtoSchema,
@@ -38,6 +40,12 @@ export type AuditLogInput = {
 export type AdminAuditContext = Pick<AuditLogInput, "actorType"> & Partial<AuditLogInput> & {
   principalSessionId?: string | null;
 };
+
+export function adminAuditTransactionOptions(auditContext?: AdminAuditContext): UnitOfWorkTransactionOptions {
+  return {
+    observability: pickObservabilityContext(auditContext),
+  };
+}
 
 function getContextUserName(c: Context): string | null {
   const user = c.get("userDetailDto") as { name?: unknown } | undefined;

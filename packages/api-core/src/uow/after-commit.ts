@@ -1,3 +1,5 @@
+import type { ObservabilityContext } from "../observability";
+import { observabilityLogFields } from "../observability";
 import { AfterCommitRequiredTaskError } from "./errors";
 
 export type AfterCommitTaskMode = "required" | "bestEffort";
@@ -45,6 +47,7 @@ export function createAfterCommitPort(tasks: AfterCommitTask[]): AfterCommitPort
 export async function runAfterCommitTasks(
   tasks: readonly AfterCommitTask[],
   logger: AfterCommitLoggerPort,
+  observability?: ObservabilityContext | null,
 ): Promise<void> {
   const requiredFailures: AfterCommitTaskFailure[] = [];
 
@@ -53,7 +56,12 @@ export async function runAfterCommitTasks(
       await task.callback();
     }
     catch (err) {
-      const logFields = { afterCommit: task.name, mode: task.mode, err };
+      const logFields = {
+        afterCommit: task.name,
+        mode: task.mode,
+        err,
+        ...observabilityLogFields(observability),
+      };
       if (task.mode === "required") {
         logger.error(logFields, "required afterCommit task failed");
         requiredFailures.push({ name: task.name, mode: task.mode, error: err });

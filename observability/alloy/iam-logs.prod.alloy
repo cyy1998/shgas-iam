@@ -108,3 +108,23 @@ loki.write "default" {
     url = env("LOKI_PUSH_URL")
   }
 }
+
+otelcol.receiver.otlp "apisix" {
+  http {
+    endpoint = "0.0.0.0:4318"
+  }
+
+  output {
+    traces = [otelcol.processor.batch.apisix.input]
+  }
+}
+
+otelcol.processor.batch "apisix" {
+  output {
+    traces = [otelcol.exporter.debug.apisix.input]
+  }
+}
+
+otelcol.exporter.debug "apisix" {
+  verbosity = "basic"
+}

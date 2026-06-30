@@ -3,6 +3,7 @@ import type { HumanVerificationContext } from "./human-verification.type";
 import { createHmac } from "node:crypto";
 import { HumanVerificationAction } from "@api/enums/humanVerification.action";
 import { SystemLogEvent } from "@iam/api-core/logger";
+import { observabilityLogFields } from "@iam/api-core/observability";
 import { HumanVerificationRequiredError } from "./human-verification.error";
 
 type RedeemInput = {
@@ -14,6 +15,20 @@ const tokenActionKey = (secret: string, token: string) => `cap:token-action:${ha
 
 function hashToken(secret: string, token: string) {
   return createHmac("sha256", secret).update(token).digest("hex");
+}
+
+function verificationLogFields(
+  event: typeof SystemLogEvent[keyof typeof SystemLogEvent],
+  action: HumanVerificationAction,
+  context?: HumanVerificationContext,
+) {
+  return {
+    event,
+    action,
+    ...observabilityLogFields(context),
+    ip: context?.ip,
+    subject: context?.subject,
+  };
 }
 
 export function createCapService(deps: CapServiceDeps) {
@@ -48,12 +63,19 @@ export function createCapService(deps: CapServiceDeps) {
     return Object.values(HumanVerificationAction).includes(value as HumanVerificationAction);
   }
 
-  async function verifyTokenForAction(action: HumanVerificationAction, token?: string) {
+  async function verifyTokenForAction(
+    action: HumanVerificationAction,
+    token?: string,
+    context?: HumanVerificationContext,
+  ) {
     if (!deps.config.capEnabled) {
       return;
     }
     if (!token) {
-      deps.logger.warn({ event: SystemLogEvent.HumanVerificationMissing, action }, "human verification token missing");
+      deps.logger.warn(
+        verificationLogFields(SystemLogEvent.HumanVerificationMissing, action, context),
+        "human verification token missing",
+      );
       throw new HumanVerificationRequiredError();
     }
 
@@ -61,17 +83,26 @@ export function createCapService(deps: CapServiceDeps) {
     const storedAction = await deps.redis.get(actionKey);
     if (storedAction !== action) {
       await deps.redis.del(actionKey);
-      deps.logger.warn({ event: SystemLogEvent.HumanVerificationMismatch, action, storedAction }, "human verification token action mismatch");
+      deps.logger.warn({
+        ...verificationLogFields(SystemLogEvent.HumanVerificationMismatch, action, context),
+        storedAction,
+      }, "human verification token action mismatch");
       throw new HumanVerificationRequiredError();
     }
 
     const result = await deps.capClient.validateToken(token);
     await deps.redis.del(actionKey);
     if (!result.success) {
-      deps.logger.warn({ event: SystemLogEvent.HumanVerificationFailed, action }, "human verification token validation failed");
+      deps.logger.warn(
+        verificationLogFields(SystemLogEvent.HumanVerificationFailed, action, context),
+        "human verification token validation failed",
+      );
       throw new HumanVerificationRequiredError();
     }
-    deps.logger.info({ event: SystemLogEvent.HumanVerificationValidated, action }, "human verification token validated");
+    deps.logger.info(
+      verificationLogFields(SystemLogEvent.HumanVerificationValidated, action, context),
+      "human verification token validated",
+    );
   }
 
   async function ensureActionAllowed(
@@ -81,13 +112,10 @@ export function createCapService(deps: CapServiceDeps) {
   ) {
     if (await deps.riskService.shouldRequireVerification(action, context)) {
       deps.logger.info({
-        event: SystemLogEvent.HumanVerificationRequired,
-        action,
+        ...verificationLogFields(SystemLogEvent.HumanVerificationRequired, action, context),
         hasToken: token !== undefined,
-        ip: context.ip,
-        subject: context.subject,
       }, "human verification required for action");
-      await verifyTokenForAction(action, token);
+      await verifyTokenForAction(action, token, context);
     }
   }
 

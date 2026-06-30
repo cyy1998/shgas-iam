@@ -26,12 +26,31 @@ apisix:
     listen:
       - port: 9443
 
+plugins:
+  - request-id
+  - real-ip
+  - limit-req
+  - cors
+  - proxy-rewrite
+  - prometheus
+  - redirect
+  - forward-auth
+  - key-auth
+  - opentelemetry
+
 nginx_config:
   http:
     access_log: /dev/stdout
     access_log_format_escape: json
-    access_log_format: '{"event":"gateway.request.completed","sourceApp":"apisix","requestId":"$sent_http_x_request_id","method":"$request_method","path":"$uri","statusCode":$status,"durationMs":$request_time,"upstreamStatus":"$upstream_status","upstreamAddr":"$upstream_addr","clientIp":"$remote_addr","userAgent":"$http_user_agent"}'
+    access_log_format: '{"event":"gateway.request.completed","sourceApp":"apisix","requestId":"$sent_http_x_request_id","traceId":"$opentelemetry_trace_id","spanId":"$opentelemetry_span_id","traceparent":"$opentelemetry_context_traceparent","method":"$request_method","path":"$uri","statusCode":$status,"durationMs":$request_time,"upstreamStatus":"$upstream_status","upstreamAddr":"$upstream_addr","clientIp":"$remote_addr","userAgent":"$http_user_agent"}'
 
 plugin_attr:
   prometheus:
     export_uri: /apisix/prometheus/metrics
+  opentelemetry:
+    set_ngx_var: true
+    resource:
+      service.name: shgas-iam-apisix
+    collector:
+      address: ${{APISIX_OTEL_COLLECTOR_ENDPOINT}}
+      request_timeout: 3

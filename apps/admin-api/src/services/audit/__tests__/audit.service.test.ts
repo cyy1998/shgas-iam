@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, mock, test } from "bun:test";
+import { AuditLogPaginationQueryDtoSchema } from "../audit.schema";
 import { createAdminAuditService, normalizeAuditLogQueryActions } from "../audit.service";
 
 const insertedValues: unknown[] = [];
@@ -156,5 +157,25 @@ describe("admin auditService.searchAuditLogsForAdmin", () => {
       total: 1,
       pages: 1,
     });
+  });
+
+  test("accepts and forwards traceId exact filters", async () => {
+    const traceId = "11111111111111111111111111111111";
+    const query = AuditLogPaginationQueryDtoSchema.parse({
+      conditions: { traceId },
+      pageNum: 1,
+      pageSize: 10,
+    });
+    selectedRows = [auditRow({ traceId })];
+
+    await expect(auditService.searchAuditLogsForAdmin(query)).resolves.toMatchObject({
+      result: [{ traceId }],
+      total: 1,
+      pages: 1,
+    });
+
+    expect(searchAuditLogsPaged).toHaveBeenCalledWith(expect.objectContaining({
+      conditions: expect.objectContaining({ traceId }),
+    }));
   });
 });

@@ -16,14 +16,18 @@ export function createImmediateUnitOfWork<TxPorts extends object>(
   options: CreateImmediateUnitOfWorkOptions = {},
 ): UnitOfWorkPort<TxPorts> {
   return {
-    async transaction(callback) {
+    async transaction(callback, transactionOptions) {
       const afterCommitTasks: AfterCommitTask[] = [];
       const result = await callback({
         ...txPorts,
         ...createAfterCommitPort(afterCommitTasks),
       });
 
-      await runAfterCommitTasks(afterCommitTasks, options.logger ?? noopAfterCommitLogger);
+      await runAfterCommitTasks(
+        afterCommitTasks,
+        options.logger ?? noopAfterCommitLogger,
+        transactionOptions?.observability,
+      );
 
       return result;
     },

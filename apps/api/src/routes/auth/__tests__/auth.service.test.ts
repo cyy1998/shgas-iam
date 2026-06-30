@@ -208,6 +208,18 @@ async function expectCredentialError(promise: Promise<unknown>, message: string)
   await expect(promise).rejects.toThrow(message);
 }
 
+function requestContext() {
+  return {
+    sourceApp: "iam",
+    requestId: "req-auth",
+    traceId: "11111111111111111111111111111111",
+    ip: "203.0.113.10",
+    userAgent: "auth-service-test",
+    route: "/auth/login/password",
+    method: "POST",
+  };
+}
+
 beforeEach(() => {
   fakeRedis.reset();
   auditLogs.length = 0;
@@ -339,9 +351,49 @@ describe("createAuthService", () => {
     await expectCredentialError(authService.loginMobile(MOBILE, "0000"), "验证码错误");
 
     expect(humanRiskLoginFailures).toEqual([
-      ["passwordLogin", { subject: userDetail.username }],
-      ["mobileLogin", { subject: MOBILE }],
+      ["passwordLogin", {
+        subject: userDetail.username,
+        ip: undefined,
+        requestId: null,
+        traceId: null,
+      }],
+      ["mobileLogin", {
+        subject: MOBILE,
+        ip: undefined,
+        requestId: null,
+        traceId: null,
+      }],
     ]);
+  });
+
+  test("records login audit with request context", async () => {
+    const authService = createService();
+    passwordMatches = true;
+
+    await expect(authService.loginPassword(userDetail.username, "correct-password", {
+      requestContext: requestContext(),
+    })).resolves.toEqual({
+      isMobileSet: true,
+      token: SESSION_ID,
+    });
+
+    expect(ensureActionAllowed).toHaveBeenCalledWith(
+      "passwordLogin",
+      undefined,
+      expect.objectContaining({
+        requestId: "req-auth",
+        traceId: "11111111111111111111111111111111",
+        subject: userDetail.username,
+      }),
+    );
+    expect(auditLogs.at(-1)).toMatchObject({
+      action: "auth.login.password",
+      outcome: "success",
+      requestId: "req-auth",
+      traceId: "11111111111111111111111111111111",
+      ip: "203.0.113.10",
+      route: "/auth/login/password",
+    });
   });
 
   test("stops login when human verification is required", async () => {

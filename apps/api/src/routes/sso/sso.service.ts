@@ -1,4 +1,5 @@
-import type { CustomSsoPrincipalTokenSource, SsoServiceDeps } from "./sso.port";
+import type { CustomSsoPrincipalTokenSource, SsoRequestOptions, SsoServiceDeps } from "./sso.port";
+import { withApiRequestContext } from "@api/services/audit/audit.service";
 import { buildOaLoginSuccessAudit, buildWechatLoginSuccessAudit } from "@api/services/audit/events/auth.audit";
 import { UserDetailDtoSchema } from "@api/services/user/user.schema";
 import { AuthzUnauthorizedError } from "@iam/api-core/errors/AuthzUnauthorizedError";
@@ -6,6 +7,7 @@ import { InvalidRedirectUriError } from "@iam/api-core/errors/InvalidRedirectUri
 import { InvalidSsoClientError } from "@iam/api-core/errors/InvalidSsoClientError";
 import { LoginFailedError } from "@iam/api-core/errors/LoginFailedError";
 import { SystemLogEvent } from "@iam/api-core/logger";
+import { observabilityLogFields } from "@iam/api-core/observability";
 import { reviveIsoDates } from "@iam/api-core/utils";
 import { ClientManagementLevel } from "@iam/contracts";
 import { matchRedirectUrlPattern } from "@iam/domain/client";
@@ -23,7 +25,12 @@ function hasSupportedRedirectUrlSyntax(redirectUrl: string) {
 }
 
 export function createSsoService(deps: SsoServiceDeps) {
-  function isRedirectUrlAllowed(clientCode: string, redirectUrl: string, patterns: string[]) {
+  function isRedirectUrlAllowed(
+    clientCode: string,
+    redirectUrl: string,
+    patterns: string[],
+    options: SsoRequestOptions = {},
+  ) {
     if (!hasSupportedRedirectUrlSyntax(redirectUrl)) {
       return false;
     }
@@ -35,19 +42,25 @@ export function createSsoService(deps: SsoServiceDeps) {
         }
       }
       catch (err) {
-        deps.logger.warn({ event: SystemLogEvent.RedirectPatternInvalid, err, clientCode, pattern }, "invalid client redirect url pattern");
+        deps.logger.warn({
+          event: SystemLogEvent.RedirectPatternInvalid,
+          err,
+          clientCode,
+          pattern,
+          ...observabilityLogFields(options.requestContext),
+        }, "invalid client redirect url pattern");
       }
     }
 
     return false;
   }
 
-  async function callback(code: string, clientCode: string, redirectUrl: string) {
+  async function callback(code: string, clientCode: string, redirectUrl: string, options: SsoRequestOptions = {}) {
     const client = await deps.clientService.getClientByCode(clientCode);
     if (client === null) {
       throw new InvalidSsoClientError("非法client代码");
     }
-    if (!isRedirectUrlAllowed(clientCode, redirectUrl, client.extAttributes.validRedirectUrls)) {
+    if (!isRedirectUrlAllowed(clientCode, redirectUrl, client.extAttributes.validRedirectUrls, options)) {
       throw new InvalidRedirectUriError("非法重定向地址");
     }
     const authCode = await deps.customSsoSession.consumeAuthCode({
@@ -69,6 +82,7 @@ export function createSsoService(deps: SsoServiceDeps) {
       mode: ClientManagementLevel.Gateway,
       userDetail: userDetailDto,
       orcasSessionId: globalOrcasSessionId,
+      requestContext: options.requestContext,
     });
     return {
       orcasSessionId: globalOrcasSessionId,
@@ -76,7 +90,7 @@ export function createSsoService(deps: SsoServiceDeps) {
     };
   }
 
-  async function setToken(code: string, clientCode: string, clientSecret: string) {
+  async function setToken(code: string, clientCode: string, clientSecret: string, options: SsoRequestOptions = {}) {
     const client = await deps.clientService.getClientByCode(clientCode);
     if (client === null || clientSecret !== client.clientSecret) {
       throw new InvalidSsoClientError("非法Client");
@@ -91,6 +105,7 @@ export function createSsoService(deps: SsoServiceDeps) {
       client,
       mode: ClientManagementLevel.Independent,
       userDetail: authCode.userDetail,
+      requestContext: options.requestContext,
     });
     return { sid: token, ttl, userInfo };
   }
@@ -100,13 +115,13 @@ export function createSsoService(deps: SsoServiceDeps) {
     tokenSource: CustomSsoPrincipalTokenSource,
     clientCode: string,
     redirectUrl: string,
-    requestId?: string,
+    options: SsoRequestOptions = {},
   ) {
     const client = await deps.clientService.getClientByCode(clientCode);
     if (client === null) {
       throw new InvalidSsoClientError("非法client代码");
     }
-    if (!isRedirectUrlAllowed(clientCode, redirectUrl, client.extAttributes.validRedirectUrls)) {
+    if (!isRedirectUrlAllowed(clientCode, redirectUrl, client.extAttributes.validRedirectUrls, options)) {
       throw new InvalidRedirectUriError("非法重定向地址");
     }
     return await deps.customSsoSession.authorize({
@@ -114,7 +129,7 @@ export function createSsoService(deps: SsoServiceDeps) {
       tokenSource,
       clientCode,
       redirectUrl,
-      requestId,
+      requestContext: options.requestContext,
     });
   }
 
@@ -123,7 +138,13 @@ export function createSsoService(deps: SsoServiceDeps) {
     return true;
   }
 
-  async function loginOA(clientCode: string, loginid: string, ts: string, token: string) {
+  async function loginOA(
+    clientCode: string,
+    loginid: string,
+    ts: string,
+    token: string,
+    options: SsoRequestOptions = {},
+  ) {
     const client = await deps.clientService.getClientByCode(clientCode);
     if (client === null) {
       throw new InvalidSsoClientError("非法client代码");
@@ -141,7 +162,10 @@ export function createSsoService(deps: SsoServiceDeps) {
       throw new LoginFailedError("用户类别不支持OA登录");
     }
     const { token: sessionId } = await deps.customSsoSession.createPrincipalSession(userDetailDto, { amr: ["oa"] });
-    await deps.auditLogWriter.recordAuditLog(buildOaLoginSuccessAudit(userDetailDto, clientCode));
+    await deps.auditLogWriter.recordAuditLog(withApiRequestContext(
+      options.requestContext,
+      buildOaLoginSuccessAudit(userDetailDto, clientCode),
+    ));
     return { token: sessionId, isMobileSet: userDetailDto.mobile !== null };
   }
 
@@ -166,7 +190,7 @@ export function createSsoService(deps: SsoServiceDeps) {
     return { token, isMobileSet: userDetailDto.mobile !== null };
   }
 
-  async function loginWX(code: string) {
+  async function loginWX(code: string, options: SsoRequestOptions = {}) {
     const codeCached = await deps.redis.get(`wx-code:${code}`);
     if (codeCached !== null) {
       return wxRetry(code);
@@ -175,7 +199,10 @@ export function createSsoService(deps: SsoServiceDeps) {
     const wxId = await deps.wechatClient.getWxUserId(code);
     const userDetailDto = await deps.userService.getUserDetailByWxId(wxId);
     const { token } = await deps.customSsoSession.createPrincipalSession(userDetailDto, { amr: ["wechat"] });
-    await deps.auditLogWriter.recordAuditLog(buildWechatLoginSuccessAudit(userDetailDto));
+    await deps.auditLogWriter.recordAuditLog(withApiRequestContext(
+      options.requestContext,
+      buildWechatLoginSuccessAudit(userDetailDto),
+    ));
     await deps.redis.set(`wx-code:${code}`, JSON.stringify(userDetailDto), "EX", 600);
     return { token, isMobileSet: userDetailDto.mobile !== null };
   }

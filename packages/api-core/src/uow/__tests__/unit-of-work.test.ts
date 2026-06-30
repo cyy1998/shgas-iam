@@ -117,13 +117,46 @@ describe("createUnitOfWork", () => {
     expect(events).toEqual(["required.fail", "best.fail", "required.ok"]);
     expect(logger.error).toHaveBeenCalledTimes(1);
     expect(logger.error.mock.calls[0]).toEqual([
-      { afterCommit: "required.fail", mode: "required", err: requiredFailure },
+      { afterCommit: "required.fail", mode: "required", err: requiredFailure, requestId: null, traceId: null },
       "required afterCommit task failed",
     ]);
     expect(logger.warn).toHaveBeenCalledTimes(1);
     expect(logger.warn.mock.calls[0]).toEqual([
-      { afterCommit: "best.fail", mode: "bestEffort", err: bestEffortFailure },
+      { afterCommit: "best.fail", mode: "bestEffort", err: bestEffortFailure, requestId: null, traceId: null },
       "best-effort afterCommit task failed",
+    ]);
+  });
+
+  test("logs after-commit failures with transaction observability context", async () => {
+    const logger = createLogger();
+    const failure = new Error("publish failed");
+    const uow = createUnitOfWork({
+      db: createTransactionalDb({}),
+      logger,
+      createTxPorts: () => ({}),
+    });
+
+    await expect(uow.transaction(async (tx) => {
+      tx.afterCommit.required("required.fail", () => {
+        throw failure;
+      });
+      return "ok";
+    }, {
+      observability: {
+        requestId: "req-1",
+        traceId: "11111111111111111111111111111111",
+      },
+    })).rejects.toBeInstanceOf(AfterCommitRequiredTaskError);
+
+    expect(logger.error.mock.calls[0]).toEqual([
+      {
+        afterCommit: "required.fail",
+        mode: "required",
+        err: failure,
+        requestId: "req-1",
+        traceId: "11111111111111111111111111111111",
+      },
+      "required afterCommit task failed",
     ]);
   });
 });
@@ -155,6 +188,35 @@ describe("createImmediateUnitOfWork", () => {
     expect(events).toEqual(["callback:1", "best.fail", "required.fail", "best.ok"]);
     expect(logger.warn).toHaveBeenCalledTimes(1);
     expect(logger.error).toHaveBeenCalledTimes(1);
+  });
+
+  test("preserves observability context for service-test afterCommit logging", async () => {
+    const logger = createLogger();
+    const failure = new Error("best failed");
+    const uow = createImmediateUnitOfWork({ value: 1 }, { logger });
+
+    await uow.transaction(async (tx) => {
+      tx.afterCommit.bestEffort("best.fail", () => {
+        throw failure;
+      });
+      return "ok";
+    }, {
+      observability: {
+        requestId: "req-test",
+        traceId: "trace-test",
+      },
+    });
+
+    expect(logger.warn.mock.calls[0]).toEqual([
+      {
+        afterCommit: "best.fail",
+        mode: "bestEffort",
+        err: failure,
+        requestId: "req-test",
+        traceId: "trace-test",
+      },
+      "best-effort afterCommit task failed",
+    ]);
   });
 });
 

@@ -210,6 +210,7 @@ function validateRouteSourceReferences(manifest: LoadedManifest, issues: Validat
 function getSourceLists(manifest: LoadedManifest): Array<{ path: string; items: ManifestObject[] }> {
   return [
     { path: "upstreams", items: getSourceListItems(manifest.source.upstreams) },
+    { path: "plugin_metadata", items: getSourceListItems(manifest.source.plugin_metadata) },
     { path: "routes", items: getSourceListItems(manifest.source.routes) },
     {
       path: "service.plugin_configs",
@@ -373,6 +374,14 @@ function validateIamLoggingPolicy(manifest: LoadedManifest): ValidationIssue[] {
   }
 
   const issues: ValidationIssue[] = [];
+  if (!manifest.resources.plugin_metadata.some(metadata => metadata.id === "opentelemetry")) {
+    issues.push({
+      file: manifest.manifest,
+      path: "plugin_metadata",
+      message: "iam manifest must configure opentelemetry plugin_metadata",
+    });
+  }
+
   const pluginConfigsById = new Map(
     manifest.resources.plugin_configs
       .filter(config => typeof config.id === "string")
@@ -397,6 +406,14 @@ function validateIamLoggingPolicy(manifest: LoadedManifest): ValidationIssue[] {
         file: manifest.manifest,
         path: `routes[${index}]`,
         message: `${routeId} must enable request-id through route plugins or plugin_config_id`,
+      });
+    }
+
+    if (!hasPlugin(routePlugins, "opentelemetry") && !hasPlugin(getPlugins(pluginConfig), "opentelemetry")) {
+      issues.push({
+        file: manifest.manifest,
+        path: `routes[${index}]`,
+        message: `${routeId} must enable opentelemetry through route plugins or plugin_config_id`,
       });
     }
   }

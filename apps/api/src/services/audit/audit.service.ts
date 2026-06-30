@@ -8,6 +8,8 @@ import {
   redactAuditDetails,
 } from "@iam/domain/audit";
 
+export type ApiRequestContext = AuditRequestContext;
+
 export type AuditLogInput = {
   eventTime?: Date;
   action: string;
@@ -68,6 +70,18 @@ export function getApiAuditRequestContext(c: Context): AuditRequestContext {
     route: c.req.path,
     method: c.req.method,
   };
+}
+
+export function withApiRequestContext(
+  requestContext: ApiRequestContext | null | undefined,
+  input: AuditLogInput,
+): AuditLogInput {
+  return requestContext
+    ? {
+        ...requestContext,
+        ...input,
+      }
+    : input;
 }
 
 export function getApiUserAuditActor(c: Context) {
@@ -133,10 +147,7 @@ export function createApiAuditLogWriter(deps: CreateApiAuditLogWriterDeps) {
   }
 
   async function recordAuditLogFromContext(c: Context, input: AuditLogInput) {
-    await recordAuditLog({
-      ...getApiAuditRequestContext(c),
-      ...input,
-    });
+    await recordAuditLog(withApiRequestContext(getApiAuditRequestContext(c), input));
   }
 
   return {

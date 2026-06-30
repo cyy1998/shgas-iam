@@ -15,6 +15,7 @@
     "./middlewares": "./src/middlewares/index.ts",
     "./middlewares/*": "./src/middlewares/*.ts",
     "./oidc": "./src/oidc/index.ts",
+    "./observability": "./src/observability/index.ts",
     "./redis": "./src/redis/index.ts",
     "./security": "./src/security/index.ts",
     "./session/kernel": "./src/session/kernel/index.ts",

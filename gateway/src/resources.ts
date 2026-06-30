@@ -23,6 +23,15 @@ export const resourceDefinitions = [
     },
   },
   {
+    kind: "plugin_metadata",
+    topKey: "plugin_metadata",
+    endpoint: "plugin_metadata",
+    idFields: ["id"],
+    syncOrder: 15,
+    references: [],
+    compare: commonCompare,
+  },
+  {
     kind: "plugin_configs",
     topKey: "plugin_configs",
     endpoint: "plugin_configs",

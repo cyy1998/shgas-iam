@@ -10,6 +10,7 @@ export function registerProviderEvents(provider: Provider, logger: OidcLogger) {
       sourceApp: LoggerSourceApp.OidcProvider,
       err: error,
       requestId: ctx.state.requestId,
+      traceId: ctx.state.traceId ?? null,
       errorName: error.name,
       errorMessage: error.message,
     }, "OIDC provider server error");
@@ -23,6 +24,7 @@ export function registerProviderEvents(provider: Provider, logger: OidcLogger) {
       errorName: error.name,
       errorMessage: error.message,
       requestId: ctx.state.requestId,
+      traceId: ctx.state.traceId ?? null,
       statusCode: error.statusCode,
     }, `OIDC ${event}`);
   };

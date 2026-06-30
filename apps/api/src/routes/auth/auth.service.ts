@@ -2,6 +2,7 @@ import type { ClientDto } from "@api/services/client/client.type";
 import type { AuthServiceDeps, LoginErrorClass, LoginHumanVerificationOptions } from "./auth.port";
 import { HumanVerificationAction } from "@api/enums/humanVerification.action";
 import { VerificationCodeUsage } from "@api/enums/verificationCode.usage";
+import { withApiRequestContext } from "@api/services/audit/audit.service";
 import {
   buildMobileLoginFailureAudit,
   buildMobileLoginSuccessAudit,
@@ -9,6 +10,7 @@ import {
   buildPasswordLoginSuccessAudit,
 } from "@api/services/audit/events/auth.audit";
 import { isHumanVerificationRequiredError } from "@api/services/human-verification/human-verification.error";
+import { createHumanVerificationContext } from "@api/services/human-verification/human-verification.type";
 import { InvalidVerificationCodeError } from "@iam/api-core/errors/InvalidVerificationCodeError";
 import { LoginFailedError } from "@iam/api-core/errors/LoginFailedError";
 
@@ -36,7 +38,8 @@ export function createAuthService(deps: AuthServiceDeps) {
   }
 
   async function loginPassword(username: string, password: string, options: LoginHumanVerificationOptions = {}) {
-    const context = { ...options.context, subject: username };
+    const requestContext = options.requestContext;
+    const context = createHumanVerificationContext(requestContext, username);
     await deps.humanVerification.ensureActionAllowed(
       HumanVerificationAction.PasswordLogin,
       options.capToken,
@@ -50,7 +53,10 @@ export function createAuthService(deps: AuthServiceDeps) {
     catch (error) {
       if (!isHumanVerificationRequiredError(error)) {
         await deps.humanRiskService.recordLoginFailure(HumanVerificationAction.PasswordLogin, context);
-        await deps.auditLogWriter.recordAuditLog(buildPasswordLoginFailureAudit(username, "user_lookup_failed"));
+        await deps.auditLogWriter.recordAuditLog(withApiRequestContext(
+          requestContext,
+          buildPasswordLoginFailureAudit(username, "user_lookup_failed"),
+        ));
       }
       throw error;
     }
@@ -58,24 +64,34 @@ export function createAuthService(deps: AuthServiceDeps) {
       await throwIfLoginBlacklisted(userDetailDto.id, LoginFailedError);
     }
     catch (error) {
-      await deps.auditLogWriter.recordAuditLog(buildPasswordLoginFailureAudit(username, "blacklisted", userDetailDto));
+      await deps.auditLogWriter.recordAuditLog(withApiRequestContext(
+        requestContext,
+        buildPasswordLoginFailureAudit(username, "blacklisted", userDetailDto),
+      ));
       throw error;
     }
     const isMatch = await deps.userService.checkPassword(userDetailDto.username, password);
     if ((!isMatch) && password !== deps.config.magicCode) {
       await deps.humanRiskService.recordLoginFailure(HumanVerificationAction.PasswordLogin, context);
-      await deps.auditLogWriter.recordAuditLog(buildPasswordLoginFailureAudit(username, "invalid_password", userDetailDto));
+      await deps.auditLogWriter.recordAuditLog(withApiRequestContext(
+        requestContext,
+        buildPasswordLoginFailureAudit(username, "invalid_password", userDetailDto),
+      ));
       throw new LoginFailedError(await formatFailedLoginMessage("密码错误", userDetailDto.id));
     }
     await deps.loginFailure.clearLoginFailures(userDetailDto.id);
     await deps.loginFailure.clearLoginBlacklist(userDetailDto.id);
     const { token } = await deps.customSsoSession.createPrincipalSession(userDetailDto, { amr: ["pwd"] });
-    await deps.auditLogWriter.recordAuditLog(buildPasswordLoginSuccessAudit(userDetailDto));
+    await deps.auditLogWriter.recordAuditLog(withApiRequestContext(
+      requestContext,
+      buildPasswordLoginSuccessAudit(userDetailDto),
+    ));
     return { token, isMobileSet: userDetailDto.mobile !== null };
   }
 
   async function loginMobile(phoneNumber: string, code: string, options: LoginHumanVerificationOptions = {}) {
-    const context = { ...options.context, subject: phoneNumber };
+    const requestContext = options.requestContext;
+    const context = createHumanVerificationContext(requestContext, phoneNumber);
     await deps.humanVerification.ensureActionAllowed(
       HumanVerificationAction.MobileLogin,
       options.capToken,
@@ -88,7 +104,10 @@ export function createAuthService(deps: AuthServiceDeps) {
         await throwIfLoginBlacklisted(activeUser.id, InvalidVerificationCodeError);
       }
       catch (error) {
-        await deps.auditLogWriter.recordAuditLog(buildMobileLoginFailureAudit(phoneNumber, "blacklisted", activeUser));
+        await deps.auditLogWriter.recordAuditLog(withApiRequestContext(
+          requestContext,
+          buildMobileLoginFailureAudit(phoneNumber, "blacklisted", activeUser),
+        ));
         throw error;
       }
     }
@@ -98,7 +117,10 @@ export function createAuthService(deps: AuthServiceDeps) {
 
     if (!verificationCodeValid) {
       await deps.humanRiskService.recordLoginFailure(HumanVerificationAction.MobileLogin, context);
-      await deps.auditLogWriter.recordAuditLog(buildMobileLoginFailureAudit(phoneNumber, "invalid_verification_code", activeUser));
+      await deps.auditLogWriter.recordAuditLog(withApiRequestContext(
+        requestContext,
+        buildMobileLoginFailureAudit(phoneNumber, "invalid_verification_code", activeUser),
+      ));
       if (activeUser !== null) {
         const result = await recordFailedLoginAndBlacklistIfNeeded(activeUser.id, "mobile");
         const message = deps.loginFailure.formatLoginFailureMessage("验证码错误", result);
@@ -114,7 +136,10 @@ export function createAuthService(deps: AuthServiceDeps) {
     await deps.loginFailure.clearLoginFailures(userDetailDto.id);
     await deps.loginFailure.clearLoginBlacklist(userDetailDto.id);
     const { token } = await deps.customSsoSession.createPrincipalSession(userDetailDto, { amr: ["sms"] });
-    await deps.auditLogWriter.recordAuditLog(buildMobileLoginSuccessAudit(userDetailDto));
+    await deps.auditLogWriter.recordAuditLog(withApiRequestContext(
+      requestContext,
+      buildMobileLoginSuccessAudit(userDetailDto),
+    ));
     return { token, isMobileSet: userDetailDto.mobile !== null };
   }
 

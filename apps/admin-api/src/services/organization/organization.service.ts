@@ -1,4 +1,4 @@
-import type { AdminAuditContext } from "@admin-api/services/audit/audit.service";
+import { adminAuditTransactionOptions, type AdminAuditContext } from "@admin-api/services/audit/audit.service";
 import type {
   OrganizationCreateDto,
   OrganizationPaginationQueryDto,
@@ -39,7 +39,7 @@ export function createOrganizationService(deps: AdminOrganizationServiceDeps) {
         orgType: organizationCreateDto.orgType,
       }, auditContext));
       return true;
-    });
+    }, adminAuditTransactionOptions(auditContext));
   }
 
   async function getOrganizationChildrenForAdmin(
@@ -127,7 +127,7 @@ export function createOrganizationService(deps: AdminOrganizationServiceDeps) {
         previousOrgCode: orgCode,
       }, auditContext));
       return true;
-    });
+    }, adminAuditTransactionOptions(auditContext));
   }
 
   async function updateOrganizationStatus(
@@ -157,7 +157,7 @@ export function createOrganizationService(deps: AdminOrganizationServiceDeps) {
         deleted: true,
       }, auditContext));
       return true;
-    });
+    }, adminAuditTransactionOptions(auditContext));
   }
 
   return {

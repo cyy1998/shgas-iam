@@ -1,4 +1,4 @@
-import type { EnvMap, LoadedManifest, ManifestObject, ManifestScope } from "./types";
+import type { EnvMap, LoadedManifest, ManifestObject, ManifestScope, ResourceKind } from "./types";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -71,7 +71,7 @@ function materializeSourceManifest(
   source: ManifestObject,
   scope: ManifestScope,
   manifest: string,
-): Record<"routes" | "upstreams" | "services" | "plugin_configs" | "consumers" | "ssls", ManifestObject[]> {
+): Record<ResourceKind, ManifestObject[]> {
   const resources = createEmptyResourceMap();
   const service = isRecord(source.service) ? source.service : undefined;
 
@@ -83,6 +83,8 @@ function materializeSourceManifest(
 
   resources.upstreams = readObjectList(source.upstreams, "upstreams", manifest)
     .map((item, index) => materializeKeyedResource(item, scope, index, "upstreams"));
+  resources.plugin_metadata = readObjectList(source.plugin_metadata, "plugin_metadata", manifest)
+    .map((item, index) => materializeKeyedResource(item, scope, index, "plugin_metadata"));
   resources.routes = readObjectList(source.routes, "routes", manifest)
     .map((item, index) => materializeRoute(item, scope, index));
   resources.consumers = readObjectList(source.consumers, "consumers", manifest)
@@ -109,10 +111,10 @@ function materializeKeyedResource(
   source: ManifestObject,
   scope: ManifestScope,
   index: number,
-  kind: "upstreams" | "plugin_configs" | "consumers" | "ssls",
+  kind: "upstreams" | "plugin_configs" | "plugin_metadata" | "consumers" | "ssls",
 ): ManifestObject {
   const key = getSourceKey(source, index);
-  const id = formatGeneratedId(scope, key);
+  const id = kind === "plugin_metadata" ? key : formatGeneratedId(scope, key);
   const resource = omitSourceFields(source, ["key"]);
 
   if (kind === "consumers") {

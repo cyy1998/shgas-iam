@@ -3,6 +3,7 @@ import type { ClientService } from "@api/services/client/client.service";
 import type { CustomSsoPrincipalTokenSource } from "./sso.port";
 import type { SsoService } from "./sso.service";
 import type { SsoRouteHandler } from "./sso.type";
+import { getApiAuditRequestContext } from "@api/services/audit/audit.service";
 import * as HttpStatusCodes from "@iam/api-core/core/http-status-codes";
 import * as resp from "@iam/api-core/http";
 import { getProtocolAndHost } from "@iam/api-core/utils";
@@ -82,7 +83,8 @@ export function createSsoHandlers(deps: CreateSsoHandlersDeps) {
 
   const callback: SsoRouteHandler<"callback"> = async (c) => {
     const { code, client, redirectUrl } = c.req.valid("query");
-    const data = await deps.ssoService.callback(code, client, redirectUrl);
+    const requestContext = getApiAuditRequestContext(c);
+    const data = await deps.ssoService.callback(code, client, redirectUrl, { requestContext });
     setCookie(c, `local_${client}_session`, data.token, {
       httpOnly: true,
       sameSite: "Lax",
@@ -105,13 +107,16 @@ export function createSsoHandlers(deps: CreateSsoHandlersDeps) {
 
   const token: SsoRouteHandler<"token"> = async (c) => {
     const { code, client, clientSecret } = c.req.valid("query");
-    const data = await deps.ssoService.setToken(code, client, clientSecret);
+    const data = await deps.ssoService.setToken(code, client, clientSecret, {
+      requestContext: getApiAuditRequestContext(c),
+    });
     return c.json(resp.ok(data));
   };
 
   const authorize: SsoRouteHandler<"authorize"> = async (c) => {
     const { client, redirectUrl, token } = c.req.valid("query");
     const searchParams = new URLSearchParams(c.req.query());
+    const requestContext = getApiAuditRequestContext(c);
     const principalToken = resolvePrincipalToken(getCookie(c, "global_session"), c.req.header("Authorization"), token);
     const clientDto = await deps.clientService.getClientByCode(client);
     const data = await deps.ssoService.authorize(
@@ -119,7 +124,7 @@ export function createSsoHandlers(deps: CreateSsoHandlersDeps) {
       principalToken.source,
       client,
       redirectUrl,
-      c.get("requestId"),
+      { requestContext },
     );
     if (data.isLogin === false) {
       return c.redirect(`${deps.config.loginEndpoint}?${searchParams.toString()}`);
@@ -145,7 +150,9 @@ export function createSsoHandlers(deps: CreateSsoHandlersDeps) {
     if (sessionId) {
       await deps.ssoService.logout(sessionId);
     }
-    const data = await deps.ssoService.loginOA(clientCode, loginid, ts, token);
+    const data = await deps.ssoService.loginOA(clientCode, loginid, ts, token, {
+      requestContext: getApiAuditRequestContext(c),
+    });
     setCookie(c, "global_session", data.token, {
       httpOnly: true,
       sameSite: "Lax",
@@ -157,7 +164,9 @@ export function createSsoHandlers(deps: CreateSsoHandlersDeps) {
 
   const loginWX: SsoRouteHandler<"loginWX"> = async (c) => {
     const { code, redirectUrl, client } = c.req.valid("query");
-    const data = await deps.ssoService.loginWX(code);
+    const data = await deps.ssoService.loginWX(code, {
+      requestContext: getApiAuditRequestContext(c),
+    });
     setCookie(c, "global_session", data.token, {
       httpOnly: true,
       sameSite: "Lax",

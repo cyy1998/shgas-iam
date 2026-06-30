@@ -8,14 +8,15 @@ import type { OpenService } from "./open.service";
 import type { OpenRouteHandler } from "./open.type";
 import { HumanVerificationAction } from "@api/enums/humanVerification.action";
 import { VerificationCodeUsage } from "@api/enums/verificationCode.usage";
+import { getApiAuditRequestContext, withApiRequestContext } from "@api/services/audit/audit.service";
 import {
   buildSmsCodeSendAudit,
   buildSmsCodeVerifyAudit,
 } from "@api/services/audit/events/auth.audit";
+import { createHumanVerificationContext } from "@api/services/human-verification/human-verification.type";
 import { OK } from "@iam/api-core/core/http-status-codes";
 import { InvalidHumanVerificationSiteError } from "@iam/api-core/errors/InvalidHumanVerificationSiteError";
 import * as resp from "@iam/api-core/http";
-import { getVerificationContext } from "../human-verification-context";
 
 export interface CreateOpenHandlersDeps {
   auditLogWriter: AuditLogWriterPort;
@@ -39,7 +40,8 @@ export function createOpenHandlers(deps: CreateOpenHandlersDeps) {
 
   const userInfo: OpenRouteHandler<"userInfo"> = async (c) => {
     const { username, capToken } = c.req.valid("query");
-    const context = getVerificationContext(c, username);
+    const requestContext = getApiAuditRequestContext(c);
+    const context = createHumanVerificationContext(requestContext, username);
     await deps.humanVerification.ensureActionAllowed(
       HumanVerificationAction.OpenUserInfoLookup,
       capToken,
@@ -56,42 +58,47 @@ export function createOpenHandlers(deps: CreateOpenHandlersDeps) {
 
   const codeSend: OpenRouteHandler<"codeSend"> = async (c) => {
     const { phoneNumber, username, usage, capToken } = c.req.valid("json");
+    const requestContext = getApiAuditRequestContext(c);
     await deps.humanVerification.ensureActionAllowed(
       HumanVerificationAction.SendSmsCode,
       capToken,
-      getVerificationContext(c, phoneNumber ?? username),
+      createHumanVerificationContext(requestContext, phoneNumber ?? username),
     );
     const targetPhoneNumber = usage === VerificationCodeUsage.ResetPassword
       ? await deps.openService.resolveResetPasswordMobile(username, phoneNumber)
       : deps.openService.requirePhoneNumber(phoneNumber);
     const data = await deps.mobileService.sendCode(targetPhoneNumber, usage);
-    await deps.auditLogWriter.recordAuditLogFromContext(c, buildSmsCodeSendAudit({
+    await deps.auditLogWriter.recordAuditLog(withApiRequestContext(requestContext, buildSmsCodeSendAudit({
       phoneNumber: targetPhoneNumber,
       usage,
       username,
-    }));
+    })));
     return c.json(resp.ok(data));
   };
 
   const codeVerify: OpenRouteHandler<"codeVerify"> = async (c) => {
     const { phoneNumber, username, usage, code } = c.req.valid("json");
+    const requestContext = getApiAuditRequestContext(c);
     const targetPhoneNumber = usage === VerificationCodeUsage.ResetPassword
       ? await deps.openService.resolveResetPasswordMobile(username, phoneNumber)
       : deps.openService.requirePhoneNumber(phoneNumber);
     const data = await deps.mobileService.checkVerificationCode(usage, targetPhoneNumber, code);
-    await deps.auditLogWriter.recordAuditLogFromContext(c, buildSmsCodeVerifyAudit({
+    await deps.auditLogWriter.recordAuditLog(withApiRequestContext(requestContext, buildSmsCodeVerifyAudit({
       phoneNumber: targetPhoneNumber,
       usage,
       username,
       verified: data,
-    }));
+    })));
     return c.json(resp.ok({ result: data }));
   };
 
   const passwordReset: OpenRouteHandler<"passwordReset"> = async (c) => {
     const { username, phoneNumber, code, newPassword } = c.req.valid("json");
+    const requestContext = getApiAuditRequestContext(c);
     const targetPhoneNumber = await deps.openService.resolveResetPasswordMobile(username, phoneNumber);
-    const data = await deps.userService.resetPassword(username, targetPhoneNumber, code, newPassword);
+    const data = await deps.userService.resetPassword(username, targetPhoneNumber, code, newPassword, {
+      requestContext,
+    });
     return c.json(resp.ok(data));
   };
 

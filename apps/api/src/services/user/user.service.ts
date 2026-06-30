@@ -1,6 +1,8 @@
 import type { UserServiceDeps } from "./user.port";
+import type { UserRequestOptions } from "./user.port";
 import type { UserDetailDto, UserDto, UserQueryDto, UserQueryWithPrivilegeDelegationDto } from "./user.type";
 import { VerificationCodeUsage } from "@api/enums/verificationCode.usage";
+import { withApiRequestContext } from "@api/services/audit/audit.service";
 import {
   buildMobileBindSuccessAudit,
   buildPasswordResetFailureAudit,
@@ -15,7 +17,12 @@ import { UserStatus } from "@iam/contracts";
 import { InvalidOldPasswordError, UserNotFoundError } from "@iam/domain/user";
 
 export function createUserService(deps: UserServiceDeps) {
-  async function setPassword(username: string, oldPassword: string, newPassword: string) {
+  async function setPassword(
+    username: string,
+    oldPassword: string,
+    newPassword: string,
+    options: UserRequestOptions = {},
+  ) {
     return await deps.uow.transaction(async (tx) => {
       const user = await tx.userRepository.getUserByUsername(username);
       if (user === null) {
@@ -26,36 +33,57 @@ export function createUserService(deps: UserServiceDeps) {
       }
       const isMatch = await deps.passwordHelper.verifyUserPassword(user, oldPassword);
       if (!isMatch) {
-        await tx.auditLogWriter.recordAuditLog(buildSelfPasswordChangeFailureAudit(user));
+        await tx.auditLogWriter.recordAuditLog(withApiRequestContext(
+          options.requestContext,
+          buildSelfPasswordChangeFailureAudit(user),
+        ));
         throw new InvalidOldPasswordError("旧密码错误");
       }
       deps.passwordHelper.assertStrongPassword(newPassword);
       const newPasswordHash = await deps.passwordHelper.hashUserPassword(newPassword);
       await tx.userRepository.setPassword(user.id, newPasswordHash);
-      await tx.auditLogWriter.recordAuditLog(buildSelfPasswordChangeSuccessAudit(user));
+      await tx.auditLogWriter.recordAuditLog(withApiRequestContext(
+        options.requestContext,
+        buildSelfPasswordChangeSuccessAudit(user),
+      ));
       return true;
-    });
+    }, { observability: options.requestContext });
   }
 
-  async function resetPassword(username: string, phone: string, code: string, newPassword: string) {
+  async function resetPassword(
+    username: string,
+    phone: string,
+    code: string,
+    newPassword: string,
+    options: UserRequestOptions = {},
+  ) {
     const user = await deps.userRepository.getUserByUsername(username);
     if (user === null) {
       throw new UserNotFoundError("用户不存在");
     }
     if (user.mobile !== phone) {
-      await deps.auditLogWriter.recordAuditLog(buildPasswordResetFailureAudit(user, phone, "mobile_mismatch"));
+      await deps.auditLogWriter.recordAuditLog(withApiRequestContext(
+        options.requestContext,
+        buildPasswordResetFailureAudit(user, phone, "mobile_mismatch"),
+      ));
       throw new UserNotFoundError("用户名与手机号不匹配");
     }
     if (!await deps.mobileService.consumeVerificationCode(VerificationCodeUsage.ResetPassword, phone, code)) {
-      await deps.auditLogWriter.recordAuditLog(buildPasswordResetFailureAudit(user, phone, "invalid_verification_code"));
+      await deps.auditLogWriter.recordAuditLog(withApiRequestContext(
+        options.requestContext,
+        buildPasswordResetFailureAudit(user, phone, "invalid_verification_code"),
+      ));
       throw new InvalidVerificationCodeError("验证码错误");
     }
     const newPasswordHash = await deps.passwordHelper.hashUserPassword(newPassword);
     return await deps.uow.transaction(async (tx) => {
       await tx.userRepository.setPassword(user.id, newPasswordHash);
-      await tx.auditLogWriter.recordAuditLog(buildPasswordResetSuccessAudit(user, phone));
+      await tx.auditLogWriter.recordAuditLog(withApiRequestContext(
+        options.requestContext,
+        buildPasswordResetSuccessAudit(user, phone),
+      ));
       return true;
-    });
+    }, { observability: options.requestContext });
   }
 
   async function checkPassword(username: string, inputPassword: string) {
@@ -74,12 +102,15 @@ export function createUserService(deps: UserServiceDeps) {
     return await deps.userRepository.updateEnabledUserStatus(userId, UserStatus.Pause);
   }
 
-  async function setMobile(userId: number, phoneNumber: string, code: string) {
-    await deps.mobileBinding.assertCanBindMobile(userId, phoneNumber, code);
+  async function setMobile(userId: number, phoneNumber: string, code: string, options: UserRequestOptions = {}) {
+    await deps.mobileBinding.assertCanBindMobile(userId, phoneNumber, code, options);
     await deps.uow.transaction(async (tx) => {
       await tx.userRepository.setMobile(userId, phoneNumber);
-      await tx.auditLogWriter.recordAuditLog(buildMobileBindSuccessAudit(userId, phoneNumber));
-    });
+      await tx.auditLogWriter.recordAuditLog(withApiRequestContext(
+        options.requestContext,
+        buildMobileBindSuccessAudit(userId, phoneNumber),
+      ));
+    }, { observability: options.requestContext });
     return await getUserDetailById(userId);
   }
 

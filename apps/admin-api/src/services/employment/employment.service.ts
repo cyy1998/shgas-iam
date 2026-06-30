@@ -1,4 +1,4 @@
-import type { AdminAuditContext } from "@admin-api/services/audit/audit.service";
+import { adminAuditTransactionOptions, type AdminAuditContext } from "@admin-api/services/audit/audit.service";
 import type { AdminEmploymentServiceDeps, AdminEmploymentTransactionPorts } from "./employment.port";
 import type {
   EmploymentAdminCreateDto,
@@ -136,7 +136,7 @@ export function createEmploymentService(deps: AdminEmploymentServiceDeps) {
         description: dto.description ?? null,
       }, auditContext));
       return { id: created.id };
-    });
+    }, adminAuditTransactionOptions(auditContext));
   }
 
   async function updateEmployment(id: number, dto: EmploymentUpdateDto, auditContext?: AdminAuditContext) {
@@ -163,7 +163,7 @@ export function createEmploymentService(deps: AdminEmploymentServiceDeps) {
         patch: dto,
       }, auditContext));
       return true;
-    });
+    }, adminAuditTransactionOptions(auditContext));
   }
 
   async function updateEmploymentStatus(id: number, status: EmploymentStatus, auditContext?: AdminAuditContext) {
@@ -185,7 +185,7 @@ export function createEmploymentService(deps: AdminEmploymentServiceDeps) {
         patch,
       }, auditContext));
       return true;
-    });
+    }, adminAuditTransactionOptions(auditContext));
   }
 
   async function deleteEmployment(id: number, auditContext?: AdminAuditContext) {
@@ -198,7 +198,7 @@ export function createEmploymentService(deps: AdminEmploymentServiceDeps) {
         deleted: true,
       }, auditContext));
       return true;
-    });
+    }, adminAuditTransactionOptions(auditContext));
   }
 
   async function transferEmployment(id: number, dto: EmploymentTransferDto, auditContext?: AdminAuditContext) {
@@ -255,7 +255,7 @@ export function createEmploymentService(deps: AdminEmploymentServiceDeps) {
         startTime: dto.startTime ?? now,
       }, auditContext));
       return { newEmploymentId: created.id };
-    });
+    }, adminAuditTransactionOptions(auditContext));
   }
 
   async function setPrimaryEmployment(id: number, auditContext?: AdminAuditContext) {
@@ -272,7 +272,7 @@ export function createEmploymentService(deps: AdminEmploymentServiceDeps) {
         primary: true,
       }, auditContext));
       return true;
-    });
+    }, adminAuditTransactionOptions(auditContext));
   }
 
   async function resignUser(username: string, auditContext?: AdminAuditContext) {
@@ -288,7 +288,7 @@ export function createEmploymentService(deps: AdminEmploymentServiceDeps) {
       );
       await tx.auditService.recordAuditLog(buildEmploymentResignUserAudit(user, auditContext));
       return true;
-    });
+    }, adminAuditTransactionOptions(auditContext));
   }
 
   return {

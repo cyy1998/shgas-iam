@@ -10,6 +10,8 @@
 #
 # The IAM SSO APISIX manifest also requires these env-file values when rendered:
 # IAM_SSO_EXTERNAL_HOST, IAM_SSO_INTERNAL_HOST and IAM_SSO_CORS_ALLOW_ORIGINS.
+# The APISIX OpenTelemetry plugin reads APISIX_OTEL_COLLECTOR_ENDPOINT from the
+# mounted config, for example alloy:4318 when Alloy shares the gateway network.
 
 name: iam-service-prod
 
@@ -71,6 +73,7 @@ services:
       APISIX_ETCD_ENDPOINT: ${APISIX_ETCD_ENDPOINT:-http://apisix-etcd:2379}
       APISIX_ETCD_USER: ${APISIX_ETCD_USER:-root}
       APISIX_ETCD_PASSWORD: ${APISIX_ETCD_PASSWORD:-${APISIX_ETCD_ROOT_PASSWORD:?set APISIX_ETCD_ROOT_PASSWORD}}
+      APISIX_OTEL_COLLECTOR_ENDPOINT: ${APISIX_OTEL_COLLECTOR_ENDPOINT:?set APISIX_OTEL_COLLECTOR_ENDPOINT}
     volumes:
       - "${APISIX_CONFIG_PATH:-../gateway/config/config.prod.example.yaml}:/usr/local/apisix/conf/config.yaml:ro"
     depends_on:

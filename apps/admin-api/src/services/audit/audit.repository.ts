@@ -78,6 +78,7 @@ function auditLogWhere(query: AuditLogPaginationQueryDto) {
       ? undefined
       : ilikeContainsIf(auditLogs.targetCode, conditions.targetKeyword),
     conditions.requestId === undefined ? undefined : eq(auditLogs.requestId, conditions.requestId),
+    conditions.traceId === undefined ? undefined : eq(auditLogs.traceId, conditions.traceId),
     conditions.eventTimeFrom === undefined ? undefined : gte(auditLogs.eventTime, conditions.eventTimeFrom),
     conditions.eventTimeTo === undefined ? undefined : lte(auditLogs.eventTime, conditions.eventTimeTo),
   );

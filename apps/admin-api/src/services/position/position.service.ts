@@ -1,4 +1,4 @@
-import type { AdminAuditContext } from "@admin-api/services/audit/audit.service";
+import { adminAuditTransactionOptions, type AdminAuditContext } from "@admin-api/services/audit/audit.service";
 import type { PositionStatus } from "@iam/contracts";
 import type { AdminPositionServiceDeps, AdminPositionTransactionPorts } from "./position.port";
 import type { PositionCreateDto, PositionUpdateDto } from "./position.type";
@@ -37,7 +37,7 @@ export function createPositionService(deps: AdminPositionServiceDeps) {
         description: positionCreateDto.description ?? null,
       }, auditContext));
       return true;
-    });
+    }, adminAuditTransactionOptions(auditContext));
   }
 
   async function getPositionDetailByCode(posCode: string) {
@@ -71,7 +71,7 @@ export function createPositionService(deps: AdminPositionServiceDeps) {
         previousPosCode: posCode,
       }, auditContext));
       return true;
-    });
+    }, adminAuditTransactionOptions(auditContext));
   }
 
   async function updatePositionStatus(posCode: string, status: PositionStatus, auditContext?: AdminAuditContext) {
@@ -93,7 +93,7 @@ export function createPositionService(deps: AdminPositionServiceDeps) {
         deleted: true,
       }, auditContext));
       return true;
-    });
+    }, adminAuditTransactionOptions(auditContext));
   }
 
   return {

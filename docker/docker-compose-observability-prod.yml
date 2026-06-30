@@ -56,11 +56,13 @@ services:
     restart: unless-stopped
     command:
       - run
+      - --stability.level=experimental
       - /etc/alloy/iam-logs.alloy
       - --server.http.listen-addr=0.0.0.0:12345
       - --storage.path=/var/lib/alloy/data
     ports:
       - "${ALLOY_HTTP_PUBLISHED_HOST:-127.0.0.1}:${ALLOY_HTTP_PUBLISHED_PORT:-12345}:12345"
+      - "${ALLOY_OTLP_HTTP_PUBLISHED_HOST:-127.0.0.1}:${ALLOY_OTLP_HTTP_PUBLISHED_PORT:-4318}:4318"
     environment:
       ALLOY_LOG_LEVEL: ${ALLOY_LOG_LEVEL:-info}
       IAM_LOG_HOST: ${IAM_LOG_HOST:?set IAM_LOG_HOST}

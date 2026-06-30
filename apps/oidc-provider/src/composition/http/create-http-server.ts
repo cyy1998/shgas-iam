@@ -6,6 +6,7 @@ import type { OidcLogger } from "../../lib/logger.ts";
 import { createServer } from "node:http";
 import {
   buildHttpRequestLogFields,
+  getTraceIdFromHeaders,
   getStatusLogLevel,
   LoggerSourceApp,
   SystemLogEvent,
@@ -84,6 +85,7 @@ export function createOidcHttpServer(runtime: OidcHttpRuntime) {
   return createServer(async (request, response) => {
     const startedAt = performance.now();
     const requestId = ensureRequestId(request, response);
+    const traceId = getTraceIdFromHeaders(name => request.headers[name.toLowerCase()]) ?? null;
     const originalUrl = request.url;
     const route = classifyOidcHttpRoute(getOriginalPath(originalUrl, env.oidc.publicOrigin));
     let finished = false;
@@ -155,6 +157,7 @@ export function createOidcHttpServer(runtime: OidcHttpRuntime) {
         sourceApp: LoggerSourceApp.OidcProvider,
         err: error,
         requestId,
+        traceId,
         errorName: error instanceof Error ? error.name : "UnknownError",
         errorMessage: error instanceof Error ? error.message : "Unknown OIDC HTTP request failure",
       }, "OIDC HTTP request failed");

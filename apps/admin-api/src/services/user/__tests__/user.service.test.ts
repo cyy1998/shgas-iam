@@ -136,9 +136,15 @@ describe("createUserService", () => {
     const { service, deps, tx } = createService({ afterCommitLogger });
     (tx.userRepository.getUserByUsernameForAdmin as any).mockResolvedValue(user());
     const revocationFailure = new Error("revocation failed");
+    const auditContext = {
+      actorType: "admin" as const,
+      actorUserId: 100,
+      requestId: "req-user-revoke",
+      traceId: "11111111111111111111111111111111",
+    };
     deps.sessionRevocation.revokeUserSessions.mockRejectedValueOnce(revocationFailure);
 
-    await expect(service.updateUser("zhangsan", { status: UserStatus.Disable })).resolves.toBe(true);
+    await expect(service.updateUser("zhangsan", { status: UserStatus.Disable }, auditContext)).resolves.toBe(true);
 
     expect(tx.userRepository.updateUserByUsername).toHaveBeenCalledWith("zhangsan", {
       status: UserStatus.Disable,
@@ -148,6 +154,8 @@ describe("createUserService", () => {
       afterCommit: "admin.session_revoke.user",
       mode: "bestEffort",
       err: revocationFailure,
+      requestId: "req-user-revoke",
+      traceId: "11111111111111111111111111111111",
     }, "best-effort afterCommit task failed");
     expect(afterCommitLogger.error).not.toHaveBeenCalled();
   });

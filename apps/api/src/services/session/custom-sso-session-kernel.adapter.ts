@@ -1,5 +1,5 @@
 import type { ClockPort, LoggerPort, RedisPort } from "@api/composition/runtime";
-import type { ApiAuditLogWriter } from "@api/services/audit/audit.service";
+import type { ApiAuditLogWriter, ApiRequestContext } from "@api/services/audit/audit.service";
 import type { ClientDto } from "@api/services/client/client.type";
 import type { UserService } from "@api/services/user/user.service";
 import type { UserDetailDto } from "@api/services/user/user.type";
@@ -11,6 +11,7 @@ import type {
   SessionKernel,
 } from "@iam/api-core/session/kernel";
 import { randomUUID } from "node:crypto";
+import { withApiRequestContext } from "@api/services/audit/audit.service";
 import { buildLocalLoginSuccessAudit } from "@api/services/audit/events/auth.audit";
 import { UserDetailDtoSchema } from "@api/services/user/user.schema";
 import { AuthzMaintenanceError } from "@iam/api-core/errors/AuthzMaintenanceError";
@@ -18,6 +19,7 @@ import { AuthzUnauthorizedError } from "@iam/api-core/errors/AuthzUnauthorizedEr
 import { CustomError } from "@iam/api-core/errors/CustomError";
 import { InvalidAuthCodeError } from "@iam/api-core/errors/InvalidAuthCodeError";
 import { LoggerSourceApp, SystemLogEvent } from "@iam/api-core/logger";
+import { observabilityLogFields } from "@iam/api-core/observability";
 import { reviveIsoDates } from "@iam/api-core/utils";
 import { ClientManagementLevel, ClientStatus } from "@iam/contracts";
 import { z } from "zod";
@@ -145,7 +147,7 @@ export function createCustomSsoSessionKernelAdapter(deps: CustomSsoSessionKernel
     tokenSource: CustomSsoPrincipalTokenSource;
     clientCode: string;
     redirectUrl: string;
-    requestId?: string;
+    requestContext?: ApiRequestContext;
   }) {
     if (!input.token) {
       return { isLogin: false as const, code: null };
@@ -155,7 +157,7 @@ export function createCustomSsoSessionKernelAdapter(deps: CustomSsoSessionKernel
     if (principal.status !== "resolved") {
       return { isLogin: false as const, code: null };
     }
-    logLegacyBearerSource(input.tokenSource, input.clientCode, input.requestId);
+    logLegacyBearerSource(input.tokenSource, input.clientCode, input.requestContext);
 
     const renewed = await deps.kernel.renewPrincipalSession(principal.value.principalSessionId);
     if (renewed.status !== "resolved") {
@@ -226,6 +228,7 @@ export function createCustomSsoSessionKernelAdapter(deps: CustomSsoSessionKernel
     mode: ClientManagementLevel;
     userDetail: UserDetailDto;
     orcasSessionId?: string | null;
+    requestContext?: ApiRequestContext;
   }): Promise<CustomSsoLocalSession> {
     const clientCode = input.client.clientCode;
     const payloadRef = randomUUID();
@@ -299,12 +302,19 @@ export function createCustomSsoSessionKernelAdapter(deps: CustomSsoSessionKernel
     }
     catch (error) {
       await deps.kernel.revokeBinding(binding.value.bindingId, "binding_invalid");
-      deps.logger.warn({ err: error, clientCode }, "failed to write custom sso local session payload");
+      deps.logger.warn({
+        err: error,
+        clientCode,
+        ...observabilityLogFields(input.requestContext),
+      }, "failed to write custom sso local session payload");
       throw new AuthzUnauthorizedError("局部session创建失败");
     }
 
     await deps.auditLogWriter.recordAuditLog(
-      buildLocalLoginSuccessAudit(input.userDetail, clientCode, input.mode),
+      withApiRequestContext(
+        input.requestContext,
+        buildLocalLoginSuccessAudit(input.userDetail, clientCode, input.mode),
+      ),
     );
 
     return {
@@ -459,7 +469,11 @@ export function createCustomSsoSessionKernelAdapter(deps: CustomSsoSessionKernel
     }
   }
 
-  function logLegacyBearerSource(source: CustomSsoPrincipalTokenSource, clientCode: string, requestId?: string) {
+  function logLegacyBearerSource(
+    source: CustomSsoPrincipalTokenSource,
+    clientCode: string,
+    requestContext?: ApiRequestContext,
+  ) {
     if (source !== "authorization_header" && source !== "query")
       return;
     deps.logger.info({
@@ -467,7 +481,7 @@ export function createCustomSsoSessionKernelAdapter(deps: CustomSsoSessionKernel
       sourceApp: LoggerSourceApp.Api,
       source,
       clientCode,
-      requestId,
+      ...observabilityLogFields(requestContext),
     }, "legacy principal session bearer source used");
   }
 

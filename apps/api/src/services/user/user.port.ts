@@ -1,5 +1,5 @@
 import type { PasswordHasherPort } from "@api/composition/runtime";
-import type { AuditLogWriterPort } from "@api/services/audit/audit.service";
+import type { ApiRequestContext, AuditLogWriterPort } from "@api/services/audit/audit.service";
 import type { EmploymentRepository } from "@api/services/employment/employment.repository";
 import type { MobileService } from "@api/services/mobile/mobile.service";
 import type { PrivilegeRepository } from "@api/services/privilege/privilege.repository";
@@ -24,6 +24,10 @@ export interface UserDelegationQueryDeps {
 export interface UserMobileBindingDeps {
   mobileService: Pick<MobileService, "checkValidPhoneNumber" | "checkExistingPhoneNumber" | "consumeVerificationCode">;
   auditLogWriter: AuditLogWriterPort;
+}
+
+export interface UserRequestOptions {
+  requestContext?: ApiRequestContext;
 }
 
 export interface UserPasswordHelperDeps {
@@ -56,7 +60,7 @@ export interface UserServiceDeps {
     searchUsersWithDelegations: (query: UserQueryWithPrivilegeDelegationDto) => Promise<unknown>;
   };
   mobileBinding: {
-    assertCanBindMobile: (userId: number, phoneNumber: string, code: string) => Promise<void>;
+    assertCanBindMobile: (userId: number, phoneNumber: string, code: string, options?: UserRequestOptions) => Promise<void>;
   };
   passwordHelper: {
     assertStrongPassword: (password: string) => void;

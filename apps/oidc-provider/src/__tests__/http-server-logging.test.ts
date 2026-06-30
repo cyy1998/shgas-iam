@@ -152,6 +152,7 @@ describe("oIDC HTTP access logging", () => {
   it("keeps failed request event and access logs on the same requestId", async () => {
     const { createOidcHttpServer } = await loadApp();
     const lines: LogLine[] = [];
+    const traceId = "11111111111111111111111111111111";
     const server = createOidcHttpServer(
       {
         ...createRuntime(lines),
@@ -163,7 +164,10 @@ describe("oIDC HTTP access logging", () => {
     const port = await listen(server);
 
     const response = await fetch(`http://127.0.0.1:${port}/health`, {
-      headers: { "x-request-id": "req-failed" },
+      headers: {
+        "traceparent": `00-${traceId}-2222222222222222-01`,
+        "x-request-id": "req-failed",
+      },
     });
     await waitForLog(lines, line => line.requestId === "req-failed" && line.event === SystemLogEvent.HttpRequestCompleted);
 
@@ -173,11 +177,13 @@ describe("oIDC HTTP access logging", () => {
         event: SystemLogEvent.OidcProviderHttpRequestFailed,
         sourceApp: LoggerSourceApp.OidcProvider,
         requestId: "req-failed",
+        traceId,
         level: "error",
       }),
       expect.objectContaining({
         event: SystemLogEvent.HttpRequestCompleted,
         requestId: "req-failed",
+        traceId,
         route: "/health",
         statusCode: 503,
         level: "info",

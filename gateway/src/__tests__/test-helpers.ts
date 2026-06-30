@@ -8,6 +8,7 @@ import { createEmptyResourceMap } from "../resources";
 interface SourceManifestOverrides {
   service?: ManifestObject | false;
   upstreams?: ManifestObject[];
+  plugin_metadata?: ManifestObject[];
   routes?: ManifestObject[];
   plugin_configs?: ManifestObject[];
   consumers?: ManifestObject[];
@@ -28,6 +29,7 @@ export async function createManifestFile(overrides: SourceManifestOverrides): Pr
   }
 
   source.upstreams = overrides.upstreams ?? [];
+  source.plugin_metadata = overrides.plugin_metadata ?? [sourceOpenTelemetryPluginMetadata()];
   source.routes = overrides.routes ?? [];
 
   if (overrides.consumers !== undefined) {
@@ -112,6 +114,26 @@ export function sourcePluginConfig(value: Record<string, unknown> = {}): Manifes
         header_name: "X-Request-Id",
         include_in_response: true,
       },
+      "opentelemetry": {
+        sampler: {
+          name: "always_on",
+        },
+      },
+    },
+    ...value,
+  };
+}
+
+export function sourceOpenTelemetryPluginMetadata(value: Record<string, unknown> = {}): ManifestObject {
+  return {
+    key: "opentelemetry",
+    set_ngx_var: true,
+    resource: {
+      "service.name": "shgas-iam-apisix",
+    },
+    collector: {
+      address: "alloy:4318",
+      request_timeout: 3,
     },
     ...value,
   };

@@ -32,6 +32,40 @@ describe("user helper factories", () => {
     await expect(mobileBinding.assertCanBindMobile(1, "13800000000", "1234")).resolves.toBeUndefined();
   });
 
+  test("records mobile binding failures with request context", async () => {
+    const auditLogWriter = {
+      recordAuditLog: mock(async () => undefined),
+      recordAuditLogFromContext: mock(async () => undefined),
+    };
+    const mobileBinding = createUserMobileBinding({
+      auditLogWriter,
+      mobileService: {
+        checkExistingPhoneNumber: mock(async () => false),
+        checkValidPhoneNumber: mock(() => true),
+        consumeVerificationCode: mock(async () => false),
+      },
+    });
+
+    await expect(mobileBinding.assertCanBindMobile(1, "13800000000", "bad-code", {
+      requestContext: {
+        sourceApp: "iam",
+        requestId: "req-mobile-bind",
+        traceId: "11111111111111111111111111111111",
+        ip: "203.0.113.10",
+        userAgent: "user-helper-test",
+        route: "/public/mobile",
+        method: "POST",
+      },
+    })).rejects.toThrow("验证码错误");
+
+    expect(auditLogWriter.recordAuditLog).toHaveBeenCalledWith(expect.objectContaining({
+      action: "self.mobile.bind",
+      outcome: "failure",
+      requestId: "req-mobile-bind",
+      traceId: "11111111111111111111111111111111",
+    }));
+  });
+
   test("delegation query enforces a single ancestor organization", async () => {
     const delegationQuery = createUserDelegationQuery({
       userRepository: { searchUsers: mock(async () => []) },

@@ -1,4 +1,11 @@
-export type ResourceKind = "routes" | "upstreams" | "services" | "plugin_configs" | "consumers" | "ssls";
+export type ResourceKind =
+  | "routes"
+  | "upstreams"
+  | "plugin_metadata"
+  | "services"
+  | "plugin_configs"
+  | "consumers"
+  | "ssls";
 
 export type ManifestObject = Record<string, unknown>;
 export type EnvMap = Record<string, string | undefined>;

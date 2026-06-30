@@ -1,3 +1,4 @@
+import type { ObservabilityContext } from "../observability";
 import type { AfterCommitLoggerPort, AfterCommitPort, AfterCommitTask } from "./after-commit";
 import { createAfterCommitPort, runAfterCommitTasks } from "./after-commit";
 
@@ -7,8 +8,15 @@ export interface TransactionalDbPort<Tx> {
 
 export type TransactionContext<TxPorts extends object> = TxPorts & AfterCommitPort;
 
+export interface UnitOfWorkTransactionOptions {
+  observability?: ObservabilityContext | null;
+}
+
 export interface UnitOfWorkPort<TxPorts extends object> {
-  transaction: <T>(callback: (tx: TransactionContext<TxPorts>) => Promise<T>) => Promise<T>;
+  transaction: <T>(
+    callback: (tx: TransactionContext<TxPorts>) => Promise<T>,
+    options?: UnitOfWorkTransactionOptions,
+  ) => Promise<T>;
 }
 
 export interface CreateUnitOfWorkOptions<Tx, TxPorts extends object> {
@@ -25,7 +33,7 @@ export function createUnitOfWork<Tx, TxPorts extends object>(
   options: CreateUnitOfWorkOptions<Tx, TxPorts>,
 ): UnitOfWorkPort<TxPorts> {
   return {
-    async transaction(callback) {
+    async transaction(callback, transactionOptions) {
       const afterCommitTasks: AfterCommitTask[] = [];
 
       const result = await options.db.transaction(async (tx) => {
@@ -36,7 +44,7 @@ export function createUnitOfWork<Tx, TxPorts extends object>(
         });
       });
 
-      await runAfterCommitTasks(afterCommitTasks, options.logger);
+      await runAfterCommitTasks(afterCommitTasks, options.logger, transactionOptions?.observability);
 
       return result;
     },
@@ -48,14 +56,14 @@ export function mapUnitOfWork<SourceTxPorts extends object, MappedTxPorts extend
   map: (tx: TransactionContext<SourceTxPorts>) => MappedTxPorts,
 ): UnitOfWorkPort<MappedTxPorts> {
   return {
-    async transaction(callback) {
+    async transaction(callback, options) {
       return await unitOfWork.transaction(async (tx) => {
         const mappedTxPorts = map(tx);
         return await callback({
           ...mappedTxPorts,
           afterCommit: tx.afterCommit,
         });
-      });
+      }, options);
     },
   };
 }

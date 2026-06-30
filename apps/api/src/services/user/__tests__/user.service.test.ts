@@ -39,6 +39,7 @@ function createDeps(overrides: Record<string, unknown> = {}) {
       verifyUserPassword: mock(async (_user: unknown, password: string) => password === "oldPass123"),
     },
     uow: createImmediateUnitOfWork(tx),
+    tx,
     userDelegationQuery: { searchUsersWithDelegations: mock(async () => ({ users: [], delegations: [] })) },
     userDetailBuilder: { buildUserDetail: mock(async () => user) },
     userRepository: {
@@ -58,8 +59,24 @@ describe("createUserService", () => {
     const deps = createDeps();
     const service = createUserService(deps);
 
-    await expect(service.setPassword("zhangsan", "oldPass123", "newPass123")).resolves.toBe(true);
+    await expect(service.setPassword("zhangsan", "oldPass123", "newPass123", {
+      requestContext: {
+        sourceApp: "iam",
+        requestId: "req-public",
+        traceId: "11111111111111111111111111111111",
+        ip: "203.0.113.10",
+        userAgent: "user-service-test",
+        route: "/public/password/change",
+        method: "POST",
+      },
+    })).resolves.toBe(true);
     expect(deps.passwordHelper.hashUserPassword).toHaveBeenCalledWith("newPass123");
+    expect(deps.tx.auditLogWriter.recordAuditLog).toHaveBeenCalledWith(expect.objectContaining({
+      action: "self.password.change",
+      outcome: "success",
+      requestId: "req-public",
+      traceId: "11111111111111111111111111111111",
+    }));
   });
 
   test("rejects reset password when mobile does not match", async () => {

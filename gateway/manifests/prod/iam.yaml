@@ -8,6 +8,9 @@ service:
           header_name: X-Request-Id
           include_in_response: true
           algorithm: uuid
+        opentelemetry:
+          sampler:
+            name: always_on
         real-ip:
           source: http_x_real_ip
           trusted_addresses:
@@ -29,6 +32,9 @@ service:
           header_name: X-Request-Id
           include_in_response: true
           algorithm: uuid
+        opentelemetry:
+          sampler:
+            name: always_on
         real-ip:
           source: http_x_real_ip
           trusted_addresses:
@@ -50,6 +56,9 @@ service:
           header_name: X-Request-Id
           include_in_response: true
           algorithm: uuid
+        opentelemetry:
+          sampler:
+            name: always_on
         real-ip:
           source: http_x_real_ip
           trusted_addresses:
@@ -77,6 +86,9 @@ service:
           header_name: X-Request-Id
           include_in_response: true
           algorithm: uuid
+        opentelemetry:
+          sampler:
+            name: always_on
         real-ip:
           source: http_x_real_ip
           trusted_addresses:
@@ -91,6 +103,14 @@ service:
           policy: local
       labels:
         template: internal-api-ip-rate-limit
+plugin_metadata:
+  - key: opentelemetry
+    set_ngx_var: true
+    resource:
+      service.name: shgas-iam-apisix
+    collector:
+      address: ${APISIX_OTEL_COLLECTOR_ENDPOINT}
+      request_timeout: 3
 upstreams:
   - key: api
     desc: IAM public API upstream for production
@@ -136,6 +156,9 @@ routes:
         header_name: X-Request-Id
         include_in_response: true
         algorithm: uuid
+      opentelemetry:
+        sampler:
+          name: always_on
       redirect:
         uri: /portal/login
         ret_code: 302
@@ -151,6 +174,9 @@ routes:
         header_name: X-Request-Id
         include_in_response: true
         algorithm: uuid
+      opentelemetry:
+        sampler:
+          name: always_on
     upstream: sso-frontend
   - key: admin-frontend
     desc: IAM admin frontend through APISIX
@@ -162,6 +188,9 @@ routes:
         header_name: X-Request-Id
         include_in_response: true
         algorithm: uuid
+      opentelemetry:
+        sampler:
+          name: always_on
     upstream: admin-frontend
   - key: oidc-provider
     desc: IAM OIDC provider through same-origin /oidc issuer

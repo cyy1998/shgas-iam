@@ -63,10 +63,14 @@ function makeLoginContext() {
       header: mock((name: string) => {
         const headers: Record<string, string> = {
           "Client": "iam",
+          "traceparent": "00-11111111111111111111111111111111-2222222222222222-01",
+          "user-agent": "api-handler-test",
           "x-forwarded-for": "203.0.113.9",
         };
         return headers[name];
       }),
+      method: "POST",
+      path: "/auth/login/password",
     },
     header: mock((...args: unknown[]) => {
       responseHeaders.push(args);
@@ -143,9 +147,14 @@ describe("createAuthHandlers", () => {
     expect(parseLoginPasswordCredential).toHaveBeenCalledWith("iam-login-v1.payload");
     expect(loginPasswordService).toHaveBeenCalledWith("138550", "1234", {
       capToken: "cap-token",
-      context: {
-        subject: "138550",
+      requestContext: {
+        sourceApp: "iam",
+        requestId: "req-1",
+        traceId: "11111111111111111111111111111111",
         ip: "203.0.113.9",
+        userAgent: "api-handler-test",
+        route: "/auth/login/password",
+        method: "POST",
       },
     });
     expect(context.responseHeaders[0]?.[0]).toBe("Set-Cookie");

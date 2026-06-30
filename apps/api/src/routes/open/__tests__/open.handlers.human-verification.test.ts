@@ -9,6 +9,7 @@ const ensureActionAllowed = mock(async () => undefined);
 const recordOpenUserInfoLookup = mock(async () => undefined);
 const checkVerificationCode = mock(async () => true);
 const sendCode = mock(async () => true);
+const recordAuditLog = mock(async () => undefined);
 const recordAuditLogFromContext = mock(async () => undefined);
 const getUserDetailByUsername = mock(async () => ({
   mobile: "17721462865",
@@ -26,7 +27,7 @@ const requirePhoneNumber = mock((phoneNumber?: string) => {
 function createHandlers() {
   return createOpenHandlers({
     auditLogWriter: {
-      recordAuditLog: mock(async () => undefined),
+      recordAuditLog,
       recordAuditLogFromContext,
     },
     clientService: {
@@ -80,6 +81,8 @@ beforeEach(() => {
   checkVerificationCode.mockResolvedValue(true);
   sendCode.mockReset();
   sendCode.mockResolvedValue(true);
+  recordAuditLog.mockReset();
+  recordAuditLog.mockResolvedValue(undefined);
   recordAuditLogFromContext.mockReset();
   recordAuditLogFromContext.mockResolvedValue(undefined);
   getUserDetailByUsername.mockReset();
@@ -129,9 +132,11 @@ describe("createOpenHandlers human verification", () => {
     });
     expect(ensureActionAllowed).toHaveBeenCalled();
     expect(sendCode).toHaveBeenCalledWith("17721462865", VerificationCodeUsage.Login);
-    expect(recordAuditLogFromContext).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({
+    expect(recordAuditLog).toHaveBeenCalledWith(expect.objectContaining({
       action: "auth.sms_code.send",
       outcome: "success",
+      requestId: "req-1",
+      traceId: null,
       details: {
         phoneNumber: "177****2865",
         usage: VerificationCodeUsage.Login,
@@ -198,5 +203,25 @@ describe("createOpenHandlers human verification", () => {
     });
     expect(checkVerificationCode).toHaveBeenCalledWith(VerificationCodeUsage.ResetPassword, "17721462865", "123456");
     expect(sendCode).not.toHaveBeenCalled();
+  });
+
+  test("passes request context to password reset service", async () => {
+    const handlers = createHandlers();
+
+    await handlers.passwordReset(makeContext({
+      json: {
+        code: "123456",
+        newPassword: "newPass123",
+        phoneNumber: "17721462865",
+        username: "zhangsan",
+      },
+    }) as never, undefined as never);
+
+    expect(resetPassword).toHaveBeenCalledWith("zhangsan", "17721462865", "123456", "newPass123", {
+      requestContext: expect.objectContaining({
+        requestId: "req-1",
+        sourceApp: "iam",
+      }),
+    });
   });
 });

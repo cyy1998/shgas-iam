@@ -1,4 +1,4 @@
-import type { AdminAuditContext } from "@admin-api/services/audit/audit.service";
+import { adminAuditTransactionOptions, type AdminAuditContext } from "@admin-api/services/audit/audit.service";
 import type { ClientStatus } from "@iam/contracts";
 import type { OidcRuntimeInvalidationTarget } from "../session-revocation/session-revocation.port";
 import type { AdminClientServiceDeps } from "./client.port";
@@ -199,7 +199,7 @@ export function createClientService(deps: AdminClientServiceDeps) {
         await deps.clientCache.setClient(created);
       });
       return created;
-    });
+    }, adminAuditTransactionOptions(auditContext));
   }
 
   async function updateClient(
@@ -241,7 +241,7 @@ export function createClientService(deps: AdminClientServiceDeps) {
         auditContext,
       );
       return parsedUpdated;
-    });
+    }, adminAuditTransactionOptions(auditContext));
   }
 
   async function updateClientById(clientDto: ClientInputDto, auditContext?: AdminAuditContext) {
@@ -282,7 +282,7 @@ export function createClientService(deps: AdminClientServiceDeps) {
         auditContext,
       );
       return parsedUpdated;
-    });
+    }, adminAuditTransactionOptions(auditContext));
   }
 
   async function updateClientStatus(clientCode: string, status: ClientStatus, auditContext?: AdminAuditContext) {
@@ -309,7 +309,7 @@ export function createClientService(deps: AdminClientServiceDeps) {
       tx.afterCommit.bestEffort("admin.session_revoke.client_all_protocols", async () => {
         await txClientAllProtocolsRevocation(client, "client_deleted", auditContext);
       });
-    });
+    }, adminAuditTransactionOptions(auditContext));
     return true;
   }
 
@@ -352,7 +352,7 @@ export function createClientService(deps: AdminClientServiceDeps) {
         await txClientProtocolRevocation(client, "oidc", "client_config_changed", auditContext);
       });
       return { client, clientSecret };
-    });
+    }, adminAuditTransactionOptions(auditContext));
     return { client: toClientAdminDetailDto(result.client), clientSecret: result.clientSecret };
   }
 
@@ -390,7 +390,7 @@ export function createClientService(deps: AdminClientServiceDeps) {
         );
       });
       return client;
-    });
+    }, adminAuditTransactionOptions(auditContext));
     return { client: toClientAdminDetailDto(result) };
   }
 
@@ -423,7 +423,7 @@ export function createClientService(deps: AdminClientServiceDeps) {
         await txClientProtocolRevocation(client, "oidc", "client_protocol_disabled", auditContext);
       });
       return client;
-    });
+    }, adminAuditTransactionOptions(auditContext));
     return { client: toClientAdminDetailDto(result) };
   }
 
@@ -445,7 +445,7 @@ export function createClientService(deps: AdminClientServiceDeps) {
         await txClientProtocolRevocation(client, "oidc", "client_config_changed", auditContext);
       });
       return { client, clientSecret };
-    });
+    }, adminAuditTransactionOptions(auditContext));
     return { client: toClientAdminDetailDto(result.client), clientSecret: result.clientSecret };
   }
 

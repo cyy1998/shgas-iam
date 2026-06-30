@@ -43,6 +43,11 @@ describe("apisix sync commands", () => {
               header_name: "X-Request-Id",
               include_in_response: true,
             },
+            "opentelemetry": {
+              sampler: {
+                name: "always_on",
+              },
+            },
           },
         }),
       ],

@@ -1,4 +1,4 @@
-import type { AdminAuditContext } from "@admin-api/services/audit/audit.service";
+import { adminAuditTransactionOptions, type AdminAuditContext } from "@admin-api/services/audit/audit.service";
 import type { AdminUserServiceDeps } from "./user.port";
 import type { UserAdminCreateDto, UserDetailDto, UserPaginationQueryDto, UserUpdateDto } from "./user.type";
 import { buildAdminUserAudit } from "@admin-api/services/audit/events/user.audit";
@@ -88,7 +88,7 @@ export function createUserService(deps: AdminUserServiceDeps) {
         username: dto.username,
         generatedPassword: dto.password ? null : plainPassword,
       };
-    });
+    }, adminAuditTransactionOptions(auditContext));
   }
 
   async function updateUser(
@@ -115,7 +115,7 @@ export function createUserService(deps: AdminUserServiceDeps) {
           });
         });
       }
-    });
+    }, adminAuditTransactionOptions(auditContext));
     return true;
   }
 
@@ -144,7 +144,7 @@ export function createUserService(deps: AdminUserServiceDeps) {
           auditContext,
         });
       });
-    });
+    }, adminAuditTransactionOptions(auditContext));
     return true;
   }
 
@@ -169,7 +169,7 @@ export function createUserService(deps: AdminUserServiceDeps) {
         });
       });
       return newPassword;
-    });
+    }, adminAuditTransactionOptions(auditContext));
   }
 
   return {

@@ -54,6 +54,11 @@ function expectSsoRoutesClassifyEntryNetwork(manifest: Awaited<ReturnType<typeof
       header_name: "X-Request-Id",
       include_in_response: true,
     }),
+    "opentelemetry": expect.objectContaining({
+      sampler: expect.objectContaining({
+        name: "always_on",
+      }),
+    }),
     "limit-req": expect.any(Object),
     "real-ip": expect.any(Object),
     "cors": expect.any(Object),
@@ -78,11 +83,25 @@ describe("apisix manifest validation", () => {
     const manifest = await loadManifest("dev:iam");
     expect(validateManifest(manifest)).toEqual([]);
     expectRootRedirectToSsoLogin(manifest);
+    expect(manifest.resources.plugin_metadata).toContainEqual(expect.objectContaining({
+      id: "opentelemetry",
+      set_ngx_var: true,
+      collector: expect.objectContaining({
+        address: "${APISIX_OTEL_COLLECTOR_ENDPOINT}",
+        request_timeout: 3,
+      }),
+    }));
     expect(manifest.resources.routes.every((route) => {
       const routePlugins = route.plugins as Record<string, unknown> | undefined;
       const pluginConfig = manifest.resources.plugin_configs.find(config => config.id === route.plugin_config_id);
       const configPlugins = pluginConfig?.plugins as Record<string, unknown> | undefined;
       return routePlugins?.["request-id"] !== undefined || configPlugins?.["request-id"] !== undefined;
+    })).toBe(true);
+    expect(manifest.resources.routes.every((route) => {
+      const routePlugins = route.plugins as Record<string, unknown> | undefined;
+      const pluginConfig = manifest.resources.plugin_configs.find(config => config.id === route.plugin_config_id);
+      const configPlugins = pluginConfig?.plugins as Record<string, unknown> | undefined;
+      return routePlugins?.opentelemetry !== undefined || configPlugins?.opentelemetry !== undefined;
     })).toBe(true);
   });
 
@@ -112,6 +131,7 @@ describe("apisix manifest validation", () => {
         PROD_IAM_OIDC_PROVIDER_UPSTREAM_PORT: "30002",
         PROD_IAM_SSO_FRONTEND_UPSTREAM_HOST: "iam-sso.internal",
         PROD_IAM_SSO_FRONTEND_UPSTREAM_PORT: "80",
+        APISIX_OTEL_COLLECTOR_ENDPOINT: "alloy:4318",
         TENCENT_NGINX_TRUSTED_CIDR: "10.0.0.0/24",
       },
     });
@@ -179,6 +199,11 @@ describe("apisix manifest validation", () => {
             "request-id": {
               header_name: "X-Request-Id",
               include_in_response: true,
+            },
+            "opentelemetry": {
+              sampler: {
+                name: "always_on",
+              },
             },
             "redirect": {
               uri: "/login",
@@ -471,6 +496,47 @@ describe("apisix manifest validation", () => {
     expect(issues.some(issue => issue.message.includes("must enable request-id"))).toBe(true);
   });
 
+  it("rejects IAM routes without opentelemetry", async () => {
+    const manifest = await loadManifest("test:iam", await createManifestFile({
+      upstreams: [
+        sourceUpstream(),
+      ],
+      routes: [
+        sourceRoute({
+          plugins: {
+            "request-id": {
+              header_name: "X-Request-Id",
+              include_in_response: true,
+            },
+          },
+        }),
+      ],
+    }));
+
+    const issues = validateManifest(manifest);
+    expect(issues.some(issue => issue.message.includes("must enable opentelemetry"))).toBe(true);
+  });
+
+  it("rejects IAM manifests without opentelemetry plugin metadata", async () => {
+    const manifest = await loadManifest("test:iam", await createManifestFile({
+      plugin_metadata: [],
+      upstreams: [
+        sourceUpstream(),
+      ],
+      plugin_configs: [
+        sourcePluginConfig(),
+      ],
+      routes: [
+        sourceRoute({
+          plugin_config: "api-plugin",
+        }),
+      ],
+    }));
+
+    const issues = validateManifest(manifest);
+    expect(issues.some(issue => issue.message.includes("must configure opentelemetry plugin_metadata"))).toBe(true);
+  });
+
   it("rejects IAM Loki/http/file logger plugins", async () => {
     const manifest = await loadManifest("test:iam", await createManifestFile({
       upstreams: [
@@ -481,6 +547,7 @@ describe("apisix manifest validation", () => {
           key: "api-logger",
           plugins: {
             "request-id": { header_name: "X-Request-Id", include_in_response: true },
+            "opentelemetry": { sampler: { name: "always_on" } },
             "loki-logger": { endpoint_addr: "http://loki:3100" },
           },
         }),
@@ -503,10 +570,21 @@ describe("apisix manifest validation", () => {
       const format = httpConfig.access_log_format as string;
 
       expect(httpConfig.access_log).toBe("/dev/stdout");
+      expect(parsed.plugins).toContain("opentelemetry");
+      expect(parsed.plugins).not.toContain("...");
+      expect(parsed.plugin_attr.opentelemetry).toMatchObject({
+        set_ngx_var: true,
+        collector: {
+          request_timeout: 3,
+        },
+      });
       for (const field of [
         "event",
         "sourceApp",
         "requestId",
+        "traceId",
+        "spanId",
+        "traceparent",
         "method",
         "path",
         "statusCode",
@@ -516,6 +594,9 @@ describe("apisix manifest validation", () => {
       ]) {
         expect(format).toContain(`"${field}"`);
       }
+      expect(format).toContain("$opentelemetry_trace_id");
+      expect(format).toContain("$opentelemetry_span_id");
+      expect(format).toContain("$opentelemetry_context_traceparent");
       expect(format).not.toMatch(/request_body|resp_body|authorization|cookie|set_cookie|\$args/i);
     }
   });

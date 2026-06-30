@@ -200,9 +200,15 @@ describe("createClientService", () => {
     const afterCommitLogger = createAfterCommitLogger();
     const { service, deps } = createService({ afterCommitLogger });
     const revocationFailure = new Error("session revoke down");
+    const auditContext = {
+      actorType: "admin" as const,
+      actorUserId: 100,
+      requestId: "req-client-revoke",
+      traceId: "11111111111111111111111111111111",
+    };
     deps.sessionRevocation.revokeClientAllProtocols.mockRejectedValueOnce(revocationFailure);
 
-    await expect(service.updateClientStatus("portal", ClientStatus.Disable)).resolves.toBe(true);
+    await expect(service.updateClientStatus("portal", ClientStatus.Disable, auditContext)).resolves.toBe(true);
 
     expect(deps.clientCache.syncUpdatedClient).toHaveBeenCalled();
     expect(deps.sessionRevocation.revokeClientAllProtocols).toHaveBeenCalled();
@@ -210,6 +216,8 @@ describe("createClientService", () => {
       afterCommit: "admin.session_revoke.client_all_protocols",
       mode: "bestEffort",
       err: revocationFailure,
+      requestId: "req-client-revoke",
+      traceId: "11111111111111111111111111111111",
     }, "best-effort afterCommit task failed");
     expect(afterCommitLogger.error).not.toHaveBeenCalled();
   });

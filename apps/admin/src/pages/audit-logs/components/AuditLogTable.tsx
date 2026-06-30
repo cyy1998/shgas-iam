@@ -102,7 +102,7 @@ function renderTarget(row: AuditLogVo) {
   );
 }
 
-function buildConditions(
+export function buildConditions(
   params: Record<string, unknown>,
   fixedConditions: Partial<AuditLogSearchConditions>,
 ) {
@@ -126,6 +126,7 @@ function buildConditions(
     ) as AuditLogSearchConditions['targetType'],
     targetKeyword: trimValue(params.targetKeyword),
     requestId: trimValue(params.requestId),
+    traceId: trimValue(params.traceId),
     eventTimeFrom: from ? new Date(String(from)) : undefined,
     eventTimeTo: to ? new Date(String(to)) : undefined,
     ...fixedConditions,
@@ -276,6 +277,19 @@ export default function AuditLogTable({
         ),
     },
     {
+      title: 'Trace ID',
+      dataIndex: 'traceId',
+      width: 220,
+      render: (_, row) =>
+        row.traceId ? (
+          <Typography.Text code ellipsis copyable>
+            {row.traceId}
+          </Typography.Text>
+        ) : (
+          '—'
+        ),
+    },
+    {
       title: '时间',
       dataIndex: 'eventTime',
       width: 170,
@@ -323,7 +337,7 @@ export default function AuditLogTable({
             return { data: [], total: 0, success: false };
           }
         }}
-        scroll={{ x: 1180 }}
+        scroll={{ x: 1400 }}
         locale={{ emptyText: '暂无审计日志' }}
       />
 
