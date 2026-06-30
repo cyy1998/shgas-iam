@@ -1,6 +1,6 @@
 # Build context: monorepo root
 
-FROM docker.xuanyuan.run/node:24-alpine AS base
+FROM docker.xuanyuan.run/node:24.18.0-alpine AS base
 ENV PNPM_HOME="/pnpm"
 ENV PATH="$PNPM_HOME:$PATH"
 ARG HTTP_PROXY
@@ -34,7 +34,7 @@ COPY packages/domain/ ./packages/domain/
 COPY apps/oidc-provider/ ./apps/oidc-provider/
 RUN pnpm --filter @iam/oidc-provider deploy --prod --legacy /deploy/oidc-provider
 
-FROM docker.xuanyuan.run/node:24-alpine AS runner
+FROM docker.xuanyuan.run/node:24.18.0-alpine AS runner
 ENV NODE_ENV=production
 WORKDIR /app
 COPY --from=builder /deploy/oidc-provider ./

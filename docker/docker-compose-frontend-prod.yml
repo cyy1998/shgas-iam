@@ -21,7 +21,7 @@ x-build-proxy-args: &build-proxy-args
 
 services:
   sso:
-    image: ${IAM_SSO_IMAGE:-iam-sso:latest}
+    image: ${IAM_SSO_IMAGE:-iam-sso:1.0.0}
     build:
       context: ..
       dockerfile: apps/sso/Dockerfile
@@ -41,7 +41,7 @@ services:
       - "${IAM_SSO_PUBLISHED_PORT:-30013}:80"
 
   admin:
-    image: ${IAM_ADMIN_IMAGE:-iam-admin:latest}
+    image: ${IAM_ADMIN_IMAGE:-iam-admin:1.0.0}
     build:
       context: ..
       dockerfile: apps/admin/Dockerfile

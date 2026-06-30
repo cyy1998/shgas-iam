@@ -1,6 +1,6 @@
 # Build context: monorepo root
 
-FROM docker.xuanyuan.run/node:24-alpine AS base
+FROM docker.xuanyuan.run/node:24.18.0-alpine AS base
 ENV PNPM_HOME="/pnpm"
 ENV PATH="$PNPM_HOME:$PATH"
 ARG HTTP_PROXY
@@ -52,7 +52,7 @@ COPY packages/contracts/ ./packages/contracts/
 COPY apps/sso/ ./apps/sso/
 RUN pnpm rebuild && pnpm --filter @iam/sso run setup && pnpm --filter @iam/sso run build
 
-FROM docker.xuanyuan.run/nginx:1.27-alpine AS runner
+FROM docker.xuanyuan.run/nginx:1.27.5-alpine AS runner
 COPY apps/sso/nginx.conf /etc/nginx/conf.d/default.conf
 COPY --from=builder /app/apps/sso/dist/ /usr/share/nginx/html/portal/
 EXPOSE 80

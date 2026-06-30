@@ -2,7 +2,7 @@
 #   docker build -f apps/api/Dockerfile -t iam-api .
 
 # ── Stage 1: pnpm base ───────────────────────────────────────────────────────
-FROM docker.xuanyuan.run/node:24-alpine AS base
+FROM docker.xuanyuan.run/node:24.18.0-alpine AS base
 ENV PNPM_HOME="/pnpm"
 ENV PATH="$PNPM_HOME:$PATH"
 ARG HTTP_PROXY

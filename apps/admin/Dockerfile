@@ -1,6 +1,6 @@
 # Build context: monorepo root
 
-FROM docker.xuanyuan.run/node:24-alpine AS base
+FROM docker.xuanyuan.run/node:24.18.0-alpine AS base
 ENV PNPM_HOME="/pnpm"
 ENV PATH="$PNPM_HOME:$PATH"
 ARG HTTP_PROXY
@@ -56,7 +56,7 @@ COPY apps/admin-api/ ./apps/admin-api/
 COPY apps/admin/ ./apps/admin/
 RUN pnpm rebuild && pnpm --filter @iam/admin run setup && pnpm --filter @iam/admin run build
 
-FROM docker.xuanyuan.run/nginx:1.27-alpine AS runner
+FROM docker.xuanyuan.run/nginx:1.27.5-alpine AS runner
 COPY apps/admin/nginx.conf /etc/nginx/conf.d/default.conf
 COPY --from=builder /app/apps/admin/dist/ /usr/share/nginx/html/iam-admin/
 EXPOSE 80

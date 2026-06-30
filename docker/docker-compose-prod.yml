@@ -47,7 +47,7 @@ x-postgres-environment: &postgres-environment
   POSTGRES_REPLICATION_CIDR: ${POSTGRES_REPLICATION_CIDR:-0.0.0.0/0}
 
 x-postgres-common: &postgres-common
-  image: ${POSTGRES_IMAGE:-docker.xuanyuan.run/postgres:18}
+  image: ${POSTGRES_IMAGE:-docker.xuanyuan.run/postgres:18.4}
   restart: unless-stopped
   environment: *postgres-environment
   healthcheck:
@@ -166,7 +166,7 @@ services:
       - "${POSTGRES_REPLICA_2_DATA_PATH:-/data/postgres-replica-2}:/var/lib/postgresql/data"
 
   redis:
-    image: ${REDIS_IMAGE:-docker.xuanyuan.run/library/redis:latest}
+    image: ${REDIS_IMAGE:-docker.xuanyuan.run/library/redis:8.8.0}
     restart: unless-stopped
     environment:
       REDIS_PASSWORD: ${REDIS_PASSWORD:?set REDIS_PASSWORD}
@@ -188,7 +188,7 @@ services:
       start_period: 15s
 
   api:
-    image: ${IAM_API_IMAGE:-iam-api:latest}
+    image: ${IAM_API_IMAGE:-iam-api:1.0.0}
     build:
       context: ..
       dockerfile: apps/api/Dockerfile
@@ -252,7 +252,7 @@ services:
       NO_PROXY: ${NO_PROXY:-localhost,127.0.0.1,postgres-primary,redis,apisix,apisix-etcd}
 
   admin-api:
-    image: ${IAM_ADMIN_API_IMAGE:-iam-admin-api:latest}
+    image: ${IAM_ADMIN_API_IMAGE:-iam-admin-api:1.0.0}
     build:
       context: ..
       dockerfile: apps/admin-api/Dockerfile
@@ -289,7 +289,7 @@ services:
       IAM_ADMIN_API_SESSION_LOOKUP_HMAC_PREVIOUS_SECRET: ${IAM_SESSION_LOOKUP_HMAC_PREVIOUS_SECRET:-}
 
   oidc-provider:
-    image: ${IAM_OIDC_PROVIDER_IMAGE:-iam-oidc-provider:latest}
+    image: ${IAM_OIDC_PROVIDER_IMAGE:-iam-oidc-provider:1.0.0}
     build:
       context: ..
       dockerfile: apps/oidc-provider/Dockerfile
