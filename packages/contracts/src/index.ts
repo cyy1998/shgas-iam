@@ -13,5 +13,6 @@ export * from "./enums/privilegeDelegation.status";
 export * from "./enums/role.status";
 export * from "./enums/user.status";
 export * from "./enums/user.type";
+export * from "./jobs/user-profile";
 export * from "./oidc/client";
 export * from "./session";
