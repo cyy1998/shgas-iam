@@ -76,6 +76,8 @@ Preserve existing domain file naming: `user.service.ts`, `user.repository.ts`, `
 - For non-trivial work, start with a short plan or OpenSpec task list before implementation.
 - Read nearby code and follow existing package patterns before adding abstractions; re-plan when new findings invalidate assumptions, expand scope, or make the current approach brittle.
 - Keep changes as small as the problem allows, fix root causes rather than layering temporary workarounds, and compare subtle behavior changes against existing branch behavior or surrounding implementations.
+- The user explicitly authorizes Codex to spawn and manage sub-agents for delegation and parallel agent work when helpful.
+- This standing authorization covers independent code archaeology, impact analysis, disjoint implementation slices, verification, test triage, API/schema contract review, security review, and UI smoke-checking. Ask for confirmation only when delegated write scopes are unclear or unusually risky.
 - Use sub-agents when a task has independent workstreams, such as code archaeology, impact analysis, failing-test triage, API/schema contract review, security review, or UI smoke-checking.
 - Keep each sub-agent focused on one bounded question and ask for concrete evidence: relevant files, line references, observed behavior, risks, and recommended next steps.
 - The main agent remains responsible for the final plan, code integration, verification, and commit. Do not let parallel investigations produce conflicting edits without reconciling them first.
