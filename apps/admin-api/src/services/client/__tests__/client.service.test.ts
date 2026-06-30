@@ -225,7 +225,7 @@ describe("createClientService", () => {
   test("maintenance status revokes only OIDC protocol", async () => {
     const { service, deps } = createService();
 
-    await expect(service.updateClientStatus("portal", ClientStatus.Maintance)).resolves.toBe(true);
+    await expect(service.updateClientStatus("portal", ClientStatus.Maintenance)).resolves.toBe(true);
 
     expect(deps.sessionRevocation.revokeClientProtocol).toHaveBeenCalledWith({
       clientCode: "portal",

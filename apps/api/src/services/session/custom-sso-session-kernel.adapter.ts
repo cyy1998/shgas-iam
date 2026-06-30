@@ -431,7 +431,7 @@ export function createCustomSsoSessionKernelAdapter(deps: CustomSsoSessionKernel
     }
 
     if (options.enforceMaintenance
-      && client.status === ClientStatus.Maintance
+      && client.status === ClientStatus.Maintenance
       && !isUserExcludedFromMaintenance(client, user)) {
       throw new AuthzMaintenanceError("系统维护中");
     }

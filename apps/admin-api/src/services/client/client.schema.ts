@@ -34,7 +34,7 @@ export const ClientPaginationQueryDtoSchema = createPageQuerySchema(
     }),
     exactConditions: z.object({
       statuses: z.array(z.enum(ClientStatus)).optional().openapi({
-        example: [ClientStatus.Enable, ClientStatus.Maintance],
+        example: [ClientStatus.Enable, ClientStatus.Maintenance],
       }),
       managementLevels: z.array(z.enum(ClientManagementLevel)).optional().openapi({
         example: [ClientManagementLevel.Gateway],

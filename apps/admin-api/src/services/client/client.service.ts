@@ -88,7 +88,7 @@ function resolveClientUpdateSessionRevocations(
   }
 
   const decisions: ClientSessionRevocationDecision[] = [];
-  if (statusChanged && updated.status === ClientStatusValue.Maintance) {
+  if (statusChanged && updated.status === ClientStatusValue.Maintenance) {
     decisions.push({ scope: "protocol", protocol: "oidc", reason: "client_config_changed" });
   }
   if (hasCustomSsoSessionConfigChange(existing, data)) {

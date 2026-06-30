@@ -671,13 +671,13 @@ describe("SSO Kernel session consistency", () => {
 
     await expect(services.customSsoSession.authorizeLocalSession(result.sid, {
       ...client,
-      status: ClientStatus.Maintance,
+      status: ClientStatus.Maintenance,
       extAttributes: { ...client.extAttributes, userExcluding: [] },
     })).rejects.toBeInstanceOf(AuthzMaintenanceError);
 
     await expect(services.customSsoSession.authorizeLocalSession(result.sid, {
       ...client,
-      status: ClientStatus.Maintance,
+      status: ClientStatus.Maintenance,
       extAttributes: { ...client.extAttributes, userExcluding: [userDetail.username] },
     })).resolves.toBe(encoded);
   });

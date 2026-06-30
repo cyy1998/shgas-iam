@@ -104,7 +104,7 @@ describe("createInternalAuthenticationHandler", () => {
   });
 
   test("rejects maintenance clients", async () => {
-    const client = createClient({ status: ClientStatus.Maintance });
+    const client = createClient({ status: ClientStatus.Maintenance });
     const { app, logger } = createInternalAuthTestApp({ [client.clientSecret]: client });
 
     const response = await app.request("http://localhost/internal/ping", {
@@ -117,7 +117,7 @@ describe("createInternalAuthenticationHandler", () => {
         reason: "inactive_client",
         clientCode: client.clientCode,
         isDelete: false,
-        status: ClientStatus.Maintance,
+        status: ClientStatus.Maintenance,
       }),
       "internal client authentication failed",
     );

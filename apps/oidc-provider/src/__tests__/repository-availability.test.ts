@@ -17,7 +17,7 @@ const activeClient = {
 
 describe("oIDC repository availability", () => {
   it.each([
-    ["maintenance", { ...activeClient, status: ClientStatus.Maintance }],
+    ["maintenance", { ...activeClient, status: ClientStatus.Maintenance }],
     ["disabled", { ...activeClient, status: ClientStatus.Disable }],
     ["deleted", { ...activeClient, isDelete: true }],
     ["OIDC disabled", { ...activeClient, oidcEnabled: false }],
