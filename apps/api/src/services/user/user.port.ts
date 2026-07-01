@@ -60,7 +60,12 @@ export interface UserServiceDeps {
     searchUsersWithDelegations: (query: UserQueryWithPrivilegeDelegationDto) => Promise<unknown>;
   };
   mobileBinding: {
-    assertCanBindMobile: (userId: number, phoneNumber: string, code: string, options?: UserRequestOptions) => Promise<void>;
+    assertCanBindMobile: (
+      userId: number,
+      phoneNumber: string,
+      code: string,
+      options?: UserRequestOptions,
+    ) => Promise<void>;
   };
   passwordHelper: {
     assertStrongPassword: (password: string) => void;

@@ -1,6 +1,6 @@
 import {
-  DEFAULT_SESSION_LOOKUP_HMAC_CURRENT_SECRET,
   createSessionKernelConfigFromEnv,
+  DEFAULT_SESSION_LOOKUP_HMAC_CURRENT_SECRET,
 } from "@iam/api-core/session/kernel";
 import { describe, expect, test } from "bun:test";
 

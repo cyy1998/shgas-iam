@@ -78,9 +78,9 @@ export type LegacySessionCleanupFailedResult = Omit<LegacySessionCleanupComplete
   errorMessage: string;
 };
 
-export type LegacySessionCleanupResult =
-  | LegacySessionCleanupCompletedResult
-  | LegacySessionCleanupFailedResult;
+export type LegacySessionCleanupResult
+  = | LegacySessionCleanupCompletedResult
+    | LegacySessionCleanupFailedResult;
 
 export type LegacySessionCleanupCliOptions = {
   mode: LegacySessionCleanupMode;
@@ -278,5 +278,5 @@ function sanitizeErrorMessage(message: string) {
   return message
     .replace(/redis:\/\/\S+/giu, "redis://[REDACTED]")
     .replace(/\b(?:global_session|auth_code|local_[^\s:]+_session|local_session_reverse|local_session_set|oidc:[^\s:]+):\S+/giu, "[REDACTED_KEY]")
-    .replace(/[A-Za-z0-9_-]{32,}/gu, "[REDACTED_VALUE]");
+    .replace(/[\w-]{32,}/gu, "[REDACTED_VALUE]");
 }

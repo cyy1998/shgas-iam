@@ -1,9 +1,9 @@
 import type { LegacySessionCleanupRedis } from "../kernel";
+import { SystemLogEvent } from "@iam/api-core/logger";
 import {
   cleanupLegacySessionKeys,
   parseLegacySessionCleanupArgs,
 } from "@iam/api-core/session/kernel";
-import { SystemLogEvent } from "@iam/api-core/logger";
 import { describe, expect, test } from "bun:test";
 
 class FakeCleanupRedis implements LegacySessionCleanupRedis {

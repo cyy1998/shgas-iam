@@ -1,6 +1,7 @@
 import type { SessionKernelRedis, SessionKernelRedisTransaction } from "../kernel";
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
+import { SystemLogEvent } from "@iam/api-core/logger";
 import {
   createLookupHash,
   createSessionKernel,
@@ -11,7 +12,6 @@ import {
   generateKernelToken,
   parseIndexMember,
 } from "@iam/api-core/session/kernel";
-import { SystemLogEvent } from "@iam/api-core/logger";
 import { describe, expect, test } from "bun:test";
 
 type RedisResult = [Error | null, unknown];

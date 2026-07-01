@@ -83,7 +83,7 @@ export function createSessionKernelConfigFromEnv(input: SessionKernelEnvConfigIn
 
 function normalizeOptionalString(value: string | undefined) {
   const normalized = value?.trim();
-  return normalized ? normalized : undefined;
+  return normalized || undefined;
 }
 
 function secondsToMilliseconds(seconds: number, label: string) {

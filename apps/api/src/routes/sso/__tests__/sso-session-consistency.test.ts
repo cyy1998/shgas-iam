@@ -749,5 +749,4 @@ describe("SSO Kernel session consistency", () => {
       clientCode: client.clientCode,
     }), "independent client logout endpoint failed");
   });
-
 });

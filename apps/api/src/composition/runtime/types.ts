@@ -49,6 +49,11 @@ export interface ApiRuntimeConfig {
     nonceTtlSeconds: number;
   };
   sessionKernel: SessionKernelConfig;
+  userProfile: {
+    workerConcurrency: number;
+    rebuildBatchSize: number;
+    backfillBatchSize: number;
+  };
 }
 
 export interface CapIntegrationPort {

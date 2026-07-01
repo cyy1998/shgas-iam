@@ -38,7 +38,7 @@ describe("oIDC provider observability", () => {
       body: undefined,
       cookies: { set: vi.fn() },
       get: vi.fn((name: string) => ({
-        traceparent: `00-${traceId}-2222222222222222-01`,
+        "traceparent": `00-${traceId}-2222222222222222-01`,
         "x-request-id": "req-provider",
       }[name.toLowerCase()] ?? "")),
       ip: "203.0.113.10",

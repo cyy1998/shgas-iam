@@ -1,4 +1,4 @@
-import { adminAuditTransactionOptions, type AdminAuditContext } from "@admin-api/services/audit/audit.service";
+import type { AdminAuditContext } from "@admin-api/services/audit/audit.service";
 import type {
   OrganizationCreateDto,
   OrganizationPaginationQueryDto,
@@ -8,6 +8,7 @@ import type {
 } from "@admin-api/services/organization/organization.type";
 import type { OrganizationStatus } from "@iam/contracts";
 import type { AdminOrganizationServiceDeps } from "./organization.port";
+import { adminAuditTransactionOptions } from "@admin-api/services/audit/audit.service";
 import { buildOrganizationAudit } from "@admin-api/services/audit/events/organization.audit";
 import { toOrganizationDto } from "@admin-api/services/organization/organization.schema";
 import { paginate } from "@iam/api-core/utils";

@@ -12,6 +12,8 @@ import { privilegeDelegationsRelations } from "./privilege-delegations";
 import { privilegesRelations } from "./privileges";
 import { rolePrivilegesRelations } from "./role-privileges";
 import { rolesRelations } from "./roles";
+import { userProfileDirtyRelations } from "./user-profile-dirty";
+import { userProfilesRelations } from "./user-profiles";
 import { usersRelations } from "./users";
 
 export function coreRelations(r: RelationsHelper) {
@@ -29,6 +31,8 @@ export function coreRelations(r: RelationsHelper) {
     ...privilegesRelations(r),
     ...rolePrivilegesRelations(r),
     ...rolesRelations(r),
+    ...userProfileDirtyRelations(r),
+    ...userProfilesRelations(r),
     ...usersRelations(r),
   } satisfies RelationsConfig;
 }

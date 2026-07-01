@@ -1,4 +1,4 @@
-import { adminAuditTransactionOptions, type AdminAuditContext } from "@admin-api/services/audit/audit.service";
+import type { AdminAuditContext } from "@admin-api/services/audit/audit.service";
 import type { ClientStatus } from "@iam/contracts";
 import type { OidcRuntimeInvalidationTarget } from "../session-revocation/session-revocation.port";
 import type { AdminClientServiceDeps } from "./client.port";
@@ -11,6 +11,7 @@ import type {
   ClientPaginationQueryDto,
   ClientUpdateDto,
 } from "./client.type";
+import { adminAuditTransactionOptions } from "@admin-api/services/audit/audit.service";
 import { buildAdminClientAudit } from "@admin-api/services/audit/events/client.audit";
 import { ClientDtoSchema } from "@admin-api/services/client/client.schema";
 import { ClientStatus as ClientStatusValue, OidcClientType } from "@iam/contracts";

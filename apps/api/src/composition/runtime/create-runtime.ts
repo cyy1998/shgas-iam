@@ -86,6 +86,11 @@ export function createApiRuntime(options: CreateApiRuntimeOptions = {}): ApiRunt
         lookupHmacPreviousSecret: runtimeEnv.sessionKernel.lookupHmacPreviousSecret,
         nodeEnv: runtimeEnv.nodeEnv,
       }),
+      userProfile: {
+        workerConcurrency: runtimeEnv.userProfile.workerConcurrency,
+        rebuildBatchSize: runtimeEnv.userProfile.rebuildBatchSize,
+        backfillBatchSize: runtimeEnv.userProfile.backfillBatchSize,
+      },
     },
     integrations: {
       cap: createCapClient({

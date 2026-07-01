@@ -6,8 +6,8 @@ import type { OidcLogger } from "../../lib/logger.ts";
 import { createServer } from "node:http";
 import {
   buildHttpRequestLogFields,
-  getTraceIdFromHeaders,
   getStatusLogLevel,
+  getTraceIdFromHeaders,
   LoggerSourceApp,
   SystemLogEvent,
 } from "@iam/api-core/logger";

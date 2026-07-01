@@ -7,6 +7,14 @@ export function usersRelations(r: RelationsHelper) {
         from: r.users.id,
         to: r.employments.userId,
       }),
+      profile: r.one.userProfiles({
+        from: r.users.id,
+        to: r.userProfiles.userId,
+      }),
+      profileDirty: r.one.userProfileDirty({
+        from: r.users.id,
+        to: r.userProfileDirty.userId,
+      }),
       delegationTo: r.many.privilegeDelegations({
         from: r.users.id,
         to: r.privilegeDelegations.delegatorUserId,

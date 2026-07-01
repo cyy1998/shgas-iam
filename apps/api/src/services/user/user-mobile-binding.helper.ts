@@ -1,5 +1,4 @@
-import type { UserMobileBindingDeps } from "./user.port";
-import type { UserRequestOptions } from "./user.port";
+import type { UserMobileBindingDeps, UserRequestOptions } from "./user.port";
 import { VerificationCodeUsage } from "@api/enums/verificationCode.usage";
 import { withApiRequestContext } from "@api/services/audit/audit.service";
 import { buildMobileBindInvalidCodeAudit } from "@api/services/audit/events/self-user.audit";

@@ -46,6 +46,27 @@ describe("API environment", () => {
     expect(env.log.format).toBe("auto");
     expect(env.sso.externalOrigin).toBe("https://iam.example.com");
     expect(env.loginCredential.privateKeysByKid["2026-05-primary"]).toBe("private-key");
+    expect(env.userProfile).toEqual({
+      workerConcurrency: 2,
+      rebuildBatchSize: 100,
+      backfillBatchSize: 500,
+    });
+    expect("IAM_API_USER_PROFILE_WORKER_CONCURRENCY" in env).toBe(false);
+  });
+
+  test("accepts app-prefixed user-profile overrides", () => {
+    const env = parseApiEnv({
+      ...validEnv(),
+      IAM_API_USER_PROFILE_WORKER_CONCURRENCY: "4",
+      IAM_API_USER_PROFILE_REBUILD_BATCH_SIZE: "25",
+      IAM_API_USER_PROFILE_BACKFILL_BATCH_SIZE: "200",
+    });
+
+    expect(env.userProfile).toEqual({
+      workerConcurrency: 4,
+      rebuildBatchSize: 25,
+      backfillBatchSize: 200,
+    });
   });
 
   test("rejects the default Session Kernel HMAC secret in production", () => {

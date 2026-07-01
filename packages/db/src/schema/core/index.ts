@@ -11,4 +11,6 @@ export * from "./privilege-delegations";
 export * from "./privileges";
 export * from "./role-privileges";
 export * from "./roles";
+export * from "./user-profile-dirty";
+export * from "./user-profiles";
 export * from "./users";

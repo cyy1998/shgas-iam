@@ -18,6 +18,8 @@ import {
   createCustomSsoCleanupAdapter,
   createCustomSsoSessionKernelAdapter,
 } from "@api/services/session/custom-sso-session-kernel.adapter";
+import { createUserProfileBuilder } from "@api/services/user-profile/user-profile-builder.service";
+import { createUserProfileQueryService } from "@api/services/user-profile/user-profile-query.service";
 import { createUserDelegationQuery } from "@api/services/user/user-delegation-query.helper";
 import { createUserDetailBuilder } from "@api/services/user/user-detail.helper";
 import { createUserMobileBinding } from "@api/services/user/user-mobile-binding.helper";
@@ -98,6 +100,18 @@ export function createApiServices(options: CreateApiServicesOptions) {
     employmentRepository: repositories.employment,
     roleRepository: repositories.role,
     privilegeRepository: repositories.privilege,
+  });
+
+  const userProfileBuilder = createUserProfileBuilder({
+    buildRepository: repositories.userProfileBuild,
+    clock: runtime.clock,
+    config: {
+      batchSize: runtime.config.userProfile.rebuildBatchSize,
+    },
+  });
+
+  const userProfileQuery = createUserProfileQueryService({
+    profileRepository: repositories.userProfile,
   });
 
   const userDelegationQuery = createUserDelegationQuery({
@@ -219,6 +233,8 @@ export function createApiServices(options: CreateApiServicesOptions) {
     privilegeDelegation: privilegeDelegationService,
     sso: ssoService,
     user: userService,
+    userProfileBuilder,
+    userProfileQuery,
   };
 }
 

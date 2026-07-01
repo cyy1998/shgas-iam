@@ -16,6 +16,8 @@
   "scripts": {
     "dev": "bun --hot src/index.ts",
     "serve": "bun run src/index.ts",
+    "worker:user-profile": "bun run src/workers/user-profile.ts",
+    "worker:user-profile:dev": "bun --hot src/workers/user-profile.ts",
     "lint": "eslint src eslint.config.js",
     "lint:fix": "eslint --fix src eslint.config.js",
     "db:generate": "pnpm --filter @iam/db db:generate",
@@ -32,6 +34,7 @@
     "@iam/contracts": "workspace:*",
     "@iam/db": "workspace:*",
     "@iam/domain": "workspace:*",
+    "@iam/jobs": "workspace:*",
     "@scalar/hono-api-reference": "^0.10.20",
     "@trpc/server": "^11.17.0",
     "bcrypt": "^6.0.0",

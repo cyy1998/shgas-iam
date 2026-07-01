@@ -1,5 +1,4 @@
-import type { UserServiceDeps } from "./user.port";
-import type { UserRequestOptions } from "./user.port";
+import type { UserRequestOptions, UserServiceDeps } from "./user.port";
 import type { UserDetailDto, UserDto, UserQueryDto, UserQueryWithPrivilegeDelegationDto } from "./user.type";
 import { VerificationCodeUsage } from "@api/enums/verificationCode.usage";
 import { withApiRequestContext } from "@api/services/audit/audit.service";
