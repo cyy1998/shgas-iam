@@ -92,6 +92,7 @@ const RawEnvSchema = z.object({
   IAM_API_USER_PROFILE_WORKER_CONCURRENCY: z.coerce.number().int().positive().default(2),
   IAM_API_USER_PROFILE_REBUILD_BATCH_SIZE: z.coerce.number().int().positive().default(100),
   IAM_API_USER_PROFILE_BACKFILL_BATCH_SIZE: z.coerce.number().int().positive().default(500),
+  IAM_API_USER_PROFILE_DSL_MAX_LIMIT: z.coerce.number().int().positive().max(500).default(100),
 }).superRefine((raw, ctx) => {
   if (raw.IAM_API_LOGIN_CREDENTIAL_PRIVATE_KEYS_JSON[raw.IAM_API_LOGIN_CREDENTIAL_ACTIVE_KID] === undefined) {
     ctx.addIssue({
@@ -207,6 +208,7 @@ export interface Env extends Record<string, unknown> {
     workerConcurrency: number;
     rebuildBatchSize: number;
     backfillBatchSize: number;
+    dslMaxLimit: number;
   };
 }
 
@@ -285,6 +287,7 @@ function toApiEnv(raw: RawEnv): Env {
       workerConcurrency: raw.IAM_API_USER_PROFILE_WORKER_CONCURRENCY,
       rebuildBatchSize: raw.IAM_API_USER_PROFILE_REBUILD_BATCH_SIZE,
       backfillBatchSize: raw.IAM_API_USER_PROFILE_BACKFILL_BATCH_SIZE,
+      dslMaxLimit: raw.IAM_API_USER_PROFILE_DSL_MAX_LIMIT,
     },
   };
 }

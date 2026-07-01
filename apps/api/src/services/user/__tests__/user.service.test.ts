@@ -41,13 +41,18 @@ function createDeps(overrides: Record<string, unknown> = {}) {
     uow: createImmediateUnitOfWork(tx),
     tx,
     userDelegationQuery: { searchUsersWithDelegations: mock(async () => ({ users: [], delegations: [] })) },
-    userDetailBuilder: { buildUserDetail: mock(async () => user) },
+    profileQuery: {
+      getDetailByMobile: mock(async () => user),
+      getDetailByUserId: mock(async () => user),
+      getDetailByUsername: mock(async () => user),
+      getDetailByWxId: mock(async () => user),
+      searchLegacyUsers: mock(async () => [user]),
+    },
     userRepository: {
       getUserById: mock(async () => user),
       getUserByMobile: mock(async () => user),
       getUserByUsername: mock(async () => user),
       getUserByWxId: mock(async () => user),
-      searchUsers: mock(async () => [user]),
       updateEnabledUserStatus: mock(async () => user),
     },
     ...overrides,
@@ -85,5 +90,25 @@ describe("createUserService", () => {
     await expect(service.resetPassword("zhangsan", "13900000000", "1234", "newPass123"))
       .rejects
       .toThrow("用户名与手机号不匹配");
+  });
+
+  test("sets mobile without reading profile detail after mutation", async () => {
+    const deps = createDeps();
+    const service = createUserService(deps);
+
+    await expect(service.setMobile(1, "13900000000", "1234")).resolves.toBe(true);
+
+    expect(deps.profileQuery.getDetailByUserId).not.toHaveBeenCalled();
+  });
+
+  test("delegates user detail and legacy search reads to profile query service", async () => {
+    const deps = createDeps();
+    const service = createUserService(deps);
+
+    await service.getUserDetailByUsername("zhangsan");
+    await service.searchUsers({ usernames: ["zhangsan"] });
+
+    expect(deps.profileQuery.getDetailByUsername).toHaveBeenCalledWith("zhangsan");
+    expect(deps.profileQuery.searchLegacyUsers).toHaveBeenCalledWith({ usernames: ["zhangsan"] });
   });
 });

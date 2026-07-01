@@ -13,6 +13,7 @@ import { isHumanVerificationRequiredError } from "@api/services/human-verificati
 import { createHumanVerificationContext } from "@api/services/human-verification/human-verification.type";
 import { InvalidVerificationCodeError } from "@iam/api-core/errors/InvalidVerificationCodeError";
 import { LoginFailedError } from "@iam/api-core/errors/LoginFailedError";
+import { UserNotFoundError } from "@iam/domain/user";
 
 export function createAuthService(deps: AuthServiceDeps) {
   async function recordFailedLoginAndBlacklistIfNeeded(userId: number, reason: "password" | "mobile") {
@@ -46,9 +47,12 @@ export function createAuthService(deps: AuthServiceDeps) {
       context,
     );
 
-    let userDetailDto: Awaited<ReturnType<AuthServiceDeps["userService"]["getUserDetailByUsername"]>>;
+    let activeUser: Awaited<ReturnType<AuthServiceDeps["userService"]["getActiveUserByUsername"]>> | null = null;
     try {
-      userDetailDto = await deps.userService.getUserDetailByUsername(username);
+      activeUser = await deps.userService.getActiveUserByUsername(username);
+      if (activeUser === null) {
+        throw new UserNotFoundError("用户不存在");
+      }
     }
     catch (error) {
       if (!isHumanVerificationRequiredError(error)) {
@@ -60,25 +64,29 @@ export function createAuthService(deps: AuthServiceDeps) {
       }
       throw error;
     }
+    if (activeUser === null) {
+      throw new UserNotFoundError("用户不存在");
+    }
     try {
-      await throwIfLoginBlacklisted(userDetailDto.id, LoginFailedError);
+      await throwIfLoginBlacklisted(activeUser.id, LoginFailedError);
     }
     catch (error) {
       await deps.auditLogWriter.recordAuditLog(withApiRequestContext(
         requestContext,
-        buildPasswordLoginFailureAudit(username, "blacklisted", userDetailDto),
+        buildPasswordLoginFailureAudit(username, "blacklisted", activeUser),
       ));
       throw error;
     }
-    const isMatch = await deps.userService.checkPassword(userDetailDto.username, password);
+    const isMatch = await deps.userService.checkPassword(activeUser.username, password);
     if ((!isMatch) && password !== deps.config.magicCode) {
       await deps.humanRiskService.recordLoginFailure(HumanVerificationAction.PasswordLogin, context);
       await deps.auditLogWriter.recordAuditLog(withApiRequestContext(
         requestContext,
-        buildPasswordLoginFailureAudit(username, "invalid_password", userDetailDto),
+        buildPasswordLoginFailureAudit(username, "invalid_password", activeUser),
       ));
-      throw new LoginFailedError(await formatFailedLoginMessage("密码错误", userDetailDto.id));
+      throw new LoginFailedError(await formatFailedLoginMessage("密码错误", activeUser.id));
     }
+    const userDetailDto = await deps.userService.getUserDetailById(activeUser.id);
     await deps.loginFailure.clearLoginFailures(userDetailDto.id);
     await deps.loginFailure.clearLoginBlacklist(userDetailDto.id);
     const { token } = await deps.customSsoSession.createPrincipalSession(userDetailDto, { amr: ["pwd"] });
@@ -132,7 +140,10 @@ export function createAuthService(deps: AuthServiceDeps) {
       }
       throw new InvalidVerificationCodeError("验证码错误");
     }
-    const userDetailDto = await deps.userService.getUserDetailByMobile(phoneNumber);
+    if (activeUser === null) {
+      throw new UserNotFoundError("用户不存在");
+    }
+    const userDetailDto = await deps.userService.getUserDetailById(activeUser.id);
     await deps.loginFailure.clearLoginFailures(userDetailDto.id);
     await deps.loginFailure.clearLoginBlacklist(userDetailDto.id);
     const { token } = await deps.customSsoSession.createPrincipalSession(userDetailDto, { amr: ["sms"] });

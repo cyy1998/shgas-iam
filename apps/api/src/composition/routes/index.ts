@@ -91,6 +91,7 @@ export async function createApiRoutes(options: CreateApiRoutesOptions): Promise<
     },
     mobileService: services.mobile,
     userService: services.user,
+    userProfileQuery: services.userProfileQuery,
     uow: mapUnitOfWork(unitOfWork, tx => ({
       employmentRepository: tx.repositories.employment,
       organizationRepository: tx.repositories.organization,
@@ -103,7 +104,9 @@ export async function createApiRoutes(options: CreateApiRoutesOptions): Promise<
     "./src/routes/auth/auth.index.ts": { default: createAuthRoute(authHandlers) },
     "./src/routes/internal/delegation/delegation.index.ts": { default: createDelegationRoute(delegationHandlers) },
     "./src/routes/internal/organization/organization.index.ts": { default: createOrganizationRoute(organizationHandlers) },
-    "./src/routes/internal/user/user.index.ts": { default: createUserRoute(userHandlers) },
+    "./src/routes/internal/user/user.index.ts": {
+      default: createUserRoute(userHandlers, { dslMaxLimit: runtime.config.userProfile.dslMaxLimit }),
+    },
     "./src/routes/open/open.index.ts": { default: createOpenRoute(openHandlers) },
     "./src/routes/public/public.index.ts": { default: createPublicRoute(publicHandlers) },
     "./src/routes/sso/sso.index.ts": { default: createSsoRoute(ssoHandlers) },

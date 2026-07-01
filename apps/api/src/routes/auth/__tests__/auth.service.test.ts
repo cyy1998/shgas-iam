@@ -139,6 +139,11 @@ const consumeVerificationCode = mock(async () => false);
 
 let passwordMatches = false;
 let activeMobileUser: { id: number } | null = { id: USER_ID };
+let activePasswordUser: { id: number; username: string; name: string } | null = {
+  id: USER_ID,
+  username: "138550",
+  name: "测试用户",
+};
 let failureIdSequence = 0;
 
 const userDetail = {
@@ -170,8 +175,8 @@ function createService() {
     userService: {
       checkPassword: mock(async () => passwordMatches),
       getActiveUserByMobile: mock(async () => activeMobileUser as any),
-      getUserDetailByMobile: mock(async () => userDetail),
-      getUserDetailByUsername: mock(async () => userDetail),
+      getActiveUserByUsername: mock(async () => activePasswordUser as any),
+      getUserDetailById: mock(async () => userDetail),
     },
     customSsoSession: {
       authorizeLocalSession: mock(async () => ""),
@@ -230,6 +235,11 @@ beforeEach(() => {
   consumeVerificationCode.mockResolvedValue(false);
   passwordMatches = false;
   activeMobileUser = { id: USER_ID };
+  activePasswordUser = {
+    id: USER_ID,
+    username: userDetail.username,
+    name: userDetail.name,
+  };
   failureIdSequence = 0;
 });
 

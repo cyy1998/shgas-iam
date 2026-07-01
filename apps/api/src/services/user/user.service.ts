@@ -9,7 +9,6 @@ import {
   buildSelfPasswordChangeFailureAudit,
   buildSelfPasswordChangeSuccessAudit,
 } from "@api/services/audit/events/self-user.audit";
-import { UserDtoSchema } from "@api/services/user/user.schema";
 import { CustomError } from "@iam/api-core/errors/CustomError";
 import { InvalidVerificationCodeError } from "@iam/api-core/errors/InvalidVerificationCodeError";
 import { UserStatus } from "@iam/contracts";
@@ -97,6 +96,18 @@ export function createUserService(deps: UserServiceDeps) {
     return await deps.userRepository.getUserByMobile(mobile);
   }
 
+  async function getActiveUserById(userId: number) {
+    return await deps.userRepository.getUserById(userId);
+  }
+
+  async function getActiveUserByUsername(username: string) {
+    return await deps.userRepository.getUserByUsername(username);
+  }
+
+  async function getActiveUserByWxId(wxId: string) {
+    return await deps.userRepository.getUserByWxId(wxId);
+  }
+
   async function pauseEnabledUser(userId: number) {
     return await deps.userRepository.updateEnabledUserStatus(userId, UserStatus.Pause);
   }
@@ -110,13 +121,11 @@ export function createUserService(deps: UserServiceDeps) {
         buildMobileBindSuccessAudit(userId, phoneNumber),
       ));
     }, { observability: options.requestContext });
-    return await getUserDetailById(userId);
+    return true;
   }
 
   async function searchUsers(userQueryDto: UserQueryDto): Promise<UserDto[]> {
-    const users = await deps.userRepository.searchUsers(userQueryDto);
-    const userDtos = users.map(u => UserDtoSchema.parse(u));
-    return userDtos;
+    return await deps.profileQuery.searchLegacyUsers(userQueryDto);
   }
 
   async function searchUsersWithPrivilegeDelegation(query: UserQueryWithPrivilegeDelegationDto) {
@@ -124,34 +133,29 @@ export function createUserService(deps: UserServiceDeps) {
   }
 
   async function getUserDetailById(userId: number): Promise<UserDetailDto> {
-    const user = await deps.userRepository.getUserById(userId);
-    const userDetail = await deps.userDetailBuilder.buildUserDetail(user);
-    return userDetail;
+    return await deps.profileQuery.getDetailByUserId(userId);
   }
 
   async function getUserDetailByUsername(username: string): Promise<UserDetailDto> {
-    const user = await deps.userRepository.getUserByUsername(username);
-    const userDetail = await deps.userDetailBuilder.buildUserDetail(user);
-    return userDetail;
+    return await deps.profileQuery.getDetailByUsername(username);
   }
 
   async function getUserDetailByMobile(mobile: string): Promise<UserDetailDto> {
-    const user = await deps.userRepository.getUserByMobile(mobile);
-    const userDetail = await deps.userDetailBuilder.buildUserDetail(user);
-    return userDetail;
+    return await deps.profileQuery.getDetailByMobile(mobile);
   }
 
   async function getUserDetailByWxId(wxId: string): Promise<UserDetailDto> {
-    const user = await deps.userRepository.getUserByWxId(wxId);
-    const userDetail = await deps.userDetailBuilder.buildUserDetail(user);
-    return userDetail;
+    return await deps.profileQuery.getDetailByWxId(wxId);
   }
 
   return {
     setPassword,
     resetPassword,
     checkPassword,
+    getActiveUserById,
     getActiveUserByMobile,
+    getActiveUserByUsername,
+    getActiveUserByWxId,
     pauseEnabledUser,
     setMobile,
     searchUsers,

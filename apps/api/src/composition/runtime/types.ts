@@ -53,6 +53,7 @@ export interface ApiRuntimeConfig {
     workerConcurrency: number;
     rebuildBatchSize: number;
     backfillBatchSize: number;
+    dslMaxLimit: number;
   };
 }
 

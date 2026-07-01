@@ -120,6 +120,57 @@ describe("UserProfileQueryService", () => {
     })).rejects.toThrow("employment fields must be inside a nested employments filter");
   });
 
+  test("uses the server DSL default limit when no explicit limit is provided", async () => {
+    const searchCurrentVisibleProfiles = mock(async () => []);
+    const service = createUserProfileQueryService({
+      profileRepository: {
+        searchCurrentVisibleProfiles,
+      } as any,
+      config: {
+        dslDefaultLimit: 25,
+      },
+    });
+
+    await service.searchDsl({
+      field: "user.username",
+      op: "eq",
+      value: "zhangsan",
+    });
+
+    expect(searchCurrentVisibleProfiles).toHaveBeenCalledWith({
+      filter: {
+        field: "user.username",
+        op: "eq",
+        value: "zhangsan",
+      },
+      limit: 25,
+    });
+  });
+
+  test("passes explicit DSL limits to the profile repository", async () => {
+    const searchCurrentVisibleProfiles = mock(async () => []);
+    const service = createUserProfileQueryService({
+      profileRepository: {
+        searchCurrentVisibleProfiles,
+      } as any,
+    });
+
+    await service.searchDsl({
+      field: "user.username",
+      op: "eq",
+      value: "zhangsan",
+    }, { limit: 10 });
+
+    expect(searchCurrentVisibleProfiles).toHaveBeenCalledWith({
+      filter: {
+        field: "user.username",
+        op: "eq",
+        value: "zhangsan",
+      },
+      limit: 10,
+    });
+  });
+
   test("validates dirty status and reason schemas used by profile DTOs", async () => {
     const schema = await import("../user-profile.schema");
 

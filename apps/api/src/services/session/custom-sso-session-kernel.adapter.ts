@@ -86,7 +86,7 @@ export interface CustomSsoSessionKernelAdapterDeps {
   kernel: SessionKernel;
   redis: Pick<RedisPort, "get" | "set">;
   logger: Pick<LoggerPort, "info" | "warn">;
-  userService: Pick<UserService, "getUserDetailById">;
+  userService: Pick<UserService, "getActiveUserById" | "getUserDetailById">;
   auditLogWriter: ApiAuditLogWriter;
   clock: Pick<ClockPort, "now">;
   config: {
@@ -214,7 +214,8 @@ export function createCustomSsoSessionKernelAdapter(deps: CustomSsoSessionKernel
       throw new AuthzUnauthorizedError("全局session不存在或已过期");
     }
 
-    const userDetail = await getLiveUserDetail(principalSession.value.principal.subjectId);
+    await assertLiveUserAvailable(principalSession.value.principal.subjectId);
+    const userDetail = await getProfileUserDetail(principalSession.value.principal.subjectId);
     return {
       artifact,
       principalSession: principalSession.value,
@@ -326,11 +327,10 @@ export function createCustomSsoSessionKernelAdapter(deps: CustomSsoSessionKernel
   }
 
   async function authorizeLocalSession(localSessionToken: string, client: ClientDto) {
-    const payload = await resolveValidatedLocalSession(localSessionToken, client, { enforceMaintenance: true });
+    const { userDetail } = await resolveValidatedLocalSession(localSessionToken, client, { enforceMaintenance: true });
     const userAbstract = {
-      username: payload.user.username,
-      id: payload.user.id,
-      name: payload.user.name,
+      username: userDetail.username,
+      id: userDetail.id,
     };
     return Buffer.from(JSON.stringify(userAbstract), "utf8").toString("base64");
   }
@@ -340,12 +340,13 @@ export function createCustomSsoSessionKernelAdapter(deps: CustomSsoSessionKernel
     if (principalSession.status !== "resolved") {
       throw new AuthzUnauthorizedError("未登录");
     }
-    return await getLiveUserDetail(principalSession.value.principal.subjectId);
+    await assertLiveUserAvailable(principalSession.value.principal.subjectId);
+    return await getProfileUserDetail(principalSession.value.principal.subjectId);
   }
 
   async function resolveLocalSessionUser(localSessionToken: string, client: ClientDto) {
-    const payload = await resolveValidatedLocalSession(localSessionToken, client, { enforceMaintenance: false });
-    return payload.user;
+    const { userDetail } = await resolveValidatedLocalSession(localSessionToken, client, { enforceMaintenance: false });
+    return userDetail;
   }
 
   async function logout(token: string | undefined): Promise<RevokeSummary | true> {
@@ -405,7 +406,7 @@ export function createCustomSsoSessionKernelAdapter(deps: CustomSsoSessionKernel
       throw new AuthzUnauthorizedError("未登录");
     }
 
-    const user = await getLiveUserDetail(principal.value.principal.subjectId);
+    const liveUser = await assertLiveUserAvailable(principal.value.principal.subjectId);
     if (client.isDelete) {
       await deps.kernel.revokeClientProtocol(client.clientCode, CUSTOM_SSO_PROTOCOL, "client_deleted");
       throw new AuthzUnauthorizedError("未登录");
@@ -432,11 +433,12 @@ export function createCustomSsoSessionKernelAdapter(deps: CustomSsoSessionKernel
 
     if (options.enforceMaintenance
       && client.status === ClientStatus.Maintenance
-      && !isUserExcludedFromMaintenance(client, user)) {
+      && !isUserExcludedFromMaintenance(client, liveUser)) {
       throw new AuthzMaintenanceError("系统维护中");
     }
 
-    return payload;
+    const userDetail = await getProfileUserDetail(principal.value.principal.subjectId);
+    return { payload, userDetail };
   }
 
   async function readPayload(payloadRef: string) {
@@ -452,19 +454,32 @@ export function createCustomSsoSessionKernelAdapter(deps: CustomSsoSessionKernel
     return parsed.data;
   }
 
-  async function getLiveUserDetail(subjectId: string) {
+  function parseUserId(subjectId: string) {
     const userId = Number.parseInt(subjectId, 10);
     if (!Number.isSafeInteger(userId)) {
       throw new AuthzUnauthorizedError("未登录");
     }
-    try {
-      return await deps.userService.getUserDetailById(userId);
-    }
-    catch {
+    return userId;
+  }
+
+  async function assertLiveUserAvailable(subjectId: string) {
+    const userId = parseUserId(subjectId);
+    const user = await deps.userService.getActiveUserById(userId);
+    if (user === null) {
       await deps.kernel.revokeUserSessions({
         principalType: "user",
         subjectId: String(userId),
       }, "user_disabled");
+      throw new AuthzUnauthorizedError("未登录");
+    }
+    return user;
+  }
+
+  async function getProfileUserDetail(subjectId: string) {
+    try {
+      return await deps.userService.getUserDetailById(parseUserId(subjectId));
+    }
+    catch {
       throw new AuthzUnauthorizedError("未登录");
     }
   }
@@ -562,7 +577,7 @@ function throwInvalidCode(kind: "unauthorized" | "invalid_auth_code" = "invalid_
   throw new InvalidAuthCodeError("非法Code");
 }
 
-function isUserExcludedFromMaintenance(client: ClientDto, user: UserDetailDto) {
+function isUserExcludedFromMaintenance(client: ClientDto, user: { username: string }) {
   return client.extAttributes.userExcluding !== undefined
     && client.extAttributes.userExcluding !== null
     && client.extAttributes.userExcluding.includes(user.username);

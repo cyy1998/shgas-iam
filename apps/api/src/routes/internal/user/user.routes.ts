@@ -1,5 +1,6 @@
 import { PrivilegeDelegationDtoSchema } from "@api/services/privilege/privilegeDelegation.schema";
 import { UserDetailDtoSchema, UserDtoSchema, UserQueryDtoSchema, UserQueryWithPrivilegeDelegationDtoSchema } from "@api/services/user/user.schema";
+import { createUserProfileDslSearchRequestSchema } from "@api/services/user-profile/user-profile.schema";
 import { createRoute, z } from "@hono/zod-openapi";
 import * as HttpStatusCodes from "@iam/api-core/core/http-status-codes";
 import { commonErrorResponses } from "@iam/api-core/core/openapi/helpers/common-error-responses";
@@ -54,6 +55,25 @@ export const usersSearchWithPrivilegeDelegation = createRoute({
     ), "用户搜索结果"),
   },
 });
+
+export function createUsersSearchDslRoute(dslMaxLimit: number) {
+  return createRoute({
+    method: "post",
+    path: "/search-dsl",
+    tags,
+    request: {
+      body: jsonContentRequired(createUserProfileDslSearchRequestSchema(dslMaxLimit), "用户 profile DSL 搜索条件"),
+    },
+    responses: {
+      ...commonErrorResponses,
+      [HttpStatusCodes.OK]: jsonContent(createSuccessResponseSchema(
+        z.array(UserDetailDtoSchema),
+      ), "用户 profile DSL 搜索结果"),
+    },
+  });
+}
+
+export const usersSearchDsl = createUsersSearchDslRoute(500);
 
 export const contactRegister = createRoute({
   method: "post",

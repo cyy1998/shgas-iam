@@ -3,6 +3,7 @@ import type { EmploymentRepository } from "@api/services/employment/employment.r
 import type { MobileService } from "@api/services/mobile/mobile.service";
 import type { OrganizationRepository } from "@api/services/organization/organization.repository";
 import type { PositionRepository } from "@api/services/position/position.repository";
+import type { UserProfileQueryService } from "@api/services/user-profile/user-profile-query.service";
 import type { UserRepository } from "@api/services/user/user.repository";
 import type { UserService } from "@api/services/user/user.service";
 import type { UnitOfWorkPort } from "@iam/api-core/uow";
@@ -32,6 +33,7 @@ export interface CreateUserHandlersDeps {
     UserService,
     "getUserDetailByUsername" | "searchUsers" | "searchUsersWithPrivilegeDelegation"
   >;
+  userProfileQuery: Pick<UserProfileQueryService, "searchDsl">;
   uow: ContactRegistrationUnitOfWorkPort;
 }
 
@@ -51,6 +53,12 @@ export function createUserHandlers(deps: CreateUserHandlersDeps) {
   const usersSearchWithPrivilegeDelegation: UserRouteHandler<"usersSearchWithPrivilegeDelegation"> = async (c) => {
     const userQueryDto = c.req.valid("json");
     const data = await deps.userService.searchUsersWithPrivilegeDelegation(userQueryDto);
+    return c.json(resp.ok(data));
+  };
+
+  const usersSearchDsl: UserRouteHandler<"usersSearchDsl"> = async (c) => {
+    const { filter, limit } = c.req.valid("json");
+    const data = await deps.userProfileQuery.searchDsl(filter, { limit });
     return c.json(resp.ok(data));
   };
 
@@ -110,6 +118,7 @@ export function createUserHandlers(deps: CreateUserHandlersDeps) {
   return {
     contactRegister,
     userInfo,
+    usersSearchDsl,
     usersSearch,
     usersSearchWithPrivilegeDelegation,
   };

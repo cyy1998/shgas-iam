@@ -90,6 +90,7 @@ export function createApiRuntime(options: CreateApiRuntimeOptions = {}): ApiRunt
         workerConcurrency: runtimeEnv.userProfile.workerConcurrency,
         rebuildBatchSize: runtimeEnv.userProfile.rebuildBatchSize,
         backfillBatchSize: runtimeEnv.userProfile.backfillBatchSize,
+        dslMaxLimit: runtimeEnv.userProfile.dslMaxLimit,
       },
     },
     integrations: {

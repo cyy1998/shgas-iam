@@ -221,6 +221,7 @@ const logger = {
 
 let fetchShouldFail = false;
 let liveUserAvailable = true;
+let profileAvailable = true;
 let orcasShouldFail = false;
 
 const userDetail = {
@@ -334,8 +335,14 @@ function createServices() {
     logger,
   });
   const adapterUserService = {
-    getUserDetailById: mock(async (userId: number) => {
+    getActiveUserById: mock(async (userId: number) => {
       if (!liveUserAvailable || userId !== userDetail.id) {
+        return null;
+      }
+      return userDetail;
+    }),
+    getUserDetailById: mock(async (userId: number) => {
+      if (!profileAvailable || userId !== userDetail.id) {
         throw new Error("user not found");
       }
       return userDetail;
@@ -373,8 +380,15 @@ function createServices() {
     clientService,
     customSsoSession,
     userService: {
-      getUserDetailByUsername: mock(async () => userDetail),
-      getUserDetailByWxId: mock(async () => userDetail),
+      getActiveUserById: mock(async (userId: number) => liveUserAvailable && userId === userDetail.id ? userDetail : null),
+      getActiveUserByUsername: mock(async (username: string) => liveUserAvailable && username === userDetail.username ? userDetail : null),
+      getActiveUserByWxId: mock(async () => liveUserAvailable ? userDetail : null),
+      getUserDetailById: mock(async (userId: number) => {
+        if (!profileAvailable || userId !== userDetail.id) {
+          throw new Error("user not found");
+        }
+        return userDetail;
+      }),
     },
     auditLogWriter,
     config: {
@@ -438,6 +452,7 @@ beforeEach(() => {
   logger.warn.mockClear();
   fetchShouldFail = false;
   liveUserAvailable = true;
+  profileAvailable = true;
   orcasShouldFail = false;
   logger.info.mockClear();
   globalThis.fetch = mock(async (_input: string | URL | Request, init?: RequestInit) => {
@@ -665,7 +680,6 @@ describe("SSO Kernel session consistency", () => {
     const encoded = await services.customSsoSession.authorizeLocalSession(result.sid, client);
     expect(JSON.parse(Buffer.from(encoded, "base64").toString("utf8"))).toEqual({
       id: userDetail.id,
-      name: userDetail.name,
       username: userDetail.username,
     });
 
@@ -707,6 +721,19 @@ describe("SSO Kernel session consistency", () => {
       services.customSsoSession.authorizeLocalSession(second.sid, client),
     ).rejects.toBeInstanceOf(AuthzUnauthorizedError);
     liveUserAvailable = true;
+    await expect(
+      services.customSsoSession.authorizeLocalSession(second.sid, client),
+    ).rejects.toBeInstanceOf(AuthzUnauthorizedError);
+
+    const profileMissing = await exchangeIndependentLocalSession(services);
+    profileAvailable = false;
+    await expect(
+      services.customSsoSession.authorizeLocalSession(profileMissing.sid, client),
+    ).rejects.toBeInstanceOf(AuthzUnauthorizedError);
+    profileAvailable = true;
+    await expect(
+      services.customSsoSession.authorizeLocalSession(profileMissing.sid, client),
+    ).resolves.toEqual(expect.any(String));
 
     const third = await exchangeIndependentLocalSession(services);
     await expect(services.customSsoSession.authorizeLocalSession(third.sid, {

@@ -29,7 +29,10 @@ export interface SsoServiceDeps {
     | "createPrincipalSession"
     | "logout"
   >;
-  userService: Pick<UserService, "getUserDetailByUsername" | "getUserDetailByWxId">;
+  userService: Pick<
+    UserService,
+    "getActiveUserById" | "getActiveUserByUsername" | "getActiveUserByWxId" | "getUserDetailById"
+  >;
   auditLogWriter: AuditLogWriterPort;
   config: {
     nodeEnv: string;

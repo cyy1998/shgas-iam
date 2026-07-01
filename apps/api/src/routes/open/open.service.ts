@@ -16,7 +16,10 @@ export function createOpenService(deps: OpenServiceDeps) {
     if (!username) {
       throw new CustomError("用户名不能为空");
     }
-    const user = await deps.userService.getUserDetailByUsername(username);
+    const user = await deps.userService.getActiveUserByUsername(username);
+    if (user === null) {
+      throw new CustomError("用户不存在");
+    }
     if (!user.mobile) {
       throw new CustomError("该用户暂未绑定手机号");
     }

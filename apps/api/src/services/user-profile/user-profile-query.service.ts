@@ -11,9 +11,16 @@ import { UserProfileFilterDslSchema } from "./user-profile.schema";
 
 export interface UserProfileQueryServiceDeps {
   profileRepository: UserProfileRepository;
+  config?: {
+    dslDefaultLimit?: number;
+  };
 }
 
+const DEFAULT_DSL_SEARCH_LIMIT = 50;
+
 export function createUserProfileQueryService(deps: UserProfileQueryServiceDeps) {
+  const dslDefaultLimit = deps.config?.dslDefaultLimit ?? DEFAULT_DSL_SEARCH_LIMIT;
+
   async function getDetailByUserId(userId: number): Promise<UserDetailDto> {
     return parseProfileDetail(await deps.profileRepository.getCurrentByUserId(userId));
   }
@@ -36,9 +43,12 @@ export function createUserProfileQueryService(deps: UserProfileQueryServiceDeps)
     return profiles.map(profile => UserDtoSchema.parse(toUserDtoFromProfile(profile)));
   }
 
-  async function searchDsl(input: UserProfileFilterDsl): Promise<UserDetailDto[]> {
+  async function searchDsl(input: UserProfileFilterDsl, options: { limit?: number } = {}): Promise<UserDetailDto[]> {
     const filter = UserProfileFilterDslSchema.parse(input);
-    const profiles = await deps.profileRepository.searchCurrentVisibleProfiles({ filter });
+    const profiles = await deps.profileRepository.searchCurrentVisibleProfiles({
+      filter,
+      limit: options.limit ?? dslDefaultLimit,
+    });
     return profiles.map(profile => UserDetailDtoSchema.parse(profile.detail));
   }
 

@@ -50,8 +50,10 @@ describe("API environment", () => {
       workerConcurrency: 2,
       rebuildBatchSize: 100,
       backfillBatchSize: 500,
+      dslMaxLimit: 100,
     });
     expect("IAM_API_USER_PROFILE_WORKER_CONCURRENCY" in env).toBe(false);
+    expect("IAM_API_USER_PROFILE_DSL_MAX_LIMIT" in env).toBe(false);
   });
 
   test("accepts app-prefixed user-profile overrides", () => {
@@ -60,13 +62,32 @@ describe("API environment", () => {
       IAM_API_USER_PROFILE_WORKER_CONCURRENCY: "4",
       IAM_API_USER_PROFILE_REBUILD_BATCH_SIZE: "25",
       IAM_API_USER_PROFILE_BACKFILL_BATCH_SIZE: "200",
+      IAM_API_USER_PROFILE_DSL_MAX_LIMIT: "75",
     });
 
     expect(env.userProfile).toEqual({
       workerConcurrency: 4,
       rebuildBatchSize: 25,
       backfillBatchSize: 200,
+      dslMaxLimit: 75,
     });
+  });
+
+  test("does not expose naked user-profile DSL env names", () => {
+    const env = parseApiEnv({
+      ...validEnv(),
+      USER_PROFILE_DSL_MAX_LIMIT: "12",
+    });
+
+    expect(env.userProfile.dslMaxLimit).toBe(100);
+    expect("USER_PROFILE_DSL_MAX_LIMIT" in env).toBe(false);
+  });
+
+  test("rejects unsafe user-profile DSL limits", () => {
+    expect(() => parseApiEnv({
+      ...validEnv(),
+      IAM_API_USER_PROFILE_DSL_MAX_LIMIT: "501",
+    })).toThrow();
   });
 
   test("rejects the default Session Kernel HMAC secret in production", () => {

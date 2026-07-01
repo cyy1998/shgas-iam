@@ -9,10 +9,16 @@ import { LoginFailedError } from "@iam/api-core/errors/LoginFailedError";
 import { SystemLogEvent } from "@iam/api-core/logger";
 import { observabilityLogFields } from "@iam/api-core/observability";
 import { reviveIsoDates } from "@iam/api-core/utils";
-import { ClientManagementLevel } from "@iam/contracts";
+import { ClientManagementLevel, UserType } from "@iam/contracts";
 import { matchRedirectUrlPattern } from "@iam/domain/client";
 import { sleep } from "bun";
 import { sm3 } from "sm-crypto";
+import { z } from "zod";
+
+const CachedWechatLoginUserSchema = z.union([
+  z.object({ userId: z.number().int().positive() }),
+  UserDetailDtoSchema.pick({ id: true }).transform(value => ({ userId: value.id })),
+]);
 
 function hasSupportedRedirectUrlSyntax(redirectUrl: string) {
   try {
@@ -157,10 +163,14 @@ export function createSsoService(deps: SsoServiceDeps) {
     if (hashSting !== token) {
       throw new AuthzUnauthorizedError("token校验失败");
     }
-    const userDetailDto = await deps.userService.getUserDetailByUsername(loginid);
-    if (userDetailDto.userType !== "正式员工") {
+    const liveUser = await deps.userService.getActiveUserByUsername(loginid);
+    if (liveUser === null) {
+      throw new LoginFailedError("用户不存在");
+    }
+    if (liveUser.userType !== UserType.Formal) {
       throw new LoginFailedError("用户类别不支持OA登录");
     }
+    const userDetailDto = await deps.userService.getUserDetailById(liveUser.id);
     const { token: sessionId } = await deps.customSsoSession.createPrincipalSession(userDetailDto, { amr: ["oa"] });
     await deps.auditLogWriter.recordAuditLog(withApiRequestContext(
       options.requestContext,
@@ -185,7 +195,12 @@ export function createSsoService(deps: SsoServiceDeps) {
     if (codeCache === "Processing") {
       return wxRetry(code, retryTimes + 1);
     }
-    const userDetailDto = UserDetailDtoSchema.parse(JSON.parse(codeCache, reviveIsoDates));
+    const { userId } = CachedWechatLoginUserSchema.parse(JSON.parse(codeCache, reviveIsoDates));
+    const liveUser = await deps.userService.getActiveUserById(userId);
+    if (liveUser === null) {
+      throw new LoginFailedError("用户不存在");
+    }
+    const userDetailDto = await deps.userService.getUserDetailById(liveUser.id);
     const { token } = await deps.customSsoSession.createPrincipalSession(userDetailDto, { amr: ["wechat"] });
     return { token, isMobileSet: userDetailDto.mobile !== null };
   }
@@ -197,13 +212,17 @@ export function createSsoService(deps: SsoServiceDeps) {
     }
     await deps.redis.set(`wx-code:${code}`, "Processing", "EX", 600);
     const wxId = await deps.wechatClient.getWxUserId(code);
-    const userDetailDto = await deps.userService.getUserDetailByWxId(wxId);
+    const liveUser = await deps.userService.getActiveUserByWxId(wxId);
+    if (liveUser === null) {
+      throw new LoginFailedError("用户不存在");
+    }
+    const userDetailDto = await deps.userService.getUserDetailById(liveUser.id);
     const { token } = await deps.customSsoSession.createPrincipalSession(userDetailDto, { amr: ["wechat"] });
     await deps.auditLogWriter.recordAuditLog(withApiRequestContext(
       options.requestContext,
       buildWechatLoginSuccessAudit(userDetailDto),
     ));
-    await deps.redis.set(`wx-code:${code}`, JSON.stringify(userDetailDto), "EX", 600);
+    await deps.redis.set(`wx-code:${code}`, JSON.stringify({ userId: liveUser.id }), "EX", 600);
     return { token, isMobileSet: userDetailDto.mobile !== null };
   }
 

@@ -1,9 +1,7 @@
 ## Purpose
 
 定义 IAM 后端 runtime env、前端 Umi build env、Docker 编排层 env 与命名 guard 的配置契约，避免 app 之间变量撞名，并让部署变量名只停留在配置边界。
-
 ## Requirements
-
 ### Requirement: Backend app raw env SHALL use app-prefixed contracts
 后端 app SHALL 只接受 app 专属前缀的 raw runtime env 作为配置输入，并 SHALL NOT 继续接受旧的无 app 前缀 env 名称。
 
@@ -88,3 +86,21 @@ Docker compose 和 env example SHALL 区分第三方容器原生变量、IAM 共
 - **WHEN** 开发者运行 `pnpm check:env-names`
 - **THEN** guard SHALL fail if Docker compose or env examples use retired app config variables such as `OIDC_PUBLISHED_PORT`、`SSO_UMI_APP_*` or un-namespaced frontend build variables
 - **AND** guard SHALL allow documented third-party native prefixes and IAM shared deployment variables
+
+### Requirement: API user-profile DSL env limit
+API app SHALL expose user-profile DSL search limits through app-prefixed raw env and grouped runtime config.
+
+#### Scenario: API DSL max limit uses IAM_API prefix
+- **WHEN** `apps/api` parses runtime env for user-profile DSL search
+- **THEN** raw env schema SHALL accept `IAM_API_USER_PROFILE_DSL_MAX_LIMIT`
+- **AND** raw env schema MUST NOT accept `USER_PROFILE_DSL_MAX_LIMIT` or other old naked variable names as fallback
+
+#### Scenario: DSL max limit stays behind env boundary
+- **WHEN** API code needs to validate `/internal/users/search-dsl` request limit
+- **THEN** app code SHALL consume a grouped runtime config field such as `env.userProfile.dslMaxLimit`
+- **AND** app code outside `env.ts` and env tests MUST NOT reference raw env key `IAM_API_USER_PROFILE_DSL_MAX_LIMIT`
+
+#### Scenario: DSL max limit has safe default
+- **WHEN** `IAM_API_USER_PROFILE_DSL_MAX_LIMIT` is not provided
+- **THEN** API runtime config SHALL provide a bounded default value
+- **AND** requests above that effective limit SHALL be rejected before executing profile search

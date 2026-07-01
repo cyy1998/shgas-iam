@@ -5,6 +5,7 @@ import type { MobileService } from "@api/services/mobile/mobile.service";
 import type { PrivilegeRepository } from "@api/services/privilege/privilege.repository";
 import type { PrivilegeDelegationRepository } from "@api/services/privilege/privilegeDelegation.repository";
 import type { RoleRepository } from "@api/services/role/role.repository";
+import type { UserProfileQueryService } from "@api/services/user-profile/user-profile-query.service";
 import type { UserRepository } from "@api/services/user/user.repository";
 import type { UnitOfWorkPort } from "@iam/api-core/uow";
 import type { User } from "@iam/db/schema";
@@ -17,7 +18,7 @@ export interface UserDetailBuilderDeps {
 }
 
 export interface UserDelegationQueryDeps {
-  userRepository: Pick<UserRepository, "searchUsers">;
+  profileQuery: Pick<UserProfileQueryService, "searchLegacyUsers">;
   privilegeDelegationRepository: Pick<PrivilegeDelegationRepository, "getDelegationsByUserAndOrganizationScopeAndPrivilege">;
 }
 
@@ -48,14 +49,18 @@ export interface UserServiceDeps {
     | "getUserByUsername"
     | "getUserByWxId"
     | "getUserByMobile"
-    | "searchUsers"
     | "updateEnabledUserStatus"
   >;
   mobileService: Pick<MobileService, "consumeVerificationCode" | "checkValidPhoneNumber" | "checkExistingPhoneNumber">;
   auditLogWriter: AuditLogWriterPort;
-  userDetailBuilder: {
-    buildUserDetail: (user: User | null) => Promise<UserDetailDto>;
-  };
+  profileQuery: Pick<
+    UserProfileQueryService,
+    | "getDetailByUserId"
+    | "getDetailByUsername"
+    | "getDetailByMobile"
+    | "getDetailByWxId"
+    | "searchLegacyUsers"
+  >;
   userDelegationQuery: {
     searchUsersWithDelegations: (query: UserQueryWithPrivilegeDelegationDto) => Promise<unknown>;
   };

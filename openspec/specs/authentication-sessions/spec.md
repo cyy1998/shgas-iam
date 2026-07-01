@@ -143,7 +143,7 @@
 - **AND** 系统 SHALL 保持既有用户维度登录失败计数和账号暂停规则
 
 ### Requirement: SSO 授权码与局部会话
-系统 SHALL 为已登录用户和合法客户端生成一次性 Kernel ProtocolArtifact，并在 callback 或 token 兑换时一致地创建面向客户端的 ClientBinding 与 local session IssuedCredential。
+系统 SHALL 为已登录用户和合法客户端生成一次性 Kernel ProtocolArtifact，并在 callback 或 token 兑换时一致地创建面向客户端的 ClientBinding 与 local session IssuedCredential。local session payload SHALL 保留协议私有一致性数据，但后续用户资料读取 SHALL NOT 以 Redis payload 快照作为权威来源。
 
 #### Scenario: 未登录用户发起 SSO 授权
 - **WHEN** `/sso/authorize` 请求没有可用的 PrincipalSession
@@ -168,8 +168,11 @@
 - **WHEN** `/sso/callback` 收到存在且未撤销的 auth code、合法 client code 和通过前缀校验的 redirect URL
 - **THEN** 系统 SHALL 通过 Session Kernel 原子消费 auth code artifact
 - **AND** 系统 SHALL 校验 artifact 引用的 PrincipalSession 仍存在、未撤销且未过期
+- **AND** 系统 SHALL live 校验 PrincipalSession 引用的用户仍启用且未软删除
+- **AND** 系统 SHALL 从当前 schema version profile 读取 `UserDetailDto`
 - **AND** 系统 SHALL 为该 client 创建 custom SSO ClientBinding 与 local session IssuedCredential
-- **AND** custom SSO adapter SHALL 构造并保存协议私有 `UserDetailDto` local session payload
+- **AND** custom SSO adapter SHALL 保存协议私有 local session payload 以校验 credential/binding/principal/client 一致性
+- **AND** local session payload 中的用户快照 SHALL NOT 作为后续用户资料权威来源
 - **AND** HTTP handler SHALL 写入 `local_<client>_session` cookie 并重定向到 redirect URL
 - **AND** 重定向 URL SHALL 携带 `token=<localSessionOpaqueToken>`
 
@@ -183,9 +186,10 @@
 - **WHEN** `/sso/token` 收到存在且未撤销的 auth code、合法 client code 和匹配的 client secret
 - **THEN** 系统 SHALL 通过 Session Kernel 原子消费 auth code artifact
 - **AND** 系统 SHALL 校验 artifact 引用的 PrincipalSession 仍存在、未撤销且未过期
+- **AND** 系统 SHALL live 校验 PrincipalSession 引用的用户仍启用且未软删除
 - **AND** 系统 SHALL 创建 Independent 模式 custom SSO ClientBinding 与 local session IssuedCredential
 - **AND** 响应 SHALL 返回 `sid`、`ttl` 和 `userInfo`
-- **AND** `userInfo` SHALL 保持 custom SSO 现有 `UserDetailDto` 响应契约
+- **AND** `userInfo` SHALL 保持 custom SSO 现有 `UserDetailDto` 响应契约并来自当前 schema version profile
 
 #### Scenario: 授权码重复兑换被拒绝
 - **WHEN** 同一个 custom SSO auth code 已经被 `/sso/callback` 或 `/sso/token` 成功消费
@@ -255,7 +259,8 @@
 - **AND** 系统 SHALL 校验 credential 关联的 clientCode 与请求 client 一致
 - **AND** 系统 SHALL 校验关联 ClientBinding 和 PrincipalSession 仍有效
 - **AND** 系统 SHALL 通过注入 hook 或 adapter 校验实时 user 和 client 状态
-- **AND** 系统 SHALL 从 custom SSO local session payload 中读取用户快照
+- **AND** 系统 SHALL 校验 custom SSO local session payload 与 credential、binding、PrincipalSession 和 client 一致
+- **AND** 系统 SHALL 从当前 schema version profile 读取用户详情
 - **AND** 系统 SHALL 将 `{ username, id }` 编码为 base64 字符串
 - **AND** 系统 SHALL 将该字符串写入 `X-User-Info` 响应头并作为成功响应数据返回
 
@@ -288,6 +293,12 @@
 - **WHEN** `/auth/authz` 请求能解析到 active custom SSO credential，但 custom SSO local session payload 缺失或 schema 无效
 - **THEN** 系统 SHALL 拒绝请求并报告未登录
 - **AND** 系统 SHALL lazy revoke 当前 credential
+
+#### Scenario: Profile detail unavailable
+- **WHEN** `/auth/authz` 请求的 credential、binding、PrincipalSession、用户和 client 状态均有效，但当前 schema version profile 缺失或无效
+- **THEN** 系统 SHALL 拒绝请求并报告未登录
+- **AND** 系统 SHALL NOT fallback 到源表构建用户摘要
+- **AND** 系统 SHALL NOT 仅因为 profile 缺失而 lazy revoke 该用户的所有 PrincipalSession
 
 ### Requirement: 内部服务鉴权
 系统 SHALL 对 `/auth/internal-authz` 和 `/internal/*` 使用统一 internal client 身份校验。系统 MUST 仅将 `apikey` header 作为当前 internal client secret 准入凭据，且认证出的 client MUST 存在、未软删除并且 `status` 为 `ClientStatus.Enable`。系统 MUST NOT 因 `IP-Chain` header 命中任何内网片段而放行请求。

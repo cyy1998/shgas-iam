@@ -28,7 +28,10 @@ export interface LoginFailurePort {
 export interface AuthServiceDeps {
   userService: Pick<
     UserService,
-    "getUserDetailByUsername" | "checkPassword" | "getActiveUserByMobile" | "getUserDetailByMobile"
+    | "checkPassword"
+    | "getActiveUserByMobile"
+    | "getActiveUserByUsername"
+    | "getUserDetailById"
   >;
   customSsoSession: Pick<
     CustomSsoSessionKernelAdapter,

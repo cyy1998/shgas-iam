@@ -130,6 +130,13 @@ export const UserProfileFilterDslSchema = BaseUserProfileFilterDslSchema.superRe
   validateFilterOperators(dsl, ctx);
 });
 
+export function createUserProfileDslSearchRequestSchema(maxLimit: number) {
+  return z.object({
+    filter: UserProfileFilterDslSchema,
+    limit: z.number().int().positive().max(maxLimit).optional(),
+  }).strict().openapi("UserProfileDslSearchRequest");
+}
+
 export function isEmploymentField(field: UserProfileFilterField): field is UserProfileEmploymentField {
   return field.startsWith("employment.");
 }

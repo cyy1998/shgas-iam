@@ -21,7 +21,6 @@ import {
 import { createUserProfileBuilder } from "@api/services/user-profile/user-profile-builder.service";
 import { createUserProfileQueryService } from "@api/services/user-profile/user-profile-query.service";
 import { createUserDelegationQuery } from "@api/services/user/user-delegation-query.helper";
-import { createUserDetailBuilder } from "@api/services/user/user-detail.helper";
 import { createUserMobileBinding } from "@api/services/user/user-mobile-binding.helper";
 import { createUserPasswordHelper } from "@api/services/user/user-password.helper";
 import { createUserService } from "@api/services/user/user.service";
@@ -96,12 +95,6 @@ export function createApiServices(options: CreateApiServicesOptions) {
     },
   });
 
-  const userDetailBuilder = createUserDetailBuilder({
-    employmentRepository: repositories.employment,
-    roleRepository: repositories.role,
-    privilegeRepository: repositories.privilege,
-  });
-
   const userProfileBuilder = createUserProfileBuilder({
     buildRepository: repositories.userProfileBuild,
     clock: runtime.clock,
@@ -112,10 +105,13 @@ export function createApiServices(options: CreateApiServicesOptions) {
 
   const userProfileQuery = createUserProfileQueryService({
     profileRepository: repositories.userProfile,
+    config: {
+      dslDefaultLimit: runtime.config.userProfile.dslMaxLimit,
+    },
   });
 
   const userDelegationQuery = createUserDelegationQuery({
-    userRepository: repositories.user,
+    profileQuery: userProfileQuery,
     privilegeDelegationRepository: repositories.privilegeDelegation,
   });
 
@@ -132,7 +128,7 @@ export function createApiServices(options: CreateApiServicesOptions) {
     userRepository: repositories.user,
     mobileService,
     auditLogWriter,
-    userDetailBuilder,
+    profileQuery: userProfileQuery,
     userDelegationQuery,
     mobileBinding: userMobileBinding,
     passwordHelper: userPasswordHelper,

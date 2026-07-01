@@ -1,4 +1,5 @@
 import { createFakePasswordHasher } from "@api/testing/fakes";
+import { UserStatus, UserType } from "@iam/contracts";
 import { describe, expect, mock, test } from "bun:test";
 import { createUserDelegationQuery } from "../user-delegation-query.helper";
 import { createUserMobileBinding } from "../user-mobile-binding.helper";
@@ -68,7 +69,7 @@ describe("user helper factories", () => {
 
   test("delegation query enforces a single ancestor organization", async () => {
     const delegationQuery = createUserDelegationQuery({
-      userRepository: { searchUsers: mock(async () => []) },
+      profileQuery: { searchLegacyUsers: mock(async () => []) },
       privilegeDelegationRepository: {
         getDelegationsByUserAndOrganizationScopeAndPrivilege: mock(async () => []),
       },
@@ -78,5 +79,45 @@ describe("user helper factories", () => {
       ancestorOrgCodes: [],
       privilegeCode: "p",
     } as any)).rejects.toThrow("ancestorOrgCodes元素数量只支持为1");
+  });
+
+  test("delegation query combines profile users with live delegations", async () => {
+    const profileUser = {
+      id: 1,
+      username: "zhangsan",
+      wxId: null,
+      name: "张三",
+      mobile: "13800000000",
+      userType: UserType.Formal,
+      orderNum: 1,
+      status: UserStatus.Enable,
+      isDelete: false,
+      createTime: new Date("2026-01-01T00:00:00.000Z"),
+      updateTime: new Date("2026-01-01T00:00:00.000Z"),
+      orcasId: null,
+    };
+    const searchLegacyUsers = mock(async () => [profileUser]);
+    const getDelegationsByUserAndOrganizationScopeAndPrivilege = mock(async () => []);
+    const delegationQuery = createUserDelegationQuery({
+      profileQuery: { searchLegacyUsers },
+      privilegeDelegationRepository: {
+        getDelegationsByUserAndOrganizationScopeAndPrivilege,
+      },
+    } as any);
+
+    await expect(delegationQuery.searchUsersWithDelegations({
+      ancestorOrgCodes: ["ORG"],
+      privilegeCode: "privilege:a",
+    } as any)).resolves.toEqual({
+      users: [profileUser],
+      delegations: [],
+    });
+
+    expect(searchLegacyUsers).toHaveBeenCalled();
+    expect(getDelegationsByUserAndOrganizationScopeAndPrivilege).toHaveBeenCalledWith(
+      ["zhangsan"],
+      "ORG",
+      "privilege:a",
+    );
   });
 });
