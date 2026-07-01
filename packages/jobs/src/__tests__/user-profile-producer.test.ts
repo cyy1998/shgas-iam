@@ -19,9 +19,9 @@ describe("createUserProfileJobProducer", () => {
       userId: 123,
       reason: UserProfileDirtyReason.UserUpdated,
       requestedAt: "2026-07-01T00:00:00.000Z",
-    })).resolves.toEqual({ jobId: "rebuild-user-profile:123" });
+    })).resolves.toEqual({ jobId: "rebuild-user-profile|123" });
 
-    expect(producer.buildRebuildJobId(123)).toBe("rebuild-user-profile:123");
+    expect(producer.buildRebuildJobId(123)).toBe("rebuild-user-profile|123");
     expect(queue.add).toHaveBeenCalledWith(
       UserProfileJobName.RebuildUserProfile,
       {
@@ -29,7 +29,7 @@ describe("createUserProfileJobProducer", () => {
         reason: UserProfileDirtyReason.UserUpdated,
         requestedAt: "2026-07-01T00:00:00.000Z",
       },
-      { jobId: "rebuild-user-profile:123" },
+      { jobId: "rebuild-user-profile|123" },
     );
   });
 
@@ -55,7 +55,7 @@ describe("createUserProfileJobProducer", () => {
       bucket: "2026-07-01T00:00",
       reason: UserProfileDirtyReason.UserUpdated,
     })).resolves.toEqual({
-      jobId: "expand-user-profile-scope:user-ids:1,3:2026-07-01T00:00",
+      jobId: "expand-user-profile-scope|user-ids|1%2C3|2026-07-01T00%3A00",
     });
 
     expect(queue.add).toHaveBeenCalledWith(
@@ -66,7 +66,7 @@ describe("createUserProfileJobProducer", () => {
         bucket: "2026-07-01T00:00",
         reason: UserProfileDirtyReason.UserUpdated,
       },
-      { jobId: "expand-user-profile-scope:user-ids:1,3:2026-07-01T00:00" },
+      { jobId: "expand-user-profile-scope|user-ids|1%2C3|2026-07-01T00%3A00" },
     );
   });
 });

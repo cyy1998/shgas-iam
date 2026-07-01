@@ -10,7 +10,7 @@ import {
 
 describe("job id helpers", () => {
   test("builds a deterministic user-level job id", () => {
-    expect(buildUserJobId("rebuild-user-profile", 123)).toBe("rebuild-user-profile:123");
+    expect(buildUserJobId("rebuild-user-profile", 123)).toBe("rebuild-user-profile|123");
   });
 
   test("builds a deterministic scope/time-bucket job id", () => {
@@ -19,7 +19,18 @@ describe("job id helpers", () => {
       scopeType: "organization-id",
       scopeId: 9,
       bucket: "2026-06-30T10:00",
-    })).toBe("expand-user-profile-scope:organization-id:9:2026-06-30T10:00");
+    })).toBe("expand-user-profile-scope|organization-id|9|2026-06-30T10%3A00");
+  });
+
+  test("builds BullMQ-compatible ids without colon characters", () => {
+    const jobId = buildScopeBucketJobId({
+      jobName: "expand-user-profile-scope",
+      scopeType: "user-ids",
+      scopeId: "1,3",
+      bucket: "2026-07-01T00:00",
+    });
+
+    expect(jobId).not.toContain(":");
   });
 
   test("rejects empty job id parts", () => {

@@ -11,7 +11,7 @@ export function buildDeterministicJobId(parts: readonly DeterministicJobIdPart[]
   if (parts.length === 0)
     throw new Error("jobId parts must not be empty");
 
-  return parts.map(formatJobIdPart).join(":");
+  return parts.map(formatJobIdPart).join("|");
 }
 
 export function buildUserJobId(jobName: string, userId: DeterministicJobIdPart): string {
@@ -28,5 +28,5 @@ function formatJobIdPart(part: DeterministicJobIdPart): string {
   if (!text)
     throw new Error("jobId parts must be non-empty");
 
-  return text;
+  return encodeURIComponent(text);
 }

@@ -42,8 +42,8 @@ function createDeps(overrides: Record<string, unknown> = {}) {
       buildOne: mock(async (userId: number) => builtProfile(userId)),
     },
     jobProducer: {
-      buildRebuildJobId: mock((userId: number) => `rebuild-user-profile:${userId}`),
-      enqueueRebuildJob: mock(async (input: { userId: number }) => ({ jobId: `rebuild-user-profile:${input.userId}` })),
+      buildRebuildJobId: mock((userId: number) => `rebuild-user-profile|${userId}`),
+      enqueueRebuildJob: mock(async (input: { userId: number }) => ({ jobId: `rebuild-user-profile|${input.userId}` })),
     },
     clock: { nowDate: () => now },
     config: { backfillBatchSize: 2 },
@@ -175,13 +175,13 @@ describe("UserProfileWorkerService", () => {
         userId: 5,
         reasonCodes: [UserProfileDirtyReason.ManualRebuild],
         dirtyAt: now,
-        lastJobId: "rebuild-user-profile:5",
+        lastJobId: "rebuild-user-profile|5",
       },
       {
         userId: 6,
         reasonCodes: [UserProfileDirtyReason.ManualRebuild],
         dirtyAt: now,
-        lastJobId: "rebuild-user-profile:6",
+        lastJobId: "rebuild-user-profile|6",
       },
     ]);
   });
