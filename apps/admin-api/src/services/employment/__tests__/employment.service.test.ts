@@ -1,5 +1,5 @@
 import { createFakeClock, createImmediateUnitOfWork } from "@admin-api/test/fakes";
-import { EmploymentStatus, OrganizationLevel, OrganizationStatus, OrganizationType, PositionStatus, UserStatus, UserType } from "@iam/contracts";
+import { EmploymentStatus, OrganizationLevel, OrganizationStatus, OrganizationType, PositionStatus, UserProfileDirtyReason, UserStatus, UserType } from "@iam/contracts";
 import { describe, expect, mock, test } from "bun:test";
 import { createEmploymentService } from "../employment.service";
 
@@ -83,6 +83,9 @@ function employment(overrides: Record<string, unknown> = {}) {
 function createService() {
   const tx = {
     auditService: { recordAuditLog: mock(async () => undefined) },
+    profileDirtyMarker: {
+      markUsersDirty: mock(async () => ({ marked: 1, userIds: [1] })),
+    },
     employmentRepository: {
       createEmploymentRecord: mock(async () => employment({ id: 10 })),
       endActiveEmploymentsByUserId: mock(async () => undefined),
@@ -145,6 +148,13 @@ describe("createEmploymentService", () => {
       action: "admin.employment.create",
       targetId: 10,
     }));
+    expect(tx.profileDirtyMarker.markUsersDirty).toHaveBeenCalledWith({
+      userIds: [1],
+      reasonCodes: [UserProfileDirtyReason.EmploymentUpdated],
+      afterCommit: expect.any(Object),
+      requestId: undefined,
+      traceId: undefined,
+    });
   });
 
   test("rejects creating an employment for an unknown user", async () => {
@@ -169,5 +179,9 @@ describe("createEmploymentService", () => {
       status: EmploymentStatus.Disable,
       endTime: now,
     });
+    expect(tx.profileDirtyMarker.markUsersDirty).toHaveBeenCalledWith(expect.objectContaining({
+      userIds: [1],
+      reasonCodes: [UserProfileDirtyReason.EmploymentUpdated],
+    }));
   });
 });

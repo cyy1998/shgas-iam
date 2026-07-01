@@ -6,3 +6,4 @@ export * from "./organization";
 export * from "./position";
 export * from "./privilege";
 export * from "./user";
+export * from "./user-profile";

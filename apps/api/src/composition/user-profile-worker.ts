@@ -2,10 +2,9 @@ import type { UserProfileJobName, UserProfileJobPayload } from "@iam/contracts";
 import env from "@api/env";
 import { logger } from "@api/lib/logger";
 import { createUserProfileBuilder } from "@api/services/user-profile/user-profile-builder.service";
-import { createUserProfileJobProducer } from "@api/services/user-profile/user-profile-job.producer";
 import { createUserProfileWorkerService } from "@api/services/user-profile/user-profile-worker.service";
 import { USER_PROFILE_QUEUE_NAME } from "@iam/contracts";
-import { createJobQueue } from "@iam/jobs";
+import { createJobQueue, createUserProfileJobProducer } from "@iam/jobs";
 import { createApiRepositories } from "./repositories";
 import { createApiRuntime } from "./runtime";
 

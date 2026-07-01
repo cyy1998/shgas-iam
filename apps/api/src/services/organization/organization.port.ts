@@ -1,4 +1,5 @@
 import type { UnitOfWorkPort } from "@iam/api-core/uow";
+import type { UserProfileDirtyMarker } from "@iam/domain/user-profile";
 import type { OrganizationRepository } from "./organization.repository";
 
 export interface OrganizationTransactionPorts {
@@ -9,6 +10,7 @@ export interface OrganizationTransactionPorts {
     | "setOrganization"
     | "updateOrganizationByCode"
   >;
+  profileDirtyMarker: Pick<UserProfileDirtyMarker, "markScopeDirty">;
 }
 
 export type OrganizationUnitOfWorkPort = UnitOfWorkPort<OrganizationTransactionPorts>;

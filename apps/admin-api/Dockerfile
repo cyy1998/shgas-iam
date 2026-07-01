@@ -23,6 +23,7 @@ COPY packages/contracts/package.json ./packages/contracts/
 COPY packages/db/package.json ./packages/db/
 COPY packages/api-core/package.json ./packages/api-core/
 COPY packages/domain/package.json ./packages/domain/
+COPY packages/jobs/package.json ./packages/jobs/
 COPY apps/admin-api/package.json ./apps/admin-api/
 ARG HTTP_PROXY
 ARG HTTPS_PROXY
@@ -37,6 +38,7 @@ COPY packages/contracts/ ./packages/contracts/
 COPY packages/db/ ./packages/db/
 COPY packages/api-core/ ./packages/api-core/
 COPY packages/domain/ ./packages/domain/
+COPY packages/jobs/ ./packages/jobs/
 COPY apps/admin-api/ ./apps/admin-api/
 RUN pnpm --filter @iam/admin-api deploy --prod --legacy /deploy/admin-api
 

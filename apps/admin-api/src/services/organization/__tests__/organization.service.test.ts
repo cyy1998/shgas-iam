@@ -1,5 +1,5 @@
 import { createImmediateUnitOfWork } from "@admin-api/test/fakes";
-import { OrganizationLevel, OrganizationStatus, OrganizationType } from "@iam/contracts";
+import { OrganizationLevel, OrganizationStatus, OrganizationType, UserProfileDirtyReason, UserProfileScopeType } from "@iam/contracts";
 import { describe, expect, mock, test } from "bun:test";
 import { createOrganizationService } from "../organization.service";
 
@@ -41,6 +41,9 @@ function createService() {
   }];
   const tx = {
     auditService: { recordAuditLog: mock(async () => undefined) },
+    profileDirtyMarker: {
+      markScopeDirty: mock(async () => ({ marked: 1, userIds: [1] })),
+    },
     organizationRepository: {
       countActiveChildrenByOrgCode: mock(async () => 0),
       countActiveEmploymentsByOrgCode: mock(async () => 0),
@@ -91,5 +94,19 @@ describe("createOrganizationService", () => {
     await expect(service.updateOrganization("ORG", { orgCode: "OTHER" } as any)).rejects.toThrow("组织编码已存在");
 
     expect(tx.organizationRepository.updateOrganizationByCode).not.toHaveBeenCalled();
+  });
+
+  test("marks descendant users dirty when updating an organization", async () => {
+    const { service, tx } = createService();
+
+    await expect(service.updateOrganization("ORG", { orgName: "New Organization" })).resolves.toBe(true);
+
+    expect(tx.profileDirtyMarker.markScopeDirty).toHaveBeenCalledWith({
+      scope: { scopeType: UserProfileScopeType.OrganizationId, scopeId: 1 },
+      reasonCodes: [UserProfileDirtyReason.OrganizationUpdated],
+      afterCommit: expect.any(Object),
+      requestId: undefined,
+      traceId: undefined,
+    });
   });
 });

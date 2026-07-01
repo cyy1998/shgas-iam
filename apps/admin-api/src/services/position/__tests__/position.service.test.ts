@@ -1,5 +1,5 @@
 import { createImmediateUnitOfWork } from "@admin-api/test/fakes";
-import { PositionStatus } from "@iam/contracts";
+import { PositionStatus, UserProfileDirtyReason, UserProfileScopeType } from "@iam/contracts";
 import { describe, expect, mock, test } from "bun:test";
 import { createPositionService } from "../position.service";
 
@@ -20,6 +20,9 @@ function position(overrides: Record<string, unknown> = {}) {
 function createService(overrides: Record<string, unknown> = {}) {
   const tx = {
     auditService: { recordAuditLog: mock(async () => undefined) },
+    profileDirtyMarker: {
+      markScopeDirty: mock(async () => ({ marked: 1, userIds: [1] })),
+    },
     positionRepository: {
       countActiveEmploymentsByPosCode: mock(async () => 0),
       getAnyPositionByCode: mock(async () => null),
@@ -50,6 +53,13 @@ describe("createPositionService", () => {
       action: "admin.position.update",
       targetCode: "DEV",
     }));
+    expect(tx.profileDirtyMarker.markScopeDirty).toHaveBeenCalledWith({
+      scope: { scopeType: UserProfileScopeType.PositionId, scopeId: 1 },
+      reasonCodes: [UserProfileDirtyReason.PositionUpdated],
+      afterCommit: expect.any(Object),
+      requestId: undefined,
+      traceId: undefined,
+    });
   });
 
   test("rejects renaming to an existing position code", async () => {

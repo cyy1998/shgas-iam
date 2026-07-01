@@ -137,4 +137,15 @@ describe("Admin API DI architecture", () => {
 
     expect(violations).toEqual([]);
   });
+
+  test("does not import API-private user-profile producer modules", () => {
+    const violations = collectImports()
+      .filter(({ moduleSpecifier }) =>
+        moduleSpecifier === "@api/services/user-profile/user-profile-job.producer"
+        || moduleSpecifier === "@api/services/user-profile/user-profile-dirty.repository"
+        || moduleSpecifier === "@api/services/user-profile/user-profile-scope.repository")
+      .map(({ file, moduleSpecifier }) => `${file} imports ${moduleSpecifier}`);
+
+    expect(violations).toEqual([]);
+  });
 });

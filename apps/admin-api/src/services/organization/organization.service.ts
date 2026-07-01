@@ -12,7 +12,7 @@ import { adminAuditTransactionOptions } from "@admin-api/services/audit/audit.se
 import { buildOrganizationAudit } from "@admin-api/services/audit/events/organization.audit";
 import { toOrganizationDto } from "@admin-api/services/organization/organization.schema";
 import { paginate } from "@iam/api-core/utils";
-import { organizationStatusToString } from "@iam/contracts";
+import { organizationStatusToString, UserProfileDirtyReason, UserProfileScopeType } from "@iam/contracts";
 import {
   OrganizationAlreadyExistsError,
   OrganizationCodeExistsError,
@@ -127,6 +127,13 @@ export function createOrganizationService(deps: AdminOrganizationServiceDeps) {
         patch: data,
         previousOrgCode: orgCode,
       }, auditContext));
+      await tx.profileDirtyMarker.markScopeDirty({
+        scope: { scopeType: UserProfileScopeType.OrganizationId, scopeId: existing.id },
+        reasonCodes: [UserProfileDirtyReason.OrganizationUpdated],
+        afterCommit: tx.afterCommit,
+        requestId: auditContext?.requestId ?? undefined,
+        traceId: auditContext?.traceId ?? undefined,
+      });
       return true;
     }, adminAuditTransactionOptions(auditContext));
   }
@@ -157,6 +164,13 @@ export function createOrganizationService(deps: AdminOrganizationServiceDeps) {
       await tx.auditService.recordAuditLog(buildOrganizationAudit("admin.organization.delete", existing, {
         deleted: true,
       }, auditContext));
+      await tx.profileDirtyMarker.markScopeDirty({
+        scope: { scopeType: UserProfileScopeType.OrganizationId, scopeId: existing.id },
+        reasonCodes: [UserProfileDirtyReason.OrganizationUpdated],
+        afterCommit: tx.afterCommit,
+        requestId: auditContext?.requestId ?? undefined,
+        traceId: auditContext?.traceId ?? undefined,
+      });
       return true;
     }, adminAuditTransactionOptions(auditContext));
   }

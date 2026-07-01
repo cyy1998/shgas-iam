@@ -1,5 +1,5 @@
 import { createFakePasswordHasher, createFakeRandom, createImmediateUnitOfWork } from "@admin-api/test/fakes";
-import { UserStatus, UserType } from "@iam/contracts";
+import { UserProfileDirtyReason, UserStatus, UserType } from "@iam/contracts";
 import { describe, expect, mock, test } from "bun:test";
 import { createUserService } from "../user.service";
 
@@ -44,6 +44,9 @@ function createAfterCommitLogger() {
 function createService(options: { afterCommitLogger?: ReturnType<typeof createAfterCommitLogger> } = {}) {
   const tx = {
     auditService: { recordAuditLog: mock(async () => undefined) },
+    profileDirtyMarker: {
+      markUsersDirty: mock(async () => ({ marked: 1, userIds: [1] })),
+    },
     userRepository: {
       countActiveEmploymentsByUsername: mock(async () => 0),
       getUserByUsernameForAdmin: mock(async () => null),
@@ -100,6 +103,13 @@ describe("createUserService", () => {
       action: "admin.user.create",
       targetCode: "zhangsan",
     }));
+    expect(tx.profileDirtyMarker.markUsersDirty).toHaveBeenCalledWith({
+      userIds: [1],
+      reasonCodes: [UserProfileDirtyReason.UserUpdated],
+      afterCommit: expect.any(Object),
+      requestId: undefined,
+      traceId: undefined,
+    });
   });
 
   test("rejects duplicate usernames before creating", async () => {
@@ -124,6 +134,10 @@ describe("createUserService", () => {
     expect(tx.userRepository.updateUserByUsername).toHaveBeenCalledWith("zhangsan", {
       status: UserStatus.Disable,
     });
+    expect(tx.profileDirtyMarker.markUsersDirty).toHaveBeenCalledWith(expect.objectContaining({
+      userIds: [1],
+      reasonCodes: [UserProfileDirtyReason.UserUpdated],
+    }));
     expect(deps.sessionRevocation.revokeUserSessions).toHaveBeenCalledWith({
       userId: 1,
       reason: "user_disabled",
@@ -167,6 +181,10 @@ describe("createUserService", () => {
     await expect(service.deleteUser("zhangsan")).resolves.toBe(true);
 
     expect(tx.userRepository.softDeleteUserByUsername).toHaveBeenCalledWith("zhangsan");
+    expect(tx.profileDirtyMarker.markUsersDirty).toHaveBeenCalledWith(expect.objectContaining({
+      userIds: [1],
+      reasonCodes: [UserProfileDirtyReason.UserUpdated],
+    }));
     expect(deps.sessionRevocation.revokeUserSessions).toHaveBeenCalledWith({
       userId: 1,
       reason: "user_deleted",
@@ -193,6 +211,7 @@ describe("createUserService", () => {
 
     expect(deps.passwordHasher.hashPassword).toHaveBeenCalledWith("Rand1234");
     expect(tx.userRepository.setPassword).toHaveBeenCalledWith(1, "hashed:Rand1234");
+    expect(tx.profileDirtyMarker.markUsersDirty).not.toHaveBeenCalled();
     expect(deps.sessionRevocation.revokeUserSessions).toHaveBeenCalledWith({
       userId: 1,
       reason: "admin_revoke",

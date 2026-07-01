@@ -3,9 +3,12 @@ import type {
   RebuildUserProfileJobPayload,
   UserProfileDirtyReason,
 } from "@iam/contracts";
+import type {
+  UserProfileDirtyRepository,
+  UserProfileExpansionScope,
+  UserProfileScopeRepository,
+} from "@iam/domain/user-profile";
 import type { UserProfileBuilder } from "./user-profile-builder.service";
-import type { UserProfileDirtyRepository } from "./user-profile-dirty.repository";
-import type { UserProfileExpansionScope, UserProfileScopeRepository } from "./user-profile-scope.repository";
 import type { UserProfileRepository } from "./user-profile.repository";
 import { UserProfileDirtyReason as UserProfileDirtyReasonValue, UserProfileScopeType } from "@iam/contracts";
 
@@ -123,13 +126,14 @@ export function createUserProfileWorkerService(deps: UserProfileWorkerServiceDep
   ) {
     const uniqueUserIds = [...new Set(userIds)];
     const requestedAt = meta.requestedAt ?? deps.clock.nowDate().toISOString();
+    const dirtyAt = deps.clock.nowDate();
+    await deps.dirtyRepository.markManyDirty(uniqueUserIds.map(userId => ({
+      userId,
+      reasonCodes: [meta.reason],
+      dirtyAt,
+      lastJobId: deps.jobProducer.buildRebuildJobId(userId),
+    })));
     for (const userId of uniqueUserIds) {
-      await deps.dirtyRepository.markDirty({
-        userId,
-        reasonCodes: [meta.reason],
-        dirtyAt: deps.clock.nowDate(),
-        lastJobId: deps.jobProducer.buildRebuildJobId(userId),
-      });
       await deps.jobProducer.enqueueRebuildJob({
         userId,
         reason: meta.reason,

@@ -4,6 +4,7 @@ import type { AdminPositionServiceDeps, AdminPositionTransactionPorts } from "./
 import type { PositionCreateDto, PositionUpdateDto } from "./position.type";
 import { adminAuditTransactionOptions } from "@admin-api/services/audit/audit.service";
 import { buildPositionAudit } from "@admin-api/services/audit/events/position.audit";
+import { UserProfileDirtyReason, UserProfileScopeType } from "@iam/contracts";
 import {
   PositionCodeExistsError,
   PositionHasEmploymentError,
@@ -71,6 +72,13 @@ export function createPositionService(deps: AdminPositionServiceDeps) {
         patch: data,
         previousPosCode: posCode,
       }, auditContext));
+      await tx.profileDirtyMarker.markScopeDirty({
+        scope: { scopeType: UserProfileScopeType.PositionId, scopeId: existing.id },
+        reasonCodes: [UserProfileDirtyReason.PositionUpdated],
+        afterCommit: tx.afterCommit,
+        requestId: auditContext?.requestId ?? undefined,
+        traceId: auditContext?.traceId ?? undefined,
+      });
       return true;
     }, adminAuditTransactionOptions(auditContext));
   }
@@ -93,6 +101,13 @@ export function createPositionService(deps: AdminPositionServiceDeps) {
       await tx.auditService.recordAuditLog(buildPositionAudit("admin.position.delete", existing, {
         deleted: true,
       }, auditContext));
+      await tx.profileDirtyMarker.markScopeDirty({
+        scope: { scopeType: UserProfileScopeType.PositionId, scopeId: existing.id },
+        reasonCodes: [UserProfileDirtyReason.PositionUpdated],
+        afterCommit: tx.afterCommit,
+        requestId: auditContext?.requestId ?? undefined,
+        traceId: auditContext?.traceId ?? undefined,
+      });
       return true;
     }, adminAuditTransactionOptions(auditContext));
   }

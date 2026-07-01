@@ -3,9 +3,13 @@ import type {
   RebuildUserProfileJobPayload,
   UserProfileJobPayload,
 } from "@iam/contracts";
-import type { JobQueue } from "@iam/jobs";
-import { UserProfileJobName } from "@iam/contracts";
-import { buildScopeBucketJobId, buildUserJobId } from "@iam/jobs";
+import type { JobQueue } from "./queue";
+import {
+  ExpandUserProfileScopeJobPayloadSchema,
+  RebuildUserProfileJobPayloadSchema,
+  UserProfileJobName,
+} from "@iam/contracts";
+import { buildScopeBucketJobId, buildUserJobId } from "./job-id";
 
 export type UserProfileJobQueue = JobQueue<UserProfileJobPayload, unknown, UserProfileJobName>;
 
@@ -14,20 +18,27 @@ export function createUserProfileJobProducer(queue: UserProfileJobQueue) {
     return buildUserJobId(UserProfileJobName.RebuildUserProfile, userId);
   }
 
+  function buildScopeExpansionJobId(input: ExpandUserProfileScopeJobPayload) {
+    return buildScopeExpansionJobIdFromPayload(input);
+  }
+
   async function enqueueRebuildJob(input: RebuildUserProfileJobPayload) {
-    const jobId = buildRebuildJobId(input.userId);
-    const job = await queue.add(UserProfileJobName.RebuildUserProfile, input, { jobId });
+    const payload = RebuildUserProfileJobPayloadSchema.parse(input);
+    const jobId = buildRebuildJobId(payload.userId);
+    const job = await queue.add(UserProfileJobName.RebuildUserProfile, payload, { jobId });
     return { jobId: job.id ?? jobId };
   }
 
   async function enqueueScopeExpansionJob(input: ExpandUserProfileScopeJobPayload) {
-    const jobId = buildScopeExpansionJobId(input);
-    const job = await queue.add(UserProfileJobName.ExpandUserProfileScope, input, { jobId });
+    const payload = ExpandUserProfileScopeJobPayloadSchema.parse(input);
+    const jobId = buildScopeExpansionJobId(payload);
+    const job = await queue.add(UserProfileJobName.ExpandUserProfileScope, payload, { jobId });
     return { jobId: job.id ?? jobId };
   }
 
   return {
     buildRebuildJobId,
+    buildScopeExpansionJobId,
     enqueueRebuildJob,
     enqueueScopeExpansionJob,
   };
@@ -35,7 +46,7 @@ export function createUserProfileJobProducer(queue: UserProfileJobQueue) {
 
 export type UserProfileJobProducer = ReturnType<typeof createUserProfileJobProducer>;
 
-function buildScopeExpansionJobId(input: ExpandUserProfileScopeJobPayload) {
+function buildScopeExpansionJobIdFromPayload(input: ExpandUserProfileScopeJobPayload) {
   if ("scopeId" in input) {
     return buildScopeBucketJobId({
       jobName: UserProfileJobName.ExpandUserProfileScope,
@@ -48,7 +59,7 @@ function buildScopeExpansionJobId(input: ExpandUserProfileScopeJobPayload) {
     return buildScopeBucketJobId({
       jobName: UserProfileJobName.ExpandUserProfileScope,
       scopeType: input.scopeType,
-      scopeId: input.userIds.join(","),
+      scopeId: [...new Set(input.userIds)].sort((left, right) => left - right).join(","),
       bucket: input.bucket,
     });
   }

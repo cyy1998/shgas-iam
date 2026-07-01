@@ -32,6 +32,7 @@ export function createAdminApiServices(options: CreateAdminApiServicesOptions) {
     uow: mapUnitOfWork(unitOfWork, tx => ({
       userRepository: tx.repositories.user,
       auditService: tx.auditService,
+      profileDirtyMarker: tx.profileDirtyMarker,
     })),
   });
 
@@ -52,6 +53,7 @@ export function createAdminApiServices(options: CreateAdminApiServicesOptions) {
     uow: mapUnitOfWork(unitOfWork, tx => ({
       organizationRepository: tx.repositories.organization,
       auditService: tx.auditService,
+      profileDirtyMarker: tx.profileDirtyMarker,
     })),
   });
 
@@ -60,6 +62,7 @@ export function createAdminApiServices(options: CreateAdminApiServicesOptions) {
     uow: mapUnitOfWork(unitOfWork, tx => ({
       positionRepository: tx.repositories.position,
       auditService: tx.auditService,
+      profileDirtyMarker: tx.profileDirtyMarker,
     })),
   });
 
@@ -74,6 +77,7 @@ export function createAdminApiServices(options: CreateAdminApiServicesOptions) {
       positionRepository: tx.repositories.position,
       userRepository: tx.repositories.user,
       auditService: tx.auditService,
+      profileDirtyMarker: tx.profileDirtyMarker,
     })),
   });
 

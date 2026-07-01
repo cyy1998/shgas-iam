@@ -1,5 +1,6 @@
 import type { AuditLogWriterPort } from "@admin-api/services/audit/audit.service";
 import type { UnitOfWorkPort } from "@iam/api-core/uow";
+import type { UserProfileDirtyMarker } from "@iam/domain/user-profile";
 import type { OrganizationRepository } from "./organization.repository";
 
 export interface AdminOrganizationTransactionPorts {
@@ -14,6 +15,7 @@ export interface AdminOrganizationTransactionPorts {
     | "softDeleteOrganizationByCode"
   >;
   auditService: AuditLogWriterPort;
+  profileDirtyMarker: Pick<UserProfileDirtyMarker, "markScopeDirty">;
 }
 
 export type AdminOrganizationUnitOfWorkPort = UnitOfWorkPort<AdminOrganizationTransactionPorts>;

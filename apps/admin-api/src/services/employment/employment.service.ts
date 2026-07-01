@@ -13,7 +13,7 @@ import {
 } from "@admin-api/services/audit/events/employment.audit";
 import { EmploymentDetailDtoSchema, toEmploymentDto } from "@admin-api/services/employment/employment.schema";
 import { CustomError } from "@iam/api-core/errors/CustomError";
-import { EmploymentStatus, UserStatus } from "@iam/contracts";
+import { EmploymentStatus, UserProfileDirtyReason, UserStatus } from "@iam/contracts";
 import {
   EmploymentAlreadyExistsError,
   EmploymentNotEditableError,
@@ -136,6 +136,13 @@ export function createEmploymentService(deps: AdminEmploymentServiceDeps) {
         startTime: dto.startTime,
         description: dto.description ?? null,
       }, auditContext));
+      await tx.profileDirtyMarker.markUsersDirty({
+        userIds: [user.id],
+        reasonCodes: [UserProfileDirtyReason.EmploymentUpdated],
+        afterCommit: tx.afterCommit,
+        requestId: auditContext?.requestId ?? undefined,
+        traceId: auditContext?.traceId ?? undefined,
+      });
       return { id: created.id };
     }, adminAuditTransactionOptions(auditContext));
   }
@@ -163,6 +170,13 @@ export function createEmploymentService(deps: AdminEmploymentServiceDeps) {
       await tx.auditService.recordAuditLog(buildEmploymentAudit("admin.employment.update", existing, {
         patch: dto,
       }, auditContext));
+      await tx.profileDirtyMarker.markUsersDirty({
+        userIds: [existing.userId],
+        reasonCodes: [UserProfileDirtyReason.EmploymentUpdated],
+        afterCommit: tx.afterCommit,
+        requestId: auditContext?.requestId ?? undefined,
+        traceId: auditContext?.traceId ?? undefined,
+      });
       return true;
     }, adminAuditTransactionOptions(auditContext));
   }
@@ -185,6 +199,13 @@ export function createEmploymentService(deps: AdminEmploymentServiceDeps) {
       await tx.auditService.recordAuditLog(buildEmploymentAudit("admin.employment.status_update", existing, {
         patch,
       }, auditContext));
+      await tx.profileDirtyMarker.markUsersDirty({
+        userIds: [existing.userId],
+        reasonCodes: [UserProfileDirtyReason.EmploymentUpdated],
+        afterCommit: tx.afterCommit,
+        requestId: auditContext?.requestId ?? undefined,
+        traceId: auditContext?.traceId ?? undefined,
+      });
       return true;
     }, adminAuditTransactionOptions(auditContext));
   }
@@ -198,6 +219,13 @@ export function createEmploymentService(deps: AdminEmploymentServiceDeps) {
       await tx.auditService.recordAuditLog(buildEmploymentAudit("admin.employment.delete", existing, {
         deleted: true,
       }, auditContext));
+      await tx.profileDirtyMarker.markUsersDirty({
+        userIds: [existing.userId],
+        reasonCodes: [UserProfileDirtyReason.EmploymentUpdated],
+        afterCommit: tx.afterCommit,
+        requestId: auditContext?.requestId ?? undefined,
+        traceId: auditContext?.traceId ?? undefined,
+      });
       return true;
     }, adminAuditTransactionOptions(auditContext));
   }
@@ -255,6 +283,13 @@ export function createEmploymentService(deps: AdminEmploymentServiceDeps) {
         newIsPrimary,
         startTime: dto.startTime ?? now,
       }, auditContext));
+      await tx.profileDirtyMarker.markUsersDirty({
+        userIds: [existing.userId],
+        reasonCodes: [UserProfileDirtyReason.EmploymentUpdated],
+        afterCommit: tx.afterCommit,
+        requestId: auditContext?.requestId ?? undefined,
+        traceId: auditContext?.traceId ?? undefined,
+      });
       return { newEmploymentId: created.id };
     }, adminAuditTransactionOptions(auditContext));
   }
@@ -272,6 +307,13 @@ export function createEmploymentService(deps: AdminEmploymentServiceDeps) {
       await tx.auditService.recordAuditLog(buildEmploymentAudit("admin.employment.set_primary", existing, {
         primary: true,
       }, auditContext));
+      await tx.profileDirtyMarker.markUsersDirty({
+        userIds: [existing.userId],
+        reasonCodes: [UserProfileDirtyReason.EmploymentUpdated],
+        afterCommit: tx.afterCommit,
+        requestId: auditContext?.requestId ?? undefined,
+        traceId: auditContext?.traceId ?? undefined,
+      });
       return true;
     }, adminAuditTransactionOptions(auditContext));
   }
@@ -288,6 +330,13 @@ export function createEmploymentService(deps: AdminEmploymentServiceDeps) {
         { status: UserStatus.Disable },
       );
       await tx.auditService.recordAuditLog(buildEmploymentResignUserAudit(user, auditContext));
+      await tx.profileDirtyMarker.markUsersDirty({
+        userIds: [user.id],
+        reasonCodes: [UserProfileDirtyReason.EmploymentUpdated, UserProfileDirtyReason.UserUpdated],
+        afterCommit: tx.afterCommit,
+        requestId: auditContext?.requestId ?? undefined,
+        traceId: auditContext?.traceId ?? undefined,
+      });
       return true;
     }, adminAuditTransactionOptions(auditContext));
   }

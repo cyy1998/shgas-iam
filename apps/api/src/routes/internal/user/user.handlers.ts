@@ -7,18 +7,20 @@ import type { UserProfileQueryService } from "@api/services/user-profile/user-pr
 import type { UserRepository } from "@api/services/user/user.repository";
 import type { UserService } from "@api/services/user/user.service";
 import type { UnitOfWorkPort } from "@iam/api-core/uow";
+import type { UserProfileDirtyMarker } from "@iam/domain/user-profile";
 import type { UserRouteHandler } from "./user.type";
 import { getInternalAuditActor } from "@api/services/audit/audit.service";
 import { buildInternalPurveyorContactRegisterAudit } from "@api/services/audit/events/internal.audit";
 import { CustomError } from "@iam/api-core/errors/CustomError";
 import * as resp from "@iam/api-core/http";
-import { UserType } from "@iam/contracts";
+import { UserProfileDirtyReason, UserType } from "@iam/contracts";
 
 export interface ContactRegistrationTransactionPorts {
   employmentRepository: Pick<EmploymentRepository, "getEmploymentByUserOrgPosId" | "setEmployment">;
   organizationRepository: Pick<OrganizationRepository, "getOrganizationByCode">;
   positionRepository: Pick<PositionRepository, "getPositionByCode">;
   userRepository: Pick<UserRepository, "getUserByMobile" | "setUser">;
+  profileDirtyMarker: Pick<UserProfileDirtyMarker, "markUsersDirty">;
 }
 
 export type ContactRegistrationUnitOfWorkPort = UnitOfWorkPort<ContactRegistrationTransactionPorts>;
@@ -84,6 +86,11 @@ export function createUserHandlers(deps: CreateUserHandlersDeps) {
         );
         if (existingEmployment === null) {
           await tx.employmentRepository.setEmployment(existingUser.id, pos.id, org.id);
+          await tx.profileDirtyMarker.markUsersDirty({
+            userIds: [existingUser.id],
+            reasonCodes: [UserProfileDirtyReason.EmploymentUpdated],
+            afterCommit: tx.afterCommit,
+          });
         }
         return { targetUserId: existingUser.id, existingContact: true };
       }
@@ -96,6 +103,11 @@ export function createUserHandlers(deps: CreateUserHandlersDeps) {
         password: null,
       });
       await tx.employmentRepository.setEmployment(user.id, pos.id, org.id);
+      await tx.profileDirtyMarker.markUsersDirty({
+        userIds: [user.id],
+        reasonCodes: [UserProfileDirtyReason.UserUpdated, UserProfileDirtyReason.EmploymentUpdated],
+        afterCommit: tx.afterCommit,
+      });
       return { targetUserId: user.id, existingContact: false };
     });
     await deps.auditLogWriter.recordAuditLogFromContext(

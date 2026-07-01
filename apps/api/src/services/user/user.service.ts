@@ -11,7 +11,7 @@ import {
 } from "@api/services/audit/events/self-user.audit";
 import { CustomError } from "@iam/api-core/errors/CustomError";
 import { InvalidVerificationCodeError } from "@iam/api-core/errors/InvalidVerificationCodeError";
-import { UserStatus } from "@iam/contracts";
+import { UserProfileDirtyReason, UserStatus } from "@iam/contracts";
 import { InvalidOldPasswordError, UserNotFoundError } from "@iam/domain/user";
 
 export function createUserService(deps: UserServiceDeps) {
@@ -120,6 +120,13 @@ export function createUserService(deps: UserServiceDeps) {
         options.requestContext,
         buildMobileBindSuccessAudit(userId, phoneNumber),
       ));
+      await tx.profileDirtyMarker.markUsersDirty({
+        userIds: [userId],
+        reasonCodes: [UserProfileDirtyReason.UserUpdated],
+        afterCommit: tx.afterCommit,
+        requestId: options.requestContext?.requestId ?? undefined,
+        traceId: options.requestContext?.traceId ?? undefined,
+      });
     }, { observability: options.requestContext });
     return true;
   }

@@ -1,4 +1,5 @@
 import { createImmediateUnitOfWork } from "@api/testing/fakes";
+import { UserProfileDirtyReason } from "@iam/contracts";
 import { describe, expect, mock, test } from "bun:test";
 import { createUserService } from "../user.service";
 
@@ -24,6 +25,9 @@ function createDeps(overrides: Record<string, unknown> = {}) {
       setPassword: mock(async () => user),
     },
     auditLogWriter: { recordAuditLog: mock(async () => undefined) },
+    profileDirtyMarker: {
+      markUsersDirty: mock(async () => ({ marked: 1, userIds: [1] })),
+    },
   };
   return {
     auditLogWriter: { recordAuditLog: mock(async () => undefined) },
@@ -82,6 +86,7 @@ describe("createUserService", () => {
       requestId: "req-public",
       traceId: "11111111111111111111111111111111",
     }));
+    expect(deps.tx.profileDirtyMarker.markUsersDirty).not.toHaveBeenCalled();
   });
 
   test("rejects reset password when mobile does not match", async () => {
@@ -92,6 +97,16 @@ describe("createUserService", () => {
       .toThrow("用户名与手机号不匹配");
   });
 
+  test("resets password without marking profile dirty", async () => {
+    const deps = createDeps();
+    const service = createUserService(deps);
+
+    await expect(service.resetPassword("zhangsan", "13800000000", "1234", "newPass123")).resolves.toBe(true);
+
+    expect(deps.tx.userRepository.setPassword).toHaveBeenCalledWith(1, "hashed:newPass123");
+    expect(deps.tx.profileDirtyMarker.markUsersDirty).not.toHaveBeenCalled();
+  });
+
   test("sets mobile without reading profile detail after mutation", async () => {
     const deps = createDeps();
     const service = createUserService(deps);
@@ -99,6 +114,13 @@ describe("createUserService", () => {
     await expect(service.setMobile(1, "13900000000", "1234")).resolves.toBe(true);
 
     expect(deps.profileQuery.getDetailByUserId).not.toHaveBeenCalled();
+    expect(deps.tx.profileDirtyMarker.markUsersDirty).toHaveBeenCalledWith({
+      userIds: [1],
+      reasonCodes: [UserProfileDirtyReason.UserUpdated],
+      afterCommit: expect.any(Object),
+      requestId: undefined,
+      traceId: undefined,
+    });
   });
 
   test("delegates user detail and legacy search reads to profile query service", async () => {

@@ -1,5 +1,6 @@
 import type { AuditLogWriterPort } from "@admin-api/services/audit/audit.service";
 import type { UnitOfWorkPort } from "@iam/api-core/uow";
+import type { UserProfileDirtyMarker } from "@iam/domain/user-profile";
 import type { PositionRepository } from "./position.repository";
 
 export interface AdminPositionTransactionPorts {
@@ -13,6 +14,7 @@ export interface AdminPositionTransactionPorts {
     | "softDeletePositionByCode"
   >;
   auditService: AuditLogWriterPort;
+  profileDirtyMarker: Pick<UserProfileDirtyMarker, "markScopeDirty">;
 }
 
 export type AdminPositionUnitOfWorkPort = UnitOfWorkPort<AdminPositionTransactionPorts>;

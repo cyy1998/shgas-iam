@@ -1,7 +1,10 @@
 import type { CreateAppOptions } from "@iam/api-core/core/create-app";
+import type { UserProfileJobName, UserProfileJobPayload } from "@iam/contracts";
 import env from "@admin-api/env";
 import { logger } from "@admin-api/lib/logger";
 import { createAdminAuditService } from "@admin-api/services/audit/audit.service";
+import { USER_PROFILE_QUEUE_NAME } from "@iam/contracts";
+import { createJobQueue, createUserProfileJobProducer } from "@iam/jobs";
 import { createAdminApiMiddlewares } from "./middlewares";
 import { createAdminApiRepositories } from "./repositories";
 import { createAdminApiRoutes } from "./routes";
@@ -17,6 +20,8 @@ export interface AdminApiComposition {
   session: ReturnType<typeof createAdminApiSession>;
   repositories: ReturnType<typeof createAdminApiRepositories>;
   auditService: ReturnType<typeof createAdminAuditService>;
+  userProfileQueue: ReturnType<typeof createJobQueue<UserProfileJobPayload, unknown, UserProfileJobName>>;
+  userProfileJobProducer: ReturnType<typeof createUserProfileJobProducer>;
   unitOfWork: ReturnType<typeof createAdminApiUnitOfWork>;
   services: ReturnType<typeof createAdminApiServices>;
   routes: CreateAppOptions["routes"];
@@ -37,8 +42,15 @@ export async function createAdminApiComposition(
   const session = createAdminApiSession({ runtime });
   const repositories = createAdminApiRepositories();
   const auditService = createAdminAuditService({ auditRepository: repositories.audit });
+  const userProfileQueue = createJobQueue<UserProfileJobPayload, unknown, UserProfileJobName>({
+    name: USER_PROFILE_QUEUE_NAME,
+    redis: runtime.config.env.redis,
+  });
+  const userProfileJobProducer = createUserProfileJobProducer(userProfileQueue);
   const unitOfWork = createAdminApiUnitOfWork({
     logger: runtime.afterCommitLogger,
+    userProfileJobProducer,
+    clock: runtime.clock,
   });
   const services = createAdminApiServices({ runtime, repositories, session, unitOfWork });
 
@@ -49,6 +61,8 @@ export async function createAdminApiComposition(
     session,
     repositories,
     auditService,
+    userProfileQueue,
+    userProfileJobProducer,
     unitOfWork,
     services,
     routes: await createAdminApiRoutes({ auditService, repositories, runtime, services }),

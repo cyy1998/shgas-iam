@@ -92,6 +92,31 @@ Position management SHALL use centralized named errors for stable position failu
 - **WHEN** a position has active employment relationships
 - **THEN** the backend SHALL throw the centralized position has employment error
 
+### Requirement: 管理端岗位写操作标记 profile dirty
+管理端岗位写操作 SHALL 标记受影响用户 profile dirty，使 profile 中的 position summary 和搜索文档最终收敛。
+
+#### Scenario: 更新岗位属性标记 users dirty
+- **WHEN** 管理端成功更新岗位编码、名称、状态、描述或其它 profile-relevant 字段
+- **THEN** 系统 SHALL 在同一事务内解析该岗位 active employments 的用户
+- **AND** 系统 SHALL 标记这些用户 profile dirty
+- **AND** dirty reason SHALL include `PositionUpdated`
+
+#### Scenario: 删除岗位标记 affected users dirty when present
+- **WHEN** 管理端成功软删除岗位
+- **THEN** 系统 SHALL 在同一事务内解析该岗位下受影响用户
+- **AND** 如果存在受影响用户，系统 SHALL 标记这些用户 profile dirty
+- **AND** 如果删除约束保证没有受影响用户，系统 SHALL NOT 创建无目标 dirty 记录
+
+#### Scenario: 创建空岗位不要求 dirty
+- **WHEN** 管理端创建尚无任职用户的新岗位
+- **THEN** 系统 SHALL NOT 要求为该岗位创建 user profile dirty 记录
+- **AND** 后续使用该岗位创建任职 SHALL 由任职写路径标记用户 dirty
+
+#### Scenario: 岗位 scope wake-up is best-effort
+- **WHEN** 岗位写事务提交并已持久化受影响用户 dirty
+- **THEN** 系统 SHALL best-effort enqueue position scope expansion or rebuild wake-up
+- **AND** enqueue failure SHALL NOT remove the persisted dirty rows
+
 ## Open Questions
 - 删除岗位的计数函数不按 employment status 过滤，只按 `isDelete=false` 过滤；暂停或结束的未软删除 employment 也会阻止删除，这是当前行为，是否符合目标语义需要确认。
 - 创建岗位会拒绝已软删除岗位的 posCode 复用；这可能是保守设计，也可能是历史残留。

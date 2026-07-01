@@ -97,6 +97,7 @@ export async function createApiRoutes(options: CreateApiRoutesOptions): Promise<
       organizationRepository: tx.repositories.organization,
       positionRepository: tx.repositories.position,
       userRepository: tx.repositories.user,
+      profileDirtyMarker: tx.profileDirtyMarker,
     })),
   });
 

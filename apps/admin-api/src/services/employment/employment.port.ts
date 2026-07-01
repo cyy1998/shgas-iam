@@ -7,6 +7,7 @@ import type { PrivilegeRepository } from "@admin-api/services/privilege/privileg
 import type { RoleRepository } from "@admin-api/services/role/role.repository";
 import type { UserRepository } from "@admin-api/services/user/user.repository";
 import type { UnitOfWorkPort } from "@iam/api-core/uow";
+import type { UserProfileDirtyMarker } from "@iam/domain/user-profile";
 
 export interface AdminEmploymentTransactionPorts {
   employmentRepository: Pick<
@@ -23,6 +24,7 @@ export interface AdminEmploymentTransactionPorts {
   positionRepository: Pick<PositionRepository, "getPositionByCode">;
   userRepository: Pick<UserRepository, "getUserByUsernameForAdmin" | "updateUserByUsername">;
   auditService: AuditLogWriterPort;
+  profileDirtyMarker: Pick<UserProfileDirtyMarker, "markUsersDirty">;
 }
 
 export type AdminEmploymentUnitOfWorkPort = UnitOfWorkPort<AdminEmploymentTransactionPorts>;

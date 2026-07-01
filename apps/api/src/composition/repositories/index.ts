@@ -8,11 +8,10 @@ import { createPrivilegeRepository } from "@api/services/privilege/privilege.rep
 import { createPrivilegeDelegationRepository } from "@api/services/privilege/privilegeDelegation.repository";
 import { createRoleRepository } from "@api/services/role/role.repository";
 import { createUserProfileBuildRepository } from "@api/services/user-profile/user-profile-build.repository";
-import { createUserProfileDirtyRepository } from "@api/services/user-profile/user-profile-dirty.repository";
-import { createUserProfileScopeRepository } from "@api/services/user-profile/user-profile-scope.repository";
 import { createUserProfileRepository } from "@api/services/user-profile/user-profile.repository";
 import { createUserRepository } from "@api/services/user/user.repository";
 import db from "@iam/db";
+import { createUserProfileDirtyRepository, createUserProfileScopeRepository } from "@iam/domain/user-profile";
 
 export function createApiRepositories(client: DbClient = db) {
   return {

@@ -8,8 +8,8 @@ import type { RoleRepository } from "@api/services/role/role.repository";
 import type { UserProfileQueryService } from "@api/services/user-profile/user-profile-query.service";
 import type { UserRepository } from "@api/services/user/user.repository";
 import type { UnitOfWorkPort } from "@iam/api-core/uow";
-import type { User } from "@iam/db/schema";
-import type { UserDetailDto, UserQueryWithPrivilegeDelegationDto } from "./user.type";
+import type { UserProfileDirtyMarker } from "@iam/domain/user-profile";
+import type { UserQueryWithPrivilegeDelegationDto } from "./user.type";
 
 export interface UserDetailBuilderDeps {
   employmentRepository: Pick<EmploymentRepository, "getEmploymentsByUserId">;
@@ -38,6 +38,7 @@ export interface UserPasswordHelperDeps {
 export interface UserTransactionPorts {
   userRepository: Pick<UserRepository, "getUserByUsername" | "setPassword" | "setMobile">;
   auditLogWriter: AuditLogWriterPort;
+  profileDirtyMarker: Pick<UserProfileDirtyMarker, "markUsersDirty">;
 }
 
 export type UserUnitOfWorkPort = UnitOfWorkPort<UserTransactionPorts>;

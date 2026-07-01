@@ -31,34 +31,11 @@ export function createUserProfileDirtyRepository(db: DbClient) {
     },
 
     async markDirty(input: MarkUserProfileDirtyInput) {
-      const existing = await db.query.userProfileDirty.findFirst({ where: { userId: input.userId } });
-      const reasonCodes = mergeReasonCodes(existing?.reasonCodes ?? [], input.reasonCodes);
-      return firstRow(await db
-        .insert(userProfileDirty)
-        .values({
-          userId: input.userId,
-          status: UserProfileDirtyStatus.Pending,
-          reasonCodes,
-          dirtyAt: input.dirtyAt,
-          processingStartedAt: null,
-          processedAt: null,
-          lastError: null,
-          lastJobId: input.lastJobId,
-        })
-        .onConflictDoUpdate({
-          target: userProfileDirty.userId,
-          set: {
-            status: UserProfileDirtyStatus.Pending,
-            reasonCodes,
-            dirtyAt: input.dirtyAt,
-            processingStartedAt: null,
-            processedAt: null,
-            lastError: null,
-            lastJobId: input.lastJobId,
-            updateTime: new Date(),
-          },
-        })
-        .returning())!;
+      return firstRow(await markManyDirty(db, [input])) ?? null;
+    },
+
+    async markManyDirty(inputs: MarkUserProfileDirtyInput[]) {
+      return await markManyDirty(db, inputs);
     },
 
     async claimForProcessing(input: ClaimUserProfileDirtyInput) {
@@ -113,6 +90,10 @@ export function createUserProfileDirtyRepository(db: DbClient) {
         .where(or(
           eq(userProfileDirty.status, UserProfileDirtyStatus.Failed),
           and(
+            eq(userProfileDirty.status, UserProfileDirtyStatus.Pending),
+            lt(userProfileDirty.dirtyAt, input.staleBefore),
+          ),
+          and(
             eq(userProfileDirty.status, UserProfileDirtyStatus.Processing),
             lt(userProfileDirty.processingStartedAt, input.staleBefore),
           ),
@@ -125,6 +106,67 @@ export function createUserProfileDirtyRepository(db: DbClient) {
 
 export type UserProfileDirtyRepository = ReturnType<typeof createUserProfileDirtyRepository>;
 
-function mergeReasonCodes(existing: UserProfileDirty["reasonCodes"], incoming: UserProfileDirtyReason[]) {
+export function mergeUserProfileDirtyReasons(
+  existing: UserProfileDirty["reasonCodes"],
+  incoming: UserProfileDirtyReason[],
+) {
   return [...new Set([...existing, ...incoming])];
+}
+
+async function markManyDirty(db: DbClient, inputs: MarkUserProfileDirtyInput[]) {
+  if (inputs.length === 0)
+    return [];
+
+  const dirtyRows = mergeInputsByUserId(inputs).map(input => ({
+    userId: input.userId,
+    status: UserProfileDirtyStatus.Pending,
+    reasonCodes: input.reasonCodes,
+    dirtyAt: input.dirtyAt,
+    processingStartedAt: null,
+    processedAt: null,
+    lastError: null,
+    lastJobId: input.lastJobId ?? null,
+  }));
+
+  return await db
+    .insert(userProfileDirty)
+    .values(dirtyRows)
+    .onConflictDoUpdate({
+      target: userProfileDirty.userId,
+      set: {
+        status: UserProfileDirtyStatus.Pending,
+        reasonCodes: sql<UserProfileDirtyReason[]>`(
+          select coalesce(jsonb_agg(distinct reason_code.value order by reason_code.value), '[]'::jsonb)
+          from jsonb_array_elements_text(${userProfileDirty.reasonCodes} || excluded.reason_codes) as reason_code(value)
+        )`,
+        dirtyAt: sql`excluded.dirty_at`,
+        processingStartedAt: null,
+        processedAt: null,
+        lastError: null,
+        lastJobId: sql`coalesce(excluded.last_job_id, ${userProfileDirty.lastJobId})`,
+        updateTime: new Date(),
+      },
+    })
+    .returning();
+}
+
+function mergeInputsByUserId(inputs: MarkUserProfileDirtyInput[]) {
+  const byUserId = new Map<number, MarkUserProfileDirtyInput>();
+  for (const input of inputs) {
+    const existing = byUserId.get(input.userId);
+    if (existing === undefined) {
+      byUserId.set(input.userId, {
+        ...input,
+        reasonCodes: mergeUserProfileDirtyReasons([], input.reasonCodes),
+      });
+      continue;
+    }
+    byUserId.set(input.userId, {
+      userId: input.userId,
+      reasonCodes: mergeUserProfileDirtyReasons(existing.reasonCodes, input.reasonCodes),
+      dirtyAt: input.dirtyAt > existing.dirtyAt ? input.dirtyAt : existing.dirtyAt,
+      lastJobId: input.lastJobId ?? existing.lastJobId,
+    });
+  }
+  return [...byUserId.values()];
 }

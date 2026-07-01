@@ -5,6 +5,7 @@ import type { PrivilegeRepository } from "@admin-api/services/privilege/privileg
 import type { RoleRepository } from "@admin-api/services/role/role.repository";
 import type { AdminSessionRevocationPort } from "@admin-api/services/session-revocation/session-revocation.port";
 import type { UnitOfWorkPort } from "@iam/api-core/uow";
+import type { UserProfileDirtyMarker } from "@iam/domain/user-profile";
 import type { UserRepository } from "./user.repository";
 
 export interface AdminUserTransactionPorts {
@@ -18,6 +19,7 @@ export interface AdminUserTransactionPorts {
     | "setPassword"
   >;
   auditService: AuditLogWriterPort;
+  profileDirtyMarker: Pick<UserProfileDirtyMarker, "markUsersDirty">;
 }
 
 export type AdminUserUnitOfWorkPort = UnitOfWorkPort<AdminUserTransactionPorts>;

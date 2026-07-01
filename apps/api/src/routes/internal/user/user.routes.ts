@@ -1,6 +1,6 @@
 import { PrivilegeDelegationDtoSchema } from "@api/services/privilege/privilegeDelegation.schema";
-import { UserDetailDtoSchema, UserDtoSchema, UserQueryDtoSchema, UserQueryWithPrivilegeDelegationDtoSchema } from "@api/services/user/user.schema";
 import { createUserProfileDslSearchRequestSchema } from "@api/services/user-profile/user-profile.schema";
+import { UserDetailDtoSchema, UserDtoSchema, UserQueryDtoSchema, UserQueryWithPrivilegeDelegationDtoSchema } from "@api/services/user/user.schema";
 import { createRoute, z } from "@hono/zod-openapi";
 import * as HttpStatusCodes from "@iam/api-core/core/http-status-codes";
 import { commonErrorResponses } from "@iam/api-core/core/openapi/helpers/common-error-responses";

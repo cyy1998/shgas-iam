@@ -233,6 +233,31 @@
 - **AND** 测试 SHALL 覆盖删除业务约束失败时不触发撤销
 - **AND** 测试 SHALL 覆盖 revoke failure 走 best-effort 且业务操作保持成功
 
+### Requirement: 管理端用户写操作标记 profile dirty
+管理端用户写操作 SHALL 在成功提交后触发对应用户的 API profile 重建。
+
+#### Scenario: 创建用户标记 dirty
+- **WHEN** 管理端成功创建用户
+- **THEN** 系统 SHALL 在同一事务内标记新用户 profile dirty
+- **AND** dirty reason SHALL include `UserUpdated`
+- **AND** commit 后系统 SHALL best-effort enqueue 该用户的 rebuild job
+
+#### Scenario: 更新用户资料标记 dirty
+- **WHEN** 管理端成功更新用户 username、name、mobile、wxId、userType、status、orderNum 或删除状态
+- **THEN** 系统 SHALL 在同一事务内标记该用户 profile dirty
+- **AND** commit 后系统 SHALL best-effort enqueue 该用户的 rebuild job
+
+#### Scenario: 禁用或删除用户同时保留 session revoke
+- **WHEN** 管理端禁用或删除用户
+- **THEN** 系统 SHALL 保持现有 Session Kernel 撤销行为
+- **AND** 系统 SHALL 同时标记该用户 profile dirty
+- **AND** profile dirty enqueue failure SHALL NOT 阻止 session revoke afterCommit task 注册
+
+#### Scenario: 重置密码不标记 profile dirty
+- **WHEN** 管理端仅重置用户密码且没有修改 profile 文档字段
+- **THEN** 系统 SHALL NOT 因密码 hash 变化标记 profile dirty
+- **AND** 系统 SHALL 保持现有 session revoke 行为
+
 ## Open Questions
 - 创建用户时只校验 username 重复，没有显式校验 mobile 或 wxId 唯一性；是否需要作为业务约束需要人工确认。
 - 管理端重置密码不会清理已有 Redis session；用户重置后旧 session 是否继续有效需后续单独确认。

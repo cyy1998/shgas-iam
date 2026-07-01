@@ -31,6 +31,7 @@ function createDeps(overrides: Record<string, unknown> = {}) {
       markProcessed: mock(async () => ({ userId: 1 })),
       markFailed: mock(async () => ({ userId: 1 })),
       markDirty: mock(async (input: unknown) => input),
+      markManyDirty: mock(async (input: unknown) => input),
       scanFailedOrStale: mock(async () => [{ userId: 5 }, { userId: 6 }]),
     },
     scopeRepository: {
@@ -132,7 +133,7 @@ describe("UserProfileWorkerService", () => {
       { scopeType: UserProfileScopeType.RoleId, scopeId: 20 },
       { scopeType: UserProfileScopeType.PrivilegeId, scopeId: 30 },
     ]);
-    expect(deps.dirtyRepository.markDirty).toHaveBeenCalledTimes(6);
+    expect(deps.dirtyRepository.markManyDirty).toHaveBeenCalledTimes(3);
     expect(deps.jobProducer.enqueueRebuildJob).toHaveBeenCalledTimes(6);
   });
 
@@ -169,5 +170,19 @@ describe("UserProfileWorkerService", () => {
       userIds: [5, 6],
     });
     expect(deps.dirtyRepository.scanFailedOrStale).toHaveBeenCalledWith({ staleBefore, limit: 2 });
+    expect(deps.dirtyRepository.markManyDirty).toHaveBeenCalledWith([
+      {
+        userId: 5,
+        reasonCodes: [UserProfileDirtyReason.ManualRebuild],
+        dirtyAt: now,
+        lastJobId: "rebuild-user-profile:5",
+      },
+      {
+        userId: 6,
+        reasonCodes: [UserProfileDirtyReason.ManualRebuild],
+        dirtyAt: now,
+        lastJobId: "rebuild-user-profile:6",
+      },
+    ]);
   });
 });
