@@ -7,7 +7,7 @@ import type {
   UserProfileDirtyRepository,
   UserProfileExpansionScope,
   UserProfileScopeRepository,
-} from "@iam/domain/user-profile";
+} from "./producer";
 import type { UserProfileBuilder } from "./user-profile-builder.service";
 import type { UserProfileRepository } from "./user-profile.repository";
 import { UserProfileDirtyReason as UserProfileDirtyReasonValue, UserProfileScopeType } from "@iam/contracts";

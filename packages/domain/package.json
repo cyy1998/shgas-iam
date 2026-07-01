@@ -18,9 +18,7 @@
     "./privilege": "./src/privilege/index.ts",
     "./privilege/*": "./src/privilege/*.ts",
     "./user": "./src/user/index.ts",
-    "./user/*": "./src/user/*.ts",
-    "./user-profile": "./src/user-profile/index.ts",
-    "./user-profile/*": "./src/user-profile/*.ts"
+    "./user/*": "./src/user/*.ts"
   },
   "scripts": {
     "lint": "eslint src eslint.config.js",

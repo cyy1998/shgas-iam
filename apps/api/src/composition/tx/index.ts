@@ -1,13 +1,13 @@
 import type { ApiAuditLogWriter } from "@api/services/audit/audit.service";
 import type { UnitOfWorkPort } from "@iam/api-core/uow";
 import type { DbClient } from "@iam/db";
-import type { UserProfileDirtyJobProducerPort, UserProfileDirtyMarker } from "@iam/domain/user-profile";
+import type { UserProfileDirtyJobProducerPort, UserProfileDirtyMarker } from "@iam/user-profile-read-model/producer";
 import type { ApiRepositories } from "../repositories";
 import type { AfterCommitLoggerPort, ClockPort } from "../runtime";
 import { createApiAuditLogWriter } from "@api/services/audit/audit.service";
 import { createUnitOfWork } from "@iam/api-core/uow";
 import db from "@iam/db";
-import { createUserProfileDirtyMarker } from "@iam/domain/user-profile";
+import { createUserProfileDirtyMarker } from "@iam/user-profile-read-model/producer";
 import { createApiRepositories } from "../repositories";
 
 export interface ApiTxPorts {

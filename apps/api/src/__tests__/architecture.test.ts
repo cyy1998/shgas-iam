@@ -1,4 +1,4 @@
-import { readdirSync, readFileSync, statSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { join, relative, sep } from "node:path";
 import { describe, expect, test } from "bun:test";
 import ts from "typescript";
@@ -10,6 +10,7 @@ type ImportRecord = {
 };
 
 const sourceRoot = join(import.meta.dir, "..");
+const workspaceRoot = join(sourceRoot, "../../..");
 
 function toPosixPath(path: string) {
   return path.split(sep).join("/");
@@ -29,6 +30,10 @@ function collectSourceFiles(dir: string): string[] {
   });
 }
 
+function collectSourceFilesIfExists(dir: string): string[] {
+  return existsSync(dir) ? collectSourceFiles(dir) : [];
+}
+
 function hasValueImport(importClause: ts.ImportClause | undefined) {
   if (!importClause)
     return true;
@@ -45,9 +50,13 @@ function hasValueImport(importClause: ts.ImportClause | undefined) {
 }
 
 function collectImports(): ImportRecord[] {
-  return collectSourceFiles(sourceRoot).flatMap((file) => {
+  return collectImportsFromRoot(sourceRoot);
+}
+
+function collectImportsFromRoot(root: string): ImportRecord[] {
+  return collectSourceFilesIfExists(root).flatMap((file) => {
     const source = ts.createSourceFile(file, readFileSync(file, "utf8"), ts.ScriptTarget.Latest, true);
-    const relativeFile = toPosixPath(relative(sourceRoot, file));
+    const relativeFile = toPosixPath(relative(root, file));
     return source.statements.flatMap((statement): ImportRecord[] => {
       if (!ts.isImportDeclaration(statement) || !ts.isStringLiteral(statement.moduleSpecifier)) {
         return [];
@@ -59,6 +68,11 @@ function collectImports(): ImportRecord[] {
       }];
     });
   });
+}
+
+function importsUserProfileProducerFromJobs(file: string) {
+  return /import\s*\{[^}]*\bcreateUserProfileJobProducer\b[^}]*\}\s*from\s*["']@iam\/jobs["']/u
+    .test(readFileSync(file, "utf8"));
 }
 
 function isComposition(file: string) {
@@ -83,6 +97,10 @@ function isCustomSsoRuntimeBoundary(file: string) {
     || file.startsWith("routes/auth/")
     || file.startsWith("routes/sso/")
     || file.startsWith("services/session/");
+}
+
+function isTransitionalUserProfileWorkerComposition(file: string) {
+  return file === "composition/user-profile-worker.ts";
 }
 
 const legacyCustomSsoAuthorityKeyPatterns = [
@@ -151,5 +169,37 @@ describe("API DI architecture", () => {
       .map(({ file, moduleSpecifier }) => `${file} imports ${moduleSpecifier}`);
 
     expect([...keyViolations, ...importViolations]).toEqual([]);
+  });
+
+  test("keeps user-profile read model ownership out of old API/domain/jobs paths", () => {
+    const importViolations = collectImports()
+      .filter(({ moduleSpecifier }) =>
+        moduleSpecifier.startsWith("@api/services/user-profile")
+        || moduleSpecifier.startsWith("@iam/domain/user-profile"))
+      .map(({ file, moduleSpecifier }) => `${file} imports ${moduleSpecifier}`);
+
+    const producerViolations = collectSourceFiles(sourceRoot)
+      .filter(importsUserProfileProducerFromJobs)
+      .map(file => `${toPosixPath(relative(sourceRoot, file))} imports createUserProfileJobProducer from @iam/jobs`);
+
+    expect([...importViolations, ...producerViolations]).toEqual([]);
+  });
+
+  test("keeps user-profile worker-side APIs out of normal API composition", () => {
+    const violations = collectImports()
+      .filter(({ moduleSpecifier }) => moduleSpecifier === "@iam/user-profile-read-model/worker")
+      .filter(({ file }) => !isTransitionalUserProfileWorkerComposition(file))
+      .map(({ file, moduleSpecifier }) => `${file} imports ${moduleSpecifier}`);
+
+    expect(violations).toEqual([]);
+  });
+
+  test("keeps future worker app code free of API-private imports", () => {
+    const workerSourceRoot = join(workspaceRoot, "apps/worker/src");
+    const violations = collectImportsFromRoot(workerSourceRoot)
+      .filter(({ moduleSpecifier }) => moduleSpecifier.startsWith("@api/"))
+      .map(({ file, moduleSpecifier }) => `apps/worker/src/${file} imports ${moduleSpecifier}`);
+
+    expect(violations).toEqual([]);
   });
 });

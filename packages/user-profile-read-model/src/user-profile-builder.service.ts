@@ -1,4 +1,3 @@
-import type { UserDetailDto } from "@api/services/user/user.type";
 import type { Employment, Organization } from "@iam/db/schema";
 import type {
   UserProfileBuildDataset,
@@ -6,13 +5,14 @@ import type {
   UserProfileBuildPosition,
   UserProfileBuildRepository,
 } from "./user-profile-build.repository";
-import type { UserProfileSearchDoc } from "./user-profile.schema";
-import { EmploymentDetailDtoSchema, toEmploymentDto } from "@api/services/employment/employment.schema";
-import { UserDetailDtoSchema } from "@api/services/user/user.schema";
+import type { UserDetailDto, UserProfileSearchDoc } from "./user-profile.schema";
 import { OrganizationType, UserStatus } from "@iam/contracts";
 import {
   buildAncestorKey,
   CURRENT_USER_PROFILE_SCHEMA_VERSION,
+  EmploymentDetailDtoSchema,
+  toEmploymentDto,
+  UserDetailDtoSchema,
   UserProfileSearchDocSchema,
 } from "./user-profile.schema";
 

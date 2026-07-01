@@ -3,11 +3,11 @@ import type { EmploymentRepository } from "@api/services/employment/employment.r
 import type { MobileService } from "@api/services/mobile/mobile.service";
 import type { OrganizationRepository } from "@api/services/organization/organization.repository";
 import type { PositionRepository } from "@api/services/position/position.repository";
-import type { UserProfileQueryService } from "@api/services/user-profile/user-profile-query.service";
 import type { UserRepository } from "@api/services/user/user.repository";
 import type { UserService } from "@api/services/user/user.service";
 import type { UnitOfWorkPort } from "@iam/api-core/uow";
-import type { UserProfileDirtyMarker } from "@iam/domain/user-profile";
+import type { UserProfileDirtyMarker } from "@iam/user-profile-read-model/producer";
+import type { UserProfileQueryService } from "@iam/user-profile-read-model/query";
 import type { UserRouteHandler } from "./user.type";
 import { getInternalAuditActor } from "@api/services/audit/audit.service";
 import { buildInternalPurveyorContactRegisterAudit } from "@api/services/audit/events/internal.audit";

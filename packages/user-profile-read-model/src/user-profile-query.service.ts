@@ -1,13 +1,11 @@
-import type { UserDetailDto, UserDto, UserQueryDto } from "@api/services/user/user.type";
 import type { UserProfileRepository } from "./user-profile.repository";
-import type { UserProfileFilterDsl } from "./user-profile.schema";
-import { UserDetailDtoSchema, UserDtoSchema } from "@api/services/user/user.schema";
+import type { UserDetailDto, UserDto, UserProfileFilterDsl, UserQueryDto } from "./user-profile.schema";
 import { UserNotFoundError } from "@iam/domain/user";
 import {
   compileLegacyUserQueryToProfileFilter,
   toUserDtoFromProfile,
 } from "./user-profile.repository";
-import { UserProfileFilterDslSchema } from "./user-profile.schema";
+import { UserDetailDtoSchema, UserDtoSchema, UserProfileFilterDslSchema } from "./user-profile.schema";
 
 export interface UserProfileQueryServiceDeps {
   profileRepository: UserProfileRepository;

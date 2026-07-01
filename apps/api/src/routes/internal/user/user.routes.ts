@@ -1,5 +1,4 @@
 import { PrivilegeDelegationDtoSchema } from "@api/services/privilege/privilegeDelegation.schema";
-import { createUserProfileDslSearchRequestSchema } from "@api/services/user-profile/user-profile.schema";
 import { UserDetailDtoSchema, UserDtoSchema, UserQueryDtoSchema, UserQueryWithPrivilegeDelegationDtoSchema } from "@api/services/user/user.schema";
 import { createRoute, z } from "@hono/zod-openapi";
 import * as HttpStatusCodes from "@iam/api-core/core/http-status-codes";
@@ -7,6 +6,7 @@ import { commonErrorResponses } from "@iam/api-core/core/openapi/helpers/common-
 import jsonContent from "@iam/api-core/core/openapi/helpers/json-content";
 import jsonContentRequired from "@iam/api-core/core/openapi/helpers/json-content-required";
 import createSuccessResponseSchema from "@iam/api-core/core/openapi/schemas/create-success-schema";
+import { createUserProfileDslSearchRequestSchema } from "@iam/user-profile-read-model/query";
 
 const tags = ["Internal/User"];
 

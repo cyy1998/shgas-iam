@@ -18,8 +18,6 @@ import {
   createCustomSsoCleanupAdapter,
   createCustomSsoSessionKernelAdapter,
 } from "@api/services/session/custom-sso-session-kernel.adapter";
-import { createUserProfileBuilder } from "@api/services/user-profile/user-profile-builder.service";
-import { createUserProfileQueryService } from "@api/services/user-profile/user-profile-query.service";
 import { createUserDelegationQuery } from "@api/services/user/user-delegation-query.helper";
 import { createUserMobileBinding } from "@api/services/user/user-mobile-binding.helper";
 import { createUserPasswordHelper } from "@api/services/user/user-password.helper";
@@ -27,6 +25,7 @@ import { createUserService } from "@api/services/user/user.service";
 import { LoggerSourceApp } from "@iam/api-core/logger";
 import { createSessionKernel } from "@iam/api-core/session/kernel";
 import { mapUnitOfWork } from "@iam/api-core/uow";
+import { createUserProfileQueryService } from "@iam/user-profile-read-model/query";
 
 type ApiUnitOfWork = ReturnType<typeof createApiUnitOfWork>;
 
@@ -92,14 +91,6 @@ export function createApiServices(options: CreateApiServicesOptions) {
       secret: runtime.config.cap.secret,
       challengeTtlMs: runtime.config.cap.challengeTtlMs,
       tokenTtlSeconds: runtime.config.cap.tokenTtlSeconds,
-    },
-  });
-
-  const userProfileBuilder = createUserProfileBuilder({
-    buildRepository: repositories.userProfileBuild,
-    clock: runtime.clock,
-    config: {
-      batchSize: runtime.config.userProfile.rebuildBatchSize,
     },
   });
 
@@ -231,7 +222,6 @@ export function createApiServices(options: CreateApiServicesOptions) {
     privilegeDelegation: privilegeDelegationService,
     sso: ssoService,
     user: userService,
-    userProfileBuilder,
     userProfileQuery,
   };
 }

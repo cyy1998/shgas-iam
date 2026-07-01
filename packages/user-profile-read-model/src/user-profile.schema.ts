@@ -1,8 +1,29 @@
 import type { UserProfileDirtyReason, UserProfileDirtyStatus } from "@iam/contracts";
 import { z } from "@hono/zod-openapi";
 import { UserProfileDirtyReasonSchema, UserProfileDirtyStatusSchema, UserStatus, UserType } from "@iam/contracts";
+import { EmploymentDetailDtoSchema, toEmploymentDto } from "@iam/domain/employment";
+import { UserDetailDtoSchema, UserDtoSchema } from "@iam/domain/user";
+
+export type { EmploymentDetailDto } from "@iam/domain/employment";
+export type { UserDetailDto, UserDto } from "@iam/domain/user";
+export {
+  EmploymentDetailDtoSchema,
+  toEmploymentDto,
+  UserDetailDtoSchema,
+  UserDtoSchema,
+};
 
 export const CURRENT_USER_PROFILE_SCHEMA_VERSION = 1;
+
+export const UserQueryDtoSchema = z.object({
+  usernames: z.array(z.string()).describe("用户名列表").openapi({ example: ["138550", "136163"] }),
+  phones: z.array(z.string()).describe("手机号列表").openapi({ example: ["17721462865"] }),
+  wxIds: z.array(z.string()).describe("微信ID列表").openapi({ example: ["1592677631"] }),
+  ancestorOrgCodes: z.array(z.string()).describe("用户岗位父级组织编码列表").openapi({ example: ["SR", "SB"] }),
+  ancestorOrgDepths: z.array(z.number()).describe("用户岗位父级组织深度查询（只查询组织直属用户填0，递归查询不要传此参数）").openapi({ example: [0, 1, 2] }),
+  positionCodes: z.array(z.string()).describe("岗位编码列表").openapi({ example: ["E033", "E034"] }),
+  roleCodes: z.array(z.string()).describe("角色编码列表").openapi({ example: ["tender:default-user"] }),
+}).partial().openapi("UserQueryDto");
 
 export const UserProfileSearchEmploymentDocSchema = z.object({
   id: z.number().int().positive(),
@@ -97,11 +118,11 @@ export type UserProfileFilterField = z.infer<typeof UserProfileFilterFieldSchema
 export type UserProfileFilterOperator = z.infer<typeof UserProfileFilterOperatorSchema>;
 export type UserProfileFilterValue = z.infer<typeof UserProfileFilterValueSchema>;
 
-export type UserProfileFilterCondition = {
+export interface UserProfileFilterCondition {
   field: UserProfileFilterField;
   op: UserProfileFilterOperator;
   value: UserProfileFilterValue;
-};
+}
 
 export type UserProfileFilterDsl
   = | UserProfileFilterCondition
@@ -149,6 +170,7 @@ export type UserProfileSearchDoc = z.infer<typeof UserProfileSearchDocSchema>;
 export type UserProfileDirtyDto = z.infer<typeof UserProfileDirtyDtoSchema>;
 export type UserProfileDirtyStatusType = UserProfileDirtyStatus;
 export type UserProfileDirtyReasonType = UserProfileDirtyReason;
+export type UserQueryDto = z.infer<typeof UserQueryDtoSchema>;
 
 function validateEmploymentFieldsAreNested(
   node: UserProfileFilterDsl,

@@ -5,10 +5,10 @@ import type { MobileService } from "@api/services/mobile/mobile.service";
 import type { PrivilegeRepository } from "@api/services/privilege/privilege.repository";
 import type { PrivilegeDelegationRepository } from "@api/services/privilege/privilegeDelegation.repository";
 import type { RoleRepository } from "@api/services/role/role.repository";
-import type { UserProfileQueryService } from "@api/services/user-profile/user-profile-query.service";
 import type { UserRepository } from "@api/services/user/user.repository";
 import type { UnitOfWorkPort } from "@iam/api-core/uow";
-import type { UserProfileDirtyMarker } from "@iam/domain/user-profile";
+import type { UserProfileDirtyMarker } from "@iam/user-profile-read-model/producer";
+import type { UserProfileQueryService } from "@iam/user-profile-read-model/query";
 import type { UserQueryWithPrivilegeDelegationDto } from "./user.type";
 
 export interface UserDetailBuilderDeps {

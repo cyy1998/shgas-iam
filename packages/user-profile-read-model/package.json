@@ -1,10 +1,13 @@
 {
-  "name": "@iam/jobs",
+  "name": "@iam/user-profile-read-model",
   "type": "module",
   "version": "0.0.1",
   "private": true,
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./producer": "./src/producer.ts",
+    "./query": "./src/query.ts",
+    "./worker": "./src/worker.ts"
   },
   "scripts": {
     "lint": "eslint src eslint.config.js",
@@ -13,8 +16,13 @@
     "typecheck": "pnpm exec tsgo --noEmit"
   },
   "dependencies": {
-    "bullmq": "^5.79.2",
-    "ioredis": "^5.11.0"
+    "@hono/zod-openapi": "^1.4.0",
+    "@iam/contracts": "workspace:*",
+    "@iam/db": "workspace:*",
+    "@iam/domain": "workspace:*",
+    "@iam/jobs": "workspace:*",
+    "drizzle-orm": "1.0.0-rc.2",
+    "zod": "^4.4.3"
   },
   "devDependencies": {
     "@antfu/eslint-config": "^9.0.0",

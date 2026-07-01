@@ -1,9 +1,17 @@
-import type { UserDetailDto, UserDto, UserQueryDto } from "@api/services/user/user.type";
 import type { UserStatus } from "@iam/contracts";
 import type { DbClient } from "@iam/db";
 import type { UserProfile, UserProfileDetailDocument, UserProfileSearchDocument } from "@iam/db/schema";
 import type { SQLWrapper } from "drizzle-orm";
-import type { UserProfileEmploymentField, UserProfileFilterCondition, UserProfileFilterDsl, UserProfileSearchDoc, UserProfileUserField } from "./user-profile.schema";
+import type {
+  UserDetailDto,
+  UserDto,
+  UserProfileEmploymentField,
+  UserProfileFilterCondition,
+  UserProfileFilterDsl,
+  UserProfileSearchDoc,
+  UserProfileUserField,
+  UserQueryDto,
+} from "./user-profile.schema";
 import { firstRow, inArrayIf } from "@iam/db/query-utils";
 import { userProfiles } from "@iam/db/schema";
 import { and, asc, eq, isNull, not, or, sql } from "drizzle-orm";

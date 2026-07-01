@@ -3,13 +3,13 @@ import type {
   RebuildUserProfileJobPayload,
   UserProfileJobPayload,
 } from "@iam/contracts";
-import type { JobQueue } from "./queue";
+import type { JobQueue } from "@iam/jobs";
 import {
   ExpandUserProfileScopeJobPayloadSchema,
   RebuildUserProfileJobPayloadSchema,
   UserProfileJobName,
 } from "@iam/contracts";
-import { buildScopeBucketJobId, buildUserJobId } from "./job-id";
+import { buildScopeBucketJobId, buildUserJobId } from "@iam/jobs";
 
 export type UserProfileJobQueue = JobQueue<UserProfileJobPayload, unknown, UserProfileJobName>;
 

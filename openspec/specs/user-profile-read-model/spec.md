@@ -15,8 +15,44 @@
 - **THEN** `user_profile_dirty` SHALL 以 `user_id` 为唯一键保存最新 `status`、`reason_codes`、`dirty_at`、`attempts`、`last_error`、`last_job_id` 和处理时间字段
 - **AND** 系统 MUST 合并同一用户的重复 dirty 标记，而不是为同一用户插入多行待处理记录
 
+### Requirement: Shared user-profile read model package
+系统 SHALL 提供 `@iam/user-profile-read-model` workspace package，作为 `user_profile` 读模型实现的共享能力包。
+
+#### Scenario: Package owns read model implementation
+- **WHEN** 系统实现 user-profile read model 的 schema、repository、builder、query service、dirty repository、scope repository、dirty marker、job producer 或 worker service
+- **THEN** 这些实现 SHALL 归属 `@iam/user-profile-read-model`
+- **AND** `@iam/user-profile-read-model` SHALL NOT import `@api/*` 或 `@admin-api/*` 私有模块
+
+#### Scenario: API consumes query and producer side APIs
+- **WHEN** `apps/api` 查询 user profile、编译 legacy search/DSL、标记 dirty 或 enqueue user-profile job
+- **THEN** `apps/api` SHALL 从 `@iam/user-profile-read-model` 使用对应 query、repository、dirty marker 或 producer API
+- **AND** `apps/api` SHALL NOT 继续拥有 user-profile read model 的私有 builder、repository、query 或 dirty 实现
+
+#### Scenario: Admin API consumes producer side APIs
+- **WHEN** `apps/admin-api` 在源表写事务中标记 user-profile dirty 或 enqueue user-profile job
+- **THEN** `apps/admin-api` SHALL 从 `@iam/user-profile-read-model` 使用 dirty marker、scope repository、dirty repository 或 producer API
+- **AND** `apps/admin-api` SHALL NOT import `@api/*` 私有 user-profile 模块
+
+#### Scenario: Transitional API worker entry uses shared implementation
+- **WHEN** 本 change 完成后 `apps/api` 过渡期 user-profile worker 入口仍存在
+- **THEN** 该入口 SHALL 通过 `@iam/user-profile-read-model` 的 worker-side service、builder 和 repositories 处理 jobs
+- **AND** 该入口 SHALL NOT 依赖 `apps/api/src/services/user-profile` 中的私有实现
+
+### Requirement: User-profile contracts remain stable
+系统 SHALL 保持 user-profile job、dirty 和 scope 的稳定 contract 归属在 `@iam/contracts`，供 API、admin-api、worker 和数据库 schema 共享。
+
+#### Scenario: Contracts stay outside read model package
+- **WHEN** `@iam/user-profile-read-model`、`apps/api`、`apps/admin-api` 或 `packages/db` 需要 user-profile queue name、job name、payload schema、scope type、dirty reason 或 dirty status
+- **THEN** 它们 SHALL 从 `@iam/contracts` 导入这些 contract
+- **AND** `packages/db` SHALL NOT depend on `@iam/user-profile-read-model`
+
+#### Scenario: Producer uses shared contracts
+- **WHEN** user-profile producer enqueue rebuild 或 scope expansion job
+- **THEN** producer SHALL 使用 `@iam/contracts` 中的 Zod schema 校验 payload
+- **AND** producer SHALL 使用 `@iam/jobs` 提供的 deterministic job id helper 构造 jobId
+
 ### Requirement: Active-only profile builder
-系统 SHALL 提供 `apps/api` 用户画像 builder，批量从规范化写模型构建 active-only API 用户画像。
+系统 SHALL 在 `@iam/user-profile-read-model` 提供用户画像 builder，批量从规范化写模型构建 active-only API 用户画像。
 
 #### Scenario: Build profile detail
 - **WHEN** builder 为用户构建 profile
@@ -85,7 +121,7 @@
 - **THEN** 系统 SHALL 分批扫描用户、upsert dirty 记录并 enqueue user-level rebuild jobs
 
 ### Requirement: Profile query service
-系统 SHALL 在 `apps/api` 提供并接入 `UserProfileQueryService`，作为 API 用户详情、用户搜索和 internal DSL 搜索的 profile 读取来源。
+系统 SHALL 在 `@iam/user-profile-read-model` 提供 `UserProfileQueryService`，并由 `apps/api` 接入作为 API 用户详情、用户搜索和 internal DSL 搜索的 profile 读取来源。
 
 #### Scenario: Query detail by identity
 - **WHEN** 调用方按 userId、username、mobile 或 wxId 查询 profile
@@ -154,4 +190,4 @@
 #### Scenario: Admin API does not import API private producer
 - **WHEN** `apps/admin-api` marks user-profile dirty or enqueues user-profile jobs
 - **THEN** it SHALL NOT import `@api` private modules
-- **AND** it SHALL depend only on shared contracts/jobs/db modules or app-local ports wired to shared helpers
+- **AND** it SHALL depend only on shared contracts/jobs/db modules, `@iam/user-profile-read-model`, or app-local ports wired to shared helpers

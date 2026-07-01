@@ -1,5 +1,5 @@
 import type { UnitOfWorkPort } from "@iam/api-core/uow";
-import type { UserProfileDirtyMarker } from "@iam/domain/user-profile";
+import type { UserProfileDirtyMarker } from "@iam/user-profile-read-model/producer";
 import type { OrganizationRepository } from "./organization.repository";
 
 export interface OrganizationTransactionPorts {

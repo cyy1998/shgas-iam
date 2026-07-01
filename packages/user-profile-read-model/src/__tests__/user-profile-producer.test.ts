@@ -1,6 +1,6 @@
 import { UserProfileDirtyReason, UserProfileJobName, UserProfileScopeType } from "@iam/contracts";
 import { describe, expect, mock, test } from "bun:test";
-import { createUserProfileJobProducer } from "../user-profile";
+import { createUserProfileJobProducer } from "../user-profile-job.producer";
 
 function createQueue() {
   return {

@@ -8,7 +8,7 @@ import { createPrivilegeRepository } from "@admin-api/services/privilege/privile
 import { createRoleRepository } from "@admin-api/services/role/role.repository";
 import { createUserRepository } from "@admin-api/services/user/user.repository";
 import db from "@iam/db";
-import { createUserProfileDirtyRepository, createUserProfileScopeRepository } from "@iam/domain/user-profile";
+import { createUserProfileDirtyRepository, createUserProfileScopeRepository } from "@iam/user-profile-read-model/producer";
 
 export function createAdminApiRepositories(client: DbClient = db) {
   return {
