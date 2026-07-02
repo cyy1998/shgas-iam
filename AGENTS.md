@@ -5,12 +5,16 @@ This repository is a `pnpm` workspace + Turborepo monorepo. Runtime apps live un
 
 - `apps/api`: Bun + Hono public IAM backend (`@iam/api`). Main code is in `src/`, with public/open/internal/sso/auth routes under `src/routes/`, app-side domain logic under `src/services/`, app-specific utilities under `src/lib/`, app composition wiring under `src/composition/`, and env validation in `src/env.ts`.
 - `apps/admin-api`: Bun + Hono admin backend (`@iam/admin-api`). Admin REST routes live under `src/routes/admin/`, tRPC entry routes under `src/routes/trpc/`, admin domain logic under `src/services/`, app composition wiring under `src/composition/`, and tRPC router composition under `src/trpc/`.
+- `apps/oidc-provider`: Node.js 24 + `oidc-provider` app (`@iam/oidc-provider`). Composition lives under `src/composition/`, OIDC provider wiring under `src/provider/`, Session Kernel adapters under `src/session/`, persistence under `src/storage/` and `src/stores/`, and env validation in `src/env.ts`.
+- `apps/worker`: Bun background job runtime (`@iam/worker`). Runtime composition lives under `src/composition/`, worker module selection under `src/modules/`, health/Bull Board HTTP support under `src/http/`, command-only backfill/repair entrypoints under `src/commands/`, and env validation in `src/env.ts`.
 - `apps/admin`: Umi Max + React management frontend. Pages live in `src/pages/`, reusable UI in `src/components/`, tRPC client setup in `src/lib/api-client.ts`, and page-side API wrappers in `src/services/`.
 - `apps/sso`: Umi Max + React SSO portal. Pages live in `src/pages/`, assets in `src/assets/`, API wrappers in `src/services/`, and shared browser helpers in `src/lib/` and `src/utils/`.
-- `packages/api-core/src`: shared backend infrastructure such as `createApp`, route factories, OpenAPI helpers, response helpers, errors, middlewares, Redis, logging, and tRPC utilities.
+- `packages/api-core/src`: shared backend infrastructure such as `createApp`, route factories, OpenAPI helpers, response helpers, errors, middlewares, Redis, logging, observability, Session Kernel, UnitOfWork, and tRPC utilities.
 - `packages/contracts/src`: shared enums and stable contracts consumed across apps and packages.
 - `packages/domain/src`: shared domain DTO schemas, DTO types, audit helpers, and reusable domain/business errors consumed by backend apps.
 - `packages/db/src`: Drizzle schema, relations, migrations, singleton client, and query helpers. Schema and relation domains currently include `core` and `log`, with shared column helpers under `schema/_shard/`.
+- `packages/jobs/src`: shared BullMQ connection, queue, worker, job ID, and default option helpers.
+- `packages/user-profile-read-model/src`: versioned user-profile read model, dirty marker, producer/query APIs, repositories, and worker module consumed by API/admin-api/worker.
 - `gateway`: APISIX gateway manifest package (`@iam/gateway-apisix`) with dev/prod manifests, config templates, and sync/validate/diff/apply scripts.
 - `docker/`: local dependency stacks plus dev/prod compose files.
 - `docs/`: architecture notes, plans, specs, audits, and remediation docs. Older plans may mention previous layouts; current database code is Drizzle + PostgreSQL in `packages/db`.
@@ -25,7 +29,7 @@ Do not hand-edit generated frontend directories such as `apps/admin/src/.umi/`, 
 - `apps/admin-api` currently owns `/admin` and `/rpc`; `/rpc` maps to the `src/routes/trpc` route directory.
 - `createApp` lives in `packages/api-core` and mounts materialized route and middleware records supplied by each app composition root. It remains app-agnostic and does not own app-specific DI wiring.
 - Keep backend `src/app.ts` files focused on app assembly: import env, app config, app-local logger, call the app-local composition root, and pass materialized routes and middlewares to `createApp`.
-- App-local infrastructure singletons belong under `src/lib/`, for example `@api/lib/logger`, `@admin-api/lib/logger`, and `src/lib/infra/redis.ts`.
+- App-local infrastructure singletons belong under `src/lib/`, for example `@api/lib/logger`, `@admin-api/lib/logger`, `@worker/lib/logger`, and `src/lib/infra/redis.ts`.
 - Production runtime, repository, service, route, middleware, and integration instances are created under app-local `src/composition/` modules, organized by `runtime`, `repositories`, `tx`, `services`, `routes`, and `middlewares`.
 - Backend replaceable modules should export factories and return types, for example `createUserService(deps)` and `type UserService = ReturnType<typeof createUserService>`. Do not reintroduce bound production service/repository singletons.
 - Consumer-owned `*.port.ts` files define outbound behavior a service/use-case consumes. Keep enums, DTO schemas, domain errors, business constants, and pure helpers as static imports rather than DI deps.
@@ -34,7 +38,7 @@ Do not hand-edit generated frontend directories such as `apps/admin/src/.umi/`, 
 - Backend app `tsconfig.json` files should include Bun runtime types and exclude `scripts`; backend app ESLint configs should ignore `scripts/**`.
 
 ## Shared Contracts & Database
-- Put cross-app enums and stable constants in `packages/contracts`; put shared DTO schemas, DTO types, audit helpers, and reusable business errors in `packages/domain`. App-private enums, schemas, and errors may stay inside the owning app.
+- Put cross-app enums and stable constants in `packages/contracts`; put shared DTO schemas, DTO types, audit helpers, and reusable business errors in `packages/domain`; put shared BullMQ helpers in `packages/jobs`; put user-profile read-model producer/query/worker logic in `packages/user-profile-read-model`. App-private enums, schemas, and errors may stay inside the owning app.
 - Repositories use Drizzle from `@iam/db` and are created through `createXRepository(db)` factories bound to either the root `DbClient` or a transaction `DbClient`; business service methods should not pass `tx` arguments to repository calls.
 - Transactional backend workflows should use the app-local `UnitOfWork`. Transaction callbacks receive tx-bound repository and audit writer ports; Redis/cache/OIDC/SMS/fetch side effects must run outside the callback or through best-effort `afterCommit`.
 - Drizzle table definitions belong in `packages/db/src/schema/<domain>/*.ts`; relation definitions belong in `packages/db/src/relations/<domain>/*.ts`; migrations belong in `packages/db/src/migrations/`.
@@ -43,19 +47,21 @@ Do not hand-edit generated frontend directories such as `apps/admin/src/.umi/`, 
 - Use `drizzle-orm/zod` for table-derived Zod schemas, and keep join-table primary keys, indexes, and uniqueness constraints explicit.
 
 ## Build, Test, and Development Commands
-- Workspace: `pnpm dev`, `pnpm build`, `pnpm lint`, `pnpm test`, and `pnpm typecheck`.
-- Documentation index/freshness guard: `pnpm check:docs`.
+- Workspace: `pnpm dev`, `pnpm build`, `pnpm lint`, `pnpm test`, `pnpm e2e`, and `pnpm typecheck`.
+- Documentation index/freshness guard: `pnpm check:docs`; env naming guard: `pnpm check:env-names`.
 - Backend apps: `pnpm --filter @iam/api <dev|serve|lint|test|typecheck>` and `pnpm --filter @iam/admin-api <dev|serve|lint|test|typecheck>`.
+- OIDC provider: `pnpm --filter @iam/oidc-provider <dev|serve|lint|test|typecheck>`.
+- Worker app: `pnpm --filter @iam/worker <dev|serve|lint|test|typecheck|user-profile:backfill|user-profile:repair>`.
 - Shared packages: use the same filtered `lint`, `test`, and `typecheck` pattern, for example `pnpm --filter @iam/domain typecheck`.
 - Database: `pnpm --filter @iam/db <db:push|db:generate|db:migrate|db:check>`; `@iam/api` keeps compatibility wrappers for `db:push`, `db:generate`, and `db:migrate`.
 - Historical migration: `pnpm --filter @iam/api migrate:mysql-to-postgres`.
-- Frontends: `pnpm --filter @iam/admin <dev|build|typecheck|format>` and `pnpm --filter @iam/sso <dev|build|typecheck|format>`.
+- Frontends: `pnpm --filter @iam/admin <dev|build|lint|test|e2e|typecheck|format>` and `pnpm --filter @iam/sso <dev|build|lint|test|e2e|typecheck|format>`.
 - Gateway: use root shortcuts `pnpm gateway:apisix:<validate|diff|apply>` or `pnpm --filter @iam/gateway-apisix <validate|diff|apply|lint|test|typecheck>`.
 
 ## Coding Style & Naming Conventions
 Use TypeScript throughout and keep 2-space indentation. Follow the formatter already configured in each app or package:
 
-- API/backend/shared/gateway packages (`apps/api`, `apps/admin-api`, `packages/api-core`, `packages/contracts`, `packages/db`, `packages/domain`, `gateway`): ESLint uses the Antfu config with double quotes, semicolons, and a 120-character soft limit.
+- API/backend/shared/gateway packages (`apps/api`, `apps/admin-api`, `apps/oidc-provider`, `apps/worker`, `packages/api-core`, `packages/contracts`, `packages/db`, `packages/domain`, `packages/jobs`, `packages/user-profile-read-model`, `gateway`): ESLint uses the Antfu config with double quotes, semicolons, and a 120-character soft limit.
 - Admin/SSO frontends (`apps/admin`, `apps/sso`): Prettier uses single quotes, trailing commas, and 80-character wrap.
 
 Preserve existing domain file naming: `user.service.ts`, `user.repository.ts`, `user.schema.ts`, `user.routes.ts`, `user.handlers.ts`, `user.trpc.ts`, and `user.type.ts`. Use PascalCase for React components and pages, and prefer existing import aliases such as `@admin`, `@sso`, or workspace package imports where they are already used.
@@ -63,7 +69,7 @@ Preserve existing domain file naming: `user.service.ts`, `user.repository.ts`, `
 ## Backend Implementation Conventions
 - Route handlers should return shared response envelopes from `@iam/api-core/http`, for example `c.json(resp.ok(data))` for successful JSON responses and `resp.fail(...)` for explicit failure envelopes. Prefer throwing domain/API errors when the existing error middleware already maps them correctly.
 - Use `@iam/api-core/core/http-status-codes` constants in OpenAPI route definitions and explicit non-200 responses rather than numeric literals.
-- Use the app logger (`@api/lib/logger` or `@admin-api/lib/logger`) for runtime diagnostics. Prefer structured Pino calls with the data object first and the message second, for example `logger.info({ userId }, "user synced")`.
+- Use the app logger (`@api/lib/logger`, `@admin-api/lib/logger`, `@worker/lib/logger`, or the OIDC provider logger) for runtime diagnostics. Prefer structured Pino calls with the data object first and the message second, for example `logger.info({ userId }, "user synced")`.
 - Avoid `console.log`, `console.warn`, and `console.error` in application code. Acceptable exceptions are env validation, singleton/process lifecycle code, tests, one-off scripts, and the centralized error handler.
 - Prefer enums and constants from `packages/contracts` or the owning module over magic strings/numbers in business queries, especially for status, type, and role-like fields.
 - Prefer deriving TypeScript types from Zod schemas with `z.infer<typeof Schema>` when a schema is already the source of truth.
@@ -117,8 +123,9 @@ Package-level `test` scripts are available throughout the workspace. Backend/sha
 - Prefer package scripts over raw runner commands when running several files together. Backend service/handler/adapter tests should construct factories with DI fakes instead of using `mock.module` for app-local service/repository/db/redis/logger modules.
 - Frontend unit tests use Vitest through package scripts; run affected `@iam/admin` or `@iam/sso` `test`/`typecheck`, and run filtered `e2e` (`pnpm --filter @iam/admin e2e` or `pnpm --filter @iam/sso e2e`) when user flows change.
 - OIDC provider changes use Node.js 24.x and require the narrowest relevant filtered checks from `pnpm --filter @iam/oidc-provider test`, `lint`, and `typecheck`.
+- Worker changes use Bun and require the narrowest relevant filtered checks from `pnpm --filter @iam/worker test`, `lint`, and `typecheck`; user-profile queue behavior may also require `@iam/jobs` and `@iam/user-profile-read-model` checks.
 - Drizzle schema changes need the appropriate `@iam/db` command: `db:push` for local sync or `db:generate` + `db:migrate` when producing migrations.
-- Shared package changes (`packages/contracts`, `packages/api-core`, `packages/domain`, `packages/db`) require type checks for the package and directly affected apps, including `@iam/oidc-provider` when session, OIDC, logging, or database contracts it consumes are touched; tRPC changes consumed by `admin` require both `@iam/admin-api` and `@iam/admin` type checks.
+- Shared package changes (`packages/contracts`, `packages/api-core`, `packages/domain`, `packages/db`, `packages/jobs`, `packages/user-profile-read-model`) require type checks for the package and directly affected apps, including `@iam/oidc-provider` when session, OIDC, logging, or database contracts it consumes are touched and `@iam/worker` when queue/read-model behavior is touched; tRPC changes consumed by `admin` require both `@iam/admin-api` and `@iam/admin` type checks.
 - APISIX gateway manifest/script changes require `pnpm gateway:apisix:validate -- --env <env>:<app>` plus `pnpm --filter @iam/gateway-apisix typecheck` or `test` when scripts changed.
-- Smoke-test affected surfaces: public API Scalar UI at `http://localhost:30000` or public tier `/doc`; admin API Scalar UI at `http://localhost:30001` or `/admin/doc` and `/rpc/doc`; OIDC provider discovery/JWKS/authorization/token/UserInfo flows through gateway `http://localhost:30080/oidc` or direct dev port `http://localhost:30015`; affected `admin` or `sso` UI flows.
-- With `docker/docker-compose-dev.yml`, direct backend host ports are `http://localhost:30011` for `api`, `http://localhost:30012` for `admin-api`, and `http://localhost:30015` for `oidc-provider`; APISIX gateway host ports are `http://localhost:30080` and `https://localhost:30443`.
+- Smoke-test affected surfaces: public API Scalar UI at `http://localhost:30000` or public tier `/doc`; admin API Scalar UI at `http://localhost:30001` or `/admin/doc` and `/rpc/doc`; OIDC provider discovery/JWKS/authorization/token/UserInfo flows through gateway `http://localhost:30080/oidc` or direct dev port `http://localhost:30015`; worker health/Bull Board through `http://localhost:30016/healthz` and `/admin/queues` when dashboard is enabled; affected `admin` or `sso` UI flows.
+- With `docker/docker-compose-dev.yml`, direct backend host ports are `http://localhost:30011` for `api`, `http://localhost:30012` for `admin-api`, `http://localhost:30015` for `oidc-provider`, and `http://localhost:30016` for the worker dashboard; APISIX gateway host ports are `http://localhost:30080` and `https://localhost:30443`.

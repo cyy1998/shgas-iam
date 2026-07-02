@@ -2,9 +2,12 @@
 
 ## 范围
 
-该栈通过 Docker stdout/stderr、Grafana Alloy、Loki 和 Grafana 收集 `api`、`admin-api`、`oidc-provider` 与 `apisix` 的运行时系统日志。它不替代 PostgreSQL 审计日志，也不会创建 `system_log` 表。
+该栈通过 Docker stdout/stderr、Grafana Alloy、Loki 和 Grafana 收集带有
+`shgas-iam.logs.enabled=true` 标签的 IAM 容器运行时系统日志。当前 dev/prod compose 会采集 `api`、
+`admin-api`、`oidc-provider`、`worker-user-profile`、`worker-dashboard` 与 `apisix`。它不替代
+PostgreSQL 审计日志，也不会创建 `system_log` 表。
 
-第一阶段有意排除前端 `admin` 和 `sso` 容器。
+前端 `admin` 和 `sso` 容器当前未打日志采集标签，仍有意排除在系统日志栈之外。
 
 ## 开发环境
 
@@ -87,7 +90,9 @@ Grafana provisioning 文件位于 `observability/grafana/provisioning/`。
 
 - Datasource UID：`iam-loki`。
 - Dashboard UID：`iam-overview`、`iam-request-drilldown`、`iam-error-center`。
-- 告警规则覆盖 service error spike、APISIX 5xx spike、OIDC provider server/protocol error，以及采集失败。
+- 告警规则覆盖核心 service error spike、APISIX 5xx spike、OIDC provider server/protocol error，以及采集失败。
+  当前 service error spike 规则聚焦 `api`、`admin-api` 和 `oidc-provider`；worker 日志已进入 Loki 与 dashboard，
+  但专门告警需按队列运行指标或 worker 事件另行补充。
 
 开发环境告警默认使用 null webhook，以避免本地通知噪音。生产通知路由应通过环境管理的 Grafana provisioning 替换默认 contact point。
 
@@ -118,7 +123,7 @@ Grafana data link 和管理端深链只能携带技术关联字段：
 系统日志使用如下 JSON 字段：
 
 - `event`：稳定的小写点分事件名。
-- `sourceApp`：`iam-api`、`iam-admin-api`、`iam-oidc-provider` 或 `apisix`。
+- `sourceApp`：`iam-api`、`iam-admin-api`、`iam-oidc-provider`、`iam-worker` 或 `apisix`。
 - `requestId`：来自 `X-Request-Id` 的主要关联 ID。
 - `traceId`：存在时记录可选 trace header 值。
 - `method`、`path`、`route`、`statusCode`、`durationMs`。

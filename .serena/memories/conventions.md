@@ -6,9 +6,9 @@
 - Preserve domain file naming patterns: `*.service.ts`, `*.repository.ts`, `*.schema.ts`, `*.routes.ts`, `*.handlers.ts`, `*.adapter.ts`, `*.trpc.ts`, `*.type.ts`.
 - Backend route handlers return shared envelopes from `@iam/api-core/http`, e.g. `c.json(resp.ok(data))`; prefer domain/API errors when middleware maps them.
 - OpenAPI route definitions and explicit non-200 responses use `@iam/api-core/core/http-status-codes` constants rather than numeric literals.
-- Runtime diagnostics use app loggers (`@api/lib/logger`, `@admin-api/lib/logger`) with structured Pino calls: data object first, message second.
+- Runtime diagnostics use app loggers (`@api/lib/logger`, `@admin-api/lib/logger`, OIDC provider logger, `@worker/lib/logger`) with structured Pino calls: data object first, message second.
 - Avoid `console.*` in application code; acceptable in env validation, singleton/process lifecycle code, tests, one-off scripts, and the centralized error handler.
-- Cross-app enums/stable business contracts belong in `packages/contracts`; shared DTO schemas/types/audit helpers/reusable business errors belong in `packages/domain`; app-private items may stay in the owning app.
+- Cross-app enums/stable business contracts belong in `packages/contracts`; shared DTO schemas/types/audit helpers/reusable business errors belong in `packages/domain`; shared BullMQ helpers belong in `packages/jobs`; user-profile read-model producer/query/worker logic belongs in `packages/user-profile-read-model`; app-private items may stay in the owning app.
 - Prefer enums/constants over magic status/type/role strings in business queries.
 - Prefer Zod-derived types via `z.infer<typeof Schema>` when a schema is the source of truth.
 - Keep narrow changes; avoid unrelated refactors/format churn.

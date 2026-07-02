@@ -28,12 +28,12 @@
 - **AND** 系统 MUST NOT 将运行时系统日志写入 PostgreSQL 作为事实存储
 
 ### Requirement: Alloy Docker Log Collection Scope
-系统 SHALL 通过 Docker labels 标识 Alloy 采集目标，并 SHALL 仅采集 `api`、`admin-api`、`oidc-provider` 和 `apisix` 容器的 stdout/stderr。
+系统 SHALL 通过 Docker labels 标识 Alloy 采集目标，并 SHALL 仅采集带有 IAM 日志采集标签的 backend、worker 和 APISIX 容器 stdout/stderr。
 
 #### Scenario: Target containers are selected by labels
 - **WHEN** Alloy 发现 Docker 容器
 - **THEN** Alloy SHALL 仅采集带有 `shgas-iam.logs.enabled=true` 的容器
-- **AND** `api`、`admin-api`、`oidc-provider` 和 `apisix` SHALL 声明稳定的 service、component 和 env labels
+- **AND** `api`、`admin-api`、`oidc-provider`、`worker-user-profile`、`worker-dashboard` 和 `apisix` SHALL 声明稳定的 service、component 和 env labels
 
 #### Scenario: Frontend containers are excluded in phase one
 - **WHEN** `admin` 或 `sso` 前端容器运行
@@ -347,7 +347,7 @@ APISIX gateway access log SHALL 输出 trace 关联字段，使 gateway 请求�
 - **THEN** Grafana SHALL 打开围绕该 requestId 和时间范围的日志查询上下文
 
 ### Requirement: Backend Logger Policy
-后端应用 SHALL 通过统一 logger factory 创建运行时 logger，并 SHALL 对 `api`、`admin-api` 和 `oidc-provider` 使用一致的日志级别、格式、脱敏和 `sourceApp` 规则。
+后端应用 SHALL 通过统一 logger factory 创建运行时 logger，并 SHALL 对 `api`、`admin-api`、`oidc-provider` 和 `worker` 使用一致的日志级别、格式、脱敏和 `sourceApp` 规则。
 
 #### Scenario: App log format auto resolves by NODE_ENV
 - **WHEN** 后端应用未显式配置 app-specific `*_LOG_FORMAT` 或配置为 `auto`
@@ -360,7 +360,7 @@ APISIX gateway access log SHALL 输出 trace 关联字段，使 gateway 请求�
 - **AND** 该显式配置 SHALL 优先于 `NODE_ENV`
 
 #### Scenario: App log format is validated
-- **WHEN** `api`、`admin-api` 或 `oidc-provider` 解析环境变量
+- **WHEN** `api`、`admin-api`、`oidc-provider` 或 `worker` 解析环境变量
 - **THEN** app-specific `*_LOG_FORMAT` SHALL 只接受 `auto`、`json` 或 `pretty`
 - **AND** 缺省值 SHALL 为 `auto`
 
@@ -378,8 +378,8 @@ APISIX gateway access log SHALL 输出 trace 关联字段，使 gateway 请求�
 后端系统日志 SHALL 使用受控 `sourceApp` 值标识输出日志的应用，并 SHALL 避免应用事件日志重复手写该字段。
 
 #### Scenario: Source app values are controlled
-- **WHEN** `api`、`admin-api` 或 `oidc-provider` 创建 logger
-- **THEN** `sourceApp` SHALL 分别使用受控值 `iam-api`、`iam-admin-api` 和 `iam-oidc-provider`
+- **WHEN** `api`、`admin-api`、`oidc-provider` 或 `worker` 创建 logger
+- **THEN** `sourceApp` SHALL 分别使用受控值 `iam-api`、`iam-admin-api`、`iam-oidc-provider` 和 `iam-worker`
 - **AND** 这些值 SHALL 由共享常量或等价受控定义提供
 
 #### Scenario: Application event logs use logger binding
@@ -468,7 +468,7 @@ APISIX gateway access log SHALL 输出 trace 关联字段，使 gateway 请求�
 共享 logger factory SHALL 避免单一全局 singleton 造成不同 app 或测试配置串味。
 
 #### Scenario: Different source apps can create independent loggers
-- **WHEN** 同一进程中先后创建 `iam-api`、`iam-admin-api` 或 `iam-oidc-provider` logger
+- **WHEN** 同一进程中先后创建 `iam-api`、`iam-admin-api`、`iam-oidc-provider` 或 `iam-worker` logger
 - **THEN** 每个 logger SHALL 保留自身 `sourceApp`、app-specific log format、app-specific log level 和额外脱敏配置
 - **AND** 后创建的 logger MUST NOT 复用第一个 logger 的固定全局实例
 

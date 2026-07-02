@@ -28,7 +28,7 @@
 | [docs/features/oidc/oidc-session-migration.md](features/oidc/oidc-session-migration.md) | feature | Current | 2026-06-28 | 2026-09-30 | Session Kernel 会话迁移、旧 key cleanup 和回滚边界。 |
 | [docs/features/sso/public-thirdparty-unified-login.md](features/sso/public-thirdparty-unified-login.md) | feature | Current | 2026-06-28 | 2026-09-30 | 第三方统一登录入口说明。 |
 | [docs/features/sso/third-party-sso-integration.md](features/sso/third-party-sso-integration.md) | feature | Current | 2026-06-28 | 2026-09-30 | 第三方业务系统 custom SSO 对接说明。 |
-| [docs/releases/observability-system-logs.md](releases/observability-system-logs.md) | runbook | Current | 2026-06-28 | 2026-09-30 | Loki/Grafana/Alloy 系统日志观测运行手册。 |
+| [docs/releases/observability-system-logs.md](releases/observability-system-logs.md) | runbook | Current | 2026-07-02 | 2026-09-30 | Loki/Grafana/Alloy 系统日志观测运行手册；当前采集 backend、worker 与 APISIX，前端容器仍排除。 |
 | [docs/releases/oidc-release-runbook.md](releases/oidc-release-runbook.md) | runbook | Current | 2026-06-28 | 2026-09-30 | OIDC Provider 发布、smoke 和回滚手册。 |
 | [docs/releases/session-kernel-release-smoke.md](releases/session-kernel-release-smoke.md) | release-record | Historical | 2026-06-24 | n/a | Session Kernel 发布 smoke 证据快照；不代表后续当前状态。 |
 | [docs/releases/sm-encrypted-password-login-release.md](releases/sm-encrypted-password-login-release.md) | release-record | Historical | 2026-06-28 | n/a | SM 加密密码登录发布检查清单和历史验收记录。 |
