@@ -49,12 +49,12 @@ export interface UserProfileWorkerHandle {
   on: (
     (
       event: "completed",
-      listener: (job: { id?: string; name: string }) => void,
+      listener: (job: { id?: string; name: string; data?: unknown; returnvalue?: unknown }) => void,
     ) => unknown
   ) & (
     (
       event: "failed",
-      listener: (job: { id?: string; name: string } | undefined, error: Error) => void,
+      listener: (job: { id?: string; name: string; data?: unknown } | undefined, error: Error) => void,
     ) => unknown
   );
 }
@@ -112,11 +112,31 @@ export function createUserProfileWorkerModule(input: CreateUserProfileWorkerModu
       concurrency: input.config.concurrency,
       processor: async (job) => {
         switch (job.name) {
-          case UserProfileJobNameValue.RebuildUserProfile:
-            return await workerService.processRebuildUserProfile(
-              RebuildUserProfileJobPayloadSchema.parse(job.data),
-              { jobId: job.id },
-            );
+          case UserProfileJobNameValue.RebuildUserProfile: {
+            const payload = RebuildUserProfileJobPayloadSchema.parse(job.data);
+            try {
+              const result = await workerService.processRebuildUserProfile(payload, { jobId: job.id });
+              input.logger.info({
+                userId: payload.userId,
+                dirtyVersion: payload.dirtyVersion,
+                jobId: job.id,
+                jobName: job.name,
+                status: result.status,
+              }, "user profile rebuild job processed");
+              return result;
+            }
+            catch (error) {
+              input.logger.error({
+                err: error,
+                userId: payload.userId,
+                dirtyVersion: payload.dirtyVersion,
+                jobId: job.id,
+                jobName: job.name,
+                status: "failed",
+              }, "user profile rebuild job failed");
+              throw error;
+            }
+          }
           case UserProfileJobNameValue.ExpandUserProfileScope:
             return await workerService.processExpandUserProfileScope(
               ExpandUserProfileScopeJobPayloadSchema.parse(job.data),
@@ -126,10 +146,21 @@ export function createUserProfileWorkerModule(input: CreateUserProfileWorkerModu
     });
 
     worker.on("completed", (job) => {
-      input.logger.info({ jobId: job.id, jobName: job.name }, "user profile job completed");
+      input.logger.info({
+        jobId: job.id,
+        jobName: job.name,
+        status: extractReturnStatus(job.returnvalue),
+        ...extractRebuildJobLogFields(job),
+      }, "user profile job completed");
     });
     worker.on("failed", (job, error) => {
-      input.logger.error({ err: error, jobId: job?.id, jobName: job?.name }, "user profile job failed");
+      input.logger.error({
+        err: error,
+        jobId: job?.id,
+        jobName: job?.name,
+        status: "failed",
+        ...extractRebuildJobLogFields(job),
+      }, "user profile job failed");
     });
   }
 
@@ -153,4 +184,26 @@ export function createUserProfileWorkerModule(input: CreateUserProfileWorkerModu
     startConsumers,
     close,
   };
+}
+
+function extractRebuildJobLogFields(job: { name?: string; data?: unknown } | undefined) {
+  if (job?.name !== UserProfileJobNameValue.RebuildUserProfile)
+    return {};
+
+  const payload = RebuildUserProfileJobPayloadSchema.safeParse(job.data);
+  if (!payload.success)
+    return {};
+
+  return {
+    userId: payload.data.userId,
+    dirtyVersion: payload.data.dirtyVersion,
+  };
+}
+
+function extractReturnStatus(returnvalue: unknown) {
+  if (typeof returnvalue !== "object" || returnvalue === null || !("status" in returnvalue))
+    return undefined;
+
+  const status = (returnvalue as { status?: unknown }).status;
+  return typeof status === "string" ? status : undefined;
 }

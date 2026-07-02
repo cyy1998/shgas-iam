@@ -43,6 +43,7 @@ const UserProfileJobMetaSchema = z.object({
   requestId: z.string().min(1).max(128).optional(),
   traceId: z.string().min(1).max(128).optional(),
 });
+const DirtyVersionSchema = z.string().regex(/^[1-9]\d*$/u, "dirtyVersion must be a positive decimal string");
 
 export const UserProfileJobNameSchema = z.enum(UserProfileJobName);
 export const UserProfileScopeTypeSchema = z.enum(UserProfileScopeType);
@@ -51,6 +52,7 @@ export const UserProfileDirtyStatusSchema = z.enum(UserProfileDirtyStatus);
 
 export const RebuildUserProfileJobPayloadSchema = UserProfileJobMetaSchema.extend({
   userId: z.number().int().positive(),
+  dirtyVersion: DirtyVersionSchema,
 }).strict();
 
 const ExpandUserProfileScopeBucketSchema = z.string().min(1).max(64);

@@ -1,7 +1,5 @@
-## Purpose
+## MODIFIED Requirements
 
-定义 API 用户画像读模型、持久化重建状态、批量 builder、查询服务与 worker/backfill 能力，用于后续将现有用户读取路径切换到预计算 profile。
-## Requirements
 ### Requirement: User profile tables
 系统 SHALL 在 PostgreSQL 中维护 `user_profile` 和 `user_profile_dirty` 两张表，分别保存 API 用户画像读模型和每用户最新 profile rebuild 状态。
 
@@ -22,75 +20,6 @@
 - **AND** 系统 SHALL set `status` to `pending`
 - **AND** 系统 SHALL set `reason_codes` to the current dirty input reasons rather than accumulating historical reasons
 - **AND** 系统 SHALL reset `attempts`、`last_error`、`processing_started_at` 和 `processed_at` for the new version
-
-### Requirement: Shared user-profile read model package
-系统 SHALL 提供 `@iam/user-profile-read-model` workspace package，作为 `user_profile` 读模型实现的共享能力包。
-
-#### Scenario: Package owns read model implementation
-- **WHEN** 系统实现 user-profile read model 的 schema、repository、builder、query service、dirty repository、scope repository、dirty marker、job producer 或 worker service
-- **THEN** 这些实现 SHALL 归属 `@iam/user-profile-read-model`
-- **AND** `@iam/user-profile-read-model` SHALL NOT import `@api/*` 或 `@admin-api/*` 私有模块
-
-#### Scenario: API consumes query and producer side APIs
-- **WHEN** `apps/api` 查询 user profile、编译 legacy search/DSL、标记 dirty 或 enqueue user-profile job
-- **THEN** `apps/api` SHALL 从 `@iam/user-profile-read-model` 使用对应 query、repository、dirty marker 或 producer API
-- **AND** `apps/api` SHALL NOT 继续拥有 user-profile read model 的私有 builder、repository、query 或 dirty 实现
-
-#### Scenario: Admin API consumes producer side APIs
-- **WHEN** `apps/admin-api` 在源表写事务中标记 user-profile dirty 或 enqueue user-profile job
-- **THEN** `apps/admin-api` SHALL 从 `@iam/user-profile-read-model` 使用 dirty marker、scope repository、dirty repository 或 producer API
-- **AND** `apps/admin-api` SHALL NOT import `@api/*` 私有 user-profile 模块
-
-#### Scenario: Worker app consumes worker-side APIs
-- **WHEN** `apps/worker` 处理 user-profile jobs、backfill 或 repair
-- **THEN** worker SHALL 通过 `@iam/user-profile-read-model` 的 worker-side service、builder、repositories 和 module factory 执行
-- **AND** `apps/api` SHALL NOT 保留 user-profile worker entry 或 worker-only composition
-
-### Requirement: User-profile contracts remain stable
-系统 SHALL 保持 user-profile job、dirty 和 scope 的稳定 contract 归属在 `@iam/contracts`，供 API、admin-api、worker 和数据库 schema 共享。
-
-#### Scenario: Contracts stay outside read model package
-- **WHEN** `@iam/user-profile-read-model`、`apps/api`、`apps/admin-api` 或 `packages/db` 需要 user-profile queue name、job name、payload schema、scope type、dirty reason 或 dirty status
-- **THEN** 它们 SHALL 从 `@iam/contracts` 导入这些 contract
-- **AND** `packages/db` SHALL NOT depend on `@iam/user-profile-read-model`
-
-#### Scenario: Producer uses shared contracts
-- **WHEN** user-profile producer enqueue rebuild 或 scope expansion job
-- **THEN** producer SHALL 使用 `@iam/contracts` 中的 Zod schema 校验 payload
-- **AND** producer SHALL 使用 `@iam/jobs` 提供的 deterministic job id helper 构造 jobId
-
-### Requirement: Active-only profile builder
-系统 SHALL 在 `@iam/user-profile-read-model` 提供用户画像 builder，批量从规范化写模型构建 active-only API 用户画像。
-
-#### Scenario: Build profile detail
-- **WHEN** builder 为用户构建 profile
-- **THEN** `detail` SHALL 符合 `UserDetailDto` 契约，并包含 active employments、每个任职的 organization context、position summary、role codes 和 privilege codes
-
-#### Scenario: Build profile search document
-- **WHEN** builder 为用户构建 profile
-- **THEN** `search_doc` SHALL 使用独立 schema 保存 user 字段和 employments 检索文档
-- **AND** 每个 employment search document SHALL 包含 organization ancestor codes、ancestor depths、ancestor keys、position code、role codes、privilege codes 和 primary 标记
-
-#### Scenario: Active-only filtering
-- **WHEN** 用户、任职、岗位、角色或权限处于删除或禁用状态
-- **THEN** builder SHALL 仅把符合当前 `apps/api` active 视角的数据写入 `detail` 和 `search_doc`
-
-#### Scenario: Organization status does not filter path
-- **WHEN** 任职组织路径中的组织未删除但 status 不是启用
-- **THEN** builder SHALL 保留该组织路径节点
-- **AND** builder MUST 排除 `is_delete=true` 的组织路径节点
-
-### Requirement: Profile schema versioning
-系统 SHALL 使用 `profile_schema_version` 标记当前 `detail` 和 `search_doc` 结构版本。
-
-#### Scenario: Builder writes current schema version
-- **WHEN** builder upsert `user_profile`
-- **THEN** 系统 SHALL 写入当前 `CURRENT_USER_PROFILE_SCHEMA_VERSION`
-
-#### Scenario: Query only reads current schema version
-- **WHEN** profile query service 查询用户画像
-- **THEN** 系统 SHALL 只返回 `profile_schema_version` 等于当前版本的 profile
-- **AND** 系统 SHALL NOT fallback 到旧版本 profile
 
 ### Requirement: Dirty table is rebuild source of truth
 系统 SHALL 将 `user_profile_dirty` 作为 profile 重建真相来源，BullMQ job 只作为唤醒器。
@@ -164,49 +93,6 @@
 - **THEN** repair SHALL reset the same `dirty_version` to `pending` before enqueue
 - **AND** repair SHALL NOT change `dirty_at`
 
-### Requirement: Profile query service
-系统 SHALL 在 `@iam/user-profile-read-model` 提供 `UserProfileQueryService`，并由 `apps/api` 接入作为 API 用户详情、用户搜索和 internal DSL 搜索的 profile 读取来源。
-
-#### Scenario: Query detail by identity
-- **WHEN** 调用方按 userId、username、mobile 或 wxId 查询 profile
-- **THEN** query service SHALL 返回当前 schema version 的 `UserDetailDto`
-- **AND** 如果 profile 缺失，query service SHALL 返回未找到错误而不是 fallback 到源表
-- **AND** 响应 SHALL NOT 暴露 `profile_schema_version`、`rebuilt_at` 或 dirty/worker 状态
-
-#### Scenario: Legacy search preserves nested employment semantics
-- **WHEN** query service 使用旧 `UserQueryDto` 搜索用户
-- **THEN** 系统 SHALL 将 employment 条件编译为同一个 employment 元素内满足条件的 nested 查询语义
-- **AND** 系统 SHALL 只返回当前 schema version 且 `search_visible=true` 的 profile
-
-#### Scenario: Legacy search supports user name filters
-- **WHEN** query service 使用包含 `names` 的旧 `UserQueryDto` 搜索用户
-- **THEN** 系统 SHALL 将 `names` 编译为 `user.name` 的精确匹配条件
-- **AND** 多个 `names` 值 SHALL 匹配任一姓名
-- **AND** `names` SHALL 与 username、phone、wxId 和 employment 条件按现有 legacy AND 组合语义共同生效
-
-#### Scenario: DSL requires explicit nested employment
-- **WHEN** filter DSL 查询引用 employment 字段
-- **THEN** DSL MUST 使用显式 nested employment 表达式
-- **AND** 非 nested 上下文引用 employment 字段 SHALL 校验失败
-
-#### Scenario: Internal DSL search is bounded
-- **WHEN** internal API 调用 profile DSL 搜索并提供 `limit`
-- **THEN** 系统 SHALL 拒绝超过 API user-profile DSL 最大限制的请求
-- **AND** 未提供 `limit` 时系统 SHALL 使用服务端默认限制
-- **AND** DSL 搜索 SHALL NOT 暴露给 public 或 open API
-
-### Requirement: Profile indexes
-系统 SHALL 为 `user_profile` 创建支持身份查找和 JSONB 检索的索引。
-
-#### Scenario: Identity lookup indexes
-- **WHEN** migration 创建 `user_profile`
-- **THEN** 系统 SHALL 为 `user_id`、`username`、`mobile`、`wx_id` 和 `search_visible, profile_schema_version` 创建适合查询的索引或约束
-
-#### Scenario: Search document index
-- **WHEN** migration 创建 `user_profile`
-- **THEN** 系统 SHALL 为 `search_doc` 创建 GIN 索引
-- **AND** 系统 SHALL NOT 为 `detail` 创建 GIN 索引
-
 ### Requirement: Source writes produce profile dirty records
 系统 SHALL 在会影响 API user profile 的源表写事务中持久化受影响用户的 `user_profile_dirty` 记录，并在事务提交后唤醒 user-profile worker。
 
@@ -247,6 +133,8 @@
 - **THEN** it SHALL NOT import `@api` private modules
 - **AND** it SHALL depend only on shared contracts/jobs/db modules, `@iam/user-profile-read-model`, or app-local ports wired to shared helpers
 
+## ADDED Requirements
+
 ### Requirement: Dirty rebuild state indexes
 系统 SHALL provide indexes that support repair scans and rebuild backlog observation for `user_profile_dirty`.
 
@@ -261,4 +149,3 @@
 #### Scenario: User profile query hides rebuild internals
 - **WHEN** public、open、admin、SSO 或 internal business read APIs return user profile data
 - **THEN** responses SHALL NOT include `dirtyVersion`、`dirty_version`、dirty status、worker attempts or worker job ids
-

@@ -16,9 +16,11 @@ import { createWorkerRuntime } from "./runtime";
 export interface CreateWorkerCompositionOptions {
   env: WorkerEnv;
   logger: WorkerLogger;
+  commandOnly?: boolean;
 }
 
 export async function createWorkerComposition(options: CreateWorkerCompositionOptions) {
+  const commandOnly = options.commandOnly ?? false;
   const runtime = createWorkerRuntime({ env: options.env, logger: options.logger });
   const userProfileModule = createUserProfileWorkerModule({
     db,
@@ -30,45 +32,51 @@ export async function createWorkerComposition(options: CreateWorkerCompositionOp
   const knownModules = [userProfileModule];
   const enabledModuleKeys = resolveModuleKeys(options.env.modules.enabled, knownModules);
   const enabledModules = selectModules(options.env.modules.enabled, knownModules);
-  const dashboardQueues = selectQueueRegistrations(options.env.dashboard.queues, knownModules);
-  await startWorkerModules(enabledModules);
+  const dashboardQueues = commandOnly ? [] : selectQueueRegistrations(options.env.dashboard.queues, knownModules);
+  if (!commandOnly) {
+    await startWorkerModules(enabledModules);
+  }
 
-  const httpApp = createWorkerHttpApp({
-    env: options.env,
-    redis: runtime.redis,
-    healthState: {
-      enabledModules: enabledModuleKeys,
-      dashboardOnly: enabledModuleKeys.length === 0 && options.env.dashboard.enabled,
-      modulesStarted: true,
-    },
-    dashboardQueues,
-    checkHealth: async () => {
-      try {
-        await Promise.all([
-          runtime.redis.ping(),
-          db.execute(sql`select 1`),
-        ]);
-        return {
-          ready: true,
-          dependencies: {
-            db: "ok" as const,
-            redis: "ok" as const,
-          },
-        };
-      }
-      catch (error) {
-        return {
-          ready: false,
-          dependencies: {
-            db: "error" as const,
-            redis: "error" as const,
-          },
-          error: error instanceof Error ? error.message : String(error),
-        };
-      }
-    },
-  });
-  const httpServer = options.env.http.enabled ? startWorkerHttpServer(httpApp, options.env.http.port) : undefined;
+  const httpApp = commandOnly
+    ? undefined
+    : createWorkerHttpApp({
+        env: options.env,
+        redis: runtime.redis,
+        healthState: {
+          enabledModules: enabledModuleKeys,
+          dashboardOnly: enabledModuleKeys.length === 0 && options.env.dashboard.enabled,
+          modulesStarted: true,
+        },
+        dashboardQueues,
+        checkHealth: async () => {
+          try {
+            await Promise.all([
+              runtime.redis.ping(),
+              db.execute(sql`select 1`),
+            ]);
+            return {
+              ready: true,
+              dependencies: {
+                db: "ok" as const,
+                redis: "ok" as const,
+              },
+            };
+          }
+          catch (error) {
+            return {
+              ready: false,
+              dependencies: {
+                db: "error" as const,
+                redis: "error" as const,
+              },
+              error: error instanceof Error ? error.message : String(error),
+            };
+          }
+        },
+      });
+  const httpServer = !commandOnly && options.env.http.enabled
+    ? startWorkerHttpServer(httpApp!, options.env.http.port)
+    : undefined;
 
   async function shutdown(signal: string) {
     runtime.logger.info({ signal, enabledModules: enabledModuleKeys }, "worker shutting down");
@@ -95,3 +103,7 @@ export async function createWorkerComposition(options: CreateWorkerCompositionOp
 }
 
 export type WorkerComposition = Awaited<ReturnType<typeof createWorkerComposition>>;
+
+export async function createWorkerCommandComposition(options: Omit<CreateWorkerCompositionOptions, "commandOnly">) {
+  return await createWorkerComposition({ ...options, commandOnly: true });
+}

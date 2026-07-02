@@ -36,7 +36,10 @@ export interface UserPasswordHelperDeps {
 }
 
 export interface UserTransactionPorts {
-  userRepository: Pick<UserRepository, "getUserByUsername" | "setPassword" | "setMobile">;
+  userRepository: Pick<
+    UserRepository,
+    "getUserByUsername" | "setPassword" | "setMobile" | "updateEnabledUserStatus"
+  >;
   auditLogWriter: AuditLogWriterPort;
   profileDirtyMarker: Pick<UserProfileDirtyMarker, "markUsersDirty">;
 }

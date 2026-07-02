@@ -56,6 +56,9 @@ describe("user profile dirty schema", () => {
     const indexes = indexesByName(userProfileDirty);
 
     expect(columns.user_id.primary).toBe(true);
+    expect(columns.dirty_version.columnType).toBe("PgBigIntString");
+    expect(columns.dirty_version.notNull).toBe(true);
+    expect(columns.dirty_version.hasDefault).toBe(true);
     expect(columns.status.notNull).toBe(true);
     expect(columns.status.hasDefault).toBe(true);
     expect(columns.reason_codes.columnType).toBe("PgJsonb");
@@ -67,5 +70,10 @@ describe("user profile dirty schema", () => {
       "status",
       "dirty_at",
     ]);
+    expect(indexes.user_profile_dirty_status_processing_started_at_idx.columns.map((column: any) => column.name))
+      .toEqual([
+        "status",
+        "processing_started_at",
+      ]);
   });
 });

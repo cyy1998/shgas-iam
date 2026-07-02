@@ -24,11 +24,13 @@ describe("user-profile job contract", () => {
   test("validates rebuild payloads before enqueueing or processing", () => {
     expect(RebuildUserProfileJobPayloadSchema.parse({
       userId: 123,
+      dirtyVersion: "42",
       reason: UserProfileDirtyReason.UserUpdated,
       requestId: "req-1",
       traceId: "trace-1",
     })).toEqual({
       userId: 123,
+      dirtyVersion: "42",
       reason: UserProfileDirtyReason.UserUpdated,
       requestId: "req-1",
       traceId: "trace-1",
@@ -36,6 +38,19 @@ describe("user-profile job contract", () => {
 
     expect(RebuildUserProfileJobPayloadSchema.safeParse({
       userId: 0,
+      dirtyVersion: "1",
+      reason: UserProfileDirtyReason.UserUpdated,
+    }).success).toBe(false);
+
+    expect(RebuildUserProfileJobPayloadSchema.safeParse({
+      userId: 123,
+      dirtyVersion: "not-decimal",
+      reason: UserProfileDirtyReason.UserUpdated,
+    }).success).toBe(false);
+
+    expect(RebuildUserProfileJobPayloadSchema.safeParse({
+      userId: 123,
+      dirtyVersion: "0",
       reason: UserProfileDirtyReason.UserUpdated,
     }).success).toBe(false);
 
@@ -68,11 +83,13 @@ describe("user-profile job contract", () => {
   test("exposes schemas by job name for shared producer and worker validation", () => {
     const payload = UserProfileJobPayloadSchemas[UserProfileJobName.RebuildUserProfile].parse({
       userId: 456,
+      dirtyVersion: "7",
       reason: UserProfileDirtyReason.ManualRebuild,
     });
 
     expect(payload).toEqual({
       userId: 456,
+      dirtyVersion: "7",
       reason: UserProfileDirtyReason.ManualRebuild,
     });
   });

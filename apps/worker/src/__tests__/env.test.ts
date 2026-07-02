@@ -31,6 +31,7 @@ describe("worker environment", () => {
       IAM_WORKER_USER_PROFILE_CONCURRENCY: "4",
       IAM_WORKER_USER_PROFILE_REBUILD_BATCH_SIZE: "25",
       IAM_WORKER_USER_PROFILE_BACKFILL_BATCH_SIZE: "200",
+      IAM_WORKER_USER_PROFILE_REPAIR_STALE_SECONDS: "600",
     });
 
     expect(env.databaseUrl).toBe("postgresql://iam:password@localhost/iam");
@@ -42,6 +43,7 @@ describe("worker environment", () => {
       concurrency: 4,
       rebuildBatchSize: 25,
       backfillBatchSize: 200,
+      repairStaleSeconds: 600,
     });
     expect("IAM_WORKER_DATABASE_URL" in env).toBe(false);
   });
@@ -52,14 +54,17 @@ describe("worker environment", () => {
       IAM_API_USER_PROFILE_WORKER_CONCURRENCY: "9",
       IAM_API_USER_PROFILE_REBUILD_BATCH_SIZE: "9",
       IAM_API_USER_PROFILE_BACKFILL_BATCH_SIZE: "9",
+      IAM_API_USER_PROFILE_REPAIR_STALE_SECONDS: "9",
       WORKER_USER_PROFILE_CONCURRENCY: "9",
       USER_PROFILE_CONCURRENCY: "9",
+      USER_PROFILE_REPAIR_STALE_SECONDS: "9",
     });
 
     expect(env.userProfile).toEqual({
       concurrency: 2,
       rebuildBatchSize: 100,
       backfillBatchSize: 500,
+      repairStaleSeconds: 300,
     });
   });
 

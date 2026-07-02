@@ -109,4 +109,32 @@ describe("createOrganizationService", () => {
       traceId: undefined,
     });
   });
+
+  test("marks descendant users dirty when updating organization status", async () => {
+    const { service, tx } = createService();
+
+    await expect(service.updateOrganizationStatus("ORG", OrganizationStatus.Disable)).resolves.toBe(true);
+
+    expect(tx.organizationRepository.updateOrganizationByCode).toHaveBeenCalledWith("ORG", {
+      status: OrganizationStatus.Disable,
+    });
+    expect(tx.profileDirtyMarker.markScopeDirty).toHaveBeenCalledWith(expect.objectContaining({
+      scope: { scopeType: UserProfileScopeType.OrganizationId, scopeId: 1 },
+      reasonCodes: [UserProfileDirtyReason.OrganizationUpdated],
+    }));
+  });
+
+  test("marks descendant users dirty when deleting an organization after relationship checks", async () => {
+    const { service, tx } = createService();
+
+    await expect(service.deleteOrganization("ORG")).resolves.toBe(true);
+
+    expect(tx.organizationRepository.countActiveChildrenByOrgCode).toHaveBeenCalledWith("ORG");
+    expect(tx.organizationRepository.countActiveEmploymentsByOrgCode).toHaveBeenCalledWith("ORG");
+    expect(tx.organizationRepository.softDeleteOrganizationByCode).toHaveBeenCalledWith("ORG");
+    expect(tx.profileDirtyMarker.markScopeDirty).toHaveBeenCalledWith(expect.objectContaining({
+      scope: { scopeType: UserProfileScopeType.OrganizationId, scopeId: 1 },
+      reasonCodes: [UserProfileDirtyReason.OrganizationUpdated],
+    }));
+  });
 });

@@ -67,6 +67,13 @@ export function createUserProfileRepository(db: DbClient) {
         .returning())!;
     },
 
+    async deleteByUserId(userId: number) {
+      return firstRow(await db
+        .delete(userProfiles)
+        .where(eq(userProfiles.userId, userId))
+        .returning()) ?? null;
+    },
+
     async getCurrentByUserId(userId: number) {
       return await db.query.userProfiles.findFirst({
         where: {

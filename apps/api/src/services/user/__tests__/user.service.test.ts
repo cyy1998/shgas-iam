@@ -1,5 +1,5 @@
 import { createImmediateUnitOfWork } from "@api/testing/fakes";
-import { UserProfileDirtyReason } from "@iam/contracts";
+import { UserProfileDirtyReason, UserStatus } from "@iam/contracts";
 import { describe, expect, mock, test } from "bun:test";
 import { createUserService } from "../user.service";
 
@@ -23,6 +23,7 @@ function createDeps(overrides: Record<string, unknown> = {}) {
       getUserByUsername: mock(async () => user),
       setMobile: mock(async () => user),
       setPassword: mock(async () => user),
+      updateEnabledUserStatus: mock(async () => user),
     },
     auditLogWriter: { recordAuditLog: mock(async () => undefined) },
     profileDirtyMarker: {
@@ -57,7 +58,6 @@ function createDeps(overrides: Record<string, unknown> = {}) {
       getUserByMobile: mock(async () => user),
       getUserByUsername: mock(async () => user),
       getUserByWxId: mock(async () => user),
-      updateEnabledUserStatus: mock(async () => user),
     },
     ...overrides,
   } as any;
@@ -114,6 +114,22 @@ describe("createUserService", () => {
     await expect(service.setMobile(1, "13900000000", "1234")).resolves.toBe(true);
 
     expect(deps.profileQuery.getDetailByUserId).not.toHaveBeenCalled();
+    expect(deps.tx.profileDirtyMarker.markUsersDirty).toHaveBeenCalledWith({
+      userIds: [1],
+      reasonCodes: [UserProfileDirtyReason.UserUpdated],
+      afterCommit: expect.any(Object),
+      requestId: undefined,
+      traceId: undefined,
+    });
+  });
+
+  test("marks profile dirty when pausing an enabled user", async () => {
+    const deps = createDeps();
+    const service = createUserService(deps);
+
+    await expect(service.pauseEnabledUser(1)).resolves.toMatchObject({ id: 1 });
+
+    expect(deps.tx.userRepository.updateEnabledUserStatus).toHaveBeenCalledWith(1, UserStatus.Pause);
     expect(deps.tx.profileDirtyMarker.markUsersDirty).toHaveBeenCalledWith({
       userIds: [1],
       reasonCodes: [UserProfileDirtyReason.UserUpdated],

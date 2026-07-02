@@ -1,4 +1,4 @@
-import { UserProfileDirtyReason, UserProfileScopeType, UserStatus } from "@iam/contracts";
+import { UserProfileDirtyReason, UserProfileDirtyStatus, UserProfileScopeType, UserStatus } from "@iam/contracts";
 import { describe, expect, mock, test } from "bun:test";
 import { createUserProfileWorkerService } from "../user-profile-worker.service";
 import { CURRENT_USER_PROFILE_SCHEMA_VERSION } from "../user-profile.schema";
@@ -25,14 +25,40 @@ function createDeps(overrides: Record<string, unknown> = {}) {
   const deps = {
     profileRepository: {
       upsertProfile: mock(async () => builtProfile()),
+      deleteByUserId: mock(async () => null),
     },
     dirtyRepository: {
-      claimForProcessing: mock(async () => ({ userId: 1 })),
-      markProcessed: mock(async () => ({ userId: 1 })),
-      markFailed: mock(async () => ({ userId: 1 })),
+      claimForProcessing: mock(async () => ({ userId: 1, dirtyVersion: "4" })),
+      markProcessed: mock(async () => ({ userId: 1, dirtyVersion: "4" })),
+      markFailed: mock(async () => ({ userId: 1, dirtyVersion: "4" })),
       markDirty: mock(async (input: unknown) => input),
-      markManyDirty: mock(async (input: unknown) => input),
-      scanFailedOrStale: mock(async () => [{ userId: 5 }, { userId: 6 }]),
+      markManyDirty: mock(async (inputs: Array<{ userId: number; reasonCodes: UserProfileDirtyReason[] }>) =>
+        inputs.map((input, index) => ({
+          userId: input.userId,
+          dirtyVersion: String(index + 10),
+          reasonCodes: input.reasonCodes,
+          status: UserProfileDirtyStatus.Pending,
+        }))),
+      scanFailedOrStale: mock(async () => [
+        {
+          userId: 5,
+          dirtyVersion: "7",
+          reasonCodes: [UserProfileDirtyReason.UserUpdated],
+          status: UserProfileDirtyStatus.Failed,
+        },
+        {
+          userId: 6,
+          dirtyVersion: "8",
+          reasonCodes: [UserProfileDirtyReason.EmploymentUpdated],
+          status: UserProfileDirtyStatus.Processing,
+        },
+      ]),
+      resetStaleProcessing: mock(async (input: { userId: number; dirtyVersion: string }) => ({
+        userId: input.userId,
+        dirtyVersion: input.dirtyVersion,
+        reasonCodes: [UserProfileDirtyReason.EmploymentUpdated],
+        status: UserProfileDirtyStatus.Pending,
+      })),
     },
     scopeRepository: {
       resolveUserIds: mock(async () => [1, 2]),
@@ -42,8 +68,13 @@ function createDeps(overrides: Record<string, unknown> = {}) {
       buildOne: mock(async (userId: number) => builtProfile(userId)),
     },
     jobProducer: {
-      buildRebuildJobId: mock((userId: number) => `rebuild-user-profile|${userId}`),
-      enqueueRebuildJob: mock(async (input: { userId: number }) => ({ jobId: `rebuild-user-profile|${input.userId}` })),
+      enqueueRebuildJob: mock(async (input: { userId: number; dirtyVersion: string }) => ({
+        jobId: `rebuild-user-profile|${input.userId}|${input.dirtyVersion}`,
+      })),
+      enqueueRebuildJobs: mock(async (inputs: Array<{ userId: number; dirtyVersion: string }>) => ({
+        enqueued: inputs.length,
+        jobIds: inputs.map(input => `rebuild-user-profile|${input.userId}|${input.dirtyVersion}`),
+      })),
     },
     clock: { nowDate: () => now },
     config: { backfillBatchSize: 2 },
@@ -59,12 +90,22 @@ describe("UserProfileWorkerService", () => {
 
     await expect(service.processRebuildUserProfile({
       userId: 1,
+      dirtyVersion: "4",
       reason: UserProfileDirtyReason.UserUpdated,
-    }, { jobId: "job-1" })).resolves.toEqual({ status: "rebuilt", userId: 1 });
+    }, { jobId: "job-1" })).resolves.toEqual({ status: "rebuilt", userId: 1, dirtyVersion: "4" });
 
-    expect(deps.dirtyRepository.claimForProcessing).toHaveBeenCalledWith({ userId: 1, now, jobId: "job-1" });
+    expect(deps.dirtyRepository.claimForProcessing).toHaveBeenCalledWith({
+      userId: 1,
+      dirtyVersion: "4",
+      now,
+      jobId: "job-1",
+    });
     expect(deps.profileRepository.upsertProfile).toHaveBeenCalledWith(expect.objectContaining({ userId: 1 }));
-    expect(deps.dirtyRepository.markProcessed).toHaveBeenCalledWith(1, now);
+    expect(deps.dirtyRepository.markProcessed).toHaveBeenCalledWith({
+      userId: 1,
+      dirtyVersion: "4",
+      processedAt: now,
+    });
   });
 
   test("no-ops rebuild jobs when no pending or failed dirty row exists", async () => {
@@ -73,14 +114,16 @@ describe("UserProfileWorkerService", () => {
         claimForProcessing: mock(async () => null),
         markProcessed: mock(async () => null),
         markFailed: mock(async () => null),
+        resetStaleProcessing: mock(async () => null),
       },
     });
     const service = createUserProfileWorkerService(deps);
 
     await expect(service.processRebuildUserProfile({
       userId: 1,
+      dirtyVersion: "4",
       reason: UserProfileDirtyReason.UserUpdated,
-    })).resolves.toEqual({ status: "skipped", userId: 1 });
+    })).resolves.toEqual({ status: "skipped", userId: 1, dirtyVersion: "4" });
 
     expect(deps.builder.buildOne).not.toHaveBeenCalled();
     expect(deps.profileRepository.upsertProfile).not.toHaveBeenCalled();
@@ -99,10 +142,54 @@ describe("UserProfileWorkerService", () => {
 
     await expect(service.processRebuildUserProfile({
       userId: 1,
+      dirtyVersion: "4",
       reason: UserProfileDirtyReason.UserUpdated,
     })).rejects.toThrow("builder failed");
 
-    expect(deps.dirtyRepository.markFailed).toHaveBeenCalledWith(1, "builder failed", now);
+    expect(deps.dirtyRepository.markFailed).toHaveBeenCalledWith({
+      userId: 1,
+      dirtyVersion: "4",
+      error: "builder failed",
+      failedAt: now,
+    });
+  });
+
+  test("deletes stale profile rows when the source user is missing", async () => {
+    const deps = createDeps({
+      builder: {
+        buildOne: mock(async () => null),
+      },
+    });
+    const service = createUserProfileWorkerService(deps);
+
+    await expect(service.processRebuildUserProfile({
+      userId: 1,
+      dirtyVersion: "4",
+      reason: UserProfileDirtyReason.UserUpdated,
+    })).resolves.toEqual({ status: "missing", userId: 1, dirtyVersion: "4" });
+
+    expect(deps.profileRepository.deleteByUserId).toHaveBeenCalledWith(1);
+    expect(deps.dirtyRepository.markProcessed).toHaveBeenCalledWith({
+      userId: 1,
+      dirtyVersion: "4",
+      processedAt: now,
+    });
+  });
+
+  test("treats stale processed CAS as a no-op result", async () => {
+    const deps = createDeps({
+      dirtyRepository: {
+        ...createDeps().dirtyRepository,
+        markProcessed: mock(async () => null),
+      },
+    });
+    const service = createUserProfileWorkerService(deps);
+
+    await expect(service.processRebuildUserProfile({
+      userId: 1,
+      dirtyVersion: "4",
+      reason: UserProfileDirtyReason.UserUpdated,
+    })).resolves.toEqual({ status: "stale", userId: 1, dirtyVersion: "4" });
   });
 
   test("expands organization, role, and privilege scopes through the scope repository", async () => {
@@ -134,7 +221,7 @@ describe("UserProfileWorkerService", () => {
       { scopeType: UserProfileScopeType.PrivilegeId, scopeId: 30 },
     ]);
     expect(deps.dirtyRepository.markManyDirty).toHaveBeenCalledTimes(3);
-    expect(deps.jobProducer.enqueueRebuildJob).toHaveBeenCalledTimes(6);
+    expect(deps.jobProducer.enqueueRebuildJobs).toHaveBeenCalledTimes(3);
   });
 
   test("backfills users in batches", async () => {
@@ -170,18 +257,25 @@ describe("UserProfileWorkerService", () => {
       userIds: [5, 6],
     });
     expect(deps.dirtyRepository.scanFailedOrStale).toHaveBeenCalledWith({ staleBefore, limit: 2 });
-    expect(deps.dirtyRepository.markManyDirty).toHaveBeenCalledWith([
+    expect(deps.dirtyRepository.resetStaleProcessing).toHaveBeenCalledWith({
+      userId: 6,
+      dirtyVersion: "8",
+      staleBefore,
+      now,
+    });
+    expect(deps.dirtyRepository.markManyDirty).not.toHaveBeenCalled();
+    expect(deps.jobProducer.enqueueRebuildJobs).toHaveBeenCalledWith([
       {
         userId: 5,
-        reasonCodes: [UserProfileDirtyReason.ManualRebuild],
-        dirtyAt: now,
-        lastJobId: "rebuild-user-profile|5",
+        dirtyVersion: "7",
+        reason: UserProfileDirtyReason.UserUpdated,
+        requestedAt: now.toISOString(),
       },
       {
         userId: 6,
-        reasonCodes: [UserProfileDirtyReason.ManualRebuild],
-        dirtyAt: now,
-        lastJobId: "rebuild-user-profile|6",
+        dirtyVersion: "8",
+        reason: UserProfileDirtyReason.EmploymentUpdated,
+        requestedAt: now.toISOString(),
       },
     ]);
   });

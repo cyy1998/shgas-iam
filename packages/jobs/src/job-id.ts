@@ -18,6 +18,14 @@ export function buildUserJobId(jobName: string, userId: DeterministicJobIdPart):
   return buildDeterministicJobId([jobName, userId]);
 }
 
+export function buildUserVersionJobId(
+  jobName: string,
+  userId: DeterministicJobIdPart,
+  version: DeterministicJobIdPart,
+): string {
+  return buildDeterministicJobId([jobName, userId, version]);
+}
+
 export function buildScopeBucketJobId(input: ScopeBucketJobIdInput): string {
   return buildDeterministicJobId([input.jobName, input.scopeType, input.scopeId, input.bucket]);
 }

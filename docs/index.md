@@ -32,6 +32,7 @@
 | [docs/releases/oidc-release-runbook.md](releases/oidc-release-runbook.md) | runbook | Current | 2026-06-28 | 2026-09-30 | OIDC Provider 发布、smoke 和回滚手册。 |
 | [docs/releases/session-kernel-release-smoke.md](releases/session-kernel-release-smoke.md) | release-record | Historical | 2026-06-24 | n/a | Session Kernel 发布 smoke 证据快照；不代表后续当前状态。 |
 | [docs/releases/sm-encrypted-password-login-release.md](releases/sm-encrypted-password-login-release.md) | release-record | Historical | 2026-06-28 | n/a | SM 加密密码登录发布检查清单和历史验收记录。 |
+| [docs/releases/user-profile-dirty-queue-release.md](releases/user-profile-dirty-queue-release.md) | runbook | Current | 2026-07-02 | 2026-09-30 | versioned user-profile dirty/rebuild 队列发布顺序和回滚注意事项。 |
 | [docs/reviews/ARCHITECTURE_REVIEW.md](reviews/ARCHITECTURE_REVIEW.md) | review | Stale | 2026-06-28 | n/a | not current: 仍引用 Prisma、旧路径和旧架构判断，只能作为历史线索。 |
 | [docs/reviews/SOLID_DRY_KISS_REVIEW_2026-06-15.md](reviews/SOLID_DRY_KISS_REVIEW_2026-06-15.md) | review | Historical | 2026-06-15 | n/a | 2026-06-15 的代码审查快照；用于追溯风险，不替代当前代码检查。 |
 | [docs/reviews/TYPESCRIPT_BEST_PRACTICES_REVIEW_2026-06-15.md](reviews/TYPESCRIPT_BEST_PRACTICES_REVIEW_2026-06-15.md) | review | Historical | 2026-06-15 | n/a | 2026-06-15 的 TypeScript 审查快照；用于追溯风险，不替代当前 lint/typecheck。 |

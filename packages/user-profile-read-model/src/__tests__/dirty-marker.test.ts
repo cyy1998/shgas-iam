@@ -7,15 +7,24 @@ const now = new Date("2026-07-01T00:00:00.000Z");
 function createDeps() {
   return {
     dirtyRepository: {
-      markManyDirty: mock(async (inputs: unknown[]) => inputs),
+      markManyDirty: mock(async (
+        inputs: Array<{ userId: number; reasonCodes: UserProfileDirtyReason[]; dirtyAt: Date }>,
+      ) =>
+        inputs.map((input, index) => ({
+          ...input,
+          dirtyVersion: String(index + 2),
+        }))),
     },
     scopeRepository: {
       resolveUserIds: mock(async () => [2, 1, 2]),
     },
     jobProducer: {
-      buildRebuildJobId: mock((userId: number) => `rebuild-user-profile:${userId}`),
-      enqueueRebuildJob: mock(async (input: { userId: number }) => ({
-        jobId: `rebuild-user-profile:${input.userId}`,
+      enqueueRebuildJob: mock(async (input: { userId: number; dirtyVersion: string }) => ({
+        jobId: `rebuild-user-profile|${input.userId}|${input.dirtyVersion}`,
+      })),
+      enqueueRebuildJobs: mock(async (inputs: Array<{ userId: number; dirtyVersion: string }>) => ({
+        enqueued: inputs.length,
+        jobIds: inputs.map(input => `rebuild-user-profile|${input.userId}|${input.dirtyVersion}`),
       })),
     },
     clock: {
@@ -55,13 +64,11 @@ describe("createUserProfileDirtyMarker", () => {
         userId: 1,
         reasonCodes: [UserProfileDirtyReason.UserUpdated, UserProfileDirtyReason.EmploymentUpdated],
         dirtyAt: now,
-        lastJobId: "rebuild-user-profile:1",
       },
       {
         userId: 2,
         reasonCodes: [UserProfileDirtyReason.UserUpdated, UserProfileDirtyReason.EmploymentUpdated],
         dirtyAt: now,
-        lastJobId: "rebuild-user-profile:2",
       },
     ]);
     expect(afterCommit.afterCommit.bestEffort).toHaveBeenCalledWith(
@@ -70,14 +77,24 @@ describe("createUserProfileDirtyMarker", () => {
     );
 
     await afterCommit.tasks[0]!();
-    expect(deps.jobProducer.enqueueRebuildJob).toHaveBeenCalledWith({
-      userId: 1,
-      reason: UserProfileDirtyReason.UserUpdated,
-      requestedAt: now.toISOString(),
-      requestId: "req-1",
-      traceId: "trace-1",
-    });
-    expect(deps.jobProducer.enqueueRebuildJob).toHaveBeenCalledWith(expect.objectContaining({ userId: 2 }));
+    expect(deps.jobProducer.enqueueRebuildJobs).toHaveBeenCalledWith([
+      {
+        userId: 1,
+        dirtyVersion: "2",
+        reason: UserProfileDirtyReason.UserUpdated,
+        requestedAt: now.toISOString(),
+        requestId: "req-1",
+        traceId: "trace-1",
+      },
+      {
+        userId: 2,
+        dirtyVersion: "3",
+        reason: UserProfileDirtyReason.UserUpdated,
+        requestedAt: now.toISOString(),
+        requestId: "req-1",
+        traceId: "trace-1",
+      },
+    ]);
   });
 
   test("resolves scopes inside the transaction before marking users dirty", async () => {
@@ -100,13 +117,11 @@ describe("createUserProfileDirtyMarker", () => {
         userId: 2,
         reasonCodes: [UserProfileDirtyReason.OrganizationUpdated],
         dirtyAt: now,
-        lastJobId: "rebuild-user-profile:2",
       },
       {
         userId: 1,
         reasonCodes: [UserProfileDirtyReason.OrganizationUpdated],
         dirtyAt: now,
-        lastJobId: "rebuild-user-profile:1",
       },
     ]);
   });

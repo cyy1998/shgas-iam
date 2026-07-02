@@ -3,6 +3,7 @@ import type {
   RebuildUserProfileJobPayload,
   UserProfileDirtyReason,
 } from "@iam/contracts";
+import type { UserProfileDirty } from "@iam/db/schema";
 import type {
   UserProfileDirtyRepository,
   UserProfileExpansionScope,
@@ -10,17 +11,29 @@ import type {
 } from "./producer";
 import type { UserProfileBuilder } from "./user-profile-builder.service";
 import type { UserProfileRepository } from "./user-profile.repository";
-import { UserProfileDirtyReason as UserProfileDirtyReasonValue, UserProfileScopeType } from "@iam/contracts";
+import {
+  UserProfileDirtyReason as UserProfileDirtyReasonValue,
+  UserProfileDirtyStatus,
+  UserProfileScopeType,
+} from "@iam/contracts";
 
 export interface UserProfileJobProducerPort {
-  buildRebuildJobId: (userId: number) => string;
   enqueueRebuildJob: (input: {
     userId: number;
+    dirtyVersion: string;
     reason: UserProfileDirtyReason;
     requestedAt: string;
     requestId?: string;
     traceId?: string;
   }) => Promise<{ jobId: string }>;
+  enqueueRebuildJobs: (inputs: Array<{
+    userId: number;
+    dirtyVersion: string;
+    reason: UserProfileDirtyReason;
+    requestedAt: string;
+    requestId?: string;
+    traceId?: string;
+  }>) => Promise<{ enqueued: number; jobIds: string[] }>;
 }
 
 export interface UserProfileWorkerServiceDeps {
@@ -44,11 +57,12 @@ export function createUserProfileWorkerService(deps: UserProfileWorkerServiceDep
   ) {
     const claimed = await deps.dirtyRepository.claimForProcessing({
       userId: payload.userId,
+      dirtyVersion: payload.dirtyVersion,
       now: deps.clock.nowDate(),
       jobId: options.jobId,
     });
     if (claimed === null) {
-      return { status: "skipped" as const, userId: payload.userId };
+      return { status: "skipped" as const, userId: payload.userId, dirtyVersion: payload.dirtyVersion };
     }
 
     try {
@@ -56,14 +70,33 @@ export function createUserProfileWorkerService(deps: UserProfileWorkerServiceDep
       if (builtProfile !== null) {
         await deps.profileRepository.upsertProfile(builtProfile);
       }
-      await deps.dirtyRepository.markProcessed(payload.userId, deps.clock.nowDate());
+      else {
+        await deps.profileRepository.deleteByUserId(payload.userId);
+      }
+      const processed = await deps.dirtyRepository.markProcessed({
+        userId: payload.userId,
+        dirtyVersion: payload.dirtyVersion,
+        processedAt: deps.clock.nowDate(),
+      });
+      if (processed === null) {
+        return { status: "stale" as const, userId: payload.userId, dirtyVersion: payload.dirtyVersion };
+      }
       return {
         status: builtProfile === null ? "missing" as const : "rebuilt" as const,
         userId: payload.userId,
+        dirtyVersion: payload.dirtyVersion,
       };
     }
     catch (error) {
-      await deps.dirtyRepository.markFailed(payload.userId, errorMessage(error), deps.clock.nowDate());
+      const failed = await deps.dirtyRepository.markFailed({
+        userId: payload.userId,
+        dirtyVersion: payload.dirtyVersion,
+        error: errorMessage(error),
+        failedAt: deps.clock.nowDate(),
+      });
+      if (failed === null) {
+        return { status: "stale" as const, userId: payload.userId, dirtyVersion: payload.dirtyVersion };
+      }
       throw error;
     }
   }
@@ -110,8 +143,26 @@ export function createUserProfileWorkerService(deps: UserProfileWorkerServiceDep
       staleBefore: input.staleBefore,
       limit: input.limit ?? deps.config.backfillBatchSize,
     });
-    return await markDirtyAndEnqueue(rows.map(row => row.userId), {
-      reason: UserProfileDirtyReasonValue.ManualRebuild,
+    const now = deps.clock.nowDate();
+    const repairRows = [];
+    for (const row of rows) {
+      if (row.status !== UserProfileDirtyStatus.Processing) {
+        repairRows.push(row);
+        continue;
+      }
+
+      const reset = await deps.dirtyRepository.resetStaleProcessing({
+        userId: row.userId,
+        dirtyVersion: row.dirtyVersion,
+        staleBefore: input.staleBefore,
+        now,
+      });
+      if (reset !== null) {
+        repairRows.push(reset);
+      }
+    }
+    return await enqueueDirtyRows(repairRows, {
+      requestedAt: now.toISOString(),
     });
   }
 
@@ -127,22 +178,37 @@ export function createUserProfileWorkerService(deps: UserProfileWorkerServiceDep
     const uniqueUserIds = [...new Set(userIds)];
     const requestedAt = meta.requestedAt ?? deps.clock.nowDate().toISOString();
     const dirtyAt = deps.clock.nowDate();
-    await deps.dirtyRepository.markManyDirty(uniqueUserIds.map(userId => ({
+    const rows = await deps.dirtyRepository.markManyDirty(uniqueUserIds.map(userId => ({
       userId,
       reasonCodes: [meta.reason],
       dirtyAt,
-      lastJobId: deps.jobProducer.buildRebuildJobId(userId),
     })));
-    for (const userId of uniqueUserIds) {
-      await deps.jobProducer.enqueueRebuildJob({
-        userId,
-        reason: meta.reason,
-        requestedAt,
-        requestId: meta.requestId,
-        traceId: meta.traceId,
-      });
-    }
-    return { enqueued: uniqueUserIds.length, userIds: uniqueUserIds };
+    return await enqueueDirtyRows(rows, {
+      reason: meta.reason,
+      requestedAt,
+      requestId: meta.requestId,
+      traceId: meta.traceId,
+    });
+  }
+
+  async function enqueueDirtyRows(
+    rows: UserProfileDirty[],
+    meta: {
+      reason?: UserProfileDirtyReason;
+      requestedAt: string;
+      requestId?: string;
+      traceId?: string;
+    },
+  ) {
+    await deps.jobProducer.enqueueRebuildJobs(rows.map(row => ({
+      userId: row.userId,
+      dirtyVersion: row.dirtyVersion,
+      reason: row.reasonCodes[0] ?? meta.reason ?? UserProfileDirtyReasonValue.ManualRebuild,
+      requestedAt: meta.requestedAt,
+      requestId: meta.requestId,
+      traceId: meta.traceId,
+    })));
+    return { enqueued: rows.length, userIds: rows.map(row => row.userId) };
   }
 
   return {

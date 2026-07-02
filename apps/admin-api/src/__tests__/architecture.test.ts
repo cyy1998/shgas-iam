@@ -75,6 +75,11 @@ function importsUserProfileProducerFromJobs(file: string) {
     .test(readFileSync(file, "utf8"));
 }
 
+function importsUserProfileProducerFromReadModel(file: string) {
+  return /import\s*\{[^}]*\bcreateUserProfileJobProducer\b[^}]*\}\s*from\s*["']@iam\/user-profile-read-model\/producer["']/u
+    .test(readFileSync(file, "utf8"));
+}
+
 function isComposition(file: string) {
   return file.startsWith("composition/");
 }
@@ -165,6 +170,30 @@ describe("Admin API DI architecture", () => {
       .map(file => `${toPosixPath(relative(sourceRoot, file))} imports createUserProfileJobProducer from @iam/jobs`);
 
     expect([...importViolations, ...producerViolations]).toEqual([]);
+  });
+
+  test("keeps source write paths from using scope expansion as the dirty fact", () => {
+    const forbiddenScopeWakeUpPatterns = [
+      /\benqueueScopeExpansionJob\b/u,
+      /\bbuildScopeExpansionJobId\b/u,
+      /\bExpandUserProfileScopeJobPayload\b/u,
+    ];
+    const sourceFiles = collectSourceFiles(sourceRoot)
+      .map(file => toPosixPath(relative(sourceRoot, file)))
+      .filter(file => !isComposition(file));
+
+    const scopeViolations = sourceFiles.flatMap((file) => {
+      const content = readFileSync(join(sourceRoot, file), "utf8");
+      return forbiddenScopeWakeUpPatterns
+        .filter(pattern => pattern.test(content))
+        .map(pattern => `${file} contains ${pattern}`);
+    });
+    const producerViolations = collectSourceFiles(sourceRoot)
+      .filter(file => !isComposition(toPosixPath(relative(sourceRoot, file))))
+      .filter(importsUserProfileProducerFromReadModel)
+      .map(file => `${toPosixPath(relative(sourceRoot, file))} imports createUserProfileJobProducer from read model`);
+
+    expect([...scopeViolations, ...producerViolations]).toEqual([]);
   });
 
   test("keeps future worker app code free of API-private imports", () => {

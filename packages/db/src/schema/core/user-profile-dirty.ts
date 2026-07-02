@@ -1,11 +1,12 @@
 import { UserProfileDirtyReason, UserProfileDirtyStatus } from "@iam/contracts";
-import { index, integer, jsonb, snakeCase, text, timestamp, varchar } from "drizzle-orm/pg-core";
+import { bigint, index, integer, jsonb, snakeCase, text, timestamp, varchar } from "drizzle-orm/pg-core";
 import { createInsertSchema, createSelectSchema, createUpdateSchema } from "drizzle-orm/zod";
 import { z } from "zod";
 import { baseColumns } from "../_shard/base-columns";
 
 export const userProfileDirty = snakeCase.table("user_profile_dirty", {
   userId: integer().primaryKey(),
+  dirtyVersion: bigint({ mode: "string" }).notNull().default("1"),
   status: varchar({ length: 20 }).$type<UserProfileDirtyStatus>().notNull().default(UserProfileDirtyStatus.Pending),
   reasonCodes: jsonb().$type<UserProfileDirtyReason[]>().notNull().default([]),
   dirtyAt: timestamp().notNull().defaultNow(),
@@ -19,7 +20,7 @@ export const userProfileDirty = snakeCase.table("user_profile_dirty", {
 }, table => [
   index("user_profile_dirty_status_idx").on(table.status),
   index("user_profile_dirty_status_dirty_at_idx").on(table.status, table.dirtyAt),
-  index("user_profile_dirty_processing_started_at_idx").on(table.processingStartedAt),
+  index("user_profile_dirty_status_processing_started_at_idx").on(table.status, table.processingStartedAt),
 ]);
 
 export const selectUserProfileDirtySchema = createSelectSchema(userProfileDirty, {

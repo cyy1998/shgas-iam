@@ -78,6 +78,7 @@ const RawWorkerEnvSchema = z.object({
   IAM_WORKER_USER_PROFILE_CONCURRENCY: z.coerce.number().int().positive().default(2),
   IAM_WORKER_USER_PROFILE_REBUILD_BATCH_SIZE: z.coerce.number().int().positive().default(100),
   IAM_WORKER_USER_PROFILE_BACKFILL_BATCH_SIZE: z.coerce.number().int().positive().default(500),
+  IAM_WORKER_USER_PROFILE_REPAIR_STALE_SECONDS: z.coerce.number().int().positive().max(86_400).default(300),
 }).superRefine((raw, ctx) => {
   if (!raw.IAM_WORKER_BULL_BOARD_ENABLED)
     return;
@@ -138,6 +139,7 @@ export interface WorkerEnv {
     concurrency: number;
     rebuildBatchSize: number;
     backfillBatchSize: number;
+    repairStaleSeconds: number;
   };
 }
 
@@ -176,6 +178,7 @@ function toWorkerEnv(raw: RawWorkerEnv): WorkerEnv {
       concurrency: raw.IAM_WORKER_USER_PROFILE_CONCURRENCY,
       rebuildBatchSize: raw.IAM_WORKER_USER_PROFILE_REBUILD_BATCH_SIZE,
       backfillBatchSize: raw.IAM_WORKER_USER_PROFILE_BACKFILL_BATCH_SIZE,
+      repairStaleSeconds: raw.IAM_WORKER_USER_PROFILE_REPAIR_STALE_SECONDS,
     },
   };
 }

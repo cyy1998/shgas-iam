@@ -20,8 +20,8 @@ async function main() {
   const { parseWorkerEnv } = await import("@worker/env");
   const env = parseWorkerEnv(process.env);
   const { logger } = await import("@worker/lib/logger");
-  const { createWorkerComposition } = await import("@worker/composition");
-  const composition = await createWorkerComposition({ env, logger });
+  const { createWorkerCommandComposition } = await import("@worker/composition");
+  const composition = await createWorkerCommandComposition({ env, logger });
   try {
     await runUserProfileBackfillCommand({
       workerService: composition.userProfile.workerService,

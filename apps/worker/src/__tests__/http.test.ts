@@ -29,7 +29,7 @@ function env(overrides: Partial<WorkerEnv> = {}): WorkerEnv {
       password: "secret",
       readOnly: true,
     },
-    userProfile: { concurrency: 2, rebuildBatchSize: 100, backfillBatchSize: 500 },
+    userProfile: { concurrency: 2, rebuildBatchSize: 100, backfillBatchSize: 500, repairStaleSeconds: 300 },
     ...overrides,
   };
 }

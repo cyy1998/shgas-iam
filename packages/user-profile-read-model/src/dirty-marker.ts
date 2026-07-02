@@ -7,7 +7,7 @@ export interface UserProfileAfterCommitPort {
 }
 
 export interface UserProfileDirtyRepositoryPort {
-  markManyDirty: (inputs: MarkUserProfileDirtyInput[]) => Promise<unknown[]>;
+  markManyDirty: (inputs: MarkUserProfileDirtyInput[]) => Promise<UserProfileDirtyWakeUpRow[]>;
 }
 
 export interface UserProfileScopeRepositoryPort {
@@ -15,14 +15,22 @@ export interface UserProfileScopeRepositoryPort {
 }
 
 export interface UserProfileDirtyJobProducerPort {
-  buildRebuildJobId: (userId: number) => string;
   enqueueRebuildJob: (input: {
     userId: number;
+    dirtyVersion: string;
     reason: UserProfileDirtyReason;
     requestedAt?: string;
     requestId?: string;
     traceId?: string;
   }) => Promise<{ jobId: string }>;
+  enqueueRebuildJobs: (inputs: Array<{
+    userId: number;
+    dirtyVersion: string;
+    reason: UserProfileDirtyReason;
+    requestedAt?: string;
+    requestId?: string;
+    traceId?: string;
+  }>) => Promise<{ enqueued: number; jobIds: string[] }>;
 }
 
 export interface UserProfileDirtyMarkerDeps {
@@ -52,6 +60,13 @@ export interface MarkUserProfileScopeDirtyInput {
   traceId?: string;
 }
 
+export interface UserProfileDirtyWakeUpRow {
+  userId: number;
+  dirtyVersion: string;
+  reasonCodes: UserProfileDirtyReason[];
+  dirtyAt: Date;
+}
+
 export function createUserProfileDirtyMarker(deps: UserProfileDirtyMarkerDeps) {
   async function markUsersDirty(input: MarkUserProfileUsersDirtyInput) {
     const userIds = normalizeUserIds(input.userIds);
@@ -62,15 +77,14 @@ export function createUserProfileDirtyMarker(deps: UserProfileDirtyMarkerDeps) {
 
     const reason = reasonCodes[0]!;
     const dirtyAt = deps.clock.nowDate();
-    await deps.dirtyRepository.markManyDirty(userIds.map(userId => ({
+    const rows = await deps.dirtyRepository.markManyDirty(userIds.map(userId => ({
       userId,
       reasonCodes,
       dirtyAt,
-      lastJobId: deps.jobProducer.buildRebuildJobId(userId),
     })));
 
     registerRebuildWakeUp({
-      userIds,
+      rows,
       reason,
       afterCommit: input.afterCommit,
       requestedAt: input.requestedAt ?? dirtyAt.toISOString(),
@@ -78,7 +92,7 @@ export function createUserProfileDirtyMarker(deps: UserProfileDirtyMarkerDeps) {
       traceId: input.traceId,
     });
 
-    return { marked: userIds.length, userIds };
+    return { marked: rows.length, userIds: rows.map(row => row.userId) };
   }
 
   async function markScopeDirty(input: MarkUserProfileScopeDirtyInput) {
@@ -94,7 +108,7 @@ export function createUserProfileDirtyMarker(deps: UserProfileDirtyMarkerDeps) {
   }
 
   function registerRebuildWakeUp(input: {
-    userIds: number[];
+    rows: UserProfileDirtyWakeUpRow[];
     reason: UserProfileDirtyReason;
     afterCommit: UserProfileAfterCommitPort;
     requestedAt: string;
@@ -102,9 +116,10 @@ export function createUserProfileDirtyMarker(deps: UserProfileDirtyMarkerDeps) {
     traceId?: string;
   }) {
     input.afterCommit.bestEffort("user_profile.rebuild.wake_up", async () => {
-      await Promise.all(input.userIds.map(userId => deps.jobProducer.enqueueRebuildJob({
-        userId,
-        reason: input.reason,
+      await deps.jobProducer.enqueueRebuildJobs(input.rows.map(row => ({
+        userId: row.userId,
+        dirtyVersion: row.dirtyVersion,
+        reason: row.reasonCodes[0] ?? input.reason,
         requestedAt: input.requestedAt,
         requestId: input.requestId,
         traceId: input.traceId,

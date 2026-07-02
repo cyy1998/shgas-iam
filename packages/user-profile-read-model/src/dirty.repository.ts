@@ -1,28 +1,52 @@
 import type { UserProfileDirtyReason } from "@iam/contracts";
 import type { DbClient } from "@iam/db";
 import type { UserProfileDirty } from "@iam/db/schema";
-import { UserProfileDirtyStatus } from "@iam/contracts";
+import { UserProfileDirtyStatus, UserProfileJobName } from "@iam/contracts";
 import { firstRow } from "@iam/db/query-utils";
 import { userProfileDirty } from "@iam/db/schema";
+import { buildUserVersionJobId } from "@iam/jobs";
 import { and, asc, eq, inArray, lt, or, sql } from "drizzle-orm";
+import { formatDirtyVersion } from "./dirty-version";
 
 export interface MarkUserProfileDirtyInput {
   userId: number;
   reasonCodes: UserProfileDirtyReason[];
   dirtyAt: Date;
-  lastJobId?: string;
 }
 
 export interface ClaimUserProfileDirtyInput {
   userId: number;
+  dirtyVersion: string;
   now: Date;
   jobId?: string;
+}
+
+export interface MarkUserProfileDirtyProcessedInput {
+  userId: number;
+  dirtyVersion: string;
+  processedAt: Date;
+}
+
+export interface MarkUserProfileDirtyFailedInput {
+  userId: number;
+  dirtyVersion: string;
+  error: string;
+  failedAt: Date;
 }
 
 export interface ScanRepairableDirtyInput {
   staleBefore: Date;
   limit: number;
 }
+
+export interface ResetStaleProcessingDirtyInput {
+  userId: number;
+  dirtyVersion: string;
+  staleBefore: Date;
+  now: Date;
+}
+
+const INITIAL_DIRTY_VERSION = "1";
 
 export function createUserProfileDirtyRepository(db: DbClient) {
   return {
@@ -46,40 +70,50 @@ export function createUserProfileDirtyRepository(db: DbClient) {
           processingStartedAt: input.now,
           processedAt: null,
           lastJobId: input.jobId,
-          updateTime: new Date(),
+          lastError: null,
+          updateTime: input.now,
         })
         .where(and(
           eq(userProfileDirty.userId, input.userId),
+          eq(userProfileDirty.dirtyVersion, formatDirtyVersion(input.dirtyVersion)),
           inArray(userProfileDirty.status, [UserProfileDirtyStatus.Pending, UserProfileDirtyStatus.Failed]),
         ))
         .returning()) ?? null;
     },
 
-    async markProcessed(userId: number, processedAt: Date) {
+    async markProcessed(input: MarkUserProfileDirtyProcessedInput) {
       return firstRow(await db
         .update(userProfileDirty)
         .set({
           status: UserProfileDirtyStatus.Processed,
-          processedAt,
+          processedAt: input.processedAt,
           processingStartedAt: null,
           lastError: null,
-          updateTime: new Date(),
+          updateTime: input.processedAt,
         })
-        .where(eq(userProfileDirty.userId, userId))
+        .where(and(
+          eq(userProfileDirty.userId, input.userId),
+          eq(userProfileDirty.dirtyVersion, formatDirtyVersion(input.dirtyVersion)),
+          eq(userProfileDirty.status, UserProfileDirtyStatus.Processing),
+        ))
         .returning()) ?? null;
     },
 
-    async markFailed(userId: number, error: string, failedAt: Date) {
+    async markFailed(input: MarkUserProfileDirtyFailedInput) {
       return firstRow(await db
         .update(userProfileDirty)
         .set({
           status: UserProfileDirtyStatus.Failed,
-          lastError: error,
+          lastError: input.error,
           processingStartedAt: null,
           attempts: sql`${userProfileDirty.attempts} + 1`,
-          updateTime: failedAt,
+          updateTime: input.failedAt,
         })
-        .where(eq(userProfileDirty.userId, userId))
+        .where(and(
+          eq(userProfileDirty.userId, input.userId),
+          eq(userProfileDirty.dirtyVersion, formatDirtyVersion(input.dirtyVersion)),
+          eq(userProfileDirty.status, UserProfileDirtyStatus.Processing),
+        ))
         .returning()) ?? null;
     },
 
@@ -100,6 +134,24 @@ export function createUserProfileDirtyRepository(db: DbClient) {
         ))
         .orderBy(asc(userProfileDirty.dirtyAt))
         .limit(input.limit);
+    },
+
+    async resetStaleProcessing(input: ResetStaleProcessingDirtyInput) {
+      return firstRow(await db
+        .update(userProfileDirty)
+        .set({
+          status: UserProfileDirtyStatus.Pending,
+          processingStartedAt: null,
+          lastError: null,
+          updateTime: input.now,
+        })
+        .where(and(
+          eq(userProfileDirty.userId, input.userId),
+          eq(userProfileDirty.dirtyVersion, formatDirtyVersion(input.dirtyVersion)),
+          eq(userProfileDirty.status, UserProfileDirtyStatus.Processing),
+          lt(userProfileDirty.processingStartedAt, input.staleBefore),
+        ))
+        .returning()) ?? null;
     },
   };
 }
@@ -124,9 +176,11 @@ async function markManyDirty(db: DbClient, inputs: MarkUserProfileDirtyInput[]) 
     dirtyAt: input.dirtyAt,
     processingStartedAt: null,
     processedAt: null,
+    attempts: 0,
     lastError: null,
-    lastJobId: input.lastJobId ?? null,
+    lastJobId: buildRebuildJobId(input.userId, INITIAL_DIRTY_VERSION),
   }));
+  const nextDirtyVersion = sql<string>`${userProfileDirty.dirtyVersion} + 1`;
 
   return await db
     .insert(userProfileDirty)
@@ -134,16 +188,15 @@ async function markManyDirty(db: DbClient, inputs: MarkUserProfileDirtyInput[]) 
     .onConflictDoUpdate({
       target: userProfileDirty.userId,
       set: {
+        dirtyVersion: nextDirtyVersion,
         status: UserProfileDirtyStatus.Pending,
-        reasonCodes: sql<UserProfileDirtyReason[]>`(
-          select coalesce(jsonb_agg(distinct reason_code.value order by reason_code.value), '[]'::jsonb)
-          from jsonb_array_elements_text(${userProfileDirty.reasonCodes} || excluded.reason_codes) as reason_code(value)
-        )`,
+        reasonCodes: sql<UserProfileDirtyReason[]>`excluded.reason_codes`,
         dirtyAt: sql`excluded.dirty_at`,
         processingStartedAt: null,
         processedAt: null,
+        attempts: 0,
         lastError: null,
-        lastJobId: sql`coalesce(excluded.last_job_id, ${userProfileDirty.lastJobId})`,
+        lastJobId: sql<string>`concat(${UserProfileJobName.RebuildUserProfile}::text, '|', ${userProfileDirty.userId}, '|', ${nextDirtyVersion})`,
         updateTime: new Date(),
       },
     })
@@ -165,8 +218,11 @@ function mergeInputsByUserId(inputs: MarkUserProfileDirtyInput[]) {
       userId: input.userId,
       reasonCodes: mergeUserProfileDirtyReasons(existing.reasonCodes, input.reasonCodes),
       dirtyAt: input.dirtyAt > existing.dirtyAt ? input.dirtyAt : existing.dirtyAt,
-      lastJobId: input.lastJobId ?? existing.lastJobId,
     });
   }
   return [...byUserId.values()];
+}
+
+function buildRebuildJobId(userId: number, dirtyVersion: string) {
+  return buildUserVersionJobId(UserProfileJobName.RebuildUserProfile, userId, dirtyVersion);
 }

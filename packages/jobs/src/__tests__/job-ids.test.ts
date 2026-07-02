@@ -3,6 +3,7 @@ import {
   buildDeterministicJobId,
   buildScopeBucketJobId,
   buildUserJobId,
+  buildUserVersionJobId,
   DEFAULT_JOB_OPTIONS,
   DEFAULT_QUEUE_PREFIX,
   resolveDefaultJobOptions,
@@ -11,6 +12,11 @@ import {
 describe("job id helpers", () => {
   test("builds a deterministic user-level job id", () => {
     expect(buildUserJobId("rebuild-user-profile", 123)).toBe("rebuild-user-profile|123");
+  });
+
+  test("builds a deterministic user-version job id", () => {
+    expect(buildUserVersionJobId("rebuild-user-profile", 123, "42")).toBe("rebuild-user-profile|123|42");
+    expect(buildUserVersionJobId("rebuild-user-profile", 123, "43")).toBe("rebuild-user-profile|123|43");
   });
 
   test("builds a deterministic scope/time-bucket job id", () => {

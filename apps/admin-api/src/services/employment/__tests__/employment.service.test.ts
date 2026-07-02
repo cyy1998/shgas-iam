@@ -184,4 +184,87 @@ describe("createEmploymentService", () => {
       reasonCodes: [UserProfileDirtyReason.EmploymentUpdated],
     }));
   });
+
+  test("updates an employment and marks its existing user dirty", async () => {
+    const { service, tx } = createService();
+
+    await expect(service.updateEmployment(4, { description: "updated" })).resolves.toBe(true);
+
+    expect(tx.employmentRepository.updateEmploymentRecord).toHaveBeenCalledWith(4, {
+      isPrimary: undefined,
+      startTime: undefined,
+      description: "updated",
+    });
+    expect(tx.profileDirtyMarker.markUsersDirty).toHaveBeenCalledWith(expect.objectContaining({
+      userIds: [1],
+      reasonCodes: [UserProfileDirtyReason.EmploymentUpdated],
+    }));
+  });
+
+  test("deletes an employment after capturing the affected user", async () => {
+    const { service, tx } = createService();
+
+    await expect(service.deleteEmployment(4)).resolves.toBe(true);
+
+    expect(tx.employmentRepository.softDeleteEmployment).toHaveBeenCalledWith(4);
+    expect(tx.profileDirtyMarker.markUsersDirty).toHaveBeenCalledWith(expect.objectContaining({
+      userIds: [1],
+      reasonCodes: [UserProfileDirtyReason.EmploymentUpdated],
+    }));
+  });
+
+  test("transfers an employment and marks the original user dirty", async () => {
+    const { service, tx } = createService();
+
+    await expect(service.transferEmployment(4, {
+      newOrgCode: "ORG",
+      newPosCode: "DEV",
+      inheritPrimary: false,
+    })).resolves.toEqual({ newEmploymentId: 10 });
+
+    expect(tx.employmentRepository.updateEmploymentRecord).toHaveBeenCalledWith(4, {
+      status: EmploymentStatus.Disable,
+      endTime: now,
+      isPrimary: false,
+    });
+    expect(tx.employmentRepository.createEmploymentRecord).toHaveBeenCalledWith(expect.objectContaining({
+      userId: 1,
+      orgId: 2,
+      posId: 3,
+      isPrimary: false,
+      status: EmploymentStatus.Enable,
+    }));
+    expect(tx.profileDirtyMarker.markUsersDirty).toHaveBeenCalledWith(expect.objectContaining({
+      userIds: [1],
+      reasonCodes: [UserProfileDirtyReason.EmploymentUpdated],
+    }));
+  });
+
+  test("sets a primary employment and marks the user dirty", async () => {
+    const { service, tx } = createService();
+
+    await expect(service.setPrimaryEmployment(4)).resolves.toBe(true);
+
+    expect(tx.employmentRepository.unsetPrimariesByUserId).toHaveBeenCalledWith(1, 4);
+    expect(tx.employmentRepository.updateEmploymentRecord).toHaveBeenCalledWith(4, { isPrimary: true });
+    expect(tx.profileDirtyMarker.markUsersDirty).toHaveBeenCalledWith(expect.objectContaining({
+      userIds: [1],
+      reasonCodes: [UserProfileDirtyReason.EmploymentUpdated],
+    }));
+  });
+
+  test("resigns a user and marks both employment and user profile reasons dirty", async () => {
+    const { service, tx } = createService();
+
+    await expect(service.resignUser("zhangsan")).resolves.toBe(true);
+
+    expect(tx.employmentRepository.endActiveEmploymentsByUserId).toHaveBeenCalledWith(1);
+    expect(tx.userRepository.updateUserByUsername).toHaveBeenCalledWith("zhangsan", {
+      status: UserStatus.Disable,
+    });
+    expect(tx.profileDirtyMarker.markUsersDirty).toHaveBeenCalledWith(expect.objectContaining({
+      userIds: [1],
+      reasonCodes: [UserProfileDirtyReason.EmploymentUpdated, UserProfileDirtyReason.UserUpdated],
+    }));
+  });
 });

@@ -108,8 +108,21 @@ export function createUserService(deps: UserServiceDeps) {
     return await deps.userRepository.getUserByWxId(wxId);
   }
 
-  async function pauseEnabledUser(userId: number) {
-    return await deps.userRepository.updateEnabledUserStatus(userId, UserStatus.Pause);
+  async function pauseEnabledUser(userId: number, options: UserRequestOptions = {}) {
+    return await deps.uow.transaction(async (tx) => {
+      const updatedUser = await tx.userRepository.updateEnabledUserStatus(userId, UserStatus.Pause);
+      if (updatedUser === null)
+        return null;
+
+      await tx.profileDirtyMarker.markUsersDirty({
+        userIds: [userId],
+        reasonCodes: [UserProfileDirtyReason.UserUpdated],
+        afterCommit: tx.afterCommit,
+        requestId: options.requestContext?.requestId ?? undefined,
+        traceId: options.requestContext?.traceId ?? undefined,
+      });
+      return updatedUser;
+    }, { observability: options.requestContext });
   }
 
   async function setMobile(userId: number, phoneNumber: string, code: string, options: UserRequestOptions = {}) {

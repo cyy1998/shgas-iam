@@ -79,4 +79,31 @@ describe("createPositionService", () => {
 
     expect(tx.positionRepository.softDeletePositionByCode).not.toHaveBeenCalled();
   });
+
+  test("marks affected users dirty when updating position status", async () => {
+    const { service, tx } = createService();
+
+    await expect(service.updatePositionStatus("DEV", PositionStatus.Disable)).resolves.toBe(true);
+
+    expect(tx.positionRepository.updatePositionByCode).toHaveBeenCalledWith("DEV", {
+      status: PositionStatus.Disable,
+    });
+    expect(tx.profileDirtyMarker.markScopeDirty).toHaveBeenCalledWith(expect.objectContaining({
+      scope: { scopeType: UserProfileScopeType.PositionId, scopeId: 1 },
+      reasonCodes: [UserProfileDirtyReason.PositionUpdated],
+    }));
+  });
+
+  test("marks affected users dirty when deleting a position after relationship checks", async () => {
+    const { service, tx } = createService();
+
+    await expect(service.deletePosition("DEV")).resolves.toBe(true);
+
+    expect(tx.positionRepository.countActiveEmploymentsByPosCode).toHaveBeenCalledWith("DEV");
+    expect(tx.positionRepository.softDeletePositionByCode).toHaveBeenCalledWith("DEV");
+    expect(tx.profileDirtyMarker.markScopeDirty).toHaveBeenCalledWith(expect.objectContaining({
+      scope: { scopeType: UserProfileScopeType.PositionId, scopeId: 1 },
+      reasonCodes: [UserProfileDirtyReason.PositionUpdated],
+    }));
+  });
 });

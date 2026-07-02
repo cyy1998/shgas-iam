@@ -11,8 +11,11 @@ pnpm --filter @iam/worker user-profile:backfill
 pnpm --filter @iam/worker user-profile:repair
 ```
 
-`user-profile:backfill` and `user-profile:repair` only mark rows dirty and enqueue jobs. Actual profile rebuilds are
-handled by the BullMQ worker consumer.
+`user-profile:backfill` and `user-profile:repair` use command-only composition: they do not start consumers, the HTTP
+server, or Bull Board. Actual profile rebuilds are handled by the BullMQ worker consumer.
+
+`user-profile:repair` repairs failed rows plus stale pending/processing dirty rows. Without `--stale-before`, it uses
+`IAM_WORKER_USER_PROFILE_REPAIR_STALE_SECONDS` to compute the repair threshold; the default is 300 seconds.
 
 ## Runtime Modes
 

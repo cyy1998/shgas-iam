@@ -15,6 +15,7 @@ export interface UserProfileRepairCommandDeps {
   };
   config: {
     limit: number;
+    repairStaleSeconds: number;
   };
 }
 
@@ -27,10 +28,17 @@ export async function runUserProfileRepairCommand(
   deps: UserProfileRepairCommandDeps,
   options: UserProfileRepairCommandOptions = {},
 ) {
-  const staleBefore = options.staleBefore ?? deps.clock.nowDate();
+  const staleBefore = options.staleBefore ?? new Date(
+    deps.clock.nowDate().getTime() - deps.config.repairStaleSeconds * 1000,
+  );
   const limit = options.limit ?? deps.config.limit;
   const result = await deps.workerService.repairFailedOrStale({ staleBefore, limit });
-  deps.logger.info({ enqueued: result.enqueued, userIds: result.userIds }, "user profile repair jobs enqueued");
+  deps.logger.info({
+    enqueued: result.enqueued,
+    userIds: result.userIds,
+    staleBefore: staleBefore.toISOString(),
+    limit,
+  }, "user profile repair jobs enqueued");
   return result;
 }
 
@@ -54,8 +62,8 @@ async function main() {
   const { parseWorkerEnv } = await import("@worker/env");
   const env = parseWorkerEnv(process.env);
   const { logger } = await import("@worker/lib/logger");
-  const { createWorkerComposition } = await import("@worker/composition");
-  const composition = await createWorkerComposition({ env, logger });
+  const { createWorkerCommandComposition } = await import("@worker/composition");
+  const composition = await createWorkerCommandComposition({ env, logger });
   try {
     await runUserProfileRepairCommand(
       {
@@ -64,6 +72,7 @@ async function main() {
         logger: composition.logger,
         config: {
           limit: env.userProfile.backfillBatchSize,
+          repairStaleSeconds: env.userProfile.repairStaleSeconds,
         },
       },
       parseRepairArgs(process.argv.slice(2)),
