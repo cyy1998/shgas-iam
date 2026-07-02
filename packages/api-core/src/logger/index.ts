@@ -8,6 +8,7 @@ export const LoggerSourceApp = {
   Api: "iam-api",
   AdminApi: "iam-admin-api",
   OidcProvider: "iam-oidc-provider",
+  Worker: "iam-worker",
 } as const;
 
 export type LoggerSourceAppValue = typeof LoggerSourceApp[keyof typeof LoggerSourceApp];

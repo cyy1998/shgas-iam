@@ -47,29 +47,32 @@ describe("API environment", () => {
     expect(env.sso.externalOrigin).toBe("https://iam.example.com");
     expect(env.loginCredential.privateKeysByKid["2026-05-primary"]).toBe("private-key");
     expect(env.userProfile).toEqual({
-      workerConcurrency: 2,
-      rebuildBatchSize: 100,
-      backfillBatchSize: 500,
       dslMaxLimit: 100,
     });
-    expect("IAM_API_USER_PROFILE_WORKER_CONCURRENCY" in env).toBe(false);
     expect("IAM_API_USER_PROFILE_DSL_MAX_LIMIT" in env).toBe(false);
   });
 
-  test("accepts app-prefixed user-profile overrides", () => {
+  test("accepts app-prefixed user-profile DSL override", () => {
+    const env = parseApiEnv({
+      ...validEnv(),
+      IAM_API_USER_PROFILE_DSL_MAX_LIMIT: "75",
+    });
+
+    expect(env.userProfile).toEqual({
+      dslMaxLimit: 75,
+    });
+  });
+
+  test("ignores retired API worker env names", () => {
     const env = parseApiEnv({
       ...validEnv(),
       IAM_API_USER_PROFILE_WORKER_CONCURRENCY: "4",
       IAM_API_USER_PROFILE_REBUILD_BATCH_SIZE: "25",
       IAM_API_USER_PROFILE_BACKFILL_BATCH_SIZE: "200",
-      IAM_API_USER_PROFILE_DSL_MAX_LIMIT: "75",
     });
 
     expect(env.userProfile).toEqual({
-      workerConcurrency: 4,
-      rebuildBatchSize: 25,
-      backfillBatchSize: 200,
-      dslMaxLimit: 75,
+      dslMaxLimit: 100,
     });
   });
 

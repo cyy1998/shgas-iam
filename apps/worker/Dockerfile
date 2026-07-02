@@ -25,7 +25,7 @@ COPY packages/api-core/package.json ./packages/api-core/
 COPY packages/domain/package.json ./packages/domain/
 COPY packages/jobs/package.json ./packages/jobs/
 COPY packages/user-profile-read-model/package.json ./packages/user-profile-read-model/
-COPY apps/admin-api/package.json ./apps/admin-api/
+COPY apps/worker/package.json ./apps/worker/
 ARG HTTP_PROXY
 ARG HTTPS_PROXY
 ARG NO_PROXY
@@ -41,12 +41,12 @@ COPY packages/api-core/ ./packages/api-core/
 COPY packages/domain/ ./packages/domain/
 COPY packages/jobs/ ./packages/jobs/
 COPY packages/user-profile-read-model/ ./packages/user-profile-read-model/
-COPY apps/admin-api/ ./apps/admin-api/
-RUN pnpm --filter @iam/admin-api deploy --prod --legacy /deploy/admin-api
+COPY apps/worker/ ./apps/worker/
+RUN pnpm --filter @iam/worker deploy --prod --legacy /deploy/worker
 
 FROM docker.xuanyuan.run/oven/bun:1.3.14-alpine AS runner
 ENV NODE_ENV=production
 WORKDIR /app
-COPY --from=builder /deploy/admin-api ./
-EXPOSE 30001
+COPY --from=builder /deploy/worker ./
+EXPOSE 30003
 CMD ["bun", "run", "src/index.ts"]

@@ -25,3 +25,7 @@ ignoredBuiltDependencies:
   - '@scarf/scarf'
   - prisma
   - prisma-zod-generator
+minimumReleaseAgeExclude:
+  - '@bull-board/api@8.0.2'
+  - '@bull-board/hono@8.0.2'
+  - '@bull-board/ui@8.0.2'

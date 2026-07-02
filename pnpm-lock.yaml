@@ -434,6 +434,64 @@ importers:
         specifier: 0.34.6
         version: 0.34.6(jsdom@29.1.1)(less@4.6.4)(lightningcss@1.22.1)(playwright@1.61.1)(sass@1.54.0)(terser@5.48.0)
 
+  apps/worker:
+    dependencies:
+      '@bull-board/api':
+        specifier: ^8.0.2
+        version: 8.0.2(@bull-board/ui@8.0.2)
+      '@bull-board/hono':
+        specifier: ^8.0.2
+        version: 8.0.2(hono@4.12.23)
+      '@iam/api-core':
+        specifier: workspace:*
+        version: link:../../packages/api-core
+      '@iam/contracts':
+        specifier: workspace:*
+        version: link:../../packages/contracts
+      '@iam/db':
+        specifier: workspace:*
+        version: link:../../packages/db
+      '@iam/jobs':
+        specifier: workspace:*
+        version: link:../../packages/jobs
+      '@iam/user-profile-read-model':
+        specifier: workspace:*
+        version: link:../../packages/user-profile-read-model
+      drizzle-orm:
+        specifier: 1.0.0-rc.2
+        version: 1.0.0-rc.2(bun-types@1.3.14)(mysql2@3.22.4(@types/node@25.9.1))(postgres@3.4.9)(zod@4.4.3)
+      hono:
+        specifier: ^4.12.23
+        version: 4.12.23
+      ioredis:
+        specifier: ^5.11.0
+        version: 5.11.0
+      pino:
+        specifier: ^10.3.1
+        version: 10.3.1
+      zod:
+        specifier: ^4.4.3
+        version: 4.4.3
+    devDependencies:
+      '@antfu/eslint-config':
+        specifier: ^9.0.0
+        version: 9.0.0(@typescript-eslint/rule-tester@8.58.0(eslint@10.4.1(jiti@2.7.0))(typescript@6.0.3))(@typescript-eslint/typescript-estree@8.59.3(typescript@6.0.3))(@typescript-eslint/utils@8.59.3(eslint@10.4.1(jiti@2.7.0))(typescript@6.0.3))(@vue/compiler-sfc@3.5.29)(eslint-plugin-format@2.0.1(eslint@10.4.1(jiti@2.7.0)))(eslint@10.4.1(jiti@2.7.0))(typescript@6.0.3)(vitest@0.34.6(jsdom@29.1.1)(less@4.6.4)(lightningcss@1.22.1)(playwright@1.61.1)(sass@1.54.0)(terser@5.48.0))
+      '@types/bun':
+        specifier: latest
+        version: 1.3.14
+      '@typescript/native-preview':
+        specifier: 7.0.0-dev.20260603.1
+        version: 7.0.0-dev.20260603.1
+      eslint:
+        specifier: ^10.4.1
+        version: 10.4.1(jiti@2.7.0)
+      eslint-plugin-format:
+        specifier: ^2.0.1
+        version: 2.0.1(eslint@10.4.1(jiti@2.7.0))
+      typescript:
+        specifier: 6.0.3
+        version: 6.0.3
+
   gateway:
     dependencies:
       commander:
@@ -1212,6 +1270,19 @@ packages:
   '@bramus/specificity@2.4.2':
     resolution: {integrity: sha512-ctxtJ/eA+t+6q2++vj5j7FYX3nRu311q1wfYH3xjlLOsczhlhxAg2FWNUXhpGvAw3BWo1xBcvOV6/YLc2r5FJw==}
     hasBin: true
+
+  '@bull-board/api@8.0.2':
+    resolution: {integrity: sha512-b+AfdwFK/9u105Jj9P/Jj+pIC4hY/hNqrqvdhvRFFV7ThusTTy0QUQCS+GO/XwxztZkqNDxyt/djhWbirTIN1w==}
+    peerDependencies:
+      '@bull-board/ui': 8.0.2
+
+  '@bull-board/hono@8.0.2':
+    resolution: {integrity: sha512-APeEAy7hugdgoWKyTLsU6oQKK2CuoQZ2ge5EG0zXGPfD9Zhw1bmiN4vLH2seXqamMxRBOnLIewS2Iv5G9u1RAw==}
+    peerDependencies:
+      hono: ^4
+
+  '@bull-board/ui@8.0.2':
+    resolution: {integrity: sha512-kFthFARLKt9z1SHH1qTUTglVex8NoKQgBKKvb2GjqEMw6kQBw98ZV5sWW5dOzJlW+gdQaWyVyupJb/778sbtCQ==}
 
   '@cap.js/server@4.0.5':
     resolution: {integrity: sha512-S902YIyGyiriNaexfqTzMy5ixxSb3/jYSJwr2gAY9d7XXoYftcifgij/11pjuiU72Ogm6XKZOggDB2DtjRMyww==}
@@ -5105,6 +5176,11 @@ packages:
   ee-first@1.1.1:
     resolution: {integrity: sha512-WMwm9LhRUo+WUaRN+vRuETqG89IgZphVSNkdFgeb6sS/E4OrDIN7t48CAewSHXc6C8lefD8KKfr5vY61brQlow==}
 
+  ejs@6.0.1:
+    resolution: {integrity: sha512-UaaM14yby8U3k02ihS1Bmj5Kz2d7CCQM1scxpgs4Mhkq8F1wR2gl3+Ts4h5Ne4Mnt7M9m4Dw7jsuMr3+xO4vZA==}
+    engines: {node: '>=0.12.18'}
+    hasBin: true
+
   electron-to-chromium@1.5.355:
     resolution: {integrity: sha512-LUPZhKzZPYSPme1jEYohpkA+ybYCJztr1quAdBd7E7h3+VOBVcKkwwtBJu41nrjawrRzfb8mtMfzWozoaK0ZIQ==}
 
@@ -8647,6 +8723,9 @@ packages:
     resolution: {integrity: sha512-1qny3OExCf0UvUV/5wpYKf2YwPcOqXzkwKKSmKHiE6ZMQs5heeE/c8eXK+PNllPvmjgAbfnsbpkGZWy8cBpn9w==}
     engines: {node: '>=4'}
 
+  redis-info@3.1.0:
+    resolution: {integrity: sha512-ER4L9Sh/vm63DkIE0bkSjxluQlioBiBgf5w1UuldaW/3vPcecdljVDisZhmnCMvsxHNiARTTDDHGg9cGwTfrKg==}
+
   redis-parser@3.0.0:
     resolution: {integrity: sha512-DJnGAeenTdpMEH6uAJRK/uiyEIH9WVsUmoLwzudwGJUwZPp80PDBWPHXSAGNPwNvIXAbe7MSUB1zQFugFml66A==}
     engines: {node: '>=4'}
@@ -10988,6 +11067,22 @@ snapshots:
   '@bramus/specificity@2.4.2':
     dependencies:
       css-tree: 3.2.1
+
+  '@bull-board/api@8.0.2(@bull-board/ui@8.0.2)':
+    dependencies:
+      '@bull-board/ui': 8.0.2
+      redis-info: 3.1.0
+
+  '@bull-board/hono@8.0.2(hono@4.12.23)':
+    dependencies:
+      '@bull-board/api': 8.0.2(@bull-board/ui@8.0.2)
+      '@bull-board/ui': 8.0.2
+      ejs: 6.0.1
+      hono: 4.12.23
+
+  '@bull-board/ui@8.0.2':
+    dependencies:
+      '@bull-board/api': 8.0.2(@bull-board/ui@8.0.2)
 
   '@cap.js/server@4.0.5': {}
 
@@ -15448,6 +15543,8 @@ snapshots:
   eastasianwidth@0.2.0: {}
 
   ee-first@1.1.1: {}
+
+  ejs@6.0.1: {}
 
   electron-to-chromium@1.5.355: {}
 
@@ -20011,6 +20108,10 @@ snapshots:
       strip-indent: 3.0.0
 
   redis-errors@1.2.0: {}
+
+  redis-info@3.1.0:
+    dependencies:
+      lodash: 4.18.1
 
   redis-parser@3.0.0:
     dependencies:

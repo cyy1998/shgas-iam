@@ -99,10 +99,6 @@ function isCustomSsoRuntimeBoundary(file: string) {
     || file.startsWith("services/session/");
 }
 
-function isTransitionalUserProfileWorkerComposition(file: string) {
-  return file === "composition/user-profile-worker.ts";
-}
-
 const legacyCustomSsoAuthorityKeyPatterns = [
   /global_session:/u,
   /auth_code:/u,
@@ -188,7 +184,6 @@ describe("API DI architecture", () => {
   test("keeps user-profile worker-side APIs out of normal API composition", () => {
     const violations = collectImports()
       .filter(({ moduleSpecifier }) => moduleSpecifier === "@iam/user-profile-read-model/worker")
-      .filter(({ file }) => !isTransitionalUserProfileWorkerComposition(file))
       .map(({ file, moduleSpecifier }) => `${file} imports ${moduleSpecifier}`);
 
     expect(violations).toEqual([]);

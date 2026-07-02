@@ -33,10 +33,10 @@
 - **THEN** `apps/admin-api` SHALL 从 `@iam/user-profile-read-model` 使用 dirty marker、scope repository、dirty repository 或 producer API
 - **AND** `apps/admin-api` SHALL NOT import `@api/*` 私有 user-profile 模块
 
-#### Scenario: Transitional API worker entry uses shared implementation
-- **WHEN** 本 change 完成后 `apps/api` 过渡期 user-profile worker 入口仍存在
-- **THEN** 该入口 SHALL 通过 `@iam/user-profile-read-model` 的 worker-side service、builder 和 repositories 处理 jobs
-- **AND** 该入口 SHALL NOT 依赖 `apps/api/src/services/user-profile` 中的私有实现
+#### Scenario: Worker app consumes worker-side APIs
+- **WHEN** `apps/worker` 处理 user-profile jobs、backfill 或 repair
+- **THEN** worker SHALL 通过 `@iam/user-profile-read-model` 的 worker-side service、builder、repositories 和 module factory 执行
+- **AND** `apps/api` SHALL NOT 保留 user-profile worker entry 或 worker-only composition
 
 ### Requirement: User-profile contracts remain stable
 系统 SHALL 保持 user-profile job、dirty 和 scope 的稳定 contract 归属在 `@iam/contracts`，供 API、admin-api、worker 和数据库 schema 共享。
@@ -117,8 +117,14 @@
 - **THEN** worker SHALL 通过 `role_privilege` 找到 roleIds 后按 role scope 规则展开受影响用户
 
 #### Scenario: Backfill enqueues user-level rebuilds
-- **WHEN** worker 或 command 处理 `all-users` backfill
+- **WHEN** `apps/worker` user-profile backfill command 处理 all-users backfill
 - **THEN** 系统 SHALL 分批扫描用户、upsert dirty 记录并 enqueue user-level rebuild jobs
+- **AND** command SHALL NOT synchronously rebuild profiles outside BullMQ worker processing
+
+#### Scenario: Repair enqueues repairable dirty rows
+- **WHEN** `apps/worker` user-profile repair command 处理 failed 或 stale dirty rows
+- **THEN** 系统 SHALL enqueue user-level rebuild jobs for repairable rows
+- **AND** command SHALL report repair enqueue result
 
 ### Requirement: Profile query service
 系统 SHALL 在 `@iam/user-profile-read-model` 提供 `UserProfileQueryService`，并由 `apps/api` 接入作为 API 用户详情、用户搜索和 internal DSL 搜索的 profile 读取来源。

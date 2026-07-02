@@ -50,9 +50,6 @@ export interface ApiRuntimeConfig {
   };
   sessionKernel: SessionKernelConfig;
   userProfile: {
-    workerConcurrency: number;
-    rebuildBatchSize: number;
-    backfillBatchSize: number;
     dslMaxLimit: number;
   };
 }

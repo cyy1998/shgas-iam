@@ -1,10 +1,10 @@
 {
-  "name": "@iam/api",
+  "name": "@iam/worker",
   "type": "module",
-  "version": "1.0.0",
+  "version": "0.0.1",
   "private": true,
   "exports": {
-    ".": "./src/app.ts"
+    ".": "./src/index.ts"
   },
   "module": "index.ts",
   "devEngines": {
@@ -16,49 +16,31 @@
   "scripts": {
     "dev": "bun --hot src/index.ts",
     "serve": "bun run src/index.ts",
+    "user-profile:backfill": "bun run src/commands/user-profile-backfill.ts",
+    "user-profile:repair": "bun run src/commands/user-profile-repair.ts",
     "lint": "eslint src eslint.config.js",
     "lint:fix": "eslint --fix src eslint.config.js",
-    "db:generate": "pnpm --filter @iam/db db:generate",
-    "db:migrate": "pnpm --filter @iam/db db:migrate",
-    "db:push": "pnpm --filter @iam/db db:push",
-    "migrate:mysql-to-postgres": "bun scripts/migrate-mysql-to-postgres.ts",
     "test": "bun test --parallel",
     "typecheck": "pnpm exec tsgo --noEmit"
   },
   "dependencies": {
-    "@cap.js/server": "^4.0.5",
-    "@hono/zod-openapi": "^1.4.0",
+    "@bull-board/api": "^8.0.2",
+    "@bull-board/hono": "^8.0.2",
     "@iam/api-core": "workspace:*",
     "@iam/contracts": "workspace:*",
     "@iam/db": "workspace:*",
-    "@iam/domain": "workspace:*",
     "@iam/jobs": "workspace:*",
     "@iam/user-profile-read-model": "workspace:*",
-    "@scalar/hono-api-reference": "^0.10.20",
-    "@trpc/server": "^11.17.0",
-    "bcrypt": "^6.0.0",
-    "bcrypt-ts": "^8.0.1",
-    "csv-parse": "^6.2.1",
-    "csv-parser": "^3.2.1",
     "drizzle-orm": "1.0.0-rc.2",
     "hono": "^4.12.23",
-    "hono-pino": "^0.10.3",
     "ioredis": "^5.11.0",
-    "mysql2": "^3.22.4",
-    "p-limit": "^7.3.0",
     "pino": "^10.3.1",
-    "postgres": "^3.4.9",
-    "sm-crypto": "^0.4.0",
-    "ts-enum-util": "^4.1.0",
-    "xlsx": "^0.18.5",
     "zod": "^4.4.3"
   },
   "devDependencies": {
     "@antfu/eslint-config": "^9.0.0",
     "@types/bun": "latest",
-    "@types/sm-crypto": "^0.3.4",
     "@typescript/native-preview": "7.0.0-dev.20260603.1",
-    "drizzle-kit": "1.0.0-rc.2",
     "eslint": "^10.4.1",
     "eslint-plugin-format": "^2.0.1",
     "typescript": "^6.0.3"

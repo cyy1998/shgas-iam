@@ -1,7 +1,5 @@
-## Purpose
+## MODIFIED Requirements
 
-定义 IAM 后端 runtime env、前端 Umi build env、Docker 编排层 env 与命名 guard 的配置契约，避免 app 之间变量撞名，并让部署变量名只停留在配置边界。
-## Requirements
 ### Requirement: Backend app raw env SHALL use app-prefixed contracts
 后端 app SHALL 只接受 app 专属前缀的 raw runtime env 作为配置输入，并 SHALL NOT 继续接受旧的无 app 前缀 env 名称或已迁移到其它 app 的 retired env 名称。
 
@@ -38,24 +36,6 @@
 - **WHEN** `parseApiEnv`、`parseAdminApiEnv`、`parseOidcProviderEnv` 或 `parseWorkerEnv` 返回配置对象
 - **THEN** 返回值 SHALL 使用 camelCase 字段表达应用配置语义
 - **AND** 返回值 MUST NOT expose a flat object whose property names are raw environment variable names
-
-### Requirement: Frontend build env SHALL be app-namespaced under UMI_APP
-前端 app SHALL 保留 Umi Max build-time env 的 `UMI_APP_` 公开前缀，并 SHALL 在该前缀后使用 app namespace 防止 `admin` 与 `sso` 变量撞名。
-
-#### Scenario: Admin frontend 使用 UMI_APP_ADMIN 前缀
-- **WHEN** `apps/admin` 读取 build-time env
-- **THEN** config boundary SHALL use `UMI_APP_ADMIN_API_PREFIX`、`UMI_APP_ADMIN_SSO_AUTHORIZE_URL`、`UMI_APP_ADMIN_SSO_LOGOUT_URL`、`UMI_APP_ADMIN_CLIENT_CODE`、`UMI_APP_ADMIN_ROLE_CODE`、`UMI_APP_ADMIN_GRAFANA_URL` 和 `UMI_APP_ADMIN_SYSTEM_LOG_ENV`
-- **AND** frontend code MUST NOT read `UMI_APP_API_PREFIX` or `UMI_APP_SSO_CLIENT_CODE`
-
-#### Scenario: SSO frontend 使用 UMI_APP_SSO 前缀
-- **WHEN** `apps/sso` 读取 build-time env
-- **THEN** config boundary SHALL use `UMI_APP_SSO_API_PREFIX`、`UMI_APP_SSO_CLIENT_CODE`、`UMI_APP_SSO_WELL_KNOWN_URL`、`UMI_APP_SSO_CAP_SITE_KEY`、`UMI_APP_SSO_CAP_ENDPOINT`、`UMI_APP_SSO_CAP_WASM_URL`、`UMI_APP_SSO_CAP_PAKO_URL`、`UMI_APP_SSO_LOGIN_CREDENTIAL_KID` 和 `UMI_APP_SSO_LOGIN_CREDENTIAL_PUBLIC_KEY`
-- **AND** frontend code MUST NOT read `UMI_APP_API_PREFIX`、`UMI_APP_CAP_*` or `SSO_UMI_APP_*`
-
-#### Scenario: Frontend process.env 使用集中在 config boundary
-- **WHEN** 维护者搜索 `apps/admin/src` 和 `apps/sso/src` 中的 `process.env`
-- **THEN** direct reads SHALL be limited to each app's `src/constants/config.ts` or equivalent config boundary
-- **AND** page、service、utility 和 component code SHALL consume exported config constants instead of reading env directly
 
 ### Requirement: Docker env files SHALL separate third-party, IAM shared, and app contracts
 Docker compose 和 env example SHALL 区分第三方容器原生变量、IAM 共享部署变量和 app 内部变量映射。
@@ -97,21 +77,3 @@ Docker compose 和 env example SHALL 区分第三方容器原生变量、IAM 共
 - **WHEN** 开发者运行 `pnpm check:env-names`
 - **THEN** guard SHALL fail if Docker compose or env examples use retired app config variables such as `OIDC_PUBLISHED_PORT`、`SSO_UMI_APP_*`、retired API worker env names or un-namespaced frontend build variables
 - **AND** guard SHALL allow documented third-party native prefixes and IAM shared deployment variables
-
-### Requirement: API user-profile DSL env limit
-API app SHALL expose user-profile DSL search limits through app-prefixed raw env and grouped runtime config.
-
-#### Scenario: API DSL max limit uses IAM_API prefix
-- **WHEN** `apps/api` parses runtime env for user-profile DSL search
-- **THEN** raw env schema SHALL accept `IAM_API_USER_PROFILE_DSL_MAX_LIMIT`
-- **AND** raw env schema MUST NOT accept `USER_PROFILE_DSL_MAX_LIMIT` or other old naked variable names as fallback
-
-#### Scenario: DSL max limit stays behind env boundary
-- **WHEN** API code needs to validate `/internal/users/search-dsl` request limit
-- **THEN** app code SHALL consume a grouped runtime config field such as `env.userProfile.dslMaxLimit`
-- **AND** app code outside `env.ts` and env tests MUST NOT reference raw env key `IAM_API_USER_PROFILE_DSL_MAX_LIMIT`
-
-#### Scenario: DSL max limit has safe default
-- **WHEN** `IAM_API_USER_PROFILE_DSL_MAX_LIMIT` is not provided
-- **THEN** API runtime config SHALL provide a bounded default value
-- **AND** requests above that effective limit SHALL be rejected before executing profile search
