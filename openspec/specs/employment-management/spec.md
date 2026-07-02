@@ -309,7 +309,7 @@ Employment management SHALL use centralized named errors for stable employment f
 - 用户离职不软删除雇佣，只更新状态和 endTime；是否应同时清理 session 或权限快照未在代码中体现。
 
 ## Evidence Review
-- 管理端暴露雇佣管理操作: 证据 `apps/admin-api/src/routes/admin/employment/employment.routes.ts`, `employment.handlers.ts`, `employment.ops.ts`, `employment.trpc.ts`。状态: 有代码证据。
+- 管理端暴露雇佣管理操作: 证据 `apps/admin-api/src/routes/admin/employment/employment.adapter.ts`, `employment.index.ts`, `employment.routes.ts`, `employment.trpc.ts`。状态: 有代码证据。
 - 搜索和查询雇佣: 证据 `apps/admin-api/src/services/employment/employment.repository.ts`, `apps/admin-api/src/services/employment/employment.service.ts`, `packages/domain/src/employment/schema.ts`, `apps/admin-api/src/services/role/role.repository.ts`, `apps/admin-api/src/services/privilege/privilege.repository.ts`。状态: 有代码证据。
 - 创建雇佣: 证据 `apps/admin-api/src/services/employment/employment.service.ts`, `apps/admin-api/src/services/employment/employment.repository.ts`, `packages/db/src/schema/core/employments.ts`。状态: 有代码证据。
 - 更新雇佣与状态: 证据 `apps/admin-api/src/services/employment/employment.service.ts`, `apps/admin-api/src/services/employment/employment.repository.ts`, `packages/contracts/src/enums/employment.status.ts`。状态: 有代码证据。

@@ -1,7 +1,7 @@
 # oidc-client-registry Specification
 
 ## Purpose
-TBD - created by archiving change add-oidc-provider. Update Purpose after archive.
+描述 OIDC client 配置如何复用现有 client 主体，包括 `clientCode` 作为不可变 OIDC `client_id`、独立 OIDC JSONB 配置、secret hash、状态启停、配置版本和 Session Kernel 撤销语义。
 ## Requirements
 ### Requirement: OIDC 复用现有 client 主体
 系统 SHALL 将现有 `client` 作为 OIDC relying party 的应用主实体，并 SHALL NOT 创建独立 OIDC client 主表。
@@ -12,7 +12,7 @@ TBD - created by archiving change add-oidc-provider. Update Purpose after archiv
 - **AND** SHALL 复用其名称、描述、全局状态、软删除状态和角色归属
 - **AND** SHALL 将 OIDC 协议配置与 custom SSO `extAttributes`、`clientSecret` 分开存储
 
-#### Scenario: 修改 clientCode
+#### Scenario: clientCode 创建后不可变
 - **WHEN** 管理员或旧管理接口尝试修改已创建 client 的 `clientCode`
 - **THEN** 系统 SHALL 拒绝该请求
 - **AND** SHALL 保持所有 client 的 `clientCode` 创建后不可变
@@ -246,10 +246,10 @@ TBD - created by archiving change add-oidc-provider. Update Purpose after archiv
 - **AND** revocation reason SHALL 为 `client_config_changed`
 
 #### Scenario: client 全局状态影响 OIDC protocol
-- **WHEN** 管理员将 client 全局 status 变更为 `Disable`、`Maintance` 或软删除该 client
+- **WHEN** 管理员将 client 全局 status 变更为 `Disable`、`Maintenance` 或软删除该 client
 - **THEN** 系统 SHALL 使 OIDC runtime cache 失效
 - **AND** 对 `Disable` 或软删除，系统 SHALL 撤销该 client 的 OIDC protocol 对象
-- **AND** 对 `Maintance`，系统 SHALL 撤销该 client 的 OIDC protocol 对象
+- **AND** 对 `Maintenance`，系统 SHALL 撤销该 client 的 OIDC protocol 对象
 - **AND** revocation reason SHALL 分别反映 `client_disabled`、`client_deleted` 或 `client_config_changed`
 
 #### Scenario: OIDC invalidation 与 Session Kernel 撤销统一记录

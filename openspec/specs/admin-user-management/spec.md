@@ -260,16 +260,16 @@
 
 ## Open Questions
 - 创建用户时只校验 username 重复，没有显式校验 mobile 或 wxId 唯一性；是否需要作为业务约束需要人工确认。
-- 管理端重置密码不会清理已有 Redis session；用户重置后旧 session 是否继续有效需后续单独确认。
+- 管理端重置密码已在事务提交后通过 Session Kernel-backed revocation port best-effort 撤销用户会话；是否需要阻断式撤销或额外通知需后续单独确认。
 - `generatedPassword` 和 reset password 都返回明文密码，这是当前行为；交付渠道、展示次数和审计要求未在代码中体现。
 - 更新用户 repository 的 where 只按 username 更新，service 已先校验未软删除；并发软删除下的语义需要人工确认。
 - 管理端权限由 tier middleware 校验 admin client 和 admin role，本 spec 不声明字段级或操作级权限。
 
 ## Evidence Review
-- 管理端暴露用户管理操作: 证据 `apps/admin-api/src/routes/admin/user/user.routes.ts`, `apps/admin-api/src/routes/admin/user/user.handlers.ts`, `apps/admin-api/src/routes/admin/user/user.ops.ts`, `apps/admin-api/src/routes/admin/user/user.trpc.ts`。状态: 有代码证据。
+- 管理端暴露用户管理操作: 证据 `apps/admin-api/src/routes/admin/user/user.adapter.ts`, `apps/admin-api/src/routes/admin/user/user.index.ts`, `apps/admin-api/src/routes/admin/user/user.routes.ts`, `apps/admin-api/src/routes/admin/user/user.trpc.ts`。状态: 有代码证据。
 - 管理端搜索用户: 证据 `apps/admin-api/src/services/user/user.schema.ts`, `apps/admin-api/src/services/user/user.repository.ts`, `apps/admin-api/src/services/user/user.service.ts`。状态: 有代码证据；无专门测试。
 - 管理端查询用户详情聚合权限: 证据 `apps/admin-api/src/services/user/user.service.ts`, `apps/admin-api/src/services/employment/employment.repository.ts`, `apps/admin-api/src/services/role/role.repository.ts`, `apps/admin-api/src/services/privilege/privilege.repository.ts`, `packages/domain/src/user/schema.ts`。状态: 有代码证据；角色来源语义由 authorization-model spec 进一步描述。
 - 管理端创建用户: 证据 `apps/admin-api/src/services/user/user.service.ts`, `apps/admin-api/src/services/user/user.repository.ts`, `apps/admin-api/src/services/user/user.schema.ts`, `packages/db/src/schema/core/users.ts`。状态: 有代码证据。
 - 管理端更新用户与状态: 证据 `apps/admin-api/src/services/user/user.service.ts`, `apps/admin-api/src/services/user/user.repository.ts`, `packages/contracts/src/enums/user.status.ts`。状态: 有代码证据。
 - 管理端删除用户受活跃雇佣约束: 证据 `apps/admin-api/src/services/user/user.service.ts`, `apps/admin-api/src/services/user/user.repository.ts`, `packages/db/src/schema/core/employments.ts`。状态: 有代码证据。
-- 管理端重置和生成密码: 证据 `apps/admin-api/src/services/user/user.service.ts`, `apps/admin-api/src/routes/admin/user/user.ops.ts`, `@iam/api-core/utils` 中的 `generateRandomPassword` 调用点。状态: 有代码证据；密码展示流程需人工确认。
+- 管理端重置和生成密码: 证据 `apps/admin-api/src/services/user/user.service.ts`, `apps/admin-api/src/routes/admin/user/user.adapter.ts`, `@iam/api-core/utils` 中的 `generateRandomPassword` 调用点。状态: 有代码证据；密码展示流程需人工确认。

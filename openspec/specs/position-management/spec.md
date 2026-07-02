@@ -123,7 +123,7 @@ Position management SHALL use centralized named errors for stable position failu
 - 搜索岗位加载所有 employments 后由 VO mapper 计算 memberNumber，是否需要只统计 active employment 未在本轮确认。
 
 ## Evidence Review
-- 管理端暴露岗位管理操作: 证据 `apps/admin-api/src/routes/admin/position/position.routes.ts`, `position.handlers.ts`, `position.ops.ts`, `position.trpc.ts`。状态: 有代码证据。
+- 管理端暴露岗位管理操作: 证据 `apps/admin-api/src/routes/admin/position/position.adapter.ts`, `position.index.ts`, `position.routes.ts`, `position.trpc.ts`。状态: 有代码证据。
 - 搜索和查询岗位: 证据 `apps/admin-api/src/services/position/position.repository.ts`, `apps/admin-api/src/services/position/position.service.ts`, `apps/admin-api/src/routes/admin/position/position.schema.ts`。状态: 有代码证据。
 - 创建岗位: 证据 `apps/admin-api/src/services/position/position.service.ts`, `apps/admin-api/src/services/position/position.repository.ts`, `packages/db/src/schema/core/positions.ts`。状态: 有代码证据。
 - 更新岗位与状态: 证据 `apps/admin-api/src/services/position/position.service.ts`, `apps/admin-api/src/services/position/position.repository.ts`, `apps/admin-api/src/services/position/__tests__/position.service.test.ts`, `packages/contracts/src/enums/position.status.ts`。状态: 有代码和测试证据，测试覆盖重命名冲突。

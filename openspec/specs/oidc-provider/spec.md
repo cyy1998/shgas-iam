@@ -1,7 +1,7 @@
 # oidc-provider Specification
 
 ## Purpose
-TBD - created by archiving change add-oidc-provider. Update Purpose after archive.
+描述当前 OIDC provider 的运行时行为，包括 `/oidc` issuer metadata、RS256 JWKS、授权码流程、Session Kernel-backed global session、token/UserInfo/logout、Redis adapter 持久化、事件日志和旧 session envelope 拒绝策略。
 ## Requirements
 ### Requirement: Provider 发布固定 issuer Metadata 与 RS256 JWKS
 系统 SHALL 在同一 IAM origin 的 `/oidc` issuer 下发布标准 Discovery metadata 和 RS256 JWKS。

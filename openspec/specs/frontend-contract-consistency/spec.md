@@ -10,7 +10,7 @@
 #### Scenario: SSO client status 类型复用 ClientStatus
 - **WHEN** `apps/sso` 定义 `/open/client/status` 响应中 client status 的前端类型
 - **THEN** `status` 字段 SHALL 使用 `@iam/contracts` 导出的 `ClientStatus`
-- **AND** SSO 前端 SHALL 使用 `ClientStatus.Maintance` 判断维护状态
+- **AND** SSO 前端 SHALL 使用 `ClientStatus.Maintenance` 判断维护状态
 - **AND** SSO 前端 SHALL NOT 使用裸 `number` 或数字字面量 `2` 表达 client 维护状态
 
 #### Scenario: Admin user status 操作复用 UserStatus

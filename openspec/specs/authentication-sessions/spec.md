@@ -151,8 +151,10 @@
 - **AND** HTTP handler SHALL 重定向到登录端点并保留原查询参数
 
 #### Scenario: 已登录用户发起 SSO 授权
-- **WHEN** `/sso/authorize` 请求包含可用 PrincipalSession，客户端存在，并且 `redirectUrl` 通过客户端允许地址前缀校验
+- **WHEN** `/sso/authorize` 请求包含可用 PrincipalSession，客户端存在，并且 `redirectUrl` 命中客户端允许的 redirect URL pattern
 - **THEN** 系统 SHALL 按前台交互规则刷新 PrincipalSession idle TTL
+- **AND** 系统 SHALL 使用结构化 URL 语义匹配 protocol、hostname、port 和 pathname
+- **AND** 系统 SHALL NOT 使用纯字符串 `startsWith` 作为 redirectUrl 校验语义
 - **AND** 系统 SHALL 创建 `protocol=custom-sso`、`artifactType=auth_code` 的 Kernel ProtocolArtifact
 - **AND** auth code artifact SHALL 保存 PrincipalSession、client、redirectUrl 和 custom SSO exchange metadata 引用
 - **AND** auth code artifact SHALL NOT 保存完整 `UserDetailDto`
@@ -165,8 +167,10 @@
 - **AND** system log SHALL NOT 包含 PrincipalSession token 明文
 
 #### Scenario: Gateway callback 兑换局部会话
-- **WHEN** `/sso/callback` 收到存在且未撤销的 auth code、合法 client code 和通过前缀校验的 redirect URL
+- **WHEN** `/sso/callback` 收到存在且未撤销的 auth code、合法 client code 和命中客户端允许 redirect URL pattern 的 redirect URL
 - **THEN** 系统 SHALL 通过 Session Kernel 原子消费 auth code artifact
+- **AND** 系统 SHALL 使用结构化 URL 语义匹配 protocol、hostname、port 和 pathname
+- **AND** 系统 SHALL NOT 使用纯字符串 `startsWith` 作为 redirectUrl 校验语义
 - **AND** 系统 SHALL 校验 artifact 引用的 PrincipalSession 仍存在、未撤销且未过期
 - **AND** 系统 SHALL live 校验 PrincipalSession 引用的用户仍启用且未软删除
 - **AND** 系统 SHALL 从当前 schema version profile 读取 `UserDetailDto`
@@ -285,7 +289,7 @@
 - **AND** 系统 SHALL lazy revoke 该用户的所有 PrincipalSession
 
 #### Scenario: 客户端维护中
-- **WHEN** 客户端状态为 `ClientStatus.Maintance`，且当前用户不在客户端 `userExcluding` 列表中
+- **WHEN** 客户端状态为 `ClientStatus.Maintenance`，且当前用户不在客户端 `userExcluding` 列表中
 - **THEN** 系统 SHALL 拒绝请求并报告系统维护中
 - **AND** 系统 SHALL NOT 因 custom SSO maintenance 主动撤销该 local session credential
 
@@ -322,7 +326,7 @@
 - **THEN** 系统 SHALL 拒绝请求
 
 #### Scenario: inactive client 不得通过内部服务鉴权
-- **WHEN** `/auth/internal-authz` 或 `/internal/*` 请求提供的 `apikey` 解析到软删除 client、`ClientStatus.Maintance` client 或 `ClientStatus.Disable` client
+- **WHEN** `/auth/internal-authz` 或 `/internal/*` 请求提供的 `apikey` 解析到软删除 client、`ClientStatus.Maintenance` client 或 `ClientStatus.Disable` client
 - **THEN** 系统 SHALL 拒绝请求
 
 ### Requirement: public 用户密码校验与账号暂停服务规则具备单元测试覆盖
@@ -456,14 +460,14 @@ Admin API SHALL 使用 Session Kernel PrincipalSession 作为唯一登录态来�
 
 ## Open Questions
 - `MAGIC_CODE` 是当前已实现行为和已有测试覆盖点，但安全审计将其标为 Critical；是否继续作为目标行为需要后续单独确认。
-- `redirectUrl` 当前使用字符串 `startsWith` 前缀校验；baseline 只记录当前合法性判断，不声明其安全充分性。
-- OIDC 与 admin afterCommit revoke 尚未迁移到 Session Kernel；跨协议 PrincipalSession cleanup 顺序和统一 revoke summary 由后续 child change 固化。
+- `redirectUrl` 当前使用共享 redirect URL pattern matcher 做结构化匹配；历史非法 pattern 会按不匹配处理并记录 warn 日志。
+- OIDC 与 admin afterCommit revoke 已通过 Session Kernel-backed port 执行主动撤销；跨协议 cleanup 的日志和汇总语义由 `system-log-observability` 与相关能力 specs 固化。
 
 ## Evidence Review
-- 密码登录加密凭证传输: 证据 `apps/api/src/routes/auth/login-credential.ts`, `apps/api/src/routes/auth/auth.handlers.ts`, `apps/sso/src/services/auth.ts`, `apps/sso/src/lib/login-credential.ts`。状态: 有代码和测试证据。
+- 密码登录加密凭证传输: 证据 `apps/api/src/routes/auth/login-credential.helper.ts`, `apps/api/src/routes/auth/auth.handlers.ts`, `apps/sso/src/services/auth.ts`, `apps/sso/src/lib/login-credential.ts`。状态: 有代码和测试证据。
 - 全局登录创建会话: 证据 `apps/api/src/routes/auth/auth.routes.ts`, `apps/api/src/routes/auth/auth.handlers.ts`, `apps/api/src/routes/auth/auth.service.ts`, `apps/api/src/routes/sso/sso.service.ts`, `apps/api/src/services/session/custom-sso-session-kernel.adapter.ts`, `packages/api-core/src/session/kernel`。状态: 有代码和测试证据；含安全风险 `MAGIC_CODE`。
 - 登录失败计数与账号暂停: 证据 `apps/api/src/routes/auth/login-failure.helper.ts`, `apps/api/src/routes/auth/auth.service.ts`, `apps/api/src/routes/auth/__tests__/auth.service.test.ts`。状态: 有代码和测试证据；未覆盖所有第三方失败路径。
 - SSO 授权码与局部会话: 证据 `apps/api/src/routes/sso/sso.routes.ts`, `apps/api/src/routes/sso/sso.handlers.ts`, `apps/api/src/routes/sso/sso.service.ts`, `apps/api/src/services/session/custom-sso-session-kernel.adapter.ts`, `packages/api-core/src/session/kernel`, `packages/db/src/schema/core/clients.ts`。状态: 有代码和测试证据；redirect/token 传输存在已知安全风险。
 - SSO 登出清理会话: 证据 `apps/api/src/routes/sso/sso.handlers.ts`, `apps/api/src/routes/sso/sso.service.ts`, `apps/api/src/services/session/custom-sso-session-kernel.adapter.ts`, `packages/api-core/src/session/kernel`。状态: 有代码和测试证据。
 - 网关鉴权返回用户摘要: 证据 `apps/api/src/routes/auth/auth.handlers.ts`, `apps/api/src/routes/auth/auth.service.ts`, `apps/api/src/services/session/custom-sso-session-kernel.adapter.ts`, `apps/api/src/services/client/client.service.ts`。状态: 有代码和测试证据；未证明 path/method 权限校验。
-- 内部服务鉴权: 证据 `packages/api-core/src/middlewares/auth.ts`, `apps/api/src/routes/auth/auth.handlers.ts`, `apps/api/src/services/client/client.service.ts`, `gateway/manifests/dev/tender/routes.yaml`, `gateway/manifests/prod/tender/routes.yaml`。状态: 有代码和测试证据；内部服务鉴权统一依赖 active client `apikey`，不再接受 `IP-Chain` 白名单绕过。
+- 内部服务鉴权: 证据 `packages/api-core/src/middlewares/auth.ts`, `apps/api/src/routes/auth/auth.handlers.ts`, `apps/api/src/services/client/client.service.ts`, `gateway/manifests/dev/tender.yaml`, `gateway/manifests/prod/tender.yaml`。状态: 有代码和测试证据；内部服务鉴权统一依赖 active client `apikey`，不再接受 `IP-Chain` 白名单绕过。

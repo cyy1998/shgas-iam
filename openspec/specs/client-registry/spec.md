@@ -12,7 +12,7 @@
 
 #### Scenario: 客户端状态枚举
 - **WHEN** 系统读取 client status
-- **THEN** status SHALL 使用 `ClientStatus.Enable`、`ClientStatus.Maintance` 或 `ClientStatus.Disable`
+- **THEN** status SHALL 使用 `ClientStatus.Enable`、`ClientStatus.Maintenance` 或 `ClientStatus.Disable`
 
 ### Requirement: 管理端查询和维护客户端
 系统 SHALL 通过管理端 client REST 与 tRPC 接口提供 client 分页搜索、详情读取、状态变更和软删除能力。
@@ -82,11 +82,17 @@
 - **AND** 系统 SHALL 将更新后的 ClientDto 写入 `cache:client:code:<clientCode>` 与 `cache:client:secret:<clientSecret>`
 - **AND** 响应 SHALL 返回 ClientDto
 
-#### Scenario: 更新客户端标识或密钥后清理旧缓存
-- **WHEN** 管理端更新 client 且 clientCode 或 clientSecret 发生变化
-- **THEN** 系统 SHALL 删除旧 `cache:client:code:<oldClientCode>` 或旧 `cache:client:secret:<oldClientSecret>` key
-- **AND** 系统 SHALL 写入新 `cache:client:code:<newClientCode>` 与 `cache:client:secret:<newClientSecret>` key
-- **AND** 旧 clientCode 或旧 clientSecret 后续 SHALL 不再因 Redis 缓存命中而解析为有效 client
+#### Scenario: clientCode 创建后不可变
+- **WHEN** 管理端当前 REST/tRPC 更新契约收到 `clientCode` 字段
+- **THEN** schema SHALL 拒绝该输入
+- **AND** 服务端 legacy 更新路径即使收到 `clientCode` 也 SHALL 校验其与既有 clientCode 一致
+- **AND** repository SHALL NOT 更新已创建 client 的 `clientCode`
+
+#### Scenario: 更新客户端密钥后清理旧缓存
+- **WHEN** 管理端更新 client 且 clientSecret 发生变化
+- **THEN** 系统 SHALL 删除旧 `cache:client:secret:<oldClientSecret>` key
+- **AND** 系统 SHALL 写入当前 `cache:client:code:<clientCode>` 与新 `cache:client:secret:<newClientSecret>` key
+- **AND** 旧 clientSecret 后续 SHALL 不再因 Redis 缓存命中而解析为有效 client
 
 ### Requirement: Client redirect URL patterns are validated on write
 系统 SHALL 在管理端创建或更新 client 时校验 `validRedirectUrls` 中每一条 redirect URL pattern。
@@ -189,7 +195,7 @@
 - **THEN** 系统 SHALL 调用 ORCAS 登录并把 orcas session 写入 cookie 与重定向 URL 参数
 
 #### Scenario: 维护状态鉴权
-- **WHEN** client.status 为 `ClientStatus.Maintance` 且当前用户不在 userExcluding 列表中
+- **WHEN** client.status 为 `ClientStatus.Maintenance` 且当前用户不在 userExcluding 列表中
 - **THEN** 网关鉴权 SHALL 拒绝请求并报告系统维护中
 
 ### Requirement: Client and SSO errors use centralized API errors
@@ -200,8 +206,12 @@ Client registry and SSO flows SHALL use centralized named errors for stable clie
 - **THEN** the backend SHALL throw a centralized client not found error
 
 #### Scenario: Client code already exists
-- **WHEN** creating or renaming a client would duplicate a client code
+- **WHEN** creating a client would duplicate a client code
 - **THEN** the backend SHALL throw a centralized client code exists error
+
+#### Scenario: Client code is immutable
+- **WHEN** a legacy update attempts to change `clientCode` after creation
+- **THEN** the backend SHALL throw a centralized client code immutable error
 
 #### Scenario: SSO request has invalid client or redirect URI
 - **WHEN** an SSO request contains an invalid client code or redirect URI
@@ -231,7 +241,7 @@ Client registry and SSO flows SHALL use centralized named errors for stable clie
 - **AND** 系统 SHALL NOT 因该 custom SSO 配置变化撤销其他 client 的会话对象
 
 #### Scenario: custom SSO maintenance 不主动撤销 local session
-- **WHEN** 管理员将 client status 变更为 `Maintance`
+- **WHEN** 管理员将 client status 变更为 `Maintenance`
 - **THEN** 系统 SHALL 保持 custom SSO maintenance 的运行时拒绝语义
 - **AND** 系统 SHALL NOT 仅因 custom SSO maintenance 主动撤销该 client 的 custom-sso local session credential
 - **AND** OIDC protocol 对象撤销 SHALL 由 `oidc-client-registry` 能力处理
@@ -251,7 +261,7 @@ Client registry and SSO flows SHALL use centralized named errors for stable clie
 #### Scenario: client 服务测试覆盖撤销触发
 - **WHEN** 执行 admin-api client 服务单元测试
 - **THEN** 测试 SHALL 覆盖 status Disable、soft delete、clientSecret rotation 和 custom SSO 会话相关 extAttributes 变化触发撤销
-- **AND** 测试 SHALL 覆盖 status Maintance 不主动撤销 custom-sso local session
+- **AND** 测试 SHALL 覆盖 status Maintenance 不主动撤销 custom-sso local session
 - **AND** 测试 SHALL 覆盖非会话字段更新不触发撤销
 
 ## Open Questions
@@ -261,8 +271,8 @@ Client registry and SSO flows SHALL use centralized named errors for stable clie
 
 ## Evidence Review
 - 客户端记录包含 SSO 和会话管理属性: 证据 `packages/db/src/schema/core/clients.ts`, `packages/contracts/src/enums/client.status.ts`, `packages/contracts/src/enums/client.managementLevel.ts`, `packages/domain/src/client/schema.ts`。状态: 有 schema 证据。
-- 管理端查询和维护客户端: 证据 `apps/admin-api/src/routes/admin/client/client.ops.ts`, `client.routes.ts`, `client.handlers.ts`, `client.trpc.ts`, `apps/admin-api/src/services/client/client.service.ts`, `client.repository.ts`, `apps/admin/src/pages/clients/index.tsx`。状态: 有代码和测试证据。
-- 管理端创建和更新客户端: 证据 `apps/admin-api/src/routes/admin/client/client.ops.ts`, `client.routes.ts`, `client.handlers.ts`, `client.trpc.ts`, `apps/admin-api/src/services/client/client.service.ts`, `client.repository.ts`。状态: 有 REST 与 tRPC 代码证据。
+- 管理端查询和维护客户端: 证据 `apps/admin-api/src/routes/admin/client/client.adapter.ts`, `client.index.ts`, `client.routes.ts`, `client.trpc.ts`, `apps/admin-api/src/services/client/client.schema.ts`, `client.service.ts`, `client.repository.ts`, `apps/admin/src/pages/clients/index.tsx`。状态: 有代码和测试证据。
+- 管理端创建和更新客户端: 证据 `apps/admin-api/src/routes/admin/client/client.adapter.ts`, `client.index.ts`, `client.routes.ts`, `client.trpc.ts`, `apps/admin-api/src/services/client/client.schema.ts`, `client.service.ts`, `client.repository.ts`。状态: 有 REST 与 tRPC 代码证据。
 - 公共 API 按 clientCode 返回客户端信息: 证据 `apps/api/src/routes/open/open.routes.ts`, `apps/api/src/routes/open/open.handlers.ts`, `apps/api/src/services/client/client.service.ts`。状态: 有代码证据；含敏感字段风险。
 - 系统按 clientCode 和 clientSecret 解析客户端: 证据 `apps/api/src/services/client/client.service.ts`, `apps/api/src/services/client/client.repository.ts`, `apps/api/src/routes/auth/auth.handlers.ts`, `apps/api/src/routes/sso/sso.service.ts`。状态: 有代码证据。
 - 客户端配置影响 SSO 和鉴权行为: 证据 `apps/api/src/routes/sso/sso.handlers.ts`, `apps/api/src/routes/sso/sso.service.ts`, `apps/api/src/routes/auth/auth.service.ts`, `packages/db/src/schema/core/clients.ts`。状态: 有代码证据；redirect/token 安全性需另行确认。
