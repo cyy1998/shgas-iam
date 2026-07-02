@@ -107,13 +107,18 @@ describe("user helper factories", () => {
 
     await expect(delegationQuery.searchUsersWithDelegations({
       ancestorOrgCodes: ["ORG"],
+      names: ["张三"],
       privilegeCode: "privilege:a",
     } as any)).resolves.toEqual({
       users: [profileUser],
       delegations: [],
     });
 
-    expect(searchLegacyUsers).toHaveBeenCalled();
+    expect(searchLegacyUsers).toHaveBeenCalledWith({
+      ancestorOrgCodes: ["ORG"],
+      names: ["张三"],
+      privilegeCode: "privilege:a",
+    });
     expect(getDelegationsByUserAndOrganizationScopeAndPrivilege).toHaveBeenCalledWith(
       ["zhangsan"],
       "ORG",

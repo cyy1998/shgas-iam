@@ -140,6 +140,12 @@
 - **THEN** 系统 SHALL 将 employment 条件编译为同一个 employment 元素内满足条件的 nested 查询语义
 - **AND** 系统 SHALL 只返回当前 schema version 且 `search_visible=true` 的 profile
 
+#### Scenario: Legacy search supports user name filters
+- **WHEN** query service 使用包含 `names` 的旧 `UserQueryDto` 搜索用户
+- **THEN** 系统 SHALL 将 `names` 编译为 `user.name` 的精确匹配条件
+- **AND** 多个 `names` 值 SHALL 匹配任一姓名
+- **AND** `names` SHALL 与 username、phone、wxId 和 employment 条件按现有 legacy AND 组合语义共同生效
+
 #### Scenario: DSL requires explicit nested employment
 - **WHEN** filter DSL 查询引用 employment 字段
 - **THEN** DSL MUST 使用显式 nested employment 表达式
@@ -197,3 +203,4 @@
 - **WHEN** `apps/admin-api` marks user-profile dirty or enqueues user-profile jobs
 - **THEN** it SHALL NOT import `@api` private modules
 - **AND** it SHALL depend only on shared contracts/jobs/db modules, `@iam/user-profile-read-model`, or app-local ports wired to shared helpers
+

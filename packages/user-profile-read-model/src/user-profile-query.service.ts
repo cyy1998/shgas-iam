@@ -5,7 +5,7 @@ import {
   compileLegacyUserQueryToProfileFilter,
   toUserDtoFromProfile,
 } from "./user-profile.repository";
-import { UserDetailDtoSchema, UserDtoSchema, UserProfileFilterDslSchema } from "./user-profile.schema";
+import { parseUserProfileDetailDocument, UserDtoSchema, UserProfileFilterDslSchema } from "./user-profile.schema";
 
 export interface UserProfileQueryServiceDeps {
   profileRepository: UserProfileRepository;
@@ -47,7 +47,7 @@ export function createUserProfileQueryService(deps: UserProfileQueryServiceDeps)
       filter,
       limit: options.limit ?? dslDefaultLimit,
     });
-    return profiles.map(profile => UserDetailDtoSchema.parse(profile.detail));
+    return profiles.map(profile => parseUserProfileDetailDocument(profile.detail));
   }
 
   return {
@@ -66,5 +66,5 @@ function parseProfileDetail(profile: Awaited<ReturnType<UserProfileRepository["g
   if (profile === null) {
     throw new UserNotFoundError("用户画像不存在");
   }
-  return UserDetailDtoSchema.parse(profile.detail);
+  return parseUserProfileDetailDocument(profile.detail);
 }

@@ -1,4 +1,5 @@
 import type { UserProfileDirtyReason, UserProfileDirtyStatus } from "@iam/contracts";
+import type { UserDetailDto } from "@iam/domain/user";
 import { z } from "@hono/zod-openapi";
 import { UserProfileDirtyReasonSchema, UserProfileDirtyStatusSchema, UserStatus, UserType } from "@iam/contracts";
 import { EmploymentDetailDtoSchema, toEmploymentDto } from "@iam/domain/employment";
@@ -17,6 +18,7 @@ export const CURRENT_USER_PROFILE_SCHEMA_VERSION = 1;
 
 export const UserQueryDtoSchema = z.object({
   usernames: z.array(z.string()).describe("用户名列表").openapi({ example: ["138550", "136163"] }),
+  names: z.array(z.string()).describe("姓名列表精确匹配").openapi({ example: ["张三", "李四"] }),
   phones: z.array(z.string()).describe("手机号列表").openapi({ example: ["17721462865"] }),
   wxIds: z.array(z.string()).describe("微信ID列表").openapi({ example: ["1592677631"] }),
   ancestorOrgCodes: z.array(z.string()).describe("用户岗位父级组织编码列表").openapi({ example: ["SR", "SB"] }),
@@ -172,6 +174,13 @@ export type UserProfileDirtyStatusType = UserProfileDirtyStatus;
 export type UserProfileDirtyReasonType = UserProfileDirtyReason;
 export type UserQueryDto = z.infer<typeof UserQueryDtoSchema>;
 
+const ISO_DATE_REGEX = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,3})?(?:Z|[+-]\d{2}:\d{2})$/;
+const PROFILE_DETAIL_DATE_KEYS = new Set(["createTime", "updateTime", "startTime", "endTime"]);
+
+export function parseUserProfileDetailDocument(input: unknown): UserDetailDto {
+  return UserDetailDtoSchema.parse(reviveProfileDetailDates(input));
+}
+
 function validateEmploymentFieldsAreNested(
   node: UserProfileFilterDsl,
   insideEmploymentNested: boolean,
@@ -204,6 +213,24 @@ function validateEmploymentFieldsAreNested(
   }
 
   validateEmploymentFieldsAreNested(node.not, insideEmploymentNested, ctx);
+}
+
+function reviveProfileDetailDates(value: unknown, key?: string): unknown {
+  if (typeof value === "string" && key !== undefined && PROFILE_DETAIL_DATE_KEYS.has(key) && ISO_DATE_REGEX.test(value)) {
+    return new Date(value);
+  }
+
+  if (value instanceof Date || value === null || typeof value !== "object") {
+    return value;
+  }
+
+  if (Array.isArray(value)) {
+    return value.map(item => reviveProfileDetailDates(item));
+  }
+
+  return Object.fromEntries(
+    Object.entries(value).map(([childKey, childValue]) => [childKey, reviveProfileDetailDates(childValue, childKey)]),
+  );
 }
 
 function validateFilterOperators(node: UserProfileFilterDsl, ctx: z.RefinementCtx) {

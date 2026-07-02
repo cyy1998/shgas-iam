@@ -148,7 +148,8 @@
 #### Scenario: 查询用户目录
 - **WHEN** public 或 internal API 提交用户查询条件
 - **THEN** 系统 SHALL 只返回当前 schema version profile 中 `search_visible=true` 的用户
-- **AND** 系统 SHALL 支持按 username、phone、wxId、组织祖先、组织深度、岗位编码和角色编码过滤
+- **AND** 系统 SHALL 支持按 username、name、phone、wxId、组织祖先、组织深度、岗位编码和角色编码过滤
+- **AND** name 过滤 SHALL 使用 legacy `UserQueryDto.names` 姓名列表进行精确匹配
 - **AND** 用户目录查询 SHALL 使用 profile search document 并保持旧 `UserQueryDto` 的同一 employment nested 过滤语义
 
 ### Requirement: 内部供应商注册

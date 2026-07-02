@@ -19,6 +19,7 @@ import {
   buildAncestorKey,
   CURRENT_USER_PROFILE_SCHEMA_VERSION,
   isEmploymentField,
+  parseUserProfileDetailDocument,
 } from "./user-profile.schema";
 
 export interface UserProfileUpsertInput {
@@ -125,6 +126,7 @@ export type UserProfileRepository = ReturnType<typeof createUserProfileRepositor
 export function compileLegacyUserQueryToProfileFilter(query: UserQueryDto): UserProfileFilterDsl | undefined {
   const all: UserProfileFilterDsl[] = [];
   addInCondition(all, "user.username", query.usernames);
+  addInCondition(all, "user.name", query.names);
   addInCondition(all, "user.mobile", query.phones);
   addInCondition(all, "user.wxId", query.wxIds);
 
@@ -157,7 +159,7 @@ export function compileLegacyUserQueryToProfileFilter(query: UserQueryDto): User
 }
 
 export function toUserDtoFromProfile(profile: UserProfile): UserDto {
-  const detail = profile.detail as unknown as UserDetailDto;
+  const detail = parseUserProfileDetailDocument(profile.detail);
   const { employments: _employments, privileges: _privileges, roles: _roles, ...user } = detail;
   return user;
 }
