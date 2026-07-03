@@ -17,7 +17,7 @@ This repository is a `pnpm` workspace + Turborepo monorepo. Runtime apps live un
 - `packages/user-profile-read-model/src`: versioned user-profile read model, dirty marker, producer/query APIs, repositories, and worker module consumed by API/admin-api/worker.
 - `gateway`: APISIX gateway manifest package (`@iam/gateway-apisix`) with dev/prod manifests, config templates, and sync/validate/diff/apply scripts.
 - `docker/`: local dependency stacks plus dev/prod compose files.
-- `docs/`: architecture notes, plans, specs, audits, and remediation docs. Older plans may mention previous layouts; current database code is Drizzle + PostgreSQL in `packages/db`.
+- `docs/`: workflow guides, architecture notes, plans, specs, audits, and remediation docs. Older plans may mention previous layouts; current database code is Drizzle + PostgreSQL in `packages/db`.
 - `openspec/`: active OpenSpec changes, archived changes, main specs, and OpenSpec project configuration.
 - `scripts/`: repo-level utility scripts.
 
@@ -78,54 +78,12 @@ Preserve existing domain file naming: `user.service.ts`, `user.repository.ts`, `
 - Architecture guard tests in `apps/api/src/__tests__/architecture.test.ts` and `apps/admin-api/src/__tests__/architecture.test.ts` intentionally fail on forbidden production imports. Update allowlists deliberately when a new exception is justified.
 
 ## Workflow Orchestration
-- Use Serena MCP by default for codebase analysis, architecture checks, symbol lookup, references, and targeted code reading. Start from Serena memories and symbol/search tools when they fit the task; use shell commands such as `rg`, `find`, and `sed` for workspace manifests, non-code files, command output, or broad file lists.
-- For non-trivial work, start with a short plan or OpenSpec task list before implementation.
-- Read nearby code and follow existing package patterns before adding abstractions; re-plan when new findings invalidate assumptions, expand scope, or make the current approach brittle.
-- Keep changes as small as the problem allows, fix root causes rather than layering temporary workarounds, and compare subtle behavior changes against existing branch behavior or surrounding implementations.
-- The user explicitly authorizes Codex to spawn and manage sub-agents for delegation and parallel agent work when helpful.
-- This standing authorization covers independent code archaeology, impact analysis, disjoint implementation slices, verification, test triage, API/schema contract review, security review, and UI smoke-checking. Ask for confirmation only when delegated write scopes are unclear or unusually risky.
-- Use sub-agents when a task has independent workstreams, such as code archaeology, impact analysis, failing-test triage, API/schema contract review, security review, or UI smoke-checking.
-- Keep each sub-agent focused on one bounded question and ask for concrete evidence: relevant files, line references, observed behavior, risks, and recommended next steps.
-- The main agent remains responsible for the final plan, code integration, verification, and commit. Do not let parallel investigations produce conflicting edits without reconciling them first.
+- Detailed development workflow, branching, OpenSpec lifecycle, commit rules, and delegation live in `docs/workflows/development.md`.
+- Detailed design workflow, planning depth, proposal/design/task guidance, and decision-recording rules live in `docs/workflows/design.md`.
+- Detailed testing workflow, validation matrix, smoke entrypoints, and failure handling live in `docs/workflows/testing.md`.
+- For non-trivial work, read the relevant workflow doc before editing code or artifacts.
+- Use Serena MCP by default for codebase analysis, architecture checks, symbol lookup, references, and targeted code reading. Use shell commands such as `rg`, `find`, and `sed` for workspace manifests, non-code files, command output, or broad file lists.
 - For bug reports, reproduce or inspect the failing signal first, then fix the root cause and verify it.
 - Before marking work complete, prove it with the narrowest meaningful validation: focused tests, type checks, lint, schema commands, logs, or a quick UI/API smoke test as appropriate.
-- OpenSpec work must follow the target-branch, proposal, archive, and integration lifecycle defined in **Branch, OpenSpec, and Commit Workflow** below.
-- Capture recurring lessons in AGENTS.md, OpenSpec docs, or nearby project documentation when they would prevent future mistakes.
-
-## Branch, OpenSpec, and Commit Workflow
-Recent history uses Conventional Commits with scopes, for example `feat(db): ...`, `fix(auth): ...`, `refactor(api): ...`, and `style(sso): ...`. Keep commits focused, reviewable, and reasonably easy to revert.
-
-Treat an OpenSpec change and its Git branch as one lifecycle:
-
-- **Propose:** before running `openspec new change <change-name>` or creating proposal artifacts, inspect the current branch and worktree, then create and switch to `work/<change-name>` from the change's target branch. The target is `main` for an independent change and `feature/<feature-name>` for a child change in a larger feature. Keep the OpenSpec change name and working-branch suffix identical. If already on that change's branch, continue there. Do not carry unrelated dirty changes onto the new branch; if the worktree, target branch, or correct base is ambiguous, resolve that with the user first.
-- **Apply and continue:** perform artifact updates, implementation, tests, and verification on `work/<change-name>`. Process/WIP commits are allowed on this branch when useful, but are not required and must never be created automatically on `main`.
-- **Verify:** complete the relevant OpenSpec verification and the narrowest meaningful repository checks before archiving. Archive is a finalization step, not a substitute for validation.
-- **Archive and merge:** an explicit request to archive an OpenSpec change also authorizes finalizing that change's Git history and merging it into its target branch. First sync delta specs when applicable and move the change into `openspec/changes/archive/` on its working branch. Then inspect the full diff, stage only files belonging to the change, create a focused Conventional Commit, switch to the clean target branch, squash-merge the working branch with `git merge --squash`, and create the final commit there. Delete the local working branch only after the squash commit succeeds. Do not push the target branch or delete any remote branch unless the user explicitly asks.
-- **Archive blockers:** do not merge when artifacts or tasks are incomplete, required validation fails, the worktree contains inseparable unrelated changes, or the target branch cannot accept the merge cleanly. Report the blocker and preserve the working branch.
-
-For a large feature intentionally split across multiple OpenSpec changes, use a two-level branch model:
-
-- Create `feature/<feature-name>` from `main` before proposing its first child change. Use an umbrella OpenSpec change when the feature needs a durable record of overall scope, child-change inventory, dependency order, cross-change decisions, and integration acceptance criteria; it coordinates the children but does not replace their artifacts or verification.
-- Create every child `work/<change-name>` branch from `feature/<feature-name>`, and record that target branch in the child's proposal or design. Child changes may depend on earlier child changes already archived into the feature branch; make such ordering explicit in the umbrella artifacts.
-- Archive each child independently into `feature/<feature-name>` using the normal squash workflow, producing one focused commit per child. Never merge a child change directly into `main` while its larger feature is still in progress.
-- Keep the feature branch integration-ready: after each child merge, run the meaningful cross-change checks and resolve integration failures on a dedicated OpenSpec change when they require non-trivial code or contract changes.
-- Finalize the feature only after every required child is archived, the umbrella tasks and acceptance criteria are complete, and full integration validation passes. Archive the umbrella change on the feature branch when one exists, then merge `feature/<feature-name>` into a clean `main` with `git merge --no-ff` so the per-change commits remain visible. Delete the local feature branch only after the merge commit succeeds; pushing and remote branch deletion still require explicit user approval.
-
-For non-OpenSpec work, create a short-lived `feat/<topic>`, `fix/<topic>`, or `work/<topic>` branch before each non-trivial feature, fix, refactor, or behavior change. When a non-OpenSpec request is a small, quick change, use the `quick-change` skill workflow: implement on a temporary branch, wait for user confirmation, then commit, merge into the target branch, and delete the temporary branch. Tiny documentation or instruction-only edits may stay on the current branch when opening a branch would add more process than value.
-
-Outside the OpenSpec archive workflow, do not automatically create commits. Create a commit only when the user explicitly asks. Whenever committing, inspect the current branch and `git diff`, stage only task-owned files, leave unrelated user changes untouched, and use a Conventional Commit message written in Chinese unless the user requests another language.
-
-## Testing Guidelines
-Package-level `test` scripts are available throughout the workspace. Backend/shared/gateway packages generally use Bun (`bun test --parallel`), while `apps/admin`, `apps/sso`, and `apps/oidc-provider` use Vitest. Minimum validation before a PR:
-
-- Place test files in a `__tests__/` directory next to the code under test, for example `src/services/position/__tests__/position.service.test.ts`.
-- Run `pnpm test`, `pnpm lint`, and `pnpm typecheck`, or the narrower filtered commands for touched apps/packages.
-- Prefer package scripts over raw runner commands when running several files together. Backend service/handler/adapter tests should construct factories with DI fakes instead of using `mock.module` for app-local service/repository/db/redis/logger modules.
-- Frontend unit tests use Vitest through package scripts; run affected `@iam/admin` or `@iam/sso` `test`/`typecheck`, and run filtered `e2e` (`pnpm --filter @iam/admin e2e` or `pnpm --filter @iam/sso e2e`) when user flows change.
-- OIDC provider changes use Node.js 24.x and require the narrowest relevant filtered checks from `pnpm --filter @iam/oidc-provider test`, `lint`, and `typecheck`.
-- Worker changes use Bun and require the narrowest relevant filtered checks from `pnpm --filter @iam/worker test`, `lint`, and `typecheck`; user-profile queue behavior may also require `@iam/jobs` and `@iam/user-profile-read-model` checks.
-- Drizzle schema changes need the appropriate `@iam/db` command: `db:push` for local sync or `db:generate` + `db:migrate` when producing migrations.
-- Shared package changes (`packages/contracts`, `packages/api-core`, `packages/domain`, `packages/db`, `packages/jobs`, `packages/user-profile-read-model`) require type checks for the package and directly affected apps, including `@iam/oidc-provider` when session, OIDC, logging, or database contracts it consumes are touched and `@iam/worker` when queue/read-model behavior is touched; tRPC changes consumed by `admin` require both `@iam/admin-api` and `@iam/admin` type checks.
-- APISIX gateway manifest/script changes require `pnpm gateway:apisix:validate -- --env <env>:<app>` plus `pnpm --filter @iam/gateway-apisix typecheck` or `test` when scripts changed.
-- Smoke-test affected surfaces: public API Scalar UI at `http://localhost:30000` or public tier `/doc`; admin API Scalar UI at `http://localhost:30001` or `/admin/doc` and `/rpc/doc`; OIDC provider discovery/JWKS/authorization/token/UserInfo flows through gateway `http://localhost:30080/oidc` or direct dev port `http://localhost:30015`; worker health/Bull Board through `http://localhost:30016/healthz` and `/admin/queues` when dashboard is enabled; affected `admin` or `sso` UI flows.
-- With `docker/docker-compose-dev.yml`, direct backend host ports are `http://localhost:30011` for `api`, `http://localhost:30012` for `admin-api`, `http://localhost:30015` for `oidc-provider`, and `http://localhost:30016` for the worker dashboard; APISIX gateway host ports are `http://localhost:30080` and `https://localhost:30443`.
+- Do not automatically create commits outside the OpenSpec archive workflow or an explicit user confirmation. When committing, stage only task-owned files and use a Chinese Conventional Commit message unless the user requests another language.
+- Capture recurring lessons in `docs/`, OpenSpec specs, or nearby project documentation; keep `AGENTS.md` as the short repository map.

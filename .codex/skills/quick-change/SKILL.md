@@ -7,7 +7,7 @@ description: Handle small, low-risk repository changes with a temporary branch w
 
 ## Overview
 
-Use this workflow for small non-OpenSpec changes that should still be isolated from `main`: create a temporary branch, implement and validate the change, pause for user confirmation, then commit, merge into the target branch, and delete the temporary branch.
+Use this workflow for small non-OpenSpec changes that should still be isolated from the branch where the user raised the request: create a temporary branch, implement and validate the change, pause for user confirmation, then commit, merge into the target branch, and delete the temporary branch.
 
 If the request grows into a feature, schema change, API contract change, risky refactor, or multi-step design discussion, stop using this skill and move to the repository's normal branch/OpenSpec workflow.
 
@@ -15,7 +15,7 @@ If the request grows into a feature, schema change, API contract change, risky r
 
 1. **Triage the request**
    - Confirm the change is small, focused, and likely reviewable from a compact diff.
-   - Identify the target branch. Default to `main` unless the user specifies another target.
+   - Identify the target branch. Default to the branch that was current when the user raised the request, unless the user specifies another target.
    - Run `git status --short --branch` before changing branches.
    - If unrelated dirty changes exist, do not stash, revert, or carry them onto the temporary branch. Pause and ask the user how to proceed unless the dirty files are clearly part of the requested change.
 
@@ -70,6 +70,6 @@ If the user asks for revisions, keep working on the same temporary branch and re
 
 - Never use destructive Git commands such as `git reset --hard` or `git checkout -- <file>` unless the user explicitly requests them.
 - Never include unrelated dirty files in the quick-change commit.
-- Never commit directly on `main`.
+- Never commit directly on the target branch.
 - Never skip the confirmation gate, even when the original request sounds routine.
 - Prefer a normal implementation branch or OpenSpec change when the change is no longer obviously small.

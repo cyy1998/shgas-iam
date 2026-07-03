@@ -37,6 +37,9 @@
 | [docs/releases/sm-encrypted-password-login-release.md](releases/sm-encrypted-password-login-release.md) | runbook | Current | 2026-07-03 | 2026-10-31 | SM2/SM4 加密密码登录、API/SSO 同步发布、Cap 重试、错误码和 rollback matrix。 |
 | [docs/releases/user-profile-dirty-queue-release.md](releases/user-profile-dirty-queue-release.md) | runbook | Current | 2026-07-03 | 2026-10-31 | versioned user-profile dirty/rebuild 队列、worker health、Bull Board、repair/backfill 和回滚手册。 |
 | [docs/reviews/SOFTWARE_ENGINEERING_PRINCIPLES_REVIEW_2026-07-03.md](reviews/SOFTWARE_ENGINEERING_PRINCIPLES_REVIEW_2026-07-03.md) | review | Historical | 2026-07-03 | n/a | 2026-07-03 的软件工程原则审查快照；用于追溯风险，不替代当前代码检查。 |
+| [docs/workflows/design.md](workflows/design.md) | workflow | Current | 2026-07-03 | 2026-10-31 | 设计入口、OpenSpec 适用范围、设计内容和文档沉淀规则。 |
+| [docs/workflows/development.md](workflows/development.md) | workflow | Current | 2026-07-03 | 2026-10-31 | 日常开发、分支、OpenSpec 流程、Quick Change 流程和提交合并规则。 |
+| [docs/workflows/testing.md](workflows/testing.md) | workflow | Current | 2026-07-03 | 2026-10-31 | 测试与验证原则、步骤、验证矩阵、Smoke 入口和失败处理。 |
 
 ## 维护方式
 
