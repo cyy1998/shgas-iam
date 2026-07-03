@@ -28,14 +28,15 @@
 | [docs/features/oidc/oidc-session-migration.md](features/oidc/oidc-session-migration.md) | feature | Current | 2026-06-28 | 2026-09-30 | Session Kernel 会话迁移、旧 key cleanup 和回滚边界。 |
 | [docs/features/sso/public-thirdparty-unified-login.md](features/sso/public-thirdparty-unified-login.md) | feature | Current | 2026-06-28 | 2026-09-30 | 第三方统一登录入口说明。 |
 | [docs/features/sso/third-party-sso-integration.md](features/sso/third-party-sso-integration.md) | feature | Current | 2026-06-28 | 2026-09-30 | 第三方业务系统 custom SSO 对接说明。 |
-| [docs/releases/observability-system-logs.md](releases/observability-system-logs.md) | runbook | Current | 2026-07-02 | 2026-09-30 | Loki/Grafana/Alloy 系统日志观测运行手册；当前采集 backend、worker 与 APISIX，前端容器仍排除。 |
-| [docs/releases/oidc-release-runbook.md](releases/oidc-release-runbook.md) | runbook | Current | 2026-06-28 | 2026-09-30 | OIDC Provider 发布、smoke 和回滚手册。 |
-| [docs/releases/session-kernel-release-smoke.md](releases/session-kernel-release-smoke.md) | release-record | Historical | 2026-06-24 | n/a | Session Kernel 发布 smoke 证据快照；不代表后续当前状态。 |
-| [docs/releases/sm-encrypted-password-login-release.md](releases/sm-encrypted-password-login-release.md) | release-record | Historical | 2026-06-28 | n/a | SM 加密密码登录发布检查清单和历史验收记录。 |
-| [docs/releases/user-profile-dirty-queue-release.md](releases/user-profile-dirty-queue-release.md) | runbook | Current | 2026-07-02 | 2026-09-30 | versioned user-profile dirty/rebuild 队列发布顺序和回滚注意事项。 |
-| [docs/reviews/ARCHITECTURE_REVIEW.md](reviews/ARCHITECTURE_REVIEW.md) | review | Stale | 2026-06-28 | n/a | not current: 仍引用 Prisma、旧路径和旧架构判断，只能作为历史线索。 |
-| [docs/reviews/SOLID_DRY_KISS_REVIEW_2026-06-15.md](reviews/SOLID_DRY_KISS_REVIEW_2026-06-15.md) | review | Historical | 2026-06-15 | n/a | 2026-06-15 的代码审查快照；用于追溯风险，不替代当前代码检查。 |
-| [docs/reviews/TYPESCRIPT_BEST_PRACTICES_REVIEW_2026-06-15.md](reviews/TYPESCRIPT_BEST_PRACTICES_REVIEW_2026-06-15.md) | review | Historical | 2026-06-15 | n/a | 2026-06-15 的 TypeScript 审查快照；用于追溯风险，不替代当前 lint/typecheck。 |
+| [docs/releases/apisix-gateway-release.md](releases/apisix-gateway-release.md) | runbook | Current | 2026-07-03 | 2026-10-31 | APISIX gateway manifest validate、diff、apply、prune、真实 IP/限流、OpenTelemetry 和回滚手册。 |
+| [docs/releases/audit-login-log-retirement-release.md](releases/audit-login-log-retirement-release.md) | runbook | Current | 2026-07-03 | 2026-10-31 | 统一审计日志与 legacy `login_log` 退役发布、迁移验收、敏感字段检查和回滚手册。 |
+| [docs/releases/observability-system-logs.md](releases/observability-system-logs.md) | runbook | Current | 2026-07-03 | 2026-10-31 | Loki/Grafana/Alloy 系统日志观测运行手册；补充 APISIX trace、Alloy OTLP 和证据留存。 |
+| [docs/releases/oidc-release-runbook.md](releases/oidc-release-runbook.md) | runbook | Current | 2026-07-03 | 2026-10-31 | OIDC Provider 发布、JWK/HMAC rotation、逐 client smoke 和回滚手册。 |
+| [docs/releases/role-assignment-role-management-release.md](releases/role-assignment-role-management-release.md) | runbook | Current | 2026-07-03 | 2026-10-31 | 角色分配统一、admin `/roles`、user-profile dirty 验收和回滚手册。 |
+| [docs/releases/session-kernel-release-smoke.md](releases/session-kernel-release-smoke.md) | release-record | Historical | 2026-07-03 | n/a | 2026-06-24 Session Kernel 发布 smoke 证据快照，并提供后续可复用 smoke 模板。 |
+| [docs/releases/sm-encrypted-password-login-release.md](releases/sm-encrypted-password-login-release.md) | runbook | Current | 2026-07-03 | 2026-10-31 | SM2/SM4 加密密码登录、API/SSO 同步发布、Cap 重试、错误码和 rollback matrix。 |
+| [docs/releases/user-profile-dirty-queue-release.md](releases/user-profile-dirty-queue-release.md) | runbook | Current | 2026-07-03 | 2026-10-31 | versioned user-profile dirty/rebuild 队列、worker health、Bull Board、repair/backfill 和回滚手册。 |
+| [docs/reviews/SOFTWARE_ENGINEERING_PRINCIPLES_REVIEW_2026-07-03.md](reviews/SOFTWARE_ENGINEERING_PRINCIPLES_REVIEW_2026-07-03.md) | review | Historical | 2026-07-03 | n/a | 2026-07-03 的软件工程原则审查快照；用于追溯风险，不替代当前代码检查。 |
 
 ## 维护方式
 

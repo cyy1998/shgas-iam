@@ -1,5 +1,10 @@
 # IAM 系统日志可观测性运行手册
 
+Type: runbook
+Status: Current
+Last verified: 2026-07-03
+Next review: 2026-10-31
+
 ## 范围
 
 该栈通过 Docker stdout/stderr、Grafana Alloy、Loki 和 Grafana 收集带有
@@ -52,6 +57,23 @@ docker compose -f docker/docker-compose-observability-prod.yml up -d alloy
 Loki 默认配置为保留 30 天（`720h`）。如果某个环境需要不同的保留窗口，可覆盖 `LOKI_RETENTION_PERIOD`。监控 Loki 数据目录，并在磁盘使用率达到危险水位前告警；随附的 Grafana 告警规则包含采集失败信号，但磁盘水位也应由宿主平台监控。
 
 通过快照 `LOKI_DATA_PATH` 和 `GRAFANA_DATA_PATH` 备份 Loki 与 Grafana。回滚该栈时，停止可观测性 compose 服务即可；IAM 应用会继续写 stdout/stderr 日志。
+
+## Trace 发布前置
+
+APISIX 与后端 trace 关联依赖以下条件同时满足：
+
+- APISIX manifest 保留 `opentelemetry` plugin metadata，且设置 `set_ngx_var: true`，使
+  `$opentelemetry_trace_id`、`$opentelemetry_span_id` 和 `$opentelemetry_context_traceparent` 可进入 access log。
+- APISIX 容器配置 `APISIX_OTEL_COLLECTOR_ENDPOINT`，开发 compose 默认指向 `alloy:4318`。
+- Alloy 配置启用 `otelcol.receiver.otlp "apisix"`，并开放 OTLP HTTP receiver；开发 compose 默认发布
+  `ALLOY_OTLP_HTTP_PUBLISHED_PORT=4318`。
+- APISIX access log JSON 字段包含 `traceId`、`spanId` 和 `traceparent`；缺失 OpenTelemetry 变量时字段保持空字符串或等价缺失值。
+- 后端按 `traceparent`、`x-b3-traceid`、`x-trace-id` 的优先级解析 `traceId`，并只记录
+  `traceparent` 中的 32 位 trace-id，不记录完整 header 原文。
+
+发布 APISIX 或 Alloy 变更前，先确认 `gateway` manifest 校验与可观测性 compose 配置都来自同一变更集。直接绕过
+APISIX 访问后端且没有 trace header 的请求，应在后端系统日志和审计日志中保留 `traceId = null` 或等价缺失值，
+不得由后端随机生成 traceId。
 
 ## Grafana OIDC
 
@@ -118,6 +140,22 @@ Grafana data link 和管理端深链只能携带技术关联字段：
 
 当前没有把 dashboard 截图作为视觉基线提交到仓库。如果某次发布需要截图评审，请在 provisioning 加载后从开发可观测性栈生成截图，并将截图产物保留在仓库外，除非有专门评审流程要求纳入。
 
+## Trace Smoke
+
+发布或调整 APISIX OpenTelemetry、Alloy OTLP receiver、日志格式、dashboard 或审计 trace 查询时，至少执行以下 smoke：
+
+1. 带合法 `traceparent` 访问一个经过 APISIX 的 IAM API endpoint，记录请求使用的 `X-Request-Id`。
+2. 在 Loki 中查询 `service="apisix"` 的 gateway access log，确认同一请求包含 `event="gateway.request.completed"`、
+   `traceId`、`spanId`、`traceparent`、`requestId`、`statusCode`、`durationMs` 和 upstream 字段。
+3. 查询 backend 日志，确认同一 `requestId` 或 `traceId` 可以找到 `api`、`admin-api` 或 `oidc-provider`
+   的 request log。
+4. 触发一条会写审计的操作，确认 `audit_log.request_id` 与 `audit_log.trace_id` 可与 gateway/backend 日志关联。
+5. 不带 `traceparent` 再访问一次 gateway，确认 APISIX OpenTelemetry 创建 trace context，并将 trace 字段传给上游。
+6. 在 `IAM Request Drilldown` 使用 `requestId` 或 `traceId` 打开请求详情，确认时间线覆盖 gateway 和后端日志。
+
+证据留存只记录 requestId、traceId、服务名、时间窗口、查询表达式摘要和截图或命令结果摘要。不得保存
+Authorization header、Cookie、请求体、响应体、完整业务 URL query、token、client secret、验证码或审计 details 原文。
+
 ## 日志契约
 
 系统日志使用如下 JSON 字段：
@@ -125,7 +163,9 @@ Grafana data link 和管理端深链只能携带技术关联字段：
 - `event`：稳定的小写点分事件名。
 - `sourceApp`：`iam-api`、`iam-admin-api`、`iam-oidc-provider`、`iam-worker` 或 `apisix`。
 - `requestId`：来自 `X-Request-Id` 的主要关联 ID。
-- `traceId`：存在时记录可选 trace header 值。
+- `traceId`：存在时记录标准 trace context 的 trace id。
+- `spanId`：gateway access log 中记录 APISIX OpenTelemetry span id。
+- `traceparent`：gateway access log 中记录 APISIX 传递给上游的 traceparent。
 - `method`、`path`、`route`、`statusCode`、`durationMs`。
 - `clientIp`、`userAgent`。
 - `errorName`、`errorCode`、`errorMessage`、`source`。

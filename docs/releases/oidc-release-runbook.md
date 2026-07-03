@@ -1,5 +1,10 @@
 # OIDC Provider 发布与回滚手册
 
+Type: runbook
+Status: Current
+Last verified: 2026-07-03
+Next review: 2026-10-31
+
 ## 发布前提
 
 1. 使用 Node.js 24.x 构建并测试 `@iam/oidc-provider`。
@@ -27,6 +32,48 @@ pnpm gateway:apisix:diff -- --env prod:iam --render-env
 ```
 
 确保 localhost 或 Admin API 主机不经过 HTTP 代理。
+
+## JWK Signing Key Rotation
+
+OIDC ID Token 使用 RS256 signing JWK。轮换时按以下顺序执行：
+
+1. 生成新的 RSA private JWK，设置唯一 `kid`，`alg` 必须为 `RS256`，不得提交 private key material。
+2. 将旧 current JWK 配置为 previous，将新 JWK 配置为 current。
+3. 部署 provider，确认 Discovery 的 `jwks_uri` 不变，JWKS 同时返回 current 和仍需验证未过期 ID Token 的 previous public JWK。
+4. 对测试 client 执行 authorize/token，验证新 ID Token protected header 中的 `kid` 为新 current。
+5. 等待旧 ID Token 最大 TTL 结束后，移除 previous JWK，再次确认 JWKS 只暴露仍需要的 public key。
+
+如果 current/previous `kid` 冲突、不是可用 RSA private key 或配置缺失，provider 必须启动失败，不得降级为临时内存 key。
+
+## Session Kernel HMAC Lookup Rotation
+
+Session Kernel external token lookup 使用 HMAC hash。轮换顺序是：
+
+1. 将旧 current 配为 `IAM_OIDC_PROVIDER_SESSION_LOOKUP_HMAC_PREVIOUS_ID` 和
+   `IAM_OIDC_PROVIDER_SESSION_LOOKUP_HMAC_PREVIOUS_SECRET`。
+2. 配置新的 `IAM_OIDC_PROVIDER_SESSION_LOOKUP_HMAC_CURRENT_ID` 和
+   `IAM_OIDC_PROVIDER_SESSION_LOOKUP_HMAC_CURRENT_SECRET`。
+3. 部署 provider，确认 current/previous 的 id 和 secret 均不冲突，previous 成对存在。
+4. 在旧 PrincipalSession、authorization code、access token 或 lookup 最大 TTL 覆盖窗口内保留 previous。
+5. 确认旧 lookup 全部过期或用户已重新登录后，移除 previous HMAC key pair。
+
+生产环境不得使用开发默认 HMAC secret。HMAC rotation 失败时，优先恢复上一组 current/previous 配置；不要清理
+`sess:v2:` key，除非明确执行跨版本回滚。
+
+## 逐 Client 启用矩阵
+
+每个生产 client 单独记录启用、smoke 和证据状态。建议发布窗口中使用下表维护：
+
+| clientCode | client type | `oidcEnabled` 前 | 操作 | Smoke | 证据 |
+|---|---|---|---|---|---|
+| `<client>` | `public` / `confidential` | `false` / `true` | configure / enable / rotate secret | discovery、authorize、token、UserInfo、logout、replay | requestId、traceId、时间窗口 |
+
+启用规则：
+
+- 已配置但禁用的 client 先在管理端确认 redirect URI、post logout redirect URI、allowed scopes 和 secret 状态。
+- confidential client secret 只在生成或 rotate 响应中显示一次，不得写入发布记录。
+- 每个 client 通过 authorize/token/UserInfo/logout smoke 后，再启用下一个 client。
+- configure、enable、disable、remove、rotate secret、全局状态变化或软删除都会递增 `oidcConfigVersion` 并撤销旧协议对象。
 
 ## 分阶段发布
 
@@ -77,3 +124,16 @@ pnpm --filter @iam/api-core session:cleanup-legacy-keys -- --apply --batch-size 
 ## 验收记录
 
 发布或回滚都必须把命令输出摘要、Redis cleanup dry-run/apply 摘要、custom SSO/OIDC/admin revoke smoke 结果和 Loki/Grafana 查询证据写入 Session Kernel release smoke 记录。
+
+建议记录模板：
+
+| 分类 | 结果 | 证据摘要 |
+|---|---|---|
+| build/test | 通过/失败 | `@iam/oidc-provider` test、lint、typecheck 摘要。 |
+| JWK rotation | 通过/跳过 | current/previous `kid`、JWKS public key 数量、token header `kid`。 |
+| HMAC lookup rotation | 通过/跳过 | current/previous id、保留窗口、移除 previous 时间。 |
+| client enable matrix | 通过/失败 | 每个 client 的启用状态、smoke 路径和 requestId/traceId。 |
+| Redis cleanup | 通过/跳过 | dry-run/apply pattern/count 摘要，不记录完整 key。 |
+| protocol smoke | 通过/失败 | Discovery、JWKS、authorize、token、UserInfo、replay、logout。 |
+| admin revoke | 通过/失败 | `admin.session_revoke.*` 日志与旧 token 拒绝结果。 |
+| redaction | 通过/失败 | 未发现 code、token、verifier、secret、cookie、完整 Redis key 或 private payload。 |
