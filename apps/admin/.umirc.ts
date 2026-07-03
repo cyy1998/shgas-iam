@@ -89,6 +89,13 @@ export default defineConfig({
       access: 'isAdmin',
     },
     {
+      path: '/roles',
+      name: '角色管理',
+      icon: 'safety',
+      component: './roles/index',
+      access: 'isAdmin',
+    },
+    {
       path: '/audit-logs',
       name: '审计日志',
       icon: 'fileSearch',

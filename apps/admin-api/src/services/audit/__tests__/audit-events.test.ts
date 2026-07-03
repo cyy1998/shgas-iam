@@ -1,6 +1,8 @@
+import { RoleAssignmentTargetType } from "@iam/contracts";
 import { describe, expect, test } from "bun:test";
 import * as clientAudit from "../events/client.audit";
 import * as employmentAudit from "../events/employment.audit";
+import * as roleAudit from "../events/role.audit";
 import * as userAudit from "../events/user.audit";
 
 describe("admin audit event builders", () => {
@@ -51,6 +53,41 @@ describe("admin audit event builders", () => {
       details: {
         username: "zhangsan",
         resigned: true,
+      },
+    });
+  });
+
+  test("builds role assignment payload with role target and assignment summary", () => {
+    expect(roleAudit.buildRoleAssignmentAudit(
+      "admin.role.assignment.create",
+      { id: 1, roleCode: "portal-admin", roleName: "Portal Admin", status: 1 },
+      {
+        id: 100,
+        targetType: RoleAssignmentTargetType.Organization,
+        targetId: 20,
+        includeDescendants: true,
+        target: { code: "ORG", name: "Org", status: 1 },
+      },
+      { created: true },
+      { actorType: "admin", actorUsername: "admin" },
+    )).toMatchObject({
+      action: "admin.role.assignment.create",
+      targetType: "role",
+      targetCode: "portal-admin",
+      details: {
+        roleCode: "portal-admin",
+        roleName: "Portal Admin",
+        status: 1,
+        assignment: {
+          id: 100,
+          targetType: "organization",
+          targetId: 20,
+          targetCode: "ORG",
+          targetName: "Org",
+          targetStatus: 1,
+          includeDescendants: true,
+        },
+        created: true,
       },
     });
   });

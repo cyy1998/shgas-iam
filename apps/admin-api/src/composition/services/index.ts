@@ -6,6 +6,7 @@ import { createClientService } from "@admin-api/services/client/client.service";
 import { createEmploymentService } from "@admin-api/services/employment/employment.service";
 import { createOrganizationService } from "@admin-api/services/organization/organization.service";
 import { createPositionService } from "@admin-api/services/position/position.service";
+import { createRoleService } from "@admin-api/services/role/role.service";
 import { createUserService } from "@admin-api/services/user/user.service";
 import { mapUnitOfWork } from "@iam/api-core/uow";
 
@@ -66,6 +67,15 @@ export function createAdminApiServices(options: CreateAdminApiServicesOptions) {
     })),
   });
 
+  const roleService = createRoleService({
+    roleRepository: repositories.role,
+    uow: mapUnitOfWork(unitOfWork, tx => ({
+      roleRepository: tx.repositories.role,
+      auditService: tx.auditService,
+      profileDirtyMarker: tx.profileDirtyMarker,
+    })),
+  });
+
   const employmentService = createEmploymentService({
     employmentRepository: repositories.employment,
     roleRepository: repositories.role,
@@ -86,6 +96,7 @@ export function createAdminApiServices(options: CreateAdminApiServicesOptions) {
     employment: employmentService,
     organization: organizationService,
     position: positionService,
+    role: roleService,
     user: userService,
   };
 }

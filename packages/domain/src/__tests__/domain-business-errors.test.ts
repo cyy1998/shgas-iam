@@ -5,6 +5,7 @@ import * as EmploymentErrors from "@iam/domain/employment";
 import * as OrganizationErrors from "@iam/domain/organization";
 import * as PositionErrors from "@iam/domain/position";
 import * as PrivilegeErrors from "@iam/domain/privilege";
+import * as RoleErrors from "@iam/domain/role";
 import * as UserErrors from "@iam/domain/user";
 import { describe, expect, test } from "bun:test";
 import { DomainBusinessError } from "../errors";
@@ -157,6 +158,48 @@ const cases: ExpectedError[] = [
     message: "客户端编码已存在",
     code: ApiErrorCode.ClientCodeExists,
     httpStatus: 409,
+  },
+  {
+    className: "RoleNotFoundError",
+    exports: RoleErrors,
+    message: "角色不存在",
+    code: ApiErrorCode.RoleNotFound,
+    httpStatus: 404,
+  },
+  {
+    className: "RoleCodeExistsError",
+    exports: RoleErrors,
+    message: "角色编码已存在",
+    code: ApiErrorCode.RoleCodeExists,
+    httpStatus: 409,
+  },
+  {
+    className: "RoleHasAssignmentError",
+    exports: RoleErrors,
+    message: "角色仍存在分配，无法删除",
+    code: ApiErrorCode.RoleHasAssignment,
+    httpStatus: 409,
+  },
+  {
+    className: "RoleAssignmentExistsError",
+    exports: RoleErrors,
+    message: "角色分配已存在",
+    code: ApiErrorCode.RoleAssignmentExists,
+    httpStatus: 409,
+  },
+  {
+    className: "InvalidRoleAssignmentScopeError",
+    exports: RoleErrors,
+    message: "角色分配作用范围非法",
+    code: ApiErrorCode.InvalidRoleAssignmentScope,
+    httpStatus: 400,
+  },
+  {
+    className: "RoleAssignmentTargetNotFoundError",
+    exports: RoleErrors,
+    message: "角色分配目标不存在或不可用",
+    code: ApiErrorCode.RoleAssignmentTargetNotFound,
+    httpStatus: 404,
   },
   {
     className: "PrivilegeDelegationNotFoundError",

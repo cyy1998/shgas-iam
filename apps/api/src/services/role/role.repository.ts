@@ -1,14 +1,12 @@
 import type { DbClient } from "@iam/db";
-import { EmploymentStatus, RoleStatus } from "@iam/contracts";
+import { EmploymentStatus, RoleAssignmentTargetType, RoleStatus } from "@iam/contracts";
 import {
-  employmentRoles,
   employments,
   organizationClosures,
-  organizationRoles,
-  positionRoles,
+  roleAssignments,
   roles,
 } from "@iam/db/schema";
-import { and, eq, exists, or, sql } from "drizzle-orm";
+import { and, eq, exists, gt, or, sql } from "drizzle-orm";
 
 export function createRoleRepository(db: DbClient) {
   return {
@@ -31,31 +29,34 @@ function roleAssignedToEmploymentWhere(employmentId: number, tx: DbClient) {
   return or(
     exists(
       tx.select({ value: sql`1` })
-        .from(positionRoles)
-        .innerJoin(employments, eq(positionRoles.positionId, employments.posId))
+        .from(roleAssignments)
+        .innerJoin(employments, eq(roleAssignments.targetId, employments.posId))
         .where(and(
-          eq(positionRoles.roleId, roles.id),
+          eq(roleAssignments.roleId, roles.id),
+          eq(roleAssignments.targetType, RoleAssignmentTargetType.Position),
           eq(employments.id, employmentId),
           eq(employments.status, EmploymentStatus.Enable),
         )),
     ),
     exists(
       tx.select({ value: sql`1` })
-        .from(organizationRoles)
+        .from(roleAssignments)
         .innerJoin(employments, eq(employments.id, employmentId))
         .where(and(
-          eq(organizationRoles.roleId, roles.id),
+          eq(roleAssignments.roleId, roles.id),
+          eq(roleAssignments.targetType, RoleAssignmentTargetType.Organization),
           eq(employments.status, EmploymentStatus.Enable),
           or(
-            and(eq(organizationRoles.isAllSub, false), eq(organizationRoles.organizationId, employments.orgId)),
+            eq(roleAssignments.targetId, employments.orgId),
             and(
-              eq(organizationRoles.isAllSub, true),
+              eq(roleAssignments.includeDescendants, true),
               exists(
                 tx.select({ value: sql`1` })
                   .from(organizationClosures)
                   .where(and(
-                    eq(organizationClosures.ancestorId, organizationRoles.organizationId),
+                    eq(organizationClosures.ancestorId, roleAssignments.targetId),
                     eq(organizationClosures.descendantId, employments.orgId),
+                    gt(organizationClosures.depth, 0),
                   )),
               ),
             ),
@@ -64,10 +65,11 @@ function roleAssignedToEmploymentWhere(employmentId: number, tx: DbClient) {
     ),
     exists(
       tx.select({ value: sql`1` })
-        .from(employmentRoles)
-        .innerJoin(employments, eq(employmentRoles.employmentId, employments.id))
+        .from(roleAssignments)
+        .innerJoin(employments, eq(roleAssignments.targetId, employments.id))
         .where(and(
-          eq(employmentRoles.roleId, roles.id),
+          eq(roleAssignments.roleId, roles.id),
+          eq(roleAssignments.targetType, RoleAssignmentTargetType.Employment),
           eq(employments.id, employmentId),
           eq(employments.status, EmploymentStatus.Enable),
         )),

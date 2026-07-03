@@ -7,17 +7,9 @@ export function rolesRelations(r: RelationsHelper) {
         from: r.roles.clientId,
         to: r.clients.id,
       }),
-      positions: r.many.positionRoles({
+      assignments: r.many.roleAssignments({
         from: r.roles.id,
-        to: r.positionRoles.roleId,
-      }),
-      organizations: r.many.organizationRoles({
-        from: r.roles.id,
-        to: r.organizationRoles.roleId,
-      }),
-      employments: r.many.employmentRoles({
-        from: r.roles.id,
-        to: r.employmentRoles.roleId,
+        to: r.roleAssignments.roleId,
       }),
       privileges: r.many.rolePrivileges({
         from: r.roles.id,

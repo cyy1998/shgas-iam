@@ -20,6 +20,7 @@ export const targetTypeLabels: Record<string, string> = {
   organization: '组织',
   position: '职位',
   client: '应用',
+  role: '角色',
   delegation: '权限委派',
   mobile: '手机号',
 };
@@ -76,6 +77,7 @@ export function getTargetDisplay(row: AuditLogVo) {
       'targetName',
       'userName',
       'clientName',
+      'roleName',
       'orgName',
       'posName',
       'purveyorName',

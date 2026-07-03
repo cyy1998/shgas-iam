@@ -5,4 +5,5 @@ export * from "./errors";
 export * from "./organization";
 export * from "./position";
 export * from "./privilege";
+export * from "./role";
 export * from "./user";

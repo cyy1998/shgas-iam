@@ -40,6 +40,13 @@ export enum ApiErrorCode {
   ClientNotFound = "CLIENT.NOT_FOUND",
   ClientCodeExists = "CLIENT.CODE_EXISTS",
 
+  RoleNotFound = "ROLE.NOT_FOUND",
+  RoleCodeExists = "ROLE.CODE_EXISTS",
+  RoleHasAssignment = "ROLE.HAS_ASSIGNMENT",
+  RoleAssignmentExists = "ROLE.ASSIGNMENT_EXISTS",
+  InvalidRoleAssignmentScope = "ROLE.INVALID_ASSIGNMENT_SCOPE",
+  RoleAssignmentTargetNotFound = "ROLE.ASSIGNMENT_TARGET_NOT_FOUND",
+
   InvalidSsoClient = "SSO.INVALID_CLIENT",
   InvalidRedirectUri = "SSO.INVALID_REDIRECT_URI",
   InvalidAuthCode = "SSO.INVALID_AUTH_CODE",

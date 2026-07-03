@@ -3,11 +3,12 @@ import {
   getEmploymentStatusOptions,
   getOrganizationStatusOptions,
   getPositionStatusOptions,
+  getRoleStatusOptions,
   getUserStatusOptions,
 } from '@iam/contracts';
 import { Tag } from 'antd';
 
-type Domain = 'user' | 'org' | 'position' | 'employment' | 'client';
+type Domain = 'user' | 'org' | 'position' | 'employment' | 'client' | 'role';
 
 const optionsByDomain = {
   user: getUserStatusOptions,
@@ -15,6 +16,7 @@ const optionsByDomain = {
   position: getPositionStatusOptions,
   employment: getEmploymentStatusOptions,
   client: getClientStatusOptions,
+  role: getRoleStatusOptions,
 } as const;
 
 type Props = {

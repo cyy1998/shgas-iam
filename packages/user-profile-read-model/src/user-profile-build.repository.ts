@@ -1,15 +1,13 @@
 import type { DbClient } from "@iam/db";
 import type { Employment, Organization, User } from "@iam/db/schema";
-import { EmploymentStatus, PositionStatus, PrivilegeStatus, RoleStatus } from "@iam/contracts";
+import { EmploymentStatus, PositionStatus, PrivilegeStatus, RoleAssignmentTargetType, RoleStatus } from "@iam/contracts";
 import {
-  employmentRoles,
   employments,
   organizationClosures,
-  organizationRoles,
   organizations,
-  positionRoles,
   positions,
   privileges,
+  roleAssignments,
   rolePrivileges,
   roles,
   users,
@@ -149,8 +147,11 @@ async function loadEmploymentRoles(db: DbClient, employmentIds: number[]) {
         roleCode: roles.roleCode,
       })
       .from(employments)
-      .innerJoin(positionRoles, eq(positionRoles.positionId, employments.posId))
-      .innerJoin(roles, eq(positionRoles.roleId, roles.id))
+      .innerJoin(roleAssignments, and(
+        eq(roleAssignments.targetType, RoleAssignmentTargetType.Position),
+        eq(roleAssignments.targetId, employments.posId),
+      ))
+      .innerJoin(roles, eq(roleAssignments.roleId, roles.id))
       .where(and(
         inArray(employments.id, employmentIds),
         activeRoleWhere(),
@@ -162,8 +163,11 @@ async function loadEmploymentRoles(db: DbClient, employmentIds: number[]) {
         roleCode: roles.roleCode,
       })
       .from(employments)
-      .innerJoin(employmentRoles, eq(employmentRoles.employmentId, employments.id))
-      .innerJoin(roles, eq(employmentRoles.roleId, roles.id))
+      .innerJoin(roleAssignments, and(
+        eq(roleAssignments.targetType, RoleAssignmentTargetType.Employment),
+        eq(roleAssignments.targetId, employments.id),
+      ))
+      .innerJoin(roles, eq(roleAssignments.roleId, roles.id))
       .where(and(
         inArray(employments.id, employmentIds),
         activeRoleWhere(),
@@ -176,14 +180,17 @@ async function loadEmploymentRoles(db: DbClient, employmentIds: number[]) {
       })
       .from(employments)
       .innerJoin(organizationClosures, eq(organizationClosures.descendantId, employments.orgId))
-      .innerJoin(organizationRoles, eq(organizationRoles.organizationId, organizationClosures.ancestorId))
-      .innerJoin(roles, eq(organizationRoles.roleId, roles.id))
+      .innerJoin(roleAssignments, and(
+        eq(roleAssignments.targetType, RoleAssignmentTargetType.Organization),
+        eq(roleAssignments.targetId, organizationClosures.ancestorId),
+      ))
+      .innerJoin(roles, eq(roleAssignments.roleId, roles.id))
       .where(and(
         inArray(employments.id, employmentIds),
         activeRoleWhere(),
         or(
           eq(organizationClosures.depth, 0),
-          and(gt(organizationClosures.depth, 0), eq(organizationRoles.isAllSub, true)),
+          and(gt(organizationClosures.depth, 0), eq(roleAssignments.includeDescendants, true)),
         ),
       )),
   ]);

@@ -86,6 +86,26 @@
 - **THEN** builder SHALL 保留该组织路径节点
 - **AND** builder MUST 排除 `is_delete=true` 的组织路径节点
 
+### Requirement: Profile builder resolves roles from unified role assignments
+系统 SHALL 在 user-profile builder 中通过 `role_assignment` 解析每条 active employment 的 role codes。
+
+#### Scenario: Builder includes position role assignments
+- **WHEN** active employment 的岗位存在 active role assignment
+- **THEN** builder SHALL 将对应 active role code 写入该 employment 的 detail 和 search document
+
+#### Scenario: Builder includes employment role assignments
+- **WHEN** active employment 本身存在 active role assignment
+- **THEN** builder SHALL 将对应 active role code 写入该 employment 的 detail 和 search document
+
+#### Scenario: Builder includes organization role assignments
+- **WHEN** active employment 的组织或其 ancestor organization 存在 active role assignment
+- **THEN** builder SHALL 按 `includeDescendants` 语义判断该 role 是否作用于该 employment
+- **AND** 命中的 active role code SHALL 写入该 employment 的 detail 和 search document
+
+#### Scenario: Builder deduplicates repeated role hits
+- **WHEN** 同一个 role 通过多个 assignment source 命中同一个 employment
+- **THEN** builder SHALL 在该 employment 的 roles 中只保留一个 role code
+
 ### Requirement: Profile schema versioning
 系统 SHALL 使用 `profile_schema_version` 标记当前 `detail` 和 `search_doc` 结构版本。
 
@@ -145,7 +165,8 @@
 
 #### Scenario: Role scope expands all assignment sources
 - **WHEN** worker 处理 `role-id` scope
-- **THEN** worker SHALL 从 `employment_role`、`position_role` 和 `organization_role` 反向展开受影响用户
+- **THEN** worker SHALL 从 `role_assignment` 中按 `targetType=employment`、`targetType=position` 和 `targetType=organization` 反向展开受影响用户
+- **AND** organization assignment SHALL 按 `includeDescendants` 判断是否包含 descendant 组织下的 active employments
 
 #### Scenario: Privilege scope expands through roles
 - **WHEN** worker 处理 `privilege-id` scope
@@ -252,6 +273,29 @@
 - **WHEN** `apps/admin-api` marks user-profile dirty or enqueues user-profile jobs
 - **THEN** it SHALL NOT import `@api` private modules
 - **AND** it SHALL depend only on shared contracts/jobs/db modules, `@iam/user-profile-read-model`, or app-local ports wired to shared helpers
+
+### Requirement: Role assignment writes mark affected profiles dirty
+系统 SHALL 在角色分配创建、删除或组织作用范围修改时持久化受影响用户的 `user_profile_dirty` 记录，并在事务提交后唤醒 user-profile worker。
+
+#### Scenario: Organization assignment change marks organization scope dirty
+- **WHEN** organization role assignment 被创建、删除或修改 `includeDescendants`
+- **THEN** 系统 SHALL 使用 `UserProfileScopeType.OrganizationId` 展开受影响用户
+- **AND** dirty reason SHALL 使用 `UserProfileDirtyReason.RoleUpdated`
+
+#### Scenario: Position assignment change marks position scope dirty
+- **WHEN** position role assignment 被创建或删除
+- **THEN** 系统 SHALL 使用 `UserProfileScopeType.PositionId` 展开受影响用户
+- **AND** dirty reason SHALL 使用 `UserProfileDirtyReason.RoleUpdated`
+
+#### Scenario: Employment assignment change marks employment scope dirty
+- **WHEN** employment role assignment 被创建或删除
+- **THEN** 系统 SHALL 使用 `UserProfileScopeType.EmploymentId` 展开受影响用户
+- **AND** dirty reason SHALL 使用 `UserProfileDirtyReason.RoleUpdated`
+
+#### Scenario: Assignment deletion preserves affected scope
+- **WHEN** role assignment 删除会使关系本身不可再查询
+- **THEN** 系统 SHALL 在删除前捕获 target type 和 target id
+- **AND** 系统 SHALL 用删除前捕获的 scope 标记 user-profile dirty
 
 ### Requirement: Dirty rebuild state indexes
 系统 SHALL provide indexes that support repair scans and rebuild backlog observation for `user_profile_dirty`.

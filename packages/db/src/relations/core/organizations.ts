@@ -19,10 +19,6 @@ export function organizationsRelations(r: RelationsHelper) {
         to: r.employments.orgId,
         alias: "employment_dept",
       }),
-      roles: r.many.organizationRoles({
-        from: r.organizations.id,
-        to: r.organizationRoles.organizationId,
-      }),
       ancestorClosures: r.many.organizationClosures({
         from: r.organizations.id,
         to: r.organizationClosures.descendantId,

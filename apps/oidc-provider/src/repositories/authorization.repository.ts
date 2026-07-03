@@ -5,17 +5,16 @@ import {
   OrganizationStatus,
   PositionStatus,
   PrivilegeStatus,
+  RoleAssignmentTargetType,
   RoleStatus,
 } from "@iam/contracts";
 import {
-  employmentRoles,
   employments,
   organizationClosures,
-  organizationRoles,
   organizations,
-  positionRoles,
   positions,
   privileges,
+  roleAssignments,
   rolePrivileges,
   roles,
 } from "@iam/db/schema";
@@ -27,6 +26,68 @@ import {
 } from "./authorization-claim.ts";
 
 export type { OidcAuthorizationClaim } from "./authorization-claim.ts";
+
+export interface RoleAssignmentEmploymentInput {
+  id: number;
+  orgId: number;
+  posId: number;
+}
+
+export interface RoleAssignmentInput {
+  roleId: number;
+  targetId: number;
+}
+
+export interface OrganizationRoleAssignmentInput extends RoleAssignmentInput {
+  includeDescendants: boolean;
+}
+
+export interface OrganizationPathInput {
+  id: number;
+}
+
+export function resolveRoleIdsByEmploymentFromAssignments(input: {
+  activeRoleIds: ReadonlySet<number>;
+  directRoleRows: RoleAssignmentInput[];
+  employments: RoleAssignmentEmploymentInput[];
+  organizationRoleRows: OrganizationRoleAssignmentInput[];
+  pathByOrg: Map<number, OrganizationPathInput[]>;
+  positionRoleRows: RoleAssignmentInput[];
+}) {
+  const directRolesByEmployment = new Map<number, number[]>();
+  for (const row of input.directRoleRows) {
+    const roleIds = directRolesByEmployment.get(row.targetId) ?? [];
+    roleIds.push(row.roleId);
+    directRolesByEmployment.set(row.targetId, roleIds);
+  }
+
+  const assignmentRoleIdsByPosition = new Map<number, number[]>();
+  for (const row of input.positionRoleRows) {
+    const roleIds = assignmentRoleIdsByPosition.get(row.targetId) ?? [];
+    roleIds.push(row.roleId);
+    assignmentRoleIdsByPosition.set(row.targetId, roleIds);
+  }
+
+  const roleIdsByEmployment = new Map<number, number[]>();
+  for (const employment of input.employments) {
+    const ancestorIds = new Set((input.pathByOrg.get(employment.orgId) ?? []).map(node => node.id));
+    const roleIds = new Set([
+      ...(directRolesByEmployment.get(employment.id) ?? []),
+      ...(assignmentRoleIdsByPosition.get(employment.posId) ?? []),
+    ]);
+    for (const assignment of input.organizationRoleRows) {
+      if (assignment.targetId === employment.orgId
+        || (assignment.includeDescendants && ancestorIds.has(assignment.targetId))) {
+        roleIds.add(assignment.roleId);
+      }
+    }
+    roleIdsByEmployment.set(
+      employment.id,
+      [...roleIds].filter(roleId => input.activeRoleIds.has(roleId)),
+    );
+  }
+  return roleIdsByEmployment;
+}
 
 export function createOidcAuthorizationRepository(db: DbClient) {
   return {
@@ -79,11 +140,20 @@ export function createOidcAuthorizationRepository(db: DbClient) {
       ));
       const ancestorIds = [...new Set(pathRows.map(row => row.id))];
       const [directRoleRows, positionRoleRows, organizationRoleRows, clientRoleRows] = await Promise.all([
-        db.select().from(employmentRoles).where(inArray(employmentRoles.employmentId, employmentIds)),
-        db.select().from(positionRoles).where(inArray(positionRoles.positionId, posIds)),
+        db.select().from(roleAssignments).where(and(
+          eq(roleAssignments.targetType, RoleAssignmentTargetType.Employment),
+          inArray(roleAssignments.targetId, employmentIds),
+        )),
+        db.select().from(roleAssignments).where(and(
+          eq(roleAssignments.targetType, RoleAssignmentTargetType.Position),
+          inArray(roleAssignments.targetId, posIds),
+        )),
         ancestorIds.length === 0
           ? Promise.resolve([])
-          : db.select().from(organizationRoles).where(inArray(organizationRoles.organizationId, ancestorIds)),
+          : db.select().from(roleAssignments).where(and(
+              eq(roleAssignments.targetType, RoleAssignmentTargetType.Organization),
+              inArray(roleAssignments.targetId, ancestorIds),
+            )),
         db.select({
           id: roles.id,
           roleCode: roles.roleCode,
@@ -104,34 +174,14 @@ export function createOidcAuthorizationRepository(db: DbClient) {
       for (const path of pathByOrg.values())
         path.sort((a, b) => b.depth - a.depth || a.id - b.id);
 
-      const directRolesByEmployment = new Map<number, number[]>();
-      for (const row of directRoleRows) {
-        const roleIds = directRolesByEmployment.get(row.employmentId) ?? [];
-        roleIds.push(row.roleId);
-        directRolesByEmployment.set(row.employmentId, roleIds);
-      }
-      const positionRolesByPosition = new Map<number, number[]>();
-      for (const row of positionRoleRows) {
-        const roleIds = positionRolesByPosition.get(row.positionId) ?? [];
-        roleIds.push(row.roleId);
-        positionRolesByPosition.set(row.positionId, roleIds);
-      }
-
-      const roleIdsByEmployment = new Map<number, number[]>();
-      for (const employment of employmentRows) {
-        const ancestorIds = new Set((pathByOrg.get(employment.orgId) ?? []).map(node => node.id));
-        const roleIds = new Set([
-          ...(directRolesByEmployment.get(employment.id) ?? []),
-          ...(positionRolesByPosition.get(employment.posId) ?? []),
-        ]);
-        for (const assignment of organizationRoleRows) {
-          if ((!assignment.isAllSub && assignment.organizationId === employment.orgId)
-            || (assignment.isAllSub && ancestorIds.has(assignment.organizationId))) {
-            roleIds.add(assignment.roleId);
-          }
-        }
-        roleIdsByEmployment.set(employment.id, [...roleIds].filter(roleId => activeRoles.has(roleId)));
-      }
+      const roleIdsByEmployment = resolveRoleIdsByEmploymentFromAssignments({
+        activeRoleIds: new Set(activeRoles.keys()),
+        directRoleRows,
+        employments: employmentRows,
+        organizationRoleRows,
+        pathByOrg,
+        positionRoleRows,
+      });
 
       const allRoleIds = [...new Set([...roleIdsByEmployment.values()].flat())];
       const privilegeRows = allRoleIds.length === 0

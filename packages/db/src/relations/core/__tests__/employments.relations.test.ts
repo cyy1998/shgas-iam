@@ -28,9 +28,6 @@ const r = {
   positions: {
     id: "positions.id",
   },
-  employmentRoles: {
-    employmentId: "employmentRoles.employmentId",
-  },
 } as unknown as RelationsHelper;
 
 describe("employmentsRelations", () => {

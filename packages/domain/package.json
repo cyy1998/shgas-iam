@@ -17,6 +17,8 @@
     "./position/*": "./src/position/*.ts",
     "./privilege": "./src/privilege/index.ts",
     "./privilege/*": "./src/privilege/*.ts",
+    "./role": "./src/role/index.ts",
+    "./role/*": "./src/role/*.ts",
     "./user": "./src/user/index.ts",
     "./user/*": "./src/user/*.ts"
   },

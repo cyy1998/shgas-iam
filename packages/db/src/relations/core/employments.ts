@@ -16,10 +16,6 @@ export function employmentsRelations(r: RelationsHelper) {
         from: r.employments.posId,
         to: r.positions.id,
       }),
-      roles: r.many.employmentRoles({
-        from: r.employments.id,
-        to: r.employmentRoles.employmentId,
-      }),
     },
   } satisfies RelationsConfig;
 }

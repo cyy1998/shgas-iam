@@ -44,6 +44,7 @@ const targetTypeValueEnum: Record<string, { text: string }> = {
   organization: { text: targetTypeLabels.organization },
   position: { text: targetTypeLabels.position },
   client: { text: targetTypeLabels.client },
+  role: { text: targetTypeLabels.role },
   delegation: { text: targetTypeLabels.delegation },
   mobile: { text: targetTypeLabels.mobile },
 };
