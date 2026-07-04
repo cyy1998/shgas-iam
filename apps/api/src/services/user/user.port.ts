@@ -4,12 +4,13 @@ import type { EmploymentRepository } from "@api/services/employment/employment.r
 import type { MobileService } from "@api/services/mobile/mobile.service";
 import type { PrivilegeRepository } from "@api/services/privilege/privilege.repository";
 import type { PrivilegeDelegationRepository } from "@api/services/privilege/privilegeDelegation.repository";
+import type { PrivilegeDelegationDto } from "@api/services/privilege/privilegeDelegation.type";
 import type { RoleRepository } from "@api/services/role/role.repository";
 import type { UserRepository } from "@api/services/user/user.repository";
 import type { UnitOfWorkPort } from "@iam/api-core/uow";
 import type { UserProfileDirtyMarker } from "@iam/user-profile-read-model/producer";
 import type { UserProfileQueryService } from "@iam/user-profile-read-model/query";
-import type { UserQueryWithPrivilegeDelegationDto } from "./user.type";
+import type { UserDto, UserQueryWithPrivilegeDelegationDto } from "./user.type";
 
 export interface UserDetailBuilderDeps {
   employmentRepository: Pick<EmploymentRepository, "getEmploymentsByUserId">;
@@ -33,6 +34,11 @@ export interface UserRequestOptions {
 
 export interface UserPasswordHelperDeps {
   passwordHasher: PasswordHasherPort;
+}
+
+export interface UserSearchWithDelegationsResult {
+  users: UserDto[];
+  delegations: PrivilegeDelegationDto[];
 }
 
 export interface UserTransactionPorts {
@@ -66,7 +72,9 @@ export interface UserServiceDeps {
     | "searchLegacyUsers"
   >;
   userDelegationQuery: {
-    searchUsersWithDelegations: (query: UserQueryWithPrivilegeDelegationDto) => Promise<unknown>;
+    searchUsersWithDelegations: (
+      query: UserQueryWithPrivilegeDelegationDto,
+    ) => Promise<UserSearchWithDelegationsResult>;
   };
   mobileBinding: {
     assertCanBindMobile: (

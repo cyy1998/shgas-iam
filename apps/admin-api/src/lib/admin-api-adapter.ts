@@ -1,4 +1,6 @@
-import type { Context, Env } from "hono";
+import type { ApiEnvelope } from "@iam/api-core/http";
+import type { Context, Env, TypedResponse } from "hono";
+import type { JSONParsed } from "hono/utils/types";
 import type { z } from "zod";
 import * as resp from "@iam/api-core/http";
 import { mapCustomErrorToTRPCError, publicProcedure } from "@iam/api-core/trpc";
@@ -18,6 +20,20 @@ export type AdminApiRestContext = Context<Env, string, {
 }>;
 
 type MaybePromise<T> = T | Promise<T>;
+
+type HandlerReturn<THandler> = THandler extends (...args: infer _Args) => infer TReturn ? TReturn : never;
+
+type AdminApiGeneratedRestResponse<TOutput>
+  = Response & TypedResponse<JSONParsed<ApiEnvelope<Awaited<TOutput>, 200>>, 200, "json">;
+
+type AdminApiGeneratedRestHandler<TOutput> = (c: AdminApiRestContext) => Promise<
+  AdminApiGeneratedRestResponse<TOutput>
+>;
+
+type AdminApiRestHandlerCompatibility<THandler, TOutput>
+  = AdminApiGeneratedRestResponse<TOutput> extends Awaited<HandlerReturn<THandler>>
+    ? []
+    : ["Admin REST handler response is not assignable to route response schema"];
 
 type AdminApiOperationHandler<TSchema extends z.ZodTypeAny, TOutput> = (
   input: z.infer<TSchema>,
@@ -47,11 +63,14 @@ function createAdminApiOperationBase<TSchema extends z.ZodTypeAny, TOutput>(
     return config.handler(config.input.parse(input), context);
   }
 
-  function toHandler<THandler = (c: AdminApiRestContext) => Promise<unknown>>() {
-    return (async (c: AdminApiRestContext) => {
+  function toHandler<THandler = AdminApiGeneratedRestHandler<TOutput>>(
+    ..._compatibility: AdminApiRestHandlerCompatibility<THandler, TOutput>
+  ): THandler {
+    const handler = async (c: AdminApiRestContext) => {
       const data = await run(config.restInput(c), { hono: c });
       return c.json(resp.ok(data), 200);
-    }) as THandler;
+    };
+    return handler as unknown as THandler;
   }
 
   const resolver = async (opts: { input: unknown; ctx?: AdminApiOperationContext }) => {

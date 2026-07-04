@@ -1,12 +1,72 @@
 import type { Context } from "hono";
 import type { AdminApiRestContext } from "../admin-api-adapter";
-import { NOT_FOUND } from "@iam/api-core/core/http-status-codes";
+import type { RouteHandler } from "@hono/zod-openapi";
+import type { ApiEnvelope } from "@iam/api-core/http";
+import { createRoute } from "@hono/zod-openapi";
+import { NOT_FOUND, OK } from "@iam/api-core/core/http-status-codes";
+import jsonContent from "@iam/api-core/core/openapi/helpers/json-content";
+import createSuccessResponseSchema from "@iam/api-core/core/openapi/schemas/create-success-schema";
 import { CustomError } from "@iam/api-core/errors";
 import { router } from "@iam/api-core/trpc";
 import { TRPCError } from "@trpc/server";
 import { describe, expect, mock, test } from "bun:test";
 import { z } from "zod";
 import { defineAdminApiOperation } from "../admin-api-adapter";
+
+type IsAny<T> = 0 extends (1 & T) ? true : false;
+type IsEqual<TActual, TExpected> = (
+  <T>() => T extends TActual ? 1 : 2
+) extends (
+  <T>() => T extends TExpected ? 1 : 2
+) ? true : false;
+type Assert<T extends true> = T;
+type AssertFalse<T extends false> = T;
+
+const typedObjectOutputRoute = createRoute({
+  method: "get",
+  path: "/typed-object-output",
+  responses: {
+    [OK]: jsonContent(createSuccessResponseSchema(z.object({
+      id: z.string(),
+    })), "ok"),
+  },
+});
+
+const typedStringOutputRoute = createRoute({
+  method: "get",
+  path: "/typed-string-output",
+  responses: {
+    [OK]: jsonContent(createSuccessResponseSchema(z.string()), "ok"),
+  },
+});
+
+type ObjectOutputRouteHandler = RouteHandler<typeof typedObjectOutputRoute>;
+type StringOutputRouteHandler = RouteHandler<typeof typedStringOutputRoute>;
+
+const typedObjectOutputOperation = defineAdminApiOperation({
+  type: "query",
+  input: z.object({}),
+  restInput: () => ({}),
+  handler: async (): Promise<{ id: string }> => ({ id: "u-1" }),
+});
+
+const generatedObjectOutputHandler = typedObjectOutputOperation.toHandler();
+typedObjectOutputOperation.toHandler<ObjectOutputRouteHandler>();
+// @ts-expect-error operation output object is not assignable to a string success response schema
+typedObjectOutputOperation.toHandler<StringOutputRouteHandler>();
+
+type _GeneratedHandlerReturnIsNotAny = AssertFalse<IsAny<Awaited<ReturnType<typeof generatedObjectOutputHandler>>>>;
+type _GeneratedHandlerEnvelopeCode = Assert<
+  IsEqual<Awaited<ReturnType<typeof generatedObjectOutputHandler>>["_data"]["code"], 200>
+>;
+type _GeneratedHandlerEnvelopeData = Assert<
+  IsEqual<Awaited<ReturnType<typeof generatedObjectOutputHandler>>["_data"]["data"], { id: string }>
+>;
+type _GeneratedHandlerEnvelopeAssignable = Assert<
+  Awaited<ReturnType<typeof generatedObjectOutputHandler>>["_data"] extends ApiEnvelope<{ id: string }, 200>
+    ? true
+    : false
+>;
 
 function createRestContext(valid: Record<string, unknown>) {
   return {
@@ -44,7 +104,7 @@ describe("defineAdminApiOperation", () => {
       param: { id: "u-1" },
     });
 
-    const result = await operation.toHandler()(context);
+    const result: unknown = await operation.toHandler()(context);
 
     expect(context.req.valid).toHaveBeenCalledWith("param");
     expect(context.req.valid).toHaveBeenCalledWith("json");

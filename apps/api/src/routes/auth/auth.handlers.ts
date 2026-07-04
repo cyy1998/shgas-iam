@@ -4,6 +4,7 @@ import type { AuthService } from "./auth.service";
 import type { AuthRouteHandler } from "./auth.type";
 import type { LoginCredentialParser } from "./login-credential.helper";
 import { getApiAuditRequestContext } from "@api/services/audit/audit.service";
+import * as HttpStatusCodes from "@iam/api-core/core/http-status-codes";
 import { AuthzUnauthorizedError } from "@iam/api-core/errors/AuthzUnauthorizedError";
 import * as resp from "@iam/api-core/http";
 import { SystemLogEvent } from "@iam/api-core/logger";
@@ -35,7 +36,7 @@ export function createAuthHandlers(deps: CreateAuthHandlersDeps) {
       maxAge: deps.config.redisExpireSeconds,
       path: "/",
     });
-    return c.json(resp.ok(data));
+    return c.json(resp.ok(data), HttpStatusCodes.OK);
   };
 
   const loginMobile: AuthRouteHandler<"loginMobile"> = async (c) => {
@@ -51,7 +52,7 @@ export function createAuthHandlers(deps: CreateAuthHandlersDeps) {
       maxAge: deps.config.redisExpireSeconds,
       path: "/",
     });
-    return c.json(resp.ok(data));
+    return c.json(resp.ok(data), HttpStatusCodes.OK);
   };
 
   const authz: AuthRouteHandler<"authz"> = async (c) => {
@@ -69,7 +70,7 @@ export function createAuthHandlers(deps: CreateAuthHandlersDeps) {
     }
     const data = await deps.authService.authz(sessionId, client);
     c.header("X-User-Info", data);
-    return c.json(resp.ok(data));
+    return c.json(resp.ok(data), HttpStatusCodes.OK);
   };
 
   const internalAuthz: AuthRouteHandler<"internalAuthz"> = async (c) => {
@@ -84,7 +85,7 @@ export function createAuthHandlers(deps: CreateAuthHandlersDeps) {
     await verifyInternalClient(c, {
       getClientBySecret: deps.clientService.getClientBySecret,
     });
-    return c.json(resp.ok(true));
+    return c.json(resp.ok(true), HttpStatusCodes.OK);
   };
 
   return {

@@ -251,7 +251,7 @@
 - **AND** 后续携带同一 local session token 的请求 SHALL 因 tombstone 被拒绝
 
 ### Requirement: 网关鉴权返回用户摘要
-系统 SHALL 通过客户端标识和 custom SSO local session credential 校验网关请求，并在 credential、binding、PrincipalSession、用户和 client 状态一致有效时返回 base64 编码的用户摘要。
+系统 SHALL 通过客户端标识和 custom SSO local session credential 校验网关请求，并在 credential、binding、PrincipalSession、用户和 client 状态一致有效时返回 base64 编码的用户摘要。系统 SHALL 在 `/auth/authz` OpenAPI 成功响应中将该用户摘要记录为成功 envelope 的字符串 `data`。
 
 #### Scenario: 缺少必要请求上下文
 - **WHEN** `/auth/authz` 请求缺少 `Client` header 或 `X-Forwarded-Uri`
@@ -267,6 +267,12 @@
 - **AND** 系统 SHALL 从当前 schema version profile 读取用户详情
 - **AND** 系统 SHALL 将 `{ username, id }` 编码为 base64 字符串
 - **AND** 系统 SHALL 将该字符串写入 `X-User-Info` 响应头并作为成功响应数据返回
+
+#### Scenario: OpenAPI 成功响应记录字符串数据
+- **WHEN** `/auth/authz` route definition 暴露 OpenAPI 成功响应 schema
+- **THEN** 成功响应 SHALL 使用标准成功 envelope
+- **AND** 成功响应 envelope 的 `data` SHALL 被记录为字符串
+- **AND** 成功响应 envelope 的 `data` SHALL NOT 被记录为空对象或任意对象
 
 #### Scenario: 局部会话 credential 已撤销
 - **WHEN** `/auth/authz` 请求携带的 local session token 命中 credential tombstone

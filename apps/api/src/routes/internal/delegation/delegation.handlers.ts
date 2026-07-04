@@ -6,6 +6,7 @@ import {
   buildInternalDelegationCreateAudit,
   buildInternalDelegationUpdateAudit,
 } from "@api/services/audit/events/internal.audit";
+import * as HttpStatusCodes from "@iam/api-core/core/http-status-codes";
 import * as resp from "@iam/api-core/http";
 
 export interface CreateDelegationHandlersDeps {
@@ -20,7 +21,7 @@ export function createDelegationHandlers(deps: CreateDelegationHandlersDeps) {
   const privilegeDelegationsQuery: DelegationRouteHandler<"privilegeDelegationsQuery"> = async (c) => {
     const query = c.req.valid("json");
     const data = await deps.privilegeDelegationService.queryPrivilegeDelegations(query);
-    return c.json(resp.ok(data));
+    return c.json(resp.ok(data), HttpStatusCodes.OK);
   };
 
   const privilegeDelegationUpdate: DelegationRouteHandler<"privilegeDelegationUpdate"> = async (c) => {
@@ -31,7 +32,7 @@ export function createDelegationHandlers(deps: CreateDelegationHandlersDeps) {
       c,
       buildInternalDelegationUpdateAudit(getInternalAuditActor(c), id, dto),
     );
-    return c.json(resp.ok(data));
+    return c.json(resp.ok(data), HttpStatusCodes.OK);
   };
 
   const privilegeDelegationSet: DelegationRouteHandler<"privilegeDelegationSet"> = async (c) => {
@@ -49,7 +50,7 @@ export function createDelegationHandlers(deps: CreateDelegationHandlersDeps) {
         endTime: data.endTime,
       }),
     );
-    return c.json(resp.ok(data));
+    return c.json(resp.ok(data), HttpStatusCodes.OK);
   };
 
   return {

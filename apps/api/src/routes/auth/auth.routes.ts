@@ -65,7 +65,7 @@ export const authz = createRoute({
   tags,
   responses: {
     ...commonErrorResponses,
-    [HttpStatusCodes.OK]: jsonContent(createSuccessResponseSchema(z.object()), "准许"),
+    [HttpStatusCodes.OK]: jsonContent(createSuccessResponseSchema(z.string()), "准许"),
   },
 });
 

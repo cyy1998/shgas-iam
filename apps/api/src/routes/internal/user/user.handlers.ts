@@ -11,6 +11,7 @@ import type { UserProfileQueryService } from "@iam/user-profile-read-model/query
 import type { UserRouteHandler } from "./user.type";
 import { getInternalAuditActor } from "@api/services/audit/audit.service";
 import { buildInternalPurveyorContactRegisterAudit } from "@api/services/audit/events/internal.audit";
+import * as HttpStatusCodes from "@iam/api-core/core/http-status-codes";
 import { CustomError } from "@iam/api-core/errors/CustomError";
 import * as resp from "@iam/api-core/http";
 import { UserProfileDirtyReason, UserType } from "@iam/contracts";
@@ -43,25 +44,25 @@ export function createUserHandlers(deps: CreateUserHandlersDeps) {
   const userInfo: UserRouteHandler<"userInfo"> = async (c) => {
     const { username } = c.req.valid("param");
     const data = await deps.userService.getUserDetailByUsername(username);
-    return c.json(resp.ok(data));
+    return c.json(resp.ok(data), HttpStatusCodes.OK);
   };
 
   const usersSearch: UserRouteHandler<"usersSearch"> = async (c) => {
     const userQueryDto = c.req.valid("json");
     const data = await deps.userService.searchUsers(userQueryDto);
-    return c.json(resp.ok(data));
+    return c.json(resp.ok(data), HttpStatusCodes.OK);
   };
 
   const usersSearchWithPrivilegeDelegation: UserRouteHandler<"usersSearchWithPrivilegeDelegation"> = async (c) => {
     const userQueryDto = c.req.valid("json");
     const data = await deps.userService.searchUsersWithPrivilegeDelegation(userQueryDto);
-    return c.json(resp.ok(data));
+    return c.json(resp.ok(data), HttpStatusCodes.OK);
   };
 
   const usersSearchDsl: UserRouteHandler<"usersSearchDsl"> = async (c) => {
     const { filter, limit } = c.req.valid("json");
     const data = await deps.userProfileQuery.searchDsl(filter, { limit });
-    return c.json(resp.ok(data));
+    return c.json(resp.ok(data), HttpStatusCodes.OK);
   };
 
   const contactRegister: UserRouteHandler<"contactRegister"> = async (c) => {
@@ -124,7 +125,7 @@ export function createUserHandlers(deps: CreateUserHandlersDeps) {
     if (deps.config.nodeEnv === "production") {
       await deps.mobileService.sendMessage(mobile, deps.mobileService.getPurveyorWelcomeMessage(name));
     }
-    return c.json(resp.ok(true));
+    return c.json(resp.ok(true), HttpStatusCodes.OK);
   };
 
   return {

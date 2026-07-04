@@ -78,7 +78,7 @@ export function createSsoHandlers(deps: CreateSsoHandlersDeps) {
       authorizationEndpoint: joinOriginPath(origin, deps.config.authorizationEndpoint),
       logoutEndpoint: joinOriginPath(origin, deps.config.logoutEndpoint),
       thirdPartyOAEndpoint: joinOriginPath(origin, deps.config.thirdPartyOAEndpoint),
-    }));
+    }), HttpStatusCodes.OK);
   };
 
   const callback: SsoRouteHandler<"callback"> = async (c) => {
@@ -110,7 +110,7 @@ export function createSsoHandlers(deps: CreateSsoHandlersDeps) {
     const data = await deps.ssoService.setToken(code, client, clientSecret, {
       requestContext: getApiAuditRequestContext(c),
     });
-    return c.json(resp.ok(data));
+    return c.json(resp.ok(data), HttpStatusCodes.OK);
   };
 
   const authorize: SsoRouteHandler<"authorize"> = async (c) => {

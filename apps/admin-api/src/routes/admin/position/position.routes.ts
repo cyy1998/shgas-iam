@@ -11,6 +11,7 @@ import { commonErrorResponses } from "@iam/api-core/core/openapi/helpers/common-
 import jsonContent from "@iam/api-core/core/openapi/helpers/json-content";
 import jsonContentRequired from "@iam/api-core/core/openapi/helpers/json-content-required";
 import createSuccessResponseSchema from "@iam/api-core/core/openapi/schemas/create-success-schema";
+import { createPageResultSchema } from "@iam/api-core/core/pagination/schema";
 import { PositionVoSchema } from "./position.schema";
 
 const tags = ["Admin/Position"];
@@ -24,7 +25,10 @@ export const positionsSearch = createRoute({
   },
   responses: {
     ...commonErrorResponses,
-    [HttpStatusCodes.OK]: jsonContent(createSuccessResponseSchema(z.array(PositionVoSchema)), "符合条件岗位列表"),
+    [HttpStatusCodes.OK]: jsonContent(
+      createSuccessResponseSchema(createPageResultSchema(z.array(PositionVoSchema))),
+      "符合条件岗位列表",
+    ),
   },
 });
 

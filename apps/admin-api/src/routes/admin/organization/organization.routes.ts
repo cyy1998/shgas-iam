@@ -27,7 +27,10 @@ export const organizationsSearch = createRoute({
   },
   responses: {
     ...commonErrorResponses,
-    [HttpStatusCodes.OK]: jsonContent(createSuccessResponseSchema(z.array(OrganizationVoSchema)), "符合条件组织列表"),
+    [HttpStatusCodes.OK]: jsonContent(
+      createSuccessResponseSchema(createPageResultSchema(z.array(OrganizationVoSchema))),
+      "符合条件组织列表",
+    ),
   },
 });
 

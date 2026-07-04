@@ -35,7 +35,7 @@ export function createOpenHandlers(deps: CreateOpenHandlersDeps) {
   const clientStatus: OpenRouteHandler<"clientStatus"> = async (c) => {
     const { clientCode } = c.req.valid("query");
     const data = await deps.clientService.getClientByCode(clientCode);
-    return c.json(resp.ok(data));
+    return c.json(resp.ok(data), OK);
   };
 
   const userInfo: OpenRouteHandler<"userInfo"> = async (c) => {
@@ -53,7 +53,7 @@ export function createOpenHandlers(deps: CreateOpenHandlersDeps) {
       username: data.username,
       name: data.name,
       mobile: deps.openService.maskMobile(data.mobile),
-    }));
+    }), OK);
   };
 
   const codeSend: OpenRouteHandler<"codeSend"> = async (c) => {
@@ -73,7 +73,7 @@ export function createOpenHandlers(deps: CreateOpenHandlersDeps) {
       usage,
       username,
     })));
-    return c.json(resp.ok(data));
+    return c.json(resp.ok(data), OK);
   };
 
   const codeVerify: OpenRouteHandler<"codeVerify"> = async (c) => {
@@ -89,7 +89,7 @@ export function createOpenHandlers(deps: CreateOpenHandlersDeps) {
       username,
       verified: data,
     })));
-    return c.json(resp.ok({ result: data }));
+    return c.json(resp.ok({ result: data }), OK);
   };
 
   const passwordReset: OpenRouteHandler<"passwordReset"> = async (c) => {
@@ -99,7 +99,7 @@ export function createOpenHandlers(deps: CreateOpenHandlersDeps) {
     const data = await deps.userService.resetPassword(username, targetPhoneNumber, code, newPassword, {
       requestContext,
     });
-    return c.json(resp.ok(data));
+    return c.json(resp.ok(data), OK);
   };
 
   const capChallenge: OpenRouteHandler<"capChallenge"> = async (c) => {

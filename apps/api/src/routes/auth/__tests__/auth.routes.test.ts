@@ -3,9 +3,10 @@ import { ApiErrorCode } from "@iam/contracts";
 import { describe, expect, test } from "bun:test";
 import { capChallenge } from "../../open/open.routes";
 import { callback } from "../../sso/sso.routes";
-import { internalAuthz, loginPassword } from "../auth.routes";
+import { authz, internalAuthz, loginPassword } from "../auth.routes";
 
 const loginPasswordSchema = loginPassword.request.body.content["application/json"].schema;
+const authzSuccessSchema = authz.responses[200].content["application/json"].schema;
 const internalAuthzSuccessSchema = internalAuthz.responses[200].content["application/json"].schema;
 
 type SchemaLike = {
@@ -93,6 +94,20 @@ describe("auth routes", () => {
     }).success).toBe(true);
 
     expect(internalAuthzSuccessSchema.safeParse({
+      code: 200,
+      data: {},
+      message: "success",
+    }).success).toBe(false);
+  });
+
+  test("authz success response documents encoded user info string data", () => {
+    expect(authzSuccessSchema.safeParse({
+      code: 200,
+      data: "dXNlci1pbmZv",
+      message: "success",
+    }).success).toBe(true);
+
+    expect(authzSuccessSchema.safeParse({
       code: 200,
       data: {},
       message: "success",

@@ -22,7 +22,7 @@ export const clientStatus = createRoute({
   },
   responses: {
     ...commonErrorResponses,
-    [HttpStatusCodes.OK]: jsonContent(createSuccessResponseSchema(ClientDtoSchema), "应用信息"),
+    [HttpStatusCodes.OK]: jsonContent(createSuccessResponseSchema(ClientDtoSchema.nullable()), "应用信息"),
   },
 });
 

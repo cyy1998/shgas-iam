@@ -1,4 +1,5 @@
 import * as resp from "@iam/api-core/http";
+import * as HttpStatusCodes from "@iam/api-core/core/http-status-codes";
 import { ClientStatus } from "@iam/contracts";
 import { beforeEach, describe, expect, mock, test } from "bun:test";
 import { createAuthHandlers } from "../auth.handlers";
@@ -126,12 +127,15 @@ describe("createAuthHandlers", () => {
       }),
     };
 
-    await expect(handlers.authz(context as never, undefined as never)).resolves.toEqual(resp.ok("user-info"));
+    const result: unknown = await handlers.authz(context as never, undefined as never);
+
+    expect(result).toEqual(resp.ok("user-info"));
 
     expect(getClientByCode).toHaveBeenCalledWith("portal");
     expect(authzService).toHaveBeenCalledWith("local-session-token", expect.objectContaining({
       clientCode: "portal",
     }));
+    expect(context.json).toHaveBeenCalledWith(resp.ok("user-info"), HttpStatusCodes.OK);
     expect(responseHeaders).toContainEqual(["X-User-Info", "user-info"]);
   });
 
@@ -139,7 +143,9 @@ describe("createAuthHandlers", () => {
     const handlers = createHandlers();
     const context = makeLoginContext();
 
-    await expect(handlers.loginPassword(context as never, undefined as never)).resolves.toEqual(resp.ok({
+    const result: unknown = await handlers.loginPassword(context as never, undefined as never);
+
+    expect(result).toEqual(resp.ok({
       token: "session-id",
       isMobileSet: true,
     }));
@@ -185,7 +191,9 @@ describe("createAuthHandlers", () => {
       "IP-Chain": "10.0.0.1, 192.168.93.10",
     });
 
-    await expect(handlers.internalAuthz(context as never, undefined as never)).resolves.toEqual(resp.ok(true));
+    const result: unknown = await handlers.internalAuthz(context as never, undefined as never);
+
+    expect(result).toEqual(resp.ok(true));
 
     expect(getClientBySecret).toHaveBeenCalledWith("secret-1");
   });
