@@ -80,4 +80,5 @@ OpenSpec 归档前必须确认 OpenSpec artifacts、tasks 和实现一致，并�
 
 - 必要验证通过，或失败已明确分类为已有问题、环境问题或阻塞项。
 - OpenSpec artifacts、tasks 和实现一致。
-- 下一步进入 [archive.md](archive.md)，或回到 [implement.md](implement.md) 修复问题。
+- 用户已确认验证结论和下一步方向；若下一步是 Archive，用户已确认进入 Archive 后将自动执行提交、合并、归档和本地分支清理，不再二次确认。
+- 下一步在用户确认后进入 [archive.md](archive.md)，或回到 [implement.md](implement.md) 修复问题。

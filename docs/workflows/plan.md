@@ -50,4 +50,5 @@ OpenSpec change 和 Git 分支视为同一个生命周期，用于能力规格�
 
 - Quick Change 已经足够指导实现。
 - OpenSpec change 或 umbrella change 中当前阶段需要的 artifacts 已完成。
-- 下一步进入 [implement.md](implement.md)。
+- 用户已确认所选计划产物和下一步实施方向。
+- 下一步在用户确认后进入 [implement.md](implement.md)。
