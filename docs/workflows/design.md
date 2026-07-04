@@ -18,6 +18,25 @@
 - 单文件 bug fix，已有测试或失败信号能直接说明问题与验收标准。
 - `$quick-change` 范围内的小改；仍应在最终说明中记录验证结果。
 
+## 流程状态机
+
+设计前后的状态流为：Idea -> Explore -> Clarify -> Design -> OpenSpec -> Implement -> Verify -> Archive。不是每个状态都必须产生文档，但每次跳过状态都必须满足对应跳过条件。
+
+- Idea：只有初始想法、问题报告或改动请求。若目标行为、影响范围和正确性标准还不能说清楚，不能直接进入 Design 或 OpenSpec。
+- Explore：使用 `$openspec-explore` 发散调查、比较方案或摸清影响面；当问题空间、候选方向、主要未知项和是否触发 OpenSpec 已经清楚时，可退出。
+- Clarify：使用 `$grill-with-docs` 收敛需求边界、领域术语和关键取舍；当用户意图、术语、非目标和必须成立的验收条件清楚时，可退出。
+- Design：沉淀 what、why、范围、取舍、风险和正确性标准；不写具体验证命令。
+- OpenSpec：当命中 OpenSpec 触发条件时，使用 `$openspec-propose` 正式沉淀 proposal/design/spec/tasks；未命中时可走普通任务清单或 Quick Change。
+- Implement：按 [development.md](development.md) 改代码、文档或 artifacts。
+- Verify：按 [testing.md](testing.md) 证明正确性。
+- Archive：仅在 OpenSpec change 完成、验证通过且用户明确要求归档时进入。
+
+进入 OpenSpec 前必须满足：目标行为清楚；范围和非目标清楚；受影响契约、数据、权限、安全、审计、队列、session/OIDC/SSO 或发布边界已识别；至少有一条可验证的正确性标准；未解决问题已记录为开放问题或任务。
+
+允许跳过 `$openspec-explore` 的条件：需求已经具体、影响面可从仓库事实直接判断、没有多个候选方向需要比较。
+
+允许跳过 `$grill-with-docs` 的条件：需求边界、领域术语、关键取舍、非目标和正确性标准都能从用户请求、代码、OpenSpec、docs 或既有测试中明确推断。只要其中任一项不清楚，就先进入 Clarify；不要靠猜测直接写 Design 或 OpenSpec。
+
 ## 探索模式
 
 当需求仍处于想法、问题空间、方案比较或影响面调查阶段，且还不适合直接写 OpenSpec artifacts 时，可以先使用
