@@ -66,6 +66,10 @@ Use TypeScript throughout and keep 2-space indentation. Follow the formatter alr
 
 Preserve existing domain file naming: `user.service.ts`, `user.repository.ts`, `user.schema.ts`, `user.routes.ts`, `user.handlers.ts`, `user.trpc.ts`, and `user.type.ts`. Use PascalCase for React components and pages, and prefer existing import aliases such as `@admin`, `@sso`, or workspace package imports where they are already used.
 
+## Agent Interaction & Shell Conventions
+- In the chat UI, user-facing responses should default to idiomatic, natural Chinese. Keep code identifiers, commands, file paths, API names, and quoted source text in their original language.
+- In PowerShell, read text files with explicit UTF-8 encoding, for example `Get-Content -Path "AGENTS.md" -Encoding utf8`, to avoid mojibake in Chinese content.
+
 ## Backend Implementation Conventions
 - Route handlers should return shared response envelopes from `@iam/api-core/http`, for example `c.json(resp.ok(data))` for successful JSON responses and `resp.fail(...)` for explicit failure envelopes. Prefer throwing domain/API errors when the existing error middleware already maps them correctly.
 - Use `@iam/api-core/core/http-status-codes` constants in OpenAPI route definitions and explicit non-200 responses rather than numeric literals.
