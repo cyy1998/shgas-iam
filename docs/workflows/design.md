@@ -18,6 +18,15 @@
 - 单文件 bug fix，已有测试或失败信号能直接说明问题与验收标准。
 - `$quick-change` 范围内的小改；仍应在最终说明中记录验证结果。
 
+## 探索模式
+
+当需求仍处于想法、问题空间、方案比较或影响面调查阶段，且还不适合直接写 OpenSpec artifacts 时，可以先使用
+`$openspec-explore`。Explore 用于思考、调查和对齐方向，不用于实现；它可以读取代码、OpenSpec、docs 和测试，帮助识别现状、
+候选方案、隐藏复杂度、风险、未知问题以及是否需要进入 OpenSpec。
+
+`$openspec-explore` 是可选前置探索入口，不替代正式设计澄清或 OpenSpec 产物。探索过程中形成明确需求、范围变化或设计决策时，
+应先由用户确认，再沉淀到 proposal、design、spec、tasks、ADR 或相关 docs；不要在探索模式中自动实现代码。
+
 ## 设计澄清
 
 当需求边界、领域术语或关键取舍尚未清楚时，先使用 `$grill-with-docs` 做一轮一问一答的设计澄清，再进入
@@ -39,6 +48,8 @@ ADR 说明为什么长期采用某个架构选择，OpenSpec 说明本次变更�
 - 中等复杂度改动：先写任务清单，必要时在 `docs/` 增加说明或 runbook。
 - 涉及正式能力、契约、迁移或跨模块生命周期的改动：使用 OpenSpec proposal/design/spec/tasks。
 - 大型功能拆分：用 umbrella change 或 feature 文档记录子 change 列表、依赖顺序、集成验收标准。
+
+入口优先级为：OpenSpec 触发条件 > 普通设计或任务清单 > Quick Change 短计划 > 仅在最终说明中记录。判断依据是行为、契约和风险，而不是 diff 大小。只要改动影响正式能力、跨模块契约、schema、安全/权限/session/审计/队列语义、迁移、回滚、发布或跨模块生命周期，即使实现很小，也应进入 OpenSpec；只有未触发 OpenSpec 且低风险的小改，才使用 Quick Change 短计划。
 
 ## 设计内容
 

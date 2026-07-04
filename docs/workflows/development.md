@@ -5,11 +5,13 @@
 
 ## 任务分流
 
-- 纯说明、索引或低风险文档微调：可以留在当前分支，但仍要运行相关检查。
-- 小型非 OpenSpec 改动：使用 `$quick-change`，默认以用户提出需求时所在分支作为目标分支，创建 `work/quick-<slug>`，实现并验证后等待用户确认再提交、合并和删除临时分支。
+- 小型、低风险、非 OpenSpec 改动：默认使用 `$quick-change`，包括纯说明、索引、低风险文档微调、配置小改和局部修正。默认以用户提出需求时所在分支作为目标分支，创建 `work/quick-<slug>`，实现并验证后等待用户确认再提交、合并和删除临时分支。
+- 只有用户明确要求直接在当前分支修改或不要创建临时分支时，才可留在当前分支；仍要运行相关检查，且不要自动提交。
 - 非平凡 feature、fix、refactor 或行为变化：创建短生命周期 `feat/<topic>`、`fix/<topic>` 或 `work/<topic>` 分支。
 - 涉及能力规格、跨模块契约、迁移、发布流程或架构约束：使用 OpenSpec change。
 - 大型功能拆分：先建 `feature/<feature-name>`，再从 feature 分支派生每个 child `work/<change-name>`。
+
+边界判断优先级为：OpenSpec 触发条件 > Quick Change > 当前分支直改。只要改动命中 OpenSpec 触发条件，即使 diff 很小，也应使用 OpenSpec；Quick Change 只接收未触发 OpenSpec 的小型低风险改动。
 
 开始前先运行：
 
@@ -65,7 +67,7 @@ logger 等 app-local singleton 不应通过 `mock.module` 替换；优先沿用�
 
 ## Quick Change 流程
 
-Quick Change 用于小型、低风险、非 OpenSpec 改动，例如文档微调、配置小改、索引维护或局部修正。它仍然需要临时分支和验证，但提交、合并、删分支必须等用户确认。
+Quick Change 是小型、低风险、非 OpenSpec 改动的默认入口，例如文档微调、配置小改、索引维护或局部修正。除非用户明确要求直接在当前分支修改，它都需要临时分支和验证；提交、合并、删分支必须等用户确认。
 
 1. Triage：确认改动足够小、diff 可快速审阅，并识别目标分支。默认目标为用户提出该 Quick Change 需求时所在分支，除非用户指定其他目标。
 2. Inspect：运行 `git status --short --branch`。如果存在无关 dirty changes，不要 stash、revert 或带入临时分支；先确认它们是否属于当前任务。
