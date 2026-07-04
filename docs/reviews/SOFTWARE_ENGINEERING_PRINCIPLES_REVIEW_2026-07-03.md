@@ -30,13 +30,28 @@
 | 幂等性 | 有明显问题 | 缺请求级幂等键，部分先查再插入无 DB 约束，事务后副作用不可恢复 |
 | 可观测性 | 基本通过 | 后端日志/审计较好；前端 requestId、health check、traceId 索引仍不足 |
 
+## 修复状态
+
+截至 2026-07-04，以下问题已完成，并在对应条目标记为 `[已完成]`：
+
+- `/auth/authz` OpenAPI 与实现返回类型不一致。
+- 响应 envelope 被 `any` 擦除。
+- 任职创建/转岗缺活跃唯一约束。
+- 验证码先消费后事务失败不可恢复。
+- `apps/api/src/services/user/user.port.ts` 的搜索委托输出契约被 `Promise<unknown>` 擦除。
+- CAP 非 envelope 成功响应缺少显式协议例外护栏。
+
+本报告保留 2026-07-03 原始审查描述；已完成问题下的证据为修复前证据。
+
 ## 最高优先级问题
 
-### P1: `/auth/authz` OpenAPI 与实现返回类型不一致
+### P1 [已完成]: `/auth/authz` OpenAPI 与实现返回类型不一致
+
+**修复状态**：已完成。`/auth/authz` 成功响应 schema 已改为字符串 `data`，并补充 route/handler 契约测试。
 
 **原则风险**：契约清晰、可测试性、客户端兼容性
 
-**证据**
+**原始证据（修复前）**
 
 - `apps/api/src/routes/auth/auth.routes.ts:68` 声明 `/auth/authz` 成功响应 `data` 是 `z.object()`
 - `apps/api/src/services/session/custom-sso-session-kernel.adapter.ts:335` 返回 base64 字符串
@@ -50,11 +65,13 @@
 
 优先将 OpenAPI schema 修正为 `createSuccessResponseSchema(z.string())`，或改实现返回对象。若当前生产行为已经依赖字符串，应优先让文档匹配现状，再另开变更讨论是否调整响应结构。
 
-### P1: 响应 envelope 被 `any` 擦除
+### P1 [已完成]: 响应 envelope 被 `any` 擦除
+
+**修复状态**：已完成。`packages/api-core/src/http/response.ts` 已导出 `ApiEnvelope<TData, TCode>`，`ok/fail` 已保留泛型返回类型，并补充类型断言测试。
 
 **原则风险**：契约清晰、类型安全、回归防护
 
-**证据**
+**原始证据（修复前）**
 
 - `packages/api-core/src/http/response.ts:7` 的 `makeResponse(...): any`
 - `ok/fail` 继承该 `any`
@@ -68,17 +85,19 @@ Route handler 即使声明了 OpenAPI response schema，TypeScript 也无法校�
 
 在 `packages/api-core/src/http/response.ts` 定义并导出 `ApiEnvelope<T>`，让 `ok<T>()` / `fail<T>()` 返回泛型 envelope，去掉 `any`。之后补一组轻量契约测试，抽样验证 handler 返回值和 OpenAPI Zod schema 对齐。
 
-### P1: 任职创建/转岗缺活跃唯一约束
+### P1 [已完成]: 任职创建/转岗缺活跃唯一约束
+
+**修复状态**：已完成。`employment` 表已增加 active relationship partial unique index，repository 已将唯一冲突映射为稳定业务错误，并补充 schema/repository/service 测试。
 
 **原则风险**：幂等性、数据一致性
 
-**证据**
+**原始证据（修复前）**
 
 - `apps/admin-api/src/services/employment/employment.service.ts:102`
 - `apps/admin-api/src/services/employment/employment.repository.ts:83`
 - `packages/db/src/schema/core/employments.ts:24`
 
-当前任职创建/转岗路径是先查再插入，但 `employment` 表只有普通索引，没有覆盖 `user_id + dept_id + pos_id + active status` 的唯一约束或排他保护。
+原始审查时，任职创建/转岗路径是先查再插入，但 `employment` 表只有普通索引，没有覆盖 `user_id + dept_id + pos_id + active status` 的唯一约束或排他保护。
 
 **影响**
 
@@ -88,17 +107,19 @@ Route handler 即使声明了 OpenAPI response schema，TypeScript 也无法校�
 
 增加活跃任职复合唯一约束，至少覆盖用户、部门、岗位与软删除/状态维度，并将 repository 写入改为 `onConflict` 或显式冲突映射。
 
-### P1: 验证码先消费后事务失败不可恢复
+### P1 [已完成]: 验证码先消费后事务失败不可恢复
+
+**修复状态**：已完成。`resetPassword` 和 `bindPhone` 已改为验证码 reserve/confirm 编排，事务失败会 release 并允许合法重试，成功后再确认消费。
 
 **原则风险**：幂等性、用户体验、失败恢复
 
-**证据**
+**原始证据（修复前）**
 
 - `apps/api/src/services/mobile/mobile.service.ts:15`
 - `apps/api/src/services/user/user.service.ts:69`
 - `apps/api/src/services/user/user-mobile-binding.helper.ts:21`
 
-验证码消费通过 Redis `DEL` 一次性删除，但发生在密码重置或手机号绑定数据库事务之前。
+原始审查时，验证码消费通过 Redis `DEL` 一次性删除，但发生在密码重置或手机号绑定数据库事务之前。
 
 **影响**
 
@@ -286,24 +307,24 @@ composition、route adapter、audit event builder 多数职责清晰，但少数
 
 | 风险 | 位置 | 问题 |
 |---|---|---|
-| P1 | `apps/api/src/routes/auth/auth.routes.ts:68`、`custom-sso-session-kernel.adapter.ts:335`、`auth.handlers.ts:71` | `/auth/authz` OpenAPI 与实现返回类型不一致 |
-| P1 | `packages/api-core/src/http/response.ts:7` | `resp.ok/fail` envelope 返回 `any` |
+| P1 [已完成] | `apps/api/src/routes/auth/auth.routes.ts:68`、`custom-sso-session-kernel.adapter.ts:335`、`auth.handlers.ts:71` | `/auth/authz` OpenAPI 与实现返回类型不一致 |
+| P1 [已完成] | `packages/api-core/src/http/response.ts:7` | `resp.ok/fail` envelope 返回 `any` |
 | P2 | `apps/sso/src/types/api.d.ts:27`、`apps/api/src/routes/public/public.routes.ts:19`、`packages/domain/src/user/schema.ts:17` | SSO 前端 `UserInfo` 手写字段与后端 DTO 漂移 |
 | P2 | `apps/api/src/routes/internal/user/user.routes.ts:46` | `/search-with-delegation` 使用 `jsonContent`，文档显示 body 非必填，但业务实际必填 |
-| P2 | `apps/api/src/services/user/user.port.ts:69` | port 返回 `Promise<unknown>`，擦除了 `{ users, delegations }` 输出契约 |
+| P2 [已完成] | `apps/api/src/services/user/user.port.ts:69` | port 返回 `Promise<unknown>`，擦除了 `{ users, delegations }` 输出契约 |
 | P2 | `apps/api/src/enums/verificationCode.usage.ts:1`、`apps/sso/src/types/api.d.ts:35` | 验证码 usage、人机校验 action 前后端重复手写 |
 | P3 | `apps/sso/src/services/open.ts:11`、`:46`、`public.ts:12`、`:19` | 后端 boolean 响应在前端 wrapper 声明为 `request<void>` |
-| P3 | `apps/api/src/routes/open/open.routes.ts:110`、`:137` | CAP 成功响应不走 IAM envelope，但缺少显式协议例外说明 |
+| P3 [已完成] | `apps/api/src/routes/open/open.routes.ts:110`、`:137` | CAP 成功响应不走 IAM envelope，但缺少显式协议例外说明 |
 
 **建议**
 
-- 定义 `ApiEnvelope<T>` 并泛型化 `ok/fail`。
-- 修正 `/auth/authz` 成功 schema 或实现。
+- [已完成] 定义 `ApiEnvelope<T>` 并泛型化 `ok/fail`。
+- [已完成] 修正 `/auth/authz` 成功 schema 或实现。
 - SSO REST 面引入 OpenAPI 生成类型或共享 DTO，减少 `apps/sso/src/types/api.d.ts` 手写契约。
 - 将 `VerificationCodeUsage`、`HumanVerificationAction` 移到 `packages/contracts`。
 - 将 `/search-with-delegation` body 改为 `jsonContentRequired`。
-- 用明确类型替换 `Promise<unknown>`。
-- 给 CAP endpoints 增加命名 helper 或注释/测试，标记其非 envelope 响应是协议兼容例外。
+- [已完成] 用明确类型替换 `Promise<unknown>`。
+- [已完成] 给 CAP endpoints 增加命名 helper 或注释/测试，标记其非 envelope 响应是协议兼容例外。
 
 ### 7. 幂等性
 
@@ -323,8 +344,8 @@ composition、route adapter、audit event builder 多数职责清晰，但少数
 
 | 风险 | 位置 | 问题 |
 |---|---|---|
-| P1 | `apps/admin-api/src/services/employment/employment.service.ts:102`、`employment.repository.ts:83`、`packages/db/src/schema/core/employments.ts:24` | 任职创建/转岗先查再插入，缺活跃唯一约束 |
-| P1 | `apps/api/src/services/mobile/mobile.service.ts:15`、`user.service.ts:69`、`user-mobile-binding.helper.ts:21` | 验证码先 `DEL` 消费，事务失败后无法重试 |
+| P1 [已完成] | `apps/admin-api/src/services/employment/employment.service.ts:102`、`employment.repository.ts:83`、`packages/db/src/schema/core/employments.ts:24` | 任职创建/转岗先查再插入，缺活跃唯一约束 |
+| P1 [已完成] | `apps/api/src/services/mobile/mobile.service.ts:15`、`user.service.ts:69`、`user-mobile-binding.helper.ts:21` | 验证码先 `DEL` 消费，事务失败后无法重试 |
 | P2 | `apps/api/src/services/privilege/privilegeDelegation.service.ts:61`、`privilegeDelegation.repository.ts:102`、`privilege-delegations.ts:20` | 权限委托只靠服务层冲突查询，无唯一/排他约束 |
 | P2 | `apps/admin-api/src/services/client/client.service.ts:190`、`:199`、`unit-of-work.ts:47` | 客户端创建 DB commit 后 required cache afterCommit 失败会留下已创建行，重试无法恢复原成功响应 |
 | P2 | `apps/api/src/routes/internal/user/user.handlers.ts:113`、`:125` | 联系人注册事务后写审计和发送欢迎短信，重复请求可能重复副作用 |
@@ -334,9 +355,9 @@ composition、route adapter、audit event builder 多数职责清晰，但少数
 **建议**
 
 - 为 admin/api mutation 增加请求级幂等键：actor + route + method + idempotency-key + body hash。
-- 给 employment 增加活跃任职复合唯一约束。
+- [已完成] 给 employment 增加活跃任职复合唯一约束。
 - 权限委托使用 PostgreSQL exclusion constraint 或事务内 advisory lock。
-- 验证码消费改为 reserve/confirm。
+- [已完成] 验证码消费改为 reserve/confirm。
 - 事务后副作用引入 outbox/任务表和确定性 eventId。
 - 审计写入增加可选 dedupe key。
 - 状态更新和软删除接口对“已是目标状态/已删除”返回幂等成功。
@@ -401,11 +422,11 @@ composition、route adapter、audit event builder 多数职责清晰，但少数
 
 ### 第一阶段：阻断高风险回归
 
-1. 修正 `/auth/authz` OpenAPI 与实现不一致。
-2. 泛型化 `ApiEnvelope<T>`，去掉 `resp.ok/fail` 的 `any`。
-3. 给 employment 增加活跃唯一约束和冲突处理。
-4. 将验证码消费改为 reserve/confirm 或 operationId 模式。
-5. 补最小契约测试和并发/重试单测。
+1. [已完成] 修正 `/auth/authz` OpenAPI 与实现不一致。
+2. [已完成] 泛型化 `ApiEnvelope<T>`，去掉 `resp.ok/fail` 的 `any`。
+3. [已完成] 给 employment 增加活跃唯一约束和冲突处理。
+4. [已完成] 将验证码消费改为 reserve/confirm 或 operationId 模式。
+5. [已完成] 补最小契约测试和并发/重试单测。
 
 ### 第二阶段：补关键工程护栏
 
