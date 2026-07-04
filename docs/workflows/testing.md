@@ -31,40 +31,36 @@
 
 ## 验证矩阵
 
-优先运行最窄有意义的检查；共享契约或跨 app 改动需要扩大验证范围。
+优先运行最窄有意义的检查；共享契约或跨 app 改动需要扩大验证范围。下列条目使用清单而不是宽表，避免长命令或 smoke 覆盖被 Markdown 表格截断。
 
-| 改动范围 | 建议验证 |
-|---|---|
-| `docs/**/*.md` | `pnpm check:docs` |
-| `AGENTS.md`、`.codex/skills/**/*.md`、流程文档 | `pnpm check:docs`，再人工检查相关链接和流程一致性 |
-| env 命名、`.env.example`、Docker env | `pnpm check:env-names`；必要时启动依赖栈确认变量被实际消费 |
-| `apps/api` | `pnpm --filter @iam/api lint`、`test`、`typecheck` 中相关项；公开路由变化补 `/doc` 或接口 smoke |
-| `apps/admin-api` | `pnpm --filter @iam/admin-api lint`、`test`、`typecheck` 中相关项；admin REST/tRPC 变化补 `/admin/doc`、`/rpc/doc` 或接口 smoke |
-| `apps/oidc-provider` | `pnpm --filter @iam/oidc-provider lint`、`test`、`typecheck`；OIDC/session/security 改动补 discovery、JWKS、authorize、token 或 UserInfo smoke |
-| `apps/worker` | `pnpm --filter @iam/worker lint`、`test`、`typecheck`；队列/read-model 行为同时检查 `@iam/jobs` 和 `@iam/user-profile-read-model` |
-| `apps/admin` 或 `apps/sso` | `pnpm --filter @iam/<app> lint`、`test`、`typecheck`；关键用户流程改动运行对应 `e2e` 或浏览器 smoke |
-| `packages/contracts` | 包自身 typecheck/test，加上所有直接消费 app 或 package 的 typecheck |
-| `packages/api-core`、`domain`、`jobs`、`user-profile-read-model` | 包自身 typecheck/test，加上直接受影响 app 的 typecheck；队列或 read-model 行为补 worker 检查 |
-| `packages/db` schema/relations/migrations | `pnpm --filter @iam/db db:check`；本地同步用 `db:push`，产出迁移时运行 `db:generate` + `db:migrate`；再跑相关 typecheck |
-| tRPC contract consumed by admin | `pnpm --filter @iam/admin-api typecheck` 和 `pnpm --filter @iam/admin typecheck` |
-| auth、permission、session、audit、tenant 边界 | 受影响 backend test/typecheck；补失败路径、权限拒绝、审计事件和 smoke |
-| APISIX gateway manifest/script | `pnpm gateway:apisix:validate -- --env <env>:<app>`；脚本改动再跑 `pnpm --filter @iam/gateway-apisix typecheck` 或 `test` |
-| OpenSpec artifacts | `openspec validate <change-name> --strict` 或对应仓库脚本；归档前补实现侧验证 |
-| repo scripts | 脚本自身 dry run 或聚焦命令；TypeScript 脚本补 `typecheck` 或直接运行目标命令 |
+- `docs/**/*.md`：运行 `pnpm check:docs`。
+- `AGENTS.md`、`.codex/skills/**/*.md`、流程文档：运行 `pnpm check:docs`，再人工检查相关链接和流程一致性。
+- env 命名、`.env.example`、Docker env：运行 `pnpm check:env-names`；必要时启动依赖栈确认变量被实际消费。
+- `apps/api`：按影响面运行 `pnpm --filter @iam/api lint`、`pnpm --filter @iam/api test`、`pnpm --filter @iam/api typecheck`；公开路由变化补 `/doc` 或接口 smoke。
+- `apps/admin-api`：按影响面运行 `pnpm --filter @iam/admin-api lint`、`pnpm --filter @iam/admin-api test`、`pnpm --filter @iam/admin-api typecheck`；admin REST/tRPC 变化补 `/admin/doc`、`/rpc/doc` 或接口 smoke。
+- `apps/oidc-provider`：运行 `pnpm --filter @iam/oidc-provider lint`、`pnpm --filter @iam/oidc-provider test`、`pnpm --filter @iam/oidc-provider typecheck`；OIDC/session/security 改动补 discovery、JWKS、authorize、token、UserInfo 或 RP-Initiated Logout smoke。
+- `apps/worker`：运行 `pnpm --filter @iam/worker lint`、`pnpm --filter @iam/worker test`、`pnpm --filter @iam/worker typecheck`；队列/read-model 行为同时检查 `@iam/jobs` 和 `@iam/user-profile-read-model`。
+- `apps/admin` 或 `apps/sso`：运行 `pnpm --filter @iam/<app> lint`、`pnpm --filter @iam/<app> test`、`pnpm --filter @iam/<app> typecheck`；关键用户流程改动运行对应 `e2e` 或浏览器 smoke；页面、路由、构建配置或视觉类改动补 `pnpm --filter @iam/<app> build`、截图 smoke 或人工 smoke。
+- `packages/contracts`：运行包自身 typecheck/test，加上所有直接消费 app 或 package 的 typecheck。
+- `packages/api-core`、`packages/domain`、`packages/jobs`、`packages/user-profile-read-model`：运行包自身 typecheck/test，加上直接受影响 app 的 typecheck；队列或 read-model 行为补 worker 检查。
+- `packages/db` schema/relations/migrations：运行 `pnpm --filter @iam/db db:check`；本地同步用 `db:push`，产出迁移时运行 `db:generate` + `db:migrate`；再跑相关 typecheck。
+- tRPC contract consumed by admin：运行 `pnpm --filter @iam/admin-api typecheck` 和 `pnpm --filter @iam/admin typecheck`。
+- auth、permission、session、audit、tenant 边界：运行受影响 backend test/typecheck；补失败路径、权限拒绝、审计事件和 smoke。
+- APISIX gateway manifest/script：运行 `pnpm gateway:apisix:validate -- --env <env>:<app>`；脚本改动再跑 `pnpm --filter @iam/gateway-apisix typecheck` 或 `pnpm --filter @iam/gateway-apisix test`。
+- OpenSpec artifacts：运行 `openspec validate <change-name> --strict` 或对应仓库脚本；归档前补实现侧验证。
+- repo scripts：运行脚本自身 dry run 或聚焦命令；TypeScript 脚本补 `typecheck` 或直接运行目标命令。
 
 ## Smoke 入口
 
-- Public API Scalar UI：`http://localhost:30000` 或 public tier `/doc`。
-- Admin API Scalar UI：`http://localhost:30001`、`/admin/doc`、`/rpc/doc`。
-- OIDC direct dev port：`http://localhost:30015`。
-- OIDC gateway：`http://localhost:30080/oidc`。
-- Worker health/Bull Board：`http://localhost:30016/healthz` 和 `/admin/queues`，仅 dashboard 启用时使用。
+选择 smoke URL 前先确认当前运行方式，避免把本机 dev 端口和 Docker dev 宿主机映射端口混用。
+
+- 本机 `pnpm dev` 后端默认端口：public API `http://localhost:30000`，admin API `http://localhost:30001`，OIDC Provider `http://localhost:30002`，worker HTTP `http://localhost:30003`。
+- Docker dev 直连宿主机端口：api `http://localhost:30011`，admin-api `http://localhost:30012`，oidc-provider `http://localhost:30015`，worker dashboard `http://localhost:30016`。
+- Docker dev APISIX gateway：HTTP `http://localhost:30080`，HTTPS `https://localhost:30443`，OIDC gateway `http://localhost:30080/oidc`。
+- API docs smoke：public tier `/doc`，admin REST `/admin/doc`，admin tRPC `/rpc/doc`。
+- Worker smoke：health `http://localhost:30016/healthz`；Bull Board `http://localhost:30016/admin/queues`，仅 dashboard 启用时使用。
 - Frontend flows：根据改动运行 `@iam/admin` 或 `@iam/sso` mocked E2E，也可以用浏览器手动 smoke 关键路径。
 - Logs/metrics：发布、网关、队列、审计、OIDC/session 和观测改动应查询对应日志、trace 或 dashboard，并记录筛选条件。
-
-With `docker/docker-compose-dev.yml`, direct backend host ports are `http://localhost:30011` for `api`,
-`http://localhost:30012` for `admin-api`, `http://localhost:30015` for `oidc-provider`, and `http://localhost:30016`
-for the worker dashboard. APISIX gateway host ports are `http://localhost:30080` and `https://localhost:30443`.
 
 ## 失败处理
 
