@@ -61,12 +61,12 @@ ADR 说明为什么长期采用某个架构选择，OpenSpec 说明本次变更�
 - 方案和取舍：列出采纳方案，必要时记录备选方案和不采用原因。
 - 数据和契约：DTO、schema、API、事件、日志字段、队列任务、Redis key、数据库迁移。
 - 风险和回滚：兼容性、迁移窗口、部分失败、数据修复、回滚前提。
-- 验收方式：单元测试、类型检查、lint、schema command、smoke、日志/指标查询、截图或 trace。
+- 正确性标准：哪些用户或系统行为、契约、边界条件、风险和证据必须成立，才算本次变更完成。
 
 ## 编写原则
 
 - 使用具体文件路径和稳定术语，避免只写“相关模块”“某接口”。
-- 把 Given/When/Then、SHALL/MUST、验收命令写成可验证文本。
+- 把 Given/When/Then、SHALL/MUST 和验收条件写成可验证文本；不要在设计中复制验证矩阵或命令清单。
 - 让当前事实落在仓库内：重要 Slack/口头决策应沉淀到 OpenSpec、`docs/` 或相邻 README。
 - 设计只描述需要实现的行为和关键取舍；实现细节放到 tasks 或代码评审中。
 - 当实现改变了设计假设，更新设计或记录偏离原因，不让旧设计继续伪装成当前事实。
@@ -75,5 +75,5 @@ ADR 说明为什么长期采用某个架构选择，OpenSpec 说明本次变更�
 
 - 新增 `docs/**/*.md` 后必须更新 [docs/index.md](../index.md)。
 - 当前可作为依据的文档标记为 `Current`，历史快照标记为 `Historical`，已知过期内容标记为 `Stale`。
-- 涉及发布、回滚、smoke 或运维操作的设计结果，应同步到 `docs/releases/` 或对应 feature 文档。
-- 运行 `pnpm check:docs` 验证索引覆盖、新鲜度和本地 Markdown 链接。
+- 涉及发布、回滚、验证证据或运维操作的设计结果，应同步到 `docs/releases/` 或对应 feature 文档。
+- 文档变更的索引覆盖、新鲜度和本地 Markdown 链接验证方式由 [testing.md](testing.md) 统一定义。

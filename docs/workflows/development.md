@@ -31,7 +31,7 @@ OpenSpec change 和 Git 分支视为同一个生命周期，用于能力规格�
    小步实现；保持改动小而聚焦，优先沿用现有包边界、命名、工厂、DI、测试和日志模式。
 4. Investigate：bug 报告先复现或检查失败信号，再改根因；使用 Serena MCP 做代码结构分析、符号查找和引用检查，用 `rg`、`find`、`sed` 处理清单、非代码文件和命令输出。
 5. Delegate：需要并行调查时可以使用子代理。每个子代理只回答一个边界清晰的问题，给出文件、行号、风险和建议；主代理负责最终集成和验证。
-6. Verify：归档前完成 OpenSpec verification，并按 [testing.md](testing.md) 运行最窄有意义的仓库检查。新发现推翻假设时，先更新计划或 artifacts，再继续实现。
+6. Verify：归档前确认 OpenSpec artifacts、tasks 和实现一致，并进入 [testing.md](testing.md) 定义的验证流程。新发现推翻假设时，先更新计划或 artifacts，再继续实现。
 7. Archive and merge：用户明确要求 archive 时，先同步 delta specs 并移动 change 到 `openspec/changes/archive/`；检查完整 diff；只暂存 change 相关文件；创建一个聚焦提交；切回干净目标分支后 squash merge 并创建最终提交。
 8. Blockers：任务或 artifacts 未完成、验证失败、存在不可分离的无关 dirty changes、目标分支无法干净接收时，不要归档或合并，保留工作分支并报告阻塞。
 
@@ -63,7 +63,7 @@ worker module 入口或 package export。不要测试 private 方法或内部 co
 mock 只放在系统边界，例如外部 API、时间、随机数、文件系统，或必要时数据库。项目内 service、repository、db、redis、
 logger 等 app-local singleton 不应通过 `mock.module` 替换；优先沿用本仓库 factory 和 DI fake 模式。
 
-重构只在测试为绿后进行；重构后继续按 [testing.md](testing.md) 运行触及范围内最窄有意义的验证。
+重构只在测试为绿后进行；重构后进入 [testing.md](testing.md) 定义的最终验证。
 
 ## Quick Change 流程
 
@@ -74,7 +74,7 @@ Quick Change 是小型、低风险、非 OpenSpec 改动的默认入口，例如
 3. Branch：从干净目标分支创建 `work/quick-<slug>`。如果分支已存在，追加短时间戳。
 4. Implement：读取附近文件，按现有文档和代码约定做最小改动；若 quick change 涉及可观察行为，默认按 `$tdd`
    写一个聚焦失败测试再实现；实现过程中不创建提交。
-5. Validate：按 [testing.md](testing.md) 运行触及范围内最窄有意义的检查，例如文档改动运行 `pnpm check:docs`。如果没有可用检查，至少检查 diff 并说明原因。
+5. Validate：按 [testing.md](testing.md) 选择并运行触及范围内的验证。如果没有可用检查，至少检查 diff 并说明原因。
 6. Confirm：向用户说明当前临时分支、变更文件、验证结果和简短摘要，明确询问是否提交、合入目标分支并删除临时分支。
 7. Finalize：用户确认后重新检查 status/diff，只暂存本次任务拥有的文件；创建一个中文 Conventional Commit；切回目标分支 fast-forward merge；合并成功后删除本地临时分支。不要 push，除非用户明确要求。
 
@@ -90,4 +90,4 @@ Quick Change 是小型、低风险、非 OpenSpec 改动的默认入口，例如
 
 ## 验证入口
 
-具体测试策略、验证矩阵、Smoke 入口、证据留存和失败处理见 [testing.md](testing.md)。开发流程只决定何时验证；具体验证范围以改动风险和受影响模块为准。
+具体测试策略、验证矩阵、Smoke 入口、证据留存和失败处理见 [testing.md](testing.md)。开发流程只决定何时交给验证流程；具体验证命令、范围和记录规则以 [testing.md](testing.md) 为准。
