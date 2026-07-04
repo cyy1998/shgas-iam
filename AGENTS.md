@@ -82,12 +82,16 @@ Preserve existing domain file naming: `user.service.ts`, `user.repository.ts`, `
 - Architecture guard tests in `apps/api/src/__tests__/architecture.test.ts` and `apps/admin-api/src/__tests__/architecture.test.ts` intentionally fail on forbidden production imports. Update allowlists deliberately when a new exception is justified.
 
 ## Workflow Orchestration
-- Detailed development workflow, branching, OpenSpec lifecycle, commit rules, and delegation live in `docs/workflows/development.md`.
-- Detailed design workflow, planning depth, proposal/design/task guidance, and decision-recording rules live in `docs/workflows/design.md`.
-- Detailed testing workflow, validation matrix, smoke entrypoints, and failure handling live in `docs/workflows/testing.md`.
-- For non-trivial work, read the relevant workflow doc before editing code or artifacts.
+- Detailed planning workflow, routing decisions, lifecycle states, and links to stage guides live in `docs/workflows/index.md`.
+- Stage method guides live in `docs/workflows/explore.md`, `docs/workflows/clarify.md`, `docs/workflows/plan.md`, `docs/workflows/implement.md`, `docs/workflows/verify.md`, and `docs/workflows/archive.md`.
+- Detailed verification workflow, validation matrix, smoke entrypoints, and failure handling live in `docs/workflows/verify.md`.
+- Treat `docs/workflows/*.md` as normative process gates, not background references. For non-trivial work, OpenSpec changes, behavior/API/contract/schema/security changes, or workflow changes, read the relevant workflow doc before editing code or artifacts and use it as the execution checklist.
+- Workflow docs decide phase gates; named skills decide execution method; OpenSpec `tasks.md` decides change-local scope. Do not use a task checklist as a substitute for required workflow gates or skill instructions.
 - Use Serena MCP by default for codebase analysis, architecture checks, symbol lookup, references, and targeted code reading. Use shell commands such as `rg`, `find`, and `sed` for workspace manifests, non-code files, command output, or broad file lists.
 - For bug reports, reproduce or inspect the failing signal first, then fix the root cause and verify it.
+- Feature, fix, and behavior changes covered by the TDD gate in `docs/workflows/implement.md` must follow `$tdd`, or record an explicit exception before implementation with the reason, alternative validation, and residual risk.
+- If implementation or verification uncovers drift outside the current artifacts or task list, pause to classify it: update in-scope artifacts before continuing, split unrelated historical issues out, and only include extra fixes that block validation with the reason recorded.
 - Before marking work complete, prove it with the narrowest meaningful validation: focused tests, type checks, lint, schema commands, logs, or a quick UI/API smoke test as appropriate.
+- Before archive, merge, or final completion, confirm artifacts/tasks are complete, delta specs are synced or explicitly user-approved to skip, final validation ran after the last relevant edit, and staged files are task-owned only.
 - Do not automatically create commits outside the OpenSpec archive workflow or an explicit user confirmation. When committing, stage only task-owned files and use a Chinese Conventional Commit message unless the user requests another language.
 - Capture recurring lessons in `docs/`, OpenSpec specs, or nearby project documentation; keep `AGENTS.md` as the short repository map.

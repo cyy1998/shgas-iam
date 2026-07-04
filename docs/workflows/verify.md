@@ -1,6 +1,6 @@
-# 测试与验证流程
+# Verify 阶段
 
-本流程承接 [AGENTS.md](../../AGENTS.md) 和 [development.md](development.md)，说明如何为一次改动选择验证范围、编写测试、运行命令、执行 smoke，并记录证据。目标是用最窄但足够可信的验证证明改动正确，同时在共享契约或跨 app 影响出现时主动扩大范围。
+本阶段承接 [index.md](index.md) 的 Verify 状态，用于为一次改动选择验证范围、复核测试覆盖、运行命令、执行 smoke，并记录证据。目标是用最窄但足够可信的验证证明改动正确，同时在共享契约或跨 app 影响出现时主动扩大范围。
 
 ## 快速选择
 
@@ -10,6 +10,7 @@
 - 优先使用 package script 和 workspace filter，例如 `pnpm --filter @iam/api test`；只有在需要定位单个文件时才直接调用底层 runner。
 - 类型、lint、单元测试、schema command、文档 guard、smoke、日志和指标查询都算验证；选择与改动风险相匹配的组合。
 - 共享契约、跨 app、schema、auth/session/OIDC、队列和 gateway 改动需要扩大范围。
+- 最终验证必须发生在最后一次相关代码、契约、artifact、配置或 workflow 文档修改之后；如果验证后又修改了受影响内容，必须重跑对应验证或记录为什么无需重跑。
 - 每次交付都说明实际运行的命令和结果。未运行某类验证时，说明原因和剩余风险。
 
 ## 验证流程
@@ -17,26 +18,29 @@
 1. Scope：列出触及文件、模块边界、共享契约、运行时入口、数据迁移和用户可见行为。
 2. Baseline：失败修复先复现问题；重构或文档改动至少检查现有 guard 是否能覆盖当前风险。
 3. Select：从验证矩阵中选择最窄有意义命令；跨 app、共享包、schema、auth/session/OIDC、队列和 gateway 改动需要扩大范围。
-4. Implement tests：行为变化优先补或改测试；后端服务/handler/adapter 测试使用工厂和 DI fake，避免 mock app-local singleton；前端关键流程使用包内 Vitest 或 E2E。
-5. Run：先跑聚焦命令，再按影响面补 typecheck、lint、schema 或 smoke。若聚焦命令失败，不要用无关大命令掩盖失败。
+4. Coverage：复核实现阶段已有测试是否覆盖关键行为、契约和风险路径；如果缺少必要测试，回到 [implement.md](implement.md) 并按 `$tdd` 补齐后再重新验证。
+5. Run：先跑聚焦命令，再按影响面补 typecheck、lint、schema 或 smoke。若聚焦命令失败，不要用无关大命令掩盖失败；若命令后又有相关修改，重新运行受影响命令。
 6. Inspect：查看失败输出、日志、生成 diff 和关键断言；确认失败是本次改动导致、已有问题，还是环境问题。
 7. Record：最终说明记录命令、结果、跳过项和残余风险；发布或运维类验证应把可复用证据沉淀到对应 runbook 或 release record。
 
-## 测试编写
+OpenSpec 归档前必须确认 OpenSpec artifacts、tasks 和实现一致，并进入本阶段验证流程。新发现推翻假设或扩大范围时，先更新计划、artifacts 或记录偏离原因，再继续实现。
 
-- 测试文件放在被测代码旁的 `__tests__/` 目录，例如 `src/services/position/__tests__/position.service.test.ts`。
-- 断言外部行为、契约和边界条件，不只断言实现细节。
-- 事务、审计、队列、OIDC/session、Redis/cache、gateway manifest 和数据库 schema 改动要覆盖失败、幂等、回滚或兼容路径。
-- 后端服务/handler/adapter 测试构造 factories 并传入 DI fakes；不要为 app-local service、repository、db、redis、logger 使用 `mock.module`。
-- 前端测试覆盖用户能观察到的状态、交互和错误提示；关键流程变更补 mocked E2E 或 smoke。
-- 新增 fixture、snapshot 或迁移输出时，只提交任务拥有的稳定产物，避免把本地缓存和运行报告纳入 diff。
+## 测试覆盖复核
+
+本节不定义实现后补测试流程；测试编写属于 [implement.md](implement.md) 的实现循环，触发 TDD 时必须按 `$tdd` 先写失败测试再写实现。Verify 阶段只判断测试证据是否足够，并在发现缺口时回到 Implement 补齐。
+
+- 确认触发 TDD 的 feature、fix 和行为变化已在实现阶段按已确认 seam 写测试；缺少时视为流程缺口，回到 [implement.md](implement.md)。
+- 检查测试是否断言外部行为、契约和边界条件，而不是只绑定实现细节。
+- 检查事务、审计、队列、OIDC/session、Redis/cache、gateway manifest 和数据库 schema 改动是否覆盖失败、幂等、回滚或兼容路径。
+- 检查后端服务/handler/adapter 测试是否使用 factories 和 DI fakes，避免 mock app-local singleton。
+- 检查前端关键流程是否覆盖用户可观察状态、交互和错误提示；必要时补 mocked E2E 或 smoke。
+- 检查新增 fixture、snapshot 或迁移输出是否为任务拥有的稳定产物，避免把本地缓存和运行报告纳入 diff。
 
 ## 验证矩阵
 
 优先运行最窄有意义的检查；共享契约或跨 app 改动需要扩大验证范围。下列条目使用清单而不是宽表，避免长命令或 smoke 覆盖被 Markdown 表格截断。
 
-- `docs/**/*.md`：运行 `pnpm check:docs`。
-- `AGENTS.md`、`.codex/skills/**/*.md`、流程文档：运行 `pnpm check:docs`，再人工检查相关链接和流程一致性。
+- 文档变更（`docs/**/*.md`、`AGENTS.md`、`.codex/skills/**/*.md`）：运行 `pnpm check:docs`；涉及流程文档时，再人工检查相关链接和流程一致性。
 - env 命名、`.env.example`、Docker env：运行 `pnpm check:env-names`；必要时启动依赖栈确认变量被实际消费。
 - `apps/api`：按影响面运行 `pnpm --filter @iam/api lint`、`pnpm --filter @iam/api test`、`pnpm --filter @iam/api typecheck`；公开路由变化补 `/doc` 或接口 smoke。
 - `apps/admin-api`：按影响面运行 `pnpm --filter @iam/admin-api lint`、`pnpm --filter @iam/admin-api test`、`pnpm --filter @iam/admin-api typecheck`；admin REST/tRPC 变化补 `/admin/doc`、`/rpc/doc` 或接口 smoke。
@@ -70,4 +74,10 @@
 - 如果失败来自本次改动，修复后重跑同一命令，再按影响面补充相关检查。
 - 如果失败是已有问题或环境问题，记录命令、关键错误、判断依据和未覆盖风险。
 - 如果无法运行必要验证，说明缺失依赖、服务、凭据或数据前提，并给出可恢复后应运行的命令。
-- 最终说明必须记录实际运行的命令、结果、跳过项和残余风险。
+- 最终说明必须记录实际运行的命令、结果、跳过项和残余风险，并确认这些验证覆盖最后一次相关修改。
+
+## 退出条件
+
+- 必要验证通过，或失败已明确分类为已有问题、环境问题或阻塞项。
+- OpenSpec artifacts、tasks 和实现一致。
+- 下一步进入 [archive.md](archive.md)，或回到 [implement.md](implement.md) 修复问题。
