@@ -25,7 +25,8 @@ OpenSpec change 和 Git 分支视为同一个生命周期，用于能力规格�
 
 1. Propose：检查当前分支和 worktree，从目标分支创建 `work/<change-name>`。独立 change 目标为 `main`；大型 feature 的 child change 目标为 `feature/<feature-name>`。change 名称和工作分支后缀保持一致。
 2. Plan：读取附近代码、`openspec/specs/`、`docs/index.md` 指向的当前文档和相关 runbook；完成 proposal、design、spec、tasks 中当前阶段需要的 artifacts。
-3. Apply：在 `work/<change-name>` 上更新 artifacts、实现、测试和验证。保持改动小而聚焦，优先沿用现有包边界、命名、工厂、DI、测试和日志模式。
+3. Apply：在 `work/<change-name>` 上更新 artifacts、实现、测试和验证。有清晰可观察行为的 feature/fix 默认使用 `$tdd`
+   小步实现；保持改动小而聚焦，优先沿用现有包边界、命名、工厂、DI、测试和日志模式。
 4. Investigate：bug 报告先复现或检查失败信号，再改根因；使用 Serena MCP 做代码结构分析、符号查找和引用检查，用 `rg`、`find`、`sed` 处理清单、非代码文件和命令输出。
 5. Delegate：需要并行调查时可以使用子代理。每个子代理只回答一个边界清晰的问题，给出文件、行号、风险和建议；主代理负责最终集成和验证。
 6. Verify：归档前完成 OpenSpec verification，并按 [testing.md](testing.md) 运行最窄有意义的仓库检查。新发现推翻假设时，先更新计划或 artifacts，再继续实现。
@@ -38,6 +39,30 @@ OpenSpec change 和 Git 分支视为同一个生命周期，用于能力规格�
 - 每个 child `work/<change-name>` 从 feature 分支创建，并独立归档回 feature 分支。
 - 只有所有 child 完成、umbrella 验收通过、集成验证完成后，才把 feature 分支合入 `main`。
 
+## TDD 实现循环
+
+有清晰可观察行为的 feature、fix 和行为变化默认使用 `$tdd` 作为实现循环；纯文档、格式、索引、低风险配置微调、
+机械重命名或没有可执行验收面的改动可以跳过。`$tdd` 不替代 OpenSpec、设计文档或最终验证；它只约束实现阶段如何让代码长出来。
+
+进入 `$tdd` 前，先写明被测 seam：也就是通过哪个公开接口观察行为，例如 route、service factory 返回的方法、tRPC operation、
+worker module 入口或 package export。不要测试 private 方法或内部 collaborator。若 seam 无法从 OpenSpec、代码和既有测试中明确推断，
+先向用户确认后再写测试。
+
+循环按一片行为推进：
+
+1. 写一个失败测试，证明当前行为缺失或 bug 仍存在。
+2. 写刚好让测试通过的最小实现。
+3. 跑同一个聚焦测试确认变绿。
+4. 再进入下一片行为。
+
+不要一次性批量写完所有测试再实现。测试应断言外部行为、契约和边界条件，期望值来自规格、已知示例或手算结果，
+不要用和实现相同的算法重新计算期望值。
+
+mock 只放在系统边界，例如外部 API、时间、随机数、文件系统，或必要时数据库。项目内 service、repository、db、redis、
+logger 等 app-local singleton 不应通过 `mock.module` 替换；优先沿用本仓库 factory 和 DI fake 模式。
+
+重构只在测试为绿后进行；重构后继续按 [testing.md](testing.md) 运行触及范围内最窄有意义的验证。
+
 ## Quick Change 流程
 
 Quick Change 用于小型、低风险、非 OpenSpec 改动，例如文档微调、配置小改、索引维护或局部修正。它仍然需要临时分支和验证，但提交、合并、删分支必须等用户确认。
@@ -45,7 +70,8 @@ Quick Change 用于小型、低风险、非 OpenSpec 改动，例如文档微调
 1. Triage：确认改动足够小、diff 可快速审阅，并识别目标分支。默认目标为用户提出该 Quick Change 需求时所在分支，除非用户指定其他目标。
 2. Inspect：运行 `git status --short --branch`。如果存在无关 dirty changes，不要 stash、revert 或带入临时分支；先确认它们是否属于当前任务。
 3. Branch：从干净目标分支创建 `work/quick-<slug>`。如果分支已存在，追加短时间戳。
-4. Implement：读取附近文件，按现有文档和代码约定做最小改动；实现过程中不创建提交。
+4. Implement：读取附近文件，按现有文档和代码约定做最小改动；若 quick change 涉及可观察行为，默认按 `$tdd`
+   写一个聚焦失败测试再实现；实现过程中不创建提交。
 5. Validate：按 [testing.md](testing.md) 运行触及范围内最窄有意义的检查，例如文档改动运行 `pnpm check:docs`。如果没有可用检查，至少检查 diff 并说明原因。
 6. Confirm：向用户说明当前临时分支、变更文件、验证结果和简短摘要，明确询问是否提交、合入目标分支并删除临时分支。
 7. Finalize：用户确认后重新检查 status/diff，只暂存本次任务拥有的文件；创建一个中文 Conventional Commit；切回目标分支 fast-forward merge；合并成功后删除本地临时分支。不要 push，除非用户明确要求。
