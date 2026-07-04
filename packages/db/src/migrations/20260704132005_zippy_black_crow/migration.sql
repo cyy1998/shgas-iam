@@ -1,0 +1,1 @@
+CREATE UNIQUE INDEX "employment_active_relationship_unique_idx" ON "employment" ("user_id","dept_id","pos_id") WHERE "is_delete" = false AND "status" = 1;

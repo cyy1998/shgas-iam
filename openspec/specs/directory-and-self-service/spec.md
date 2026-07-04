@@ -23,8 +23,8 @@
 #### Scenario: 绑定手机号
 - **WHEN** 已认证用户提交 phoneNumber 和 bindPhone 用途验证码
 - **THEN** 系统 SHALL 使用源表校验手机号格式、手机号未被已有用户使用、当前用户仍启用且未删除、验证码匹配
-- **AND** 系统 SHALL 原子消费该 `mobile-code:bindPhone:<phone>` 验证码
 - **AND** 系统 SHALL 更新当前用户手机号
+- **AND** 系统 SHALL 在手机号更新成功后确认消费该 `mobile-code:bindPhone:<phone>` 验证码
 - **AND** 系统 SHALL 返回成功布尔结果
 - **AND** 系统 SHALL 允许后续 profile 读取在重建前返回旧手机号
 
@@ -101,13 +101,36 @@
 #### Scenario: 重置密码
 - **WHEN** open API 提交 username、手机号、验证码和 newPassword
 - **THEN** 系统 SHALL 校验用户存在、手机号匹配和 resetPassword 验证码匹配
-- **AND** 系统 SHALL 原子消费该 `mobile-code:resetPassword:<phone>` 验证码
 - **AND** 系统 SHALL 哈希保存新密码
+- **AND** 系统 SHALL 在新密码保存成功后确认消费该 `mobile-code:resetPassword:<phone>` 验证码
 
 #### Scenario: 重置密码重复提交被拒绝
 - **WHEN** resetPassword 用途验证码已经被一次成功重置密码操作消费
 - **THEN** 后续使用相同用户名、手机号和验证码重置密码 SHALL 视为验证码错误
 - **AND** 系统 SHALL NOT 再次更新用户密码
+
+### Requirement: Business verification codes are confirmed after successful writes
+系统 SHALL 对包含数据库写入事务的业务验证码使用 reserve/confirm 消费语义，使业务写入失败不会提前消耗合法验证码。
+
+#### Scenario: resetPassword 事务失败后验证码可重试
+- **WHEN** resetPassword 验证码匹配且业务在保存新密码事务中失败
+- **THEN** 系统 SHALL NOT 确认消费该 `mobile-code:resetPassword:<phone>` 验证码
+- **AND** 用户 SHALL 能使用同一验证码再次发起 resetPassword
+
+#### Scenario: resetPassword 成功后验证码不可重放
+- **WHEN** resetPassword 验证码匹配且新密码保存成功
+- **THEN** 系统 SHALL 确认消费该 `mobile-code:resetPassword:<phone>` 验证码
+- **AND** 后续使用同一验证码的 resetPassword SHALL 视为验证码错误
+
+#### Scenario: bindPhone 事务失败后验证码可重试
+- **WHEN** bindPhone 验证码匹配且业务在更新手机号事务中失败
+- **THEN** 系统 SHALL NOT 确认消费该 `mobile-code:bindPhone:<phone>` 验证码
+- **AND** 用户 SHALL 能使用同一验证码再次发起 bindPhone
+
+#### Scenario: bindPhone 成功后验证码不可重放
+- **WHEN** bindPhone 验证码匹配且手机号更新成功
+- **THEN** 系统 SHALL 确认消费该 `mobile-code:bindPhone:<phone>` 验证码
+- **AND** 后续使用同一验证码绑定手机号 SHALL 视为验证码错误
 
 ### Requirement: 公开脱敏用户信息
 系统 SHALL 通过 open tier 按 username 返回用户的脱敏基本信息，并在异常查询条件下要求有效 Cap token。

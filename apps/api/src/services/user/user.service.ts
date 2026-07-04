@@ -66,22 +66,38 @@ export function createUserService(deps: UserServiceDeps) {
       ));
       throw new UserNotFoundError("用户名与手机号不匹配");
     }
-    if (!await deps.mobileService.consumeVerificationCode(VerificationCodeUsage.ResetPassword, phone, code)) {
+    const reservation = await deps.mobileService.reserveVerificationCode(
+      VerificationCodeUsage.ResetPassword,
+      phone,
+      code,
+    );
+    if (reservation === null) {
       await deps.auditLogWriter.recordAuditLog(withApiRequestContext(
         options.requestContext,
         buildPasswordResetFailureAudit(user, phone, "invalid_verification_code"),
       ));
       throw new InvalidVerificationCodeError("验证码错误");
     }
-    const newPasswordHash = await deps.passwordHelper.hashUserPassword(newPassword);
-    return await deps.uow.transaction(async (tx) => {
-      await tx.userRepository.setPassword(user.id, newPasswordHash);
-      await tx.auditLogWriter.recordAuditLog(withApiRequestContext(
-        options.requestContext,
-        buildPasswordResetSuccessAudit(user, phone),
-      ));
-      return true;
-    }, { observability: options.requestContext });
+    let transactionSucceeded = false;
+    try {
+      const newPasswordHash = await deps.passwordHelper.hashUserPassword(newPassword);
+      const result = await deps.uow.transaction(async (tx) => {
+        await tx.userRepository.setPassword(user.id, newPasswordHash);
+        await tx.auditLogWriter.recordAuditLog(withApiRequestContext(
+          options.requestContext,
+          buildPasswordResetSuccessAudit(user, phone),
+        ));
+        return true;
+      }, { observability: options.requestContext });
+      transactionSucceeded = true;
+      await deps.mobileService.confirmReservedVerificationCode(reservation);
+      return result;
+    }
+    catch (error) {
+      if (!transactionSucceeded)
+        await deps.mobileService.releaseReservedVerificationCode(reservation);
+      throw error;
+    }
   }
 
   async function checkPassword(username: string, inputPassword: string) {
@@ -126,22 +142,32 @@ export function createUserService(deps: UserServiceDeps) {
   }
 
   async function setMobile(userId: number, phoneNumber: string, code: string, options: UserRequestOptions = {}) {
-    await deps.mobileBinding.assertCanBindMobile(userId, phoneNumber, code, options);
-    await deps.uow.transaction(async (tx) => {
-      await tx.userRepository.setMobile(userId, phoneNumber);
-      await tx.auditLogWriter.recordAuditLog(withApiRequestContext(
-        options.requestContext,
-        buildMobileBindSuccessAudit(userId, phoneNumber),
-      ));
-      await tx.profileDirtyMarker.markUsersDirty({
-        userIds: [userId],
-        reasonCodes: [UserProfileDirtyReason.UserUpdated],
-        afterCommit: tx.afterCommit,
-        requestId: options.requestContext?.requestId ?? undefined,
-        traceId: options.requestContext?.traceId ?? undefined,
-      });
-    }, { observability: options.requestContext });
-    return true;
+    const reservation = await deps.mobileBinding.assertCanBindMobile(userId, phoneNumber, code, options);
+    let transactionSucceeded = false;
+    try {
+      await deps.uow.transaction(async (tx) => {
+        await tx.userRepository.setMobile(userId, phoneNumber);
+        await tx.auditLogWriter.recordAuditLog(withApiRequestContext(
+          options.requestContext,
+          buildMobileBindSuccessAudit(userId, phoneNumber),
+        ));
+        await tx.profileDirtyMarker.markUsersDirty({
+          userIds: [userId],
+          reasonCodes: [UserProfileDirtyReason.UserUpdated],
+          afterCommit: tx.afterCommit,
+          requestId: options.requestContext?.requestId ?? undefined,
+          traceId: options.requestContext?.traceId ?? undefined,
+        });
+      }, { observability: options.requestContext });
+      transactionSucceeded = true;
+      await deps.mobileService.confirmReservedVerificationCode(reservation);
+      return true;
+    }
+    catch (error) {
+      if (!transactionSucceeded)
+        await deps.mobileService.releaseReservedVerificationCode(reservation);
+      throw error;
+    }
   }
 
   async function searchUsers(userQueryDto: UserQueryDto): Promise<UserDto[]> {

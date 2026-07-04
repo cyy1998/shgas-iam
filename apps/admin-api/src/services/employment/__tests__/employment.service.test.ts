@@ -1,5 +1,6 @@
 import { createFakeClock, createImmediateUnitOfWork } from "@admin-api/test/fakes";
 import { EmploymentStatus, OrganizationLevel, OrganizationStatus, OrganizationType, PositionStatus, UserProfileDirtyReason, UserStatus, UserType } from "@iam/contracts";
+import { EmploymentAlreadyExistsError } from "@iam/domain/employment";
 import { describe, expect, mock, test } from "bun:test";
 import { createEmploymentService } from "../employment.service";
 
@@ -168,6 +169,21 @@ describe("createEmploymentService", () => {
     })).rejects.toThrow("用户不存在");
 
     expect(tx.employmentRepository.createEmploymentRecord).not.toHaveBeenCalled();
+  });
+
+  test("does not audit or mark dirty when storage rejects a duplicate employment", async () => {
+    const { service, tx } = createService();
+    (tx.employmentRepository.createEmploymentRecord as any)
+      .mockRejectedValue(new EmploymentAlreadyExistsError("相同任职关系已存在"));
+
+    await expect(service.createEmploymentForAdmin({
+      username: "zhangsan",
+      orgCode: "ORG",
+      posCode: "DEV",
+    })).rejects.toBeInstanceOf(EmploymentAlreadyExistsError);
+
+    expect(tx.auditService.recordAuditLog).not.toHaveBeenCalled();
+    expect(tx.profileDirtyMarker.markUsersDirty).not.toHaveBeenCalled();
   });
 
   test("disabling an employment sets end time from the injected clock", async () => {

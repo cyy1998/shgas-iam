@@ -18,13 +18,19 @@ export function createUserMobileBinding(deps: UserMobileBindingDeps) {
     if (await deps.mobileService.checkExistingPhoneNumber(phoneNumber)) {
       throw new MobileAlreadyExistsError("手机号已存在");
     }
-    if (!await deps.mobileService.consumeVerificationCode(VerificationCodeUsage.BindPhone, phoneNumber, code)) {
+    const reservation = await deps.mobileService.reserveVerificationCode(
+      VerificationCodeUsage.BindPhone,
+      phoneNumber,
+      code,
+    );
+    if (reservation === null) {
       await deps.auditLogWriter.recordAuditLog(withApiRequestContext(
         options.requestContext,
         buildMobileBindInvalidCodeAudit(userId, phoneNumber),
       ));
       throw new InvalidVerificationCodeError("验证码错误");
     }
+    return reservation;
   }
 
   return { assertCanBindMobile };

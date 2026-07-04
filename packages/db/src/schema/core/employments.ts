@@ -1,5 +1,6 @@
 import { EmploymentStatus } from "@iam/contracts";
-import { boolean, index, integer, snakeCase, timestamp, varchar } from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
+import { boolean, index, integer, snakeCase, timestamp, uniqueIndex, varchar } from "drizzle-orm/pg-core";
 import { createInsertSchema, createSelectSchema, createUpdateSchema } from "drizzle-orm/zod";
 import { z } from "zod";
 import { baseColumns } from "../_shard/base-columns";
@@ -18,6 +19,9 @@ export const employments = snakeCase.table("employment", {
   createTime: baseColumns.createTime,
   updateTime: baseColumns.updateTime,
 }, table => [
+  uniqueIndex("employment_active_relationship_unique_idx")
+    .on(table.userId, table.orgId, table.posId)
+    .where(sql`${table.isDelete} = false AND ${table.status} = ${EmploymentStatus.Enable}`),
   index("idx_employment_user_id").on(table.userId),
   index("idx_dept_id").on(table.orgId),
   index("idx_pos_id").on(table.posId),

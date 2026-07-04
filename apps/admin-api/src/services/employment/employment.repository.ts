@@ -11,8 +11,11 @@ import {
   positions,
   users,
 } from "@iam/db/schema";
+import { EmploymentAlreadyExistsError } from "@iam/domain/employment";
 import { and, count, desc, eq, exists, inArray, or, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
+
+const EMPLOYMENT_ACTIVE_RELATIONSHIP_UNIQUE_INDEX = "employment_active_relationship_unique_idx";
 
 export function createEmploymentRepository(db: DbClient) {
   return {
@@ -80,15 +83,22 @@ export function createEmploymentRepository(db: DbClient) {
       description?: string | null;
       status?: EmploymentStatus;
     }) {
-      return firstRow(await db.insert(employments).values({
-        userId: data.userId,
-        posId: data.posId,
-        orgId: data.orgId,
-        isPrimary: data.isPrimary ?? false,
-        startTime: data.startTime ?? new Date(),
-        description: data.description ?? null,
-        status: data.status ?? EmploymentStatus.Enable,
-      }).returning())!;
+      try {
+        return firstRow(await db.insert(employments).values({
+          userId: data.userId,
+          posId: data.posId,
+          orgId: data.orgId,
+          isPrimary: data.isPrimary ?? false,
+          startTime: data.startTime ?? new Date(),
+          description: data.description ?? null,
+          status: data.status ?? EmploymentStatus.Enable,
+        }).returning())!;
+      }
+      catch (error) {
+        if (isEmploymentActiveRelationshipUniqueViolation(error))
+          throw new EmploymentAlreadyExistsError("相同任职关系已存在");
+        throw error;
+      }
     },
     async updateEmploymentRecord(id: number, data: {
       isPrimary?: boolean;
@@ -137,6 +147,18 @@ export function createEmploymentRepository(db: DbClient) {
 }
 
 export type EmploymentRepository = ReturnType<typeof createEmploymentRepository>;
+
+function isEmploymentActiveRelationshipUniqueViolation(error: unknown) {
+  if (typeof error !== "object" || error === null)
+    return false;
+
+  const candidate = error as { code?: unknown; constraint?: unknown; constraint_name?: unknown };
+  return candidate.code === "23505"
+    && (
+      candidate.constraint === EMPLOYMENT_ACTIVE_RELATIONSHIP_UNIQUE_INDEX
+      || candidate.constraint_name === EMPLOYMENT_ACTIVE_RELATIONSHIP_UNIQUE_INDEX
+    );
+}
 
 type Position = typeof positions.$inferSelect;
 type EmploymentWithRelations = Employment & {

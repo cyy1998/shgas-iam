@@ -163,15 +163,28 @@ export function createMemoryRedis(now: () => number = Date.now) {
       return sets.get(key)?.size ?? 0;
     },
 
-    async eval(_script: string, keyCount: number, key: string, expectedValue: string) {
-      if (keyCount !== 1)
-        throw new Error("memory redis eval supports one key only");
+    async eval(_script: string, keyCount: number, ...args: string[]) {
+      if (keyCount !== 1 && keyCount !== 2)
+        throw new Error("memory redis eval supports one or two keys only");
 
-      const savedValue = await redis.get(key);
+      if (keyCount === 2) {
+        const [codeKey, reservationKey] = args;
+        const savedValue = await redis.get(codeKey!);
+        const reservedValue = await redis.get(reservationKey!);
+        if (savedValue === null || reservedValue === null || savedValue !== reservedValue)
+          return 0;
+
+        await redis.del(codeKey!, reservationKey!);
+        return 1;
+      }
+
+      const [key, expectedValue] = args;
+
+      const savedValue = await redis.get(key!);
       if (savedValue === null || savedValue !== expectedValue)
         return 0;
 
-      await redis.del(key);
+      await redis.del(key!);
       return 1;
     },
 

@@ -1,7 +1,7 @@
 import type { PasswordHasherPort } from "@api/composition/runtime";
 import type { ApiRequestContext, AuditLogWriterPort } from "@api/services/audit/audit.service";
 import type { EmploymentRepository } from "@api/services/employment/employment.repository";
-import type { MobileService } from "@api/services/mobile/mobile.service";
+import type { MobileService, MobileVerificationCodeReservation } from "@api/services/mobile/mobile.service";
 import type { PrivilegeRepository } from "@api/services/privilege/privilege.repository";
 import type { PrivilegeDelegationRepository } from "@api/services/privilege/privilegeDelegation.repository";
 import type { PrivilegeDelegationDto } from "@api/services/privilege/privilegeDelegation.type";
@@ -24,7 +24,7 @@ export interface UserDelegationQueryDeps {
 }
 
 export interface UserMobileBindingDeps {
-  mobileService: Pick<MobileService, "checkValidPhoneNumber" | "checkExistingPhoneNumber" | "consumeVerificationCode">;
+  mobileService: Pick<MobileService, "checkValidPhoneNumber" | "checkExistingPhoneNumber" | "reserveVerificationCode">;
   auditLogWriter: AuditLogWriterPort;
 }
 
@@ -61,7 +61,10 @@ export interface UserServiceDeps {
     | "getUserByMobile"
     | "updateEnabledUserStatus"
   >;
-  mobileService: Pick<MobileService, "consumeVerificationCode" | "checkValidPhoneNumber" | "checkExistingPhoneNumber">;
+  mobileService: Pick<
+    MobileService,
+    "confirmReservedVerificationCode" | "releaseReservedVerificationCode" | "reserveVerificationCode"
+  >;
   auditLogWriter: AuditLogWriterPort;
   profileQuery: Pick<
     UserProfileQueryService,
@@ -82,7 +85,7 @@ export interface UserServiceDeps {
       phoneNumber: string,
       code: string,
       options?: UserRequestOptions,
-    ) => Promise<void>;
+    ) => Promise<MobileVerificationCodeReservation>;
   };
   passwordHelper: {
     assertStrongPassword: (password: string) => void;

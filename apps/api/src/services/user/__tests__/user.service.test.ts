@@ -4,6 +4,8 @@ import { describe, expect, mock, test } from "bun:test";
 import { createUserService } from "../user.service";
 
 function createDeps(overrides: Record<string, unknown> = {}) {
+  const resetPasswordReservation = { usage: "resetPassword", phone: "13800000000", token: "reset-token" };
+  const bindPhoneReservation = { usage: "bindPhone", phone: "13900000000", token: "bind-token" };
   const user = {
     id: 1,
     username: "zhangsan",
@@ -32,11 +34,14 @@ function createDeps(overrides: Record<string, unknown> = {}) {
   };
   return {
     auditLogWriter: { recordAuditLog: mock(async () => undefined) },
-    mobileBinding: { assertCanBindMobile: mock(async () => undefined) },
+    mobileBinding: { assertCanBindMobile: mock(async () => bindPhoneReservation) },
     mobileService: {
       checkExistingPhoneNumber: mock(async () => false),
       checkValidPhoneNumber: mock(() => true),
       consumeVerificationCode: mock(async () => true),
+      reserveVerificationCode: mock(async () => resetPasswordReservation),
+      confirmReservedVerificationCode: mock(async () => true),
+      releaseReservedVerificationCode: mock(async () => undefined),
     },
     passwordHelper: {
       assertStrongPassword: mock(() => undefined),
@@ -59,6 +64,8 @@ function createDeps(overrides: Record<string, unknown> = {}) {
       getUserByUsername: mock(async () => user),
       getUserByWxId: mock(async () => user),
     },
+    bindPhoneReservation,
+    resetPasswordReservation,
     ...overrides,
   } as any;
 }
@@ -104,7 +111,20 @@ describe("createUserService", () => {
     await expect(service.resetPassword("zhangsan", "13800000000", "1234", "newPass123")).resolves.toBe(true);
 
     expect(deps.tx.userRepository.setPassword).toHaveBeenCalledWith(1, "hashed:newPass123");
+    expect(deps.mobileService.confirmReservedVerificationCode).toHaveBeenCalledWith(deps.resetPasswordReservation);
+    expect(deps.mobileService.releaseReservedVerificationCode).not.toHaveBeenCalled();
     expect(deps.tx.profileDirtyMarker.markUsersDirty).not.toHaveBeenCalled();
+  });
+
+  test("releases reset password verification reservation when transaction fails", async () => {
+    const deps = createDeps();
+    const service = createUserService(deps);
+    deps.tx.userRepository.setPassword.mockRejectedValue(new Error("db failed"));
+
+    await expect(service.resetPassword("zhangsan", "13800000000", "1234", "newPass123")).rejects.toThrow("db failed");
+
+    expect(deps.mobileService.confirmReservedVerificationCode).not.toHaveBeenCalled();
+    expect(deps.mobileService.releaseReservedVerificationCode).toHaveBeenCalledWith(deps.resetPasswordReservation);
   });
 
   test("sets mobile without reading profile detail after mutation", async () => {
@@ -114,6 +134,8 @@ describe("createUserService", () => {
     await expect(service.setMobile(1, "13900000000", "1234")).resolves.toBe(true);
 
     expect(deps.profileQuery.getDetailByUserId).not.toHaveBeenCalled();
+    expect(deps.mobileService.confirmReservedVerificationCode).toHaveBeenCalledWith(deps.bindPhoneReservation);
+    expect(deps.mobileService.releaseReservedVerificationCode).not.toHaveBeenCalled();
     expect(deps.tx.profileDirtyMarker.markUsersDirty).toHaveBeenCalledWith({
       userIds: [1],
       reasonCodes: [UserProfileDirtyReason.UserUpdated],
@@ -121,6 +143,17 @@ describe("createUserService", () => {
       requestId: undefined,
       traceId: undefined,
     });
+  });
+
+  test("releases mobile binding verification reservation when transaction fails", async () => {
+    const deps = createDeps();
+    const service = createUserService(deps);
+    deps.tx.userRepository.setMobile.mockRejectedValue(new Error("db failed"));
+
+    await expect(service.setMobile(1, "13900000000", "1234")).rejects.toThrow("db failed");
+
+    expect(deps.mobileService.confirmReservedVerificationCode).not.toHaveBeenCalled();
+    expect(deps.mobileService.releaseReservedVerificationCode).toHaveBeenCalledWith(deps.bindPhoneReservation);
   });
 
   test("marks profile dirty when pausing an enabled user", async () => {

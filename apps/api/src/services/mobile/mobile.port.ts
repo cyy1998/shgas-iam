@@ -7,7 +7,7 @@ export interface SmsSenderPort {
 }
 
 export interface MobileServiceDeps {
-  redis: Pick<RedisPort, "get" | "set" | "eval">;
+  redis: Pick<RedisPort, "del" | "eval" | "get" | "set" | "ttl">;
   smsSender: SmsSenderPort;
   userRepository: Pick<UserRepository, "getUserByMobile">;
   config: {

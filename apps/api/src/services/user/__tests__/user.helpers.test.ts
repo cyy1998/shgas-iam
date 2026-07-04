@@ -21,16 +21,17 @@ describe("user helper factories", () => {
       recordAuditLog: mock(async () => undefined),
       recordAuditLogFromContext: mock(async () => undefined),
     };
+    const reservation = { usage: "bindPhone", phone: "13800000000", token: "reservation-1" };
     const mobileBinding = createUserMobileBinding({
       auditLogWriter,
       mobileService: {
         checkExistingPhoneNumber: mock(async () => false),
         checkValidPhoneNumber: mock(() => true),
-        consumeVerificationCode: mock(async () => true),
+        reserveVerificationCode: mock(async () => reservation),
       },
     });
 
-    await expect(mobileBinding.assertCanBindMobile(1, "13800000000", "1234")).resolves.toBeUndefined();
+    await expect(mobileBinding.assertCanBindMobile(1, "13800000000", "1234")).resolves.toEqual(reservation);
   });
 
   test("records mobile binding failures with request context", async () => {
@@ -43,7 +44,7 @@ describe("user helper factories", () => {
       mobileService: {
         checkExistingPhoneNumber: mock(async () => false),
         checkValidPhoneNumber: mock(() => true),
-        consumeVerificationCode: mock(async () => false),
+        reserveVerificationCode: mock(async () => null),
       },
     });
 
