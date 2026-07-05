@@ -1,86 +1,21 @@
-# Repository Guidelines
+# 仓库指引入口
 
-## Project Structure & Module Organization
-This repository is a `pnpm` workspace + Turborepo monorepo. Runtime apps live under `apps/`, shared workspace packages live under `packages/`, and gateway tooling lives under `gateway/`.
+本文件是 Codex 和其他 agent 的仓库级入口。详细规则放在 `docs/`；`AGENTS.md` 保持为短索引。
 
-- `apps/api`: Bun + Hono public IAM backend (`@iam/api`). Main code is in `src/`, with public/open/internal/sso/auth routes under `src/routes/`, app-side domain logic under `src/services/`, app-specific utilities under `src/lib/`, app composition wiring under `src/composition/`, and env validation in `src/env.ts`.
-- `apps/admin-api`: Bun + Hono admin backend (`@iam/admin-api`). Admin REST routes live under `src/routes/admin/`, tRPC entry routes under `src/routes/trpc/`, admin domain logic under `src/services/`, app composition wiring under `src/composition/`, and tRPC router composition under `src/trpc/`.
-- `apps/oidc-provider`: Node.js 24 + `oidc-provider` app (`@iam/oidc-provider`). Composition lives under `src/composition/`, OIDC provider wiring under `src/provider/`, Session Kernel adapters under `src/session/`, persistence under `src/storage/` and `src/stores/`, and env validation in `src/env.ts`.
-- `apps/worker`: Bun background job runtime (`@iam/worker`). Runtime composition lives under `src/composition/`, worker module selection under `src/modules/`, health/Bull Board HTTP support under `src/http/`, command-only backfill/repair entrypoints under `src/commands/`, and env validation in `src/env.ts`.
-- `apps/admin`: Umi Max + React management frontend. Pages live in `src/pages/`, reusable UI in `src/components/`, tRPC client setup in `src/lib/api-client.ts`, and page-side API wrappers in `src/services/`.
-- `apps/sso`: Umi Max + React SSO portal. Pages live in `src/pages/`, assets in `src/assets/`, API wrappers in `src/services/`, and shared browser helpers in `src/lib/` and `src/utils/`.
-- `packages/api-core/src`: shared backend infrastructure such as `createApp`, route factories, OpenAPI helpers, response helpers, errors, middlewares, Redis, logging, observability, Session Kernel, UnitOfWork, and tRPC utilities.
-- `packages/contracts/src`: shared enums and stable contracts consumed across apps and packages.
-- `packages/domain/src`: shared domain DTO schemas, DTO types, audit helpers, and reusable domain/business errors consumed by backend apps.
-- `packages/db/src`: Drizzle schema, relations, migrations, singleton client, and query helpers. Schema and relation domains currently include `core` and `log`, with shared column helpers under `schema/_shard/`.
-- `packages/jobs/src`: shared BullMQ connection, queue, worker, job ID, and default option helpers.
-- `packages/user-profile-read-model/src`: versioned user-profile read model, dirty marker, producer/query APIs, repositories, and worker module consumed by API/admin-api/worker.
-- `gateway`: APISIX gateway manifest package (`@iam/gateway-apisix`) with dev/prod manifests, config templates, and sync/validate/diff/apply scripts.
-- `docker/`: local dependency stacks plus dev/prod compose files.
-- `docs/`: workflow guides, architecture notes, plans, specs, audits, and remediation docs. Older plans may mention previous layouts; current database code is Drizzle + PostgreSQL in `packages/db`.
-- `openspec/`: active OpenSpec changes, archived changes, main specs, and OpenSpec project configuration.
-- `scripts/`: repo-level utility scripts.
+## 必读入口
 
-Do not hand-edit generated frontend directories such as `apps/admin/src/.umi/`, `apps/admin/src/.umi-production/`, `apps/sso/src/.umi/`, or `apps/sso/src/.umi-production/`. Avoid editing frontend build outputs under `apps/admin/dist/` and `apps/sso/dist/`. Avoid editing vendored API documentation assets in `apps/api/static/` or `apps/admin-api/static/` unless the task is specifically about those assets.
+- Workflow 分流与门禁，开发时必须遵守：
+  [docs/workflows/index.md](docs/workflows/index.md)
+- 当前文档索引：[docs/index.md](docs/index.md)
+- 仓库结构与生成目录边界：[docs/architecture/repository-map.md](docs/architecture/repository-map.md)
+- 后端架构与 composition 规则：[docs/architecture/backend-architecture.md](docs/architecture/backend-architecture.md)
+- 前端架构与 composition 规则：[docs/architecture/frontend-architecture.md](docs/architecture/frontend-architecture.md)
+- 共享契约与数据库规则：[docs/architecture/contracts-and-database.md](docs/architecture/contracts-and-database.md)
+- 构建、测试与开发命令：[docs/development/commands.md](docs/development/commands.md)
+- 编码风格与命名约定：[docs/development/coding-style.md](docs/development/coding-style.md)
+- 后端实现约定：[docs/development/backend-implementation.md](docs/development/backend-implementation.md)
 
-## Backend Architecture Notes
-- API tiers are declared per backend app in `apps/api/app.config.ts` and `apps/admin-api/app.config.ts`.
-- `apps/api` currently owns `/public`, `/open`, `/internal`, `/sso`, and `/auth`.
-- `apps/admin-api` currently owns `/admin` and `/rpc`; `/rpc` maps to the `src/routes/trpc` route directory.
-- `createApp` lives in `packages/api-core` and mounts materialized route and middleware records supplied by each app composition root. It remains app-agnostic and does not own app-specific DI wiring.
-- Keep backend `src/app.ts` files focused on app assembly: import env, app config, app-local logger, call the app-local composition root, and pass materialized routes and middlewares to `createApp`.
-- App-local infrastructure singletons belong under `src/lib/`, for example `@api/lib/logger`, `@admin-api/lib/logger`, `@worker/lib/logger`, and `src/lib/infra/redis.ts`.
-- Production runtime, repository, service, route, middleware, and integration instances are created under app-local `src/composition/` modules, organized by `runtime`, `repositories`, `tx`, `services`, `routes`, and `middlewares`.
-- Backend replaceable modules should export factories and return types, for example `createUserService(deps)` and `type UserService = ReturnType<typeof createUserService>`. Do not reintroduce bound production service/repository singletons.
-- Consumer-owned `*.port.ts` files define outbound behavior a service/use-case consumes. Keep enums, DTO schemas, domain errors, business constants, and pure helpers as static imports rather than DI deps.
-- Tier-level `_middleware.ts` files should stay thin and expose middleware factories or compose injected middleware arrays; shared authentication handlers belong in app-level `src/middlewares/*.handler.ts` files and are materialized by composition.
-- REST-only route modules should use `*.routes.ts`, `*.handlers.ts`, and `*.type.ts`. Route `*.index.ts` files should expose router factories that receive materialized handlers/adapters. Admin REST + tRPC route modules should share `*.adapter.ts` operation factories and expose thin `*.trpc.ts` modules.
-- Backend app `tsconfig.json` files should include Bun runtime types and exclude `scripts`; backend app ESLint configs should ignore `scripts/**`.
+## Agent 交互与 Shell 约定
 
-## Shared Contracts & Database
-- Put cross-app enums and stable constants in `packages/contracts`; put shared DTO schemas, DTO types, audit helpers, and reusable business errors in `packages/domain`; put shared BullMQ helpers in `packages/jobs`; put user-profile read-model producer/query/worker logic in `packages/user-profile-read-model`. App-private enums, schemas, and errors may stay inside the owning app.
-- Repositories use Drizzle from `@iam/db` and are created through `createXRepository(db)` factories bound to either the root `DbClient` or a transaction `DbClient`; business service methods should not pass `tx` arguments to repository calls.
-- Transactional backend workflows should use the app-local `UnitOfWork`. Transaction callbacks receive tx-bound repository and audit writer ports; Redis/cache/OIDC/SMS/fetch side effects must run outside the callback or through best-effort `afterCommit`.
-- Drizzle table definitions belong in `packages/db/src/schema/<domain>/*.ts`; relation definitions belong in `packages/db/src/relations/<domain>/*.ts`; migrations belong in `packages/db/src/migrations/`.
-- Keep domain and top-level schema/relation exports synchronized, for example `packages/db/src/schema/core/index.ts`, `packages/db/src/relations/core/index.ts`, `schema/index.ts`, and `relations/index.ts`.
-- Use `snakeCase.table` / `snakeCase.schema`; keep TypeScript property names camelCase and database table/column names snake_case.
-- Use `drizzle-orm/zod` for table-derived Zod schemas, and keep join-table primary keys, indexes, and uniqueness constraints explicit.
-
-## Build, Test, and Development Commands
-- Workspace: `pnpm dev`, `pnpm build`, `pnpm lint`, `pnpm test`, `pnpm e2e`, and `pnpm typecheck`.
-- Documentation index/freshness guard: `pnpm check:docs`; env naming guard: `pnpm check:env-names`.
-- Backend apps: `pnpm --filter @iam/api <dev|serve|lint|test|typecheck>` and `pnpm --filter @iam/admin-api <dev|serve|lint|test|typecheck>`.
-- OIDC provider: `pnpm --filter @iam/oidc-provider <dev|serve|lint|test|typecheck>`.
-- Worker app: `pnpm --filter @iam/worker <dev|serve|lint|test|typecheck|user-profile:backfill|user-profile:repair>`.
-- Shared packages: use the same filtered `lint`, `test`, and `typecheck` pattern, for example `pnpm --filter @iam/domain typecheck`.
-- Database: `pnpm --filter @iam/db <db:push|db:generate|db:migrate|db:check>`; `@iam/api` keeps compatibility wrappers for `db:push`, `db:generate`, and `db:migrate`.
-- Historical migration: `pnpm --filter @iam/api migrate:mysql-to-postgres`.
-- Frontends: `pnpm --filter @iam/admin <dev|build|lint|test|e2e|typecheck|format>` and `pnpm --filter @iam/sso <dev|build|lint|test|e2e|typecheck|format>`.
-- Gateway: use root shortcuts `pnpm gateway:apisix:<validate|diff|apply>` or `pnpm --filter @iam/gateway-apisix <validate|diff|apply|lint|test|typecheck>`.
-
-## Coding Style & Naming Conventions
-Use TypeScript throughout and keep 2-space indentation. Follow the formatter already configured in each app or package:
-
-- API/backend/shared/gateway packages (`apps/api`, `apps/admin-api`, `apps/oidc-provider`, `apps/worker`, `packages/api-core`, `packages/contracts`, `packages/db`, `packages/domain`, `packages/jobs`, `packages/user-profile-read-model`, `gateway`): ESLint uses the Antfu config with double quotes, semicolons, and a 120-character soft limit.
-- Admin/SSO frontends (`apps/admin`, `apps/sso`): Prettier uses single quotes, trailing commas, and 80-character wrap.
-
-Preserve existing domain file naming: `user.service.ts`, `user.repository.ts`, `user.schema.ts`, `user.routes.ts`, `user.handlers.ts`, `user.trpc.ts`, and `user.type.ts`. Use PascalCase for React components and pages, and prefer existing import aliases such as `@admin`, `@sso`, or workspace package imports where they are already used.
-
-## Agent Interaction & Shell Conventions
-- In the chat UI, user-facing responses should default to idiomatic, natural Chinese. Keep code identifiers, commands, file paths, API names, and quoted source text in their original language.
-- In PowerShell, read text files with explicit UTF-8 encoding, for example `Get-Content -Path "AGENTS.md" -Encoding utf8`, to avoid mojibake in Chinese content.
-
-## Backend Implementation Conventions
-- Route handlers should return shared response envelopes from `@iam/api-core/http`, for example `c.json(resp.ok(data))` for successful JSON responses and `resp.fail(...)` for explicit failure envelopes. Prefer throwing domain/API errors when the existing error middleware already maps them correctly.
-- Use `@iam/api-core/core/http-status-codes` constants in OpenAPI route definitions and explicit non-200 responses rather than numeric literals.
-- Use the app logger (`@api/lib/logger`, `@admin-api/lib/logger`, `@worker/lib/logger`, or the OIDC provider logger) for runtime diagnostics. Prefer structured Pino calls with the data object first and the message second, for example `logger.info({ userId }, "user synced")`.
-- Avoid `console.log`, `console.warn`, and `console.error` in application code. Acceptable exceptions are env validation, singleton/process lifecycle code, tests, one-off scripts, and the centralized error handler.
-- Prefer enums and constants from `packages/contracts` or the owning module over magic strings/numbers in business queries, especially for status, type, and role-like fields.
-- Prefer deriving TypeScript types from Zod schemas with `z.infer<typeof Schema>` when a schema is already the source of truth.
-- Keep simple guard clauses concise when they return a single obvious value, for example `if (!entity) return null;`.
-- Backend audit event helpers under `services/audit/events` should be pure payload builders. Services and handlers write those payloads through injected root or tx audit writer ports.
-- Architecture guard tests in `apps/api/src/__tests__/architecture.test.ts` and `apps/admin-api/src/__tests__/architecture.test.ts` intentionally fail on forbidden production imports. Update allowlists deliberately when a new exception is justified.
-
-## Workflow Orchestration
-- Use `docs/workflows/index.md` as the workflow entry point. For non-trivial work, OpenSpec changes, or behavior/API/contract/schema/security/workflow changes, read the linked stage guide before editing code or artifacts.
-- Keep recurring lessons in `docs/`, OpenSpec specs, or nearby project documentation; keep `AGENTS.md` as the short repository map.
+- 在聊天 UI 中，面向用户的回复默认使用自然、地道的中文。代码标识符、命令、文件路径、API 名称和引用的源文本保持原语言。
+- 在 PowerShell 中读取文本文件时显式指定 UTF-8 编码，例如 `Get-Content -Path "AGENTS.md" -Encoding utf8`，避免中文乱码。

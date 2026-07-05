@@ -23,6 +23,13 @@
 
 | Document | Type | Status | Last verified | Next review | Notes |
 |---|---|---|---|---|---|
+| [docs/architecture/backend-architecture.md](architecture/backend-architecture.md) | architecture | Current | 2026-07-05 | 2026-10-31 | 后端 app composition、factory/DI、route/middleware 和 backend tooling 结构约定。 |
+| [docs/architecture/contracts-and-database.md](architecture/contracts-and-database.md) | architecture | Current | 2026-07-05 | 2026-10-31 | shared contracts、domain/db/jobs/read-model 边界、UnitOfWork 和 Drizzle schema/relations/migration 约定。 |
+| [docs/architecture/frontend-architecture.md](architecture/frontend-architecture.md) | architecture | Current | 2026-07-05 | 2026-10-31 | admin/sso 前端 app 边界、Umi runtime、pages/components/hooks、service wrapper 和 contract 使用约定。 |
+| [docs/architecture/repository-map.md](architecture/repository-map.md) | architecture | Current | 2026-07-05 | 2026-10-31 | monorepo apps/packages/gateway 地图，以及 generated/build/vendored path 编辑边界。 |
+| [docs/development/backend-implementation.md](development/backend-implementation.md) | development | Current | 2026-07-05 | 2026-10-31 | backend response envelope、OpenAPI status、logger、audit event 和 architecture guard 实现惯例。 |
+| [docs/development/coding-style.md](development/coding-style.md) | development | Current | 2026-07-05 | 2026-10-31 | TypeScript、formatter 边界、文件命名、React 命名和 import alias 风格约定。 |
+| [docs/development/commands.md](development/commands.md) | development | Current | 2026-07-05 | 2026-10-31 | workspace、backend、shared package、database、frontend 和 gateway 常用命令入口。 |
 | [docs/features/audit/audit-logging.md](features/audit/audit-logging.md) | feature | Current | 2026-06-28 | 2026-09-30 | 统一审计日志能力说明；当前行为以 `openspec/specs/audit-logging/spec.md` 为准。 |
 | [docs/features/oidc/oidc-integration.md](features/oidc/oidc-integration.md) | feature | Current | 2026-06-28 | 2026-09-30 | 内部 OIDC client 接入指南；与 OIDC specs 和 release runbook 共同使用。 |
 | [docs/features/oidc/oidc-session-migration.md](features/oidc/oidc-session-migration.md) | feature | Current | 2026-06-28 | 2026-09-30 | Session Kernel 会话迁移、旧 key cleanup 和回滚边界。 |
