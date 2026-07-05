@@ -4,7 +4,9 @@
 
 ## 方法
 
-`$grill-with-docs` 是前置澄清流程，不替代 Plan 产物或 OpenSpec artifacts。澄清过程中应优先让 Codex 查阅代码、OpenSpec、既有文档和测试来回答可自证的问题；只有代码库无法判断的设计意图、产品取舍或领域语言才交给用户确认。
+进入 Clarify 时必须先完成 [index.md](index.md) 的 skill preflight，并默认读取和使用 `$grill-with-docs`。`$grill-with-docs` 是前置澄清流程，不替代 Plan 产物或 OpenSpec artifacts；澄清过程中应优先让 Codex 查阅代码、OpenSpec、既有文档和测试来回答可自证的问题，只有代码库无法判断的设计意图、产品取舍或领域语言才交给用户确认。
+
+若本轮明确不需要 `$grill-with-docs`，必须在行动前记录例外原因、替代澄清方式和剩余风险。
 
 澄清时每次只问一个问题，并在问题中给出推荐答案。使用 `$grill-with-docs` 后，正式能力、契约、迁移或跨模块生命周期仍应继续沉淀到 OpenSpec proposal/design/spec/tasks。
 

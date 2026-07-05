@@ -4,6 +4,8 @@
 
 ## 快速选择
 
+进入 Verify 时必须先完成 [index.md](index.md) 的 skill preflight。验证 OpenSpec change 或大型 umbrella change 时，必须读取并使用 `$openspec-verify-change`，再选择验证命令和记录证据。
+
 先理解风险，再选择命令；不要把全量测试当作唯一答案，也不要用过窄检查替代必要的契约验证。
 
 - bug 报告先复现或定位失败信号，再修复根因，最后证明原失败路径已被覆盖。

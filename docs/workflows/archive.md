@@ -4,6 +4,8 @@
 
 ## 通用规则
 
+进入 Archive 时必须先完成 [index.md](index.md) 的 skill preflight。归档单个 OpenSpec change 时必须读取并使用 `$openspec-archive-change`；批量归档时必须读取并使用 `$openspec-bulk-archive-change`。
+
 提交、归档或合并前重新检查当前分支、完整 diff 和 staged diff，只暂存本次任务拥有的文件；若用户有并行改动，必须明确排除，不得纳入提交。
 
 - 使用 Conventional Commits，例如 `feat(db): ...`、`fix(auth): ...`、`refactor(api): ...`、`style(sso): ...`。

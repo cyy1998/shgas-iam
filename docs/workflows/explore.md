@@ -4,7 +4,9 @@
 
 ## 方法
 
-`$openspec-explore` 是可选前置探索入口，不替代正式澄清、Plan 产物或 OpenSpec artifacts。它可以读取代码、OpenSpec、docs 和测试，帮助识别现状、候选方案、隐藏复杂度、风险、未知问题以及是否需要进入 OpenSpec。
+进入 Explore 时必须先完成 [index.md](index.md) 的 skill preflight，并默认读取和使用 `$openspec-explore`。`$openspec-explore` 是前置探索入口，不替代正式澄清、Plan 产物或 OpenSpec artifacts；它可以读取代码、OpenSpec、docs 和测试，帮助识别现状、候选方案、隐藏复杂度、风险、未知问题以及是否需要进入 OpenSpec。
+
+若本轮只做极小事实确认而不使用 `$openspec-explore`，必须在行动前记录例外原因、替代探索方式和剩余风险。
 
 探索过程中形成明确需求、范围变化或设计决策时，应先由用户确认，再沉淀到 proposal、design、spec、tasks、ADR 或相关 docs；不要在探索模式中自动实现代码。
 

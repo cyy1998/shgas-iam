@@ -8,6 +8,15 @@
 - OpenSpec change：目标行为、范围和非目标、受影响契约/数据/权限/安全/审计/队列/session/OIDC/SSO 或发布边界、至少一条可验证正确性标准都清楚后，使用 `$openspec-propose` 产出 `proposal.md`、`design.md`、`spec.md` 和 `tasks.md`；未解决问题记录为开放问题或任务。
 - 大型 OpenSpec umbrella change：用于拆分大型功能或跨阶段能力，记录 child change 列表、依赖顺序和集成验收标准；每个 child change 仍独立产出 OpenSpec artifacts。
 
+## Skill 前置门禁
+
+选择计划产物后、任何分支状态变更或写入动作前，必须先完成 [index.md](index.md) 的 skill preflight：
+
+- Quick Change：必须读取并使用 `$quick-change`，再创建 quick change 分支、编辑文件或提交验证结果。
+- OpenSpec change：必须读取并使用 `$openspec-propose`，再创建 change 分支、执行 `openspec new change` 或写入 artifacts。
+- 大型 OpenSpec umbrella change：必须读取并使用 `$openspec-propose`，再创建 feature 分支、执行 `openspec new change` 或写入 umbrella artifacts。
+- 用户明确点名其他 `$openspec-*` 计划 skill 时，按被点名 skill 执行，并记录它替代 `$openspec-propose` 的原因。
+
 ## 分支前置门禁
 
 进入 Quick Change、OpenSpec change 或大型 OpenSpec umbrella change 的写入动作前，必须先完成分支前置检查；未完成前不得创建

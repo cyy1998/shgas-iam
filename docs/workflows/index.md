@@ -20,6 +20,27 @@
 
 非平凡任务的最终说明必须留下最小合规记录：采用的入口（Quick Change、OpenSpec change、OpenSpec umbrella change 或当前分支直改）、TDD 执行情况或例外、范围漂移处理、实际验证命令和结果，以及提交/合并/归档状态。
 
+## Skill 前置门禁
+
+阶段分流完成后、任何分支状态变更、写入动作或 OpenSpec artifact 创建前，必须先完成 skill preflight：
+
+1. 根据用户请求、当前 workflow 阶段和任务影响面识别适用 skill。
+2. 命中 skill 时，必须先完整读取对应 `SKILL.md`，并按该 skill 说明执行；不得用 workflow 文档替代 skill。
+3. 如果阶段默认 skill 不适用，必须在行动前记录例外原因、替代流程和剩余风险。
+4. 面向用户的阶段说明和最终说明必须记录本次使用的 skill；非平凡任务还应记录应使用但跳过的 skill 及原因。
+
+默认 skill 门禁：
+
+| 阶段或产物 | 默认 skill |
+| --- | --- |
+| Explore | 进入 [explore.md](explore.md) 时默认使用 `$openspec-explore`。 |
+| Clarify | 进入 [clarify.md](clarify.md) 时默认使用 `$grill-with-docs`；需要沉淀已确认领域词汇时再使用 `$domain-modeling`。 |
+| Plan - Quick Change | 选择 Quick Change 时必须使用 `$quick-change`。 |
+| Plan - OpenSpec change 或 umbrella change | 创建或更新计划 artifacts 前必须使用 `$openspec-propose`，除非用户明确点名更具体的 `$openspec-*` 计划 skill。 |
+| Implement | 实施 OpenSpec change 时使用 `$openspec-apply-change`；涉及 schema、Drizzle 或数据库约束时使用 `$db-schema`；用户要求 test-first 或集成测试时使用 `$tdd`。 |
+| Verify | 验证 OpenSpec change 时使用 `$openspec-verify-change`。 |
+| Archive | 归档单个 change 时使用 `$openspec-archive-change`；批量归档时使用 `$openspec-bulk-archive-change`。 |
+
 ## 文档维护
 
 - 新增 `docs/**/*.md` 后必须更新 [docs/index.md](../index.md)；当前可作为依据的文档标记为 `Current`，历史快照标记为 `Historical`，已知过期内容标记为 `Stale`。

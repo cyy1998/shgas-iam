@@ -4,6 +4,8 @@
 
 ## 开始前
 
+进入 Implement 时必须先完成 [index.md](index.md) 的 skill preflight。OpenSpec change 实施前必须读取并使用 `$openspec-apply-change`；涉及 schema、Drizzle 或数据库约束时必须读取并使用 `$db-schema`；触发 TDD 门槛时必须读取并使用 `$tdd`。
+
 开始任何会修改文件或 artifacts 的阶段前先运行：
 
 ```bash
