@@ -37,6 +37,15 @@ upstreams:
       verify: false
     nodes:
       ${DEV_GDS_API_UPSTREAM_HOST}:${DEV_GDS_API_UPSTREAM_PORT}: 0
+  - key: aiqc-api
+    type: roundrobin
+    scheme: http
+    pass_host: pass
+    hash_on: vars
+    tls:
+      verify: false
+    nodes:
+      ${DEV_GDS_AIQC_API_UPSTREAM_HOST}:${DEV_GDS_AIQC_API_UPSTREAM_PORT}: 0
   - key: dashboard
     type: roundrobin
     scheme: http
@@ -66,16 +75,17 @@ routes:
     uri: /api/v1/*
     plugins:
       forward-auth:
-        uri: http://176.169.99.191:30080/api/iam/auth/authz
+        uri: ${DEV_GDS_AUTHZ_API_URL}
         allow_degradation: false
         client_headers:
           - Forbidden-Reason
+        extra_headers:
+          Client: gds
         keepalive: true
         keepalive_pool: 5
         keepalive_timeout: 60000
         request_headers:
           - Cookie
-          - Client
           - Authorization
         request_method: GET
         ssl_verify: false
@@ -84,6 +94,30 @@ routes:
         upstream_headers:
           - X-User-Info
     upstream: api
+    plugin_config: api-ip-rate-limit
+  - key: aiqc-api
+    uri: /api/v1/ocr/*
+    plugins:
+      forward-auth:
+        uri: ${DEV_GDS_AUTHZ_API_URL}
+        allow_degradation: false
+        client_headers:
+          - Forbidden-Reason
+        extra_headers:
+          Client: gds
+        keepalive: true
+        keepalive_pool: 5
+        keepalive_timeout: 60000
+        request_headers:
+          - Cookie
+          - Authorization
+        request_method: GET
+        ssl_verify: false
+        status_on_error: 403
+        timeout: 3000
+        upstream_headers:
+          - X-User-Info
+    upstream: aiqc-api
     plugin_config: api-ip-rate-limit
   - key: no-login
     uri: /api/v1/dashboard/oa_portal
