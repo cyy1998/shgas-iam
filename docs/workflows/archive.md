@@ -15,12 +15,9 @@
 
 ## Quick Change
 
-Quick Change 进入 Archive 前必须已经完成 [verify.md](verify.md) 要求的验证或明确记录无法验证的原因。
+Quick Change 进入 Archive 前必须已经完成 [verify.md](verify.md) 要求的验证或明确记录无法验证的原因，并且用户已经确认提交、合并和本地分支清理。
 
-1. Prepare：重新检查当前分支、变更文件、验证结果和简短摘要；若与 Verify 阶段确认的信息不一致，暂停并报告。
-2. Commit：创建一个中文 Conventional Commit。
-3. Merge：切回目标分支 fast-forward merge；如果目标分支已前进且冲突不直观，暂停并报告。
-4. Cleanup：合并成功后删除本地临时分支；不要 push，除非用户明确要求。
+Quick Change 的提交、合并和本地分支清理由 `$quick-change` 的 finalize 步骤统一定义；本文件只补充仓库级 Archive 门禁：提交信息使用中文 Conventional Commit，只暂存本次任务拥有的文件，默认不 push。
 
 ## OpenSpec Archive
 

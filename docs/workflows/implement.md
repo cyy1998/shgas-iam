@@ -18,7 +18,7 @@ git status --short --branch
 
 ## Quick Change
 
-Quick Change 只实现 [plan.md](plan.md) 中确认的小范围、低风险、非 OpenSpec 改动。分支策略、目标分支和当前分支直改例外由 Plan 阶段决定。
+Quick Change 只实现 [plan.md](plan.md) 中确认的小范围、低风险、非 OpenSpec 改动，并继续遵守 `$quick-change` 的实现、验证和确认约束；本节不重复定义 skill 的执行细节。
 
 1. Inspect：确认当前分支符合 Plan 阶段的分支决策，并再次检查 dirty changes；如果存在无关 dirty changes，不要 stash、revert 或带入当前改动。
 2. Implement：读取附近文件，按现有文档和代码约定做最小改动；实现过程中不创建提交。

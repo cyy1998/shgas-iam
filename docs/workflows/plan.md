@@ -4,7 +4,7 @@
 
 ## 产物选择
 
-- Quick Change：只用于未命中 OpenSpec 且低风险的小改，通常留在对话中，说明目标、触及文件、验证方式和是否需要相邻文档更新；具体分支、提交和合并步骤按 [implement.md](implement.md) 与 [archive.md](archive.md) 执行。
+- Quick Change：只用于未命中 OpenSpec 且低风险的小改，通常留在对话中，说明目标、触及文件、验证方式和是否需要相邻文档更新；具体执行细则以 `$quick-change` 为准，workflow 只保留分流、短计划和项目级门禁。
 - OpenSpec change：目标行为、范围和非目标、受影响契约/数据/权限/安全/审计/队列/session/OIDC/SSO 或发布边界、至少一条可验证正确性标准都清楚后，使用 `$openspec-propose` 产出 `proposal.md`、`design.md`、`spec.md` 和 `tasks.md`；未解决问题记录为开放问题或任务。
 - 大型 OpenSpec umbrella change：用于拆分大型功能或跨阶段能力，记录 child change 列表、依赖顺序和集成验收标准；每个 child change 仍独立产出 OpenSpec artifacts。
 
@@ -12,7 +12,7 @@
 
 选择计划产物后、任何分支状态变更或写入动作前，必须先完成 [index.md](index.md) 的 skill preflight：
 
-- Quick Change：必须读取并使用 `$quick-change`，再创建 quick change 分支、编辑文件或提交验证结果。
+- Quick Change：必须读取并使用 `$quick-change`，再创建 quick change 分支、编辑文件或提交验证结果；不得用本 workflow 复制的步骤替代 skill。
 - OpenSpec change：必须读取并使用 `$openspec-propose`，再创建 change 分支、执行 `openspec new change` 或写入 artifacts。
 - 大型 OpenSpec umbrella change：必须读取并使用 `$openspec-propose`，再创建 feature 分支、执行 `openspec new change` 或写入 umbrella artifacts。
 - 用户明确点名其他 `$openspec-*` 计划 skill 时，按被点名 skill 执行，并记录它替代 `$openspec-propose` 的原因。
@@ -24,8 +24,7 @@ OpenSpec artifacts、编辑代码或编辑文档：
 
 1. 运行 `git status --short --branch`，确认当前分支、dirty 文件和目标分支。
 2. 若存在与本次无关的 dirty 文件，不得 stash、revert 或带入新分支；必须先请用户确认处理方式。
-3. Quick Change 必须先从干净目标分支创建 `work/quick-<slug>`；当用户指定从 `main` 开始时，必须先切到干净
-   `main`，再创建 quick change 分支。
+3. Quick Change 的临时分支、命名、确认、提交、合并和清理规则由 `$quick-change` 定义；workflow 不重复定义执行步骤。
 4. OpenSpec change 必须先创建或切换到对应 `work/<change-name>` 分支，再执行 `openspec new change` 或写入 artifacts。
 5. 大型 OpenSpec umbrella change 必须先从干净 `main` 创建或切换到 `feature/<feature-name>`，再执行
    `openspec new change` 或写入 umbrella artifacts。
@@ -39,13 +38,11 @@ Quick Change 适用于未触发 OpenSpec、低风险、小范围、diff 可快�
 - 验证：准备运行的最窄有意义检查；如果没有可用检查，说明将人工检查 diff。
 - 文档：是否需要更新相邻 README、`docs/` 或索引。
 
-### Quick Change 分支流程
+### Quick Change 执行边界
 
-1. 识别目标分支。默认目标为用户提出 Quick Change 需求时所在分支；若用户指定目标分支，以用户指定为准。
-2. 若用户明确要求当前分支直改或不要创建临时分支，可以跳过临时分支，但仍不得自动提交。
-3. 运行 `git status --short --branch`，确认 worktree 干净或仅包含本次相关改动。
-4. 默认从干净目标分支创建 `work/quick-<slug>`；如果分支名已存在，追加短时间戳。
-5. 临时分支只承载本次小改；提交、合并回目标分支和删除临时分支必须等用户确认，具体执行见 [implement.md](implement.md) 和 [archive.md](archive.md)。
+Quick Change 的执行生命周期由 `$quick-change` 统一定义，包括目标分支识别、临时分支命名、实现范围、验证、提交前确认、提交、合并和本地分支清理。workflow 不再维护平行的分支流程，以避免与 skill 漂移。
+
+本阶段只负责确认 Quick Change 是否适用，并留下足够短计划供 Implement 和 Verify 使用。验证命令仍按 [verify.md](verify.md) 的项目级矩阵选择；提交、合并和清理只能在用户确认进入 Archive 后执行。
 
 如果计划或实现过程中发现契约、schema、安全、session/OIDC/SSO、审计、队列、发布、回滚或跨模块生命周期影响，必须停止 Quick Change，重新分流为 OpenSpec change。若范围变大、风险升高或 diff 不再适合快速审阅，也应停止 Quick Change 并重新分流。
 
