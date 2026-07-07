@@ -1,4 +1,4 @@
-import { ApiErrorCode } from '@iam/contracts';
+import { ApiErrorCode, ClientStatus } from '@iam/contracts';
 import { HttpResponse, http } from 'msw';
 import {
   authenticationConfig,
@@ -34,6 +34,14 @@ export const handlers = [
   http.post('*/open/code/send', () => ok(null)),
   http.post('*/open/code/verify', () => ok({ result: true })),
   http.post('*/open/password/reset', () => ok(null)),
+  http.get('*/open/client/status', () =>
+    ok({
+      clientCode: 'iam-admin',
+      clientName: 'IAM 管理后台',
+      status: ClientStatus.Enable,
+      extAttributes: {},
+    }),
+  ),
   http.get('*/open/users/userInfo', () => ok(resetPasswordUserInfo)),
   http.post('*/public/mobile/set', () => ok(null)),
 ];

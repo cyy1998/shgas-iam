@@ -45,6 +45,8 @@ export type LoginPasswordResult = {
 };
 
 export type ClientStatusResult = {
+  clientCode: string;
+  clientName: string;
   status: ClientStatus;
   extAttributes?: Record<string, unknown> | null;
-};
+} | null;

@@ -24,7 +24,7 @@ export default function SystemMaintenancePage() {
     setLoading(true);
     try {
       const data = await clientStatus({ clientCode });
-      if (data.status !== ClientStatus.Maintenance) {
+      if (!data || data.status !== ClientStatus.Maintenance) {
         const redirectUrl = decodeRedirect(getQuery('redirectUrl'));
         if (redirectUrl) {
           window.location.href = redirectUrl;

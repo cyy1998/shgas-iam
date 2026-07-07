@@ -26,6 +26,8 @@ describe('LoginPage', () => {
     );
     const { user } = render(<LoginPage />);
 
+    expect(await screen.findByText('IAM 管理后台')).toBeInTheDocument();
+
     await user.type(screen.getByPlaceholderText('请输入您的工号'), 'zhangsan');
     await user.type(screen.getByPlaceholderText('请输入登录密码'), 'secret');
     await user.click(screen.getByRole('button', { name: /安全登录/ }));
