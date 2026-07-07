@@ -353,9 +353,6 @@ function buildEmploymentAdminWhere(dto: EmploymentAdminPaginationQueryDto, tx: D
         eq(users.id, employments.userId),
         eq(users.isDelete, false),
         inArrayIf(users.username, dto.conditions.exactConditions.usernames),
-        text !== undefined
-          ? or(ilikeContainsIf(users.username, text), ilikeContainsIf(users.name, text))
-          : undefined,
       )),
     ),
     organizationCondition,
@@ -364,6 +361,38 @@ function buildEmploymentAdminWhere(dto: EmploymentAdminPaginationQueryDto, tx: D
         eq(positions.id, employments.posId),
         eq(positions.isDelete, false),
         inArrayIf(positions.posCode, dto.conditions.exactConditions.posCodes),
+      )),
+    ),
+    buildEmploymentFuzzyTextCondition(text, tx),
+  );
+}
+
+function buildEmploymentFuzzyTextCondition(text: string | undefined, tx: DbClient): SQLWrapper | undefined {
+  if (text === undefined) {
+    return undefined;
+  }
+  const pattern = `%${text}%`;
+  return or(
+    sql`${employments.id}::text ILIKE ${pattern}`,
+    exists(
+      tx.select({ value: sql`1` }).from(users).where(and(
+        eq(users.id, employments.userId),
+        eq(users.isDelete, false),
+        or(ilikeContainsIf(users.username, text), ilikeContainsIf(users.name, text)),
+      )),
+    ),
+    exists(
+      tx.select({ value: sql`1` }).from(organizations).where(and(
+        eq(organizations.id, employments.orgId),
+        eq(organizations.isDelete, false),
+        or(ilikeContainsIf(organizations.orgCode, text), ilikeContainsIf(organizations.orgName, text)),
+      )),
+    ),
+    exists(
+      tx.select({ value: sql`1` }).from(positions).where(and(
+        eq(positions.id, employments.posId),
+        eq(positions.isDelete, false),
+        or(ilikeContainsIf(positions.posCode, text), ilikeContainsIf(positions.posName, text)),
       )),
     ),
   );

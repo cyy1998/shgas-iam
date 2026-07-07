@@ -1,9 +1,14 @@
 import {
   ClientManagementLevel,
   ClientStatus,
+  EmploymentStatus,
   OidcClientState,
   OidcClientType,
   OidcScope,
+  OrganizationLevel,
+  OrganizationStatus,
+  OrganizationType,
+  PositionStatus,
   UserStatus,
   UserType,
 } from '@iam/contracts';
@@ -74,3 +79,59 @@ export const adminClientSearchResult = {
 };
 
 export const adminClientDetail = adminClients[0];
+
+export const adminPositions = [
+  {
+    id: 1,
+    posCode: 'FIN-001',
+    posName: '财务经理',
+    status: PositionStatus.Enable,
+    description: '财务岗位',
+    createTime: '2026-01-04T08:00:00.000Z',
+    updateTime: '2026-01-04T08:00:00.000Z',
+  },
+];
+
+export const adminPositionSearchResult = {
+  result: adminPositions,
+  total: adminPositions.length,
+};
+
+const adminOrganization = {
+  id: 1,
+  orgCode: 'FIN',
+  orgName: '财务部',
+  orgType: OrganizationType.Department,
+  status: OrganizationStatus.Enable,
+  level: OrganizationLevel.One,
+  parentId: null,
+  isVirtual: false,
+  isEntity: true,
+};
+
+export const adminEmployments = [
+  {
+    id: 42,
+    user: adminUsers[0],
+    position: adminPositions[0],
+    organization: {
+      assignedOrg: adminOrganization,
+      fullOrgPath: [adminOrganization],
+      companyNodes: [],
+    },
+    isPrimary: true,
+    status: EmploymentStatus.Enable,
+    startTime: '2026-01-05T08:00:00.000Z',
+    endTime: null,
+    description: null,
+    createTime: '2026-01-05T08:00:00.000Z',
+    updateTime: '2026-01-05T08:00:00.000Z',
+    roles: [],
+    privileges: [],
+  },
+];
+
+export const adminEmploymentSearchResult = {
+  result: adminEmployments,
+  total: adminEmployments.length,
+};

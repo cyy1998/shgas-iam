@@ -1,6 +1,7 @@
 import StatusTag from '@admin/components/StatusTag';
 import RoleDetailDrawer from '@admin/pages/roles/components/RoleDetailDrawer';
 import RoleFormModal from '@admin/pages/roles/components/RoleFormModal';
+import { requestClientOptions } from '@admin/pages/roles/role-selectors';
 import {
   type RoleDetailVo,
   type RoleVo,
@@ -79,7 +80,15 @@ export default function RolesPage() {
       title: '所属应用',
       dataIndex: 'clientCode',
       width: 180,
-      render: (_, row) => `${row.client.clientName}（${row.client.clientCode}）`,
+      valueType: 'select',
+      request: requestClientOptions,
+      fieldProps: {
+        filterOption: false,
+        placeholder: '输入应用名称或编码搜索',
+        showSearch: true,
+      },
+      render: (_, row) =>
+        `${row.client.clientName}（${row.client.clientCode}）`,
     },
     {
       title: '状态',

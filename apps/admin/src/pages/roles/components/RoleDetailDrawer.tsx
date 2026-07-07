@@ -2,9 +2,7 @@ import StatusTag from '@admin/components/StatusTag';
 import AuditLogTable from '@admin/pages/audit-logs/components/AuditLogTable';
 import {
   type RoleAssignmentVo,
-  type RoleAssignmentCreateInput,
   type RoleDetailVo,
-  createRoleAssignment,
   deleteRoleAssignment,
   getRole,
   searchRoleAssignments,
@@ -12,19 +10,26 @@ import {
 } from '@admin/services/role';
 import {
   ActionType,
-  ModalForm,
   ProColumns,
   ProDescriptions,
-  ProFormDependency,
-  ProFormDigit,
-  ProFormSelect,
-  ProFormSwitch,
-  ProFormText,
   ProTable,
 } from '@ant-design/pro-components';
 import { RoleAssignmentTargetType } from '@iam/contracts';
-import { Button, Drawer, Empty, message, Modal, Skeleton, Space, Tabs, Tag } from 'antd';
+import {
+  Button,
+  Drawer,
+  Empty,
+  message,
+  Modal,
+  Skeleton,
+  Space,
+  Tabs,
+  Tag,
+} from 'antd';
 import { useEffect, useRef, useState } from 'react';
+import RoleAssignmentFormModal, {
+  targetTypeOptions,
+} from './RoleAssignmentFormModal';
 
 type Props = {
   open: boolean;
@@ -32,12 +37,6 @@ type Props = {
   onOpenChange: (open: boolean) => void;
   onChanged: () => void;
 };
-
-const targetTypeOptions = [
-  { label: '组织', value: RoleAssignmentTargetType.Organization },
-  { label: '岗位', value: RoleAssignmentTargetType.Position },
-  { label: '任职', value: RoleAssignmentTargetType.Employment },
-];
 
 export default function RoleDetailDrawer({
   open,
@@ -334,74 +333,13 @@ export default function RoleDetailDrawer({
           />
         ) : null}
       </Drawer>
-      <ModalForm
-        title="新增角色分配"
+      <RoleAssignmentFormModal
         open={assignmentFormOpen}
-        modalProps={{ destroyOnClose: true, maskClosable: false }}
-        initialValues={{ targetType: RoleAssignmentTargetType.Organization }}
+        roleCode={detail?.roleCode ?? null}
         onOpenChange={setAssignmentFormOpen}
-        onFinish={async (values) => {
-          if (!detail) return false;
-          try {
-            await createRoleAssignment(
-              detail.roleCode,
-              values as RoleAssignmentCreateInput,
-            );
-            message.success('分配已创建');
-            setAssignmentFormOpen(false);
-            reloadAssignments();
-            return true;
-          } catch (err) {
-            handleError(err);
-            return false;
-          }
-        }}
-      >
-        <ProFormSelect
-          name="targetType"
-          label="分配类型"
-          options={targetTypeOptions}
-          rules={[{ required: true }]}
-        />
-        <ProFormDependency name={['targetType']}>
-          {({ targetType }) => {
-            if (targetType === RoleAssignmentTargetType.Position) {
-              return (
-                <ProFormText
-                  name="posCode"
-                  label="岗位编码"
-                  rules={[{ required: true }]}
-                />
-              );
-            }
-            if (targetType === RoleAssignmentTargetType.Employment) {
-              return (
-                <ProFormDigit
-                  name="employmentId"
-                  label="任职 ID"
-                  min={1}
-                  fieldProps={{ precision: 0 }}
-                  rules={[{ required: true }]}
-                />
-              );
-            }
-            return (
-              <>
-                <ProFormText
-                  name="orgCode"
-                  label="组织编码"
-                  rules={[{ required: true }]}
-                />
-                <ProFormSwitch
-                  name="includeDescendants"
-                  label="包含下级组织"
-                  initialValue
-                />
-              </>
-            );
-          }}
-        </ProFormDependency>
-      </ModalForm>
+        onSuccess={reloadAssignments}
+        onError={handleError}
+      />
     </>
   );
 }

@@ -20,13 +20,11 @@
 #### Scenario: 搜索雇佣
 - **WHEN** 管理端提交雇佣分页查询条件
 - **THEN** 系统 SHALL 只查询 `employment.isDelete=false` 的记录
-- **AND** 系统 SHALL 支持按 statuses、isPrimary、usernames、posCodes 和 organization 过滤
+- **AND** fuzzy text SHALL 支持匹配任职 ID、用户 username/name、任职组织 orgCode/orgName 和岗位 posCode/posName
+- **AND** 系统 SHALL 支持按 usernames、organization、posCodes、isPrimary 和 statuses 精确过滤
 - **AND** organization 过滤 SHALL 支持 `matchMode=exact` 精确匹配任职组织
 - **AND** organization 过滤 SHALL 支持 `matchMode=subtree` 匹配组织子树下任职
 - **AND** organization 过滤 SHALL 支持 `matchMode=company` 匹配 Company 祖先下任职
-- **AND** 系统 SHALL 在迁移期继续接受 companyOrgCodes 和 deptOrgCodes，并将其映射为 organization 过滤
-- **AND** 系统 SHALL 支持按 username 或 name 模糊匹配 text
-- **AND** 系统 SHALL 按 `isPrimary desc` 和 `id desc` 排序并返回分页结果
 
 #### Scenario: 查询雇佣详情
 - **WHEN** 管理端按 id 查询到未软删除雇佣

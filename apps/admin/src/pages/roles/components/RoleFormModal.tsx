@@ -1,3 +1,4 @@
+import { requestClientOptions } from '@admin/pages/roles/role-selectors';
 import {
   type RoleDetailVo,
   createRole,
@@ -81,12 +82,20 @@ export default function RoleFormModal({
         rules={[{ required: true }]}
         fieldProps={{ maxLength: 128 }}
       />
-      <ProFormText
+      <ProFormSelect
         name="clientCode"
-        label="所属应用编码"
+        label="所属应用"
         disabled={editing}
+        showSearch
         rules={[{ required: true }]}
-        fieldProps={{ maxLength: 64 }}
+        fieldProps={{
+          filterOption: false,
+          placeholder: editing ? undefined : '输入应用名称或编码搜索',
+          showSearch: true,
+        }}
+        request={(params) =>
+          requestClientOptions(params, initialValues?.client)
+        }
       />
       <ProFormSelect
         name="status"
