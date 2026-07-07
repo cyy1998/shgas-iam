@@ -15,10 +15,19 @@ export function createPositionRepository(db: DbClient) {
       await db.insert(positions).values(positionCreateDto);
     },
     async searchPositionsFuzzy(positionAdminQueryDto: PositionFuzzyQueryDto) {
-      const text = positionAdminQueryDto.conditions.fuzzyConditions.text;
+      const { exactConditions, fuzzyConditions } = positionAdminQueryDto.conditions;
+      const text = fuzzyConditions.text;
+      const statuses = exactConditions.statuses;
+      if (statuses?.length === 0) {
+        return [];
+      }
+
       return await db.query.positions.findMany({
         where: {
           isDelete: false,
+          ...(statuses !== undefined
+            ? { status: { in: statuses } }
+            : {}),
           ...(text !== undefined
             ? {
                 OR: [

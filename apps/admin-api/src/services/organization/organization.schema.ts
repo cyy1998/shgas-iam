@@ -73,6 +73,9 @@ export const OrganizationSelectorQueryDtoSchema = z.object({
   parentOrgCode: z.string().nullish().openapi({ example: "SR" }),
   text: z.string().optional().openapi({ example: "信息中心" }),
   orgCode: z.string().optional().openapi({ example: "SR23" }),
+  visibleStatuses: z.array(z.enum(OrganizationStatus)).optional().openapi({
+    example: [OrganizationStatus.Enable],
+  }),
   selectableOrgTypes: z.array(z.enum(OrganizationType)).optional().openapi({ example: [OrganizationType.Department] }),
   selectableStatuses: z.array(z.enum(OrganizationStatus)).optional().openapi({ example: [OrganizationStatus.Enable] }),
   pageSize: z.int().positive().max(200).default(50),

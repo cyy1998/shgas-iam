@@ -9,7 +9,7 @@ import type {
 import type { DbClient } from "@iam/db";
 import type { Organization } from "@iam/db/schema";
 import { getChildOrganizationLevel, OrganizationStatus } from "@iam/contracts";
-import { compactUpdate, firstRow, ilikeContainsIf } from "@iam/db/query-utils";
+import { compactUpdate, firstRow, ilikeContainsIf, inArrayIf } from "@iam/db/query-utils";
 import { employments, organizationClosures, organizations } from "@iam/db/schema";
 import { and, count, eq, exists, gt, inArray, or, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
@@ -163,6 +163,8 @@ export function createOrganizationRepository(db: DbClient) {
     },
     async getOrganizationSelectorNodesForAdmin(query: OrganizationSelectorQueryDto) {
       let parentId: number | undefined;
+      const visibleStatusCondition = inArrayIf(organizations.status, query.visibleStatuses);
+
       if (query.parentOrgCode !== undefined && query.parentOrgCode !== null) {
         const parent = await db.query.organizations.findFirst({
           columns: { id: true },
@@ -185,6 +187,7 @@ export function createOrganizationRepository(db: DbClient) {
               ? eq(organizations.parentId, -1)
               : undefined,
           query.orgCode === undefined ? undefined : eq(organizations.orgCode, query.orgCode),
+          visibleStatusCondition,
           query.text === undefined
             ? undefined
             : or(
@@ -323,7 +326,7 @@ function isSelectable(
 
 async function attachSelectorNodeContext(
   rows: Organization[],
-  query: Pick<OrganizationSelectorQueryDto, "selectableOrgTypes" | "selectableStatuses">,
+  query: Pick<OrganizationSelectorQueryDto, "selectableOrgTypes" | "selectableStatuses" | "visibleStatuses">,
   tx: DbClient,
 ): Promise<OrganizationSelectorNode[]> {
   if (rows.length === 0) {
@@ -332,11 +335,16 @@ async function attachSelectorNodeContext(
 
   const rowIds = rows.map(row => row.id);
   const ancestor = alias(organizations, "selector_path_ancestor");
+  const visibleChildStatusCondition = inArrayIf(organizations.status, query.visibleStatuses);
   const [childrenCounts, pathRows] = await Promise.all([
     tx
       .select({ parentId: organizations.parentId, value: count() })
       .from(organizations)
-      .where(and(eq(organizations.isDelete, false), inArray(organizations.parentId, rowIds)))
+      .where(and(
+        eq(organizations.isDelete, false),
+        inArray(organizations.parentId, rowIds),
+        visibleChildStatusCondition,
+      ))
       .groupBy(organizations.parentId),
     tx
       .select({

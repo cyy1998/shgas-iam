@@ -1,16 +1,17 @@
 import OrganizationTreeSelector from '@admin/components/OrganizationTreeSelector';
 import { apiClient } from '@admin/lib/api-client';
 import { createEmployment } from '@admin/services/employment';
+import type { ProFormInstance } from '@ant-design/pro-components';
 import {
   ModalForm,
-  ProFormDatePicker,
   ProForm,
+  ProFormDatePicker,
   ProFormSelect,
   ProFormSwitch,
   ProFormTextArea,
 } from '@ant-design/pro-components';
-import type { ProFormInstance } from '@ant-design/pro-components';
 import type { AppRouter } from '@iam/admin-api/trpc';
+import { PositionStatus, UserStatus } from '@iam/contracts';
 import type { inferRouterOutputs } from '@trpc/server';
 import { message } from 'antd';
 import { useRef } from 'react';
@@ -105,7 +106,7 @@ export default function EmploymentFormModal({
             pageSize: 20,
             conditions: {
               fuzzyConditions: { text },
-              exactConditions: {},
+              exactConditions: { statuses: [UserStatus.Enable] },
             },
           });
           return res.result.map((u: UserVo) => ({
@@ -132,7 +133,7 @@ export default function EmploymentFormModal({
             pageSize: 50,
             conditions: {
               fuzzyConditions: { text: params.keyWords || undefined },
-              exactConditions: {},
+              exactConditions: { statuses: [PositionStatus.Enable] },
             },
           });
           return res.result.map((p: PosVo) => ({

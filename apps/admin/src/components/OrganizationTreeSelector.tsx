@@ -15,6 +15,7 @@ type Props = {
   onChange?: (value?: string) => void;
   placeholder?: string;
   disabled?: boolean;
+  visibleStatuses?: OrganizationStatus[];
   selectableOrgTypes?: OrganizationType[];
   selectableStatuses?: OrganizationStatus[];
 };
@@ -27,6 +28,13 @@ function toTreeNode(node: OrganizationSelectorNode): TreeNode {
     isLeaf: node.isLeaf,
     selectable: node.selectable,
   };
+}
+
+export function filterOrganizationSelectorNodesByStatus(
+  nodes: OrganizationSelectorNode[],
+  statuses: OrganizationStatus[],
+) {
+  return nodes.filter((node) => statuses.includes(node.status));
 }
 
 function mergeChildren(
@@ -112,6 +120,7 @@ export default function OrganizationTreeSelector({
   onChange,
   placeholder = '请选择组织',
   disabled,
+  visibleStatuses,
   selectableOrgTypes,
   selectableStatuses,
 }: Props) {
@@ -120,6 +129,9 @@ export default function OrganizationTreeSelector({
   const [loading, setLoading] = useState(false);
   const valueRef = useRef(value);
 
+  const visibleStatusesKey = (
+    visibleStatuses ?? DEFAULT_SELECTABLE_STATUSES
+  ).join('|');
   const selectableOrgTypesKey = selectableOrgTypes?.join('|') ?? '';
   const selectableStatusesKey = (
     selectableStatuses ?? DEFAULT_SELECTABLE_STATUSES
@@ -127,6 +139,7 @@ export default function OrganizationTreeSelector({
 
   const baseQuery = useMemo(
     () => ({
+      visibleStatuses: [...(visibleStatuses ?? DEFAULT_SELECTABLE_STATUSES)],
       selectableOrgTypes: selectableOrgTypes
         ? [...selectableOrgTypes]
         : undefined,
@@ -134,8 +147,9 @@ export default function OrganizationTreeSelector({
         ...(selectableStatuses ?? DEFAULT_SELECTABLE_STATUSES),
       ],
     }),
-    [selectableOrgTypesKey, selectableStatusesKey],
+    [visibleStatusesKey, selectableOrgTypesKey, selectableStatusesKey],
   );
+  const currentVisibleStatuses = baseQuery.visibleStatuses;
 
   useEffect(() => {
     valueRef.current = value;
@@ -151,7 +165,10 @@ export default function OrganizationTreeSelector({
     })
       .then((nodes) => {
         if (!cancelled) {
-          const rootNodes = nodes.map(toTreeNode);
+          const rootNodes = filterOrganizationSelectorNodesByStatus(
+            nodes,
+            currentVisibleStatuses,
+          ).map(toTreeNode);
           setTreeData((prev) => {
             const nextNodes = preserveLoadedChildren(rootNodes, prev);
             const selectedNode = valueRef.current
@@ -174,7 +191,7 @@ export default function OrganizationTreeSelector({
     return () => {
       cancelled = true;
     };
-  }, [baseQuery]);
+  }, [baseQuery, currentVisibleStatuses]);
 
   useEffect(() => {
     if (!value) return;
@@ -187,7 +204,12 @@ export default function OrganizationTreeSelector({
     })
       .then((nodes) => {
         if (cancelled || nodes.length === 0) return;
-        const selectedNode = toTreeNode(nodes[0]);
+        const [node] = filterOrganizationSelectorNodesByStatus(
+          nodes,
+          currentVisibleStatuses,
+        );
+        if (!node) return;
+        const selectedNode = toTreeNode(node);
         setTreeData((prev) => upsertTreeNode(prev, selectedNode));
       })
       .catch((err: unknown) => {
@@ -199,7 +221,7 @@ export default function OrganizationTreeSelector({
     return () => {
       cancelled = true;
     };
-  }, [baseQuery, value]);
+  }, [baseQuery, currentVisibleStatuses, value]);
 
   const loadData: TreeSelectProps['loadData'] = async (node) => {
     const children = await getOrganizationSelectorNodes({
@@ -208,7 +230,14 @@ export default function OrganizationTreeSelector({
       pageSize: 200,
     });
     setTreeData((prev) =>
-      mergeChildren(prev, String(node.value), children.map(toTreeNode)),
+      mergeChildren(
+        prev,
+        String(node.value),
+        filterOrganizationSelectorNodesByStatus(
+          children,
+          currentVisibleStatuses,
+        ).map(toTreeNode),
+      ),
     );
   };
 
@@ -223,7 +252,12 @@ export default function OrganizationTreeSelector({
       text: keyword,
       pageSize: 80,
     });
-    setSearchData(nodes.map(toTreeNode));
+    setSearchData(
+      filterOrganizationSelectorNodesByStatus(
+        nodes,
+        currentVisibleStatuses,
+      ).map(toTreeNode),
+    );
   };
 
   return (

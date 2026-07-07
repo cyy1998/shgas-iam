@@ -14,6 +14,7 @@ import {
   ProFormTextArea,
 } from '@ant-design/pro-components';
 import type { AppRouter } from '@iam/admin-api/trpc';
+import { PositionStatus } from '@iam/contracts';
 import type { inferRouterOutputs } from '@trpc/server';
 import { Descriptions, message } from 'antd';
 import { useRef } from 'react';
@@ -121,7 +122,7 @@ export default function TransferModal({
             pageSize: 50,
             conditions: {
               fuzzyConditions: { text: params.keyWords || undefined },
-              exactConditions: {},
+              exactConditions: { statuses: [PositionStatus.Enable] },
             },
           });
           return res.result.map((p: PosVo) => ({
