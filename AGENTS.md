@@ -19,4 +19,5 @@
 
 - 在聊天 UI 中，面向用户的回复默认使用自然、地道的中文。代码标识符、命令、文件路径、API 名称和引用的源文本保持原语言。
 - 本仓库明确授权 Codex 使用子代理功能并行调查或拆分边界清晰的任务；主代理仍负责整合结论、执行改动和最终验证。
+- 涉及提交、合并、OpenSpec 归档或分支清理等生命周期动作时，必须先按 `docs/workflows/index.md` 分流并执行对应阶段文档；不得只执行单个 OpenSpec skill 来替代完整 workflow Archive 阶段。
 - 在 PowerShell 中读取文本文件时显式指定 UTF-8 编码，例如 `Get-Content -Path "AGENTS.md" -Encoding utf8`，避免中文乱码。
