@@ -3,7 +3,7 @@ import type { ClientService } from "@api/services/client/client.service";
 import type { CustomSsoSessionKernelAdapter } from "@api/services/session/custom-sso-session-kernel.adapter";
 import type { Context, Next } from "hono";
 import { AuthzUnauthorizedError } from "@iam/api-core/errors/AuthzUnauthorizedError";
-import { CustomError } from "@iam/api-core/errors/CustomError";
+import { BadRequestError } from "@iam/api-core/errors/BadRequestError";
 import {
   createInternalAuthenticationHandler,
 } from "@iam/api-core/middlewares";
@@ -19,7 +19,7 @@ export function createApiAuthenticationHandlers(deps: CreateApiAuthenticationHan
   async function publicAuthenticationHandler(c: Context, next: Next) {
     const clientCode = c.req.header("Client");
     if (!clientCode) {
-      throw new CustomError("非法请求");
+      throw new BadRequestError("非法请求");
     }
 
     const sessionCookieName = clientCode === "iam" ? "global_session" : `local_${clientCode}_session`;

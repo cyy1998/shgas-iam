@@ -6,7 +6,7 @@ import type {
   PrivilegeDelegationQueryDto,
   PrivilegeDelegationUpdateDto,
 } from "./privilegeDelegation.type";
-import { CustomError } from "@iam/api-core/errors/CustomError";
+import { BadRequestError } from "@iam/api-core/errors/BadRequestError";
 import { PrivilegeDelegationStatus } from "@iam/contracts";
 import { compactUpdate, firstRow, inArrayIf } from "@iam/db/query-utils";
 import {
@@ -97,7 +97,7 @@ export function createPrivilegeDelegationRepository(db: DbClient) {
     },
     async setPrivilegeDelegation(dto: Prettify<PrivilegeDelegationCreateDto>) {
       if (!dto.delegateeUserId || !dto.delegatorUserId || !dto.organizationScopeId || !dto.privilegeIds) {
-        throw new CustomError("缺少必要参数");
+        throw new BadRequestError("缺少必要参数");
       }
       const delegation = firstRow(await db.insert(privilegeDelegations).values({
         delegatorUserId: dto.delegatorUserId,

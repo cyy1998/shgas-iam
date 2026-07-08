@@ -1,6 +1,7 @@
 import { VerificationCodeUsage } from "@api/enums/verificationCode.usage";
 import { createMemoryRedis } from "@api/testing/fakes";
-import { UserStatus, UserType } from "@iam/contracts";
+import { INTERNAL_SERVER_ERROR } from "@iam/api-core/core/http-status-codes";
+import { ApiErrorCode, UserStatus, UserType } from "@iam/contracts";
 import { describe, expect, mock, test } from "bun:test";
 import { createMobileService } from "../mobile.service";
 
@@ -42,6 +43,18 @@ describe("createMobileService", () => {
 
     await expect(service.sendCode("13800000000", VerificationCodeUsage.Login)).resolves.toBe(true);
     expect(redis.__values.get("mobile-code:login:13800000000")).toBe("1234");
+  });
+
+  test("keeps SMS provider failures classified as internal errors", async () => {
+    const { service, smsSender } = createService();
+    smsSender.sendVerificationCode.mockResolvedValueOnce({ success: false, code: "" });
+
+    await expect(service.sendCode("13800000000", VerificationCodeUsage.Login))
+      .rejects
+      .toMatchObject({
+        code: ApiErrorCode.InternalError,
+        httpStatus: INTERNAL_SERVER_ERROR,
+      });
   });
 
   test("consumes matching verification code once", async () => {

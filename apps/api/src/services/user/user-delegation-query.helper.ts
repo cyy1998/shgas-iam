@@ -1,7 +1,7 @@
 import type { UserDelegationQueryDeps, UserSearchWithDelegationsResult } from "./user.port";
 import type { UserQueryWithPrivilegeDelegationDto } from "./user.type";
 import { toPrivilegeDelegationDto } from "@api/services/privilege/privilegeDelegation.schema";
-import { CustomError } from "@iam/api-core/errors/CustomError";
+import { BadRequestError } from "@iam/api-core/errors/BadRequestError";
 
 export function createUserDelegationQuery(deps: UserDelegationQueryDeps) {
   async function searchUsersWithDelegations(
@@ -9,7 +9,7 @@ export function createUserDelegationQuery(deps: UserDelegationQueryDeps) {
   ): Promise<UserSearchWithDelegationsResult> {
     const [orgCode] = query.ancestorOrgCodes;
     if (query.ancestorOrgCodes.length !== 1 || orgCode === undefined) {
-      throw new CustomError("该接口ancestorOrgCodes元素数量只支持为1");
+      throw new BadRequestError("该接口ancestorOrgCodes元素数量只支持为1");
     }
     const userDtos = await deps.profileQuery.searchLegacyUsers(query);
     const delegations = (await deps.privilegeDelegationRepository.getDelegationsByUserAndOrganizationScopeAndPrivilege(

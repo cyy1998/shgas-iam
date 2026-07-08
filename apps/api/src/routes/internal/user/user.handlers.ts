@@ -15,6 +15,7 @@ import * as HttpStatusCodes from "@iam/api-core/core/http-status-codes";
 import { CustomError } from "@iam/api-core/errors/CustomError";
 import * as resp from "@iam/api-core/http";
 import { UserProfileDirtyReason, UserType } from "@iam/contracts";
+import { OrganizationNotFoundError } from "@iam/domain/organization";
 
 export interface ContactRegistrationTransactionPorts {
   employmentRepository: Pick<EmploymentRepository, "getEmploymentByUserOrgPosId" | "setEmployment">;
@@ -74,7 +75,7 @@ export function createUserHandlers(deps: CreateUserHandlersDeps) {
         tx.organizationRepository.getOrganizationByCode(orgCode),
       ]);
       if (org === null) {
-        throw new CustomError("供应商尚未注册");
+        throw new OrganizationNotFoundError("供应商尚未注册");
       }
       if (pos === null) {
         throw new CustomError("系统基本信息缺失");

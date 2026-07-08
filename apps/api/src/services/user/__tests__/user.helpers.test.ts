@@ -1,4 +1,5 @@
 import { createFakePasswordHasher } from "@api/testing/fakes";
+import { BadRequestError } from "@iam/api-core/errors";
 import { UserStatus, UserType } from "@iam/contracts";
 import { describe, expect, mock, test } from "bun:test";
 import { createUserDelegationQuery } from "../user-delegation-query.helper";
@@ -79,7 +80,7 @@ describe("user helper factories", () => {
     await expect(delegationQuery.searchUsersWithDelegations({
       ancestorOrgCodes: [],
       privilegeCode: "p",
-    } as any)).rejects.toThrow("ancestorOrgCodes元素数量只支持为1");
+    } as any)).rejects.toBeInstanceOf(BadRequestError);
   });
 
   test("delegation query combines profile users with live delegations", async () => {

@@ -3,6 +3,7 @@ import { describe, expect, mock, spyOn, test } from "bun:test";
 import { Hono } from "hono";
 import { HTTPException } from "hono/http-exception";
 import { BAD_REQUEST, INTERNAL_SERVER_ERROR, NOT_FOUND } from "../../core/http-status-codes";
+import { BadRequestError } from "../../errors/BadRequestError";
 import { CustomError } from "../../errors/CustomError";
 import { SystemLogEvent } from "../../logger";
 import { createErrorHandler } from "../error-handler";
@@ -95,6 +96,34 @@ describe("errorHandler", () => {
       code: ApiErrorCode.OrganizationNotFound,
       data: null,
       message: "组织不存在",
+    });
+  });
+
+  test("serializes BadRequestError as handled 400 without internal error code", async () => {
+    const app = new Hono();
+    const appLogger = createMockLogger();
+    app.get("/bad-request", () => {
+      throw new BadRequestError("非法请求");
+    });
+    app.onError(createErrorHandler(appLogger.logger));
+
+    const res = await app.request("http://localhost/bad-request");
+
+    expect(res.status).toBe(BAD_REQUEST);
+    expect(appLogger.info).toHaveBeenCalledTimes(1);
+    expect(appLogger.error).toHaveBeenCalledTimes(0);
+    expect(appLogger.info.mock.calls[0]?.[0]).toMatchObject({
+      event: SystemLogEvent.ApiErrorHandled,
+      surface: "rest",
+      statusCode: BAD_REQUEST,
+      errorCode: ApiErrorCode.BadRequest,
+      errorName: "BadRequestError",
+      errorMessage: "非法请求",
+    });
+    await expect(res.json()).resolves.toEqual({
+      code: ApiErrorCode.BadRequest,
+      data: null,
+      message: "非法请求",
     });
   });
 

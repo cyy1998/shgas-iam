@@ -27,3 +27,12 @@ export class EmploymentAlreadyExistsError extends DomainBusinessError {
     });
   }
 }
+
+export class EmploymentOrganizationScopeMismatchError extends DomainBusinessError {
+  constructor(message: string = "任职组织不属于期望组织范围") {
+    super(message, {
+      code: ApiErrorCode.BadRequest,
+      httpStatus: DomainHttpStatus.BadRequest,
+    });
+  }
+}

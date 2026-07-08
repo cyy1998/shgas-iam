@@ -1,4 +1,4 @@
-import { CustomError } from "../errors/CustomError";
+import { BadRequestError } from "../errors/BadRequestError";
 
 const ISO_DATE_REGEX = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,3})?(?:Z|[+-]\d{2}:\d{2})$/;
 
@@ -66,7 +66,7 @@ export function getProtocolAndHost(url: string): string {
   }
   // eslint-disable-next-line unused-imports/no-unused-vars
   catch (e) {
-    throw new CustomError(`Invalid URL: ${url}`);
+    throw new BadRequestError(`Invalid URL: ${url}`);
   }
 }
 

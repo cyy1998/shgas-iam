@@ -55,6 +55,15 @@ export class WeakPasswordError extends DomainBusinessError {
   }
 }
 
+export class UserPasswordUnchangedError extends DomainBusinessError {
+  constructor(message: string = "旧密码与新密码相同") {
+    super(message, {
+      code: ApiErrorCode.BadRequest,
+      httpStatus: DomainHttpStatus.BadRequest,
+    });
+  }
+}
+
 export class UserHasActiveEmploymentError extends DomainBusinessError {
   constructor(message: string = "该用户仍存在活跃雇佣，无法删除") {
     super(message, {

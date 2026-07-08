@@ -62,6 +62,13 @@ const cases: ExpectedError[] = [
     httpStatus: 400,
   },
   {
+    className: "UserPasswordUnchangedError",
+    exports: UserErrors,
+    message: "旧密码与新密码相同",
+    code: ApiErrorCode.BadRequest,
+    httpStatus: 400,
+  },
+  {
     className: "UserHasActiveEmploymentError",
     exports: UserErrors,
     message: "该用户仍存在活跃雇佣，无法删除",
@@ -144,6 +151,13 @@ const cases: ExpectedError[] = [
     message: "相同任职关系已存在",
     code: ApiErrorCode.EmploymentAlreadyExists,
     httpStatus: 409,
+  },
+  {
+    className: "EmploymentOrganizationScopeMismatchError",
+    exports: EmploymentErrors,
+    message: "任职组织不属于期望组织范围",
+    code: ApiErrorCode.BadRequest,
+    httpStatus: 400,
   },
   {
     className: "ClientNotFoundError",

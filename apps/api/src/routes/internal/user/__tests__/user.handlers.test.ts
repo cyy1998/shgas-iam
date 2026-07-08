@@ -1,4 +1,5 @@
 import { UserProfileDirtyReason } from "@iam/contracts";
+import { OrganizationNotFoundError } from "@iam/domain/organization";
 import { describe, expect, mock, test } from "bun:test";
 import { createUserHandlers } from "../user.handlers";
 import { createUsersSearchDslRoute } from "../user.routes";
@@ -204,6 +205,45 @@ describe("createUserHandlers", () => {
       reasonCodes: [UserProfileDirtyReason.UserUpdated, UserProfileDirtyReason.EmploymentUpdated],
       afterCommit: expect.any(Object),
     });
+  });
+
+  test("rejects contact registration when supplier organization is missing", async () => {
+    const { deps, handlers } = createHandlers();
+    (deps.uow.transaction as any).mockImplementationOnce(async (callback: any) => await callback({
+      employmentRepository: {
+        getEmploymentByUserOrgPosId: mock(async () => null),
+        setEmployment: mock(async () => {
+          throw new Error("setEmployment should not be called");
+        }),
+      },
+      organizationRepository: {
+        getOrganizationByCode: mock(async () => null),
+      },
+      positionRepository: {
+        getPositionByCode: mock(async () => ({ id: 3 })),
+      },
+      profileDirtyMarker: {
+        markUsersDirty: mock(async () => ({ marked: 0, userIds: [] })),
+      },
+      userRepository: {
+        getUserByMobile: mock(async () => null),
+        setUser: mock(async () => {
+          throw new Error("setUser should not be called");
+        }),
+      },
+    }));
+    const input = { username: "newuser", mobile: "13900000000", name: "新用户", orgCode: "MISSING" };
+    const context = {
+      req: {
+        valid: mock(() => input),
+        header: mock((name: string) => name === "Client" ? "portal" : undefined),
+      },
+      json: mock((payload: unknown) => payload),
+    };
+
+    await expect(handlers.contactRegister(context as never, undefined as never))
+      .rejects
+      .toBeInstanceOf(OrganizationNotFoundError);
   });
 });
 

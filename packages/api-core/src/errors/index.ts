@@ -4,6 +4,7 @@ export * from "./AuthzForbiddenError";
 export * from "./AuthzMaintaincingError";
 export * from "./AuthzMaintenanceError";
 export * from "./AuthzUnauthorizedError";
+export * from "./BadRequestError";
 export * from "./CustomError";
 export * from "./HumanVerificationRequiredError";
 export * from "./InvalidAuthCodeError";

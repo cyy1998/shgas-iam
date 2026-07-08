@@ -9,10 +9,9 @@ import {
   buildSelfPasswordChangeFailureAudit,
   buildSelfPasswordChangeSuccessAudit,
 } from "@api/services/audit/events/self-user.audit";
-import { CustomError } from "@iam/api-core/errors/CustomError";
 import { InvalidVerificationCodeError } from "@iam/api-core/errors/InvalidVerificationCodeError";
 import { UserProfileDirtyReason, UserStatus } from "@iam/contracts";
-import { InvalidOldPasswordError, UserNotFoundError } from "@iam/domain/user";
+import { InvalidOldPasswordError, UserNotFoundError, UserPasswordUnchangedError } from "@iam/domain/user";
 
 export function createUserService(deps: UserServiceDeps) {
   async function setPassword(
@@ -27,7 +26,7 @@ export function createUserService(deps: UserServiceDeps) {
         throw new UserNotFoundError("用户名不存在");
       }
       if (oldPassword === newPassword) {
-        throw new CustomError("旧密码与新密码相同");
+        throw new UserPasswordUnchangedError("旧密码与新密码相同");
       }
       const isMatch = await deps.passwordHelper.verifyUserPassword(user, oldPassword);
       if (!isMatch) {

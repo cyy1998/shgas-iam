@@ -12,12 +12,12 @@ import {
   buildEmploymentResignUserAudit,
 } from "@admin-api/services/audit/events/employment.audit";
 import { EmploymentDetailDtoSchema, toEmploymentDto } from "@admin-api/services/employment/employment.schema";
-import { CustomError } from "@iam/api-core/errors/CustomError";
 import { EmploymentStatus, UserProfileDirtyReason, UserStatus } from "@iam/contracts";
 import {
   EmploymentAlreadyExistsError,
   EmploymentNotEditableError,
   EmploymentNotFoundError,
+  EmploymentOrganizationScopeMismatchError,
 } from "@iam/domain/employment";
 import { OrganizationNotFoundError } from "@iam/domain/organization";
 import { PositionNotFoundError } from "@iam/domain/position";
@@ -48,7 +48,7 @@ async function assertExpectedAncestor(
   }
   const matches = await tx.organizationRepository.isOrganizationDescendantOf(orgCode, expectedAncestorOrgCode);
   if (!matches) {
-    throw new CustomError(message);
+    throw new EmploymentOrganizationScopeMismatchError(message);
   }
 }
 

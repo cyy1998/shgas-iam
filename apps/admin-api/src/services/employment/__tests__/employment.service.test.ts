@@ -1,6 +1,6 @@
 import { createFakeClock, createImmediateUnitOfWork } from "@admin-api/test/fakes";
 import { EmploymentStatus, OrganizationLevel, OrganizationStatus, OrganizationType, PositionStatus, UserProfileDirtyReason, UserStatus, UserType } from "@iam/contracts";
-import { EmploymentAlreadyExistsError } from "@iam/domain/employment";
+import { EmploymentAlreadyExistsError, EmploymentOrganizationScopeMismatchError } from "@iam/domain/employment";
 import { describe, expect, mock, test } from "bun:test";
 import { createEmploymentService } from "../employment.service";
 
@@ -184,6 +184,21 @@ describe("createEmploymentService", () => {
 
     expect(tx.auditService.recordAuditLog).not.toHaveBeenCalled();
     expect(tx.profileDirtyMarker.markUsersDirty).not.toHaveBeenCalled();
+  });
+
+  test("rejects create when assigned organization is outside expected ancestor", async () => {
+    const { service, tx } = createService();
+    (tx.organizationRepository.isOrganizationDescendantOf as any).mockResolvedValue(false);
+
+    await expect(service.createEmploymentForAdmin({
+      username: "zhangsan",
+      orgCode: "DEPT",
+      expectedAncestorOrgCode: "COMPANY",
+      posCode: "DEV",
+    })).rejects.toBeInstanceOf(EmploymentOrganizationScopeMismatchError);
+
+    expect(tx.employmentRepository.createEmploymentRecord).not.toHaveBeenCalled();
+    expect(tx.auditService.recordAuditLog).not.toHaveBeenCalled();
   });
 
   test("disabling an employment sets end time from the injected clock", async () => {

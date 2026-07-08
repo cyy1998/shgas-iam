@@ -1,5 +1,6 @@
 import { createImmediateUnitOfWork } from "@api/testing/fakes";
 import { UserProfileDirtyReason, UserStatus } from "@iam/contracts";
+import { UserPasswordUnchangedError } from "@iam/domain/user";
 import { describe, expect, mock, test } from "bun:test";
 import { createUserService } from "../user.service";
 
@@ -94,6 +95,16 @@ describe("createUserService", () => {
       traceId: "11111111111111111111111111111111",
     }));
     expect(deps.tx.profileDirtyMarker.markUsersDirty).not.toHaveBeenCalled();
+  });
+
+  test("rejects unchanged password with domain bad request error", async () => {
+    const deps = createDeps();
+    const service = createUserService(deps);
+
+    await expect(service.setPassword("zhangsan", "oldPass123", "oldPass123"))
+      .rejects
+      .toBeInstanceOf(UserPasswordUnchangedError);
+    expect(deps.tx.userRepository.setPassword).not.toHaveBeenCalled();
   });
 
   test("rejects reset password when mobile does not match", async () => {
