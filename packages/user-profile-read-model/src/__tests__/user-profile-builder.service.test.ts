@@ -133,7 +133,7 @@ describe("UserProfileBuilder", () => {
     expect(activeProfile.profileSchemaVersion).toBe(CURRENT_USER_PROFILE_SCHEMA_VERSION);
     expect(activeProfile.rebuiltAt).toBe(now);
     expect(activeProfile.searchVisible).toBe(true);
-    expect(activeProfile.detail.orcasId).toBeNull();
+    expect(activeProfile.detail).not.toHaveProperty("orcasId");
     expect(activeProfile.detail.employments).toHaveLength(2);
     expect(activeProfile.detail.employments[0]?.isPrimary).toBe(true);
     expect(activeProfile.detail.roles).toEqual([

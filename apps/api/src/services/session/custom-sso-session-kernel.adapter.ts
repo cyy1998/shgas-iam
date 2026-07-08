@@ -46,6 +46,11 @@ export type CustomSsoLocalSession = {
   orcasSessionId: string | null;
 };
 
+export type CustomSsoOrcasContext = {
+  userId: string;
+  sessionId: string | null;
+};
+
 export type CustomSsoLocalSessionContext = {
   userDetail: UserDetailDto;
   orcasId: string | null;
@@ -63,6 +68,11 @@ const CredentialMetadataSchema = z.object({
   payloadRef: z.string(),
 });
 
+const OrcasContextSchema = z.object({
+  userId: z.string(),
+  sessionId: z.string().nullable(),
+});
+
 const LocalSessionPayloadSchema = z.object({
   version: z.literal(LOCAL_SESSION_PAYLOAD_VERSION),
   payloadRef: z.string(),
@@ -76,8 +86,12 @@ const LocalSessionPayloadSchema = z.object({
   issuedAt: z.number().int().nonnegative(),
   expiresAt: z.number().int().nonnegative(),
   logoutEndpoint: z.string().optional(),
+  orcas: OrcasContextSchema.nullable().optional(),
   orcasSessionId: z.string().nullable().optional(),
-});
+}).transform(payload => ({
+  ...payload,
+  orcas: payload.orcas ?? null,
+}));
 
 type LocalSessionPayload = z.infer<typeof LocalSessionPayloadSchema>;
 
@@ -233,7 +247,7 @@ export function createCustomSsoSessionKernelAdapter(deps: CustomSsoSessionKernel
     client: ClientDto;
     mode: ClientManagementLevel;
     userDetail: UserDetailDto;
-    orcasSessionId?: string | null;
+    orcas?: CustomSsoOrcasContext | null;
     requestContext?: ApiRequestContext;
   }): Promise<CustomSsoLocalSession> {
     const clientCode = input.client.clientCode;
@@ -300,7 +314,7 @@ export function createCustomSsoSessionKernelAdapter(deps: CustomSsoSessionKernel
       logoutEndpoint: input.mode === ClientManagementLevel.Independent
         ? input.client.extAttributes.logoutEndpoint
         : undefined,
-      orcasSessionId: input.orcasSessionId ?? null,
+      orcas: input.orcas ?? null,
     };
 
     try {
@@ -327,7 +341,7 @@ export function createCustomSsoSessionKernelAdapter(deps: CustomSsoSessionKernel
       token: credential.externalToken,
       ttl,
       userInfo: input.userDetail,
-      orcasSessionId: input.orcasSessionId ?? null,
+      orcasSessionId: input.orcas?.sessionId ?? null,
     };
   }
 
@@ -365,7 +379,7 @@ export function createCustomSsoSessionKernelAdapter(deps: CustomSsoSessionKernel
     );
     return {
       userDetail,
-      orcasId: payload.user.orcasId ?? null,
+      orcasId: payload.orcas?.userId ?? null,
     };
   }
 
@@ -536,7 +550,8 @@ export function createCustomSsoSessionKernelAdapter(deps: CustomSsoSessionKernel
 
 function parseLocalSessionPayload(serialized: string) {
   try {
-    return LocalSessionPayloadSchema.safeParse(JSON.parse(serialized, reviveIsoDates));
+    const parsed = JSON.parse(serialized, reviveIsoDates);
+    return LocalSessionPayloadSchema.safeParse(normalizeLegacyLocalSessionPayload(parsed));
   }
   catch (error) {
     return {
@@ -546,6 +561,27 @@ function parseLocalSessionPayload(serialized: string) {
       },
     };
   }
+}
+
+function normalizeLegacyLocalSessionPayload(value: unknown) {
+  if (!isRecord(value) || value.orcas !== undefined || !isRecord(value.user)) {
+    return value;
+  }
+  const legacyOrcasId = value.user.orcasId;
+  if (typeof legacyOrcasId !== "string") {
+    return value;
+  }
+  return {
+    ...value,
+    orcas: {
+      userId: legacyOrcasId,
+      sessionId: typeof value.orcasSessionId === "string" ? value.orcasSessionId : null,
+    },
+  };
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 async function notifyIndependentClientLogout(deps: CustomSsoCleanupAdapterDeps, payload: LocalSessionPayload) {

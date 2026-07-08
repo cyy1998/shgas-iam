@@ -96,7 +96,6 @@ describe("user helper factories", () => {
       isDelete: false,
       createTime: new Date("2026-01-01T00:00:00.000Z"),
       updateTime: new Date("2026-01-01T00:00:00.000Z"),
-      orcasId: null,
     };
     const searchLegacyUsers = mock(async () => [profileUser]);
     const getDelegationsByUserAndOrganizationScopeAndPrivilege = mock(async () => []);

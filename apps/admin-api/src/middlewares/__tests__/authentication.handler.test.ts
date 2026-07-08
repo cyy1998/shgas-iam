@@ -183,7 +183,6 @@ function adminUser(overrides: Partial<UserDetailDto> = {}): UserDetailDto {
     isDelete: false,
     createTime: new Date(),
     updateTime: new Date(),
-    orcasId: null,
     employments: [],
     roles: ["iam:admin"],
     privileges: [],

@@ -32,7 +32,6 @@ function userDto() {
     userType: UserType.Formal,
     orderNum: 1,
     status: UserStatus.Enable,
-    orcasId: null,
   };
 }
 

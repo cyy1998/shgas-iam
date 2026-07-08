@@ -10,8 +10,6 @@ export const UserSchema = DbUserSchema.omit({
 
 export const UserDtoSchema = UserSchema.omit({
   password: true,
-}).extend({
-  orcasId: z.string().nullable().default(null).openapi({ example: "ada8wf89w83b2" }),
 }).openapi("UserDto");
 
 export const UserDetailDtoSchema = UserDtoSchema.extend({

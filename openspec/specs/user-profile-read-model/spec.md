@@ -60,11 +60,12 @@
 - **AND** producer SHALL 使用 `@iam/jobs` 提供的 deterministic job id helper 构造 jobId
 
 ### Requirement: Profile builder preserves identity detail and active search visibility
-系统 SHALL 在 `@iam/user-profile-read-model` 提供用户画像 builder，批量从规范化写模型构建当前 schema version 的用户画像；builder SHALL 为身份详情保留可读取的 detail，并通过 `searchVisible` 控制搜索可见性。
+系统 SHALL 在 `@iam/user-profile-read-model` 提供用户画像 builder，批量从规范化写模型构建当前 schema version 的用户画像；builder SHALL 为 IAM 用户档案保留可读取的 detail，并通过 `searchVisible` 控制搜索可见性。
 
 #### Scenario: Build profile detail
 - **WHEN** builder 为用户构建 profile
 - **THEN** `detail` SHALL 符合 `UserDetailDto` 契约，并包含 active employments、每个任职的 organization context、position summary、role codes 和 privilege codes
+- **AND** `detail` SHALL NOT 包含 ORCAS 会话身份字段
 
 #### Scenario: Build profile search document
 - **WHEN** builder 为用户构建 profile

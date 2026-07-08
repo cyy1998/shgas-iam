@@ -41,7 +41,6 @@ function profile(overrides: Partial<UserProfile> = {}): UserProfile {
       isDelete: false,
       createTime: now,
       updateTime: now,
-      orcasId: null,
       employments: [],
       privileges: [],
       roles: [],
@@ -175,6 +174,7 @@ describe("UserProfileQueryService", () => {
       value: "zhangsan",
     });
 
+    expect(detail).not.toHaveProperty("orcasId");
     expect(detail.createTime).toBeInstanceOf(Date);
     expect(detail.updateTime).toBeInstanceOf(Date);
     expect(detail.employments[0]?.startTime).toBeInstanceOf(Date);

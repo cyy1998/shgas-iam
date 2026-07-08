@@ -75,23 +75,21 @@ export function createSsoService(deps: SsoServiceDeps) {
       redirectUrl,
       invalidCodeError: "unauthorized",
     });
-    const userDetailDto = { ...authCode.userDetail };
-    let globalOrcasSessionId = null;
+    let orcas: { userId: string; sessionId: string } | null = null;
     if (client.extAttributes.requireOrcas === true) {
-      const { orcasSessionId, orcasId } = await deps.orcasClient.orcasLogin(userDetailDto);
-      globalOrcasSessionId = orcasSessionId;
-      userDetailDto.orcasId = orcasId;
+      const { orcasSessionId, orcasId } = await deps.orcasClient.orcasLogin(authCode.userDetail);
+      orcas = { userId: orcasId, sessionId: orcasSessionId };
     }
     const { token } = await deps.customSsoSession.createLocalSession({
       authCode,
       client,
       mode: ClientManagementLevel.Gateway,
-      userDetail: userDetailDto,
-      orcasSessionId: globalOrcasSessionId,
+      userDetail: authCode.userDetail,
+      orcas,
       requestContext: options.requestContext,
     });
     return {
-      orcasSessionId: globalOrcasSessionId,
+      orcasSessionId: orcas?.sessionId ?? null,
       token,
     };
   }

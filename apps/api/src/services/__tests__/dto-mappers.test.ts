@@ -200,8 +200,8 @@ describe("API DTO mappers", () => {
       delegateeName: "User 2",
     });
     expect(schemaModule.toPrivilegeDelegationDetailDto(detail)).toMatchObject({
-      delegatorUser: { username: "user1", orcasId: null },
-      delegateeUser: { username: "user2", orcasId: null },
+      delegatorUser: { username: "user1" },
+      delegateeUser: { username: "user2" },
       organizationScope: { orgCode: "DEPT", isLeaf: true },
       privileges: [{ privilegeCode: "priv:1" }],
     });

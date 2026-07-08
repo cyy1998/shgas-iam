@@ -121,7 +121,6 @@ function buildFromDataset(dataset: UserProfileBuildDataset, rebuiltAt: Date): Bu
 
     const detail = UserDetailDtoSchema.parse({
       ...user,
-      orcasId: null,
       employments: employmentDetails.map(item => item.dto),
       roles: unique(employmentDetails.flatMap(item => item.roles)),
       privileges: unique(employmentDetails.flatMap(item => item.privileges)),

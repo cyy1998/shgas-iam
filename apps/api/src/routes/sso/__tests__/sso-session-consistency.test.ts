@@ -228,7 +228,6 @@ const userDetail = {
   id: 1001,
   username: "138550",
   wxId: null,
-  orcasId: null,
   name: "测试用户",
   mobile: "17721462865",
   userType: UserType.Formal,
@@ -380,8 +379,10 @@ function createServices() {
     clientService,
     customSsoSession,
     userService: {
-      getActiveUserById: mock(async (userId: number) => liveUserAvailable && userId === userDetail.id ? userDetail : null),
-      getActiveUserByUsername: mock(async (username: string) => liveUserAvailable && username === userDetail.username ? userDetail : null),
+      getActiveUserById: mock(async (userId: number) =>
+        liveUserAvailable && userId === userDetail.id ? userDetail : null),
+      getActiveUserByUsername: mock(async (username: string) =>
+        liveUserAvailable && username === userDetail.username ? userDetail : null),
       getActiveUserByWxId: mock(async () => liveUserAvailable ? userDetail : null),
       getUserDetailById: mock(async (userId: number) => {
         if (!profileAvailable || userId !== userDetail.id) {
@@ -685,7 +686,43 @@ describe("SSO Kernel session consistency", () => {
     const sessionContext = await services.customSsoSession.resolveLocalSessionContext(result.token, gatewayClient);
 
     expect(sessionContext.orcasId).toBe("orcas");
-    expect(sessionContext.userDetail.orcasId).toBeNull();
+    expect(sessionContext.userDetail).not.toHaveProperty("orcasId");
+  });
+
+  test("resolves legacy Gateway Orcas ID from the local session payload user snapshot", async () => {
+    const services = createServices();
+    const redirectUrl = "https://gateway.example.com/callback";
+    const { code } = await createAuthorizedCode(services, "gateway-orcas", redirectUrl);
+    const gatewayClient = getMockClientByCode("gateway-orcas");
+    if (gatewayClient === null) {
+      throw new Error("expected gateway-orcas client");
+    }
+
+    const payloadKeysBefore = new Set(fakeRedis.payloadKeys());
+    const result = await services.ssoService.callback(code, "gateway-orcas", redirectUrl);
+    const payloadKey = fakeRedis.payloadKeys().find(key => !payloadKeysBefore.has(key));
+    if (!payloadKey) {
+      throw new Error("expected private payload key");
+    }
+    const serialized = await fakeRedis.get(payloadKey);
+    if (serialized === null) {
+      throw new Error("expected private payload");
+    }
+    const payload = JSON.parse(serialized) as Record<string, unknown>;
+    delete payload.orcas;
+    await fakeRedis.set(payloadKey, JSON.stringify({
+      ...payload,
+      user: {
+        ...(payload.user as Record<string, unknown>),
+        orcasId: "legacy-orcas",
+      },
+      orcasSessionId: "legacy-orcas-session",
+    }));
+
+    const sessionContext = await services.customSsoSession.resolveLocalSessionContext(result.token, gatewayClient);
+
+    expect(sessionContext.orcasId).toBe("legacy-orcas");
+    expect(sessionContext.userDetail).not.toHaveProperty("orcasId");
   });
 
   test("authz validates local session credentials and preserves maintenance semantics", async () => {

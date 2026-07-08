@@ -150,7 +150,6 @@ const userDetail = {
   id: USER_ID,
   username: "138550",
   wxId: null,
-  orcasId: null,
   name: "测试用户",
   mobile: MOBILE,
   userType: UserType.Formal,

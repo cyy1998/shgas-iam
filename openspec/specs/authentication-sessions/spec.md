@@ -143,7 +143,7 @@
 - **AND** 系统 SHALL 保持既有用户维度登录失败计数和账号暂停规则
 
 ### Requirement: SSO 授权码与局部会话
-系统 SHALL 为已登录用户和合法客户端生成一次性 Kernel ProtocolArtifact，并在 callback 或 token 兑换时一致地创建面向客户端的 ClientBinding 与 local session IssuedCredential。local session payload SHALL 保留协议私有一致性数据，但后续用户资料读取 SHALL NOT 以 Redis payload 快照作为权威来源。
+系统 SHALL 为已登录用户和合法客户端生成一次性 Kernel ProtocolArtifact，并在 callback 或 token 兑换时一致地创建面向客户端的 ClientBinding 与 local session IssuedCredential。local session payload SHALL 保留协议私有一致性数据和必要集成上下文，但后续用户资料读取 SHALL NOT 以 Redis payload 快照作为权威来源。
 
 #### Scenario: 未登录用户发起 SSO 授权
 - **WHEN** `/sso/authorize` 请求没有可用的 PrincipalSession
@@ -183,8 +183,15 @@
 #### Scenario: Gateway callback 需要 ORCAS
 - **WHEN** `/sso/callback` 兑换的 client 配置要求 ORCAS 登录
 - **THEN** custom SSO adapter SHALL 在创建 local session payload 前完成 ORCAS 登录
-- **AND** local session payload SHALL 保留兼容的 ORCAS 用户信息
+- **AND** local session payload SHALL 在 ORCAS 集成上下文中保存 ORCAS 用户 ID 和 ORCAS session ID
+- **AND** local session payload SHALL NOT 将 ORCAS 用户 ID 写入 `UserDetailDto` 或 `userInfo`
 - **AND** ORCAS 登录失败时系统 SHALL NOT 向调用方返回可用 local session token
+
+#### Scenario: Public ORCAS ID 查询
+- **WHEN** 已认证 public 请求访问 `/public/orcasId`
+- **THEN** 系统 SHALL 从当前 Custom SSO local session 的 ORCAS 集成上下文返回 `{ orcasId }`
+- **AND** 当当前 session 没有 ORCAS 集成上下文时，系统 SHALL 返回 `{ orcasId: null }`
+- **AND** 系统 SHALL NOT 从 `UserDetailDto` 读取 ORCAS ID
 
 #### Scenario: Independent token 兑换局部会话
 - **WHEN** `/sso/token` 收到存在且未撤销的 auth code、合法 client code 和匹配的 client secret
@@ -194,6 +201,7 @@
 - **AND** 系统 SHALL 创建 Independent 模式 custom SSO ClientBinding 与 local session IssuedCredential
 - **AND** 响应 SHALL 返回 `sid`、`ttl` 和 `userInfo`
 - **AND** `userInfo` SHALL 保持 custom SSO 现有 `UserDetailDto` 响应契约并来自当前 schema version profile
+- **AND** `userInfo` SHALL NOT 包含 ORCAS 会话身份字段
 
 #### Scenario: 授权码重复兑换被拒绝
 - **WHEN** 同一个 custom SSO auth code 已经被 `/sso/callback` 或 `/sso/token` 成功消费
