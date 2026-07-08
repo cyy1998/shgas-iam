@@ -672,6 +672,22 @@ describe("SSO Kernel session consistency", () => {
     ).rejects.toBeInstanceOf(AuthzUnauthorizedError);
   });
 
+  test("resolves Gateway Orcas ID from the local session payload", async () => {
+    const services = createServices();
+    const redirectUrl = "https://gateway.example.com/callback";
+    const { code } = await createAuthorizedCode(services, "gateway-orcas", redirectUrl);
+    const gatewayClient = getMockClientByCode("gateway-orcas");
+    if (gatewayClient === null) {
+      throw new Error("expected gateway-orcas client");
+    }
+
+    const result = await services.ssoService.callback(code, "gateway-orcas", redirectUrl);
+    const sessionContext = await services.customSsoSession.resolveLocalSessionContext(result.token, gatewayClient);
+
+    expect(sessionContext.orcasId).toBe("orcas");
+    expect(sessionContext.userDetail.orcasId).toBeNull();
+  });
+
   test("authz validates local session credentials and preserves maintenance semantics", async () => {
     const services = createServices();
     const { code } = await createAuthorizedCode(services);

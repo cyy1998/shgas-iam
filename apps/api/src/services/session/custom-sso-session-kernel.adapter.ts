@@ -46,6 +46,11 @@ export type CustomSsoLocalSession = {
   orcasSessionId: string | null;
 };
 
+export type CustomSsoLocalSessionContext = {
+  userDetail: UserDetailDto;
+  orcasId: string | null;
+};
+
 export type FetchPort = (input: string | URL | Request, init?: RequestInit) => Promise<Response>;
 
 const AuthCodeMetadataSchema = z.object({
@@ -345,8 +350,23 @@ export function createCustomSsoSessionKernelAdapter(deps: CustomSsoSessionKernel
   }
 
   async function resolveLocalSessionUser(localSessionToken: string, client: ClientDto) {
-    const { userDetail } = await resolveValidatedLocalSession(localSessionToken, client, { enforceMaintenance: false });
+    const { userDetail } = await resolveLocalSessionContext(localSessionToken, client);
     return userDetail;
+  }
+
+  async function resolveLocalSessionContext(
+    localSessionToken: string,
+    client: ClientDto,
+  ): Promise<CustomSsoLocalSessionContext> {
+    const { payload, userDetail } = await resolveValidatedLocalSession(
+      localSessionToken,
+      client,
+      { enforceMaintenance: false },
+    );
+    return {
+      userDetail,
+      orcasId: payload.user.orcasId ?? null,
+    };
   }
 
   async function logout(token: string | undefined): Promise<RevokeSummary | true> {
@@ -508,6 +528,7 @@ export function createCustomSsoSessionKernelAdapter(deps: CustomSsoSessionKernel
     createPrincipalSession,
     lazyRevokeUserSessions,
     logout,
+    resolveLocalSessionContext,
     resolveLocalSessionUser,
     resolvePrincipalSessionUser,
   };

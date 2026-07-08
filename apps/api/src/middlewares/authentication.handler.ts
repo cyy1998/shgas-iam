@@ -11,7 +11,7 @@ import { deleteCookie, getCookie } from "hono/cookie";
 
 export interface CreateApiAuthenticationHandlersDeps {
   clientService: Pick<ClientService, "getClientByCode" | "getClientBySecret">;
-  customSsoSession: Pick<CustomSsoSessionKernelAdapter, "resolveLocalSessionUser" | "resolvePrincipalSessionUser">;
+  customSsoSession: Pick<CustomSsoSessionKernelAdapter, "resolveLocalSessionContext" | "resolvePrincipalSessionUser">;
   redis: RedisPort;
 }
 
@@ -29,12 +29,17 @@ export function createApiAuthenticationHandlers(deps: CreateApiAuthenticationHan
     }
 
     try {
-      const user = clientCode === "iam"
-        ? await deps.customSsoSession.resolvePrincipalSessionUser(sessionToken)
-        : await resolveCustomSsoLocalSessionUser(clientCode, sessionToken);
+      const sessionContext = clientCode === "iam"
+        ? {
+            userDetail: await deps.customSsoSession.resolvePrincipalSessionUser(sessionToken),
+            orcasId: null,
+          }
+        : await resolveCustomSsoLocalSessionContext(clientCode, sessionToken);
+      const user = sessionContext.userDetail;
       c.set("userId", user.id);
       c.set("username", user.username);
       c.set("userDetailDto", user);
+      c.set("customSsoSessionOrcasId", sessionContext.orcasId);
       return await next();
     }
     catch (error) {
@@ -47,12 +52,12 @@ export function createApiAuthenticationHandlers(deps: CreateApiAuthenticationHan
     }
   }
 
-  async function resolveCustomSsoLocalSessionUser(clientCode: string, sessionToken: string) {
+  async function resolveCustomSsoLocalSessionContext(clientCode: string, sessionToken: string) {
     const client = await deps.clientService.getClientByCode(clientCode);
     if (!client) {
       throw new AuthzUnauthorizedError("未登录");
     }
-    return await deps.customSsoSession.resolveLocalSessionUser(sessionToken, client);
+    return await deps.customSsoSession.resolveLocalSessionContext(sessionToken, client);
   }
 
   return {

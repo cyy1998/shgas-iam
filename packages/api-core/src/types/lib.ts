@@ -14,6 +14,7 @@ export type UserVariables<TUserDetail = unknown> = {
   userId: number;
   username: string;
   userDetailDto: TUserDetail;
+  customSsoSessionOrcasId?: string | null;
 };
 
 export type InternalClientVariables<TClient = unknown> = {

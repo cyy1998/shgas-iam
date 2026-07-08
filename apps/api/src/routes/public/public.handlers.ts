@@ -16,6 +16,10 @@ export function createPublicHandlers(deps: CreatePublicHandlersDeps) {
     return c.json(resp.ok(data), HttpStatusCodes.OK);
   };
 
+  const orcasId: PublicRouteHandler<"orcasId"> = async (c) => {
+    return c.json(resp.ok({ orcasId: c.get("customSsoSessionOrcasId") ?? null }), HttpStatusCodes.OK);
+  };
+
   const passwordChange: PublicRouteHandler<"passwordChange"> = async (c) => {
     const { oldPassword, newPassword } = c.req.valid("json");
     const data = await deps.userService.setPassword(c.get("username"), oldPassword, newPassword, {
@@ -46,6 +50,7 @@ export function createPublicHandlers(deps: CreatePublicHandlersDeps) {
 
   return {
     mobileSet,
+    orcasId,
     organizationsSearch,
     passwordChange,
     userInfo,

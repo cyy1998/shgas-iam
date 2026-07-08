@@ -7,6 +7,7 @@ import * as routes from "./public.routes";
 export function createPublicRoute(handlers: PublicHandlers) {
   return createRouter<PublicBindings<UserDetailDto>>()
     .openapi(routes.userInfo, handlers.userInfo)
+    .openapi(routes.orcasId, handlers.orcasId)
     .openapi(routes.passwordChange, handlers.passwordChange)
     .openapi(routes.mobileSet, handlers.mobileSet)
     .openapi(routes.organizationsSearch, handlers.organizationsSearch)
