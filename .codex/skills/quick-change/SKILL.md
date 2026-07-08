@@ -7,7 +7,7 @@ description: Handle small, low-risk repository changes with a temporary branch w
 
 ## Overview
 
-Use this workflow for small non-OpenSpec changes that should still be isolated from the branch where the user raised the request: create a temporary branch, implement and validate the change, pause for user confirmation, then commit, merge into the target branch, and delete the temporary branch.
+Use this workflow for small non-OpenSpec changes that should still be isolated from the branch where the user raised the request: create a temporary branch, propose the exact implementation plan, wait for user confirmation before editing, implement and validate the change, pause for final confirmation, then commit, merge into the target branch, and delete the temporary branch.
 
 If the request grows into a feature, schema change, API contract change, risky refactor, or multi-step design discussion, stop using this skill and move to the repository's normal branch/OpenSpec workflow.
 
@@ -24,22 +24,29 @@ If the request grows into a feature, schema change, API contract change, risky r
    - Use a short-lived branch named `work/quick-<slug>`, where `<slug>` is a lowercase hyphenated summary of the request.
    - If the branch name already exists, append a short timestamp such as `work/quick-fix-title-0617-1430`.
 
-3. **Implement narrowly**
+3. **Ask for confirmation before implementation**
+   - Briefly state the target branch, temporary branch, files or areas expected to change, intended validation, and any assumptions.
+   - Ask explicitly whether to proceed with implementation.
+   - Do not edit files, run generators, install dependencies, or make other state-changing task actions until the user confirms.
+   - Non-mutating inspection is allowed before this gate when needed to produce a credible plan.
+   - If the user has already given explicit implementation approval for the exact scoped change in the same turn, record that approval in the update and proceed without asking again.
+
+4. **Implement narrowly**
    - Read nearby files first and follow existing repository conventions.
    - Keep edits limited to the requested behavior.
    - Do not create commits while implementing.
    - Preserve any unrelated user changes in the worktree.
 
-4. **Validate the change**
+5. **Validate the change**
    - Run the narrowest meaningful check for the touched area: focused test, typecheck, lint, build, schema check, or smoke check.
    - If no useful check is practical, inspect the diff carefully and state that validation was not run.
 
-5. **Ask for confirmation before committing**
+6. **Ask for confirmation before committing**
    - Show the current temporary branch, changed files, validation result, and a concise change summary.
    - Ask explicitly whether to commit, merge into the target branch, and delete the temporary branch.
    - Do not commit, merge, or delete the branch until the user confirms.
 
-6. **Finalize after confirmation**
+7. **Finalize after confirmation**
    - Re-run `git status --short --branch` and inspect `git diff`/`git diff --staged`.
    - Stage only files owned by this quick change.
    - Create one focused Conventional Commit with a Chinese message unless the user requested another language.
@@ -50,7 +57,21 @@ If the request grows into a feature, schema change, API contract change, risky r
 
 ## Confirmation Text
 
-Use a confirmation prompt like:
+Before implementation, use a confirmation prompt like:
+
+```text
+准备在 <branch> 做快速改动。
+
+预计变更：
+- <file-or-area>: <summary>
+
+验证计划：
+- <command-or-check>
+
+请确认是否开始实施。
+```
+
+Before commit and merge, use a confirmation prompt like:
 
 ```text
 已在 <branch> 完成快速改动。
@@ -71,5 +92,5 @@ If the user asks for revisions, keep working on the same temporary branch and re
 - Never use destructive Git commands such as `git reset --hard` or `git checkout -- <file>` unless the user explicitly requests them.
 - Never include unrelated dirty files in the quick-change commit.
 - Never commit directly on the target branch.
-- Never skip the confirmation gate, even when the original request sounds routine.
+- Never skip either confirmation gate, even when the original request sounds routine.
 - Prefer a normal implementation branch or OpenSpec change when the change is no longer obviously small.
