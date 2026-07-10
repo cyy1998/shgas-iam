@@ -1,7 +1,12 @@
 import type { AdminAuditContext } from "@admin-api/services/audit/audit.service";
 import type { PositionStatus } from "@iam/contracts";
 import type { AdminPositionServiceDeps, AdminPositionTransactionPorts } from "./position.port";
-import type { PositionCreateDto, PositionUpdateDto } from "./position.type";
+import type {
+  PositionCreateDto,
+  PositionFuzzyQueryDto,
+  PositionSearchResult,
+  PositionUpdateDto,
+} from "./position.type";
 import { adminAuditTransactionOptions } from "@admin-api/services/audit/audit.service";
 import { buildPositionAudit } from "@admin-api/services/audit/events/position.audit";
 import { UserProfileDirtyReason, UserProfileScopeType } from "@iam/contracts";
@@ -28,6 +33,10 @@ async function assertRenamedPositionCodeAvailable(
 }
 
 export function createPositionService(deps: AdminPositionServiceDeps) {
+  async function searchPositionsFuzzy(input: PositionFuzzyQueryDto): Promise<PositionSearchResult> {
+    return await deps.positionRepository.searchPositionsFuzzy(input);
+  }
+
   async function setPosition(positionCreateDto: PositionCreateDto, auditContext?: AdminAuditContext) {
     return await deps.uow.transaction(async (tx) => {
       const existingPos = await tx.positionRepository.getAnyPositionByCode(positionCreateDto.posCode);
@@ -115,6 +124,7 @@ export function createPositionService(deps: AdminPositionServiceDeps) {
   return {
     deletePosition,
     getPositionDetailByCode,
+    searchPositionsFuzzy,
     setPosition,
     updatePosition,
     updatePositionStatus,

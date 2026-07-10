@@ -1,9 +1,8 @@
 import type { ApiAuditLogWriter } from "@api/services/audit/audit.service";
 import type { CreateAppOptions } from "@iam/api-core/core/create-app";
-import type { ApiRepositories } from "../repositories";
 import type { ApiRuntimePorts } from "../runtime";
 import type { ApiServices } from "../services";
-import type { createApiUnitOfWork } from "../tx";
+import type { ApiUseCases } from "../use-cases";
 import { createAuthHandlers } from "@api/routes/auth/auth.handlers";
 import { createAuthRoute } from "@api/routes/auth/auth.index";
 import { createDelegationHandlers } from "@api/routes/internal/delegation/delegation.handlers";
@@ -18,20 +17,16 @@ import { createPublicHandlers } from "@api/routes/public/public.handlers";
 import { createPublicRoute } from "@api/routes/public/public.index";
 import { createSsoHandlers } from "@api/routes/sso/sso.handlers";
 import { createSsoRoute } from "@api/routes/sso/sso.index";
-import { mapUnitOfWork } from "@iam/api-core/uow";
-
-type ApiUnitOfWork = ReturnType<typeof createApiUnitOfWork>;
 
 export interface CreateApiRoutesOptions {
   auditLogWriter: ApiAuditLogWriter;
-  repositories: ApiRepositories;
   runtime: ApiRuntimePorts;
   services: ApiServices;
-  unitOfWork: ApiUnitOfWork;
+  useCases: ApiUseCases;
 }
 
 export async function createApiRoutes(options: CreateApiRoutesOptions): Promise<CreateAppOptions["routes"]> {
-  const { auditLogWriter, runtime, services, unitOfWork } = options;
+  const { auditLogWriter, runtime, services, useCases } = options;
 
   const authHandlers = createAuthHandlers({
     authService: services.auth,
@@ -85,20 +80,9 @@ export async function createApiRoutes(options: CreateApiRoutesOptions): Promise<
   });
 
   const userHandlers = createUserHandlers({
-    auditLogWriter,
-    config: {
-      nodeEnv: runtime.config.env.nodeEnv,
-    },
-    mobileService: services.mobile,
+    registerPurveyorContact: useCases.registerPurveyorContact,
     userService: services.user,
     userProfileQuery: services.userProfileQuery,
-    uow: mapUnitOfWork(unitOfWork, tx => ({
-      employmentRepository: tx.repositories.employment,
-      organizationRepository: tx.repositories.organization,
-      positionRepository: tx.repositories.position,
-      userRepository: tx.repositories.user,
-      profileDirtyMarker: tx.profileDirtyMarker,
-    })),
   });
 
   return {

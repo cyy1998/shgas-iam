@@ -12,6 +12,7 @@ import { createApiRoutes } from "./routes";
 import { createApiRuntime } from "./runtime";
 import { createApiServices } from "./services";
 import { createApiUnitOfWork } from "./tx";
+import { createApiUseCases } from "./use-cases";
 
 export interface ApiComposition {
   env: typeof env;
@@ -23,6 +24,7 @@ export interface ApiComposition {
   userProfileJobProducer: ReturnType<typeof createUserProfileJobProducer>;
   unitOfWork: ReturnType<typeof createApiUnitOfWork>;
   services: ReturnType<typeof createApiServices>;
+  useCases: ReturnType<typeof createApiUseCases>;
   routes: CreateAppOptions["routes"];
   middlewares: CreateAppOptions["middlewares"];
 }
@@ -54,6 +56,12 @@ export async function createApiComposition(options: CreateApiCompositionOptions 
     auditLogWriter,
     unitOfWork,
   });
+  const useCases = createApiUseCases({
+    auditLogWriter,
+    runtime,
+    services,
+    unitOfWork,
+  });
 
   return {
     env: compositionEnv,
@@ -65,7 +73,8 @@ export async function createApiComposition(options: CreateApiCompositionOptions 
     userProfileJobProducer,
     unitOfWork,
     services,
-    routes: await createApiRoutes({ auditLogWriter, repositories, runtime, services, unitOfWork }),
+    useCases,
+    routes: await createApiRoutes({ auditLogWriter, runtime, services, useCases }),
     middlewares: await createApiMiddlewares({ runtime, services }),
   };
 }

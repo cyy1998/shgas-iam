@@ -92,6 +92,20 @@ function isAppAssembly(file: string) {
   return file === "app.ts";
 }
 
+function isRouteProductionModule(file: string) {
+  return file.startsWith("routes/");
+}
+
+function isAppLocalRepositoryImport(moduleSpecifier: string) {
+  return /^@admin-api\/.+\.repository$/u.test(moduleSpecifier)
+    || (moduleSpecifier.startsWith(".") && moduleSpecifier.endsWith(".repository"));
+}
+
+function isAppLocalUseCaseImport(moduleSpecifier: string) {
+  return /^@admin-api\/use-cases(?:\/|$)/u.test(moduleSpecifier)
+    || (moduleSpecifier.startsWith(".") && moduleSpecifier.split("/").includes("use-cases"));
+}
+
 function isApprovedAuditHelperImport(moduleSpecifier: string) {
   // Audit helper functions in this module build actor/request context and do not expose production singletons.
   return moduleSpecifier === "@admin-api/services/audit/audit.service";
@@ -111,6 +125,26 @@ function forbiddenSessionRevocationBypass(moduleSpecifier: string) {
 }
 
 describe("Admin API DI architecture", () => {
+  test("keeps route production modules off app-local repositories and UnitOfWork", () => {
+    const violations = collectImports()
+      .filter(({ file }) => isRouteProductionModule(file))
+      .filter(({ moduleSpecifier }) =>
+        isAppLocalRepositoryImport(moduleSpecifier)
+        || moduleSpecifier === "@iam/api-core/uow")
+      .map(({ file, moduleSpecifier }) => `${file} imports ${moduleSpecifier}`);
+
+    expect(violations).toEqual([]);
+  });
+
+  test("keeps domain-aligned services from importing application use-cases", () => {
+    const violations = collectImports()
+      .filter(({ file }) => file.startsWith("services/"))
+      .filter(({ moduleSpecifier }) => isAppLocalUseCaseImport(moduleSpecifier))
+      .map(({ file, moduleSpecifier }) => `${file} imports ${moduleSpecifier}`);
+
+    expect(violations).toEqual([]);
+  });
+
   test("keeps production service, repository, db, redis, and logger value imports behind composition", () => {
     const violations = collectImports()
       .filter(item => item.hasValueImport)

@@ -66,7 +66,7 @@ export async function createAdminApiComposition(
     userProfileJobProducer,
     unitOfWork,
     services,
-    routes: await createAdminApiRoutes({ auditService, repositories, runtime, services }),
+    routes: await createAdminApiRoutes({ auditService, runtime, services }),
     middlewares: await createAdminApiMiddlewares({ runtime, services, sessionKernel: session.kernel }),
   };
 }

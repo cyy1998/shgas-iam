@@ -20,6 +20,6 @@ export interface AdminPositionTransactionPorts {
 export type AdminPositionUnitOfWorkPort = UnitOfWorkPort<AdminPositionTransactionPorts>;
 
 export interface AdminPositionServiceDeps {
-  positionRepository: Pick<PositionRepository, "getPositionByCode">;
+  positionRepository: Pick<PositionRepository, "getPositionByCode" | "searchPositionsFuzzy">;
   uow: AdminPositionUnitOfWorkPort;
 }

@@ -1,44 +1,18 @@
-import type { AuditLogWriterPort } from "@api/services/audit/audit.service";
-import type { EmploymentRepository } from "@api/services/employment/employment.repository";
-import type { MobileService } from "@api/services/mobile/mobile.service";
-import type { OrganizationRepository } from "@api/services/organization/organization.repository";
-import type { PositionRepository } from "@api/services/position/position.repository";
-import type { UserRepository } from "@api/services/user/user.repository";
 import type { UserService } from "@api/services/user/user.service";
-import type { UnitOfWorkPort } from "@iam/api-core/uow";
-import type { UserProfileDirtyMarker } from "@iam/user-profile-read-model/producer";
+import type { RegisterPurveyorContactUseCase } from "@api/use-cases/internal/register-purveyor-contact/register-purveyor-contact.use-case";
 import type { UserProfileQueryService } from "@iam/user-profile-read-model/query";
 import type { UserRouteHandler } from "./user.type";
-import { getInternalAuditActor } from "@api/services/audit/audit.service";
-import { buildInternalPurveyorContactRegisterAudit } from "@api/services/audit/events/internal.audit";
+import { getApiAuditRequestContext, getInternalAuditActor } from "@api/services/audit/audit.service";
 import * as HttpStatusCodes from "@iam/api-core/core/http-status-codes";
-import { CustomError } from "@iam/api-core/errors/CustomError";
 import * as resp from "@iam/api-core/http";
-import { UserProfileDirtyReason, UserType } from "@iam/contracts";
-import { OrganizationNotFoundError } from "@iam/domain/organization";
-
-export interface ContactRegistrationTransactionPorts {
-  employmentRepository: Pick<EmploymentRepository, "getEmploymentByUserOrgPosId" | "setEmployment">;
-  organizationRepository: Pick<OrganizationRepository, "getOrganizationByCode">;
-  positionRepository: Pick<PositionRepository, "getPositionByCode">;
-  userRepository: Pick<UserRepository, "getUserByMobile" | "setUser">;
-  profileDirtyMarker: Pick<UserProfileDirtyMarker, "markUsersDirty">;
-}
-
-export type ContactRegistrationUnitOfWorkPort = UnitOfWorkPort<ContactRegistrationTransactionPorts>;
 
 export interface CreateUserHandlersDeps {
-  auditLogWriter: AuditLogWriterPort;
-  config: {
-    nodeEnv: string;
-  };
-  mobileService: Pick<MobileService, "getPurveyorWelcomeMessage" | "sendMessage">;
+  registerPurveyorContact: Pick<RegisterPurveyorContactUseCase, "execute">;
   userService: Pick<
     UserService,
     "getUserDetailByUsername" | "searchUsers" | "searchUsersWithPrivilegeDelegation"
   >;
   userProfileQuery: Pick<UserProfileQueryService, "searchDsl">;
-  uow: ContactRegistrationUnitOfWorkPort;
 }
 
 export function createUserHandlers(deps: CreateUserHandlersDeps) {
@@ -67,66 +41,12 @@ export function createUserHandlers(deps: CreateUserHandlersDeps) {
   };
 
   const contactRegister: UserRouteHandler<"contactRegister"> = async (c) => {
-    const { username, mobile, name, orgCode } = c.req.valid("json");
-    const registration = await deps.uow.transaction(async (tx) => {
-      const existingUser = await tx.userRepository.getUserByMobile(mobile);
-      const [pos, org] = await Promise.all([
-        tx.positionRepository.getPositionByCode("P001"),
-        tx.organizationRepository.getOrganizationByCode(orgCode),
-      ]);
-      if (org === null) {
-        throw new OrganizationNotFoundError("供应商尚未注册");
-      }
-      if (pos === null) {
-        throw new CustomError("系统基本信息缺失");
-      }
-      if (existingUser !== null) {
-        const existingEmployment = await tx.employmentRepository.getEmploymentByUserOrgPosId(
-          existingUser.id,
-          org.id,
-          pos.id,
-        );
-        if (existingEmployment === null) {
-          await tx.employmentRepository.setEmployment(existingUser.id, pos.id, org.id);
-          await tx.profileDirtyMarker.markUsersDirty({
-            userIds: [existingUser.id],
-            reasonCodes: [UserProfileDirtyReason.EmploymentUpdated],
-            afterCommit: tx.afterCommit,
-          });
-        }
-        return { targetUserId: existingUser.id, existingContact: true };
-      }
-
-      const user = await tx.userRepository.setUser({
-        username,
-        name,
-        mobile,
-        userType: UserType.External,
-        password: null,
-      });
-      await tx.employmentRepository.setEmployment(user.id, pos.id, org.id);
-      await tx.profileDirtyMarker.markUsersDirty({
-        userIds: [user.id],
-        reasonCodes: [UserProfileDirtyReason.UserUpdated, UserProfileDirtyReason.EmploymentUpdated],
-        afterCommit: tx.afterCommit,
-      });
-      return { targetUserId: user.id, existingContact: false };
+    const input = c.req.valid("json");
+    const result = await deps.registerPurveyorContact.execute(input, {
+      actor: getInternalAuditActor(c),
+      requestContext: getApiAuditRequestContext(c),
     });
-    await deps.auditLogWriter.recordAuditLogFromContext(
-      c,
-      buildInternalPurveyorContactRegisterAudit(getInternalAuditActor(c), {
-        targetUserId: registration.targetUserId,
-        username,
-        name,
-        mobile,
-        orgCode,
-        existingContact: registration.existingContact,
-      }),
-    );
-    if (deps.config.nodeEnv === "production") {
-      await deps.mobileService.sendMessage(mobile, deps.mobileService.getPurveyorWelcomeMessage(name));
-    }
-    return c.json(resp.ok(true), HttpStatusCodes.OK);
+    return c.json(resp.ok(result), HttpStatusCodes.OK);
   };
 
   return {

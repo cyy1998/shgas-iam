@@ -1,4 +1,3 @@
-import type { PositionRepository } from "@admin-api/services/position/position.repository";
 import type { PositionService } from "@admin-api/services/position/position.service";
 import type { PositionRouteHandler } from "./position.type";
 import { defineAdminApiMutationOperation, defineAdminApiQueryOperation } from "@admin-api/lib/admin-api-adapter";
@@ -15,10 +14,14 @@ import { z } from "zod";
 import { toPositionVo } from "./position.schema";
 
 export interface CreatePositionAdapterDeps {
-  positionRepository: Pick<PositionRepository, "searchPositionsFuzzy">;
   positionService: Pick<
     PositionService,
-    "deletePosition" | "getPositionDetailByCode" | "setPosition" | "updatePosition" | "updatePositionStatus"
+    | "deletePosition"
+    | "getPositionDetailByCode"
+    | "searchPositionsFuzzy"
+    | "setPosition"
+    | "updatePosition"
+    | "updatePositionStatus"
   >;
 }
 
@@ -27,7 +30,7 @@ export function createPositionAdapter(deps: CreatePositionAdapterDeps) {
     input: PositionPaginationQueryDtoSchema,
     restInput: c => c.req.valid("json") as z.infer<typeof PositionPaginationQueryDtoSchema>,
     handler: async (input) => {
-      const positions = await deps.positionRepository.searchPositionsFuzzy(input);
+      const positions = await deps.positionService.searchPositionsFuzzy(input);
       const vos = positions.map(p => toPositionVo(p));
       return paginate(vos, input);
     },
