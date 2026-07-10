@@ -5,7 +5,7 @@
 
 ## Requirements
 ### Requirement: Release 手册必须使用中文并被索引
-所有 `docs/releases/` 下的发布手册和 release 记录必须面向中文运维/研发读者维护，并进入文档索引。
+所有 `docs/releases/` 下的发布手册和 release 记录 SHALL 面向中文运维/研发读者维护，并进入文档索引。
 
 #### Scenario: Release 手册正文使用简体中文
 - **WHEN** 新增或更新 `docs/releases/*.md`
@@ -24,7 +24,7 @@
 - **AND** 历史记录类文档 MAY 将 `Next review` 设置为 `n/a`，但 MUST 明确其不是当前发布流程
 
 ### Requirement: 可复用 release runbook 必须覆盖发布闭环
-当前有效的 release runbook 必须提供足够步骤，使发布、验证、回滚和证据留存可以重复执行。
+当前有效的 release runbook SHALL 提供足够步骤，使发布、验证、回滚和证据留存可以重复执行。
 
 #### Scenario: Runbook 声明发布前置条件和顺序
 - **WHEN** runbook 面向当前或未来发布
@@ -42,7 +42,7 @@
 - **AND** it MUST list data, queues, cache keys, keys/secrets, gateway config, or legacy objects that need cleanup or preservation
 
 ### Requirement: Historical release record 必须区别于当前流程
-历史 release 记录必须保留上下文，但不得让读者误以为其仍是当前发布步骤。
+历史 release 记录 SHALL 保留上下文，但 MUST NOT 让读者误以为其仍是当前发布步骤。
 
 #### Scenario: 历史记录不再作为当前 runbook
 - **WHEN** a release document records an already-completed release
@@ -55,7 +55,7 @@
 - **AND** it MUST include reusable Session Kernel smoke coverage for health, login, logout, refresh, revoke, Redis TTL/session keys, audit logs, and rollback checks
 
 ### Requirement: 现有 release 手册必须按能力风险补强
-既有 release 手册必须覆盖各自能力的关键发布风险、冒烟、回滚和证据。
+既有 release 手册 SHALL 覆盖各自能力的关键发布风险、冒烟、回滚和证据。
 
 #### Scenario: User Profile Dirty Queue runbook 覆盖版本化 dirty 队列
 - **WHEN** `docs/releases/user-profile-dirty-queue-release.md` is maintained
@@ -74,7 +74,7 @@
 - **THEN** it MUST include JWK rotation windows, Session Kernel HMAC lookup rotation, per-client enablement matrix, discovery/JWKS/token/UserInfo smoke checks, and evidence templates for client authorization
 
 ### Requirement: 缺失的高风险 release 手册必须新增
-缺少可复用 runbook 的高风险发布面必须补齐独立 release 手册。
+缺少可复用 runbook 的高风险发布面 SHALL 补齐独立 release 手册。
 
 #### Scenario: Role assignment and role management runbook exists
 - **WHEN** role assignment or role management changes are released
@@ -89,7 +89,7 @@
 - **THEN** `docs/releases/audit-login-log-retirement-release.md` MUST cover dependency inventory, retention/export checks, migration or compatibility order, API/admin smoke, rollback/recovery, and evidence proving legacy reads are no longer required
 
 ### Requirement: Release 文档变更必须通过文档检查
-Release 手册治理变更必须在归档前通过仓库文档守卫和基础链接/命令检查。
+Release 手册治理变更 SHALL 在归档前通过仓库文档守卫和基础链接/命令检查。
 
 #### Scenario: 文档索引守卫通过
 - **WHEN** release 文档或 `docs/index.md` 发生变更

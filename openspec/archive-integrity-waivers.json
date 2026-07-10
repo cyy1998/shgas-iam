@@ -1,0 +1,10 @@
+{
+  "waivers": [
+    {
+      "archive": "2026-05-27-normalize-employment-organization-context",
+      "ruleId": "tasks-complete",
+      "reason": "该 archive 建立于现行归档完整性门禁之前，两个依赖真实环境的 smoke task 当时没有执行证据，因此保留原始未勾选状态。",
+      "residualRisk": "Admin Employment 与 public/internal 流程的两项历史环境 smoke 仍未补跑；本 waiver 只承认历史记录，不证明这些 smoke 已通过。"
+    }
+  ]
+}

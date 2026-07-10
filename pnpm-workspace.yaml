@@ -5,6 +5,7 @@ packages:
 overrides:
   typescript: 6.0.3
 allowBuilds:
+  '@fission-ai/openspec': false
   bcrypt: true
   core-js: false
   core-js-pure: false
@@ -13,6 +14,7 @@ allowBuilds:
   msgpackr-extract: true
   msw: false
   nice-napi: true
+  simple-git-hooks: false
 peerDependencyRules:
   allowedVersions:
     dva-core: '2'

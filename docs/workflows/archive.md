@@ -21,10 +21,12 @@ Quick Change 的提交、合并和本地分支清理由 `$quick-change` 的 fina
 
 ## OpenSpec Archive
 
-OpenSpec Archive 只在 Verify 阶段已确认进入 Archive 后执行；归档时先同步 delta specs 并移动 change 到 `openspec/changes/archive/`。若确需跳过 spec 同步但未在进入 Archive 前确认，暂停并报告。
+OpenSpec Archive 只在 Verify 阶段已确认进入 Archive 后执行；归档时先同步 delta specs 并移动 change 到 `openspec/changes/archive/`。同步后必须运行 `pnpm check:openspec`，确认全部主规格、active changes 和 archive integrity 仍通过。若确需跳过 spec 同步但未在进入 Archive 前确认，暂停并报告。
+
+Archive 中的未完成 task 默认硬阻塞。只有现行门禁建立前已经存在、预先记录在 `openspec/archive-integrity-waivers.json` 且以 archive + `tasks-complete` rule ID 精确匹配的历史例外，才能由 guard 识别；waiver 必须记录原因和残余风险，并保留原 task 的未勾选事实。Archive 阶段不得为当前 change 新增 waiver 来绕过 incomplete task，也不得把未执行的 task 改写为已完成。
 
 OpenSpec 归档提交成功后，切回干净目标分支 squash merge 并创建最终提交；工作分支只在目标分支最终提交成功后删除。
 
 ## 阻塞条件
 
-任务或 artifacts 未完成、TDD 例外未记录、验证失败、存在不可分离的无关 dirty changes、目标分支无法干净接收时，不要归档或合并，保留工作分支并报告阻塞。
+任务或 artifacts 未完成、当前 change 含未完成 task、TDD 例外未记录、`pnpm check:openspec` 或其他必要验证失败、存在不可分离的无关 dirty changes、目标分支无法干净接收时，不要归档或合并，保留工作分支并报告阻塞。

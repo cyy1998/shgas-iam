@@ -25,7 +25,9 @@
 6. Inspect：查看失败输出、日志、生成 diff 和关键断言；确认失败是本次改动导致、已有问题，还是环境问题。
 7. Record：最终说明记录命令、结果、跳过项和残余风险；发布或运维类验证应把可复用证据沉淀到对应 runbook 或 release record。
 
-OpenSpec 归档前必须确认 OpenSpec artifacts、tasks 和实现一致，并进入本阶段验证流程。新发现推翻假设或扩大范围时，先更新计划、artifacts 或记录偏离原因，再继续实现。
+OpenSpec 归档前必须确认 OpenSpec artifacts、tasks 和实现一致，并进入本阶段验证流程。必须运行 `pnpm check:openspec`，统一覆盖全部主规格、active changes 和 archive integrity；针对单个 change 的 CLI validation 只用于聚焦诊断，不能替代聚合检查。新发现推翻假设或扩大范围时，先更新计划、artifacts 或记录偏离原因，再继续实现。
+
+Pre-commit 的 staged OpenSpec guard 只提供本地快速反馈，可以被 `git commit --no-verify` 绕过，也不会替代本阶段的最终 `pnpm check:openspec`。CI 尚未接入时，最终说明必须保留这一剩余风险；后续远端门禁应复用同一聚合命令。
 
 ## 测试覆盖复核
 
@@ -55,7 +57,7 @@ OpenSpec 归档前必须确认 OpenSpec artifacts、tasks 和实现一致，并�
 - tRPC contract consumed by admin：运行 `pnpm --filter @iam/admin-api typecheck` 和 `pnpm --filter @iam/admin typecheck`。
 - auth、permission、session、audit、tenant 边界：运行受影响 backend test/typecheck；补失败路径、权限拒绝、审计事件和 smoke。
 - APISIX gateway manifest/script：运行 `pnpm gateway:apisix:validate -- --env <env>:<app>`；脚本改动再跑 `pnpm --filter @iam/gateway-apisix typecheck` 或 `pnpm --filter @iam/gateway-apisix test`。
-- OpenSpec artifacts：运行 `openspec validate <change-name> --strict` 或对应仓库脚本；归档前补实现侧验证。
+- OpenSpec artifacts、guard 或 archive：运行 `pnpm check:openspec`；聚焦定位时可以补 `pnpm exec openspec validate <change-name> --type change --strict`，但归档前仍必须运行聚合命令和实现侧验证。
 - repo scripts：运行脚本自身 dry run 或聚焦命令；TypeScript 脚本补 `typecheck` 或直接运行目标命令。
 
 ## Smoke 和运行信号

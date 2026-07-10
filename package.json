@@ -2,6 +2,9 @@
   "name": "iam-monorepo",
   "packageManager": "pnpm@11.5.0",
   "private": true,
+  "engines": {
+    "node": "24.x"
+  },
   "scripts": {
     "dev": "turbo dev",
     "build": "turbo build",
@@ -12,14 +15,26 @@
     "e2e:install": "pnpm --filter @iam/admin exec playwright install --with-deps chromium",
     "e2e:install:browsers": "pnpm --filter @iam/admin exec playwright install chromium",
     "typecheck": "turbo typecheck",
+    "check:openspec": "bun scripts/check-openspec.ts",
+    "check:openspec:archives": "bun scripts/check-openspec-archive-integrity.ts",
     "check:docs": "bun scripts/check-docs-index.ts",
     "check:env-names": "bun scripts/check-env-names.ts",
+    "hooks:install": "node scripts/install-git-hooks.mjs",
+    "precommit": "nano-staged --config nano-staged.mjs",
+    "prepare": "node scripts/install-git-hooks.mjs",
     "gateway:apisix": "pnpm --filter @iam/gateway-apisix apisix",
     "gateway:apisix:validate": "pnpm --filter @iam/gateway-apisix validate",
     "gateway:apisix:diff": "pnpm --filter @iam/gateway-apisix diff",
     "gateway:apisix:apply": "pnpm --filter @iam/gateway-apisix apply"
   },
   "devDependencies": {
+    "@fission-ai/openspec": "1.4.1",
+    "nano-staged": "1.0.2",
+    "simple-git-hooks": "2.13.1",
     "turbo": "^2.9.16"
+  },
+  "simple-git-hooks": {
+    "pre-commit": "pnpm precommit",
+    "preserveUnused": true
   }
 }

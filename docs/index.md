@@ -29,7 +29,7 @@
 | [docs/architecture/repository-map.md](architecture/repository-map.md) | architecture | Current | 2026-07-05 | 2026-10-31 | monorepo apps/packages/gateway 地图，以及 generated/build/vendored path 编辑边界。 |
 | [docs/development/backend-implementation.md](development/backend-implementation.md) | development | Current | 2026-07-05 | 2026-10-31 | backend response envelope、OpenAPI status、logger、audit event 和 architecture guard 实现惯例。 |
 | [docs/development/coding-style.md](development/coding-style.md) | development | Current | 2026-07-05 | 2026-10-31 | TypeScript、formatter 边界、文件命名、React 命名和 import alias 风格约定。 |
-| [docs/development/commands.md](development/commands.md) | development | Current | 2026-07-05 | 2026-10-31 | workspace、backend、shared package、database、frontend 和 gateway 常用命令入口。 |
+| [docs/development/commands.md](development/commands.md) | development | Current | 2026-07-10 | 2026-10-31 | workspace、OpenSpec guard、pre-commit hook、backend、shared package、database、frontend 和 gateway 常用命令入口。 |
 | [docs/features/audit/audit-logging.md](features/audit/audit-logging.md) | feature | Current | 2026-06-28 | 2026-09-30 | 统一审计日志能力说明；当前行为以 `openspec/specs/audit-logging/spec.md` 为准。 |
 | [docs/features/oidc/oidc-integration.md](features/oidc/oidc-integration.md) | feature | Current | 2026-06-28 | 2026-09-30 | 内部 OIDC client 接入指南；与 OIDC specs 和 release runbook 共同使用。 |
 | [docs/features/oidc/oidc-session-migration.md](features/oidc/oidc-session-migration.md) | feature | Current | 2026-06-28 | 2026-09-30 | Session Kernel 会话迁移、旧 key cleanup 和回滚边界。 |
@@ -44,13 +44,13 @@
 | [docs/releases/sm-encrypted-password-login-release.md](releases/sm-encrypted-password-login-release.md) | runbook | Current | 2026-07-03 | 2026-10-31 | SM2/SM4 加密密码登录、API/SSO 同步发布、Cap 重试、错误码和 rollback matrix。 |
 | [docs/releases/user-profile-dirty-queue-release.md](releases/user-profile-dirty-queue-release.md) | runbook | Current | 2026-07-03 | 2026-10-31 | versioned user-profile dirty/rebuild 队列、worker health、Bull Board、repair/backfill 和回滚手册。 |
 | [docs/reviews/SOFTWARE_ENGINEERING_PRINCIPLES_REVIEW_2026-07-03.md](reviews/SOFTWARE_ENGINEERING_PRINCIPLES_REVIEW_2026-07-03.md) | review | Historical | 2026-07-03 | n/a | 2026-07-03 的软件工程原则审查快照；用于追溯风险，不替代当前代码检查。 |
-| [docs/workflows/archive.md](workflows/archive.md) | workflow | Current | 2026-07-03 | 2026-10-31 | 提交、合并、OpenSpec archive、分支清理和阻塞条件。 |
+| [docs/workflows/archive.md](workflows/archive.md) | workflow | Current | 2026-07-10 | 2026-10-31 | 提交、合并、OpenSpec archive integrity、分支清理和阻塞条件。 |
 | [docs/workflows/clarify.md](workflows/clarify.md) | workflow | Current | 2026-07-03 | 2026-10-31 | 需求边界、领域术语、关键取舍和正确性标准澄清方法。 |
 | [docs/workflows/explore.md](workflows/explore.md) | workflow | Current | 2026-07-03 | 2026-10-31 | 问题空间、候选方案、未知项和影响面探索方法。 |
 | [docs/workflows/implement.md](workflows/implement.md) | workflow | Current | 2026-07-03 | 2026-10-31 | 实现、分支策略、TDD、范围漂移和委派规则。 |
 | [docs/workflows/index.md](workflows/index.md) | workflow | Current | 2026-07-03 | 2026-10-31 | workflow 子目录索引、需求分流、计划入口和生命周期状态规则。 |
 | [docs/workflows/plan.md](workflows/plan.md) | workflow | Current | 2026-07-03 | 2026-10-31 | Quick Change、OpenSpec change 和大型 OpenSpec umbrella change 产物边界。 |
-| [docs/workflows/verify.md](workflows/verify.md) | workflow | Current | 2026-07-03 | 2026-10-31 | 验证门禁、测试覆盖复核、验证矩阵、Smoke 入口、失败处理和结果记录要求。 |
+| [docs/workflows/verify.md](workflows/verify.md) | workflow | Current | 2026-07-10 | 2026-10-31 | 验证门禁、OpenSpec 聚合检查、测试覆盖复核、验证矩阵、Smoke 入口、失败处理和结果记录要求。 |
 
 ## 维护方式
 
