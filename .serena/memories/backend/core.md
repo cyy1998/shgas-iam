@@ -7,13 +7,19 @@
 - `apps/worker` is `@iam/worker`, a Bun background job runtime; composition lives under `src/composition`, module selection under `src/modules`, health/Bull Board HTTP support under `src/http`, and command-only backfill/repair entrypoints under `src/commands`.
 - API tiers are declared in `apps/api/app.config.ts` and `apps/admin-api/app.config.ts`.
 - `createApp` lives in `packages/api-core` and mounts materialized route/middleware records supplied by app composition roots; keep it app-agnostic and free of app-specific DI wiring.
-- API app `src/app.ts` files should stay focused on app assembly: env, app config, logger, composition root, and `createApp` inputs.
-- App-local composition creates production runtime, repository, tx, service, route, middleware, integration, session, and worker instances under `src/composition/`.
+- API app `src/app.ts` files stay focused on env, app config, logger, composition root, and `createApp` inputs.
+- Production runtime, repository, tx, service, use-case, route, middleware, integration, session, and worker instances are created under app-local `src/composition/`.
+- Composition creates application use-cases under `composition/use-cases/` and passes them to route composition through a distinct `useCases` field; do not merge them into `services`.
+- Application Use Cases express caller-goal, cross-domain workflows and may coordinate cross-repository transactions plus result-driven side effects. Place them under `src/use-cases/<scope>/<verb-noun>/` as `*.use-case.ts`, `*.port.ts`, and `*.type.ts`; expose protocol-agnostic methods such as `execute(input, options)`.
+- Domain-aligned Application Services are app-local command/query facades under `src/services/<domain>/<domain>.service.ts`. Existing `UserService`/`RoleService` are application facades, not pure DDD Domain Services.
+- Pure domain rules that need no persistence, transaction, audit, network, Hono, or composition belong under `packages/domain/src/<domain>/`; prefer role-specific names such as `*Policy`, `*Rules`, or `*Specification`.
+- Allowed dependency direction: composition -> routes -> use-cases -> services/consumer-owned ports; routes may also call services; use-cases/services may call pure domain logic. Routes must not import app-local repositories or `@iam/api-core/uow`; services must not import `use-cases/**`; `packages/domain` must not import app-local layers.
 - Backend replaceable modules export factories and return types, e.g. `createUserService(deps)` and `type UserService = ReturnType<typeof createUserService>`; do not reintroduce bound production service/repository singletons.
 - App-local infrastructure singletons belong under `src/lib/`, e.g. logger aliases and `src/lib/infra/redis.ts`.
 - Consumer-owned `*.port.ts` files define outbound behavior consumed by services/use-cases; keep enums, DTO schemas, domain errors, constants, and pure helpers as static imports.
 - Tier-level `_middleware.ts` files stay thin; shared auth handlers live in app-level `src/middlewares/*.handler.ts` files and are materialized by composition.
 - REST route modules use `*.routes.ts`, `*.handlers.ts`, and `*.type.ts`; route `*.index.ts` files expose router factories that receive materialized handlers/adapters.
 - Admin REST + tRPC route modules share `*.adapter.ts` operation factories and expose thin `*.trpc.ts` modules.
+- Route production modules only parse protocol/context, invoke use-case/service facades, map VOs, and adapt responses; they do not orchestrate transaction-result-dependent business side effects.
 - Bun API/worker app `tsconfig.json` files include Bun runtime types; backend ESLint configs ignore generated/unsupported script surfaces as configured locally.
-- Architecture guard tests in `apps/api/src/__tests__/architecture.test.ts` and `apps/admin-api/src/__tests__/architecture.test.ts` intentionally fail on forbidden production imports.
+- Architecture guards in `apps/api/src/__tests__/architecture.test.ts` and `apps/admin-api/src/__tests__/architecture.test.ts` enforce production import boundaries for both value and type-only imports.

@@ -4,6 +4,8 @@
 - Backend/shared/gateway packages use Antfu ESLint; configured style is double quotes, semicolons, about 120-char soft line length.
 - Admin/SSO frontends use Prettier: single quotes, trailing commas, 80-char wrap, organize-import/packagejson plugins.
 - Preserve domain file naming patterns: `*.service.ts`, `*.repository.ts`, `*.schema.ts`, `*.routes.ts`, `*.handlers.ts`, `*.adapter.ts`, `*.trpc.ts`, `*.type.ts`.
+- Caller-goal application workflows use `<verb-noun>.use-case.ts` with colocated `<verb-noun>.port.ts` and `<verb-noun>.type.ts`; factories/types use `create<VerbNoun>UseCase`/`<VerbNoun>UseCase`.
+- Pure domain rule names should describe their role (`*Policy`, `*Rules`, `*Specification`) instead of using ambiguous `*DomainService`.
 - Backend route handlers return shared envelopes from `@iam/api-core/http`, e.g. `c.json(resp.ok(data))`; prefer domain/API errors when middleware maps them.
 - OpenAPI route definitions and explicit non-200 responses use `@iam/api-core/core/http-status-codes` constants rather than numeric literals.
 - Runtime diagnostics use app loggers (`@api/lib/logger`, `@admin-api/lib/logger`, OIDC provider logger, `@worker/lib/logger`) with structured Pino calls: data object first, message second.
