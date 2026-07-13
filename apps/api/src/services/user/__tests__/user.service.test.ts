@@ -5,7 +5,6 @@ import { describe, expect, mock, test } from "bun:test";
 import { createUserService } from "../user.service";
 
 function createDeps(overrides: Record<string, unknown> = {}) {
-  const resetPasswordReservation = { usage: "resetPassword", phone: "13800000000", token: "reset-token" };
   const bindPhoneReservation = { usage: "bindPhone", phone: "13900000000", token: "bind-token" };
   const user = {
     id: 1,
@@ -34,13 +33,11 @@ function createDeps(overrides: Record<string, unknown> = {}) {
     },
   };
   return {
-    auditLogWriter: { recordAuditLog: mock(async () => undefined) },
     mobileBinding: { assertCanBindMobile: mock(async () => bindPhoneReservation) },
     mobileService: {
       checkExistingPhoneNumber: mock(async () => false),
       checkValidPhoneNumber: mock(() => true),
       consumeVerificationCode: mock(async () => true),
-      reserveVerificationCode: mock(async () => resetPasswordReservation),
       confirmReservedVerificationCode: mock(async () => true),
       releaseReservedVerificationCode: mock(async () => undefined),
     },
@@ -66,7 +63,6 @@ function createDeps(overrides: Record<string, unknown> = {}) {
       getUserByWxId: mock(async () => user),
     },
     bindPhoneReservation,
-    resetPasswordReservation,
     ...overrides,
   } as any;
 }
@@ -105,37 +101,6 @@ describe("createUserService", () => {
       .rejects
       .toBeInstanceOf(UserPasswordUnchangedError);
     expect(deps.tx.userRepository.setPassword).not.toHaveBeenCalled();
-  });
-
-  test("rejects reset password when mobile does not match", async () => {
-    const service = createUserService(createDeps());
-
-    await expect(service.resetPassword("zhangsan", "13900000000", "1234", "newPass123"))
-      .rejects
-      .toThrow("用户名与手机号不匹配");
-  });
-
-  test("resets password without marking profile dirty", async () => {
-    const deps = createDeps();
-    const service = createUserService(deps);
-
-    await expect(service.resetPassword("zhangsan", "13800000000", "1234", "newPass123")).resolves.toBe(true);
-
-    expect(deps.tx.userRepository.setPassword).toHaveBeenCalledWith(1, "hashed:newPass123");
-    expect(deps.mobileService.confirmReservedVerificationCode).toHaveBeenCalledWith(deps.resetPasswordReservation);
-    expect(deps.mobileService.releaseReservedVerificationCode).not.toHaveBeenCalled();
-    expect(deps.tx.profileDirtyMarker.markUsersDirty).not.toHaveBeenCalled();
-  });
-
-  test("releases reset password verification reservation when transaction fails", async () => {
-    const deps = createDeps();
-    const service = createUserService(deps);
-    deps.tx.userRepository.setPassword.mockRejectedValue(new Error("db failed"));
-
-    await expect(service.resetPassword("zhangsan", "13800000000", "1234", "newPass123")).rejects.toThrow("db failed");
-
-    expect(deps.mobileService.confirmReservedVerificationCode).not.toHaveBeenCalled();
-    expect(deps.mobileService.releaseReservedVerificationCode).toHaveBeenCalledWith(deps.resetPasswordReservation);
   });
 
   test("sets mobile without reading profile detail after mutation", async () => {

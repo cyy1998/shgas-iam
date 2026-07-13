@@ -1,17 +1,40 @@
 import type { AuditLogWriterPort } from "@api/services/audit/audit.service";
-import type { EmploymentRepository } from "@api/services/employment/employment.repository";
-import type { MobileService } from "@api/services/mobile/mobile.service";
-import type { OrganizationRepository } from "@api/services/organization/organization.repository";
-import type { PositionRepository } from "@api/services/position/position.repository";
-import type { UserRepository } from "@api/services/user/user.repository";
 import type { UnitOfWorkPort } from "@iam/api-core/uow";
+import type { UserCreateDto } from "@iam/domain/user";
 import type { UserProfileDirtyMarker } from "@iam/user-profile-read-model/producer";
 
+export interface RegisterPurveyorEmploymentStorePort {
+  getEmploymentByUserOrgPosId: (
+    userId: number,
+    orgId: number,
+    posId: number,
+  ) => Promise<unknown | null>;
+  setEmployment: (userId: number, posId: number, orgId: number) => Promise<unknown>;
+}
+
+export interface RegisterPurveyorOrganizationReaderPort {
+  getOrganizationByCode: (orgCode: string) => Promise<{ id: number } | null>;
+}
+
+export interface RegisterPurveyorPositionReaderPort {
+  getPositionByCode: (posCode: string) => Promise<{ id: number } | null>;
+}
+
+export interface RegisterPurveyorUserStorePort {
+  getUserByMobile: (mobile: string) => Promise<{ id: number } | null>;
+  setUser: (input: UserCreateDto) => Promise<{ id: number }>;
+}
+
+export interface RegisterPurveyorMobilePort {
+  getPurveyorWelcomeMessage: (name: string) => string;
+  sendMessage: (phoneNumber: string, message: string) => Promise<boolean>;
+}
+
 export interface RegisterPurveyorContactTransactionPorts {
-  employmentRepository: Pick<EmploymentRepository, "getEmploymentByUserOrgPosId" | "setEmployment">;
-  organizationRepository: Pick<OrganizationRepository, "getOrganizationByCode">;
-  positionRepository: Pick<PositionRepository, "getPositionByCode">;
-  userRepository: Pick<UserRepository, "getUserByMobile" | "setUser">;
+  employmentRepository: RegisterPurveyorEmploymentStorePort;
+  organizationRepository: RegisterPurveyorOrganizationReaderPort;
+  positionRepository: RegisterPurveyorPositionReaderPort;
+  userRepository: RegisterPurveyorUserStorePort;
   profileDirtyMarker: Pick<UserProfileDirtyMarker, "markUsersDirty">;
 }
 
@@ -20,6 +43,6 @@ export interface RegisterPurveyorContactUseCaseDeps {
   config: {
     nodeEnv: string;
   };
-  mobileService: Pick<MobileService, "getPurveyorWelcomeMessage" | "sendMessage">;
+  mobileService: RegisterPurveyorMobilePort;
   uow: UnitOfWorkPort<RegisterPurveyorContactTransactionPorts>;
 }

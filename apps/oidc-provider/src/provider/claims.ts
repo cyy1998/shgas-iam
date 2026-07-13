@@ -56,7 +56,7 @@ function tokenExtra(token: AccessToken): OidcAccessTokenExtra | null {
   return extra as OidcAccessTokenExtra;
 }
 
-export interface CreateOidcClaimsServiceDeps {
+export interface CreateOidcClaimsAdapterDeps {
   accounts: ClaimsAccountReader;
   authorization: ClaimsAuthorizationReader;
   clients: ClaimsClientRuntimeReader;
@@ -65,7 +65,7 @@ export interface CreateOidcClaimsServiceDeps {
   tokens: ClaimsTokenRevoker;
 }
 
-export function createOidcClaimsService(deps: CreateOidcClaimsServiceDeps) {
+export function createOidcClaimsAdapter(deps: CreateOidcClaimsAdapterDeps) {
   async function buildSnapshot(subject: string, clientId: string, scopes: string[]) {
     const [account, client] = await Promise.all([
       deps.accounts.findBySubject(subject),
@@ -195,4 +195,4 @@ export function createOidcClaimsService(deps: CreateOidcClaimsServiceDeps) {
   };
 }
 
-export type OidcClaimsService = ReturnType<typeof createOidcClaimsService>;
+export type OidcClaimsAdapter = ReturnType<typeof createOidcClaimsAdapter>;

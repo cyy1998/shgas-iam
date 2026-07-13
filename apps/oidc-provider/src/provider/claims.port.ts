@@ -1,8 +1,8 @@
 import type { OidcAccountDto } from "@iam/domain/user";
 import type { ResolvedGlobalSession } from "../interaction/global-session.ts";
-import type { OidcAuthorizationClaim } from "../repositories/authorization.repository.ts";
-import type { OidcClientRuntimeMetadata } from "../repositories/client-metadata.ts";
 import type { ProviderSessionBinding } from "../session/provider-session.ts";
+import type { OidcAuthorizationClaim } from "./authorization-claim.ts";
+import type { OidcClientRuntimeMetadata } from "./client-runtime-metadata.ts";
 
 export interface ClaimsAccountReader {
   findBySubject: (subject: string) => Promise<OidcAccountDto | null>;

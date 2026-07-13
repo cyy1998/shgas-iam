@@ -1,8 +1,8 @@
 import type { DbClient } from "@iam/db";
 import type {
+  AdminClientOidcUpdate,
   ClientCreateDto,
   ClientInputDto,
-  ClientOidcConfigureDto,
   ClientPaginationQueryDto,
   ClientUpdateDto,
 } from "./client.type";
@@ -86,11 +86,7 @@ export function createClientRepository(db: DbClient) {
         .returning();
       return firstRow(rows)!;
     },
-    async updateClientOidcByCode(clientCode: string, data: {
-      oidcEnabled?: boolean;
-      oidcConfig?: ClientOidcConfigureDto | null;
-      oidcSecretHash?: string | null;
-    }) {
+    async updateClientOidcByCode(clientCode: string, data: AdminClientOidcUpdate) {
       const rows = await db
         .update(clients)
         .set({ ...data, oidcConfigVersion: sql`${clients.oidcConfigVersion} + 1` })

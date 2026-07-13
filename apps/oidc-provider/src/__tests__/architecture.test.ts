@@ -70,6 +70,43 @@ function collectImports(): ImportRecord[] {
   });
 }
 
+function isRepositoryOwnedPortModule(moduleSpecifier: string) {
+  return moduleSpecifier.endsWith(".repository")
+    || moduleSpecifier.endsWith(".repository.ts")
+    || moduleSpecifier.split("/").includes("repositories");
+}
+
+function collectPortOwnershipViolationsFromSource(file: string, content: string) {
+  const source = ts.createSourceFile(file, content, ts.ScriptTarget.Latest, true);
+  const reasons = new Set<string>();
+  function visit(node: ts.Node) {
+    if (ts.isImportDeclaration(node) && ts.isStringLiteral(node.moduleSpecifier)) {
+      const moduleSpecifier = node.moduleSpecifier.text;
+      if (isRepositoryOwnedPortModule(moduleSpecifier))
+        reasons.add(`imports ${moduleSpecifier}`);
+    }
+    if (ts.isTypeReferenceNode(node)
+      && node.typeName.getText(source) === "Pick"
+      && node.typeArguments?.[0]) {
+      const providerType = node.typeArguments[0].getText(source);
+      if (/(?:Repository|Service)$/u.test(providerType))
+        reasons.add(`derives Pick<${providerType}>`);
+    }
+    ts.forEachChild(node, visit);
+  }
+  visit(source);
+  return reasons.size === 0 ? [] : [`${file}: ${[...reasons].join("; ")}`];
+}
+
+function collectProductionPortOwnershipViolations() {
+  return collectSourceFiles(sourceRoot)
+    .filter(file => file.endsWith(".port.ts"))
+    .flatMap(file => collectPortOwnershipViolationsFromSource(
+      toPosixPath(relative(sourceRoot, file)),
+      readFileSync(file, "utf8"),
+    ));
+}
+
 function isComposition(file: string) {
   return file.startsWith("composition/");
 }
@@ -92,6 +129,33 @@ function isAllowedKernelLifecyclePatternFile(file: string) {
 }
 
 describe("oIDC provider DI architecture", () => {
+  it("detects provider-derived ports without rejecting port or platform narrowing", () => {
+    const allowed = collectPortOwnershipViolationsFromSource("allowed.port.ts", `
+      import type { IncomingMessage } from "node:http";
+      interface SessionStorePort { read: (id: string) => Promise<unknown> }
+      type HeaderRequest = Pick<IncomingMessage, "headers">;
+      type SessionReader = Pick<SessionStorePort, "read">;
+    `);
+    const forbidden = collectPortOwnershipViolationsFromSource("forbidden.port.ts", `
+      import type { AuthorizationRepository } from "../repositories/authorization.repository.ts";
+      interface ClaimsService { findClaims: () => Promise<unknown> }
+      type ClaimReader = Pick<
+        AuthorizationRepository,
+        "buildClaim"
+      >;
+      type ClaimsLookup = Pick<ClaimsService, "findClaims">;
+    `);
+
+    expect(allowed).toEqual([]);
+    expect(forbidden).toEqual([
+      "forbidden.port.ts: imports ../repositories/authorization.repository.ts; derives Pick<AuthorizationRepository>; derives Pick<ClaimsService>",
+    ]);
+  });
+
+  it("keeps all production ports consumer-owned", () => {
+    expect(collectProductionPortOwnershipViolations()).toEqual([]);
+  });
+
   it("keeps DB, Redis, logger, and concrete repository value imports behind approved boundaries", () => {
     const violations = collectImports()
       .filter(item => item.hasValueImport)
@@ -170,5 +234,38 @@ describe("oIDC provider DI architecture", () => {
     });
 
     expect([...importViolations, ...bindingIdViolations]).toEqual([]);
+  });
+
+  it("keeps claims, security, and session wiring under their explicit composition owners", () => {
+    const sourceFiles = collectSourceFiles(sourceRoot)
+      .map(file => toPosixPath(relative(sourceRoot, file)));
+    const claimsSource = readFileSync(join(sourceRoot, "provider/claims.ts"), "utf8");
+    const providerComposition = readFileSync(join(sourceRoot, "composition/provider/index.ts"), "utf8");
+    const violations: string[] = [];
+
+    if (!claimsSource.includes("createOidcClaimsAdapter") || !claimsSource.includes("OidcClaimsAdapter"))
+      violations.push("provider/claims.ts does not expose Claims Adapter symbols");
+    if (claimsSource.includes("createOidcClaimsService") || claimsSource.includes("OidcClaimsService"))
+      violations.push("provider/claims.ts exposes legacy Claims Service symbols");
+    violations.push(...sourceFiles
+      .filter(file => file.startsWith("composition/services/"))
+      .map(file => `${file} remains under mixed services composition`));
+
+    violations.push(...collectSourceFiles(sourceRoot).flatMap((file) => {
+      const relativeFile = toPosixPath(relative(sourceRoot, file));
+      if (relativeFile === "composition/security/index.ts" || relativeFile.startsWith("security/"))
+        return [];
+      const source = readFileSync(file, "utf8");
+      return ["createClientAuthRateLimiter", "createOidcClientSecretVerifier"]
+        .filter(factory => source.includes(factory))
+        .map(factory => `${relativeFile} materializes security component with ${factory}`);
+    }));
+
+    if (providerComposition.includes("services"))
+      violations.push("composition/provider/index.ts depends on mixed services composition");
+    if (providerComposition.includes("globalSessionResolver"))
+      violations.push("composition/provider/index.ts uses a secondary global session resolver alias");
+
+    expect(violations).toEqual([]);
   });
 });

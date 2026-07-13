@@ -5,7 +5,7 @@ import type {
   UserUpdateDtoSchema,
 } from "./user.schema";
 
-export type { UserCreateDto, UserDetailDto } from "@iam/domain/user";
+export type { User, UserCreateDto, UserDetailDto } from "@iam/domain/user";
 export interface UserPaginationQueryDto extends z.infer<typeof UserPaginationQueryDtoSchema> {}
 export interface UserAdminCreateDto extends z.infer<typeof UserAdminCreateDtoSchema> {}
 export interface UserUpdateDto extends z.infer<typeof UserUpdateDtoSchema> {}

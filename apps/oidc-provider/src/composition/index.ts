@@ -11,7 +11,7 @@ import { loadSigningKeys } from "../security/signing-keys.ts";
 import { createOidcHttpServer } from "./http/index.ts";
 import { createOidcProviderRuntime } from "./provider/index.ts";
 import { createOidcProviderRepositories } from "./repositories/index.ts";
-import { createOidcProviderServices } from "./services/index.ts";
+import { createOidcProviderSecurity } from "./security/index.ts";
 import { createOidcProviderSession } from "./session/index.ts";
 import { createOidcProviderStores } from "./stores/index.ts";
 import { createOidcProviderWorkers } from "./workers/index.ts";
@@ -35,14 +35,15 @@ export async function createOidcProviderComposition(options: CreateOidcProviderC
   const repositories = createOidcProviderRepositories(options.dbClient);
   const stores = createOidcProviderStores({ env: options.env, redis, repositories });
   const session = createOidcProviderSession({ env: options.env, redis, logger, repositories, stores });
-  const services = createOidcProviderServices({ env: options.env, repositories, stores, session });
+  const security = createOidcProviderSecurity({ env: options.env, repositories, stores });
   const providerRuntime = createOidcProviderRuntime({
     env: options.env,
     logger,
     redis,
     signingKeys,
+    repositories,
+    security,
     session,
-    services,
     stores,
   });
   const server = createOidcHttpServer({
@@ -76,7 +77,7 @@ export async function createOidcProviderComposition(options: CreateOidcProviderC
     repositories,
     stores,
     session,
-    services,
+    security,
     providerRuntime,
     provider: providerRuntime.provider,
     interactions: providerRuntime.interactions,

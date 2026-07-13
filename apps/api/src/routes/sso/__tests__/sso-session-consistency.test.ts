@@ -2,6 +2,13 @@ import {
   createCustomSsoCleanupAdapter,
   createCustomSsoSessionKernelAdapter,
 } from "@api/services/session/custom-sso-session-kernel.adapter";
+import { createSsoRedirectUrlValidator } from "@api/services/sso/redirect-url.validator";
+import { createAuthorizeSsoUseCase } from "@api/use-cases/sso/authorize-sso/authorize-sso.use-case";
+import { createCompleteSsoCallbackUseCase } from "@api/use-cases/sso/complete-sso-callback/complete-sso-callback.use-case";
+import { createExchangeSsoCodeUseCase } from "@api/use-cases/sso/exchange-sso-code/exchange-sso-code.use-case";
+import { createLoginWithOaUseCase } from "@api/use-cases/sso/login-with-oa/login-with-oa.use-case";
+import { createLoginWithWechatUseCase } from "@api/use-cases/sso/login-with-wechat/login-with-wechat.use-case";
+import { createLogoutSsoSessionUseCase } from "@api/use-cases/sso/logout-sso-session/logout-sso-session.use-case";
 import { AuthzMaintenanceError } from "@iam/api-core/errors/AuthzMaintenanceError";
 import { AuthzUnauthorizedError } from "@iam/api-core/errors/AuthzUnauthorizedError";
 import { InvalidAuthCodeError } from "@iam/api-core/errors/InvalidAuthCodeError";
@@ -10,7 +17,6 @@ import { createSessionKernel } from "@iam/api-core/session/kernel";
 import { ClientManagementLevel, ClientStatus, UserStatus, UserType } from "@iam/contracts";
 import { beforeEach, describe, expect, mock, test } from "bun:test";
 import { sm3 } from "sm-crypto";
-import { createSsoService } from "../sso.service";
 
 type RedisResult = [Error | null, unknown];
 type RedisOperation = () => unknown | Promise<unknown>;
@@ -359,46 +365,67 @@ function createServices() {
       localSessionTtlSeconds: 3600,
     },
   });
-  const ssoService = createSsoService({
-    redis: fakeRedis as any,
-    logger,
-    clock: {
-      now: mock(() => fakeRedis.now()),
-    },
-    orcasClient: {
-      orcasLogin: mock(async () => {
-        if (orcasShouldFail) {
-          throw new Error("orcas failed");
-        }
-        return { orcasId: "orcas", orcasSessionId: "orcas-session" };
-      }),
-    },
-    wechatClient: {
-      getWxUserId: mock(async () => "wx-id"),
-    },
-    clientService,
-    customSsoSession,
-    userService: {
-      getActiveUserById: mock(async (userId: number) =>
-        liveUserAvailable && userId === userDetail.id ? userDetail : null),
-      getActiveUserByUsername: mock(async (username: string) =>
-        liveUserAvailable && username === userDetail.username ? userDetail : null),
-      getActiveUserByWxId: mock(async () => liveUserAvailable ? userDetail : null),
-      getUserDetailById: mock(async (userId: number) => {
-        if (!profileAvailable || userId !== userDetail.id) {
-          throw new Error("user not found");
-        }
-        return userDetail;
-      }),
-    },
-    auditLogWriter,
-    config: {
-      authCodeExpireSeconds: 60,
-      nodeEnv: "test",
-    },
-  } as any);
+  const redirectUrls = createSsoRedirectUrlValidator({ logger });
+  const orcas = {
+    orcasLogin: mock(async () => {
+      if (orcasShouldFail) {
+        throw new Error("orcas failed");
+      }
+      return { orcasId: "orcas", orcasSessionId: "orcas-session" };
+    }),
+  };
+  const wechat = {
+    getWxUserId: mock(async () => "wx-id"),
+  };
+  const ssoUsers = {
+    getActiveUserById: mock(async (userId: number) =>
+      liveUserAvailable && userId === userDetail.id ? userDetail : null),
+    getActiveUserByUsername: mock(async (username: string) =>
+      liveUserAvailable && username === userDetail.username ? userDetail : null),
+    getActiveUserByWxId: mock(async () => liveUserAvailable ? userDetail : null),
+    getUserDetailById: mock(async (userId: number) => {
+      if (!profileAvailable || userId !== userDetail.id) {
+        throw new Error("user not found");
+      }
+      return userDetail;
+    }),
+  };
+  const sso = {
+    authorize: createAuthorizeSsoUseCase({
+      clients: clientService,
+      principalSessions: customSsoSession,
+      redirectUrls,
+    }),
+    completeCallback: createCompleteSsoCallbackUseCase({
+      clients: clientService,
+      orcas,
+      redirectUrls,
+      sessions: customSsoSession,
+    }),
+    exchangeCode: createExchangeSsoCodeUseCase({
+      clients: clientService,
+      sessions: customSsoSession,
+    }),
+    loginWithOa: createLoginWithOaUseCase({
+      auditLogWriter,
+      clients: clientService,
+      clock: { now: () => fakeRedis.now() },
+      config: { nodeEnv: "test" },
+      principalSessions: customSsoSession,
+      users: ssoUsers,
+    }),
+    loginWithWechat: createLoginWithWechatUseCase({
+      auditLogWriter,
+      cache: fakeRedis,
+      delay: { wait: async () => undefined },
+      principalSessions: customSsoSession,
+      users: ssoUsers,
+      wechat,
+    }),
+    logout: createLogoutSsoSessionUseCase({ sessions: customSsoSession }),
+  };
 
-  return { customSsoSession, kernel, ssoService };
+  return { customSsoSession, kernel, sso };
 }
 
 async function createPrincipalToken(customSsoSession: ReturnType<typeof createServices>["customSsoSession"]) {
@@ -423,7 +450,12 @@ async function createAuthorizedCode(
   redirectUrl = "https://app.example.com/callback",
 ) {
   const principalToken = await createPrincipalToken(services.customSsoSession);
-  const authorization = await services.ssoService.authorize(principalToken, "cookie", clientCode, redirectUrl);
+  const authorization = await services.sso.authorize.execute({
+    clientCode,
+    globalSessionToken: principalToken,
+    redirectUrl,
+    tokenSource: "cookie",
+  });
   if (!authorization.code) {
     throw new Error("expected auth code");
   }
@@ -432,12 +464,20 @@ async function createAuthorizedCode(
 
 async function exchangeIndependentLocalSession(services: ReturnType<typeof createServices>) {
   const { code } = await createAuthorizedCode(services);
-  return await services.ssoService.setToken(code, client.clientCode, client.clientSecret);
+  return await services.sso.exchangeCode.execute({
+    clientCode: client.clientCode,
+    clientSecret: client.clientSecret,
+    code,
+  });
 }
 
 async function exchangeIndependentLocalSessionWithRequestContext(services: ReturnType<typeof createServices>) {
   const { code } = await createAuthorizedCode(services);
-  return await services.ssoService.setToken(code, client.clientCode, client.clientSecret, {
+  return await services.sso.exchangeCode.execute({
+    clientCode: client.clientCode,
+    clientSecret: client.clientSecret,
+    code,
+  }, {
     requestContext: requestContext("req-local-session"),
   });
 }
@@ -465,29 +505,29 @@ beforeEach(() => {
   }) as unknown as typeof fetch;
 });
 
-describe("createSsoService redirect pattern validation", () => {
+describe("SSO use-case redirect pattern validation", () => {
   test("callback accepts redirect URLs matching a valid wildcard pattern", async () => {
     const services = createServices();
     const redirectUrl = "https://tenant.example.com/app/callback?next=1";
     const { code } = await createAuthorizedCode(services, "pattern-callback", redirectUrl);
 
-    await expect(services.ssoService.callback(
+    await expect(services.sso.completeCallback.execute({
+      clientCode: "pattern-callback",
       code,
-      "pattern-callback",
       redirectUrl,
-    )).resolves.toMatchObject({ token: expect.stringContaining("iam_ls_") });
+    })).resolves.toMatchObject({ token: expect.stringContaining("iam_ls_") });
   });
 
   test("authorize skips invalid historical patterns and accepts a later valid match", async () => {
     const services = createServices();
     const principalToken = await createPrincipalToken(services.customSsoSession);
 
-    await expect(services.ssoService.authorize(
-      principalToken,
-      "cookie",
-      "pattern-skip-invalid",
-      "https://app.example.com/foo",
-    )).resolves.toMatchObject({ isLogin: true, code: expect.stringContaining("iam_ac_") });
+    await expect(services.sso.authorize.execute({
+      clientCode: "pattern-skip-invalid",
+      globalSessionToken: principalToken,
+      redirectUrl: "https://app.example.com/foo",
+      tokenSource: "cookie",
+    })).resolves.toMatchObject({ isLogin: true, code: expect.stringContaining("iam_ac_") });
 
     expect(logger.warn).toHaveBeenCalledWith(expect.objectContaining({
       clientCode: "pattern-skip-invalid",
@@ -496,36 +536,36 @@ describe("createSsoService redirect pattern validation", () => {
   });
 
   test("authorize rejects when no valid pattern matches", async () => {
-    const { ssoService } = createServices();
+    const { sso } = createServices();
 
-    await expect(ssoService.authorize(
-      "global-session",
-      "cookie",
-      "pattern-no-match",
-      "https://app.example.com/bar",
-    )).rejects.toThrow("非法重定向地址");
+    await expect(sso.authorize.execute({
+      clientCode: "pattern-no-match",
+      globalSessionToken: "global-session",
+      redirectUrl: "https://app.example.com/bar",
+      tokenSource: "cookie",
+    })).rejects.toThrow("非法重定向地址");
   });
 
   test("path patterns respect segment boundaries", async () => {
-    const { ssoService } = createServices();
+    const { sso } = createServices();
 
-    await expect(ssoService.authorize(
-      "global-session",
-      "cookie",
-      "pattern-path-boundary",
-      "https://app.example.com/foobar",
-    )).rejects.toThrow("非法重定向地址");
+    await expect(sso.authorize.execute({
+      clientCode: "pattern-path-boundary",
+      globalSessionToken: "global-session",
+      redirectUrl: "https://app.example.com/foobar",
+      tokenSource: "cookie",
+    })).rejects.toThrow("非法重定向地址");
   });
 
   test("host wildcard patterns do not match the root domain", async () => {
-    const { ssoService } = createServices();
+    const { sso } = createServices();
 
-    await expect(ssoService.authorize(
-      "global-session",
-      "cookie",
-      "pattern-root-domain",
-      "https://example.com",
-    )).rejects.toThrow("非法重定向地址");
+    await expect(sso.authorize.execute({
+      clientCode: "pattern-root-domain",
+      globalSessionToken: "global-session",
+      redirectUrl: "https://example.com",
+      tokenSource: "cookie",
+    })).rejects.toThrow("非法重定向地址");
   });
 });
 
@@ -534,20 +574,18 @@ describe("SSO Kernel session consistency", () => {
     const services = createServices();
     const principalToken = await createPrincipalToken(services.customSsoSession);
 
-    await services.ssoService.authorize(
-      principalToken,
-      "authorization_header",
-      client.clientCode,
-      "https://app.example.com/callback",
-      { requestContext: requestContext("req-authz-header") },
-    );
-    await services.ssoService.authorize(
-      principalToken,
-      "query",
-      client.clientCode,
-      "https://app.example.com/callback",
-      { requestContext: requestContext("req-query-token") },
-    );
+    await services.sso.authorize.execute({
+      clientCode: client.clientCode,
+      globalSessionToken: principalToken,
+      redirectUrl: "https://app.example.com/callback",
+      tokenSource: "authorization_header",
+    }, { requestContext: requestContext("req-authz-header") });
+    await services.sso.authorize.execute({
+      clientCode: client.clientCode,
+      globalSessionToken: principalToken,
+      redirectUrl: "https://app.example.com/callback",
+      tokenSource: "query",
+    }, { requestContext: requestContext("req-query-token") });
 
     expect(logger.info).toHaveBeenCalledWith(expect.objectContaining({
       event: SystemLogEvent.SsoLegacyBearerSourceUsed,
@@ -575,21 +613,21 @@ describe("SSO Kernel session consistency", () => {
   test("OA and WeChat login create Kernel PrincipalSession tokens", async () => {
     const services = createServices();
     const ts = String(fakeRedis.now());
-    const oa = await services.ssoService.loginOA(
-      client.clientCode,
-      userDetail.username,
-      ts,
-      createOaToken(userDetail.username, ts),
-    );
+    const oa = await services.sso.loginWithOa.execute({
+      clientCode: client.clientCode,
+      loginId: userDetail.username,
+      timestamp: ts,
+      token: createOaToken(userDetail.username, ts),
+    });
 
     expect(oa).toEqual({ token: expect.stringContaining("iam_ps_"), isMobileSet: true });
     await expect(services.customSsoSession.resolvePrincipalSessionUser(oa.token)).resolves.toMatchObject({
       id: userDetail.id,
     });
 
-    const wx = await services.ssoService.loginWX("wx-code");
+    const wx = await services.sso.loginWithWechat.execute({ code: "wx-code" });
     expect(wx).toEqual({ token: expect.stringContaining("iam_ps_"), isMobileSet: true });
-    const wxRetry = await services.ssoService.loginWX("wx-code");
+    const wxRetry = await services.sso.loginWithWechat.execute({ code: "wx-code" });
     expect(wxRetry).toEqual({ token: expect.stringContaining("iam_ps_"), isMobileSet: true });
   });
 
@@ -597,7 +635,11 @@ describe("SSO Kernel session consistency", () => {
     const services = createServices();
     const { code } = await createAuthorizedCode(services);
 
-    const result = await services.ssoService.setToken(code, client.clientCode, client.clientSecret, {
+    const result = await services.sso.exchangeCode.execute({
+      clientCode: client.clientCode,
+      clientSecret: client.clientSecret,
+      code,
+    }, {
       requestContext: requestContext("req-local-session"),
     });
 
@@ -614,7 +656,11 @@ describe("SSO Kernel session consistency", () => {
     expect(fakeRedis.legacyLocalSessionKeys()).toHaveLength(0);
     expect(fakeRedis.reverseKeys()).toHaveLength(0);
     await expect(
-      services.ssoService.setToken(code, client.clientCode, client.clientSecret),
+      services.sso.exchangeCode.execute({
+        clientCode: client.clientCode,
+        clientSecret: client.clientSecret,
+        code,
+      }),
     ).rejects.toBeInstanceOf(InvalidAuthCodeError);
     expect(fakeRedis.payloadKeys()).toHaveLength(1);
   });
@@ -629,7 +675,11 @@ describe("SSO Kernel session consistency", () => {
     await fakeRedis.del(services.kernel.keys.active("principal_session", principal.value.principalSessionId));
 
     await expect(
-      services.ssoService.setToken(code, client.clientCode, client.clientSecret),
+      services.sso.exchangeCode.execute({
+        clientCode: client.clientCode,
+        clientSecret: client.clientSecret,
+        code,
+      }),
     ).rejects.toBeInstanceOf(AuthzUnauthorizedError);
 
     expect(fakeRedis.payloadKeys()).toHaveLength(0);
@@ -641,7 +691,11 @@ describe("SSO Kernel session consistency", () => {
     fakeRedis.failNextPayloadWrite = true;
 
     await expect(
-      services.ssoService.setToken(code, client.clientCode, client.clientSecret, {
+      services.sso.exchangeCode.execute({
+        clientCode: client.clientCode,
+        clientSecret: client.clientSecret,
+        code,
+      }, {
         requestContext: requestContext("req-payload-failure"),
       }),
     ).rejects.toBeInstanceOf(AuthzUnauthorizedError);
@@ -653,7 +707,11 @@ describe("SSO Kernel session consistency", () => {
       traceId: "11111111111111111111111111111111",
     }), "failed to write custom sso local session payload");
     await expect(
-      services.ssoService.setToken(code, client.clientCode, client.clientSecret),
+      services.sso.exchangeCode.execute({
+        clientCode: client.clientCode,
+        clientSecret: client.clientSecret,
+        code,
+      }),
     ).rejects.toBeInstanceOf(InvalidAuthCodeError);
   });
 
@@ -664,12 +722,12 @@ describe("SSO Kernel session consistency", () => {
     orcasShouldFail = true;
 
     await expect(
-      services.ssoService.callback(code, "gateway-orcas", redirectUrl),
+      services.sso.completeCallback.execute({ clientCode: "gateway-orcas", code, redirectUrl }),
     ).rejects.toThrow("orcas failed");
 
     expect(fakeRedis.payloadKeys()).toHaveLength(0);
     await expect(
-      services.ssoService.callback(code, "gateway-orcas", redirectUrl),
+      services.sso.completeCallback.execute({ clientCode: "gateway-orcas", code, redirectUrl }),
     ).rejects.toBeInstanceOf(AuthzUnauthorizedError);
   });
 
@@ -682,7 +740,7 @@ describe("SSO Kernel session consistency", () => {
       throw new Error("expected gateway-orcas client");
     }
 
-    const result = await services.ssoService.callback(code, "gateway-orcas", redirectUrl);
+    const result = await services.sso.completeCallback.execute({ clientCode: "gateway-orcas", code, redirectUrl });
     const sessionContext = await services.customSsoSession.resolveLocalSessionContext(result.token, gatewayClient);
 
     expect(sessionContext.orcasId).toBe("orcas");
@@ -699,7 +757,7 @@ describe("SSO Kernel session consistency", () => {
     }
 
     const payloadKeysBefore = new Set(fakeRedis.payloadKeys());
-    const result = await services.ssoService.callback(code, "gateway-orcas", redirectUrl);
+    const result = await services.sso.completeCallback.execute({ clientCode: "gateway-orcas", code, redirectUrl });
     const payloadKey = fakeRedis.payloadKeys().find(key => !payloadKeysBefore.has(key));
     if (!payloadKey) {
       throw new Error("expected private payload key");
@@ -728,7 +786,11 @@ describe("SSO Kernel session consistency", () => {
   test("authz validates local session credentials and preserves maintenance semantics", async () => {
     const services = createServices();
     const { code } = await createAuthorizedCode(services);
-    const result = await services.ssoService.setToken(code, client.clientCode, client.clientSecret);
+    const result = await services.sso.exchangeCode.execute({
+      clientCode: client.clientCode,
+      clientSecret: client.clientSecret,
+      code,
+    });
 
     const encoded = await services.customSsoSession.authorizeLocalSession(result.sid, client);
     expect(JSON.parse(Buffer.from(encoded, "base64").toString("utf8"))).toEqual({
@@ -752,7 +814,11 @@ describe("SSO Kernel session consistency", () => {
   test("authz rejects tombstone, client mismatch, invalid principal, live-state, and bad payload paths", async () => {
     const services = createServices();
     const { code } = await createAuthorizedCode(services);
-    const result = await services.ssoService.setToken(code, client.clientCode, client.clientSecret);
+    const result = await services.sso.exchangeCode.execute({
+      clientCode: client.clientCode,
+      clientSecret: client.clientSecret,
+      code,
+    });
 
     await expect(services.customSsoSession.authorizeLocalSession(result.sid, {
       ...client,
@@ -815,7 +881,11 @@ describe("SSO Kernel session consistency", () => {
   test("cleans private payload and logs Independent notification failure during PrincipalSession logout", async () => {
     const services = createServices();
     const { principalToken, code } = await createAuthorizedCode(services);
-    await services.ssoService.setToken(code, client.clientCode, client.clientSecret);
+    await services.sso.exchangeCode.execute({
+      clientCode: client.clientCode,
+      clientSecret: client.clientSecret,
+      code,
+    });
     fetchShouldFail = true;
 
     await expect(services.customSsoSession.logout(principalToken)).resolves.toMatchObject({

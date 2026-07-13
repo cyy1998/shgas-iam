@@ -1,8 +1,10 @@
 import type { LoggerPort } from "@api/composition/runtime";
+import type { LoginCredentialParser } from "@api/services/authentication/login-credential.parser";
 import type { ClientService } from "@api/services/client/client.service";
-import type { AuthService } from "./auth.service";
+import type { ClientDto } from "@api/services/client/client.type";
+import type { LoginWithMobileUseCase } from "@api/use-cases/authentication/login-with-mobile/login-with-mobile.use-case";
+import type { LoginWithPasswordUseCase } from "@api/use-cases/authentication/login-with-password/login-with-password.use-case";
 import type { AuthRouteHandler } from "./auth.type";
-import type { LoginCredentialParser } from "./login-credential.helper";
 import { getApiAuditRequestContext } from "@api/services/audit/audit.service";
 import * as HttpStatusCodes from "@iam/api-core/core/http-status-codes";
 import { AuthzUnauthorizedError } from "@iam/api-core/errors/AuthzUnauthorizedError";
@@ -12,8 +14,14 @@ import { verifyInternalClient } from "@iam/api-core/middlewares";
 import { getCookie, setCookie } from "hono/cookie";
 
 export interface CreateAuthHandlersDeps {
-  authService: Pick<AuthService, "loginPassword" | "loginMobile" | "authz">;
+  authentication: {
+    loginWithMobile: Pick<LoginWithMobileUseCase, "execute">;
+    loginWithPassword: Pick<LoginWithPasswordUseCase, "execute">;
+  };
   clientService: Pick<ClientService, "getClientByCode" | "getClientBySecret">;
+  localSessionAuthorizer: {
+    authorizeLocalSession: (sessionId: string, client: ClientDto) => Promise<string>;
+  };
   loginCredentialParser: Pick<LoginCredentialParser, "parseLoginPasswordCredential">;
   logger: Pick<LoggerPort, "info">;
   config: {
@@ -26,10 +34,10 @@ export function createAuthHandlers(deps: CreateAuthHandlersDeps) {
     const { credential, capToken } = c.req.valid("json");
     const { username, password } = await deps.loginCredentialParser.parseLoginPasswordCredential(credential);
     const requestContext = getApiAuditRequestContext(c);
-    const data = await deps.authService.loginPassword(username, password, {
-      capToken,
-      requestContext,
-    });
+    const data = await deps.authentication.loginWithPassword.execute(
+      { capToken, password, username },
+      { requestContext },
+    );
     setCookie(c, "global_session", data.token, {
       httpOnly: true,
       sameSite: "Lax",
@@ -42,10 +50,10 @@ export function createAuthHandlers(deps: CreateAuthHandlersDeps) {
   const loginMobile: AuthRouteHandler<"loginMobile"> = async (c) => {
     const { code, phoneNumber, capToken } = c.req.valid("json");
     const requestContext = getApiAuditRequestContext(c);
-    const data = await deps.authService.loginMobile(phoneNumber, code, {
-      capToken,
-      requestContext,
-    });
+    const data = await deps.authentication.loginWithMobile.execute(
+      { capToken, code, phoneNumber },
+      { requestContext },
+    );
     setCookie(c, "global_session", data.token, {
       httpOnly: true,
       sameSite: "Lax",
@@ -68,7 +76,7 @@ export function createAuthHandlers(deps: CreateAuthHandlersDeps) {
     if (!sessionId) {
       throw new AuthzUnauthorizedError("未登录");
     }
-    const data = await deps.authService.authz(sessionId, client);
+    const data = await deps.localSessionAuthorizer.authorizeLocalSession(sessionId, client);
     c.header("X-User-Info", data);
     return c.json(resp.ok(data), HttpStatusCodes.OK);
   };

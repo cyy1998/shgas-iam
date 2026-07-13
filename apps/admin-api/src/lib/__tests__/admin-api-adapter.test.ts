@@ -1,7 +1,7 @@
-import type { Context } from "hono";
-import type { AdminApiRestContext } from "../admin-api-adapter";
 import type { RouteHandler } from "@hono/zod-openapi";
 import type { ApiEnvelope } from "@iam/api-core/http";
+import type { Context } from "hono";
+import type { AdminApiRestContext } from "../admin-api-adapter";
 import { createRoute } from "@hono/zod-openapi";
 import { NOT_FOUND, OK } from "@iam/api-core/core/http-status-codes";
 import jsonContent from "@iam/api-core/core/openapi/helpers/json-content";
@@ -67,6 +67,10 @@ type _GeneratedHandlerEnvelopeAssignable = Assert<
     ? true
     : false
 >;
+
+void typedObjectOutputRoute;
+void typedStringOutputRoute;
+void generatedObjectOutputHandler;
 
 function createRestContext(valid: Record<string, unknown>) {
   return {

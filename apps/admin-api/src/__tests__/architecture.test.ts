@@ -70,6 +70,47 @@ function collectImportsFromRoot(root: string): ImportRecord[] {
   });
 }
 
+function isRepositoryOwnedPortModule(moduleSpecifier: string) {
+  return moduleSpecifier.endsWith(".repository")
+    || moduleSpecifier.endsWith(".repository.ts")
+    || moduleSpecifier.split("/").includes("repositories");
+}
+
+function collectPortOwnershipViolationsFromSource(file: string, content: string) {
+  const source = ts.createSourceFile(file, content, ts.ScriptTarget.Latest, true);
+  const reasons = new Set<string>();
+  function visit(node: ts.Node) {
+    if (ts.isImportDeclaration(node) && ts.isStringLiteral(node.moduleSpecifier)) {
+      const moduleSpecifier = node.moduleSpecifier.text;
+      if (isRepositoryOwnedPortModule(moduleSpecifier))
+        reasons.add(`imports ${moduleSpecifier}`);
+    }
+    if (ts.isTypeReferenceNode(node)
+      && node.typeName.getText(source) === "Pick"
+      && node.typeArguments?.[0]) {
+      const providerType = node.typeArguments[0].getText(source);
+      if (/(?:Repository|Service)$/u.test(providerType))
+        reasons.add(`derives Pick<${providerType}>`);
+    }
+    ts.forEachChild(node, visit);
+  }
+  visit(source);
+  return reasons.size === 0 ? [] : [`${file}: ${[...reasons].join("; ")}`];
+}
+
+function collectProductionPortOwnershipViolations() {
+  return collectSourceFiles(sourceRoot)
+    .filter(file => file.endsWith(".port.ts"))
+    .flatMap(file => collectPortOwnershipViolationsFromSource(
+      toPosixPath(relative(sourceRoot, file)),
+      readFileSync(file, "utf8"),
+    ));
+}
+
+function readSourceFile(file: string) {
+  return readFileSync(join(sourceRoot, file), "utf8");
+}
+
 function importsUserProfileProducerFromJobs(file: string) {
   return /import\s*\{[^}]*\bcreateUserProfileJobProducer\b[^}]*\}\s*from\s*["']@iam\/jobs["']/u
     .test(readFileSync(file, "utf8"));
@@ -125,6 +166,33 @@ function forbiddenSessionRevocationBypass(moduleSpecifier: string) {
 }
 
 describe("Admin API DI architecture", () => {
+  test("detects provider-derived ports without rejecting port or platform narrowing", () => {
+    const allowed = collectPortOwnershipViolationsFromSource("allowed.port.ts", `
+      import type { IncomingMessage } from "node:http";
+      import type { ClockPort } from "@admin-api/composition/runtime";
+      type HeaderRequest = Pick<IncomingMessage, "headers">;
+      type ClockReader = Pick<ClockPort, "nowDate">;
+    `);
+    const forbidden = collectPortOwnershipViolationsFromSource("forbidden.port.ts", `
+      import type { UserRepository } from "./user.repository";
+      interface UserService { findUser: () => Promise<unknown> }
+      type UserReader = Pick<
+        UserRepository,
+        "getUserByUsernameForAdmin"
+      >;
+      type UserLookup = Pick<UserService, "findUser">;
+    `);
+
+    expect(allowed).toEqual([]);
+    expect(forbidden).toEqual([
+      "forbidden.port.ts: imports ./user.repository; derives Pick<UserRepository>; derives Pick<UserService>",
+    ]);
+  });
+
+  test("keeps all production ports consumer-owned", () => {
+    expect(collectProductionPortOwnershipViolations()).toEqual([]);
+  });
+
   test("keeps route production modules off app-local repositories and UnitOfWork", () => {
     const violations = collectImports()
       .filter(({ file }) => isRouteProductionModule(file))
@@ -141,6 +209,63 @@ describe("Admin API DI architecture", () => {
       .filter(({ file }) => file.startsWith("services/"))
       .filter(({ moduleSpecifier }) => isAppLocalUseCaseImport(moduleSpecifier))
       .map(({ file, moduleSpecifier }) => `${file} imports ${moduleSpecifier}`);
+
+    expect(violations).toEqual([]);
+  });
+
+  test("keeps user resignation owned by application use-case composition", () => {
+    const employmentService = readSourceFile("services/employment/employment.service.ts");
+    const employmentAdapter = readSourceFile("routes/admin/employment/employment.adapter.ts");
+    const serviceComposition = readSourceFile("composition/services/index.ts");
+    const routeComposition = readSourceFile("composition/routes/index.ts");
+    const rootComposition = readSourceFile("composition/index.ts");
+    const useCaseCompositionPath = join(sourceRoot, "composition/use-cases/index.ts");
+    const violations = [
+      /\basync function resignUser\b/u.test(employmentService)
+        ? "EmploymentService implements resignUser"
+        : null,
+      /employmentService\.resignUser\b/u.test(employmentAdapter)
+        ? "employment adapter binds resignation through EmploymentService"
+        : null,
+      /createResignUserUseCase/u.test(serviceComposition)
+        ? "service composition creates resign-user use-case"
+        : null,
+      !existsSync(useCaseCompositionPath)
+        ? "composition/use-cases/index.ts is missing"
+        : null,
+      !/\buseCases:\s*ReturnType<typeof createAdminApiUseCases>/u.test(rootComposition)
+        ? "Admin composition does not expose a separate useCases field"
+        : null,
+      !/resignUser:\s*useCases\.employment\.resignUser/u.test(routeComposition)
+        ? "route composition does not inject the resignation facade separately"
+        : null,
+    ].filter((violation): violation is string => violation !== null);
+
+    expect(violations).toEqual([]);
+  });
+
+  test("keeps the resignation transaction port consumer-owned", () => {
+    const port = readSourceFile("use-cases/employment/resign-user/resign-user.port.ts");
+    const forbiddenPatterns = [
+      /\bPick\s*</u,
+      /\.repository[/"']/u,
+      /\.service[/"']/u,
+      /\/routes\//u,
+      /\.adapter[/"']/u,
+    ];
+    const violations = forbiddenPatterns
+      .filter(pattern => pattern.test(port))
+      .map(pattern => `resign-user.port.ts contains ${pattern}`);
+    const requiredMethods = [
+      "getUserByUsernameForAdmin",
+      "updateUserByUsername",
+      "endActiveEmploymentsByUserId",
+      "recordAuditLog",
+      "markUsersDirty",
+    ];
+    violations.push(...requiredMethods
+      .filter(method => !port.includes(method))
+      .map(method => `resign-user.port.ts does not declare ${method}`));
 
     expect(violations).toEqual([]);
   });

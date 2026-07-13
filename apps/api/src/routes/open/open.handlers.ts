@@ -4,7 +4,9 @@ import type { CapService } from "@api/services/human-verification/cap.service";
 import type { HumanRiskServicePort } from "@api/services/human-verification/human-verification.port";
 import type { MobileService } from "@api/services/mobile/mobile.service";
 import type { UserService } from "@api/services/user/user.service";
-import type { OpenService } from "./open.service";
+import type { RequestPasswordResetCodeUseCase } from "@api/use-cases/account-recovery/request-password-reset-code/request-password-reset-code.use-case";
+import type { ResetPasswordUseCase } from "@api/use-cases/account-recovery/reset-password/reset-password.use-case";
+import type { VerifyPasswordResetCodeUseCase } from "@api/use-cases/account-recovery/verify-password-reset-code/verify-password-reset-code.use-case";
 import type { OpenRouteHandler } from "./open.type";
 import { HumanVerificationAction } from "@api/enums/humanVerification.action";
 import { VerificationCodeUsage } from "@api/enums/verificationCode.usage";
@@ -17,8 +19,15 @@ import { createHumanVerificationContext } from "@api/services/human-verification
 import { OK } from "@iam/api-core/core/http-status-codes";
 import { InvalidHumanVerificationSiteError } from "@iam/api-core/errors/InvalidHumanVerificationSiteError";
 import * as resp from "@iam/api-core/http";
+import { maskMobile } from "./open.presenter";
+import { requirePhoneNumber } from "./open.validation";
 
 export interface CreateOpenHandlersDeps {
+  accountRecovery: {
+    requestPasswordResetCode: RequestPasswordResetCodeUseCase;
+    resetPassword: ResetPasswordUseCase;
+    verifyPasswordResetCode: VerifyPasswordResetCodeUseCase;
+  };
   auditLogWriter: AuditLogWriterPort;
   clientService: Pick<ClientService, "getClientByCode">;
   humanVerification: Pick<
@@ -27,8 +36,7 @@ export interface CreateOpenHandlersDeps {
   >;
   humanRiskService: Pick<HumanRiskServicePort, "recordOpenUserInfoLookup">;
   mobileService: Pick<MobileService, "sendCode" | "checkVerificationCode">;
-  openService: Pick<OpenService, "maskMobile" | "requirePhoneNumber" | "resolveResetPasswordMobile">;
-  userService: Pick<UserService, "getUserDetailByUsername" | "resetPassword">;
+  userService: Pick<UserService, "getUserDetailByUsername">;
 }
 
 export function createOpenHandlers(deps: CreateOpenHandlersDeps) {
@@ -52,7 +60,7 @@ export function createOpenHandlers(deps: CreateOpenHandlersDeps) {
     return c.json(resp.ok({
       username: data.username,
       name: data.name,
-      mobile: deps.openService.maskMobile(data.mobile),
+      mobile: maskMobile(data.mobile),
     }), OK);
   };
 
@@ -64,9 +72,13 @@ export function createOpenHandlers(deps: CreateOpenHandlersDeps) {
       capToken,
       createHumanVerificationContext(requestContext, phoneNumber ?? username),
     );
-    const targetPhoneNumber = usage === VerificationCodeUsage.ResetPassword
-      ? await deps.openService.resolveResetPasswordMobile(username, phoneNumber)
-      : deps.openService.requirePhoneNumber(phoneNumber);
+    if (usage === VerificationCodeUsage.ResetPassword) {
+      const data = await deps.accountRecovery.requestPasswordResetCode.execute({ username, phoneNumber }, {
+        requestContext,
+      });
+      return c.json(resp.ok(data), OK);
+    }
+    const targetPhoneNumber = requirePhoneNumber(phoneNumber);
     const data = await deps.mobileService.sendCode(targetPhoneNumber, usage);
     await deps.auditLogWriter.recordAuditLog(withApiRequestContext(requestContext, buildSmsCodeSendAudit({
       phoneNumber: targetPhoneNumber,
@@ -79,9 +91,15 @@ export function createOpenHandlers(deps: CreateOpenHandlersDeps) {
   const codeVerify: OpenRouteHandler<"codeVerify"> = async (c) => {
     const { phoneNumber, username, usage, code } = c.req.valid("json");
     const requestContext = getApiAuditRequestContext(c);
-    const targetPhoneNumber = usage === VerificationCodeUsage.ResetPassword
-      ? await deps.openService.resolveResetPasswordMobile(username, phoneNumber)
-      : deps.openService.requirePhoneNumber(phoneNumber);
+    if (usage === VerificationCodeUsage.ResetPassword) {
+      const data = await deps.accountRecovery.verifyPasswordResetCode.execute({
+        code,
+        phoneNumber,
+        username,
+      }, { requestContext });
+      return c.json(resp.ok({ result: data }), OK);
+    }
+    const targetPhoneNumber = requirePhoneNumber(phoneNumber);
     const data = await deps.mobileService.checkVerificationCode(usage, targetPhoneNumber, code);
     await deps.auditLogWriter.recordAuditLog(withApiRequestContext(requestContext, buildSmsCodeVerifyAudit({
       phoneNumber: targetPhoneNumber,
@@ -95,8 +113,12 @@ export function createOpenHandlers(deps: CreateOpenHandlersDeps) {
   const passwordReset: OpenRouteHandler<"passwordReset"> = async (c) => {
     const { username, phoneNumber, code, newPassword } = c.req.valid("json");
     const requestContext = getApiAuditRequestContext(c);
-    const targetPhoneNumber = await deps.openService.resolveResetPasswordMobile(username, phoneNumber);
-    const data = await deps.userService.resetPassword(username, targetPhoneNumber, code, newPassword, {
+    const data = await deps.accountRecovery.resetPassword.execute({
+      code,
+      newPassword,
+      phoneNumber,
+      username,
+    }, {
       requestContext,
     });
     return c.json(resp.ok(data), OK);

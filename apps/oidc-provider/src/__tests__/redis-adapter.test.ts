@@ -5,7 +5,7 @@ import {
   OidcTokenEndpointAuthMethod,
 } from "@iam/contracts";
 import { describe, expect, it } from "vitest";
-import { toOidcClientRuntimeMetadata } from "../repositories/client-metadata.ts";
+import { toOidcClientRuntimeMetadata } from "../provider/client-runtime-metadata.ts";
 import { RedisOidcAdapter, revokeClientProtocolObjects } from "../storage/redis-adapter.ts";
 import { createOidcTokenStore } from "../stores/token.store.ts";
 

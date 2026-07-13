@@ -1,7 +1,12 @@
 import type { LoggerPort } from "@api/composition/runtime";
 import type { ClientService } from "@api/services/client/client.service";
-import type { CustomSsoPrincipalTokenSource } from "./sso.port";
-import type { SsoService } from "./sso.service";
+import type { SsoPrincipalTokenSource } from "@api/use-cases/sso/authorize-sso/authorize-sso.type";
+import type { AuthorizeSsoUseCase } from "@api/use-cases/sso/authorize-sso/authorize-sso.use-case";
+import type { CompleteSsoCallbackUseCase } from "@api/use-cases/sso/complete-sso-callback/complete-sso-callback.use-case";
+import type { ExchangeSsoCodeUseCase } from "@api/use-cases/sso/exchange-sso-code/exchange-sso-code.use-case";
+import type { LoginWithOaUseCase } from "@api/use-cases/sso/login-with-oa/login-with-oa.use-case";
+import type { LoginWithWechatUseCase } from "@api/use-cases/sso/login-with-wechat/login-with-wechat.use-case";
+import type { LogoutSsoSessionUseCase } from "@api/use-cases/sso/logout-sso-session/logout-sso-session.use-case";
 import type { SsoRouteHandler } from "./sso.type";
 import { getApiAuditRequestContext } from "@api/services/audit/audit.service";
 import * as HttpStatusCodes from "@iam/api-core/core/http-status-codes";
@@ -15,10 +20,14 @@ type SsoEntryNetwork = "internal" | "external";
 export interface CreateSsoHandlersDeps {
   clientService: Pick<ClientService, "getClientByCode">;
   logger: Pick<LoggerPort, "warn">;
-  ssoService: Pick<
-    SsoService,
-    "authorize" | "callback" | "loginOA" | "loginWX" | "logout" | "setToken"
-  >;
+  sso: {
+    authorize: AuthorizeSsoUseCase;
+    completeCallback: CompleteSsoCallbackUseCase;
+    exchangeCode: ExchangeSsoCodeUseCase;
+    loginWithOa: LoginWithOaUseCase;
+    loginWithWechat: LoginWithWechatUseCase;
+    logout: LogoutSsoSessionUseCase;
+  };
   config: {
     authorizationEndpoint: string;
     authCodeExpireSeconds: number;
@@ -49,7 +58,7 @@ function resolvePrincipalToken(
   cookieToken: string | undefined,
   authorizationHeader: string | undefined,
   queryToken: string | undefined,
-): { token?: string; source: CustomSsoPrincipalTokenSource } {
+): { token?: string; source: SsoPrincipalTokenSource } {
   if (cookieToken) {
     return { token: cookieToken, source: "cookie" };
   }
@@ -84,7 +93,11 @@ export function createSsoHandlers(deps: CreateSsoHandlersDeps) {
   const callback: SsoRouteHandler<"callback"> = async (c) => {
     const { code, client, redirectUrl } = c.req.valid("query");
     const requestContext = getApiAuditRequestContext(c);
-    const data = await deps.ssoService.callback(code, client, redirectUrl, { requestContext });
+    const data = await deps.sso.completeCallback.execute({
+      code,
+      clientCode: client,
+      redirectUrl,
+    }, { requestContext });
     setCookie(c, `local_${client}_session`, data.token, {
       httpOnly: true,
       sameSite: "Lax",
@@ -107,9 +120,11 @@ export function createSsoHandlers(deps: CreateSsoHandlersDeps) {
 
   const token: SsoRouteHandler<"token"> = async (c) => {
     const { code, client, clientSecret } = c.req.valid("query");
-    const data = await deps.ssoService.setToken(code, client, clientSecret, {
-      requestContext: getApiAuditRequestContext(c),
-    });
+    const data = await deps.sso.exchangeCode.execute({
+      code,
+      clientCode: client,
+      clientSecret,
+    }, { requestContext: getApiAuditRequestContext(c) });
     return c.json(resp.ok(data), HttpStatusCodes.OK);
   };
 
@@ -119,13 +134,12 @@ export function createSsoHandlers(deps: CreateSsoHandlersDeps) {
     const requestContext = getApiAuditRequestContext(c);
     const principalToken = resolvePrincipalToken(getCookie(c, "global_session"), c.req.header("Authorization"), token);
     const clientDto = await deps.clientService.getClientByCode(client);
-    const data = await deps.ssoService.authorize(
-      principalToken.token,
-      principalToken.source,
-      client,
+    const data = await deps.sso.authorize.execute({
+      clientCode: client,
+      globalSessionToken: principalToken.token,
       redirectUrl,
-      { requestContext },
-    );
+      tokenSource: principalToken.source,
+    }, { requestContext });
     if (data.isLogin === false) {
       return c.redirect(`${deps.config.loginEndpoint}?${searchParams.toString()}`);
     }
@@ -138,7 +152,7 @@ export function createSsoHandlers(deps: CreateSsoHandlersDeps) {
   const logout: SsoRouteHandler<"logout"> = async (c) => {
     const { redirectUrl, token } = c.req.valid("query");
     const sessionToken = getCookie(c, "global_session") ?? token;
-    await deps.ssoService.logout(sessionToken);
+    await deps.sso.logout.execute({ sessionToken });
     deleteCookie(c, "global_session");
     return c.redirect(redirectUrl ?? deps.config.loginEndpoint);
   };
@@ -148,11 +162,14 @@ export function createSsoHandlers(deps: CreateSsoHandlersDeps) {
     const { loginid, ts, token, redirectUrl, client } = c.req.valid("query");
     const sessionId = getCookie(c, "global_session") ?? c.req.header("Authorization");
     if (sessionId) {
-      await deps.ssoService.logout(sessionId);
+      await deps.sso.logout.execute({ sessionToken: sessionId });
     }
-    const data = await deps.ssoService.loginOA(clientCode, loginid, ts, token, {
-      requestContext: getApiAuditRequestContext(c),
-    });
+    const data = await deps.sso.loginWithOa.execute({
+      clientCode,
+      loginId: loginid,
+      timestamp: ts,
+      token,
+    }, { requestContext: getApiAuditRequestContext(c) });
     setCookie(c, "global_session", data.token, {
       httpOnly: true,
       sameSite: "Lax",
@@ -164,9 +181,10 @@ export function createSsoHandlers(deps: CreateSsoHandlersDeps) {
 
   const loginWX: SsoRouteHandler<"loginWX"> = async (c) => {
     const { code, redirectUrl, client } = c.req.valid("query");
-    const data = await deps.ssoService.loginWX(code, {
-      requestContext: getApiAuditRequestContext(c),
-    });
+    const data = await deps.sso.loginWithWechat.execute(
+      { code },
+      { requestContext: getApiAuditRequestContext(c) },
+    );
     setCookie(c, "global_session", data.token, {
       httpOnly: true,
       sameSite: "Lax",

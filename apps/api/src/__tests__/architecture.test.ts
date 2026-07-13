@@ -70,6 +70,43 @@ function collectImportsFromRoot(root: string): ImportRecord[] {
   });
 }
 
+function isRepositoryOwnedPortModule(moduleSpecifier: string) {
+  return moduleSpecifier.endsWith(".repository")
+    || moduleSpecifier.endsWith(".repository.ts")
+    || moduleSpecifier.split("/").includes("repositories");
+}
+
+function collectPortOwnershipViolationsFromSource(file: string, content: string) {
+  const source = ts.createSourceFile(file, content, ts.ScriptTarget.Latest, true);
+  const reasons = new Set<string>();
+  function visit(node: ts.Node) {
+    if (ts.isImportDeclaration(node) && ts.isStringLiteral(node.moduleSpecifier)) {
+      const moduleSpecifier = node.moduleSpecifier.text;
+      if (isRepositoryOwnedPortModule(moduleSpecifier))
+        reasons.add(`imports ${moduleSpecifier}`);
+    }
+    if (ts.isTypeReferenceNode(node)
+      && node.typeName.getText(source) === "Pick"
+      && node.typeArguments?.[0]) {
+      const providerType = node.typeArguments[0].getText(source);
+      if (/(?:Repository|Service)$/u.test(providerType))
+        reasons.add(`derives Pick<${providerType}>`);
+    }
+    ts.forEachChild(node, visit);
+  }
+  visit(source);
+  return reasons.size === 0 ? [] : [`${file}: ${[...reasons].join("; ")}`];
+}
+
+function collectProductionPortOwnershipViolations() {
+  return collectSourceFiles(sourceRoot)
+    .filter(file => file.endsWith(".port.ts"))
+    .flatMap(file => collectPortOwnershipViolationsFromSource(
+      toPosixPath(relative(sourceRoot, file)),
+      readFileSync(file, "utf8"),
+    ));
+}
+
 function importsUserProfileProducerFromJobs(file: string) {
   return /import\s*\{[^}]*\bcreateUserProfileJobProducer\b[^}]*\}\s*from\s*["']@iam\/jobs["']/u
     .test(readFileSync(file, "utf8"));
@@ -115,7 +152,9 @@ function isCustomSsoRuntimeBoundary(file: string) {
   return file === "middlewares/authentication.handler.ts"
     || file.startsWith("routes/auth/")
     || file.startsWith("routes/sso/")
-    || file.startsWith("services/session/");
+    || file.startsWith("services/session/")
+    || file.startsWith("services/sso/")
+    || file.startsWith("use-cases/sso/");
 }
 
 const legacyCustomSsoAuthorityKeyPatterns = [
@@ -127,6 +166,33 @@ const legacyCustomSsoAuthorityKeyPatterns = [
 ];
 
 describe("API DI architecture", () => {
+  test("detects provider-derived ports without rejecting port or platform narrowing", () => {
+    const allowed = collectPortOwnershipViolationsFromSource("allowed.port.ts", `
+      import type { IncomingMessage } from "node:http";
+      import type { RedisPort } from "@api/composition/runtime";
+      type HeaderRequest = Pick<IncomingMessage, "headers">;
+      type RedisReader = Pick<RedisPort, "get">;
+    `);
+    const forbidden = collectPortOwnershipViolationsFromSource("forbidden.port.ts", `
+      import type { UserRepository } from "./user.repository";
+      interface UserService { findUser: () => Promise<unknown> }
+      type UserReader = Pick<
+        UserRepository,
+        "getUserByUsername"
+      >;
+      type UserLookup = Pick<UserService, "findUser">;
+    `);
+
+    expect(allowed).toEqual([]);
+    expect(forbidden).toEqual([
+      "forbidden.port.ts: imports ./user.repository; derives Pick<UserRepository>; derives Pick<UserService>",
+    ]);
+  });
+
+  test("keeps all production ports consumer-owned", () => {
+    expect(collectProductionPortOwnershipViolations()).toEqual([]);
+  });
+
   test("keeps route production modules off app-local repositories and UnitOfWork", () => {
     const violations = collectImports()
       .filter(({ file }) => isRouteProductionModule(file))
@@ -185,6 +251,167 @@ describe("API DI architecture", () => {
       .map(({ file, moduleSpecifier }) => `${file} imports ${moduleSpecifier}`);
 
     expect(routeFactoryViolations).toEqual([]);
+  });
+
+  test("keeps migrated open routes free of application service factories", () => {
+    const openRouteRoot = join(sourceRoot, "routes/open");
+    const violations = collectSourceFilesIfExists(openRouteRoot)
+      .map(file => ({
+        file: toPosixPath(relative(openRouteRoot, file)),
+        content: readFileSync(file, "utf8"),
+      }))
+      .filter(({ file, content }) =>
+        file === "open.port.ts"
+        || file === "open.service.ts"
+        || /\bexport\s+function\s+create\w*Service\b/u.test(content))
+      .map(({ file }) => file);
+
+    expect(violations).toEqual([]);
+  });
+
+  test("keeps migrated auth routes free of application services and stateful helpers", () => {
+    const authRouteRoot = join(sourceRoot, "routes/auth");
+    const legacyFiles = new Set([
+      "auth.port.ts",
+      "auth.service.ts",
+      "login-credential.helper.ts",
+      "login-failure.helper.ts",
+    ]);
+    const violations = collectSourceFilesIfExists(authRouteRoot)
+      .map(file => ({
+        file: toPosixPath(relative(authRouteRoot, file)),
+        content: readFileSync(file, "utf8"),
+      }))
+      .filter(({ file, content }) =>
+        legacyFiles.has(file)
+        || /\bexport\s+function\s+create\w*Service\b/u.test(content))
+      .map(({ file }) => file);
+
+    expect(violations).toEqual([]);
+  });
+
+  test("keeps migrated SSO routes free of application services and stateful workflow dependencies", () => {
+    const ssoRouteRoot = join(sourceRoot, "routes/sso");
+    const legacyFiles = new Set(["sso.port.ts", "sso.service.ts"]);
+    const fileViolations = collectSourceFilesIfExists(ssoRouteRoot)
+      .map(file => ({
+        file: toPosixPath(relative(ssoRouteRoot, file)),
+        content: readFileSync(file, "utf8"),
+      }))
+      .filter(({ file, content }) =>
+        legacyFiles.has(file)
+        || /\bexport\s+function\s+create\w*Service\b/u.test(content))
+      .map(({ file }) => file);
+    const dependencyViolations = collectImports()
+      .filter(item => item.hasValueImport && item.file.startsWith("routes/sso/"))
+      .filter(({ moduleSpecifier }) =>
+        moduleSpecifier === "@api/lib/infra/redis"
+        || moduleSpecifier === "@api/services/session/custom-sso-session-kernel.adapter"
+        || moduleSpecifier.startsWith("@api/services/audit/events/")
+        || moduleSpecifier.startsWith("@api/integrations/"))
+      .map(({ file, moduleSpecifier }) => `${file} imports ${moduleSpecifier}`);
+
+    expect([...fileViolations, ...dependencyViolations]).toEqual([]);
+  });
+
+  test("keeps Account Recovery ports consumer-owned", () => {
+    const accountRecoveryRoots = [
+      join(sourceRoot, "services/account-recovery"),
+      join(sourceRoot, "use-cases/account-recovery"),
+    ];
+    const violations = accountRecoveryRoots
+      .flatMap(collectSourceFilesIfExists)
+      .filter(file => file.endsWith(".port.ts"))
+      .flatMap((file) => {
+        const content = readFileSync(file, "utf8");
+        const relativeFile = toPosixPath(relative(sourceRoot, file));
+        return [
+          /from\s+["'][^"']+\.repository["']/u.test(content)
+            ? `${relativeFile} imports a repository module`
+            : null,
+          /\bPick\s*<[^>]*(?:Repository|Service)\b/u.test(content)
+            ? `${relativeFile} derives a provider-owned port`
+            : null,
+        ].filter((violation): violation is string => violation !== null);
+      });
+
+    expect(violations).toEqual([]);
+  });
+
+  test("keeps Authentication ports consumer-owned", () => {
+    const authenticationRoots = [
+      join(sourceRoot, "services/authentication"),
+      join(sourceRoot, "use-cases/authentication"),
+    ];
+    const violations = authenticationRoots
+      .flatMap(collectSourceFilesIfExists)
+      .filter(file => file.endsWith(".port.ts"))
+      .flatMap((file) => {
+        const content = readFileSync(file, "utf8");
+        const relativeFile = toPosixPath(relative(sourceRoot, file));
+        return [
+          /from\s+["'][^"']+\.repository["']/u.test(content)
+            ? `${relativeFile} imports a repository module`
+            : null,
+          /\bPick\s*<[^>]*(?:Repository|Service)\b/u.test(content)
+            ? `${relativeFile} derives a provider-owned port`
+            : null,
+          /from\s+["']@api\/(?:routes|services)\/.+\.(?:service|adapter)["']/u.test(content)
+            ? `${relativeFile} imports a concrete application module`
+            : null,
+        ].filter((violation): violation is string => violation !== null);
+      });
+
+    expect(violations).toEqual([]);
+  });
+
+  test("keeps SSO ports consumer-owned", () => {
+    const ssoRoots = [
+      join(sourceRoot, "services/sso"),
+      join(sourceRoot, "use-cases/sso"),
+    ];
+    const violations = ssoRoots
+      .flatMap(collectSourceFilesIfExists)
+      .filter(file => file.endsWith(".port.ts"))
+      .flatMap((file) => {
+        const content = readFileSync(file, "utf8");
+        const relativeFile = toPosixPath(relative(sourceRoot, file));
+        return [
+          /from\s+["'][^"']+\.repository["']/u.test(content)
+            ? `${relativeFile} imports a repository module`
+            : null,
+          /\bPick\s*<[^>]*(?:Repository|Service|Adapter)\b/u.test(content)
+            ? `${relativeFile} derives a provider-owned port`
+            : null,
+          /from\s+["']@api\/(?:routes|services)\/.+\.(?:service|adapter|type)["']/u.test(content)
+            ? `${relativeFile} imports a concrete application module`
+            : null,
+        ].filter((violation): violation is string => violation !== null);
+      });
+
+    expect(violations).toEqual([]);
+  });
+
+  test("keeps SSO composition owned by useCases", () => {
+    const compositionRoot = join(sourceRoot, "composition");
+    const violations = collectSourceFilesIfExists(compositionRoot)
+      .flatMap((file) => {
+        const content = readFileSync(file, "utf8");
+        const relativeFile = toPosixPath(relative(sourceRoot, file));
+        return [
+          /@api\/routes\/sso\/sso\.service/u.test(content)
+            ? `${relativeFile} imports the legacy SSO service`
+            : null,
+          /\bssoService\s*:/u.test(content)
+            ? `${relativeFile} exposes ssoService`
+            : null,
+          /\bservices\.sso\b/u.test(content)
+            ? `${relativeFile} consumes services.sso`
+            : null,
+        ].filter((violation): violation is string => violation !== null);
+      });
+
+    expect(violations).toEqual([]);
   });
 
   test("keeps custom SSO runtime off legacy Redis authority keys", () => {

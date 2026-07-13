@@ -2,10 +2,13 @@ import type { Redis } from "ioredis";
 import type { OidcProviderEnv } from "../../env.ts";
 import type { OidcLogger } from "../../lib/logger.ts";
 import type { SigningKey } from "../../security/signing-keys.ts";
-import type { OidcProviderServices } from "../services/index.ts";
+import type { OidcProviderRepositories } from "../repositories/index.ts";
+import type { OidcProviderSecurity } from "../security/index.ts";
 import type { OidcProviderSession } from "../session/index.ts";
 import type { OidcProviderStores } from "../stores/index.ts";
 import { createOidcInteractionHandler } from "../../interaction/handler.ts";
+import { createIamInteractionPolicy } from "../../interaction/policy.ts";
+import { createOidcClaimsAdapter } from "../../provider/claims.ts";
 import { createOidcProvider } from "../../provider/create-provider.ts";
 import { createOidcAdapterFactory } from "../../storage/redis-adapter.ts";
 
@@ -17,12 +20,9 @@ export interface CreateOidcProviderRuntimeDeps {
     current: SigningKey;
     previous?: SigningKey;
   };
+  repositories: Pick<OidcProviderRepositories, "account" | "authorization">;
+  security: Pick<OidcProviderSecurity, "clientAuthRateLimiter" | "clientSecretVerifier">;
   session: Pick<OidcProviderSession, "oidcSession">;
-  services: Pick<OidcProviderServices, | "claims"
-  | "clientAuthRateLimiter"
-  | "clientSecretVerifier"
-  | "globalSessionResolver"
-  | "interactionPolicy">;
   stores: Pick<OidcProviderStores, | "clientRuntime"
   | "tokens">;
 }
@@ -35,21 +35,29 @@ export function createOidcProviderRuntime(deps: CreateOidcProviderRuntimeDeps) {
     providerSessions: deps.session.oidcSession,
     tokens: deps.stores.tokens,
   });
+  const claims = createOidcClaimsAdapter({
+    accounts: deps.repositories.account,
+    authorization: deps.repositories.authorization,
+    clients: deps.stores.clientRuntime,
+    globalSessions: deps.session.oidcSession,
+    providerSessions: deps.session.oidcSession,
+    tokens: deps.session.oidcSession,
+  });
   const provider = createOidcProvider({
     env: deps.env,
     logger: deps.logger,
     signingKeys: deps.signingKeys,
     adapter,
-    claims: deps.services.claims,
-    interactionPolicy: deps.services.interactionPolicy,
-    clientAuthRateLimiter: deps.services.clientAuthRateLimiter,
-    clientSecretVerifier: deps.services.clientSecretVerifier,
+    claims,
+    interactionPolicy: createIamInteractionPolicy(deps.session.oidcSession),
+    clientAuthRateLimiter: deps.security.clientAuthRateLimiter,
+    clientSecretVerifier: deps.security.clientSecretVerifier,
     oidcSession: deps.session.oidcSession,
   });
   const interactions = createOidcInteractionHandler({
     provider,
     clients: deps.stores.clientRuntime,
-    globalSessions: deps.services.globalSessionResolver,
+    globalSessions: deps.session.oidcSession,
     providerSessions: deps.session.oidcSession,
     returnHandles: deps.session.oidcSession,
     env: deps.env,

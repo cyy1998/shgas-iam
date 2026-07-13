@@ -3,11 +3,9 @@ import type { SessionKernelRedis } from "@iam/api-core/session/kernel";
 import type { ApiRepositories } from "../repositories";
 import type { ApiRuntimePorts } from "../runtime";
 import type { createApiUnitOfWork } from "../tx";
-import { createAuthService } from "@api/routes/auth/auth.service";
-import { createLoginCredentialParser } from "@api/routes/auth/login-credential.helper";
-import { createLoginFailureService } from "@api/routes/auth/login-failure.helper";
-import { createOpenService } from "@api/routes/open/open.service";
-import { createSsoService } from "@api/routes/sso/sso.service";
+import { createAccountRecoveryService } from "@api/services/account-recovery/account-recovery.service";
+import { createLoginCredentialParser } from "@api/services/authentication/login-credential.parser";
+import { createLoginFailureService } from "@api/services/authentication/login-failure.service";
 import { createClientService } from "@api/services/client/client.service";
 import { createCapService } from "@api/services/human-verification/cap.service";
 import { createHumanRiskService } from "@api/services/human-verification/human-risk.service";
@@ -18,6 +16,7 @@ import {
   createCustomSsoCleanupAdapter,
   createCustomSsoSessionKernelAdapter,
 } from "@api/services/session/custom-sso-session-kernel.adapter";
+import { createSsoRedirectUrlValidator } from "@api/services/sso/redirect-url.validator";
 import { createUserDelegationQuery } from "@api/services/user/user-delegation-query.helper";
 import { createUserMobileBinding } from "@api/services/user/user-mobile-binding.helper";
 import { createUserPasswordHelper } from "@api/services/user/user-password.helper";
@@ -118,7 +117,6 @@ export function createApiServices(options: CreateApiServicesOptions) {
   const userService = createUserService({
     userRepository: repositories.user,
     mobileService,
-    auditLogWriter,
     profileQuery: userProfileQuery,
     userDelegationQuery,
     mobileBinding: userMobileBinding,
@@ -128,6 +126,10 @@ export function createApiServices(options: CreateApiServicesOptions) {
       auditLogWriter: tx.auditLogWriter,
       profileDirtyMarker: tx.profileDirtyMarker,
     })),
+  });
+
+  const accountRecoveryService = createAccountRecoveryService({
+    userLookup: userService,
   });
 
   const organizationService = createOrganizationService({
@@ -177,51 +179,24 @@ export function createApiServices(options: CreateApiServicesOptions) {
     },
   });
 
-  const authService = createAuthService({
-    userService,
-    customSsoSession,
-    mobileService,
-    humanVerification: capService,
-    humanRiskService,
-    auditLogWriter,
-    loginFailure: loginFailureService,
-    config: {
-      magicCode: runtime.config.auth.magicCode,
-    },
-  });
-
-  const openService = createOpenService({ userService });
-
-  const ssoService = createSsoService({
-    redis: runtime.redis,
+  const ssoRedirectUrl = createSsoRedirectUrlValidator({
     logger: runtime.logger,
-    random: runtime.random,
-    clock: runtime.clock,
-    orcasClient: runtime.integrations.orcas,
-    wechatClient: runtime.integrations.wechat,
-    clientService,
-    customSsoSession,
-    userService,
-    auditLogWriter,
-    config: {
-      nodeEnv: runtime.config.env.nodeEnv,
-      authCodeExpireSeconds: runtime.config.auth.authCodeExpireSeconds,
-    },
   });
 
   return {
-    auth: authService,
+    accountRecovery: accountRecoveryService,
     cap: capService,
     client: clientService,
     customSsoSession,
     humanRisk: humanRiskService,
     loginCredential: loginCredentialParser,
+    loginFailure: loginFailureService,
     mobile: mobileService,
-    open: openService,
     organization: organizationService,
     privilegeDelegation: privilegeDelegationService,
-    sso: ssoService,
+    ssoRedirectUrl,
     user: userService,
+    userPassword: userPasswordHelper,
     userProfileQuery,
   };
 }

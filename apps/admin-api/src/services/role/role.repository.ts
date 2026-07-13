@@ -1,7 +1,13 @@
 import type { DbClient } from "@iam/db";
 import type { RoleAssignmentTargetSummaryDto } from "@iam/domain/role";
 import type { SQLWrapper } from "drizzle-orm";
-import type { RoleAssignmentPaginationQueryDto, RolePaginationQueryDto, RoleUpdateDto } from "./role.type";
+import type {
+  AdminRoleAssignmentCreateRecord,
+  AdminRoleCreateRecord,
+  RoleAssignmentPaginationQueryDto,
+  RolePaginationQueryDto,
+  RoleUpdateDto,
+} from "./role.type";
 import { EmploymentStatus, OrganizationStatus, PositionStatus, RoleAssignmentTargetType, RoleStatus } from "@iam/contracts";
 import { compactUpdate, firstRow, ilikeContainsIf } from "@iam/db/query-utils";
 import {
@@ -56,13 +62,7 @@ export function createRoleRepository(db: DbClient) {
       };
     },
 
-    async createRole(data: {
-      roleCode: string;
-      roleName: string;
-      clientId: number;
-      status?: RoleStatus;
-      description?: string | null;
-    }) {
+    async createRole(data: AdminRoleCreateRecord) {
       return firstRow(await db.insert(roles).values({
         roleCode: data.roleCode,
         roleName: data.roleName,
@@ -196,12 +196,7 @@ export function createRoleRepository(db: DbClient) {
       }) ?? null;
     },
 
-    async createAssignment(data: {
-      roleId: number;
-      targetType: RoleAssignmentTargetType;
-      targetId: number;
-      includeDescendants: boolean;
-    }) {
+    async createAssignment(data: AdminRoleAssignmentCreateRecord) {
       return firstRow(await db.insert(roleAssignments).values(data).returning())!;
     },
 

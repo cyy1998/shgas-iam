@@ -11,3 +11,15 @@ _Avoid_: session payload, protocol payload
 **ORCAS Session Identity**:
 Custom SSO Gateway 登录过程中由 ORCAS 返回、绑定到本次 local session 的外部身份信息；它不是 IAM 用户档案属性。
 _Avoid_: user detail field, user profile attribute
+
+**Account Recovery**:
+用户无法正常登录时，通过已绑定身份凭据重新取得 IAM 账号访问权的自助过程；它不包括普通登录或管理员代为重置凭据。
+_Avoid_: open flow, public password helper
+
+**User Resignation**:
+管理员结束用户全部有效任职并禁用其 IAM 账号的原子业务流程；它不同于删除单条任职或删除用户。
+_Avoid_: employment deletion, user deletion
+
+**OIDC Claims Snapshot**:
+OIDC token 签发时按账号、client、scope 和授权状态固化的声明视图；后续读取不得把新的档案或授权事实混入既有 token。
+_Avoid_: live user profile, current authorization view

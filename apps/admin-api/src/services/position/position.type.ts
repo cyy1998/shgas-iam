@@ -10,3 +10,4 @@ export interface PositionCreateDto extends z.infer<typeof PositionCreateDtoSchem
 export interface PositionFuzzyQueryDto extends z.infer<typeof PositionPaginationQueryDtoSchema> {};
 export type PositionSearchResult = Array<z.infer<typeof PositionDetailSchema>>;
 export interface PositionUpdateDto extends z.infer<typeof PositionUpdateDtoSchema> {};
+export type { Position } from "@iam/domain/position";

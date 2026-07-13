@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   assembleOidcAuthorizationClaim,
   buildOidcAuthorizationEmployment,
-} from "../repositories/authorization-claim.ts";
+} from "../provider/authorization-claim.ts";
 
 describe("iam:authorization claim", () => {
   it("filters roles to the current client and derives privileges only from retained roles", () => {

@@ -1,15 +1,11 @@
 import type { UserRequestOptions, UserServiceDeps } from "./user.port";
 import type { UserDetailDto, UserDto, UserQueryDto, UserQueryWithPrivilegeDelegationDto } from "./user.type";
-import { VerificationCodeUsage } from "@api/enums/verificationCode.usage";
 import { withApiRequestContext } from "@api/services/audit/audit.service";
 import {
   buildMobileBindSuccessAudit,
-  buildPasswordResetFailureAudit,
-  buildPasswordResetSuccessAudit,
   buildSelfPasswordChangeFailureAudit,
   buildSelfPasswordChangeSuccessAudit,
 } from "@api/services/audit/events/self-user.audit";
-import { InvalidVerificationCodeError } from "@iam/api-core/errors/InvalidVerificationCodeError";
 import { UserProfileDirtyReason, UserStatus } from "@iam/contracts";
 import { InvalidOldPasswordError, UserNotFoundError, UserPasswordUnchangedError } from "@iam/domain/user";
 
@@ -45,58 +41,6 @@ export function createUserService(deps: UserServiceDeps) {
       ));
       return true;
     }, { observability: options.requestContext });
-  }
-
-  async function resetPassword(
-    username: string,
-    phone: string,
-    code: string,
-    newPassword: string,
-    options: UserRequestOptions = {},
-  ) {
-    const user = await deps.userRepository.getUserByUsername(username);
-    if (user === null) {
-      throw new UserNotFoundError("用户不存在");
-    }
-    if (user.mobile !== phone) {
-      await deps.auditLogWriter.recordAuditLog(withApiRequestContext(
-        options.requestContext,
-        buildPasswordResetFailureAudit(user, phone, "mobile_mismatch"),
-      ));
-      throw new UserNotFoundError("用户名与手机号不匹配");
-    }
-    const reservation = await deps.mobileService.reserveVerificationCode(
-      VerificationCodeUsage.ResetPassword,
-      phone,
-      code,
-    );
-    if (reservation === null) {
-      await deps.auditLogWriter.recordAuditLog(withApiRequestContext(
-        options.requestContext,
-        buildPasswordResetFailureAudit(user, phone, "invalid_verification_code"),
-      ));
-      throw new InvalidVerificationCodeError("验证码错误");
-    }
-    let transactionSucceeded = false;
-    try {
-      const newPasswordHash = await deps.passwordHelper.hashUserPassword(newPassword);
-      const result = await deps.uow.transaction(async (tx) => {
-        await tx.userRepository.setPassword(user.id, newPasswordHash);
-        await tx.auditLogWriter.recordAuditLog(withApiRequestContext(
-          options.requestContext,
-          buildPasswordResetSuccessAudit(user, phone),
-        ));
-        return true;
-      }, { observability: options.requestContext });
-      transactionSucceeded = true;
-      await deps.mobileService.confirmReservedVerificationCode(reservation);
-      return result;
-    }
-    catch (error) {
-      if (!transactionSucceeded)
-        await deps.mobileService.releaseReservedVerificationCode(reservation);
-      throw error;
-    }
   }
 
   async function checkPassword(username: string, inputPassword: string) {
@@ -195,7 +139,6 @@ export function createUserService(deps: UserServiceDeps) {
 
   return {
     setPassword,
-    resetPassword,
     checkPassword,
     getActiveUserById,
     getActiveUserByMobile,

@@ -1,28 +1,68 @@
 import type { ClockPort } from "@admin-api/composition/runtime";
 import type { AuditLogWriterPort } from "@admin-api/services/audit/audit.service";
-import type { EmploymentRepository } from "@admin-api/services/employment/employment.repository";
-import type { OrganizationRepository } from "@admin-api/services/organization/organization.repository";
-import type { PositionRepository } from "@admin-api/services/position/position.repository";
-import type { PrivilegeRepository } from "@admin-api/services/privilege/privilege.repository";
-import type { RoleRepository } from "@admin-api/services/role/role.repository";
-import type { UserRepository } from "@admin-api/services/user/user.repository";
 import type { UnitOfWorkPort } from "@iam/api-core/uow";
+import type { Organization } from "@iam/domain/organization";
+import type { Position } from "@iam/domain/position";
+import type { User } from "@iam/domain/user";
 import type { UserProfileDirtyMarker } from "@iam/user-profile-read-model/producer";
+import type {
+  AdminEmploymentRecordCreate,
+  AdminEmploymentRecordUpdate,
+  Employment,
+  EmploymentAdminPaginationQueryDto,
+  EmploymentDetail,
+} from "./employment.type";
+
+export interface AdminEmploymentStorePort {
+  getEmploymentByUserOrgPosId: (
+    userId: number,
+    orgId: number,
+    posId: number,
+  ) => Promise<EmploymentDetail | null>;
+  getEmploymentByIdForAdmin: (id: number) => Promise<EmploymentDetail | null>;
+  createEmploymentRecord: (input: AdminEmploymentRecordCreate) => Promise<Employment>;
+  updateEmploymentRecord: (id: number, input: AdminEmploymentRecordUpdate) => Promise<Employment>;
+  unsetPrimariesByUserId: (userId: number, exceptEmploymentId: number | null) => Promise<unknown>;
+  softDeleteEmployment: (id: number) => Promise<unknown>;
+}
+
+export interface AdminEmploymentReaderPort {
+  getEmploymentByIdForAdmin: (id: number) => Promise<EmploymentDetail | null>;
+  searchEmploymentsFuzzyForAdminPaged: (query: EmploymentAdminPaginationQueryDto) => Promise<{
+    rows: EmploymentDetail[];
+    total: number;
+  }>;
+}
+
+export interface AdminEmploymentOrganizationReaderPort {
+  getOrganizationByCode: (orgCode: string) => Promise<Organization | null>;
+  isOrganizationDescendantOf: (descendantOrgCode: string, ancestorOrgCode: string) => Promise<boolean>;
+}
+
+export interface AdminEmploymentPositionReaderPort {
+  getPositionByCode: (posCode: string) => Promise<Position | null>;
+}
+
+export interface AdminEmploymentUserReaderPort {
+  getUserByUsernameForAdmin: (username: string) => Promise<User | null>;
+}
+
+export interface AdminEmploymentRoleReaderPort {
+  getRolesByEmploymentId: (employmentId: number) => Promise<Array<{
+    id: number;
+    roleCode: string;
+  }>>;
+}
+
+export interface AdminEmploymentPrivilegeReaderPort {
+  getPrivilegesByRoleIds: (roleIds: number[]) => Promise<Array<{ privilegeCode: string }>>;
+}
 
 export interface AdminEmploymentTransactionPorts {
-  employmentRepository: Pick<
-    EmploymentRepository,
-    | "getEmploymentByUserOrgPosId"
-    | "getEmploymentByIdForAdmin"
-    | "createEmploymentRecord"
-    | "updateEmploymentRecord"
-    | "unsetPrimariesByUserId"
-    | "softDeleteEmployment"
-    | "endActiveEmploymentsByUserId"
-  >;
-  organizationRepository: Pick<OrganizationRepository, "getOrganizationByCode" | "isOrganizationDescendantOf">;
-  positionRepository: Pick<PositionRepository, "getPositionByCode">;
-  userRepository: Pick<UserRepository, "getUserByUsernameForAdmin" | "updateUserByUsername">;
+  employmentRepository: AdminEmploymentStorePort;
+  organizationRepository: AdminEmploymentOrganizationReaderPort;
+  positionRepository: AdminEmploymentPositionReaderPort;
+  userRepository: AdminEmploymentUserReaderPort;
   auditService: AuditLogWriterPort;
   profileDirtyMarker: Pick<UserProfileDirtyMarker, "markUsersDirty">;
 }
@@ -30,12 +70,9 @@ export interface AdminEmploymentTransactionPorts {
 export type AdminEmploymentUnitOfWorkPort = UnitOfWorkPort<AdminEmploymentTransactionPorts>;
 
 export interface AdminEmploymentServiceDeps {
-  employmentRepository: Pick<
-    EmploymentRepository,
-    "getEmploymentByIdForAdmin" | "searchEmploymentsFuzzyForAdminPaged"
-  >;
-  roleRepository: Pick<RoleRepository, "getRolesByEmploymentId">;
-  privilegeRepository: Pick<PrivilegeRepository, "getPrivilegesByRoleIds">;
+  employmentRepository: AdminEmploymentReaderPort;
+  roleRepository: AdminEmploymentRoleReaderPort;
+  privilegeRepository: AdminEmploymentPrivilegeReaderPort;
   clock: Pick<ClockPort, "nowDate">;
   uow: AdminEmploymentUnitOfWorkPort;
 }

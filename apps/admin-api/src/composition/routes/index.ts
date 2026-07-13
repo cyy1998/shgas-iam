@@ -2,6 +2,7 @@ import type { AdminAuditService } from "@admin-api/services/audit/audit.service"
 import type { CreateAppOptions } from "@iam/api-core/core/create-app";
 import type { AdminApiRuntimePorts } from "../runtime";
 import type { AdminApiServices } from "../services";
+import type { AdminApiUseCases } from "../use-cases";
 import { createAuditAdapter } from "@admin-api/routes/admin/audit/audit.adapter";
 import { createAuditRoute } from "@admin-api/routes/admin/audit/audit.index";
 import { createAuditAdminRouter } from "@admin-api/routes/admin/audit/audit.trpc";
@@ -31,16 +32,20 @@ export interface CreateAdminApiRoutesOptions {
   auditService: AdminAuditService;
   runtime: AdminApiRuntimePorts;
   services: AdminApiServices;
+  useCases: AdminApiUseCases;
 }
 
 export async function createAdminApiRoutes(
   options: CreateAdminApiRoutesOptions,
 ): Promise<CreateAppOptions["routes"]> {
-  const { auditService, runtime, services } = options;
+  const { auditService, runtime, services, useCases } = options;
 
   const auditAdapter = createAuditAdapter({ auditService });
   const clientAdapter = createClientAdapter({ clientService: services.client });
-  const employmentAdapter = createEmploymentAdapter({ employmentService: services.employment });
+  const employmentAdapter = createEmploymentAdapter({
+    employmentService: services.employment,
+    resignUser: useCases.employment.resignUser,
+  });
   const organizationAdapter = createOrganizationAdapter({ organizationService: services.organization });
   const positionAdapter = createPositionAdapter({ positionService: services.position });
   const roleAdapter = createRoleAdapter({ roleService: services.role });

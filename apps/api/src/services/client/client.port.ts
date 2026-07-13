@@ -1,7 +1,12 @@
 import type { RedisPort } from "@api/composition/runtime";
-import type { ClientRepository } from "./client.repository";
+import type { ClientDto } from "./client.type";
+
+export interface ClientReaderPort {
+  getClientByCode: (clientCode: string) => Promise<ClientDto | null>;
+  getClientBySecret: (clientSecret: string) => Promise<ClientDto | null>;
+}
 
 export interface ClientServiceDeps {
   redis: Pick<RedisPort, "get" | "set" | "del">;
-  clientRepository: Pick<ClientRepository, "getClientByCode" | "getClientBySecret">;
+  clientRepository: ClientReaderPort;
 }

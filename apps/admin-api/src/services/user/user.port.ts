@@ -1,23 +1,49 @@
 import type { PasswordHasherPort, RandomPort } from "@admin-api/composition/runtime";
 import type { AuditLogWriterPort } from "@admin-api/services/audit/audit.service";
-import type { EmploymentRepository } from "@admin-api/services/employment/employment.repository";
-import type { PrivilegeRepository } from "@admin-api/services/privilege/privilege.repository";
-import type { RoleRepository } from "@admin-api/services/role/role.repository";
 import type { AdminSessionRevocationPort } from "@admin-api/services/session-revocation/session-revocation.port";
 import type { UnitOfWorkPort } from "@iam/api-core/uow";
 import type { UserProfileDirtyMarker } from "@iam/user-profile-read-model/producer";
-import type { UserRepository } from "./user.repository";
+import type {
+  User,
+  UserCreateDto,
+  UserPaginationQueryDto,
+  UserUpdateDto,
+} from "./user.type";
+
+export interface AdminUserTransactionStorePort {
+  getUserByUsernameForAdmin: (username: string) => Promise<User | null>;
+  setUserForAdmin: (input: UserCreateDto) => Promise<User>;
+  updateUserByUsername: (username: string, input: UserUpdateDto) => Promise<User>;
+  countActiveEmploymentsByUsername: (username: string) => Promise<number>;
+  softDeleteUserByUsername: (username: string) => Promise<User>;
+  setPassword: (userId: number, password: string) => Promise<User>;
+}
+
+export interface AdminUserReaderPort {
+  getUserByUsernameForAdmin: (username: string) => Promise<User | null>;
+  searchUsersFuzzyPaged: (query: UserPaginationQueryDto) => Promise<{
+    rows: User[];
+    total: number;
+  }>;
+}
+
+export interface AdminUserEmploymentReaderPort {
+  getAllEmploymentsByUserIdForAdmin: (userId: number) => Promise<Array<{ id: number }>>;
+}
+
+export interface AdminUserRoleReaderPort {
+  getRolesByEmploymentId: (employmentId: number) => Promise<Array<{
+    id: number;
+    roleCode: string;
+  }>>;
+}
+
+export interface AdminUserPrivilegeReaderPort {
+  getPrivilegesByRoleIds: (roleIds: number[]) => Promise<Array<{ privilegeCode: string }>>;
+}
 
 export interface AdminUserTransactionPorts {
-  userRepository: Pick<
-    UserRepository,
-    | "getUserByUsernameForAdmin"
-    | "setUserForAdmin"
-    | "updateUserByUsername"
-    | "countActiveEmploymentsByUsername"
-    | "softDeleteUserByUsername"
-    | "setPassword"
-  >;
+  userRepository: AdminUserTransactionStorePort;
   auditService: AuditLogWriterPort;
   profileDirtyMarker: Pick<UserProfileDirtyMarker, "markUsersDirty">;
 }
@@ -25,10 +51,10 @@ export interface AdminUserTransactionPorts {
 export type AdminUserUnitOfWorkPort = UnitOfWorkPort<AdminUserTransactionPorts>;
 
 export interface AdminUserServiceDeps {
-  userRepository: Pick<UserRepository, "getUserByUsernameForAdmin" | "searchUsersFuzzyPaged">;
-  employmentRepository: Pick<EmploymentRepository, "getAllEmploymentsByUserIdForAdmin">;
-  roleRepository: Pick<RoleRepository, "getRolesByEmploymentId">;
-  privilegeRepository: Pick<PrivilegeRepository, "getPrivilegesByRoleIds">;
+  userRepository: AdminUserReaderPort;
+  employmentRepository: AdminUserEmploymentReaderPort;
+  roleRepository: AdminUserRoleReaderPort;
+  privilegeRepository: AdminUserPrivilegeReaderPort;
   passwordHasher: Pick<PasswordHasherPort, "hashPassword">;
   random: Pick<RandomPort, "password">;
   sessionRevocation: Pick<AdminSessionRevocationPort, "revokeUserSessions">;

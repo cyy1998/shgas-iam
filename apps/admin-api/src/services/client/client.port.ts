@@ -6,29 +6,51 @@ import type {
 import type { AuditLogWriterPort } from "@admin-api/services/audit/audit.service";
 import type { AdminSessionRevocationPort } from "@admin-api/services/session-revocation/session-revocation.port";
 import type { UnitOfWorkPort } from "@iam/api-core/uow";
-import type { ClientRepository } from "./client.repository";
+import type {
+  AdminClientOidcUpdate,
+  AdminClientRecord,
+  ClientCreateDto,
+  ClientInputDto,
+  ClientPaginationQueryDto,
+  ClientUpdateDto,
+} from "./client.type";
+
+export interface AdminClientReaderPort {
+  searchClientsPaged: (query: ClientPaginationQueryDto) => Promise<{
+    rows: AdminClientRecord[];
+    total: number;
+  }>;
+  getClientByCode: (clientCode: string) => Promise<AdminClientRecord | null>;
+}
+
+export interface AdminClientTransactionStorePort {
+  getAnyClientByCode: (clientCode: string) => Promise<AdminClientRecord | null>;
+  getClientByCode: (clientCode: string) => Promise<AdminClientRecord | null>;
+  getClientById: (id: number) => Promise<AdminClientRecord | null>;
+  createClient: (input: ClientCreateDto) => Promise<AdminClientRecord>;
+  updateClientByCode: (clientCode: string, input: ClientUpdateDto) => Promise<AdminClientRecord>;
+  updateClientByCodeWithOidcVersion: (
+    clientCode: string,
+    input: ClientUpdateDto,
+  ) => Promise<AdminClientRecord>;
+  updateClientById: (input: ClientInputDto) => Promise<AdminClientRecord>;
+  updateClientByIdWithOidcVersion: (input: ClientInputDto) => Promise<AdminClientRecord>;
+  updateClientOidcByCode: (
+    clientCode: string,
+    input: AdminClientOidcUpdate,
+  ) => Promise<AdminClientRecord>;
+  softDeleteClientByCode: (clientCode: string) => Promise<AdminClientRecord>;
+}
 
 export interface AdminClientTransactionPorts {
-  clientRepository: Pick<
-    ClientRepository,
-    | "getAnyClientByCode"
-    | "getClientByCode"
-    | "getClientById"
-    | "createClient"
-    | "updateClientByCode"
-    | "updateClientByCodeWithOidcVersion"
-    | "updateClientById"
-    | "updateClientByIdWithOidcVersion"
-    | "updateClientOidcByCode"
-    | "softDeleteClientByCode"
-  >;
+  clientRepository: AdminClientTransactionStorePort;
   auditService: AuditLogWriterPort;
 }
 
 export type AdminClientUnitOfWorkPort = UnitOfWorkPort<AdminClientTransactionPorts>;
 
 export interface AdminClientServiceDeps {
-  clientRepository: Pick<ClientRepository, "searchClientsPaged" | "getClientByCode">;
+  clientRepository: AdminClientReaderPort;
   clientCache: ClientCachePort;
   sessionRevocation: Pick<AdminSessionRevocationPort, "revokeClientProtocol" | "revokeClientAllProtocols">;
   passwordHasher: Pick<PasswordHasherPort, "hashSecret">;

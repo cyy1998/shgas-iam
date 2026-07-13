@@ -1,7 +1,11 @@
 import type { DbClient } from "@iam/db";
 import type { Employment, Organization, User } from "@iam/db/schema";
 import type { SQLWrapper } from "drizzle-orm";
-import type { EmploymentAdminPaginationQueryDto } from "./employment.type";
+import type {
+  AdminEmploymentRecordCreate,
+  AdminEmploymentRecordUpdate,
+  EmploymentAdminPaginationQueryDto,
+} from "./employment.type";
 import { EmploymentStatus, OrganizationType } from "@iam/contracts";
 import { compactUpdate, firstRow, ilikeContainsIf, inArrayIf } from "@iam/db/query-utils";
 import {
@@ -74,15 +78,7 @@ export function createEmploymentRepository(db: DbClient) {
       ]);
       return { rows: await attachEmploymentRelations(rows, db), total: firstRow(totalRows)?.value ?? 0 };
     },
-    async createEmploymentRecord(data: {
-      userId: number;
-      posId: number;
-      orgId: number;
-      isPrimary?: boolean;
-      startTime?: Date;
-      description?: string | null;
-      status?: EmploymentStatus;
-    }) {
+    async createEmploymentRecord(data: AdminEmploymentRecordCreate) {
       try {
         return firstRow(await db.insert(employments).values({
           userId: data.userId,
@@ -100,13 +96,7 @@ export function createEmploymentRepository(db: DbClient) {
         throw error;
       }
     },
-    async updateEmploymentRecord(id: number, data: {
-      isPrimary?: boolean;
-      startTime?: Date;
-      endTime?: Date | null;
-      description?: string | null;
-      status?: EmploymentStatus;
-    }) {
+    async updateEmploymentRecord(id: number, data: AdminEmploymentRecordUpdate) {
       return firstRow(await db
         .update(employments)
         .set(compactUpdate(data))

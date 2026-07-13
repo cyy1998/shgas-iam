@@ -89,7 +89,6 @@ function createService() {
     },
     employmentRepository: {
       createEmploymentRecord: mock(async () => employment({ id: 10 })),
-      endActiveEmploymentsByUserId: mock(async () => undefined),
       getEmploymentByIdForAdmin: mock(async () => employment()),
       getEmploymentByUserOrgPosId: mock(async () => null),
       softDeleteEmployment: mock(async () => employment({ isDelete: true })),
@@ -105,7 +104,6 @@ function createService() {
     },
     userRepository: {
       getUserByUsernameForAdmin: mock(async () => user()),
-      updateUserByUsername: mock(async () => user()),
     },
   };
   const deps = {
@@ -281,21 +279,6 @@ describe("createEmploymentService", () => {
     expect(tx.profileDirtyMarker.markUsersDirty).toHaveBeenCalledWith(expect.objectContaining({
       userIds: [1],
       reasonCodes: [UserProfileDirtyReason.EmploymentUpdated],
-    }));
-  });
-
-  test("resigns a user and marks both employment and user profile reasons dirty", async () => {
-    const { service, tx } = createService();
-
-    await expect(service.resignUser("zhangsan")).resolves.toBe(true);
-
-    expect(tx.employmentRepository.endActiveEmploymentsByUserId).toHaveBeenCalledWith(1);
-    expect(tx.userRepository.updateUserByUsername).toHaveBeenCalledWith("zhangsan", {
-      status: UserStatus.Disable,
-    });
-    expect(tx.profileDirtyMarker.markUsersDirty).toHaveBeenCalledWith(expect.objectContaining({
-      userIds: [1],
-      reasonCodes: [UserProfileDirtyReason.EmploymentUpdated, UserProfileDirtyReason.UserUpdated],
     }));
   });
 });

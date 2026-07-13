@@ -1,5 +1,5 @@
 import type { DbClient } from "@iam/db";
-import type { OidcAuthorizationClaim } from "./authorization-claim.ts";
+import type { OidcAuthorizationClaim } from "../provider/authorization-claim.ts";
 import {
   EmploymentStatus,
   OrganizationStatus,
@@ -23,9 +23,7 @@ import { alias } from "drizzle-orm/pg-core";
 import {
   assembleOidcAuthorizationClaim,
   buildOidcAuthorizationEmployment,
-} from "./authorization-claim.ts";
-
-export type { OidcAuthorizationClaim } from "./authorization-claim.ts";
+} from "../provider/authorization-claim.ts";
 
 export interface RoleAssignmentEmploymentInput {
   id: number;

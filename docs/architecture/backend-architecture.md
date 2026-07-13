@@ -20,12 +20,21 @@
   `@worker/lib/logger` 和 `src/lib/infra/redis.ts`。
 - Production runtime、repository、service、use-case、route、middleware 和 integration 实例在 app-local
   `src/composition/` 模块中创建，并按 `runtime`、`repositories`、`tx`、`services`、`use-cases`、`routes`、
-  `middlewares` 组织。
+  `middlewares` 组织；non-Hono app 可以按实际 runtime ownership 使用 `provider`、`security`、`session`、`stores`、
+  `workers` 等分类，不得把异构 protocol/runtime components 伪装成 Application Services 聚合。
 - 后端可替换模块应导出 factory 和返回类型，例如 `createUserService(deps)` 和
   `type UserService = ReturnType<typeof createUserService>`。不要重新引入已绑定 production 依赖的
   service/repository singleton。
 - Consumer-owned `*.port.ts` 文件定义 service/use-case 消费的出站行为。enum、DTO schema、domain error、业务常量
   和纯 helper 保持静态导入，不作为 DI deps 注入。
+- Production `*.port.ts` 直接声明调用方所需的最窄 reader/writer/store/collaborator signature，不 import app-local
+  `*.repository`、`repositories/**`，也不通过 `Pick<...Repository>` 或 `Pick<...Service>` 从 provider 类型派生接口。
+  三个 backend 的 architecture suites 会扫描全部 production ports，防止这类 ownership 回退。
+- 多个边界共享的 input/result type 由 `packages/domain`、`packages/contracts`、相邻 `*.type.ts` 或单一的 neutral
+  protocol/session module 持有。允许从另一个 consumer-owned `*Port` 继续收窄（例如 `Pick<...Port>`），也允许收窄
+  platform type；这些用法不得把 concrete provider ownership 带入消费方。
+- Production provider 应优先通过 TypeScript structural typing 直接满足 port。只有两侧确有不同语义、需要显式映射时，
+  才在 composition 建立有行为且有测试的 adapter；不得用 unchecked assertion 或 behaviorless wrapper 掩盖不兼容。
 
 ## Application Use Case、Application Service 与领域规则
 
@@ -57,6 +66,20 @@ use-cases / domain-aligned services -> pure domain logic
 Route 可以调用 use-case 或 service facade，但不得直接依赖 app-local repository 或 `@iam/api-core/uow`。
 `services/**` 不得反向 import `use-cases/**`；`packages/domain` 不得 import app-local use-case、service 或
 composition。跨层实例连接统一由 composition 完成。
+
+## OIDC Provider Protocol Components
+
+- `apps/oidc-provider/src/provider/claims.ts` 直接实现 `oidc-provider` 的 claims hooks，属于 protocol adapter。Factory、
+  返回类型和 deps type 分别使用 `createOidcClaimsAdapter`、`OidcClaimsAdapter` 和
+  `CreateOidcClaimsAdapterDeps`；它不属于 Domain-aligned Application Service。
+- OIDC production composition 按 ownership 分类：Claims Adapter 与 interaction policy 由 `composition/provider`
+  物化；client auth rate limiter 与 client secret verifier 由 `composition/security` 物化；Session Kernel 与
+  `oidcSession` facade 由 `composition/session` 物化。
+- Provider composition 可以显式接收 repositories、stores、security 和 session facades。Claims、interaction policy
+  与 interaction handler 直接消费 `session.oidcSession`，不得通过 `services.globalSessionResolver` 或等价 services
+  alias 二次分类。
+- Provider protocol module 可以静态 import `oidc-provider` types 和纯 protocol helpers，但不得静态绑定 app-local DB、
+  Redis、logger 或 concrete production repository；production 实例连接只发生在 composition。
 
 ## Routes 与 Middleware
 

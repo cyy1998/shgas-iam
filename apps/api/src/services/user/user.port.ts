@@ -1,30 +1,91 @@
 import type { PasswordHasherPort } from "@api/composition/runtime";
 import type { ApiRequestContext, AuditLogWriterPort } from "@api/services/audit/audit.service";
-import type { EmploymentRepository } from "@api/services/employment/employment.repository";
-import type { MobileService, MobileVerificationCodeReservation } from "@api/services/mobile/mobile.service";
-import type { PrivilegeRepository } from "@api/services/privilege/privilege.repository";
-import type { PrivilegeDelegationRepository } from "@api/services/privilege/privilegeDelegation.repository";
+import type { MobileVerificationCodeReservation } from "@api/services/mobile/mobile.type";
 import type { PrivilegeDelegationDto } from "@api/services/privilege/privilegeDelegation.type";
-import type { RoleRepository } from "@api/services/role/role.repository";
-import type { UserRepository } from "@api/services/user/user.repository";
 import type { UnitOfWorkPort } from "@iam/api-core/uow";
 import type { UserProfileDirtyMarker } from "@iam/user-profile-read-model/producer";
-import type { UserProfileQueryService } from "@iam/user-profile-read-model/query";
-import type { UserDto, UserQueryWithPrivilegeDelegationDto } from "./user.type";
+import type {
+  User,
+  UserDetailDto,
+  UserDto,
+  UserQueryDto,
+  UserQueryWithPrivilegeDelegationDto,
+} from "./user.type";
+
+export interface UserEmploymentReaderPort {
+  getEmploymentsByUserId: (userId: number) => Promise<Array<{ id: number }>>;
+}
+
+export interface UserRoleReaderPort {
+  getRolesByEmploymentId: (employmentId: number) => Promise<Array<{
+    id: number;
+    roleCode: string;
+  }>>;
+}
+
+export interface UserPrivilegeReaderPort {
+  getPrivilegesByRoleIds: (roleIds: number[]) => Promise<Array<{ privilegeCode: string }>>;
+}
+
+export interface UserProfileReaderPort {
+  getDetailByUserId: (userId: number) => Promise<UserDetailDto>;
+  getDetailByUsername: (username: string) => Promise<UserDetailDto>;
+  getDetailByMobile: (mobile: string) => Promise<UserDetailDto>;
+  getDetailByWxId: (wxId: string) => Promise<UserDetailDto>;
+  searchLegacyUsers: (query: UserQueryDto) => Promise<UserDto[]>;
+}
+
+export interface UserDelegationReaderPort {
+  getDelegationsByUserAndOrganizationScopeAndPrivilege: (
+    usernames: string[],
+    orgCode: string,
+    privilegeCode: string,
+  ) => Promise<unknown[]>;
+}
+
+export interface UserMobileBindingPort {
+  checkValidPhoneNumber: (phone: string) => boolean;
+  checkExistingPhoneNumber: (phone: string) => Promise<boolean>;
+  reserveVerificationCode: (
+    usage: string,
+    phone: string,
+    code: string,
+  ) => Promise<MobileVerificationCodeReservation | null>;
+}
+
+export interface UserMobileVerificationPort {
+  confirmReservedVerificationCode: (reservation: MobileVerificationCodeReservation) => Promise<boolean>;
+  releaseReservedVerificationCode: (reservation: MobileVerificationCodeReservation) => Promise<void>;
+}
+
+export interface UserStorePort {
+  getUserById: (userId: number) => Promise<User | null>;
+  getUserByUsername: (username: string) => Promise<User | null>;
+  getUserByWxId: (wxId: string) => Promise<User | null>;
+  getUserByMobile: (mobile: string) => Promise<User | null>;
+  updateEnabledUserStatus: (userId: number, status: User["status"]) => Promise<User | null>;
+}
+
+export interface UserTransactionStorePort {
+  getUserByUsername: (username: string) => Promise<User | null>;
+  setPassword: (userId: number, password: string) => Promise<unknown>;
+  setMobile: (userId: number, phoneNumber: string) => Promise<unknown>;
+  updateEnabledUserStatus: (userId: number, status: User["status"]) => Promise<User | null>;
+}
 
 export interface UserDetailBuilderDeps {
-  employmentRepository: Pick<EmploymentRepository, "getEmploymentsByUserId">;
-  roleRepository: Pick<RoleRepository, "getRolesByEmploymentId">;
-  privilegeRepository: Pick<PrivilegeRepository, "getPrivilegesByRoleIds">;
+  employmentRepository: UserEmploymentReaderPort;
+  roleRepository: UserRoleReaderPort;
+  privilegeRepository: UserPrivilegeReaderPort;
 }
 
 export interface UserDelegationQueryDeps {
-  profileQuery: Pick<UserProfileQueryService, "searchLegacyUsers">;
-  privilegeDelegationRepository: Pick<PrivilegeDelegationRepository, "getDelegationsByUserAndOrganizationScopeAndPrivilege">;
+  profileQuery: Pick<UserProfileReaderPort, "searchLegacyUsers">;
+  privilegeDelegationRepository: UserDelegationReaderPort;
 }
 
 export interface UserMobileBindingDeps {
-  mobileService: Pick<MobileService, "checkValidPhoneNumber" | "checkExistingPhoneNumber" | "reserveVerificationCode">;
+  mobileService: UserMobileBindingPort;
   auditLogWriter: AuditLogWriterPort;
 }
 
@@ -42,10 +103,7 @@ export interface UserSearchWithDelegationsResult {
 }
 
 export interface UserTransactionPorts {
-  userRepository: Pick<
-    UserRepository,
-    "getUserByUsername" | "setPassword" | "setMobile" | "updateEnabledUserStatus"
-  >;
+  userRepository: UserTransactionStorePort;
   auditLogWriter: AuditLogWriterPort;
   profileDirtyMarker: Pick<UserProfileDirtyMarker, "markUsersDirty">;
 }
@@ -53,27 +111,9 @@ export interface UserTransactionPorts {
 export type UserUnitOfWorkPort = UnitOfWorkPort<UserTransactionPorts>;
 
 export interface UserServiceDeps {
-  userRepository: Pick<
-    UserRepository,
-    | "getUserById"
-    | "getUserByUsername"
-    | "getUserByWxId"
-    | "getUserByMobile"
-    | "updateEnabledUserStatus"
-  >;
-  mobileService: Pick<
-    MobileService,
-    "confirmReservedVerificationCode" | "releaseReservedVerificationCode" | "reserveVerificationCode"
-  >;
-  auditLogWriter: AuditLogWriterPort;
-  profileQuery: Pick<
-    UserProfileQueryService,
-    | "getDetailByUserId"
-    | "getDetailByUsername"
-    | "getDetailByMobile"
-    | "getDetailByWxId"
-    | "searchLegacyUsers"
-  >;
+  userRepository: UserStorePort;
+  mobileService: UserMobileVerificationPort;
+  profileQuery: UserProfileReaderPort;
   userDelegationQuery: {
     searchUsersWithDelegations: (
       query: UserQueryWithPrivilegeDelegationDto,

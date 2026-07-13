@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { createOidcClaimsService } from "../provider/claims.ts";
+import { createOidcClaimsAdapter } from "../provider/claims.ts";
 import { providerSessionBindingKey } from "../session/provider-session.ts";
 
 class ClaimsRedis {
@@ -39,6 +39,19 @@ function createFixture() {
     authTime: 123,
   };
   const revokedCredentialIds: string[] = [];
+  const credential = {
+    credential: {
+      credentialId: "credential-a",
+      principalSessionId: session.sessionId,
+      bindingId: "binding-a",
+      clientCode: "client-a",
+    },
+    metadata: {
+      providerTokenKey: "oidc:model:AccessToken:token-a",
+      providerTokenId: "token-a",
+      oidcConfigVersion: client.oidc_config_version,
+    },
+  };
   redis.values.set(providerSessionBindingKey("provider-a"), JSON.stringify({
     globalSessionId: session.sessionId,
     principalSessionId: session.sessionId,
@@ -49,7 +62,7 @@ function createFixture() {
     oidcConfigVersion: client.oidc_config_version,
     expiresAt: Math.floor(Date.now() / 1000) + 300,
   }));
-  const service = createOidcClaimsService({
+  const adapter = createOidcClaimsAdapter({
     accounts: {
       findBySubject: async (subject: string) => subject === account.oidcSubject ? account : null,
     },
@@ -73,32 +86,18 @@ function createFixture() {
       },
     },
     tokens: {
-      resolveAccessTokenCredential: async (externalToken: string) => externalToken === "token-a"
-        ? {
-            credential: {
-              credentialId: "credential-a",
-              principalSessionId: session.sessionId,
-              bindingId: "binding-a",
-              clientCode: "client-a",
-            },
-            metadata: {
-              providerTokenKey: "oidc:model:AccessToken:token-a",
-              providerTokenId: "token-a",
-              oidcConfigVersion: client.oidc_config_version,
-            },
-          }
-        : null,
+      resolveAccessTokenCredential: async (externalToken: string) => externalToken === "token-a" ? credential : null,
       revokeAccessTokenCredential: async (credentialId: string) => {
         revokedCredentialIds.push(credentialId);
       },
     },
   });
-  return { account, client, redis, revokedCredentialIds, service };
+  return { account, adapter, client, credential, redis, revokedCredentialIds, session };
 }
 
 describe("oIDC claims and UserInfo snapshot", () => {
   it("stores only scope-authorized claims and excludes authorization data from ID Token claims", async () => {
-    const { account, service } = createFixture();
+    const { account, adapter } = createFixture();
     const token = {
       kind: "AccessToken",
       accountId: account.oidcSubject,
@@ -107,18 +106,20 @@ describe("oIDC claims and UserInfo snapshot", () => {
       scope: "openid profile iam:authorization",
       scopes: new Set(["openid", "profile", "iam:authorization"]),
     };
-    const extra = await service.createAccessTokenExtra(token as never);
+    const extra = await adapter.createAccessTokenExtra(token as never);
 
-    expect(extra).toMatchObject({
+    expect(extra).toEqual({
       userId: 7,
       globalSessionId: "principal-a",
       authTime: 123,
+      scopes: ["openid", "profile", "iam:authorization"],
       oidcConfigVersion: 3,
       userInfoSnapshot: {
         "sub": account.oidcSubject,
         "name": "Alice",
         "preferred_username": "alice",
         "iam:authorization": {
+          employments: [],
           roles: ["app:user"],
           privileges: ["app:read"],
         },
@@ -127,7 +128,7 @@ describe("oIDC claims and UserInfo snapshot", () => {
     expect(extra?.userInfoSnapshot).not.toHaveProperty("phone_number");
     expect(extra?.userInfoSnapshot).not.toHaveProperty("id");
 
-    const resolved = await service.findAccount(account.oidcSubject, {
+    const resolved = await adapter.findAccount(account.oidcSubject, {
       ...token,
       jti: "token-a",
       extra: { ...extra, kernelCredentialId: "credential-a" },
@@ -136,9 +137,35 @@ describe("oIDC claims and UserInfo snapshot", () => {
     expect(await resolved?.claims("id_token")).not.toHaveProperty("iam:authorization");
   });
 
+  it("builds an authorization-code snapshot and exposes auth_time only in ID Token claims", async () => {
+    const { account, adapter } = createFixture();
+    const resolved = await adapter.findAccount(account.oidcSubject, {
+      kind: "AuthorizationCode",
+      authTime: 456,
+      clientId: "client-a",
+      scope: "openid phone iam:authorization",
+      scopes: new Set(["openid", "phone", "iam:authorization"]),
+    } as never);
+
+    expect(await resolved?.claims("userinfo")).toEqual({
+      "sub": account.oidcSubject,
+      "phone_number": "13800000000",
+      "iam:authorization": {
+        employments: [],
+        roles: ["app:user"],
+        privileges: ["app:read"],
+      },
+    });
+    expect(await resolved?.claims("id_token")).toEqual({
+      sub: account.oidcSubject,
+      phone_number: "13800000000",
+      auth_time: 456,
+    });
+  });
+
   it("rejects and removes a token when the client version no longer matches", async () => {
-    const { account, client, revokedCredentialIds, service } = createFixture();
-    const resolved = await service.findAccount(account.oidcSubject, {
+    const { account, adapter, client, revokedCredentialIds } = createFixture();
+    const resolved = await adapter.findAccount(account.oidcSubject, {
       kind: "AccessToken",
       jti: "token-a",
       accountId: account.oidcSubject,
@@ -152,6 +179,121 @@ describe("oIDC claims and UserInfo snapshot", () => {
         authTime: 123,
         scopes: ["openid"],
         oidcConfigVersion: client.oidc_config_version + 1,
+        kernelCredentialId: "credential-a",
+        userInfoSnapshot: { sub: account.oidcSubject },
+      },
+    } as never);
+
+    expect(resolved).toBeUndefined();
+    expect(revokedCredentialIds).toEqual(["credential-a"]);
+  });
+
+  it("rejects an unresolved access-token credential without adding a revocation side effect", async () => {
+    const { account, adapter, client, revokedCredentialIds } = createFixture();
+    const resolved = await adapter.findAccount(account.oidcSubject, {
+      kind: "AccessToken",
+      jti: "missing-token",
+      accountId: account.oidcSubject,
+      clientId: "client-a",
+      sessionUid: "provider-a",
+      scope: "openid",
+      scopes: new Set(["openid"]),
+      extra: {
+        userId: account.id,
+        globalSessionId: "principal-a",
+        authTime: 123,
+        scopes: ["openid"],
+        oidcConfigVersion: client.oidc_config_version,
+        kernelCredentialId: "credential-a",
+        userInfoSnapshot: { sub: account.oidcSubject },
+      },
+    } as never);
+
+    expect(resolved).toBeUndefined();
+    expect(revokedCredentialIds).toEqual([]);
+  });
+
+  it("revokes a resolved credential when the provider binding no longer matches", async () => {
+    const { account, adapter, client, redis, revokedCredentialIds } = createFixture();
+    redis.values.set(providerSessionBindingKey("provider-a"), JSON.stringify({
+      globalSessionId: "principal-a",
+      principalSessionId: "principal-a",
+      bindingId: "binding-b",
+      userId: account.id,
+      accountId: account.oidcSubject,
+      authTime: 123,
+      oidcConfigVersion: client.oidc_config_version,
+      expiresAt: Math.floor(Date.now() / 1000) + 300,
+    }));
+
+    const resolved = await adapter.findAccount(account.oidcSubject, {
+      kind: "AccessToken",
+      jti: "token-a",
+      accountId: account.oidcSubject,
+      clientId: "client-a",
+      sessionUid: "provider-a",
+      scope: "openid",
+      scopes: new Set(["openid"]),
+      extra: {
+        userId: account.id,
+        globalSessionId: "principal-a",
+        authTime: 123,
+        scopes: ["openid"],
+        oidcConfigVersion: client.oidc_config_version,
+        kernelCredentialId: "credential-a",
+        userInfoSnapshot: { sub: account.oidcSubject },
+      },
+    } as never);
+
+    expect(resolved).toBeUndefined();
+    expect(revokedCredentialIds).toEqual(["credential-a"]);
+  });
+
+  it("revokes a resolved credential when the global session no longer matches its binding", async () => {
+    const { account, adapter, client, revokedCredentialIds, session } = createFixture();
+    session.authTime = 999;
+
+    const resolved = await adapter.findAccount(account.oidcSubject, {
+      kind: "AccessToken",
+      jti: "token-a",
+      accountId: account.oidcSubject,
+      clientId: "client-a",
+      sessionUid: "provider-a",
+      scope: "openid",
+      scopes: new Set(["openid"]),
+      extra: {
+        userId: account.id,
+        globalSessionId: "principal-a",
+        authTime: 123,
+        scopes: ["openid"],
+        oidcConfigVersion: client.oidc_config_version,
+        kernelCredentialId: "credential-a",
+        userInfoSnapshot: { sub: account.oidcSubject },
+      },
+    } as never);
+
+    expect(resolved).toBeUndefined();
+    expect(revokedCredentialIds).toEqual(["credential-a"]);
+  });
+
+  it("revokes a resolved credential when its config metadata is stale", async () => {
+    const { account, adapter, client, credential, revokedCredentialIds } = createFixture();
+    credential.metadata.oidcConfigVersion = client.oidc_config_version + 1;
+
+    const resolved = await adapter.findAccount(account.oidcSubject, {
+      kind: "AccessToken",
+      jti: "token-a",
+      accountId: account.oidcSubject,
+      clientId: "client-a",
+      sessionUid: "provider-a",
+      scope: "openid",
+      scopes: new Set(["openid"]),
+      extra: {
+        userId: account.id,
+        globalSessionId: "principal-a",
+        authTime: 123,
+        scopes: ["openid"],
+        oidcConfigVersion: client.oidc_config_version,
         kernelCredentialId: "credential-a",
         userInfoSnapshot: { sub: account.oidcSubject },
       },

@@ -1,4 +1,5 @@
 import type { EmploymentService } from "@admin-api/services/employment/employment.service";
+import type { ResignUserUseCase } from "@admin-api/use-cases/employment/resign-user/resign-user.use-case";
 import type { EmploymentRouteHandler } from "./employment.type";
 import { defineAdminApiMutationOperation, defineAdminApiQueryOperation } from "@admin-api/lib/admin-api-adapter";
 import { resolveAdminAuditContext } from "@admin-api/services/audit/audit.service";
@@ -21,13 +22,13 @@ export interface CreateEmploymentAdapterDeps {
     | "createEmploymentForAdmin"
     | "deleteEmployment"
     | "getEmploymentDetailByIdForAdmin"
-    | "resignUser"
     | "searchEmploymentsFuzzyForAdmin"
     | "setPrimaryEmployment"
     | "transferEmployment"
     | "updateEmployment"
     | "updateEmploymentStatus"
   >;
+  resignUser: Pick<ResignUserUseCase, "execute">;
 }
 
 export function createEmploymentAdapter(deps: CreateEmploymentAdapterDeps) {
@@ -116,7 +117,10 @@ export function createEmploymentAdapter(deps: CreateEmploymentAdapterDeps) {
     input: z.object({ username: z.string() }),
     restInput: c => c.req.valid("param") as { username: string },
     handler: ({ username }, context) =>
-      deps.employmentService.resignUser(username, resolveAdminAuditContext(context)),
+      deps.resignUser.execute(
+        { username },
+        { auditContext: resolveAdminAuditContext(context) },
+      ),
   });
 
   const employmentAdminRouter = router({

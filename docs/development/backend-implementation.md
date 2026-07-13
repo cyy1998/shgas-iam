@@ -49,12 +49,39 @@ Application Use Case 的 consumer-owned ports 与输入类型和主文件同目�
 schema/context、调用 use-case/service、映射 VO 和构造 response，不得通过 type-only import 绕过 repository 或
 UnitOfWork 边界。
 
+编写或修改 production `*.port.ts` 时：
+
+- 在消费方直接写出实际调用的方法签名；不得 import `*.repository`、`repositories/**`，也不得使用
+  `Pick<...Repository>` 或 `Pick<...Service>` 派生 port。
+- 跨 provider/consumer 使用的 input/result type 放到 domain/contracts、相邻 `*.type.ts` 或 neutral
+  protocol/session module，并让 repository/service 同样 import 该 owner；不要从 provider 模块 re-export 来保留旧所有权。
+- 可以使用 `Pick<...Port>` 复用另一个 consumer-owned port 的一部分，也可以对 Node/framework platform type 做窄化。
+- 用只在类型检查阶段执行的 provider-to-port compatibility assertion 固定 structural compatibility。只有确需字段或语义
+  转换时才在 composition 写显式 adapter，并为映射行为补测试；不要添加空转 adapter 或 `as unknown as`。
+
+## Protocol Adapter 与 Non-Hono Composition
+
+- 直接实现 framework/protocol hooks、并在 public signature 中使用 framework protocol types 的模块使用 Adapter、
+  Resolver、Policy、Verifier 等实际角色命名，不因其含业务数据就命名为 Application Service。
+- OIDC claims hook 保留在 `provider/claims.ts`，使用 `createOidcClaimsAdapter`/`OidcClaimsAdapter`；不要迁入
+  `services/claims`，也不要保留 `*ClaimsService` compatibility alias。
+- `apps/oidc-provider` 按 `composition/provider`、`composition/security`、`composition/session` 等 ownership 物化
+  components。Provider/interaction wiring 直接接收所需 facade，不建立混合 `composition/services` 或 session resolver
+  的 services alias。
+- Protocol adapter tests 通过 factory 注入 account/client/authorization/session/token ports，断言 claims、token extra、
+  validation 和 revoke 等调用方可观察行为；architecture test 另行约束命名、目录和 production import 边界。
+
 ## Audit 与 Architecture Guards
 
 - `services/audit/events` 下的 backend audit event helper 应是纯 payload builder。
 - Service 和 handler 通过注入的 root 或 tx audit writer port 写入 audit payload。
 - `apps/api/src/__tests__/architecture.test.ts` 和 `apps/admin-api/src/__tests__/architecture.test.ts` 中的
   architecture guard test 会故意在 forbidden production import 出现时失败。
+- `apps/oidc-provider/src/__tests__/architecture.test.ts` 同时约束 non-Hono DI、Claims Adapter 命名，以及
+  provider/security/session composition ownership。
+- 三个 backend 的 architecture suites 还会扫描全部 production `*.port.ts`，拒绝 concrete repository import、
+  `repositories/**` import 和从 Repository/Service 派生的 `Pick`；synthetic controls 会固定合法 `Pick<...Port>` 与
+  platform narrowing 不被误报。
 - Route production module 的 type/value import 都受 guard 约束：不得 import app-local `*.repository` 或
   `@iam/api-core/uow`；`services/**` 不得反向 import `use-cases/**`。失败信息应保留违规文件与 import specifier，
   便于定位边界回退。

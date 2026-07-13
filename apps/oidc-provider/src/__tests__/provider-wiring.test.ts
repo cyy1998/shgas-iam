@@ -1,5 +1,6 @@
 import type Provider from "oidc-provider";
 import { describe, expect, it } from "vitest";
+import { createOidcProviderSecurity } from "../composition/security/index.ts";
 import { registerClientAuthentication } from "../provider/client-auth.ts";
 import { registerProtocolModelPayloadExtensions } from "../provider/protocol-models.ts";
 
@@ -47,5 +48,31 @@ describe("oIDC provider wiring", () => {
       "globalSessionExpiresAt",
     ]);
     expect(authorizationCodeModel.IN_PAYLOAD).not.toBe(authorizationCodeModel.IN_PAYLOAD);
+  });
+
+  it("materializes client authentication security from explicit composition dependencies", async () => {
+    let failureCount = 1;
+    const security = createOidcProviderSecurity({
+      env: { oidc: { clientAuthFailureLimit: 2 } } as never,
+      repositories: {
+        client: {
+          findSecretRecord: async () => null,
+        },
+      } as never,
+      stores: {
+        clientAuthFailures: {
+          readFailureCount: async () => failureCount,
+          recordFailure: async () => ++failureCount,
+          clear: async () => {
+            failureCount = 0;
+          },
+        },
+      } as never,
+    });
+
+    await expect(security.clientAuthRateLimiter.isBlocked("client-a", "127.0.0.1")).resolves.toBe(false);
+    await security.clientAuthRateLimiter.recordFailure("client-a", "127.0.0.1");
+    await expect(security.clientAuthRateLimiter.isBlocked("client-a", "127.0.0.1")).resolves.toBe(true);
+    await expect(security.clientSecretVerifier.verify("client-a", "secret-a")).resolves.toBe(false);
   });
 });

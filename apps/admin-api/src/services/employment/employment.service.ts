@@ -7,12 +7,9 @@ import type {
   EmploymentUpdateDto,
 } from "./employment.type";
 import { adminAuditTransactionOptions } from "@admin-api/services/audit/audit.service";
-import {
-  buildEmploymentAudit,
-  buildEmploymentResignUserAudit,
-} from "@admin-api/services/audit/events/employment.audit";
+import { buildEmploymentAudit } from "@admin-api/services/audit/events/employment.audit";
 import { EmploymentDetailDtoSchema, toEmploymentDto } from "@admin-api/services/employment/employment.schema";
-import { EmploymentStatus, UserProfileDirtyReason, UserStatus } from "@iam/contracts";
+import { EmploymentStatus, UserProfileDirtyReason } from "@iam/contracts";
 import {
   EmploymentAlreadyExistsError,
   EmploymentNotEditableError,
@@ -318,34 +315,10 @@ export function createEmploymentService(deps: AdminEmploymentServiceDeps) {
     }, adminAuditTransactionOptions(auditContext));
   }
 
-  async function resignUser(username: string, auditContext?: AdminAuditContext) {
-    return await deps.uow.transaction(async (tx) => {
-      const user = await tx.userRepository.getUserByUsernameForAdmin(username);
-      if (user === null)
-        throw new UserNotFoundError("用户不存在");
-
-      await tx.employmentRepository.endActiveEmploymentsByUserId(user.id);
-      await tx.userRepository.updateUserByUsername(
-        username,
-        { status: UserStatus.Disable },
-      );
-      await tx.auditService.recordAuditLog(buildEmploymentResignUserAudit(user, auditContext));
-      await tx.profileDirtyMarker.markUsersDirty({
-        userIds: [user.id],
-        reasonCodes: [UserProfileDirtyReason.EmploymentUpdated, UserProfileDirtyReason.UserUpdated],
-        afterCommit: tx.afterCommit,
-        requestId: auditContext?.requestId ?? undefined,
-        traceId: auditContext?.traceId ?? undefined,
-      });
-      return true;
-    }, adminAuditTransactionOptions(auditContext));
-  }
-
   return {
     createEmploymentForAdmin,
     deleteEmployment,
     getEmploymentDetailByIdForAdmin,
-    resignUser,
     searchEmploymentsFuzzyForAdmin,
     setPrimaryEmployment,
     transferEmployment,

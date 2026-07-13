@@ -1,9 +1,9 @@
 import type { OidcClientRuntimeDto } from "@iam/domain/client";
 import type { Redis } from "ioredis";
-import type { OidcClientRuntimeMetadata } from "../repositories/client-metadata.ts";
+import type { OidcClientRuntimeMetadata } from "../provider/client-runtime-metadata.ts";
 import { oidcClientRuntimeCacheKey } from "@iam/api-core/oidc";
+import { toOidcClientRuntimeMetadata } from "../provider/client-runtime-metadata.ts";
 import { isOidcClientAvailable } from "../repositories/availability.ts";
-import { toOidcClientRuntimeMetadata } from "../repositories/client-metadata.ts";
 
 export function createOidcClientRuntimeCache(redis: Redis, cacheTtlSeconds: number) {
   return {

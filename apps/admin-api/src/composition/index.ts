@@ -13,6 +13,7 @@ import { createAdminApiRuntime } from "./runtime";
 import { createAdminApiServices } from "./services";
 import { createAdminApiSession } from "./session";
 import { createAdminApiUnitOfWork } from "./tx";
+import { createAdminApiUseCases } from "./use-cases";
 
 export interface AdminApiComposition {
   env: typeof env;
@@ -25,6 +26,7 @@ export interface AdminApiComposition {
   userProfileJobProducer: ReturnType<typeof createUserProfileJobProducer>;
   unitOfWork: ReturnType<typeof createAdminApiUnitOfWork>;
   services: ReturnType<typeof createAdminApiServices>;
+  useCases: ReturnType<typeof createAdminApiUseCases>;
   routes: CreateAppOptions["routes"];
   middlewares: CreateAppOptions["middlewares"];
 }
@@ -54,6 +56,7 @@ export async function createAdminApiComposition(
     clock: runtime.clock,
   });
   const services = createAdminApiServices({ runtime, repositories, session, unitOfWork });
+  const useCases = createAdminApiUseCases({ unitOfWork });
 
   return {
     env: compositionEnv,
@@ -66,7 +69,8 @@ export async function createAdminApiComposition(
     userProfileJobProducer,
     unitOfWork,
     services,
-    routes: await createAdminApiRoutes({ auditService, runtime, services }),
+    useCases,
+    routes: await createAdminApiRoutes({ auditService, runtime, services, useCases }),
     middlewares: await createAdminApiMiddlewares({ runtime, services, sessionKernel: session.kernel }),
   };
 }

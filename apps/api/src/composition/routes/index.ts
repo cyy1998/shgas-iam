@@ -29,8 +29,9 @@ export async function createApiRoutes(options: CreateApiRoutesOptions): Promise<
   const { auditLogWriter, runtime, services, useCases } = options;
 
   const authHandlers = createAuthHandlers({
-    authService: services.auth,
+    authentication: useCases.authentication,
     clientService: services.client,
+    localSessionAuthorizer: services.customSsoSession,
     loginCredentialParser: services.loginCredential,
     logger: runtime.logger,
     config: {
@@ -39,19 +40,19 @@ export async function createApiRoutes(options: CreateApiRoutesOptions): Promise<
   });
 
   const openHandlers = createOpenHandlers({
+    accountRecovery: useCases.accountRecovery,
     auditLogWriter,
     clientService: services.client,
     humanVerification: services.cap,
     humanRiskService: services.humanRisk,
     mobileService: services.mobile,
-    openService: services.open,
     userService: services.user,
   });
 
   const ssoHandlers = createSsoHandlers({
     clientService: services.client,
     logger: runtime.logger,
-    ssoService: services.sso,
+    sso: useCases.sso,
     config: {
       authorizationEndpoint: runtime.config.env.sso.authorizationEndpoint,
       authCodeExpireSeconds: runtime.config.auth.authCodeExpireSeconds,

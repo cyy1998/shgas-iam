@@ -16,16 +16,17 @@ const getUserDetailByUsername = mock(async () => ({
   name: "张三",
   username: "zhangsan",
 }));
-const resetPassword = mock(async () => true);
-const resolveResetPasswordMobile = mock(async (_username: string, phoneNumber?: string) => phoneNumber ?? "17721462865");
-const requirePhoneNumber = mock((phoneNumber?: string) => {
-  if (!phoneNumber)
-    throw new Error("手机号不能为空");
-  return phoneNumber;
-});
+const requestPasswordResetCode = mock(async () => true);
+const verifyPasswordResetCode = mock(async () => true);
+const resetAccountPassword = mock(async () => true);
 
 function createHandlers() {
   return createOpenHandlers({
+    accountRecovery: {
+      requestPasswordResetCode: { execute: requestPasswordResetCode },
+      resetPassword: { execute: resetAccountPassword },
+      verifyPasswordResetCode: { execute: verifyPasswordResetCode },
+    },
     auditLogWriter: {
       recordAuditLog,
       recordAuditLogFromContext,
@@ -46,14 +47,8 @@ function createHandlers() {
       checkVerificationCode,
       sendCode,
     },
-    openService: {
-      maskMobile: mock((mobile: string | null) => mobile?.replace(/^(\d{3})\d{4}(\d{4})$/, "$1****$2") ?? null),
-      requirePhoneNumber,
-      resolveResetPasswordMobile,
-    },
     userService: {
       getUserDetailByUsername,
-      resetPassword,
     },
   } as any);
 }
@@ -91,9 +86,9 @@ beforeEach(() => {
     name: "张三",
     username: "zhangsan",
   });
-  resetPassword.mockClear();
-  resolveResetPasswordMobile.mockClear();
-  requirePhoneNumber.mockClear();
+  requestPasswordResetCode.mockClear();
+  verifyPasswordResetCode.mockClear();
+  resetAccountPassword.mockClear();
 });
 
 describe("createOpenHandlers human verification", () => {
@@ -145,6 +140,40 @@ describe("createOpenHandlers human verification", () => {
     }));
   });
 
+  test("sends a bind-phone code to the provided mobile", async () => {
+    const handlers = createHandlers();
+
+    await handlers.codeSend(makeContext({
+      json: {
+        capToken: "cap-token",
+        phoneNumber: "17721462865",
+        usage: VerificationCodeUsage.BindPhone,
+      },
+    }) as never, undefined as never);
+
+    expect(sendCode).toHaveBeenCalledWith("17721462865", VerificationCodeUsage.BindPhone);
+  });
+
+  test("dispatches password-reset code requests to the Account Recovery use-case", async () => {
+    const handlers = createHandlers();
+
+    await handlers.codeSend(makeContext({
+      json: {
+        capToken: "cap-token",
+        phoneNumber: "177****2865",
+        username: "zhangsan",
+        usage: VerificationCodeUsage.ResetPassword,
+      },
+    }) as never, undefined as never);
+
+    expect(requestPasswordResetCode).toHaveBeenCalledWith({
+      phoneNumber: "177****2865",
+      username: "zhangsan",
+    }, {
+      requestContext: expect.objectContaining({ requestId: "req-1" }),
+    });
+  });
+
   test("does not query user info when Cap verification is required", async () => {
     const handlers = createHandlers();
     ensureActionAllowed.mockRejectedValue(Object.assign(new Error("需要人机校验"), {
@@ -184,7 +213,7 @@ describe("createOpenHandlers human verification", () => {
     expect(getUserDetailByUsername).toHaveBeenCalledWith("zhangsan");
   });
 
-  test("verifies SMS codes without consuming them", async () => {
+  test("returns the Account Recovery verification result without consuming in the route", async () => {
     const handlers = createHandlers();
 
     const result = await handlers.codeVerify(makeContext({
@@ -201,11 +230,66 @@ describe("createOpenHandlers human verification", () => {
       data: { result: true },
       message: "success",
     });
-    expect(checkVerificationCode).toHaveBeenCalledWith(VerificationCodeUsage.ResetPassword, "17721462865", "123456");
-    expect(sendCode).not.toHaveBeenCalled();
   });
 
-  test("passes request context to password reset service", async () => {
+  test("dispatches password-reset code verification to the Account Recovery use-case", async () => {
+    const handlers = createHandlers();
+
+    await handlers.codeVerify(makeContext({
+      json: {
+        code: "123456",
+        phoneNumber: "177****2865",
+        username: "zhangsan",
+        usage: VerificationCodeUsage.ResetPassword,
+      },
+    }) as never, undefined as never);
+
+    expect(verifyPasswordResetCode).toHaveBeenCalledWith({
+      code: "123456",
+      phoneNumber: "177****2865",
+      username: "zhangsan",
+    }, {
+      requestContext: expect.objectContaining({ requestId: "req-1" }),
+    });
+  });
+
+  test("verifies a login code against the login Redis namespace", async () => {
+    const handlers = createHandlers();
+
+    await handlers.codeVerify(makeContext({
+      json: {
+        code: "123456",
+        phoneNumber: "17721462865",
+        usage: VerificationCodeUsage.Login,
+      },
+    }) as never, undefined as never);
+
+    expect(checkVerificationCode).toHaveBeenCalledWith(
+      VerificationCodeUsage.Login,
+      "17721462865",
+      "123456",
+    );
+  });
+
+  test("verifies a bind-phone code against the bind-phone Redis namespace", async () => {
+    const handlers = createHandlers();
+
+    await handlers.codeVerify(makeContext({
+      json: {
+        code: "123456",
+        phoneNumber: "17721462865",
+        usage: VerificationCodeUsage.BindPhone,
+      },
+    }) as never, undefined as never);
+
+    expect(checkVerificationCode).toHaveBeenCalledWith(
+      VerificationCodeUsage.BindPhone,
+      "17721462865",
+      "123456",
+    );
+  });
+
+  test("dispatches password reset to the Account Recovery use-case", async () => {
     const handlers = createHandlers();
 
     await handlers.passwordReset(makeContext({
@@ -217,7 +301,12 @@ describe("createOpenHandlers human verification", () => {
       },
     }) as never, undefined as never);
 
-    expect(resetPassword).toHaveBeenCalledWith("zhangsan", "17721462865", "123456", "newPass123", {
+    expect(resetAccountPassword).toHaveBeenCalledWith({
+      code: "123456",
+      newPassword: "newPass123",
+      phoneNumber: "17721462865",
+      username: "zhangsan",
+    }, {
       requestContext: expect.objectContaining({
         requestId: "req-1",
         sourceApp: "iam",

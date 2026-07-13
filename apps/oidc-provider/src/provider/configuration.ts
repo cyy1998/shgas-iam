@@ -1,12 +1,12 @@
 import type { Configuration, interactionPolicy, KoaContextWithOIDC } from "oidc-provider";
 import type { OidcProviderEnv } from "../env.ts";
 import type { SigningKey } from "../security/signing-keys.ts";
-import type { OidcClaimsService } from "./claims.ts";
+import type { OidcClaimsAdapter } from "./claims.ts";
 import { OIDC_SUPPORTED_SCOPES } from "@iam/contracts";
 
 export type ProviderConfigurationDependencies = {
   adapter: NonNullable<Configuration["adapter"]>;
-  claims: OidcClaimsService;
+  claims: OidcClaimsAdapter;
   currentSigningKey: SigningKey;
   previousSigningKey?: SigningKey;
   interactionPolicy: interactionPolicy.Prompt[];

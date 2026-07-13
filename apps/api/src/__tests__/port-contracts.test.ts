@@ -1,0 +1,75 @@
+import type { ClientReaderPort } from "@api/services/client/client.port";
+import type { ClientRepository } from "@api/services/client/client.repository";
+import type { EmploymentRepository } from "@api/services/employment/employment.repository";
+import type { MobileUserReaderPort } from "@api/services/mobile/mobile.port";
+import type { MobileService } from "@api/services/mobile/mobile.service";
+import type {
+  OrganizationReaderPort,
+  OrganizationTransactionStorePort,
+} from "@api/services/organization/organization.port";
+import type { OrganizationRepository } from "@api/services/organization/organization.repository";
+import type { PositionRepository } from "@api/services/position/position.repository";
+import type { PrivilegeRepository } from "@api/services/privilege/privilege.repository";
+import type {
+  PrivilegeDelegationOrganizationReaderPort,
+  PrivilegeDelegationPrivilegeReaderPort,
+  PrivilegeDelegationSearchPort,
+  PrivilegeDelegationTransactionStorePort,
+  PrivilegeDelegationUserReaderPort,
+} from "@api/services/privilege/privilegeDelegation.port";
+import type { PrivilegeDelegationRepository } from "@api/services/privilege/privilegeDelegation.repository";
+import type { RoleRepository } from "@api/services/role/role.repository";
+import type {
+  UserDelegationReaderPort,
+  UserEmploymentReaderPort,
+  UserMobileBindingPort,
+  UserMobileVerificationPort,
+  UserPrivilegeReaderPort,
+  UserProfileReaderPort,
+  UserRoleReaderPort,
+  UserStorePort,
+  UserTransactionStorePort,
+} from "@api/services/user/user.port";
+import type { UserRepository } from "@api/services/user/user.repository";
+import type {
+  RegisterPurveyorEmploymentStorePort,
+  RegisterPurveyorMobilePort,
+  RegisterPurveyorOrganizationReaderPort,
+  RegisterPurveyorPositionReaderPort,
+  RegisterPurveyorUserStorePort,
+} from "@api/use-cases/internal/register-purveyor-contact/register-purveyor-contact.port";
+import type { UserProfileQueryService } from "@iam/user-profile-read-model/query";
+import { expect, test } from "bun:test";
+
+function assertAssignable<Port, _Provider extends Port>() {}
+
+test("API providers structurally satisfy consumer-owned ports", () => {
+  assertAssignable<ClientReaderPort, ClientRepository>();
+  assertAssignable<MobileUserReaderPort, UserRepository>();
+  assertAssignable<OrganizationReaderPort, OrganizationRepository>();
+  assertAssignable<OrganizationTransactionStorePort, OrganizationRepository>();
+
+  assertAssignable<PrivilegeDelegationUserReaderPort, UserRepository>();
+  assertAssignable<PrivilegeDelegationOrganizationReaderPort, OrganizationRepository>();
+  assertAssignable<PrivilegeDelegationPrivilegeReaderPort, PrivilegeRepository>();
+  assertAssignable<PrivilegeDelegationTransactionStorePort, PrivilegeDelegationRepository>();
+  assertAssignable<PrivilegeDelegationSearchPort, PrivilegeDelegationRepository>();
+
+  assertAssignable<UserEmploymentReaderPort, EmploymentRepository>();
+  assertAssignable<UserRoleReaderPort, RoleRepository>();
+  assertAssignable<UserPrivilegeReaderPort, PrivilegeRepository>();
+  assertAssignable<UserProfileReaderPort, UserProfileQueryService>();
+  assertAssignable<UserDelegationReaderPort, PrivilegeDelegationRepository>();
+  assertAssignable<UserMobileBindingPort, MobileService>();
+  assertAssignable<UserMobileVerificationPort, MobileService>();
+  assertAssignable<UserStorePort, UserRepository>();
+  assertAssignable<UserTransactionStorePort, UserRepository>();
+
+  assertAssignable<RegisterPurveyorEmploymentStorePort, EmploymentRepository>();
+  assertAssignable<RegisterPurveyorOrganizationReaderPort, OrganizationRepository>();
+  assertAssignable<RegisterPurveyorPositionReaderPort, PositionRepository>();
+  assertAssignable<RegisterPurveyorUserStorePort, UserRepository>();
+  assertAssignable<RegisterPurveyorMobilePort, MobileService>();
+
+  expect(true).toBe(true);
+});

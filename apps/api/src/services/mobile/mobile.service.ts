@@ -1,4 +1,5 @@
 import type { MobileServiceDeps } from "./mobile.port";
+import type { MobileVerificationCodeReservation } from "./mobile.type";
 import { randomUUID } from "node:crypto";
 import { VerificationCodeUsage } from "@api/enums/verificationCode.usage";
 import { CustomError } from "@iam/api-core/errors/CustomError";
@@ -38,12 +39,6 @@ function mobileCodeKey(usage: string, phone: string) {
 function mobileCodeReservationKey(reservation: MobileVerificationCodeReservation) {
   return `mobile-code-reservation:${reservation.usage}:${reservation.phone}:${reservation.token}`;
 }
-
-export type MobileVerificationCodeReservation = {
-  usage: string;
-  phone: string;
-  token: string;
-};
 
 export function createMobileService(deps: MobileServiceDeps) {
   async function sendCode(phoneNumber: string, usage: string) {
