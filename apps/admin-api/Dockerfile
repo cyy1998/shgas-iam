@@ -19,6 +19,7 @@ RUN corepack enable && corepack prepare pnpm@11.5.0 --activate
 FROM base AS deps
 WORKDIR /app
 COPY .npmrc pnpm-workspace.yaml package.json pnpm-lock.yaml ./
+COPY scripts/install-git-hooks.mjs ./scripts/install-git-hooks.mjs
 COPY packages/contracts/package.json ./packages/contracts/
 COPY packages/db/package.json ./packages/db/
 COPY packages/api-core/package.json ./packages/api-core/

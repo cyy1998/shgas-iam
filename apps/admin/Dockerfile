@@ -49,6 +49,7 @@ ENV UMI_APP_ADMIN_CLIENT_CODE=$UMI_APP_ADMIN_CLIENT_CODE
 ENV UMI_APP_ADMIN_ROLE_CODE=$UMI_APP_ADMIN_ROLE_CODE
 ENV UMI_APP_ADMIN_GRAFANA_URL=$UMI_APP_ADMIN_GRAFANA_URL
 ENV UMI_APP_ADMIN_SYSTEM_LOG_ENV=$UMI_APP_ADMIN_SYSTEM_LOG_ENV
+COPY scripts/install-git-hooks.mjs ./scripts/install-git-hooks.mjs
 COPY packages/contracts/ ./packages/contracts/
 COPY packages/db/ ./packages/db/
 COPY packages/api-core/ ./packages/api-core/
