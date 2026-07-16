@@ -1,7 +1,7 @@
 # Core
 
 - Canonical repo entry point is `AGENTS.md`; it is a short index. Detailed current rules live under `docs/`.
-- Before repository development or lifecycle work, route the task through `docs/workflows/index.md`; workflow selects stage gates, skills select execution methods, and OpenSpec/tasks define scope.
+- Before repository development or lifecycle work, route the task through `docs/agents/workflow.md`; Matt skills select the method, while an approved local spec and its tickets define feature scope.
 - Monorepo: `pnpm` workspace + Turborepo at `/home/caiyi/projects/shgas-iam`.
 - Workspace packages: `apps/*`, `packages/*`, and `gateway`.
 - Runtime apps: public IAM backend `apps/api`; admin backend `apps/admin-api`; OIDC provider `apps/oidc-provider`; background worker `apps/worker`; admin frontend `apps/admin`; SSO portal `apps/sso`.

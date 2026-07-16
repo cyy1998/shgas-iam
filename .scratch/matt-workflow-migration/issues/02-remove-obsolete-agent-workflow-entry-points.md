@@ -4,7 +4,7 @@
 
 **Blocked by:** 01 — Establish the Matt workflow contract and freeze OpenSpec.
 
-**Status:** ready-for-agent
+**Status:** claimed
 
 - [ ] OpenSpec skills and command aliases are absent from every active repository-provided agent integration.
 - [ ] The quick-change skill is absent from every active repository-provided agent integration, and the documented small-change path uses direct implementation instead.

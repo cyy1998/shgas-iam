@@ -57,6 +57,7 @@ OpenSpec 不再是新工作的可选入口。
 - 功能分支使用 `codex/<feature-slug>`；默认目标分支是本地 `main`，除非维护者另有指定。
 - 一个功能默认使用一个分支，并为每张 ticket 保留一个受评审的交付提交。
 - 只有明确选择并行实施时，才为彼此独立的 tickets 创建额外分支或 worktree；否则即使多个 tickets 同时位于依赖前沿，也按顺序实施。
+- 交付提交和 tracker-only 元数据提交使用 focused Conventional Commit；description 默认使用中文，除非维护者要求其他语言。
 - ticket 验证与评审通过后可以自动创建提交。
 - merge、push 和删除远端分支始终需要维护者明确批准。
 - 普通功能获批后使用 `--no-ff` 合并，以保留 ticket commits 和功能边界；合并成功后自动删除本地功能分支。远端分支仍需单独授权后清理。
