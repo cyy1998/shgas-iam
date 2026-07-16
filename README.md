@@ -12,7 +12,7 @@
 - **类型安全调用**：管理后台通过 `@trpc/client` 消费 `@iam/admin-api/trpc` 暴露的 `AppRouter` 类型
 - **声明式后端装配**：API 后端的 `app.config.ts` 声明 API tier，app-local composition root materialize 路由和 tier 中间件，再交给 `@iam/api-core` 挂载
 - **Drizzle + PostgreSQL**：数据库层集中在 `packages/db`，使用 Drizzle ORM v1 relations 和 PostgreSQL
-- **企业集成能力**：企业微信、短信服务、ORCAS 集成、OIDC Provider、权限委托、用户档案读模型、导入导出和 MySQL 到 PostgreSQL 迁移脚本
+- **企业集成能力**：企业微信、短信服务、ORCAS 集成、OIDC Provider、权限委托、用户档案读模型和导入导出
 
 ## 📦 仓库结构
 
@@ -27,7 +27,6 @@ iam-service/
 │   │   │   ├── middlewares/         # 应用侧中间件
 │   │   │   ├── enums/               # 应用私有枚举
 │   │   │   └── env.ts               # 环境变量 Zod 校验
-│   │   ├── scripts/                 # 维护和历史迁移脚本
 │   │   ├── static/                  # Scalar / Swagger 静态资源
 │   │   ├── app.config.ts            # API tier、OpenAPI、Scalar 配置
 │   │   ├── Dockerfile
@@ -88,12 +87,15 @@ iam-service/
 │   ├── jobs/                        # BullMQ queue/worker 基础设施（@iam/jobs）
 │   └── user-profile-read-model/     # 用户档案读模型 producer/query/worker（@iam/user-profile-read-model）
 ├── docker/                          # 本地依赖栈、开发和生产 compose 文件
-├── docs/                            # 架构评审、设计稿、实施计划和安全整改文档
+├── docs/                            # Current 架构/功能/runbook、Agent 工作流、ADR 与历史记录
 ├── scripts/                         # 仓库级辅助脚本
 ├── pnpm-workspace.yaml
 ├── turbo.json
 └── package.json
 ```
+
+文档的稳定入口是 [docs/index.md](docs/index.md)。判断当前行为时应对照代码、可执行测试和索引中标记为
+`Current` 的文档；`Historical`、`Stale` 及冻结的 OpenSpec 记录只用于追溯，不应单独作为实现依据。
 
 ### 后端装配模型
 
@@ -289,7 +291,6 @@ pnpm --filter @iam/api lint
 pnpm --filter @iam/api lint:fix
 pnpm --filter @iam/api test
 pnpm --filter @iam/api typecheck
-pnpm --filter @iam/api migrate:mysql-to-postgres
 ```
 
 ### 管理端 API
@@ -386,7 +387,7 @@ Vitest + React Testing Library + MSW，`test:coverage` 生成覆盖率报告但�
 常规 `pnpm test`。Linux/WSL 下包级 `e2e` 会先检查 Playwright Chromium 的系统依赖，缺失时会提示运行
 `pnpm e2e:install`。
 
-后续 OpenSpec 前端变更的验收规则：
+后续前端变更的验收规则：
 
 - 修改纯逻辑、请求封装、service wrapper 或 API 契约消费时，应新增或更新对应 Vitest 测试；如不自动化覆盖，需要在任务或设计中说明原因。
 - 修改登录、重置密码、管理端核心 CRUD、客户端配置等关键页面流程时，应新增或更新 mocked E2E smoke；如不自动化覆盖，需要明确豁免原因。
@@ -605,12 +606,6 @@ Cap 前端资源已放在 `apps/sso/public/cap/`，构建时会复制到 SSO 产
 pnpm --filter @iam/db db:push
 pnpm --filter @iam/db db:generate
 pnpm --filter @iam/db db:migrate
-```
-
-历史 MySQL 数据迁移脚本仍在公共 API 应用内：
-
-```bash
-pnpm --filter @iam/api migrate:mysql-to-postgres
 ```
 
 ## 🚢 部署

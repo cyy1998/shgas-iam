@@ -2,14 +2,14 @@
 
 Type: runbook
 Status: Current
-Last verified: 2026-07-03
+Last verified: 2026-07-16
 Next review: 2026-10-31
 
 ## 适用范围
 
 本手册用于发布 versioned user-profile dirty/rebuild 队列能力。事实来源包括
-`openspec/specs/user-profile-read-model/spec.md`、`openspec/specs/worker-app-runtime/spec.md`、
-`openspec/specs/background-job-queue/spec.md`、`apps/worker/package.json`、`apps/worker/src/env.ts`、
+`packages/contracts/src/jobs/user-profile.ts`、`packages/user-profile-read-model/src/` 及其测试、
+`apps/worker/package.json`、`apps/worker/src/env.ts`、相关数据库 migration，以及
 `docker/docker-compose-dev.yml` 和 `docker/docker-compose-prod.yml`。
 
 该发布会把 `rebuild-user-profile` job payload 和 deterministic jobId 升级为 `userId + dirtyVersion` 维度，

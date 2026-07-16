@@ -22,16 +22,9 @@
 
 新登录事件只写入 `audit_log`，`packages/db` 不再导出 legacy `login_log` schema 或 relations。删除 `login_log` 的数据库迁移属于破坏性迁移；生产执行前必须确认历史登录记录已经迁移到 `audit_log`，或确认当前环境没有需要保留的 legacy 登录记录。
 
-历史迁移验收可先 dry-run：
+仓库当前不再包含当时 `migrate:login-log-audit` 命令所需的一次性迁移实现。原始发布顺序和验收项保留在
+[Historical 退役记录](../../releases/audit-login-log-retirement-release.md) 中，仅供追溯，不可作为当前可执行命令。
 
-```bash
-pnpm --filter @iam/db migrate:login-log-audit -- --dry-run --batch-size 500 --sample-size 5
-```
-
-确认待迁移数量和样例映射后再执行历史迁移：
-
-```bash
-pnpm --filter @iam/db migrate:login-log-audit -- --execute --batch-size 500
-```
-
-迁移脚本通过 `details.migrationSource = "login_log"` 和 `details.legacyLoginLogId` 跳过已迁移记录，可重复执行；执行完成后应确认 pending 数量为 0。只有完成该验收后，才应应用删除 `login_log` 表的 Drizzle migration。
+若仍有早于该退役版本的环境，升级前必须基于现有 `audit_log` schema 单独制定迁移方案：先备份并盘点 legacy 数据，
+验证 actor、target、action、outcome 与脱敏 details 的映射，再确认待迁移数量归零。不得假设当前分支仍包含旧 schema
+或旧迁移实现；即使旧 script key 仍出现在某个历史 package 配置中，也不得把它视为可运行入口。

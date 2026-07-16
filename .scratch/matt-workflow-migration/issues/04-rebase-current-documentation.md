@@ -4,7 +4,7 @@
 
 **Blocked by:** 01 — Establish the Matt workflow contract and freeze OpenSpec.
 
-**Status:** ready-for-agent
+**Status:** claimed
 
 - [ ] Active architecture, development, onboarding, and repository-map documentation identifies code, executable tests, and documents marked Current as the maintained sources of truth.
 - [ ] Active documentation no longer instructs contributors to run OpenSpec commands or create, validate, synchronize, or archive OpenSpec artifacts.

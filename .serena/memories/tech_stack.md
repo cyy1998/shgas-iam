@@ -7,7 +7,7 @@
 - OIDC provider app: `oidc-provider` `9.8.4`, `jose` `^6.1.3`, Node 24, `vitest` `0.34.6`.
 - Worker/jobs: `apps/worker` uses Bun + Hono for health/Bull Board, `@bull-board/api`/`@bull-board/hono`, and `packages/jobs` wraps BullMQ `^5.79.2`.
 - User-profile read model: `packages/user-profile-read-model` owns producer/query/dirty marker/worker module logic and depends on `@iam/jobs`, `@iam/db`, `@iam/domain`, and `@iam/contracts`.
-- Database: Drizzle ORM `1.0.0-rc.2`, Drizzle Kit `1.0.0-rc.2`, PostgreSQL via `postgres` driver; historical MySQL migration script remains in `apps/api`.
+- Database: Drizzle ORM `1.0.0-rc.2`, Drizzle Kit `1.0.0-rc.2`, and PostgreSQL via the `postgres` driver.
 - Frontends: Umi Max `^4.6.58`, React/ReactDOM `^18.3.1`, Ant Design `^5.29.3`, Ant Design Pro Components `^2.8.10`, `@ant-design/icons` `^6.2.5`.
 - Frontend tests: Vitest `0.34.6`, React Testing Library, MSW, and Playwright mocked smoke E2E.
 - Admin frontend consumes admin-api tRPC types via workspace dependency on `@iam/admin-api`.

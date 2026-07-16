@@ -12,6 +12,5 @@
 - DB package: `pnpm --filter @iam/db db:push`, `pnpm --filter @iam/db db:generate`, `pnpm --filter @iam/db db:migrate`, `pnpm --filter @iam/db db:check`.
 - Jobs/read-model packages: `pnpm --filter @iam/jobs <lint|test|typecheck>`, `pnpm --filter @iam/user-profile-read-model <lint|test|typecheck>`.
 - API compatibility DB wrappers: `pnpm --filter @iam/api db:push`, `pnpm --filter @iam/api db:generate`, `pnpm --filter @iam/api db:migrate`.
-- Historical migration: `pnpm --filter @iam/api migrate:mysql-to-postgres`.
 - APISIX gateway: `pnpm gateway:apisix`, `pnpm gateway:apisix:validate`, `pnpm gateway:apisix:diff`, `pnpm gateway:apisix:apply`; for manifest validation prefer `pnpm gateway:apisix:validate -- --env <env>:<app>`.
 - Fast local search: use `rg` and `rg --files`.

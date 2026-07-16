@@ -37,9 +37,10 @@
 - `gateway`: APISIX gateway manifest package (`@iam/gateway-apisix`)，包含 dev/prod manifests、config template 和
   sync/validate/diff/apply scripts。
 - `docker/`: local dependency stacks 以及 dev/prod compose files。
-- `docs/`: workflow guide、architecture note、plan、spec、audit 和 remediation docs。旧 plan 可能提到旧布局；当前
-  database code 是 `packages/db` 中的 Drizzle + PostgreSQL。
-- `openspec/`: active OpenSpec changes、archived changes、main specs 和 OpenSpec project configuration。
+- `docs/`: agent workflow、Current architecture/feature/runbook、ADR 和历史审查记录；状态与事实来源以
+  [文档索引](../index.md) 为准。
+- `openspec/`: 冻结的只读历史需求与设计记录，不是当前事实来源；使用前先阅读
+  [冻结说明](../../openspec/README.md)。
 - `scripts/`: repo-level utility scripts。
 
 ## 生成目录与 Vendored 资源
