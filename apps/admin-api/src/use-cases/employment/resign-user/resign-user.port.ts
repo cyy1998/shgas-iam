@@ -1,6 +1,7 @@
 import type { AfterCommitRegistrationPort, UnitOfWorkPort } from "@iam/api-core/uow";
 import type { UserProfileDirtyReason, UserStatus } from "@iam/contracts";
 import type { AuditActorType, AuditDetails, AuditOutcome } from "@iam/domain/audit";
+import type { ResignUserOptions } from "./resign-user.type";
 
 export interface ResignUserTarget {
   id: number;
@@ -54,6 +55,15 @@ export interface ResignUserTransactionPorts {
   };
 }
 
+export interface ResignUserSessionRevocationPort {
+  revokeUserSessions: (input: {
+    userId: number;
+    reason: "user_disabled";
+    auditContext?: ResignUserOptions["auditContext"];
+  }) => Promise<unknown>;
+}
+
 export interface ResignUserUseCaseDeps {
+  sessionRevocation: ResignUserSessionRevocationPort;
   uow: UnitOfWorkPort<ResignUserTransactionPorts>;
 }

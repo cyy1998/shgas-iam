@@ -29,6 +29,13 @@ export function createResignUserUseCase(deps: ResignUserUseCaseDeps) {
         requestId: auditContext?.requestId ?? undefined,
         traceId: auditContext?.traceId ?? undefined,
       });
+      tx.afterCommit.bestEffort("admin.session_revoke.user", async () => {
+        await deps.sessionRevocation.revokeUserSessions({
+          userId: user.id,
+          reason: "user_disabled",
+          auditContext,
+        });
+      });
       return true as const;
     }, adminAuditTransactionOptions(auditContext));
   }

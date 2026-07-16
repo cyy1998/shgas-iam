@@ -220,6 +220,9 @@ describe("Admin API DI architecture", () => {
     const routeComposition = readSourceFile("composition/routes/index.ts");
     const rootComposition = readSourceFile("composition/index.ts");
     const useCaseCompositionPath = join(sourceRoot, "composition/use-cases/index.ts");
+    const useCaseComposition = existsSync(useCaseCompositionPath)
+      ? readSourceFile("composition/use-cases/index.ts")
+      : "";
     const violations = [
       /\basync function resignUser\b/u.test(employmentService)
         ? "EmploymentService implements resignUser"
@@ -233,8 +236,17 @@ describe("Admin API DI architecture", () => {
       !existsSync(useCaseCompositionPath)
         ? "composition/use-cases/index.ts is missing"
         : null,
+      !/\bcreateResignUserUseCase\(/u.test(useCaseComposition)
+        ? "use-case composition does not create the resign-user use-case"
+        : null,
+      !/sessionRevocation:\s*options\.sessionRevocation/u.test(useCaseComposition)
+        ? "use-case composition does not bind session revocation to resign-user"
+        : null,
       !/\buseCases:\s*ReturnType<typeof createAdminApiUseCases>/u.test(rootComposition)
         ? "Admin composition does not expose a separate useCases field"
+        : null,
+      !/sessionRevocation:\s*session\.revocation/u.test(rootComposition)
+        ? "Admin composition does not inject session revocation into use cases"
         : null,
       !/resignUser:\s*useCases\.employment\.resignUser/u.test(routeComposition)
         ? "route composition does not inject the resignation facade separately"
@@ -244,7 +256,7 @@ describe("Admin API DI architecture", () => {
     expect(violations).toEqual([]);
   });
 
-  test("keeps the resignation transaction port consumer-owned", () => {
+  test("keeps the resignation ports consumer-owned", () => {
     const port = readSourceFile("use-cases/employment/resign-user/resign-user.port.ts");
     const forbiddenPatterns = [
       /\bPick\s*</u,
@@ -262,6 +274,7 @@ describe("Admin API DI architecture", () => {
       "endActiveEmploymentsByUserId",
       "recordAuditLog",
       "markUsersDirty",
+      "revokeUserSessions",
     ];
     violations.push(...requiredMethods
       .filter(method => !port.includes(method))

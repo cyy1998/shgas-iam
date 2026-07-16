@@ -56,7 +56,7 @@ export async function createAdminApiComposition(
     clock: runtime.clock,
   });
   const services = createAdminApiServices({ runtime, repositories, session, unitOfWork });
-  const useCases = createAdminApiUseCases({ unitOfWork });
+  const useCases = createAdminApiUseCases({ sessionRevocation: session.revocation, unitOfWork });
 
   return {
     env: compositionEnv,
