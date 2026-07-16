@@ -26,6 +26,7 @@
 | [docs/adr/0001-replace-openspec-workflow.md](adr/0001-replace-openspec-workflow.md) | decision | Current | 2026-07-16 | 2026-10-31 | 采用 Matt skills 工作流并冻结 OpenSpec 的架构决策。 |
 | [docs/agents/domain.md](agents/domain.md) | agent-config | Current | 2026-07-16 | 2026-10-31 | Engineering skills 的 single-context domain documentation 消费规则。 |
 | [docs/agents/issue-tracker.md](agents/issue-tracker.md) | agent-config | Current | 2026-07-16 | 2026-10-31 | 本地 Markdown issue tracker 的路径与操作约定。 |
+| [docs/agents/serena-mcp.md](agents/serena-mcp.md) | agent-config | Current | 2026-07-16 | 2026-10-31 | Linux/bash 与 Windows/PowerShell 下的项目级 Serena MCP 启动和故障处理约定。 |
 | [docs/agents/triage-labels.md](agents/triage-labels.md) | agent-config | Current | 2026-07-16 | 2026-10-31 | Engineering skills 使用的默认 triage 标签映射。 |
 | [docs/agents/workflow.md](agents/workflow.md) | agent-config | Current | 2026-07-16 | 2026-10-31 | Matt skills 的标准流程、快速路径、ticket 生命周期、分支、验证和授权规则。 |
 | [docs/architecture/backend-architecture.md](architecture/backend-architecture.md) | architecture | Current | 2026-07-16 | 2026-10-31 | 后端 app composition、factory/DI、ports、route/middleware 和 architecture test 约定。 |
