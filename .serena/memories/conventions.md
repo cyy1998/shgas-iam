@@ -14,4 +14,4 @@
 - Prefer enums/constants over magic status/type/role strings in business queries.
 - Prefer Zod-derived types via `z.infer<typeof Schema>` when a schema is the source of truth.
 - Keep narrow changes; avoid unrelated refactors/format churn.
-- Do not create commits automatically outside the OpenSpec archive flow or an explicit quick-change confirmation gate. When committing, use a focused Conventional Commit with a Chinese message unless the user requests another language.
+- Follow `docs/agents/workflow.md` for ticket commits, commit format, merge, push, and branch-cleanup authorization.

@@ -1,8 +1,7 @@
 # 后端架构
 
-本文记录后端结构与 composition 约定。Workflow 门禁仍从 [../workflows/index.md](../workflows/index.md)
-进入；当前 functional DI 契约细节见
-[../../openspec/specs/backend-functional-di/spec.md](../../openspec/specs/backend-functional-di/spec.md)。
+本文记录后端结构与 composition 约定。当前 functional DI 契约由本文、各后端 app 的 production composition，
+以及 `src/__tests__/architecture.test.ts` 和 `src/__tests__/port-contracts.test.ts` 共同维护。
 
 ## App 边界
 
@@ -93,5 +92,8 @@ composition。跨层实例连接统一由 composition 完成。
 
 ## 后端 App 工具配置
 
-- 后端 app 的 `tsconfig.json` 应包含 Bun runtime types，并排除 `scripts`。
-- 后端 app ESLint 配置应忽略 `scripts/**`。
+- Bun runtime apps（`apps/api`、`apps/admin-api`、`apps/worker`）的 `tsconfig.json` 应包含 Bun types；
+  Node.js runtime 的 `apps/oidc-provider` 应包含 Node types。
+- App-local maintenance scripts 属于非生产工具；实际新增该目录时，应在 `tsconfig.json` 中排除 `scripts`，并在
+  ESLint 配置中忽略 `scripts/**`。API、Admin API 和 OIDC Provider 的配置已预留这些模式；Worker 当前没有该目录，
+  也没有对应排除项。

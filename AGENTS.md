@@ -4,8 +4,6 @@
 
 ## 必读入口
 
-- Workflow 分流与门禁，开发时必须遵守：
-  [docs/workflows/index.md](docs/workflows/index.md)
 - 当前文档索引：[docs/index.md](docs/index.md)
 - 仓库结构与生成目录边界：[docs/architecture/repository-map.md](docs/architecture/repository-map.md)
 - 后端架构与 composition 规则：[docs/architecture/backend-architecture.md](docs/architecture/backend-architecture.md)
@@ -20,6 +18,24 @@
 - 在聊天 UI 中，面向用户的回复默认使用自然、地道的中文。代码标识符、命令、文件路径、API 名称和引用的源文本保持原语言。
 - 本仓库明确授权 Codex 使用子代理功能并行调查或拆分边界清晰的任务；主代理仍负责整合结论、执行改动和最终验证。
 - 每次任务开始时运行 `systemctl --user is-active --quiet serena-mcp-shgas-iam-proxy.socket || systemctl --user start serena-mcp-shgas-iam-proxy.socket`，确保项目级 Serena MCP 的按需启动入口可用。Serena backend 由 socket activation 管理；不得另行启动第二个 Serena 进程。若 socket 恢复后当前任务仍没有 Serena 工具，告知用户需要重启或恢复任务以重新初始化 MCP。
-- 涉及提交、合并、OpenSpec 归档或分支清理等生命周期动作时，必须先按 `docs/workflows/index.md` 分流并执行对应阶段文档；不得只执行单个 OpenSpec skill 来替代完整 workflow Archive 阶段。
-- Archive 阶段若通过 squash merge 把工作分支合入目标分支，`git branch -d <branch>` 可能因工作分支提交不是目标分支祖先而拒绝删除；确认最终提交已在目标分支且工作树干净后，使用 `git branch -D <branch>` 清理本地工作分支，并在最终说明中记录原因。
 - 在 PowerShell 中读取文本文件时显式指定 UTF-8 编码，例如 `Get-Content -Path "AGENTS.md" -Encoding utf8`，避免中文乱码。
+
+## Agent skills
+
+### Engineering workflow
+
+所有新工作统一使用 Matt skills 工作流；标准功能依次经过澄清、规格、票据、实现和双轴评审，小型低风险改动可直接进入实现。仓库级生命周期、分支、验证和授权边界见 [docs/agents/workflow.md](docs/agents/workflow.md)。
+
+`openspec/` 已冻结为只读历史参考。除非维护者明确要求修正历史记录，否则不得在其中新增、修改、同步或归档产物，也不得把其中的规格视为当前事实来源。
+
+### Issue tracker
+
+Issues and specs are tracked as local Markdown files under `.scratch/`. See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+The default canonical triage labels are used unchanged. See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+This repo uses a single-context layout with `CONTEXT.md` at the root and ADRs under `docs/adr/`. See `docs/agents/domain.md`.

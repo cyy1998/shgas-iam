@@ -2,15 +2,14 @@
 
 Type: runbook
 Status: Current
-Last verified: 2026-07-03
+Last verified: 2026-07-16
 Next review: 2026-10-31
 
 ## 适用范围
 
 本手册用于发布 `gateway/manifests/<env>/<app>.yaml` 中由 Git 管理的 APISIX gateway 基线配置。事实来源包括
-`gateway/README.md`、`openspec/specs/gateway-configuration-management/spec.md`、
-`openspec/specs/system-log-observability/spec.md`、`gateway/src/commands.ts` 和
-`gateway/src/__tests__/manifest.test.ts`。
+`gateway/README.md`、`gateway/src/manifest.ts`、`gateway/src/ownership-policy.ts`、`gateway/src/commands.ts`，以及
+`gateway/src/__tests__/manifest.test.ts` 和 `gateway/src/__tests__/commands.test.ts`。
 
 `apisix-sync` 只管理 `labels.source=repo-manifest` 的对象，并避让 `source=dynamic-registry` 的 IAM 动态注册对象。
 

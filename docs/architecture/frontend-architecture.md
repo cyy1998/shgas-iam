@@ -1,8 +1,7 @@
 # 前端架构
 
 本文记录 `apps/admin` 和 `apps/sso` 下 Umi Max + React 前端 app 的结构与 composition 约定。编码风格见
-[../development/coding-style.md](../development/coding-style.md)，验证选择见
-[../workflows/verify.md](../workflows/verify.md)。
+[../development/coding-style.md](../development/coding-style.md)。
 
 ## App 边界
 
@@ -39,7 +38,7 @@
 ## 测试与生成路径
 
 - 前端测试应在可用时使用 app-local Vitest setup、React Testing Library helper、MSW handler 和 Umi runtime mock。
-  当前 test workflow contract 见
-  [../../openspec/specs/frontend-test-workflow/spec.md](../../openspec/specs/frontend-test-workflow/spec.md).
+  当前 test workflow 由两个前端 package 的 test scripts、`vitest.config.ts`、`playwright.config.ts` 和已提交测试共同维护；
+  命令入口见 [../development/commands.md](../development/commands.md)。
 - 不要直接编辑 Umi generated directory 或 frontend build output；generated 和 vendored path 规则见
   [repository-map.md](repository-map.md)。

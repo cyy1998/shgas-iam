@@ -2,15 +2,15 @@
 
 Type: runbook
 Status: Current
-Last verified: 2026-07-03
+Last verified: 2026-07-16
 Next review: 2026-10-31
 
 ## 适用范围
 
 本手册用于发布统一 `role_assignment` 表、角色授权聚合和 admin `/roles` 角色管理页面。事实来源包括
-`openspec/specs/authorization-model/spec.md`、`openspec/specs/admin-role-management/spec.md`、
-`openspec/specs/user-profile-read-model/spec.md`、`packages/db/src/schema/core/role-assignments.ts`、
-`apps/admin-api/src/services/role/role.service.ts` 和 `apps/admin/src/pages/roles/`。
+`packages/db/src/schema/core/role-assignments.ts`、`apps/admin-api/src/services/role/role.service.ts`、
+`apps/admin/src/pages/roles/`、`apps/oidc-provider/src/__tests__/authorization-role-assignments.test.ts`，以及
+`packages/user-profile-read-model/src/__tests__/user-profile-builder.service.test.ts`。
 
 该发布会把旧 `employment_role`、`organization_role`、`position_role` 三表分配语义迁移到统一
 `role_assignment`，并让 API、admin-api、OIDC claims 和 user-profile read model 从统一表读取角色。

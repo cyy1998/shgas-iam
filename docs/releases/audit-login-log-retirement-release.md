@@ -1,16 +1,19 @@
 # 统一审计日志与 login_log 退役发布手册
 
 Type: runbook
-Status: Current
-Last verified: 2026-07-03
-Next review: 2026-10-31
+Status: Historical
+Last verified: 2026-07-16
+Next review: n/a
+
+> 本文件记录已经完成的 `login_log` 一次性退役流程。当前仓库不再包含文中
+> `migrate:login-log-audit` 命令所需的迁移实现；不得把下列命令当作当前 runbook。现行审计边界见
+> [统一审计日志](../features/audit/audit-logging.md)。
 
 ## 适用范围
 
-本手册用于发布统一 `audit_log` 审计日志和 legacy `login_log` 退役。事实来源包括
-`docs/features/audit/audit-logging.md`、`openspec/specs/audit-logging/spec.md`、
-`packages/db/package.json`、`packages/db/scripts/migrate-login-log-to-audit.ts`、
-`packages/db/src/schema/log/audit-logs.ts` 和 `packages/db/src/migrations/20260605081527_sour_bill_hollister/migration.sql`。
+本手册记录统一 `audit_log` 审计日志和 legacy `login_log` 的历史退役。当前仍可核对的交付证据包括
+`docs/features/audit/audit-logging.md`、`packages/db/src/schema/log/audit-logs.ts` 和
+`packages/db/src/migrations/20260605081527_sour_bill_hollister/migration.sql`；文中的迁移命令属于当时版本。
 
 新登录安全事件只写入 `audit_log`。删除 `login_log` 是破坏性数据库变更，生产执行前必须完成历史迁移验收，或确认环境中没有需要保留的 legacy 登录记录。
 

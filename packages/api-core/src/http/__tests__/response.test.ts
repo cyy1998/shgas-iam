@@ -12,20 +12,20 @@ type IsEqual<TActual, TExpected> = (
 type Assert<T extends true> = T;
 type AssertFalse<T extends false> = T;
 
-const typedSuccessEnvelope = resp.ok("user-info" as string);
-const typedNullSuccessEnvelope = resp.ok();
-const typedFailureEnvelope = resp.fail(
+const _typedSuccessEnvelope = resp.ok("user-info" as string);
+const _typedNullSuccessEnvelope = resp.ok();
+const _typedFailureEnvelope = resp.fail(
   ApiErrorCode.BadRequest,
   "请求失败",
   { requestId: "req-1" } as { requestId: string },
 );
 
-type _SuccessEnvelopeIsNotAny = AssertFalse<IsAny<typeof typedSuccessEnvelope>>;
-type _SuccessEnvelopePreservesData = Assert<IsEqual<typeof typedSuccessEnvelope, ApiEnvelope<string, 200>>>;
-type _NullSuccessEnvelopePreservesData = Assert<IsEqual<typeof typedNullSuccessEnvelope["data"], null>>;
-type _FailureEnvelopeIsNotAny = AssertFalse<IsAny<typeof typedFailureEnvelope>>;
+type _SuccessEnvelopeIsNotAny = AssertFalse<IsAny<typeof _typedSuccessEnvelope>>;
+type _SuccessEnvelopePreservesData = Assert<IsEqual<typeof _typedSuccessEnvelope, ApiEnvelope<string, 200>>>;
+type _NullSuccessEnvelopePreservesData = Assert<IsEqual<typeof _typedNullSuccessEnvelope["data"], null>>;
+type _FailureEnvelopeIsNotAny = AssertFalse<IsAny<typeof _typedFailureEnvelope>>;
 type _FailureEnvelopePreservesData = Assert<
-  IsEqual<typeof typedFailureEnvelope["data"], { requestId: string }>
+  IsEqual<typeof _typedFailureEnvelope["data"], { requestId: string }>
 >;
 type _ApiEnvelopePreservesData = Assert<IsEqual<ApiEnvelope<{ id: string }>["data"], { id: string }>>;
 

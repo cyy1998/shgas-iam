@@ -2,15 +2,15 @@
 
 Type: runbook
 Status: Current
-Last verified: 2026-07-03
+Last verified: 2026-07-16
 Next review: 2026-10-31
 
 ## 适用范围
 
 本手册用于发布 `/auth/login/password` 的 SM2 + SM4 加密凭证登录契约。事实来源包括
-`openspec/specs/authentication-sessions/spec.md`、`openspec/specs/human-verification/spec.md`、
-`packages/contracts/src/auth/login-credential.ts`、`apps/api/src/routes/auth/login-credential.helper.ts`、
-`apps/api/src/env.ts`、`apps/sso/src/lib/login-credential.ts` 和 `apps/sso/src/constants/config.ts`。
+`packages/contracts/src/auth/login-credential.ts` 及其测试、
+`apps/api/src/services/authentication/login-credential.parser.ts` 及其测试、`apps/api/src/env.ts`、
+`apps/sso/src/lib/login-credential.ts` 及其测试，以及 `apps/sso/src/constants/config.ts`。
 
 该变更是请求契约变更：密码登录请求体只接受 `credential` 和可选 `capToken`，不再接受 legacy
 `{ username, password }` 明文请求。
