@@ -1,8 +1,7 @@
 # 前端架构
 
 本文记录 `apps/admin` 和 `apps/sso` 下 Umi Max + React 前端 app 的结构与 composition 约定。编码风格见
-[../development/coding-style.md](../development/coding-style.md)，验证选择见
-[../workflows/verify.md](../workflows/verify.md)。
+[../development/coding-style.md](../development/coding-style.md)。
 
 ## App 边界
 

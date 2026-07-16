@@ -1,7 +1,6 @@
 # 后端架构
 
-本文记录后端结构与 composition 约定。Workflow 门禁仍从 [../workflows/index.md](../workflows/index.md)
-进入；当前 functional DI 契约细节见
+本文记录后端结构与 composition 约定。当前 functional DI 契约细节见
 [../../openspec/specs/backend-functional-di/spec.md](../../openspec/specs/backend-functional-di/spec.md)。
 
 ## App 边界
