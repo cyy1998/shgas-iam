@@ -106,3 +106,11 @@ Freeze the existing OpenSpec tree as read-only historical reference, remove its 
 - Both Codex and CodeBuddy currently contain OpenSpec skills, while CodeBuddy also contains OpenSpec command aliases. Both surfaces are in scope for removal.
 - The current working tree already contains the installed Matt skills configuration and deletion of the superseded repository workflow documents. Those changes are part of this feature and must not be overwritten or discarded.
 - The completed feature spec and resolved tickets remain version controlled at this location as the first durable example of the new workflow.
+
+## Amendments
+
+### 2026-07-16 — Permit test-only baseline repairs required by final validation
+
+Final repository validation exposed two failures already present at the `main` baseline: three compile-time assertion values violate the current unused-variable lint convention, and one OIDC HTTP logging integration test exceeds its 10-second local timeout only under full-suite parallel load while passing in 1.7 seconds when focused.
+
+The maintainer approved two narrowly scoped repairs in ticket 05: prefix the three type-assertion constants with `_`, and raise only the affected integration test's local timeout to 30 seconds. These changes must preserve all existing assertions, add no production behavior, and introduce no new general lint, test, hook, or timeout policy.
