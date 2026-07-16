@@ -4,7 +4,7 @@
 
 **Blocked by:** 01 — Establish the Matt workflow contract and freeze OpenSpec.
 
-**Status:** ready-for-agent
+**Status:** claimed
 
 - [ ] Package metadata and workspace configuration contain no OpenSpec CLI dependency, OpenSpec commands, or OpenSpec-specific build allowance.
 - [ ] OpenSpec validation, archive-integrity, staged-check, hook-installation, and associated test code with no remaining responsibility are removed.
