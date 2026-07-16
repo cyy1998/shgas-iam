@@ -5,6 +5,10 @@ import { UserNotFoundError } from "@iam/domain/user";
 import { describe, expect, mock, test } from "bun:test";
 import { createResignUserUseCase } from "../resign-user.use-case";
 
+function createSessionRevocation() {
+  return { revokeUserSessions: mock(async () => undefined) };
+}
+
 describe("createResignUserUseCase", () => {
   test("ends active employments before disabling an existing user", async () => {
     const events: string[] = [];
@@ -36,6 +40,7 @@ describe("createResignUserUseCase", () => {
       },
     };
     const useCase = createResignUserUseCase({
+      sessionRevocation: createSessionRevocation(),
       uow: createImmediateUnitOfWork(tx),
     });
 
@@ -51,6 +56,132 @@ describe("createResignUserUseCase", () => {
       "audit",
       "profile:dirty",
     ]);
+  });
+
+  test("revokes every active session after resignation takes effect", async () => {
+    const events: string[] = [];
+    const afterCommitTasks: Array<() => Promise<void> | void> = [];
+    const afterCommit = {
+      bestEffort: mock((_name: string, callback: () => Promise<void> | void) => {
+        afterCommitTasks.push(callback);
+      }),
+      required: mock(() => undefined),
+    };
+    const sessionRevocation = {
+      revokeUserSessions: mock(async () => {
+        events.push("sessions:revoke");
+      }),
+    };
+    const tx = {
+      auditLogWriter: {
+        recordAuditLog: mock(async () => {
+          events.push("audit");
+        }),
+      },
+      employmentStore: {
+        endActiveEmploymentsByUserId: mock(async () => {
+          events.push("employment:end");
+        }),
+      },
+      profileDirtyMarker: {
+        markUsersDirty: mock(async () => {
+          events.push("profile:dirty");
+        }),
+      },
+      userStore: {
+        getUserByUsernameForAdmin: mock(async () => ({ id: 1, username: "zhangsan", name: "张三" })),
+        updateUserByUsername: mock(async () => {
+          events.push("user:disable");
+        }),
+      },
+    };
+    const uow: ResignUserUseCaseDeps["uow"] = {
+      async transaction(callback) {
+        const result = await callback({ ...tx, afterCommit });
+        events.push("transaction:committed");
+        for (const task of afterCommitTasks)
+          await task();
+        return result;
+      },
+    };
+    const useCase = createResignUserUseCase({
+      sessionRevocation,
+      uow,
+    });
+    const auditContext = {
+      actorType: "admin" as const,
+      actorUserId: 1,
+      principalSessionId: "ps-current",
+      requestId: "req-1",
+      traceId: "trace-1",
+    };
+
+    await expect(useCase.execute(
+      { username: "zhangsan" },
+      { auditContext },
+    )).resolves.toBe(true);
+
+    expect(sessionRevocation.revokeUserSessions).toHaveBeenCalledWith({
+      auditContext,
+      reason: "user_disabled",
+      userId: 1,
+    });
+    expect(events).toEqual([
+      "employment:end",
+      "user:disable",
+      "audit",
+      "profile:dirty",
+      "transaction:committed",
+      "sessions:revoke",
+    ]);
+  });
+
+  test("keeps resignation successful when session revocation fails", async () => {
+    const revocationFailure = new Error("session revocation unavailable");
+    const sessionRevocation = {
+      revokeUserSessions: mock(async () => {
+        throw revocationFailure;
+      }),
+    };
+    const tx = {
+      auditLogWriter: { recordAuditLog: mock(async () => undefined) },
+      employmentStore: { endActiveEmploymentsByUserId: mock(async () => undefined) },
+      profileDirtyMarker: { markUsersDirty: mock(async () => undefined) },
+      userStore: {
+        getUserByUsernameForAdmin: mock(async () => ({ id: 1, username: "zhangsan", name: "张三" })),
+        updateUserByUsername: mock(async () => undefined),
+      },
+    };
+    const useCase = createResignUserUseCase({
+      sessionRevocation,
+      uow: createImmediateUnitOfWork(tx),
+    });
+
+    await expect(useCase.execute({ username: "zhangsan" })).resolves.toBe(true);
+    expect(sessionRevocation.revokeUserSessions).toHaveBeenCalledTimes(1);
+  });
+
+  test("retries session revocation when resignation is repeated", async () => {
+    const sessionRevocation = createSessionRevocation();
+    const tx = {
+      auditLogWriter: { recordAuditLog: mock(async () => undefined) },
+      employmentStore: { endActiveEmploymentsByUserId: mock(async () => undefined) },
+      profileDirtyMarker: { markUsersDirty: mock(async () => undefined) },
+      userStore: {
+        getUserByUsernameForAdmin: mock(async () => ({ id: 1, username: "zhangsan", name: "张三" })),
+        updateUserByUsername: mock(async () => undefined),
+      },
+    };
+    const useCase = createResignUserUseCase({
+      sessionRevocation,
+      uow: createImmediateUnitOfWork(tx),
+    });
+
+    await expect(useCase.execute({ username: "zhangsan" })).resolves.toBe(true);
+    await expect(useCase.execute({ username: "zhangsan" })).resolves.toBe(true);
+
+    expect(tx.auditLogWriter.recordAuditLog).toHaveBeenCalledTimes(2);
+    expect(sessionRevocation.revokeUserSessions).toHaveBeenCalledTimes(2);
   });
 
   test("preserves resignation audit, dirty context, and transaction observability", async () => {
@@ -75,7 +206,7 @@ describe("createResignUserUseCase", () => {
         return await callback(tx);
       },
     };
-    const useCase = createResignUserUseCase({ uow });
+    const useCase = createResignUserUseCase({ sessionRevocation: createSessionRevocation(), uow });
     const auditContext = {
       actorType: "admin" as const,
       actorUserId: 1001,
@@ -123,7 +254,11 @@ describe("createResignUserUseCase", () => {
         updateUserByUsername: mock(async () => undefined),
       },
     };
-    const useCase = createResignUserUseCase({ uow: createImmediateUnitOfWork(tx) });
+    const sessionRevocation = createSessionRevocation();
+    const useCase = createResignUserUseCase({
+      sessionRevocation,
+      uow: createImmediateUnitOfWork(tx),
+    });
 
     await expect(useCase.execute({ username: "missing" }))
       .rejects
@@ -132,6 +267,7 @@ describe("createResignUserUseCase", () => {
     expect(tx.userStore.updateUserByUsername).not.toHaveBeenCalled();
     expect(tx.auditLogWriter.recordAuditLog).not.toHaveBeenCalled();
     expect(tx.profileDirtyMarker.markUsersDirty).not.toHaveBeenCalled();
+    expect(sessionRevocation.revokeUserSessions).not.toHaveBeenCalled();
   });
 
   test("propagates each transaction failure without running later side effects", async () => {
@@ -157,11 +293,16 @@ describe("createResignUserUseCase", () => {
           updateUserByUsername: mock(async () => runStage("user:disable")),
         },
       };
-      const useCase = createResignUserUseCase({ uow: createImmediateUnitOfWork(tx) });
+      const sessionRevocation = createSessionRevocation();
+      const useCase = createResignUserUseCase({
+        sessionRevocation,
+        uow: createImmediateUnitOfWork(tx),
+      });
 
       await expect(useCase.execute({ username: "zhangsan" })).rejects.toBe(error);
       const failureIndex = stages.indexOf(failingStage);
       expect(events).toEqual(["user:lookup", ...stages.slice(0, failureIndex + 1)]);
+      expect(sessionRevocation.revokeUserSessions).not.toHaveBeenCalled();
     }
   });
 });

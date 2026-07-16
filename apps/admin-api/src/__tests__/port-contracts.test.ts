@@ -29,6 +29,7 @@ import type {
   AdminRoleTransactionStorePort,
 } from "@admin-api/services/role/role.port";
 import type { RoleRepository } from "@admin-api/services/role/role.repository";
+import type { AdminSessionRevocationPort } from "@admin-api/services/session-revocation/session-revocation.port";
 import type {
   AdminUserEmploymentReaderPort,
   AdminUserPrivilegeReaderPort,
@@ -37,6 +38,7 @@ import type {
   AdminUserTransactionStorePort,
 } from "@admin-api/services/user/user.port";
 import type { UserRepository } from "@admin-api/services/user/user.repository";
+import type { ResignUserSessionRevocationPort } from "@admin-api/use-cases/employment/resign-user/resign-user.port";
 import { expect, test } from "bun:test";
 
 function assertAssignable<Port, _Provider extends Port>() {}
@@ -65,6 +67,8 @@ test("Admin API providers structurally satisfy consumer-owned ports", () => {
   assertAssignable<AdminUserEmploymentReaderPort, EmploymentRepository>();
   assertAssignable<AdminUserRoleReaderPort, RoleRepository>();
   assertAssignable<AdminUserPrivilegeReaderPort, PrivilegeRepository>();
+
+  assertAssignable<ResignUserSessionRevocationPort, AdminSessionRevocationPort>();
 
   expect(true).toBe(true);
 });

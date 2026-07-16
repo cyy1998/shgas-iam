@@ -17,7 +17,7 @@ _Avoid_: user detail field, user profile attribute
 _Avoid_: open flow, public password helper
 
 **User Resignation**:
-管理员结束用户全部有效任职并禁用其 IAM 账号的原子业务流程；它不同于删除单条任职或删除用户。
+管理员原子地结束用户全部有效任职并禁用其 IAM 账号，随后终止该用户全部活跃访问会话的业务流程；会话终止失败不撤销已生效的离职结果。重复执行仍视为成功并再次尝试终止全部会话；它不同于删除单条任职或删除用户。
 _Avoid_: employment deletion, user deletion
 
 **OIDC Claims Snapshot**:
