@@ -4,7 +4,7 @@
 
 **Blocked by:** 01 — 建立角色分配解析模块
 
-**Status:** ready-for-agent
+**Status:** claimed
 
 - [ ] OIDC composition root 创建 resolver，并将其注入授权快照持久化适配器，不由叶子 repository 自行构造。
 - [ ] OIDC 为一次快照批量解析全部有效任职，并显式传入当前 IAM client ID。

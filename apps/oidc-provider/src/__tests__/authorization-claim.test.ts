@@ -5,7 +5,7 @@ import {
 } from "../provider/authorization-claim.ts";
 
 describe("iam:authorization claim", () => {
-  it("filters roles to the current client and derives privileges only from retained roles", () => {
+  it("maps Effective Roles and derives their privileges", () => {
     const employment = buildOidcAuthorizationEmployment({
       orderNum: 2,
       organization: {
@@ -18,19 +18,17 @@ describe("iam:authorization claim", () => {
         ],
       },
       position: { posCode: "engineer", posName: "Engineer" },
-      roleIds: [1, 2, 99],
+      effectiveRoles: [
+        { id: 1, roleCode: "app:user" },
+        { id: 2, roleCode: "app:admin" },
+      ],
     }, new Map([
-      [1, "app:user"],
-      [2, "app:admin"],
-    ]), new Map([
       [1, ["app:read"]],
       [2, ["app:write", "app:read"]],
-      [99, ["other:forbidden"]],
     ]));
 
     expect(employment.roles).toEqual(["app:admin", "app:user"]);
     expect(employment.privileges).toEqual(["app:read", "app:write"]);
-    expect(JSON.stringify(employment)).not.toContain("other:forbidden");
   });
 
   it("keeps all employments, strips ordering metadata, and produces stable aggregate codes", () => {
