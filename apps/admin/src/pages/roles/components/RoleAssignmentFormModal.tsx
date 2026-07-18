@@ -39,10 +39,11 @@ export default function RoleAssignmentFormModal({
   onError,
 }: Props) {
   const formRef = useRef<ProFormInstance>();
+  const [messageApi, messageContextHolder] = message.useMessage();
   const handleError =
     onError ??
     ((err: unknown) =>
-      message.error(err instanceof Error ? err.message : '操作失败'));
+      messageApi.error(err instanceof Error ? err.message : '操作失败'));
 
   return (
     <ModalForm
@@ -62,7 +63,7 @@ export default function RoleAssignmentFormModal({
             roleCode,
             normalizeAssignmentCreateInput(values),
           );
-          message.success('分配已创建');
+          messageApi.success('分配已创建');
           onOpenChange(false);
           onSuccess();
           return true;
@@ -72,6 +73,7 @@ export default function RoleAssignmentFormModal({
         }
       }}
     >
+      {messageContextHolder}
       <ProFormSelect
         name="targetType"
         label="分配类型"

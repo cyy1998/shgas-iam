@@ -16,8 +16,8 @@
   "scripts": {
     "dev": "bun --hot src/index.ts",
     "serve": "bun run src/index.ts",
-    "lint": "eslint src eslint.config.js",
-    "lint:fix": "eslint --fix src eslint.config.js",
+    "lint": "eslint src app.config.ts eslint.config.js",
+    "lint:fix": "eslint --fix src app.config.ts eslint.config.js",
     "db:generate": "pnpm --filter @iam/db db:generate",
     "db:migrate": "pnpm --filter @iam/db db:migrate",
     "db:push": "pnpm --filter @iam/db db:push",

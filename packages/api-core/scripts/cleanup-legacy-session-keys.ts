@@ -6,7 +6,7 @@ import {
 
 const logger = {
   info(data: Record<string, unknown>) {
-    console.log(JSON.stringify(data));
+    process.stdout.write(`${JSON.stringify(data)}\n`);
   },
   warn(data: Record<string, unknown>) {
     console.warn(JSON.stringify(data));

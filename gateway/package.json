@@ -8,8 +8,8 @@
     "validate": "bun src/cli.ts validate",
     "diff": "bun src/cli.ts diff",
     "apply": "bun src/cli.ts apply",
-    "lint": "eslint src/",
-    "lint:fix": "eslint --fix src/",
+    "lint": "eslint src eslint.config.js config manifests",
+    "lint:fix": "eslint --fix src eslint.config.js config manifests",
     "test": "bun test --parallel",
     "typecheck": "pnpm exec tsgo --noEmit"
   },

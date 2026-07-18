@@ -3,8 +3,8 @@ import { spawnSync } from "node:child_process";
 import process from "node:process";
 
 if (
-  process.env.PLAYWRIGHT_E2E_SKIP_PREFLIGHT === "1" ||
-  process.platform !== "linux"
+  process.env.PLAYWRIGHT_E2E_SKIP_PREFLIGHT === "1"
+  || process.platform !== "linux"
 ) {
   process.exit(0);
 }

@@ -71,7 +71,8 @@ function parseIndex(): Map<string, IndexedDoc> {
 
   for (const line of text.split("\n")) {
     const trimmed = line.trim();
-    if (!trimmed.startsWith("| [")) continue;
+    if (!trimmed.startsWith("| ["))
+      continue;
 
     const cells = trimmed
       .slice(1, trimmed.endsWith("|") ? -1 : undefined)
@@ -181,7 +182,8 @@ function checkMarkdownLinks(files: string[]): void {
     for (const match of text.matchAll(linkPattern)) {
       const rawTarget = match[1].trim();
       const target = rawTarget.split(/\s+/)[0].split("#")[0];
-      if (!target || shouldSkipLink(target)) continue;
+      if (!target || shouldSkipLink(target))
+        continue;
 
       const targetPath = resolve(dirname(join(repoRoot, file)), target);
       if (!existsSync(targetPath)) {
@@ -195,7 +197,8 @@ function checkStaleReferences(rows: Map<string, IndexedDoc>): void {
   for (const doc of rows.values()) {
     const text = read(doc.path);
     const stalePattern = staleReferencePatterns.find(({ pattern }) => pattern.test(text));
-    if (!stalePattern) continue;
+    if (!stalePattern)
+      continue;
 
     if (doc.status === "Current" || doc.status === "Needs Review") {
       fail(doc.path, `contains ${stalePattern.label}; mark as Historical/Stale or update the content`);

@@ -172,7 +172,8 @@ console.log("Env name guard passed.");
 function checkRawEnvSchema(check: AppEnvSchemaCheck): void {
   const text = read(check.file);
   const block = extractRawEnvSchemaBlock(text, check.file);
-  if (!block) return;
+  if (!block)
+    return;
 
   for (const match of block.text.matchAll(/^\s{2}([A-Z][A-Z0-9_]*)\s*:/gm)) {
     const key = match[1];
@@ -185,7 +186,8 @@ function checkRawEnvSchema(check: AppEnvSchemaCheck): void {
 function checkBackendProcessEnvBoundary(envFile: string): void {
   const appSrcDir = envFile.replace(/\/env\.ts$/, "");
   for (const file of listFiles(appSrcDir, isTypeScriptFile)) {
-    if (file === envFile || file.includes("/__tests__/")) continue;
+    if (file === envFile || file.includes("/__tests__/"))
+      continue;
     const text = read(file);
     for (const match of text.matchAll(/process\.env(?:\.([A-Z][A-Z0-9_]*)|\[\s*["']([A-Z][A-Z0-9_]*)["']\s*\])/g)) {
       add(file, lineNumber(text, match.index!), "backend process.env reads must stay inside src/env.ts");
@@ -199,10 +201,12 @@ function checkEnvExample(check: EnvExampleCheck): void {
 
   text.split("\n").forEach((line, index) => {
     const match = line.match(/^([A-Z][A-Z0-9_]*)=/);
-    if (!match) return;
+    if (!match)
+      return;
 
     const key = match[1];
-    if (allowedKeys.has(key) || check.allowedPrefixes.some(prefix => key.startsWith(prefix))) return;
+    if (allowedKeys.has(key) || check.allowedPrefixes.some(prefix => key.startsWith(prefix)))
+      return;
 
     add(check.file, index + 1, `${key} must use one of ${check.allowedPrefixes.join(", ")}`);
   });
@@ -275,14 +279,16 @@ function extractRawEnvSchemaBlock(text: string, file: string): { start: number; 
 
 function listFiles(dir: string, predicate: (file: string) => boolean): string[] {
   const absoluteDir = join(repoRoot, dir);
-  if (!existsSync(absoluteDir)) return [];
+  if (!existsSync(absoluteDir))
+    return [];
 
   const result: string[] = [];
   for (const entry of readdirSync(absoluteDir)) {
-    if (entry === "node_modules" || entry === "dist" || entry === ".umi" || entry === ".umi-production") continue;
+    if (entry === "node_modules" || entry === "dist" || entry === ".umi" || entry === ".umi-production")
+      continue;
 
     const absolutePath = join(absoluteDir, entry);
-    const relativePath = relative(repoRoot, absolutePath);
+    const relativePath = relative(repoRoot, absolutePath).replaceAll("\\", "/");
     const stat = statSync(absolutePath);
 
     if (stat.isDirectory()) {
