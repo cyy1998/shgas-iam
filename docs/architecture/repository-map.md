@@ -32,6 +32,8 @@
 - `packages/db/src`: Drizzle schema、relations、migrations、singleton client 和 query helper。Schema 和 relation
   domain 当前包含 `core` 和 `log`，共享 column helper 位于 `schema/_shard/`。
 - `packages/jobs/src`: 共享 BullMQ connection、queue、worker、job ID 和 default option helper。
+- `packages/role-assignment-resolution/src`: 正向 Effective Role 与反向受影响用户解析的唯一公开 seam，隐藏
+  assignment 来源、组织闭包、有效性、去重和排序规则。
 - `packages/user-profile-read-model/src`: API/admin-api/worker 消费的 versioned user-profile read model、dirty
   marker、producer/query API、repository 和 worker module。
 - `gateway`: APISIX gateway manifest package (`@iam/gateway-apisix`)，包含 dev/prod manifests、config template 和

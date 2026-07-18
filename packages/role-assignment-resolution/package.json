@@ -1,0 +1,30 @@
+{
+  "name": "@iam/role-assignment-resolution",
+  "type": "module",
+  "version": "0.0.1",
+  "private": true,
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "lint": "eslint src test-postgres eslint.config.js",
+    "lint:fix": "eslint --fix src test-postgres eslint.config.js",
+    "test": "bun test src",
+    "test:postgres": "bun test test-postgres",
+    "typecheck": "pnpm exec tsgo --noEmit"
+  },
+  "dependencies": {
+    "@iam/contracts": "workspace:*",
+    "@iam/db": "workspace:*",
+    "drizzle-orm": "1.0.0-rc.2"
+  },
+  "devDependencies": {
+    "@antfu/eslint-config": "^9.0.0",
+    "@types/bun": "latest",
+    "@typescript/native-preview": "7.0.0-dev.20260603.1",
+    "eslint": "^10.4.1",
+    "eslint-plugin-format": "^2.0.1",
+    "postgres": "^3.4.9",
+    "typescript": "^6.0.3"
+  }
+}

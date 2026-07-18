@@ -8,6 +8,8 @@
 - 跨 app enum 和稳定常量放在 `packages/contracts`。
 - 共享 DTO schema、DTO type、audit helper 和可复用 business error 放在 `packages/domain`。
 - 共享 BullMQ helper 放在 `packages/jobs`。
+- 角色分配的正向 Effective Role 与反向受影响用户解析放在 `packages/role-assignment-resolution`；该 package
+  接收 composition root 提供的 `DbClient`，调用方不复制 assignment 或组织闭包规则。
 - user-profile read-model producer/query/worker 逻辑放在 `packages/user-profile-read-model`。
 - App-private enum、schema 和 error 可以留在所属 app 内。
 

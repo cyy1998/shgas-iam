@@ -31,12 +31,12 @@
 | [docs/agents/triage-labels.md](agents/triage-labels.md) | agent-config | Current | 2026-07-16 | 2026-10-31 | Engineering skills 使用的默认 triage 标签映射。 |
 | [docs/agents/workflow.md](agents/workflow.md) | agent-config | Current | 2026-07-16 | 2026-10-31 | Matt skills 的标准流程、快速路径、ticket 生命周期、分支、验证和授权规则。 |
 | [docs/architecture/backend-architecture.md](architecture/backend-architecture.md) | architecture | Current | 2026-07-16 | 2026-10-31 | 后端 app composition、factory/DI、ports、route/middleware 和 architecture test 约定。 |
-| [docs/architecture/contracts-and-database.md](architecture/contracts-and-database.md) | architecture | Current | 2026-07-05 | 2026-10-31 | shared contracts、domain/db/jobs/read-model 边界、UnitOfWork 和 Drizzle schema/relations/migration 约定。 |
+| [docs/architecture/contracts-and-database.md](architecture/contracts-and-database.md) | architecture | Current | 2026-07-18 | 2026-10-31 | shared contracts、domain/db/jobs/role-assignment-resolution/read-model 边界、UnitOfWork 和 Drizzle schema/relations/migration 约定。 |
 | [docs/architecture/frontend-architecture.md](architecture/frontend-architecture.md) | architecture | Current | 2026-07-16 | 2026-10-31 | admin/sso 前端边界、service wrapper、contract、测试与生成路径约定。 |
-| [docs/architecture/repository-map.md](architecture/repository-map.md) | architecture | Current | 2026-07-16 | 2026-10-31 | monorepo apps/packages/gateway 地图，以及 Current docs、冻结历史和生成目录边界。 |
+| [docs/architecture/repository-map.md](architecture/repository-map.md) | architecture | Current | 2026-07-18 | 2026-10-31 | monorepo apps/packages/gateway 地图，以及 Current docs、冻结历史和生成目录边界。 |
 | [docs/development/backend-implementation.md](development/backend-implementation.md) | development | Current | 2026-07-05 | 2026-10-31 | backend response envelope、OpenAPI status、logger、audit event 和 architecture guard 实现惯例。 |
-| [docs/development/coding-style.md](development/coding-style.md) | development | Current | 2026-07-05 | 2026-10-31 | TypeScript、formatter 边界、文件命名、React 命名和 import alias 风格约定。 |
-| [docs/development/commands.md](development/commands.md) | development | Current | 2026-07-16 | 2026-10-31 | workspace、显式提交前检查、backend、shared package、database、frontend 和 gateway 命令入口。 |
+| [docs/development/coding-style.md](development/coding-style.md) | development | Current | 2026-07-18 | 2026-10-31 | TypeScript、formatter 边界、文件命名、React 命名和 import alias 风格约定。 |
+| [docs/development/commands.md](development/commands.md) | development | Current | 2026-07-18 | 2026-10-31 | workspace、显式提交前检查、backend、shared package、显式 PostgreSQL 测试、database、frontend 和 gateway 命令入口。 |
 | [docs/features/audit/audit-logging.md](features/audit/audit-logging.md) | feature | Current | 2026-07-16 | 2026-09-30 | 统一审计日志、安全字段和已完成 `login_log` 退役后的当前边界。 |
 | [docs/features/oidc/oidc-integration.md](features/oidc/oidc-integration.md) | feature | Current | 2026-07-16 | 2026-09-30 | 内部 OIDC client 的端点、client 类型、scope/claim、CORS 和退出契约。 |
 | [docs/features/oidc/oidc-session-migration.md](features/oidc/oidc-session-migration.md) | feature | Current | 2026-06-28 | 2026-09-30 | Session Kernel 会话迁移、旧 key cleanup 和回滚边界。 |
