@@ -4,11 +4,26 @@
 
 **Blocked by:** 01 — 建立角色分配解析模块
 
-**Status:** claimed
+**Status:** resolved
 
-- [ ] User Profile worker module 作为 package composition root 创建一次 resolver，并将其注入档案构建数据访问能力。
-- [ ] 每个构建批次通过一个批量 resolver 调用取得全部任职的 Effective Role，不传 client 范围。
-- [ ] resolver 结果被映射为现有角色行并继续驱动 privilege 加载，User Profile schema 和持久化格式保持不变。
-- [ ] User Profile 本地任职、岗位、组织 assignment 正向查询、状态过滤、去重 helper 及不再需要的 imports 被删除。
-- [ ] 构建器测试继续覆盖档案、任职、角色与权限可观察结果，但不复制共享模块的 SQL 或规则矩阵。
-- [ ] user-profile-read-model 与 worker 的聚焦测试、lint、typecheck 以及共享模块显式 PostgreSQL 测试通过并记录证据。
+- [x] User Profile worker module 作为 package composition root 创建一次 resolver，并将其注入档案构建数据访问能力。
+- [x] 每个构建批次通过一个批量 resolver 调用取得全部任职的 Effective Role，不传 client 范围。
+- [x] resolver 结果被映射为现有角色行并继续驱动 privilege 加载，User Profile schema 和持久化格式保持不变。
+- [x] User Profile 本地任职、岗位、组织 assignment 正向查询、状态过滤、去重 helper 及不再需要的 imports 被删除。
+- [x] 构建器测试继续覆盖档案、任职、角色与权限可观察结果，但不复制共享模块的 SQL 或规则矩阵。
+- [x] user-profile-read-model 与 worker 的聚焦测试、lint、typecheck 以及共享模块显式 PostgreSQL 测试通过并记录证据。
+
+## Resolution
+
+- Commit: `ebe90733`
+- Validation:
+  - `pnpm --filter @iam/user-profile-read-model test` — passed (32 tests)
+  - `pnpm --filter @iam/user-profile-read-model lint` — passed
+  - `pnpm --filter @iam/user-profile-read-model typecheck` — passed
+  - `pnpm --filter @iam/worker test` — passed (13 tests)
+  - `pnpm --filter @iam/worker lint` — passed
+  - `pnpm --filter @iam/worker typecheck` — passed
+  - `pnpm --filter @iam/role-assignment-resolution test:postgres` — passed (45 tests)
+  - `pnpm install --frozen-lockfile` — passed with Node 24 and pnpm 11.5.0
+  - `git diff --check` — passed
+- Review: Standards and Spec review passed with no unresolved findings.
