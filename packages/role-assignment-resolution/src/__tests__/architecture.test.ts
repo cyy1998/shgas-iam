@@ -41,6 +41,16 @@ const retiredApiRoleResolutionFiles = [
   "apps/api/src/services/role/role.repository.ts",
   "apps/api/src/services/user/user-detail.helper.ts",
 ];
+const requiredDockerWorkspacePackages = {
+  "apps/admin-api/Dockerfile": ["packages/role-assignment-resolution"],
+  "apps/admin/Dockerfile": [
+    "packages/role-assignment-resolution",
+    "packages/user-profile-read-model",
+  ],
+  "apps/api/Dockerfile": ["packages/role-assignment-resolution"],
+  "apps/oidc-provider/Dockerfile": ["packages/role-assignment-resolution"],
+  "apps/worker/Dockerfile": ["packages/role-assignment-resolution"],
+} satisfies Record<string, string[]>;
 
 function toPosixPath(path: string) {
   return path.split(sep).join("/");
@@ -166,6 +176,13 @@ function collectArchitectureViolations(file: string, content: string) {
   return violations;
 }
 
+function collectDockerCopySources(content: string) {
+  return new Set(content.split(/\r?\n/).flatMap((line) => {
+    const match = /^COPY\s+(\S+)\s+\S+\s*$/.exec(line);
+    return match?.[1] ? [match[1]] : [];
+  }));
+}
+
 describe("role assignment resolution architecture", () => {
   test("keeps direct assignment-table access behind the resolver and role management", () => {
     const violations = migratedCallerRoots
@@ -288,5 +305,19 @@ describe("role assignment resolution architecture", () => {
       existsSync(join(workspaceRoot, file)));
 
     expect(existingLegacyFiles).toEqual([]);
+  });
+
+  test("keeps Docker build contexts closed over resolver workspace dependencies", () => {
+    const missingInputs = Object.entries(requiredDockerWorkspacePackages).flatMap(([file, packageRoots]) => {
+      const copySources = collectDockerCopySources(readFileSync(join(workspaceRoot, file), "utf8"));
+      const requiredSources = packageRoots.flatMap(packageRoot => [
+        `${packageRoot}/package.json`,
+        `${packageRoot}/`,
+      ]);
+
+      return requiredSources.filter(source => !copySources.has(source)).map(source => `${file}: ${source}`);
+    });
+
+    expect(missingInputs).toEqual([]);
   });
 });

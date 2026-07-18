@@ -23,6 +23,7 @@ COPY packages/contracts/package.json ./packages/contracts/
 COPY packages/db/package.json ./packages/db/
 COPY packages/api-core/package.json ./packages/api-core/
 COPY packages/domain/package.json ./packages/domain/
+COPY packages/role-assignment-resolution/package.json ./packages/role-assignment-resolution/
 COPY apps/oidc-provider/package.json ./apps/oidc-provider/
 RUN pnpm install --frozen-lockfile --prod
 
@@ -31,6 +32,7 @@ COPY packages/contracts/ ./packages/contracts/
 COPY packages/db/ ./packages/db/
 COPY packages/api-core/ ./packages/api-core/
 COPY packages/domain/ ./packages/domain/
+COPY packages/role-assignment-resolution/ ./packages/role-assignment-resolution/
 COPY apps/oidc-provider/ ./apps/oidc-provider/
 RUN pnpm --filter @iam/oidc-provider deploy --prod --legacy /deploy/oidc-provider
 

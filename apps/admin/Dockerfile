@@ -24,6 +24,8 @@ COPY packages/db/package.json ./packages/db/
 COPY packages/api-core/package.json ./packages/api-core/
 COPY packages/domain/package.json ./packages/domain/
 COPY packages/jobs/package.json ./packages/jobs/
+COPY packages/role-assignment-resolution/package.json ./packages/role-assignment-resolution/
+COPY packages/user-profile-read-model/package.json ./packages/user-profile-read-model/
 COPY apps/admin-api/package.json ./apps/admin-api/
 COPY apps/admin/package.json ./apps/admin/
 ARG HTTP_PROXY
@@ -54,6 +56,8 @@ COPY packages/db/ ./packages/db/
 COPY packages/api-core/ ./packages/api-core/
 COPY packages/domain/ ./packages/domain/
 COPY packages/jobs/ ./packages/jobs/
+COPY packages/role-assignment-resolution/ ./packages/role-assignment-resolution/
+COPY packages/user-profile-read-model/ ./packages/user-profile-read-model/
 COPY apps/admin-api/ ./apps/admin-api/
 COPY apps/admin/ ./apps/admin/
 RUN pnpm rebuild && pnpm --filter @iam/admin run setup && pnpm --filter @iam/admin run build
