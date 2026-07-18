@@ -4,7 +4,7 @@
 
 **Blocked by:** 01 — 建立角色分配解析模块
 
-**Status:** ready-for-agent
+**Status:** claimed
 
 - [ ] User Profile worker module 作为 package composition root 创建一次 resolver，并将其注入档案构建数据访问能力。
 - [ ] 每个构建批次通过一个批量 resolver 调用取得全部任职的 Effective Role，不传 client 范围。
