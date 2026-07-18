@@ -1,10 +1,13 @@
 import type { CreateAppOptions } from "@iam/api-core/core/create-app";
 import type { UserProfileJobName, UserProfileJobPayload } from "@iam/contracts";
+import type { DbClient } from "@iam/db";
 import env from "@admin-api/env";
 import { logger } from "@admin-api/lib/logger";
 import { createAdminAuditService } from "@admin-api/services/audit/audit.service";
 import { USER_PROFILE_QUEUE_NAME } from "@iam/contracts";
+import db from "@iam/db";
 import { createJobQueue } from "@iam/jobs";
+import { createRoleAssignmentResolver } from "@iam/role-assignment-resolution";
 import { createUserProfileJobProducer } from "@iam/user-profile-read-model/producer";
 import { createAdminApiMiddlewares } from "./middlewares";
 import { createAdminApiRepositories } from "./repositories";
@@ -21,6 +24,7 @@ export interface AdminApiComposition {
   runtime: ReturnType<typeof createAdminApiRuntime>;
   session: ReturnType<typeof createAdminApiSession>;
   repositories: ReturnType<typeof createAdminApiRepositories>;
+  roleAssignmentResolver: ReturnType<typeof createRoleAssignmentResolver>;
   auditService: ReturnType<typeof createAdminAuditService>;
   userProfileQueue: ReturnType<typeof createJobQueue<UserProfileJobPayload, unknown, UserProfileJobName>>;
   userProfileJobProducer: ReturnType<typeof createUserProfileJobProducer>;
@@ -32,6 +36,7 @@ export interface AdminApiComposition {
 }
 
 export interface CreateAdminApiCompositionOptions {
+  db?: DbClient;
   env?: typeof env;
   logger?: typeof logger;
 }
@@ -41,9 +46,11 @@ export async function createAdminApiComposition(
 ): Promise<AdminApiComposition> {
   const compositionEnv = options.env ?? env;
   const compositionLogger = options.logger ?? logger;
+  const compositionDb = options.db ?? db;
   const runtime = createAdminApiRuntime({ env: compositionEnv, logger: compositionLogger });
   const session = createAdminApiSession({ runtime });
-  const repositories = createAdminApiRepositories();
+  const repositories = createAdminApiRepositories(compositionDb);
+  const roleAssignmentResolver = createRoleAssignmentResolver(compositionDb);
   const auditService = createAdminAuditService({ auditRepository: repositories.audit });
   const userProfileQueue = createJobQueue<UserProfileJobPayload, unknown, UserProfileJobName>({
     name: USER_PROFILE_QUEUE_NAME,
@@ -55,7 +62,7 @@ export async function createAdminApiComposition(
     userProfileJobProducer,
     clock: runtime.clock,
   });
-  const services = createAdminApiServices({ runtime, repositories, session, unitOfWork });
+  const services = createAdminApiServices({ roleAssignmentResolver, repositories, runtime, session, unitOfWork });
   const useCases = createAdminApiUseCases({ sessionRevocation: session.revocation, unitOfWork });
 
   return {
@@ -64,6 +71,7 @@ export async function createAdminApiComposition(
     runtime,
     session,
     repositories,
+    roleAssignmentResolver,
     auditService,
     userProfileQueue,
     userProfileJobProducer,

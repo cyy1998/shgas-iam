@@ -31,11 +31,13 @@ export interface AdminUserEmploymentReaderPort {
   getAllEmploymentsByUserIdForAdmin: (userId: number) => Promise<Array<{ id: number }>>;
 }
 
-export interface AdminUserRoleReaderPort {
-  getRolesByEmploymentId: (employmentId: number) => Promise<Array<{
+export interface AdminUserEffectiveRoleResolverPort {
+  resolveEffectiveRoles: (input: {
+    employmentIds: readonly number[];
+  }) => Promise<ReadonlyMap<number, readonly {
     id: number;
     roleCode: string;
-  }>>;
+  }[]>>;
 }
 
 export interface AdminUserPrivilegeReaderPort {
@@ -53,7 +55,7 @@ export type AdminUserUnitOfWorkPort = UnitOfWorkPort<AdminUserTransactionPorts>;
 export interface AdminUserServiceDeps {
   userRepository: AdminUserReaderPort;
   employmentRepository: AdminUserEmploymentReaderPort;
-  roleRepository: AdminUserRoleReaderPort;
+  roleAssignmentResolver: AdminUserEffectiveRoleResolverPort;
   privilegeRepository: AdminUserPrivilegeReaderPort;
   passwordHasher: Pick<PasswordHasherPort, "hashPassword">;
   random: Pick<RandomPort, "password">;

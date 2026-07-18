@@ -1,3 +1,4 @@
+import type { RoleAssignmentResolver } from "@iam/role-assignment-resolution";
 import type { AdminApiRepositories } from "../repositories";
 import type { AdminApiRuntimePorts } from "../runtime";
 import type { AdminApiSession } from "../session";
@@ -13,6 +14,7 @@ import { mapUnitOfWork } from "@iam/api-core/uow";
 type AdminApiUnitOfWork = ReturnType<typeof createAdminApiUnitOfWork>;
 
 export interface CreateAdminApiServicesOptions {
+  roleAssignmentResolver: RoleAssignmentResolver;
   runtime: AdminApiRuntimePorts;
   repositories: AdminApiRepositories;
   session: Pick<AdminApiSession, "revocation">;
@@ -20,12 +22,12 @@ export interface CreateAdminApiServicesOptions {
 }
 
 export function createAdminApiServices(options: CreateAdminApiServicesOptions) {
-  const { runtime, repositories, session, unitOfWork } = options;
+  const { roleAssignmentResolver, runtime, repositories, session, unitOfWork } = options;
 
   const userService = createUserService({
     userRepository: repositories.user,
     employmentRepository: repositories.employment,
-    roleRepository: repositories.role,
+    roleAssignmentResolver,
     privilegeRepository: repositories.privilege,
     passwordHasher: runtime.passwordHasher,
     random: runtime.random,
@@ -78,7 +80,7 @@ export function createAdminApiServices(options: CreateAdminApiServicesOptions) {
 
   const employmentService = createEmploymentService({
     employmentRepository: repositories.employment,
-    roleRepository: repositories.role,
+    roleAssignmentResolver,
     privilegeRepository: repositories.privilege,
     clock: runtime.clock,
     uow: mapUnitOfWork(unitOfWork, tx => ({

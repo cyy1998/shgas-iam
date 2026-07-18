@@ -29,9 +29,12 @@ export function createUserService(deps: AdminUserServiceDeps) {
     }
     const userDto = UserDetailDtoSchema.parse(user);
     const employments = await deps.employmentRepository.getAllEmploymentsByUserIdForAdmin(userDto.id);
+    const rolesByEmployment = await deps.roleAssignmentResolver.resolveEffectiveRoles({
+      employmentIds: employments.map(employment => employment.id),
+    });
     const employmentDtos = [];
     for (const employment of employments) {
-      const roles = await deps.roleRepository.getRolesByEmploymentId(employment.id);
+      const roles = rolesByEmployment.get(employment.id) ?? [];
       const privileges = await deps.privilegeRepository.getPrivilegesByRoleIds(roles.map(r => r.id));
       const employmentDto = EmploymentDetailDtoSchema.parse(toEmploymentDto(employment));
       employmentDto.roles = roles.map(r => r.roleCode);

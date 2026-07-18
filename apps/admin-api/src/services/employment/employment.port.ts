@@ -47,11 +47,13 @@ export interface AdminEmploymentUserReaderPort {
   getUserByUsernameForAdmin: (username: string) => Promise<User | null>;
 }
 
-export interface AdminEmploymentRoleReaderPort {
-  getRolesByEmploymentId: (employmentId: number) => Promise<Array<{
+export interface AdminEmploymentEffectiveRoleResolverPort {
+  resolveEffectiveRoles: (input: {
+    employmentIds: readonly number[];
+  }) => Promise<ReadonlyMap<number, readonly {
     id: number;
     roleCode: string;
-  }>>;
+  }[]>>;
 }
 
 export interface AdminEmploymentPrivilegeReaderPort {
@@ -71,7 +73,7 @@ export type AdminEmploymentUnitOfWorkPort = UnitOfWorkPort<AdminEmploymentTransa
 
 export interface AdminEmploymentServiceDeps {
   employmentRepository: AdminEmploymentReaderPort;
-  roleRepository: AdminEmploymentRoleReaderPort;
+  roleAssignmentResolver: AdminEmploymentEffectiveRoleResolverPort;
   privilegeRepository: AdminEmploymentPrivilegeReaderPort;
   clock: Pick<ClockPort, "nowDate">;
   uow: AdminEmploymentUnitOfWorkPort;

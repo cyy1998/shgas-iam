@@ -61,6 +61,11 @@ function position(overrides: Record<string, unknown> = {}) {
 }
 
 function employment(overrides: Record<string, unknown> = {}) {
+  const assignedOrg = {
+    ...organization(),
+    pathIndex: 0,
+    distanceToAssignedOrg: 0,
+  };
   return {
     id: 4,
     userId: 1,
@@ -76,7 +81,11 @@ function employment(overrides: Record<string, unknown> = {}) {
     updateTime: now,
     user: user(),
     position: position(),
-    organization: { assignedOrg: organization() },
+    organization: {
+      assignedOrg,
+      fullOrgPath: [assignedOrg],
+      companyNodes: [],
+    },
     ...overrides,
   };
 }
@@ -115,8 +124,8 @@ function createService() {
     privilegeRepository: {
       getPrivilegesByRoleIds: mock(async () => []),
     },
-    roleRepository: {
-      getRolesByEmploymentId: mock(async () => []),
+    roleAssignmentResolver: {
+      resolveEffectiveRoles: mock(async () => new Map()),
     },
     uow: createImmediateUnitOfWork(tx),
   } as any;
@@ -124,6 +133,36 @@ function createService() {
 }
 
 describe("createEmploymentService", () => {
+  test("resolves Effective Roles for an employment detail through the batch interface", async () => {
+    const { service, deps } = createService();
+    deps.roleAssignmentResolver.resolveEffectiveRoles.mockResolvedValueOnce(new Map([
+      [4, [
+        { id: 11, roleCode: "admin" },
+        { id: 12, roleCode: "reviewer" },
+      ]],
+    ]));
+    deps.privilegeRepository.getPrivilegesByRoleIds.mockResolvedValueOnce([
+      { privilegeCode: "user:read" },
+      { privilegeCode: "user:write" },
+    ]);
+
+    const detail = await service.getEmploymentDetailByIdForAdmin(4);
+
+    expect(deps.roleAssignmentResolver.resolveEffectiveRoles).toHaveBeenCalledWith({ employmentIds: [4] });
+    expect(deps.privilegeRepository.getPrivilegesByRoleIds).toHaveBeenCalledWith([11, 12]);
+    expect(detail.roles).toEqual(["admin", "reviewer"]);
+    expect(detail.privileges).toEqual(["user:read", "user:write"]);
+  });
+
+  test("keeps the existing employment-not-found behavior before resolving roles", async () => {
+    const { service, deps } = createService();
+    deps.employmentRepository.getEmploymentByIdForAdmin.mockResolvedValueOnce(null);
+
+    await expect(service.getEmploymentDetailByIdForAdmin(404)).rejects.toThrow();
+
+    expect(deps.roleAssignmentResolver.resolveEffectiveRoles).not.toHaveBeenCalled();
+  });
+
   test("creates a primary employment and clears existing primaries", async () => {
     const { service, tx } = createService();
 

@@ -55,7 +55,10 @@ export function createEmploymentService(deps: AdminEmploymentServiceDeps) {
     if (employment === null) {
       throw new EmploymentNotFoundError();
     }
-    const roles = await deps.roleRepository.getRolesByEmploymentId(employment.id);
+    const rolesByEmployment = await deps.roleAssignmentResolver.resolveEffectiveRoles({
+      employmentIds: [employment.id],
+    });
+    const roles = rolesByEmployment.get(employment.id) ?? [];
     const privileges = await deps.privilegeRepository.getPrivilegesByRoleIds(roles.map(r => r.id));
     const dto = EmploymentDetailDtoSchema.parse(toEmploymentDto(employment));
     dto.roles = roles.map(r => r.roleCode);

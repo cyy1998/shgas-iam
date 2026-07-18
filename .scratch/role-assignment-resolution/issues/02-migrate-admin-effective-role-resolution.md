@@ -4,7 +4,7 @@
 
 **Blocked by:** 01 — 建立角色分配解析模块
 
-**Status:** ready-for-agent
+**Status:** claimed
 
 - [ ] admin composition root 使用自身 `DbClient` 创建 resolver，并通过消费方拥有的最窄端口注入用户与任职能力。
 - [ ] 用户详情一次批量解析全部任职，不再按任职执行角色查询；单任职详情复用同一批量接口。
