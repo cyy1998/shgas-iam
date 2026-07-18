@@ -59,7 +59,11 @@ export default function OrgFormModal({
               status: 1,
             }
       }
-      modalProps={{ destroyOnClose: true, maskClosable: false }}
+      modalProps={{
+        destroyOnHidden: true,
+        mask: { closable: false },
+        okText: '确定',
+      }}
       onFinish={async (values) => {
         try {
           if (isEdit && initialValues) {
@@ -74,7 +78,7 @@ export default function OrgFormModal({
               orgCode: values.orgCode,
               orgName: values.orgName,
               orgType: values.orgType,
-              parentCode: mode === 'create-child' ? parentCode ?? null : null,
+              parentCode: mode === 'create-child' ? (parentCode ?? null) : null,
               status: values.status,
             });
             message.success('创建成功');

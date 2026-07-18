@@ -133,7 +133,11 @@ export default function OrganizationsPage() {
               </Button>
             }
           >
-            <Space direction="vertical" size="middle" style={{ width: '100%' }}>
+            <Space
+              orientation="vertical"
+              size="middle"
+              style={{ width: '100%' }}
+            >
               <OrgSearchPanel onSelect={(code) => setSelectedCode(code)} />
               <OrgTree
                 loadChildrenPage={loadChildrenPage}
@@ -145,7 +149,7 @@ export default function OrganizationsPage() {
           </Card>
         </Col>
         <Col span={16}>
-          <Card bodyStyle={{ padding: 0 }}>
+          <Card styles={{ body: { padding: 0 } }}>
             <OrgDetailPanel
               loading={detailLoading}
               detail={detailData}

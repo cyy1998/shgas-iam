@@ -1,3 +1,5 @@
+/// <reference types="vitest/jsdom" />
+
 import '@testing-library/jest-dom/vitest';
 import { cleanup } from '@testing-library/react';
 import { afterAll, afterEach, beforeAll, vi } from 'vitest';
@@ -45,9 +47,21 @@ Object.defineProperty(window, 'IntersectionObserver', {
   value: IntersectionObserverMock,
 });
 
+jsdom.virtualConsole.removeAllListeners('jsdomError');
+jsdom.virtualConsole.forwardTo(console, {
+  jsdomErrors: ['not-implemented', 'resource-loading', 'unhandled-exception'],
+});
+
 Object.defineProperty(window, 'scrollTo', {
   writable: true,
   value: vi.fn(),
+});
+
+const nativeGetComputedStyle = window.getComputedStyle.bind(window);
+
+Object.defineProperty(window, 'getComputedStyle', {
+  writable: true,
+  value: (element: Element) => nativeGetComputedStyle(element),
 });
 
 Object.defineProperty(HTMLElement.prototype, 'scrollIntoView', {

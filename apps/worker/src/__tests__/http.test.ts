@@ -34,6 +34,22 @@ function env(overrides: Partial<WorkerEnv> = {}): WorkerEnv {
   };
 }
 
+function createDashboardHttpApp() {
+  return createWorkerHttpApp({
+    env: env({ dashboard: { ...env().dashboard, enabled: true } }),
+    healthState: {
+      enabledModules: [],
+      dashboardOnly: true,
+      modulesStarted: true,
+    },
+    dashboardQueues: [{ moduleKey: "user-profile", queueName: "user-profile", queue: fakeBullMqQueue() }],
+    checkHealth: async () => ({
+      ready: true,
+      dependencies: { db: "skipped" as const, redis: "ok" as const },
+    }),
+  });
+}
+
 describe("worker HTTP app", () => {
   test("reports ready health with enabled modules and dashboard-only state", async () => {
     const app = createWorkerHttpApp({
@@ -61,22 +77,22 @@ describe("worker HTTP app", () => {
   });
 
   test("requires Basic Auth for dashboard routes", async () => {
-    const app = createWorkerHttpApp({
-      env: env({ dashboard: { ...env().dashboard, enabled: true } }),
-      healthState: {
-        enabledModules: [],
-        dashboardOnly: true,
-        modulesStarted: true,
-      },
-      dashboardQueues: [{ moduleKey: "user-profile", queueName: "user-profile", queue: fakeBullMqQueue() }],
-      checkHealth: async () => ({
-        ready: true,
-        dependencies: { db: "skipped", redis: "ok" },
-      }),
-    });
+    const app = createDashboardHttpApp();
 
     const response = await app.request("/admin/queues");
     expect(response.status).toBe(401);
+  });
+
+  test("serves the Bull Board dashboard through the Hono adapter", async () => {
+    const app = createDashboardHttpApp();
+
+    const response = await app.request("/admin/queues", {
+      headers: { Authorization: `Basic ${btoa("ops:secret")}` },
+    });
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("content-type")).toContain("text/html");
+    expect(await response.text()).toContain("Bull Dashboard");
   });
 
   test("configures dashboard queue adapters as read-only by default", () => {

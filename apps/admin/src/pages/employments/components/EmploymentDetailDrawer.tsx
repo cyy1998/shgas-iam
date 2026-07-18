@@ -59,10 +59,10 @@ export default function EmploymentDetailDrawer({
 
   return (
     <Drawer
-      width={640}
+      size={640}
       open={open}
       onClose={onClose}
-      destroyOnClose
+      destroyOnHidden
       title={
         detail ? (
           <Space>

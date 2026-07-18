@@ -3,8 +3,14 @@ packages:
   - 'gateway'
   - 'packages/*'
 overrides:
-  typescript: 6.0.3
+  '@types/react': '19.2.17'
+  '@types/react-dom': '19.2.3'
+  '@typescript/native': 'npm:typescript@7.0.2'
+  # Umi resolves Sass 1.54, but Vitest 4's Vite 8 peer requires Sass ^1.70.
+  sass: '1.101.0'
+  typescript: 'npm:@typescript/typescript6@6.0.2'
 allowBuilds:
+  '@parcel/watcher': false
   bcrypt: true
   core-js: false
   core-js-pure: false
@@ -18,14 +24,10 @@ peerDependencyRules:
     dva-core: '2'
     less-loader: '11 || 12'
     postcss: '8'
-    react: '18'
-    react-dom: '18'
+    react: '19'
+    react-dom: '19'
 ignoredBuiltDependencies:
   - '@prisma/engines'
   - '@scarf/scarf'
   - prisma
   - prisma-zod-generator
-minimumReleaseAgeExclude:
-  - '@bull-board/api@8.0.2'
-  - '@bull-board/hono@8.0.2'
-  - '@bull-board/ui@8.0.2'

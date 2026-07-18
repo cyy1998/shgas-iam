@@ -37,7 +37,7 @@ export function useLoginRedirect() {
 
   const redirectAfterLogin = useCallback(() => {
     if (oidcReturn) {
-      if (!/^[A-Za-z0-9_-]{43}$/.test(oidcReturn)) {
+      if (!/^[\w-]{43}$/.test(oidcReturn)) {
         message.error('OIDC 登录请求已失效，请返回应用重新发起登录');
         return;
       }

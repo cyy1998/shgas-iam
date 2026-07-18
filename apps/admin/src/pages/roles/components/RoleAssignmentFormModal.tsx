@@ -38,7 +38,7 @@ export default function RoleAssignmentFormModal({
   onSuccess,
   onError,
 }: Props) {
-  const formRef = useRef<ProFormInstance>();
+  const formRef = useRef<ProFormInstance>(undefined);
   const [messageApi, messageContextHolder] = message.useMessage();
   const handleError =
     onError ??
@@ -50,7 +50,11 @@ export default function RoleAssignmentFormModal({
       title="新增角色分配"
       open={open}
       formRef={formRef}
-      modalProps={{ destroyOnHidden: true, maskClosable: false }}
+      modalProps={{
+        destroyOnHidden: true,
+        mask: { closable: false },
+        okText: '确定',
+      }}
       initialValues={{
         targetType: RoleAssignmentTargetType.Organization,
         includeDescendants: true,

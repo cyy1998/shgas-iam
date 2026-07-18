@@ -38,7 +38,7 @@ export default function EmploymentFormModal({
   onOpenChange,
   onSuccess,
 }: Props) {
-  const formRef = useRef<ProFormInstance>();
+  const formRef = useRef<ProFormInstance>(undefined);
 
   const handleError = (err: unknown) =>
     message.error(err instanceof Error ? err.message : '创建失败');
@@ -58,7 +58,11 @@ export default function EmploymentFormModal({
         orgCode: presetOrgCode ?? undefined,
         isPrimary: false,
       }}
-      modalProps={{ destroyOnClose: true, maskClosable: false }}
+      modalProps={{
+        destroyOnHidden: true,
+        mask: { closable: false },
+        okText: '确定',
+      }}
       onFinish={async (values) => {
         try {
           await createEmployment({

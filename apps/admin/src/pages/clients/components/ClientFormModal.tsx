@@ -89,7 +89,11 @@ export default function ClientFormModal({
       open={open}
       onOpenChange={onOpenChange}
       initialValues={toInitialValues(initialValues)}
-      modalProps={{ destroyOnClose: true, maskClosable: false }}
+      modalProps={{
+        destroyOnHidden: true,
+        mask: { closable: false },
+        okText: '确定',
+      }}
       onFinish={async (values) => {
         const body = {
           clientName: values.clientName,

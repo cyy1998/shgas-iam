@@ -21,28 +21,28 @@
     "lint": "eslint src eslint.config.js",
     "lint:fix": "eslint --fix src eslint.config.js",
     "test": "bun test --parallel",
-    "typecheck": "pnpm exec tsgo --noEmit"
+    "typecheck": "pnpm exec tsc --noEmit"
   },
   "dependencies": {
-    "@bull-board/api": "^8.0.2",
-    "@bull-board/hono": "^8.0.2",
+    "@bull-board/api": "^8.1.2",
+    "@bull-board/hono": "^8.1.2",
     "@iam/api-core": "workspace:*",
     "@iam/contracts": "workspace:*",
     "@iam/db": "workspace:*",
     "@iam/jobs": "workspace:*",
     "@iam/user-profile-read-model": "workspace:*",
     "drizzle-orm": "1.0.0-rc.2",
-    "hono": "^4.12.23",
-    "ioredis": "^5.11.0",
+    "hono": "^4.12.30",
+    "ioredis": "^5.11.1",
     "pino": "^10.3.1",
     "zod": "^4.4.3"
   },
   "devDependencies": {
-    "@antfu/eslint-config": "^9.0.0",
+    "@antfu/eslint-config": "^9.1.0",
     "@types/bun": "latest",
-    "@typescript/native-preview": "7.0.0-dev.20260603.1",
-    "eslint": "^10.4.1",
+    "@typescript/native": "npm:typescript@7.0.2",
+    "eslint": "^10.7.0",
     "eslint-plugin-format": "^2.0.1",
-    "typescript": "^6.0.3"
+    "typescript": "npm:@typescript/typescript6@6.0.2"
   }
 }

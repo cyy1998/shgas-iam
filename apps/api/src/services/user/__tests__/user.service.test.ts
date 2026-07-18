@@ -1,8 +1,12 @@
+import { createApiPasswordHasher } from "@api/composition/runtime/password-hasher";
 import { createImmediateUnitOfWork } from "@api/testing/fakes";
 import { UserProfileDirtyReason, UserStatus } from "@iam/contracts";
 import { UserPasswordUnchangedError } from "@iam/domain/user";
 import { describe, expect, mock, test } from "bun:test";
+import { createUserPasswordHelper } from "../user-password.helper";
 import { createUserService } from "../user.service";
+
+const EXISTING_BCRYPT_TS_8_HASH = "$2b$04$ZwwFh9CSK/owUc7IdLKdFOPiqfxmljguVbVqfGRZq8J9tkkdrcxH2";
 
 function createDeps(overrides: Record<string, unknown> = {}) {
   const bindPhoneReservation = { usage: "bindPhone", phone: "13900000000", token: "bind-token" };
@@ -48,6 +52,7 @@ function createDeps(overrides: Record<string, unknown> = {}) {
     },
     uow: createImmediateUnitOfWork(tx),
     tx,
+    user,
     userDelegationQuery: { searchUsersWithDelegations: mock(async () => ({ users: [], delegations: [] })) },
     profileQuery: {
       getDetailByMobile: mock(async () => user),
@@ -68,6 +73,25 @@ function createDeps(overrides: Record<string, unknown> = {}) {
 }
 
 describe("createUserService", () => {
+  test("changes an existing bcrypt password through the production runtime hasher", async () => {
+    const deps = createDeps();
+    deps.user.password = EXISTING_BCRYPT_TS_8_HASH;
+    deps.passwordHelper = createUserPasswordHelper({
+      passwordHasher: createApiPasswordHasher(4),
+    });
+    deps.tx.userRepository.setPassword.mockImplementation(async (_userId: number, password: string) => {
+      deps.user.password = password;
+      return deps.user;
+    });
+    const service = createUserService(deps);
+
+    await expect(service.checkPassword("zhangsan", "Existing123!")).resolves.toBe(true);
+    await expect(service.checkPassword("zhangsan", "Wrong123!")).resolves.toBe(false);
+    await expect(service.setPassword("zhangsan", "Existing123!", "NewSecret123!")).resolves.toBe(true);
+    await expect(service.checkPassword("zhangsan", "NewSecret123!")).resolves.toBe(true);
+    await expect(service.checkPassword("zhangsan", "Existing123!")).resolves.toBe(false);
+  });
+
   test("changes password inside a unit of work", async () => {
     const deps = createDeps();
     const service = createUserService(deps);

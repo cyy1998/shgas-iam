@@ -7,6 +7,7 @@ import {
   SafetyCertificateOutlined,
   UserOutlined,
 } from '@ant-design/icons';
+import { VerificationCodeInput } from '@sso/components/VerificationCodeInput';
 import { useSmsCodeCountdown } from '@sso/hooks/useSmsCodeCountdown';
 import { withHumanVerification } from '@sso/lib/human-verification';
 import { selfMobileSendMsg } from '@sso/services/open';
@@ -195,7 +196,7 @@ export default function UserInfoPage() {
                 </div>
               </div>
 
-              <Table
+              <Table<Employment>
                 rowKey="id"
                 size="middle"
                 pagination={false}
@@ -324,24 +325,18 @@ export default function UserInfoPage() {
                       name="code"
                       rules={[{ required: true, message: '请输入验证码' }]}
                     >
-                      <Input
-                        size="large"
+                      <VerificationCodeInput
                         placeholder="请输入验证码"
                         prefix={<LockOutlined />}
-                        addonAfter={
-                          <button
-                            className="profile-code-btn"
-                            type="button"
-                            disabled={isCounting || smsSending}
-                            onClick={sendCode}
-                          >
-                            {smsSending
-                              ? '发送中'
-                              : countdown <= 0
-                                ? '获取验证码'
-                                : `${countdown} s`}
-                          </button>
+                        buttonDisabled={isCounting || smsSending}
+                        buttonText={
+                          smsSending
+                            ? '发送中'
+                            : countdown <= 0
+                              ? '获取验证码'
+                              : `${countdown} s`
                         }
+                        onSendCode={sendCode}
                       />
                     </Form.Item>
                   </Form>

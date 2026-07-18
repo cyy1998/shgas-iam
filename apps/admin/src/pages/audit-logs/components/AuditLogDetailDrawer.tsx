@@ -1,7 +1,15 @@
-import type { AuditLogVo } from '@admin/services/audit';
 import { buildAuditLogGrafanaUrl } from '@admin/lib/grafana';
+import type { AuditLogVo } from '@admin/services/audit';
 import { ExportOutlined } from '@ant-design/icons';
-import { Button, Descriptions, Divider, Drawer, Space, Tag, Typography } from 'antd';
+import {
+  Button,
+  Descriptions,
+  Divider,
+  Drawer,
+  Space,
+  Tag,
+  Typography,
+} from 'antd';
 import {
   getActionLabel,
   getActorDisplay,
@@ -49,10 +57,10 @@ export default function AuditLogDetailDrawer({
 
   return (
     <Drawer
-      width={720}
+      size={720}
       open={open}
       onClose={onClose}
-      destroyOnClose
+      destroyOnHidden
       title="审计日志详情"
       extra={
         grafanaUrl ? (
@@ -79,7 +87,7 @@ export default function AuditLogDetailDrawer({
               </Tag>
             </Descriptions.Item>
             <Descriptions.Item label="Action" span={2}>
-              <Space direction="vertical" size={0}>
+              <Space orientation="vertical" size={0}>
                 <Typography.Text>
                   {getActionLabel(auditLog.action)}
                 </Typography.Text>
@@ -92,7 +100,7 @@ export default function AuditLogDetailDrawer({
               {actor ? (
                 <Space size={6} wrap>
                   <Tag>{actor.typeLabel}</Tag>
-                  <Space direction="vertical" size={0}>
+                  <Space orientation="vertical" size={0}>
                     <Typography.Text>
                       {actor.name ?? actor.code}
                     </Typography.Text>
@@ -109,7 +117,7 @@ export default function AuditLogDetailDrawer({
               {target ? (
                 <Space size={6} wrap>
                   <Tag>{target.typeLabel}</Tag>
-                  <Space direction="vertical" size={0}>
+                  <Space orientation="vertical" size={0}>
                     <Typography.Text>
                       {target.name ?? target.code}
                     </Typography.Text>
@@ -162,7 +170,7 @@ export default function AuditLogDetailDrawer({
             </Descriptions.Item>
           </Descriptions>
 
-          <Divider orientation="left">Details</Divider>
+          <Divider titlePlacement="start">Details</Divider>
           <Typography.Paragraph
             style={{
               background: '#f6f8fa',

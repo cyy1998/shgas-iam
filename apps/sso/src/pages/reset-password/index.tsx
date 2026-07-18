@@ -8,6 +8,7 @@ import {
   UserOutlined,
 } from '@ant-design/icons';
 import logoColorfulTextWhite from '@sso/assets/logo-colorful-text-white.png';
+import { VerificationCodeInput } from '@sso/components/VerificationCodeInput';
 import { useSmsCodeCountdown } from '@sso/hooks/useSmsCodeCountdown';
 import { withHumanVerification } from '@sso/lib/human-verification';
 import {
@@ -284,22 +285,16 @@ export default function ResetPasswordPage() {
                     name="code"
                     rules={[{ required: true, message: '请输入验证码' }]}
                   >
-                    <Input
-                      size="large"
+                    <VerificationCodeInput
                       placeholder="请输入验证码"
                       prefix={<LockOutlined />}
-                      addonAfter={
-                        <button
-                          className="reset-code-btn"
-                          type="button"
-                          disabled={isCounting}
-                          onClick={sendCode}
-                        >
-                          {countdown <= 0
-                            ? '获取验证码'
-                            : `${countdown} 秒后重试`}
-                        </button>
+                      buttonDisabled={isCounting}
+                      buttonText={
+                        countdown <= 0
+                          ? '获取验证码'
+                          : `${countdown} 秒后重试`
                       }
+                      onSendCode={sendCode}
                     />
                   </Form.Item>
                 </Form>
@@ -364,7 +359,7 @@ export default function ResetPasswordPage() {
         open={done}
         title="密码重置完成"
         closable={false}
-        maskClosable={false}
+        mask={{ closable: false }}
         keyboard={false}
         footer={
           <Button type="primary" onClick={goLogin}>

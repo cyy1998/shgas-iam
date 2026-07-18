@@ -8,7 +8,7 @@ import { createSmsClient } from "@api/lib/integrations/sms";
 import { createWechatClient } from "@api/lib/integrations/wechat";
 import { logger } from "@api/lib/logger";
 import { createSessionKernelConfigFromEnv } from "@iam/api-core/session/kernel";
-import { compare, hash } from "bcrypt-ts";
+import { createApiPasswordHasher } from "./password-hasher";
 
 export interface CreateApiRuntimeOptions {
   env?: typeof env;
@@ -38,14 +38,7 @@ export function createApiRuntime(options: CreateApiRuntimeOptions = {}): ApiRunt
     logger: runtimeLogger,
     afterCommitLogger: runtimeLogger,
     redis: runtimeRedis,
-    passwordHasher: {
-      async hashPassword(password) {
-        return await hash(password, runtimeEnv.passwordHashRounds);
-      },
-      async verifyPassword(password, hashedPassword) {
-        return await compare(password, hashedPassword);
-      },
-    },
+    passwordHasher: createApiPasswordHasher(runtimeEnv.passwordHashRounds),
     random: runtimeRandom,
     clock: runtimeClock,
     config: {

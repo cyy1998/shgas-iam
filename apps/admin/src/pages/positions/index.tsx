@@ -7,9 +7,9 @@ import {
   updatePositionStatus,
 } from '@admin/services/position';
 import {
-  ActionType,
+  type ActionType,
   PageContainer,
-  ProColumns,
+  type ProColumns,
   ProTable,
 } from '@ant-design/pro-components';
 import { getPositionStatusOptions } from '@iam/contracts';
@@ -17,7 +17,7 @@ import { Button, Dropdown, message, Modal } from 'antd';
 import { useRef, useState } from 'react';
 
 export default function PositionsPage() {
-  const actionRef = useRef<ActionType>();
+  const actionRef = useRef<ActionType>(undefined);
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<PositionVo | null>(null);
 
@@ -109,6 +109,7 @@ export default function PositionsPage() {
         rowKey="posCode"
         columns={columns}
         search={{ labelWidth: 'auto' }}
+        scroll={{ x: 900 }}
         request={async (params) => {
           try {
             const {

@@ -28,7 +28,6 @@ export default function SystemMaintenancePage() {
         const redirectUrl = decodeRedirect(getQuery('redirectUrl'));
         if (redirectUrl) {
           window.location.href = redirectUrl;
-          return;
         }
       }
     } finally {

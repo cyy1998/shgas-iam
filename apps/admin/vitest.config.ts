@@ -10,6 +10,20 @@ export default defineConfig({
     },
   },
   test: {
+    deps: {
+      optimizer: {
+        client: {
+          enabled: true,
+          include: [
+            'react',
+            'react/jsx-runtime',
+            'react-dom',
+            'antd',
+            '@ant-design/pro-components',
+          ],
+        },
+      },
+    },
     environment: 'jsdom',
     setupFiles: ['./test/setup.ts'],
     include: [

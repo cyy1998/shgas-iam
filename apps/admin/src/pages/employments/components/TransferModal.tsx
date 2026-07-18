@@ -51,7 +51,7 @@ export default function TransferModal({
   onOpenChange,
   onSuccess,
 }: Props) {
-  const formRef = useRef<ProFormInstance>();
+  const formRef = useRef<ProFormInstance>(undefined);
 
   const handleError = (err: unknown) =>
     message.error(err instanceof Error ? err.message : '转岗失败');
@@ -63,7 +63,11 @@ export default function TransferModal({
       onOpenChange={onOpenChange}
       formRef={formRef}
       initialValues={{ inheritPrimary: true }}
-      modalProps={{ destroyOnClose: true, maskClosable: false }}
+      modalProps={{
+        destroyOnHidden: true,
+        mask: { closable: false },
+        okText: '确定',
+      }}
       onFinish={async (values) => {
         if (!employment) return false;
         try {

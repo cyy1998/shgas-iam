@@ -8,8 +8,15 @@ import {
 } from '@admin/constants/config';
 import { redirectToLogin } from '@admin/utils/auth';
 import { history } from '@umijs/max';
+import { ConfigProvider } from 'antd';
 import { createElement, type ReactElement } from 'react';
 import './global.less';
+import { adminTheme } from './theme';
+
+ConfigProvider.config({
+  holderRender: (children) => children,
+  theme: adminTheme,
+});
 
 type InitialState = {
   currentUser?: { username: string; name: string; roles: string[] };

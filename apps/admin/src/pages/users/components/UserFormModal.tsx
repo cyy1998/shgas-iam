@@ -1,4 +1,8 @@
-import { createUser, updateUser, type UserDetailVo } from '@admin/services/user';
+import {
+  createUser,
+  updateUser,
+  type UserDetailVo,
+} from '@admin/services/user';
 import {
   ModalForm,
   ProFormSelect,
@@ -61,7 +65,11 @@ export default function UserFormModal({
             }
           : { status: 1 }
       }
-      modalProps={{ destroyOnClose: true, maskClosable: false }}
+      modalProps={{
+        destroyOnHidden: true,
+        mask: { closable: false },
+        okText: '确定',
+      }}
       onFinish={async (values) => {
         try {
           if (isEdit) {

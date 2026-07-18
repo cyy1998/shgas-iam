@@ -84,7 +84,7 @@ export default function ResignByUserDialog({
       okText="确认离职"
       okType="danger"
       okButtonProps={{ loading: submitting, disabled: !selected }}
-      destroyOnClose
+      destroyOnHidden
       width={480}
     >
       <p style={{ marginBottom: 12 }}>

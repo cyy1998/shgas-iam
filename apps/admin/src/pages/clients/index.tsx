@@ -17,8 +17,8 @@ import {
   ProTable,
 } from '@ant-design/pro-components';
 import {
-  ClientStatus,
-  ClientManagementLevel,
+  type ClientManagementLevel,
+  type ClientStatus,
   getClientManagementLevelOptions,
   getClientStatusOptions,
   OidcClientState,
@@ -29,8 +29,7 @@ import { Button, Dropdown, message, Modal, Tag } from 'antd';
 import { useRef, useState } from 'react';
 
 type FormState =
-  | { open: false }
-  | { open: true; initialValues: ClientDetailVo | null };
+  { open: false } | { open: true; initialValues: ClientDetailVo | null };
 
 type OidcFormState = { open: false } | { open: true; client: ClientDetailVo };
 
@@ -39,7 +38,7 @@ const managementLevelText = Object.fromEntries(
 );
 
 export default function ClientsPage() {
-  const actionRef = useRef<ActionType>();
+  const actionRef = useRef<ActionType>(undefined);
   const [formState, setFormState] = useState<FormState>({ open: false });
   const [oidcFormState, setOidcFormState] = useState<OidcFormState>({
     open: false,
@@ -213,6 +212,7 @@ export default function ClientsPage() {
         rowKey="clientCode"
         columns={columns}
         search={{ labelWidth: 'auto' }}
+        scroll={{ x: 1500 }}
         request={async (params) => {
           try {
             const {

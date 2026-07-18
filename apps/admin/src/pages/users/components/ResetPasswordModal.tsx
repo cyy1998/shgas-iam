@@ -19,7 +19,7 @@ export function confirmResetPassword({ username, name }: Args) {
           title: '新密码已生成',
           width: 620,
           content: (
-            <Space direction="vertical" style={{ width: '100%' }}>
+            <Space orientation="vertical" style={{ width: '100%' }}>
               <Typography.Text>
                 请将下列密码复制并转交给用户，关闭后不再显示：
               </Typography.Text>

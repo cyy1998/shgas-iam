@@ -32,7 +32,11 @@ export default function RoleFormModal({
     <ModalForm
       title={editing ? '编辑角色' : '新建角色'}
       open={open}
-      modalProps={{ destroyOnClose: true, maskClosable: false }}
+      modalProps={{
+        destroyOnHidden: true,
+        mask: { closable: false },
+        okText: '确定',
+      }}
       initialValues={
         initialValues
           ? {

@@ -1,4 +1,5 @@
 import { LockOutlined, MobileOutlined } from '@ant-design/icons';
+import { VerificationCodeInput } from '@sso/components/VerificationCodeInput';
 import { Button, Form, Input } from 'antd';
 import type { ReactNode } from 'react';
 
@@ -59,26 +60,20 @@ export function SmsLoginForm({
         name="code"
         rules={[{ required: true, message: '请输入验证码' }]}
       >
-        <Input
-          size="large"
+        <VerificationCodeInput
           placeholder="验证码"
           prefix={<LockOutlined />}
-          addonAfter={
-            <button
-              className="sms-code-btn"
-              type="button"
-              disabled={isCounting || smsSending}
-              onClick={() => {
-                void onSendCode(form.getFieldValue('phoneNumber'));
-              }}
-            >
-              {smsSending
-                ? '发送中'
-                : countdown <= 0
-                  ? '获取验证码'
-                  : `${countdown} s`}
-            </button>
+          buttonDisabled={isCounting || smsSending}
+          buttonText={
+            smsSending
+              ? '发送中'
+              : countdown <= 0
+                ? '获取验证码'
+                : `${countdown} s`
           }
+          onSendCode={() => {
+            void onSendCode(form.getFieldValue('phoneNumber'));
+          }}
         />
       </Form.Item>
       <Button

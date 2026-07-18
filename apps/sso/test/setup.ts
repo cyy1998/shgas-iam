@@ -35,6 +35,12 @@ Object.defineProperty(window, 'matchMedia', {
   })),
 });
 
+const nativeGetComputedStyle = window.getComputedStyle.bind(window);
+Object.defineProperty(window, 'getComputedStyle', {
+  writable: true,
+  value: (element: Element) => nativeGetComputedStyle(element),
+});
+
 Object.defineProperty(window, 'ResizeObserver', {
   writable: true,
   value: ResizeObserverMock,

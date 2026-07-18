@@ -42,7 +42,11 @@ export default function PositionFormModal({
             }
           : { status: 1 }
       }
-      modalProps={{ destroyOnClose: true, maskClosable: false }}
+      modalProps={{
+        destroyOnHidden: true,
+        mask: { closable: false },
+        okText: '确定',
+      }}
       onFinish={async (values) => {
         try {
           if (isEdit) {

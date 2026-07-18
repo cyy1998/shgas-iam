@@ -9,8 +9,8 @@ import {
   updateRoleAssignmentScope,
 } from '@admin/services/role';
 import {
-  ActionType,
-  ProColumns,
+  type ActionType,
+  type ProColumns,
   ProDescriptions,
   ProTable,
 } from '@ant-design/pro-components';
@@ -44,7 +44,7 @@ export default function RoleDetailDrawer({
   onOpenChange,
   onChanged,
 }: Props) {
-  const assignmentActionRef = useRef<ActionType>();
+  const assignmentActionRef = useRef<ActionType>(undefined);
   const [detail, setDetail] = useState<RoleDetailVo | null>(null);
   const [loading, setLoading] = useState(false);
   const [assignmentFormOpen, setAssignmentFormOpen] = useState(false);
@@ -124,7 +124,7 @@ export default function RoleDetailDrawer({
       dataIndex: 'targetText',
       ellipsis: true,
       render: (_, row) => (
-        <Space direction="vertical" size={0}>
+        <Space orientation="vertical" size={0}>
           <span>{row.target.name}</span>
           <span style={{ color: '#6b7280', fontSize: 12 }}>
             {row.target.code}
@@ -174,10 +174,10 @@ export default function RoleDetailDrawer({
   return (
     <>
       <Drawer
-        width={760}
+        size={760}
         open={open}
         onClose={() => onOpenChange(false)}
-        destroyOnClose
+        destroyOnHidden
         title={
           detail ? (
             <Space>
@@ -256,6 +256,7 @@ export default function RoleDetailDrawer({
                     size="small"
                     columns={assignmentColumns}
                     search={{ labelWidth: 'auto' }}
+                    scroll={{ x: 750 }}
                     toolBarRender={() => [
                       <Button
                         key="create"

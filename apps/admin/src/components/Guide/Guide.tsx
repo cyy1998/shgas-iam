@@ -2,9 +2,9 @@ import { Layout, Row, Typography } from 'antd';
 import React from 'react';
 import styles from './Guide.less';
 
-interface Props {
+type Props = {
   name: string;
-}
+};
 
 // 脚手架示例组件
 const Guide: React.FC<Props> = (props) => {

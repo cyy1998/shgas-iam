@@ -1,4 +1,4 @@
-import { ApiErrorCode } from '@iam/contracts';
+import type { ApiErrorCode } from '@iam/contracts';
 import { message } from 'antd';
 
 export class ServiceError extends Error {

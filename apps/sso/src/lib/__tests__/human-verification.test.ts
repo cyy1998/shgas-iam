@@ -6,11 +6,15 @@ import { withHumanVerification } from '../human-verification';
 
 const capSolve = vi.hoisted(() => vi.fn());
 
-vi.mock('cap-widget', () => ({
-  default: vi.fn().mockImplementation(() => ({
-    solve: capSolve,
-  })),
-}));
+vi.mock('cap-widget', () => {
+  function MockCap() {
+    return {
+      solve: capSolve,
+    };
+  }
+
+  return { default: vi.fn(MockCap) };
+});
 
 vi.mock('antd', async (importOriginal) => {
   const actual = await importOriginal<typeof import('antd')>();

@@ -18,7 +18,7 @@ import {
 import {
   getUserStatusOptions,
   getUserTypeOptions,
-  UserStatus,
+  type UserStatus,
   type UserType,
 } from '@iam/contracts';
 import { Button, Dropdown, message, Modal } from 'antd';
@@ -30,7 +30,7 @@ type FormState =
   | { open: true; mode: 'edit'; initialValues: UserDetailVo };
 
 export default function UsersPage() {
-  const actionRef = useRef<ActionType>();
+  const actionRef = useRef<ActionType>(undefined);
   const [formState, setFormState] = useState<FormState>({ open: false });
   const [drawerUsername, setDrawerUsername] = useState<string | null>(null);
 
@@ -148,6 +148,7 @@ export default function UsersPage() {
         rowKey="username"
         columns={columns}
         search={{ labelWidth: 'auto' }}
+        scroll={{ x: 1050 }}
         request={async (params) => {
           try {
             const {
@@ -164,8 +165,8 @@ export default function UsersPage() {
               userType?: UserType;
             };
             const text = (user ?? '').trim();
-            const statusNum
-              = status === undefined || status === null || status === ''
+            const statusNum =
+              status === undefined || status === null || status === ''
                 ? undefined
                 : (Number(status) as UserStatus);
             const data = await searchUsers({

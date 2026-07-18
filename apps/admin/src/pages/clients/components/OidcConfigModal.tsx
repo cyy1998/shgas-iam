@@ -54,7 +54,7 @@ function showOneTimeSecret(secret: string) {
     title: 'OIDC client secret 仅显示一次',
     width: 620,
     content: (
-      <Space direction="vertical" style={{ width: '100%' }}>
+      <Space orientation="vertical" style={{ width: '100%' }}>
         <Typography.Text>
           请立即保存。关闭此弹窗后，系统只会保留 bcrypt 摘要，无法再次查看明文。
         </Typography.Text>
@@ -123,7 +123,11 @@ export default function OidcConfigModal({
       open={open}
       onOpenChange={onOpenChange}
       initialValues={initialValues(client)}
-      modalProps={{ destroyOnClose: true, maskClosable: false, width: 760 }}
+      modalProps={{
+        destroyOnHidden: true,
+        mask: { closable: false },
+        width: 760,
+      }}
       submitter={{ searchConfig: { submitText: '保存 OIDC 配置' } }}
       onFinish={async (values) => {
         if (
@@ -164,7 +168,7 @@ export default function OidcConfigModal({
         }
       }}
     >
-      <Space direction="vertical" size="middle" style={{ width: '100%' }}>
+      <Space orientation="vertical" size="middle" style={{ width: '100%' }}>
         <Space wrap>
           <Typography.Text strong>client_id:</Typography.Text>
           <Typography.Text code>{client.clientCode}</Typography.Text>

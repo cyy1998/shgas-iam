@@ -144,22 +144,22 @@ app 入口里创建 app-specific DI 实例。
 - **缓存**：Redis / ioredis
 - **验证与错误**：Zod、自定义错误、统一响应封装
 - **认证/加密**：bcrypt / bcrypt-ts、sm-crypto
-- **基础设施**：Pino、hono-pino、axios、CSV/XLSX 导入导出工具
+- **基础设施**：Pino、hono-pino
 - **代码检查**：ESLint（Antfu 配置）
 
 ### 前端（`apps/admin`、`apps/sso`）
 
-- **框架**：Umi Max + React 18
-- **UI**：Ant Design + `@ant-design/pro-components`
+- **框架**：Umi Max + React 19
+- **UI**：Ant Design 6；Admin 使用与其兼容的 `@ant-design/pro-components` 3 beta，SSO 不依赖 ProComponents
 - **管理后台 API**：`@trpc/client` + `@iam/admin-api/trpc` 类型推导
 - **SSO 门户 API**：封装 `fetch`，统一处理 cookie、业务状态码和跳转
 - **格式化**：Prettier + `prettier-plugin-organize-imports`
 
 ### 工程
 
-- **包管理**：pnpm workspace（根 `packageManager` 为 `pnpm@11.5.0`）
+- **包管理**：pnpm workspace（根 `packageManager` 为 `pnpm@11.14.0`）
 - **任务编排**：Turborepo
-- **语言**：TypeScript 6 / native preview 工具链
+- **语言**：TypeScript 7.0.2 稳定 CLI + TypeScript 6.0.2 compiler API compatibility package
 
 ## 🚀 快速开始
 
@@ -167,7 +167,7 @@ app 入口里创建 app-specific DI 实例。
 
 - Bun 1.x
 - Node.js 24.x（OIDC Provider、前端构建镜像和部分工具链使用）
-- pnpm 11.x（根 `packageManager` 当前为 `pnpm@11.5.0`）
+- pnpm 11.x（根 `packageManager` 当前为 `pnpm@11.14.0`）
 - PostgreSQL（本地 compose 使用 `postgres:18`）
 - Redis
 

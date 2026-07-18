@@ -13,10 +13,10 @@
     "lint": "eslint src eslint.config.js",
     "lint:fix": "eslint --fix src eslint.config.js",
     "test": "bun test --parallel",
-    "typecheck": "pnpm exec tsgo --noEmit"
+    "typecheck": "pnpm exec tsc --noEmit"
   },
   "dependencies": {
-    "@hono/zod-openapi": "^1.4.0",
+    "@hono/zod-openapi": "^1.5.1",
     "@iam/contracts": "workspace:*",
     "@iam/db": "workspace:*",
     "@iam/domain": "workspace:*",
@@ -26,11 +26,11 @@
     "zod": "^4.4.3"
   },
   "devDependencies": {
-    "@antfu/eslint-config": "^9.0.0",
+    "@antfu/eslint-config": "^9.1.0",
     "@types/bun": "latest",
-    "@typescript/native-preview": "7.0.0-dev.20260603.1",
-    "eslint": "^10.4.1",
+    "@typescript/native": "npm:typescript@7.0.2",
+    "eslint": "^10.7.0",
     "eslint-plugin-format": "^2.0.1",
-    "typescript": "^6.0.3"
+    "typescript": "npm:@typescript/typescript6@6.0.2"
   }
 }

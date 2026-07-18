@@ -48,8 +48,8 @@ function formatPosition(row: EmploymentVo) {
 }
 
 export default function EmploymentsPage() {
-  const actionRef = useRef<ActionType>();
-  const searchFormRef = useRef<ProFormInstance>();
+  const actionRef = useRef<ActionType>(undefined);
+  const searchFormRef = useRef<ProFormInstance>(undefined);
   const location = useLocation();
 
   const [formOpen, setFormOpen] = useState(false);
@@ -102,7 +102,10 @@ export default function EmploymentsPage() {
     });
   };
 
-  const onStatusChange = async (row: EmploymentVo, status: EmploymentStatus) => {
+  const onStatusChange = async (
+    row: EmploymentVo,
+    status: EmploymentStatus,
+  ) => {
     try {
       await updateEmploymentStatus(row.id, status);
       message.success('状态已更新');
@@ -140,7 +143,7 @@ export default function EmploymentsPage() {
       title: '组织',
       dataIndex: 'organizationOrgCode',
       hideInTable: true,
-      renderFormItem: () => (
+      formItemRender: () => (
         <OrganizationTreeSelector placeholder="请选择组织范围" />
       ),
     },
@@ -251,6 +254,7 @@ export default function EmploymentsPage() {
         rowKey="id"
         columns={columns}
         search={{ labelWidth: 'auto' }}
+        scroll={{ x: 1200 }}
         request={async (params) => {
           try {
             const {

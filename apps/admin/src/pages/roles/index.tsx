@@ -3,26 +3,26 @@ import RoleDetailDrawer from '@admin/pages/roles/components/RoleDetailDrawer';
 import RoleFormModal from '@admin/pages/roles/components/RoleFormModal';
 import { requestClientOptions } from '@admin/pages/roles/role-selectors';
 import {
-  type RoleDetailVo,
-  type RoleVo,
   deleteRole,
   getRole,
+  type RoleDetailVo,
+  type RoleVo,
   searchRoles,
   updateRoleStatus,
 } from '@admin/services/role';
 import { PlusOutlined } from '@ant-design/icons';
 import {
-  ActionType,
+  type ActionType,
   PageContainer,
-  ProColumns,
+  type ProColumns,
   ProTable,
 } from '@ant-design/pro-components';
-import { getRoleStatusOptions, RoleStatus } from '@iam/contracts';
+import { getRoleStatusOptions, type RoleStatus } from '@iam/contracts';
 import { Button, Dropdown, message, Modal } from 'antd';
 import { useRef, useState } from 'react';
 
 export default function RolesPage() {
-  const actionRef = useRef<ActionType>();
+  const actionRef = useRef<ActionType>(undefined);
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState<RoleDetailVo | null>(null);
   const [drawerRoleCode, setDrawerRoleCode] = useState<string | null>(null);
@@ -156,6 +156,7 @@ export default function RolesPage() {
         rowKey="roleCode"
         columns={columns}
         search={{ labelWidth: 'auto' }}
+        scroll={{ x: 1170 }}
         request={async (params) => {
           try {
             const {

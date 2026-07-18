@@ -18,7 +18,7 @@ import {
   EmploymentStatus,
   getEmploymentStatusOptions,
   getUserStatusOptions,
-  UserStatus,
+  type UserStatus,
 } from '@iam/contracts';
 import {
   Button,
@@ -280,10 +280,10 @@ export default function UserDetailDrawer({
         }}
       />
       <Drawer
-        width={640}
+        size={640}
         open={open}
         onClose={onClose}
-        destroyOnClose
+        destroyOnHidden
         title={
           detail ? (
             <Space>

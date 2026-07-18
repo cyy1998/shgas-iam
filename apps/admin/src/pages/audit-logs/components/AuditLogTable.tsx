@@ -70,7 +70,7 @@ function renderActor(row: AuditLogVo) {
   return (
     <Space size={6} wrap>
       <Tag>{actor.typeLabel}</Tag>
-      <Space direction="vertical" size={0}>
+      <Space orientation="vertical" size={0}>
         <Typography.Text style={{ wordBreak: 'break-all' }}>
           {actor.name ?? actor.code}
         </Typography.Text>
@@ -89,7 +89,7 @@ function renderTarget(row: AuditLogVo) {
   return (
     <Space size={6} wrap>
       <Tag>{target.typeLabel}</Tag>
-      <Space direction="vertical" size={0}>
+      <Space orientation="vertical" size={0}>
         <Typography.Text style={{ wordBreak: 'break-all' }}>
           {target.name ?? target.code}
         </Typography.Text>
@@ -155,14 +155,14 @@ export default function AuditLogTable({
       dataIndex: 'eventTimeRange',
       valueType: 'dateTimeRange',
       hideInTable: true,
-      hideInSearch: !search,
+      search: search ? undefined : false,
     },
     {
       title: '动作',
       dataIndex: 'actions',
       hideInTable: true,
-      hideInSearch: !search,
-      renderFormItem: () => (
+      search: search ? undefined : false,
+      formItemRender: () => (
         <Select
           allowClear
           showSearch
@@ -183,7 +183,7 @@ export default function AuditLogTable({
       width: 240,
       search: false,
       render: (_, row) => (
-        <Space direction="vertical" size={0}>
+        <Space orientation="vertical" size={0}>
           <Typography.Text>{getActionLabel(row.action)}</Typography.Text>
           <Typography.Text
             code
@@ -211,14 +211,14 @@ export default function AuditLogTable({
       title: '操作者',
       dataIndex: 'actorKeyword',
       hideInTable: true,
-      hideInSearch: !search,
+      search: search ? undefined : false,
       fieldProps: { placeholder: '用户名 / client / system' },
     },
     {
       title: 'Actor 类型',
       dataIndex: 'actorType',
       hideInTable: true,
-      hideInSearch: !search,
+      search: search ? undefined : false,
       valueType: 'select',
       valueEnum: actorTypeValueEnum,
     },
@@ -233,14 +233,14 @@ export default function AuditLogTable({
       title: '目标对象',
       dataIndex: 'targetKeyword',
       hideInTable: true,
-      hideInSearch: !search,
+      search: search ? undefined : false,
       fieldProps: { placeholder: '目标编码 / ID' },
     },
     {
       title: '目标类型',
       dataIndex: 'targetType',
       hideInTable: true,
-      hideInSearch: !search,
+      search: search ? undefined : false,
       valueType: 'select',
       valueEnum: targetTypeValueEnum,
     },
