@@ -15,6 +15,7 @@
 
 ## Resolution evidence
 
+- Final squash commit: `fbfe426807fc576ade42e554b734b1b47c572cf8`.
 - 实现提交：`8140a78b5c694387fd6eb07869fa0d33cc2f7e16`。
 - 直接依赖审计确认 ioredis 5.11.1、BullMQ 5.80.6、Bull Board API/Hono/UI 8.1.2；重新解析传递依赖后安装包净减少 5 个。
 - 新增通过 Basic Auth 后获取 Bull Board HTML 的真实 Hono HTTP smoke；既有 queue producer/worker、retry 默认值、Redis adapter 与 OIDC 测试全部通过。

@@ -19,6 +19,7 @@
 
 ## Resolution evidence
 
+- Final squash commit: `fbfe426807fc576ade42e554b734b1b47c572cf8`.
 - 实现提交：`411bb451b8b265ccf5a58d7a39c43971057332b5`。
 - 全仓源码/脚本/测试扫描无 CSV parser、mysql2 或 xlsx consumer；历史核对确认唯一 MySQL 迁移脚本已删除。
 - `pnpm why` 与锁文件审计确认四个包没有实际解析路径；Drizzle 锁元数据中只保留 mysql2 可选 peer 声明，不安装 mysql2。

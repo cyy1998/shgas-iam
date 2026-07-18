@@ -17,7 +17,7 @@
 
 ## Resolution
 
-- Final squash commit: `pending`
+- Final squash commit: `fbfe426807fc576ade42e554b734b1b47c572cf8`
 - Reviewed implementation commit: `0b8cfddac75e61c4f59d56cdd3ef7571e091f4b8`
 - Validation:
   - `pnpm -r list eslint @antfu/eslint-config stylelint stylelint-config-standard postcss-less prettier --depth 0` — confirmed ESLint 10.7.0 and Antfu 9.1.0 across all 15 projects; Admin and SSO resolve Stylelint 17.14.0, standard config 40.0.0, postcss-less 6.0.0, and Prettier 3.9.5.

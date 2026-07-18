@@ -16,6 +16,7 @@
 
 ## Resolution evidence
 
+- Final squash commit: `fbfe426807fc576ade42e554b734b1b47c572cf8`.
 - 实现提交：`c3d5d3e5b291084505bcc6b9c4f45697090aa0da`。
 - 新增 API 与 Admin API 的真实 HTTP smoke，覆盖 Scalar 页面、OpenAPI 3.1 schema 和本地浏览器 bundle；worker dashboard/health HTTP smoke 通过。
 - `pnpm test`、`pnpm lint`、`pnpm typecheck`、`pnpm build`、受影响 workspace 测试以及 `pnpm install --frozen-lockfile` 全部通过；`git diff --check` 无错误。

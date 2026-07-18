@@ -28,7 +28,7 @@
 
 ## Resolution
 
-- Final squash commit: `pending`.
+- Final squash commit: `fbfe426807fc576ade42e554b734b1b47c572cf8`.
 - Implementation commit: `b3f32fb6`.
 - Final feature-review follow-up commit: `f0d1ef74`.
 - All 15 manifests were audited. Shared external dependency declarations are consistent, internal `workspace:*` contracts are unchanged, and `pnpm outdated -r --format json` reports only the approved Node 24 exception: `@types/node@24.13.2` versus registry latest 26.1.1.

@@ -17,7 +17,7 @@
 
 ## Resolution
 
-- Final squash commit: `pending`
+- Final squash commit: `fbfe426807fc576ade42e554b734b1b47c572cf8`
 - Reviewed implementation commit: `5d1f4c078c7810b0b47bc2877b78b9dbfbdfd686`
 - Validation:
   - `pnpm install --frozen-lockfile` — passed before the upgrade with pnpm 11.5.0 and after the upgrade with pnpm 11.14.0.

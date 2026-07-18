@@ -18,6 +18,7 @@
 
 ## Resolution
 
+- Final squash commit: `fbfe426807fc576ade42e554b734b1b47c572cf8`.
 - Implementation commit: `cfb99af5`.
 - Admin resolves React/DOM 19.2.7, React types 19.2.17/19.2.3, Ant Design 6.5.1, Umi 4.6.79, icons 6.3.2, and exact ProComponents 3.1.14-2; workspace peer policy is React 19 only.
 - Official ProComponents v3 and React 19 removed/deprecated API scans passed. Six `hideInSearch` columns moved to `search`, custom form fields moved to `formItemRender`, and Ant Design 6 Modal/Drawer/Card/Space props were migrated without type ignores or compatibility wrappers.

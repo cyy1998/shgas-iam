@@ -16,7 +16,7 @@
 
 ## Resolution
 
-- Final squash commit: `pending`
+- Final squash commit: `fbfe426807fc576ade42e554b734b1b47c572cf8`
 - Reviewed implementation commit: `3243ccebb7338a6a93a634a7e9b84bc73c239a93`
 - Validation:
   - `pnpm --filter @iam/admin test:coverage` on Vitest 0.34.6 — passed with 9 files / 19 tests before the upgrade.

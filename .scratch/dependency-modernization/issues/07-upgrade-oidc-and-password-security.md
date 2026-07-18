@@ -15,6 +15,7 @@
 
 ## Resolution evidence
 
+- Final squash commit: `fbfe426807fc576ade42e554b734b1b47c572cf8`.
 - 实现提交：`dc5ee87ca3bdb3635ee54a06885531c6ddf324c2`。
 - 直接依赖审计确认 bcrypt-ts 9.0.1、oidc-provider 9.9.1、tsx 4.23.1，锁文件无旧目标版本。
 - API 行为测试使用生产 runtime password-hasher 完成 bcrypt-ts 8 历史散列校验、错误密码拒绝、密码更新、新密码通过与旧密码失效；共享 bcrypt 新散列 round-trip 也通过。

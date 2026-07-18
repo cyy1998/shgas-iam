@@ -16,7 +16,7 @@
 
 ## Resolution
 
-- Final squash commit: `pending`
+- Final squash commit: `fbfe426807fc576ade42e554b734b1b47c572cf8`
 - Reviewed implementation commit: `abb5120d58955977ce880f63719977e6e0e0be25`
 - Validation:
   - Baseline `pnpm typecheck` — passed all 14 workspaces on the previous native preview before migration.
