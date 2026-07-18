@@ -1,4 +1,5 @@
 import type { DbClient } from "@iam/db";
+import type { UserProfileAffectedUserResolverPort } from "@iam/user-profile-read-model/producer";
 import { createAuditRepository } from "@api/services/audit/audit.repository";
 import { createClientRepository } from "@api/services/client/client.repository";
 import { createEmploymentRepository } from "@api/services/employment/employment.repository";
@@ -8,11 +9,13 @@ import { createPrivilegeRepository } from "@api/services/privilege/privilege.rep
 import { createPrivilegeDelegationRepository } from "@api/services/privilege/privilegeDelegation.repository";
 import { createRoleRepository } from "@api/services/role/role.repository";
 import { createUserRepository } from "@api/services/user/user.repository";
-import db from "@iam/db";
 import { createUserProfileDirtyRepository, createUserProfileScopeRepository } from "@iam/user-profile-read-model/producer";
 import { createUserProfileRepository } from "@iam/user-profile-read-model/query";
 
-export function createApiRepositories(client: DbClient = db) {
+export function createApiRepositories(
+  client: DbClient,
+  roleAssignmentResolver: UserProfileAffectedUserResolverPort,
+) {
   return {
     audit: createAuditRepository(client),
     client: createClientRepository(client),
@@ -25,7 +28,7 @@ export function createApiRepositories(client: DbClient = db) {
     user: createUserRepository(client),
     userProfile: createUserProfileRepository(client),
     userProfileDirty: createUserProfileDirtyRepository(client),
-    userProfileScope: createUserProfileScopeRepository(client),
+    userProfileScope: createUserProfileScopeRepository(client, roleAssignmentResolver),
   };
 }
 

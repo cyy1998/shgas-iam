@@ -202,6 +202,9 @@ importers:
       '@iam/jobs':
         specifier: workspace:*
         version: link:../../packages/jobs
+      '@iam/role-assignment-resolution':
+        specifier: workspace:*
+        version: link:../../packages/role-assignment-resolution
       '@iam/user-profile-read-model':
         specifier: workspace:*
         version: link:../../packages/user-profile-read-model

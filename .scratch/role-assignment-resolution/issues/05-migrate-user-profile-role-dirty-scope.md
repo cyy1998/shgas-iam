@@ -4,7 +4,7 @@
 
 **Blocked by:** 04 — 迁移 User Profile 正向角色构建
 
-**Status:** ready-for-agent
+**Status:** claimed
 
 - [ ] User Profile scope repository 消费 worker module 已创建的 resolver；API 与 admin composition 也为其各自的 scope repository 注入同一模块接口。
 - [ ] Role scope 直接批量调用反向解析；Privilege ID 与 Privilege Code scope 取得关联角色后复用同一反向操作。

@@ -32,6 +32,7 @@
     "@iam/db": "workspace:*",
     "@iam/domain": "workspace:*",
     "@iam/jobs": "workspace:*",
+    "@iam/role-assignment-resolution": "workspace:*",
     "@iam/user-profile-read-model": "workspace:*",
     "@scalar/hono-api-reference": "^0.10.20",
     "@trpc/server": "^11.17.0",

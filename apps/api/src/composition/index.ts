@@ -4,7 +4,9 @@ import env from "@api/env";
 import { logger } from "@api/lib/logger";
 import { createApiAuditLogWriter } from "@api/services/audit/audit.service";
 import { USER_PROFILE_QUEUE_NAME } from "@iam/contracts";
+import db from "@iam/db";
 import { createJobQueue } from "@iam/jobs";
+import { createRoleAssignmentResolver } from "@iam/role-assignment-resolution";
 import { createUserProfileJobProducer } from "@iam/user-profile-read-model/producer";
 import { createApiMiddlewares } from "./middlewares";
 import { createApiRepositories } from "./repositories";
@@ -38,7 +40,8 @@ export async function createApiComposition(options: CreateApiCompositionOptions 
   const compositionEnv = options.env ?? env;
   const compositionLogger = options.logger ?? logger;
   const runtime = createApiRuntime({ env: compositionEnv, logger: compositionLogger });
-  const repositories = createApiRepositories();
+  const roleAssignmentResolver = createRoleAssignmentResolver(db);
+  const repositories = createApiRepositories(db, roleAssignmentResolver);
   const auditLogWriter = createApiAuditLogWriter({ auditRepository: repositories.audit });
   const userProfileQueue = createJobQueue<UserProfileJobPayload, unknown, UserProfileJobName>({
     name: USER_PROFILE_QUEUE_NAME,

@@ -49,8 +49,8 @@ export async function createAdminApiComposition(
   const compositionDb = options.db ?? db;
   const runtime = createAdminApiRuntime({ env: compositionEnv, logger: compositionLogger });
   const session = createAdminApiSession({ runtime });
-  const repositories = createAdminApiRepositories(compositionDb);
   const roleAssignmentResolver = createRoleAssignmentResolver(compositionDb);
+  const repositories = createAdminApiRepositories(compositionDb, roleAssignmentResolver);
   const auditService = createAdminAuditService({ auditRepository: repositories.audit });
   const userProfileQueue = createJobQueue<UserProfileJobPayload, unknown, UserProfileJobName>({
     name: USER_PROFILE_QUEUE_NAME,

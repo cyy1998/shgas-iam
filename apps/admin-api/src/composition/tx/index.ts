@@ -7,6 +7,7 @@ import type { AfterCommitLoggerPort, ClockPort } from "../runtime";
 import { createAdminAuditService } from "@admin-api/services/audit/audit.service";
 import { createUnitOfWork } from "@iam/api-core/uow";
 import db from "@iam/db";
+import { createRoleAssignmentResolver } from "@iam/role-assignment-resolution";
 import { createUserProfileDirtyMarker } from "@iam/user-profile-read-model/producer";
 import { createAdminApiRepositories } from "../repositories";
 
@@ -29,7 +30,8 @@ export function createAdminApiUnitOfWork(
     db,
     logger: options.logger,
     createTxPorts: (tx) => {
-      const repositories = createAdminApiRepositories(tx);
+      const roleAssignmentResolver = createRoleAssignmentResolver(tx);
+      const repositories = createAdminApiRepositories(tx, roleAssignmentResolver);
       return {
         repositories,
         auditService: createAdminAuditService({ auditRepository: repositories.audit }),
