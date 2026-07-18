@@ -1,12 +1,11 @@
 import type { DbClient } from "@iam/db";
+import type { RoleAssignmentResolver } from "@iam/role-assignment-resolution";
 import type { OidcAuthorizationClaim } from "../provider/authorization-claim.ts";
 import {
   EmploymentStatus,
   OrganizationStatus,
   PositionStatus,
   PrivilegeStatus,
-  RoleAssignmentTargetType,
-  RoleStatus,
 } from "@iam/contracts";
 import {
   employments,
@@ -14,9 +13,7 @@ import {
   organizations,
   positions,
   privileges,
-  roleAssignments,
   rolePrivileges,
-  roles,
 } from "@iam/db/schema";
 import { and, asc, eq, inArray } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
@@ -25,75 +22,15 @@ import {
   buildOidcAuthorizationEmployment,
 } from "../provider/authorization-claim.ts";
 
-export interface RoleAssignmentEmploymentInput {
-  id: number;
-  orgId: number;
-  posId: number;
-}
-
-export interface RoleAssignmentInput {
-  roleId: number;
-  targetId: number;
-}
-
-export interface OrganizationRoleAssignmentInput extends RoleAssignmentInput {
-  includeDescendants: boolean;
-}
-
-export interface OrganizationPathInput {
-  id: number;
-}
-
-export function resolveRoleIdsByEmploymentFromAssignments(input: {
-  activeRoleIds: ReadonlySet<number>;
-  directRoleRows: RoleAssignmentInput[];
-  employments: RoleAssignmentEmploymentInput[];
-  organizationRoleRows: OrganizationRoleAssignmentInput[];
-  pathByOrg: Map<number, OrganizationPathInput[]>;
-  positionRoleRows: RoleAssignmentInput[];
-}) {
-  const directRolesByEmployment = new Map<number, number[]>();
-  for (const row of input.directRoleRows) {
-    const roleIds = directRolesByEmployment.get(row.targetId) ?? [];
-    roleIds.push(row.roleId);
-    directRolesByEmployment.set(row.targetId, roleIds);
-  }
-
-  const assignmentRoleIdsByPosition = new Map<number, number[]>();
-  for (const row of input.positionRoleRows) {
-    const roleIds = assignmentRoleIdsByPosition.get(row.targetId) ?? [];
-    roleIds.push(row.roleId);
-    assignmentRoleIdsByPosition.set(row.targetId, roleIds);
-  }
-
-  const roleIdsByEmployment = new Map<number, number[]>();
-  for (const employment of input.employments) {
-    const ancestorIds = new Set((input.pathByOrg.get(employment.orgId) ?? []).map(node => node.id));
-    const roleIds = new Set([
-      ...(directRolesByEmployment.get(employment.id) ?? []),
-      ...(assignmentRoleIdsByPosition.get(employment.posId) ?? []),
-    ]);
-    for (const assignment of input.organizationRoleRows) {
-      if (assignment.targetId === employment.orgId
-        || (assignment.includeDescendants && ancestorIds.has(assignment.targetId))) {
-        roleIds.add(assignment.roleId);
-      }
-    }
-    roleIdsByEmployment.set(
-      employment.id,
-      [...roleIds].filter(roleId => input.activeRoleIds.has(roleId)),
-    );
-  }
-  return roleIdsByEmployment;
-}
-
-export function createOidcAuthorizationRepository(db: DbClient) {
+export function createOidcAuthorizationRepository(
+  db: DbClient,
+  roleAssignmentResolver: Pick<RoleAssignmentResolver, "resolveEffectiveRoles">,
+) {
   return {
     async buildClaim(userId: number, iamClientId: number): Promise<OidcAuthorizationClaim> {
       const employmentSelection = db.select({
         id: employments.id,
         orgId: employments.orgId,
-        posId: employments.posId,
         orgCode: organizations.orgCode,
         orgName: organizations.orgName,
         orgType: organizations.orgType,
@@ -122,7 +59,6 @@ export function createOidcAuthorizationRepository(db: DbClient) {
 
       const employmentIds = employmentRows.map(row => row.id);
       const orgIds = [...new Set(employmentRows.map(row => row.orgId))];
-      const posIds = [...new Set(employmentRows.map(row => row.posId))];
       const ancestor = alias(organizations, "oidc_authorization_org_ancestor");
       const pathRows = await db.select({
         descendantId: organizationClosures.descendantId,
@@ -136,33 +72,6 @@ export function createOidcAuthorizationRepository(db: DbClient) {
         eq(ancestor.status, OrganizationStatus.Enable),
         eq(ancestor.isDelete, false),
       ));
-      const ancestorIds = [...new Set(pathRows.map(row => row.id))];
-      const [directRoleRows, positionRoleRows, organizationRoleRows, clientRoleRows] = await Promise.all([
-        db.select().from(roleAssignments).where(and(
-          eq(roleAssignments.targetType, RoleAssignmentTargetType.Employment),
-          inArray(roleAssignments.targetId, employmentIds),
-        )),
-        db.select().from(roleAssignments).where(and(
-          eq(roleAssignments.targetType, RoleAssignmentTargetType.Position),
-          inArray(roleAssignments.targetId, posIds),
-        )),
-        ancestorIds.length === 0
-          ? Promise.resolve([])
-          : db.select().from(roleAssignments).where(and(
-              eq(roleAssignments.targetType, RoleAssignmentTargetType.Organization),
-              inArray(roleAssignments.targetId, ancestorIds),
-            )),
-        db.select({
-          id: roles.id,
-          roleCode: roles.roleCode,
-        }).from(roles).where(and(
-          eq(roles.clientId, iamClientId),
-          eq(roles.status, RoleStatus.Enable),
-          eq(roles.isDelete, false),
-        )),
-      ]);
-
-      const activeRoles = new Map(clientRoleRows.map(role => [role.id, role.roleCode]));
       const pathByOrg = new Map<number, Array<(typeof pathRows)[number]>>();
       for (const row of pathRows) {
         const path = pathByOrg.get(row.descendantId) ?? [];
@@ -172,16 +81,12 @@ export function createOidcAuthorizationRepository(db: DbClient) {
       for (const path of pathByOrg.values())
         path.sort((a, b) => b.depth - a.depth || a.id - b.id);
 
-      const roleIdsByEmployment = resolveRoleIdsByEmploymentFromAssignments({
-        activeRoleIds: new Set(activeRoles.keys()),
-        directRoleRows,
-        employments: employmentRows,
-        organizationRoleRows,
-        pathByOrg,
-        positionRoleRows,
+      const effectiveRolesByEmployment = await roleAssignmentResolver.resolveEffectiveRoles({
+        employmentIds,
+        clientId: iamClientId,
       });
-
-      const allRoleIds = [...new Set([...roleIdsByEmployment.values()].flat())];
+      const allEffectiveRoles = [...effectiveRolesByEmployment.values()].flat();
+      const allRoleIds = [...new Set(allEffectiveRoles.map(role => role.id))];
       const privilegeRows = allRoleIds.length === 0
         ? []
         : await db.select({
@@ -215,8 +120,8 @@ export function createOidcAuthorizationRepository(db: DbClient) {
           posCode: employment.posCode,
           posName: employment.posName,
         },
-        roleIds: roleIdsByEmployment.get(employment.id) ?? [],
-      }, activeRoles, privilegesByRole));
+        effectiveRoles: effectiveRolesByEmployment.get(employment.id) ?? [],
+      }, privilegesByRole));
 
       return assembleOidcAuthorizationClaim(claimEmployments);
     },

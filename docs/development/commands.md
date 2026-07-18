@@ -36,6 +36,15 @@ ticket 生命周期、验证层级和提交授权见 [Engineering workflow](../a
 pnpm --filter @iam/domain typecheck
 ```
 
+角色分配解析的默认测试不依赖外部服务。真实 PostgreSQL 规则矩阵要求
+`IAM_ROLE_ASSIGNMENT_TEST_DATABASE_URL` 指向专用非系统测试库，并显式运行：
+
+```bash
+pnpm --filter @iam/role-assignment-resolution test:postgres
+```
+
+该命令只在随机隔离 schema 中应用当前 migrations 并在结束后清理；不回退 `DATABASE_URL`，也不自行启动容器。
+
 ## 数据库
 
 - `pnpm --filter @iam/db <db:push|db:generate|db:migrate|db:check>`

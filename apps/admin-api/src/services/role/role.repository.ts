@@ -13,24 +13,16 @@ import { compactUpdate, firstRow, ilikeContainsIf } from "@iam/db/query-utils";
 import {
   clients,
   employments,
-  organizationClosures,
   organizations,
   positions,
   roleAssignments,
   roles,
   users,
 } from "@iam/db/schema";
-import { and, count, eq, exists, gt, inArray, or, sql } from "drizzle-orm";
+import { and, count, eq, exists, inArray, or, sql } from "drizzle-orm";
 
 export function createRoleRepository(db: DbClient) {
   return {
-    async getRolesByEmploymentId(employmentId: number) {
-      return await db
-        .select()
-        .from(roles)
-        .where(and(activeRoleWhere(), roleAssignedToEmploymentWhere(employmentId, db)));
-    },
-
     async getRoleByCode(roleCode: string) {
       const row = await db.query.roles.findFirst({
         where: { roleCode, isDelete: false },
@@ -222,10 +214,6 @@ export type RoleRepository = ReturnType<typeof createRoleRepository>;
 type RoleRow = typeof roles.$inferSelect;
 type RoleAssignmentRow = typeof roleAssignments.$inferSelect;
 
-function activeRoleWhere() {
-  return and(eq(roles.status, RoleStatus.Enable), eq(roles.isDelete, false));
-}
-
 function roleAdminWhere(input: RolePaginationQueryDto, tx: DbClient) {
   const { fuzzyConditions, exactConditions } = input.conditions;
   return and(
@@ -409,56 +397,4 @@ function idsForTargetType(rows: RoleAssignmentRow[], targetType: RoleAssignmentT
 
 function targetKey(targetType: RoleAssignmentTargetType, targetId: number) {
   return `${targetType}:${targetId}`;
-}
-
-function roleAssignedToEmploymentWhere(employmentId: number, tx: DbClient) {
-  return or(
-    exists(
-      tx.select({ value: sql`1` })
-        .from(roleAssignments)
-        .innerJoin(employments, eq(roleAssignments.targetId, employments.posId))
-        .where(and(
-          eq(roleAssignments.roleId, roles.id),
-          eq(roleAssignments.targetType, RoleAssignmentTargetType.Position),
-          eq(employments.id, employmentId),
-          eq(employments.status, EmploymentStatus.Enable),
-        )),
-    ),
-    exists(
-      tx.select({ value: sql`1` })
-        .from(roleAssignments)
-        .innerJoin(employments, eq(employments.id, employmentId))
-        .where(and(
-          eq(roleAssignments.roleId, roles.id),
-          eq(roleAssignments.targetType, RoleAssignmentTargetType.Organization),
-          eq(employments.status, EmploymentStatus.Enable),
-          or(
-            eq(roleAssignments.targetId, employments.orgId),
-            and(
-              eq(roleAssignments.includeDescendants, true),
-              exists(
-                tx.select({ value: sql`1` })
-                  .from(organizationClosures)
-                  .where(and(
-                    eq(organizationClosures.ancestorId, roleAssignments.targetId),
-                    eq(organizationClosures.descendantId, employments.orgId),
-                    gt(organizationClosures.depth, 0),
-                  )),
-              ),
-            ),
-          ),
-        )),
-    ),
-    exists(
-      tx.select({ value: sql`1` })
-        .from(roleAssignments)
-        .innerJoin(employments, eq(roleAssignments.targetId, employments.id))
-        .where(and(
-          eq(roleAssignments.roleId, roles.id),
-          eq(roleAssignments.targetType, RoleAssignmentTargetType.Employment),
-          eq(employments.id, employmentId),
-          eq(employments.status, EmploymentStatus.Enable),
-        )),
-    ),
-  );
 }

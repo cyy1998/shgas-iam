@@ -1,3 +1,5 @@
+import type { EffectiveRole } from "@iam/role-assignment-resolution";
+
 export type OidcAuthorizationClaim = {
   employments: Array<{
     organization: {
@@ -28,17 +30,17 @@ export type OidcAuthorizationEmployment = OidcAuthorizationClaim["employments"][
 const sortCodes = (values: Iterable<string>) => [...new Set(values)].sort((a, b) => a.localeCompare(b));
 
 export function buildOidcAuthorizationEmployment(
-  employment: Omit<OidcAuthorizationEmployment, "roles" | "privileges"> & { roleIds: number[] },
-  activeRoles: ReadonlyMap<number, string>,
-  privilegesByRole: ReadonlyMap<number, string[]>,
+  employment: Omit<OidcAuthorizationEmployment, "roles" | "privileges"> & {
+    effectiveRoles: readonly EffectiveRole[];
+  },
+  privilegesByRole: ReadonlyMap<number, readonly string[]>,
 ): OidcAuthorizationEmployment {
-  const roleIds = employment.roleIds.filter(roleId => activeRoles.has(roleId));
   return {
     orderNum: employment.orderNum,
     organization: employment.organization,
     position: employment.position,
-    roles: sortCodes(roleIds.map(roleId => activeRoles.get(roleId)!).filter(Boolean)),
-    privileges: sortCodes(roleIds.flatMap(roleId => privilegesByRole.get(roleId) ?? [])),
+    roles: sortCodes(employment.effectiveRoles.map(role => role.roleCode)),
+    privileges: sortCodes(employment.effectiveRoles.flatMap(role => privilegesByRole.get(role.id) ?? [])),
   };
 }
 

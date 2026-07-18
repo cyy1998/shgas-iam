@@ -12,21 +12,6 @@ import type {
   UserQueryWithPrivilegeDelegationDto,
 } from "./user.type";
 
-export interface UserEmploymentReaderPort {
-  getEmploymentsByUserId: (userId: number) => Promise<Array<{ id: number }>>;
-}
-
-export interface UserRoleReaderPort {
-  getRolesByEmploymentId: (employmentId: number) => Promise<Array<{
-    id: number;
-    roleCode: string;
-  }>>;
-}
-
-export interface UserPrivilegeReaderPort {
-  getPrivilegesByRoleIds: (roleIds: number[]) => Promise<Array<{ privilegeCode: string }>>;
-}
-
 export interface UserProfileReaderPort {
   getDetailByUserId: (userId: number) => Promise<UserDetailDto>;
   getDetailByUsername: (username: string) => Promise<UserDetailDto>;
@@ -71,12 +56,6 @@ export interface UserTransactionStorePort {
   setPassword: (userId: number, password: string) => Promise<unknown>;
   setMobile: (userId: number, phoneNumber: string) => Promise<unknown>;
   updateEnabledUserStatus: (userId: number, status: User["status"]) => Promise<User | null>;
-}
-
-export interface UserDetailBuilderDeps {
-  employmentRepository: UserEmploymentReaderPort;
-  roleRepository: UserRoleReaderPort;
-  privilegeRepository: UserPrivilegeReaderPort;
 }
 
 export interface UserDelegationQueryDeps {

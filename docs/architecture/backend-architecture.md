@@ -35,6 +35,17 @@
 - Production provider 应优先通过 TypeScript structural typing 直接满足 port。只有两侧确有不同语义、需要显式映射时，
   才在 composition 建立有行为且有测试的 adapter；不得用 unchecked assertion 或 behaviorless wrapper 掩盖不兼容。
 
+### 角色分配解析的 Composition 边界
+
+- `@iam/role-assignment-resolution` 是 Effective Role 与角色变更受影响用户解析的唯一生产 seam。Admin、OIDC 和
+  User Profile 的叶子 service/repository 只消费 composition 注入的最窄 resolver 能力，不直接读取
+  `role_assignment` 来重建解析规则。
+- App composition root 或 `createUserProfileWorkerModule` 使用其当前 `DbClient` 创建 resolver；同一组合中的消费者复用
+  该实例。事务 composition 必须使用 transaction `DbClient` 重新创建 resolver，并与同一 transaction 的 repositories
+  一起注入 dirty marker 路径。
+- Admin 角色管理 repository 仍可直接读写 assignment 以实现 CRUD、搜索和约束检查；这不属于 Effective Role 或
+  受影响用户解析。架构测试允许该 owner，并阻止其他已迁移生产调用方重新导入 assignment table。
+
 ## Application Use Case、Application Service 与领域规则
 
 后端通过位置和命名区分三类业务模块：

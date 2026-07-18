@@ -1,18 +1,17 @@
 import type { DbClient } from "@iam/db";
 import type { Employment, Organization, User } from "@iam/db/schema";
-import { EmploymentStatus, PositionStatus, PrivilegeStatus, RoleAssignmentTargetType, RoleStatus } from "@iam/contracts";
+import type { EffectiveRole } from "@iam/role-assignment-resolution";
+import { EmploymentStatus, PositionStatus, PrivilegeStatus } from "@iam/contracts";
 import {
   employments,
   organizationClosures,
   organizations,
   positions,
   privileges,
-  roleAssignments,
   rolePrivileges,
-  roles,
   users,
 } from "@iam/db/schema";
-import { and, eq, gt, inArray, or } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 
 export type UserProfileBuildOrgPathRow = Pick<
@@ -45,7 +44,16 @@ export interface UserProfileBuildDataset {
   privilegeRows: UserProfileBuildPrivilegeRow[];
 }
 
-export function createUserProfileBuildRepository(db: DbClient) {
+export interface UserProfileEffectiveRoleResolverPort {
+  readonly resolveEffectiveRoles: (input: {
+    readonly employmentIds: readonly number[];
+  }) => Promise<ReadonlyMap<number, readonly EffectiveRole[]>>;
+}
+
+export function createUserProfileBuildRepository(
+  db: DbClient,
+  roleAssignmentResolver: UserProfileEffectiveRoleResolverPort,
+) {
   return {
     async loadByUserIds(userIds: number[]): Promise<UserProfileBuildDataset> {
       const uniqueUserIds = [...new Set(userIds)];
@@ -68,7 +76,7 @@ export function createUserProfileBuildRepository(db: DbClient) {
       const [positionRows, orgPathRows, roleRows] = await Promise.all([
         loadActivePositions(db, positionIds),
         loadOrganizationPaths(db, organizationIds),
-        loadEmploymentRoles(db, employmentIds),
+        loadEmploymentRoles(roleAssignmentResolver, employmentIds),
       ]);
       const roleIds = [...new Set(roleRows.map(row => row.roleId))];
       const privilegeRows = await loadRolePrivileges(db, roleIds);
@@ -135,67 +143,21 @@ async function loadOrganizationPaths(db: DbClient, organizationIds: number[]) {
     ));
 }
 
-async function loadEmploymentRoles(db: DbClient, employmentIds: number[]) {
+async function loadEmploymentRoles(
+  roleAssignmentResolver: UserProfileEffectiveRoleResolverPort,
+  employmentIds: number[],
+): Promise<UserProfileBuildRoleRow[]> {
   if (employmentIds.length === 0)
     return [];
 
-  const [positionRoleRows, employmentRoleRows, organizationRoleRows] = await Promise.all([
-    db
-      .select({
-        employmentId: employments.id,
-        roleId: roles.id,
-        roleCode: roles.roleCode,
-      })
-      .from(employments)
-      .innerJoin(roleAssignments, and(
-        eq(roleAssignments.targetType, RoleAssignmentTargetType.Position),
-        eq(roleAssignments.targetId, employments.posId),
-      ))
-      .innerJoin(roles, eq(roleAssignments.roleId, roles.id))
-      .where(and(
-        inArray(employments.id, employmentIds),
-        activeRoleWhere(),
-      )),
-    db
-      .select({
-        employmentId: employments.id,
-        roleId: roles.id,
-        roleCode: roles.roleCode,
-      })
-      .from(employments)
-      .innerJoin(roleAssignments, and(
-        eq(roleAssignments.targetType, RoleAssignmentTargetType.Employment),
-        eq(roleAssignments.targetId, employments.id),
-      ))
-      .innerJoin(roles, eq(roleAssignments.roleId, roles.id))
-      .where(and(
-        inArray(employments.id, employmentIds),
-        activeRoleWhere(),
-      )),
-    db
-      .select({
-        employmentId: employments.id,
-        roleId: roles.id,
-        roleCode: roles.roleCode,
-      })
-      .from(employments)
-      .innerJoin(organizationClosures, eq(organizationClosures.descendantId, employments.orgId))
-      .innerJoin(roleAssignments, and(
-        eq(roleAssignments.targetType, RoleAssignmentTargetType.Organization),
-        eq(roleAssignments.targetId, organizationClosures.ancestorId),
-      ))
-      .innerJoin(roles, eq(roleAssignments.roleId, roles.id))
-      .where(and(
-        inArray(employments.id, employmentIds),
-        activeRoleWhere(),
-        or(
-          eq(organizationClosures.depth, 0),
-          and(gt(organizationClosures.depth, 0), eq(roleAssignments.includeDescendants, true)),
-        ),
-      )),
-  ]);
-
-  return dedupeRoleRows([...positionRoleRows, ...employmentRoleRows, ...organizationRoleRows]);
+  const effectiveRolesByEmploymentId = await roleAssignmentResolver.resolveEffectiveRoles({ employmentIds });
+  return employmentIds.flatMap(employmentId =>
+    (effectiveRolesByEmploymentId.get(employmentId) ?? []).map(role => ({
+      employmentId,
+      roleId: role.id,
+      roleCode: role.roleCode,
+    })),
+  );
 }
 
 async function loadRolePrivileges(db: DbClient, roleIds: number[]) {
@@ -214,19 +176,4 @@ async function loadRolePrivileges(db: DbClient, roleIds: number[]) {
       eq(privileges.status, PrivilegeStatus.Enable),
       eq(privileges.isDelete, false),
     ));
-}
-
-function activeRoleWhere() {
-  return and(eq(roles.status, RoleStatus.Enable), eq(roles.isDelete, false));
-}
-
-function dedupeRoleRows(rows: UserProfileBuildRoleRow[]) {
-  const seen = new Set<string>();
-  return rows.filter((row) => {
-    const key = `${row.employmentId}:${row.roleId}`;
-    if (seen.has(key))
-      return false;
-    seen.add(key);
-    return true;
-  });
 }

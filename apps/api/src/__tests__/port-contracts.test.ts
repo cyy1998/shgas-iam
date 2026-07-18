@@ -18,15 +18,11 @@ import type {
   PrivilegeDelegationUserReaderPort,
 } from "@api/services/privilege/privilegeDelegation.port";
 import type { PrivilegeDelegationRepository } from "@api/services/privilege/privilegeDelegation.repository";
-import type { RoleRepository } from "@api/services/role/role.repository";
 import type {
   UserDelegationReaderPort,
-  UserEmploymentReaderPort,
   UserMobileBindingPort,
   UserMobileVerificationPort,
-  UserPrivilegeReaderPort,
   UserProfileReaderPort,
-  UserRoleReaderPort,
   UserStorePort,
   UserTransactionStorePort,
 } from "@api/services/user/user.port";
@@ -55,9 +51,6 @@ test("API providers structurally satisfy consumer-owned ports", () => {
   assertAssignable<PrivilegeDelegationTransactionStorePort, PrivilegeDelegationRepository>();
   assertAssignable<PrivilegeDelegationSearchPort, PrivilegeDelegationRepository>();
 
-  assertAssignable<UserEmploymentReaderPort, EmploymentRepository>();
-  assertAssignable<UserRoleReaderPort, RoleRepository>();
-  assertAssignable<UserPrivilegeReaderPort, PrivilegeRepository>();
   assertAssignable<UserProfileReaderPort, UserProfileQueryService>();
   assertAssignable<UserDelegationReaderPort, PrivilegeDelegationRepository>();
   assertAssignable<UserMobileBindingPort, MobileService>();

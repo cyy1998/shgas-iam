@@ -19,6 +19,7 @@
     "@iam/contracts": "workspace:*",
     "@iam/db": "workspace:*",
     "@iam/domain": "workspace:*",
+    "@iam/role-assignment-resolution": "workspace:*",
     "bcrypt-ts": "^8.0.1",
     "drizzle-orm": "1.0.0-rc.2",
     "ioredis": "^5.11.0",

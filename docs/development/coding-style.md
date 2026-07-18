@@ -6,7 +6,8 @@
 
 - API/backend/shared/gateway packages（`apps/api`、`apps/admin-api`、`apps/oidc-provider`、`apps/worker`、
   `packages/api-core`, `packages/contracts`, `packages/db`, `packages/domain`, `packages/jobs`,
-  `packages/user-profile-read-model`、`gateway`）：ESLint 使用 Antfu config，采用 double quotes、semicolons，以及
+  `packages/role-assignment-resolution`, `packages/user-profile-read-model`、`gateway`）：ESLint 使用 Antfu config，
+  采用 double quotes、semicolons，以及
   120-character soft limit。
 - Admin/SSO frontends（`apps/admin`、`apps/sso`）：Prettier 使用 single quotes、trailing commas 和 80-character
   wrap。

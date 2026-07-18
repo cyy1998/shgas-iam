@@ -111,6 +111,60 @@ function readSourceFile(file: string) {
   return readFileSync(join(sourceRoot, file), "utf8");
 }
 
+function parseSourceFile(file: string) {
+  return ts.createSourceFile(file, readSourceFile(file), ts.ScriptTarget.Latest, true);
+}
+
+function collectNamedCalls(source: ts.SourceFile, calleeName: string) {
+  const calls: ts.CallExpression[] = [];
+  function visit(node: ts.Node) {
+    if (ts.isCallExpression(node)
+      && ts.isIdentifier(node.expression)
+      && node.expression.text === calleeName) {
+      calls.push(node);
+    }
+    ts.forEachChild(node, visit);
+  }
+  visit(source);
+  return calls;
+}
+
+function findFactoryBinding(source: ts.SourceFile, factoryName: string) {
+  let result: { binding: string; firstArgument: string | undefined } | undefined;
+  function visit(node: ts.Node) {
+    if (ts.isVariableDeclaration(node)
+      && ts.isIdentifier(node.name)
+      && node.initializer
+      && ts.isCallExpression(node.initializer)
+      && ts.isIdentifier(node.initializer.expression)
+      && node.initializer.expression.text === factoryName) {
+      result = {
+        binding: node.name.text,
+        firstArgument: node.initializer.arguments[0]?.getText(source),
+      };
+    }
+    ts.forEachChild(node, visit);
+  }
+  visit(source);
+  return result;
+}
+
+function objectArgumentPropertyValue(source: ts.SourceFile, call: ts.CallExpression, propertyName: string) {
+  const argument = call.arguments[0];
+  if (!argument || !ts.isObjectLiteralExpression(argument))
+    return undefined;
+
+  for (const property of argument.properties) {
+    if (ts.isShorthandPropertyAssignment(property) && property.name.text === propertyName)
+      return property.name.text;
+    if (ts.isPropertyAssignment(property)
+      && property.name.getText(source).replaceAll(/["']/gu, "") === propertyName) {
+      return property.initializer.getText(source);
+    }
+  }
+  return undefined;
+}
+
 function importsUserProfileProducerFromJobs(file: string) {
   return /import\s*\{[^}]*\bcreateUserProfileJobProducer\b[^}]*\}\s*from\s*["']@iam\/jobs["']/u
     .test(readFileSync(file, "utf8"));
@@ -166,6 +220,52 @@ function forbiddenSessionRevocationBypass(moduleSpecifier: string) {
 }
 
 describe("Admin API DI architecture", () => {
+  test("creates the role assignment resolver at the composition root and injects it into consumers", () => {
+    const rootComposition = parseSourceFile("composition/index.ts");
+    const serviceComposition = parseSourceFile("composition/services/index.ts");
+    const repositoryBinding = findFactoryBinding(rootComposition, "createAdminApiRepositories");
+    const resolverBinding = findFactoryBinding(rootComposition, "createRoleAssignmentResolver");
+    const serviceFactoryCalls = collectNamedCalls(rootComposition, "createAdminApiServices");
+    const userServiceCalls = collectNamedCalls(serviceComposition, "createUserService");
+    const employmentServiceCalls = collectNamedCalls(serviceComposition, "createEmploymentService");
+    const violations: string[] = [];
+
+    if (!repositoryBinding || !resolverBinding || repositoryBinding.firstArgument !== resolverBinding.firstArgument)
+      violations.push("Admin composition does not create repositories and the resolver with the same DbClient");
+
+    const serviceFactoryCall = serviceFactoryCalls.length === 1 ? serviceFactoryCalls[0] : undefined;
+    if (!serviceFactoryCall || !resolverBinding
+      || objectArgumentPropertyValue(rootComposition, serviceFactoryCall, "roleAssignmentResolver")
+      !== resolverBinding.binding) {
+      violations.push("Admin composition does not pass its role assignment resolver to service composition");
+    }
+
+    for (const [consumer, calls] of [
+      ["UserService", userServiceCalls],
+      ["EmploymentService", employmentServiceCalls],
+    ] as const) {
+      const call = calls.length === 1 ? calls[0] : undefined;
+      if (!call || objectArgumentPropertyValue(serviceComposition, call, "roleAssignmentResolver") === undefined)
+        violations.push(`${consumer} does not receive the role assignment resolver`);
+    }
+
+    expect(violations).toEqual([]);
+  });
+
+  test("keeps Effective Role resolution out of the admin role repository", () => {
+    const roleRepository = readSourceFile("services/role/role.repository.ts");
+    const violations = [
+      /\bgetRolesByEmploymentId\b/u.test(roleRepository)
+        ? "RoleRepository still exposes the old per-employment Effective Role query"
+        : null,
+      /\broleAssignedToEmploymentWhere\b/u.test(roleRepository)
+        ? "RoleRepository still owns the old assignment and organization-closure predicate"
+        : null,
+    ].filter((violation): violation is string => violation !== null);
+
+    expect(violations).toEqual([]);
+  });
+
   test("detects provider-derived ports without rejecting port or platform narrowing", () => {
     const allowed = collectPortOwnershipViolationsFromSource("allowed.port.ts", `
       import type { IncomingMessage } from "node:http";

@@ -1,18 +1,16 @@
 import type { DbClient } from "@iam/db";
 import {
   EmploymentStatus,
-  RoleAssignmentTargetType,
   UserProfileScopeType,
 } from "@iam/contracts";
 import {
   employments,
   organizationClosures,
   privileges,
-  roleAssignments,
   rolePrivileges,
   users,
 } from "@iam/db/schema";
-import { and, asc, eq, gt, inArray, or } from "drizzle-orm";
+import { and, asc, eq, gt } from "drizzle-orm";
 
 export interface ScanAllUserIdsInput {
   afterUserId?: number;
@@ -30,7 +28,16 @@ export type UserProfileExpansionScope
     | { scopeType: UserProfileScopeType.PrivilegeCode; scopeId: string }
     | { scopeType: UserProfileScopeType.EmploymentId; scopeId: number };
 
-export function createUserProfileScopeRepository(db: DbClient) {
+export interface UserProfileAffectedUserResolverPort {
+  readonly resolveAffectedUserIds: (input: {
+    readonly roleIds: readonly number[];
+  }) => Promise<readonly number[]>;
+}
+
+export function createUserProfileScopeRepository(
+  db: DbClient,
+  roleAssignmentResolver: UserProfileAffectedUserResolverPort,
+) {
   return {
     async scanAllUserIds(input: ScanAllUserIdsInput) {
       return await scanAllUserIds(db, input);
@@ -49,11 +56,11 @@ export function createUserProfileScopeRepository(db: DbClient) {
         case UserProfileScopeType.PositionId:
           return await findUserIdsByPositionId(db, scope.scopeId);
         case UserProfileScopeType.RoleId:
-          return await findUserIdsByRoleIds(db, [scope.scopeId]);
+          return [...await roleAssignmentResolver.resolveAffectedUserIds({ roleIds: [scope.scopeId] })];
         case UserProfileScopeType.PrivilegeId:
-          return await findUserIdsByPrivilegeId(db, scope.scopeId);
+          return await findUserIdsByPrivilegeId(db, roleAssignmentResolver, scope.scopeId);
         case UserProfileScopeType.PrivilegeCode:
-          return await findUserIdsByPrivilegeCode(db, scope.scopeId);
+          return await findUserIdsByPrivilegeCode(db, roleAssignmentResolver, scope.scopeId);
         case UserProfileScopeType.EmploymentId:
           return await findUserIdsByEmploymentId(db, scope.scopeId);
       }
@@ -98,66 +105,29 @@ async function findUserIdsByPositionId(db: DbClient, positionId: number) {
   return uniqueUserIds(rows);
 }
 
-async function findUserIdsByRoleIds(db: DbClient, roleIds: number[]) {
-  if (roleIds.length === 0)
-    return [];
-
-  const [employmentRows, positionRows, organizationRows] = await Promise.all([
-    db
-      .select({ userId: employments.userId })
-      .from(roleAssignments)
-      .innerJoin(employments, eq(roleAssignments.targetId, employments.id))
-      .where(and(
-        eq(roleAssignments.targetType, RoleAssignmentTargetType.Employment),
-        inArray(roleAssignments.roleId, roleIds),
-        eq(employments.status, EmploymentStatus.Enable),
-        eq(employments.isDelete, false),
-      )),
-    db
-      .select({ userId: employments.userId })
-      .from(roleAssignments)
-      .innerJoin(employments, eq(roleAssignments.targetId, employments.posId))
-      .where(and(
-        eq(roleAssignments.targetType, RoleAssignmentTargetType.Position),
-        inArray(roleAssignments.roleId, roleIds),
-        eq(employments.status, EmploymentStatus.Enable),
-        eq(employments.isDelete, false),
-      )),
-    db
-      .select({ userId: employments.userId })
-      .from(roleAssignments)
-      .innerJoin(organizationClosures, eq(roleAssignments.targetId, organizationClosures.ancestorId))
-      .innerJoin(employments, eq(employments.orgId, organizationClosures.descendantId))
-      .where(and(
-        eq(roleAssignments.targetType, RoleAssignmentTargetType.Organization),
-        inArray(roleAssignments.roleId, roleIds),
-        eq(employments.status, EmploymentStatus.Enable),
-        eq(employments.isDelete, false),
-        or(
-          eq(organizationClosures.depth, 0),
-          and(gt(organizationClosures.depth, 0), eq(roleAssignments.includeDescendants, true)),
-        ),
-      )),
-  ]);
-
-  return uniqueUserIds([...employmentRows, ...positionRows, ...organizationRows]);
-}
-
-async function findUserIdsByPrivilegeId(db: DbClient, privilegeId: number) {
+async function findUserIdsByPrivilegeId(
+  db: DbClient,
+  roleAssignmentResolver: UserProfileAffectedUserResolverPort,
+  privilegeId: number,
+) {
   const rows = await db
     .select({ roleId: rolePrivileges.roleId })
     .from(rolePrivileges)
     .where(eq(rolePrivileges.privilegeId, privilegeId));
-  return await findUserIdsByRoleIds(db, rows.map(row => row.roleId));
+  return [...await roleAssignmentResolver.resolveAffectedUserIds({ roleIds: rows.map(row => row.roleId) })];
 }
 
-async function findUserIdsByPrivilegeCode(db: DbClient, privilegeCode: string) {
+async function findUserIdsByPrivilegeCode(
+  db: DbClient,
+  roleAssignmentResolver: UserProfileAffectedUserResolverPort,
+  privilegeCode: string,
+) {
   const rows = await db
     .select({ roleId: rolePrivileges.roleId })
     .from(privileges)
     .innerJoin(rolePrivileges, eq(rolePrivileges.privilegeId, privileges.id))
     .where(eq(privileges.privilegeCode, privilegeCode));
-  return await findUserIdsByRoleIds(db, rows.map(row => row.roleId));
+  return [...await roleAssignmentResolver.resolveAffectedUserIds({ roleIds: rows.map(row => row.roleId) })];
 }
 
 async function findUserIdsByEmploymentId(db: DbClient, employmentId: number) {

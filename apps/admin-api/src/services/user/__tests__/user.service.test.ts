@@ -1,5 +1,13 @@
 import { createFakePasswordHasher, createFakeRandom, createImmediateUnitOfWork } from "@admin-api/test/fakes";
-import { UserProfileDirtyReason, UserStatus, UserType } from "@iam/contracts";
+import {
+  EmploymentStatus,
+  OrganizationLevel,
+  OrganizationType,
+  PositionStatus,
+  UserProfileDirtyReason,
+  UserStatus,
+  UserType,
+} from "@iam/contracts";
 import { describe, expect, mock, test } from "bun:test";
 import { createUserService } from "../user.service";
 
@@ -21,6 +29,51 @@ function user(overrides: Record<string, unknown> = {}) {
     createTime: now,
     updateTime: now,
     ...overrides,
+  };
+}
+
+function employment(id: number, status: EmploymentStatus) {
+  const assignedOrg = {
+    id: 2,
+    orgCode: "ORG",
+    orgName: "Organization",
+    orgType: OrganizationType.Department,
+    level: OrganizationLevel.Two,
+    parentId: -1,
+    isVirtual: false,
+    isEntity: true,
+    pathIndex: 0,
+    distanceToAssignedOrg: 0,
+  };
+  return {
+    id,
+    userId: 1,
+    posId: 3,
+    orgId: 2,
+    isPrimary: false,
+    status,
+    startTime: now,
+    endTime: null,
+    description: null,
+    isDelete: false,
+    createTime: now,
+    updateTime: now,
+    user: user(),
+    position: {
+      id: 3,
+      posCode: "DEV",
+      posName: "Developer",
+      status: PositionStatus.Enable,
+      description: null,
+      isDelete: false,
+      createTime: now,
+      updateTime: now,
+    },
+    organization: {
+      assignedOrg,
+      fullOrgPath: [assignedOrg],
+      companyNodes: [],
+    },
   };
 }
 
@@ -65,8 +118,8 @@ function createService(options: { afterCommitLogger?: ReturnType<typeof createAf
       getPrivilegesByRoleIds: mock(async () => []),
     },
     random: createFakeRandom(),
-    roleRepository: {
-      getRolesByEmploymentId: mock(async () => []),
+    roleAssignmentResolver: {
+      resolveEffectiveRoles: mock(async () => new Map()),
     },
     sessionRevocation: {
       revokeUserSessions: mock(async () => revokeSummary()),
@@ -81,6 +134,62 @@ function createService(options: { afterCommitLogger?: ReturnType<typeof createAf
 }
 
 describe("createUserService", () => {
+  test("resolves Effective Roles once for every employment in a user detail", async () => {
+    const { service, deps } = createService();
+    deps.employmentRepository.getAllEmploymentsByUserIdForAdmin.mockResolvedValueOnce([
+      employment(4, EmploymentStatus.Enable),
+      employment(5, EmploymentStatus.Disable),
+    ]);
+    deps.roleAssignmentResolver.resolveEffectiveRoles.mockResolvedValueOnce(new Map([
+      [4, [
+        { id: 11, roleCode: "admin" },
+        { id: 12, roleCode: "reviewer" },
+      ]],
+      [5, [{ id: 13, roleCode: "legacy" }]],
+    ]));
+    deps.privilegeRepository.getPrivilegesByRoleIds.mockImplementation(async (roleIds: number[]) =>
+      roleIds.map(roleId => ({ privilegeCode: `privilege:${roleId}` })));
+
+    const detail = await service.getUserDetailByUsernameForAdmin("zhangsan");
+
+    expect(deps.roleAssignmentResolver.resolveEffectiveRoles).toHaveBeenCalledTimes(1);
+    expect(deps.roleAssignmentResolver.resolveEffectiveRoles).toHaveBeenCalledWith({ employmentIds: [4, 5] });
+    expect(detail.employments.map(item => ({
+      id: item.id,
+      roles: item.roles,
+      privileges: item.privileges,
+    }))).toEqual([
+      { id: 4, roles: ["admin", "reviewer"], privileges: ["privilege:11", "privilege:12"] },
+      { id: 5, roles: ["legacy"], privileges: ["privilege:13"] },
+    ]);
+    expect(detail.roles).toEqual(["admin", "reviewer"]);
+    expect(detail.privileges).toEqual(["privilege:11", "privilege:12"]);
+  });
+
+  test("keeps empty Effective Role results empty in user detail", async () => {
+    const { service, deps } = createService();
+    deps.employmentRepository.getAllEmploymentsByUserIdForAdmin.mockResolvedValueOnce([
+      employment(4, EmploymentStatus.Enable),
+    ]);
+    deps.roleAssignmentResolver.resolveEffectiveRoles.mockResolvedValueOnce(new Map([[4, []]]));
+
+    const detail = await service.getUserDetailByUsernameForAdmin("zhangsan");
+
+    expect(deps.privilegeRepository.getPrivilegesByRoleIds).toHaveBeenCalledWith([]);
+    expect(detail.employments[0]).toMatchObject({ roles: [], privileges: [] });
+    expect(detail.roles).toEqual([]);
+    expect(detail.privileges).toEqual([]);
+  });
+
+  test("keeps the existing user-not-found behavior before resolving roles", async () => {
+    const { service, deps } = createService();
+    deps.userRepository.getUserByUsernameForAdmin.mockResolvedValueOnce(null);
+
+    await expect(service.getUserDetailByUsernameForAdmin("missing")).rejects.toThrow("用户不存在");
+
+    expect(deps.roleAssignmentResolver.resolveEffectiveRoles).not.toHaveBeenCalled();
+  });
+
   test("creates users with a generated password when none is provided", async () => {
     const { service, deps, tx } = createService();
 

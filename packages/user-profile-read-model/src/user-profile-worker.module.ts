@@ -9,6 +9,7 @@ import {
   UserProfileJobName as UserProfileJobNameValue,
 } from "@iam/contracts";
 import { createJobQueue, createJobWorker } from "@iam/jobs";
+import { createRoleAssignmentResolver } from "@iam/role-assignment-resolution";
 import { createUserProfileDirtyRepository } from "./dirty.repository";
 import { createUserProfileScopeRepository } from "./scope.repository";
 import { createUserProfileBuildRepository } from "./user-profile-build.repository";
@@ -75,8 +76,9 @@ export interface UserProfileWorkerModule {
 export function createUserProfileWorkerModule(input: CreateUserProfileWorkerModuleInput): UserProfileWorkerModule {
   const profileRepository = createUserProfileRepository(input.db);
   const dirtyRepository = createUserProfileDirtyRepository(input.db);
-  const scopeRepository = createUserProfileScopeRepository(input.db);
-  const buildRepository = createUserProfileBuildRepository(input.db);
+  const roleAssignmentResolver = createRoleAssignmentResolver(input.db);
+  const scopeRepository = createUserProfileScopeRepository(input.db, roleAssignmentResolver);
+  const buildRepository = createUserProfileBuildRepository(input.db, roleAssignmentResolver);
   const queue = (input.factories?.createQueue ?? createJobQueue<UserProfileJobPayload, unknown, UserProfileJobName>)({
     name: USER_PROFILE_QUEUE_NAME,
     redis: input.redis,

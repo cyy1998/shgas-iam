@@ -7,6 +7,7 @@ import type { AfterCommitLoggerPort, ClockPort } from "../runtime";
 import { createApiAuditLogWriter } from "@api/services/audit/audit.service";
 import { createUnitOfWork } from "@iam/api-core/uow";
 import db from "@iam/db";
+import { createRoleAssignmentResolver } from "@iam/role-assignment-resolution";
 import { createUserProfileDirtyMarker } from "@iam/user-profile-read-model/producer";
 import { createApiRepositories } from "../repositories";
 
@@ -27,7 +28,8 @@ export function createApiUnitOfWork(options: CreateApiUnitOfWorkOptions): UnitOf
     db,
     logger: options.logger,
     createTxPorts: (tx) => {
-      const repositories = createApiRepositories(tx);
+      const roleAssignmentResolver = createRoleAssignmentResolver(tx);
+      const repositories = createApiRepositories(tx, roleAssignmentResolver);
       return {
         repositories,
         auditLogWriter: createApiAuditLogWriter({ auditRepository: repositories.audit }),

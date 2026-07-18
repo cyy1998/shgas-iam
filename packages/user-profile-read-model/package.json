@@ -21,6 +21,7 @@
     "@iam/db": "workspace:*",
     "@iam/domain": "workspace:*",
     "@iam/jobs": "workspace:*",
+    "@iam/role-assignment-resolution": "workspace:*",
     "drizzle-orm": "1.0.0-rc.2",
     "zod": "^4.4.3"
   },
