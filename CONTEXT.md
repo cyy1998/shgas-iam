@@ -8,6 +8,10 @@
 IAM 中关于一个用户的稳定档案视图，包括用户基础身份信息、任职、角色和权限。
 _Avoid_: session payload, protocol payload
 
+**Effective Role**:
+对一条有效任职生效的启用角色；只有任职及其岗位、任职组织、角色分配目标和角色均启用且未删除时才生效。用户自身状态不属于该概念，由使用方单独判断。
+_Avoid_: parsed role, assigned role
+
 **ORCAS Session Identity**:
 Custom SSO Gateway 登录过程中由 ORCAS 返回、绑定到本次 local session 的外部身份信息；它不是 IAM 用户档案属性。
 _Avoid_: user detail field, user profile attribute

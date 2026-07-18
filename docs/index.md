@@ -24,6 +24,7 @@
 | Document | Type | Status | Last verified | Next review | Notes |
 |---|---|---|---|---|---|
 | [docs/adr/0001-replace-openspec-workflow.md](adr/0001-replace-openspec-workflow.md) | decision | Current | 2026-07-16 | 2026-10-31 | 采用 Matt skills 工作流并冻结 OpenSpec 的架构决策。 |
+| [docs/adr/0002-centralize-role-assignment-resolution.md](adr/0002-centralize-role-assignment-resolution.md) | decision | Current | 2026-07-18 | 2026-10-31 | 以独立 workspace package 统一有效角色与受影响用户解析。 |
 | [docs/agents/domain.md](agents/domain.md) | agent-config | Current | 2026-07-16 | 2026-10-31 | Engineering skills 的 single-context domain documentation 消费规则。 |
 | [docs/agents/issue-tracker.md](agents/issue-tracker.md) | agent-config | Current | 2026-07-16 | 2026-10-31 | 本地 Markdown issue tracker 的路径与操作约定。 |
 | [docs/agents/serena-mcp.md](agents/serena-mcp.md) | agent-config | Current | 2026-07-16 | 2026-10-31 | Linux/bash 与 Windows/PowerShell 下的项目级 Serena MCP 启动和故障处理约定。 |
