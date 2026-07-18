@@ -4,7 +4,7 @@
 
 **Blocked by:** 02 — 迁移 admin Effective Role 查询；03 — 迁移 OIDC client-scoped 授权解析；05 — 迁移 User Profile 反向 dirty scope
 
-**Status:** ready-for-agent
+**Status:** claimed
 
 - [ ] API 中无生产调用的旧角色 repository、旧 user-detail builder、关联 ports、composition wiring 和仅证明旧链存在的契约断言被删除。
 - [ ] 仓库中不再存在 admin、OIDC 或 User Profile 的本地 Effective Role/受影响用户解析副本，也不存在 compatibility wrapper、旧 re-export、production 双读或 shadow comparison。

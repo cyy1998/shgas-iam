@@ -9,7 +9,11 @@
 - 共享 DTO schema、DTO type、audit helper 和可复用 business error 放在 `packages/domain`。
 - 共享 BullMQ helper 放在 `packages/jobs`。
 - 角色分配的正向 Effective Role 与反向受影响用户解析放在 `packages/role-assignment-resolution`；该 package
-  接收 composition root 提供的 `DbClient`，调用方不复制 assignment 或组织闭包规则。
+  接收 composition root 提供的 `DbClient`，调用方不复制 assignment 或组织闭包匹配规则。
+- 正向解析采用严格有效性：任职、任职岗位、任职组织、assignment target 和角色都必须启用且未删除；可选 client
+  范围由 resolver 过滤。反向 dirty-scope 解析有意更保守，只过滤失效任职，不因角色、岗位或组织已失效而漏掉重建。
+- 两个操作都批量接收 ID、处理重复和空输入，并返回稳定排序结果。Admin 角色管理 CRUD 与 role-privilege 聚合仍属于
+  调用方，不进入 resolver。
 - user-profile read-model producer/query/worker 逻辑放在 `packages/user-profile-read-model`。
 - App-private enum、schema 和 error 可以留在所属 app 内。
 

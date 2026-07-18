@@ -7,7 +7,6 @@ import { createOrganizationRepository } from "@api/services/organization/organiz
 import { createPositionRepository } from "@api/services/position/position.repository";
 import { createPrivilegeRepository } from "@api/services/privilege/privilege.repository";
 import { createPrivilegeDelegationRepository } from "@api/services/privilege/privilegeDelegation.repository";
-import { createRoleRepository } from "@api/services/role/role.repository";
 import { createUserRepository } from "@api/services/user/user.repository";
 import { createUserProfileDirtyRepository, createUserProfileScopeRepository } from "@iam/user-profile-read-model/producer";
 import { createUserProfileRepository } from "@iam/user-profile-read-model/query";
@@ -24,7 +23,6 @@ export function createApiRepositories(
     position: createPositionRepository(client),
     privilege: createPrivilegeRepository(client),
     privilegeDelegation: createPrivilegeDelegationRepository(client),
-    role: createRoleRepository(client),
     user: createUserRepository(client),
     userProfile: createUserProfileRepository(client),
     userProfileDirty: createUserProfileDirtyRepository(client),

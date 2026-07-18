@@ -2,18 +2,22 @@
 
 Type: runbook
 Status: Current
-Last verified: 2026-07-16
+Last verified: 2026-07-18
 Next review: 2026-10-31
 
 ## 适用范围
 
 本手册用于发布统一 `role_assignment` 表、角色授权聚合和 admin `/roles` 角色管理页面。事实来源包括
 `packages/db/src/schema/core/role-assignments.ts`、`apps/admin-api/src/services/role/role.service.ts`、
-`apps/admin/src/pages/roles/`、`apps/oidc-provider/src/__tests__/authorization-role-assignments.test.ts`，以及
-`packages/user-profile-read-model/src/__tests__/user-profile-builder.service.test.ts`。
+`apps/admin/src/pages/roles/`、`packages/role-assignment-resolution/test-postgres/role-assignment-resolver.postgres.test.ts`、
+`apps/oidc-provider/src/__tests__/authorization.repository.test.ts`，以及 User Profile 的 build/scope repository 测试。
 
 该发布会把旧 `employment_role`、`organization_role`、`position_role` 三表分配语义迁移到统一
-`role_assignment`，并让 API、admin-api、OIDC claims 和 user-profile read model 从统一表读取角色。
+`role_assignment`。当前运行时由 `@iam/role-assignment-resolution` 统一解析严格 Effective Role 和保守 dirty scope：
+admin-api、OIDC 和 user-profile read model 消费该 seam，API 用户详情读取 user-profile 投影。API 与 Admin 的
+transaction composition 都为 scope repository 绑定 transaction resolver。当前 Admin 角色本体变更通过 `RoleId` scope
+调用反向 resolver；assignment 变更仍映射为对应的 Organization、Position 或 Employment scope，由 User Profile scope
+repository 展开。只有 Admin 角色管理 repository 直接拥有 assignment CRUD。
 
 ## 发布前置条件
 
@@ -21,7 +25,8 @@ Next review: 2026-10-31
   到 `include_descendants`，再删除旧三张分配表。
 - 已确认备份或可恢复快照覆盖旧三表、`role`、`role_privilege`、`organization_closure` 和相关用户数据。
 - 已确认 `@iam/api`、`@iam/admin-api`、`@iam/oidc-provider`、`@iam/admin`、
-  `@iam/user-profile-read-model` 和 `@iam/worker` 来自同一兼容版本。
+  `@iam/role-assignment-resolution`、`@iam/user-profile-read-model` 和 `@iam/worker` 来自同一兼容版本。
+- 已使用专用非系统测试库运行 resolver 的显式 PostgreSQL 接口测试；测试 harness 不自行启动或管理 Docker 容器。
 - 已准备 user-profile worker repair/backfill 操作窗口，用于补救角色变更后的 dirty 唤醒。
 - 管理端 smoke 账号具备访问 `/roles` 的 admin 权限。
 
@@ -43,16 +48,17 @@ pnpm --filter @iam/worker user-profile:repair
 
 ## 一致性 smoke
 
-- API/admin-api 角色聚合：选择一个包含岗位、组织和任职直接角色的测试用户，确认用户详情、用户搜索和授权解析只来自
-  `role_assignment`，且同一 role 多来源命中时只保留一个 role code。
+- API/admin-api 角色聚合：选择一个包含岗位、组织和任职直接角色的测试用户，确认 API 的 User Profile 与 admin 用户/
+  任职详情一致，且同一 role 多来源命中时只保留一个 role code。
 - OIDC claims：使用启用 OIDC 的测试 client 完成 authorize/token/UserInfo，确认角色与权限 claims 与同一用户的
-  admin/API 视角一致。
+  admin/API 视角一致，并且不包含其他 client 的角色。
 - Admin API：调用 `/admin/roles` 搜索、详情、创建、更新、状态变更、删除和分配管理路由；删除仍存在
   `role_assignment` 的角色应被拒绝。
 - Admin UI：打开 `/roles` 页面，完成角色列表、详情抽屉、创建 organization/position/employment 分配、修改组织
   `includeDescendants`、删除分配和状态展示 smoke。
 - User-profile dirty：创建、删除或修改角色分配后，确认事务内写入 `user_profile_dirty`，reason 为
-  `UserProfileDirtyReason.RoleUpdated`，并在提交后唤醒 worker。
+  `UserProfileDirtyReason.RoleUpdated`，并在提交后唤醒 worker；停用角色、岗位或组织后仍应覆盖此前可能持有旧授权的
+  活跃任职用户。
 - Worker 日志：确认受影响 scope 展开后日志包含 `userId`、`dirtyVersion`、`jobId` 和 `jobName`。
 
 ## 证据留存
@@ -62,6 +68,7 @@ pnpm --filter @iam/worker user-profile:repair
 | 证据 | 摘要 |
 |---|---|
 | migration | 新表创建、旧三表 backfill 数量、旧表删除确认。 |
+| resolver | 专用测试库标识、显式 `test:postgres` 结果及严格正向/保守反向矩阵摘要。 |
 | API/admin-api | 用户角色聚合一致性、`/admin/roles` 路由 smoke 状态。 |
 | admin UI | `/roles` 页面截图或操作结果摘要，避免包含敏感用户资料。 |
 | user-profile | dirty 行 reason、repair/backfill enqueue count、worker 完成日志。 |
