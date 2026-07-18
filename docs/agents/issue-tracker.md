@@ -24,20 +24,22 @@ Implementation tickets use one linear lifecycle:
 
 1. `ready-for-agent` — fully specified and available when every blocker is resolved.
 2. `claimed` — owned by the current implementation session; set this before editing implementation files.
-3. `resolved` — acceptance criteria, validation, two-axis review, and the delivery commit have all succeeded.
+3. `resolved` — acceptance criteria, validation, two-axis review, and the reviewed implementation commit have all succeeded; the final squash SHA is backfilled after feature merge.
 
 When resolving a ticket, check its acceptance criteria and append:
 
 ```markdown
 ## Resolution
 
-- Commit: `<delivery-commit-sha>`
+- Final squash commit: `pending`
 - Validation:
   - `<command>` — passed
 - Review: Standards and Spec review passed with no unresolved findings.
 ```
 
-Because a commit cannot contain its own final SHA, commit the resolution record immediately after the delivery commit as tracker-only metadata. This bookkeeping commit does not carry implementation changes and is not a second ticket delivery commit.
+Commit the resolution record immediately after the reviewed implementation commit as tracker-only metadata. This bookkeeping commit does not carry implementation changes and is not a second implementation commit.
+
+After the feature is squash-merged, replace `pending` in every ticket with the final squash commit SHA and commit those updates together as one tracker-only metadata commit on the target branch. The squash commit is the permanent delivery identifier; feature-branch implementation commits need not remain reachable after the metadata is backfilled.
 
 The full lifecycle, branch, validation, review, and authorization policy is defined in `workflow.md`.
 
