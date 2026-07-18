@@ -27,3 +27,19 @@
   - `pnpm install --frozen-lockfile` — passed with Node 24 and pnpm 11.5.0
   - `git diff --check` — passed
 - Review: Standards and Spec review of `04f4eb7f..eacbaffd` passed with no unresolved findings.
+
+### Docker build follow-up
+
+- Commit: `ad964b25`
+- Cause: app Dockerfiles manually enumerate workspace build inputs and did not include the new
+  `@iam/role-assignment-resolution` package; the Admin image also lacked the transitive
+  `@iam/user-profile-read-model` build input.
+- Validation:
+  - `pnpm --filter @iam/role-assignment-resolution test` — passed (7 tests, including a static Dockerfile guard)
+  - `docker compose -p shgas-iam -f docker/docker-compose-dev.yml build worker-user-profile` — passed
+  - affected `api`, `admin-api`, `oidc-provider`, `worker-user-profile`, `worker-dashboard`, and `admin` image builds — passed
+  - `pnpm lint` — passed (14 workspaces)
+  - `pnpm typecheck` — passed (14 workspaces)
+  - `pnpm test` — passed (14 workspaces)
+  - `git diff --check` — passed
+- Review: Standards and Spec review of the follow-up passed with no unresolved findings.
