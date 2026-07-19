@@ -3,7 +3,7 @@
 Workflow-Version: 2
 Feature-Slug: fix-prod-husky-prepare
 Workflow-Kind: quick
-Stage: merge-ready
+Stage: delivered
 Feature-Branch: codex/quick-fix-prod-husky-prepare
 Target-Branch: main
 Target-Base: d58ff96e0a45f91d9c5b5358e50a35453f0dc40d
@@ -19,7 +19,7 @@ Content-Head: 8e3bff9620bd9ec6582d875ccd23317ac6ad30e3
 Verified-Content-Head: 8e3bff9620bd9ec6582d875ccd23317ac6ad30e3
 Reviewed-Content-Head: 8e3bff9620bd9ec6582d875ccd23317ac6ad30e3
 Merge-Target-Tip: d58ff96e0a45f91d9c5b5358e50a35453f0dc40d
-Final-Squash-Commit: pending
+Final-Squash-Commit: f2958aea4b80422c13ad8353eebee5031230f2b3
 
 ## 范围与验收
 
@@ -43,6 +43,7 @@ Final-Squash-Commit: pending
 - `G4 Implementing` — 已根据首轮 Standards finding 校正完整 Compose 授权范围、受影响 workspace 和 frontend 验证计划；Content-Head: `8e3bff9620bd9ec6582d875ccd23317ac6ad30e3`。
 - `G5 Feature Verified` — Content-Head: `8e3bff9620bd9ec6582d875ccd23317ac6ad30e3`；完整验证矩阵通过，最终 Standards 与 Spec 双轴评审清零。
 - `G6 Merge Ready` — target tip 仍为 `d58ff96e0a45f91d9c5b5358e50a35453f0dc40d`；content、verified 与 reviewed head 一致，等待维护者授权本地 squash 事务。
+- `G7 Delivered` — 已在 `main` 创建 squash 交付提交 `f2958aea4b80422c13ad8353eebee5031230f2b3`，并回填最终交付元数据。
 
 ## 验证记录
 
@@ -67,6 +68,7 @@ Final-Squash-Commit: pending
 ## 授权记录
 
 - 2026-07-19 — 用户明确要求修复完整 `docker compose build` 的 Husky 生命周期失败，授权覆盖 Compose 中所有受该根生命周期影响的应用镜像；未授权 merge、push 或远端分支操作。
+- 2026-07-19 — 维护者确认按 Merge brief 执行本地 squash、最终 SHA 回填和本地功能分支清理；仍未授权 push 或远端分支操作。
 
 ## Waivers
 
@@ -101,4 +103,11 @@ Final-Squash-Commit: pending
 
 ## Delivery receipt
 
-- 无。
+- Target branch: `main`
+- Squash commit: `f2958aea4b80422c13ad8353eebee5031230f2b3`
+- Tracker metadata: planned
+- Final checks:
+  - `pnpm check:workflow` — passed
+  - `pnpm check:docs` — passed
+  - `git diff --check` — passed
+- Local feature branch: deleted
