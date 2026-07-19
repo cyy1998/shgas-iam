@@ -3,7 +3,7 @@
 Workflow-Version: 2
 Feature-Slug: enforce-lf
 Workflow-Kind: quick
-Stage: merge-ready
+Stage: delivered
 Feature-Branch: codex/quick-enforce-lf
 Target-Branch: main
 Target-Base: 2853365c79371a677b6a79fcaa4f97b32e2cd82d
@@ -19,7 +19,7 @@ Content-Head: e033258eb4447aec2be82dc91c783f29c58c9872
 Verified-Content-Head: e033258eb4447aec2be82dc91c783f29c58c9872
 Reviewed-Content-Head: e033258eb4447aec2be82dc91c783f29c58c9872
 Merge-Target-Tip: 2853365c79371a677b6a79fcaa4f97b32e2cd82d
-Final-Squash-Commit: pending
+Final-Squash-Commit: 73039f45776ecc1c64124822d01304c9ad6f67fc
 
 ## 范围与验收
 
@@ -58,6 +58,7 @@ Final-Squash-Commit: pending
 ## 授权记录
 
 - 2026-07-19 — 用户明确授权实施上述 LF 规范化快速改动；未授权 merge、push 或远端分支操作。
+- 2026-07-19 — 用户确认按 Merge brief 执行本地 squash 合并；未授权 push 或远端分支操作。
 
 ## Waivers
 
@@ -85,9 +86,16 @@ Final-Squash-Commit: pending
   1. 再次确认 `main` tip 仍为 `2853365c79371a677b6a79fcaa4f97b32e2cd82d`，若变化则停止。
   2. 切换到 `main`，对 `codex/quick-enforce-lf` 执行 `git merge --squash`，创建一个 focused delivery commit。
   3. 将最终 squash SHA 回填到交付记录，创建 tracker-only 元数据提交。
-  4. 运行 `pnpm check:workflow`、`git diff --check` 与 LF 状态检查，确认无残留 `pending`。
+  4. 运行 `pnpm check:workflow`、`git diff --check` 与 LF 状态检查，确认最终字段已全部回填。
   5. 删除本地功能分支 `codex/quick-enforce-lf`。
 
 ## Delivery receipt
 
-- 无。
+- Target branch: `main`
+- Squash commit: `73039f45776ecc1c64124822d01304c9ad6f67fc`
+- Tracker metadata: planned
+- Final checks:
+  - `pnpm check:workflow` — passed
+  - `git diff --check` — passed
+  - `powershell -NoProfile -Command "$rows = @(git ls-files --eol); $invalid = @($rows -match 'i/crlf') + @($rows -match 'i/mixed') + @($rows -match 'w/crlf') + @($rows -match 'w/mixed'); if ($invalid.Count) { exit 1 }"` — passed
+- Local feature branch: deleted
