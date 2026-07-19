@@ -3,7 +3,7 @@
 Workflow-Version: 2
 Feature-Slug: docker-pnpm-store-cache
 Workflow-Kind: quick
-Stage: merge-ready
+Stage: delivered
 Feature-Branch: codex/quick-docker-pnpm-store-cache
 Target-Branch: main
 Target-Base: f700cba85212523e3a60ae374e64f4d1e50e791f
@@ -19,7 +19,7 @@ Content-Head: 1cbf028516194f08dd8e43a861e96259758df98b
 Verified-Content-Head: 1cbf028516194f08dd8e43a861e96259758df98b
 Reviewed-Content-Head: 1cbf028516194f08dd8e43a861e96259758df98b
 Merge-Target-Tip: f700cba85212523e3a60ae374e64f4d1e50e791f
-Final-Squash-Commit: pending
+Final-Squash-Commit: 8d7cb10027c58d2d442f37fcf7eeb1f0d62a618a
 
 ## 范围与验收
 
@@ -116,4 +116,11 @@ Final-Squash-Commit: pending
 
 ## Delivery receipt
 
-- 无。
+- Target branch: `main`
+- Squash commit: `8d7cb10027c58d2d442f37fcf7eeb1f0d62a618a`
+- Tracker metadata: planned
+- Final checks:
+  - `pnpm check:workflow` — passed
+  - `pnpm check:docs` — passed
+  - `git diff --check` — passed
+- Local feature branch: deleted
