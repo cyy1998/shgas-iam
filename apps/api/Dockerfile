@@ -21,7 +21,9 @@ RUN corepack enable && corepack prepare pnpm@11.14.0 --activate
 # ── Stage 2: Install dependencies ────────────────────────────────────────────
 FROM base AS deps
 WORKDIR /app
+ENV HUSKY=0
 COPY .npmrc pnpm-workspace.yaml package.json pnpm-lock.yaml ./
+COPY .husky/install.mjs ./.husky/install.mjs
 COPY packages/contracts/package.json ./packages/contracts/
 COPY packages/db/package.json ./packages/db/
 COPY packages/api-core/package.json ./packages/api-core/
