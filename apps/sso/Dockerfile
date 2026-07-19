@@ -29,7 +29,8 @@ ARG NO_PROXY
 ARG http_proxy
 ARG https_proxy
 ARG no_proxy
-RUN pnpm install --frozen-lockfile --ignore-scripts
+RUN --mount=type=cache,id=iam-pnpm-v11,target=/pnpm/store \
+    pnpm install --frozen-lockfile --ignore-scripts
 
 FROM deps AS builder
 ARG UMI_APP_SSO_API_PREFIX

@@ -35,7 +35,8 @@ ARG NO_PROXY
 ARG http_proxy
 ARG https_proxy
 ARG no_proxy
-RUN pnpm install --frozen-lockfile --prod
+RUN --mount=type=cache,id=iam-pnpm-v11,target=/pnpm/store \
+    pnpm install --frozen-lockfile --prod
 
 FROM deps AS builder
 COPY packages/contracts/ ./packages/contracts/
@@ -46,7 +47,8 @@ COPY packages/jobs/ ./packages/jobs/
 COPY packages/role-assignment-resolution/ ./packages/role-assignment-resolution/
 COPY packages/user-profile-read-model/ ./packages/user-profile-read-model/
 COPY apps/worker/ ./apps/worker/
-RUN pnpm --filter @iam/worker deploy --prod --legacy /deploy/worker
+RUN --mount=type=cache,id=iam-pnpm-v11,target=/pnpm/store \
+    pnpm --config.inject-workspace-packages=true --filter @iam/worker deploy --prod /deploy/worker
 
 FROM docker.xuanyuan.run/oven/bun:1.3.14-alpine AS runner
 ENV NODE_ENV=production

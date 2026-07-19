@@ -38,7 +38,8 @@ ARG NO_PROXY
 ARG http_proxy
 ARG https_proxy
 ARG no_proxy
-RUN pnpm install --frozen-lockfile --prod
+RUN --mount=type=cache,id=iam-pnpm-v11,target=/pnpm/store \
+    pnpm install --frozen-lockfile --prod
 
 # ── Stage 3: Create deploy bundle ────────────────────────────────────────────
 FROM deps AS builder
@@ -51,8 +52,9 @@ COPY packages/role-assignment-resolution/ ./packages/role-assignment-resolution/
 COPY packages/user-profile-read-model/ ./packages/user-profile-read-model/
 COPY apps/api/        ./apps/api/
 # Flatten monorepo -> self-contained bundle (prod deps + source, no devDeps).
-# pnpm v10 requires --legacy unless inject-workspace-packages is enabled.
-RUN pnpm --filter @iam/api deploy --prod --legacy /deploy/api
+# Enable injected workspace packages for a portable deploy with a dedicated lockfile.
+RUN --mount=type=cache,id=iam-pnpm-v11,target=/pnpm/store \
+    pnpm --config.inject-workspace-packages=true --filter @iam/api deploy --prod /deploy/api
 
 # ── Stage 4: Production runtime (Bun) ────────────────────────────────────────
 FROM docker.xuanyuan.run/oven/bun:1.3.14-alpine AS runner

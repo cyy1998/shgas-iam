@@ -27,7 +27,8 @@ COPY packages/api-core/package.json ./packages/api-core/
 COPY packages/domain/package.json ./packages/domain/
 COPY packages/role-assignment-resolution/package.json ./packages/role-assignment-resolution/
 COPY apps/oidc-provider/package.json ./apps/oidc-provider/
-RUN pnpm install --frozen-lockfile --prod
+RUN --mount=type=cache,id=iam-pnpm-v11,target=/pnpm/store \
+    pnpm install --frozen-lockfile --prod
 
 FROM deps AS builder
 COPY packages/contracts/ ./packages/contracts/
@@ -36,7 +37,8 @@ COPY packages/api-core/ ./packages/api-core/
 COPY packages/domain/ ./packages/domain/
 COPY packages/role-assignment-resolution/ ./packages/role-assignment-resolution/
 COPY apps/oidc-provider/ ./apps/oidc-provider/
-RUN pnpm --filter @iam/oidc-provider deploy --prod --legacy /deploy/oidc-provider
+RUN --mount=type=cache,id=iam-pnpm-v11,target=/pnpm/store \
+    pnpm --config.inject-workspace-packages=true --filter @iam/oidc-provider deploy --prod /deploy/oidc-provider
 
 FROM docker.xuanyuan.run/node:24.18.0-alpine AS runner
 ENV NODE_ENV=production
