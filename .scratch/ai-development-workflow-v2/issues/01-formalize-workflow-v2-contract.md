@@ -22,7 +22,7 @@
 - Ticket base: `dd3f9add69936de23f759fe326d97172232b364c`
 - Reviewed content head: `938f0550ae7d6804b375c22ef759c44d62ea802e`
 - Candidate commits: `50a35b36c0a46e2b82c7242be7243deff4ca4d96`, `938f0550ae7d6804b375c22ef759c44d62ea802e`
-- Final squash commit: `pending`
+- Final squash commit: `9b2b2656d25969a197de90a596991b7da822e9cc`
 - Validation:
   - `pnpm check:docs` — passed，索引覆盖 28 篇文档
   - `git diff --check` — passed
@@ -40,7 +40,7 @@
 - Ticket base: `1c985a3f417dd1a30f45ce63f33587d25b5d2858`
 - Reviewed content head: `008ea5e582919fceba5a31051c97cf87c1374263`
 - Candidate commits: `e9f551f995a02e8a89659a3ac63b492193325550`, `008ea5e582919fceba5a31051c97cf87c1374263`
-- Final squash commit: `pending`
+- Final squash commit: `9b2b2656d25969a197de90a596991b7da822e9cc`
 - Validation:
   - `pnpm check:docs` — passed，共检查 28 篇索引文档
   - `pnpm check:workflow` — passed，1 个 v2 feature 与 4 个 legacy feature

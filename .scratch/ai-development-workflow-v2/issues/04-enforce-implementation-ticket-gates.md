@@ -22,7 +22,7 @@
 - Ticket base: `fd89282109020884ef16ac436f336abe584e6026`
 - Reviewed content head: `0838c37190450a17467048f1483e14a1bf1a6b88`
 - Candidate commits: `fc50e8f52af11a44e0c2c1ca5408b11fc7a2e264`, `0838c37190450a17467048f1483e14a1bf1a6b88`
-- Final squash commit: `pending`
+- Final squash commit: `9b2b2656d25969a197de90a596991b7da822e9cc`
 - Validation:
   - `pnpm test:workflow` — passed，81 个 CLI tests、356 个 expectations
   - `pnpm lint` — passed，仅有仓库既有 warning

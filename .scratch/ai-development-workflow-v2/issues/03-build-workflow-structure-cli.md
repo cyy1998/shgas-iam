@@ -22,7 +22,7 @@
 - Ticket base: `35463537dca61592d10536e0a79e46a997fb695b`
 - Reviewed content head: `36cd9ad6e07b9922510dd761198c17562204ac49`
 - Candidate commits: `006a2de547f126a3499e97a9ad32f31d91ace51b`, `cabfd9c1340ad0f6e1ddce10b3b5a793020d2af8`, `cbeffe15812bacf4f1a28990ba040108a1c30f53`, `0e80f1bb0b1dc46360d8655481b528543079e6fd`, `36cd9ad6e07b9922510dd761198c17562204ac49`
-- Final squash commit: `pending`
+- Final squash commit: `9b2b2656d25969a197de90a596991b7da822e9cc`
 - Validation:
   - `pnpm install --frozen-lockfile` — passed
   - `pnpm test:workflow` — passed，39 个 CLI tests、193 个 expectations
@@ -43,7 +43,7 @@
 - Ticket base: `6e5005545c7036a4c30bb937fb204d8f84f6ba4f`
 - Reviewed content head: `2ef812d780a2580571c6ead50222efba1ea47570`
 - Candidate commits: `2ef812d780a2580571c6ead50222efba1ea47570`
-- Final squash commit: `pending`
+- Final squash commit: `9b2b2656d25969a197de90a596991b7da822e9cc`
 - Validation:
   - `pnpm install --frozen-lockfile` — passed
   - `pnpm test:workflow` — passed，99 个 CLI tests、510 个 expectations，包含 delivery、spec 与 ticket 的 CRLF 回归覆盖

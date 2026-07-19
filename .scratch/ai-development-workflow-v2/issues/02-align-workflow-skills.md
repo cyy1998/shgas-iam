@@ -22,7 +22,7 @@
 - Ticket base: `677f03125a55e9986277b65411478885a2afc870`
 - Reviewed content head: `bb3093e601daaa32bc4f8b3405b4841fb4f777a5`
 - Candidate commits: `b31464c67dd745cfa729039a17ab5712734d5812`, `bb3093e601daaa32bc4f8b3405b4841fb4f777a5`
-- Final squash commit: `pending`
+- Final squash commit: `9b2b2656d25969a197de90a596991b7da822e9cc`
 - Validation:
   - `python -X utf8 .../quick_validate.py <skill-dir>` — passed for all four skills
   - `pnpm check:docs` — passed，索引覆盖 28 篇文档
@@ -41,7 +41,7 @@
 - Ticket base: `350ebf85971386d94f449d33b2c88bb4ec2d384e`
 - Reviewed content head: `f902a527d82d40508df6e430abed59198abc4576`
 - Candidate commits: `f902a527d82d40508df6e430abed59198abc4576`
-- Final squash commit: `pending`
+- Final squash commit: `9b2b2656d25969a197de90a596991b7da822e9cc`
 - Validation:
   - `python -X utf8 .../quick_validate.py <skill-dir>` — passed，四个 workflow skills
   - `pnpm check:workflow` — passed，1 个 v2 feature 与 4 个 legacy feature

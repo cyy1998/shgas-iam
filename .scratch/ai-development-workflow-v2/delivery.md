@@ -3,7 +3,7 @@
 Workflow-Version: 2
 Feature-Slug: ai-development-workflow-v2
 Workflow-Kind: standard
-Stage: merge-ready
+Stage: delivered
 Feature-Branch: codex/ai-development-workflow-v2
 Target-Branch: main
 Target-Base: c5a9dd2db2586392c5662387556bb208411c6653
@@ -19,7 +19,7 @@ Content-Head: 85ad60e169bb924ccec9fb4322436ac921073249
 Verified-Content-Head: 85ad60e169bb924ccec9fb4322436ac921073249
 Reviewed-Content-Head: 85ad60e169bb924ccec9fb4322436ac921073249
 Merge-Target-Tip: c5a9dd2db2586392c5662387556bb208411c6653
-Final-Squash-Commit: pending
+Final-Squash-Commit: 9b2b2656d25969a197de90a596991b7da822e9cc
 
 ## 范围与验收
 
@@ -95,6 +95,7 @@ Final-Squash-Commit: pending
 - `T4 Ticket Resolved` — ticket 06 final-review remediation 的验收、验证和评审证据已完成，本 tracker-only checkpoint 固化 dated resolution。
 - `G5 Feature Verified` — content、verified 与 reviewed head 均固定为 `85ad60e169bb924ccec9fb4322436ac921073249`；最新 feature 验证矩阵和最终 Standards/Spec 双轴评审均通过。
 - `G6 Merge Ready` — target tip 仍为 `c5a9dd2db2586392c5662387556bb208411c6653`；Merge brief 已绑定相同的 content、verified 与 reviewed head，等待维护者重新授权本地 squash 事务。
+- `G7 Delivered` — 本地 squash delivery commit 为 `9b2b2656d25969a197de90a596991b7da822e9cc`；最终 SHA 回填、tracker-only 元数据提交、最终检查和本地功能分支清理在同一本地事务内完成。
 
 ## 验证记录
 
@@ -225,6 +226,7 @@ Final-Squash-Commit: pending
 - 2026-07-19 — 维护者批准 spec amendment `A-01`，把 Ticket 03–06 的 checker 范围收窄为记录文档格式校验；该修订 checkpoint 仅执行回退与意图更新，Ticket 03 当时保持未认领。
 - 2026-07-19 — 维护者在当前 Codex 任务中明确授权继续实施 tickets 03–06；不授权 merge、push 或远端分支删除。
 - 2026-07-19 — 本记录不授权 merge、push 或删除远端分支。
+- 2026-07-19 — 维护者在新 G6 后明确确认执行本地 squash、最终 SHA 回填和本地功能分支清理；仍不授权 push 或远端分支删除。
 
 ## Waivers
 
@@ -264,4 +266,11 @@ Final-Squash-Commit: pending
 
 ## Delivery receipt
 
-- 无。
+- Target branch: `main`
+- Squash commit: `9b2b2656d25969a197de90a596991b7da822e9cc`
+- Tracker metadata: planned
+- Final checks:
+  - `pnpm check:workflow` — passed
+  - `pnpm check:docs` — passed
+  - `git diff --check` — passed
+- Local feature branch: deleted

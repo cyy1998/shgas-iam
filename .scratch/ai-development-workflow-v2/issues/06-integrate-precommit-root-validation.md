@@ -22,7 +22,7 @@
 - Ticket base: `b10d9cb8f66b036525955284575710adb36ac032`
 - Reviewed content head: `a8f2a629b48da1cd17f5ad5925b69d2375a19e82`
 - Candidate commits: `a8f2a629b48da1cd17f5ad5925b69d2375a19e82`
-- Final squash commit: `pending`
+- Final squash commit: `9b2b2656d25969a197de90a596991b7da822e9cc`
 - Validation:
   - `pnpm install --frozen-lockfile` — passed，15 个 workspace projects，Husky prepare 完成
   - `pnpm test:workflow` — passed，98 个 CLI tests、507 个 expectations
@@ -47,7 +47,7 @@
 - Ticket base: `a67c389279ebc9b6c06fc38820a1781279f11d8f`
 - Reviewed content head: `85ad60e169bb924ccec9fb4322436ac921073249`
 - Candidate commits: `f2f29602271e41d0665056196cdba6a9c51c0392`, `85ad60e169bb924ccec9fb4322436ac921073249`
-- Final squash commit: `pending`
+- Final squash commit: `9b2b2656d25969a197de90a596991b7da822e9cc`
 - Validation:
   - `pnpm install --frozen-lockfile` — passed，15 个 workspace projects
   - `pnpm test:workflow` — passed，101 个 CLI/hook tests、514 个 expectations
