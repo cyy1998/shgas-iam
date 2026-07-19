@@ -1,89 +1,74 @@
 ---
 name: code-review
-description: Review the changes since a fixed point (commit, branch, tag, or merge-base) along two axes — Standards (does the code follow this repo's documented coding standards?) and Spec (does the code match what the originating issue/PRD asked for?). Runs both reviews in parallel sub-agents and reports them side by side. Use when the user wants to review a branch, a PR, work-in-progress changes, or asks to "review since X".
+description: 从固定比较点沿 Standards 与 Spec 两轴评审已提交变更，并由两个并行子代理分别报告结果。用户要求评审分支、PR、WIP 或从某个 SHA 开始 review 时使用。
 ---
 
-Two-axis review of the diff between `HEAD` and a fixed point the user supplies:
+# 双轴代码评审
 
-- **Standards** — does the code conform to this repo's documented coding standards?
-- **Spec** — does the code faithfully implement the originating issue / PRD / spec?
+评审固定比较点与 `HEAD` 之间的 committed diff：
 
-Both axes run as **parallel sub-agents** so they don't pollute each other's context, then this skill aggregates their findings.
+- **Standards**：变更是否遵守仓库已记录的工程规范？
+- **Spec**：变更是否忠实实现来源 issue、PRD 或 spec？
 
-The issue tracker should have been provided to you — run `/setup-matt-pocock-skills` if `docs/agents/issue-tracker.md` is missing.
+两个轴必须由并行子代理独立完成，避免互相污染判断，再由主代理并列汇总。分支、ticket/feature gate、评审新鲜度和文档语言遵守仓库 Engineering workflow。
 
-## Process
+## 1. 固定比较点
 
-### 1. Pin the fixed point
+Fixed point 可以来自用户，也可以来自调用本 skill 的仓库 workflow。Ticket review 通常使用 claim checkpoint，feature review 通常使用已固定 target tip。只有两者都没有提供时才询问用户，不要覆盖调用 workflow 已固定的 SHA。
 
-Whatever the user said is the fixed point — a commit SHA, branch name, tag, `main`, `HEAD~5`, etc. If they didn't specify one, ask for it.
+一次性记录：
 
-Capture the diff command once: `git diff <fixed-point>...HEAD` (three-dot, so the comparison is against the merge-base). Also note the list of commits via `git log <fixed-point>..HEAD --oneline`.
+```bash
+git diff <fixed-point>...HEAD
+git log <fixed-point>..HEAD --oneline
+```
 
-Before going further, confirm the fixed point resolves (`git rev-parse <fixed-point>`) and the diff is non-empty. A bad ref or empty diff should fail here — not inside two parallel sub-agents.
+继续前必须确认：
 
-### 2. Identify the spec source
+- `git rev-parse <fixed-point>` 成功；
+- committed diff 非空；
+- 工作区满足调用 gate 的要求，至少不能存在未提交 content change；仓库 workflow 要求干净时必须完全干净。
 
-Look for the originating spec, in this order:
+引用无效、diff 为空或工作区不满足 gate 时立即失败，不把错误留给子代理。
 
-1. Issue references in the commit messages (`#123`, `Closes #45`, GitLab `!67`, etc.) — fetch via the workflow in `docs/agents/issue-tracker.md`.
-2. A path the user passed as an argument.
-3. A PRD/spec file under `docs/`, `specs/`, or `.scratch/` matching the branch name or feature.
-4. If nothing is found, ask the user where the spec is. If they say there isn't one, the **Spec** sub-agent will skip and report "no spec available".
+## 2. 确定 Spec 来源
 
-### 3. Identify the standards sources
+按以下顺序查找：
 
-Anything in the repo that documents how code should be written, such as `CODING_STANDARDS.md` or `CONTRIBUTING.md`.
+1. Commit message 引用的 issue；按 `docs/agents/issue-tracker.md` 获取。
+2. 用户或调用 workflow 传入的 ticket/spec 路径。
+3. 与分支或 feature 匹配的 `docs/`、`specs/` 或 `.scratch/` 规格。
+4. 标准 ticket review 同时使用当前 ticket 与 approved spec；快速路径使用 delivery ledger 的范围和验收项。
 
-On top of whatever the repo documents, the Standards axis always carries the **smell baseline** below — a fixed set of Fowler code smells (_Refactoring_, ch.3) that applies even when a repo documents nothing. Two rules bind it:
+没有独立 spec 文件时，把用户请求、对话中确认的验收行为或快速路径 delivery scope 固定为 Spec 来源。仍无法确定预期行为时停止并询问用户；不得跳过 Spec 子代理或把单轴评审报告成双轴通过。
 
-- **The repo overrides.** A documented repo standard always wins; where it endorses something the baseline would flag, suppress the smell.
-- **Always a judgement call.** Each smell is a labelled heuristic ("possible Feature Envy"), never a hard violation — and, like any standard here, skip anything tooling already enforces.
+## 3. 确定 Standards 来源
 
-Each smell reads *what it is* → *how to fix*; match it against the diff:
+读取仓库中约束当前变更的 `AGENTS.md`、Current 架构/开发文档和相关 skill。仓库明文规范优先于以下 smell baseline；tooling 已确定性强制的事项不重复报告。Smell 始终是 judgement call，不是 hard violation：
 
-- **Mysterious Name** — a function, variable, or type whose name doesn't reveal what it does or holds. → rename it; if no honest name comes, the design's murky.
-- **Duplicated Code** — the same logic shape appears in more than one hunk or file in the change. → extract the shared shape, call it from both.
-- **Feature Envy** — a method that reaches into another object's data more than its own. → move the method onto the data it envies.
-- **Data Clumps** — the same few fields or params keep travelling together (a type wanting to be born). → bundle them into one type, pass that.
-- **Primitive Obsession** — a primitive or string standing in for a domain concept that deserves its own type. → give the concept its own small type.
-- **Repeated Switches** — the same `switch`/`if`-cascade on the same type recurs across the change. → replace with polymorphism, or one map both sites share.
-- **Shotgun Surgery** — one logical change forces scattered edits across many files in the diff. → gather what changes together into one module.
-- **Divergent Change** — one file or module is edited for several unrelated reasons. → split so each module changes for one reason.
-- **Speculative Generality** — abstraction, parameters, or hooks added for needs the spec doesn't have. → delete it; inline back until a real need shows.
-- **Message Chains** — long `a.b().c().d()` navigation the caller shouldn't depend on. → hide the walk behind one method on the first object.
-- **Middle Man** — a class or function that mostly just delegates onward. → cut it, call the real target direct.
-- **Refused Bequest** — a subclass or implementer that ignores or overrides most of what it inherits. → drop the inheritance, use composition.
+- **Mysterious Name**：名称不能揭示用途；重命名，无法诚实命名时重新澄清设计。
+- **Duplicated Code**：相同逻辑形状重复；提取共享形状。
+- **Feature Envy**：方法更多依赖其他对象数据；把行为移动到拥有数据的对象。
+- **Data Clumps**：相同字段或参数总是成组出现；形成一个类型。
+- **Primitive Obsession**：primitive/string 替代了明确领域概念；引入小型领域类型。
+- **Repeated Switches**：对同一类型重复 switch/if cascade；使用多态或共享映射。
+- **Shotgun Surgery**：一个逻辑变化迫使多处散改；把共同变化收拢到一个模块。
+- **Divergent Change**：同一模块因互不相关的原因变化；按职责拆分。
+- **Speculative Generality**：增加 spec 未需要的抽象、参数或 hook；删除或内联。
+- **Message Chains**：调用者依赖长导航链；由首个对象隐藏导航。
+- **Middle Man**：类或函数主要只做委托；直接调用真实目标。
+- **Refused Bequest**：子类或实现忽略大部分继承契约；改用组合。
 
-### 4. Spawn both sub-agents in parallel
+## 4. 并行启动两个子代理
 
-Send a single message with two `Agent` tool calls. Use the `general-purpose` subagent for both.
+一次并行启动 Standards 与 Spec 子代理，二者都只读，不修改文件。
 
-**Standards sub-agent prompt** — include:
+Standards prompt 必须包含 diff 命令、commit 列表、标准来源文件，以及上面的完整 smell baseline。要求按文件/hunk 报告明文规范违反与 smell，引用规则，区分 hard violation 和 judgement call，跳过 tooling 已覆盖事项，中文不超过 400 字。
 
-- The full diff command and commit list.
-- The list of standards-source files you found in step 3, **plus the smell baseline from step 3** pasted in full — the sub-agent has no other access to it.
-- The brief: "Report — per file/hunk where relevant — (a) every place the diff violates a documented standard: cite the standard (file + the rule); and (b) any baseline smell you spot: name it and quote the hunk. Distinguish hard violations from judgement calls — documented-standard breaches can be hard, but baseline smells are always judgement calls, and a documented repo standard overrides the baseline. Skip anything tooling enforces. Under 400 words."
+Spec prompt 必须包含 diff 命令、commit 列表和完整需求来源。要求报告：缺失或部分实现的要求、未被要求的 scope creep、看似实现但语义错误的要求；每项引用具体需求，中文不超过 400 字。
 
-**Spec sub-agent prompt** — include:
+## 5. 并列汇总
 
-- The diff command and commit list.
-- The path or fetched contents of the spec.
-- The brief: "Report: (a) requirements the spec asked for that are missing or partial; (b) behaviour in the diff that wasn't asked for (scope creep); (c) requirements that look implemented but where the implementation looks wrong. Quote the spec line for each finding. Under 400 words."
+分别在 `## Standards` 与 `## Spec` 下原样或轻量整理两个报告，不合并、不跨轴重排 findings。最后用一行分别统计两轴 finding 数量和各轴最严重问题，不选跨轴“总冠军”。
 
-If the spec is missing, skip the Spec sub-agent and note this in the final report.
-
-### 5. Aggregate
-
-Present the two reports under `## Standards` and `## Spec` headings, verbatim or lightly cleaned. Do **not** merge or rerank findings — the two axes are deliberately separate (see _Why two axes_).
-
-End with a one-line summary: total findings per axis, and the worst issue _within each axis_ (if any). Don't pick a single winner across axes — that's the reranking the separation exists to prevent.
-
-## Why two axes
-
-A change can pass one axis and fail the other:
-
-- Code that follows every standard but implements the wrong thing → **Standards pass, Spec fail.**
-- Code that does exactly what the issue asked but breaks the project's conventions → **Spec pass, Standards fail.**
-
-Reporting them separately stops one axis from masking the other.
+存在 finding 时，调用 workflow 负责验证、创建额外 focused commit、同步 content HEAD，并对原 fixed point 到新 HEAD 的完整范围重新运行本 skill。两轴清零才可记录 review gate 通过。

@@ -1,5 +1,6 @@
 interface:
-  display_name: "To Spec"
-  short_description: "Turn a conversation into a spec"
+  display_name: "整理规格"
+  short_description: "把已澄清的对话共识整理成可确认、可拆票的 draft spec"
+  default_prompt: "使用 $to-spec 把当前对话共识整理成 draft spec，并在发布后停止。"
 policy:
   allow_implicit_invocation: false

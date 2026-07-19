@@ -1,5 +1,6 @@
 interface:
-  display_name: "To Tickets"
-  short_description: "Split a plan into tracer-bullet tickets"
+  display_name: "拆分 Tickets"
+  short_description: "把获批规格拆成粒度合适、带真实阻塞边的纵向 tickets"
+  default_prompt: "使用 $to-tickets 把获批规格拆成 tracer-bullet tickets，并在发布后给出 implementation brief。"
 policy:
   allow_implicit_invocation: false

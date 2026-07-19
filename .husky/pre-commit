@@ -1,0 +1,14 @@
+set -e
+
+git diff --cached --check
+
+workflow_snapshot="$(mktemp -d)"
+trap 'rm -rf -- "$workflow_snapshot"' EXIT
+git ls-files -z -- .scratch scripts/check-workflow.ts > "$workflow_snapshot/index-files"
+git checkout-index --stdin -z --prefix="$workflow_snapshot/" < "$workflow_snapshot/index-files"
+rm "$workflow_snapshot/index-files"
+
+(
+  cd "$workflow_snapshot"
+  bun scripts/check-workflow.ts
+)
