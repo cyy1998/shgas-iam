@@ -28,8 +28,19 @@ function preserveQuery(): string {
   return s ? `?${s}` : '';
 }
 
+function loginQuery(): string {
+  const usp = currentSearchParams();
+  if (!usp.get('oidcReturn')) {
+    if (!usp.get('client')) usp.set('client', SSO_CLIENT_CODE);
+    if (!usp.get('redirectUrl')) {
+      usp.set('redirectUrl', window.location.href);
+    }
+  }
+  return `?${usp.toString()}`;
+}
+
 function gotoLogin() {
-  history.replace(`/login${preserveQuery()}`);
+  history.replace(`/login${loginQuery()}`);
 }
 
 function gotoMaintenance() {
