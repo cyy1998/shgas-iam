@@ -3,7 +3,7 @@
 Workflow-Version: 2
 Feature-Slug: fix-sso-user-info-login-redirect
 Workflow-Kind: quick
-Stage: merge-ready
+Stage: delivered
 Feature-Branch: codex/quick-fix-sso-user-info-login-redirect
 Target-Branch: main
 Target-Base: cef6b2024d527c138da30d39730f21c18b1bf850
@@ -19,7 +19,7 @@ Content-Head: de36d36118edb654005b19152bb90a8613950fdf
 Verified-Content-Head: de36d36118edb654005b19152bb90a8613950fdf
 Reviewed-Content-Head: de36d36118edb654005b19152bb90a8613950fdf
 Merge-Target-Tip: cef6b2024d527c138da30d39730f21c18b1bf850
-Final-Squash-Commit: pending
+Final-Squash-Commit: 4fcb2214e84440dd9bc42b01ec3b1e2aaaa23a9b
 
 ## 范围与验收
 
@@ -43,6 +43,7 @@ Final-Squash-Commit: pending
 - `G4 Implementing` — Content-Head: `de36d36118edb654005b19152bb90a8613950fdf`；验收行为、除既有 Gateway 基线失败外的验证矩阵及最终双轴评审均已完成，等待维护者决定 `pnpm test` waiver。
 - `G5 Feature Verified` — Content-Head: `de36d36118edb654005b19152bb90a8613950fdf`；功能级验证在维护者批准既有 Gateway 基线失败 waiver 后通过，最终 Standards 与 Spec 双轴评审清零。
 - `G6 Merge Ready` — target tip 仍为 `cef6b2024d527c138da30d39730f21c18b1bf850`；content、verified 与 reviewed head 一致，等待维护者授权本地 squash 事务。
+- `G7 Delivered` — 本地 squash delivery commit 为 `4fcb2214e84440dd9bc42b01ec3b1e2aaaa23a9b`；最终 SHA 回填、tracker-only 元数据提交、最终检查和本地功能分支清理在同一本地事务内完成。
 
 ## 验证记录
 
@@ -69,6 +70,7 @@ Final-Squash-Commit: pending
 
 - 2026-07-20 — 用户明确要求修复 SSO 前端个人信息页未登录跳转缺少参数的问题；授权实现与验证，未授权 merge、push 或远端操作。
 - 2026-07-20 — 维护者确认豁免 `pnpm test` 中两条既有 Gateway Tender forward-auth 失败；未授权 merge、push 或远端操作。
+- 2026-07-20 — 维护者批准按 Merge brief 执行本地 squash 合并、最终 SHA 回填和本地功能分支清理；未授权 push 或其他远端操作。
 
 ## Waivers
 
@@ -101,4 +103,11 @@ Final-Squash-Commit: pending
 
 ## Delivery receipt
 
-- 无。
+- Target branch: `main`
+- Squash commit: `4fcb2214e84440dd9bc42b01ec3b1e2aaaa23a9b`
+- Tracker metadata: planned
+- Final checks:
+  - `pnpm check:workflow` — passed
+  - `pnpm check:docs` — passed
+  - `git diff --check` — passed
+- Local feature branch: deleted
