@@ -37,6 +37,7 @@ plugins:
   - forward-auth
   - key-auth
   - opentelemetry
+  - client-control
 
 nginx_config:
   http:
