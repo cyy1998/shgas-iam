@@ -1,8 +1,4 @@
-import {
-  ReloadOutlined,
-  SafetyCertificateOutlined,
-  ToolOutlined,
-} from '@ant-design/icons';
+import { ReloadOutlined, ToolOutlined } from '@ant-design/icons';
 import { ClientStatus } from '@iam/contracts';
 import logoColorfulTextWhite from '@sso/assets/logo-colorful-text-white.png';
 import { clientStatus } from '@sso/services/open';
@@ -38,21 +34,14 @@ export default function SystemMaintenancePage() {
   return (
     <div className="maintenance-page">
       <div className="maintenance-shell">
-        <section className="maintenance-hero" aria-label="系统维护">
+        <section className="maintenance-hero" aria-label="业务系统维护中">
           <div className="brand-top">
             <img src={logoColorfulTextWhite} alt="上海燃气" />
             <span>SHANGHAI GAS IAM</span>
           </div>
 
           <div className="hero-copy">
-            <div className="hero-kicker">Service Notice</div>
-            <h1>系统维护中</h1>
-            <p>统一身份认证服务正在进行维护，完成后将恢复业务系统访问。</p>
-          </div>
-
-          <div className="security-note">
-            <SafetyCertificateOutlined />
-            <span>维护期间请勿重复提交登录请求，稍后可刷新重试。</span>
+            <h1>业务系统维护中</h1>
           </div>
         </section>
 
@@ -61,10 +50,7 @@ export default function SystemMaintenancePage() {
             <div className="status-icon">
               <ToolOutlined />
             </div>
-            <div className="maintenance-title">系统维护中</div>
-            <div className="maintenance-desc">
-              当前服务暂不可用，请稍后刷新重试。
-            </div>
+            <div className="maintenance-title">业务系统维护中</div>
             <Button
               className="maintenance-submit"
               icon={<ReloadOutlined />}
