@@ -3,7 +3,7 @@
 Workflow-Version: 2
 Feature-Slug: authz-forward-name
 Workflow-Kind: quick
-Stage: merge-ready
+Stage: delivered
 Feature-Branch: codex/quick-authz-forward-name
 Target-Branch: main
 Target-Base: 87d3f288ef36336c0f42b391bb33febca02496d8
@@ -19,7 +19,7 @@ Content-Head: f0db0a484d1461af9aaea46ecec51c5de90bb3e8
 Verified-Content-Head: f0db0a484d1461af9aaea46ecec51c5de90bb3e8
 Reviewed-Content-Head: f0db0a484d1461af9aaea46ecec51c5de90bb3e8
 Merge-Target-Tip: 87d3f288ef36336c0f42b391bb33febca02496d8
-Final-Squash-Commit: pending
+Final-Squash-Commit: 72a4103f4934042eafe3f1e20b5fa078be0a5f18
 
 ## 范围与验收
 
@@ -47,6 +47,7 @@ Final-Squash-Commit: pending
 - `G4 Implementing` — Content-Head: `f0db0a484d1461af9aaea46ecec51c5de90bb3e8`；Validation Plan 全部通过，进入最终双轴评审。
 - `G5 Feature Verified` — Content-Head: `f0db0a484d1461af9aaea46ecec51c5de90bb3e8`；功能级验证全部通过，最终 Standards 与 Spec 双轴评审清零。
 - `G6 Merge Ready` — target tip 仍为 `87d3f288ef36336c0f42b391bb33febca02496d8`；content、verified 与 reviewed head 一致，等待维护者授权本地 squash 事务。
+- `G7 Delivered` — 本地 squash delivery commit 为 `72a4103f4934042eafe3f1e20b5fa078be0a5f18`；最终 SHA 回填、tracker-only 元数据提交、最终检查和本地功能分支清理在同一本地事务内完成。
 
 ## 验证记录
 
@@ -76,6 +77,7 @@ Final-Squash-Commit: pending
 
 - 2026-07-22 — 用户明确要求在 authz 下游用户信息中新增 `name`；授权实现与验证，未授权 merge、push 或远端操作。
 - 2026-07-22 — 用户明确要求普通功能开发测试不要运行 `pnpm test:workflow`，并进一步授权修改根 `pnpm test`；未授权 merge、push 或远端操作。
+- 2026-07-22 — 维护者批准按 Merge brief 执行本地 squash 合并、最终 SHA 回填和本地功能分支清理；未授权 push 或其他远端操作。
 
 ## Waivers
 
@@ -108,4 +110,11 @@ Final-Squash-Commit: pending
 
 ## Delivery receipt
 
-- 无。
+- Target branch: `main`
+- Squash commit: `72a4103f4934042eafe3f1e20b5fa078be0a5f18`
+- Tracker metadata: planned
+- Final checks:
+  - `pnpm check:workflow` — passed
+  - `pnpm check:docs` — passed
+  - `git diff --check` — passed
+- Local feature branch: deleted
