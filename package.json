@@ -11,7 +11,7 @@
     "prepare": "node .husky/install.mjs",
     "lint": "turbo lint && eslint --config eslint.root.config.mjs scripts eslint.root.config.mjs eslint.frontend.config.mjs stylelint.frontend.config.mjs && pnpm check:workflow",
     "lint:fix": "turbo lint:fix && eslint --config eslint.root.config.mjs --fix scripts eslint.root.config.mjs eslint.frontend.config.mjs stylelint.frontend.config.mjs",
-    "test": "turbo test && pnpm test:workflow",
+    "test": "turbo test",
     "test:workflow": "bun test scripts/__tests__/check-workflow.test.ts",
     "e2e": "turbo e2e",
     "e2e:install": "pnpm --filter @iam/admin exec playwright install --with-deps chromium",

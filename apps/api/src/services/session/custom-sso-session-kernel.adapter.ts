@@ -350,6 +350,7 @@ export function createCustomSsoSessionKernelAdapter(deps: CustomSsoSessionKernel
     const userAbstract = {
       username: userDetail.username,
       id: userDetail.id,
+      name: userDetail.name,
     };
     return Buffer.from(JSON.stringify(userAbstract), "utf8").toString("base64");
   }

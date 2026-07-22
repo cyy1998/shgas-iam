@@ -233,7 +233,7 @@ X-Forwarded-Uri: /业务系统原始路径
 鉴权成功时 IAM 返回 200，并在响应头写入：
 
 ```http
-X-User-Info: eyJ1c2VybmFtZSI6IjEzODU1MCIsImlkIjoxfQ==
+X-User-Info: eyJ1c2VybmFtZSI6IjEzODU1MCIsImlkIjoxLCJuYW1lIjoi5byg5LiJIn0=
 ```
 
 `X-User-Info` 是 Base64 编码后的 JSON，解码后形如：
@@ -241,7 +241,8 @@ X-User-Info: eyJ1c2VybmFtZSI6IjEzODU1MCIsImlkIjoxfQ==
 ```json
 {
   "username": "138550",
-  "id": 1
+  "id": 1,
+  "name": "张三"
 }
 ```
 

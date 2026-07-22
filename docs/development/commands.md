@@ -7,13 +7,13 @@
 - `pnpm dev`
 - `pnpm build`
 - `pnpm lint`（包含无参数的全局 workflow 记录格式检查）
-- `pnpm test`（包含 workflow CLI tests）
+- `pnpm test`（运行各 workspace 的普通测试，不包含 workflow CLI 专项测试）
 - `pnpm e2e`
 - `pnpm typecheck`
 - 文档索引与 freshness guard：`pnpm check:docs`
 - Env naming guard：`pnpm check:env-names`
 - Workflow 记录格式 guard：`pnpm check:workflow`
-- Workflow CLI 聚焦测试：`pnpm test:workflow`
+- Workflow CLI 聚焦测试：`pnpm test:workflow`（仅在修改 workflow checker 或 CLI 测试时显式运行）
 
 根开发工具链要求 Node 24。具体功能在提交前运行受影响 package 的测试、lint 和 typecheck；功能结束时执行全仓检查。
 ticket 生命周期、验证层级和提交授权见 [Engineering workflow](../agents/workflow.md)。
