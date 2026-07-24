@@ -39,7 +39,7 @@ flowchart LR
 ```
 
 `static` 聚合 lint 与仓库级静态 guards，并保证每项只执行一次。一个阶段失败后不再启动后续阶段；同一阶段内部由 Turbo 按预算并行
-package。PostgreSQL、E2E、Gateway 等检查不是 `verify` 的隐式依赖，而是由 Validation Plan 按改动类型追加。
+package。PostgreSQL、E2E、Gateway 等检查不是 `verify` 的隐式依赖，而是由 agent 根据当前改动与风险显式追加。
 
 ## 分类规则与文件命名
 
@@ -162,8 +162,8 @@ owner、原因、跟踪 ticket、到期日和风险，并继续在非阻塞通�
 | 阶段 | 最小测试范围 |
 |---|---|
 | 开发内循环 | 当前 package、单文件或测试名 |
-| Ticket candidate | 受影响 package、依赖影响面和相关 package smoke，再加 ticket Validation Plan |
-| Feature / merge candidate | 完整 `pnpm verify`，再按改动类型执行外部通道 |
+| Ticket 实现 | 最高层相关测试、受影响 package、依赖影响面和相关 package smoke |
+| 准备 merge/release | 在最终实现内容上运行一次完整 `pnpm verify`，再按改动类型执行外部通道 |
 | Future main/nightly | 在 CI 平台建立后增加 uncached、随机顺序或重复压力运行 |
 
 改动类型附加项至少包括：
@@ -197,8 +197,8 @@ owner、原因、跟踪 ticket、到期日和风险，并继续在非阻塞通�
 ## 已实施基线与演进边界
 
 Current 基线已经包含根与 package scripts、Turbo task graph、runner 配置、OIDC smoke harness、结构测试和 Windows
-连续验收。当前命令见 [构建、测试与开发命令](../development/commands.md)，feature/merge gate 见
-[AI 开发工作流 v2](../agents/workflow.md)。
+连续验收。当前命令见 [构建、测试与开发命令](../development/commands.md)，实现与本地交付规则见
+[AI 开发工作流](../agents/workflow.md)。
 
 后续提高并发、改变 cache/input、接入新的 process smoke 或建立 Linux/CI runner 时，必须在目标平台重新验证相同资源契约，
 并同步本文的预算、adoption 与平台状态；不得用未经运行的脚本兼容性推断平台已经验收。

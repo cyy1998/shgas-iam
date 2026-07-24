@@ -21,9 +21,6 @@
         "$TURBO_ROOT$/stylelint.frontend.config.mjs",
         "$TURBO_ROOT$/package.json",
         "$TURBO_ROOT$/pnpm-lock.yaml",
-        "$TURBO_ROOT$/.scratch/*/delivery.md",
-        "$TURBO_ROOT$/.scratch/*/spec.md",
-        "$TURBO_ROOT$/.scratch/*/issues/*.md",
         "$TURBO_ROOT$/packages/eslint-config/package.json",
         "$TURBO_ROOT$/packages/eslint-config/src/**"
       ]

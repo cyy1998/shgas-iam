@@ -1,59 +1,75 @@
 ---
 name: to-spec
-description: 把已澄清的对话整理成 draft spec 并发布到项目 issue tracker。用户要求沉淀 PRD、规格或把现有共识写成可拆票基线时使用；不重新访谈。
+description: Turn the current conversation into a spec and publish it to the project issue tracker — no interview, just synthesis of what you've already discussed.
+disable-model-invocation: true
 ---
 
-# 整理规格
+This skill takes the current conversation context and codebase understanding and produces a spec (you may know this document as a PRD). Do NOT interview the user — just synthesize what you already know.
 
-把当前对话上下文和代码库事实整理成 spec（也称 PRD）。不要重新访谈用户；只综合已经讨论并确认的内容。
+The issue tracker and triage label vocabulary should have been provided to you — run `/setup-matt-pocock-skills` if not.
 
-开始前读取仓库的 `AGENTS.md`、Engineering workflow、issue tracker 约定和 delivery ledger。分支、授权、文档语言、checkpoint 与状态由仓库 workflow 决定；本 skill 不建立第二套生命周期。
+## Process
 
-## 流程
+1. Explore the repo to understand the current state of the codebase, if you haven't already. Use the project's domain glossary vocabulary throughout the spec, and respect any ADRs in the area you're touching.
 
-1. 如果尚未调查代码库，先了解当前实现。规格使用项目领域词汇，并遵守相关 ADR。
-2. 找出功能可测试的接缝。优先使用已有接缝和最高层公开接缝；只有必要时才提出新接缝，数量越少越好，理想数量是一个。
-3. 请用户确认这些测试接缝符合预期。
-4. 按下方模板写 spec，并根据 tracker 约定发布。文档正文使用项目规定的语言；代码标识符、命令、路径、API/skill 名称和机器字段保持稳定。
-5. 新 spec 的状态是 `draft`，不得使用 `ready-for-agent`，也不得在 ticket 拆分获批前声称 implementation-ready。
-6. 按仓库 workflow 验证并提交 draft spec checkpoint。提交完成后停止，给出 spec 路径、content HEAD、验证摘要和进入 `to-tickets` 的范围 brief；没有独立授权时不得继续拆票。
+2. Sketch out the seams at which you're going to test the feature. Existing seams should be preferred to new ones. Use the highest seam possible. If new seams are needed, propose them at the highest point you can. The fewer seams across the codebase, the better - the ideal number is one.
+
+Check with the user that these seams match their expectations.
+
+3. Write the spec using the template below, then publish it to the project issue tracker. Apply the `ready-for-agent` triage label - no need for additional triage.
 
 <spec-template>
 
-# <中文 Spec 标题>
+## Problem Statement
 
-**Status:** draft
+The problem that the user is facing, from the user's perspective.
 
-## 问题陈述
+## Solution
 
-从用户视角说明正在面对的问题。
+The solution to the problem, from the user's perspective.
 
-## 解决方案
+## User Stories
 
-从用户视角说明拟提供的解决方案。
+A LONG, numbered list of user stories. Each user story should be in the format of:
 
-## 用户故事
+1. As an <actor>, I want a <feature>, so that <benefit>
 
-使用较完整的编号列表覆盖功能各方面。每项采用：
+<user-story-example>
+1. As a mobile bank customer, I want to see balance on my accounts, so that I can make better informed decisions about my spending
+</user-story-example>
 
-1. 作为 `<角色>`，我希望 `<能力>`，以便 `<收益>`。
+This list of user stories should be extremely extensive and cover all aspects of the feature.
 
-## 实现决策
+## Implementation Decisions
 
-记录已经形成的实现决策，例如模块或接口边界、技术澄清、架构决定、schema 变化和 API 契约。
+A list of implementation decisions that were made. This can include:
 
-不要写容易失效的具体文件路径或代码片段。例外：prototype 产生的状态机、reducer、schema 或 type shape 比文字更精确时，可以只摘录体现决策的最小片段，并注明来源。
+- The modules that will be built/modified
+- The interfaces of those modules that will be modified
+- Technical clarifications from the developer
+- Architectural decisions
+- Schema changes
+- API contracts
+- Specific interactions
 
-## 测试决策
+Do NOT include specific file paths or code snippets. They may end up being outdated very quickly.
 
-记录外部行为测试原则、需要测试的模块、选定的最高层测试接缝，以及代码库中的相似先例。
+Exception: if a prototype produced a snippet that encodes a decision more precisely than prose can (state machine, reducer, schema, type shape), inline it within the relevant decision and note briefly that it came from a prototype. Trim to the decision-rich parts — not a working demo, just the important bits.
 
-## 范围之外
+## Testing Decisions
 
-明确本规格不处理的内容。
+A list of testing decisions that were made. Include:
 
-## 补充说明
+- A description of what makes a good test (only test external behavior, not implementation details)
+- Which modules will be tested
+- Prior art for the tests (i.e. similar types of tests in the codebase)
 
-记录不适合放入前述章节的必要信息。
+## Out of Scope
+
+A description of the things that are out of scope for this spec.
+
+## Further Notes
+
+Any further notes about the feature.
 
 </spec-template>

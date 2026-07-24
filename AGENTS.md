@@ -23,13 +23,15 @@
 
 ### Engineering workflow
 
-所有新工作统一使用 Matt skills 工作流；标准功能依次经过澄清、规格、票据、实现和双轴评审，小型低风险改动可直接进入实现。仓库级生命周期、分支、验证和授权边界见 [docs/agents/workflow.md](docs/agents/workflow.md)。
+通用开发方法以 `mattpocock/skills` 为准；小型明确改动可以直接进入 `/implement`，跨会话 feature 使用 spec、tickets
+和双轴评审。仓库只在 [docs/agents/workflow.md](docs/agents/workflow.md) 补充分支、验证、授权、归档和本地合入约束。
 
 `openspec/` 已冻结为只读历史参考。除非维护者明确要求修正历史记录，否则不得在其中新增、修改、同步或归档产物，也不得把其中的规格视为当前事实来源。
 
 ### Issue tracker
 
-Issues and specs are tracked as local Markdown files under `.scratch/`. See `docs/agents/issue-tracker.md`.
+跨会话 feature 的 spec、tickets 与 journal 使用 `.scratch/` 下的本地 Markdown；单会话直接实现无需创建 tracker。
+See `docs/agents/issue-tracker.md`.
 
 ### Triage labels
 

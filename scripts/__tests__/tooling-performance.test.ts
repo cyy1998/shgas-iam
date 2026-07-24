@@ -108,18 +108,15 @@ describe("tooling performance contracts", () => {
     });
   });
 
-  test("reads the current root and workspace task graph", () => {
+  test("keeps root lint scoped to executable tooling inputs", () => {
     const graph = readToolingGraph(repoRoot);
 
     expect(graph.rootScripts.lint).toBe("turbo lint lint:root");
     expect(graph.rootScripts["lint:root"]).toBe(
-      "eslint --config eslint.root.config.mjs scripts eslint.root.config.mjs eslint.frontend.config.mjs stylelint.frontend.config.mjs && bun scripts/check-workflow.ts",
+      "eslint --config eslint.root.config.mjs scripts eslint.root.config.mjs eslint.frontend.config.mjs stylelint.frontend.config.mjs",
     );
     expect(graph.rootScripts["lint:fix"]).toBe("turbo lint:fix lint:fix:root");
     expect(graph.rootScripts["lint:fix:root"]).toContain("--fix");
-    expect(graph.rootScripts.typecheck).toBe("turbo typecheck --concurrency=3");
-    expect(graph.globalTurboConcurrency).toBeUndefined();
-    expect(graph.globalTestTimeoutOverrides).toEqual([]);
     expect(graph.turboTasks.lint.dependsOn).toEqual(["^lint"]);
     expect(graph.turboTasks["//#lint:root"]).toEqual({
       inputs: [
@@ -129,14 +126,19 @@ describe("tooling performance contracts", () => {
         "$TURBO_ROOT$/stylelint.frontend.config.mjs",
         "$TURBO_ROOT$/package.json",
         "$TURBO_ROOT$/pnpm-lock.yaml",
-        "$TURBO_ROOT$/.scratch/*/delivery.md",
-        "$TURBO_ROOT$/.scratch/*/spec.md",
-        "$TURBO_ROOT$/.scratch/*/issues/*.md",
         "$TURBO_ROOT$/packages/eslint-config/package.json",
         "$TURBO_ROOT$/packages/eslint-config/src/**",
       ],
     });
     expect(graph.turboTasks["//#lint:fix:root"]).toEqual({ cache: false });
+  });
+
+  test("reads the current workspace task graph", () => {
+    const graph = readToolingGraph(repoRoot);
+
+    expect(graph.rootScripts.typecheck).toBe("turbo typecheck --concurrency=3");
+    expect(graph.globalTurboConcurrency).toBeUndefined();
+    expect(graph.globalTestTimeoutOverrides).toEqual([]);
     expect(graph.turboTasks.typecheck.dependsOn).toEqual(["^typecheck"]);
     expect(graph.workspaces).toHaveLength(15);
     for (const workspace of graph.workspaces) {

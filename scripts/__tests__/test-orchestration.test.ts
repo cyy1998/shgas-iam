@@ -160,14 +160,22 @@ function createPnpmRecorder() {
 }
 
 describe("test orchestration", () => {
-  test("exposes ordinary, smoke, verify, and transit tasks with explicit budgets", () => {
+  test("exposes test lanes and keeps root guards lightweight", () => {
     const rootPackage = readJson(join(repoRoot, "package.json"));
     const turbo = readJson(join(repoRoot, "turbo.json"));
 
     expect(rootPackage.scripts.test).toBe("turbo test --concurrency=2");
     expect(rootPackage.scripts["test:smoke"]).toBe("turbo test:smoke --concurrency=1");
     expect(rootPackage.scripts.verify).toBe("node scripts/verify.mjs");
-    expect(rootPackage.scripts["lint:root"].match(/bun scripts\/check-workflow\.ts/gu)).toHaveLength(1);
+    expect(rootPackage.scripts["lint:root"]).toBe(
+      "eslint --config eslint.root.config.mjs scripts eslint.root.config.mjs eslint.frontend.config.mjs stylelint.frontend.config.mjs",
+    );
+    expect(rootPackage.scripts["check:workflow"]).toBeUndefined();
+    expect(rootPackage.scripts["test:workflow"]).toBeUndefined();
+    expect(existsSync(join(repoRoot, "scripts", "check-workflow.ts"))).toBe(false);
+    expect(existsSync(join(repoRoot, "scripts", "__tests__", "check-workflow.test.ts"))).toBe(false);
+    expect(readFileSync(join(repoRoot, ".husky", "pre-commit"), "utf8"))
+      .toBe("git diff --cached --check\n");
     expect(turbo.tasks.transit).toEqual({
       dependsOn: ["^transit"],
     });
