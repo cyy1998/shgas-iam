@@ -18,7 +18,7 @@
 - Ticket base: `10e5cc80f78cfbe582151048adfd65e487223e7b`
 - Reviewed content head: `336585da98878c35c55478074b62a0f4b9f39d75`
 - Candidate commits: `6503f4f8de86c93be3f8adcba151f238158f5358`, `4977381c4aaccbd4d5eae5bee368cd5cac8df9e2`, `2107e13d03f165219046b777afe3a4d5055ec177`, `336585da98878c35c55478074b62a0f4b9f39d75`
-- Final squash commit: `pending`
+- Final squash commit: `a5f1355ea4d0f164417e5bab32367cf6d7dadf16`
 - Validation:
   - `pnpm install --frozen-lockfile` — passed
   - `bun test scripts/__tests__/tooling-performance.test.ts` — passed
@@ -56,7 +56,7 @@
 - Ticket base: `63ed5274e2bdd20c59dd77e1e94950bd9de3de98`
 - Reviewed content head: `232f2de75043fb0985cbadff17f73213c6282c5c`
 - Candidate commits: `232f2de75043fb0985cbadff17f73213c6282c5c`
-- Final squash commit: `pending`
+- Final squash commit: `a5f1355ea4d0f164417e5bab32367cf6d7dadf16`
 - Validation:
   - `pnpm install --frozen-lockfile` — passed，16 个 workspace 且 lockfile 无变化
   - `bun test scripts/__tests__/tooling-performance.test.ts` — passed，10/10 测试、72 个断言

@@ -3,7 +3,7 @@
 Workflow-Version: 2
 Feature-Slug: tooling-performance
 Workflow-Kind: standard
-Stage: merge-ready
+Stage: delivered
 Feature-Branch: codex/tooling-performance
 Target-Branch: main
 Target-Base: 55c25384e82fca2935dec782e4dd270090a9d5dc
@@ -19,7 +19,7 @@ Content-Head: 232f2de75043fb0985cbadff17f73213c6282c5c
 Verified-Content-Head: 232f2de75043fb0985cbadff17f73213c6282c5c
 Reviewed-Content-Head: 232f2de75043fb0985cbadff17f73213c6282c5c
 Merge-Target-Tip: 55c25384e82fca2935dec782e4dd270090a9d5dc
-Final-Squash-Commit: pending
+Final-Squash-Commit: a5f1355ea4d0f164417e5bab32367cf6d7dadf16
 
 ## 范围与验收
 
@@ -71,6 +71,7 @@ Final-Squash-Commit: pending
 - `T4 Ticket Resolved` — ticket 06 remediation；五项最终 feature finding、验证证据文字偏差与完整双轴复审均已闭环。
 - `G5 Feature Verified` — content、verified 与 reviewed head 均固定为 `232f2de75043fb0985cbadff17f73213c6282c5c`；target tip 仍为 `55c25384e82fca2935dec782e4dd270090a9d5dc`，完整 feature 验证矩阵与最终 Standards/Spec 双轴评审均通过。
 - `G6 Merge Ready` — target tip 与 merge-base 仍为 `55c25384e82fca2935dec782e4dd270090a9d5dc`；工作区干净且无未完成 Git 操作，Merge brief 已绑定相同的 content、verified 与 reviewed head，等待维护者授权本地 squash 事务。
+- `G7 Delivered` — 本地 squash delivery commit 为 `a5f1355ea4d0f164417e5bab32367cf6d7dadf16`；最终 SHA 回填、tracker-only 元数据提交、最终检查和本地功能分支清理在同一本地事务内完成。
 
 ## 验证记录
 
@@ -317,6 +318,7 @@ Final-Squash-Commit: pending
 - 2026-07-23 — 维护者明确授权实施 tickets 01–06；未授权 merge、push 或远端清理。
 - 2026-07-23 — 维护者批准共享 ESLint 配置缓存语义 amendment：保留各 consumer 的直接 workspace 依赖，接受配置源码变化使 consumer test/typecheck cache 一并失效；未授权改为单进程 lint、merge、push 或远端清理。
 - 2026-07-23 — 维护者批准连续强制冷执行墙钟预算 amendment：typecheck concurrency 3 由 55 秒调整为 80 秒，test concurrency 2 由 60 秒调整为 75 秒；不改变并发、工具内部 worker/checker 或普通测试 timeout，未授权 merge、push 或远端清理。
+- 2026-07-24 — 维护者确认按 Merge brief 执行本地 squash、最终 SHA 回填和本地功能分支清理；未授权 push、远端分支删除或其他远端操作。
 
 ## Waivers
 
@@ -350,4 +352,11 @@ Final-Squash-Commit: pending
 
 ## Delivery receipt
 
-- 无。
+- Target branch: `main`
+- Squash commit: `a5f1355ea4d0f164417e5bab32367cf6d7dadf16`
+- Tracker metadata: planned
+- Final checks:
+  - `pnpm check:workflow` — passed
+  - `pnpm check:docs` — passed
+  - `git diff --check` — passed
+- Local feature branch: deleted

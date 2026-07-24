@@ -19,7 +19,7 @@
 - Ticket base: `449f2ca66f2edbe206177d3806ded4dc372032d8`
 - Reviewed content head: `d9480121eb742b95de9875d16a7565d1e04239ef`
 - Candidate commits: `910dc68b07431d807d90da1771debd1541830f1b`, `b58dedb21dff208abf83ef5e7142f72cdf54adef`, `97a8a469f6bbae38b1f4211c65552f7b68f3ebba`, `d9480121eb742b95de9875d16a7565d1e04239ef`
-- Final squash commit: `pending`
+- Final squash commit: `a5f1355ea4d0f164417e5bab32367cf6d7dadf16`
 - Validation:
   - `pnpm install --frozen-lockfile` — passed
   - `pnpm --filter @iam/eslint-config test` — passed

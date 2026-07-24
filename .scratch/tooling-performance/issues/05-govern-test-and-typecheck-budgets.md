@@ -20,7 +20,7 @@
 - Ticket base: `7150e4eed80d1a29eac5a969c43d31f34b847ee0`
 - Reviewed content head: `f06ebcfdc9392b4030fc0c9c1aa21a4a309884fc`
 - Candidate commits: `648f26b7703517cfc24c7df1bbce32e81ae63419`, `ab39309add7b8f40cfa23721c6daffea9c599a6a`, `f06ebcfdc9392b4030fc0c9c1aa21a4a309884fc`
-- Final squash commit: `pending`
+- Final squash commit: `a5f1355ea4d0f164417e5bab32367cf6d7dadf16`
 - Validation:
   - `pnpm install --frozen-lockfile` — passed
   - `bun test scripts/__tests__/tooling-performance.test.ts` — passed

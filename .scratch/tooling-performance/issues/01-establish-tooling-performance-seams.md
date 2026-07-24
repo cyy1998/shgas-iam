@@ -17,7 +17,7 @@
 - Ticket base: `7f438dff50aa2a42ff22d6655c93698ec378b09d`
 - Reviewed content head: `69e05c4bea838c212f7821ff8baa8c58da060c85`
 - Candidate commits: `f167d84bb0ad5488f67d3347623b526f8577292b`, `07fa964c302d822d0d632dea4ab331c183cdb57b`, `69e05c4bea838c212f7821ff8baa8c58da060c85`
-- Final squash commit: `pending`
+- Final squash commit: `a5f1355ea4d0f164417e5bab32367cf6d7dadf16`
 - Validation:
   - `bun test scripts/__tests__/tooling-performance.test.ts` — passed
   - `node scripts/benchmark-eslint-config.mjs --profile current-backend --rounds 5 --compile-cache-dir <temp>` — passed

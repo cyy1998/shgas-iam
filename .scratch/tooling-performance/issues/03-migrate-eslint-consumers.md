@@ -18,7 +18,7 @@
 - Ticket base: `865a3f99a2399de2860c4db6de724982ca41a2d8`
 - Reviewed content head: `1fe00e596e2c41de28a30a2d9bc37689a34c745b`
 - Candidate commits: `81a60b0e48736523dcb74e1a72d1ccc75e3290cd`, `1fe00e596e2c41de28a30a2d9bc37689a34c745b`
-- Final squash commit: `pending`
+- Final squash commit: `a5f1355ea4d0f164417e5bab32367cf6d7dadf16`
 - Validation:
   - `pnpm install --frozen-lockfile` — passed
   - `bun test scripts/__tests__/eslint-config-equivalence.test.ts` — passed
