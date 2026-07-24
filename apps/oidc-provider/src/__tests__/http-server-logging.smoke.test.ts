@@ -147,7 +147,7 @@ describe("oIDC HTTP access logging", () => {
         level: "info",
       }),
     ]));
-  }, 30_000);
+  }, 15_000);
 
   it("keeps failed request event and access logs on the same requestId", async () => {
     const { createOidcHttpServer } = await loadApp();

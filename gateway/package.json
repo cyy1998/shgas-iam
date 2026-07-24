@@ -10,7 +10,7 @@
     "apply": "bun src/cli.ts apply",
     "lint": "eslint src eslint.config.js config manifests",
     "lint:fix": "eslint --fix src eslint.config.js config manifests",
-    "test": "bun test --parallel",
+    "test": "bun test --max-concurrency=2",
     "typecheck": "pnpm exec tsc --noEmit"
   },
   "dependencies": {

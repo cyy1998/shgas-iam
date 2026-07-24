@@ -31,12 +31,15 @@ export default defineConfig({
       'test/**/*.{test,spec}.{ts,tsx}',
     ],
     exclude: [
+      '**/*.smoke.test.{ts,tsx}',
       'dist/**',
       'e2e/**',
       'node_modules/**',
       'src/.umi/**',
       'src/.umi-production/**',
     ],
+    maxWorkers: '25%',
+    testTimeout: 10_000,
     coverage: {
       provider: 'v8',
       reporter: ['text', 'html', 'lcov'],

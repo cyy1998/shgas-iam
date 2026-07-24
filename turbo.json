@@ -35,8 +35,23 @@
     "//#lint:fix:root": {
       "cache": false
     },
+    "transit": {
+      "dependsOn": ["^transit"]
+    },
     "test": {
-      "dependsOn": ["^test"]
+      "dependsOn": ["transit"]
+    },
+    "test:smoke": {
+      "dependsOn": ["transit"],
+      "cache": false
+    },
+    "test:postgres": {
+      "dependsOn": ["transit"],
+      "cache": false
+    },
+    "test:coverage": {
+      "dependsOn": ["transit"],
+      "outputs": ["coverage/**"]
     },
     "e2e": {
       "cache": false

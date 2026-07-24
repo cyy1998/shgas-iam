@@ -25,17 +25,19 @@
 |---|---|---|---|---|---|
 | [docs/adr/0001-replace-openspec-workflow.md](adr/0001-replace-openspec-workflow.md) | decision | Current | 2026-07-16 | 2026-10-31 | 采用 Matt skills 工作流并冻结 OpenSpec 的架构决策。 |
 | [docs/adr/0002-centralize-role-assignment-resolution.md](adr/0002-centralize-role-assignment-resolution.md) | decision | Current | 2026-07-18 | 2026-10-31 | 以独立 workspace package 统一有效角色与受影响用户解析。 |
+| [docs/adr/0003-adopt-layered-test-lanes-and-resource-budgets.md](adr/0003-adopt-layered-test-lanes-and-resource-budgets.md) | decision | Current | 2026-07-24 | 2026-10-31 | 采用普通测试、process smoke 与外部资源测试分层，以及显式缓存和并发预算；实现与平台状态见测试编排架构。 |
 | [docs/agents/domain.md](agents/domain.md) | agent-config | Current | 2026-07-16 | 2026-10-31 | Engineering skills 的 single-context domain documentation 消费规则。 |
 | [docs/agents/issue-tracker.md](agents/issue-tracker.md) | agent-config | Current | 2026-07-19 | 2026-10-31 | v2 delivery ledger、ticket 生命周期、记录格式校验边界、最终 SHA 回填与 legacy adoption 契约。 |
 | [docs/agents/triage-labels.md](agents/triage-labels.md) | agent-config | Current | 2026-07-16 | 2026-10-31 | Engineering skills 使用的默认 triage 标签映射。 |
-| [docs/agents/workflow.md](agents/workflow.md) | agent-config | Current | 2026-07-19 | 2026-10-31 | AI 开发工作流 v2 的状态机、授权、交付契约，以及只校验记录格式的 checker 边界。 |
+| [docs/agents/workflow.md](agents/workflow.md) | agent-config | Current | 2026-07-24 | 2026-10-31 | AI 开发工作流 v2 的状态机、授权、以 `pnpm verify` 为 feature/merge 基线的验证矩阵、交付契约和 checker 边界。 |
 | [docs/architecture/backend-architecture.md](architecture/backend-architecture.md) | architecture | Current | 2026-07-18 | 2026-10-31 | 后端 app composition、factory/DI、ports、角色解析注入边界、route/middleware 和 architecture test 约定。 |
 | [docs/architecture/contracts-and-database.md](architecture/contracts-and-database.md) | architecture | Current | 2026-07-18 | 2026-10-31 | shared contracts、domain/db/jobs/role-assignment-resolution/read-model 边界、UnitOfWork 和 Drizzle schema/relations/migration 约定。 |
 | [docs/architecture/frontend-architecture.md](architecture/frontend-architecture.md) | architecture | Current | 2026-07-16 | 2026-10-31 | admin/sso 前端边界、service wrapper、contract、测试与生成路径约定。 |
 | [docs/architecture/repository-map.md](architecture/repository-map.md) | architecture | Current | 2026-07-23 | 2026-10-31 | monorepo apps/packages/gateway 地图、共享 ESLint 配置所有权，以及 Current docs、冻结历史和生成目录边界。 |
+| [docs/architecture/testing-architecture.md](architecture/testing-architecture.md) | architecture | Current | 2026-07-24 | 2026-10-31 | 已实施的普通/process smoke/外部资源通道、预算、Windows 连续验收、平台状态与 backend adoption 边界。 |
 | [docs/development/backend-implementation.md](development/backend-implementation.md) | development | Current | 2026-07-05 | 2026-10-31 | backend response envelope、OpenAPI status、logger、audit event 和 architecture guard 实现惯例。 |
 | [docs/development/coding-style.md](development/coding-style.md) | development | Current | 2026-07-18 | 2026-10-31 | TypeScript、formatter 边界、文件命名、React 命名和 import alias 风格约定。 |
-| [docs/development/commands.md](development/commands.md) | development | Current | 2026-07-22 | 2026-10-31 | workspace、显式提交前检查、backend、shared package、显式 PostgreSQL 测试、database、frontend 和 gateway 命令入口。 |
+| [docs/development/commands.md](development/commands.md) | development | Current | 2026-07-24 | 2026-10-31 | workspace、普通/smoke/verify 测试通道、显式外部资源检查、提交前 guard 与各 package 命令入口。 |
 | [docs/features/audit/audit-logging.md](features/audit/audit-logging.md) | feature | Current | 2026-07-16 | 2026-09-30 | 统一审计日志、安全字段和已完成 `login_log` 退役后的当前边界。 |
 | [docs/features/oidc/oidc-integration.md](features/oidc/oidc-integration.md) | feature | Current | 2026-07-16 | 2026-09-30 | 内部 OIDC client 的端点、client 类型、scope/claim、CORS 和退出契约。 |
 | [docs/features/oidc/oidc-session-migration.md](features/oidc/oidc-session-migration.md) | feature | Current | 2026-06-28 | 2026-09-30 | Session Kernel 会话迁移、旧 key cleanup 和回滚边界。 |

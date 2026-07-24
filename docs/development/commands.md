@@ -7,16 +7,64 @@
 - `pnpm dev`
 - `pnpm build`
 - `pnpm lint`（包含无参数的全局 workflow 记录格式检查）
-- `pnpm test`（运行各 workspace 的普通测试，不包含 workflow CLI 专项测试）
-- `pnpm e2e`
+- `pnpm test`（运行可缓存的普通测试，不包含 process smoke、外部资源测试或 workflow CLI 专项测试）
+- `pnpm test:smoke`（以单 package 并发运行真实进程/端口 smoke；当前只由 `@iam/oidc-provider` 接入）
+- `pnpm verify`（按 static → typecheck → test → smoke → build 顺序执行环境无关的完整本地基线）
+- `pnpm e2e`（显式浏览器通道，不属于 `pnpm verify`）
 - `pnpm typecheck`
 - 文档索引与 freshness guard：`pnpm check:docs`
 - Env naming guard：`pnpm check:env-names`
 - Workflow 记录格式 guard：`pnpm check:workflow`
 - Workflow CLI 聚焦测试：`pnpm test:workflow`（仅在修改 workflow checker 或 CLI 测试时显式运行）
 
-根开发工具链要求 Node 24。具体功能在提交前运行受影响 package 的测试、lint 和 typecheck；功能结束时执行全仓检查。
+根开发工具链要求 Node 24。具体功能在提交前运行受影响 package 的测试、lint 和 typecheck；feature/merge candidate
+运行 `pnpm verify`，再按改动类型追加外部资源检查。
 ticket 生命周期、验证层级和提交授权见 [Engineering workflow](../agents/workflow.md)。
+
+## 测试通道与完整本地验证
+
+`pnpm test` 通过 Turbo 只调度各 workspace 的普通 `test`，适用于单元、组件、契约、架构和纯内存集成测试。它不会启动
+OIDC 真实 entry，也不隐式连接 PostgreSQL、启动浏览器或校验 Gateway。开发内循环优先使用 package-local 命令，例如：
+
+```bash
+pnpm --filter @iam/oidc-provider test
+pnpm --filter @iam/api test
+```
+
+`pnpm test:smoke` 只调度声明同名 script 的 package，禁用任务缓存，并以 Turbo concurrency 1 运行。当前只有
+`@iam/oidc-provider` 接入该通道；其 package-local Vitest smoke config 使用单 worker，收集
+`src/**/*.smoke.test.ts`。定向验证 OIDC runtime entry 时运行：
+
+```bash
+pnpm --filter @iam/oidc-provider test:smoke
+```
+
+`pnpm verify` 是 feature/merge candidate 的环境无关基线。跨平台 Node.js 编排器按以下顺序 fail-fast：
+
+1. static：`pnpm lint`、`pnpm check:docs`、`pnpm check:env-names`；
+2. typecheck：`pnpm typecheck`；
+3. test：`pnpm test`；
+4. smoke：`pnpm test:smoke`；
+5. build：`pnpm build`。
+
+`pnpm lint` 已包含全局 workflow 记录格式检查；Validation Plan 仍可显式追加聚焦的
+`pnpm check:workflow -- --feature <feature-slug>`。`pnpm verify` 不代替外部资源通道；调用方先准备专用环境，再按改动类型追加：
+
+```bash
+# 数据库 schema 或查询行为
+pnpm --filter @iam/db db:check
+pnpm --filter @iam/role-assignment-resolution test:postgres
+
+# 前端浏览器行为
+pnpm --filter @iam/admin e2e
+pnpm --filter @iam/sso e2e
+
+# APISIX manifest（按目标环境提供已声明参数）
+pnpm gateway:apisix:validate -- <environment-arguments>
+```
+
+PostgreSQL、浏览器和 Gateway 检查不会由 `pnpm verify` 自动准备或启动外部服务。所需环境缺失时应明确失败，并按
+[Engineering workflow](../agents/workflow.md) 处理；不得静默 skip 或回退到开发环境。
 
 ## 工具链性能与缓存
 
@@ -56,8 +104,9 @@ node scripts/benchmark-eslint-config.mjs --rounds 5
 
 ### Test、typecheck 与 TypeScript 双轨
 
-根 `pnpm test` 默认使用 Turbo concurrency 2，根 `pnpm typecheck` 默认使用 concurrency 3；workspace 局部命令和
-Vitest/Bun worker、TypeScript checker 保持各自默认值。更大的 runner 可以显式覆盖外层预算：
+根 `pnpm test` 使用 Turbo concurrency 2，package-local Vitest 普通测试使用 `maxWorkers: 25%`，Bun 普通测试显式使用
+`--max-concurrency=2`；根 `pnpm test:smoke` 与 OIDC smoke runner 都使用 concurrency 1。根 `pnpm typecheck` 使用
+concurrency 3。更大的 runner 可以显式覆盖普通测试或 typecheck 的外层预算：
 
 ```bash
 pnpm exec turbo test --concurrency=<N>
@@ -66,8 +115,9 @@ pnpm exec turbo typecheck --concurrency=<N>
 
 将 `<N>` 替换为该 runner 上单独复测过的值。
 一次调优只改变一个并行层；不要同时提高 Turbo concurrency、测试 worker 与 TypeScript checker，也不要在
-`turbo.json` 设置全局 concurrency。普通测试沿用运行器默认 timeout；只有具备独立基线的测试可以在自身用例上设置
-定点阈值，不得通过 Vitest/Bun 全局配置放宽。
+`turbo.json` 设置全局 concurrency。Vitest 普通测试统一使用 10 秒 timeout，Bun 普通测试保留 5 秒默认值；只有明确标注并
+具备独立基线的 hermetic integration 才可在自身用例或 suite 使用 15 秒定点阈值。Process smoke 拥有独立 readiness 与
+cleanup deadline，不得通过继续放宽普通 runner 的全局 timeout 处理抖动。
 
 `pnpm exec tsc` 是 TypeScript 7.0.2 CLI；裸模块 `typescript` 是供 ESLint 等 API 消费方使用的官方 TypeScript 6
 compatibility package。TS7 当前不提供等价 JavaScript API，不要让 API 消费方直接加载 TS7 CLI 包，也不要删除这条
@@ -107,7 +157,7 @@ Hook 未安装或损坏时运行 `pnpm prepare` 恢复；也可分别运行 `git
 
 - API backend：`pnpm --filter @iam/api <dev|serve|lint|test|typecheck>`
 - Admin API backend：`pnpm --filter @iam/admin-api <dev|serve|lint|test|typecheck>`
-- OIDC provider：`pnpm --filter @iam/oidc-provider <dev|serve|lint|test|typecheck>`
+- OIDC provider：`pnpm --filter @iam/oidc-provider <dev|serve|lint|test|test:smoke|typecheck>`
 - Worker app：`pnpm --filter @iam/worker <dev|serve|lint|test|typecheck|user-profile:backfill|user-profile:repair>`
 
 ## 共享 Packages

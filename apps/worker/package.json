@@ -20,7 +20,7 @@
     "user-profile:repair": "bun run src/commands/user-profile-repair.ts",
     "lint": "eslint src eslint.config.js",
     "lint:fix": "eslint --fix src eslint.config.js",
-    "test": "bun test --parallel",
+    "test": "bun test --max-concurrency=2",
     "typecheck": "pnpm exec tsc --noEmit"
   },
   "dependencies": {

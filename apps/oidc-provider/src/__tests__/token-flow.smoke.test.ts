@@ -183,7 +183,7 @@ async function exchangeCode(
   return await fetch(`${url}/token`, { method: "POST", headers, body });
 }
 
-describe("authorization code token flow", () => {
+describe("authorization code token flow HTTP smoke", () => {
   it("enforces PKCE, echoes nonce in a verifiable RS256 ID Token, and rejects code replay", async () => {
     const { provider, publicKey, url } = await createRuntime();
     const redirectUri = "https://public.example/callback?from=iam";

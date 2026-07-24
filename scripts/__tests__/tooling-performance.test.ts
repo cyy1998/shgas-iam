@@ -117,7 +117,6 @@ describe("tooling performance contracts", () => {
     );
     expect(graph.rootScripts["lint:fix"]).toBe("turbo lint:fix lint:fix:root");
     expect(graph.rootScripts["lint:fix:root"]).toContain("--fix");
-    expect(graph.rootScripts.test).toBe("turbo test --concurrency=2");
     expect(graph.rootScripts.typecheck).toBe("turbo typecheck --concurrency=3");
     expect(graph.globalTurboConcurrency).toBeUndefined();
     expect(graph.globalTestTimeoutOverrides).toEqual([]);
@@ -138,7 +137,6 @@ describe("tooling performance contracts", () => {
       ],
     });
     expect(graph.turboTasks["//#lint:fix:root"]).toEqual({ cache: false });
-    expect(graph.turboTasks.test.dependsOn).toEqual(["^test"]);
     expect(graph.turboTasks.typecheck.dependsOn).toEqual(["^typecheck"]);
     expect(graph.workspaces).toHaveLength(15);
     for (const workspace of graph.workspaces) {

@@ -34,7 +34,7 @@ const emptyAdapter: Adapter = {
   async upsert() {},
 };
 
-describe("oIDC discovery and JWKS", () => {
+describe("oIDC discovery and JWKS HTTP smoke", () => {
   it("serves fixed discovery metadata and only public current/previous keys under the issuer path", async () => {
     const { createOidcHttpServer, createOidcProvider } = await import("../app.ts");
     const [current, previous] = await Promise.all([

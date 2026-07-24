@@ -169,18 +169,25 @@ Git commit 不能在自己的内容中记录尚未生成的 SHA。为避免用�
 
 ### Feature 级
 
+Feature/merge candidate 的环境无关基线是正式入口 `pnpm verify`。它按 static、typecheck、test、smoke、build
+顺序 fail-fast；static 阶段包含 lint、文档索引、env naming 和全局 workflow 记录格式 guard。不要用手工挑选的等价命令
+替代该入口，也不要把外部资源检查塞进环境无关基线。
+
 | 变更类型 | Feature 必需检查 |
 |---|---|
-| 标准代码功能 | `pnpm lint`、`pnpm typecheck`、`pnpm test`、`pnpm build`、`pnpm check:workflow`、`git diff --check` |
+| 标准代码功能 | `pnpm verify`、`pnpm check:workflow`、`git diff --check` |
 | `docs` | 在适用基础矩阵上增加 `pnpm check:docs` |
 | `agent-config` | 增加 `pnpm check:workflow`；涉及 Markdown 时同时增加 `pnpm check:docs` |
 | `dependencies` | 在适用基础矩阵上增加 `pnpm install --frozen-lockfile` |
 | `database` | 增加 `pnpm --filter @iam/db db:check`；若 diff 命中 `packages/role-assignment-resolution/**`，再增加 `pnpm --filter @iam/role-assignment-resolution test:postgres` |
 | `frontend` | 对每个受影响的 `@iam/admin` 或 `@iam/sso` 增加 `pnpm --filter <workspace> e2e` |
 | `gateway` | 增加 `pnpm gateway:apisix:validate -- <已声明环境参数>`；环境参数必须原样记录在 Validation Plan |
-| 仅文档或 agent 配置的快速改动 | 可以省略完整代码 lint/typecheck/test/build，但仍需 `pnpm check:docs`、`pnpm check:workflow` 和 `git diff --check` |
+| 仅文档或 agent 配置的快速改动 | 可以省略 `pnpm verify`，但仍需 `pnpm check:docs`、`pnpm check:workflow` 和 `git diff --check` |
 
 Ticket 行必须列出至少一个直接覆盖验收行为的聚焦测试；只有 `Change-Types` 完全由 `docs`、`agent-config` 组成时，才可用 `pnpm check:docs`/`pnpm check:workflow` 代替行为测试。Feature 行必须包含由上表计算出的命令全集。外部 PostgreSQL、前端浏览器或 Gateway 环境缺失时，仍保留命令并按失败或 waiver 记录，不能从计划中删除。
+
+`pnpm verify` 不包含 PostgreSQL、浏览器 E2E 或 Gateway 验证。命中 `database`、`frontend` 或 `gateway` 时，必须在
+同一 Content-Head 上完成表中的附加命令；环境无关基线通过不能替代这些结果。
 
 验证记录必须包含命令、结果和被验证的完整 `Content-Head`。评审记录必须包含 fixed point、reviewed HEAD 和两轴结果。只有以下条件同时成立时证据才新鲜：
 

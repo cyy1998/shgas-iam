@@ -9,9 +9,10 @@
   "scripts": {
     "dev": "node --watch --import tsx src/index.ts",
     "serve": "node --import tsx src/index.ts",
-    "lint": "eslint src eslint.config.js",
-    "lint:fix": "eslint --fix src eslint.config.js",
-    "test": "vitest run",
+    "lint": "eslint src vitest.config.ts vitest.smoke.config.ts eslint.config.js",
+    "lint:fix": "eslint --fix src vitest.config.ts vitest.smoke.config.ts eslint.config.js",
+    "test": "vitest run --config vitest.config.ts",
+    "test:smoke": "vitest run --config vitest.smoke.config.ts",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

@@ -29,7 +29,7 @@
     "lint": "eslint src scripts eslint.config.js",
     "lint:fix": "eslint --fix src scripts eslint.config.js",
     "session:cleanup-legacy-keys": "bun scripts/cleanup-legacy-session-keys.ts",
-    "test": "bun test --parallel",
+    "test": "bun test --max-concurrency=2",
     "typecheck": "pnpm exec tsc --noEmit"
   },
   "dependencies": {

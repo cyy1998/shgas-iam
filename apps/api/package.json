@@ -21,7 +21,7 @@
     "db:generate": "pnpm --filter @iam/db db:generate",
     "db:migrate": "pnpm --filter @iam/db db:migrate",
     "db:push": "pnpm --filter @iam/db db:push",
-    "test": "bun test --parallel",
+    "test": "bun test --max-concurrency=2",
     "typecheck": "pnpm exec tsc --noEmit"
   },
   "dependencies": {
