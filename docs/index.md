@@ -27,7 +27,6 @@
 | [docs/adr/0002-centralize-role-assignment-resolution.md](adr/0002-centralize-role-assignment-resolution.md) | decision | Current | 2026-07-18 | 2026-10-31 | 以独立 workspace package 统一有效角色与受影响用户解析。 |
 | [docs/agents/domain.md](agents/domain.md) | agent-config | Current | 2026-07-16 | 2026-10-31 | Engineering skills 的 single-context domain documentation 消费规则。 |
 | [docs/agents/issue-tracker.md](agents/issue-tracker.md) | agent-config | Current | 2026-07-19 | 2026-10-31 | v2 delivery ledger、ticket 生命周期、记录格式校验边界、最终 SHA 回填与 legacy adoption 契约。 |
-| [docs/agents/serena-mcp.md](agents/serena-mcp.md) | agent-config | Current | 2026-07-16 | 2026-10-31 | Linux/bash 与 Windows/PowerShell 下的项目级 Serena MCP 启动和故障处理约定。 |
 | [docs/agents/triage-labels.md](agents/triage-labels.md) | agent-config | Current | 2026-07-16 | 2026-10-31 | Engineering skills 使用的默认 triage 标签映射。 |
 | [docs/agents/workflow.md](agents/workflow.md) | agent-config | Current | 2026-07-19 | 2026-10-31 | AI 开发工作流 v2 的状态机、授权、交付契约，以及只校验记录格式的 checker 边界。 |
 | [docs/architecture/backend-architecture.md](architecture/backend-architecture.md) | architecture | Current | 2026-07-18 | 2026-10-31 | 后端 app composition、factory/DI、ports、角色解析注入边界、route/middleware 和 architecture test 约定。 |

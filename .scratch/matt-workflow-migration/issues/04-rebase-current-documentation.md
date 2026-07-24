@@ -19,6 +19,6 @@
   - `pnpm check:docs` — passed with 26 indexed documents and no `Needs Review` entries.
   - Active-document scan — passed with no OpenSpec spec, command, hook, or removed-workflow reference outside explicit historical boundaries.
   - `pnpm --filter @iam/api typecheck` — passed after removing a manifest script whose target implementation did not exist.
-  - MySQL migration entry scan across README, Current docs, API manifest, and Serena memories — passed with no dangling command or capability claim.
+  - MySQL migration entry scan across README, Current docs, API manifest, and agent-maintained technical notes — passed with no dangling command or capability claim.
   - `git diff --check` — passed.
 - Review: Standards and Spec reviews both passed with no unresolved findings after correcting onboarding navigation, Bun/Node and app-local script rules, historical audit status, and dangling migration references.

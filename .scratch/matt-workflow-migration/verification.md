@@ -6,7 +6,7 @@
 
 ## Static acceptance scan
 
-- Repository-provided agent surfaces (`.codex`, `.codebuddy`, `.serena`, `.agents`, `.superpowers`, and `.vscode`) contain no active OpenSpec, OPSX, or `quick-change` entry point.
+- Repository-provided agent surfaces (`.codex`, `.codebuddy`, `.agents`, `.superpowers`, and `.vscode`) contain no active OpenSpec, OPSX, or `quick-change` entry point.
 - Package manifests, the lockfile, workspace configuration, repository scripts, and Dockerfiles contain no OpenSpec or OPSX dependency or command outside the frozen `openspec/` tree.
 - Current documentation contains no active OpenSpec spec link, command, hook, or OPSX alias. Historical references remain only where they are explicitly labelled as frozen or superseded.
 - `.git/hooks/pre-commit` is absent, confirming that the retired OpenSpec-only hook was not replaced by this migration.

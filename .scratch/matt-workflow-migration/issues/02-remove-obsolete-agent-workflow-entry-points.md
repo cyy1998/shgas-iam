@@ -15,7 +15,7 @@
 
 - Commit: `3620edaa7a2713c64ae383f0f197756b10461622`
 - Validation:
-  - Agent-surface path scan across Codex, CodeBuddy, Serena, `.agents`, `.superpowers`, and VS Code configuration — passed with no OpenSpec, OPSX, quick-change, or removed-workflow entry point.
+  - Agent-surface path scan across Codex, CodeBuddy, `.agents`, `.superpowers`, and VS Code configuration — passed with no OpenSpec, OPSX, quick-change, or removed-workflow entry point.
   - `pnpm check:docs` — passed; expected `Needs Review` warnings remain assigned to ticket 04.
   - `git diff --check` — passed.
-- Review: Standards and Spec reviews both passed with no unresolved findings after adding the missed Serena surface and removing duplicated commit-format policy from its memory.
+- Review: Standards and Spec reviews both passed with no unresolved findings after adding the missed agent surface and removing duplicated commit-format policy from its memory.

@@ -30,4 +30,4 @@
   - `pnpm install --frozen-lockfile` — passed with pnpm 11.14.0.
   - `git diff --check` — passed; Umi setup produced no tracked generated-file changes.
 - Compatibility fix: added the explicit `Table<Employment>` row type in SSO to resolve the sole TypeScript 7 inference difference without weakening compiler options.
-- Review: Standards and Spec review passed with no unresolved findings after synchronizing the tracked Serena tech-stack record with the dual-toolchain baseline.
+- Review: Standards and Spec review passed with no unresolved findings after synchronizing the tracked toolchain record with the dual-toolchain baseline.

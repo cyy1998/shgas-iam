@@ -104,7 +104,6 @@ CHANGELOG.md
 *.md
 
 # Development files
-.serena
 .claude
 src/**/*.test.ts
 src/**/*.spec.ts
