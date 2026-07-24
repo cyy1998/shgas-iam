@@ -22,7 +22,7 @@
 - Ticket base: `4f10dc40c43f698382534cf399d6a3cd4cfaa500`
 - Reviewed content head: `59673110e5e33a8aa5e4cf0a1bb78ec9538032ad`
 - Candidate commits: `470204c053dbcf6f60855ba1eaa3089049ad57ca`, `59673110e5e33a8aa5e4cf0a1bb78ec9538032ad`
-- Final squash commit: `pending`
+- Final squash commit: `461c711f8c610798795e96ecff74d34bfb7a239c`
 - Validation:
   - `pnpm install --frozen-lockfile` — passed
   - `bun test scripts/__tests__/test-orchestration.test.ts` — passed

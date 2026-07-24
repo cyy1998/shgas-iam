@@ -3,7 +3,7 @@
 Workflow-Version: 2
 Feature-Slug: test-orchestration
 Workflow-Kind: standard
-Stage: merge-ready
+Stage: delivered
 Feature-Branch: codex/test-orchestration
 Target-Branch: main
 Target-Base: 5fc1b7169bd2a75b2eadf4b5453f591c96d456bc
@@ -19,7 +19,7 @@ Content-Head: b79f83ae20cebccdf511425d03bfff6a6a68953f
 Verified-Content-Head: b79f83ae20cebccdf511425d03bfff6a6a68953f
 Reviewed-Content-Head: b79f83ae20cebccdf511425d03bfff6a6a68953f
 Merge-Target-Tip: 5fc1b7169bd2a75b2eadf4b5453f591c96d456bc
-Final-Squash-Commit: pending
+Final-Squash-Commit: 461c711f8c610798795e96ecff74d34bfb7a239c
 
 ## 范围与验收
 
@@ -73,6 +73,7 @@ Final-Squash-Commit: pending
 - `T4 Ticket Resolved` — ticket 02 remediation；E2E cache 回归保护、实际范围分类、专项 gate 与授权摘要均已闭环。
 - `G5 Feature Verified` — Content-Head: `b79f83ae20cebccdf511425d03bfff6a6a68953f`；目标 tip `5fc1b7169bd2a75b2eadf4b5453f591c96d456bc` 未漂移，完整 feature Validation Plan 通过，最终 Standards 与 Spec 双轴评审均为 0 finding。
 - `G6 Merge Ready` — content、verified 与 reviewed HEAD 均为 `b79f83ae20cebccdf511425d03bfff6a6a68953f`，目标 tip 未漂移，ledger、tickets、waivers 与本地交付事务均已完整记录。
+- `G7 Delivered` — `main` 已创建 squash 交付提交 `461c711f8c610798795e96ecff74d34bfb7a239c`；最终 SHA、tracker metadata、结构检查与本地功能分支清理按 delivery receipt 收束。
 
 ## 验证记录
 
@@ -252,6 +253,7 @@ Final-Squash-Commit: pending
 - 2026-07-24 — 用户批准 draft spec 与四片拆票方案，授权进入 to-tickets 并发布 tickets 01–04；implementation、merge、push 和远端操作仍未授权。
 - 2026-07-24 — 用户明确批准实施，授权范围为当前任务和分支内的 tickets 01–04；merge、push 和远端操作仍未授权。
 - 2026-07-24 — 用户依据 Ticket 02 的实测诊断，明确要求所有 package-local Vitest 普通测试默认 timeout 统一放宽到 10 秒；Bun、process smoke、merge、push 与远端授权边界不变。
+- 2026-07-24 — 用户明确批准 merge brief 中的一次本地 squash 交付事务；授权覆盖 target tip 复核、`main` squash/commit、最终 SHA 回填、结构检查和本地功能分支删除，不包括 push 或远端分支删除。
 
 ## Waivers
 
@@ -287,4 +289,11 @@ Final-Squash-Commit: pending
 
 ## Delivery receipt
 
-- 无。
+- Target branch: `main`
+- Squash commit: `461c711f8c610798795e96ecff74d34bfb7a239c`
+- Tracker metadata: planned
+- Final checks:
+  - `pnpm check:workflow -- --feature test-orchestration` — passed
+  - `pnpm check:docs` — passed
+  - `git diff --check` — passed
+- Local feature branch: deleted

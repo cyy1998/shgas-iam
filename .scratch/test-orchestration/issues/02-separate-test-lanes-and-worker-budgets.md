@@ -29,7 +29,7 @@
 - Ticket base: `7c5c82cdcae2bdb2aee08542144d3475387c1760`
 - Reviewed content head: `d9ba45886d452deff36f8e322fa5d522e471ae1b`
 - Candidate commits: `8b78564f9dbb2fc71cd7736f539bad372085b288`, `d9ba45886d452deff36f8e322fa5d522e471ae1b`
-- Final squash commit: `pending`
+- Final squash commit: `461c711f8c610798795e96ecff74d34bfb7a239c`
 - Validation:
   - `pnpm install --frozen-lockfile` — passed
   - `bun test scripts/__tests__/test-orchestration.test.ts` — passed
@@ -58,7 +58,7 @@
 - Ticket base: `7c1669fd18912ede7bd1cbf31d3bd019f7da000c`
 - Reviewed content head: `b79f83ae20cebccdf511425d03bfff6a6a68953f`
 - Candidate commits: `b79f83ae20cebccdf511425d03bfff6a6a68953f`
-- Final squash commit: `pending`
+- Final squash commit: `461c711f8c610798795e96ecff74d34bfb7a239c`
 - Validation:
   - `pnpm install --frozen-lockfile` — passed
   - `bun test scripts/__tests__/test-orchestration.test.ts` — passed
