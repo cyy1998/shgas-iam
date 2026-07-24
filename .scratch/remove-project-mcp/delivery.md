@@ -3,7 +3,7 @@
 Workflow-Version: 2
 Feature-Slug: remove-project-mcp
 Workflow-Kind: quick
-Stage: merge-ready
+Stage: delivered
 Feature-Branch: codex/quick-remove-project-mcp
 Target-Branch: main
 Target-Base: 8fa3d37bbf0e8c3669b9ac89ff91bb20124115ec
@@ -19,7 +19,7 @@ Content-Head: 426072018ab411acf65d562a67e2506943107fa5
 Verified-Content-Head: 426072018ab411acf65d562a67e2506943107fa5
 Reviewed-Content-Head: 426072018ab411acf65d562a67e2506943107fa5
 Merge-Target-Tip: 8fa3d37bbf0e8c3669b9ac89ff91bb20124115ec
-Final-Squash-Commit: pending
+Final-Squash-Commit: 8f7d18ebd05894b8916866714076d5cf75f18633
 
 ## 范围与验收
 
@@ -40,6 +40,7 @@ Final-Squash-Commit: pending
 - `G4 Implementing` — Content-Head: `426072018ab411acf65d562a67e2506943107fa5`；已创建项目级集成清理候选提交并完成内容头同步。
 - `G5 Feature Verified` — Content-Head: `426072018ab411acf65d562a67e2506943107fa5`；残留扫描、静态检查、类型检查和构建通过，全量测试中的既有启动时限抖动已由用户接受。
 - `G6 Merge Ready` — target tip 仍为 `8fa3d37bbf0e8c3669b9ac89ff91bb20124115ec`；content、verified 与 reviewed head 一致，双轴评审清零，等待维护者授权本地 squash 事务。
+- `G7 Delivered` — 已在 `main` 创建 squash 交付提交 `8f7d18ebd05894b8916866714076d5cf75f18633`，并回填最终交付元数据。
 
 ## 验证记录
 
@@ -61,6 +62,7 @@ Final-Squash-Commit: pending
 
 - 2026-07-24 — 用户明确要求移除该项目中的指定集成，授权覆盖项目内相关配置、目录、文档和文字残留；未授权 merge、push 或远端分支操作。
 - 2026-07-24 — 用户明确表示本次全量测试按通过处理，接受既有启动 smoke 时限抖动；仍未授权 merge、push 或远端分支操作。
+- 2026-07-24 — 用户明确授权按 Merge brief 合并到 `main`，覆盖本地 squash、最终 SHA 回填和本地功能分支清理；未授权 push 或其他远端操作。
 
 ## Waivers
 
@@ -93,4 +95,11 @@ Final-Squash-Commit: pending
 
 ## Delivery receipt
 
-- 无。
+- Target branch: `main`
+- Squash commit: `8f7d18ebd05894b8916866714076d5cf75f18633`
+- Tracker metadata: planned
+- Final checks:
+  - `pnpm check:workflow` — passed
+  - `pnpm check:docs` — passed
+  - `git diff --check` — passed
+- Local feature branch: deleted
