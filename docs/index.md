@@ -33,7 +33,7 @@
 | [docs/architecture/backend-architecture.md](architecture/backend-architecture.md) | architecture | Current | 2026-07-18 | 2026-10-31 | 后端 app composition、factory/DI、ports、角色解析注入边界、route/middleware 和 architecture test 约定。 |
 | [docs/architecture/contracts-and-database.md](architecture/contracts-and-database.md) | architecture | Current | 2026-07-18 | 2026-10-31 | shared contracts、domain/db/jobs/role-assignment-resolution/read-model 边界、UnitOfWork 和 Drizzle schema/relations/migration 约定。 |
 | [docs/architecture/frontend-architecture.md](architecture/frontend-architecture.md) | architecture | Current | 2026-07-16 | 2026-10-31 | admin/sso 前端边界、service wrapper、contract、测试与生成路径约定。 |
-| [docs/architecture/repository-map.md](architecture/repository-map.md) | architecture | Current | 2026-07-18 | 2026-10-31 | monorepo apps/packages/gateway 地图，以及 Current docs、冻结历史和生成目录边界。 |
+| [docs/architecture/repository-map.md](architecture/repository-map.md) | architecture | Current | 2026-07-23 | 2026-10-31 | monorepo apps/packages/gateway 地图、共享 ESLint 配置所有权，以及 Current docs、冻结历史和生成目录边界。 |
 | [docs/development/backend-implementation.md](development/backend-implementation.md) | development | Current | 2026-07-05 | 2026-10-31 | backend response envelope、OpenAPI status、logger、audit event 和 architecture guard 实现惯例。 |
 | [docs/development/coding-style.md](development/coding-style.md) | development | Current | 2026-07-18 | 2026-10-31 | TypeScript、formatter 边界、文件命名、React 命名和 import alias 风格约定。 |
 | [docs/development/commands.md](development/commands.md) | development | Current | 2026-07-22 | 2026-10-31 | workspace、显式提交前检查、backend、shared package、显式 PostgreSQL 测试、database、frontend 和 gateway 命令入口。 |

@@ -1,22 +1,7 @@
-import antfu from "@antfu/eslint-config";
+import { createBackendConfig } from "@iam/eslint-config";
 
-export default antfu({
-  formatters: true,
-  stylistic: {
-    semi: true,
-    quotes: "double",
-  },
+export default createBackendConfig({
   rules: {
     "node/prefer-global/process": "off",
-    "max-len": [
-      "warn",
-      {
-        code: 120,
-        ignoreStrings: true,
-        ignoreTemplateLiterals: true,
-        ignoreRegExpLiterals: true,
-        ignoreUrls: true,
-      },
-    ],
   },
 });

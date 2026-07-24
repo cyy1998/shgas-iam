@@ -19,11 +19,10 @@
     "drizzle-orm": "1.0.0-rc.2"
   },
   "devDependencies": {
-    "@antfu/eslint-config": "^9.1.0",
+    "@iam/eslint-config": "workspace:*",
     "@types/bun": "latest",
     "@typescript/native": "npm:typescript@7.0.2",
     "eslint": "^10.7.0",
-    "eslint-plugin-format": "^2.0.1",
     "postgres": "^3.4.9",
     "typescript": "npm:@typescript/typescript6@6.0.2"
   }

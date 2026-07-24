@@ -7,6 +7,7 @@ settings:
 overrides:
   '@types/react': 19.2.17
   '@types/react-dom': 19.2.3
+  '@typescript/typescript6@6.0.2>@typescript/old': npm:typescript@6.0.2
   '@typescript/native': npm:typescript@7.0.2
   sass: 1.101.0
   typescript: npm:@typescript/typescript6@6.0.2
@@ -15,18 +16,15 @@ importers:
 
   .:
     devDependencies:
-      '@antfu/eslint-config':
-        specifier: ^9.1.0
-        version: 9.1.0(@eslint-react/eslint-plugin@5.17.1(@typescript/typescript6@6.0.2)(eslint@10.7.0(jiti@2.7.0)))(@typescript-eslint/typescript-estree@8.64.0(@typescript/typescript6@6.0.2))(@typescript-eslint/utils@8.64.0(@typescript/typescript6@6.0.2)(eslint@10.7.0(jiti@2.7.0)))(@typescript/typescript6@6.0.2)(@vue/compiler-sfc@3.5.29)(eslint-plugin-format@2.0.1(eslint@10.7.0(jiti@2.7.0)))(eslint-plugin-react-refresh@0.5.3(eslint@10.7.0(jiti@2.7.0)))(eslint@10.7.0(jiti@2.7.0))(vitest@4.1.10)
+      '@iam/eslint-config':
+        specifier: workspace:*
+        version: link:packages/eslint-config
       '@typescript/native':
         specifier: npm:typescript@7.0.2
         version: typescript@7.0.2
       eslint:
         specifier: ^10.7.0
         version: 10.7.0(jiti@2.7.0)
-      eslint-plugin-format:
-        specifier: ^2.0.1
-        version: 2.0.1(eslint@10.7.0(jiti@2.7.0))
       husky:
         specifier: ^9.1.7
         version: 9.1.7
@@ -67,15 +65,12 @@ importers:
         specifier: ^19.2.7
         version: 19.2.7(react@19.2.7)
     devDependencies:
-      '@antfu/eslint-config':
-        specifier: ^9.1.0
-        version: 9.1.0(@eslint-react/eslint-plugin@5.17.1(@typescript/typescript6@6.0.2)(eslint@10.7.0(jiti@2.7.0)))(@typescript-eslint/typescript-estree@8.64.0(@typescript/typescript6@6.0.2))(@typescript-eslint/utils@8.64.0(@typescript/typescript6@6.0.2)(eslint@10.7.0(jiti@2.7.0)))(@typescript/typescript6@6.0.2)(@vue/compiler-sfc@3.5.29)(eslint-plugin-format@2.0.1(eslint@10.7.0(jiti@2.7.0)))(eslint-plugin-react-refresh@0.5.3(eslint@10.7.0(jiti@2.7.0)))(eslint@10.7.0(jiti@2.7.0))(vitest@4.1.10)
-      '@eslint-react/eslint-plugin':
-        specifier: ^5.17.1
-        version: 5.17.1(@typescript/typescript6@6.0.2)(eslint@10.7.0(jiti@2.7.0))
       '@iam/admin-api':
         specifier: workspace:*
         version: link:../admin-api
+      '@iam/eslint-config':
+        specifier: workspace:*
+        version: link:../../packages/eslint-config
       '@playwright/test':
         specifier: ^1.61.1
         version: 1.61.1
@@ -109,9 +104,6 @@ importers:
       eslint:
         specifier: ^10.7.0
         version: 10.7.0(jiti@2.7.0)
-      eslint-plugin-react-refresh:
-        specifier: ^0.5.3
-        version: 0.5.3(eslint@10.7.0(jiti@2.7.0))
       jsdom:
         specifier: ^29.1.1
         version: 29.1.1
@@ -200,9 +192,9 @@ importers:
         specifier: ^4.4.3
         version: 4.4.3
     devDependencies:
-      '@antfu/eslint-config':
-        specifier: ^9.1.0
-        version: 9.1.0(@eslint-react/eslint-plugin@5.17.1(@typescript/typescript6@6.0.2)(eslint@10.7.0(jiti@2.7.0)))(@typescript-eslint/typescript-estree@8.64.0(@typescript/typescript6@6.0.2))(@typescript-eslint/utils@8.64.0(@typescript/typescript6@6.0.2)(eslint@10.7.0(jiti@2.7.0)))(@typescript/typescript6@6.0.2)(@vue/compiler-sfc@3.5.29)(eslint-plugin-format@2.0.1(eslint@10.7.0(jiti@2.7.0)))(eslint-plugin-react-refresh@0.5.3(eslint@10.7.0(jiti@2.7.0)))(eslint@10.7.0(jiti@2.7.0))(vitest@4.1.10)
+      '@iam/eslint-config':
+        specifier: workspace:*
+        version: link:../../packages/eslint-config
       '@types/bun':
         specifier: latest
         version: 1.3.14
@@ -212,9 +204,6 @@ importers:
       eslint:
         specifier: ^10.7.0
         version: 10.7.0(jiti@2.7.0)
-      eslint-plugin-format:
-        specifier: ^2.0.1
-        version: 2.0.1(eslint@10.7.0(jiti@2.7.0))
       typescript:
         specifier: npm:@typescript/typescript6@6.0.2
         version: '@typescript/typescript6@6.0.2'
@@ -291,9 +280,9 @@ importers:
         specifier: ^4.4.3
         version: 4.4.3
     devDependencies:
-      '@antfu/eslint-config':
-        specifier: ^9.1.0
-        version: 9.1.0(@eslint-react/eslint-plugin@5.17.1(@typescript/typescript6@6.0.2)(eslint@10.7.0(jiti@2.7.0)))(@typescript-eslint/typescript-estree@8.64.0(@typescript/typescript6@6.0.2))(@typescript-eslint/utils@8.64.0(@typescript/typescript6@6.0.2)(eslint@10.7.0(jiti@2.7.0)))(@typescript/typescript6@6.0.2)(@vue/compiler-sfc@3.5.29)(eslint-plugin-format@2.0.1(eslint@10.7.0(jiti@2.7.0)))(eslint-plugin-react-refresh@0.5.3(eslint@10.7.0(jiti@2.7.0)))(eslint@10.7.0(jiti@2.7.0))(vitest@4.1.10)
+      '@iam/eslint-config':
+        specifier: workspace:*
+        version: link:../../packages/eslint-config
       '@types/bun':
         specifier: latest
         version: 1.3.14
@@ -309,9 +298,6 @@ importers:
       eslint:
         specifier: ^10.7.0
         version: 10.7.0(jiti@2.7.0)
-      eslint-plugin-format:
-        specifier: ^2.0.1
-        version: 2.0.1(eslint@10.7.0(jiti@2.7.0))
       typescript:
         specifier: npm:@typescript/typescript6@6.0.2
         version: '@typescript/typescript6@6.0.2'
@@ -358,9 +344,9 @@ importers:
         specifier: ^4.4.3
         version: 4.4.3
     devDependencies:
-      '@antfu/eslint-config':
-        specifier: ^9.1.0
-        version: 9.1.0(@eslint-react/eslint-plugin@5.17.1(@typescript/typescript6@6.0.2)(eslint@10.7.0(jiti@2.7.0)))(@typescript-eslint/typescript-estree@8.64.0(@typescript/typescript6@6.0.2))(@typescript-eslint/utils@8.64.0(@typescript/typescript6@6.0.2)(eslint@10.7.0(jiti@2.7.0)))(@typescript/typescript6@6.0.2)(@vue/compiler-sfc@3.5.29)(eslint-plugin-format@2.0.1(eslint@10.7.0(jiti@2.7.0)))(eslint-plugin-react-refresh@0.5.3(eslint@10.7.0(jiti@2.7.0)))(eslint@10.7.0(jiti@2.7.0))(vitest@4.1.10)
+      '@iam/eslint-config':
+        specifier: workspace:*
+        version: link:../../packages/eslint-config
       '@types/node':
         specifier: 24.13.2
         version: 24.13.2
@@ -373,9 +359,6 @@ importers:
       eslint:
         specifier: ^10.7.0
         version: 10.7.0(jiti@2.7.0)
-      eslint-plugin-format:
-        specifier: ^2.0.1
-        version: 2.0.1(eslint@10.7.0(jiti@2.7.0))
       typescript:
         specifier: npm:@typescript/typescript6@6.0.2
         version: '@typescript/typescript6@6.0.2'
@@ -410,12 +393,9 @@ importers:
         specifier: ^19.2.7
         version: 19.2.7(react@19.2.7)
     devDependencies:
-      '@antfu/eslint-config':
-        specifier: ^9.1.0
-        version: 9.1.0(@eslint-react/eslint-plugin@5.17.1(@typescript/typescript6@6.0.2)(eslint@10.7.0(jiti@2.7.0)))(@typescript-eslint/typescript-estree@8.64.0(@typescript/typescript6@6.0.2))(@typescript-eslint/utils@8.64.0(@typescript/typescript6@6.0.2)(eslint@10.7.0(jiti@2.7.0)))(@typescript/typescript6@6.0.2)(@vue/compiler-sfc@3.5.29)(eslint-plugin-format@2.0.1(eslint@10.7.0(jiti@2.7.0)))(eslint-plugin-react-refresh@0.5.3(eslint@10.7.0(jiti@2.7.0)))(eslint@10.7.0(jiti@2.7.0))(vitest@4.1.10)
-      '@eslint-react/eslint-plugin':
-        specifier: ^5.17.1
-        version: 5.17.1(@typescript/typescript6@6.0.2)(eslint@10.7.0(jiti@2.7.0))
+      '@iam/eslint-config':
+        specifier: workspace:*
+        version: link:../../packages/eslint-config
       '@playwright/test':
         specifier: ^1.61.1
         version: 1.61.1
@@ -446,9 +426,6 @@ importers:
       eslint:
         specifier: ^10.7.0
         version: 10.7.0(jiti@2.7.0)
-      eslint-plugin-react-refresh:
-        specifier: ^0.5.3
-        version: 0.5.3(eslint@10.7.0(jiti@2.7.0))
       jsdom:
         specifier: ^29.1.1
         version: 29.1.1
@@ -519,9 +496,9 @@ importers:
         specifier: ^4.4.3
         version: 4.4.3
     devDependencies:
-      '@antfu/eslint-config':
-        specifier: ^9.1.0
-        version: 9.1.0(@eslint-react/eslint-plugin@5.17.1(@typescript/typescript6@6.0.2)(eslint@10.7.0(jiti@2.7.0)))(@typescript-eslint/typescript-estree@8.64.0(@typescript/typescript6@6.0.2))(@typescript-eslint/utils@8.64.0(@typescript/typescript6@6.0.2)(eslint@10.7.0(jiti@2.7.0)))(@typescript/typescript6@6.0.2)(@vue/compiler-sfc@3.5.29)(eslint-plugin-format@2.0.1(eslint@10.7.0(jiti@2.7.0)))(eslint-plugin-react-refresh@0.5.3(eslint@10.7.0(jiti@2.7.0)))(eslint@10.7.0(jiti@2.7.0))(vitest@4.1.10)
+      '@iam/eslint-config':
+        specifier: workspace:*
+        version: link:../../packages/eslint-config
       '@types/bun':
         specifier: latest
         version: 1.3.14
@@ -531,9 +508,6 @@ importers:
       eslint:
         specifier: ^10.7.0
         version: 10.7.0(jiti@2.7.0)
-      eslint-plugin-format:
-        specifier: ^2.0.1
-        version: 2.0.1(eslint@10.7.0(jiti@2.7.0))
       typescript:
         specifier: npm:@typescript/typescript6@6.0.2
         version: '@typescript/typescript6@6.0.2'
@@ -547,9 +521,9 @@ importers:
         specifier: ^2.8.2
         version: 2.9.0
     devDependencies:
-      '@antfu/eslint-config':
-        specifier: ^9.1.0
-        version: 9.1.0(@eslint-react/eslint-plugin@5.17.1(@typescript/typescript6@6.0.2)(eslint@10.7.0(jiti@2.7.0)))(@typescript-eslint/typescript-estree@8.64.0(@typescript/typescript6@6.0.2))(@typescript-eslint/utils@8.64.0(@typescript/typescript6@6.0.2)(eslint@10.7.0(jiti@2.7.0)))(@typescript/typescript6@6.0.2)(@vue/compiler-sfc@3.5.29)(eslint-plugin-format@2.0.1(eslint@10.7.0(jiti@2.7.0)))(eslint-plugin-react-refresh@0.5.3(eslint@10.7.0(jiti@2.7.0)))(eslint@10.7.0(jiti@2.7.0))(vitest@4.1.10)
+      '@iam/eslint-config':
+        specifier: workspace:*
+        version: link:../packages/eslint-config
       '@types/bun':
         specifier: latest
         version: 1.3.14
@@ -559,9 +533,6 @@ importers:
       eslint:
         specifier: ^10.7.0
         version: 10.7.0(jiti@2.7.0)
-      eslint-plugin-format:
-        specifier: ^2.0.1
-        version: 2.0.1(eslint@10.7.0(jiti@2.7.0))
       typescript:
         specifier: npm:@typescript/typescript6@6.0.2
         version: '@typescript/typescript6@6.0.2'
@@ -605,9 +576,9 @@ importers:
         specifier: ^4.4.3
         version: 4.4.3
     devDependencies:
-      '@antfu/eslint-config':
-        specifier: ^9.1.0
-        version: 9.1.0(@eslint-react/eslint-plugin@5.17.1(@typescript/typescript6@6.0.2)(eslint@10.7.0(jiti@2.7.0)))(@typescript-eslint/typescript-estree@8.64.0(@typescript/typescript6@6.0.2))(@typescript-eslint/utils@8.64.0(@typescript/typescript6@6.0.2)(eslint@10.7.0(jiti@2.7.0)))(@typescript/typescript6@6.0.2)(@vue/compiler-sfc@3.5.29)(eslint-plugin-format@2.0.1(eslint@10.7.0(jiti@2.7.0)))(eslint-plugin-react-refresh@0.5.3(eslint@10.7.0(jiti@2.7.0)))(eslint@10.7.0(jiti@2.7.0))(vitest@4.1.10)
+      '@iam/eslint-config':
+        specifier: workspace:*
+        version: link:../eslint-config
       '@types/bun':
         specifier: latest
         version: 1.3.14
@@ -620,9 +591,6 @@ importers:
       eslint:
         specifier: ^10.7.0
         version: 10.7.0(jiti@2.7.0)
-      eslint-plugin-format:
-        specifier: ^2.0.1
-        version: 2.0.1(eslint@10.7.0(jiti@2.7.0))
       typescript:
         specifier: npm:@typescript/typescript6@6.0.2
         version: '@typescript/typescript6@6.0.2'
@@ -636,9 +604,9 @@ importers:
         specifier: ^4.4.3
         version: 4.4.3
     devDependencies:
-      '@antfu/eslint-config':
-        specifier: ^9.1.0
-        version: 9.1.0(@eslint-react/eslint-plugin@5.17.1(@typescript/typescript6@6.0.2)(eslint@10.7.0(jiti@2.7.0)))(@typescript-eslint/typescript-estree@8.64.0(@typescript/typescript6@6.0.2))(@typescript-eslint/utils@8.64.0(@typescript/typescript6@6.0.2)(eslint@10.7.0(jiti@2.7.0)))(@typescript/typescript6@6.0.2)(@vue/compiler-sfc@3.5.29)(eslint-plugin-format@2.0.1(eslint@10.7.0(jiti@2.7.0)))(eslint-plugin-react-refresh@0.5.3(eslint@10.7.0(jiti@2.7.0)))(eslint@10.7.0(jiti@2.7.0))(vitest@4.1.10)
+      '@iam/eslint-config':
+        specifier: workspace:*
+        version: link:../eslint-config
       '@types/bun':
         specifier: latest
         version: 1.3.14
@@ -651,9 +619,6 @@ importers:
       eslint:
         specifier: ^10.7.0
         version: 10.7.0(jiti@2.7.0)
-      eslint-plugin-format:
-        specifier: ^2.0.1
-        version: 2.0.1(eslint@10.7.0(jiti@2.7.0))
       typescript:
         specifier: npm:@typescript/typescript6@6.0.2
         version: '@typescript/typescript6@6.0.2'
@@ -673,9 +638,9 @@ importers:
         specifier: ^4.4.3
         version: 4.4.3
     devDependencies:
-      '@antfu/eslint-config':
-        specifier: ^9.1.0
-        version: 9.1.0(@eslint-react/eslint-plugin@5.17.1(@typescript/typescript6@6.0.2)(eslint@10.7.0(jiti@2.7.0)))(@typescript-eslint/typescript-estree@8.64.0(@typescript/typescript6@6.0.2))(@typescript-eslint/utils@8.64.0(@typescript/typescript6@6.0.2)(eslint@10.7.0(jiti@2.7.0)))(@typescript/typescript6@6.0.2)(@vue/compiler-sfc@3.5.29)(eslint-plugin-format@2.0.1(eslint@10.7.0(jiti@2.7.0)))(eslint-plugin-react-refresh@0.5.3(eslint@10.7.0(jiti@2.7.0)))(eslint@10.7.0(jiti@2.7.0))(vitest@4.1.10)
+      '@iam/eslint-config':
+        specifier: workspace:*
+        version: link:../eslint-config
       '@types/bun':
         specifier: latest
         version: 1.3.14
@@ -688,9 +653,6 @@ importers:
       eslint:
         specifier: ^10.7.0
         version: 10.7.0(jiti@2.7.0)
-      eslint-plugin-format:
-        specifier: ^2.0.1
-        version: 2.0.1(eslint@10.7.0(jiti@2.7.0))
       typescript:
         specifier: npm:@typescript/typescript6@6.0.2
         version: '@typescript/typescript6@6.0.2'
@@ -713,9 +675,9 @@ importers:
         specifier: ^4.4.3
         version: 4.4.3
     devDependencies:
-      '@antfu/eslint-config':
-        specifier: ^9.1.0
-        version: 9.1.0(@eslint-react/eslint-plugin@5.17.1(@typescript/typescript6@6.0.2)(eslint@10.7.0(jiti@2.7.0)))(@typescript-eslint/typescript-estree@8.64.0(@typescript/typescript6@6.0.2))(@typescript-eslint/utils@8.64.0(@typescript/typescript6@6.0.2)(eslint@10.7.0(jiti@2.7.0)))(@typescript/typescript6@6.0.2)(@vue/compiler-sfc@3.5.29)(eslint-plugin-format@2.0.1(eslint@10.7.0(jiti@2.7.0)))(eslint-plugin-react-refresh@0.5.3(eslint@10.7.0(jiti@2.7.0)))(eslint@10.7.0(jiti@2.7.0))(vitest@4.1.10)
+      '@iam/eslint-config':
+        specifier: workspace:*
+        version: link:../eslint-config
       '@types/bun':
         specifier: latest
         version: 1.3.14
@@ -725,9 +687,46 @@ importers:
       eslint:
         specifier: ^10.7.0
         version: 10.7.0(jiti@2.7.0)
+      typescript:
+        specifier: npm:@typescript/typescript6@6.0.2
+        version: '@typescript/typescript6@6.0.2'
+
+  packages/eslint-config:
+    dependencies:
+      '@antfu/eslint-config':
+        specifier: ^9.1.0
+        version: 9.1.0(@eslint-react/eslint-plugin@5.17.1(@typescript/typescript6@6.0.2)(eslint@10.7.0(jiti@2.7.0)))(@typescript-eslint/typescript-estree@8.64.0(@typescript/typescript6@6.0.2))(@typescript-eslint/utils@8.64.0(@typescript/typescript6@6.0.2)(eslint@10.7.0(jiti@2.7.0)))(@typescript/typescript6@6.0.2)(@vue/compiler-sfc@3.5.29)(eslint-plugin-format@2.0.1(eslint@10.7.0(jiti@2.7.0)))(eslint-plugin-react-refresh@0.5.3(eslint@10.7.0(jiti@2.7.0)))(eslint@10.7.0(jiti@2.7.0))(vitest@4.1.10)
+      '@eslint-react/eslint-plugin':
+        specifier: ^5.17.1
+        version: 5.17.1(@typescript/typescript6@6.0.2)(eslint@10.7.0(jiti@2.7.0))
+      '@typescript-eslint/eslint-plugin':
+        specifier: ^8.64.0
+        version: 8.64.0(@typescript-eslint/parser@8.64.0(@typescript/typescript6@6.0.2)(eslint@10.7.0(jiti@2.7.0)))(@typescript/typescript6@6.0.2)(eslint@10.7.0(jiti@2.7.0))
+      '@typescript-eslint/parser':
+        specifier: ^8.64.0
+        version: 8.64.0(@typescript/typescript6@6.0.2)(eslint@10.7.0(jiti@2.7.0))
       eslint-plugin-format:
         specifier: ^2.0.1
         version: 2.0.1(eslint@10.7.0(jiti@2.7.0))
+      eslint-plugin-import-lite:
+        specifier: ^0.6.0
+        version: 0.6.0(eslint@10.7.0(jiti@2.7.0))
+      eslint-plugin-n:
+        specifier: ^18.2.2
+        version: 18.2.2(@typescript/typescript6@6.0.2)(eslint@10.7.0(jiti@2.7.0))
+      eslint-plugin-react-refresh:
+        specifier: ^0.5.3
+        version: 0.5.3(eslint@10.7.0(jiti@2.7.0))
+      eslint-plugin-unused-imports:
+        specifier: ^4.4.1
+        version: 4.4.1(@typescript-eslint/eslint-plugin@8.64.0(@typescript-eslint/parser@8.64.0(@typescript/typescript6@6.0.2)(eslint@10.7.0(jiti@2.7.0)))(@typescript/typescript6@6.0.2)(eslint@10.7.0(jiti@2.7.0)))(eslint@10.7.0(jiti@2.7.0))
+    devDependencies:
+      '@typescript/native':
+        specifier: npm:typescript@7.0.2
+        version: typescript@7.0.2
+      eslint:
+        specifier: ^10.7.0
+        version: 10.7.0(jiti@2.7.0)
       typescript:
         specifier: npm:@typescript/typescript6@6.0.2
         version: '@typescript/typescript6@6.0.2'
@@ -741,9 +740,9 @@ importers:
         specifier: ^5.11.1
         version: 5.11.1
     devDependencies:
-      '@antfu/eslint-config':
-        specifier: ^9.1.0
-        version: 9.1.0(@eslint-react/eslint-plugin@5.17.1(@typescript/typescript6@6.0.2)(eslint@10.7.0(jiti@2.7.0)))(@typescript-eslint/typescript-estree@8.64.0(@typescript/typescript6@6.0.2))(@typescript-eslint/utils@8.64.0(@typescript/typescript6@6.0.2)(eslint@10.7.0(jiti@2.7.0)))(@typescript/typescript6@6.0.2)(@vue/compiler-sfc@3.5.29)(eslint-plugin-format@2.0.1(eslint@10.7.0(jiti@2.7.0)))(eslint-plugin-react-refresh@0.5.3(eslint@10.7.0(jiti@2.7.0)))(eslint@10.7.0(jiti@2.7.0))(vitest@4.1.10)
+      '@iam/eslint-config':
+        specifier: workspace:*
+        version: link:../eslint-config
       '@types/bun':
         specifier: latest
         version: 1.3.14
@@ -753,9 +752,6 @@ importers:
       eslint:
         specifier: ^10.7.0
         version: 10.7.0(jiti@2.7.0)
-      eslint-plugin-format:
-        specifier: ^2.0.1
-        version: 2.0.1(eslint@10.7.0(jiti@2.7.0))
       typescript:
         specifier: npm:@typescript/typescript6@6.0.2
         version: '@typescript/typescript6@6.0.2'
@@ -772,9 +768,9 @@ importers:
         specifier: 1.0.0-rc.2
         version: 1.0.0-rc.2(bun-types@1.3.14)(postgres@3.4.9)(zod@4.4.3)
     devDependencies:
-      '@antfu/eslint-config':
-        specifier: ^9.1.0
-        version: 9.1.0(@eslint-react/eslint-plugin@5.17.1(@typescript/typescript6@6.0.2)(eslint@10.7.0(jiti@2.7.0)))(@typescript-eslint/typescript-estree@8.64.0(@typescript/typescript6@6.0.2))(@typescript-eslint/utils@8.64.0(@typescript/typescript6@6.0.2)(eslint@10.7.0(jiti@2.7.0)))(@typescript/typescript6@6.0.2)(@vue/compiler-sfc@3.5.29)(eslint-plugin-format@2.0.1(eslint@10.7.0(jiti@2.7.0)))(eslint-plugin-react-refresh@0.5.3(eslint@10.7.0(jiti@2.7.0)))(eslint@10.7.0(jiti@2.7.0))(vitest@4.1.10)
+      '@iam/eslint-config':
+        specifier: workspace:*
+        version: link:../eslint-config
       '@types/bun':
         specifier: latest
         version: 1.3.14
@@ -784,9 +780,6 @@ importers:
       eslint:
         specifier: ^10.7.0
         version: 10.7.0(jiti@2.7.0)
-      eslint-plugin-format:
-        specifier: ^2.0.1
-        version: 2.0.1(eslint@10.7.0(jiti@2.7.0))
       postgres:
         specifier: ^3.4.9
         version: 3.4.9
@@ -821,9 +814,9 @@ importers:
         specifier: ^4.4.3
         version: 4.4.3
     devDependencies:
-      '@antfu/eslint-config':
-        specifier: ^9.1.0
-        version: 9.1.0(@eslint-react/eslint-plugin@5.17.1(@typescript/typescript6@6.0.2)(eslint@10.7.0(jiti@2.7.0)))(@typescript-eslint/typescript-estree@8.64.0(@typescript/typescript6@6.0.2))(@typescript-eslint/utils@8.64.0(@typescript/typescript6@6.0.2)(eslint@10.7.0(jiti@2.7.0)))(@typescript/typescript6@6.0.2)(@vue/compiler-sfc@3.5.29)(eslint-plugin-format@2.0.1(eslint@10.7.0(jiti@2.7.0)))(eslint-plugin-react-refresh@0.5.3(eslint@10.7.0(jiti@2.7.0)))(eslint@10.7.0(jiti@2.7.0))(vitest@4.1.10)
+      '@iam/eslint-config':
+        specifier: workspace:*
+        version: link:../eslint-config
       '@types/bun':
         specifier: latest
         version: 1.3.14
@@ -833,9 +826,6 @@ importers:
       eslint:
         specifier: ^10.7.0
         version: 10.7.0(jiti@2.7.0)
-      eslint-plugin-format:
-        specifier: ^2.0.1
-        version: 2.0.1(eslint@10.7.0(jiti@2.7.0))
       typescript:
         specifier: npm:@typescript/typescript6@6.0.2
         version: '@typescript/typescript6@6.0.2'
@@ -10446,8 +10436,8 @@ packages:
     resolution: {integrity: sha512-phPGCwqr2+Qo0fwniCE8e4pKnGu/yFb5nD5Y8bf0EEeiI5GklnACYA9GFy/DrAeRrKHXvHn+1SUsOWgJp6RO+g==}
     engines: {node: '>= 0.4'}
 
-  typescript@6.0.3:
-    resolution: {integrity: sha512-y2TvuxSZPDyQakkFRPZHKFm+KKVqIisdg9/CZwm9ftvKXLP8NRWj38/ODjNbr43SsoXqNuAisEf1GdCxqWcdBw==}
+  typescript@6.0.2:
+    resolution: {integrity: sha512-bGdAIrZ0wiGDo5l8c++HWtbaNCWTS4UTv7RaTH/ThVIgjkveJt83m74bBHMJkuCbslY8ixgLBVZJIOiQlQTjfQ==}
     engines: {node: '>=14.17'}
     hasBin: true
 
@@ -14329,7 +14319,7 @@ snapshots:
 
   '@typescript/typescript6@6.0.2':
     dependencies:
-      '@typescript/old': typescript@6.0.3
+      '@typescript/old': typescript@6.0.2
 
   '@umijs/ast@4.6.79':
     dependencies:
@@ -21926,7 +21916,7 @@ snapshots:
       possible-typed-array-names: 1.1.0
       reflect.getprototypeof: 1.0.10
 
-  typescript@6.0.3: {}
+  typescript@6.0.2: {}
 
   typescript@7.0.2:
     optionalDependencies:

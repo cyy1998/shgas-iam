@@ -1,0 +1,34 @@
+{
+  "name": "@iam/eslint-config",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./backend": "./src/backend.ts",
+    "./frontend": "./src/frontend.ts",
+    "./root": "./src/root.ts"
+  },
+  "scripts": {
+    "lint": "eslint --config ../../eslint.root.config.mjs src test benchmark",
+    "lint:fix": "eslint --config ../../eslint.root.config.mjs --fix src test benchmark",
+    "test": "bun test test",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@antfu/eslint-config": "^9.1.0",
+    "@eslint-react/eslint-plugin": "^5.17.1",
+    "@typescript-eslint/eslint-plugin": "^8.64.0",
+    "@typescript-eslint/parser": "^8.64.0",
+    "eslint-plugin-format": "^2.0.1",
+    "eslint-plugin-import-lite": "^0.6.0",
+    "eslint-plugin-n": "^18.2.2",
+    "eslint-plugin-react-refresh": "^0.5.3",
+    "eslint-plugin-unused-imports": "^4.4.1"
+  },
+  "devDependencies": {
+    "@typescript/native": "npm:typescript@7.0.2",
+    "eslint": "^10.7.0",
+    "typescript": "npm:@typescript/typescript6@6.0.2"
+  }
+}

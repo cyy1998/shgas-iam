@@ -31,6 +31,9 @@
   error。
 - `packages/db/src`: Drizzle schema、relations、migrations、singleton client 和 query helper。Schema 和 relation
   domain 当前包含 `core` 和 `log`，共享 column helper 位于 `schema/_shard/`。
+- `packages/eslint-config`: 全仓唯一的 ESLint 配置所有者。公开入口只包含 root、backend、frontend preset 工厂；
+  Antfu 与其运行时插件依赖由该 package 统一解析。`benchmark/` 中的 lean/curated profile 仅用于测量和选型，
+  不是 workspace 可消费的生产 preset，也不得绕过公开 exports。
 - `packages/jobs/src`: 共享 BullMQ connection、queue、worker、job ID 和 default option helper。
 - `packages/role-assignment-resolution/src`: 通过 `createRoleAssignmentResolver(db)` 暴露正向 Effective Role 与反向
   受影响用户解析的唯一公开 seam；assignment 来源、组织闭包、有效性、去重和排序规则只存在于 package 内部。

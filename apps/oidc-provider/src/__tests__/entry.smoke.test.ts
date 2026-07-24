@@ -5,6 +5,8 @@ import { exportJWK, generateKeyPair } from "jose";
 import { afterEach, describe, expect, it } from "vitest";
 
 const children = new Set<ChildProcessWithoutNullStreams>();
+const entryReadyTimeoutMs = 15_000;
+const entrySmokeTimeoutMs = 25_000;
 
 afterEach(async () => {
   await Promise.all([...children].map(stopChild));
@@ -24,7 +26,10 @@ async function reservePort() {
 async function waitForOutput(child: ChildProcessWithoutNullStreams, expected: string) {
   let output = "";
   return await new Promise<string>((resolve, reject) => {
-    const timeout = setTimeout(() => reject(new Error(`OIDC entry did not start:\n${output}`)), 10_000);
+    const timeout = setTimeout(
+      () => reject(new Error(`OIDC entry did not start:\n${output}`)),
+      entryReadyTimeoutMs,
+    );
     const onData = (data: Buffer) => {
       output += data.toString();
       if (output.includes(expected)) {
@@ -91,5 +96,5 @@ describe("oIDC provider entry", () => {
 
     await stopChild(child);
     children.delete(child);
-  }, 15_000);
+  }, entrySmokeTimeoutMs);
 });

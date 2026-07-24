@@ -1,10 +1,15 @@
 import { ApiErrorCode } from '@iam/contracts';
+import { Modal } from 'antd';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { render, screen, waitFor } from '../../../../test/render';
+import { fireEvent, render, screen, waitFor } from '../../../../test/render';
 import { ServiceError } from '../../../utils/request';
 import LoginPage from '../index';
 
 const withHumanVerification = vi.hoisted(() => vi.fn());
+const modalError = vi.spyOn(Modal, 'error').mockReturnValue({
+  destroy: vi.fn(),
+  update: vi.fn(),
+});
 
 vi.mock('@sso/lib/human-verification', () => ({
   withHumanVerification,
@@ -24,17 +29,23 @@ describe('LoginPage', () => {
     withHumanVerification.mockRejectedValue(
       new ServiceError('账号或密码错误', ApiErrorCode.LoginFailed),
     );
-    const { user } = render(<LoginPage />);
+    render(<LoginPage />);
 
-    expect(await screen.findByText('IAM 管理后台')).toBeInTheDocument();
-
-    await user.type(screen.getByPlaceholderText('请输入您的工号'), 'zhangsan');
-    await user.type(screen.getByPlaceholderText('请输入登录密码'), 'secret');
-    await user.click(screen.getByRole('button', { name: /安全登录/ }));
+    fireEvent.change(screen.getByPlaceholderText('请输入您的工号'), {
+      target: { value: 'zhangsan' },
+    });
+    fireEvent.change(screen.getByPlaceholderText('请输入登录密码'), {
+      target: { value: 'secret' },
+    });
+    fireEvent.click(screen.getByText('安全登录').closest('button')!);
 
     await waitFor(() => {
-      expect(screen.getAllByText('登录失败').length).toBeGreaterThan(0);
-      expect(screen.getByText('账号或密码错误')).toBeInTheDocument();
+      expect(modalError).toHaveBeenCalledWith({
+        centered: true,
+        title: '登录失败',
+        content: '账号或密码错误',
+        okText: '确定',
+      });
     });
   });
 });

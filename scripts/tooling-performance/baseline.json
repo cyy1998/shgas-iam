@@ -1,0 +1,26 @@
+{
+  "schemaVersion": 1,
+  "capturedAt": "2026-07-23",
+  "targetBase": "55c25384e82fca2935dec782e4dd270090a9d5dc",
+  "machine": {
+    "environment": "WSL2",
+    "logicalCpuCount": 18,
+    "memoryGiB": 15,
+    "swapGiBUsedDuringDiagnosis": 2.5
+  },
+  "commands": {
+    "warmLintFeedback": "timeout 10s pnpm lint",
+    "coldLint": "pnpm exec turbo lint --force --concurrency=3",
+    "coldTypecheck": "pnpm exec turbo typecheck --force --concurrency=3",
+    "coldTest": "pnpm exec turbo test --force --concurrency=2",
+    "eslintConfig": "node scripts/benchmark-eslint-config.mjs --rounds 5"
+  },
+  "observations": {
+    "warmLintSeconds": 15.7,
+    "domainLintSeconds": 15.5,
+    "apiLintSeconds": 18.2,
+    "adminLintSeconds": 19.1,
+    "typecheckConcurrency3Seconds": 44,
+    "testConcurrency2Seconds": 41
+  }
+}

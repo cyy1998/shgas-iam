@@ -1,0 +1,130 @@
+{
+  "root": {
+    "checkedFileCount": 17,
+    "checkedFileSetHash": "9774a9765d72dec9b69d97939c97f4f3a783d8e8cbbddbadd62d9e82d46549a7",
+    "diagnosticKeys": [],
+    "errorCount": 0,
+    "exitCode": 0,
+    "warningCount": 0
+  },
+  "@iam/admin": {
+    "checkedFileCount": 78,
+    "checkedFileSetHash": "5f3be8df713a042244d7eecbeee55df81feb7f1c69108736d6202a7129324e0d",
+    "diagnosticKeys": [
+      "1:react-refresh/only-export-components:namedExport",
+      "1:react/exhaustive-deps:",
+      "1:react/no-unnecessary-use-prefix:default",
+      "1:react/set-state-in-effect:default"
+    ],
+    "errorCount": 0,
+    "exitCode": 0,
+    "warningCount": 25
+  },
+  "@iam/admin-api": {
+    "checkedFileCount": 140,
+    "checkedFileSetHash": "877a0bcb84297059f428f74678e615d277e2e76d25c5dec56c83d38bee4f3dc3",
+    "diagnosticKeys": [],
+    "errorCount": 0,
+    "exitCode": 0,
+    "warningCount": 0
+  },
+  "@iam/api": {
+    "checkedFileCount": 195,
+    "checkedFileSetHash": "ff07a09311a481dbb6db0eb68b49d067b32c401fe8b328185ec26f6c1e629548",
+    "diagnosticKeys": [],
+    "errorCount": 0,
+    "exitCode": 0,
+    "warningCount": 0
+  },
+  "@iam/oidc-provider": {
+    "checkedFileCount": 67,
+    "checkedFileSetHash": "2e1c96485d29076fd26787fd700f889e3b8e7c59b9c0ed457a91228f9cb56614",
+    "diagnosticKeys": [],
+    "errorCount": 0,
+    "exitCode": 0,
+    "warningCount": 0
+  },
+  "@iam/sso": {
+    "checkedFileCount": 51,
+    "checkedFileSetHash": "b66c2ea1153fafa6690e3d1be7dc928792d5421f53e512bfdf125a3d40a214b9",
+    "diagnosticKeys": [
+      "1:react/no-unnecessary-use-prefix:default",
+      "1:react/set-state-in-effect:default"
+    ],
+    "errorCount": 0,
+    "exitCode": 0,
+    "warningCount": 4
+  },
+  "@iam/worker": {
+    "checkedFileCount": 15,
+    "checkedFileSetHash": "d40b8f7f9482544294547efc489ba4b15408e3ec330e81c7917d81866e04ec70",
+    "diagnosticKeys": [],
+    "errorCount": 0,
+    "exitCode": 0,
+    "warningCount": 0
+  },
+  "@iam/gateway-apisix": {
+    "checkedFileCount": 29,
+    "checkedFileSetHash": "05ea4c052af7e72ad2e5ed425196a64f644268d7699a574a5be91433defe6b04",
+    "diagnosticKeys": [],
+    "errorCount": 0,
+    "exitCode": 0,
+    "warningCount": 0
+  },
+  "@iam/api-core": {
+    "checkedFileCount": 99,
+    "checkedFileSetHash": "ffda86bd820edd0a7bccb63c3568646850abe7c842b6026fdb7873011c692dd2",
+    "diagnosticKeys": [],
+    "errorCount": 0,
+    "exitCode": 0,
+    "warningCount": 0
+  },
+  "@iam/contracts": {
+    "checkedFileCount": 26,
+    "checkedFileSetHash": "ae9d988475ddc299a1c7b438a0d27e029fc862c3b789dbffae87774a7f2ac243",
+    "diagnosticKeys": [],
+    "errorCount": 0,
+    "exitCode": 0,
+    "warningCount": 0
+  },
+  "@iam/db": {
+    "checkedFileCount": 58,
+    "checkedFileSetHash": "70fdb7f12f66d172d82ee22e05ec16a69e301fea35bd4ccfe763ee35dd8f736e",
+    "diagnosticKeys": [],
+    "errorCount": 0,
+    "exitCode": 0,
+    "warningCount": 0
+  },
+  "@iam/domain": {
+    "checkedFileCount": 42,
+    "checkedFileSetHash": "c05f139b4c3d40e82fb97c9ede14df70bd681dc30a2d0cd6e82f86f2df2738c4",
+    "diagnosticKeys": [],
+    "errorCount": 0,
+    "exitCode": 0,
+    "warningCount": 0
+  },
+  "@iam/jobs": {
+    "checkedFileCount": 7,
+    "checkedFileSetHash": "2fc8160d99ded626050d34386cbd7d0056b8c22e6098f731b24f45794bfa682f",
+    "diagnosticKeys": [],
+    "errorCount": 0,
+    "exitCode": 0,
+    "warningCount": 0
+  },
+  "@iam/role-assignment-resolution": {
+    "checkedFileCount": 8,
+    "checkedFileSetHash": "0a62c0daa3ab1c630ff39b7ed8636233a21e0fbbb4e41dd03a815ad2d92c3df5",
+    "diagnosticKeys": [],
+    "errorCount": 0,
+    "exitCode": 0,
+    "warningCount": 0
+  },
+  "@iam/user-profile-read-model": {
+    "checkedFileCount": 26,
+    "checkedFileSetHash": "40ea086da2dc9daca6184da9ca3f71d5d05a4c178cb706d2cf980e6c081df5ce",
+    "diagnosticKeys": [],
+    "errorCount": 0,
+    "exitCode": 0,
+    "warningCount": 0
+  }
+}

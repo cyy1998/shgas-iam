@@ -18,6 +18,72 @@
 根开发工具链要求 Node 24。具体功能在提交前运行受影响 package 的测试、lint 和 typecheck；功能结束时执行全仓检查。
 ticket 生命周期、验证层级和提交授权见 [Engineering workflow](../agents/workflow.md)。
 
+## 工具链性能与缓存
+
+### Lint 执行与配置所有权
+
+默认 lint 保持 package-level 模型：每个 workspace 的 `lint` 脚本负责自己的文件范围，根 `pnpm lint` 在同一次
+Turbo 调度中请求 package `lint` 和 `//#lint:root`。root task 检查根配置、`scripts/` 与 workflow 记录，并和
+workspace task 一样按输入缓存；不要把根 ESLint 重新追加到 Turbo 之后，也不要用单进程全仓 ESLint 替换默认入口。
+
+`packages/eslint-config` 是唯一共享 ESLint 配置所有者。root 与各消费 workspace 必须以 `workspace:*` 直接依赖它，
+并只从公开的 root、backend 或 frontend preset 入口组合 package-local 差异。共享 preset 源码进入 Turbo 依赖图；
+它变化时 lint 必须失效，也可能按内部 workspace 哈希语义保守地使消费者的 test/typecheck cache 失效。不要在消费端
+重新声明 Antfu、typescript-eslint 或 React 插件图来规避这种 cache miss。
+
+### 冷、热路径复测
+
+性能比较使用相同命令连续执行，记录墙钟、user/system CPU 时间和最大 RSS；`--force` 表示绕过 Turbo task cache，
+并不清空操作系统文件缓存。
+
+```bash
+# warm lint：先预热，再确认 10 秒反馈环连续三次通过
+pnpm lint
+timeout 10s pnpm lint
+timeout 10s pnpm lint
+timeout 10s pnpm lint
+
+# 强制执行的全仓预算：各自连续运行两次
+/usr/bin/time -f 'elapsed_seconds=%e user_cpu_seconds=%U system_cpu_seconds=%S max_rss_kib=%M' pnpm exec turbo typecheck --force --concurrency=3
+/usr/bin/time -f 'elapsed_seconds=%e user_cpu_seconds=%U system_cpu_seconds=%S max_rss_kib=%M' pnpm exec turbo test --force --concurrency=2
+
+# ESLint 配置 import/compose、首文件 lint、完整 workspace lint 与 RSS：backend/frontend 各五轮交错采样
+node scripts/benchmark-eslint-config.mjs --rounds 5
+```
+
+基准脚本把每个 profile 的第一次文件系统观察与后续 warm observations 分开报告。评估 Node compile cache 时使用临时、
+按 profile 与阶段隔离的 `--compile-cache-dir`；不得把首次写 cache 的样本混入热启动结论。
+
+### Test、typecheck 与 TypeScript 双轨
+
+根 `pnpm test` 默认使用 Turbo concurrency 2，根 `pnpm typecheck` 默认使用 concurrency 3；workspace 局部命令和
+Vitest/Bun worker、TypeScript checker 保持各自默认值。更大的 runner 可以显式覆盖外层预算：
+
+```bash
+pnpm exec turbo test --concurrency=<N>
+pnpm exec turbo typecheck --concurrency=<N>
+```
+
+将 `<N>` 替换为该 runner 上单独复测过的值。
+一次调优只改变一个并行层；不要同时提高 Turbo concurrency、测试 worker 与 TypeScript checker，也不要在
+`turbo.json` 设置全局 concurrency。普通测试沿用运行器默认 timeout；只有具备独立基线的测试可以在自身用例上设置
+定点阈值，不得通过 Vitest/Bun 全局配置放宽。
+
+`pnpm exec tsc` 是 TypeScript 7.0.2 CLI；裸模块 `typescript` 是供 ESLint 等 API 消费方使用的官方 TypeScript 6
+compatibility package。TS7 当前不提供等价 JavaScript API，不要让 API 消费方直接加载 TS7 CLI 包，也不要删除这条
+双轨：
+
+```bash
+pnpm exec tsc --version
+node -e "const wrapper=require('typescript/package.json'); const api=require('typescript'); console.log(wrapper.name, wrapper.version, api.version)"
+```
+
+### Remote Cache 边界
+
+本仓库的正确性与本机预算不依赖 Remote Cache。团队或 CI 可以在平台侧按 Turborepo 的认证机制选择启用，用于复用
+相同输入的 task 产物；凭据只放在 CI secret 或开发者本机，不提交 token、team 标识或生成的认证文件。性能基线须注明
+Remote Cache 是否启用；强制执行数据继续使用 `--force`，避免把远端命中误记为本机执行性能。
+
 ## Commit 前检查
 
 `pnpm install` 的 `prepare` 生命周期会安装版本化 Husky hook。pre-commit 只执行以下两项 guard：

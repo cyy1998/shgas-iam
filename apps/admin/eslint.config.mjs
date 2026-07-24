@@ -1,4 +1,3 @@
-import antfu from '@antfu/eslint-config';
-import { createFrontendEslintConfig } from '../../eslint.frontend.config.mjs';
+import { createFrontendConfig } from '@iam/eslint-config';
 
-export default createFrontendEslintConfig(antfu);
+export default createFrontendConfig();
