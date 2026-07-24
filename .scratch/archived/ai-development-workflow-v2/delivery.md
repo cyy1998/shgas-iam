@@ -23,8 +23,8 @@ Final-Squash-Commit: 9b2b2656d25969a197de90a596991b7da822e9cc
 
 ## 范围与验收
 
-- Approved spec：`.scratch/ai-development-workflow-v2/spec.md`
-- Implementation tickets：`.scratch/ai-development-workflow-v2/issues/01-*.md` 至 `06-*.md`
+- Approved spec：`.scratch/archived/ai-development-workflow-v2/spec.md`
+- Implementation tickets：`.scratch/archived/ai-development-workflow-v2/issues/01-*.md` 至 `06-*.md`
 - 验收范围以 approved spec 和各 ticket 的 checkbox 为准；本 ledger 不复制其意图。
 
 ## Validation Plan
