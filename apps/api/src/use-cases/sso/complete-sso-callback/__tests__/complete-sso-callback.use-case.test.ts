@@ -1,33 +1,41 @@
-import { ClientManagementLevel } from "@iam/contracts";
+import type { CustomSsoClientRuntimeDto } from "@iam/domain/client";
+import { ClientManagementLevel, ClientStatus } from "@iam/contracts";
 import { expect, mock, test } from "bun:test";
 import { createCompleteSsoCallbackUseCase } from "../complete-sso-callback.use-case";
 
-test("consumes the code, completes ORCAS login, then creates a Gateway local session", async () => {
-  const events: string[] = [];
-  const client = {
-    clientCode: "gateway",
-    extAttributes: { requireOrcas: true, validRedirectUrls: ["https://gateway.example.com"] },
-  };
-  const userDetail = { id: 1001, name: "测试用户" };
-  const authCode = { userDetail };
-  const consumeAuthCode = mock(async () => {
-    events.push("consume");
-    return authCode;
-  });
-  const orcasLogin = mock(async () => {
-    events.push("orcas");
-    return { orcasId: "orcas-user", orcasSessionId: "orcas-session" };
-  });
-  const createLocalSession = mock(async () => {
-    events.push("session");
-    return { token: "local-token" };
-  });
+const client = {
+  id: 1,
+  clientCode: "gateway",
+  clientName: "Gateway",
+  clientSecret: "secret",
+  url: "https://gateway.example.com",
+  status: ClientStatus.Enable,
+  description: null,
+  extAttributes: {
+    callbackEndpoint: "https://gateway.example.com/sso/callback",
+    logoutEndpoint: "https://gateway.example.com/sso/logout",
+    managementLevel: ClientManagementLevel.Gateway,
+    requireOrcas: true,
+    userExcluding: [],
+    validRedirectUrls: ["https://gateway.example.com"],
+  },
+  isDelete: false,
+  createTime: new Date("2026-01-01T00:00:00Z"),
+  updateTime: new Date("2026-01-01T00:00:00Z"),
+} satisfies CustomSsoClientRuntimeDto;
+
+test("delegates once and maps the completed Gateway Local Session", async () => {
+  const getClientByCode = mock(async () => client);
+  const isAllowed = mock(() => true);
+  const completeGatewayLogin = mock(async () => ({
+    orcasSessionId: "orcas-session",
+    token: "local-token",
+  }));
   const useCase = createCompleteSsoCallbackUseCase({
-    clients: { getClientByCode: mock(async () => client) },
-    orcas: { orcasLogin },
-    redirectUrls: { isAllowed: mock(() => true) },
-    sessions: { consumeAuthCode, createLocalSession },
-  } as any);
+    authorizationGrants: { completeGatewayLogin },
+    clients: { getClientByCode },
+    redirectUrls: { isAllowed },
+  });
 
   await expect(useCase.execute({
     clientCode: "gateway",
@@ -48,18 +56,11 @@ test("consumes the code, completes ORCAS login, then creates a Gateway local ses
     token: "local-token",
   });
 
-  expect(events).toEqual(["consume", "orcas", "session"]);
-  expect(consumeAuthCode).toHaveBeenCalledWith({
-    clientCode: "gateway",
-    code: "auth-code",
-    invalidCodeError: "unauthorized",
-    redirectUrl: "https://gateway.example.com/home",
-  });
-  expect(createLocalSession).toHaveBeenCalledWith({
-    authCode,
+  expect(completeGatewayLogin).toHaveBeenCalledTimes(1);
+  expect(completeGatewayLogin).toHaveBeenCalledWith({
     client,
-    mode: ClientManagementLevel.Gateway,
-    orcas: { sessionId: "orcas-session", userId: "orcas-user" },
+    code: "auth-code",
+    redirectUrl: "https://gateway.example.com/home",
     requestContext: {
       sourceApp: "iam",
       requestId: "req-callback",
@@ -69,47 +70,20 @@ test("consumes the code, completes ORCAS login, then creates a Gateway local ses
       route: null,
       method: null,
     },
-    userDetail,
   });
 });
 
-test("does not create a local session when required ORCAS login fails", async () => {
-  const createLocalSession = mock(async () => ({ token: "should-not-exist" }));
-  const useCase = createCompleteSsoCallbackUseCase({
-    clients: {
-      getClientByCode: mock(async () => ({
-        extAttributes: { requireOrcas: true, validRedirectUrls: ["https://gateway.example.com"] },
-      })),
-    },
-    orcas: { orcasLogin: mock(async () => { throw new Error("ORCAS unavailable"); }) },
-    redirectUrls: { isAllowed: mock(() => true) },
-    sessions: {
-      consumeAuthCode: mock(async () => ({ userDetail: { id: 1001 } })),
-      createLocalSession,
-    },
-  } as any);
-
-  await expect(useCase.execute({
-    clientCode: "gateway",
-    code: "auth-code",
-    redirectUrl: "https://gateway.example.com",
-  })).rejects.toThrow("ORCAS unavailable");
-
-  expect(createLocalSession).not.toHaveBeenCalled();
-});
-
-test("rejects an unknown client before redirect validation or auth-code consumption", async () => {
+test("rejects an unknown client before redirect validation or Gateway login completion", async () => {
   const isAllowed = mock(() => true);
-  const consumeAuthCode = mock(async () => ({ userDetail: { id: 1001 } }));
+  const completeGatewayLogin = mock(async () => ({
+    orcasSessionId: null,
+    token: "should-not-exist",
+  }));
   const useCase = createCompleteSsoCallbackUseCase({
+    authorizationGrants: { completeGatewayLogin },
     clients: { getClientByCode: mock(async () => null) },
-    orcas: { orcasLogin: mock(async () => ({ orcasId: "orcas", orcasSessionId: "session" })) },
     redirectUrls: { isAllowed },
-    sessions: {
-      consumeAuthCode,
-      createLocalSession: mock(async () => ({ token: "local-token" })),
-    },
-  } as any);
+  });
 
   await expect(useCase.execute({
     clientCode: "missing",
@@ -118,5 +92,25 @@ test("rejects an unknown client before redirect validation or auth-code consumpt
   })).rejects.toThrow("非法client代码");
 
   expect(isAllowed).not.toHaveBeenCalled();
-  expect(consumeAuthCode).not.toHaveBeenCalled();
+  expect(completeGatewayLogin).not.toHaveBeenCalled();
+});
+
+test("rejects a disallowed redirect before Gateway login completion", async () => {
+  const completeGatewayLogin = mock(async () => ({
+    orcasSessionId: null,
+    token: "should-not-exist",
+  }));
+  const useCase = createCompleteSsoCallbackUseCase({
+    authorizationGrants: { completeGatewayLogin },
+    clients: { getClientByCode: mock(async () => client) },
+    redirectUrls: { isAllowed: mock(() => false) },
+  });
+
+  await expect(useCase.execute({
+    clientCode: "gateway",
+    code: "auth-code",
+    redirectUrl: "https://blocked.example.com",
+  })).rejects.toThrow("非法重定向地址");
+
+  expect(completeGatewayLogin).not.toHaveBeenCalled();
 });

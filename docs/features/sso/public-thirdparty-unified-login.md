@@ -18,7 +18,7 @@
 | 概念 | 说明 | 在本文中的对应参数 |
 |---|---|---|
 | 第三方系统 | 已经有自己用户体系的外部业务系统。它先完成用户认证，再把用户带到 IAM。它通常负责生成签名、发起跳转、提供 `loginid`。 | 路径参数 `clientCode`，表示第三方系统自己的 IAM 客户端编码。 |
-| 目标业务系统 | 用户通过 IAM 统一登录后，最终要进入的业务系统。它使用 IAM 授权码或局部会话继续完成自己的登录态。 | 查询参数 `client`，表示最终要登录的目标业务系统客户端编码。 |
+| 目标业务系统 | 用户通过 IAM 统一登录后，最终要进入的业务系统。Independent 系统以 IAM credential 建立自己的本地会话；Gateway client 使用 IAM 建立的 Gateway Local Session。 | 查询参数 `client`，表示最终要登录的目标业务系统客户端编码。 |
 
 两者可以是同一个系统，也可以是不同系统：
 
@@ -34,10 +34,11 @@
 可以把整个过程理解成：
 
 ```text
-第三方系统登录态 -> IAM 全局登录态 -> 目标业务系统局部登录态
+第三方系统登录态 -> IAM 全局登录态 -> Custom SSO Authorization Grant -> 目标系统登录态
 ```
 
-第三方系统负责把“外部身份”可靠地转换成 IAM 可识别的用户身份；目标业务系统负责把 IAM 的统一身份再转换成自己的会话。
+第三方系统负责把“外部身份”可靠地转换成 IAM 可识别的用户身份。Independent 目标业务系统负责用 IAM 授予的
+Independent Client Credential 建立并拥有自己的本地会话；Gateway 目标使用 IAM 管理的 Gateway Local Session。
 
 第三方接入API应用路径为：
 
@@ -53,7 +54,7 @@ http://app.shgas.com/sso/thirdparty/:clientCode
 4. IAM 校验 `clientCode`、时间戳、签名和用户状态。
 5. IAM 为用户创建 `global_session` 全局会话 Cookie。
 6. IAM 自动跳转到 `/sso/authorize`，为目标业务系统继续执行标准 SSO 授权。
-7. 目标业务系统按网关托管或独立应用模式建立本系统局部会话。
+7. Independent 目标业务系统取得 IAM credential 后自行建立本地会话；Gateway 目标由 IAM 建立 Gateway Local Session。
 
 ## 3. 接入前准备
 
@@ -164,8 +165,19 @@ Set-Cookie: global_session={globalSessionId}; HttpOnly; SameSite=Lax; Path=/
 
 后续建立局部会话的方式见 [第三方业务系统 SSO 单点登录对接说明](./third-party-sso-integration.md)：
 
-- `Gateway` 网关托管模式：IAM 回调 `/sso/callback`，写入 `local_{client}_session` Cookie，再跳回 `redirectUrl`。
-- `Independent` 独立应用模式：IAM 跳转到目标客户端 `callbackEndpoint`，业务系统后端用 `code` 和 `clientSecret` 调 `/sso/token` 换取局部会话。
+- `Gateway` 网关托管模式：IAM 回调 `/sso/callback`，建立 Gateway Local Session、写入
+  `local_{client}_session` Cookie，再跳回 `redirectUrl`。
+- `Independent` 独立应用模式：IAM 跳转到目标客户端 `callbackEndpoint`，业务系统后端用 `code` 和
+  `clientSecret` 调 `/sso/token` 换取 Independent Client Credential，再自行建立本地会话。IAM 不替第三方建立或存储该会话。
+
+### 6.1 IAM 内部职责边界
+
+进入标准 Custom SSO 授权后，endpoint use case 在授权码消费前完成对应入口校验：`/sso/authorize` 校验目标 client 与
+redirect，`/sso/token` 校验 client 与 client secret，`/sso/callback` 校验 client 与 redirect。Custom SSO deep module
+随后一次性完成 grant resolution，以及 Independent credential 或 Gateway session 的生命周期；Gateway 所需 ORCAS、
+私有 payload、审计和失败补偿也留在该 module 内。Route 只负责 HTTP 参数、Cookie、response 和 redirect 适配。
+
+第三方系统不应依赖 IAM 内部的授权码消费与 credential/session 创建顺序，只依赖最终 HTTP、Cookie 和 redirect contract。
 
 ## 7. 第三方系统实现步骤
 
@@ -229,4 +241,5 @@ return redirect(url.toString());
 - `loginid` 能在 IAM 中查到启用状态的正式员工用户。
 - 浏览器访问第三方入口后能收到 `global_session` Cookie。
 - 后续 `/sso/authorize` 能成功跳转到目标业务系统回调地址。
-- 目标业务系统能完成局部会话建立，并可调用 `/public/user-info` 获取当前用户。
+- Independent 目标业务系统能用 `sid` 自行建立本地会话，或 Gateway 目标能取得 Gateway Local Session，并可调用
+  `/public/user-info` 获取当前用户。

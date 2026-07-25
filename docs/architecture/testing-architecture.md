@@ -63,6 +63,8 @@ package。PostgreSQL、E2E、Gateway 等检查不是 `verify` 的隐式依赖，
 资源模型覆盖历史命名。`apps/api` 和 `apps/admin-api` 的 OpenAPI HTTP 检查是进程内测试，现名为
 `openapi.test.ts` 并由普通 `test` 收集；`apps/oidc-provider/src/__tests__/entry.smoke.test.ts` 启动真实 Node.js
 runtime，只由 `test:smoke` 收集。
+共享 process harness 的普通契约测试由 `@iam/api-core` 的 `test` 收集；验证真实 Windows Job process tree 的测试位于
+`packages/api-core/test-smoke/`，只由该 package 的 `test:smoke` 收集。
 
 ## 编排与所有权
 
@@ -137,6 +139,8 @@ Process smoke harness 必须同时满足：
 4. stdout/stderr 使用有界缓冲，成功时可静默，失败时完整呈现足够诊断。
 5. 正常、断言失败、timeout 和测试进程中断路径都清理完整进程树；cleanup 超时或失败是显式失败。
 6. 每个测试拥有独立临时目录、端口和进程 owner，不依赖上一次运行的残留状态。
+7. 子进程环境只从跨平台 runtime 最小白名单和测试专用 override 构造；禁止继承完整 `process.env`，会自动加载 env
+   文件的 runtime 必须在 smoke 命令中显式关闭该行为。
 
 启动耗时的性能目标由独立 benchmark 管理。不得继续提高已声明的全局 timeout、重复执行失败测试或吞掉 cleanup 错误来换取绿色结果。
 
@@ -177,17 +181,24 @@ owner、原因、跟踪 ticket、到期日和风险，并继续在非阻塞通�
 
 当前没有 CI 平台。2026-07-24 的 Windows 本地验收在禁用 smoke 任务缓存、不重试失败轮次的条件下完成：
 
-- OIDC `test:smoke` 连续 20/20 次通过；
+- 当时由 OIDC package 收集的 `test:smoke` 连续 20/20 次通过；
 - 正式 `pnpm verify` 连续 3/3 次通过；
 - 每轮均无 timeout、retry，以及由 harness 持有的残留 OIDC 进程、监听端口或临时目录。
+
+2026-07-25 又完成 `@iam/api` 的 focused Windows local adoption：Bun 真实入口以 `--no-env-file` 和最小 runtime env
+白名单构造 production composition，并通过 HTTP OpenAPI probe 就绪；测试只使用不可达的 PostgreSQL、Redis、ORCAS 占位地址。共享
+process-smoke harness 的提前退出、readiness timeout、端口冲突、完整进程树和临时目录清理契约继续由公开测试接口锁定。
+同日完成测试归属收口：共享 harness 的 24 个普通契约测试由 `@iam/api-core` 的 Bun ordinary lane 收集，1 个真实
+Windows Job 测试由其 package-local smoke lane 收集；OIDC 当前 smoke lane 只保留 4 个 app-owned 文件中的 8 个测试。
 
 正式脚本必须用 Node.js、Bun、Turbo 或其他跨平台 API 编排，不得在 `package.json` 中依赖 Bash、PowerShell 或 `cmd.exe`
 专有语法。Linux 与未来 CI 的状态保持 `pending`，直到在实际 runner 上运行同一契约。
 
-| Backend app | 当前分类 | 真实 process smoke | Adoption 状态 |
+| Backend workspace | 当前分类 | 真实 process smoke | Adoption 状态 |
 |---|---|---|---|
-| `@iam/oidc-provider` | 普通与 `*.smoke.test.ts` 由两个 Vitest config 互斥收集 | package-local `test:smoke` 覆盖真实 entry、协议端口及 Windows Job tree owner | `complete`（Windows local）；Linux/CI `pending` |
-| `@iam/api` | 进程内 `openapi.test.ts` 由普通 `test` 收集 | 尚无真实 entry smoke | `pending` |
+| `@iam/api-core` | Bun 普通测试限定在 `src/`，`*.smoke.test.ts` 限定在 `test-smoke/` | package-local `test:smoke` 以最小 runtime env 和独立临时目录覆盖 Windows Job tree owner | `complete`（Windows local）；Linux/CI `pending` |
+| `@iam/oidc-provider` | 普通与 `*.smoke.test.ts` 由两个 Vitest config 互斥收集 | package-local `test:smoke` 只覆盖 app-owned 的真实 entry、HTTP、token 与协议端口 | `complete`（Windows local）；Linux/CI `pending` |
+| `@iam/api` | Bun 普通测试限定在 `src/`，`*.smoke.test.ts` 限定在 `test-smoke/` | package-local `test:smoke` 通过共享 harness 覆盖真实 Bun entry、隔离 env、production composition 与 HTTP readiness | `complete`（Windows local）；Linux/CI `pending` |
 | `@iam/admin-api` | 进程内 `openapi.test.ts` 由普通 `test` 收集 | 尚无真实 entry smoke | `pending` |
 | `@iam/worker` | 普通测试由 `test` 收集 | 尚无真实 entry/composition smoke | `pending` |
 
@@ -196,8 +207,9 @@ owner、原因、跟踪 ticket、到期日和风险，并继续在非阻塞通�
 
 ## 已实施基线与演进边界
 
-Current 基线已经包含根与 package scripts、Turbo task graph、runner 配置、OIDC smoke harness、结构测试和 Windows
-连续验收。当前命令见 [构建、测试与开发命令](../development/commands.md)，实现与本地交付规则见
+Current 基线已经包含根与 package scripts、Turbo task graph、runner 配置、共享 process-smoke harness 及其 API Core
+ordinary/Windows Job smoke、OIDC/API entry smoke、结构测试和 Windows 本地验收。当前命令见
+[构建、测试与开发命令](../development/commands.md)，实现与本地交付规则见
 [AI 开发工作流](../agents/workflow.md)。
 
 后续提高并发、改变 cache/input、接入新的 process smoke 或建立 Linux/CI runner 时，必须在目标平台重新验证相同资源契约，

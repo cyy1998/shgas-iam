@@ -1,3 +1,4 @@
+// Package-shared launcher for process-smoke Windows Job ownership.
 import { spawn } from "node:child_process";
 import process from "node:process";
 

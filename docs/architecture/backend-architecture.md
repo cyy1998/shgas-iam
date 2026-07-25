@@ -91,6 +91,23 @@ composition。跨层实例连接统一由 composition 完成。
 - Provider protocol module 可以静态 import `oidc-provider` types 和纯 protocol helpers，但不得静态绑定 app-local DB、
   Redis、logger 或 concrete production repository；production 实例连接只发生在 composition。
 
+## Custom SSO Authorization Grant 模块
+
+- `/sso/authorize`、`/sso/token` 和 `/sso/callback` 对应的 Application Use Case 拥有入口验证：在进入任何会消费
+  authorization code 或创建 credential/session 的操作前，先按端点完成 client 查询、client secret 校验和 redirect
+  allowlist 校验。三个 use case 分别只消费 `AuthorizationCodeIssuerPort`、
+  `IndependentAuthorizationGrantPort` 和 `GatewayLoginCompletionPort`。
+- `custom-sso-session-kernel.adapter.ts` 是 Custom SSO 的 deep module implementation。它拥有一次性 grant resolution、
+  PrincipalSession 与实时用户校验、Independent Client Credential、Gateway Local Session、ORCAS、私有 payload、
+  audit 和失败补偿；共同的 resolved grant 只存在于 implementation 内，不越过 module interface。
+- Production adapter 通过 TypeScript structural typing 直接满足上述三个 consumer-owned ports。Composition 只注入
+  ORCAS 所需的最窄 `CustomSsoOrcasLoginPort`，不得增加 behaviorless wrapper，也不得恢复公开
+  `consumeAuthCode → createLocalSession` 两阶段 interface。
+- SSO route 只拥有 HTTP query/header/Cookie 解析、response envelope、Gateway/ORCAS Cookie、redirect query 和 status
+  适配，不接触 Session Kernel 模型，也不编排 grant、credential、session、ORCAS 或补偿步骤。
+- 兼容性标识继续由 deep module implementation 持有。现有 Redis key、payload version、credential discriminator、
+  audit action 和 active session payload normalization 不因 module interface 收缩而重命名或迁移。
+
 ## Routes 与 Middleware
 
 - Tier-level `_middleware.ts` 文件应保持薄层，只暴露 middleware factory 或组合注入的 middleware 数组；共享认证

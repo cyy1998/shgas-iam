@@ -31,19 +31,19 @@
 | [docs/agents/issue-tracker.md](agents/issue-tracker.md) | agent-config | Current | 2026-07-24 | 2026-10-31 | 本地 spec、ticket、轻量 feature journal 与 fresh-context handoff 的文件约定。 |
 | [docs/agents/triage-labels.md](agents/triage-labels.md) | agent-config | Current | 2026-07-16 | 2026-10-31 | Engineering skills 使用的默认 triage 标签映射。 |
 | [docs/agents/workflow.md](agents/workflow.md) | agent-config | Current | 2026-07-25 | 2026-10-31 | Matt skills 的仓库薄适配：本地 tracker、分支、验证、授权、归档和本地合入。 |
-| [docs/architecture/backend-architecture.md](architecture/backend-architecture.md) | architecture | Current | 2026-07-18 | 2026-10-31 | 后端 app composition、factory/DI、ports、角色解析注入边界、route/middleware 和 architecture test 约定。 |
+| [docs/architecture/backend-architecture.md](architecture/backend-architecture.md) | architecture | Current | 2026-07-25 | 2026-10-31 | 后端 app composition、factory/DI、ports、Custom SSO deep module、角色解析注入边界、route/middleware 和 architecture test 约定。 |
 | [docs/architecture/contracts-and-database.md](architecture/contracts-and-database.md) | architecture | Current | 2026-07-18 | 2026-10-31 | shared contracts、domain/db/jobs/role-assignment-resolution/read-model 边界、UnitOfWork 和 Drizzle schema/relations/migration 约定。 |
 | [docs/architecture/frontend-architecture.md](architecture/frontend-architecture.md) | architecture | Current | 2026-07-16 | 2026-10-31 | admin/sso 前端边界、service wrapper、contract、测试与生成路径约定。 |
-| [docs/architecture/repository-map.md](architecture/repository-map.md) | architecture | Current | 2026-07-23 | 2026-10-31 | monorepo apps/packages/gateway 地图、共享 ESLint 配置所有权，以及 Current docs、冻结历史和生成目录边界。 |
-| [docs/architecture/testing-architecture.md](architecture/testing-architecture.md) | architecture | Current | 2026-07-24 | 2026-10-31 | 已实施的普通/process smoke/外部资源通道、预算、Windows 连续验收、平台状态与 backend adoption 边界。 |
+| [docs/architecture/repository-map.md](architecture/repository-map.md) | architecture | Current | 2026-07-25 | 2026-10-31 | monorepo apps/packages/gateway 地图、共享 ESLint 配置所有权，以及 Current docs、冻结历史和生成目录边界。 |
+| [docs/architecture/testing-architecture.md](architecture/testing-architecture.md) | architecture | Current | 2026-07-25 | 2026-10-31 | 已实施的普通/process smoke/外部资源通道、预算、Windows 连续验收、平台状态与 backend adoption 边界。 |
 | [docs/development/backend-implementation.md](development/backend-implementation.md) | development | Current | 2026-07-05 | 2026-10-31 | backend response envelope、OpenAPI status、logger、audit event 和 architecture guard 实现惯例。 |
 | [docs/development/coding-style.md](development/coding-style.md) | development | Current | 2026-07-18 | 2026-10-31 | TypeScript、formatter 边界、文件命名、React 命名和 import alias 风格约定。 |
-| [docs/development/commands.md](development/commands.md) | development | Current | 2026-07-24 | 2026-10-31 | 聚焦实现、workspace、普通/smoke/verify、外部资源、性能与 commit guard 的可执行入口。 |
+| [docs/development/commands.md](development/commands.md) | development | Current | 2026-07-25 | 2026-10-31 | 聚焦实现、workspace、普通/smoke/verify、外部资源、性能与 commit guard 的可执行入口。 |
 | [docs/features/audit/audit-logging.md](features/audit/audit-logging.md) | feature | Current | 2026-07-16 | 2026-09-30 | 统一审计日志、安全字段和已完成 `login_log` 退役后的当前边界。 |
 | [docs/features/oidc/oidc-integration.md](features/oidc/oidc-integration.md) | feature | Current | 2026-07-16 | 2026-09-30 | 内部 OIDC client 的端点、client 类型、scope/claim、CORS 和退出契约。 |
 | [docs/features/oidc/oidc-session-migration.md](features/oidc/oidc-session-migration.md) | feature | Current | 2026-06-28 | 2026-09-30 | Session Kernel 会话迁移、旧 key cleanup 和回滚边界。 |
-| [docs/features/sso/public-thirdparty-unified-login.md](features/sso/public-thirdparty-unified-login.md) | feature | Current | 2026-06-28 | 2026-09-30 | 第三方统一登录入口说明。 |
-| [docs/features/sso/third-party-sso-integration.md](features/sso/third-party-sso-integration.md) | feature | Current | 2026-07-22 | 2026-09-30 | 第三方业务系统 custom SSO 对接说明。 |
+| [docs/features/sso/public-thirdparty-unified-login.md](features/sso/public-thirdparty-unified-login.md) | feature | Current | 2026-07-25 | 2026-09-30 | 第三方统一登录入口、目标系统会话所有权与 Custom SSO 职责边界说明。 |
+| [docs/features/sso/third-party-sso-integration.md](features/sso/third-party-sso-integration.md) | feature | Current | 2026-07-25 | 2026-09-30 | 第三方业务系统 custom SSO 对接、credential/session 所有权与 IAM 内部职责边界说明。 |
 | [docs/releases/apisix-gateway-release.md](releases/apisix-gateway-release.md) | runbook | Current | 2026-07-16 | 2026-10-31 | APISIX manifest validate/diff/apply/prune、限流、观测和回滚手册。 |
 | [docs/releases/audit-login-log-retirement-release.md](releases/audit-login-log-retirement-release.md) | runbook | Historical | 2026-07-16 | n/a | 已完成的 `login_log` 一次性退役记录；其迁移实现已不在当前仓库，不可作为当前 runbook。 |
 | [docs/releases/observability-system-logs.md](releases/observability-system-logs.md) | runbook | Current | 2026-07-03 | 2026-10-31 | Loki/Grafana/Alloy 系统日志观测运行手册；补充 APISIX trace、Alloy OTLP 和证据留存。 |

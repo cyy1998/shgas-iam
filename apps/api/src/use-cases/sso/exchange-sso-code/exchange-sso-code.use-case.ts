@@ -5,7 +5,6 @@ import type {
   ExchangeSsoCodeResult,
 } from "./exchange-sso-code.type";
 import { InvalidSsoClientError } from "@iam/api-core/errors/InvalidSsoClientError";
-import { ClientManagementLevel } from "@iam/contracts";
 
 export function createExchangeSsoCodeUseCase(deps: ExchangeSsoCodeDeps) {
   async function execute(
@@ -16,19 +15,12 @@ export function createExchangeSsoCodeUseCase(deps: ExchangeSsoCodeDeps) {
     if (client === null || input.clientSecret !== client.clientSecret) {
       throw new InvalidSsoClientError("非法Client");
     }
-    const authCode = await deps.sessions.consumeAuthCode({
-      code: input.code,
-      clientCode: input.clientCode,
-      invalidCodeError: "invalid_auth_code",
-    });
-    const { token, ttl, userInfo } = await deps.sessions.createLocalSession({
-      authCode,
+    const { credential, ttl, userInfo } = await deps.authorizationGrants.redeemIndependentGrant({
       client,
-      mode: ClientManagementLevel.Independent,
-      userDetail: authCode.userDetail,
+      code: input.code,
       requestContext: options.requestContext,
     });
-    return { sid: token, ttl, userInfo };
+    return { sid: credential, ttl, userInfo };
   }
 
   return { execute };

@@ -16,6 +16,19 @@ _Avoid_: parsed role, assigned role
 Custom SSO Gateway 登录过程中由 ORCAS 返回、绑定到本次 local session 的外部身份信息；它不是 IAM 用户档案属性。
 _Avoid_: user detail field, user profile attribute
 
+**Custom SSO Authorization Grant**:
+基于有效 IAM 登录身份、授予指定 client 一次性继续 Custom SSO 登录的权利。兑现结果按 client 接入模式是
+Independent Client Credential 或 Gateway Local Session，grant 本身不是任一登录会话。
+_Avoid_: local session, client session
+
+**Independent Client Credential**:
+IAM 向 Independent client 签发并管理的 client-scoped credential；第三方可以据此建立自己的本地会话，但该会话不属于 IAM。
+_Avoid_: third-party local session, IAM-created third-party session
+
+**Gateway Local Session**:
+IAM 为 Gateway client 建立并管理的 client-scoped 登录会话。
+_Avoid_: Independent Client Credential, third-party local session
+
 **Account Recovery**:
 用户无法正常登录时，通过已绑定身份凭据重新取得 IAM 账号访问权的自助过程；它不包括普通登录或管理员代为重置凭据。
 _Avoid_: open flow, public password helper

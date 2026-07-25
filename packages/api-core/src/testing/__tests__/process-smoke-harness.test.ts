@@ -1,24 +1,28 @@
 import type {
   ProcessSmokeChild,
   ProcessTreeOwner,
-} from "./process-smoke-harness.ts";
+} from "@iam/api-core/testing/process-smoke-harness";
 import { spawn } from "node:child_process";
 import { EventEmitter } from "node:events";
+import { existsSync } from "node:fs";
 import { access, writeFile } from "node:fs/promises";
 import { PassThrough } from "node:stream";
-import { describe, expect, it } from "vitest";
 import {
+  createProcessSmokeEnvironment,
+  createProcessSmokeSuite,
   FatalReadinessError,
   PortCollisionError,
   ProcessSmokeError,
   recoverFromPortCollision,
   runProcessSmoke,
+  terminateProcessByPid,
   terminateProcessTree,
   withOwnedTemporaryDirectory,
-} from "./process-smoke-harness.ts";
+} from "@iam/api-core/testing/process-smoke-harness";
+import { describe, expect, it } from "bun:test";
 
 class FakeChild extends EventEmitter implements ProcessSmokeChild {
-  readonly pid = 321;
+  readonly pid: number | undefined = 321;
   readonly stdout = new PassThrough();
   readonly stderr = new PassThrough();
   exitCode: number | null = null;
@@ -59,6 +63,10 @@ class FakeChild extends EventEmitter implements ProcessSmokeChild {
   }
 }
 
+class PidlessFakeChild extends FakeChild {
+  override readonly pid = undefined;
+}
+
 async function captureFailure(promise: Promise<unknown>) {
   let failure: unknown;
   try {
@@ -78,6 +86,77 @@ function stopFakeChild(child: ProcessSmokeChild) {
 }
 
 describe("process smoke harness", () => {
+  it("builds child environments from a portable runtime allowlist and explicit overrides", () => {
+    const environment = createProcessSmokeEnvironment({
+      source: {
+        Path: "sentinel-runtime-path",
+        PATHEXT: ".EXE;.CMD",
+        SystemRoot: "C:\\sentinel-windows",
+        TEMP: "C:\\shared-temp",
+        NODE_ENV: "development",
+        REDIS_URL: "redis://sentinel-development-service",
+        ORCAS_URL: "https://sentinel-development-service",
+        IAM_API_DATABASE_URL: "postgresql://sentinel-development-service",
+      },
+      temporaryDirectory: "C:\\owned-smoke-temp",
+      overrides: {
+        NODE_ENV: "test",
+        IAM_API_DATABASE_URL: "postgresql://iam:password@127.0.0.1:1/iam",
+        IAM_API_REDIS_HOST: "127.0.0.1",
+        TEMP: "C:\\unowned-override",
+      },
+    });
+
+    expect(environment).toEqual({
+      Path: "sentinel-runtime-path",
+      PATHEXT: ".EXE;.CMD",
+      SystemRoot: "C:\\sentinel-windows",
+      NODE_ENV: "test",
+      IAM_API_DATABASE_URL: "postgresql://iam:password@127.0.0.1:1/iam",
+      IAM_API_REDIS_HOST: "127.0.0.1",
+      TEMP: "C:\\owned-smoke-temp",
+      TMP: "C:\\owned-smoke-temp",
+      TMPDIR: "C:\\owned-smoke-temp",
+    });
+  });
+
+  it("owns port allocation, temporary files, and child cleanup for an entry attempt", async () => {
+    const child = new FakeChild();
+    const allocatedHosts: string[] = [];
+    let stopCalls = 0;
+    const suite = createProcessSmokeSuite({
+      label: "owned-entry",
+      temporaryDirectoryPrefix: "iam-owned-entry-",
+      hostname: "sentinel-host",
+      async allocatePort(hostname) {
+        allocatedHosts.push(hostname);
+        return 43_210;
+      },
+    });
+
+    const context = await suite.run({
+      start: () => child,
+      async probe(attempt) {
+        await access(attempt.temporaryDirectory);
+        return attempt;
+      },
+      async stop(processChild) {
+        stopCalls += 1;
+        await stopFakeChild(processChild);
+      },
+    });
+
+    expect(context).toMatchObject({
+      attemptNumber: 1,
+      hostname: "sentinel-host",
+      port: 43_210,
+    });
+    expect(allocatedHosts).toEqual(["sentinel-host"]);
+    expect(stopCalls).toBe(1);
+    await expect(access(context.temporaryDirectory)).rejects.toMatchObject({ code: "ENOENT" });
+    await expect(suite.cleanup()).resolves.toBeUndefined();
+  });
+
   it("reports an early exit with bounded stderr diagnostics", async () => {
     const child = new FakeChild();
     const failurePromise = runProcessSmoke({
@@ -212,6 +291,44 @@ describe("process smoke harness", () => {
     expect(failure.message).toContain("ENOENT");
   });
 
+  it("waits for bounded cleanup when a pidless child never closes its output", async () => {
+    const child = new PidlessFakeChild();
+    let cleanupSettled = false;
+    const cleanup = terminateProcessTree(child, {
+      timeoutMs: 25,
+    }).finally(() => {
+      cleanupSettled = true;
+    });
+
+    await new Promise(resolve => setTimeout(resolve, 5));
+    expect(cleanupSettled).toBe(false);
+
+    const failure = await captureFailure(cleanup);
+    child.stdout.destroy();
+    child.stderr.destroy();
+    expect(failure.message).toContain(
+      "child without a pid did not close its stdio within 25ms",
+    );
+  });
+
+  it("accepts a pidless child after its output closes without a child close event", async () => {
+    const child = new PidlessFakeChild();
+    let cleanupSettled = false;
+    const cleanup = terminateProcessTree(child, {
+      timeoutMs: 50,
+    }).finally(() => {
+      cleanupSettled = true;
+    });
+
+    await new Promise(resolve => setTimeout(resolve, 5));
+    expect(cleanupSettled).toBe(false);
+    child.stdout.destroy();
+    child.stderr.destroy();
+
+    await cleanup;
+    expect(cleanupSettled).toBe(true);
+  });
+
   it("times out a never-ready child quickly and still cleans it up", async () => {
     const child = new FakeChild();
     let cleaned = false;
@@ -313,6 +430,24 @@ describe("process smoke harness", () => {
     }, { maxAttempts: 3 }));
     expect(failure.message).toContain("configuration failed");
     expect(attempts).toBe(1);
+  });
+
+  it("fails cleanup when a directly owned process survives SIGKILL", async () => {
+    const signals: Array<{ pid: number; signal: NodeJS.Signals }> = [];
+
+    const failure = await captureFailure(terminateProcessByPid(654, {
+      timeoutMs: 5,
+      pollIntervalMs: 1,
+      isProcessAlive: async () => true,
+      killProcess(pid, signal) {
+        signals.push({ pid, signal });
+      },
+    }));
+
+    expect(signals).toEqual([{ pid: 654, signal: "SIGKILL" }]);
+    expect(failure.message).toContain(
+      "process 654 did not exit within 5ms after SIGKILL",
+    );
   });
 
   it("terminates a POSIX process group instead of only its parent", async () => {
@@ -427,12 +562,12 @@ describe("process smoke harness", () => {
     let ownedDirectory = "";
 
     await withOwnedTemporaryDirectory({
-      prefix: "iam-oidc-smoke-harness-",
+      prefix: "iam-api-core-process-smoke-",
       cleanupTimeoutMs: 2_000,
       async run(directory) {
         ownedDirectory = directory;
         await writeFile(`${directory}/owned.txt`, "owned", "utf8");
-        await expect(access(directory)).resolves.toBeUndefined();
+        expect(existsSync(directory)).toBe(true);
       },
     });
 
@@ -443,7 +578,7 @@ describe("process smoke harness", () => {
     let ownedDirectory = "";
 
     const failure = await captureFailure(withOwnedTemporaryDirectory({
-      prefix: "iam-oidc-smoke-harness-",
+      prefix: "iam-api-core-process-smoke-",
       cleanupTimeoutMs: 2_000,
       async run(directory) {
         ownedDirectory = directory;

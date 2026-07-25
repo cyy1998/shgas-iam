@@ -17,7 +17,7 @@ export function createAuthorizeSsoUseCase(deps: AuthorizeSsoDeps) {
     )) {
       throw new InvalidRedirectUriError("非法重定向地址");
     }
-    return await deps.principalSessions.authorize({
+    return await deps.authorizationGrants.issueAuthorizationCode({
       token: input.globalSessionToken,
       tokenSource: input.tokenSource,
       clientCode: input.clientCode,

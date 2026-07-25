@@ -25,7 +25,8 @@
 ## 共享 Packages 与工具
 
 - `packages/api-core/src`: 共享后端基础设施，例如 `createApp`、route factory、OpenAPI helper、response helper、
-  error、middleware、Redis、logging、observability、Session Kernel、UnitOfWork 和 tRPC utility。
+  error、middleware、Redis、logging、observability、Session Kernel、UnitOfWork 和 tRPC utility；仅供测试消费的共享
+  process-smoke harness 位于 `src/testing/`，通过独立 testing export 暴露。
 - `packages/contracts/src`: 跨 app 和 package 消费的共享 enum 与稳定 contract。
 - `packages/domain/src`: 后端 app 消费的共享 domain DTO schema、DTO type、audit helper 和可复用 domain/business
   error。

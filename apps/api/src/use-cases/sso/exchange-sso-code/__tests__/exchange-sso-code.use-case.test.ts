@@ -1,28 +1,58 @@
-import { ClientManagementLevel } from "@iam/contracts";
+import type { CustomSsoClientRuntimeDto } from "@iam/domain/client";
+import type { UserDetailDto } from "@iam/domain/user";
+import { ClientManagementLevel, ClientStatus, UserStatus, UserType } from "@iam/contracts";
 import { expect, mock, test } from "bun:test";
 import { createExchangeSsoCodeUseCase } from "../exchange-sso-code.use-case";
 
-test("validates the client secret before consuming the code and creating an Independent session", async () => {
-  const events: string[] = [];
-  const client = { clientCode: "independent", clientSecret: "secret" };
-  const userDetail = { id: 1001, name: "测试用户" } as any;
-  const authCode = { userDetail };
-  const getClientByCode = mock(async () => {
-    events.push("client");
-    return client;
-  });
-  const consumeAuthCode = mock(async () => {
-    events.push("consume");
-    return authCode;
-  });
-  const createLocalSession = mock(async () => {
-    events.push("session");
-    return { token: "local-token", ttl: 3600, userInfo: userDetail };
-  });
+const client = {
+  id: 1,
+  clientCode: "independent",
+  clientName: "Independent",
+  clientSecret: "secret",
+  url: "https://app.example.com",
+  status: ClientStatus.Enable,
+  description: null,
+  extAttributes: {
+    callbackEndpoint: "https://app.example.com/sso/callback",
+    logoutEndpoint: "https://app.example.com/sso/logout",
+    managementLevel: ClientManagementLevel.Independent,
+    requireOrcas: false,
+    userExcluding: [],
+    validRedirectUrls: ["https://app.example.com"],
+  },
+  isDelete: false,
+  createTime: new Date("2026-01-01T00:00:00Z"),
+  updateTime: new Date("2026-01-01T00:00:00Z"),
+} satisfies CustomSsoClientRuntimeDto;
+
+const userInfo = {
+  id: 1001,
+  username: "138550",
+  wxId: null,
+  name: "测试用户",
+  mobile: "17721462865",
+  userType: UserType.Formal,
+  orderNum: 1,
+  status: UserStatus.Enable,
+  isDelete: false,
+  createTime: new Date("2026-01-01T00:00:00Z"),
+  updateTime: new Date("2026-01-01T00:00:00Z"),
+  employments: [],
+  roles: [],
+  privileges: [],
+} satisfies UserDetailDto;
+
+test("delegates once and maps the Independent Client Credential to the existing response", async () => {
+  const getClientByCode = mock(async () => client);
+  const redeemIndependentGrant = mock(async () => ({
+    credential: "iam-managed-credential",
+    ttl: 3600,
+    userInfo,
+  }));
   const useCase = createExchangeSsoCodeUseCase({
+    authorizationGrants: { redeemIndependentGrant },
     clients: { getClientByCode },
-    sessions: { consumeAuthCode, createLocalSession },
-  } as any);
+  });
 
   await expect(useCase.execute({
     clientCode: "independent",
@@ -39,21 +69,15 @@ test("validates the client secret before consuming the code and creating an Inde
       method: null,
     },
   })).resolves.toEqual({
-    sid: "local-token",
+    sid: "iam-managed-credential",
     ttl: 3600,
-    userInfo: userDetail,
+    userInfo,
   });
 
-  expect(events).toEqual(["client", "consume", "session"]);
-  expect(consumeAuthCode).toHaveBeenCalledWith({
-    clientCode: "independent",
-    code: "auth-code",
-    invalidCodeError: "invalid_auth_code",
-  });
-  expect(createLocalSession).toHaveBeenCalledWith({
-    authCode,
+  expect(redeemIndependentGrant).toHaveBeenCalledTimes(1);
+  expect(redeemIndependentGrant).toHaveBeenCalledWith({
     client,
-    mode: ClientManagementLevel.Independent,
+    code: "auth-code",
     requestContext: {
       sourceApp: "iam",
       requestId: "req-token",
@@ -63,19 +87,19 @@ test("validates the client secret before consuming the code and creating an Inde
       route: null,
       method: null,
     },
-    userDetail,
   });
 });
 
-test("rejects a wrong client secret before consuming the auth code", async () => {
-  const consumeAuthCode = mock(async () => ({ userDetail: { id: 1001 } }));
-  const createLocalSession = mock(async () => ({ token: "token", ttl: 3600, userInfo: { id: 1001 } }));
+test("rejects a wrong client secret before redeeming the authorization grant", async () => {
+  const redeemIndependentGrant = mock(async () => ({
+    credential: "should-not-exist",
+    ttl: 3600,
+    userInfo,
+  }));
   const useCase = createExchangeSsoCodeUseCase({
-    clients: {
-      getClientByCode: mock(async () => ({ clientSecret: "correct-secret" })),
-    },
-    sessions: { consumeAuthCode, createLocalSession },
-  } as any);
+    authorizationGrants: { redeemIndependentGrant },
+    clients: { getClientByCode: mock(async () => client) },
+  });
 
   await expect(useCase.execute({
     clientCode: "independent",
@@ -83,6 +107,25 @@ test("rejects a wrong client secret before consuming the auth code", async () =>
     code: "auth-code",
   })).rejects.toThrow("非法Client");
 
-  expect(consumeAuthCode).not.toHaveBeenCalled();
-  expect(createLocalSession).not.toHaveBeenCalled();
+  expect(redeemIndependentGrant).not.toHaveBeenCalled();
+});
+
+test("rejects an unknown client before redeeming the authorization grant", async () => {
+  const redeemIndependentGrant = mock(async () => ({
+    credential: "should-not-exist",
+    ttl: 3600,
+    userInfo,
+  }));
+  const useCase = createExchangeSsoCodeUseCase({
+    authorizationGrants: { redeemIndependentGrant },
+    clients: { getClientByCode: mock(async () => null) },
+  });
+
+  await expect(useCase.execute({
+    clientCode: "missing",
+    clientSecret: "secret",
+    code: "auth-code",
+  })).rejects.toThrow("非法Client");
+
+  expect(redeemIndependentGrant).not.toHaveBeenCalled();
 });

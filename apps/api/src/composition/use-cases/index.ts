@@ -77,19 +77,18 @@ export function createApiUseCases(options: CreateApiUseCasesOptions) {
 
   const sso = {
     authorize: createAuthorizeSsoUseCase({
+      authorizationGrants: services.customSsoSession,
       clients: services.client,
-      principalSessions: services.customSsoSession,
       redirectUrls: services.ssoRedirectUrl,
     }),
     completeCallback: createCompleteSsoCallbackUseCase({
+      authorizationGrants: services.customSsoSession,
       clients: services.client,
-      orcas: runtime.integrations.orcas,
       redirectUrls: services.ssoRedirectUrl,
-      sessions: services.customSsoSession,
     }),
     exchangeCode: createExchangeSsoCodeUseCase({
+      authorizationGrants: services.customSsoSession,
       clients: services.client,
-      sessions: services.customSsoSession,
     }),
     loginWithOa: createLoginWithOaUseCase({
       auditLogWriter,

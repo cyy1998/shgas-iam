@@ -1,3 +1,4 @@
+import type { OrcasClient } from "@api/lib/integrations/orcas";
 import type { ClientReaderPort } from "@api/services/client/client.port";
 import type { ClientRepository } from "@api/services/client/client.repository";
 import type { EmploymentRepository } from "@api/services/employment/employment.repository";
@@ -19,6 +20,10 @@ import type {
 } from "@api/services/privilege/privilegeDelegation.port";
 import type { PrivilegeDelegationRepository } from "@api/services/privilege/privilegeDelegation.repository";
 import type {
+  CustomSsoSessionKernelAdapter,
+} from "@api/services/session/custom-sso-session-kernel.adapter";
+import type { CustomSsoOrcasLoginPort } from "@api/services/session/custom-sso-session-kernel.port";
+import type {
   UserDelegationReaderPort,
   UserMobileBindingPort,
   UserMobileVerificationPort,
@@ -34,10 +39,30 @@ import type {
   RegisterPurveyorPositionReaderPort,
   RegisterPurveyorUserStorePort,
 } from "@api/use-cases/internal/register-purveyor-contact/register-purveyor-contact.port";
+import type { AuthorizationCodeIssuerPort } from "@api/use-cases/sso/authorize-sso/authorize-sso.port";
+import type {
+  GatewayLoginCompletionPort,
+} from "@api/use-cases/sso/complete-sso-callback/complete-sso-callback.port";
+import type {
+  IndependentAuthorizationGrantPort,
+} from "@api/use-cases/sso/exchange-sso-code/exchange-sso-code.port";
 import type { UserProfileQueryService } from "@iam/user-profile-read-model/query";
 import { expect, test } from "bun:test";
 
 function assertAssignable<Port, _Provider extends Port>() {}
+
+type ForbiddenCustomSsoAdapterPublicOperation
+  = | "consumeAuthCode"
+    | "createLocalSession"
+    | "issueClientCredential"
+    | "resolveAuthorizationGrant";
+
+type LeakedCustomSsoAdapterPublicOperation = Extract<
+  keyof CustomSsoSessionKernelAdapter,
+  ForbiddenCustomSsoAdapterPublicOperation
+>;
+
+function assertNever<_Value extends never>() {}
 
 test("API providers structurally satisfy consumer-owned ports", () => {
   assertAssignable<ClientReaderPort, ClientRepository>();
@@ -63,6 +88,12 @@ test("API providers structurally satisfy consumer-owned ports", () => {
   assertAssignable<RegisterPurveyorPositionReaderPort, PositionRepository>();
   assertAssignable<RegisterPurveyorUserStorePort, UserRepository>();
   assertAssignable<RegisterPurveyorMobilePort, MobileService>();
+
+  assertAssignable<AuthorizationCodeIssuerPort, CustomSsoSessionKernelAdapter>();
+  assertAssignable<IndependentAuthorizationGrantPort, CustomSsoSessionKernelAdapter>();
+  assertAssignable<GatewayLoginCompletionPort, CustomSsoSessionKernelAdapter>();
+  assertAssignable<CustomSsoOrcasLoginPort, OrcasClient>();
+  assertNever<LeakedCustomSsoAdapterPublicOperation>();
 
   expect(true).toBe(true);
 });

@@ -13,6 +13,8 @@ import { pathToFileURL } from "node:url";
 import { describe, expect, test } from "bun:test";
 
 const repoRoot = join(import.meta.dirname, "..", "..");
+const apiRoot = join(repoRoot, "apps", "api");
+const apiCoreRoot = join(repoRoot, "packages", "api-core");
 const oidcRoot = join(repoRoot, "apps", "oidc-provider");
 const pnpmRecorderScript = join(
   repoRoot,
@@ -26,6 +28,17 @@ const verifyScript = join(repoRoot, "scripts", "verify.mjs");
 
 function readJson(path: string) {
   return JSON.parse(readFileSync(path, "utf8"));
+}
+
+function readNumericConstant(source: string, constantName: string) {
+  const assignment = new RegExp(
+    `const ${constantName} = (?<value>[\\d_]+);`,
+    "u",
+  ).exec(source);
+  const value = assignment?.groups?.value;
+  if (value === undefined)
+    throw new Error(`missing numeric constant ${constantName}`);
+  return Number(value.replaceAll("_", ""));
 }
 
 function writeJson(path: string, value: unknown) {
@@ -148,6 +161,31 @@ function runConsumerTestDryRun(root: string) {
   if (result.exitCode !== 0) {
     throw new Error(
       `Turbo dry-run failed with ${result.exitCode}:\n${result.stdout.toString()}${result.stderr.toString()}`,
+    );
+  }
+  return JSON.parse(result.stdout.toString());
+}
+
+function runPackageSmokeDryRun(packageName: string) {
+  const result = Bun.spawnSync([
+    process.execPath,
+    turboBin,
+    "run",
+    "test:smoke",
+    `--filter=${packageName}`,
+    "--dry=json",
+    "--no-daemon",
+  ], {
+    cwd: repoRoot,
+    env: {
+      ...process.env,
+      FORCE_COLOR: "0",
+      NO_COLOR: "1",
+    },
+  });
+  if (result.exitCode !== 0) {
+    throw new Error(
+      `Turbo ${packageName} smoke dry-run failed with ${result.exitCode}:\n${result.stdout.toString()}${result.stderr.toString()}`,
     );
   }
   return JSON.parse(result.stdout.toString());
@@ -281,6 +319,178 @@ describe("test orchestration", () => {
     expect(smokeFiles.every(file => file.endsWith(".smoke.test.ts"))).toBe(true);
     expect(ordinaryFiles.filter(file => smokeFiles.includes(file))).toEqual([]);
   }, 15_000);
+
+  test("keeps shared process harness ordinary tests with API Core", () => {
+    const apiCorePackage = readJson(join(apiCoreRoot, "package.json"));
+    const apiCoreHarnessTest = join(
+      apiCoreRoot,
+      "src",
+      "testing",
+      "__tests__",
+      "process-smoke-harness.test.ts",
+    );
+    const oidcHarnessTest = join(
+      oidcRoot,
+      "src",
+      "__tests__",
+      "process-smoke-harness.test.ts",
+    );
+
+    expect(apiCorePackage.scripts.test).toBe("bun test --max-concurrency=2 src");
+    expect(existsSync(apiCoreHarnessTest)).toBe(true);
+    expect(existsSync(oidcHarnessTest)).toBe(false);
+  });
+
+  test("discovers API Core ordinary and Windows Job smoke tests in disjoint Bun lanes", () => {
+    const apiCorePackage = readJson(join(apiCoreRoot, "package.json"));
+    const ordinaryFiles = [...new Bun.Glob("src/**/*.test.ts").scanSync({ cwd: apiCoreRoot })]
+      .map(file => file.replaceAll("\\", "/"))
+      .sort();
+    const smokeFiles = [...new Bun.Glob("test-smoke/**/*.smoke.test.ts").scanSync({
+      cwd: apiCoreRoot,
+    })]
+      .map(file => file.replaceAll("\\", "/"))
+      .sort();
+    const windowsJobSmokePath = join(
+      apiCoreRoot,
+      "test-smoke",
+      "process-smoke-windows-job.smoke.test.ts",
+    );
+    const oidcWindowsJobSmokePath = join(
+      oidcRoot,
+      "src",
+      "__tests__",
+      "process-smoke-windows-job.smoke.test.ts",
+    );
+    const dryRun = runPackageSmokeDryRun("@iam/api-core");
+    const smokeTask = dryRun.tasks.find(
+      (task: { taskId: string }) => task.taskId === "@iam/api-core#test:smoke",
+    );
+
+    expect(apiCorePackage.scripts.test).toBe("bun test --max-concurrency=2 src");
+    expect(apiCorePackage.scripts["test:smoke"])
+      .toBe("bun test --max-concurrency=1 test-smoke");
+    expect(apiCorePackage.scripts.lint)
+      .toBe("eslint src test-smoke scripts eslint.config.js");
+    expect(apiCorePackage.scripts["lint:fix"])
+      .toBe("eslint --fix src test-smoke scripts eslint.config.js");
+    expect(ordinaryFiles).toContain("src/testing/__tests__/process-smoke-harness.test.ts");
+    expect(smokeFiles).toContain("test-smoke/process-smoke-windows-job.smoke.test.ts");
+    expect(ordinaryFiles.filter(file => smokeFiles.includes(file))).toEqual([]);
+    expect(existsSync(windowsJobSmokePath)).toBe(true);
+    expect(existsSync(oidcWindowsJobSmokePath)).toBe(false);
+
+    const windowsJobSmokeSource = readFileSync(windowsJobSmokePath, "utf8");
+    expect(windowsJobSmokeSource).toContain("createProcessSmokeEnvironment({");
+    expect(windowsJobSmokeSource).toContain("withOwnedTemporaryDirectory({");
+    expect(windowsJobSmokeSource).not.toContain("env: process.env");
+    expect(windowsJobSmokeSource).not.toContain("...process.env");
+    expect(smokeTask).toMatchObject({
+      command: "bun test --max-concurrency=1 test-smoke",
+      resolvedTaskDefinition: {
+        cache: false,
+        dependsOn: ["transit"],
+      },
+    });
+  }, 15_000);
+
+  test("keeps the Windows Job outer deadline above every serial cleanup budget", () => {
+    const windowsJobSmokeSource = readFileSync(
+      join(
+        apiCoreRoot,
+        "test-smoke",
+        "process-smoke-windows-job.smoke.test.ts",
+      ),
+      "utf8",
+    );
+    const serialBudget = [
+      "supervisorCloseTimeoutMs",
+      "descendantExitTimeoutMs",
+      "processTreeCleanupTimeoutMs",
+      "descendantCleanupConfirmationTimeoutMs",
+      "descendantPostKillExitTimeoutMs",
+      "temporaryDirectoryCleanupTimeoutMs",
+    ].reduce(
+      (total, constantName) =>
+        total + readNumericConstant(windowsJobSmokeSource, constantName),
+      0,
+    );
+    const outerDeadline = readNumericConstant(
+      windowsJobSmokeSource,
+      "windowsJobSmokeTestTimeoutMs",
+    );
+
+    expect(outerDeadline - serialBudget).toBeGreaterThanOrEqual(2_000);
+    expect(windowsJobSmokeSource).toMatch(
+      /test\.skipIf[\s\S]+windowsJobSmokeTestTimeoutMs,\s*\);/u,
+    );
+    expect(windowsJobSmokeSource).toContain(
+      "await terminateProcessByPid(descendantPid, {",
+    );
+    expect(windowsJobSmokeSource).not.toContain(
+      "process.kill(descendantPid, \"SIGKILL\")",
+    );
+    expect(windowsJobSmokeSource).toMatch(
+      /new AggregateError\(\s*\[\s*testFailure,\s*cleanupFailure\s*\]/u,
+    );
+  });
+
+  test("discovers API ordinary and process smoke tests in disjoint Bun lanes", () => {
+    const apiPackage = readJson(join(apiRoot, "package.json"));
+    const ordinaryFiles = [...new Bun.Glob("src/**/*.test.ts").scanSync({ cwd: apiRoot })]
+      .map(file => file.replaceAll("\\", "/"))
+      .sort();
+    const smokeFiles = [...new Bun.Glob("test-smoke/**/*.smoke.test.ts").scanSync({ cwd: apiRoot })]
+      .map(file => file.replaceAll("\\", "/"))
+      .sort();
+    const dryRun = runPackageSmokeDryRun("@iam/api");
+    const smokeTask = dryRun.tasks.find((task: { taskId: string }) => task.taskId === "@iam/api#test:smoke");
+    const entrySmokeSource = readFileSync(join(apiRoot, "test-smoke", "entry.smoke.test.ts"), "utf8");
+
+    expect(apiPackage.scripts.test).toBe("bun test --max-concurrency=2 src");
+    expect(apiPackage.scripts["test:smoke"]).toBe("bun test --max-concurrency=1 test-smoke");
+    expect(apiPackage.scripts.lint).toBe("eslint src test-smoke app.config.ts eslint.config.js");
+    expect(apiPackage.scripts["lint:fix"]).toBe("eslint --fix src test-smoke app.config.ts eslint.config.js");
+    expect(ordinaryFiles.length).toBeGreaterThan(0);
+    expect(ordinaryFiles.every(file => !file.endsWith(".smoke.test.ts"))).toBe(true);
+    expect(smokeFiles).toContain("test-smoke/entry.smoke.test.ts");
+    expect(smokeFiles.every(file => file.endsWith(".smoke.test.ts"))).toBe(true);
+    expect(ordinaryFiles.filter(file => smokeFiles.includes(file))).toEqual([]);
+    expect(entrySmokeSource).toContain("createProcessSmokeEnvironment({");
+    expect(entrySmokeSource).toContain("args: [\"--no-env-file\", \"run\", \"src/index.ts\"]");
+    expect(entrySmokeSource).not.toContain("...process.env");
+    expect(smokeTask).toMatchObject({
+      command: "bun test --max-concurrency=1 test-smoke",
+      resolvedTaskDefinition: {
+        cache: false,
+        dependsOn: ["transit"],
+      },
+    });
+  }, 15_000);
+
+  test("keeps entry smoke resource ownership in the shared process suite", () => {
+    const entrySmokeSources = [
+      readFileSync(join(apiRoot, "test-smoke", "entry.smoke.test.ts"), "utf8"),
+      readFileSync(
+        join(repoRoot, "apps", "oidc-provider", "src", "__tests__", "entry.smoke.test.ts"),
+        "utf8",
+      ),
+    ];
+    const packageLocalLifecycle = [
+      "createServer",
+      "recoverFromPortCollision",
+      "runProcessSmoke",
+      "terminateProcessTree",
+      "withOwnedTemporaryDirectory",
+      "new Set<ProcessSmokeChild>",
+    ];
+
+    for (const source of entrySmokeSources) {
+      expect(source).toContain("createProcessSmokeSuite({");
+      for (const lifecyclePrimitive of packageLocalLifecycle)
+        expect(source).not.toContain(lifecyclePrimitive);
+    }
+  });
 
   test("classifies in-memory OpenAPI HTTP checks as ordinary tests", () => {
     for (const workspace of ["apps/api", "apps/admin-api"]) {

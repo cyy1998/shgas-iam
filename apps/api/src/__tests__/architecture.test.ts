@@ -157,6 +157,68 @@ function isCustomSsoRuntimeBoundary(file: string) {
     || file.startsWith("use-cases/sso/");
 }
 
+const legacyCustomSsoCompletionOperationNames = new Set([
+  "consumeAuthCode",
+  "createLocalSession",
+]);
+
+const sessionKernelModelNames = new Set([
+  "PrincipalSession",
+  "ProtocolArtifact",
+]);
+
+function isCustomSsoApplicationBoundary(file: string) {
+  return file.startsWith("routes/sso/")
+    || file.startsWith("use-cases/sso/");
+}
+
+function isCustomSsoCompletionBoundary(file: string) {
+  return file === "services/session/custom-sso-session-kernel.adapter.ts"
+    || file.startsWith("routes/sso/")
+    || file.startsWith("use-cases/sso/complete-sso-callback/")
+    || file.startsWith("use-cases/sso/exchange-sso-code/");
+}
+
+function isSessionKernelModule(moduleSpecifier: string) {
+  return moduleSpecifier === "@iam/api-core/session"
+    || moduleSpecifier.startsWith("@iam/api-core/session/");
+}
+
+function collectCustomSsoSeamViolationsFromSource(file: string, content: string) {
+  const source = ts.createSourceFile(file, content, ts.ScriptTarget.Latest, true);
+  const reasons = new Set<string>();
+  const applicationBoundary = isCustomSsoApplicationBoundary(file);
+  const completionBoundary = isCustomSsoCompletionBoundary(file);
+
+  function visit(node: ts.Node) {
+    if (applicationBoundary
+      && ts.isImportDeclaration(node)
+      && ts.isStringLiteral(node.moduleSpecifier)
+      && isSessionKernelModule(node.moduleSpecifier.text)) {
+      reasons.add(`imports ${node.moduleSpecifier.text}`);
+    }
+    if (applicationBoundary
+      && ts.isIdentifier(node)
+      && sessionKernelModelNames.has(node.text)) {
+      reasons.add(`uses Session Kernel model ${node.text}`);
+    }
+    if (completionBoundary
+      && (ts.isIdentifier(node) || ts.isStringLiteral(node))
+      && legacyCustomSsoCompletionOperationNames.has(node.text)) {
+      reasons.add(`uses legacy completion operation ${node.text}`);
+    }
+    if (completionBoundary
+      && ts.isIdentifier(node)
+      && (node.text === "ConsumedSsoAuthCode" || node.text === "CustomSsoConsumedAuthCode")) {
+      reasons.add(`uses legacy intermediate model ${node.text}`);
+    }
+    ts.forEachChild(node, visit);
+  }
+
+  visit(source);
+  return reasons.size === 0 ? [] : [`${file}: ${[...reasons].sort().join("; ")}`];
+}
+
 const legacyCustomSsoAuthorityKeyPatterns = [
   /global_session:/u,
   /auth_code:/u,
@@ -388,6 +450,87 @@ describe("API DI architecture", () => {
             : null,
         ].filter((violation): violation is string => violation !== null);
       });
+
+    expect(violations).toEqual([]);
+  });
+
+  test("detects leaked Custom SSO models and legacy completion operations without matching explanatory text", () => {
+    const allowed = collectCustomSsoSeamViolationsFromSource(
+      "use-cases/sso/complete-sso-callback/complete-sso-callback.port.ts",
+      `
+        import type { AuditRequestContext } from "@iam/domain/audit";
+        const migrationNote = "consumeAuthCode and createLocalSession are retired";
+        interface GatewayLoginCompletionPort {
+          completeGatewayLogin: (requestContext?: AuditRequestContext) => Promise<{ token: string }>;
+        }
+      `,
+    );
+    const forbiddenSessionKernelConsumer = collectCustomSsoSeamViolationsFromSource(
+      "use-cases/sso/exchange-sso-code/exchange-sso-code.port.ts",
+      `
+        import type {
+          PrincipalSession as Session,
+          ProtocolArtifact,
+        } from "@iam/api-core/session/kernel";
+        interface GrantContext {
+          artifact: ProtocolArtifact;
+          principalSession: Session;
+        }
+      `,
+    );
+    const forbiddenLegacyConsumer = collectCustomSsoSeamViolationsFromSource(
+      "use-cases/sso/exchange-sso-code/exchange-sso-code.port.ts",
+      `
+        interface ConsumedSsoAuthCode {
+          userId: number;
+        }
+        interface CompletionPort {
+          consumeAuthCode: () => Promise<ConsumedSsoAuthCode>;
+          "createLocalSession": () => Promise<string>;
+        }
+      `,
+    );
+    const forbiddenProvider = collectCustomSsoSeamViolationsFromSource(
+      "services/session/custom-sso-session-kernel.adapter.ts",
+      `
+        const resolveGrant = () => ({});
+        const createCredential = () => ({});
+        export function createAdapter() {
+          return {
+            consumeAuthCode: resolveGrant,
+            createLocalSession: createCredential,
+          };
+        }
+      `,
+    );
+
+    expect(allowed).toEqual([]);
+    expect(forbiddenSessionKernelConsumer).toEqual([
+      "use-cases/sso/exchange-sso-code/exchange-sso-code.port.ts: "
+      + "imports @iam/api-core/session/kernel; "
+      + "uses Session Kernel model PrincipalSession; "
+      + "uses Session Kernel model ProtocolArtifact",
+    ]);
+    expect(forbiddenLegacyConsumer).toEqual([
+      "use-cases/sso/exchange-sso-code/exchange-sso-code.port.ts: "
+      + "uses legacy completion operation consumeAuthCode; "
+      + "uses legacy completion operation createLocalSession; "
+      + "uses legacy intermediate model ConsumedSsoAuthCode",
+    ]);
+    expect(forbiddenProvider).toEqual([
+      "services/session/custom-sso-session-kernel.adapter.ts: "
+      + "uses legacy completion operation consumeAuthCode; "
+      + "uses legacy completion operation createLocalSession",
+    ]);
+  });
+
+  test("keeps Custom SSO Session Kernel models and legacy completion operations behind the module seam", () => {
+    const violations = collectSourceFiles(sourceRoot)
+      .map(file => ({
+        file: toPosixPath(relative(sourceRoot, file)),
+        content: readFileSync(file, "utf8"),
+      }))
+      .flatMap(({ file, content }) => collectCustomSsoSeamViolationsFromSource(file, content));
 
     expect(violations).toEqual([]);
   });

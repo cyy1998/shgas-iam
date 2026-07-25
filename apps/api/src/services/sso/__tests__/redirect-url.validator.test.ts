@@ -8,12 +8,12 @@ beforeEach(() => {
 });
 
 describe("createSsoRedirectUrlValidator", () => {
-  test("accepts an http redirect matching the configured wildcard and path pattern", () => {
+  test("accepts an http redirect with a query matching the configured wildcard and path pattern", () => {
     const validator = createSsoRedirectUrlValidator({ logger: { warn } });
 
     expect(validator.isAllowed(
       "portal",
-      "https://tenant.example.com/app/home",
+      "https://tenant.example.com/app/callback?next=1",
       ["https://*.example.com/app/*"],
     )).toBe(true);
   });
@@ -49,5 +49,25 @@ describe("createSsoRedirectUrlValidator", () => {
 
     expect(validator.isAllowed("portal", "javascript:alert(1)", ["javascript:*"])).toBe(false);
     expect(warn).not.toHaveBeenCalled();
+  });
+
+  test("does not treat a path-prefix match as a path-segment match", () => {
+    const validator = createSsoRedirectUrlValidator({ logger: { warn } });
+
+    expect(validator.isAllowed(
+      "portal",
+      "https://app.example.com/foobar",
+      ["https://app.example.com/foo"],
+    )).toBe(false);
+  });
+
+  test("does not match a wildcard subdomain pattern against the root domain", () => {
+    const validator = createSsoRedirectUrlValidator({ logger: { warn } });
+
+    expect(validator.isAllowed(
+      "portal",
+      "https://example.com",
+      ["https://*.example.com"],
+    )).toBe(false);
   });
 });

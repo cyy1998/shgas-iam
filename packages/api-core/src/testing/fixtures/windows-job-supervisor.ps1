@@ -1,3 +1,4 @@
+# Package-shared supervisor for process-smoke Windows Job ownership.
 [CmdletBinding()]
 param(
   [Parameter(Mandatory = $true)]

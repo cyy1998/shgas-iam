@@ -1,17 +1,22 @@
-import type { ClientManagementLevel } from "@iam/contracts";
 import type { CustomSsoClientRuntimeDto } from "@iam/domain/client";
-import type { UserDetailDto } from "@iam/domain/user";
 import type {
   CompleteSsoCallbackOptions,
-  ConsumedSsoAuthCode,
+  CompleteSsoCallbackResult,
 } from "./complete-sso-callback.type";
 
+export interface GatewayLoginCompletionPort {
+  completeGatewayLogin: (input: {
+    client: CustomSsoClientRuntimeDto;
+    code: string;
+    redirectUrl: string;
+    requestContext?: CompleteSsoCallbackOptions["requestContext"];
+  }) => Promise<CompleteSsoCallbackResult>;
+}
+
 export interface CompleteSsoCallbackDeps {
+  authorizationGrants: GatewayLoginCompletionPort;
   clients: {
     getClientByCode: (clientCode: string) => Promise<CustomSsoClientRuntimeDto | null>;
-  };
-  orcas: {
-    orcasLogin: (user: UserDetailDto) => Promise<{ orcasSessionId: string; orcasId: string }>;
   };
   redirectUrls: {
     isAllowed: (
@@ -20,21 +25,5 @@ export interface CompleteSsoCallbackDeps {
       patterns: string[],
       options?: CompleteSsoCallbackOptions,
     ) => boolean;
-  };
-  sessions: {
-    consumeAuthCode: (input: {
-      clientCode: string;
-      code: string;
-      invalidCodeError: "unauthorized";
-      redirectUrl: string;
-    }) => Promise<ConsumedSsoAuthCode>;
-    createLocalSession: (input: {
-      authCode: ConsumedSsoAuthCode;
-      client: CustomSsoClientRuntimeDto;
-      mode: ClientManagementLevel.Gateway;
-      orcas?: { sessionId: string | null; userId: string } | null;
-      requestContext?: CompleteSsoCallbackOptions["requestContext"];
-      userDetail: UserDetailDto;
-    }) => Promise<{ token: string }>;
   };
 }

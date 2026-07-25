@@ -1,23 +1,24 @@
 import { expect, mock, test } from "bun:test";
 import { createAuthorizeSsoUseCase } from "../authorize-sso.use-case";
 
-test("authorizes after resolving the client and validating the redirect", async () => {
-  const events: string[] = [];
+test("delegates authorization-code issuance after resolving the client and validating the redirect", async () => {
+  const requestContext = {
+    sourceApp: "iam",
+    requestId: "req-authorize",
+    traceId: null,
+    ip: null,
+    userAgent: null,
+    route: null,
+    method: null,
+  };
   const getClientByCode = mock(async () => {
-    events.push("client");
     return { extAttributes: { validRedirectUrls: ["https://app.example.com"] } };
   });
-  const isAllowed = mock(() => {
-    events.push("redirect");
-    return true;
-  });
-  const authorize = mock(async () => {
-    events.push("session");
-    return { isLogin: true as const, code: "auth-code" };
-  });
+  const isAllowed = mock(() => true);
+  const issueAuthorizationCode = mock(async () => ({ isLogin: true as const, code: "auth-code" }));
   const useCase = createAuthorizeSsoUseCase({
+    authorizationGrants: { issueAuthorizationCode },
     clients: { getClientByCode },
-    principalSessions: { authorize },
     redirectUrls: { isAllowed },
   });
 
@@ -27,44 +28,35 @@ test("authorizes after resolving the client and validating the redirect", async 
     redirectUrl: "https://app.example.com",
     tokenSource: "authorization_header",
   }, {
-    requestContext: {
-      sourceApp: "iam",
-      requestId: "req-authorize",
-      traceId: null,
-      ip: null,
-      userAgent: null,
-      route: null,
-      method: null,
-    },
+    requestContext,
   })).resolves.toEqual({
     isLogin: true,
     code: "auth-code",
   });
 
-  expect(events).toEqual(["client", "redirect", "session"]);
-  expect(authorize).toHaveBeenCalledWith({
+  expect(isAllowed).toHaveBeenCalledTimes(1);
+  expect(isAllowed).toHaveBeenCalledWith(
+    "portal",
+    "https://app.example.com",
+    ["https://app.example.com"],
+    { requestContext },
+  );
+  expect(issueAuthorizationCode).toHaveBeenCalledTimes(1);
+  expect(issueAuthorizationCode).toHaveBeenCalledWith({
     clientCode: "portal",
     redirectUrl: "https://app.example.com",
-    requestContext: {
-      sourceApp: "iam",
-      requestId: "req-authorize",
-      traceId: null,
-      ip: null,
-      userAgent: null,
-      route: null,
-      method: null,
-    },
+    requestContext,
     token: "principal-token",
     tokenSource: "authorization_header",
   });
 });
 
-test("rejects an unknown client before redirect or session work", async () => {
+test("rejects an unknown client before redirect validation or authorization-code issuance", async () => {
   const isAllowed = mock(() => true);
-  const authorize = mock(async () => ({ isLogin: false as const, code: null }));
+  const issueAuthorizationCode = mock(async () => ({ isLogin: false as const, code: null }));
   const useCase = createAuthorizeSsoUseCase({
+    authorizationGrants: { issueAuthorizationCode },
     clients: { getClientByCode: mock(async () => null) },
-    principalSessions: { authorize },
     redirectUrls: { isAllowed },
   });
 
@@ -75,18 +67,18 @@ test("rejects an unknown client before redirect or session work", async () => {
   })).rejects.toThrow("非法client代码");
 
   expect(isAllowed).not.toHaveBeenCalled();
-  expect(authorize).not.toHaveBeenCalled();
+  expect(issueAuthorizationCode).not.toHaveBeenCalled();
 });
 
-test("rejects a disallowed redirect before session authorization", async () => {
-  const authorize = mock(async () => ({ isLogin: false as const, code: null }));
+test("rejects a disallowed redirect before authorization-code issuance", async () => {
+  const issueAuthorizationCode = mock(async () => ({ isLogin: false as const, code: null }));
   const useCase = createAuthorizeSsoUseCase({
+    authorizationGrants: { issueAuthorizationCode },
     clients: {
       getClientByCode: mock(async () => ({
         extAttributes: { validRedirectUrls: ["https://allowed.example.com"] },
       })),
     },
-    principalSessions: { authorize },
     redirectUrls: { isAllowed: mock(() => false) },
   });
 
@@ -96,5 +88,5 @@ test("rejects a disallowed redirect before session authorization", async () => {
     tokenSource: "none",
   })).rejects.toThrow("非法重定向地址");
 
-  expect(authorize).not.toHaveBeenCalled();
+  expect(issueAuthorizationCode).not.toHaveBeenCalled();
 });

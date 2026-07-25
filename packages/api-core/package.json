@@ -19,6 +19,7 @@
     "./redis": "./src/redis/index.ts",
     "./security": "./src/security/index.ts",
     "./session/kernel": "./src/session/kernel/index.ts",
+    "./testing/process-smoke-harness": "./src/testing/process-smoke-harness.ts",
     "./trpc": "./src/trpc/index.ts",
     "./types": "./src/types/lib.ts",
     "./uow": "./src/uow/index.ts",
@@ -26,10 +27,11 @@
     "./utils/*": "./src/utils/*.ts"
   },
   "scripts": {
-    "lint": "eslint src scripts eslint.config.js",
-    "lint:fix": "eslint --fix src scripts eslint.config.js",
+    "lint": "eslint src test-smoke scripts eslint.config.js",
+    "lint:fix": "eslint --fix src test-smoke scripts eslint.config.js",
     "session:cleanup-legacy-keys": "bun scripts/cleanup-legacy-session-keys.ts",
-    "test": "bun test --max-concurrency=2",
+    "test": "bun test --max-concurrency=2 src",
+    "test:smoke": "bun test --max-concurrency=1 test-smoke",
     "typecheck": "pnpm exec tsc --noEmit"
   },
   "dependencies": {

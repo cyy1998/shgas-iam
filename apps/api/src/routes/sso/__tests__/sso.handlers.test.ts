@@ -325,7 +325,7 @@ describe("createSsoHandlers protocol adaptation", () => {
     expect(context.redirect).not.toHaveBeenCalled();
   });
 
-  test("token returns the existing Independent local-session envelope", async () => {
+  test("token returns the existing Independent Client Credential envelope", async () => {
     const handlers = createHandlers();
     const context = createTokenContext();
     setToken.mockResolvedValueOnce({ sid: "independent-token", ttl: 7200, userInfo: { id: 1001 } });

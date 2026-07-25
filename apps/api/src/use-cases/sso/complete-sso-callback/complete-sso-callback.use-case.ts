@@ -6,7 +6,6 @@ import type {
 } from "./complete-sso-callback.type";
 import { InvalidRedirectUriError } from "@iam/api-core/errors/InvalidRedirectUriError";
 import { InvalidSsoClientError } from "@iam/api-core/errors/InvalidSsoClientError";
-import { ClientManagementLevel } from "@iam/contracts";
 
 export function createCompleteSsoCallbackUseCase(deps: CompleteSsoCallbackDeps) {
   async function execute(
@@ -25,27 +24,14 @@ export function createCompleteSsoCallbackUseCase(deps: CompleteSsoCallbackDeps) 
     )) {
       throw new InvalidRedirectUriError("非法重定向地址");
     }
-    const authCode = await deps.sessions.consumeAuthCode({
-      code: input.code,
-      clientCode: input.clientCode,
-      redirectUrl: input.redirectUrl,
-      invalidCodeError: "unauthorized",
-    });
-    let orcas: { userId: string; sessionId: string } | null = null;
-    if (client.extAttributes.requireOrcas === true) {
-      const { orcasSessionId, orcasId } = await deps.orcas.orcasLogin(authCode.userDetail);
-      orcas = { userId: orcasId, sessionId: orcasSessionId };
-    }
-    const { token } = await deps.sessions.createLocalSession({
-      authCode,
+    const { token, orcasSessionId } = await deps.authorizationGrants.completeGatewayLogin({
       client,
-      mode: ClientManagementLevel.Gateway,
-      userDetail: authCode.userDetail,
-      orcas,
+      code: input.code,
+      redirectUrl: input.redirectUrl,
       requestContext: options.requestContext,
     });
     return {
-      orcasSessionId: orcas?.sessionId ?? null,
+      orcasSessionId,
       token,
     };
   }

@@ -2,6 +2,7 @@ import type { EventEmitter } from "node:events";
 import type { Readable } from "node:stream";
 import { spawn } from "node:child_process";
 import { mkdtemp, rm } from "node:fs/promises";
+import { createServer } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import process from "node:process";
@@ -14,8 +15,48 @@ const windowsJobLauncherPath = fileURLToPath(
 const windowsJobSupervisorPath = fileURLToPath(
   new URL("./fixtures/windows-job-supervisor.ps1", import.meta.url),
 );
+const portableRuntimeEnvironmentKeys = new Set([
+  "comspec",
+  "dyld_fallback_library_path",
+  "dyld_library_path",
+  "ld_library_path",
+  "path",
+  "pathext",
+  "systemroot",
+  "windir",
+]);
+const defaultReadinessTimeoutMs = 30_000;
+const defaultCleanupTimeoutMs = 5_000;
+const defaultTemporaryDirectoryCleanupTimeoutMs = 5_000;
+const defaultMaxPortAllocationAttempts = 3;
+export const PROCESS_SMOKE_TEST_TIMEOUT_MS = 45_000;
 
+/** Public test-support seam shared by package-local process smoke suites. */
 export type ProcessTreeOwner = "posix-process-group" | "windows-job";
+
+export function createProcessSmokeEnvironment(options: {
+  source: NodeJS.ProcessEnv;
+  temporaryDirectory: string;
+  overrides: NodeJS.ProcessEnv;
+}) {
+  const environment: NodeJS.ProcessEnv = {};
+  for (const [key, value] of Object.entries(options.source)) {
+    if (
+      value !== undefined
+      && portableRuntimeEnvironmentKeys.has(key.toLowerCase())
+    ) {
+      environment[key] = value;
+    }
+  }
+  for (const [key, value] of Object.entries(options.overrides)) {
+    if (value !== undefined)
+      environment[key] = value;
+  }
+  environment.TEMP = options.temporaryDirectory;
+  environment.TMP = options.temporaryDirectory;
+  environment.TMPDIR = options.temporaryDirectory;
+  return environment;
+}
 
 export interface ProcessSmokeChild extends EventEmitter {
   readonly pid?: number;
@@ -324,35 +365,82 @@ function hasExited(child: ProcessSmokeChild) {
 }
 
 function createProcessCloseWaiter(child: ProcessSmokeChild) {
-  let closed = false;
-  let resolveClosed: () => void = () => {};
-  const closedPromise = new Promise<void>((resolve) => {
-    resolveClosed = resolve;
+  let childClosed = false;
+  let childExited = hasExited(child);
+  let processClosed = false;
+  let stdioClosed = false;
+  let resolveProcessClosed: () => void = () => {};
+  let resolveStdioClosed: () => void = () => {};
+  const processClosedPromise = new Promise<void>((resolve) => {
+    resolveProcessClosed = resolve;
   });
-  const onClose = () => {
-    closed = true;
-    resolveClosed();
+  const stdioClosedPromise = new Promise<void>((resolve) => {
+    resolveStdioClosed = resolve;
+  });
+  const streams = [child.stdout, child.stderr].filter(
+    (stream): stream is Readable => stream !== null,
+  );
+  const streamListeners: Array<{
+    stream: Readable;
+    event: "close" | "end";
+  }> = [];
+
+  const updateCompletion = () => {
+    if (
+      !stdioClosed
+      && streams.every(stream =>
+        stream.closed || stream.destroyed || stream.readableEnded)
+    ) {
+      stdioClosed = true;
+      resolveStdioClosed();
+    }
+    if (!processClosed && (childClosed || (childExited && stdioClosed))) {
+      processClosed = true;
+      resolveProcessClosed();
+    }
   };
+  const onExit = () => {
+    childExited = true;
+    updateCompletion();
+  };
+  const onClose = () => {
+    childClosed = true;
+    updateCompletion();
+  };
+  const onStreamCompletion = () => updateCompletion();
+
+  child.once("exit", onExit);
   child.once("close", onClose);
-  if (
-    hasExited(child)
-    && [child.stdout, child.stderr]
-      .every(stream => stream === null || stream.closed || stream.destroyed)
-  ) {
-    onClose();
+  for (const stream of streams) {
+    for (const event of ["end", "close"] as const) {
+      stream.once(event, onStreamCompletion);
+      streamListeners.push({ stream, event });
+    }
   }
+  updateCompletion();
 
   return {
     dispose() {
+      child.off("exit", onExit);
       child.off("close", onClose);
+      for (const { stream, event } of streamListeners)
+        stream.off(event, onStreamCompletion);
     },
-    async wait(timeoutMs: number) {
-      if (closed)
+    async wait(
+      timeoutMs: number,
+      options: { acceptStdioClosure?: boolean } = {},
+    ) {
+      updateCompletion();
+      if (processClosed || (options.acceptStdioClosure && stdioClosed))
         return true;
       let timeout: NodeJS.Timeout | undefined;
       try {
+        const completionPromises = [
+          processClosedPromise,
+          ...(options.acceptStdioClosure ? [stdioClosedPromise] : []),
+        ];
         return await Promise.race([
-          closedPromise.then(() => true),
+          ...completionPromises.map(completion => completion.then(() => true)),
           new Promise<false>((resolve) => {
             timeout = setTimeout(resolve, timeoutMs, false);
           }),
@@ -457,6 +545,20 @@ function isPermissionDenied(error: unknown) {
     && (error as NodeJS.ErrnoException).code === "EPERM";
 }
 
+function isProcessAlive(pid: number) {
+  try {
+    process.kill(pid, 0);
+    return true;
+  }
+  catch (error) {
+    if (isMissingProcess(error))
+      return false;
+    if (isPermissionDenied(error))
+      return true;
+    throw error;
+  }
+}
+
 function isPosixProcessGroupAlive(pid: number) {
   try {
     process.kill(-pid, 0);
@@ -487,6 +589,42 @@ async function waitForProcessTreeExit(
   return true;
 }
 
+export interface TerminateProcessByPidOptions {
+  timeoutMs: number;
+  pollIntervalMs?: number;
+  isProcessAlive?: (pid: number) => boolean | Promise<boolean>;
+  killProcess?: (pid: number, signal: NodeJS.Signals) => void;
+}
+
+export async function terminateProcessByPid(
+  pid: number,
+  options: TerminateProcessByPidOptions,
+) {
+  const processIsAlive = () =>
+    (options.isProcessAlive ?? isProcessAlive)(pid);
+  if (!await processIsAlive())
+    return;
+
+  try {
+    (options.killProcess ?? process.kill.bind(process))(pid, "SIGKILL");
+  }
+  catch (error) {
+    if (isMissingProcess(error))
+      return;
+    throw error;
+  }
+
+  if (!await waitForProcessTreeExit(
+    processIsAlive,
+    options.timeoutMs,
+    options.pollIntervalMs ?? 25,
+  )) {
+    throw new Error(
+      `process ${pid} did not exit within ${options.timeoutMs}ms after SIGKILL`,
+    );
+  }
+}
+
 export interface TerminateProcessTreeOptions {
   timeoutMs: number;
   forceAfterMs?: number;
@@ -508,9 +646,9 @@ export async function terminateProcessTree(
   try {
     const pid = child.pid;
     if (pid === undefined) {
-      if (!await closeWaiter.wait(remaining())) {
+      if (!await closeWaiter.wait(remaining(), { acceptStdioClosure: true })) {
         throw new Error(
-          "child spawn failed without a pid but did not close its stdio",
+          `child without a pid did not close its stdio within ${options.timeoutMs}ms`,
         );
       }
       return;
@@ -778,4 +916,128 @@ export async function recoverFromPortCollision<T>(
     collisions,
     `port collision persisted across ${options.maxAttempts} allocation attempts`,
   );
+}
+
+export interface ProcessSmokeAttemptContext {
+  attemptNumber: number;
+  hostname: string;
+  port: number;
+  temporaryDirectory: string;
+}
+
+export interface ProcessSmokeSuiteAttempt<T> {
+  start: (context: ProcessSmokeAttemptContext) => ProcessSmokeChild;
+  probe: (
+    context: ProcessSmokeAttemptContext,
+    signal: AbortSignal,
+  ) => Promise<T | undefined>;
+  childReadinessEvidence?:
+    | string
+    | ((context: ProcessSmokeAttemptContext) => string | undefined);
+  stop?: (child: ProcessSmokeChild) => Promise<void>;
+}
+
+export interface CreateProcessSmokeSuiteOptions {
+  label: string;
+  temporaryDirectoryPrefix: string;
+  hostname?: string;
+  readinessTimeoutMs?: number;
+  cleanupTimeoutMs?: number;
+  temporaryDirectoryCleanupTimeoutMs?: number;
+  maxPortAllocationAttempts?: number;
+  allocatePort?: (hostname: string) => Promise<number>;
+}
+
+async function allocateAvailablePort(hostname: string) {
+  const reservation = createServer();
+  try {
+    await new Promise<void>((resolve, reject) => {
+      reservation.once("error", reject);
+      reservation.listen(0, hostname, resolve);
+    });
+    const address = reservation.address();
+    if (address === null || typeof address === "string")
+      throw new Error(`failed to reserve process smoke port on ${hostname}`);
+    return address.port;
+  }
+  finally {
+    if (reservation.listening) {
+      await new Promise<void>((resolve, reject) =>
+        reservation.close(error => error ? reject(error) : resolve()));
+    }
+  }
+}
+
+export function createProcessSmokeSuite(options: CreateProcessSmokeSuiteOptions) {
+  const hostname = options.hostname ?? "127.0.0.1";
+  const readinessTimeoutMs = options.readinessTimeoutMs ?? defaultReadinessTimeoutMs;
+  const cleanupTimeoutMs = options.cleanupTimeoutMs ?? defaultCleanupTimeoutMs;
+  const temporaryDirectoryCleanupTimeoutMs = options.temporaryDirectoryCleanupTimeoutMs
+    ?? defaultTemporaryDirectoryCleanupTimeoutMs;
+  const maxPortAllocationAttempts = options.maxPortAllocationAttempts
+    ?? defaultMaxPortAllocationAttempts;
+  const allocatePort = options.allocatePort ?? allocateAvailablePort;
+  const children = new Set<ProcessSmokeChild>();
+
+  async function cleanup() {
+    const cleanupResults = await Promise.allSettled([...children].map(async (child) => {
+      await terminateProcessTree(child, { timeoutMs: cleanupTimeoutMs });
+      children.delete(child);
+    }));
+    const cleanupFailures = cleanupResults
+      .filter(result => result.status === "rejected")
+      .map(result => result.reason);
+    if (cleanupFailures.length > 0) {
+      throw new AggregateError(
+        cleanupFailures,
+        `${options.label} runner cleanup failed for ${cleanupFailures.length} child process(es)`,
+      );
+    }
+  }
+
+  async function run<T>(attempt: ProcessSmokeSuiteAttempt<T>) {
+    return await recoverFromPortCollision(
+      async (attemptNumber) => {
+        return await withOwnedTemporaryDirectory({
+          prefix: options.temporaryDirectoryPrefix,
+          cleanupTimeoutMs: temporaryDirectoryCleanupTimeoutMs,
+          async run(temporaryDirectory) {
+            const port = await allocatePort(hostname);
+            const context = {
+              attemptNumber,
+              hostname,
+              port,
+              temporaryDirectory,
+            };
+            const childReadinessEvidence = typeof attempt.childReadinessEvidence === "function"
+              ? attempt.childReadinessEvidence(context)
+              : attempt.childReadinessEvidence;
+
+            return await runProcessSmoke({
+              label: `${options.label} attempt ${attemptNumber}`,
+              start() {
+                const child = attempt.start(context);
+                children.add(child);
+                return child;
+              },
+              probe: signal => attempt.probe(context, signal),
+              childReadinessEvidence,
+              readinessTimeoutMs,
+              cleanupTimeoutMs,
+              async stop(child) {
+                if (attempt.stop === undefined)
+                  await terminateProcessTree(child, { timeoutMs: cleanupTimeoutMs });
+                else
+                  await attempt.stop(child);
+                children.delete(child);
+              },
+            });
+          },
+        });
+      },
+      { maxAttempts: maxPortAllocationAttempts },
+    );
+  }
+
+  return { cleanup, run };
 }

@@ -154,6 +154,7 @@ export function createApiServices(options: CreateApiServicesOptions) {
     kernel: sessionKernel,
     redis: runtime.redis,
     logger: runtime.logger,
+    orcas: runtime.integrations.orcas,
     userService,
     auditLogWriter,
     clock: runtime.clock,

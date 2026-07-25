@@ -5,11 +5,10 @@ import type { UserService } from "@api/services/user/user.service";
 import type { UserDetailDto } from "@api/services/user/user.type";
 import type {
   CleanupAdapter,
-  PrincipalSession,
-  ProtocolArtifact,
   RevokeSummary,
   SessionKernel,
 } from "@iam/api-core/session/kernel";
+import type { CustomSsoOrcasLoginPort } from "./custom-sso-session-kernel.port";
 import { randomUUID } from "node:crypto";
 import { withApiRequestContext } from "@api/services/audit/audit.service";
 import { buildLocalLoginSuccessAudit } from "@api/services/audit/events/auth.audit";
@@ -31,27 +30,26 @@ const LOCAL_SESSION_CREDENTIAL_TYPE = "local_session";
 const LOCAL_SESSION_PAYLOAD_VERSION = 1;
 const LOCAL_SESSION_PAYLOAD_CLEANUP_KIND = "local_session_payload";
 
-export type CustomSsoPrincipalTokenSource = "cookie" | "authorization_header" | "query" | "none";
+type CustomSsoPrincipalTokenSource = "cookie" | "authorization_header" | "query" | "none";
 
-export type CustomSsoConsumedAuthCode = {
-  artifact: ProtocolArtifact;
-  principalSession: PrincipalSession;
+type ResolvedAuthorizationGrant = {
+  principalSessionId: string;
   userDetail: UserDetailDto;
 };
 
-export type CustomSsoLocalSession = {
+type IssuedClientCredential = {
   token: string;
   ttl: number;
   userInfo: UserDetailDto;
   orcasSessionId: string | null;
 };
 
-export type CustomSsoOrcasContext = {
+type CustomSsoOrcasContext = {
   userId: string;
   sessionId: string | null;
 };
 
-export type CustomSsoLocalSessionContext = {
+type CustomSsoLocalSessionContext = {
   userDetail: UserDetailDto;
   orcasId: string | null;
 };
@@ -105,6 +103,7 @@ export interface CustomSsoSessionKernelAdapterDeps {
   kernel: SessionKernel;
   redis: Pick<RedisPort, "get" | "set">;
   logger: Pick<LoggerPort, "info" | "warn">;
+  orcas: CustomSsoOrcasLoginPort;
   userService: Pick<UserService, "getActiveUserById" | "getUserDetailById">;
   auditLogWriter: ApiAuditLogWriter;
   clock: Pick<ClockPort, "now">;
@@ -161,7 +160,7 @@ export function createCustomSsoSessionKernelAdapter(deps: CustomSsoSessionKernel
     };
   }
 
-  async function authorize(input: {
+  async function issueAuthorizationCode(input: {
     token?: string;
     tokenSource: CustomSsoPrincipalTokenSource;
     clientCode: string;
@@ -204,12 +203,12 @@ export function createCustomSsoSessionKernelAdapter(deps: CustomSsoSessionKernel
     };
   }
 
-  async function consumeAuthCode(input: {
+  async function resolveAuthorizationGrant(input: {
     code: string;
     clientCode: string;
     redirectUrl?: string;
     invalidCodeError?: "unauthorized" | "invalid_auth_code";
-  }): Promise<CustomSsoConsumedAuthCode> {
+  }): Promise<ResolvedAuthorizationGrant> {
     const consumed = await deps.kernel.consumeProtocolArtifact(input.code);
     if (consumed.status !== "resolved") {
       throwInvalidCode(input.invalidCodeError);
@@ -236,20 +235,18 @@ export function createCustomSsoSessionKernelAdapter(deps: CustomSsoSessionKernel
     await assertLiveUserAvailable(principalSession.value.principal.subjectId);
     const userDetail = await getProfileUserDetail(principalSession.value.principal.subjectId);
     return {
-      artifact,
-      principalSession: principalSession.value,
+      principalSessionId: principalSession.value.principalSessionId,
       userDetail,
     };
   }
 
-  async function createLocalSession(input: {
-    authCode: CustomSsoConsumedAuthCode;
+  async function issueClientCredential(input: {
+    authorizationGrant: ResolvedAuthorizationGrant;
     client: ClientDto;
     mode: ClientManagementLevel;
-    userDetail: UserDetailDto;
     orcas?: CustomSsoOrcasContext | null;
     requestContext?: ApiRequestContext;
-  }): Promise<CustomSsoLocalSession> {
+  }): Promise<IssuedClientCredential> {
     const clientCode = input.client.clientCode;
     const payloadRef = randomUUID();
     const cleanupRefs = [{
@@ -260,7 +257,7 @@ export function createCustomSsoSessionKernelAdapter(deps: CustomSsoSessionKernel
     }];
 
     const binding = await deps.kernel.createClientBinding({
-      principalSessionId: input.authCode.principalSession.principalSessionId,
+      principalSessionId: input.authorizationGrant.principalSessionId,
       protocol: CUSTOM_SSO_PROTOCOL,
       clientCode,
       ttlMs: deps.config.localSessionTtlSeconds * 1000,
@@ -274,7 +271,7 @@ export function createCustomSsoSessionKernelAdapter(deps: CustomSsoSessionKernel
     }
 
     const credential = await deps.kernel.issueCredential({
-      principalSessionId: input.authCode.principalSession.principalSessionId,
+      principalSessionId: input.authorizationGrant.principalSessionId,
       bindingId: binding.value.bindingId,
       protocol: CUSTOM_SSO_PROTOCOL,
       clientCode,
@@ -304,11 +301,11 @@ export function createCustomSsoSessionKernelAdapter(deps: CustomSsoSessionKernel
       payloadRef,
       credentialId: credential.value.credentialId,
       bindingId: binding.value.bindingId,
-      principalSessionId: input.authCode.principalSession.principalSessionId,
+      principalSessionId: input.authorizationGrant.principalSessionId,
       clientCode,
       mode: input.mode,
       localSessionId: credential.externalToken,
-      user: input.userDetail,
+      user: input.authorizationGrant.userDetail,
       issuedAt: credential.value.issuedAt,
       expiresAt: credential.value.expiresAt,
       logoutEndpoint: input.mode === ClientManagementLevel.Independent
@@ -333,15 +330,77 @@ export function createCustomSsoSessionKernelAdapter(deps: CustomSsoSessionKernel
     await deps.auditLogWriter.recordAuditLog(
       withApiRequestContext(
         input.requestContext,
-        buildLocalLoginSuccessAudit(input.userDetail, clientCode, input.mode),
+        buildLocalLoginSuccessAudit(input.authorizationGrant.userDetail, clientCode, input.mode),
       ),
     );
 
     return {
       token: credential.externalToken,
       ttl,
-      userInfo: input.userDetail,
+      userInfo: input.authorizationGrant.userDetail,
       orcasSessionId: input.orcas?.sessionId ?? null,
+    };
+  }
+
+  async function redeemIndependentGrant(input: {
+    client: ClientDto;
+    code: string;
+    requestContext?: ApiRequestContext;
+  }) {
+    const authorizationGrant = await resolveAuthorizationGrant({
+      clientCode: input.client.clientCode,
+      code: input.code,
+      invalidCodeError: "invalid_auth_code",
+    });
+    const credential = await issueClientCredential({
+      authorizationGrant,
+      client: input.client,
+      mode: ClientManagementLevel.Independent,
+      requestContext: input.requestContext,
+    });
+    return {
+      credential: credential.token,
+      ttl: credential.ttl,
+      userInfo: credential.userInfo,
+    };
+  }
+
+  async function completeGatewayLogin(input: {
+    client: ClientDto;
+    code: string;
+    redirectUrl: string;
+    requestContext?: ApiRequestContext;
+  }) {
+    const authorizationGrant = await resolveAuthorizationGrant({
+      clientCode: input.client.clientCode,
+      code: input.code,
+      redirectUrl: input.redirectUrl,
+      invalidCodeError: "unauthorized",
+    });
+    let orcas: CustomSsoOrcasContext | null = null;
+    if (input.client.extAttributes.requireOrcas === true) {
+      const { id, username, name, mobile } = authorizationGrant.userDetail;
+      const { orcasSessionId, orcasId } = await deps.orcas.orcasLogin({
+        id,
+        username,
+        name,
+        mobile,
+      });
+      orcas = {
+        userId: orcasId,
+        sessionId: orcasSessionId,
+      };
+    }
+    const localSession = await issueClientCredential({
+      authorizationGrant,
+      client: input.client,
+      mode: ClientManagementLevel.Gateway,
+      orcas,
+      requestContext: input.requestContext,
+    });
+    return {
+      orcasSessionId: localSession.orcasSessionId,
+      token: localSession.token,
     };
   }
 
@@ -536,13 +595,13 @@ export function createCustomSsoSessionKernelAdapter(deps: CustomSsoSessionKernel
   }
 
   return {
-    authorize,
     authorizeLocalSession,
-    consumeAuthCode,
-    createLocalSession,
+    completeGatewayLogin,
     createPrincipalSession,
+    issueAuthorizationCode,
     lazyRevokeUserSessions,
     logout,
+    redeemIndependentGrant,
     resolveLocalSessionContext,
     resolveLocalSessionUser,
     resolvePrincipalSessionUser,
