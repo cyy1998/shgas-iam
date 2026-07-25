@@ -31,20 +31,26 @@
 
 ## 多 Ticket 协调与交接
 
-Ticket 状态是协作提示，生命周期为 `ready-for-agent → claimed → resolved`，不是 gate：
+本节适用于由 `.scratch/<feature>/issues/` 管理的多 Ticket `/implement`。子代理 dispatch 是强制的上下文边界，
+不是可选的并行优化。Ticket 状态是协作提示，生命周期为 `ready-for-agent → claimed → resolved`，不是 gate：
 
-1. 当前任务按 blockers 顺序选择依赖前沿，只认领 blockers 已 `resolved` 的 ticket，并在修改前把状态改为
-   `claimed`。不为 claim 创建独立 checkpoint。
-2. 每张 ticket 在不继承上一张聊天历史的全新上下文中实现。当前任务充当协调者；同一功能分支默认顺序执行，除非
-   维护者明确要求并行分支或 worktree。
-3. 新上下文读取功能分支、`AGENTS.md`、来源 spec、当前 ticket、blockers 和 `delivery.md`，并把 ticket 开始前的
-   提交固定为 review fixed point。
-4. 完成验收与聚焦验证后创建一个正常的 focused implementation commit，再用 `/code-review` 分别评审 Standards
-   与 Spec。Finding 使用额外 focused fix commit，随后对同一 fixed point 到新 `HEAD` 的完整范围重审；不自动
-   amend 或 rebase。
-5. 两轴 findings 清零后勾选验收项、把 ticket 标为 `resolved`、更新 journal，并创建只包含本 feature tracker 状态
-   的轻量 handoff commit。Ticket 不写 Resolution schema、候选 SHA 或证据新鲜度字段。
-6. Handoff commit 完成后，下一张已解阻 ticket 才能进入新的上下文。
+1. 主会话按 blockers 顺序选择依赖前沿，只调度 blockers 已 `resolved` 的 ticket。每张 ticket 都必须由主会话显式
+   调用一个全新的 implementation 子代理；不得把主会话压缩、清空或总结后继续执行视为“全新上下文”。
+2. 从首张 ticket 开始到最终 handoff commit 完成为止，主会话只负责分支与目标检查、只读调查、子代理调度与监控、
+   评审组织和最终验证。主会话不得直接创建、修改、移动或删除任何受版本控制文件，也不得 stage 或 commit；claim、
+   production/test/docs 改动、finding 修复、tracker handoff 及其提交全部由对应子代理执行。
+3. 若子代理工具支持控制历史继承，implementation 子代理必须禁用主会话历史继承，并从仓库事实来源恢复上下文。
+   子代理读取功能分支、`AGENTS.md`、来源 spec、当前 ticket、blockers 和 `delivery.md`，把 ticket 开始前的提交固定为
+   review fixed point，并在其他文件改动前把 ticket 状态改为 `claimed`；不为 claim 创建独立 checkpoint。
+4. 同一功能分支默认顺序执行 tickets，除非维护者明确要求并行分支或 worktree。当前 ticket 完成验收与聚焦验证后，
+   implementation 子代理创建正常的 focused implementation commit。
+5. 主会话随后显式调用相互独立、只读的 Standards 与 Spec 评审子代理，对 review fixed point 到候选 `HEAD` 的完整
+   范围执行 `/code-review`。Finding 交回原 implementation 子代理，用额外 focused fix commit 修复，再由两轴重新
+   审查完整范围；不自动 amend 或 rebase。
+6. 两轴 findings 清零后，原 implementation 子代理勾选验收项、把 ticket 标为 `resolved`、更新 journal，并创建只
+   包含本 feature tracker 状态的轻量 handoff commit。Ticket 不写 Resolution schema、候选 SHA 或证据新鲜度字段。
+7. Handoff commit 完成后，主会话才能为下一张已解阻 ticket 显式调用另一个全新的 implementation 子代理。
+8. 如果当前运行环境没有可用的子代理能力，主会话必须停止并向维护者报告；不得静默退回主会话直接实施。
 
 ## 验证节奏
 
