@@ -190,6 +190,13 @@ owner、原因、跟踪 ticket、到期日和风险，并继续在非阻塞通�
 process-smoke harness 的提前退出、readiness timeout、端口冲突、完整进程树和临时目录清理契约继续由公开测试接口锁定。
 同日完成测试归属收口：共享 harness 的 24 个普通契约测试由 `@iam/api-core` 的 Bun ordinary lane 收集，1 个真实
 Windows Job 测试由其 package-local smoke lane 收集；OIDC 当前 smoke lane 只保留 4 个 app-owned 文件中的 8 个测试。
+同日也完成 `@iam/admin-api` 的 focused Windows local adoption：package-local `test:smoke` 使用共享 harness 启动真实 Bun
+entry，以最小 runtime env、独占端口和临时目录构造 production composition，并通过 `/admin/doc` OpenAPI probe 就绪；
+PostgreSQL 与 Redis 只使用不可达占位地址。
+同日完成 `@iam/worker` 的 focused Windows local adoption：package-local `test:smoke` 使用共享 harness 启动真实 Bun entry，
+以最小 runtime env 和独占端口构造 production composition。测试保留生产 User Profile 模块的构造，但关闭 queue worker
+启动并将 PostgreSQL、Redis 指向不可达占位地址，再通过 Bull Board HTML probe 确认 HTTP readiness；进程树、端口和临时目录
+继续由共享 harness 持有并清理。
 
 正式脚本必须用 Node.js、Bun、Turbo 或其他跨平台 API 编排，不得在 `package.json` 中依赖 Bash、PowerShell 或 `cmd.exe`
 专有语法。Linux 与未来 CI 的状态保持 `pending`，直到在实际 runner 上运行同一契约。
@@ -199,8 +206,28 @@ Windows Job 测试由其 package-local smoke lane 收集；OIDC 当前 smoke lan
 | `@iam/api-core` | Bun 普通测试限定在 `src/`，`*.smoke.test.ts` 限定在 `test-smoke/` | package-local `test:smoke` 以最小 runtime env 和独立临时目录覆盖 Windows Job tree owner | `complete`（Windows local）；Linux/CI `pending` |
 | `@iam/oidc-provider` | 普通与 `*.smoke.test.ts` 由两个 Vitest config 互斥收集 | package-local `test:smoke` 只覆盖 app-owned 的真实 entry、HTTP、token 与协议端口 | `complete`（Windows local）；Linux/CI `pending` |
 | `@iam/api` | Bun 普通测试限定在 `src/`，`*.smoke.test.ts` 限定在 `test-smoke/` | package-local `test:smoke` 通过共享 harness 覆盖真实 Bun entry、隔离 env、production composition 与 HTTP readiness | `complete`（Windows local）；Linux/CI `pending` |
-| `@iam/admin-api` | 进程内 `openapi.test.ts` 由普通 `test` 收集 | 尚无真实 entry smoke | `pending` |
-| `@iam/worker` | 普通测试由 `test` 收集 | 尚无真实 entry/composition smoke | `pending` |
+| `@iam/admin-api` | Bun 普通测试限定在 `src/`，`*.smoke.test.ts` 限定在 `test-smoke/` | package-local `test:smoke` 通过共享 harness 覆盖真实 Bun entry、隔离资源、production composition 与 `/admin/doc` readiness | `complete`（Windows local）；Linux/CI `pending` |
+| `@iam/worker` | Bun 普通测试限定在 `src/`，`*.smoke.test.ts` 限定在 `test-smoke/` | package-local `test:smoke` 通过共享 harness 覆盖真实 Bun entry、production composition、隔离资源与 Bull Board readiness | `complete`（Windows local）；Linux/CI `pending` |
+
+### User Profile 失效功能的公开测试 seam
+
+User Profile 失效深化与 scope-expansion 协议退役由以下调用方可观察 seam 共同锁定：
+
+1. `UserProfileInvalidation.recordChanges` 覆盖 source change 到受影响用户与 canonical reason 的映射、去重、dirty
+   version 推进，以及同一 transaction 的单次 after-commit 批量 wake-up；测试只 fake 数据库、BullMQ、clock 和
+   transaction lifecycle 等系统边界。
+2. UnitOfWork lifecycle 契约覆盖 transaction-port factory 与 transaction callback 共享同一个 `afterCommit`
+   registration port，并获得当前 `{ requestId, traceId }` observability；rollback 不运行提交后任务，enqueue 失败维持
+   best-effort 语义。
+3. Worker maintenance 与 rebuild processor 分别覆盖 backfill/repair 和 dirty 状态机；shared job contract、producer
+   surface 与 worker job dispatch 共同证明旧 scope job、schema、producer 和 consumer 不再属于 production exports。
+4. API/Admin architecture suites 扫描业务 production module 的仓库惯例静态边界，三端 package-local process smoke
+   则验证真实 runtime entry、env parsing 与 production composition。API 以 `/public/doc`、Admin API 以
+   `/admin/doc`、Worker 以 Bull Board HTML 作为协议级 readiness probe。
+
+Boundary helper 是维护性回归检查，不是对抗式源码扫描器。其承诺限定为规范 casing 的静态 named/type import 与
+re-export、常规跨 package 内部静态路径和直接 legacy identifier；动态/计算 import、string-named specifier、非规范
+casing、quoted nested destructuring 与 alias dataflow 不属于该测试 seam。
 
 从本架构成为 Current 起，新建或实质修改 backend runtime entry/composition 时，必须同时添加或更新该 app 的
 `test:smoke`；未改动的既有 app 可以按 adoption 表逐步补齐。
@@ -208,7 +235,7 @@ Windows Job 测试由其 package-local smoke lane 收集；OIDC 当前 smoke lan
 ## 已实施基线与演进边界
 
 Current 基线已经包含根与 package scripts、Turbo task graph、runner 配置、共享 process-smoke harness 及其 API Core
-ordinary/Windows Job smoke、OIDC/API entry smoke、结构测试和 Windows 本地验收。当前命令见
+ordinary/Windows Job smoke、OIDC/API/Admin API/Worker entry smoke、结构测试和 Windows 本地验收。当前命令见
 [构建、测试与开发命令](../development/commands.md)，实现与本地交付规则见
 [AI 开发工作流](../agents/workflow.md)。
 

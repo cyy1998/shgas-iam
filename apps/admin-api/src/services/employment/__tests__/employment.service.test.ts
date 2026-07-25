@@ -1,5 +1,5 @@
 import { createFakeClock, createImmediateUnitOfWork } from "@admin-api/test/fakes";
-import { EmploymentStatus, OrganizationLevel, OrganizationStatus, OrganizationType, PositionStatus, UserProfileDirtyReason, UserStatus, UserType } from "@iam/contracts";
+import { EmploymentStatus, OrganizationLevel, OrganizationStatus, OrganizationType, PositionStatus, UserStatus, UserType } from "@iam/contracts";
 import { EmploymentAlreadyExistsError, EmploymentOrganizationScopeMismatchError } from "@iam/domain/employment";
 import { describe, expect, mock, test } from "bun:test";
 import { createEmploymentService } from "../employment.service";
@@ -93,8 +93,8 @@ function employment(overrides: Record<string, unknown> = {}) {
 function createService() {
   const tx = {
     auditService: { recordAuditLog: mock(async () => undefined) },
-    profileDirtyMarker: {
-      markUsersDirty: mock(async () => ({ marked: 1, userIds: [1] })),
+    userProfileInvalidation: {
+      recordChanges: mock(async () => undefined),
     },
     employmentRepository: {
       createEmploymentRecord: mock(async () => employment({ id: 10 })),
@@ -186,13 +186,9 @@ describe("createEmploymentService", () => {
       action: "admin.employment.create",
       targetId: 10,
     }));
-    expect(tx.profileDirtyMarker.markUsersDirty).toHaveBeenCalledWith({
-      userIds: [1],
-      reasonCodes: [UserProfileDirtyReason.EmploymentUpdated],
-      afterCommit: expect.any(Object),
-      requestId: undefined,
-      traceId: undefined,
-    });
+    expect(tx.userProfileInvalidation.recordChanges).toHaveBeenCalledWith([
+      { kind: "employment", userId: 1 },
+    ]);
   });
 
   test("rejects creating an employment for an unknown user", async () => {
@@ -220,7 +216,7 @@ describe("createEmploymentService", () => {
     })).rejects.toBeInstanceOf(EmploymentAlreadyExistsError);
 
     expect(tx.auditService.recordAuditLog).not.toHaveBeenCalled();
-    expect(tx.profileDirtyMarker.markUsersDirty).not.toHaveBeenCalled();
+    expect(tx.userProfileInvalidation.recordChanges).not.toHaveBeenCalled();
   });
 
   test("rejects create when assigned organization is outside expected ancestor", async () => {
@@ -247,10 +243,9 @@ describe("createEmploymentService", () => {
       status: EmploymentStatus.Disable,
       endTime: now,
     });
-    expect(tx.profileDirtyMarker.markUsersDirty).toHaveBeenCalledWith(expect.objectContaining({
-      userIds: [1],
-      reasonCodes: [UserProfileDirtyReason.EmploymentUpdated],
-    }));
+    expect(tx.userProfileInvalidation.recordChanges).toHaveBeenCalledWith([
+      { kind: "employment", userId: 1 },
+    ]);
   });
 
   test("updates an employment and marks its existing user dirty", async () => {
@@ -263,10 +258,9 @@ describe("createEmploymentService", () => {
       startTime: undefined,
       description: "updated",
     });
-    expect(tx.profileDirtyMarker.markUsersDirty).toHaveBeenCalledWith(expect.objectContaining({
-      userIds: [1],
-      reasonCodes: [UserProfileDirtyReason.EmploymentUpdated],
-    }));
+    expect(tx.userProfileInvalidation.recordChanges).toHaveBeenCalledWith([
+      { kind: "employment", userId: 1 },
+    ]);
   });
 
   test("deletes an employment after capturing the affected user", async () => {
@@ -275,10 +269,9 @@ describe("createEmploymentService", () => {
     await expect(service.deleteEmployment(4)).resolves.toBe(true);
 
     expect(tx.employmentRepository.softDeleteEmployment).toHaveBeenCalledWith(4);
-    expect(tx.profileDirtyMarker.markUsersDirty).toHaveBeenCalledWith(expect.objectContaining({
-      userIds: [1],
-      reasonCodes: [UserProfileDirtyReason.EmploymentUpdated],
-    }));
+    expect(tx.userProfileInvalidation.recordChanges).toHaveBeenCalledWith([
+      { kind: "employment", userId: 1 },
+    ]);
   });
 
   test("transfers an employment and marks the original user dirty", async () => {
@@ -302,10 +295,9 @@ describe("createEmploymentService", () => {
       isPrimary: false,
       status: EmploymentStatus.Enable,
     }));
-    expect(tx.profileDirtyMarker.markUsersDirty).toHaveBeenCalledWith(expect.objectContaining({
-      userIds: [1],
-      reasonCodes: [UserProfileDirtyReason.EmploymentUpdated],
-    }));
+    expect(tx.userProfileInvalidation.recordChanges).toHaveBeenCalledWith([
+      { kind: "employment", userId: 1 },
+    ]);
   });
 
   test("sets a primary employment and marks the user dirty", async () => {
@@ -315,9 +307,8 @@ describe("createEmploymentService", () => {
 
     expect(tx.employmentRepository.unsetPrimariesByUserId).toHaveBeenCalledWith(1, 4);
     expect(tx.employmentRepository.updateEmploymentRecord).toHaveBeenCalledWith(4, { isPrimary: true });
-    expect(tx.profileDirtyMarker.markUsersDirty).toHaveBeenCalledWith(expect.objectContaining({
-      userIds: [1],
-      reasonCodes: [UserProfileDirtyReason.EmploymentUpdated],
-    }));
+    expect(tx.userProfileInvalidation.recordChanges).toHaveBeenCalledWith([
+      { kind: "employment", userId: 1 },
+    ]);
   });
 });

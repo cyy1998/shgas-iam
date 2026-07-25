@@ -1,6 +1,5 @@
 import type { AuditLogWriterPort } from "@admin-api/services/audit/audit.service";
 import type { UnitOfWorkPort } from "@iam/api-core/uow";
-import type { UserProfileDirtyMarker } from "@iam/user-profile-read-model/producer";
 import type {
   Position,
   PositionCreateDto,
@@ -23,10 +22,17 @@ export interface AdminPositionReaderPort {
   searchPositionsFuzzy: (query: PositionFuzzyQueryDto) => Promise<PositionSearchResult>;
 }
 
+export interface AdminPositionProfileChange {
+  readonly kind: "position";
+  readonly positionId: number;
+}
+
 export interface AdminPositionTransactionPorts {
   positionRepository: AdminPositionTransactionStorePort;
   auditService: AuditLogWriterPort;
-  profileDirtyMarker: Pick<UserProfileDirtyMarker, "markScopeDirty">;
+  userProfileInvalidation: {
+    recordChanges: (changes: readonly AdminPositionProfileChange[]) => Promise<void>;
+  };
 }
 
 export type AdminPositionUnitOfWorkPort = UnitOfWorkPort<AdminPositionTransactionPorts>;

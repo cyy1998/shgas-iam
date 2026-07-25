@@ -6,7 +6,7 @@ import {
   buildSelfPasswordChangeFailureAudit,
   buildSelfPasswordChangeSuccessAudit,
 } from "@api/services/audit/events/self-user.audit";
-import { UserProfileDirtyReason, UserStatus } from "@iam/contracts";
+import { UserStatus } from "@iam/contracts";
 import { InvalidOldPasswordError, UserNotFoundError, UserPasswordUnchangedError } from "@iam/domain/user";
 
 export function createUserService(deps: UserServiceDeps) {
@@ -73,13 +73,9 @@ export function createUserService(deps: UserServiceDeps) {
       if (updatedUser === null)
         return null;
 
-      await tx.profileDirtyMarker.markUsersDirty({
-        userIds: [userId],
-        reasonCodes: [UserProfileDirtyReason.UserUpdated],
-        afterCommit: tx.afterCommit,
-        requestId: options.requestContext?.requestId ?? undefined,
-        traceId: options.requestContext?.traceId ?? undefined,
-      });
+      await tx.userProfileInvalidation.recordChanges([
+        { kind: "user", userId },
+      ]);
       return updatedUser;
     }, { observability: options.requestContext });
   }
@@ -94,13 +90,9 @@ export function createUserService(deps: UserServiceDeps) {
           options.requestContext,
           buildMobileBindSuccessAudit(userId, phoneNumber),
         ));
-        await tx.profileDirtyMarker.markUsersDirty({
-          userIds: [userId],
-          reasonCodes: [UserProfileDirtyReason.UserUpdated],
-          afterCommit: tx.afterCommit,
-          requestId: options.requestContext?.requestId ?? undefined,
-          traceId: options.requestContext?.traceId ?? undefined,
-        });
+        await tx.userProfileInvalidation.recordChanges([
+          { kind: "user", userId },
+        ]);
       }, { observability: options.requestContext });
       transactionSucceeded = true;
       await deps.mobileService.confirmReservedVerificationCode(reservation);

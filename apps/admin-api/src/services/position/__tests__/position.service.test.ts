@@ -1,5 +1,5 @@
 import { createImmediateUnitOfWork } from "@admin-api/test/fakes";
-import { PositionStatus, UserProfileDirtyReason, UserProfileScopeType } from "@iam/contracts";
+import { PositionStatus } from "@iam/contracts";
 import { describe, expect, mock, test } from "bun:test";
 import { createPositionService } from "../position.service";
 
@@ -20,8 +20,8 @@ function position(overrides: Record<string, unknown> = {}) {
 function createService(overrides: Record<string, unknown> = {}) {
   const tx = {
     auditService: { recordAuditLog: mock(async () => undefined) },
-    profileDirtyMarker: {
-      markScopeDirty: mock(async () => ({ marked: 1, userIds: [1] })),
+    userProfileInvalidation: {
+      recordChanges: mock(async () => undefined),
     },
     positionRepository: {
       countActiveEmploymentsByPosCode: mock(async () => 0),
@@ -53,13 +53,9 @@ describe("createPositionService", () => {
       action: "admin.position.update",
       targetCode: "DEV",
     }));
-    expect(tx.profileDirtyMarker.markScopeDirty).toHaveBeenCalledWith({
-      scope: { scopeType: UserProfileScopeType.PositionId, scopeId: 1 },
-      reasonCodes: [UserProfileDirtyReason.PositionUpdated],
-      afterCommit: expect.any(Object),
-      requestId: undefined,
-      traceId: undefined,
-    });
+    expect(tx.userProfileInvalidation.recordChanges).toHaveBeenCalledWith([
+      { kind: "position", positionId: 1 },
+    ]);
   });
 
   test("rejects renaming to an existing position code", async () => {
@@ -80,7 +76,7 @@ describe("createPositionService", () => {
     expect(tx.positionRepository.softDeletePositionByCode).not.toHaveBeenCalled();
   });
 
-  test("marks affected users dirty when updating position status", async () => {
+  test("records a position change when updating position status", async () => {
     const { service, tx } = createService();
 
     await expect(service.updatePositionStatus("DEV", PositionStatus.Disable)).resolves.toBe(true);
@@ -88,22 +84,20 @@ describe("createPositionService", () => {
     expect(tx.positionRepository.updatePositionByCode).toHaveBeenCalledWith("DEV", {
       status: PositionStatus.Disable,
     });
-    expect(tx.profileDirtyMarker.markScopeDirty).toHaveBeenCalledWith(expect.objectContaining({
-      scope: { scopeType: UserProfileScopeType.PositionId, scopeId: 1 },
-      reasonCodes: [UserProfileDirtyReason.PositionUpdated],
-    }));
+    expect(tx.userProfileInvalidation.recordChanges).toHaveBeenCalledWith([
+      { kind: "position", positionId: 1 },
+    ]);
   });
 
-  test("marks affected users dirty when deleting a position after relationship checks", async () => {
+  test("records a position change when deleting a position after relationship checks", async () => {
     const { service, tx } = createService();
 
     await expect(service.deletePosition("DEV")).resolves.toBe(true);
 
     expect(tx.positionRepository.countActiveEmploymentsByPosCode).toHaveBeenCalledWith("DEV");
     expect(tx.positionRepository.softDeletePositionByCode).toHaveBeenCalledWith("DEV");
-    expect(tx.profileDirtyMarker.markScopeDirty).toHaveBeenCalledWith(expect.objectContaining({
-      scope: { scopeType: UserProfileScopeType.PositionId, scopeId: 1 },
-      reasonCodes: [UserProfileDirtyReason.PositionUpdated],
-    }));
+    expect(tx.userProfileInvalidation.recordChanges).toHaveBeenCalledWith([
+      { kind: "position", positionId: 1 },
+    ]);
   });
 });

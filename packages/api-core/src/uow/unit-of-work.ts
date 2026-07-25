@@ -1,5 +1,10 @@
 import type { ObservabilityContext } from "../observability";
-import type { AfterCommitLoggerPort, AfterCommitPort, AfterCommitTask } from "./after-commit";
+import type {
+  AfterCommitLoggerPort,
+  AfterCommitPort,
+  AfterCommitRegistrationPort,
+  AfterCommitTask,
+} from "./after-commit";
 import { createAfterCommitPort, runAfterCommitTasks } from "./after-commit";
 
 export interface TransactionalDbPort<Tx> {
@@ -12,6 +17,11 @@ export interface UnitOfWorkTransactionOptions {
   observability?: ObservabilityContext | null;
 }
 
+export interface UnitOfWorkTransactionLifecycle {
+  afterCommit: AfterCommitRegistrationPort;
+  observability: ObservabilityContext | null;
+}
+
 export interface UnitOfWorkPort<TxPorts extends object> {
   transaction: <T>(
     callback: (tx: TransactionContext<TxPorts>) => Promise<T>,
@@ -22,7 +32,7 @@ export interface UnitOfWorkPort<TxPorts extends object> {
 export interface CreateUnitOfWorkOptions<Tx, TxPorts extends object> {
   db: TransactionalDbPort<Tx>;
   logger: AfterCommitLoggerPort;
-  createTxPorts: (tx: Tx) => TxPorts;
+  createTxPorts: (tx: Tx, lifecycle: UnitOfWorkTransactionLifecycle) => TxPorts;
 }
 
 /**
@@ -35,16 +45,18 @@ export function createUnitOfWork<Tx, TxPorts extends object>(
   return {
     async transaction(callback, transactionOptions) {
       const afterCommitTasks: AfterCommitTask[] = [];
+      const afterCommit = createAfterCommitPort(afterCommitTasks).afterCommit;
+      const observability = transactionOptions?.observability ?? null;
 
       const result = await options.db.transaction(async (tx) => {
-        const txPorts = options.createTxPorts(tx);
+        const txPorts = options.createTxPorts(tx, { afterCommit, observability });
         return await callback({
           ...txPorts,
-          ...createAfterCommitPort(afterCommitTasks),
+          afterCommit,
         });
       });
 
-      await runAfterCommitTasks(afterCommitTasks, options.logger, transactionOptions?.observability);
+      await runAfterCommitTasks(afterCommitTasks, options.logger, observability);
 
       return result;
     },

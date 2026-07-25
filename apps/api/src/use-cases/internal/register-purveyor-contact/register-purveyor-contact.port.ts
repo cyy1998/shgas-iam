@@ -1,7 +1,16 @@
 import type { AuditLogWriterPort } from "@api/services/audit/audit.service";
 import type { UnitOfWorkPort } from "@iam/api-core/uow";
 import type { UserCreateDto } from "@iam/domain/user";
-import type { UserProfileDirtyMarker } from "@iam/user-profile-read-model/producer";
+
+export type RegisterPurveyorContactProfileChange
+  = | {
+    readonly kind: "user";
+    readonly userId: number;
+  }
+  | {
+    readonly kind: "employment";
+    readonly userId: number;
+  };
 
 export interface RegisterPurveyorEmploymentStorePort {
   getEmploymentByUserOrgPosId: (
@@ -35,7 +44,9 @@ export interface RegisterPurveyorContactTransactionPorts {
   organizationRepository: RegisterPurveyorOrganizationReaderPort;
   positionRepository: RegisterPurveyorPositionReaderPort;
   userRepository: RegisterPurveyorUserStorePort;
-  profileDirtyMarker: Pick<UserProfileDirtyMarker, "markUsersDirty">;
+  userProfileInvalidation: {
+    recordChanges: (changes: readonly RegisterPurveyorContactProfileChange[]) => Promise<void>;
+  };
 }
 
 export interface RegisterPurveyorContactUseCaseDeps {

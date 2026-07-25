@@ -1,5 +1,5 @@
 export interface UserProfileBackfillCommandDeps {
-  workerService: {
+  maintenance: {
     backfillAllUsers: (options?: { batchSize?: number }) => Promise<{ enqueued: number }>;
   };
   logger: {
@@ -11,7 +11,7 @@ export interface UserProfileBackfillCommandDeps {
 }
 
 export async function runUserProfileBackfillCommand(deps: UserProfileBackfillCommandDeps) {
-  const result = await deps.workerService.backfillAllUsers({ batchSize: deps.config.batchSize });
+  const result = await deps.maintenance.backfillAllUsers({ batchSize: deps.config.batchSize });
   deps.logger.info({ enqueued: result.enqueued }, "user profile backfill jobs enqueued");
   return result;
 }
@@ -24,7 +24,7 @@ async function main() {
   const composition = await createWorkerCommandComposition({ env, logger });
   try {
     await runUserProfileBackfillCommand({
-      workerService: composition.userProfile.workerService,
+      maintenance: composition.userProfile.maintenance,
       logger: composition.logger,
       config: {
         batchSize: env.userProfile.backfillBatchSize,

@@ -1,11 +1,10 @@
 import type { AdminAuditContext } from "@admin-api/services/audit/audit.service";
 import type { RoleAssignmentTargetSummaryDto } from "@iam/domain/role";
-import type { UserProfileAfterCommitPort, UserProfileExpansionScope } from "@iam/user-profile-read-model/producer";
 import type { AdminRoleServiceDeps, AdminRoleTransactionPorts } from "./role.port";
 import type { RoleAssignmentCreateDto, RoleAssignmentPaginationQueryDto, RoleCreateDto, RolePaginationQueryDto, RoleUpdateDto } from "./role.type";
 import { adminAuditTransactionOptions } from "@admin-api/services/audit/audit.service";
 import { buildRoleAssignmentAudit, buildRoleAudit } from "@admin-api/services/audit/events/role.audit";
-import { RoleAssignmentTargetType, RoleStatus, UserProfileDirtyReason, UserProfileScopeType } from "@iam/contracts";
+import { RoleAssignmentTargetType, RoleStatus } from "@iam/contracts";
 import { ClientNotFoundError } from "@iam/domain/client";
 import {
   InvalidRoleAssignmentScopeError,
@@ -94,7 +93,9 @@ export function createRoleService(deps: AdminRoleServiceDeps) {
         patch: data,
       }, auditContext));
       if (data.status !== undefined && data.status !== existing.status) {
-        await markRoleScopeDirty(tx, existing.id, auditContext);
+        await tx.userProfileInvalidation.recordChanges([
+          { kind: "role", roleId: existing.id },
+        ]);
       }
       return detail;
     }, adminAuditTransactionOptions(auditContext));
@@ -164,7 +165,13 @@ export function createRoleService(deps: AdminRoleServiceDeps) {
         { created: true },
         auditContext,
       ));
-      await markAssignmentScopeDirty(tx, detail, auditContext);
+      await tx.userProfileInvalidation.recordChanges([
+        {
+          kind: "role-assignment",
+          targetType: assignment.targetType,
+          targetId: assignment.targetId,
+        },
+      ]);
       return detail;
     }, adminAuditTransactionOptions(auditContext));
   }
@@ -202,7 +209,18 @@ export function createRoleService(deps: AdminRoleServiceDeps) {
         { previousIncludeDescendants: existing.includeDescendants },
         auditContext,
       ));
-      await markAssignmentScopeDirty(tx, detail, auditContext);
+      await tx.userProfileInvalidation.recordChanges([
+        {
+          kind: "role-assignment",
+          targetType: existing.targetType,
+          targetId: existing.targetId,
+        },
+        {
+          kind: "role-assignment",
+          targetType: updated.targetType,
+          targetId: updated.targetId,
+        },
+      ]);
       return detail;
     }, adminAuditTransactionOptions(auditContext));
   }
@@ -225,7 +243,13 @@ export function createRoleService(deps: AdminRoleServiceDeps) {
         { deleted: true },
         auditContext,
       ));
-      await markAssignmentScopeDirty(tx, existing, auditContext);
+      await tx.userProfileInvalidation.recordChanges([
+        {
+          kind: "role-assignment",
+          targetType: existing.targetType,
+          targetId: existing.targetId,
+        },
+      ]);
       return true;
     }, adminAuditTransactionOptions(auditContext));
   }
@@ -245,10 +269,6 @@ export function createRoleService(deps: AdminRoleServiceDeps) {
 }
 
 export type RoleService = ReturnType<typeof createRoleService>;
-
-type AdminRoleTransactionContext = AdminRoleTransactionPorts & {
-  afterCommit: UserProfileAfterCommitPort;
-};
 
 interface ResolvedRoleAssignmentTarget {
   target: RoleAssignmentTargetSummaryDto;
@@ -296,50 +316,6 @@ async function resolveAssignmentTarget(
       }
       return { target, includeDescendants: false };
     }
-  }
-}
-
-async function markRoleScopeDirty(
-  tx: AdminRoleTransactionContext,
-  roleId: number,
-  auditContext?: AdminAuditContext,
-) {
-  await tx.profileDirtyMarker.markScopeDirty({
-    scope: { scopeType: UserProfileScopeType.RoleId, scopeId: roleId },
-    reasonCodes: [UserProfileDirtyReason.RoleUpdated],
-    afterCommit: tx.afterCommit,
-    requestId: auditContext?.requestId ?? undefined,
-    traceId: auditContext?.traceId ?? undefined,
-  });
-}
-
-async function markAssignmentScopeDirty(
-  tx: AdminRoleTransactionContext,
-  assignment: {
-    targetType: RoleAssignmentTargetType;
-    targetId: number;
-  },
-  auditContext?: AdminAuditContext,
-) {
-  await tx.profileDirtyMarker.markScopeDirty({
-    scope: assignmentScope(assignment),
-    reasonCodes: [UserProfileDirtyReason.RoleUpdated],
-    afterCommit: tx.afterCommit,
-    requestId: auditContext?.requestId ?? undefined,
-    traceId: auditContext?.traceId ?? undefined,
-  });
-}
-
-function assignmentScope(
-  assignment: { targetType: RoleAssignmentTargetType; targetId: number },
-): UserProfileExpansionScope {
-  switch (assignment.targetType) {
-    case RoleAssignmentTargetType.Organization:
-      return { scopeType: UserProfileScopeType.OrganizationId, scopeId: assignment.targetId };
-    case RoleAssignmentTargetType.Position:
-      return { scopeType: UserProfileScopeType.PositionId, scopeId: assignment.targetId };
-    case RoleAssignmentTargetType.Employment:
-      return { scopeType: UserProfileScopeType.EmploymentId, scopeId: assignment.targetId };
   }
 }
 

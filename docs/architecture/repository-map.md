@@ -38,9 +38,10 @@
 - `packages/jobs/src`: 共享 BullMQ connection、queue、worker、job ID 和 default option helper。
 - `packages/role-assignment-resolution/src`: 通过 `createRoleAssignmentResolver(db)` 暴露正向 Effective Role 与反向
   受影响用户解析的唯一公开 seam；assignment 来源、组织闭包、有效性、去重和排序规则只存在于 package 内部。
-- `packages/user-profile-read-model/src`: API/admin-api/worker 消费的 versioned user-profile read model、dirty
-  marker、producer/query API、repository 和 worker module；档案构建与 Role/Privilege dirty scope 通过注入的 resolver
-  消费角色分配结果，不自行解析 assignment。
+- `packages/user-profile-read-model/src`: API/admin-api/worker 消费的 versioned user-profile read model、transaction-bound
+  `UserProfileInvalidation`、dirty workflow、producer/query API、repository 和 worker module。角色与角色分配变化由
+  invalidation 内部的 affected-user repository 通过注入的反向 resolver 推导受影响用户；旧 scope-expansion 协议与
+  scope repository 已退役。`PrivilegeUpdated` 只作为历史 dirty reason 保留，不对应公开 privilege source change。
 - `gateway`: APISIX gateway manifest package (`@iam/gateway-apisix`)，包含 dev/prod manifests、config template 和
   sync/validate/diff/apply scripts。
 - `docker/`: local dependency stacks 以及 dev/prod compose files。

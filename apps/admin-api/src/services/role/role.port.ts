@@ -1,7 +1,6 @@
 import type { AuditLogWriterPort } from "@admin-api/services/audit/audit.service";
 import type { UnitOfWorkPort } from "@iam/api-core/uow";
 import type { RoleAssignmentTargetType } from "@iam/contracts";
-import type { UserProfileDirtyMarker } from "@iam/user-profile-read-model/producer";
 import type {
   AdminRoleAssignmentCreateRecord,
   AdminRoleAssignmentRecord,
@@ -53,10 +52,25 @@ export interface AdminRoleReaderPort {
   ) => Promise<{ rows: RoleDetailDto[]; total: number }>;
 }
 
+export interface AdminRoleProfileChange {
+  readonly kind: "role";
+  readonly roleId: number;
+}
+
+export interface AdminRoleAssignmentProfileChange {
+  readonly kind: "role-assignment";
+  readonly targetType: RoleAssignmentTargetType;
+  readonly targetId: number;
+}
+
 export interface AdminRoleTransactionPorts {
   roleRepository: AdminRoleTransactionStorePort;
   auditService: AuditLogWriterPort;
-  profileDirtyMarker: Pick<UserProfileDirtyMarker, "markScopeDirty">;
+  userProfileInvalidation: {
+    recordChanges: (
+      changes: readonly (AdminRoleProfileChange | AdminRoleAssignmentProfileChange)[],
+    ) => Promise<void>;
+  };
 }
 
 export type AdminRoleUnitOfWorkPort = UnitOfWorkPort<AdminRoleTransactionPorts>;

@@ -7,6 +7,7 @@
     ".": "./src/index.ts",
     "./producer": "./src/producer.ts",
     "./query": "./src/query.ts",
+    "./testing/user-profile-business-boundary": "./src/testing/user-profile-business-boundary.ts",
     "./worker": "./src/worker.ts"
   },
   "scripts": {

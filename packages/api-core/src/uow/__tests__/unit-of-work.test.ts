@@ -54,6 +54,49 @@ describe("createUnitOfWork", () => {
     expect(logger.error).toHaveBeenCalledTimes(0);
   });
 
+  test("shares transaction lifecycle with the port factory", async () => {
+    const events: string[] = [];
+    const logger = createLogger();
+    const observability = {
+      requestId: "req-lifecycle",
+      traceId: "22222222222222222222222222222222",
+    };
+    const db = {
+      async transaction<T>(callback: (tx: { id: number }) => Promise<T>): Promise<T> {
+        const result = await callback({ id: 1 });
+        events.push("commit");
+        return result;
+      },
+    };
+    const uow = createUnitOfWork({
+      db,
+      logger,
+      createTxPorts: (tx, lifecycle) => {
+        lifecycle.afterCommit.required("factory.required", () => {
+          events.push("factory.required");
+        });
+        return {
+          tx,
+          factoryAfterCommit: lifecycle.afterCommit,
+          factoryObservability: lifecycle.observability,
+        };
+      },
+    });
+
+    const result = await uow.transaction(async (tx) => {
+      events.push(`callback:${tx.tx.id}`);
+      expect(tx.factoryAfterCommit).toBe(tx.afterCommit);
+      expect(tx.factoryObservability).toBe(observability);
+      tx.afterCommit.bestEffort("callback.best-effort", () => {
+        events.push("callback.best-effort");
+      });
+      return "ok";
+    }, { observability });
+
+    expect(result).toBe("ok");
+    expect(events).toEqual(["callback:1", "commit", "factory.required", "callback.best-effort"]);
+  });
+
   test("does not run after-commit tasks when the transaction callback fails", async () => {
     const events: string[] = [];
     const logger = createLogger();
@@ -61,13 +104,18 @@ describe("createUnitOfWork", () => {
     const uow = createUnitOfWork({
       db,
       logger,
-      createTxPorts: () => ({}),
+      createTxPorts: (_tx, lifecycle) => {
+        lifecycle.afterCommit.required("factory.required", () => {
+          events.push("factory.required");
+        });
+        return {};
+      },
     });
     const failure = new Error("rollback");
 
     await expect(uow.transaction(async (tx) => {
-      tx.afterCommit.required("required.one", () => {
-        events.push("required.one");
+      tx.afterCommit.required("callback.required", () => {
+        events.push("callback.required");
       });
       throw failure;
     })).rejects.toThrow(failure);

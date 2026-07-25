@@ -2,13 +2,17 @@ import type { PasswordHasherPort, RandomPort } from "@admin-api/composition/runt
 import type { AuditLogWriterPort } from "@admin-api/services/audit/audit.service";
 import type { AdminSessionRevocationPort } from "@admin-api/services/session-revocation/session-revocation.port";
 import type { UnitOfWorkPort } from "@iam/api-core/uow";
-import type { UserProfileDirtyMarker } from "@iam/user-profile-read-model/producer";
 import type {
   User,
   UserCreateDto,
   UserPaginationQueryDto,
   UserUpdateDto,
 } from "./user.type";
+
+export interface AdminUserProfileChange {
+  readonly kind: "user";
+  readonly userId: number;
+}
 
 export interface AdminUserTransactionStorePort {
   getUserByUsernameForAdmin: (username: string) => Promise<User | null>;
@@ -47,7 +51,9 @@ export interface AdminUserPrivilegeReaderPort {
 export interface AdminUserTransactionPorts {
   userRepository: AdminUserTransactionStorePort;
   auditService: AuditLogWriterPort;
-  profileDirtyMarker: Pick<UserProfileDirtyMarker, "markUsersDirty">;
+  userProfileInvalidation: {
+    recordChanges: (changes: readonly AdminUserProfileChange[]) => Promise<void>;
+  };
 }
 
 export type AdminUserUnitOfWorkPort = UnitOfWorkPort<AdminUserTransactionPorts>;

@@ -1,5 +1,5 @@
 import { createImmediateUnitOfWork } from "@admin-api/test/fakes";
-import { OrganizationLevel, OrganizationStatus, OrganizationType, UserProfileDirtyReason, UserProfileScopeType } from "@iam/contracts";
+import { OrganizationLevel, OrganizationStatus, OrganizationType } from "@iam/contracts";
 import { describe, expect, mock, test } from "bun:test";
 import { createOrganizationService } from "../organization.service";
 
@@ -41,8 +41,8 @@ function createService() {
   }];
   const tx = {
     auditService: { recordAuditLog: mock(async () => undefined) },
-    profileDirtyMarker: {
-      markScopeDirty: mock(async () => ({ marked: 1, userIds: [1] })),
+    userProfileInvalidation: {
+      recordChanges: mock(async () => undefined),
     },
     organizationRepository: {
       countActiveChildrenByOrgCode: mock(async () => 0),
@@ -96,21 +96,17 @@ describe("createOrganizationService", () => {
     expect(tx.organizationRepository.updateOrganizationByCode).not.toHaveBeenCalled();
   });
 
-  test("marks descendant users dirty when updating an organization", async () => {
+  test("records an organization change when updating an organization", async () => {
     const { service, tx } = createService();
 
     await expect(service.updateOrganization("ORG", { orgName: "New Organization" })).resolves.toBe(true);
 
-    expect(tx.profileDirtyMarker.markScopeDirty).toHaveBeenCalledWith({
-      scope: { scopeType: UserProfileScopeType.OrganizationId, scopeId: 1 },
-      reasonCodes: [UserProfileDirtyReason.OrganizationUpdated],
-      afterCommit: expect.any(Object),
-      requestId: undefined,
-      traceId: undefined,
-    });
+    expect(tx.userProfileInvalidation.recordChanges).toHaveBeenCalledWith([
+      { kind: "organization", organizationId: 1 },
+    ]);
   });
 
-  test("marks descendant users dirty when updating organization status", async () => {
+  test("records an organization change when updating organization status", async () => {
     const { service, tx } = createService();
 
     await expect(service.updateOrganizationStatus("ORG", OrganizationStatus.Disable)).resolves.toBe(true);
@@ -118,13 +114,12 @@ describe("createOrganizationService", () => {
     expect(tx.organizationRepository.updateOrganizationByCode).toHaveBeenCalledWith("ORG", {
       status: OrganizationStatus.Disable,
     });
-    expect(tx.profileDirtyMarker.markScopeDirty).toHaveBeenCalledWith(expect.objectContaining({
-      scope: { scopeType: UserProfileScopeType.OrganizationId, scopeId: 1 },
-      reasonCodes: [UserProfileDirtyReason.OrganizationUpdated],
-    }));
+    expect(tx.userProfileInvalidation.recordChanges).toHaveBeenCalledWith([
+      { kind: "organization", organizationId: 1 },
+    ]);
   });
 
-  test("marks descendant users dirty when deleting an organization after relationship checks", async () => {
+  test("records an organization change when deleting an organization after relationship checks", async () => {
     const { service, tx } = createService();
 
     await expect(service.deleteOrganization("ORG")).resolves.toBe(true);
@@ -132,9 +127,8 @@ describe("createOrganizationService", () => {
     expect(tx.organizationRepository.countActiveChildrenByOrgCode).toHaveBeenCalledWith("ORG");
     expect(tx.organizationRepository.countActiveEmploymentsByOrgCode).toHaveBeenCalledWith("ORG");
     expect(tx.organizationRepository.softDeleteOrganizationByCode).toHaveBeenCalledWith("ORG");
-    expect(tx.profileDirtyMarker.markScopeDirty).toHaveBeenCalledWith(expect.objectContaining({
-      scope: { scopeType: UserProfileScopeType.OrganizationId, scopeId: 1 },
-      reasonCodes: [UserProfileDirtyReason.OrganizationUpdated],
-    }));
+    expect(tx.userProfileInvalidation.recordChanges).toHaveBeenCalledWith([
+      { kind: "organization", organizationId: 1 },
+    ]);
   });
 });

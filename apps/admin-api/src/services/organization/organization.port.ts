@@ -1,6 +1,5 @@
 import type { AuditLogWriterPort } from "@admin-api/services/audit/audit.service";
 import type { UnitOfWorkPort } from "@iam/api-core/uow";
-import type { UserProfileDirtyMarker } from "@iam/user-profile-read-model/producer";
 import type {
   AdminOrganizationChildRecord,
   AdminOrganizationRecord,
@@ -41,10 +40,17 @@ export interface AdminOrganizationReaderPort {
   ) => Promise<OrganizationSelectorNode[]>;
 }
 
+export interface AdminOrganizationProfileChange {
+  readonly kind: "organization";
+  readonly organizationId: number;
+}
+
 export interface AdminOrganizationTransactionPorts {
   organizationRepository: AdminOrganizationTransactionStorePort;
   auditService: AuditLogWriterPort;
-  profileDirtyMarker: Pick<UserProfileDirtyMarker, "markScopeDirty">;
+  userProfileInvalidation: {
+    recordChanges: (changes: readonly AdminOrganizationProfileChange[]) => Promise<void>;
+  };
 }
 
 export type AdminOrganizationUnitOfWorkPort = UnitOfWorkPort<AdminOrganizationTransactionPorts>;

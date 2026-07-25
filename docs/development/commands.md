@@ -48,12 +48,14 @@ bun test scripts/__tests__/eslint-config-equivalence.test.ts
 `pnpm test` 以 Turbo concurrency 2 运行可缓存的普通测试。Package-local Vitest 普通测试使用 25% workers，Bun
 普通测试使用 `--max-concurrency=2`。
 
-`pnpm test:smoke` 以 Turbo concurrency 1 运行真实进程/端口 smoke，禁用任务缓存。当前共享 process harness、API 与
-OIDC 的 package-local 命令为：
+`pnpm test:smoke` 以 Turbo concurrency 1 运行真实进程/端口 smoke，禁用任务缓存。当前共享 process harness、API、
+Admin API、Worker 与 OIDC 的 package-local 命令为：
 
 ```bash
 pnpm --filter @iam/api-core test:smoke
 pnpm --filter @iam/api test:smoke
+pnpm --filter @iam/admin-api test:smoke
+pnpm --filter @iam/worker test:smoke
 pnpm --filter @iam/oidc-provider test:smoke
 ```
 
@@ -115,10 +117,10 @@ Hook 不运行 lint、typecheck、test、build 或 tracker checker。按改动�
 ## Workspace 入口
 
 - API backend：`pnpm --filter @iam/api <dev|serve|lint|test|test:smoke|typecheck>`
-- Admin API backend：`pnpm --filter @iam/admin-api <dev|serve|lint|test|typecheck>`
+- Admin API backend：`pnpm --filter @iam/admin-api <dev|serve|lint|test|test:smoke|typecheck>`
 - OIDC provider：`pnpm --filter @iam/oidc-provider <dev|serve|lint|test|test:smoke|typecheck>`
 - API Core：`pnpm --filter @iam/api-core <lint|test|test:smoke|typecheck>`
-- Worker：`pnpm --filter @iam/worker <dev|serve|lint|test|typecheck|user-profile:backfill|user-profile:repair>`
+- Worker：`pnpm --filter @iam/worker <dev|serve|lint|test|test:smoke|typecheck|user-profile:backfill|user-profile:repair>`
 - Admin frontend：`pnpm --filter @iam/admin <dev|build|lint|test|e2e|typecheck|format>`
 - SSO frontend：`pnpm --filter @iam/sso <dev|build|lint|test|e2e|typecheck|format>`
 - Database：`pnpm --filter @iam/db <db:push|db:generate|db:migrate|db:check>`

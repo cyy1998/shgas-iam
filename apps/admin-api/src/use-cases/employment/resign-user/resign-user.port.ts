@@ -1,7 +1,17 @@
-import type { AfterCommitRegistrationPort, UnitOfWorkPort } from "@iam/api-core/uow";
-import type { UserProfileDirtyReason, UserStatus } from "@iam/contracts";
+import type { UnitOfWorkPort } from "@iam/api-core/uow";
+import type { UserStatus } from "@iam/contracts";
 import type { AuditActorType, AuditDetails, AuditOutcome } from "@iam/domain/audit";
 import type { ResignUserOptions } from "./resign-user.type";
+
+export type ResignUserProfileChange
+  = | {
+    readonly kind: "user";
+    readonly userId: number;
+  }
+  | {
+    readonly kind: "employment";
+    readonly userId: number;
+  };
 
 export interface ResignUserTarget {
   id: number;
@@ -40,14 +50,8 @@ export interface ResignUserTransactionPorts {
   employmentStore: {
     endActiveEmploymentsByUserId: (userId: number) => Promise<unknown>;
   };
-  profileDirtyMarker: {
-    markUsersDirty: (input: {
-      userIds: number[];
-      reasonCodes: UserProfileDirtyReason[];
-      afterCommit: AfterCommitRegistrationPort;
-      requestId?: string;
-      traceId?: string;
-    }) => Promise<unknown>;
+  userProfileInvalidation: {
+    recordChanges: (changes: readonly ResignUserProfileChange[]) => Promise<void>;
   };
   userStore: {
     getUserByUsernameForAdmin: (username: string) => Promise<ResignUserTarget | null>;

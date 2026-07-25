@@ -2,7 +2,7 @@ import type { ResignUserUseCaseDeps } from "./resign-user.port";
 import type { ResignUserInput, ResignUserOptions } from "./resign-user.type";
 import { adminAuditTransactionOptions } from "@admin-api/services/audit/audit.service";
 import { buildEmploymentResignUserAudit } from "@admin-api/services/audit/events/employment.audit";
-import { UserProfileDirtyReason, UserStatus } from "@iam/contracts";
+import { UserStatus } from "@iam/contracts";
 import { UserNotFoundError } from "@iam/domain/user";
 
 export function createResignUserUseCase(deps: ResignUserUseCaseDeps) {
@@ -22,13 +22,10 @@ export function createResignUserUseCase(deps: ResignUserUseCaseDeps) {
         status: UserStatus.Disable,
       });
       await tx.auditLogWriter.recordAuditLog(buildEmploymentResignUserAudit(user, auditContext));
-      await tx.profileDirtyMarker.markUsersDirty({
-        userIds: [user.id],
-        reasonCodes: [UserProfileDirtyReason.EmploymentUpdated, UserProfileDirtyReason.UserUpdated],
-        afterCommit: tx.afterCommit,
-        requestId: auditContext?.requestId ?? undefined,
-        traceId: auditContext?.traceId ?? undefined,
-      });
+      await tx.userProfileInvalidation.recordChanges([
+        { kind: "user", userId: user.id },
+        { kind: "employment", userId: user.id },
+      ]);
       tx.afterCommit.bestEffort("admin.session_revoke.user", async () => {
         await deps.sessionRevocation.revokeUserSessions({
           userId: user.id,

@@ -6,7 +6,7 @@ import type {
 import { withApiRequestContext } from "@api/services/audit/audit.service";
 import { buildInternalPurveyorContactRegisterAudit } from "@api/services/audit/events/internal.audit";
 import { CustomError } from "@iam/api-core/errors/CustomError";
-import { UserProfileDirtyReason, UserType } from "@iam/contracts";
+import { UserType } from "@iam/contracts";
 import { OrganizationNotFoundError } from "@iam/domain/organization";
 
 export function createRegisterPurveyorContactUseCase(deps: RegisterPurveyorContactUseCaseDeps) {
@@ -34,11 +34,9 @@ export function createRegisterPurveyorContactUseCase(deps: RegisterPurveyorConta
         );
         if (existingEmployment === null) {
           await tx.employmentRepository.setEmployment(existingUser.id, position.id, organization.id);
-          await tx.profileDirtyMarker.markUsersDirty({
-            userIds: [existingUser.id],
-            reasonCodes: [UserProfileDirtyReason.EmploymentUpdated],
-            afterCommit: tx.afterCommit,
-          });
+          await tx.userProfileInvalidation.recordChanges([
+            { kind: "employment", userId: existingUser.id },
+          ]);
         }
         return { targetUserId: existingUser.id, existingContact: true };
       }
@@ -51,13 +49,12 @@ export function createRegisterPurveyorContactUseCase(deps: RegisterPurveyorConta
         password: null,
       });
       await tx.employmentRepository.setEmployment(user.id, position.id, organization.id);
-      await tx.profileDirtyMarker.markUsersDirty({
-        userIds: [user.id],
-        reasonCodes: [UserProfileDirtyReason.UserUpdated, UserProfileDirtyReason.EmploymentUpdated],
-        afterCommit: tx.afterCommit,
-      });
+      await tx.userProfileInvalidation.recordChanges([
+        { kind: "user", userId: user.id },
+        { kind: "employment", userId: user.id },
+      ]);
       return { targetUserId: user.id, existingContact: false };
-    });
+    }, { observability: options.requestContext });
 
     await deps.auditLogWriter.recordAuditLog(withApiRequestContext(
       options.requestContext,

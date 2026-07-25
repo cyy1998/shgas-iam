@@ -1,6 +1,6 @@
 import type { ResignUserUseCaseDeps } from "../resign-user.port";
 import { createImmediateUnitOfWork } from "@admin-api/testing/fakes";
-import { UserProfileDirtyReason, UserStatus } from "@iam/contracts";
+import { UserStatus } from "@iam/contracts";
 import { UserNotFoundError } from "@iam/domain/user";
 import { describe, expect, mock, test } from "bun:test";
 import { createResignUserUseCase } from "../resign-user.use-case";
@@ -23,10 +23,9 @@ describe("createResignUserUseCase", () => {
           events.push("employment:end");
         }),
       },
-      profileDirtyMarker: {
-        markUsersDirty: mock(async () => {
-          events.push("profile:dirty");
-          return { marked: 1, userIds: [1] };
+      userProfileInvalidation: {
+        recordChanges: mock(async () => {
+          events.push("profile:invalidate");
         }),
       },
       userStore: {
@@ -49,12 +48,16 @@ describe("createResignUserUseCase", () => {
     expect(tx.userStore.updateUserByUsername).toHaveBeenCalledWith("zhangsan", {
       status: UserStatus.Disable,
     });
+    expect(tx.userProfileInvalidation.recordChanges).toHaveBeenCalledWith([
+      { kind: "user", userId: 1 },
+      { kind: "employment", userId: 1 },
+    ]);
     expect(events).toEqual([
       "user:lookup",
       "employment:end",
       "user:disable",
       "audit",
-      "profile:dirty",
+      "profile:invalidate",
     ]);
   });
 
@@ -83,9 +86,9 @@ describe("createResignUserUseCase", () => {
           events.push("employment:end");
         }),
       },
-      profileDirtyMarker: {
-        markUsersDirty: mock(async () => {
-          events.push("profile:dirty");
+      userProfileInvalidation: {
+        recordChanges: mock(async () => {
+          events.push("profile:invalidate");
         }),
       },
       userStore: {
@@ -130,7 +133,7 @@ describe("createResignUserUseCase", () => {
       "employment:end",
       "user:disable",
       "audit",
-      "profile:dirty",
+      "profile:invalidate",
       "transaction:committed",
       "sessions:revoke",
     ]);
@@ -146,7 +149,7 @@ describe("createResignUserUseCase", () => {
     const tx = {
       auditLogWriter: { recordAuditLog: mock(async () => undefined) },
       employmentStore: { endActiveEmploymentsByUserId: mock(async () => undefined) },
-      profileDirtyMarker: { markUsersDirty: mock(async () => undefined) },
+      userProfileInvalidation: { recordChanges: mock(async () => undefined) },
       userStore: {
         getUserByUsernameForAdmin: mock(async () => ({ id: 1, username: "zhangsan", name: "张三" })),
         updateUserByUsername: mock(async () => undefined),
@@ -166,7 +169,7 @@ describe("createResignUserUseCase", () => {
     const tx = {
       auditLogWriter: { recordAuditLog: mock(async () => undefined) },
       employmentStore: { endActiveEmploymentsByUserId: mock(async () => undefined) },
-      profileDirtyMarker: { markUsersDirty: mock(async () => undefined) },
+      userProfileInvalidation: { recordChanges: mock(async () => undefined) },
       userStore: {
         getUserByUsernameForAdmin: mock(async () => ({ id: 1, username: "zhangsan", name: "张三" })),
         updateUserByUsername: mock(async () => undefined),
@@ -184,7 +187,7 @@ describe("createResignUserUseCase", () => {
     expect(sessionRevocation.revokeUserSessions).toHaveBeenCalledTimes(2);
   });
 
-  test("preserves resignation audit, dirty context, and transaction observability", async () => {
+  test("records resignation changes and preserves transaction observability", async () => {
     const afterCommit = {
       bestEffort: mock(() => undefined),
       required: mock(() => undefined),
@@ -193,7 +196,7 @@ describe("createResignUserUseCase", () => {
       afterCommit,
       auditLogWriter: { recordAuditLog: mock(async () => undefined) },
       employmentStore: { endActiveEmploymentsByUserId: mock(async () => undefined) },
-      profileDirtyMarker: { markUsersDirty: mock(async () => ({ marked: 1, userIds: [1] })) },
+      userProfileInvalidation: { recordChanges: mock(async () => undefined) },
       userStore: {
         getUserByUsernameForAdmin: mock(async () => ({ id: 1, username: "zhangsan", name: "张三" })),
         updateUserByUsername: mock(async () => undefined),
@@ -232,13 +235,10 @@ describe("createResignUserUseCase", () => {
       targetName: null,
       targetType: "user",
     });
-    expect(tx.profileDirtyMarker.markUsersDirty).toHaveBeenCalledWith({
-      afterCommit,
-      reasonCodes: [UserProfileDirtyReason.EmploymentUpdated, UserProfileDirtyReason.UserUpdated],
-      requestId: "req-1",
-      traceId: "trace-1",
-      userIds: [1],
-    });
+    expect(tx.userProfileInvalidation.recordChanges).toHaveBeenCalledWith([
+      { kind: "user", userId: 1 },
+      { kind: "employment", userId: 1 },
+    ]);
     expect(transactionOptions).toEqual({
       observability: { requestId: "req-1", traceId: "trace-1" },
     });
@@ -248,7 +248,7 @@ describe("createResignUserUseCase", () => {
     const tx = {
       auditLogWriter: { recordAuditLog: mock(async () => undefined) },
       employmentStore: { endActiveEmploymentsByUserId: mock(async () => undefined) },
-      profileDirtyMarker: { markUsersDirty: mock(async () => undefined) },
+      userProfileInvalidation: { recordChanges: mock(async () => undefined) },
       userStore: {
         getUserByUsernameForAdmin: mock(async () => null),
         updateUserByUsername: mock(async () => undefined),
@@ -266,12 +266,12 @@ describe("createResignUserUseCase", () => {
     expect(tx.employmentStore.endActiveEmploymentsByUserId).not.toHaveBeenCalled();
     expect(tx.userStore.updateUserByUsername).not.toHaveBeenCalled();
     expect(tx.auditLogWriter.recordAuditLog).not.toHaveBeenCalled();
-    expect(tx.profileDirtyMarker.markUsersDirty).not.toHaveBeenCalled();
+    expect(tx.userProfileInvalidation.recordChanges).not.toHaveBeenCalled();
     expect(sessionRevocation.revokeUserSessions).not.toHaveBeenCalled();
   });
 
   test("propagates each transaction failure without running later side effects", async () => {
-    const stages = ["employment:end", "user:disable", "audit", "profile:dirty"] as const;
+    const stages = ["employment:end", "user:disable", "audit", "profile:invalidate"] as const;
 
     for (const failingStage of stages) {
       const events: string[] = [];
@@ -284,7 +284,7 @@ describe("createResignUserUseCase", () => {
       const tx = {
         auditLogWriter: { recordAuditLog: mock(async () => runStage("audit")) },
         employmentStore: { endActiveEmploymentsByUserId: mock(async () => runStage("employment:end")) },
-        profileDirtyMarker: { markUsersDirty: mock(async () => runStage("profile:dirty")) },
+        userProfileInvalidation: { recordChanges: mock(async () => runStage("profile:invalidate")) },
         userStore: {
           getUserByUsernameForAdmin: mock(async () => {
             events.push("user:lookup");

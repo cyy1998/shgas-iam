@@ -16,7 +16,7 @@ export function createAdminApiUseCases(options: CreateAdminApiUseCasesOptions) {
     uow: mapUnitOfWork(options.unitOfWork, tx => ({
       auditLogWriter: tx.auditService,
       employmentStore: tx.repositories.employment,
-      profileDirtyMarker: tx.profileDirtyMarker,
+      userProfileInvalidation: tx.userProfileInvalidation,
       userStore: tx.repositories.user,
     })),
   });

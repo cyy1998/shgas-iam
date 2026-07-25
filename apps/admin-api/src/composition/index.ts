@@ -1,5 +1,5 @@
 import type { CreateAppOptions } from "@iam/api-core/core/create-app";
-import type { UserProfileJobName, UserProfileJobPayload } from "@iam/contracts";
+import type { RebuildUserProfileJobPayload, UserProfileJobName } from "@iam/contracts";
 import type { DbClient } from "@iam/db";
 import env from "@admin-api/env";
 import { logger } from "@admin-api/lib/logger";
@@ -26,7 +26,7 @@ export interface AdminApiComposition {
   repositories: ReturnType<typeof createAdminApiRepositories>;
   roleAssignmentResolver: ReturnType<typeof createRoleAssignmentResolver>;
   auditService: ReturnType<typeof createAdminAuditService>;
-  userProfileQueue: ReturnType<typeof createJobQueue<UserProfileJobPayload, unknown, UserProfileJobName>>;
+  userProfileQueue: ReturnType<typeof createJobQueue<RebuildUserProfileJobPayload, unknown, UserProfileJobName>>;
   userProfileJobProducer: ReturnType<typeof createUserProfileJobProducer>;
   unitOfWork: ReturnType<typeof createAdminApiUnitOfWork>;
   services: ReturnType<typeof createAdminApiServices>;
@@ -50,9 +50,9 @@ export async function createAdminApiComposition(
   const runtime = createAdminApiRuntime({ env: compositionEnv, logger: compositionLogger });
   const session = createAdminApiSession({ runtime });
   const roleAssignmentResolver = createRoleAssignmentResolver(compositionDb);
-  const repositories = createAdminApiRepositories(compositionDb, roleAssignmentResolver);
+  const repositories = createAdminApiRepositories(compositionDb);
   const auditService = createAdminAuditService({ auditRepository: repositories.audit });
-  const userProfileQueue = createJobQueue<UserProfileJobPayload, unknown, UserProfileJobName>({
+  const userProfileQueue = createJobQueue<RebuildUserProfileJobPayload, unknown, UserProfileJobName>({
     name: USER_PROFILE_QUEUE_NAME,
     redis: runtime.config.env.redis,
   });

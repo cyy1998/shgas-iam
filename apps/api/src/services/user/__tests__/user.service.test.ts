@@ -1,6 +1,6 @@
 import { createApiPasswordHasher } from "@api/composition/runtime/password-hasher";
 import { createImmediateUnitOfWork } from "@api/testing/fakes";
-import { UserProfileDirtyReason, UserStatus } from "@iam/contracts";
+import { UserStatus } from "@iam/contracts";
 import { UserPasswordUnchangedError } from "@iam/domain/user";
 import { describe, expect, mock, test } from "bun:test";
 import { createUserPasswordHelper } from "../user-password.helper";
@@ -32,8 +32,8 @@ function createDeps(overrides: Record<string, unknown> = {}) {
       updateEnabledUserStatus: mock(async () => user),
     },
     auditLogWriter: { recordAuditLog: mock(async () => undefined) },
-    profileDirtyMarker: {
-      markUsersDirty: mock(async () => ({ marked: 1, userIds: [1] })),
+    userProfileInvalidation: {
+      recordChanges: mock(async () => undefined),
     },
   };
   return {
@@ -114,7 +114,7 @@ describe("createUserService", () => {
       requestId: "req-public",
       traceId: "11111111111111111111111111111111",
     }));
-    expect(deps.tx.profileDirtyMarker.markUsersDirty).not.toHaveBeenCalled();
+    expect(deps.tx.userProfileInvalidation.recordChanges).not.toHaveBeenCalled();
   });
 
   test("rejects unchanged password with domain bad request error", async () => {
@@ -136,13 +136,9 @@ describe("createUserService", () => {
     expect(deps.profileQuery.getDetailByUserId).not.toHaveBeenCalled();
     expect(deps.mobileService.confirmReservedVerificationCode).toHaveBeenCalledWith(deps.bindPhoneReservation);
     expect(deps.mobileService.releaseReservedVerificationCode).not.toHaveBeenCalled();
-    expect(deps.tx.profileDirtyMarker.markUsersDirty).toHaveBeenCalledWith({
-      userIds: [1],
-      reasonCodes: [UserProfileDirtyReason.UserUpdated],
-      afterCommit: expect.any(Object),
-      requestId: undefined,
-      traceId: undefined,
-    });
+    expect(deps.tx.userProfileInvalidation.recordChanges).toHaveBeenCalledWith([
+      { kind: "user", userId: 1 },
+    ]);
   });
 
   test("releases mobile binding verification reservation when transaction fails", async () => {
@@ -163,13 +159,9 @@ describe("createUserService", () => {
     await expect(service.pauseEnabledUser(1)).resolves.toMatchObject({ id: 1 });
 
     expect(deps.tx.userRepository.updateEnabledUserStatus).toHaveBeenCalledWith(1, UserStatus.Pause);
-    expect(deps.tx.profileDirtyMarker.markUsersDirty).toHaveBeenCalledWith({
-      userIds: [1],
-      reasonCodes: [UserProfileDirtyReason.UserUpdated],
-      afterCommit: expect.any(Object),
-      requestId: undefined,
-      traceId: undefined,
-    });
+    expect(deps.tx.userProfileInvalidation.recordChanges).toHaveBeenCalledWith([
+      { kind: "user", userId: 1 },
+    ]);
   });
 
   test("delegates user detail and legacy search reads to profile query service", async () => {

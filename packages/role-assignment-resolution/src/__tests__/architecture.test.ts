@@ -17,6 +17,7 @@ const approvedRoleAssignmentTargetTypeOwners = [
   "apps/admin-api/src/routes/admin/role/",
   "apps/admin-api/src/services/role/",
   "apps/admin-api/src/services/audit/events/role.audit.ts",
+  "packages/user-profile-read-model/src/user-profile-invalidation.ts",
 ];
 const approvedAdminRoleRepositoryOperations = new Set([
   "countAssignmentsByRoleId",
@@ -278,6 +279,14 @@ describe("role assignment resolution architecture", () => {
       "apps/admin-api/src/services/role/role.service.ts",
       "role assignment target type",
     )).toBe(true);
+    expect(isApprovedKnowledgeOwner(
+      "packages/user-profile-read-model/src/user-profile-invalidation.ts",
+      "role assignment target type",
+    )).toBe(true);
+    expect(isApprovedKnowledgeOwner(
+      "packages/user-profile-read-model/src/affected-user.repository.ts",
+      "role assignment target type",
+    )).toBe(false);
     expect(isApprovedKnowledgeOwner(
       "apps/oidc-provider/src/repositories/authorization.repository.ts",
       "role assignment target type",

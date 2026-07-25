@@ -126,7 +126,7 @@ export function createApiUseCases(options: CreateApiUseCasesOptions) {
       organizationRepository: tx.repositories.organization,
       positionRepository: tx.repositories.position,
       userRepository: tx.repositories.user,
-      profileDirtyMarker: tx.profileDirtyMarker,
+      userProfileInvalidation: tx.userProfileInvalidation,
     })),
   });
 

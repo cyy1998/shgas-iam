@@ -17,9 +17,10 @@
   "scripts": {
     "dev": "bun --hot src/index.ts",
     "serve": "bun run src/index.ts",
-    "lint": "eslint src app.config.ts eslint.config.js",
-    "lint:fix": "eslint --fix src app.config.ts eslint.config.js",
-    "test": "bun test --max-concurrency=2",
+    "lint": "eslint src test-smoke app.config.ts eslint.config.js",
+    "lint:fix": "eslint --fix src test-smoke app.config.ts eslint.config.js",
+    "test": "bun test --max-concurrency=2 src",
+    "test:smoke": "bun test --max-concurrency=1 test-smoke",
     "typecheck": "pnpm exec tsc --noEmit"
   },
   "dependencies": {

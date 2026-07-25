@@ -5,12 +5,12 @@ import { runUserProfileBackfillCommand } from "../commands/user-profile-backfill
 import { runUserProfileRepairCommand } from "../commands/user-profile-repair";
 
 describe("user-profile commands", () => {
-  test("backfill command delegates to dirty-and-enqueue service path", async () => {
+  test("backfill command delegates to worker maintenance", async () => {
     const backfillAllUsers = mock(async () => ({ enqueued: 3 }));
     const info = mock(() => {});
 
     await expect(runUserProfileBackfillCommand({
-      workerService: { backfillAllUsers },
+      maintenance: { backfillAllUsers },
       logger: { info },
       config: { batchSize: 25 },
     })).resolves.toEqual({ enqueued: 3 });
@@ -27,7 +27,7 @@ describe("user-profile commands", () => {
 
     await expect(runUserProfileRepairCommand(
       {
-        workerService: { repairFailedOrStale },
+        maintenance: { repairFailedOrStale },
         clock: { nowDate: () => now },
         logger: { info },
         config: { limit: 10, repairStaleSeconds: 300 },
@@ -47,7 +47,7 @@ describe("user-profile commands", () => {
 
     await runUserProfileRepairCommand(
       {
-        workerService: { repairFailedOrStale },
+        maintenance: { repairFailedOrStale },
         clock: { nowDate: () => new Date("2026-07-01T00:05:00.000Z") },
         logger: { info: mock(() => {}) },
         config: { limit: 10, repairStaleSeconds: 300 },

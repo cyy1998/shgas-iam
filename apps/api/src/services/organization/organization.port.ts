@@ -1,5 +1,4 @@
 import type { UnitOfWorkPort } from "@iam/api-core/uow";
-import type { UserProfileDirtyMarker } from "@iam/user-profile-read-model/producer";
 import type {
   Organization,
   OrganizationCreateDto,
@@ -19,9 +18,16 @@ export interface OrganizationTransactionStorePort {
   updateOrganizationByCode: (orgCode: string, input: OrganizationUpdateDto) => Promise<unknown>;
 }
 
+export interface ApiOrganizationProfileChange {
+  readonly kind: "organization";
+  readonly organizationId: number;
+}
+
 export interface OrganizationTransactionPorts {
   organizationRepository: OrganizationTransactionStorePort;
-  profileDirtyMarker: Pick<UserProfileDirtyMarker, "markScopeDirty">;
+  userProfileInvalidation: {
+    recordChanges: (changes: readonly ApiOrganizationProfileChange[]) => Promise<void>;
+  };
 }
 
 export type OrganizationUnitOfWorkPort = UnitOfWorkPort<OrganizationTransactionPorts>;

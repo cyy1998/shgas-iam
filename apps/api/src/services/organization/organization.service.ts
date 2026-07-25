@@ -5,7 +5,6 @@ import type {
 } from "@api/services/organization/organization.type";
 import type { OrganizationServiceDeps } from "./organization.port";
 import { toOrganizationDto } from "@api/services/organization/organization.schema";
-import { UserProfileDirtyReason, UserProfileScopeType } from "@iam/contracts";
 import {
   OrganizationAlreadyExistsError,
   OrganizationCodeExistsError,
@@ -65,11 +64,9 @@ export function createOrganizationService(deps: OrganizationServiceDeps) {
         }
       }
       await tx.organizationRepository.updateOrganizationByCode(orgCode, data);
-      await tx.profileDirtyMarker.markScopeDirty({
-        scope: { scopeType: UserProfileScopeType.OrganizationId, scopeId: existing.id },
-        reasonCodes: [UserProfileDirtyReason.OrganizationUpdated],
-        afterCommit: tx.afterCommit,
-      });
+      await tx.userProfileInvalidation.recordChanges([
+        { kind: "organization", organizationId: existing.id },
+      ]);
       return true;
     });
   }

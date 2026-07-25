@@ -40,11 +40,33 @@
 - `@iam/role-assignment-resolution` 是 Effective Role 与角色变更受影响用户解析的唯一生产 seam。Admin、OIDC 和
   User Profile 的叶子 service/repository 只消费 composition 注入的最窄 resolver 能力，不直接读取
   `role_assignment` 来重建解析规则。
-- App composition root 或 `createUserProfileWorkerModule` 使用其当前 `DbClient` 创建 resolver；同一组合中的消费者复用
-  该实例。事务 composition 必须使用 transaction `DbClient` 重新创建 resolver，并与同一 transaction 的 repositories
-  一起注入 dirty marker 路径。
+- App composition root 或 `createUserProfileWorkerModule` 使用其当前 `DbClient` 为所拥有的普通消费者创建 resolver；
+  同一组合中的消费者复用该实例。User Profile 失效是模块自有边界：API/Admin transaction composition 不创建或注入
+  resolver/projection repositories，只把当前 transaction `DbClient`、rebuild queue adapter、lifecycle 和 clock
+  交给 `createUserProfileInvalidation`，由模块内部创建 tx-bound resolver 及 projection repositories。
 - Admin 角色管理 repository 仍可直接读写 assignment 以实现 CRUD、搜索和约束检查；这不属于 Effective Role 或
   受影响用户解析。架构测试允许该 owner，并阻止其他已迁移生产调用方重新导入 assignment table。
+
+### User Profile 失效的 Composition 边界
+
+- `@iam/user-profile-read-model` 的事务绑定 `UserProfileInvalidation.recordChanges` 是业务写路径唯一的 User Profile
+  失效 seam。调用方只提交 user、employment、organization、position、role 或 role-assignment source change，并在
+  同一 source transaction 的领域写入完成后调用；调用方不选择 dirty reason 或 scope，不接触 dirty/affected-user
+  repository、job producer、`afterCommit` registration，也不复制 request/trace metadata。
+- API 与 Admin API 的 UnitOfWork transaction-port factory 接收 lifecycle
+  `{ afterCommit, observability }`。两端 transaction composition 使用当前 transaction `DbClient` 创建
+  `UserProfileInvalidation`；模块内部拥有 tx-bound dirty repository、affected-user repository 和 role-assignment
+  resolver。普通 repository composition 不创建或暴露这些投影实现，业务 service/use-case 只接收自己需要的最窄
+  `recordChanges` port。
+- lifecycle 中的 `afterCommit` 与 transaction callback 暴露的 `tx.afterCommit` 是同一个 registration port；
+  `observability` 为失效模块提供当前 request ID 与 trace ID。transaction callback 继续可以用通用
+  `tx.afterCommit` 编排 User Resignation session revocation 等其他提交后行为，不把它们并入 User Profile 模块。
+- `recordChanges` 成功表示 dirty fact 已在 source transaction 中持久化并登记 rebuild wake-up，不表示 BullMQ
+  已经完成入队。提交后的批量 enqueue 仍是 best-effort，失败由日志与现有 repair 路径恢复，不回滚已经提交的业务事实。
+- API/Admin architecture suites 通过仓库惯例下的维护性 guard 约束业务 production module：覆盖规范 casing 的静态
+  named/type import 与 re-export、常规跨 package 内部静态路径和直接 legacy identifier。该 guard 不是安全 sandbox，
+  不承担动态/计算 import、string-named specifier、非规范 casing、quoted nested destructuring 或 alias dataflow
+  分析；production exports、typecheck 与 lint 是并行防线。
 
 ## Application Use Case、Application Service 与领域规则
 

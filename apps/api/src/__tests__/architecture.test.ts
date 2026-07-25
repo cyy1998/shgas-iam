@@ -1,5 +1,8 @@
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { join, relative, sep } from "node:path";
+import {
+  collectUserProfileBusinessBoundaryViolations as collectUserProfileBusinessBoundaryViolationsFromSource,
+} from "@iam/user-profile-read-model/testing/user-profile-business-boundary";
 import { describe, expect, test } from "bun:test";
 import ts from "typescript";
 
@@ -228,6 +231,47 @@ const legacyCustomSsoAuthorityKeyPatterns = [
 ];
 
 describe("API DI architecture", () => {
+  test("composes transaction-bound user-profile invalidation as the only projection write port", () => {
+    const txComposition = readFileSync(join(sourceRoot, "composition/tx/index.ts"), "utf8");
+    const repositoryComposition = readFileSync(join(sourceRoot, "composition/repositories/index.ts"), "utf8");
+    const invalidationCall = txComposition.match(
+      /userProfileInvalidation:\s*createUserProfileInvalidation\(\{(?<deps>[\s\S]*?)\}\),/u,
+    );
+    const dependencies = invalidationCall?.groups?.deps ?? "";
+    const violations = [
+      !/createTxPorts:\s*\(tx,\s*lifecycle\)\s*=>/u.test(txComposition)
+        ? "transaction-port factory does not receive lifecycle"
+        : null,
+      invalidationCall === null
+        ? "transaction ports do not expose UserProfileInvalidation"
+        : null,
+      !/\bdb:\s*tx\b/u.test(dependencies)
+        ? "UserProfileInvalidation does not use the current transaction DbClient"
+        : null,
+      !/\bjobProducer:\s*options\.userProfileJobProducer\b/u.test(dependencies)
+        ? "UserProfileInvalidation does not use the existing rebuild queue adapter"
+        : null,
+      !/\blifecycle\b/u.test(dependencies)
+        ? "UserProfileInvalidation does not receive transaction lifecycle"
+        : null,
+      !/\bclock:\s*options\.clock\b/u.test(dependencies)
+        ? "UserProfileInvalidation does not use the application clock"
+        : null,
+      /\b(?:profileDirtyMarker|createUserProfileDirtyMarker)\b/u.test(txComposition)
+        ? "transaction ports still expose the legacy dirty marker"
+        : null,
+      /\b(?:userProfileDirty|createUserProfileDirtyRepository)\b/u.test(repositoryComposition)
+        ? "normal repository composition still owns the User Profile dirty repository"
+        : null,
+      /\b(?:userProfileScope|createUserProfileScopeRepository|UserProfileAffectedUserResolverPort)\b/u
+        .test(repositoryComposition)
+        ? "normal repository composition still owns User Profile scope resolution"
+        : null,
+    ].filter((violation): violation is string => violation !== null);
+
+    expect(violations).toEqual([]);
+  });
+
   test("detects provider-derived ports without rejecting port or platform narrowing", () => {
     const allowed = collectPortOwnershipViolationsFromSource("allowed.port.ts", `
       import type { IncomingMessage } from "node:http";
@@ -594,6 +638,17 @@ describe("API DI architecture", () => {
     const violations = collectImports()
       .filter(({ moduleSpecifier }) => moduleSpecifier === "@iam/user-profile-read-model/worker")
       .map(({ file, moduleSpecifier }) => `${file} imports ${moduleSpecifier}`);
+
+    expect(violations).toEqual([]);
+  });
+
+  test("keeps business production modules behind UserProfileInvalidation", () => {
+    const violations = collectSourceFiles(sourceRoot)
+      .filter(file => !isComposition(toPosixPath(relative(sourceRoot, file))))
+      .flatMap(file => collectUserProfileBusinessBoundaryViolationsFromSource(
+        file,
+        readFileSync(file, "utf8"),
+      ));
 
     expect(violations).toEqual([]);
   });

@@ -9,7 +9,7 @@ import type {
 import { adminAuditTransactionOptions } from "@admin-api/services/audit/audit.service";
 import { buildEmploymentAudit } from "@admin-api/services/audit/events/employment.audit";
 import { EmploymentDetailDtoSchema, toEmploymentDto } from "@admin-api/services/employment/employment.schema";
-import { EmploymentStatus, UserProfileDirtyReason } from "@iam/contracts";
+import { EmploymentStatus } from "@iam/contracts";
 import {
   EmploymentAlreadyExistsError,
   EmploymentNotEditableError,
@@ -136,13 +136,9 @@ export function createEmploymentService(deps: AdminEmploymentServiceDeps) {
         startTime: dto.startTime,
         description: dto.description ?? null,
       }, auditContext));
-      await tx.profileDirtyMarker.markUsersDirty({
-        userIds: [user.id],
-        reasonCodes: [UserProfileDirtyReason.EmploymentUpdated],
-        afterCommit: tx.afterCommit,
-        requestId: auditContext?.requestId ?? undefined,
-        traceId: auditContext?.traceId ?? undefined,
-      });
+      await tx.userProfileInvalidation.recordChanges([
+        { kind: "employment", userId: user.id },
+      ]);
       return { id: created.id };
     }, adminAuditTransactionOptions(auditContext));
   }
@@ -170,13 +166,9 @@ export function createEmploymentService(deps: AdminEmploymentServiceDeps) {
       await tx.auditService.recordAuditLog(buildEmploymentAudit("admin.employment.update", existing, {
         patch: dto,
       }, auditContext));
-      await tx.profileDirtyMarker.markUsersDirty({
-        userIds: [existing.userId],
-        reasonCodes: [UserProfileDirtyReason.EmploymentUpdated],
-        afterCommit: tx.afterCommit,
-        requestId: auditContext?.requestId ?? undefined,
-        traceId: auditContext?.traceId ?? undefined,
-      });
+      await tx.userProfileInvalidation.recordChanges([
+        { kind: "employment", userId: existing.userId },
+      ]);
       return true;
     }, adminAuditTransactionOptions(auditContext));
   }
@@ -199,13 +191,9 @@ export function createEmploymentService(deps: AdminEmploymentServiceDeps) {
       await tx.auditService.recordAuditLog(buildEmploymentAudit("admin.employment.status_update", existing, {
         patch,
       }, auditContext));
-      await tx.profileDirtyMarker.markUsersDirty({
-        userIds: [existing.userId],
-        reasonCodes: [UserProfileDirtyReason.EmploymentUpdated],
-        afterCommit: tx.afterCommit,
-        requestId: auditContext?.requestId ?? undefined,
-        traceId: auditContext?.traceId ?? undefined,
-      });
+      await tx.userProfileInvalidation.recordChanges([
+        { kind: "employment", userId: existing.userId },
+      ]);
       return true;
     }, adminAuditTransactionOptions(auditContext));
   }
@@ -219,13 +207,9 @@ export function createEmploymentService(deps: AdminEmploymentServiceDeps) {
       await tx.auditService.recordAuditLog(buildEmploymentAudit("admin.employment.delete", existing, {
         deleted: true,
       }, auditContext));
-      await tx.profileDirtyMarker.markUsersDirty({
-        userIds: [existing.userId],
-        reasonCodes: [UserProfileDirtyReason.EmploymentUpdated],
-        afterCommit: tx.afterCommit,
-        requestId: auditContext?.requestId ?? undefined,
-        traceId: auditContext?.traceId ?? undefined,
-      });
+      await tx.userProfileInvalidation.recordChanges([
+        { kind: "employment", userId: existing.userId },
+      ]);
       return true;
     }, adminAuditTransactionOptions(auditContext));
   }
@@ -283,13 +267,9 @@ export function createEmploymentService(deps: AdminEmploymentServiceDeps) {
         newIsPrimary,
         startTime: dto.startTime ?? now,
       }, auditContext));
-      await tx.profileDirtyMarker.markUsersDirty({
-        userIds: [existing.userId],
-        reasonCodes: [UserProfileDirtyReason.EmploymentUpdated],
-        afterCommit: tx.afterCommit,
-        requestId: auditContext?.requestId ?? undefined,
-        traceId: auditContext?.traceId ?? undefined,
-      });
+      await tx.userProfileInvalidation.recordChanges([
+        { kind: "employment", userId: existing.userId },
+      ]);
       return { newEmploymentId: created.id };
     }, adminAuditTransactionOptions(auditContext));
   }
@@ -307,13 +287,9 @@ export function createEmploymentService(deps: AdminEmploymentServiceDeps) {
       await tx.auditService.recordAuditLog(buildEmploymentAudit("admin.employment.set_primary", existing, {
         primary: true,
       }, auditContext));
-      await tx.profileDirtyMarker.markUsersDirty({
-        userIds: [existing.userId],
-        reasonCodes: [UserProfileDirtyReason.EmploymentUpdated],
-        afterCommit: tx.afterCommit,
-        requestId: auditContext?.requestId ?? undefined,
-        traceId: auditContext?.traceId ?? undefined,
-      });
+      await tx.userProfileInvalidation.recordChanges([
+        { kind: "employment", userId: existing.userId },
+      ]);
       return true;
     }, adminAuditTransactionOptions(auditContext));
   }

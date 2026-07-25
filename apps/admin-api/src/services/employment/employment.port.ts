@@ -4,7 +4,6 @@ import type { UnitOfWorkPort } from "@iam/api-core/uow";
 import type { Organization } from "@iam/domain/organization";
 import type { Position } from "@iam/domain/position";
 import type { User } from "@iam/domain/user";
-import type { UserProfileDirtyMarker } from "@iam/user-profile-read-model/producer";
 import type {
   AdminEmploymentRecordCreate,
   AdminEmploymentRecordUpdate,
@@ -12,6 +11,11 @@ import type {
   EmploymentAdminPaginationQueryDto,
   EmploymentDetail,
 } from "./employment.type";
+
+export interface AdminEmploymentProfileChange {
+  readonly kind: "employment";
+  readonly userId: number;
+}
 
 export interface AdminEmploymentStorePort {
   getEmploymentByUserOrgPosId: (
@@ -66,7 +70,9 @@ export interface AdminEmploymentTransactionPorts {
   positionRepository: AdminEmploymentPositionReaderPort;
   userRepository: AdminEmploymentUserReaderPort;
   auditService: AuditLogWriterPort;
-  profileDirtyMarker: Pick<UserProfileDirtyMarker, "markUsersDirty">;
+  userProfileInvalidation: {
+    recordChanges: (changes: readonly AdminEmploymentProfileChange[]) => Promise<void>;
+  };
 }
 
 export type AdminEmploymentUnitOfWorkPort = UnitOfWorkPort<AdminEmploymentTransactionPorts>;

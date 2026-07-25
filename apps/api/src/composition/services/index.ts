@@ -124,7 +124,7 @@ export function createApiServices(options: CreateApiServicesOptions) {
     uow: mapUnitOfWork(unitOfWork, tx => ({
       userRepository: tx.repositories.user,
       auditLogWriter: tx.auditLogWriter,
-      profileDirtyMarker: tx.profileDirtyMarker,
+      userProfileInvalidation: tx.userProfileInvalidation,
     })),
   });
 
@@ -136,7 +136,7 @@ export function createApiServices(options: CreateApiServicesOptions) {
     organizationRepository: repositories.organization,
     uow: mapUnitOfWork(unitOfWork, tx => ({
       organizationRepository: tx.repositories.organization,
-      profileDirtyMarker: tx.profileDirtyMarker,
+      userProfileInvalidation: tx.userProfileInvalidation,
     })),
   });
 

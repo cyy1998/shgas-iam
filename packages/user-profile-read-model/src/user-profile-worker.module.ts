@@ -1,9 +1,11 @@
-import type { UserProfileJobName, UserProfileJobPayload } from "@iam/contracts";
+import type {
+  RebuildUserProfileJobPayload,
+  UserProfileJobName,
+} from "@iam/contracts";
 import type { DbClient } from "@iam/db";
 import type { BullMqRedisConfig, CreateJobQueueInput, CreateJobWorkerInput, JobQueue } from "@iam/jobs";
-import type { UserProfileWorkerService } from "./user-profile-worker.service";
+import type { UserProfileWorkerMaintenance } from "./user-profile-worker-maintenance";
 import {
-  ExpandUserProfileScopeJobPayloadSchema,
   RebuildUserProfileJobPayloadSchema,
   USER_PROFILE_QUEUE_NAME,
   UserProfileJobName as UserProfileJobNameValue,
@@ -11,11 +13,12 @@ import {
 import { createJobQueue, createJobWorker } from "@iam/jobs";
 import { createRoleAssignmentResolver } from "@iam/role-assignment-resolution";
 import { createUserProfileDirtyRepository } from "./dirty.repository";
-import { createUserProfileScopeRepository } from "./scope.repository";
 import { createUserProfileBuildRepository } from "./user-profile-build.repository";
 import { createUserProfileBuilder } from "./user-profile-builder.service";
 import { createUserProfileJobProducer } from "./user-profile-job.producer";
-import { createUserProfileWorkerService } from "./user-profile-worker.service";
+import { createUserProfileMaintenanceRepository } from "./user-profile-maintenance.repository";
+import { createUserProfileRebuildProcessor } from "./user-profile-rebuild.processor";
+import { createUserProfileWorkerMaintenance } from "./user-profile-worker-maintenance";
 import { createUserProfileRepository } from "./user-profile.repository";
 
 export const USER_PROFILE_WORKER_MODULE_KEY = "user-profile";
@@ -24,6 +27,57 @@ export interface UserProfileWorkerModuleLogger {
   info: (data: Record<string, unknown>, message: string) => void;
   error: (data: Record<string, unknown>, message: string) => void;
 }
+
+export interface UserProfileJobProcessorInput {
+  id?: string;
+  name: string;
+  data: unknown;
+}
+
+export interface UserProfileJobProcessorRebuildPort {
+  process: (
+    payload: RebuildUserProfileJobPayload,
+    options?: { jobId?: string },
+  ) => Promise<{ status: string }>;
+}
+
+export interface CreateUserProfileJobProcessorDeps {
+  rebuildProcessor: UserProfileJobProcessorRebuildPort;
+  logger: UserProfileWorkerModuleLogger;
+}
+
+export function createUserProfileJobProcessor(deps: CreateUserProfileJobProcessorDeps) {
+  return async (job: UserProfileJobProcessorInput) => {
+    if (job.name !== UserProfileJobNameValue.RebuildUserProfile)
+      throw new Error(`Unsupported user profile job name: ${job.name}`);
+
+    const payload = RebuildUserProfileJobPayloadSchema.parse(job.data);
+    try {
+      const result = await deps.rebuildProcessor.process(payload, { jobId: job.id });
+      deps.logger.info({
+        userId: payload.userId,
+        dirtyVersion: payload.dirtyVersion,
+        jobId: job.id,
+        jobName: job.name,
+        status: result.status,
+      }, "user profile rebuild job processed");
+      return result;
+    }
+    catch (error) {
+      deps.logger.error({
+        err: error,
+        userId: payload.userId,
+        dirtyVersion: payload.dirtyVersion,
+        jobId: job.id,
+        jobName: job.name,
+        status: "failed",
+      }, "user profile rebuild job failed");
+      throw error;
+    }
+  };
+}
+
+export type UserProfileJobProcessor = ReturnType<typeof createUserProfileJobProcessor>;
 
 export interface CreateUserProfileWorkerModuleInput {
   db: DbClient;
@@ -38,9 +92,9 @@ export interface CreateUserProfileWorkerModuleInput {
     backfillBatchSize: number;
   };
   factories?: {
-    createQueue?: (input: CreateJobQueueInput) => JobQueue<UserProfileJobPayload, unknown, UserProfileJobName>;
+    createQueue?: (input: CreateJobQueueInput) => JobQueue<RebuildUserProfileJobPayload, unknown, UserProfileJobName>;
     createWorker?: (
-      input: CreateJobWorkerInput<UserProfileJobPayload, unknown, UserProfileJobName>,
+      input: CreateJobWorkerInput<RebuildUserProfileJobPayload, unknown, UserProfileJobName>,
     ) => UserProfileWorkerHandle;
   };
 }
@@ -62,12 +116,12 @@ export interface UserProfileWorkerHandle {
 
 export interface UserProfileWorkerModule {
   key: typeof USER_PROFILE_WORKER_MODULE_KEY;
-  queue: JobQueue<UserProfileJobPayload, unknown, UserProfileJobName>;
-  workerService: UserProfileWorkerService;
+  queue: JobQueue<RebuildUserProfileJobPayload, unknown, UserProfileJobName>;
+  maintenance: UserProfileWorkerMaintenance;
   queueRegistrations: Array<{
     moduleKey: typeof USER_PROFILE_WORKER_MODULE_KEY;
     queueName: typeof USER_PROFILE_QUEUE_NAME;
-    queue: JobQueue<UserProfileJobPayload, unknown, UserProfileJobName>;
+    queue: JobQueue<RebuildUserProfileJobPayload, unknown, UserProfileJobName>;
   }>;
   startConsumers: () => Promise<void>;
   close: () => Promise<void>;
@@ -77,12 +131,14 @@ export function createUserProfileWorkerModule(input: CreateUserProfileWorkerModu
   const profileRepository = createUserProfileRepository(input.db);
   const dirtyRepository = createUserProfileDirtyRepository(input.db);
   const roleAssignmentResolver = createRoleAssignmentResolver(input.db);
-  const scopeRepository = createUserProfileScopeRepository(input.db, roleAssignmentResolver);
+  const maintenanceRepository = createUserProfileMaintenanceRepository(input.db);
   const buildRepository = createUserProfileBuildRepository(input.db, roleAssignmentResolver);
-  const queue = (input.factories?.createQueue ?? createJobQueue<UserProfileJobPayload, unknown, UserProfileJobName>)({
-    name: USER_PROFILE_QUEUE_NAME,
-    redis: input.redis,
-  });
+  const queue
+    = (input.factories?.createQueue
+      ?? createJobQueue<RebuildUserProfileJobPayload, unknown, UserProfileJobName>)({
+      name: USER_PROFILE_QUEUE_NAME,
+      redis: input.redis,
+    });
   const jobProducer = createUserProfileJobProducer(queue);
   const builder = createUserProfileBuilder({
     buildRepository,
@@ -91,11 +147,19 @@ export function createUserProfileWorkerModule(input: CreateUserProfileWorkerModu
       batchSize: input.config.rebuildBatchSize,
     },
   });
-  const workerService = createUserProfileWorkerService({
+  const rebuildProcessor = createUserProfileRebuildProcessor({
     profileRepository,
     dirtyRepository,
-    scopeRepository,
     builder,
+    clock: input.clock,
+  });
+  const jobProcessor = createUserProfileJobProcessor({
+    rebuildProcessor,
+    logger: input.logger,
+  });
+  const maintenance = createUserProfileWorkerMaintenance({
+    userRepository: maintenanceRepository,
+    dirtyRepository,
     jobProducer,
     clock: input.clock,
     config: {
@@ -108,44 +172,14 @@ export function createUserProfileWorkerModule(input: CreateUserProfileWorkerModu
     if (worker !== undefined)
       return;
 
-    worker = (input.factories?.createWorker ?? createJobWorker<UserProfileJobPayload, unknown, UserProfileJobName>)({
-      name: USER_PROFILE_QUEUE_NAME,
-      redis: input.redis,
-      concurrency: input.config.concurrency,
-      processor: async (job) => {
-        switch (job.name) {
-          case UserProfileJobNameValue.RebuildUserProfile: {
-            const payload = RebuildUserProfileJobPayloadSchema.parse(job.data);
-            try {
-              const result = await workerService.processRebuildUserProfile(payload, { jobId: job.id });
-              input.logger.info({
-                userId: payload.userId,
-                dirtyVersion: payload.dirtyVersion,
-                jobId: job.id,
-                jobName: job.name,
-                status: result.status,
-              }, "user profile rebuild job processed");
-              return result;
-            }
-            catch (error) {
-              input.logger.error({
-                err: error,
-                userId: payload.userId,
-                dirtyVersion: payload.dirtyVersion,
-                jobId: job.id,
-                jobName: job.name,
-                status: "failed",
-              }, "user profile rebuild job failed");
-              throw error;
-            }
-          }
-          case UserProfileJobNameValue.ExpandUserProfileScope:
-            return await workerService.processExpandUserProfileScope(
-              ExpandUserProfileScopeJobPayloadSchema.parse(job.data),
-            );
-        }
-      },
-    });
+    worker
+      = (input.factories?.createWorker
+        ?? createJobWorker<RebuildUserProfileJobPayload, unknown, UserProfileJobName>)({
+        name: USER_PROFILE_QUEUE_NAME,
+        redis: input.redis,
+        concurrency: input.config.concurrency,
+        processor: jobProcessor,
+      });
 
     worker.on("completed", (job) => {
       input.logger.info({
@@ -177,7 +211,7 @@ export function createUserProfileWorkerModule(input: CreateUserProfileWorkerModu
   return {
     key: USER_PROFILE_WORKER_MODULE_KEY,
     queue,
-    workerService,
+    maintenance,
     queueRegistrations: [{
       moduleKey: USER_PROFILE_WORKER_MODULE_KEY,
       queueName: USER_PROFILE_QUEUE_NAME,

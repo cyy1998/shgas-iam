@@ -3,7 +3,6 @@ import type { ApiRequestContext, AuditLogWriterPort } from "@api/services/audit/
 import type { MobileVerificationCodeReservation } from "@api/services/mobile/mobile.type";
 import type { PrivilegeDelegationDto } from "@api/services/privilege/privilegeDelegation.type";
 import type { UnitOfWorkPort } from "@iam/api-core/uow";
-import type { UserProfileDirtyMarker } from "@iam/user-profile-read-model/producer";
 import type {
   User,
   UserDetailDto,
@@ -11,6 +10,11 @@ import type {
   UserQueryDto,
   UserQueryWithPrivilegeDelegationDto,
 } from "./user.type";
+
+export interface ApiUserProfileChange {
+  readonly kind: "user";
+  readonly userId: number;
+}
 
 export interface UserProfileReaderPort {
   getDetailByUserId: (userId: number) => Promise<UserDetailDto>;
@@ -84,7 +88,9 @@ export interface UserSearchWithDelegationsResult {
 export interface UserTransactionPorts {
   userRepository: UserTransactionStorePort;
   auditLogWriter: AuditLogWriterPort;
-  profileDirtyMarker: Pick<UserProfileDirtyMarker, "markUsersDirty">;
+  userProfileInvalidation: {
+    recordChanges: (changes: readonly ApiUserProfileChange[]) => Promise<void>;
+  };
 }
 
 export type UserUnitOfWorkPort = UnitOfWorkPort<UserTransactionPorts>;

@@ -18,9 +18,10 @@
     "serve": "bun run src/index.ts",
     "user-profile:backfill": "bun run src/commands/user-profile-backfill.ts",
     "user-profile:repair": "bun run src/commands/user-profile-repair.ts",
-    "lint": "eslint src eslint.config.js",
-    "lint:fix": "eslint --fix src eslint.config.js",
-    "test": "bun test --max-concurrency=2",
+    "lint": "eslint src test-smoke eslint.config.js",
+    "lint:fix": "eslint --fix src test-smoke eslint.config.js",
+    "test": "bun test --max-concurrency=2 src",
+    "test:smoke": "bun test --max-concurrency=1 test-smoke",
     "typecheck": "pnpm exec tsc --noEmit"
   },
   "dependencies": {

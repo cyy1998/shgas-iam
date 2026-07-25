@@ -1,37 +1,45 @@
 import { describe, expect, test } from "bun:test";
 import {
-  ExpandUserProfileScopeJobPayloadSchema,
   RebuildUserProfileJobPayloadSchema,
   USER_PROFILE_QUEUE_NAME,
-  UserProfileDirtyReason,
+  UserProfileDirtyReasonSchema,
   UserProfileJobName,
   UserProfileJobNameSchema,
-  UserProfileJobPayloadSchemas,
-  UserProfileScopeType,
 } from "../user-profile";
+import * as userProfileJobContract from "../user-profile";
 
 describe("user-profile job contract", () => {
-  test("defines stable queue and job names", () => {
+  test("defines the stable rebuild queue and job name", () => {
     expect(USER_PROFILE_QUEUE_NAME).toBe("user-profile");
-    expect(UserProfileJobNameSchema.parse(UserProfileJobName.RebuildUserProfile)).toBe(
-      UserProfileJobName.RebuildUserProfile,
-    );
-    expect(UserProfileJobNameSchema.parse(UserProfileJobName.ExpandUserProfileScope)).toBe(
-      UserProfileJobName.ExpandUserProfileScope,
-    );
+    const result = UserProfileJobNameSchema.safeParse("rebuild-user-profile");
+
+    expect(result.success).toBe(true);
+    if (!result.success)
+      throw result.error;
+    expect(String(result.data)).toBe("rebuild-user-profile");
   });
 
   test("validates rebuild payloads before enqueueing or processing", () => {
-    expect(RebuildUserProfileJobPayloadSchema.parse({
+    const result = RebuildUserProfileJobPayloadSchema.safeParse({
       userId: 123,
       dirtyVersion: "42",
-      reason: UserProfileDirtyReason.UserUpdated,
+      reason: "user-updated",
+      requestedAt: "2026-07-25T10:30:00.000Z",
       requestId: "req-1",
       traceId: "trace-1",
-    })).toEqual({
+    });
+
+    expect(result.success).toBe(true);
+    if (!result.success)
+      throw result.error;
+    expect({
+      ...result.data,
+      reason: String(result.data.reason),
+    }).toEqual({
       userId: 123,
       dirtyVersion: "42",
-      reason: UserProfileDirtyReason.UserUpdated,
+      reason: "user-updated",
+      requestedAt: "2026-07-25T10:30:00.000Z",
       requestId: "req-1",
       traceId: "trace-1",
     });
@@ -39,19 +47,19 @@ describe("user-profile job contract", () => {
     expect(RebuildUserProfileJobPayloadSchema.safeParse({
       userId: 0,
       dirtyVersion: "1",
-      reason: UserProfileDirtyReason.UserUpdated,
+      reason: "user-updated",
     }).success).toBe(false);
 
     expect(RebuildUserProfileJobPayloadSchema.safeParse({
       userId: 123,
       dirtyVersion: "not-decimal",
-      reason: UserProfileDirtyReason.UserUpdated,
+      reason: "user-updated",
     }).success).toBe(false);
 
     expect(RebuildUserProfileJobPayloadSchema.safeParse({
       userId: 123,
       dirtyVersion: "0",
-      reason: UserProfileDirtyReason.UserUpdated,
+      reason: "user-updated",
     }).success).toBe(false);
 
     expect(RebuildUserProfileJobPayloadSchema.safeParse({
@@ -59,38 +67,28 @@ describe("user-profile job contract", () => {
     }).success).toBe(false);
   });
 
-  test("validates scope expansion payloads", () => {
-    expect(ExpandUserProfileScopeJobPayloadSchema.parse({
-      scopeType: UserProfileScopeType.OrganizationId,
+  test("rejects the retired scope-expansion job name and payload", () => {
+    expect(UserProfileJobNameSchema.safeParse("expand-user-profile-scope").success).toBe(false);
+    expect(RebuildUserProfileJobPayloadSchema.safeParse({
+      scopeType: "organization-id",
       scopeId: 9,
       bucket: "2026-06-30T10:00",
-      reason: UserProfileDirtyReason.OrganizationUpdated,
-    })).toEqual({
-      scopeType: UserProfileScopeType.OrganizationId,
-      scopeId: 9,
-      bucket: "2026-06-30T10:00",
-      reason: UserProfileDirtyReason.OrganizationUpdated,
-    });
-
-    expect(ExpandUserProfileScopeJobPayloadSchema.safeParse({
-      scopeType: "unsupported",
-      scopeId: 9,
-      bucket: "2026-06-30T10:00",
-      reason: UserProfileDirtyReason.OrganizationUpdated,
+      reason: "organization-updated",
     }).success).toBe(false);
   });
 
-  test("exposes schemas by job name for shared producer and worker validation", () => {
-    const payload = UserProfileJobPayloadSchemas[UserProfileJobName.RebuildUserProfile].parse({
-      userId: 456,
-      dirtyVersion: "7",
-      reason: UserProfileDirtyReason.ManualRebuild,
-    });
+  test("does not expose generic payload registries for the single rebuild protocol", () => {
+    expect("UserProfileJobPayloadSchemas" in userProfileJobContract).toBe(false);
+    expect("UserProfileJobPayloadSchema" in userProfileJobContract).toBe(false);
+  });
 
-    expect(payload).toEqual({
-      userId: 456,
-      dirtyVersion: "7",
-      reason: UserProfileDirtyReason.ManualRebuild,
-    });
+  test("continues parsing the historical privilege dirty reason", () => {
+    const result = UserProfileDirtyReasonSchema.safeParse("privilege-updated");
+
+    expect(result.success).toBe(true);
+    if (!result.success)
+      throw result.error;
+    expect(String(result.data)).toBe("privilege-updated");
+    expect(String(UserProfileJobName.RebuildUserProfile)).toBe("rebuild-user-profile");
   });
 });

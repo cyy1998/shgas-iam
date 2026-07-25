@@ -31,11 +31,11 @@
 | [docs/agents/issue-tracker.md](agents/issue-tracker.md) | agent-config | Current | 2026-07-24 | 2026-10-31 | 本地 spec、ticket、轻量 feature journal 与 fresh-context handoff 的文件约定。 |
 | [docs/agents/triage-labels.md](agents/triage-labels.md) | agent-config | Current | 2026-07-16 | 2026-10-31 | Engineering skills 使用的默认 triage 标签映射。 |
 | [docs/agents/workflow.md](agents/workflow.md) | agent-config | Current | 2026-07-25 | 2026-10-31 | Matt skills 的仓库薄适配：本地 tracker、分支、验证、授权、归档和本地合入。 |
-| [docs/architecture/backend-architecture.md](architecture/backend-architecture.md) | architecture | Current | 2026-07-25 | 2026-10-31 | 后端 app composition、factory/DI、ports、Custom SSO deep module、角色解析注入边界、route/middleware 和 architecture test 约定。 |
+| [docs/architecture/backend-architecture.md](architecture/backend-architecture.md) | architecture | Current | 2026-07-25 | 2026-10-31 | 后端 app composition、factory/DI、ports、Custom SSO deep module、角色解析、transaction-bound User Profile invalidation、route/middleware 和 architecture test 约定。 |
 | [docs/architecture/contracts-and-database.md](architecture/contracts-and-database.md) | architecture | Current | 2026-07-18 | 2026-10-31 | shared contracts、domain/db/jobs/role-assignment-resolution/read-model 边界、UnitOfWork 和 Drizzle schema/relations/migration 约定。 |
 | [docs/architecture/frontend-architecture.md](architecture/frontend-architecture.md) | architecture | Current | 2026-07-16 | 2026-10-31 | admin/sso 前端边界、service wrapper、contract、测试与生成路径约定。 |
 | [docs/architecture/repository-map.md](architecture/repository-map.md) | architecture | Current | 2026-07-25 | 2026-10-31 | monorepo apps/packages/gateway 地图、共享 ESLint 配置所有权，以及 Current docs、冻结历史和生成目录边界。 |
-| [docs/architecture/testing-architecture.md](architecture/testing-architecture.md) | architecture | Current | 2026-07-25 | 2026-10-31 | 已实施的普通/process smoke/外部资源通道、预算、Windows 连续验收、平台状态与 backend adoption 边界。 |
+| [docs/architecture/testing-architecture.md](architecture/testing-architecture.md) | architecture | Current | 2026-07-25 | 2026-10-31 | 已实施的普通/process smoke/外部资源通道、预算、Windows 连续验收、backend adoption 与 User Profile 公开测试 seam。 |
 | [docs/development/backend-implementation.md](development/backend-implementation.md) | development | Current | 2026-07-05 | 2026-10-31 | backend response envelope、OpenAPI status、logger、audit event 和 architecture guard 实现惯例。 |
 | [docs/development/coding-style.md](development/coding-style.md) | development | Current | 2026-07-18 | 2026-10-31 | TypeScript、formatter 边界、文件命名、React 命名和 import alias 风格约定。 |
 | [docs/development/commands.md](development/commands.md) | development | Current | 2026-07-25 | 2026-10-31 | 聚焦实现、workspace、普通/smoke/verify、外部资源、性能与 commit guard 的可执行入口。 |
@@ -48,10 +48,10 @@
 | [docs/releases/audit-login-log-retirement-release.md](releases/audit-login-log-retirement-release.md) | runbook | Historical | 2026-07-16 | n/a | 已完成的 `login_log` 一次性退役记录；其迁移实现已不在当前仓库，不可作为当前 runbook。 |
 | [docs/releases/observability-system-logs.md](releases/observability-system-logs.md) | runbook | Current | 2026-07-03 | 2026-10-31 | Loki/Grafana/Alloy 系统日志观测运行手册；补充 APISIX trace、Alloy OTLP 和证据留存。 |
 | [docs/releases/oidc-release-runbook.md](releases/oidc-release-runbook.md) | runbook | Current | 2026-07-03 | 2026-10-31 | OIDC Provider 发布、JWK/HMAC rotation、逐 client smoke 和回滚手册。 |
-| [docs/releases/role-assignment-role-management-release.md](releases/role-assignment-role-management-release.md) | runbook | Current | 2026-07-18 | 2026-10-31 | 角色分配 resolver、admin `/roles`、OIDC/read-model 一致性验收和回滚手册。 |
+| [docs/releases/role-assignment-role-management-release.md](releases/role-assignment-role-management-release.md) | runbook | Current | 2026-07-25 | 2026-10-31 | 角色分配 resolver、admin `/roles`、OIDC/read-model 一致性验收和回滚手册。 |
 | [docs/releases/session-kernel-release-smoke.md](releases/session-kernel-release-smoke.md) | release-record | Historical | 2026-07-03 | n/a | 2026-06-24 Session Kernel 发布 smoke 证据快照，并提供后续可复用 smoke 模板。 |
 | [docs/releases/sm-encrypted-password-login-release.md](releases/sm-encrypted-password-login-release.md) | runbook | Current | 2026-07-16 | 2026-10-31 | SM2/SM4 加密密码登录、API/SSO 同步发布、Cap 重试、错误码和 rollback matrix。 |
-| [docs/releases/user-profile-dirty-queue-release.md](releases/user-profile-dirty-queue-release.md) | runbook | Current | 2026-07-16 | 2026-10-31 | versioned dirty/rebuild 队列、worker health、Bull Board、repair/backfill 和回滚手册。 |
+| [docs/releases/user-profile-dirty-queue-release.md](releases/user-profile-dirty-queue-release.md) | runbook | Current | 2026-07-25 | 2026-10-31 | scope producer 停止、旧 job 五类排空、worker-last 发布门禁，以及现有 Bull Board/repair/backfill 操作语义。 |
 | [docs/reviews/SOFTWARE_ENGINEERING_PRINCIPLES_REVIEW_2026-07-03.md](reviews/SOFTWARE_ENGINEERING_PRINCIPLES_REVIEW_2026-07-03.md) | review | Historical | 2026-07-03 | n/a | 2026-07-03 的软件工程原则审查快照；用于追溯风险，不替代当前代码检查。 |
 
 ## 维护方式

@@ -1,5 +1,4 @@
 import { CustomError } from "@iam/api-core/errors/CustomError";
-import { UserProfileDirtyReason } from "@iam/contracts";
 import { OrganizationNotFoundError } from "@iam/domain/organization";
 import { describe, expect, mock, test } from "bun:test";
 import { createRegisterPurveyorContactUseCase } from "../register-purveyor-contact.use-case";
@@ -32,8 +31,8 @@ const options = {
 
 describe("RegisterPurveyorContactUseCase", () => {
   test("adds employment for an existing supplier contact and marks the profile dirty", async () => {
-    const profileDirtyMarker = {
-      markUsersDirty: mock(async () => ({ marked: 1, userIds: [7] })),
+    const userProfileInvalidation = {
+      recordChanges: mock(async () => undefined),
     };
     const setEmployment = mock(async () => ({}));
     const useCase = createRegisterPurveyorContactUseCase({
@@ -47,7 +46,6 @@ describe("RegisterPurveyorContactUseCase", () => {
       },
       uow: {
         transaction: mock(async (callback: any) => await callback({
-          afterCommit: { bestEffort: mock(() => undefined), required: mock(() => undefined) },
           employmentRepository: {
             getEmploymentByUserOrgPosId: mock(async () => null),
             setEmployment,
@@ -58,7 +56,7 @@ describe("RegisterPurveyorContactUseCase", () => {
           positionRepository: {
             getPositionByCode: mock(async () => ({ id: 3 })),
           },
-          profileDirtyMarker,
+          userProfileInvalidation,
           userRepository: {
             getUserByMobile: mock(async () => ({ id: 7 })),
             setUser: mock(async () => {
@@ -72,16 +70,14 @@ describe("RegisterPurveyorContactUseCase", () => {
     await expect(useCase.execute(input, options)).resolves.toBe(true);
 
     expect(setEmployment).toHaveBeenCalledWith(7, 3, 2);
-    expect(profileDirtyMarker.markUsersDirty).toHaveBeenCalledWith({
-      userIds: [7],
-      reasonCodes: [UserProfileDirtyReason.EmploymentUpdated],
-      afterCommit: expect.any(Object),
-    });
+    expect(userProfileInvalidation.recordChanges).toHaveBeenCalledWith([
+      { kind: "employment", userId: 7 },
+    ]);
   });
 
   test("creates a new external supplier contact and marks user and employment facts dirty", async () => {
-    const profileDirtyMarker = {
-      markUsersDirty: mock(async () => ({ marked: 1, userIds: [9] })),
+    const userProfileInvalidation = {
+      recordChanges: mock(async () => undefined),
     };
     const setUser = mock(async () => ({ id: 9 }));
     const setEmployment = mock(async () => ({}));
@@ -96,7 +92,6 @@ describe("RegisterPurveyorContactUseCase", () => {
       },
       uow: {
         transaction: mock(async (callback: any) => await callback({
-          afterCommit: { bestEffort: mock(() => undefined), required: mock(() => undefined) },
           employmentRepository: {
             getEmploymentByUserOrgPosId: mock(async () => null),
             setEmployment,
@@ -107,7 +102,7 @@ describe("RegisterPurveyorContactUseCase", () => {
           positionRepository: {
             getPositionByCode: mock(async () => ({ id: 3 })),
           },
-          profileDirtyMarker,
+          userProfileInvalidation,
           userRepository: {
             getUserByMobile: mock(async () => null),
             setUser,
@@ -126,11 +121,58 @@ describe("RegisterPurveyorContactUseCase", () => {
       password: null,
     });
     expect(setEmployment).toHaveBeenCalledWith(9, 3, 2);
-    expect(profileDirtyMarker.markUsersDirty).toHaveBeenCalledWith({
-      userIds: [9],
-      reasonCodes: [UserProfileDirtyReason.UserUpdated, UserProfileDirtyReason.EmploymentUpdated],
-      afterCommit: expect.any(Object),
-    });
+    expect(userProfileInvalidation.recordChanges).toHaveBeenCalledWith([
+      { kind: "user", userId: 9 },
+      { kind: "employment", userId: 9 },
+    ]);
+  });
+
+  test("preserves request observability for existing and new supplier contact transactions", async () => {
+    const transactionOptions: unknown[] = [];
+
+    for (const existingUserId of [7, null]) {
+      const useCase = createRegisterPurveyorContactUseCase({
+        auditLogWriter: {
+          recordAuditLog: mock(async () => undefined),
+        },
+        config: { nodeEnv: "test" },
+        mobileService: {
+          getPurveyorWelcomeMessage: mock(() => "welcome"),
+          sendMessage: mock(async () => true),
+        },
+        uow: {
+          transaction: mock(async (callback: any, currentOptions: unknown) => {
+            transactionOptions.push(currentOptions);
+            return await callback({
+              employmentRepository: {
+                getEmploymentByUserOrgPosId: mock(async () => ({ id: 10 })),
+                setEmployment: mock(async () => ({})),
+              },
+              organizationRepository: {
+                getOrganizationByCode: mock(async () => ({ id: 2 })),
+              },
+              positionRepository: {
+                getPositionByCode: mock(async () => ({ id: 3 })),
+              },
+              userProfileInvalidation: {
+                recordChanges: mock(async () => undefined),
+              },
+              userRepository: {
+                getUserByMobile: mock(async () => existingUserId === null ? null : { id: existingUserId }),
+                setUser: mock(async () => ({ id: 9 })),
+              },
+            });
+          }),
+        },
+      } as never);
+
+      await useCase.execute(input, options);
+    }
+
+    expect(transactionOptions).toEqual([
+      { observability: options.requestContext },
+      { observability: options.requestContext },
+    ]);
   });
 
   test("records the supplier contact audit with request context and redacted mobile", async () => {
@@ -144,7 +186,6 @@ describe("RegisterPurveyorContactUseCase", () => {
       },
       uow: {
         transaction: mock(async (callback: any) => await callback({
-          afterCommit: { bestEffort: mock(() => undefined), required: mock(() => undefined) },
           employmentRepository: {
             getEmploymentByUserOrgPosId: mock(async () => ({ id: 10 })),
             setEmployment: mock(async () => ({})),
@@ -155,8 +196,8 @@ describe("RegisterPurveyorContactUseCase", () => {
           positionRepository: {
             getPositionByCode: mock(async () => ({ id: 3 })),
           },
-          profileDirtyMarker: {
-            markUsersDirty: mock(async () => ({ marked: 0, userIds: [] })),
+          userProfileInvalidation: {
+            recordChanges: mock(async () => undefined),
           },
           userRepository: {
             getUserByMobile: mock(async () => ({ id: 7 })),
@@ -216,7 +257,6 @@ describe("RegisterPurveyorContactUseCase", () => {
       uow: {
         transaction: mock(async (callback: any) => {
           const result = await callback({
-            afterCommit: { bestEffort: mock(() => undefined), required: mock(() => undefined) },
             employmentRepository: {
               getEmploymentByUserOrgPosId: mock(async () => ({ id: 10 })),
               setEmployment: mock(async () => ({})),
@@ -227,8 +267,8 @@ describe("RegisterPurveyorContactUseCase", () => {
             positionRepository: {
               getPositionByCode: mock(async () => ({ id: 3 })),
             },
-            profileDirtyMarker: {
-              markUsersDirty: mock(async () => ({ marked: 0, userIds: [] })),
+            userProfileInvalidation: {
+              recordChanges: mock(async () => undefined),
             },
             userRepository: {
               getUserByMobile: mock(async () => ({ id: 7 })),
@@ -257,7 +297,6 @@ describe("RegisterPurveyorContactUseCase", () => {
       },
       uow: {
         transaction: mock(async (callback: any) => await callback({
-          afterCommit: { bestEffort: mock(() => undefined), required: mock(() => undefined) },
           employmentRepository: {
             getEmploymentByUserOrgPosId: mock(async () => null),
             setEmployment: mock(async () => ({})),
@@ -268,8 +307,8 @@ describe("RegisterPurveyorContactUseCase", () => {
           positionRepository: {
             getPositionByCode: mock(async () => ({ id: 3 })),
           },
-          profileDirtyMarker: {
-            markUsersDirty: mock(async () => ({ marked: 0, userIds: [] })),
+          userProfileInvalidation: {
+            recordChanges: mock(async () => undefined),
           },
           userRepository: {
             getUserByMobile: mock(async () => null),
@@ -292,7 +331,6 @@ describe("RegisterPurveyorContactUseCase", () => {
       },
       uow: {
         transaction: mock(async (callback: any) => await callback({
-          afterCommit: { bestEffort: mock(() => undefined), required: mock(() => undefined) },
           employmentRepository: {
             getEmploymentByUserOrgPosId: mock(async () => null),
             setEmployment: mock(async () => ({})),
@@ -303,8 +341,8 @@ describe("RegisterPurveyorContactUseCase", () => {
           positionRepository: {
             getPositionByCode: mock(async () => null),
           },
-          profileDirtyMarker: {
-            markUsersDirty: mock(async () => ({ marked: 0, userIds: [] })),
+          userProfileInvalidation: {
+            recordChanges: mock(async () => undefined),
           },
           userRepository: {
             getUserByMobile: mock(async () => null),
@@ -318,7 +356,7 @@ describe("RegisterPurveyorContactUseCase", () => {
   });
 
   test("does not create or mark employment when the supplier contact employment already exists", async () => {
-    const markUsersDirty = mock(async () => ({ marked: 0, userIds: [] }));
+    const recordChanges = mock(async () => undefined);
     const setEmployment = mock(async () => ({}));
     const useCase = createRegisterPurveyorContactUseCase({
       auditLogWriter: { recordAuditLog: mock(async () => undefined) },
@@ -329,7 +367,6 @@ describe("RegisterPurveyorContactUseCase", () => {
       },
       uow: {
         transaction: mock(async (callback: any) => await callback({
-          afterCommit: { bestEffort: mock(() => undefined), required: mock(() => undefined) },
           employmentRepository: {
             getEmploymentByUserOrgPosId: mock(async () => ({ id: 10 })),
             setEmployment,
@@ -340,7 +377,7 @@ describe("RegisterPurveyorContactUseCase", () => {
           positionRepository: {
             getPositionByCode: mock(async () => ({ id: 3 })),
           },
-          profileDirtyMarker: { markUsersDirty },
+          userProfileInvalidation: { recordChanges },
           userRepository: {
             getUserByMobile: mock(async () => ({ id: 7 })),
             setUser: mock(async () => ({ id: 9 })),
@@ -352,7 +389,7 @@ describe("RegisterPurveyorContactUseCase", () => {
     await useCase.execute(input, options);
 
     expect(setEmployment).not.toHaveBeenCalled();
-    expect(markUsersDirty).not.toHaveBeenCalled();
+    expect(recordChanges).not.toHaveBeenCalled();
   });
 
   test("does not send the supplier welcome message outside production", async () => {
@@ -366,7 +403,6 @@ describe("RegisterPurveyorContactUseCase", () => {
       },
       uow: {
         transaction: mock(async (callback: any) => await callback({
-          afterCommit: { bestEffort: mock(() => undefined), required: mock(() => undefined) },
           employmentRepository: {
             getEmploymentByUserOrgPosId: mock(async () => ({ id: 10 })),
             setEmployment: mock(async () => ({})),
@@ -377,8 +413,8 @@ describe("RegisterPurveyorContactUseCase", () => {
           positionRepository: {
             getPositionByCode: mock(async () => ({ id: 3 })),
           },
-          profileDirtyMarker: {
-            markUsersDirty: mock(async () => ({ marked: 0, userIds: [] })),
+          userProfileInvalidation: {
+            recordChanges: mock(async () => undefined),
           },
           userRepository: {
             getUserByMobile: mock(async () => ({ id: 7 })),
@@ -405,7 +441,6 @@ describe("RegisterPurveyorContactUseCase", () => {
       },
       uow: {
         transaction: mock(async (callback: any) => await callback({
-          afterCommit: { bestEffort: mock(() => undefined), required: mock(() => undefined) },
           employmentRepository: {
             getEmploymentByUserOrgPosId: mock(async () => ({ id: 10 })),
             setEmployment: mock(async () => ({})),
@@ -416,8 +451,8 @@ describe("RegisterPurveyorContactUseCase", () => {
           positionRepository: {
             getPositionByCode: mock(async () => ({ id: 3 })),
           },
-          profileDirtyMarker: {
-            markUsersDirty: mock(async () => ({ marked: 0, userIds: [] })),
+          userProfileInvalidation: {
+            recordChanges: mock(async () => undefined),
           },
           userRepository: {
             getUserByMobile: mock(async () => ({ id: 7 })),
@@ -444,7 +479,6 @@ describe("RegisterPurveyorContactUseCase", () => {
       },
       uow: {
         transaction: mock(async (callback: any) => await callback({
-          afterCommit: { bestEffort: mock(() => undefined), required: mock(() => undefined) },
           employmentRepository: {
             getEmploymentByUserOrgPosId: mock(async () => ({ id: 10 })),
             setEmployment: mock(async () => ({})),
@@ -455,8 +489,8 @@ describe("RegisterPurveyorContactUseCase", () => {
           positionRepository: {
             getPositionByCode: mock(async () => ({ id: 3 })),
           },
-          profileDirtyMarker: {
-            markUsersDirty: mock(async () => ({ marked: 0, userIds: [] })),
+          userProfileInvalidation: {
+            recordChanges: mock(async () => undefined),
           },
           userRepository: {
             getUserByMobile: mock(async () => ({ id: 7 })),

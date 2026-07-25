@@ -8,7 +8,7 @@ import {
   UserDetailDtoSchema,
   UserDtoSchema,
 } from "@admin-api/services/user/user.schema";
-import { EmploymentStatus, UserProfileDirtyReason, UserStatus } from "@iam/contracts";
+import { EmploymentStatus, UserStatus } from "@iam/contracts";
 import {
   UserHasActiveEmploymentError,
   UsernameAlreadyExistsError,
@@ -88,13 +88,9 @@ export function createUserService(deps: AdminUserServiceDeps) {
         orderNum: dto.orderNum ?? 0,
         passwordProvided: dto.password !== undefined,
       }, auditContext));
-      await tx.profileDirtyMarker.markUsersDirty({
-        userIds: [createdUser.id],
-        reasonCodes: [UserProfileDirtyReason.UserUpdated],
-        afterCommit: tx.afterCommit,
-        requestId: auditContext?.requestId ?? undefined,
-        traceId: auditContext?.traceId ?? undefined,
-      });
+      await tx.userProfileInvalidation.recordChanges([
+        { kind: "user", userId: createdUser.id },
+      ]);
       return {
         username: dto.username,
         generatedPassword: dto.password ? null : plainPassword,
@@ -117,13 +113,9 @@ export function createUserService(deps: AdminUserServiceDeps) {
       await tx.auditService.recordAuditLog(buildAdminUserAudit(action, updatedUser, {
         patch: data,
       }, auditContext));
-      await tx.profileDirtyMarker.markUsersDirty({
-        userIds: [existing.id],
-        reasonCodes: [UserProfileDirtyReason.UserUpdated],
-        afterCommit: tx.afterCommit,
-        requestId: auditContext?.requestId ?? undefined,
-        traceId: auditContext?.traceId ?? undefined,
-      });
+      await tx.userProfileInvalidation.recordChanges([
+        { kind: "user", userId: existing.id },
+      ]);
       if (data.status !== undefined && data.status !== existing.status && data.status !== UserStatus.Enable) {
         tx.afterCommit.bestEffort("admin.session_revoke.user", async () => {
           await deps.sessionRevocation.revokeUserSessions({
@@ -155,13 +147,9 @@ export function createUserService(deps: AdminUserServiceDeps) {
       await tx.auditService.recordAuditLog(buildAdminUserAudit("admin.user.delete", deletedUser, {
         deleted: true,
       }, auditContext));
-      await tx.profileDirtyMarker.markUsersDirty({
-        userIds: [existing.id],
-        reasonCodes: [UserProfileDirtyReason.UserUpdated],
-        afterCommit: tx.afterCommit,
-        requestId: auditContext?.requestId ?? undefined,
-        traceId: auditContext?.traceId ?? undefined,
-      });
+      await tx.userProfileInvalidation.recordChanges([
+        { kind: "user", userId: existing.id },
+      ]);
       tx.afterCommit.bestEffort("admin.session_revoke.user", async () => {
         await deps.sessionRevocation.revokeUserSessions({
           userId: existing.id,

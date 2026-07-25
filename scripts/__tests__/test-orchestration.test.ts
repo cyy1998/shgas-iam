@@ -13,9 +13,11 @@ import { pathToFileURL } from "node:url";
 import { describe, expect, test } from "bun:test";
 
 const repoRoot = join(import.meta.dirname, "..", "..");
+const adminApiRoot = join(repoRoot, "apps", "admin-api");
 const apiRoot = join(repoRoot, "apps", "api");
 const apiCoreRoot = join(repoRoot, "packages", "api-core");
 const oidcRoot = join(repoRoot, "apps", "oidc-provider");
+const workerRoot = join(repoRoot, "apps", "worker");
 const pnpmRecorderScript = join(
   repoRoot,
   "scripts",
@@ -468,13 +470,83 @@ describe("test orchestration", () => {
     });
   }, 15_000);
 
+  test("discovers Admin API ordinary and process smoke tests in disjoint Bun lanes", () => {
+    const adminApiPackage = readJson(join(adminApiRoot, "package.json"));
+    const ordinaryFiles = [...new Bun.Glob("src/**/*.test.ts").scanSync({ cwd: adminApiRoot })]
+      .map(file => file.replaceAll("\\", "/"))
+      .sort();
+    const smokeFiles = [...new Bun.Glob("test-smoke/**/*.smoke.test.ts").scanSync({ cwd: adminApiRoot })]
+      .map(file => file.replaceAll("\\", "/"))
+      .sort();
+    const dryRun = runPackageSmokeDryRun("@iam/admin-api");
+    const smokeTask = dryRun.tasks.find((task: { taskId: string }) => task.taskId === "@iam/admin-api#test:smoke");
+    const entrySmokeSource = readFileSync(join(adminApiRoot, "test-smoke", "entry.smoke.test.ts"), "utf8");
+
+    expect(adminApiPackage.scripts.test).toBe("bun test --max-concurrency=2 src");
+    expect(adminApiPackage.scripts["test:smoke"]).toBe("bun test --max-concurrency=1 test-smoke");
+    expect(adminApiPackage.scripts.lint).toBe("eslint src test-smoke app.config.ts eslint.config.js");
+    expect(adminApiPackage.scripts["lint:fix"]).toBe("eslint --fix src test-smoke app.config.ts eslint.config.js");
+    expect(ordinaryFiles.length).toBeGreaterThan(0);
+    expect(ordinaryFiles.every(file => !file.endsWith(".smoke.test.ts"))).toBe(true);
+    expect(smokeFiles).toContain("test-smoke/entry.smoke.test.ts");
+    expect(smokeFiles.every(file => file.endsWith(".smoke.test.ts"))).toBe(true);
+    expect(ordinaryFiles.filter(file => smokeFiles.includes(file))).toEqual([]);
+    expect(entrySmokeSource).toContain("createProcessSmokeEnvironment({");
+    expect(entrySmokeSource).toContain("args: [\"--no-env-file\", \"run\", \"src/index.ts\"]");
+    expect(entrySmokeSource).toContain("/admin/doc");
+    expect(entrySmokeSource).not.toContain("...process.env");
+    expect(smokeTask).toMatchObject({
+      command: "bun test --max-concurrency=1 test-smoke",
+      resolvedTaskDefinition: {
+        cache: false,
+        dependsOn: ["transit"],
+      },
+    });
+  }, 15_000);
+
+  test("discovers Worker ordinary and process smoke tests in disjoint Bun lanes", () => {
+    const workerPackage = readJson(join(workerRoot, "package.json"));
+    const ordinaryFiles = [...new Bun.Glob("src/**/*.test.ts").scanSync({ cwd: workerRoot })]
+      .map(file => file.replaceAll("\\", "/"))
+      .sort();
+    const smokeFiles = [...new Bun.Glob("test-smoke/**/*.smoke.test.ts").scanSync({ cwd: workerRoot })]
+      .map(file => file.replaceAll("\\", "/"))
+      .sort();
+    const dryRun = runPackageSmokeDryRun("@iam/worker");
+    const smokeTask = dryRun.tasks.find((task: { taskId: string }) => task.taskId === "@iam/worker#test:smoke");
+    const entrySmokeSource = readFileSync(join(workerRoot, "test-smoke", "entry.smoke.test.ts"), "utf8");
+
+    expect(workerPackage.scripts.test).toBe("bun test --max-concurrency=2 src");
+    expect(workerPackage.scripts["test:smoke"]).toBe("bun test --max-concurrency=1 test-smoke");
+    expect(workerPackage.scripts.lint).toBe("eslint src test-smoke eslint.config.js");
+    expect(workerPackage.scripts["lint:fix"]).toBe("eslint --fix src test-smoke eslint.config.js");
+    expect(ordinaryFiles.length).toBeGreaterThan(0);
+    expect(ordinaryFiles.every(file => !file.endsWith(".smoke.test.ts"))).toBe(true);
+    expect(smokeFiles).toContain("test-smoke/entry.smoke.test.ts");
+    expect(smokeFiles.every(file => file.endsWith(".smoke.test.ts"))).toBe(true);
+    expect(ordinaryFiles.filter(file => smokeFiles.includes(file))).toEqual([]);
+    expect(entrySmokeSource).toContain("createProcessSmokeEnvironment({");
+    expect(entrySmokeSource).toContain("args: [\"--no-env-file\", \"run\", \"src/index.ts\"]");
+    expect(entrySmokeSource).toContain("IAM_WORKER_ENABLED_MODULES: \"none\"");
+    expect(entrySmokeSource).not.toContain("...process.env");
+    expect(smokeTask).toMatchObject({
+      command: "bun test --max-concurrency=1 test-smoke",
+      resolvedTaskDefinition: {
+        cache: false,
+        dependsOn: ["transit"],
+      },
+    });
+  }, 15_000);
+
   test("keeps entry smoke resource ownership in the shared process suite", () => {
     const entrySmokeSources = [
+      readFileSync(join(adminApiRoot, "test-smoke", "entry.smoke.test.ts"), "utf8"),
       readFileSync(join(apiRoot, "test-smoke", "entry.smoke.test.ts"), "utf8"),
       readFileSync(
         join(repoRoot, "apps", "oidc-provider", "src", "__tests__", "entry.smoke.test.ts"),
         "utf8",
       ),
+      readFileSync(join(workerRoot, "test-smoke", "entry.smoke.test.ts"), "utf8"),
     ];
     const packageLocalLifecycle = [
       "createServer",

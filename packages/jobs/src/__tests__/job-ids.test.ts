@@ -1,13 +1,13 @@
 import { describe, expect, test } from "bun:test";
 import {
   buildDeterministicJobId,
-  buildScopeBucketJobId,
   buildUserJobId,
   buildUserVersionJobId,
   DEFAULT_JOB_OPTIONS,
   DEFAULT_QUEUE_PREFIX,
   resolveDefaultJobOptions,
 } from "../index";
+import * as jobs from "../index";
 
 describe("job id helpers", () => {
   test("builds a deterministic user-level job id", () => {
@@ -19,24 +19,8 @@ describe("job id helpers", () => {
     expect(buildUserVersionJobId("rebuild-user-profile", 123, "43")).toBe("rebuild-user-profile|123|43");
   });
 
-  test("builds a deterministic scope/time-bucket job id", () => {
-    expect(buildScopeBucketJobId({
-      jobName: "expand-user-profile-scope",
-      scopeType: "organization-id",
-      scopeId: 9,
-      bucket: "2026-06-30T10:00",
-    })).toBe("expand-user-profile-scope|organization-id|9|2026-06-30T10%3A00");
-  });
-
-  test("builds BullMQ-compatible ids without colon characters", () => {
-    const jobId = buildScopeBucketJobId({
-      jobName: "expand-user-profile-scope",
-      scopeType: "user-ids",
-      scopeId: "1,3",
-      bucket: "2026-07-01T00:00",
-    });
-
-    expect(jobId).not.toContain(":");
+  test("does not expose the retired scope-bucket job id builder", () => {
+    expect("buildScopeBucketJobId" in jobs).toBe(false);
   });
 
   test("rejects empty job id parts", () => {

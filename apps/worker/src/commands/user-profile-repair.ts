@@ -1,7 +1,7 @@
 import { parseArgs } from "node:util";
 
 export interface UserProfileRepairCommandDeps {
-  workerService: {
+  maintenance: {
     repairFailedOrStale: (input: { staleBefore: Date; limit?: number }) => Promise<{
       enqueued: number;
       userIds: number[];
@@ -32,7 +32,7 @@ export async function runUserProfileRepairCommand(
     deps.clock.nowDate().getTime() - deps.config.repairStaleSeconds * 1000,
   );
   const limit = options.limit ?? deps.config.limit;
-  const result = await deps.workerService.repairFailedOrStale({ staleBefore, limit });
+  const result = await deps.maintenance.repairFailedOrStale({ staleBefore, limit });
   deps.logger.info({
     enqueued: result.enqueued,
     userIds: result.userIds,
@@ -67,7 +67,7 @@ async function main() {
   try {
     await runUserProfileRepairCommand(
       {
-        workerService: composition.userProfile.workerService,
+        maintenance: composition.userProfile.maintenance,
         clock: composition.runtime.clock,
         logger: composition.logger,
         config: {

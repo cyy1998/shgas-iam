@@ -2,7 +2,7 @@
 
 Type: runbook
 Status: Current
-Last verified: 2026-07-18
+Last verified: 2026-07-25
 Next review: 2026-10-31
 
 ## 适用范围
@@ -10,14 +10,18 @@ Next review: 2026-10-31
 本手册用于发布统一 `role_assignment` 表、角色授权聚合和 admin `/roles` 角色管理页面。事实来源包括
 `packages/db/src/schema/core/role-assignments.ts`、`apps/admin-api/src/services/role/role.service.ts`、
 `apps/admin/src/pages/roles/`、`packages/role-assignment-resolution/test-postgres/role-assignment-resolver.postgres.test.ts`、
-`apps/oidc-provider/src/__tests__/authorization.repository.test.ts`，以及 User Profile 的 build/scope repository 测试。
+`apps/oidc-provider/src/__tests__/authorization.repository.test.ts`、
+`packages/user-profile-read-model/src/__tests__/user-profile-invalidation.test.ts`，以及
+`packages/user-profile-read-model/src/__tests__/user-profile-rebuild-processor.test.ts`。
 
 该发布会把旧 `employment_role`、`organization_role`、`position_role` 三表分配语义迁移到统一
-`role_assignment`。当前运行时由 `@iam/role-assignment-resolution` 统一解析严格 Effective Role 和保守 dirty scope：
+`role_assignment`。当前运行时由 `@iam/role-assignment-resolution` 统一解析严格 Effective Role 和保守受影响用户：
 admin-api、OIDC 和 user-profile read model 消费该 seam，API 用户详情读取 user-profile 投影。API 与 Admin 的
-transaction composition 都为 scope repository 绑定 transaction resolver。当前 Admin 角色本体变更通过 `RoleId` scope
-调用反向 resolver；assignment 变更仍映射为对应的 Organization、Position 或 Employment scope，由 User Profile scope
-repository 展开。只有 Admin 角色管理 repository 直接拥有 assignment CRUD。
+transaction composition 都创建 transaction-bound `UserProfileInvalidation`。当前 Admin 角色本体变更通过
+`recordChanges` 提交 role change；assignment 创建、范围修改和删除提交带已保存领域 target 的 role-assignment change。
+模块内部的 affected-user repository 调用 transaction resolver 推导用户、写入 versioned dirty fact，并在提交后批量唤醒
+`rebuild-user-profile` worker。旧 `ExpandUserProfileScope` 协议和 scope repository 已退役。只有 Admin 角色管理
+repository 直接拥有 assignment CRUD。
 
 ## 发布前置条件
 
@@ -39,8 +43,10 @@ repository 展开。只有 Admin 角色管理 repository 直接拥有 assignment
    - `targetType=position` 覆盖旧 `position_role`。
    - `targetType=organization` 覆盖旧 `organization_role`，并保留 `includeDescendants` 语义。
 4. 部署 backend、OIDC provider、worker 和 admin 前端。
-5. 恢复管理端角色分配写流量。
-6. 如发布期间存在 enqueue 失败或 user-profile backlog，运行：
+5. 使用受控角色本体和 assignment 变更验证 `recordChanges` 在源事务内写入 dirty fact，并在提交后产生
+   `rebuild-user-profile` 唤醒。
+6. 恢复管理端角色分配写流量。
+7. 如发布期间存在 enqueue 失败或 user-profile backlog，运行：
 
 ```bash
 pnpm --filter @iam/worker user-profile:repair
@@ -57,9 +63,9 @@ pnpm --filter @iam/worker user-profile:repair
 - Admin UI：打开 `/roles` 页面，完成角色列表、详情抽屉、创建 organization/position/employment 分配、修改组织
   `includeDescendants`、删除分配和状态展示 smoke。
 - User-profile dirty：创建、删除或修改角色分配后，确认事务内写入 `user_profile_dirty`，reason 为
-  `UserProfileDirtyReason.RoleUpdated`，并在提交后唤醒 worker；停用角色、岗位或组织后仍应覆盖此前可能持有旧授权的
-  活跃任职用户。
-- Worker 日志：确认受影响 scope 展开后日志包含 `userId`、`dirtyVersion`、`jobId` 和 `jobName`。
+  `UserProfileDirtyReason.RoleUpdated`，并在提交后唤醒 worker；确认 affected-user resolver 在停用角色、岗位或组织后
+  仍覆盖此前可能持有旧授权的活跃任职用户。
+- Worker 日志：确认每个完成的 `rebuild-user-profile` 日志包含 `userId`、`dirtyVersion`、`jobId` 和 `jobName`。
 
 ## 证据留存
 

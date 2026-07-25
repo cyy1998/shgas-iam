@@ -2,8 +2,6 @@ import { createImmediateUnitOfWork } from "@admin-api/test/fakes";
 import {
   RoleAssignmentTargetType,
   RoleStatus,
-  UserProfileDirtyReason,
-  UserProfileScopeType,
 } from "@iam/contracts";
 import { describe, expect, mock, test } from "bun:test";
 import { createRoleService } from "../role.service";
@@ -55,8 +53,8 @@ function assignment(overrides: Record<string, unknown> = {}) {
 function createService() {
   const tx = {
     auditService: { recordAuditLog: mock(async () => undefined) },
-    profileDirtyMarker: {
-      markScopeDirty: mock(async () => ({ marked: 1, userIds: [1] })),
+    userProfileInvalidation: {
+      recordChanges: mock(async () => undefined),
     },
     roleRepository: {
       countAssignmentsByRoleId: mock(async () => 0),
@@ -100,7 +98,21 @@ function createService() {
 }
 
 describe("createRoleService", () => {
-  test("creates an organization assignment with default descendant scope and marks profiles dirty", async () => {
+  test("records a role change after updating role status", async () => {
+    const { service, tx } = createService();
+    tx.roleRepository.updateRoleByCode.mockResolvedValueOnce(role({ status: RoleStatus.Disable }));
+
+    await expect(service.updateRoleStatus("portal-admin", RoleStatus.Disable)).resolves.toMatchObject({
+      roleCode: "portal-admin",
+      status: RoleStatus.Disable,
+    });
+
+    expect(tx.userProfileInvalidation.recordChanges).toHaveBeenCalledWith([
+      { kind: "role", roleId: 1 },
+    ]);
+  });
+
+  test("creates an organization assignment and records its current domain target", async () => {
     const { service, tx } = createService();
 
     await expect(service.createAssignment("portal-admin", {
@@ -122,10 +134,13 @@ describe("createRoleService", () => {
       targetType: "role",
       targetCode: "portal-admin",
     }));
-    expect(tx.profileDirtyMarker.markScopeDirty).toHaveBeenCalledWith(expect.objectContaining({
-      scope: { scopeType: UserProfileScopeType.OrganizationId, scopeId: 20 },
-      reasonCodes: [UserProfileDirtyReason.RoleUpdated],
-    }));
+    expect(tx.userProfileInvalidation.recordChanges).toHaveBeenCalledWith([
+      {
+        kind: "role-assignment",
+        targetType: RoleAssignmentTargetType.Organization,
+        targetId: 20,
+      },
+    ]);
   });
 
   test("rejects duplicate assignment before insert", async () => {
@@ -168,6 +183,56 @@ describe("createRoleService", () => {
     await expect(service.updateAssignmentScope("portal-admin", 100, true)).rejects.toThrow("仅组织角色分配允许修改作用范围");
 
     expect(tx.roleRepository.updateAssignmentScope).not.toHaveBeenCalled();
+  });
+
+  test("records the original and updated assignment targets when changing scope", async () => {
+    const { service, tx } = createService();
+
+    await expect(service.updateAssignmentScope("portal-admin", 100, false)).resolves.toMatchObject({
+      targetType: RoleAssignmentTargetType.Organization,
+      targetId: 20,
+      includeDescendants: false,
+    });
+
+    expect(tx.userProfileInvalidation.recordChanges).toHaveBeenCalledWith([
+      {
+        kind: "role-assignment",
+        targetType: RoleAssignmentTargetType.Organization,
+        targetId: 20,
+      },
+      {
+        kind: "role-assignment",
+        targetType: RoleAssignmentTargetType.Organization,
+        targetId: 20,
+      },
+    ]);
+  });
+
+  test("records the saved assignment target after deleting the assignment", async () => {
+    const { service, tx } = createService();
+    tx.roleRepository.getAssignmentByIdForRole.mockResolvedValueOnce(assignment({
+      targetType: RoleAssignmentTargetType.Position,
+      targetId: 30,
+      includeDescendants: false,
+      target: {
+        id: 30,
+        code: "POS",
+        name: "Position",
+        status: 1,
+        description: null,
+      },
+    }));
+
+    await expect(service.deleteAssignment("portal-admin", 100)).resolves.toBe(true);
+
+    expect(tx.roleRepository.deleteAssignment).toHaveBeenCalledWith(1, 100);
+    expect(tx.userProfileInvalidation.recordChanges).toHaveBeenCalledWith([
+      {
+        kind: "role-assignment",
+        targetType: RoleAssignmentTargetType.Position,
+        targetId: 30,
+      },
+    ]);
   });
 
   test("prevents deleting a role that still has assignments", async () => {
