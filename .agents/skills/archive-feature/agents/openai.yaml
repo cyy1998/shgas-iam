@@ -1,7 +1,7 @@
 interface:
   display_name: "Archive Feature"
   short_description: "Safely archive a completed feature tracker"
-  default_prompt: "Use $archive-feature to archive the completed tracker for the current feature branch."
+  default_prompt: "Use $archive-feature to archive the completed tracker identified by the user's request or current feature context."
 
 policy:
   allow_implicit_invocation: true
