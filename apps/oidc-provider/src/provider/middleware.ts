@@ -3,7 +3,7 @@ import type { OidcProviderEnv } from "../env.ts";
 import type { ClientAuthRateLimiter } from "../security/client-auth-rate-limit.ts";
 import { getTraceIdFromHeaders } from "@iam/api-core/logger";
 import { getCookieValue } from "../interaction/global-session.ts";
-import { parseBasicClientId } from "../security/client-auth-rate-limit.ts";
+import { parseBasicClientId } from "./basic-client-auth.ts";
 import { setOidcRoute } from "./request-route.ts";
 
 export interface ProviderMiddlewareOidcSessionAdapter {

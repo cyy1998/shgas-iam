@@ -4,7 +4,7 @@ import type {
   VerifyPasswordResetCodeOptions,
 } from "./verify-password-reset-code.type";
 import { VerificationCodeUsage } from "@api/enums/verificationCode.usage";
-import { withApiRequestContext } from "@api/services/audit/audit.service";
+import { withApiRequestContext } from "@api/services/audit/audit.context";
 import { buildSmsCodeVerifyAudit } from "@api/services/audit/events/auth.audit";
 
 export function createVerifyPasswordResetCodeUseCase(deps: VerifyPasswordResetCodeUseCaseDeps) {

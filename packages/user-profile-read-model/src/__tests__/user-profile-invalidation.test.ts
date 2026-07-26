@@ -1,5 +1,6 @@
 import { RoleAssignmentTargetType } from "@iam/contracts";
-import { employments, organizationClosures, roleAssignments } from "@iam/db/schema";
+import { employments, organizationClosures } from "@iam/db/schema";
+import { roleAssignments } from "@iam/db/schema/role-assignments";
 import { describe, expect, mock, test } from "bun:test";
 import { createUserProfileInvalidation, createUserProfileJobProducer } from "../producer";
 

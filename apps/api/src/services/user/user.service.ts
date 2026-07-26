@@ -1,6 +1,6 @@
 import type { UserRequestOptions, UserServiceDeps } from "./user.port";
 import type { UserDetailDto, UserDto, UserQueryDto, UserQueryWithPrivilegeDelegationDto } from "./user.type";
-import { withApiRequestContext } from "@api/services/audit/audit.service";
+import { withApiRequestContext } from "@api/services/audit/audit.context";
 import {
   buildMobileBindSuccessAudit,
   buildSelfPasswordChangeFailureAudit,

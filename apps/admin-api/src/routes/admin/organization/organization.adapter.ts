@@ -1,7 +1,7 @@
 import type { OrganizationService } from "@admin-api/services/organization/organization.service";
 import type { OrganizationRouteHandler } from "./organization.type";
 import { defineAdminApiMutationOperation, defineAdminApiQueryOperation } from "@admin-api/lib/admin-api-adapter";
-import { resolveAdminAuditContext } from "@admin-api/services/audit/audit.service";
+import { resolveAdminAuditContext } from "@admin-api/services/audit/audit.context";
 import {
   OrganizationChildrenQueryDtoSchema,
   OrganizationCreateDtoSchema,

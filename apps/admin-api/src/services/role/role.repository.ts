@@ -15,10 +15,10 @@ import {
   employments,
   organizations,
   positions,
-  roleAssignments,
   roles,
   users,
 } from "@iam/db/schema";
+import { roleAssignments } from "@iam/db/schema/role-assignments";
 import { and, count, eq, exists, inArray, or, sql } from "drizzle-orm";
 
 export function createRoleRepository(db: DbClient) {

@@ -1,14 +1,14 @@
-import type { UserProfileRepository } from "./user-profile.repository";
+import type { UserProfileQueryRecord, UserProfileQueryRepositoryPort } from "./user-profile-query.port";
 import type { UserDetailDto, UserDto, UserProfileFilterDsl, UserQueryDto } from "./user-profile.schema";
 import { UserNotFoundError } from "@iam/domain/user";
 import {
   compileLegacyUserQueryToProfileFilter,
   toUserDtoFromProfile,
-} from "./user-profile.repository";
+} from "./user-profile-query.helper";
 import { parseUserProfileDetailDocument, UserDtoSchema, UserProfileFilterDslSchema } from "./user-profile.schema";
 
 export interface UserProfileQueryServiceDeps {
-  profileRepository: UserProfileRepository;
+  profileRepository: UserProfileQueryRepositoryPort;
   config?: {
     dslDefaultLimit?: number;
   };
@@ -62,7 +62,7 @@ export function createUserProfileQueryService(deps: UserProfileQueryServiceDeps)
 
 export type UserProfileQueryService = ReturnType<typeof createUserProfileQueryService>;
 
-function parseProfileDetail(profile: Awaited<ReturnType<UserProfileRepository["getCurrentByUserId"]>>): UserDetailDto {
+function parseProfileDetail(profile: UserProfileQueryRecord | null): UserDetailDto {
   if (profile === null) {
     throw new UserNotFoundError("用户画像不存在");
   }

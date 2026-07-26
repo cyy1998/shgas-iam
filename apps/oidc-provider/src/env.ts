@@ -1,7 +1,7 @@
 import {
   DEFAULT_SESSION_LOOKUP_HMAC_CURRENT_ID,
   DEFAULT_SESSION_LOOKUP_HMAC_CURRENT_SECRET,
-} from "@iam/api-core/session/kernel";
+} from "@iam/api-core/session/kernel/env-config";
 import { z } from "zod";
 
 const positiveSeconds = z.coerce.number().int().positive();

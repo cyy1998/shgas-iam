@@ -1,6 +1,6 @@
 import type { UserMobileBindingDeps, UserRequestOptions } from "./user.port";
 import { VerificationCodeUsage } from "@api/enums/verificationCode.usage";
-import { withApiRequestContext } from "@api/services/audit/audit.service";
+import { withApiRequestContext } from "@api/services/audit/audit.context";
 import { buildMobileBindInvalidCodeAudit } from "@api/services/audit/events/self-user.audit";
 import { InvalidVerificationCodeError } from "@iam/api-core/errors/InvalidVerificationCodeError";
 import { InvalidMobileError, MobileAlreadyExistsError } from "@iam/domain/user";

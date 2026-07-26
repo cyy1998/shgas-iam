@@ -44,14 +44,6 @@ class FakeRedis {
     return this.keysStartingWith("custom-sso:local-session-payload:");
   }
 
-  legacyLocalSessionKeys() {
-    return Array.from(this.values.keys()).filter(key => key.startsWith("local_") && key.includes("_session:"));
-  }
-
-  reverseKeys() {
-    return this.keysStartingWith("local_session_reverse:");
-  }
-
   async set(key: string, value: string, mode?: string, ttl?: number) {
     if (this.failNextPayloadWrite && key.startsWith("custom-sso:local-session-payload:")) {
       this.failNextPayloadWrite = false;
@@ -614,7 +606,7 @@ describe("Custom SSO module interface", () => {
     expect(wxRetry).toEqual({ token: expect.stringContaining("iam_ps_"), isMobileSet: true });
   });
 
-  test("redeems an Independent grant once without legacy local keys", async () => {
+  test("redeems an Independent grant once and persists its current payload", async () => {
     const services = createServices();
     const { code } = await issueAuthorizationCode(services);
 
@@ -626,8 +618,6 @@ describe("Custom SSO module interface", () => {
 
     expect(result.credential).toContain("iam_ls_");
     expect(fakeRedis.payloadKeys()).toHaveLength(1);
-    expect(fakeRedis.legacyLocalSessionKeys()).toHaveLength(0);
-    expect(fakeRedis.reverseKeys()).toHaveLength(0);
     await expect(
       services.customSsoSession.redeemIndependentGrant({
         client,

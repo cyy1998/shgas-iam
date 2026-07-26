@@ -80,7 +80,6 @@ describe("UserProfileRebuildProcessor", () => {
       dirtyVersion: "4",
       processedAt: now,
     });
-    expect(Object.keys(fixture.processor)).toEqual(["process"]);
   });
 
   test("skips rebuild work when the dirty version can no longer be claimed", async () => {

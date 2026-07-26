@@ -1,4 +1,4 @@
-import type { AdminAuditContext, AuditLogInput } from "./audit.service";
+import type { AdminAuditContext, AuditLogInput } from "./audit.context";
 
 type AdminAuditTarget = {
   type: string;

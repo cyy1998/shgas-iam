@@ -2,7 +2,7 @@ import type { EmploymentService } from "@admin-api/services/employment/employmen
 import type { ResignUserUseCase } from "@admin-api/use-cases/employment/resign-user/resign-user.use-case";
 import type { EmploymentRouteHandler } from "./employment.type";
 import { defineAdminApiMutationOperation, defineAdminApiQueryOperation } from "@admin-api/lib/admin-api-adapter";
-import { resolveAdminAuditContext } from "@admin-api/services/audit/audit.service";
+import { resolveAdminAuditContext } from "@admin-api/services/audit/audit.context";
 import {
   EmploymentAdminCreateDtoSchema,
   EmploymentAdminPaginationQueryDtoSchema,

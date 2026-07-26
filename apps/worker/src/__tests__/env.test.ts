@@ -48,26 +48,6 @@ describe("worker environment", () => {
     expect("IAM_WORKER_DATABASE_URL" in env).toBe(false);
   });
 
-  test("ignores retired API and naked worker env names", () => {
-    const env = parseWorkerEnv({
-      ...validEnv(),
-      IAM_API_USER_PROFILE_WORKER_CONCURRENCY: "9",
-      IAM_API_USER_PROFILE_REBUILD_BATCH_SIZE: "9",
-      IAM_API_USER_PROFILE_BACKFILL_BATCH_SIZE: "9",
-      IAM_API_USER_PROFILE_REPAIR_STALE_SECONDS: "9",
-      WORKER_USER_PROFILE_CONCURRENCY: "9",
-      USER_PROFILE_CONCURRENCY: "9",
-      USER_PROFILE_REPAIR_STALE_SECONDS: "9",
-    });
-
-    expect(env.userProfile).toEqual({
-      concurrency: 2,
-      rebuildBatchSize: 100,
-      backfillBatchSize: 500,
-      repairStaleSeconds: 300,
-    });
-  });
-
   test("requires dashboard credentials in production", () => {
     expect(() => parseWorkerEnv({
       ...validEnv(),

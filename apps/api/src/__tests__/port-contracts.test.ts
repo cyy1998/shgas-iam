@@ -51,19 +51,6 @@ import { expect, test } from "bun:test";
 
 function assertAssignable<Port, _Provider extends Port>() {}
 
-type ForbiddenCustomSsoAdapterPublicOperation
-  = | "consumeAuthCode"
-    | "createLocalSession"
-    | "issueClientCredential"
-    | "resolveAuthorizationGrant";
-
-type LeakedCustomSsoAdapterPublicOperation = Extract<
-  keyof CustomSsoSessionKernelAdapter,
-  ForbiddenCustomSsoAdapterPublicOperation
->;
-
-function assertNever<_Value extends never>() {}
-
 test("API providers structurally satisfy consumer-owned ports", () => {
   assertAssignable<ClientReaderPort, ClientRepository>();
   assertAssignable<MobileUserReaderPort, UserRepository>();
@@ -93,7 +80,6 @@ test("API providers structurally satisfy consumer-owned ports", () => {
   assertAssignable<IndependentAuthorizationGrantPort, CustomSsoSessionKernelAdapter>();
   assertAssignable<GatewayLoginCompletionPort, CustomSsoSessionKernelAdapter>();
   assertAssignable<CustomSsoOrcasLoginPort, OrcasClient>();
-  assertNever<LeakedCustomSsoAdapterPublicOperation>();
 
   expect(true).toBe(true);
 });

@@ -2,7 +2,7 @@ import type { UserService } from "@api/services/user/user.service";
 import type { RegisterPurveyorContactUseCase } from "@api/use-cases/internal/register-purveyor-contact/register-purveyor-contact.use-case";
 import type { UserProfileQueryService } from "@iam/user-profile-read-model/query";
 import type { UserRouteHandler } from "./user.type";
-import { getApiAuditRequestContext, getInternalAuditActor } from "@api/services/audit/audit.service";
+import { getApiAuditRequestContext, getInternalAuditActor } from "@api/services/audit/audit.context";
 import * as HttpStatusCodes from "@iam/api-core/core/http-status-codes";
 import * as resp from "@iam/api-core/http";
 

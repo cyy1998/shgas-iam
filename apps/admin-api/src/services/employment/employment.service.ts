@@ -1,4 +1,4 @@
-import type { AdminAuditContext } from "@admin-api/services/audit/audit.service";
+import type { AdminAuditContext } from "@admin-api/services/audit/audit.context";
 import type { AdminEmploymentServiceDeps, AdminEmploymentTransactionPorts } from "./employment.port";
 import type {
   EmploymentAdminCreateDto,
@@ -6,7 +6,7 @@ import type {
   EmploymentTransferDto,
   EmploymentUpdateDto,
 } from "./employment.type";
-import { adminAuditTransactionOptions } from "@admin-api/services/audit/audit.service";
+import { adminAuditTransactionOptions } from "@admin-api/services/audit/audit.context";
 import { buildEmploymentAudit } from "@admin-api/services/audit/events/employment.audit";
 import { EmploymentDetailDtoSchema, toEmploymentDto } from "@admin-api/services/employment/employment.schema";
 import { EmploymentStatus } from "@iam/contracts";

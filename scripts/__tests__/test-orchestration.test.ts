@@ -193,10 +193,33 @@ function runPackageSmokeDryRun(packageName: string) {
   return JSON.parse(result.stdout.toString());
 }
 
-function createPnpmRecorder() {
+function runVerifyWithRecorder(failCommand?: string) {
   const root = mkdtempSync(join(tmpdir(), "iam-verify-recorder-"));
   const log = join(root, "commands.log");
-  return { root, script: pnpmRecorderScript, log };
+  const env = {
+    ...process.env,
+    FORCE_COLOR: "0",
+    IAM_VERIFY_COMMAND_LOG: log,
+    NO_COLOR: "1",
+    npm_execpath: pnpmRecorderScript,
+  };
+  delete env.IAM_VERIFY_FAIL_COMMAND;
+  if (failCommand !== undefined)
+    env.IAM_VERIFY_FAIL_COMMAND = failCommand;
+
+  try {
+    const result = Bun.spawnSync(["node", verifyScript], {
+      cwd: repoRoot,
+      env,
+    });
+    return {
+      commands: readFileSync(log, "utf8").trim().split("\n"),
+      exitCode: result.exitCode,
+    };
+  }
+  finally {
+    rmSync(root, { recursive: true, force: true });
+  }
 }
 
 describe("test orchestration", () => {
@@ -207,6 +230,7 @@ describe("test orchestration", () => {
     expect(rootPackage.scripts.test).toBe("turbo test --concurrency=2");
     expect(rootPackage.scripts["test:smoke"]).toBe("turbo test:smoke --concurrency=1");
     expect(rootPackage.scripts.verify).toBe("node scripts/verify.mjs");
+    expect(rootPackage.scripts["check:architecture"]).toBe("bun scripts/check-architecture.ts");
     expect(rootPackage.scripts["lint:root"]).toBe(
       "eslint --config eslint.root.config.mjs scripts eslint.root.config.mjs eslint.frontend.config.mjs stylelint.frontend.config.mjs",
     );
@@ -583,61 +607,44 @@ describe("test orchestration", () => {
   });
 
   test("runs verify stages in the declared order", () => {
-    const recorder = createPnpmRecorder();
-    try {
-      const result = Bun.spawnSync(["node", verifyScript], {
-        cwd: repoRoot,
-        env: {
-          ...process.env,
-          FORCE_COLOR: "0",
-          IAM_VERIFY_COMMAND_LOG: recorder.log,
-          NO_COLOR: "1",
-          npm_execpath: recorder.script,
-        },
-      });
-
-      expect(result.exitCode).toBe(0);
-      expect(readFileSync(recorder.log, "utf8").trim().split("\n")).toEqual([
+    expect(runVerifyWithRecorder()).toEqual({
+      commands: [
         "lint",
         "check:docs",
         "check:env-names",
+        "check:architecture",
         "typecheck",
         "test",
         "test:smoke",
         "build",
-      ]);
-    }
-    finally {
-      rmSync(recorder.root, { recursive: true, force: true });
-    }
+      ],
+      exitCode: 0,
+    });
   }, 15_000);
 
   test("stops verify after the first failed stage command", () => {
-    const recorder = createPnpmRecorder();
-    try {
-      const result = Bun.spawnSync(["node", verifyScript], {
-        cwd: repoRoot,
-        env: {
-          ...process.env,
-          FORCE_COLOR: "0",
-          IAM_VERIFY_COMMAND_LOG: recorder.log,
-          IAM_VERIFY_FAIL_COMMAND: "test",
-          NO_COLOR: "1",
-          npm_execpath: recorder.script,
-        },
-      });
-
-      expect(result.exitCode).toBe(37);
-      expect(readFileSync(recorder.log, "utf8").trim().split("\n")).toEqual([
+    expect(runVerifyWithRecorder("test")).toEqual({
+      commands: [
         "lint",
         "check:docs",
         "check:env-names",
+        "check:architecture",
         "typecheck",
         "test",
-      ]);
-    }
-    finally {
-      rmSync(recorder.root, { recursive: true, force: true });
-    }
+      ],
+      exitCode: 37,
+    });
+  }, 15_000);
+
+  test("stops verify before typecheck when the architecture guard fails", () => {
+    expect(runVerifyWithRecorder("check:architecture")).toEqual({
+      commands: [
+        "lint",
+        "check:docs",
+        "check:env-names",
+        "check:architecture",
+      ],
+      exitCode: 37,
+    });
   }, 15_000);
 });

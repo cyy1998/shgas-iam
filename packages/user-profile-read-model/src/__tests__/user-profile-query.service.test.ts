@@ -1,4 +1,6 @@
 import type { UserProfile } from "@iam/db/schema";
+import type { UserProfileQueryRepositoryPort } from "../query";
+import type { UserProfileRepository } from "../user-profile.repository";
 import {
   EmploymentStatus,
   OrganizationLevel,
@@ -10,14 +12,16 @@ import {
 } from "@iam/contracts";
 import { UserNotFoundError } from "@iam/domain/user";
 import { describe, expect, mock, test } from "bun:test";
-import { createUserProfileQueryService } from "../user-profile-query.service";
 import {
   compileLegacyUserQueryToProfileFilter,
-  createUserProfileRepository,
-} from "../user-profile.repository";
+  createUserProfileQueryService,
+} from "../query";
+import { createUserProfileRepository } from "../user-profile.repository";
 import { CURRENT_USER_PROFILE_SCHEMA_VERSION } from "../user-profile.schema";
 
 const now = new Date("2026-06-30T08:00:00.000Z");
+
+function assertAssignable<Port, _Provider extends Port>() {}
 
 function profile(overrides: Partial<UserProfile> = {}): UserProfile {
   return {
@@ -142,6 +146,29 @@ describe("UserProfileRepository", () => {
 });
 
 describe("UserProfileQueryService", () => {
+  test("the production repository satisfies the query-only read port", () => {
+    assertAssignable<UserProfileQueryRepositoryPort, UserProfileRepository>();
+  });
+
+  test("depends on a query-only read port", async () => {
+    const currentProfile = profile();
+    const queryRepository = {
+      getCurrentByUserId: mock(async () => currentProfile),
+      getCurrentByUsername: mock(async () => currentProfile),
+      getCurrentByMobile: mock(async () => currentProfile),
+      getCurrentByWxId: mock(async () => currentProfile),
+      searchCurrentVisibleProfiles: mock(async () => [currentProfile]),
+    } satisfies UserProfileQueryRepositoryPort;
+    const service = createUserProfileQueryService({
+      profileRepository: queryRepository,
+    });
+
+    await expect(service.getDetailByUserId(1)).resolves.toMatchObject({
+      id: 1,
+      username: "zhangsan",
+    });
+  });
+
   test("returns current-version profile details without fallback to source tables", async () => {
     const service = createUserProfileQueryService({
       profileRepository: {

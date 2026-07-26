@@ -19,6 +19,7 @@
     "e2e:install": "pnpm --filter @iam/admin exec playwright install --with-deps chromium",
     "e2e:install:browsers": "pnpm --filter @iam/admin exec playwright install chromium",
     "typecheck": "turbo typecheck --concurrency=3",
+    "check:architecture": "bun scripts/check-architecture.ts",
     "check:docs": "bun scripts/check-docs-index.ts",
     "check:env-names": "bun scripts/check-env-names.ts",
     "gateway:apisix": "pnpm --filter @iam/gateway-apisix apisix",

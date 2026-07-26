@@ -1,4 +1,4 @@
-import type { AuditLogInput } from "@api/services/audit/audit.service";
+import type { AuditLogInput } from "@api/services/audit/audit.context";
 
 export interface PasswordResetCodeAuditWriterPort {
   recordAuditLog: (input: AuditLogInput) => Promise<void>;

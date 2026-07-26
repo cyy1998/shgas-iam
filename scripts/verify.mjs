@@ -3,7 +3,10 @@ import { spawnSync } from "node:child_process";
 import process from "node:process";
 
 const stages = [
-  { name: "static", commands: [["lint"], ["check:docs"], ["check:env-names"]] },
+  {
+    name: "static",
+    commands: [["lint"], ["check:docs"], ["check:env-names"], ["check:architecture"]],
+  },
   { name: "typecheck", commands: [["typecheck"]] },
   { name: "test", commands: [["test"]] },
   { name: "smoke", commands: [["test:smoke"]] },

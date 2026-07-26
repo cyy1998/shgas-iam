@@ -1,5 +1,3 @@
-import { readFileSync } from "node:fs";
-import { join } from "node:path";
 import { describe, expect, mock, test } from "bun:test";
 import { runUserProfileBackfillCommand } from "../commands/user-profile-backfill";
 import { runUserProfileRepairCommand } from "../commands/user-profile-repair";
@@ -56,15 +54,5 @@ describe("user-profile commands", () => {
     );
 
     expect(repairFailedOrStale).toHaveBeenCalledWith({ staleBefore, limit: 5 });
-  });
-
-  test("command entrypoints use command-only composition", () => {
-    const backfillSource = readFileSync(join(import.meta.dir, "../commands/user-profile-backfill.ts"), "utf8");
-    const repairSource = readFileSync(join(import.meta.dir, "../commands/user-profile-repair.ts"), "utf8");
-
-    expect(backfillSource).toContain("createWorkerCommandComposition");
-    expect(repairSource).toContain("createWorkerCommandComposition");
-    expect(backfillSource).not.toContain("createWorkerComposition({ env, logger })");
-    expect(repairSource).not.toContain("createWorkerComposition({ env, logger })");
   });
 });

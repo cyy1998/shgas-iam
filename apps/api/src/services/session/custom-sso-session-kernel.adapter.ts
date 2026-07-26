@@ -1,5 +1,6 @@
 import type { ClockPort, LoggerPort, RedisPort } from "@api/composition/runtime";
-import type { ApiAuditLogWriter, ApiRequestContext } from "@api/services/audit/audit.service";
+import type { ApiRequestContext } from "@api/services/audit/audit.context";
+import type { ApiAuditLogWriter } from "@api/services/audit/audit.service";
 import type { ClientDto } from "@api/services/client/client.type";
 import type { UserService } from "@api/services/user/user.service";
 import type { UserDetailDto } from "@api/services/user/user.type";
@@ -10,7 +11,7 @@ import type {
 } from "@iam/api-core/session/kernel";
 import type { CustomSsoOrcasLoginPort } from "./custom-sso-session-kernel.port";
 import { randomUUID } from "node:crypto";
-import { withApiRequestContext } from "@api/services/audit/audit.service";
+import { withApiRequestContext } from "@api/services/audit/audit.context";
 import { buildLocalLoginSuccessAudit } from "@api/services/audit/events/auth.audit";
 import { UserDetailDtoSchema } from "@api/services/user/user.schema";
 import { AuthzMaintenanceError } from "@iam/api-core/errors/AuthzMaintenanceError";

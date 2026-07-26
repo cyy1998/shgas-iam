@@ -1,4 +1,4 @@
-import type { AuditLogInput } from "@api/services/audit/audit.service";
+import type { AuditLogInput } from "@api/services/audit/audit.context";
 import type { UnitOfWorkPort } from "@iam/api-core/uow";
 import type { AccountRecoveryUser, PasswordResetCodeReservation } from "./reset-password.type";
 

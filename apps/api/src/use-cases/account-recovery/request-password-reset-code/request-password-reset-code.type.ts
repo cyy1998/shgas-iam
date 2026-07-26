@@ -1,4 +1,4 @@
-import type { ApiRequestContext } from "@api/services/audit/audit.service";
+import type { ApiRequestContext } from "@api/services/audit/audit.context";
 
 export interface RequestPasswordResetCodeInput {
   username?: string;

@@ -1,7 +1,7 @@
 import type { OrganizationService } from "@api/services/organization/organization.service";
 import type { UserService } from "@api/services/user/user.service";
 import type { PublicRouteHandler } from "./public.type";
-import { getApiAuditRequestContext } from "@api/services/audit/audit.service";
+import { getApiAuditRequestContext } from "@api/services/audit/audit.context";
 import * as HttpStatusCodes from "@iam/api-core/core/http-status-codes";
 import * as resp from "@iam/api-core/http";
 

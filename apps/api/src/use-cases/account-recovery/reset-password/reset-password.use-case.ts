@@ -1,7 +1,7 @@
 import type { ResetPasswordUseCaseDeps } from "./reset-password.port";
 import type { ResetPasswordInput, ResetPasswordOptions } from "./reset-password.type";
 import { VerificationCodeUsage } from "@api/enums/verificationCode.usage";
-import { withApiRequestContext } from "@api/services/audit/audit.service";
+import { withApiRequestContext } from "@api/services/audit/audit.context";
 import {
   buildPasswordResetFailureAudit,
   buildPasswordResetSuccessAudit,

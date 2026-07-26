@@ -69,20 +69,20 @@ UnitOfWork 边界。
   components。Provider/interaction wiring 直接接收所需 facade，不建立混合 `composition/services` 或 session resolver
   的 services alias。
 - Protocol adapter tests 通过 factory 注入 account/client/authorization/session/token ports，断言 claims、token extra、
-  validation 和 revoke 等调用方可观察行为；architecture test 另行约束命名、目录和 production import 边界。
+  validation 和 revoke 等调用方可观察行为；根级 Architecture Guard 只约束稳定的 production module edge owner。
 
 ## Audit 与 Architecture Guards
 
 - `services/audit/events` 下的 backend audit event helper 应是纯 payload builder。
 - Service 和 handler 通过注入的 root 或 tx audit writer port 写入 audit payload。
-- `apps/api/src/__tests__/architecture.test.ts` 和 `apps/admin-api/src/__tests__/architecture.test.ts` 中的
-  architecture guard test 会故意在 forbidden production import 出现时失败。
-- `apps/oidc-provider/src/__tests__/architecture.test.ts` 同时约束 non-Hono DI、Claims Adapter 命名，以及
-  provider/security/session composition ownership。
-- 三个 backend 的 architecture suites 还会扫描全部 production `*.port.ts`，拒绝 concrete repository import、
-  `repositories/**` import 和从 Repository/Service 派生的 `Pick`；synthetic controls 会固定合法 `Pick<...Port>` 与
-  platform narrowing 不被误报。
-- Route production module 的 type/value import 都受 guard 约束：不得 import app-local `*.repository` 或
-  `@iam/api-core/uow`；`services/**` 不得反向 import `use-cases/**`。失败信息应保留违规文件与 import specifier，
-  便于定位边界回退。
-- 只有在新例外确有理由时，才审慎更新 architecture guard allowlist。
+- `pnpm check:architecture` 是唯一静态架构入口；package 普通测试不扫描其他 workspace 的 production source。
+- 根级 Architecture Guard 扫描受保护 workspace 的 production `*.port.ts`，拒绝 concrete repository import、
+  `repositories/**` import 和从 Repository/Service 派生的直接 `Pick`；合法 `Pick<...Port>` 与 platform narrowing
+  不应误报。
+- Route production module 的 type/value import 都受根 guard 约束：不得 import app-local `*.repository` 或
+  `@iam/api-core/uow`；`services/**` 不得反向 import `use-cases/**`。失败信息保留稳定 rule ID、违规文件、行号与
+  可操作诊断。
+- Package public surface 与 provider/port 结构兼容由 exports 和 typecheck 负责；业务与 transaction 语义由公开
+  behavior/contract tests 负责；真实 composition wiring/readiness 由 process smoke 负责；PostgreSQL、浏览器和
+  Gateway 事实由各自外部资源通道负责。新增永久静态规则前遵守
+  [架构守卫规范](../architecture/architecture-guard.md)的观察模型与准入流程。

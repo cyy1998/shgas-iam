@@ -1,7 +1,7 @@
 import type { AuditLogWriterPort } from "@api/services/audit/audit.service";
 import type { PrivilegeDelegationService } from "@api/services/privilege/privilegeDelegation.service";
 import type { DelegationRouteHandler } from "./delegation.type";
-import { getInternalAuditActor } from "@api/services/audit/audit.service";
+import { getInternalAuditActor } from "@api/services/audit/audit.context";
 import {
   buildInternalDelegationCreateAudit,
   buildInternalDelegationUpdateAudit,

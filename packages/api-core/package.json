@@ -19,6 +19,7 @@
     "./redis": "./src/redis/index.ts",
     "./security": "./src/security/index.ts",
     "./session/kernel": "./src/session/kernel/index.ts",
+    "./session/kernel/env-config": "./src/session/kernel/env-config.ts",
     "./testing/process-smoke-harness": "./src/testing/process-smoke-harness.ts",
     "./trpc": "./src/trpc/index.ts",
     "./types": "./src/types/lib.ts",

@@ -1,8 +1,8 @@
-import type { AdminAuditContext } from "@admin-api/services/audit/audit.service";
+import type { AdminAuditContext } from "@admin-api/services/audit/audit.context";
 import type { RoleAssignmentTargetSummaryDto } from "@iam/domain/role";
 import type { AdminRoleServiceDeps, AdminRoleTransactionPorts } from "./role.port";
 import type { RoleAssignmentCreateDto, RoleAssignmentPaginationQueryDto, RoleCreateDto, RolePaginationQueryDto, RoleUpdateDto } from "./role.type";
-import { adminAuditTransactionOptions } from "@admin-api/services/audit/audit.service";
+import { adminAuditTransactionOptions } from "@admin-api/services/audit/audit.context";
 import { buildRoleAssignmentAudit, buildRoleAudit } from "@admin-api/services/audit/events/role.audit";
 import { RoleAssignmentTargetType, RoleStatus } from "@iam/contracts";
 import { ClientNotFoundError } from "@iam/domain/client";

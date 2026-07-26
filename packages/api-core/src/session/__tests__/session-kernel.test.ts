@@ -1,6 +1,4 @@
 import type { SessionKernelRedis, SessionKernelRedisTransaction } from "../kernel";
-import { readdirSync, readFileSync } from "node:fs";
-import { join } from "node:path";
 import { SystemLogEvent } from "@iam/api-core/logger";
 import {
   createLookupHash,
@@ -219,29 +217,10 @@ const principal = { principalType: "user", subjectId: "u-1", displayName: "Alice
 const snapshot = { subjectId: "u-1", username: "alice", displayName: "Alice" };
 
 describe("session kernel module boundaries", () => {
-  test("exports the package subpath without relying on legacy session helpers", () => {
+  test("generates a PrincipalSession token through the Kernel entry", () => {
     const redis = new KernelFakeRedis();
     const token = generateKernelToken(createConfig(redis), "principalSession");
     expect(token.startsWith("iam_ps_")).toBe(true);
-  });
-
-  test("keeps kernel source free of app-local and protocol runtime imports", () => {
-    const kernelDir = join(import.meta.dir, "..", "kernel");
-    const source = readSourceFiles(kernelDir);
-    const forbidden = [
-      "from \"hono\"",
-      "from \"koa\"",
-      "@iam/db",
-      "drizzle-orm",
-      "@api/",
-      "@admin-api/",
-      "/routes/",
-      "/middlewares/",
-      "audit writer",
-    ];
-
-    for (const pattern of forbidden)
-      expect(source.includes(pattern), pattern).toBe(false);
   });
 });
 
@@ -728,12 +707,3 @@ describe("session kernel tombstone, cleanup, validation, and fail closed behavio
     });
   });
 });
-
-function readSourceFiles(directory: string): string {
-  return readdirSync(directory, { withFileTypes: true })
-    .map((entry) => {
-      const path = join(directory, entry.name);
-      return entry.isDirectory() ? readSourceFiles(path) : readFileSync(path, "utf8");
-    })
-    .join("\n");
-}

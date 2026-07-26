@@ -1,6 +1,5 @@
-import type { AdminAuditContext } from "@admin-api/services/audit/audit.service";
+import type { AdminAuditContext, AuditLogInput } from "@admin-api/services/audit/audit.context";
 import type { PositionStatus } from "@iam/contracts";
-import type { AuditLogInput } from "../audit.service";
 import { buildAdminResourceAudit } from "../admin-resource-audit";
 
 export function buildPositionAudit(

@@ -1,25 +1,22 @@
 import type { UserStatus } from "@iam/contracts";
 import type { DbClient } from "@iam/db";
-import type { UserProfile, UserProfileDetailDocument, UserProfileSearchDocument } from "@iam/db/schema";
+import type { UserProfileDetailDocument, UserProfileSearchDocument } from "@iam/db/schema";
 import type { SQLWrapper } from "drizzle-orm";
+import type { UserProfileSearchInput } from "./user-profile-query.port";
 import type {
   UserDetailDto,
-  UserDto,
   UserProfileEmploymentField,
   UserProfileFilterCondition,
   UserProfileFilterDsl,
   UserProfileSearchDoc,
   UserProfileUserField,
-  UserQueryDto,
 } from "./user-profile.schema";
 import { firstRow, inArrayIf } from "@iam/db/query-utils";
 import { userProfiles } from "@iam/db/schema";
 import { and, asc, eq, isNull, not, or, sql } from "drizzle-orm";
 import {
-  buildAncestorKey,
   CURRENT_USER_PROFILE_SCHEMA_VERSION,
   isEmploymentField,
-  parseUserProfileDetailDocument,
 } from "./user-profile.schema";
 
 export interface UserProfileUpsertInput {
@@ -34,11 +31,6 @@ export interface UserProfileUpsertInput {
   detail: UserDetailDto;
   searchDoc: UserProfileSearchDoc;
   rebuiltAt: Date;
-}
-
-export interface UserProfileSearchInput {
-  filter?: UserProfileFilterDsl;
-  limit?: number;
 }
 
 export function createUserProfileRepository(db: DbClient) {
@@ -130,47 +122,6 @@ export function createUserProfileRepository(db: DbClient) {
 
 export type UserProfileRepository = ReturnType<typeof createUserProfileRepository>;
 
-export function compileLegacyUserQueryToProfileFilter(query: UserQueryDto): UserProfileFilterDsl | undefined {
-  const all: UserProfileFilterDsl[] = [];
-  addInCondition(all, "user.username", query.usernames);
-  addInCondition(all, "user.name", query.names);
-  addInCondition(all, "user.mobile", query.phones);
-  addInCondition(all, "user.wxId", query.wxIds);
-
-  const employmentAll: UserProfileFilterDsl[] = [];
-  addInCondition(employmentAll, "employment.position.code", query.positionCodes);
-  addContainsAnyCondition(employmentAll, "employment.roles", query.roleCodes);
-
-  const ancestorCodes = query.ancestorOrgCodes;
-  const ancestorDepths = query.ancestorOrgDepths;
-  if (ancestorCodes !== undefined && ancestorDepths !== undefined) {
-    addContainsAnyCondition(
-      employmentAll,
-      "employment.org.ancestorKeys",
-      ancestorCodes.flatMap(code => ancestorDepths.map(depth => buildAncestorKey(code, depth))),
-    );
-  }
-  else {
-    addContainsAnyCondition(employmentAll, "employment.org.ancestorCodes", ancestorCodes);
-    addContainsAnyCondition(employmentAll, "employment.org.ancestorDepths", ancestorDepths);
-  }
-
-  if (employmentAll.length > 0) {
-    all.push({ nested: "employments", where: { all: employmentAll } });
-  }
-
-  if (all.length === 0)
-    return undefined;
-
-  return all.length === 1 ? all[0]! : { all };
-}
-
-export function toUserDtoFromProfile(profile: UserProfile): UserDto {
-  const detail = parseUserProfileDetailDocument(profile.detail);
-  const { employments: _employments, privileges: _privileges, roles: _roles, ...user } = detail;
-  return user;
-}
-
 export function compileProfileFilterDslToSql(filter: UserProfileFilterDsl): SQLWrapper {
   if ("field" in filter)
     return compileUserConditionToSql(filter);
@@ -193,28 +144,6 @@ function toProfileRow(input: UserProfileUpsertInput) {
     detail: input.detail as unknown as UserProfileDetailDocument,
     searchDoc: input.searchDoc as unknown as UserProfileSearchDocument,
   };
-}
-
-function addInCondition(
-  target: UserProfileFilterDsl[],
-  field: UserProfileUserField | UserProfileEmploymentField,
-  values: string[] | number[] | undefined,
-) {
-  if (values === undefined)
-    return;
-
-  target.push({ field, op: "in", value: values });
-}
-
-function addContainsAnyCondition(
-  target: UserProfileFilterDsl[],
-  field: UserProfileEmploymentField,
-  values: string[] | number[] | undefined,
-) {
-  if (values === undefined)
-    return;
-
-  target.push({ field, op: "containsAny", value: values });
 }
 
 function compileUserConditionToSql(condition: UserProfileFilterCondition): SQLWrapper {

@@ -6,7 +6,6 @@ import {
   UserProfileJobName,
   UserProfileJobNameSchema,
 } from "../user-profile";
-import * as userProfileJobContract from "../user-profile";
 
 describe("user-profile job contract", () => {
   test("defines the stable rebuild queue and job name", () => {
@@ -65,21 +64,6 @@ describe("user-profile job contract", () => {
     expect(RebuildUserProfileJobPayloadSchema.safeParse({
       userId: 123,
     }).success).toBe(false);
-  });
-
-  test("rejects the retired scope-expansion job name and payload", () => {
-    expect(UserProfileJobNameSchema.safeParse("expand-user-profile-scope").success).toBe(false);
-    expect(RebuildUserProfileJobPayloadSchema.safeParse({
-      scopeType: "organization-id",
-      scopeId: 9,
-      bucket: "2026-06-30T10:00",
-      reason: "organization-updated",
-    }).success).toBe(false);
-  });
-
-  test("does not expose generic payload registries for the single rebuild protocol", () => {
-    expect("UserProfileJobPayloadSchemas" in userProfileJobContract).toBe(false);
-    expect("UserProfileJobPayloadSchema" in userProfileJobContract).toBe(false);
   });
 
   test("continues parsing the historical privilege dirty reason", () => {

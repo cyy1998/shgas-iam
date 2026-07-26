@@ -31,12 +31,10 @@ const r = {
 } as unknown as RelationsHelper;
 
 describe("employmentsRelations", () => {
-  test("exposes the department relation with the corrected spelling", () => {
-    const relationNames = Object.keys(employmentsRelations(r).employments);
-    const previousMisspelling = ["dept", "artment"].join("");
-
-    expect(relationNames).toContain("department");
-    expect(relationNames).not.toContain("company");
-    expect(relationNames).not.toContain(previousMisspelling);
+  test("exposes the current department relation", () => {
+    expect(employmentsRelations(r).employments.department).toMatchObject({
+      kind: "one",
+      tableName: "organizations",
+    });
   });
 });

@@ -1,4 +1,4 @@
-import type { AuditLogInput } from "@api/services/audit/audit.service";
+import type { AuditLogInput } from "@api/services/audit/audit.context";
 import type { UserDetailDto } from "@api/services/user/user.type";
 import type { ClientManagementLevel } from "@iam/contracts";
 import { AuditActions } from "@iam/contracts";

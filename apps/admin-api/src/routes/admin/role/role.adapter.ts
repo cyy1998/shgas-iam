@@ -1,7 +1,7 @@
 import type { RoleService } from "@admin-api/services/role/role.service";
 import type { RoleRouteHandler } from "./role.type";
 import { defineAdminApiMutationOperation, defineAdminApiQueryOperation } from "@admin-api/lib/admin-api-adapter";
-import { resolveAdminAuditContext } from "@admin-api/services/audit/audit.service";
+import { resolveAdminAuditContext } from "@admin-api/services/audit/audit.context";
 import {
   RoleAssignmentCreateDtoSchema,
   RoleAssignmentPaginationQueryDtoSchema,

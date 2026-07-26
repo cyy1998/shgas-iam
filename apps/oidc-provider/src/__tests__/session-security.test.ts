@@ -1,6 +1,7 @@
 import type { Redis } from "ioredis";
 import { describe, expect, it } from "vitest";
-import { createClientAuthRateLimiter, parseBasicClientId } from "../security/client-auth-rate-limit.ts";
+import { parseBasicClientId } from "../provider/basic-client-auth.ts";
+import { createClientAuthRateLimiter } from "../security/client-auth-rate-limit.ts";
 import { createClientAuthFailureStore } from "../stores/client-auth-failure.store.ts";
 
 class SecurityRedis {

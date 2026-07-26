@@ -1,7 +1,8 @@
 # 后端架构
 
-本文记录后端结构与 composition 约定。当前 functional DI 契约由本文、各后端 app 的 production composition，
-以及 `src/__tests__/architecture.test.ts` 和 `src/__tests__/port-contracts.test.ts` 共同维护。
+本文记录后端结构与 composition 约定。当前 functional DI 契约由本文、各后端 app 的 production composition、
+typecheck、port/type contract tests、module interface behavior tests、process smoke，以及根级 Architecture Guard
+按各自可观察事实共同维护。
 
 ## App 边界
 
@@ -28,7 +29,7 @@
   和纯 helper 保持静态导入，不作为 DI deps 注入。
 - Production `*.port.ts` 直接声明调用方所需的最窄 reader/writer/store/collaborator signature，不 import app-local
   `*.repository`、`repositories/**`，也不通过 `Pick<...Repository>` 或 `Pick<...Service>` 从 provider 类型派生接口。
-  三个 backend 的 architecture suites 会扫描全部 production ports，防止这类 ownership 回退。
+  根级 Architecture Guard 会扫描受保护 workspace 的全部 production ports，防止这类 ownership 回退。
 - 多个边界共享的 input/result type 由 `packages/domain`、`packages/contracts`、相邻 `*.type.ts` 或单一的 neutral
   protocol/session module 持有。允许从另一个 consumer-owned `*Port` 继续收窄（例如 `Pick<...Port>`），也允许收窄
   platform type；这些用法不得把 concrete provider ownership 带入消费方。
@@ -45,7 +46,8 @@
   resolver/projection repositories，只把当前 transaction `DbClient`、rebuild queue adapter、lifecycle 和 clock
   交给 `createUserProfileInvalidation`，由模块内部创建 tx-bound resolver 及 projection repositories。
 - Admin 角色管理 repository 仍可直接读写 assignment 以实现 CRUD、搜索和约束检查；这不属于 Effective Role 或
-  受影响用户解析。架构测试允许该 owner，并阻止其他已迁移生产调用方重新导入 assignment table。
+  受影响用户解析。根级 Architecture Guard 允许该 owner，并阻止其他 production 调用方导入专用 assignment schema
+  subpath。
 
 ### User Profile 失效的 Composition 边界
 
@@ -63,10 +65,17 @@
   `tx.afterCommit` 编排 User Resignation session revocation 等其他提交后行为，不把它们并入 User Profile 模块。
 - `recordChanges` 成功表示 dirty fact 已在 source transaction 中持久化并登记 rebuild wake-up，不表示 BullMQ
   已经完成入队。提交后的批量 enqueue 仍是 best-effort，失败由日志与现有 repair 路径恢复，不回滚已经提交的业务事实。
-- API/Admin architecture suites 通过仓库惯例下的维护性 guard 约束业务 production module：覆盖规范 casing 的静态
-  named/type import 与 re-export、常规跨 package 内部静态路径和直接 legacy identifier。该 guard 不是安全 sandbox，
-  不承担动态/计算 import、string-named specifier、非规范 casing、quoted nested destructuring 或 alias dataflow
-  分析；production exports、typecheck 与 lint 是并行防线。
+- 根级 Architecture Guard 通过 production source path 与规范化静态 module edge 约束 User Profile owner 和依赖方向。
+  Package exports 与 consumer typecheck 负责 public surface 和结构兼容，公开 interface behavior tests 负责 transaction
+  语义，API/Admin process smoke 负责真实 runtime wiring 与 readiness。
+
+### Session runtime 与跨 App 边界
+
+- Admin `services/user/**` 和 `services/client/**` 的会话终止只经由 consumer-owned Session Revocation port。在该
+  workflow 中，只有 `services/session-revocation/**` 和 `composition/**` 直接持有 Session Kernel、OIDC runtime、
+  concrete session adapter 或 app-local Redis runtime dependency；provider 与 port 的结构兼容继续由 typecheck 负责。
+- Worker production source 不依赖 API 私有 alias `@api`、`@api/*`、`~api/src` 或 `~api/src/*`。跨 app 复用的能力通过
+  public workspace package 暴露和消费。
 
 ## Application Use Case、Application Service 与领域规则
 

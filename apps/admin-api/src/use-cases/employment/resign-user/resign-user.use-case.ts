@@ -1,6 +1,6 @@
 import type { ResignUserUseCaseDeps } from "./resign-user.port";
 import type { ResignUserInput, ResignUserOptions } from "./resign-user.type";
-import { adminAuditTransactionOptions } from "@admin-api/services/audit/audit.service";
+import { adminAuditTransactionOptions } from "@admin-api/services/audit/audit.context";
 import { buildEmploymentResignUserAudit } from "@admin-api/services/audit/events/employment.audit";
 import { UserStatus } from "@iam/contracts";
 import { UserNotFoundError } from "@iam/domain/user";

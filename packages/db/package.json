@@ -5,7 +5,8 @@
   "private": true,
   "exports": {
     ".": "./src/index.ts",
-    "./schema": "./src/schema/index.ts",
+    "./schema": "./src/schema/public.ts",
+    "./schema/role-assignments": "./src/schema/role-assignments.ts",
     "./relations": "./src/relations/index.ts",
     "./query-utils": "./src/query-utils.ts"
   },

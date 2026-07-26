@@ -1,7 +1,7 @@
 import type { PositionService } from "@admin-api/services/position/position.service";
 import type { PositionRouteHandler } from "./position.type";
 import { defineAdminApiMutationOperation, defineAdminApiQueryOperation } from "@admin-api/lib/admin-api-adapter";
-import { resolveAdminAuditContext } from "@admin-api/services/audit/audit.service";
+import { resolveAdminAuditContext } from "@admin-api/services/audit/audit.context";
 import {
   PositionCreateDtoSchema,
   PositionPaginationQueryDtoSchema,

@@ -5,6 +5,8 @@
 
 本文定义 monorepo 测试的通道、资源所有权、跨 package 编排、缓存、并发、timeout、隔离和验收模型。核心决策见
 [ADR-0003](../adr/0003-adopt-layered-test-lanes-and-resource-budgets.md)。
+本文负责验证通道与资源编排；Architecture Guard 的设计、规则准入、观察模型与复杂度边界见
+[架构守卫规范](architecture-guard.md)。
 
 ## 设计目标
 
@@ -21,7 +23,7 @@
 
 | 通道 | Package script | Root entry | 资源模型 | 默认缓存 |
 |---|---|---|---|---|
-| 普通测试 | `test` | `pnpm test` | 单元、组件、契约、架构、纯内存集成 | 开启 |
+| 普通测试 | `test` | `pnpm test` | 单元、组件、契约、纯内存集成 | 开启 |
 | 进程 smoke | `test:smoke` | `pnpm test:smoke` | 真实应用入口、子进程、端口、就绪探针 | 关闭 |
 | PostgreSQL | `test:postgres` | 按改动类型显式调用 | 调用方提供的专用数据库、随机 schema | 关闭 |
 | 浏览器 E2E | `e2e` | 按改动类型显式调用 | 浏览器、应用服务及其依赖 | 关闭 |
@@ -38,8 +40,9 @@ flowchart LR
   D --> E["build"]
 ```
 
-`static` 聚合 lint 与仓库级静态 guards，并保证每项只执行一次。一个阶段失败后不再启动后续阶段；同一阶段内部由 Turbo 按预算并行
-package。PostgreSQL、E2E、Gateway 等检查不是 `verify` 的隐式依赖，而是由 agent 根据当前改动与风险显式追加。
+`static` 聚合 lint 与仓库级静态 guards，并保证每项只执行一次；`pnpm check:architecture` 是唯一静态架构入口，不进入
+package `test`。一个阶段失败后不再启动后续阶段；同一阶段内部由 Turbo 按预算并行 package。PostgreSQL、E2E、Gateway
+等检查不是 `verify` 的隐式依赖，而是由 agent 根据当前改动与风险显式追加。
 
 ## 分类规则与文件命名
 
@@ -211,7 +214,7 @@ PostgreSQL 与 Redis 只使用不可达占位地址。
 
 ### User Profile 失效功能的公开测试 seam
 
-User Profile 失效深化与 scope-expansion 协议退役由以下调用方可观察 seam 共同锁定：
+User Profile 失效由以下调用方可观察 seam 共同验证：
 
 1. `UserProfileInvalidation.recordChanges` 覆盖 source change 到受影响用户与 canonical reason 的映射、去重、dirty
    version 推进，以及同一 transaction 的单次 after-commit 批量 wake-up；测试只 fake 数据库、BullMQ、clock 和
@@ -219,15 +222,11 @@ User Profile 失效深化与 scope-expansion 协议退役由以下调用方可�
 2. UnitOfWork lifecycle 契约覆盖 transaction-port factory 与 transaction callback 共享同一个 `afterCommit`
    registration port，并获得当前 `{ requestId, traceId }` observability；rollback 不运行提交后任务，enqueue 失败维持
    best-effort 语义。
-3. Worker maintenance 与 rebuild processor 分别覆盖 backfill/repair 和 dirty 状态机；shared job contract、producer
-   surface 与 worker job dispatch 共同证明旧 scope job、schema、producer 和 consumer 不再属于 production exports。
-4. API/Admin architecture suites 扫描业务 production module 的仓库惯例静态边界，三端 package-local process smoke
-   则验证真实 runtime entry、env parsing 与 production composition。API 以 `/public/doc`、Admin API 以
-   `/admin/doc`、Worker 以 Bull Board HTML 作为协议级 readiness probe。
-
-Boundary helper 是维护性回归检查，不是对抗式源码扫描器。其承诺限定为规范 casing 的静态 named/type import 与
-re-export、常规跨 package 内部静态路径和直接 legacy identifier；动态/计算 import、string-named specifier、非规范
-casing、quoted nested destructuring 与 alias dataflow 不属于该测试 seam。
+3. Worker maintenance 覆盖 backfill/repair，rebuild processor 覆盖 dirty 状态机；shared job contract、producer 与
+   worker job dispatch 共同验证 single-user versioned rebuild protocol 的解析、批量投递和消费。
+4. 根级 `pnpm check:architecture` 负责稳定 module edge 的 owner 和依赖方向；三端 package-local process smoke 验证真实
+   runtime entry、env parsing 与 production composition。API 以 `/public/doc`、Admin API 以 `/admin/doc`、Worker
+   以 Bull Board HTML 作为协议级 readiness probe。
 
 从本架构成为 Current 起，新建或实质修改 backend runtime entry/composition 时，必须同时添加或更新该 app 的
 `test:smoke`；未改动的既有 app 可以按 adoption 表逐步补齐。

@@ -1,5 +1,5 @@
 import type { LoggerPort } from "@admin-api/composition/runtime";
-import type { AdminAuditContext } from "@admin-api/services/audit/audit.service";
+import type { AdminAuditContext } from "@admin-api/services/audit/audit.context";
 import type { CleanupFailure, RevokeSummary } from "@iam/api-core/session/kernel";
 import type {
   AdminSessionProtocol,

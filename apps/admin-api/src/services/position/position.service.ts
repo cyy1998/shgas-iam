@@ -1,4 +1,4 @@
-import type { AdminAuditContext } from "@admin-api/services/audit/audit.service";
+import type { AdminAuditContext } from "@admin-api/services/audit/audit.context";
 import type { PositionStatus } from "@iam/contracts";
 import type { AdminPositionServiceDeps, AdminPositionTransactionPorts } from "./position.port";
 import type {
@@ -7,7 +7,7 @@ import type {
   PositionSearchResult,
   PositionUpdateDto,
 } from "./position.type";
-import { adminAuditTransactionOptions } from "@admin-api/services/audit/audit.service";
+import { adminAuditTransactionOptions } from "@admin-api/services/audit/audit.context";
 import { buildPositionAudit } from "@admin-api/services/audit/events/position.audit";
 import {
   PositionCodeExistsError,

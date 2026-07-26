@@ -7,7 +7,7 @@ import { createPositionRepository } from "@api/services/position/position.reposi
 import { createPrivilegeRepository } from "@api/services/privilege/privilege.repository";
 import { createPrivilegeDelegationRepository } from "@api/services/privilege/privilegeDelegation.repository";
 import { createUserRepository } from "@api/services/user/user.repository";
-import { createUserProfileRepository } from "@iam/user-profile-read-model/query";
+import { createUserProfileRepository } from "@iam/user-profile-read-model/query/repository";
 
 export function createApiRepositories(client: DbClient) {
   return {

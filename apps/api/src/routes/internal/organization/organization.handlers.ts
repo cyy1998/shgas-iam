@@ -1,7 +1,7 @@
 import type { AuditLogWriterPort } from "@api/services/audit/audit.service";
 import type { OrganizationService } from "@api/services/organization/organization.service";
 import type { OrganizationRouteHandler } from "./organization.type";
-import { getInternalAuditActor } from "@api/services/audit/audit.service";
+import { getInternalAuditActor } from "@api/services/audit/audit.context";
 import { buildInternalPurveyorRegisterAudit } from "@api/services/audit/events/internal.audit";
 import { OrganizationCreateDtoSchema } from "@api/services/organization/organization.schema";
 import * as HttpStatusCodes from "@iam/api-core/core/http-status-codes";

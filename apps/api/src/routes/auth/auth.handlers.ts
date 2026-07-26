@@ -5,7 +5,7 @@ import type { ClientDto } from "@api/services/client/client.type";
 import type { LoginWithMobileUseCase } from "@api/use-cases/authentication/login-with-mobile/login-with-mobile.use-case";
 import type { LoginWithPasswordUseCase } from "@api/use-cases/authentication/login-with-password/login-with-password.use-case";
 import type { AuthRouteHandler } from "./auth.type";
-import { getApiAuditRequestContext } from "@api/services/audit/audit.service";
+import { getApiAuditRequestContext } from "@api/services/audit/audit.context";
 import * as HttpStatusCodes from "@iam/api-core/core/http-status-codes";
 import { AuthzUnauthorizedError } from "@iam/api-core/errors/AuthzUnauthorizedError";
 import * as resp from "@iam/api-core/http";

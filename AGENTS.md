@@ -10,6 +10,7 @@
 - 前端架构与 composition 规则：[docs/architecture/frontend-architecture.md](docs/architecture/frontend-architecture.md)
 - 共享契约与数据库规则：[docs/architecture/contracts-and-database.md](docs/architecture/contracts-and-database.md)
 - 测试编排、通道与资源预算：[docs/architecture/testing-architecture.md](docs/architecture/testing-architecture.md)
+- 架构守卫准入、观察模型与复杂度边界：[docs/architecture/architecture-guard.md](docs/architecture/architecture-guard.md)
 - 构建、测试与开发命令：[docs/development/commands.md](docs/development/commands.md)
 - 编码风格与命名约定：[docs/development/coding-style.md](docs/development/coding-style.md)
 - 后端实现约定：[docs/development/backend-implementation.md](docs/development/backend-implementation.md)

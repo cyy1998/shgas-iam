@@ -5,7 +5,7 @@ import { defineAdminApiMutationOperation, defineAdminApiQueryOperation } from "@
 import {
   getAdminAuditActor,
   getAdminAuditRequestContext,
-} from "@admin-api/services/audit/audit.service";
+} from "@admin-api/services/audit/audit.context";
 import {
   ClientCreateDtoSchema,
   ClientInputDtoSchema,

@@ -10,7 +10,7 @@ import type { VerifyPasswordResetCodeUseCase } from "@api/use-cases/account-reco
 import type { OpenRouteHandler } from "./open.type";
 import { HumanVerificationAction } from "@api/enums/humanVerification.action";
 import { VerificationCodeUsage } from "@api/enums/verificationCode.usage";
-import { getApiAuditRequestContext, withApiRequestContext } from "@api/services/audit/audit.service";
+import { getApiAuditRequestContext, withApiRequestContext } from "@api/services/audit/audit.context";
 import {
   buildSmsCodeSendAudit,
   buildSmsCodeVerifyAudit,

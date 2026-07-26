@@ -8,7 +8,7 @@ import type { LoginWithOaUseCase } from "@api/use-cases/sso/login-with-oa/login-
 import type { LoginWithWechatUseCase } from "@api/use-cases/sso/login-with-wechat/login-with-wechat.use-case";
 import type { LogoutSsoSessionUseCase } from "@api/use-cases/sso/logout-sso-session/logout-sso-session.use-case";
 import type { SsoRouteHandler } from "./sso.type";
-import { getApiAuditRequestContext } from "@api/services/audit/audit.service";
+import { getApiAuditRequestContext } from "@api/services/audit/audit.context";
 import * as HttpStatusCodes from "@iam/api-core/core/http-status-codes";
 import * as resp from "@iam/api-core/http";
 import { getProtocolAndHost } from "@iam/api-core/utils";

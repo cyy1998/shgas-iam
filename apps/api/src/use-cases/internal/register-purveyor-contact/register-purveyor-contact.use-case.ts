@@ -3,7 +3,7 @@ import type {
   RegisterPurveyorContactInput,
   RegisterPurveyorContactOptions,
 } from "./register-purveyor-contact.type";
-import { withApiRequestContext } from "@api/services/audit/audit.service";
+import { withApiRequestContext } from "@api/services/audit/audit.context";
 import { buildInternalPurveyorContactRegisterAudit } from "@api/services/audit/events/internal.audit";
 import { CustomError } from "@iam/api-core/errors/CustomError";
 import { UserType } from "@iam/contracts";

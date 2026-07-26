@@ -11,6 +11,7 @@
 pnpm --filter <workspace> test
 pnpm --filter <workspace> lint
 pnpm --filter <workspace> typecheck
+pnpm check:architecture
 pnpm check:docs
 git diff --check
 ```
@@ -18,6 +19,7 @@ git diff --check
 根工具链变化的聚焦 Bun 测试：
 
 ```bash
+bun test scripts/__tests__/architecture-guard.test.ts
 bun test scripts/__tests__/test-orchestration.test.ts
 bun test scripts/__tests__/tooling-performance.test.ts
 bun test scripts/__tests__/eslint-config-equivalence.test.ts
@@ -38,6 +40,7 @@ bun test scripts/__tests__/eslint-config-equivalence.test.ts
 - `pnpm e2e`
 - `pnpm e2e:install`
 - `pnpm e2e:install:browsers`
+- 后端 Architecture Guard（唯一静态架构入口）：`pnpm check:architecture`
 - 文档索引与 freshness guard：`pnpm check:docs`
 - Env naming guard：`pnpm check:env-names`
 
@@ -46,7 +49,8 @@ bun test scripts/__tests__/eslint-config-equivalence.test.ts
 ## 测试与验证通道
 
 `pnpm test` 以 Turbo concurrency 2 运行可缓存的普通测试。Package-local Vitest 普通测试使用 25% workers，Bun
-普通测试使用 `--max-concurrency=2`。
+普通测试使用 `--max-concurrency=2`。Architecture Guard 不进入 package `test`，由根级
+`pnpm check:architecture` 单独执行。
 
 `pnpm test:smoke` 以 Turbo concurrency 1 运行真实进程/端口 smoke，禁用任务缓存。当前共享 process harness、API、
 Admin API、Worker 与 OIDC 的 package-local 命令为：
@@ -61,7 +65,7 @@ pnpm --filter @iam/oidc-provider test:smoke
 
 `pnpm verify` 通过 `scripts/verify.mjs` 按以下顺序 fail-fast：
 
-1. static：`pnpm lint`、`pnpm check:docs`、`pnpm check:env-names`；
+1. static：`pnpm lint`、`pnpm check:docs`、`pnpm check:env-names`、`pnpm check:architecture`；
 2. typecheck：`pnpm typecheck`；
 3. test：`pnpm test`；
 4. smoke：`pnpm test:smoke`；

@@ -1,5 +1,6 @@
 import type { PasswordHasherPort } from "@api/composition/runtime";
-import type { ApiRequestContext, AuditLogWriterPort } from "@api/services/audit/audit.service";
+import type { ApiRequestContext } from "@api/services/audit/audit.context";
+import type { AuditLogWriterPort } from "@api/services/audit/audit.service";
 import type { MobileVerificationCodeReservation } from "@api/services/mobile/mobile.type";
 import type { PrivilegeDelegationDto } from "@api/services/privilege/privilegeDelegation.type";
 import type { UnitOfWorkPort } from "@iam/api-core/uow";

@@ -1,7 +1,7 @@
-import type { AdminAuditContext } from "@admin-api/services/audit/audit.service";
+import type { AdminAuditContext } from "@admin-api/services/audit/audit.context";
 import type { AdminUserServiceDeps } from "./user.port";
 import type { UserAdminCreateDto, UserDetailDto, UserPaginationQueryDto, UserUpdateDto } from "./user.type";
-import { adminAuditTransactionOptions } from "@admin-api/services/audit/audit.service";
+import { adminAuditTransactionOptions } from "@admin-api/services/audit/audit.context";
 import { buildAdminUserAudit } from "@admin-api/services/audit/events/user.audit";
 import { EmploymentDetailDtoSchema, toEmploymentDto } from "@admin-api/services/employment/employment.schema";
 import {

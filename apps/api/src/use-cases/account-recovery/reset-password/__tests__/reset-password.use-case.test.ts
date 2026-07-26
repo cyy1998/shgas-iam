@@ -1,4 +1,4 @@
-import type { AuditLogInput } from "@api/services/audit/audit.service";
+import type { AuditLogInput } from "@api/services/audit/audit.context";
 import { createImmediateUnitOfWork } from "@api/testing/fakes";
 import { expect, mock, test } from "bun:test";
 import { createResetPasswordUseCase } from "../reset-password.use-case";

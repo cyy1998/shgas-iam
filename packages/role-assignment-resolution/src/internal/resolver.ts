@@ -15,9 +15,9 @@ import {
   organizationClosures,
   organizations,
   positions,
-  roleAssignments,
   roles,
 } from "@iam/db/schema";
+import { roleAssignments } from "@iam/db/schema/role-assignments";
 import { and, eq, gt, inArray, or } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 
