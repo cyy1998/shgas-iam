@@ -77,17 +77,17 @@ export default defineConfig({
       access: 'isAdmin',
     },
     {
-      path: '/audit-logs',
-      name: '审计日志',
-      icon: 'fileSearch',
-      component: './audit-logs/index',
-      access: 'isAdmin',
-    },
-    {
       path: '/sessions',
       name: '会话管理',
       icon: 'history',
       component: './sessions/index',
+      access: 'isAdmin',
+    },
+    {
+      path: '/audit-logs',
+      name: '审计日志',
+      icon: 'fileSearch',
+      component: './audit-logs/index',
       access: 'isAdmin',
     },
     {
