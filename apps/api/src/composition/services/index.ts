@@ -5,7 +5,6 @@ import type { ApiRuntimePorts } from "../runtime";
 import type { createApiUnitOfWork } from "../tx";
 import { createAccountRecoveryService } from "@api/services/account-recovery/account-recovery.service";
 import { createLoginCredentialParser } from "@api/services/authentication/login-credential.parser";
-import { createLoginFailureService } from "@api/services/authentication/login-failure.service";
 import { createClientService } from "@api/services/client/client.service";
 import { createCapService } from "@api/services/human-verification/cap.service";
 import { createHumanRiskService } from "@api/services/human-verification/human-risk.service";
@@ -22,6 +21,10 @@ import { createUserMobileBinding } from "@api/services/user/user-mobile-binding.
 import { createUserPasswordHelper } from "@api/services/user/user-password.helper";
 import { createUserService } from "@api/services/user/user.service";
 import { LoggerSourceApp } from "@iam/api-core/logger";
+import {
+  createLoginRestriction,
+  createRedisLoginRestrictionStore,
+} from "@iam/api-core/login-restriction";
 import { createSessionKernel } from "@iam/api-core/session/kernel";
 import { mapUnitOfWork } from "@iam/api-core/uow";
 import { createUserProfileQueryService } from "@iam/user-profile-read-model/query";
@@ -164,10 +167,12 @@ export function createApiServices(options: CreateApiServicesOptions) {
     },
   });
 
-  const loginFailureService = createLoginFailureService({
-    redis: runtime.redis,
+  const loginRestriction = createLoginRestriction({
     clock: runtime.clock,
     random: runtime.random,
+    store: createRedisLoginRestrictionStore({
+      redis: runtime.redis,
+    }),
   });
 
   const loginCredentialParser = createLoginCredentialParser({
@@ -191,7 +196,7 @@ export function createApiServices(options: CreateApiServicesOptions) {
     customSsoSession,
     humanRisk: humanRiskService,
     loginCredential: loginCredentialParser,
-    loginFailure: loginFailureService,
+    loginRestriction,
     mobile: mobileService,
     organization: organizationService,
     privilegeDelegation: privilegeDelegationService,

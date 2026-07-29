@@ -41,6 +41,12 @@ describe("audit action catalog", () => {
     const values = auditActionOptions.map(option => option.value);
 
     expect(values).toContain("auth.login.password");
+    expect(values).toContain("admin.session.revoke");
+    expect(getAuditActionLabel("admin.session.revoke")).toBe("强制下线单个会话");
+    expect(values).toContain("admin.session.revoke_user");
+    expect(getAuditActionLabel("admin.session.revoke_user")).toBe("下线用户全部会话");
+    expect(values).toContain("admin.login_restriction.release");
+    expect(getAuditActionLabel("admin.login_restriction.release")).toBe("解除临时登录限制");
     expect(values).toContain("admin.client.oidc.configure");
     expect(values).toContain("admin.client.oidc.rotate_secret");
     expect(values).not.toContain("auth.login.password.failure");

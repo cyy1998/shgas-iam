@@ -1,3 +1,4 @@
+import type { SessionOrigin } from "@api/services/session/session-origin";
 import type {
   AuditActorType,
   AuditDetails,
@@ -29,6 +30,16 @@ export interface OaLoginAuditInput {
   details?: AuditDetails;
 }
 
+export interface OaPrincipalSessionPort {
+  createPrincipalSession: (
+    user: UserDetailDto,
+    options: {
+      amr: readonly ["oa"];
+      origin?: SessionOrigin;
+    },
+  ) => Promise<{ token: string }>;
+}
+
 export interface LoginWithOaDeps {
   auditLogWriter: {
     recordAuditLog: (input: OaLoginAuditInput) => Promise<void>;
@@ -42,12 +53,7 @@ export interface LoginWithOaDeps {
   config: {
     nodeEnv: string;
   };
-  principalSessions: {
-    createPrincipalSession: (
-      user: UserDetailDto,
-      options: { amr?: string[] },
-    ) => Promise<{ token: string }>;
-  };
+  principalSessions: OaPrincipalSessionPort;
   users: {
     getActiveUserByUsername: (username: string) => Promise<OaLoginUser | null>;
     getUserDetailById: (userId: number) => Promise<UserDetailDto>;

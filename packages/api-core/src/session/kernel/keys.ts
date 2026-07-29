@@ -36,6 +36,7 @@ export function createSessionKernelKeyBuilder(namespace = "sess:v2:") {
       lookupHash: string,
     ) => `${ns}revoked_lookup:${objectKindCodes[kind]}:${lookupHash}`,
     index: {
+      principalSessions: `${ns}idx:principal_sessions`,
       user: (principal: PrincipalRef) =>
         `${ns}idx:user:${encodePart(principal.principalType)}:${encodePart(principal.subjectId)}:principal`,
       client: (clientCode: string) => `${ns}idx:client:${encodePart(clientCode)}`,

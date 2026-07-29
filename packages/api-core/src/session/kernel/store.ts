@@ -35,7 +35,9 @@ export type SessionKernelRedis = {
   del: (...keys: string[]) => Promise<number>;
   pexpireat: (key: string, expiresAt: number) => Promise<number>;
   zadd: (key: string, score: number, member: string) => Promise<unknown>;
+  zcard: (key: string) => Promise<number>;
   zrange: (key: string, start: number, stop: number) => Promise<string[]>;
+  zrevrange: (key: string, start: number, stop: number) => Promise<string[]>;
   zrem: (key: string, member: string) => Promise<unknown>;
   zremrangebyscore: (key: string, min: string | number, max: string | number) => Promise<number>;
   multi: () => SessionKernelRedisTransaction;
@@ -229,6 +231,27 @@ export class SessionKernelStore {
   async readIndex(key: string, now = this.config.clock.now()) {
     await this.redis.zremrangebyscore(key, "-inf", now);
     return await this.redis.zrange(key, 0, -1);
+  }
+
+  async cleanExpiredIndex(key: string, now = this.config.clock.now()) {
+    await this.redis.zremrangebyscore(key, "-inf", now);
+  }
+
+  async readIndexChunkDescending(key: string, start: number, stop: number) {
+    return await this.redis.zrevrange(key, start, stop);
+  }
+
+  async countIndexMembers(key: string) {
+    return await this.redis.zcard(key);
+  }
+
+  async removeIndexMembers(key: string, members: string[]) {
+    if (members.length === 0)
+      return;
+    const transaction = this.redis.multi();
+    for (const member of members)
+      transaction.zrem(key, member);
+    await assertTransaction(transaction.exec());
   }
 
   private async readTombstoneKey(key: string): Promise<

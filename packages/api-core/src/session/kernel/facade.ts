@@ -14,6 +14,7 @@ import type {
   RevocationReason,
   RevokedTombstone,
   RevokeSummary,
+  SessionOrigin,
   ValidationResult,
 } from "./model";
 import type { CreateResult, ResolveResult } from "./result";
@@ -25,6 +26,7 @@ import { runCleanupRefs } from "./cleanup";
 import { normalizeSessionKernelConfig } from "./config";
 import { createCurrentLookupHash } from "./hmac";
 import { createSessionKernelKeyBuilder, encodeIndexMember, parseIndexMember } from "./keys";
+import { normalizeSessionOrigin } from "./model";
 import { counterForKind, createEmptyRevokeSummary, failClosed, mergeRevokeSummary } from "./result";
 import { SessionKernelStore } from "./store";
 import {
@@ -40,6 +42,8 @@ type MaybePromise<T> = Promise<T> | T;
 type PrincipalValidationTarget = PrincipalSession | ClientBinding | IssuedCredential;
 type ProtocolValidationTarget = ClientBinding | IssuedCredential | ProtocolArtifact;
 
+const PRINCIPAL_SESSION_INVENTORY_CHUNK_SIZE = 100;
+
 export type SessionKernelValidationHooks = {
   validatePrincipal?: (session: PrincipalValidationTarget) => MaybePromise<ValidationResult>;
   validateClient?: (object: ProtocolValidationTarget) => MaybePromise<ValidationResult>;
@@ -51,6 +55,9 @@ export type SessionKernelValidationHooks = {
 export type SessionKernelDependencies = {
   redis: SessionKernelRedis;
   config: SessionKernelConfigInput | SessionKernelConfig;
+  random?: {
+    uuid: () => string;
+  };
   validationHooks?: SessionKernelValidationHooks;
   cleanupAdapters?: CleanupAdapter[];
   logger?: SessionKernelLogger;
@@ -63,6 +70,7 @@ export type CreatePrincipalSessionInput = {
   sessionKind?: string;
   amr?: string[];
   acr?: string;
+  origin?: SessionOrigin;
   tenantId?: string;
   issuerId?: string;
   metadata?: Record<string, unknown>;
@@ -114,6 +122,28 @@ export type RevokeUserSessionsOptions = {
   excludePrincipalSessionIds?: string[];
 };
 
+export type ListPrincipalSessionsInput = {
+  offset: number;
+  limit: number;
+  userId?: string;
+};
+
+export type PrincipalSessionInventoryItem = {
+  principalSessionId: string;
+  sessionKind: string;
+  principal: PrincipalRef;
+  authTime: number;
+  expiresAt: number;
+  amr: string[];
+  acr?: string;
+  origin?: SessionOrigin;
+};
+
+export type ListPrincipalSessionsResult = {
+  items: PrincipalSessionInventoryItem[];
+  total: number;
+};
+
 export type SessionKernel = ReturnType<typeof createSessionKernel>;
 
 export function createSessionKernel(deps: SessionKernelDependencies) {
@@ -121,6 +151,7 @@ export function createSessionKernel(deps: SessionKernelDependencies) {
   const keys = createSessionKernelKeyBuilder(config.namespace);
   const store = new SessionKernelStore(deps.redis, keys, config);
   const cleanupAdapters = deps.cleanupAdapters ?? [];
+  const uuid = deps.random?.uuid ?? randomUUID;
 
   async function createPrincipalSession(
     input: CreatePrincipalSessionInput,
@@ -129,7 +160,7 @@ export function createSessionKernel(deps: SessionKernelDependencies) {
       const now = config.clock.now();
       const externalToken = input.externalToken ?? generateKernelToken(config, "principalSession");
       const lookup = createCurrentLookupHash(externalToken, config);
-      const principalSessionId = randomUUID();
+      const principalSessionId = uuid();
       const window = createPrincipalSessionWindow(now, config);
       const session: PrincipalSession = {
         version: 1,
@@ -144,6 +175,7 @@ export function createSessionKernel(deps: SessionKernelDependencies) {
         absoluteExpiresAt: window.absoluteExpiresAt,
         amr: input.amr ?? [],
         acr: input.acr,
+        origin: normalizeSessionOrigin(input.origin),
         snapshot: input.snapshot,
         tenantId: input.tenantId,
         issuerId: input.issuerId,
@@ -205,6 +237,69 @@ export function createSessionKernel(deps: SessionKernelDependencies) {
     }
   }
 
+  async function listPrincipalSessions(
+    input: ListPrincipalSessionsInput,
+  ): Promise<ListPrincipalSessionsResult> {
+    if (!Number.isInteger(input.offset) || input.offset < 0)
+      throw new RangeError("Principal Session inventory offset must be a non-negative integer");
+    if (!Number.isInteger(input.limit) || input.limit <= 0)
+      throw new RangeError("Principal Session inventory limit must be a positive integer");
+    if (input.userId !== undefined && input.userId.length === 0)
+      throw new RangeError("Principal Session inventory userId must not be empty");
+
+    const indexKey = input.userId === undefined
+      ? keys.index.principalSessions
+      : keys.index.user({ principalType: "user", subjectId: input.userId });
+    await store.cleanExpiredIndex(indexKey);
+    const items: PrincipalSessionInventoryItem[] = [];
+    let rank = 0;
+    let validSeen = 0;
+
+    while (items.length < input.limit) {
+      const members = await store.readIndexChunkDescending(
+        indexKey,
+        rank,
+        rank + PRINCIPAL_SESSION_INVENTORY_CHUNK_SIZE - 1,
+      );
+      if (members.length === 0)
+        break;
+
+      const staleMembers: string[] = [];
+      let retainedMembers = 0;
+      for (const member of members) {
+        const parsed = parseIndexMember(member);
+        if (!parsed || parsed.kind !== "principal_session") {
+          staleMembers.push(member);
+          continue;
+        }
+        const resolved = await store.resolveObject("principal_session", parsed.id);
+        if (
+          resolved.status !== "resolved"
+          || resolved.value.principal.principalType !== "user"
+          || (input.userId !== undefined && resolved.value.principal.subjectId !== input.userId)
+        ) {
+          staleMembers.push(member);
+          continue;
+        }
+
+        if (validSeen >= input.offset && items.length < input.limit)
+          items.push(toPrincipalSessionInventoryItem(resolved.value));
+        validSeen += 1;
+        retainedMembers += 1;
+      }
+
+      await store.removeIndexMembers(indexKey, staleMembers);
+      rank += retainedMembers;
+      if (members.length < PRINCIPAL_SESSION_INVENTORY_CHUNK_SIZE)
+        break;
+    }
+
+    return {
+      items,
+      total: await store.countIndexMembers(indexKey),
+    };
+  }
+
   async function createClientBinding(input: CreateClientBindingInput): Promise<CreateResult<ClientBinding>> {
     try {
       const principal = await store.resolveObject("principal_session", input.principalSessionId);
@@ -219,7 +314,7 @@ export function createSessionKernel(deps: SessionKernelDependencies) {
       });
       const binding: ClientBinding = {
         version: 1,
-        bindingId: randomUUID(),
+        bindingId: uuid(),
         protocol: input.protocol,
         clientCode: input.clientCode,
         principalSessionId: input.principalSessionId,
@@ -271,7 +366,7 @@ export function createSessionKernel(deps: SessionKernelDependencies) {
       });
       const credential: IssuedCredential = {
         version: 1,
-        credentialId: randomUUID(),
+        credentialId: uuid(),
         protocol: input.protocol,
         credentialType: input.credentialType,
         lookupHash: lookup.lookupHash,
@@ -318,7 +413,7 @@ export function createSessionKernel(deps: SessionKernelDependencies) {
       const lookup = createCurrentLookupHash(externalToken, config);
       const artifact: ProtocolArtifact = {
         version: 1,
-        artifactId: randomUUID(),
+        artifactId: uuid(),
         protocol: input.protocol,
         artifactType: input.artifactType,
         lookupHash: lookup.lookupHash,
@@ -622,17 +717,21 @@ export function createSessionKernel(deps: SessionKernelDependencies) {
   }
 
   function principalSessionIndexes(session: PrincipalSession): StoreIndexWrite[] {
+    const member = encodeIndexMember("principal_session", session.principalSessionId);
     return [
       {
         key: keys.index.user(session.principal),
         score: session.expiresAt,
-        member: encodeIndexMember("principal_session", session.principalSessionId),
+        member,
       },
       {
         key: keys.index.principal(session.principalSessionId),
         score: session.expiresAt,
-        member: encodeIndexMember("principal_session", session.principalSessionId),
+        member,
       },
+      ...(session.principal.principalType === "user"
+        ? [{ key: keys.index.principalSessions, score: session.expiresAt, member }]
+        : []),
     ];
   }
 
@@ -781,6 +880,7 @@ export function createSessionKernel(deps: SessionKernelDependencies) {
     resolvePrincipalSession,
     resolvePrincipalSessionById,
     renewPrincipalSession,
+    listPrincipalSessions,
     createClientBinding,
     resolveClientBindingById,
     issueCredential,
@@ -798,6 +898,19 @@ export function createSessionKernel(deps: SessionKernelDependencies) {
     revokePrincipalObjects,
     revokeBindingObjects,
     revokeProtocol,
+  };
+}
+
+function toPrincipalSessionInventoryItem(session: PrincipalSession): PrincipalSessionInventoryItem {
+  return {
+    principalSessionId: session.principalSessionId,
+    sessionKind: session.sessionKind,
+    principal: { ...session.principal },
+    authTime: session.authTime,
+    expiresAt: session.expiresAt,
+    amr: [...session.amr],
+    acr: session.acr,
+    origin: session.origin ? { ...session.origin } : undefined,
   };
 }
 

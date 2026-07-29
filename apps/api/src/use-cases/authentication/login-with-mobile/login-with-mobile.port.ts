@@ -1,10 +1,15 @@
 import type { HumanVerificationAction } from "@api/enums/humanVerification.action";
+import type { SessionOrigin } from "@api/services/session/session-origin";
 import type {
   AuditActorType,
   AuditDetails,
   AuditOutcome,
 } from "@iam/domain/audit";
 import type { UserDetailDto } from "@iam/domain/user";
+import type {
+  AuthenticationLoginFailureStatus,
+  AuthenticationLoginRestrictionStatus,
+} from "../login-restriction.type";
 import type { MobileLoginUser } from "./login-with-mobile.type";
 
 export interface MobileLoginAuditInput {
@@ -30,10 +35,23 @@ export interface MobileLoginAuditInput {
   details?: AuditDetails;
 }
 
-export interface MobileLoginFailureResult {
-  failureCount: number;
-  remainingAttempts: number;
-  shouldBlacklist: boolean;
+export interface MobileLoginRestrictionPort {
+  recordFailure: (input: {
+    userId: number;
+    triggerMethod: "mobile";
+  }) => Promise<AuthenticationLoginFailureStatus>;
+  clearLoginState: (userId: number) => Promise<unknown>;
+  getRestriction: (userId: number) => Promise<AuthenticationLoginRestrictionStatus | null>;
+}
+
+export interface MobilePrincipalSessionPort {
+  createPrincipalSession: (
+    user: UserDetailDto,
+    options: {
+      amr: readonly ["sms"];
+      origin?: SessionOrigin;
+    },
+  ) => Promise<{ token: string }>;
 }
 
 export interface LoginWithMobileDeps {
@@ -59,21 +77,8 @@ export interface LoginWithMobileDeps {
       traceId?: string | null;
     }) => Promise<void>;
   };
-  loginFailure: {
-    recordLoginFailure: (userId: number) => Promise<MobileLoginFailureResult>;
-    blacklistLoginUser: (userId: number, reason: "mobile") => Promise<void>;
-    clearLoginFailures: (userId: number) => Promise<void>;
-    clearLoginBlacklist: (userId: number) => Promise<void>;
-    isLoginUserBlacklisted: (userId: number) => Promise<boolean>;
-    formatLoginBlacklistMessage: (userId: number) => Promise<string>;
-    formatLoginFailureMessage: (prefix: string, result: MobileLoginFailureResult) => string;
-  };
-  principalSessions: {
-    createPrincipalSession: (
-      user: UserDetailDto,
-      options: { amr?: string[] },
-    ) => Promise<{ token: string }>;
-  };
+  loginRestriction: MobileLoginRestrictionPort;
+  principalSessions: MobilePrincipalSessionPort;
   users: {
     getActiveUserByMobile: (phoneNumber: string) => Promise<MobileLoginUser | null>;
     getUserDetailById: (userId: number) => Promise<UserDetailDto>;

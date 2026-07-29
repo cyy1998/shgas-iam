@@ -3,6 +3,7 @@ import { createLoginWithWechatUseCase } from "../login-with-wechat.use-case";
 
 test("completes a cache miss in Processing exchange session audit and final-cache order", async () => {
   const events: string[] = [];
+  const longUserAgent = `wechat-browser/${"x".repeat(600)}`;
   const userDetail = {
     id: 1001,
     mobile: "17721462865",
@@ -52,8 +53,8 @@ test("completes a cache miss in Processing exchange session audit and final-cach
         sourceApp: "iam",
         requestId: "req-wechat",
         traceId: null,
-        ip: null,
-        userAgent: null,
+        ip: "203.0.113.14",
+        userAgent: longUserAgent,
         route: null,
         method: null,
       },
@@ -71,7 +72,13 @@ test("completes a cache miss in Processing exchange session audit and final-cach
   ]);
   expect(set).toHaveBeenNthCalledWith(1, "wx-code:wechat-code", "Processing", "EX", 600);
   expect(set).toHaveBeenNthCalledWith(2, "wx-code:wechat-code", JSON.stringify({ userId: 1001 }), "EX", 600);
-  expect(createPrincipalSession).toHaveBeenCalledWith(userDetail, { amr: ["wechat"] });
+  expect(createPrincipalSession).toHaveBeenCalledWith(userDetail, {
+    amr: ["wechat"],
+    origin: {
+      ip: "203.0.113.14",
+      userAgent: longUserAgent.slice(0, 512),
+    },
+  });
   expect(recordAuditLog).toHaveBeenCalledWith(expect.objectContaining({
     action: "auth.login.wechat",
     requestId: "req-wechat",
@@ -85,6 +92,7 @@ test("reuses a cached user id after one delay without exchange or duplicate audi
   const recordAuditLog = mock(async () => undefined);
   const getActiveUserById = mock(async () => ({ id: 1001 }));
   const userDetail = { id: 1001, mobile: null, name: "测试用户", username: "138550" };
+  const createPrincipalSession = mock(async () => ({ token: "cached-session" }));
   const useCase = createLoginWithWechatUseCase({
     auditLogWriter: { recordAuditLog },
     cache: {
@@ -93,7 +101,7 @@ test("reuses a cached user id after one delay without exchange or duplicate audi
       set: mock(async () => "OK"),
     },
     delay: { wait },
-    principalSessions: { createPrincipalSession: mock(async () => ({ token: "cached-session" })) },
+    principalSessions: { createPrincipalSession },
     users: {
       getActiveUserById,
       getActiveUserByWxId: mock(async () => ({ id: 1001 })),
@@ -102,7 +110,17 @@ test("reuses a cached user id after one delay without exchange or duplicate audi
     wechat: { getWxUserId },
   } as any);
 
-  await expect(useCase.execute({ code: "wechat-code" })).resolves.toEqual({
+  await expect(useCase.execute({ code: "wechat-code" }, {
+    requestContext: {
+      sourceApp: "iam",
+      requestId: "req-cached-wechat",
+      traceId: null,
+      ip: "203.0.113.15",
+      userAgent: "cached-wechat-browser",
+      route: "/sso/third-party/wx",
+      method: "POST",
+    },
+  })).resolves.toEqual({
     token: "cached-session",
     isMobileSet: false,
   });
@@ -111,6 +129,13 @@ test("reuses a cached user id after one delay without exchange or duplicate audi
   expect(getActiveUserById).toHaveBeenCalledWith(1001);
   expect(getWxUserId).not.toHaveBeenCalled();
   expect(recordAuditLog).not.toHaveBeenCalled();
+  expect(createPrincipalSession).toHaveBeenCalledWith(userDetail, {
+    amr: ["wechat"],
+    origin: {
+      ip: "203.0.113.15",
+      userAgent: "cached-wechat-browser",
+    },
+  });
 });
 
 test("accepts the legacy cached user-detail payload shape", async () => {

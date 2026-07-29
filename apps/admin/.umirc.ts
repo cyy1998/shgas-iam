@@ -5,6 +5,7 @@ import { adminTheme } from './src/theme';
 export default defineConfig({
   alias: {
     '@admin': resolve(__dirname, 'src'),
+    '@iam/contracts': resolve(__dirname, '../../packages/contracts/src'),
     '~admin': __dirname,
   },
   base: '/iam-admin',
@@ -70,6 +71,13 @@ export default defineConfig({
       name: '审计日志',
       icon: 'fileSearch',
       component: './audit-logs/index',
+      access: 'isAdmin',
+    },
+    {
+      path: '/sessions',
+      name: '会话管理',
+      icon: 'history',
+      component: './sessions/index',
       access: 'isAdmin',
     },
     {

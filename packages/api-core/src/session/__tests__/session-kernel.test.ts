@@ -76,10 +76,24 @@ class KernelFakeRedis implements SessionKernelRedis {
     return 1;
   }
 
+  async zcard(key: string) {
+    this.purgeExpired(key);
+    return this.zsets.get(key)?.size ?? 0;
+  }
+
   async zrange(key: string, start: number, stop: number) {
     this.purgeExpired(key);
     const sorted = [...(this.zsets.get(key)?.entries() ?? [])]
-      .sort((left, right) => left[1] - right[1])
+      .sort((left, right) => left[1] - right[1] || compareText(left[0], right[0]))
+      .map(([member]) => member);
+    const normalizedStop = stop < 0 ? sorted.length + stop : stop;
+    return sorted.slice(start, normalizedStop + 1);
+  }
+
+  async zrevrange(key: string, start: number, stop: number) {
+    this.purgeExpired(key);
+    const sorted = [...(this.zsets.get(key)?.entries() ?? [])]
+      .sort((left, right) => right[1] - left[1] || compareText(right[0], left[0]))
       .map(([member]) => member);
     const normalizedStop = stop < 0 ? sorted.length + stop : stop;
     return sorted.slice(start, normalizedStop + 1);
@@ -162,6 +176,14 @@ class KernelFakeRedis implements SessionKernelRedis {
   }
 }
 
+function compareText(left: string, right: string) {
+  if (left < right)
+    return -1;
+  if (left > right)
+    return 1;
+  return 0;
+}
+
 class FailingRedis extends KernelFakeRedis {
   override multi() {
     const transaction: SessionKernelRedisTransaction = {
@@ -171,6 +193,25 @@ class FailingRedis extends KernelFakeRedis {
       zadd: () => transaction,
       zrem: () => transaction,
       exec: async () => [[new Error("redis down"), null] as RedisResult],
+    };
+    return transaction;
+  }
+}
+
+class FailNextTransactionRedis extends KernelFakeRedis {
+  failNextTransaction = false;
+
+  override multi() {
+    if (!this.failNextTransaction)
+      return super.multi();
+    this.failNextTransaction = false;
+    const transaction: SessionKernelRedisTransaction = {
+      set: () => transaction,
+      pexpireat: () => transaction,
+      del: () => transaction,
+      zadd: () => transaction,
+      zrem: () => transaction,
+      exec: async () => [[new Error("redis transaction failed"), null] as RedisResult],
     };
     return transaction;
   }
@@ -245,6 +286,7 @@ describe("session kernel config, keys, token, and HMAC", () => {
     const keys = createSessionKernelKeyBuilder();
     expect(keys.active("principal_session", "ps-1")).toBe("sess:v2:active:p:ps-1");
     expect(keys.lookup("credential", "hash")).toBe("sess:v2:lookup:c:hash");
+    expect(keys.index.principalSessions).toBe("sess:v2:idx:principal_sessions");
     expect(parseIndexMember(encodeIndexMember("artifact", "artifact:1"))).toEqual({
       kind: "artifact",
       id: "artifact:1",
@@ -305,6 +347,179 @@ describe("session kernel config, keys, token, and HMAC", () => {
 });
 
 describe("session kernel lifecycle", () => {
+  test("stores bounded Session Origin while keeping origin-less Principal Sessions compatible", async () => {
+    const { kernel } = createKernel();
+    const longUserAgent = `browser/${"x".repeat(600)}`;
+    const withOrigin = await kernel.createPrincipalSession({
+      principal,
+      snapshot,
+      origin: {
+        ip: "203.0.113.10",
+        userAgent: longUserAgent,
+      },
+    });
+    expect(withOrigin.status).toBe("created");
+    if (withOrigin.status !== "created")
+      return;
+
+    const resolvedWithOrigin = await kernel.resolvePrincipalSession(withOrigin.externalToken!);
+    expect(resolvedWithOrigin).toMatchObject({
+      status: "resolved",
+      value: {
+        origin: {
+          ip: "203.0.113.10",
+          userAgent: longUserAgent.slice(0, 512),
+        },
+      },
+    });
+
+    const withoutOrigin = await kernel.createPrincipalSession({ principal, snapshot });
+    expect(withoutOrigin.status).toBe("created");
+    if (withoutOrigin.status !== "created")
+      return;
+    await expect(kernel.resolvePrincipalSession(withoutOrigin.externalToken!)).resolves.toMatchObject({
+      status: "resolved",
+      value: {
+        principalSessionId: withoutOrigin.value.principalSessionId,
+      },
+    });
+    expect(withoutOrigin.value.origin).toBeUndefined();
+  });
+
+  test("lists only indexed user Principal Sessions by expiry without promising activity", async () => {
+    const { redis, kernel } = createKernel();
+    const older = await kernel.createPrincipalSession({
+      principal,
+      snapshot,
+      origin: { ip: "203.0.113.10", userAgent: "older-browser" },
+    });
+    redis.advance(1_000);
+    await kernel.createPrincipalSession({
+      principal: { principalType: "service", subjectId: "svc-1" },
+      snapshot: { subjectId: "svc-1" },
+    });
+    redis.advance(1_000);
+    const newer = await kernel.createPrincipalSession({
+      principal: { ...principal, subjectId: "u-2" },
+      snapshot: { ...snapshot, subjectId: "u-2", username: "bob" },
+    });
+    expect(older.status).toBe("created");
+    expect(newer.status).toBe("created");
+    if (older.status !== "created" || newer.status !== "created")
+      return;
+
+    const inventory = await kernel.listPrincipalSessions({ offset: 0, limit: 10 });
+
+    expect(inventory.total).toBe(2);
+    expect(inventory.items.map(item => item.principalSessionId)).toEqual([
+      newer.value.principalSessionId,
+      older.value.principalSessionId,
+    ]);
+    expect(inventory.items[1]?.origin).toEqual({
+      ip: "203.0.113.10",
+      userAgent: "older-browser",
+    });
+    expect("lastActiveAt" in inventory.items[0]!).toBe(false);
+  });
+
+  test("fills a page across dirty inventory chunks with deterministic equal-expiry ordering", async () => {
+    const redis = new KernelFakeRedis();
+    let nextId = 0;
+    const kernel = createSessionKernel({
+      redis,
+      config: createConfig(redis),
+      random: {
+        uuid: () => `ps-${String(nextId++).padStart(3, "0")}`,
+      },
+    });
+    for (let index = 0; index < 105; index += 1) {
+      const created = await kernel.createPrincipalSession({
+        principal: { principalType: "user", subjectId: `u-${index}` },
+        snapshot: { subjectId: `u-${index}` },
+      });
+      expect(created.status).toBe("created");
+    }
+    await redis.zadd(
+      kernel.keys.index.principalSessions,
+      redis.now + 100_000,
+      encodeIndexMember("principal_session", "missing-session"),
+    );
+
+    const expectedIds = ["ps-005", "ps-004", "ps-003", "ps-002", "ps-001"];
+    const firstRead = await kernel.listPrincipalSessions({ offset: 99, limit: 5 });
+    const secondRead = await kernel.listPrincipalSessions({ offset: 99, limit: 5 });
+
+    expect(firstRead).toEqual({
+      items: expectedIds.map(principalSessionId => expect.objectContaining({ principalSessionId })),
+      total: 105,
+    });
+    expect(secondRead.items.map(item => item.principalSessionId)).toEqual(expectedIds);
+    expect(new Set(secondRead.items.map(item => item.principalSessionId)).size).toBe(5);
+  });
+
+  test("uses the user index without backfilling legacy sessions until renewal and removes revoked sessions", async () => {
+    const { redis, kernel } = createKernel();
+    const legacy = await kernel.createPrincipalSession({ principal, snapshot });
+    const other = await kernel.createPrincipalSession({
+      principal: { principalType: "user", subjectId: "u-2" },
+      snapshot: { subjectId: "u-2" },
+    });
+    expect(legacy.status).toBe("created");
+    expect(other.status).toBe("created");
+    if (legacy.status !== "created" || other.status !== "created")
+      return;
+    await redis.zrem(
+      kernel.keys.index.principalSessions,
+      encodeIndexMember("principal_session", legacy.value.principalSessionId),
+    );
+
+    const filtered = await kernel.listPrincipalSessions({ offset: 0, limit: 10, userId: "u-1" });
+    expect(filtered).toMatchObject({
+      items: [{ principalSessionId: legacy.value.principalSessionId }],
+      total: 1,
+    });
+    expect(await kernel.listPrincipalSessions({ offset: 1, limit: 10, userId: "u-1" })).toMatchObject({
+      items: [],
+      total: 1,
+    });
+    expect((await kernel.listPrincipalSessions({ offset: 0, limit: 10 })).items).toHaveLength(1);
+
+    await expect(kernel.renewPrincipalSession(legacy.value.principalSessionId)).resolves.toMatchObject({
+      status: "resolved",
+    });
+    expect((await kernel.listPrincipalSessions({ offset: 0, limit: 10 })).total).toBe(2);
+
+    const revoked = await kernel.revokePrincipalSession(legacy.value.principalSessionId, "admin_revoke");
+    expect(revoked.principalSessions.revoked).toBe(1);
+    expect(await kernel.listPrincipalSessions({ offset: 0, limit: 10 })).toMatchObject({
+      items: [{ principalSessionId: other.value.principalSessionId }],
+      total: 1,
+    });
+  });
+
+  test("removes naturally expired inventory members before counting and filling the page", async () => {
+    const { redis, kernel } = createKernel();
+    const expired = await kernel.createPrincipalSession({ principal, snapshot });
+    expect(expired.status).toBe("created");
+    redis.advance(59_000);
+    const valid = await kernel.createPrincipalSession({
+      principal: { principalType: "user", subjectId: "u-2" },
+      snapshot: { subjectId: "u-2" },
+    });
+    expect(valid.status).toBe("created");
+    if (expired.status !== "created" || valid.status !== "created")
+      return;
+    redis.advance(1_000);
+
+    expect(await kernel.listPrincipalSessions({ offset: 0, limit: 10 })).toMatchObject({
+      items: [{ principalSessionId: valid.value.principalSessionId }],
+      total: 1,
+    });
+    expect(await redis.get(
+      kernel.keys.tombstone("principal_session", expired.value.principalSessionId),
+    )).toBeNull();
+  });
+
   test("creates, resolves, and renews principal sessions with extendable children", async () => {
     const { redis, kernel } = createKernel();
     const session = await kernel.createPrincipalSession({ principal, snapshot });
@@ -704,6 +919,41 @@ describe("session kernel tombstone, cleanup, validation, and fail closed behavio
     const kernel = createSessionKernel({ redis, config: createConfig(redis) });
     await expect(kernel.createPrincipalSession({ principal, snapshot })).resolves.toMatchObject({
       status: "fail_closed",
+    });
+    await expect(kernel.listPrincipalSessions({ offset: 0, limit: 10 })).resolves.toEqual({
+      items: [],
+      total: 0,
+    });
+  });
+
+  test("keeps Principal Session state and inventory together when renew or revoke writes fail", async () => {
+    const redis = new FailNextTransactionRedis();
+    const kernel = createSessionKernel({ redis, config: createConfig(redis) });
+    const created = await kernel.createPrincipalSession({ principal, snapshot });
+    expect(created.status).toBe("created");
+    if (created.status !== "created")
+      return;
+    redis.advance(1_000);
+
+    redis.failNextTransaction = true;
+    await expect(kernel.renewPrincipalSession(created.value.principalSessionId)).resolves.toMatchObject({
+      status: "fail_closed",
+    });
+    await expect(kernel.listPrincipalSessions({ offset: 0, limit: 10 })).resolves.toMatchObject({
+      items: [{
+        expiresAt: created.value.expiresAt,
+        principalSessionId: created.value.principalSessionId,
+      }],
+      total: 1,
+    });
+
+    redis.failNextTransaction = true;
+    await expect(kernel.revokePrincipalSession(created.value.principalSessionId, "admin_revoke"))
+      .rejects
+      .toThrow("redis transaction failed");
+    await expect(kernel.listPrincipalSessions({ offset: 0, limit: 10 })).resolves.toMatchObject({
+      items: [{ principalSessionId: created.value.principalSessionId }],
+      total: 1,
     });
   });
 });

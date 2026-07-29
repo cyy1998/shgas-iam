@@ -80,6 +80,21 @@ export const auditActionCatalog = [
     legacyAliases: [],
   },
   {
+    action: "admin.session.revoke",
+    label: "强制下线单个会话",
+    legacyAliases: [],
+  },
+  {
+    action: "admin.session.revoke_user",
+    label: "下线用户全部会话",
+    legacyAliases: [],
+  },
+  {
+    action: "admin.login_restriction.release",
+    label: "解除临时登录限制",
+    legacyAliases: [],
+  },
+  {
     action: "admin.client.create",
     label: "创建应用",
     legacyAliases: [],

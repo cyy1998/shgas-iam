@@ -6,10 +6,24 @@ import {
   employments,
   users,
 } from "@iam/db/schema";
-import { and, count, eq, or } from "drizzle-orm";
+import { and, count, eq, inArray, or } from "drizzle-orm";
 
 export function createUserRepository(db: DbClient) {
   return {
+    async getSessionManagementUserSummaries(userIds: readonly number[]) {
+      if (userIds.length === 0)
+        return [];
+      return await db
+        .select({
+          id: users.id,
+          username: users.username,
+          name: users.name,
+          status: users.status,
+          isDelete: users.isDelete,
+        })
+        .from(users)
+        .where(inArray(users.id, [...userIds]));
+    },
     async setPassword(userId: number, password: string) {
       return firstRow(await db
         .update(users)

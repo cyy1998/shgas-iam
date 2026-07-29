@@ -21,6 +21,9 @@ import { createPositionAdminRouter } from "@admin-api/routes/admin/position/posi
 import { createRoleAdapter } from "@admin-api/routes/admin/role/role.adapter";
 import { createRoleRoute } from "@admin-api/routes/admin/role/role.index";
 import { createRoleAdminRouter } from "@admin-api/routes/admin/role/role.trpc";
+import { createSessionManagementAdapter } from "@admin-api/routes/admin/session-management/session-management.adapter";
+import { createSessionManagementRoute } from "@admin-api/routes/admin/session-management/session-management.index";
+import { createSessionManagementAdminRouter } from "@admin-api/routes/admin/session-management/session-management.trpc";
 import { createUserAdapter } from "@admin-api/routes/admin/user/user.adapter";
 import { createUserRoute } from "@admin-api/routes/admin/user/user.index";
 import { createUserAdminRouter } from "@admin-api/routes/admin/user/user.trpc";
@@ -49,6 +52,9 @@ export async function createAdminApiRoutes(
   const organizationAdapter = createOrganizationAdapter({ organizationService: services.organization });
   const positionAdapter = createPositionAdapter({ positionService: services.position });
   const roleAdapter = createRoleAdapter({ roleService: services.role });
+  const sessionManagementAdapter = createSessionManagementAdapter({
+    sessionManagementService: services.sessionManagement,
+  });
   const userAdapter = createUserAdapter({
     random: runtime.random,
     userService: services.user,
@@ -61,6 +67,7 @@ export async function createAdminApiRoutes(
     organization: createOrganizationAdminRouter(organizationAdapter),
     position: createPositionAdminRouter(positionAdapter),
     role: createRoleAdminRouter(roleAdapter),
+    sessionManagement: createSessionManagementAdminRouter(sessionManagementAdapter),
     user: createUserAdminRouter(userAdapter),
   });
   const appRouter = createAppRouter(adminRouter);
@@ -72,6 +79,9 @@ export async function createAdminApiRoutes(
     "./src/routes/admin/organization/organization.index.ts": { default: createOrganizationRoute(organizationAdapter) },
     "./src/routes/admin/position/position.index.ts": { default: createPositionRoute(positionAdapter) },
     "./src/routes/admin/role/role.index.ts": { default: createRoleRoute(roleAdapter) },
+    "./src/routes/admin/session-management/session-management.index.ts": {
+      default: createSessionManagementRoute(sessionManagementAdapter),
+    },
     "./src/routes/admin/user/user.index.ts": { default: createUserRoute(userAdapter) },
     "./src/routes/trpc/trpc.index.ts": { default: createTrpcRoute(appRouter) },
   };

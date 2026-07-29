@@ -40,3 +40,23 @@ _Avoid_: employment deletion, user deletion
 **OIDC Claims Snapshot**:
 OIDC token 签发时按账号、client、scope 和授权状态固化的声明视图；后续读取不得把新的档案或授权事实混入既有 token。
 _Avoid_: live user profile, current authorization view
+
+**Valid Principal Session**:
+用户完成 IAM 身份验证后形成、尚未过期且未被撤销的根登录会话；客户端是否仍打开不影响其有效性。
+_Avoid_: online session, 在线会话
+
+**Temporary Login Restriction**:
+用户在统计窗口内登录失败次数过多后受到的用户级临时登录限制；它只阻止新的认证，不撤销已有会话，也不是账号禁用或永久黑名单。
+_Avoid_: blacklist, 黑名单, disabled account
+
+**Login Restriction Trigger Method**:
+使登录失败计数达到限制阈值的最后一种认证方式；它不表示该认证方式独自产生了全部失败。
+_Avoid_: restriction cause, failure breakdown
+
+**Session Origin**:
+登录时观测到的客户端 IP 和由 User-Agent 推断的粗粒度设备描述；它只用于调查提示，不是可信设备身份或授权依据。
+_Avoid_: trusted device, device identity, device fingerprint
+
+**Session Revocation**:
+使 IAM 管理的登录会话及其派生访问不再被 IAM 接受的终止操作；它不阻止未来登录，外围清理失败不会恢复其有效性，第三方自行建立的本地会话不在其保证范围内。
+_Avoid_: guaranteed third-party logout, reversible logout

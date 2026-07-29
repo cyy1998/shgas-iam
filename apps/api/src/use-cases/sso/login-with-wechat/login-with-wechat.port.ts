@@ -1,3 +1,4 @@
+import type { SessionOrigin } from "@api/services/session/session-origin";
 import type {
   AuditActorType,
   AuditDetails,
@@ -29,6 +30,16 @@ export interface WechatLoginAuditInput {
   details?: AuditDetails;
 }
 
+export interface WechatPrincipalSessionPort {
+  createPrincipalSession: (
+    user: UserDetailDto,
+    options: {
+      amr: readonly ["wechat"];
+      origin?: SessionOrigin;
+    },
+  ) => Promise<{ token: string }>;
+}
+
 export interface LoginWithWechatDeps {
   auditLogWriter: {
     recordAuditLog: (input: WechatLoginAuditInput) => Promise<void>;
@@ -41,12 +52,7 @@ export interface LoginWithWechatDeps {
   delay: {
     wait: (milliseconds: number) => Promise<void>;
   };
-  principalSessions: {
-    createPrincipalSession: (
-      user: UserDetailDto,
-      options: { amr?: string[] },
-    ) => Promise<{ token: string }>;
-  };
+  principalSessions: WechatPrincipalSessionPort;
   users: {
     getActiveUserById: (userId: number) => Promise<WechatLoginUser | null>;
     getActiveUserByWxId: (wxId: string) => Promise<WechatLoginUser | null>;

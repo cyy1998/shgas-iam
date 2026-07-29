@@ -12,6 +12,10 @@ export enum ApiErrorCode {
   LoginFailed = "LOGIN.FAILED",
   InvalidVerificationCode = "LOGIN.INVALID_VERIFICATION_CODE",
   HumanVerificationRequired = "LOGIN.HUMAN_VERIFICATION_REQUIRED",
+  LoginProtectionUnavailable = "LOGIN_PROTECTION_UNAVAILABLE",
+  AdminLoginStateUnavailable = "ADMIN_LOGIN_STATE_UNAVAILABLE",
+  AdminLoginStateAuditFailedAfterEffect = "ADMIN_LOGIN_STATE_AUDIT_FAILED_AFTER_EFFECT",
+  AdminSessionCurrentProtected = "ADMIN_SESSION_CURRENT_PROTECTED",
 
   InvalidHumanVerificationSite = "HUMAN_VERIFICATION.INVALID_SITE",
 

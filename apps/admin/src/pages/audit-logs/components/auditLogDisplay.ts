@@ -1,7 +1,7 @@
 import type { AuditLogVo } from '@admin/services/audit';
 import {
-  auditActionOptions as sharedAuditActionOptions,
   getAuditActionLabel,
+  auditActionOptions as sharedAuditActionOptions,
 } from '@iam/contracts';
 
 export const auditActionOptions = sharedAuditActionOptions;
@@ -23,6 +23,7 @@ export const targetTypeLabels: Record<string, string> = {
   role: '角色',
   delegation: '权限委派',
   mobile: '手机号',
+  principal_session: 'Principal Session',
 };
 
 export const outcomeLabels: Record<string, string> = {

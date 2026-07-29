@@ -7,6 +7,25 @@
 
 - `apps/admin` 是管理前端。它应通过 `src/services/` 下的 page-side wrapper 消费 admin 能力，并把 tRPC client
   集中在 `src/lib/api-client.ts`。
+- Admin `/sessions` 页面通过 `src/services/session-management.ts` 消费四个 intent：Valid Principal Session
+  列表与单会话/用户全部撤销，以及 Temporary Login Restriction 列表与解除。页面使用“有效会话”和
+  “临时登录限制”两个标签页；两个列表都复用用户远程搜索提交精确 numeric user ID，使用默认 20、最大 100 的分页
+  与手动刷新，不轮询。
+- “有效会话”每行统一提供“强制下线本次”和“下线该用户全部”。当前管理会话的单会话按钮禁用；本人全部下线仍可用，
+  确认框明确保留当前根会话但撤销其关联 IAM 凭证与其他 roots。确认框同时说明点式撤销的并发窗口、不能保证第三方
+  本地会话退出、不会阻止未来登录，以及凭据泄露时的密码重置、账号暂停或结束处置；不展示推测的关联应用清单，也不要求备注
+  或原因。成功、幂等无变化和 cleanup 部分失败分别显示稳定提示并刷新当前列表；
+  `ADMIN_LOGIN_STATE_AUDIT_FAILED_AFTER_EFFECT` 显示“作用可能已生效”，刷新状态且不自动重试 mutation。
+- 页面只渲染后端安全 VO，不接触原始 User-Agent、Session Kernel 模型或 cleanup failure 内容。Transport 错误由
+  service wrapper 使用共享 API error code 归一化为稳定的页面错误；页面不得解析 tRPC `httpStatus`、展示
+  `serviceCode` 或原始错误 message。
+- “临时登录限制”每行显示用户与账号状态、固定“登录失败次数过多”原因、最后 Trigger Method、自动解除时间与剩余
+  时间。倒计时只在行内按服务端初值本地推进，不触发列表重载、服务端轮询或实时推送；异常 Trigger Method 显示为
+  “未知”。
+- 解除确认明确同时清除限制和当前失败历史、不创建白名单或宽限期、新失败立即重新计数，且不影响任何已有
+  Principal Session；不提供阈值、窗口或时长配置，不要求备注，也不发送通知。成功与 `changed:false` 都刷新一次，
+  Redis 503 保留当前状态且不显示假成功；`ADMIN_LOGIN_STATE_AUDIT_FAILED_AFTER_EFFECT` 提示作用可能已生效、刷新
+  一次且不自动重试 mutation。
 - `apps/sso` 是 SSO 门户。它应通过 `src/services/` 下的 wrapper 消费 public/auth/self-service 能力，并把共享
   request 与浏览器 helper 集中在 `src/lib/` 和 `src/utils/`。
 - Umi runtime integration 放在 `src/app.ts`、`src/access.ts` 和 app-local `src/models/`。这些文件只聚焦 runtime

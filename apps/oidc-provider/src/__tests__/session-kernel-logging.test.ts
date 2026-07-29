@@ -56,10 +56,24 @@ class KernelRedis implements SessionKernelRedis {
     return 1;
   }
 
+  async zcard(key: string) {
+    this.purgeExpired(key);
+    return this.zsets.get(key)?.size ?? 0;
+  }
+
   async zrange(key: string, start: number, stop: number) {
     this.purgeExpired(key);
     const sorted = [...(this.zsets.get(key)?.entries() ?? [])]
       .sort((left, right) => left[1] - right[1])
+      .map(([member]) => member);
+    const normalizedStop = stop < 0 ? sorted.length + stop : stop;
+    return sorted.slice(start, normalizedStop + 1);
+  }
+
+  async zrevrange(key: string, start: number, stop: number) {
+    this.purgeExpired(key);
+    const sorted = [...(this.zsets.get(key)?.entries() ?? [])]
+      .sort((left, right) => right[1] - left[1] || right[0].localeCompare(left[0]))
       .map(([member]) => member);
     const normalizedStop = stop < 0 ? sorted.length + stop : stop;
     return sorted.slice(start, normalizedStop + 1);

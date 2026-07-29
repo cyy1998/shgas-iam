@@ -4,6 +4,7 @@ import { createLoginWithOaUseCase } from "../login-with-oa.use-case";
 
 test("creates an OA PrincipalSession and audits the active Formal user", async () => {
   const events: string[] = [];
+  const longUserAgent = `oa-browser/${"x".repeat(600)}`;
   const userDetail = {
     id: 1001,
     mobile: "17721462865",
@@ -39,8 +40,8 @@ test("creates an OA PrincipalSession and audits the active Formal user", async (
       sourceApp: "iam",
       requestId: "req-oa",
       traceId: null,
-      ip: null,
-      userAgent: null,
+      ip: "203.0.113.13",
+      userAgent: longUserAgent,
       route: null,
       method: null,
     },
@@ -50,7 +51,13 @@ test("creates an OA PrincipalSession and audits the active Formal user", async (
   });
 
   expect(events).toEqual(["session", "audit"]);
-  expect(createPrincipalSession).toHaveBeenCalledWith(userDetail, { amr: ["oa"] });
+  expect(createPrincipalSession).toHaveBeenCalledWith(userDetail, {
+    amr: ["oa"],
+    origin: {
+      ip: "203.0.113.13",
+      userAgent: longUserAgent.slice(0, 512),
+    },
+  });
   expect(recordAuditLog).toHaveBeenCalledWith(expect.objectContaining({
     action: "auth.login.oa",
     requestId: "req-oa",

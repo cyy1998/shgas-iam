@@ -78,6 +78,9 @@ pnpm --filter @iam/oidc-provider test:smoke
 pnpm --filter @iam/db db:check
 pnpm --filter @iam/role-assignment-resolution test:postgres
 
+# Redis（需由调用方提供专用 IAM_API_CORE_TEST_REDIS_URL）
+pnpm --filter @iam/api-core test:redis
+
 # Browser
 pnpm --filter @iam/admin e2e
 pnpm --filter @iam/sso e2e
@@ -123,7 +126,7 @@ Hook 不运行 lint、typecheck、test、build 或 tracker checker。按改动�
 - API backend：`pnpm --filter @iam/api <dev|serve|lint|test|test:smoke|typecheck>`
 - Admin API backend：`pnpm --filter @iam/admin-api <dev|serve|lint|test|test:smoke|typecheck>`
 - OIDC provider：`pnpm --filter @iam/oidc-provider <dev|serve|lint|test|test:smoke|typecheck>`
-- API Core：`pnpm --filter @iam/api-core <lint|test|test:smoke|typecheck>`
+- API Core：`pnpm --filter @iam/api-core <lint|test|test:redis|test:smoke|typecheck>`
 - Worker：`pnpm --filter @iam/worker <dev|serve|lint|test|test:smoke|typecheck|user-profile:backfill|user-profile:repair>`
 - Admin frontend：`pnpm --filter @iam/admin <dev|build|lint|test|e2e|typecheck|format>`
 - SSO frontend：`pnpm --filter @iam/sso <dev|build|lint|test|e2e|typecheck|format>`

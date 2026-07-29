@@ -26,11 +26,13 @@
 | 普通测试 | `test` | `pnpm test` | 单元、组件、契约、纯内存集成 | 开启 |
 | 进程 smoke | `test:smoke` | `pnpm test:smoke` | 真实应用入口、子进程、端口、就绪探针 | 关闭 |
 | PostgreSQL | `test:postgres` | 按改动类型显式调用 | 调用方提供的专用数据库、随机 schema | 关闭 |
+| Redis | `test:redis` | 按改动类型显式调用 | 调用方提供的专用 Redis、随机 key namespace | 关闭 |
 | 浏览器 E2E | `e2e` | 按改动类型显式调用 | 浏览器、应用服务及其依赖 | 关闭 |
 | Gateway/其他外部验证 | 专用动词脚本 | 按改动类型显式调用 | 外部工具或运行环境 | 关闭 |
 | 覆盖率 | `test:coverage` | 独立按需入口 | 普通测试加 instrumentation | 可独立配置 |
 
-`pnpm test` 不包含 smoke、真实数据库、E2E 或 Gateway 检查。`pnpm verify` 是环境无关的完整基线，固定按以下阶段串行：
+`pnpm test` 不包含 smoke、真实 PostgreSQL/Redis、E2E 或 Gateway 检查。`pnpm verify` 是环境无关的完整基线，
+固定按以下阶段串行：
 
 ```mermaid
 flowchart LR
@@ -61,6 +63,7 @@ package `test`。一个阶段失败后不再启动后续阶段；同一阶段内
 - `*.test.ts[x]`：普通测试，包括纯内存 integration。
 - `*.smoke.test.ts[x]`：只允许由 `test:smoke` 收集。
 - PostgreSQL 测试放入 package 明确的 PostgreSQL test 目录，由 `test:postgres` 收集。
+- Redis contract 测试放入 package 明确的 Redis test 目录，由 `test:redis` 收集。
 - Playwright 测试放入 `e2e/`。
 
 资源模型覆盖历史命名。`apps/api` 和 `apps/admin-api` 的 OpenAPI HTTP 检查是进程内测试，现名为
@@ -107,6 +110,7 @@ Turbo 是唯一跨 package orchestrator。每个 package 继续拥有 runner、�
 | 普通 `test` | 2 | Vitest `maxWorkers: 25%`；Bun 并发不超过 2 |
 | `test:smoke` | 1 | 单 worker、单 package |
 | `test:postgres` | 由专用环境决定，默认 1 | 每个 schema/namespace 有唯一 owner |
+| `test:redis` | 由专用环境决定，默认 1 | 每次运行使用随机 key namespace，不清空 Redis |
 | Playwright `e2e` | Playwright 自主管理 | 不与普通测试或 smoke 竞争运行 |
 
 提高预算必须满足三项约束：在目标 runner 上有连续样本；一次只改变 Turbo 或 runner 中的一层；同时观察墙钟、失败率和残留资源。
@@ -121,8 +125,8 @@ Turbo 是唯一跨 package orchestrator。每个 package 继续拥有 runner、�
 - 测试固定或注入时间、随机数和网络边界。
 - 测试不把临时文件写到共享位置。
 
-`test:smoke`、`test:postgres`、E2E 和其他外部资源测试一律 `cache: false`。Coverage 使用独立任务，声明 `coverage/**` 输出，
-不能污染普通 `test` 的缓存语义。Remote Cache 可以在未来平台上启用，但正确性不得依赖它。
+`test:smoke`、`test:postgres`、`test:redis`、E2E 和其他外部资源测试一律 `cache: false`。Coverage 使用独立任务，
+声明 `coverage/**` 输出，不能污染普通 `test` 的缓存语义。Remote Cache 可以在未来平台上启用，但正确性不得依赖它。
 
 ## Timeout、就绪与清理
 
@@ -176,6 +180,7 @@ owner、原因、跟踪 ticket、到期日和风险，并继续在非阻塞通�
 改动类型附加项至少包括：
 
 - 数据库 schema/查询行为：`db:check` 和相关 `test:postgres`。
+- Redis 脚本、transaction 或并发原子性：相关 `test:redis`。
 - 前端浏览器行为：相关 Playwright `e2e`。
 - Gateway manifest：对应 validate/diff 安全检查。
 - 运行时 entry/composition：对应 app 的 `test:smoke`。
@@ -206,7 +211,7 @@ PostgreSQL 与 Redis 只使用不可达占位地址。
 
 | Backend workspace | 当前分类 | 真实 process smoke | Adoption 状态 |
 |---|---|---|---|
-| `@iam/api-core` | Bun 普通测试限定在 `src/`，`*.smoke.test.ts` 限定在 `test-smoke/` | package-local `test:smoke` 以最小 runtime env 和独立临时目录覆盖 Windows Job tree owner | `complete`（Windows local）；Linux/CI `pending` |
+| `@iam/api-core` | Bun 普通测试限定在 `src/`，真实 Redis contract 限定在 `test-redis/`，`*.smoke.test.ts` 限定在 `test-smoke/` | package-local `test:smoke` 以最小 runtime env 和独立临时目录覆盖 Windows Job tree owner | `complete`（Windows local）；Linux/CI `pending` |
 | `@iam/oidc-provider` | 普通与 `*.smoke.test.ts` 由两个 Vitest config 互斥收集 | package-local `test:smoke` 只覆盖 app-owned 的真实 entry、HTTP、token 与协议端口 | `complete`（Windows local）；Linux/CI `pending` |
 | `@iam/api` | Bun 普通测试限定在 `src/`，`*.smoke.test.ts` 限定在 `test-smoke/` | package-local `test:smoke` 通过共享 harness 覆盖真实 Bun entry、隔离 env、production composition 与 HTTP readiness | `complete`（Windows local）；Linux/CI `pending` |
 | `@iam/admin-api` | Bun 普通测试限定在 `src/`，`*.smoke.test.ts` 限定在 `test-smoke/` | package-local `test:smoke` 通过共享 harness 覆盖真实 Bun entry、隔离资源、production composition 与 `/admin/doc` readiness | `complete`（Windows local）；Linux/CI `pending` |
@@ -228,6 +233,33 @@ User Profile 失效由以下调用方可观察 seam 共同验证：
    runtime entry、env parsing 与 production composition。API 以 `/public/doc`、Admin API 以 `/admin/doc`、Worker
    以 Bull Board HTML 作为协议级 readiness probe。
 
+### Temporary Login Restriction 的公开测试 seam
+
+1. `LoginRestriction` 公开接口的普通测试使用业务语义化 atomic storage port 的 Fake，覆盖混合失败、阈值、滚动窗口、
+   规范 cause/trigger、自然过期、原子清理、索引读取与修复；Fake 不解析 Lua、KEYS/ARGV 或 Redis 命令排列。
+2. 密码与手机登录 use case 测试只通过 consumer-owned `loginRestriction` port 验证状态检查、失败/成功委托，以及
+   `LOGIN_PROTECTION_UNAVAILABLE` 与审计原因的 fail-closed 语义。
+3. 显式 `@iam/api-core` `test:redis` 使用同一公开接口和独立 writer/observer clients，补充 atomic storage Fake
+   无法证明的 production Lua、并发计数、阈值/index 原子出现及 clear 与新失败的 Redis 执行顺序线性化。
+4. Admin session management service/shared adapter seam 覆盖分页与精确用户筛选、用户缺失状态、规范 cause 与
+   Trigger Method、到期时间、原子解除、幂等无变化、503、审计和作用后审计失败；port contract 验证 production
+   `LoginRestriction` structural typing，且测试断言解除不调用 Session inventory/control。Admin Playwright 覆盖
+   第二标签页、本地倒计时无轮询、确认文案、success/no-op、列表与解除 503，以及作用后刷新且不重试 mutation。
+
+### Valid Principal Session inventory 的公开测试 seam
+
+1. Session Kernel 公开接口的普通测试使用稳定 Redis storage port Fake，覆盖可选 Session Origin 与旧 v1 对象兼容、
+   仅用户根会话进入全局索引，以及创建、续期、撤销后 inventory 的可观察结果；Fake 不读取序列化对象来推导期望，
+   也不检查 transaction 命令排列。
+2. Inventory 普通测试覆盖 `expiresAt` 倒序、相同 score 的确定顺序、精确用户筛选、自然过期清理、悬空成员修复、
+   跨分块页面补足、清理后的计数和旧会话不在读取时回填。测试把 clock 与 UUID random 作为系统边界注入，不使用
+   Redis `SCAN` 或私有 helper seam。
+3. 密码、手机验证码、OA 和微信登录 use-case 测试只验证服务端 request context 形成的有界 Session Origin 被传入
+   Principal Session 创建边界；不读取 Redis object，也不断言 Session Kernel 的内部写入顺序。
+4. Admin session management service/adapter seam 覆盖其他用户一次 bulk 撤销、本人服务端 current-root 例外、缺失
+   当前 ID 的零 mutation、空索引/并发 no-op、cleanup 脱敏计数与作用后审计失败；不重复断言 Kernel 的 Redis 遍历。
+   Admin Playwright 覆盖普通用户与本人确认文案、统一按钮、success/no-op/cleanup 和作用后刷新且不重试。
+
 从本架构成为 Current 起，新建或实质修改 backend runtime entry/composition 时，必须同时添加或更新该 app 的
 `test:smoke`；未改动的既有 app 可以按 adoption 表逐步补齐。
 
@@ -237,6 +269,11 @@ Current 基线已经包含根与 package scripts、Turbo task graph、runner 配
 ordinary/Windows Job smoke、OIDC/API/Admin API/Worker entry smoke、结构测试和 Windows 本地验收。当前命令见
 [构建、测试与开发命令](../development/commands.md)，实现与本地交付规则见
 [AI 开发工作流](../agents/workflow.md)。
+
+`@iam/api-core` 另有显式 `test:redis`：调用方必须通过 `IAM_API_CORE_TEST_REDIS_URL` 提供专用 Redis，测试为每次运行
+生成随机 key namespace，只清理自己拥有的 namespace，不启动 Docker、不执行 `FLUSHDB`/`FLUSHALL`。该通道通过
+`LoginRestriction` 公开接口验证 Lua 与并发线性化，不进入 `pnpm test` 或 `pnpm verify`；缺少 URL 时命令快速失败并
+说明配置要求。
 
 后续提高并发、改变 cache/input、接入新的 process smoke 或建立 Linux/CI runner 时，必须在目标平台重新验证相同资源契约，
 并同步本文的预算、adoption 与平台状态；不得用未经运行的脚本兼容性推断平台已经验收。

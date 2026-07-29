@@ -21,6 +21,7 @@ export const currentAdminUser = {
 
 export const adminUsers = [
   {
+    id: 42,
     username: 'zhangsan',
     name: '张三',
     mobile: '13800000000',
@@ -29,6 +30,7 @@ export const adminUsers = [
     createTime: '2026-01-01T08:00:00.000Z',
   },
   {
+    id: 43,
     username: 'lisi',
     name: '李四',
     mobile: '13900000000',

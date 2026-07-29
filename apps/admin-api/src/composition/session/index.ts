@@ -3,6 +3,10 @@ import type { AdminApiRuntimePorts } from "../runtime";
 import { createAdminSessionRevocationLogger } from "@admin-api/services/session-revocation/session-revocation.logger";
 import { createAdminSessionRevocationPort } from "@admin-api/services/session-revocation/session-revocation.port";
 import { LoggerSourceApp } from "@iam/api-core/logger";
+import {
+  createLoginRestriction,
+  createRedisLoginRestrictionStore,
+} from "@iam/api-core/login-restriction";
 import { createSessionKernel } from "@iam/api-core/session/kernel";
 
 export interface CreateAdminApiSessionOptions {
@@ -10,6 +14,13 @@ export interface CreateAdminApiSessionOptions {
 }
 
 export function createAdminApiSession(options: CreateAdminApiSessionOptions) {
+  const loginRestriction = createLoginRestriction({
+    clock: options.runtime.clock,
+    random: options.runtime.random,
+    store: createRedisLoginRestrictionStore({
+      redis: options.runtime.redis,
+    }),
+  });
   const sessionKernel = createSessionKernel({
     redis: options.runtime.redis as SessionKernelRedis,
     config: {
@@ -28,6 +39,7 @@ export function createAdminApiSession(options: CreateAdminApiSessionOptions) {
 
   return {
     kernel: sessionKernel,
+    loginRestriction,
     revocation,
   };
 }

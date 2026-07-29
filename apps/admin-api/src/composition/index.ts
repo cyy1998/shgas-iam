@@ -62,7 +62,14 @@ export async function createAdminApiComposition(
     userProfileJobProducer,
     clock: runtime.clock,
   });
-  const services = createAdminApiServices({ roleAssignmentResolver, repositories, runtime, session, unitOfWork });
+  const services = createAdminApiServices({
+    auditService,
+    roleAssignmentResolver,
+    repositories,
+    runtime,
+    session,
+    unitOfWork,
+  });
   const useCases = createAdminApiUseCases({ sessionRevocation: session.revocation, unitOfWork });
 
   return {

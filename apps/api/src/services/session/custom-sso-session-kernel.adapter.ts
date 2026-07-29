@@ -8,6 +8,7 @@ import type {
   CleanupAdapter,
   RevokeSummary,
   SessionKernel,
+  SessionOrigin,
 } from "@iam/api-core/session/kernel";
 import type { CustomSsoOrcasLoginPort } from "./custom-sso-session-kernel.port";
 import { randomUUID } from "node:crypto";
@@ -32,6 +33,11 @@ const LOCAL_SESSION_PAYLOAD_VERSION = 1;
 const LOCAL_SESSION_PAYLOAD_CLEANUP_KIND = "local_session_payload";
 
 type CustomSsoPrincipalTokenSource = "cookie" | "authorization_header" | "query" | "none";
+
+type CustomSsoPrincipalSessionCreationOptions = {
+  amr?: readonly string[];
+  origin?: SessionOrigin;
+};
 
 type ResolvedAuthorizationGrant = {
   principalSessionId: string;
@@ -145,12 +151,16 @@ export function createCustomSsoCleanupAdapter(deps: CustomSsoCleanupAdapterDeps)
 }
 
 export function createCustomSsoSessionKernelAdapter(deps: CustomSsoSessionKernelAdapterDeps) {
-  async function createPrincipalSession(user: UserDetailDto, options: { amr?: string[] } = {}) {
+  async function createPrincipalSession(
+    user: UserDetailDto,
+    options: CustomSsoPrincipalSessionCreationOptions = {},
+  ) {
     const result = await deps.kernel.createPrincipalSession({
       principal: toPrincipalRef(user),
       snapshot: toPrincipalSnapshot(user),
       sessionKind: BROWSER_USER_SESSION_KIND,
-      amr: options.amr ?? [],
+      amr: options.amr === undefined ? [] : [...options.amr],
+      origin: options.origin,
     });
     if (result.status !== "created" || !result.externalToken) {
       throw new CustomError("全局session创建失败");

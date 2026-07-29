@@ -1,5 +1,6 @@
 import type { LoginWithPasswordDeps } from "../login-with-password.port";
 import { CustomError } from "@iam/api-core/errors/CustomError";
+import { LoginRestrictionUnavailableError } from "@iam/api-core/login-restriction";
 import { ApiErrorCode, UserStatus, UserType } from "@iam/contracts";
 import { describe, expect, mock, test } from "bun:test";
 import { createLoginWithPasswordUseCase } from "../login-with-password.use-case";
@@ -21,9 +22,24 @@ const userDetail = {
   privileges: [],
 };
 
+function loginRestrictionUnavailable() {
+  return new LoginRestrictionUnavailableError({
+    cause: new Error("Redis unavailable"),
+  });
+}
+
+function temporaryRestriction(
+  triggerMethod: "mobile" | "password" | "unknown" = "password",
+) {
+  return {
+    remainingSeconds: 30 * 60,
+    triggerMethod,
+  };
+}
+
 function createFixture(overrides: {
-  blacklisted?: boolean;
   passwordMatches?: boolean;
+  restriction?: ReturnType<typeof temporaryRestriction> | null;
   user?: { id: number; username: string; name: string } | null;
 } = {}) {
   const auditLogs: LoginWithPasswordDeps["auditLogWriter"] extends {
@@ -31,18 +47,19 @@ function createFixture(overrides: {
   } ? T[] : never = [];
   const humanRiskFailures: unknown[][] = [];
   const ensureActionAllowed = mock(async () => undefined);
-  const recordLoginFailure = mock(async () => ({
+  const getRestriction = mock(async () => overrides.restriction ?? null);
+  const recordFailure = mock(async () => ({
     failureCount: 5,
     remainingAttempts: 0,
-    shouldBlacklist: true,
+    restriction: temporaryRestriction("password"),
   }));
-  const blacklistLoginUser = mock(async () => undefined);
+  const clearLoginState = mock(async () => undefined);
+  const createPrincipalSession = mock(async () => ({ token: "session-token" }));
+  const recordAuditLog = mock(async (input) => {
+    auditLogs.push(input);
+  });
   const deps: LoginWithPasswordDeps = {
-    auditLogWriter: {
-      recordAuditLog: mock(async (input) => {
-        auditLogs.push(input);
-      }),
-    },
+    auditLogWriter: { recordAuditLog },
     config: { magicCode: "MAGIC" },
     humanRisk: {
       recordLoginFailure: mock(async (...args) => {
@@ -50,18 +67,12 @@ function createFixture(overrides: {
       }),
     },
     humanVerification: { ensureActionAllowed },
-    loginFailure: {
-      blacklistLoginUser,
-      clearLoginBlacklist: mock(async () => undefined),
-      clearLoginFailures: mock(async () => undefined),
-      formatLoginBlacklistMessage: mock(async () => "账号已被临时限制"),
-      formatLoginFailureMessage: mock(prefix => `${prefix}，当前已连续失败 5 次`),
-      isLoginUserBlacklisted: mock(async () => overrides.blacklisted ?? false),
-      recordLoginFailure,
+    loginRestriction: {
+      clearLoginState,
+      getRestriction,
+      recordFailure,
     },
-    principalSessions: {
-      createPrincipalSession: mock(async () => ({ token: "session-token" })),
-    },
+    principalSessions: { createPrincipalSession },
     users: {
       checkPassword: mock(async () => overrides.passwordMatches ?? false),
       getActiveUserByUsername: mock(async () => overrides.user === undefined
@@ -70,109 +81,63 @@ function createFixture(overrides: {
       getUserDetailById: mock(async () => userDetail),
     },
   };
+
   return {
     auditLogs,
-    blacklistLoginUser,
+    clearLoginState,
+    createPrincipalSession,
     deps,
     ensureActionAllowed,
+    getRestriction,
     humanRiskFailures,
-    recordLoginFailure,
+    recordAuditLog,
+    recordFailure,
   };
 }
 
 describe("createLoginWithPasswordUseCase", () => {
-  test("executes the successful password-login workflow in order", async () => {
-    const events: string[] = [];
-    const createPrincipalSession = mock(async () => {
-      events.push("session");
-      return { token: "session-token" };
-    });
-    const useCase = createLoginWithPasswordUseCase({
-      auditLogWriter: {
-        recordAuditLog: mock(async () => {
-          events.push("audit");
-        }),
-      },
-      config: { magicCode: "MAGIC" },
-      humanRisk: { recordLoginFailure: mock(async () => undefined) },
-      humanVerification: {
-        ensureActionAllowed: mock(async () => {
-          events.push("human-verification");
-        }),
-      },
-      loginFailure: {
-        blacklistLoginUser: mock(async () => undefined),
-        clearLoginBlacklist: mock(async () => {
-          events.push("clear-blacklist");
-        }),
-        clearLoginFailures: mock(async () => {
-          events.push("clear-failures");
-        }),
-        formatLoginBlacklistMessage: mock(async () => "blacklisted"),
-        formatLoginFailureMessage: mock(() => "failure"),
-        isLoginUserBlacklisted: mock(async () => {
-          events.push("blacklist-check");
-          return false;
-        }),
-        recordLoginFailure: mock(async () => ({
-          failureCount: 1,
-          remainingAttempts: 4,
-          shouldBlacklist: false,
-        })),
-      },
-      principalSessions: { createPrincipalSession },
-      users: {
-        checkPassword: mock(async () => {
-          events.push("password-check");
-          return true;
-        }),
-        getActiveUserByUsername: mock(async () => {
-          events.push("user-lookup");
-          return {
-            id: userDetail.id,
-            username: userDetail.username,
-            name: userDetail.name,
-          };
-        }),
-        getUserDetailById: mock(async () => {
-          events.push("user-detail");
-          return userDetail;
-        }),
-      },
-    });
+  test("successful password login checks and atomically clears shared restriction state", async () => {
+    const fixture = createFixture({ passwordMatches: true });
+    const useCase = createLoginWithPasswordUseCase(fixture.deps);
+    const longUserAgent = `password-browser/${"x".repeat(600)}`;
 
     await expect(useCase.execute({
       password: "correct-password",
       username: userDetail.username,
+    }, {
+      requestContext: {
+        sourceApp: "iam",
+        requestId: "req-password",
+        traceId: null,
+        ip: "203.0.113.11",
+        userAgent: longUserAgent,
+        route: "/auth/login/password",
+        method: "POST",
+      },
     })).resolves.toEqual({
       isMobileSet: true,
       token: "session-token",
     });
 
-    expect(events).toEqual([
-      "human-verification",
-      "user-lookup",
-      "blacklist-check",
-      "password-check",
-      "user-detail",
-      "clear-failures",
-      "clear-blacklist",
-      "session",
-      "audit",
-    ]);
-    expect(createPrincipalSession).toHaveBeenCalledWith(userDetail, { amr: ["pwd"] });
+    expect(fixture.getRestriction).toHaveBeenCalledWith(userDetail.id);
+    expect(fixture.clearLoginState).toHaveBeenCalledWith(userDetail.id);
+    expect(fixture.createPrincipalSession).toHaveBeenCalledWith(userDetail, {
+      amr: ["pwd"],
+      origin: {
+        ip: "203.0.113.11",
+        userAgent: longUserAgent.slice(0, 512),
+      },
+    });
   });
 
-  test("records risk, audit, failure count, and blacklist before rejecting an invalid password", async () => {
+  test("invalid password delegates one atomic failure transition with the password trigger method", async () => {
     const fixture = createFixture();
     const useCase = createLoginWithPasswordUseCase(fixture.deps);
 
     await expect(useCase.execute({
       password: "wrong-password",
       username: userDetail.username,
-    })).rejects.toThrow(
-      "密码错误，当前已连续失败 5 次，账号已被临时限制",
-    );
+    })).rejects.toThrow("最后触发方式：密码");
 
     expect(fixture.humanRiskFailures).toEqual([
       ["passwordLogin", {
@@ -182,28 +147,124 @@ describe("createLoginWithPasswordUseCase", () => {
         traceId: null,
       }],
     ]);
+    expect(fixture.recordFailure).toHaveBeenCalledWith({
+      triggerMethod: "password",
+      userId: userDetail.id,
+    });
     expect(fixture.auditLogs).toHaveLength(1);
     expect(fixture.auditLogs[0]).toMatchObject({
       action: "auth.login.password",
       details: { reason: "invalid_password" },
       outcome: "failure",
     });
-    expect(fixture.recordLoginFailure).toHaveBeenCalledWith(userDetail.id);
-    expect(fixture.blacklistLoginUser).toHaveBeenCalledWith(userDetail.id, "password");
   });
 
-  test("audits a blacklist rejection without checking the password", async () => {
-    const fixture = createFixture({ blacklisted: true });
+  test("Temporary Login Restriction prevents password verification with the canonical audit reason", async () => {
+    const fixture = createFixture({ restriction: temporaryRestriction("mobile") });
     const useCase = createLoginWithPasswordUseCase(fixture.deps);
 
     await expect(useCase.execute({
       password: "correct-password",
       username: userDetail.username,
-    })).rejects.toThrow("账号已被临时限制");
+    })).rejects.toThrow("最后触发方式：手机验证码");
 
     expect(fixture.deps.users.checkPassword).not.toHaveBeenCalled();
     expect(fixture.auditLogs[0]).toMatchObject({
-      details: { reason: "blacklisted" },
+      details: { reason: "too_many_login_failures" },
+      outcome: "failure",
+    });
+  });
+
+  test("fails closed when Temporary Login Restriction state cannot be confirmed", async () => {
+    const fixture = createFixture();
+    fixture.getRestriction.mockRejectedValue(loginRestrictionUnavailable());
+    const useCase = createLoginWithPasswordUseCase(fixture.deps);
+
+    await expect(useCase.execute({
+      password: "correct-password",
+      username: userDetail.username,
+    })).rejects.toMatchObject({
+      code: "LOGIN_PROTECTION_UNAVAILABLE",
+      httpStatus: 503,
+    });
+
+    expect(fixture.deps.users.checkPassword).not.toHaveBeenCalled();
+    expect(fixture.auditLogs).toHaveLength(1);
+    expect(fixture.auditLogs[0]).toMatchObject({
+      details: { reason: "login_protection_unavailable" },
+      outcome: "failure",
+    });
+  });
+
+  test("keeps the fixed unavailable response when its audit write also fails", async () => {
+    const fixture = createFixture();
+    fixture.getRestriction.mockRejectedValue(loginRestrictionUnavailable());
+    fixture.recordAuditLog.mockRejectedValue(new Error("audit database unavailable"));
+    const useCase = createLoginWithPasswordUseCase(fixture.deps);
+
+    await expect(useCase.execute({
+      password: "correct-password",
+      username: userDetail.username,
+    })).rejects.toMatchObject({
+      code: "LOGIN_PROTECTION_UNAVAILABLE",
+      httpStatus: 503,
+    });
+
+    expect(fixture.recordAuditLog).toHaveBeenCalledTimes(1);
+    expect(fixture.deps.users.checkPassword).not.toHaveBeenCalled();
+  });
+
+  test("does not misclassify an unexpected restriction-port error as an infrastructure outage", async () => {
+    const cause = new Error("unexpected adapter bug");
+    const fixture = createFixture();
+    fixture.getRestriction.mockRejectedValue(cause);
+    const useCase = createLoginWithPasswordUseCase(fixture.deps);
+
+    await expect(useCase.execute({
+      password: "correct-password",
+      username: userDetail.username,
+    })).rejects.toBe(cause);
+
+    expect(fixture.auditLogs).toEqual([]);
+  });
+
+  test("failure-state write errors are not audited as invalid credentials or a real restriction", async () => {
+    const fixture = createFixture();
+    fixture.recordFailure.mockRejectedValue(loginRestrictionUnavailable());
+    const useCase = createLoginWithPasswordUseCase(fixture.deps);
+
+    await expect(useCase.execute({
+      password: "wrong-password",
+      username: userDetail.username,
+    })).rejects.toMatchObject({
+      code: "LOGIN_PROTECTION_UNAVAILABLE",
+      httpStatus: 503,
+    });
+
+    expect(fixture.auditLogs).toHaveLength(1);
+    expect(fixture.auditLogs[0]).toMatchObject({
+      details: { reason: "login_protection_unavailable" },
+      outcome: "failure",
+    });
+  });
+
+  test("successful credentials do not create a session when shared state cannot be cleared", async () => {
+    const fixture = createFixture({ passwordMatches: true });
+    fixture.clearLoginState.mockRejectedValue(loginRestrictionUnavailable());
+    const useCase = createLoginWithPasswordUseCase(fixture.deps);
+
+    await expect(useCase.execute({
+      password: "correct-password",
+      username: userDetail.username,
+    })).rejects.toMatchObject({
+      code: "LOGIN_PROTECTION_UNAVAILABLE",
+      httpStatus: 503,
+    });
+
+    expect(fixture.createPrincipalSession).not.toHaveBeenCalled();
+    expect(fixture.auditLogs).toHaveLength(1);
+    expect(fixture.auditLogs[0]).toMatchObject({
+      details: { reason: "login_protection_unavailable" },
       outcome: "failure",
     });
   });
@@ -251,7 +312,8 @@ describe("createLoginWithPasswordUseCase", () => {
       username: userDetail.username,
     })).resolves.toEqual({ isMobileSet: true, token: "session-token" });
 
-    expect(fixture.recordLoginFailure).not.toHaveBeenCalled();
+    expect(fixture.recordFailure).not.toHaveBeenCalled();
     expect(fixture.humanRiskFailures).toHaveLength(0);
+    expect(fixture.clearLoginState).toHaveBeenCalledWith(userDetail.id);
   });
 });

@@ -1,7 +1,12 @@
+import type {
+  AuthenticationLoginFailureStatus,
+  AuthenticationLoginRestrictionStatus,
+} from "../login-restriction.type";
 import type { LoginWithMobileDeps } from "./login-with-mobile.port";
 import type {
   LoginWithMobileInput,
   LoginWithMobileOptions,
+  MobileLoginUser,
 } from "./login-with-mobile.type";
 import { HumanVerificationAction } from "@api/enums/humanVerification.action";
 import { VerificationCodeUsage } from "@api/enums/verificationCode.usage";
@@ -10,18 +15,16 @@ import {
   buildMobileLoginSuccessAudit,
 } from "@api/services/audit/events/auth.audit";
 import { createHumanVerificationContext } from "@api/services/human-verification/human-verification.type";
+import { toSessionOrigin } from "@api/services/session/session-origin";
 import { InvalidVerificationCodeError } from "@iam/api-core/errors/InvalidVerificationCodeError";
 import { UserNotFoundError } from "@iam/domain/user";
+import { runLoginProtectionOperation } from "../login-protection.helper";
+import {
+  formatLoginFailureMessage,
+  formatTemporaryLoginRestrictionMessage,
+} from "../login-restriction-message";
 
 export function createLoginWithMobileUseCase(deps: LoginWithMobileDeps) {
-  async function recordFailedLoginAndBlacklistIfNeeded(userId: number) {
-    const result = await deps.loginFailure.recordLoginFailure(userId);
-    if (result.shouldBlacklist) {
-      await deps.loginFailure.blacklistLoginUser(userId, "mobile");
-    }
-    return result;
-  }
-
   async function execute(
     input: LoginWithMobileInput,
     options: LoginWithMobileOptions = {},
@@ -35,20 +38,35 @@ export function createLoginWithMobileUseCase(deps: LoginWithMobileDeps) {
     );
 
     const activeUser = await deps.users.getActiveUserByMobile(input.phoneNumber);
-    if (activeUser !== null) {
-      try {
-        if (await deps.loginFailure.isLoginUserBlacklisted(activeUser.id)) {
-          throw new InvalidVerificationCodeError(
-            await deps.loginFailure.formatLoginBlacklistMessage(activeUser.id),
-          );
-        }
-      }
-      catch (error) {
+    const runLoginProtection = <T>(
+      user: MobileLoginUser,
+      operation: () => Promise<T>,
+    ) => runLoginProtectionOperation({
+      operation,
+      auditUnavailable: async () => {
         await deps.auditLogWriter.recordAuditLog({
           ...requestContext,
-          ...buildMobileLoginFailureAudit(input.phoneNumber, "blacklisted", activeUser),
+          ...buildMobileLoginFailureAudit(
+            input.phoneNumber,
+            "login_protection_unavailable",
+            user,
+          ),
         });
-        throw error;
+      },
+    });
+    if (activeUser !== null) {
+      const restriction: AuthenticationLoginRestrictionStatus | null = await runLoginProtection(
+        activeUser,
+        () => deps.loginRestriction.getRestriction(activeUser.id),
+      );
+      if (restriction !== null) {
+        await deps.auditLogWriter.recordAuditLog({
+          ...requestContext,
+          ...buildMobileLoginFailureAudit(input.phoneNumber, "too_many_login_failures", activeUser),
+        });
+        throw new InvalidVerificationCodeError(
+          formatTemporaryLoginRestrictionMessage(restriction),
+        );
       }
     }
 
@@ -60,19 +78,24 @@ export function createLoginWithMobileUseCase(deps: LoginWithMobileDeps) {
       );
     if (!verificationCodeValid) {
       await deps.humanRisk.recordLoginFailure(HumanVerificationAction.MobileLogin, context);
+      if (activeUser !== null) {
+        const failureResult: AuthenticationLoginFailureStatus = await runLoginProtection(
+          activeUser,
+          () => deps.loginRestriction.recordFailure({
+            userId: activeUser.id,
+            triggerMethod: "mobile",
+          }),
+        );
+        await deps.auditLogWriter.recordAuditLog({
+          ...requestContext,
+          ...buildMobileLoginFailureAudit(input.phoneNumber, "invalid_verification_code", activeUser),
+        });
+        throw new InvalidVerificationCodeError(formatLoginFailureMessage("验证码错误", failureResult));
+      }
       await deps.auditLogWriter.recordAuditLog({
         ...requestContext,
-        ...buildMobileLoginFailureAudit(input.phoneNumber, "invalid_verification_code", activeUser),
+        ...buildMobileLoginFailureAudit(input.phoneNumber, "invalid_verification_code", null),
       });
-      if (activeUser !== null) {
-        const result = await recordFailedLoginAndBlacklistIfNeeded(activeUser.id);
-        const message = deps.loginFailure.formatLoginFailureMessage("验证码错误", result);
-        throw new InvalidVerificationCodeError(
-          result.shouldBlacklist
-            ? `${message}，${await deps.loginFailure.formatLoginBlacklistMessage(activeUser.id)}`
-            : message,
-        );
-      }
       throw new InvalidVerificationCodeError("验证码错误");
     }
     if (activeUser === null) {
@@ -80,9 +103,14 @@ export function createLoginWithMobileUseCase(deps: LoginWithMobileDeps) {
     }
 
     const userDetail = await deps.users.getUserDetailById(activeUser.id);
-    await deps.loginFailure.clearLoginFailures(userDetail.id);
-    await deps.loginFailure.clearLoginBlacklist(userDetail.id);
-    const { token } = await deps.principalSessions.createPrincipalSession(userDetail, { amr: ["sms"] });
+    await runLoginProtection(
+      activeUser,
+      () => deps.loginRestriction.clearLoginState(userDetail.id),
+    );
+    const { token } = await deps.principalSessions.createPrincipalSession(userDetail, {
+      amr: ["sms"],
+      origin: toSessionOrigin(requestContext),
+    });
     await deps.auditLogWriter.recordAuditLog({
       ...requestContext,
       ...buildMobileLoginSuccessAudit(userDetail),

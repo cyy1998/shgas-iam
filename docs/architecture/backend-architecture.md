@@ -139,8 +139,68 @@ composition。跨层实例连接统一由 composition 完成。
 - Admin `services/user/**` 和 `services/client/**` 的会话终止只经过 consumer-owned Session Revocation port。
   只有 `services/session-revocation/**` 与 `composition/**` 直接持有 Session Kernel、OIDC runtime、concrete
   session adapter 或 app-local Redis runtime dependency。
+- `@iam/api-core/session/kernel` 拥有用户根 Principal Session 的实时 inventory。默认全局索引为
+  `sess:v2:idx:principal_sessions`，member 沿用 lifecycle object 编码，score 为 `expiresAt`；创建、续期和撤销
+  Principal Session 时，对象与该索引必须在同一 Redis transaction 中变化。
+- Inventory 只返回 `principalType=user` 的有效根会话，并通过全局索引或精确用户索引按 `expiresAt` 倒序分块读取；
+  查询先批量清理到期 score，遇到悬空成员时删除并继续补足当前页，不执行 Redis `SCAN`。上线前未进入全局索引的旧
+  会话不在读取时回填，只有后续续期才进入。
+- Admin `services/session-management/**` 只通过消费方拥有的 inventory/control port 读取或撤销 Valid Principal
+  Session，并通过一次批量用户摘要 port 补充正常、暂停、结束、已删除或未知账号状态。用户摘要基础设施错误正常
+  传播，不把整页伪装成未知用户；production Session Kernel 与用户 repository 通过 structural typing 直接满足这些
+  port。
+- `POST /admin/session-management/sessions/search`、`POST /admin/session-management/sessions/revoke` 与对应
+  `admin.sessionManagement.listSessions`、`admin.sessionManagement.revokeSessions` procedure 复用同一 adapter。
+  Adapter 只从认证后的服务端 context 注入 actor user ID、当前 Principal Session ID 和审计请求上下文；列表返回
+  归一化 AMR、粗粒度 Session Origin 与 current 标记。撤销 target 只接受内部 `principalSessionId` 或 numeric
+  user ID；actor、当前会话和本人例外不能由客户端提交。响应只返回白名单数量摘要，原始 User-Agent、
+  `lastActiveAt`、token、metadata、cleanup ref、cleanup failure 内容与原始异常不离开 service/adapter 边界。
+- 单会话撤销先保护当前管理 Principal Session，再用固定 `admin_revoke` 原因调用 Kernel 级联撤销。当前会话目标在
+  control port 之前失败并返回 `409 / ADMIN_SESSION_CURRENT_PROTECTED`；已失效或不存在的目标返回
+  `200 / changed:false`。外围 cleanup 部分失败仍是成功结果，只暴露计数；Kernel inventory/control 不可用映射为
+  `503 / ADMIN_LOGIN_STATE_UNAVAILABLE`。
+- 用户级撤销通过消费方拥有的 bulk control 一次处理操作开始时用户索引中的根 Principal Session，不在 Admin service
+  预取列表或逐行撤销。其他用户的全部根会话与 children 被撤销；actor 本人保留服务端当前根会话但仍撤销其 children
+  和其他 roots。本人缺少当前 Principal Session ID 时在 control 前 fail closed；操作不引入 user generation、
+  revocation epoch、登录冻结或并发新登录屏障。
+- Session Revocation 的 Redis 作用先于 PostgreSQL 审计。作用后审计失败记录结构化系统日志并返回
+  `500 / ADMIN_LOGIN_STATE_AUDIT_FAILED_AFTER_EFFECT`；调用方必须刷新状态且不得自动重试 mutation。
+- Principal Session v1 可以携带可选 Session Origin；来源只保存可信网关清洗后的请求 IP 与最多 512 字符的原始
+  User-Agent，不提升对象版本，也不形成设备身份或授权事实。密码、手机验证码、OA 和微信登录从服务端请求上下文把
+  来源传入统一 Principal Session 创建边界。
 - Worker production source 不依赖 API 私有 alias `@api`、`@api/*`、`~api/src` 或 `~api/src/*`。跨 app 复用能力
   通过 public workspace package 暴露和消费。
+
+### Temporary Login Restriction
+
+- `@iam/api-core/login-restriction` 是 Temporary Login Restriction 实时生命周期的共享 production seam。它统一拥有
+  `login-failures:user:*`、`login-blacklist:user:*` 兼容 key、5 次阈值、30 分钟滚动窗口、30 分钟限制和
+  `login-blacklist:idx:users` 派生索引。
+- `LoginRestriction` 生命周期 facade 只依赖业务语义化 atomic storage port；production Redis adapter 独占 key 与
+  Lua，并使用 Redis 服务端时间创建、清理和遍历到期索引。列表遍历期间不得重写成员 score。
+- 密码与手机登录 use case 只通过 consumer-owned `loginRestriction` port 查询状态、原子记录失败和原子清理状态；
+  不自行持有 Redis key、阈值、限制写入或清理顺序。Temporary Login Restriction 不调用 Session Kernel，也不撤销或
+  恢复已有 Principal Session。
+- Admin `services/session-management/**` 通过 consumer-owned `loginRestrictions` port 读取限制和原子清理登录状态；
+  production `LoginRestriction` 以 structural typing 直接满足该 port。列表按自动到期时间倒序使用现有分页形状，
+  支持可选精确 numeric user ID，并通过一次批量用户摘要补充正常、暂停、结束、已删除或未知账号状态；用户记录缺失
+  不会使限制不可见或不可解除。
+- `POST /admin/session-management/login-restrictions/search`、
+  `DELETE /admin/session-management/login-restrictions/{userId}` 与对应
+  `admin.sessionManagement.listLoginRestrictions`、`admin.sessionManagement.releaseLoginRestriction` procedure
+  复用同一 adapter。安全列表 VO 只暴露用户摘要、规范 `too_many_login_failures` cause、最后
+  `password` / `mobile` / `unknown` Trigger Method、自动到期时间与服务端剩余秒数。
+- 解除意图只调用共享 `clearLoginState` 原子删除限制、当前失败历史与限制索引成员，返回 `changed` 和
+  `failureStateCleared:true`；自然过期或并发处理返回 `200 / changed:false`。它不调用 Session inventory/control，
+  不创建 allowlist 或宽限期，也不创建、撤销、续期或恢复任何 Principal Session；后续新失败立即按现有策略计数。
+- 限制查询或解除无法确认 Redis 状态时返回 `503 / ADMIN_LOGIN_STATE_UNAVAILABLE`。解除作用先于
+  `admin.login_restriction.release` PostgreSQL 审计；`changed:true` 后审计失败返回
+  `500 / ADMIN_LOGIN_STATE_AUDIT_FAILED_AFTER_EFFECT`，调用方刷新状态且不得自动重试 mutation。
+- Redis 状态无法确认时，共享模块抛出中性的 unavailable error，由登录入口映射为
+  `503 / LOGIN_PROTECTION_UNAVAILABLE`；登录审计使用 `login_protection_unavailable`，不得伪装成凭据错误或真实限制。
+- 新索引不执行旧 Temporary Login Restriction backfill，也不增加维护扫描或页面开放门禁；上线前未索引状态允许在
+  最长约 30 分钟的既有 TTL 窗口内不可见。
+- Production 使用未加前缀的兼容 key；`keyPrefix` 只用于真实 Redis contract 的随机 namespace 隔离，不属于业务输入。
 
 ### Custom SSO Authorization Grant
 

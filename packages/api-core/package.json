@@ -12,6 +12,7 @@
     "./http": "./src/http/index.ts",
     "./http/*": "./src/http/*.ts",
     "./logger": "./src/logger/index.ts",
+    "./login-restriction": "./src/login-restriction/index.ts",
     "./middlewares": "./src/middlewares/index.ts",
     "./middlewares/*": "./src/middlewares/*.ts",
     "./oidc": "./src/oidc/index.ts",
@@ -28,10 +29,11 @@
     "./utils/*": "./src/utils/*.ts"
   },
   "scripts": {
-    "lint": "eslint src test-smoke scripts eslint.config.js",
-    "lint:fix": "eslint --fix src test-smoke scripts eslint.config.js",
+    "lint": "eslint src test-smoke test-redis scripts eslint.config.js",
+    "lint:fix": "eslint --fix src test-smoke test-redis scripts eslint.config.js",
     "session:cleanup-legacy-keys": "bun scripts/cleanup-legacy-session-keys.ts",
     "test": "bun test --max-concurrency=2 src",
+    "test:redis": "bun test --max-concurrency=1 test-redis",
     "test:smoke": "bun test --max-concurrency=1 test-smoke",
     "typecheck": "pnpm exec tsc --noEmit"
   },

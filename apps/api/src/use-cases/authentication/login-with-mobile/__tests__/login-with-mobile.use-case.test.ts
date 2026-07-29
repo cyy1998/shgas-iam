@@ -1,5 +1,6 @@
 import type { LoginWithMobileDeps } from "../login-with-mobile.port";
 import { CustomError } from "@iam/api-core/errors/CustomError";
+import { LoginRestrictionUnavailableError } from "@iam/api-core/login-restriction";
 import { ApiErrorCode, UserStatus, UserType } from "@iam/contracts";
 import { describe, expect, mock, test } from "bun:test";
 import { createLoginWithMobileUseCase } from "../login-with-mobile.use-case";
@@ -21,10 +22,24 @@ const userDetail = {
   privileges: [],
 };
 
+function loginRestrictionUnavailable() {
+  return new LoginRestrictionUnavailableError({
+    cause: new Error("Redis unavailable"),
+  });
+}
+
+function temporaryRestriction(
+  triggerMethod: "mobile" | "password" | "unknown" = "mobile",
+) {
+  return {
+    remainingSeconds: 30 * 60,
+    triggerMethod,
+  };
+}
+
 function createFixture(overrides: {
-  blacklisted?: boolean;
   codeValid?: boolean;
-  shouldBlacklist?: boolean;
+  restriction?: ReturnType<typeof temporaryRestriction> | null;
   user?: { id: number; name: string } | null;
 } = {}) {
   const auditLogs: LoginWithMobileDeps["auditLogWriter"] extends {
@@ -33,18 +48,19 @@ function createFixture(overrides: {
   const humanRiskFailures: unknown[][] = [];
   const ensureActionAllowed = mock(async () => undefined);
   const consumeVerificationCode = mock(async () => overrides.codeValid ?? false);
-  const recordLoginFailure = mock(async () => ({
-    failureCount: overrides.shouldBlacklist ? 5 : 1,
-    remainingAttempts: overrides.shouldBlacklist ? 0 : 4,
-    shouldBlacklist: overrides.shouldBlacklist ?? false,
+  const getRestriction = mock(async () => overrides.restriction ?? null);
+  const recordFailure = mock(async () => ({
+    failureCount: 5,
+    remainingAttempts: 0,
+    restriction: temporaryRestriction("mobile"),
   }));
-  const blacklistLoginUser = mock(async () => undefined);
+  const clearLoginState = mock(async () => undefined);
+  const createPrincipalSession = mock(async () => ({ token: "session-token" }));
+  const recordAuditLog = mock(async (input) => {
+    auditLogs.push(input);
+  });
   const deps: LoginWithMobileDeps = {
-    auditLogWriter: {
-      recordAuditLog: mock(async (input) => {
-        auditLogs.push(input);
-      }),
-    },
+    auditLogWriter: { recordAuditLog },
     config: { magicCode: "MAGIC" },
     humanRisk: {
       recordLoginFailure: mock(async (...args) => {
@@ -52,18 +68,12 @@ function createFixture(overrides: {
       }),
     },
     humanVerification: { ensureActionAllowed },
-    loginFailure: {
-      blacklistLoginUser,
-      clearLoginBlacklist: mock(async () => undefined),
-      clearLoginFailures: mock(async () => undefined),
-      formatLoginBlacklistMessage: mock(async () => "账号已被临时限制"),
-      formatLoginFailureMessage: mock(prefix => `${prefix}，当前已连续失败 ${overrides.shouldBlacklist ? 5 : 1} 次`),
-      isLoginUserBlacklisted: mock(async () => overrides.blacklisted ?? false),
-      recordLoginFailure,
+    loginRestriction: {
+      clearLoginState,
+      getRestriction,
+      recordFailure,
     },
-    principalSessions: {
-      createPrincipalSession: mock(async () => ({ token: "session-token" })),
-    },
+    principalSessions: { createPrincipalSession },
     users: {
       getActiveUserByMobile: mock(async () => overrides.user === undefined
         ? { id: userDetail.id, name: userDetail.name }
@@ -72,96 +82,55 @@ function createFixture(overrides: {
     },
     verificationCodes: { consumeVerificationCode },
   };
+
   return {
     auditLogs,
-    blacklistLoginUser,
+    clearLoginState,
     consumeVerificationCode,
+    createPrincipalSession,
     deps,
     ensureActionAllowed,
+    getRestriction,
     humanRiskFailures,
-    recordLoginFailure,
+    recordAuditLog,
+    recordFailure,
   };
 }
 
 describe("createLoginWithMobileUseCase", () => {
-  test("atomically consumes the code and creates an sms principal session in order", async () => {
-    const events: string[] = [];
-    const consumeVerificationCode = mock(async () => {
-      events.push("consume-code");
-      return true;
-    });
-    const createPrincipalSession = mock(async () => {
-      events.push("session");
-      return { token: "session-token" };
-    });
-    const useCase = createLoginWithMobileUseCase({
-      auditLogWriter: {
-        recordAuditLog: mock(async () => {
-          events.push("audit");
-        }),
-      },
-      config: { magicCode: "MAGIC" },
-      humanRisk: { recordLoginFailure: mock(async () => undefined) },
-      humanVerification: {
-        ensureActionAllowed: mock(async () => {
-          events.push("human-verification");
-        }),
-      },
-      loginFailure: {
-        blacklistLoginUser: mock(async () => undefined),
-        clearLoginBlacklist: mock(async () => {
-          events.push("clear-blacklist");
-        }),
-        clearLoginFailures: mock(async () => {
-          events.push("clear-failures");
-        }),
-        formatLoginBlacklistMessage: mock(async () => "blacklisted"),
-        formatLoginFailureMessage: mock(() => "failure"),
-        isLoginUserBlacklisted: mock(async () => {
-          events.push("blacklist-check");
-          return false;
-        }),
-        recordLoginFailure: mock(async () => ({
-          failureCount: 1,
-          remainingAttempts: 4,
-          shouldBlacklist: false,
-        })),
-      },
-      principalSessions: { createPrincipalSession },
-      users: {
-        getActiveUserByMobile: mock(async () => {
-          events.push("user-lookup");
-          return { id: userDetail.id, name: userDetail.name };
-        }),
-        getUserDetailById: mock(async () => {
-          events.push("user-detail");
-          return userDetail;
-        }),
-      },
-      verificationCodes: { consumeVerificationCode },
-    });
+  test("successful mobile login checks and atomically clears shared restriction state", async () => {
+    const fixture = createFixture({ codeValid: true });
+    const useCase = createLoginWithMobileUseCase(fixture.deps);
+    const longUserAgent = `mobile-browser/${"x".repeat(600)}`;
 
     await expect(useCase.execute({
       code: "1234",
       phoneNumber: userDetail.mobile,
+    }, {
+      requestContext: {
+        sourceApp: "iam",
+        requestId: "req-mobile",
+        traceId: null,
+        ip: "203.0.113.12",
+        userAgent: longUserAgent,
+        route: "/auth/login/mobile",
+        method: "POST",
+      },
     })).resolves.toEqual({
       isMobileSet: true,
       token: "session-token",
     });
 
-    expect(events).toEqual([
-      "human-verification",
-      "user-lookup",
-      "blacklist-check",
-      "consume-code",
-      "user-detail",
-      "clear-failures",
-      "clear-blacklist",
-      "session",
-      "audit",
-    ]);
-    expect(consumeVerificationCode).toHaveBeenCalledWith("login", userDetail.mobile, "1234");
-    expect(createPrincipalSession).toHaveBeenCalledWith(userDetail, { amr: ["sms"] });
+    expect(fixture.consumeVerificationCode).toHaveBeenCalledWith("login", userDetail.mobile, "1234");
+    expect(fixture.getRestriction).toHaveBeenCalledWith(userDetail.id);
+    expect(fixture.clearLoginState).toHaveBeenCalledWith(userDetail.id);
+    expect(fixture.createPrincipalSession).toHaveBeenCalledWith(userDetail, {
+      amr: ["sms"],
+      origin: {
+        ip: "203.0.113.12",
+        userAgent: longUserAgent.slice(0, 512),
+      },
+    });
   });
 
   test("rejects replay after the verification code has been consumed", async () => {
@@ -181,13 +150,13 @@ describe("createLoginWithMobileUseCase", () => {
     expect(fixture.consumeVerificationCode).toHaveBeenCalledTimes(2);
   });
 
-  test("shares failure state and blacklists a known user after an invalid code", async () => {
-    const fixture = createFixture({ shouldBlacklist: true });
+  test("invalid code delegates one atomic failure transition with the mobile trigger method", async () => {
+    const fixture = createFixture();
     const useCase = createLoginWithMobileUseCase(fixture.deps);
 
     await expect(useCase.execute({ code: "0000", phoneNumber: userDetail.mobile }))
       .rejects
-      .toThrow("验证码错误，当前已连续失败 5 次，账号已被临时限制");
+      .toThrow("最后触发方式：手机验证码");
 
     expect(fixture.humanRiskFailures).toEqual([
       ["mobileLogin", {
@@ -197,12 +166,14 @@ describe("createLoginWithMobileUseCase", () => {
         traceId: null,
       }],
     ]);
+    expect(fixture.recordFailure).toHaveBeenCalledWith({
+      triggerMethod: "mobile",
+      userId: userDetail.id,
+    });
     expect(fixture.auditLogs[0]).toMatchObject({
       details: { reason: "invalid_verification_code" },
       outcome: "failure",
     });
-    expect(fixture.recordLoginFailure).toHaveBeenCalledWith(userDetail.id);
-    expect(fixture.blacklistLoginUser).toHaveBeenCalledWith(userDetail.id, "mobile");
   });
 
   test("does not attach an invalid-code failure to an unknown user", async () => {
@@ -214,8 +185,7 @@ describe("createLoginWithMobileUseCase", () => {
       .toThrow("验证码错误");
 
     expect(fixture.humanRiskFailures).toHaveLength(1);
-    expect(fixture.recordLoginFailure).not.toHaveBeenCalled();
-    expect(fixture.blacklistLoginUser).not.toHaveBeenCalled();
+    expect(fixture.recordFailure).not.toHaveBeenCalled();
   });
 
   test("preserves user-not-found after a valid code for an unknown mobile", async () => {
@@ -226,25 +196,114 @@ describe("createLoginWithMobileUseCase", () => {
       .rejects
       .toThrow("用户不存在");
 
-    expect(fixture.recordLoginFailure).not.toHaveBeenCalled();
+    expect(fixture.recordFailure).not.toHaveBeenCalled();
   });
 
-  test("audits a blacklist rejection before consuming a code", async () => {
-    const fixture = createFixture({ blacklisted: true });
+  test("Temporary Login Restriction prevents code consumption with the canonical audit reason", async () => {
+    const fixture = createFixture({ restriction: temporaryRestriction("password") });
     const useCase = createLoginWithMobileUseCase(fixture.deps);
 
     await expect(useCase.execute({ code: "1234", phoneNumber: userDetail.mobile }))
       .rejects
-      .toThrow("账号已被临时限制");
+      .toThrow("最后触发方式：密码");
 
     expect(fixture.consumeVerificationCode).not.toHaveBeenCalled();
     expect(fixture.auditLogs[0]).toMatchObject({
-      details: { reason: "blacklisted" },
+      details: { reason: "too_many_login_failures" },
       outcome: "failure",
     });
   });
 
-  test("accepts the configured magic code without consuming a verification code", async () => {
+  test("fails closed when Temporary Login Restriction state cannot be confirmed", async () => {
+    const fixture = createFixture();
+    fixture.getRestriction.mockRejectedValue(loginRestrictionUnavailable());
+    const useCase = createLoginWithMobileUseCase(fixture.deps);
+
+    await expect(useCase.execute({ code: "1234", phoneNumber: userDetail.mobile }))
+      .rejects
+      .toMatchObject({
+        code: "LOGIN_PROTECTION_UNAVAILABLE",
+        httpStatus: 503,
+      });
+
+    expect(fixture.consumeVerificationCode).not.toHaveBeenCalled();
+    expect(fixture.auditLogs).toHaveLength(1);
+    expect(fixture.auditLogs[0]).toMatchObject({
+      details: { reason: "login_protection_unavailable" },
+      outcome: "failure",
+    });
+  });
+
+  test("keeps the fixed unavailable response when its audit write also fails", async () => {
+    const fixture = createFixture();
+    fixture.getRestriction.mockRejectedValue(loginRestrictionUnavailable());
+    fixture.recordAuditLog.mockRejectedValue(new Error("audit database unavailable"));
+    const useCase = createLoginWithMobileUseCase(fixture.deps);
+
+    await expect(useCase.execute({ code: "1234", phoneNumber: userDetail.mobile }))
+      .rejects
+      .toMatchObject({
+        code: "LOGIN_PROTECTION_UNAVAILABLE",
+        httpStatus: 503,
+      });
+
+    expect(fixture.recordAuditLog).toHaveBeenCalledTimes(1);
+    expect(fixture.consumeVerificationCode).not.toHaveBeenCalled();
+  });
+
+  test("does not misclassify an unexpected restriction-port error as an infrastructure outage", async () => {
+    const cause = new Error("unexpected adapter bug");
+    const fixture = createFixture();
+    fixture.getRestriction.mockRejectedValue(cause);
+    const useCase = createLoginWithMobileUseCase(fixture.deps);
+
+    await expect(useCase.execute({ code: "1234", phoneNumber: userDetail.mobile }))
+      .rejects
+      .toBe(cause);
+
+    expect(fixture.auditLogs).toEqual([]);
+  });
+
+  test("failure-state write errors are not audited as invalid codes or a real restriction", async () => {
+    const fixture = createFixture();
+    fixture.recordFailure.mockRejectedValue(loginRestrictionUnavailable());
+    const useCase = createLoginWithMobileUseCase(fixture.deps);
+
+    await expect(useCase.execute({ code: "0000", phoneNumber: userDetail.mobile }))
+      .rejects
+      .toMatchObject({
+        code: "LOGIN_PROTECTION_UNAVAILABLE",
+        httpStatus: 503,
+      });
+
+    expect(fixture.auditLogs).toHaveLength(1);
+    expect(fixture.auditLogs[0]).toMatchObject({
+      details: { reason: "login_protection_unavailable" },
+      outcome: "failure",
+    });
+  });
+
+  test("successful code does not create a session when shared state cannot be cleared", async () => {
+    const fixture = createFixture({ codeValid: true });
+    fixture.clearLoginState.mockRejectedValue(loginRestrictionUnavailable());
+    const useCase = createLoginWithMobileUseCase(fixture.deps);
+
+    await expect(useCase.execute({ code: "1234", phoneNumber: userDetail.mobile }))
+      .rejects
+      .toMatchObject({
+        code: "LOGIN_PROTECTION_UNAVAILABLE",
+        httpStatus: 503,
+      });
+
+    expect(fixture.createPrincipalSession).not.toHaveBeenCalled();
+    expect(fixture.auditLogs).toHaveLength(1);
+    expect(fixture.auditLogs[0]).toMatchObject({
+      details: { reason: "login_protection_unavailable" },
+      outcome: "failure",
+    });
+  });
+
+  test("accepts the configured magic code without consuming or recording a failure", async () => {
     const fixture = createFixture();
     const useCase = createLoginWithMobileUseCase(fixture.deps);
 
@@ -253,7 +312,8 @@ describe("createLoginWithMobileUseCase", () => {
       .toEqual({ isMobileSet: true, token: "session-token" });
 
     expect(fixture.consumeVerificationCode).not.toHaveBeenCalled();
-    expect(fixture.recordLoginFailure).not.toHaveBeenCalled();
+    expect(fixture.recordFailure).not.toHaveBeenCalled();
+    expect(fixture.clearLoginState).toHaveBeenCalledWith(userDetail.id);
   });
 
   test("stops before lookup when human verification is required", async () => {

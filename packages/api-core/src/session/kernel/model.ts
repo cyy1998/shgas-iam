@@ -1,6 +1,8 @@
 import { z } from "zod";
 
 export const SESSION_KERNEL_OBJECT_VERSION = 1;
+export const MAX_SESSION_ORIGIN_IP_LENGTH = 64;
+export const MAX_SESSION_ORIGIN_USER_AGENT_LENGTH = 512;
 
 export const LifecycleObjectKindSchema = z.enum([
   "principal_session",
@@ -52,6 +54,25 @@ export const PrincipalSnapshotSchema = z.object({
 });
 export type PrincipalSnapshot = z.infer<typeof PrincipalSnapshotSchema>;
 
+export const SessionOriginSchema = z.object({
+  ip: z.string().min(1).max(MAX_SESSION_ORIGIN_IP_LENGTH).optional(),
+  userAgent: z.string().min(1).max(MAX_SESSION_ORIGIN_USER_AGENT_LENGTH).optional(),
+});
+export type SessionOrigin = z.infer<typeof SessionOriginSchema>;
+
+export function normalizeSessionOrigin(input: {
+  ip?: string | null;
+  userAgent?: string | null;
+} | null | undefined): SessionOrigin | undefined {
+  const ip = normalizeBoundedOriginValue(input?.ip, MAX_SESSION_ORIGIN_IP_LENGTH, true);
+  const userAgent = normalizeBoundedOriginValue(
+    input?.userAgent,
+    MAX_SESSION_ORIGIN_USER_AGENT_LENGTH,
+    false,
+  );
+  return ip || userAgent ? { ip, userAgent } : undefined;
+}
+
 export const CleanupRefSchema = z.object({
   protocol: z.string().min(1),
   kind: z.string().min(1),
@@ -81,6 +102,7 @@ export const PrincipalSessionSchema = z.object({
   absoluteExpiresAt: z.number().int().nonnegative(),
   amr: z.array(z.string()).default([]),
   acr: z.string().optional(),
+  origin: SessionOriginSchema.optional(),
   snapshot: PrincipalSnapshotSchema,
   tenantId: z.string().optional(),
   issuerId: z.string().optional(),
@@ -258,4 +280,17 @@ export function stringifyLifecycleObject(object: LifecycleObject) {
 
 export function stringifyRevokedTombstone(tombstone: RevokedTombstone) {
   return JSON.stringify(tombstone);
+}
+
+function normalizeBoundedOriginValue(
+  value: string | null | undefined,
+  maxLength: number,
+  trim: boolean,
+) {
+  if (typeof value !== "string")
+    return undefined;
+  const normalized = trim ? value.trim() : value;
+  if (normalized.trim().length === 0)
+    return undefined;
+  return normalized.slice(0, maxLength);
 }

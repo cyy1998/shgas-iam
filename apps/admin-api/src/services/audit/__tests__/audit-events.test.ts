@@ -3,6 +3,7 @@ import { describe, expect, test } from "bun:test";
 import * as clientAudit from "../events/client.audit";
 import * as employmentAudit from "../events/employment.audit";
 import * as roleAudit from "../events/role.audit";
+import * as sessionManagementAudit from "../events/session-management.audit";
 import * as userAudit from "../events/user.audit";
 
 describe("admin audit event builders", () => {
@@ -55,6 +56,119 @@ describe("admin audit event builders", () => {
         resigned: true,
       },
     });
+  });
+
+  test("builds a safe exact Principal Session revocation target", () => {
+    const audit = sessionManagementAudit.buildAdminSessionRevokeAudit(
+      {
+        principalSessionId: "ps-target",
+        outcome: "success",
+        result: {
+          changed: true,
+          scope: "session",
+          revoked: {
+            principalSessions: 1,
+            bindings: 2,
+            credentials: 3,
+            artifacts: 4,
+          },
+          currentPrincipalSessionExcluded: false,
+          cleanup: {
+            attempted: 2,
+            succeeded: 1,
+            failed: 1,
+          },
+        },
+      },
+      {
+        actorType: "admin",
+        actorUserId: 7,
+        principalSessionId: "ps-actor-must-not-be-persisted",
+        requestId: "req-1",
+        targetId: 999,
+      },
+    );
+
+    expect(audit).toEqual({
+      action: "admin.session.revoke",
+      outcome: "success",
+      actorType: "admin",
+      actorUserId: 7,
+      requestId: "req-1",
+      targetType: "principal_session",
+      targetCode: "ps-target",
+      details: {
+        scope: "session",
+        changed: true,
+        revoked: {
+          principalSessions: 1,
+          bindings: 2,
+          credentials: 3,
+          artifacts: 4,
+        },
+        currentPrincipalSessionExcluded: false,
+        cleanupFailedCount: 1,
+      },
+    });
+    expect(JSON.stringify(audit)).not.toContain("ps-actor-must-not-be-persisted");
+  });
+
+  test("builds a safe user-level Session Revocation target with only counts and exception state", () => {
+    const audit = sessionManagementAudit.buildAdminSessionRevokeUserAudit(
+      {
+        userId: 42,
+        outcome: "success",
+        result: {
+          changed: true,
+          scope: "user",
+          revoked: {
+            principalSessions: 1,
+            bindings: 2,
+            credentials: 3,
+            artifacts: 4,
+          },
+          currentPrincipalSessionExcluded: true,
+          cleanup: {
+            attempted: 2,
+            succeeded: 1,
+            failed: 1,
+          },
+        },
+      },
+      {
+        actorType: "admin",
+        actorUserId: 42,
+        principalSessionId: "ps-actor-must-not-be-persisted",
+        requestId: "req-user-revoke",
+        targetCode: "ps-target-must-not-be-persisted",
+      },
+    );
+
+    expect(audit).toEqual({
+      action: "admin.session.revoke_user",
+      outcome: "success",
+      actorType: "admin",
+      actorUserId: 42,
+      requestId: "req-user-revoke",
+      targetType: "user",
+      targetId: 42,
+      details: {
+        scope: "user",
+        changed: true,
+        revoked: {
+          principalSessions: 1,
+          bindings: 2,
+          credentials: 3,
+          artifacts: 4,
+        },
+        currentPrincipalSessionExcluded: true,
+        cleanupFailedCount: 1,
+      },
+    });
+    const persistedAudit = JSON.stringify(audit);
+    expect(persistedAudit).not.toContain("ps-actor-must-not-be-persisted");
+    expect(persistedAudit).not.toContain("ps-target-must-not-be-persisted");
+    expect(persistedAudit).not.toMatch(/externalToken|lookup|hmac|metadata|cleanupRef|failures|userAgent|origin|error/);
   });
 
   test("builds role assignment payload with role target and assignment summary", () => {

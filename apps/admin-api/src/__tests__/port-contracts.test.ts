@@ -29,6 +29,13 @@ import type {
   AdminRoleTransactionStorePort,
 } from "@admin-api/services/role/role.port";
 import type { RoleRepository } from "@admin-api/services/role/role.repository";
+import type {
+  AdminLoginRestrictionPort,
+  AdminSessionControlPort,
+  AdminSessionInventoryPort,
+  AdminSessionUserControlPort,
+  AdminSessionUserSummaryPort,
+} from "@admin-api/services/session-management/session-management.port";
 import type { AdminSessionRevocationPort } from "@admin-api/services/session-revocation/session-revocation.port";
 import type {
   AdminUserEffectiveRoleResolverPort,
@@ -39,12 +46,22 @@ import type {
 } from "@admin-api/services/user/user.port";
 import type { UserRepository } from "@admin-api/services/user/user.repository";
 import type { ResignUserSessionRevocationPort } from "@admin-api/use-cases/employment/resign-user/resign-user.port";
+import type { LoginRestriction } from "@iam/api-core/login-restriction";
+import type { SessionKernel } from "@iam/api-core/session/kernel";
 import type { RoleAssignmentResolver } from "@iam/role-assignment-resolution";
 import { expect, test } from "bun:test";
 
 function assertAssignable<Port, _Provider extends Port>() {}
 
 test("Admin API providers structurally satisfy consumer-owned ports", () => {
+  type RevokeUserInput = Parameters<AdminSessionUserControlPort["revokeUserSessions"]>[0];
+  // @ts-expect-error Admin user Session Revocation always requires server audit context.
+  const missingAuditContext: RevokeUserInput = {
+    userId: 1,
+    reason: "admin_revoke",
+  };
+  void missingAuditContext;
+
   assertAssignable<AdminClientReaderPort, ClientRepository>();
   assertAssignable<AdminClientTransactionStorePort, ClientRepository>();
 
@@ -69,6 +86,11 @@ test("Admin API providers structurally satisfy consumer-owned ports", () => {
   assertAssignable<AdminUserEffectiveRoleResolverPort, RoleAssignmentResolver>();
   assertAssignable<AdminUserPrivilegeReaderPort, PrivilegeRepository>();
 
+  assertAssignable<AdminSessionInventoryPort, SessionKernel>();
+  assertAssignable<AdminSessionControlPort, SessionKernel>();
+  assertAssignable<AdminLoginRestrictionPort, LoginRestriction>();
+  assertAssignable<AdminSessionUserControlPort, AdminSessionRevocationPort>();
+  assertAssignable<AdminSessionUserSummaryPort, UserRepository>();
   assertAssignable<ResignUserSessionRevocationPort, AdminSessionRevocationPort>();
 
   expect(true).toBe(true);

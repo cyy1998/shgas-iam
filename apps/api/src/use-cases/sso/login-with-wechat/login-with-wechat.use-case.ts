@@ -1,6 +1,7 @@
 import type { LoginWithWechatDeps } from "./login-with-wechat.port";
 import type { LoginWithWechatInput, LoginWithWechatOptions } from "./login-with-wechat.type";
 import { buildWechatLoginSuccessAudit } from "@api/services/audit/events/auth.audit";
+import { toSessionOrigin } from "@api/services/session/session-origin";
 import { LoginFailedError } from "@iam/api-core/errors/LoginFailedError";
 import { reviveIsoDates } from "@iam/api-core/utils";
 import { UserDetailDtoSchema } from "@iam/domain/user";
@@ -12,7 +13,12 @@ const CachedWechatLoginUserSchema = z.union([
 ]);
 
 export function createLoginWithWechatUseCase(deps: LoginWithWechatDeps) {
-  async function retry(code: string, retryTimes: number = 0, maxTimes: number = 5): Promise<{
+  async function retry(
+    code: string,
+    requestContext: LoginWithWechatOptions["requestContext"],
+    retryTimes: number = 0,
+    maxTimes: number = 5,
+  ): Promise<{
     token: string;
     isMobileSet: boolean;
   }> {
@@ -26,7 +32,7 @@ export function createLoginWithWechatUseCase(deps: LoginWithWechatDeps) {
       throw new LoginFailedError("微信登录超时");
     }
     if (codeCache === "Processing") {
-      return retry(code, retryTimes + 1);
+      return retry(code, requestContext, retryTimes + 1, maxTimes);
     }
     const { userId } = CachedWechatLoginUserSchema.parse(JSON.parse(codeCache, reviveIsoDates));
     const liveUser = await deps.users.getActiveUserById(userId);
@@ -34,14 +40,17 @@ export function createLoginWithWechatUseCase(deps: LoginWithWechatDeps) {
       throw new LoginFailedError("用户不存在");
     }
     const userDetail = await deps.users.getUserDetailById(liveUser.id);
-    const { token } = await deps.principalSessions.createPrincipalSession(userDetail, { amr: ["wechat"] });
+    const { token } = await deps.principalSessions.createPrincipalSession(userDetail, {
+      amr: ["wechat"],
+      origin: toSessionOrigin(requestContext),
+    });
     return { token, isMobileSet: userDetail.mobile !== null };
   }
 
   async function execute(input: LoginWithWechatInput, options: LoginWithWechatOptions = {}) {
     const codeCached = await deps.cache.get(`wx-code:${input.code}`);
     if (codeCached !== null) {
-      return retry(input.code);
+      return retry(input.code, options.requestContext);
     }
     await deps.cache.set(`wx-code:${input.code}`, "Processing", "EX", 600);
     const wxId = await deps.wechat.getWxUserId(input.code);
@@ -50,7 +59,10 @@ export function createLoginWithWechatUseCase(deps: LoginWithWechatDeps) {
       throw new LoginFailedError("用户不存在");
     }
     const userDetail = await deps.users.getUserDetailById(liveUser.id);
-    const { token } = await deps.principalSessions.createPrincipalSession(userDetail, { amr: ["wechat"] });
+    const { token } = await deps.principalSessions.createPrincipalSession(userDetail, {
+      amr: ["wechat"],
+      origin: toSessionOrigin(options.requestContext),
+    });
     await deps.auditLogWriter.recordAuditLog({
       ...options.requestContext,
       ...buildWechatLoginSuccessAudit(userDetail),

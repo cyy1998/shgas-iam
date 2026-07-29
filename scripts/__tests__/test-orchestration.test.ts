@@ -254,6 +254,10 @@ describe("test orchestration", () => {
       dependsOn: ["transit"],
       cache: false,
     });
+    expect(turbo.tasks["test:redis"]).toEqual({
+      dependsOn: ["transit"],
+      cache: false,
+    });
     expect(turbo.tasks.e2e).toEqual({
       cache: false,
     });
@@ -331,6 +335,10 @@ describe("test orchestration", () => {
     );
     expect(roleResolution.scripts["test:postgres"])
       .toBe("bun test --max-concurrency=1 test-postgres");
+    const apiCore = readJson(join(apiCoreRoot, "package.json"));
+    expect(apiCore.scripts["test:redis"])
+      .toBe("bun test --max-concurrency=1 test-redis");
+    expect(apiCore.scripts.test).not.toContain("test-redis");
   });
 
   test("collects OIDC ordinary and process smoke tests into disjoint lanes", async () => {
@@ -367,12 +375,17 @@ describe("test orchestration", () => {
     expect(existsSync(oidcHarnessTest)).toBe(false);
   });
 
-  test("discovers API Core ordinary and Windows Job smoke tests in disjoint Bun lanes", () => {
+  test("discovers API Core ordinary, Redis, and Windows Job smoke tests in disjoint Bun lanes", () => {
     const apiCorePackage = readJson(join(apiCoreRoot, "package.json"));
     const ordinaryFiles = [...new Bun.Glob("src/**/*.test.ts").scanSync({ cwd: apiCoreRoot })]
       .map(file => file.replaceAll("\\", "/"))
       .sort();
     const smokeFiles = [...new Bun.Glob("test-smoke/**/*.smoke.test.ts").scanSync({
+      cwd: apiCoreRoot,
+    })]
+      .map(file => file.replaceAll("\\", "/"))
+      .sort();
+    const redisFiles = [...new Bun.Glob("test-redis/**/*.redis.test.ts").scanSync({
       cwd: apiCoreRoot,
     })]
       .map(file => file.replaceAll("\\", "/"))
@@ -394,15 +407,20 @@ describe("test orchestration", () => {
     );
 
     expect(apiCorePackage.scripts.test).toBe("bun test --max-concurrency=2 src");
+    expect(apiCorePackage.scripts["test:redis"])
+      .toBe("bun test --max-concurrency=1 test-redis");
     expect(apiCorePackage.scripts["test:smoke"])
       .toBe("bun test --max-concurrency=1 test-smoke");
     expect(apiCorePackage.scripts.lint)
-      .toBe("eslint src test-smoke scripts eslint.config.js");
+      .toBe("eslint src test-smoke test-redis scripts eslint.config.js");
     expect(apiCorePackage.scripts["lint:fix"])
-      .toBe("eslint --fix src test-smoke scripts eslint.config.js");
+      .toBe("eslint --fix src test-smoke test-redis scripts eslint.config.js");
     expect(ordinaryFiles).toContain("src/testing/__tests__/process-smoke-harness.test.ts");
+    expect(redisFiles).toContain("test-redis/login-restriction.redis.test.ts");
     expect(smokeFiles).toContain("test-smoke/process-smoke-windows-job.smoke.test.ts");
     expect(ordinaryFiles.filter(file => smokeFiles.includes(file))).toEqual([]);
+    expect(ordinaryFiles.filter(file => redisFiles.includes(file))).toEqual([]);
+    expect(smokeFiles.filter(file => redisFiles.includes(file))).toEqual([]);
     expect(existsSync(windowsJobSmokePath)).toBe(true);
     expect(existsSync(oidcWindowsJobSmokePath)).toBe(false);
 

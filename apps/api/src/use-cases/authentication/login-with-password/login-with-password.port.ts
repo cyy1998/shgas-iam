@@ -1,10 +1,15 @@
 import type { HumanVerificationAction } from "@api/enums/humanVerification.action";
+import type { SessionOrigin } from "@api/services/session/session-origin";
 import type {
   AuditActorType,
   AuditDetails,
   AuditOutcome,
 } from "@iam/domain/audit";
 import type { UserDetailDto } from "@iam/domain/user";
+import type {
+  AuthenticationLoginFailureStatus,
+  AuthenticationLoginRestrictionStatus,
+} from "../login-restriction.type";
 import type { PasswordLoginUser } from "./login-with-password.type";
 
 export interface PasswordLoginAuditInput {
@@ -30,10 +35,23 @@ export interface PasswordLoginAuditInput {
   details?: AuditDetails;
 }
 
-export interface PasswordLoginFailureResult {
-  failureCount: number;
-  remainingAttempts: number;
-  shouldBlacklist: boolean;
+export interface PasswordLoginRestrictionPort {
+  recordFailure: (input: {
+    userId: number;
+    triggerMethod: "password";
+  }) => Promise<AuthenticationLoginFailureStatus>;
+  clearLoginState: (userId: number) => Promise<unknown>;
+  getRestriction: (userId: number) => Promise<AuthenticationLoginRestrictionStatus | null>;
+}
+
+export interface PasswordPrincipalSessionPort {
+  createPrincipalSession: (
+    user: UserDetailDto,
+    options: {
+      amr: readonly ["pwd"];
+      origin?: SessionOrigin;
+    },
+  ) => Promise<{ token: string }>;
 }
 
 export interface LoginWithPasswordDeps {
@@ -59,21 +77,8 @@ export interface LoginWithPasswordDeps {
       traceId?: string | null;
     }) => Promise<void>;
   };
-  loginFailure: {
-    recordLoginFailure: (userId: number) => Promise<PasswordLoginFailureResult>;
-    blacklistLoginUser: (userId: number, reason: "password") => Promise<void>;
-    clearLoginFailures: (userId: number) => Promise<void>;
-    clearLoginBlacklist: (userId: number) => Promise<void>;
-    isLoginUserBlacklisted: (userId: number) => Promise<boolean>;
-    formatLoginBlacklistMessage: (userId: number) => Promise<string>;
-    formatLoginFailureMessage: (prefix: string, result: PasswordLoginFailureResult) => string;
-  };
-  principalSessions: {
-    createPrincipalSession: (
-      user: UserDetailDto,
-      options: { amr?: string[] },
-    ) => Promise<{ token: string }>;
-  };
+  loginRestriction: PasswordLoginRestrictionPort;
+  principalSessions: PasswordPrincipalSessionPort;
   users: {
     checkPassword: (username: string, password: string) => Promise<boolean>;
     getActiveUserByUsername: (username: string) => Promise<PasswordLoginUser | null>;

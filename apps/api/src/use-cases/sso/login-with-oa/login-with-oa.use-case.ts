@@ -1,6 +1,7 @@
 import type { LoginWithOaDeps } from "./login-with-oa.port";
 import type { LoginWithOaInput, LoginWithOaOptions } from "./login-with-oa.type";
 import { buildOaLoginSuccessAudit } from "@api/services/audit/events/auth.audit";
+import { toSessionOrigin } from "@api/services/session/session-origin";
 import { AuthzUnauthorizedError } from "@iam/api-core/errors/AuthzUnauthorizedError";
 import { InvalidSsoClientError } from "@iam/api-core/errors/InvalidSsoClientError";
 import { LoginFailedError } from "@iam/api-core/errors/LoginFailedError";
@@ -33,7 +34,10 @@ export function createLoginWithOaUseCase(deps: LoginWithOaDeps) {
       throw new LoginFailedError("用户类别不支持OA登录");
     }
     const userDetail = await deps.users.getUserDetailById(liveUser.id);
-    const { token: sessionId } = await deps.principalSessions.createPrincipalSession(userDetail, { amr: ["oa"] });
+    const { token: sessionId } = await deps.principalSessions.createPrincipalSession(userDetail, {
+      amr: ["oa"],
+      origin: toSessionOrigin(options.requestContext),
+    });
     await deps.auditLogWriter.recordAuditLog({
       ...options.requestContext,
       ...buildOaLoginSuccessAudit(userDetail, input.clientCode),

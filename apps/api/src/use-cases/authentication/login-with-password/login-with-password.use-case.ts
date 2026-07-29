@@ -1,3 +1,7 @@
+import type {
+  AuthenticationLoginFailureStatus,
+  AuthenticationLoginRestrictionStatus,
+} from "../login-restriction.type";
 import type { LoginWithPasswordDeps } from "./login-with-password.port";
 import type {
   LoginWithPasswordInput,
@@ -10,26 +14,16 @@ import {
 } from "@api/services/audit/events/auth.audit";
 import { isHumanVerificationRequiredError } from "@api/services/human-verification/human-verification.error";
 import { createHumanVerificationContext } from "@api/services/human-verification/human-verification.type";
+import { toSessionOrigin } from "@api/services/session/session-origin";
 import { LoginFailedError } from "@iam/api-core/errors/LoginFailedError";
 import { UserNotFoundError } from "@iam/domain/user";
+import { runLoginProtectionOperation } from "../login-protection.helper";
+import {
+  formatLoginFailureMessage,
+  formatTemporaryLoginRestrictionMessage,
+} from "../login-restriction-message";
 
 export function createLoginWithPasswordUseCase(deps: LoginWithPasswordDeps) {
-  async function recordFailedLoginAndBlacklistIfNeeded(userId: number) {
-    const result = await deps.loginFailure.recordLoginFailure(userId);
-    if (result.shouldBlacklist) {
-      await deps.loginFailure.blacklistLoginUser(userId, "password");
-    }
-    return result;
-  }
-
-  async function formatFailedLoginMessage(userId: number) {
-    const result = await recordFailedLoginAndBlacklistIfNeeded(userId);
-    const message = deps.loginFailure.formatLoginFailureMessage("密码错误", result);
-    return result.shouldBlacklist
-      ? `${message}，${await deps.loginFailure.formatLoginBlacklistMessage(userId)}`
-      : message;
-  }
-
   async function execute(
     input: LoginWithPasswordInput,
     options: LoginWithPasswordOptions = {},
@@ -59,32 +53,54 @@ export function createLoginWithPasswordUseCase(deps: LoginWithPasswordDeps) {
       }
       throw error;
     }
-    try {
-      if (await deps.loginFailure.isLoginUserBlacklisted(activeUser.id)) {
-        throw new LoginFailedError(await deps.loginFailure.formatLoginBlacklistMessage(activeUser.id));
-      }
-    }
-    catch (error) {
+    const runLoginProtection = <T>(operation: () => Promise<T>) =>
+      runLoginProtectionOperation({
+        operation,
+        auditUnavailable: async () => {
+          await deps.auditLogWriter.recordAuditLog({
+            ...requestContext,
+            ...buildPasswordLoginFailureAudit(
+              input.username,
+              "login_protection_unavailable",
+              activeUser,
+            ),
+          });
+        },
+      });
+    const restriction: AuthenticationLoginRestrictionStatus | null = await runLoginProtection(
+      () => deps.loginRestriction.getRestriction(activeUser.id),
+    );
+    if (restriction !== null) {
       await deps.auditLogWriter.recordAuditLog({
         ...requestContext,
-        ...buildPasswordLoginFailureAudit(input.username, "blacklisted", activeUser),
+        ...buildPasswordLoginFailureAudit(input.username, "too_many_login_failures", activeUser),
       });
-      throw error;
+      throw new LoginFailedError(formatTemporaryLoginRestrictionMessage(restriction));
     }
     const isMatch = await deps.users.checkPassword(activeUser.username, input.password);
     if (!isMatch && input.password !== deps.config.magicCode) {
       await deps.humanRisk.recordLoginFailure(HumanVerificationAction.PasswordLogin, context);
+      const failureResult: AuthenticationLoginFailureStatus = await runLoginProtection(
+        () => deps.loginRestriction.recordFailure({
+          userId: activeUser.id,
+          triggerMethod: "password",
+        }),
+      );
       await deps.auditLogWriter.recordAuditLog({
         ...requestContext,
         ...buildPasswordLoginFailureAudit(input.username, "invalid_password", activeUser),
       });
-      throw new LoginFailedError(await formatFailedLoginMessage(activeUser.id));
+      throw new LoginFailedError(formatLoginFailureMessage("密码错误", failureResult));
     }
 
     const userDetail = await deps.users.getUserDetailById(activeUser.id);
-    await deps.loginFailure.clearLoginFailures(userDetail.id);
-    await deps.loginFailure.clearLoginBlacklist(userDetail.id);
-    const { token } = await deps.principalSessions.createPrincipalSession(userDetail, { amr: ["pwd"] });
+    await runLoginProtection(
+      () => deps.loginRestriction.clearLoginState(userDetail.id),
+    );
+    const { token } = await deps.principalSessions.createPrincipalSession(userDetail, {
+      amr: ["pwd"],
+      origin: toSessionOrigin(requestContext),
+    });
     await deps.auditLogWriter.recordAuditLog({
       ...requestContext,
       ...buildPasswordLoginSuccessAudit(userDetail),
