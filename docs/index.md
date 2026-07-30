@@ -28,6 +28,11 @@
 | [docs/adr/0003-adopt-layered-test-lanes-and-resource-budgets.md](adr/0003-adopt-layered-test-lanes-and-resource-budgets.md) | decision | Current | 2026-07-24 | 2026-10-31 | 采用普通测试、process smoke 与外部资源测试分层，以及显式缓存和并发预算；实现与平台状态见测试编排架构。 |
 | [docs/adr/0004-adopt-upstream-first-matt-skills.md](adr/0004-adopt-upstream-first-matt-skills.md) | decision | Current | 2026-07-24 | 2026-10-31 | 确立上游 Matt skills 的流程所有权，并以仓库薄适配取代可执行证据状态机。 |
 | [docs/adr/0005-keep-live-login-state-in-redis.md](adr/0005-keep-live-login-state-in-redis.md) | decision | Current | 2026-07-28 | 2026-10-31 | 有效会话与临时登录限制只以 Redis 实时状态为事实来源，不建立 PostgreSQL 会话影子或历史快照。 |
+| [docs/adr/0006-adopt-distributed-authorization-control-plane.md](adr/0006-adopt-distributed-authorization-control-plane.md) | decision | Current | 2026-07-30 | 2026-10-31 | IAM 集中治理 OPA 授权策略和共享主体属性，各 client 在本地执行授权判定。 |
+| [docs/adr/0007-retain-effective-roles-as-subject-attributes.md](adr/0007-retain-effective-roles-as-subject-attributes.md) | decision | Current | 2026-07-30 | 2026-10-31 | ABAC 保留 Effective Role 作为派生主体属性，但不再由角色直接决定最终授权。 |
+| [docs/adr/0008-federate-authorization-model-ownership.md](adr/0008-federate-authorization-model-ownership.md) | decision | Current | 2026-07-30 | 2026-10-31 | 各业务域拥有 client 授权模型，IAM 统一治理公共契约、安全基线与策略发布。 |
+| [docs/adr/0009-keep-resource-attribute-models-with-resource-owners.md](adr/0009-keep-resource-attribute-models-with-resource-owners.md) | decision | Current | 2026-07-30 | 2026-10-31 | 资源属性模型随业务仓库维护，IAM 仅登记和发布不可变的授权契约修订版。 |
+| [docs/adr/0010-adopt-tiered-authorization-freshness.md](adr/0010-adopt-tiered-authorization-freshness.md) | decision | Current | 2026-07-30 | 2026-10-31 | 紧急撤权 30 秒、普通主体与策略变化 2 分钟、资源事实请求时实时参与判定。 |
 | [docs/agents/domain.md](agents/domain.md) | agent-config | Current | 2026-07-16 | 2026-10-31 | Engineering skills 的 single-context domain documentation 消费规则。 |
 | [docs/agents/issue-tracker.md](agents/issue-tracker.md) | agent-config | Current | 2026-07-24 | 2026-10-31 | 本地 spec、ticket、轻量 feature journal 与 fresh-context handoff 的文件约定。 |
 | [docs/agents/triage-labels.md](agents/triage-labels.md) | agent-config | Current | 2026-07-16 | 2026-10-31 | Engineering skills 使用的默认 triage 标签映射。 |

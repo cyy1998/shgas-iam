@@ -9,8 +9,28 @@ IAM 中关于一个用户的稳定档案视图，包括用户基础身份信息�
 _Avoid_: session payload, protocol payload
 
 **Effective Role**:
-对一条有效任职生效的启用角色；只有任职及其岗位、任职组织、角色分配目标和角色均启用且未删除时才生效。用户自身状态不属于该概念，由使用方单独判断。
+对一条有效任职生效的启用角色；只有任职及其岗位、任职组织、角色分配目标和角色均启用且未删除时才生效。用户自身状态不属于该概念，由使用方单独判断。它是派生的主体属性，不独立表示某项访问已获允许。
 _Avoid_: parsed role, assigned role
+
+**Authorization Control Plane**:
+IAM 中集中治理跨 client 授权策略、共享主体属性、版本发布和决策审计的边界；它不位于每个业务请求的同步判定路径。
+_Avoid_: central authorization proxy, remote request gatekeeper
+
+**Authorization Enforcement Boundary**:
+每个受保护 client 在靠近其资源的位置完成授权判定与执行的运行边界；资源语义和请求上下文不由 IAM 代替业务系统推断。
+_Avoid_: IAM remote authorization endpoint
+
+**Client Authorization Contract**:
+一个 client 对其资源类型、可执行动作和判定所需资源属性作出的版本化声明；资源所属业务域拥有其语义，IAM 统一治理声明的发布与兼容性。
+_Avoid_: global permission list, IAM-owned business resource model
+
+**Authorization Contract Revision**:
+Client Authorization Contract 经审核发布后形成的不可变版本，以内容摘要标识并由 IAM 登记；可编辑的源定义仍属于资源所属业务仓库。
+_Avoid_: editable IAM copy, mutable schema record
+
+**Authorization Freshness Class**:
+授权事实从源头变化到所有相关 Authorization Enforcement Boundary 必须可见的最长时间类别。紧急撤权上限为 30 秒，普通主体属性、角色和已发布策略变更上限为 2 分钟；资源事实以业务请求读取到的当前状态为准。
+_Avoid_: instant consistency, cache TTL
 
 **ORCAS Session Identity**:
 Custom SSO Gateway 登录过程中由 ORCAS 返回、绑定到本次 local session 的外部身份信息；它不是 IAM 用户档案属性。
