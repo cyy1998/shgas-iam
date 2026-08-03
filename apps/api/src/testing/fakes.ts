@@ -163,7 +163,7 @@ export function createMemoryRedis(now: () => number = Date.now) {
       return sets.get(key)?.size ?? 0;
     },
 
-    async eval(_script: string, keyCount: number, ...args: string[]) {
+    async eval(script: string, keyCount: number, ...args: string[]) {
       if (keyCount !== 1 && keyCount !== 2)
         throw new Error("memory redis eval supports one or two keys only");
 

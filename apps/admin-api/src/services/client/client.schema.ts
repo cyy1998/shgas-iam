@@ -1,21 +1,27 @@
 import { z } from "@hono/zod-openapi";
 import { createPageQuerySchema } from "@iam/api-core/core/pagination/schema";
 import {
-  ClientManagementLevel,
   ClientStatus,
+  CustomSsoClientMode,
+  CustomSsoClientState,
   OidcClientState,
   OidcClientType,
   OidcScope,
 } from "@iam/contracts";
-import { insertClientSchema, oidcClientConfigSchema, updateClientSchema } from "@iam/db/schema";
+import {
+  customSsoClientConfigSchema,
+  insertClientSchema,
+  oidcClientConfigSchema,
+  selectClientSchema,
+  updateClientSchema,
+} from "@iam/db/schema";
 import {
   ClientAdminDetailDtoSchema,
   ClientAdminListDtoSchema,
-  ClientDtoSchema,
   validateRedirectUrlPattern,
 } from "@iam/domain/client";
 
-export { ClientAdminDetailDtoSchema, ClientAdminListDtoSchema, ClientDtoSchema };
+export { ClientAdminDetailDtoSchema, ClientAdminListDtoSchema };
 
 const oidcManagedFields = {
   oidcEnabled: true,
@@ -24,20 +30,53 @@ const oidcManagedFields = {
   oidcConfigVersion: true,
 } as const;
 
-const genericClientInsertSchema = insertClientSchema.omit(oidcManagedFields);
-const genericClientUpdateSchema = updateClientSchema.omit(oidcManagedFields);
+const customSsoManagedFields = {
+  customSsoEnabled: true,
+  customSsoConfig: true,
+  customSsoSecretHash: true,
+  customSsoConfigVersion: true,
+} as const;
+
+const AdminClientStorageSchema = z.object(selectClientSchema.shape);
+const AdminClientStorageWithoutLegacyAttributesSchema
+  = AdminClientStorageSchema.omit({
+    extAttributes: true,
+  });
+const genericClientExtAttributesSchema = z.object({}).strict();
+
+export const AdminClientRecordSchema
+  = AdminClientStorageWithoutLegacyAttributesSchema.extend({
+    extAttributes: genericClientExtAttributesSchema,
+  });
+
+export function toAdminClientRecord(input: unknown) {
+  return AdminClientRecordSchema.parse({
+    ...AdminClientStorageWithoutLegacyAttributesSchema.parse(input),
+    extAttributes: {},
+  });
+}
+
+const genericClientInsertSchema = insertClientSchema
+  .omit({ ...oidcManagedFields, ...customSsoManagedFields })
+  .extend({ extAttributes: genericClientExtAttributesSchema.default({}) });
+const genericClientUpdateSchema = updateClientSchema
+  .omit({ ...oidcManagedFields, ...customSsoManagedFields })
+  .extend({ extAttributes: genericClientExtAttributesSchema.optional() });
 
 export const ClientPaginationQueryDtoSchema = createPageQuerySchema(
   z.object({
     fuzzyConditions: z.object({
       text: z.string().optional().openapi({ example: "portal" }),
-    }),
+    }).strict(),
     exactConditions: z.object({
       statuses: z.array(z.enum(ClientStatus)).optional().openapi({
         example: [ClientStatus.Enable, ClientStatus.Maintenance],
       }),
-      managementLevels: z.array(z.enum(ClientManagementLevel)).optional().openapi({
-        example: [ClientManagementLevel.Gateway],
+      customSsoStates: z.array(z.enum(CustomSsoClientState)).optional().openapi({
+        example: [CustomSsoClientState.Enabled],
+      }),
+      customSsoModes: z.array(z.enum(CustomSsoClientMode)).optional().openapi({
+        example: [CustomSsoClientMode.Gateway],
       }),
       oidcStates: z.array(z.enum(OidcClientState)).optional().openapi({
         example: [OidcClientState.Enabled],
@@ -48,25 +87,18 @@ export const ClientPaginationQueryDtoSchema = createPageQuerySchema(
       oidcAllowedScopes: z.array(z.enum(OidcScope)).optional().openapi({
         example: [OidcScope.OpenId, OidcScope.Profile],
       }),
-    }),
-  }),
+    }).strict(),
+  }).strict(),
 ).openapi("ClientPaginationQueryDto");
 
 export const ClientInputDtoSchema = z.object(genericClientUpdateSchema.shape).extend({
-  id: ClientDtoSchema.shape.id,
-}).strict().superRefine((dto, ctx) => {
-  addRedirectUrlPatternIssues(dto.extAttributes?.validRedirectUrls, ctx);
-}).openapi("ClientInputDto");
+  id: AdminClientRecordSchema.shape.id,
+}).strict().openapi("ClientInputDto");
 
-export const ClientCreateDtoSchema = z.object(genericClientInsertSchema.shape).strict().superRefine((dto, ctx) => {
-  addRedirectUrlPatternIssues(dto.extAttributes.validRedirectUrls, ctx);
-}).openapi("ClientCreateDto");
+export const ClientCreateDtoSchema = z.object(genericClientInsertSchema.shape).strict().openapi("ClientCreateDto");
 
 export const ClientUpdateDtoSchema = z.object(genericClientUpdateSchema.omit({ clientCode: true }).shape)
   .strict()
-  .superRefine((dto, ctx) => {
-    addRedirectUrlPatternIssues(dto.extAttributes?.validRedirectUrls, ctx);
-  })
   .openapi("ClientUpdateDto");
 
 export const ClientStatusUpdateDtoSchema = z.object({
@@ -75,6 +107,12 @@ export const ClientStatusUpdateDtoSchema = z.object({
 
 export const ClientOidcConfigureDtoSchema = oidcClientConfigSchema;
 
+export const ClientCustomSsoConfigureDtoSchema = customSsoClientConfigSchema
+  .superRefine((config, ctx) => {
+    addRedirectUrlPatternIssues(config.validRedirectUrls, ctx, ["validRedirectUrls"]);
+  })
+  .openapi("ClientCustomSsoConfigureDto");
+
 export const ClientOidcMutationResultSchema = z.object({
   client: ClientAdminDetailDtoSchema,
   clientSecret: z.string().optional().openapi({
@@ -82,13 +120,24 @@ export const ClientOidcMutationResultSchema = z.object({
   }),
 }).openapi("ClientOidcMutationResult");
 
-function addRedirectUrlPatternIssues(patterns: string[] | undefined, ctx: z.RefinementCtx) {
+export const ClientCustomSsoMutationResultSchema = z.object({
+  client: ClientAdminDetailDtoSchema,
+  customSsoSecret: z.string().optional().openapi({
+    description: "仅在创建 Independent、切换到 Independent 或轮换时返回一次的 Custom SSO secret",
+  }),
+}).openapi("ClientCustomSsoMutationResult");
+
+function addRedirectUrlPatternIssues(
+  patterns: string[] | undefined,
+  ctx: z.RefinementCtx,
+  pathPrefix: PropertyKey[] = [],
+) {
   patterns?.forEach((pattern, index) => {
     const result = validateRedirectUrlPattern(pattern);
     if (!result.ok) {
       ctx.addIssue({
         code: "custom",
-        path: ["extAttributes", "validRedirectUrls", index],
+        path: [...pathPrefix, index],
         message: `存在非法 redirect URL pattern: ${pattern}`,
       });
     }

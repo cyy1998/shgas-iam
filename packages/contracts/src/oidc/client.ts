@@ -7,6 +7,7 @@ export enum OidcScope {
   OpenId = "openid",
   Profile = "profile",
   Phone = "phone",
+  IamEmployments = "iam:employments",
   IamAuthorization = "iam:authorization",
 }
 
@@ -25,6 +26,7 @@ export const OIDC_SUPPORTED_SCOPES = [
   OidcScope.OpenId,
   OidcScope.Profile,
   OidcScope.Phone,
+  OidcScope.IamEmployments,
   OidcScope.IamAuthorization,
 ] as const;
 

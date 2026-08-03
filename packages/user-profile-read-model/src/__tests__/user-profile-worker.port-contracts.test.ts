@@ -1,19 +1,21 @@
 import type { UserProfileDirtyRepository } from "../dirty.repository";
+import type { createSubjectFactsRedisPublisher } from "../subject-facts-redis.publisher";
 import type { UserProfileBuilder } from "../user-profile-builder.service";
 import type { UserProfileJobProducer } from "../user-profile-job.producer";
 import type { UserProfileMaintenanceRepository } from "../user-profile-maintenance.repository";
+import type { createUserProfilePublicationRepository } from "../user-profile-publication.repository";
 import type {
   createUserProfileJobProcessor,
   UserProfileJobProcessor,
 } from "../user-profile-worker.module";
-import type { UserProfileRepository } from "../user-profile.repository";
 import type {
+  SubjectFactsPublisherPort,
   UserProfileMaintenanceDirtyRepositoryPort,
   UserProfileMaintenanceJobProducerPort,
   UserProfileMaintenanceUserRepositoryPort,
+  UserProfilePublicationPort,
   UserProfileRebuildBuilderPort,
   UserProfileRebuildDirtyStorePort,
-  UserProfileRebuildProfileStorePort,
 } from "../worker";
 import { describe, test } from "bun:test";
 
@@ -35,7 +37,8 @@ describe("User Profile worker port contracts", () => {
     assertAssignable<UserProfileMaintenanceDirtyRepositoryPort, UserProfileDirtyRepository>();
     assertAssignable<UserProfileMaintenanceJobProducerPort, UserProfileJobProducer>();
 
-    assertAssignable<UserProfileRebuildProfileStorePort, UserProfileRepository>();
+    assertAssignable<UserProfilePublicationPort, ReturnType<typeof createUserProfilePublicationRepository>>();
+    assertAssignable<SubjectFactsPublisherPort, ReturnType<typeof createSubjectFactsRedisPublisher>>();
     assertAssignable<UserProfileRebuildDirtyStorePort, UserProfileDirtyRepository>();
     assertAssignable<UserProfileRebuildBuilderPort, UserProfileBuilder>();
   });

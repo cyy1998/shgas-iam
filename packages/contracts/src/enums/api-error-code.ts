@@ -7,6 +7,8 @@ export enum ApiErrorCode {
   Unauthorized = "AUTH.UNAUTHORIZED",
   Forbidden = "AUTH.FORBIDDEN",
   Maintenance = "AUTH.MAINTENANCE",
+  SessionInvalid = "SESSION_INVALID",
+  SubjectAccessUnavailable = "SUBJECT_ACCESS_UNAVAILABLE",
 
   InvalidLoginCredential = "LOGIN.INVALID_CREDENTIAL",
   LoginFailed = "LOGIN.FAILED",
@@ -54,6 +56,7 @@ export enum ApiErrorCode {
   InvalidSsoClient = "SSO.INVALID_CLIENT",
   InvalidRedirectUri = "SSO.INVALID_REDIRECT_URI",
   InvalidAuthCode = "SSO.INVALID_AUTH_CODE",
+  SubjectProjectionNotReady = "SUBJECT_PROJECTION_NOT_READY",
 
   PrivilegeDelegationNotFound = "PRIVILEGE.DELEGATION_NOT_FOUND",
   PrivilegeDelegationEnded = "PRIVILEGE.DELEGATION_ENDED",

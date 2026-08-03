@@ -72,6 +72,11 @@ function getInternalErrorMessage(requestId: string | undefined) {
   return requestId ? "服务器内部错误，请联系管理员并提供 requestId" : "服务器内部错误";
 }
 
+function setRetryAfterHeader(err: { retryAfterSeconds?: number }, c: Context) {
+  if (Number.isSafeInteger(err.retryAfterSeconds) && (err.retryAfterSeconds ?? 0) > 0)
+    c.header("Retry-After", String(err.retryAfterSeconds));
+}
+
 export function createErrorHandler(appLogger: ErrorLogger) {
   return function errorHandler(err: Error | HTTPResponseError, c: Context) {
     const logger = getRequestLogger(c) ?? appLogger;
@@ -85,6 +90,7 @@ export function createErrorHandler(appLogger: ErrorLogger) {
         errorMessage: err.message,
         err,
       }, "handled request error");
+      setRetryAfterHeader(err, c);
       return c.json(resp.fail(err.code, err.message), err.httpStatus as ContentfulStatusCode);
     }
     else if (err instanceof HTTPException) {

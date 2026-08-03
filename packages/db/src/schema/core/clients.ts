@@ -1,9 +1,12 @@
 import {
-  ClientManagementLevel,
+  ClientCodeSchema,
   ClientStatus,
+  CustomSsoClientMode,
   OidcClientType,
   OidcScope,
   OidcTokenEndpointAuthMethod,
+  SUBJECT_CLAIMS_V1,
+  SubjectClaim,
 } from "@iam/contracts";
 import { sql } from "drizzle-orm";
 import { boolean, check, integer, jsonb, snakeCase, varchar } from "drizzle-orm/pg-core";
@@ -11,18 +14,74 @@ import { createInsertSchema, createSelectSchema, createUpdateSchema } from "driz
 import { z } from "zod";
 import { baseColumns } from "../_shard/base-columns";
 
-export const clientExtAttributesSchema = z.object({
-  userExcluding: z.array(z.string()).default([]),
-  requireOrcas: z.boolean().default(false),
-  validRedirectUrls: z.array(
-    z.string().describe("Redirect URL pattern, e.g. https://app.example.com, https://*.example.com, or https://app.example.com/path/*"),
-  ).default([]).describe("Allowed redirect URL patterns for SSO authorize and callback validation"),
-  managementLevel: z.enum(ClientManagementLevel).default(ClientManagementLevel.None),
-  logoutEndpoint: z.url().default("http://localhost:8888"),
-  callbackEndpoint: z.url().default("http://localhost:8888"),
-});
+const clientStorageExtAttributesSchema = z.record(z.string(), z.unknown());
 
-export type ClientExtAttributes = z.infer<typeof clientExtAttributesSchema>;
+const customSsoSubjectClaimsSchema = z.array(z.enum(SUBJECT_CLAIMS_V1))
+  .min(1)
+  .superRefine((claims, ctx) => {
+    if (!claims.includes(SubjectClaim.SubjectIdentifier)) {
+      ctx.addIssue({
+        code: "custom",
+        message: "Custom SSO subjectClaims 必须包含 subjectIdentifier",
+      });
+    }
+    if (new Set(claims).size !== claims.length) {
+      ctx.addIssue({
+        code: "custom",
+        message: "Custom SSO subjectClaims 不得重复",
+      });
+    }
+  });
+
+const customSsoCommonConfigFields = {
+  validRedirectUrls: z.array(z.string().min(1)).min(1),
+  subjectClaimCatalogVersion: z.literal(1),
+  subjectClaims: customSsoSubjectClaimsSchema,
+};
+
+export const customSsoClientConfigSchema = z.discriminatedUnion("mode", [
+  z.object({
+    ...customSsoCommonConfigFields,
+    mode: z.literal(CustomSsoClientMode.Gateway),
+    orcas: z.object({ enabled: z.boolean() }).strict(),
+  }).strict(),
+  z.object({
+    ...customSsoCommonConfigFields,
+    mode: z.literal(CustomSsoClientMode.Independent),
+    callbackEndpoint: z.url(),
+    logoutEndpoint: z.url(),
+  }).strict(),
+]);
+
+export type CustomSsoClientConfig = z.infer<typeof customSsoClientConfigSchema>;
+
+export const customSsoClientStorageStateSchema = z.object({
+  customSsoEnabled: z.boolean(),
+  customSsoConfig: customSsoClientConfigSchema.nullable(),
+  customSsoSecretHash: z.string().min(1).nullable(),
+}).superRefine((value, ctx) => {
+  if (value.customSsoConfig === null) {
+    if (value.customSsoEnabled || value.customSsoSecretHash !== null) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["customSsoConfig"],
+        message: "未配置的 Custom SSO 必须保持禁用且不保存 secret hash",
+      });
+    }
+    return;
+  }
+
+  const requiresSecret = value.customSsoConfig.mode === CustomSsoClientMode.Independent;
+  if (requiresSecret !== (value.customSsoSecretHash !== null)) {
+    ctx.addIssue({
+      code: "custom",
+      path: ["customSsoSecretHash"],
+      message: requiresSecret
+        ? "Independent Custom SSO client 必须保存 secret hash"
+        : "Gateway Custom SSO client 不得保存 secret hash",
+    });
+  }
+});
 
 export function isValidOidcRedirectUri(value: string) {
   if (value !== value.trim() || !/^https?:\/\//u.test(value) || /[*{}]/u.test(value)) {
@@ -107,27 +166,93 @@ export const clients = snakeCase.table("client", {
   isDelete: baseColumns.isDelete,
   createTime: baseColumns.createTime,
   updateTime: baseColumns.updateTime,
-  extAttributes: jsonb().$type<ClientExtAttributes>().notNull(),
+  extAttributes: jsonb().$type<Record<string, unknown>>().notNull(),
   oidcEnabled: boolean().notNull().default(false),
   oidcConfig: jsonb().$type<OidcClientConfig>(),
   oidcSecretHash: varchar({ length: 255 }),
   oidcConfigVersion: integer().notNull().default(0),
+  customSsoEnabled: boolean().notNull().default(false),
+  customSsoConfig: jsonb().$type<CustomSsoClientConfig>(),
+  customSsoSecretHash: varchar({ length: 255 }),
+  customSsoConfigVersion: integer().notNull().default(0),
 }, table => [
   check("client_oidc_enabled_config_check", sql`NOT ${table.oidcEnabled} OR ${table.oidcConfig} IS NOT NULL`),
+  check(
+    "client_custom_sso_state_check",
+    sql`((
+      (
+        ${table.customSsoConfig} IS NULL
+        AND NOT ${table.customSsoEnabled}
+        AND ${table.customSsoSecretHash} IS NULL
+      )
+      OR
+      (
+        ${table.customSsoConfig} IS NOT NULL
+        AND ${table.customSsoConfigVersion} > 0
+        AND jsonb_typeof(${table.customSsoConfig}) = 'object'
+        AND jsonb_typeof(${table.customSsoConfig}->'validRedirectUrls') = 'array'
+        AND jsonb_array_length(${table.customSsoConfig}->'validRedirectUrls') > 0
+        AND jsonb_typeof(${table.customSsoConfig}->'subjectClaims') = 'array'
+        AND jsonb_array_length(${table.customSsoConfig}->'subjectClaims') > 0
+        AND ${table.customSsoConfig}->'subjectClaims' @> '["subjectIdentifier"]'::jsonb
+        AND ${table.customSsoConfig}->>'subjectClaimCatalogVersion' = '1'
+        AND (
+          (
+            ${table.customSsoConfig}->>'mode' = 'gateway'
+            AND ${table.customSsoSecretHash} IS NULL
+            AND (${table.customSsoConfig} - ARRAY[
+              'validRedirectUrls',
+              'subjectClaimCatalogVersion',
+              'subjectClaims',
+              'mode',
+              'orcas'
+            ]::text[]) = '{}'::jsonb
+            AND jsonb_typeof(${table.customSsoConfig}->'orcas') = 'object'
+            AND ((${table.customSsoConfig}->'orcas') - 'enabled'::text) = '{}'::jsonb
+            AND jsonb_typeof(${table.customSsoConfig}->'orcas'->'enabled') = 'boolean'
+          )
+          OR
+          (
+            ${table.customSsoConfig}->>'mode' = 'independent'
+            AND ${table.customSsoSecretHash} IS NOT NULL
+            AND (${table.customSsoConfig} - ARRAY[
+              'validRedirectUrls',
+              'subjectClaimCatalogVersion',
+              'subjectClaims',
+              'mode',
+              'callbackEndpoint',
+              'logoutEndpoint'
+            ]::text[]) = '{}'::jsonb
+            AND jsonb_typeof(${table.customSsoConfig}->'callbackEndpoint') = 'string'
+            AND ${table.customSsoConfig}->>'callbackEndpoint' <> ''
+            AND jsonb_typeof(${table.customSsoConfig}->'logoutEndpoint') = 'string'
+            AND ${table.customSsoConfig}->>'logoutEndpoint' <> ''
+          )
+        )
+      )
+    ) IS TRUE)`,
+  ),
+  check("client_custom_sso_config_version_check", sql`${table.customSsoConfigVersion} >= 0`),
 ]);
 
 export const selectClientSchema = createSelectSchema(clients, {
+  clientCode: () => ClientCodeSchema,
   status: () => z.enum(ClientStatus),
-  extAttributes: () => clientExtAttributesSchema,
+  extAttributes: () => clientStorageExtAttributesSchema,
   oidcConfig: () => oidcClientConfigSchema.nullable(),
+  customSsoConfig: () => customSsoClientConfigSchema.nullable(),
 });
 export const insertClientSchema = createInsertSchema(clients, {
+  clientCode: () => ClientCodeSchema,
   status: () => z.enum(ClientStatus),
-  extAttributes: () => clientExtAttributesSchema,
+  extAttributes: () => clientStorageExtAttributesSchema,
   oidcConfig: () => oidcClientConfigSchema.nullable(),
+  customSsoConfig: () => customSsoClientConfigSchema.nullable(),
 }).omit({ id: true, createTime: true, updateTime: true, isDelete: true });
 export const updateClientSchema = createUpdateSchema(clients, {
+  clientCode: () => ClientCodeSchema,
   status: () => z.enum(ClientStatus),
-  extAttributes: () => clientExtAttributesSchema,
+  extAttributes: () => clientStorageExtAttributesSchema,
   oidcConfig: () => oidcClientConfigSchema.nullable(),
+  customSsoConfig: () => customSsoClientConfigSchema.nullable(),
 }).omit({ id: true, createTime: true, updateTime: true, isDelete: true });

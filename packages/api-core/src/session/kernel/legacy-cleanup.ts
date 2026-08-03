@@ -2,12 +2,19 @@ import { SystemLogEvent } from "../../logger";
 
 export const LEGACY_SESSION_CLEANUP_SOURCE_APP = "iam-release-tooling";
 
-export const LEGACY_SESSION_KEY_CLEANUP_ALLOWLIST = [
+export const CUSTOM_SSO_CUTOVER_KEY_CLEANUP_ALLOWLIST = [
   { id: "global-session", pattern: "global_session:*" },
   { id: "custom-sso-auth-code", pattern: "auth_code:*" },
   { id: "custom-sso-local-session", pattern: "local_*_session:*" },
   { id: "custom-sso-local-session-reverse", pattern: "local_session_reverse:*" },
   { id: "custom-sso-local-session-set", pattern: "local_session_set:*" },
+  {
+    id: "custom-sso-local-session-payload",
+    pattern: "custom-sso:local-session-payload:*",
+  },
+] as const;
+
+const OIDC_LEGACY_SESSION_KEY_CLEANUP_ALLOWLIST = [
   { id: "oidc-model-payload", pattern: "oidc:model:*" },
   { id: "oidc-consumed-payload", pattern: "oidc:consumed:*" },
   { id: "oidc-grant-index", pattern: "oidc:grant-objects:*" },
@@ -23,7 +30,18 @@ export const LEGACY_SESSION_KEY_CLEANUP_ALLOWLIST = [
   { id: "oidc-pending-provider-session-binding", pattern: "oidc:pending-provider-session-binding:*" },
 ] as const;
 
-export type LegacySessionCleanupMode = "dry-run" | "apply";
+export const LEGACY_SESSION_KEY_CLEANUP_ALLOWLIST = [
+  ...CUSTOM_SSO_CUTOVER_KEY_CLEANUP_ALLOWLIST,
+  ...OIDC_LEGACY_SESSION_KEY_CLEANUP_ALLOWLIST,
+] as const;
+
+export const LEGACY_SESSION_KEY_CLEANUP_PROFILES = {
+  "all": LEGACY_SESSION_KEY_CLEANUP_ALLOWLIST,
+  "custom-sso-cutover": CUSTOM_SSO_CUTOVER_KEY_CLEANUP_ALLOWLIST,
+} as const;
+
+export type LegacySessionCleanupMode = "dry-run" | "verify" | "apply";
+export type LegacySessionCleanupProfile = keyof typeof LEGACY_SESSION_KEY_CLEANUP_PROFILES;
 export type LegacySessionCleanupPattern = typeof LEGACY_SESSION_KEY_CLEANUP_ALLOWLIST[number];
 export type LegacySessionCleanupPatternId = LegacySessionCleanupPattern["id"];
 
@@ -47,6 +65,7 @@ export interface LegacySessionCleanupLogger {
 
 export type LegacySessionCleanupOptions = {
   mode: LegacySessionCleanupMode;
+  profile?: LegacySessionCleanupProfile;
   batchSize?: number;
   sourceApp?: string;
   now?: () => number;
@@ -64,10 +83,11 @@ export type LegacySessionCleanupCompletedResult = {
   result: "completed";
   sourceApp: string;
   mode: LegacySessionCleanupMode;
+  profile: LegacySessionCleanupProfile;
   batchSize: number;
   durationMs: number;
-  patternCounts: Record<LegacySessionCleanupPatternId, number>;
-  deletedCounts: Record<LegacySessionCleanupPatternId, number>;
+  patternCounts: Partial<Record<LegacySessionCleanupPatternId, number>>;
+  deletedCounts: Partial<Record<LegacySessionCleanupPatternId, number>>;
   patterns: LegacySessionCleanupPatternSummary[];
 };
 
@@ -84,6 +104,7 @@ export type LegacySessionCleanupResult
 
 export type LegacySessionCleanupCliOptions = {
   mode: LegacySessionCleanupMode;
+  profile: LegacySessionCleanupProfile;
   batchSize: number;
 };
 
@@ -92,20 +113,23 @@ const DEFAULT_BATCH_SIZE = 500;
 export function parseLegacySessionCleanupArgs(args: string[]): LegacySessionCleanupCliOptions {
   let mode: LegacySessionCleanupMode | undefined;
   let batchSize = DEFAULT_BATCH_SIZE;
+  let profile: LegacySessionCleanupProfile = "all";
+  let profileSpecified = false;
 
   for (let index = 0; index < args.length; index += 1) {
     const arg = args[index];
     if (arg === undefined)
       continue;
-    if (arg === "--dry-run") {
-      if (mode && mode !== "dry-run")
-        throw new Error("Use only one of --dry-run or --apply");
-      mode = "dry-run";
+    if (arg === "--dry-run" || arg === "--verify") {
+      const requestedMode = arg === "--verify" ? "verify" : "dry-run";
+      if (mode && mode !== requestedMode)
+        throw new Error("Use only one of --dry-run, --verify, or --apply");
+      mode = requestedMode;
       continue;
     }
     if (arg === "--apply") {
       if (mode && mode !== "apply")
-        throw new Error("Use only one of --dry-run or --apply");
+        throw new Error("Use only one of --dry-run, --verify, or --apply");
       mode = "apply";
       continue;
     }
@@ -115,6 +139,24 @@ export function parseLegacySessionCleanupArgs(args: string[]): LegacySessionClea
         throw new Error("--batch-size requires a positive integer value");
       batchSize = parseBatchSize(value);
       index += 1;
+      continue;
+    }
+    if (arg === "--profile") {
+      if (profileSpecified)
+        throw new Error("Specify --profile only once");
+      const value = args[index + 1];
+      if (!value)
+        throw new Error("--profile requires a built-in cleanup profile");
+      profileSpecified = true;
+      profile = parseCleanupProfile(value);
+      index += 1;
+      continue;
+    }
+    if (arg.startsWith("--profile=")) {
+      if (profileSpecified)
+        throw new Error("Specify --profile only once");
+      profileSpecified = true;
+      profile = parseCleanupProfile(arg.slice("--profile=".length));
       continue;
     }
     if (arg.startsWith("--batch-size=")) {
@@ -127,7 +169,7 @@ export function parseLegacySessionCleanupArgs(args: string[]): LegacySessionClea
     throw new Error(`Unsupported argument: ${arg}`);
   }
 
-  return { mode: mode ?? "dry-run", batchSize };
+  return { mode: mode ?? "dry-run", batchSize, profile };
 }
 
 export async function cleanupLegacySessionKeys(
@@ -136,20 +178,41 @@ export async function cleanupLegacySessionKeys(
 ): Promise<LegacySessionCleanupResult> {
   const batchSize = normalizeBatchSize(options.batchSize);
   const sourceApp = options.sourceApp ?? LEGACY_SESSION_CLEANUP_SOURCE_APP;
+  const profile = options.profile ?? "all";
+  const allowlist = LEGACY_SESSION_KEY_CLEANUP_PROFILES[profile];
   const now = options.now ?? Date.now;
   const startedAt = now();
   const summaries: LegacySessionCleanupPatternSummary[] = [];
 
   try {
-    for (const allowlistedPattern of LEGACY_SESSION_KEY_CLEANUP_ALLOWLIST) {
+    for (const allowlistedPattern of allowlist) {
       summaries.push(await cleanupPattern(redis, allowlistedPattern, options.mode, batchSize));
     }
 
-    const result = buildResult("completed", sourceApp, options.mode, batchSize, now() - startedAt, summaries);
+    if (options.mode === "verify") {
+      const residual = summaries.find(summary => summary.matched > 0);
+      if (residual !== undefined) {
+        const error = new Error("legacy keys remain for the selected cleanup profile");
+        error.name = "LegacySessionCleanupVerificationError";
+        throw attachFailedPattern(error, residual.id);
+      }
+    }
+
+    const result = buildResult(
+      "completed",
+      sourceApp,
+      options.mode,
+      profile,
+      batchSize,
+      now() - startedAt,
+      allowlist,
+      summaries,
+    );
     options.logger?.info?.({
       event: SystemLogEvent.SessionKernelCleanupLegacyKeysCompleted,
       sourceApp,
       mode: result.mode,
+      profile: result.profile,
       patternCounts: result.patternCounts,
       deletedCounts: result.deletedCounts,
       durationMs: result.durationMs,
@@ -158,9 +221,18 @@ export async function cleanupLegacySessionKeys(
     return result;
   }
   catch (error) {
-    const failedPattern = readFailedPattern(error);
+    const failedPattern = readFailedPattern(error, allowlist);
     const result = {
-      ...buildResult("failed", sourceApp, options.mode, batchSize, now() - startedAt, summaries),
+      ...buildResult(
+        "failed",
+        sourceApp,
+        options.mode,
+        profile,
+        batchSize,
+        now() - startedAt,
+        allowlist,
+        summaries,
+      ),
       failedPattern,
       errorName: error instanceof Error ? error.name : "Error",
       errorMessage: sanitizeErrorMessage(error instanceof Error ? error.message : String(error)),
@@ -169,6 +241,7 @@ export async function cleanupLegacySessionKeys(
       event: SystemLogEvent.SessionKernelCleanupLegacyKeysFailed,
       sourceApp,
       mode: result.mode,
+      profile: result.profile,
       failedPattern: result.failedPattern,
       errorName: result.errorName,
       errorMessage: result.errorMessage,
@@ -221,13 +294,15 @@ function buildResult<TStatus extends LegacySessionCleanupResult["result"]>(
   result: TStatus,
   sourceApp: string,
   mode: LegacySessionCleanupMode,
+  profile: LegacySessionCleanupProfile,
   batchSize: number,
   durationMs: number,
+  allowlist: readonly LegacySessionCleanupPattern[],
   summaries: LegacySessionCleanupPatternSummary[],
 ) {
   const patternCounts = Object.fromEntries(
-    LEGACY_SESSION_KEY_CLEANUP_ALLOWLIST.map(({ id }) => [id, 0]),
-  ) as Record<LegacySessionCleanupPatternId, number>;
+    allowlist.map(({ id }) => [id, 0]),
+  ) as Partial<Record<LegacySessionCleanupPatternId, number>>;
   const deletedCounts = { ...patternCounts };
   for (const summary of summaries) {
     patternCounts[summary.id] = summary.matched;
@@ -238,6 +313,7 @@ function buildResult<TStatus extends LegacySessionCleanupResult["result"]>(
     result,
     sourceApp,
     mode,
+    profile,
     batchSize,
     durationMs: Math.max(0, durationMs),
     patternCounts,
@@ -265,13 +341,25 @@ function attachFailedPattern(error: unknown, pattern: LegacySessionCleanupPatter
   return error;
 }
 
-function readFailedPattern(error: unknown): LegacySessionCleanupPatternId {
+function readFailedPattern(
+  error: unknown,
+  allowlist: readonly LegacySessionCleanupPattern[],
+): LegacySessionCleanupPatternId {
   if (error && (typeof error === "object" || typeof error === "function")) {
     const value = (error as { [failedPatternSymbol]?: unknown })[failedPatternSymbol];
-    if (typeof value === "string" && LEGACY_SESSION_KEY_CLEANUP_ALLOWLIST.some(pattern => pattern.id === value))
+    if (typeof value === "string" && allowlist.some(pattern => pattern.id === value))
       return value as LegacySessionCleanupPatternId;
   }
-  return LEGACY_SESSION_KEY_CLEANUP_ALLOWLIST[0].id;
+  const fallback = allowlist[0];
+  if (fallback === undefined)
+    throw new Error("Built-in cleanup profiles must contain at least one pattern");
+  return fallback.id;
+}
+
+function parseCleanupProfile(value: string): LegacySessionCleanupProfile {
+  if (value === "all" || value === "custom-sso-cutover")
+    return value;
+  throw new Error("Unsupported cleanup profile");
 }
 
 function sanitizeErrorMessage(message: string) {

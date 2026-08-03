@@ -249,6 +249,283 @@ describe("repository architecture guard", () => {
     expect(analyzeRepositoryArchitecture(repoRoot)).toEqual([]);
   });
 
+  test("allows Projection implementation ports and Custom SSO public interface consumption", () => {
+    const repoRoot = createFixtureRepository({
+      "packages/client-subject-projection/src/internal/client-subject-projection.ts":
+        "import type { SubjectFactsPort } from \"../index.ts\";",
+      "packages/client-subject-projection/src/custom-sso.ts": [
+        "import type { ClientSubjectProjection } from \"./index.ts\";",
+        "export type { ClientSubjectProjectionService } from \"@iam/client-subject-projection\";",
+      ].join("\n"),
+    });
+
+    expect(analyzeRepositoryArchitecture(repoRoot)).toEqual([]);
+  });
+
+  test("keeps every Projection core source independent of client protocol configuration", () => {
+    const repoRoot = createFixtureRepository({
+      "packages/client-subject-projection/src/catalog.ts": [
+        "import type { ClientDto } from \"@iam/domain/client\";",
+        "import type { RelativeClientDto } from \"../../domain/src/client/index.ts\";",
+      ].join("\n"),
+    });
+
+    expect(analyzeRepositoryArchitecture(repoRoot)).toEqual([
+      {
+        ruleId: "client-subject-projection-owner",
+        file: "packages/client-subject-projection/src/catalog.ts",
+        line: 1,
+        message: "Client Subject Projection implementation must not import runtime or protocol module "
+          + "\"@iam/domain/client\"; depend on its injected facts and safety ports.",
+      },
+      {
+        ruleId: "client-subject-projection-owner",
+        file: "packages/client-subject-projection/src/catalog.ts",
+        line: 2,
+        message: "Client Subject Projection implementation must not import runtime or protocol module "
+          + "\"../../domain/src/client/index.ts\"; depend on its injected facts and safety ports.",
+      },
+    ]);
+  });
+
+  test("rejects Hono package subpaths from both Projection core and wire sources", () => {
+    const repoRoot = createFixtureRepository({
+      "packages/client-subject-projection/src/catalog.ts":
+        "import type { CookieOptions } from \"hono/cookie\";",
+      "packages/client-subject-projection/src/custom-sso.ts":
+        "import type { Context } from \"hono/types\";",
+    });
+
+    expect(analyzeRepositoryArchitecture(repoRoot)).toEqual([
+      {
+        ruleId: "client-subject-projection-owner",
+        file: "packages/client-subject-projection/src/catalog.ts",
+        line: 1,
+        message: "Client Subject Projection implementation must not import runtime or protocol module "
+          + "\"hono/cookie\"; depend on its injected facts and safety ports.",
+      },
+      {
+        ruleId: "client-subject-projection-owner",
+        file: "packages/client-subject-projection/src/custom-sso.ts",
+        line: 1,
+        message: "Custom SSO wire adapter must not import facts persistence, configuration, runtime, "
+          + "or transport module \"hono/types\"; "
+          + "depend only on the root public Client Subject Projection interface.",
+      },
+    ]);
+  });
+
+  test("matches blocked external package roots only at exact or slash-subpath boundaries", () => {
+    const repoRoot = createFixtureRepository({
+      "packages/client-subject-projection/src/catalog.ts": [
+        "import type { Redis } from \"ioredis/built/Redis\";",
+        "import type { RedisClient } from \"redis/client\";",
+        "import type { ProviderHelper } from \"oidc-provider/lib/helpers\";",
+        "import type { Honorable } from \"honorable\";",
+      ].join("\n"),
+    });
+
+    expect(analyzeRepositoryArchitecture(repoRoot)).toEqual([
+      {
+        ruleId: "client-subject-projection-owner",
+        file: "packages/client-subject-projection/src/catalog.ts",
+        line: 1,
+        message: "Client Subject Projection implementation must not import runtime or protocol module "
+          + "\"ioredis/built/Redis\"; depend on its injected facts and safety ports.",
+      },
+      {
+        ruleId: "client-subject-projection-owner",
+        file: "packages/client-subject-projection/src/catalog.ts",
+        line: 2,
+        message: "Client Subject Projection implementation must not import runtime or protocol module "
+          + "\"redis/client\"; depend on its injected facts and safety ports.",
+      },
+      {
+        ruleId: "client-subject-projection-owner",
+        file: "packages/client-subject-projection/src/catalog.ts",
+        line: 3,
+        message: "Client Subject Projection implementation must not import runtime or protocol module "
+          + "\"oidc-provider/lib/helpers\"; depend on its injected facts and safety ports.",
+      },
+    ]);
+  });
+
+  test("maps every app and Gateway workspace package to its production owner", () => {
+    const repoRoot = createFixtureRepository({
+      "packages/client-subject-projection/src/catalog.ts": [
+        "import \"@iam/admin/routes/client\";",
+        "import \"@iam/admin-api/routes/client\";",
+        "import \"@iam/api\";",
+        "import \"@iam/oidc-provider/session\";",
+        "import \"@iam/sso/pages/login\";",
+        "import \"@iam/worker/queues\";",
+      ].join("\n"),
+      "packages/client-subject-projection/src/custom-sso.ts":
+        "import \"@iam/gateway-apisix/planner\";",
+    });
+
+    expect(analyzeRepositoryArchitecture(repoRoot)).toEqual([
+      {
+        ruleId: "client-subject-projection-owner",
+        file: "packages/client-subject-projection/src/catalog.ts",
+        line: 1,
+        message: "Client Subject Projection implementation must not import runtime or protocol module "
+          + "\"@iam/admin/routes/client\"; depend on its injected facts and safety ports.",
+      },
+      {
+        ruleId: "client-subject-projection-owner",
+        file: "packages/client-subject-projection/src/catalog.ts",
+        line: 2,
+        message: "Client Subject Projection implementation must not import runtime or protocol module "
+          + "\"@iam/admin-api/routes/client\"; depend on its injected facts and safety ports.",
+      },
+      {
+        ruleId: "client-subject-projection-owner",
+        file: "packages/client-subject-projection/src/catalog.ts",
+        line: 3,
+        message: "Client Subject Projection implementation must not import runtime or protocol module "
+          + "\"@iam/api\"; depend on its injected facts and safety ports.",
+      },
+      {
+        ruleId: "client-subject-projection-owner",
+        file: "packages/client-subject-projection/src/catalog.ts",
+        line: 4,
+        message: "Client Subject Projection implementation must not import runtime or protocol module "
+          + "\"@iam/oidc-provider/session\"; depend on its injected facts and safety ports.",
+      },
+      {
+        ruleId: "client-subject-projection-owner",
+        file: "packages/client-subject-projection/src/catalog.ts",
+        line: 5,
+        message: "Client Subject Projection implementation must not import runtime or protocol module "
+          + "\"@iam/sso/pages/login\"; depend on its injected facts and safety ports.",
+      },
+      {
+        ruleId: "client-subject-projection-owner",
+        file: "packages/client-subject-projection/src/catalog.ts",
+        line: 6,
+        message: "Client Subject Projection implementation must not import runtime or protocol module "
+          + "\"@iam/worker/queues\"; depend on its injected facts and safety ports.",
+      },
+      {
+        ruleId: "client-subject-projection-owner",
+        file: "packages/client-subject-projection/src/custom-sso.ts",
+        line: 1,
+        message: "Custom SSO wire adapter must not import facts persistence, configuration, runtime, "
+          + "or transport module \"@iam/gateway-apisix/planner\"; "
+          + "depend only on the root public Client Subject Projection interface.",
+      },
+    ]);
+  });
+
+  test("keeps the Custom SSO wire mapper independent of facts and runtime owners", () => {
+    const repoRoot = createFixtureRepository({
+      "packages/client-subject-projection/src/custom-sso.ts": [
+        "import type { SubjectFactsReader } from \"@iam/user-profile-read-model/query\";",
+        "import type { Context } from \"hono\";",
+      ].join("\n"),
+    });
+
+    expect(analyzeRepositoryArchitecture(repoRoot)).toEqual([
+      {
+        ruleId: "client-subject-projection-owner",
+        file: "packages/client-subject-projection/src/custom-sso.ts",
+        line: 1,
+        message: "Custom SSO wire adapter must not import facts persistence, configuration, runtime, "
+          + "or transport module \"@iam/user-profile-read-model/query\"; "
+          + "depend only on the root public Client Subject Projection interface.",
+      },
+      {
+        ruleId: "client-subject-projection-owner",
+        file: "packages/client-subject-projection/src/custom-sso.ts",
+        line: 2,
+        message: "Custom SSO wire adapter must not import facts persistence, configuration, runtime, "
+          + "or transport module \"hono\"; "
+          + "depend only on the root public Client Subject Projection interface.",
+      },
+    ]);
+  });
+
+  test("normalizes canonical self-imports before enforcing the Projection protocol edge", () => {
+    const repoRoot = createFixtureRepository({
+      "packages/client-subject-projection/src/internal/client-subject-projection.ts":
+        "import type { CustomSsoSubjectProjectionV1 } "
+        + "from \"@iam/client-subject-projection/custom-sso\";",
+    });
+
+    expect(analyzeRepositoryArchitecture(repoRoot)).toEqual([
+      {
+        ruleId: "client-subject-projection-owner",
+        file: "packages/client-subject-projection/src/internal/client-subject-projection.ts",
+        line: 1,
+        message: "Client Subject Projection implementation must not import runtime or protocol module "
+          + "\"@iam/client-subject-projection/custom-sso\"; "
+          + "depend on its injected facts and safety ports.",
+      },
+    ]);
+  });
+
+  test("keeps the Custom SSO wire mapper on the root public Projection interface", () => {
+    const repoRoot = createFixtureRepository({
+      "packages/client-subject-projection/src/custom-sso.ts":
+        "import { SUBJECT_CLAIM_CATALOG_V1 } from \"./catalog.ts\";",
+    });
+
+    expect(analyzeRepositoryArchitecture(repoRoot)).toEqual([
+      {
+        ruleId: "client-subject-projection-owner",
+        file: "packages/client-subject-projection/src/custom-sso.ts",
+        line: 1,
+        message: "Custom SSO wire adapter must not import non-root Projection module \"./catalog.ts\"; "
+          + "depend only on the root public Client Subject Projection interface.",
+      },
+    ]);
+  });
+
+  test("keeps Projection implementation protocol-neutral and its wire adapter behind the public interface", () => {
+    const repoRoot = createFixtureRepository({
+      "packages/client-subject-projection/src/internal/client-subject-projection.ts": [
+        "import type { Context } from \"hono\";",
+        "import type { UserProfileQuery } from \"@iam/user-profile-read-model/query\";",
+        "import type { CustomSsoSubjectProjectionV1 } from \"../custom-sso.ts\";",
+      ].join("\n"),
+      "packages/client-subject-projection/src/custom-sso.ts":
+        "import { createClientSubjectProjectionService } from \"./internal/client-subject-projection.ts\";",
+    });
+
+    expect(analyzeRepositoryArchitecture(repoRoot)).toEqual([
+      {
+        ruleId: "client-subject-projection-owner",
+        file: "packages/client-subject-projection/src/custom-sso.ts",
+        line: 1,
+        message: "Custom SSO wire adapter must not import non-root Projection module "
+          + "\"./internal/client-subject-projection.ts\"; "
+          + "depend only on the root public Client Subject Projection interface.",
+      },
+      {
+        ruleId: "client-subject-projection-owner",
+        file: "packages/client-subject-projection/src/internal/client-subject-projection.ts",
+        line: 1,
+        message: "Client Subject Projection implementation must not import runtime or protocol module \"hono\"; "
+          + "depend on its injected facts and safety ports.",
+      },
+      {
+        ruleId: "client-subject-projection-owner",
+        file: "packages/client-subject-projection/src/internal/client-subject-projection.ts",
+        line: 2,
+        message: "Client Subject Projection implementation must not import runtime or protocol module "
+          + "\"@iam/user-profile-read-model/query\"; depend on its injected facts and safety ports.",
+      },
+      {
+        ruleId: "client-subject-projection-owner",
+        file: "packages/client-subject-projection/src/internal/client-subject-projection.ts",
+        line: 3,
+        message: "Client Subject Projection implementation must not import runtime or protocol module "
+          + "\"../custom-sso.ts\"; depend on its injected facts and safety ports.",
+      },
+    ]);
+  });
+
   test("keeps Custom SSO routes and use cases behind session runtime interfaces", () => {
     const repoRoot = createFixtureRepository({
       "apps/api/src/routes/sso/sso.handlers.ts": [
@@ -595,14 +872,14 @@ describe("repository architecture guard", () => {
         ruleId: "docker-build-closure",
         file: "apps/api/Dockerfile",
         line: 1,
-        message: "Backend image @iam/api consumes @iam/role-assignment-resolution but does not COPY "
+        message: "Docker image @iam/api consumes @iam/role-assignment-resolution but does not COPY "
           + "\"packages/role-assignment-resolution/\" from the workspace.",
       },
       {
         ruleId: "docker-build-closure",
         file: "apps/api/Dockerfile",
         line: 1,
-        message: "Backend image @iam/api consumes @iam/user-profile-read-model but does not COPY "
+        message: "Docker image @iam/api consumes @iam/user-profile-read-model but does not COPY "
           + "\"packages/user-profile-read-model/package.json\" from the workspace.",
       },
     ]);
@@ -637,14 +914,14 @@ describe("repository architecture guard", () => {
         ruleId: "docker-build-closure",
         file: "apps/worker/Dockerfile",
         line: 1,
-        message: "Backend image @iam/worker consumes @iam/role-assignment-resolution but does not COPY "
+        message: "Docker image @iam/worker consumes @iam/role-assignment-resolution but does not COPY "
           + "\"packages/role-assignment-resolution/\" from the workspace.",
       },
       {
         ruleId: "docker-build-closure",
         file: "apps/worker/Dockerfile",
         line: 1,
-        message: "Backend image @iam/worker consumes @iam/role-assignment-resolution but does not COPY "
+        message: "Docker image @iam/worker consumes @iam/role-assignment-resolution but does not COPY "
           + "\"packages/role-assignment-resolution/package.json\" from the workspace.",
       },
     ]);
@@ -660,6 +937,7 @@ describe("repository architecture guard", () => {
       }),
       "apps/api/Dockerfile": [
         "FROM node:24-alpine",
+        "COPY packages/domain/package.json ./packages/domain/",
         "COPY packages/user-profile-read-model/package.json ./packages/user-profile-read-model/",
       ].join("\n"),
       "packages/domain/package.json": JSON.stringify({
@@ -678,10 +956,245 @@ describe("repository architecture guard", () => {
         ruleId: "docker-build-closure",
         file: "apps/api/Dockerfile",
         line: 1,
-        message: "Backend image @iam/api consumes @iam/user-profile-read-model but does not COPY "
+        message: "Docker image @iam/api consumes @iam/user-profile-read-model but does not COPY "
           + "\"packages/user-profile-read-model/\" from the workspace.",
       },
     ]);
+  });
+
+  test("requires a copied manifest for a devDependency path to protected architecture workspaces", () => {
+    const repoRoot = createFixtureRepository({
+      "apps/admin/package.json": JSON.stringify({
+        name: "@iam/admin",
+        devDependencies: {
+          "@iam/admin-api": "workspace:*",
+        },
+      }),
+      "apps/admin/Dockerfile": [
+        "FROM node:24-alpine",
+        "COPY apps/admin-api/ ./apps/admin-api/",
+        "COPY packages/user-profile-read-model/package.json ./packages/user-profile-read-model/",
+        "COPY packages/user-profile-read-model/ ./packages/user-profile-read-model/",
+      ].join("\n"),
+      "apps/admin-api/package.json": JSON.stringify({
+        name: "@iam/admin-api",
+        dependencies: {
+          "@iam/user-profile-read-model": "workspace:*",
+        },
+      }),
+      "packages/user-profile-read-model/package.json": JSON.stringify({
+        name: "@iam/user-profile-read-model",
+      }),
+    });
+
+    expect(analyzeRepositoryArchitecture(repoRoot)).toEqual([
+      {
+        ruleId: "docker-build-closure",
+        file: "apps/admin/Dockerfile",
+        line: 1,
+        message: "Docker image @iam/admin reaches protected architecture workspaces through @iam/admin-api "
+          + "but does not COPY \"apps/admin-api/package.json\" from the workspace.",
+      },
+    ]);
+  });
+
+  test("allows a complete devDependency path to protected architecture workspaces", () => {
+    const repoRoot = createFixtureRepository({
+      "apps/admin/package.json": JSON.stringify({
+        name: "@iam/admin",
+        devDependencies: {
+          "@iam/admin-api": "workspace:*",
+        },
+      }),
+      "apps/admin/Dockerfile": [
+        "FROM node:24-alpine",
+        "COPY apps/admin-api/package.json ./apps/admin-api/",
+        "COPY apps/admin-api/ ./apps/admin-api/",
+        "COPY packages/user-profile-read-model/package.json ./packages/user-profile-read-model/",
+        "COPY packages/user-profile-read-model/ ./packages/user-profile-read-model/",
+      ].join("\n"),
+      "apps/admin-api/package.json": JSON.stringify({
+        name: "@iam/admin-api",
+        dependencies: {
+          "@iam/user-profile-read-model": "workspace:*",
+        },
+      }),
+      "packages/user-profile-read-model/package.json": JSON.stringify({
+        name: "@iam/user-profile-read-model",
+      }),
+    });
+
+    expect(analyzeRepositoryArchitecture(repoRoot)).toEqual([]);
+  });
+
+  test("requires a copied manifest for an optionalDependency path to protected architecture workspaces", () => {
+    const repoRoot = createFixtureRepository({
+      "apps/worker/package.json": JSON.stringify({
+        name: "@iam/worker",
+        optionalDependencies: {
+          "@iam/optional-profile-bridge": "workspace:*",
+        },
+      }),
+      "apps/worker/Dockerfile": [
+        "FROM node:24-alpine",
+        "COPY packages/optional-profile-bridge/ ./packages/optional-profile-bridge/",
+        "COPY packages/user-profile-read-model/package.json ./packages/user-profile-read-model/",
+        "COPY packages/user-profile-read-model/ ./packages/user-profile-read-model/",
+      ].join("\n"),
+      "packages/optional-profile-bridge/package.json": JSON.stringify({
+        name: "@iam/optional-profile-bridge",
+        dependencies: {
+          "@iam/user-profile-read-model": "workspace:*",
+        },
+      }),
+      "packages/user-profile-read-model/package.json": JSON.stringify({
+        name: "@iam/user-profile-read-model",
+      }),
+    });
+
+    expect(analyzeRepositoryArchitecture(repoRoot)).toEqual([
+      {
+        ruleId: "docker-build-closure",
+        file: "apps/worker/Dockerfile",
+        line: 1,
+        message: "Docker image @iam/worker reaches protected architecture workspaces "
+          + "through @iam/optional-profile-bridge but does not COPY "
+          + "\"packages/optional-profile-bridge/package.json\" from the workspace.",
+      },
+    ]);
+  });
+
+  test("allows a complete optionalDependency path to protected architecture workspaces", () => {
+    const repoRoot = createFixtureRepository({
+      "apps/worker/package.json": JSON.stringify({
+        name: "@iam/worker",
+        optionalDependencies: {
+          "@iam/optional-profile-bridge": "workspace:*",
+        },
+      }),
+      "apps/worker/Dockerfile": [
+        "FROM node:24-alpine",
+        "COPY packages/optional-profile-bridge/package.json ./packages/optional-profile-bridge/",
+        "COPY packages/optional-profile-bridge/ ./packages/optional-profile-bridge/",
+        "COPY packages/user-profile-read-model/package.json ./packages/user-profile-read-model/",
+        "COPY packages/user-profile-read-model/ ./packages/user-profile-read-model/",
+      ].join("\n"),
+      "packages/optional-profile-bridge/package.json": JSON.stringify({
+        name: "@iam/optional-profile-bridge",
+        dependencies: {
+          "@iam/user-profile-read-model": "workspace:*",
+        },
+      }),
+      "packages/user-profile-read-model/package.json": JSON.stringify({
+        name: "@iam/user-profile-read-model",
+      }),
+    });
+
+    expect(analyzeRepositoryArchitecture(repoRoot)).toEqual([]);
+  });
+
+  test("ignores peer-only workspace contracts when computing package-owned Docker closure", () => {
+    const repoRoot = createFixtureRepository({
+      "apps/worker/package.json": JSON.stringify({
+        name: "@iam/worker",
+        peerDependencies: {
+          "@iam/peer-profile-bridge": "workspace:*",
+        },
+      }),
+      "apps/worker/Dockerfile": "FROM node:24-alpine",
+      "packages/peer-profile-bridge/package.json": JSON.stringify({
+        name: "@iam/peer-profile-bridge",
+        dependencies: {
+          "@iam/user-profile-read-model": "workspace:*",
+        },
+      }),
+      "packages/user-profile-read-model/package.json": JSON.stringify({
+        name: "@iam/user-profile-read-model",
+      }),
+    });
+
+    expect(analyzeRepositoryArchitecture(repoRoot)).toEqual([]);
+  });
+
+  test("follows explicitly copied workspace manifests in every app Docker image", () => {
+    const repoRoot = createFixtureRepository({
+      "apps/admin/package.json": JSON.stringify({
+        name: "@iam/admin",
+      }),
+      "apps/admin/Dockerfile": [
+        "FROM node:24-alpine",
+        "COPY apps/admin-api/package.json ./apps/admin-api/",
+        "COPY apps/admin-api/ ./apps/admin-api/",
+        "COPY packages/user-profile-read-model/package.json ./packages/user-profile-read-model/",
+        "COPY packages/user-profile-read-model/ ./packages/user-profile-read-model/",
+      ].join("\n"),
+      "apps/admin-api/package.json": JSON.stringify({
+        name: "@iam/admin-api",
+        dependencies: {
+          "@iam/user-profile-read-model": "workspace:*",
+        },
+      }),
+      "packages/client-subject-projection/package.json": JSON.stringify({
+        name: "@iam/client-subject-projection",
+      }),
+      "packages/user-profile-read-model/package.json": JSON.stringify({
+        name: "@iam/user-profile-read-model",
+        dependencies: {
+          "@iam/client-subject-projection": "workspace:*",
+        },
+      }),
+    });
+
+    expect(analyzeRepositoryArchitecture(repoRoot)).toEqual([
+      {
+        ruleId: "docker-build-closure",
+        file: "apps/admin/Dockerfile",
+        line: 1,
+        message: "Docker image @iam/admin consumes @iam/client-subject-projection but does not COPY "
+          + "\"packages/client-subject-projection/\" from the workspace.",
+      },
+      {
+        ruleId: "docker-build-closure",
+        file: "apps/admin/Dockerfile",
+        line: 1,
+        message: "Docker image @iam/admin consumes @iam/client-subject-projection but does not COPY "
+          + "\"packages/client-subject-projection/package.json\" from the workspace.",
+      },
+    ]);
+  });
+
+  test("allows a complete closure rooted in an explicitly copied workspace manifest", () => {
+    const repoRoot = createFixtureRepository({
+      "apps/admin/package.json": JSON.stringify({
+        name: "@iam/admin",
+      }),
+      "apps/admin/Dockerfile": [
+        "FROM node:24-alpine",
+        "COPY apps/admin-api/package.json ./apps/admin-api/",
+        "COPY packages/client-subject-projection/package.json ./packages/client-subject-projection/",
+        "COPY packages/user-profile-read-model/package.json ./packages/user-profile-read-model/",
+        "COPY apps/admin-api/ ./apps/admin-api/",
+        "COPY packages/client-subject-projection/ ./packages/client-subject-projection/",
+        "COPY packages/user-profile-read-model/ ./packages/user-profile-read-model/",
+      ].join("\n"),
+      "apps/admin-api/package.json": JSON.stringify({
+        name: "@iam/admin-api",
+        dependencies: {
+          "@iam/user-profile-read-model": "workspace:*",
+        },
+      }),
+      "packages/client-subject-projection/package.json": JSON.stringify({
+        name: "@iam/client-subject-projection",
+      }),
+      "packages/user-profile-read-model/package.json": JSON.stringify({
+        name: "@iam/user-profile-read-model",
+        dependencies: {
+          "@iam/client-subject-projection": "workspace:*",
+        },
+      }),
+    });
+
+    expect(analyzeRepositoryArchitecture(repoRoot)).toEqual([]);
   });
 
   test("allows Docker build contexts closed over direct and transitive architecture workspaces", () => {

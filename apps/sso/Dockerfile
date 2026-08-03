@@ -21,6 +21,7 @@ WORKDIR /app
 ENV HUSKY=0
 COPY .npmrc pnpm-workspace.yaml package.json pnpm-lock.yaml ./
 COPY .husky/install.mjs ./.husky/install.mjs
+COPY packages/client-subject-projection/package.json ./packages/client-subject-projection/
 COPY packages/contracts/package.json ./packages/contracts/
 COPY apps/sso/package.json ./apps/sso/
 ARG HTTP_PROXY
@@ -51,6 +52,7 @@ ENV UMI_APP_SSO_CAP_PAKO_URL=$UMI_APP_SSO_CAP_PAKO_URL
 ENV UMI_APP_SSO_LOGIN_CREDENTIAL_KID=$UMI_APP_SSO_LOGIN_CREDENTIAL_KID
 ENV UMI_APP_SSO_LOGIN_CREDENTIAL_PUBLIC_KEY=$UMI_APP_SSO_LOGIN_CREDENTIAL_PUBLIC_KEY
 ENV UMI_APP_SSO_WELL_KNOWN_URL=$UMI_APP_SSO_WELL_KNOWN_URL
+COPY packages/client-subject-projection/ ./packages/client-subject-projection/
 COPY packages/contracts/ ./packages/contracts/
 COPY apps/sso/ ./apps/sso/
 RUN pnpm rebuild && pnpm --filter @iam/sso run setup && pnpm --filter @iam/sso run build

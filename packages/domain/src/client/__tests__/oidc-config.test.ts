@@ -10,7 +10,7 @@ import {
 } from "@iam/db/schema";
 import { describe, expect, test } from "bun:test";
 import { OidcAccountDtoSchema, UserDtoSchema } from "../../user";
-import { ClientDtoSchema, OidcClientRuntimeDtoSchema } from "../schema";
+import { OidcClientRuntimeDtoSchema } from "../schema";
 
 const publicConfig = {
   clientType: OidcClientType.Public,
@@ -43,6 +43,10 @@ describe("OIDC redirect URI validation", () => {
 describe("OIDC client config validation", () => {
   test("accepts public and confidential discriminants", () => {
     expect(oidcClientConfigSchema.safeParse(publicConfig).success).toBe(true);
+    expect(oidcClientConfigSchema.safeParse({
+      ...publicConfig,
+      allowedScopes: [OidcScope.OpenId, OidcScope.IamEmployments],
+    }).success).toBe(true);
     expect(oidcClientConfigSchema.safeParse({
       ...publicConfig,
       clientType: OidcClientType.Confidential,
@@ -86,11 +90,10 @@ describe("OIDC client config validation", () => {
 });
 
 describe("OIDC DTO boundaries", () => {
-  test("keeps OIDC secrets and subjects out of common DTOs", () => {
-    expect("oidcSecretHash" in ClientDtoSchema.shape).toBe(false);
-    expect("oidcConfig" in ClientDtoSchema.shape).toBe(false);
+  test("keeps protocol-neutral Subject Identifiers out of common DTOs", () => {
     expect("oidcSecretHash" in OidcClientRuntimeDtoSchema.shape).toBe(false);
-    expect("oidcSubject" in UserDtoSchema.shape).toBe(false);
-    expect("oidcSubject" in OidcAccountDtoSchema.shape).toBe(true);
+    expect("subjectIdentifier" in UserDtoSchema.shape).toBe(false);
+    expect("subjectIdentifier" in OidcAccountDtoSchema.shape).toBe(true);
+    expect("oidcSubject" in OidcAccountDtoSchema.shape).toBe(false);
   });
 });

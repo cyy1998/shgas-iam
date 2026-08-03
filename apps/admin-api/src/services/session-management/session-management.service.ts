@@ -108,10 +108,35 @@ export function createSessionManagementService(deps: AdminSessionManagementServi
         );
       }
 
+      const [targetUser] = await deps.users.getSessionManagementUserSummaries([
+        input.target.userId,
+      ]);
+      if (targetUser === undefined) {
+        const result = emptySessionRevokeResult("user");
+        await recordMutationAudit({
+          audit: buildAdminSessionRevokeUserAudit({
+            userId: input.target.userId,
+            outcome: "success",
+            result,
+          }, auditContext),
+          changed: false,
+          auditContext,
+          actorUserIdFallback: actor.actorUserId,
+          logFields: {
+            targetScope: result.scope,
+            targetUserId: input.target.userId,
+            revoked: result.revoked,
+            cleanup: result.cleanup,
+          },
+        });
+        return result;
+      }
+
       let summary: AdminSessionControlSummary;
       try {
         summary = await deps.userControl.revokeUserSessions({
           userId: input.target.userId,
+          subjectIdentifier: targetUser.subjectIdentifier,
           reason: "admin_revoke",
           ...(exceptPrincipalSessionId
             ? { exceptPrincipalSessionId }
@@ -195,25 +220,41 @@ export function createSessionManagementService(deps: AdminSessionManagementServi
     input: AdminSessionListInput,
     actor: AdminSessionActorContext,
   ): Promise<AdminSessionListResult> {
+    const filteredUser = input.userId === undefined
+      ? undefined
+      : (await deps.users.getSessionManagementUserSummaries([input.userId]))[0];
+    if (input.userId !== undefined && filteredUser === undefined) {
+      return {
+        result: [],
+        total: 0,
+        pageNum: input.pageNum,
+        pageSize: input.pageSize,
+        pages: 0,
+      };
+    }
+
     let inventory;
     try {
       inventory = await deps.inventory.listPrincipalSessions({
         offset: (input.pageNum - 1) * input.pageSize,
         limit: input.pageSize,
-        userId: input.userId === undefined ? undefined : String(input.userId),
+        subjectIdentifier: filteredUser?.subjectIdentifier,
       });
     }
     catch (cause) {
       throw new AdminLoginStateUnavailableError(cause);
     }
-    const userIds = uniqueNumericUserIds(inventory.items);
-    const userSummaries = userIds.length === 0
+    const subjectIdentifiers = uniqueSubjectIdentifiers(inventory.items);
+    const userSummaries = subjectIdentifiers.length === 0
       ? []
-      : await deps.users.getSessionManagementUserSummaries(userIds);
-    const usersById = new Map(userSummaries.map(user => [user.id, user]));
+      : await deps.users.getSessionManagementUserSummariesBySubjectIdentifiers(subjectIdentifiers);
+    const usersBySubjectIdentifier = new Map(
+      userSummaries.map(user => [user.subjectIdentifier, user]),
+    );
 
     return {
-      result: inventory.items.map(item => toAdminSessionListItem(item, usersById, actor)),
+      result: inventory.items.map(item =>
+        toAdminSessionListItem(item, usersBySubjectIdentifier, actor)),
       total: inventory.total,
       pageNum: input.pageNum,
       pageSize: input.pageSize,
@@ -302,16 +343,15 @@ export type SessionManagementService = ReturnType<typeof createSessionManagement
 
 function toAdminSessionListItem(
   item: AdminSessionInventoryItem,
-  usersById: ReadonlyMap<number, AdminSessionUserSummary>,
+  usersBySubjectIdentifier: ReadonlyMap<string, AdminSessionUserSummary>,
   actor: AdminSessionActorContext,
 ): AdminSessionListItem {
-  const numericUserId = parseNumericUserId(item.principal.subjectId);
-  const user = numericUserId === null ? undefined : usersById.get(numericUserId);
+  const user = usersBySubjectIdentifier.get(item.principal.subjectId);
 
   return {
     principalSessionId: item.principalSessionId,
     user: {
-      id: numericUserId,
+      id: user?.id ?? null,
       subjectId: item.principal.subjectId,
       username: user?.username ?? null,
       name: user?.name ?? null,
@@ -322,7 +362,7 @@ function toAdminSessionListItem(
     expiresAt: item.expiresAt,
     origin: summarizeOrigin(item.origin),
     isCurrentSession: actor.principalSessionId === item.principalSessionId,
-    isCurrentUser: String(actor.actorUserId) === item.principal.subjectId,
+    isCurrentUser: user?.id === actor.actorUserId,
   };
 }
 
@@ -345,21 +385,8 @@ function toAdminLoginRestrictionListItem(
   };
 }
 
-function uniqueNumericUserIds(items: readonly AdminSessionInventoryItem[]) {
-  const userIds = new Set<number>();
-  for (const item of items) {
-    const userId = parseNumericUserId(item.principal.subjectId);
-    if (userId !== null)
-      userIds.add(userId);
-  }
-  return [...userIds];
-}
-
-function parseNumericUserId(subjectId: string): number | null {
-  if (!/^[1-9]\d*$/.test(subjectId))
-    return null;
-  const userId = Number(subjectId);
-  return Number.isSafeInteger(userId) ? userId : null;
+function uniqueSubjectIdentifiers(items: readonly AdminSessionInventoryItem[]) {
+  return [...new Set(items.map(item => item.principal.subjectId))];
 }
 
 function toAccountStatus(user: AdminSessionUserSummary | undefined): AdminSessionAccountStatusValue {

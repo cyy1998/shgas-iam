@@ -1,16 +1,43 @@
+import type {
+  AuthorizationGrantRedemption,
+  AuthorizationGrantRedemptionScheduler,
+} from "@iam/api-core/authorization-grant";
+import type { SessionKernel } from "@iam/api-core/session/kernel";
+import type { CustomSsoClientRuntimeDto } from "@iam/domain/client";
+import { randomUUID } from "node:crypto";
 import {
-  createCustomSsoCleanupAdapter,
+  CustomSsoClientRuntimeUnavailableError,
+} from "@api/services/client/custom-sso-client-runtime.reader";
+import {
   createCustomSsoSessionKernelAdapter,
 } from "@api/services/session/custom-sso-session-kernel.adapter";
 import { createLoginWithOaUseCase } from "@api/use-cases/sso/login-with-oa/login-with-oa.use-case";
 import { createLoginWithWechatUseCase } from "@api/use-cases/sso/login-with-wechat/login-with-wechat.use-case";
 import { createLogoutSsoSessionUseCase } from "@api/use-cases/sso/logout-sso-session/logout-sso-session.use-case";
-import { AuthzMaintenanceError } from "@iam/api-core/errors/AuthzMaintenanceError";
+import { createAuthorizationGrantRedemption } from "@iam/api-core/authorization-grant";
+import {
+  createInMemoryAuthorizationGrantRedemptionStore,
+  createManualAuthorizationGrantRedemptionScheduler,
+} from "@iam/api-core/authorization-grant/testing";
 import { AuthzUnauthorizedError } from "@iam/api-core/errors/AuthzUnauthorizedError";
 import { InvalidAuthCodeError } from "@iam/api-core/errors/InvalidAuthCodeError";
 import { LoggerSourceApp, SystemLogEvent } from "@iam/api-core/logger";
-import { createSessionKernel } from "@iam/api-core/session/kernel";
-import { ClientManagementLevel, ClientStatus, UserStatus, UserType } from "@iam/contracts";
+import { createSessionKernelForTesting } from "@iam/api-core/session/kernel/testing";
+import {
+  SubjectAccessDisabledError,
+  SubjectAccessUnavailableError,
+} from "@iam/api-core/subject-access";
+import {
+  SubjectProjectionNotReadyError,
+} from "@iam/client-subject-projection";
+import {
+  ClientStatus,
+  CustomSsoClientMode,
+  RETRYABLE_SERVICE_UNAVAILABLE,
+  SubjectClaim,
+  UserStatus,
+  UserType,
+} from "@iam/contracts";
 import { beforeEach, describe, expect, mock, test } from "bun:test";
 import { sm3 } from "sm-crypto";
 
@@ -34,6 +61,10 @@ class FakeRedis {
 
   now() {
     return this.timestamp;
+  }
+
+  advance(milliseconds: number) {
+    this.timestamp += milliseconds;
   }
 
   keysStartingWith(prefix: string) {
@@ -204,7 +235,6 @@ class FakeRedis {
 
 const fakeRedis = new FakeRedis();
 const auditLogs: unknown[] = [];
-const logoutNotifications: unknown[] = [];
 const logger = {
   child: mock(() => logger),
   debug: mock(() => undefined),
@@ -213,10 +243,11 @@ const logger = {
   warn: mock(() => undefined),
 };
 
-let fetchShouldFail = false;
 let liveUserAvailable = true;
 let profileAvailable = true;
 let orcasShouldFail = false;
+
+const subjectIdentifier = "00000000-0000-4000-8000-000000001001";
 
 const userDetail = {
   id: 1001,
@@ -243,53 +274,135 @@ const client = {
   url: "https://app.example.com",
   status: ClientStatus.Enable,
   description: null,
-  extAttributes: {
-    callbackEndpoint: "https://app.example.com/sso/callback",
-    logoutEndpoint: "https://app.example.com/sso/logout",
-    managementLevel: ClientManagementLevel.Independent,
-    requireOrcas: false,
-    userExcluding: [],
-    validRedirectUrls: ["https://app.example.com"],
-  },
+  extAttributes: {},
   isDelete: false,
   createTime: new Date("2026-01-01T00:00:00Z"),
   updateTime: new Date("2026-01-01T00:00:00Z"),
 };
+
+const independentClient = {
+  clientCode: "independent",
+  configVersion: 7,
+  subjectClaimCatalogVersion: 1 as const,
+  subjectClaims: [SubjectClaim.SubjectIdentifier],
+};
+
+const independentRuntimeClient = {
+  id: 1,
+  clientCode: "independent",
+  clientName: "Independent",
+  status: ClientStatus.Enable,
+  isDelete: false,
+  customSsoEnabled: true,
+  customSsoConfig: {
+    mode: CustomSsoClientMode.Independent,
+    subjectClaimCatalogVersion: 1,
+    subjectClaims: [SubjectClaim.SubjectIdentifier],
+    validRedirectUrls: ["https://app.example.com/callback"],
+    callbackEndpoint: "https://app.example.com/sso/callback",
+    logoutEndpoint: "https://app.example.com/sso/logout",
+  },
+  customSsoConfigVersion: 7,
+} satisfies CustomSsoClientRuntimeDto;
+let currentIndependentRuntimeClient: CustomSsoClientRuntimeDto
+  = independentRuntimeClient;
+
+function createGatewayRuntimeClient(
+  clientCode: "gateway" | "gateway-orcas",
+): CustomSsoClientRuntimeDto {
+  return {
+    id: clientCode === "gateway" ? 2 : 3,
+    clientCode,
+    clientName: clientCode,
+    status: ClientStatus.Enable,
+    isDelete: false,
+    customSsoEnabled: true,
+    customSsoConfig: {
+      mode: CustomSsoClientMode.Gateway,
+      orcas: { enabled: clientCode === "gateway-orcas" },
+      subjectClaimCatalogVersion: 1,
+      subjectClaims: [SubjectClaim.SubjectIdentifier],
+      validRedirectUrls: ["https://gateway.example.com"],
+    },
+    customSsoConfigVersion: 7,
+  };
+}
+
+let currentGatewayRuntimeClient: CustomSsoClientRuntimeDto
+  = createGatewayRuntimeClient("gateway");
+let currentGatewayOrcasRuntimeClient: CustomSsoClientRuntimeDto
+  = createGatewayRuntimeClient("gateway-orcas");
 
 function getMockClientByCode(clientCode: string) {
   if (clientCode === "gateway" || clientCode === "gateway-orcas") {
     return {
       ...client,
       clientCode,
-      extAttributes: {
-        ...client.extAttributes,
-        managementLevel: ClientManagementLevel.Gateway,
-        requireOrcas: clientCode === "gateway-orcas",
-        validRedirectUrls: ["https://gateway.example.com"],
-      },
+      extAttributes: {},
     };
   }
 
   return clientCode === client.clientCode ? client : null;
 }
 
-function createServices() {
+function getGatewayClientContext(clientCode: "gateway" | "gateway-orcas") {
+  return {
+    clientCode,
+    configVersion: 7,
+    orcasEnabled: clientCode === "gateway-orcas",
+  };
+}
+
+function createServices(options: {
+  authorizationGrantRedemption?: (
+    defaultRedemption: AuthorizationGrantRedemption,
+  ) => AuthorizationGrantRedemption;
+  captureSubjectAccessTransitionId?: () => string | Promise<string>;
+  decorateKernel?: (
+    kernel: SessionKernel,
+  ) => SessionKernel;
+  getActiveUserBySubjectIdentifier?: (
+    subjectIdentifier: string,
+  ) => Promise<(typeof userDetail & { subjectIdentifier: string }) | null>;
+  findRuntimeClient?: (
+    clientCode: string,
+  ) => Promise<CustomSsoClientRuntimeDto | null>;
+  grantLeaseDurationMs?: number;
+  grantScheduler?: AuthorizationGrantRedemptionScheduler;
+  recordAuditLog?: (event: unknown) => Promise<void>;
+  validatePrincipal?: (target: { principal: { subjectId: string } }) => Promise<
+    | { ok: true }
+    | {
+      ok: false;
+      reason: "session_generation_stale" | "user_deleted" | "user_disabled";
+    }
+  >;
+  resolveSubjectProjection?: (input: {
+    subjectIdentifier: string;
+    clientCode: string;
+  }) => Promise<{
+    subjectIdentifier: string;
+    username?: string;
+  }>;
+} = {}) {
   const clientService = {
     getClientByCode: mock(async (clientCode: string) => getMockClientByCode(clientCode)),
   };
   const auditLogWriter = {
     recordAuditLog: mock(async (event: unknown) => {
+      if (options.recordAuditLog)
+        return await options.recordAuditLog(event);
       auditLogs.push(event);
     }),
     recordAuditLogFromContext: mock(async () => undefined),
   };
-  const cleanupAdapter = createCustomSsoCleanupAdapter({
+  const kernel = createSessionKernelForTesting({
     redis: fakeRedis as any,
-    logger,
-    fetch: globalThis.fetch.bind(globalThis),
-  });
-  const kernel = createSessionKernel({
-    redis: fakeRedis as any,
+    principalAccessFence: {
+      capture: options.captureSubjectAccessTransitionId
+        ?? (async () => "20000000-0000-4000-8000-000000000001"),
+      validate: async () => ({ ok: true }),
+    },
     config: {
       namespace: "sess:v2:",
       principalIdleTtlMs: 3_600_000,
@@ -304,15 +417,20 @@ function createServices() {
       tombstoneGraceMs: 300_000,
       clock: { now: () => fakeRedis.now() },
     },
-    cleanupAdapters: [cleanupAdapter],
+    validationHooks: options.validatePrincipal === undefined
+      ? undefined
+      : { validatePrincipal: options.validatePrincipal },
     logger,
   });
+  const adapterKernel = options.decorateKernel?.(kernel) ?? kernel;
   const adapterUserService = {
-    getActiveUserById: mock(async (userId: number) => {
-      if (!liveUserAvailable || userId !== userDetail.id) {
+    getActiveUserBySubjectIdentifier: mock(async (input: string) => {
+      if (options.getActiveUserBySubjectIdentifier)
+        return await options.getActiveUserBySubjectIdentifier(input);
+      if (!liveUserAvailable || input !== subjectIdentifier) {
         return null;
       }
-      return userDetail;
+      return { ...userDetail, subjectIdentifier };
     }),
     getUserDetailById: mock(async (userId: number) => {
       if (!profileAvailable || userId !== userDetail.id) {
@@ -329,11 +447,59 @@ function createServices() {
       return { orcasId: "orcas", orcasSessionId: "orcas-session" };
     }),
   };
+  const defaultAuthorizationGrantRedemption = createAuthorizationGrantRedemption({
+    leaseDurationMs: options.grantLeaseDurationMs ?? 5_000,
+    random: { uuid: randomUUID },
+    scheduler: options.grantScheduler,
+    store: createInMemoryAuthorizationGrantRedemptionStore({
+      clock: { now: () => fakeRedis.now() },
+    }),
+  });
+  const authorizationGrantRedemption
+    = options.authorizationGrantRedemption?.(defaultAuthorizationGrantRedemption)
+      ?? defaultAuthorizationGrantRedemption;
+  const subjectProjection = {
+    resolve: mock(options.resolveSubjectProjection ?? (async (input: {
+      subjectIdentifier: string;
+      clientCode: string;
+    }) => ({
+      subjectIdentifier: input.subjectIdentifier,
+    }))),
+  };
+  const subjectDelivery = {
+    createUserInfoCapability: mock((context: {
+      subjectIdentifier: string;
+    }) => Object.freeze({
+      resolveUserInfo: mock(async () => ({
+        version: 1 as const,
+        subjectIdentifier: context.subjectIdentifier,
+      })),
+    })),
+    resolveGatewaySubjectHeader: mock(async (context: {
+      subjectIdentifier: string;
+    }) => Buffer.from(JSON.stringify({
+      version: 1,
+      subjectIdentifier: context.subjectIdentifier,
+    }), "utf8").toString("base64")),
+  };
   const customSsoSession = createCustomSsoSessionKernelAdapter({
-    kernel,
-    redis: fakeRedis as any,
+    authorizationGrantRedemption,
+    clients: {
+      findRuntimeRecord: options.findRuntimeClient
+        ?? (async (clientCode: string) =>
+          clientCode === currentIndependentRuntimeClient.clientCode
+            ? currentIndependentRuntimeClient
+            : clientCode === currentGatewayRuntimeClient.clientCode
+              ? currentGatewayRuntimeClient
+              : clientCode === currentGatewayOrcasRuntimeClient.clientCode
+                ? currentGatewayOrcasRuntimeClient
+                : null),
+    },
+    kernel: adapterKernel,
     logger,
     orcas,
+    subjectDelivery,
+    subjectProjection,
     userService: adapterUserService as any,
     auditLogWriter,
     clock: { now: () => fakeRedis.now() },
@@ -347,10 +513,10 @@ function createServices() {
   };
   const ssoUsers = {
     getActiveUserById: mock(async (userId: number) =>
-      liveUserAvailable && userId === userDetail.id ? userDetail : null),
+      liveUserAvailable && userId === userDetail.id ? { ...userDetail, subjectIdentifier } : null),
     getActiveUserByUsername: mock(async (username: string) =>
-      liveUserAvailable && username === userDetail.username ? userDetail : null),
-    getActiveUserByWxId: mock(async () => liveUserAvailable ? userDetail : null),
+      liveUserAvailable && username === userDetail.username ? { ...userDetail, subjectIdentifier } : null),
+    getActiveUserByWxId: mock(async () => liveUserAvailable ? { ...userDetail, subjectIdentifier } : null),
     getUserDetailById: mock(async (userId: number) => {
       if (!profileAvailable || userId !== userDetail.id) {
         throw new Error("user not found");
@@ -378,11 +544,20 @@ function createServices() {
     logout: createLogoutSsoSessionUseCase({ sessions: customSsoSession }),
   };
 
-  return { customSsoSession, kernel, orcas, sso };
+  return {
+    authorizationGrantRedemption,
+    customSsoSession,
+    kernel,
+    orcas,
+    sso,
+    subjectDelivery,
+    subjectProjection,
+    userService: adapterUserService,
+  };
 }
 
 async function createPrincipalToken(customSsoSession: ReturnType<typeof createServices>["customSsoSession"]) {
-  return (await customSsoSession.createPrincipalSession(userDetail, { amr: ["pwd"] })).token;
+  return (await customSsoSession.createPrincipalSession(subjectIdentifier, { amr: ["pwd"] })).token;
 }
 
 function requestContext(requestId: string) {
@@ -401,16 +576,23 @@ async function issueAuthorizationCode(
   services: ReturnType<typeof createServices>,
   options: {
     clientCode?: string;
+    configVersion?: number;
     redirectUrl?: string;
     requestContext?: ReturnType<typeof requestContext>;
+    state?: string;
     tokenSource?: "cookie" | "authorization_header" | "query";
   } = {},
 ) {
   const principalToken = await createPrincipalToken(services.customSsoSession);
   const authorization = await services.customSsoSession.issueAuthorizationCode({
     clientCode: options.clientCode ?? client.clientCode,
+    configVersion: options.configVersion ?? 7,
+    mode: (options.clientCode ?? client.clientCode).startsWith("gateway")
+      ? CustomSsoClientMode.Gateway
+      : CustomSsoClientMode.Independent,
     redirectUrl: options.redirectUrl ?? "https://app.example.com/callback",
     requestContext: options.requestContext,
+    state: options.state,
     token: principalToken,
     tokenSource: options.tokenSource ?? "cookie",
   });
@@ -426,8 +608,9 @@ async function redeemIndependentCredential(
 ) {
   const { code } = await issueAuthorizationCode(services);
   return await services.customSsoSession.redeemIndependentGrant({
-    client,
+    client: independentClient,
     code,
+    redirectUri: "https://app.example.com/callback",
     requestContext: options.requestContext,
   });
 }
@@ -439,38 +622,754 @@ function createOaToken(loginid: string, ts: string, clientSecret = client.client
 beforeEach(() => {
   fakeRedis.reset();
   auditLogs.length = 0;
-  logoutNotifications.length = 0;
   logger.warn.mockClear();
-  fetchShouldFail = false;
   liveUserAvailable = true;
   profileAvailable = true;
   orcasShouldFail = false;
+  currentIndependentRuntimeClient = independentRuntimeClient;
+  currentGatewayRuntimeClient = createGatewayRuntimeClient("gateway");
+  currentGatewayOrcasRuntimeClient = createGatewayRuntimeClient("gateway-orcas");
   logger.info.mockClear();
-  globalThis.fetch = mock(async (_input: string | URL | Request, init?: RequestInit) => {
-    logoutNotifications.push(init?.body);
-    if (fetchShouldFail) {
-      throw new Error("client logout failed");
-    }
-    return new Response(null, { status: 204 });
-  }) as unknown as typeof fetch;
 });
 
 describe("Custom SSO module interface", () => {
+  test("preserves Subject Access classification while creating an authorization artifact", async () => {
+    let validationCalls = 0;
+    const services = createServices({
+      validatePrincipal: async () => {
+        validationCalls += 1;
+        return validationCalls === 3
+          ? { ok: false, reason: "user_disabled" }
+          : { ok: true };
+      },
+    });
+    const token = await createPrincipalToken(services.customSsoSession);
+
+    await expect(services.customSsoSession.issueAuthorizationCode({
+      clientCode: client.clientCode,
+      configVersion: independentClient.configVersion,
+      mode: CustomSsoClientMode.Independent,
+      redirectUrl: "https://app.example.com/callback",
+      token,
+      tokenSource: "cookie",
+    })).rejects.toBeInstanceOf(SubjectAccessDisabledError);
+  });
+
+  test.each([
+    ["binding", 3],
+    ["credential", 4],
+  ] as const)("preserves Subject Access classification while creating a local %s", async (
+    _objectKind,
+    failingValidationCall,
+  ) => {
+    let countValidations = false;
+    let validationCalls = 0;
+    const services = createServices({
+      validatePrincipal: async () => {
+        if (!countValidations)
+          return { ok: true };
+        validationCalls += 1;
+        return validationCalls === failingValidationCall
+          ? { ok: false, reason: "user_disabled" }
+          : { ok: true };
+      },
+    });
+    const { code } = await issueAuthorizationCode(services);
+    countValidations = true;
+
+    await expect(services.customSsoSession.redeemIndependentGrant({
+      client: independentClient,
+      code,
+      redirectUri: "https://app.example.com/callback",
+    })).rejects.toBeInstanceOf(SubjectAccessDisabledError);
+  });
+
+  test("keeps pre-disable Local Session, Independent Credential, and Grant invalid after re-enable", async () => {
+    const services = createServices();
+    const independentCredential
+      = await redeemIndependentCredential(services);
+    const { code: independentGrant } = await issueAuthorizationCode(
+      services,
+    );
+    const gatewayRedirectUrl
+      = "https://gateway.example.com/callback";
+    const { code: gatewayGrant } = await issueAuthorizationCode(
+      services,
+      {
+        clientCode: "gateway",
+        redirectUrl: gatewayRedirectUrl,
+      },
+    );
+    const gatewaySession
+      = await services.customSsoSession.completeGatewayLogin({
+        client: getGatewayClientContext("gateway"),
+        code: gatewayGrant,
+        redirectUrl: gatewayRedirectUrl,
+      });
+
+    currentIndependentRuntimeClient = {
+      ...independentRuntimeClient,
+      status: ClientStatus.Enable,
+      customSsoEnabled: true,
+      customSsoConfigVersion: 8,
+    };
+    currentGatewayRuntimeClient = {
+      ...createGatewayRuntimeClient("gateway"),
+      status: ClientStatus.Enable,
+      customSsoEnabled: true,
+      customSsoConfigVersion: 8,
+    };
+
+    await expect(
+      services.customSsoSession.resolveLocalSessionContext(
+        gatewaySession.token,
+        "gateway",
+      ),
+    ).rejects.toBeInstanceOf(AuthzUnauthorizedError);
+    await expect(
+      services.customSsoSession.resolveIndependentCredentialContext(
+        independentCredential.credential,
+        independentClient.clientCode,
+      ),
+    ).rejects.toBeInstanceOf(AuthzUnauthorizedError);
+    await expect(
+      services.customSsoSession.redeemIndependentGrant({
+        client: {
+          ...independentClient,
+          configVersion: 8,
+        },
+        code: independentGrant,
+        redirectUri: "https://app.example.com/callback",
+      }),
+    ).rejects.toBeInstanceOf(InvalidAuthCodeError);
+  });
+
+  test("maps a disabled PrincipalSession to SESSION_INVALID", async () => {
+    const services = createServices({
+      validatePrincipal: async () => ({ ok: false, reason: "user_disabled" }),
+    });
+    const token = await createPrincipalToken(services.customSsoSession);
+
+    await expect(
+      services.customSsoSession.resolvePrincipalSessionContext(token),
+    ).rejects.toBeInstanceOf(SubjectAccessDisabledError);
+  });
+
+  test("propagates uncertain PrincipalSession access for the HTTP 503 mapper", async () => {
+    const unavailable = new SubjectAccessUnavailableError();
+    const services = createServices({
+      validatePrincipal: async () => {
+        throw unavailable;
+      },
+    });
+    const token = await createPrincipalToken(services.customSsoSession);
+
+    await expect(
+      services.customSsoSession.resolvePrincipalSessionContext(token),
+    ).rejects.toBe(unavailable);
+  });
+
+  test("maps a disabled subject when resolving a valid local Credential", async () => {
+    let disabled = false;
+    const services = createServices({
+      validatePrincipal: async () => disabled
+        ? { ok: false, reason: "user_disabled" }
+        : { ok: true },
+    });
+    const credential = await redeemIndependentCredential(services);
+    disabled = true;
+
+    await expect(
+      services.customSsoSession.resolveLocalSessionContext(
+        credential.credential,
+        client.clientCode,
+      ),
+    ).rejects.toBeInstanceOf(SubjectAccessDisabledError);
+  });
+
+  test("resolves Principal Session context through the Barrier without a legacy account lookup", async () => {
+    const services = createServices();
+    const token = await createPrincipalToken(services.customSsoSession);
+    services.userService.getActiveUserBySubjectIdentifier.mockClear();
+    services.userService.getUserDetailById.mockClear();
+
+    await expect(
+      services.customSsoSession.resolvePrincipalSessionContext(token),
+    ).resolves.toEqual({ subjectIdentifier });
+    expect(services.userService.getActiveUserBySubjectIdentifier)
+      .not
+      .toHaveBeenCalled();
+    expect(services.userService.getUserDetailById).not.toHaveBeenCalled();
+  });
+
+  test("preserves stale subject validation when consuming an authorization artifact", async () => {
+    let stale = false;
+    const services = createServices({
+      validatePrincipal: async () => stale
+        ? { ok: false, reason: "session_generation_stale" }
+        : { ok: true },
+    });
+    const { code } = await issueAuthorizationCode(services);
+    stale = true;
+
+    await expect(services.customSsoSession.redeemIndependentGrant({
+      client: independentClient,
+      code,
+      redirectUri: "https://app.example.com/callback",
+    })).rejects.toBeInstanceOf(SubjectAccessDisabledError);
+  });
+
+  test("preserves disabled validation when logout resolves either principal or credential", async () => {
+    let principalDisabled = false;
+    const principalServices = createServices({
+      validatePrincipal: async () => principalDisabled
+        ? { ok: false, reason: "user_disabled" }
+        : { ok: true },
+    });
+    const principalToken = await createPrincipalToken(
+      principalServices.customSsoSession,
+    );
+    principalDisabled = true;
+
+    await expect(principalServices.customSsoSession.logout(principalToken))
+      .rejects
+      .toBeInstanceOf(SubjectAccessDisabledError);
+
+    let credentialDisabled = false;
+    const credentialServices = createServices({
+      validatePrincipal: async () => credentialDisabled
+        ? { ok: false, reason: "user_disabled" }
+        : { ok: true },
+    });
+    const credential = await redeemIndependentCredential(credentialServices);
+    credentialDisabled = true;
+    await expect(
+      credentialServices.customSsoSession.logout(credential.credential),
+    )
+      .rejects
+      .toBeInstanceOf(SubjectAccessDisabledError);
+  });
+
   test("issueAuthorizationCode reports an unauthenticated PrincipalSession", async () => {
     const services = createServices();
 
     await expect(services.customSsoSession.issueAuthorizationCode({
       clientCode: client.clientCode,
+      configVersion: independentClient.configVersion,
+      mode: CustomSsoClientMode.Independent,
       redirectUrl: "https://app.example.com/callback",
       tokenSource: "none",
     })).resolves.toEqual({ isLogin: false, code: null });
   });
 
-  test("redeemIndependentGrant returns an IAM-managed credential with user info and audit context", async () => {
+  test("issues a strict V1 authorization grant and initializes its redemption record", async () => {
+    const services = createServices();
+    const principalToken = await createPrincipalToken(services.customSsoSession);
+
+    const authorization = await services.customSsoSession.issueAuthorizationCode({
+      clientCode: client.clientCode,
+      configVersion: 7,
+      mode: CustomSsoClientMode.Independent,
+      redirectUrl: "https://app.example.com/callback",
+      state: "opaque state with spaces",
+      token: principalToken,
+      tokenSource: "cookie",
+    });
+    if (!authorization.code) {
+      throw new Error("expected auth code");
+    }
+
+    const artifact = await services.kernel.resolveProtocolArtifact(authorization.code);
+    expect(artifact).toMatchObject({
+      status: "resolved",
+      value: {
+        clientCode: client.clientCode,
+        metadata: {
+          version: 1,
+          subjectIdentifier,
+          clientCode: client.clientCode,
+          mode: CustomSsoClientMode.Independent,
+          redirectUri: "https://app.example.com/callback",
+          state: "opaque state with spaces",
+          configVersion: 7,
+        },
+      },
+    });
+    expect(JSON.stringify(artifact)).not.toContain("userInfo");
+    expect(JSON.stringify(artifact)).not.toContain("userDetail");
+    expect(JSON.stringify(artifact)).not.toContain("projection");
+    expect(JSON.stringify(logger.info.mock.calls)).not.toContain("opaque state with spaces");
+
+    if (artifact.status !== "resolved") {
+      throw new Error("expected authorization artifact");
+    }
+    await expect(
+      services.authorizationGrantRedemption.begin(artifact.value.artifactId),
+    ).resolves.toMatchObject({
+      status: "reserved",
+      reservation: {
+        grantId: artifact.value.artifactId,
+        expiresAt: artifact.value.expiresAt,
+      },
+    });
+  });
+
+  test("revokes a newly issued authorization artifact when the client changes during issuance", async () => {
+    let runtimeReadCount = 0;
+    const revokeArtifact = mock(async (
+      _artifactId: string,
+      _reason?: string,
+    ) => undefined);
+    const services = createServices({
+      findRuntimeClient: async (clientCode) => {
+        if (clientCode !== independentRuntimeClient.clientCode)
+          return null;
+        runtimeReadCount += 1;
+        return runtimeReadCount === 1
+          ? independentRuntimeClient
+          : {
+              ...independentRuntimeClient,
+              customSsoConfigVersion:
+                independentRuntimeClient.customSsoConfigVersion + 1,
+            };
+      },
+      decorateKernel: kernel => ({
+        ...kernel,
+        async revokeArtifact(artifactId, reason) {
+          await revokeArtifact(artifactId, reason);
+          return await kernel.revokeArtifact(artifactId, reason);
+        },
+      }),
+    });
+    const principalToken = await createPrincipalToken(
+      services.customSsoSession,
+    );
+
+    await expect(
+      services.customSsoSession.issueAuthorizationCode({
+        clientCode: independentClient.clientCode,
+        configVersion: independentClient.configVersion,
+        mode: CustomSsoClientMode.Independent,
+        redirectUrl: "https://app.example.com/callback",
+        token: principalToken,
+        tokenSource: "cookie",
+      }),
+    ).rejects.toBeInstanceOf(AuthzUnauthorizedError);
+
+    expect(runtimeReadCount).toBe(2);
+    expect(revokeArtifact).toHaveBeenCalledWith(
+      expect.any(String),
+      "client_config_changed",
+    );
+  });
+
+  test("revokes the authorization artifact when redemption initialization cannot create its record", async () => {
+    let grantId: string | undefined;
+    const initialize = mock(async (input: { grantId: string }) => {
+      grantId = input.grantId;
+      return "exists" as const;
+    });
+    const services = createServices({
+      authorizationGrantRedemption: defaultRedemption => ({
+        ...defaultRedemption,
+        initialize,
+      }),
+    });
+    const principalToken = await createPrincipalToken(services.customSsoSession);
+
+    await expect(services.customSsoSession.issueAuthorizationCode({
+      clientCode: client.clientCode,
+      configVersion: 7,
+      mode: CustomSsoClientMode.Independent,
+      redirectUrl: "https://app.example.com/callback",
+      token: principalToken,
+      tokenSource: "cookie",
+    })).rejects.toThrow("授权码创建失败");
+
+    expect(initialize).toHaveBeenCalledTimes(1);
+    expect(grantId).toBeDefined();
+    expect(
+      await fakeRedis.get(services.kernel.keys.active("artifact", grantId!)),
+    ).toBeNull();
+  });
+
+  test("redeems an Independent grant into a minimal credential and a client-scoped V1 projection", async () => {
+    const services = createServices();
+    const { code } = await issueAuthorizationCode(services);
+
+    const result = await services.customSsoSession.redeemIndependentGrant({
+      client: independentClient,
+      code,
+      redirectUri: "https://app.example.com/callback",
+      requestContext: requestContext("req-independent-grant-v1"),
+    });
+
+    expect(result).toEqual({
+      credential: expect.stringContaining("iam_ls_"),
+      ttl: expect.any(Number),
+      subject: {
+        version: 1,
+        subjectIdentifier,
+      },
+    });
+    expect(services.subjectProjection.resolve).toHaveBeenCalledWith({
+      subjectIdentifier,
+      clientCode: independentClient.clientCode,
+      selection: {
+        catalogVersion: 1,
+        optionalClaims: [],
+      },
+    });
+
+    const credential = await services.kernel.resolveCredential(result.credential);
+    expect(credential).toMatchObject({
+      status: "resolved",
+      value: {
+        clientCode: independentClient.clientCode,
+        metadata: {
+          mode: CustomSsoClientMode.Independent,
+          configVersion: independentClient.configVersion,
+        },
+      },
+    });
+    expect(JSON.stringify(credential)).not.toContain("payloadRef");
+    expect(JSON.stringify(credential)).not.toContain("userDetail");
+    expect(JSON.stringify(credential)).not.toContain("projection");
+    expect(fakeRedis.payloadKeys()).toHaveLength(0);
+
+    await expect(
+      services.customSsoSession.resolveIndependentCredentialContext(
+        result.credential,
+        independentClient.clientCode,
+      ),
+    ).resolves.toEqual({
+      authenticatedClientCode: independentClient.clientCode,
+      subjectIdentifier,
+    });
+
+    await expect(services.customSsoSession.redeemIndependentGrant({
+      client: independentClient,
+      code,
+      redirectUri: "https://app.example.com/callback",
+    })).rejects.toBeInstanceOf(InvalidAuthCodeError);
+  });
+
+  test.each([
+    ["projection not ready", new SubjectProjectionNotReadyError()],
+    ["Subject Access unavailable", new SubjectAccessUnavailableError()],
+    ["another typed retryable 503", Object.assign(
+      new Error("typed retryable dependency"),
+      { retryability: RETRYABLE_SERVICE_UNAVAILABLE },
+    )],
+  ])("releases the same grant attempt after retryable %s", async (_label, retryableError) => {
+    let projectionAttempts = 0;
+    const services = createServices({
+      resolveSubjectProjection: async ({ subjectIdentifier: inputSubjectIdentifier }) => {
+        projectionAttempts += 1;
+        if (projectionAttempts === 1)
+          throw retryableError;
+        return { subjectIdentifier: inputSubjectIdentifier };
+      },
+    });
+    const { code } = await issueAuthorizationCode(services);
+    const input = {
+      client: independentClient,
+      code,
+      redirectUri: "https://app.example.com/callback",
+    };
+
+    await expect(
+      services.customSsoSession.redeemIndependentGrant(input),
+    ).rejects.toBe(retryableError);
+    await expect(
+      services.customSsoSession.redeemIndependentGrant(input),
+    ).resolves.toMatchObject({
+      credential: expect.stringContaining("iam_ls_"),
+      subject: { version: 1, subjectIdentifier },
+    });
+    expect(projectionAttempts).toBe(2);
+  });
+
+  test("keeps retryable 503 semantics after projection crosses the original lease window", async () => {
+    const retryableError = new SubjectProjectionNotReadyError();
+    let projectionAttempts = 0;
+    const manualScheduler = createManualAuthorizationGrantRedemptionScheduler();
+    const services = createServices({
+      grantLeaseDurationMs: 60,
+      grantScheduler: manualScheduler.scheduler,
+      resolveSubjectProjection: async ({ subjectIdentifier: inputSubjectIdentifier }) => {
+        projectionAttempts += 1;
+        if (projectionAttempts === 1) {
+          fakeRedis.advance(35);
+          await expect(manualScheduler.advanceToNextHeartbeat()).resolves.toBe(20);
+          fakeRedis.advance(35);
+          await expect(manualScheduler.advanceToNextHeartbeat()).resolves.toBe(20);
+          fakeRedis.advance(25);
+          throw retryableError;
+        }
+        return { subjectIdentifier: inputSubjectIdentifier };
+      },
+    });
+    const { code } = await issueAuthorizationCode(services);
+    const input = {
+      client: independentClient,
+      code,
+      redirectUri: "https://app.example.com/callback",
+    };
+
+    await expect(
+      services.customSsoSession.redeemIndependentGrant(input),
+    ).rejects.toBe(retryableError);
+    await expect(
+      services.customSsoSession.redeemIndependentGrant(input),
+    ).resolves.toMatchObject({
+      credential: expect.stringContaining("iam_ls_"),
+    });
+  });
+
+  test("consumes a successful Independent grant after projection crosses one lease window", async () => {
+    const manualScheduler = createManualAuthorizationGrantRedemptionScheduler();
+    const services = createServices({
+      grantLeaseDurationMs: 60,
+      grantScheduler: manualScheduler.scheduler,
+      resolveSubjectProjection: async ({ subjectIdentifier: inputSubjectIdentifier }) => {
+        fakeRedis.advance(35);
+        await expect(manualScheduler.advanceToNextHeartbeat()).resolves.toBe(20);
+        fakeRedis.advance(35);
+        await expect(manualScheduler.advanceToNextHeartbeat()).resolves.toBe(20);
+        fakeRedis.advance(25);
+        return { subjectIdentifier: inputSubjectIdentifier };
+      },
+    });
+    const { code } = await issueAuthorizationCode(services);
+
+    await expect(services.customSsoSession.redeemIndependentGrant({
+      client: independentClient,
+      code,
+      redirectUri: "https://app.example.com/callback",
+    })).resolves.toMatchObject({
+      credential: expect.stringContaining("iam_ls_"),
+    });
+  });
+
+  test.each([
+    ["unauthorized failure", new AuthzUnauthorizedError("未登录")],
+    ["unexpected bug", new Error("projection bug")],
+  ])("does not release a grant attempt after a non-retryable %s", async (
+    _label,
+    nonRetryableError,
+  ) => {
+    let projectionAttempts = 0;
+    const services = createServices({
+      resolveSubjectProjection: async () => {
+        projectionAttempts += 1;
+        throw nonRetryableError;
+      },
+    });
+    const { code } = await issueAuthorizationCode(services);
+    const input = {
+      client: independentClient,
+      code,
+      redirectUri: "https://app.example.com/callback",
+    };
+
+    await expect(
+      services.customSsoSession.redeemIndependentGrant(input),
+    ).rejects.toBe(nonRetryableError);
+    await expect(
+      services.customSsoSession.redeemIndependentGrant(input),
+    ).rejects.toBeInstanceOf(InvalidAuthCodeError);
+    expect(projectionAttempts).toBe(1);
+  });
+
+  test.each([
+    ["redirect URI", {
+      client: independentClient,
+      redirectUri: "https://app.example.com/different",
+    }],
+    ["config version", {
+      client: { ...independentClient, configVersion: 8 },
+      redirectUri: "https://app.example.com/callback",
+    }],
+  ])("rejects a mismatched %s before reserving the grant", async (_label, mismatch) => {
+    const services = createServices();
+    const { code } = await issueAuthorizationCode(services);
+
+    await expect(services.customSsoSession.redeemIndependentGrant({
+      ...mismatch,
+      code,
+    })).rejects.toBeInstanceOf(InvalidAuthCodeError);
+    await expect(services.customSsoSession.redeemIndependentGrant({
+      client: independentClient,
+      code,
+      redirectUri: "https://app.example.com/callback",
+    })).resolves.toMatchObject({
+      credential: expect.stringContaining("iam_ls_"),
+    });
+  });
+
+  test("revokes a newly issued credential and binding when grant consumption loses its fence", async () => {
+    let issuedCredentialToken: string | undefined;
+    const services = createServices({
+      authorizationGrantRedemption: (defaultRedemption) => {
+        const consume = mock(async () => "stale-attempt" as const);
+        return {
+          ...defaultRedemption,
+          consume,
+          withLease: async (_reservation, operation) => await operation({
+            consume,
+            release: async () => "stale-attempt" as const,
+          }),
+        };
+      },
+      decorateKernel: kernel => ({
+        ...kernel,
+        async issueCredential(input) {
+          const issued = await kernel.issueCredential(input);
+          issuedCredentialToken = issued.status === "created"
+            ? issued.externalToken
+            : undefined;
+          return issued;
+        },
+      }),
+    });
+    const { code } = await issueAuthorizationCode(services);
+
+    await expect(services.customSsoSession.redeemIndependentGrant({
+      client: independentClient,
+      code,
+      redirectUri: "https://app.example.com/callback",
+    })).rejects.toBeInstanceOf(InvalidAuthCodeError);
+
+    expect(fakeRedis.keysStartingWith("sess:v2:active:c:")).toHaveLength(0);
+    expect(fakeRedis.keysStartingWith("sess:v2:active:b:")).toHaveLength(0);
+    expect(fakeRedis.payloadKeys()).toHaveLength(0);
+    expect(issuedCredentialToken).toBeDefined();
+    await expect(
+      services.kernel.resolveCredential(issuedCredentialToken!),
+    ).resolves.toMatchObject({ status: "revoked" });
+  });
+
+  test("never returns a sid when consume and binding compensation throw", async () => {
+    let issuedCredentialToken: string | undefined;
+    const consumeFailure = new Error("consume dependency failed");
+    const services = createServices({
+      authorizationGrantRedemption: (defaultRedemption) => {
+        const consume = mock(async () => {
+          throw consumeFailure;
+        });
+        return {
+          ...defaultRedemption,
+          consume,
+          withLease: async (_reservation, operation) => await operation({
+            consume,
+            release: async () => "stale-attempt" as const,
+          }),
+        };
+      },
+      decorateKernel: kernel => ({
+        ...kernel,
+        async issueCredential(input) {
+          const issued = await kernel.issueCredential(input);
+          issuedCredentialToken = issued.status === "created"
+            ? issued.externalToken
+            : undefined;
+          return issued;
+        },
+        async revokeBinding() {
+          throw new Error("binding revoke failed");
+        },
+      }),
+    });
+    const { code } = await issueAuthorizationCode(services, {
+      state: "unique-state-compensation-sentinel",
+    });
+
+    await expect(services.customSsoSession.redeemIndependentGrant({
+      client: independentClient,
+      code,
+      redirectUri: "https://app.example.com/callback",
+    })).rejects.toBe(consumeFailure);
+
+    expect(issuedCredentialToken).toBeDefined();
+    await expect(
+      services.kernel.resolveCredential(issuedCredentialToken!),
+    ).resolves.toMatchObject({ status: "revoked" });
+    expect(logger.warn).toHaveBeenCalledWith(expect.objectContaining({
+      clientCode: independentClient.clientCode,
+      operation: "independent_credential_compensation",
+      outcome: "binding_revoke_failed_credential_revoked",
+    }), "custom sso credential compensation used credential fallback");
+    const observableOutput = JSON.stringify(logger.warn.mock.calls);
+    expect(observableOutput).not.toContain(issuedCredentialToken!);
+    expect(observableOutput).not.toContain(code);
+    expect(observableOutput).not.toContain("unique-state-compensation-sentinel");
+  });
+
+  test.each([
+    ["config version changes", { customSsoConfigVersion: 8 }],
+    ["client is disabled", { status: ClientStatus.Disable }],
+    ["Custom SSO is disabled", { customSsoEnabled: false }],
+  ] as const)("fails closed whenever an Independent credential's %s", async (
+    _label,
+    runtimeOverride,
+  ) => {
+    const services = createServices();
+    const { code } = await issueAuthorizationCode(services);
+    const result = await services.customSsoSession.redeemIndependentGrant({
+      client: independentClient,
+      code,
+      redirectUri: "https://app.example.com/callback",
+    });
+    currentIndependentRuntimeClient = {
+      ...independentRuntimeClient,
+      ...runtimeOverride,
+    };
+
+    await expect(
+      services.customSsoSession.resolveIndependentCredentialContext(
+        result.credential,
+        independentClient.clientCode,
+      ),
+    ).rejects.toBeInstanceOf(AuthzUnauthorizedError);
+    await expect(
+      services.kernel.resolveCredential(result.credential),
+    ).resolves.toMatchObject({ status: "revoked" });
+  });
+
+  test("preserves an unavailable Subject Access Barrier when using an Independent credential", async () => {
+    let barrierUnavailable = false;
+    const unavailable = new SubjectAccessUnavailableError();
+    const services = createServices({
+      validatePrincipal: async () => {
+        if (barrierUnavailable)
+          throw unavailable;
+        return { ok: true };
+      },
+    });
+    const { code } = await issueAuthorizationCode(services);
+    const result = await services.customSsoSession.redeemIndependentGrant({
+      client: independentClient,
+      code,
+      redirectUri: "https://app.example.com/callback",
+    });
+    barrierUnavailable = true;
+
+    await expect(
+      services.customSsoSession.resolveIndependentCredentialContext(
+        result.credential,
+        independentClient.clientCode,
+      ),
+    ).rejects.toBe(unavailable);
+  });
+
+  test("redeemIndependentGrant records narrow Subject-based audit context", async () => {
     const services = createServices();
     const principalToken = await createPrincipalToken(services.customSsoSession);
     const authorization = await services.customSsoSession.issueAuthorizationCode({
       clientCode: client.clientCode,
+      configVersion: independentClient.configVersion,
+      mode: CustomSsoClientMode.Independent,
       redirectUrl: "https://app.example.com/callback",
       token: principalToken,
       tokenSource: "cookie",
@@ -480,45 +1379,152 @@ describe("Custom SSO module interface", () => {
     }
 
     const result = await services.customSsoSession.redeemIndependentGrant({
-      client,
+      client: independentClient,
       code: authorization.code,
+      redirectUri: "https://app.example.com/callback",
       requestContext: requestContext("req-independent-grant"),
     });
 
     expect(result).toEqual({
       credential: expect.stringContaining("iam_ls_"),
       ttl: expect.any(Number),
-      userInfo: userDetail,
+      subject: { version: 1, subjectIdentifier },
     });
     expect(result.ttl).toBeGreaterThan(0);
     await expect(
-      services.customSsoSession.resolveLocalSessionContext(result.credential, client),
-    ).resolves.toEqual({ userDetail, orcasId: null });
+      services.customSsoSession.resolveIndependentCredentialContext(
+        result.credential,
+        independentClient.clientCode,
+      ),
+    ).resolves.toEqual({
+      authenticatedClientCode: client.clientCode,
+      subjectIdentifier,
+    });
     expect(auditLogs).toContainEqual(expect.objectContaining({
       action: "auth.login.local",
       details: expect.objectContaining({
         clientCode: client.clientCode,
-        managementLevel: ClientManagementLevel.Independent,
+        mode: CustomSsoClientMode.Independent,
       }),
       requestId: "req-independent-grant",
       traceId: "11111111111111111111111111111111",
+      targetCode: subjectIdentifier,
+      targetId: null,
     }));
   });
 
-  test("completeGatewayLogin creates a Gateway Local Session without calling ORCAS when it is not required", async () => {
+  test("returns a consumed Independent credential when its success audit after-effect fails", async () => {
+    const auditFailure = new Error("unique-audit-failure-sentinel");
+    const services = createServices({
+      recordAuditLog: async () => {
+        throw auditFailure;
+      },
+    });
+    const { code } = await issueAuthorizationCode(services, {
+      state: "unique-audit-state-sentinel",
+    });
+
+    const result = await services.customSsoSession.redeemIndependentGrant({
+      client: independentClient,
+      code,
+      redirectUri: "https://app.example.com/callback",
+      requestContext: requestContext("req-audit-after-effect"),
+    });
+    const credentialToken = result.credential;
+
+    expect(typeof credentialToken).toBe("string");
+    expect(result).toMatchObject({
+      credential: expect.stringContaining("iam_ls_"),
+      subject: { version: 1, subjectIdentifier },
+    });
+    await expect(
+      services.customSsoSession.redeemIndependentGrant({
+        client: independentClient,
+        code,
+        redirectUri: "https://app.example.com/callback",
+      }),
+    ).rejects.toBeInstanceOf(InvalidAuthCodeError);
+    expect(logger.warn).toHaveBeenCalledWith(expect.objectContaining({
+      clientCode: independentClient.clientCode,
+      operation: "independent_login_audit",
+      outcome: "audit_failed",
+      requestId: "req-audit-after-effect",
+    }), "custom sso independent login audit after-effect failed");
+    const observableLog = JSON.stringify(logger.warn.mock.calls);
+    expect(observableLog).not.toContain(auditFailure.message);
+    expect(observableLog).not.toContain("unique-audit-state-sentinel");
+    expect(observableLog).not.toContain(code);
+    expect(observableLog).not.toContain(credentialToken);
+  });
+
+  test("does not consume a grant or retain a credential when pure projection mapping fails", async () => {
+    const services = createServices({
+      resolveSubjectProjection: async () => ({
+        authorization: {
+          employments: null,
+          privileges: [],
+          roles: [],
+        },
+        subjectIdentifier,
+      } as never),
+    });
+    const { code } = await issueAuthorizationCode(services);
+
+    await expect(
+      services.customSsoSession.redeemIndependentGrant({
+        client: independentClient,
+        code,
+        redirectUri: "https://app.example.com/callback",
+      }),
+    ).rejects.toBeInstanceOf(TypeError);
+
+    expect(fakeRedis.keysStartingWith("sess:v2:active:c:")).toHaveLength(0);
+  });
+
+  test("rejects authorization issuance when the current client is not enabled", async () => {
+    const services = createServices({
+      findRuntimeClient: async () => ({
+        ...independentRuntimeClient,
+        status: ClientStatus.Maintenance,
+      }),
+    });
+    const principalToken = await createPrincipalToken(
+      services.customSsoSession,
+    );
+
+    await expect(
+      services.customSsoSession.issueAuthorizationCode({
+        clientCode: independentClient.clientCode,
+        configVersion: independentClient.configVersion,
+        mode: CustomSsoClientMode.Independent,
+        redirectUrl: "https://app.example.com/callback",
+        token: principalToken,
+        tokenSource: "cookie",
+      }),
+    ).rejects.toBeInstanceOf(AuthzUnauthorizedError);
+
+    expect(fakeRedis.keysStartingWith("sess:v2:active:c:")).toHaveLength(0);
+  });
+
+  test("completeGatewayLogin creates an ORCAS-disabled Gateway Local Session without loading a legacy account or User Detail", async () => {
     const services = createServices();
     const redirectUrl = "https://gateway.example.com/callback";
     const { code } = await issueAuthorizationCode(services, {
       clientCode: "gateway",
       redirectUrl,
+      state: "trusted-gateway-state",
     });
     const gatewayClient = getMockClientByCode("gateway");
     if (gatewayClient === null) {
       throw new Error("expected gateway client");
     }
+    liveUserAvailable = false;
+    profileAvailable = false;
+    services.userService.getActiveUserBySubjectIdentifier.mockClear();
+    services.userService.getUserDetailById.mockClear();
 
     const result = await services.customSsoSession.completeGatewayLogin({
-      client: gatewayClient,
+      client: getGatewayClientContext("gateway"),
       code,
       redirectUrl,
       requestContext: requestContext("req-gateway"),
@@ -526,21 +1532,247 @@ describe("Custom SSO module interface", () => {
 
     expect(result).toEqual({
       orcasSessionId: null,
+      state: "trusted-gateway-state",
       token: expect.stringContaining("iam_ls_"),
     });
     await expect(
-      services.customSsoSession.resolveLocalSessionContext(result.token, gatewayClient),
-    ).resolves.toEqual({ userDetail, orcasId: null });
+      services.customSsoSession.resolveLocalSessionContext(
+        result.token,
+        gatewayClient.clientCode,
+      ),
+    ).resolves.toEqual({
+      authenticatedClientCode: gatewayClient.clientCode,
+      subjectIdentifier,
+    });
     expect(services.orcas.orcasLogin).not.toHaveBeenCalled();
+    expect(services.userService.getActiveUserBySubjectIdentifier).not.toHaveBeenCalled();
+    expect(services.userService.getUserDetailById).not.toHaveBeenCalled();
     expect(auditLogs).toContainEqual(expect.objectContaining({
       action: "auth.login.local",
+      actorUserId: null,
       details: expect.objectContaining({
         clientCode: "gateway",
-        managementLevel: ClientManagementLevel.Gateway,
+        mode: CustomSsoClientMode.Gateway,
       }),
       requestId: "req-gateway",
+      targetCode: subjectIdentifier,
+      targetId: null,
+      targetType: "subject",
       traceId: "11111111111111111111111111111111",
     }));
+  });
+
+  test("stores a Gateway Local Session as versioned minimal Kernel metadata without a private user payload", async () => {
+    const services = createServices();
+    const redirectUrl = "https://gateway.example.com/callback";
+    const { code } = await issueAuthorizationCode(services, {
+      clientCode: "gateway",
+      redirectUrl,
+    });
+
+    const result = await services.customSsoSession.completeGatewayLogin({
+      client: getGatewayClientContext("gateway"),
+      code,
+      redirectUrl,
+    });
+    const credential = await services.kernel.resolveCredential(result.token);
+    if (credential.status !== "resolved" || credential.value.bindingId === undefined)
+      throw new Error("expected resolved Gateway credential");
+    const binding = await services.kernel.resolveClientBindingById(
+      credential.value.bindingId,
+    );
+
+    expect(credential.value.metadata).toEqual({
+      version: 1,
+      mode: CustomSsoClientMode.Gateway,
+      configVersion: 7,
+    });
+    expect(binding).toMatchObject({
+      status: "resolved",
+      value: {
+        metadata: {
+          version: 1,
+          mode: CustomSsoClientMode.Gateway,
+          configVersion: 7,
+        },
+      },
+    });
+    const serializedArtifacts = JSON.stringify({ binding, credential });
+    expect(serializedArtifacts).not.toContain("payloadRef");
+    expect(serializedArtifacts).not.toContain("userDetail");
+    expect(serializedArtifacts).not.toContain("projection");
+    expect(serializedArtifacts).not.toContain(userDetail.username);
+    expect(serializedArtifacts).not.toContain(`"id":${userDetail.id}`);
+    expect(fakeRedis.payloadKeys()).toHaveLength(0);
+  });
+
+  test.each([
+    [
+      "global client is not enabled",
+      (runtime: CustomSsoClientRuntimeDto): CustomSsoClientRuntimeDto => ({
+        ...runtime,
+        status: ClientStatus.Maintenance,
+      }),
+    ],
+    [
+      "Custom SSO is disabled",
+      (runtime: CustomSsoClientRuntimeDto): CustomSsoClientRuntimeDto => ({
+        ...runtime,
+        customSsoEnabled: false,
+      }),
+    ],
+    [
+      "Custom SSO config is removed",
+      (runtime: CustomSsoClientRuntimeDto): CustomSsoClientRuntimeDto => ({
+        ...runtime,
+        customSsoConfig: null,
+      }),
+    ],
+    [
+      "Custom SSO config version changes",
+      (runtime: CustomSsoClientRuntimeDto): CustomSsoClientRuntimeDto => ({
+        ...runtime,
+        customSsoConfigVersion: runtime.customSsoConfigVersion + 1,
+      }),
+    ],
+  ] as const)(
+    "fails closed and revokes a Gateway Local Session when %s",
+    async (_reason, mutateRuntime) => {
+      const services = createServices();
+      const redirectUrl = "https://gateway.example.com/callback";
+      const { code } = await issueAuthorizationCode(services, {
+        clientCode: "gateway",
+        redirectUrl,
+      });
+      const result = await services.customSsoSession.completeGatewayLogin({
+        client: getGatewayClientContext("gateway"),
+        code,
+        redirectUrl,
+      });
+      currentGatewayRuntimeClient = mutateRuntime(currentGatewayRuntimeClient);
+
+      await expect(
+        services.customSsoSession.resolveLocalSessionContext(
+          result.token,
+          "gateway",
+        ),
+      ).rejects.toBeInstanceOf(AuthzUnauthorizedError);
+      await expect(
+        services.customSsoSession.resolveLocalSessionContext(
+          result.token,
+          "gateway",
+        ),
+      ).rejects.toBeInstanceOf(AuthzUnauthorizedError);
+    },
+  );
+
+  test("resolves a Gateway Local Session without loading a legacy account or User Detail", async () => {
+    const services = createServices();
+    const redirectUrl = "https://gateway.example.com/callback";
+    const { code } = await issueAuthorizationCode(services, {
+      clientCode: "gateway",
+      redirectUrl,
+    });
+    const result = await services.customSsoSession.completeGatewayLogin({
+      client: getGatewayClientContext("gateway"),
+      code,
+      redirectUrl,
+    });
+    services.userService.getActiveUserBySubjectIdentifier.mockClear();
+    services.userService.getUserDetailById.mockClear();
+
+    await expect(
+      services.customSsoSession.resolveLocalSessionContext(
+        result.token,
+        "gateway",
+      ),
+    ).resolves.toEqual({
+      authenticatedClientCode: "gateway",
+      subjectIdentifier,
+    });
+    expect(services.userService.getActiveUserBySubjectIdentifier).not.toHaveBeenCalled();
+    expect(services.userService.getUserDetailById).not.toHaveBeenCalled();
+  });
+
+  test("captures the local artifact version only inside the public delivery capability", async () => {
+    const services = createServices();
+    const redirectUrl = "https://gateway.example.com/callback";
+    const { code } = await issueAuthorizationCode(services, {
+      clientCode: "gateway",
+      redirectUrl,
+    });
+    const result = await services.customSsoSession.completeGatewayLogin({
+      client: getGatewayClientContext("gateway"),
+      code,
+      redirectUrl,
+    });
+
+    const resolved
+      = await services.customSsoSession.resolvePublicAuthentication(
+        result.token,
+        "gateway",
+      );
+
+    expect(resolved.authenticationContext).toEqual({
+      authenticatedClientCode: "gateway",
+      subjectIdentifier,
+    });
+    expect(Object.keys(resolved.subjectDeliveryCapability)).toEqual([
+      "resolveUserInfo",
+    ]);
+    expect(JSON.stringify(resolved)).not.toContain(
+      "customSsoConfigVersion",
+    );
+    expect(services.subjectDelivery.createUserInfoCapability)
+      .toHaveBeenCalledWith({
+        authenticatedClientCode: "gateway",
+        expectedConfigVersion: 7,
+        subjectIdentifier,
+      });
+  });
+
+  test("completeGatewayLogin has one atomic winner for concurrent valid callbacks", async () => {
+    const services = createServices();
+    const redirectUrl = "https://gateway.example.com/callback";
+    const { code } = await issueAuthorizationCode(services, {
+      clientCode: "gateway",
+      redirectUrl,
+      state: "concurrent-gateway-state",
+    });
+    const gatewayClient = getMockClientByCode("gateway");
+    if (gatewayClient === null)
+      throw new Error("expected gateway client");
+
+    const completions = await Promise.allSettled([
+      services.customSsoSession.completeGatewayLogin({
+        client: getGatewayClientContext("gateway"),
+        code,
+        redirectUrl,
+      }),
+      services.customSsoSession.completeGatewayLogin({
+        client: getGatewayClientContext("gateway"),
+        code,
+        redirectUrl,
+      }),
+    ]);
+
+    const fulfilled = completions.filter(
+      result => result.status === "fulfilled",
+    );
+    const rejected = completions.filter(
+      result => result.status === "rejected",
+    );
+    expect(fulfilled).toHaveLength(1);
+    expect(fulfilled[0]).toMatchObject({
+      value: {
+        state: "concurrent-gateway-state",
+        token: expect.stringContaining("iam_ls_"),
+      },
+    });
+    expect(rejected).toHaveLength(1);
+    expect(rejected[0]).toMatchObject({
+      reason: expect.any(AuthzUnauthorizedError),
+    });
   });
 
   test("logs legacy PrincipalSession bearer sources without leaking bearer values", async () => {
@@ -549,6 +1781,8 @@ describe("Custom SSO module interface", () => {
 
     await services.customSsoSession.issueAuthorizationCode({
       clientCode: client.clientCode,
+      configVersion: independentClient.configVersion,
+      mode: CustomSsoClientMode.Independent,
       redirectUrl: "https://app.example.com/callback",
       requestContext: requestContext("req-authz-header"),
       token: principalToken,
@@ -556,6 +1790,8 @@ describe("Custom SSO module interface", () => {
     });
     await services.customSsoSession.issueAuthorizationCode({
       clientCode: client.clientCode,
+      configVersion: independentClient.configVersion,
+      mode: CustomSsoClientMode.Independent,
       redirectUrl: "https://app.example.com/callback",
       requestContext: requestContext("req-query-token"),
       token: principalToken,
@@ -596,8 +1832,8 @@ describe("Custom SSO module interface", () => {
     });
 
     expect(oa).toEqual({ token: expect.stringContaining("iam_ps_"), isMobileSet: true });
-    await expect(services.customSsoSession.resolvePrincipalSessionUser(oa.token)).resolves.toMatchObject({
-      id: userDetail.id,
+    await expect(services.customSsoSession.resolvePrincipalSessionContext(oa.token)).resolves.toEqual({
+      subjectIdentifier,
     });
 
     const wx = await services.sso.loginWithWechat.execute({ code: "wx-code" });
@@ -606,25 +1842,27 @@ describe("Custom SSO module interface", () => {
     expect(wxRetry).toEqual({ token: expect.stringContaining("iam_ps_"), isMobileSet: true });
   });
 
-  test("redeems an Independent grant once and persists its current payload", async () => {
+  test("redeems an Independent grant once without a private payload", async () => {
     const services = createServices();
     const { code } = await issueAuthorizationCode(services);
 
     const result = await services.customSsoSession.redeemIndependentGrant({
-      client,
+      client: independentClient,
       code,
+      redirectUri: "https://app.example.com/callback",
       requestContext: requestContext("req-local-session"),
     });
 
     expect(result.credential).toContain("iam_ls_");
-    expect(fakeRedis.payloadKeys()).toHaveLength(1);
+    expect(fakeRedis.payloadKeys()).toHaveLength(0);
     await expect(
       services.customSsoSession.redeemIndependentGrant({
-        client,
+        client: independentClient,
         code,
+        redirectUri: "https://app.example.com/callback",
       }),
     ).rejects.toBeInstanceOf(InvalidAuthCodeError);
-    expect(fakeRedis.payloadKeys()).toHaveLength(1);
+    expect(fakeRedis.payloadKeys()).toHaveLength(0);
   });
 
   test("rejects an Independent grant bound to another client", async () => {
@@ -633,23 +1871,37 @@ describe("Custom SSO module interface", () => {
 
     await expect(
       services.customSsoSession.redeemIndependentGrant({
-        client: { ...client, clientCode: "other-client" },
+        client: { ...independentClient, clientCode: "other-client" },
         code,
+        redirectUri: "https://app.example.com/callback",
       }),
     ).rejects.toBeInstanceOf(InvalidAuthCodeError);
     await expect(
-      services.customSsoSession.redeemIndependentGrant({ client, code }),
-    ).rejects.toBeInstanceOf(InvalidAuthCodeError);
+      services.customSsoSession.redeemIndependentGrant({
+        client: independentClient,
+        code,
+        redirectUri: "https://app.example.com/callback",
+      }),
+    ).resolves.toMatchObject({ credential: expect.stringContaining("iam_ls_") });
   });
 
-  test("rejects an Independent grant when the live user is disabled", async () => {
-    const services = createServices();
+  test("rejects an Independent grant when Subject Access is disabled", async () => {
+    let disabled = false;
+    const services = createServices({
+      validatePrincipal: async () => disabled
+        ? { ok: false, reason: "user_disabled" }
+        : { ok: true },
+    });
     const { code } = await issueAuthorizationCode(services);
-    liveUserAvailable = false;
+    disabled = true;
 
     await expect(
-      services.customSsoSession.redeemIndependentGrant({ client, code }),
-    ).rejects.toBeInstanceOf(AuthzUnauthorizedError);
+      services.customSsoSession.redeemIndependentGrant({
+        client: independentClient,
+        code,
+        redirectUri: "https://app.example.com/callback",
+      }),
+    ).rejects.toBeInstanceOf(SubjectAccessDisabledError);
 
     expect(fakeRedis.payloadKeys()).toHaveLength(0);
   });
@@ -667,12 +1919,46 @@ describe("Custom SSO module interface", () => {
     }
 
     await expect(services.customSsoSession.completeGatewayLogin({
-      client: gatewayClient,
+      client: getGatewayClientContext("gateway-orcas"),
       code,
       redirectUrl: "https://gateway.example.com/different",
     })).rejects.toBeInstanceOf(AuthzUnauthorizedError);
 
     expect(fakeRedis.payloadKeys()).toHaveLength(0);
+    await expect(services.customSsoSession.completeGatewayLogin({
+      client: getGatewayClientContext("gateway-orcas"),
+      code,
+      redirectUrl: issuedRedirectUrl,
+    })).resolves.toMatchObject({
+      token: expect.stringContaining("iam_ls_"),
+    });
+  });
+
+  test("binds a Gateway authorization code to the current Custom SSO config version", async () => {
+    const services = createServices();
+    const redirectUrl = "https://gateway.example.com/callback";
+    const { code } = await issueAuthorizationCode(services, {
+      clientCode: "gateway",
+      configVersion: 7,
+      redirectUrl,
+    });
+
+    await expect(services.customSsoSession.completeGatewayLogin({
+      client: {
+        ...getGatewayClientContext("gateway"),
+        configVersion: 8,
+      },
+      code,
+      redirectUrl,
+    })).rejects.toBeInstanceOf(AuthzUnauthorizedError);
+
+    await expect(services.customSsoSession.completeGatewayLogin({
+      client: getGatewayClientContext("gateway"),
+      code,
+      redirectUrl,
+    })).resolves.toMatchObject({
+      token: expect.stringContaining("iam_ls_"),
+    });
   });
 
   test("rejects an Independent grant when the referenced PrincipalSession is revoked", async () => {
@@ -686,42 +1972,37 @@ describe("Custom SSO module interface", () => {
 
     await expect(
       services.customSsoSession.redeemIndependentGrant({
-        client,
+        client: independentClient,
         code,
+        redirectUri: "https://app.example.com/callback",
       }),
     ).rejects.toBeInstanceOf(AuthzUnauthorizedError);
 
     expect(fakeRedis.payloadKeys()).toHaveLength(0);
   });
 
-  test("does not return an Independent credential when its private payload write fails", async () => {
+  test("does not depend on the legacy private payload store when issuing an Independent credential", async () => {
     const services = createServices();
     const { code } = await issueAuthorizationCode(services);
     fakeRedis.failNextPayloadWrite = true;
 
-    await expect(
-      services.customSsoSession.redeemIndependentGrant({
-        client,
-        code,
-        requestContext: requestContext("req-payload-failure"),
-      }),
-    ).rejects.toBeInstanceOf(AuthzUnauthorizedError);
+    await expect(services.customSsoSession.redeemIndependentGrant({
+      client: independentClient,
+      code,
+      redirectUri: "https://app.example.com/callback",
+      requestContext: requestContext("req-payload-failure"),
+    })).resolves.toMatchObject({
+      credential: expect.stringContaining("iam_ls_"),
+    });
 
     expect(fakeRedis.payloadKeys()).toHaveLength(0);
-    expect(logger.warn).toHaveBeenCalledWith(expect.objectContaining({
-      clientCode: client.clientCode,
-      requestId: "req-payload-failure",
-      traceId: "11111111111111111111111111111111",
-    }), "failed to write custom sso local session payload");
-    await expect(
-      services.customSsoSession.redeemIndependentGrant({
-        client,
-        code,
-      }),
-    ).rejects.toBeInstanceOf(InvalidAuthCodeError);
+    expect(logger.warn).not.toHaveBeenCalledWith(
+      expect.anything(),
+      "failed to write custom sso local session payload",
+    );
   });
 
-  test("does not return a Gateway local token when ORCAS login fails", async () => {
+  test("releases a Gateway grant when ORCAS login fails so the callback can retry", async () => {
     const services = createServices();
     const redirectUrl = "https://gateway.example.com/callback";
     const { principalToken, code } = await issueAuthorizationCode(services, {
@@ -736,19 +2017,23 @@ describe("Custom SSO module interface", () => {
 
     await expect(
       services.customSsoSession.completeGatewayLogin({
-        client: gatewayClient,
+        client: getGatewayClientContext("gateway-orcas"),
         code,
         redirectUrl,
       }),
     ).rejects.toThrow("orcas failed");
 
+    orcasShouldFail = false;
     await expect(
       services.customSsoSession.completeGatewayLogin({
-        client: gatewayClient,
+        client: getGatewayClientContext("gateway-orcas"),
         code,
         redirectUrl,
       }),
-    ).rejects.toBeInstanceOf(AuthzUnauthorizedError);
+    ).resolves.toMatchObject({
+      orcasSessionId: "orcas-session",
+      token: expect.stringContaining("iam_ls_"),
+    });
     await expect(
       services.customSsoSession.logout(principalToken),
     ).resolves.toMatchObject({
@@ -757,73 +2042,46 @@ describe("Custom SSO module interface", () => {
         alreadyRevoked: 0,
         excluded: 0,
         missing: 0,
-        revoked: 0,
+        revoked: 1,
       },
       credentials: {
         alreadyRevoked: 0,
         excluded: 0,
         missing: 0,
-        revoked: 0,
+        revoked: 1,
       },
     });
   });
 
-  test("does not return a Gateway local token or allow code replay when its private payload write fails", async () => {
+  test("does not depend on the legacy private payload store when issuing a Gateway Local Session", async () => {
     const services = createServices();
     const redirectUrl = "https://gateway.example.com/callback";
-    const { principalToken, code } = await issueAuthorizationCode(services, {
+    const { code } = await issueAuthorizationCode(services, {
       clientCode: "gateway",
       redirectUrl,
     });
-    const gatewayClient = getMockClientByCode("gateway");
-    if (gatewayClient === null) {
-      throw new Error("expected gateway client");
-    }
     fakeRedis.failNextPayloadWrite = true;
 
     await expect(
       services.customSsoSession.completeGatewayLogin({
-        client: gatewayClient,
+        client: getGatewayClientContext("gateway"),
         code,
         redirectUrl,
         requestContext: requestContext("req-gateway-payload-failure"),
       }),
-    ).rejects.toBeInstanceOf(AuthzUnauthorizedError);
-
-    expect(auditLogs).toHaveLength(0);
-    expect(logger.warn).toHaveBeenCalledWith(expect.objectContaining({
-      clientCode: "gateway",
-      requestId: "req-gateway-payload-failure",
-      traceId: "11111111111111111111111111111111",
-    }), "failed to write custom sso local session payload");
-
-    await expect(
-      services.customSsoSession.completeGatewayLogin({
-        client: gatewayClient,
-        code,
-        redirectUrl,
-      }),
-    ).rejects.toBeInstanceOf(AuthzUnauthorizedError);
-    await expect(
-      services.customSsoSession.logout(principalToken),
     ).resolves.toMatchObject({
-      principalSessions: { revoked: 1 },
-      bindings: {
-        alreadyRevoked: 0,
-        excluded: 0,
-        missing: 0,
-        revoked: 0,
-      },
-      credentials: {
-        alreadyRevoked: 0,
-        excluded: 0,
-        missing: 0,
-        revoked: 0,
-      },
+      orcasSessionId: null,
+      token: expect.stringContaining("iam_ls_"),
     });
+
+    expect(fakeRedis.payloadKeys()).toHaveLength(0);
+    expect(logger.warn).not.toHaveBeenCalledWith(
+      expect.anything(),
+      "failed to write custom sso local session payload",
+    );
   });
 
-  test("completeGatewayLogin binds the required ORCAS identity without changing the user DTO", async () => {
+  test("completeGatewayLogin binds ORCAS without restoring a wide audit target", async () => {
     const services = createServices();
     const redirectUrl = "https://gateway.example.com/callback";
     const { code } = await issueAuthorizationCode(services, {
@@ -836,11 +2094,14 @@ describe("Custom SSO module interface", () => {
     }
 
     const result = await services.customSsoSession.completeGatewayLogin({
-      client: gatewayClient,
+      client: getGatewayClientContext("gateway-orcas"),
       code,
       redirectUrl,
     });
-    const sessionContext = await services.customSsoSession.resolveLocalSessionContext(result.token, gatewayClient);
+    const sessionContext = await services.customSsoSession.resolveLocalSessionContext(
+      result.token,
+      gatewayClient.clientCode,
+    );
 
     expect(services.orcas.orcasLogin).toHaveBeenCalledWith({
       id: userDetail.id,
@@ -853,13 +2114,25 @@ describe("Custom SSO module interface", () => {
       token: expect.stringContaining("iam_ls_"),
     });
     expect(sessionContext).toEqual({
+      authenticatedClientCode: gatewayClient.clientCode,
       orcasId: "orcas",
-      userDetail,
+      subjectIdentifier,
     });
-    expect(sessionContext.userDetail).not.toHaveProperty("orcasId");
+    expect(auditLogs).toContainEqual(expect.objectContaining({
+      action: "auth.login.local",
+      actorUserId: null,
+      details: expect.objectContaining({
+        clientCode: "gateway-orcas",
+        mode: CustomSsoClientMode.Gateway,
+      }),
+      targetCode: subjectIdentifier,
+      targetId: null,
+      targetType: "subject",
+    }));
+    expect(JSON.stringify(auditLogs)).not.toContain("managementLevel");
   });
 
-  test("resolves legacy Gateway Orcas ID from the local session payload user snapshot", async () => {
+  test("stores and resolves the ORCAS identity only from strict Gateway credential metadata", async () => {
     const services = createServices();
     const redirectUrl = "https://gateway.example.com/callback";
     const { code } = await issueAuthorizationCode(services, {
@@ -871,150 +2144,215 @@ describe("Custom SSO module interface", () => {
       throw new Error("expected gateway-orcas client");
     }
 
-    const payloadKeysBefore = new Set(fakeRedis.payloadKeys());
     const result = await services.customSsoSession.completeGatewayLogin({
-      client: gatewayClient,
+      client: getGatewayClientContext("gateway-orcas"),
       code,
       redirectUrl,
     });
-    const payloadKey = fakeRedis.payloadKeys().find(key => !payloadKeysBefore.has(key));
-    if (!payloadKey) {
-      throw new Error("expected private payload key");
-    }
-    const serialized = await fakeRedis.get(payloadKey);
-    if (serialized === null) {
-      throw new Error("expected private payload");
-    }
-    const payload = JSON.parse(serialized) as Record<string, unknown>;
-    delete payload.orcas;
-    await fakeRedis.set(payloadKey, JSON.stringify({
-      ...payload,
-      user: {
-        ...(payload.user as Record<string, unknown>),
-        orcasId: "legacy-orcas",
-      },
-      orcasSessionId: "legacy-orcas-session",
-    }));
+    const credential = await services.kernel.resolveCredential(result.token);
+    if (credential.status !== "resolved")
+      throw new Error("expected resolved Gateway credential");
 
-    const sessionContext = await services.customSsoSession.resolveLocalSessionContext(result.token, gatewayClient);
+    const sessionContext = await services.customSsoSession.resolveLocalSessionContext(
+      result.token,
+      gatewayClient.clientCode,
+    );
 
-    expect(sessionContext.orcasId).toBe("legacy-orcas");
-    expect(sessionContext.userDetail).not.toHaveProperty("orcasId");
+    expect(credential.value.metadata).toEqual({
+      version: 1,
+      mode: CustomSsoClientMode.Gateway,
+      configVersion: 7,
+      orcasId: "orcas",
+    });
+    expect(sessionContext).toEqual({
+      authenticatedClientCode: gatewayClient.clientCode,
+      orcasId: "orcas",
+      subjectIdentifier,
+    });
+    expect(fakeRedis.payloadKeys()).toHaveLength(0);
   });
 
-  test("IAM validates Independent Client Credentials and preserves maintenance semantics", async () => {
+  test("IAM validates Independent Client Credentials without a wide user context", async () => {
     const services = createServices();
     const result = await redeemIndependentCredential(services);
 
-    const encoded = await services.customSsoSession.authorizeLocalSession(result.credential, client);
-    expect(JSON.parse(Buffer.from(encoded, "base64").toString("utf8"))).toEqual({
-      id: userDetail.id,
-      name: userDetail.name,
-      username: userDetail.username,
+    await expect(
+      services.customSsoSession.resolveIndependentCredentialContext(
+        result.credential,
+        independentClient.clientCode,
+      ),
+    ).resolves.toEqual({
+      authenticatedClientCode: independentClient.clientCode,
+      subjectIdentifier,
     });
-
-    await expect(services.customSsoSession.authorizeLocalSession(result.credential, {
-      ...client,
+    currentIndependentRuntimeClient = {
+      ...independentRuntimeClient,
       status: ClientStatus.Maintenance,
-      extAttributes: { ...client.extAttributes, userExcluding: [] },
-    })).rejects.toBeInstanceOf(AuthzMaintenanceError);
+    };
+    await expect(
+      services.customSsoSession.resolveIndependentCredentialContext(
+        result.credential,
+        independentClient.clientCode,
+      ),
+    ).rejects.toBeInstanceOf(AuthzUnauthorizedError);
+  });
 
-    await expect(services.customSsoSession.authorizeLocalSession(result.credential, {
-      ...client,
-      status: ClientStatus.Maintenance,
-      extAttributes: { ...client.extAttributes, userExcluding: [userDetail.username] },
-    })).resolves.toBe(encoded);
+  test("rejects an Independent credential at Gateway authz without revoking it", async () => {
+    const services = createServices();
+    const result = await redeemIndependentCredential(services);
+
+    await expect(
+      services.customSsoSession.authorizeLocalSession(
+        result.credential,
+        independentClient.clientCode,
+      ),
+    ).rejects.toBeInstanceOf(AuthzUnauthorizedError);
+    await expect(
+      services.customSsoSession.resolveIndependentCredentialContext(
+        result.credential,
+        independentClient.clientCode,
+      ),
+    ).resolves.toEqual({
+      authenticatedClientCode: independentClient.clientCode,
+      subjectIdentifier,
+    });
   });
 
   test("IAM revokes an Independent Client Credential through logout", async () => {
     const services = createServices();
-    const credential = await redeemIndependentCredential(services);
+    const { principalToken, code } = await issueAuthorizationCode(services);
+    const credential = await services.customSsoSession.redeemIndependentGrant({
+      client: independentClient,
+      code,
+      redirectUri: "https://app.example.com/callback",
+    });
 
     await services.customSsoSession.logout(credential.credential);
 
     await expect(
-      services.customSsoSession.resolveLocalSessionContext(credential.credential, client),
+      services.customSsoSession.resolvePrincipalSessionContext(principalToken),
+    ).rejects.toBeInstanceOf(AuthzUnauthorizedError);
+    await expect(
+      services.customSsoSession.resolveIndependentCredentialContext(
+        credential.credential,
+        independentClient.clientCode,
+      ),
     ).rejects.toBeInstanceOf(AuthzUnauthorizedError);
   });
 
-  test("authz rejects tombstone, client mismatch, invalid principal, live-state, and bad payload paths", async () => {
-    const services = createServices();
-    const result = await redeemIndependentCredential(services);
-
-    await expect(services.customSsoSession.authorizeLocalSession(result.credential, {
-      ...client,
-      clientCode: "other-client",
-    })).rejects.toBeInstanceOf(AuthzUnauthorizedError);
-
-    const credential = await services.kernel.resolveCredential(result.credential);
-    if (credential.status !== "resolved") {
-      throw new Error("expected credential");
-    }
-    await fakeRedis.del(services.kernel.keys.active("principal_session", credential.value.principalSessionId));
-    await expect(
-      services.customSsoSession.authorizeLocalSession(result.credential, client),
-    ).rejects.toBeInstanceOf(AuthzUnauthorizedError);
-
-    const second = await redeemIndependentCredential(services, {
-      requestContext: requestContext("req-local-session"),
-    });
-    liveUserAvailable = false;
-    await expect(
-      services.customSsoSession.authorizeLocalSession(second.credential, client),
-    ).rejects.toBeInstanceOf(AuthzUnauthorizedError);
-    liveUserAvailable = true;
-    await expect(
-      services.customSsoSession.authorizeLocalSession(second.credential, client),
-    ).rejects.toBeInstanceOf(AuthzUnauthorizedError);
-
-    const profileMissing = await redeemIndependentCredential(services);
-    profileAvailable = false;
-    await expect(
-      services.customSsoSession.authorizeLocalSession(profileMissing.credential, client),
-    ).rejects.toBeInstanceOf(AuthzUnauthorizedError);
-    profileAvailable = true;
-    await expect(
-      services.customSsoSession.authorizeLocalSession(profileMissing.credential, client),
-    ).resolves.toEqual(expect.any(String));
-
-    const third = await redeemIndependentCredential(services);
-    await expect(services.customSsoSession.authorizeLocalSession(third.credential, {
-      ...client,
-      status: ClientStatus.Disable,
-    })).rejects.toBeInstanceOf(AuthzUnauthorizedError);
-
-    const payloadKeysBeforeFourth = new Set(fakeRedis.payloadKeys());
-    const fourth = await redeemIndependentCredential(services);
-    const payloadKey = fakeRedis.payloadKeys().find(key => !payloadKeysBeforeFourth.has(key));
-    if (!payloadKey) {
-      throw new Error("expected private payload key");
-    }
-    await fakeRedis.set(payloadKey, "{}");
-    await expect(
-      services.customSsoSession.authorizeLocalSession(fourth.credential, client),
-    ).rejects.toBeInstanceOf(AuthzUnauthorizedError);
-  });
-
-  test("cleans private payload and logs Independent notification failure during PrincipalSession logout", async () => {
+  test.each([
+    ["config version changes", { customSsoConfigVersion: 8 }],
+    ["client is disabled", { status: ClientStatus.Disable }],
+    ["Custom SSO is disabled", { customSsoEnabled: false }],
+    ["Custom SSO config is removed", { customSsoConfig: null }],
+  ] as const)("rejects an Independent Credential logout when its live Client %s without revoking the parent Principal Session", async (
+    _label,
+    runtimeOverride,
+  ) => {
     const services = createServices();
     const { principalToken, code } = await issueAuthorizationCode(services);
     const credential = await services.customSsoSession.redeemIndependentGrant({
-      client,
+      client: independentClient,
       code,
+      redirectUri: "https://app.example.com/callback",
     });
-    fetchShouldFail = true;
+    currentIndependentRuntimeClient = {
+      ...independentRuntimeClient,
+      ...runtimeOverride,
+    };
 
+    await expect(
+      services.customSsoSession.logout(credential.credential),
+    ).rejects.toBeInstanceOf(AuthzUnauthorizedError);
+    await expect(
+      services.customSsoSession.resolvePrincipalSessionContext(principalToken),
+    ).resolves.toEqual({ subjectIdentifier });
+  });
+
+  test("keeps the parent Principal Session when credential logout cannot confirm current Client state", async () => {
+    let clientRuntimeUnavailable = false;
+    const services = createServices({
+      findRuntimeClient: async (clientCode) => {
+        if (clientRuntimeUnavailable)
+          throw new CustomSsoClientRuntimeUnavailableError();
+        return clientCode === currentIndependentRuntimeClient.clientCode
+          ? currentIndependentRuntimeClient
+          : null;
+      },
+    });
+    const { principalToken, code } = await issueAuthorizationCode(services);
+    const credential = await services.customSsoSession.redeemIndependentGrant({
+      client: independentClient,
+      code,
+      redirectUri: "https://app.example.com/callback",
+    });
+    clientRuntimeUnavailable = true;
+
+    await expect(
+      services.customSsoSession.logout(credential.credential),
+    ).rejects.toBeInstanceOf(CustomSsoClientRuntimeUnavailableError);
+    await expect(
+      services.customSsoSession.resolvePrincipalSessionContext(principalToken),
+    ).resolves.toEqual({ subjectIdentifier });
+  });
+
+  test("Independent credential resolution rejects client mismatch and an invalid PrincipalSession", async () => {
+    const services = createServices();
+    const result = await redeemIndependentCredential(services);
+
+    await expect(
+      services.customSsoSession.resolveIndependentCredentialContext(
+        result.credential,
+        "other-client",
+      ),
+    ).rejects.toBeInstanceOf(AuthzUnauthorizedError);
+
+    const second = await redeemIndependentCredential(services);
+    const credential = await services.kernel.resolveCredential(second.credential);
+    if (credential.status !== "resolved") {
+      throw new Error("expected credential");
+    }
+    await fakeRedis.del(
+      services.kernel.keys.active(
+        "principal_session",
+        credential.value.principalSessionId,
+      ),
+    );
+    await expect(
+      services.customSsoSession.resolveIndependentCredentialContext(
+        second.credential,
+        independentClient.clientCode,
+      ),
+    ).rejects.toBeInstanceOf(AuthzUnauthorizedError);
+  });
+
+  test("Independent logout has no private payload or IAM-owned client notification", async () => {
+    const services = createServices();
+    const { principalToken, code } = await issueAuthorizationCode(services);
+    const credential = await services.customSsoSession.redeemIndependentGrant({
+      client: independentClient,
+      code,
+      redirectUri: "https://app.example.com/callback",
+    });
     await expect(services.customSsoSession.logout(principalToken)).resolves.toMatchObject({
       principalSessions: { revoked: 1 },
       credentials: { revoked: 1 },
     });
 
     expect(fakeRedis.payloadKeys()).toHaveLength(0);
-    expect(logoutNotifications).toEqual([
-      JSON.stringify({ sid: credential.credential }),
-    ]);
-    expect(logger.warn).toHaveBeenCalledWith(expect.objectContaining({
-      clientCode: client.clientCode,
-    }), "independent client logout endpoint failed");
+    expect(logger.warn).not.toHaveBeenCalledWith(
+      expect.anything(),
+      "independent client logout endpoint failed",
+    );
+    currentIndependentRuntimeClient = {
+      ...independentRuntimeClient,
+      status: ClientStatus.Maintenance,
+    };
+    await expect(
+      services.customSsoSession.resolveIndependentCredentialContext(
+        credential.credential,
+        independentClient.clientCode,
+      ),
+    ).rejects.toBeInstanceOf(AuthzUnauthorizedError);
   });
 });

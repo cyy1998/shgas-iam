@@ -1,63 +1,126 @@
-import type { RedisPort } from "@api/composition/runtime";
 import type { ClientService } from "@api/services/client/client.service";
 import type { CustomSsoSessionKernelAdapter } from "@api/services/session/custom-sso-session-kernel.adapter";
+import type {
+  CustomSsoSubjectDeliveryRequestScope,
+} from "@api/services/sso/custom-sso-subject-delivery-request-scope";
 import type { Context, Next } from "hono";
+import { mapCustomSsoRetryableError } from "@api/middlewares/custom-sso-retryable.error";
+import {
+  customSsoLocalSessionCookieName,
+  decodeCustomSsoClientCode,
+} from "@api/services/sso/custom-sso-client-code.transport";
+import {
+  CustomSsoClientDeliveryUnauthorizedError,
+} from "@api/services/sso/custom-sso-client-delivery.error";
+import { expireCustomSsoCookies } from "@api/services/sso/custom-sso-cookie";
 import { AuthzUnauthorizedError } from "@iam/api-core/errors/AuthzUnauthorizedError";
 import { BadRequestError } from "@iam/api-core/errors/BadRequestError";
 import {
   createInternalAuthenticationHandler,
 } from "@iam/api-core/middlewares";
-import { deleteCookie, getCookie } from "hono/cookie";
+import {
+  createSubjectAccessHttpAdapter,
+} from "@iam/api-core/subject-access";
+import { ClientCodeSchema } from "@iam/contracts";
+import { getCookie } from "hono/cookie";
+
+const subjectAccessHttp = createSubjectAccessHttpAdapter();
 
 export interface CreateApiAuthenticationHandlersDeps {
-  clientService: Pick<ClientService, "getClientByCode" | "getClientBySecret">;
-  customSsoSession: Pick<CustomSsoSessionKernelAdapter, "resolveLocalSessionContext" | "resolvePrincipalSessionUser">;
-  redis: RedisPort;
+  clientService: Pick<ClientService, "getClientBySecret">;
+  customSsoSession: Pick<
+    CustomSsoSessionKernelAdapter,
+    "resolvePublicAuthentication"
+  >;
+  subjectDeliveryRequests: Pick<
+    CustomSsoSubjectDeliveryRequestScope,
+    "runWithCapability"
+  >;
+  config: {
+    readonly projectionRetryAfterSeconds: number;
+  };
 }
 
 export function createApiAuthenticationHandlers(deps: CreateApiAuthenticationHandlersDeps) {
   async function publicAuthenticationHandler(c: Context, next: Next) {
-    const clientCode = c.req.header("Client");
-    if (!clientCode) {
+    const encodedClientCode = c.req.header("Client");
+    const clientCodeResult = ClientCodeSchema.safeParse(
+      encodedClientCode === undefined
+        ? null
+        : decodeCustomSsoClientCode(encodedClientCode),
+    );
+    if (!clientCodeResult.success) {
       throw new BadRequestError("非法请求");
     }
+    const clientCode = clientCodeResult.data;
 
-    const sessionCookieName = clientCode === "iam" ? "global_session" : `local_${clientCode}_session`;
-    const sessionToken = getCookie(c, sessionCookieName) ?? c.req.header("Authorization") ?? null;
-    if (!sessionToken) {
+    const sessionCookieName = clientCode === "iam"
+      ? "global_session"
+      : customSsoLocalSessionCookieName(clientCode);
+    const sessionCookie = getCookie(c, sessionCookieName);
+    const authorizationHeader = c.req.header("Authorization");
+    const sessionCredential = sessionCookie !== undefined
+      ? { source: "cookie" as const, token: sessionCookie }
+      : authorizationHeader === undefined
+        ? null
+        : {
+            source: "authorization_header" as const,
+            token: authorizationHeader,
+          };
+    if (sessionCredential === null) {
       throw new AuthzUnauthorizedError("未登录");
     }
+    const sourceCookies = sessionCredential.source === "cookie"
+      ? [sessionCookieName, "orcas_sso_sessionid"]
+      : [];
 
     try {
-      const sessionContext = clientCode === "iam"
-        ? {
-            userDetail: await deps.customSsoSession.resolvePrincipalSessionUser(sessionToken),
-            orcasId: null,
-          }
-        : await resolveCustomSsoLocalSessionContext(clientCode, sessionToken);
-      const user = sessionContext.userDetail;
-      c.set("userId", user.id);
-      c.set("username", user.username);
-      c.set("userDetailDto", user);
-      c.set("customSsoSessionOrcasId", sessionContext.orcasId);
-      return await next();
+      return await subjectAccessHttp.run(c, {
+        clearCookiesOnInvalidSession: sourceCookies,
+        retryAfterSeconds: deps.config.projectionRetryAfterSeconds,
+      }, async () => {
+        const resolved
+          = await deps.customSsoSession.resolvePublicAuthentication(
+            sessionCredential.token,
+            clientCode,
+          );
+        const sessionContext = resolved.authenticationContext;
+        c.set("subjectIdentifier", sessionContext.subjectIdentifier);
+        c.set(
+          "authenticatedClientCode",
+          sessionContext.authenticatedClientCode,
+        );
+        if ("orcasId" in sessionContext
+          && sessionContext.orcasId !== null
+          && sessionContext.orcasId !== undefined) {
+          c.set("orcasId", sessionContext.orcasId);
+        }
+        await deps.subjectDeliveryRequests.runWithCapability(
+          c,
+          resolved.subjectDeliveryCapability,
+          async () => {
+            await next();
+            if (c.error !== undefined)
+              throw c.error;
+          },
+        );
+      });
     }
     catch (error) {
-      deleteCookie(c, sessionCookieName);
-      deleteCookie(c, "orcas_sso_sessionid");
-      if (error instanceof AuthzUnauthorizedError) {
-        throw error;
+      if (
+        error instanceof AuthzUnauthorizedError
+        && sourceCookies.length > 0
+        && !(
+          sessionCookieName === "global_session"
+          && error instanceof CustomSsoClientDeliveryUnauthorizedError
+        )
+      ) {
+        expireCustomSsoCookies(c, sourceCookies);
       }
-      throw error;
+      throw mapCustomSsoRetryableError(error, {
+        retryAfterSeconds: deps.config.projectionRetryAfterSeconds,
+      });
     }
-  }
-
-  async function resolveCustomSsoLocalSessionContext(clientCode: string, sessionToken: string) {
-    const client = await deps.clientService.getClientByCode(clientCode);
-    if (!client) {
-      throw new AuthzUnauthorizedError("未登录");
-    }
-    return await deps.customSsoSession.resolveLocalSessionContext(sessionToken, client);
   }
 
   return {

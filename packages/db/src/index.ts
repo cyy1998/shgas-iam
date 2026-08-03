@@ -26,6 +26,7 @@ export default db;
 export type DbTransaction = Parameters<Parameters<typeof db.transaction>[0]>[0];
 export type DbClient = typeof db | DbTransaction;
 
-export async function closeDb() {
-  await queryClient.end();
+export async function closeDb(options: { timeoutSeconds?: number } = {}) {
+  const timeout = options.timeoutSeconds;
+  await queryClient.end(timeout === undefined ? undefined : { timeout });
 }

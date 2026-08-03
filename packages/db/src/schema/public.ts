@@ -13,6 +13,7 @@ export {
 } from "./core/role-assignments";
 export * from "./core/role-privileges";
 export * from "./core/roles";
+export * from "./core/subject-access-transitions";
 export * from "./core/user-profile-dirty";
 export * from "./core/user-profiles";
 export * from "./core/users";

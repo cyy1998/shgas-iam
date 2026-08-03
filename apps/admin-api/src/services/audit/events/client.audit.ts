@@ -1,10 +1,10 @@
 import type { AdminAuditContext, AuditLogInput } from "@admin-api/services/audit/audit.context";
-import type { ClientDto } from "@admin-api/services/client/client.type";
+import type { GenericClientRuntimeDto } from "@iam/domain/client";
 import { buildAdminResourceAudit } from "../admin-resource-audit";
 
 export function buildAdminClientAudit(
   action: string,
-  clientDto: ClientDto,
+  clientDto: GenericClientRuntimeDto,
   details: Record<string, unknown>,
   auditContext?: AdminAuditContext,
 ): AuditLogInput {

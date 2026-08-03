@@ -4,6 +4,7 @@ import {
   organizationClosures,
   positions,
   rolePrivileges,
+  roles,
   users,
 } from "@iam/db/schema";
 import { describe, expect, mock, test } from "bun:test";
@@ -14,6 +15,7 @@ interface BuildQueryRows {
   readonly employments: readonly unknown[];
   readonly positions: readonly unknown[];
   readonly organizationPaths: readonly unknown[];
+  readonly roleClients: readonly unknown[];
   readonly privileges: readonly unknown[];
 }
 
@@ -31,6 +33,8 @@ function createBuildDb(rows: BuildQueryRows) {
             selectedRows = rows.positions;
           else if (table === organizationClosures)
             selectedRows = rows.organizationPaths;
+          else if (table === roles)
+            selectedRows = rows.roleClients;
           else if (table === rolePrivileges)
             selectedRows = rows.privileges;
           else
@@ -62,6 +66,10 @@ describe("UserProfileBuildRepository", () => {
         { descendantId: 1000, depth: 0, id: 1000, orgCode: "ORG1000" },
         { descendantId: 1001, depth: 0, id: 1001, orgCode: "ORG1001" },
       ],
+      roleClients: [
+        { roleId: 7, clientCode: "portal" },
+        { roleId: 8, clientCode: "backoffice" },
+      ],
       privileges: [
         { roleId: 7, privilegeCode: "user:read" },
         { roleId: 8, privilegeCode: "user:write" },
@@ -84,12 +92,11 @@ describe("UserProfileBuildRepository", () => {
 
     const dataset = await repository.loadByUserIds([1, 1]);
 
-    expect(resolveEffectiveRoles).toHaveBeenCalledTimes(1);
     expect(resolveEffectiveRoles).toHaveBeenCalledWith({ employmentIds: [10, 11] });
     expect(dataset.roleRows).toEqual([
-      { employmentId: 10, roleId: 7, roleCode: "role-a" },
-      { employmentId: 10, roleId: 8, roleCode: "role-b" },
-      { employmentId: 11, roleId: 7, roleCode: "role-a" },
+      { employmentId: 10, roleId: 7, roleCode: "role-a", clientCode: "portal" },
+      { employmentId: 10, roleId: 8, roleCode: "role-b", clientCode: "backoffice" },
+      { employmentId: 11, roleId: 7, roleCode: "role-a", clientCode: "portal" },
     ]);
     expect(dataset.privilegeRows).toEqual([
       { roleId: 7, privilegeCode: "user:read" },

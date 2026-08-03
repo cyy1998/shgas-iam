@@ -1,4 +1,8 @@
-import type { ClientStatusResult, SmsUsage, UserInfo } from '@sso/types/api';
+import type {
+  AccountLookupUserInfo,
+  ClientStatusResult,
+  SmsUsage,
+} from '@sso/types/api';
 import { request } from '@sso/utils/request';
 import { toQueryString } from '@sso/utils/url';
 
@@ -58,7 +62,7 @@ export function clientStatus(params: { clientCode: string }) {
 
 export function usersUserInfo(params: { username: string; capToken?: string }) {
   const qs = toQueryString(params);
-  return request<Pick<UserInfo, 'username' | 'name' | 'mobile'>>(
+  return request<AccountLookupUserInfo>(
     `/open/users/userInfo?${qs}`,
     { skipAuthRedirect: true },
   );

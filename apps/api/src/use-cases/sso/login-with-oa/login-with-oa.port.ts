@@ -32,7 +32,7 @@ export interface OaLoginAuditInput {
 
 export interface OaPrincipalSessionPort {
   createPrincipalSession: (
-    user: UserDetailDto,
+    subjectIdentifier: string,
     options: {
       amr: readonly ["oa"];
       origin?: SessionOrigin;

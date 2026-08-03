@@ -67,7 +67,7 @@ http://app.shgas.com/sso/thirdparty/:clientCode
 | `status` | 客户端必须处于启用状态。 |
 | 目标业务系统 `client` | 登录完成后要进入的业务系统客户端编码，用于查询参数 `client`。可以与路径中的 `clientCode` 相同，也可以不同。 |
 | 目标业务系统 `validRedirectUrls` | `redirectUrl` 必须命中目标业务系统客户端允许的地址 pattern；支持 origin、一级子域 wildcard（如 `https://*.example.com`）和 path 末尾 `/*`。 |
-| 目标业务系统 `managementLevel` | 决定后续授权码回调方式，常用值为 `Gateway`（网关托管）或 `Independent`（独立应用）。 |
+| 目标业务系统 Custom SSO 配置 | Custom SSO 必须已配置并启用；`mode` 决定后续交付方式，取值为 `gateway`（网关托管）或 `independent`（独立应用）。 |
 
 用户侧还需要满足：
 
@@ -161,21 +161,29 @@ Set-Cookie: global_session={globalSessionId}; HttpOnly; SameSite=Lax; Path=/
 2. 校验 `redirectUrl` 是否命中目标客户端 `validRedirectUrls` pattern。
 3. 校验全局会话是否有效。
 4. 生成一次性授权码 `code`。
-5. 根据目标客户端 `managementLevel` 跳转到回调地址。
+5. 根据目标客户端当前 Custom SSO `mode` 跳转到回调地址。
 
 后续建立局部会话的方式见 [第三方业务系统 SSO 单点登录对接说明](./third-party-sso-integration.md)：
 
 - `Gateway` 网关托管模式：IAM 回调 `/sso/callback`，建立 Gateway Local Session、写入
-  `local_{client}_session` Cookie，再跳回 `redirectUrl`。
+  `local_{transportClientCode}_session` Cookie，再跳回 `redirectUrl`。`transportClientCode` 是 Client Code
+  原值按 UTF-8 和 RFC 3986 URI component 规则做 percent encoding 后的结果；业务系统不应自行用原值拼 Cookie 名。
 - `Independent` 独立应用模式：IAM 跳转到目标客户端 `callbackEndpoint`，业务系统后端用 `code` 和
-  `clientSecret` 调 `/sso/token` 换取 Independent Client Credential，再自行建立本地会话。IAM 不替第三方建立或存储该会话。
+  Custom SSO 专用的一次性 `customSsoSecret` 调 `/sso/token` 换取 Independent Client Credential，再自行建立本地会话。
+  该密钥与本页前述第三方登录签名使用的通用 `clientSecret` 无关；IAM 不替第三方建立或存储该会话。
 
 ### 6.1 IAM 内部职责边界
 
 进入标准 Custom SSO 授权后，endpoint use case 在授权码消费前完成对应入口校验：`/sso/authorize` 校验目标 client 与
 redirect，`/sso/token` 校验 client 与 client secret，`/sso/callback` 校验 client 与 redirect。Custom SSO deep module
 随后一次性完成 grant resolution，以及 Independent credential 或 Gateway session 的生命周期；Gateway 所需 ORCAS、
-私有 payload、审计和失败补偿也留在该 module 内。Route 只负责 HTTP 参数、Cookie、response 和 redirect 适配。
+最小 session metadata、ORCAS 专用引用、审计与失败补偿留在该 module 内。运行时不再读取、写入或规范化 legacy
+私有 payload；旧 key 只由维护窗口的
+`pnpm --filter @iam/api-core session:cleanup-custom-sso-cutover -- --dry-run` 独立清理命令处理；核对摘要后才可改用
+`--verify` 检查残留；门禁有效后才可改用 `--apply`，并以 clean `--verify` 零退出收尾。该内建 profile 只覆盖旧
+Principal Session 与 Custom SSO artifact，不扫描或删除 `oidc:*` key。完整顺序见
+[Custom SSO Subject Projection 硬切换与回滚手册](../../releases/custom-sso-subject-projection-release.md)。Route
+只负责 HTTP 参数、Cookie、response 和 redirect 适配。
 
 第三方系统不应依赖 IAM 内部的授权码消费与 credential/session 创建顺序，只依赖最终 HTTP、Cookie 和 redirect contract。
 

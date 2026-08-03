@@ -70,7 +70,12 @@ export async function createAdminApiComposition(
     session,
     unitOfWork,
   });
-  const useCases = createAdminApiUseCases({ sessionRevocation: session.revocation, unitOfWork });
+  const useCases = createAdminApiUseCases({
+    sessionRevocation: session.revocation,
+    subjectAccessLifecycle: session.subjectAccessLifecycle,
+    unitOfWork,
+    userReader: repositories.user,
+  });
 
   return {
     env: compositionEnv,

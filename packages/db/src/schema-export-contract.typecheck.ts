@@ -1,7 +1,6 @@
 import {
   auditLogDetailsSchema,
   auditLogs,
-  clientExtAttributesSchema,
   insertAuditLogSchema,
   insertClientSchema,
   insertDelegationDetailSchema,
@@ -34,7 +33,6 @@ import {
 export const schemaExportContract = [
   auditLogs,
   auditLogDetailsSchema,
-  clientExtAttributesSchema,
   privilegeFieldValuesSchema,
   selectAuditLogSchema,
   insertAuditLogSchema,

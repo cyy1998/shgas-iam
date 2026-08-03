@@ -58,8 +58,10 @@ export type OidcInvalidationSummary = {
 export interface AdminSessionRevocationPort {
   revokeUserSessions: (input: {
     userId: number;
+    subjectIdentifier: string;
     reason: Extract<AdminSessionRevocationReason, "user_disabled" | "user_deleted" | "admin_revoke">;
     exceptPrincipalSessionId?: string;
+    onlySubjectAccessTransitionId?: string;
     auditContext?: AdminAuditContext;
   }) => Promise<RevokeSummary>;
   revokeClientProtocol: (input: {
@@ -112,9 +114,17 @@ export function createAdminSessionRevocationPort(
   return {
     async revokeUserSessions(input) {
       const summary = await deps.sessionKernel.revokeUserSessions(
-        { principalType: "user", subjectId: String(input.userId) },
+        { principalType: "user", subjectId: input.subjectIdentifier },
         input.reason,
-        { exceptPrincipalSessionId: input.exceptPrincipalSessionId },
+        {
+          exceptPrincipalSessionId: input.exceptPrincipalSessionId,
+          ...(input.onlySubjectAccessTransitionId === undefined
+            ? {}
+            : {
+                onlySubjectAccessTransitionId:
+                  input.onlySubjectAccessTransitionId,
+              }),
+        },
       );
       deps.logger.logUserRevocation({
         targetUserId: input.userId,

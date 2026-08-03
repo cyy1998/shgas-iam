@@ -15,4 +15,5 @@ export interface LoginWithWechatResult {
 
 export interface WechatLoginUser {
   id: number;
+  subjectIdentifier: string;
 }

@@ -1,63 +1,36 @@
-import type { CustomSsoClientRuntimeDto } from "@iam/domain/client";
-import type { UserDetailDto } from "@iam/domain/user";
-import { ClientManagementLevel, ClientStatus, UserStatus, UserType } from "@iam/contracts";
+import { SubjectClaim } from "@iam/contracts";
 import { expect, mock, test } from "bun:test";
 import { createExchangeSsoCodeUseCase } from "../exchange-sso-code.use-case";
 
-const client = {
-  id: 1,
+const authenticatedClient = {
   clientCode: "independent",
-  clientName: "Independent",
-  clientSecret: "secret",
-  url: "https://app.example.com",
-  status: ClientStatus.Enable,
-  description: null,
-  extAttributes: {
-    callbackEndpoint: "https://app.example.com/sso/callback",
-    logoutEndpoint: "https://app.example.com/sso/logout",
-    managementLevel: ClientManagementLevel.Independent,
-    requireOrcas: false,
-    userExcluding: [],
-    validRedirectUrls: ["https://app.example.com"],
-  },
-  isDelete: false,
-  createTime: new Date("2026-01-01T00:00:00Z"),
-  updateTime: new Date("2026-01-01T00:00:00Z"),
-} satisfies CustomSsoClientRuntimeDto;
+  configVersion: 7,
+  subjectClaimCatalogVersion: 1 as const,
+  subjectClaims: [SubjectClaim.SubjectIdentifier],
+};
 
-const userInfo = {
-  id: 1001,
-  username: "138550",
-  wxId: null,
-  name: "测试用户",
-  mobile: "17721462865",
-  userType: UserType.Formal,
-  orderNum: 1,
-  status: UserStatus.Enable,
-  isDelete: false,
-  createTime: new Date("2026-01-01T00:00:00Z"),
-  updateTime: new Date("2026-01-01T00:00:00Z"),
-  employments: [],
-  roles: [],
-  privileges: [],
-} satisfies UserDetailDto;
+const subject = {
+  version: 1 as const,
+  subjectIdentifier: "00000000-0000-4000-8000-000000001001",
+};
 
-test("delegates once and maps the Independent Client Credential to the existing response", async () => {
-  const getClientByCode = mock(async () => client);
+test("authenticates with the dedicated credential verifier and returns only the Independent projection", async () => {
+  const authenticate = mock(async () => authenticatedClient);
   const redeemIndependentGrant = mock(async () => ({
     credential: "iam-managed-credential",
     ttl: 3600,
-    userInfo,
+    subject,
   }));
   const useCase = createExchangeSsoCodeUseCase({
     authorizationGrants: { redeemIndependentGrant },
-    clients: { getClientByCode },
+    clientCredentials: { authenticate },
   });
 
   await expect(useCase.execute({
     clientCode: "independent",
     clientSecret: "secret",
     code: "auth-code",
+    redirectUri: "https://app.example.com/callback",
   }, {
     requestContext: {
       sourceApp: "iam",
@@ -71,13 +44,15 @@ test("delegates once and maps the Independent Client Credential to the existing 
   })).resolves.toEqual({
     sid: "iam-managed-credential",
     ttl: 3600,
-    userInfo,
+    subject,
   });
 
+  expect(authenticate).toHaveBeenCalledWith("independent", "secret");
   expect(redeemIndependentGrant).toHaveBeenCalledTimes(1);
   expect(redeemIndependentGrant).toHaveBeenCalledWith({
-    client,
+    client: authenticatedClient,
     code: "auth-code",
+    redirectUri: "https://app.example.com/callback",
     requestContext: {
       sourceApp: "iam",
       requestId: "req-token",
@@ -94,38 +69,46 @@ test("rejects a wrong client secret before redeeming the authorization grant", a
   const redeemIndependentGrant = mock(async () => ({
     credential: "should-not-exist",
     ttl: 3600,
-    userInfo,
+    subject,
   }));
   const useCase = createExchangeSsoCodeUseCase({
     authorizationGrants: { redeemIndependentGrant },
-    clients: { getClientByCode: mock(async () => client) },
+    clientCredentials: { authenticate: mock(async () => null) },
   });
 
   await expect(useCase.execute({
     clientCode: "independent",
     clientSecret: "wrong-secret",
     code: "auth-code",
+    redirectUri: "https://app.example.com/callback",
   })).rejects.toThrow("非法Client");
 
   expect(redeemIndependentGrant).not.toHaveBeenCalled();
 });
 
-test("rejects an unknown client before redeeming the authorization grant", async () => {
+test("does not expose the supplied secret or a generic client record to grant redemption", async () => {
+  const authenticate = mock(async () => authenticatedClient);
   const redeemIndependentGrant = mock(async () => ({
-    credential: "should-not-exist",
+    credential: "iam-managed-credential",
     ttl: 3600,
-    userInfo,
+    subject,
   }));
   const useCase = createExchangeSsoCodeUseCase({
     authorizationGrants: { redeemIndependentGrant },
-    clients: { getClientByCode: mock(async () => null) },
+    clientCredentials: { authenticate },
   });
 
-  await expect(useCase.execute({
-    clientCode: "missing",
-    clientSecret: "secret",
+  await useCase.execute({
+    clientCode: "independent",
+    clientSecret: "unique-secret-sentinel",
     code: "auth-code",
-  })).rejects.toThrow("非法Client");
+    redirectUri: "https://app.example.com/callback",
+  });
 
-  expect(redeemIndependentGrant).not.toHaveBeenCalled();
+  expect(JSON.stringify(redeemIndependentGrant.mock.calls))
+    .not
+    .toContain("unique-secret-sentinel");
+  expect(JSON.stringify(redeemIndependentGrant.mock.calls))
+    .not
+    .toContain("clientSecret");
 });

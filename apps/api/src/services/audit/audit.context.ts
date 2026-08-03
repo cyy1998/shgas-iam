@@ -29,11 +29,6 @@ export type AuditLogInput = {
   details?: AuditDetails;
 };
 
-function getContextUserName(c: Context): string | null {
-  const user = c.get("userDetailDto") as { name?: unknown } | undefined;
-  return typeof user?.name === "string" && user.name.trim() ? user.name.trim() : null;
-}
-
 export function getApiAuditRequestContext(c: Context): AuditRequestContext {
   return {
     sourceApp: "iam",
@@ -56,19 +51,6 @@ export function withApiRequestContext(
         ...input,
       }
     : input;
-}
-
-export function getApiUserAuditActor(c: Context) {
-  return {
-    ...normalizeAuditActor({
-      actorType: "user",
-      actorUserId: c.get("userId") ?? null,
-      actorUsername: c.get("username") ?? null,
-      actorClientCode: null,
-      actorSystemKey: null,
-    }),
-    actorName: getContextUserName(c),
-  };
 }
 
 export function getInternalAuditActor(c: Context) {

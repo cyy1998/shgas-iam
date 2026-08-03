@@ -4,11 +4,14 @@ export const authenticationConfig = {
 };
 
 export const currentUserInfo = {
-  username: 'zhangsan',
-  name: '张三',
-  mobile: '13800000000',
-  isMobileSet: true,
-  employments: [],
+  version: 1,
+  subjectIdentifier: '00000000-0000-4000-8000-000000000001',
+  profile: {
+    username: 'zhangsan',
+    name: '张三',
+    phone: '13800000000',
+    employments: [],
+  },
 };
 
 export const resetPasswordUserInfo = {

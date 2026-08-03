@@ -46,7 +46,7 @@ export interface MobileLoginRestrictionPort {
 
 export interface MobilePrincipalSessionPort {
   createPrincipalSession: (
-    user: UserDetailDto,
+    subjectIdentifier: string,
     options: {
       amr: readonly ["sms"];
       origin?: SessionOrigin;

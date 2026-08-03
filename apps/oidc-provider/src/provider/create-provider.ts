@@ -47,7 +47,10 @@ export function createOidcProvider(options: CreateOidcProviderOptions) {
     clientAuthRateLimiter: options.clientAuthRateLimiter,
     oidcSession: options.oidcSession,
   });
-  registerProviderEvents(provider, options.logger);
+  registerProviderEvents(provider, options.logger, {
+    cookieName: options.env.oidc.globalSessionCookie,
+    cookieSecure: options.env.oidc.cookieSecure,
+  });
 
   return provider;
 }

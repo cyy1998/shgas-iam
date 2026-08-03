@@ -21,6 +21,7 @@ type StaticDependencyDeclaration = ts.ImportDeclaration | ts.ExportDeclaration;
 
 type StaticModulePattern = Readonly<
   | { kind: "exact"; module: string }
+  | { kind: "package"; module: string }
   | { kind: "prefix"; module: string }
   | { kind: "suffix"; module: string }
   | { kind: "prefix-suffix"; prefix: string; suffix: string }
@@ -32,9 +33,13 @@ type StaticSourcePattern = string | Readonly<{
 }>;
 
 type StaticModuleOwnershipRule = Readonly<{
-  ruleId: "session-runtime-owner" | "worker-ownership";
+  ruleId:
+    | "client-subject-projection-owner"
+    | "session-runtime-owner"
+    | "worker-ownership";
   sourceScopes: readonly StaticSourcePattern[];
   targets: readonly StaticModulePattern[];
+  allowedTargets?: readonly StaticModulePattern[];
   allowedSources: readonly StaticSourcePattern[];
   dependencyKind: "all" | "value";
   message: (moduleSpecifier: string, declaration: StaticDependencyDeclaration) => string;
@@ -45,6 +50,7 @@ const protectedSourceRoots = [
   "apps/admin-api/src",
   "apps/oidc-provider/src",
   "apps/worker/src",
+  "packages/client-subject-projection/src",
   "packages/role-assignment-resolution/src",
   "packages/user-profile-read-model/src",
 ] as const;
@@ -64,14 +70,98 @@ const excludedSourceDirectories = new Set([
   "tests",
 ]);
 
-const backendDockerApps = ["api", "admin-api", "oidc-provider", "worker"] as const;
-
 const architectureWorkspaceRoots = new Map([
+  ["@iam/client-subject-projection", "packages/client-subject-projection"],
   ["@iam/role-assignment-resolution", "packages/role-assignment-resolution"],
   ["@iam/user-profile-read-model", "packages/user-profile-read-model"],
 ]);
+const workspaceBuildDependencySections = [
+  "dependencies",
+  "devDependencies",
+  "optionalDependencies",
+] as const;
+
+interface WorkspacePackageManifest {
+  name?: string;
+  dependencies?: Record<string, string>;
+  devDependencies?: Record<string, string>;
+  optionalDependencies?: Record<string, string>;
+  peerDependencies?: Record<string, string>;
+}
+
+interface WorkspaceDependencyNode {
+  packageRoot: string;
+  dependencies: Record<string, string>;
+}
+
+const canonicalStaticSourceRoots = new Map([
+  ["@iam/admin", "apps/admin/src"],
+  ["@iam/admin-api", "apps/admin-api/src"],
+  ["@iam/api", "apps/api/src"],
+  ["@iam/api-core", "packages/api-core/src"],
+  ["@iam/client-subject-projection", "packages/client-subject-projection/src"],
+  ["@iam/db", "packages/db/src"],
+  ["@iam/domain", "packages/domain/src"],
+  ["@iam/gateway-apisix", "gateway/src"],
+  ["@iam/oidc-provider", "apps/oidc-provider/src"],
+  ["@iam/sso", "apps/sso/src"],
+  ["@iam/user-profile-read-model", "packages/user-profile-read-model/src"],
+  ["@iam/worker", "apps/worker/src"],
+]);
+
+const clientSubjectProjectionExternalOwnerTargets: readonly StaticModulePattern[] = [
+  { kind: "prefix", module: "packages/api-core/src" },
+  { kind: "prefix", module: "packages/db/src" },
+  { kind: "prefix", module: "packages/domain/src" },
+  { kind: "prefix", module: "packages/user-profile-read-model/src" },
+  { kind: "prefix", module: "apps" },
+  { kind: "prefix", module: "gateway" },
+  { kind: "prefix", module: "@hono" },
+  { kind: "package", module: "hono" },
+  { kind: "package", module: "ioredis" },
+  { kind: "package", module: "redis" },
+  { kind: "package", module: "oidc-provider" },
+];
 
 const staticModuleOwnershipRules: readonly StaticModuleOwnershipRule[] = [
+  {
+    ruleId: "client-subject-projection-owner",
+    sourceScopes: ["packages/client-subject-projection/src"],
+    targets: [
+      ...clientSubjectProjectionExternalOwnerTargets,
+      { kind: "prefix", module: "packages/client-subject-projection/src/custom-sso" },
+    ],
+    allowedSources: [
+      "packages/client-subject-projection/src/custom-sso.ts",
+      "packages/client-subject-projection/src/testing.ts",
+    ],
+    dependencyKind: "all",
+    message: moduleSpecifier =>
+      `Client Subject Projection implementation must not import runtime or protocol module "${moduleSpecifier}"; `
+      + "depend on its injected facts and safety ports.",
+  },
+  {
+    ruleId: "client-subject-projection-owner",
+    sourceScopes: ["packages/client-subject-projection/src/custom-sso.ts"],
+    targets: clientSubjectProjectionExternalOwnerTargets,
+    allowedSources: [],
+    dependencyKind: "all",
+    message: moduleSpecifier =>
+      `Custom SSO wire adapter must not import facts persistence, configuration, runtime, `
+      + `or transport module "${moduleSpecifier}"; `
+      + "depend only on the root public Client Subject Projection interface.",
+  },
+  {
+    ruleId: "client-subject-projection-owner",
+    sourceScopes: ["packages/client-subject-projection/src/custom-sso.ts"],
+    targets: [{ kind: "prefix", module: "packages/client-subject-projection/src" }],
+    allowedTargets: [{ kind: "exact", module: "packages/client-subject-projection/src" }],
+    allowedSources: [],
+    dependencyKind: "all",
+    message: moduleSpecifier =>
+      `Custom SSO wire adapter must not import non-root Projection module "${moduleSpecifier}"; `
+      + "depend only on the root public Client Subject Projection interface.",
+  },
   {
     ruleId: "session-runtime-owner",
     sourceScopes: [
@@ -145,7 +235,7 @@ const staticModuleOwnershipRules: readonly StaticModuleOwnershipRule[] = [
   {
     ruleId: "session-runtime-owner",
     sourceScopes: ["apps/oidc-provider/src"],
-    targets: [{ kind: "exact", module: "ioredis" }],
+    targets: [{ kind: "package", module: "ioredis" }],
     allowedSources: [
       "apps/oidc-provider/src/stores",
       "apps/oidc-provider/src/storage",
@@ -475,9 +565,15 @@ function collectStaticModuleOwnershipViolations(
           if (rule.dependencyKind === "value" && !hasValueDependency(declaration))
             return [];
           const moduleSpecifier = declaration.moduleSpecifier.text;
-          const normalizedTarget = normalizeStaticModuleEdge(source.file, moduleSpecifier);
-          if (!rule.targets.some(pattern => matchesStaticModulePattern(normalizedTarget, pattern)))
+          const normalizedTargets = normalizeStaticModuleEdges(source.file, moduleSpecifier);
+          if (!rule.targets.some(pattern =>
+            normalizedTargets.some(target => matchesStaticModulePattern(target, pattern)))) {
             return [];
+          }
+          if (rule.allowedTargets?.some(pattern =>
+            normalizedTargets.some(target => matchesStaticModulePattern(target, pattern)))) {
+            return [];
+          }
           return [{
             ruleId: rule.ruleId,
             file: source.file,
@@ -588,22 +684,43 @@ function collectSourceDependencyDirectionViolations(
 
 function collectDockerBuildClosureViolations(repoRoot: string): ArchitectureViolation[] {
   const workspaceDependencies = collectWorkspaceDependencyGraph(repoRoot);
-  return backendDockerApps.flatMap((app) => {
+  return collectDockerApps(repoRoot).flatMap((app) => {
     const packageFile = join(repoRoot, "apps", app, "package.json");
     const dockerFile = join(repoRoot, "apps", app, "Dockerfile");
     if (!existsSync(packageFile) || !existsSync(dockerFile))
       return [];
 
-    const packageManifest = JSON.parse(readFileSync(packageFile, "utf8")) as {
-      name?: string;
-      dependencies?: Record<string, string>;
-    };
+    const packageManifest = JSON.parse(readFileSync(packageFile, "utf8")) as WorkspacePackageManifest;
     const copySources = collectDockerCopySources(readFileSync(dockerFile, "utf8"));
+    const closureRoots = {
+      ...collectWorkspaceBuildDependencies(packageManifest),
+      ...Object.fromEntries(
+        collectCopiedWorkspacePackageNames(repoRoot, copySources, workspaceDependencies)
+          .map(packageName => [packageName, "workspace:*"]),
+      ),
+    };
     const consumedWorkspaces = collectWorkspaceDependencyClosure(
-      packageManifest.dependencies ?? {},
+      closureRoots,
       workspaceDependencies,
     );
-    return [...architectureWorkspaceRoots]
+    const intermediateManifestViolations = [...consumedWorkspaces]
+      .filter(packageName => !architectureWorkspaceRoots.has(packageName))
+      .filter(packageName => reachesProtectedArchitectureWorkspace(packageName, workspaceDependencies))
+      .sort(compareText)
+      .flatMap((packageName): ArchitectureViolation[] => {
+        const packageRoot = workspaceDependencies.get(packageName)?.packageRoot;
+        const requiredSource = packageRoot === undefined ? undefined : `${packageRoot}/package.json`;
+        if (requiredSource === undefined || copySources.has(requiredSource))
+          return [];
+        return [{
+          ruleId: "docker-build-closure",
+          file: `apps/${app}/Dockerfile`,
+          line: 1,
+          message: `Docker image ${packageManifest.name ?? `@iam/${app}`} reaches protected architecture workspaces `
+            + `through ${packageName} but does not COPY "${requiredSource}" from the workspace.`,
+        }];
+      });
+    const protectedWorkspaceViolations = [...architectureWorkspaceRoots]
       .filter(([packageName]) => consumedWorkspaces.has(packageName))
       .flatMap(([packageName, packageRoot]): ArchitectureViolation[] =>
         [`${packageRoot}/package.json`, `${packageRoot}/`]
@@ -612,10 +729,43 @@ function collectDockerBuildClosureViolations(repoRoot: string): ArchitectureViol
             ruleId: "docker-build-closure",
             file: `apps/${app}/Dockerfile`,
             line: 1,
-            message: `Backend image ${packageManifest.name ?? `@iam/${app}`} consumes ${packageName} but does not COPY `
+            message: `Docker image ${packageManifest.name ?? `@iam/${app}`} consumes ${packageName} but does not COPY `
               + `"${requiredSource}" from the workspace.`,
           })));
+    return [...intermediateManifestViolations, ...protectedWorkspaceViolations];
   });
+}
+
+function collectDockerApps(repoRoot: string) {
+  const appsRoot = join(repoRoot, "apps");
+  if (!existsSync(appsRoot))
+    return [];
+
+  return readdirSync(appsRoot, { withFileTypes: true })
+    .filter(entry =>
+      entry.isDirectory()
+      && existsSync(join(appsRoot, entry.name, "package.json"))
+      && existsSync(join(appsRoot, entry.name, "Dockerfile")))
+    .map(entry => entry.name)
+    .sort(compareText);
+}
+
+function collectCopiedWorkspacePackageNames(
+  repoRoot: string,
+  copySources: ReadonlySet<string>,
+  workspaceDependencies: ReadonlyMap<string, WorkspaceDependencyNode>,
+) {
+  return [...copySources]
+    .filter(source => source.endsWith("/package.json"))
+    .flatMap((source) => {
+      const packageFile = join(repoRoot, ...source.split("/"));
+      if (!existsSync(packageFile))
+        return [];
+      const packageManifest = JSON.parse(readFileSync(packageFile, "utf8")) as { name?: string };
+      return packageManifest.name && workspaceDependencies.has(packageManifest.name)
+        ? [packageManifest.name]
+        : [];
+    });
 }
 
 function collectWorkspaceDependencyGraph(repoRoot: string) {
@@ -630,24 +780,25 @@ function collectWorkspaceDependencyGraph(repoRoot: string) {
   if (existsSync(join(repoRoot, "gateway", "package.json")))
     workspaceRoots.push("gateway");
 
-  const graph = new Map<string, Record<string, string>>();
+  const graph = new Map<string, WorkspaceDependencyNode>();
   for (const workspaceRoot of workspaceRoots.sort(compareText)) {
     const packageFile = join(repoRoot, ...workspaceRoot.split("/"), "package.json");
     if (!existsSync(packageFile))
       continue;
-    const packageManifest = JSON.parse(readFileSync(packageFile, "utf8")) as {
-      name?: string;
-      dependencies?: Record<string, string>;
-    };
-    if (packageManifest.name)
-      graph.set(packageManifest.name, packageManifest.dependencies ?? {});
+    const packageManifest = JSON.parse(readFileSync(packageFile, "utf8")) as WorkspacePackageManifest;
+    if (packageManifest.name) {
+      graph.set(packageManifest.name, {
+        packageRoot: workspaceRoot,
+        dependencies: collectWorkspaceBuildDependencies(packageManifest),
+      });
+    }
   }
   return graph;
 }
 
 function collectWorkspaceDependencyClosure(
   dependencies: Record<string, string>,
-  workspaceDependencies: ReadonlyMap<string, Record<string, string>>,
+  workspaceDependencies: ReadonlyMap<string, WorkspaceDependencyNode>,
 ) {
   const consumedWorkspaces = new Set<string>();
   const pending = Object.keys(dependencies)
@@ -657,12 +808,32 @@ function collectWorkspaceDependencyClosure(
     if (consumedWorkspaces.has(packageName))
       continue;
     consumedWorkspaces.add(packageName);
-    for (const dependencyName of Object.keys(workspaceDependencies.get(packageName) ?? {})) {
+    for (const dependencyName of Object.keys(workspaceDependencies.get(packageName)?.dependencies ?? {})) {
       if (workspaceDependencies.has(dependencyName))
         pending.push(dependencyName);
     }
   }
   return consumedWorkspaces;
+}
+
+function collectWorkspaceBuildDependencies(packageManifest: WorkspacePackageManifest) {
+  return Object.fromEntries(
+    workspaceBuildDependencySections.flatMap(section =>
+      Object.entries(packageManifest[section] ?? {})
+        .filter(([, version]) => version.startsWith("workspace:"))),
+  );
+}
+
+function reachesProtectedArchitectureWorkspace(
+  packageName: string,
+  workspaceDependencies: ReadonlyMap<string, WorkspaceDependencyNode>,
+) {
+  const closure = collectWorkspaceDependencyClosure(
+    { [packageName]: "workspace:*" },
+    workspaceDependencies,
+  );
+  return [...architectureWorkspaceRoots.keys()].some(protectedPackageName =>
+    closure.has(protectedPackageName));
 }
 
 function collectDockerCopySources(content: string) {
@@ -825,25 +996,41 @@ function normalizeStaticModulePath(modulePath: string) {
     : withoutTypeScriptExtension;
 }
 
-function normalizeStaticModuleEdge(sourceFile: string, moduleSpecifier: string) {
+function normalizeStaticModuleEdges(sourceFile: string, moduleSpecifier: string) {
   const normalizedModule = normalizeStaticModulePath(moduleSpecifier);
+  const normalizedTargets = new Set([normalizedModule]);
+  const canonicalSourceModule = resolveCanonicalStaticSourceModule(normalizedModule);
+  if (canonicalSourceModule)
+    normalizedTargets.add(canonicalSourceModule);
   const aliasedModule = resolveAliasedAppModule(moduleSpecifier);
   if (aliasedModule) {
-    return normalizeStaticModulePath(
+    normalizedTargets.add(normalizeStaticModulePath(
       posix.join("apps", aliasedModule.app, "src", aliasedModule.path),
-    );
+    ));
   }
-  if (normalizedModule.startsWith(".")) {
-    return normalizeStaticModulePath(
+  else if (normalizedModule.startsWith(".")) {
+    normalizedTargets.add(normalizeStaticModulePath(
       posix.normalize(posix.join(posix.dirname(sourceFile), normalizedModule)),
-    );
+    ));
   }
-  return normalizedModule;
+  return [...normalizedTargets];
+}
+
+function resolveCanonicalStaticSourceModule(modulePath: string) {
+  for (const [packageName, sourceRoot] of canonicalStaticSourceRoots) {
+    if (modulePath === packageName)
+      return sourceRoot;
+    if (modulePath.startsWith(`${packageName}/`))
+      return posix.join(sourceRoot, modulePath.slice(packageName.length + 1));
+  }
+  return undefined;
 }
 
 function matchesStaticModulePattern(modulePath: string, pattern: StaticModulePattern) {
   if (pattern.kind === "exact")
     return modulePath === pattern.module;
+  if (pattern.kind === "package")
+    return isPackageRootOrSubpath(modulePath, pattern.module);
   if (pattern.kind === "prefix")
     return isPathAtOrBelow(modulePath, pattern.module);
   if (pattern.kind === "suffix")
@@ -859,6 +1046,10 @@ function matchesStaticSourcePattern(sourceFile: string, pattern: StaticSourcePat
 
 function isPathAtOrBelow(path: string, prefix: string) {
   return path === prefix || path.startsWith(`${prefix}/`);
+}
+
+function isPackageRootOrSubpath(modulePath: string, packageRoot: string) {
+  return modulePath === packageRoot || modulePath.startsWith(`${packageRoot}/`);
 }
 
 function referencedTypeName(type: ts.TypeNode, sourceFile: ts.SourceFile) {

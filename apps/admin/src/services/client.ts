@@ -1,5 +1,6 @@
 import { apiClient } from '@admin/lib/api-client';
 import type { AppRouter } from '@iam/admin-api/trpc';
+import { ApiErrorCode } from '@iam/contracts';
 import type { inferRouterInputs, inferRouterOutputs } from '@trpc/server';
 
 type AdminClientInputs = inferRouterInputs<AppRouter>['admin']['client'];
@@ -10,13 +11,47 @@ export type ClientDetailVo = AdminClientOutputs['detail'];
 export type ClientSearchParams = AdminClientInputs['search'];
 export type ClientOidcConfigureInput =
   AdminClientInputs['oidcConfigure']['data'];
+export type ClientCustomSsoConfigureInput =
+  AdminClientInputs['customSsoConfigure']['data'];
+
+export const ClientDetailErrorKind = {
+  NotFound: 'not-found',
+  RequestFailed: 'request-failed',
+} as const;
+
+export type ClientDetailErrorKindValue =
+  (typeof ClientDetailErrorKind)[keyof typeof ClientDetailErrorKind];
+
+export class ClientDetailError extends Error {
+  public readonly kind: ClientDetailErrorKindValue;
+
+  constructor(kind: ClientDetailErrorKindValue, cause?: unknown) {
+    super(
+      kind === ClientDetailErrorKind.NotFound
+        ? '应用不存在'
+        : '应用详情加载失败',
+    );
+    this.name = ClientDetailError.name;
+    this.kind = kind;
+    this.cause = cause;
+  }
+}
 
 export function searchClients(params: ClientSearchParams) {
   return apiClient.admin.client.search.query(params);
 }
 
-export function getClient(clientCode: string) {
-  return apiClient.admin.client.detail.query({ clientCode });
+export async function getClient(clientCode: string) {
+  try {
+    return await apiClient.admin.client.detail.query({ clientCode });
+  } catch (error) {
+    throw new ClientDetailError(
+      isClientNotFoundTransportError(error)
+        ? ClientDetailErrorKind.NotFound
+        : ClientDetailErrorKind.RequestFailed,
+      error,
+    );
+  }
 }
 
 export function createClient(body: AdminClientInputs['create']) {
@@ -62,4 +97,41 @@ export function removeClientOidc(clientCode: string) {
 
 export function rotateClientOidcSecret(clientCode: string) {
   return apiClient.admin.client.oidcRotateSecret.mutate({ clientCode });
+}
+
+export function configureClientCustomSso(
+  clientCode: string,
+  data: ClientCustomSsoConfigureInput,
+) {
+  return apiClient.admin.client.customSsoConfigure.mutate({
+    clientCode,
+    data,
+  });
+}
+
+export function enableClientCustomSso(clientCode: string) {
+  return apiClient.admin.client.customSsoEnable.mutate({ clientCode });
+}
+
+export function disableClientCustomSso(clientCode: string) {
+  return apiClient.admin.client.customSsoDisable.mutate({ clientCode });
+}
+
+export function removeClientCustomSso(clientCode: string) {
+  return apiClient.admin.client.customSsoRemove.mutate({ clientCode });
+}
+
+export function rotateClientCustomSsoSecret(clientCode: string) {
+  return apiClient.admin.client.customSsoRotateSecret.mutate({ clientCode });
+}
+
+function isClientNotFoundTransportError(error: unknown) {
+  if (typeof error !== 'object' || error === null) return false;
+  const data = (error as {
+    data?: { httpStatus?: unknown; serviceCode?: unknown };
+  }).data;
+  return (
+    data?.serviceCode === ApiErrorCode.ClientNotFound ||
+    data?.httpStatus === 404
+  );
 }

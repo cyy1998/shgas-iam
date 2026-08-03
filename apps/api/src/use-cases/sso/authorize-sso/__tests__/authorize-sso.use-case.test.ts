@@ -1,5 +1,25 @@
+import type { CustomSsoClientRuntimeDto } from "@iam/domain/client";
+import { ClientStatus, CustomSsoClientMode } from "@iam/contracts";
 import { expect, mock, test } from "bun:test";
 import { createAuthorizeSsoUseCase } from "../authorize-sso.use-case";
+
+const client = {
+  id: 1,
+  clientCode: "portal",
+  clientName: "Portal",
+  status: ClientStatus.Enable,
+  isDelete: false,
+  customSsoEnabled: true,
+  customSsoConfig: {
+    mode: CustomSsoClientMode.Independent,
+    subjectClaimCatalogVersion: 1,
+    subjectClaims: ["subjectIdentifier"],
+    validRedirectUrls: ["https://app.example.com/callback"],
+    callbackEndpoint: "https://app.example.com/sso/callback",
+    logoutEndpoint: "https://app.example.com/sso/logout",
+  },
+  customSsoConfigVersion: 7,
+} satisfies CustomSsoClientRuntimeDto;
 
 test("delegates authorization-code issuance after resolving the client and validating the redirect", async () => {
   const requestContext = {
@@ -11,53 +31,60 @@ test("delegates authorization-code issuance after resolving the client and valid
     route: null,
     method: null,
   };
-  const getClientByCode = mock(async () => {
-    return { extAttributes: { validRedirectUrls: ["https://app.example.com"] } };
-  });
-  const isAllowed = mock(() => true);
+  const findRuntimeRecord = mock(async () => client);
+  const normalizeAllowed = mock(() => "https://app.example.com/callback");
   const issueAuthorizationCode = mock(async () => ({ isLogin: true as const, code: "auth-code" }));
   const useCase = createAuthorizeSsoUseCase({
     authorizationGrants: { issueAuthorizationCode },
-    clients: { getClientByCode },
-    redirectUrls: { isAllowed },
+    clients: { findRuntimeRecord },
+    redirectUrls: { normalizeAllowed },
   });
 
   await expect(useCase.execute({
     clientCode: "portal",
     globalSessionToken: "principal-token",
-    redirectUrl: "https://app.example.com",
+    redirectUrl: "HTTPS://APP.Example.COM:443/a/../callback",
+    state: "opaque state with spaces",
     tokenSource: "authorization_header",
   }, {
     requestContext,
   })).resolves.toEqual({
     isLogin: true,
     code: "auth-code",
+    callbackEndpoint: "https://app.example.com/sso/callback",
+    clientCode: "portal",
+    mode: CustomSsoClientMode.Independent,
+    redirectUrl: "https://app.example.com/callback",
+    state: "opaque state with spaces",
   });
 
-  expect(isAllowed).toHaveBeenCalledTimes(1);
-  expect(isAllowed).toHaveBeenCalledWith(
+  expect(normalizeAllowed).toHaveBeenCalledTimes(1);
+  expect(normalizeAllowed).toHaveBeenCalledWith(
     "portal",
-    "https://app.example.com",
-    ["https://app.example.com"],
+    "HTTPS://APP.Example.COM:443/a/../callback",
+    ["https://app.example.com/callback"],
     { requestContext },
   );
   expect(issueAuthorizationCode).toHaveBeenCalledTimes(1);
   expect(issueAuthorizationCode).toHaveBeenCalledWith({
     clientCode: "portal",
-    redirectUrl: "https://app.example.com",
+    configVersion: 7,
+    mode: CustomSsoClientMode.Independent,
+    redirectUrl: "https://app.example.com/callback",
     requestContext,
+    state: "opaque state with spaces",
     token: "principal-token",
     tokenSource: "authorization_header",
   });
 });
 
 test("rejects an unknown client before redirect validation or authorization-code issuance", async () => {
-  const isAllowed = mock(() => true);
+  const normalizeAllowed = mock(() => "https://app.example.com");
   const issueAuthorizationCode = mock(async () => ({ isLogin: false as const, code: null }));
   const useCase = createAuthorizeSsoUseCase({
     authorizationGrants: { issueAuthorizationCode },
-    clients: { getClientByCode: mock(async () => null) },
-    redirectUrls: { isAllowed },
+    clients: { findRuntimeRecord: mock(async () => null) },
+    redirectUrls: { normalizeAllowed },
   });
 
   await expect(useCase.execute({
@@ -66,7 +93,7 @@ test("rejects an unknown client before redirect validation or authorization-code
     tokenSource: "none",
   })).rejects.toThrow("非法client代码");
 
-  expect(isAllowed).not.toHaveBeenCalled();
+  expect(normalizeAllowed).not.toHaveBeenCalled();
   expect(issueAuthorizationCode).not.toHaveBeenCalled();
 });
 
@@ -75,11 +102,15 @@ test("rejects a disallowed redirect before authorization-code issuance", async (
   const useCase = createAuthorizeSsoUseCase({
     authorizationGrants: { issueAuthorizationCode },
     clients: {
-      getClientByCode: mock(async () => ({
-        extAttributes: { validRedirectUrls: ["https://allowed.example.com"] },
+      findRuntimeRecord: mock(async () => ({
+        ...client,
+        customSsoConfig: {
+          ...client.customSsoConfig,
+          validRedirectUrls: ["https://allowed.example.com"],
+        },
       })),
     },
-    redirectUrls: { isAllowed: mock(() => false) },
+    redirectUrls: { normalizeAllowed: mock(() => null) },
   });
 
   await expect(useCase.execute({
@@ -89,4 +120,65 @@ test("rejects a disallowed redirect before authorization-code issuance", async (
   })).rejects.toThrow("非法重定向地址");
 
   expect(issueAuthorizationCode).not.toHaveBeenCalled();
+});
+
+test.each([
+  ["disabled client", { status: ClientStatus.Disable }],
+  ["deleted client", { isDelete: true }],
+  ["custom SSO disabled", { customSsoEnabled: false }],
+  ["missing custom SSO config", { customSsoConfig: null }],
+] as const)("rejects %s before redirect validation or authorization-code issuance", async (
+  _label,
+  clientOverride,
+) => {
+  const normalizeAllowed = mock(() => "https://app.example.com/callback");
+  const issueAuthorizationCode = mock(async () => ({ isLogin: false as const, code: null }));
+  const useCase = createAuthorizeSsoUseCase({
+    authorizationGrants: { issueAuthorizationCode },
+    clients: {
+      findRuntimeRecord: mock(async () => ({
+        ...client,
+        ...clientOverride,
+      } as CustomSsoClientRuntimeDto)),
+    },
+    redirectUrls: { normalizeAllowed },
+  });
+
+  await expect(useCase.execute({
+    clientCode: "portal",
+    redirectUrl: "https://app.example.com/callback",
+    tokenSource: "none",
+  })).rejects.toThrow("非法client代码");
+
+  expect(normalizeAllowed).not.toHaveBeenCalled();
+  expect(issueAuthorizationCode).not.toHaveBeenCalled();
+});
+
+test("does not synthesize state when the authorize request omits it", async () => {
+  const issueAuthorizationCode = mock(async () => ({ isLogin: true as const, code: "auth-code" }));
+  const useCase = createAuthorizeSsoUseCase({
+    authorizationGrants: { issueAuthorizationCode },
+    clients: { findRuntimeRecord: mock(async () => client) },
+    redirectUrls: {
+      normalizeAllowed: mock(() => "https://app.example.com/callback"),
+    },
+  });
+
+  const result = await useCase.execute({
+    clientCode: "portal",
+    globalSessionToken: "principal-token",
+    redirectUrl: "https://app.example.com/callback",
+    tokenSource: "cookie",
+  });
+
+  expect(result).not.toHaveProperty("state");
+  expect(issueAuthorizationCode).toHaveBeenCalledWith({
+    clientCode: "portal",
+    configVersion: 7,
+    mode: CustomSsoClientMode.Independent,
+    redirectUrl: "https://app.example.com/callback",
+    requestContext: undefined,
+    token: "principal-token",
+    tokenSource: "cookie",
+  });
 });

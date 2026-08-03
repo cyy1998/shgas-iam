@@ -7,6 +7,7 @@ import type {
   InteractionProviderSessionBindingStore,
   InteractionReturnHandleStore,
 } from "./interaction.port.ts";
+import { writeOidcSubjectAccessNodeResponse } from "../provider/subject-access-protocol.ts";
 import { getCookieValue, requestNeedsReauthentication } from "./global-session.ts";
 import {
   createOpaqueValue,
@@ -41,82 +42,117 @@ export interface CreateOidcInteractionHandlerDeps {
 }
 
 export function createOidcInteractionHandler(deps: CreateOidcInteractionHandlerDeps) {
-  return {
-    async handleInteraction(request: IncomingMessage, response: ServerResponse) {
-      const details = await deps.provider.interactionDetails(request, response);
-      const clientId = typeof details.params.client_id === "string" ? details.params.client_id : null;
-      if (!clientId || details.prompt.name !== "login")
-        return failClosed(response);
-      const client = await deps.clients.findRuntime(clientId);
-      if (!client)
-        return failClosed(response);
+  async function handleInteraction(request: IncomingMessage, response: ServerResponse) {
+    const details = await deps.provider.interactionDetails(request, response);
+    const clientId = typeof details.params.client_id === "string" ? details.params.client_id : null;
+    if (!clientId || details.prompt.name !== "login")
+      return failClosed(response);
+    const client = await deps.clients.findRuntime(clientId);
+    if (!client)
+      return failClosed(response);
 
-      const session = await deps.globalSessions.resolve(request);
-      if (session && !requestNeedsReauthentication(details.params, session.authTime)) {
-        await deps.globalSessions.renew(session.sessionId);
-        const bindingContext = {
-          clientId,
-          oidcConfigVersion: client.oidc_config_version,
-        };
-        if (details.session?.uid) {
-          if (!await deps.providerSessions.bind(details.session.uid, session, bindingContext))
-            return failClosed(response);
-        }
-        else if (!await deps.providerSessions.stage(session, bindingContext)) {
-          return failClosed(response);
-        }
-        await deps.provider.interactionFinished(request, response, {
-          login: {
-            accountId: session.accountId,
-            ts: session.authTime,
-            amr: ["iam"],
-          },
-        });
-        return;
-      }
-
-      const browserBinding = createOpaqueValue();
-      const returnTarget = new URL("/oidc/resume", deps.env.oidc.issuer).href;
-      const handle = await deps.returnHandles.create({
-        interactionUid: details.uid,
+    const session = await deps.globalSessions.resolve(request);
+    if (session && !requestNeedsReauthentication(details.params, session.authTime)) {
+      await deps.globalSessions.renew(session.sessionId);
+      const bindingContext = {
+        authorizationAttemptId: details.uid,
         clientId,
         oidcConfigVersion: client.oidc_config_version,
-        browserBinding,
-        returnTarget,
-      }, deps.env.oidc.interactionTtlSeconds);
-      if (!handle)
+        providerSessionUid: details.session?.uid ?? null,
+      };
+      if (!await deps.providerSessions.stage(session, bindingContext)) {
         return failClosed(response);
-      const loginUrl = new URL(deps.env.oidc.ssoLoginPath, deps.env.oidc.publicOrigin);
-      loginUrl.searchParams.set("oidcReturn", handle);
-      const secure = deps.env.nodeEnv === "production" ? "; Secure" : "";
-      redirect(
+      }
+      await deps.provider.interactionFinished(request, response, {
+        login: {
+          accountId: session.accountId,
+          ts: session.authTime,
+          amr: ["iam"],
+        },
+      });
+      return;
+    }
+
+    const browserBinding = createOpaqueValue();
+    const returnTarget = new URL("/oidc/resume", deps.env.oidc.issuer).href;
+    const handle = await deps.returnHandles.create({
+      interactionUid: details.uid,
+      clientId,
+      oidcConfigVersion: client.oidc_config_version,
+      browserBinding,
+      returnTarget,
+    }, deps.env.oidc.interactionTtlSeconds);
+    if (!handle)
+      return failClosed(response);
+    const loginUrl = new URL(deps.env.oidc.ssoLoginPath, deps.env.oidc.publicOrigin);
+    loginUrl.searchParams.set("oidcReturn", handle);
+    const secure = deps.env.nodeEnv === "production" ? "; Secure" : "";
+    redirect(
+      response,
+      loginUrl.href,
+      `${BROWSER_BINDING_COOKIE}=${browserBinding}; Path=/oidc; HttpOnly; SameSite=Lax; Max-Age=${deps.env.oidc.interactionTtlSeconds}${secure}`,
+    );
+  }
+
+  async function handleResume(request: IncomingMessage, response: ServerResponse) {
+    const url = new URL(request.url ?? "/", deps.env.oidc.publicOrigin);
+    const handle = url.searchParams.get("oidcReturn");
+    if (!handle)
+      return failClosed(response);
+    const payload = await deps.returnHandles.consume(handle);
+    const browserBinding = getCookieValue(request.headers.cookie, BROWSER_BINDING_COOKIE);
+    if (!payload || !browserBinding || !secureStringEqual(payload.browserBinding, browserBinding))
+      return failClosed(response);
+
+    const client = await deps.clients.findRuntime(payload.clientId);
+    if (!client || client.oidc_config_version !== payload.oidcConfigVersion)
+      return failClosed(response);
+    const session = await deps.globalSessions.resolve(request);
+    if (!session)
+      return failClosed(response);
+
+    const interactionUrl = new URL(
+      `${deps.env.oidc.issuer}/interaction/${payload.interactionUid}`,
+    );
+    redirect(response, interactionUrl.href);
+  }
+
+  async function withSubjectAccessProtocolBoundary(
+    request: IncomingMessage,
+    response: ServerResponse,
+    operation: () => Promise<void>,
+  ) {
+    try {
+      await operation();
+    }
+    catch (error) {
+      const handled = writeOidcSubjectAccessNodeResponse(error, response, {
+        cookieName: deps.env.oidc.globalSessionCookie,
+        cookieSecure: deps.env.oidc.cookieSecure,
+        clearGlobalSessionCookie: getCookieValue(
+          request.headers.cookie,
+          deps.env.oidc.globalSessionCookie,
+        ) !== null,
+      });
+      if (!handled)
+        throw error;
+    }
+  }
+
+  return {
+    handleInteraction(request: IncomingMessage, response: ServerResponse) {
+      return withSubjectAccessProtocolBoundary(
+        request,
         response,
-        loginUrl.href,
-        `${BROWSER_BINDING_COOKIE}=${browserBinding}; Path=/oidc; HttpOnly; SameSite=Lax; Max-Age=${deps.env.oidc.interactionTtlSeconds}${secure}`,
+        () => handleInteraction(request, response),
       );
     },
-
-    async handleResume(request: IncomingMessage, response: ServerResponse) {
-      const url = new URL(request.url ?? "/", deps.env.oidc.publicOrigin);
-      const handle = url.searchParams.get("oidcReturn");
-      if (!handle)
-        return failClosed(response);
-      const payload = await deps.returnHandles.consume(handle);
-      const browserBinding = getCookieValue(request.headers.cookie, BROWSER_BINDING_COOKIE);
-      if (!payload || !browserBinding || !secureStringEqual(payload.browserBinding, browserBinding))
-        return failClosed(response);
-
-      const client = await deps.clients.findRuntime(payload.clientId);
-      if (!client || client.oidc_config_version !== payload.oidcConfigVersion)
-        return failClosed(response);
-      const session = await deps.globalSessions.resolve(request);
-      if (!session)
-        return failClosed(response);
-
-      const interactionUrl = new URL(
-        `${deps.env.oidc.issuer}/interaction/${payload.interactionUid}`,
+    handleResume(request: IncomingMessage, response: ServerResponse) {
+      return withSubjectAccessProtocolBoundary(
+        request,
+        response,
+        () => handleResume(request, response),
       );
-      redirect(response, interactionUrl.href);
     },
   };
 }

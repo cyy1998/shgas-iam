@@ -19,34 +19,19 @@ import {
   phoneRule,
 } from '@sso/utils/form-check';
 import { ServiceError } from '@sso/utils/request';
-import { decodeRedirect, getQuery } from '@sso/utils/url';
+import { getQuery } from '@sso/utils/url';
 import { history, useModel } from '@umijs/max';
 import { Button, Form, Input, Spin, Table, Tabs, message } from 'antd';
 import { useEffect, useState } from 'react';
 import TopBar from './_components/TopBar';
+import {
+  formatProjectionCompany,
+  formatProjectionOrganizationPath,
+  formatProjectionPosition,
+} from './user-info-projection';
 import './index.less';
 
 type TabKey = 'password' | 'mobile';
-
-function formatCompany(row: Employment) {
-  const companyNodes = row.organization?.companyNodes ?? [];
-  const company = companyNodes[companyNodes.length - 1];
-  return company?.orgName ?? '—';
-}
-
-function formatOrgPath(row: Employment) {
-  return (
-    row.organization?.fullOrgPath?.map((node) => node.orgName).join(' / ') ||
-    row.organization?.assignedOrg?.orgName ||
-    '—'
-  );
-}
-
-function formatPosition(row: Employment) {
-  return row.position
-    ? `${row.position.posName} (${row.position.posCode})`
-    : '—';
-}
 
 export default function UserInfoPage() {
   const { userInfo, loadUserInfo } = useModel('sso');
@@ -122,7 +107,7 @@ export default function UserInfoPage() {
   };
 
   const back = () => {
-    const redirectUrl = decodeRedirect(getQuery('redirectUrl'));
+    const redirectUrl = getQuery('redirectUrl');
     if (redirectUrl) {
       window.location.href = redirectUrl;
     } else {
@@ -160,11 +145,13 @@ export default function UserInfoPage() {
           <div className="info-grid">
             <aside className="profile-panel">
               <div className="avatar-ring">
-                {userInfo?.name?.[0] ?? <UserOutlined />}
+                {userInfo?.profile?.name?.[0] ?? <UserOutlined />}
               </div>
-              <div className="profile-name">{userInfo?.name ?? '-'}</div>
+              <div className="profile-name">
+                {userInfo?.profile?.name ?? '-'}
+              </div>
               <div className="profile-username">
-                {userInfo?.username ?? '-'}
+                {userInfo?.profile?.username ?? '-'}
               </div>
 
               <div className="profile-meta">
@@ -172,14 +159,16 @@ export default function UserInfoPage() {
                   <MobileOutlined />
                   <div>
                     <span>绑定手机号</span>
-                    <strong>{userInfo?.mobile || '未绑定'}</strong>
+                    <strong>{userInfo?.profile?.phone || '未绑定'}</strong>
                   </div>
                 </div>
                 <div className="meta-item">
                   <IdcardOutlined />
                   <div>
                     <span>岗位数量</span>
-                    <strong>{userInfo?.employments?.length ?? 0}</strong>
+                    <strong>
+                      {userInfo?.profile?.employments?.length ?? 0}
+                    </strong>
                   </div>
                 </div>
               </div>
@@ -197,25 +186,30 @@ export default function UserInfoPage() {
               </div>
 
               <Table<Employment>
-                rowKey="id"
+                rowKey={employment =>
+                  `${employment.organization.code}:${employment.position.code}`
+                }
                 size="middle"
                 pagination={false}
-                dataSource={userInfo?.employments ?? []}
+                dataSource={userInfo?.profile?.employments ?? []}
                 columns={[
                   {
                     title: '公司',
-                    dataIndex: ['organization', 'companyNodes'],
-                    render: (_value, row) => formatCompany(row),
+                    dataIndex: ['organization', 'path'],
+                    render: (_value, row) =>
+                      formatProjectionCompany(row),
                   },
                   {
                     title: '组织',
-                    dataIndex: ['organization', 'assignedOrg', 'orgName'],
-                    render: (_value, row) => formatOrgPath(row),
+                    dataIndex: ['organization', 'name'],
+                    render: (_value, row) =>
+                      formatProjectionOrganizationPath(row),
                   },
                   {
                     title: '岗位',
-                    dataIndex: ['position', 'posName'],
-                    render: (_value, row) => formatPosition(row),
+                    dataIndex: ['position', 'name'],
+                    render: (_value, row) =>
+                      formatProjectionPosition(row),
                   },
                 ]}
               />
@@ -307,7 +301,7 @@ export default function UserInfoPage() {
                   >
                     <div className="current-mobile">
                       <span>当前手机号</span>
-                      <strong>{userInfo?.mobile || '-'}</strong>
+                      <strong>{userInfo?.profile?.phone || '-'}</strong>
                     </div>
                     <Form.Item
                       label="新手机号"

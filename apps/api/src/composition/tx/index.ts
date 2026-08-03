@@ -5,17 +5,20 @@ import type {
   CreateUserProfileInvalidationDeps,
   UserProfileInvalidation,
 } from "@iam/user-profile-read-model/producer";
+import type { SubjectAccessTransitionRepository } from "@iam/user-profile-read-model/subject-access-transition";
 import type { ApiRepositories } from "../repositories";
 import type { AfterCommitLoggerPort, ClockPort } from "../runtime";
 import { createApiAuditLogWriter } from "@api/services/audit/audit.service";
 import { createUnitOfWork } from "@iam/api-core/uow";
 import db from "@iam/db";
 import { createUserProfileInvalidation } from "@iam/user-profile-read-model/producer";
+import { createSubjectAccessTransitionRepository } from "@iam/user-profile-read-model/subject-access-transition";
 import { createApiRepositories } from "../repositories";
 
 export interface ApiTxPorts {
   repositories: ApiRepositories;
   auditLogWriter: ApiAuditLogWriter;
+  subjectAccessMutation: Pick<SubjectAccessTransitionRepository, "runMutation">;
   userProfileInvalidation: UserProfileInvalidation;
 }
 
@@ -34,6 +37,7 @@ export function createApiUnitOfWork(options: CreateApiUnitOfWorkOptions): UnitOf
       return {
         repositories,
         auditLogWriter: createApiAuditLogWriter({ auditRepository: repositories.audit }),
+        subjectAccessMutation: createSubjectAccessTransitionRepository(tx),
         userProfileInvalidation: createUserProfileInvalidation({
           db: tx,
           jobProducer: options.userProfileJobProducer,

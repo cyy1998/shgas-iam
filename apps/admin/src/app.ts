@@ -6,7 +6,15 @@ import {
   API_PREFIX,
   SSO_CLIENT_CODE,
 } from '@admin/constants/config';
-import { redirectToLogin } from '@admin/utils/auth';
+import {
+  mapCurrentAdminUser,
+  type CurrentAdminUser,
+} from '@admin/lib/current-admin-user';
+import {
+  redirectToLogin,
+  restoreLoginRedirectState,
+} from '@admin/utils/auth';
+import type { CustomSsoSubjectProjectionV1 } from '@iam/client-subject-projection/custom-sso';
 import { history } from '@umijs/max';
 import { ConfigProvider } from 'antd';
 import { createElement, type ReactElement } from 'react';
@@ -19,8 +27,12 @@ ConfigProvider.config({
 });
 
 type InitialState = {
-  currentUser?: { username: string; name: string; roles: string[] };
+  currentUser?: CurrentAdminUser;
 };
+
+if (typeof window !== 'undefined') {
+  restoreLoginRedirectState();
+}
 
 // 全局初始化数据配置，用于 Layout 用户信息和权限初始化
 // 更多信息见文档：https://umijs.org/docs/api/runtime-config#getinitialstate
@@ -39,15 +51,12 @@ export async function getInitialState(): Promise<InitialState> {
     }
 
     if (res.ok) {
-      const body = await res.json();
-      const roles = (body.data.roles as string[]) ?? [];
-      const currentUser = {
-        username: body.data.username as string,
-        name: (body.data.name as string | undefined) ?? '',
-        roles,
+      const body = (await res.json()) as {
+        data: CustomSsoSubjectProjectionV1;
       };
+      const currentUser = mapCurrentAdminUser(body.data);
 
-      if (!roles.includes(ADMIN_ROLE_CODE)) {
+      if (!currentUser.roles.includes(ADMIN_ROLE_CODE)) {
         history.replace('/403');
         return { currentUser };
       }

@@ -2,6 +2,8 @@ import { UserType } from "@iam/contracts";
 import { expect, mock, test } from "bun:test";
 import { createLoginWithOaUseCase } from "../login-with-oa.use-case";
 
+const subjectIdentifier = "00000000-0000-4000-8000-000000001001";
+
 test("creates an OA PrincipalSession and audits the active Formal user", async () => {
   const events: string[] = [];
   const longUserAgent = `oa-browser/${"x".repeat(600)}`;
@@ -25,7 +27,11 @@ test("creates an OA PrincipalSession and audits the active Formal user", async (
     config: { nodeEnv: "production" },
     principalSessions: { createPrincipalSession },
     users: {
-      getActiveUserByUsername: mock(async () => ({ id: 1001, userType: UserType.Formal })),
+      getActiveUserByUsername: mock(async () => ({
+        id: 1001,
+        subjectIdentifier,
+        userType: UserType.Formal,
+      })),
       getUserDetailById: mock(async () => userDetail),
     },
   } as any);
@@ -51,7 +57,7 @@ test("creates an OA PrincipalSession and audits the active Formal user", async (
   });
 
   expect(events).toEqual(["session", "audit"]);
-  expect(createPrincipalSession).toHaveBeenCalledWith(userDetail, {
+  expect(createPrincipalSession).toHaveBeenCalledWith(subjectIdentifier, {
     amr: ["oa"],
     origin: {
       ip: "203.0.113.13",

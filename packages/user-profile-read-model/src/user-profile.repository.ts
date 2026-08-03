@@ -1,62 +1,57 @@
-import type { UserStatus } from "@iam/contracts";
 import type { DbClient } from "@iam/db";
-import type { UserProfileDetailDocument, UserProfileSearchDocument } from "@iam/db/schema";
 import type { SQLWrapper } from "drizzle-orm";
 import type { UserProfileSearchInput } from "./user-profile-query.port";
 import type {
-  UserDetailDto,
+  PublishedUserProfile,
   UserProfileEmploymentField,
   UserProfileFilterCondition,
   UserProfileFilterDsl,
-  UserProfileSearchDoc,
   UserProfileUserField,
 } from "./user-profile.schema";
 import { firstRow, inArrayIf } from "@iam/db/query-utils";
 import { userProfiles } from "@iam/db/schema";
-import { and, asc, eq, isNull, not, or, sql } from "drizzle-orm";
+import { and, asc, eq, isNull, lte, not, or, sql } from "drizzle-orm";
+import { toUserProfileRow } from "./user-profile-row";
 import {
   CURRENT_USER_PROFILE_SCHEMA_VERSION,
   isEmploymentField,
+  PublishedUserProfileSchema,
 } from "./user-profile.schema";
 
-export interface UserProfileUpsertInput {
-  userId: number;
-  username: string;
-  mobile: string | null;
-  wxId: string | null;
-  status: UserStatus;
-  isDelete: boolean;
-  searchVisible: boolean;
-  profileSchemaVersion: number;
-  detail: UserDetailDto;
-  searchDoc: UserProfileSearchDoc;
-  rebuiltAt: Date;
-}
+export type UserProfileUpsertInput = PublishedUserProfile;
 
 export function createUserProfileRepository(db: DbClient) {
   return {
     async upsertProfile(input: UserProfileUpsertInput) {
-      const values = toProfileRow(input);
+      const values = toUserProfileRow(PublishedUserProfileSchema.parse(input));
       return firstRow(await db
         .insert(userProfiles)
         .values(values)
         .onConflictDoUpdate({
           target: userProfiles.userId,
           set: {
+            subjectIdentifier: values.subjectIdentifier,
             username: values.username,
+            name: values.name,
             mobile: values.mobile,
             wxId: values.wxId,
             status: values.status,
             isDelete: values.isDelete,
             searchVisible: values.searchVisible,
             profileSchemaVersion: values.profileSchemaVersion,
+            sourceDirtyVersion: values.sourceDirtyVersion,
             detail: values.detail,
             searchDoc: values.searchDoc,
+            subjectFacts: values.subjectFacts,
             rebuiltAt: values.rebuiltAt,
-            updateTime: new Date(),
+            updateTime: values.rebuiltAt,
           },
+          setWhere: or(
+            isNull(userProfiles.sourceDirtyVersion),
+            lte(userProfiles.sourceDirtyVersion, values.sourceDirtyVersion),
+          ),
         })
-        .returning())!;
+        .returning()) ?? null;
     },
 
     async deleteByUserId(userId: number) {
@@ -64,6 +59,23 @@ export function createUserProfileRepository(db: DbClient) {
         .delete(userProfiles)
         .where(eq(userProfiles.userId, userId))
         .returning()) ?? null;
+    },
+
+    async deleteByUserIdAtMostVersion(input: { userId: number; sourceDirtyVersion: string }) {
+      return firstRow(await db
+        .delete(userProfiles)
+        .where(and(
+          eq(userProfiles.userId, input.userId),
+          or(
+            isNull(userProfiles.sourceDirtyVersion),
+            lte(userProfiles.sourceDirtyVersion, input.sourceDirtyVersion),
+          ),
+        ))
+        .returning()) ?? null;
+    },
+
+    async getAnyByUserId(userId: number) {
+      return await db.query.userProfiles.findFirst({ where: { userId } }) ?? null;
     },
 
     async getCurrentByUserId(userId: number) {
@@ -136,14 +148,6 @@ export function compileProfileFilterDslToSql(filter: UserProfileFilterDsl): SQLW
     return not(compileProfileFilterDslToSql(filter.not));
 
   return compileEmploymentNestedToSql(filter.where);
-}
-
-function toProfileRow(input: UserProfileUpsertInput) {
-  return {
-    ...input,
-    detail: input.detail as unknown as UserProfileDetailDocument,
-    searchDoc: input.searchDoc as unknown as UserProfileSearchDocument,
-  };
 }
 
 function compileUserConditionToSql(condition: UserProfileFilterCondition): SQLWrapper {

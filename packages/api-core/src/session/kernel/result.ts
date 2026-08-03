@@ -46,18 +46,21 @@ export type FailClosedResult = {
   cause?: unknown;
 };
 
-export type ResolveResult<T>
-  = | ResolvedResult<T>
-    | RevokedResult
+export type LifecycleFailureResult
+  = | RevokedResult
     | MissingOrExpiredResult
     | SchemaInvalidResult
     | ValidationFailedResult
     | ConsumedReplayResult
     | FailClosedResult;
 
+export type ResolveResult<T>
+  = | ResolvedResult<T>
+    | LifecycleFailureResult;
+
 export type CreateResult<T>
   = | { status: "created"; value: T; externalToken?: string }
-    | FailClosedResult;
+    | LifecycleFailureResult;
 
 export function failClosed(message: string, cause?: unknown): FailClosedResult {
   return { status: "fail_closed", message, cause };

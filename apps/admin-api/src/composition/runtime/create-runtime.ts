@@ -8,6 +8,7 @@ import { hashSecret } from "@iam/api-core/security";
 import { createSessionKernelConfigFromEnv } from "@iam/api-core/session/kernel";
 import { generateRandomPassword } from "@iam/api-core/utils";
 import { hash } from "bcrypt-ts";
+import { createAdminClientCache } from "./client-cache";
 
 export interface CreateAdminApiRuntimeOptions {
   env?: typeof env;
@@ -34,6 +35,9 @@ export function createAdminApiRuntime(options: CreateAdminApiRuntimeOptions = {}
     },
     random: {
       uuid: randomUUID,
+      customSsoClientSecret() {
+        return `iam_sso_${randomBytes(32).toString("base64url")}`;
+      },
       oidcClientSecret() {
         return `iam_oidc_${randomBytes(32).toString("base64url")}`;
       },
@@ -71,31 +75,7 @@ export function createAdminApiRuntime(options: CreateAdminApiRuntimeOptions = {}
       }),
     },
     integrations: {
-      clientCache: {
-        async setClient(clientDto) {
-          await Promise.all([
-            runtimeRedis.set(`cache:client:code:${clientDto.clientCode}`, JSON.stringify(clientDto)),
-            runtimeRedis.set(`cache:client:secret:${clientDto.clientSecret}`, JSON.stringify(clientDto)),
-          ]);
-        },
-        async deleteClient(clientDto) {
-          await Promise.all([
-            runtimeRedis.del(`cache:client:code:${clientDto.clientCode}`),
-            runtimeRedis.del(`cache:client:secret:${clientDto.clientSecret}`),
-          ]);
-        },
-        async syncUpdatedClient(oldClientDto, newClientDto) {
-          await Promise.all([
-            oldClientDto.clientCode === newClientDto.clientCode
-              ? Promise.resolve()
-              : runtimeRedis.del(`cache:client:code:${oldClientDto.clientCode}`),
-            oldClientDto.clientSecret === newClientDto.clientSecret
-              ? Promise.resolve()
-              : runtimeRedis.del(`cache:client:secret:${oldClientDto.clientSecret}`),
-            this.setClient(newClientDto),
-          ]);
-        },
-      },
+      clientCache: createAdminClientCache({ redis: runtimeRedis }),
       oidcInvalidation: {
         async invalidateClient(client) {
           await invalidateOidcClient(runtimeRedis, {

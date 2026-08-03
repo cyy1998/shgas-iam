@@ -5,6 +5,10 @@ import { adminTheme } from './src/theme';
 export default defineConfig({
   alias: {
     '@admin': resolve(__dirname, 'src'),
+    '@iam/client-subject-projection': resolve(
+      __dirname,
+      '../../packages/client-subject-projection/src',
+    ),
     '@iam/contracts': resolve(__dirname, '../../packages/contracts/src'),
     '~admin': __dirname,
   },
@@ -58,6 +62,12 @@ export default defineConfig({
       icon: 'appstore',
       component: './clients/index',
       access: 'isAdmin',
+    },
+    {
+      path: '/clients/:clientCode/edit',
+      component: './clients/edit',
+      access: 'isAdmin',
+      hideInMenu: true,
     },
     {
       path: '/roles',

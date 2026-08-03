@@ -1,22 +1,30 @@
+import type { GenericClientRuntimeDto } from "@iam/domain/client";
 import type { ClientServiceDeps } from "./client.port";
-import type { ClientDto } from "./client.type";
-import { ClientDtoSchema } from "@api/services/client/client.schema";
 import { reviveIsoDates } from "@iam/api-core/utils";
+import {
+  GenericClientRuntimeDtoSchema,
+  toGenericClientRuntimeDto,
+} from "@iam/domain/client";
 import { ZodError } from "zod";
 
 export function createClientService(deps: ClientServiceDeps) {
-  async function setClientCache(clientDto: ClientDto) {
+  async function setClientCache(clientDto: GenericClientRuntimeDto) {
     await Promise.all([
       deps.redis.set(`cache:client:code:${clientDto.clientCode}`, JSON.stringify(clientDto)),
       deps.redis.set(`cache:client:secret:${clientDto.clientSecret}`, JSON.stringify(clientDto)),
     ]);
   }
 
-  async function getClientFromCache(key: string, type: string): Promise<ClientDto | null> {
+  async function getClientFromCache(
+    key: string,
+    type: string,
+  ): Promise<GenericClientRuntimeDto | null> {
     const cacheString = await deps.redis.get(`cache:client:${type}:${key}`);
     if (cacheString !== null) {
       try {
-        const cacheClient = ClientDtoSchema.parse(JSON.parse(cacheString, reviveIsoDates));
+        const cacheClient = GenericClientRuntimeDtoSchema.parse(
+          JSON.parse(cacheString, reviveIsoDates),
+        );
         return cacheClient;
       }
       catch (err) {
@@ -32,7 +40,9 @@ export function createClientService(deps: ClientServiceDeps) {
     return null;
   }
 
-  async function getClientByCode(clientCode: string): Promise<ClientDto | null> {
+  async function getClientByCode(
+    clientCode: string,
+  ): Promise<GenericClientRuntimeDto | null> {
     const cachedClient = await getClientFromCache(clientCode, "code");
     if (cachedClient !== null) {
       return cachedClient;
@@ -41,12 +51,14 @@ export function createClientService(deps: ClientServiceDeps) {
     if (client === null) {
       return null;
     }
-    const clientDto = ClientDtoSchema.parse(client);
+    const clientDto = toGenericClientRuntimeDto(client);
     await setClientCache(clientDto);
     return clientDto;
   }
 
-  async function getClientBySecret(clientSecret: string): Promise<ClientDto | null> {
+  async function getClientBySecret(
+    clientSecret: string,
+  ): Promise<GenericClientRuntimeDto | null> {
     const cachedClient = await getClientFromCache(clientSecret, "secret");
     if (cachedClient !== null) {
       return cachedClient;
@@ -55,7 +67,7 @@ export function createClientService(deps: ClientServiceDeps) {
     if (client === null) {
       return null;
     }
-    const clientDto = ClientDtoSchema.parse(client);
+    const clientDto = toGenericClientRuntimeDto(client);
     await setClientCache(clientDto);
     return clientDto;
   }

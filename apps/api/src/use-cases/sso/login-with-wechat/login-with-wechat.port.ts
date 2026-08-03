@@ -32,7 +32,7 @@ export interface WechatLoginAuditInput {
 
 export interface WechatPrincipalSessionPort {
   createPrincipalSession: (
-    user: UserDetailDto,
+    subjectIdentifier: string,
     options: {
       amr: readonly ["wechat"];
       origin?: SessionOrigin;

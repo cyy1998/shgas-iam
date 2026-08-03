@@ -1,29 +1,18 @@
-import {
-  createClient,
-  updateClient,
-  type ClientDetailVo,
-} from '@admin/services/client';
+import { createClient, type ClientDetailVo } from '@admin/services/client';
 import {
   ModalForm,
   ProFormGroup,
   ProFormSelect,
-  ProFormSwitch,
   ProFormText,
   ProFormTextArea,
 } from '@ant-design/pro-components';
-import {
-  ClientManagementLevel,
-  ClientStatus,
-  getClientManagementLevelOptions,
-  getClientStatusOptions,
-} from '@iam/contracts';
+import { ClientStatus, getClientStatusOptions } from '@iam/contracts';
 import { message } from 'antd';
 
 type Props = {
   open: boolean;
-  initialValues?: ClientDetailVo | null;
   onOpenChange: (open: boolean) => void;
-  onSuccess?: () => void;
+  onSuccess?: (client: ClientDetailVo) => void;
 };
 
 type FormValues = {
@@ -33,96 +22,37 @@ type FormValues = {
   url?: string;
   status: ClientStatus;
   description?: string;
-  managementLevel: ClientManagementLevel;
-  requireOrcas?: boolean;
-  validRedirectUrls?: string[];
-  userExcluding?: string[];
-  logoutEndpoint: string;
-  callbackEndpoint: string;
 };
-
-const defaultEndpoint = 'http://localhost:8888';
-
-function cleanList(value: string[] | undefined) {
-  return (value ?? [])
-    .map((item) => item.trim())
-    .filter((item): item is string => !!item);
-}
-
-function toInitialValues(initialValues: ClientDetailVo | null | undefined) {
-  if (!initialValues) {
-    return {
-      status: ClientStatus.Enable,
-      managementLevel: ClientManagementLevel.None,
-      requireOrcas: false,
-      logoutEndpoint: defaultEndpoint,
-      callbackEndpoint: defaultEndpoint,
-    };
-  }
-  return {
-    clientCode: initialValues.clientCode,
-    clientName: initialValues.clientName,
-    clientSecret: initialValues.clientSecret,
-    url: initialValues.url ?? undefined,
-    status: initialValues.status,
-    description: initialValues.description ?? undefined,
-    managementLevel: initialValues.extAttributes.managementLevel,
-    requireOrcas: initialValues.extAttributes.requireOrcas,
-    validRedirectUrls: initialValues.extAttributes.validRedirectUrls,
-    userExcluding: initialValues.extAttributes.userExcluding,
-    logoutEndpoint: initialValues.extAttributes.logoutEndpoint,
-    callbackEndpoint: initialValues.extAttributes.callbackEndpoint,
-  };
-}
 
 export default function ClientFormModal({
   open,
-  initialValues,
   onOpenChange,
   onSuccess,
 }: Props) {
-  const isEdit = !!initialValues;
-
   return (
     <ModalForm<FormValues>
-      title={isEdit ? '编辑应用' : '新建应用'}
+      title="新建应用"
       open={open}
       onOpenChange={onOpenChange}
-      initialValues={toInitialValues(initialValues)}
+      initialValues={{ status: ClientStatus.Enable }}
       modalProps={{
         destroyOnHidden: true,
         mask: { closable: false },
-        okText: '确定',
+        okText: '创建并编辑',
       }}
       onFinish={async (values) => {
-        const body = {
-          clientName: values.clientName,
-          clientSecret: values.clientSecret,
-          url: values.url || null,
-          status: values.status,
-          description: values.description || null,
-          extAttributes: {
-            userExcluding: cleanList(values.userExcluding),
-            requireOrcas: values.requireOrcas ?? false,
-            validRedirectUrls: cleanList(values.validRedirectUrls),
-            managementLevel: values.managementLevel,
-            logoutEndpoint: values.logoutEndpoint,
-            callbackEndpoint: values.callbackEndpoint,
-          },
-        };
-
         try {
-          if (isEdit) {
-            await updateClient(initialValues!.clientCode, body);
-            message.success('更新成功');
-          } else {
-            await createClient({
-              ...body,
-              clientCode: values.clientCode,
-            });
-            message.success('创建成功');
-          }
-          onSuccess?.();
+          const client = await createClient({
+            clientCode: values.clientCode,
+            clientName: values.clientName,
+            clientSecret: values.clientSecret,
+            url: values.url || null,
+            status: values.status,
+            description: values.description || null,
+            extAttributes: {},
+          });
+          message.success('创建成功');
+          onSuccess?.(client);
           return true;
         } catch (err) {
           message.error(err instanceof Error ? err.message : '操作失败');
@@ -134,89 +64,43 @@ export default function ClientFormModal({
         <ProFormText
           name="clientCode"
           label="应用编码"
-          disabled={isEdit}
-          tooltip="创建后不可修改；启用 OIDC 后该值直接作为 client_id"
-          extra={
-            isEdit ? '应用编码已锁定，也是不可变的 OIDC client_id。' : undefined
-          }
+          tooltip="创建后不可修改，也是各协议使用的 client 标识"
           width="md"
+          fieldProps={{ 'aria-label': '应用编码' }}
           rules={[{ required: true, message: '请输入应用编码' }]}
         />
         <ProFormText
           name="clientName"
           label="应用名称"
           width="md"
+          fieldProps={{ 'aria-label': '应用名称' }}
           rules={[{ required: true, message: '请输入应用名称' }]}
         />
       </ProFormGroup>
       <ProFormGroup>
         <ProFormText
           name="clientSecret"
-          label="应用密钥"
+          label="通用应用密钥"
+          tooltip="不用于 Custom SSO 或 OIDC"
           width="md"
-          fieldProps={{ type: 'password' }}
+          fieldProps={{
+            type: 'password',
+            'aria-label': '通用应用密钥',
+          }}
           rules={[{ required: true, message: '请输入应用密钥' }]}
         />
         <ProFormText name="url" label="访问地址" width="md" />
       </ProFormGroup>
-      <ProFormGroup>
-        <ProFormSelect
-          name="status"
-          label="状态"
-          width="md"
-          options={getClientStatusOptions().map((o) => ({
-            label: o.label,
-            value: o.value,
-          }))}
-          rules={[{ required: true }]}
-        />
-        <ProFormSelect
-          name="managementLevel"
-          label="管理模式"
-          width="md"
-          options={getClientManagementLevelOptions()}
-          rules={[{ required: true }]}
-        />
-      </ProFormGroup>
-      <ProFormSwitch name="requireOrcas" label="需要 ORCAS" />
       <ProFormSelect
-        name="validRedirectUrls"
-        label="允许重定向地址"
-        tooltip="支持 origin、一级子域 wildcard，以及 path 末尾 /*。"
-        mode="tags"
-        fieldProps={{
-          open: false,
-          placeholder:
-            '如 https://app.example.com、https://*.example.com、https://app.example.com/path/*',
-          style: { width: '100%' },
-          tokenSeparators: ['\n'],
-        }}
+        name="status"
+        label="全局状态"
+        width="md"
+        options={getClientStatusOptions().map((option) => ({
+          label: option.label,
+          value: option.value,
+        }))}
+        rules={[{ required: true }]}
       />
-      <ProFormSelect
-        name="userExcluding"
-        label="维护白名单用户"
-        mode="tags"
-        fieldProps={{
-          open: false,
-          placeholder: '输入用户标识后按 Enter 添加',
-          style: { width: '100%' },
-          tokenSeparators: ['\n', ','],
-        }}
-      />
-      <ProFormGroup>
-        <ProFormText
-          name="logoutEndpoint"
-          label="登出地址"
-          width="md"
-          rules={[{ required: true, message: '请输入登出地址' }]}
-        />
-        <ProFormText
-          name="callbackEndpoint"
-          label="回调地址"
-          width="md"
-          rules={[{ required: true, message: '请输入回调地址' }]}
-        />
-      </ProFormGroup>
       <ProFormTextArea name="description" label="描述" />
     </ModalForm>
   );

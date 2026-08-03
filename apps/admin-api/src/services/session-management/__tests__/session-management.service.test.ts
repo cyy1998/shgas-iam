@@ -18,6 +18,10 @@ import { UserStatus } from "@iam/contracts";
 import { describe, expect, mock, test } from "bun:test";
 import { createSessionManagementService } from "../session-management.service";
 
+function subjectIdentifierFor(userId: number) {
+  return `00000000-0000-4000-8000-${String(userId).padStart(12, "0")}`;
+}
+
 function unusedMutationDeps() {
   return {
     audit: {
@@ -103,6 +107,7 @@ function createLoginRestrictionHarness(
   const getSessionManagementUserSummaries = mock(async (
     _userIds: readonly number[],
   ) => options.users ?? []);
+  const getSessionManagementUserSummariesBySubjectIdentifiers = mock(async () => []);
   const listPrincipalSessions = mock(async () => {
     throw new Error("Principal Session inventory must not run");
   });
@@ -123,6 +128,7 @@ function createLoginRestrictionHarness(
     },
     users: {
       getSessionManagementUserSummaries,
+      getSessionManagementUserSummariesBySubjectIdentifiers,
     },
     audit: {
       recordAuditLog: async (input) => {
@@ -264,7 +270,15 @@ function createRevokeHarness(options: CreateRevokeHarnessOptions = {}) {
       }),
     },
     users: {
-      getSessionManagementUserSummaries: mock(async () => []),
+      getSessionManagementUserSummaries: mock(async (userIds: readonly number[]) => userIds.map(userId => ({
+        id: userId,
+        subjectIdentifier: subjectIdentifierFor(userId),
+        username: `user-${userId}`,
+        name: `User ${userId}`,
+        status: UserStatus.Enable,
+        isDelete: false,
+      }))),
+      getSessionManagementUserSummariesBySubjectIdentifiers: mock(async () => []),
     },
     control: {
       revokePrincipalSession: async (...args) => {
@@ -849,6 +863,7 @@ describe("createSessionManagementService", () => {
 
     expect(userControlCalls).toEqual([{
       userId: 42,
+      subjectIdentifier: subjectIdentifierFor(42),
       reason: "admin_revoke",
       auditContext,
     }]);
@@ -922,6 +937,7 @@ describe("createSessionManagementService", () => {
 
     expect(userControlCalls).toEqual([{
       userId: 7,
+      subjectIdentifier: subjectIdentifierFor(7),
       reason: "admin_revoke",
       exceptPrincipalSessionId: "ps-current",
       auditContext,
@@ -1257,7 +1273,7 @@ describe("createSessionManagementService", () => {
         items: [{
           principalSessionId: "ps-current",
           sessionKind: "browser_user",
-          principal: { principalType: "user", subjectId: "7" },
+          principal: { principalType: "user", subjectId: subjectIdentifierFor(7) },
           authTime: 1_753_689_600_000,
           expiresAt: 1_753_776_000_000,
           amr: ["pwd", "sms", "custom-factor", "pwd"],
@@ -1276,6 +1292,15 @@ describe("createSessionManagementService", () => {
     const users = {
       getSessionManagementUserSummaries: mock(async () => [{
         id: 7,
+        subjectIdentifier: subjectIdentifierFor(7),
+        username: "alice",
+        name: "Alice",
+        status: UserStatus.Enable,
+        isDelete: false,
+      }]),
+      getSessionManagementUserSummariesBySubjectIdentifiers: mock(async () => [{
+        id: 7,
+        subjectIdentifier: subjectIdentifierFor(7),
         username: "alice",
         name: "Alice",
         status: UserStatus.Enable,
@@ -1296,15 +1321,17 @@ describe("createSessionManagementService", () => {
     expect(inventory.listPrincipalSessions).toHaveBeenCalledWith({
       offset: 20,
       limit: 20,
-      userId: "7",
+      subjectIdentifier: subjectIdentifierFor(7),
     });
     expect(users.getSessionManagementUserSummaries).toHaveBeenCalledWith([7]);
+    expect(users.getSessionManagementUserSummariesBySubjectIdentifiers)
+      .toHaveBeenCalledWith([subjectIdentifierFor(7)]);
     expect(result).toEqual({
       result: [{
         principalSessionId: "ps-current",
         user: {
           id: 7,
-          subjectId: "7",
+          subjectId: subjectIdentifierFor(7),
           username: "alice",
           name: "Alice",
           accountStatus: "normal",
@@ -1334,6 +1361,7 @@ describe("createSessionManagementService", () => {
   test("reports unavailable login state instead of an empty list when inventory cannot be read", async () => {
     const users = {
       getSessionManagementUserSummaries: mock(async () => []),
+      getSessionManagementUserSummariesBySubjectIdentifiers: mock(async () => []),
     };
     const service = createSessionManagementService({
       ...unusedMutationDeps(),
@@ -1363,28 +1391,28 @@ describe("createSessionManagementService", () => {
           items: [
             {
               principalSessionId: "ps-latest",
-              principal: { subjectId: "1" },
+              principal: { subjectId: subjectIdentifierFor(1) },
               authTime: 10,
               expiresAt: 300,
               amr: ["pwd"],
             },
             {
               principalSessionId: "ps-tie-first",
-              principal: { subjectId: "2" },
+              principal: { subjectId: subjectIdentifierFor(2) },
               authTime: 20,
               expiresAt: 200,
               amr: ["sms"],
             },
             {
               principalSessionId: "ps-tie-second",
-              principal: { subjectId: "3" },
+              principal: { subjectId: subjectIdentifierFor(3) },
               authTime: 30,
               expiresAt: 200,
               amr: ["oa"],
             },
             {
               principalSessionId: "ps-oldest",
-              principal: { subjectId: "4" },
+              principal: { subjectId: subjectIdentifierFor(4) },
               authTime: 40,
               expiresAt: 100,
               amr: ["wechat"],
@@ -1395,6 +1423,7 @@ describe("createSessionManagementService", () => {
       },
       users: {
         getSessionManagementUserSummaries: mock(async () => []),
+        getSessionManagementUserSummariesBySubjectIdentifiers: mock(async () => []),
       },
     });
 
@@ -1416,11 +1445,13 @@ describe("createSessionManagementService", () => {
 
   test("keeps paused, ended, deleted, and missing users visible without inventing identity data", async () => {
     const inventoryItems = [
-      { principalSessionId: "ps-paused", principal: { subjectId: "1" } },
-      { principalSessionId: "ps-ended", principal: { subjectId: "2" } },
-      { principalSessionId: "ps-deleted", principal: { subjectId: "3" } },
-      { principalSessionId: "ps-missing", principal: { subjectId: "4" } },
-      { principalSessionId: "ps-legacy", principal: { subjectId: "legacy-user" } },
+      { principalSessionId: "ps-paused", principal: { subjectId: subjectIdentifierFor(1) } },
+      { principalSessionId: "ps-ended", principal: { subjectId: subjectIdentifierFor(2) } },
+      { principalSessionId: "ps-deleted", principal: { subjectId: subjectIdentifierFor(3) } },
+      { principalSessionId: "ps-missing", principal: { subjectId: subjectIdentifierFor(4) } },
+      { principalSessionId: "ps-unknown", principal: {
+        subjectId: "00000000-0000-4000-8000-999999999999",
+      } },
     ].map(item => ({
       ...item,
       authTime: 1,
@@ -1429,9 +1460,56 @@ describe("createSessionManagementService", () => {
     }));
     const users = {
       getSessionManagementUserSummaries: mock(async () => [
-        { id: 1, username: "paused", name: "Paused", status: UserStatus.Pause, isDelete: false },
-        { id: 2, username: "ended", name: "Ended", status: UserStatus.Disable, isDelete: false },
-        { id: 3, username: "deleted", name: "Deleted", status: UserStatus.Enable, isDelete: true },
+        {
+          id: 1,
+          subjectIdentifier: subjectIdentifierFor(1),
+          username: "paused",
+          name: "Paused",
+          status: UserStatus.Pause,
+          isDelete: false,
+        },
+        {
+          id: 2,
+          subjectIdentifier: subjectIdentifierFor(2),
+          username: "ended",
+          name: "Ended",
+          status: UserStatus.Disable,
+          isDelete: false,
+        },
+        {
+          id: 3,
+          subjectIdentifier: subjectIdentifierFor(3),
+          username: "deleted",
+          name: "Deleted",
+          status: UserStatus.Enable,
+          isDelete: true,
+        },
+      ]),
+      getSessionManagementUserSummariesBySubjectIdentifiers: mock(async () => [
+        {
+          id: 1,
+          subjectIdentifier: subjectIdentifierFor(1),
+          username: "paused",
+          name: "Paused",
+          status: UserStatus.Pause,
+          isDelete: false,
+        },
+        {
+          id: 2,
+          subjectIdentifier: subjectIdentifierFor(2),
+          username: "ended",
+          name: "Ended",
+          status: UserStatus.Disable,
+          isDelete: false,
+        },
+        {
+          id: 3,
+          subjectIdentifier: subjectIdentifierFor(3),
+          username: "deleted",
+          name: "Deleted",
+          status: UserStatus.Enable,
+          isDelete: true,
+        },
       ]),
     };
     const service = createSessionManagementService({
@@ -1447,13 +1525,49 @@ describe("createSessionManagementService", () => {
       { actorUserId: 99, principalSessionId: "ps-admin" },
     );
 
-    expect(users.getSessionManagementUserSummaries).toHaveBeenCalledWith([1, 2, 3, 4]);
+    expect(users.getSessionManagementUserSummariesBySubjectIdentifiers).toHaveBeenCalledWith([
+      subjectIdentifierFor(1),
+      subjectIdentifierFor(2),
+      subjectIdentifierFor(3),
+      subjectIdentifierFor(4),
+      "00000000-0000-4000-8000-999999999999",
+    ]);
     expect(result.result.map(session => session.user)).toEqual([
-      { id: 1, subjectId: "1", username: "paused", name: "Paused", accountStatus: "paused" },
-      { id: 2, subjectId: "2", username: "ended", name: "Ended", accountStatus: "ended" },
-      { id: 3, subjectId: "3", username: "deleted", name: "Deleted", accountStatus: "deleted" },
-      { id: 4, subjectId: "4", username: null, name: null, accountStatus: "unknown" },
-      { id: null, subjectId: "legacy-user", username: null, name: null, accountStatus: "unknown" },
+      {
+        id: 1,
+        subjectId: subjectIdentifierFor(1),
+        username: "paused",
+        name: "Paused",
+        accountStatus: "paused",
+      },
+      {
+        id: 2,
+        subjectId: subjectIdentifierFor(2),
+        username: "ended",
+        name: "Ended",
+        accountStatus: "ended",
+      },
+      {
+        id: 3,
+        subjectId: subjectIdentifierFor(3),
+        username: "deleted",
+        name: "Deleted",
+        accountStatus: "deleted",
+      },
+      {
+        id: null,
+        subjectId: subjectIdentifierFor(4),
+        username: null,
+        name: null,
+        accountStatus: "unknown",
+      },
+      {
+        id: null,
+        subjectId: "00000000-0000-4000-8000-999999999999",
+        username: null,
+        name: null,
+        accountStatus: "unknown",
+      },
     ]);
     expect(result.result.every(session => session.authMethods[0] === "unknown")).toBe(true);
     expect(result.result.every(session => session.origin === null)).toBe(true);
@@ -1467,7 +1581,7 @@ describe("createSessionManagementService", () => {
         listPrincipalSessions: mock(async () => ({
           items: [{
             principalSessionId: "ps-1",
-            principal: { subjectId: "1" },
+            principal: { subjectId: subjectIdentifierFor(1) },
             authTime: 1,
             expiresAt: 2,
             amr: ["pwd"],
@@ -1476,7 +1590,8 @@ describe("createSessionManagementService", () => {
         })),
       },
       users: {
-        getSessionManagementUserSummaries: mock(async () => {
+        getSessionManagementUserSummaries: mock(async () => []),
+        getSessionManagementUserSummariesBySubjectIdentifiers: mock(async () => {
           throw databaseError;
         }),
       },
@@ -1503,7 +1618,7 @@ describe("createSessionManagementService", () => {
         listPrincipalSessions: mock(async () => ({
           items: userAgents.map((userAgent, index) => ({
             principalSessionId: `ps-${index}`,
-            principal: { subjectId: "1" },
+            principal: { subjectId: subjectIdentifierFor(1) },
             authTime: 1,
             expiresAt: 2,
             amr: ["oa", "wechat"],
@@ -1514,6 +1629,7 @@ describe("createSessionManagementService", () => {
       },
       users: {
         getSessionManagementUserSummaries: mock(async () => []),
+        getSessionManagementUserSummariesBySubjectIdentifiers: mock(async () => []),
       },
     });
 
@@ -1547,6 +1663,7 @@ describe("createSessionManagementService", () => {
       },
       users: [{
         id: 7,
+        subjectIdentifier: subjectIdentifierFor(7),
         username: "alice",
         name: "Alice",
         status: UserStatus.Pause,
@@ -1659,6 +1776,7 @@ describe("createSessionManagementService", () => {
       },
       users: [{
         id: 7,
+        subjectIdentifier: subjectIdentifierFor(7),
         username: "deleted-user",
         name: "Deleted User",
         status: UserStatus.Enable,

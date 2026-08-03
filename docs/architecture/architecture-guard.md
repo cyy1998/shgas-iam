@@ -40,6 +40,10 @@ closure，帮助维护者尽早发现跨 module 的所有权回退。
 静态 side-effect import 属于 value dependency。Module specifier 规范化可以识别仓库现有的 `@api`、`@admin-api`、
 `~api/src`、`~admin-api/src` aliases，并归一化仓库惯例中的扩展名。相对 module path 可以仅依据当前 source path
 做词法拼接与 `.`/`..`、扩展名归一化；这些操作不读取目标 module，也不做 module resolution 或 type resolution。
+规则声明的 canonical workspace package 可以同时保留原 specifier 并按已声明 source root 产生 production-source
+候选，使 canonical subpath 与 repository-relative path 进入同一 owner 判断；该映射不读取 package exports。
+第三方 package-root pattern 只匹配 package root 本身或其 `/` subpath，不使用普通文本前缀，因此 `hono/*` 属于
+`hono` owner，而 `honorable` 不属于。
 
 Architecture Guard 只能对上述事实作判断。规则需要的新事实不在此列表中时，必须停止并重新选择 seam 或验证层。
 
@@ -88,6 +92,7 @@ Architecture Guard 只覆盖仓库规范的静态写法。对同一依赖边采�
 
 当前 Architecture Guard 只包含下列永久规则族：
 
+- `client-subject-projection-owner`
 - `consumer-owned-port`
 - `dependency-direction`
 - `role-resolution-owner`
@@ -95,6 +100,22 @@ Architecture Guard 只覆盖仓库规范的静态写法。对同一依赖边采�
 - `session-runtime-owner`，可包含 Custom SSO、Session Revocation 与 OIDC 的 module dependency owner
 - `worker-ownership`
 - `docker-build-closure`
+
+`client-subject-projection-owner` 只观察 package 内 production source path 与规范静态依赖。除 Custom SSO wire、
+testing export 和普通测试外，Projection core 全部受保护，不能反向依赖 client 协议配置、数据库、User Profile
+implementation、shared provider DTO、app/Gateway runtime 或协议 transport，也不能依赖协议 wire surface。Custom
+SSO wire mapper 只能从 package root public Projection Interface 取得 core 类型或能力，不能直接依赖其他 core
+subpath、Facts persistence、client 配置、runtime 或 transport。该 package 的 canonical subpath 与
+repository-relative path 使用同一 production-source owner 判断；全部 app 与 Gateway workspace manifest 中的
+canonical package name 均映射到各自 production source owner。Package exports、结构兼容与投影/wire 语义分别由
+typecheck 和公开 contract tests 证明。
+
+`docker-build-closure` 检查每个 `apps/*/Dockerfile`。Image owner 在 `dependencies`、`devDependencies` 和
+`optionalDependencies` 中以 `workspace:` 声明的依赖，以及 Dockerfile 以字面量 `COPY` 引入的其他 workspace
+`package.json`，共同构成 closure roots；规则沿相同的 workspace dependency sections 前进。`peerDependencies`
+由消费方满足，不作为声明方拥有的 build edge。通向受保护 architecture workspace 的每个中间 workspace 必须已
+`COPY` manifest，受保护 workspace 的 manifest 与 source 则必须都已 `COPY`。该规则不解释 `RUN`、shell、build
+argument 或 package-manager 命令语义。
 
 `transaction-bound-invalidation` AST 规则和 authority-key literal 规则不属于该目录。未来规则只有在完全沿用同一观察模型
 且满足准入流程时才能单独提出。

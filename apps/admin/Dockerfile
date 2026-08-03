@@ -21,6 +21,7 @@ WORKDIR /app
 ENV HUSKY=0
 COPY .npmrc pnpm-workspace.yaml package.json pnpm-lock.yaml ./
 COPY .husky/install.mjs ./.husky/install.mjs
+COPY packages/client-subject-projection/package.json ./packages/client-subject-projection/
 COPY packages/contracts/package.json ./packages/contracts/
 COPY packages/db/package.json ./packages/db/
 COPY packages/api-core/package.json ./packages/api-core/
@@ -54,6 +55,7 @@ ENV UMI_APP_ADMIN_CLIENT_CODE=$UMI_APP_ADMIN_CLIENT_CODE
 ENV UMI_APP_ADMIN_ROLE_CODE=$UMI_APP_ADMIN_ROLE_CODE
 ENV UMI_APP_ADMIN_GRAFANA_URL=$UMI_APP_ADMIN_GRAFANA_URL
 ENV UMI_APP_ADMIN_SYSTEM_LOG_ENV=$UMI_APP_ADMIN_SYSTEM_LOG_ENV
+COPY packages/client-subject-projection/ ./packages/client-subject-projection/
 COPY packages/contracts/ ./packages/contracts/
 COPY packages/db/ ./packages/db/
 COPY packages/api-core/ ./packages/api-core/

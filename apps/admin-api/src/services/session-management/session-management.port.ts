@@ -19,7 +19,7 @@ export interface AdminSessionInventoryPort {
   listPrincipalSessions: (input: {
     offset: number;
     limit: number;
-    userId?: string;
+    subjectIdentifier?: string;
   }) => Promise<{
     items: AdminSessionInventoryItem[];
     total: number;
@@ -28,6 +28,7 @@ export interface AdminSessionInventoryPort {
 
 export interface AdminSessionUserSummary {
   id: number;
+  subjectIdentifier: string;
   username: string;
   name: string;
   status: UserStatus;
@@ -37,6 +38,9 @@ export interface AdminSessionUserSummary {
 export interface AdminSessionUserSummaryPort {
   getSessionManagementUserSummaries: (
     userIds: readonly number[],
+  ) => Promise<AdminSessionUserSummary[]>;
+  getSessionManagementUserSummariesBySubjectIdentifiers: (
+    subjectIdentifiers: readonly string[],
   ) => Promise<AdminSessionUserSummary[]>;
 }
 
@@ -86,6 +90,7 @@ export interface AdminSessionControlPort {
 export interface AdminSessionUserControlPort {
   revokeUserSessions: (input: {
     userId: number;
+    subjectIdentifier: string;
     reason: "admin_revoke";
     exceptPrincipalSessionId?: string;
     auditContext: AdminAuditContext;

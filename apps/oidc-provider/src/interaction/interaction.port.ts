@@ -13,15 +13,24 @@ export interface InteractionGlobalSessionResolver {
   renew: (sessionId: string) => Promise<boolean>;
 }
 
-export interface InteractionProviderSessionBindingStore {
-  bind: (
+export interface InteractionProviderSessionPrincipalReader {
+  isCurrentOrStagedPrincipal: (
     sessionUid: string,
+    clientId: string,
     session: ResolvedGlobalSession,
-    context: { clientId: string; oidcConfigVersion: number },
-  ) => Promise<ProviderSessionBinding | null>;
+    authorizationAttemptId: string | null,
+  ) => Promise<boolean>;
+}
+
+export interface InteractionProviderSessionBindingStore {
   stage: (
     session: ResolvedGlobalSession,
-    context: { clientId: string; oidcConfigVersion: number },
+    context: {
+      authorizationAttemptId: string;
+      clientId: string;
+      oidcConfigVersion: number;
+      providerSessionUid: string | null;
+    },
   ) => Promise<ProviderSessionBinding | null>;
 }
 

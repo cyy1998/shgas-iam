@@ -35,6 +35,8 @@ export async function createApiRoutes(options: CreateApiRoutesOptions): Promise<
     loginCredentialParser: services.loginCredential,
     logger: runtime.logger,
     config: {
+      projectionRetryAfterSeconds:
+        runtime.config.env.sso.projectionRetryAfterSeconds,
       redisExpireSeconds: runtime.config.auth.redisExpireSeconds,
     },
   });
@@ -50,7 +52,6 @@ export async function createApiRoutes(options: CreateApiRoutesOptions): Promise<
   });
 
   const ssoHandlers = createSsoHandlers({
-    clientService: services.client,
     logger: runtime.logger,
     sso: useCases.sso,
     config: {
@@ -58,6 +59,8 @@ export async function createApiRoutes(options: CreateApiRoutesOptions): Promise<
       authCodeExpireSeconds: runtime.config.auth.authCodeExpireSeconds,
       loginEndpoint: runtime.config.env.sso.loginEndpoint,
       logoutEndpoint: runtime.config.env.sso.logoutEndpoint,
+      projectionRetryAfterSeconds:
+        runtime.config.env.sso.projectionRetryAfterSeconds,
       redisExpireSeconds: runtime.config.auth.redisExpireSeconds,
       ssoExternalOrigin: runtime.config.env.sso.externalOrigin,
       ssoInternalOrigin: runtime.config.env.sso.internalOrigin,
@@ -67,7 +70,13 @@ export async function createApiRoutes(options: CreateApiRoutesOptions): Promise<
 
   const publicHandlers = createPublicHandlers({
     organizationService: services.organization,
+    subjectDeliveryRequests:
+      services.customSsoSubjectDeliveryRequests,
     userService: services.user,
+    config: {
+      projectionRetryAfterSeconds:
+        runtime.config.env.sso.projectionRetryAfterSeconds,
+    },
   });
 
   const organizationHandlers = createOrganizationHandlers({

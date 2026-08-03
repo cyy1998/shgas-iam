@@ -26,13 +26,16 @@ function assertAssignable<Port, _Provider extends Port>() {}
 function profile(overrides: Partial<UserProfile> = {}): UserProfile {
   return {
     userId: 1,
+    subjectIdentifier: "00000000-0000-4000-8000-000000000001",
     username: "zhangsan",
+    name: "Zhang San",
     mobile: "13800000000",
     wxId: "wx-1",
     status: UserStatus.Enable,
     isDelete: false,
     searchVisible: true,
     profileSchemaVersion: CURRENT_USER_PROFILE_SCHEMA_VERSION,
+    sourceDirtyVersion: "1",
     detail: {
       id: 1,
       username: "zhangsan",
@@ -61,6 +64,7 @@ function profile(overrides: Partial<UserProfile> = {}): UserProfile {
       },
       employments: [],
     },
+    subjectFacts: { employments: [] },
     rebuiltAt: now,
     createTime: now,
     updateTime: now,

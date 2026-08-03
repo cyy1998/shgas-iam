@@ -9,6 +9,7 @@ export * from "./privileges";
 export * from "./role-assignments";
 export * from "./role-privileges";
 export * from "./roles";
+export * from "./subject-access-transitions";
 export * from "./user-profile-dirty";
 export * from "./user-profiles";
 export * from "./users";

@@ -14,7 +14,12 @@ export async function createApiMiddlewares(options: CreateApiMiddlewaresOptions)
   const authenticationHandlers = createApiAuthenticationHandlers({
     clientService: options.services.client,
     customSsoSession: options.services.customSsoSession,
-    redis: options.runtime.redis,
+    subjectDeliveryRequests:
+      options.services.customSsoSubjectDeliveryRequests,
+    config: {
+      projectionRetryAfterSeconds:
+        options.runtime.config.env.sso.projectionRetryAfterSeconds,
+    },
   });
 
   return {

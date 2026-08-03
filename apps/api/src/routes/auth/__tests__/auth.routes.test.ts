@@ -6,7 +6,7 @@ import { callback } from "../../sso/sso.routes";
 import { authz, internalAuthz, loginPassword } from "../auth.routes";
 
 const loginPasswordSchema = loginPassword.request.body.content["application/json"].schema;
-const authzSuccessSchema = authz.responses[200].content["application/json"].schema;
+const authzSuccessSchema = getJsonSchema(authz, 200);
 const internalAuthzSuccessSchema = internalAuthz.responses[200].content["application/json"].schema;
 
 type SchemaLike = {

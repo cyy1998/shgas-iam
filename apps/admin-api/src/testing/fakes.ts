@@ -19,6 +19,7 @@ export function createFakePasswordHasher() {
 export function createFakeRandom() {
   return {
     uuid: mock(() => "00000000-0000-4000-8000-000000000001"),
+    customSsoClientSecret: mock(() => "iam_sso_test_secret"),
     oidcClientSecret: mock(() => "iam_oidc_test_secret"),
     password: mock(() => "Rand1234"),
     integer: mock((min: number) => min),

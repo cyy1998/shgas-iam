@@ -24,6 +24,7 @@ export const RevocationReasonSchema = z.enum([
   "admin_revoke",
   "user_disabled",
   "user_deleted",
+  "session_generation_stale",
   "client_disabled",
   "client_deleted",
   "client_protocol_disabled",
@@ -40,19 +41,9 @@ const MetadataSchema = z.record(z.string(), z.unknown());
 
 export const PrincipalRefSchema = z.object({
   principalType: z.string().min(1),
-  subjectId: z.string().min(1),
-  displayName: z.string().optional(),
-});
+  subjectId: z.uuid(),
+}).strict();
 export type PrincipalRef = z.infer<typeof PrincipalRefSchema>;
-
-export const PrincipalSnapshotSchema = z.object({
-  subjectId: z.string().min(1),
-  username: z.string().optional(),
-  displayName: z.string().optional(),
-  email: z.string().optional(),
-  metadata: MetadataSchema.optional(),
-});
-export type PrincipalSnapshot = z.infer<typeof PrincipalSnapshotSchema>;
 
 export const SessionOriginSchema = z.object({
   ip: z.string().min(1).max(MAX_SESSION_ORIGIN_IP_LENGTH).optional(),
@@ -91,6 +82,7 @@ const BaseLifecycleSchema = z.object({
 
 export const PrincipalSessionSchema = z.object({
   version: z.literal(SESSION_KERNEL_OBJECT_VERSION),
+  subjectAccessTransitionId: z.uuid(),
   sessionKind: z.string().min(1).default("browser_user"),
   principalSessionId: z.string().min(1),
   externalTokenLookupHash: z.string().min(1),
@@ -103,15 +95,15 @@ export const PrincipalSessionSchema = z.object({
   amr: z.array(z.string()).default([]),
   acr: z.string().optional(),
   origin: SessionOriginSchema.optional(),
-  snapshot: PrincipalSnapshotSchema,
   tenantId: z.string().optional(),
   issuerId: z.string().optional(),
   metadata: MetadataSchema.optional(),
   cleanupRefs: z.array(CleanupRefSchema).default([]),
-});
+}).strict();
 export type PrincipalSession = z.infer<typeof PrincipalSessionSchema>;
 
 export const ClientBindingSchema = BaseLifecycleSchema.extend({
+  subjectAccessTransitionId: z.uuid(),
   bindingId: z.string().min(1),
   protocol: z.string().min(1),
   clientCode: z.string().min(1),
@@ -123,6 +115,7 @@ export const ClientBindingSchema = BaseLifecycleSchema.extend({
 export type ClientBinding = z.infer<typeof ClientBindingSchema>;
 
 export const IssuedCredentialSchema = BaseLifecycleSchema.extend({
+  subjectAccessTransitionId: z.uuid(),
   credentialId: z.string().min(1),
   protocol: z.string().min(1),
   credentialType: z.string().min(1),
@@ -137,6 +130,7 @@ export const IssuedCredentialSchema = BaseLifecycleSchema.extend({
 export type IssuedCredential = z.infer<typeof IssuedCredentialSchema>;
 
 export const ProtocolArtifactSchema = BaseLifecycleSchema.extend({
+  subjectAccessTransitionId: z.uuid().optional(),
   artifactId: z.string().min(1),
   protocol: z.string().min(1),
   artifactType: z.string().min(1),
@@ -146,6 +140,17 @@ export const ProtocolArtifactSchema = BaseLifecycleSchema.extend({
   bindingId: z.string().min(1).optional(),
   clientCode: z.string().min(1).optional(),
   principal: PrincipalRefSchema.optional(),
+}).superRefine((artifact, context) => {
+  if (
+    (artifact.principal !== undefined || artifact.principalSessionId !== undefined)
+    && artifact.subjectAccessTransitionId === undefined
+  ) {
+    context.addIssue({
+      code: "custom",
+      path: ["subjectAccessTransitionId"],
+      message: "principal-linked protocol artifact requires a Subject Access transition ID",
+    });
+  }
 });
 export type ProtocolArtifact = z.infer<typeof ProtocolArtifactSchema>;
 
@@ -178,6 +183,7 @@ export type FreshnessRequirement = z.infer<typeof FreshnessRequirementSchema>;
 export const ValidationFailureReasonSchema = z.enum([
   "user_disabled",
   "user_deleted",
+  "session_generation_stale",
   "client_disabled",
   "client_deleted",
   "client_protocol_disabled",

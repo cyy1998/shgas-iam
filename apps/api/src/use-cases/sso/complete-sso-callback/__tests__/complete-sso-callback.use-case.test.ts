@@ -1,40 +1,36 @@
-import type { CustomSsoClientRuntimeDto } from "@iam/domain/client";
-import { ClientManagementLevel, ClientStatus } from "@iam/contracts";
-import { expect, mock, test } from "bun:test";
+import {
+  ClientStatus,
+  CustomSsoClientMode,
+  SubjectClaim,
+} from "@iam/contracts";
+import { describe, expect, mock, test } from "bun:test";
 import { createCompleteSsoCallbackUseCase } from "../complete-sso-callback.use-case";
 
 const client = {
-  id: 1,
   clientCode: "gateway",
-  clientName: "Gateway",
-  clientSecret: "secret",
-  url: "https://gateway.example.com",
   status: ClientStatus.Enable,
-  description: null,
-  extAttributes: {
-    callbackEndpoint: "https://gateway.example.com/sso/callback",
-    logoutEndpoint: "https://gateway.example.com/sso/logout",
-    managementLevel: ClientManagementLevel.Gateway,
-    requireOrcas: true,
-    userExcluding: [],
+  isDelete: false,
+  customSsoEnabled: true,
+  customSsoConfig: {
+    mode: CustomSsoClientMode.Gateway,
+    orcas: { enabled: true },
+    subjectClaimCatalogVersion: 1 as const,
+    subjectClaims: [SubjectClaim.SubjectIdentifier],
     validRedirectUrls: ["https://gateway.example.com"],
   },
-  isDelete: false,
-  createTime: new Date("2026-01-01T00:00:00Z"),
-  updateTime: new Date("2026-01-01T00:00:00Z"),
-} satisfies CustomSsoClientRuntimeDto;
+  customSsoConfigVersion: 7,
+};
 
 test("delegates once and maps the completed Gateway Local Session", async () => {
-  const getClientByCode = mock(async () => client);
-  const isAllowed = mock(() => true);
+  const findRuntimeRecord = mock(async () => client);
   const completeGatewayLogin = mock(async () => ({
     orcasSessionId: "orcas-session",
+    state: "opaque-state",
     token: "local-token",
   }));
   const useCase = createCompleteSsoCallbackUseCase({
     authorizationGrants: { completeGatewayLogin },
-    clients: { getClientByCode },
-    redirectUrls: { isAllowed },
+    clients: { findRuntimeRecord },
   });
 
   await expect(useCase.execute({
@@ -53,12 +49,17 @@ test("delegates once and maps the completed Gateway Local Session", async () => 
     },
   })).resolves.toEqual({
     orcasSessionId: "orcas-session",
+    state: "opaque-state",
     token: "local-token",
   });
 
   expect(completeGatewayLogin).toHaveBeenCalledTimes(1);
   expect(completeGatewayLogin).toHaveBeenCalledWith({
-    client,
+    client: {
+      clientCode: "gateway",
+      configVersion: 7,
+      orcasEnabled: true,
+    },
     code: "auth-code",
     redirectUrl: "https://gateway.example.com/home",
     requestContext: {
@@ -73,44 +74,67 @@ test("delegates once and maps the completed Gateway Local Session", async () => 
   });
 });
 
-test("rejects an unknown client before redirect validation or Gateway login completion", async () => {
-  const isAllowed = mock(() => true);
-  const completeGatewayLogin = mock(async () => ({
-    orcasSessionId: null,
-    token: "should-not-exist",
-  }));
-  const useCase = createCompleteSsoCallbackUseCase({
-    authorizationGrants: { completeGatewayLogin },
-    clients: { getClientByCode: mock(async () => null) },
-    redirectUrls: { isAllowed },
+describe("current Gateway client state", () => {
+  test.each([
+    ["missing", null],
+    ["disabled", { ...client, customSsoEnabled: false }],
+    ["deleted", { ...client, isDelete: true }],
+    ["maintenance", { ...client, status: ClientStatus.Maintenance }],
+    ["unconfigured", { ...client, customSsoConfig: null }],
+    ["Independent mode", {
+      ...client,
+      customSsoConfig: {
+        mode: CustomSsoClientMode.Independent,
+        callbackEndpoint: "https://gateway.example.com/sso/callback",
+        logoutEndpoint: "https://gateway.example.com/sso/logout",
+        subjectClaimCatalogVersion: 1 as const,
+        subjectClaims: [SubjectClaim.SubjectIdentifier],
+        validRedirectUrls: ["https://gateway.example.com"],
+      },
+    }],
+  ])("rejects %s before Gateway login completion", async (_name, currentClient) => {
+    const completeGatewayLogin = mock(async () => ({
+      orcasSessionId: null,
+      token: "should-not-exist",
+    }));
+    const useCase = createCompleteSsoCallbackUseCase({
+      authorizationGrants: { completeGatewayLogin },
+      clients: { findRuntimeRecord: mock(async () => currentClient) },
+    });
+
+    await expect(useCase.execute({
+      clientCode: "gateway",
+      code: "auth-code",
+      redirectUrl: "https://gateway.example.com",
+    })).rejects.toThrow("非法client代码");
+
+    expect(completeGatewayLogin).not.toHaveBeenCalled();
   });
-
-  await expect(useCase.execute({
-    clientCode: "missing",
-    code: "auth-code",
-    redirectUrl: "https://gateway.example.com",
-  })).rejects.toThrow("非法client代码");
-
-  expect(isAllowed).not.toHaveBeenCalled();
-  expect(completeGatewayLogin).not.toHaveBeenCalled();
 });
 
-test("rejects a disallowed redirect before Gateway login completion", async () => {
-  const completeGatewayLogin = mock(async () => ({
-    orcasSessionId: null,
-    token: "should-not-exist",
-  }));
+test("delegates the literal redirect to the grant without reapplying a redirect pattern", async () => {
+  const completeGatewayLogin = mock(async () => {
+    throw new Error("grant redirect mismatch");
+  });
   const useCase = createCompleteSsoCallbackUseCase({
     authorizationGrants: { completeGatewayLogin },
-    clients: { getClientByCode: mock(async () => client) },
-    redirectUrls: { isAllowed: mock(() => false) },
+    clients: { findRuntimeRecord: mock(async () => client) },
   });
 
   await expect(useCase.execute({
     clientCode: "gateway",
     code: "auth-code",
     redirectUrl: "https://blocked.example.com",
-  })).rejects.toThrow("非法重定向地址");
+  })).rejects.toThrow("grant redirect mismatch");
 
-  expect(completeGatewayLogin).not.toHaveBeenCalled();
+  expect(completeGatewayLogin).toHaveBeenCalledWith({
+    client: {
+      clientCode: "gateway",
+      configVersion: 7,
+      orcasEnabled: true,
+    },
+    code: "auth-code",
+    redirectUrl: "https://blocked.example.com",
+    requestContext: undefined,
+  });
 });

@@ -49,6 +49,11 @@ describe("audit action catalog", () => {
     expect(getAuditActionLabel("admin.login_restriction.release")).toBe("解除临时登录限制");
     expect(values).toContain("admin.client.oidc.configure");
     expect(values).toContain("admin.client.oidc.rotate_secret");
+    expect(values).toContain("admin.client.custom_sso.configure");
+    expect(values).toContain("admin.client.custom_sso.enable");
+    expect(values).toContain("admin.client.custom_sso.disable");
+    expect(values).toContain("admin.client.custom_sso.remove");
+    expect(values).toContain("admin.client.custom_sso.rotate_secret");
     expect(values).not.toContain("auth.login.password.failure");
   });
 });

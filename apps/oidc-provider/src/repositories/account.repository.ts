@@ -10,14 +10,14 @@ export function createOidcAccountRepository(db: DbClient) {
     async findBySubject(subject: string) {
       const [row] = await db.select({
         id: users.id,
-        oidcSubject: users.oidcSubject,
+        subjectIdentifier: users.subjectIdentifier,
         username: users.username,
         name: users.name,
         mobile: users.mobile,
         status: users.status,
         isDelete: users.isDelete,
       }).from(users).where(and(
-        eq(users.oidcSubject, subject),
+        eq(users.subjectIdentifier, subject),
         eq(users.status, UserStatus.Enable),
         eq(users.isDelete, false),
       )).limit(1);
@@ -30,7 +30,7 @@ export function createOidcAccountRepository(db: DbClient) {
     async findById(id: number) {
       const [row] = await db.select({
         id: users.id,
-        oidcSubject: users.oidcSubject,
+        subjectIdentifier: users.subjectIdentifier,
         username: users.username,
         name: users.name,
         mobile: users.mobile,

@@ -1,3 +1,6 @@
+import {
+  CustomSsoSubjectProjectionV1Schema,
+} from "@api/services/sso/custom-sso-subject.schema";
 import { z } from "@hono/zod-openapi";
 
 export const SSOMetaInfoSchema = z.object({
@@ -14,3 +17,9 @@ export const SSOMetaInfoSchema = z.object({
     example: "https://iam.example.com/sso/thirdparty/oa",
   }),
 }).openapi("SSOMetaInfo");
+
+export const SsoTokenResultSchema = z.object({
+  sid: z.string().min(1),
+  ttl: z.number().int().positive(),
+  subject: CustomSsoSubjectProjectionV1Schema,
+}).strict().openapi("SsoTokenResult");

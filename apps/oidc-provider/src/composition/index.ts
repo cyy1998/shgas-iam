@@ -4,7 +4,7 @@ import type { OidcProviderEnv } from "../env.ts";
 import type { OidcLogger } from "../lib/logger.ts";
 import type { SigningKey } from "../security/signing-keys.ts";
 import { SystemLogEvent } from "@iam/api-core/logger";
-import { closeDb } from "@iam/db";
+import db, { closeDb } from "@iam/db";
 import { createLogger } from "../lib/logger.ts";
 import { createProviderRedis } from "../lib/redis.ts";
 import { loadSigningKeys } from "../security/signing-keys.ts";
@@ -32,7 +32,8 @@ export async function createOidcProviderComposition(options: CreateOidcProviderC
   const redis = options.redis ?? createProviderRedis(options.env);
   const signingKeys = options.signingKeys
     ?? await loadSigningKeys(options.env.oidc.currentJwkJson, options.env.oidc.previousJwkJson);
-  const repositories = createOidcProviderRepositories(options.dbClient);
+  const dbClient = options.dbClient ?? db;
+  const repositories = createOidcProviderRepositories(dbClient);
   const stores = createOidcProviderStores({ env: options.env, redis, repositories });
   const session = createOidcProviderSession({ env: options.env, redis, logger, repositories, stores });
   const security = createOidcProviderSecurity({ env: options.env, repositories, stores });
@@ -40,6 +41,7 @@ export async function createOidcProviderComposition(options: CreateOidcProviderC
     env: options.env,
     logger,
     redis,
+    db: dbClient,
     signingKeys,
     repositories,
     security,

@@ -1,6 +1,7 @@
 import type { AfterCommitLoggerPort, AfterCommitTask } from "./after-commit";
 import type { UnitOfWorkPort } from "./unit-of-work";
 import { createAfterCommitPort, runAfterCommitTasks } from "./after-commit";
+import { markTransactionRollbackConfirmed } from "./unit-of-work";
 
 const noopAfterCommitLogger: AfterCommitLoggerPort = {
   warn: () => undefined,
@@ -18,10 +19,17 @@ export function createImmediateUnitOfWork<TxPorts extends object>(
   return {
     async transaction(callback, transactionOptions) {
       const afterCommitTasks: AfterCommitTask[] = [];
-      const result = await callback({
-        ...txPorts,
-        ...createAfterCommitPort(afterCommitTasks),
-      });
+      let result: Awaited<ReturnType<typeof callback>>;
+      try {
+        result = await callback({
+          ...txPorts,
+          ...createAfterCommitPort(afterCommitTasks),
+        });
+      }
+      catch (error) {
+        markTransactionRollbackConfirmed(error);
+        throw error;
+      }
 
       await runAfterCommitTasks(
         afterCommitTasks,

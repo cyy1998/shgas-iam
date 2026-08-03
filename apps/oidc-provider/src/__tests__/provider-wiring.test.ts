@@ -29,13 +29,18 @@ describe("oIDC provider wiring", () => {
     expect(client.postLogoutRedirectUriAllowed("https://client.example/logout")).toBe(true);
   });
 
-  it("adds global session expiry to authorization code payloads without mutating the original list", () => {
+  it("keeps protocol-owned payload on loaded authorization codes and Provider Sessions", () => {
     class AuthorizationCode {}
+    class Session {}
     Object.defineProperty(AuthorizationCode, "IN_PAYLOAD", {
       configurable: true,
       value: ["foo"],
     });
-    const provider = { AuthorizationCode } as unknown as Provider;
+    Object.defineProperty(Session, "IN_PAYLOAD", {
+      configurable: true,
+      value: ["bar"],
+    });
+    const provider = { AuthorizationCode, Session } as unknown as Provider;
 
     registerProtocolModelPayloadExtensions(provider);
 
@@ -45,9 +50,18 @@ describe("oIDC provider wiring", () => {
 
     expect(authorizationCodeModel.IN_PAYLOAD).toEqual([
       "foo",
+      "authorizationAttemptId",
+      "claimsSnapshot",
       "globalSessionExpiresAt",
     ]);
     expect(authorizationCodeModel.IN_PAYLOAD).not.toBe(authorizationCodeModel.IN_PAYLOAD);
+    const sessionModel = provider.Session as unknown as typeof Session & { IN_PAYLOAD: string[] };
+    expect(sessionModel.IN_PAYLOAD).toEqual([
+      "bar",
+      "kernelPrincipalSessionId",
+      "providerSessionAnchorGeneration",
+    ]);
+    expect(sessionModel.IN_PAYLOAD).not.toBe(sessionModel.IN_PAYLOAD);
   });
 
   it("materializes client authentication security from explicit composition dependencies", async () => {

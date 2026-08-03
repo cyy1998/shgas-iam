@@ -40,6 +40,7 @@ describe("createAdminSessionRevocationPort", () => {
     });
 
     await port.revokeUserSessions({
+      subjectIdentifier: "00000000-0000-4000-8000-000000000001",
       userId: 1,
       reason: "admin_revoke",
       exceptPrincipalSessionId: "ps-current",
@@ -47,7 +48,10 @@ describe("createAdminSessionRevocationPort", () => {
     });
 
     expect(kernel.revokeUserSessions).toHaveBeenCalledWith(
-      { principalType: "user", subjectId: "1" },
+      {
+        principalType: "user",
+        subjectId: "00000000-0000-4000-8000-000000000001",
+      },
       "admin_revoke",
       { exceptPrincipalSessionId: "ps-current" },
     );

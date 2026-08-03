@@ -17,6 +17,7 @@ export interface LoginWithPasswordResult {
 
 export interface PasswordLoginUser {
   id: number;
+  subjectIdentifier: string;
   username: string;
   name?: string | null;
 }

@@ -228,6 +228,8 @@ describe("test orchestration", () => {
     const turbo = readJson(join(repoRoot, "turbo.json"));
 
     expect(rootPackage.scripts.test).toBe("turbo test --concurrency=2");
+    expect(rootPackage.scripts["test:external"])
+      .toBe("turbo test:external --concurrency=1");
     expect(rootPackage.scripts["test:smoke"]).toBe("turbo test:smoke --concurrency=1");
     expect(rootPackage.scripts.verify).toBe("node scripts/verify.mjs");
     expect(rootPackage.scripts["check:architecture"]).toBe("bun scripts/check-architecture.ts");
@@ -250,6 +252,16 @@ describe("test orchestration", () => {
       dependsOn: ["transit"],
       cache: false,
     });
+    expect(turbo.tasks["test:external"]).toEqual({
+      dependsOn: ["transit"],
+      cache: false,
+      passThroughEnv: [
+        "IAM_API_TEST_DATABASE_URL",
+        "IAM_API_TEST_REDIS_URL",
+        "IAM_OIDC_PROVIDER_TEST_DATABASE_URL",
+        "IAM_OIDC_PROVIDER_TEST_REDIS_URL",
+      ],
+    });
     expect(turbo.tasks["test:postgres"]).toEqual({
       dependsOn: ["transit"],
       cache: false,
@@ -257,6 +269,12 @@ describe("test orchestration", () => {
     expect(turbo.tasks["test:redis"]).toEqual({
       dependsOn: ["transit"],
       cache: false,
+      passThroughEnv: [
+        "IAM_API_CORE_TEST_REDIS_URL",
+        "IAM_API_TEST_REDIS_URL",
+        "IAM_OIDC_PROVIDER_TEST_REDIS_URL",
+        "IAM_USER_PROFILE_TEST_REDIS_URL",
+      ],
     });
     expect(turbo.tasks.e2e).toEqual({
       cache: false,
@@ -299,6 +317,8 @@ describe("test orchestration", () => {
     expect(oidcPackage.scripts.test).toBe("vitest run --config vitest.config.ts");
     expect(oidcPackage.scripts["test:smoke"])
       .toBe("vitest run --config vitest.smoke.config.ts");
+    expect(oidcPackage.scripts["test:external"])
+      .toBe("vitest run --config vitest.external.config.ts");
 
     for (const workspace of ["apps/admin", "apps/sso", "apps/oidc-provider"]) {
       const config = await readVitestTestConfig(workspace);
@@ -335,6 +355,10 @@ describe("test orchestration", () => {
     );
     expect(roleResolution.scripts["test:postgres"])
       .toBe("bun test --max-concurrency=1 test-postgres");
+    const dbPackage = readJson(join(repoRoot, "packages", "db", "package.json"));
+    expect(dbPackage.scripts.test).toBe("bun test --max-concurrency=2 src");
+    expect(dbPackage.scripts["test:postgres"])
+      .toBe("bun test --max-concurrency=1 test-postgres");
     const apiCore = readJson(join(apiCoreRoot, "package.json"));
     expect(apiCore.scripts["test:redis"])
       .toBe("bun test --max-concurrency=1 test-redis");
@@ -352,6 +376,17 @@ describe("test orchestration", () => {
     expect(smokeFiles).toContain("src/__tests__/entry.smoke.test.ts");
     expect(smokeFiles.every(file => file.endsWith(".smoke.test.ts"))).toBe(true);
     expect(ordinaryFiles.filter(file => smokeFiles.includes(file))).toEqual([]);
+    const entrySmokeSource = readFileSync(
+      join(oidcRoot, "src", "__tests__", "entry.smoke.test.ts"),
+      "utf8",
+    );
+    const externalEntrySource = readFileSync(
+      join(oidcRoot, "test-external", "entry.external.test.ts"),
+      "utf8",
+    );
+    expect(entrySmokeSource).not.toContain("IAM_OIDC_PROVIDER_TEST_");
+    expect(externalEntrySource).toContain("IAM_OIDC_PROVIDER_TEST_DATABASE_URL");
+    expect(externalEntrySource).toContain("IAM_OIDC_PROVIDER_TEST_REDIS_URL");
   }, 15_000);
 
   test("keeps shared process harness ordinary tests with API Core", () => {
@@ -416,8 +451,12 @@ describe("test orchestration", () => {
     expect(apiCorePackage.scripts["lint:fix"])
       .toBe("eslint --fix src test-smoke test-redis scripts eslint.config.js");
     expect(ordinaryFiles).toContain("src/testing/__tests__/process-smoke-harness.test.ts");
+    expect(ordinaryFiles).toContain(
+      "src/testing/__tests__/process-smoke-redis-server.test.ts",
+    );
     expect(redisFiles).toContain("test-redis/login-restriction.redis.test.ts");
     expect(smokeFiles).toContain("test-smoke/process-smoke-windows-job.smoke.test.ts");
+    expect(smokeFiles).toContain("test-smoke/process-smoke-redis-server.smoke.test.ts");
     expect(ordinaryFiles.filter(file => smokeFiles.includes(file))).toEqual([]);
     expect(ordinaryFiles.filter(file => redisFiles.includes(file))).toEqual([]);
     expect(smokeFiles.filter(file => redisFiles.includes(file))).toEqual([]);
@@ -479,7 +518,7 @@ describe("test orchestration", () => {
     );
   });
 
-  test("discovers API ordinary and process smoke tests in disjoint Bun lanes", () => {
+  test("discovers API ordinary, external, Redis, and process smoke tests in disjoint Bun lanes", () => {
     const apiPackage = readJson(join(apiRoot, "package.json"));
     const ordinaryFiles = [...new Bun.Glob("src/**/*.test.ts").scanSync({ cwd: apiRoot })]
       .map(file => file.replaceAll("\\", "/"))
@@ -487,22 +526,51 @@ describe("test orchestration", () => {
     const smokeFiles = [...new Bun.Glob("test-smoke/**/*.smoke.test.ts").scanSync({ cwd: apiRoot })]
       .map(file => file.replaceAll("\\", "/"))
       .sort();
+    const redisFiles = [...new Bun.Glob("test-redis/**/*.redis.test.ts").scanSync({ cwd: apiRoot })]
+      .map(file => file.replaceAll("\\", "/"))
+      .sort();
+    const externalFiles = [...new Bun.Glob("test-external/**/*.external.test.ts").scanSync({ cwd: apiRoot })]
+      .map(file => file.replaceAll("\\", "/"))
+      .sort();
     const dryRun = runPackageSmokeDryRun("@iam/api");
     const smokeTask = dryRun.tasks.find((task: { taskId: string }) => task.taskId === "@iam/api#test:smoke");
     const entrySmokeSource = readFileSync(join(apiRoot, "test-smoke", "entry.smoke.test.ts"), "utf8");
+    const externalEntrySource = readFileSync(
+      join(apiRoot, "test-external", "entry.external.test.ts"),
+      "utf8",
+    );
+    const redisHarnessSource = readFileSync(
+      join(apiRoot, "test-redis", "redis-test-harness.ts"),
+      "utf8",
+    );
 
     expect(apiPackage.scripts.test).toBe("bun test --max-concurrency=2 src");
+    expect(apiPackage.scripts["test:external"])
+      .toBe("bun test --max-concurrency=1 test-external");
+    expect(apiPackage.scripts["test:redis"]).toBe("bun test --max-concurrency=1 test-redis");
     expect(apiPackage.scripts["test:smoke"]).toBe("bun test --max-concurrency=1 test-smoke");
-    expect(apiPackage.scripts.lint).toBe("eslint src test-smoke app.config.ts eslint.config.js");
-    expect(apiPackage.scripts["lint:fix"]).toBe("eslint --fix src test-smoke app.config.ts eslint.config.js");
+    expect(apiPackage.scripts.lint).toBe("eslint src test-external test-postgres test-redis test-smoke app.config.ts eslint.config.js");
+    expect(apiPackage.scripts["lint:fix"]).toBe("eslint --fix src test-external test-postgres test-redis test-smoke app.config.ts eslint.config.js");
     expect(ordinaryFiles.length).toBeGreaterThan(0);
     expect(ordinaryFiles.every(file => !file.endsWith(".smoke.test.ts"))).toBe(true);
     expect(smokeFiles).toContain("test-smoke/entry.smoke.test.ts");
+    expect(redisFiles).toContain("test-redis/custom-sso-client-runtime.redis.test.ts");
+    expect(redisFiles).toContain("test-redis/admin-client-cache.redis.test.ts");
+    expect(externalFiles).toEqual(["test-external/entry.external.test.ts"]);
     expect(smokeFiles.every(file => file.endsWith(".smoke.test.ts"))).toBe(true);
     expect(ordinaryFiles.filter(file => smokeFiles.includes(file))).toEqual([]);
+    expect(ordinaryFiles.filter(file => redisFiles.includes(file))).toEqual([]);
+    expect(smokeFiles.filter(file => redisFiles.includes(file))).toEqual([]);
+    expect(redisHarnessSource).toContain("IAM_API_TEST_REDIS_URL");
+    expect(redisHarnessSource).toContain("no fallback is allowed");
+    expect(redisHarnessSource).not.toContain("IAM_API_REDIS_HOST");
+    expect(redisHarnessSource).not.toContain("IAM_API_REDIS_URL");
     expect(entrySmokeSource).toContain("createProcessSmokeEnvironment({");
     expect(entrySmokeSource).toContain("args: [\"--no-env-file\", \"run\", \"src/index.ts\"]");
     expect(entrySmokeSource).not.toContain("...process.env");
+    expect(entrySmokeSource).not.toContain("IAM_API_TEST_");
+    expect(externalEntrySource).toContain("IAM_API_TEST_DATABASE_URL");
+    expect(externalEntrySource).toContain("IAM_API_TEST_REDIS_URL");
     expect(smokeTask).toMatchObject({
       command: "bun test --max-concurrency=1 test-smoke",
       resolvedTaskDefinition: {
@@ -560,8 +628,10 @@ describe("test orchestration", () => {
 
     expect(workerPackage.scripts.test).toBe("bun test --max-concurrency=2 src");
     expect(workerPackage.scripts["test:smoke"]).toBe("bun test --max-concurrency=1 test-smoke");
-    expect(workerPackage.scripts.lint).toBe("eslint src test-smoke eslint.config.js");
-    expect(workerPackage.scripts["lint:fix"]).toBe("eslint --fix src test-smoke eslint.config.js");
+    expect(workerPackage.scripts.lint)
+      .toBe("eslint src test-postgres test-smoke eslint.config.js");
+    expect(workerPackage.scripts["lint:fix"])
+      .toBe("eslint --fix src test-postgres test-smoke eslint.config.js");
     expect(ordinaryFiles.length).toBeGreaterThan(0);
     expect(ordinaryFiles.every(file => !file.endsWith(".smoke.test.ts"))).toBe(true);
     expect(smokeFiles).toContain("test-smoke/entry.smoke.test.ts");
@@ -590,20 +660,27 @@ describe("test orchestration", () => {
       ),
       readFileSync(join(workerRoot, "test-smoke", "entry.smoke.test.ts"), "utf8"),
     ];
-    const packageLocalLifecycle = [
-      "createServer",
+    const packageLocalProcessLifecycle = [
       "recoverFromPortCollision",
       "runProcessSmoke",
       "terminateProcessTree",
-      "withOwnedTemporaryDirectory",
       "new Set<ProcessSmokeChild>",
     ];
 
     for (const source of entrySmokeSources) {
       expect(source).toContain("createProcessSmokeSuite({");
-      for (const lifecyclePrimitive of packageLocalLifecycle)
+      for (const lifecyclePrimitive of packageLocalProcessLifecycle)
         expect(source).not.toContain(lifecyclePrimitive);
     }
+
+    const apiEntrySmokeSource = entrySmokeSources[1]!;
+    expect(apiEntrySmokeSource).toContain(
+      "@iam/api-core/testing/external-test-resources",
+    );
+    expect(apiEntrySmokeSource).toContain(
+      "await runWithOwnedTestResources(async ({ registerCleanup }) => {",
+    );
+    expect(apiEntrySmokeSource).toContain("await observer.close()");
   });
 
   test("classifies in-memory OpenAPI HTTP checks as ordinary tests", () => {

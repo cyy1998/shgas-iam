@@ -2,7 +2,7 @@ import type { Configuration, interactionPolicy, KoaContextWithOIDC } from "oidc-
 import type { OidcProviderEnv } from "../env.ts";
 import type { SigningKey } from "../security/signing-keys.ts";
 import type { OidcClaimsAdapter } from "./claims.ts";
-import { OIDC_SUPPORTED_SCOPES } from "@iam/contracts";
+import { OIDC_SUPPORTED_SCOPES, OidcScope } from "@iam/contracts";
 
 export type ProviderConfigurationDependencies = {
   adapter: NonNullable<Configuration["adapter"]>;
@@ -30,11 +30,12 @@ export function createProviderConfiguration(
   return {
     adapter: dependencies.adapter,
     claims: {
-      "openid": ["sub"],
-      "profile": ["name", "preferred_username"],
-      "phone": ["phone_number"],
-      "iam:authorization": ["iam:authorization"],
-      "auth_time": null,
+      [OidcScope.OpenId]: ["sub"],
+      [OidcScope.Profile]: ["name", "preferred_username"],
+      [OidcScope.Phone]: ["phone_number"],
+      [OidcScope.IamEmployments]: [OidcScope.IamEmployments],
+      [OidcScope.IamAuthorization]: [OidcScope.IamAuthorization],
+      auth_time: null,
     },
     clientBasedCORS: (ctx, origin, client) => {
       if (ctx.oidc.route === "token" && client.clientAuthMethod !== "none")
@@ -86,10 +87,13 @@ export function createProviderConfiguration(
       userinfo: { enabled: true },
       webMessageResponseMode: { enabled: false },
     },
-    extraTokenClaims: async (_ctx, token) => {
+    extraTokenClaims: async (ctx, token) => {
       if (token.kind !== "AccessToken")
         return undefined;
-      const extra = await dependencies.claims.createAccessTokenExtra(token);
+      const extra = await dependencies.claims.createAccessTokenExtra(
+        token,
+        ctx.oidc.entities.AuthorizationCode,
+      );
       if (!extra)
         throw new Error("OIDC global session is unavailable");
       return extra;
@@ -110,7 +114,9 @@ export function createProviderConfiguration(
         : new ctx.oidc.provider.Grant({ accountId, clientId });
       if (!grant)
         return undefined;
-      const scope = typeof ctx.oidc.params?.scope === "string" ? ctx.oidc.params.scope : "openid";
+      const scope = typeof ctx.oidc.params?.scope === "string"
+        ? ctx.oidc.params.scope
+        : OidcScope.OpenId;
       grant.addOIDCScope(scope);
       await grant.save();
       return grant;

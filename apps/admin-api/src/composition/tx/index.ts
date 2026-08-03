@@ -5,17 +5,20 @@ import type {
   CreateUserProfileInvalidationDeps,
   UserProfileInvalidation,
 } from "@iam/user-profile-read-model/producer";
+import type { SubjectAccessTransitionRepository } from "@iam/user-profile-read-model/subject-access-transition";
 import type { AdminApiRepositories } from "../repositories";
 import type { AfterCommitLoggerPort, ClockPort } from "../runtime";
 import { createAdminAuditService } from "@admin-api/services/audit/audit.service";
 import { createUnitOfWork } from "@iam/api-core/uow";
 import db from "@iam/db";
 import { createUserProfileInvalidation } from "@iam/user-profile-read-model/producer";
+import { createSubjectAccessTransitionRepository } from "@iam/user-profile-read-model/subject-access-transition";
 import { createAdminApiRepositories } from "../repositories";
 
 export interface AdminApiTxPorts {
   repositories: AdminApiRepositories;
   auditService: AdminAuditService;
+  subjectAccessMutation: Pick<SubjectAccessTransitionRepository, "runMutation">;
   userProfileInvalidation: UserProfileInvalidation;
 }
 
@@ -36,6 +39,7 @@ export function createAdminApiUnitOfWork(
       return {
         repositories,
         auditService: createAdminAuditService({ auditRepository: repositories.audit }),
+        subjectAccessMutation: createSubjectAccessTransitionRepository(tx),
         userProfileInvalidation: createUserProfileInvalidation({
           db: tx,
           jobProducer: options.userProfileJobProducer,

@@ -1,14 +1,19 @@
 import type { Redis } from "ioredis";
 import type { Adapter, AdapterPayload } from "oidc-provider";
+import type { ProviderSessionLifecycleFence } from "../session/provider-session.ts";
 import type {
+  AdapterClaimsSnapshotIssuer,
   AdapterClientRuntimeReader,
   AdapterClientVersionReader,
   AdapterOidcSessionKernel,
   AdapterProviderSessionBindingStore,
   AdapterTokenRegistry,
 } from "./redis-adapter.port.ts";
+import { normalizeOidcProtocolScopes } from "../protocol/scopes.ts";
+import { OidcScopesSchema } from "../provider/claims-snapshot.ts";
 
 export interface RedisOidcAdapterDeps {
+  claims: AdapterClaimsSnapshotIssuer;
   clientVersions: AdapterClientVersionReader;
   oidcSession: AdapterOidcSessionKernel;
   providerSessions: AdapterProviderSessionBindingStore;
@@ -85,6 +90,11 @@ function payloadAccountId(payload: AdapterPayload) {
   return typeof payload.accountId === "string" ? payload.accountId : undefined;
 }
 
+function payloadString(payload: AdapterPayload, key: string) {
+  const value = (payload as Record<string, unknown>)[key];
+  return typeof value === "string" && value ? value : undefined;
+}
+
 export class RedisOidcAdapter implements Adapter {
   constructor(
     private readonly model: string,
@@ -92,18 +102,53 @@ export class RedisOidcAdapter implements Adapter {
     private readonly deps: RedisOidcAdapterDeps,
   ) {}
 
-  private async resolveProviderSessionBinding(payload: AdapterPayload) {
+  private async readOrConsumeProviderSessionBinding(accountId: string, sessionUid: string, clientId: string) {
+    const existing = await this.deps.providerSessions.read(sessionUid, clientId);
+    return existing?.accountId === accountId && existing.clientCode === clientId
+      ? existing
+      : null;
+  }
+
+  private async resolveAuthorizationCodeBinding(
+    payload: AdapterPayload,
+    oidcConfigVersion: number | undefined,
+  ) {
     const sessionUid = payloadSessionUid(payload);
-    if (!sessionUid)
+    const accountId = payloadAccountId(payload);
+    const clientId = payloadClientId(payload);
+    if (!sessionUid || !accountId || !clientId || oidcConfigVersion === undefined)
       return null;
 
-    const existing = await this.deps.providerSessions.read(sessionUid);
-    if (existing)
-      return existing;
-
-    const accountId = payloadAccountId(payload);
-    return accountId
-      ? await this.deps.providerSessions.consumeStaged(accountId, sessionUid)
+    const authorizationAttemptId = payloadString(payload, "authorizationAttemptId");
+    if (authorizationAttemptId) {
+      const staged = await this.deps.providerSessions.consumeStaged({
+        accountId,
+        authorizationAttemptId,
+        clientCode: clientId,
+        providerSessionUid: sessionUid,
+      });
+      return staged?.accountId === accountId
+        && staged.clientCode === clientId
+        && staged.oidcConfigVersion === oidcConfigVersion
+        ? staged
+        : null;
+    }
+    const anchor = await this.deps.providerSessions.readPrincipalAnchor(sessionUid, accountId);
+    if (!anchor)
+      return null;
+    const ensured = await this.deps.providerSessions.ensureClientBinding({
+      accountId,
+      anchorGeneration: anchor.generation,
+      clientCode: clientId,
+      oidcConfigVersion,
+      principalSessionId: anchor.principalSessionId,
+      providerSessionUid: sessionUid,
+    });
+    return ensured?.accountId === accountId
+      && ensured.clientCode === clientId
+      && ensured.oidcConfigVersion === oidcConfigVersion
+      && ensured.principalSessionId === anchor.principalSessionId
+      ? ensured
       : null;
   }
 
@@ -118,21 +163,92 @@ export class RedisOidcAdapter implements Adapter {
       return [clientId, version] as const;
     })));
     const clientId = payloadClientId(payload);
+    const oidcConfigVersion = clientId ? oidcConfigVersions[clientId] : undefined;
+    const protocolAccountId = payloadAccountId(payload);
+    const protocolSessionUid = payloadSessionUid(payload);
 
     const sessionBinding = this.model === "AuthorizationCode"
-      ? await this.resolveProviderSessionBinding(payload)
+      ? await this.resolveAuthorizationCodeBinding(payload, oidcConfigVersion)
       : null;
     const accessTokenBinding = this.model === "AccessToken"
-      ? await this.resolveProviderSessionBinding(payload)
+      && clientId
+      && protocolAccountId
+      && protocolSessionUid
+      ? await this.readOrConsumeProviderSessionBinding(
+          protocolAccountId,
+          protocolSessionUid,
+          clientId,
+        )
       : null;
-    if (this.model === "Session" && payload.uid && typeof payload.accountId === "string")
-      await this.deps.providerSessions.consumeStaged(payload.accountId, payload.uid);
+    const sessionAccountId = payloadAccountId(payload);
+    const providerSessionUid = typeof payload.uid === "string" ? payload.uid : undefined;
+    const sessionPrincipalAnchor = this.model === "Session" && sessionAccountId && providerSessionUid
+      ? await this.deps.providerSessions.readPrincipalAnchor(providerSessionUid, sessionAccountId)
+      : null;
+    const sessionBindings = this.model === "Session"
+      && sessionAccountId
+      && providerSessionUid
+      && !sessionPrincipalAnchor
+      ? await Promise.all(clientIds.map(clientCode => this.readOrConsumeProviderSessionBinding(
+          sessionAccountId,
+          providerSessionUid,
+          clientCode,
+        )))
+      : [];
+    if (this.model === "Session" && sessionAccountId && providerSessionUid && !sessionPrincipalAnchor) {
+      const principalSessionIds = new Set(sessionBindings.flatMap(binding => binding
+        ? [binding.principalSessionId]
+        : []));
+      if (typeof payload.kernelPrincipalSessionId === "string")
+        principalSessionIds.add(payload.kernelPrincipalSessionId);
+      if (principalSessionIds.size > 1)
+        throw new Error("OIDC provider session principal binding is inconsistent");
+    }
+    const sessionPrincipalSessionId = sessionPrincipalAnchor?.principalSessionId
+      ?? (typeof payload.kernelPrincipalSessionId === "string"
+        ? payload.kernelPrincipalSessionId
+        : sessionBindings.find(binding => binding)?.principalSessionId);
+    const sessionAnchorGeneration = sessionPrincipalAnchor?.generation
+      ?? sessionBindings.find(binding => binding)?.anchorGeneration
+      ?? payloadString(payload, "providerSessionAnchorGeneration");
+    if (this.model === "AuthorizationCode"
+      && (!clientId
+        || !sessionBinding
+        || typeof payload.accountId !== "string"
+        || typeof payload.sessionUid !== "string"
+        || typeof oidcConfigVersion !== "number")) {
+      throw new Error("OIDC authorization code provider-session binding is unavailable");
+    }
+    const claimsSnapshotScopes = this.model === "AuthorizationCode"
+      ? parseAuthorizationCodeScopes(payload)
+      : undefined;
+    const claimsSnapshot = this.model === "AuthorizationCode"
+      && clientId
+      && sessionBinding
+      && claimsSnapshotScopes
+      && typeof payload.accountId === "string"
+      && typeof payload.sessionUid === "string"
+      && typeof oidcConfigVersion === "number"
+      ? await this.deps.claims.createAuthorizationCodeSnapshot({
+          subjectIdentifier: payload.accountId,
+          clientId,
+          scopes: claimsSnapshotScopes,
+          oidcConfigVersion,
+          providerSessionUid: payload.sessionUid,
+          principalSessionId: sessionBinding.principalSessionId,
+          providerSessionBindingId: sessionBinding.bindingId,
+        })
+      : undefined;
+    const artifactPayload: AdapterPayload = {
+      ...payload,
+      ...(claimsSnapshot ? { claimsSnapshot } : {}),
+    };
     const tokenKey = key;
     const issuedCredential = this.model === "AccessToken"
       ? await this.deps.oidcSession.registerAccessTokenCredential({
           providerTokenId: id,
           providerTokenKey: tokenKey,
-          payload,
+          payload: artifactPayload,
           expiresIn,
           binding: accessTokenBinding,
         })
@@ -142,7 +258,7 @@ export class RedisOidcAdapter implements Adapter {
     if (this.model === "AuthorizationCode") {
       const registered = await this.deps.oidcSession.registerAuthorizationCodeArtifact({
         providerCodeId: id,
-        payload,
+        payload: artifactPayload,
         expiresIn,
         binding: sessionBinding,
       });
@@ -150,7 +266,9 @@ export class RedisOidcAdapter implements Adapter {
         throw new Error("OIDC authorization code Kernel artifact registration failed");
     }
     const stored: AdapterPayload = {
-      ...payload,
+      ...artifactPayload,
+      ...(this.model === "Session" && sessionPrincipalSessionId ? { kernelPrincipalSessionId: sessionPrincipalSessionId } : {}),
+      ...(this.model === "Session" && sessionAnchorGeneration ? { providerSessionAnchorGeneration: sessionAnchorGeneration } : {}),
       ...(clientId ? { clientId, oidcConfigVersion: oidcConfigVersions[clientId] } : {}),
       ...(clientIds.length ? { oidcConfigVersions } : {}),
       ...(sessionBinding ? { globalSessionExpiresAt: sessionBinding.expiresAt } : {}),
@@ -252,7 +370,21 @@ export class RedisOidcAdapter implements Adapter {
       await this.deps.tokens.revokeAccessToken(key);
     }
     else {
-      await this.redis.del(key, consumedKey(this.model, id));
+      const providerSession = this.model === "Session"
+        ? readProviderSessionReference(await this.redis.get(key))
+        : null;
+      if (providerSession) {
+        const destroyed = await this.deps.providerSessions.destroyProviderSession(
+          providerSession.uid,
+          providerSession.lifecycleFence,
+        );
+        if (!destroyed)
+          throw new Error("OIDC Provider Session anchor destroy conflicted");
+      }
+      await this.redis.del(
+        key,
+        consumedKey(this.model, id),
+      );
     }
   }
 
@@ -267,6 +399,14 @@ export class RedisOidcAdapter implements Adapter {
       await this.redis.del(...otherKeys, ...otherKeys.map(key => key.replace("oidc:model:", "oidc:consumed:")));
     await this.redis.del(indexKey);
   }
+}
+
+function parseAuthorizationCodeScopes(payload: AdapterPayload) {
+  const normalized = normalizeOidcProtocolScopes(payload);
+  const parsed = OidcScopesSchema.safeParse(normalized);
+  if (!parsed.success)
+    throw new Error("OIDC authorization code scopes are invalid");
+  return parsed.data;
 }
 
 class DynamicClientAdapter implements Adapter {
@@ -336,6 +476,35 @@ function readKernelCredentialId(serialized: string | null) {
     };
     const credentialId = payload.kernelCredentialId ?? payload.extra?.kernelCredentialId;
     return typeof credentialId === "string" ? credentialId : null;
+  }
+  catch {
+    return null;
+  }
+}
+
+function readProviderSessionReference(serialized: string | null) {
+  if (!serialized)
+    return null;
+  try {
+    const payload = JSON.parse(serialized) as {
+      kernelPrincipalSessionId?: unknown;
+      providerSessionAnchorGeneration?: unknown;
+      uid?: unknown;
+    };
+    if (typeof payload.uid !== "string" || !payload.uid)
+      return null;
+    let lifecycleFence: ProviderSessionLifecycleFence | null = null;
+    if (typeof payload.providerSessionAnchorGeneration === "string"
+      && typeof payload.kernelPrincipalSessionId === "string") {
+      lifecycleFence = {
+        generation: payload.providerSessionAnchorGeneration,
+        principalSessionId: payload.kernelPrincipalSessionId,
+      };
+    }
+    return {
+      uid: payload.uid,
+      ...(lifecycleFence ? { lifecycleFence } : {}),
+    };
   }
   catch {
     return null;

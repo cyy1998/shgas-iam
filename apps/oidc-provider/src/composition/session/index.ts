@@ -5,18 +5,25 @@ import type {
 import type { Redis } from "ioredis";
 import type { OidcProviderEnv } from "../../env.ts";
 import type { OidcLogger } from "../../lib/logger.ts";
-import type { OidcSessionKernelRedis } from "../../session/oidc-session-kernel.adapter.ts";
+import type { ProviderSessionStateRedis } from "../../session/provider-session-state.store.ts";
 import type { OidcProviderRepositories } from "../repositories/index.ts";
 import type { OidcProviderStores } from "../stores/index.ts";
+import { randomUUID } from "node:crypto";
 import { LoggerSourceApp } from "@iam/api-core/logger";
 import {
   createSessionKernel,
   createSessionKernelConfigFromEnv,
 } from "@iam/api-core/session/kernel";
 import {
+  createRedisSubjectAccessStore,
+  createSubjectAccessBarrier,
+  createSubjectAccessPrincipalValidator,
+} from "@iam/api-core/subject-access";
+import {
   createOidcSessionKernelAdapter,
   createOidcSessionKernelCleanupAdapter,
 } from "../../session/oidc-session-kernel.adapter.ts";
+import { createProviderSessionStateStore } from "../../session/provider-session-state.store.ts";
 
 export interface CreateOidcProviderSessionDeps {
   env: OidcProviderEnv;
@@ -45,16 +52,25 @@ export function createOidcProviderSessionKernelConfig(env: OidcProviderEnv) {
   };
 }
 
+function createOidcProviderSubjectAccess(
+  deps: Pick<CreateOidcProviderSessionDeps, "redis">,
+) {
+  return createSubjectAccessBarrier({
+    clock: { nowDate: () => new Date() },
+    random: { uuid: randomUUID },
+    store: createRedisSubjectAccessStore({
+      redis: deps.redis,
+    }),
+  });
+}
+
 export function createOidcProviderSession(deps: CreateOidcProviderSessionDeps) {
+  const subjectAccess = createOidcProviderSubjectAccess(deps);
+  const providerSessionState = createProviderSessionStateStore(
+    deps.redis as unknown as ProviderSessionStateRedis,
+  );
+  const subjectAccessPrincipal = createSubjectAccessPrincipalValidator(subjectAccess);
   const validationHooks: SessionKernelValidationHooks = {
-    async validatePrincipal(session) {
-      const userId = Number.parseInt(session.principal.subjectId, 10);
-      if (!Number.isSafeInteger(userId))
-        return { ok: false, reason: "user_deleted", message: "invalid user subject" };
-      return await deps.repositories.account.findById(userId)
-        ? { ok: true }
-        : { ok: false, reason: "user_disabled", message: "OIDC principal is unavailable" };
-    },
     async validateClient(object) {
       if (!object.clientCode)
         return { ok: true };
@@ -80,7 +96,11 @@ export function createOidcProviderSession(deps: CreateOidcProviderSessionDeps) {
   const kernel = createSessionKernel({
     redis: deps.redis as SessionKernelRedis,
     config: createOidcProviderSessionKernelConfig(deps.env),
-    cleanupAdapters: createOidcSessionKernelCleanupAdapter({ redis: deps.redis }),
+    cleanupAdapters: createOidcSessionKernelCleanupAdapter({
+      providerSessionState,
+      redis: deps.redis,
+    }),
+    principalAccessFence: subjectAccessPrincipal,
     validationHooks,
     logger: deps.logger,
     sourceApp: LoggerSourceApp.OidcProvider,
@@ -88,7 +108,7 @@ export function createOidcProviderSession(deps: CreateOidcProviderSessionDeps) {
 
   const adapter = createOidcSessionKernelAdapter({
     kernel,
-    redis: deps.redis as unknown as OidcSessionKernelRedis,
+    providerSessionState,
     logger: deps.logger,
     accounts: deps.repositories.account,
     clients: deps.stores.clientRuntime,
@@ -99,6 +119,7 @@ export function createOidcProviderSession(deps: CreateOidcProviderSessionDeps) {
   return {
     kernel,
     oidcSession: adapter,
+    subjectAccess,
   };
 }
 

@@ -5,6 +5,8 @@ import { ApiErrorCode, UserStatus, UserType } from "@iam/contracts";
 import { describe, expect, mock, test } from "bun:test";
 import { createLoginWithMobileUseCase } from "../login-with-mobile.use-case";
 
+const subjectIdentifier = "00000000-0000-4000-8000-000000001001";
+
 const userDetail = {
   id: 1001,
   username: "138550",
@@ -40,7 +42,7 @@ function temporaryRestriction(
 function createFixture(overrides: {
   codeValid?: boolean;
   restriction?: ReturnType<typeof temporaryRestriction> | null;
-  user?: { id: number; name: string } | null;
+  user?: { id: number; subjectIdentifier: string; name: string } | null;
 } = {}) {
   const auditLogs: LoginWithMobileDeps["auditLogWriter"] extends {
     recordAuditLog: (input: infer T) => Promise<void>;
@@ -76,7 +78,7 @@ function createFixture(overrides: {
     principalSessions: { createPrincipalSession },
     users: {
       getActiveUserByMobile: mock(async () => overrides.user === undefined
-        ? { id: userDetail.id, name: userDetail.name }
+        ? { id: userDetail.id, name: userDetail.name, subjectIdentifier }
         : overrides.user),
       getUserDetailById: mock(async () => userDetail),
     },
@@ -124,7 +126,7 @@ describe("createLoginWithMobileUseCase", () => {
     expect(fixture.consumeVerificationCode).toHaveBeenCalledWith("login", userDetail.mobile, "1234");
     expect(fixture.getRestriction).toHaveBeenCalledWith(userDetail.id);
     expect(fixture.clearLoginState).toHaveBeenCalledWith(userDetail.id);
-    expect(fixture.createPrincipalSession).toHaveBeenCalledWith(userDetail, {
+    expect(fixture.createPrincipalSession).toHaveBeenCalledWith(subjectIdentifier, {
       amr: ["sms"],
       origin: {
         ip: "203.0.113.12",

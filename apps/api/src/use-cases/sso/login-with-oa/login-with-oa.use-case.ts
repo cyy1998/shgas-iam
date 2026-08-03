@@ -34,7 +34,7 @@ export function createLoginWithOaUseCase(deps: LoginWithOaDeps) {
       throw new LoginFailedError("用户类别不支持OA登录");
     }
     const userDetail = await deps.users.getUserDetailById(liveUser.id);
-    const { token: sessionId } = await deps.principalSessions.createPrincipalSession(userDetail, {
+    const { token: sessionId } = await deps.principalSessions.createPrincipalSession(liveUser.subjectIdentifier, {
       amr: ["oa"],
       origin: toSessionOrigin(options.requestContext),
     });

@@ -36,7 +36,7 @@ export const SessionManagementSessionVoSchema = z.object({
   principalSessionId: z.string().min(1),
   user: z.object({
     id: z.int().positive().nullable(),
-    subjectId: z.string().min(1),
+    subjectId: z.uuid(),
     username: z.string().nullable(),
     name: z.string().nullable(),
     accountStatus: z.enum(AdminSessionAccountStatus),

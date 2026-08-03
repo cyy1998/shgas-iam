@@ -1,0 +1,28 @@
+{
+  "name": "@iam/client-subject-projection",
+  "type": "module",
+  "version": "0.0.1",
+  "private": true,
+  "exports": {
+    ".": "./src/index.ts",
+    "./custom-sso": "./src/custom-sso.ts",
+    "./testing": "./src/testing.ts"
+  },
+  "scripts": {
+    "lint": "eslint src eslint.config.js",
+    "lint:fix": "eslint --fix src eslint.config.js",
+    "test": "bun test --max-concurrency=2 src",
+    "typecheck": "pnpm exec tsc --noEmit"
+  },
+  "dependencies": {
+    "@iam/contracts": "workspace:*",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@iam/eslint-config": "workspace:*",
+    "@types/bun": "latest",
+    "@typescript/native": "npm:typescript@7.0.2",
+    "eslint": "^10.7.0",
+    "typescript": "npm:@typescript/typescript6@6.0.2"
+  }
+}

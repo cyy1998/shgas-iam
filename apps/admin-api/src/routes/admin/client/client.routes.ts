@@ -2,7 +2,8 @@ import {
   ClientAdminDetailDtoSchema,
   ClientAdminListDtoSchema,
   ClientCreateDtoSchema,
-  ClientDtoSchema,
+  ClientCustomSsoConfigureDtoSchema,
+  ClientCustomSsoMutationResultSchema,
   ClientInputDtoSchema,
   ClientOidcConfigureDtoSchema,
   ClientOidcMutationResultSchema,
@@ -45,7 +46,7 @@ export const clientCreate = createRoute({
   },
   responses: {
     ...commonErrorResponses,
-    [HttpStatusCodes.OK]: jsonContent(createSuccessResponseSchema(ClientDtoSchema), "创建客户端成功"),
+    [HttpStatusCodes.OK]: jsonContent(createSuccessResponseSchema(ClientAdminDetailDtoSchema), "创建客户端成功"),
   },
 });
 
@@ -72,7 +73,7 @@ export const clientUpdate = createRoute({
   },
   responses: {
     ...commonErrorResponses,
-    [HttpStatusCodes.OK]: jsonContent(createSuccessResponseSchema(ClientDtoSchema), "更新客户端成功"),
+    [HttpStatusCodes.OK]: jsonContent(createSuccessResponseSchema(ClientAdminDetailDtoSchema), "更新客户端成功"),
   },
 });
 
@@ -120,7 +121,11 @@ export const clientOidcConfigure = createRoute({
   },
 });
 
-function createOidcActionRoute(path: string, description: string) {
+function createClientProtocolActionRoute<T extends z.ZodSchema>(
+  path: string,
+  description: string,
+  resultSchema: T,
+) {
   return createRoute({
     method: "post",
     path,
@@ -128,17 +133,71 @@ function createOidcActionRoute(path: string, description: string) {
     request: { params: z.object({ clientCode: z.string() }) },
     responses: {
       ...commonErrorResponses,
-      [HttpStatusCodes.OK]: jsonContent(createSuccessResponseSchema(ClientOidcMutationResultSchema), description),
+      [HttpStatusCodes.OK]: jsonContent(
+        createSuccessResponseSchema(resultSchema),
+        description,
+      ),
     },
   });
 }
 
-export const clientOidcEnable = createOidcActionRoute("/:clientCode/oidc/enable", "OIDC 启用成功");
-export const clientOidcDisable = createOidcActionRoute("/:clientCode/oidc/disable", "OIDC 禁用成功");
-export const clientOidcRemove = createOidcActionRoute("/:clientCode/oidc/remove", "OIDC 配置移除成功");
-export const clientOidcRotateSecret = createOidcActionRoute(
+export const clientOidcEnable = createClientProtocolActionRoute(
+  "/:clientCode/oidc/enable",
+  "OIDC 启用成功",
+  ClientOidcMutationResultSchema,
+);
+export const clientOidcDisable = createClientProtocolActionRoute(
+  "/:clientCode/oidc/disable",
+  "OIDC 禁用成功",
+  ClientOidcMutationResultSchema,
+);
+export const clientOidcRemove = createClientProtocolActionRoute(
+  "/:clientCode/oidc/remove",
+  "OIDC 配置移除成功",
+  ClientOidcMutationResultSchema,
+);
+export const clientOidcRotateSecret = createClientProtocolActionRoute(
   "/:clientCode/oidc/rotate-secret",
   "OIDC secret 轮换成功",
+  ClientOidcMutationResultSchema,
+);
+
+export const clientCustomSsoConfigure = createRoute({
+  method: "put",
+  path: "/:clientCode/custom-sso/configure",
+  tags,
+  request: {
+    params: z.object({ clientCode: z.string() }),
+    body: jsonContentRequired(ClientCustomSsoConfigureDtoSchema, "Custom SSO 配置"),
+  },
+  responses: {
+    ...commonErrorResponses,
+    [HttpStatusCodes.OK]: jsonContent(
+      createSuccessResponseSchema(ClientCustomSsoMutationResultSchema),
+      "Custom SSO 配置成功",
+    ),
+  },
+});
+
+export const clientCustomSsoEnable = createClientProtocolActionRoute(
+  "/:clientCode/custom-sso/enable",
+  "Custom SSO 启用成功",
+  ClientCustomSsoMutationResultSchema,
+);
+export const clientCustomSsoDisable = createClientProtocolActionRoute(
+  "/:clientCode/custom-sso/disable",
+  "Custom SSO 禁用成功",
+  ClientCustomSsoMutationResultSchema,
+);
+export const clientCustomSsoRemove = createClientProtocolActionRoute(
+  "/:clientCode/custom-sso/remove",
+  "Custom SSO 配置移除成功",
+  ClientCustomSsoMutationResultSchema,
+);
+export const clientCustomSsoRotateSecret = createClientProtocolActionRoute(
+  "/:clientCode/custom-sso/rotate-secret",
+  "Custom SSO secret 轮换成功",
+  ClientCustomSsoMutationResultSchema,
 );
 
 export const clientCreateLegacy = createRoute({
@@ -150,7 +209,7 @@ export const clientCreateLegacy = createRoute({
   },
   responses: {
     ...commonErrorResponses,
-    [HttpStatusCodes.OK]: jsonContent(createSuccessResponseSchema(ClientDtoSchema), "创建客户端成功"),
+    [HttpStatusCodes.OK]: jsonContent(createSuccessResponseSchema(ClientAdminDetailDtoSchema), "创建客户端成功"),
   },
 });
 
@@ -163,6 +222,6 @@ export const clientUpdateLegacy = createRoute({
   },
   responses: {
     ...commonErrorResponses,
-    [HttpStatusCodes.OK]: jsonContent(createSuccessResponseSchema(ClientDtoSchema), "更新客户端成功"),
+    [HttpStatusCodes.OK]: jsonContent(createSuccessResponseSchema(ClientAdminDetailDtoSchema), "更新客户端成功"),
   },
 });

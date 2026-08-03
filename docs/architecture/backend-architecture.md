@@ -80,7 +80,9 @@ composition。跨层实例连接统一由 composition 完成。
   callback 暴露的是同一个 registration port；`mapUnitOfWork` 必须保留该 registration API。
 - 一个 workflow 只拥有一个 UnitOfWork transaction boundary。嵌套 UnitOfWork 不受支持，因为 inner commit 可能在
   outer transaction 回滚前执行 after-commit tasks。
-- 外部 side effect 不在数据库 transaction callback 内直接执行；应在 callback 外执行，或注册为 after-commit task。
+- 外部 side effect 默认不在数据库 transaction callback 内直接执行；应在 callback 外执行，或注册为
+  after-commit task。唯一已批准的例外是下述 Custom SSO Client runtime pre-commit coordination fence；
+  不得把该例外扩展到通知、Session 撤销、业务 cache 写入或其他不可逆作用。
   Task 只在 transaction 成功提交后按注册顺序运行：
   - `required`：失败会记录 error；所有 task 尝试完成后，required failures 聚合为
     `AfterCommitRequiredTaskError` 返回给调用方。
@@ -90,6 +92,11 @@ composition。跨层实例连接统一由 composition 完成。
   rebuild wake-up 等可恢复动作使用 `bestEffort`。
 - `UnitOfWorkTransactionOptions.observability` 携带当前 `requestId`、`traceId`。它同时传给 transaction-port factory
   和 after-commit logger；下层模块不重新解析 protocol context。
+- `RegisterPurveyorContactUseCase` 的同手机号 create-or-attach 规则由 transaction-bound user port
+  `lockPurveyorContactMobile` 串行化。Production repository 使用 operation-specific key 的
+  PostgreSQL transaction advisory lock，并在新建和复用联系人两条 transaction 路径中都先取锁、再查询手机号。
+  当前 schema 有意不把所有用户手机号提升为全局唯一约束：手机号可空且其他用户写流程并不共享该 upsert 语义；
+  新增任何供应商联系人数据库写入口时必须复用同一 lock key/用例，而不能绕过该并发边界。
 
 ## 请求、审计与可观测上下文
 
@@ -106,6 +113,52 @@ composition。跨层实例连接统一由 composition 完成。
   integration port；不得依赖隐藏的全局 request state，也不得在叶子模块重复解析 headers。
 
 ## 关键模块所有权
+
+### Client Subject Projection
+
+- `@iam/client-subject-projection` 通过单一 `ClientSubjectProjectionService.resolve` Interface 隐藏 Catalog
+  校验、Subject Facts 读取、client 裁剪、稳定排序与投影组装。调用方只提交 Subject Identifier、`clientCode` 和
+  `SubjectClaimSelection`；facts/access/freshness dependencies 只在 factory 处注入。
+- Subject Facts port 只暴露显式 Profile 与当前有效任职事实，不暴露 Legacy User Detail。普通 Profile claim
+  可以使用最后发布事实；选择 `iam:authorization` 时，Module 根据 facts source version 调用 Authorization
+  Freshness port。该 port 可以确认当前 facts、返回一次重载后的 facts，或报告 not-ready；Module 在组装任何已选
+  claim 前采用已确认版本，无法证明新鲜时返回 `SubjectProjectionNotReadyError`。
+- 核心投影保持协议中性。Custom SSO V1 wire mapper 通过独立 package subpath 消费公开投影 Interface，负责
+  `version`、嵌套父对象、null/空数组和字段白名单规则；它只能通过 package root public Interface 取得 Projection
+  类型或能力，不得导入其他 core subpath、Facts persistence、client 配置、runtime 或 transport。
+- `@iam/user-profile-read-model/subject-facts` 提供同时满足 Facts 与 Freshness ports 的 deep reader：有效 Redis
+  record 直读；miss、损坏或未知 schema 按 Subject single-flight 查询一行窄 `user_profile` 并以版本 CAS 回填；
+  查询不读取 Legacy `detail`/`search_doc` 或联查源业务表。严格授权每次只从 PostgreSQL 读取权威 Dirty version/status，
+  仅 `processed` 且版本相等时放行；缓存落后时最多重载一次 Profile。普通 Profile 不读取 Dirty。
+- API production composition 已把 Projection Module 接入 Custom SSO Independent token exchange、
+  `/public/user-info` 和 Gateway `/auth/authz`。前两者按当前 Client selection 输出 Custom SSO V1 wire；
+  `/auth/authz` 强制收窄为 Subject Identifier 与可选 username/name，并把同一 Base64 值写入 body/header。
+  Gateway Local Session 解析形成最小 Subject/client/ORCAS 认证数据，并携带仅供服务端竞态校验的 config version；
+  该版本不进入 projection 或 wire。投影前后都复查当前 Client/config version。Client runtime 使用带 generation
+  与 mutation fence 的 Redis read-through cache：positive/negative TTL 分别为 30 秒/3 秒，mutation fence 为
+  120 秒；既有 Client 的 Admin mutation 在持有 Client row lock 后原子写 fence、递增 generation 并删除 cache，
+  commit 后按 token 完成。完成失败时读取保持 fail-closed，fence 自然过期后因旧 cache 已删除而从 PostgreSQL
+  自动收敛。新建 Client 尚无可锁的行，不使用 pre-commit fence；它在 commit 后通过 `afterCommit.required`
+  递增 generation 并删除 cache，晚到的旧 generation publish 会被拒绝。若该 invalidation 不可用，既有 negative
+  cache 只会继续 fail closed 并在最多 3 秒 TTL 后收敛。
+  这是 Transactions 规则中唯一的 pre-commit 外部协调例外，必须同时满足：
+  - fence 只保存有界 TTL 的随机 ownership token，不承载业务事实；受保护的 runtime reader 在 fence 存在或状态
+    无法确认时 fail closed。
+  - 只有既有 Client mutation 使用该例外；transaction 先取得 Client row lock，再在任何业务写入前建立 fence；
+    建立失败必须让 transaction 回滚。Client create 不得在无 row lock 时建立 fence。
+  - mutation 全程续租 heartbeat，并在 callback 返回、允许 commit 前再次确认 ownership；ownership 丢失必须回滚。
+  - 只有 UnitOfWork 已确认 rollback 时，才在 transaction 外停止 heartbeat 并按 token abort；成功路径只通过
+    `afterCommit.required` 停止 heartbeat 并按同一 token complete。commit 结果不确定或 after-commit 失败时只停止
+    heartbeat、保留 fence，不能把它误当成 rollback 后 abort。abort/complete 失败不得开放读取，只能由 TTL 与
+    generation 收敛。
+  - begin、abort、complete 对 generation、cache 与 ownership 的变更必须由 Redis 原子脚本完成；其他 Redis/cache、
+    通知和 Session 副作用仍遵守普通 transaction/afterCommit 规则。
+  Subject Facts cache hit 热路径不访问 PostgreSQL。OIDC Provider production composition 已注入同一 Projection
+  Module，并在 Authorization Code 持久化前按当前 client、scope、config version 与 Provider Session binding 创建严格
+  Claims Snapshot；Access Token 只转移该快照，UserInfo/ID Token 只重放并复验快照，不重新读取当前主体事实。
+  Subject Access Barrier 已接入 API、Admin API 与 OIDC Provider 的 Session Kernel principal validation hook。
+  API 的 Custom SSO retryable error adapter 将 Projection Not Ready 与 Subject Access unavailable 分别映射为稳定
+  `503` code 和配置的 `Retry-After`，不复用于 OIDC。
 
 ### 角色分配解析
 
@@ -133,6 +186,77 @@ composition。跨层实例连接统一由 composition 完成。
   composition 不创建或暴露这些 projection implementations。
 - `recordChanges` 成功表示 dirty fact 已在 source transaction 持久化并登记 rebuild wake-up，不表示 BullMQ 已完成
   入队。提交后的批量 enqueue 是 best-effort；失败由日志和 repair 路径恢复，不回滚业务事实。
+
+### User Profile Subject Facts publication
+
+- Worker claim 在 transaction 外绑定 candidate 的 Dirty Version。Builder 只投影当前有效任职、岗位和直属组织，
+  通过 `@iam/role-assignment-resolution` 的唯一 Effective Role seam 取得 assignment/closure 结果，再按不可变
+  `clientCode` 形成最小 Subject Facts；organization path、client、role 和 privilege 均稳定排序，无角色任职保留空
+  authorization 数组。
+- PostgreSQL publication 是模块内部 deep seam：transaction 先对目标 dirty row 取行锁并重验同一 user/version 仍为
+  processing，再单调 upsert/delete `user_profile`，最后在同一 transaction 标记 dirty processed。过期 candidate
+  或低于已发布 `source_dirty_version` 的 candidate 直接丢弃。
+- PostgreSQL 提交后，Worker 才把一个 versioned Subject record 发布到 Redis。Redis CAS 以规范十进制字符串比较
+  Dirty Version，原子保留较新记录；缓存失败的结构化 warning 只记录 user、Dirty Version、`cacheStatus` 及严格
+  白名单化的 error type/code。原始 error、message、stack、Redis command/args 和 Subject Facts record 不进入日志。
+  `cacheStatus=failed` 同时进入 processor 结果和 Worker 完成日志，不执行数据库补偿。
+  自动恢复由 Subject Facts Reader 的 read-through/cache repair 负责；Reader 只在缓存未命中或不可解析时读取
+  `user_profile` 窄行，并继续使用同一版本 CAS publisher。Facts cache 发布成功后，Worker 还通过注入的
+  Subject Access repair port 尝试收敛对应账号；repair 失败不回滚已经提交的 Profile 或 Dirty 状态。
+- API 与 OIDC composition 为同一 Reader 注入 `subject_facts.operation.observed` logger adapter。事件只含
+  `operation`、`outcome`、`durationMs`：区分 cache hit/miss/invalid、Profile/Dirty load、single-flight wait 和
+  authorization freshness；不得包含 Subject Identifier、Facts/Dirty payload、Redis key 或 Token。observer 失败不会
+  改变认证结果。
+
+### Subject Access Barrier
+
+- `@iam/api-core/subject-access` 是账号实时可访问性的唯一共享 seam。公开 Barrier 只接受严格版本化的
+  `enabled`、`blocking`、`disabled` record；缺失、非法内容、Redis 失败和 `blocking` 都 fail closed。
+  Redis adapter 独占 record、transition journal、repair ZSET 与 Lua 原子转换；rollback/finalize 只接受同一
+  transition ID，repair 不从缺失 record 创建 `enabled`。普通 package export 只暴露 Barrier/lifecycle/repair
+  factory、稳定错误和配置所需 port；record serializer、atomic store 结果和 Lua mechanics 保持模块私有。
+  Barrier 写 adapter 的基础设施异常统一收敛为无 cause 的 `SubjectAccessWriteUnavailableError`，domain conflict
+  仍使用 `SubjectAccessTransitionRejectedError`，原始 Redis error/message 不跨越写接口。
+- API、Admin API 与 OIDC Provider 的 Session Kernel composition 都注入同一个 principal validator 形状，因此
+  Principal Session、Client Binding 和 Credential 解析在返回调用方前检查 Barrier。`disabled` 形成
+  `user_disabled` validation failure 并级联撤销；不确定状态直接传播中性 unavailable error，不触发撤销。
+  API/Admin HTTP adapter 分别映射为 `401 / SESSION_INVALID`（清 Cookie）或
+  `503 / SUBJECT_ACCESS_UNAVAILABLE`（不清 Cookie）。所有浏览器 Cookie 删除都带原创建路径 `Path=/`、
+  epoch `Expires` 与 `Max-Age=0`。OIDC provider middleware 和原生 interaction handler 在协议边界分别映射
+  disabled 为 `login_required`（UserInfo 为 `invalid_token`），unavailable 为
+  `temporarily_unavailable`；只有 disabled 清除全局 Cookie。
+- Admin 用户创建、状态变更、删除与离职 use case 复用同一 lifecycle coordinator：数据库 mutation 前原子
+  pre-block，回滚时恢复转换前状态；pre-block 前先独立持久化窄 PostgreSQL transition intent，实际 domain mutation
+  与精确 intent 的 `FOR UPDATE`/committed outcome 处于同一 transaction，因此被回收的旧 owner 会在 domain write 前
+  被 status fence 拒绝。禁用类提交后 finalize `disabled` 再 best-effort 撤销 Principal Sessions。lifecycle
+  disposition 可以由 transaction 结果决定；Admin 状态更新使用 transaction 内的 old/new 状态，同态更新
+  `restore_previous`，实际新启用保持 `blocking`，直到当前版本 Subject Facts 发布成功并由 repair finalize `enabled`。
+- Worker repair 以 Redis ZSET 为可索引 backlog，通过 PostgreSQL `user` 状态/删除标记核对账号权威状态；启用账号
+  还必须证明 `user_profile` 与 processed Dirty version 一致、严格解析 Facts，并成功执行版本 CAS 发布。
+  worker 用单个 Lua claim 原子领取所有到期成员并把 score 推进到 lease deadline；并发 worker 不重复领取，
+  crash 后 lease 到期重试。deferred/failed 仅在 record 仍是同一 blocking transition 时重排，stable ack 与新
+  pre-block 原子线性化，因此旧 worker 不能删除或推迟新 transition。
+  从仅有 `idx:repair` 的旧部署滚动升级时，claim Lua 对缺失的 `idx:repair:age` member 做原子惰性补齐，不能因
+  指标索引尚未迁移而阻断 repair。旧 entry 的精确首次入队时间不可恢复；迁移后的 entered-at 定义为“当前 legacy
+  调度 score 与新 owner 首次观察到的 Redis server time 中较早者”，后续 lease/backoff 只推进调度索引，不重置该 age。
+  `user-profile:repair` 的 Subject Access 路径严格分三阶段：先用 PostgreSQL server time 与
+  `IAM_WORKER_USER_PROFILE_REPAIR_STALE_SECONDS` 阈值，在单条写事务中按 `update_time`、`id` 有界选取最多
+  `--limit` 个 stale `pending` intent，以 `FOR UPDATE SKIP LOCKED` 跳过活跃 writer 并原子改为
+  `rolled_back`/`rollback`；该扫描覆盖 Redis 尚未索引的 PG-only gap。之后处理 Redis transition recovery，最后
+  运行上述 authority repair。PostgreSQL reaper 失败时命令 fail closed，不执行后续 Redis recovery 或 authority repair。
+  `--subject-access-only` 使用不创建 BullMQ Queue、不执行 User Profile maintenance 的窄 command composition，
+  但它不是 PostgreSQL 只读路径，也不局限于 indexed Barrier backlog；Worker DB role 必须具有 schema access 以及
+  `subject_access_transition` 的 `SELECT`、`UPDATE` 权限，并保留 authority repair 所需读权限。默认模式在 transition
+  recovery 后并行执行 Dirty maintenance 与 authority repair；`--stale-before` 只影响 Dirty row，不改变 PG-only
+  transition 使用的 server-time threshold。
+  仓库不内置 scheduler；部署 owner 必须按文档化恢复 SLO 配置外部周期、stale threshold、`--limit`、重复排空和告警，
+  并把 threshold、等待下一轮调度和有界排空三段最坏耗时计入 SLO。
+  结构化监控以 `Subject Access stale transition intent reap started` 的 `limit`、`staleAfterSeconds`，
+  `Subject Access stale transition intents reaped` 的 `rolledBack`、`limit`、`staleAfterSeconds`，
+  `Subject Access transition recovery backlog processed` 的 `prepared`、`rolledBack`、`deferred`、`failed`、
+  `limit`，以及 `Subject Access repair backlog processed` 的 `disabled`、`enabled`、`deferred`、`failed`、
+  `stable`、`limit` 为准；非零退出或 start 后缺少完成日志表示该轮未完成。请求路径、cache warmer 和 read-through
+  都不得把缺失或不确定 Barrier 推断为启用。
 
 ### Session runtime 与跨 App 边界
 
@@ -209,15 +333,27 @@ composition。跨层实例连接统一由 composition 完成。
   三个 use case 分别只消费 `AuthorizationCodeIssuerPort`、`IndependentAuthorizationGrantPort` 和
   `GatewayLoginCompletionPort`。
 - `custom-sso-session-kernel.adapter.ts` 是 Custom SSO deep module implementation。它拥有一次性 grant resolution、
-  PrincipalSession 与实时用户校验、Independent Client Credential、Gateway Local Session、ORCAS、私有 payload、
-  audit 和失败补偿；共同的 resolved grant 只存在于 implementation 内。
+  PrincipalSession 与实时用户校验、Independent Client Credential、Gateway Local Session、ORCAS、最小 Kernel
+  metadata、audit 和失败补偿；共同的 resolved grant 只存在于 implementation 内。运行时不读取、规范化或删除
+  Legacy 私有 payload，所有 credential/session 都只保存严格版本化的最小 Kernel metadata。
+- Grant 固化已验证的 literal redirect、client mode/config version 与可选 opaque state。Gateway callback 通过
+  callback-owned 窄 Client context 重新确认当前全局状态、Custom SSO 启用态、Gateway mode、ORCAS 配置与
+  config version；该 context 不暴露通用 Client Secret。redirect 或版本错误在 reservation 前拒绝，因此错误
+  callback 不烧码。
+- Gateway 与 Independent 共用独立 Grant redemption state machine。`begin` 通过 attempt fence 保证并发兑换只有
+  一个赢家；reserved 工作由 heartbeat 定期续租，renew 必须匹配 grant、attempt 和上一 lease deadline，且只延长
+  lease、不延长 Grant 原始 expiry。Independent 只有 Credential 签发、按当前 Client/Subject Access 复核并完成
+  投影后才 consume；Gateway 只有最小 Local Session、可选 ORCAS 和当前 Client 复核成功后才 consume。消费前
+  失败按语义 release，并补偿已创建的 binding/credential；消费后 Session Kernel artifact 清理和成功审计是
+  best-effort after-effect。
 - Production adapter 通过 TypeScript structural typing 直接满足上述三个 consumer-owned ports。Composition 只注入
   ORCAS 所需的最窄 `CustomSsoOrcasLoginPort`，不得增加 behaviorless wrapper，也不得恢复公开
   `consumeAuthCode → createLocalSession` 两阶段 interface。
 - SSO route 只拥有 HTTP query/header/Cookie 解析、response envelope、Gateway/ORCAS Cookie、redirect query 和
   status 适配，不接触 Session Kernel 模型，也不编排 grant、credential、session、ORCAS 或补偿步骤。
-- 兼容性标识由 deep module implementation 持有。现有 Redis key、payload version、credential discriminator、
-  audit action 和 active session payload normalization 不因 module interface 收缩而重命名或迁移。
+- 现有 Redis key、credential discriminator 和 audit action 不因 module interface 收缩而重命名。维护窗口中的旧 key
+  清理由独立运维命令负责；production composition 不注册旧 active session payload reader、normalizer 或 client logout
+  notifier。
 
 ## Runtime-specific Composition
 
@@ -232,6 +368,29 @@ composition。跨层实例连接统一由 composition 完成。
 - Provider composition 可以显式接收 repositories、stores、security 和 session facades。Claims、interaction policy
   与 interaction handler 直接消费 `session.oidcSession`，不得通过 `services.globalSessionResolver` 或等价 services
   alias 二次分类。
+- Claims composition 组合 Subject Access、Subject Facts Reader 与 Client Subject Projection。每个 Provider Session
+  binding 以 `(sessionUid, clientCode)` 独立归属；Authorization Code 必须先取得同 client binding 并成功生成严格
+  Claims Snapshot，失败时不得持久化 Code。Provider Session 的 authoritative Principal anchor 只由已验证 binding
+  建立，Session payload 中的 `kernelPrincipalSessionId` 与 `providerSessionAnchorGeneration` 只是该 anchor 的协议镜像。
+  同账号 Principal Session 轮换时，
+  interaction policy 只通过窄 port 比较当前或本次已 stage 的 Principal。stage 必须以 oidc-provider 的 `Interaction.uid`
+  作为 authorization attempt identity，并绑定 account、client 与已知的 Provider Session uid；首次流程尚无 uid 时显式记录
+  `null`。Authorization Code payload 携带同一 attempt identity，Code adapter 通过 Lua 一次性校验并 claim 对应 stage，不能以
+  account/client 猜测 stage，也不能用分离的 `GET`/`DEL` 消费。
+- Code adapter claim stage 后，由 Session Kernel binding store 以 anchor generation CAS 原子发布新 anchor 与当前 client
+  mapping；并发轮换中只有读取同一旧 generation 的一个 attempt 可以提交。静默补建 client binding 只能在读取到的同一
+  generation 上 CAS mapping，不能重写或回滚较新的 Principal anchor。发布使用 attempt/mapping owner 幂等确认：Redis 已
+  提交但响应丢失时确认现有 owner 并继续；只有确认未提交时才补偿撤销新 binding，结果仍不确定时保留 binding 等待 TTL，
+  不得撤销可能已提交的 owner。旧 binding cleanup 必须按 mapping owner compare-delete，并从对应 generation membership
+  移除自身；只有该 generation 的最后一个 member 清理且它仍是当前 anchor 时才删除 anchor，不得删除其他 client mapping 或
+  后来的 generation。Session artifact 销毁只有同时持有匹配的 Principal Session 与 anchor generation mirror 时才能删除
+  authoritative anchor；旧 payload 缺少任一 mirror 时必须 fail-safe no-op，由 bounded TTL 或后续完整 payload 的精确清理收敛。
+- 同一 Provider Session 对新 client 静默授权时，Code adapter 必须按精确 session UID/account 读取 authoritative anchor，
+  经 Session Kernel 重新校验 Principal、Subject Access Barrier、account 和当前 client config，再创建该 client 的独立
+  binding。anchor 不等价于 binding，也不得绕过这些校验。
+- Access Token、UserInfo 与 ID Token 复用 Authorization Code 的 Claims Snapshot，并校验 subject、client、scopes、
+  Provider Session、Principal Session 与 binding ownership；撤销一个 client lifecycle 不得删除同一 Provider Session
+  下其他 client 的 binding。
 - `composition/workers` 是 client invalidation subscriber 的唯一 runtime owner。它创建 Redis subscriber，并只注入
   `oidcSession`、token store 和 protocol-object store 的最窄 client revocation 能力。单条消息的 cleanup failure
   记录 structured warning，不反向进入 client update transaction。

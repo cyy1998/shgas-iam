@@ -21,10 +21,14 @@ export function buildAuthorizeUrl(
   cfg: AuthConfig,
   redirectUrl: string,
   client: string,
+  state?: string,
 ): string {
   const r = encodeURIComponent(redirectUrl);
   const c = encodeURIComponent(client);
-  return `${cfg.authorizationEndpoint}?redirectUrl=${r}&client=${c}`;
+  const stateQuery = state === undefined
+    ? ''
+    : `&state=${encodeURIComponent(state)}`;
+  return `${cfg.authorizationEndpoint}?redirectUrl=${r}&client=${c}${stateQuery}`;
 }
 
 export function buildLogoutUrl(

@@ -3,6 +3,10 @@ import type { ApiRequestContext } from "@api/services/audit/audit.context";
 import type { AuditLogWriterPort } from "@api/services/audit/audit.service";
 import type { MobileVerificationCodeReservation } from "@api/services/mobile/mobile.type";
 import type { PrivilegeDelegationDto } from "@api/services/privilege/privilegeDelegation.type";
+import type {
+  SubjectAccessMutationReceipt,
+  SubjectAccessTransitionTarget,
+} from "@iam/api-core/subject-access";
 import type { UnitOfWorkPort } from "@iam/api-core/uow";
 import type {
   User,
@@ -50,6 +54,7 @@ export interface UserMobileVerificationPort {
 
 export interface UserStorePort {
   getUserById: (userId: number) => Promise<User | null>;
+  getUserBySubjectIdentifier: (subjectIdentifier: string) => Promise<User | null>;
   getUserByUsername: (username: string) => Promise<User | null>;
   getUserByWxId: (wxId: string) => Promise<User | null>;
   getUserByMobile: (mobile: string) => Promise<User | null>;
@@ -77,6 +82,32 @@ export interface UserRequestOptions {
   requestContext?: ApiRequestContext;
 }
 
+export interface ApiSubjectAccessLifecyclePort {
+  run: <T>(input: {
+    subjectIdentifier: string;
+    disposition: "disabled" | "awaiting_publication";
+    mutate: (receipt: SubjectAccessMutationReceipt) => Promise<T>;
+    revokeSessions?: (
+      result: T,
+      context: {
+        invalidatedSubjectAccessTransitionId: string;
+      },
+    ) => Promise<unknown>;
+    observability?: {
+      requestId?: string;
+      traceId?: string;
+    };
+  }) => Promise<T>;
+}
+
+export interface ApiUserSessionRevocationPort {
+  revokeUserSessions: (input: {
+    subjectIdentifier: string;
+    reason: "user_disabled";
+    onlySubjectAccessTransitionId: string;
+  }) => Promise<unknown>;
+}
+
 export interface UserPasswordHelperDeps {
   passwordHasher: PasswordHasherPort;
 }
@@ -89,6 +120,13 @@ export interface UserSearchWithDelegationsResult {
 export interface UserTransactionPorts {
   userRepository: UserTransactionStorePort;
   auditLogWriter: AuditLogWriterPort;
+  subjectAccessMutation: {
+    runMutation: <T>(
+      receipt: SubjectAccessMutationReceipt,
+      mutation: () => Promise<T>,
+      resolveTarget: (result: T) => SubjectAccessTransitionTarget,
+    ) => Promise<T>;
+  };
   userProfileInvalidation: {
     recordChanges: (changes: readonly ApiUserProfileChange[]) => Promise<void>;
   };
@@ -118,5 +156,7 @@ export interface UserServiceDeps {
     hashUserPassword: (password: string) => Promise<string>;
     verifyUserPassword: (user: { password: string | null }, inputPassword: string) => Promise<boolean>;
   };
+  sessionRevocation: ApiUserSessionRevocationPort;
+  subjectAccessLifecycle: ApiSubjectAccessLifecyclePort;
   uow: UserUnitOfWorkPort;
 }

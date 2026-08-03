@@ -1,3 +1,4 @@
+import type { SessionKernelArtifactConsumer } from "./artifact-consumption";
 import type { SessionKernelConfig } from "./config";
 import type { SessionKernelKeyBuilder } from "./keys";
 import type {
@@ -7,7 +8,13 @@ import type {
   ProtocolArtifact,
   RevokedTombstone,
 } from "./model";
-import type { ResolveResult } from "./result";
+import type {
+  ConsumedReplayResult,
+  LifecycleFailureResult,
+  ResolvedResult,
+  ResolveResult,
+  RevokedResult,
+} from "./result";
 import { createLookupHashCandidates } from "./hmac";
 import {
   parseLifecycleObject,
@@ -19,6 +26,10 @@ import { failClosed } from "./result";
 import { ttlMsUntil } from "./time";
 
 type RedisResult = [Error | null, unknown];
+
+type StoredResolveResult<T>
+  = | LifecycleFailureResult
+    | (ResolvedResult<T> & { serialized: string });
 
 export type SessionKernelRedisTransaction = {
   set: (key: string, value: string) => SessionKernelRedisTransaction;
@@ -41,7 +52,11 @@ export type SessionKernelRedis = {
   zrem: (key: string, member: string) => Promise<unknown>;
   zremrangebyscore: (key: string, min: string | number, max: string | number) => Promise<number>;
   multi: () => SessionKernelRedisTransaction;
-  eval?: (script: string, keyCount: number, ...args: unknown[]) => Promise<unknown>;
+  eval?: (
+    script: string,
+    keyCount: number,
+    ...args: Array<number | string>
+  ) => Promise<unknown>;
   ttl?: (key: string) => Promise<number>;
   expire?: (key: string, seconds: number) => Promise<number>;
 };
@@ -59,12 +74,28 @@ export class SessionKernelStore {
     private readonly redis: SessionKernelRedis,
     private readonly keys: SessionKernelKeyBuilder,
     private readonly config: SessionKernelConfig,
+    private readonly artifactConsumer: SessionKernelArtifactConsumer,
   ) {}
 
   async resolveByExternalToken<K extends ExternalKind>(
     kind: K,
     externalToken: string,
   ): Promise<ResolveResult<LifecycleObjectByKind[K]>> {
+    return withoutSerialized(
+      await this.resolveStoredByExternalToken(kind, externalToken),
+    );
+  }
+
+  async resolveArtifactForConsumption(
+    externalToken: string,
+  ): Promise<StoredResolveResult<ProtocolArtifact>> {
+    return await this.resolveStoredByExternalToken("artifact", externalToken);
+  }
+
+  private async resolveStoredByExternalToken<K extends ExternalKind>(
+    kind: K,
+    externalToken: string,
+  ): Promise<StoredResolveResult<LifecycleObjectByKind[K]>> {
     const now = this.config.clock.now();
     for (const candidate of createLookupHashCandidates(externalToken, this.config)) {
       const lookupTombstone = await this.readTombstoneKey(this.keys.lookupTombstone(kind, candidate.lookupHash));
@@ -77,7 +108,7 @@ export class SessionKernelStore {
       if (!id)
         continue;
 
-      const resolved = await this.resolveObject(kind, id, now);
+      const resolved = await this.resolveStoredObject(kind, id, now);
       if (resolved.status === "resolved") {
         const objectLookupHash = lookupHashForResolvedObject(resolved.value);
         if (objectLookupHash !== candidate.lookupHash) {
@@ -100,6 +131,14 @@ export class SessionKernelStore {
     id: string,
     now = this.config.clock.now(),
   ): Promise<ResolveResult<LifecycleObjectByKind[K]>> {
+    return withoutSerialized(await this.resolveStoredObject(kind, id, now));
+  }
+
+  private async resolveStoredObject<K extends LifecycleObjectKind>(
+    kind: K,
+    id: string,
+    now: number,
+  ): Promise<StoredResolveResult<LifecycleObjectByKind[K]>> {
     const tombstone = await this.readTombstoneKey(this.keys.tombstone(kind, id));
     if (tombstone.status === "schema_invalid")
       return tombstone;
@@ -121,7 +160,7 @@ export class SessionKernelStore {
     }
     if (parsed.data.expiresAt <= now)
       return { status: "missing_or_expired" };
-    return { status: "resolved", value: parsed.data };
+    return { status: "resolved", value: parsed.data, serialized };
   }
 
   async putObject<K extends LifecycleObjectKind>(input: {
@@ -208,6 +247,7 @@ export class SessionKernelStore {
 
   async consumeArtifact(input: {
     artifact: ProtocolArtifact;
+    serializedArtifact: string;
     tombstone: RevokedTombstone;
   }): Promise<ResolveResult<ProtocolArtifact>> {
     const existing = await this.readTombstoneKey(this.keys.tombstone("artifact", input.artifact.artifactId));
@@ -216,16 +256,17 @@ export class SessionKernelStore {
     if (existing.status === "revoked")
       return tombstoneResolveResult(existing.tombstone);
 
-    const transaction = this.redis.multi()
-      .set(this.keys.tombstone("artifact", input.artifact.artifactId), stringifyRevokedTombstone(input.tombstone))
-      .pexpireat(this.keys.tombstone("artifact", input.artifact.artifactId), input.tombstone.expiresAt)
-      .set(this.keys.lookupTombstone("artifact", input.artifact.lookupHash), stringifyRevokedTombstone(input.tombstone))
-      .pexpireat(this.keys.lookupTombstone("artifact", input.artifact.lookupHash), input.tombstone.expiresAt)
-      .del(this.keys.active("artifact", input.artifact.artifactId))
-      .del(this.keys.lookup("artifact", input.artifact.lookupHash));
+    const tombstoneKey = this.keys.tombstone("artifact", input.artifact.artifactId);
+    const result = await this.artifactConsumer.consume(input);
+    if (result === "consumed")
+      return { status: "resolved", value: input.artifact };
 
-    await assertTransaction(transaction.exec());
-    return { status: "resolved", value: input.artifact };
+    const tombstone = await this.readTombstoneKey(tombstoneKey);
+    if (tombstone.status === "schema_invalid")
+      return tombstone;
+    if (tombstone.status === "revoked")
+      return tombstoneResolveResult(tombstone.tombstone);
+    return { status: "missing_or_expired" };
   }
 
   async readIndex(key: string, now = this.config.clock.now()) {
@@ -274,11 +315,31 @@ export class SessionKernelStore {
   }
 }
 
+function withoutSerialized<T>(
+  result: StoredResolveResult<T>,
+): ResolveResult<T> {
+  if (result.status !== "resolved")
+    return result;
+  if (result.lookupKeyId === undefined) {
+    return {
+      status: "resolved",
+      value: result.value,
+    };
+  }
+  return {
+    status: "resolved",
+    value: result.value,
+    lookupKeyId: result.lookupKeyId,
+  };
+}
+
 function isExternalKind(kind: LifecycleObjectKind): kind is ExternalKind {
   return kind === "principal_session" || kind === "credential" || kind === "artifact";
 }
 
-function tombstoneResolveResult<T>(tombstone: RevokedTombstone): ResolveResult<T> {
+function tombstoneResolveResult(
+  tombstone: RevokedTombstone,
+): ConsumedReplayResult | RevokedResult {
   if (tombstone.objectKind === "artifact" && tombstone.reason === "consumed")
     return { status: "consumed_replay", tombstone };
   return { status: "revoked", tombstone };

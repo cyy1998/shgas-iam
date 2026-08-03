@@ -21,7 +21,7 @@ const firstPageSessions = [
     principalSessionId: 'ps-current',
     user: {
       id: 42,
-      subjectId: '42',
+      subjectId: '00000000-0000-4000-8000-000000000042',
       username: 'zhangsan',
       name: '张三',
       accountStatus: 'normal',
@@ -42,7 +42,7 @@ const firstPageSessions = [
     principalSessionId: 'ps-deleted',
     user: {
       id: 43,
-      subjectId: '43',
+      subjectId: '00000000-0000-4000-8000-000000000043',
       username: 'deleted-user',
       name: '已删除用户',
       accountStatus: 'deleted',
@@ -60,7 +60,7 @@ const secondPageSession = {
   principalSessionId: 'ps-page-two',
   user: {
     id: null,
-    subjectId: 'legacy-user',
+    subjectId: '00000000-0000-4000-8000-999999999999',
     username: null,
     name: null,
     accountStatus: 'unknown',
@@ -336,7 +336,11 @@ test('valid sessions support navigation, exact user filtering, pagination, and m
   await expect(page.getByText('登录来源仅供调查参考')).toBeVisible();
 
   await page.locator('.ant-pagination-next').click();
-  await expect(page.getByText('legacy-user')).toBeVisible();
+  await expect(
+    page.getByText(
+      '无用户名 · ID 00000000-0000-4000-8000-999999999999',
+    ),
+  ).toBeVisible();
   await expect(page.getByText('未知').first()).toBeVisible();
   await expect.poll(() => inputs.at(-1)?.pageNum).toBe(2);
 

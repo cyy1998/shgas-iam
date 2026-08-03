@@ -51,6 +51,7 @@ describe("oIDC provider configuration", () => {
     assert.equal(configuration.features?.jwtUserinfo?.enabled, false);
     assert.equal(configuration.features?.rpInitiatedLogout?.enabled, true);
     assert.equal(configuration.scopes?.includes("offline_access"), false);
+    assert.deepEqual(configuration.claims?.["iam:employments"], ["iam:employments"]);
     assert.deepEqual(configuration.claims?.["iam:authorization"], ["iam:authorization"]);
     assert.equal(configuration.cookies?.long?.secure, false);
     assert.equal(configuration.cookies?.short?.secure, false);
@@ -96,5 +97,29 @@ describe("oIDC provider configuration", () => {
       "https://evil.example",
       publicClient as never,
     ), false);
+  });
+
+  it("passes the consumed Authorization Code to the Access Token snapshot transfer", async () => {
+    const received: unknown[][] = [];
+    const configuration = createProviderConfiguration(env as never, {
+      adapter: () => emptyAdapter,
+      claims: {
+        createAccessTokenExtra: async (...args: unknown[]) => {
+          received.push(args);
+          return { claimsSnapshot: { claims: { sub: "subject-a" } } };
+        },
+        findAccount: async () => undefined,
+      } as never,
+      currentSigningKey: { jwk: { kty: "RSA", kid: "current", alg: "RS256" } } as SigningKey,
+      interactionPolicy: interactionPolicy.base(),
+    });
+    const code = { kind: "AuthorizationCode", claimsSnapshot: { claims: { sub: "subject-a" } } };
+    const token = { kind: "AccessToken" };
+
+    await configuration.extraTokenClaims?.({
+      oidc: { entities: { AuthorizationCode: code } },
+    } as never, token as never);
+
+    assert.deepEqual(received, [[token, code]]);
   });
 });

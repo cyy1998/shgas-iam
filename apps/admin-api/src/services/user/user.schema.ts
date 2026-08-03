@@ -32,6 +32,7 @@ export const UserAdminCreateDtoSchema = SharedUserSchema.partial().required({
   userType: true,
 }).omit({
   id: true,
+  subjectIdentifier: true,
   isDelete: true,
   createTime: true,
   updateTime: true,

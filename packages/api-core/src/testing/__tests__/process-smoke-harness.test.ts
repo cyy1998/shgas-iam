@@ -8,12 +8,14 @@ import { existsSync } from "node:fs";
 import { access, writeFile } from "node:fs/promises";
 import { PassThrough } from "node:stream";
 import {
+  createBoundedProcessLogCapture,
   createProcessSmokeEnvironment,
   createProcessSmokeSuite,
   FatalReadinessError,
   PortCollisionError,
   ProcessSmokeError,
   recoverFromPortCollision,
+  runProcessCommandSmoke,
   runProcessSmoke,
   terminateProcessByPid,
   terminateProcessTree,
@@ -182,6 +184,84 @@ describe("process smoke harness", () => {
     expect(failure.message).toContain("output truncated");
     expect(failure.message).not.toContain("discard-me");
     expect(failure.message).toContain("useful-tail");
+  });
+
+  it("captures successful process telemetry with an explicit byte bound", () => {
+    const child = new FakeChild();
+    const capture = createBoundedProcessLogCapture(child, { maxBytes: 64 });
+
+    child.stdout.write(`discard-me:${"x".repeat(128)}\n`);
+    child.stdout.write("useful-telemetry-tail");
+
+    expect(capture.snapshot()).toContain("output truncated");
+    expect(capture.snapshot()).not.toContain("discard-me");
+    expect(capture.snapshot()).toContain("useful-telemetry-tail");
+
+    capture.dispose();
+    const disposedSnapshot = capture.snapshot();
+    child.stdout.write("must-not-be-captured");
+    expect(capture.snapshot()).toBe(disposedSnapshot);
+  });
+
+  it("accepts a zero-exit command and returns its bounded output", async () => {
+    const child = new FakeChild();
+    const completion = runProcessCommandSmoke({
+      label: "successful-command",
+      start: () => child,
+      stop: stopFakeChild,
+      completionTimeoutMs: 100,
+      cleanupTimeoutMs: 50,
+    });
+
+    queueMicrotask(() => {
+      child.stdout.write("repair completed");
+      child.finish(0);
+    });
+
+    await expect(completion).resolves.toEqual({
+      exitCode: 0,
+      output: expect.stringContaining("repair completed"),
+    });
+  });
+
+  it("reports a non-zero command exit with bounded diagnostics", async () => {
+    const child = new FakeChild();
+    const completion = runProcessCommandSmoke({
+      label: "failed-command",
+      start: () => child,
+      stop: stopFakeChild,
+      completionTimeoutMs: 100,
+      cleanupTimeoutMs: 50,
+    });
+
+    queueMicrotask(() => {
+      child.stderr.write("repair failed safely");
+      child.finish(17);
+    });
+
+    const failure = await captureFailure(completion);
+    expect(failure).toBeInstanceOf(ProcessSmokeError);
+    expect(failure.message).toContain("expected exit code 0, received 17");
+    expect(failure.message).toContain("repair failed safely");
+  });
+
+  it("times out a command that never exits and still cleans its process tree", async () => {
+    const child = new FakeChild();
+    let cleaned = false;
+    const failure = await captureFailure(runProcessCommandSmoke({
+      label: "stuck-command",
+      start: () => child,
+      async stop(processChild) {
+        cleaned = true;
+        await stopFakeChild(processChild);
+      },
+      completionTimeoutMs: 5,
+      cleanupTimeoutMs: 50,
+    }));
+
+    expect(failure).toBeInstanceOf(ProcessSmokeError);
+    expect(failure.message).toContain("completion deadline exceeded after 5ms");
+    expect(cleaned).toBe(true);
   });
 
   it("drains output emitted between exit and close before reporting failure", async () => {

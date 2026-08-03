@@ -1,3 +1,8 @@
+import { restoreFirstPartySsoBrowserNavigation } from '@iam/contracts';
+
+type NavigationHistory = Pick<History, 'state' | 'replaceState'>;
+type NavigationEventTarget = Pick<Window, 'dispatchEvent'>;
+
 export function toQueryString(
   params: Record<string, string | number | undefined | null>,
 ): string {
@@ -17,11 +22,15 @@ export function getQuery(name: string): string | null {
   return currentSearchParams().get(name);
 }
 
-export function decodeRedirect(value: string | null | undefined): string | null {
-  if (!value) return null;
-  try {
-    return decodeURIComponent(value);
-  } catch {
-    return value;
-  }
+export function restoreLoginRedirectState(
+  callbackUrl = window.location.href,
+  browserHistory: NavigationHistory = window.history,
+  eventTarget: NavigationEventTarget = window,
+) {
+  return restoreFirstPartySsoBrowserNavigation(
+    callbackUrl,
+    browserHistory,
+    eventTarget,
+    PopStateEvent,
+  );
 }

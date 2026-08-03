@@ -1,16 +1,27 @@
 import type { Context } from "hono";
-import { ClientStatus, OidcClientType, OidcScope, OidcTokenEndpointAuthMethod } from "@iam/contracts";
+import {
+  ClientStatus,
+  CustomSsoClientMode,
+  OidcClientType,
+  OidcScope,
+  OidcTokenEndpointAuthMethod,
+} from "@iam/contracts";
 import { beforeEach, describe, expect, mock, test } from "bun:test";
 import { createClientAdapter } from "../client.adapter";
 
 const clientService = {
   createClient: mock(),
+  configureClientCustomSso: mock(),
   configureClientOidc: mock(),
   deleteClient: mock(),
+  disableClientCustomSso: mock(),
   disableClientOidc: mock(),
+  enableClientCustomSso: mock(),
   enableClientOidc: mock(),
   getClientDetailByCode: mock(),
+  removeClientCustomSso: mock(),
   removeClientOidc: mock(),
+  rotateClientCustomSsoSecret: mock(),
   rotateClientOidcSecret: mock(),
   searchClientsForAdmin: mock(),
   updateClient: mock(),
@@ -24,12 +35,17 @@ const handlers = createClientAdapter({
 
 beforeEach(() => {
   clientService.createClient.mockReset();
+  clientService.configureClientCustomSso.mockReset();
   clientService.configureClientOidc.mockReset();
   clientService.deleteClient.mockReset();
+  clientService.disableClientCustomSso.mockReset();
   clientService.disableClientOidc.mockReset();
+  clientService.enableClientCustomSso.mockReset();
   clientService.enableClientOidc.mockReset();
   clientService.getClientDetailByCode.mockReset();
+  clientService.removeClientCustomSso.mockReset();
   clientService.removeClientOidc.mockReset();
+  clientService.rotateClientCustomSsoSecret.mockReset();
   clientService.rotateClientOidcSecret.mockReset();
   clientService.searchClientsForAdmin.mockReset();
   clientService.updateClient.mockReset();
@@ -131,5 +147,45 @@ describe("admin client adapter", () => {
       data,
       expect.objectContaining({ actorUserId: 1001, actorUsername: "admin", requestId: "req-1" }),
     );
+  });
+
+  test("delegates strict Custom SSO configure input with audit context", async () => {
+    const data = {
+      mode: CustomSsoClientMode.Gateway,
+      validRedirectUrls: ["https://portal.example.com/sso/*"],
+      subjectClaimCatalogVersion: 1,
+      subjectClaims: ["subjectIdentifier"],
+      orcas: { enabled: true },
+    };
+    clientService.configureClientCustomSso.mockResolvedValue({ client: {} });
+
+    const context = createContext({ json: data, param: { clientCode: "portal" } });
+    await expect(handlers.clientCustomSsoConfigure(context, async () => {})).resolves.toMatchObject({ code: 200 });
+
+    expect(clientService.configureClientCustomSso).toHaveBeenCalledWith(
+      "portal",
+      data,
+      expect.objectContaining({ actorUserId: 1001, actorUsername: "admin", requestId: "req-1" }),
+    );
+  });
+
+  test("delegates all state-only Custom SSO operations with audit context", async () => {
+    const cases = [
+      ["clientCustomSsoEnable", "enableClientCustomSso"],
+      ["clientCustomSsoDisable", "disableClientCustomSso"],
+      ["clientCustomSsoRemove", "removeClientCustomSso"],
+      ["clientCustomSsoRotateSecret", "rotateClientCustomSsoSecret"],
+    ] as const;
+
+    for (const [handlerName, serviceName] of cases) {
+      clientService[serviceName].mockResolvedValueOnce({ client: {} });
+      const context = createContext({ param: { clientCode: "portal" } });
+
+      await expect(handlers[handlerName](context, async () => {})).resolves.toMatchObject({ code: 200 });
+      expect(clientService[serviceName]).toHaveBeenCalledWith(
+        "portal",
+        expect.objectContaining({ actorUserId: 1001, actorUsername: "admin", requestId: "req-1" }),
+      );
+    }
   });
 });

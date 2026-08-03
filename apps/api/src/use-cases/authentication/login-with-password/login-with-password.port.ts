@@ -46,7 +46,7 @@ export interface PasswordLoginRestrictionPort {
 
 export interface PasswordPrincipalSessionPort {
   createPrincipalSession: (
-    user: UserDetailDto,
+    subjectIdentifier: string,
     options: {
       amr: readonly ["pwd"];
       origin?: SessionOrigin;

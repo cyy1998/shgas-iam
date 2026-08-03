@@ -21,7 +21,7 @@ function ok<T>(data: T) {
   return { code: 200, message: 'OK', data };
 }
 
-async function fulfillJson(route: Route, data: unknown) {
+export async function fulfillJson(route: Route, data: unknown) {
   await route.fulfill({
     contentType: 'application/json',
     json: data,
@@ -29,7 +29,7 @@ async function fulfillJson(route: Route, data: unknown) {
   });
 }
 
-async function fulfillTrpc(route: Route, data: unknown) {
+export async function fulfillTrpc(route: Route, data: unknown) {
   await fulfillJson(route, [{ result: { data } }]);
 }
 
@@ -40,8 +40,7 @@ type TrpcFailureResponse = {
 };
 
 type TrpcOperationResponse<TResult, TFailure extends string> =
-  | { type: 'success'; data: TResult }
-  | { type: TFailure };
+  { type: 'success'; data: TResult } | { type: TFailure };
 
 type TrpcOperationResponder<TInput, TResult, TFailure extends string> = (
   input: TInput,
@@ -59,8 +58,7 @@ const loginStateUnavailableFailure = {
 const auditFailedAfterEffectFailure = {
   httpStatus: 500,
   serviceCode: ApiErrorCode.AdminLoginStateAuditFailedAfterEffect,
-  serviceMessage:
-    '登录状态已变更，但审计记录失败；请刷新确认且不要自动重试',
+  serviceMessage: '登录状态已变更，但审计记录失败；请刷新确认且不要自动重试',
 } satisfies TrpcFailureResponse;
 
 const requestFailedFailure = {
@@ -69,11 +67,7 @@ const requestFailedFailure = {
   serviceMessage: 'internal detail must stay hidden',
 } satisfies TrpcFailureResponse;
 
-async function mockTrpcOperationRoute<
-  TInput,
-  TResult,
-  TFailure extends string,
->(
+async function mockTrpcOperationRoute<TInput, TResult, TFailure extends string>(
   page: Page,
   operation: string,
   respond: TrpcOperationResponder<TInput, TResult, TFailure>,
@@ -111,22 +105,14 @@ async function mockTrpcOperationRoute<
 function mockTrpcQueryRoute<TInput, TResult>(
   page: Page,
   operation: string,
-  respond: TrpcOperationResponder<
-    TInput,
-    TResult,
-    'login-state-unavailable'
-  >,
+  respond: TrpcOperationResponder<TInput, TResult, 'login-state-unavailable'>,
 ) {
   return mockTrpcOperationRoute(page, operation, respond, {
     'login-state-unavailable': loginStateUnavailableFailure,
   });
 }
 
-function mockTrpcMutationRoute<
-  TInput,
-  TResult,
-  TFailure extends string,
->(
+function mockTrpcMutationRoute<TInput, TResult, TFailure extends string>(
   page: Page,
   operation: string,
   respond: TrpcOperationResponder<TInput, TResult, TFailure>,
@@ -176,9 +162,7 @@ export async function mockLoginRestrictionListRoute(
 }
 
 type LoginRestrictionReleaseFailure =
-  | 'audit-failed-after-effect'
-  | 'login-state-unavailable'
-  | 'request-failed';
+  'audit-failed-after-effect' | 'login-state-unavailable' | 'request-failed';
 
 type LoginRestrictionReleaseRouteResponse = TrpcOperationResponse<
   LoginRestrictionReleaseResult,
@@ -254,15 +238,64 @@ export async function mockAdminApi(page: Page) {
   await page.route('**/rpc/admin.client.detail**', (route) =>
     fulfillTrpc(route, adminClientDetail),
   );
-  await page.route('**/rpc/admin.client.create**', (route) =>
-    fulfillTrpc(route, adminClientDetail),
-  );
+  await page.route('**/rpc/admin.client.create**', (route) => {
+    const input = parseTrpcBatchInput<{ clientCode?: string }>(route);
+    return fulfillTrpc(route, {
+      ...adminClientDetail,
+      clientCode: input.clientCode ?? adminClientDetail.clientCode,
+    });
+  });
   await page.route('**/rpc/admin.client.update**', (route) =>
     fulfillTrpc(route, adminClientDetail),
   );
+  await page.route('**/rpc/admin.client.updateStatus**', (route) =>
+    fulfillTrpc(route, adminClientDetail),
+  );
+  await page.route('**/rpc/admin.client.delete**', (route) =>
+    fulfillTrpc(route, adminClientDetail),
+  );
+  await page.route('**/rpc/admin.client.customSsoConfigure**', (route) =>
+    fulfillTrpc(route, {
+      client: adminClientDetail,
+      customSsoSecret: 'iam_sso_once_secret',
+    }),
+  );
+  await page.route('**/rpc/admin.client.customSsoEnable**', (route) =>
+    fulfillTrpc(route, { client: adminClientDetail }),
+  );
+  await page.route('**/rpc/admin.client.customSsoDisable**', (route) =>
+    fulfillTrpc(route, { client: adminClientDetail }),
+  );
+  await page.route('**/rpc/admin.client.customSsoRemove**', (route) =>
+    fulfillTrpc(route, { client: adminClientDetail }),
+  );
+  await page.route('**/rpc/admin.client.customSsoRotateSecret**', (route) =>
+    fulfillTrpc(route, {
+      client: adminClientDetail,
+      customSsoSecret: 'iam_sso_rotated_once_secret',
+    }),
+  );
+  await page.route('**/rpc/admin.client.oidcConfigure**', (route) =>
+    fulfillTrpc(route, { client: adminClientDetail }),
+  );
+  await page.route('**/rpc/admin.client.oidcEnable**', (route) =>
+    fulfillTrpc(route, { client: adminClientDetail }),
+  );
+  await page.route('**/rpc/admin.client.oidcDisable**', (route) =>
+    fulfillTrpc(route, { client: adminClientDetail }),
+  );
+  await page.route('**/rpc/admin.client.oidcRemove**', (route) =>
+    fulfillTrpc(route, { client: adminClientDetail }),
+  );
+  await page.route('**/rpc/admin.client.oidcRotateSecret**', (route) =>
+    fulfillTrpc(route, {
+      client: adminClientDetail,
+      clientSecret: 'oidc_once_secret',
+    }),
+  );
 }
 
-function parseTrpcBatchInput<T>(route: Route): T {
+export function parseTrpcBatchInput<T>(route: Route): T {
   const request = route.request();
   const encodedInput = new URL(request.url()).searchParams.get('input');
   const batch = encodedInput

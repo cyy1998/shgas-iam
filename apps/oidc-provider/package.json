@@ -9,18 +9,21 @@
   "scripts": {
     "dev": "node --watch --import tsx src/index.ts",
     "serve": "node --import tsx src/index.ts",
-    "lint": "eslint src vitest.config.ts vitest.smoke.config.ts eslint.config.js",
-    "lint:fix": "eslint --fix src vitest.config.ts vitest.smoke.config.ts eslint.config.js",
+    "lint": "eslint src test-external test-redis vitest.config.ts vitest.external.config.ts vitest.redis.config.ts vitest.smoke.config.ts eslint.config.js",
+    "lint:fix": "eslint --fix src test-external test-redis vitest.config.ts vitest.external.config.ts vitest.redis.config.ts vitest.smoke.config.ts eslint.config.js",
     "test": "vitest run --config vitest.config.ts",
+    "test:external": "vitest run --config vitest.external.config.ts",
+    "test:redis": "vitest run --config vitest.redis.config.ts",
     "test:smoke": "vitest run --config vitest.smoke.config.ts",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "@iam/api-core": "workspace:*",
+    "@iam/client-subject-projection": "workspace:*",
     "@iam/contracts": "workspace:*",
     "@iam/db": "workspace:*",
     "@iam/domain": "workspace:*",
-    "@iam/role-assignment-resolution": "workspace:*",
+    "@iam/user-profile-read-model": "workspace:*",
     "bcrypt-ts": "^9.0.1",
     "drizzle-orm": "1.0.0-rc.2",
     "ioredis": "^5.11.1",
@@ -36,6 +39,7 @@
     "@types/oidc-provider": "9.5.0",
     "@typescript/native": "npm:typescript@7.0.2",
     "eslint": "^10.7.0",
+    "postgres": "^3.4.9",
     "typescript": "npm:@typescript/typescript6@6.0.2",
     "vitest": "4.1.10"
   }

@@ -477,6 +477,7 @@ Vitest + React Testing Library + MSW，`test:coverage` 生成覆盖率报告但�
 | `IAM_API_ORCAS_URL`             | ORCAS 服务地址                                   | 必填               |
 | `IAM_API_SESSION_DEFAULT_TTL_SECONDS` | Redis 默认过期时间（秒）                  | `86400`            |
 | `IAM_API_AUTH_CODE_TTL_SECONDS` | 授权码过期时间（秒）                             | `300`              |
+| `IAM_API_CUSTOM_SSO_PROJECTION_RETRY_AFTER_SECONDS` | Custom SSO Subject Access 或 Projection 暂不可用时的建议重试秒数 | `3` |
 | `IAM_API_LOGIN_ENDPOINT`        | 登录端点                                         | `/portal/login`    |
 | `IAM_API_SSO_INTERNAL_ORIGIN`   | 内网 SSO 入口 origin，用于 discovery URL 拼接     | 必填               |
 | `IAM_API_SSO_EXTERNAL_ORIGIN`   | 外网 SSO 入口 origin，用于 discovery URL 拼接     | 必填               |

@@ -1,70 +1,119 @@
+import { getPublicSuffix } from "tldts";
+
 export interface RedirectUrlPattern {
   raw: string;
   protocol: "http:" | "https:";
   hostname: string;
   port: string;
   hostWildcardSuffix: string | null;
-  pathMode: "origin" | "subtree" | "wildcard-subtree";
+  pathMode: "exact" | "wildcard-subtree";
   pathname: string;
 }
 
+export const RedirectUrlPatternFailureReasons = {
+  DynamicQueryOrFragment: "query_or_fragment_not_allowed",
+  EmptyOrBareWildcard: "empty_or_bare_wildcard",
+  HostWildcardInvalid: "host_wildcard_invalid",
+  HostWildcardIp: "host_wildcard_ip_not_allowed",
+  HostWildcardPublicSuffix: "host_wildcard_public_or_private_suffix",
+  InvalidUrl: "invalid_url",
+  PathWildcardInvalid: "path_wildcard_invalid",
+  UnsupportedProtocol: "unsupported_protocol",
+  UrlCredentials: "url_credentials_not_allowed",
+} as const;
+
+export type RedirectUrlPatternFailureReason
+  = typeof RedirectUrlPatternFailureReasons[
+    keyof typeof RedirectUrlPatternFailureReasons
+  ];
+
 export class RedirectUrlPatternSyntaxError extends Error {
-  constructor(pattern: string, message: string) {
-    super(`Invalid redirect URL pattern "${pattern}": ${message}`);
+  readonly reason: RedirectUrlPatternFailureReason;
+
+  constructor(reason: RedirectUrlPatternFailureReason) {
+    super(`Invalid redirect URL pattern: ${reason}`);
     this.name = "RedirectUrlPatternSyntaxError";
+    this.reason = reason;
   }
 }
 
 export interface RedirectUrlPatternValidationResult {
   ok: boolean;
   error?: string;
+  reason?: RedirectUrlPatternFailureReason;
 }
 
-function parseUrl(value: string, kind: "pattern" | "redirectUrl") {
+function parseUrl(value: string) {
   try {
     return new URL(value);
   }
   catch {
-    throw new RedirectUrlPatternSyntaxError(value, `${kind} must be a valid URL`);
+    throw new RedirectUrlPatternSyntaxError(
+      RedirectUrlPatternFailureReasons.InvalidUrl,
+    );
   }
 }
 
-function assertSupportedProtocol(pattern: string, url: URL) {
+function assertNoRawUserinfo(value: string) {
+  const authority = /^[a-z][a-z\d+.-]*:\/\/([^/?#]*)/iu.exec(
+    value.trim(),
+  )?.[1];
+  if (authority?.includes("@")) {
+    throw new RedirectUrlPatternSyntaxError(
+      RedirectUrlPatternFailureReasons.UrlCredentials,
+    );
+  }
+}
+
+function assertSupportedProtocol(url: URL) {
   if (url.protocol !== "http:" && url.protocol !== "https:") {
-    throw new RedirectUrlPatternSyntaxError(pattern, "protocol must be http or https");
+    throw new RedirectUrlPatternSyntaxError(
+      RedirectUrlPatternFailureReasons.UnsupportedProtocol,
+    );
   }
 }
 
-function parseProtocol(pattern: string, url: URL): RedirectUrlPattern["protocol"] {
-  assertSupportedProtocol(pattern, url);
+function parseProtocol(url: URL): RedirectUrlPattern["protocol"] {
+  assertSupportedProtocol(url);
   return url.protocol as RedirectUrlPattern["protocol"];
 }
 
-function parseHostWildcard(pattern: string, hostname: string) {
+function parseHostWildcard(hostname: string) {
   const wildcardCount = [...hostname].filter(char => char === "*").length;
   if (wildcardCount === 0) {
     return null;
   }
   if (wildcardCount !== 1 || !hostname.startsWith("*.")) {
-    throw new RedirectUrlPatternSyntaxError(pattern, "host wildcard must be the left-most label");
+    throw new RedirectUrlPatternSyntaxError(
+      RedirectUrlPatternFailureReasons.HostWildcardInvalid,
+    );
   }
 
   const suffix = hostname.slice(2);
   if (!suffix.includes(".") || suffix.includes("*") || suffix.startsWith(".") || suffix.endsWith(".")) {
-    throw new RedirectUrlPatternSyntaxError(pattern, "host wildcard suffix is too broad or invalid");
+    throw new RedirectUrlPatternSyntaxError(
+      RedirectUrlPatternFailureReasons.HostWildcardInvalid,
+    );
   }
   if (suffix.startsWith("[") || /^\d+\.\d+\.\d+\.\d+$/.test(suffix)) {
-    throw new RedirectUrlPatternSyntaxError(pattern, "host wildcard cannot target an IP address");
+    throw new RedirectUrlPatternSyntaxError(
+      RedirectUrlPatternFailureReasons.HostWildcardIp,
+    );
+  }
+  if (getPublicSuffix(suffix, { allowPrivateDomains: true }) === suffix) {
+    throw new RedirectUrlPatternSyntaxError(
+      RedirectUrlPatternFailureReasons.HostWildcardPublicSuffix,
+    );
   }
 
   return suffix;
 }
 
-function parsePathMode(pattern: string, pathname: string): Pick<RedirectUrlPattern, "pathMode" | "pathname"> {
+function parsePathMode(pathname: string): Pick<RedirectUrlPattern, "pathMode" | "pathname"> {
   const wildcardCount = [...pathname].filter(char => char === "*").length;
   if (wildcardCount === 0) {
     return {
-      pathMode: pathname === "/" ? "origin" : "subtree",
+      pathMode: "exact",
       pathname,
     };
   }
@@ -74,23 +123,40 @@ function parsePathMode(pattern: string, pathname: string): Pick<RedirectUrlPatte
       pathname: pathname.slice(0, -1),
     };
   }
-  throw new RedirectUrlPatternSyntaxError(pattern, "path wildcard is only allowed at the end as /*");
+  throw new RedirectUrlPatternSyntaxError(
+    RedirectUrlPatternFailureReasons.PathWildcardInvalid,
+  );
 }
 
 export function parseRedirectUrlPattern(pattern: string): RedirectUrlPattern {
   const trimmed = pattern.trim();
   if (trimmed === "" || trimmed === "*") {
-    throw new RedirectUrlPatternSyntaxError(pattern, "pattern must not be empty or bare *");
+    throw new RedirectUrlPatternSyntaxError(
+      RedirectUrlPatternFailureReasons.EmptyOrBareWildcard,
+    );
+  }
+  if (trimmed.includes("?") || trimmed.includes("#")) {
+    throw new RedirectUrlPatternSyntaxError(
+      RedirectUrlPatternFailureReasons.DynamicQueryOrFragment,
+    );
   }
 
-  const url = parseUrl(trimmed, "pattern");
-  const protocol = parseProtocol(trimmed, url);
+  assertNoRawUserinfo(trimmed);
+  const url = parseUrl(trimmed);
+  const protocol = parseProtocol(url);
+  if (url.username !== "" || url.password !== "") {
+    throw new RedirectUrlPatternSyntaxError(
+      RedirectUrlPatternFailureReasons.UrlCredentials,
+    );
+  }
   if (url.search !== "" || url.hash !== "") {
-    throw new RedirectUrlPatternSyntaxError(trimmed, "query and hash are not allowed");
+    throw new RedirectUrlPatternSyntaxError(
+      RedirectUrlPatternFailureReasons.DynamicQueryOrFragment,
+    );
   }
 
-  const hostWildcardSuffix = parseHostWildcard(trimmed, url.hostname);
-  const path = parsePathMode(trimmed, url.pathname);
+  const hostWildcardSuffix = parseHostWildcard(url.hostname);
+  const path = parsePathMode(url.pathname);
 
   return {
     raw: trimmed,
@@ -111,8 +177,34 @@ export function validateRedirectUrlPattern(pattern: string): RedirectUrlPatternV
     return {
       ok: false,
       error: err instanceof Error ? err.message : "Invalid redirect URL pattern",
+      reason: err instanceof RedirectUrlPatternSyntaxError
+        ? err.reason
+        : RedirectUrlPatternFailureReasons.InvalidUrl,
     };
   }
+}
+
+export function normalizeRedirectUrl(redirectUrl: string) {
+  if (redirectUrl.includes("?") || redirectUrl.includes("#")) {
+    throw new RedirectUrlPatternSyntaxError(
+      RedirectUrlPatternFailureReasons.DynamicQueryOrFragment,
+    );
+  }
+
+  assertNoRawUserinfo(redirectUrl);
+  const url = parseUrl(redirectUrl);
+  assertSupportedProtocol(url);
+  if (url.username !== "" || url.password !== "") {
+    throw new RedirectUrlPatternSyntaxError(
+      RedirectUrlPatternFailureReasons.UrlCredentials,
+    );
+  }
+  if (url.search !== "" || url.hash !== "") {
+    throw new RedirectUrlPatternSyntaxError(
+      RedirectUrlPatternFailureReasons.DynamicQueryOrFragment,
+    );
+  }
+  return url.toString();
 }
 
 function matchesHostname(pattern: RedirectUrlPattern, hostname: string) {
@@ -130,20 +222,16 @@ function matchesHostname(pattern: RedirectUrlPattern, hostname: string) {
 }
 
 function matchesPath(pattern: RedirectUrlPattern, pathname: string) {
-  if (pattern.pathMode === "origin") {
-    return true;
-  }
   if (pattern.pathMode === "wildcard-subtree") {
     return pathname.startsWith(pattern.pathname);
   }
 
-  return pathname === pattern.pathname || pathname.startsWith(`${pattern.pathname}/`);
+  return pathname === pattern.pathname;
 }
 
 export function matchRedirectUrlPattern(redirectUrl: string, pattern: string | RedirectUrlPattern) {
   const parsedPattern = typeof pattern === "string" ? parseRedirectUrlPattern(pattern) : pattern;
-  const url = parseUrl(redirectUrl, "redirectUrl");
-  assertSupportedProtocol(redirectUrl, url);
+  const url = new URL(normalizeRedirectUrl(redirectUrl));
 
   return url.protocol === parsedPattern.protocol
     && url.port === parsedPattern.port

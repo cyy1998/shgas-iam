@@ -1,4 +1,5 @@
 import type { AdminAuditContext } from "@admin-api/services/audit/audit.context";
+import type { SubjectAccessMutationReceipt } from "@iam/api-core/subject-access";
 import type { AdminUserServiceDeps } from "./user.port";
 import type { UserAdminCreateDto, UserDetailDto, UserPaginationQueryDto, UserUpdateDto } from "./user.type";
 import { adminAuditTransactionOptions } from "@admin-api/services/audit/audit.context";
@@ -27,6 +28,20 @@ export function createUserService(deps: AdminUserServiceDeps) {
     if (user === null) {
       throw new UserNotFoundError("用户不存在");
     }
+    return await getUserDetailForAdmin(user);
+  }
+
+  async function getUserDetailBySubjectIdentifierForAdmin(
+    subjectIdentifier: string,
+  ): Promise<UserDetailDto> {
+    const user = await deps.userRepository.getUserBySubjectIdentifierForAdmin(subjectIdentifier);
+    if (user === null) {
+      throw new UserNotFoundError("用户不存在");
+    }
+    return await getUserDetailForAdmin(user);
+  }
+
+  async function getUserDetailForAdmin(user: Parameters<typeof UserDetailDtoSchema.parse>[0]) {
     const userDto = UserDetailDtoSchema.parse(user);
     const employments = await deps.employmentRepository.getAllEmploymentsByUserIdForAdmin(userDto.id);
     const rolesByEmployment = await deps.roleAssignmentResolver.resolveEffectiveRoles({
@@ -65,37 +80,59 @@ export function createUserService(deps: AdminUserServiceDeps) {
     dto: UserAdminCreateDto,
     auditContext?: AdminAuditContext,
   ): Promise<{ username: string; generatedPassword: string | null }> {
-    return await deps.uow.transaction(async (tx) => {
-      const existing = await tx.userRepository.getUserByUsernameForAdmin(dto.username);
-      if (existing !== null) {
-        throw new UsernameAlreadyExistsError("用户名已存在");
-      }
-      const plainPassword = dto.password ?? deps.random.password(8);
-      const passwordHash = await deps.passwordHasher.hashPassword(plainPassword);
-      const createdUser = await tx.userRepository.setUserForAdmin({
-        username: dto.username,
-        name: dto.name,
-        userType: dto.userType,
-        password: passwordHash,
-        mobile: dto.mobile ?? null,
-        wxId: dto.wxId ?? null,
-        status: dto.status ?? UserStatus.Enable,
-        orderNum: dto.orderNum ?? 0,
-      });
-      await tx.auditService.recordAuditLog(buildAdminUserAudit("admin.user.create", createdUser, {
-        userType: dto.userType,
-        status: dto.status ?? UserStatus.Enable,
-        orderNum: dto.orderNum ?? 0,
-        passwordProvided: dto.password !== undefined,
-      }, auditContext));
-      await tx.userProfileInvalidation.recordChanges([
-        { kind: "user", userId: createdUser.id },
-      ]);
-      return {
-        username: dto.username,
-        generatedPassword: dto.password ? null : plainPassword,
-      };
-    }, adminAuditTransactionOptions(auditContext));
+    const existing = await deps.userRepository.getUserByUsernameForAdmin(dto.username);
+    if (existing !== null) {
+      throw new UsernameAlreadyExistsError("用户名已存在");
+    }
+    const subjectIdentifier = deps.random.uuid();
+    const disposition = (dto.status ?? UserStatus.Enable) === UserStatus.Enable
+      ? "awaiting_publication"
+      : "disabled";
+    return await deps.subjectAccessLifecycle.run({
+      subjectIdentifier,
+      disposition,
+      mutate: async receipt => await deps.uow.transaction(async tx =>
+        await tx.subjectAccessMutation.runMutation(
+          receipt,
+          async () => {
+            const existing = await tx.userRepository.getUserByUsernameForAdmin(dto.username);
+            if (existing !== null) {
+              throw new UsernameAlreadyExistsError("用户名已存在");
+            }
+            const plainPassword = dto.password ?? deps.random.password(8);
+            const passwordHash = await deps.passwordHasher.hashPassword(plainPassword);
+            const createdUser = await tx.userRepository.setUserForAdmin({
+              username: dto.username,
+              name: dto.name,
+              userType: dto.userType,
+              password: passwordHash,
+              mobile: dto.mobile ?? null,
+              wxId: dto.wxId ?? null,
+              status: dto.status ?? UserStatus.Enable,
+              orderNum: dto.orderNum ?? 0,
+              subjectIdentifier,
+            });
+            await tx.auditService.recordAuditLog(buildAdminUserAudit("admin.user.create", createdUser, {
+              userType: dto.userType,
+              status: dto.status ?? UserStatus.Enable,
+              orderNum: dto.orderNum ?? 0,
+              passwordProvided: dto.password !== undefined,
+            }, auditContext));
+            await tx.userProfileInvalidation.recordChanges([
+              { kind: "user", userId: createdUser.id },
+            ]);
+            return {
+              username: dto.username,
+              generatedPassword: dto.password ? null : plainPassword,
+            };
+          },
+          () => disposition === "disabled" ? "disabled" : "enabled",
+        ), adminAuditTransactionOptions(auditContext)),
+      observability: {
+        requestId: auditContext?.requestId ?? undefined,
+        traceId: auditContext?.traceId ?? undefined,
+      },
+    });
   }
 
   async function updateUser(
@@ -104,29 +141,73 @@ export function createUserService(deps: AdminUserServiceDeps) {
     auditContext?: AdminAuditContext,
     action = "admin.user.update",
   ) {
-    await deps.uow.transaction(async (tx) => {
-      const existing = await tx.userRepository.getUserByUsernameForAdmin(username);
-      if (existing === null) {
-        throw new UserNotFoundError("用户不存在");
-      }
-      const updatedUser = await tx.userRepository.updateUserByUsername(username, data);
-      await tx.auditService.recordAuditLog(buildAdminUserAudit(action, updatedUser, {
-        patch: data,
-      }, auditContext));
-      await tx.userProfileInvalidation.recordChanges([
-        { kind: "user", userId: existing.id },
-      ]);
-      if (data.status !== undefined && data.status !== existing.status && data.status !== UserStatus.Enable) {
-        tx.afterCommit.bestEffort("admin.session_revoke.user", async () => {
+    const existing = await deps.userRepository.getUserByUsernameForAdmin(username);
+    if (existing === null) {
+      throw new UserNotFoundError("用户不存在");
+    }
+
+    const mutate = async (receipt?: SubjectAccessMutationReceipt) => {
+      return await deps.uow.transaction(async (tx) => {
+        const mutation = async () => {
+          const current = await tx.userRepository.getUserByUsernameForAdmin(username);
+          if (current === null) {
+            throw new UserNotFoundError("用户不存在");
+          }
+          const updatedUser = await tx.userRepository.updateUserByUsername(username, data);
+          await tx.auditService.recordAuditLog(buildAdminUserAudit(action, updatedUser, {
+            patch: data,
+          }, auditContext));
+          await tx.userProfileInvalidation.recordChanges([
+            { kind: "user", userId: current.id },
+          ]);
+          return {
+            current,
+            disposition: current.status === updatedUser.status
+              ? "restore_previous" as const
+              : updatedUser.status === UserStatus.Enable
+                ? "awaiting_publication" as const
+                : "disabled" as const,
+            value: true as const,
+          };
+        };
+        if (receipt === undefined)
+          return await mutation();
+        return await tx.subjectAccessMutation.runMutation(
+          receipt,
+          mutation,
+          result => result.disposition === "restore_previous"
+            ? "rollback"
+            : result.disposition === "disabled"
+              ? "disabled"
+              : "enabled",
+        );
+      }, adminAuditTransactionOptions(auditContext));
+    };
+
+    if (data.status !== undefined) {
+      const result = await deps.subjectAccessLifecycle.run<Awaited<ReturnType<typeof mutate>>>({
+        subjectIdentifier: existing.subjectIdentifier,
+        disposition: result => result.disposition,
+        mutate: async receipt => await mutate(receipt),
+        revokeSessions: async (result, context) => {
           await deps.sessionRevocation.revokeUserSessions({
-            userId: existing.id,
+            userId: result.current.id,
+            subjectIdentifier: result.current.subjectIdentifier,
             reason: "user_disabled",
+            onlySubjectAccessTransitionId:
+              context.invalidatedSubjectAccessTransitionId,
             auditContext,
           });
-        });
-      }
-    }, adminAuditTransactionOptions(auditContext));
-    return true;
+        },
+        observability: {
+          requestId: auditContext?.requestId ?? undefined,
+          traceId: auditContext?.traceId ?? undefined,
+        },
+      });
+      return result.value;
+    }
+
+    return (await mutate()).value;
   }
 
   async function updateUserStatus(username: string, status: UserStatus, auditContext?: AdminAuditContext) {
@@ -134,30 +215,50 @@ export function createUserService(deps: AdminUserServiceDeps) {
   }
 
   async function deleteUser(username: string, auditContext?: AdminAuditContext) {
-    await deps.uow.transaction(async (tx) => {
-      const existing = await tx.userRepository.getUserByUsernameForAdmin(username);
-      if (existing === null) {
-        throw new UserNotFoundError("用户不存在");
-      }
-      const activeEmps = await tx.userRepository.countActiveEmploymentsByUsername(username);
-      if (activeEmps > 0) {
-        throw new UserHasActiveEmploymentError();
-      }
-      const deletedUser = await tx.userRepository.softDeleteUserByUsername(username);
-      await tx.auditService.recordAuditLog(buildAdminUserAudit("admin.user.delete", deletedUser, {
-        deleted: true,
-      }, auditContext));
-      await tx.userProfileInvalidation.recordChanges([
-        { kind: "user", userId: existing.id },
-      ]);
-      tx.afterCommit.bestEffort("admin.session_revoke.user", async () => {
+    const existing = await deps.userRepository.getUserByUsernameForAdmin(username);
+    if (existing === null) {
+      throw new UserNotFoundError("用户不存在");
+    }
+    await deps.subjectAccessLifecycle.run({
+      subjectIdentifier: existing.subjectIdentifier,
+      disposition: "disabled",
+      mutate: async receipt => await deps.uow.transaction(async tx =>
+        await tx.subjectAccessMutation.runMutation(
+          receipt,
+          async () => {
+            const existing = await tx.userRepository.getUserByUsernameForAdmin(username);
+            if (existing === null) {
+              throw new UserNotFoundError("用户不存在");
+            }
+            const activeEmps = await tx.userRepository.countActiveEmploymentsByUsername(username);
+            if (activeEmps > 0) {
+              throw new UserHasActiveEmploymentError();
+            }
+            const deletedUser = await tx.userRepository.softDeleteUserByUsername(username);
+            await tx.auditService.recordAuditLog(buildAdminUserAudit("admin.user.delete", deletedUser, {
+              deleted: true,
+            }, auditContext));
+            await tx.userProfileInvalidation.recordChanges([
+              { kind: "user", userId: existing.id },
+            ]);
+          },
+          () => "disabled",
+        ), adminAuditTransactionOptions(auditContext)),
+      revokeSessions: async (_result, context) => {
         await deps.sessionRevocation.revokeUserSessions({
           userId: existing.id,
+          subjectIdentifier: existing.subjectIdentifier,
           reason: "user_deleted",
+          onlySubjectAccessTransitionId:
+            context.invalidatedSubjectAccessTransitionId,
           auditContext,
         });
-      });
-    }, adminAuditTransactionOptions(auditContext));
+      },
+      observability: {
+        requestId: auditContext?.requestId ?? undefined,
+        traceId: auditContext?.traceId ?? undefined,
+      },
+    });
     return true;
   }
 
@@ -176,6 +277,7 @@ export function createUserService(deps: AdminUserServiceDeps) {
       tx.afterCommit.bestEffort("admin.session_revoke.user", async () => {
         await deps.sessionRevocation.revokeUserSessions({
           userId: user.id,
+          subjectIdentifier: user.subjectIdentifier,
           reason: "admin_revoke",
           exceptPrincipalSessionId: currentPrincipalSessionException(user.id, auditContext),
           auditContext,
@@ -187,6 +289,7 @@ export function createUserService(deps: AdminUserServiceDeps) {
 
   return {
     deleteUser,
+    getUserDetailBySubjectIdentifierForAdmin,
     getUserDetailByUsernameForAdmin,
     resetPasswordByUsername,
     searchUsersFuzzyForAdmin,

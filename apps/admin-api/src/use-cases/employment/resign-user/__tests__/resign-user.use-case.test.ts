@@ -1,12 +1,71 @@
-import type { ResignUserUseCaseDeps } from "../resign-user.port";
+import type { SubjectAccessMutationReceipt } from "@iam/api-core/subject-access";
+import type {
+  ResignUserSubjectAccessLifecyclePort,
+  ResignUserTransactionPorts,
+  ResignUserUseCaseDeps,
+} from "../resign-user.port";
 import { createImmediateUnitOfWork } from "@admin-api/testing/fakes";
 import { UserStatus } from "@iam/contracts";
 import { UserNotFoundError } from "@iam/domain/user";
 import { describe, expect, mock, test } from "bun:test";
 import { createResignUserUseCase } from "../resign-user.use-case";
 
+const subjectIdentifier = "00000000-0000-4000-8000-000000000001";
+const previousSubjectAccessTransitionId = "20000000-0000-4000-8000-000000000001";
+const subjectAccessMutationReceipt: SubjectAccessMutationReceipt = {
+  subjectIdentifier,
+  transitionId: "10000000-0000-4000-8000-000000000001",
+  ownerToken: "10000000-0000-4000-8000-000000000002",
+};
+
+function createSubjectAccessMutation(): ResignUserTransactionPorts["subjectAccessMutation"] {
+  return {
+    runMutation: async <T>(
+      _receipt: SubjectAccessMutationReceipt,
+      mutation: () => Promise<T>,
+    ) => await mutation(),
+  };
+}
+
 function createSessionRevocation() {
   return { revokeUserSessions: mock(async () => undefined) };
+}
+
+function createSubjectAccessLifecycle(preBlockError?: Error) {
+  return {
+    run: mock(async (
+      input: Parameters<ResignUserSubjectAccessLifecyclePort["run"]>[0],
+    ) => {
+      if (preBlockError)
+        throw preBlockError;
+      const result = await input.mutate(subjectAccessMutationReceipt);
+      try {
+        await input.revokeSessions(result, {
+          invalidatedSubjectAccessTransitionId:
+            previousSubjectAccessTransitionId,
+        });
+      }
+      catch {
+        // Session revocation remains best-effort after the account mutation commits.
+      }
+      return result;
+    }),
+  };
+}
+
+function createUserReader(
+  value: ResignUserUseCaseDeps["userReader"] extends {
+    getUserByUsernameForAdmin: (...args: never[]) => Promise<infer T>;
+  } ? T : never = {
+      id: 1,
+      subjectIdentifier,
+      username: "zhangsan",
+      name: "张三",
+    },
+) {
+  return {
+    getUserByUsernameForAdmin: mock(async () => value),
+  };
 }
 
 describe("createResignUserUseCase", () => {
@@ -18,6 +77,7 @@ describe("createResignUserUseCase", () => {
           events.push("audit");
         }),
       },
+      subjectAccessMutation: createSubjectAccessMutation(),
       employmentStore: {
         endActiveEmploymentsByUserId: mock(async () => {
           events.push("employment:end");
@@ -31,7 +91,7 @@ describe("createResignUserUseCase", () => {
       userStore: {
         getUserByUsernameForAdmin: mock(async () => {
           events.push("user:lookup");
-          return { id: 1, username: "zhangsan", name: "张三" };
+          return { id: 1, subjectIdentifier, username: "zhangsan", name: "张三" };
         }),
         updateUserByUsername: mock(async () => {
           events.push("user:disable");
@@ -40,7 +100,9 @@ describe("createResignUserUseCase", () => {
     };
     const useCase = createResignUserUseCase({
       sessionRevocation: createSessionRevocation(),
+      subjectAccessLifecycle: createSubjectAccessLifecycle(),
       uow: createImmediateUnitOfWork(tx),
+      userReader: createUserReader(),
     });
 
     await expect(useCase.execute({ username: "zhangsan" })).resolves.toBe(true);
@@ -81,6 +143,7 @@ describe("createResignUserUseCase", () => {
           events.push("audit");
         }),
       },
+      subjectAccessMutation: createSubjectAccessMutation(),
       employmentStore: {
         endActiveEmploymentsByUserId: mock(async () => {
           events.push("employment:end");
@@ -92,7 +155,12 @@ describe("createResignUserUseCase", () => {
         }),
       },
       userStore: {
-        getUserByUsernameForAdmin: mock(async () => ({ id: 1, username: "zhangsan", name: "张三" })),
+        getUserByUsernameForAdmin: mock(async () => ({
+          id: 1,
+          subjectIdentifier,
+          username: "zhangsan",
+          name: "张三",
+        })),
         updateUserByUsername: mock(async () => {
           events.push("user:disable");
         }),
@@ -109,7 +177,9 @@ describe("createResignUserUseCase", () => {
     };
     const useCase = createResignUserUseCase({
       sessionRevocation,
+      subjectAccessLifecycle: createSubjectAccessLifecycle(),
       uow,
+      userReader: createUserReader(),
     });
     const auditContext = {
       actorType: "admin" as const,
@@ -127,6 +197,8 @@ describe("createResignUserUseCase", () => {
     expect(sessionRevocation.revokeUserSessions).toHaveBeenCalledWith({
       auditContext,
       reason: "user_disabled",
+      onlySubjectAccessTransitionId: previousSubjectAccessTransitionId,
+      subjectIdentifier,
       userId: 1,
     });
     expect(events).toEqual([
@@ -148,16 +220,24 @@ describe("createResignUserUseCase", () => {
     };
     const tx = {
       auditLogWriter: { recordAuditLog: mock(async () => undefined) },
+      subjectAccessMutation: createSubjectAccessMutation(),
       employmentStore: { endActiveEmploymentsByUserId: mock(async () => undefined) },
       userProfileInvalidation: { recordChanges: mock(async () => undefined) },
       userStore: {
-        getUserByUsernameForAdmin: mock(async () => ({ id: 1, username: "zhangsan", name: "张三" })),
+        getUserByUsernameForAdmin: mock(async () => ({
+          id: 1,
+          subjectIdentifier,
+          username: "zhangsan",
+          name: "张三",
+        })),
         updateUserByUsername: mock(async () => undefined),
       },
     };
     const useCase = createResignUserUseCase({
       sessionRevocation,
+      subjectAccessLifecycle: createSubjectAccessLifecycle(),
       uow: createImmediateUnitOfWork(tx),
+      userReader: createUserReader(),
     });
 
     await expect(useCase.execute({ username: "zhangsan" })).resolves.toBe(true);
@@ -168,16 +248,24 @@ describe("createResignUserUseCase", () => {
     const sessionRevocation = createSessionRevocation();
     const tx = {
       auditLogWriter: { recordAuditLog: mock(async () => undefined) },
+      subjectAccessMutation: createSubjectAccessMutation(),
       employmentStore: { endActiveEmploymentsByUserId: mock(async () => undefined) },
       userProfileInvalidation: { recordChanges: mock(async () => undefined) },
       userStore: {
-        getUserByUsernameForAdmin: mock(async () => ({ id: 1, username: "zhangsan", name: "张三" })),
+        getUserByUsernameForAdmin: mock(async () => ({
+          id: 1,
+          subjectIdentifier,
+          username: "zhangsan",
+          name: "张三",
+        })),
         updateUserByUsername: mock(async () => undefined),
       },
     };
     const useCase = createResignUserUseCase({
       sessionRevocation,
+      subjectAccessLifecycle: createSubjectAccessLifecycle(),
       uow: createImmediateUnitOfWork(tx),
+      userReader: createUserReader(),
     });
 
     await expect(useCase.execute({ username: "zhangsan" })).resolves.toBe(true);
@@ -195,10 +283,16 @@ describe("createResignUserUseCase", () => {
     const tx = {
       afterCommit,
       auditLogWriter: { recordAuditLog: mock(async () => undefined) },
+      subjectAccessMutation: createSubjectAccessMutation(),
       employmentStore: { endActiveEmploymentsByUserId: mock(async () => undefined) },
       userProfileInvalidation: { recordChanges: mock(async () => undefined) },
       userStore: {
-        getUserByUsernameForAdmin: mock(async () => ({ id: 1, username: "zhangsan", name: "张三" })),
+        getUserByUsernameForAdmin: mock(async () => ({
+          id: 1,
+          subjectIdentifier,
+          username: "zhangsan",
+          name: "张三",
+        })),
         updateUserByUsername: mock(async () => undefined),
       },
     };
@@ -209,7 +303,12 @@ describe("createResignUserUseCase", () => {
         return await callback(tx);
       },
     };
-    const useCase = createResignUserUseCase({ sessionRevocation: createSessionRevocation(), uow });
+    const useCase = createResignUserUseCase({
+      sessionRevocation: createSessionRevocation(),
+      subjectAccessLifecycle: createSubjectAccessLifecycle(),
+      uow,
+      userReader: createUserReader(),
+    });
     const auditContext = {
       actorType: "admin" as const,
       actorUserId: 1001,
@@ -247,6 +346,7 @@ describe("createResignUserUseCase", () => {
   test("stops without side effects when the user does not exist", async () => {
     const tx = {
       auditLogWriter: { recordAuditLog: mock(async () => undefined) },
+      subjectAccessMutation: createSubjectAccessMutation(),
       employmentStore: { endActiveEmploymentsByUserId: mock(async () => undefined) },
       userProfileInvalidation: { recordChanges: mock(async () => undefined) },
       userStore: {
@@ -257,7 +357,9 @@ describe("createResignUserUseCase", () => {
     const sessionRevocation = createSessionRevocation();
     const useCase = createResignUserUseCase({
       sessionRevocation,
+      subjectAccessLifecycle: createSubjectAccessLifecycle(),
       uow: createImmediateUnitOfWork(tx),
+      userReader: createUserReader(null),
     });
 
     await expect(useCase.execute({ username: "missing" }))
@@ -283,12 +385,13 @@ describe("createResignUserUseCase", () => {
       };
       const tx = {
         auditLogWriter: { recordAuditLog: mock(async () => runStage("audit")) },
+        subjectAccessMutation: createSubjectAccessMutation(),
         employmentStore: { endActiveEmploymentsByUserId: mock(async () => runStage("employment:end")) },
         userProfileInvalidation: { recordChanges: mock(async () => runStage("profile:invalidate")) },
         userStore: {
           getUserByUsernameForAdmin: mock(async () => {
             events.push("user:lookup");
-            return { id: 1, username: "zhangsan", name: "张三" };
+            return { id: 1, subjectIdentifier, username: "zhangsan", name: "张三" };
           }),
           updateUserByUsername: mock(async () => runStage("user:disable")),
         },
@@ -296,7 +399,9 @@ describe("createResignUserUseCase", () => {
       const sessionRevocation = createSessionRevocation();
       const useCase = createResignUserUseCase({
         sessionRevocation,
+        subjectAccessLifecycle: createSubjectAccessLifecycle(),
         uow: createImmediateUnitOfWork(tx),
+        userReader: createUserReader(),
       });
 
       await expect(useCase.execute({ username: "zhangsan" })).rejects.toBe(error);
@@ -304,5 +409,40 @@ describe("createResignUserUseCase", () => {
       expect(events).toEqual(["user:lookup", ...stages.slice(0, failureIndex + 1)]);
       expect(sessionRevocation.revokeUserSessions).not.toHaveBeenCalled();
     }
+  });
+
+  test("does not start resignation when Subject Access pre-block fails", async () => {
+    const preBlockError = new Error("subject access unavailable");
+    const tx = {
+      auditLogWriter: { recordAuditLog: mock(async () => undefined) },
+      subjectAccessMutation: createSubjectAccessMutation(),
+      employmentStore: { endActiveEmploymentsByUserId: mock(async () => undefined) },
+      userProfileInvalidation: { recordChanges: mock(async () => undefined) },
+      userStore: {
+        getUserByUsernameForAdmin: mock(async () => ({
+          id: 1,
+          subjectIdentifier,
+          username: "zhangsan",
+          name: "张三",
+        })),
+        updateUserByUsername: mock(async () => undefined),
+      },
+    };
+    const sessionRevocation = createSessionRevocation();
+    const useCase = createResignUserUseCase({
+      sessionRevocation,
+      subjectAccessLifecycle: createSubjectAccessLifecycle(preBlockError),
+      uow: createImmediateUnitOfWork(tx),
+      userReader: createUserReader(),
+    });
+
+    await expect(useCase.execute({ username: "zhangsan" }))
+      .rejects
+      .toBe(preBlockError);
+    expect(tx.employmentStore.endActiveEmploymentsByUserId).not.toHaveBeenCalled();
+    expect(tx.userStore.updateUserByUsername).not.toHaveBeenCalled();
+    expect(tx.auditLogWriter.recordAuditLog).not.toHaveBeenCalled();
+    expect(tx.userProfileInvalidation.recordChanges).not.toHaveBeenCalled();
+    expect(sessionRevocation.revokeUserSessions).not.toHaveBeenCalled();
   });
 });

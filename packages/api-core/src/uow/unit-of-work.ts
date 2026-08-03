@@ -7,6 +7,8 @@ import type {
 } from "./after-commit";
 import { createAfterCommitPort, runAfterCommitTasks } from "./after-commit";
 
+const rollbackConfirmedErrors = new WeakSet<object>();
+
 export interface TransactionalDbPort<Tx> {
   transaction: <T>(callback: (tx: Tx) => Promise<T>) => Promise<T>;
 }
@@ -35,6 +37,23 @@ export interface CreateUnitOfWorkOptions<Tx, TxPorts extends object> {
   createTxPorts: (tx: Tx, lifecycle: UnitOfWorkTransactionLifecycle) => TxPorts;
 }
 
+export function consumeTransactionRollbackConfirmation(error: unknown) {
+  if (
+    typeof error !== "object"
+    || error === null
+    || !rollbackConfirmedErrors.has(error)
+  ) {
+    return false;
+  }
+  rollbackConfirmedErrors.delete(error);
+  return true;
+}
+
+export function markTransactionRollbackConfirmed(error: unknown) {
+  if (typeof error === "object" && error !== null)
+    rollbackConfirmedErrors.add(error);
+}
+
 /**
  * Own a single transaction boundary. Nested UnitOfWork ownership is unsupported because an inner commit could
  * execute after-commit tasks before an outer transaction rolls back.
@@ -48,13 +67,30 @@ export function createUnitOfWork<Tx, TxPorts extends object>(
       const afterCommit = createAfterCommitPort(afterCommitTasks).afterCommit;
       const observability = transactionOptions?.observability ?? null;
 
-      const result = await options.db.transaction(async (tx) => {
-        const txPorts = options.createTxPorts(tx, { afterCommit, observability });
-        return await callback({
-          ...txPorts,
-          afterCommit,
+      let callbackFailure: unknown;
+      let callbackRejected = false;
+      let result: Awaited<ReturnType<typeof callback>>;
+      try {
+        result = await options.db.transaction(async (tx) => {
+          const txPorts = options.createTxPorts(tx, { afterCommit, observability });
+          try {
+            return await callback({
+              ...txPorts,
+              afterCommit,
+            });
+          }
+          catch (error) {
+            callbackRejected = true;
+            callbackFailure = error;
+            throw error;
+          }
         });
-      });
+      }
+      catch (error) {
+        if (callbackRejected && error === callbackFailure)
+          markTransactionRollbackConfirmed(error);
+        throw error;
+      }
 
       await runAfterCommitTasks(afterCommitTasks, options.logger, observability);
 

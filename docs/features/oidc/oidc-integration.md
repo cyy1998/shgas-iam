@@ -37,17 +37,26 @@ fragment、通配符和模板变量。匹配时使用完整原始字符串，不
 
 支持以下 scope：
 
-- `openid`：返回来自 `user.oidcSubject` 的稳定 opaque `sub`。
-- `profile`：返回 `name` 和 `preferred_username`。
+- `openid`：返回 IAM 协议中性 Subject Identifier 的稳定 opaque `sub`；既有 UUID 原值不变。
+- `profile`：返回 `name` 和 `preferred_username`，不隐含任职。
 - `phone`：存在手机号时返回 `phone_number`。
+- `iam:employments`：只在 JSON UserInfo 中返回当前有效任职；该 claim 永远不会进入 ID Token。
 - `iam:authorization`：在 JSON UserInfo 中返回授权快照；该 claim 永远不会进入 ID Token。
 
-`iam:authorization` 包含全部有效任职。每条任职仅包含组织业务编码、名称、类型、从根到叶的组织路径、
-职位编码与名称，以及当前 client 对应的角色和权限。角色与权限会去重并稳定排序。响应不会包含数据库 ID、
-密码、custom SSO 字段、状态字段、软删除字段或时间戳。
+`iam:employments` 与 `iam:authorization` 的每条任职都包含 `isPrimary`、组织业务编码、名称、类型、从根到叶的
+组织路径，以及职位编码与名称。`iam:authorization` 还只包含当前 client 对应的角色和权限；角色与权限会去重并
+稳定排序。OIDC wire 继续使用 `orgCode`、`orgName`、`orgType`、`fullOrgPath`、`posCode` 和 `posName`，不会并行
+输出 Custom SSO wire 字段。响应不会包含数据库 ID、密码、状态字段、软删除字段或时间戳。
 
-UserInfo 只有在确认 token、用户、client、OIDC 配置版本和绑定的 global session 仍然有效后，才会读取
-签发时保存在 Redis 中的快照。
+授权完成后、Authorization Code 持久化前，Provider 会把实际授权 scope 映射为 Subject Claim Selection，并固化
+独立的 OIDC Claims Snapshot。Snapshot 绑定 Subject Identifier、client、实际 scope、OIDC config version、Provider
+Session 与 Principal Session。选择 `iam:authorization` 时会在此处执行 Authorization Freshness Barrier；投影尚未
+就绪会返回标准 `temporarily_unavailable`，且不会签发 Code。
+
+Token Endpoint 只把 Code 中的 Snapshot 转移到 Access Token，不重新读取 Profile 或重新计算 Selection。UserInfo
+在确认 token、client、OIDC 配置版本和绑定 session 仍然有效后，只重放 Access Token Snapshot。因此授权完成后的
+档案或权限变化不会混入该 token 的 UserInfo；变化会在下一次授权产生的新 Snapshot 中体现。OIDC 与 Custom SSO
+只共享 Subject Identifier、Selection、Projection 和 Facts，不共享配置、Secret、wire、Snapshot、artifact 或 session。
 
 ## CORS
 

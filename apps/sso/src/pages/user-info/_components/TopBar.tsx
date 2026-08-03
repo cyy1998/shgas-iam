@@ -1,7 +1,7 @@
 import { LogoutOutlined } from '@ant-design/icons';
 import logo from '@sso/assets/logo.png';
 import { buildLogoutUrl } from '@sso/lib/sso';
-import { decodeRedirect, getQuery } from '@sso/utils/url';
+import { getQuery } from '@sso/utils/url';
 import { useModel } from '@umijs/max';
 import { Avatar, Dropdown, message } from 'antd';
 
@@ -10,7 +10,7 @@ export default function TopBar() {
 
   const handleLogout = () => {
     const client = getQuery('client') ?? '';
-    const redirectUrl = decodeRedirect(getQuery('redirectUrl')) ?? '';
+    const redirectUrl = getQuery('redirectUrl') ?? '';
     if (!authConfig) {
       message.error('SSO 配置未就绪，请刷新重试');
       return;
@@ -55,9 +55,9 @@ export default function TopBar() {
                 marginRight: 8,
               }}
             >
-              {userInfo.name?.[0] ?? ''}
+              {userInfo.profile?.name?.[0] ?? ''}
             </Avatar>
-            <span>{userInfo.name}</span>
+            <span>{userInfo.profile?.name ?? ''}</span>
           </div>
         </Dropdown>
       )}

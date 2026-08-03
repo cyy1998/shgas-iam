@@ -1,4 +1,8 @@
 import type { AuditLogWriterPort } from "@api/services/audit/audit.service";
+import type {
+  SubjectAccessMutationReceipt,
+  SubjectAccessTransitionTarget,
+} from "@iam/api-core/subject-access";
 import type { UnitOfWorkPort } from "@iam/api-core/uow";
 import type { UserCreateDto } from "@iam/domain/user";
 
@@ -30,8 +34,9 @@ export interface RegisterPurveyorPositionReaderPort {
 }
 
 export interface RegisterPurveyorUserStorePort {
+  lockPurveyorContactMobile: (mobile: string) => Promise<void>;
   getUserByMobile: (mobile: string) => Promise<{ id: number } | null>;
-  setUser: (input: UserCreateDto) => Promise<{ id: number }>;
+  setUser: (input: UserCreateDto & { subjectIdentifier: string }) => Promise<{ id: number }>;
 }
 
 export interface RegisterPurveyorMobilePort {
@@ -43,6 +48,13 @@ export interface RegisterPurveyorContactTransactionPorts {
   employmentRepository: RegisterPurveyorEmploymentStorePort;
   organizationRepository: RegisterPurveyorOrganizationReaderPort;
   positionRepository: RegisterPurveyorPositionReaderPort;
+  subjectAccessMutation: {
+    runMutation: <T>(
+      receipt: SubjectAccessMutationReceipt,
+      mutation: () => Promise<T>,
+      resolveTarget: (result: T) => SubjectAccessTransitionTarget,
+    ) => Promise<T>;
+  };
   userRepository: RegisterPurveyorUserStorePort;
   userProfileInvalidation: {
     recordChanges: (changes: readonly RegisterPurveyorContactProfileChange[]) => Promise<void>;
@@ -55,5 +67,22 @@ export interface RegisterPurveyorContactUseCaseDeps {
     nodeEnv: string;
   };
   mobileService: RegisterPurveyorMobilePort;
+  random: {
+    uuid: () => string;
+  };
+  subjectAccessLifecycle: {
+    run: <T>(input: {
+      subjectIdentifier: string;
+      disposition: "disabled" | "awaiting_publication";
+      mutate: (receipt: SubjectAccessMutationReceipt) => Promise<T>;
+      observability?: {
+        requestId?: string;
+        traceId?: string;
+      };
+    }) => Promise<T>;
+  };
   uow: UnitOfWorkPort<RegisterPurveyorContactTransactionPorts>;
+  userReader: {
+    getActiveUserByMobile: (mobile: string) => Promise<{ id: number } | null>;
+  };
 }

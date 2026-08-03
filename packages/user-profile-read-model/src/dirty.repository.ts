@@ -54,6 +54,14 @@ export function createUserProfileDirtyRepository(db: DbClient) {
       return await db.query.userProfileDirty.findFirst({ where: { userId } }) ?? null;
     },
 
+    async lockByUserId(userId: number) {
+      return firstRow(await db
+        .select()
+        .from(userProfileDirty)
+        .where(eq(userProfileDirty.userId, userId))
+        .for("update")) ?? null;
+    },
+
     async markDirty(input: MarkUserProfileDirtyInput) {
       return firstRow(await markManyDirty(db, [input])) ?? null;
     },

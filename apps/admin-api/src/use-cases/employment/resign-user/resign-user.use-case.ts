@@ -11,30 +11,51 @@ export function createResignUserUseCase(deps: ResignUserUseCaseDeps) {
     options: ResignUserOptions = {},
   ): Promise<true> {
     const { auditContext } = options;
-    return await deps.uow.transaction(async (tx) => {
-      const user = await tx.userStore.getUserByUsernameForAdmin(input.username);
-      if (user === null) {
-        throw new UserNotFoundError("用户不存在");
-      }
+    const user = await deps.userReader.getUserByUsernameForAdmin(input.username);
+    if (user === null) {
+      throw new UserNotFoundError("用户不存在");
+    }
 
-      await tx.employmentStore.endActiveEmploymentsByUserId(user.id);
-      await tx.userStore.updateUserByUsername(input.username, {
-        status: UserStatus.Disable,
-      });
-      await tx.auditLogWriter.recordAuditLog(buildEmploymentResignUserAudit(user, auditContext));
-      await tx.userProfileInvalidation.recordChanges([
-        { kind: "user", userId: user.id },
-        { kind: "employment", userId: user.id },
-      ]);
-      tx.afterCommit.bestEffort("admin.session_revoke.user", async () => {
+    return await deps.subjectAccessLifecycle.run({
+      subjectIdentifier: user.subjectIdentifier,
+      disposition: "disabled",
+      mutate: async receipt => await deps.uow.transaction(async tx =>
+        await tx.subjectAccessMutation.runMutation(
+          receipt,
+          async () => {
+            const current = await tx.userStore.getUserByUsernameForAdmin(input.username);
+            if (current === null) {
+              throw new UserNotFoundError("用户不存在");
+            }
+
+            await tx.employmentStore.endActiveEmploymentsByUserId(current.id);
+            await tx.userStore.updateUserByUsername(input.username, {
+              status: UserStatus.Disable,
+            });
+            await tx.auditLogWriter.recordAuditLog(buildEmploymentResignUserAudit(current, auditContext));
+            await tx.userProfileInvalidation.recordChanges([
+              { kind: "user", userId: current.id },
+              { kind: "employment", userId: current.id },
+            ]);
+            return true as const;
+          },
+          () => "disabled",
+        ), adminAuditTransactionOptions(auditContext)),
+      revokeSessions: async (_result, context) => {
         await deps.sessionRevocation.revokeUserSessions({
           userId: user.id,
+          subjectIdentifier: user.subjectIdentifier,
           reason: "user_disabled",
+          onlySubjectAccessTransitionId:
+            context.invalidatedSubjectAccessTransitionId,
           auditContext,
         });
-      });
-      return true as const;
-    }, adminAuditTransactionOptions(auditContext));
+      },
+      observability: {
+        requestId: auditContext?.requestId ?? undefined,
+        traceId: auditContext?.traceId ?? undefined,
+      },
+    });
   }
 
   return { execute };

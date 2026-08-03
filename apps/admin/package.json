@@ -26,6 +26,7 @@
   "dependencies": {
     "@ant-design/icons": "^6.3.2",
     "@ant-design/pro-components": "3.1.14-2",
+    "@iam/client-subject-projection": "workspace:*",
     "@iam/contracts": "workspace:*",
     "@trpc/client": "^11.18.0",
     "@trpc/server": "^11.18.0",

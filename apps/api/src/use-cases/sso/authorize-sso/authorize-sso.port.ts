@@ -1,32 +1,41 @@
+import type { CustomSsoClientMode } from "@iam/contracts";
+import type { CustomSsoClientRuntimeDto } from "@iam/domain/client";
 import type {
   AuthorizeSsoOptions,
-  AuthorizeSsoResult,
   SsoPrincipalTokenSource,
 } from "./authorize-sso.type";
 
 export interface AuthorizationCodeIssuerPort {
   issueAuthorizationCode: (input: {
     clientCode: string;
+    configVersion: number;
+    mode: CustomSsoClientMode;
     redirectUrl: string;
     requestContext?: AuthorizeSsoOptions["requestContext"];
     token?: string;
     tokenSource: SsoPrincipalTokenSource;
-  }) => Promise<AuthorizeSsoResult>;
+    state?: string;
+  }) => Promise<
+    | { isLogin: false; code: null }
+    | { isLogin: true; code: string }
+  >;
+}
+
+export interface AuthorizeSsoClientReaderPort {
+  findRuntimeRecord: (
+    clientCode: string,
+  ) => Promise<CustomSsoClientRuntimeDto | null>;
 }
 
 export interface AuthorizeSsoDeps {
   authorizationGrants: AuthorizationCodeIssuerPort;
-  clients: {
-    getClientByCode: (clientCode: string) => Promise<{
-      extAttributes: { validRedirectUrls: string[] };
-    } | null>;
-  };
+  clients: AuthorizeSsoClientReaderPort;
   redirectUrls: {
-    isAllowed: (
+    normalizeAllowed: (
       clientCode: string,
       redirectUrl: string,
       patterns: string[],
       options?: AuthorizeSsoOptions,
-    ) => boolean;
+    ) => string | null;
   };
 }

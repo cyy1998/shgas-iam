@@ -10,11 +10,10 @@ export type BaseVariables = {
   tierBasePath: string;
 };
 
-export type UserVariables<TUserDetail = unknown> = {
-  userId: number;
-  username: string;
-  userDetailDto: TUserDetail;
-  customSsoSessionOrcasId?: string | null;
+export type AuthenticatedSubjectVariables = {
+  subjectIdentifier: string;
+  authenticatedClientCode: string;
+  orcasId?: string;
 };
 
 export type InternalClientVariables<TClient = unknown> = {
@@ -26,18 +25,17 @@ export type BaseBindings = {
   Variables: BaseVariables;
 };
 
-export type AuthenticatedBindings<TUserDetail = unknown> = {
-  Variables: UserVariables<TUserDetail> & BaseVariables;
+export type AuthenticatedBindings = {
+  Variables: AuthenticatedSubjectVariables & BaseVariables;
 };
 
-export type PublicBindings<TUserDetail = unknown> = AuthenticatedBindings<TUserDetail>;
+export type PublicBindings = AuthenticatedBindings;
 
 export type InternalBindings<TClient = unknown> = {
   Variables: InternalClientVariables<TClient> & BaseVariables;
 };
 
-export type PublicRouteHandler<R extends HonoRouteConfig, TUserDetail = unknown>
-  = RouteHandler<R, PublicBindings<TUserDetail>>;
+export type PublicRouteHandler<R extends HonoRouteConfig> = RouteHandler<R, PublicBindings>;
 export type BaseRouteHandler<R extends HonoRouteConfig> = RouteHandler<R, BaseBindings>;
 export type InternalRouteHandler<R extends HonoRouteConfig, TClient = unknown>
   = RouteHandler<R, InternalBindings<TClient>>;

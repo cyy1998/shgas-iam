@@ -1,12 +1,12 @@
-import type {
-  ClientCachePort,
-  PasswordHasherPort,
-  RandomPort,
-} from "@admin-api/composition/runtime";
 import type { AuditLogWriterPort } from "@admin-api/services/audit/audit.service";
 import type { AdminSessionRevocationPort } from "@admin-api/services/session-revocation/session-revocation.port";
+import type {
+  CustomSsoClientRuntimeMutation,
+  CustomSsoClientRuntimeMutationHeartbeat,
+} from "@iam/api-core/custom-sso";
 import type { UnitOfWorkPort } from "@iam/api-core/uow";
 import type {
+  AdminClientCustomSsoUpdate,
   AdminClientOidcUpdate,
   AdminClientRecord,
   ClientCreateDto,
@@ -26,18 +26,25 @@ export interface AdminClientReaderPort {
 export interface AdminClientTransactionStorePort {
   getAnyClientByCode: (clientCode: string) => Promise<AdminClientRecord | null>;
   getClientByCode: (clientCode: string) => Promise<AdminClientRecord | null>;
-  getClientById: (id: number) => Promise<AdminClientRecord | null>;
+  lockClientByCode: (clientCode: string) => Promise<AdminClientRecord | null>;
+  lockClientById: (id: number) => Promise<AdminClientRecord | null>;
   createClient: (input: ClientCreateDto) => Promise<AdminClientRecord>;
   updateClientByCode: (clientCode: string, input: ClientUpdateDto) => Promise<AdminClientRecord>;
-  updateClientByCodeWithOidcVersion: (
+  updateClientByCodeWithProtocolEpochs: (
     clientCode: string,
     input: ClientUpdateDto,
   ) => Promise<AdminClientRecord>;
   updateClientById: (input: ClientInputDto) => Promise<AdminClientRecord>;
-  updateClientByIdWithOidcVersion: (input: ClientInputDto) => Promise<AdminClientRecord>;
+  updateClientByIdWithProtocolEpochs: (
+    input: ClientInputDto,
+  ) => Promise<AdminClientRecord>;
   updateClientOidcByCode: (
     clientCode: string,
     input: AdminClientOidcUpdate,
+  ) => Promise<AdminClientRecord>;
+  updateClientCustomSsoByCode: (
+    clientCode: string,
+    input: AdminClientCustomSsoUpdate,
   ) => Promise<AdminClientRecord>;
   softDeleteClientByCode: (clientCode: string) => Promise<AdminClientRecord>;
 }
@@ -49,11 +56,49 @@ export interface AdminClientTransactionPorts {
 
 export type AdminClientUnitOfWorkPort = UnitOfWorkPort<AdminClientTransactionPorts>;
 
+export interface AdminClientCacheInvalidationTarget {
+  clientCode: string;
+  clientSecret: string;
+}
+
+export interface AdminClientCachePort {
+  beginRuntimeMutation: (
+    clientCode: string,
+    mutationId: string,
+  ) => Promise<CustomSsoClientRuntimeMutation>;
+  startRuntimeMutationHeartbeat: (
+    mutation: CustomSsoClientRuntimeMutation,
+  ) => CustomSsoClientRuntimeMutationHeartbeat;
+  completeRuntimeMutation: (
+    mutation: CustomSsoClientRuntimeMutation,
+  ) => Promise<"completed" | "expired" | "superseded">;
+  abortRuntimeMutation: (
+    mutation: CustomSsoClientRuntimeMutation,
+  ) => Promise<"aborted" | "expired" | "superseded">;
+  invalidateClient: (
+    client: AdminClientCacheInvalidationTarget,
+  ) => Promise<unknown>;
+  invalidateUpdatedClient: (
+    oldClient: AdminClientCacheInvalidationTarget,
+    newClient: AdminClientCacheInvalidationTarget,
+  ) => Promise<unknown>;
+}
+
+export interface AdminClientSecretHasherPort {
+  hashSecret: (secret: string) => Promise<string>;
+}
+
+export interface AdminClientSecretGeneratorPort {
+  uuid: () => string;
+  customSsoClientSecret: () => string;
+  oidcClientSecret: () => string;
+}
+
 export interface AdminClientServiceDeps {
   clientRepository: AdminClientReaderPort;
-  clientCache: ClientCachePort;
+  clientCache: AdminClientCachePort;
   sessionRevocation: Pick<AdminSessionRevocationPort, "revokeClientProtocol" | "revokeClientAllProtocols">;
-  passwordHasher: Pick<PasswordHasherPort, "hashSecret">;
-  random: Pick<RandomPort, "oidcClientSecret">;
+  passwordHasher: AdminClientSecretHasherPort;
+  random: AdminClientSecretGeneratorPort;
   uow: AdminClientUnitOfWorkPort;
 }

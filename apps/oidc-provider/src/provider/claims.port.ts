@@ -1,15 +1,18 @@
+import type {
+  ClientSubjectProjection,
+  ResolveClientSubjectInput,
+} from "@iam/client-subject-projection";
 import type { OidcAccountDto } from "@iam/domain/user";
 import type { ResolvedGlobalSession } from "../interaction/global-session.ts";
 import type { ProviderSessionBinding } from "../session/provider-session.ts";
-import type { OidcAuthorizationClaim } from "./authorization-claim.ts";
 import type { OidcClientRuntimeMetadata } from "./client-runtime-metadata.ts";
 
 export interface ClaimsAccountReader {
   findBySubject: (subject: string) => Promise<OidcAccountDto | null>;
 }
 
-export interface ClaimsAuthorizationReader {
-  buildClaim: (userId: number, iamClientId: number) => Promise<OidcAuthorizationClaim>;
+export interface ClaimsSubjectProjectionResolver {
+  resolve: (input: ResolveClientSubjectInput) => Promise<ClientSubjectProjection>;
 }
 
 export interface ClaimsClientRuntimeReader {
@@ -21,7 +24,7 @@ export interface ClaimsSessionResolver {
 }
 
 export interface ClaimsProviderSessionBindingStore {
-  read: (sessionUid: string) => Promise<ProviderSessionBinding | null>;
+  read: (sessionUid: string, clientCode: string) => Promise<ProviderSessionBinding | null>;
 }
 
 export interface ClaimsTokenRevoker {

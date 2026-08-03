@@ -3,6 +3,7 @@ import { CustomError } from "./CustomError";
 export interface ApiRuntimeError extends Error {
   code: string;
   httpStatus: number;
+  retryAfterSeconds?: number;
 }
 
 function hasApiRuntimeErrorShape(err: Error): err is ApiRuntimeError {

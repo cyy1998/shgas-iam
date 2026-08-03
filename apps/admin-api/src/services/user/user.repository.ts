@@ -16,6 +16,7 @@ export function createUserRepository(db: DbClient) {
       return await db
         .select({
           id: users.id,
+          subjectIdentifier: users.subjectIdentifier,
           username: users.username,
           name: users.name,
           status: users.status,
@@ -23,6 +24,23 @@ export function createUserRepository(db: DbClient) {
         })
         .from(users)
         .where(inArray(users.id, [...userIds]));
+    },
+    async getSessionManagementUserSummariesBySubjectIdentifiers(
+      subjectIdentifiers: readonly string[],
+    ) {
+      if (subjectIdentifiers.length === 0)
+        return [];
+      return await db
+        .select({
+          id: users.id,
+          subjectIdentifier: users.subjectIdentifier,
+          username: users.username,
+          name: users.name,
+          status: users.status,
+          isDelete: users.isDelete,
+        })
+        .from(users)
+        .where(inArray(users.subjectIdentifier, [...subjectIdentifiers]));
     },
     async setPassword(userId: number, password: string) {
       return firstRow(await db
@@ -35,6 +53,14 @@ export function createUserRepository(db: DbClient) {
       return await db.query.users.findFirst({
         where: {
           username,
+          isDelete: false,
+        },
+      }) ?? null;
+    },
+    async getUserBySubjectIdentifierForAdmin(subjectIdentifier: string) {
+      return await db.query.users.findFirst({
+        where: {
+          subjectIdentifier,
           isDelete: false,
         },
       }) ?? null;
@@ -81,7 +107,7 @@ export function createUserRepository(db: DbClient) {
         ));
       return firstRow(rows)?.value ?? 0;
     },
-    async setUserForAdmin(userCreateDto: UserCreateDto) {
+    async setUserForAdmin(userCreateDto: UserCreateDto & { subjectIdentifier: string }) {
       return firstRow(await db.insert(users).values(userCreateDto).returning())!;
     },
   };

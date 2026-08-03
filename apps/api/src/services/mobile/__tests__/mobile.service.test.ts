@@ -20,7 +20,7 @@ function createService() {
       password: null,
       mobile: "13800000000",
       wxId: null,
-      oidcSubject: "",
+      subjectIdentifier: "",
       status: UserStatus.Enable,
       orderNum: 0,
       isDelete: false,

@@ -59,6 +59,10 @@ export function createUserService(deps: UserServiceDeps) {
     return await deps.userRepository.getUserById(userId);
   }
 
+  async function getActiveUserBySubjectIdentifier(subjectIdentifier: string) {
+    return await deps.userRepository.getUserBySubjectIdentifier(subjectIdentifier);
+  }
+
   async function getActiveUserByUsername(username: string) {
     return await deps.userRepository.getUserByUsername(username);
   }
@@ -68,16 +72,41 @@ export function createUserService(deps: UserServiceDeps) {
   }
 
   async function pauseEnabledUser(userId: number, options: UserRequestOptions = {}) {
-    return await deps.uow.transaction(async (tx) => {
-      const updatedUser = await tx.userRepository.updateEnabledUserStatus(userId, UserStatus.Pause);
-      if (updatedUser === null)
-        return null;
+    const existing = await deps.userRepository.getUserById(userId);
+    if (existing === null)
+      return null;
 
-      await tx.userProfileInvalidation.recordChanges([
-        { kind: "user", userId },
-      ]);
-      return updatedUser;
-    }, { observability: options.requestContext });
+    return await deps.subjectAccessLifecycle.run({
+      subjectIdentifier: existing.subjectIdentifier,
+      disposition: "disabled",
+      mutate: async receipt => await deps.uow.transaction(async tx =>
+        await tx.subjectAccessMutation.runMutation(
+          receipt,
+          async () => {
+            const updatedUser = await tx.userRepository.updateEnabledUserStatus(userId, UserStatus.Pause);
+            if (updatedUser === null)
+              return null;
+
+            await tx.userProfileInvalidation.recordChanges([
+              { kind: "user", userId },
+            ]);
+            return updatedUser;
+          },
+          () => "disabled",
+        ), { observability: options.requestContext }),
+      revokeSessions: async (_result, context) => {
+        await deps.sessionRevocation.revokeUserSessions({
+          subjectIdentifier: existing.subjectIdentifier,
+          reason: "user_disabled",
+          onlySubjectAccessTransitionId:
+            context.invalidatedSubjectAccessTransitionId,
+        });
+      },
+      observability: {
+        requestId: options.requestContext?.requestId ?? undefined,
+        traceId: options.requestContext?.traceId ?? undefined,
+      },
+    });
   }
 
   async function setMobile(userId: number, phoneNumber: string, code: string, options: UserRequestOptions = {}) {
@@ -133,6 +162,7 @@ export function createUserService(deps: UserServiceDeps) {
     setPassword,
     checkPassword,
     getActiveUserById,
+    getActiveUserBySubjectIdentifier,
     getActiveUserByMobile,
     getActiveUserByUsername,
     getActiveUserByWxId,

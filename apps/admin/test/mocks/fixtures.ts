@@ -1,6 +1,7 @@
 import {
-  ClientManagementLevel,
   ClientStatus,
+  CustomSsoClientMode,
+  CustomSsoClientState,
   EmploymentStatus,
   OidcClientState,
   OidcClientType,
@@ -9,14 +10,23 @@ import {
   OrganizationStatus,
   OrganizationType,
   PositionStatus,
+  SubjectClaim,
   UserStatus,
   UserType,
 } from '@iam/contracts';
 
 export const currentAdminUser = {
-  username: 'admin',
-  name: '管理员',
-  roles: ['iam:admin'],
+  version: 1,
+  subjectIdentifier: '00000000-0000-4000-8000-000000000001',
+  profile: {
+    username: 'admin',
+    name: '管理员',
+  },
+  authorization: {
+    employments: [],
+    roles: ['iam:admin'],
+    privileges: [],
+  },
 };
 
 export const adminUsers = [
@@ -54,15 +64,22 @@ export const adminClients = [
     status: ClientStatus.Enable,
     description: '管理后台',
     createTime: '2026-01-03T08:00:00.000Z',
-    extAttributes: {
-      managementLevel: ClientManagementLevel.Independent,
-      requireOrcas: false,
+    extAttributes: {},
+    customSsoState: CustomSsoClientState.Disabled,
+    customSsoMode: CustomSsoClientMode.Gateway,
+    customSsoConfigVersion: 3,
+    hasCustomSsoSecret: false,
+    customSsoConfig: {
+      mode: CustomSsoClientMode.Gateway,
       validRedirectUrls: ['http://localhost:8001/iam-admin/*'],
-      userExcluding: [],
-      logoutEndpoint: 'http://localhost:8001/iam-admin',
-      callbackEndpoint: 'http://localhost:8001/iam-admin',
+      subjectClaimCatalogVersion: 1,
+      subjectClaims: [
+        SubjectClaim.SubjectIdentifier,
+        SubjectClaim.ProfileUsername,
+      ],
+      orcas: { enabled: false },
     },
-    oidcState: OidcClientState.Disabled,
+    oidcState: OidcClientState.Enabled,
     oidcClientType: OidcClientType.Public,
     oidcAllowedScopes: [OidcScope.OpenId],
     oidcConfig: {
@@ -71,6 +88,7 @@ export const adminClients = [
       postLogoutRedirectUris: ['http://localhost:8001/iam-admin'],
       allowedScopes: [OidcScope.OpenId],
     },
+    oidcConfigVersion: 2,
     hasOidcSecret: false,
   },
 ];

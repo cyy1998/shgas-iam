@@ -1,10 +1,11 @@
+import type { CustomSsoSubjectProjectionV1 } from "@iam/client-subject-projection/custom-sso";
 import type { AuditRequestContext } from "@iam/domain/audit";
-import type { UserDetailDto } from "@iam/domain/user";
 
 export interface ExchangeSsoCodeInput {
   clientCode: string;
   clientSecret: string;
   code: string;
+  redirectUri: string;
 }
 
 export interface ExchangeSsoCodeOptions {
@@ -14,5 +15,5 @@ export interface ExchangeSsoCodeOptions {
 export interface ExchangeSsoCodeResult {
   sid: string;
   ttl: number;
-  userInfo: UserDetailDto;
+  subject: CustomSsoSubjectProjectionV1;
 }

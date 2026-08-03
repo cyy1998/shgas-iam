@@ -138,7 +138,47 @@ curl -fsS http://localhost:30016/healthz
 pnpm --filter @iam/worker user-profile:repair
 ```
 
-  repair 只按 dirty row 的当前 `dirtyVersion` 重投 rebuild job，不推进版本。它不能替代旧 scope job 的五项排空证据。
+  repair 的 User Profile 部分只按 dirty row 的当前 `dirtyVersion` 重投 rebuild job，不推进版本；同一命令会先
+  回收 stale PostgreSQL transition intent（包括 Redis 尚不可见的 PG-only gap），再处理 Redis transition recovery，
+  最后执行 Subject Access authority repair。启用账号只有在 PostgreSQL Profile/processed Dirty 一致且当前
+  Subject Facts CAS 发布成功后才会收敛为 enabled；禁用或删除账号按 `user` 权威状态收敛为 disabled。任一 repair
+  都不能替代旧 scope job 的五项排空证据。
+
+### Subject Access Barrier repair 运行入口
+
+需要独立处理 Barrier backlog 时运行：
+
+```bash
+pnpm --filter @iam/worker run user-profile:repair -- --subject-access-only --limit 500
+```
+
+- 该模式不创建 BullMQ Queue，也不查询或重投 User Profile dirty row，但不是 PostgreSQL 只读命令，也不只处理 Redis
+  indexed backlog。它严格按以下顺序执行：
+  1. PostgreSQL reaper 以数据库 server time 和
+     `IAM_WORKER_USER_PROFILE_REPAIR_STALE_SECONDS`（默认 300 秒）判断 stale，在一个有界单语句写事务中按
+     `update_time`、`id` 选取最多 `--limit` 个 `pending` intent，使用 `FOR UPDATE SKIP LOCKED` 并将其原子更新为
+     `rolled_back`/`rollback`。该扫描覆盖 Redis 未索引的 PG-only gap；fresh intent 与已被活跃 mutation transaction
+     锁定的行保持不变，留待后续轮次。
+  2. Redis transition recovery 处理已索引的 recovery work，并在行锁下读取精确 PostgreSQL receipt；committed
+     outcome 按记录目标恢复，pending outcome 先原子 rollback，缺失 receipt 只 deferred，不猜测账号状态。
+  3. Subject Access authority repair 领取 indexed Barrier backlog，并根据 PostgreSQL 账号/Profile/Dirty 与
+     Subject Facts publication 事实收敛。
+- Worker 数据库角色除已有 authority 查询权限外，还必须具有 schema access 以及
+  `subject_access_transition` 的 `SELECT`、`UPDATE` 权限；发布前应应用包含 stale scan partial index 的当前 migration。
+  PostgreSQL reaper 失败时命令非零退出，不继续 Redis recovery 或 authority repair，不能把该轮视为成功或积压已收敛。
+- `--limit` 分别限制每个 Subject Access 阶段的单轮工作量；Redis 到期成员仍由带 lease/fence 的 production Lua 领取，
+  并发或重叠 invocation 不得手工去重。仓库不提供 scheduler；部署 owner 必须明确外部周期触发、恢复 SLO、server-time
+  stale threshold、调用频率、单轮 limit、重复排空策略和告警；SLO 必须容纳 threshold、等待下一轮调度和有界排空
+  三段最坏耗时。
+- 监控结构化日志 `Subject Access stale transition intent reap started`（`limit`、`staleAfterSeconds`）、
+  `Subject Access stale transition intents reaped`（`rolledBack`、`limit`、`staleAfterSeconds`）、
+  `Subject Access transition recovery backlog processed`（`prepared`、`rolledBack`、`deferred`、`failed`、`limit`）
+  和 `Subject Access repair backlog processed`（`disabled`、`enabled`、`deferred`、`failed`、`stable`、`limit`）。
+  start 后没有 matching reaped 日志、命令非零退出、`rolledBack` 异常突增或 `failed`/`deferred` 持续非零都必须告警；
+  先修复 PostgreSQL/Redis/Facts publication 依赖，再等待 retry 到期或重新运行。
+- 不得通过手工写 Redis、cache warmer、read-through 或请求路径把 missing/blocking record 改成 enabled。修复入口只
+  有 PostgreSQL reaper 可以处置尚未进入 Redis index 的 stale intent；后续 Redis 阶段由 transition ID、lease token
+  与 fence 拒绝旧 worker 覆盖新转换。
 - 只有需要主动全量重建且容量窗口已批准时才运行 backfill：
 
 ```bash

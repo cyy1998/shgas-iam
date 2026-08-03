@@ -1,6 +1,11 @@
 import type { UnknownObject } from "oidc-provider";
-import type { InteractionGlobalSessionResolver } from "./interaction.port.ts";
+import type {
+  InteractionGlobalSessionResolver,
+  InteractionProviderSessionPrincipalReader,
+} from "./interaction.port.ts";
+import { OidcScope } from "@iam/contracts";
 import { errors, interactionPolicy } from "oidc-provider";
+import { normalizeOidcProtocolScopes } from "../protocol/scopes.ts";
 import { requestNeedsReauthentication } from "./global-session.ts";
 
 export type AuthorizationRequestClient = {
@@ -19,16 +24,23 @@ export function validateAuthorizationRequest(params: UnknownObject, client: Auth
     throw new errors.InvalidRequest("client is required");
   if (typeof params.redirect_uri !== "string" || !client.redirectUris?.includes(params.redirect_uri))
     throw new errors.InvalidRequest("redirect_uri must exactly match a registered URI");
-  const requestedScopes = typeof params.scope === "string" ? params.scope.split(" ").filter(Boolean) : [];
+  const requestedScopes = normalizeOidcProtocolScopes({ scope: params.scope });
   const allowedScopes = client.allowed_scopes;
-  if (!Array.isArray(allowedScopes)
-    || !requestedScopes.includes("openid")
+  if (!requestedScopes
+    || !Array.isArray(allowedScopes)
+    || !requestedScopes.includes(OidcScope.OpenId)
     || requestedScopes.some(scope => !allowedScopes.includes(scope))) {
-    throw new errors.InvalidScope("requested scopes are not allowed for this client", requestedScopes.join(" "));
+    throw new errors.InvalidScope(
+      "requested scopes are not allowed for this client",
+      requestedScopes?.join(" ") ?? "",
+    );
   }
 }
 
-export function createIamInteractionPolicy(globalSessions: InteractionGlobalSessionResolver) {
+export function createIamInteractionPolicy(
+  globalSessions: InteractionGlobalSessionResolver,
+  providerSessions: InteractionProviderSessionPrincipalReader,
+) {
   const policy = interactionPolicy.base();
   policy.remove("consent");
   const login = policy.get("login");
@@ -51,6 +63,18 @@ export function createIamInteractionPolicy(globalSessions: InteractionGlobalSess
         return interactionPolicy.Check.REQUEST_PROMPT;
       if (providerSession.accountId !== session.accountId)
         return interactionPolicy.Check.REQUEST_PROMPT;
+      const clientId = typeof params.client_id === "string" ? params.client_id : null;
+      const authorizationAttemptId = ctx.oidc.entities.Interaction?.uid ?? null;
+      if (!providerSession.uid
+        || !clientId
+        || !await providerSessions.isCurrentOrStagedPrincipal(
+          providerSession.uid,
+          clientId,
+          session,
+          authorizationAttemptId,
+        )) {
+        return interactionPolicy.Check.REQUEST_PROMPT;
+      }
       return requestNeedsReauthentication(params, session.authTime)
         ? interactionPolicy.Check.REQUEST_PROMPT
         : interactionPolicy.Check.NO_NEED_TO_PROMPT;

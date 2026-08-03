@@ -1,30 +1,45 @@
 import type { LoggerPort } from "@api/composition/runtime";
 import type { LoginCredentialParser } from "@api/services/authentication/login-credential.parser";
 import type { ClientService } from "@api/services/client/client.service";
-import type { ClientDto } from "@api/services/client/client.type";
 import type { LoginWithMobileUseCase } from "@api/use-cases/authentication/login-with-mobile/login-with-mobile.use-case";
 import type { LoginWithPasswordUseCase } from "@api/use-cases/authentication/login-with-password/login-with-password.use-case";
 import type { AuthRouteHandler } from "./auth.type";
+import {
+  mapCustomSsoRetryableError,
+} from "@api/middlewares/custom-sso-retryable.error";
 import { getApiAuditRequestContext } from "@api/services/audit/audit.context";
+import {
+  customSsoLocalSessionCookieName,
+  decodeCustomSsoClientCode,
+} from "@api/services/sso/custom-sso-client-code.transport";
+import { expireCustomSsoCookies } from "@api/services/sso/custom-sso-cookie";
 import * as HttpStatusCodes from "@iam/api-core/core/http-status-codes";
 import { AuthzUnauthorizedError } from "@iam/api-core/errors/AuthzUnauthorizedError";
 import * as resp from "@iam/api-core/http";
 import { SystemLogEvent } from "@iam/api-core/logger";
 import { verifyInternalClient } from "@iam/api-core/middlewares";
+import { createSubjectAccessHttpAdapter } from "@iam/api-core/subject-access";
+import { ClientCodeSchema } from "@iam/contracts";
 import { getCookie, setCookie } from "hono/cookie";
+
+const subjectAccessHttp = createSubjectAccessHttpAdapter();
 
 export interface CreateAuthHandlersDeps {
   authentication: {
     loginWithMobile: Pick<LoginWithMobileUseCase, "execute">;
     loginWithPassword: Pick<LoginWithPasswordUseCase, "execute">;
   };
-  clientService: Pick<ClientService, "getClientByCode" | "getClientBySecret">;
+  clientService: Pick<ClientService, "getClientBySecret">;
   localSessionAuthorizer: {
-    authorizeLocalSession: (sessionId: string, client: ClientDto) => Promise<string>;
+    authorizeLocalSession: (
+      sessionId: string,
+      clientCode: string,
+    ) => Promise<string>;
   };
   loginCredentialParser: Pick<LoginCredentialParser, "parseLoginPasswordCredential">;
   logger: Pick<LoggerPort, "info">;
   config: {
+    projectionRetryAfterSeconds: number;
     redisExpireSeconds: number;
   };
 }
@@ -64,19 +79,58 @@ export function createAuthHandlers(deps: CreateAuthHandlersDeps) {
   };
 
   const authz: AuthRouteHandler<"authz"> = async (c) => {
-    const clientCode = c.req.header("Client");
-    const sessionId = getCookie(c, `local_${clientCode}_session`) ?? c.req.header("Authorization");
-    if (!c.req.header("X-Forwarded-Uri") || !clientCode) {
+    const encodedClientCode = c.req.header("Client");
+    const clientCodeResult = ClientCodeSchema.safeParse(
+      encodedClientCode === undefined
+        ? null
+        : decodeCustomSsoClientCode(encodedClientCode),
+    );
+    if (
+      !c.req.header("X-Forwarded-Uri")
+      || !clientCodeResult.success
+    ) {
       throw new AuthzUnauthorizedError("非法访问");
     }
-    const client = await deps.clientService.getClientByCode(clientCode);
-    if (!client) {
-      throw new AuthzUnauthorizedError("非法访问");
-    }
+    const clientCode = clientCodeResult.data;
+    const localSessionCookieName
+      = customSsoLocalSessionCookieName(clientCode);
+    const localSessionCookie = getCookie(c, localSessionCookieName);
+    const sessionId = localSessionCookie ?? c.req.header("Authorization");
     if (!sessionId) {
       throw new AuthzUnauthorizedError("未登录");
     }
-    const data = await deps.localSessionAuthorizer.authorizeLocalSession(sessionId, client);
+    let data;
+    try {
+      data = await subjectAccessHttp.run(c, {
+        clearCookiesOnInvalidSession: localSessionCookie === undefined
+          ? []
+          : [localSessionCookieName, "orcas_sso_sessionid"],
+      }, async () => {
+        try {
+          return await deps.localSessionAuthorizer.authorizeLocalSession(
+            sessionId,
+            clientCode,
+          );
+        }
+        catch (error) {
+          throw mapCustomSsoRetryableError(error, {
+            retryAfterSeconds: deps.config.projectionRetryAfterSeconds,
+          });
+        }
+      });
+    }
+    catch (error) {
+      if (
+        error instanceof AuthzUnauthorizedError
+        && localSessionCookie !== undefined
+      ) {
+        expireCustomSsoCookies(c, [
+          localSessionCookieName,
+          "orcas_sso_sessionid",
+        ]);
+      }
+      throw error;
+    }
     c.header("X-User-Info", data);
     return c.json(resp.ok(data), HttpStatusCodes.OK);
   };

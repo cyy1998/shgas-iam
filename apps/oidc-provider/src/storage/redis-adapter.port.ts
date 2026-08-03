@@ -1,6 +1,14 @@
 import type { IssuedCredential } from "@iam/api-core/session/kernel";
 import type { AdapterPayload } from "oidc-provider";
-import type { ProviderSessionBinding } from "../session/provider-session.ts";
+import type {
+  CreateOidcAuthorizationCodeSnapshotInput,
+  OidcClaimsSnapshot,
+} from "../provider/claims-snapshot.ts";
+import type {
+  ProviderSessionBinding,
+  ProviderSessionLifecycleFence,
+  ProviderSessionPrincipalAnchor,
+} from "../session/provider-session.ts";
 
 export interface AdapterClientRuntimeReader {
   findRuntime: (clientId: string) => Promise<AdapterPayload | null | undefined>;
@@ -10,9 +18,36 @@ export interface AdapterClientVersionReader {
   findActiveVersion: (clientId: string) => Promise<number | null>;
 }
 
+export interface AdapterClaimsSnapshotIssuer {
+  createAuthorizationCodeSnapshot: (
+    input: CreateOidcAuthorizationCodeSnapshotInput,
+  ) => Promise<OidcClaimsSnapshot>;
+}
+
 export interface AdapterProviderSessionBindingStore {
-  read: (sessionUid: string) => Promise<ProviderSessionBinding | null>;
-  consumeStaged: (accountId: string, sessionUid: string) => Promise<ProviderSessionBinding | null>;
+  destroyProviderSession: (
+    sessionUid: string,
+    expected?: ProviderSessionLifecycleFence,
+  ) => Promise<boolean>;
+  read: (sessionUid: string, clientCode: string) => Promise<ProviderSessionBinding | null>;
+  consumeStaged: (input: {
+    accountId: string;
+    authorizationAttemptId: string;
+    clientCode: string;
+    providerSessionUid: string;
+  }) => Promise<ProviderSessionBinding | null>;
+  ensureClientBinding: (input: {
+    accountId: string;
+    clientCode: string;
+    anchorGeneration: string;
+    oidcConfigVersion: number;
+    principalSessionId: string;
+    providerSessionUid: string;
+  }) => Promise<ProviderSessionBinding | null>;
+  readPrincipalAnchor: (
+    sessionUid: string,
+    accountId: string,
+  ) => Promise<ProviderSessionPrincipalAnchor | null>;
 }
 
 export interface AdapterOidcSessionKernel {

@@ -4,12 +4,11 @@ import { EmploymentDetailDtoSchema } from "../employment";
 
 const DbUserSchema = z.object(selectUserSchema.shape);
 
-export const UserSchema = DbUserSchema.omit({
-  oidcSubject: true,
-});
+export const UserSchema = DbUserSchema;
 
 export const UserDtoSchema = UserSchema.omit({
   password: true,
+  subjectIdentifier: true,
 }).openapi("UserDto");
 
 export const UserDetailDtoSchema = UserDtoSchema.extend({
@@ -25,6 +24,7 @@ export const UserCreateDtoSchema = UserSchema.partial().required({
   password: true,
 }).omit({
   id: true,
+  subjectIdentifier: true,
   isDelete: true,
   createTime: true,
   updateTime: true,
@@ -32,7 +32,7 @@ export const UserCreateDtoSchema = UserSchema.partial().required({
 
 export const OidcAccountDtoSchema = DbUserSchema.pick({
   id: true,
-  oidcSubject: true,
+  subjectIdentifier: true,
   username: true,
   name: true,
   mobile: true,

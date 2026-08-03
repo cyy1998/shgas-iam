@@ -5,6 +5,8 @@ import { ApiErrorCode, UserStatus, UserType } from "@iam/contracts";
 import { describe, expect, mock, test } from "bun:test";
 import { createLoginWithPasswordUseCase } from "../login-with-password.use-case";
 
+const subjectIdentifier = "00000000-0000-4000-8000-000000001001";
+
 const userDetail = {
   id: 1001,
   username: "138550",
@@ -40,7 +42,7 @@ function temporaryRestriction(
 function createFixture(overrides: {
   passwordMatches?: boolean;
   restriction?: ReturnType<typeof temporaryRestriction> | null;
-  user?: { id: number; username: string; name: string } | null;
+  user?: { id: number; subjectIdentifier: string; username: string; name: string } | null;
 } = {}) {
   const auditLogs: LoginWithPasswordDeps["auditLogWriter"] extends {
     recordAuditLog: (input: infer T) => Promise<void>;
@@ -76,7 +78,7 @@ function createFixture(overrides: {
     users: {
       checkPassword: mock(async () => overrides.passwordMatches ?? false),
       getActiveUserByUsername: mock(async () => overrides.user === undefined
-        ? { id: userDetail.id, username: userDetail.username, name: userDetail.name }
+        ? { id: userDetail.id, username: userDetail.username, name: userDetail.name, subjectIdentifier }
         : overrides.user),
       getUserDetailById: mock(async () => userDetail),
     },
@@ -121,7 +123,7 @@ describe("createLoginWithPasswordUseCase", () => {
 
     expect(fixture.getRestriction).toHaveBeenCalledWith(userDetail.id);
     expect(fixture.clearLoginState).toHaveBeenCalledWith(userDetail.id);
-    expect(fixture.createPrincipalSession).toHaveBeenCalledWith(userDetail, {
+    expect(fixture.createPrincipalSession).toHaveBeenCalledWith(subjectIdentifier, {
       amr: ["pwd"],
       origin: {
         ip: "203.0.113.11",

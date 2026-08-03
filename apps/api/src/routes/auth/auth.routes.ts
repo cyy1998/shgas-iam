@@ -1,3 +1,12 @@
+import {
+  GatewayAuthzRequestHeadersSchema,
+} from "@api/services/sso/custom-sso-delivery-request.schema";
+import {
+  CUSTOM_SSO_SESSION_AUTHORIZATION_SECURITY_SCHEME,
+} from "@api/services/sso/custom-sso-delivery.security";
+import {
+  createCustomSsoUnavailableResponse,
+} from "@api/services/sso/custom-sso-retryable.openapi";
 import { createRoute, z } from "@hono/zod-openapi";
 import * as HttpStatusCodes from "@iam/api-core/core/http-status-codes";
 import { commonErrorResponses } from "@iam/api-core/core/openapi/helpers/common-error-responses";
@@ -63,9 +72,28 @@ export const authz = createRoute({
   method: "get",
   path: `${routePrefix}/authz`,
   tags,
+  description:
+    "Requires encoded Client and trusted X-Forwarded-Uri headers plus an authenticated Local Session. OpenAPI clients use the raw Local Session ID through the Authorization security scheme; browser calls may instead use the IAM-managed local_{encodedClientCode}_session cookie.",
+  security: [
+    { [CUSTOM_SSO_SESSION_AUTHORIZATION_SECURITY_SCHEME]: [] },
+  ],
+  request: {
+    headers: GatewayAuthzRequestHeadersSchema,
+  },
   responses: {
     ...commonErrorResponses,
-    [HttpStatusCodes.OK]: jsonContent(createSuccessResponseSchema(z.string()), "准许"),
+    [HttpStatusCodes.OK]: {
+      ...jsonContent(createSuccessResponseSchema(z.string()), "准许"),
+      headers: {
+        "X-User-Info": {
+          description: "与响应 data 完全相同的 Base64 Gateway Subject JSON",
+          schema: { type: "string" },
+        },
+      },
+    },
+    [HttpStatusCodes.SERVICE_UNAVAILABLE]: createCustomSsoUnavailableResponse(
+      "Subject Access 或 Gateway Subject Projection 暂时不可用",
+    ),
   },
 });
 

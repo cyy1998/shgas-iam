@@ -1,5 +1,17 @@
 import { OrganizationDtoSchema, OrganizationQueryDtoSchema } from "@api/services/organization/organization.schema";
-import { UserDetailDtoSchema, UserDtoSchema, UserQueryDtoSchema } from "@api/services/user/user.schema";
+import {
+  CustomSsoDeliveryRequestHeadersSchema,
+} from "@api/services/sso/custom-sso-delivery-request.schema";
+import {
+  CUSTOM_SSO_SESSION_AUTHORIZATION_SECURITY_SCHEME,
+} from "@api/services/sso/custom-sso-delivery.security";
+import {
+  createCustomSsoUnavailableResponse,
+} from "@api/services/sso/custom-sso-retryable.openapi";
+import {
+  CustomSsoSubjectProjectionV1Schema,
+} from "@api/services/sso/custom-sso-subject.schema";
+import { UserDtoSchema, UserQueryDtoSchema } from "@api/services/user/user.schema";
 import { createRoute, z } from "@hono/zod-openapi";
 import * as HttpStatusCodes from "@iam/api-core/core/http-status-codes";
 import { commonErrorResponses } from "@iam/api-core/core/openapi/helpers/common-error-responses";
@@ -18,9 +30,23 @@ export const userInfo = createRoute({
   method: "get",
   path: `${routePrefix}/user-info`,
   tags,
+  description:
+    "Requires the encoded Client header and an authenticated session. OpenAPI clients use the raw session ID through the Authorization security scheme; browser calls may instead use global_session for Client=iam or the IAM-managed local_{encodedClientCode}_session cookie for other clients.",
+  security: [
+    { [CUSTOM_SSO_SESSION_AUTHORIZATION_SECURITY_SCHEME]: [] },
+  ],
+  request: {
+    headers: CustomSsoDeliveryRequestHeadersSchema,
+  },
   responses: {
     ...commonErrorResponses,
-    [HttpStatusCodes.OK]: jsonContent(createSuccessResponseSchema(UserDetailDtoSchema), "本用户基本信息"),
+    [HttpStatusCodes.OK]: jsonContent(
+      createSuccessResponseSchema(CustomSsoSubjectProjectionV1Schema),
+      "当前 Custom SSO Client 可见的主体投影",
+    ),
+    [HttpStatusCodes.SERVICE_UNAVAILABLE]: createCustomSsoUnavailableResponse(
+      "Subject Access 或 Client Subject Projection 暂时不可用",
+    ),
   },
 });
 

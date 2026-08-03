@@ -3,8 +3,10 @@ import type { OidcProviderEnv } from "../env.ts";
 import type { ClientAuthRateLimiter } from "../security/client-auth-rate-limit.ts";
 import { getTraceIdFromHeaders } from "@iam/api-core/logger";
 import { getCookieValue } from "../interaction/global-session.ts";
+import { isGlobalSessionCookieError } from "../session/global-session-error-provenance.ts";
 import { parseBasicClientId } from "./basic-client-auth.ts";
 import { setOidcRoute } from "./request-route.ts";
+import { handleOidcSubjectAccessProtocolError } from "./subject-access-protocol.ts";
 
 export interface ProviderMiddlewareOidcSessionAdapter {
   logoutPrincipalSession: (token: string | undefined) => Promise<unknown>;
@@ -32,7 +34,21 @@ export function registerProviderMiddleware(provider: Provider, deps: RegisterPro
       return;
     }
 
-    await next();
+    try {
+      await next();
+    }
+    catch (error) {
+      if (handleOidcSubjectAccessProtocolError(error, ctx, {
+        cookieName: deps.env.oidc.globalSessionCookie,
+        cookieSecure: deps.env.oidc.cookieSecure,
+        clearGlobalSessionCookie:
+          principalSessionToken !== undefined
+          && isGlobalSessionCookieError(error),
+      })) {
+        return;
+      }
+      throw error;
+    }
 
     if (ctx.response.get("access-control-allow-origin") === "*")
       ctx.remove("access-control-allow-origin");
@@ -46,10 +62,25 @@ export function registerProviderMiddleware(provider: Provider, deps: RegisterPro
         await deps.clientAuthRateLimiter.clear(basicClientId, ctx.ip);
     }
     if (ctx.oidc?.route === "end_session_confirm" && ctx.status < 400 && principalSessionToken) {
-      await deps.oidcSession.logoutPrincipalSession(principalSessionToken);
+      try {
+        await deps.oidcSession.logoutPrincipalSession(principalSessionToken);
+      }
+      catch (error) {
+        if (handleOidcSubjectAccessProtocolError(error, ctx, {
+          cookieName: deps.env.oidc.globalSessionCookie,
+          cookieSecure: deps.env.oidc.cookieSecure,
+          clearGlobalSessionCookie: true,
+        })) {
+          return;
+        }
+        throw error;
+      }
       ctx.cookies.set(deps.env.oidc.globalSessionCookie, null, {
+        expires: new Date(0),
         httpOnly: true,
+        maxAge: 0,
         overwrite: true,
+        path: "/",
         sameSite: "lax",
         secure: deps.env.oidc.cookieSecure,
       });

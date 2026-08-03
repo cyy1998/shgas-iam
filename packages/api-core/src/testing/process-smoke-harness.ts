@@ -80,6 +80,7 @@ type ProcessSmokeFailureKind
   = | "child-error"
     | "child-exit"
     | "cleanup"
+    | "completion-timeout"
     | "probe"
     | "readiness-timeout";
 
@@ -174,6 +175,20 @@ class BoundedProcessOutput {
       this.truncated = true;
     }
   }
+}
+
+/** Owner-disposable bounded capture for assertions on successful child logs. */
+export function createBoundedProcessLogCapture(
+  child: ProcessSmokeChild,
+  options: { maxBytes: number },
+) {
+  if (!Number.isSafeInteger(options.maxBytes) || options.maxBytes <= 0)
+    throw new RangeError("process log capture maxBytes must be a positive safe integer");
+  const output = new BoundedProcessOutput(child, options.maxBytes);
+  return {
+    dispose: () => output.dispose(),
+    snapshot: () => output.snapshot(),
+  };
 }
 
 function toError(error: unknown) {
@@ -510,6 +525,8 @@ export function spawnOwnedProcessTree(options: {
         process.execPath,
         "-LauncherPath",
         windowsJobLauncherPath,
+        "-RuntimeKind",
+        process.versions.bun === undefined ? "node" : "bun",
       ],
       {
         cwd: options.cwd,
@@ -829,6 +846,188 @@ export async function runProcessSmoke<T>(options: RunProcessSmokeOptions<T>) {
   if (!outcome.ok)
     throw outcome.error;
   return outcome.value;
+}
+
+export interface RunProcessCommandSmokeOptions {
+  label: string;
+  start: () => ProcessSmokeChild;
+  completionTimeoutMs: number;
+  cleanupTimeoutMs: number;
+  expectedExitCode?: number;
+  maxOutputBytes?: number;
+  outputDrainTimeoutMs?: number;
+  stop?: (child: ProcessSmokeChild) => Promise<void>;
+}
+
+export async function runProcessCommandSmoke(
+  options: RunProcessCommandSmokeOptions,
+) {
+  let child: ProcessSmokeChild;
+  try {
+    child = options.start();
+  }
+  catch (error) {
+    throw new ProcessSmokeError(
+      "child-error",
+      `${options.label}: failed to start child process: ${toError(error).message}`,
+      { cause: error },
+    );
+  }
+
+  const output = new BoundedProcessOutput(
+    child,
+    options.maxOutputBytes ?? 64 * 1024,
+  );
+  let outcome:
+    | { ok: true; value: { exitCode: number; output: string } }
+    | { ok: false; error: Error };
+  try {
+    const exitCode = await waitForCommandExit(child, output, {
+      label: options.label,
+      completionTimeoutMs: options.completionTimeoutMs,
+      expectedExitCode: options.expectedExitCode ?? 0,
+      outputDrainTimeoutMs: options.outputDrainTimeoutMs ?? 500,
+    });
+    outcome = {
+      ok: true,
+      value: {
+        exitCode,
+        output: output.snapshot(),
+      },
+    };
+  }
+  catch (error) {
+    outcome = { ok: false, error: toError(error) };
+  }
+
+  let cleanupFailure: ProcessSmokeError | undefined;
+  try {
+    await withDeadline(
+      options.stop === undefined
+        ? terminateProcessTree(child, { timeoutMs: options.cleanupTimeoutMs })
+        : options.stop(child),
+      options.cleanupTimeoutMs,
+      `cleanup deadline exceeded after ${options.cleanupTimeoutMs}ms`,
+    );
+  }
+  catch (error) {
+    const cause = toError(error);
+    cleanupFailure = new ProcessSmokeError(
+      "cleanup",
+      processDiagnostic(
+        options.label,
+        "cleanup failed",
+        child,
+        output,
+        `cleanup error: ${cause.message}`,
+      ),
+      { cause },
+    );
+  }
+  finally {
+    output.dispose();
+  }
+
+  if (cleanupFailure !== undefined) {
+    if (!outcome.ok) {
+      throw new AggregateError(
+        [outcome.error, cleanupFailure],
+        `${options.label}: command completion and cleanup both failed\n${cleanupFailure.message}`,
+      );
+    }
+    throw cleanupFailure;
+  }
+  if (!outcome.ok)
+    throw outcome.error;
+  return outcome.value;
+}
+
+async function waitForCommandExit(
+  child: ProcessSmokeChild,
+  output: BoundedProcessOutput,
+  options: {
+    label: string;
+    completionTimeoutMs: number;
+    expectedExitCode: number;
+    outputDrainTimeoutMs: number;
+  },
+) {
+  const closeWaiter = createProcessCloseWaiter(child);
+  let disposeCompletionListeners = () => {};
+  let timeout: NodeJS.Timeout | undefined;
+  try {
+    const completed = new Promise<{
+      code: number | null;
+      signal: NodeJS.Signals | null;
+    }>((resolve, reject) => {
+      let dispose = () => {};
+      const onError = (error: Error) => {
+        dispose();
+        reject(new ProcessSmokeError(
+          "child-error",
+          processDiagnostic(
+            options.label,
+            "child process error before completion",
+            child,
+            output,
+            `child error: ${error.message}`,
+          ),
+          { cause: error },
+        ));
+      };
+      const onExit = (code: number | null, signal: NodeJS.Signals | null) => {
+        dispose();
+        resolve({ code, signal });
+      };
+      dispose = () => {
+        child.off("error", onError);
+        child.off("exit", onExit);
+      };
+      disposeCompletionListeners = dispose;
+      child.once("error", onError);
+      child.once("exit", onExit);
+      if (hasExited(child)) {
+        dispose();
+        resolve({ code: child.exitCode, signal: child.signalCode });
+      }
+    });
+    const deadline = new Promise<never>((_, reject) => {
+      timeout = setTimeout(() => {
+        reject(new ProcessSmokeError(
+          "completion-timeout",
+          processDiagnostic(
+            options.label,
+            `completion deadline exceeded after ${options.completionTimeoutMs}ms`,
+            child,
+            output,
+          ),
+        ));
+      }, options.completionTimeoutMs);
+    });
+    const result = await Promise.race([completed, deadline]);
+    await closeWaiter.wait(options.outputDrainTimeoutMs, {
+      acceptStdioClosure: true,
+    });
+    if (result.code !== options.expectedExitCode || result.signal !== null) {
+      throw new ProcessSmokeError(
+        "child-exit",
+        processDiagnostic(
+          options.label,
+          `expected exit code ${options.expectedExitCode}, received ${result.code ?? "null"}`,
+          child,
+          output,
+          `observed exit: code=${result.code ?? "null"} signal=${result.signal ?? "null"}`,
+        ),
+      );
+    }
+    return result.code;
+  }
+  finally {
+    if (timeout !== undefined)
+      clearTimeout(timeout);
+    disposeCompletionListeners();
+    closeWaiter.dispose();
+  }
 }
 
 export async function withOwnedTemporaryDirectory<T>(options: {

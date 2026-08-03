@@ -54,3 +54,21 @@ export class OidcClientStateError extends DomainBusinessError {
     });
   }
 }
+
+export class CustomSsoClientConfigurationError extends DomainBusinessError {
+  constructor(message: string = "Custom SSO 客户端配置无效") {
+    super(message, {
+      code: ApiErrorCode.BadRequest,
+      httpStatus: DomainHttpStatus.BadRequest,
+    });
+  }
+}
+
+export class CustomSsoClientStateError extends DomainBusinessError {
+  constructor(message: string = "Custom SSO 客户端状态不允许该操作") {
+    super(message, {
+      code: ApiErrorCode.BadRequest,
+      httpStatus: DomainHttpStatus.BadRequest,
+    });
+  }
+}

@@ -1,23 +1,27 @@
-import type { RebuildUserProfileJobPayload, UserStatus } from "@iam/contracts";
-import type { UserDetailDto, UserProfileSearchDoc } from "./user-profile.schema";
+import type { RebuildUserProfileJobPayload } from "@iam/contracts";
+import type { SubjectFactsCacheRecordV1 } from "./subject-facts-cache";
+import type { PublishedUserProfile } from "./user-profile.schema";
+import { createSubjectFactsCacheRecord } from "./subject-facts-cache";
 
-export interface UserProfileRebuildProjection {
-  userId: number;
-  username: string;
-  mobile: string | null;
-  wxId: string | null;
-  status: UserStatus;
-  isDelete: boolean;
-  searchVisible: boolean;
-  profileSchemaVersion: number;
-  detail: UserDetailDto;
-  searchDoc: UserProfileSearchDoc;
-  rebuiltAt: Date;
+export type UserProfileRebuildProjection = PublishedUserProfile;
+
+export interface UserProfilePublicationPort {
+  publishCandidate: (input: {
+    userId: number;
+    dirtyVersion: string;
+    profile: UserProfileRebuildProjection | null;
+    processedAt: Date;
+  }) => Promise<
+    | { status: "published" }
+    | { status: "missing" }
+    | { status: "stale" }
+  >;
 }
 
-export interface UserProfileRebuildProfileStorePort {
-  upsertProfile: (input: UserProfileRebuildProjection) => Promise<unknown>;
-  deleteByUserId: (userId: number) => Promise<unknown>;
+export interface SubjectFactsPublisherPort {
+  publish: (record: SubjectFactsCacheRecordV1) => Promise<{
+    status: "published" | "retained-newer";
+  }>;
 }
 
 export interface UserProfileRebuildDirtyStorePort {
@@ -26,11 +30,6 @@ export interface UserProfileRebuildDirtyStorePort {
     dirtyVersion: string;
     now: Date;
     jobId?: string;
-  }) => Promise<unknown | null>;
-  markProcessed: (input: {
-    userId: number;
-    dirtyVersion: string;
-    processedAt: Date;
   }) => Promise<unknown | null>;
   markFailed: (input: {
     userId: number;
@@ -41,13 +40,27 @@ export interface UserProfileRebuildDirtyStorePort {
 }
 
 export interface UserProfileRebuildBuilderPort {
-  buildOne: (userId: number) => Promise<UserProfileRebuildProjection | null>;
+  buildOne: (input: {
+    userId: number;
+    sourceDirtyVersion: string;
+  }) => Promise<UserProfileRebuildProjection | null>;
+}
+
+export interface UserProfileRebuildLoggerPort {
+  warn: (data: Record<string, unknown>, message: string) => void;
+}
+
+export interface SubjectAccessRepairPort {
+  repairSubject: (subjectIdentifier: string) => Promise<unknown>;
 }
 
 export interface CreateUserProfileRebuildProcessorDeps {
-  profileRepository: UserProfileRebuildProfileStorePort;
   dirtyRepository: UserProfileRebuildDirtyStorePort;
   builder: UserProfileRebuildBuilderPort;
+  publicationRepository: UserProfilePublicationPort;
+  subjectFactsPublisher: SubjectFactsPublisherPort;
+  subjectAccessRepair: SubjectAccessRepairPort;
+  logger: UserProfileRebuildLoggerPort;
   clock: {
     nowDate: () => Date;
   };
@@ -70,25 +83,55 @@ export function createUserProfileRebuildProcessor(deps: CreateUserProfileRebuild
       }
 
       try {
-        const builtProfile = await deps.builder.buildOne(payload.userId);
-        if (builtProfile !== null) {
-          await deps.profileRepository.upsertProfile(builtProfile);
-        }
-        else {
-          await deps.profileRepository.deleteByUserId(payload.userId);
-        }
-        const processed = await deps.dirtyRepository.markProcessed({
+        const builtProfile = await deps.builder.buildOne({
+          userId: payload.userId,
+          sourceDirtyVersion: payload.dirtyVersion,
+        });
+        const processedAt = deps.clock.nowDate();
+        const cacheRecord = builtProfile === null
+          ? null
+          : createSubjectFactsCacheRecord(builtProfile, processedAt);
+        const publication = await deps.publicationRepository.publishCandidate({
           userId: payload.userId,
           dirtyVersion: payload.dirtyVersion,
-          processedAt: deps.clock.nowDate(),
+          profile: builtProfile,
+          processedAt,
         });
-        if (processed === null) {
+        if (publication.status === "stale") {
           return { status: "stale" as const, userId: payload.userId, dirtyVersion: payload.dirtyVersion };
         }
+        if (publication.status === "missing" || cacheRecord === null) {
+          return {
+            status: "missing" as const,
+            userId: payload.userId,
+            dirtyVersion: payload.dirtyVersion,
+          };
+        }
+
+        const cacheStatus = await publishCache(
+          deps.subjectFactsPublisher,
+          cacheRecord,
+          {
+            userId: payload.userId,
+            dirtyVersion: payload.dirtyVersion,
+            logger: deps.logger,
+          },
+        );
+        if (cacheStatus !== "failed") {
+          await repairSubjectAccess(
+            deps.subjectAccessRepair,
+            cacheRecord.subjectIdentifier,
+            {
+              userId: payload.userId,
+              logger: deps.logger,
+            },
+          );
+        }
         return {
-          status: builtProfile === null ? "missing" as const : "rebuilt" as const,
+          status: "rebuilt" as const,
           userId: payload.userId,
           dirtyVersion: payload.dirtyVersion,
+          cacheStatus,
         };
       }
       catch (error) {
@@ -107,8 +150,74 @@ export function createUserProfileRebuildProcessor(deps: CreateUserProfileRebuild
   };
 }
 
+async function repairSubjectAccess(
+  repair: SubjectAccessRepairPort,
+  subjectIdentifier: string,
+  context: {
+    userId: number;
+    logger: UserProfileRebuildLoggerPort;
+  },
+) {
+  try {
+    await repair.repairSubject(subjectIdentifier);
+  }
+  catch (error) {
+    context.logger.warn({
+      userId: context.userId,
+      operation: "subject_access_repair",
+      errorType: readSafeErrorToken(error, "name") ?? "UnknownError",
+    }, "user profile Subject Access repair failed");
+  }
+}
+
 export type UserProfileRebuildProcessor = ReturnType<typeof createUserProfileRebuildProcessor>;
 
 function errorMessage(error: unknown) {
   return error instanceof Error ? error.message : String(error);
+}
+
+async function publishCache(
+  publisher: SubjectFactsPublisherPort,
+  record: SubjectFactsCacheRecordV1,
+  context: {
+    userId: number;
+    dirtyVersion: string;
+    logger: UserProfileRebuildLoggerPort;
+  },
+) {
+  try {
+    return (await publisher.publish(record)).status;
+  }
+  catch (error) {
+    const errorSummary = summarizeCachePublicationError(error);
+    context.logger.warn({
+      userId: context.userId,
+      dirtyVersion: context.dirtyVersion,
+      cacheStatus: "failed",
+      ...errorSummary,
+    }, "user profile Subject Facts cache publication failed");
+    return "failed" as const;
+  }
+}
+
+function summarizeCachePublicationError(error: unknown) {
+  return {
+    errorType: readSafeErrorToken(error, "name") ?? "UnknownError",
+    errorCode: readSafeErrorToken(error, "code"),
+  };
+}
+
+function readSafeErrorToken(error: unknown, property: "code" | "name") {
+  if (typeof error !== "object" || error === null)
+    return undefined;
+
+  try {
+    const value = (error as Record<string, unknown>)[property];
+    return typeof value === "string" && /^[A-Za-z][\w.-]{0,63}$/u.test(value)
+      ? value
+      : undefined;
+  }
+  catch {
+    return undefined;
+  }
 }

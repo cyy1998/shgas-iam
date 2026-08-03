@@ -17,5 +17,6 @@ export interface LoginWithMobileResult {
 
 export interface MobileLoginUser {
   id: number;
+  subjectIdentifier: string;
   name?: string | null;
 }

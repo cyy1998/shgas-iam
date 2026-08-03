@@ -1,5 +1,5 @@
 import type { Env } from "@admin-api/env";
-import type { ClientDto } from "@admin-api/services/client/client.type";
+import type { AdminClientCachePort } from "@admin-api/services/client/client.port";
 import type { SessionKernelConfig } from "@iam/api-core/session/kernel";
 import type Redis from "ioredis";
 import type { Logger } from "pino";
@@ -15,6 +15,7 @@ export interface PasswordHasherPort {
 
 export interface RandomPort {
   uuid: () => string;
+  customSsoClientSecret: () => string;
   oidcClientSecret: () => string;
   password: (length: number) => string;
   integer: (min: number, max: number) => number;
@@ -35,18 +36,12 @@ export interface AdminApiRuntimeConfig {
   sessionKernel: SessionKernelConfig;
 }
 
-export interface ClientCachePort {
-  setClient: (client: ClientDto) => Promise<unknown>;
-  deleteClient: (client: Pick<ClientDto, "clientCode" | "clientSecret">) => Promise<unknown>;
-  syncUpdatedClient: (oldClient: ClientDto, newClient: ClientDto) => Promise<unknown>;
-}
-
 export interface OidcInvalidationPort {
   invalidateClient: (client: { id: number; clientCode: string; oidcConfigVersion: number }) => Promise<unknown>;
 }
 
 export interface AdminApiIntegrationPorts {
-  clientCache: ClientCachePort;
+  clientCache: AdminClientCachePort;
   oidcInvalidation: OidcInvalidationPort;
 }
 

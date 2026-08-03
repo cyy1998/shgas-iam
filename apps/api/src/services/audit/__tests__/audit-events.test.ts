@@ -1,3 +1,4 @@
+import { CustomSsoClientMode } from "@iam/contracts";
 import { describe, expect, test } from "bun:test";
 import * as authAudit from "../events/auth.audit";
 import * as internalAudit from "../events/internal.audit";
@@ -54,15 +55,42 @@ describe("api audit event builders", () => {
   test("builds sso and third-party login success payloads", () => {
     const user = { id: 1001, username: "zhangsan", name: "张三" } as never;
 
-    expect(authAudit.buildLocalLoginSuccessAudit(user, "portal", "admin" as never)).toMatchObject({
+    const gatewayAudit = authAudit.buildGatewayLoginSuccessAudit(
+      "00000000-0000-4000-8000-000000001001",
+      "portal",
+    );
+    expect(gatewayAudit).toMatchObject({
       action: "auth.login.local",
+      actorUserId: null,
       outcome: "success",
+      targetCode: "00000000-0000-4000-8000-000000001001",
+      targetId: null,
+      targetType: "subject",
       details: {
         clientCode: "portal",
         loginType: "local",
-        managementLevel: "admin",
+        mode: CustomSsoClientMode.Gateway,
       },
     });
+    expect(gatewayAudit.details).not.toHaveProperty("managementLevel");
+    const independentAudit = authAudit.buildIndependentLoginSuccessAudit(
+      "00000000-0000-4000-8000-000000001001",
+      "portal",
+    );
+    expect(independentAudit).toMatchObject({
+      action: "auth.login.local",
+      actorUserId: null,
+      outcome: "success",
+      targetCode: "00000000-0000-4000-8000-000000001001",
+      targetId: null,
+      targetType: "subject",
+      details: {
+        clientCode: "portal",
+        loginType: "local",
+        mode: CustomSsoClientMode.Independent,
+      },
+    });
+    expect(independentAudit.details).not.toHaveProperty("managementLevel");
     expect(authAudit.buildOaLoginSuccessAudit(user, "oa")).toMatchObject({
       action: "auth.login.oa",
       outcome: "success",

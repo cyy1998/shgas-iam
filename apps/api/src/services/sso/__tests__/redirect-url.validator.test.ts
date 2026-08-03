@@ -8,23 +8,36 @@ beforeEach(() => {
 });
 
 describe("createSsoRedirectUrlValidator", () => {
-  test("accepts an http redirect with a query matching the configured wildcard and path pattern", () => {
+  test("returns the canonical actual redirect URL that must be bound into the grant", () => {
     const validator = createSsoRedirectUrlValidator({ logger: { warn } });
 
-    expect(validator.isAllowed(
+    expect(validator.normalizeAllowed(
+      "portal",
+      "HTTPS://APP.Example.COM:443/a/../callback",
+      ["https://app.example.com/callback"],
+    )).toBe("https://app.example.com/callback");
+  });
+
+  test("rejects an actual redirect URL with dynamic query data", () => {
+    const validator = createSsoRedirectUrlValidator({ logger: { warn } });
+
+    expect(validator.normalizeAllowed(
       "portal",
       "https://tenant.example.com/app/callback?next=1",
       ["https://*.example.com/app/*"],
-    )).toBe(true);
+    )).toBeNull();
   });
 
   test("skips an invalid historical pattern, logs context, and accepts a later match", () => {
     const validator = createSsoRedirectUrlValidator({ logger: { warn } });
+    const credentialSentinel = "unique-redirect-password-sentinel";
+    const invalidPattern
+      = `https://user:${credentialSentinel}@invalid.example.com/callback`;
 
-    expect(validator.isAllowed(
+    expect(validator.normalizeAllowed(
       "portal",
       "https://app.example.com/foo",
-      ["https://*.com/callback", "https://app.example.com/foo"],
+      [invalidPattern, "https://app.example.com/foo"],
       {
         requestContext: {
           sourceApp: "iam",
@@ -36,38 +49,47 @@ describe("createSsoRedirectUrlValidator", () => {
           method: null,
         },
       },
-    )).toBe(true);
+    )).toBe("https://app.example.com/foo");
     expect(warn).toHaveBeenCalledWith(expect.objectContaining({
       clientCode: "portal",
-      pattern: "https://*.com/callback",
+      patternIndex: 0,
+      reason: "url_credentials_not_allowed",
       requestId: "req-redirect",
     }), "invalid client redirect url pattern");
+    const observableLog = JSON.stringify(warn.mock.calls);
+    expect(observableLog).not.toContain(invalidPattern);
+    expect(observableLog).not.toContain(credentialSentinel);
+    expect(observableLog).not.toContain("user:");
   });
 
   test("rejects non-http redirect schemes before pattern matching", () => {
     const validator = createSsoRedirectUrlValidator({ logger: { warn } });
 
-    expect(validator.isAllowed("portal", "javascript:alert(1)", ["javascript:*"])).toBe(false);
+    expect(validator.normalizeAllowed(
+      "portal",
+      "javascript:alert(1)",
+      ["javascript:*"],
+    )).toBeNull();
     expect(warn).not.toHaveBeenCalled();
   });
 
   test("does not treat a path-prefix match as a path-segment match", () => {
     const validator = createSsoRedirectUrlValidator({ logger: { warn } });
 
-    expect(validator.isAllowed(
+    expect(validator.normalizeAllowed(
       "portal",
       "https://app.example.com/foobar",
       ["https://app.example.com/foo"],
-    )).toBe(false);
+    )).toBeNull();
   });
 
   test("does not match a wildcard subdomain pattern against the root domain", () => {
     const validator = createSsoRedirectUrlValidator({ logger: { warn } });
 
-    expect(validator.isAllowed(
+    expect(validator.normalizeAllowed(
       "portal",
       "https://example.com",
       ["https://*.example.com"],
-    )).toBe(false);
+    )).toBeNull();
   });
 });

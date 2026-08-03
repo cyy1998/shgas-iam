@@ -246,6 +246,38 @@ routes:
         use_real_request_uri_unsafe: false
     upstream: api
     plugin_config: internal-api-ip-rate-limit
+  - key: sso-token-external
+    desc: IAM server-to-server Custom SSO token exchange through external dev host without browser CORS
+    uri: /sso/token
+    hosts:
+      - ${IAM_SSO_EXTERNAL_HOST}
+    plugins:
+      prometheus:
+        prefer_name: true
+      proxy-rewrite:
+        headers:
+          set:
+            X-IAM-Entry-Network: external
+        use_real_request_uri_unsafe: false
+    priority: 300
+    upstream: api
+    plugin_config: api-ip-rate-limit
+  - key: sso-token-internal
+    desc: IAM server-to-server Custom SSO token exchange through internal dev host without browser CORS
+    uri: /sso/token
+    hosts:
+      - ${IAM_SSO_INTERNAL_HOST}
+    plugins:
+      prometheus:
+        prefer_name: true
+      proxy-rewrite:
+        headers:
+          set:
+            X-IAM-Entry-Network: internal
+        use_real_request_uri_unsafe: false
+    priority: 300
+    upstream: api
+    plugin_config: api-ip-rate-limit
   - key: sso-external
     desc: IAM SSO tier through external dev host
     uri: /sso/*

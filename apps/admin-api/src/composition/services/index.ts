@@ -26,7 +26,10 @@ export interface CreateAdminApiServicesOptions {
   roleAssignmentResolver: RoleAssignmentResolver;
   runtime: AdminApiRuntimePorts;
   repositories: AdminApiRepositories;
-  session: Pick<AdminApiSession, "kernel" | "loginRestriction" | "revocation">;
+  session: Pick<
+    AdminApiSession,
+    "kernel" | "loginRestriction" | "revocation" | "subjectAccessLifecycle"
+  >;
   unitOfWork: AdminApiUnitOfWork;
 }
 
@@ -54,9 +57,11 @@ export function createAdminApiServices(options: CreateAdminApiServicesOptions) {
     passwordHasher: runtime.passwordHasher,
     random: runtime.random,
     sessionRevocation: session.revocation,
+    subjectAccessLifecycle: session.subjectAccessLifecycle,
     uow: mapUnitOfWork(unitOfWork, tx => ({
       userRepository: tx.repositories.user,
       auditService: tx.auditService,
+      subjectAccessMutation: tx.subjectAccessMutation,
       userProfileInvalidation: tx.userProfileInvalidation,
     })),
   });

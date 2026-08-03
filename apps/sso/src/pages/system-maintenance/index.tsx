@@ -2,7 +2,7 @@ import { ReloadOutlined, ToolOutlined } from '@ant-design/icons';
 import { ClientStatus } from '@iam/contracts';
 import logoColorfulTextWhite from '@sso/assets/logo-colorful-text-white.png';
 import { clientStatus } from '@sso/services/open';
-import { decodeRedirect, getQuery } from '@sso/utils/url';
+import { getQuery } from '@sso/utils/url';
 import { Button, message, Spin } from 'antd';
 import { useState } from 'react';
 import './index.less';
@@ -21,7 +21,7 @@ export default function SystemMaintenancePage() {
     try {
       const data = await clientStatus({ clientCode });
       if (!data || data.status !== ClientStatus.Maintenance) {
-        const redirectUrl = decodeRedirect(getQuery('redirectUrl'));
+        const redirectUrl = getQuery('redirectUrl');
         if (redirectUrl) {
           window.location.href = redirectUrl;
         }

@@ -1,4 +1,7 @@
-import { ApiErrorCode } from '@iam/contracts';
+import {
+  ApiErrorCode,
+  splitFirstPartySsoNavigation,
+} from '@iam/contracts';
 import { API_PREFIX, SSO_CLIENT_CODE } from '@sso/constants/config';
 import type { ApiEnvelope } from '@sso/types/api';
 import { currentSearchParams } from '@sso/utils/url';
@@ -30,13 +33,25 @@ function preserveQuery(): string {
 
 function loginQuery(): string {
   const usp = currentSearchParams();
-  if (!usp.get('oidcReturn')) {
-    if (!usp.get('client')) usp.set('client', SSO_CLIENT_CODE);
-    if (!usp.get('redirectUrl')) {
-      usp.set('redirectUrl', window.location.href);
-    }
+  if (usp.get('oidcReturn')) {
+    return `?${usp.toString()}`;
   }
-  return `?${usp.toString()}`;
+
+  const client = usp.get('client') || SSO_CLIENT_CODE;
+  if (usp.get('redirectUrl')) {
+    if (!usp.get('client')) usp.set('client', client);
+    return `?${usp.toString()}`;
+  }
+
+  const navigation = splitFirstPartySsoNavigation(window.location.href);
+  const loginParams = new URLSearchParams({
+    client,
+    redirectUrl: navigation.redirectUrl,
+  });
+  if (navigation.state !== undefined) {
+    loginParams.set('state', navigation.state);
+  }
+  return `?${loginParams.toString()}`;
 }
 
 function gotoLogin() {

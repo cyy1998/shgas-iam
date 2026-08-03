@@ -27,7 +27,12 @@ export interface CreateApiUseCasesOptions {
 }
 
 export function createApiUseCases(options: CreateApiUseCasesOptions) {
-  const { auditLogWriter, runtime, services, unitOfWork } = options;
+  const {
+    auditLogWriter,
+    runtime,
+    services,
+    unitOfWork,
+  } = options;
 
   const accountRecovery = {
     requestPasswordResetCode: createRequestPasswordResetCodeUseCase({
@@ -78,17 +83,16 @@ export function createApiUseCases(options: CreateApiUseCasesOptions) {
   const sso = {
     authorize: createAuthorizeSsoUseCase({
       authorizationGrants: services.customSsoSession,
-      clients: services.client,
+      clients: services.customSsoClientRuntime,
       redirectUrls: services.ssoRedirectUrl,
     }),
     completeCallback: createCompleteSsoCallbackUseCase({
       authorizationGrants: services.customSsoSession,
-      clients: services.client,
-      redirectUrls: services.ssoRedirectUrl,
+      clients: services.customSsoClientRuntime,
     }),
     exchangeCode: createExchangeSsoCodeUseCase({
       authorizationGrants: services.customSsoSession,
-      clients: services.client,
+      clientCredentials: services.customSsoClientCredentials,
     }),
     loginWithOa: createLoginWithOaUseCase({
       auditLogWriter,
@@ -121,13 +125,17 @@ export function createApiUseCases(options: CreateApiUseCasesOptions) {
       nodeEnv: runtime.config.env.nodeEnv,
     },
     mobileService: services.mobile,
+    random: runtime.random,
+    subjectAccessLifecycle: services.subjectAccessLifecycle,
     uow: mapUnitOfWork(unitOfWork, tx => ({
       employmentRepository: tx.repositories.employment,
       organizationRepository: tx.repositories.organization,
       positionRepository: tx.repositories.position,
+      subjectAccessMutation: tx.subjectAccessMutation,
       userRepository: tx.repositories.user,
       userProfileInvalidation: tx.userProfileInvalidation,
     })),
+    userReader: services.user,
   });
 
   return { accountRecovery, authentication, registerPurveyorContact, sso };

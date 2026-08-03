@@ -30,7 +30,7 @@ function sessionListResult() {
       principalSessionId: "ps-42",
       user: {
         id: 42,
-        subjectId: "42",
+        subjectId: "00000000-0000-4000-8000-000000000042",
         username: "alice",
         name: "Alice",
         accountStatus: "normal" as const,
@@ -507,7 +507,7 @@ describe("admin session management adapter", () => {
       principalSessionId: "ps-42",
       user: {
         id: 42,
-        subjectId: "42",
+        subjectId: "00000000-0000-4000-8000-000000000042",
         username: "alice",
         name: "Alice",
         accountStatus: "normal",
@@ -998,6 +998,7 @@ describe("admin session management adapter", () => {
       userControl: { revokeUserSessions },
       users: {
         getSessionManagementUserSummaries: mock(async () => []),
+        getSessionManagementUserSummariesBySubjectIdentifiers: mock(async () => []),
       },
     });
     const adapter = createSessionManagementAdapter({

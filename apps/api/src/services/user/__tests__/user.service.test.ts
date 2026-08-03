@@ -1,3 +1,4 @@
+import type { SubjectAccessMutationReceipt } from "@iam/api-core/subject-access";
 import { createApiPasswordHasher } from "@api/composition/runtime/password-hasher";
 import { createImmediateUnitOfWork } from "@api/testing/fakes";
 import { UserStatus } from "@iam/contracts";
@@ -7,11 +8,17 @@ import { createUserPasswordHelper } from "../user-password.helper";
 import { createUserService } from "../user.service";
 
 const EXISTING_BCRYPT_TS_8_HASH = "$2b$04$ZwwFh9CSK/owUc7IdLKdFOPiqfxmljguVbVqfGRZq8J9tkkdrcxH2";
+const subjectAccessMutationReceipt: SubjectAccessMutationReceipt = {
+  subjectIdentifier: "11111111-1111-4111-8111-111111111111",
+  transitionId: "20000000-0000-4000-8000-000000000002",
+  ownerToken: "20000000-0000-4000-8000-000000000003",
+};
 
 function createDeps(overrides: Record<string, unknown> = {}) {
   const bindPhoneReservation = { usage: "bindPhone", phone: "13900000000", token: "bind-token" };
   const user = {
     id: 1,
+    subjectIdentifier: "11111111-1111-4111-8111-111111111111",
     username: "zhangsan",
     name: "张三",
     userType: "employee",
@@ -25,6 +32,12 @@ function createDeps(overrides: Record<string, unknown> = {}) {
     updateTime: new Date(),
   };
   const tx = {
+    subjectAccessMutation: {
+      runMutation: async <T>(
+        _receipt: SubjectAccessMutationReceipt,
+        mutation: () => Promise<T>,
+      ) => await mutation(),
+    },
     userRepository: {
       getUserByUsername: mock(async () => user),
       setMobile: mock(async () => user),
@@ -49,6 +62,27 @@ function createDeps(overrides: Record<string, unknown> = {}) {
       assertStrongPassword: mock(() => undefined),
       hashUserPassword: mock(async (password: string) => `hashed:${password}`),
       verifyUserPassword: mock(async (_user: unknown, password: string) => password === "oldPass123"),
+    },
+    sessionRevocation: {
+      revokeUserSessions: mock(async () => undefined),
+    },
+    subjectAccessLifecycle: {
+      run: mock(async (input: {
+        mutate: (receipt: SubjectAccessMutationReceipt) => Promise<unknown>;
+        revokeSessions?: (
+          result: unknown,
+          context: {
+            invalidatedSubjectAccessTransitionId: string;
+          },
+        ) => Promise<unknown>;
+      }) => {
+        const result = await input.mutate(subjectAccessMutationReceipt);
+        await input.revokeSessions?.(result, {
+          invalidatedSubjectAccessTransitionId:
+            "20000000-0000-4000-8000-000000000001",
+        });
+        return result;
+      }),
     },
     uow: createImmediateUnitOfWork(tx),
     tx,
@@ -162,6 +196,33 @@ describe("createUserService", () => {
     expect(deps.tx.userProfileInvalidation.recordChanges).toHaveBeenCalledWith([
       { kind: "user", userId: 1 },
     ]);
+    expect(deps.subjectAccessLifecycle.run).toHaveBeenCalledWith(expect.objectContaining({
+      subjectIdentifier: deps.user.subjectIdentifier,
+      disposition: "disabled",
+    }));
+    expect(deps.sessionRevocation.revokeUserSessions).toHaveBeenCalledWith({
+      subjectIdentifier: deps.user.subjectIdentifier,
+      reason: "user_disabled",
+      onlySubjectAccessTransitionId: "20000000-0000-4000-8000-000000000001",
+    });
+  });
+
+  test("does not mutate when Subject Access cannot pre-block a pause", async () => {
+    const barrierError = new Error("subject access unavailable");
+    const deps = createDeps({
+      subjectAccessLifecycle: {
+        run: mock(async () => {
+          throw barrierError;
+        }),
+      },
+    });
+    const service = createUserService(deps);
+
+    await expect(service.pauseEnabledUser(1)).rejects.toBe(barrierError);
+
+    expect(deps.tx.userRepository.updateEnabledUserStatus).not.toHaveBeenCalled();
+    expect(deps.tx.userProfileInvalidation.recordChanges).not.toHaveBeenCalled();
+    expect(deps.sessionRevocation.revokeUserSessions).not.toHaveBeenCalled();
   });
 
   test("delegates user detail and legacy search reads to profile query service", async () => {

@@ -3,14 +3,27 @@ import type {
   UserProfileBuildDataset,
   UserProfileBuildOrgPathRow,
   UserProfileBuildPosition,
+  UserProfileBuildPrivilegeRow,
   UserProfileBuildRepository,
+  UserProfileBuildRoleRow,
 } from "./user-profile-build.repository";
-import type { UserDetailDto, UserProfileSearchDoc } from "./user-profile.schema";
-import { OrganizationType, UserStatus } from "@iam/contracts";
+import type {
+  PublishedUserProfile,
+  SubjectFactsDocumentV1,
+} from "./user-profile.schema";
+import {
+  EmploymentStatus,
+  OrganizationStatus,
+  OrganizationType,
+  PositionStatus,
+  UserStatus,
+} from "@iam/contracts";
+import { formatDirtyVersion } from "./dirty-version";
 import {
   buildAncestorKey,
   CURRENT_USER_PROFILE_SCHEMA_VERSION,
   EmploymentDetailDtoSchema,
+  SubjectFactsDocumentV1Schema,
   toEmploymentDto,
   UserDetailDtoSchema,
   UserProfileSearchDocSchema,
@@ -26,39 +39,41 @@ export interface UserProfileBuilderDeps {
   };
 }
 
-export interface BuiltUserProfile {
+export type BuiltUserProfile = PublishedUserProfile;
+
+export interface UserProfileBuildTarget {
   userId: number;
-  username: string;
-  mobile: string | null;
-  wxId: string | null;
-  status: UserStatus;
-  isDelete: boolean;
-  searchVisible: boolean;
-  profileSchemaVersion: number;
-  detail: UserDetailDto;
-  searchDoc: UserProfileSearchDoc;
-  rebuiltAt: Date;
+  sourceDirtyVersion: string;
 }
 
 type EmploymentOrgNode = Pick<
   Organization,
-  "id" | "orgCode" | "orgName" | "orgType" | "level" | "parentId" | "isVirtual" | "isEntity"
+  | "id"
+  | "orgCode"
+  | "orgName"
+  | "orgType"
+  | "level"
+  | "parentId"
+  | "isVirtual"
+  | "isEntity"
+  | "status"
+  | "isDelete"
 > & {
   pathIndex: number;
   distanceToAssignedOrg: number;
 };
 
 export function createUserProfileBuilder(deps: UserProfileBuilderDeps) {
-  async function buildOne(userId: number) {
-    return (await buildMany([userId]))[0] ?? null;
+  async function buildOne(target: UserProfileBuildTarget) {
+    return (await buildMany([target]))[0] ?? null;
   }
 
-  async function buildMany(userIds: number[]) {
-    const uniqueUserIds = [...new Set(userIds)];
+  async function buildMany(targets: UserProfileBuildTarget[]) {
+    const targetsByUserId = normalizeBuildTargets(targets);
     const profiles: BuiltUserProfile[] = [];
-    for (const chunk of chunks(uniqueUserIds, deps.config.batchSize)) {
+    for (const chunk of chunks([...targetsByUserId.keys()], deps.config.batchSize)) {
       const dataset = await deps.buildRepository.loadByUserIds(chunk);
-      profiles.push(...buildFromDataset(dataset, deps.clock.nowDate()));
+      profiles.push(...buildFromDataset(dataset, deps.clock.nowDate(), targetsByUserId));
     }
     return profiles;
   }
@@ -71,7 +86,11 @@ export function createUserProfileBuilder(deps: UserProfileBuilderDeps) {
 
 export type UserProfileBuilder = ReturnType<typeof createUserProfileBuilder>;
 
-function buildFromDataset(dataset: UserProfileBuildDataset, rebuiltAt: Date): BuiltUserProfile[] {
+function buildFromDataset(
+  dataset: UserProfileBuildDataset,
+  rebuiltAt: Date,
+  targetsByUserId: ReadonlyMap<number, string>,
+): BuiltUserProfile[] {
   const employmentRowsByUserId = groupBy(dataset.employments, row => row.userId);
   const positionById = new Map(dataset.positions.map(position => [position.id, position]));
   const orgPathByOrgId = buildOrgPathMap(dataset.orgPathRows);
@@ -79,13 +98,17 @@ function buildFromDataset(dataset: UserProfileBuildDataset, rebuiltAt: Date): Bu
   const privilegesByRoleId = groupBy(dataset.privilegeRows, row => row.roleId);
 
   return dataset.users.map((user) => {
+    const sourceDirtyVersion = targetsByUserId.get(user.id);
+    if (sourceDirtyVersion === undefined)
+      throw new Error(`User Profile build returned unexpected user ${user.id}`);
     const employmentDetails = (employmentRowsByUserId.get(user.id) ?? [])
       .map((employment) => {
         const position = positionById.get(employment.posId);
         const fullOrgPath = orgPathByOrgId.get(employment.orgId) ?? [];
         const assignedOrg = fullOrgPath.find(node => node.id === employment.orgId);
-        if (position === undefined || assignedOrg === undefined)
+        if (position === undefined || assignedOrg === undefined) {
           return null;
+        }
 
         const roleRows = roleRowsByEmploymentId.get(employment.id) ?? [];
         const roles = unique(roleRows.map(row => row.roleCode));
@@ -103,6 +126,7 @@ function buildFromDataset(dataset: UserProfileBuildDataset, rebuiltAt: Date): Bu
           employment,
           organization,
           position,
+          roleRows,
           roles,
           privileges,
           dto: EmploymentDetailDtoSchema.parse({
@@ -137,21 +161,117 @@ function buildFromDataset(dataset: UserProfileBuildDataset, rebuiltAt: Date): Bu
       },
       employments: employmentDetails.map(item => toSearchEmploymentDoc(item)),
     });
+    const subjectFacts = SubjectFactsDocumentV1Schema.parse({
+      employments: employmentDetails
+        .filter(isCurrentSubjectFactsEmployment)
+        .map(item => toSubjectFactsEmployment(item, privilegesByRoleId))
+        .sort(compareSubjectFactsEmployments),
+    });
 
     return {
       userId: user.id,
+      subjectIdentifier: user.subjectIdentifier,
       username: user.username,
+      name: user.name,
       mobile: user.mobile,
       wxId: user.wxId,
       status: user.status,
       isDelete: user.isDelete,
       searchVisible: user.status === UserStatus.Enable && !user.isDelete,
       profileSchemaVersion: CURRENT_USER_PROFILE_SCHEMA_VERSION,
+      sourceDirtyVersion,
       detail,
       searchDoc,
+      subjectFacts,
       rebuiltAt,
     };
   });
+}
+
+function isCurrentSubjectFactsEmployment(input: {
+  employment: Employment;
+  organization: {
+    assignedOrg: EmploymentOrgNode;
+  };
+  position: UserProfileBuildPosition;
+}) {
+  return input.employment.status === EmploymentStatus.Enable
+    && !input.employment.isDelete
+    && input.position.status === PositionStatus.Enable
+    && !input.position.isDelete
+    && input.organization.assignedOrg.status === OrganizationStatus.Enable
+    && !input.organization.assignedOrg.isDelete;
+}
+
+function normalizeBuildTargets(targets: UserProfileBuildTarget[]) {
+  const result = new Map<number, string>();
+  for (const target of targets) {
+    const sourceDirtyVersion = formatDirtyVersion(target.sourceDirtyVersion);
+    const existingVersion = result.get(target.userId);
+    if (existingVersion !== undefined && existingVersion !== sourceDirtyVersion) {
+      throw new Error(`User Profile ${target.userId} cannot be built for multiple Dirty Versions`);
+    }
+    result.set(target.userId, sourceDirtyVersion);
+  }
+  return result;
+}
+
+function toSubjectFactsEmployment(
+  input: {
+    employment: Employment;
+    organization: {
+      assignedOrg: EmploymentOrgNode;
+      fullOrgPath: EmploymentOrgNode[];
+    };
+    position: UserProfileBuildPosition;
+    roleRows: UserProfileBuildRoleRow[];
+  },
+  privilegesByRoleId: Map<number, UserProfileBuildPrivilegeRow[]>,
+) {
+  return {
+    isPrimary: input.employment.isPrimary,
+    organization: {
+      code: input.organization.assignedOrg.orgCode,
+      name: input.organization.assignedOrg.orgName,
+      type: input.organization.assignedOrg.orgType,
+      path: input.organization.fullOrgPath.map(node => ({
+        code: node.orgCode,
+        name: node.orgName,
+        type: node.orgType,
+      })),
+    },
+    position: {
+      code: input.position.posCode,
+      name: input.position.posName,
+    },
+    clientAuthorizations: [...groupBy(input.roleRows, role => role.clientCode)]
+      .sort(([left], [right]) => compareCodes(left, right))
+      .map(([clientCode, roles]) => ({
+        clientCode,
+        roles: [...new Map(roles.map(role => [role.roleCode, role])).values()]
+          .sort((left, right) => compareCodes(left.roleCode, right.roleCode))
+          .map(role => ({
+            code: role.roleCode,
+            privileges: unique(
+              (privilegesByRoleId.get(role.roleId) ?? []).map(row => row.privilegeCode),
+            ).sort(compareCodes),
+          })),
+      })),
+  };
+}
+
+function compareSubjectFactsEmployments(
+  left: SubjectFactsDocumentV1["employments"][number],
+  right: SubjectFactsDocumentV1["employments"][number],
+) {
+  if (left.isPrimary !== right.isPrimary)
+    return left.isPrimary ? -1 : 1;
+  return compareCodes(left.organization.code, right.organization.code)
+    || compareCodes(left.position.code, right.position.code);
+}
+
+function compareCodes(left: string, right: string) {
+  return left < right ? -1 : left > right ? 1 : 0;
 }
 
 function toSearchEmploymentDoc(input: {

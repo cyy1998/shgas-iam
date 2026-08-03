@@ -5,7 +5,11 @@ param(
   [string]$NodeExecutable,
 
   [Parameter(Mandatory = $true)]
-  [string]$LauncherPath
+  [string]$LauncherPath,
+
+  [Parameter(Mandatory = $true)]
+  [ValidateSet("bun", "node")]
+  [string]$RuntimeKind
 )
 
 $ErrorActionPreference = "Stop"
@@ -128,7 +132,13 @@ namespace IamProcessSmoke
 
   $startInfo = New-Object Diagnostics.ProcessStartInfo
   $startInfo.FileName = $NodeExecutable
-  $startInfo.Arguments = '"' + $LauncherPath.Replace('"', '\"') + '"'
+  $launcherArgument = '"' + $LauncherPath.Replace('"', '\"') + '"'
+  $startInfo.Arguments = if ($RuntimeKind -eq "bun") {
+    "--no-env-file " + $launcherArgument
+  }
+  else {
+    $launcherArgument
+  }
   $startInfo.UseShellExecute = $false
   $startInfo.CreateNoWindow = $true
   $startInfo.RedirectStandardInput = $true

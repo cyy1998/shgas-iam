@@ -54,14 +54,15 @@
 
 | 路径 | 职责与边界 |
 |---|---|
-| `packages/api-core/src` | 共享后端基础设施：`createApp`、route/OpenAPI/response helpers、errors、middleware、Redis、logging、observability、Session Kernel、LoginRestriction、UnitOfWork 和 tRPC utilities。共享 process-smoke harness 位于 `src/testing/`，只通过独立 testing export 暴露。 |
+| `packages/api-core/src` | 共享后端基础设施：`createApp`、route/OpenAPI/response helpers、errors、middleware、Redis、logging、observability、Session Kernel、LoginRestriction、Subject Access Barrier、UnitOfWork 和 tRPC utilities。共享 process-smoke harness 位于 `src/testing/`，只通过独立 testing export 暴露。 |
+| `packages/client-subject-projection/src` | 协议中性的 Client Subject Projection deep Module；公开 `resolve` Interface、Catalog V1、最窄 facts/access/freshness ports，并以独立 subpath 暴露 Custom SSO V1 wire mapper 和纯内存测试 adapter。 |
 | `packages/contracts/src` | 跨 app/package 消费的稳定 contracts 与 enums。 |
 | `packages/domain/src` | 共享 domain schemas/types、pure domain rules、audit helpers 和可复用 domain/business errors。 |
 | `packages/db/src` | Drizzle schemas、relations、migrations、singleton client 和 query helpers。Schema/relations domain 为 `core` 与 `log`；共享 column helpers 位于 `schema/_shard/`。 |
 | `packages/eslint-config` | 全仓唯一 ESLint 配置所有者，公开 root/backend/frontend preset factories。`benchmark/` 的 lean/curated profiles 只用于测量和选型，不是生产 presets。 |
 | `packages/jobs/src` | 共享 BullMQ connection、queue、worker、job ID 和 default option helpers。 |
 | `packages/role-assignment-resolution/src` | 通过 `createRoleAssignmentResolver(db)` 暴露正向 Effective Role 与反向受影响用户解析的唯一 public seam；assignment 来源、组织闭包、有效性、去重和排序规则留在 package 内。 |
-| `packages/user-profile-read-model/src` | API/admin-api/worker 消费的 versioned user-profile read model，包括 transaction-bound `UserProfileInvalidation`、dirty/rebuild workflow、producer/query、repositories 和 worker module；受影响用户通过注入的反向 role-assignment resolver 推导。 |
+| `packages/user-profile-read-model/src` | API/admin-api/worker 消费的 versioned user-profile read model，包括 transaction-bound `UserProfileInvalidation`、dirty/rebuild workflow、version-bound Subject Facts builder、PostgreSQL atomic publication、提交后的 Redis monotonic publisher、Subject Facts read-through/freshness reader、Subject Access PostgreSQL authority reader、producer/query、repositories 和 worker module；Effective Role 与受影响用户均通过唯一 role-assignment resolver seam 推导。 |
 
 更详细的 package ownership、公开 exports、数据库和 transaction 规则见
 [共享契约与数据库](contracts-and-database.md)。

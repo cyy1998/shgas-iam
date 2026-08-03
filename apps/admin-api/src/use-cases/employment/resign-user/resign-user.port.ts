@@ -1,3 +1,7 @@
+import type {
+  SubjectAccessMutationReceipt,
+  SubjectAccessTransitionTarget,
+} from "@iam/api-core/subject-access";
 import type { UnitOfWorkPort } from "@iam/api-core/uow";
 import type { UserStatus } from "@iam/contracts";
 import type { AuditActorType, AuditDetails, AuditOutcome } from "@iam/domain/audit";
@@ -15,6 +19,7 @@ export type ResignUserProfileChange
 
 export interface ResignUserTarget {
   id: number;
+  subjectIdentifier: string;
   username: string;
   name?: string | null;
 }
@@ -50,6 +55,13 @@ export interface ResignUserTransactionPorts {
   employmentStore: {
     endActiveEmploymentsByUserId: (userId: number) => Promise<unknown>;
   };
+  subjectAccessMutation: {
+    runMutation: <T>(
+      receipt: SubjectAccessMutationReceipt,
+      mutation: () => Promise<T>,
+      resolveTarget: (result: T) => SubjectAccessTransitionTarget,
+    ) => Promise<T>;
+  };
   userProfileInvalidation: {
     recordChanges: (changes: readonly ResignUserProfileChange[]) => Promise<void>;
   };
@@ -62,12 +74,38 @@ export interface ResignUserTransactionPorts {
 export interface ResignUserSessionRevocationPort {
   revokeUserSessions: (input: {
     userId: number;
+    subjectIdentifier: string;
     reason: "user_disabled";
+    onlySubjectAccessTransitionId?: string;
     auditContext?: ResignUserOptions["auditContext"];
   }) => Promise<unknown>;
 }
 
+export interface ResignUserReaderPort {
+  getUserByUsernameForAdmin: (username: string) => Promise<ResignUserTarget | null>;
+}
+
+export interface ResignUserSubjectAccessLifecyclePort {
+  run: (input: {
+    subjectIdentifier: string;
+    disposition: "disabled";
+    mutate: (receipt: SubjectAccessMutationReceipt) => Promise<true>;
+    revokeSessions: (
+      result: true,
+      context: {
+        invalidatedSubjectAccessTransitionId: string;
+      },
+    ) => Promise<unknown>;
+    observability?: {
+      requestId?: string;
+      traceId?: string;
+    };
+  }) => Promise<true>;
+}
+
 export interface ResignUserUseCaseDeps {
   sessionRevocation: ResignUserSessionRevocationPort;
+  subjectAccessLifecycle: ResignUserSubjectAccessLifecyclePort;
   uow: UnitOfWorkPort<ResignUserTransactionPorts>;
+  userReader: ResignUserReaderPort;
 }

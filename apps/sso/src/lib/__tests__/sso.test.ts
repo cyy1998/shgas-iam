@@ -23,6 +23,31 @@ describe('sso helpers', () => {
     );
   });
 
+  it('round-trips optional opaque state when login resumes authorization', () => {
+    const cfg = {
+      authorizationEndpoint: '/sso/authorize',
+      logoutEndpoint: '/sso/logout',
+    };
+
+    expect(
+      buildAuthorizeUrl(
+        cfg,
+        'https://client.example.com/callback',
+        'independent',
+        'opaque state !/?:&=%',
+      ),
+    ).toBe(
+      '/sso/authorize?redirectUrl=https%3A%2F%2Fclient.example.com%2Fcallback&client=independent&state=opaque%20state%20!%2F%3F%3A%26%3D%25',
+    );
+    expect(
+      buildAuthorizeUrl(
+        cfg,
+        'https://client.example.com/callback',
+        'independent',
+      ),
+    ).not.toContain('state=');
+  });
+
   it('consumes authentication configuration envelopes', async () => {
     await expect(fetchAuthenticationConfig()).resolves.toEqual({
       authorizationEndpoint: '/sso/authorize',

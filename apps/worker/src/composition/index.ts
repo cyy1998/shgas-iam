@@ -1,7 +1,24 @@
 import type { WorkerEnv } from "@worker/env";
 import type { WorkerLogger } from "./runtime";
+import { randomBytes } from "node:crypto";
+import { hashSecret } from "@iam/api-core/security";
+import {
+  createSubjectAccessRepair,
+  createSubjectAccessTransitionRecovery,
+} from "@iam/api-core/subject-access";
 import db, { closeDb } from "@iam/db";
-import { createUserProfileWorkerModule } from "@iam/user-profile-read-model/worker";
+import {
+  createSubjectAccessTransitionRecoveryAuthority,
+  createSubjectAccessTransitionRepository,
+} from "@iam/user-profile-read-model/subject-access-transition";
+import {
+  createSubjectAccessAuthorityRepository,
+  createSubjectFactsRedisInspector,
+  createSubjectFactsRedisPublisher,
+  createSubjectProjectionCutoverRepository,
+  createSubjectProjectionCutoverVerifier,
+  createUserProfileWorkerModule,
+} from "@iam/user-profile-read-model/worker";
 import { createWorkerHttpApp, startWorkerHttpServer } from "@worker/http/server";
 import {
   closeWorkerModules,
@@ -11,7 +28,13 @@ import {
   startWorkerModules,
 } from "@worker/modules/registry";
 import { sql } from "drizzle-orm";
+import { createSubjectProjectionClientCutover } from "../commands/subject-projection-client-cutover";
+import { createSubjectProjectionClientCutoverRepository } from "../commands/subject-projection-client-cutover.repository";
 import { createWorkerRuntime } from "./runtime";
+import { createWorkerSubjectAccess } from "./subject-access";
+
+const CUTOVER_SECRET_HASH_COST = 12;
+const COMMAND_DB_SHUTDOWN_TIMEOUT_SECONDS = 1;
 
 export interface CreateWorkerCompositionOptions {
   env: WorkerEnv;
@@ -19,12 +42,70 @@ export interface CreateWorkerCompositionOptions {
   commandOnly?: boolean;
 }
 
+function createWorkerSubjectAccessRepair(runtime: ReturnType<typeof createWorkerRuntime>) {
+  const {
+    barrier: subjectAccessBarrier,
+    bootstrap: subjectAccessBootstrap,
+    store: subjectAccessStore,
+  } = createWorkerSubjectAccess(runtime);
+  const subjectAccessAuthority = createSubjectAccessAuthorityRepository({
+    db,
+    subjectFactsPublisher: createSubjectFactsRedisPublisher(runtime.redis),
+  });
+  const subjectAccessRepair = createSubjectAccessRepair({
+    authority: subjectAccessAuthority,
+    backlog: subjectAccessStore,
+    barrier: subjectAccessBarrier,
+    logger: runtime.logger,
+  });
+  const subjectAccessTransitionRecovery = createSubjectAccessTransitionRecovery({
+    authority: createSubjectAccessTransitionRecoveryAuthority({
+      transaction: async callback =>
+        await db.transaction(async tx => await callback(tx)),
+    }),
+    backlog: subjectAccessStore,
+    logger: runtime.logger,
+  });
+  const subjectAccessTransitionReaper
+    = createSubjectAccessTransitionRepository(db);
+  const repairBacklog: Pick<
+    typeof subjectAccessStore,
+    "inspectRepairBacklog"
+  > = subjectAccessStore;
+  return {
+    barrier: subjectAccessBarrier,
+    bootstrap: subjectAccessBootstrap,
+    repair: subjectAccessRepair,
+    repairBacklog,
+    transitionReaper: subjectAccessTransitionReaper,
+    transitionRecovery: subjectAccessTransitionRecovery,
+  };
+}
+
 export async function createWorkerComposition(options: CreateWorkerCompositionOptions) {
   const commandOnly = options.commandOnly ?? false;
   const runtime = createWorkerRuntime({ env: options.env, logger: options.logger });
+  const subjectAccess = createWorkerSubjectAccessRepair(runtime);
+  const subjectProjectionClients = createSubjectProjectionClientCutover({
+    clients: createSubjectProjectionClientCutoverRepository(db),
+    secrets: {
+      generate: () => `iam_sso_${randomBytes(32).toString("base64url")}`,
+      hash: async secret => await hashSecret(secret, CUTOVER_SECRET_HASH_COST),
+    },
+  });
+  const subjectProjectionVerifier = createSubjectProjectionCutoverVerifier({
+    projection: createSubjectProjectionCutoverRepository(db),
+    subjectFacts: createSubjectFactsRedisInspector(runtime.redis),
+    subjectAccess: subjectAccess.bootstrap,
+    clients: subjectProjectionClients,
+    clock: runtime.clock,
+  });
   const userProfileModule = createUserProfileWorkerModule({
     db,
     redis: runtime.config.redis,
+    subjectFactsRedis: runtime.redis,
+    subjectAccessRepair: subjectAccess.repair,
+    subjectAccessBootstrap: subjectAccess.bootstrap,
     logger: runtime.logger,
     clock: runtime.clock,
     config: runtime.config.userProfile,
@@ -84,7 +165,9 @@ export async function createWorkerComposition(options: CreateWorkerCompositionOp
       closeWorkerModules(knownModules),
       Promise.resolve(httpServer?.stop(true)),
       runtime.redis.quit(),
-      closeDb(),
+      closeDb(commandOnly
+        ? { timeoutSeconds: COMMAND_DB_SHUTDOWN_TIMEOUT_SECONDS }
+        : undefined),
     ]);
   }
 
@@ -98,6 +181,17 @@ export async function createWorkerComposition(options: CreateWorkerCompositionOp
     httpApp,
     httpServer,
     userProfile: userProfileModule,
+    subjectProjectionCutover: {
+      clients: subjectProjectionClients,
+      verifier: subjectProjectionVerifier,
+    },
+    subjectAccess: {
+      barrier: subjectAccess.barrier,
+      repair: subjectAccess.repair,
+      repairBacklog: subjectAccess.repairBacklog,
+      transitionReaper: subjectAccess.transitionReaper,
+      transitionRecovery: subjectAccess.transitionRecovery,
+    },
     shutdown,
   };
 }
@@ -106,4 +200,30 @@ export type WorkerComposition = Awaited<ReturnType<typeof createWorkerCompositio
 
 export async function createWorkerCommandComposition(options: Omit<CreateWorkerCompositionOptions, "commandOnly">) {
   return await createWorkerComposition({ ...options, commandOnly: true });
+}
+
+export async function createWorkerSubjectAccessRepairComposition(
+  options: Omit<CreateWorkerCompositionOptions, "commandOnly">,
+) {
+  const runtime = createWorkerRuntime({
+    env: options.env,
+    logger: options.logger,
+  });
+  const subjectAccess = createWorkerSubjectAccessRepair(runtime);
+
+  async function shutdown(signal: string) {
+    runtime.logger.info({ signal }, "worker Subject Access repair shutting down");
+    await Promise.allSettled([
+      runtime.redis.quit(),
+      closeDb(),
+    ]);
+  }
+
+  return {
+    env: options.env,
+    logger: runtime.logger,
+    runtime,
+    subjectAccess,
+    shutdown,
+  };
 }

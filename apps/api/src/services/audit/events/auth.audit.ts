@@ -1,7 +1,9 @@
 import type { AuditLogInput } from "@api/services/audit/audit.context";
 import type { UserDetailDto } from "@api/services/user/user.type";
-import type { ClientManagementLevel } from "@iam/contracts";
-import { AuditActions } from "@iam/contracts";
+import {
+  AuditActions,
+  CustomSsoClientMode,
+} from "@iam/contracts";
 import { maskMobileForAudit } from "@iam/domain/audit";
 
 type UserAuditTarget = {
@@ -64,16 +66,47 @@ export function buildMobileLoginSuccessAudit(user: UserDetailDto) {
   });
 }
 
-export function buildLocalLoginSuccessAudit(
-  user: UserDetailDto,
+export function buildIndependentLoginSuccessAudit(
+  subjectIdentifier: string,
   clientCode: string,
-  managementLevel: ClientManagementLevel,
-) {
-  return buildUserLoginSuccessAudit(AuditActions["auth.login.local"], user, {
+): AuditLogInput {
+  return buildSubjectLoginSuccessAudit(
+    subjectIdentifier,
     clientCode,
-    loginType: "local",
-    managementLevel,
-  });
+    CustomSsoClientMode.Independent,
+  );
+}
+
+export function buildGatewayLoginSuccessAudit(
+  subjectIdentifier: string,
+  clientCode: string,
+): AuditLogInput {
+  return buildSubjectLoginSuccessAudit(
+    subjectIdentifier,
+    clientCode,
+    CustomSsoClientMode.Gateway,
+  );
+}
+
+function buildSubjectLoginSuccessAudit(
+  subjectIdentifier: string,
+  clientCode: string,
+  mode: CustomSsoClientMode,
+): AuditLogInput {
+  return {
+    action: AuditActions["auth.login.local"],
+    outcome: "success",
+    actorType: "user",
+    actorUserId: null,
+    targetType: "subject",
+    targetId: null,
+    targetCode: subjectIdentifier,
+    details: {
+      clientCode,
+      loginType: "local",
+      mode,
+    },
+  };
 }
 
 export function buildOaLoginSuccessAudit(user: UserDetailDto, clientCode: string) {

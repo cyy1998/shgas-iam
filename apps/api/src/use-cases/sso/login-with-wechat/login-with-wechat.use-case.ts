@@ -40,7 +40,7 @@ export function createLoginWithWechatUseCase(deps: LoginWithWechatDeps) {
       throw new LoginFailedError("用户不存在");
     }
     const userDetail = await deps.users.getUserDetailById(liveUser.id);
-    const { token } = await deps.principalSessions.createPrincipalSession(userDetail, {
+    const { token } = await deps.principalSessions.createPrincipalSession(liveUser.subjectIdentifier, {
       amr: ["wechat"],
       origin: toSessionOrigin(requestContext),
     });
@@ -59,7 +59,7 @@ export function createLoginWithWechatUseCase(deps: LoginWithWechatDeps) {
       throw new LoginFailedError("用户不存在");
     }
     const userDetail = await deps.users.getUserDetailById(liveUser.id);
-    const { token } = await deps.principalSessions.createPrincipalSession(userDetail, {
+    const { token } = await deps.principalSessions.createPrincipalSession(liveUser.subjectIdentifier, {
       amr: ["wechat"],
       origin: toSessionOrigin(options.requestContext),
     });

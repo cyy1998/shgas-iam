@@ -45,6 +45,7 @@ describe("API environment", () => {
     expect(env.redis.host).toBe("localhost");
     expect(env.log.format).toBe("auto");
     expect(env.sso.externalOrigin).toBe("https://iam.example.com");
+    expect(env.sso.projectionRetryAfterSeconds).toBe(3);
     expect(env.loginCredential.privateKeysByKid["2026-05-primary"]).toBe("private-key");
     expect(env.userProfile).toEqual({
       dslMaxLimit: 100,
@@ -67,6 +68,17 @@ describe("API environment", () => {
     expect(() => parseApiEnv({
       ...validEnv(),
       IAM_API_USER_PROFILE_DSL_MAX_LIMIT: "501",
+    })).toThrow();
+  });
+
+  test("accepts only positive Custom SSO projection retry hints", () => {
+    expect(parseApiEnv({
+      ...validEnv(),
+      IAM_API_CUSTOM_SSO_PROJECTION_RETRY_AFTER_SECONDS: "7",
+    }).sso.projectionRetryAfterSeconds).toBe(7);
+    expect(() => parseApiEnv({
+      ...validEnv(),
+      IAM_API_CUSTOM_SSO_PROJECTION_RETRY_AFTER_SECONDS: "0",
     })).toThrow();
   });
 

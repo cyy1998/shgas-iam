@@ -1,9 +1,13 @@
+import type { SubjectAccessBootstrap } from "@iam/api-core/subject-access";
 import type {
   RebuildUserProfileJobPayload,
   UserProfileJobName,
 } from "@iam/contracts";
-import type { DbClient } from "@iam/db";
+import type { db as database } from "@iam/db";
 import type { BullMqRedisConfig, CreateJobQueueInput, CreateJobWorkerInput, JobQueue } from "@iam/jobs";
+import type { SubjectFactsRedisClient } from "./subject-facts-redis.publisher";
+import type { SubjectProjectionCutoverBackfill } from "./subject-projection-cutover-backfill";
+import type { SubjectAccessRepairPort } from "./user-profile-rebuild.processor";
 import type { UserProfileWorkerMaintenance } from "./user-profile-worker-maintenance";
 import {
   RebuildUserProfileJobPayloadSchema,
@@ -13,18 +17,22 @@ import {
 import { createJobQueue, createJobWorker } from "@iam/jobs";
 import { createRoleAssignmentResolver } from "@iam/role-assignment-resolution";
 import { createUserProfileDirtyRepository } from "./dirty.repository";
+import { createSubjectFactsRedisPublisher } from "./subject-facts-redis.publisher";
+import { createSubjectProjectionCutoverBackfill } from "./subject-projection-cutover-backfill";
+import { createSubjectProjectionCutoverRepository } from "./subject-projection-cutover.repository";
 import { createUserProfileBuildRepository } from "./user-profile-build.repository";
 import { createUserProfileBuilder } from "./user-profile-builder.service";
 import { createUserProfileJobProducer } from "./user-profile-job.producer";
 import { createUserProfileMaintenanceRepository } from "./user-profile-maintenance.repository";
+import { createUserProfilePublicationRepository } from "./user-profile-publication.repository";
 import { createUserProfileRebuildProcessor } from "./user-profile-rebuild.processor";
 import { createUserProfileWorkerMaintenance } from "./user-profile-worker-maintenance";
-import { createUserProfileRepository } from "./user-profile.repository";
 
 export const USER_PROFILE_WORKER_MODULE_KEY = "user-profile";
 
 export interface UserProfileWorkerModuleLogger {
   info: (data: Record<string, unknown>, message: string) => void;
+  warn: (data: Record<string, unknown>, message: string) => void;
   error: (data: Record<string, unknown>, message: string) => void;
 }
 
@@ -38,7 +46,10 @@ export interface UserProfileJobProcessorRebuildPort {
   process: (
     payload: RebuildUserProfileJobPayload,
     options?: { jobId?: string },
-  ) => Promise<{ status: string }>;
+  ) => Promise<{
+    status: string;
+    cacheStatus?: "failed" | "published" | "retained-newer";
+  }>;
 }
 
 export interface CreateUserProfileJobProcessorDeps {
@@ -60,6 +71,7 @@ export function createUserProfileJobProcessor(deps: CreateUserProfileJobProcesso
         jobId: job.id,
         jobName: job.name,
         status: result.status,
+        cacheStatus: result.cacheStatus,
       }, "user profile rebuild job processed");
       return result;
     }
@@ -80,8 +92,11 @@ export function createUserProfileJobProcessor(deps: CreateUserProfileJobProcesso
 export type UserProfileJobProcessor = ReturnType<typeof createUserProfileJobProcessor>;
 
 export interface CreateUserProfileWorkerModuleInput {
-  db: DbClient;
+  db: typeof database;
   redis: BullMqRedisConfig;
+  subjectFactsRedis: SubjectFactsRedisClient;
+  subjectAccessRepair: SubjectAccessRepairPort;
+  subjectAccessBootstrap: Pick<SubjectAccessBootstrap, "seedMany">;
   logger: UserProfileWorkerModuleLogger;
   clock: {
     nowDate: () => Date;
@@ -118,6 +133,7 @@ export interface UserProfileWorkerModule {
   key: typeof USER_PROFILE_WORKER_MODULE_KEY;
   queue: JobQueue<RebuildUserProfileJobPayload, unknown, UserProfileJobName>;
   maintenance: UserProfileWorkerMaintenance;
+  cutoverBackfill: SubjectProjectionCutoverBackfill;
   queueRegistrations: Array<{
     moduleKey: typeof USER_PROFILE_WORKER_MODULE_KEY;
     queueName: typeof USER_PROFILE_QUEUE_NAME;
@@ -128,10 +144,12 @@ export interface UserProfileWorkerModule {
 }
 
 export function createUserProfileWorkerModule(input: CreateUserProfileWorkerModuleInput): UserProfileWorkerModule {
-  const profileRepository = createUserProfileRepository(input.db);
   const dirtyRepository = createUserProfileDirtyRepository(input.db);
+  const publicationRepository = createUserProfilePublicationRepository(input.db);
+  const subjectFactsPublisher = createSubjectFactsRedisPublisher(input.subjectFactsRedis);
   const roleAssignmentResolver = createRoleAssignmentResolver(input.db);
   const maintenanceRepository = createUserProfileMaintenanceRepository(input.db);
+  const cutoverRepository = createSubjectProjectionCutoverRepository(input.db);
   const buildRepository = createUserProfileBuildRepository(input.db, roleAssignmentResolver);
   const queue
     = (input.factories?.createQueue
@@ -148,9 +166,12 @@ export function createUserProfileWorkerModule(input: CreateUserProfileWorkerModu
     },
   });
   const rebuildProcessor = createUserProfileRebuildProcessor({
-    profileRepository,
     dirtyRepository,
     builder,
+    publicationRepository,
+    subjectFactsPublisher,
+    subjectAccessRepair: input.subjectAccessRepair,
+    logger: input.logger,
     clock: input.clock,
   });
   const jobProcessor = createUserProfileJobProcessor({
@@ -165,6 +186,13 @@ export function createUserProfileWorkerModule(input: CreateUserProfileWorkerModu
     config: {
       backfillBatchSize: input.config.backfillBatchSize,
     },
+  });
+  const cutoverBackfill = createSubjectProjectionCutoverBackfill({
+    repository: cutoverRepository,
+    builder,
+    subjectFacts: subjectFactsPublisher,
+    subjectAccess: input.subjectAccessBootstrap,
+    clock: input.clock,
   });
   let worker: UserProfileWorkerHandle | undefined;
 
@@ -186,6 +214,7 @@ export function createUserProfileWorkerModule(input: CreateUserProfileWorkerModu
         jobId: job.id,
         jobName: job.name,
         status: extractReturnStatus(job.returnvalue),
+        cacheStatus: extractReturnCacheStatus(job.returnvalue),
         ...extractRebuildJobLogFields(job),
       }, "user profile job completed");
     });
@@ -212,6 +241,7 @@ export function createUserProfileWorkerModule(input: CreateUserProfileWorkerModu
     key: USER_PROFILE_WORKER_MODULE_KEY,
     queue,
     maintenance,
+    cutoverBackfill,
     queueRegistrations: [{
       moduleKey: USER_PROFILE_WORKER_MODULE_KEY,
       queueName: USER_PROFILE_QUEUE_NAME,
@@ -242,4 +272,12 @@ function extractReturnStatus(returnvalue: unknown) {
 
   const status = (returnvalue as { status?: unknown }).status;
   return typeof status === "string" ? status : undefined;
+}
+
+function extractReturnCacheStatus(returnvalue: unknown) {
+  if (typeof returnvalue !== "object" || returnvalue === null || !("cacheStatus" in returnvalue))
+    return undefined;
+
+  const cacheStatus = (returnvalue as { cacheStatus?: unknown }).cacheStatus;
+  return typeof cacheStatus === "string" ? cacheStatus : undefined;
 }

@@ -66,6 +66,8 @@ const RawEnvSchema = z.object({
   IAM_API_AUTHORIZATION_ENDPOINT: z.string().min(1),
   IAM_API_LOGOUT_ENDPOINT: z.string().min(1),
   IAM_API_THIRDPARTY_OA_ENDPOINT: z.string().min(1),
+  IAM_API_CUSTOM_SSO_PROJECTION_RETRY_AFTER_SECONDS:
+    z.coerce.number().int().positive().default(3),
   IAM_API_LOG_LEVEL: z.string().default("info"),
   IAM_API_LOG_FORMAT: z.enum(["auto", "json", "pretty"]).default("auto"),
   IAM_API_CAP_ENABLED: booleanString(false),
@@ -200,6 +202,7 @@ export interface Env extends Record<string, unknown> {
     authorizationEndpoint: string;
     logoutEndpoint: string;
     thirdPartyOAEndpoint: string;
+    projectionRetryAfterSeconds: number;
   };
   userProfile: {
     dslMaxLimit: number;
@@ -276,6 +279,8 @@ function toApiEnv(raw: RawEnv): Env {
       authorizationEndpoint: raw.IAM_API_AUTHORIZATION_ENDPOINT,
       logoutEndpoint: raw.IAM_API_LOGOUT_ENDPOINT,
       thirdPartyOAEndpoint: raw.IAM_API_THIRDPARTY_OA_ENDPOINT,
+      projectionRetryAfterSeconds:
+        raw.IAM_API_CUSTOM_SSO_PROJECTION_RETRY_AFTER_SECONDS,
     },
     userProfile: {
       dslMaxLimit: raw.IAM_API_USER_PROFILE_DSL_MAX_LIMIT,

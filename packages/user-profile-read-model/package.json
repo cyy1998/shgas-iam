@@ -8,16 +8,23 @@
     "./producer": "./src/producer.ts",
     "./query": "./src/query.ts",
     "./query/repository": "./src/user-profile.repository.ts",
+    "./subject-access-transition": "./src/subject-access-transition.repository.ts",
+    "./subject-facts": "./src/subject-facts.ts",
     "./worker": "./src/worker.ts"
   },
   "scripts": {
-    "lint": "eslint src eslint.config.js",
-    "lint:fix": "eslint --fix src eslint.config.js",
-    "test": "bun test --max-concurrency=2",
+    "lint": "eslint src test-postgres test-redis test-rehearsal eslint.config.js",
+    "lint:fix": "eslint --fix src test-postgres test-redis test-rehearsal eslint.config.js",
+    "test": "bun test --max-concurrency=2 src",
+    "test:postgres": "bun test --max-concurrency=1 test-postgres",
+    "test:redis": "bun test --max-concurrency=1 test-redis",
+    "test:rehearsal": "bun test --max-concurrency=1 test-rehearsal",
     "typecheck": "pnpm exec tsc --noEmit"
   },
   "dependencies": {
     "@hono/zod-openapi": "^1.5.1",
+    "@iam/api-core": "workspace:*",
+    "@iam/client-subject-projection": "workspace:*",
     "@iam/contracts": "workspace:*",
     "@iam/db": "workspace:*",
     "@iam/domain": "workspace:*",
@@ -31,6 +38,8 @@
     "@types/bun": "latest",
     "@typescript/native": "npm:typescript@7.0.2",
     "eslint": "^10.7.0",
+    "ioredis": "^5.11.1",
+    "postgres": "^3.4.9",
     "typescript": "npm:@typescript/typescript6@6.0.2"
   }
 }

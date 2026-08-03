@@ -3,14 +3,30 @@ import type { DbClient } from "@iam/db";
 import { UserStatus } from "@iam/contracts";
 import { firstRow } from "@iam/db/query-utils";
 import { users } from "@iam/db/schema";
-import { and, eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 
 export function createUserRepository(db: DbClient) {
   return {
+    async lockPurveyorContactMobile(mobile: string) {
+      await db.execute(sql`
+        select pg_advisory_xact_lock(
+          hashtextextended(${`iam:purveyor-contact:${mobile}`}, 0::bigint)
+        )
+      `);
+    },
     async getUserById(userId: number) {
       return await db.query.users.findFirst({
         where: {
           id: userId,
+          status: UserStatus.Enable,
+          isDelete: false,
+        },
+      }) ?? null;
+    },
+    async getUserBySubjectIdentifier(subjectIdentifier: string) {
+      return await db.query.users.findFirst({
+        where: {
+          subjectIdentifier,
           status: UserStatus.Enable,
           isDelete: false,
         },
@@ -64,7 +80,7 @@ export function createUserRepository(db: DbClient) {
         .where(and(eq(users.id, userId), eq(users.status, UserStatus.Enable), eq(users.isDelete, false)))
         .returning()) ?? null;
     },
-    async setUser(userCreateDto: UserCreateDto) {
+    async setUser(userCreateDto: UserCreateDto & { subjectIdentifier: string }) {
       return firstRow(await db.insert(users).values(userCreateDto).returning())!;
     },
   };

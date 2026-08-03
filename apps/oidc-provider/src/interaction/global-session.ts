@@ -75,7 +75,7 @@ export function createGlobalSessionResolver(deps: CreateGlobalSessionResolverDep
       sessionId,
       authTime: envelope.authTime,
       userId: account.id,
-      accountId: account.oidcSubject,
+      accountId: account.subjectIdentifier,
     };
   }
 

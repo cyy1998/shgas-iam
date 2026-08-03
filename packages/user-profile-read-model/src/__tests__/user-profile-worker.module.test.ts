@@ -14,6 +14,7 @@ describe("createUserProfileJobProcessor", () => {
       rebuildProcessor: { process },
       logger: {
         info: mock(() => {}),
+        warn: mock(() => {}),
         error: mock(() => {}),
       },
     });
@@ -45,6 +46,7 @@ describe("createUserProfileJobProcessor", () => {
       rebuildProcessor: { process },
       logger: {
         info: mock(() => {}),
+        warn: mock(() => {}),
         error: mock(() => {}),
       },
     });
@@ -71,6 +73,42 @@ describe("createUserProfileJobProcessor", () => {
 
     expect(process).not.toHaveBeenCalled();
   });
+
+  test("reports the cache publication result in the structured rebuild log", async () => {
+    const info = mock(() => {});
+    const processor = createUserProfileJobProcessor({
+      rebuildProcessor: {
+        process: mock(async () => ({
+          status: "rebuilt",
+          cacheStatus: "failed" as const,
+        })),
+      },
+      logger: {
+        info,
+        error: mock(() => {}),
+        warn: mock(() => {}),
+      },
+    });
+
+    await processor({
+      id: "rebuild-user-profile|123|42",
+      name: "rebuild-user-profile",
+      data: {
+        userId: 123,
+        dirtyVersion: "42",
+        reason: "user-updated",
+      },
+    });
+
+    expect(info).toHaveBeenCalledWith({
+      userId: 123,
+      dirtyVersion: "42",
+      jobId: "rebuild-user-profile|123|42",
+      jobName: "rebuild-user-profile",
+      status: "rebuilt",
+      cacheStatus: "failed",
+    }, "user profile rebuild job processed");
+  });
 });
 
 describe("createUserProfileWorkerModule", () => {
@@ -86,11 +124,25 @@ describe("createUserProfileWorkerModule", () => {
     };
     const createQueue = mock(() => queue);
     const createWorker = mock(() => worker);
+    const info = mock(() => {});
     const module = createUserProfileWorkerModule({
       db: {} as never,
       redis: { host: "localhost", port: 6379, db: 0 },
+      subjectFactsRedis: {
+        eval: mock(async () => 1),
+      },
+      subjectAccessRepair: {
+        repairSubject: mock(async () => ({ status: "stable" as const })),
+      },
+      subjectAccessBootstrap: {
+        seedMany: mock(async records => ({
+          seeded: records.length,
+          retainedExisting: 0,
+        })),
+      },
       logger: {
-        info: mock(() => {}),
+        info,
+        warn: mock(() => {}),
         error: mock(() => {}),
       },
       clock: { nowDate: () => new Date("2026-07-01T00:00:00.000Z") },
@@ -124,6 +176,33 @@ describe("createUserProfileWorkerModule", () => {
     });
     expect(worker.on).toHaveBeenCalledWith("completed", expect.any(Function));
     expect(worker.on).toHaveBeenCalledWith("failed", expect.any(Function));
+
+    const completedListener = (worker.on.mock.calls as unknown as Array<[
+      string,
+      (job: unknown) => void,
+    ]>).find(([event]) => event === "completed")?.[1];
+    completedListener?.({
+      id: "rebuild-user-profile|123|42",
+      name: "rebuild-user-profile",
+      data: {
+        userId: 123,
+        dirtyVersion: "42",
+        reason: "user-updated",
+      },
+      returnvalue: {
+        status: "rebuilt",
+        cacheStatus: "failed",
+      },
+    });
+
+    expect(info).toHaveBeenCalledWith({
+      jobId: "rebuild-user-profile|123|42",
+      jobName: "rebuild-user-profile",
+      status: "rebuilt",
+      cacheStatus: "failed",
+      userId: 123,
+      dirtyVersion: "42",
+    }, "user profile job completed");
 
     await module.close();
 

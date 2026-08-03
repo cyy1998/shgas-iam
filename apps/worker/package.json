@@ -18,9 +18,12 @@
     "serve": "bun run src/index.ts",
     "user-profile:backfill": "bun run src/commands/user-profile-backfill.ts",
     "user-profile:repair": "bun run src/commands/user-profile-repair.ts",
-    "lint": "eslint src test-smoke eslint.config.js",
-    "lint:fix": "eslint --fix src test-smoke eslint.config.js",
+    "subject-projection:backfill": "bun run src/commands/subject-projection-cutover.ts backfill",
+    "subject-projection:verify": "bun run src/commands/subject-projection-cutover.ts verify",
+    "lint": "eslint src test-postgres test-smoke eslint.config.js",
+    "lint:fix": "eslint --fix src test-postgres test-smoke eslint.config.js",
     "test": "bun test --max-concurrency=2 src",
+    "test:postgres": "bun test --max-concurrency=1 test-postgres",
     "test:smoke": "bun test --max-concurrency=1 test-smoke",
     "typecheck": "pnpm exec tsc --noEmit"
   },
@@ -30,6 +33,7 @@
     "@iam/api-core": "workspace:*",
     "@iam/contracts": "workspace:*",
     "@iam/db": "workspace:*",
+    "@iam/domain": "workspace:*",
     "@iam/jobs": "workspace:*",
     "@iam/user-profile-read-model": "workspace:*",
     "drizzle-orm": "1.0.0-rc.2",
@@ -43,6 +47,7 @@
     "@types/bun": "latest",
     "@typescript/native": "npm:typescript@7.0.2",
     "eslint": "^10.7.0",
+    "postgres": "^3.4.9",
     "typescript": "npm:@typescript/typescript6@6.0.2"
   }
 }

@@ -145,6 +145,31 @@ export const auditActionCatalog = [
     legacyAliases: [],
   },
   {
+    action: "admin.client.custom_sso.configure",
+    label: "配置 Custom SSO",
+    legacyAliases: [],
+  },
+  {
+    action: "admin.client.custom_sso.enable",
+    label: "启用 Custom SSO",
+    legacyAliases: [],
+  },
+  {
+    action: "admin.client.custom_sso.disable",
+    label: "禁用 Custom SSO",
+    legacyAliases: [],
+  },
+  {
+    action: "admin.client.custom_sso.remove",
+    label: "移除 Custom SSO",
+    legacyAliases: [],
+  },
+  {
+    action: "admin.client.custom_sso.rotate_secret",
+    label: "轮换 Custom SSO 密钥",
+    legacyAliases: [],
+  },
+  {
     action: "admin.organization.create",
     label: "创建组织",
     legacyAliases: [],

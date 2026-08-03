@@ -3,6 +3,7 @@ import { describe, expect, mock, test } from "bun:test";
 import { INTERNAL_SERVER_ERROR } from "../../core/http-status-codes";
 import {
   AfterCommitRequiredTaskError,
+  consumeTransactionRollbackConfirmation,
   createImmediateUnitOfWork,
   createUnitOfWork,
   mapUnitOfWork,
@@ -24,6 +25,88 @@ function createTransactionalDb<Tx>(tx: Tx) {
 }
 
 describe("createUnitOfWork", () => {
+  test("marks only the callback error rethrown after rollback as confirmed, once", async () => {
+    const failure = new Error("callback failed");
+    const uow = createUnitOfWork({
+      db: createTransactionalDb({}),
+      logger: createLogger(),
+      createTxPorts: () => ({}),
+    });
+
+    const caught = await uow.transaction(async () => {
+      throw failure;
+    }).catch(error => error);
+
+    expect(caught).toBe(failure);
+    expect(consumeTransactionRollbackConfirmation(caught)).toBe(true);
+    expect(consumeTransactionRollbackConfirmation(caught)).toBe(false);
+  });
+
+  test("does not confirm rollback when the adapter replaces the callback error", async () => {
+    const callbackFailure = new Error("callback failed");
+    const rollbackFailure = new Error("rollback transport failed");
+    const uow = createUnitOfWork({
+      db: {
+        async transaction<T>(callback: (tx: object) => Promise<T>) {
+          try {
+            await callback({});
+          }
+          catch {
+            throw rollbackFailure;
+          }
+          throw new Error("expected callback failure");
+        },
+      },
+      logger: createLogger(),
+      createTxPorts: () => ({}),
+    });
+
+    const caught = await uow.transaction(async () => {
+      throw callbackFailure;
+    }).catch(error => error);
+
+    expect(caught).toBe(rollbackFailure);
+    expect(consumeTransactionRollbackConfirmation(caught)).toBe(false);
+  });
+
+  test("does not confirm a transport error after the callback resolves", async () => {
+    const commitFailure = new Error("commit response lost");
+    const uow = createUnitOfWork({
+      db: {
+        async transaction<T>(callback: (tx: object) => Promise<T>) {
+          await callback({});
+          throw commitFailure;
+        },
+      },
+      logger: createLogger(),
+      createTxPorts: () => ({}),
+    });
+
+    const caught = await uow.transaction(async () => "committed")
+      .catch(error => error);
+
+    expect(caught).toBe(commitFailure);
+    expect(consumeTransactionRollbackConfirmation(caught)).toBe(false);
+  });
+
+  test("does not mark a required after-commit failure as rollback confirmed", async () => {
+    const uow = createUnitOfWork({
+      db: createTransactionalDb({}),
+      logger: createLogger(),
+      createTxPorts: () => ({}),
+    });
+
+    const caught = await uow.transaction(async (tx) => {
+      tx.afterCommit.required("required.fail", () => {
+        throw new Error("post-commit failed");
+      });
+      return "committed";
+    }).catch(error => error);
+
+    expect(caught).toBeInstanceOf(AfterCommitRequiredTaskError);
+    expect(consumeTransactionRollbackConfirmation(caught)).toBe(false);
+  });
+
   test("runs after-commit tasks after a committed transaction in registration order", async () => {
     const events: string[] = [];
     const logger = createLogger();

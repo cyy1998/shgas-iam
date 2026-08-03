@@ -1,3 +1,4 @@
+import type { SessionKernelArtifactConsumer } from "./artifact-consumption";
 import type { CleanupAdapter, SessionKernelLogger } from "./cleanup";
 import type { SessionKernelConfig, SessionKernelConfigInput } from "./config";
 import type {
@@ -8,7 +9,6 @@ import type {
   LifecycleObjectKind,
   PrincipalRef,
   PrincipalSession,
-  PrincipalSnapshot,
   ProtocolArtifact,
   RenewalPolicy,
   RevocationReason,
@@ -22,11 +22,12 @@ import type { SessionKernelRedis, StoreIndexWrite } from "./store";
 import type { KernelTokenKind } from "./token";
 import { randomUUID } from "node:crypto";
 import { SystemLogEvent } from "../../logger";
+import { createRedisSessionKernelArtifactConsumer } from "./artifact-consumption";
 import { runCleanupRefs } from "./cleanup";
 import { normalizeSessionKernelConfig } from "./config";
 import { createCurrentLookupHash } from "./hmac";
 import { createSessionKernelKeyBuilder, encodeIndexMember, parseIndexMember } from "./keys";
-import { normalizeSessionOrigin } from "./model";
+import { normalizeSessionOrigin, PrincipalRefSchema } from "./model";
 import { counterForKind, createEmptyRevokeSummary, failClosed, mergeRevokeSummary } from "./result";
 import { SessionKernelStore } from "./store";
 import {
@@ -52,6 +53,11 @@ export type SessionKernelValidationHooks = {
   ) => MaybePromise<ValidationResult>;
 };
 
+export type SessionKernelPrincipalAccessFence = {
+  capture: (principal: PrincipalRef) => MaybePromise<string>;
+  validate: (session: PrincipalValidationTarget) => MaybePromise<ValidationResult>;
+};
+
 export type SessionKernelDependencies = {
   redis: SessionKernelRedis;
   config: SessionKernelConfigInput | SessionKernelConfig;
@@ -59,23 +65,19 @@ export type SessionKernelDependencies = {
     uuid: () => string;
   };
   validationHooks?: SessionKernelValidationHooks;
+  principalAccessFence: SessionKernelPrincipalAccessFence;
   cleanupAdapters?: CleanupAdapter[];
   logger?: SessionKernelLogger;
   sourceApp?: string;
 };
 
-export type CreatePrincipalSessionInput = {
-  principal: PrincipalRef;
-  snapshot: PrincipalSnapshot;
+export type PrincipalAuthenticationContext = {
   sessionKind?: string;
-  amr?: string[];
+  amr?: readonly string[];
   acr?: string;
   origin?: SessionOrigin;
   tenantId?: string;
   issuerId?: string;
-  metadata?: Record<string, unknown>;
-  cleanupRefs?: CleanupRef[];
-  externalToken?: string;
 };
 
 export type CreateClientBindingInput = {
@@ -120,12 +122,13 @@ export type CreateProtocolArtifactInput = {
 export type RevokeUserSessionsOptions = {
   exceptPrincipalSessionId?: string;
   excludePrincipalSessionIds?: string[];
+  onlySubjectAccessTransitionId?: string;
 };
 
 export type ListPrincipalSessionsInput = {
   offset: number;
   limit: number;
-  userId?: string;
+  subjectIdentifier?: string;
 };
 
 export type PrincipalSessionInventoryItem = {
@@ -147,49 +150,99 @@ export type ListPrincipalSessionsResult = {
 export type SessionKernel = ReturnType<typeof createSessionKernel>;
 
 export function createSessionKernel(deps: SessionKernelDependencies) {
+  return createSessionKernelWithArtifactConsumerFactory(
+    deps,
+    ({ redis, keys }) =>
+      createRedisSessionKernelArtifactConsumer(redis, keys),
+  );
+}
+
+export function createSessionKernelWithArtifactConsumerFactory(
+  deps: SessionKernelDependencies,
+  createArtifactConsumer: (input: {
+    redis: SessionKernelRedis;
+    keys: ReturnType<typeof createSessionKernelKeyBuilder>;
+  }) => SessionKernelArtifactConsumer,
+) {
   const config = normalizeSessionKernelConfig(deps.config);
   const keys = createSessionKernelKeyBuilder(config.namespace);
-  const store = new SessionKernelStore(deps.redis, keys, config);
+  const artifactConsumer = createArtifactConsumer({
+    redis: deps.redis,
+    keys,
+  });
+  const store = new SessionKernelStore(
+    deps.redis,
+    keys,
+    config,
+    artifactConsumer,
+  );
   const cleanupAdapters = deps.cleanupAdapters ?? [];
   const uuid = deps.random?.uuid ?? randomUUID;
 
   async function createPrincipalSession(
-    input: CreatePrincipalSessionInput,
+    subjectIdentifier: string,
+    authenticationContext: PrincipalAuthenticationContext = {},
   ): Promise<CreateResult<PrincipalSession>> {
+    let prepared: {
+      externalToken: string;
+      lookup: ReturnType<typeof createCurrentLookupHash>;
+      principalSessionId: string;
+      window: ReturnType<typeof createPrincipalSessionWindow>;
+      principal: PrincipalRef;
+    };
     try {
       const now = config.clock.now();
-      const externalToken = input.externalToken ?? generateKernelToken(config, "principalSession");
+      const externalToken = generateKernelToken(config, "principalSession");
       const lookup = createCurrentLookupHash(externalToken, config);
       const principalSessionId = uuid();
       const window = createPrincipalSessionWindow(now, config);
+      const principal = PrincipalRefSchema.parse({
+        principalType: "user",
+        subjectId: subjectIdentifier,
+      });
+      prepared = {
+        externalToken,
+        lookup,
+        principalSessionId,
+        window,
+        principal,
+      };
+    }
+    catch (cause) {
+      return failClosed("failed to create principal session", cause);
+    }
+
+    const subjectAccessTransitionId = await deps.principalAccessFence
+      .capture(prepared.principal);
+
+    try {
       const session: PrincipalSession = {
         version: 1,
-        sessionKind: input.sessionKind ?? "browser_user",
-        principalSessionId,
-        externalTokenLookupHash: lookup.lookupHash,
-        lookupKeyId: lookup.keyId,
-        principal: input.principal,
-        authTime: window.authTime,
-        lastActiveAt: window.lastActiveAt,
-        expiresAt: window.expiresAt,
-        absoluteExpiresAt: window.absoluteExpiresAt,
-        amr: input.amr ?? [],
-        acr: input.acr,
-        origin: normalizeSessionOrigin(input.origin),
-        snapshot: input.snapshot,
-        tenantId: input.tenantId,
-        issuerId: input.issuerId,
-        metadata: input.metadata,
-        cleanupRefs: input.cleanupRefs ?? [],
+        subjectAccessTransitionId,
+        sessionKind: authenticationContext.sessionKind ?? "browser_user",
+        principalSessionId: prepared.principalSessionId,
+        externalTokenLookupHash: prepared.lookup.lookupHash,
+        lookupKeyId: prepared.lookup.keyId,
+        principal: prepared.principal,
+        authTime: prepared.window.authTime,
+        lastActiveAt: prepared.window.lastActiveAt,
+        expiresAt: prepared.window.expiresAt,
+        absoluteExpiresAt: prepared.window.absoluteExpiresAt,
+        amr: authenticationContext.amr === undefined ? [] : [...authenticationContext.amr],
+        acr: authenticationContext.acr,
+        origin: normalizeSessionOrigin(authenticationContext.origin),
+        tenantId: authenticationContext.tenantId,
+        issuerId: authenticationContext.issuerId,
+        cleanupRefs: [],
       };
       await store.putObject({
         kind: "principal_session",
-        id: principalSessionId,
+        id: prepared.principalSessionId,
         object: session,
-        lookupHash: lookup.lookupHash,
+        lookupHash: prepared.lookup.lookupHash,
         indexes: principalSessionIndexes(session),
       });
-      return { status: "created", value: session, externalToken };
+      return { status: "created", value: session, externalToken: prepared.externalToken };
     }
     catch (cause) {
       return failClosed("failed to create principal session", cause);
@@ -209,8 +262,7 @@ export function createSessionKernel(deps: SessionKernelDependencies) {
   }
 
   async function renewPrincipalSession(principalSessionId: string): Promise<ResolveResult<PrincipalSession>> {
-    const result = await store.resolveObject("principal_session", principalSessionId);
-    observeResolveResult(result, { operation: "renew", objectType: "principal_session" });
+    const result = await resolvePrincipalSessionById(principalSessionId);
     if (result.status !== "resolved")
       return result;
     const now = config.clock.now();
@@ -244,12 +296,12 @@ export function createSessionKernel(deps: SessionKernelDependencies) {
       throw new RangeError("Principal Session inventory offset must be a non-negative integer");
     if (!Number.isInteger(input.limit) || input.limit <= 0)
       throw new RangeError("Principal Session inventory limit must be a positive integer");
-    if (input.userId !== undefined && input.userId.length === 0)
-      throw new RangeError("Principal Session inventory userId must not be empty");
+    if (input.subjectIdentifier !== undefined && input.subjectIdentifier.length === 0)
+      throw new RangeError("Principal Session inventory subjectIdentifier must not be empty");
 
-    const indexKey = input.userId === undefined
+    const indexKey = input.subjectIdentifier === undefined
       ? keys.index.principalSessions
-      : keys.index.user({ principalType: "user", subjectId: input.userId });
+      : keys.index.user({ principalType: "user", subjectId: input.subjectIdentifier });
     await store.cleanExpiredIndex(indexKey);
     const items: PrincipalSessionInventoryItem[] = [];
     let rank = 0;
@@ -272,11 +324,14 @@ export function createSessionKernel(deps: SessionKernelDependencies) {
           staleMembers.push(member);
           continue;
         }
-        const resolved = await store.resolveObject("principal_session", parsed.id);
+        const resolved = await resolvePrincipalSessionById(parsed.id);
         if (
           resolved.status !== "resolved"
           || resolved.value.principal.principalType !== "user"
-          || (input.userId !== undefined && resolved.value.principal.subjectId !== input.userId)
+          || (
+            input.subjectIdentifier !== undefined
+            && resolved.value.principal.subjectId !== input.subjectIdentifier
+          )
         ) {
           staleMembers.push(member);
           continue;
@@ -301,10 +356,11 @@ export function createSessionKernel(deps: SessionKernelDependencies) {
   }
 
   async function createClientBinding(input: CreateClientBindingInput): Promise<CreateResult<ClientBinding>> {
+    const principal = await resolvePrincipalSessionById(input.principalSessionId);
+    if (principal.status !== "resolved")
+      return principal;
+
     try {
-      const principal = await store.resolveObject("principal_session", input.principalSessionId);
-      if (principal.status !== "resolved")
-        return failClosed("cannot create client binding for inactive principal session", principal);
       const now = config.clock.now();
       const expiresAt = clampDerivedExpiresAt({
         now,
@@ -314,6 +370,7 @@ export function createSessionKernel(deps: SessionKernelDependencies) {
       });
       const binding: ClientBinding = {
         version: 1,
+        subjectAccessTransitionId: principal.value.subjectAccessTransitionId,
         bindingId: uuid(),
         protocol: input.protocol,
         clientCode: input.clientCode,
@@ -349,10 +406,11 @@ export function createSessionKernel(deps: SessionKernelDependencies) {
   }
 
   async function issueCredential(input: IssueCredentialInput): Promise<CreateResult<IssuedCredential>> {
+    const principal = await resolvePrincipalSessionById(input.principalSessionId);
+    if (principal.status !== "resolved")
+      return principal;
+
     try {
-      const principal = await store.resolveObject("principal_session", input.principalSessionId);
-      if (principal.status !== "resolved")
-        return failClosed("cannot issue credential for inactive principal session", principal);
       const now = config.clock.now();
       const externalToken = input.externalToken ?? generateKernelToken(config, input.tokenKind ?? "credential");
       const lookup = createCurrentLookupHash(externalToken, config);
@@ -366,6 +424,7 @@ export function createSessionKernel(deps: SessionKernelDependencies) {
       });
       const credential: IssuedCredential = {
         version: 1,
+        subjectAccessTransitionId: principal.value.subjectAccessTransitionId,
         credentialId: uuid(),
         protocol: input.protocol,
         credentialType: input.credentialType,
@@ -402,17 +461,19 @@ export function createSessionKernel(deps: SessionKernelDependencies) {
   }
 
   async function createProtocolArtifact(input: CreateProtocolArtifactInput): Promise<CreateResult<ProtocolArtifact>> {
+    const principal = input.principalSessionId
+      ? await resolvePrincipalSessionById(input.principalSessionId)
+      : undefined;
+    if (principal && principal.status !== "resolved")
+      return principal;
+
     try {
-      const principal = input.principalSessionId
-        ? await store.resolveObject("principal_session", input.principalSessionId)
-        : undefined;
-      if (principal && principal.status !== "resolved")
-        return failClosed("cannot create protocol artifact for inactive principal session", principal);
       const now = config.clock.now();
       const externalToken = input.externalToken ?? generateKernelToken(config, input.tokenKind ?? "artifact");
       const lookup = createCurrentLookupHash(externalToken, config);
       const artifact: ProtocolArtifact = {
         version: 1,
+        subjectAccessTransitionId: principal?.value.subjectAccessTransitionId,
         artifactId: uuid(),
         protocol: input.protocol,
         artifactType: input.artifactType,
@@ -448,7 +509,14 @@ export function createSessionKernel(deps: SessionKernelDependencies) {
   }
 
   async function consumeProtocolArtifact(externalToken: string): Promise<ResolveResult<ProtocolArtifact>> {
-    const resolved = await store.resolveByExternalToken("artifact", externalToken);
+    const stored = await store.resolveArtifactForConsumption(externalToken);
+    const resolved: ResolveResult<ProtocolArtifact> = stored.status === "resolved"
+      ? {
+          status: "resolved",
+          value: stored.value,
+          lookupKeyId: stored.lookupKeyId,
+        }
+      : stored;
     observeResolveResult(resolved, { operation: "consume", objectType: "artifact" });
     const result = await applyArtifactValidation(resolved);
     if (result.status !== "resolved") {
@@ -457,7 +525,13 @@ export function createSessionKernel(deps: SessionKernelDependencies) {
     const now = config.clock.now();
     const tombstone = createTombstone("artifact", result.value, "consumed", now);
     try {
-      return await store.consumeArtifact({ artifact: result.value, tombstone });
+      if (stored.status !== "resolved")
+        return stored;
+      return await store.consumeArtifact({
+        artifact: result.value,
+        serializedArtifact: stored.serialized,
+        tombstone,
+      });
     }
     catch (cause) {
       return failClosed("failed to consume protocol artifact", cause);
@@ -508,6 +582,18 @@ export function createSessionKernel(deps: SessionKernelDependencies) {
       const parsed = parseIndexMember(member);
       if (!parsed || parsed.kind !== "principal_session")
         continue;
+
+      if (options.onlySubjectAccessTransitionId !== undefined) {
+        const resolved = await store.resolveObject("principal_session", parsed.id);
+        if (
+          resolved.status !== "resolved"
+          || resolved.value.subjectAccessTransitionId
+          !== options.onlySubjectAccessTransitionId
+        ) {
+          summary.principalSessions.excluded += 1;
+          continue;
+        }
+      }
 
       if (excludedPrincipalSessionIds.has(parsed.id)) {
         summary.principalSessions.excluded += 1;
@@ -646,12 +732,25 @@ export function createSessionKernel(deps: SessionKernelDependencies) {
   async function applyPrincipalValidation<T extends PrincipalSession>(
     result: ResolveResult<T>,
   ): Promise<ResolveResult<T>> {
-    if (result.status !== "resolved" || !deps.validationHooks?.validatePrincipal)
+    if (result.status !== "resolved")
       return result;
-    const validation = await deps.validationHooks.validatePrincipal(result.value);
+    const validation = await validatePrincipal(result.value);
     if (validation.ok)
       return result;
-    const revokeSummary = await revokeUserSessions(result.value.principal, validation.reason);
+    const revokeSummary = await runValidationCleanup(
+      result.value,
+      validation,
+      async () => validation.reason === "session_generation_stale"
+        ? await revokePrincipalSession(result.value.principalSessionId, validation.reason)
+        : await revokeUserSessions(
+            result.value.principal,
+            validation.reason,
+            {
+              onlySubjectAccessTransitionId:
+                result.value.subjectAccessTransitionId,
+            },
+          ),
+    );
     return { status: "validation_failed", reason: validation.reason, message: validation.message, revokeSummary };
   }
 
@@ -678,42 +777,122 @@ export function createSessionKernel(deps: SessionKernelDependencies) {
   }
 
   async function validateLifecycleObject(object: ClientBinding | IssuedCredential | ProtocolArtifact) {
-    const validations = [
-      deps.validationHooks?.validatePrincipal && "principal" in object && object.principal
-        ? await deps.validationHooks.validatePrincipal(object as ClientBinding | IssuedCredential)
-        : undefined,
-      deps.validationHooks?.validateClient ? await deps.validationHooks.validateClient(object) : undefined,
-      deps.validationHooks?.validateProtocolVersion
-        ? await deps.validationHooks.validateProtocolVersion(object)
-        : undefined,
-    ].filter((item): item is Exclude<typeof item, undefined> => item !== undefined);
+    let validation: ValidationResult = { ok: true };
+    if ("principal" in object && object.principal) {
+      validation = await validatePrincipal(object as ClientBinding | IssuedCredential);
+      if (!validation.ok)
+        return await validationFailure(object, validation);
+    }
+    if (deps.validationHooks?.validateClient) {
+      validation = await deps.validationHooks.validateClient(object);
+      if (!validation.ok)
+        return await validationFailure(object, validation);
+    }
+    if (deps.validationHooks?.validateProtocolVersion) {
+      validation = await deps.validationHooks.validateProtocolVersion(object);
+      if (!validation.ok)
+        return await validationFailure(object, validation);
+    }
+    return { ok: true as const };
+  }
 
-    const failure = validations.find(item => !item.ok);
-    if (!failure)
-      return { ok: true as const };
+  async function validatePrincipal(target: PrincipalValidationTarget): Promise<ValidationResult> {
+    const fenced = await deps.principalAccessFence.validate(target);
+    if (!fenced.ok)
+      return fenced;
+    return await deps.validationHooks?.validatePrincipal?.(target) ?? { ok: true };
+  }
 
-    let revokeSummary: RevokeSummary;
-    if (failure.reason === "user_disabled" || failure.reason === "user_deleted") {
-      revokeSummary = "principal" in object && object.principal
-        ? await revokeUserSessions(object.principal, failure.reason)
-        : createEmptyRevokeSummary();
+  async function validationFailure(
+    object: ClientBinding | IssuedCredential | ProtocolArtifact,
+    failure: Extract<ValidationResult, { ok: false }>,
+  ) {
+    let cleanup: (() => Promise<RevokeSummary>) | undefined;
+    if (failure.reason === "session_generation_stale") {
+      const principalSessionId = object.principalSessionId;
+      cleanup = principalSessionId === undefined
+        ? undefined
+        : async () => await revokePrincipalSession(
+          principalSessionId,
+          failure.reason,
+        );
+    }
+    else if (failure.reason === "user_disabled" || failure.reason === "user_deleted") {
+      if (!("principal" in object) || !object.principal) {
+        cleanup = undefined;
+      }
+      else if (object.subjectAccessTransitionId === undefined) {
+        const principalSessionId = object.principalSessionId;
+        cleanup = principalSessionId === undefined
+          ? undefined
+          : async () => await revokePrincipalSession(
+            principalSessionId,
+            failure.reason,
+          );
+      }
+      else {
+        const principal = object.principal;
+        const subjectAccessTransitionId = object.subjectAccessTransitionId;
+        cleanup = async () => await revokeUserSessions(
+          principal,
+          failure.reason,
+          {
+            onlySubjectAccessTransitionId:
+              subjectAccessTransitionId,
+          },
+        );
+      }
     }
     else if (failure.reason === "client_disabled" || failure.reason === "client_deleted") {
-      revokeSummary = "clientCode" in object && object.clientCode
-        ? await revokeClientProtocol(object.clientCode, object.protocol, failure.reason)
-        : createEmptyRevokeSummary();
+      const clientCode = "clientCode" in object ? object.clientCode : undefined;
+      cleanup = clientCode
+        ? async () => await revokeClientProtocol(clientCode, object.protocol, failure.reason)
+        : undefined;
     }
     else {
-      revokeSummary = "clientCode" in object && object.clientCode
-        ? await revokeClientProtocol(object.clientCode, object.protocol, failure.reason)
-        : createEmptyRevokeSummary();
+      const clientCode = "clientCode" in object ? object.clientCode : undefined;
+      cleanup = clientCode
+        ? async () => await revokeClientProtocol(clientCode, object.protocol, failure.reason)
+        : undefined;
     }
+    const revokeSummary = cleanup === undefined
+      ? createEmptyRevokeSummary()
+      : await runValidationCleanup(object, failure, cleanup);
     return {
+      ok: false as const,
       status: "validation_failed" as const,
       reason: failure.reason,
       message: failure.message,
       revokeSummary,
     };
+  }
+
+  async function runValidationCleanup(
+    object: PrincipalSession | ClientBinding | IssuedCredential | ProtocolArtifact,
+    failure: Extract<ValidationResult, { ok: false }>,
+    cleanup: () => Promise<RevokeSummary>,
+  ): Promise<RevokeSummary> {
+    try {
+      return await cleanup();
+    }
+    catch (error) {
+      try {
+        deps.logger?.warn?.({
+          event: SystemLogEvent.SessionKernelRevokeCleanupFailed,
+          sourceApp: deps.sourceApp ?? "session-kernel",
+          kind: "validation_cleanup",
+          refType: lifecycleObjectKind(object),
+          reason: failure.reason,
+          protocol: "protocol" in object ? object.protocol : undefined,
+          clientCode: "clientCode" in object ? object.clientCode : undefined,
+          errorName: error instanceof Error ? error.name : "Error",
+        }, "session kernel validation cleanup failed");
+      }
+      catch {
+        // Validation classification must survive telemetry failures as well.
+      }
+      return createEmptyRevokeSummary();
+    }
   }
 
   function principalSessionIndexes(session: PrincipalSession): StoreIndexWrite[] {
@@ -899,6 +1078,18 @@ export function createSessionKernel(deps: SessionKernelDependencies) {
     revokeBindingObjects,
     revokeProtocol,
   };
+}
+
+function lifecycleObjectKind(
+  object: PrincipalSession | ClientBinding | IssuedCredential | ProtocolArtifact,
+): LifecycleObjectKind {
+  if ("sessionKind" in object)
+    return "principal_session";
+  if ("credentialType" in object)
+    return "credential";
+  if ("artifactType" in object)
+    return "artifact";
+  return "client_binding";
 }
 
 function toPrincipalSessionInventoryItem(session: PrincipalSession): PrincipalSessionInventoryItem {

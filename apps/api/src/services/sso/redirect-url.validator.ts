@@ -2,7 +2,12 @@ import type { LoggerPort } from "@api/composition/runtime";
 import type { AuditRequestContext } from "@iam/domain/audit";
 import { SystemLogEvent } from "@iam/api-core/logger";
 import { observabilityLogFields } from "@iam/api-core/observability";
-import { matchRedirectUrlPattern } from "@iam/domain/client";
+import {
+  matchRedirectUrlPattern,
+  normalizeRedirectUrl,
+  RedirectUrlPatternFailureReasons,
+  RedirectUrlPatternSyntaxError,
+} from "@iam/domain/client";
 
 export interface SsoRedirectUrlValidatorDeps {
   logger: Pick<LoggerPort, "warn">;
@@ -12,48 +17,44 @@ export interface SsoRedirectValidationOptions {
   requestContext?: AuditRequestContext;
 }
 
-function hasSupportedRedirectUrlSyntax(redirectUrl: string) {
-  try {
-    const url = new URL(redirectUrl);
-    return url.protocol === "http:" || url.protocol === "https:";
-  }
-  catch {
-    return false;
-  }
-}
-
 export function createSsoRedirectUrlValidator(deps: SsoRedirectUrlValidatorDeps) {
-  function isAllowed(
+  function normalizeAllowed(
     clientCode: string,
     redirectUrl: string,
     patterns: string[],
     options: SsoRedirectValidationOptions = {},
   ) {
-    if (!hasSupportedRedirectUrlSyntax(redirectUrl)) {
-      return false;
+    let normalizedRedirectUrl: string;
+    try {
+      normalizedRedirectUrl = normalizeRedirectUrl(redirectUrl);
+    }
+    catch {
+      return null;
     }
 
-    for (const pattern of patterns) {
+    for (const [patternIndex, pattern] of patterns.entries()) {
       try {
-        if (matchRedirectUrlPattern(redirectUrl, pattern)) {
-          return true;
+        if (matchRedirectUrlPattern(normalizedRedirectUrl, pattern)) {
+          return normalizedRedirectUrl;
         }
       }
-      catch (err) {
+      catch (error) {
         deps.logger.warn({
           event: SystemLogEvent.RedirectPatternInvalid,
-          err,
           clientCode,
-          pattern,
+          patternIndex,
+          reason: error instanceof RedirectUrlPatternSyntaxError
+            ? error.reason
+            : RedirectUrlPatternFailureReasons.InvalidUrl,
           ...observabilityLogFields(options.requestContext),
         }, "invalid client redirect url pattern");
       }
     }
 
-    return false;
+    return null;
   }
 
-  return { isAllowed };
+  return { normalizeAllowed };
 }
 
 export type SsoRedirectUrlValidator = ReturnType<typeof createSsoRedirectUrlValidator>;

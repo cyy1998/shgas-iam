@@ -1,5 +1,15 @@
-import { ApiErrorCode, ClientManagementLevel } from "@iam/contracts";
+import {
+  CustomSsoClientRuntimeUnavailableError,
+} from "@api/services/client/custom-sso-client-runtime.reader";
+import { createErrorHandler } from "@iam/api-core/middlewares";
+import {
+  SubjectAccessSessionInvalidHttpError,
+  SubjectAccessUnavailableError,
+} from "@iam/api-core/subject-access";
+import { SubjectProjectionNotReadyError } from "@iam/client-subject-projection";
+import { ApiErrorCode, CustomSsoClientMode } from "@iam/contracts";
 import { beforeEach, describe, expect, mock, test } from "bun:test";
+import { Hono } from "hono";
 import { createSsoHandlers } from "../sso.handlers";
 
 const logger = {
@@ -8,28 +18,37 @@ const logger = {
 
 const authorize = mock(async (): Promise<
   | { isLogin: false; code: null }
-  | { isLogin: true; code: string }
+  | {
+    isLogin: true;
+    code: string;
+    callbackEndpoint?: string;
+    clientCode: string;
+    mode: CustomSsoClientMode;
+    redirectUrl: string;
+    state?: string;
+  }
 > => ({ isLogin: false, code: null }));
-const callback = mock(async (): Promise<{ token: string; orcasSessionId: string | null }> => ({
+const callback = mock(async (): Promise<{
+  token: string;
+  orcasSessionId: string | null;
+  state?: string;
+}> => ({
   token: "local-session",
   orcasSessionId: null,
 }));
 const loginOA = mock(async () => ({ token: "global-session", isMobileSet: true }));
 const loginWX = mock(async () => ({ token: "global-session", isMobileSet: true }));
-const logout = mock(async () => true);
-const setToken = mock(async () => ({ sid: "local-session", ttl: 3600, userInfo: {} }));
-const getClientByCode = mock(async () => ({
-  extAttributes: {
-    callbackEndpoint: "https://app.example.com/sso/callback",
-    managementLevel: ClientManagementLevel.Independent,
+const logout = mock(async () => true as const);
+const setToken = mock(async () => ({
+  sid: "local-session",
+  ttl: 3600,
+  subject: {
+    version: 1 as const,
+    subjectIdentifier: "00000000-0000-4000-8000-000000001001",
   },
 }));
-
 function createHandlers() {
   return createSsoHandlers({
-    clientService: {
-      getClientByCode,
-    },
     logger,
     sso: {
       authorize: { execute: authorize },
@@ -44,29 +63,41 @@ function createHandlers() {
       authorizationEndpoint: "/sso/authorize",
       loginEndpoint: "/login",
       logoutEndpoint: "/sso/logout",
+      projectionRetryAfterSeconds: 3,
       redisExpireSeconds: 3600,
       ssoExternalOrigin: "https://iam.example.com/",
       ssoInternalOrigin: "https://iam.internal.example.com/",
       thirdPartyOAEndpoint: "/sso/thirdparty/oa",
     },
-  } as any);
+  });
 }
 
 function createAuthorizeContext(options: {
   authorization?: string;
+  client?: string;
   cookie?: string;
   queryToken?: string;
+  state?: string;
 } = {}) {
   const {
     authorization = "header-session",
+    client = "independent",
     cookie = "cookie-session",
     queryToken = "query-session",
+    state,
   } = options;
-  const query = {
-    client: "independent",
+  const query: {
+    client: string;
+    redirectUrl: string;
+    state?: string;
+    token: string;
+  } = {
+    client,
     redirectUrl: "https://app.example.com/home?from=iam",
     token: queryToken,
   };
+  if (state !== undefined)
+    query.state = state;
   const headers = new Headers();
   if (authorization)
     headers.set("Authorization", authorization);
@@ -103,6 +134,7 @@ function createCallbackContext() {
         client: "gateway",
         code: "auth-code",
         redirectUrl: "https://gateway.example.com/home?from=iam",
+        state: "untrusted-callback-state",
       })),
     },
     get: mock((key: string) => key === "requestId" ? "req-callback" : undefined),
@@ -114,14 +146,30 @@ function createCallbackContext() {
 }
 
 function createTokenContext() {
-  const raw = new Request("https://iam.example.test/sso/token");
+  const raw = new Request("https://iam.example.test/sso/token", {
+    method: "POST",
+    headers: {
+      "Authorization": `Basic ${Buffer.from("independent:secret").toString("base64")}`,
+      "Content-Type": "application/x-www-form-urlencoded",
+    },
+    body: new URLSearchParams({
+      code: "auth-code",
+      redirect_uri: "https://app.example.com/callback",
+    }),
+  });
   return {
     req: {
       header: mock((name: string) => raw.headers.get(name) ?? undefined),
-      method: "GET",
+      method: "POST",
       path: "/sso/token",
       raw,
-      valid: mock(() => ({ client: "independent", clientSecret: "secret", code: "auth-code" })),
+      url: raw.url,
+      valid: mock((target: string) => target === "header"
+        ? { authorization: raw.headers.get("Authorization")! }
+        : {
+            code: "auth-code",
+            redirect_uri: "https://app.example.com/callback",
+          }),
     },
     get: mock((key: string) => key === "requestId" ? "req-token" : undefined),
     json: mock((body: unknown, status: number) => ({ body, status })),
@@ -165,6 +213,7 @@ function createOaContext() {
             client: "independent",
             loginid: "138550",
             redirectUrl: "https://app.example.com/home",
+            state: "opaque state !/?:&=%",
             token: "oa-signature",
             ts: "1700000000000",
           }),
@@ -191,6 +240,7 @@ function createWechatContext() {
         client: "independent",
         code: "wechat-code",
         redirectUrl: "https://app.example.com/home",
+        state: "opaque state !/?:&=%",
       })),
     },
     get: mock((key: string) => key === "requestId" ? "req-wechat" : undefined),
@@ -212,6 +262,84 @@ function createContext(entryNetwork?: string) {
   };
 }
 
+function createHttpHandlerApp(
+  path: string,
+  handler: (context: never, next: never) => unknown,
+  validInput: Record<string, string>,
+) {
+  const app = new Hono();
+  app.get(path, async (context) => {
+    (context.req as unknown as {
+      valid: () => Record<string, string>;
+    }).valid = () => validInput;
+    return await handler(context as never, undefined as never) as Response;
+  });
+  app.onError(createErrorHandler({
+    error: mock(() => undefined),
+    info: mock(() => undefined),
+    warn: mock(() => undefined),
+  } as never));
+  return app;
+}
+
+function createOaHandlerApp(
+  handler: (context: never, next: never) => unknown,
+) {
+  const app = new Hono();
+  app.get("/sso/thirdparty/oa/:clientCode", async (context) => {
+    (context.req as unknown as {
+      valid: (target: string) => Record<string, string>;
+    }).valid = (target): Record<string, string> => {
+      if (target === "param") {
+        return { clientCode: "oa" };
+      }
+      return {
+        client: "independent",
+        loginid: "138550",
+        redirectUrl: "https://app.example.com/home",
+        token: "oa-signature",
+        ts: "1700000000000",
+      };
+    };
+    return await handler(context as never, undefined as never) as Response;
+  });
+  app.onError(createErrorHandler({
+    error: mock(() => undefined),
+    info: mock(() => undefined),
+    warn: mock(() => undefined),
+  } as never));
+  return app;
+}
+
+function createTokenHandlerApp(
+  handler: (context: never, next: never) => unknown,
+) {
+  const app = new Hono();
+  app.post("/sso/token", async (context) => {
+    (context.req as unknown as {
+      valid: (target: string) => Record<string, string>;
+    }).valid = (target) => {
+      if (target === "header") {
+        return {
+          authorization:
+            `Basic ${Buffer.from("independent:secret").toString("base64")}`,
+        } as Record<string, string>;
+      }
+      return {
+        code: "auth-code",
+        redirect_uri: "https://app.example.com/callback",
+      } as Record<string, string>;
+    };
+    return await handler(context as never, undefined as never) as Response;
+  });
+  app.onError(createErrorHandler({
+    error: mock(() => undefined),
+    info: mock(() => undefined),
+    warn: mock(() => undefined),
+  } as never));
+  return app;
+}
+
 beforeEach(() => {
   logger.warn.mockClear();
   authorize.mockClear();
@@ -220,7 +348,6 @@ beforeEach(() => {
   loginWX.mockClear();
   logout.mockClear();
   setToken.mockClear();
-  getClientByCode.mockClear();
 });
 
 describe("createSsoHandlers protocol adaptation", () => {
@@ -281,7 +408,14 @@ describe("createSsoHandlers protocol adaptation", () => {
   test("authorize redirects a logged-in Independent client to its configured callback", async () => {
     const handlers = createHandlers();
     const context = createAuthorizeContext();
-    authorize.mockResolvedValueOnce({ isLogin: true, code: "auth-code" });
+    authorize.mockResolvedValueOnce({
+      isLogin: true,
+      code: "auth-code",
+      callbackEndpoint: "https://app.example.com/sso/callback",
+      clientCode: "independent",
+      mode: CustomSsoClientMode.Independent,
+      redirectUrl: "https://app.example.com/home?from=iam",
+    });
 
     await handlers.authorize(context as never, async () => {});
 
@@ -290,10 +424,36 @@ describe("createSsoHandlers protocol adaptation", () => {
     );
   });
 
+  test("authorize keeps Gateway state only in the Grant until the trusted callback completes", async () => {
+    const handlers = createHandlers();
+    const context = createAuthorizeContext({
+      client: "gateway",
+      state: "opaque-gateway-state",
+    });
+    authorize.mockResolvedValueOnce({
+      isLogin: true,
+      code: "auth-code",
+      clientCode: "gateway",
+      mode: CustomSsoClientMode.Gateway,
+      redirectUrl: "https://gateway.example.com/home?from=iam",
+      state: "opaque-gateway-state",
+    });
+
+    await handlers.authorize(context as never, async () => {});
+
+    expect(context.redirect).toHaveBeenCalledWith(
+      "https://gateway.example.com/sso/callback?code=auth-code&client=gateway&redirectUrl=https%3A%2F%2Fgateway.example.com%2Fhome%3Ffrom%3Diam",
+    );
+  });
+
   test("callback writes local and ORCAS cookies before redirecting with both tokens", async () => {
     const handlers = createHandlers();
     const context = createCallbackContext();
-    callback.mockResolvedValueOnce({ token: "local-token", orcasSessionId: "orcas-token" });
+    callback.mockResolvedValueOnce({
+      token: "local-token",
+      orcasSessionId: "orcas-token",
+      state: "trusted-grant-state",
+    });
 
     await handlers.callback(context as never, async () => {});
 
@@ -310,7 +470,7 @@ describe("createSsoHandlers protocol adaptation", () => {
       expect.arrayContaining(["Set-Cookie", expect.stringContaining("orcas_sso_sessionid=orcas-token")]),
     ]));
     expect(context.redirect).toHaveBeenCalledWith(
-      "https://gateway.example.com/home?from=iam&token=local-token&orcasToken=orcas-token",
+      "https://gateway.example.com/home?from=iam&token=local-token&orcasToken=orcas-token&state=trusted-grant-state",
     );
   });
 
@@ -325,22 +485,213 @@ describe("createSsoHandlers protocol adaptation", () => {
     expect(context.redirect).not.toHaveBeenCalled();
   });
 
-  test("token returns the existing Independent Client Credential envelope", async () => {
+  test("token adapts Basic and form input to the narrow Independent Credential envelope", async () => {
     const handlers = createHandlers();
     const context = createTokenContext();
-    setToken.mockResolvedValueOnce({ sid: "independent-token", ttl: 7200, userInfo: { id: 1001 } });
+    setToken.mockResolvedValueOnce({
+      sid: "independent-token",
+      ttl: 7200,
+      subject: {
+        version: 1,
+        subjectIdentifier: "00000000-0000-4000-8000-000000001001",
+      },
+    });
 
     await expect(handlers.token(context as never, async () => {})).resolves.toMatchObject({
       status: 200,
       body: {
-        data: { sid: "independent-token", ttl: 7200, userInfo: { id: 1001 } },
+        data: {
+          sid: "independent-token",
+          ttl: 7200,
+          subject: {
+            version: 1,
+            subjectIdentifier: "00000000-0000-4000-8000-000000001001",
+          },
+        },
       },
     });
     expect(setToken).toHaveBeenCalledWith({
       clientCode: "independent",
       clientSecret: "secret",
       code: "auth-code",
+      redirectUri: "https://app.example.com/callback",
     }, { requestContext: expect.objectContaining({ requestId: "req-token", route: "/sso/token" }) });
+  });
+
+  test("authorize returns stable Subject Access errors and only clears its global cookie when disabled", async () => {
+    const handlers = createHandlers();
+    const app = createHttpHandlerApp("/sso/authorize", handlers.authorize, {
+      client: "independent",
+      redirectUrl: "https://app.example.com/home",
+      token: "",
+    });
+    const url = "/sso/authorize?client=independent&redirectUrl=https%3A%2F%2Fapp.example.com%2Fhome";
+
+    authorize.mockRejectedValueOnce(new SubjectAccessSessionInvalidHttpError());
+    const disabled = await app.request(url, {
+      headers: { Cookie: "global_session=global-token" },
+    });
+    expect(disabled.status).toBe(401);
+    await expect(disabled.json()).resolves.toMatchObject({
+      code: ApiErrorCode.SessionInvalid,
+    });
+    expect(disabled.headers.getSetCookie()).toHaveLength(1);
+    expect(disabled.headers.getSetCookie()[0]).toContain("global_session=");
+    expect(disabled.headers.getSetCookie()[0]).toContain("Path=/");
+    expect(disabled.headers.getSetCookie()[0]).toContain("Max-Age=0");
+
+    authorize.mockRejectedValueOnce(new SubjectAccessUnavailableError());
+    const unavailable = await app.request(url, {
+      headers: { Cookie: "global_session=global-token" },
+    });
+    expect(unavailable.status).toBe(503);
+    expect(unavailable.headers.get("Retry-After")).toBe("3");
+    await expect(unavailable.json()).resolves.toMatchObject({
+      code: ApiErrorCode.SubjectAccessUnavailable,
+    });
+    expect(unavailable.headers.getSetCookie()).toEqual([]);
+
+    authorize.mockRejectedValueOnce(new SubjectProjectionNotReadyError());
+    const projectionUnavailable = await app.request(url);
+    expect(projectionUnavailable.status).toBe(503);
+    expect(projectionUnavailable.headers.get("Retry-After")).toBe("3");
+    await expect(projectionUnavailable.json()).resolves.toMatchObject({
+      code: ApiErrorCode.SubjectProjectionNotReady,
+    });
+  });
+
+  test("callback maps Subject Access errors and expires global, target local, and ORCAS cookies only when disabled", async () => {
+    const handlers = createHandlers();
+    const app = createHttpHandlerApp("/sso/callback", handlers.callback, {
+      client: "gateway",
+      code: "auth-code",
+      redirectUrl: "https://gateway.example.com/home",
+    });
+
+    callback.mockRejectedValueOnce(new SubjectAccessSessionInvalidHttpError());
+    const disabled = await app.request("/sso/callback", {
+      headers: {
+        Cookie: "global_session=global-token; local_gateway_session=local-token; orcas_sso_sessionid=orcas-token",
+      },
+    });
+    expect(disabled.status).toBe(401);
+    expect(disabled.headers.getSetCookie()).toHaveLength(3);
+    for (const cookie of disabled.headers.getSetCookie()) {
+      expect(cookie).toContain("Path=/");
+      expect(cookie).toContain("Max-Age=0");
+      expect(cookie).toContain("Expires=Thu, 01 Jan 1970 00:00:00 GMT");
+    }
+
+    callback.mockRejectedValueOnce(new SubjectAccessUnavailableError());
+    const unavailable = await app.request("/sso/callback", {
+      headers: { Cookie: "global_session=global-token" },
+    });
+    expect(unavailable.status).toBe(503);
+    expect(unavailable.headers.get("Retry-After")).toBe("3");
+    expect(unavailable.headers.getSetCookie()).toEqual([]);
+
+    callback.mockRejectedValueOnce(new SubjectProjectionNotReadyError());
+    const projectionUnavailable = await app.request("/sso/callback");
+    expect(projectionUnavailable.status).toBe(503);
+    expect(projectionUnavailable.headers.get("Retry-After")).toBe("3");
+    await expect(projectionUnavailable.json()).resolves.toMatchObject({
+      code: ApiErrorCode.SubjectProjectionNotReady,
+    });
+  });
+
+  test("token maps disabled and unavailable credentials without emitting browser cookie deletion", async () => {
+    const handlers = createHandlers();
+    const app = createTokenHandlerApp(handlers.token);
+    const request = {
+      method: "POST",
+      headers: {
+        "Authorization":
+          `Basic ${Buffer.from("independent:secret").toString("base64")}`,
+        "Content-Type": "application/x-www-form-urlencoded",
+      },
+      body: new URLSearchParams({
+        code: "auth-code",
+        redirect_uri: "https://app.example.com/callback",
+      }),
+    };
+
+    setToken.mockRejectedValueOnce(new SubjectAccessSessionInvalidHttpError());
+    const disabled = await app.request("/sso/token", request);
+    expect(disabled.status).toBe(401);
+    await expect(disabled.json()).resolves.toMatchObject({
+      code: ApiErrorCode.SessionInvalid,
+    });
+    expect(disabled.headers.getSetCookie()).toEqual([]);
+
+    setToken.mockRejectedValueOnce(new SubjectAccessUnavailableError());
+    const unavailable = await app.request("/sso/token", request);
+    expect(unavailable.status).toBe(503);
+    expect(unavailable.headers.get("Retry-After")).toBe("3");
+    await expect(unavailable.json()).resolves.toMatchObject({
+      code: ApiErrorCode.SubjectAccessUnavailable,
+    });
+    expect(unavailable.headers.getSetCookie()).toEqual([]);
+  });
+
+  test("sanitizes unknown authorize, callback, and token failures", async () => {
+    const handlers = createHandlers();
+    const authorizeApp = createHttpHandlerApp(
+      "/sso/authorize",
+      handlers.authorize,
+      {
+        client: "independent",
+        redirectUrl: "https://app.example.com/home",
+        token: "",
+      },
+    );
+    const callbackApp = createHttpHandlerApp(
+      "/sso/callback",
+      handlers.callback,
+      {
+        client: "gateway",
+        code: "auth-code",
+        redirectUrl: "https://gateway.example.com/home",
+      },
+    );
+    const tokenApp = createTokenHandlerApp(handlers.token);
+
+    for (const [operation, request] of [
+      [
+        authorize,
+        () => authorizeApp.request(
+          "/sso/authorize?client=independent&redirectUrl=https%3A%2F%2Fapp.example.com%2Fhome",
+        ),
+      ],
+      [
+        callback,
+        () => callbackApp.request("/sso/callback"),
+      ],
+      [
+        setToken,
+        () => tokenApp.request("/sso/token", {
+          method: "POST",
+          headers: {
+            "Authorization":
+              `Basic ${Buffer.from("independent:secret").toString("base64")}`,
+            "Content-Type": "application/x-www-form-urlencoded",
+          },
+          body: new URLSearchParams({
+            code: "auth-code",
+            redirect_uri: "https://app.example.com/callback",
+          }),
+        }),
+      ],
+    ] as const) {
+      operation.mockRejectedValueOnce(
+        new Error("redis://user:secret@internal/sensitive"),
+      );
+      const response = await request();
+      expect(response.status).toBe(500);
+      const body = JSON.stringify(await response.json());
+      expect(body).toContain(ApiErrorCode.InternalError);
+      expect(body).not.toContain("redis://");
+      expect(body).not.toContain("sensitive");
+    }
   });
 
   test("logout prefers the global-session cookie, deletes it, and preserves the requested redirect", async () => {
@@ -352,10 +703,46 @@ describe("createSsoHandlers protocol adaptation", () => {
     expect(logout).toHaveBeenCalledWith({ sessionToken: "cookie-session" });
     expect(context.responseHeaders).toContainEqual([
       "Set-Cookie",
-      expect.stringContaining("global_session=;"),
+      expect.stringMatching(
+        /global_session=;.*Max-Age=0;.*Path=\/.*Expires=Thu, 01 Jan 1970 00:00:00 GMT/iu,
+      ),
       { append: true },
     ]);
     expect(context.redirect).toHaveBeenCalledWith("https://app.example.com/signed-out");
+  });
+
+  test("logout maps invalid and unavailable Subject Access before clearing a successful cookie", async () => {
+    const handlers = createHandlers();
+    const app = createHttpHandlerApp("/sso/logout", handlers.logout, {
+      redirectUrl: "https://app.example.com/signed-out",
+      token: "query-session",
+    });
+
+    logout.mockRejectedValueOnce(new SubjectAccessSessionInvalidHttpError());
+    const disabled = await app.request("/sso/logout", {
+      headers: { Cookie: "global_session=global-token" },
+    });
+    expect(disabled.status).toBe(401);
+    expect(disabled.headers.getSetCookie()).toHaveLength(1);
+    expect(disabled.headers.getSetCookie()[0]).toContain("global_session=");
+
+    logout.mockRejectedValueOnce(new SubjectAccessUnavailableError());
+    const unavailable = await app.request("/sso/logout", {
+      headers: { Cookie: "global_session=global-token" },
+    });
+    expect(unavailable.status).toBe(503);
+    expect(unavailable.headers.getSetCookie()).toEqual([]);
+
+    logout.mockRejectedValueOnce(new CustomSsoClientRuntimeUnavailableError());
+    const clientRuntimeUnavailable = await app.request("/sso/logout", {
+      headers: { Cookie: "global_session=global-token" },
+    });
+    expect(clientRuntimeUnavailable.status).toBe(503);
+    expect(clientRuntimeUnavailable.headers.get("Retry-After")).toBe("3");
+    expect(clientRuntimeUnavailable.headers.getSetCookie()).toEqual([]);
+    await expect(clientRuntimeUnavailable.json()).resolves.toMatchObject({
+      code: ApiErrorCode.SubjectProjectionNotReady,
+    });
   });
 
   test("OA login replaces the previous session and redirects through authorize", async () => {
@@ -378,8 +765,29 @@ describe("createSsoHandlers protocol adaptation", () => {
       { append: true },
     ]);
     expect(context.redirect).toHaveBeenCalledWith(
-      "/sso/authorize?client=independent&redirectUrl=https%3A%2F%2Fapp.example.com%2Fhome&token=oa-session",
+      "/sso/authorize?client=independent&redirectUrl=https%3A%2F%2Fapp.example.com%2Fhome&token=oa-session&state=opaque+state+%21%2F%3F%3A%26%3D%25",
     );
+  });
+
+  test("OA login stops when replacing the old session hits invalid or unavailable Subject Access", async () => {
+    const handlers = createHandlers();
+    const app = createOaHandlerApp(handlers.loginOA);
+
+    logout.mockRejectedValueOnce(new SubjectAccessSessionInvalidHttpError());
+    const disabled = await app.request("/sso/thirdparty/oa/oa", {
+      headers: { Cookie: "global_session=global-token" },
+    });
+    expect(disabled.status).toBe(401);
+    expect(disabled.headers.getSetCookie()).toHaveLength(1);
+    expect(loginOA).not.toHaveBeenCalled();
+
+    logout.mockRejectedValueOnce(new SubjectAccessUnavailableError());
+    const unavailable = await app.request("/sso/thirdparty/oa/oa", {
+      headers: { Cookie: "global_session=global-token" },
+    });
+    expect(unavailable.status).toBe(503);
+    expect(unavailable.headers.getSetCookie()).toEqual([]);
+    expect(loginOA).not.toHaveBeenCalled();
   });
 
   test("WeChat login writes the global session and redirects through authorize", async () => {
@@ -399,7 +807,7 @@ describe("createSsoHandlers protocol adaptation", () => {
       { append: true },
     ]);
     expect(context.redirect).toHaveBeenCalledWith(
-      "/sso/authorize?client=independent&redirectUrl=https%3A%2F%2Fapp.example.com%2Fhome&token=wechat-session",
+      "/sso/authorize?client=independent&redirectUrl=https%3A%2F%2Fapp.example.com%2Fhome&token=wechat-session&state=opaque+state+%21%2F%3F%3A%26%3D%25",
     );
   });
 });

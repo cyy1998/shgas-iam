@@ -17,6 +17,39 @@ function indexesByName(table: typeof userProfiles | typeof userProfileDirty) {
 }
 
 describe("user profile schema", () => {
+  test("declares the tightened seventeen-column Subject Facts publication model", () => {
+    const config = getTableConfig(userProfiles);
+    const columns = columnsByProperty(userProfiles);
+
+    expect(Object.keys(columns)).toEqual([
+      "user_id",
+      "subject_identifier",
+      "username",
+      "name",
+      "mobile",
+      "wx_id",
+      "status",
+      "is_delete",
+      "search_visible",
+      "profile_schema_version",
+      "source_dirty_version",
+      "detail",
+      "search_doc",
+      "subject_facts",
+      "rebuilt_at",
+      "create_time",
+      "update_time",
+    ]);
+    expect(columns.subject_identifier).toMatchObject({ columnType: "PgUUID", notNull: true });
+    expect(columns.name).toMatchObject({ columnType: "PgVarchar", notNull: true });
+    expect(columns.source_dirty_version).toMatchObject({ columnType: "PgBigIntString", notNull: true });
+    expect(columns.subject_facts).toMatchObject({ columnType: "PgJsonb", notNull: true });
+    expect(config.checks.map(check => check.name).sort()).toEqual([
+      "user_profile_source_dirty_version_positive_check",
+      "user_profile_subject_facts_object_check",
+    ]);
+  });
+
   test("stores one current profile row per user with JSONB profile documents", () => {
     const columns = columnsByProperty(userProfiles);
 
@@ -46,6 +79,16 @@ describe("user profile schema", () => {
     expect(indexes.user_profile_search_doc_gin_idx.columns.map((column: any) => column.name)).toEqual(["search_doc"]);
     expect(Object.values(indexes).some((index: any) =>
       index.method === "gin" && index.columns.some((column: any) => column.name === "detail"),
+    )).toBe(false);
+    expect(indexes.user_profile_subject_identifier_idx).toMatchObject({
+      method: "btree",
+      unique: true,
+    });
+    expect(indexes.user_profile_subject_identifier_idx.columns.map((column: any) => column.name))
+      .toEqual(["subject_identifier"]);
+    expect(Object.values(indexes).some((index: any) =>
+      index.method === "gin"
+      && index.columns.some((column: any) => column.name === "subject_facts"),
     )).toBe(false);
   });
 });

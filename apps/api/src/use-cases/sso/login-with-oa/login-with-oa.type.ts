@@ -19,5 +19,6 @@ export interface LoginWithOaResult {
 
 export interface OaLoginUser {
   id: number;
+  subjectIdentifier: string;
   userType: UserType;
 }

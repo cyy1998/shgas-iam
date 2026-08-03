@@ -3,15 +3,20 @@ import type { SessionKernel } from "@iam/api-core/session/kernel";
 import type { Context, Next } from "hono";
 import { AuthzForbiddenError } from "@iam/api-core/errors/AuthzForbiddenError";
 import { AuthzUnauthorizedError } from "@iam/api-core/errors/AuthzUnauthorizedError";
+import {
+  createSubjectAccessHttpAdapter,
+  translateSubjectAccessResolveResult,
+} from "@iam/api-core/subject-access";
 import { UserStatus } from "@iam/contracts";
-import { deleteCookie, getCookie } from "hono/cookie";
+import { getCookie, setCookie } from "hono/cookie";
 
 const GLOBAL_SESSION_COOKIE = "global_session";
 const ORCAS_SESSION_COOKIE = "orcas_sso_sessionid";
+const subjectAccessHttp = createSubjectAccessHttpAdapter();
 
 export interface CreateAdminAuthenticationHandlersDeps {
   sessionKernel: Pick<SessionKernel, "resolvePrincipalSession">;
-  userService: Pick<UserService, "getUserDetailByUsernameForAdmin">;
+  userService: Pick<UserService, "getUserDetailBySubjectIdentifierForAdmin">;
   config: {
     allowedClientCodes: string[];
     adminRoleCodes: string[];
@@ -25,26 +30,37 @@ export function createAdminAuthenticationHandlers(deps: CreateAdminAuthenticatio
       throw new AuthzForbiddenError("无管理端访问权限");
     }
 
-    const token = getCookie(c, GLOBAL_SESSION_COOKIE) ?? c.req.header("Authorization") ?? null;
+    const sessionCookie = getCookie(c, GLOBAL_SESSION_COOKIE);
+    const token = sessionCookie ?? c.req.header("Authorization") ?? null;
     if (!token) {
       clearGlobalSessionCookies(c);
       throw new AuthzUnauthorizedError("未登录");
     }
 
-    const principal = await deps.sessionKernel.resolvePrincipalSession(token);
+    const principal = await subjectAccessHttp.run(c, {
+      clearCookiesOnInvalidSession: sessionCookie === undefined
+        ? []
+        : [GLOBAL_SESSION_COOKIE, ORCAS_SESSION_COOKIE],
+    }, async () => {
+      return translateSubjectAccessResolveResult(
+        await deps.sessionKernel.resolvePrincipalSession(token),
+      );
+    });
     if (principal.status !== "resolved") {
+      if (sessionCookie !== undefined)
+        clearGlobalSessionCookies(c);
+      throw new AuthzUnauthorizedError("未登录");
+    }
+
+    if (principal.value.principal.principalType !== "user") {
       clearGlobalSessionCookies(c);
       throw new AuthzUnauthorizedError("未登录");
     }
 
-    if (principal.value.principal.principalType !== "user" || !principal.value.snapshot.username) {
-      clearGlobalSessionCookies(c);
-      throw new AuthzUnauthorizedError("未登录");
-    }
-
-    const user = await deps.userService.getUserDetailByUsernameForAdmin(principal.value.snapshot.username)
+    const user = await deps.userService
+      .getUserDetailBySubjectIdentifierForAdmin(principal.value.principal.subjectId)
       .catch(() => null);
-    if (!user || user.status !== UserStatus.Enable || String(user.id) !== principal.value.principal.subjectId) {
+    if (!user || user.status !== UserStatus.Enable) {
       clearGlobalSessionCookies(c);
       throw new AuthzUnauthorizedError("未登录");
     }
@@ -67,8 +83,13 @@ export function createAdminAuthenticationHandlers(deps: CreateAdminAuthenticatio
 }
 
 function clearGlobalSessionCookies(c: Context) {
-  deleteCookie(c, GLOBAL_SESSION_COOKIE);
-  deleteCookie(c, ORCAS_SESSION_COOKIE);
+  for (const cookieName of [GLOBAL_SESSION_COOKIE, ORCAS_SESSION_COOKIE]) {
+    setCookie(c, cookieName, "", {
+      expires: new Date(0),
+      maxAge: 0,
+      path: "/",
+    });
+  }
 }
 
 export type AdminAuthenticationHandlers = ReturnType<typeof createAdminAuthenticationHandlers>;

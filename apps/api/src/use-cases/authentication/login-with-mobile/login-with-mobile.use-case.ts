@@ -107,7 +107,7 @@ export function createLoginWithMobileUseCase(deps: LoginWithMobileDeps) {
       activeUser,
       () => deps.loginRestriction.clearLoginState(userDetail.id),
     );
-    const { token } = await deps.principalSessions.createPrincipalSession(userDetail, {
+    const { token } = await deps.principalSessions.createPrincipalSession(activeUser.subjectIdentifier, {
       amr: ["sms"],
       origin: toSessionOrigin(requestContext),
     });

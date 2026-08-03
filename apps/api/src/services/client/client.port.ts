@@ -1,12 +1,21 @@
-import type { RedisPort } from "@api/composition/runtime";
-import type { ClientDto } from "./client.type";
+import type { GenericClientRecord } from "@iam/domain/client";
+
+export interface ClientCachePort {
+  get: (key: string) => Promise<string | null>;
+  set: (key: string, value: string) => Promise<unknown>;
+  del: (key: string) => Promise<number>;
+}
 
 export interface ClientReaderPort {
-  getClientByCode: (clientCode: string) => Promise<ClientDto | null>;
-  getClientBySecret: (clientSecret: string) => Promise<ClientDto | null>;
+  getClientByCode: (
+    clientCode: string,
+  ) => Promise<GenericClientRecord | null>;
+  getClientBySecret: (
+    clientSecret: string,
+  ) => Promise<GenericClientRecord | null>;
 }
 
 export interface ClientServiceDeps {
-  redis: Pick<RedisPort, "get" | "set" | "del">;
+  redis: ClientCachePort;
   clientRepository: ClientReaderPort;
 }

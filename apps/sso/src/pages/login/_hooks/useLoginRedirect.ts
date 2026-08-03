@@ -1,6 +1,6 @@
 import { buildAuthorizeUrl } from '@sso/lib/sso';
 import { clientStatus } from '@sso/services/open';
-import { decodeRedirect, getQuery } from '@sso/utils/url';
+import { getQuery } from '@sso/utils/url';
 import { useModel } from '@umijs/max';
 import { message } from 'antd';
 import { useCallback, useEffect, useState } from 'react';
@@ -9,7 +9,8 @@ export function useLoginRedirect() {
   const { authConfig } = useModel('sso');
   const client = getQuery('client');
   const oidcReturn = getQuery('oidcReturn') ?? '';
-  const redirectUrl = decodeRedirect(getQuery('redirectUrl')) ?? '';
+  const redirectUrl = getQuery('redirectUrl') ?? '';
+  const state = getQuery('state') ?? undefined;
   const fallbackClientLabel = oidcReturn
     ? 'OIDC'
     : client === 'iam-admin'
@@ -48,8 +49,13 @@ export function useLoginRedirect() {
       message.error('SSO 配置未就绪，请刷新重试');
       return;
     }
-    window.location.href = buildAuthorizeUrl(authConfig, redirectUrl, client);
-  }, [authConfig, client, oidcReturn, redirectUrl]);
+    window.location.href = buildAuthorizeUrl(
+      authConfig,
+      redirectUrl,
+      client,
+      state,
+    );
+  }, [authConfig, client, oidcReturn, redirectUrl, state]);
 
   return {
     client,

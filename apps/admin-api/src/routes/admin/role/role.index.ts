@@ -1,10 +1,10 @@
-import type { PublicBindings } from "@iam/api-core/types";
+import type { AdminBindings } from "@admin-api/types/lib";
 import type { RoleAdapter } from "./role.adapter";
 import { createRouter } from "@iam/api-core/core/create-router";
 import * as routes from "./role.routes";
 
 export function createRoleRoute(adapter: RoleAdapter) {
-  return createRouter<PublicBindings>()
+  return createRouter<AdminBindings>()
     .basePath("/roles")
     .openapi(routes.rolesSearch, adapter.rolesSearch)
     .openapi(routes.roleDetail, adapter.roleDetail)

@@ -65,6 +65,41 @@ function expectSsoRoutesClassifyEntryNetwork(manifest: Awaited<ReturnType<typeof
   });
 }
 
+function expectTokenExchangeToExcludeBrowserCors(manifest: Awaited<ReturnType<typeof loadManifest>>) {
+  const tokenRoutes = manifest.resources.routes.filter(route => route.uri === "/sso/token");
+  const browserRoutes = getSsoRoutes(manifest);
+
+  expect(tokenRoutes).toHaveLength(2);
+  expect(tokenRoutes.map(route => route.hosts).flat().sort())
+    .toEqual(browserRoutes.map(route => route.hosts).flat().sort());
+  expect(tokenRoutes.map(route => getEntryNetwork(route)?.["X-IAM-Entry-Network"]).sort())
+    .toEqual(["external", "internal"]);
+
+  for (const route of tokenRoutes) {
+    const routePlugins = route.plugins as Record<string, unknown> | undefined;
+    const pluginConfig = manifest.resources.plugin_configs.find(config => config.id === route.plugin_config_id);
+    const configPlugins = pluginConfig?.plugins as Record<string, unknown> | undefined;
+
+    expect(route.priority).toBeGreaterThan(
+      Math.max(...browserRoutes.map(browserRoute => Number(browserRoute.priority ?? 0))),
+    );
+    expect(route.service_id).toBe(`iam.${manifest.scope.env}`);
+    expect(route.upstream_id).toBe(`iam.api.${manifest.scope.env}`);
+    expect(route.plugin_config_id).toBe(`iam.api-ip-rate-limit.${manifest.scope.env}`);
+    expect(route).not.toHaveProperty("methods");
+    expect(routePlugins?.cors).toBeUndefined();
+    expect(configPlugins?.cors).toBeUndefined();
+  }
+
+  for (const route of browserRoutes) {
+    const pluginConfig = manifest.resources.plugin_configs.find(config => config.id === route.plugin_config_id);
+    const configPlugins = pluginConfig?.plugins as Record<string, unknown> | undefined;
+
+    expect(route.uri).toBe("/sso/*");
+    expect(configPlugins?.cors).toEqual(expect.any(Object));
+  }
+}
+
 function getForwardAuthConfig(route: Record<string, unknown>) {
   return (route.plugins as Record<string, unknown> | undefined)?.["forward-auth"] as Record<string, unknown> | undefined;
 }
@@ -142,6 +177,17 @@ describe("apisix manifest validation", () => {
       "iam.example.com",
       "iam.internal.example.com",
     ]);
+  });
+
+  it("keeps token exchange outside browser CORS while authorize and callback retain it", async () => {
+    const manifests = await Promise.all([
+      loadManifest("dev:iam"),
+      loadManifest("prod:iam"),
+    ]);
+
+    for (const manifest of manifests) {
+      expectTokenExchangeToExcludeBrowserCors(manifest);
+    }
   });
 
   it("loads app-scoped manifests from env:app single files", async () => {

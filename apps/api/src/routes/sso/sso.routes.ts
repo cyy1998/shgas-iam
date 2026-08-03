@@ -1,12 +1,28 @@
+import {
+  createCustomSsoUnavailableResponse,
+} from "@api/services/sso/custom-sso-retryable.openapi";
 import { createRoute, z } from "@hono/zod-openapi";
 import * as HttpStatusCodes from "@iam/api-core/core/http-status-codes";
 import { commonErrorResponses } from "@iam/api-core/core/openapi/helpers/common-error-responses";
 import jsonContent from "@iam/api-core/core/openapi/helpers/json-content";
 import createSuccessResponseSchema from "@iam/api-core/core/openapi/schemas/create-success-schema";
-import { SSOMetaInfoSchema } from "./sso.schema";
+import { ClientCodeSchema } from "@iam/contracts";
+import {
+  SSOMetaInfoSchema,
+  SsoTokenResultSchema,
+} from "./sso.schema";
+import { CUSTOM_SSO_BASIC_SECURITY_SCHEME } from "./sso.security";
 
 const routePrefix = "";
 const tags = ["SSO"];
+const CustomSsoClientCodeSchema = ClientCodeSchema
+  .meta({
+    description: "Client Code",
+    example: "tender",
+  });
+const customSsoUnavailableResponse = createCustomSsoUnavailableResponse(
+  "Subject Access 或 Client Subject Projection 暂时不可用",
+);
 
 export const endpointsConfiguration = createRoute({
   method: "get",
@@ -33,7 +49,7 @@ export const callback = createRoute({
   request: {
     query: z.object({
       code: z.string().openapi({ example: "dw98qr3hoi2hn" }),
-      client: z.string().openapi({ example: "tender" }),
+      client: CustomSsoClientCodeSchema,
       redirectUrl: z.url().openapi({ example: "http://localhost:8080" }),
     }),
   },
@@ -42,25 +58,39 @@ export const callback = createRoute({
     [HttpStatusCodes.MOVED_TEMPORARILY]: {
       description: "本地会话回调成功",
     },
+    [HttpStatusCodes.SERVICE_UNAVAILABLE]:
+      customSsoUnavailableResponse,
   },
 });
 
 export const token = createRoute({
-  method: "get",
+  method: "post",
   path: `${routePrefix}/token`,
   tags,
+  security: [{ [CUSTOM_SSO_BASIC_SECURITY_SCHEME]: [] }],
   request: {
-    query: z.object({
-      code: z.string().openapi({ example: "dw98qr3hoi2hn" }),
-      client: z.string().openapi({ example: "tender" }),
-      clientSecret: z.string().openapi({ example: "jt123456" }),
-    }),
+    body: {
+      content: {
+        "application/x-www-form-urlencoded": {
+          schema: z.object({
+            code: z.string().min(1).openapi({ example: "dw98qr3hoi2hn" }),
+            redirect_uri: z.url().openapi({
+              example: "https://client.example.com/sso/callback",
+            }),
+          }).strict(),
+        },
+      },
+      required: true,
+    },
   },
   responses: {
     ...commonErrorResponses,
-    [HttpStatusCodes.MOVED_TEMPORARILY]: {
-      description: "本地会话回调成功",
-    },
+    [HttpStatusCodes.OK]: jsonContent(
+      createSuccessResponseSchema(SsoTokenResultSchema),
+      "Independent credential 与受控主体投影",
+    ),
+    [HttpStatusCodes.SERVICE_UNAVAILABLE]:
+      customSsoUnavailableResponse,
   },
 });
 
@@ -70,8 +100,9 @@ export const authorize = createRoute({
   tags,
   request: {
     query: z.object({
-      client: z.string().openapi({ example: "tender" }),
+      client: CustomSsoClientCodeSchema,
       redirectUrl: z.url().openapi({ example: "http://localhost:8080" }),
+      state: z.string().optional().openapi({ example: "opaque-client-state" }),
       token: z.string().optional().openapi({ example: "abcd" }),
     }),
   },
@@ -80,6 +111,8 @@ export const authorize = createRoute({
     [HttpStatusCodes.MOVED_TEMPORARILY]: {
       description: "全局未登录，跳转登录页面",
     },
+    [HttpStatusCodes.SERVICE_UNAVAILABLE]:
+      customSsoUnavailableResponse,
   },
 });
 
@@ -98,6 +131,8 @@ export const logout = createRoute({
     [HttpStatusCodes.MOVED_TEMPORARILY]: {
       description: "登出成功",
     },
+    [HttpStatusCodes.SERVICE_UNAVAILABLE]:
+      customSsoUnavailableResponse,
   },
 });
 
@@ -107,14 +142,15 @@ export const loginOA = createRoute({
   tags,
   request: {
     params: z.object({
-      clientCode: z.string().openapi({ example: "oa" }),
+      clientCode: CustomSsoClientCodeSchema.openapi({ example: "oa" }),
     }),
     query: z.object({
       loginid: z.string().openapi({ example: "138550" }),
       ts: z.string().openapi({ example: "1234" }),
       token: z.string().openapi({ example: "138550" }),
       redirectUrl: z.url().openapi({ example: "http://localhost:8080" }),
-      client: z.string().openapi({ example: "tender" }),
+      client: CustomSsoClientCodeSchema,
+      state: z.string().optional().openapi({ example: "opaque-client-state" }),
     }),
   },
   responses: {
@@ -133,7 +169,8 @@ export const loginWX = createRoute({
     query: z.object({
       code: z.string().openapi({ example: "1234" }),
       redirectUrl: z.url().openapi({ example: "http://localhost:8080" }),
-      client: z.string().openapi({ example: "tender" }),
+      client: CustomSsoClientCodeSchema,
+      state: z.string().optional().openapi({ example: "opaque-client-state" }),
     }),
   },
   responses: {

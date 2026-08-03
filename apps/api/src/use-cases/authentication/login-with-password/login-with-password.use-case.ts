@@ -97,7 +97,7 @@ export function createLoginWithPasswordUseCase(deps: LoginWithPasswordDeps) {
     await runLoginProtection(
       () => deps.loginRestriction.clearLoginState(userDetail.id),
     );
-    const { token } = await deps.principalSessions.createPrincipalSession(userDetail, {
+    const { token } = await deps.principalSessions.createPrincipalSession(activeUser.subjectIdentifier, {
       amr: ["pwd"],
       origin: toSessionOrigin(requestContext),
     });

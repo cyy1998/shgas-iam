@@ -1,143 +1,119 @@
 import StatusTag from '@admin/components/StatusTag';
 import ClientFormModal from '@admin/pages/clients/components/ClientFormModal';
-import OidcConfigModal from '@admin/pages/clients/components/OidcConfigModal';
 import {
-  type ClientDetailVo,
+  type ClientSearchParams,
   type ClientVo,
-  deleteClient,
-  getClient,
   searchClients,
-  updateClientStatus,
 } from '@admin/services/client';
 import { PlusOutlined } from '@ant-design/icons';
 import {
-  type ActionType,
   PageContainer,
   type ProColumns,
   ProTable,
 } from '@ant-design/pro-components';
 import {
-  type ClientManagementLevel,
   type ClientStatus,
-  getClientManagementLevelOptions,
-  getClientStatusOptions,
+  CustomSsoClientMode,
+  CustomSsoClientState,
   OidcClientState,
   OidcClientType,
   OidcScope,
 } from '@iam/contracts';
-import { Button, Dropdown, message, Modal, Tag } from 'antd';
-import { useRef, useState } from 'react';
+import { history, Link } from '@umijs/max';
+import { Button, message, Space, Tag } from 'antd';
+import { useState } from 'react';
 
-type FormState =
-  { open: false } | { open: true; initialValues: ClientDetailVo | null };
+const customSsoStateLabels = {
+  [CustomSsoClientState.Unconfigured]: '未配置',
+  [CustomSsoClientState.Disabled]: '已禁用',
+  [CustomSsoClientState.Enabled]: '已启用',
+} as const;
 
-type OidcFormState = { open: false } | { open: true; client: ClientDetailVo };
+const customSsoModeLabels = {
+  [CustomSsoClientMode.Gateway]: 'Gateway',
+  [CustomSsoClientMode.Independent]: 'Independent',
+} as const;
 
-const managementLevelText = Object.fromEntries(
-  getClientManagementLevelOptions().map((o) => [o.value, o.label]),
-);
+const protocolStateColors = {
+  unconfigured: 'default',
+  disabled: 'orange',
+  enabled: 'green',
+} as const;
+
+function editClient(clientCode: string) {
+  history.push(`/clients/${encodeURIComponent(clientCode)}/edit?section=basic`);
+}
 
 export default function ClientsPage() {
-  const actionRef = useRef<ActionType>(undefined);
-  const [formState, setFormState] = useState<FormState>({ open: false });
-  const [oidcFormState, setOidcFormState] = useState<OidcFormState>({
-    open: false,
-  });
+  const [createOpen, setCreateOpen] = useState(false);
 
   const handleError = (err: unknown) =>
     message.error(err instanceof Error ? err.message : '操作失败');
-
-  const onEdit = async (row: ClientVo) => {
-    try {
-      const detail = await getClient(row.clientCode);
-      setFormState({ open: true, initialValues: detail });
-    } catch (err) {
-      handleError(err);
-    }
-  };
-
-  const onDelete = (row: ClientVo) => {
-    Modal.confirm({
-      title: `删除应用 ${row.clientName}？`,
-      content: '软删除后应用不会出现在管理列表中，相关缓存也会被清理。',
-      okType: 'danger',
-      onOk: async () => {
-        try {
-          await deleteClient(row.clientCode);
-          message.success('已删除');
-          actionRef.current?.reload();
-        } catch (err) {
-          handleError(err);
-        }
-      },
-    });
-  };
-
-  const onOidc = async (row: ClientVo) => {
-    try {
-      const client = await getClient(row.clientCode);
-      setOidcFormState({ open: true, client });
-    } catch (err) {
-      handleError(err);
-    }
-  };
-
-  const onStatusChange = async (row: ClientVo, status: ClientStatus) => {
-    try {
-      await updateClientStatus(row.clientCode, status);
-      message.success('状态已更新');
-      actionRef.current?.reload();
-    } catch (err) {
-      handleError(err);
-    }
-  };
 
   const columns: ProColumns<ClientVo>[] = [
     { title: '应用编码', dataIndex: 'clientCode', width: 150 },
     { title: '应用名称', dataIndex: 'clientName', width: 180 },
     { title: '访问地址', dataIndex: 'url', ellipsis: true, search: false },
     {
-      title: '状态',
+      title: '全局状态',
       dataIndex: 'status',
       width: 110,
       valueType: 'select',
-      valueEnum: Object.fromEntries(
-        getClientStatusOptions().map((o) => [o.value, { text: o.label }]),
-      ),
       render: (_, row) => <StatusTag domain="client" status={row.status} />,
     },
     {
-      title: '管理模式',
-      dataIndex: 'managementLevel',
-      width: 130,
+      title: 'Custom SSO',
+      dataIndex: 'customSsoState',
+      width: 210,
       valueType: 'select',
       valueEnum: Object.fromEntries(
-        getClientManagementLevelOptions().map((o) => [
-          o.value,
-          { text: o.label },
+        Object.entries(customSsoStateLabels).map(([value, text]) => [
+          value,
+          { text },
         ]),
       ),
-      render: (_, row) =>
-        managementLevelText[row.extAttributes.managementLevel] ?? '未知',
+      render: (_, row) => (
+        <Space size={4}>
+          <Tag color={protocolStateColors[row.customSsoState]}>
+            {customSsoStateLabels[row.customSsoState]}
+          </Tag>
+          {row.customSsoMode && (
+            <Tag>{customSsoModeLabels[row.customSsoMode]}</Tag>
+          )}
+        </Space>
+      ),
+    },
+    {
+      title: 'Custom SSO 模式',
+      dataIndex: 'customSsoMode',
+      valueType: 'select',
+      hideInTable: true,
+      valueEnum: {
+        [CustomSsoClientMode.Gateway]: { text: 'Gateway' },
+        [CustomSsoClientMode.Independent]: { text: 'Independent' },
+      },
     },
     {
       title: 'OIDC',
       dataIndex: 'oidcState',
-      width: 130,
+      width: 140,
       valueType: 'select',
       valueEnum: {
         [OidcClientState.Unconfigured]: { text: '未配置' },
         [OidcClientState.Disabled]: { text: '已配置/禁用' },
         [OidcClientState.Enabled]: { text: '已启用' },
       },
-      render: (_, row) => {
-        const config = {
-          [OidcClientState.Unconfigured]: { color: 'default', text: '未配置' },
-          [OidcClientState.Disabled]: { color: 'orange', text: '已禁用' },
-          [OidcClientState.Enabled]: { color: 'green', text: '已启用' },
-        }[row.oidcState];
-        return <Tag color={config.color}>{config.text}</Tag>;
-      },
+      render: (_, row) => (
+        <Tag color={protocolStateColors[row.oidcState]}>
+          {
+            {
+              [OidcClientState.Unconfigured]: '未配置',
+              [OidcClientState.Disabled]: '已禁用',
+              [OidcClientState.Enabled]: '已启用',
+            }[row.oidcState]
+          }
+        </Tag>
+      ),
     },
     {
       title: 'OIDC Client 类型',
@@ -159,6 +135,7 @@ export default function ClientsPage() {
         [OidcScope.OpenId]: { text: 'openid' },
         [OidcScope.Profile]: { text: 'profile' },
         [OidcScope.Phone]: { text: 'phone' },
+        [OidcScope.IamEmployments]: { text: 'iam:employments' },
         [OidcScope.IamAuthorization]: { text: 'iam:authorization' },
       },
     },
@@ -172,35 +149,14 @@ export default function ClientsPage() {
     {
       title: '操作',
       valueType: 'option',
-      width: 270,
+      width: 90,
       render: (_, row) => [
-        <a key="edit" onClick={() => onEdit(row)}>
+        <Link
+          key="edit"
+          to={`/clients/${encodeURIComponent(row.clientCode)}/edit?section=basic`}
+        >
           编辑
-        </a>,
-        <a key="oidc" onClick={() => onOidc(row)}>
-          OIDC
-        </a>,
-        <Dropdown
-          key="status"
-          menu={{
-            items: getClientStatusOptions()
-              .filter((o) => o.value !== row.status)
-              .map((o) => ({
-                key: String(o.value),
-                label: `切为「${o.label}」`,
-                onClick: () => onStatusChange(row, o.value as ClientStatus),
-              })),
-          }}
-        >
-          <a>状态</a>
-        </Dropdown>,
-        <a
-          key="delete"
-          style={{ color: '#d4380d' }}
-          onClick={() => onDelete(row)}
-        >
-          删除
-        </a>,
+        </Link>,
       ],
     },
   ];
@@ -208,11 +164,10 @@ export default function ClientsPage() {
   return (
     <PageContainer title="应用管理">
       <ProTable<ClientVo>
-        actionRef={actionRef}
         rowKey="clientCode"
         columns={columns}
         search={{ labelWidth: 'auto' }}
-        scroll={{ x: 1500 }}
+        scroll={{ x: 1300 }}
         request={async (params) => {
           try {
             const {
@@ -221,47 +176,46 @@ export default function ClientsPage() {
               clientCode,
               clientName,
               status,
-              managementLevel,
+              customSsoState,
+              customSsoMode,
               oidcState,
               oidcClientType,
               oidcAllowedScopes,
-            } = params as {
-              current?: number;
-              pageSize?: number;
-              clientCode?: string;
-              clientName?: string;
-              status?: string | number;
-              managementLevel?: ClientManagementLevel;
-              oidcState?: OidcClientState;
-              oidcClientType?: OidcClientType;
-              oidcAllowedScopes?: OidcScope[];
-            };
-            const text = (clientCode || clientName || '') as string;
-            const statusNum =
+            } = params;
+            const text = String(clientCode || clientName || '');
+            const statusNumber =
               status === undefined || status === null || status === ''
                 ? undefined
                 : (Number(status) as ClientStatus);
-            const data = await searchClients({
+            const query = {
               pageNum: current,
               pageSize,
               conditions: {
                 fuzzyConditions: text ? { text } : {},
                 exactConditions: {
-                  statuses: statusNum !== undefined ? [statusNum] : undefined,
-                  managementLevels: managementLevel
-                    ? [managementLevel]
+                  statuses:
+                    statusNumber === undefined ? undefined : [statusNumber],
+                  customSsoStates: customSsoState
+                    ? [customSsoState as CustomSsoClientState]
                     : undefined,
-                  oidcStates: oidcState ? [oidcState] : undefined,
+                  customSsoModes: customSsoMode
+                    ? [customSsoMode as CustomSsoClientMode]
+                    : undefined,
+                  oidcStates: oidcState
+                    ? [oidcState as OidcClientState]
+                    : undefined,
                   oidcClientTypes: oidcClientType
-                    ? [oidcClientType]
+                    ? [oidcClientType as OidcClientType]
                     : undefined,
                   oidcAllowedScopes:
-                    oidcAllowedScopes && oidcAllowedScopes.length > 0
-                      ? oidcAllowedScopes
+                    Array.isArray(oidcAllowedScopes) &&
+                    oidcAllowedScopes.length > 0
+                      ? (oidcAllowedScopes as OidcScope[])
                       : undefined,
                 },
               },
-            });
+            } satisfies ClientSearchParams;
+            const data = await searchClients(query);
             return {
               data: data.result,
               total: data.total,
@@ -277,7 +231,7 @@ export default function ClientsPage() {
             key="create"
             type="primary"
             icon={<PlusOutlined />}
-            onClick={() => setFormState({ open: true, initialValues: null })}
+            onClick={() => setCreateOpen(true)}
           >
             新建应用
           </Button>,
@@ -285,34 +239,11 @@ export default function ClientsPage() {
       />
 
       <ClientFormModal
-        open={formState.open}
-        initialValues={formState.open ? formState.initialValues : null}
-        onOpenChange={(open) => {
-          if (!open) setFormState({ open: false });
-        }}
-        onSuccess={() => {
-          setFormState({ open: false });
-          actionRef.current?.reload();
-        }}
-      />
-
-      <OidcConfigModal
-        open={oidcFormState.open}
-        client={oidcFormState.open ? oidcFormState.client : null}
-        onOpenChange={(open) => {
-          if (!open) setOidcFormState({ open: false });
-        }}
-        onSuccess={async () => {
-          actionRef.current?.reload();
-          if (oidcFormState.open) {
-            try {
-              const client = await getClient(oidcFormState.client.clientCode);
-              setOidcFormState({ open: true, client });
-            } catch (err) {
-              handleError(err);
-              setOidcFormState({ open: false });
-            }
-          }
+        open={createOpen}
+        onOpenChange={setCreateOpen}
+        onSuccess={(client) => {
+          setCreateOpen(false);
+          editClient(client.clientCode);
         }}
       />
     </PageContainer>

@@ -11,16 +11,20 @@ export function createExchangeSsoCodeUseCase(deps: ExchangeSsoCodeDeps) {
     input: ExchangeSsoCodeInput,
     options: ExchangeSsoCodeOptions = {},
   ): Promise<ExchangeSsoCodeResult> {
-    const client = await deps.clients.getClientByCode(input.clientCode);
-    if (client === null || input.clientSecret !== client.clientSecret) {
+    const client = await deps.clientCredentials.authenticate(
+      input.clientCode,
+      input.clientSecret,
+    );
+    if (client === null) {
       throw new InvalidSsoClientError("非法Client");
     }
-    const { credential, ttl, userInfo } = await deps.authorizationGrants.redeemIndependentGrant({
+    const { credential, ttl, subject } = await deps.authorizationGrants.redeemIndependentGrant({
       client,
       code: input.code,
+      redirectUri: input.redirectUri,
       requestContext: options.requestContext,
     });
-    return { sid: credential, ttl, userInfo };
+    return { sid: credential, ttl, subject };
   }
 
   return { execute };

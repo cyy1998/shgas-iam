@@ -2,28 +2,51 @@ import type { AuthorizeSsoDeps } from "./authorize-sso.port";
 import type { AuthorizeSsoInput, AuthorizeSsoOptions } from "./authorize-sso.type";
 import { InvalidRedirectUriError } from "@iam/api-core/errors/InvalidRedirectUriError";
 import { InvalidSsoClientError } from "@iam/api-core/errors/InvalidSsoClientError";
+import { ClientStatus, CustomSsoClientMode } from "@iam/contracts";
 
 export function createAuthorizeSsoUseCase(deps: AuthorizeSsoDeps) {
   async function execute(input: AuthorizeSsoInput, options: AuthorizeSsoOptions = {}) {
-    const client = await deps.clients.getClientByCode(input.clientCode);
-    if (client === null) {
+    const client = await deps.clients.findRuntimeRecord(input.clientCode);
+    if (
+      client === null
+      || client.status !== ClientStatus.Enable
+      || client.isDelete
+      || !client.customSsoEnabled
+      || client.customSsoConfig === null
+    ) {
       throw new InvalidSsoClientError("非法client代码");
     }
-    if (!deps.redirectUrls.isAllowed(
+    const redirectUrl = deps.redirectUrls.normalizeAllowed(
       input.clientCode,
       input.redirectUrl,
-      client.extAttributes.validRedirectUrls,
+      client.customSsoConfig.validRedirectUrls,
       options,
-    )) {
+    );
+    if (redirectUrl === null) {
       throw new InvalidRedirectUriError("非法重定向地址");
     }
-    return await deps.authorizationGrants.issueAuthorizationCode({
+    const grant = await deps.authorizationGrants.issueAuthorizationCode({
       token: input.globalSessionToken,
       tokenSource: input.tokenSource,
       clientCode: input.clientCode,
-      redirectUrl: input.redirectUrl,
+      configVersion: client.customSsoConfigVersion,
+      mode: client.customSsoConfig.mode,
+      redirectUrl,
       requestContext: options.requestContext,
+      ...(input.state === undefined ? {} : { state: input.state }),
     });
+    if (!grant.isLogin)
+      return grant;
+    return {
+      ...grant,
+      clientCode: input.clientCode,
+      mode: client.customSsoConfig.mode,
+      redirectUrl,
+      ...(client.customSsoConfig.mode === CustomSsoClientMode.Independent
+        ? { callbackEndpoint: client.customSsoConfig.callbackEndpoint }
+        : {}),
+      ...(input.state === undefined ? {} : { state: input.state }),
+    };
   }
 
   return { execute };
