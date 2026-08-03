@@ -31,7 +31,7 @@
 | [docs/adr/0006-elevate-user-subject-identifier.md](adr/0006-elevate-user-subject-identifier.md) | decision | Current | 2026-07-30 | 2026-10-31 | 保留现有 UUID，并将 Subject Identifier 的命名与所有权从 OIDC 提升到 IAM 身份域。 |
 | [docs/adr/0007-separate-versioned-custom-sso-client-configuration.md](adr/0007-separate-versioned-custom-sso-client-configuration.md) | decision | Current | 2026-07-30 | 2026-10-31 | Custom SSO 使用独立的严格配置、Secret Hash 和版本屏障，并通过无双读的维护窗口硬切换迁移。 |
 | [docs/adr/0008-adopt-client-subject-projection.md](adr/0008-adopt-client-subject-projection.md) | decision | Current | 2026-07-30 | 2026-10-31 | 两个协议共享主体事实与 client 裁剪模块，但保持配置、Wire Contract 和生命周期独立。 |
-| [docs/agents/code-investigation.md](agents/code-investigation.md) | agent-config | Current | 2026-08-03 | 2026-10-31 | 项目级 `code_researcher` 的路由、只读调查、证据返回和外置记忆规则。 |
+| [docs/agents/code-investigation.md](agents/code-investigation.md) | agent-config | Current | 2026-08-03 | 2026-10-31 | 项目级 `code_researcher`/`deep_researcher` 的分层路由、只读调查、证据返回和外置记忆规则。 |
 | [docs/agents/domain.md](agents/domain.md) | agent-config | Current | 2026-07-16 | 2026-10-31 | Engineering skills 的 single-context domain documentation 消费规则。 |
 | [docs/agents/issue-tracker.md](agents/issue-tracker.md) | agent-config | Current | 2026-07-24 | 2026-10-31 | 本地 spec、ticket、轻量 feature journal 与 fresh-context handoff 的文件约定。 |
 | [docs/agents/triage-labels.md](agents/triage-labels.md) | agent-config | Current | 2026-07-16 | 2026-10-31 | Engineering skills 使用的默认 triage 标签映射。 |

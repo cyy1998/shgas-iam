@@ -1,7 +1,11 @@
 # 代码调查子代理
 
-本仓库提供项目级 `code_researcher`，用于隔离跨文件搜索、调用链追踪和证据收集产生的中间噪声。Agent 定义位于
-`.codex/agents/code-researcher.toml`，固定使用 `gpt-5.6-luna`、`max` 推理和 `read-only` sandbox。
+本仓库提供两个互补的项目级只读调查 agent：
+
+- `code_researcher`：隔离跨文件搜索、调用链追踪和证据收集产生的中间噪声；定义位于
+  `.codex/agents/code-researcher.toml`，固定使用 `gpt-5.6-luna`、`max` 推理和 `read-only` sandbox；
+- `deep_researcher`：裁决高风险、高歧义或证据冲突的复杂行为；定义位于
+  `.codex/agents/deep-researcher.toml`，固定使用 `gpt-5.6-sol`、`high` 推理和 `read-only` sandbox。
 
 ## 调用策略
 
@@ -21,10 +25,26 @@
 - 问题还无法收敛为一个有停止条件的调查切片；
 - 相同范围已经由其他 agent 调查完成。
 
+## 深度调查升级策略
+
+默认先用 `code_researcher` 建立地图和证据索引。满足以下任一条件时，把一个更窄的裁决问题升级给
+`deep_researcher`：
+
+- 需要证明 transaction boundary、rollback、`UnitOfWork`/`afterCommit` 或 failure atomicity；
+- 涉及 concurrency、ordering、retry、idempotency 或跨 runtime 的状态一致性；
+- 涉及 authorization bypass、安全边界或敏感数据流；
+- 控制流依赖 composition、configuration、cache、queue 或隐式 framework lifecycle；
+- `code_researcher` 的证据相互矛盾，或事实与 `Current` 架构文档声明不一致；
+- 需要主动寻找反例才能确认关键 invariant。
+
+问题本身已明确属于上述高风险范围时，可以直接使用一个 `deep_researcher`。不要默认让两个 agent 调查同一范围，也不要
+并行启动多个 `deep_researcher`；升级时必须把已有 evidence index、未决问题和无需重读的范围一并交给它。
+
 ## 委派约束
 
-1. 每个 `code_researcher` 只接收一个调查问题，并明确 included scope、excluded scope 和 completion condition。
-2. 默认最多并行启动三个调查 agent；按独立 subsystem 或 concern 拆分，不按任意文件数量拆分。
+1. 每个调查 agent 只接收一个问题，并明确 included scope、excluded scope 和 completion condition。
+2. 默认最多并行启动三个 `code_researcher`；按独立 subsystem 或 concern 拆分，不按任意文件数量拆分。
+   `deep_researcher` 默认只启动一个，负责范围更窄的复杂裁决。
 3. 调查 agent 不修改 production code、测试、文档、tracker 或配置，也不递归委派其他 agent。
 4. 主代理等待所有必要调查完成后再综合，只针对冲突或缺口做聚焦补充调查，不重复已完成的扫描。
 5. 主代理负责最终判断、冲突消解、实现决策和任何需要落盘的调查记录。
@@ -59,6 +79,8 @@ protocol entry
 4. `Inferences`：有依据但未被直接证明的判断；
 5. `Unknowns`：未确认项与下一步最小调查动作。
 
-结果只返回压缩后的证据摘要，不返回原始搜索日志或大段源码。`code_researcher` 使用硬只读 sandbox，因此需要跨上下文恢复
-时，由主代理把摘要、已排除假设、无需重读的文件和下一步动作写入当前 feature 的 `.scratch/` journal，或用户明确指定的
-调查报告路径；恢复后优先读取该记录，不重新扫描已完成范围。
+`deep_researcher` 还必须返回关键 `Invariants and failure modes`，以及用于挑战主假设的 `Counterevidence`。
+
+结果只返回压缩后的证据摘要，不返回原始搜索日志或大段源码。两个调查 agent 都使用硬只读 sandbox，因此需要跨上下文
+恢复时，由主代理把摘要、已排除假设、无需重读的文件和下一步动作写入当前 feature 的 `.scratch/` journal，或用户明确
+指定的调查报告路径；恢复后优先读取该记录，不重新扫描已完成范围。
