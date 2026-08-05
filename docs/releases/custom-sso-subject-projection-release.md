@@ -65,7 +65,7 @@ create 与 `0600` 权限，不得提交或粘贴到工单。
 
 在与生产拓扑和数据规模近似的专用环境先完成“仓库验证矩阵”及完整窗口演练。外部资源测试只使用调用方提供的专用
 URL，禁止 fallback 到 runtime 数据库。普通 PostgreSQL/Redis contract lane 仍只清理自己的随机 schema/key namespace，
-禁止 `FLUSHDB`/`FLUSHALL`。Ticket 12 的 API/OIDC `test:external` 只允许使用非生产、独占、可销毁的数据库和 Redis logical
+禁止 `FLUSHDB`/`FLUSHALL`。Ticket 12 的 API/OIDC `test:integration:composition` 只允许使用非生产、独占、可销毁的数据库和 Redis logical
 DB；为真实 production-entry fixture 可 inventory/清理整个专用 logical DB。该豁免不适用于共享/生产 Redis，也不扩大
 cleanup 命令的 production allowlist。
 

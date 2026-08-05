@@ -12,7 +12,7 @@
     "warmLintFeedback": "timeout 10s pnpm lint",
     "coldLint": "pnpm exec turbo lint --force --concurrency=3",
     "coldTypecheck": "pnpm exec turbo typecheck --force --concurrency=3",
-    "coldTest": "pnpm exec turbo test --force --concurrency=2",
+    "coldTest": "pnpm exec turbo test:unit --force --concurrency=2",
     "eslintConfig": "node scripts/benchmark-eslint-config.mjs --rounds 5"
   },
   "observations": {

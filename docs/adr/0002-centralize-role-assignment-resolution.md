@@ -18,7 +18,10 @@ Admin、OIDC 和用户档案构建需要从角色分配推导任职的有效角�
 
 Resolver 只由 app composition root 或 `createUserProfileWorkerModule` 这类 package composition root 创建，并注入叶子 repository 或 service；叶子模块不得自行绑定 production `DbClient` 或构造 resolver。
 
-模块的 PostgreSQL 接口测试暂不自行启动 Docker 容器。默认测试保持无外部服务；显式 `test:postgres` 通过 `IAM_ROLE_ASSIGNMENT_TEST_DATABASE_URL` 连接专用测试库，在隔离的随机 schema 中应用当前 migrations、运行公开接口规则矩阵并清理。该命令在未提供 URL 时失败；迁移查询行为前必须人工运行通过，但暂不接入根目录 `pnpm test`。
+模块的 PostgreSQL 接口测试暂不自行启动 Docker 容器。默认测试保持无外部服务；显式
+`test:integration:postgres` 通过 `IAM_ROLE_ASSIGNMENT_TEST_DATABASE_URL` 连接专用测试库，在隔离的随机 schema 中应用当前
+migrations、运行公开接口规则矩阵并清理。该命令在未提供 URL 时失败；迁移查询行为前必须人工运行通过，但不接入根目录
+`pnpm test`。
 
 批量接口保证数据库查询次数不随任职或角色 ID 数量增长，并对空输入零查询；具体使用一条复杂 SQL 还是固定数量的并行 set-based 查询属于实现细节，不构成接口承诺。
 

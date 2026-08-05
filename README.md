@@ -269,11 +269,19 @@ pnpm dev
 pnpm build
 pnpm lint
 pnpm test
-pnpm e2e
+pnpm test:unit
+pnpm test:integration
+pnpm test:integration:component
+pnpm test:integration:process
+pnpm test:integration:redis
+pnpm test:integration:postgres
+pnpm test:integration:composition
+pnpm test:integration:browser
+pnpm check:test-collection
 pnpm typecheck
 ```
 
-首次在 Linux/WSL 环境运行 Playwright E2E 前，先安装浏览器与 Chromium 系统依赖：
+首次在 Linux/WSL 环境运行 Browser Integration 前，先安装浏览器与 Chromium 系统依赖：
 
 ```bash
 pnpm e2e:install
@@ -368,7 +376,7 @@ pnpm --filter @iam/admin format
 pnpm --filter @iam/admin test
 pnpm --filter @iam/admin test:watch
 pnpm --filter @iam/admin test:coverage
-pnpm --filter @iam/admin e2e
+pnpm --filter @iam/admin test:integration:browser
 pnpm --filter @iam/admin typecheck
 
 pnpm --filter @iam/sso dev
@@ -377,20 +385,19 @@ pnpm --filter @iam/sso format
 pnpm --filter @iam/sso test
 pnpm --filter @iam/sso test:watch
 pnpm --filter @iam/sso test:coverage
-pnpm --filter @iam/sso e2e
+pnpm --filter @iam/sso test:integration:browser
 pnpm --filter @iam/sso typecheck
 ```
 
-`pnpm test` 通过 Turborepo 调度后端、shared、gateway 与两个前端的包级 `test` 任务。前端 `test` 使用
-Vitest + React Testing Library + MSW，`test:coverage` 生成覆盖率报告但第一期不设置全局覆盖率硬阈值。
-`pnpm e2e` 是独立的 Playwright mocked smoke 流程，只调度 `@iam/admin#e2e` 与 `@iam/sso#e2e`，不会混入
-常规 `pnpm test`。Linux/WSL 下包级 `e2e` 会先检查 Playwright Chromium 的系统依赖，缺失时会提示运行
-`pnpm e2e:install`。
+`pnpm test` 永久代理 `pnpm test:unit`。前端 Unit 使用 Vitest + React Testing Library + MSW；
+`test:coverage` 生成 Unit 覆盖率报告但不设置全局覆盖率硬阈值。Admin/SSO 的 Playwright mock-browser 流程由
+`pnpm test:integration:browser` 或 package-local 同名命令执行，不进入默认 `test`/`verify`。Linux/WSL 缺少
+Playwright Chromium 系统依赖时，preflight 会提示运行 `pnpm e2e:install`。
 
 后续前端变更的验收规则：
 
 - 修改纯逻辑、请求封装、service wrapper 或 API 契约消费时，应新增或更新对应 Vitest 测试；如不自动化覆盖，需要在任务或设计中说明原因。
-- 修改登录、重置密码、管理端核心 CRUD、客户端配置等关键页面流程时，应新增或更新 mocked E2E smoke；如不自动化覆盖，需要明确豁免原因。
+- 修改登录、重置密码、管理端核心 CRUD、客户端配置等关键页面流程时，应新增或更新 mock-browser Integration；如不自动化覆盖，需要明确豁免原因。
 - 仅调整样式、布局或文案且不改变业务逻辑时，可用 lint、build、截图 smoke 或人工 smoke 作为合理验证，不强制补低价值单测。
 
 ## 🧩 开发指南
@@ -697,7 +704,7 @@ OIDC 接入见 [docs/features/oidc/oidc-integration.md](docs/features/oidc/oidc-
 - API 调试：开发环境分别访问 <http://localhost:30000> 和 <http://localhost:30001>
 - 数据调试：Drizzle Kit 命令或直接连接本地 PostgreSQL
 - 前端代理：查看 `apps/admin/.umirc.ts` 和 `apps/sso/.umirc.ts`
-- 测试：`pnpm test`，已配置 Bun 测试的后端/共享包通过 `bun test --parallel` 隔离测试文件间的 module mock；前端和 OIDC Provider 使用 Vitest；Playwright mocked smoke 通过 `pnpm e2e` 或包级 `e2e` 执行
+- 测试：`pnpm test` 等价于 `pnpm test:unit`；Integration 按 profile 显式运行；前端和 OIDC Provider 使用 Vitest，Playwright mock-browser 测试通过 `pnpm test:integration:browser` 执行
 - 类型检查：`pnpm typecheck`
 
 ## 🤝 贡献指南

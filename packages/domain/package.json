@@ -25,7 +25,8 @@
   "scripts": {
     "lint": "eslint src eslint.config.js",
     "lint:fix": "eslint --fix src eslint.config.js",
-    "test": "bun test --max-concurrency=2",
+    "test": "pnpm test:unit",
+    "test:unit": "bun test --max-concurrency=2 src",
     "typecheck": "pnpm exec tsc --noEmit"
   },
   "dependencies": {

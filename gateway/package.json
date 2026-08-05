@@ -8,9 +8,11 @@
     "validate": "bun src/cli.ts validate",
     "diff": "bun src/cli.ts diff",
     "apply": "bun src/cli.ts apply",
-    "lint": "eslint src eslint.config.js config manifests",
-    "lint:fix": "eslint --fix src eslint.config.js config manifests",
-    "test": "bun test --max-concurrency=2",
+    "lint": "eslint src test-integration eslint.config.js config manifests",
+    "lint:fix": "eslint --fix src test-integration eslint.config.js config manifests",
+    "test": "pnpm test:unit",
+    "test:unit": "bun test --max-concurrency=2 src",
+    "test:integration:component": "bun test --max-concurrency=2 test-integration/component",
     "typecheck": "pnpm exec tsc --noEmit"
   },
   "dependencies": {

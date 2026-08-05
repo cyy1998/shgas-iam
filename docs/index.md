@@ -25,12 +25,13 @@
 |---|---|---|---|---|---|
 | [docs/adr/0001-replace-openspec-workflow.md](adr/0001-replace-openspec-workflow.md) | decision | Current | 2026-07-16 | 2026-10-31 | 采用 Matt skills 工作流并冻结 OpenSpec 的架构决策。 |
 | [docs/adr/0002-centralize-role-assignment-resolution.md](adr/0002-centralize-role-assignment-resolution.md) | decision | Current | 2026-07-18 | 2026-10-31 | 以独立 workspace package 统一有效角色与受影响用户解析。 |
-| [docs/adr/0003-adopt-layered-test-lanes-and-resource-budgets.md](adr/0003-adopt-layered-test-lanes-and-resource-budgets.md) | decision | Current | 2026-07-24 | 2026-10-31 | 采用普通测试、process smoke 与外部资源测试分层，以及显式缓存和并发预算；实现与平台状态见测试编排架构。 |
+| [docs/adr/0003-adopt-layered-test-lanes-and-resource-budgets.md](adr/0003-adopt-layered-test-lanes-and-resource-budgets.md) | decision | Historical | 2026-08-05 | n/a | 旧普通/smoke/external 通道决策；已由 ADR-0009 取代。 |
 | [docs/adr/0004-adopt-upstream-first-matt-skills.md](adr/0004-adopt-upstream-first-matt-skills.md) | decision | Current | 2026-07-24 | 2026-10-31 | 确立上游 Matt skills 的流程所有权，并以仓库薄适配取代可执行证据状态机。 |
 | [docs/adr/0005-keep-live-login-state-in-redis.md](adr/0005-keep-live-login-state-in-redis.md) | decision | Current | 2026-07-28 | 2026-10-31 | 有效会话与临时登录限制只以 Redis 实时状态为事实来源，不建立 PostgreSQL 会话影子或历史快照。 |
 | [docs/adr/0006-elevate-user-subject-identifier.md](adr/0006-elevate-user-subject-identifier.md) | decision | Current | 2026-07-30 | 2026-10-31 | 保留现有 UUID，并将 Subject Identifier 的命名与所有权从 OIDC 提升到 IAM 身份域。 |
 | [docs/adr/0007-separate-versioned-custom-sso-client-configuration.md](adr/0007-separate-versioned-custom-sso-client-configuration.md) | decision | Current | 2026-07-30 | 2026-10-31 | Custom SSO 使用独立的严格配置、Secret Hash 和版本屏障，并通过无双读的维护窗口硬切换迁移。 |
 | [docs/adr/0008-adopt-client-subject-projection.md](adr/0008-adopt-client-subject-projection.md) | decision | Current | 2026-07-30 | 2026-10-31 | 两个协议共享主体事实与 client 裁剪模块，但保持配置、Wire Contract 和生命周期独立。 |
+| [docs/adr/0009-adopt-canonical-test-collections.md](adr/0009-adopt-canonical-test-collections.md) | decision | Current | 2026-08-05 | 2026-10-31 | 采用 Unit/Integration/E2E canonical collections、永久 Guard，并原子切换默认 `test` 与 `verify`。 |
 | [docs/agents/code-investigation.md](agents/code-investigation.md) | agent-config | Current | 2026-08-03 | 2026-10-31 | 项目级 `code_researcher`/`deep_researcher` 的分层路由、只读调查、证据返回和外置记忆规则。 |
 | [docs/agents/domain.md](agents/domain.md) | agent-config | Current | 2026-07-16 | 2026-10-31 | Engineering skills 的 single-context domain documentation 消费规则。 |
 | [docs/agents/issue-tracker.md](agents/issue-tracker.md) | agent-config | Current | 2026-07-24 | 2026-10-31 | 本地 spec、ticket、轻量 feature journal 与 fresh-context handoff 的文件约定。 |
@@ -41,10 +42,10 @@
 | [docs/architecture/contracts-and-database.md](architecture/contracts-and-database.md) | architecture | Current | 2026-08-01 | 2026-10-31 | shared contracts、domain/db/jobs/role-assignment-resolution/read-model 边界、UnitOfWork/afterCommit 和 Drizzle schema/relations/migration 约定。 |
 | [docs/architecture/frontend-architecture.md](architecture/frontend-architecture.md) | architecture | Current | 2026-07-16 | 2026-10-31 | admin/sso 前端边界、service wrapper、contract、测试与生成路径约定。 |
 | [docs/architecture/repository-map.md](architecture/repository-map.md) | architecture | Current | 2026-07-31 | 2026-10-31 | monorepo apps/packages 地图、gateway/observability 基础设施、agent workflow roots，以及生成目录边界。 |
-| [docs/architecture/testing-architecture.md](architecture/testing-architecture.md) | architecture | Current | 2026-08-02 | 2026-10-31 | 已实施的普通/process smoke/外部资源通道、预算、Windows 连续验收、backend adoption 与公开测试 seam。 |
+| [docs/architecture/testing-architecture.md](architecture/testing-architecture.md) | architecture | Current | 2026-08-05 | 2026-10-31 | 已实施的 Unit/Integration/E2E canonical collections、六个 Integration profiles、永久 Collection Guard、资源预算与默认验证契约。 |
 | [docs/development/backend-implementation.md](development/backend-implementation.md) | development | Current | 2026-07-26 | 2026-10-31 | backend response envelope、OpenAPI status、logger、audit event 和 Architecture Guard 验证分层。 |
 | [docs/development/coding-style.md](development/coding-style.md) | development | Current | 2026-07-31 | 2026-10-31 | TypeScript、formatter 边界、文件命名、React 命名和 import alias 风格约定。 |
-| [docs/development/commands.md](development/commands.md) | development | Current | 2026-08-02 | 2026-10-31 | 聚焦实现、workspace、Architecture Guard、普通/smoke/verify、外部资源、性能与 commit guard 的可执行入口。 |
+| [docs/development/commands.md](development/commands.md) | development | Current | 2026-08-05 | 2026-10-31 | 聚焦实现、canonical Unit/Integration commands、默认 verify、显式资源 profiles、Architecture Guard、性能与 commit guard 的可执行入口。 |
 | [docs/features/audit/audit-logging.md](features/audit/audit-logging.md) | feature | Current | 2026-07-16 | 2026-09-30 | 统一审计日志、安全字段和已完成 `login_log` 退役后的当前边界。 |
 | [docs/features/oidc/oidc-integration.md](features/oidc/oidc-integration.md) | feature | Current | 2026-08-01 | 2026-09-30 | 内部 OIDC client 的端点、client 类型、scope/claim、CORS 和退出契约。 |
 | [docs/features/oidc/oidc-session-migration.md](features/oidc/oidc-session-migration.md) | feature | Current | 2026-06-28 | 2026-09-30 | Session Kernel 会话迁移、旧 key cleanup 和回滚边界。 |

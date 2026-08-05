@@ -8,8 +8,7 @@ const stages = [
     commands: [["lint"], ["check:docs"], ["check:env-names"], ["check:architecture"]],
   },
   { name: "typecheck", commands: [["typecheck"]] },
-  { name: "test", commands: [["test"]] },
-  { name: "smoke", commands: [["test:smoke"]] },
+  { name: "test:unit", commands: [["test:unit"]] },
   { name: "build", commands: [["build"]] },
 ];
 

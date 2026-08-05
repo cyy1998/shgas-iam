@@ -1,15 +1,15 @@
 {
   "root": {
-    "checkedFileCount": 17,
-    "checkedFileSetHash": "9774a9765d72dec9b69d97939c97f4f3a783d8e8cbbddbadd62d9e82d46549a7",
+    "checkedFileCount": 24,
+    "checkedFileSetHash": "ee864b7909b2ea236df0ef4bd30a91e43b4857ff27d8259b6faeb07e617d7960",
     "diagnosticKeys": [],
     "errorCount": 0,
     "exitCode": 0,
     "warningCount": 0
   },
   "@iam/admin": {
-    "checkedFileCount": 78,
-    "checkedFileSetHash": "5f3be8df713a042244d7eecbeee55df81feb7f1c69108736d6202a7129324e0d",
+    "checkedFileCount": 95,
+    "checkedFileSetHash": "ad8426fd68e5ffaba3c1959d6d2dc97d0b97acbdda651ba4fb1c9edce45a63b2",
     "diagnosticKeys": [
       "1:react-refresh/only-export-components:namedExport",
       "1:react/exhaustive-deps:",
@@ -21,32 +21,32 @@
     "warningCount": 25
   },
   "@iam/admin-api": {
-    "checkedFileCount": 140,
-    "checkedFileSetHash": "877a0bcb84297059f428f74678e615d277e2e76d25c5dec56c83d38bee4f3dc3",
+    "checkedFileCount": 163,
+    "checkedFileSetHash": "e50d6ec69c367cd89bb9d1753ba03bf88679f5914b50342f3fec5aa34cb61697",
     "diagnosticKeys": [],
     "errorCount": 0,
     "exitCode": 0,
     "warningCount": 0
   },
   "@iam/api": {
-    "checkedFileCount": 195,
-    "checkedFileSetHash": "ff07a09311a481dbb6db0eb68b49d067b32c401fe8b328185ec26f6c1e629548",
+    "checkedFileCount": 230,
+    "checkedFileSetHash": "ea36e9ae0dd77007ae557916d3c2f71e452d5d1298935c32233f1ca9ac835ad6",
     "diagnosticKeys": [],
     "errorCount": 0,
     "exitCode": 0,
     "warningCount": 0
   },
   "@iam/oidc-provider": {
-    "checkedFileCount": 67,
-    "checkedFileSetHash": "2e1c96485d29076fd26787fd700f889e3b8e7c59b9c0ed457a91228f9cb56614",
+    "checkedFileCount": 83,
+    "checkedFileSetHash": "7f98c7c5f1efee21fdbc5987c9a0a1f6fd007ff2a6b25cd5346ac7ef28878e0c",
     "diagnosticKeys": [],
     "errorCount": 0,
     "exitCode": 0,
     "warningCount": 0
   },
   "@iam/sso": {
-    "checkedFileCount": 51,
-    "checkedFileSetHash": "b66c2ea1153fafa6690e3d1be7dc928792d5421f53e512bfdf125a3d40a214b9",
+    "checkedFileCount": 56,
+    "checkedFileSetHash": "dc97349213038bb4bb851cdf7cf6fd199d32e7b4daa33d09e63ae9c7ca959cf6",
     "diagnosticKeys": [
       "1:react/no-unnecessary-use-prefix:default",
       "1:react/set-state-in-effect:default"
@@ -56,8 +56,8 @@
     "warningCount": 4
   },
   "@iam/worker": {
-    "checkedFileCount": 15,
-    "checkedFileSetHash": "d40b8f7f9482544294547efc489ba4b15408e3ec330e81c7917d81866e04ec70",
+    "checkedFileCount": 29,
+    "checkedFileSetHash": "27039460d7cb7a934242ed2f40ee20001177b0db3821d4548bdbeebcc76b0a4f",
     "diagnosticKeys": [],
     "errorCount": 0,
     "exitCode": 0,
@@ -65,39 +65,47 @@
   },
   "@iam/gateway-apisix": {
     "checkedFileCount": 29,
-    "checkedFileSetHash": "05ea4c052af7e72ad2e5ed425196a64f644268d7699a574a5be91433defe6b04",
+    "checkedFileSetHash": "0d57c7e154cea4889e89ec14c2d49bc6b9f3fa392d344555cfa20c0bf9a3505f",
     "diagnosticKeys": [],
     "errorCount": 0,
     "exitCode": 0,
     "warningCount": 0
   },
   "@iam/api-core": {
-    "checkedFileCount": 99,
-    "checkedFileSetHash": "ffda86bd820edd0a7bccb63c3568646850abe7c842b6026fdb7873011c692dd2",
+    "checkedFileCount": 156,
+    "checkedFileSetHash": "f1059405c661911f280e1beaf30b285697c3e6aa08467be664ee20ae9ca06d37",
+    "diagnosticKeys": [],
+    "errorCount": 0,
+    "exitCode": 0,
+    "warningCount": 0
+  },
+  "@iam/client-subject-projection": {
+    "checkedFileCount": 11,
+    "checkedFileSetHash": "4293fcd0b8d98ad02e3f8205d7fd3a827b90b8272bbe7bbb40855a40b6e152bb",
     "diagnosticKeys": [],
     "errorCount": 0,
     "exitCode": 0,
     "warningCount": 0
   },
   "@iam/contracts": {
-    "checkedFileCount": 26,
-    "checkedFileSetHash": "ae9d988475ddc299a1c7b438a0d27e029fc862c3b789dbffae87774a7f2ac243",
+    "checkedFileCount": 33,
+    "checkedFileSetHash": "38f12d30b6f22fbef050c2f0f18c6c78efdde8845d4985ae87604c9ee1dbe69a",
     "diagnosticKeys": [],
     "errorCount": 0,
     "exitCode": 0,
     "warningCount": 0
   },
   "@iam/db": {
-    "checkedFileCount": 58,
-    "checkedFileSetHash": "70fdb7f12f66d172d82ee22e05ec16a69e301fea35bd4ccfe763ee35dd8f736e",
+    "checkedFileCount": 77,
+    "checkedFileSetHash": "7610e7511222455b31c52e381821e17bc38e3928789df7df9f3f014dcc6b75af",
     "diagnosticKeys": [],
     "errorCount": 0,
     "exitCode": 0,
     "warningCount": 0
   },
   "@iam/domain": {
-    "checkedFileCount": 42,
-    "checkedFileSetHash": "c05f139b4c3d40e82fb97c9ede14df70bd681dc30a2d0cd6e82f86f2df2738c4",
+    "checkedFileCount": 45,
+    "checkedFileSetHash": "3ddf9463475e1fb4698feb29b35d065748a804c7fb50ade44e9276f5e95d34e9",
     "diagnosticKeys": [],
     "errorCount": 0,
     "exitCode": 0,
@@ -112,16 +120,16 @@
     "warningCount": 0
   },
   "@iam/role-assignment-resolution": {
-    "checkedFileCount": 8,
-    "checkedFileSetHash": "0a62c0daa3ab1c630ff39b7ed8636233a21e0fbbb4e41dd03a815ad2d92c3df5",
+    "checkedFileCount": 7,
+    "checkedFileSetHash": "1a2ce5b8ed9a3da6c2eb80dd79ba526024577ee3dc1c0a494fa2d73b5f9981be",
     "diagnosticKeys": [],
     "errorCount": 0,
     "exitCode": 0,
     "warningCount": 0
   },
   "@iam/user-profile-read-model": {
-    "checkedFileCount": 26,
-    "checkedFileSetHash": "40ea086da2dc9daca6184da9ca3f71d5d05a4c178cb706d2cf980e6c081df5ce",
+    "checkedFileCount": 62,
+    "checkedFileSetHash": "7ca8f9108f9d4877c8c60588c1fb12f6433b4f810fa22f09c12d3b03ed13a356",
     "diagnosticKeys": [],
     "errorCount": 0,
     "exitCode": 0,

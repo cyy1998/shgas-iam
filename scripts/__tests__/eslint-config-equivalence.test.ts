@@ -36,7 +36,7 @@ describe("shared ESLint config migration", () => {
 
   test("keeps plugin graph ownership in @iam/eslint-config", async () => {
     const eslintConsumers = await discoverEslintConsumers();
-    expect(eslintConsumers).toHaveLength(15);
+    expect(eslintConsumers).toHaveLength(16);
 
     for (const consumer of eslintConsumers) {
       const manifest = await readWorkspaceManifest(consumer);

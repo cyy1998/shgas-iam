@@ -13,12 +13,14 @@
     "./worker": "./src/worker.ts"
   },
   "scripts": {
-    "lint": "eslint src test-postgres test-redis test-rehearsal eslint.config.js",
-    "lint:fix": "eslint --fix src test-postgres test-redis test-rehearsal eslint.config.js",
-    "test": "bun test --max-concurrency=2 src",
-    "test:postgres": "bun test --max-concurrency=1 test-postgres",
-    "test:redis": "bun test --max-concurrency=1 test-redis",
-    "test:rehearsal": "bun test --max-concurrency=1 test-rehearsal",
+    "lint": "eslint src test-integration scripts eslint.config.js",
+    "lint:fix": "eslint --fix src test-integration scripts eslint.config.js",
+    "test": "pnpm test:unit",
+    "test:unit": "bun test --max-concurrency=2 src",
+    "test:integration:component": "bun test --max-concurrency=2 test-integration/component",
+    "test:integration:postgres": "bun test --max-concurrency=1 test-integration/postgres",
+    "test:integration:redis": "bun test --max-concurrency=1 test-integration/redis",
+    "subject-projection:rehearsal": "bun scripts/subject-projection-rehearsal.ts",
     "typecheck": "pnpm exec tsc --noEmit"
   },
   "dependencies": {

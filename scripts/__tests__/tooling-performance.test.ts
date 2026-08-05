@@ -34,13 +34,13 @@ describe("tooling performance contracts", () => {
 
   test("isolates compile caches by profile and measurement phase", () => {
     expect(profileCompileCacheDirectory("/tmp/eslint-cache", "current-backend", "config"))
-      .toBe("/tmp/eslint-cache/current-backend/config");
+      .toBe(join("/tmp/eslint-cache", "current-backend", "config"));
     expect(profileCompileCacheDirectory("/tmp/eslint-cache", "current-backend", "first-file-lint"))
-      .toBe("/tmp/eslint-cache/current-backend/first-file-lint");
+      .toBe(join("/tmp/eslint-cache", "current-backend", "first-file-lint"));
     expect(profileCompileCacheDirectory("/tmp/eslint-cache", "current-backend", "workspace-lint"))
-      .toBe("/tmp/eslint-cache/current-backend/workspace-lint");
+      .toBe(join("/tmp/eslint-cache", "current-backend", "workspace-lint"));
     expect(profileCompileCacheDirectory("/tmp/eslint-cache", "current-frontend", "config"))
-      .toBe("/tmp/eslint-cache/current-frontend/config");
+      .toBe(join("/tmp/eslint-cache", "current-frontend", "config"));
   });
 
   test("reports stable distribution fields", () => {
@@ -138,9 +138,12 @@ describe("tooling performance contracts", () => {
 
     expect(graph.rootScripts.typecheck).toBe("turbo typecheck --concurrency=3");
     expect(graph.globalTurboConcurrency).toBeUndefined();
-    expect(graph.globalTestTimeoutOverrides).toEqual([]);
+    expect(graph.globalTestTimeoutOverrides).toEqual([
+      "apps/admin/vitest.shared.ts: testTimeout:",
+      "apps/sso/vitest.shared.ts: testTimeout:",
+    ]);
     expect(graph.turboTasks.typecheck.dependsOn).toEqual(["^typecheck"]);
-    expect(graph.workspaces).toHaveLength(15);
+    expect(graph.workspaces).toHaveLength(16);
     for (const workspace of graph.workspaces) {
       expect(typeof workspace.scripts.lint).toBe("string");
       expect(typeof workspace.scripts["lint:fix"]).toBe("string");
@@ -160,15 +163,13 @@ describe("tooling performance contracts", () => {
     });
 
     const oidcEntrySmoke = readFileSync(
-      join(repoRoot, "apps", "oidc-provider", "src", "__tests__", "entry.smoke.test.ts"),
+      join(repoRoot, "apps", "oidc-provider", "test-integration", "process", "entry.integration.test.ts"),
       "utf8",
     );
-    expect(oidcEntrySmoke).toContain("const entryReadyTimeoutMs = 15_000;");
-    expect(oidcEntrySmoke).toContain("const entrySmokeTimeoutMs = 25_000;");
-    expect(oidcEntrySmoke.match(/\bentryReadyTimeoutMs\b/gu)).toHaveLength(2);
-    expect(oidcEntrySmoke.match(/\bentrySmokeTimeoutMs\b/gu)).toHaveLength(2);
-    expect(oidcEntrySmoke).toContain("      entryReadyTimeoutMs,\n    );");
-    expect(oidcEntrySmoke).toContain("  }, entrySmokeTimeoutMs);");
+    expect(oidcEntrySmoke).toContain("PROCESS_SMOKE_TEST_TIMEOUT_MS,");
+    expect(oidcEntrySmoke).toContain("  }, PROCESS_SMOKE_TEST_TIMEOUT_MS);");
+    expect(oidcEntrySmoke).not.toContain("entryReadyTimeoutMs");
+    expect(oidcEntrySmoke).not.toContain("entrySmokeTimeoutMs");
   });
 
   test("keeps the TypeScript CLI and compatibility API on their pinned tracks", () => {

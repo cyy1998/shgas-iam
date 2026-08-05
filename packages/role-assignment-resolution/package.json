@@ -7,10 +7,10 @@
     ".": "./src/index.ts"
   },
   "scripts": {
-    "lint": "eslint src test-postgres eslint.config.js",
-    "lint:fix": "eslint --fix src test-postgres eslint.config.js",
-    "test": "bun test --max-concurrency=2 src",
-    "test:postgres": "bun test --max-concurrency=1 test-postgres",
+    "lint": "eslint src test-integration eslint.config.js",
+    "lint:fix": "eslint --fix src test-integration eslint.config.js",
+    "test:integration:component": "bun test --max-concurrency=2 test-integration/component",
+    "test:integration:postgres": "bun test --max-concurrency=1 test-integration/postgres",
     "typecheck": "pnpm exec tsc --noEmit"
   },
   "dependencies": {

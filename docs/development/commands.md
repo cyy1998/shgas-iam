@@ -25,6 +25,14 @@ bun test scripts/__tests__/tooling-performance.test.ts
 bun test scripts/__tests__/eslint-config-equivalence.test.ts
 ```
 
+Canonical collection 与编排变化还应运行：
+
+```bash
+pnpm check:test-collection
+pnpm test:unit
+pnpm test:integration:<component|process|redis|postgres|composition|browser>
+```
+
 完整 `pnpm verify` 只在准备 merge、release 或用户明确要求时运行一次；ticket 实现内循环不重复运行。
 
 ## Workspace 命令
@@ -34,43 +42,156 @@ bun test scripts/__tests__/eslint-config-equivalence.test.ts
 - `pnpm lint`
 - `pnpm lint:fix`
 - `pnpm test`
-- `pnpm test:external`
-- `pnpm test:smoke`
+- `pnpm test:unit`
+- `pnpm test:integration`
+- `pnpm test:integration:<component|process|redis|postgres|composition|browser>`
 - `pnpm typecheck`
 - `pnpm verify`
-- `pnpm e2e`
 - `pnpm e2e:install`
 - `pnpm e2e:install:browsers`
 - 后端 Architecture Guard（唯一静态架构入口）：`pnpm check:architecture`
 - 文档索引与 freshness guard：`pnpm check:docs`
 - Env naming guard：`pnpm check:env-names`
+- Test Collection Guard：`pnpm check:test-collection`
 
 `pnpm lint` 调度各 workspace 的 lint 与根 ESLint；根 lint 范围为 `scripts/` 和三个根 ESLint/Stylelint 配置。
 
 ## 测试与验证通道
 
-`pnpm test` 以 Turbo concurrency 2 运行可缓存的普通测试。Package-local Vitest 普通测试使用 25% workers，Bun
-普通测试使用 `--max-concurrency=2`。Architecture Guard 不进入 package `test`，由根级
-`pnpm check:architecture` 单独执行。
-
-`pnpm test:smoke` 以 Turbo concurrency 1 运行真实进程/端口 smoke，禁用任务缓存。当前共享 process harness、API、
-Admin API、Worker 与 OIDC 的 package-local 命令为：
+Root 与 package 已切换到以下长期 collection commands：
 
 ```bash
-pnpm --filter @iam/api-core test:smoke
-pnpm --filter @iam/api test:smoke
-pnpm --filter @iam/admin-api test:smoke
-pnpm --filter @iam/worker test:smoke
-pnpm --filter @iam/oidc-provider test:smoke
+pnpm test:unit
+pnpm test:integration
+pnpm test:integration:component
+pnpm test:integration:process
+pnpm test:integration:redis
+pnpm test:integration:postgres
+pnpm test:integration:composition
+pnpm test:integration:browser
 ```
+
+`test:unit` 通过 Turbo 运行 package Unit，并精确加入四个 root tooling tests。各 profile command 只运行同名 package task。
+聚合 `test:integration` 在任何 profile 启动前一次性列出全部缺失的 caller-owned PostgreSQL/Redis 环境变量；其中包括
+`IAM_API_CORE_CLEANUP_TEST_REDIS_URL`，且任何专用 URL 都不得回退 runtime 或其他 test URL。资源 tasks 在 Turbo strict
+env 下显式透传对应 owner URL 并保持 `cache:false`。
+`pnpm test` 永久代理 `pnpm test:unit`；有 Unit collection 的 package 使用同一代理，没有 Unit collection 的 package
+不发布空 `test`。旧 `test:smoke`、`test:external`、package-local `test:postgres`/`test:redis` 与 frontend `e2e`
+collection aliases 已删除。
+
+`pnpm check:test-collection` 通过 Vitest/Playwright 机器 list、Bun 窄目录与 Turbo dry-run 验证每个当前候选的唯一收集、
+路径/命名归属和 root task 可达性。它与 production Architecture Guard 分离，不分析测试断言、资源调用或 AST/data flow。
+
+`pnpm test:unit` 以 Turbo concurrency 2 运行可缓存的 Unit。Package-local Vitest Unit 使用 25% workers，Bun
+Unit 使用 `--max-concurrency=2`。Architecture Guard 不进入 package `test`，由根级
+`pnpm check:architecture` 单独执行。
+
+真实进程/端口行为由 `test:integration:process` 以 Turbo concurrency 1 运行，并禁用任务缓存：
+
+```bash
+pnpm --filter @iam/api-core test:integration:process
+pnpm --filter @iam/api test:integration:process
+pnpm --filter @iam/admin-api test:integration:process
+pnpm --filter @iam/worker test:integration:process
+pnpm --filter @iam/oidc-provider test:integration:process
+```
+
+`@iam/api-core` 已作为 collection migration 的 Bun tracer bullet 发布 package-local canonical commands：
+
+```bash
+pnpm --filter @iam/api-core test:unit
+pnpm --filter @iam/api-core test:integration:component
+pnpm --filter @iam/api-core test:integration:process
+pnpm --filter @iam/api-core test:integration:redis
+```
+
+`@iam/api` 已发布完整的六个 package-local canonical commands：
+
+```bash
+pnpm --filter @iam/api test:unit
+pnpm --filter @iam/api test:integration:component
+pnpm --filter @iam/api test:integration:process
+pnpm --filter @iam/api test:integration:composition
+pnpm --filter @iam/api test:integration:postgres
+pnpm --filter @iam/api test:integration:redis
+```
+
+`@iam/oidc-provider` 已发布五个 package-local canonical commands：
+
+```bash
+pnpm --filter @iam/oidc-provider test:unit
+pnpm --filter @iam/oidc-provider test:integration:component
+pnpm --filter @iam/oidc-provider test:integration:process
+pnpm --filter @iam/oidc-provider test:integration:composition
+pnpm --filter @iam/oidc-provider test:integration:redis
+```
+
+`@iam/admin-api` 与 `@iam/worker` 已发布完整的 package-local canonical commands：
+
+```bash
+pnpm --filter @iam/admin-api test:unit
+pnpm --filter @iam/admin-api test:integration:component
+pnpm --filter @iam/admin-api test:integration:process
+pnpm --filter @iam/worker test:unit
+pnpm --filter @iam/worker test:integration:component
+pnpm --filter @iam/worker test:integration:process
+pnpm --filter @iam/worker test:integration:postgres
+```
+
+Admin process 使用的 `test-smoke/client-cache-invalidation.composition-smoke.ts` 是由测试
+spawn 的 fixture，不被 canonical runner 收集。
+
+Database、Role Assignment 与 User Profile Read Model 已发布以下 package-local canonical commands：
+
+```bash
+pnpm --filter @iam/db test:unit
+pnpm --filter @iam/db test:integration:postgres
+pnpm --filter @iam/role-assignment-resolution test:integration:component
+pnpm --filter @iam/role-assignment-resolution test:integration:postgres
+pnpm --filter @iam/user-profile-read-model test:unit
+pnpm --filter @iam/user-profile-read-model test:integration:component
+pnpm --filter @iam/user-profile-read-model test:integration:postgres
+pnpm --filter @iam/user-profile-read-model test:integration:redis
+```
+
+Role Assignment 没有空的 Unit profile。User Profile 近规模 rehearsal 使用测试模型外的
+`subject-projection:rehearsal` 操作入口，不形成第七个 profile。
+
+Pure shared packages、ESLint config、Client Subject Projection 与 Gateway 已发布以下 package-local canonical commands：
+
+```bash
+pnpm --filter @iam/contracts test:unit
+pnpm --filter @iam/domain test:unit
+pnpm --filter @iam/eslint-config test:unit
+pnpm --filter @iam/jobs test:unit
+pnpm --filter @iam/client-subject-projection test:unit
+pnpm --filter @iam/client-subject-projection test:integration:component
+pnpm --filter @iam/gateway-apisix test:unit
+pnpm --filter @iam/gateway-apisix test:integration:component
+```
+
+ESLint config 的 Unit command 显式收集 `test/` 下唯一 MJS test。Canonical tasks 只依赖 Turbo `transit`，不会通过
+`^test` 扩大执行拓扑。
+
+Admin 与 SSO frontend 已发布 Unit、component 与 mock-browser package-local canonical commands：
+
+```bash
+pnpm --filter @iam/admin test:unit
+pnpm --filter @iam/admin test:integration:component
+pnpm --filter @iam/admin test:integration:browser
+pnpm --filter @iam/sso test:unit
+pnpm --filter @iam/sso test:integration:component
+pnpm --filter @iam/sso test:integration:browser
+```
+
+Browser Integration 保留原 API mocks、package-local `webServer`、base URL 与单 Chromium project，不是 Full-system E2E。
 
 `pnpm verify` 通过 `scripts/verify.mjs` 按以下顺序 fail-fast：
 
 1. static：`pnpm lint`、`pnpm check:docs`、`pnpm check:env-names`、`pnpm check:architecture`；
 2. typecheck：`pnpm typecheck`；
-3. test：`pnpm test`；
-4. smoke：`pnpm test:smoke`；
-5. build：`pnpm build`。
+3. test:unit：`pnpm test:unit`；
+4. build：`pnpm build`。
 
 外部资源检查不进入 `pnpm verify`，需要时显式运行：
 
@@ -78,43 +199,43 @@ pnpm --filter @iam/oidc-provider test:smoke
 # API/OIDC 真实 production entry 联合 PG/Redis 验证；四个 URL 都必须指向调用方独占、非生产、可销毁的资源
 IAM_API_TEST_DATABASE_URL=<dedicated-url> IAM_API_TEST_REDIS_URL=<dedicated-url> \
 IAM_OIDC_PROVIDER_TEST_DATABASE_URL=<dedicated-url> IAM_OIDC_PROVIDER_TEST_REDIS_URL=<dedicated-url> \
-pnpm test:external
+pnpm test:integration:composition
 
 # 也可按 package 单独运行；缺少该 package 的任一 URL 会 fail fast，不会 skip 或回退
-pnpm --filter @iam/api test:external
-pnpm --filter @iam/oidc-provider test:external
+pnpm --filter @iam/api test:integration:composition
+pnpm --filter @iam/oidc-provider test:integration:composition
 
 # Database migration contract（guard、raw rollback、Drizzle journal replay、普通索引锁；需专用 IAM_DB_TEST_DATABASE_URL）
 pnpm --filter @iam/db db:check
-pnpm --filter @iam/db test:postgres
+pnpm --filter @iam/db test:integration:postgres
 
 # Worker Subject Projection Client cutover contract（需专用 IAM_WORKER_TEST_DATABASE_URL）
-pnpm --filter @iam/worker test:postgres
+pnpm --filter @iam/worker test:integration:postgres
 
 # Role assignment PostgreSQL contract（需由调用方提供专用 IAM_ROLE_ASSIGNMENT_TEST_DATABASE_URL）
-pnpm --filter @iam/role-assignment-resolution test:postgres
+pnpm --filter @iam/role-assignment-resolution test:integration:postgres
 
 # API Purveyor contact 并发 contract（需由调用方提供专用 IAM_API_TEST_DATABASE_URL）
-pnpm --filter @iam/api test:postgres
+pnpm --filter @iam/api test:integration:postgres
 
 # API Custom SSO Client runtime Redis contract（需由调用方提供专用 IAM_API_TEST_REDIS_URL）
-pnpm --filter @iam/api test:redis
+pnpm --filter @iam/api test:integration:redis
 
-# OIDC Provider Session binding Redis contract（需由调用方提供专用 IAM_OIDC_PROVIDER_TEST_REDIS_URL）
-pnpm --filter @iam/oidc-provider test:redis
+# OIDC Provider Session binding Redis contract（需专用 IAM_OIDC_PROVIDER_TEST_REDIS_URL）
+pnpm --filter @iam/oidc-provider test:integration:redis
 
 # User Profile publication/cutover backfill 与 verify contract（需专用 IAM_USER_PROFILE_TEST_DATABASE_URL）
-pnpm --filter @iam/user-profile-read-model test:postgres
+pnpm --filter @iam/user-profile-read-model test:integration:postgres
 
 # User Profile Subject Facts 单条/CAS/batch prewarm contract（需专用 IAM_USER_PROFILE_TEST_REDIS_URL）
-pnpm --filter @iam/user-profile-read-model test:redis
+pnpm --filter @iam/user-profile-read-model test:integration:redis
 
 # API Core Redis 与 Subject Access seed-if-absent contract（需专用 IAM_API_CORE_TEST_REDIS_URL）
-pnpm --filter @iam/api-core test:redis
+pnpm --filter @iam/api-core test:integration:redis
 
-# Browser
-pnpm --filter @iam/admin e2e
-pnpm --filter @iam/sso e2e
+# Mock-browser Integration
+pnpm --filter @iam/admin test:integration:browser
+pnpm --filter @iam/sso test:integration:browser
 
 # APISIX
 pnpm gateway:apisix:validate -- <environment-arguments>
@@ -127,7 +248,7 @@ PostgreSQL/Redis 环境组合本节已有的 Worker backfill/verify、cleanup、
 下列近规模性能 lane 手动走完；只在 Historical 记录中保存候选 commit、实际命令、聚合计数/延迟、通过/失败和资源清理结果：
 
 ```bash
-pnpm --filter @iam/user-profile-read-model test:rehearsal
+pnpm --filter @iam/user-profile-read-model subject-projection:rehearsal
 ```
 
 不生成或提交 JSONL receipt、机器 evidence manifest/transcript。Client cutover manifest 与一次性 Secret 输出仍按下文作为
@@ -148,7 +269,7 @@ pnpm --filter @iam/db subject-projection:rollback
 ```bash
 # 绕过 Turbo task cache 的强制执行
 pnpm exec turbo typecheck --force --concurrency=3
-pnpm exec turbo test --force --concurrency=2
+pnpm exec turbo test:unit --force --concurrency=2
 
 # ESLint profile 交错采样
 node scripts/benchmark-eslint-config.mjs --rounds 5
@@ -177,13 +298,13 @@ Hook 不运行 lint、typecheck、test、build 或 tracker checker。按改动�
 
 ## Workspace 入口
 
-- API backend：`pnpm --filter @iam/api <dev|serve|lint|test|test:external|test:postgres|test:redis|test:smoke|typecheck>`
-- Admin API backend：`pnpm --filter @iam/admin-api <dev|serve|lint|test|test:smoke|typecheck>`
-- OIDC provider：`pnpm --filter @iam/oidc-provider <dev|serve|lint|test|test:external|test:redis|test:smoke|typecheck>`
-- API Core：`pnpm --filter @iam/api-core <lint|test|test:redis|test:smoke|typecheck>`
-- Client Subject Projection：`pnpm --filter @iam/client-subject-projection <lint|test|typecheck>`
-- User Profile Read Model：`pnpm --filter @iam/user-profile-read-model <lint|test|test:postgres|test:redis|test:rehearsal|typecheck>`
-- Worker：`pnpm --filter @iam/worker <dev|serve|lint|test|test:smoke|typecheck|user-profile:backfill|user-profile:repair|subject-projection:backfill|subject-projection:verify>`
+- API backend：`pnpm --filter @iam/api <dev|serve|lint|test|test:unit|test:integration:component|test:integration:process|test:integration:composition|test:integration:postgres|test:integration:redis|typecheck>`
+- Admin API backend：`pnpm --filter @iam/admin-api <dev|serve|lint|test|test:unit|test:integration:component|test:integration:process|typecheck>`
+- OIDC provider：`pnpm --filter @iam/oidc-provider <dev|serve|lint|test|test:unit|test:integration:component|test:integration:process|test:integration:composition|test:integration:redis|typecheck>`
+- API Core：`pnpm --filter @iam/api-core <lint|test|test:unit|test:integration:component|test:integration:process|test:integration:redis|typecheck>`
+- Client Subject Projection：`pnpm --filter @iam/client-subject-projection <lint|test|test:unit|test:integration:component|typecheck>`
+- User Profile Read Model：`pnpm --filter @iam/user-profile-read-model <lint|test|test:unit|test:integration:component|test:integration:postgres|test:integration:redis|subject-projection:rehearsal|typecheck>`
+- Worker：`pnpm --filter @iam/worker <dev|serve|lint|test|test:unit|test:integration:component|test:integration:process|test:integration:postgres|typecheck|user-profile:backfill|user-profile:repair|subject-projection:backfill|subject-projection:verify>`
 - 仅处理 Subject Access indexed backlog：
   `pnpm --filter @iam/worker run user-profile:repair -- --subject-access-only --limit <positive-integer>`
 - Subject Projection cutover：
@@ -194,10 +315,11 @@ Hook 不运行 lint、typecheck、test、build 或 tracker checker。按改动�
   `pnpm --filter @iam/api-core session:cleanup-custom-sso-cutover -- --dry-run --batch-size 500`；核对摘要后把
   `--dry-run` 改为 `--verify`，有残留时必须非零退出；确认门禁有效后改为 `--apply`，完成后再以
   `--verify` 零退出收尾。
-- Admin frontend：`pnpm --filter @iam/admin <dev|build|lint|test|e2e|typecheck|format>`
-- SSO frontend：`pnpm --filter @iam/sso <dev|build|lint|test|e2e|typecheck|format>`
-- Database：`pnpm --filter @iam/db <lint|test|test:postgres|typecheck|db:push|db:generate|db:migrate|db:check>`
-- Gateway：`pnpm --filter @iam/gateway-apisix <validate|diff|apply|lint|test|typecheck>`
+- Admin frontend：`pnpm --filter @iam/admin <dev|build|lint|test|test:unit|test:integration:component|test:integration:browser|typecheck|format>`
+- SSO frontend：`pnpm --filter @iam/sso <dev|build|lint|test|test:unit|test:integration:component|test:integration:browser|typecheck|format>`
+- Database：`pnpm --filter @iam/db <lint|test|test:unit|test:integration:postgres|typecheck|db:push|db:generate|db:migrate|db:check>`
+- Role Assignment：`pnpm --filter @iam/role-assignment-resolution <lint|test:integration:component|test:integration:postgres|typecheck>`
+- Gateway：`pnpm --filter @iam/gateway-apisix <validate|diff|apply|lint|test|test:unit|test:integration:component|typecheck>`
 
 共享 packages 使用相同的 filtered 模式，例如：
 

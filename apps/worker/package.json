@@ -20,11 +20,13 @@
     "user-profile:repair": "bun run src/commands/user-profile-repair.ts",
     "subject-projection:backfill": "bun run src/commands/subject-projection-cutover.ts backfill",
     "subject-projection:verify": "bun run src/commands/subject-projection-cutover.ts verify",
-    "lint": "eslint src test-postgres test-smoke eslint.config.js",
-    "lint:fix": "eslint --fix src test-postgres test-smoke eslint.config.js",
-    "test": "bun test --max-concurrency=2 src",
-    "test:postgres": "bun test --max-concurrency=1 test-postgres",
-    "test:smoke": "bun test --max-concurrency=1 test-smoke",
+    "lint": "eslint src test-integration eslint.config.js",
+    "lint:fix": "eslint --fix src test-integration eslint.config.js",
+    "test": "pnpm test:unit",
+    "test:integration:component": "bun test --max-concurrency=2 test-integration/component",
+    "test:integration:postgres": "bun test --max-concurrency=1 test-integration/postgres",
+    "test:integration:process": "bun test --max-concurrency=1 test-integration/process",
+    "test:unit": "bun test --max-concurrency=2 src",
     "typecheck": "pnpm exec tsc --noEmit"
   },
   "dependencies": {

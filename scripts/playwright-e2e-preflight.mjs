@@ -36,7 +36,7 @@ console.error(
   "Playwright Chromium cannot start because Linux/WSL system dependencies are missing.",
 );
 console.error(
-  "Run this once from the repository root, then retry the e2e command:",
+  "Run this once from the repository root, then retry the browser Integration command:",
 );
 console.error("");
 console.error("  pnpm e2e:install");

@@ -39,7 +39,7 @@ export function createFrontendConfig(options: PresetOptions = {}) {
       files: [
         "**/*.{test,spec}.{ts,tsx}",
         "test/**/*.{ts,tsx}",
-        "e2e/**/*.{ts,tsx}",
+        "test-integration/**/*.{ts,tsx}",
       ],
       rules: {
         "react-refresh/only-export-components": "off",

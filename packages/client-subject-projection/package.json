@@ -9,9 +9,11 @@
     "./testing": "./src/testing.ts"
   },
   "scripts": {
-    "lint": "eslint src eslint.config.js",
-    "lint:fix": "eslint --fix src eslint.config.js",
-    "test": "bun test --max-concurrency=2 src",
+    "lint": "eslint src test-integration eslint.config.js",
+    "lint:fix": "eslint --fix src test-integration eslint.config.js",
+    "test": "pnpm test:unit",
+    "test:unit": "bun test --max-concurrency=2 src",
+    "test:integration:component": "bun test --max-concurrency=2 test-integration/component",
     "typecheck": "pnpm exec tsc --noEmit"
   },
   "dependencies": {

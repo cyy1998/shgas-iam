@@ -63,7 +63,8 @@ function readGlobalTestTimeoutOverrides(repoRoot, rootPackage, workspaceDirector
     readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
       if (!entry.isFile())
         return [];
-      const isVitestConfig = /^vitest\.config\.[cm]?[jt]s$/u.test(entry.name);
+      const isVitestConfig = /^vitest(?:\.config)?\.shared\.[cm]?[jt]s$/u.test(entry.name)
+        || /^vitest\.config\.[cm]?[jt]s$/u.test(entry.name);
       const isBunConfig = entry.name === "bunfig.toml";
       if (!isVitestConfig && !isBunConfig)
         return [];
@@ -75,7 +76,7 @@ function readGlobalTestTimeoutOverrides(repoRoot, rootPackage, workspaceDirector
         : [/^\s*timeout\s*=/gmu];
       return patterns.flatMap(pattern =>
         [...source.matchAll(pattern)].map(match =>
-          `${relative(repoRoot, path)}: ${match[0].trim()}`));
+          `${relative(repoRoot, path).replaceAll("\\", "/")}: ${match[0].trim()}`));
     }));
 
   return [...scriptOverrides, ...configOverrides].sort();

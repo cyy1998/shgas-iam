@@ -11,10 +11,11 @@
     "./query-utils": "./src/query-utils.ts"
   },
   "scripts": {
-    "lint": "eslint scripts src test-postgres drizzle.config.ts eslint.config.js",
-    "lint:fix": "eslint --fix scripts src test-postgres drizzle.config.ts eslint.config.js",
-    "test": "bun test --max-concurrency=2 src",
-    "test:postgres": "bun test --max-concurrency=1 test-postgres",
+    "lint": "eslint scripts src test-integration drizzle.config.ts eslint.config.js",
+    "lint:fix": "eslint --fix scripts src test-integration drizzle.config.ts eslint.config.js",
+    "test": "pnpm test:unit",
+    "test:unit": "bun test --max-concurrency=2 src",
+    "test:integration:postgres": "bun test --max-concurrency=1 test-integration/postgres",
     "typecheck": "pnpm exec tsc --noEmit",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",

@@ -12,7 +12,8 @@
   "scripts": {
     "lint": "eslint --config ../../eslint.root.config.mjs src test benchmark",
     "lint:fix": "eslint --config ../../eslint.root.config.mjs --fix src test benchmark",
-    "test": "bun test --max-concurrency=2 test",
+    "test": "pnpm test:unit",
+    "test:unit": "bun test --max-concurrency=2 test",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

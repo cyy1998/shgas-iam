@@ -4,7 +4,7 @@ const port = 8001;
 const baseURL = `http://127.0.0.1:${port}`;
 
 export default defineConfig({
-  testDir: './e2e',
+  testDir: './test-integration/browser',
   timeout: 180_000,
   expect: {
     timeout: 120_000,

@@ -15,7 +15,7 @@
 ├── gateway/          # APISIX manifests 与发布工具
 ├── docker/           # 本地依赖栈及 dev/prod Compose
 ├── observability/    # Alloy、Loki 与 Grafana 配置
-├── scripts/          # 仓库级检查、测试编排和辅助脚本
+├── scripts/          # 仓库级检查、canonical test collection/Integration 编排和辅助脚本
 ├── docs/             # 当前架构、功能、runbook、ADR 与历史记录
 ├── CONTEXT.md        # 稳定领域语言
 ├── .scratch/         # 跨会话 feature 的本地 Markdown tracker

@@ -9,10 +9,11 @@ Next review: 2026-10-31
 
 本手册用于发布统一 `role_assignment` 表、角色授权聚合和 admin `/roles` 角色管理页面。事实来源包括
 `packages/db/src/schema/core/role-assignments.ts`、`apps/admin-api/src/services/role/role.service.ts`、
-`apps/admin/src/pages/roles/`、`packages/role-assignment-resolution/test-postgres/role-assignment-resolver.postgres.test.ts`、
-`apps/oidc-provider/src/__tests__/authorization.repository.test.ts`、
-`packages/user-profile-read-model/src/__tests__/user-profile-invalidation.test.ts`，以及
-`packages/user-profile-read-model/src/__tests__/user-profile-rebuild-processor.test.ts`。
+`apps/admin/src/pages/roles/`、
+`packages/role-assignment-resolution/test-integration/postgres/role-assignment-resolver.integration.test.ts`、
+`apps/oidc-provider/test-integration/component/repository-availability.integration.test.ts`、
+`packages/user-profile-read-model/test-integration/component/user-profile-invalidation.integration.test.ts`，以及
+`packages/user-profile-read-model/test-integration/component/user-profile-rebuild-processor.integration.test.ts`。
 
 该发布会把旧 `employment_role`、`organization_role`、`position_role` 三表分配语义迁移到统一
 `role_assignment`。当前运行时由 `@iam/role-assignment-resolution` 统一解析严格 Effective Role 和保守受影响用户：
@@ -74,7 +75,7 @@ pnpm --filter @iam/worker user-profile:repair
 | 证据 | 摘要 |
 |---|---|
 | migration | 新表创建、旧三表 backfill 数量、旧表删除确认。 |
-| resolver | 专用测试库标识、显式 `test:postgres` 结果及严格正向/保守反向矩阵摘要。 |
+| resolver | 专用测试库标识、显式 `test:integration:postgres` 结果及严格正向/保守反向矩阵摘要。 |
 | API/admin-api | 用户角色聚合一致性、`/admin/roles` 路由 smoke 状态。 |
 | admin UI | `/roles` 页面截图或操作结果摘要，避免包含敏感用户资料。 |
 | user-profile | dirty 行 reason、repair/backfill enqueue count、worker 完成日志。 |

@@ -18,5 +18,5 @@
     "verbatimModuleSyntax": true,
     "skipLibCheck": true
   },
-  "include": ["src/**/*", "test-postgres/**/*", "test-redis/**/*", "test-rehearsal/**/*"]
+  "include": ["src/**/*", "test-integration/**/*", "scripts/**/*"]
 }

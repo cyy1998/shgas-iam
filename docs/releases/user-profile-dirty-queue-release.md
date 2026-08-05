@@ -44,9 +44,9 @@ job ID `rebuild-user-profile|<userId>|<dirtyVersion>` 保持不变；新 worker 
 5. 在候选内容上完成 package-local process smoke：
 
 ```bash
-pnpm --filter @iam/api test:smoke
-pnpm --filter @iam/admin-api test:smoke
-pnpm --filter @iam/worker test:smoke
+pnpm --filter @iam/api test:integration:process
+pnpm --filter @iam/admin-api test:integration:process
+pnpm --filter @iam/worker test:integration:process
 ```
 
 ## 停止并证明旧 producer 已停止

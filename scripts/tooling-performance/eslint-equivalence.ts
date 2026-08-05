@@ -1,7 +1,7 @@
 import { Buffer } from "node:buffer";
 import { spawn } from "node:child_process";
 import { createHash } from "node:crypto";
-import { readdir, readFile } from "node:fs/promises";
+import { access, readdir, readFile } from "node:fs/promises";
 import { dirname, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -130,10 +130,10 @@ export async function discoverEslintConsumers(): Promise<EslintConsumer[]> {
 }
 
 async function runEslintConsumer(consumer: EslintConsumer): Promise<EslintDiagnosticSnapshot> {
-  const eslintBinary = resolve(repoRoot, "node_modules/.bin/eslint");
+  const eslintBinary = resolve(repoRoot, "node_modules/eslint/bin/eslint.js");
   const result = await spawnProcess(
-    eslintBinary,
-    [...consumer.args, "--format", "json"],
+    "node",
+    [eslintBinary, ...consumer.args, "--format", "json"],
     resolve(repoRoot, consumer.workspace),
   );
 
@@ -221,10 +221,21 @@ async function findWorkspaceConfig(workspace: string, name: string) {
 
 async function listWorkspaceDirectories(parent: string) {
   const entries = await readdir(resolve(repoRoot, parent), { withFileTypes: true });
-  return entries
-    .filter(entry => entry.isDirectory())
-    .map(entry => `${parent}/${entry.name}`)
-    .sort();
+  const workspaces: string[] = [];
+  for (const entry of entries) {
+    if (!entry.isDirectory())
+      continue;
+    const workspace = `${parent}/${entry.name}`;
+    try {
+      await access(resolve(repoRoot, workspace, "package.json"));
+      workspaces.push(workspace);
+    }
+    catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== "ENOENT")
+        throw error;
+    }
+  }
+  return workspaces.sort();
 }
 
 async function readPackageManifest(path: string): Promise<PackageManifest> {

@@ -24,5 +24,6 @@
     "noEmit": true,
     "verbatimModuleSyntax": true,
     "skipLibCheck": true
-  }
+  },
+  "include": ["src/**/*.ts", "test-integration/**/*.ts", "eslint.config.js"]
 }
