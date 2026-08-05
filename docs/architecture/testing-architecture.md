@@ -29,9 +29,11 @@ profile 不是新的测试层级、速度标签或 Gate。多资源测试按测�
 - Full-system E2E 独占 `e2e/system/**/*.spec.ts`。当前仓库只保留这一路径契约，不发布 `test:e2e`。
 - `subject-projection:rehearsal` 是近规模操作命令，不采用测试命名，也不属于任何 collection。
 
-每个测试候选必须由一个且仅一个 canonical collection 收集。Admin API 的
-`test-smoke/client-cache-invalidation.composition-smoke.ts` 是 process test spawn 的非测试 fixture；它不符合 candidate
-命名，不形成旧 collection 或公开命令。
+每个测试候选必须由一个且仅一个 canonical collection 收集。Admin API 的 client cache 真实 contract 位于 `redis`
+profile，并通过 production Admin runtime 的 `clientCache` seam 验证 invalidation、update 与 mutation completion，不初始化
+与该 contract 无关的 queue；process profile 只保留 entry/readiness/exit/cleanup。Redis-dependent 状态由各 production owner
+在 `redis` 或 `composition` profile 建立，测试 fixture 不实现 Redis 协议、key、serialization、TTL、Lua 或 transaction
+排列。原 process-smoke RESP server、testing export 与 compatibility cases 已在真实 owner coverage 通过后退役。
 
 ## Root 与 package commands
 
@@ -113,6 +115,13 @@ Timeout 只保护测试不永久挂起，不承担性能 SLA。Process harness �
 PostgreSQL 测试只清理自己创建的随机 schema。Redis 测试只清理自己的随机 namespace；禁止对共享实例执行
 `FLUSHDB`/`FLUSHALL`。外部测试不自行启动 Docker、PostgreSQL 或 Redis；browser profile 可以按 Playwright config 启动
 package-local web server。所有 caller-owned URLs 缺失时都 fail closed，不回退开发或生产资源。
+
+Destructive legacy cleanup 不使用普通 namespace-isolated Redis。它只接受调用方提供的
+`IAM_API_CORE_CLEANUP_TEST_REDIS_URL`，该 URL 必须指向独占、初始为空且可销毁的 logical DB 或 instance，并且不能与任何
+可见的普通 test/runtime Redis identity 相同。其真实 Redis contract 同时验证 ACL 禁止 `FLUSHDB`/`FLUSHALL`、non-target
+sentinel 保留，以及独立 client 观察到的完整 before/after inventory 精确等于目标删除集合。API Core Redis contract 与 API
+composition 复用同一个 API Core-owned testing harness 完成 identity preflight、初始 inventory、CLI 执行和最终 teardown；
+调用方不各自实现弱化的 destructive cleanup validator。
 
 ## 默认验证与交付
 

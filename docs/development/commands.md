@@ -126,20 +126,24 @@ pnpm --filter @iam/oidc-provider test:integration:composition
 pnpm --filter @iam/oidc-provider test:integration:redis
 ```
 
-`@iam/admin-api` 与 `@iam/worker` 已发布完整的 package-local canonical commands：
+`@iam/admin-api` 已发布 Unit、component、process 与 redis package-local canonical commands；`@iam/worker` 已发布
+Unit、component、process 与 postgres commands：
 
 ```bash
 pnpm --filter @iam/admin-api test:unit
 pnpm --filter @iam/admin-api test:integration:component
 pnpm --filter @iam/admin-api test:integration:process
+pnpm --filter @iam/admin-api test:integration:redis
 pnpm --filter @iam/worker test:unit
 pnpm --filter @iam/worker test:integration:component
 pnpm --filter @iam/worker test:integration:process
 pnpm --filter @iam/worker test:integration:postgres
 ```
 
-Admin process 使用的 `test-smoke/client-cache-invalidation.composition-smoke.ts` 是由测试
-spawn 的 fixture，不被 canonical runner 收集。
+Admin 的 `test-smoke/client-cache-invalidation.runtime-smoke.ts` 是 Redis test 使用的 production runtime entry
+fixture，不是测试候选。client cache 的 invalidation、update 与 mutation completion 已由真实 Redis profile 验证；API
+legacy cleanup 的精确删除边界由 API Core 的真实 Redis profile 在独占 cleanup 资源上验证；process profile 不再运行 RESP
+compatibility case。
 
 Database、Role Assignment 与 User Profile Read Model 已发布以下 package-local canonical commands：
 
@@ -196,7 +200,9 @@ Browser Integration 保留原 API mocks、package-local `webServer`、base URL �
 外部资源检查不进入 `pnpm verify`，需要时显式运行：
 
 ```bash
-# API/OIDC 真实 production entry 联合 PG/Redis 验证；四个 URL 都必须指向调用方独占、非生产、可销毁的资源
+# API/OIDC 真实 production entry 联合 PG/Redis 验证；普通资源与 cleanup Redis 必须彼此独立，
+# 且全部指向调用方独占、非生产、可销毁的资源
+IAM_API_CORE_CLEANUP_TEST_REDIS_URL=<exclusive-disposable-url> \
 IAM_API_TEST_DATABASE_URL=<dedicated-url> IAM_API_TEST_REDIS_URL=<dedicated-url> \
 IAM_OIDC_PROVIDER_TEST_DATABASE_URL=<dedicated-url> IAM_OIDC_PROVIDER_TEST_REDIS_URL=<dedicated-url> \
 pnpm test:integration:composition
@@ -221,6 +227,9 @@ pnpm --filter @iam/api test:integration:postgres
 # API Custom SSO Client runtime Redis contract（需由调用方提供专用 IAM_API_TEST_REDIS_URL）
 pnpm --filter @iam/api test:integration:redis
 
+# Admin API Custom SSO Client cache mutation contract（需由调用方提供专用 IAM_ADMIN_API_TEST_REDIS_URL）
+pnpm --filter @iam/admin-api test:integration:redis
+
 # OIDC Provider Session binding Redis contract（需专用 IAM_OIDC_PROVIDER_TEST_REDIS_URL）
 pnpm --filter @iam/oidc-provider test:integration:redis
 
@@ -230,7 +239,9 @@ pnpm --filter @iam/user-profile-read-model test:integration:postgres
 # User Profile Subject Facts 单条/CAS/batch prewarm contract（需专用 IAM_USER_PROFILE_TEST_REDIS_URL）
 pnpm --filter @iam/user-profile-read-model test:integration:redis
 
-# API Core Redis 与 Subject Access seed-if-absent contract（需专用 IAM_API_CORE_TEST_REDIS_URL）
+# API Core 普通 Redis contracts 与 legacy cleanup 精确边界（需两个彼此独立的专用 URL）
+IAM_API_CORE_TEST_REDIS_URL=<namespace-isolated-url> \
+IAM_API_CORE_CLEANUP_TEST_REDIS_URL=<exclusive-disposable-url> \
 pnpm --filter @iam/api-core test:integration:redis
 
 # Mock-browser Integration
@@ -240,6 +251,15 @@ pnpm --filter @iam/sso test:integration:browser
 # APISIX
 pnpm gateway:apisix:validate -- <environment-arguments>
 ```
+
+`IAM_API_CORE_CLEANUP_TEST_REDIS_URL` 必须指向初始为空、调用方独占且可销毁的 logical DB/instance；URL 所使用的 ACL user
+必须允许测试所需的 `ACL DRYRUN`、inventory、fixture 与 cleanup 命令，同时由 `ACL DRYRUN` 证明其不能执行
+`FLUSHDB`/`FLUSHALL`。Cleanup 测试不会把 `IAM_API_CORE_TEST_REDIS_URL` 或 runtime Redis 用作 fallback；它会在连接前
+比较去除 credential 后的 host/port/logical DB identity，并拒绝与任一可见普通测试或 runtime Redis identity 相同的资源。
+Caller-owned 对照集合与 `turbo.json` 的 `test:integration:redis.passThroughEnv` 及
+`test:integration:composition.passThroughEnv` 中 Redis URL 集合一致，包含 Admin API、API Core、API、OIDC Provider 与 User
+Profile 的专用 Redis URL，明确排除正在验证的 cleanup URL 自身。任何 Redis URL 出现 query 参数时也会在
+连接前失败，避免 `?db=`、`?port=` 等产生第二种 connection identity 表示。测试不会启动 Docker。
 
 Ticket 12 不提供根级一键 rehearsal。维护者或 agent 按
 [Custom SSO Subject Projection 硬切换与回滚手册](../releases/custom-sso-subject-projection-release.md)，在调用方拥有的临时
@@ -273,6 +293,9 @@ pnpm exec turbo test:unit --force --concurrency=2
 
 # ESLint profile 交错采样
 node scripts/benchmark-eslint-config.mjs --rounds 5
+
+# 手动核对 ESLint 文件集合与诊断快照；不属于 pnpm verify
+pnpm test:eslint-diagnostic-baseline
 ```
 
 `--force` 不会清空操作系统文件缓存。性能比较应使用相同命令和 runner，记录墙钟、CPU 与最大 RSS，一次只调整一个
@@ -299,7 +322,7 @@ Hook 不运行 lint、typecheck、test、build 或 tracker checker。按改动�
 ## Workspace 入口
 
 - API backend：`pnpm --filter @iam/api <dev|serve|lint|test|test:unit|test:integration:component|test:integration:process|test:integration:composition|test:integration:postgres|test:integration:redis|typecheck>`
-- Admin API backend：`pnpm --filter @iam/admin-api <dev|serve|lint|test|test:unit|test:integration:component|test:integration:process|typecheck>`
+- Admin API backend：`pnpm --filter @iam/admin-api <dev|serve|lint|test|test:unit|test:integration:component|test:integration:process|test:integration:redis|typecheck>`
 - OIDC provider：`pnpm --filter @iam/oidc-provider <dev|serve|lint|test|test:unit|test:integration:component|test:integration:process|test:integration:composition|test:integration:redis|typecheck>`
 - API Core：`pnpm --filter @iam/api-core <lint|test|test:unit|test:integration:component|test:integration:process|test:integration:redis|typecheck>`
 - Client Subject Projection：`pnpm --filter @iam/client-subject-projection <lint|test|test:unit|test:integration:component|typecheck>`

@@ -1,11 +1,100 @@
 import { expect, test } from "bun:test";
 import {
   cleanupRedisKeysAddedSince,
+  cleanupRedisKeysMatchingOwnerMarkers,
   parseDedicatedRedisTestUrl,
   requireDedicatedPostgresTestUrl,
   requireExternalTestUrl,
   runWithOwnedTestResources,
 } from "../external-test-resources";
+
+test("removes only Redis keys matched by caller-owned markers and verifies cleanup", async () => {
+  const keys = new Set([
+    "sess:api-owned:principal",
+    "subject-access:oidc-owned",
+    "shared-unrelated-sentinel",
+  ]);
+  const removed: string[][] = [];
+  const redis = {
+    async removeKeys(ownedKeys: readonly string[]) {
+      removed.push([...ownedKeys]);
+      for (const key of ownedKeys)
+        keys.delete(key);
+      return ownedKeys.length;
+    },
+    async scanPage() {
+      return ["0", [...keys]] as [string, string[]];
+    },
+  };
+
+  await cleanupRedisKeysMatchingOwnerMarkers({
+    diagnosticLabel: "composition fixture",
+    ownerMarkers: new Set(["api-owned", "oidc-owned"]),
+    redis,
+  });
+
+  expect({ keys: [...keys], removed }).toEqual({
+    keys: ["shared-unrelated-sentinel"],
+    removed: [[
+      "sess:api-owned:principal",
+      "subject-access:oidc-owned",
+    ]],
+  });
+});
+
+test("identifies the caller when owned Redis keys remain after cleanup", async () => {
+  const redis = {
+    async removeKeys(keys: readonly string[]) {
+      return keys.length;
+    },
+    async scanPage() {
+      return ["0", ["sess:oidc-owned:principal"]] as [string, string[]];
+    },
+  };
+
+  await expect(cleanupRedisKeysMatchingOwnerMarkers({
+    diagnosticLabel: "OIDC composition",
+    ownerMarkers: new Set(["oidc-owned"]),
+    redis,
+  })).rejects.toThrow(
+    "OIDC composition cleanup left 1 owned Redis keys",
+  );
+});
+
+test.each([
+  ["an empty marker set", new Set<string>()],
+  ["an empty marker", new Set(["api-owned", ""])],
+  ["a whitespace-only marker", new Set(["api-owned", "   "])],
+  ["an untrimmed marker", new Set(["api-owned", " oidc-owned"])],
+])("rejects %s before inventorying or deleting Redis keys", async (_, ownerMarkers) => {
+  const keys = new Set(["shared-unrelated-sentinel"]);
+  let inventoryCalls = 0;
+  let removeCalls = 0;
+  const redis = {
+    async removeKeys(ownedKeys: readonly string[]) {
+      removeCalls += 1;
+      for (const key of ownedKeys)
+        keys.delete(key);
+      return ownedKeys.length;
+    },
+    async scanPage() {
+      inventoryCalls += 1;
+      return ["0", [...keys]] as [string, string[]];
+    },
+  };
+
+  await expect(cleanupRedisKeysMatchingOwnerMarkers({
+    diagnosticLabel: "composition fixture",
+    ownerMarkers,
+    redis,
+  })).rejects.toThrow("composition fixture cleanup requires non-empty trimmed owner markers");
+
+  expect({ inventoryCalls, keys: [...keys], removeCalls }).toEqual({
+    inventoryCalls: 0,
+    keys: ["shared-unrelated-sentinel"],
+    removeCalls: 0,
+  });
+});
 
 test("preserves the body failure while attempting every owned resource cleanup", async () => {
   const bodyFailure = new Error("body failed");

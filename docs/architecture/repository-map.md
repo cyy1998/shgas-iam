@@ -54,7 +54,7 @@
 
 | 路径 | 职责与边界 |
 |---|---|
-| `packages/api-core/src` | 共享后端基础设施：`createApp`、route/OpenAPI/response helpers、errors、middleware、Redis、logging、observability、Session Kernel、LoginRestriction、Subject Access Barrier、UnitOfWork 和 tRPC utilities。共享 process-smoke harness 位于 `src/testing/`，只通过独立 testing export 暴露。 |
+| `packages/api-core/src` | 共享后端基础设施：`createApp`、route/OpenAPI/response helpers、errors、middleware、Redis、logging、observability、Session Kernel、LoginRestriction、Subject Access Barrier、UnitOfWork 和 tRPC utilities。共享 process-smoke harness 位于 `src/testing/`，只通过独立 testing export 暴露；它不实现 Redis 协议或 persistence seed。 |
 | `packages/client-subject-projection/src` | 协议中性的 Client Subject Projection deep Module；公开 `resolve` Interface、Catalog V1、最窄 facts/access/freshness ports，并以独立 subpath 暴露 Custom SSO V1 wire mapper 和纯内存测试 adapter。 |
 | `packages/contracts/src` | 跨 app/package 消费的稳定 contracts 与 enums。 |
 | `packages/domain/src` | 共享 domain schemas/types、pure domain rules、audit helpers 和可复用 domain/business errors。 |

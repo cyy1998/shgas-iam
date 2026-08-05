@@ -15,18 +15,27 @@ const logger = {
 
 try {
   const options = parseLegacySessionCleanupArgs(process.argv.slice(2));
-  const redis = new Redis({
-    host: process.env.IAM_REDIS_HOST ?? process.env.REDIS_URL ?? "localhost",
-    port: Number(process.env.IAM_REDIS_PORT ?? process.env.REDIS_PORT ?? 6379),
-    password: process.env.IAM_REDIS_PASSWORD || process.env.REDIS_PASSWORD || undefined,
-    db: Number(process.env.IAM_REDIS_DB ?? process.env.REDIS_DB ?? 0),
-  });
+  const redis = process.env.IAM_REDIS_HOST === undefined && process.env.REDIS_URL !== undefined
+    ? new Redis(process.env.REDIS_URL)
+    : new Redis({
+        host: process.env.IAM_REDIS_HOST ?? "localhost",
+        port: Number(process.env.IAM_REDIS_PORT ?? process.env.REDIS_PORT ?? 6379),
+        password: process.env.IAM_REDIS_PASSWORD || process.env.REDIS_PASSWORD || undefined,
+        db: Number(process.env.IAM_REDIS_DB ?? process.env.REDIS_DB ?? 0),
+      });
 
   try {
     const result = await cleanupLegacySessionKeys(redis, {
       ...options,
       logger,
     });
+    const matched = Object.values(result.patternCounts)
+      .reduce((total, count) => total + (count ?? 0), 0);
+    const deleted = Object.values(result.deletedCounts)
+      .reduce((total, count) => total + (count ?? 0), 0);
+    process.stdout.write(
+      `Legacy cleanup ${result.profile} ${result.mode} ${result.result}: matched ${matched}, deleted ${deleted}.\n`,
+    );
     process.exitCode = result.result === "completed" ? 0 : 1;
   }
   finally {

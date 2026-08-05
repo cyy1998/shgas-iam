@@ -7,7 +7,7 @@
 03 — 收窄 API 与 Admin API Process 覆盖；04 — 移除 OIDC、Worker 与 API Core 的 Process Shim 依赖；
 05 — 证明 Legacy Cleanup 的精确删除边界
 
-**Status:** ready-for-agent
+**Status:** resolved
 
 **Repository invariant:** 删除只发生在全部替代覆盖与 cleanup safety 成立后；不顺带改变 canonical commands、E2E 或 Gate。
 
@@ -18,7 +18,7 @@
 - 运行所有受影响 `redis`/`process`/`composition` profiles 与 package lint/typecheck。
 - 用 `rg` inventory 证明 shim/command observer 退役；运行 `pnpm check:docs` 与 `git diff --check`。
 
-- [ ] Consumer inventory 为零，所有删除场景已有更高 fidelity 的公开行为覆盖。
-- [ ] 仓库不存在 shim import/export、Lua comment dispatch、`MULTI/EXEC` 排列或 `redis.commands` assertions。
-- [ ] Current docs 准确描述真实 Redis、普通隔离与 destructive cleanup；未复制其他 feature 的 contract。
-- [ ] 本票没有改变 canonical commands、Full-system E2E 或 Gate。
+- [x] Consumer inventory 为零，所有删除场景已有更高 fidelity 的公开行为覆盖。
+- [x] 仓库不存在 shim import/export、Lua comment dispatch、`MULTI/EXEC` 排列或 `redis.commands` assertions。
+- [x] Current docs 准确描述真实 Redis、普通隔离与 destructive cleanup；未复制其他 feature 的 contract。
+- [x] 本票没有改变 canonical commands、Full-system E2E 或 Gate。

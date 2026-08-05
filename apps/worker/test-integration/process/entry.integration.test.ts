@@ -49,23 +49,18 @@ function createEntryEnvironment(context: ProcessSmokeAttemptContext) {
   });
 }
 
-async function probeWorkerDashboard(origin: string, signal: AbortSignal) {
-  const response = await fetch(`${origin}/admin/queues`, { signal });
-  if (response.status !== 200) {
+async function probeWorkerReadiness(origin: string, signal: AbortSignal) {
+  const response = await fetch(`${origin}/healthz`, { signal });
+  if (response.status !== 503) {
     throw new PortCollisionError(
-      `port served an unexpected Worker readiness status: expected 200, received ${response.status}`,
+      `port served an unexpected Worker readiness status: expected 503, received ${response.status}`,
     );
   }
-  const contentType = response.headers.get("content-type");
-  const body = await response.text();
-  if (!contentType?.includes("text/html") || !body.includes("Bull Dashboard"))
-    throw new PortCollisionError("port did not serve the Worker Bull Board");
-
-  return { contentType, body };
+  return await response.json() as Record<string, unknown>;
 }
 
 describe("Worker entry", () => {
-  test("starts through Bun, parsed environment, and the real production composition", async () => {
+  test("reports unavailable storage as not ready without starting consumers", async () => {
     const result = await entrySmoke.run({
       start(context) {
         return spawnOwnedProcessTree({
@@ -75,11 +70,18 @@ describe("Worker entry", () => {
           env: createEntryEnvironment(context),
         });
       },
-      probe: (context, signal) => probeWorkerDashboard(entryOrigin(context), signal),
+      probe: (context, signal) => probeWorkerReadiness(entryOrigin(context), signal),
       childReadinessEvidence: "worker started",
     });
 
-    expect(result.contentType).toContain("text/html");
-    expect(result.body).toContain("Bull Dashboard");
+    expect(result).toMatchObject({
+      ok: false,
+      enabledModules: [],
+      modulesStarted: true,
+      dependencies: {
+        db: "error",
+        redis: "error",
+      },
+    });
   }, PROCESS_SMOKE_TEST_TIMEOUT_MS);
 });

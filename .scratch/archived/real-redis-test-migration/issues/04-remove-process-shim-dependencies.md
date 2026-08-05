@@ -6,7 +6,7 @@ process harness，不保留 Redis server 作为 process dependency。
 
 **Blocked by:** 03 — 收窄 API 与 Admin API Process 覆盖
 
-**Status:** ready-for-agent
+**Status:** resolved
 
 **Repository invariant:** 非破坏性 consumers 全部先脱离 shim；cleanup 专属 RESP case 留给下一票以真实 disposable Redis
 替换。
@@ -16,6 +16,6 @@ process harness，不保留 Redis server 作为 process dependency。
 - 运行 OIDC/Worker/API Core process 与真实 Redis contracts 的最高层相关命令。
 - 盘点 RESP callers，并运行三个 workspace lint/typecheck 与 `git diff --check`。
 
-- [ ] OIDC Provider Session 的 atomic claim、generation CAS、TTL 与 lifecycle fence 继续由现有真实 Redis contract 覆盖。
-- [ ] Worker assertions 锁定外部安全属性，不固化 PostgreSQL-first 顺序或 Redis command count。
-- [ ] 除 cleanup CLI 专属场景外，所有 process-smoke RESP callers 已有真实 owner 替代或有证据删除。
+- [x] OIDC Provider Session 的 atomic claim、generation CAS、TTL 与 lifecycle fence 继续由现有真实 Redis contract 覆盖。
+- [x] Worker assertions 锁定外部安全属性，不固化 PostgreSQL-first 顺序或 Redis command count。
+- [x] 除 cleanup CLI 专属场景外，所有 process-smoke RESP callers 已有真实 owner 替代或有证据删除。

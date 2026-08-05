@@ -1,9 +1,16 @@
 import type { ProcessSmokeAttemptContext } from "@iam/api-core/testing/process-smoke-harness";
+import type { DbClient } from "@iam/db";
+import type { SubjectFactsCacheRecordV1 } from "@iam/user-profile-read-model/subject-facts";
+import type Redis from "ioredis";
+import type { ClientCustomSsoConfigureDto } from "../../../admin-api/src/services/client/client.type.ts";
 import { createHash, randomUUID } from "node:crypto";
 import { fileURLToPath } from "node:url";
-import { customSsoClientRuntimeCacheKey } from "@iam/api-core/custom-sso";
+import { hashSecret } from "@iam/api-core/security";
 import {
-  cleanupRedisKeysAddedSince,
+  createSubjectAccessBootstrap,
+} from "@iam/api-core/subject-access";
+import {
+  cleanupRedisKeysMatchingOwnerMarkers,
   createRedisKeyInventoryPort,
   inventoryRedisKeys,
   parseDedicatedRedisTestUrl,
@@ -20,33 +27,53 @@ import {
   PROCESS_SMOKE_TEST_TIMEOUT_MS,
   spawnOwnedProcessTree,
 } from "@iam/api-core/testing/process-smoke-harness";
-import { seedProcessSmokePrincipalSession } from "@iam/api-core/testing/process-smoke-redis-server";
+import { CustomSsoClientMode, SubjectClaim } from "@iam/contracts";
+import { relations } from "@iam/db/relations";
+import {
+  createSubjectFactsRedisInspector,
+  createSubjectFactsRedisPublisher,
+} from "@iam/user-profile-read-model/subject-facts";
+import { drizzle } from "drizzle-orm/postgres-js";
 import { decodeJwt, exportJWK, generateKeyPair } from "jose";
 import postgres from "postgres";
 import { afterEach, describe, expect, it } from "vitest";
+import { createClientRepository } from "../../../admin-api/src/services/client/client.repository.ts";
+import { createCustomSsoClientRuntimeReader } from "../../../api/src/services/client/custom-sso-client-runtime.reader.ts";
+import { createCustomSsoClientRepository } from "../../../api/src/services/client/custom-sso-client.repository.ts";
+import { createOidcProviderSession } from "../../src/composition/session/index.ts";
+import { createOidcProviderStores } from "../../src/composition/stores/index.ts";
+import { parseOidcProviderEnv } from "../../src/env.ts";
+import { createLogger } from "../../src/lib/logger.ts";
+import { createOidcAccountRepository } from "../../src/repositories/account.repository.ts";
+import { createOidcClientRepository } from "../../src/repositories/client.repository.ts";
 import { createOidcProviderRedisTestHarness } from "../redis/redis-test-harness.ts";
 
 const oidcRoot = fileURLToPath(new URL("../../", import.meta.url));
 const entryListeningEvidence = "OIDC provider listening";
 const lookupHmacId = "entry-external";
 const lookupHmacSecret = "oidc-entry-external-secret-that-is-at-least-32-bytes";
-const subjectIdentifier = "00000000-0000-4000-8000-000000000099";
-const subjectAccessTransitionId = "10000000-0000-4000-8000-000000000099";
+const subjectIdentifier = randomUUID();
+const resourceSuffix = subjectIdentifier.replaceAll("-", "");
 const username = "oidc-sensitive-username";
 const originalName = "OIDC Snapshot Name";
 const changedName = "OIDC Current Name Must Not Leak";
-const principalToken = `iam_ps_${"p".repeat(43)}`;
-const clientId = "oidc-real-entry-observability";
+const clientId = `oidc-real-entry-${resourceSuffix}`;
 const redirectUri = "https://oidc-real-entry.example.test/callback";
 const postLogoutRedirectUri = "https://oidc-real-entry.example.test/logout-complete";
 const codeVerifier = "a".repeat(64);
 const codeChallenge = createHash("sha256").update(codeVerifier).digest("base64url");
 const userId = 900_099;
 const sourceDirtyVersion = "99";
-const customSsoCacheSentinel = "ticket12-custom-sso-cache-must-remain-unchanged";
-const customSsoHashSentinel = "$2b$04$ticket12CustomSsoHashOnlyNotASecretValue";
 const databaseUrlName = "IAM_OIDC_PROVIDER_TEST_DATABASE_URL";
 const redisUrlName = "IAM_OIDC_PROVIDER_TEST_REDIS_URL";
+const customSsoIsolationConfig: ClientCustomSsoConfigureDto = {
+  mode: CustomSsoClientMode.Independent,
+  validRedirectUrls: ["https://oidc-isolation.example.test/sso/*"],
+  subjectClaimCatalogVersion: 1,
+  subjectClaims: [SubjectClaim.SubjectIdentifier],
+  callbackEndpoint: "https://oidc-isolation.example.test/sso/callback",
+  logoutEndpoint: "https://oidc-isolation.example.test/logout",
+};
 const databaseUrl = requireDedicatedPostgresTestUrl({
   forbidden: [
     { name: "DATABASE_URL", value: process.env.DATABASE_URL },
@@ -114,7 +141,7 @@ function createEntryEnvironment(
   });
 }
 
-function createCookieJar() {
+function createCookieJar(principalToken: string) {
   const cookies = new Map([["global_session", principalToken]]);
   return {
     absorb(response: Response) {
@@ -155,6 +182,8 @@ async function runPublicProtocolFlow(input: {
   issuer: string;
   onCodeIssued: () => Promise<void>;
   origin: string;
+  principalToken: string;
+  registerOwnedProtocolToken: (token: string) => void;
   signal: AbortSignal;
 }) {
   const authorization = new URL(`${input.issuer}/auth`);
@@ -167,7 +196,7 @@ async function runPublicProtocolFlow(input: {
     scope: "openid profile iam:employments iam:authorization",
     state: "real-entry-state",
   }).toString();
-  const cookieJar = createCookieJar();
+  const cookieJar = createCookieJar(input.principalToken);
   let next = authorization.href;
   let callback: URL | undefined;
   let authorizeStatus: number | undefined;
@@ -198,6 +227,7 @@ async function runPublicProtocolFlow(input: {
   if (callback.searchParams.get("state") !== "real-entry-state" || code === null) {
     throw new FatalReadinessError("OIDC authorization callback omitted code or state");
   }
+  input.registerOwnedProtocolToken(code);
 
   await input.onCodeIssued();
 
@@ -223,6 +253,7 @@ async function runPublicProtocolFlow(input: {
       `OIDC token exchange returned unexpected ${tokenResponse.status}/${String(tokens.error)}`,
     );
   }
+  input.registerOwnedProtocolToken(tokens.access_token);
 
   const userInfoResponse = await fetch(`${input.issuer}/me`, {
     headers: { authorization: `Bearer ${tokens.access_token}` },
@@ -297,8 +328,139 @@ async function probeDiscovery(origin: string, issuer: string, signal: AbortSigna
   return discovery;
 }
 
-function subjectFacts(name: string) {
-  return JSON.stringify({
+function parseProductionOwnerEnvironment(environment: NodeJS.ProcessEnv) {
+  const previousDatabaseUrl = process.env.DATABASE_URL;
+  try {
+    return parseOidcProviderEnv(environment);
+  }
+  finally {
+    if (previousDatabaseUrl === undefined)
+      delete process.env.DATABASE_URL;
+    else
+      process.env.DATABASE_URL = previousDatabaseUrl;
+  }
+}
+
+async function createCustomSsoIsolationSentinel(input: {
+  clientCode: string;
+  dbClient: DbClient;
+  observerRedis: Redis;
+  ownerRedis: Redis;
+}) {
+  const configurationOwner = createClientRepository(input.dbClient);
+  const runtimeSource = createCustomSsoClientRepository(input.dbClient);
+  const ownerRuntime = createCustomSsoClientRuntimeReader({
+    redis: input.ownerRedis,
+    source: runtimeSource,
+  });
+  const observerRuntime = createCustomSsoClientRuntimeReader({
+    redis: input.observerRedis,
+    source: {
+      async findRuntimeRecord() {
+        throw new Error(
+          "OIDC Custom SSO cache observer must not read through PostgreSQL",
+        );
+      },
+    },
+  });
+  const customSsoSecretHash = await hashSecret(
+    `iam_sso_${input.clientCode}`,
+    4,
+  );
+  await configurationOwner.updateClientCustomSsoByCode(input.clientCode, {
+    customSsoConfig: customSsoIsolationConfig,
+    customSsoEnabled: true,
+    customSsoSecretHash,
+  });
+  const seededRuntime = await ownerRuntime.findRuntimeRecord(input.clientCode);
+  if (seededRuntime === null)
+    throw new Error("OIDC Custom SSO runtime cache seed was unavailable");
+
+  return {
+    async observe() {
+      const [client, runtime] = await Promise.all([
+        configurationOwner.getClientByCode(input.clientCode),
+        observerRuntime.findRuntimeRecord(input.clientCode),
+      ]);
+      if (client === null || runtime === null)
+        throw new Error("OIDC Custom SSO isolation client was unavailable");
+      return {
+        configuration: {
+          customSsoConfig: client.customSsoConfig,
+          customSsoConfigVersion: client.customSsoConfigVersion,
+          customSsoEnabled: client.customSsoEnabled,
+          customSsoSecretHash: client.customSsoSecretHash,
+        },
+        runtime: {
+          clientCode: runtime.clientCode,
+          customSsoConfig: runtime.customSsoConfig,
+          customSsoConfigVersion: runtime.customSsoConfigVersion,
+          customSsoEnabled: runtime.customSsoEnabled,
+        },
+      };
+    },
+  };
+}
+
+function createProductionOwnerSeed(input: {
+  dbClient: DbClient;
+  environment: NodeJS.ProcessEnv;
+  redis: Redis;
+}) {
+  const env = parseProductionOwnerEnvironment(input.environment);
+  const repositories = {
+    account: createOidcAccountRepository(input.dbClient),
+    client: createOidcClientRepository(input.dbClient),
+  };
+  const stores = createOidcProviderStores({ env, redis: input.redis, repositories });
+  const session = createOidcProviderSession({
+    env,
+    redis: input.redis,
+    logger: createLogger(env),
+    repositories,
+    stores,
+  });
+  return {
+    clientRuntimeCache: stores.clientRuntimeCache,
+    clientRuntime: stores.clientRuntime,
+    sessionKernel: session.kernel,
+    subjectAccessBootstrap: createSubjectAccessBootstrap({
+      random: { uuid: randomUUID },
+      redis: input.redis,
+    }),
+    subjectFacts: createSubjectFactsRedisPublisher(input.redis),
+    subjectFactsInspector: createSubjectFactsRedisInspector(input.redis),
+  };
+}
+
+async function seedExternalSessionState(
+  owners: ReturnType<typeof createProductionOwnerSeed>,
+) {
+  const access = await owners.subjectAccessBootstrap.seedMany([{
+    state: "enabled",
+    subjectIdentifier,
+  }], new Date());
+  if (access.seeded !== 1)
+    throw new Error("OIDC composition Subject Access fixture was not newly seeded");
+  const principal = await owners.sessionKernel.createPrincipalSession(
+    subjectIdentifier,
+    { amr: ["password"], sessionKind: "browser_user" },
+  );
+  if (principal.status !== "created")
+    throw new Error(`OIDC composition Principal Session seed failed: ${principal.status}`);
+  if (principal.externalToken === undefined)
+    throw new Error("OIDC composition Principal Session seed returned no external token");
+  const facts = await owners.subjectFacts.publish(subjectFacts(originalName));
+  if (facts.status !== "published")
+    throw new Error(`OIDC composition Subject Facts seed failed: ${facts.status}`);
+  const client = await owners.clientRuntime.findRuntime(clientId);
+  if (client === null)
+    throw new Error("OIDC composition client runtime seed was unavailable");
+  return { principalToken: principal.externalToken };
+}
+
+function subjectFacts(name: string): SubjectFactsCacheRecordV1 {
+  return {
     schemaVersion: 1,
     sourceDirtyVersion,
     publishedAt: new Date().toISOString(),
@@ -328,13 +490,14 @@ function subjectFacts(name: string) {
         }],
       }],
     },
-  });
+  };
 }
 
 describe("oIDC provider explicit external entry", () => {
-  it("uses real PostgreSQL and Redis while preserving the pre-code snapshot and Custom SSO isolation", async () => {
+  it("uses production owners with real PostgreSQL and Redis while preserving the pre-code snapshot", async () => {
     await runWithOwnedTestResources(async ({ registerCleanup }) => {
       const sql = postgres(databaseUrl, { max: 1 });
+      const dbClient: DbClient = drizzle({ client: sql, relations });
       registerCleanup(async () => await sql.end({ timeout: 5 }));
       registerCleanup(async () => {
         await sql.begin(async (transaction) => {
@@ -350,11 +513,22 @@ describe("oIDC provider explicit external entry", () => {
       registerCleanup(async () => await redis.close());
       const redisInventory = createRedisKeyInventoryPort(redis.observer);
       const existingKeys = await inventoryRedisKeys(redisInventory);
+      const ownedRedisMarkers = new Set([
+        subjectIdentifier,
+        clientId,
+      ]);
       registerCleanup(async () => {
-        await cleanupRedisKeysAddedSince(redisInventory, existingKeys);
+        await cleanupRedisKeysMatchingOwnerMarkers({
+          diagnosticLabel: "OIDC composition",
+          ownerMarkers: ownedRedisMarkers,
+          redis: redisInventory,
+        });
       });
       let logCapture: ReturnType<typeof createBoundedProcessLogCapture> | undefined;
       registerCleanup(() => logCapture?.dispose());
+      let productionOwners: ReturnType<typeof createProductionOwnerSeed> | undefined;
+      let observerOwners: ReturnType<typeof createProductionOwnerSeed> | undefined;
+      let ownerSeed: Promise<{ principalToken: string }> | undefined;
 
       await sql.begin(async (transaction) => {
         await transaction`DELETE FROM user_profile_dirty WHERE user_id = ${userId}`;
@@ -371,11 +545,7 @@ describe("oIDC provider explicit external entry", () => {
             ext_attributes,
             oidc_enabled,
             oidc_config,
-            oidc_config_version,
-            custom_sso_enabled,
-            custom_sso_config,
-            custom_sso_secret_hash,
-            custom_sso_config_version
+            oidc_config_version
           )
           VALUES (
             ${clientId},
@@ -392,18 +562,7 @@ describe("oIDC provider explicit external entry", () => {
               allowedScopes: ["openid", "profile", "iam:employments", "iam:authorization"],
               tokenEndpointAuthMethod: "none",
             })},
-            1,
-            TRUE,
-            ${transaction.json({
-              mode: "independent",
-              validRedirectUrls: ["https://custom-sso-isolation.example.test/callback"],
-              subjectClaimCatalogVersion: 1,
-              subjectClaims: ["subjectIdentifier"],
-              callbackEndpoint: "https://custom-sso-isolation.example.test/callback",
-              logoutEndpoint: "https://custom-sso-isolation.example.test/logout",
-            })},
-            ${customSsoHashSentinel},
-            7
+            1
           )
         `;
         await transaction`
@@ -480,45 +639,33 @@ describe("oIDC provider explicit external entry", () => {
         `;
       });
 
-      const sessionKernelNamespace = `sess:oidc-real-entry:${randomUUID().replaceAll("-", "")}:`;
-      const principalSessionId = `principal-${randomUUID()}`;
-      const seededValues = new Map<string, string>();
-      seedProcessSmokePrincipalSession({
-        set(key, value) {
-          seededValues.set(key, value);
-        },
-      }, {
-        externalToken: principalToken,
-        lookupHmacId,
-        lookupHmacSecret,
-        namespace: sessionKernelNamespace,
-        principalSessionId,
-        subjectAccessTransitionId,
-        subjectIdentifier,
+      const customSsoIsolation = await createCustomSsoIsolationSentinel({
+        clientCode: clientId,
+        dbClient,
+        observerRedis: redis.observer,
+        ownerRedis: redis.writer,
       });
-      const barrierKey = `subject-access:v1:record:${subjectIdentifier}`;
-      const factsKey = `user-profile:subject-facts:${subjectIdentifier}`;
-      const customSsoKey = customSsoClientRuntimeCacheKey(clientId);
-      seededValues.set(barrierKey, JSON.stringify({
-        version: 1,
-        subjectIdentifier,
-        state: "enabled",
-        transitionId: subjectAccessTransitionId,
-        updatedAt: new Date().toISOString(),
-      }));
-      seededValues.set(factsKey, subjectFacts(originalName));
-      seededValues.set(customSsoKey, customSsoCacheSentinel);
-      for (const key of seededValues.keys()) {
-        if (existingKeys.has(key)) {
-          throw new Error(
-            `dedicated OIDC Redis test instance already contains owned key ${key}`,
-          );
-        }
-        redis.trackKey(key);
-      }
-      await redis.writer.mset([...seededValues].flat());
-      redis.trackPrefix(sessionKernelNamespace);
+      const initialCustomSsoIsolation = await customSsoIsolation.observe();
+      expect(initialCustomSsoIsolation).toEqual({
+        configuration: {
+          customSsoConfig: customSsoIsolationConfig,
+          customSsoConfigVersion: 1,
+          customSsoEnabled: true,
+          customSsoSecretHash: expect.any(String),
+        },
+        runtime: {
+          clientCode: clientId,
+          customSsoConfig: customSsoIsolationConfig,
+          customSsoConfigVersion: 1,
+          customSsoEnabled: true,
+        },
+      });
+      expect(
+        initialCustomSsoIsolation.configuration.customSsoSecretHash,
+      ).not.toHaveLength(0);
 
+      const sessionKernelNamespace = `sess:oidc-real-entry:${randomUUID().replaceAll("-", "")}:`;
+      ownedRedisMarkers.add(sessionKernelNamespace);
       const { privateKey } = await generateKeyPair(
         "RS256",
         { modulusLength: 2048, extractable: true },
@@ -532,16 +679,35 @@ describe("oIDC provider explicit external entry", () => {
       const result = await externalEntry.run({
         start(context) {
           logCapture?.dispose();
+          const environment = createEntryEnvironment(
+            context,
+            currentJwkJson,
+            sessionKernelNamespace,
+          );
+          productionOwners ??= createProductionOwnerSeed({
+            dbClient,
+            environment,
+            redis: redis.writer,
+          });
+          observerOwners ??= createProductionOwnerSeed({
+            dbClient,
+            environment,
+            redis: redis.observer,
+          });
+          ownerSeed ??= seedExternalSessionState(productionOwners);
           const child = spawnOwnedProcessTree({
             executable: process.execPath,
             args: ["--import", "tsx", "src/index.ts"],
             cwd: oidcRoot,
-            env: createEntryEnvironment(context, currentJwkJson, sessionKernelNamespace),
+            env: environment,
           });
           logCapture = createBoundedProcessLogCapture(child, { maxBytes: 64 * 1024 });
           return child;
         },
         async probe(context, signal) {
+          if (ownerSeed === undefined)
+            throw new FatalReadinessError("OIDC production owner seed did not start");
+          const seeded = await ownerSeed;
           const origin = entryOrigin(context);
           const issuer = `${origin}/oidc`;
           const discovery = await probeDiscovery(origin, issuer, signal);
@@ -550,9 +716,22 @@ describe("oIDC provider explicit external entry", () => {
           const protocol = await runPublicProtocolFlow({
             issuer,
             origin,
+            principalToken: seeded.principalToken,
+            registerOwnedProtocolToken(token) {
+              ownedRedisMarkers.add(token);
+            },
             signal,
             onCodeIssued: async () => {
-              await redis.writer.set(factsKey, subjectFacts(changedName));
+              if (productionOwners === undefined)
+                throw new FatalReadinessError("OIDC production owners were unavailable");
+              const publication = await productionOwners.subjectFacts.publish(
+                subjectFacts(changedName),
+              );
+              if (publication.status !== "published") {
+                throw new FatalReadinessError(
+                  `OIDC Subject Facts update failed: ${publication.status}`,
+                );
+              }
             },
           });
           return { discovery, protocol };
@@ -585,22 +764,46 @@ describe("oIDC provider explicit external entry", () => {
       expect(result.protocol.idTokenClaims).not.toHaveProperty("iam:employments");
       expect(result.protocol.idTokenClaims).not.toHaveProperty("iam:authorization");
       expect(JSON.stringify(result.protocol)).not.toContain(changedName);
-      expect(await redis.writer.get(customSsoKey)).toBe(customSsoCacheSentinel);
-
-      const [isolatedClient] = await sql<{
-        custom_sso_config_version: number;
-        custom_sso_enabled: boolean;
-        custom_sso_secret_hash: string;
-      }[]>`
-        SELECT custom_sso_enabled, custom_sso_secret_hash, custom_sso_config_version
-        FROM client
-        WHERE client_code = ${clientId}
-      `;
-      expect(isolatedClient).toEqual({
-        custom_sso_enabled: true,
-        custom_sso_secret_hash: customSsoHashSentinel,
-        custom_sso_config_version: 7,
+      if (observerOwners === undefined || ownerSeed === undefined)
+        throw new Error("OIDC production owner observer was not initialized");
+      const seeded = await ownerSeed;
+      const [observedAccess] = await observerOwners.subjectAccessBootstrap.inspectMany([
+        subjectIdentifier,
+      ]);
+      const [observedFacts] = await observerOwners.subjectFactsInspector.inspectMany([
+        subjectIdentifier,
+      ]);
+      expect(observedAccess).toMatchObject({
+        status: "valid",
+        record: { state: "enabled", subjectIdentifier },
       });
+      expect(observedFacts).toMatchObject({
+        status: "valid",
+        record: {
+          profile: { name: changedName },
+          sourceDirtyVersion,
+          subjectIdentifier,
+        },
+      });
+      expect(await observerOwners.clientRuntimeCache.get(clientId)).toMatchObject({
+        client_id: clientId,
+        oidc_config_version: 1,
+      });
+      expect(
+        await observerOwners.sessionKernel.resolvePrincipalSession(seeded.principalToken),
+      ).toMatchObject({ status: "revoked" });
+      expect(await customSsoIsolation.observe())
+        .toEqual(initialCustomSsoIsolation);
+      const ownerMarkers = [...ownedRedisMarkers];
+      const unownedAddedKeyCount = [...await inventoryRedisKeys(redisInventory)]
+        .filter(key => !existingKeys.has(key))
+        .filter(key => !ownerMarkers.some(marker => key.includes(marker)))
+        .length;
+      if (unownedAddedKeyCount > 0) {
+        throw new Error(
+          `OIDC composition left ${unownedAddedKeyCount} newly added Redis keys outside its owned markers`,
+        );
+      }
 
       const output = logCapture?.snapshot() ?? "";
       const observation = output
@@ -627,7 +830,6 @@ describe("oIDC provider explicit external entry", () => {
         subjectIdentifier,
         username,
         originalName,
-        customSsoHashSentinel,
         "user-profile:subject-facts:",
       ]) {
         expect(serializedObservation).not.toContain(sensitiveValue);

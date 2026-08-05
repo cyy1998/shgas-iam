@@ -26,6 +26,7 @@ const adminApiCanonicalRoots = {
   "unit": "src",
   "integration/component": "test-integration/component",
   "integration/process": "test-integration/process",
+  "integration/redis": "test-integration/redis",
 } as const;
 const apiRoot = join(repoRoot, "apps", "api");
 const apiOrdinaryCanonicalRoots = {
@@ -89,6 +90,7 @@ const postgresIntegrationPassThroughEnv = [
   "IAM_WORKER_TEST_DATABASE_URL",
 ];
 const redisIntegrationPassThroughEnv = [
+  "IAM_ADMIN_API_TEST_REDIS_URL",
   "IAM_API_CORE_CLEANUP_TEST_REDIS_URL",
   "IAM_API_CORE_TEST_REDIS_URL",
   "IAM_API_TEST_REDIS_URL",
@@ -108,6 +110,7 @@ const verifyScript = join(repoRoot, "scripts", "verify.mjs");
 const integrationResourceEnvNames = [
   "IAM_API_CORE_CLEANUP_TEST_REDIS_URL",
   "IAM_API_CORE_TEST_REDIS_URL",
+  "IAM_ADMIN_API_TEST_REDIS_URL",
   "IAM_API_TEST_DATABASE_URL",
   "IAM_API_TEST_REDIS_URL",
   "IAM_DB_TEST_DATABASE_URL",
@@ -673,6 +676,9 @@ describe("test orchestration", () => {
     expect(rootPackage.scripts["test:unit:root"]).toBe(
       "bun test --max-concurrency=2 scripts/__tests__/architecture-guard.test.ts scripts/__tests__/eslint-config-equivalence.test.ts scripts/__tests__/test-orchestration.test.ts scripts/__tests__/tooling-performance.test.ts",
     );
+    expect(rootPackage.scripts["test:eslint-diagnostic-baseline"]).toBe(
+      "bun test scripts/tooling-performance/eslint-diagnostic-baseline.test.ts",
+    );
     expect(rootPackage.scripts["test:integration:component"])
       .toBe("turbo test:integration:component --concurrency=2");
     expect(rootPackage.scripts["test:integration:process"])
@@ -833,10 +839,14 @@ describe("test orchestration", () => {
       dependsOn: ["transit"],
       cache: false,
       passThroughEnv: [
+        "IAM_ADMIN_API_TEST_REDIS_URL",
+        "IAM_API_CORE_CLEANUP_TEST_REDIS_URL",
+        "IAM_API_CORE_TEST_REDIS_URL",
         "IAM_API_TEST_DATABASE_URL",
         "IAM_API_TEST_REDIS_URL",
         "IAM_OIDC_PROVIDER_TEST_DATABASE_URL",
         "IAM_OIDC_PROVIDER_TEST_REDIS_URL",
+        "IAM_USER_PROFILE_TEST_REDIS_URL",
       ],
     });
     expect(turbo.tasks["test:integration:redis"]).toEqual({
@@ -1039,8 +1049,8 @@ describe("test orchestration", () => {
 
     const expectedCounts = new Map([
       ["unit", 9],
-      ["integration/component", 9],
-      ["integration/process", 5],
+      ["integration/component", 11],
+      ["integration/process", 3],
       ["integration/composition", 1],
       ["integration/redis", 1],
     ]);
@@ -1175,10 +1185,10 @@ describe("test orchestration", () => {
       listBunNarrowTestFiles(apiCoreRoot, root),
     ]));
     const expectedCounts = new Map([
-      ["unit", 14],
-      ["integration/component", 21],
-      ["integration/process", 3],
-      ["integration/redis", 4],
+      ["unit", 15],
+      ["integration/component", 20],
+      ["integration/process", 2],
+      ["integration/redis", 5],
     ]);
     const windowsJobSmokePath = join(
       apiCoreRoot,
@@ -1227,17 +1237,11 @@ describe("test orchestration", () => {
     expect(actualByProfile.get("integration/component")).toContain(
       "test-integration/component/process-smoke-harness.integration.test.ts",
     );
-    expect(actualByProfile.get("integration/component")).toContain(
-      "test-integration/component/process-smoke-redis-server.integration.test.ts",
-    );
     expect(actualByProfile.get("integration/redis")).toContain(
       "test-integration/redis/login-restriction.integration.test.ts",
     );
     expect(actualByProfile.get("integration/process")).toContain(
       "test-integration/process/process-smoke-windows-job.integration.test.ts",
-    );
-    expect(actualByProfile.get("integration/process")).toContain(
-      "test-integration/process/process-smoke-redis-server.integration.test.ts",
     );
     expect(existsSync(windowsJobSmokePath)).toBe(true);
     expect(existsSync(oidcWindowsJobSmokePath)).toBe(false);
@@ -1346,8 +1350,9 @@ describe("test orchestration", () => {
       join(apiRoot, apiProcessCanonicalRoot, "entry.integration.test.ts"),
       "utf8",
     );
-
-    expect(actual).toEqual(["test-integration/process/entry.integration.test.ts"]);
+    expect(actual).toEqual([
+      "test-integration/process/entry.integration.test.ts",
+    ]);
     expect(apiPackage.scripts["test:integration:process"])
       .toBe("bun test --max-concurrency=1 test-integration/process");
     expect(entryProcessSource).toContain("createProcessSmokeEnvironment({");
@@ -1380,16 +1385,23 @@ describe("test orchestration", () => {
       .toBe("bun test --max-concurrency=1 test-integration/composition");
     expect(entryCompositionSource).toContain("IAM_API_TEST_DATABASE_URL");
     expect(entryCompositionSource).toContain("IAM_API_TEST_REDIS_URL");
+    expect(entryCompositionSource).toContain(
+      "@iam/api-core/testing/custom-sso-cleanup-redis-harness",
+    );
     expect(compositionTask).toMatchObject({
       command: "bun test --max-concurrency=1 test-integration/composition",
       resolvedTaskDefinition: {
         cache: false,
         dependsOn: ["transit"],
         passThroughEnv: [
+          "IAM_ADMIN_API_TEST_REDIS_URL",
+          "IAM_API_CORE_CLEANUP_TEST_REDIS_URL",
+          "IAM_API_CORE_TEST_REDIS_URL",
           "IAM_API_TEST_DATABASE_URL",
           "IAM_API_TEST_REDIS_URL",
           "IAM_OIDC_PROVIDER_TEST_DATABASE_URL",
           "IAM_OIDC_PROVIDER_TEST_REDIS_URL",
+          "IAM_USER_PROFILE_TEST_REDIS_URL",
         ],
       },
     });
@@ -1439,7 +1451,6 @@ describe("test orchestration", () => {
     );
 
     expect(actual).toEqual([
-      "test-integration/redis/admin-client-cache.integration.test.ts",
       "test-integration/redis/custom-sso-client-runtime.integration.test.ts",
     ]);
     expect(apiPackage.scripts["test:integration:redis"])
@@ -1469,12 +1480,25 @@ describe("test orchestration", () => {
     const processTask = processDryRun.tasks.find(
       (task: { taskId: string }) => task.taskId === "@iam/admin-api#test:integration:process",
     );
+    const redisDryRun = runPackageTaskDryRun("@iam/admin-api", "test:integration:redis");
+    const redisTask = redisDryRun.tasks.find(
+      (task: { taskId: string }) => task.taskId === "@iam/admin-api#test:integration:redis",
+    );
     const processRoot = join(adminApiRoot, "test-integration", "process");
     const entrySmokeSource = readFileSync(join(processRoot, "entry.integration.test.ts"), "utf8");
+    const redisHarnessSource = readFileSync(
+      join(adminApiRoot, "test-integration", "redis", "redis-test-harness.ts"),
+      "utf8",
+    );
+    const clientCacheSource = readFileSync(
+      join(adminApiRoot, "test-integration", "redis", "client-cache.integration.test.ts"),
+      "utf8",
+    );
 
     expect(actualByProfile.get("unit")).toHaveLength(7);
     expect(actualByProfile.get("integration/component")).toHaveLength(25);
-    expect(actualByProfile.get("integration/process")).toHaveLength(2);
+    expect(actualByProfile.get("integration/process")).toHaveLength(1);
+    expect(actualByProfile.get("integration/redis")).toHaveLength(1);
     const allFiles = [...actualByProfile.values()].flat();
     expect(allFiles).toHaveLength(34);
     expect(new Set(allFiles).size).toBe(allFiles.length);
@@ -1484,6 +1508,8 @@ describe("test orchestration", () => {
       .toBe("bun test --max-concurrency=2 test-integration/component");
     expect(adminApiPackage.scripts["test:integration:process"])
       .toBe("bun test --max-concurrency=1 test-integration/process");
+    expect(adminApiPackage.scripts["test:integration:redis"])
+      .toBe("bun test --max-concurrency=1 test-integration/redis");
     expect(adminApiPackage.scripts.lint)
       .toBe("eslint src test-integration test-smoke app.config.ts eslint.config.js");
     expect(adminApiPackage.scripts["lint:fix"])
@@ -1491,27 +1517,38 @@ describe("test orchestration", () => {
     expect(adminApiTsConfigSource).toContain(
       "\"include\": [\"src/**/*.ts\", \"test-integration/**/*.ts\", \"test-smoke/**/*.ts\", \"app.config.ts\", \"eslint.config.js\"]",
     );
-    expect(existsSync(join(
-      adminApiRoot,
-      "test-smoke",
-      "client-cache-invalidation.composition-smoke.ts",
-    )))
-      .toBe(true);
-    expect(listBunNarrowTestFiles(
-      adminApiRoot,
-      "test-integration/process",
-    ))
-      .not
-      .toContain("test-integration/process/client-cache-invalidation.composition-smoke.ts");
     expect(entrySmokeSource).toContain("createProcessSmokeEnvironment({");
     expect(entrySmokeSource).toContain("args: [\"--no-env-file\", \"run\", \"src/index.ts\"]");
     expect(entrySmokeSource).toContain("/admin/doc");
     expect(entrySmokeSource).not.toContain("...process.env");
+    expect(redisHarnessSource).toContain("IAM_ADMIN_API_TEST_REDIS_URL");
+    expect(redisHarnessSource).not.toContain("IAM_ADMIN_API_REDIS_HOST");
+    expect(clientCacheSource).toContain("createCustomSsoClientRuntimeReader");
+    expect(clientCacheSource).toContain("spawnOwnedProcessTree");
+    expect(clientCacheSource).toContain("client-cache-invalidation.runtime-smoke.ts");
+    expect(clientCacheSource).toContain("harness.inventoryKeys()");
+    expect(clientCacheSource).not.toContain("createAdminClientCache");
+    expect(clientCacheSource).not.toContain("customSsoClientRuntimeCacheKey");
+    const cacheEntrySource = readFileSync(
+      join(adminApiRoot, "test-smoke", "client-cache-invalidation.runtime-smoke.ts"),
+      "utf8",
+    );
+    expect(cacheEntrySource).toContain("createAdminApiRuntime");
+    expect(cacheEntrySource).not.toContain("createAdminApiComposition");
+    expect(cacheEntrySource).not.toContain("userProfileQueue");
     expect(processTask).toMatchObject({
       command: "bun test --max-concurrency=1 test-integration/process",
       resolvedTaskDefinition: {
         cache: false,
         dependsOn: ["transit"],
+      },
+    });
+    expect(redisTask).toMatchObject({
+      command: "bun test --max-concurrency=1 test-integration/redis",
+      resolvedTaskDefinition: {
+        cache: false,
+        dependsOn: ["transit"],
+        passThroughEnv: redisIntegrationPassThroughEnv,
       },
     });
   }, 15_000);
@@ -1755,14 +1792,9 @@ describe("test orchestration", () => {
         expect(source).not.toContain(lifecyclePrimitive);
     }
 
-    const apiEntrySmokeSource = entrySmokeSources[1]!;
-    expect(apiEntrySmokeSource).toContain(
-      "@iam/api-core/testing/external-test-resources",
-    );
-    expect(apiEntrySmokeSource).toContain(
-      "await runWithOwnedTestResources(async ({ registerCleanup }) => {",
-    );
-    expect(apiEntrySmokeSource).toContain("await observer.close()");
+    for (const source of entrySmokeSources.slice(0, 2)) {
+      expect(source).toContain("REDIS_PORT: \"1\"");
+    }
   });
 
   test("classifies in-memory OpenAPI HTTP checks as ordinary component tests", () => {
@@ -1778,14 +1810,26 @@ describe("test orchestration", () => {
     expect(existsSync(join(adminApiComponentRoot, "openapi.integration.test.ts"))).toBe(true);
   });
 
-  test("classifies OIDC tests that listen on a real port as process integration", () => {
-    const testsRoot = join(oidcRoot, "test-integration", "process");
-    const listeningTests = readdirSync(testsRoot)
+  test("classifies fake-backed OIDC flows as component while server boundaries remain process", () => {
+    const componentRoot = join(oidcRoot, "test-integration", "component");
+    const processRoot = join(oidcRoot, "test-integration", "process");
+    const fakeBackedFlowTests = [
+      "authorization-lifecycle.integration.test.ts",
+      "token-flow.integration.test.ts",
+    ];
+    const listeningProcessTests = readdirSync(processRoot)
       .filter(file => file.endsWith(".test.ts"))
-      .filter(file => /\.\s*listen\s*\(/u.test(readFileSync(join(testsRoot, file), "utf8")));
+      .filter(file => /\.\s*listen\s*\(/u.test(readFileSync(join(processRoot, file), "utf8")))
+      .sort();
 
-    expect(listeningTests.length).toBeGreaterThan(0);
-    expect(listeningTests.every(file => file.endsWith(".integration.test.ts"))).toBe(true);
+    for (const file of fakeBackedFlowTests) {
+      expect(existsSync(join(componentRoot, file))).toBe(true);
+      expect(existsSync(join(processRoot, file))).toBe(false);
+    }
+    expect(listeningProcessTests).toEqual([
+      "http-server-logging.integration.test.ts",
+      "protocol.integration.test.ts",
+    ]);
   });
 
   test("runs verify stages in the declared order", () => {

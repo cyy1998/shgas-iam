@@ -167,6 +167,41 @@ export async function cleanupRedisKeysAddedSince(
   return addedKeys.length;
 }
 
+export async function cleanupRedisKeysMatchingOwnerMarkers(input: {
+  readonly diagnosticLabel: string;
+  readonly ownerMarkers: ReadonlySet<string>;
+  readonly redis: RedisKeyInventoryPort;
+}): Promise<void> {
+  const markers = [...input.ownerMarkers];
+  if (
+    markers.length === 0
+    || markers.some(marker => (
+      typeof marker !== "string"
+      || marker.length === 0
+      || marker.trim() !== marker
+    ))
+  ) {
+    throw new TypeError(
+      `${input.diagnosticLabel} cleanup requires non-empty trimmed owner markers`,
+    );
+  }
+  async function listOwnedKeys() {
+    return [...await inventoryRedisKeys(input.redis)]
+      .filter(key => markers.some(marker => key.includes(marker)))
+      .sort();
+  }
+
+  const ownedKeys = await listOwnedKeys();
+  if (ownedKeys.length > 0)
+    await input.redis.removeKeys(ownedKeys);
+  const remainingOwnedKeyCount = (await listOwnedKeys()).length;
+  if (remainingOwnedKeyCount > 0) {
+    throw new Error(
+      `${input.diagnosticLabel} cleanup left ${remainingOwnedKeyCount} owned Redis keys`,
+    );
+  }
+}
+
 function postgresDatabaseIdentity(parsed: URL) {
   return `${parsed.hostname.toLowerCase()}:${parsed.port || "5432"}/${
     decodeURIComponent(parsed.pathname.slice(1))
