@@ -11,13 +11,13 @@ implementation tickets，也不授权修改 production、test 或 tooling。
 ## Run
 
 ```text
-node .scratch/test-architecture-refactor-wayfinding/prototypes/07-executable-spec-and-ticket-shape/prototype.mjs
+node .scratch/archived/test-architecture-refactor-wayfinding/prototypes/07-executable-spec-and-ticket-shape/prototype.mjs
 ```
 
 非交互快照：
 
 ```text
-node .scratch/test-architecture-refactor-wayfinding/prototypes/07-executable-spec-and-ticket-shape/prototype.mjs --snapshot
+node .scratch/archived/test-architecture-refactor-wayfinding/prototypes/07-executable-spec-and-ticket-shape/prototype.mjs --snapshot
 ```
 
 交互键：`1`/`2`/`3`/`4` 切换 feature，`n` 切换 ticket，`l` 切换观察镜头，`q` 退出。每次切换都会完整重绘当前

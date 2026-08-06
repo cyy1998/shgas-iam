@@ -11,13 +11,13 @@ Gateway origin、真实自有 runtimes、可靠诊断与精确清理形成最低
 ## Run
 
 ```text
-node .scratch/test-architecture-refactor-wayfinding/prototypes/04-full-system-e2e-boundary/prototype.mjs
+node .scratch/archived/test-architecture-refactor-wayfinding/prototypes/04-full-system-e2e-boundary/prototype.mjs
 ```
 
 非交互快照：
 
 ```text
-node .scratch/test-architecture-refactor-wayfinding/prototypes/04-full-system-e2e-boundary/prototype.mjs --snapshot
+node .scratch/archived/test-architecture-refactor-wayfinding/prototypes/04-full-system-e2e-boundary/prototype.mjs --snapshot
 ```
 
 交互键：`1`/`2`/`3` 切换候选，`n` 切换观察场景，`q` 退出。每次切换都会完整重绘 ownership、flow、
