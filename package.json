@@ -24,6 +24,7 @@
     "test:integration:postgres": "turbo test:integration:postgres --concurrency=1",
     "test:integration:composition": "turbo test:integration:composition --concurrency=1",
     "test:integration:browser": "turbo test:integration:browser --concurrency=1",
+    "test:e2e": "turbo test:e2e --concurrency=1",
     "e2e:install": "pnpm --filter @iam/admin exec playwright install --with-deps chromium",
     "e2e:install:browsers": "pnpm --filter @iam/admin exec playwright install chromium",
     "typecheck": "turbo typecheck --concurrency=3",

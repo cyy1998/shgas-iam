@@ -3,7 +3,7 @@ import path from "node:path";
 import { describe, expect, it } from "bun:test";
 import { parse as parseYaml } from "yaml";
 import { renderEnvPlaceholders } from "../env";
-import { loadManifest } from "../manifest";
+import { loadManifest, packageRoot } from "../manifest";
 import { validateManifest } from "../validators";
 import { createManifestFile, sourcePluginConfig, sourceRoute, sourceUpstream } from "./test-helpers";
 
@@ -33,16 +33,28 @@ function getEntryNetwork(route: Record<string, unknown>) {
     ?.headers as Record<string, unknown> | undefined)?.set as Record<string, unknown> | undefined;
 }
 
-function expectSsoRoutesClassifyEntryNetwork(manifest: Awaited<ReturnType<typeof loadManifest>>, hosts: string[]) {
+function expectSsoRoutesClassifyEntryNetwork(
+  manifest: Awaited<ReturnType<typeof loadManifest>>,
+  matcher: { authorities: string[] } | { hosts: string[] },
+) {
   const routes = getSsoRoutes(manifest);
 
   expect(routes).toHaveLength(2);
-  expect(routes.map(route => route.hosts).flat().sort()).toEqual([...hosts].sort());
+  if ("hosts" in matcher) {
+    expect(routes.map(route => route.hosts).flat().sort())
+      .toEqual([...matcher.hosts].sort());
+    expect(routes.some(route => route.hosts === undefined)).toBe(false);
+  }
+  else {
+    expect(routes.map(route => route.vars).sort()).toEqual(matcher.authorities
+      .map(authority => [["http_host", "==", authority]])
+      .sort());
+    expect(routes.every(route => route.hosts === undefined)).toBe(true);
+  }
   expect(routes.every(route => route.service_id === `iam.${manifest.scope.env}`)).toBe(true);
   expect(routes.every(route => route.upstream_id === `iam.api.${manifest.scope.env}`)).toBe(true);
   expect(routes.every(route => route.plugin_config_id === `iam.sso-api-plugin.${manifest.scope.env}`)).toBe(true);
   expect(routes.some(route => route.id === `iam.sso.${manifest.scope.env}`)).toBe(false);
-  expect(routes.some(route => route.hosts === undefined)).toBe(false);
   expect(routes.map(route => getEntryNetwork(route)?.["X-IAM-Entry-Network"]).sort()).toEqual(["external", "internal"]);
   expect(routes.every(route => (route.plugins as Record<string, unknown> | undefined)?.cors === undefined)).toBe(true);
 
@@ -70,8 +82,13 @@ function expectTokenExchangeToExcludeBrowserCors(manifest: Awaited<ReturnType<ty
   const browserRoutes = getSsoRoutes(manifest);
 
   expect(tokenRoutes).toHaveLength(2);
-  expect(tokenRoutes.map(route => route.hosts).flat().sort())
-    .toEqual(browserRoutes.map(route => route.hosts).flat().sort());
+  expect(tokenRoutes.map(route => JSON.stringify({
+    hosts: route.hosts,
+    vars: route.vars,
+  })).sort()).toEqual(browserRoutes.map(route => JSON.stringify({
+    hosts: route.hosts,
+    vars: route.vars,
+  })).sort());
   expect(tokenRoutes.map(route => getEntryNetwork(route)?.["X-IAM-Entry-Network"]).sort())
     .toEqual(["external", "internal"]);
 
@@ -140,13 +157,45 @@ describe("apisix manifest validation", () => {
     })).toBe(true);
   });
 
-  it("splits dev IAM SSO routes by host and injects entry network", async () => {
+  it("splits dev IAM SSO routes by canonical authority and injects entry network", async () => {
     const manifest = await loadManifest("dev:iam");
 
-    expectSsoRoutesClassifyEntryNetwork(manifest, [
+    expectSsoRoutesClassifyEntryNetwork(manifest, { authorities: [
       "${IAM_SSO_EXTERNAL_HOST}",
       "${IAM_SSO_INTERNAL_HOST}",
-    ]);
+    ] });
+  });
+
+  it("matches a rendered dev canonical authority including its dynamic port", async () => {
+    const manifest = await loadManifest("e2e:iam", path.join(
+      packageRoot,
+      "manifests/dev/iam.yaml",
+    ), {
+      renderEnv: true,
+      env: {
+        APISIX_OTEL_COLLECTOR_ENDPOINT: "alloy:4318",
+        DEV_IAM_ADMIN_API_UPSTREAM_HOST: "admin-api",
+        DEV_IAM_ADMIN_API_UPSTREAM_PORT: "3001",
+        DEV_IAM_ADMIN_FRONTEND_UPSTREAM_HOST: "admin",
+        DEV_IAM_ADMIN_FRONTEND_UPSTREAM_PORT: "80",
+        DEV_IAM_API_UPSTREAM_HOST: "api",
+        DEV_IAM_API_UPSTREAM_PORT: "3000",
+        DEV_IAM_OIDC_PROVIDER_UPSTREAM_HOST: "oidc-provider",
+        DEV_IAM_OIDC_PROVIDER_UPSTREAM_PORT: "3002",
+        DEV_IAM_SSO_FRONTEND_UPSTREAM_HOST: "sso",
+        DEV_IAM_SSO_FRONTEND_UPSTREAM_PORT: "80",
+        IAM_SSO_EXTERNAL_HOST: "127.0.0.1:43123",
+        IAM_SSO_INTERNAL_HOST: "127.0.0.1:43123",
+      },
+    });
+
+    const routes = manifest.resources.routes.filter(route =>
+      route.uri === "/sso/*" || route.uri === "/sso/token");
+    expect(routes).toHaveLength(4);
+    expect(routes.every(route => route.hosts === undefined)).toBe(true);
+    expect(routes.every(route => JSON.stringify(route.vars) === JSON.stringify([
+      ["http_host", "==", "127.0.0.1:43123"],
+    ]))).toBe(true);
   });
 
   it("renders prod IAM SSO hosts and injects entry network enum values", async () => {
@@ -173,10 +222,10 @@ describe("apisix manifest validation", () => {
 
     expect(validateManifest(manifest)).toEqual([]);
     expectRootRedirectToSsoLogin(manifest);
-    expectSsoRoutesClassifyEntryNetwork(manifest, [
+    expectSsoRoutesClassifyEntryNetwork(manifest, { hosts: [
       "iam.example.com",
       "iam.internal.example.com",
-    ]);
+    ] });
   });
 
   it("keeps token exchange outside browser CORS while authorize and callback retain it", async () => {

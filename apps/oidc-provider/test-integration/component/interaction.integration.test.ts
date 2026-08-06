@@ -108,6 +108,71 @@ describe("oIDC interaction Subject Access protocol boundary", () => {
   });
 });
 
+describe("oIDC interaction browser binding cookie", () => {
+  it("honors the explicit local HTTP cookie setting while retaining the OIDC path contract", async () => {
+    const result = {
+      body: "",
+      headers: {} as Record<string, string>,
+      statusCode: 200,
+    };
+    const response = {
+      end(body = "") {
+        result.body = String(body);
+        result.statusCode = response.statusCode;
+      },
+      setHeader(name: string, value: string) {
+        result.headers[name.toLowerCase()] = value;
+      },
+      statusCode: 200,
+    };
+    const handler = createOidcInteractionHandler({
+      clients: {
+        findRuntime: vi.fn(async () => ({ oidc_config_version: 1 })),
+      },
+      env: {
+        nodeEnv: "production",
+        oidc: {
+          cookieSecure: false,
+          globalSessionCookie: "global_session",
+          interactionTtlSeconds: 600,
+          issuer: "http://127.0.0.1:43123/oidc",
+          publicOrigin: "http://127.0.0.1:43123",
+          ssoLoginPath: "/portal/login",
+        },
+      },
+      globalSessions: {
+        renew: vi.fn(),
+        resolve: vi.fn(async () => null),
+      },
+      provider: {
+        interactionDetails: vi.fn(async () => ({
+          params: { client_id: "client-a" },
+          prompt: { name: "login" },
+          uid: "interaction-a",
+        })),
+      },
+      providerSessions: {
+        bind: vi.fn(),
+        stage: vi.fn(),
+      },
+      returnHandles: {
+        consume: vi.fn(),
+        create: vi.fn(async () => "return-handle"),
+      },
+    } as never);
+
+    await handler.handleInteraction(
+      { headers: {}, url: "/oidc/interaction/interaction-a" } as never,
+      response as never,
+    );
+
+    expect(result.statusCode).toBe(302);
+    expect(result.headers["set-cookie"]).toMatch(
+      /^oidc_interaction_binding=[\w-]{43}; Path=\/oidc; HttpOnly; SameSite=Lax; Max-Age=600$/u,
+    );
+  });
+});
+
 function createSubjectAccessInteraction(error: Error, cookie: string) {
   const result = {
     body: "",

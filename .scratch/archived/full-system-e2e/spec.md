@@ -31,6 +31,11 @@ host 直连 app/APISIX admin 只用于 orchestrator readiness 或失败诊断，
 Journey 实际经过的 repo-owned runtimes 全部真实。CAPTCHA 显式关闭；不选择 SMS、WeChat、邮件、分析或外部身份源路径；
 Custom SSO seed 使用 `orcas.enabled=false`。只允许关闭或替代 journey 明确不经过的第三方边。
 
+Full-system E2E 只接受本 feature 固定或按 run 生成的 synthetic data 与 synthetic credentials。Compose、runtime、seed、
+journey 和测试配置不得接受 production endpoint、production credential 或真实 PII，也不得回退到 development/production
+配置。Run-scoped 临时 artifacts 因此可以原样包含 synthetic token、password、key、trace、screenshot 与 video；其治理边界是
+artifact directory、retention 和访问控制，而不是内容脱敏。
+
 ### 单一 Gateway origin
 
 浏览器、Playwright request 与 host-side readiness 只使用
@@ -55,9 +60,8 @@ Orchestrator 使用固定顺序，不公开可编程 phase graph：
    两条 journey 的领域状态；
 6. 仅在全部 gates 通过后运行 Playwright；任何失败先采集诊断，再进入同一幂等 cleanup。
 
-Descriptor 至少记录 exact project、动态 port、canonical origin、resource labels 与 artifact directory，不记录 password、
-token 或 secret。Seed 只返回 run-scoped 非敏感引用，不公开通用 fixture DSL，不复制 Redis key、serializer、TTL、index
-或 Lua。
+Descriptor 至少记录 exact project、动态 port、canonical origin、resource labels 与 artifact directory，不记录 credential。
+Seed 只返回 run-scoped synthetic 引用，不公开通用 fixture DSL，不复制 Redis key、serializer、TTL、index 或 Lua。
 
 ### 两条首期 journey
 
@@ -75,13 +79,18 @@ endpoint 和 `/oidc/me`。RP 是系统外调用方，可以由测试拥有；aut
 
 ### 诊断、清理与恢复
 
-Migration、seed、readiness、journey、timeout、assertion 或 cleanup 失败时，先保存 Compose `ps`/health、各服务有界且脱敏的
-最近日志、Gateway render/route 状态、migration/seed receipt 与已有 Playwright trace/screenshot/video，再清理。
+Migration、seed、readiness、journey、timeout、assertion 或 cleanup 失败时，尽量保存 Compose `ps`/health、各服务有界最近日志、
+Gateway render/route 状态、migration/seed receipt 与已有 Playwright trace/screenshot/video，再清理。Diagnostics 只限制日志总量、
+每服务字节和 Playwright 文件数/单文件/总量，不做 JSON/YAML/JWK/PEM/credential 内容分类或脱敏。Playwright raw evidence 原样
+保留在 run-scoped artifact directory，metadata index 只辅助枚举，不能替代或删除原件；路径越界与 symlink 必须 fail closed。
 
-正常完成、失败、timeout 与可捕获 signal 都调用同一 cleanup，只对 descriptor 中 exact project 执行
-`docker compose -p <exact-project> down -v --remove-orphans`。Cleanup 幂等但 failure 必须使整次运行非零，不能被吞掉或
-降级为 warning。恢复入口只接受明确 descriptor/project，不扫描模糊前缀、不执行全局 prune，也不承诺 SIGKILL/宿主崩溃后
-自动恢复。
+正常完成、失败、timeout 与可捕获 signal 都尝试同一 best-effort cleanup，只对 descriptor 中 exact project 执行
+`docker compose -p <exact-project> down -v --remove-orphans --rmi local` 或等价的单次固定命令。Signal/timeout 时先对当前 child/tree
+做一次 best-effort 终止（Windows 可用一次 `taskkill /T /F`；POSIX 可终止 process group 或 direct child），有界等待后继续 lifecycle；
+不做 PID identity snapshot、CIM fallback、身份确认或 typed unconfirmed-termination gate。Cleanup failure 必须使整次运行非零并保留
+descriptor，但允许残留；正常完成应尝试 clean，四类 Docker inventory/query/归零不再是成功硬门禁。恢复入口只接受明确
+descriptor/project 并重试同一 exact-project cleanup，不扫描模糊前缀、不执行全局 prune、不删除未知资源，也不承诺
+SIGKILL/宿主崩溃后自动恢复。
 
 ### 命令与文档所有权
 
@@ -96,27 +105,30 @@ generated artifact 边界对应的 Current 测试架构、命令文档和仓库�
 - Run descriptor 在任何资源创建前落盘且不含 secret；所有资源和 cleanup 都绑定 exact project。
 - 浏览器只看见单一 `127.0.0.1` Gateway origin；issuer、SSO origin 与 redirects 使用同一完整 origin。
 - 两条 journey 经过的 repo-owned core 全部真实；只替代明确位于 journey 外的第三方边。
-- 任何失败先保存 bounded、脱敏诊断，再 cleanup；cleanup failure 始终传播为顶层非零。
+- 所有运行只使用 synthetic data/credentials，不接受 production endpoint、credential 或真实 PII。
+- 任何失败先尽量保存 bounded 原始诊断与 raw Playwright evidence，再尝试 best-effort cleanup；cleanup failure 始终传播为顶层非零。
+- Signal/timeout 或 cleanup failure 后允许 exact-project 残留；descriptor 必须保留供显式 recovery。
 - `test:e2e` 只在 lifecycle 与两条 journey 全部完整后公开。
-- 每张中间 ticket 从空环境运行自己的完整 slice，并精确清理本 run project。
+- 每张中间 ticket 从空环境运行自己的完整 slice；正常完成尝试清理本 run project，异常后允许显式 recovery。
 - 首期只有固定拓扑，不建立 plugin platform、janitor、run registry、resume/retry 或任意 service composition。
 
 ## 验收标准
 
 - 空 project volumes 上真实 migrations、局部 seed、全部 runtime readiness 与 Gateway route probes 通过。
 - Admin Custom SSO 与 OIDC PKCE 两条 journey 都从 canonical origin 走真实登录、Session/Cookie、协议和 owner persistence。
-- 成功、assertion failure、migration/seed/readiness failure、timeout、可捕获 signal 与 descriptor recovery 都只清理本 run
-  资源，并在 cleanup failure 时非零。
-- Artifacts 与 descriptor 不泄漏 password、token、secret、完整敏感 payload 或无界日志。
+- 成功、assertion failure、migration/seed/readiness failure、timeout 与可捕获 signal 都尝试清理本 run 资源；cleanup failure 非零并
+  保留 descriptor，显式 recovery 只重试 exact target，异常路径允许残留。
+- Compose/runtime/seed/journey 只使用 synthetic data 与 credentials；descriptor 不含 credential，artifacts 保持有界并可原样保留
+  synthetic password、token、key、trace、screenshot 与 video。
 - Root `test:e2e` 从第一次出现起即完整可运行；缺 Docker/browser/config 时在创建资源前明确失败。
 - Current 文档准确描述 E2E owner、命令、资源、diagnostics 与 artifact 边界，未宣称 Linux/CI adoption。
 
 ## 测试决策
 
 - Lifecycle contract tests 对 descriptor-before-resource、phase/order、migration failure、readiness timeout、signal、诊断顺序、
-  cleanup failure 与 exact-project inventory 注入可控失败。
-- 每个中间 ticket 使用 workspace-local command 从空 project 运行完整 slice，结束后核对本 run container/network/volume
-  均被清理。
+  cleanup failure 与 exact descriptor/project recovery 注入可控失败；signal/timeout 允许残留。
+- 每个中间 ticket 使用 workspace-local command 从空 project 运行完整 slice；正常完成核对 cleanup 已尝试，异常场景通过明确
+  descriptor/project 运行 recovery，不把四类资源 inventory=0 设为硬断言。
 - Journey 用公开 UI/API/OIDC 结果验收，不直连内部 persistence 作为业务断言；owner read-back 只用于 seed contract。
 - 每票运行 workspace lint/typecheck、最高层相关 contract/journey 与 `git diff --check`，不反复运行全仓 `pnpm verify`。
 - 最后一票从干净环境无 retry 运行 `pnpm test:e2e` 一次，并运行 root orchestration tests、`pnpm check:docs` 与

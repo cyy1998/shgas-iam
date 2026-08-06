@@ -249,8 +249,11 @@ routes:
   - key: sso-token-external
     desc: IAM server-to-server Custom SSO token exchange through external dev host without browser CORS
     uri: /sso/token
-    hosts:
-      - ${IAM_SSO_EXTERNAL_HOST}
+    vars:
+      -
+        - http_host
+        - ==
+        - ${IAM_SSO_EXTERNAL_HOST}
     plugins:
       prometheus:
         prefer_name: true
@@ -265,8 +268,11 @@ routes:
   - key: sso-token-internal
     desc: IAM server-to-server Custom SSO token exchange through internal dev host without browser CORS
     uri: /sso/token
-    hosts:
-      - ${IAM_SSO_INTERNAL_HOST}
+    vars:
+      -
+        - http_host
+        - ==
+        - ${IAM_SSO_INTERNAL_HOST}
     plugins:
       prometheus:
         prefer_name: true
@@ -281,8 +287,11 @@ routes:
   - key: sso-external
     desc: IAM SSO tier through external dev host
     uri: /sso/*
-    hosts:
-      - ${IAM_SSO_EXTERNAL_HOST}
+    vars:
+      -
+        - http_host
+        - ==
+        - ${IAM_SSO_EXTERNAL_HOST}
     plugins:
       prometheus:
         prefer_name: true
@@ -296,8 +305,11 @@ routes:
   - key: sso-internal
     desc: IAM SSO tier through internal dev host
     uri: /sso/*
-    hosts:
-      - ${IAM_SSO_INTERNAL_HOST}
+    vars:
+      -
+        - http_host
+        - ==
+        - ${IAM_SSO_INTERNAL_HOST}
     plugins:
       prometheus:
         prefer_name: true

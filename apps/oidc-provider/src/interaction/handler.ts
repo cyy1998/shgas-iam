@@ -86,7 +86,7 @@ export function createOidcInteractionHandler(deps: CreateOidcInteractionHandlerD
       return failClosed(response);
     const loginUrl = new URL(deps.env.oidc.ssoLoginPath, deps.env.oidc.publicOrigin);
     loginUrl.searchParams.set("oidcReturn", handle);
-    const secure = deps.env.nodeEnv === "production" ? "; Secure" : "";
+    const secure = deps.env.oidc.cookieSecure ? "; Secure" : "";
     redirect(
       response,
       loginUrl.href,

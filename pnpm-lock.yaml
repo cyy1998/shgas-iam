@@ -533,6 +533,49 @@ importers:
         specifier: npm:@typescript/typescript6@6.0.2
         version: '@typescript/typescript6@6.0.2'
 
+  e2e/system:
+    dependencies:
+      '@iam/api-core':
+        specifier: workspace:*
+        version: link:../../packages/api-core
+      '@iam/contracts':
+        specifier: workspace:*
+        version: link:../../packages/contracts
+      '@iam/db':
+        specifier: workspace:*
+        version: link:../../packages/db
+      '@iam/role-assignment-resolution':
+        specifier: workspace:*
+        version: link:../../packages/role-assignment-resolution
+      '@iam/user-profile-read-model':
+        specifier: workspace:*
+        version: link:../../packages/user-profile-read-model
+      drizzle-orm:
+        specifier: 1.0.0-rc.2
+        version: 1.0.0-rc.2(bun-types@1.3.14)(postgres@3.4.9)(zod@4.4.3)
+      ioredis:
+        specifier: ^5.11.1
+        version: 5.11.1
+    devDependencies:
+      '@iam/eslint-config':
+        specifier: workspace:*
+        version: link:../../packages/eslint-config
+      '@playwright/test':
+        specifier: ^1.61.1
+        version: 1.61.1
+      '@types/bun':
+        specifier: latest
+        version: 1.3.14
+      '@typescript/native':
+        specifier: npm:typescript@7.0.2
+        version: typescript@7.0.2
+      eslint:
+        specifier: ^10.7.0
+        version: 10.7.0(jiti@2.7.0)
+      typescript:
+        specifier: npm:@typescript/typescript6@6.0.2
+        version: '@typescript/typescript6@6.0.2'
+
   gateway:
     dependencies:
       commander:

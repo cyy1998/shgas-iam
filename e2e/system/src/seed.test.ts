@@ -1,0 +1,160 @@
+import type {
+  E2EScenarioOwner,
+  E2EScenarioReferences,
+} from "./seed.ts";
+import { CustomSsoClientMode, OidcClientType } from "@iam/contracts";
+import { describe, expect, test } from "bun:test";
+import { seedE2EScenario } from "./seed.ts";
+
+describe("E2E scenario seed", () => {
+  test("establishes the fixed scenario through its owner and returns only run-scoped references", async () => {
+    const established: Parameters<E2EScenarioOwner["establish"]>[0][] = [];
+    const owner: E2EScenarioOwner = {
+      async establish(input) {
+        established.push(input);
+      },
+      async readBack(references) {
+        return completeReadBack(references);
+      },
+    };
+
+    const result = await seedE2EScenario({
+      adminPassword: "SYNTHETIC-PASSWORD-ONLY-FOR-E2E",
+      canonicalOrigin: "http://127.0.0.1:43123",
+      owner,
+      random: { uuid: () => "3b766c91-1daa-4c09-89e4-ea87ad123456" },
+      runId: "20260806123000000-a1b2c3d4",
+    });
+
+    expect(result).toEqual({
+      version: 1,
+      runId: "20260806123000000-a1b2c3d4",
+      canonicalOrigin: "http://127.0.0.1:43123",
+      adminSubjectIdentifier: "3b766c91-1daa-4c09-89e4-ea87ad123456",
+      adminUsername: "e2e-admin-123000000-a1b2c3d4",
+      organizationCode: "e2e-org-123000000-a1b2c3d4",
+      positionCode: "e2e-pos-123000000-a1b2c3d4",
+      adminRoleCode: "e2e-role-123000000-a1b2c3d4",
+      adminClientCode: "e2e-admin-123000000-a1b2c3d4",
+      adminRedirectUri: "http://127.0.0.1:43123/iam-admin/*",
+      customSsoClientCode: "e2e-custom-123000000-a1b2c3d4",
+      customSsoRedirectUri: "http://127.0.0.1:43123/e2e/custom-sso/*",
+      oidcClientCode: "e2e-oidc-123000000-a1b2c3d4",
+      oidcRedirectUri: "http://127.0.0.1:43123/e2e/oidc/callback",
+      oidcPostLogoutRedirectUri: "http://127.0.0.1:43123/e2e/oidc/logged-out",
+    });
+    expect(established).toHaveLength(1);
+    expect(established[0]?.adminPassword).toBe("SYNTHETIC-PASSWORD-ONLY-FOR-E2E");
+    expect(result.adminClientCode).not.toBe(result.customSsoClientCode);
+    expect(JSON.stringify(result)).not.toMatch(/password|token|secret/iu);
+  });
+
+  test("rejects an applied result when production Subject Facts are missing", async () => {
+    const owner: E2EScenarioOwner = {
+      establish: async () => undefined,
+      async readBack(references) {
+        return {
+          ...completeReadBack(references),
+          subjectFacts: {
+            ready: false,
+            subjectIdentifier: "",
+            sourceDirtyVersion: "",
+            profileUsername: "",
+            organizationCodes: [],
+            positionCodes: [],
+            clientCodes: [],
+            roleCodes: [],
+          },
+        };
+      },
+    };
+
+    await expect(seedE2EScenario({
+      adminPassword: "SYNTHETIC-PASSWORD-ONLY-FOR-E2E",
+      canonicalOrigin: "http://127.0.0.1:43123",
+      owner,
+      random: { uuid: () => "3b766c91-1daa-4c09-89e4-ea87ad123456" },
+      runId: "20260806123000000-a1b2c3d4",
+    })).rejects.toThrow(
+      "E2E scenario owner read-back did not confirm the complete fixed scenario",
+    );
+  });
+
+  test("rejects Subject Facts published for a different Dirty Version", async () => {
+    const owner: E2EScenarioOwner = {
+      establish: async () => undefined,
+      async readBack(references) {
+        const readBack = completeReadBack(references);
+        return {
+          ...readBack,
+          subjectFacts: {
+            ...readBack.subjectFacts,
+            sourceDirtyVersion: "2",
+          },
+        };
+      },
+    };
+
+    await expect(seedE2EScenario({
+      adminPassword: "SYNTHETIC-PASSWORD-ONLY-FOR-E2E",
+      canonicalOrigin: "http://127.0.0.1:43123",
+      owner,
+      random: { uuid: () => "3b766c91-1daa-4c09-89e4-ea87ad123456" },
+      runId: "20260806123000000-a1b2c3d4",
+    })).rejects.toThrow(
+      "E2E scenario owner read-back did not confirm the complete fixed scenario",
+    );
+  });
+});
+
+function completeReadBack(references: E2EScenarioReferences) {
+  return {
+    admin: {
+      active: true,
+      passwordConfigured: true,
+      subjectIdentifier: references.adminSubjectIdentifier,
+      username: references.adminUsername,
+    },
+    adminClient: {
+      active: true,
+      customSsoEnabled: true,
+      clientCode: references.adminClientCode,
+      mode: CustomSsoClientMode.Gateway,
+      redirectUris: [references.adminRedirectUri],
+    },
+    customSsoClient: {
+      active: true,
+      customSsoEnabled: false,
+      clientCode: references.customSsoClientCode,
+      mode: null,
+      redirectUris: [],
+    },
+    oidcClient: {
+      active: true,
+      clientCode: references.oidcClientCode,
+      clientType: OidcClientType.Public,
+      redirectUris: [references.oidcRedirectUri],
+    },
+    organization: { active: true, code: references.organizationCode },
+    position: { active: true, code: references.positionCode },
+    employment: { active: true },
+    role: {
+      active: true,
+      assigned: true,
+      code: references.adminRoleCode,
+    },
+    subjectAccess: "enabled" as const,
+    subjectFacts: {
+      ready: true,
+      subjectIdentifier: references.adminSubjectIdentifier,
+      sourceDirtyVersion: "1",
+      profileUsername: references.adminUsername,
+      organizationCodes: [references.organizationCode],
+      positionCodes: [references.positionCode],
+      clientCodes: [references.adminClientCode],
+      roleCodes: [references.adminRoleCode],
+    },
+    subjectProfileReady: true,
+    subjectProfileVersion: "1",
+  };
+}

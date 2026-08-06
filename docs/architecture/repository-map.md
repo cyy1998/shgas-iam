@@ -3,8 +3,8 @@
 本仓库是 `pnpm` workspace + Turborepo monorepo。本页用于回答“代码或配置应该去哪里找”，不是逐文件清单。
 当前行为仍以实现、可执行测试和 [Current 文档](../index.md) 为准。
 
-`pnpm` workspace 只包含 `apps/*`、`packages/*` 和 `gateway`；`docker/`、`observability/` 等目录属于仓库级运行和
-运维资产，不是 workspace package。
+`pnpm` workspace 包含 `apps/*`、`packages/*`、`gateway` 和 root-owned `e2e/system`；`docker/`、
+`observability/` 等目录属于仓库级运行和运维资产，不是 workspace package。
 
 ## 快速导航
 
@@ -13,6 +13,7 @@
 ├── apps/             # 可部署的后端、前端和 worker
 ├── packages/         # 跨 app 复用的 workspace packages
 ├── gateway/          # APISIX manifests 与发布工具
+├── e2e/system/       # root-owned Full-system E2E workspace；当前交付 runtime、两条 journey 与精确恢复入口
 ├── docker/           # 本地依赖栈及 dev/prod Compose
 ├── observability/    # Alloy、Loki 与 Grafana 配置
 ├── scripts/          # 仓库级检查、canonical test collection/Integration 编排和辅助脚本
@@ -66,6 +67,16 @@
 
 更详细的 package ownership、公开 exports、数据库和 transaction 规则见
 [共享契约与数据库](contracts-and-database.md)。
+
+## Root-owned Full-system E2E Workspace
+
+| 路径 | 当前职责与边界 |
+|---|---|
+| `e2e/system` | `@iam/e2e-system` 拥有 root `pnpm test:e2e` 的完整 owner task：preflight 在任何 descriptor/resource 前验证 Docker、browser 与固定配置，再以动态 Gateway host port 启动 PostgreSQL、Redis、etcd、APISIX、API、Admin API、OIDC Provider、Worker、Admin 与 SSO，在空 volumes 执行真实 Drizzle migrations、production-owner seed 与 protocol readiness，并在同一 exact-project lifecycle 中固定按 Admin → OIDC 运行两条零 retry journey。失败时保存有界 raw diagnostics 与 Playwright evidence，再尝试本 project 的 best-effort cleanup；cleanup failure 非零。`admin:journey`、`oidc:journey` 保留为 workspace-local 调试入口，`runtime:cleanup` 只接受明确 descriptor 或 exact project。Windows 本地已验收，Linux/CI 尚未验收。 |
+
+该 workspace 的 Compose、one-shot migration/Gateway sync images、lifecycle/recovery commands 与 contract tests 都保留在
+`e2e/system/`；生成的 run descriptor、migration/seed receipts、Compose/Gateway diagnostics 与后续 Playwright artifacts 位于其
+`test-results/`，属于可再生成的测试 artifact，不提交到仓库。
 
 ## 基础设施与仓库工具
 

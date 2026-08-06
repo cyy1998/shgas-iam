@@ -45,10 +45,17 @@ pnpm test:integration:<component|process|redis|postgres|composition|browser>
 - `pnpm test:unit`
 - `pnpm test:integration`
 - `pnpm test:integration:<component|process|redis|postgres|composition|browser>`
+- `pnpm test:e2e`
 - `pnpm typecheck`
 - `pnpm verify`
 - `pnpm e2e:install`
 - `pnpm e2e:install:browsers`
+- Full-system runtime lifecycle（workspace-local）：`pnpm --filter @iam/e2e-system runtime:lifecycle`
+- Full-system Admin Custom SSO journey（workspace-local）：`pnpm --filter @iam/e2e-system admin:journey`
+- Full-system OIDC Authorization Code + PKCE journey（workspace-local）：`pnpm --filter @iam/e2e-system oidc:journey`
+- Full-system exact-project recovery（workspace-local）：
+  `pnpm --filter @iam/e2e-system runtime:cleanup -- --descriptor <run-descriptor.json>` 或
+  `pnpm --filter @iam/e2e-system runtime:cleanup -- --project <exact-project>`
 - 后端 Architecture Guard（唯一静态架构入口）：`pnpm check:architecture`
 - 文档索引与 freshness guard：`pnpm check:docs`
 - Env naming guard：`pnpm check:env-names`
@@ -190,6 +197,48 @@ pnpm --filter @iam/sso test:integration:browser
 
 Browser Integration 保留原 API mocks、package-local `webServer`、base URL 与单 Chromium project，不是 Full-system E2E。
 
+`@iam/e2e-system` 通过 root `pnpm test:e2e` 发布完整 Full-system collection：受独立 60 秒 deadline 约束的 preflight 通过后才创建唯一 Compose
+project，以动态 Gateway host port 等待 PostgreSQL、Redis、etcd 与 APISIX healthy，在空 volumes 上执行真实 Drizzle migrations，
+再启动 API、Admin API、OIDC Provider、Worker、Admin 与 SSO。Runtime healthy 后命令校验 rendered Compose 的 canonical origin 合同，
+通过 production owner 建立固定 synthetic scenario 并写安全 seed receipt，然后渲染 repo-owned Gateway routes，从 canonical origin
+完成 protocol readiness；OIDC
+discovery 会精确核对 issuer、authorization endpoint、token endpoint 与 JWKS URI，而不是只接受 HTTP 200。
+它还核对 UserInfo `/oidc/me` 与 RP-initiated logout `/oidc/session/end`。普通 lifecycle command 不回显 child stdout/stderr；
+Descriptor 落盘后、diagnostic tool build 与资源创建前先原子写入安全的 `not-attempted` migration receipt；初始化失败不会创建资源。
+真正 migration 前更新为 `attempted`，随后写 `applied` 或不含命令、环境及原始错误的 `failed`。Compose/runtime 只使用 feature
+固定或 run-generated synthetic data/credentials，不接受 production endpoint、production credential 或真实 PII。
+服务日志只保留有界完整行，超长单行整行标记为 `[TRUNCATED]`；diagnostics 原样保留有界 source 内容，不做 JSON/YAML/JWK/PEM/
+credential 分类或脱敏。Run-scoped Playwright staging 的 raw trace/PNG/WebM 安全移动到 artifact directory 并保留；metadata 只辅助枚举。
+Intake 受独立 source deadline 约束，最多接受 128 个文件、单文件 16 MiB、合计 64 MiB，并拒绝路径越界与 symlink。任一 required
+diagnostic source 失败时，已取得的 artifacts、unavailable placeholder 与 index 仍先写完，然后 run 在 cleanup 尝试后非零退出。
+Preflight 发生在 descriptor/resource 之前；其失败直接非零退出，不运行不存在 project 的 diagnostics/cleanup。Descriptor
+落盘后的 runtime setup/readiness/seed failure、timeout 与可捕获 signal 都先尽量保存有界原始诊断再尝试 best-effort cleanup；cleanup failure
+保持非零。`admin:journey` 复用同一 lifecycle，在 protocol readiness 后用真实 Chromium 登录 Admin，将独立目标 client 从未配置状态推进到
+Gateway Custom SSO 已配置且启用，并在 reload 后通过真实 detail RPC 与 UI 回读 provider、redirect URL、claims 和 enabled 状态。该命令固定
+单 project、单 worker、零 retry；浏览器启动 preflight 失败时在资源创建前退出，journey 失败时则保留 raw trace/PNG/WebM 并进入统一
+diagnostics 与 exact-project cleanup。`oidc:journey` 以相同的单 project、单 worker、零 retry 与 evidence/cleanup 边界运行独立
+OIDC browser slice；test-owned RP helper 只生成 S256 verifier/challenge 并接收 registered callback，真实 repo-owned authorize、登录、
+resume、token 与 `/oidc/me` 负责协议行为。该 slice 从 canonical origin 验证 interaction Cookie、PKCE mismatch、成功兑换、code replay、
+ID Token 与 UserInfo。Root command 在同一个 exact-project lifecycle 中固定按 Admin → OIDC 运行，任一失败都进入统一
+diagnostics 与 cleanup；cleanup failure 传播为 root command 非零。Workspace-local 单 journey 命令只用于聚焦调试：
+
+```bash
+pnpm test:e2e
+pnpm --filter @iam/e2e-system runtime:lifecycle
+pnpm --filter @iam/e2e-system admin:journey
+pnpm --filter @iam/e2e-system oidc:journey
+
+# 宿主异常后只按一个明确恢复目标清理；不接受 glob/prefix scan
+pnpm --filter @iam/e2e-system runtime:cleanup -- --descriptor e2e/system/test-results/<run-id>/run-descriptor.json
+pnpm --filter @iam/e2e-system runtime:cleanup -- --project iam-e2e-<run-id>
+```
+
+Explicit recovery 的 cleanup 有独立 120 秒 deadline，对 exact project 执行一次
+`compose down -v --remove-orphans --rmi local`，不使用 prefix、glob 或 prune，也不查询/删除额外 image IDs 或把四类 inventory=0
+作为成功硬门禁。SIGINT/SIGTERM 与 timeout 对当前 child/tree 做一次 best-effort 终止并短暂有界等待；Windows 最多调用一次
+`taskkill /T /F`，不记录 PID CreationDate、不使用 CIM fallback 或 typed termination gate。Cleanup failure 非零并保留 descriptor，
+允许残留，由显式 recovery 重试同一 exact target。
+
 `pnpm verify` 通过 `scripts/verify.mjs` 按以下顺序 fail-fast：
 
 1. static：`pnpm lint`、`pnpm check:docs`、`pnpm check:env-names`、`pnpm check:architecture`；
@@ -321,6 +370,10 @@ Hook 不运行 lint、typecheck、test、build 或 tracker checker。按改动�
 
 ## Workspace 入口
 
+- Full-system E2E lifecycle：
+  root `pnpm test:e2e`；workspace-local
+  `pnpm --filter @iam/e2e-system <test:e2e|runtime:lifecycle|admin:journey|oidc:journey|runtime:cleanup|lint|test|test:unit|typecheck>`。
+  当前只完成 Windows 本地验收，未宣称 Linux/CI adoption
 - API backend：`pnpm --filter @iam/api <dev|serve|lint|test|test:unit|test:integration:component|test:integration:process|test:integration:composition|test:integration:postgres|test:integration:redis|typecheck>`
 - Admin API backend：`pnpm --filter @iam/admin-api <dev|serve|lint|test|test:unit|test:integration:component|test:integration:process|test:integration:redis|typecheck>`
 - OIDC provider：`pnpm --filter @iam/oidc-provider <dev|serve|lint|test|test:unit|test:integration:component|test:integration:process|test:integration:composition|test:integration:redis|typecheck>`

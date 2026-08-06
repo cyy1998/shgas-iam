@@ -4,6 +4,7 @@ import { getQuery } from '@sso/utils/url';
 import { useModel } from '@umijs/max';
 import { message } from 'antd';
 import { useCallback, useEffect, useState } from 'react';
+import { isValidOidcReturnHandle } from './oidc-return';
 
 export function useLoginRedirect() {
   const { authConfig } = useModel('sso');
@@ -38,7 +39,7 @@ export function useLoginRedirect() {
 
   const redirectAfterLogin = useCallback(() => {
     if (oidcReturn) {
-      if (!/^[\w-]{43}$/.test(oidcReturn)) {
+      if (!isValidOidcReturnHandle(oidcReturn)) {
         message.error('OIDC 登录请求已失效，请返回应用重新发起登录');
         return;
       }

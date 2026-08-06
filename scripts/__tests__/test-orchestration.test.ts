@@ -376,7 +376,9 @@ function createTransitFixture() {
 function createCollectionGuardFixture(options: {
   brokenRootCommand?: boolean;
   omitRootE2eTask?: boolean;
+  publishWorkspaceE2e?: boolean;
   violating?: boolean;
+  workspaceLocalJourneys?: Array<{ file: string; name: string }>;
 } = {}) {
   const root = mkdtempSync(join(tmpdir(), "iam-test-collection-"));
   const ownerRoot = join(root, "packages", "owner");
@@ -391,11 +393,14 @@ function createCollectionGuardFixture(options: {
     private: true,
     scripts: {
       ...(options.omitRootE2eTask
+        || (options.workspaceLocalJourneys?.length && !options.publishWorkspaceE2e)
         ? {}
-        : {
-            "test:e2e": "turbo test:e2e:root --concurrency=1",
-            "test:e2e:root": "bun test e2e/system/journey.spec.ts",
-          }),
+        : options.publishWorkspaceE2e
+          ? { "test:e2e": "turbo test:e2e --concurrency=1" }
+          : {
+              "test:e2e": "turbo test:e2e:root --concurrency=1",
+              "test:e2e:root": "bun test e2e/system/journey.spec.ts",
+            }),
       "test:integration:component": options.brokenRootCommand
         ? "turbo test:unit --concurrency=2"
         : "turbo test:integration:component --concurrency=2",
@@ -407,6 +412,7 @@ function createCollectionGuardFixture(options: {
   writeJson(join(root, "turbo.json"), {
     tasks: {
       "//#test:e2e:root": { cache: false },
+      "test:e2e": { cache: false, dependsOn: ["transit"] },
       "//#test:unit:root": {},
       "test:integration:component": { dependsOn: ["transit"] },
       "test:unit": { dependsOn: ["transit"] },
@@ -436,7 +442,30 @@ function createCollectionGuardFixture(options: {
     "tooling-performance.test.ts",
   ])
     writeFileSync(join(root, "scripts", "__tests__", file), "export {};\n", "utf8");
-  writeFileSync(join(root, "e2e", "system", "journey.spec.ts"), "export {};\n", "utf8");
+  if (options.workspaceLocalJourneys?.length) {
+    writeJson(join(root, "e2e", "system", "package.json"), {
+      name: "@fixture/e2e-system",
+      scripts: {
+        ...(options.publishWorkspaceE2e
+          ? { "test:e2e": "bun src/cli.ts e2e" }
+          : {}),
+        ...Object.fromEntries(options.workspaceLocalJourneys.map(journey => [
+          `${journey.name}:journey`,
+          `bun src/cli.ts ${journey.name}`,
+        ])),
+      },
+    });
+    for (const journey of options.workspaceLocalJourneys) {
+      writeFileSync(
+        join(root, "e2e", "system", journey.file),
+        "export {};\n",
+        "utf8",
+      );
+    }
+  }
+  else {
+    writeFileSync(join(root, "e2e", "system", "journey.spec.ts"), "export {};\n", "utf8");
+  }
 
   if (options.violating) {
     mkdirSync(join(ownerRoot, "test-integration", "redis"), { recursive: true });
@@ -461,6 +490,7 @@ function createCollectionGuardRunner(options: { fail?: boolean; omitComponent?: 
           stdout: JSON.stringify({
             tasks: [
               { taskId: "//#test:e2e:root" },
+              { taskId: "@fixture/e2e-system#test:e2e" },
               { taskId: "//#test:unit:root" },
               { taskId: "@fixture/owner#test:unit" },
               ...(options.omitComponent
@@ -591,6 +621,27 @@ function runTestIntegrationWithRecorder(options: {
 }
 
 describe("test orchestration", () => {
+  test("publishes the complete Full-system E2E owner through root and Turbo", () => {
+    const rootPackage = readJson(join(repoRoot, "package.json"));
+    const workspacePackage = readJson(join(repoRoot, "e2e", "system", "package.json"));
+    const dryRun = runPackageTaskDryRun("@iam/e2e-system", "test:e2e");
+    const task = dryRun.tasks.find(
+      (candidate: { taskId: string }) =>
+        candidate.taskId === "@iam/e2e-system#test:e2e",
+    );
+
+    expect(rootPackage.scripts["test:e2e"])
+      .toBe("turbo test:e2e --concurrency=1");
+    expect(workspacePackage.scripts["test:e2e"]).toBe("bun src/cli.ts e2e");
+    expect(task).toMatchObject({
+      command: "bun src/cli.ts e2e",
+      resolvedTaskDefinition: {
+        cache: false,
+        dependsOn: ["transit"],
+      },
+    });
+  });
+
   test("Collection Guard accepts a complete uniquely-owned fixture", async () => {
     const root = createCollectionGuardFixture();
     try {
@@ -623,6 +674,143 @@ describe("test orchestration", () => {
         code: "missing-collection",
         message: expect.stringContaining("e2e/system/journey.spec.ts"),
       }));
+    }
+    finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  test("Collection Guard lists the fixed Admin and OIDC owners without per-spec mappings", async () => {
+    const journeys = [
+      { file: "admin-custom-sso.spec.ts", name: "admin" },
+      { file: "oidc-pkce.spec.ts", name: "oidc" },
+    ];
+    const root = createCollectionGuardFixture({ workspaceLocalJourneys: journeys });
+    const baseRunner = createCollectionGuardRunner();
+    const runner: TestCollectionCommandRunner = {
+      async run(command, cwd, options) {
+        if (command.some(token => token.endsWith("cli.js"))) {
+          const journey = journeys.find(candidate =>
+            candidate.name === options?.env?.IAM_E2E_JOURNEY);
+          return {
+            exitCode: 0,
+            stderr: "",
+            stdout: JSON.stringify({
+              config: { rootDir: join(root, "e2e", "system") },
+              suites: journey ? [{ file: journey.file }] : [],
+            }),
+          };
+        }
+        return baseRunner.run(command, cwd, options);
+      },
+    };
+    try {
+      expect(await analyzeTestCollections(root, runner)).toEqual([]);
+    }
+    finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  test("Collection Guard assigns both journeys to the published workspace E2E owner", async () => {
+    const journeys = [
+      { file: "admin-custom-sso.spec.ts", name: "admin" },
+      { file: "oidc-pkce.spec.ts", name: "oidc" },
+    ];
+    const root = createCollectionGuardFixture({
+      publishWorkspaceE2e: true,
+      workspaceLocalJourneys: journeys,
+    });
+    const baseRunner = createCollectionGuardRunner();
+    const listedSelectors: string[] = [];
+    const runner: TestCollectionCommandRunner = {
+      async run(command, cwd, options) {
+        if (command.some(token => token.endsWith("cli.js"))) {
+          const selector = options?.env?.IAM_E2E_JOURNEY ?? "";
+          listedSelectors.push(selector);
+          const journey = journeys.find(candidate => candidate.name === selector);
+          return {
+            exitCode: 0,
+            stderr: "",
+            stdout: JSON.stringify({
+              config: { rootDir: join(root, "e2e", "system") },
+              suites: journey ? [{ file: journey.file }] : [],
+            }),
+          };
+        }
+        return baseRunner.run(command, cwd, options);
+      },
+    };
+    try {
+      expect(await analyzeTestCollections(root, runner)).toEqual([]);
+      expect(listedSelectors).toEqual(["admin", "oidc"]);
+    }
+    finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  test("Collection Guard rejects a spec collected by two discovered journey owners", async () => {
+    const root = createCollectionGuardFixture({
+      workspaceLocalJourneys: [
+        { file: "admin-custom-sso.spec.ts", name: "admin" },
+        { file: "admin-custom-sso.spec.ts", name: "oidc" },
+      ],
+    });
+    const baseRunner = createCollectionGuardRunner();
+    const runner: TestCollectionCommandRunner = {
+      async run(command, cwd, options) {
+        if (command.some(token => token.endsWith("cli.js"))) {
+          return {
+            exitCode: 0,
+            stderr: "",
+            stdout: JSON.stringify({
+              config: { rootDir: join(root, "e2e", "system") },
+              suites: [{ file: "admin-custom-sso.spec.ts" }],
+            }),
+          };
+        }
+        return baseRunner.run(command, cwd, options);
+      },
+    };
+    try {
+      expect(await analyzeTestCollections(root, runner)).toContainEqual({
+        code: "duplicate-collection",
+        message: expect.stringContaining("admin-custom-sso.spec.ts"),
+      });
+    }
+    finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  test("Collection Guard rejects an unknown workspace-local journey owner", async () => {
+    const root = createCollectionGuardFixture({
+      workspaceLocalJourneys: [
+        { file: "unknown.spec.ts", name: "unknown" },
+      ],
+    });
+    const baseRunner = createCollectionGuardRunner();
+    const runner: TestCollectionCommandRunner = {
+      async run(command, cwd, options) {
+        if (command.some(token => token.endsWith("cli.js"))) {
+          return {
+            exitCode: 0,
+            stderr: "",
+            stdout: JSON.stringify({
+              config: { rootDir: join(root, "e2e", "system") },
+              suites: [{ file: "unknown.spec.ts" }],
+            }),
+          };
+        }
+        return baseRunner.run(command, cwd, options);
+      },
+    };
+    try {
+      expect(await analyzeTestCollections(root, runner)).toContainEqual({
+        code: "unsupported-owner",
+        message: expect.stringContaining("unknown:journey"),
+      });
     }
     finally {
       rmSync(root, { recursive: true, force: true });
@@ -1089,7 +1277,7 @@ describe("test orchestration", () => {
       {
         browserRoot: ssoBrowserRoot,
         canonicalConfigs: ssoCanonicalConfigs,
-        expectedCounts: { component: 4, unit: 6 },
+        expectedCounts: { component: 4, unit: 7 },
         packageName: "@iam/sso",
         workspace: "sso" as const,
         workspaceRoot: ssoRoot,

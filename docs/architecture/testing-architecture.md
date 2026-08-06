@@ -26,7 +26,8 @@ profile 不是新的测试层级、速度标签或 Gate。多资源测试按测�
   `scripts/__tests__/`。
 - 非 browser Integration 位于 `test-integration/<profile>/**/*.integration.test.ts[x]`。
 - Browser Integration 位于 `test-integration/browser/**/*.spec.ts`。
-- Full-system E2E 独占 `e2e/system/**/*.spec.ts`。当前仓库只保留这一路径契约，不发布 `test:e2e`。
+- Full-system E2E 独占 `e2e/system/**/*.spec.ts`。Root `pnpm test:e2e` 是唯一完整 collection owner；workspace-local
+  `admin:journey` 与 `oidc:journey` 只保留为单 journey 调试入口。
 - `subject-projection:rehearsal` 是近规模操作命令，不采用测试命名，也不属于任何 collection。
 
 每个测试候选必须由一个且仅一个 canonical collection 收集。Admin API 的 client cache 真实 contract 位于 `redis`
@@ -49,12 +50,56 @@ pnpm test:integration:redis
 pnpm test:integration:postgres
 pnpm test:integration:composition
 pnpm test:integration:browser
+pnpm test:e2e
 pnpm check:test-collection
 ```
 
 `pnpm test` 永久代理 `pnpm test:unit`。有 Unit collection 的 package 也令 `test` 代理 `test:unit`；没有 Unit
 collection 的 package 不发布空 `test`。旧 `test:smoke`、`test:external`、package-local `test:postgres`/
 `test:redis` 与 frontend `e2e` collection aliases 已删除。
+
+`@iam/e2e-system` 当前通过 root `pnpm test:e2e` 从 exact-project 空 volumes 运行 migrations、六个 repo
+runtimes、固定 synthetic scenario seed、单一 `127.0.0.1` Gateway route readiness、失败诊断与 cleanup。Runtime healthy 后先校验
+rendered Compose 中 API、OIDC Provider、Gateway、Admin 与 seed 的 canonical origin/authority 合同，再运行 seed；seed 通过 production
+Drizzle、Role Assignment、User Profile 与 Subject Access owner 建立数据并做 owner read-back，不复制 Redis key、serializer 或 Lua 协议。
+Descriptor 落盘后、infra 与 migration 前会先
+构建 project-scoped Gateway 诊断查询镜像，使早期失败也能在 cleanup 前保存 route state；诊断阶段不临时 build 或暴露
+APISIX Admin host port。Descriptor 落盘后、diagnostic tool build 与任何资源创建前，先原子写入只含 stage/timestamp 的安全
+`not-attempted` migration receipt；初始化失败时不创建资源。Migration command 前再更新为 `attempted`，随后只更新为 `applied`
+或不含原始错误、命令及环境的 `failed` receipt。Full-system Compose/runtime 只使用 feature 固定或 run-generated synthetic
+data/credentials，不接受 production endpoint、production credential 或真实 PII。Compose 日志按完整行保留 recent tail；单行超过
+service byte cap 时整行替换为 `[TRUNCATED]`。Diagnostics 保留有界原始内容，不做 JSON/YAML/JWK/PEM/credential 分类或脱敏；
+synthetic token/password/key 允许出现在受 artifact directory、retention 与访问控制治理的临时产物中。
+普通 command runner 不把 child stdout/stderr 回显到 console；原始输出只由有界 capture 进入 artifact。Compose ps/health、
+每个固定 service log、Gateway state 或 existing-evidence inventory 任一采集失败时，仍 all-settled 写完可得证据、placeholder 与 index，
+随后令顶层 run 非零并继续 best-effort exact-project cleanup。所有 source failure 都走普通 required-source 路径，不存在 typed
+unconfirmed-termination 特殊 gate。若 run-scoped Playwright staging 存在，diagnostics 把 raw `trace.zip`、PNG 与 WebM 安全移动到
+run artifact directory，保留原始内容；metadata index 只辅助列出 type/name/size，不替代或删除 raw 文件。Intake 与其他 source一样
+受独立 deadline 约束，并限制最多 128 个文件、单文件 16 MiB、合计 64 MiB；路径越界、symlink、枚举、限额或移动失败都是 required
+diagnostic failure。
+Preflight 在 descriptor 和资源创建前受独立 60 秒 deadline 约束；该阶段失败时不存在 exact project 或已创建资源，因此直接
+非零退出，不运行 project diagnostics/cleanup。Descriptor 落盘后的 runtime setup、readiness、timeout 与可捕获 signal 进入同一
+`collectDiagnostics -> cleanup` 路径；cleanup failure 保持顶层非零。`runtime:cleanup` 只接受明确 descriptor 或 exact
+project，不枚举模糊前缀，也不执行全局 prune。Cleanup 对 exact project 执行一次
+`compose down -v --remove-orphans --rmi local`；不再查询/删除 image IDs 或复查 container/network/volume/image 为零。普通 down
+failure 令 cleanup 非零并保留 descriptor，允许残留供显式 recovery 重试，且不得影响 unrelated Docker 资源。cleanup 使用独立
+deadline。Signal/timeout 对当前 child/tree 做一次 best-effort 终止并有界等待：Windows 可调用一次 `taskkill /T /F`，POSIX 可终止
+process group 或 direct child；不记录 PID CreationDate、不使用 CIM leaf-to-root fallback、不确认 process identity，也没有 typed
+unconfirmed-termination gate。正常完成应尝试 clean，但异常路径不以 inventory=0 作为硬门禁。Gateway
+readiness 对 OIDC discovery 不只检查 HTTP 200，还精确核对 canonical origin 下的 issuer、authorization、token、JWKS、UserInfo
+与 RP-initiated logout URLs；Custom SSO 的 internal/external well-known configuration 也必须回读同一 canonical origin。Seed receipt
+只记录 stage、timestamps、failure category 或 run-scoped public references，不记录 credential、token 或 secret。
+
+`admin:journey` 在上述 lifecycle 的 protocol readiness 之后运行浏览器 preflight，并以单 Chromium project、单 worker、零 retry
+执行 `admin-custom-sso.spec.ts`。Journey 用 bootstrap Admin client 通过真实 SSO 登录 Admin，再从目标 client 的未配置状态开始，经真实
+Admin UI 配置并启用 Gateway Custom SSO，最后 reload 并通过真实 detail RPC read-back 验证 provider、redirect URL、claims 与 enabled
+状态；不得通过 `page.route` 替代系统 seam。浏览器失败证据沿用 run-scoped Playwright staging，随后进入统一 diagnostics 与 exact-project
+cleanup。`oidc:journey` 复用同一 lifecycle 与浏览器约束；test-owned RP helper 生成 S256 verifier/challenge 并接收 registered
+callback，浏览器经真实 authorize、SSO/API password login 与 resume 取得 code，随后从 canonical origin 的公开 token endpoint
+与 `/oidc/me` 验收错误 verifier、成功兑换、authorization code 单次使用、ID Token issuer/nonce/subject 及 UserInfo。Local HTTP
+配置只令 interaction Cookie `Secure=false`，并继续验证 `HttpOnly`、`SameSite=Lax` 与 `Path=/oidc`。两个 journey 都不使用
+`page.route` 替代 repo-owned core。完整命令在同一个 exact-project lifecycle 中固定按 Admin → OIDC 运行；任一 journey
+失败都先收集 diagnostics 再尝试 cleanup，cleanup failure 始终使 root command 非零。
 
 Root `test:unit` 通过 Turbo fan out package Unit tasks，并由 `test:unit:root` 精确收集四个 root tooling tests。
 六个 profile commands 只 fan out 同名 package tasks。`test:integration` 在启动任何 profile 前一次性检查所有
@@ -92,7 +137,8 @@ Turbo 是唯一跨 package orchestrator；package 继续拥有 runner、configs�
     "transit": { "dependsOn": ["^transit"] },
     "test:unit": { "dependsOn": ["transit"] },
     "test:integration:component": { "dependsOn": ["transit"] },
-    "test:integration:process": { "dependsOn": ["transit"], "cache": false }
+    "test:integration:process": { "dependsOn": ["transit"], "cache": false },
+    "test:e2e": { "dependsOn": ["transit"], "cache": false }
   }
 }
 ```
@@ -107,6 +153,7 @@ browser、Full-system E2E 与其他外部验证均 `cache:false`。资源 tasks 
 | Unit / component | 2 | Vitest `maxWorkers: 25%`；Bun `--max-concurrency=2` |
 | process / redis / postgres / composition | 1 | 单 package；资源 owner 独占 |
 | browser | 1 | Playwright 管理单 Chromium project |
+| Full-system E2E | 1 | 两次 Playwright journey 均为单 Chromium project、单 worker、零 retry |
 
 Timeout 只保护测试不永久挂起，不承担性能 SLA。Process harness 必须使用真实 readiness 信号、同时观察 child exit/error、
 限制 stdout/stderr 缓冲，并在成功、失败、timeout 与中断路径清理完整进程树、端口与临时目录。不得通过放宽全局 timeout、
@@ -144,5 +191,5 @@ flowchart LR
 | Ticket 实现 | 最高层相关 collection、受影响 package lint/typecheck 与永久 Guard |
 | 准备 merge/release | 最终内容上一次 `pnpm verify`，再按风险显式执行 Integration/Gateway 等检查 |
 
-当前没有 CI 平台。Windows process collection 已完成连续无 retry 验收；Linux/CI 仍为 `pending`。平台状态不能通过
+当前没有 CI 平台。Windows 本地 process collection 与 Full-system E2E 已完成无 retry 验收；Linux/CI 仍为 `pending`。平台状态不能通过
 placeholder command 或 silent skip 伪装为已采用。

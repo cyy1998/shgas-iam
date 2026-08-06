@@ -87,6 +87,10 @@
         "IAM_USER_PROFILE_TEST_REDIS_URL"
       ]
     },
+    "test:e2e": {
+      "dependsOn": ["transit"],
+      "cache": false
+    },
     "test:coverage": {
       "dependsOn": ["transit"],
       "outputs": ["coverage/**"]

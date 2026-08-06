@@ -1,0 +1,318 @@
+x-e2e-labels: &e2e-labels
+  com.shgas-iam.e2e.managed: "true"
+  com.shgas-iam.e2e.project: ${IAM_E2E_PROJECT:-iam-e2e-preflight}
+  com.shgas-iam.e2e.run-id: ${IAM_E2E_RUN_ID:-preflight}
+
+x-runtime-dependencies: &runtime-dependencies
+  postgres:
+    condition: service_healthy
+  redis:
+    condition: service_healthy
+
+x-runtime-common: &runtime-common
+  NODE_ENV: development
+
+services:
+  postgres:
+    image: ${IAM_E2E_POSTGRES_IMAGE:-docker.xuanyuan.run/postgres:18.4}
+    labels: *e2e-labels
+    environment:
+      POSTGRES_DB: iam_e2e
+      POSTGRES_PASSWORD: iam_e2e_local_password
+      POSTGRES_USER: iam_e2e
+    volumes:
+      - postgres-data:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U iam_e2e -d iam_e2e"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+      start_period: 5s
+
+  redis:
+    image: ${IAM_E2E_REDIS_IMAGE:-docker.xuanyuan.run/library/redis:8.8.0}
+    labels: *e2e-labels
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+      start_period: 2s
+
+  apisix-etcd:
+    image: ${IAM_E2E_ETCD_IMAGE:-docker.xuanyuan.run/bitnamilegacy/etcd:3.5.11}
+    labels: *e2e-labels
+    environment:
+      ALLOW_NONE_AUTHENTICATION: "yes"
+      ETCD_ADVERTISE_CLIENT_URLS: http://apisix-etcd:2379
+      ETCD_LISTEN_CLIENT_URLS: http://0.0.0.0:2379
+    volumes:
+      - etcd-data:/bitnami/etcd
+    healthcheck:
+      test: ["CMD", "etcdctl", "endpoint", "health", "--endpoints=http://127.0.0.1:2379"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+      start_period: 5s
+
+  apisix:
+    image: ${IAM_E2E_APISIX_IMAGE:-docker.xuanyuan.run/apache/apisix:3.16.0-debian}
+    labels: *e2e-labels
+    environment:
+      APISIX_OTEL_COLLECTOR_ENDPOINT: 127.0.0.1:9
+    ports:
+      - "127.0.0.1:${IAM_E2E_GATEWAY_PORT:-49152}:9080"
+    volumes:
+      - ../../gateway/config/config.dev.yaml:/usr/local/apisix/conf/config.yaml:ro
+    depends_on:
+      apisix-etcd:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "apisix", "status"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+      start_period: 5s
+
+  migrate:
+    build:
+      context: ../..
+      dockerfile: e2e/system/docker/migrate.Dockerfile
+    labels: *e2e-labels
+    environment:
+      DATABASE_URL: postgresql://iam_e2e:iam_e2e_local_password@postgres:5432/iam_e2e
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  seed:
+    build:
+      context: ../..
+      dockerfile: e2e/system/docker/seed.Dockerfile
+    labels: *e2e-labels
+    environment:
+      DATABASE_URL: postgresql://iam_e2e:iam_e2e_local_password@postgres:5432/iam_e2e
+      IAM_E2E_REDIS_HOST: redis
+      IAM_E2E_REDIS_PORT: "6379"
+      IAM_E2E_REDIS_DB: "0"
+      IAM_E2E_RUN_ID: ${IAM_E2E_RUN_ID:-preflight}
+      IAM_E2E_ORIGIN: ${IAM_E2E_ORIGIN:-http://127.0.0.1:49152}
+      IAM_E2E_ADMIN_PASSWORD: iam-e2e-admin-password-local-only
+      IAM_E2E_SEED_RECEIPT_PATH: /artifacts/${IAM_E2E_RUN_ID:-preflight}/seed-receipt.json
+    volumes:
+      - ./test-results:/artifacts
+    depends_on: *runtime-dependencies
+
+  api:
+    build:
+      context: ../..
+      dockerfile: apps/api/Dockerfile
+    labels: *e2e-labels
+    environment:
+      <<: *runtime-common
+      IAM_API_DATABASE_URL: postgresql://iam_e2e:iam_e2e_local_password@postgres:5432/iam_e2e
+      IAM_API_REDIS_HOST: redis
+      IAM_API_REDIS_PORT: "6379"
+      IAM_API_REDIS_DB: "0"
+      IAM_API_PORT: "30000"
+      IAM_API_LOG_FORMAT: json
+      IAM_API_PASSWORD_HASH_ROUNDS: "10"
+      IAM_API_MAGIC_CODE: "1234"
+      IAM_API_CAP_ENABLED: "false"
+      IAM_API_LOGIN_CREDENTIAL_ACTIVE_KID: 2026-05-primary
+      IAM_API_LOGIN_CREDENTIAL_PRIVATE_KEYS_JSON: '{"2026-05-primary":"319b4e59ca80d7b4cc35955b63da4edf1ed51772ec8f33c0a4f769dda7b9fc65"}'
+      IAM_API_SESSION_KERNEL_NAMESPACE: "sess:v2:"
+      IAM_API_SESSION_LOOKUP_HMAC_CURRENT_ID: e2e-current
+      IAM_API_SESSION_LOOKUP_HMAC_CURRENT_SECRET: iam-e2e-session-lookup-hmac-secret-local-only
+      IAM_API_WECHAT_CORP_ID: e2e-disabled
+      IAM_API_WECHAT_CORP_SECRET: e2e-disabled
+      IAM_API_SMS_URL: http://127.0.0.1:9/disabled
+      IAM_API_SMS_SIGNATURE_KEY: e2e-disabled
+      IAM_API_ORCAS_URL: http://127.0.0.1:9/disabled
+      IAM_API_SESSION_DEFAULT_TTL_SECONDS: "86400"
+      IAM_API_AUTH_CODE_TTL_SECONDS: "300"
+      IAM_API_LOGIN_ENDPOINT: /portal/login
+      IAM_API_SSO_INTERNAL_ORIGIN: ${IAM_E2E_ORIGIN:-http://127.0.0.1:49152}
+      IAM_API_SSO_EXTERNAL_ORIGIN: ${IAM_E2E_ORIGIN:-http://127.0.0.1:49152}
+      IAM_API_AUTHORIZATION_ENDPOINT: /sso/authorize
+      IAM_API_LOGOUT_ENDPOINT: /sso/logout
+      IAM_API_THIRDPARTY_OA_ENDPOINT: /sso/thirdparty/oa
+    depends_on: *runtime-dependencies
+    healthcheck:
+      test: ["CMD", "bun", "-e", "const r=await fetch('http://127.0.0.1:30000/sso/.well-known/authentication-configuration',{headers:{'X-IAM-Entry-Network':'internal'}});if(!r.ok)process.exit(1)"]
+      interval: 2s
+      timeout: 3s
+      retries: 60
+      start_period: 10s
+
+  admin-api:
+    build:
+      context: ../..
+      dockerfile: apps/admin-api/Dockerfile
+    labels: *e2e-labels
+    environment:
+      <<: *runtime-common
+      IAM_ADMIN_API_DATABASE_URL: postgresql://iam_e2e:iam_e2e_local_password@postgres:5432/iam_e2e
+      IAM_ADMIN_API_REDIS_HOST: redis
+      IAM_ADMIN_API_REDIS_PORT: "6379"
+      IAM_ADMIN_API_REDIS_DB: "0"
+      IAM_ADMIN_API_PORT: "30001"
+      IAM_ADMIN_API_LOG_FORMAT: json
+      IAM_ADMIN_API_ADMIN_CLIENT_CODES: ${IAM_E2E_ADMIN_CLIENT_CODE:-e2e-admin-preflight}
+      IAM_ADMIN_API_ADMIN_ROLE_CODES: ${IAM_E2E_ADMIN_ROLE_CODE:-e2e-role-preflight}
+      IAM_ADMIN_API_SESSION_KERNEL_NAMESPACE: "sess:v2:"
+      IAM_ADMIN_API_SESSION_LOOKUP_HMAC_CURRENT_ID: e2e-current
+      IAM_ADMIN_API_SESSION_LOOKUP_HMAC_CURRENT_SECRET: iam-e2e-session-lookup-hmac-secret-local-only
+    depends_on: *runtime-dependencies
+    healthcheck:
+      test: ["CMD", "bun", "-e", "const r=await fetch('http://127.0.0.1:30001/admin/users/search');if(r.status!==403)process.exit(1)"]
+      interval: 2s
+      timeout: 3s
+      retries: 60
+      start_period: 10s
+
+  oidc-provider:
+    build:
+      context: ../..
+      dockerfile: apps/oidc-provider/Dockerfile
+    labels: *e2e-labels
+    command: ["sh", "/run/iam-e2e/start-oidc.sh"]
+    volumes:
+      - ./docker/start-oidc.sh:/run/iam-e2e/start-oidc.sh:ro
+    environment:
+      <<: *runtime-common
+      IAM_OIDC_PROVIDER_DATABASE_URL: postgresql://iam_e2e:iam_e2e_local_password@postgres:5432/iam_e2e
+      IAM_OIDC_PROVIDER_REDIS_HOST: redis
+      IAM_OIDC_PROVIDER_REDIS_PORT: "6379"
+      IAM_OIDC_PROVIDER_REDIS_DB: "0"
+      IAM_OIDC_PROVIDER_PORT: "30002"
+      IAM_OIDC_PROVIDER_LOG_FORMAT: json
+      IAM_OIDC_PROVIDER_ISSUER: ${IAM_E2E_ORIGIN:-http://127.0.0.1:49152}/oidc
+      IAM_OIDC_PROVIDER_PUBLIC_ORIGIN: ${IAM_E2E_ORIGIN:-http://127.0.0.1:49152}
+      IAM_OIDC_PROVIDER_SSO_LOGIN_PATH: /portal/login
+      IAM_OIDC_PROVIDER_COOKIE_KEYS: iam-e2e-cookie-primary-key-32-characters,iam-e2e-cookie-secondary-key-32-characters
+      IAM_OIDC_PROVIDER_COOKIE_SECURE: "false"
+      IAM_OIDC_PROVIDER_SESSION_KERNEL_NAMESPACE: "sess:v2:"
+      IAM_OIDC_PROVIDER_SESSION_LOOKUP_HMAC_CURRENT_ID: e2e-current
+      IAM_OIDC_PROVIDER_SESSION_LOOKUP_HMAC_CURRENT_SECRET: iam-e2e-session-lookup-hmac-secret-local-only
+    depends_on: *runtime-dependencies
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:30002/health').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"]
+      interval: 2s
+      timeout: 3s
+      retries: 60
+      start_period: 10s
+
+  worker:
+    build:
+      context: ../..
+      dockerfile: apps/worker/Dockerfile
+    labels: *e2e-labels
+    environment:
+      <<: *runtime-common
+      IAM_WORKER_DATABASE_URL: postgresql://iam_e2e:iam_e2e_local_password@postgres:5432/iam_e2e
+      IAM_WORKER_REDIS_HOST: redis
+      IAM_WORKER_REDIS_PORT: "6379"
+      IAM_WORKER_REDIS_DB: "0"
+      IAM_WORKER_ENABLED_MODULES: user-profile
+      IAM_WORKER_HTTP_ENABLED: "true"
+      IAM_WORKER_HTTP_PORT: "30003"
+      IAM_WORKER_HEALTH_PATH: /healthz
+      IAM_WORKER_BULL_BOARD_ENABLED: "false"
+      IAM_WORKER_LOG_FORMAT: json
+    depends_on: *runtime-dependencies
+    healthcheck:
+      test: ["CMD", "bun", "-e", "const r=await fetch('http://127.0.0.1:30003/healthz');if(!r.ok)process.exit(1)"]
+      interval: 2s
+      timeout: 3s
+      retries: 60
+      start_period: 10s
+
+  admin:
+    build:
+      context: ../..
+      dockerfile: apps/admin/Dockerfile
+      args:
+        UMI_APP_ADMIN_API_PREFIX: /api/iam
+        UMI_APP_ADMIN_SSO_AUTHORIZE_URL: /sso/authorize
+        UMI_APP_ADMIN_SSO_LOGOUT_URL: /sso/logout
+        UMI_APP_ADMIN_CLIENT_CODE: ${IAM_E2E_ADMIN_CLIENT_CODE:-e2e-admin-preflight}
+        UMI_APP_ADMIN_ROLE_CODE: ${IAM_E2E_ADMIN_ROLE_CODE:-e2e-role-preflight}
+        UMI_APP_ADMIN_GRAFANA_URL: ""
+        UMI_APP_ADMIN_SYSTEM_LOG_ENV: e2e
+    labels: *e2e-labels
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--spider", "http://127.0.0.1/iam-admin/"]
+      interval: 2s
+      timeout: 3s
+      retries: 60
+      start_period: 5s
+
+  sso:
+    build:
+      context: ../..
+      dockerfile: apps/sso/Dockerfile
+      args:
+        UMI_APP_SSO_API_PREFIX: /api/iam
+        UMI_APP_SSO_CLIENT_CODE: iam
+        UMI_APP_SSO_CAP_SITE_KEY: iam-sso
+        UMI_APP_SSO_CAP_ENDPOINT: /api/iam/open/cap/iam-sso/
+        UMI_APP_SSO_CAP_WASM_URL: /portal/cap/cap_wasm_bg.wasm
+        UMI_APP_SSO_CAP_PAKO_URL: /portal/cap/pako_inflate.min.js
+        UMI_APP_SSO_LOGIN_CREDENTIAL_KID: 2026-05-primary
+        UMI_APP_SSO_LOGIN_CREDENTIAL_PUBLIC_KEY: 04112ddd8854e8262db2520bba112535844884c03348a45fcf4ee0f9a967979be52bd46caf43be697ae557ed2e4fa5b4dca8d2dbfa08c0f2f710c0f61591bb17dc
+        UMI_APP_SSO_WELL_KNOWN_URL: /sso/.well-known/authentication-configuration
+    labels: *e2e-labels
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--spider", "http://127.0.0.1/portal/login"]
+      interval: 2s
+      timeout: 3s
+      retries: 60
+      start_period: 5s
+
+  gateway-sync:
+    build:
+      context: ../..
+      dockerfile: e2e/system/docker/gateway-sync.Dockerfile
+    labels: *e2e-labels
+    environment:
+      APISIX_OTEL_COLLECTOR_ENDPOINT: 127.0.0.1:9
+      DEV_IAM_API_UPSTREAM_HOST: api
+      DEV_IAM_API_UPSTREAM_PORT: "30000"
+      DEV_IAM_ADMIN_API_UPSTREAM_HOST: admin-api
+      DEV_IAM_ADMIN_API_UPSTREAM_PORT: "30001"
+      DEV_IAM_OIDC_PROVIDER_UPSTREAM_HOST: oidc-provider
+      DEV_IAM_OIDC_PROVIDER_UPSTREAM_PORT: "30002"
+      DEV_IAM_SSO_FRONTEND_UPSTREAM_HOST: sso
+      DEV_IAM_SSO_FRONTEND_UPSTREAM_PORT: "80"
+      DEV_IAM_ADMIN_FRONTEND_UPSTREAM_HOST: admin
+      DEV_IAM_ADMIN_FRONTEND_UPSTREAM_PORT: "80"
+      IAM_SSO_INTERNAL_HOST: ${IAM_E2E_GATEWAY_AUTHORITY:-127.0.0.1:49152}
+      IAM_SSO_EXTERNAL_HOST: ${IAM_E2E_GATEWAY_AUTHORITY:-127.0.0.1:49152}
+    depends_on:
+      apisix:
+        condition: service_healthy
+      api:
+        condition: service_healthy
+      admin-api:
+        condition: service_healthy
+      oidc-provider:
+        condition: service_healthy
+      admin:
+        condition: service_healthy
+      sso:
+        condition: service_healthy
+
+networks:
+  default:
+    labels: *e2e-labels
+
+volumes:
+  postgres-data:
+    labels: *e2e-labels
+  redis-data:
+    labels: *e2e-labels
+  etcd-data:
+    labels: *e2e-labels

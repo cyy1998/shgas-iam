@@ -15,6 +15,20 @@ const canonicalTasks = [
   ...integrationProfiles.map(profile => `test:integration:${profile}`),
   "test:e2e",
 ];
+const workspaceLocalE2eJourneyOwners = {
+  "admin:journey": {
+    command: "bun src/cli.ts admin",
+    selector: "admin",
+  },
+  "oidc:journey": {
+    command: "bun src/cli.ts oidc",
+    selector: "oidc",
+  },
+} as const;
+const fullSystemE2eCommand = "bun src/cli.ts e2e";
+interface TestCollectionCommandOptions {
+  env?: Record<string, string>;
+}
 export interface TestCollectionCommandResult {
   exitCode: number;
   stderr: string;
@@ -22,7 +36,11 @@ export interface TestCollectionCommandResult {
 }
 
 export interface TestCollectionCommandRunner {
-  run: (command: string[], cwd: string) => Promise<TestCollectionCommandResult>;
+  run: (
+    command: string[],
+    cwd: string,
+    options?: TestCollectionCommandOptions,
+  ) => Promise<TestCollectionCommandResult>;
 }
 
 export interface TestCollectionIssue {
@@ -31,7 +49,8 @@ export interface TestCollectionIssue {
     | "duplicate-collection"
     | "missing-collection"
     | "path-naming-mismatch"
-    | "task-unreachable";
+    | "task-unreachable"
+    | "unsupported-owner";
   message: string;
 }
 
@@ -42,13 +61,14 @@ interface WorkspaceManifest {
 }
 
 const defaultCommandRunner: TestCollectionCommandRunner = {
-  async run(command, cwd) {
+  async run(command, cwd, options) {
     const child = Bun.spawn(command, {
       cwd,
       env: {
         ...process.env,
         FORCE_COLOR: "0",
         NO_COLOR: "1",
+        ...options?.env,
       },
       stderr: "pipe",
       stdout: "pipe",
@@ -99,6 +119,17 @@ function readWorkspaceManifests(repoRoot: string) {
     if (manifest.name) {
       manifests.push({
         directory: join(repoRoot, "gateway"),
+        name: manifest.name,
+        scripts: manifest.scripts ?? {},
+      });
+    }
+  }
+  const e2eSystemManifest = join(repoRoot, "e2e", "system", "package.json");
+  if (existsSync(e2eSystemManifest)) {
+    const manifest = readJson(e2eSystemManifest);
+    if (manifest.name) {
+      manifests.push({
+        directory: join(repoRoot, "e2e", "system"),
         name: manifest.name,
         scripts: manifest.scripts ?? {},
       });
@@ -171,6 +202,7 @@ async function listRunnerCollectionFiles(
   repoRoot: string,
   command: string,
   runner: TestCollectionCommandRunner,
+  task?: string,
 ) {
   if (command.startsWith("bun test "))
     return listBunCollectionFiles(workspace, repoRoot, command);
@@ -199,7 +231,9 @@ async function listRunnerCollectionFiles(
     return parsed.map(({ file }) => normalizePath(relative(repoRoot, file))).sort();
   }
 
-  if (command.includes("playwright test")) {
+  const workspaceLocalJourney = parseWorkspaceLocalJourney(command, task);
+  const fullSystemE2e = task === "test:e2e" && command === fullSystemE2eCommand;
+  if (command.includes("playwright test") || workspaceLocalJourney || fullSystemE2e) {
     const playwright = join(
       workspace.directory,
       "node_modules",
@@ -207,25 +241,45 @@ async function listRunnerCollectionFiles(
       "test",
       "cli.js",
     );
-    const result = await runner.run(
-      ["node", playwright, "test", "--list", "--reporter=json"],
-      workspace.directory,
-    );
-    if (result.exitCode !== 0) {
-      throw new Error(
-        `Playwright ${workspace.name} exited ${result.exitCode}: ${result.stderr || result.stdout}`,
-      );
-    }
-    const parsed = JSON.parse(result.stdout) as {
-      config: { rootDir: string };
-      suites: Array<{ file?: string; suites?: unknown[] }>;
-    };
     const files = new Set<string>();
-    collectPlaywrightFiles(parsed.suites, files);
+    let rootDirectory = workspace.directory;
+    const selectors = fullSystemE2e
+      ? ["admin", "oidc"]
+      : [workspaceLocalJourney];
+    for (const selector of selectors) {
+      const args = ["node", playwright, "test"];
+      if (selector)
+        args.push("--config", "playwright.config.ts");
+      args.push("--list", "--reporter=json");
+      const result = await runner.run(args, workspace.directory, selector
+        ? {
+            env: {
+              IAM_E2E_ORIGIN: "http://127.0.0.1:49151",
+              IAM_E2E_JOURNEY: selector,
+              IAM_E2E_PLAYWRIGHT_OUTPUT_DIR: join(
+                workspace.directory,
+                "test-results",
+                "collection-guard",
+              ),
+            },
+          }
+        : undefined);
+      if (result.exitCode !== 0) {
+        throw new Error(
+          `Playwright ${workspace.name} exited ${result.exitCode}: ${result.stderr || result.stdout}`,
+        );
+      }
+      const parsed = JSON.parse(result.stdout) as {
+        config: { rootDir: string };
+        suites: Array<{ file?: string; suites?: unknown[] }>;
+      };
+      rootDirectory = parsed.config.rootDir;
+      collectPlaywrightFiles(parsed.suites, files);
+    }
     return [...files]
       .map(file => normalizePath(relative(
         repoRoot,
-        resolve(parsed.config.rootDir, file),
+        resolve(rootDirectory, file),
       )))
       .sort();
   }
@@ -233,10 +287,34 @@ async function listRunnerCollectionFiles(
   throw new Error(`Unsupported canonical runner command for ${workspace.name}: ${command}`);
 }
 
+function parseWorkspaceLocalJourney(command: string, task?: string) {
+  const owner = task === undefined
+    ? undefined
+    : workspaceLocalE2eJourneyOwner(task);
+  if (!owner)
+    return undefined;
+  if (command !== owner.command) {
+    throw new Error(
+      `${task} must use the documented workspace-local command ${owner.command}`,
+    );
+  }
+  return owner.selector;
+}
+
+function workspaceLocalE2eJourneyOwner(task: string) {
+  if (!Object.hasOwn(workspaceLocalE2eJourneyOwners, task))
+    return undefined;
+  return workspaceLocalE2eJourneyOwners[
+    task as keyof typeof workspaceLocalE2eJourneyOwners
+  ];
+}
+
 function expectedCollectionForPath(repoPath: string, workspacePath: string) {
   const relativePath = workspacePath
     ? repoPath.slice(workspacePath.length + 1)
     : repoPath;
+  if (workspacePath === "e2e/system" && relativePath.endsWith(".spec.ts"))
+    return "test:e2e";
   const integration = /^test-integration\/(?<profile>[^/]+)\/(?<file>.+)$/u.exec(relativePath);
   if (integration?.groups) {
     const { file, profile } = integration.groups;
@@ -295,6 +373,7 @@ export async function analyzeTestCollections(
   const collections = new Map<string, string[]>();
   const candidates = new Map<string, string | undefined>();
   const expectedTasksByRootCommand = new Map<string, Set<string>>();
+  const workspaceLocalE2eOwners = new Set<string>();
   const issues: TestCollectionIssue[] = [];
 
   try {
@@ -302,20 +381,45 @@ export async function analyzeTestCollections(
       const workspacePath = normalizePath(relative(repoRoot, workspace.directory));
       for (const repoPath of listTestCandidates(workspace, repoRoot))
         candidates.set(repoPath, expectedCollectionForPath(repoPath, workspacePath));
-      for (const task of canonicalTasks) {
+      const declaredWorkspaceLocalE2eTasks = workspacePath === "e2e/system"
+        ? Object.keys(workspace.scripts).filter(task => task.endsWith(":journey"))
+        : [];
+      for (const task of declaredWorkspaceLocalE2eTasks) {
+        if (!workspaceLocalE2eJourneyOwner(task)) {
+          issues.push({
+            code: "unsupported-owner",
+            message: `${workspace.name}#${task} is not a documented workspace-local E2E journey owner`,
+          });
+        }
+      }
+      const workspaceLocalE2eTasks = declaredWorkspaceLocalE2eTasks
+        .filter(task => workspaceLocalE2eJourneyOwner(task));
+      const tasks = workspacePath === "e2e/system"
+        ? [
+            ...canonicalTasks,
+            ...(workspace.scripts["test:e2e"] ? [] : workspaceLocalE2eTasks),
+          ]
+        : canonicalTasks;
+      for (const task of tasks) {
         const command = workspace.scripts[task];
         if (!command)
           continue;
-        addExpectedTask(
-          expectedTasksByRootCommand,
-          task,
-          `${workspace.name}#${task}`,
-        );
+        if (canonicalTasks.includes(task)) {
+          addExpectedTask(
+            expectedTasksByRootCommand,
+            task,
+            `${workspace.name}#${task}`,
+          );
+        }
+        else {
+          workspaceLocalE2eOwners.add(`${workspace.name}#${task}`);
+        }
         for (const repoPath of await listRunnerCollectionFiles(
           workspace,
           repoRoot,
           command,
           runner,
+          task,
         ))
           addCollection(collections, repoPath, `${workspace.name}#${task}`);
       }
@@ -324,8 +428,10 @@ export async function analyzeTestCollections(
     const rootScripts = rootManifest.scripts ?? {};
     for (const file of listFiles(repoRoot, "scripts/__tests__/*.test.{mjs,ts,tsx}"))
       candidates.set(file, expectedCollectionForPath(file, ""));
-    for (const file of listFiles(repoRoot, "e2e/system/**/*.spec.ts"))
-      candidates.set(file, expectedCollectionForPath(file, ""));
+    for (const file of listFiles(repoRoot, "e2e/system/**/*.spec.ts")) {
+      if (!candidates.has(file))
+        candidates.set(file, expectedCollectionForPath(file, ""));
+    }
 
     if (rootScripts["test:unit:root"]) {
       addExpectedTask(expectedTasksByRootCommand, "test:unit", "//#test:unit:root");
@@ -428,7 +534,10 @@ export async function analyzeTestCollections(
       }
       const actualMatchesExpected = actual[0]?.endsWith(`#${expected}`)
         || (expected === "test:unit" && actual[0]?.endsWith("#test:unit:root"))
-        || (expected === "test:e2e" && actual[0]?.endsWith("#test:e2e:root"));
+        || (expected === "test:e2e" && actual[0]?.endsWith("#test:e2e:root"))
+        || (expected === "test:e2e"
+          && actual[0] !== undefined
+          && workspaceLocalE2eOwners.has(actual[0]));
       if (expected && actual.length === 1 && !actualMatchesExpected) {
         issues.push({
           code: "path-naming-mismatch",
