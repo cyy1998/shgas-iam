@@ -7,7 +7,7 @@
 诊断或管理 cleanup，又会复制 owner commands 的 contract 并随时间漂移。
 
 维护者需要在全部 owner capabilities 完整后，以最浅的 provider-neutral composition 发布两级上层 Gate，并在最终候选树上
-取得真实、无 retry、可人工阅读的聚合证据，同时准确保留 Linux/真实 CI 为 `pending`。
+取得一次完整连续、流程内部无 retry、可人工阅读的聚合证据，同时准确保留 Linux/真实 CI 为 `pending`。
 
 ## 方案
 
@@ -46,14 +46,18 @@ E2E project；`test:e2e` 或 cleanup failure 必须保留 owner 诊断并使顶�
 
 ### 发布与证据
 
-两个 Gate 在依赖能力完整前不得出现。最终候选树无 retry 地取得：
+两个 Gate 在依赖能力完整前不得出现。最终候选树必须在同一次完整、连续的成功流程中依次取得：
 
 1. Windows 本地 `pnpm verify` 连续 3/3；
 2. 调用方提供全套专用资源时 `pnpm verify:ci` 1/1；
 3. 干净 E2E 环境中 `pnpm verify:release` 1/1。
 
+流程内部任一阶段失败都立即停止下游并阻止 feature 合入；诊断并修复环境或代码根因后，允许从 Windows `verify` 3/3 开始
+重新启动整条 evidence 流程，只有随后完整连续通过的全流程可用于验收。不得在同一流程内重试单个阶段或用最终绿色删除、改写、
+隐藏先前失败与重跑历史。
+
 证据只记录实际平台、命令、次数、是否 retry 与资源清理结果；不提交完整日志、JSON receipt、manifest、transcript 或机器证据
-状态，也不记录 URLs、credentials、tokens 或 secrets。任一组失败都阻止 feature 合入，不能通过重跑筛选绿色样本。
+状态，也不记录 URLs、credentials、tokens 或 secrets。
 
 Windows 本地结果不能表述为 Linux/CI runner 已验收。真实 provider workflow、runner 选择、观察运行、branch gate 与平台启用
 阈值属于未来独立工作，不阻塞 provider-neutral 命令发布。
@@ -68,7 +72,8 @@ Windows 本地结果不能表述为 Linux/CI runner 已验收。真实 provider 
 
 - `verify:ci` 与 `verify:release` 在同一 ticket 一次发布，且依赖能力开始前已经完整。
 - Gate 只顺序组合 owner commands 并透传失败，不复制任何资源、diagnostics 或 cleanup 规则。
-- 不允许 placeholder、silent skip、warning-only success、retry-to-green 或失败后继续下游。
+- 不允许 placeholder、silent skip、warning-only success、同一流程内 retry-to-green 或失败后继续下游；根因修复后只允许从头
+  重启完整 evidence 流程，并保留全部历史。
 - Windows 本地通过不表述为 Linux/CI adoption；命令名不授权 provider workflow、merge、release 或部署。
 - 不建立 resource detector、receipt/manifest/transcript、evidence state machine 或通用 Gate framework。
 
@@ -77,7 +82,8 @@ Windows 本地结果不能表述为 Linux/CI runner 已验收。真实 provider 
 - Root orchestration 外部行为覆盖三个 Gate 的完整顺序、success、各阶段 failure、下游未启动和 cleanup failure propagation。
 - `verify:ci` 只执行 `verify -> test:integration`；`verify:release` 只执行 `verify:ci -> test:e2e`。
 - 两个命令不读取资源配置、不复制 preflight/descriptor/diagnostics/cleanup，也不解释 owner failure。
-- Windows `verify` 3/3、全资源 `verify:ci` 1/1、干净 E2E `verify:release` 1/1 均无 retry，且 cleanup 结果明确。
+- 同一次完整连续流程内，Windows `verify` 3/3、全资源 `verify:ci` 1/1、干净 E2E `verify:release` 1/1 依次通过，阶段内部
+  无 retry 且 cleanup 结果明确；根因修复后的整体重启不使历史失效，也不阻止后续完整流程用于验收。
 - Evidence 摘要不包含 sensitive configuration 或完整日志；Linux/真实 CI 明确保持 `pending`。
 - Current docs 的三个 Gate 语义、证据与 adoption 状态一致，并只链接 owner contracts。
 
@@ -86,7 +92,8 @@ Windows 本地结果不能表述为 Linux/CI runner 已验收。真实 provider 
 - 使用受控 child commands 从 root orchestration 的公开行为验证完整顺序、fail-fast、未启动下游与 exit/signal propagation。
 - 聚焦测试覆盖基础 `verify` failure、Integration failure、E2E 未启动、E2E assertion failure 与 cleanup failure。
 - Ticket 01 只运行可控 orchestration tests、受影响 tooling lint/typecheck 与 `git diff --check`，不提前运行实际聚合 evidence。
-- Ticket 02 在最终候选树上按约定运行三组真实 evidence；每组均无 retry，并运行 `pnpm check:docs` 与 `git diff --check`。
+- Ticket 02 在最终候选树上按约定运行一条完整连续的三组真实 evidence；流程内部无 retry。失败时保留历史，根因修复后从头
+  重启，并运行 `pnpm check:docs` 与 `git diff --check`。
 - Gate spec 不复测 owner feature 的全部细节；失败诊断仍由对应 owner command 提供。
 
 ## 交付切片

@@ -38,6 +38,16 @@ if not stored then return -1 end
 return 1
 `;
 
+const DELETE_OWNED_SESSION_ARTIFACT_SCRIPT = `
+-- delete_owned_session_artifact
+local owner = redis.call("GET", KEYS[3])
+redis.call("DEL", KEYS[1], KEYS[2])
+if owner == ARGV[1] then
+  return redis.call("DEL", KEYS[3])
+end
+return 0
+`;
+
 function artifactKey(model: string, id: string) {
   return `oidc:model:${model}:${id}`;
 }
@@ -381,10 +391,19 @@ export class RedisOidcAdapter implements Adapter {
         if (!destroyed)
           throw new Error("OIDC Provider Session anchor destroy conflicted");
       }
-      await this.redis.del(
-        key,
-        consumedKey(this.model, id),
-      );
+      if (providerSession) {
+        await this.redis.eval(
+          DELETE_OWNED_SESSION_ARTIFACT_SCRIPT,
+          3,
+          key,
+          consumedKey(this.model, id),
+          sessionUidKey(providerSession.uid),
+          id,
+        );
+      }
+      else {
+        await this.redis.del(key, consumedKey(this.model, id));
+      }
     }
   }
 

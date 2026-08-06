@@ -36,7 +36,9 @@
     "gateway:apisix:validate": "pnpm --filter @iam/gateway-apisix validate",
     "gateway:apisix:diff": "pnpm --filter @iam/gateway-apisix diff",
     "gateway:apisix:apply": "pnpm --filter @iam/gateway-apisix apply",
-    "verify": "node scripts/verify.mjs"
+    "verify": "node scripts/verify.mjs",
+    "verify:ci": "node scripts/run-verification-gate.mjs ci",
+    "verify:release": "node scripts/run-verification-gate.mjs release"
   },
   "devDependencies": {
     "@iam/eslint-config": "workspace:*",

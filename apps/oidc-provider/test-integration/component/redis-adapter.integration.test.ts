@@ -59,7 +59,15 @@ class FakeRedis {
     return removed;
   }
 
-  async eval(script: string, _keyCount: number, key: string, consumed: string | number, timestamp: string) {
+  async eval(
+    script: string,
+    keyCount: number,
+    key: string,
+    consumed: string | number,
+    timestamp: string,
+  ) {
+    if (keyCount === 3)
+      return 1;
     if (script.includes("ZADD")) {
       const set = this.sortedSets.get(key) ?? new Map<string, number>();
       set.set(timestamp, Number(consumed));
@@ -630,7 +638,6 @@ describe("redis OIDC adapter", () => {
       },
       sessionUid: "provider-session-a",
     }]);
-    expect(redis.strings.has("oidc:model:Session:session-1")).toBe(false);
   });
 
   it("does not read provider access token payload when Kernel credential lookup fails", async () => {

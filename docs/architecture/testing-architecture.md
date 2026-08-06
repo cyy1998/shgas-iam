@@ -185,11 +185,25 @@ flowchart LR
 不启动 browser 或 Full-system stack，也不隐式执行 Integration。开发者按改动风险显式追加相关 profiles；完整
 `test:integration` 只在调用方准备好全部专用资源时运行。
 
+两级 provider-neutral 聚合 Gate 只组合上述 owner commands，并保持 fail fast：
+
+```text
+pnpm verify:ci       = verify -> test:integration
+pnpm verify:release  = verify:ci -> test:e2e
+```
+
+Gate 本身不读取资源配置，不复制 Integration preflight 或 Full-system E2E 的 descriptor、diagnostics 与 exact-project
+cleanup，也不把命令名解释为 provider adoption。各 owner command 的资源与 lifecycle 契约见
+[构建、测试与开发命令](../development/commands.md)。
+
 | 阶段 | 最小范围 |
 |---|---|
 | 开发内循环 | 当前 Unit/profile、单文件或测试名 |
 | Ticket 实现 | 最高层相关 collection、受影响 package lint/typecheck 与永久 Guard |
 | 准备 merge/release | 最终内容上一次 `pnpm verify`，再按风险显式执行 Integration/Gateway 等检查 |
 
-当前没有 CI 平台。Windows 本地 process collection 与 Full-system E2E 已完成无 retry 验收；Linux/CI 仍为 `pending`。平台状态不能通过
-placeholder command 或 silent skip 伪装为已采用。
+2026-08-06 的 Windows 本地候选周期在同一次完整连续流程中依次通过 `pnpm verify` 3/3、全资源 `pnpm verify:ci` 1/1、
+干净 E2E `pnpm verify:release` 1/1，且最终 task-owned 与 exact-project Docker inventory 均为零。Feature 历史中的正式
+evidence 失败和 setup retries 继续保留；环境或代码根因修复后从头重启的完整流程可用于验收，但不得在同一流程内重试单个
+阶段或隐藏历史。当前没有 CI 平台；Linux/真实 CI 仍为 `pending`，平台状态不能通过 placeholder command、silent skip 或
+本地重跑伪装为已采用。

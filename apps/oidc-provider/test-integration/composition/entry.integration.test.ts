@@ -496,11 +496,13 @@ function subjectFacts(name: string): SubjectFactsCacheRecordV1 {
 describe("oIDC provider explicit external entry", () => {
   it("uses production owners with real PostgreSQL and Redis while preserving the pre-code snapshot", async () => {
     await runWithOwnedTestResources(async ({ registerCleanup }) => {
-      const sql = postgres(databaseUrl, { max: 1 });
-      const dbClient: DbClient = drizzle({ client: sql, relations });
-      registerCleanup(async () => await sql.end({ timeout: 5 }));
+      const rawSql = postgres(databaseUrl, { max: 1 });
+      registerCleanup(async () => await rawSql.end({ timeout: 5 }));
+      const drizzleSql = postgres(databaseUrl, { max: 1 });
+      registerCleanup(async () => await drizzleSql.end({ timeout: 5 }));
+      const dbClient: DbClient = drizzle({ client: drizzleSql, relations });
       registerCleanup(async () => {
-        await sql.begin(async (transaction) => {
+        await rawSql.begin(async (transaction) => {
           await transaction`DELETE FROM user_profile_dirty WHERE user_id = ${userId}`;
           await transaction`DELETE FROM user_profile WHERE user_id = ${userId} OR subject_identifier = ${subjectIdentifier}`;
           await transaction`DELETE FROM "user" WHERE id = ${userId} OR subject_identifier = ${subjectIdentifier}`;
@@ -530,7 +532,7 @@ describe("oIDC provider explicit external entry", () => {
       let observerOwners: ReturnType<typeof createProductionOwnerSeed> | undefined;
       let ownerSeed: Promise<{ principalToken: string }> | undefined;
 
-      await sql.begin(async (transaction) => {
+      await rawSql.begin(async (transaction) => {
         await transaction`DELETE FROM user_profile_dirty WHERE user_id = ${userId}`;
         await transaction`DELETE FROM user_profile WHERE user_id = ${userId} OR subject_identifier = ${subjectIdentifier}`;
         await transaction`DELETE FROM "user" WHERE id = ${userId} OR subject_identifier = ${subjectIdentifier}`;

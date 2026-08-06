@@ -33,7 +33,8 @@ pnpm test:unit
 pnpm test:integration:<component|process|redis|postgres|composition|browser>
 ```
 
-完整 `pnpm verify` 只在准备 merge、release 或用户明确要求时运行一次；ticket 实现内循环不重复运行。
+完整 root Gate 只在准备 merge、release 或用户明确要求时运行；ticket 实现内循环不重复运行。按需要选择基础
+`pnpm verify`、全资源 `pnpm verify:ci` 或包含 Full-system E2E 的 `pnpm verify:release`。
 
 ## Workspace 命令
 
@@ -48,6 +49,8 @@ pnpm test:integration:<component|process|redis|postgres|composition|browser>
 - `pnpm test:e2e`
 - `pnpm typecheck`
 - `pnpm verify`
+- `pnpm verify:ci`
+- `pnpm verify:release`
 - `pnpm e2e:install`
 - `pnpm e2e:install:browsers`
 - Full-system runtime lifecycle（workspace-local）：`pnpm --filter @iam/e2e-system runtime:lifecycle`
@@ -245,6 +248,14 @@ Explicit recovery 的 cleanup 有独立 120 秒 deadline，对 exact project 执
 2. typecheck：`pnpm typecheck`；
 3. test:unit：`pnpm test:unit`；
 4. build：`pnpm build`。
+
+`pnpm verify:ci` 固定顺序执行 `verify -> test:integration`；`pnpm verify:release` 固定顺序执行
+`verify:ci -> test:e2e`。两者都是 provider-neutral 的浅组合：任一 owner command 非零即停止并透传失败，不另行解释资源、
+diagnostics 或 cleanup。命令名不表示已经接入 CI provider，也不授予 merge、发布或部署权限。Integration 资源与 Full-system
+E2E lifecycle 的详细契约分别由本页后续专用资源说明和 [测试编排架构](../architecture/testing-architecture.md) 持有。
+
+当前 Windows 本地聚合 evidence 与平台 adoption 状态见
+[测试编排架构的“默认验证与交付”](../architecture/testing-architecture.md#默认验证与交付)；Linux/真实 CI 尚未验收。
 
 外部资源检查不进入 `pnpm verify`，需要时显式运行：
 
