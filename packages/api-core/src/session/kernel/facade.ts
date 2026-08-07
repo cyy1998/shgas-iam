@@ -2,6 +2,10 @@ import type { SessionKernelArtifactConsumer } from "./artifact-consumption";
 import type { CleanupAdapter, SessionKernelLogger } from "./cleanup";
 import type { SessionKernelConfig, SessionKernelConfigInput } from "./config";
 import type {
+  CredentialCreateResult,
+  SessionKernelCredentialCreator,
+} from "./credential-creation";
+import type {
   CleanupRef,
   ClientBinding,
   IssuedCredential,
@@ -25,6 +29,7 @@ import { SystemLogEvent } from "../../logger";
 import { createRedisSessionKernelArtifactConsumer } from "./artifact-consumption";
 import { runCleanupRefs } from "./cleanup";
 import { normalizeSessionKernelConfig } from "./config";
+import { createRedisSessionKernelCredentialCreator } from "./credential-creation";
 import { createCurrentLookupHash } from "./hmac";
 import { createSessionKernelKeyBuilder, encodeIndexMember, parseIndexMember } from "./keys";
 import { normalizeSessionOrigin, PrincipalRefSchema } from "./model";
@@ -92,6 +97,7 @@ export type CreateClientBindingInput = {
 };
 
 export type IssueCredentialInput = {
+  credentialId?: string;
   principalSessionId: string;
   bindingId?: string;
   protocol: string;
@@ -150,23 +156,33 @@ export type ListPrincipalSessionsResult = {
 export type SessionKernel = ReturnType<typeof createSessionKernel>;
 
 export function createSessionKernel(deps: SessionKernelDependencies) {
-  return createSessionKernelWithArtifactConsumerFactory(
+  return createSessionKernelWithStateAdapterFactories(
     deps,
     ({ redis, keys }) =>
       createRedisSessionKernelArtifactConsumer(redis, keys),
+    ({ redis, keys }) =>
+      createRedisSessionKernelCredentialCreator(redis, keys),
   );
 }
 
-export function createSessionKernelWithArtifactConsumerFactory(
+export function createSessionKernelWithStateAdapterFactories(
   deps: SessionKernelDependencies,
   createArtifactConsumer: (input: {
     redis: SessionKernelRedis;
     keys: ReturnType<typeof createSessionKernelKeyBuilder>;
   }) => SessionKernelArtifactConsumer,
+  createCredentialCreator: (input: {
+    redis: SessionKernelRedis;
+    keys: ReturnType<typeof createSessionKernelKeyBuilder>;
+  }) => SessionKernelCredentialCreator | undefined,
 ) {
   const config = normalizeSessionKernelConfig(deps.config);
   const keys = createSessionKernelKeyBuilder(config.namespace);
   const artifactConsumer = createArtifactConsumer({
+    redis: deps.redis,
+    keys,
+  });
+  const credentialCreator = createCredentialCreator({
     redis: deps.redis,
     keys,
   });
@@ -175,6 +191,7 @@ export function createSessionKernelWithArtifactConsumerFactory(
     keys,
     config,
     artifactConsumer,
+    credentialCreator,
   );
   const cleanupAdapters = deps.cleanupAdapters ?? [];
   const uuid = deps.random?.uuid ?? randomUUID;
@@ -414,18 +431,19 @@ export function createSessionKernelWithArtifactConsumerFactory(
       const now = config.clock.now();
       const externalToken = input.externalToken ?? generateKernelToken(config, input.tokenKind ?? "credential");
       const lookup = createCurrentLookupHash(externalToken, config);
-      if (await store.hasLookupTombstone("credential", lookup.lookupHash))
-        return failClosed("credential lookup hash is revoked");
       const expiresAt = clampDerivedExpiresAt({
         now,
         ttlMs: input.ttlMs,
         expiresAt: input.expiresAt,
         principalSession: principal.value,
       });
+      const credentialId = input.credentialId ?? uuid();
+      if (credentialId.length === 0)
+        return failClosed("credential identity is invalid");
       const credential: IssuedCredential = {
         version: 1,
         subjectAccessTransitionId: principal.value.subjectAccessTransitionId,
-        credentialId: uuid(),
+        credentialId,
         protocol: input.protocol,
         credentialType: input.credentialType,
         lookupHash: lookup.lookupHash,
@@ -440,13 +458,12 @@ export function createSessionKernelWithArtifactConsumerFactory(
         metadata: input.metadata,
         cleanupRefs: input.cleanupRefs ?? [],
       };
-      await store.putObject({
-        kind: "credential",
-        id: credential.credentialId,
-        object: credential,
-        lookupHash: lookup.lookupHash,
+      const createResult = await store.putCredential({
+        credential,
         indexes: credentialIndexes(credential),
       });
+      if (createResult !== "created")
+        return failClosed(credentialCreateFailureMessage(createResult));
       return { status: "created", value: credential, externalToken };
     }
     catch (cause) {
@@ -1078,6 +1095,21 @@ export function createSessionKernelWithArtifactConsumerFactory(
     revokeBindingObjects,
     revokeProtocol,
   };
+}
+
+function credentialCreateFailureMessage(
+  result: Exclude<CredentialCreateResult, "created">,
+) {
+  switch (result) {
+    case "active_identity_conflict":
+      return "credential identity is already active";
+    case "identity_tombstoned":
+      return "credential identity is revoked";
+    case "lookup_owned":
+      return "credential bearer token is already owned";
+    case "lookup_tombstoned":
+      return "credential bearer token is revoked";
+  }
 }
 
 function lifecycleObjectKind(

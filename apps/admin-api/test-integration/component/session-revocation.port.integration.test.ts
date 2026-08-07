@@ -97,6 +97,41 @@ describe("createAdminSessionRevocationPort", () => {
       },
     }));
   });
+
+  test("reports Custom SSO revocation as Credentials without virtual Client Bindings", async () => {
+    const summary = revokeSummary({
+      bindings: { revoked: 0, alreadyRevoked: 0, missing: 0, excluded: 0 },
+      credentials: { revoked: 1, alreadyRevoked: 0, missing: 0, excluded: 0 },
+    });
+    const logger = {
+      logUserRevocation: mock(() => undefined),
+      logClientProtocolRevocation: mock(() => undefined),
+      logClientAllProtocolsRevocation: mock(() => undefined),
+    };
+    const port = createAdminSessionRevocationPort({
+      sessionKernel: {
+        revokeUserSessions: mock(async () => revokeSummary()),
+        revokeClientProtocol: mock(async () => summary),
+        revokeClient: mock(async () => revokeSummary()),
+      },
+      oidcInvalidation: { invalidateClient: mock(async () => undefined) },
+      logger,
+    });
+
+    await expect(port.revokeClientProtocol({
+      clientCode: "portal",
+      protocol: "custom-sso",
+      reason: "client_config_changed",
+    })).resolves.toMatchObject({
+      bindings: { revoked: 0 },
+      credentials: { revoked: 1 },
+    });
+    expect(logger.logClientProtocolRevocation).toHaveBeenCalledWith(expect.objectContaining({
+      clientCode: "portal",
+      protocol: "custom-sso",
+      summary,
+    }));
+  });
 });
 
 describe("createAdminSessionRevocationLogger", () => {
@@ -177,5 +212,27 @@ describe("createAdminSessionRevocationLogger", () => {
     expect(logged).not.toContain("external-token-secret");
     expect(logged).not.toContain("clientSecret");
     expect(logged).not.toContain("hash leaked");
+  });
+
+  test("logs Custom SSO Credential counts while keeping the Client Binding counter", () => {
+    const logger = createLogger();
+    const sessionLogger = createAdminSessionRevocationLogger({ logger });
+
+    sessionLogger.logClientProtocolRevocation({
+      clientCode: "portal",
+      protocol: "custom-sso",
+      reason: "client_config_changed",
+      summary: revokeSummary({
+        bindings: { revoked: 0, alreadyRevoked: 0, missing: 0, excluded: 0 },
+        credentials: { revoked: 1, alreadyRevoked: 0, missing: 0, excluded: 0 },
+      }) as never,
+    });
+
+    expect(logger.info).toHaveBeenCalledWith(expect.objectContaining({
+      event: SystemLogEvent.AdminSessionRevokeClientProtocol,
+      protocol: "custom-sso",
+      bindings: { revoked: 0, alreadyRevoked: 0, missing: 0, excluded: 0 },
+      credentials: { revoked: 1, alreadyRevoked: 0, missing: 0, excluded: 0 },
+    }), "admin session revoke summary");
   });
 });

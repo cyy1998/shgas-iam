@@ -1,6 +1,9 @@
 import type { AuthorizationGrantRedemption } from "../../src/authorization-grant";
 import type { LoginRestriction } from "../../src/login-restriction";
-import type { SessionKernel } from "../../src/session/kernel";
+import type {
+  SessionKernel,
+  SessionKernelRedis,
+} from "../../src/session/kernel";
 import type {
   SubjectAccessBarrier,
   SubjectAccessBootstrap,
@@ -100,6 +103,8 @@ export interface SubjectAccessRedisTestScope {
 export interface SessionKernelRedisTestScope {
   readonly writer: SessionKernel;
   readonly observer: SessionKernel;
+  readonly ambiguousWriter: SessionKernel;
+  readonly failNextCredentialCreateAfterCommit: () => void;
   readonly replaceArtifactPayloadBeforeNextValidation: (input: {
     artifactId: string;
     serializedPayload: string;
@@ -220,6 +225,16 @@ export async function createRedisTestHarness(): Promise<RedisTestHarness> {
       }
 
       let beforeNextArtifactValidation: (() => Promise<void>) | undefined;
+      let failNextCredentialCreateAfterCommit = false;
+      const ambiguousWriter = createSessionKernelClient(
+        createCommitThenErrorRedis(writerRedis, () => {
+          if (!failNextCredentialCreateAfterCommit)
+            return false;
+          failNextCredentialCreateAfterCommit = false;
+          return true;
+        }),
+        keyPrefix,
+      );
       const writer = createSessionKernelClient(
         writerRedis,
         keyPrefix,
@@ -238,7 +253,11 @@ export async function createRedisTestHarness(): Promise<RedisTestHarness> {
       });
 
       return {
+        ambiguousWriter,
         close,
+        failNextCredentialCreateAfterCommit() {
+          failNextCredentialCreateAfterCommit = true;
+        },
         observer,
         writer,
         replaceArtifactPayloadBeforeNextValidation(input) {
@@ -418,7 +437,7 @@ function createSubjectAccessClient(input: {
 }
 
 function createSessionKernelClient(
-  redis: Redis,
+  redis: SessionKernelRedis,
   namespace: string,
   beforeArtifactValidation?: () => Promise<void>,
 ) {
@@ -449,6 +468,26 @@ function createSessionKernelClient(
       : undefined,
     redis,
   });
+}
+
+function createCommitThenErrorRedis(
+  redis: Redis,
+  shouldFailAfterCommit: () => boolean,
+): SessionKernelRedis {
+  return new Proxy(redis, {
+    get(target, property) {
+      if (property === "eval") {
+        return async (...args: Parameters<NonNullable<SessionKernelRedis["eval"]>>) => {
+          const result = await target.eval(...args);
+          if (shouldFailAfterCommit())
+            throw new Error("simulated connection loss after Redis commit");
+          return result;
+        };
+      }
+      const value = Reflect.get(target, property, target);
+      return typeof value === "function" ? value.bind(target) : value;
+    },
+  }) as unknown as SessionKernelRedis;
 }
 
 function createRedisClient(redisUrl: string) {

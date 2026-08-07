@@ -1,5 +1,6 @@
 import type { SessionKernelArtifactConsumer } from "./artifact-consumption";
 import type { SessionKernelConfig } from "./config";
+import type { SessionKernelCredentialCreator } from "./credential-creation";
 import type { SessionKernelKeyBuilder } from "./keys";
 import type {
   IssuedCredential,
@@ -75,6 +76,7 @@ export class SessionKernelStore {
     private readonly keys: SessionKernelKeyBuilder,
     private readonly config: SessionKernelConfig,
     private readonly artifactConsumer: SessionKernelArtifactConsumer,
+    private readonly credentialCreator: SessionKernelCredentialCreator | undefined,
   ) {}
 
   async resolveByExternalToken<K extends ExternalKind>(
@@ -190,6 +192,25 @@ export class SessionKernelStore {
     await assertTransaction(transaction.exec());
   }
 
+  async putCredential(input: {
+    credential: IssuedCredential;
+    indexes: StoreIndexWrite[];
+  }) {
+    const now = this.config.clock.now();
+    if (ttlMsUntil(input.credential.expiresAt, now) <= 0)
+      throw new Error("cannot store an expired lifecycle object");
+    if (this.credentialCreator)
+      return await this.credentialCreator.create(input);
+    await this.putObject({
+      kind: "credential",
+      id: input.credential.credentialId,
+      object: input.credential,
+      lookupHash: input.credential.lookupHash,
+      indexes: input.indexes,
+    });
+    return "created" as const;
+  }
+
   async updateObject<K extends LifecycleObjectKind>(input: {
     kind: K;
     id: string;
@@ -202,11 +223,6 @@ export class SessionKernelStore {
     for (const index of input.indexes ?? [])
       transaction.zadd(index.key, index.score, index.member);
     await assertTransaction(transaction.exec());
-  }
-
-  async hasLookupTombstone(kind: ExternalKind, lookupHash: string) {
-    const tombstone = await this.readTombstoneKey(this.keys.lookupTombstone(kind, lookupHash));
-    return tombstone.status === "revoked";
   }
 
   async revokeActiveObject(input: {

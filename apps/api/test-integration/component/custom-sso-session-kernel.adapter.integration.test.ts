@@ -368,6 +368,8 @@ function createServices(options: {
     clientCode: string,
   ) => Promise<CustomSsoClientRuntimeDto | null>;
   grantLeaseDurationMs?: number;
+  grantAttemptId?: string;
+  grantAttemptIds?: readonly string[];
   grantScheduler?: AuthorizationGrantRedemptionScheduler;
   recordAuditLog?: (event: unknown) => Promise<void>;
   validatePrincipal?: (target: { principal: { subjectId: string } }) => Promise<
@@ -447,9 +449,14 @@ function createServices(options: {
       return { orcasId: "orcas", orcasSessionId: "orcas-session" };
     }),
   };
+  let grantAttemptIndex = 0;
   const defaultAuthorizationGrantRedemption = createAuthorizationGrantRedemption({
     leaseDurationMs: options.grantLeaseDurationMs ?? 5_000,
-    random: { uuid: randomUUID },
+    random: {
+      uuid: () => options.grantAttemptIds?.[grantAttemptIndex++]
+        ?? options.grantAttemptId
+        ?? randomUUID(),
+    },
     scheduler: options.grantScheduler,
     store: createInMemoryAuthorizationGrantRedemptionStore({
       clock: { now: () => fakeRedis.now() },
@@ -615,6 +622,50 @@ async function redeemIndependentCredential(
   });
 }
 
+async function assertAmbiguousCredentialIssueRecovery(
+  prepareOperation: (
+    services: ReturnType<typeof createServices>,
+  ) => Promise<() => Promise<string>>,
+) {
+  const firstAttemptId = "10000000-0000-4000-8000-000000000001";
+  const secondAttemptId = "20000000-0000-4000-8000-000000000002";
+  const responseLoss = new Error("credential response lost");
+  let firstCredentialToken: string | undefined;
+  let issueAttempts = 0;
+  const services = createServices({
+    grantAttemptIds: [firstAttemptId, secondAttemptId],
+    decorateKernel: kernel => ({
+      ...kernel,
+      async issueCredential(input) {
+        issueAttempts += 1;
+        const issued = await kernel.issueCredential(input);
+        if (issueAttempts === 1) {
+          firstCredentialToken = issued.status === "created"
+            ? issued.externalToken
+            : undefined;
+          throw responseLoss;
+        }
+        return issued;
+      },
+    }),
+  });
+  const execute = await prepareOperation(services);
+
+  await expect(execute()).rejects.toBe(responseLoss);
+  expect(firstCredentialToken).toBeDefined();
+  await expect(
+    services.kernel.resolveCredential(firstCredentialToken!),
+  ).resolves.toMatchObject({ status: "revoked" });
+
+  const retryToken = await execute();
+  await expect(
+    services.kernel.resolveCredential(retryToken),
+  ).resolves.toMatchObject({
+    status: "resolved",
+    value: { credentialId: secondAttemptId },
+  });
+}
+
 function createOaToken(loginid: string, ts: string, clientSecret = client.clientSecret) {
   return Buffer.from(sm3(`${loginid}|${ts}|${clientSecret}${clientSecret}`), "hex").toBase64();
 }
@@ -633,6 +684,210 @@ beforeEach(() => {
 });
 
 describe("Custom SSO module interface", () => {
+  test("issues an Independent Credential with the reserved attempt identity and no Client Binding", async () => {
+    const grantAttemptId = "10000000-0000-4000-8000-000000000001";
+    const services = createServices({ grantAttemptId });
+
+    const result = await redeemIndependentCredential(services);
+    const credential = await services.kernel.resolveCredential(result.credential);
+
+    expect(credential).toMatchObject({
+      status: "resolved",
+      value: {
+        credentialId: grantAttemptId,
+      },
+    });
+    if (credential.status !== "resolved")
+      throw new Error("expected resolved Independent Credential");
+    expect(credential.value).not.toHaveProperty("bindingId");
+  });
+
+  test("protocol invalidation revokes a direct Independent Credential without a binding count", async () => {
+    const services = createServices();
+    const result = await redeemIndependentCredential(services);
+
+    const summary = await services.kernel.revokeClientProtocol(
+      independentClient.clientCode,
+      "custom-sso",
+      "client_config_changed",
+    );
+
+    expect(summary).toMatchObject({
+      bindings: { revoked: 0 },
+      credentials: { revoked: 1 },
+    });
+    await expect(
+      services.customSsoSession.resolveIndependentCredentialContext(
+        result.credential,
+        independentClient.clientCode,
+      ),
+    ).rejects.toBeInstanceOf(AuthzUnauthorizedError);
+    await expect(
+      services.kernel.resolveCredential(result.credential),
+    ).resolves.toMatchObject({ status: "revoked" });
+  });
+
+  test("revokes an ambiguously committed Credential and retries the Grant with a new attempt identity", async () => {
+    await assertAmbiguousCredentialIssueRecovery(async (services) => {
+      const { code } = await issueAuthorizationCode(services);
+      const input = {
+        client: independentClient,
+        code,
+        redirectUri: "https://app.example.com/callback",
+      };
+      return async () => {
+        const result = await services.customSsoSession.redeemIndependentGrant(input);
+        return result.credential;
+      };
+    });
+  });
+
+  test("recovers a Gateway Grant after an ambiguously committed Local Session", async () => {
+    await assertAmbiguousCredentialIssueRecovery(async (services) => {
+      const redirectUrl = "https://gateway.example.com/callback";
+      const { code } = await issueAuthorizationCode(services, {
+        clientCode: "gateway",
+        redirectUrl,
+      });
+      const input = {
+        client: getGatewayClientContext("gateway"),
+        code,
+        redirectUrl,
+      };
+      return async () => {
+        const result = await services.customSsoSession.completeGatewayLogin(input);
+        return result.token;
+      };
+    });
+  });
+
+  test("rejects and revokes a legacy binding-backed Custom SSO Credential", async () => {
+    const services = createServices();
+    const principal = await services.kernel.createPrincipalSession(subjectIdentifier);
+    if (principal.status !== "created")
+      throw new Error("expected Principal Session");
+    const binding = await services.kernel.createClientBinding({
+      principalSessionId: principal.value.principalSessionId,
+      protocol: "custom-sso",
+      clientCode: independentClient.clientCode,
+      metadata: {
+        version: 1,
+        mode: CustomSsoClientMode.Independent,
+        configVersion: independentClient.configVersion,
+      },
+    });
+    if (binding.status !== "created")
+      throw new Error("expected legacy Client Binding");
+    const legacyCredential = await services.kernel.issueCredential({
+      principalSessionId: principal.value.principalSessionId,
+      bindingId: binding.value.bindingId,
+      protocol: "custom-sso",
+      clientCode: independentClient.clientCode,
+      credentialType: "local_session",
+      tokenKind: "localSession",
+      metadata: {
+        version: 1,
+        mode: CustomSsoClientMode.Independent,
+        configVersion: independentClient.configVersion,
+      },
+    });
+    if (legacyCredential.status !== "created" || legacyCredential.externalToken === undefined)
+      throw new Error("expected legacy Credential");
+    const legacyLogoutCredential = await services.kernel.issueCredential({
+      principalSessionId: principal.value.principalSessionId,
+      bindingId: binding.value.bindingId,
+      protocol: "custom-sso",
+      clientCode: independentClient.clientCode,
+      credentialType: "local_session",
+      tokenKind: "localSession",
+      metadata: {
+        version: 1,
+        mode: CustomSsoClientMode.Independent,
+        configVersion: independentClient.configVersion,
+      },
+    });
+    if (
+      legacyLogoutCredential.status !== "created"
+      || legacyLogoutCredential.externalToken === undefined
+      || principal.externalToken === undefined
+    ) {
+      throw new Error("expected legacy logout Credential");
+    }
+
+    await expect(
+      services.customSsoSession.resolveIndependentCredentialContext(
+        legacyCredential.externalToken,
+        independentClient.clientCode,
+      ),
+    ).rejects.toBeInstanceOf(AuthzUnauthorizedError);
+    await expect(
+      services.kernel.resolveCredential(legacyCredential.externalToken),
+    ).resolves.toMatchObject({ status: "revoked" });
+    await expect(
+      services.customSsoSession.logout(legacyLogoutCredential.externalToken),
+    ).rejects.toBeInstanceOf(AuthzUnauthorizedError);
+    await expect(
+      services.kernel.resolveCredential(legacyLogoutCredential.externalToken),
+    ).resolves.toMatchObject({ status: "revoked" });
+    await expect(
+      services.kernel.resolvePrincipalSession(principal.externalToken),
+    ).resolves.toMatchObject({ status: "resolved" });
+  });
+
+  test("fails closed on an active attempt identity collision without revoking its existing Credential", async () => {
+    const grantAttemptId = "10000000-0000-4000-8000-000000000001";
+    let attemptedCredentialId: string | undefined;
+    const services = createServices({
+      grantAttemptId,
+      decorateKernel: kernel => ({
+        ...kernel,
+        async issueCredential(input) {
+          attemptedCredentialId = input.credentialId;
+          return {
+            status: "fail_closed" as const,
+            message: "credential identity is already active",
+          };
+        },
+      }),
+    });
+    const { code, principalToken } = await issueAuthorizationCode(services);
+    const principal = await services.kernel.resolvePrincipalSession(principalToken);
+    if (principal.status !== "resolved")
+      throw new Error("expected Principal Session");
+    const existing = await services.kernel.issueCredential({
+      credentialId: grantAttemptId,
+      externalToken: "preexisting-collision-token",
+      principalSessionId: principal.value.principalSessionId,
+      protocol: "custom-sso",
+      clientCode: independentClient.clientCode,
+      credentialType: "local_session",
+      metadata: {
+        version: 1,
+        mode: CustomSsoClientMode.Independent,
+        configVersion: independentClient.configVersion,
+      },
+    });
+    if (existing.status !== "created")
+      throw new Error("expected pre-existing Credential");
+
+    let redemptionError: unknown;
+    try {
+      await services.customSsoSession.redeemIndependentGrant({
+        client: independentClient,
+        code,
+        redirectUri: "https://app.example.com/callback",
+      });
+    }
+    catch (error) {
+      redemptionError = error;
+    }
+    expect(attemptedCredentialId).toBe(grantAttemptId);
+    expect(redemptionError).toBeInstanceOf(AuthzUnauthorizedError);
+    await expect(
+      services.kernel.resolveCredential("preexisting-collision-token"),
+    ).resolves.toMatchObject({ status: "resolved" });
+  });
+
   test("preserves Subject Access classification while creating an authorization artifact", async () => {
     let validationCalls = 0;
     const services = createServices({
@@ -656,10 +911,10 @@ describe("Custom SSO module interface", () => {
   });
 
   test.each([
-    ["binding", 3],
-    ["credential", 4],
-  ] as const)("preserves Subject Access classification while creating a local %s", async (
-    _objectKind,
+    ["while issuing the Credential", 3],
+    ["during post-issue Credential validation", 4],
+  ] as const)("preserves Subject Access classification %s", async (
+    _validationPhase,
     failingValidationCall,
   ) => {
     let countValidations = false;
@@ -1208,7 +1463,7 @@ describe("Custom SSO module interface", () => {
     });
   });
 
-  test("revokes a newly issued credential and binding when grant consumption loses its fence", async () => {
+  test("revokes a newly issued Credential when Grant consumption loses its fence", async () => {
     let issuedCredentialToken: string | undefined;
     const services = createServices({
       authorizationGrantRedemption: (defaultRedemption) => {
@@ -1242,7 +1497,6 @@ describe("Custom SSO module interface", () => {
     })).rejects.toBeInstanceOf(InvalidAuthCodeError);
 
     expect(fakeRedis.keysStartingWith("sess:v2:active:c:")).toHaveLength(0);
-    expect(fakeRedis.keysStartingWith("sess:v2:active:b:")).toHaveLength(0);
     expect(fakeRedis.payloadKeys()).toHaveLength(0);
     expect(issuedCredentialToken).toBeDefined();
     await expect(
@@ -1250,9 +1504,10 @@ describe("Custom SSO module interface", () => {
     ).resolves.toMatchObject({ status: "revoked" });
   });
 
-  test("never returns a sid when consume and binding compensation throw", async () => {
+  test("never returns a sid when consume and Credential compensation throw", async () => {
     let issuedCredentialToken: string | undefined;
     const consumeFailure = new Error("consume dependency failed");
+    const release = mock(async () => "released" as const);
     const services = createServices({
       authorizationGrantRedemption: (defaultRedemption) => {
         const consume = mock(async () => {
@@ -1263,7 +1518,7 @@ describe("Custom SSO module interface", () => {
           consume,
           withLease: async (_reservation, operation) => await operation({
             consume,
-            release: async () => "stale-attempt" as const,
+            release,
           }),
         };
       },
@@ -1276,8 +1531,8 @@ describe("Custom SSO module interface", () => {
             : undefined;
           return issued;
         },
-        async revokeBinding() {
-          throw new Error("binding revoke failed");
+        async revokeCredential() {
+          throw new Error("credential revoke failed");
         },
       }),
     });
@@ -1292,14 +1547,12 @@ describe("Custom SSO module interface", () => {
     })).rejects.toBe(consumeFailure);
 
     expect(issuedCredentialToken).toBeDefined();
-    await expect(
-      services.kernel.resolveCredential(issuedCredentialToken!),
-    ).resolves.toMatchObject({ status: "revoked" });
     expect(logger.warn).toHaveBeenCalledWith(expect.objectContaining({
       clientCode: independentClient.clientCode,
       operation: "independent_credential_compensation",
-      outcome: "binding_revoke_failed_credential_revoked",
-    }), "custom sso credential compensation used credential fallback");
+      outcome: "revoke_failed",
+    }), "custom sso credential compensation failed closed");
+    expect(release).not.toHaveBeenCalled();
     const observableOutput = JSON.stringify(logger.warn.mock.calls);
     expect(observableOutput).not.toContain(issuedCredentialToken!);
     expect(observableOutput).not.toContain(code);
@@ -1562,7 +1815,7 @@ describe("Custom SSO module interface", () => {
     }));
   });
 
-  test("stores a Gateway Local Session as versioned minimal Kernel metadata without a private user payload", async () => {
+  test("stores a Gateway Local Session as one versioned Credential without a private user payload", async () => {
     const services = createServices();
     const redirectUrl = "https://gateway.example.com/callback";
     const { code } = await issueAuthorizationCode(services, {
@@ -1576,28 +1829,16 @@ describe("Custom SSO module interface", () => {
       redirectUrl,
     });
     const credential = await services.kernel.resolveCredential(result.token);
-    if (credential.status !== "resolved" || credential.value.bindingId === undefined)
+    if (credential.status !== "resolved")
       throw new Error("expected resolved Gateway credential");
-    const binding = await services.kernel.resolveClientBindingById(
-      credential.value.bindingId,
-    );
 
     expect(credential.value.metadata).toEqual({
       version: 1,
       mode: CustomSsoClientMode.Gateway,
       configVersion: 7,
     });
-    expect(binding).toMatchObject({
-      status: "resolved",
-      value: {
-        metadata: {
-          version: 1,
-          mode: CustomSsoClientMode.Gateway,
-          configVersion: 7,
-        },
-      },
-    });
-    const serializedArtifacts = JSON.stringify({ binding, credential });
+    expect(credential.value).not.toHaveProperty("bindingId");
+    const serializedArtifacts = JSON.stringify({ credential });
     expect(serializedArtifacts).not.toContain("payloadRef");
     expect(serializedArtifacts).not.toContain("userDetail");
     expect(serializedArtifacts).not.toContain("projection");
@@ -2042,7 +2283,7 @@ describe("Custom SSO module interface", () => {
         alreadyRevoked: 0,
         excluded: 0,
         missing: 0,
-        revoked: 1,
+        revoked: 0,
       },
       credentials: {
         alreadyRevoked: 0,

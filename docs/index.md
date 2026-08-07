@@ -29,9 +29,10 @@
 | [docs/adr/0004-adopt-upstream-first-matt-skills.md](adr/0004-adopt-upstream-first-matt-skills.md) | decision | Current | 2026-07-24 | 2026-10-31 | 确立上游 Matt skills 的流程所有权，并以仓库薄适配取代可执行证据状态机。 |
 | [docs/adr/0005-keep-live-login-state-in-redis.md](adr/0005-keep-live-login-state-in-redis.md) | decision | Current | 2026-07-28 | 2026-10-31 | 有效会话与临时登录限制只以 Redis 实时状态为事实来源，不建立 PostgreSQL 会话影子或历史快照。 |
 | [docs/adr/0006-elevate-user-subject-identifier.md](adr/0006-elevate-user-subject-identifier.md) | decision | Current | 2026-07-30 | 2026-10-31 | 保留现有 UUID，并将 Subject Identifier 的命名与所有权从 OIDC 提升到 IAM 身份域。 |
-| [docs/adr/0007-separate-versioned-custom-sso-client-configuration.md](adr/0007-separate-versioned-custom-sso-client-configuration.md) | decision | Current | 2026-07-30 | 2026-10-31 | Custom SSO 使用独立的严格配置、Secret Hash 和版本屏障，并通过无双读的维护窗口硬切换迁移。 |
+| [docs/adr/0007-separate-versioned-custom-sso-client-configuration.md](adr/0007-separate-versioned-custom-sso-client-configuration.md) | decision | Current | 2026-08-07 | 2026-10-31 | Custom SSO 使用独立的严格配置、Secret Hash 和版本屏障；其中 Client Binding 要求已由 ADR-0010 取代。 |
 | [docs/adr/0008-adopt-client-subject-projection.md](adr/0008-adopt-client-subject-projection.md) | decision | Current | 2026-07-30 | 2026-10-31 | 两个协议共享主体事实与 client 裁剪模块，但保持配置、Wire Contract 和生命周期独立。 |
 | [docs/adr/0009-adopt-canonical-test-collections.md](adr/0009-adopt-canonical-test-collections.md) | decision | Current | 2026-08-06 | 2026-10-31 | 采用 Unit/Integration/E2E canonical collections、永久 Guard，并原子切换默认 `test` 与 `verify`。 |
+| [docs/adr/0010-narrow-client-binding-to-oidc-lifecycle.md](adr/0010-narrow-client-binding-to-oidc-lifecycle.md) | decision | Current | 2026-08-07 | 2026-10-31 | Client Binding 只属于 OIDC；Custom SSO 使用可恢复 Credential 签发，OIDC 删除 full binding 派生副本。 |
 | [docs/agents/code-investigation.md](agents/code-investigation.md) | agent-config | Current | 2026-08-03 | 2026-10-31 | 项目级 `code_researcher`/`deep_researcher` 的分层路由、只读调查、证据返回和外置记忆规则。 |
 | [docs/agents/domain.md](agents/domain.md) | agent-config | Current | 2026-07-16 | 2026-10-31 | Engineering skills 的 single-context domain documentation 消费规则。 |
 | [docs/agents/issue-tracker.md](agents/issue-tracker.md) | agent-config | Current | 2026-08-06 | 2026-10-31 | 本地 spec、ticket、轻量 feature journal 与批量实施 handoff 的文件约定。 |

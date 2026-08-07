@@ -1024,6 +1024,18 @@ describe("session kernel lifecycle", () => {
     expect(credential.status).toBe("created");
     if (credential.status !== "created")
       return;
+    const directCredential = await kernel.issueCredential({
+      principalSessionId: session.value.principalSessionId,
+      protocol: "custom-sso",
+      clientCode: "portal",
+      credentialType: "local_session",
+      renewalPolicy: "extend_with_principal",
+      ttlMs: 10_000,
+    });
+    expect(directCredential.status).toBe("created");
+    if (directCredential.status !== "created")
+      return;
+    expect(directCredential.value.bindingId).toBeUndefined();
 
     redis.advance(5_000);
     const renewed = await kernel.renewPrincipalSession(session.value.principalSessionId);
@@ -1038,6 +1050,12 @@ describe("session kernel lifecycle", () => {
     expect(renewedCredential.status).toBe("resolved");
     if (renewedCredential.status === "resolved")
       expect(renewedCredential.value.expiresAt).toBe(renewed.value.expiresAt);
+    const renewedDirectCredential = await kernel.resolveCredential(
+      directCredential.externalToken!,
+    );
+    expect(renewedDirectCredential.status).toBe("resolved");
+    if (renewedDirectCredential.status === "resolved")
+      expect(renewedDirectCredential.value.expiresAt).toBe(renewed.value.expiresAt);
   });
 
   test("issues, resolves, and idempotently revokes credentials", async () => {
@@ -1063,6 +1081,34 @@ describe("session kernel lifecycle", () => {
     await expect(kernel.resolveCredential(credential.externalToken!)).resolves.toMatchObject({ status: "revoked" });
     const second = await kernel.revokeCredential(credential.value.credentialId, "admin_revoke");
     expect(second.credentials.alreadyRevoked).toBe(1);
+  });
+
+  test("issues a credential with a caller-known identity without changing its bearer token", async () => {
+    const { kernel } = createKernel();
+    const session = await kernel.createPrincipalSession(principal.subjectId);
+    expect(session.status).toBe("created");
+    if (session.status !== "created")
+      return;
+
+    const credentialId = "30000000-0000-4000-8000-000000000001";
+    const credential = await kernel.issueCredential({
+      credentialId,
+      principalSessionId: session.value.principalSessionId,
+      protocol: "custom-sso",
+      clientCode: "portal",
+      credentialType: "local_sid",
+      ttlMs: 30_000,
+    });
+
+    expect(credential.status).toBe("created");
+    if (credential.status !== "created")
+      return;
+    expect(credential.value.credentialId).toBe(credentialId);
+    expect(credential.externalToken).not.toBe(credentialId);
+    await expect(kernel.resolveCredential(credential.externalToken!)).resolves.toMatchObject({
+      status: "resolved",
+      value: { credentialId },
+    });
   });
 
   test("consumes protocol artifacts once and reports replay through consumed tombstone", async () => {
@@ -1289,25 +1335,31 @@ describe("session kernel tombstone, cleanup, validation, and fail closed behavio
       credentialType: "access_token",
       ttlMs: 30_000,
     });
-    const revokedBinding = await kernel.createClientBinding({
+    const revokedCredential = await kernel.issueCredential({
       principalSessionId: revokedSession.value.principalSessionId,
       protocol: "custom-sso",
       clientCode: "portal",
+      credentialType: "local_session",
       ttlMs: 30_000,
     });
     expect(keptBinding.status).toBe("created");
     expect(keptCredential.status).toBe("created");
-    expect(revokedBinding.status).toBe("created");
-    if (keptBinding.status !== "created" || keptCredential.status !== "created" || revokedBinding.status !== "created")
+    expect(revokedCredential.status).toBe("created");
+    if (
+      keptBinding.status !== "created"
+      || keptCredential.status !== "created"
+      || revokedCredential.status !== "created"
+    ) {
       return;
+    }
 
     const summary = await kernel.revokeUserSessions(principal, "admin_revoke", {
       exceptPrincipalSessionId: keptSession.value.principalSessionId,
     });
 
     expect(summary.principalSessions).toMatchObject({ revoked: 1, excluded: 1 });
-    expect(summary.bindings.revoked).toBe(2);
-    expect(summary.credentials.revoked).toBe(1);
+    expect(summary.bindings.revoked).toBe(1);
+    expect(summary.credentials.revoked).toBe(2);
     await expect(kernel.resolvePrincipalSession(keptSession.externalToken!)).resolves.toMatchObject({
       status: "resolved",
     });
@@ -1341,12 +1393,6 @@ describe("session kernel tombstone, cleanup, validation, and fail closed behavio
       ttlMs: 30_000,
       cleanupRefs: [{ protocol: "oidc", kind: "payload", ref: "payload:1" }],
     });
-    const customBinding = await kernel.createClientBinding({
-      principalSessionId: session.value.principalSessionId,
-      protocol: "custom-sso",
-      clientCode: "portal",
-      ttlMs: 30_000,
-    });
     const customCredential = await kernel.issueCredential({
       principalSessionId: session.value.principalSessionId,
       protocol: "custom-sso",
@@ -1356,12 +1402,10 @@ describe("session kernel tombstone, cleanup, validation, and fail closed behavio
     });
     expect(oidcBinding.status).toBe("created");
     expect(oidcCredential.status).toBe("created");
-    expect(customBinding.status).toBe("created");
     expect(customCredential.status).toBe("created");
     if (
       oidcBinding.status !== "created"
       || oidcCredential.status !== "created"
-      || customBinding.status !== "created"
       || customCredential.status !== "created"
     ) {
       return;
@@ -1378,13 +1422,13 @@ describe("session kernel tombstone, cleanup, validation, and fail closed behavio
       ref: "payload:1",
       error: "cleanup adapter not configured",
     }]);
-    await expect(kernel.resolveClientBindingById(customBinding.value.bindingId)).resolves.toMatchObject({
+    await expect(kernel.resolveCredential(customCredential.externalToken!)).resolves.toMatchObject({
       status: "resolved",
     });
 
     const allProtocolsSummary = await kernel.revokeClient("portal", "client_deleted");
 
-    expect(allProtocolsSummary.bindings.revoked).toBe(1);
+    expect(allProtocolsSummary.bindings.revoked).toBe(0);
     expect(allProtocolsSummary.credentials.revoked).toBe(1);
     await expect(kernel.resolveCredential(customCredential.externalToken!)).resolves.toMatchObject({
       status: "revoked",

@@ -3,20 +3,6 @@ import { OidcScope } from "@iam/contracts";
 import { errors } from "oidc-provider";
 import { describe, expect, it } from "vitest";
 import { createOidcClaimsAdapter } from "../provider/claims.ts";
-import { providerSessionBindingKey } from "../session/provider-session.ts";
-
-class ClaimsRedis {
-  values = new Map<string, string>();
-
-  async get(key: string) {
-    return this.values.get(key) ?? null;
-  }
-
-  async del(...keys: string[]) {
-    keys.forEach(key => this.values.delete(key));
-    return keys.length;
-  }
-}
 
 function createOpenIdClaimsSnapshot(
   subjectIdentifier: string,
@@ -36,7 +22,6 @@ function createOpenIdClaimsSnapshot(
 }
 
 function createFixture() {
-  const redis = new ClaimsRedis();
   const account = {
     id: 7,
     subjectIdentifier: "57b0e34d-bf33-4671-87ea-4ed2f1b0e420",
@@ -72,7 +57,7 @@ function createFixture() {
       oidcConfigVersion: client.oidc_config_version,
     },
   };
-  redis.values.set(providerSessionBindingKey("provider-a", "client-a"), JSON.stringify({
+  const providerBinding = {
     globalSessionId: session.sessionId,
     principalSessionId: session.sessionId,
     bindingId: "binding-a",
@@ -82,7 +67,7 @@ function createFixture() {
     authTime: session.authTime,
     oidcConfigVersion: client.oidc_config_version,
     expiresAt: Math.floor(Date.now() / 1000) + 300,
-  }));
+  };
   const adapter = createOidcClaimsAdapter({
     accounts: {
       findBySubject: async (subject: string) => subject === account.subjectIdentifier ? account : null,
@@ -107,10 +92,10 @@ function createFixture() {
       }),
     },
     providerSessions: {
-      read: async (sessionUid: string, clientCode: string) => {
-        const value = redis.values.get(providerSessionBindingKey(sessionUid, clientCode));
-        return value ? JSON.parse(value) : null;
-      },
+      read: async (sessionUid: string, clientCode: string) => sessionUid === "provider-a"
+        && clientCode === "client-a"
+        ? structuredClone(providerBinding)
+        : null,
     },
     tokens: {
       resolveAccessTokenCredential: async (externalToken: string) => externalToken === "token-a" ? credential : null,
@@ -119,7 +104,7 @@ function createFixture() {
       },
     },
   });
-  return { account, adapter, client, credential, redis, revokedCredentialIds, session };
+  return { account, adapter, client, credential, providerBinding, revokedCredentialIds, session };
 }
 
 describe("oIDC claims and UserInfo snapshot", () => {
@@ -872,18 +857,8 @@ describe("oIDC claims and UserInfo snapshot", () => {
   });
 
   it("revokes a resolved credential when the provider binding no longer matches", async () => {
-    const { account, adapter, client, redis, revokedCredentialIds } = createFixture();
-    redis.values.set(providerSessionBindingKey("provider-a", "client-a"), JSON.stringify({
-      globalSessionId: "principal-a",
-      principalSessionId: "principal-a",
-      bindingId: "binding-b",
-      clientCode: "client-a",
-      userId: account.id,
-      accountId: account.subjectIdentifier,
-      authTime: 123,
-      oidcConfigVersion: client.oidc_config_version,
-      expiresAt: Math.floor(Date.now() / 1000) + 300,
-    }));
+    const { account, adapter, client, providerBinding, revokedCredentialIds } = createFixture();
+    providerBinding.bindingId = "binding-b";
 
     const resolved = await adapter.findAccount(account.subjectIdentifier, {
       kind: "AccessToken",

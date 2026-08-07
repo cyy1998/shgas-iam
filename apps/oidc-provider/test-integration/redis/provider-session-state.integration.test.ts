@@ -26,7 +26,6 @@ import {
 import { createProviderSessionStateStore } from "../../src/session/provider-session-state.store.ts";
 import {
   pendingProviderSessionBindingKey,
-  providerSessionBindingKey,
   providerSessionBindingLookupKey,
   providerSessionGenerationMembersKey,
   providerSessionPrincipalAnchorKey,
@@ -135,12 +134,13 @@ describe("oIDC Provider Session real Redis contract", () => {
     expect(await testScope.observer.exists(existingPendingKey)).toBe(0);
   });
 
-  it("publishes one generation, refreshes owned TTLs, and conditionally cleans its anchor", async () => {
+  it("publishes only minimal state, refreshes owned TTLs, and conditionally cleans its anchor", async () => {
     const testScope = scope!;
     const accountId = randomUUID();
     const clientCode = testScope.unique("client");
     const providerSessionUid = testScope.unique("provider");
     trackPublication(testScope, providerSessionUid, clientCode);
+    const removedFullBindingKey = removedProviderSessionBindingKey(providerSessionUid, clientCode);
     const writerStore = createProviderSessionStateStore(asStateRedis(testScope.writer));
     const observerStore = createProviderSessionStateStore(asStateRedis(testScope.observer));
     const initialAttemptId = testScope.unique("attempt-initial");
@@ -159,6 +159,7 @@ describe("oIDC Provider Session real Redis contract", () => {
       providerSessionUid,
       ttlSeconds: 60,
     })).resolves.toMatchObject({ status: "committed" });
+    expect(await testScope.observer.exists(removedFullBindingKey)).toBe(0);
     const initialAnchor = await writerStore.readAnchor(providerSessionUid);
     expect(initialAnchor).not.toBeNull();
     const secondaryClientCode = testScope.unique("client-secondary");
@@ -178,6 +179,33 @@ describe("oIDC Provider Session real Redis contract", () => {
       providerSessionUid,
       ttlSeconds: 60,
     })).resolves.toMatchObject({ status: "committed" });
+    expect(await testScope.observer.exists(removedProviderSessionBindingKey(
+      providerSessionUid,
+      secondaryClientCode,
+    ))).toBe(0);
+    await expect(writerStore.publishClientBinding({
+      anchor: initialAnchor!,
+      binding: {
+        ...secondaryBinding,
+        bindingId: testScope.unique("binding-stale-owner"),
+        mappingOwnerId: testScope.unique("owner-stale-owner"),
+      },
+      expectedLookup: {
+        bindingId: secondaryBinding.bindingId,
+        mappingOwnerId: testScope.unique("owner-wrong-expected"),
+      },
+      providerSessionUid,
+      ttlSeconds: 60,
+    })).resolves.toMatchObject({ status: "conflict" });
+    await expect(writerStore.readLookup(providerSessionUid, secondaryClientCode))
+      .resolves
+      .toMatchObject({
+        exists: true,
+        value: {
+          bindingId: secondaryBinding.bindingId,
+          mappingOwnerId: secondaryBinding.mappingOwnerId,
+        },
+      });
     await expect(writerStore.publishRebind({
       attemptId: initialAttemptId,
       binding: initialBinding,
@@ -224,11 +252,15 @@ describe("oIDC Provider Session real Redis contract", () => {
 
     const publicationKeys = [
       providerSessionPrincipalAnchorKey(providerSessionUid),
-      providerSessionBindingKey(providerSessionUid, clientCode),
       providerSessionBindingLookupKey(providerSessionUid, clientCode),
       providerSessionGenerationMembersKey(providerSessionUid, winnerAttemptId),
     ] as const;
     await Promise.all(publicationKeys.map(key => testScope.writer.pexpire(key, 1_000)));
+    await expect(writerStore.refresh({
+      binding: { ...winner, mappingOwnerId: testScope.unique("owner-stale-refresh") },
+      providerSessionUid,
+      ttlSeconds: 60,
+    })).resolves.toBe(false);
     await expect(writerStore.refresh({
       binding: winner,
       providerSessionUid,
@@ -236,6 +268,7 @@ describe("oIDC Provider Session real Redis contract", () => {
     })).resolves.toBe(true);
     const refreshedTtls = await Promise.all(publicationKeys.map(key => testScope.observer.pttl(key)));
     expect(refreshedTtls.every(ttl => ttl > 50_000)).toBe(true);
+    expect(await testScope.observer.exists(removedFullBindingKey)).toBe(0);
 
     await writerStore.deleteOwned({
       anchorGeneration: initialBinding.anchorGeneration,
@@ -252,7 +285,7 @@ describe("oIDC Provider Session real Redis contract", () => {
     });
     await expect(Promise.all(publicationKeys.map(key => testScope.observer.get(key))))
       .resolves
-      .toEqual([null, null, null, null]);
+      .toEqual([null, null, null]);
   });
 
   it("keeps a Provider Session generation anchored until its last client mapping is revoked", async () => {
@@ -309,9 +342,12 @@ describe("oIDC Provider Session real Redis contract", () => {
       generation,
       principalSessionId: bindingA.principalSessionId,
     });
-    await expect(store.readBinding(providerSessionUid, clientA)).resolves.toMatchObject({
-      bindingId: bindingA.bindingId,
+    await expect(store.readLookup(providerSessionUid, clientA)).resolves.toMatchObject({
+      exists: true,
+      value: { bindingId: bindingA.bindingId },
     });
+    expect(await testScope.observer.exists(removedProviderSessionBindingKey(providerSessionUid, clientA)))
+      .toBe(0);
     await store.deleteOwned({
       anchorGeneration: bindingA.anchorGeneration,
       clientCode: clientA,
@@ -328,6 +364,7 @@ describe("oIDC Provider Session real Redis contract", () => {
     const clientCode = testScope.unique("client");
     const generation = testScope.unique("generation");
     trackPublication(testScope, providerSessionUid, clientCode);
+    const removedFullBindingKey = removedProviderSessionBindingKey(providerSessionUid, clientCode);
     const membersKey = providerSessionGenerationMembersKey(providerSessionUid, generation);
     const store = createProviderSessionStateStore(asStateRedis(testScope.writer));
     const binding = createBinding({
@@ -346,6 +383,7 @@ describe("oIDC Provider Session real Redis contract", () => {
       ttlSeconds: 60,
     })).resolves.toMatchObject({ status: "committed" });
     expect(await testScope.observer.exists(membersKey)).toBe(1);
+    expect(await testScope.observer.exists(removedFullBindingKey)).toBe(0);
 
     await expect(store.destroyProviderSession(providerSessionUid)).resolves.toBe(true);
     await expect(store.readAnchor(providerSessionUid)).resolves.toMatchObject({ generation });
@@ -381,6 +419,7 @@ describe("oIDC Provider Session real Redis contract", () => {
 
     await expect(store.readAnchor(providerSessionUid)).resolves.toBeNull();
     expect(await testScope.observer.exists(membersKey)).toBe(0);
+    expect(await testScope.observer.exists(removedFullBindingKey)).toBe(0);
   });
 
   it("confirms a committed binding when the publish response is lost and does not revoke it", async () => {
@@ -480,6 +519,10 @@ describe("oIDC Provider Session real Redis contract", () => {
       bindingId: binding!.bindingId,
       principalSessionId: principal.value.principalSessionId,
     });
+    expect(await testScope.observer.exists(removedProviderSessionBindingKey(
+      providerSessionUid,
+      clientCode,
+    ))).toBe(0);
   });
 });
 
@@ -513,8 +556,12 @@ function trackPublication(
 ) {
   testScope.trackKey(providerSessionPrincipalAnchorKey(providerSessionUid));
   testScope.trackPrefix(providerSessionGenerationMembersKey(providerSessionUid, ""));
-  testScope.trackKey(providerSessionBindingKey(providerSessionUid, clientCode));
+  testScope.trackKey(removedProviderSessionBindingKey(providerSessionUid, clientCode));
   testScope.trackKey(providerSessionBindingLookupKey(providerSessionUid, clientCode));
+}
+
+function removedProviderSessionBindingKey(sessionUid: string, clientCode: string) {
+  return `oidc:provider-session-binding:${encodeURIComponent(sessionUid)}:${encodeURIComponent(clientCode)}`;
 }
 
 function asStateRedis(redis: OidcProviderRedisTestScope["writer"]) {

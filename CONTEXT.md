@@ -49,7 +49,7 @@ IAM 为 Gateway client 建立并管理的 client-scoped 登录会话。
 _Avoid_: Independent Client Credential, third-party local session
 
 **Custom SSO Client Configuration**:
-一个 client 对 Custom SSO 接入模式、回调行为和所需 Subject Claims 的独立版本化声明；它由 `customSsoEnabled`、可空的 `customSsoConfig`、Independent 模式专用的 `customSsoSecretHash` 与单调递增的 `customSsoConfigVersion` 表达，不属于 OIDC 配置。未配置、已配置但停用、启用是三个不同状态，`mode` 只区分 Gateway 与 Independent，不使用 `None` 表示关闭；Independent 必须有 Secret Hash，Gateway 必须没有。配置是按 `mode` 区分的严格联合类型，跨模式无意义或未知字段必须被拒绝。配置、启停或 Custom SSO secret 的任何变更都原子递增版本；Authorization Code、Client Binding 和 Credential 必须记录并校验签发版本，因此旧 artifact 即使尚未被批量清理也会 fail closed。配置按 Subject Claim Catalog 版本显式列出完整 `subjectClaims`，其中必须包含 Subject Identifier；新 client 默认只包含该 claim。配置不内嵌永久的按用户维护绕过名单。
+一个 client 对 Custom SSO 接入模式、回调行为和所需 Subject Claims 的独立版本化声明；它由 `customSsoEnabled`、可空的 `customSsoConfig`、Independent 模式专用的 `customSsoSecretHash` 与单调递增的 `customSsoConfigVersion` 表达，不属于 OIDC 配置。未配置、已配置但停用、启用是三个不同状态，`mode` 只区分 Gateway 与 Independent，不使用 `None` 表示关闭；Independent 必须有 Secret Hash，Gateway 必须没有。配置是按 `mode` 区分的严格联合类型，跨模式无意义或未知字段必须被拒绝。配置、启停或 Custom SSO secret 的任何变更都原子递增版本；Custom SSO Authorization Grant 与 Credential 必须记录并校验签发版本，因此旧 artifact 即使尚未被批量清理也会 fail closed。配置按 Subject Claim Catalog 版本显式列出完整 `subjectClaims`，其中必须包含 Subject Identifier；新 client 默认只包含该 claim。配置不内嵌永久的按用户维护绕过名单。
 _Avoid_: client ext attributes, shared clientSecret, plaintext secret, OIDC client configuration, unversioned SSO settings, userExcluding
 
 **Custom SSO Redirect Pattern**:
@@ -59,6 +59,10 @@ _Avoid_: exact-only redirect registry, implicit origin/path subtree, grant-time 
 **Custom SSO State**:
 Custom SSO V1 中由 client 可选提供的 opaque 流程关联值；存在时 IAM 将其绑定进 Authorization Grant 并在 callback 原样返回，不解释、不修改、不写入普通日志，client 负责校验。缺失时 V1 仍允许继续，IAM 不生成默认值；它不是 Session Token、Authorization Code 或身份声明，未来若改为必填必须通过新的契约版本完成。
 _Avoid_: required V1 state, session credential, server-side return URL
+
+**OIDC Client Binding**:
+在一个 OIDC Provider Session 内，将一个 client 独立关联到已验证 Principal Session 的 client-scoped 生命周期；该 client 的 Authorization Code、Claims Snapshot 与 Access Token 共同从属于这一关系，并可在不影响同一 Provider Session 下其他 client 的情况下独立失效。它不属于 Custom SSO；Custom SSO Credential 自身承载其 client-scoped 生命周期。
+_Avoid_: generic Client Binding, Custom SSO binding, client configuration, credential
 
 **Client Subject Projection**:
 IAM 向指定 client 交付的主体属性视图；它始终包含 Subject Identifier、不暴露 IAM 数据库主键，其余字段由该 client 显式声明并受 IAM 允许词汇约束。Independent Client Credential 与 Gateway Local Session 使用同一投影契约。该投影在交付响应时构建，不固化到 Custom SSO credential、session 或其私有 payload 中。Custom SSO 的 JSON Wire Contract 使用版本化嵌套结构，Catalog Claim 由协议 Adapter 映射到字段；未声明字段及其空父对象不出现。`/sso/token` 通过 `subject` 字段返回该投影，不保留 `userInfo` 别名；`/public/user-info` 的 `data` 直接返回该投影。OIDC 使用自己的 Claim 映射，不复用 Custom SSO JSON 外形。
@@ -117,7 +121,7 @@ _Avoid_: open flow, public password helper
 _Avoid_: employment deletion, user deletion
 
 **OIDC Claims Snapshot**:
-OIDC 在授权完成且 Authorization Code 签发前，按 Subject Identifier、client、scope、OIDC 配置版本及当时授权状态创建并固化的协议专用声明视图；选择 `iam:authorization` 时必须先通过 Authorization Freshness Barrier，未就绪则不签发 Code。Authorization Code 持有该 Snapshot，Token Endpoint 只将它转移到 Access Token，不重新读取档案；ID Token 从同一 Snapshot 映射但排除 `iam:authorization` 与 `iam:employments`，后续 UserInfo 也只重放 Snapshot，不混入当前事实。
+OIDC 在授权完成且 Authorization Code 签发前，按 Subject Identifier、OIDC Client Binding、scope、OIDC 配置版本及当时授权状态创建并固化的协议专用声明视图；选择 `iam:authorization` 时必须先通过 Authorization Freshness Barrier，未就绪则不签发 Code。Authorization Code 持有该 Snapshot，Token Endpoint 只将它转移到 Access Token，不重新读取档案；ID Token 从同一 Snapshot 映射但排除 `iam:authorization` 与 `iam:employments`，后续 UserInfo 也只重放 Snapshot，不混入当前事实。
 _Avoid_: token-endpoint live projection, current user profile, current authorization view
 
 **Valid Principal Session**:

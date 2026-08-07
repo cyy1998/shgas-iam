@@ -16,6 +16,7 @@ const otherSubjectIdentifier = "00000000-0000-4000-8000-000000000008";
 function createFixture() {
   const redis = new KernelRedis();
   const providerSessionState = new ProviderSessionStateFake();
+  const accountReadSubjects: string[] = [];
   let subjectEnabled = true;
   const kernel = createSessionKernelForTesting({
     redis,
@@ -42,17 +43,20 @@ function createFixture() {
   const adapter = createOidcSessionKernelAdapter({
     accounts: {
       findById: async () => null,
-      findBySubject: async subject => subject === subjectIdentifier
-        ? {
-            id: 7,
-            isDelete: false,
-            mobile: null,
-            name: "Alice",
-            status: 1,
-            subjectIdentifier,
-            username: "alice",
-          }
-        : null,
+      findBySubject: async (subject) => {
+        accountReadSubjects.push(subject);
+        return subject === subjectIdentifier
+          ? {
+              id: 7,
+              isDelete: false,
+              mobile: null,
+              name: "Alice",
+              status: 1,
+              subjectIdentifier,
+              username: "alice",
+            }
+          : null;
+      },
     },
     clients: {
       findActiveVersion: async clientId => clientId === "client-a" ? 1 : clientId === "client-b" ? 2 : null,
@@ -65,6 +69,7 @@ function createFixture() {
     providerSessionState,
   });
   return {
+    accountReadSubjects,
     adapter,
     kernel,
     providerSessionState,
@@ -140,6 +145,93 @@ describe("oIDC Provider Session client binding contract", () => {
     await expect(adapter.readPrincipalAnchor("provider-session-a", subjectIdentifier))
       .resolves
       .toBeNull();
+  });
+
+  it("reuses the authoritative Kernel binding through the minimal lookup", async () => {
+    const { accountReadSubjects, adapter, kernel } = createFixture();
+    const session = await createPrincipalSession(kernel);
+    const binding = await adapter.bind("provider-session-a", session, {
+      clientId: "client-a",
+      oidcConfigVersion: 1,
+    });
+    expect(binding).not.toBeNull();
+    const ensured = await adapter.ensureClientBinding({
+      accountId: subjectIdentifier,
+      anchorGeneration: binding!.anchorGeneration!,
+      clientCode: "client-a",
+      oidcConfigVersion: 1,
+      principalSessionId: session.sessionId,
+      providerSessionUid: "provider-session-a",
+    });
+
+    expect(ensured).toMatchObject({
+      bindingId: binding!.bindingId,
+      mappingOwnerId: binding!.mappingOwnerId,
+      principalSessionId: session.sessionId,
+    });
+    expect(accountReadSubjects).toEqual([subjectIdentifier]);
+  });
+
+  it("rejects a lookup that points at a non-OIDC Kernel binding", async () => {
+    const { adapter, kernel, providerSessionState } = createFixture();
+    const session = await createPrincipalSession(kernel);
+    const validBinding = await adapter.bind("provider-session-a", session, {
+      clientId: "client-a",
+      oidcConfigVersion: 1,
+    });
+    expect(validBinding).not.toBeNull();
+    const foreignBinding = await kernel.createClientBinding({
+      principalSessionId: session.sessionId,
+      protocol: "custom-sso",
+      clientCode: "client-a",
+      metadata: {
+        anchorGeneration: validBinding!.anchorGeneration,
+        mappingOwnerId: validBinding!.mappingOwnerId,
+        oidcConfigVersion: 1,
+        providerSessionUid: "provider-session-a",
+      },
+    });
+    expect(foreignBinding.status).toBe("created");
+    if (foreignBinding.status !== "created")
+      return;
+    providerSessionState.seedLookup("provider-session-a", "client-a", {
+      bindingId: foreignBinding.value.bindingId,
+      mappingOwnerId: validBinding!.mappingOwnerId,
+    });
+
+    await expect(adapter.read("provider-session-a", "client-a")).resolves.toBeNull();
+  });
+
+  it("rejects a Kernel binding outside the current Provider Session anchor generation", async () => {
+    const { adapter, kernel, providerSessionState } = createFixture();
+    const session = await createPrincipalSession(kernel);
+    const binding = await adapter.bind("provider-session-a", session, {
+      clientId: "client-a",
+      oidcConfigVersion: 1,
+    });
+    expect(binding).not.toBeNull();
+    providerSessionState.seedAnchor("provider-session-a", {
+      accountId: subjectIdentifier,
+      generation: "replacement-generation",
+      principalSessionId: session.sessionId,
+    });
+
+    await expect(adapter.read("provider-session-a", "client-a")).resolves.toBeNull();
+  });
+
+  it("rejects a binding lookup without a mapping owner", async () => {
+    const { adapter, kernel, providerSessionState } = createFixture();
+    const session = await createPrincipalSession(kernel);
+    const binding = await adapter.bind("provider-session-a", session, {
+      clientId: "client-a",
+      oidcConfigVersion: 1,
+    });
+    expect(binding).not.toBeNull();
+    providerSessionState.seedLookup("provider-session-a", "client-a", {
+      bindingId: binding!.bindingId,
+    });
+
+    await expect(adapter.read("provider-session-a", "client-a")).resolves.toBeNull();
   });
 
   it("refuses to ensure a binding without the current config, matching account, and enabled Principal Session", async () => {

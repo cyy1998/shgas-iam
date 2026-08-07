@@ -12,7 +12,6 @@ import type {
 
 export class ProviderSessionStateFake implements OidcSessionKernelProviderSessionStateStore {
   private readonly anchors = new Map<string, ProviderSessionPrincipalAnchor>();
-  private readonly bindings = new Map<string, ProviderSessionBinding>();
   private readonly lookups = new Map<string, ProviderSessionBindingLookup>();
   private readonly staged = new Map<string, StagedProviderSessionBinding>();
   private readonly generationMembers = new Map<string, Set<string>>();
@@ -33,6 +32,10 @@ export class ProviderSessionStateFake implements OidcSessionKernelProviderSessio
     lookup: ProviderSessionBindingLookup,
   ) {
     this.lookups.set(bindingKey(sessionUid, clientCode), structuredClone(lookup));
+  }
+
+  seedAnchor(sessionUid: string, anchor: ProviderSessionPrincipalAnchor) {
+    this.anchors.set(sessionUid, structuredClone(anchor));
   }
 
   async stage(staged: StagedProviderSessionBinding, _ttlSeconds: number) {
@@ -65,10 +68,6 @@ export class ProviderSessionStateFake implements OidcSessionKernelProviderSessio
     return clone(this.staged.get(authorizationAttemptId));
   }
 
-  async readBinding(sessionUid: string, clientCode: string) {
-    return clone(this.bindings.get(bindingKey(sessionUid, clientCode)));
-  }
-
   async readLookup(sessionUid: string, clientCode: string) {
     const lookup = this.lookups.get(bindingKey(sessionUid, clientCode));
     return lookup
@@ -94,7 +93,7 @@ export class ProviderSessionStateFake implements OidcSessionKernelProviderSessio
     ));
     if (anchorMatches(currentAnchor, input.binding, input.attemptId)
       && lookupMatches(currentLookup, input.binding.bindingId, owner)) {
-      this.writeBinding(input.providerSessionUid, input.binding, input.attemptId);
+      this.writeMinimalState(input.providerSessionUid, input.binding, input.attemptId);
       return this.committedResult();
     }
     if (input.expectedAnchorGeneration === null
@@ -107,7 +106,7 @@ export class ProviderSessionStateFake implements OidcSessionKernelProviderSessio
       generation: input.attemptId,
       principalSessionId: input.binding.principalSessionId,
     });
-    this.writeBinding(input.providerSessionUid, input.binding, input.attemptId);
+    this.writeMinimalState(input.providerSessionUid, input.binding, input.attemptId);
     return this.committedResult();
   }
 
@@ -127,14 +126,14 @@ export class ProviderSessionStateFake implements OidcSessionKernelProviderSessio
     const currentLookup = this.lookups.get(key);
     if (anchorMatches(currentAnchor, input.binding, input.anchor.generation)
       && lookupMatches(currentLookup, input.binding.bindingId, owner)) {
-      this.writeBinding(input.providerSessionUid, input.binding, input.anchor.generation);
+      this.writeMinimalState(input.providerSessionUid, input.binding, input.anchor.generation);
       return this.committedResult();
     }
     if (!anchorMatches(currentAnchor, input.binding, input.anchor.generation)
       || !sameLookup(currentLookup, input.expectedLookup)) {
       return { status: "conflict", recovered: false };
     }
-    this.writeBinding(input.providerSessionUid, input.binding, input.anchor.generation);
+    this.writeMinimalState(input.providerSessionUid, input.binding, input.anchor.generation);
     return this.committedResult();
   }
 
@@ -156,7 +155,7 @@ export class ProviderSessionStateFake implements OidcSessionKernelProviderSessio
       || !lookupMatches(currentLookup, input.binding.bindingId, owner)) {
       return false;
     }
-    this.writeBinding(input.providerSessionUid, input.binding, generation);
+    this.writeMinimalState(input.providerSessionUid, input.binding, generation);
     return true;
   }
 
@@ -170,7 +169,6 @@ export class ProviderSessionStateFake implements OidcSessionKernelProviderSessio
     const lookup = this.lookups.get(key);
     if (lookup && lookup.mappingOwnerId === input.mappingOwnerId) {
       this.lookups.delete(key);
-      this.bindings.delete(key);
     }
     if (!input.anchorGeneration || !input.mappingOwnerId)
       return 0;
@@ -204,14 +202,13 @@ export class ProviderSessionStateFake implements OidcSessionKernelProviderSessio
     return true;
   }
 
-  private writeBinding(
+  private writeMinimalState(
     providerSessionUid: string,
     binding: ProviderSessionBinding,
     generation: string,
   ) {
     const owner = requireOwner(binding);
     const key = bindingKey(providerSessionUid, binding.clientCode);
-    this.bindings.set(key, structuredClone(binding));
     this.lookups.set(key, { bindingId: binding.bindingId, mappingOwnerId: owner });
     const membersKey = generationKey(providerSessionUid, generation);
     const members = this.generationMembers.get(membersKey) ?? new Set<string>();

@@ -2,7 +2,7 @@ import type { SessionKernelArtifactConsumer } from "./artifact-consumption";
 import type { SessionKernelDependencies } from "./facade";
 import type { SessionKernelRedis } from "./store";
 import { createInMemorySessionKernelArtifactConsumer } from "./artifact-consumption";
-import { createSessionKernelWithArtifactConsumerFactory } from "./facade";
+import { createSessionKernelWithStateAdapterFactories } from "./facade";
 
 const consumersByRedis = new WeakMap<
   SessionKernelRedis,
@@ -12,7 +12,7 @@ const consumersByRedis = new WeakMap<
 export function createSessionKernelForTesting(
   deps: SessionKernelDependencies,
 ) {
-  return createSessionKernelWithArtifactConsumerFactory(
+  return createSessionKernelWithStateAdapterFactories(
     deps,
     ({ redis, keys }) => {
       let consumersByNamespace = consumersByRedis.get(redis);
@@ -29,5 +29,6 @@ export function createSessionKernelForTesting(
       consumersByNamespace.set(keys.namespace, consumer);
       return consumer;
     },
+    () => undefined,
   );
 }

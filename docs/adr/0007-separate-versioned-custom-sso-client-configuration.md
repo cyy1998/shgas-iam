@@ -4,6 +4,8 @@ status: accepted
 
 # 将 Custom SSO Client 配置与其他协议配置分离
 
+> Custom SSO 必须持有 Client Binding 的局部决定已由 [ADR-0010](0010-narrow-client-binding-to-oidc-lifecycle.md) 取代；本 ADR 的其余配置、版本屏障和迁移决定保持有效。
+
 Custom SSO 使用独立的 `customSsoEnabled`、严格按 Gateway/Independent 区分的 `customSsoConfig`、Independent 专用 `customSsoSecretHash` 和单调递增的 `customSsoConfigVersion`；它不再读取通用 `extAttributes`、复用明文 `clientSecret` 或依赖 OIDC 配置。任何配置、启停或 Secret 变更都递增版本，Authorization Code、Client Binding 和 Credential 必须校验签发版本，使批量撤销失败时旧 artifact 仍然 fail closed。
 
 配置必须显式声明版本化 Subject Claims 并包含 Subject Identifier；新 client 默认只获得该标识。配置不包含 `userExcluding` 或替代绕过名单。Redirect URI 保留显式受限的一级主机和 `/*` 路径通配，但 Authorization Grant 必须绑定通过模式校验后的实际 URI，callback/token 只能精确匹配该实际值；V1 `state` 可选。

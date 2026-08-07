@@ -59,10 +59,6 @@ export type StagedProviderSessionBinding = z.infer<typeof StagedProviderSessionB
 
 export const PENDING_PROVIDER_SESSION_BINDING_TTL_SECONDS = 60;
 
-export function providerSessionBindingKey(sessionUid: string, clientCode: string) {
-  return `oidc:provider-session-binding:${encodeURIComponent(sessionUid)}:${encodeURIComponent(clientCode)}`;
-}
-
 export function providerSessionBindingLookupKey(sessionUid: string, clientCode: string) {
   return `oidc:provider-session-binding-lookup:${encodeURIComponent(sessionUid)}:${encodeURIComponent(clientCode)}`;
 }

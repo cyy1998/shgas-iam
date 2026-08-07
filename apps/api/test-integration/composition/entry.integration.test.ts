@@ -300,13 +300,14 @@ async function seedLogoutSession(
     owners,
     "API composition logout Principal Session",
   );
-  const binding = await owners.sessionKernel.createClientBinding({
+  const credential = await owners.sessionKernel.issueCredential({
     cleanupRefs: [{
       protocol: "custom-sso",
       kind: "local_session_payload",
       ref: legacyPayloadRef,
     }],
     clientCode,
+    credentialType: "local_session",
     metadata: {
       version: 1,
       mode: CustomSsoClientMode.Independent,
@@ -315,11 +316,14 @@ async function seedLogoutSession(
     principalSessionId: principal.session.principalSessionId,
     protocol: "custom-sso",
     renewalPolicy: "extend_with_principal",
+    tokenKind: "localSession",
   });
-  if (binding.status !== "created")
-    throw new Error(`API composition logout binding seed failed: ${binding.status}`);
+  if (credential.status !== "created")
+    throw new Error(`API composition logout Credential seed failed: ${credential.status}`);
+  if (credential.externalToken === undefined)
+    throw new Error("API composition logout Credential seed returned no external token");
   return {
-    bindingId: binding.value.bindingId,
+    credentialToken: credential.externalToken,
     externalToken: principal.externalToken,
   };
 }
@@ -359,17 +363,7 @@ async function seedGatewayPublicEntry(
     owners,
     "API composition Gateway Principal Session",
   );
-  const binding = await owners.sessionKernel.createClientBinding({
-    clientCode: gatewayClientCode,
-    metadata,
-    principalSessionId: principal.session.principalSessionId,
-    protocol: "custom-sso",
-    renewalPolicy: "extend_with_principal",
-  });
-  if (binding.status !== "created")
-    throw new Error(`API composition Gateway Client Binding seed failed: ${binding.status}`);
   const credential = await owners.sessionKernel.issueCredential({
-    bindingId: binding.value.bindingId,
     clientCode: gatewayClientCode,
     credentialType: "local_session",
     metadata: { ...metadata, orcasId: `orcas-${resourceSuffix}` },
@@ -384,20 +378,7 @@ async function seedGatewayPublicEntry(
     throw new Error("API composition Gateway Local Session seed returned no external token");
 
   const staleMetadata = { ...metadata, configVersion: 0 };
-  const staleBinding = await owners.sessionKernel.createClientBinding({
-    clientCode: gatewayClientCode,
-    metadata: staleMetadata,
-    principalSessionId: principal.session.principalSessionId,
-    protocol: "custom-sso",
-    renewalPolicy: "extend_with_principal",
-  });
-  if (staleBinding.status !== "created") {
-    throw new Error(
-      `API composition stale Gateway Client Binding seed failed: ${staleBinding.status}`,
-    );
-  }
   const staleCredential = await owners.sessionKernel.issueCredential({
-    bindingId: staleBinding.value.bindingId,
     clientCode: gatewayClientCode,
     credentialType: "local_session",
     metadata: staleMetadata,
@@ -990,8 +971,8 @@ describe("API explicit external entry", () => {
         ),
       ).toMatchObject({ status: "resolved" });
       expect(
-        await observerOwners.sessionKernel.resolveClientBindingById(
-          logoutSession.bindingId,
+        await observerOwners.sessionKernel.resolveCredential(
+          logoutSession.credentialToken,
         ),
       ).toMatchObject({
         status: "resolved",
@@ -1317,8 +1298,8 @@ describe("API explicit external entry", () => {
         ),
       ).not.toMatchObject({ status: "resolved" });
       expect(
-        await observerOwners.sessionKernel.resolveClientBindingById(
-          logoutSession.bindingId,
+        await observerOwners.sessionKernel.resolveCredential(
+          logoutSession.credentialToken,
         ),
       ).not.toMatchObject({ status: "resolved" });
       expect(await cleanupHarness.inventory()).toEqual(new Map([

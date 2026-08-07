@@ -103,7 +103,6 @@ export interface OidcSessionKernelProviderSessionStateStore {
     ttlSeconds: number;
   }) => Promise<ProviderSessionPublicationResult>;
   readAnchor: (sessionUid: string) => Promise<ProviderSessionPrincipalAnchor | null>;
-  readBinding: (sessionUid: string, clientCode: string) => Promise<ProviderSessionBinding | null>;
   readLookup: (sessionUid: string, clientCode: string) => Promise<{
     exists: boolean;
     value: ProviderSessionBindingLookup | null;
@@ -408,20 +407,13 @@ export function createOidcSessionKernelAdapter(deps: OidcSessionKernelAdapterDep
       || anchor.principalSessionId !== input.principalSessionId) {
       return null;
     }
-    const mapped = await providerSessionState.readBinding(input.providerSessionUid, input.clientCode);
-    if (mapped
-      && mapped.accountId === input.accountId
-      && mapped.anchorGeneration === input.anchorGeneration
-      && mapped.principalSessionId === input.principalSessionId
-      && mapped.oidcConfigVersion === input.oidcConfigVersion) {
-      const existing = await read(input.providerSessionUid, input.clientCode);
-      if (existing
-        && existing.accountId === input.accountId
-        && existing.anchorGeneration === input.anchorGeneration
-        && existing.principalSessionId === input.principalSessionId
-        && existing.oidcConfigVersion === input.oidcConfigVersion) {
-        return existing;
-      }
+    const existing = await read(input.providerSessionUid, input.clientCode);
+    if (existing
+      && existing.accountId === input.accountId
+      && existing.anchorGeneration === input.anchorGeneration
+      && existing.principalSessionId === input.principalSessionId
+      && existing.oidcConfigVersion === input.oidcConfigVersion) {
+      return existing;
     }
     const principal = await resolveById(input.principalSessionId);
     if (!principal || principal.accountId !== input.accountId)
@@ -489,10 +481,11 @@ export function createOidcSessionKernelAdapter(deps: OidcSessionKernelAdapterDep
       }, "failed to resolve OIDC provider session binding");
       return null;
     }
-    if (binding.value.clientCode !== clientCode
+    if (!parsedLookup.mappingOwnerId
+      || binding.value.protocol !== OIDC_SESSION_PROTOCOL
+      || binding.value.clientCode !== clientCode
       || binding.value.metadata?.providerSessionUid !== sessionUid
-      || (parsedLookup.mappingOwnerId !== undefined
-        && binding.value.metadata?.mappingOwnerId !== parsedLookup.mappingOwnerId)) {
+      || binding.value.metadata?.mappingOwnerId !== parsedLookup.mappingOwnerId) {
       deps.logger.warn({
         sessionUidFingerprint: fingerprintForLog(sessionUid),
         bindingId: parsedLookup.bindingId,
@@ -511,6 +504,18 @@ export function createOidcSessionKernelAdapter(deps: OidcSessionKernelAdapterDep
       return null;
     }
     const providerBinding = toProviderSessionBinding(binding.value, principal);
+    const anchor = providerBinding.anchorGeneration
+      ? await readPrincipalAnchor(sessionUid, providerBinding.accountId)
+      : null;
+    if (!anchor
+      || anchor.generation !== providerBinding.anchorGeneration
+      || anchor.principalSessionId !== providerBinding.principalSessionId) {
+      deps.logger.warn({
+        sessionUidFingerprint: fingerprintForLog(sessionUid),
+        bindingId: parsedLookup.bindingId,
+      }, "OIDC provider session binding anchor mismatch");
+      return null;
+    }
     if (providerBinding.mappingOwnerId)
       await refreshProviderSessionBinding(sessionUid, providerBinding);
     return providerBinding;

@@ -69,12 +69,20 @@ type ReservedGatewayAuthorizationGrant = {
 };
 
 type IssuedClientCredential = {
-  bindingId: string;
   credentialId: string;
   token: string;
   ttl: number;
   orcasSessionId: string | null;
 };
+
+class CustomSsoCredentialIssueFailure {
+  constructor(
+    readonly originalError: unknown,
+    readonly credentialMayExist: boolean,
+  ) {}
+}
+
+type CredentialIssueState = "not_started" | "started" | "issued";
 
 type CustomSsoOrcasContext = {
   userId: string;
@@ -128,13 +136,10 @@ const IndependentCredentialMetadataSchema = z.object({
   configVersion: z.number().int().nonnegative(),
 }).strict();
 
-const GatewayBindingMetadataSchema = z.object({
+const GatewayCredentialMetadataSchema = z.object({
   version: z.literal(1),
   mode: z.literal(CustomSsoClientMode.Gateway),
   configVersion: z.number().int().nonnegative(),
-}).strict();
-
-const GatewayCredentialMetadataSchema = GatewayBindingMetadataSchema.extend({
   orcasId: z.string().min(1).optional(),
 }).strict();
 
@@ -145,11 +150,6 @@ const CustomSsoCredentialMetadataSchema = z.discriminatedUnion("mode", [
 type CustomSsoCredentialMetadata = z.infer<
   typeof CustomSsoCredentialMetadataSchema
 >;
-
-const CustomSsoBindingMetadataSchema = z.discriminatedUnion("mode", [
-  IndependentCredentialMetadataSchema,
-  GatewayBindingMetadataSchema,
-]);
 
 export interface CustomSsoSessionKernelAdapterDeps {
   authorizationGrantRedemption: AuthorizationGrantRedemption;
@@ -341,16 +341,16 @@ export function createCustomSsoSessionKernelAdapter(deps: CustomSsoSessionKernel
     client: GatewayClientContext;
     orcas?: CustomSsoOrcasContext | null;
   }): Promise<IssuedClientCredential> {
-    const bindingMetadata = {
+    const metadata = {
       version: 1 as const,
       mode: CustomSsoClientMode.Gateway,
       configVersion: input.client.configVersion,
     };
     const credential = await issueCustomSsoCredential({
-      bindingMetadata,
       clientCode: input.client.clientCode,
+      credentialId: input.authorizationGrant.reservation.attemptId,
       credentialMetadata: {
-        ...bindingMetadata,
+        ...metadata,
         ...(input.orcas === undefined || input.orcas === null
           ? {}
           : { orcasId: input.orcas.userId }),
@@ -375,6 +375,7 @@ export function createCustomSsoSessionKernelAdapter(deps: CustomSsoSessionKernel
       authorizationGrant.reservation,
       async (lease) => {
         let credential: Awaited<ReturnType<typeof issueIndependentCredential>> | undefined;
+        let credentialIssueState: CredentialIssueState = "not_started";
         let subject;
         try {
           const principalSession = translateSubjectAccessResolveResult(
@@ -401,10 +402,13 @@ export function createCustomSsoSessionKernelAdapter(deps: CustomSsoSessionKernel
           });
           subject = mapClientSubjectProjectionToCustomSsoV1(projection);
 
+          credentialIssueState = "started";
           credential = await issueIndependentCredential({
             client: input.client,
+            credentialId: authorizationGrant.reservation.attemptId,
             principalSessionId: authorizationGrant.principalSessionId,
           });
+          credentialIssueState = "issued";
           const currentContext = await resolveIndependentCredentialContext(
             credential.token,
             input.client.clientCode,
@@ -421,21 +425,23 @@ export function createCustomSsoSessionKernelAdapter(deps: CustomSsoSessionKernel
             throw new InvalidAuthCodeError("非法Code");
         }
         catch (error) {
-          if (credential !== undefined) {
-            await revokeFailedCredential({
-              ...credential,
-              clientCode: input.client.clientCode,
-              operation: "independent_credential_compensation",
-              requestContext: input.requestContext,
-            });
-          }
-          await releaseRetryableIndependentGrant(
-            lease,
+          await handleCredentialIssueFailure({
+            clientCode: input.client.clientCode,
+            credentialId: authorizationGrant.reservation.attemptId,
+            credentialIssueState,
             error,
-            input.client.clientCode,
-            input.requestContext,
-          );
-          throw error;
+            operation: "independent_credential_compensation",
+            releaseGrant: async (reportedError, credentialMayExist) => {
+              await releaseRetryableIndependentGrant(
+                lease,
+                reportedError,
+                input.client.clientCode,
+                input.requestContext,
+                credentialMayExist,
+              );
+            },
+            requestContext: input.requestContext,
+          });
         }
         if (credential === undefined || subject === undefined)
           throw new InvalidAuthCodeError("非法Code");
@@ -519,6 +525,7 @@ export function createCustomSsoSessionKernelAdapter(deps: CustomSsoSessionKernel
 
   async function issueIndependentCredential(input: {
     client: IndependentClientContext;
+    credentialId: string;
     principalSessionId: string;
   }) {
     const metadata = {
@@ -527,37 +534,25 @@ export function createCustomSsoSessionKernelAdapter(deps: CustomSsoSessionKernel
       configVersion: input.client.configVersion,
     };
     return await issueCustomSsoCredential({
-      bindingMetadata: metadata,
       clientCode: input.client.clientCode,
+      credentialId: input.credentialId,
       credentialMetadata: metadata,
       principalSessionId: input.principalSessionId,
     });
   }
 
   async function issueCustomSsoCredential(input: {
-    bindingMetadata: Record<string, unknown>;
     clientCode: string;
+    credentialId: string;
     credentialMetadata: Record<string, unknown>;
     principalSessionId: string;
   }) {
     const ttlMs = deps.config.localSessionTtlSeconds * 1000;
-    const binding = translateSubjectAccessResolveResult(
-      await deps.kernel.createClientBinding({
+    let issued;
+    try {
+      issued = await deps.kernel.issueCredential({
+        credentialId: input.credentialId,
         principalSessionId: input.principalSessionId,
-        protocol: CUSTOM_SSO_PROTOCOL,
-        clientCode: input.clientCode,
-        ttlMs,
-        renewalPolicy: "extend_with_principal",
-        metadata: input.bindingMetadata,
-      }),
-    );
-    if (binding.status !== "created")
-      throw new AuthzUnauthorizedError("局部session创建失败");
-
-    const credential = translateSubjectAccessResolveResult(
-      await deps.kernel.issueCredential({
-        principalSessionId: input.principalSessionId,
-        bindingId: binding.value.bindingId,
         protocol: CUSTOM_SSO_PROTOCOL,
         clientCode: input.clientCode,
         credentialType: LOCAL_SESSION_CREDENTIAL_TYPE,
@@ -565,20 +560,32 @@ export function createCustomSsoSessionKernelAdapter(deps: CustomSsoSessionKernel
         renewalPolicy: "extend_with_principal",
         tokenKind: "localSession",
         metadata: input.credentialMetadata,
-      }),
-    );
+      });
+    }
+    catch (error) {
+      throw new CustomSsoCredentialIssueFailure(error, true);
+    }
+
+    let credential;
+    try {
+      credential = translateSubjectAccessResolveResult(issued);
+    }
+    catch (error) {
+      throw new CustomSsoCredentialIssueFailure(error, false);
+    }
     if (credential.status !== "created" || !credential.externalToken) {
-      await deps.kernel.revokeBinding(binding.value.bindingId, "binding_invalid");
-      throw new AuthzUnauthorizedError("局部session创建失败");
+      throw new CustomSsoCredentialIssueFailure(
+        new AuthzUnauthorizedError("局部session创建失败"),
+        credential.status === "fail_closed" && credential.cause !== undefined,
+      );
     }
 
     const ttl = Math.floor((credential.value.expiresAt - deps.clock.now()) / 1000);
     if (ttl <= 0) {
-      await deps.kernel.revokeBinding(binding.value.bindingId, "binding_invalid");
+      await deps.kernel.revokeCredential(credential.value.credentialId, "credential_corrupted");
       throw new AuthzUnauthorizedError("局部session创建失败");
     }
     return {
-      bindingId: binding.value.bindingId,
       credentialId: credential.value.credentialId,
       token: credential.externalToken,
       ttl,
@@ -590,8 +597,9 @@ export function createCustomSsoSessionKernelAdapter(deps: CustomSsoSessionKernel
     error: unknown,
     clientCode: string,
     requestContext?: ApiRequestContext,
+    releaseAfterCredentialIssue = false,
   ) {
-    if (!isRetryableServiceUnavailable(error))
+    if (!releaseAfterCredentialIssue && !isRetryableServiceUnavailable(error))
       return;
     try {
       const released = await lease.release();
@@ -641,37 +649,57 @@ export function createCustomSsoSessionKernelAdapter(deps: CustomSsoSessionKernel
   }
 
   async function revokeFailedCredential(input: {
-    bindingId: string;
     clientCode: string;
     credentialId: string;
     operation: "gateway_local_session_compensation" | "independent_credential_compensation";
     requestContext?: ApiRequestContext;
   }) {
     try {
-      await deps.kernel.revokeBinding(input.bindingId, "binding_invalid");
+      await deps.kernel.revokeCredential(
+        input.credentialId,
+        "credential_corrupted",
+      );
+      return true;
     }
     catch {
-      try {
-        await deps.kernel.revokeCredential(
-          input.credentialId,
-          "credential_corrupted",
-        );
-        deps.logger.warn({
-          clientCode: input.clientCode,
-          operation: input.operation,
-          outcome: "binding_revoke_failed_credential_revoked",
-          ...observabilityLogFields(input.requestContext),
-        }, "custom sso credential compensation used credential fallback");
-      }
-      catch {
-        deps.logger.warn({
-          clientCode: input.clientCode,
-          operation: input.operation,
-          outcome: "revoke_failed",
-          ...observabilityLogFields(input.requestContext),
-        }, "custom sso credential compensation failed closed");
-      }
+      deps.logger.warn({
+        clientCode: input.clientCode,
+        operation: input.operation,
+        outcome: "revoke_failed",
+        ...observabilityLogFields(input.requestContext),
+      }, "custom sso credential compensation failed closed");
+      return false;
     }
+  }
+
+  async function handleCredentialIssueFailure(input: {
+    clientCode: string;
+    credentialId: string;
+    credentialIssueState: CredentialIssueState;
+    error: unknown;
+    operation: "gateway_local_session_compensation" | "independent_credential_compensation";
+    releaseGrant: (
+      reportedError: unknown,
+      credentialMayExist: boolean,
+    ) => Promise<void>;
+    requestContext?: ApiRequestContext;
+  }): Promise<never> {
+    const reportedError = input.error instanceof CustomSsoCredentialIssueFailure
+      ? input.error.originalError
+      : input.error;
+    const credentialMayExist = input.error instanceof CustomSsoCredentialIssueFailure
+      ? input.error.credentialMayExist
+      : input.credentialIssueState !== "not_started";
+    const compensated = !credentialMayExist
+      || await revokeFailedCredential({
+        clientCode: input.clientCode,
+        credentialId: input.credentialId,
+        operation: input.operation,
+        requestContext: input.requestContext,
+      });
+    if (compensated)
+      await input.releaseGrant(reportedError, credentialMayExist);
+    throw reportedError;
   }
 
   async function resolveIndependentCredentialContext(
@@ -718,6 +746,7 @@ export function createCustomSsoSessionKernelAdapter(deps: CustomSsoSessionKernel
       authorizationGrant.reservation,
       async (lease) => {
         let localSession: IssuedClientCredential | undefined;
+        let credentialIssueState: CredentialIssueState = "not_started";
         let userDetail: UserDetailDto | undefined;
         try {
           const revalidated = translateSubjectAccessResolveResult(
@@ -765,11 +794,13 @@ export function createCustomSsoSessionKernelAdapter(deps: CustomSsoSessionKernel
               sessionId: orcasSessionId,
             };
           }
+          credentialIssueState = "started";
           localSession = await issueGatewayLocalSession({
             authorizationGrant,
             client: input.client,
             orcas,
           });
+          credentialIssueState = "issued";
 
           await assertCurrentGatewayClient(input.client);
           const consumed = await lease.consume();
@@ -777,20 +808,21 @@ export function createCustomSsoSessionKernelAdapter(deps: CustomSsoSessionKernel
             throw new AuthzUnauthorizedError("非法code");
         }
         catch (error) {
-          if (localSession !== undefined) {
-            await revokeFailedCredential({
-              ...localSession,
-              clientCode: input.client.clientCode,
-              operation: "gateway_local_session_compensation",
-              requestContext: input.requestContext,
-            });
-          }
-          await releaseGatewayLease(
-            lease,
-            input.client.clientCode,
-            input.requestContext,
-          );
-          throw error;
+          await handleCredentialIssueFailure({
+            clientCode: input.client.clientCode,
+            credentialId: authorizationGrant.reservation.attemptId,
+            credentialIssueState,
+            error,
+            operation: "gateway_local_session_compensation",
+            releaseGrant: async () => {
+              await releaseGatewayLease(
+                lease,
+                input.client.clientCode,
+                input.requestContext,
+              );
+            },
+            requestContext: input.requestContext,
+          });
         }
         if (localSession === undefined)
           throw new AuthzUnauthorizedError("局部session创建失败");
@@ -935,6 +967,13 @@ export function createCustomSsoSessionKernelAdapter(deps: CustomSsoSessionKernel
   async function assertLogoutCredentialCurrent(
     credential: IssuedCredential,
   ) {
+    if (credential.bindingId !== undefined) {
+      await deps.kernel.revokeCredential(
+        credential.credentialId,
+        "credential_corrupted",
+      );
+      throw new AuthzUnauthorizedError("未登录");
+    }
     const metadata = CustomSsoCredentialMetadataSchema.safeParse(
       credential.metadata,
     );
@@ -976,9 +1015,11 @@ export function createCustomSsoSessionKernelAdapter(deps: CustomSsoSessionKernel
       || credential.value.clientCode !== clientCode) {
       throw new AuthzUnauthorizedError("未登录");
     }
-
-    if (credential.value.bindingId === undefined) {
-      await deps.kernel.revokeCredential(credential.value.credentialId, "credential_corrupted");
+    if (credential.value.bindingId !== undefined) {
+      await deps.kernel.revokeCredential(
+        credential.value.credentialId,
+        "credential_corrupted",
+      );
       throw new AuthzUnauthorizedError("未登录");
     }
 
@@ -1010,32 +1051,11 @@ export function createCustomSsoSessionKernelAdapter(deps: CustomSsoSessionKernel
       throw new AuthzUnauthorizedError("未登录");
     }
 
-    const binding = translateSubjectAccessResolveResult(
-      await deps.kernel.resolveClientBindingById(credential.value.bindingId),
-    );
-    const bindingMetadata = binding.status === "resolved"
-      ? CustomSsoBindingMetadataSchema.safeParse(binding.value.metadata)
-      : null;
-    if (
-      binding.status !== "resolved"
-      || binding.value.protocol !== CUSTOM_SSO_PROTOCOL
-      || binding.value.clientCode !== clientCode
-      || binding.value.principalSessionId
-      !== credential.value.principalSessionId
-      || !bindingMetadata?.success
-      || bindingMetadata.data.mode !== credentialMetadata.data.mode
-      || bindingMetadata.data.configVersion
-      !== credentialMetadata.data.configVersion
-    ) {
-      await deps.kernel.revokeCredential(credential.value.credentialId, "binding_invalid");
-      throw new AuthzUnauthorizedError("未登录");
-    }
-
     const principal = translateSubjectAccessResolveResult(
       await deps.kernel.resolvePrincipalSessionById(credential.value.principalSessionId),
     );
     if (principal.status !== "resolved") {
-      await deps.kernel.revokeBinding(credential.value.bindingId, "binding_invalid");
+      await deps.kernel.revokeCredential(credential.value.credentialId, "credential_corrupted");
       throw new AuthzUnauthorizedError("未登录");
     }
 

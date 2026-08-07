@@ -8,9 +8,7 @@ import type {
 } from "./provider-session.ts";
 import {
   pendingProviderSessionBindingKey,
-  providerSessionBindingKey,
   providerSessionBindingLookupKey,
-  ProviderSessionBindingSchema,
   providerSessionGenerationMembersKey,
   providerSessionPrincipalAnchorKey,
   ProviderSessionPrincipalAnchorSchema,
@@ -54,7 +52,7 @@ if current then
   if not ok then return 0 end
   currentAnchor = decoded
 end
-local lookup = redis.call("GET", KEYS[3])
+local lookup = redis.call("GET", KEYS[2])
 local currentLookup = nil
 if lookup then
   local ok, decoded = pcall(cjson.decode, lookup)
@@ -68,11 +66,10 @@ if currentAnchor
   and currentLookup
   and currentLookup.bindingId == ARGV[5]
   and currentLookup.mappingOwnerId == ARGV[6] then
-  redis.call("EXPIRE", KEYS[1], ARGV[10])
-  redis.call("SET", KEYS[2], ARGV[8], "EX", ARGV[10])
-  redis.call("SET", KEYS[3], ARGV[9], "EX", ARGV[10])
-  redis.call("SADD", KEYS[4], ARGV[6])
-  redis.call("EXPIRE", KEYS[4], ARGV[10])
+  redis.call("EXPIRE", KEYS[1], ARGV[9])
+  redis.call("SET", KEYS[2], ARGV[8], "EX", ARGV[9])
+  redis.call("SADD", KEYS[3], ARGV[6])
+  redis.call("EXPIRE", KEYS[3], ARGV[9])
   return 2
 end
 if ARGV[1] == "" then
@@ -80,11 +77,10 @@ if ARGV[1] == "" then
 elseif not currentAnchor or currentAnchor.generation ~= ARGV[1] then
   return 0
 end
-redis.call("SET", KEYS[1], ARGV[7], "EX", ARGV[10])
-redis.call("SET", KEYS[2], ARGV[8], "EX", ARGV[10])
-redis.call("SET", KEYS[3], ARGV[9], "EX", ARGV[10])
-redis.call("SADD", KEYS[4], ARGV[6])
-redis.call("EXPIRE", KEYS[4], ARGV[10])
+redis.call("SET", KEYS[1], ARGV[7], "EX", ARGV[9])
+redis.call("SET", KEYS[2], ARGV[8], "EX", ARGV[9])
+redis.call("SADD", KEYS[3], ARGV[6])
+redis.call("EXPIRE", KEYS[3], ARGV[9])
 return 1
 `;
 
@@ -94,7 +90,7 @@ local current = redis.call("GET", KEYS[1])
 if not current then return 0 end
 local anchorOk, currentAnchor = pcall(cjson.decode, current)
 if not anchorOk then return 0 end
-local lookup = redis.call("GET", KEYS[3])
+local lookup = redis.call("GET", KEYS[2])
 local currentLookup = nil
 if lookup then
   local lookupOk, decoded = pcall(cjson.decode, lookup)
@@ -107,11 +103,10 @@ if currentAnchor.generation == ARGV[1]
   and currentLookup
   and currentLookup.bindingId == ARGV[4]
   and currentLookup.mappingOwnerId == ARGV[5] then
-  redis.call("EXPIRE", KEYS[1], ARGV[11])
-  redis.call("SET", KEYS[2], ARGV[9], "EX", ARGV[11])
-  redis.call("SET", KEYS[3], ARGV[10], "EX", ARGV[11])
-  redis.call("SADD", KEYS[4], ARGV[5])
-  redis.call("EXPIRE", KEYS[4], ARGV[11])
+  redis.call("EXPIRE", KEYS[1], ARGV[10])
+  redis.call("SET", KEYS[2], ARGV[9], "EX", ARGV[10])
+  redis.call("SADD", KEYS[3], ARGV[5])
+  redis.call("EXPIRE", KEYS[3], ARGV[10])
   return 2
 end
 if currentAnchor.generation ~= ARGV[1]
@@ -126,11 +121,10 @@ elseif not currentLookup
   or (currentLookup.mappingOwnerId or "") ~= ARGV[7] then
   return 0
 end
-redis.call("EXPIRE", KEYS[1], ARGV[11])
-redis.call("SET", KEYS[2], ARGV[9], "EX", ARGV[11])
-redis.call("SET", KEYS[3], ARGV[10], "EX", ARGV[11])
-redis.call("SADD", KEYS[4], ARGV[5])
-redis.call("EXPIRE", KEYS[4], ARGV[11])
+redis.call("EXPIRE", KEYS[1], ARGV[10])
+redis.call("SET", KEYS[2], ARGV[9], "EX", ARGV[10])
+redis.call("SADD", KEYS[3], ARGV[5])
+redis.call("EXPIRE", KEYS[3], ARGV[10])
 return 1
 `;
 
@@ -156,7 +150,7 @@ return 1
 export const REFRESH_OWNED_PROVIDER_SESSION_BINDING_SCRIPT = `
 -- refresh_owned_provider_session_binding
 local anchor = redis.call("GET", KEYS[1])
-local lookup = redis.call("GET", KEYS[3])
+local lookup = redis.call("GET", KEYS[2])
 if not anchor or not lookup then return 0 end
 local anchorOk, decodedAnchor = pcall(cjson.decode, anchor)
 local lookupOk, decodedLookup = pcall(cjson.decode, lookup)
@@ -168,11 +162,10 @@ if decodedAnchor.generation ~= ARGV[1]
   or decodedLookup.mappingOwnerId ~= ARGV[5] then
   return 0
 end
-redis.call("EXPIRE", KEYS[1], ARGV[8])
-redis.call("SET", KEYS[2], ARGV[6], "EX", ARGV[8])
-redis.call("SET", KEYS[3], ARGV[7], "EX", ARGV[8])
-redis.call("SADD", KEYS[4], ARGV[5])
-redis.call("EXPIRE", KEYS[4], ARGV[8])
+redis.call("EXPIRE", KEYS[1], ARGV[7])
+redis.call("SET", KEYS[2], ARGV[6], "EX", ARGV[7])
+redis.call("SADD", KEYS[3], ARGV[5])
+redis.call("EXPIRE", KEYS[3], ARGV[7])
 return 1
 `;
 
@@ -190,20 +183,20 @@ if lookup then
       ownsMapping = decodedLookup.mappingOwnerId == ARGV[1]
     end
     if ownsMapping then
-      deleted = redis.call("DEL", KEYS[1], KEYS[2])
+      deleted = redis.call("DEL", KEYS[1])
     end
   end
 end
 if ARGV[1] ~= "" and ARGV[2] ~= "" then
-  local membersExisted = redis.call("EXISTS", KEYS[4])
-  redis.call("SREM", KEYS[4], ARGV[1])
-  if membersExisted == 1 and redis.call("SCARD", KEYS[4]) == 0 then
-    redis.call("DEL", KEYS[4])
-    local anchor = redis.call("GET", KEYS[3])
+  local membersExisted = redis.call("EXISTS", KEYS[3])
+  redis.call("SREM", KEYS[3], ARGV[1])
+  if membersExisted == 1 and redis.call("SCARD", KEYS[3]) == 0 then
+    redis.call("DEL", KEYS[3])
+    local anchor = redis.call("GET", KEYS[2])
     if anchor then
       local anchorOk, decodedAnchor = pcall(cjson.decode, anchor)
       if anchorOk and decodedAnchor.generation == ARGV[2] then
-        redis.call("DEL", KEYS[3])
+        redis.call("DEL", KEYS[2])
         return deleted + 10
       end
     end
@@ -267,13 +260,6 @@ export function createProviderSessionStateStore(redis: ProviderSessionStateRedis
     );
   }
 
-  async function readBinding(sessionUid: string, clientCode: string) {
-    return parseJson(
-      await redis.get(providerSessionBindingKey(sessionUid, clientCode)),
-      ProviderSessionBindingSchema,
-    );
-  }
-
   async function readLookup(sessionUid: string, clientCode: string) {
     const serialized = await redis.get(providerSessionBindingLookupKey(sessionUid, clientCode));
     if (!serialized)
@@ -301,7 +287,6 @@ export function createProviderSessionStateStore(redis: ProviderSessionStateRedis
       input.binding.bindingId,
       mappingOwnerId,
       JSON.stringify(anchor),
-      JSON.stringify(input.binding),
       JSON.stringify(toLookup(input.binding)),
       input.ttlSeconds,
     ] as Array<string | number>;
@@ -335,7 +320,6 @@ export function createProviderSessionStateStore(redis: ProviderSessionStateRedis
       input.expectedLookup?.bindingId ?? "",
       input.expectedLookup?.mappingOwnerId ?? "",
       input.expectedLookup ? "1" : "0",
-      JSON.stringify(input.binding),
       JSON.stringify(toLookup(input.binding)),
       input.ttlSeconds,
     ] as Array<string | number>;
@@ -360,7 +344,7 @@ export function createProviderSessionStateStore(redis: ProviderSessionStateRedis
       return false;
     const refreshed = await redis.eval(
       REFRESH_OWNED_PROVIDER_SESSION_BINDING_SCRIPT,
-      4,
+      3,
       ...publicationKeys(
         input.providerSessionUid,
         input.binding.clientCode,
@@ -371,7 +355,6 @@ export function createProviderSessionStateStore(redis: ProviderSessionStateRedis
       input.binding.principalSessionId,
       input.binding.bindingId,
       input.binding.mappingOwnerId,
-      JSON.stringify(input.binding),
       JSON.stringify(toLookup(input.binding)),
       input.ttlSeconds,
     );
@@ -421,7 +404,7 @@ export function createProviderSessionStateStore(redis: ProviderSessionStateRedis
 
   async function publishWithRecovery(input: {
     script: string;
-    keys: [string, string, string, string];
+    keys: [string, string, string];
     args: Array<string | number>;
     confirmation: {
       anchor: ProviderSessionPrincipalAnchor;
@@ -430,7 +413,7 @@ export function createProviderSessionStateStore(redis: ProviderSessionStateRedis
     };
   }): Promise<ProviderSessionPublicationResult> {
     try {
-      return classifyPublication(await redis.eval(input.script, 4, ...input.keys, ...input.args), false);
+      return classifyPublication(await redis.eval(input.script, 3, ...input.keys, ...input.args), false);
     }
     catch (firstError) {
       try {
@@ -441,7 +424,7 @@ export function createProviderSessionStateStore(redis: ProviderSessionStateRedis
         // Retry below with the same generation and mapping owner; both scripts are idempotent.
       }
       try {
-        return classifyPublication(await redis.eval(input.script, 4, ...input.keys, ...input.args), true);
+        return classifyPublication(await redis.eval(input.script, 3, ...input.keys, ...input.args), true);
       }
       catch (retryError) {
         try {
@@ -484,7 +467,6 @@ export function createProviderSessionStateStore(redis: ProviderSessionStateRedis
     publishClientBinding,
     publishRebind,
     readAnchor,
-    readBinding,
     readLookup,
     readStaged,
     refresh,
@@ -507,10 +489,9 @@ function publicationKeys(
   sessionUid: string,
   clientCode: string,
   generation: string,
-): [string, string, string, string] {
+): [string, string, string] {
   return [
     providerSessionPrincipalAnchorKey(sessionUid),
-    providerSessionBindingKey(sessionUid, clientCode),
     providerSessionBindingLookupKey(sessionUid, clientCode),
     providerSessionGenerationMembersKey(sessionUid, generation),
   ];
@@ -582,9 +563,8 @@ export async function deleteOwnedProviderSessionBinding(
 ) {
   return await redis.eval(
     DELETE_OWNED_PROVIDER_SESSION_BINDING_SCRIPT,
-    4,
+    3,
     providerSessionBindingLookupKey(input.providerSessionUid, input.clientCode),
-    providerSessionBindingKey(input.providerSessionUid, input.clientCode),
     providerSessionPrincipalAnchorKey(input.providerSessionUid),
     providerSessionGenerationMembersKey(
       input.providerSessionUid,

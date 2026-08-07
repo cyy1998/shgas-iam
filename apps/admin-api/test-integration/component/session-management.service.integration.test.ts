@@ -825,6 +825,12 @@ describe("createSessionManagementService", () => {
         details: expect.objectContaining({
           changed: true,
           cleanupFailedCount: 1,
+          revoked: {
+            principalSessions: 1,
+            bindings: 0,
+            credentials: 1,
+            artifacts: 0,
+          },
         }),
       }),
     ]);
