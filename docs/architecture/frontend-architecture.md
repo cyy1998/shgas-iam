@@ -60,5 +60,9 @@
   当前 test workflow 由两个前端 package 的 `vitest.unit.config.ts`、`vitest.integration.component.config.ts`、
   `playwright.config.ts`、canonical scripts 和已提交测试共同维护；
   命令入口见 [../development/commands.md](../development/commands.md)。
+- Admin 与 SSO Unit 分别在单个 package-local Vitest 进程内使用 Node/DOM projects。普通 `*.test.ts[x]` 默认使用 Node 且不加载
+  全局 DOM setup；确实使用浏览器全局或 React DOM render 的测试命名为 `*.dom.test.ts[x]`，由 jsdom project 加载
+  Testing Library 和浏览器兼容 setup。这个后缀只表达 Unit 执行环境；Component Integration 仍整体使用 jsdom、完整
+  setup 与 `*.integration.test.ts[x]` 收集规则。
 - 不要直接编辑 Umi generated directory 或 frontend build output；generated 和 vendored path 规则见
   [repository-map.md](repository-map.md)。

@@ -29,10 +29,15 @@
 - 不相关的未跟踪文件不自动阻断工作。未知改动必须原样保留；只有当前工作会重叠、覆盖或无法安全提交时才停止。
 - 目标分支在获得本地交付授权前保持只读。不要因 implementation 授权自动 merge、push、部署或清理分支。
 
-## 多 Ticket 协调与交接
+## 多 Ticket 批量实施的协调与交接
 
-本节适用于由 `.scratch/<feature>/issues/` 管理的多 Ticket `/implement`。子代理 dispatch 是强制的上下文边界，
-不是可选的并行优化。Ticket 状态是协作提示，生命周期为 `ready-for-agent → claimed → resolved`，不是 gate：
+`/implement` 默认由当前会话直接实施；无 ticket 的小型改动或本次只获授权实施一张 ticket 时，不启动专用
+implementation 子代理。即使同一 tracker 中还存在其他 tickets，也不能仅凭这一事实触发 dispatch。只有本次
+`/implement` 获得一次性实施两张及以上 tickets 的明确授权时，才进入下述批量模式，并为每张 ticket 启动一个全新的
+implementation 子代理。这里的限制只针对实施子代理，不影响 `/code-review` 按自身规则使用独立的只读评审子代理。
+
+批量模式下，子代理 dispatch 是强制的上下文边界，不是可选的并行优化。Ticket 状态是协作提示，生命周期为
+`ready-for-agent → claimed → resolved`，不是 gate：
 
 1. 主会话按 blockers 顺序选择依赖前沿，只调度 blockers 已 `resolved` 的 ticket。每张 ticket 都必须由主会话显式
    调用一个全新的 implementation 子代理；不得把主会话压缩、清空或总结后继续执行视为“全新上下文”。
@@ -50,7 +55,7 @@
 6. 两轴 findings 清零后，原 implementation 子代理勾选验收项、把 ticket 标为 `resolved`、更新 journal，并创建只
    包含本 feature tracker 状态的轻量 handoff commit。Ticket 不写 Resolution schema、候选 SHA 或证据新鲜度字段。
 7. Handoff commit 完成后，主会话才能为下一张已解阻 ticket 显式调用另一个全新的 implementation 子代理。
-8. 如果当前运行环境没有可用的子代理能力，主会话必须停止并向维护者报告；不得静默退回主会话直接实施。
+8. 如果批量模式下当前运行环境没有可用的子代理能力，主会话必须停止并向维护者报告；不得静默退回主会话直接实施。
 
 ## 验证节奏
 

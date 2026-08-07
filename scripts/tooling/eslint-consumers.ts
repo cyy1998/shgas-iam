@@ -1,18 +1,6 @@
-import { Buffer } from "node:buffer";
-import { spawn } from "node:child_process";
-import { createHash } from "node:crypto";
 import { access, readdir, readFile } from "node:fs/promises";
-import { dirname, relative, resolve } from "node:path";
+import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-
-export type EslintDiagnosticSnapshot = {
-  checkedFileCount: number;
-  checkedFileSetHash: string;
-  diagnosticKeys: string[];
-  errorCount: number;
-  exitCode: number;
-  warningCount: number;
-};
 
 type EslintConsumer = {
   args: string[];
@@ -29,53 +17,9 @@ type PackageManifest = {
   scripts?: Record<string, string>;
 };
 
-type EslintJsonMessage = {
-  messageId?: string;
-  ruleId: string | null;
-  severity: number;
-};
-
-type EslintJsonResult = {
-  errorCount: number;
-  filePath: string;
-  messages: EslintJsonMessage[];
-  warningCount: number;
-};
-
 const moduleDirectory = dirname(fileURLToPath(import.meta.url));
 export const repoRoot = resolve(moduleDirectory, "../..");
 const configOwner = "@iam/eslint-config";
-
-export async function collectEslintDiagnosticSnapshots(concurrency = 2) {
-  const eslintConsumers = await discoverEslintConsumers();
-  const snapshots = new Map<string, EslintDiagnosticSnapshot>();
-  const failures: unknown[] = [];
-  let nextConsumerIndex = 0;
-
-  async function worker() {
-    while (nextConsumerIndex < eslintConsumers.length) {
-      const consumer = eslintConsumers[nextConsumerIndex++];
-      try {
-        snapshots.set(consumer.name, await runEslintConsumer(consumer));
-      }
-      catch (error) {
-        failures.push(error);
-      }
-    }
-  }
-
-  await Promise.all(Array.from(
-    { length: Math.min(concurrency, eslintConsumers.length) },
-    () => worker(),
-  ));
-
-  if (failures.length > 0)
-    throw new AggregateError(failures, "One or more ESLint consumer checks failed");
-
-  return Object.fromEntries(
-    eslintConsumers.map(consumer => [consumer.name, snapshots.get(consumer.name)!]),
-  );
-}
 
 export async function readWorkspaceManifest(consumer: EslintConsumer) {
   return readPackageManifest(consumer.manifest);
@@ -127,80 +71,6 @@ export async function discoverEslintConsumers(): Promise<EslintConsumer[]> {
     },
     ...workspaceConsumers.sort((left, right) => left.name.localeCompare(right.name)),
   ];
-}
-
-async function runEslintConsumer(consumer: EslintConsumer): Promise<EslintDiagnosticSnapshot> {
-  const eslintBinary = resolve(repoRoot, "node_modules/eslint/bin/eslint.js");
-  const result = await spawnProcess(
-    "node",
-    [eslintBinary, ...consumer.args, "--format", "json"],
-    resolve(repoRoot, consumer.workspace),
-  );
-
-  let reports: EslintJsonResult[];
-  try {
-    reports = JSON.parse(result.stdout) as EslintJsonResult[];
-  }
-  catch (error) {
-    throw new Error(
-      `${consumer.name} did not emit ESLint JSON (exit ${result.exitCode}): ${result.stderr}`,
-      { cause: error },
-    );
-  }
-
-  const checkedFiles = reports
-    .map(report => relative(repoRoot, report.filePath).replaceAll("\\", "/"))
-    .sort();
-  const diagnosticKeys = new Set<string>();
-  let errorCount = 0;
-  let warningCount = 0;
-
-  for (const report of reports) {
-    errorCount += report.errorCount;
-    warningCount += report.warningCount;
-    for (const message of report.messages) {
-      diagnosticKeys.add([
-        message.severity,
-        message.ruleId ?? "fatal",
-        message.messageId ?? "",
-      ].join(":"));
-    }
-  }
-
-  return {
-    checkedFileCount: checkedFiles.length,
-    checkedFileSetHash: createHash("sha256").update(checkedFiles.join("\n")).digest("hex"),
-    diagnosticKeys: [...diagnosticKeys].sort(),
-    errorCount,
-    exitCode: result.exitCode,
-    warningCount,
-  };
-}
-
-function spawnProcess(command: string, args: string[], cwd: string) {
-  return new Promise<{ exitCode: number; stderr: string; stdout: string }>((resolvePromise, reject) => {
-    const child = spawn(command, args, {
-      cwd,
-      env: {
-        ...process.env,
-        FORCE_COLOR: "0",
-      },
-      stdio: ["ignore", "pipe", "pipe"],
-    });
-    const stdout: Buffer[] = [];
-    const stderr: Buffer[] = [];
-
-    child.stdout.on("data", chunk => stdout.push(chunk));
-    child.stderr.on("data", chunk => stderr.push(chunk));
-    child.on("error", reject);
-    child.on("close", (exitCode) => {
-      resolvePromise({
-        exitCode: exitCode ?? 1,
-        stdout: Buffer.concat(stdout).toString("utf8"),
-        stderr: Buffer.concat(stderr).toString("utf8"),
-      });
-    });
-  });
 }
 
 async function findWorkspaceConfig(workspace: string, name: string) {

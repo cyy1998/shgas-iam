@@ -1,6 +1,10 @@
 import { resolve } from 'node:path';
 import { defineConfig } from 'vitest/config';
 
+export const domTestOptions = {
+  environment: 'jsdom' as const,
+};
+
 export default defineConfig({
   resolve: {
     alias: {
@@ -10,8 +14,6 @@ export default defineConfig({
     },
   },
   test: {
-    environment: 'jsdom',
-    setupFiles: ['./test/setup.ts'],
     exclude: [
       'dist/**',
       'test-integration/browser/**',

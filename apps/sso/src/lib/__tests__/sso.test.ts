@@ -1,11 +1,25 @@
 import { HttpResponse, http } from 'msw';
-import { describe, expect, it } from 'vitest';
+import { afterAll, describe, expect, it, vi } from 'vitest';
 import { server } from '../../../test/mocks/server';
+import { registerMswLifecycle } from '../../../test/setup-msw';
 import {
   buildAuthorizeUrl,
   buildLogoutUrl,
   fetchAuthenticationConfig,
 } from '../sso';
+
+vi.hoisted(() => {
+  vi.stubEnv(
+    'UMI_APP_SSO_WELL_KNOWN_URL',
+    'http://localhost/sso/.well-known/authentication-configuration',
+  );
+});
+
+registerMswLifecycle();
+
+afterAll(() => {
+  vi.unstubAllEnvs();
+});
 
 describe('sso helpers', () => {
   it('builds encoded authorize and logout urls', () => {

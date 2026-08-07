@@ -21,8 +21,8 @@ git diff --check
 ```bash
 bun test scripts/__tests__/architecture-guard.test.ts
 bun test scripts/__tests__/test-orchestration.test.ts
-bun test scripts/__tests__/tooling-performance.test.ts
-bun test scripts/__tests__/eslint-config-equivalence.test.ts
+bun test scripts/__tests__/tooling-contracts.test.ts
+bun test scripts/__tests__/eslint-config-ownership.test.ts
 ```
 
 Canonical collection 与编排变化还应运行：
@@ -92,9 +92,9 @@ collection aliases 已删除。
 `pnpm check:test-collection` 通过 Vitest/Playwright 机器 list、Bun 窄目录与 Turbo dry-run 验证每个当前候选的唯一收集、
 路径/命名归属和 root task 可达性。它与 production Architecture Guard 分离，不分析测试断言、资源调用或 AST/data flow。
 
-`pnpm test:unit` 以 Turbo concurrency 2 运行可缓存的 Unit。Package-local Vitest Unit 使用 25% workers，Bun
-Unit 使用 `--max-concurrency=2`。Architecture Guard 不进入 package `test`，由根级
-`pnpm check:architecture` 单独执行。
+`pnpm test:unit` 以 Turbo concurrency 2 运行可缓存的 Unit。Admin 与 SSO 的 package-local Vitest Unit 固定使用 4 个
+workers，其他 Vitest Unit 使用 25% workers，Bun Unit 使用 `--max-concurrency=2`。Architecture Guard 不进入 package
+`test`，由根级 `pnpm check:architecture` 单独执行。
 
 真实进程/端口行为由 `test:integration:process` 以 Turbo concurrency 1 运行，并禁用任务缓存：
 
@@ -344,18 +344,12 @@ Subject Projection tightening migration 通过 Drizzle 应用后，rollback 必�
 pnpm --filter @iam/db subject-projection:rollback
 ```
 
-## 工具链性能入口
+## 工具链强制执行
 
 ```bash
 # 绕过 Turbo task cache 的强制执行
 pnpm exec turbo typecheck --force --concurrency=3
 pnpm exec turbo test:unit --force --concurrency=2
-
-# ESLint profile 交错采样
-node scripts/benchmark-eslint-config.mjs --rounds 5
-
-# 手动核对 ESLint 文件集合与诊断快照；不属于 pnpm verify
-pnpm test:eslint-diagnostic-baseline
 ```
 
 `--force` 不会清空操作系统文件缓存。性能比较应使用相同命令和 runner，记录墙钟、CPU 与最大 RSS，一次只调整一个

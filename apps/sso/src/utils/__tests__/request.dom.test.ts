@@ -1,9 +1,12 @@
 import { HttpResponse, http } from 'msw';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { server } from '../../../test/mocks/server';
+import { registerMswLifecycle } from '../../../test/setup-msw';
 import { history } from '../../../test/mocks/umijs-max';
 import { request } from '../request';
 import { restoreLoginRedirectState } from '../url';
+
+registerMswLifecycle();
 
 describe('request auth redirect', () => {
   beforeEach(() => {

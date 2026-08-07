@@ -24,6 +24,10 @@ profile 不是新的测试层级、速度标签或 Gate。多资源测试按测�
 
 - Unit 保留 owner-local 窄根，通常为 `src/**/*.test.ts[x]`；tooling owner 可以使用 `test/` 或
   `scripts/__tests__/`。
+- Admin 与 SSO frontend 的 Unit 分别在一个 package-local Vitest 进程中使用 Node 与 DOM execution environments。
+  普通 `*.test.ts[x]` 默认进入 Node，只有 `*.dom.test.ts[x]` 显式进入 jsdom。Node 不加载全局 DOM setup；DOM 才加载
+  Testing Library 与必要的浏览器兼容 setup。需要 HTTP mock 的文件显式注册 package-local MSW lifecycle，不以 MSW
+  的使用决定 Node/DOM 环境。Node 与 DOM 仍属于同一个 Unit collection，不形成新的公开命令或 profile。
 - 非 browser Integration 位于 `test-integration/<profile>/**/*.integration.test.ts[x]`。
 - Browser Integration 位于 `test-integration/browser/**/*.spec.ts`。
 - Full-system E2E 独占 `e2e/system/**/*.spec.ts`。Root `pnpm test:e2e` 是唯一完整 collection owner；workspace-local
@@ -143,6 +147,11 @@ Turbo 是唯一跨 package orchestrator；package 继续拥有 runner、configs�
 }
 ```
 
+Frontend package 内部的 Vitest projects、setup 与测试支持代码仍由该 package 自己持有；仓库不提供 root Vitest
+workspace、跨 package 共享配置模块或共享 setup。Admin/SSO Component Integration 与 DOM Unit 是不同的行为边界：
+前者继续整体使用 jsdom、完整 setup 与 `test-integration/component/**/*.integration.test.ts[x]` 收集规则，后者只是
+Unit collection 内的显式执行环境。
+
 Unit/component 只有在输入、env、fixtures、时间与随机性都可重现时允许缓存。process、redis、postgres、composition、
 browser、Full-system E2E 与其他外部验证均 `cache:false`。资源 tasks 通过 Turbo strict env 只透传 owner-specific test URLs。
 
@@ -150,7 +159,8 @@ browser、Full-system E2E 与其他外部验证均 `cache:false`。资源 tasks 
 
 | Collection | Turbo package concurrency | Runner 预算 |
 |---|---:|---|
-| Unit / component | 2 | Vitest `maxWorkers: 25%`；Bun `--max-concurrency=2` |
+| Unit | 2 | Admin/SSO Vitest `maxWorkers: 4`；其他 Vitest `maxWorkers: 25%`；Bun `--max-concurrency=2` |
+| component | 2 | Vitest `maxWorkers: 25%`；Bun `--max-concurrency=2` |
 | process / redis / postgres / composition | 1 | 单 package；资源 owner 独占 |
 | browser | 1 | Playwright 管理单 Chromium project |
 | Full-system E2E | 1 | 两次 Playwright journey 均为单 Chromium project、单 worker、零 retry |

@@ -1,6 +1,24 @@
 import { resolve } from 'node:path';
 import { defineConfig } from 'vitest/config';
 
+export const domTestOptions = {
+  deps: {
+    optimizer: {
+      client: {
+        enabled: true,
+        include: [
+          'react',
+          'react/jsx-runtime',
+          'react-dom',
+          'antd',
+          '@ant-design/pro-components',
+        ],
+      },
+    },
+  },
+  environment: 'jsdom' as const,
+};
+
 export default defineConfig({
   resolve: {
     alias: {
@@ -10,22 +28,6 @@ export default defineConfig({
     },
   },
   test: {
-    deps: {
-      optimizer: {
-        client: {
-          enabled: true,
-          include: [
-            'react',
-            'react/jsx-runtime',
-            'react-dom',
-            'antd',
-            '@ant-design/pro-components',
-          ],
-        },
-      },
-    },
-    environment: 'jsdom',
-    setupFiles: ['./test/setup.ts'],
     exclude: [
       'dist/**',
       'test-integration/browser/**',

@@ -6,7 +6,7 @@ import {
   readConsumerConfigImports,
   readWorkspaceManifest,
   repoRoot,
-} from "../tooling-performance/eslint-equivalence.ts";
+} from "../tooling/eslint-consumers.ts";
 
 const ownedEslintDependencies = [
   "@antfu/eslint-config",

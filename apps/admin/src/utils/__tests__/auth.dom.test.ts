@@ -5,7 +5,7 @@ import {
   restoreLoginRedirectState,
 } from '../auth';
 
-describe('admin auth url helpers', () => {
+describe('admin auth URL helpers', () => {
   it('keeps the strict redirect stable and carries query/hash in state', () => {
     const authorizeUrl = new URL(
       buildLoginRedirectUrl(

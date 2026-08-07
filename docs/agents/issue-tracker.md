@@ -68,8 +68,10 @@ Ticket 标题、交付行为和验收使用自然中文；字段名、状态、�
 - Journal 链接正式来源而不复制需求。Feature 范围与测试决策以 spec 为准，切片范围与验收以 ticket 为准，稳定领域
   语言与长期决策以 `CONTEXT.md`/ADR 为准。
 
-每张 ticket 的新上下文读取 `AGENTS.md`、当前分支、spec、ticket、blockers 和 journal。实现通过后，ticket 状态、
-验收 checkbox 与 journal 摘要进入一个轻量 handoff commit，供下一上下文恢复。
+一次性实施多张 tickets 的批量模式中，每张 ticket 的专用 implementation 子代理从新上下文读取 `AGENTS.md`、当前
+分支、spec、ticket、blockers 和 journal。只实施一张 ticket 时由当前会话直接实施，不因同一 tracker 还存在其他
+tickets 而启动专用 implementation 子代理。实现通过后，ticket 状态、验收 checkbox 与 journal 摘要进入一个轻量
+handoff commit，供后续上下文恢复。
 
 ## Skill 操作映射
 
