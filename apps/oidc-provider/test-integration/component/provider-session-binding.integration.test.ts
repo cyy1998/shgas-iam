@@ -42,7 +42,6 @@ function createFixture() {
   });
   const adapter = createOidcSessionKernelAdapter({
     accounts: {
-      findById: async () => null,
       findBySubject: async (subject) => {
         accountReadSubjects.push(subject);
         return subject === subjectIdentifier
@@ -91,11 +90,89 @@ async function createPrincipalSession(
     accountId: subjectIdentifier,
     authTime: Math.floor(principal.value.authTime / 1000),
     sessionId: principal.value.principalSessionId,
-    userId: 7,
   };
 }
 
+async function commitStagedBinding(
+  adapter: ReturnType<typeof createOidcSessionKernelAdapter>,
+  providerSessionUid: string,
+  session: { accountId: string; authTime: number; sessionId: string },
+  context: { authorizationAttemptId?: string; clientId: string; oidcConfigVersion: number },
+) {
+  const authorizationAttemptId
+    = context.authorizationAttemptId ?? `seed-${session.sessionId}-${context.clientId}`;
+  const staged = await adapter.stage(session, {
+    ...context,
+    authorizationAttemptId,
+    providerSessionUid,
+  });
+  expect(staged).not.toBeNull();
+  return await adapter.consumeStaged({
+    accountId: session.accountId,
+    authorizationAttemptId,
+    clientCode: context.clientId,
+    providerSessionUid,
+  });
+}
+
 describe("oIDC Provider Session client binding contract", () => {
+  it("resolves the current Principal Session from the cookie without exposing bearer or database identifiers", async () => {
+    const { adapter, kernel } = createFixture();
+    const principal = await kernel.createPrincipalSession(subjectIdentifier);
+    expect(principal.status).toBe("created");
+    if (principal.status !== "created")
+      return;
+    expect(principal.externalToken).toBeDefined();
+    if (!principal.externalToken)
+      return;
+
+    await expect(adapter.resolve({
+      headers: { cookie: `global_session=${encodeURIComponent(principal.externalToken)}` },
+    })).resolves.toEqual({
+      accountId: subjectIdentifier,
+      authTime: Math.floor(principal.value.authTime / 1000),
+      sessionId: principal.value.principalSessionId,
+    });
+  });
+
+  it("publishes a staged client binding without duplicate session or database identifiers", async () => {
+    const { adapter, kernel } = createFixture();
+    const session = await createPrincipalSession(kernel);
+
+    const staged = await adapter.stage(session, {
+      authorizationAttemptId: "attempt-minimal-view",
+      clientId: "client-a",
+      oidcConfigVersion: 1,
+      providerSessionUid: null,
+    });
+
+    expect(staged).toMatchObject({
+      accountId: subjectIdentifier,
+      anchorGeneration: "attempt-minimal-view",
+      bindingId: "pending",
+      clientCode: "client-a",
+      oidcConfigVersion: 1,
+      principalSessionId: session.sessionId,
+    });
+    expect(staged).not.toHaveProperty("globalSessionId");
+    expect(staged).not.toHaveProperty("userId");
+
+    const committed = await adapter.consumeStaged({
+      accountId: subjectIdentifier,
+      authorizationAttemptId: "attempt-minimal-view",
+      clientCode: "client-a",
+      providerSessionUid: "provider-session-minimal-view",
+    });
+
+    expect(committed).toMatchObject({
+      accountId: subjectIdentifier,
+      clientCode: "client-a",
+      principalSessionId: session.sessionId,
+    });
+    expect(committed).not.toHaveProperty("globalSessionId");
+    expect(committed).not.toHaveProperty("userId");
+  });
+
   it("creates a second client binding from the same verified Principal Session and revokes clients independently", async () => {
     const { adapter, kernel } = createFixture();
     const principal = await kernel.createPrincipalSession(subjectIdentifier);
@@ -107,9 +184,8 @@ describe("oIDC Provider Session client binding contract", () => {
       accountId: subjectIdentifier,
       authTime: Math.floor(principal.value.authTime / 1000),
       sessionId: principalSessionId,
-      userId: 7,
     };
-    const bindingA = await adapter.bind("provider-session-a", session, {
+    const bindingA = await commitStagedBinding(adapter, "provider-session-a", session, {
       clientId: "client-a",
       oidcConfigVersion: 1,
     });
@@ -147,10 +223,68 @@ describe("oIDC Provider Session client binding contract", () => {
       .toBeNull();
   });
 
+  it("revokes only the invalidated client's binding and current access token credential", async () => {
+    const { adapter, kernel } = createFixture();
+    const session = await createPrincipalSession(kernel);
+    const bindingA = await commitStagedBinding(adapter, "provider-session-a", session, {
+      clientId: "client-a",
+      oidcConfigVersion: 1,
+    });
+    const anchor = await adapter.readPrincipalAnchor("provider-session-a", subjectIdentifier);
+    expect(anchor).not.toBeNull();
+    const bindingB = await adapter.ensureClientBinding({
+      accountId: subjectIdentifier,
+      anchorGeneration: anchor!.generation,
+      clientCode: "client-b",
+      oidcConfigVersion: 2,
+      principalSessionId: session.sessionId,
+      providerSessionUid: "provider-session-a",
+    });
+    expect(bindingA).not.toBeNull();
+    expect(bindingB).not.toBeNull();
+    await adapter.registerAccessTokenCredential({
+      binding: bindingA,
+      expiresIn: 60,
+      payload: {
+        accountId: subjectIdentifier,
+        clientId: "client-a",
+        scope: "openid",
+        sessionUid: "provider-session-a",
+      },
+      providerTokenId: "token-a",
+      providerTokenKey: "oidc:model:AccessToken:token-a",
+    });
+    await adapter.registerAccessTokenCredential({
+      binding: bindingB,
+      expiresIn: 60,
+      payload: {
+        accountId: subjectIdentifier,
+        clientId: "client-b",
+        scope: "openid",
+        sessionUid: "provider-session-a",
+      },
+      providerTokenId: "token-b",
+      providerTokenKey: "oidc:model:AccessToken:token-b",
+    });
+
+    await adapter.revokeClientProtocol("client-a", "client_config_changed");
+
+    await expect(adapter.read("provider-session-a", "client-a")).resolves.toBeNull();
+    await expect(adapter.resolveAccessTokenCredential("token-a")).resolves.toBeNull();
+    await expect(adapter.read("provider-session-a", "client-b")).resolves.toMatchObject({
+      bindingId: bindingB?.bindingId,
+      clientCode: "client-b",
+    });
+    await expect(adapter.resolveAccessTokenCredential("token-b")).resolves.toMatchObject({
+      credential: { clientCode: "client-b" },
+      metadata: { providerTokenId: "token-b" },
+    });
+  });
+
   it("reuses the authoritative Kernel binding through the minimal lookup", async () => {
     const { accountReadSubjects, adapter, kernel } = createFixture();
     const session = await createPrincipalSession(kernel);
-    const binding = await adapter.bind("provider-session-a", session, {
+    const binding = await commitStagedBinding(adapter, "provider-session-a", session, {
       clientId: "client-a",
       oidcConfigVersion: 1,
     });
@@ -175,7 +309,7 @@ describe("oIDC Provider Session client binding contract", () => {
   it("rejects a lookup that points at a non-OIDC Kernel binding", async () => {
     const { adapter, kernel, providerSessionState } = createFixture();
     const session = await createPrincipalSession(kernel);
-    const validBinding = await adapter.bind("provider-session-a", session, {
+    const validBinding = await commitStagedBinding(adapter, "provider-session-a", session, {
       clientId: "client-a",
       oidcConfigVersion: 1,
     });
@@ -205,7 +339,7 @@ describe("oIDC Provider Session client binding contract", () => {
   it("rejects a Kernel binding outside the current Provider Session anchor generation", async () => {
     const { adapter, kernel, providerSessionState } = createFixture();
     const session = await createPrincipalSession(kernel);
-    const binding = await adapter.bind("provider-session-a", session, {
+    const binding = await commitStagedBinding(adapter, "provider-session-a", session, {
       clientId: "client-a",
       oidcConfigVersion: 1,
     });
@@ -222,7 +356,7 @@ describe("oIDC Provider Session client binding contract", () => {
   it("rejects a binding lookup without a mapping owner", async () => {
     const { adapter, kernel, providerSessionState } = createFixture();
     const session = await createPrincipalSession(kernel);
-    const binding = await adapter.bind("provider-session-a", session, {
+    const binding = await commitStagedBinding(adapter, "provider-session-a", session, {
       clientId: "client-a",
       oidcConfigVersion: 1,
     });
@@ -255,9 +389,8 @@ describe("oIDC Provider Session client binding contract", () => {
       accountId: subjectIdentifier,
       authTime: Math.floor(principal.value.authTime / 1000),
       sessionId: principal.value.principalSessionId,
-      userId: 7,
     };
-    await adapter.bind("provider-session-a", session, {
+    await commitStagedBinding(adapter, "provider-session-a", session, {
       clientId: "client-a",
       oidcConfigVersion: 1,
     });
@@ -274,7 +407,7 @@ describe("oIDC Provider Session client binding contract", () => {
   it("atomically rotates the Principal anchor and binding ownership while preserving other clients", async () => {
     const { adapter, kernel } = createFixture();
     const oldSession = await createPrincipalSession(kernel);
-    const oldBinding = await adapter.bind("provider-session-a", oldSession, {
+    const oldBinding = await commitStagedBinding(adapter, "provider-session-a", oldSession, {
       clientId: "client-a",
       oidcConfigVersion: 1,
     });
@@ -294,7 +427,7 @@ describe("oIDC Provider Session client binding contract", () => {
     expect(oldToken).not.toBeNull();
     const newSession = await createPrincipalSession(kernel);
 
-    const newBinding = await adapter.bind("provider-session-a", newSession, {
+    const newBinding = await commitStagedBinding(adapter, "provider-session-a", newSession, {
       clientId: "client-a",
       oidcConfigVersion: 1,
     });
@@ -331,7 +464,7 @@ describe("oIDC Provider Session client binding contract", () => {
   it("keeps the old anchor, binding, and token ownership when the atomic rotation commit fails", async () => {
     const { adapter, kernel, providerSessionState } = createFixture();
     const oldSession = await createPrincipalSession(kernel);
-    const oldBinding = await adapter.bind("provider-session-a", oldSession, {
+    const oldBinding = await commitStagedBinding(adapter, "provider-session-a", oldSession, {
       clientId: "client-a",
       oidcConfigVersion: 1,
     });
@@ -380,7 +513,7 @@ describe("oIDC Provider Session client binding contract", () => {
   it("allows only one staged generation to replace the same anchor", async () => {
     const { adapter, kernel } = createFixture();
     const oldSession = await createPrincipalSession(kernel);
-    await adapter.bind("provider-session-a", oldSession, {
+    await commitStagedBinding(adapter, "provider-session-a", oldSession, {
       clientId: "client-a",
       oidcConfigVersion: 1,
     });
@@ -439,7 +572,7 @@ describe("oIDC Provider Session client binding contract", () => {
     providerSessionState.recoverNextPublication();
     const session = await createPrincipalSession(kernel);
 
-    const binding = await adapter.bind("provider-session-a", session, {
+    const binding = await commitStagedBinding(adapter, "provider-session-a", session, {
       clientId: "client-a",
       oidcConfigVersion: 1,
     });

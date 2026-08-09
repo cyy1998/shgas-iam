@@ -134,7 +134,6 @@ function createProviderSessionStore(options: {
     clientCode: string;
     providerSessionUid: string | null;
     principalSessionId: string;
-    userId: number;
   }>();
   const key = (sessionUid: string, clientCode: string) => `${sessionUid}:${clientCode}`;
   const createBinding = (
@@ -143,7 +142,6 @@ function createProviderSessionStore(options: {
       accountId: string;
       authTime: number;
       sessionId: string;
-      userId: number;
     },
     clientCode: string,
     generation: string,
@@ -160,10 +158,8 @@ function createProviderSessionStore(options: {
       bindingId: `binding-${clientCode}`,
       clientCode,
       expiresAt: Math.floor(Date.now() / 1000) + 3600,
-      globalSessionId: session.sessionId,
       oidcConfigVersion: 1,
       principalSessionId: session.sessionId,
-      userId: session.userId,
     };
     bindings.set(key(sessionUid, clientCode), binding);
     principalAnchors.set(sessionUid, {
@@ -198,13 +194,6 @@ function createProviderSessionStore(options: {
     revokeClientBinding(sessionUid: string, clientCode: string) {
       bindings.delete(key(sessionUid, clientCode));
     },
-    async bind(
-      sessionUid: string,
-      session: { accountId: string; authTime: number; sessionId: string; userId: number },
-      context: { clientId: string },
-    ) {
-      return createBinding(sessionUid, session, context.clientId, `direct-${session.sessionId}`);
-    },
     async consumeStaged(input: {
       accountId: string;
       authorizationAttemptId: string;
@@ -224,7 +213,6 @@ function createProviderSessionStore(options: {
         accountId: staged.accountId,
         authTime: staged.authTime,
         sessionId: staged.principalSessionId,
-        userId: staged.userId,
       }, input.clientCode, input.authorizationAttemptId);
       if (!binding)
         throw new Error("staged binding commit failed");
@@ -251,7 +239,6 @@ function createProviderSessionStore(options: {
         accountId: subjectIdentifier,
         authTime: 123,
         sessionId: input.principalSessionId,
-        userId: 7,
       }, input.clientCode, input.anchorGeneration);
     },
     async isCurrentOrStagedPrincipal(
@@ -279,7 +266,7 @@ function createProviderSessionStore(options: {
       return anchor?.accountId === accountId ? anchor : null;
     },
     async stage(
-      session: { accountId: string; authTime: number; sessionId: string; userId: number },
+      session: { accountId: string; authTime: number; sessionId: string },
       context: {
         authorizationAttemptId: string;
         clientId: string;
@@ -293,7 +280,6 @@ function createProviderSessionStore(options: {
         clientCode: context.clientId,
         providerSessionUid: context.providerSessionUid,
         principalSessionId: session.sessionId,
-        userId: session.userId,
       });
       return {
         accountId: session.accountId,
@@ -301,10 +287,8 @@ function createProviderSessionStore(options: {
         bindingId: "pending",
         clientCode: context.clientId,
         expiresAt: Math.floor(Date.now() / 1000) + 60,
-        globalSessionId: session.sessionId,
         oidcConfigVersion: 1,
         principalSessionId: session.sessionId,
-        userId: session.userId,
       };
     },
   };
@@ -350,7 +334,6 @@ async function createAuthorizationRuntime(options: { rejectEnsure?: boolean } = 
     accountId: subjectIdentifier,
     authTime: principalSessionId === oldPrincipalSessionId ? 123 : 456,
     sessionId: principalSessionId,
-    userId: 7,
   });
   const principalSessionIdFromCookie = (cookie: string | undefined) => {
     if (cookie?.includes("global_session=principal-token-a"))

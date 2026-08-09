@@ -2,11 +2,9 @@ import type { ResolvedGlobalSession } from "../interaction/global-session.ts";
 import { z } from "zod";
 
 export const ProviderSessionBindingSchema = z.object({
-  globalSessionId: z.string().min(1),
   principalSessionId: z.string().min(1),
   bindingId: z.string().min(1),
   clientCode: z.string().min(1),
-  userId: z.number().int().positive(),
   accountId: z.string().uuid(),
   authTime: z.number().int().nonnegative(),
   oidcConfigVersion: z.number().int().nonnegative(),
@@ -52,7 +50,6 @@ export const StagedProviderSessionBindingSchema = z.object({
   oidcConfigVersion: z.number().int().nonnegative(),
   principalSessionId: z.string().min(1),
   providerSessionUid: z.string().min(1).nullable(),
-  userId: z.number().int().positive(),
 });
 
 export type StagedProviderSessionBinding = z.infer<typeof StagedProviderSessionBindingSchema>;

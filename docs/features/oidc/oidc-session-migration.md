@@ -5,6 +5,11 @@ OIDC Provider、custom SSO 和 admin revoke 现在统一通过 Session Kernel �
 `global_session:*` envelope、custom SSO local session authority key、OIDC provider runtime/index key 不再作为
 登录态或 token 状态来源。
 
+当前 OIDC runtime 不写入、不读取、也不按 `oidc:user-tokens:*`、`oidc:client-tokens:*` 或
+`oidc:global-session-tokens:*` 撤销 Access Token。这三类 key 只属于受控 legacy inventory/cleanup allowlist；当前 Access
+Token 生命周期由 Session Kernel credential/token 与 provider-object ownership 共同管理。仓库删除旧 runtime 代码不表示
+任何环境的 Redis inventory 已经为零。
+
 这是一次有意不向后兼容的切换。发布窗口内必须清理旧 key，并要求所有用户重新登录。
 
 ## Session Kernel 配置
@@ -62,11 +67,22 @@ apply 完成后再次执行 dry-run，所有旧 key pattern 的 count 应为 `0`
 ## 运行时兼容边界
 
 - OIDC provider 不读取旧 `global_session:*` envelope，也不会把裸 user DTO 或旧 envelope 自动迁移为 PrincipalSession。
-- UserInfo、logout 和 active revoke 不以旧 OIDC token index 作为权威状态来源。
+- Access Token upsert/resolve/revoke、UserInfo、logout 和 active revoke 不注册或信任旧 OIDC token index；client invalidation
+  通过 Session Kernel 撤销当前 binding/credential/token，并通过 provider-object owner 删除对应 protocol payload。
+- 旧 OIDC token-index key 只由 `session:cleanup-legacy-keys` 的固定 allowlist 扫描和删除。运行该命令前必须 drain 仍可能写入
+  或依赖旧 index 的实例、scheduler、sidecar 和旧镜像，并在维护窗口内完成 dry-run review、apply 与 verify。
 - custom SSO 的 PrincipalSession token、auth code 和 local session sid 都是 opaque bearer。
 - `Authorization` header 和 query `token` 作为 PrincipalSession 来源仅保留 legacy 兼容；新 client 不应通过 URL query 传递 PrincipalSession token。
 
+短期 `oidc:pending-provider-session-binding:*` payload 不再写入数据库 `userId`，TTL 最长为 60 秒。新 reader 会忽略
+旧 payload 中额外的 `userId`，但旧 reader 仍要求该字段，无法读取新 writer 产生的 payload。因此发布时不得长期混跑
+新旧 OIDC 实例：应统一切换全部实例，或先停止新 authorization、等待至少 60 秒使旧 pending payload 全部过期，再
+切换 writer/reader 并恢复流量；本仓库不提供永久双读兼容层。
+
 ## 回滚边界
+
+删除 legacy key 前必须先确定回滚策略。若候选旧镜像仍依赖已退役的 OIDC token index，不得先清理这些 key；cleanup 后的
+回滚只能使用不依赖旧 index 的版本，并仍需按下列范围清理新状态、要求用户重新登录和重做 client owner smoke。
 
 如果需要回滚到不理解 Session Kernel 的旧版本，必须先停止登录和协议流量，然后清理新版本 key：
 

@@ -39,7 +39,6 @@ function createFixture() {
   };
   const session = {
     sessionId: "principal-a",
-    userId: account.id,
     accountId: account.subjectIdentifier,
     authTime: 123,
   };
@@ -58,11 +57,9 @@ function createFixture() {
     },
   };
   const providerBinding = {
-    globalSessionId: session.sessionId,
     principalSessionId: session.sessionId,
     bindingId: "binding-a",
     clientCode: "client-a",
-    userId: session.userId,
     accountId: session.accountId,
     authTime: session.authTime,
     oidcConfigVersion: client.oidc_config_version,
@@ -423,7 +420,6 @@ describe("oIDC claims and UserInfo snapshot", () => {
       globalSessions: {
         resolveById: async () => ({
           sessionId: "principal-a",
-          userId: 7,
           accountId: "57b0e34d-bf33-4671-87ea-4ed2f1b0e420",
           authTime: 123,
         }),
@@ -436,11 +432,9 @@ describe("oIDC claims and UserInfo snapshot", () => {
       },
       providerSessions: {
         read: async () => ({
-          globalSessionId: "principal-a",
           principalSessionId: "principal-a",
           bindingId: "binding-a",
           clientCode: "client-a",
-          userId: 7,
           accountId: "57b0e34d-bf33-4671-87ea-4ed2f1b0e420",
           authTime: 123,
           oidcConfigVersion: 3,
@@ -546,7 +540,6 @@ describe("oIDC claims and UserInfo snapshot", () => {
       globalSessions: {
         resolveById: async () => ({
           sessionId: "principal-a",
-          userId: 7,
           accountId: subjectIdentifier,
           authTime: 123,
         }),
@@ -559,11 +552,9 @@ describe("oIDC claims and UserInfo snapshot", () => {
       },
       providerSessions: {
         read: async () => ({
-          globalSessionId: "principal-a",
           principalSessionId: "principal-a",
           bindingId: "binding-a",
           clientCode: "client-a",
-          userId: 7,
           accountId: subjectIdentifier,
           authTime: 123,
           oidcConfigVersion: 3,

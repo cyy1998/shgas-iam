@@ -90,6 +90,20 @@ type ApiServicesExcludeRepositories = AssertTrue<
 >;
 const apiServicesExcludeRepositories: ApiServicesExcludeRepositories = true;
 void apiServicesExcludeRepositories;
+type RemovedCustomSsoSessionAdapterMember
+  = | "lazyRevokeUserSessions"
+    | "resolveIndependentCredentialContext"
+    | "resolveLocalSessionContext"
+    | "resolvePrincipalSessionContext";
+type CustomSsoSessionAdapterExcludesInternalMembers = AssertTrue<
+  Extract<
+    RemovedCustomSsoSessionAdapterMember,
+    keyof CustomSsoSessionKernelAdapter
+  > extends never ? true : false
+>;
+const customSsoSessionAdapterExcludesInternalMembers:
+CustomSsoSessionAdapterExcludesInternalMembers = true;
+void customSsoSessionAdapterExcludesInternalMembers;
 
 function assertPrincipalSessionCreationContracts(
   passwordSessions: PasswordPrincipalSessionPort,

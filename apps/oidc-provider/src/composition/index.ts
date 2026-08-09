@@ -3,7 +3,6 @@ import type { Redis } from "ioredis";
 import type { OidcProviderEnv } from "../env.ts";
 import type { OidcLogger } from "../lib/logger.ts";
 import type { SigningKey } from "../security/signing-keys.ts";
-import { SystemLogEvent } from "@iam/api-core/logger";
 import db, { closeDb } from "@iam/db";
 import { createLogger } from "../lib/logger.ts";
 import { createProviderRedis } from "../lib/redis.ts";
@@ -13,6 +12,7 @@ import { createOidcProviderRuntime } from "./provider/index.ts";
 import { createOidcProviderRepositories } from "./repositories/index.ts";
 import { createOidcProviderSecurity } from "./security/index.ts";
 import { createOidcProviderSession } from "./session/index.ts";
+import { createOidcProviderShutdown } from "./shutdown.ts";
 import { createOidcProviderStores } from "./stores/index.ts";
 import { createOidcProviderWorkers } from "./workers/index.ts";
 
@@ -56,35 +56,17 @@ export async function createOidcProviderComposition(options: CreateOidcProviderC
     health: redis,
   });
   const workers = createOidcProviderWorkers({ redis, logger, stores, session });
-
-  async function shutdown(signal: string) {
-    logger.info({
-      event: SystemLogEvent.OidcProviderStopping,
-      signal,
-    }, "OIDC provider shutting down");
-    await Promise.allSettled([
-      new Promise<void>((resolve) => {
-        server.close(() => resolve());
-      }),
-      workers.clientInvalidationSubscriber.quit(),
-      redis.quit(),
-      closeDb(),
-    ]);
-  }
-
-  return {
-    env: options.env,
+  const shutdown = createOidcProviderShutdown({
+    clientInvalidationSubscriber: workers.clientInvalidationSubscriber,
+    closeDatabase: closeDb,
     logger,
     redis,
-    repositories,
-    stores,
-    session,
-    security,
-    providerRuntime,
-    provider: providerRuntime.provider,
-    interactions: providerRuntime.interactions,
     server,
-    workers,
+  });
+
+  return {
+    logger,
+    server,
     shutdown,
   };
 }

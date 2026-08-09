@@ -8,7 +8,7 @@ export interface CreateOidcProviderWorkersDeps {
   redis: Redis;
   logger: OidcLogger;
   session: Pick<OidcProviderSession, "oidcSession">;
-  stores: Pick<OidcProviderStores, "protocolObjects" | "tokens">;
+  stores: Pick<OidcProviderStores, "protocolObjects">;
 }
 
 export function createOidcProviderWorkers(deps: CreateOidcProviderWorkersDeps) {
@@ -16,7 +16,6 @@ export function createOidcProviderWorkers(deps: CreateOidcProviderWorkersDeps) {
     clientInvalidationSubscriber: startClientInvalidationSubscriber(deps.redis, deps.logger, {
       oidcSession: deps.session.oidcSession,
       protocolObjects: deps.stores.protocolObjects,
-      tokens: deps.stores.tokens,
     }),
   };
 }

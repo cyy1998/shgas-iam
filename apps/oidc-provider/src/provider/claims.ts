@@ -12,7 +12,6 @@ import type {
   DeviceCode,
   UnknownObject,
 } from "oidc-provider";
-import type { ProviderSessionBinding } from "../session/provider-session.ts";
 import type {
   CreateOidcAuthorizationCodeSnapshotInput,
   OidcClaimsSnapshot,
@@ -291,10 +290,6 @@ export function createOidcClaimsAdapter(deps: CreateOidcClaimsAdapterDeps) {
         ...(account.mobile ? { phone_number: account.mobile } : {}),
       };
       return resolvedAccount(account.subjectIdentifier, claims);
-    },
-
-    readBinding(sessionUid: string, clientCode: string): Promise<ProviderSessionBinding | null> {
-      return deps.providerSessions.read(sessionUid, clientCode);
     },
   };
 }

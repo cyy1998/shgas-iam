@@ -559,6 +559,17 @@ function createServices(options: {
     customSsoSession,
     kernel,
     orcas,
+    resolveAuthenticationContext: async (
+      token: string,
+      clientCode = "iam",
+    ): Promise<{
+      readonly authenticatedClientCode: string;
+      readonly orcasId?: string;
+      readonly subjectIdentifier: string;
+    }> => (await customSsoSession.resolvePublicAuthentication(
+      token,
+      clientCode,
+    )).authenticationContext,
     sso,
     subjectDelivery,
     subjectProjection,
@@ -720,7 +731,7 @@ describe("Custom SSO module interface", () => {
       credentials: { revoked: 1 },
     });
     await expect(
-      services.customSsoSession.resolveIndependentCredentialContext(
+      services.resolveAuthenticationContext(
         result.credential,
         independentClient.clientCode,
       ),
@@ -818,7 +829,7 @@ describe("Custom SSO module interface", () => {
     }
 
     await expect(
-      services.customSsoSession.resolveIndependentCredentialContext(
+      services.resolveAuthenticationContext(
         legacyCredential.externalToken,
         independentClient.clientCode,
       ),
@@ -979,13 +990,13 @@ describe("Custom SSO module interface", () => {
     };
 
     await expect(
-      services.customSsoSession.resolveLocalSessionContext(
+      services.resolveAuthenticationContext(
         gatewaySession.token,
         "gateway",
       ),
     ).rejects.toBeInstanceOf(AuthzUnauthorizedError);
     await expect(
-      services.customSsoSession.resolveIndependentCredentialContext(
+      services.resolveAuthenticationContext(
         independentCredential.credential,
         independentClient.clientCode,
       ),
@@ -1009,7 +1020,7 @@ describe("Custom SSO module interface", () => {
     const token = await createPrincipalToken(services.customSsoSession);
 
     await expect(
-      services.customSsoSession.resolvePrincipalSessionContext(token),
+      services.resolveAuthenticationContext(token),
     ).rejects.toBeInstanceOf(SubjectAccessDisabledError);
   });
 
@@ -1023,7 +1034,7 @@ describe("Custom SSO module interface", () => {
     const token = await createPrincipalToken(services.customSsoSession);
 
     await expect(
-      services.customSsoSession.resolvePrincipalSessionContext(token),
+      services.resolveAuthenticationContext(token),
     ).rejects.toBe(unavailable);
   });
 
@@ -1038,7 +1049,7 @@ describe("Custom SSO module interface", () => {
     disabled = true;
 
     await expect(
-      services.customSsoSession.resolveLocalSessionContext(
+      services.resolveAuthenticationContext(
         credential.credential,
         client.clientCode,
       ),
@@ -1052,8 +1063,11 @@ describe("Custom SSO module interface", () => {
     services.userService.getUserDetailById.mockClear();
 
     await expect(
-      services.customSsoSession.resolvePrincipalSessionContext(token),
-    ).resolves.toEqual({ subjectIdentifier });
+      services.resolveAuthenticationContext(token),
+    ).resolves.toEqual({
+      authenticatedClientCode: "iam",
+      subjectIdentifier,
+    });
     expect(services.userService.getActiveUserBySubjectIdentifier)
       .not
       .toHaveBeenCalled();
@@ -1296,7 +1310,7 @@ describe("Custom SSO module interface", () => {
     expect(fakeRedis.payloadKeys()).toHaveLength(0);
 
     await expect(
-      services.customSsoSession.resolveIndependentCredentialContext(
+      services.resolveAuthenticationContext(
         result.credential,
         independentClient.clientCode,
       ),
@@ -1674,7 +1688,7 @@ describe("Custom SSO module interface", () => {
     };
 
     await expect(
-      services.customSsoSession.resolveIndependentCredentialContext(
+      services.resolveAuthenticationContext(
         result.credential,
         independentClient.clientCode,
       ),
@@ -1703,7 +1717,7 @@ describe("Custom SSO module interface", () => {
     barrierUnavailable = true;
 
     await expect(
-      services.customSsoSession.resolveIndependentCredentialContext(
+      services.resolveAuthenticationContext(
         result.credential,
         independentClient.clientCode,
       ),
@@ -1739,7 +1753,7 @@ describe("Custom SSO module interface", () => {
     });
     expect(result.ttl).toBeGreaterThan(0);
     await expect(
-      services.customSsoSession.resolveIndependentCredentialContext(
+      services.resolveAuthenticationContext(
         result.credential,
         independentClient.clientCode,
       ),
@@ -1885,7 +1899,7 @@ describe("Custom SSO module interface", () => {
       token: expect.stringContaining("iam_ls_"),
     });
     await expect(
-      services.customSsoSession.resolveLocalSessionContext(
+      services.resolveAuthenticationContext(
         result.token,
         gatewayClient.clientCode,
       ),
@@ -1989,13 +2003,13 @@ describe("Custom SSO module interface", () => {
       currentGatewayRuntimeClient = mutateRuntime(currentGatewayRuntimeClient);
 
       await expect(
-        services.customSsoSession.resolveLocalSessionContext(
+        services.resolveAuthenticationContext(
           result.token,
           "gateway",
         ),
       ).rejects.toBeInstanceOf(AuthzUnauthorizedError);
       await expect(
-        services.customSsoSession.resolveLocalSessionContext(
+        services.resolveAuthenticationContext(
           result.token,
           "gateway",
         ),
@@ -2019,7 +2033,7 @@ describe("Custom SSO module interface", () => {
     services.userService.getUserDetailById.mockClear();
 
     await expect(
-      services.customSsoSession.resolveLocalSessionContext(
+      services.resolveAuthenticationContext(
         result.token,
         "gateway",
       ),
@@ -2169,7 +2183,8 @@ describe("Custom SSO module interface", () => {
     });
 
     expect(oa).toEqual({ token: expect.stringContaining("iam_ps_"), isMobileSet: true });
-    await expect(services.customSsoSession.resolvePrincipalSessionContext(oa.token)).resolves.toEqual({
+    await expect(services.resolveAuthenticationContext(oa.token)).resolves.toEqual({
+      authenticatedClientCode: "iam",
       subjectIdentifier,
     });
 
@@ -2435,7 +2450,7 @@ describe("Custom SSO module interface", () => {
       code,
       redirectUrl,
     });
-    const sessionContext = await services.customSsoSession.resolveLocalSessionContext(
+    const sessionContext = await services.resolveAuthenticationContext(
       result.token,
       gatewayClient.clientCode,
     );
@@ -2490,7 +2505,7 @@ describe("Custom SSO module interface", () => {
     if (credential.status !== "resolved")
       throw new Error("expected resolved Gateway credential");
 
-    const sessionContext = await services.customSsoSession.resolveLocalSessionContext(
+    const sessionContext = await services.resolveAuthenticationContext(
       result.token,
       gatewayClient.clientCode,
     );
@@ -2514,7 +2529,7 @@ describe("Custom SSO module interface", () => {
     const result = await redeemIndependentCredential(services);
 
     await expect(
-      services.customSsoSession.resolveIndependentCredentialContext(
+      services.resolveAuthenticationContext(
         result.credential,
         independentClient.clientCode,
       ),
@@ -2527,7 +2542,7 @@ describe("Custom SSO module interface", () => {
       status: ClientStatus.Maintenance,
     };
     await expect(
-      services.customSsoSession.resolveIndependentCredentialContext(
+      services.resolveAuthenticationContext(
         result.credential,
         independentClient.clientCode,
       ),
@@ -2545,7 +2560,7 @@ describe("Custom SSO module interface", () => {
       ),
     ).rejects.toBeInstanceOf(AuthzUnauthorizedError);
     await expect(
-      services.customSsoSession.resolveIndependentCredentialContext(
+      services.resolveAuthenticationContext(
         result.credential,
         independentClient.clientCode,
       ),
@@ -2567,10 +2582,10 @@ describe("Custom SSO module interface", () => {
     await services.customSsoSession.logout(credential.credential);
 
     await expect(
-      services.customSsoSession.resolvePrincipalSessionContext(principalToken),
+      services.resolveAuthenticationContext(principalToken),
     ).rejects.toBeInstanceOf(AuthzUnauthorizedError);
     await expect(
-      services.customSsoSession.resolveIndependentCredentialContext(
+      services.resolveAuthenticationContext(
         credential.credential,
         independentClient.clientCode,
       ),
@@ -2602,8 +2617,11 @@ describe("Custom SSO module interface", () => {
       services.customSsoSession.logout(credential.credential),
     ).rejects.toBeInstanceOf(AuthzUnauthorizedError);
     await expect(
-      services.customSsoSession.resolvePrincipalSessionContext(principalToken),
-    ).resolves.toEqual({ subjectIdentifier });
+      services.resolveAuthenticationContext(principalToken),
+    ).resolves.toEqual({
+      authenticatedClientCode: "iam",
+      subjectIdentifier,
+    });
   });
 
   test("keeps the parent Principal Session when credential logout cannot confirm current Client state", async () => {
@@ -2629,8 +2647,11 @@ describe("Custom SSO module interface", () => {
       services.customSsoSession.logout(credential.credential),
     ).rejects.toBeInstanceOf(CustomSsoClientRuntimeUnavailableError);
     await expect(
-      services.customSsoSession.resolvePrincipalSessionContext(principalToken),
-    ).resolves.toEqual({ subjectIdentifier });
+      services.resolveAuthenticationContext(principalToken),
+    ).resolves.toEqual({
+      authenticatedClientCode: "iam",
+      subjectIdentifier,
+    });
   });
 
   test("Independent credential resolution rejects client mismatch and an invalid PrincipalSession", async () => {
@@ -2638,7 +2659,7 @@ describe("Custom SSO module interface", () => {
     const result = await redeemIndependentCredential(services);
 
     await expect(
-      services.customSsoSession.resolveIndependentCredentialContext(
+      services.resolveAuthenticationContext(
         result.credential,
         "other-client",
       ),
@@ -2656,7 +2677,7 @@ describe("Custom SSO module interface", () => {
       ),
     );
     await expect(
-      services.customSsoSession.resolveIndependentCredentialContext(
+      services.resolveAuthenticationContext(
         second.credential,
         independentClient.clientCode,
       ),
@@ -2686,7 +2707,7 @@ describe("Custom SSO module interface", () => {
       status: ClientStatus.Maintenance,
     };
     await expect(
-      services.customSsoSession.resolveIndependentCredentialContext(
+      services.resolveAuthenticationContext(
         credential.credential,
         independentClient.clientCode,
       ),

@@ -152,7 +152,6 @@ describe("oIDC interaction browser binding cookie", () => {
         })),
       },
       providerSessions: {
-        bind: vi.fn(),
         stage: vi.fn(),
       },
       returnHandles: {
@@ -222,7 +221,6 @@ function createSubjectAccessInteraction(error: Error, cookie: string) {
       })),
     },
     providerSessions: {
-      bind: vi.fn(),
       stage: vi.fn(),
     },
     returnHandles: {

@@ -25,7 +25,6 @@ function createAdapter(
   providerSessionState.seedLookup("provider-session-a", "client-a", { bindingId: "binding-a" });
   const adapter = createOidcSessionKernelAdapter({
     accounts: {
-      findById: vi.fn(async () => null),
       findBySubject: vi.fn(async () => null),
     },
     clients: {
@@ -78,23 +77,21 @@ describe("oIDC Subject Access Session Adapter", () => {
       bindingId: "binding-a",
       clientCode: "client-a",
       expiresAt: 10,
-      globalSessionId: "principal-a",
       oidcConfigVersion: 1,
       principalSessionId: "principal-a",
-      userId: 1,
     };
 
-    await expect(adapter.bind(
-      "provider-session-a",
+    await expect(adapter.stage(
       {
         accountId: "subject-a",
         authTime: 1,
         sessionId: "principal-a",
-        userId: 1,
       },
       {
+        authorizationAttemptId: "attempt-a",
         clientId: "client-a",
         oidcConfigVersion: 1,
+        providerSessionUid: "provider-session-a",
       },
     )).rejects.toBeInstanceOf(SubjectAccessDisabledError);
 

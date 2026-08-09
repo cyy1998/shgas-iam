@@ -26,26 +26,6 @@ export function createOidcAccountRepository(db: DbClient) {
       const account = OidcAccountDtoSchema.parse(row);
       return isOidcAccountAvailable(account) ? account : null;
     },
-
-    async findById(id: number) {
-      const [row] = await db.select({
-        id: users.id,
-        subjectIdentifier: users.subjectIdentifier,
-        username: users.username,
-        name: users.name,
-        mobile: users.mobile,
-        status: users.status,
-        isDelete: users.isDelete,
-      }).from(users).where(and(
-        eq(users.id, id),
-        eq(users.status, UserStatus.Enable),
-        eq(users.isDelete, false),
-      )).limit(1);
-      if (!row)
-        return null;
-      const account = OidcAccountDtoSchema.parse(row);
-      return isOidcAccountAvailable(account) ? account : null;
-    },
   };
 }
 

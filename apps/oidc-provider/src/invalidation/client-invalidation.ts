@@ -3,10 +3,6 @@ import type { OidcLogger } from "../lib/logger.ts";
 import { SystemLogEvent } from "@iam/api-core/logger";
 import { OIDC_CLIENT_INVALIDATION_CHANNEL } from "@iam/api-core/oidc";
 
-export interface ClientInvalidationTokenStore {
-  revokeClientAccessTokens: (clientId: string) => Promise<unknown>;
-}
-
 export interface ClientInvalidationProtocolObjectStore {
   revokeClient: (clientId: string) => Promise<unknown>;
 }
@@ -16,7 +12,6 @@ export interface ClientInvalidationOidcSessionAdapter {
 }
 
 export interface ClientInvalidationSubscriberDeps {
-  tokens: ClientInvalidationTokenStore;
   protocolObjects: ClientInvalidationProtocolObjectStore;
   oidcSession: ClientInvalidationOidcSessionAdapter;
 }
@@ -27,6 +22,29 @@ export function startClientInvalidationSubscriber(
   deps: ClientInvalidationSubscriberDeps,
 ) {
   const subscriber = redis.duplicate();
+  const logSubscriptionFailure = (error: unknown) => {
+    logger.warn({
+      event: SystemLogEvent.OidcClientInvalidationSubscriptionFailed,
+      err: error,
+    }, "OIDC client invalidation subscription failed");
+  };
+  let subscribing = false;
+  const subscribe = async () => {
+    if (subscribing || subscriber.status !== "ready")
+      return;
+    subscribing = true;
+    try {
+      await subscriber.subscribe(OIDC_CLIENT_INVALIDATION_CHANNEL);
+    }
+    catch (error) {
+      logSubscriptionFailure(error);
+    }
+    finally {
+      subscribing = false;
+    }
+  };
+  subscriber.on("error", logSubscriptionFailure);
+  subscriber.on("ready", () => void subscribe());
   subscriber.on("message", (_channel, message) => {
     void (async () => {
       try {
@@ -34,7 +52,6 @@ export function startClientInvalidationSubscriber(
         if (!event.clientCode)
           return;
         await deps.oidcSession.revokeClientProtocol(event.clientCode, "client_config_changed");
-        await deps.tokens.revokeClientAccessTokens(event.clientCode);
         await deps.protocolObjects.revokeClient(event.clientCode);
       }
       catch (error) {
@@ -45,6 +62,9 @@ export function startClientInvalidationSubscriber(
       }
     })();
   });
-  void subscriber.subscribe(OIDC_CLIENT_INVALIDATION_CHANNEL);
+  if (subscriber.status === "wait")
+    void subscriber.connect().catch(() => undefined);
+  else if (subscriber.status === "ready")
+    void subscribe();
   return subscriber;
 }

@@ -705,13 +705,11 @@ export function createCustomSsoSessionKernelAdapter(deps: CustomSsoSessionKernel
     credentialToken: string,
     clientCode: string,
   ) {
-    return toLocalSessionContext(
-      await resolveValidatedCustomSsoCredential(
-        credentialToken,
-        clientCode,
-        CustomSsoClientMode.Independent,
-      ),
-    );
+    return (await resolveLocalSessionContext(
+      credentialToken,
+      clientCode,
+      CustomSsoClientMode.Independent,
+    )).authenticationContext;
   }
 
   async function assertCurrentGatewayClient(expected: GatewayClientContext) {
@@ -896,13 +894,17 @@ export function createCustomSsoSessionKernelAdapter(deps: CustomSsoSessionKernel
   async function resolveLocalSessionContext(
     localSessionToken: string,
     clientCode: string,
-  ): Promise<CustomSsoLocalSessionContext> {
-    return toLocalSessionContext(
-      await resolveValidatedCustomSsoCredential(
-        localSessionToken,
-        clientCode,
-      ),
+    expectedMode?: CustomSsoClientMode,
+  ) {
+    const credentialContext = await resolveValidatedCustomSsoCredential(
+      localSessionToken,
+      clientCode,
+      expectedMode,
     );
+    return {
+      authenticationContext: toLocalSessionContext(credentialContext),
+      credentialConfigVersion: credentialContext.credentialConfigVersion,
+    };
   }
 
   async function resolvePublicAuthentication(
@@ -924,18 +926,17 @@ export function createCustomSsoSessionKernelAdapter(deps: CustomSsoSessionKernel
       };
     }
 
-    const credentialContext = await resolveValidatedCustomSsoCredential(
+    const localSessionContext = await resolveLocalSessionContext(
       sessionToken,
       clientCode,
     );
-    const authenticationContext = toLocalSessionContext(credentialContext);
     return {
-      authenticationContext,
+      authenticationContext: localSessionContext.authenticationContext,
       subjectDeliveryCapability:
         deps.subjectDelivery.createUserInfoCapability({
-          ...authenticationContext,
+          ...localSessionContext.authenticationContext,
           expectedConfigVersion:
-            credentialContext.credentialConfigVersion,
+            localSessionContext.credentialConfigVersion,
         }),
     };
   }
@@ -989,13 +990,6 @@ export function createCustomSsoSessionKernelAdapter(deps: CustomSsoSessionKernel
     )) {
       throw new AuthzUnauthorizedError("未登录");
     }
-  }
-
-  async function lazyRevokeUserSessions(subjectIdentifier: string) {
-    return await deps.kernel.revokeUserSessions({
-      principalType: "user",
-      subjectId: subjectIdentifier,
-    }, "user_disabled");
   }
 
   async function resolveValidatedCustomSsoCredential(
@@ -1131,13 +1125,9 @@ export function createCustomSsoSessionKernelAdapter(deps: CustomSsoSessionKernel
     completeGatewayLogin,
     createPrincipalSession,
     issueAuthorizationCode,
-    lazyRevokeUserSessions,
     logout,
     redeemIndependentGrant,
-    resolveIndependentCredentialContext,
-    resolveLocalSessionContext,
     resolvePublicAuthentication,
-    resolvePrincipalSessionContext,
   };
 }
 

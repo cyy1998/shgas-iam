@@ -62,7 +62,6 @@ const AccessTokenMetadataSchema = z.object({
 });
 
 export interface OidcSessionKernelAccountReader {
-  findById: (id: number) => Promise<OidcAccountDto | null>;
   findBySubject: (subjectIdentifier: string) => Promise<OidcAccountDto | null>;
 }
 
@@ -204,7 +203,7 @@ export function createOidcSessionKernelAdapter(deps: OidcSessionKernelAdapterDep
       );
       if (principal.status !== "resolved")
         return null;
-      return await toResolvedGlobalSession(principal.value, externalToken);
+      return await toResolvedGlobalSession(principal.value);
     }
     catch (error) {
       throw markGlobalSessionCookieError(error);
@@ -223,20 +222,6 @@ export function createOidcSessionKernelAdapter(deps: OidcSessionKernelAdapterDep
       await deps.kernel.renewPrincipalSession(principalSessionId),
     );
     return principal.status === "resolved";
-  }
-
-  async function bind(
-    sessionUid: string,
-    session: ResolvedGlobalSession,
-    context: ProviderSessionBindingContext,
-  ): Promise<ProviderSessionBinding | null> {
-    const anchor = await readPrincipalAnchor(sessionUid, session.accountId);
-    const attemptId = context.authorizationAttemptId ?? randomUUID();
-    return await bindAndPublish(sessionUid, session, context, {
-      kind: "rebind",
-      attemptId,
-      expectedAnchorGeneration: anchor?.generation ?? null,
-    });
   }
 
   async function bindAndPublish(
@@ -343,18 +328,15 @@ export function createOidcSessionKernelAdapter(deps: OidcSessionKernelAdapterDep
       oidcConfigVersion: context.oidcConfigVersion,
       principalSessionId: session.sessionId,
       providerSessionUid: context.providerSessionUid ?? null,
-      userId: session.userId,
     };
     await providerSessionState.stage(
       staged,
       Math.min(Math.max(1, expiresAt - nowSeconds()), 60),
     );
     return {
-      globalSessionId: session.sessionId,
       principalSessionId: session.sessionId,
       bindingId: "pending",
       clientCode: context.clientId,
-      userId: session.userId,
       accountId: session.accountId,
       authTime: session.authTime,
       oidcConfigVersion: context.oidcConfigVersion,
@@ -375,7 +357,6 @@ export function createOidcSessionKernelAdapter(deps: OidcSessionKernelAdapterDep
     const binding = await bindAndPublish(input.providerSessionUid, {
       sessionId: staged.principalSessionId,
       authTime: staged.authTime,
-      userId: staged.userId,
       accountId: staged.accountId,
     }, {
       clientId: staged.clientCode,
@@ -707,18 +688,13 @@ export function createOidcSessionKernelAdapter(deps: OidcSessionKernelAdapterDep
     return true;
   }
 
-  async function toResolvedGlobalSession(
-    principal: PrincipalSession,
-    externalToken?: string,
-  ): Promise<ResolvedGlobalSession | null> {
+  async function toResolvedGlobalSession(principal: PrincipalSession): Promise<ResolvedGlobalSession | null> {
     const account = await deps.accounts.findBySubject(principal.principal.subjectId);
     if (!account)
       return null;
     return {
       sessionId: principal.principalSessionId,
-      externalToken,
       authTime: Math.floor(principal.authTime / 1000),
-      userId: account.id,
       accountId: account.subjectIdentifier,
     };
   }
@@ -753,11 +729,9 @@ export function createOidcSessionKernelAdapter(deps: OidcSessionKernelAdapterDep
       oidcConfigVersion: z.number().int().nonnegative(),
     }).passthrough().parse(binding.metadata);
     return {
-      globalSessionId: binding.principalSessionId,
       principalSessionId: binding.principalSessionId,
       bindingId: binding.bindingId,
       clientCode: binding.clientCode,
-      userId: session.userId,
       accountId: session.accountId,
       authTime: Math.floor(binding.authTime / 1000),
       oidcConfigVersion: metadata.oidcConfigVersion,
@@ -772,7 +746,6 @@ export function createOidcSessionKernelAdapter(deps: OidcSessionKernelAdapterDep
   }
 
   return {
-    bind,
     consumeAuthorizationCodeArtifact,
     consume: consumeReturnHandle,
     create: createReturnHandle,

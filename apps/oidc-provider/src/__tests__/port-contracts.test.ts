@@ -1,4 +1,5 @@
 import type { ClientSubjectProjectionService } from "@iam/client-subject-projection";
+import type { OidcProviderComposition } from "../composition/index.ts";
 import type {
   InteractionClientReader,
   InteractionGlobalSessionResolver,
@@ -14,8 +15,10 @@ import type {
   ClaimsSubjectProjectionResolver,
   ClaimsTokenRevoker,
 } from "../provider/claims.port.ts";
+import type { OidcClaimsAdapter } from "../provider/claims.ts";
 import type { OidcAccountRepository } from "../repositories/account.repository.ts";
 import type {
+  OidcSessionKernelAccountReader,
   OidcSessionKernelAdapter,
   OidcSessionKernelProviderSessionStateStore,
 } from "../session/oidc-session-kernel.adapter.ts";
@@ -28,6 +31,27 @@ import type { OidcClientRuntimeStore } from "../stores/client-runtime.store.ts";
 import { describe, expect, it } from "vitest";
 
 function assertAssignable<Port, _Provider extends Port>() {}
+
+type AssertTrue<T extends true> = T;
+type OidcProviderCompositionKeysAreClosed = AssertTrue<
+  keyof OidcProviderComposition extends "logger" | "server" | "shutdown"
+    ? "logger" | "server" | "shutdown" extends keyof OidcProviderComposition
+      ? true
+      : false
+    : false
+>;
+const oidcProviderCompositionKeysAreClosed: OidcProviderCompositionKeysAreClosed = true;
+void oidcProviderCompositionKeysAreClosed;
+type OidcSessionAdapterExcludesDirectBinding = AssertTrue<
+  "bind" extends keyof OidcSessionKernelAdapter ? false : true
+>;
+const oidcSessionAdapterExcludesDirectBinding: OidcSessionAdapterExcludesDirectBinding = true;
+void oidcSessionAdapterExcludesDirectBinding;
+type OidcClaimsAdapterExcludesBindingRead = AssertTrue<
+  "readBinding" extends keyof OidcClaimsAdapter ? false : true
+>;
+const oidcClaimsAdapterExcludesBindingRead: OidcClaimsAdapterExcludesBindingRead = true;
+void oidcClaimsAdapterExcludesBindingRead;
 
 function assertCompleteProviderSessionLifecycleFence(
   storage: AdapterProviderSessionBindingStore,
@@ -51,6 +75,14 @@ function assertCompleteProviderSessionLifecycleFence(
 }
 
 void assertCompleteProviderSessionLifecycleFence;
+
+function assertSubjectOnlyAccountReader(accounts: OidcSessionKernelAccountReader) {
+  void accounts.findBySubject("subject-a");
+  // @ts-expect-error OIDC session resolution must not expose the legacy database-id lookup
+  void accounts.findById(1);
+}
+
+void assertSubjectOnlyAccountReader;
 
 describe("oIDC provider-to-port contracts", () => {
   it("repositories satisfy claims ports", () => {

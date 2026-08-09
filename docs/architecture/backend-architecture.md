@@ -377,6 +377,11 @@ composition。跨层实例连接统一由 composition 完成。
 - OIDC composition 按 ownership 分类：Claims Adapter 与 interaction policy 由 `composition/provider` 物化；
   client auth rate limiter 与 client secret verifier 由 `composition/security` 物化；Session Kernel 与
   `oidcSession` facade 由 `composition/session` 物化。
+- 顶层 `createOidcProviderComposition()` 只向 `src/index.ts` 返回 `{ server, logger, shutdown }`。repositories、stores、
+  session、security、provider runtime、interactions 与 workers 都由 composition implementation 持有并在内部连接；runtime
+  入口只负责监听 server、记录生命周期日志，并把 process signal 或 Node HTTP server error 转交给 `shutdown`；下层 Module
+  通过各自的 consumer-owned Interface 测试，不从顶层 composition result 获取内部对象。OIDC protocol 的
+  `server_error` 仍是请求级 provider event，只记录协议错误，不触发进程关闭。
 - Provider composition 可以显式接收 repositories、stores、security 和 session facades。Claims、interaction policy
   与 interaction handler 直接消费 `session.oidcSession`，不得通过 `services.globalSessionResolver` 或等价 services
   alias 二次分类。
@@ -404,8 +409,10 @@ composition。跨层实例连接统一由 composition 完成。
   Provider Session、Principal Session 与 binding ownership；撤销一个 client lifecycle 不得删除同一 Provider Session
   下其他 client 的 binding。
 - `composition/workers` 是 client invalidation subscriber 的唯一 runtime owner。它创建 Redis subscriber，并只注入
-  `oidcSession`、token store 和 protocol-object store 的最窄 client revocation 能力。单条消息的 cleanup failure
-  记录 structured warning，不反向进入 client update transaction。
+  `oidcSession` 与 protocol-object store 的最窄 client revocation 能力：前者撤销当前 OIDC Client Binding 与 Session
+  Kernel credential/token，后者清理该 client 的 provider protocol objects。Token store 只在 Redis adapter/store 内部提供
+  单 token provider payload 删除，不作为 worker dependency；旧 user/client/global-session token index 不参与 runtime
+  注册或撤销。单条消息的 cleanup failure 记录 structured warning，不反向进入 client update transaction。
 - Provider protocol module 可以静态 import `oidc-provider` types 和纯 protocol helpers，但不得静态绑定 app-local
   DB、Redis、logger 或 concrete production repository；production 实例连接只发生在 composition。
 

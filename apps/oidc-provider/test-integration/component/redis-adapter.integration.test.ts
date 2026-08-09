@@ -134,22 +134,18 @@ function createAdapter(
       consumeStaged: async () => null,
       destroyProviderSession: options.destroyProviderSession ?? (async () => true),
       ensureClientBinding: async () => ({
-        globalSessionId: "principal-a",
         principalSessionId: "principal-a",
         bindingId: "binding-a",
         clientCode: "client-a",
-        userId: 42,
         accountId: "subject-a",
         authTime: 1_782_260_000,
         oidcConfigVersion: version.value ?? 0,
         expiresAt: 1_782_263_600,
       }),
       read: async () => ({
-        globalSessionId: "principal-a",
         principalSessionId: "principal-a",
         bindingId: "binding-a",
         clientCode: "client-a",
-        userId: 42,
         accountId: "subject-a",
         authTime: 1_782_260_000,
         oidcConfigVersion: version.value ?? 0,
@@ -253,11 +249,9 @@ describe("redis OIDC adapter", () => {
     const redis = new FakeRedis();
     const tokens = createOidcTokenStore(redis as unknown as Redis);
     const stagedBinding = {
-      globalSessionId: "principal-a",
       principalSessionId: "principal-a",
       bindingId: "binding-a",
       clientCode: "client-a",
-      userId: 42,
       accountId: "57b0e34d-bf33-4671-87ea-4ed2f1b0e420",
       authTime: 1_782_260_000,
       oidcConfigVersion: 3,
@@ -318,11 +312,9 @@ describe("redis OIDC adapter", () => {
     const redis = new FakeRedis();
     const tokens = createOidcTokenStore(redis as unknown as Redis);
     const binding = {
-      globalSessionId: "principal-a",
       principalSessionId: "principal-a",
       bindingId: "binding-a",
       clientCode: "client-a",
-      userId: 42,
       accountId: "57b0e34d-bf33-4671-87ea-4ed2f1b0e420",
       authTime: 1_782_260_000,
       oidcConfigVersion: 3,
@@ -391,11 +383,9 @@ describe("redis OIDC adapter", () => {
     const redis = new FakeRedis();
     const accountId = "57b0e34d-bf33-4671-87ea-4ed2f1b0e420";
     const bindingA = {
-      globalSessionId: "principal-a",
       principalSessionId: "principal-a",
       bindingId: "binding-a",
       clientCode: "client-a",
-      userId: 42,
       accountId,
       authTime: 1_782_260_000,
       oidcConfigVersion: 1,
@@ -519,11 +509,9 @@ describe("redis OIDC adapter", () => {
   it("does not issue an authorization code when Claims Snapshot creation fails", async () => {
     const redis = new FakeRedis();
     const binding = {
-      globalSessionId: "principal-a",
       principalSessionId: "principal-a",
       bindingId: "binding-a",
       clientCode: "client-a",
-      userId: 42,
       accountId: "57b0e34d-bf33-4671-87ea-4ed2f1b0e420",
       authTime: 1_782_260_000,
       oidcConfigVersion: 3,
@@ -591,24 +579,6 @@ describe("redis OIDC adapter", () => {
     versions.set("client-b", 3);
 
     await expect(adapter.find("session-1")).resolves.toBeUndefined();
-  });
-
-  it("keeps access token reverse indexes in Kernel and removes provider token payload", async () => {
-    const redis = new FakeRedis();
-    const adapter = createAdapter("AccessToken", redis, { value: 3 });
-    await adapter.upsert("token-1", {
-      clientId: "client-a",
-      accountId: "subject-a",
-      extra: { userId: 42, globalSessionId: "global-a" },
-    }, 3600);
-
-    const tokenKey = "oidc:model:AccessToken:token-1";
-    expect(redis.strings.has(tokenKey)).toBe(true);
-    expect([...redis.sortedSets.keys()].filter(key => key.includes("-tokens:"))).toEqual([]);
-
-    await adapter.destroy("token-1");
-
-    expect(redis.strings.has(tokenKey)).toBe(false);
   });
 
   it("destroys the Provider Session anchor with its Session artifact", async () => {
@@ -684,7 +654,6 @@ describe("redis OIDC adapter", () => {
       { params: { client_id: "client-a" } },
       600,
     );
-
     await revokeClientProtocolObjects(
       redis as unknown as Redis,
       createOidcTokenStore(redis as unknown as Redis),

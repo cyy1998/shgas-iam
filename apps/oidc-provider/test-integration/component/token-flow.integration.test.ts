@@ -129,7 +129,7 @@ async function createRuntime() {
     },
     globalSessions: {
       resolveById: async sessionId => sessionId === "principal-a"
-        ? { sessionId, userId: 7, accountId: subject, authTime: 123 }
+        ? { sessionId, accountId: subject, authTime: 123 }
         : null,
     },
     projection: {
@@ -161,11 +161,9 @@ async function createRuntime() {
     providerSessions: {
       read: async sessionUid => sessionUid === "provider-a"
         ? {
-            globalSessionId: "principal-a",
             principalSessionId: "principal-a",
             bindingId: "binding-a",
             clientCode: "public-client",
-            userId: 7,
             accountId: subject,
             authTime: 123,
             oidcConfigVersion: 1,

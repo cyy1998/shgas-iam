@@ -89,6 +89,7 @@ export const SystemLogEvent = {
   OidcProviderProtocolError: "oidc.provider.protocol_error",
   OidcProviderHttpRequestFailed: "oidc.provider.http_request.failed",
   OidcClientInvalidationCleanupFailed: "oidc.client_invalidation.cleanup_failed",
+  OidcClientInvalidationSubscriptionFailed: "oidc.client_invalidation.subscription_failed",
 } as const;
 
 export function resolveLogFormat(logFormat: LogFormat = "auto", nodeEnv: string): ResolvedLogFormat {

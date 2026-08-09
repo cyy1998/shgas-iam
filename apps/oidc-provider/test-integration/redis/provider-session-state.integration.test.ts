@@ -64,6 +64,7 @@ describe("oIDC Provider Session real Redis contract", () => {
     const writerStore = createProviderSessionStateStore(asStateRedis(testScope.writer));
     const observerStore = createProviderSessionStateStore(asStateRedis(testScope.observer));
     const expiresAt = Math.floor(Date.now() / 1000) + 120;
+    const firstPrincipalSessionId = testScope.unique("principal-first");
     await writerStore.stage({
       accountId,
       authorizationAttemptId: firstAttemptId,
@@ -72,10 +73,20 @@ describe("oIDC Provider Session real Redis contract", () => {
       expectedAnchorGeneration: null,
       expiresAt,
       oidcConfigVersion: 1,
-      principalSessionId: testScope.unique("principal-first"),
+      principalSessionId: firstPrincipalSessionId,
       providerSessionUid: null,
-      userId: 7,
     }, 60);
+    expect(JSON.parse(await testScope.observer.get(firstPendingKey) ?? "null")).toEqual({
+      accountId,
+      authorizationAttemptId: firstAttemptId,
+      authTime: 1_700_000_000,
+      clientCode,
+      expectedAnchorGeneration: null,
+      expiresAt,
+      oidcConfigVersion: 1,
+      principalSessionId: firstPrincipalSessionId,
+      providerSessionUid: null,
+    });
 
     const firstClaims = await Promise.all([
       writerStore.claim({
@@ -109,7 +120,6 @@ describe("oIDC Provider Session real Redis contract", () => {
       oidcConfigVersion: 1,
       principalSessionId: testScope.unique("principal-existing"),
       providerSessionUid,
-      userId: 7,
     }, 60);
     const ttl = await testScope.observer.ttl(existingPendingKey);
     expect(ttl).toBeGreaterThan(0);
@@ -132,6 +142,51 @@ describe("oIDC Provider Session real Redis contract", () => {
       providerSessionUid,
     });
     expect(await testScope.observer.exists(existingPendingKey)).toBe(0);
+
+    const legacyAttemptId = testScope.unique("legacy-attempt");
+    const legacyPendingKey = pendingProviderSessionBindingKey(legacyAttemptId);
+    const legacyPrincipalSessionId = testScope.unique("principal-legacy");
+    testScope.trackKey(legacyPendingKey);
+    await testScope.writer.set(legacyPendingKey, JSON.stringify({
+      accountId,
+      authorizationAttemptId: legacyAttemptId,
+      authTime: 1_700_000_002,
+      clientCode,
+      expectedAnchorGeneration: null,
+      expiresAt,
+      oidcConfigVersion: 1,
+      principalSessionId: legacyPrincipalSessionId,
+      providerSessionUid,
+      userId: 7,
+    }), "EX", 60);
+    await expect(observerStore.readStaged(legacyAttemptId)).resolves.toEqual({
+      accountId,
+      authorizationAttemptId: legacyAttemptId,
+      authTime: 1_700_000_002,
+      clientCode,
+      expectedAnchorGeneration: null,
+      expiresAt,
+      oidcConfigVersion: 1,
+      principalSessionId: legacyPrincipalSessionId,
+      providerSessionUid,
+    });
+    await expect(writerStore.claim({
+      accountId,
+      authorizationAttemptId: legacyAttemptId,
+      clientCode,
+      providerSessionUid,
+    })).resolves.toEqual({
+      accountId,
+      authorizationAttemptId: legacyAttemptId,
+      authTime: 1_700_000_002,
+      clientCode,
+      expectedAnchorGeneration: null,
+      expiresAt,
+      oidcConfigVersion: 1,
+      principalSessionId: legacyPrincipalSessionId,
+      providerSessionUid,
+    });
+    expect(await testScope.observer.exists(legacyPendingKey)).toBe(0);
   });
 
   it("publishes only minimal state, refreshes owned TTLs, and conditionally cleans its anchor", async () => {
@@ -471,7 +526,6 @@ describe("oIDC Provider Session real Redis contract", () => {
     });
     const adapter = createOidcSessionKernelAdapter({
       accounts: {
-        findById: async () => null,
         findBySubject: async subject => subject === accountId
           ? {
               id: 7,
@@ -498,15 +552,22 @@ describe("oIDC Provider Session real Redis contract", () => {
     if (principal.status !== "created")
       throw new Error("expected a Principal Session fixture");
 
-    const binding = await adapter.bind(providerSessionUid, {
+    const authorizationAttemptId = testScope.unique("attempt");
+    const session = {
       accountId,
       authTime: Math.floor(principal.value.authTime / 1000),
       sessionId: principal.value.principalSessionId,
-      userId: 7,
-    }, {
-      authorizationAttemptId: testScope.unique("attempt"),
+    };
+    await adapter.stage(session, {
+      authorizationAttemptId,
       clientId: clientCode,
       oidcConfigVersion: 1,
+      providerSessionUid,
+    });
+    const binding = await adapter.consumeStaged({
+      accountId,
+      authorizationAttemptId,
+      clientCode,
       providerSessionUid,
     });
 
@@ -541,11 +602,9 @@ function createBinding(input: {
     bindingId: input.bindingId,
     clientCode: input.clientCode,
     expiresAt: Math.floor(Date.now() / 1000) + 120,
-    globalSessionId: input.principalSessionId,
     mappingOwnerId: input.mappingOwnerId,
     oidcConfigVersion: 1,
     principalSessionId: input.principalSessionId,
-    userId: 7,
   };
 }
 
