@@ -5,7 +5,7 @@ import {
 } from '@iam/contracts';
 import { describe, expect, it } from 'vitest';
 import type { OrganizationSelectorNode } from '../../services/organization';
-import { filterOrganizationSelectorNodesByStatus } from '../OrganizationTreeSelector';
+import { filterOrganizationSelectorNodesByStatus } from '../organizationTreeSelector.helpers';
 
 function selectorNode(
   orgCode: string,

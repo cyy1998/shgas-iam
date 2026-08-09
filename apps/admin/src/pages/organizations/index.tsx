@@ -73,18 +73,17 @@ export default function OrganizationsPage() {
 
   // 切换选中组织：重置分页并加载 detail + 下级首页
   useEffect(() => {
-    if (!selectedCode) {
-      setDetailData(null);
-      setDetailChildrenPage(null);
-      setDetailChildrenPageNum(1);
-      setDetailChildrenPageSize(DETAIL_CHILDREN_DEFAULT_SIZE);
-      return;
-    }
-    setDetailChildrenPageNum(1);
-    setDetailChildrenPageSize(DETAIL_CHILDREN_DEFAULT_SIZE);
+    if (!selectedCode) return;
     loadDetail(selectedCode);
     loadDetailChildren(selectedCode, 1, DETAIL_CHILDREN_DEFAULT_SIZE);
   }, [selectedCode, loadDetail, loadDetailChildren]);
+
+  const selectOrganization = (orgCode: string) => {
+    if (orgCode === selectedCode) return;
+    setDetailChildrenPageNum(1);
+    setDetailChildrenPageSize(DETAIL_CHILDREN_DEFAULT_SIZE);
+    setSelectedCode(orgCode);
+  };
 
   const onDetailChildrenPageChange = (pageNum: number, pageSize: number) => {
     if (!selectedCode) return;
@@ -111,6 +110,10 @@ export default function OrganizationsPage() {
   };
 
   const onDetailChanged = () => {
+    setDetailData(null);
+    setDetailChildrenPage(null);
+    setDetailChildrenPageNum(1);
+    setDetailChildrenPageSize(DETAIL_CHILDREN_DEFAULT_SIZE);
     setSelectedCode(undefined);
     setTreeReloadSeq((s) => s + 1);
   };
@@ -138,11 +141,11 @@ export default function OrganizationsPage() {
               size="middle"
               style={{ width: '100%' }}
             >
-              <OrgSearchPanel onSelect={(code) => setSelectedCode(code)} />
+              <OrgSearchPanel onSelect={selectOrganization} />
               <OrgTree
                 loadChildrenPage={loadChildrenPage}
                 selectedKey={selectedCode}
-                onSelect={(code) => setSelectedCode(code)}
+                onSelect={selectOrganization}
                 reloadSeq={treeReloadSeq}
               />
             </Space>
@@ -174,7 +177,7 @@ export default function OrganizationsPage() {
                   });
                 }
               }}
-              onSelectChild={(code) => setSelectedCode(code)}
+              onSelectChild={selectOrganization}
               onChanged={onDetailChanged}
             />
           </Card>

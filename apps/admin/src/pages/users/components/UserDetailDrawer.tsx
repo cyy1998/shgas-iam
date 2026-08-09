@@ -81,25 +81,52 @@ export default function UserDetailDrawer({
   onEdit,
   onChanged,
 }: Props) {
+  return (
+    <UserDetailDrawerContent
+      key={open ? username : 'closed'}
+      open={open}
+      username={username}
+      onClose={onClose}
+      onEdit={onEdit}
+      onChanged={onChanged}
+    />
+  );
+}
+
+function UserDetailDrawerContent({
+  open,
+  username,
+  onClose,
+  onEdit,
+  onChanged,
+}: Props) {
   const [detail, setDetail] = useState<UserDetailVo | null>(null);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(open && username !== null);
   const [transferTarget, setTransferTarget] = useState<EmploymentVo | null>(
     null,
   );
   const [employmentFormOpen, setEmploymentFormOpen] = useState(false);
 
   useEffect(() => {
-    if (!open || !username) {
-      setDetail(null);
-      return;
-    }
-    setLoading(true);
+    if (!open || !username) return;
+
+    let cancelled = false;
     getUser(username)
-      .then(setDetail)
-      .catch((err: unknown) =>
-        message.error(err instanceof Error ? err.message : '加载详情失败'),
-      )
-      .finally(() => setLoading(false));
+      .then((nextDetail) => {
+        if (!cancelled) setDetail(nextDetail);
+      })
+      .catch((err: unknown) => {
+        if (!cancelled) {
+          message.error(err instanceof Error ? err.message : '加载详情失败');
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
   }, [open, username]);
 
   const handleError = (err: unknown) =>

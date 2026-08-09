@@ -6,9 +6,23 @@ import { OrganizationStatus, type OrganizationType } from '@iam/contracts';
 import type { TreeSelectProps } from 'antd';
 import { TreeSelect, message } from 'antd';
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { filterOrganizationSelectorNodesByStatus } from './organizationTreeSelector.helpers';
 
 type TreeNode = NonNullable<TreeSelectProps['treeData']>[number];
 const DEFAULT_SELECTABLE_STATUSES = [OrganizationStatus.Enable];
+
+function parseOrganizationStatusesKey(key: string): OrganizationStatus[] {
+  return key
+    ? key.split('|').map((status) => Number(status) as OrganizationStatus)
+    : [];
+}
+
+function parseOrganizationTypesKey(
+  key: string | null,
+): OrganizationType[] | undefined {
+  if (key === null) return undefined;
+  return key ? (key.split('|') as OrganizationType[]) : [];
+}
 
 type Props = {
   value?: string;
@@ -28,13 +42,6 @@ function toTreeNode(node: OrganizationSelectorNode): TreeNode {
     isLeaf: node.isLeaf,
     selectable: node.selectable,
   };
-}
-
-export function filterOrganizationSelectorNodesByStatus(
-  nodes: OrganizationSelectorNode[],
-  statuses: OrganizationStatus[],
-) {
-  return nodes.filter((node) => statuses.includes(node.status));
 }
 
 function mergeChildren(
@@ -126,30 +133,27 @@ export default function OrganizationTreeSelector({
 }: Props) {
   const [treeData, setTreeData] = useState<TreeNode[]>([]);
   const [searchData, setSearchData] = useState<TreeNode[] | null>(null);
-  const [loading, setLoading] = useState(false);
+  const [loadedBaseQuery, setLoadedBaseQuery] = useState<object | null>(null);
   const valueRef = useRef(value);
 
   const visibleStatusesKey = (
     visibleStatuses ?? DEFAULT_SELECTABLE_STATUSES
   ).join('|');
-  const selectableOrgTypesKey = selectableOrgTypes?.join('|') ?? '';
+  const selectableOrgTypesKey = selectableOrgTypes?.join('|') ?? null;
   const selectableStatusesKey = (
     selectableStatuses ?? DEFAULT_SELECTABLE_STATUSES
   ).join('|');
 
   const baseQuery = useMemo(
     () => ({
-      visibleStatuses: [...(visibleStatuses ?? DEFAULT_SELECTABLE_STATUSES)],
-      selectableOrgTypes: selectableOrgTypes
-        ? [...selectableOrgTypes]
-        : undefined,
-      selectableStatuses: [
-        ...(selectableStatuses ?? DEFAULT_SELECTABLE_STATUSES),
-      ],
+      visibleStatuses: parseOrganizationStatusesKey(visibleStatusesKey),
+      selectableOrgTypes: parseOrganizationTypesKey(selectableOrgTypesKey),
+      selectableStatuses: parseOrganizationStatusesKey(selectableStatusesKey),
     }),
-    [visibleStatusesKey, selectableOrgTypesKey, selectableStatusesKey],
+    [selectableOrgTypesKey, selectableStatusesKey, visibleStatusesKey],
   );
   const currentVisibleStatuses = baseQuery.visibleStatuses;
+  const loading = loadedBaseQuery !== baseQuery;
 
   useEffect(() => {
     valueRef.current = value;
@@ -157,7 +161,6 @@ export default function OrganizationTreeSelector({
 
   useEffect(() => {
     let cancelled = false;
-    setLoading(true);
     getOrganizationSelectorNodes({
       ...baseQuery,
       parentOrgCode: null,
@@ -186,7 +189,7 @@ export default function OrganizationTreeSelector({
         }
       })
       .finally(() => {
-        if (!cancelled) setLoading(false);
+        if (!cancelled) setLoadedBaseQuery(baseQuery);
       });
     return () => {
       cancelled = true;

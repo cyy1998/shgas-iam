@@ -40,21 +40,40 @@ export default function EmploymentDetailDrawer({
   employmentId,
   onClose,
 }: Props) {
+  return (
+    <EmploymentDetailDrawerContent
+      key={open ? employmentId : 'closed'}
+      open={open}
+      employmentId={employmentId}
+      onClose={onClose}
+    />
+  );
+}
+
+function EmploymentDetailDrawerContent({ open, employmentId, onClose }: Props) {
   const [detail, setDetail] = useState<EmploymentDetailVo | null>(null);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(open && employmentId !== null);
 
   useEffect(() => {
-    if (!open || employmentId === null) {
-      setDetail(null);
-      return;
-    }
-    setLoading(true);
+    if (!open || employmentId === null) return;
+
+    let cancelled = false;
     getEmployment(employmentId)
-      .then(setDetail)
-      .catch((err: unknown) =>
-        message.error(err instanceof Error ? err.message : '加载详情失败'),
-      )
-      .finally(() => setLoading(false));
+      .then((nextDetail) => {
+        if (!cancelled) setDetail(nextDetail);
+      })
+      .catch((err: unknown) => {
+        if (!cancelled) {
+          message.error(err instanceof Error ? err.message : '加载详情失败');
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
   }, [open, employmentId]);
 
   return (

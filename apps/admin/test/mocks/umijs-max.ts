@@ -20,13 +20,15 @@ export const history = {
 
 export const request = vi.fn();
 
-export function useModel<T = unknown>(namespace: string): T {
+function getModel<T = unknown>(namespace: string): T {
   return (modelMocks[namespace] ?? {}) as T;
 }
 
-export function useAccess<T = Record<string, unknown>>(): T {
+function getAccess<T = Record<string, unknown>>(): T {
   return accessMock as T;
 }
+
+export { getAccess as useAccess, getModel as useModel };
 
 export function __setModel(namespace: string, value: unknown) {
   modelMocks = { ...modelMocks, [namespace]: value };

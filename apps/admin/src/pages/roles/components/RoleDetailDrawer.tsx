@@ -1,5 +1,6 @@
 import StatusTag from '@admin/components/StatusTag';
 import AuditLogTable from '@admin/pages/audit-logs/components/AuditLogTable';
+import { roleAssignmentTargetTypeOptions } from '@admin/pages/roles/role-selectors';
 import {
   type RoleAssignmentVo,
   type RoleDetailVo,
@@ -26,10 +27,8 @@ import {
   Tabs,
   Tag,
 } from 'antd';
-import { useEffect, useRef, useState } from 'react';
-import RoleAssignmentFormModal, {
-  targetTypeOptions,
-} from './RoleAssignmentFormModal';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import RoleAssignmentFormModal from './RoleAssignmentFormModal';
 
 type Props = {
   open: boolean;
@@ -49,10 +48,13 @@ export default function RoleDetailDrawer({
   const [loading, setLoading] = useState(false);
   const [assignmentFormOpen, setAssignmentFormOpen] = useState(false);
 
-  const handleError = (err: unknown) =>
-    message.error(err instanceof Error ? err.message : '操作失败');
+  const handleError = useCallback(
+    (err: unknown) =>
+      message.error(err instanceof Error ? err.message : '操作失败'),
+    [],
+  );
 
-  const load = async () => {
+  const load = useCallback(async () => {
     if (!open || !roleCode) return;
     setLoading(true);
     try {
@@ -63,11 +65,11 @@ export default function RoleDetailDrawer({
     } finally {
       setLoading(false);
     }
-  };
+  }, [handleError, open, roleCode]);
 
   useEffect(() => {
     void load();
-  }, [open, roleCode]);
+  }, [load]);
 
   const reloadAssignments = () => {
     assignmentActionRef.current?.reload();
@@ -115,7 +117,10 @@ export default function RoleDetailDrawer({
       width: 100,
       valueType: 'select',
       valueEnum: Object.fromEntries(
-        targetTypeOptions.map((o) => [o.value, { text: o.label }]),
+        roleAssignmentTargetTypeOptions.map((o) => [
+          o.value,
+          { text: o.label },
+        ]),
       ),
       render: (_, row) => <Tag>{row.targetTypeText}</Tag>,
     },

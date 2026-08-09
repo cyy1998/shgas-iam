@@ -26,6 +26,12 @@ type AssignmentFormValues = Partial<RoleAssignmentCreateInput> & {
   targetType?: RoleAssignmentTargetType;
 };
 
+export const roleAssignmentTargetTypeOptions = [
+  { label: '组织', value: RoleAssignmentTargetType.Organization },
+  { label: '岗位', value: RoleAssignmentTargetType.Position },
+  { label: '任职', value: RoleAssignmentTargetType.Employment },
+];
+
 function keyword(params: SelectRequestParams) {
   return params.keyWords?.trim() || undefined;
 }

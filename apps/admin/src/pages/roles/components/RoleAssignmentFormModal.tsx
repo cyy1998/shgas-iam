@@ -3,6 +3,7 @@ import {
   normalizeAssignmentCreateInput,
   requestEmploymentOptions,
   requestPositionOptions,
+  roleAssignmentTargetTypeOptions,
 } from '@admin/pages/roles/role-selectors';
 import { createRoleAssignment } from '@admin/services/role';
 import {
@@ -24,12 +25,6 @@ type Props = {
   onSuccess: () => void;
   onError?: (err: unknown) => void;
 };
-
-const targetTypeOptions = [
-  { label: '组织', value: RoleAssignmentTargetType.Organization },
-  { label: '岗位', value: RoleAssignmentTargetType.Position },
-  { label: '任职', value: RoleAssignmentTargetType.Employment },
-];
 
 export default function RoleAssignmentFormModal({
   open,
@@ -81,7 +76,7 @@ export default function RoleAssignmentFormModal({
       <ProFormSelect
         name="targetType"
         label="分配类型"
-        options={targetTypeOptions}
+        options={roleAssignmentTargetTypeOptions}
         rules={[{ required: true }]}
         fieldProps={{
           onChange: (targetType) => {
@@ -148,5 +143,3 @@ export default function RoleAssignmentFormModal({
     </ModalForm>
   );
 }
-
-export { targetTypeOptions };

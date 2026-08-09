@@ -17,25 +17,33 @@ export function useLoginRedirect() {
     : client === 'iam-admin'
       ? 'IAM Admin'
       : client || 'SSO';
-  const [clientLabel, setClientLabel] = useState(fallbackClientLabel);
+  const [resolvedClient, setResolvedClient] = useState<{
+    code: string;
+    label: string;
+  }>();
+  const clientLabel =
+    !oidcReturn && resolvedClient?.code === client
+      ? resolvedClient.label
+      : fallbackClientLabel;
   const isUnsafeEntry = !client && !oidcReturn;
 
   useEffect(() => {
-    setClientLabel(fallbackClientLabel);
     if (!client || oidcReturn) return;
 
     let ignored = false;
     void clientStatus({ clientCode: client })
       .then((data) => {
         const clientName = data?.clientName?.trim();
-        if (!ignored && clientName) setClientLabel(clientName);
+        if (!ignored && clientName) {
+          setResolvedClient({ code: client, label: clientName });
+        }
       })
       .catch(() => {});
 
     return () => {
       ignored = true;
     };
-  }, [client, fallbackClientLabel, oidcReturn]);
+  }, [client, oidcReturn]);
 
   const redirectAfterLogin = useCallback(() => {
     if (oidcReturn) {

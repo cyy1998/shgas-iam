@@ -75,10 +75,14 @@ export default function EmploymentsPage() {
   useEffect(() => {
     const preset = parseQuery(location.search);
     if (preset.username) {
+      // The route query is an external navigation source. Hydrate the complete
+      // modal snapshot together so it opens with the matching URL preset.
+      /* eslint-disable react/set-state-in-effect */
       setFormPresetUsername(preset.username);
       setFormPresetName(preset.name ?? null);
       setFormPresetOrgCode(getSearchOrgCode());
       setFormOpen(true);
+      /* eslint-enable react/set-state-in-effect */
     }
   }, [getSearchOrgCode, location.search]);
 

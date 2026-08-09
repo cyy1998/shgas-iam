@@ -16,7 +16,7 @@ import { mobileSet } from '@sso/services/public';
 import { ServiceError } from '@sso/utils/request';
 import { history } from '@umijs/max';
 import { Button, Form, Modal, Tabs, message } from 'antd';
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import {
   PasswordLoginForm,
   type PasswordLoginValues,
@@ -29,7 +29,12 @@ import './index.less';
 type LoginMode = 'PWD' | 'SMS' | 'BMN';
 
 export default function LoginPage() {
-  const [mode, setMode] = useState<LoginMode>('PWD');
+  const [mode, setMode] = useState<LoginMode>(() => {
+    const loginType = new URLSearchParams(window.location.search).get(
+      'loginType',
+    );
+    return loginType === 'SMS' || loginType === 'PWD' ? loginType : 'PWD';
+  });
   const [submitting, setSubmitting] = useState(false);
   const [smsSending, setSmsSending] = useState(false);
   const [pwdForm] = Form.useForm<PasswordLoginValues>();
@@ -44,13 +49,6 @@ export default function LoginPage() {
       okText: '确定',
     });
   };
-
-  useEffect(() => {
-    const loginType = new URLSearchParams(window.location.search).get(
-      'loginType',
-    );
-    if (loginType === 'SMS' || loginType === 'PWD') setMode(loginType);
-  }, []);
 
   const handleForgotPassword = () => {
     const params = new URLSearchParams(window.location.search);
