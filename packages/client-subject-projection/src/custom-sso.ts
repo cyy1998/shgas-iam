@@ -1,7 +1,9 @@
 import type { SubjectClaimName } from "@iam/contracts";
 import type {
   ClientSubjectProjection,
+  ClientSubjectProjectionService,
   EmploymentProfile,
+  ResolveClientSubjectInput,
 } from "./index";
 import { SubjectClaim } from "@iam/contracts";
 import { z } from "zod";
@@ -77,7 +79,39 @@ export type CustomSsoClientAuthorizationV1 = NonNullable<
 export type CustomSsoAuthorizationEmploymentV1
   = CustomSsoClientAuthorizationV1["employments"][number];
 
-export function mapClientSubjectProjectionToCustomSsoV1(
+export type CustomSsoSubjectProjectionInvariantReason
+  = | "subject_mismatch"
+    | "invalid_wire";
+
+export class CustomSsoSubjectProjectionInvariantError extends Error {
+  readonly reason: CustomSsoSubjectProjectionInvariantReason;
+
+  constructor(reason: CustomSsoSubjectProjectionInvariantReason) {
+    super(`Custom SSO subject projection invariant failed: ${reason}`);
+    this.name = "CustomSsoSubjectProjectionInvariantError";
+    this.reason = reason;
+  }
+}
+
+export async function resolveCustomSsoSubjectProjectionV1(
+  service: ClientSubjectProjectionService,
+  input: ResolveClientSubjectInput,
+): Promise<CustomSsoSubjectProjectionV1> {
+  const projection = await service.resolve(input);
+  if (projection.subjectIdentifier !== input.subjectIdentifier) {
+    throw new CustomSsoSubjectProjectionInvariantError("subject_mismatch");
+  }
+  try {
+    return CustomSsoSubjectProjectionV1Schema.parse(
+      mapClientSubjectProjectionToCustomSsoV1(projection),
+    );
+  }
+  catch {
+    throw new CustomSsoSubjectProjectionInvariantError("invalid_wire");
+  }
+}
+
+function mapClientSubjectProjectionToCustomSsoV1(
   projection: ClientSubjectProjection,
 ): CustomSsoSubjectProjectionV1 {
   const wire: {

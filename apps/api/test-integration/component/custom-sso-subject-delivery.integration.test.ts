@@ -14,6 +14,9 @@ import {
   createClientSubjectProjectionService,
 } from "@iam/client-subject-projection";
 import {
+  CustomSsoSubjectProjectionInvariantError,
+} from "@iam/client-subject-projection/custom-sso";
+import {
   ClientStatus,
   CustomSsoClientMode,
   SubjectClaim,
@@ -312,6 +315,7 @@ describe("Custom SSO subject delivery", () => {
           subjectIdentifier: SUBJECT_IDENTIFIER,
           authenticatedClientCode: "gateway",
         }).resolveUserInfo(),
+      CustomSsoSubjectProjectionInvariantError,
     ],
     [
       "the Gateway header",
@@ -320,10 +324,12 @@ describe("Custom SSO subject delivery", () => {
           subjectIdentifier: SUBJECT_IDENTIFIER,
           authenticatedClientCode: "gateway",
         }),
+      TypeError,
     ],
   ] as const)("validates the projected Subject before reloading the Client for %s", async (
     _deliveryType,
     deliver,
+    ExpectedError,
   ) => {
     const findRuntimeRecord = mock(async () =>
       runtimeClient([SubjectClaim.SubjectIdentifier]));
@@ -335,7 +341,7 @@ describe("Custom SSO subject delivery", () => {
       projection: { resolve },
     });
 
-    await expect(deliver(delivery)).rejects.toBeInstanceOf(TypeError);
+    await expect(deliver(delivery)).rejects.toBeInstanceOf(ExpectedError);
 
     expect(resolve).toHaveBeenCalledTimes(1);
     expect(findRuntimeRecord).toHaveBeenCalledTimes(1);

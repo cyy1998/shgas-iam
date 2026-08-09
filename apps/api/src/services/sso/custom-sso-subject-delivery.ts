@@ -16,16 +16,13 @@ import {
   parseSubjectClaimSelection,
 } from "@iam/client-subject-projection";
 import {
-  mapClientSubjectProjectionToCustomSsoV1,
+  resolveCustomSsoSubjectProjectionV1,
 } from "@iam/client-subject-projection/custom-sso";
 import {
   ClientStatus,
   CustomSsoClientMode,
   SubjectClaim,
 } from "@iam/contracts";
-import {
-  CustomSsoSubjectProjectionV1Schema,
-} from "./custom-sso-subject.schema";
 
 export interface CustomSsoSubjectDeliveryDeps {
   clients: {
@@ -78,13 +75,21 @@ export function createCustomSsoSubjectDelivery(
   async function resolveUserInfo(
     context: CustomSsoSubjectDeliveryContext,
   ) {
-    const projection = await resolveCurrentSubjectProjection(
+    const { client, config } = await loadCurrentClient(context);
+    const selection = parseSubjectClaimSelection({
+      catalogVersion: config.subjectClaimCatalogVersion,
+      claims: [...config.subjectClaims],
+    });
+    const wire = await resolveCustomSsoSubjectProjectionV1(deps.projection, {
+      subjectIdentifier: context.subjectIdentifier,
+      clientCode: context.authenticatedClientCode,
+      selection,
+    });
+    await assertClientRemainsCurrent(
       context,
-      "user-info",
+      client.customSsoConfigVersion,
     );
-    return CustomSsoSubjectProjectionV1Schema.parse(
-      mapClientSubjectProjectionToCustomSsoV1(projection),
-    );
+    return wire;
   }
 
   function createUserInfoCapability(
@@ -105,10 +110,7 @@ export function createCustomSsoSubjectDelivery(
   async function resolveGatewaySubjectHeader(
     context: CustomSsoSubjectDeliveryContext,
   ) {
-    const projection = await resolveCurrentSubjectProjection(
-      context,
-      "gateway-header",
-    );
+    const projection = await resolveGatewaySubjectProjection(context);
     const payload = {
       version: 1 as const,
       subjectIdentifier: context.subjectIdentifier,
@@ -139,26 +141,20 @@ export function createCustomSsoSubjectDelivery(
     throw new CustomSsoClientRuntimeUnavailableError();
   }
 
-  async function resolveCurrentSubjectProjection(
+  async function resolveGatewaySubjectProjection(
     context: CustomSsoSubjectDeliveryContext,
-    delivery: "gateway-header" | "user-info",
   ) {
     const { client, config } = await loadCurrentClient(context);
-    if (
-      delivery === "gateway-header"
-      && config.mode !== CustomSsoClientMode.Gateway
-    ) {
+    if (config.mode !== CustomSsoClientMode.Gateway) {
       throw new AuthzUnauthorizedError("未登录");
     }
 
-    const claims = delivery === "gateway-header"
-      ? config.subjectClaims.filter(
-          claim =>
-            claim === SubjectClaim.SubjectIdentifier
-            || claim === SubjectClaim.ProfileUsername
-            || claim === SubjectClaim.ProfileName,
-        )
-      : config.subjectClaims;
+    const claims = config.subjectClaims.filter(
+      claim =>
+        claim === SubjectClaim.SubjectIdentifier
+        || claim === SubjectClaim.ProfileUsername
+        || claim === SubjectClaim.ProfileName,
+    );
     const selection = parseSubjectClaimSelection({
       catalogVersion: config.subjectClaimCatalogVersion,
       claims: [...claims],

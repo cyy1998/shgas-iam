@@ -39,7 +39,7 @@
 | [docs/agents/triage-labels.md](agents/triage-labels.md) | agent-config | Current | 2026-07-16 | 2026-10-31 | Engineering skills 使用的默认 triage 标签映射。 |
 | [docs/agents/workflow.md](agents/workflow.md) | agent-config | Current | 2026-08-06 | 2026-10-31 | Matt skills 的仓库薄适配：本地 tracker、批量实施子代理、分支、验证、授权、归档和本地合入。 |
 | [docs/architecture/architecture-guard.md](architecture/architecture-guard.md) | architecture | Current | 2026-07-31 | 2026-10-31 | 架构守卫规范的验证层选择、允许观察模型、永久规则准入、封闭目录与复杂度边界。 |
-| [docs/architecture/backend-architecture.md](architecture/backend-architecture.md) | architecture | Current | 2026-08-02 | 2026-10-31 | 后端 runtime ownership、依赖方向、composition/DI、UnitOfWork/afterCommit、请求与审计上下文、关键 deep modules、OIDC/Worker lifecycle 和分层验证。 |
+| [docs/architecture/backend-architecture.md](architecture/backend-architecture.md) | architecture | Current | 2026-08-09 | 2026-10-31 | 后端 runtime ownership、依赖方向、composition/DI、UnitOfWork/afterCommit、请求与审计上下文、关键 deep modules、OIDC/Worker lifecycle 和分层验证。 |
 | [docs/architecture/contracts-and-database.md](architecture/contracts-and-database.md) | architecture | Current | 2026-08-01 | 2026-10-31 | shared contracts、domain/db/jobs/role-assignment-resolution/read-model 边界、UnitOfWork/afterCommit 和 Drizzle schema/relations/migration 约定。 |
 | [docs/architecture/frontend-architecture.md](architecture/frontend-architecture.md) | architecture | Current | 2026-08-07 | 2026-10-31 | admin/sso 前端边界、service wrapper、contract、测试与生成路径约定。 |
 | [docs/architecture/repository-map.md](architecture/repository-map.md) | architecture | Current | 2026-08-06 | 2026-10-31 | monorepo apps/packages、root-owned E2E workspace、gateway/observability 基础设施、agent workflow roots，以及生成目录边界。 |
@@ -50,7 +50,7 @@
 | [docs/features/audit/audit-logging.md](features/audit/audit-logging.md) | feature | Current | 2026-07-16 | 2026-09-30 | 统一审计日志、安全字段和已完成 `login_log` 退役后的当前边界。 |
 | [docs/features/oidc/oidc-integration.md](features/oidc/oidc-integration.md) | feature | Current | 2026-08-01 | 2026-09-30 | 内部 OIDC client 的端点、client 类型、scope/claim、CORS 和退出契约。 |
 | [docs/features/oidc/oidc-session-migration.md](features/oidc/oidc-session-migration.md) | feature | Current | 2026-06-28 | 2026-09-30 | Session Kernel 会话迁移、旧 key cleanup 和回滚边界。 |
-| [docs/features/sso/custom-sso-subject-projection-design.md](features/sso/custom-sso-subject-projection-design.md) | design | Current | 2026-08-02 | 2026-09-30 | 已接受并形成候选实现的目标设计；生产运行时只在完整维护窗口切换后采用，不单独代表某个环境已完成切换。 |
+| [docs/features/sso/custom-sso-subject-projection-design.md](features/sso/custom-sso-subject-projection-design.md) | design | Current | 2026-08-09 | 2026-09-30 | 已接受并形成候选实现的目标设计；生产运行时只在完整维护窗口切换后采用，不单独代表某个环境已完成切换。 |
 | [docs/features/sso/public-thirdparty-unified-login.md](features/sso/public-thirdparty-unified-login.md) | feature | Current | 2026-08-02 | 2026-09-30 | 第三方统一登录入口、目标系统会话所有权与 Custom SSO 职责边界说明。 |
 | [docs/features/sso/third-party-sso-integration.md](features/sso/third-party-sso-integration.md) | feature | Current | 2026-08-02 | 2026-09-30 | 第三方业务系统 custom SSO 对接、受控主体投影、credential/session 所有权与 IAM 内部职责边界说明。 |
 | [docs/releases/apisix-gateway-release.md](releases/apisix-gateway-release.md) | runbook | Current | 2026-07-16 | 2026-10-31 | APISIX manifest validate/diff/apply/prune、限流、观测和回滚手册。 |

@@ -8,11 +8,19 @@ import {
   SubjectAccessUnavailableError,
 } from "@iam/api-core/subject-access";
 import { SubjectProjectionNotReadyError } from "@iam/client-subject-projection";
+import {
+  CustomSsoSubjectProjectionInvariantError,
+} from "@iam/client-subject-projection/custom-sso";
 import { ApiErrorCode, CustomSsoClientMode } from "@iam/contracts";
 import { beforeEach, describe, expect, mock, test } from "bun:test";
 import { Hono } from "hono";
 
 const logger = {
+  warn: mock(() => undefined),
+};
+const errorLogger = {
+  error: mock(() => undefined),
+  info: mock(() => undefined),
   warn: mock(() => undefined),
 };
 
@@ -274,11 +282,7 @@ function createHttpHandlerApp(
     }).valid = () => validInput;
     return await handler(context as never, undefined as never) as Response;
   });
-  app.onError(createErrorHandler({
-    error: mock(() => undefined),
-    info: mock(() => undefined),
-    warn: mock(() => undefined),
-  } as never));
+  app.onError(createErrorHandler(errorLogger as never));
   return app;
 }
 
@@ -303,11 +307,7 @@ function createOaHandlerApp(
     };
     return await handler(context as never, undefined as never) as Response;
   });
-  app.onError(createErrorHandler({
-    error: mock(() => undefined),
-    info: mock(() => undefined),
-    warn: mock(() => undefined),
-  } as never));
+  app.onError(createErrorHandler(errorLogger as never));
   return app;
 }
 
@@ -332,15 +332,14 @@ function createTokenHandlerApp(
     };
     return await handler(context as never, undefined as never) as Response;
   });
-  app.onError(createErrorHandler({
-    error: mock(() => undefined),
-    info: mock(() => undefined),
-    warn: mock(() => undefined),
-  } as never));
+  app.onError(createErrorHandler(errorLogger as never));
   return app;
 }
 
 beforeEach(() => {
+  errorLogger.error.mockClear();
+  errorLogger.info.mockClear();
+  errorLogger.warn.mockClear();
   logger.warn.mockClear();
   authorize.mockClear();
   callback.mockClear();
@@ -518,6 +517,28 @@ describe("createSsoHandlers protocol adaptation", () => {
     }, { requestContext: expect.objectContaining({ requestId: "req-token", route: "/sso/token" }) });
   });
 
+  test.each([
+    ["empty sid", { sid: "", ttl: 7200 }],
+    ["non-positive ttl", { sid: "independent-token", ttl: 0 }],
+  ])("token rejects a response with %s at the final HTTP Contract boundary", async (
+    _invalidField,
+    invalidCredential,
+  ) => {
+    const handlers = createHandlers();
+    const context = createTokenContext();
+    setToken.mockResolvedValueOnce({
+      ...invalidCredential,
+      subject: {
+        version: 1,
+        subjectIdentifier: "00000000-0000-4000-8000-000000001001",
+      },
+    } as never);
+
+    await expect(
+      handlers.token(context as never, async () => {}),
+    ).rejects.toThrow();
+  });
+
   test("authorize returns stable Subject Access errors and only clears its global cookie when disabled", async () => {
     const handlers = createHandlers();
     const app = createHttpHandlerApp("/sso/authorize", handlers.authorize, {
@@ -655,16 +676,18 @@ describe("createSsoHandlers protocol adaptation", () => {
     );
     const tokenApp = createTokenHandlerApp(handlers.token);
 
-    for (const [operation, request] of [
+    for (const [operation, request, error] of [
       [
         authorize,
         () => authorizeApp.request(
           "/sso/authorize?client=independent&redirectUrl=https%3A%2F%2Fapp.example.com%2Fhome",
         ),
+        new Error("redis://user:secret@internal/sensitive"),
       ],
       [
         callback,
         () => callbackApp.request("/sso/callback"),
+        new Error("redis://user:secret@internal/sensitive"),
       ],
       [
         setToken,
@@ -680,18 +703,21 @@ describe("createSsoHandlers protocol adaptation", () => {
             redirect_uri: "https://app.example.com/callback",
           }),
         }),
+        new CustomSsoSubjectProjectionInvariantError("subject_mismatch"),
       ],
     ] as const) {
-      operation.mockRejectedValueOnce(
-        new Error("redis://user:secret@internal/sensitive"),
-      );
+      operation.mockRejectedValueOnce(error);
       const response = await request();
       expect(response.status).toBe(500);
       const body = JSON.stringify(await response.json());
       expect(body).toContain(ApiErrorCode.InternalError);
       expect(body).not.toContain("redis://");
       expect(body).not.toContain("sensitive");
+      expect(body).not.toContain("subject_mismatch");
     }
+    expect(JSON.stringify(errorLogger.error.mock.calls)).toContain(
+      "subject_mismatch",
+    );
   });
 
   test("logout prefers the global-session cookie, deletes it, and preserves the requested redirect", async () => {

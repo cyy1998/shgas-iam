@@ -123,8 +123,11 @@ composition。跨层实例连接统一由 composition 完成。
   可以使用最后发布事实；选择 `iam:authorization` 时，Module 根据 facts source version 调用 Authorization
   Freshness port。该 port 可以确认当前 facts、返回一次重载后的 facts，或报告 not-ready；Module 在组装任何已选
   claim 前采用已确认版本，无法证明新鲜时返回 `SubjectProjectionNotReadyError`。
-- 核心投影保持协议中性。Custom SSO V1 wire mapper 通过独立 package subpath 消费公开投影 Interface，负责
-  `version`、嵌套父对象、null/空数组和字段白名单规则；它只能通过 package root public Interface 取得 Projection
+- 核心投影保持协议中性。`@iam/client-subject-projection/custom-sso` 只公开一个完整 V1 交付 Interface：
+  `resolveCustomSsoSubjectProjectionV1` 先调用 root Projection Service，再核对返回的 Subject Identifier 与 resolve input，
+  随后执行 wire mapping 和 strict schema parse。Raw mapper 留在 subpath 内部；schema、Wire 类型与 placeholder preview
+  继续公开。Subject mismatch 产生只含安全 reason `subject_mismatch` 的内部不变量错误，mapping/parse 失败产生
+  `invalid_wire`；resolve 阶段的既有错误原样传播。该 subpath 只能通过 package root public Interface 取得 Projection
   类型或能力，不得导入其他 core subpath、Facts persistence、client 配置、runtime 或 transport。
 - `@iam/user-profile-read-model/subject-facts` 提供同时满足 Facts 与 Freshness ports 的 deep reader：有效 Redis
   record 直读；miss、损坏或未知 schema 按 Subject single-flight 查询一行窄 `user_profile` 并以版本 CAS 回填；
@@ -134,7 +137,9 @@ composition。跨层实例连接统一由 composition 完成。
   `/public/user-info` 和 Gateway `/auth/authz`。前两者按当前 Client selection 输出 Custom SSO V1 wire；
   `/auth/authz` 强制收窄为 Subject Identifier 与可选 username/name，并把同一 Base64 值写入 body/header。
   Gateway Local Session 解析形成最小 Subject/client/ORCAS 认证数据，并携带仅供服务端竞态校验的 config version；
-  该版本不进入 projection 或 wire。投影前后都复查当前 Client/config version。Client runtime 使用带 generation
+  该版本不进入 projection 或 wire。`/public/user-info` 在完整 V1 Interface 返回后、响应交付前再次复查当前
+  Client/config version，配置变化时丢弃已构建的 Wire；Gateway Header 继续使用独立最小 mapping、Subject equality 与
+  Base64 路径。Client runtime 使用带 generation
   与 mutation fence 的 Redis read-through cache：positive/negative TTL 分别为 30 秒/3 秒，mutation fence 为
   120 秒；既有 Client 的 Admin mutation 在持有 Client row lock 后原子写 fence、递增 generation 并删除 cache，
   commit 后按 token 完成。完成失败时读取保持 fail-closed，fence 自然过期后因旧 cache 已删除而从 PostgreSQL
@@ -342,10 +347,17 @@ composition。跨层实例连接统一由 composition 完成。
   callback 不烧码。
 - Gateway 与 Independent 共用独立 Grant redemption state machine。`begin` 通过 attempt fence 保证并发兑换只有
   一个赢家；reserved 工作由 heartbeat 定期续租，renew 必须匹配 grant、attempt 和上一 lease deadline，且只延长
-  lease、不延长 Grant 原始 expiry。Independent 只有 Credential 签发、按当前 Client/Subject Access 复核并完成
-  投影后才 consume；Gateway 只有最小 Local Session、可选 ORCAS 和当前 Client 复核成功后才 consume。消费前
+  lease、不延长 Grant 原始 expiry。Independent 在任何 Credential issuance、post-validation、Grant consume、成功审计或
+  consumed artifact cleanup 前，必须先取得通过 Subject equality 与 strict schema 的完整 V1 Wire；随后只有 Credential
+  签发并按当前 Client/Subject Access 复核成功才 consume。Gateway 只有最小 Local Session、可选 ORCAS 和当前 Client
+  复核成功后才 consume。消费前
   失败按语义 release，并补偿已创建的 binding/credential；消费后 Session Kernel artifact 清理和成功审计是
   best-effort after-effect。
+- Custom SSO Subject Projection 不变量错误按未处理内部错误返回通用 `500`，不增加公开 error code、logger dependency 或
+  `Retry-After`。它发生在 Independent Credential issue state 为 `not_started` 时，不创建或撤销 Credential、不 consume、不写
+  成功审计，也不清理 consumed artifact；当前 Grant attempt 不主动 release，heartbeat 停止后保持 `redeeming`，仅在 lease
+  到期且原始 Grant 未过期时允许新 attempt 接管，且不得延长原始 expiry。Projection Not Ready 与 Subject Access unavailable
+  仍保持既有 retryable `503`、`Retry-After` 和立即 release 语义。
 - Production adapter 通过 TypeScript structural typing 直接满足上述三个 consumer-owned ports。Composition 只注入
   ORCAS 所需的最窄 `CustomSsoOrcasLoginPort`，不得增加 behaviorless wrapper，也不得恢复公开
   `consumeAuthCode → createLocalSession` 两阶段 interface。

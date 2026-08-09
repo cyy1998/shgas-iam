@@ -222,6 +222,17 @@ interface ClientAuthorization {
 - 被选择的数组 claim 即使为空也返回 `[]`。
 - 不提供 `id`、`userInfo` 或其他兼容别名。
 
+### 6.1 完整 V1 交付 Interface
+
+`@iam/client-subject-projection/custom-sso` 通过普通函数 `resolveCustomSsoSubjectProjectionV1` 封闭完整 V1 交付不变量。
+函数接收现有 Client Subject Projection Service 与一次 resolve input，并固定执行：resolve Projection、核对返回的 Subject
+Identifier 与 input 中的 expected Subject、mapping、strict Wire schema parse。Raw mapper 是 package 内部实现；公开 surface
+只保留完整 resolve Interface、schema、Wire 类型和 placeholder preview，不提供跳过 Subject 或 schema 校验的开关。
+
+合法 UUID 的 Subject mismatch 抛出只含 `subject_mismatch` reason 的 `CustomSsoSubjectProjectionInvariantError`；mapper
+failure 或 strict schema failure 统一使用 `invalid_wire`。错误不携带 Subject、claims、Projection、Wire、Zod issues、原始
+cause 或 logger dependency。Projection Service 自身的 Not Ready、Subject Access unavailable 及其他既有错误原样传播。
+
 ## 7. User Profile 与 Subject Facts
 
 ### 7.1 `user_profile` 十七列
@@ -661,9 +672,14 @@ issued → redeeming → consumed
 - 长操作按 grant、attempt ID 与上一 lease deadline 做 fenced heartbeat 续租；续租不得延长 Grant 原始过期时间。
 - `SUBJECT_PROJECTION_NOT_READY` 或 Subject Access 暂不可用时按相同 attempt ID 恢复 `issued`，保持稳定 retryable
   `503`。
+- Subject mismatch 或 invalid Wire 在任何 Credential issuance 前以通用内部 `500` 失败，不主动 release 当前 attempt；
+  heartbeat 停止后 Grant 保持 `redeeming`，lease 到期且原始 Grant 未过期时才允许新 attempt 接管。
 - 进程崩溃后租约到期允许重试。
 - 只有 Credential 或 Local Session 成功签发时才进入 `consumed`。
 - `consumed` 永远不能再次兑换。
+
+任何失败与 lease 接管都不得延长 Grant 原始 expiry。不变量失败不创建或撤销 Credential，不记录 Independent 登录成功，也不
+执行 consumed authorization artifact cleanup。
 
 Gateway callback 不交付 Client Subject Projection，因此只需完成 Session 与 Barrier 检查；Independent
 `/sso/token` 在成功消费 Grant 前必须完成响应投影。
@@ -705,6 +721,10 @@ code=<authorization-code>&redirect_uri=<exact-grant-redirect-uri>
 }
 ```
 
+Independent 兑换在 Credential identity 写入、Credential issuance/post-validation、Grant consume、成功审计与 consumed
+artifact cleanup 前调用完整 V1 交付 Interface。HTTP handler 仍对包含 `sid`、`ttl` 和 `subject` 的完整 token response 做最终
+schema parse；共享 parse 保护副作用前安全，route parse 保护最终 HTTP Contract。
+
 ### 12.2 `/public/user-info`
 
 认证中间件只生成：
@@ -721,7 +741,9 @@ handler 根据当前 Custom SSO client 配置生成 `SubjectClaimSelection`，�
 `UserDetailDto`。其他旧 `/public/*` handler 如需数据库 user ID 或 username，通过自己的 Account Resolver 按
 Subject Identifier 解析。
 
-成功响应的 `data` 直接是 Custom SSO Wire Projection。
+成功响应的 `data` 直接是完整 V1 交付 Interface 返回的 Custom SSO Wire Projection。Interface 返回后 handler 再读取当前
+Client/config version；Client 被禁用、删除、关闭 Custom SSO、切换版本或改变 claim selection 时丢弃已构建的 Wire，并沿用
+现有 client-local delivery 错误分类与 Cookie 清理语义。
 
 Cookie 清理按失效来源决定，而不是只看最终是否为 401：
 
@@ -886,6 +908,10 @@ Token Endpoint 只把 Authorization Code 中的 Snapshot 转移到 Access Token�
 
 - `/sso/token` 只接受 POST、Basic client authentication 和 form body。
 - `/sso/token` 与 `/public/user-info` 使用相同 Custom SSO Projection Wire Contract。
+- Package 公开完整 V1 Interface 覆盖成功、合法 UUID Subject mismatch、invalid Wire、mapper failure 与 resolve error 原样传播。
+- Independent Grant component tests 从公开 redemption seam 证明两类不变量错误都先于 Credential/consume/audit/cleanup，且
+  non-retryable attempt 只在 lease 到期后重试；retryable Projection/Subject Access `503` 仍立即 release。
+- `/public/user-info` 在完整 Interface 返回后复核 Client/config version；Gateway Subject Header 仍使用独立最小 Wire。
 - `/auth/authz` 输出相同的 header/body Base64 值及最小 JSON。
 - Shared public authentication context 不含 user ID、username 或 User Detail。
 - OIDC `profile` 不含 employments；专用 scope 只进入 UserInfo。

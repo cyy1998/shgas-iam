@@ -40,7 +40,7 @@ import {
 import {
   parseSubjectClaimSelection,
 } from "@iam/client-subject-projection";
-import { mapClientSubjectProjectionToCustomSsoV1 } from "@iam/client-subject-projection/custom-sso";
+import { resolveCustomSsoSubjectProjectionV1 } from "@iam/client-subject-projection/custom-sso";
 import {
   ClientStatus,
   CustomSsoClientMode,
@@ -395,12 +395,11 @@ export function createCustomSsoSessionKernelAdapter(deps: CustomSsoSessionKernel
             catalogVersion: input.client.subjectClaimCatalogVersion,
             claims: [...input.client.subjectClaims],
           });
-          const projection = await deps.subjectProjection.resolve({
+          subject = await resolveCustomSsoSubjectProjectionV1(deps.subjectProjection, {
             subjectIdentifier: authorizationGrant.subjectIdentifier,
             clientCode: input.client.clientCode,
             selection,
           });
-          subject = mapClientSubjectProjectionToCustomSsoV1(projection);
 
           credentialIssueState = "started";
           credential = await issueIndependentCredential({

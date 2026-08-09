@@ -31,6 +31,9 @@ import {
   SubjectProjectionNotReadyError,
 } from "@iam/client-subject-projection";
 import {
+  CustomSsoSubjectProjectionInvariantError,
+} from "@iam/client-subject-projection/custom-sso";
+import {
   ClientStatus,
   CustomSsoClientMode,
   RETRYABLE_SERVICE_UNAVAILABLE,
@@ -1309,6 +1312,97 @@ describe("Custom SSO module interface", () => {
     })).rejects.toBeInstanceOf(InvalidAuthCodeError);
   });
 
+  test("keeps an invariant-failed Independent grant leased without starting Credential side effects", async () => {
+    const projectedSubjectIdentifier = "00000000-0000-4000-8000-000000001002";
+    let returnMismatchedSubject = true;
+    let credentialIssueAttempts = 0;
+    const services = createServices({
+      grantLeaseDurationMs: 60,
+      resolveSubjectProjection: async () => ({
+        subjectIdentifier: returnMismatchedSubject
+          ? projectedSubjectIdentifier
+          : subjectIdentifier,
+      }),
+      decorateKernel: kernel => ({
+        ...kernel,
+        async issueCredential(input) {
+          credentialIssueAttempts += 1;
+          return await kernel.issueCredential(input);
+        },
+      }),
+    });
+    const { code } = await issueAuthorizationCode(services);
+    const auditCountBeforeRedemption = auditLogs.length;
+    const input = {
+      client: independentClient,
+      code,
+      redirectUri: "https://app.example.com/callback",
+    };
+
+    await expect(
+      services.customSsoSession.redeemIndependentGrant(input),
+    ).rejects.toEqual(
+      new CustomSsoSubjectProjectionInvariantError("subject_mismatch"),
+    );
+    expect(credentialIssueAttempts).toBe(0);
+    expect(auditLogs).toHaveLength(auditCountBeforeRedemption);
+    await expect(services.kernel.resolveProtocolArtifact(code)).resolves.toMatchObject({
+      status: "resolved",
+    });
+    await expect(
+      services.customSsoSession.redeemIndependentGrant(input),
+    ).rejects.toBeInstanceOf(InvalidAuthCodeError);
+
+    returnMismatchedSubject = false;
+    fakeRedis.advance(61);
+    await expect(
+      services.customSsoSession.redeemIndependentGrant(input),
+    ).resolves.toMatchObject({
+      credential: expect.stringContaining("iam_ls_"),
+      subject: { version: 1, subjectIdentifier },
+    });
+    expect(credentialIssueAttempts).toBe(1);
+  });
+
+  test("rejects an invalid Independent Wire before starting Credential side effects", async () => {
+    let credentialIssueAttempts = 0;
+    const services = createServices({
+      resolveSubjectProjection: async () => ({
+        subjectIdentifier,
+        username: 42,
+      } as never),
+      decorateKernel: kernel => ({
+        ...kernel,
+        async issueCredential(input) {
+          credentialIssueAttempts += 1;
+          return await kernel.issueCredential(input);
+        },
+      }),
+    });
+    const { code } = await issueAuthorizationCode(services);
+    const auditCountBeforeRedemption = auditLogs.length;
+
+    await expect(services.customSsoSession.redeemIndependentGrant({
+      client: {
+        ...independentClient,
+        subjectClaims: [
+          SubjectClaim.SubjectIdentifier,
+          SubjectClaim.ProfileUsername,
+        ],
+      },
+      code,
+      redirectUri: "https://app.example.com/callback",
+    })).rejects.toEqual(
+      new CustomSsoSubjectProjectionInvariantError("invalid_wire"),
+    );
+
+    expect(credentialIssueAttempts).toBe(0);
+    expect(auditLogs).toHaveLength(auditCountBeforeRedemption);
+    await expect(services.kernel.resolveProtocolArtifact(code)).resolves.toMatchObject({
+      status: "resolved",
+    });
+  });
+
   test.each([
     ["projection not ready", new SubjectProjectionNotReadyError()],
     ["Subject Access unavailable", new SubjectAccessUnavailableError()],
@@ -1729,7 +1823,9 @@ describe("Custom SSO module interface", () => {
         code,
         redirectUri: "https://app.example.com/callback",
       }),
-    ).rejects.toBeInstanceOf(TypeError);
+    ).rejects.toEqual(
+      new CustomSsoSubjectProjectionInvariantError("invalid_wire"),
+    );
 
     expect(fakeRedis.keysStartingWith("sess:v2:active:c:")).toHaveLength(0);
   });

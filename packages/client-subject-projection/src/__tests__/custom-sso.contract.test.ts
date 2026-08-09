@@ -1,16 +1,106 @@
+import type { ClientSubjectProjection } from "@iam/client-subject-projection";
+import {
+  SubjectProjectionNotReadyError,
+} from "@iam/client-subject-projection";
 import {
   buildCustomSsoPlaceholderPreviewV1,
+  CustomSsoSubjectProjectionInvariantError,
   CustomSsoSubjectProjectionV1Schema,
-  mapClientSubjectProjectionToCustomSsoV1,
+  resolveCustomSsoSubjectProjectionV1,
 } from "@iam/client-subject-projection/custom-sso";
 import { SubjectClaim } from "@iam/contracts";
 import { describe, expect, test } from "bun:test";
 
 const subjectIdentifier = "00000000-0000-4000-8000-000000000001";
 
+async function resolveWire(projection: ClientSubjectProjection) {
+  return await resolveCustomSsoSubjectProjectionV1({
+    resolve: async () => projection,
+  }, {
+    subjectIdentifier,
+    clientCode: "client-a",
+    selection: { catalogVersion: 1, optionalClaims: [] },
+  });
+}
+
 describe("Custom SSO V1 subject wire mapping contract", () => {
-  test("owns one strict runtime schema for every Custom SSO V1 consumer", () => {
-    const wire = mapClientSubjectProjectionToCustomSsoV1({
+  test("rejects a projection for a different valid Subject Identifier without leaking either subject", async () => {
+    const projectedSubjectIdentifier = "00000000-0000-4000-8000-000000000002";
+
+    const result = resolveCustomSsoSubjectProjectionV1({
+      resolve: async () => ({ subjectIdentifier: projectedSubjectIdentifier }),
+    }, {
+      subjectIdentifier,
+      clientCode: "client-a",
+      selection: { catalogVersion: 1, optionalClaims: [] },
+    });
+
+    await expect(result).rejects.toEqual(
+      new CustomSsoSubjectProjectionInvariantError("subject_mismatch"),
+    );
+    await expect(result).rejects.not.toHaveProperty("subjectIdentifier");
+    await expect(result).rejects.not.toHaveProperty("projection");
+    await expect(result).rejects.not.toHaveProperty("cause");
+    await expect(result).rejects.not.toHaveProperty("issues");
+    await expect(result).rejects.not.toHaveProperty("wire");
+    await expect(result).rejects.not.toHaveProperty("message", expect.stringContaining(subjectIdentifier));
+    await expect(result).rejects.not.toHaveProperty("message", expect.stringContaining(projectedSubjectIdentifier));
+  });
+
+  test("converts an invalid runtime wire into one safe invariant error", async () => {
+    const invalidProjection: ClientSubjectProjection = {
+      subjectIdentifier,
+      // @ts-expect-error exercises the runtime boundary beyond static types
+      username: 42,
+    };
+
+    const result = resolveCustomSsoSubjectProjectionV1({
+      resolve: async () => invalidProjection,
+    }, {
+      subjectIdentifier,
+      clientCode: "client-a",
+      selection: { catalogVersion: 1, optionalClaims: ["profile:username"] },
+    });
+
+    await expect(result).rejects.toEqual(
+      new CustomSsoSubjectProjectionInvariantError("invalid_wire"),
+    );
+    await expect(result).rejects.not.toHaveProperty("cause");
+    await expect(result).rejects.not.toHaveProperty("issues");
+    await expect(result).rejects.not.toHaveProperty("wire");
+  });
+
+  test("converts a mapper failure into the same safe invalid Wire error", async () => {
+    const invalidProjection: ClientSubjectProjection = {
+      subjectIdentifier,
+      // @ts-expect-error exercises a mapper failure at the runtime boundary
+      employments: [null],
+    };
+
+    await expect(resolveWire(invalidProjection)).rejects.toEqual(
+      new CustomSsoSubjectProjectionInvariantError("invalid_wire"),
+    );
+  });
+
+  test.each([
+    ["Subject Projection Not Ready", new SubjectProjectionNotReadyError()],
+    ["an existing sentinel", new Error("existing projection failure")],
+  ])("preserves %s errors from the Projection Service", async (_label, error) => {
+    const result = resolveCustomSsoSubjectProjectionV1({
+      resolve: async () => {
+        throw error;
+      },
+    }, {
+      subjectIdentifier,
+      clientCode: "client-a",
+      selection: { catalogVersion: 1, optionalClaims: [] },
+    });
+
+    await expect(result).rejects.toBe(error);
+  });
+
+  test("owns one strict runtime schema for every Custom SSO V1 consumer", async () => {
+    const wire = await resolveWire({
       subjectIdentifier,
       username: "zhangsan",
     });
@@ -35,8 +125,8 @@ describe("Custom SSO V1 subject wire mapping contract", () => {
     }).success).toBe(false);
   });
 
-  test("maps the mandatory Subject Identifier into the versioned wire contract", () => {
-    const wire = mapClientSubjectProjectionToCustomSsoV1({
+  test("maps the mandatory Subject Identifier into the versioned wire contract", async () => {
+    const wire = await resolveWire({
       subjectIdentifier,
     });
 
@@ -46,17 +136,19 @@ describe("Custom SSO V1 subject wire mapping contract", () => {
     });
   });
 
-  test("nests selected profile scalars while omitting null phone and an empty parent", () => {
-    const populated = mapClientSubjectProjectionToCustomSsoV1({
-      subjectIdentifier,
-      username: "zhangsan",
-      name: "张三",
-      phone: null,
-    });
-    const empty = mapClientSubjectProjectionToCustomSsoV1({
-      subjectIdentifier,
-      phone: null,
-    });
+  test("nests selected profile scalars while omitting null phone and an empty parent", async () => {
+    const [populated, empty] = await Promise.all([
+      resolveWire({
+        subjectIdentifier,
+        username: "zhangsan",
+        name: "张三",
+        phone: null,
+      }),
+      resolveWire({
+        subjectIdentifier,
+        phone: null,
+      }),
+    ]);
 
     expect([populated, empty]).toEqual([
       {
@@ -74,8 +166,8 @@ describe("Custom SSO V1 subject wire mapping contract", () => {
     ]);
   });
 
-  test("keeps selected arrays present when their values are empty", () => {
-    const wire = mapClientSubjectProjectionToCustomSsoV1({
+  test("keeps selected arrays present when their values are empty", async () => {
+    const wire = await resolveWire({
       subjectIdentifier,
       employments: [],
       authorization: {
@@ -99,7 +191,7 @@ describe("Custom SSO V1 subject wire mapping contract", () => {
     });
   });
 
-  test("builds the fixed Admin preview through the production mapper", () => {
+  test("builds the fixed Admin preview through the production mapper", async () => {
     const scalarPreview = buildCustomSsoPlaceholderPreviewV1([
       SubjectClaim.SubjectIdentifier,
       SubjectClaim.ProfileUsername,
@@ -110,11 +202,11 @@ describe("Custom SSO V1 subject wire mapping contract", () => {
       SubjectClaim.IamAuthorization,
     ]);
 
-    expect(scalarPreview).toEqual(mapClientSubjectProjectionToCustomSsoV1({
+    expect(scalarPreview).toEqual(await resolveWire({
       subjectIdentifier,
       username: "zhangsan",
     }));
-    expect(arrayPreview).toEqual(mapClientSubjectProjectionToCustomSsoV1({
+    expect(arrayPreview).toEqual(await resolveWire({
       subjectIdentifier,
       employments: [],
       authorization: {
@@ -130,7 +222,7 @@ describe("Custom SSO V1 subject wire mapping contract", () => {
     });
   });
 
-  test("maps self-contained claims through an explicit wire whitelist without compatibility aliases", () => {
+  test("maps self-contained claims through an explicit wire whitelist without compatibility aliases", async () => {
     const employment = {
       id: 101,
       status: 1,
@@ -184,7 +276,7 @@ describe("Custom SSO V1 subject wire mapping contract", () => {
       userInfo: { username: "legacy" },
       compatibilityAlias: "legacy",
     };
-    const wire = mapClientSubjectProjectionToCustomSsoV1(projection);
+    const wire = await resolveWire(projection);
 
     const wireEmployment = {
       isPrimary: true,
