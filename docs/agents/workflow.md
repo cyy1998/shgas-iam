@@ -65,6 +65,11 @@ implementation 子代理。这里的限制只针对实施子代理，不影响 `
   `pnpm verify`。
 - `pnpm verify` 只在准备 merge、release 或用户明确要求时，在最终实现内容上运行一次。它不替代需要显式环境的
   PostgreSQL、浏览器 E2E 或 Gateway 检查。
+- 执行依赖 PostgreSQL 或 Redis 的 Integration 测试时，如果没有提供对应的专用测试 URL，agent 应在 Docker 可用时
+  创建本地临时容器，等待资源 ready 后只向测试子进程注入生成的 URL，并在成功、失败或中断后按精确容器标识清理。
+  临时资源必须为非生产、独占且可销毁；不得回退 development、runtime 或 production URL。
+  `IAM_API_CORE_CLEANUP_TEST_REDIS_URL` 必须使用独立的临时 Redis 资源。
+- Docker 不可用或临时资源无法安全创建时，agent 必须明确报告未执行的测试及原因，不得把该测试记录为通过。
 - 不维护按路径展开的强制验证矩阵。Agent 根据风险选择直接相关的命令，并把结果摘要写入 journal；命令无法运行时
   明确报告，不伪造通过记录。
 
