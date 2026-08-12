@@ -473,7 +473,8 @@ Custom SSO 不读取 `oidcConfig`、OIDC Secret 或通用明文 `clientSecret`�
 - 只有显式 `/*` 才匹配路径子树。
 - `*.` 只匹配一级子域，不匹配根域或多级子域。
 - scheme 和 port 必须一致。
-- 禁止裸 `*`、公共后缀/IP 通配、URL credentials、动态 query 和 fragment。
+- Pattern 本身禁止 query 和 fragment；实际 redirect 命中 host `*.` 或 path `/*` 时可携带 query，fragment 始终禁止。
+- 禁止裸 `*`、公共后缀/IP 通配和 URL credentials。
 
 Authorization 阶段按模式验证，Grant 保存规范化后的实际 redirect URI；callback 或 token 兑换时必须与 Grant
 逐字一致，不再次用模式放宽。

@@ -66,7 +66,7 @@ http://app.shgas.com/sso/thirdparty/:clientCode
 | `clientSecret` | 第三方系统签名密钥，只能保存在服务端。 |
 | `status` | 客户端必须处于启用状态。 |
 | 目标业务系统 `client` | 登录完成后要进入的业务系统客户端编码，用于查询参数 `client`。可以与路径中的 `clientCode` 相同，也可以不同。 |
-| 目标业务系统 `validRedirectUrls` | `redirectUrl` 必须命中目标业务系统客户端允许的地址 pattern；支持 origin、一级子域 wildcard（如 `https://*.example.com`）和 path 末尾 `/*`。 |
+| 目标业务系统 `validRedirectUrls` | `redirectUrl` 必须命中目标业务系统客户端允许的地址 pattern；支持 origin、一级子域 wildcard（如 `https://*.example.com`）和 path 末尾 `/*`；命中任一 wildcard pattern 的实际地址可携带查询参数。 |
 | 目标业务系统 Custom SSO 配置 | Custom SSO 必须已配置并启用；`mode` 决定后续交付方式，取值为 `gateway`（网关托管）或 `independent`（独立应用）。 |
 
 用户侧还需要满足：

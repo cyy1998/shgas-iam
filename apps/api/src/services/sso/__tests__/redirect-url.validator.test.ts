@@ -18,13 +18,23 @@ describe("createSsoRedirectUrlValidator", () => {
     )).toBe("https://app.example.com/callback");
   });
 
-  test("rejects an actual redirect URL with dynamic query data", () => {
+  test("returns a wildcard-matched redirect URL with its query parameters", () => {
     const validator = createSsoRedirectUrlValidator({ logger: { warn } });
 
     expect(validator.normalizeAllowed(
       "portal",
       "https://tenant.example.com/app/callback?next=1",
       ["https://*.example.com/app/*"],
+    )).toBe("https://tenant.example.com/app/callback?next=1");
+  });
+
+  test("rejects query parameters when the path pattern is exact", () => {
+    const validator = createSsoRedirectUrlValidator({ logger: { warn } });
+
+    expect(validator.normalizeAllowed(
+      "portal",
+      "https://app.example.com/app/callback?next=1",
+      ["https://app.example.com/app/callback"],
     )).toBeNull();
   });
 

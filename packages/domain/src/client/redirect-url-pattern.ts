@@ -185,7 +185,7 @@ export function validateRedirectUrlPattern(pattern: string): RedirectUrlPatternV
 }
 
 export function normalizeRedirectUrl(redirectUrl: string) {
-  if (redirectUrl.includes("?") || redirectUrl.includes("#")) {
+  if (redirectUrl.includes("#")) {
     throw new RedirectUrlPatternSyntaxError(
       RedirectUrlPatternFailureReasons.DynamicQueryOrFragment,
     );
@@ -199,7 +199,7 @@ export function normalizeRedirectUrl(redirectUrl: string) {
       RedirectUrlPatternFailureReasons.UrlCredentials,
     );
   }
-  if (url.search !== "" || url.hash !== "") {
+  if (url.hash !== "") {
     throw new RedirectUrlPatternSyntaxError(
       RedirectUrlPatternFailureReasons.DynamicQueryOrFragment,
     );
@@ -229,14 +229,20 @@ function matchesPath(pattern: RedirectUrlPattern, pathname: string) {
   return pathname === pattern.pathname;
 }
 
+function hasWildcard(pattern: RedirectUrlPattern) {
+  return pattern.hostWildcardSuffix !== null || pattern.pathMode === "wildcard-subtree";
+}
+
 export function matchRedirectUrlPattern(redirectUrl: string, pattern: string | RedirectUrlPattern) {
   const parsedPattern = typeof pattern === "string" ? parseRedirectUrlPattern(pattern) : pattern;
-  const url = new URL(normalizeRedirectUrl(redirectUrl));
+  const normalizedRedirectUrl = normalizeRedirectUrl(redirectUrl);
+  const url = new URL(normalizedRedirectUrl);
 
   return url.protocol === parsedPattern.protocol
     && url.port === parsedPattern.port
     && matchesHostname(parsedPattern, url.hostname)
-    && matchesPath(parsedPattern, url.pathname);
+    && matchesPath(parsedPattern, url.pathname)
+    && (!normalizedRedirectUrl.includes("?") || hasWildcard(parsedPattern));
 }
 
 export function isRedirectUrlAllowedByPatterns(redirectUrl: string, patterns: string[]) {

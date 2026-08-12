@@ -22,10 +22,9 @@ describe("redirect URL pattern", () => {
     );
   });
 
-  test("rejects credentials, query, and fragment in an actual redirect URL", () => {
+  test("rejects credentials and fragment in an actual redirect URL", () => {
     for (const redirectUrl of [
       "https://user:password@app.example.com/callback",
-      "https://app.example.com/callback?return=dynamic",
       "https://app.example.com/callback#fragment",
     ]) {
       expect(() => normalizeRedirectUrl(redirectUrl)).toThrow();
@@ -51,9 +50,12 @@ describe("redirect URL pattern", () => {
     );
   });
 
-  test("rejects empty query and fragment delimiters in an actual redirect URL", () => {
-    for (const redirectUrl of [
+  test("preserves an empty query delimiter but still rejects fragment delimiters", () => {
+    expect(normalizeRedirectUrl("https://app.example.com/callback?")).toBe(
       "https://app.example.com/callback?",
+    );
+
+    for (const redirectUrl of [
       "https://app.example.com/callback#",
       "https://app.example.com/callback?#",
     ]) {
@@ -91,6 +93,25 @@ describe("redirect URL pattern", () => {
     expect(matchRedirectUrlPattern("https://app.example.com/callback/", "https://app.example.com/callback/*")).toBe(true);
     expect(matchRedirectUrlPattern("https://app.example.com/callback/a", "https://app.example.com/callback/*")).toBe(true);
     expect(matchRedirectUrlPattern("https://app.example.com/callback", "https://app.example.com/callback/*")).toBe(false);
+  });
+
+  test("allows query parameters only when a wildcard pattern matches", () => {
+    expect(matchRedirectUrlPattern(
+      "https://app.example.com/callback/complete?returnUrl=%2Fdashboard&tab=profile",
+      "https://app.example.com/callback/*",
+    )).toBe(true);
+    expect(matchRedirectUrlPattern(
+      "https://app.example.com/callback/complete?returnUrl=%2Fdashboard",
+      "https://app.example.com/callback/complete",
+    )).toBe(false);
+    expect(matchRedirectUrlPattern(
+      "https://tenant.example.com/callback?returnUrl=%2Fdashboard",
+      "https://*.example.com/callback",
+    )).toBe(true);
+    expect(matchRedirectUrlPattern(
+      "https://app.example.com/callback?",
+      "https://app.example.com/callback",
+    )).toBe(false);
   });
 
   test("rejects query and fragment in patterns", () => {

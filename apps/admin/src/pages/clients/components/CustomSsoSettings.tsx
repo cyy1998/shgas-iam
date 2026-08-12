@@ -253,7 +253,7 @@ export default function CustomSsoSettings({
           <Form.Item
             name="validRedirectUrls"
             label="允许的 Redirect Patterns"
-            extra="无通配时精确匹配；仅支持一级子域 *. 和路径末尾 /*。"
+            extra="无通配时精确匹配；仅支持一级子域 *. 和路径末尾 /*。命中通配 Pattern 的地址可携带查询参数。"
             rules={[
               {
                 required: true,

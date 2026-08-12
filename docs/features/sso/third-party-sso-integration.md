@@ -56,7 +56,7 @@ GET {IAM_ORIGIN}/sso/.well-known/authentication-configuration
 |---|---|
 | `clientCode` | 业务系统唯一编码。发起授权时作为 `client` 参数传入，例如 `tender`。 |
 | `customSsoSecret` | Custom SSO 专用客户端密钥。仅 Independent 模式兑现 grant 时使用，与通用 `clientSecret` 无关；明文只在配置或轮换时展示一次，必须保存在服务端。 |
-| `validRedirectUrls` | 允许登录完成后返回的业务地址 pattern 列表。支持 origin、一级子域 wildcard（如 `https://*.example.com`）和 path 末尾 `/*`。 |
+| `validRedirectUrls` | 允许登录完成后返回的业务地址 pattern 列表。支持 origin、一级子域 wildcard（如 `https://*.example.com`）和 path 末尾 `/*`；命中任一 wildcard pattern 的实际地址可携带查询参数。 |
 | `mode` | Custom SSO 接入模式，严格区分 `gateway` 与 `independent`。 |
 | `subjectClaims` | 该 Client 获准接收的主体字段；必须包含 Subject Identifier，其他 Profile、任职和授权字段按需选择。 |
 | `callbackEndpoint` | 独立应用模式下接收授权码的业务系统后端回调地址。 |
