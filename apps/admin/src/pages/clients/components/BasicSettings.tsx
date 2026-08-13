@@ -130,13 +130,11 @@ export default function BasicSettings({
           <Button
             disabled={formDirty || status === client.status}
             onClick={async () => {
-              const disabling = status !== ClientStatus.Enable;
               if (
+                status === ClientStatus.Disable &&
                 !(await confirmClientSettingAction(
                   '更新应用全局状态？',
-                  disabling
-                    ? '协议配置与启用意图会保留，但已有协议对象将被撤销。'
-                    : '重新启用应用后，各协议会恢复原有启用意图。',
+                  '协议配置与启用意图会保留，但已有协议对象将被撤销。',
                 ))
               ) {
                 return;
