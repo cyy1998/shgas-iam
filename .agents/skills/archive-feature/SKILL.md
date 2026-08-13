@@ -1,6 +1,6 @@
 ---
 name: archive-feature
-description: Archive a completed repo-local feature tracker, repair tracked path references, validate the staged archive, and create a focused commit. Use when the user explicitly invokes `$archive-feature` or makes an unambiguous natural-language request to archive a feature. Never infer archive authorization from completion, resolved tickets, merge, or closeout context.
+description: Archive a completed repo-local feature tracker, repair tracked path references, validate the staged archive, and create a focused commit. Use only when the user explicitly invokes `$archive-feature`, directly asks to archive a feature, or clearly approves an immediately preceding closeout prompt that explicitly names the feature and its archive step. Never infer authorization from completion, resolved tickets, current feature context, or a generic merge/closeout request that omitted the archive step.
 ---
 
 # Archive Feature
@@ -8,15 +8,19 @@ description: Archive a completed repo-local feature tracker, repair tracked path
 把已完成的 `.scratch/<slug>` tracker 安全移动到 `.scratch/archived/<slug>`，并创建一个 focused 归档提交。严格按以下
 顺序执行；不要 merge、push、删除分支或使用 `--no-verify`。
 
-只有用户直接调用 `$archive-feature`，或用无歧义的自然语言明确要求归档某个 feature 时，才执行本 skill。
-`allow_implicit_invocation: true` 只允许后一种明确请求触发 skill；不要从 feature 已完成、ticket 已 `resolved`、
-merge/closeout 讨论或其他上下文推断归档意图或授权。
+唯一授权标准是用户明确同意归档一个唯一 feature。以下两种情况成立：
+
+1. 用户直接调用 `$archive-feature`，或用自然语言明确要求归档某个 feature；
+2. 用户明确同意 agent 紧邻上一条提出的本地收尾问题，且该问题已经点名 feature，并明确说明会归档其 tracker。
+
+第二种情况的问题与答复合在一起构成明确的自然语言归档请求。`allow_implicit_invocation: true` 只允许这类明确请求触发
+skill；feature 已完成、ticket 已 `resolved`、当前 feature context，或未列出归档动作的 merge/closeout 请求都不构成授权。
 
 ## 1. 解析唯一目标
 
 1. 用 `git rev-parse --show-toplevel` 确认仓库根目录，并从根目录执行后续命令。
-2. 从用户本次明确的归档请求中读取 feature slug；若请求未写出 slug，只能使用当前对话中已经明确授权归档的唯一
-   feature。
+2. 从本次有效归档授权中读取 feature slug。若授权来自上一节第 2 种情况，从紧邻的收尾问题读取其中明确点名的 slug；
+   不从更早的对话、当前分支或目录扫描中猜测目标。
 3. 要求 slug 是唯一、非空的单个路径段；拒绝包含 `/`、`\` 的值以及 `.`、`..` 路径跳转值。
 4. 若请求和当前上下文无法唯一确定 slug，在任何修改前停止并要求用户明确目标；不扫描多个 `.scratch/` 子目录让
    用户选择，也不猜测别名。
