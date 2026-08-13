@@ -33,12 +33,23 @@
 - 不相关的未跟踪文件不自动阻断工作。未知改动必须原样保留；只有当前工作会重叠、覆盖或无法安全提交时才停止。
 - 目标分支在获得本地交付授权前保持只读。不要因 implementation 授权自动 merge、push、部署或清理分支。
 
+## 双轴评审子代理生命周期
+
+- 每轮双轴评审都新建相互独立、只读的 Standards 与 Spec 子代理；不得复用上一轮、其他 ticket 或其他改动的评审
+  子代理。没有可用 spec 时，按 `/code-review` 规则跳过 Spec 轴并明确报告，不创建没有输入依据的 Spec 子代理。
+- 一轮评审固定使用同一个不可变 review base SHA 和 candidate HEAD SHA。修复 finding 或因其他原因需要重新评审时，
+  都开始新一轮，并重新创建本轮适用的全部评审子代理。
+- 每轮都向新子代理提供完整 diff、提交列表和本轴依据。第二轮及后续轮次还要提供上一轮 findings 及其处理结果作为
+  复查清单，但仍重新审查完整范围，不能只验证旧 findings。
+- 原 implementation 子代理在各轮之间保持不变，负责接收和修复 findings；评审子代理只服务当前一轮，不修改文件、
+  stage 或 commit。
+
 ## 多 Ticket 批量实施的协调与交接
 
 `/implement` 默认由当前会话直接实施；无 ticket 的小型改动或本次只获授权实施一张 ticket 时，不启动专用
 implementation 子代理。即使同一 tracker 中还存在其他 tickets，也不能仅凭这一事实触发 dispatch。只有本次
 `/implement` 获得一次性实施两张及以上 tickets 的明确授权时，才进入下述批量模式，并为每张 ticket 启动一个全新的
-implementation 子代理。这里的限制只针对实施子代理，不影响 `/code-review` 按自身规则使用独立的只读评审子代理。
+implementation 子代理。这里的限制只针对实施子代理；评审子代理按上一节的生命周期管理。
 
 批量模式下，子代理 dispatch 是强制的上下文边界，不是可选的并行优化。Ticket 状态是协作提示，生命周期为
 `ready-for-agent → claimed → resolved`，不是 gate：
@@ -53,9 +64,9 @@ implementation 子代理。这里的限制只针对实施子代理，不影响 `
    review fixed point，并在其他文件改动前把 ticket 状态改为 `claimed`；不为 claim 创建独立 checkpoint。
 4. 同一功能分支默认顺序执行 tickets，除非维护者明确要求并行分支或 worktree。当前 ticket 完成验收与聚焦验证后，
    implementation 子代理创建正常的 focused implementation commit。
-5. 主会话随后显式调用相互独立、只读的 Standards 与 Spec 评审子代理，对 review fixed point 到候选 `HEAD` 的完整
-   范围执行 `/code-review`。Finding 交回原 implementation 子代理，用额外 focused fix commit 修复，再由两轴重新
-   审查完整范围；不自动 amend 或 rebase。
+5. 主会话随后按上述生命周期开始一轮 `/code-review`，对 review fixed point 到候选 `HEAD` 的完整范围执行 Standards
+   与 Spec 评审。Finding 交回原 implementation 子代理，用额外 focused fix commit 修复，再由全新的两轴评审子代理
+   重新审查完整范围；不自动 amend 或 rebase。
 6. 两轴 findings 清零后，原 implementation 子代理勾选验收项、把 ticket 标为 `resolved`、更新 journal，并创建只
    包含本 feature tracker 状态的轻量 handoff commit。Ticket 不写 Resolution schema、候选 SHA 或证据新鲜度字段。
 7. Handoff commit 完成后，主会话才能为下一张已解阻 ticket 显式调用另一个全新的 implementation 子代理。
