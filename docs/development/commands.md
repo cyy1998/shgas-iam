@@ -82,9 +82,10 @@ pnpm test:integration:browser
 ```
 
 `test:unit` 通过 Turbo 运行 package Unit，并精确加入四个 root tooling tests。各 profile command 只运行同名 package task。
-聚合 `test:integration` 在任何 profile 启动前一次性列出全部缺失的 caller-owned PostgreSQL/Redis 环境变量；其中包括
-`IAM_API_CORE_CLEANUP_TEST_REDIS_URL`，且任何专用 URL 都不得回退 runtime 或其他 test URL。资源 tasks 在 Turbo strict
-env 下显式透传对应 owner URL 并保持 `cache:false`。
+Integration 资源由调用方负责：维护者可以提供现有 URL，agent 也可以先启动临时 Docker 容器。聚合
+`test:integration` 本身不启动 Docker，而是在任何 profile 启动前一次性列出全部缺失的 PostgreSQL/Redis 环境变量；其中
+包括 `IAM_API_CORE_CLEANUP_TEST_REDIS_URL`，且任何专用 URL 都不得回退 runtime 或其他 test URL。资源 tasks 在 Turbo
+strict env 下显式透传对应 owner URL 并保持 `cache:false`。
 `pnpm test` 永久代理 `pnpm test:unit`；有 Unit collection 的 package 使用同一代理，没有 Unit collection 的 package
 不发布空 `test`。旧 `test:smoke`、`test:external`、package-local `test:postgres`/`test:redis` 与 frontend `e2e`
 collection aliases 已删除。
@@ -319,7 +320,9 @@ pnpm gateway:apisix:validate -- <environment-arguments>
 Caller-owned 对照集合与 `turbo.json` 的 `test:integration:redis.passThroughEnv` 及
 `test:integration:composition.passThroughEnv` 中 Redis URL 集合一致，包含 Admin API、API Core、API、OIDC Provider 与 User
 Profile 的专用 Redis URL，明确排除正在验证的 cleanup URL 自身。任何 Redis URL 出现 query 参数时也会在
-连接前失败，避免 `?db=`、`?port=` 等产生第二种 connection identity 表示。测试不会启动 Docker。
+连接前失败，避免 `?db=`、`?port=` 等产生第二种 connection identity 表示。测试命令和 harness 不负责启动 Docker。
+Agent 可以在运行命令前启动临时容器，但必须使用仓库声明的镜像版本、动态宿主端口与任务唯一的 name/label，等待服务
+ready 后传入 URL，并在测试结束后只按预先记录的 container ID 清理。不得用 glob、prefix scan 或 prune 代替精确清理。
 
 Ticket 12 不提供根级一键 rehearsal。维护者或 agent 按
 [Custom SSO Subject Projection 硬切换与回滚手册](../releases/custom-sso-subject-projection-release.md)，在调用方拥有的临时

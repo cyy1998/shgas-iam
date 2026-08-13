@@ -823,7 +823,9 @@ describe("test orchestration", () => {
 
     expect(result.exitCode).toBe(1);
     expect(result.commands).toEqual([]);
-    expect(result.output).toContain("Missing caller-provided Integration test resources:");
+    expect(result.output).toContain(
+      "Provide dedicated URLs or start disposable Docker resources first",
+    );
     expect(result.output).toContain("IAM_API_CORE_CLEANUP_TEST_REDIS_URL");
     expect(result.output).toContain("IAM_DB_TEST_DATABASE_URL");
     expect(result.output).toContain("IAM_USER_PROFILE_TEST_REDIS_URL");

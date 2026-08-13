@@ -13,8 +13,8 @@
 |---|---|---|
 | `component` | 进程内多个 module 协作，出站 seam 使用 fake 或 in-memory adapter | 无 |
 | `process` | 真实子进程、端口、readiness、退出与进程树清理 | 本机进程与端口 |
-| `redis` | production Redis adapter 行为 | caller-owned Redis |
-| `postgres` | schema、transaction 与 repository 行为 | caller-owned PostgreSQL |
+| `redis` | production Redis adapter 行为 | 调用方负责；agent 可临时启动 Docker 容器 |
+| `postgres` | schema、transaction 与 repository 行为 | 调用方负责；agent 可临时启动 Docker 容器 |
 | `composition` | production composition 与多个真实 adapter 协作 | profile 声明的全部资源 |
 | `browser` | 真实浏览器 harness，允许替代 journey 不经过的系统 seam | 浏览器与 package-local web server |
 
@@ -106,15 +106,16 @@ callback，浏览器经真实 authorize、SSO/API password login 与 resume 取�
 失败都先收集 diagnostics 再尝试 cleanup，cleanup failure 始终使 root command 非零。
 
 Root `test:unit` 通过 Turbo fan out package Unit tasks，并由 `test:unit:root` 精确收集四个 root tooling tests。
-六个 profile commands 只 fan out 同名 package tasks。`test:integration` 在启动任何 profile 前一次性检查所有
-caller-owned resources，再按以下顺序串行运行并传播第一个失败：
+六个 profile commands 只 fan out 同名 package tasks。Integration 资源由调用方负责：可以直接提供专用 URL，也可以由
+agent 先启动临时 Docker 容器。`test:integration` 本身不创建资源；它在启动任何 profile 前一次性检查所有资源 URL，
+再按以下顺序串行运行并传播第一个失败：
 
 ```text
 component -> process -> redis -> postgres -> composition -> browser
 ```
 
-预检包括 `IAM_API_CORE_CLEANUP_TEST_REDIS_URL`；它不得回退普通 Redis URL。外部资源缺失必须明确失败，不得 skip、
-retry 或读取 runtime/development 配置。
+预检包括 `IAM_API_CORE_CLEANUP_TEST_REDIS_URL`；它不得回退普通 Redis URL。缺少任一 URL 时，命令在启动 profile 前失败。
+Agent 可以补齐临时资源后重新运行，但命令不得 skip、自动 retry 或读取 runtime/development 配置。
 
 ## Collection Guard
 
@@ -170,8 +171,10 @@ Timeout 只保护测试不永久挂起，不承担性能 SLA。Process harness �
 重试或吞掉 cleanup 错误换取绿色结果。
 
 PostgreSQL 测试只清理自己创建的随机 schema。Redis 测试只清理自己的随机 namespace；禁止对共享实例执行
-`FLUSHDB`/`FLUSHALL`。外部测试不自行启动 Docker、PostgreSQL 或 Redis；browser profile 可以按 Playwright config 启动
-package-local web server。所有 caller-owned URLs 缺失时都 fail closed，不回退开发或生产资源。
+`FLUSHDB`/`FLUSHALL`。Integration 测试命令和 harness 不负责启动 Docker、PostgreSQL 或 Redis。Agent 可以在运行命令前
+启动任务独占的临时容器，但必须等待服务 ready、传入专用 URL，并负责测试成功、失败和中断后的精确清理。Browser
+profile 可以按 Playwright config 启动 package-local web server。缺少资源 URL 时命令仍然 fail closed，且不得回退开发或
+生产资源。
 
 Destructive legacy cleanup 不使用普通 namespace-isolated Redis。它只接受调用方提供的
 `IAM_API_CORE_CLEANUP_TEST_REDIS_URL`，该 URL 必须指向独占、初始为空且可销毁的 logical DB 或 instance，并且不能与任何

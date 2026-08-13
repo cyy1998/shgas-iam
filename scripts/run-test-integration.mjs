@@ -27,7 +27,9 @@ const profiles = [
 
 const missing = resourceEnvNames.filter(name => !process.env[name]?.trim());
 if (missing.length > 0) {
-  console.error("Missing caller-provided Integration test resources:");
+  console.error(
+    "Missing Integration test resource URLs. Provide dedicated URLs or start disposable Docker resources first:",
+  );
   for (const name of missing)
     console.error(`- ${name}`);
   process.exit(1);
