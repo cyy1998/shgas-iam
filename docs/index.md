@@ -1,6 +1,6 @@
 # IAM 文档索引
 
-本索引用作 Codex 和维护者进入 `docs/` 的稳定入口。需要当前行为时，对照代码、可执行测试和标记为 `Current` 的文档；需要理解历史决策时再进入 `Historical` 文档。`Stale` 文档和冻结的 OpenSpec 产物只能作为历史线索，不应作为当前架构或实现依据。
+本索引用作 Codex 和维护者进入 `docs/` 的稳定入口。判断“仓库现在怎样”与判断“本次应改成怎样”使用不同依据；不要用目标规格覆盖已观察到的当前行为，也不要让现有实现自动否定已授权的修改目标。需要理解历史决策时再进入 `Historical` 文档。`Stale` 文档和冻结的 OpenSpec 产物只能作为历史线索。
 
 ## 状态约定
 
@@ -11,19 +11,27 @@
 | Historical | 已完成的发布记录、审查记录或决策快照 | 不要求周期性复查 |
 | Stale | 已知不再反映当前代码或架构 | 必须在备注中说明 not current |
 
-## 当前事实来源
+## 当前事实与修改目标
 
-- 实现及可执行契约：应用代码与自动化测试
-- 维护中的说明：本索引标记为 `Current` 的文档
-- 仓库级指令入口：`AGENTS.md`
-- 运行和环境入口：`README.md`
-- 冻结的历史线索（非当前事实）：`openspec/`，先阅读其中的 `README.md`
+判断当前行为时，证据优先级为：
+
+1. 实现、生效配置与可执行测试结果；
+2. 本索引标记为 `Current` 的维护文档；
+3. 其他历史线索。
+
+这些证据不一致时，应记录并调查差异，不得用 spec、ADR 或其他文档声明覆盖已观察到的行为。`openspec/`、`Historical` 和
+`Stale` 文档不能单独证明当前行为。
+
+判断本次修改目标时，以用户当前授权的目标和适用 spec/ticket 的验收要求界定范围，以 `CONTEXT.md`、已接受 ADR 和当前
+工程文档约束实现。现有代码只是修改基线，不会自动否定目标；目标依据彼此冲突或范围不清时，必须先澄清再实施。
+
+仓库级指令从 `AGENTS.md` 进入，运行和环境入口见 `README.md`。
 
 ## 文档清单
 
 | Document | Type | Status | Last verified | Next review | Notes |
 |---|---|---|---|---|---|
-| [docs/adr/0001-replace-openspec-workflow.md](adr/0001-replace-openspec-workflow.md) | decision | Current | 2026-07-16 | 2026-10-31 | 采用 Matt skills 工作流并冻结 OpenSpec 的架构决策。 |
+| [docs/adr/0001-replace-openspec-workflow.md](adr/0001-replace-openspec-workflow.md) | decision | Current | 2026-08-13 | 2026-10-31 | 采用 Matt skills 工作流并冻结 OpenSpec 的架构决策。 |
 | [docs/adr/0002-centralize-role-assignment-resolution.md](adr/0002-centralize-role-assignment-resolution.md) | decision | Current | 2026-07-18 | 2026-10-31 | 以独立 workspace package 统一有效角色与受影响用户解析。 |
 | [docs/adr/0003-adopt-layered-test-lanes-and-resource-budgets.md](adr/0003-adopt-layered-test-lanes-and-resource-budgets.md) | decision | Historical | 2026-08-05 | n/a | 旧普通/smoke/external 通道决策；已由 ADR-0009 取代。 |
 | [docs/adr/0004-adopt-upstream-first-matt-skills.md](adr/0004-adopt-upstream-first-matt-skills.md) | decision | Current | 2026-07-24 | 2026-10-31 | 确立上游 Matt skills 的流程所有权，并以仓库薄适配取代可执行证据状态机。 |
@@ -34,11 +42,11 @@
 | [docs/adr/0009-adopt-canonical-test-collections.md](adr/0009-adopt-canonical-test-collections.md) | decision | Current | 2026-08-06 | 2026-10-31 | 采用 Unit/Integration/E2E canonical collections、永久 Guard，并原子切换默认 `test` 与 `verify`。 |
 | [docs/adr/0010-narrow-client-binding-to-oidc-lifecycle.md](adr/0010-narrow-client-binding-to-oidc-lifecycle.md) | decision | Current | 2026-08-07 | 2026-10-31 | Client Binding 只属于 OIDC；Custom SSO 使用可恢复 Credential 签发，OIDC 删除 full binding 派生副本。 |
 | [docs/adr/0011-model-employment-as-an-immutable-tenure-lifecycle.md](adr/0011-model-employment-as-an-immutable-tenure-lifecycle.md) | decision | Current | 2026-08-11 | 2026-10-31 | Employment 表示不可重开的任职期；写入端保证父对象完整性，Subject Facts 发布前 fail closed。 |
-| [docs/agents/code-investigation.md](agents/code-investigation.md) | agent-config | Current | 2026-08-03 | 2026-10-31 | 项目级 `code_researcher`/`deep_researcher` 的分层路由、只读调查、证据返回和外置记忆规则。 |
+| [docs/agents/code-investigation.md](agents/code-investigation.md) | agent-config | Current | 2026-08-13 | 2026-10-31 | 项目级 `code_researcher`/`deep_researcher` 的分层路由、只读调查、证据返回和外置记忆规则。 |
 | [docs/agents/domain.md](agents/domain.md) | agent-config | Current | 2026-07-16 | 2026-10-31 | Engineering skills 的 single-context domain documentation 消费规则。 |
 | [docs/agents/issue-tracker.md](agents/issue-tracker.md) | agent-config | Current | 2026-08-06 | 2026-10-31 | 本地 spec、ticket、轻量 feature journal 与批量实施 handoff 的文件约定。 |
 | [docs/agents/triage-labels.md](agents/triage-labels.md) | agent-config | Current | 2026-07-16 | 2026-10-31 | Engineering skills 使用的默认 triage 标签映射。 |
-| [docs/agents/workflow.md](agents/workflow.md) | agent-config | Current | 2026-08-06 | 2026-10-31 | Matt skills 的仓库薄适配：本地 tracker、批量实施子代理、分支、验证、授权、归档和本地合入。 |
+| [docs/agents/workflow.md](agents/workflow.md) | agent-config | Current | 2026-08-13 | 2026-10-31 | Matt skills 的仓库薄适配：本地 tracker、批量实施子代理、分支、验证、授权、归档和本地合入。 |
 | [docs/architecture/architecture-guard.md](architecture/architecture-guard.md) | architecture | Current | 2026-07-31 | 2026-10-31 | 架构守卫规范的验证层选择、允许观察模型、永久规则准入、封闭目录与复杂度边界。 |
 | [docs/architecture/backend-architecture.md](architecture/backend-architecture.md) | architecture | Current | 2026-08-11 | 2026-10-31 | 后端 runtime ownership、依赖方向、composition/DI、UnitOfWork/afterCommit、请求与审计上下文、关键 deep modules、OIDC/Worker lifecycle 和分层验证。 |
 | [docs/architecture/contracts-and-database.md](architecture/contracts-and-database.md) | architecture | Current | 2026-08-11 | 2026-10-31 | shared contracts、domain/db/jobs/role-assignment-resolution/read-model 边界、UnitOfWork/afterCommit 和 Drizzle schema/relations/migration 约定。 |

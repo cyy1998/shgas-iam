@@ -12,7 +12,7 @@ status: accepted
 
 本仓库停止以 OpenSpec change 和累计 capability specs 驱动新工作，改用 Matt skills 的 conversation → spec → tickets → implementation/review 流程，并把版本化的 `.scratch/` 作为本地 issue tracker。
 
-现有 `openspec/` 保留原路径并冻结为只读历史参考，不再作为当前事实来源。当前行为由代码、可执行测试和标记为 `Current` 的文档共同定义；稳定领域语言和长期决策分别进入 `CONTEXT.md` 与 ADR。仍有价值的 OpenSpec 内容只在相关区域被实际触及时，经当前实现验证后按需提升，不做批量转换。
+现有 `openspec/` 保留原路径并冻结为只读历史参考，不再作为当前事实来源。判断当前行为时，代码、生效配置与可执行测试结果是直接证据，标记为 `Current` 的文档用于补充说明；两者不一致时记录并调查差异，不能用文档覆盖已观察到的行为。Feature spec 和 tickets 描述修改目标，不证明目标已经实现；用户当前授权的目标受稳定领域语言、已接受 ADR 和当前工程文档约束。目标依据冲突时先澄清，不从现有实现或历史 OpenSpec 中静默选择答案。仍有价值的 OpenSpec 内容只在相关区域被实际触及时，经当前实现验证后按需提升，不做批量转换。
 
 ## 后果
 
