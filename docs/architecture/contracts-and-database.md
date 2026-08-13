@@ -17,8 +17,10 @@
 - 共享 BullMQ helper 放在 `packages/jobs`。
 - 角色分配的正向 Effective Role 与反向受影响用户解析放在 `packages/role-assignment-resolution`；该 package
   接收 composition root 提供的 `DbClient`，调用方不复制 assignment 或组织闭包匹配规则。
-- 正向解析采用严格有效性：任职、任职岗位、任职组织、assignment target 和角色都必须启用且未删除；可选 client
-  范围由 resolver 过滤。反向 dirty-scope 解析有意更保守，只过滤失效任职，不因角色、岗位或组织已失效而漏掉重建。
+- 正向解析只把 Employment 本身、assignment target 和角色的启用/删除状态作为运行时有效性，并由 resolver 过滤可选
+  client 范围；Employment 的 Position 与直属 Organization 状态属于 Employment Integrity，不再由正向解析静默过滤。
+  User Profile Builder 在发布前加载并校验全部 Open Employment 的父对象事实，异常时整次 fail closed。反向 dirty-scope
+  解析有意更保守，只过滤失效任职，不因角色、岗位或组织已失效而漏掉重建。
 - 两个操作都批量接收 ID、处理重复和空输入，并返回稳定排序结果。Admin 角色管理 CRUD 与 role-privilege 聚合仍属于
   调用方，不进入 resolver。
 - user-profile read-model producer/query/worker 逻辑放在 `packages/user-profile-read-model`。该 package 拥有
@@ -73,3 +75,7 @@
 - Worker publication transaction 必须锁定并重验同一 `user_profile_dirty` 的 user/version/processing 状态，再以
   单调 `source_dirty_version` 写入或删除 profile，并在同一 transaction 标记 dirty processed。Redis publication
   只能发生在 PostgreSQL 提交后，失败不得回滚已提交事实。
+- Employment Cutover Verifier 通过 `@iam/user-profile-read-model/worker` 的公开 read-side seam 在 PostgreSQL
+  `READ ONLY` transaction 中取得按 Employment ID 排序的一致 snapshot，只联接 Position 与直属 Organization 事实。
+  Verifier 不写数据库、不从 `updateTime` 推断结束时间，也不生成修复 SQL；全部非墓碑 blocker 以稳定分类和完整
+  Employment ID 集合报告，Legacy Employment Tombstone 只计数。

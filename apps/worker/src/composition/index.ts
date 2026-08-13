@@ -12,6 +12,8 @@ import {
   createSubjectAccessTransitionRepository,
 } from "@iam/user-profile-read-model/subject-access-transition";
 import {
+  createEmploymentCutoverRepository,
+  createEmploymentCutoverVerifier,
   createSubjectAccessAuthorityRepository,
   createSubjectFactsRedisInspector,
   createSubjectFactsRedisPublisher,
@@ -225,5 +227,22 @@ export async function createWorkerSubjectAccessRepairComposition(
     runtime,
     subjectAccess,
     shutdown,
+  };
+}
+
+export function createEmploymentCutoverCommandComposition(options: {
+  logger: WorkerLogger;
+}) {
+  return {
+    logger: options.logger,
+    employmentCutover: {
+      verifier: createEmploymentCutoverVerifier({
+        inventory: createEmploymentCutoverRepository(db),
+        clock: { nowDate: () => new Date() },
+      }),
+    },
+    async shutdown() {
+      await closeDb({ timeoutSeconds: COMMAND_DB_SHUTDOWN_TIMEOUT_SECONDS });
+    },
   };
 }

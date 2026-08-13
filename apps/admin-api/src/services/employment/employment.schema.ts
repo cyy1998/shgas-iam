@@ -66,50 +66,32 @@ export const EmploymentAdminCreateDtoSchema = z.object({
   }),
   posCode: z.string().openapi({ example: "E033" }),
   isPrimary: z.boolean().optional().openapi({ example: false }),
-  startTime: z.coerce.date().optional().openapi({
-    example: "2026-04-23T00:00:00.000Z",
-    description: "缺省则由后端写入 now()",
-  }),
   description: z.string().max(500).nullable().optional(),
 }).refine(dto => dto.orgCode !== undefined || dto.deptOrgCode !== undefined, {
   message: "orgCode 或 deptOrgCode 至少提供一个",
 }).openapi("EmploymentAdminCreateDto");
 
 export const EmploymentUpdateDtoSchema = z.object({
-  isPrimary: z.boolean().optional(),
-  startTime: z.coerce.date().optional(),
   description: z.string().max(500).nullable().optional(),
-}).openapi("EmploymentUpdateDto");
+}).strict().openapi("EmploymentUpdateDto");
 
-export const EmploymentStatusUpdateDtoSchema = z.object({
-  status: z.enum(EmploymentStatus),
-}).openapi("EmploymentStatusUpdateDto");
+export const EmploymentResumeDtoSchema = z.object({
+  expectedAncestorOrgCode: z.string().openapi({
+    example: "SR",
+    description: "祖先组织范围复核；不入库",
+  }),
+}).openapi("EmploymentResumeDto");
 
 export const EmploymentTransferDtoSchema = z.object({
-  newOrgCode: z.string().optional().openapi({ example: "SB01", description: "新的实际任职组织编码" }),
+  newOrgCode: z.string().openapi({ example: "SB01", description: "新的实际任职组织编码" }),
   expectedAncestorOrgCode: z.string().optional().openapi({
     example: "SB",
     description: "可选祖先组织校验；不入库",
   }),
-  newCompanyOrgCode: z.string().optional().openapi({
-    example: "SB",
-    description: "Deprecated compatibility input. Used as expectedAncestorOrgCode when provided.",
-    deprecated: true,
-  }),
-  newDeptOrgCode: z.string().optional().openapi({
-    example: "SB01",
-    description: "Deprecated compatibility input. Used as newOrgCode when newOrgCode is omitted.",
-    deprecated: true,
-  }),
   newPosCode: z.string().openapi({ example: "E034" }),
-  startTime: z.coerce.date().optional().openapi({
-    description: "新雇佣的 startTime；缺省 now()",
-  }),
-  inheritPrimary: z.boolean().optional().openapi({
-    example: true,
-    description: "是否继承原雇佣的 isPrimary；缺省 true",
+  isPrimary: z.boolean().openapi({
+    example: false,
+    description: "新任职是否为主任职；必须由管理员明确选择",
   }),
   description: z.string().max(500).nullable().optional(),
-}).refine(dto => dto.newOrgCode !== undefined || dto.newDeptOrgCode !== undefined, {
-  message: "newOrgCode 或 newDeptOrgCode 至少提供一个",
-}).openapi("EmploymentTransferDto");
+}).strict().openapi("EmploymentTransferDto");

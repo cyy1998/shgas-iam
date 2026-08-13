@@ -20,7 +20,7 @@ export class PositionCodeExistsError extends DomainBusinessError {
 }
 
 export class PositionHasEmploymentError extends DomainBusinessError {
-  constructor(message: string = "该岗位下存在雇佣关系，无法删除") {
+  constructor(message: string = "该岗位存在开放任职，无法停用或删除") {
     super(message, {
       code: ApiErrorCode.PositionHasEmployment,
       httpStatus: DomainHttpStatus.Conflict,

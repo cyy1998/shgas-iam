@@ -11,7 +11,7 @@ import {
 } from "@admin-api/services/user/user.schema";
 import { EmploymentStatus, UserStatus } from "@iam/contracts";
 import {
-  UserHasActiveEmploymentError,
+  UserHasOpenEmploymentError,
   UsernameAlreadyExistsError,
   UserNotFoundError,
 } from "@iam/domain/user";
@@ -230,9 +230,9 @@ export function createUserService(deps: AdminUserServiceDeps) {
             if (existing === null) {
               throw new UserNotFoundError("用户不存在");
             }
-            const activeEmps = await tx.userRepository.countActiveEmploymentsByUsername(username);
-            if (activeEmps > 0) {
-              throw new UserHasActiveEmploymentError();
+            const openEmployments = await tx.userRepository.countOpenEmploymentsByUsername(username);
+            if (openEmployments > 0) {
+              throw new UserHasOpenEmploymentError();
             }
             const deletedUser = await tx.userRepository.softDeleteUserByUsername(username);
             await tx.auditService.recordAuditLog(buildAdminUserAudit("admin.user.delete", deletedUser, {

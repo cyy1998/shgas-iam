@@ -6,13 +6,12 @@ import type {
   OrganizationTreeNodeDto,
   OrganizationUpdateDto,
 } from "@admin-api/services/organization/organization.type";
-import type { OrganizationStatus } from "@iam/contracts";
 import type { AdminOrganizationServiceDeps } from "./organization.port";
 import { adminAuditTransactionOptions } from "@admin-api/services/audit/audit.context";
 import { buildOrganizationAudit } from "@admin-api/services/audit/events/organization.audit";
 import { toOrganizationDto } from "@admin-api/services/organization/organization.schema";
 import { paginate } from "@iam/api-core/utils";
-import { organizationStatusToString } from "@iam/contracts";
+import { OrganizationStatus, organizationStatusToString } from "@iam/contracts";
 import {
   OrganizationAlreadyExistsError,
   OrganizationCodeExistsError,
@@ -73,7 +72,7 @@ export function createOrganizationService(deps: AdminOrganizationServiceDeps) {
     if (org === null) {
       throw new OrganizationNotFoundError("组织不存在");
     }
-    const employmentCount = await deps.organizationRepository.countActiveEmploymentsByOrgCode(orgCode);
+    const employmentCount = await deps.organizationRepository.countOpenEmploymentsByOrgCode(orgCode);
     const dto = toOrganizationDto(org);
     return {
       ...dto,
@@ -117,6 +116,12 @@ export function createOrganizationService(deps: AdminOrganizationServiceDeps) {
           throw new OrganizationCodeExistsError(`组织编码已存在: ${data.orgCode}`);
         }
       }
+      if (data.status !== undefined && data.status !== OrganizationStatus.Enable) {
+        const employmentCount = await tx.organizationRepository.countOpenEmploymentsByOrgCode(orgCode);
+        if (employmentCount > 0) {
+          throw new OrganizationHasEmploymentError();
+        }
+      }
       await tx.organizationRepository.updateOrganizationByCode(orgCode, data);
       await tx.auditService.recordAuditLog(buildOrganizationAudit(action, {
         ...existing,
@@ -152,7 +157,7 @@ export function createOrganizationService(deps: AdminOrganizationServiceDeps) {
       if (childrenCount > 0) {
         throw new OrganizationHasChildrenError();
       }
-      const employmentCount = await tx.organizationRepository.countActiveEmploymentsByOrgCode(orgCode);
+      const employmentCount = await tx.organizationRepository.countOpenEmploymentsByOrgCode(orgCode);
       if (employmentCount > 0) {
         throw new OrganizationHasEmploymentError();
       }

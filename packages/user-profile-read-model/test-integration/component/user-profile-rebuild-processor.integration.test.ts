@@ -1,5 +1,6 @@
 import { UserProfileDirtyReason, UserStatus } from "@iam/contracts";
 import { describe, expect, mock, test } from "bun:test";
+import { UserProfileEmploymentIntegrityError } from "../../src/user-profile-builder.service";
 import { CURRENT_USER_PROFILE_SCHEMA_VERSION } from "../../src/user-profile.schema";
 import { createUserProfileRebuildProcessor } from "../../src/worker";
 
@@ -285,8 +286,8 @@ describe("UserProfileRebuildProcessor", () => {
     });
   });
 
-  test("records a builder failure against the claimed dirty version", async () => {
-    const error = new Error("builder failed");
+  test("retains the Dirty failure without publishing a partial profile when Employment integrity fails", async () => {
+    const error = new UserProfileEmploymentIntegrityError(1, 10, "position-not-effective");
     const builder = {
       buildOne: mock(async () => {
         throw error;
@@ -303,9 +304,12 @@ describe("UserProfileRebuildProcessor", () => {
     expect(fixture.observed.failed).toEqual({
       userId: 1,
       dirtyVersion: "4",
-      error: "builder failed",
+      error: "User Profile Employment integrity failed: position-not-effective",
       failedAt: now,
     });
+    expect(fixture.publicationRepository.publishCandidate).not.toHaveBeenCalled();
+    expect(fixture.subjectFactsPublisher.publish).not.toHaveBeenCalled();
+    expect(fixture.subjectAccessRepair.repairSubject).not.toHaveBeenCalled();
   });
 
   test("returns stale when failure recording loses its CAS", async () => {

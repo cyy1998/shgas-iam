@@ -16,6 +16,7 @@
   "scripts": {
     "dev": "bun --hot src/index.ts",
     "serve": "bun run src/index.ts",
+    "employment:cutover-verify": "bun run src/commands/employment-cutover-verifier.ts",
     "user-profile:backfill": "bun run src/commands/user-profile-backfill.ts",
     "user-profile:repair": "bun run src/commands/user-profile-repair.ts",
     "subject-projection:backfill": "bun run src/commands/subject-projection-cutover.ts backfill",

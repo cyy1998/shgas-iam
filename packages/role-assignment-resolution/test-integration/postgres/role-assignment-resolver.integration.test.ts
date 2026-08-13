@@ -115,6 +115,34 @@ describe("resolveEffectiveRoles", () => {
         expect(result.get(100)).toEqual([]);
       });
     }
+
+    for (const invalidation of source.parentInvalidations()) {
+      test(`${source.name} keeps roles when ${invalidation.name}`, async () => {
+        await seedActiveEmploymentGraph(harness!.db);
+        await harness!.db.insert(roles).values(activeRole({ id: 200, roleCode: "effective", clientId: 1 }));
+        await harness!.db.insert(roleAssignments).values(source.createAssignment(200));
+        await invalidation.apply(harness!.db);
+
+        const result = await resolver.resolveEffectiveRoles({ employmentIds: [100] });
+
+        expect(result.get(100)).toEqual([{ id: 200, roleCode: "effective" }]);
+      });
+    }
+  }
+
+  for (const invalidation of getEmploymentPositionIntegrityInvalidations()) {
+    test(`position assignment excludes roles when ${invalidation.name} as the assignment target`, async () => {
+      await seedActiveEmploymentGraph(harness!.db);
+      await harness!.db.insert(roles).values(activeRole({ id: 200, roleCode: "effective", clientId: 1 }));
+      await harness!.db.insert(roleAssignments).values(
+        assignment(200, RoleAssignmentTargetType.Position, 20),
+      );
+      await invalidation.apply(harness!.db);
+
+      const result = await resolver.resolveEffectiveRoles({ employmentIds: [100] });
+
+      expect(result.get(100)).toEqual([]);
+    });
   }
 
   for (const invalidation of getOrganizationTargetInvalidations()) {
@@ -296,19 +324,26 @@ async function retirePositionAndOrganizations(db: DbClient) {
 function getForwardAssignmentSources(): Array<{
   name: string;
   createAssignment: (roleId: number) => ReturnType<typeof assignment>;
+  parentInvalidations: () => Array<{
+    name: string;
+    apply: (db: DbClient) => Promise<void>;
+  }>;
 }> {
   return [
     {
       name: "employment assignment",
       createAssignment: roleId => assignment(roleId, RoleAssignmentTargetType.Employment, 100),
+      parentInvalidations: getEmploymentParentIntegrityInvalidations,
     },
     {
       name: "position assignment",
       createAssignment: roleId => assignment(roleId, RoleAssignmentTargetType.Position, 20),
+      parentInvalidations: getEmploymentOrganizationIntegrityInvalidations,
     },
     {
       name: "organization assignment",
       createAssignment: roleId => assignment(roleId, RoleAssignmentTargetType.Organization, 10, true),
+      parentInvalidations: getEmploymentParentIntegrityInvalidations,
     },
   ];
 }
@@ -331,30 +366,6 @@ function getCommonStrictValidityInvalidations(): Array<{
       },
     },
     {
-      name: "the employment position is disabled",
-      apply: async (db) => {
-        await db.update(positions).set({ status: PositionStatus.Disable }).where(eq(positions.id, 20));
-      },
-    },
-    {
-      name: "the employment position is soft-deleted",
-      apply: async (db) => {
-        await db.update(positions).set({ isDelete: true }).where(eq(positions.id, 20));
-      },
-    },
-    {
-      name: "the employment organization is disabled",
-      apply: async (db) => {
-        await db.update(organizations).set({ status: OrganizationStatus.Disable }).where(eq(organizations.id, 12));
-      },
-    },
-    {
-      name: "the employment organization is soft-deleted",
-      apply: async (db) => {
-        await db.update(organizations).set({ isDelete: true }).where(eq(organizations.id, 12));
-      },
-    },
-    {
       name: "the role is disabled",
       apply: async (db) => {
         await db.update(roles).set({ status: RoleStatus.Disable }).where(eq(roles.id, 200));
@@ -364,6 +375,56 @@ function getCommonStrictValidityInvalidations(): Array<{
       name: "the role is soft-deleted",
       apply: async (db) => {
         await db.update(roles).set({ isDelete: true }).where(eq(roles.id, 200));
+      },
+    },
+  ];
+}
+
+function getEmploymentParentIntegrityInvalidations(): Array<{
+  name: string;
+  apply: (db: DbClient) => Promise<void>;
+}> {
+  return [
+    ...getEmploymentPositionIntegrityInvalidations(),
+    ...getEmploymentOrganizationIntegrityInvalidations(),
+  ];
+}
+
+function getEmploymentPositionIntegrityInvalidations(): Array<{
+  name: string;
+  apply: (db: DbClient) => Promise<void>;
+}> {
+  return [
+    {
+      name: "the Employment Position is disabled",
+      apply: async (db) => {
+        await db.update(positions).set({ status: PositionStatus.Disable }).where(eq(positions.id, 20));
+      },
+    },
+    {
+      name: "the Employment Position is soft-deleted",
+      apply: async (db) => {
+        await db.update(positions).set({ isDelete: true }).where(eq(positions.id, 20));
+      },
+    },
+  ];
+}
+
+function getEmploymentOrganizationIntegrityInvalidations(): Array<{
+  name: string;
+  apply: (db: DbClient) => Promise<void>;
+}> {
+  return [
+    {
+      name: "the Employment Organization is disabled",
+      apply: async (db) => {
+        await db.update(organizations).set({ status: OrganizationStatus.Disable }).where(eq(organizations.id, 12));
+      },
+    },
+    {
+      name: "the Employment Organization is soft-deleted",
+      apply: async (db) => {
+        await db.update(organizations).set({ isDelete: true }).where(eq(organizations.id, 12));
       },
     },
   ];

@@ -46,8 +46,13 @@ export async function createAdminApiRoutes(
   const auditAdapter = createAuditAdapter({ auditService });
   const clientAdapter = createClientAdapter({ clientService: services.client });
   const employmentAdapter = createEmploymentAdapter({
+    changeEmploymentAvailability: useCases.employment.changeEmploymentAvailability,
+    createEmployment: useCases.employment.createEmployment,
+    endEmployment: useCases.employment.endEmployment,
     employmentService: services.employment,
+    managePrimaryEmployment: useCases.employment.managePrimaryEmployment,
     resignUser: useCases.employment.resignUser,
+    transferEmployment: useCases.employment.transferEmployment,
   });
   const organizationAdapter = createOrganizationAdapter({ organizationService: services.organization });
   const positionAdapter = createPositionAdapter({ positionService: services.position });

@@ -13,6 +13,7 @@ const RESERVED_DATABASE_NAMES = new Set(["postgres", "template0", "template1"]);
 export interface WorkerPostgresTestHarness {
   readonly db: DbClient;
   readonly sql: ReturnType<typeof postgres>;
+  readonly commandDatabaseUrl: string;
   readonly reset: () => Promise<void>;
   readonly close: () => Promise<void>;
 }
@@ -41,6 +42,7 @@ export async function createWorkerPostgresTestHarness(): Promise<WorkerPostgresT
     return {
       db,
       sql: scopedSql,
+      commandDatabaseUrl: databaseUrlWithSearchPath(databaseUrl, schemaName),
       async reset() {
         await scopedSql!.unsafe("TRUNCATE TABLE client RESTART IDENTITY CASCADE");
       },
@@ -100,6 +102,12 @@ function databaseIdentity(databaseUrl: string) {
   const port = parsed.port || "5432";
   const databaseName = decodeURIComponent(parsed.pathname.slice(1));
   return `${host}:${port}/${databaseName}`;
+}
+
+function databaseUrlWithSearchPath(databaseUrl: string, schemaName: string) {
+  const parsed = new URL(databaseUrl);
+  parsed.searchParams.set("options", `-csearch_path=${schemaName}`);
+  return parsed.toString();
 }
 
 function quoteIdentifier(identifier: string) {

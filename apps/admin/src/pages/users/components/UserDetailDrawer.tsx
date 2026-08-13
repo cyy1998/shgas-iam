@@ -1,12 +1,10 @@
 import StatusTag from '@admin/components/StatusTag';
+import EmploymentLifecycleActions from '@admin/components/EmploymentLifecycleActions';
+import EmploymentPrimaryActions from '@admin/components/EmploymentPrimaryActions';
 import AuditLogTable from '@admin/pages/audit-logs/components/AuditLogTable';
 import EmploymentFormModal from '@admin/pages/employments/components/EmploymentFormModal';
 import TransferModal from '@admin/pages/employments/components/TransferModal';
-import {
-  deleteEmployment,
-  type EmploymentVo,
-  updateEmploymentStatus,
-} from '@admin/services/employment';
+import type { EmploymentVo } from '@admin/services/employment';
 import {
   deleteUser,
   getUser,
@@ -16,7 +14,6 @@ import {
 import { ProDescriptions } from '@ant-design/pro-components';
 import {
   EmploymentStatus,
-  getEmploymentStatusOptions,
   getUserStatusOptions,
   type UserStatus,
 } from '@iam/contracts';
@@ -174,36 +171,6 @@ function UserDetailDrawerContent({
     });
   };
 
-  const onEmploymentStatusChange = async (
-    row: EmploymentRow,
-    status: EmploymentStatus,
-  ) => {
-    try {
-      await updateEmploymentStatus(row.id, status);
-      message.success('状态已更新');
-      await refresh();
-    } catch (err) {
-      handleError(err);
-    }
-  };
-
-  const onEmploymentDelete = (row: EmploymentRow) => {
-    Modal.confirm({
-      title: `删除雇佣 ${row.position.posName}？`,
-      content: '软删除后该雇佣记录不再可见。',
-      okType: 'danger',
-      onOk: async () => {
-        try {
-          await deleteEmployment(row.id);
-          message.success('已删除');
-          await refresh();
-        } catch (err) {
-          handleError(err);
-        }
-      },
-    });
-  };
-
   const employmentColumns: ColumnsType<EmploymentRow> = [
     {
       title: '组织路径',
@@ -254,29 +221,14 @@ function UserDetailDrawerContent({
             >
               转岗
             </a>
-            <Dropdown
-              menu={{
-                items: getEmploymentStatusOptions()
-                  .filter((o) => o.value !== row.status)
-                  .map((o) => ({
-                    key: String(o.value),
-                    label: `切为「${o.label}」`,
-                    onClick: () =>
-                      onEmploymentStatusChange(
-                        row,
-                        o.value as EmploymentStatus,
-                      ),
-                  })),
-              }}
-            >
-              <a>状态</a>
-            </Dropdown>
-            <a
-              style={{ color: '#d4380d' }}
-              onClick={() => onEmploymentDelete(row)}
-            >
-              删除
-            </a>
+            <EmploymentPrimaryActions
+              employment={row}
+              onSuccess={refresh}
+            />
+            <EmploymentLifecycleActions
+              employment={row}
+              onSuccess={refresh}
+            />
           </Space>
         );
       },

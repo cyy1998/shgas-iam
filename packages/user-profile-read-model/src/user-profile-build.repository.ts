@@ -1,7 +1,7 @@
 import type { DbClient } from "@iam/db";
 import type { Employment, Organization, User } from "@iam/db/schema";
 import type { EffectiveRole } from "@iam/role-assignment-resolution";
-import { EmploymentStatus, PositionStatus, PrivilegeStatus } from "@iam/contracts";
+import { PrivilegeStatus } from "@iam/contracts";
 import {
   clients,
   employments,
@@ -13,6 +13,7 @@ import {
   roles,
   users,
 } from "@iam/db/schema";
+import { OPEN_EMPLOYMENT_STATUSES } from "@iam/domain/employment";
 import { and, eq, inArray } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 
@@ -78,7 +79,7 @@ export function createUserProfileBuildRepository(
         db.select().from(users).where(inArray(users.id, uniqueUserIds)),
         db.select().from(employments).where(and(
           inArray(employments.userId, uniqueUserIds),
-          eq(employments.status, EmploymentStatus.Enable),
+          inArray(employments.status, [...OPEN_EMPLOYMENT_STATUSES]),
           eq(employments.isDelete, false),
         )),
       ]);
@@ -88,7 +89,7 @@ export function createUserProfileBuildRepository(
       const employmentIds = employmentRows.map(row => row.id);
 
       const [positionRows, orgPathRows, roleRows] = await Promise.all([
-        loadActivePositions(db, positionIds),
+        loadPositions(db, positionIds),
         loadOrganizationPaths(db, organizationIds),
         loadEmploymentRoles(roleAssignmentResolver, employmentIds),
       ]);
@@ -129,15 +130,11 @@ function emptyDataset(): UserProfileBuildDataset {
   };
 }
 
-async function loadActivePositions(db: DbClient, positionIds: number[]) {
+async function loadPositions(db: DbClient, positionIds: number[]) {
   if (positionIds.length === 0)
     return [];
 
-  return await db.select().from(positions).where(and(
-    inArray(positions.id, positionIds),
-    eq(positions.status, PositionStatus.Enable),
-    eq(positions.isDelete, false),
-  ));
+  return await db.select().from(positions).where(inArray(positions.id, positionIds));
 }
 
 async function loadOrganizationPaths(db: DbClient, organizationIds: number[]) {
@@ -162,10 +159,7 @@ async function loadOrganizationPaths(db: DbClient, organizationIds: number[]) {
     })
     .from(organizationClosures)
     .innerJoin(ancestor, eq(organizationClosures.ancestorId, ancestor.id))
-    .where(and(
-      inArray(organizationClosures.descendantId, organizationIds),
-      eq(ancestor.isDelete, false),
-    ));
+    .where(inArray(organizationClosures.descendantId, organizationIds));
 }
 
 async function loadEmploymentRoles(

@@ -47,6 +47,8 @@ describe("audit action catalog", () => {
     expect(getAuditActionLabel("admin.session.revoke_user")).toBe("下线用户全部会话");
     expect(values).toContain("admin.login_restriction.release");
     expect(getAuditActionLabel("admin.login_restriction.release")).toBe("解除临时登录限制");
+    expect(values).toContain("admin.employment.clear_primary");
+    expect(getAuditActionLabel("admin.employment.clear_primary")).toBe("取消主岗");
     expect(values).toContain("admin.client.oidc.configure");
     expect(values).toContain("admin.client.oidc.rotate_secret");
     expect(values).toContain("admin.client.custom_sso.configure");

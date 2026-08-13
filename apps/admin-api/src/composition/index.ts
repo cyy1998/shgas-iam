@@ -71,6 +71,7 @@ export async function createAdminApiComposition(
     unitOfWork,
   });
   const useCases = createAdminApiUseCases({
+    clock: runtime.clock,
     sessionRevocation: session.revocation,
     subjectAccessLifecycle: session.subjectAccessLifecycle,
     unitOfWork,

@@ -20,7 +20,7 @@ export interface AdminOrganizationTransactionStorePort {
   ) => Promise<AdminOrganizationRecord>;
   updateOrganizationByCode: (orgCode: string, input: OrganizationUpdateDto) => Promise<unknown>;
   countActiveChildrenByOrgCode: (orgCode: string) => Promise<number>;
-  countActiveEmploymentsByOrgCode: (orgCode: string) => Promise<number>;
+  countOpenEmploymentsByOrgCode: (orgCode: string) => Promise<number>;
   softDeleteOrganizationByCode: (orgCode: string) => Promise<unknown>;
 }
 
@@ -31,7 +31,7 @@ export interface AdminOrganizationReaderPort {
     pageSize: number,
   ) => Promise<{ rows: AdminOrganizationChildRecord[]; total: number }>;
   getOrganizationByCodeForAdmin: (orgCode: string) => Promise<AdminOrganizationRecord | null>;
-  countActiveEmploymentsByOrgCode: (orgCode: string) => Promise<number>;
+  countOpenEmploymentsByOrgCode: (orgCode: string) => Promise<number>;
   searchOrganizationsForAdmin: (
     query: OrganizationPaginationQueryDto,
   ) => Promise<AdminOrganizationRecord[]>;

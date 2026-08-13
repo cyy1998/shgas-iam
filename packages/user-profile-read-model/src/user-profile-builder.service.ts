@@ -18,6 +18,7 @@ import {
   PositionStatus,
   UserStatus,
 } from "@iam/contracts";
+import { OPEN_EMPLOYMENT_STATUSES } from "@iam/domain/employment";
 import { formatDirtyVersion } from "./dirty-version";
 import {
   buildAncestorKey,
@@ -44,6 +45,25 @@ export type BuiltUserProfile = PublishedUserProfile;
 export interface UserProfileBuildTarget {
   userId: number;
   sourceDirtyVersion: string;
+}
+
+export type UserProfileEmploymentIntegrityFailureReason
+  = | "organization-not-effective"
+    | "position-not-effective";
+
+const OPEN_EMPLOYMENT_STATUS_SET = new Set<EmploymentStatus>(OPEN_EMPLOYMENT_STATUSES);
+
+export class UserProfileEmploymentIntegrityError extends Error {
+  readonly code = "USER_PROFILE_EMPLOYMENT_INTEGRITY_FAILED";
+
+  constructor(
+    readonly userId: number,
+    readonly employmentId: number,
+    readonly reason: UserProfileEmploymentIntegrityFailureReason,
+  ) {
+    super(`User Profile Employment integrity failed: ${reason}`);
+    this.name = "UserProfileEmploymentIntegrityError";
+  }
 }
 
 type EmploymentOrgNode = Pick<
@@ -101,7 +121,15 @@ function buildFromDataset(
     const sourceDirtyVersion = targetsByUserId.get(user.id);
     if (sourceDirtyVersion === undefined)
       throw new Error(`User Profile build returned unexpected user ${user.id}`);
-    const employmentDetails = (employmentRowsByUserId.get(user.id) ?? [])
+    const employmentRows = employmentRowsByUserId.get(user.id) ?? [];
+    assertOpenEmploymentIntegrity({
+      userId: user.id,
+      employments: employmentRows,
+      positionById,
+      orgPathByOrgId,
+    });
+    const employmentDetails = employmentRows
+      .filter(employment => employment.status === EmploymentStatus.Enable && !employment.isDelete)
       .map((employment) => {
         const position = positionById.get(employment.posId);
         const fullOrgPath = orgPathByOrgId.get(employment.orgId) ?? [];
@@ -163,7 +191,7 @@ function buildFromDataset(
     });
     const subjectFacts = SubjectFactsDocumentV1Schema.parse({
       employments: employmentDetails
-        .filter(isCurrentSubjectFactsEmployment)
+        .filter(item => isEffectiveEmployment(item.employment, rebuiltAt))
         .map(item => toSubjectFactsEmployment(item, privilegesByRoleId))
         .sort(compareSubjectFactsEmployments),
     });
@@ -188,19 +216,52 @@ function buildFromDataset(
   });
 }
 
-function isCurrentSubjectFactsEmployment(input: {
-  employment: Employment;
-  organization: {
-    assignedOrg: EmploymentOrgNode;
-  };
-  position: UserProfileBuildPosition;
+function assertOpenEmploymentIntegrity(input: {
+  userId: number;
+  employments: Employment[];
+  positionById: ReadonlyMap<number, UserProfileBuildPosition>;
+  orgPathByOrgId: ReadonlyMap<number, EmploymentOrgNode[]>;
 }) {
-  return input.employment.status === EmploymentStatus.Enable
-    && !input.employment.isDelete
-    && input.position.status === PositionStatus.Enable
-    && !input.position.isDelete
-    && input.organization.assignedOrg.status === OrganizationStatus.Enable
-    && !input.organization.assignedOrg.isDelete;
+  for (const employment of input.employments) {
+    if (!isOpenEmployment(employment))
+      continue;
+
+    const position = input.positionById.get(employment.posId);
+    if (position === undefined || position.status !== PositionStatus.Enable || position.isDelete) {
+      throw new UserProfileEmploymentIntegrityError(
+        input.userId,
+        employment.id,
+        "position-not-effective",
+      );
+    }
+
+    const assignedOrganization = input.orgPathByOrgId
+      .get(employment.orgId)
+      ?.find(node => node.id === employment.orgId);
+    if (
+      assignedOrganization === undefined
+      || assignedOrganization.status !== OrganizationStatus.Enable
+      || assignedOrganization.isDelete
+    ) {
+      throw new UserProfileEmploymentIntegrityError(
+        input.userId,
+        employment.id,
+        "organization-not-effective",
+      );
+    }
+  }
+}
+
+function isOpenEmployment(employment: Employment) {
+  return !employment.isDelete
+    && OPEN_EMPLOYMENT_STATUS_SET.has(employment.status);
+}
+
+function isEffectiveEmployment(employment: Employment, now: Date) {
+  return employment.status === EmploymentStatus.Enable
+    && !employment.isDelete
+    && employment.startTime.getTime() <= now.getTime()
+    && (employment.endTime === null || now.getTime() < employment.endTime.getTime());
 }
 
 function normalizeBuildTargets(targets: UserProfileBuildTarget[]) {

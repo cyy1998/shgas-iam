@@ -1,11 +1,12 @@
 import type { UserCreateDto, UserPaginationQueryDto, UserUpdateDto } from "@admin-api/services/user/user.type";
 import type { DbClient } from "@iam/db";
-import { EmploymentStatus, UserStatus } from "@iam/contracts";
+import { UserStatus } from "@iam/contracts";
 import { compactUpdate, firstRow, ilikeContainsIf, inArrayIf } from "@iam/db/query-utils";
 import {
   employments,
   users,
 } from "@iam/db/schema";
+import { OPEN_EMPLOYMENT_STATUSES } from "@iam/domain/employment";
 import { and, count, eq, inArray, or } from "drizzle-orm";
 
 export function createUserRepository(db: DbClient) {
@@ -57,6 +58,14 @@ export function createUserRepository(db: DbClient) {
         },
       }) ?? null;
     },
+    async getUserByIdForAdmin(id: number) {
+      return await db.query.users.findFirst({
+        where: {
+          id,
+          isDelete: false,
+        },
+      }) ?? null;
+    },
     async getUserBySubjectIdentifierForAdmin(subjectIdentifier: string) {
       return await db.query.users.findFirst({
         where: {
@@ -94,14 +103,14 @@ export function createUserRepository(db: DbClient) {
         .where(eq(users.username, username))
         .returning())!;
     },
-    async countActiveEmploymentsByUsername(username: string) {
+    async countOpenEmploymentsByUsername(username: string) {
       const rows = await db
         .select({ value: count() })
         .from(employments)
         .innerJoin(users, eq(employments.userId, users.id))
         .where(and(
           eq(employments.isDelete, false),
-          eq(employments.status, EmploymentStatus.Enable),
+          inArray(employments.status, OPEN_EMPLOYMENT_STATUSES),
           eq(users.username, username),
           eq(users.isDelete, false),
         ));

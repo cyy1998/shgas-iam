@@ -1,15 +1,14 @@
 import OrganizationTreeSelector from '@admin/components/OrganizationTreeSelector';
+import EmploymentLifecycleActions from '@admin/components/EmploymentLifecycleActions';
+import EmploymentPrimaryActions from '@admin/components/EmploymentPrimaryActions';
 import StatusTag from '@admin/components/StatusTag';
 import EmploymentDetailDrawer from '@admin/pages/employments/components/EmploymentDetailDrawer';
 import EmploymentFormModal from '@admin/pages/employments/components/EmploymentFormModal';
 import ResignByUserDialog from '@admin/pages/employments/components/ResignByUserModal';
 import TransferModal from '@admin/pages/employments/components/TransferModal';
 import {
-  deleteEmployment,
   type EmploymentVo,
   searchEmployments,
-  setPrimaryEmployment,
-  updateEmploymentStatus,
 } from '@admin/services/employment';
 import {
   type ActionType,
@@ -20,7 +19,7 @@ import {
 } from '@ant-design/pro-components';
 import { EmploymentStatus, getEmploymentStatusOptions } from '@iam/contracts';
 import { useLocation } from '@umijs/max';
-import { Button, Dropdown, message, Modal, Space, Tag } from 'antd';
+import { Button, message, Space, Tag } from 'antd';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 type PresetFromUrl = { username?: string; name?: string };
@@ -88,52 +87,6 @@ export default function EmploymentsPage() {
 
   const handleError = (err: unknown) =>
     message.error(err instanceof Error ? err.message : '操作失败');
-
-  const onDelete = (row: EmploymentVo) => {
-    Modal.confirm({
-      title: `删除雇佣 ${formatUser(row)} / ${formatPosition(row)}？`,
-      content: '软删除后该雇佣记录不再可见。',
-      okType: 'danger',
-      onOk: async () => {
-        try {
-          await deleteEmployment(row.id);
-          message.success('已删除');
-          actionRef.current?.reload();
-        } catch (err) {
-          handleError(err);
-        }
-      },
-    });
-  };
-
-  const onStatusChange = async (
-    row: EmploymentVo,
-    status: EmploymentStatus,
-  ) => {
-    try {
-      await updateEmploymentStatus(row.id, status);
-      message.success('状态已更新');
-      actionRef.current?.reload();
-    } catch (err) {
-      handleError(err);
-    }
-  };
-
-  const onSetPrimary = (row: EmploymentVo) => {
-    Modal.confirm({
-      title: `将 ${row.user.name} 的主岗设为 ${row.position.posName}？`,
-      content: '该用户的其它主岗将被自动置为非主。',
-      onOk: async () => {
-        try {
-          await setPrimaryEmployment(row.id);
-          message.success('已设为主岗');
-          actionRef.current?.reload();
-        } catch (err) {
-          handleError(err);
-        }
-      },
-    });
-  };
 
   const columns: ProColumns<EmploymentVo>[] = [
     {
@@ -218,33 +171,16 @@ export default function EmploymentsPage() {
           <a key="transfer" onClick={() => setTransferTarget(row)}>
             转岗
           </a>,
-          row.isPrimary ? null : (
-            <a key="primary" onClick={() => onSetPrimary(row)}>
-              设主岗
-            </a>
-          ),
-          <Dropdown
-            key="status"
-            menu={{
-              items: getEmploymentStatusOptions()
-                .filter((o) => o.value !== row.status)
-                .map((o) => ({
-                  key: String(o.value),
-                  label: `切为「${o.label}」`,
-                  onClick: () =>
-                    onStatusChange(row, o.value as EmploymentStatus),
-                })),
-            }}
-          >
-            <a>状态</a>
-          </Dropdown>,
-          <a
-            key="delete"
-            style={{ color: '#d4380d' }}
-            onClick={() => onDelete(row)}
-          >
-            删除
-          </a>,
+          <EmploymentPrimaryActions
+            key="primary"
+            employment={row}
+            onSuccess={() => actionRef.current?.reload()}
+          />,
+          <EmploymentLifecycleActions
+            key="lifecycle"
+            employment={row}
+            onSuccess={() => actionRef.current?.reload()}
+          />,
         ].filter(Boolean) as React.ReactNode[];
       },
     },

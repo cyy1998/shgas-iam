@@ -7,10 +7,20 @@ health endpoint plus an internal Bull Board dashboard.
 
 ```bash
 pnpm --filter @iam/worker serve
+pnpm --filter @iam/worker employment:cutover-verify
 pnpm --filter @iam/worker user-profile:backfill
 pnpm --filter @iam/worker user-profile:repair
 pnpm --filter @iam/worker run user-profile:repair -- --subject-access-only --limit 500
 ```
+
+`employment:cutover-verify` 是 Employment 新生命周期切换前的显式只读 gate。命令只要求
+`IAM_WORKER_DATABASE_URL`，不会启动 Worker consumer、HTTP server、Bull Board 或 Redis，也不会随普通 Worker 启动和请求
+自动执行。它在 PostgreSQL `READ ONLY` transaction 中读取 Employment 及其 Position、Organization，输出稳定分类和全部相关
+Employment ID；不执行 insert、update、delete，不读取或解释 `updateTime`，也不生成修复 SQL。
+
+报告为 `passed` 时命令退出 0；存在任一非墓碑阻断异常时报告为 `failed` 并退出 1。Legacy Employment Tombstone 只在
+`legacyTombstones` 中计数，不因缺少可信 `endTime` 阻断切换。运维人员应依据真实业务事实通过正式 Admin 入口修正数据，再重跑
+同一命令；不得把 verifier 输出当作自动修复指令。
 
 `user-profile:backfill` and `user-profile:repair` use command-only composition: they do not start consumers, the HTTP
 server, or Bull Board. Actual profile rebuilds are handled by the BullMQ worker consumer.

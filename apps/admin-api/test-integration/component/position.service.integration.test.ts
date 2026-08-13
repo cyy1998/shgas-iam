@@ -1,7 +1,10 @@
+import { createPositionRepository } from "@admin-api/services/position/position.repository";
 import { createPositionService } from "@admin-api/services/position/position.service";
 import { createImmediateUnitOfWork } from "@admin-api/test/fakes";
-import { PositionStatus } from "@iam/contracts";
+import { EmploymentStatus, PositionStatus } from "@iam/contracts";
+import { PositionHasEmploymentError } from "@iam/domain/position";
 import { describe, expect, mock, test } from "bun:test";
+import { createOpenEmploymentFixtureDb } from "../helpers/drizzle-query-capture";
 
 function position(overrides: Record<string, unknown> = {}) {
   return {
@@ -24,7 +27,7 @@ function createService(overrides: Record<string, unknown> = {}) {
       recordChanges: mock(async () => undefined),
     },
     positionRepository: {
-      countActiveEmploymentsByPosCode: mock(async () => 0),
+      countOpenEmploymentsByPosCode: mock(async (_posCode: string) => 0),
       getAnyPositionByCode: mock(async () => null),
       getPositionByCode: mock(async () => position()),
       setPosition: mock(async () => position()),
@@ -40,6 +43,17 @@ function createService(overrides: Record<string, unknown> = {}) {
     ...overrides,
   } as any;
   return { service: createPositionService(deps), tx, deps };
+}
+
+function useEmploymentFixture(
+  tx: ReturnType<typeof createService>["tx"],
+  fixture: { status: EmploymentStatus; isDelete: boolean },
+) {
+  const repository = createPositionRepository(createOpenEmploymentFixtureDb([{
+    ...fixture,
+    posCode: "DEV",
+  }]) as any);
+  tx.positionRepository.countOpenEmploymentsByPosCode = mock(repository.countOpenEmploymentsByPosCode);
 }
 
 describe("createPositionService", () => {
@@ -67,17 +81,54 @@ describe("createPositionService", () => {
     expect(tx.positionRepository.updatePositionByCode).not.toHaveBeenCalled();
   });
 
-  test("rejects deleting a position with active employments", async () => {
+  test.each([
+    ["Enable", EmploymentStatus.Enable],
+    ["Pause", EmploymentStatus.Pause],
+  ])("rejects deleting a position with an Open Employment in %s state", async (_label, employmentStatus) => {
     const { service, tx } = createService();
-    tx.positionRepository.countActiveEmploymentsByPosCode.mockResolvedValue(1);
+    useEmploymentFixture(tx, { status: employmentStatus, isDelete: false });
 
     await expect(service.deletePosition("DEV")).rejects.toThrow();
 
     expect(tx.positionRepository.softDeletePositionByCode).not.toHaveBeenCalled();
   });
 
-  test("records a position change when updating position status", async () => {
+  test.each([
+    ["Enable", EmploymentStatus.Enable, PositionStatus.Pause],
+    ["Pause", EmploymentStatus.Pause, PositionStatus.Disable],
+  ])(
+    "rejects a status transition when the position has an Open Employment in %s state",
+    async (_employmentState, employmentStatus, status) => {
+      const { service, tx } = createService();
+      useEmploymentFixture(tx, { status: employmentStatus, isDelete: false });
+
+      await expect(service.updatePositionStatus("DEV", status))
+        .rejects
+        .toBeInstanceOf(PositionHasEmploymentError);
+
+      expect(tx.positionRepository.updatePositionByCode).not.toHaveBeenCalled();
+    },
+  );
+
+  test("re-enables a position without inspecting or changing its Employments", async () => {
     const { service, tx } = createService();
+    tx.positionRepository.getPositionByCode.mockResolvedValue(position({ status: PositionStatus.Disable }));
+    tx.positionRepository.countOpenEmploymentsByPosCode.mockResolvedValue(1);
+
+    await expect(service.updatePositionStatus("DEV", PositionStatus.Enable)).resolves.toBe(true);
+
+    expect(tx.positionRepository.countOpenEmploymentsByPosCode).not.toHaveBeenCalled();
+    expect(tx.positionRepository.updatePositionByCode).toHaveBeenCalledWith("DEV", {
+      status: PositionStatus.Enable,
+    });
+  });
+
+  test.each([
+    ["Ended Employment", EmploymentStatus.Disable, false],
+    ["Legacy Employment Tombstone", EmploymentStatus.Enable, true],
+  ])("allows a position status change when referenced only by %s history", async (_label, status, isDelete) => {
+    const { service, tx } = createService();
+    useEmploymentFixture(tx, { status, isDelete });
 
     await expect(service.updatePositionStatus("DEV", PositionStatus.Disable)).resolves.toBe(true);
 
@@ -89,12 +140,16 @@ describe("createPositionService", () => {
     ]);
   });
 
-  test("records a position change when deleting a position after relationship checks", async () => {
+  test.each([
+    ["Ended Employment", EmploymentStatus.Disable, false],
+    ["Legacy Employment Tombstone", EmploymentStatus.Enable, true],
+  ])("allows deleting a position referenced only by %s history", async (_label, status, isDelete) => {
     const { service, tx } = createService();
+    useEmploymentFixture(tx, { status, isDelete });
 
     await expect(service.deletePosition("DEV")).resolves.toBe(true);
 
-    expect(tx.positionRepository.countActiveEmploymentsByPosCode).toHaveBeenCalledWith("DEV");
+    expect(tx.positionRepository.countOpenEmploymentsByPosCode).toHaveBeenCalledWith("DEV");
     expect(tx.positionRepository.softDeletePositionByCode).toHaveBeenCalledWith("DEV");
     expect(tx.userProfileInvalidation.recordChanges).toHaveBeenCalledWith([
       { kind: "position", positionId: 1 },

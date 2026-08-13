@@ -22,7 +22,7 @@ export interface AdminUserTransactionStorePort {
   getUserByUsernameForAdmin: (username: string) => Promise<User | null>;
   setUserForAdmin: (input: UserCreateDto & { subjectIdentifier: string }) => Promise<User>;
   updateUserByUsername: (username: string, input: UserUpdateDto) => Promise<User>;
-  countActiveEmploymentsByUsername: (username: string) => Promise<number>;
+  countOpenEmploymentsByUsername: (username: string) => Promise<number>;
   softDeleteUserByUsername: (username: string) => Promise<User>;
   setPassword: (userId: number, password: string) => Promise<User>;
 }

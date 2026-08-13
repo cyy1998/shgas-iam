@@ -2,7 +2,7 @@ import { EmploymentDetailVoSchema, EmploymentVoSchema } from "@admin-api/routes/
 import {
   EmploymentAdminCreateDtoSchema,
   EmploymentAdminPaginationQueryDtoSchema,
-  EmploymentStatusUpdateDtoSchema,
+  EmploymentResumeDtoSchema,
   EmploymentTransferDtoSchema,
   EmploymentUpdateDtoSchema,
 } from "@admin-api/services/employment/employment.schema";
@@ -78,30 +78,43 @@ export const employmentsUpdate = createRoute({
   },
 });
 
-export const employmentsStatusUpdate = createRoute({
-  method: "patch",
-  path: "/:id/status",
+export const employmentsPause = createRoute({
+  method: "post",
+  path: "/:id/pause",
   tags,
   request: {
     params: z.object({ id: z.coerce.number().int().positive() }),
-    body: jsonContentRequired(EmploymentStatusUpdateDtoSchema, "雇佣状态变更（status=Disable 时自动写 endTime=now）"),
   },
   responses: {
     ...commonErrorResponses,
-    [HttpStatusCodes.OK]: jsonContent(createSuccessResponseSchema(z.boolean()), "状态更新成功"),
+    [HttpStatusCodes.OK]: jsonContent(createSuccessResponseSchema(z.boolean()), "任职暂停成功"),
   },
 });
 
-export const employmentsDelete = createRoute({
-  method: "delete",
-  path: "/:id",
+export const employmentsResume = createRoute({
+  method: "post",
+  path: "/:id/resume",
+  tags,
+  request: {
+    params: z.object({ id: z.coerce.number().int().positive() }),
+    body: jsonContentRequired(EmploymentResumeDtoSchema, "任职恢复参数"),
+  },
+  responses: {
+    ...commonErrorResponses,
+    [HttpStatusCodes.OK]: jsonContent(createSuccessResponseSchema(z.boolean()), "任职恢复成功"),
+  },
+});
+
+export const employmentsEnd = createRoute({
+  method: "post",
+  path: "/:id/end",
   tags,
   request: {
     params: z.object({ id: z.coerce.number().int().positive() }),
   },
   responses: {
     ...commonErrorResponses,
-    [HttpStatusCodes.OK]: jsonContent(createSuccessResponseSchema(z.boolean()), "软删除成功"),
+    [HttpStatusCodes.OK]: jsonContent(createSuccessResponseSchema(z.boolean()), "任职结束成功"),
   },
 });
 
@@ -132,6 +145,19 @@ export const employmentsSetPrimary = createRoute({
   responses: {
     ...commonErrorResponses,
     [HttpStatusCodes.OK]: jsonContent(createSuccessResponseSchema(z.boolean()), "已设为主岗"),
+  },
+});
+
+export const employmentsClearPrimary = createRoute({
+  method: "post",
+  path: "/:id/clear-primary",
+  tags,
+  request: {
+    params: z.object({ id: z.coerce.number().int().positive() }),
+  },
+  responses: {
+    ...commonErrorResponses,
+    [HttpStatusCodes.OK]: jsonContent(createSuccessResponseSchema(z.boolean()), "已取消主任职"),
   },
 });
 

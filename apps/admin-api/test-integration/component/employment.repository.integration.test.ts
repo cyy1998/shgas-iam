@@ -2,14 +2,7 @@ import { createEmploymentRepository } from "@admin-api/services/employment/emplo
 import { EmploymentStatus } from "@iam/contracts";
 import { EmploymentAlreadyExistsError } from "@iam/domain/employment";
 import { describe, expect, mock, test } from "bun:test";
-import { sql } from "drizzle-orm";
-
-const postgresDialect = {
-  escapeName: (name: string) => `"${name}"`,
-  escapeParam: (index: number) => `$${index + 1}`,
-  escapeString: (value: string) => `'${value.replaceAll("'", "''")}'`,
-  prepareTyping: () => "none",
-};
+import { createQueryCaptureDb, renderQuery, renderSql } from "../helpers/drizzle-query-capture";
 
 function uniqueViolation() {
   return Object.assign(new Error("duplicate key value violates unique constraint"), {
@@ -18,53 +11,107 @@ function uniqueViolation() {
   });
 }
 
-function createQueryCaptureDb() {
-  const topLevelWhere: unknown[] = [];
-
-  function createSelectBuilder(selection?: Record<string, unknown>) {
-    const state: { table?: unknown; where?: unknown } = {};
-    const builder = {
-      from(table: unknown) {
-        state.table = table;
-        return builder;
-      },
-      where(condition: unknown) {
-        state.where = condition;
-        topLevelWhere.push(condition);
-        return builder;
-      },
-      orderBy() {
-        return builder;
-      },
-      limit() {
-        return builder;
-      },
-      offset() {
-        return builder;
-      },
-      getSQL() {
-        return sql`select 1 from ${state.table} where ${state.where}`;
-      },
-      then(resolve: (value: unknown[]) => void) {
-        return Promise.resolve(selection?.value === undefined ? [] : [{ value: 0 }]).then(resolve);
-      },
-    };
-    return builder;
-  }
-
-  return {
-    db: {
-      select: mock((selection?: Record<string, unknown>) => createSelectBuilder(selection)),
-    },
-    topLevelWhere,
-  };
-}
-
-function renderSql(value: unknown) {
-  return (value as { toQuery: (dialect: typeof postgresDialect) => { sql: string } }).toQuery(postgresDialect).sql;
-}
-
 describe("createEmploymentRepository", () => {
+  test("loads lifecycle parents without hiding disabled or soft-deleted records", async () => {
+    const employment = { id: 4, orgId: 2, posId: 3 } as any;
+    const organization = { id: 2, status: 3, isDelete: true } as any;
+    const position = { id: 3, status: 3, isDelete: true } as any;
+    const repository = createEmploymentRepository({
+      query: {
+        employments: { findFirst: mock(async () => employment) },
+        organizations: { findFirst: mock(async () => organization) },
+        positions: { findFirst: mock(async () => position) },
+      },
+    } as any);
+
+    await expect(repository.getEmploymentLifecycleContextById(4)).resolves.toEqual({
+      employment,
+      organization,
+      position,
+    });
+  });
+
+  test("finds duplicate open employments across enabled and paused states", async () => {
+    const findFirst = mock(async () => undefined);
+    const repository = createEmploymentRepository({
+      query: { employments: { findFirst } },
+    } as any);
+
+    await expect(repository.getOpenEmploymentByUserOrgPosId(1, 2, 3)).resolves.toBeNull();
+
+    expect(findFirst).toHaveBeenCalledWith({
+      where: {
+        userId: 1,
+        orgId: 2,
+        posId: 3,
+        status: { in: [EmploymentStatus.Enable, EmploymentStatus.Pause] },
+        isDelete: false,
+      },
+    });
+  });
+
+  test("excludes the resumed employment itself from the Open duplicate lookup", async () => {
+    const findFirst = mock(async () => undefined);
+    const repository = createEmploymentRepository({
+      query: { employments: { findFirst } },
+    } as any);
+
+    await repository.getOpenEmploymentByUserOrgPosId(1, 2, 3, 4);
+
+    expect(findFirst).toHaveBeenCalledWith({
+      where: {
+        userId: 1,
+        orgId: 2,
+        posId: 3,
+        id: { ne: 4 },
+        status: { in: [EmploymentStatus.Enable, EmploymentStatus.Pause] },
+        isDelete: false,
+      },
+    });
+  });
+
+  test("clears Primary only from other Open Employments", async () => {
+    const where = mock(async (_condition: unknown) => undefined);
+    const set = mock(() => ({ where }));
+    const update = mock(() => ({ set }));
+    const repository = createEmploymentRepository({ update } as any);
+
+    await repository.unsetOpenPrimariesByUserId(1);
+
+    expect(set).toHaveBeenCalledWith({ isPrimary: false });
+    const whereSql = renderSql(where.mock.calls[0]?.[0]);
+    expect(whereSql).toContain("\"employment\".\"user_id\" = $1");
+    expect(whereSql).toContain("\"employment\".\"is_primary\" = $2");
+    expect(whereSql).toContain("\"employment\".\"is_delete\" = $3");
+    expect(whereSql).toContain("\"employment\".\"status\" in ($4, $5)");
+  });
+
+  test("ends only Open Employments at the supplied time and clears Primary", async () => {
+    const endTime = new Date("2026-08-11T10:30:00.000Z");
+    const where = mock(async (_condition: unknown) => undefined);
+    const set = mock(() => ({ where }));
+    const update = mock(() => ({ set }));
+    const repository = createEmploymentRepository({ update } as any);
+
+    await repository.endOpenEmploymentsByUserId(1, endTime);
+
+    expect(set).toHaveBeenCalledWith({
+      status: EmploymentStatus.Disable,
+      endTime,
+      isPrimary: false,
+    });
+    const query = renderQuery(where.mock.calls[0]?.[0]);
+    expect(query.sql).toContain("\"employment\".\"user_id\" = $1");
+    expect(query.sql).toContain("\"employment\".\"is_delete\" = $2");
+    expect(query.sql).toContain("\"employment\".\"status\" in ($3, $4)");
+    expect(query.params).toEqual([
+      1,
+      false,
+      EmploymentStatus.Enable,
+      EmploymentStatus.Pause,
+    ]);
+  });
+
   test("maps active relationship unique violations to employment already exists", async () => {
     const returning = mock(async () => {
       throw uniqueViolation();
@@ -77,6 +124,10 @@ describe("createEmploymentRepository", () => {
       userId: 1,
       orgId: 2,
       posId: 3,
+      isPrimary: false,
+      startTime: new Date("2026-01-01T00:00:00.000Z"),
+      endTime: null,
+      description: null,
       status: EmploymentStatus.Enable,
     })).rejects.toBeInstanceOf(EmploymentAlreadyExistsError);
   });

@@ -8,9 +8,8 @@ import type { ProFormInstance } from '@ant-design/pro-components';
 import {
   ModalForm,
   ProForm,
-  ProFormDatePicker,
+  ProFormRadio,
   ProFormSelect,
-  ProFormSwitch,
   ProFormTextArea,
 } from '@ant-design/pro-components';
 import type { AppRouter } from '@iam/admin-api/trpc';
@@ -62,7 +61,6 @@ export default function TransferModal({
       open={open}
       onOpenChange={onOpenChange}
       formRef={formRef}
-      initialValues={{ inheritPrimary: true }}
       modalProps={{
         destroyOnHidden: true,
         mask: { closable: false },
@@ -70,14 +68,15 @@ export default function TransferModal({
       }}
       onFinish={async (values) => {
         if (!employment) return false;
+        if (typeof values.isPrimary !== 'boolean') {
+          message.warning('请选择新任职是否为主任职');
+          return false;
+        }
         try {
           await transferEmployment(employment.id, {
             newOrgCode: values.newOrgCode,
             newPosCode: values.newPosCode,
-            inheritPrimary: values.inheritPrimary,
-            startTime: values.startTime
-              ? new Date(values.startTime)
-              : undefined,
+            isPrimary: values.isPrimary,
             description: values.description || null,
           });
           message.success('转岗成功');
@@ -135,12 +134,15 @@ export default function TransferModal({
           }));
         }}
       />
-      <ProFormSwitch
-        name="inheritPrimary"
-        label="继承主岗"
-        tooltip="默认继承原雇佣的 isPrimary；关闭则新岗位默认非主"
+      <ProFormRadio.Group
+        name="isPrimary"
+        label="新任职主任职"
+        rules={[{ required: true, message: '请选择新任职是否为主任职' }]}
+        options={[
+          { label: '主任职', value: true },
+          { label: '非主任职', value: false },
+        ]}
       />
-      <ProFormDatePicker name="startTime" label="新岗位生效时间" />
       <ProFormTextArea name="description" label="备注" />
     </ModalForm>
   );

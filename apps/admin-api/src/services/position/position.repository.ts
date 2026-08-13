@@ -2,7 +2,8 @@ import type { DbClient } from "@iam/db";
 import type { PositionCreateDto, PositionFuzzyQueryDto, PositionUpdateDto } from "./position.type";
 import { compactUpdate, firstRow } from "@iam/db/query-utils";
 import { employments, positions } from "@iam/db/schema";
-import { and, count, eq } from "drizzle-orm";
+import { OPEN_EMPLOYMENT_STATUSES } from "@iam/domain/employment";
+import { and, count, eq, inArray } from "drizzle-orm";
 
 export function createPositionRepository(db: DbClient) {
   return {
@@ -54,13 +55,14 @@ export function createPositionRepository(db: DbClient) {
         .set({ isDelete: true })
         .where(and(eq(positions.posCode, posCode), eq(positions.isDelete, false)));
     },
-    async countActiveEmploymentsByPosCode(posCode: string) {
+    async countOpenEmploymentsByPosCode(posCode: string) {
       const rows = await db
         .select({ value: count() })
         .from(employments)
         .innerJoin(positions, eq(employments.posId, positions.id))
         .where(and(
           eq(employments.isDelete, false),
+          inArray(employments.status, OPEN_EMPLOYMENT_STATUSES),
           eq(positions.posCode, posCode),
           eq(positions.isDelete, false),
         ));

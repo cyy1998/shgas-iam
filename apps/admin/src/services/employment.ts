@@ -26,23 +26,28 @@ export function createEmployment(body: AdminEmploymentInputs['create']) {
 export function updateEmployment(
   id: number,
   data: {
-    isPrimary?: boolean;
-    startTime?: Date;
     description?: string | null;
   },
 ) {
   return apiClient.admin.employment.update.mutate({ id, data });
 }
 
-export function updateEmploymentStatus(
-  id: number,
-  status: AdminEmploymentInputs['updateStatus']['status'],
-) {
-  return apiClient.admin.employment.updateStatus.mutate({ id, status });
+export function pauseEmployment(id: number) {
+  return apiClient.admin.employment.pause.mutate({ id });
 }
 
-export function deleteEmployment(id: number) {
-  return apiClient.admin.employment.delete.mutate({ id });
+export function resumeEmployment(
+  id: number,
+  expectedAncestorOrgCode: string,
+) {
+  return apiClient.admin.employment.resume.mutate({
+    id,
+    expectedAncestorOrgCode,
+  });
+}
+
+export function endEmployment(id: number) {
+  return apiClient.admin.employment.end.mutate({ id });
 }
 
 export function transferEmployment(
@@ -54,6 +59,10 @@ export function transferEmployment(
 
 export function setPrimaryEmployment(id: number) {
   return apiClient.admin.employment.setPrimary.mutate({ id });
+}
+
+export function clearPrimaryEmployment(id: number) {
+  return apiClient.admin.employment.clearPrimary.mutate({ id });
 }
 
 export function resignUser(username: string) {

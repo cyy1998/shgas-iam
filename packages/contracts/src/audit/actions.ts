@@ -240,6 +240,11 @@ export const auditActionCatalog = [
     legacyAliases: [],
   },
   {
+    action: "admin.employment.clear_primary",
+    label: "取消主岗",
+    legacyAliases: [],
+  },
+  {
     action: "admin.employment.resign_user",
     label: "办理离职",
     legacyAliases: [],

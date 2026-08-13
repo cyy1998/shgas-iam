@@ -69,9 +69,9 @@ const cases: ExpectedError[] = [
     httpStatus: 400,
   },
   {
-    className: "UserHasActiveEmploymentError",
+    className: "UserHasOpenEmploymentError",
     exports: UserErrors,
-    message: "该用户仍存在活跃雇佣，无法删除",
+    message: "该用户存在开放任职，无法删除",
     code: ApiErrorCode.UserHasActiveEmployment,
     httpStatus: 409,
   },
@@ -106,7 +106,7 @@ const cases: ExpectedError[] = [
   {
     className: "OrganizationHasEmploymentError",
     exports: OrganizationErrors,
-    message: "该组织下存在雇佣关系，无法删除",
+    message: "该组织层级内存在开放任职，无法停用或删除",
     code: ApiErrorCode.OrganizationHasEmployment,
     httpStatus: 409,
   },
@@ -127,7 +127,7 @@ const cases: ExpectedError[] = [
   {
     className: "PositionHasEmploymentError",
     exports: PositionErrors,
-    message: "该岗位下存在雇佣关系，无法删除",
+    message: "该岗位存在开放任职，无法停用或删除",
     code: ApiErrorCode.PositionHasEmployment,
     httpStatus: 409,
   },

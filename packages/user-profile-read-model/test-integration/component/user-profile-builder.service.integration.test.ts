@@ -9,7 +9,10 @@ import {
   UserType,
 } from "@iam/contracts";
 import { describe, expect, mock, test } from "bun:test";
-import { createUserProfileBuilder } from "../../src/user-profile-builder.service";
+import {
+  createUserProfileBuilder,
+  UserProfileEmploymentIntegrityError,
+} from "../../src/user-profile-builder.service";
 import { CURRENT_USER_PROFILE_SCHEMA_VERSION } from "../../src/user-profile.schema";
 
 const now = new Date("2026-06-30T08:00:00.000Z");
@@ -39,7 +42,14 @@ function user(id: number, overrides: Record<string, unknown> = {}) {
   };
 }
 
-function employment(id: number, userId: number, orgId: number, posId: number, isPrimary = false) {
+function employment(
+  id: number,
+  userId: number,
+  orgId: number,
+  posId: number,
+  isPrimary = false,
+  overrides: Record<string, unknown> = {},
+) {
   return {
     ...base(id),
     userId,
@@ -50,6 +60,7 @@ function employment(id: number, userId: number, orgId: number, posId: number, is
     startTime: now,
     endTime: null,
     description: null,
+    ...overrides,
   };
 }
 
@@ -121,28 +132,37 @@ describe("UserProfileBuilder", () => {
     });
   });
 
-  test("excludes employments whose employment, position, or assigned organization is not current", async () => {
+  test("publishes only Enable employments inside the half-open Employment Period", async () => {
     const dataset = {
-      users: [user(1)],
+      users: [user(1, { status: UserStatus.Disable })],
       employments: [
         employment(10, 1, 100, 1000, true),
-        { ...employment(11, 1, 110, 1100), status: EmploymentStatus.Disable },
-        employment(12, 1, 120, 1200),
-        employment(13, 1, 130, 1300),
+        employment(11, 1, 110, 1100, false, {
+          startTime: new Date("2026-06-30T08:00:00.001Z"),
+        }),
+        employment(12, 1, 120, 1200, false, {
+          startTime: new Date("2026-06-30T07:00:00.000Z"),
+          endTime: now,
+        }),
+        employment(13, 1, 130, 1300, false, { status: EmploymentStatus.Pause }),
+        employment(14, 1, 140, 1400, false, { status: EmploymentStatus.Disable }),
+        employment(15, 1, 150, 1500, false, { isDelete: true }),
       ],
       positions: [
         position(1000),
         position(1100),
-        { ...position(1200), isDelete: true },
+        position(1200),
         position(1300),
+        position(1400),
+        position(1500),
       ],
       orgPathRows: [
         orgPathRow(100, 100, "VALID", 0),
-        orgPathRow(110, 110, "DISABLED-EMPLOYMENT", 0),
-        orgPathRow(120, 120, "DELETED-POSITION", 0),
-        orgPathRow(130, 130, "DISABLED-ORG", 0, OrganizationType.Department, {
-          status: OrganizationStatus.Disable,
-        }),
+        orgPathRow(110, 110, "FUTURE", 0),
+        orgPathRow(120, 120, "END-BOUNDARY", 0),
+        orgPathRow(130, 130, "PAUSED", 0),
+        orgPathRow(140, 140, "ENDED", 0),
+        orgPathRow(150, 150, "TOMBSTONE", 0),
       ],
       roleRows: [],
       privilegeRows: [],
@@ -170,34 +190,53 @@ describe("UserProfileBuilder", () => {
         clientAuthorizations: [],
       }],
     });
+    expect(profile?.detail.employments.map(item => item.id)).toEqual([10, 11, 12]);
+    expect(profile?.searchDoc.employments.map(item => item.id)).toEqual([10, 11, 12]);
   });
 
-  test("keeps a disabled organization employment in legacy documents but excludes it from Subject Facts", async () => {
-    const dataset = {
-      users: [user(1)],
-      employments: [employment(10, 1, 100, 1000, true)],
-      positions: [position(1000)],
-      orgPathRows: [
-        orgPathRow(100, 100, "DISABLED", 0, OrganizationType.Department, {
-          status: OrganizationStatus.Disable,
-        }),
-      ],
-      roleRows: [],
-      privilegeRows: [],
-    } as unknown as UserProfileBuildDataset;
+  test.each([
+    {
+      name: "Enable Employment references an inactive Position",
+      employment: employment(10, 1, 100, 1000),
+      positions: [{ ...position(1000), isDelete: true }],
+      orgPathRows: [orgPathRow(100, 100, "ORG", 0)],
+      reason: "position-not-effective",
+    },
+    {
+      name: "Pause Employment references an inactive Organization",
+      employment: employment(11, 1, 110, 1100, false, { status: EmploymentStatus.Pause }),
+      positions: [position(1100)],
+      orgPathRows: [orgPathRow(110, 110, "ORG", 0, OrganizationType.Department, {
+        status: OrganizationStatus.Disable,
+      })],
+      reason: "organization-not-effective",
+    },
+  ])("fails the whole build when $name", async ({ employment: employmentRow, positions, orgPathRows, reason }) => {
     const builder = createUserProfileBuilder({
       buildRepository: {
-        loadByUserIds: mock(async () => dataset),
+        loadByUserIds: mock(async () => ({
+          users: [user(1)],
+          employments: [employmentRow],
+          positions,
+          orgPathRows,
+          roleRows: [],
+          privilegeRows: [],
+        } as unknown as UserProfileBuildDataset)),
       },
       clock: { nowDate: () => now },
       config: { batchSize: 100 },
     });
 
-    const profile = await builder.buildOne({ userId: 1, sourceDirtyVersion: "7" });
+    const buildError = await builder.buildOne({ userId: 1, sourceDirtyVersion: "7" }).catch(error => error);
 
-    expect(profile?.detail.employments.map(item => item.id)).toEqual([10]);
-    expect(profile?.searchDoc.employments.map(item => item.id)).toEqual([10]);
-    expect(profile?.subjectFacts).toEqual({ employments: [] });
+    expect(buildError).toBeInstanceOf(UserProfileEmploymentIntegrityError);
+    expect(buildError).toMatchObject({
+      name: "UserProfileEmploymentIntegrityError",
+      code: "USER_PROFILE_EMPLOYMENT_INTEGRITY_FAILED",
+      reason,
+      userId: 1,
+      employmentId: employmentRow.id,
+    });
   });
 
   test("publishes minimal client-scoped Subject Facts in deterministic order", async () => {
@@ -303,7 +342,7 @@ describe("UserProfileBuilder", () => {
       employments: [
         employment(10, 1, 100, 1000, true),
         employment(11, 1, 200, 2000),
-        employment(12, 1, 300, 3000),
+        employment(12, 1, 300, 3000, false, { status: EmploymentStatus.Disable, endTime: now }),
       ] as UserProfileBuildDataset["employments"],
       positions: [
         position(1000),

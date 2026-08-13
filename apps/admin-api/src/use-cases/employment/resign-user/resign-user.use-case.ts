@@ -28,7 +28,8 @@ export function createResignUserUseCase(deps: ResignUserUseCaseDeps) {
               throw new UserNotFoundError("用户不存在");
             }
 
-            await tx.employmentStore.endActiveEmploymentsByUserId(current.id);
+            const transactionTime = deps.clock.nowDate();
+            await tx.employmentStore.endOpenEmploymentsByUserId(current.id, transactionTime);
             await tx.userStore.updateUserByUsername(input.username, {
               status: UserStatus.Disable,
             });

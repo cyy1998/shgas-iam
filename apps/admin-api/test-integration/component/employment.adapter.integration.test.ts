@@ -33,6 +33,137 @@ function createRestContext(username: string) {
 }
 
 describe("admin employment adapter", () => {
+  test("exposes an explicit End lifecycle command", async () => {
+    const execute = mock(async () => true);
+    const adapter = createEmploymentAdapter({
+      changeEmploymentAvailability: { execute: mock(async () => true) },
+      createEmployment: { execute: mock(async () => ({ id: 10 })) },
+      endEmployment: { execute },
+      employmentService: {},
+      resignUser: { execute: mock(async () => true as const) },
+    } as any);
+    const caller = adapter.employmentAdminRouter.createCaller({
+      hono: createRestContext("unused") as unknown as Context,
+    });
+
+    await expect(caller.end({ id: 4 })).resolves.toBe(true);
+
+    expect(execute).toHaveBeenCalledWith({ employmentId: 4 }, {
+      auditContext: expect.objectContaining({ actorType: "admin", actorUserId: 1001 }),
+    });
+  });
+
+  test("exposes explicit Pause and Resume lifecycle commands", async () => {
+    const execute = mock(async () => true);
+    const adapter = createEmploymentAdapter({
+      changeEmploymentAvailability: { execute },
+      createEmployment: { execute: mock(async () => ({ id: 10 })) },
+      employmentService: {},
+      resignUser: { execute: mock(async () => true as const) },
+    } as any);
+    const context = createRestContext("unused");
+    const caller = adapter.employmentAdminRouter.createCaller({
+      hono: context as unknown as Context,
+    });
+
+    await expect(caller.pause({ id: 4 })).resolves.toBe(true);
+    await expect(caller.resume({
+      id: 4,
+      expectedAncestorOrgCode: "COMPANY",
+    })).resolves.toBe(true);
+
+    expect(execute).toHaveBeenNthCalledWith(1, {
+      command: "pause",
+      employmentId: 4,
+    }, {
+      auditContext: expect.objectContaining({ actorType: "admin", actorUserId: 1001 }),
+    });
+    expect(execute).toHaveBeenNthCalledWith(2, {
+      command: "resume",
+      employmentId: 4,
+      expectedAncestorOrgCode: "COMPANY",
+    }, {
+      auditContext: expect.objectContaining({ actorType: "admin", actorUserId: 1001 }),
+    });
+  });
+
+  test("does not expose legacy status update or delete mutations", () => {
+    const adapter = createEmploymentAdapter({
+      changeEmploymentAvailability: { execute: mock(async () => true) },
+      createEmployment: { execute: mock(async () => ({ id: 10 })) },
+      endEmployment: { execute: mock(async () => true) },
+      employmentService: {},
+      resignUser: { execute: mock(async () => true as const) },
+    } as any);
+    const procedureNames = Object.keys(adapter.employmentAdminRouter._def.procedures);
+    expect(procedureNames).not.toContain("updateStatus");
+    expect(procedureNames).not.toContain("delete");
+    expect((adapter as any).employmentsStatusUpdate).toBeUndefined();
+    expect((adapter as any).employmentsDelete).toBeUndefined();
+  });
+
+  test("rejects lifecycle fields from the generic Employment edit contract", async () => {
+    const updateEmployment = mock(async () => true);
+    const adapter = createEmploymentAdapter({
+      changeEmploymentAvailability: { execute: mock(async () => true) },
+      createEmployment: { execute: mock(async () => ({ id: 10 })) },
+      endEmployment: { execute: mock(async () => true) },
+      employmentService: { updateEmployment },
+      resignUser: { execute: mock(async () => true as const) },
+    } as any);
+    const caller = adapter.employmentAdminRouter.createCaller({
+      hono: createRestContext("unused") as unknown as Context,
+    });
+
+    await expect(caller.update({
+      id: 4,
+      data: { startTime: new Date("2020-01-01T00:00:00.000Z") },
+    } as any)).rejects.toBeInstanceOf(TRPCError);
+    await expect(caller.update({
+      id: 4,
+      data: { isPrimary: true },
+    } as any)).rejects.toBeInstanceOf(TRPCError);
+
+    expect(updateEmployment).not.toHaveBeenCalled();
+  });
+
+  test("delegates creation to the Employment Lifecycle interface", async () => {
+    const execute = mock(async () => ({ id: 10 }));
+    const adapter = createEmploymentAdapter({
+      createEmployment: { execute },
+      employmentService: {},
+      resignUser: { execute: mock(async () => true as const) },
+    } as any);
+    const context = createRestContext("unused");
+    const caller = adapter.employmentAdminRouter.createCaller({
+      hono: context as unknown as Context,
+    });
+
+    await expect(caller.create({
+      username: "zhangsan",
+      orgCode: "ORG",
+      posCode: "DEV",
+      isPrimary: false,
+      startTime: new Date("2020-01-01T00:00:00.000Z"),
+      endTime: new Date("2020-02-01T00:00:00.000Z"),
+      status: 3,
+    } as any)).resolves.toEqual({ id: 10 });
+
+    expect(execute).toHaveBeenCalledWith({
+      username: "zhangsan",
+      orgCode: "ORG",
+      posCode: "DEV",
+      isPrimary: false,
+      description: undefined,
+      expectedAncestorOrgCode: undefined,
+    }, {
+      auditContext: expect.objectContaining({
+        actorType: "admin",
+        actorUserId: 1001,
+      }),
+    });
+  });
+
   test("delegates REST resignation to the independent use-case facade", async () => {
     const execute = mock(async () => true as const);
     const adapter = createEmploymentAdapter({
@@ -116,25 +247,105 @@ describe("admin employment adapter", () => {
     }
   });
 
-  test("keeps non-resignation operations on EmploymentService", async () => {
-    const setPrimaryEmployment = mock(async () => true);
-    const execute = mock(async () => true as const);
+  test("exposes explicit Set and Clear Primary lifecycle commands", async () => {
+    const execute = mock(async () => true);
     const adapter = createEmploymentAdapter({
-      employmentService: { setPrimaryEmployment },
-      resignUser: { execute },
+      employmentService: {},
+      managePrimaryEmployment: { execute },
+      resignUser: { execute: mock(async () => true as const) },
     } as any);
     const context = createRestContext("unused");
     context.req.valid.mockImplementation(() => ({ id: 4 }));
+    const caller = adapter.employmentAdminRouter.createCaller({
+      hono: context as unknown as Context,
+    });
 
     await expect(adapter.employmentsSetPrimary(
       context as unknown as Parameters<typeof adapter.employmentsSetPrimary>[0],
       async () => {},
     )).resolves.toMatchObject({ code: 200 });
+    await expect(caller.clearPrimary({ id: 4 })).resolves.toBe(true);
 
-    expect(setPrimaryEmployment).toHaveBeenCalledWith(
-      4,
-      expect.objectContaining({ actorType: "admin", actorUserId: 1001 }),
-    );
+    expect(execute).toHaveBeenNthCalledWith(1, {
+      command: "set",
+      employmentId: 4,
+    }, {
+      auditContext: expect.objectContaining({ actorType: "admin", actorUserId: 1001 }),
+    });
+    expect(execute).toHaveBeenNthCalledWith(2, {
+      command: "clear",
+      employmentId: 4,
+    }, {
+      auditContext: expect.objectContaining({ actorType: "admin", actorUserId: 1001 }),
+    });
+  });
+
+  test("delegates Transfer with an explicit Primary choice to the lifecycle interface", async () => {
+    const execute = mock(async () => ({ newEmploymentId: 10 }));
+    const adapter = createEmploymentAdapter({
+      employmentService: {},
+      resignUser: { execute: mock(async () => true as const) },
+      transferEmployment: { execute },
+    } as any);
+    const context = createRestContext("unused");
+    const caller = adapter.employmentAdminRouter.createCaller({
+      hono: context as unknown as Context,
+    });
+
+    await expect(caller.transfer({
+      id: 4,
+      data: {
+        newOrgCode: "TARGET_ORG",
+        expectedAncestorOrgCode: "COMPANY",
+        newPosCode: "TARGET_POS",
+        isPrimary: false,
+        description: null,
+      },
+    } as any)).resolves.toEqual({ newEmploymentId: 10 });
+
+    expect(execute).toHaveBeenCalledWith({
+      employmentId: 4,
+      newOrgCode: "TARGET_ORG",
+      expectedAncestorOrgCode: "COMPANY",
+      newPosCode: "TARGET_POS",
+      isPrimary: false,
+      description: null,
+    }, {
+      auditContext: expect.objectContaining({ actorType: "admin", actorUserId: 1001 }),
+    });
+  });
+
+  test("rejects Transfer without an explicit Primary choice or with legacy lifecycle fields", async () => {
+    const execute = mock(async () => ({ newEmploymentId: 10 }));
+    const adapter = createEmploymentAdapter({
+      employmentService: {},
+      resignUser: { execute: mock(async () => true as const) },
+      transferEmployment: { execute },
+    } as any);
+    const caller = adapter.employmentAdminRouter.createCaller({
+      hono: createRestContext("unused") as unknown as Context,
+    });
+
+    await expect(caller.transfer({
+      id: 4,
+      data: {
+        newOrgCode: "TARGET_ORG",
+        newPosCode: "TARGET_POS",
+      },
+    } as any)).rejects.toBeInstanceOf(TRPCError);
+    await expect(caller.transfer({
+      id: 4,
+      data: {
+        newOrgCode: "TARGET_ORG",
+        newPosCode: "TARGET_POS",
+        isPrimary: false,
+        inheritPrimary: true,
+        startTime: new Date("2020-01-01T00:00:00.000Z"),
+        endTime: null,
+        status: 1,
+      },
+    } as any)).rejects.toBeInstanceOf(TRPCError);
+
     expect(execute).not.toHaveBeenCalled();
   });
 });

@@ -15,7 +15,7 @@ import {
   positions,
   users,
 } from "@iam/db/schema";
-import { EmploymentAlreadyExistsError } from "@iam/domain/employment";
+import { EmploymentAlreadyExistsError, OPEN_EMPLOYMENT_STATUSES } from "@iam/domain/employment";
 import { and, count, desc, eq, exists, inArray, or, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 
@@ -42,17 +42,41 @@ export function createEmploymentRepository(db: DbClient) {
       });
       return await attachEmploymentRelations(rows, db);
     },
-    async getEmploymentByUserOrgPosId(userId: number, orgId: number, posId: number) {
+    async getEmploymentLifecycleContextById(id: number) {
+      const employment = await db.query.employments.findFirst({
+        where: { id, isDelete: false },
+      });
+      if (employment === undefined) {
+        return null;
+      }
+
+      const [organization, position] = await Promise.all([
+        db.query.organizations.findFirst({ where: { id: employment.orgId } }),
+        db.query.positions.findFirst({ where: { id: employment.posId } }),
+      ]);
+      return {
+        employment,
+        organization: organization ?? null,
+        position: position ?? null,
+      };
+    },
+    async getOpenEmploymentByUserOrgPosId(
+      userId: number,
+      orgId: number,
+      posId: number,
+      exceptEmploymentId?: number,
+    ) {
       const row = await db.query.employments.findFirst({
         where: {
           userId,
           orgId,
           posId,
-          status: EmploymentStatus.Enable,
+          ...(exceptEmploymentId === undefined ? {} : { id: { ne: exceptEmploymentId } }),
+          status: { in: [...OPEN_EMPLOYMENT_STATUSES] },
           isDelete: false,
         },
       });
-      return (await attachEmploymentRelations(row === undefined ? [] : [row], db))[0] ?? null;
+      return row ?? null;
     },
     async getEmploymentByIdForAdmin(id: number) {
       const row = await db.query.employments.findFirst({
@@ -84,10 +108,11 @@ export function createEmploymentRepository(db: DbClient) {
           userId: data.userId,
           posId: data.posId,
           orgId: data.orgId,
-          isPrimary: data.isPrimary ?? false,
-          startTime: data.startTime ?? new Date(),
-          description: data.description ?? null,
-          status: data.status ?? EmploymentStatus.Enable,
+          isPrimary: data.isPrimary,
+          startTime: data.startTime,
+          endTime: data.endTime,
+          description: data.description,
+          status: data.status,
         }).returning())!;
       }
       catch (error) {
@@ -103,7 +128,7 @@ export function createEmploymentRepository(db: DbClient) {
         .where(eq(employments.id, id))
         .returning())!;
     },
-    async unsetPrimariesByUserId(userId: number, exceptEmploymentId: number | null) {
+    async unsetOpenPrimariesByUserId(userId: number) {
       return await db
         .update(employments)
         .set({ isPrimary: false })
@@ -111,26 +136,21 @@ export function createEmploymentRepository(db: DbClient) {
           eq(employments.userId, userId),
           eq(employments.isPrimary, true),
           eq(employments.isDelete, false),
-          exceptEmploymentId === null ? undefined : sql`${employments.id} <> ${exceptEmploymentId}`,
+          inArray(employments.status, OPEN_EMPLOYMENT_STATUSES),
         ));
     },
-    async softDeleteEmployment(id: number) {
-      return await db
-        .update(employments)
-        .set({ isDelete: true })
-        .where(eq(employments.id, id));
-    },
-    async endActiveEmploymentsByUserId(userId: number) {
+    async endOpenEmploymentsByUserId(userId: number, endTime: Date) {
       return await db
         .update(employments)
         .set({
           status: EmploymentStatus.Disable,
-          endTime: new Date(),
+          endTime,
+          isPrimary: false,
         })
         .where(and(
           eq(employments.userId, userId),
           eq(employments.isDelete, false),
-          inArray(employments.status, [EmploymentStatus.Enable, EmploymentStatus.Pause]),
+          inArray(employments.status, OPEN_EMPLOYMENT_STATUSES),
         ));
     },
   };

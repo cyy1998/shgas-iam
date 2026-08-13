@@ -1,7 +1,7 @@
 import { createEmploymentService } from "@admin-api/services/employment/employment.service";
 import { createFakeClock, createImmediateUnitOfWork } from "@admin-api/test/fakes";
 import { EmploymentStatus, OrganizationLevel, OrganizationStatus, OrganizationType, PositionStatus, UserStatus, UserType } from "@iam/contracts";
-import { EmploymentAlreadyExistsError, EmploymentOrganizationScopeMismatchError } from "@iam/domain/employment";
+import { EmploymentNotEditableError } from "@iam/domain/employment";
 import { describe, expect, mock, test } from "bun:test";
 
 const now = new Date("2026-01-01T00:00:00Z");
@@ -99,9 +99,7 @@ function createService() {
     employmentRepository: {
       createEmploymentRecord: mock(async () => employment({ id: 10 })),
       getEmploymentByIdForAdmin: mock(async () => employment()),
-      getEmploymentByUserOrgPosId: mock(async () => null),
-      softDeleteEmployment: mock(async () => employment({ isDelete: true })),
-      unsetPrimariesByUserId: mock(async () => undefined),
+      getOpenEmploymentByUserOrgPosId: mock(async () => null),
       updateEmploymentRecord: mock(async () => employment()),
     },
     organizationRepository: {
@@ -163,99 +161,12 @@ describe("createEmploymentService", () => {
     expect(deps.roleAssignmentResolver.resolveEffectiveRoles).not.toHaveBeenCalled();
   });
 
-  test("creates a primary employment and clears existing primaries", async () => {
-    const { service, tx } = createService();
-
-    await expect(service.createEmploymentForAdmin({
-      username: "zhangsan",
-      orgCode: "ORG",
-      posCode: "DEV",
-      isPrimary: true,
-      startTime: now,
-    })).resolves.toEqual({ id: 10 });
-
-    expect(tx.employmentRepository.unsetPrimariesByUserId).toHaveBeenCalledWith(1, null);
-    expect(tx.employmentRepository.createEmploymentRecord).toHaveBeenCalledWith(expect.objectContaining({
-      userId: 1,
-      orgId: 2,
-      posId: 3,
-      isPrimary: true,
-      status: EmploymentStatus.Enable,
-    }));
-    expect(tx.auditService.recordAuditLog).toHaveBeenCalledWith(expect.objectContaining({
-      action: "admin.employment.create",
-      targetId: 10,
-    }));
-    expect(tx.userProfileInvalidation.recordChanges).toHaveBeenCalledWith([
-      { kind: "employment", userId: 1 },
-    ]);
-  });
-
-  test("rejects creating an employment for an unknown user", async () => {
-    const { service, tx } = createService();
-    (tx.userRepository.getUserByUsernameForAdmin as any).mockResolvedValue(null);
-
-    await expect(service.createEmploymentForAdmin({
-      username: "missing",
-      orgCode: "ORG",
-      posCode: "DEV",
-    })).rejects.toThrow("用户不存在");
-
-    expect(tx.employmentRepository.createEmploymentRecord).not.toHaveBeenCalled();
-  });
-
-  test("does not audit or mark dirty when storage rejects a duplicate employment", async () => {
-    const { service, tx } = createService();
-    (tx.employmentRepository.createEmploymentRecord as any)
-      .mockRejectedValue(new EmploymentAlreadyExistsError("相同任职关系已存在"));
-
-    await expect(service.createEmploymentForAdmin({
-      username: "zhangsan",
-      orgCode: "ORG",
-      posCode: "DEV",
-    })).rejects.toBeInstanceOf(EmploymentAlreadyExistsError);
-
-    expect(tx.auditService.recordAuditLog).not.toHaveBeenCalled();
-    expect(tx.userProfileInvalidation.recordChanges).not.toHaveBeenCalled();
-  });
-
-  test("rejects create when assigned organization is outside expected ancestor", async () => {
-    const { service, tx } = createService();
-    (tx.organizationRepository.isOrganizationDescendantOf as any).mockResolvedValue(false);
-
-    await expect(service.createEmploymentForAdmin({
-      username: "zhangsan",
-      orgCode: "DEPT",
-      expectedAncestorOrgCode: "COMPANY",
-      posCode: "DEV",
-    })).rejects.toBeInstanceOf(EmploymentOrganizationScopeMismatchError);
-
-    expect(tx.employmentRepository.createEmploymentRecord).not.toHaveBeenCalled();
-    expect(tx.auditService.recordAuditLog).not.toHaveBeenCalled();
-  });
-
-  test("disabling an employment sets end time from the injected clock", async () => {
-    const { service, tx } = createService();
-
-    await expect(service.updateEmploymentStatus(4, EmploymentStatus.Disable)).resolves.toBe(true);
-
-    expect(tx.employmentRepository.updateEmploymentRecord).toHaveBeenCalledWith(4, {
-      status: EmploymentStatus.Disable,
-      endTime: now,
-    });
-    expect(tx.userProfileInvalidation.recordChanges).toHaveBeenCalledWith([
-      { kind: "employment", userId: 1 },
-    ]);
-  });
-
   test("updates an employment and marks its existing user dirty", async () => {
     const { service, tx } = createService();
 
     await expect(service.updateEmployment(4, { description: "updated" })).resolves.toBe(true);
 
     expect(tx.employmentRepository.updateEmploymentRecord).toHaveBeenCalledWith(4, {
-      isPrimary: undefined,
-      startTime: undefined,
       description: "updated",
     });
     expect(tx.userProfileInvalidation.recordChanges).toHaveBeenCalledWith([
@@ -263,52 +174,18 @@ describe("createEmploymentService", () => {
     ]);
   });
 
-  test("deletes an employment after capturing the affected user", async () => {
+  test("rejects description edits for an Ended Employment", async () => {
     const { service, tx } = createService();
+    tx.employmentRepository.getEmploymentByIdForAdmin.mockResolvedValue(
+      employment({ status: EmploymentStatus.Disable, endTime: now, isPrimary: false }),
+    );
 
-    await expect(service.deleteEmployment(4)).resolves.toBe(true);
+    await expect(
+      service.updateEmployment(4, { description: "rewritten" }),
+    ).rejects.toBeInstanceOf(EmploymentNotEditableError);
 
-    expect(tx.employmentRepository.softDeleteEmployment).toHaveBeenCalledWith(4);
-    expect(tx.userProfileInvalidation.recordChanges).toHaveBeenCalledWith([
-      { kind: "employment", userId: 1 },
-    ]);
-  });
-
-  test("transfers an employment and marks the original user dirty", async () => {
-    const { service, tx } = createService();
-
-    await expect(service.transferEmployment(4, {
-      newOrgCode: "ORG",
-      newPosCode: "DEV",
-      inheritPrimary: false,
-    })).resolves.toEqual({ newEmploymentId: 10 });
-
-    expect(tx.employmentRepository.updateEmploymentRecord).toHaveBeenCalledWith(4, {
-      status: EmploymentStatus.Disable,
-      endTime: now,
-      isPrimary: false,
-    });
-    expect(tx.employmentRepository.createEmploymentRecord).toHaveBeenCalledWith(expect.objectContaining({
-      userId: 1,
-      orgId: 2,
-      posId: 3,
-      isPrimary: false,
-      status: EmploymentStatus.Enable,
-    }));
-    expect(tx.userProfileInvalidation.recordChanges).toHaveBeenCalledWith([
-      { kind: "employment", userId: 1 },
-    ]);
-  });
-
-  test("sets a primary employment and marks the user dirty", async () => {
-    const { service, tx } = createService();
-
-    await expect(service.setPrimaryEmployment(4)).resolves.toBe(true);
-
-    expect(tx.employmentRepository.unsetPrimariesByUserId).toHaveBeenCalledWith(1, 4);
-    expect(tx.employmentRepository.updateEmploymentRecord).toHaveBeenCalledWith(4, { isPrimary: true });
-    expect(tx.userProfileInvalidation.recordChanges).toHaveBeenCalledWith([
-      { kind: "employment", userId: 1 },
-    ]);
+    expect(tx.employmentRepository.updateEmploymentRecord).not.toHaveBeenCalled();
+    expect(tx.auditService.recordAuditLog).not.toHaveBeenCalled();
+    expect(tx.userProfileInvalidation.recordChanges).not.toHaveBeenCalled();
   });
 });

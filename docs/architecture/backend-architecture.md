@@ -194,10 +194,11 @@ composition。跨层实例连接统一由 composition 完成。
 
 ### User Profile Subject Facts publication
 
-- Worker claim 在 transaction 外绑定 candidate 的 Dirty Version。Builder 只投影当前有效任职、岗位和直属组织，
-  通过 `@iam/role-assignment-resolution` 的唯一 Effective Role seam 取得 assignment/closure 结果，再按不可变
-  `clientCode` 形成最小 Subject Facts；organization path、client、role 和 privilege 均稳定排序，无角色任职保留空
-  authorization 数组。
+- Worker claim 在 transaction 外绑定 candidate 的 Dirty Version。Builder 加载全部 Open Employment 及其父对象事实，
+  先对 Position 与直属 Organization 执行 fail-closed 完整性守卫，再只投影当前位于 `[startTime, endTime)` 的 Enable
+  Employment。它通过 `@iam/role-assignment-resolution` 的唯一 Effective Role seam 取得 assignment/closure 结果，再按
+  不可变 `clientCode` 形成最小 Subject Facts；organization path、client、role 和 privilege 均稳定排序，无角色任职
+  保留空 authorization 数组。
 - PostgreSQL publication 是模块内部 deep seam：transaction 先对目标 dirty row 取行锁并重验同一 user/version 仍为
   processing，再单调 upsert/delete `user_profile`，最后在同一 transaction 标记 dirty processed。过期 candidate
   或低于已发布 `source_dirty_version` 的 candidate 直接丢弃。
@@ -426,6 +427,9 @@ composition。跨层实例连接统一由 composition 完成。
   module 状态；Bull Board 只接收 module 显式注册的 queues。
 - `createWorkerCommandComposition` 使用 `commandOnly` 模式复用 DB/Redis/module wiring，但不启动 consumers、不注册
   dashboard queues，也不启动 HTTP server；`src/commands/` 的 backfill/repair entrypoints 使用该入口。
+- `createEmploymentCutoverCommandComposition` 是更窄的 PostgreSQL-only composition：只从
+  `@iam/user-profile-read-model/worker` 组装 Employment Cutover Verifier 与只读 repository，不构造 Redis、queue、consumer、
+  dashboard 或 HTTP server。对应命令仅由运维人员在切换前显式调用，不进入普通 Worker 启动或请求路径。
 - Worker composition 负责关闭构造出的 modules、HTTP server、Redis 和 DB。业务 package 不拥有 process signal
   handling；`src/index.ts` 只负责启动、记录 runtime 状态和转交 graceful shutdown。
 

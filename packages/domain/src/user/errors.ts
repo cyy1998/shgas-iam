@@ -64,8 +64,8 @@ export class UserPasswordUnchangedError extends DomainBusinessError {
   }
 }
 
-export class UserHasActiveEmploymentError extends DomainBusinessError {
-  constructor(message: string = "该用户仍存在活跃雇佣，无法删除") {
+export class UserHasOpenEmploymentError extends DomainBusinessError {
+  constructor(message: string = "该用户存在开放任职，无法删除") {
     super(message, {
       code: ApiErrorCode.UserHasActiveEmployment,
       httpStatus: DomainHttpStatus.Conflict,

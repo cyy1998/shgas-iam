@@ -1,5 +1,7 @@
 import { createLogger, LoggerSourceApp } from "@iam/api-core/logger";
-import env from "@worker/env";
+import loadWorkerEnv from "@worker/env";
+
+const env = loadWorkerEnv();
 
 export const logger = createLogger({
   nodeEnv: env.nodeEnv,

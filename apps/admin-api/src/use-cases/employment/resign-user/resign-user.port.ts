@@ -53,7 +53,7 @@ export interface ResignUserTransactionPorts {
     recordAuditLog: (input: ResignUserAuditInput) => Promise<void>;
   };
   employmentStore: {
-    endActiveEmploymentsByUserId: (userId: number) => Promise<unknown>;
+    endOpenEmploymentsByUserId: (userId: number, endTime: Date) => Promise<unknown>;
   };
   subjectAccessMutation: {
     runMutation: <T>(
@@ -69,6 +69,10 @@ export interface ResignUserTransactionPorts {
     getUserByUsernameForAdmin: (username: string) => Promise<ResignUserTarget | null>;
     updateUserByUsername: (username: string, patch: { status: UserStatus }) => Promise<unknown>;
   };
+}
+
+export interface ResignUserClockPort {
+  nowDate: () => Date;
 }
 
 export interface ResignUserSessionRevocationPort {
@@ -104,6 +108,7 @@ export interface ResignUserSubjectAccessLifecyclePort {
 }
 
 export interface ResignUserUseCaseDeps {
+  clock: ResignUserClockPort;
   sessionRevocation: ResignUserSessionRevocationPort;
   subjectAccessLifecycle: ResignUserSubjectAccessLifecyclePort;
   uow: UnitOfWorkPort<ResignUserTransactionPorts>;

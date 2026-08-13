@@ -5,12 +5,9 @@ import type {
 import type { ClientRepository } from "@admin-api/services/client/client.repository";
 import type {
   AdminEmploymentEffectiveRoleResolverPort,
-  AdminEmploymentOrganizationReaderPort,
-  AdminEmploymentPositionReaderPort,
   AdminEmploymentPrivilegeReaderPort,
   AdminEmploymentReaderPort,
   AdminEmploymentStorePort,
-  AdminEmploymentUserReaderPort,
 } from "@admin-api/services/employment/employment.port";
 import type { EmploymentRepository } from "@admin-api/services/employment/employment.repository";
 import type {
@@ -67,9 +64,6 @@ test("Admin API providers structurally satisfy consumer-owned ports", () => {
 
   assertAssignable<AdminEmploymentReaderPort, EmploymentRepository>();
   assertAssignable<AdminEmploymentStorePort, EmploymentRepository>();
-  assertAssignable<AdminEmploymentOrganizationReaderPort, OrganizationRepository>();
-  assertAssignable<AdminEmploymentPositionReaderPort, PositionRepository>();
-  assertAssignable<AdminEmploymentUserReaderPort, UserRepository>();
   assertAssignable<AdminEmploymentEffectiveRoleResolverPort, RoleAssignmentResolver>();
   assertAssignable<AdminEmploymentPrivilegeReaderPort, PrivilegeRepository>();
 

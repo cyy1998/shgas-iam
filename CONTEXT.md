@@ -28,8 +28,52 @@ _Avoid_: user snapshot, display user, database user reference
 共享 HTTP 认证中间件验证 Principal Session 或 Gateway Local Session 后产生的最小请求上下文，只包含 Subject Identifier、已验证的 client code，以及适用时独立保存的 ORCAS session 引用。它不包含 `UserDetailDto`、数据库用户主键、username 或 Client Subject Projection；需要内部账号字段的旧用例必须通过自己的 Account Resolver 按 Subject Identifier 获取。
 _Avoid_: request user detail, shared user DTO, protocol claim payload
 
+**Employment**:
+用户以某个 Position 在某个 Organization 持有的一次任职期事实；常规 Admin 管理不预约未来任职，也不回溯或改写任职期边界。暂停可在同一 Employment 上恢复，结束后不可重开；返聘、重新任职或转岗产生新 Employment，它只描述组织归属与岗位身份，不表示组织责任或直接授予角色与权限。
+_Avoid_: reusable employment slot, Organization Responsibility Assignment, Role Assignment
+
+**Open Employment**:
+非 Legacy Employment Tombstone 且尚未结束的 Employment；它可以当前生效或暂停，但仍保持任职关系，因此会阻止其 Position 或所属 Organization 停用与软删除。同一用户在同一 Organization 和 Position 下最多只有一条 Open Employment，结束后的同组合历史不受此限制。
+_Avoid_: active employment, enabled employment
+
+**Employment End**:
+Open Employment 真实任职期的终态边界；结束后记录仍作为历史事实存在，不可删除、恢复或改写为继续任职。常规 Admin 对录入错误也通过结束旧任职并新建正确 Employment 处理。
+_Avoid_: employment deletion, reversible disable
+
+**Legacy Employment Tombstone**:
+旧版 Admin 删除入口产生的 `isDelete=true` Employment 兼容记录；它不等同于 Employment End，也不能据其更新时间推断真实结束时间。既有墓碑继续排除在任职、档案与授权计算之外，正式写路径不再产生新的墓碑。
+_Avoid_: ended employment, inferred employment history
+
+**Employment Lifecycle**:
+Employment 在 Open 期间只能通过显式命令暂停、恢复或结束；暂停与恢复可逆，结束不可逆，已完成的同一命令重试是不改写时间或审计的幂等操作。
+_Avoid_: generic status update, arbitrary status transition
+
+**Employment Transfer**:
+在同一时刻结束旧 Employment 并以新组织或岗位创建新 Employment 的原子业务过程；新任职始终启用，即使旧任职曾暂停，且旧任职的组织责任不继承。管理员必须在转岗中明确选择新任职是否为 Primary Employment，不从旧任职默认继承。
+_Avoid_: in-place employment update, pause-preserving transfer
+
+**Primary Employment**:
+由管理员在一个用户的 Open Employment 中最多指定一条的可选主职标记；用户可以没有主任职，系统不根据任职数量或顺序自动选择或改派。暂停的 Employment 可以保留或被指定为主任职，Employment End 才会清除该标记。
+_Avoid_: required employment, automatically selected employment
+
+**Employment Authority**:
+一条 Employment 的唯一权威事实来源，决定其生命周期命令和任职期边界；当前是 IAM 自主管理，未来可扩展为受信任的外部任职源，但不允许多个来源通过最后写入覆盖同一任职。
+_Avoid_: last-writer-wins source, direct database writer
+
+**Employment Period**:
+一条 Employment 的权威业务时间边界，采用 `[startTime, endTime)`；空 `endTime` 表示尚未计划结束，非空时必须严格晚于 `startTime`。该区间由 Employment Authority 提供并与接收、处理及审计时间分离；当前 IAM Authority 使用命令的统一事务时刻。
+_Avoid_: Employment Tenure Interval, display-only employment dates, message receipt interval
+
+**Employment Integrity**:
+Open Employment 必须引用已启用且未软删除的 Position 和所属 Organization；违反时是数据完整性异常，不是 Employment 的一种正常失效状态。正式写路径阻止异常产生，Subject Facts 发布前拒绝异常数据，已发布投影的下游不再联表重查父对象。
+_Avoid_: implicit employment pause, downstream parent-state filtering
+
+**Effective Employment**:
+当前时刻位于 Employment Period 内且生命周期状态为启用的 Employment。Primary Employment 标记和 User 账号状态不参与该判定；Position 与所属 Organization 的有效性由 Employment Integrity 保证，不作为运行时开关。
+_Avoid_: Open Employment, enabled user employment
+
 **Effective Role**:
-对一条有效任职生效的启用角色；只有任职及其岗位、任职组织、角色分配目标和角色均启用且未删除时才生效。用户自身状态不属于该概念，由使用方单独判断。
+对一条 Effective Employment 生效的启用角色；其角色分配目标和角色必须启用且未删除。Position 与所属 Organization 由 Employment Integrity 保证，User 账号状态不属于该概念并由使用方单独判断。
 _Avoid_: parsed role, assigned role
 
 **ORCAS Session Identity**:
@@ -85,7 +129,7 @@ _Avoid_: UserDetail field list, arbitrary JSON path, protocol scope
 _Avoid_: ProjectionSpec, client configuration, protocol scope, requested HTTP fields
 
 **Subject Facts**:
-以 Subject Identifier 为键、供 IAM 内部投影使用的一份协议中性主体事实读模型。用户基础字段来自 User Profile Read Model Row 的显式类型化列；`subject_facts` JSON 只保存当前有效任职，每条包含 `isPrimary`、最小组织及完整路径、最小岗位，以及按不可修改的 `clientCode` 标识的 `clientAuthorizations`，其中角色包含自身 code 与派生 privilege codes。没有任何角色的有效任职仍保留空 `clientAuthorizations`；没有 Effective Role 的 client 不建立授权项，投影时解释为空角色与空权限。它不重复保存顶层角色或权限，不含数据库标识、账号可用性、状态、描述或时间，全部数组在发布时去重并稳定排序。Redis 缓存按主体存一份，由 Client Subject Projection Module 在内存中按 client 和 Subject Claim Selection 裁剪，不持久化 user×client 投影或 `UserDetailDto`。缓存是可重建的性能 Adapter：仅请求 Subject Identifier 时无需读取；请求 Profile Claim 时优先读取 Redis，缺失、损坏或 schema 不支持时通过 single-flight 从 `user_profile` 按 Subject Identifier 读取一行并回填。数据库行缺失或不可解析时返回 Subject Projection Not Ready，不省略已声明字段，也不回退 Legacy Detail 或现场联查源表；任何投影交付前的账号可用性只由 Subject Access Barrier 判定。
+以 Subject Identifier 为键、供 IAM 内部投影使用的一份协议中性主体事实读模型。用户基础字段来自 User Profile Read Model Row 的显式类型化列；`subject_facts` JSON 只保存 Effective Employment，每条包含 `isPrimary`、最小组织及完整路径、最小岗位，以及按不可修改的 `clientCode` 标识的 `clientAuthorizations`，其中角色包含自身 code 与派生 privilege codes。没有任何角色的有效任职仍保留空 `clientAuthorizations`；没有 Effective Role 的 client 不建立授权项，投影时解释为空角色与空权限。它不重复保存顶层角色或权限，不含数据库标识、账号可用性、状态、描述或时间，全部数组在发布时去重并稳定排序。Redis 缓存按主体存一份，由 Client Subject Projection Module 在内存中按 client 和 Subject Claim Selection 裁剪，不持久化 user×client 投影或 `UserDetailDto`。缓存是可重建的性能 Adapter：仅请求 Subject Identifier 时无需读取；请求 Profile Claim 时优先读取 Redis，缺失、损坏或 schema 不支持时通过 single-flight 从 `user_profile` 按 Subject Identifier 读取一行并回填。数据库行缺失或不可解析时返回 Subject Projection Not Ready，不省略已声明字段，也不回退 Legacy Detail 或现场联查源表；任何投影交付前的账号可用性只由 Subject Access Barrier 判定。
 _Avoid_: User Profile DTO cache, client projection cache, session payload, legacy detail document, live aggregate fallback, cached account status
 
 **Subject Facts Publication**:
@@ -109,7 +153,7 @@ _Avoid_: global roles, global privileges, authorization decision
 _Avoid_: cache TTL check, Redis-only freshness check, dirty-reason allowlist, stale authorization fallback
 
 **Employment Profile Claim**:
-`profile:employments` 表达用户当前有效任职的非授权事实，只包含 `isPrimary`、组织 code/name/type、按根到当前组织且包含当前组织的完整路径，以及岗位 code/name。任职、岗位和任职组织必须均启用且未删除；主任职优先，其余按组织 code、岗位 code 稳定排序，无有效任职时返回空数组。它不包含角色、权限、数据库标识、状态、层级数字、起止时间、描述或审计时间。Custom SSO 直接通过 Catalog 声明；OIDC 仅在独立的 `iam:employments` scope 获准时映射，并只进入 UserInfo 使用的 Claims Snapshot，不扩展标准 `profile` scope 或 ID Token。
+`profile:employments` 表达用户的 Effective Employment 非授权事实，只包含 `isPrimary`、组织 code/name/type、按根到当前组织且包含当前组织的完整路径，以及岗位 code/name；Position 与所属 Organization 由 Employment Integrity 保证，发布前发现异常时整份事实不可用。主任职优先，其余按组织 code、岗位 code 稳定排序，无有效任职时返回空数组；它不含角色、权限、数据库标识、状态、层级数字、起止时间、描述或审计时间，Custom SSO 通过 Catalog 声明，OIDC 仅在 `iam:employments` scope 获准时映射到 UserInfo Claims Snapshot，不扩展标准 `profile` scope 或 ID Token。
 _Avoid_: raw employment record, Client Authorization Claim, employment history
 
 **Account Recovery**:
@@ -117,8 +161,12 @@ _Avoid_: raw employment record, Client Authorization Claim, employment history
 _Avoid_: open flow, public password helper
 
 **User Resignation**:
-管理员原子地结束用户全部有效任职并禁用其 IAM 账号，随后终止该用户全部活跃访问会话的业务流程；会话终止失败不撤销已生效的离职结果。重复执行仍视为成功并再次尝试终止全部会话；它不同于删除单条任职或删除用户。
-_Avoid_: employment deletion, user deletion
+管理员原子地结束用户全部 Open Employment 并禁用其 IAM 账号，提交后撤销该用户全部 IAM 活跃 Session 的业务流程；撤销失败不回滚已生效的离职结果。重复执行仍视为成功且不改写既有结束时间，并再次尝试撤销 Session；它不同于普通任职变化、账号禁用或删除用户。
+_Avoid_: account disable, employment deletion, user deletion
+
+**User Deletion**:
+在用户已不存在任何 Open Employment 后软删除其 IAM 账号；暂停任职仍会阻止删除，已结束的 Employment 历史不会阻止。它不替代 User Resignation，也不是普通账号禁用。
+_Avoid_: User Resignation, account disable, employment cascade deletion
 
 **OIDC Claims Snapshot**:
 OIDC 在授权完成且 Authorization Code 签发前，按 Subject Identifier、OIDC Client Binding、scope、OIDC 配置版本及当时授权状态创建并固化的协议专用声明视图；选择 `iam:authorization` 时必须先通过 Authorization Freshness Barrier，未就绪则不签发 Code。Authorization Code 持有该 Snapshot，Token Endpoint 只将它转移到 Access Token，不重新读取档案；ID Token 从同一 Snapshot 映射但排除 `iam:authorization` 与 `iam:employments`，后续 UserInfo 也只重放 Snapshot，不混入当前事实。

@@ -1,7 +1,10 @@
+import { createOrganizationRepository } from "@admin-api/services/organization/organization.repository";
 import { createOrganizationService } from "@admin-api/services/organization/organization.service";
 import { createImmediateUnitOfWork } from "@admin-api/test/fakes";
-import { OrganizationLevel, OrganizationStatus, OrganizationType } from "@iam/contracts";
+import { EmploymentStatus, OrganizationLevel, OrganizationStatus, OrganizationType } from "@iam/contracts";
+import { OrganizationHasEmploymentError } from "@iam/domain/organization";
 import { describe, expect, mock, test } from "bun:test";
+import { createOpenEmploymentFixtureDb } from "../helpers/drizzle-query-capture";
 
 function organization(overrides: Record<string, unknown> = {}) {
   return {
@@ -46,7 +49,7 @@ function createService() {
     },
     organizationRepository: {
       countActiveChildrenByOrgCode: mock(async () => 0),
-      countActiveEmploymentsByOrgCode: mock(async () => 0),
+      countOpenEmploymentsByOrgCode: mock(async (_orgCode: string) => 0),
       getOrganizationByCode: mock(async () => null),
       getOrganizationByCodeForAdmin: mock(async () => organization()),
       setOrganization: mock(async () => organization()),
@@ -56,7 +59,7 @@ function createService() {
   };
   const deps = {
     organizationRepository: {
-      countActiveEmploymentsByOrgCode: mock(async () => 0),
+      countOpenEmploymentsByOrgCode: mock(async (_orgCode: string) => 0),
       getOrganizationByCodeForAdmin: mock(async () => organization()),
       getOrganizationSelectorNodesForAdmin: mock(async () => selectorNodes),
       listOrgChildrenByParentCode: mock(async () => ({ rows: [], total: 0 })),
@@ -65,6 +68,21 @@ function createService() {
     uow: createImmediateUnitOfWork(tx),
   } as any;
   return { service: createOrganizationService(deps), tx, deps, selectorNodes };
+}
+
+function useEmploymentFixture(
+  tx: ReturnType<typeof createService>["tx"],
+  fixture: {
+    status: EmploymentStatus;
+    isDelete: boolean;
+    ancestorOrgCodes?: readonly string[];
+  },
+) {
+  const repository = createOrganizationRepository(createOpenEmploymentFixtureDb([{
+    ...fixture,
+    ancestorOrgCodes: fixture.ancestorOrgCodes ?? ["ORG"],
+  }]) as any);
+  tx.organizationRepository.countOpenEmploymentsByOrgCode = mock(repository.countOpenEmploymentsByOrgCode);
 }
 
 describe("createOrganizationService", () => {
@@ -82,6 +100,21 @@ describe("createOrganizationService", () => {
     tx.organizationRepository.countActiveChildrenByOrgCode.mockResolvedValue(1);
 
     await expect(service.deleteOrganization("ORG")).rejects.toThrow();
+
+    expect(tx.organizationRepository.softDeleteOrganizationByCode).not.toHaveBeenCalled();
+  });
+
+  test.each([
+    ["Enable", EmploymentStatus.Enable],
+    ["Pause", EmploymentStatus.Pause],
+  ])("rejects deleting an organization whose hierarchy contains an Open Employment in %s state", async (
+    _label,
+    employmentStatus,
+  ) => {
+    const { service, tx } = createService();
+    useEmploymentFixture(tx, { status: employmentStatus, isDelete: false });
+
+    await expect(service.deleteOrganization("ORG")).rejects.toBeInstanceOf(OrganizationHasEmploymentError);
 
     expect(tx.organizationRepository.softDeleteOrganizationByCode).not.toHaveBeenCalled();
   });
@@ -106,8 +139,12 @@ describe("createOrganizationService", () => {
     ]);
   });
 
-  test("records an organization change when updating organization status", async () => {
+  test.each([
+    ["Ended Employment", EmploymentStatus.Disable, false],
+    ["Legacy Employment Tombstone", EmploymentStatus.Enable, true],
+  ])("allows an organization status change when referenced only by %s history", async (_label, status, isDelete) => {
     const { service, tx } = createService();
+    useEmploymentFixture(tx, { status, isDelete });
 
     await expect(service.updateOrganizationStatus("ORG", OrganizationStatus.Disable)).resolves.toBe(true);
 
@@ -119,13 +156,64 @@ describe("createOrganizationService", () => {
     ]);
   });
 
-  test("records an organization change when deleting an organization after relationship checks", async () => {
+  test.each([
+    ["Enable", EmploymentStatus.Enable, OrganizationStatus.Pause],
+    ["Pause", EmploymentStatus.Pause, OrganizationStatus.Disable],
+  ])(
+    "rejects a status transition when the hierarchy contains an Open Employment in %s state",
+    async (_employmentState, employmentStatus, status) => {
+      const { service, tx } = createService();
+      useEmploymentFixture(tx, { status: employmentStatus, isDelete: false });
+
+      await expect(service.updateOrganizationStatus("ORG", status))
+        .rejects
+        .toBeInstanceOf(OrganizationHasEmploymentError);
+
+      expect(tx.organizationRepository.updateOrganizationByCode).not.toHaveBeenCalled();
+    },
+  );
+
+  test("re-enables an organization without inspecting or changing its Employments", async () => {
     const { service, tx } = createService();
+    tx.organizationRepository.getOrganizationByCodeForAdmin.mockResolvedValue(
+      organization({ status: OrganizationStatus.Disable }),
+    );
+    tx.organizationRepository.countOpenEmploymentsByOrgCode.mockResolvedValue(1);
+
+    await expect(service.updateOrganizationStatus("ORG", OrganizationStatus.Enable)).resolves.toBe(true);
+
+    expect(tx.organizationRepository.countOpenEmploymentsByOrgCode).not.toHaveBeenCalled();
+    expect(tx.organizationRepository.updateOrganizationByCode).toHaveBeenCalledWith("ORG", {
+      status: OrganizationStatus.Enable,
+    });
+  });
+
+  test("allows disabling an organization when an Open Employment is outside its hierarchy", async () => {
+    const { service, tx } = createService();
+    useEmploymentFixture(tx, {
+      status: EmploymentStatus.Enable,
+      isDelete: false,
+      ancestorOrgCodes: ["OTHER"],
+    });
+
+    await expect(service.updateOrganizationStatus("ORG", OrganizationStatus.Disable)).resolves.toBe(true);
+
+    expect(tx.organizationRepository.updateOrganizationByCode).toHaveBeenCalledWith("ORG", {
+      status: OrganizationStatus.Disable,
+    });
+  });
+
+  test.each([
+    ["Ended Employment", EmploymentStatus.Disable, false],
+    ["Legacy Employment Tombstone", EmploymentStatus.Enable, true],
+  ])("allows deleting an organization referenced only by %s history", async (_label, status, isDelete) => {
+    const { service, tx } = createService();
+    useEmploymentFixture(tx, { status, isDelete });
 
     await expect(service.deleteOrganization("ORG")).resolves.toBe(true);
 
     expect(tx.organizationRepository.countActiveChildrenByOrgCode).toHaveBeenCalledWith("ORG");
-    expect(tx.organizationRepository.countActiveEmploymentsByOrgCode).toHaveBeenCalledWith("ORG");
+    expect(tx.organizationRepository.countOpenEmploymentsByOrgCode).toHaveBeenCalledWith("ORG");
     expect(tx.organizationRepository.softDeleteOrganizationByCode).toHaveBeenCalledWith("ORG");
     expect(tx.userProfileInvalidation.recordChanges).toHaveBeenCalledWith([
       { kind: "organization", organizationId: 1 },

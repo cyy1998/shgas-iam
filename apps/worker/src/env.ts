@@ -103,6 +103,13 @@ const RawWorkerEnvSchema = z.object({
   }
 });
 
+const EmploymentCutoverCommandEnvSchema = z.object({
+  IAM_WORKER_DATABASE_URL: z.string().min(1),
+  NODE_ENV: z.string().default("development"),
+  IAM_WORKER_LOG_LEVEL: z.string().default("info"),
+  IAM_WORKER_LOG_FORMAT: z.enum(["auto", "json", "pretty"]).default("auto"),
+});
+
 type RawWorkerEnv = z.infer<typeof RawWorkerEnvSchema>;
 
 export interface WorkerEnv {
@@ -140,6 +147,15 @@ export interface WorkerEnv {
     rebuildBatchSize: number;
     backfillBatchSize: number;
     repairStaleSeconds: number;
+  };
+}
+
+export interface EmploymentCutoverCommandEnv {
+  databaseUrl: string;
+  nodeEnv: string;
+  log: {
+    level: string;
+    format: "auto" | "json" | "pretty";
   };
 }
 
@@ -201,6 +217,21 @@ export function parseWorkerEnv(source: NodeJS.ProcessEnv): WorkerEnv {
   return env;
 }
 
-const env = parseWorkerEnv(process.env);
+export function parseEmploymentCutoverCommandEnv(
+  source: NodeJS.ProcessEnv,
+): EmploymentCutoverCommandEnv {
+  const raw = EmploymentCutoverCommandEnvSchema.parse(source);
+  exposeDatabaseUrlForDbPackage(raw.IAM_WORKER_DATABASE_URL);
+  return {
+    databaseUrl: raw.IAM_WORKER_DATABASE_URL,
+    nodeEnv: raw.NODE_ENV,
+    log: {
+      level: raw.IAM_WORKER_LOG_LEVEL,
+      format: raw.IAM_WORKER_LOG_FORMAT,
+    },
+  };
+}
 
-export default env;
+export default function loadWorkerEnv(): WorkerEnv {
+  return parseWorkerEnv(process.env);
+}

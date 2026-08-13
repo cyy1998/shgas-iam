@@ -1,5 +1,4 @@
 import type { AdminAuditContext } from "@admin-api/services/audit/audit.context";
-import type { PositionStatus } from "@iam/contracts";
 import type { AdminPositionServiceDeps, AdminPositionTransactionPorts } from "./position.port";
 import type {
   PositionCreateDto,
@@ -9,6 +8,7 @@ import type {
 } from "./position.type";
 import { adminAuditTransactionOptions } from "@admin-api/services/audit/audit.context";
 import { buildPositionAudit } from "@admin-api/services/audit/events/position.audit";
+import { PositionStatus } from "@iam/contracts";
 import {
   PositionCodeExistsError,
   PositionHasEmploymentError,
@@ -70,6 +70,12 @@ export function createPositionService(deps: AdminPositionServiceDeps) {
         throw new PositionNotFoundError("岗位不存在");
       }
       await assertRenamedPositionCodeAvailable(posCode, data.posCode, tx);
+      if (data.status !== undefined && data.status !== PositionStatus.Enable) {
+        const employmentCount = await tx.positionRepository.countOpenEmploymentsByPosCode(posCode);
+        if (employmentCount > 0) {
+          throw new PositionHasEmploymentError();
+        }
+      }
       await tx.positionRepository.updatePositionByCode(posCode, data);
       await tx.auditService.recordAuditLog(buildPositionAudit(action, {
         ...existing,
@@ -97,7 +103,7 @@ export function createPositionService(deps: AdminPositionServiceDeps) {
       if (existing === null) {
         throw new PositionNotFoundError("岗位不存在");
       }
-      const employmentCount = await tx.positionRepository.countActiveEmploymentsByPosCode(posCode);
+      const employmentCount = await tx.positionRepository.countOpenEmploymentsByPosCode(posCode);
       if (employmentCount > 0) {
         throw new PositionHasEmploymentError();
       }

@@ -5,7 +5,6 @@ import type { ProFormInstance } from '@ant-design/pro-components';
 import {
   ModalForm,
   ProForm,
-  ProFormDatePicker,
   ProFormSelect,
   ProFormSwitch,
   ProFormTextArea,
@@ -70,9 +69,6 @@ export default function EmploymentFormModal({
             orgCode: values.orgCode,
             posCode: values.posCode,
             isPrimary: values.isPrimary,
-            startTime: values.startTime
-              ? new Date(values.startTime)
-              : undefined,
             description: values.description || null,
           });
           message.success('雇佣已创建');
@@ -150,11 +146,6 @@ export default function EmploymentFormModal({
         name="isPrimary"
         label="设为主岗"
         tooltip="若选 true，将自动把该用户其它主岗置为非主"
-      />
-      <ProFormDatePicker
-        name="startTime"
-        label="生效时间"
-        tooltip="不填则使用当前时间"
       />
       <ProFormTextArea name="description" label="备注" />
     </ModalForm>

@@ -1,4 +1,5 @@
 import type { SubjectAccessMutationReceipt } from "@iam/api-core/subject-access";
+import { createUserRepository } from "@admin-api/services/user/user.repository";
 import { createUserService } from "@admin-api/services/user/user.service";
 import { createFakePasswordHasher, createFakeRandom, createImmediateUnitOfWork } from "@admin-api/test/fakes";
 import {
@@ -17,6 +18,7 @@ import {
   UserType,
 } from "@iam/contracts";
 import { describe, expect, mock, test } from "bun:test";
+import { createOpenEmploymentFixtureDb } from "../helpers/drizzle-query-capture";
 
 const now = new Date("2026-01-01T00:00:00Z");
 const subjectAccessNow = new Date("2026-01-01T00:05:00.000Z").getTime();
@@ -153,7 +155,7 @@ function createService(options: {
       recordChanges: mock(async () => undefined),
     },
     userRepository: {
-      countActiveEmploymentsByUsername: mock(async () => 0),
+      countOpenEmploymentsByUsername: mock(async (_username: string) => 0),
       getUserByUsernameForAdmin: mock(async () => null),
       setPassword: mock(async () => user()),
       setUserForAdmin: mock(async (input: Record<string, unknown>) => user(input)),
@@ -215,6 +217,17 @@ function createService(options: {
     },
   } as any;
   return { service: createUserService(deps), deps, tx };
+}
+
+function useEmploymentFixture(
+  tx: ReturnType<typeof createService>["tx"],
+  fixture: { status: EmploymentStatus; isDelete: boolean },
+) {
+  const repository = createUserRepository(createOpenEmploymentFixtureDb([{
+    ...fixture,
+    username: "zhangsan",
+  }]) as any);
+  tx.userRepository.countOpenEmploymentsByUsername = mock(repository.countOpenEmploymentsByUsername);
 }
 
 describe("createUserService", () => {
@@ -327,6 +340,7 @@ describe("createUserService", () => {
     expect(tx.userProfileInvalidation.recordChanges).toHaveBeenCalledWith([
       { kind: "user", userId: 1 },
     ]);
+    expect(tx.userRepository.countOpenEmploymentsByUsername).not.toHaveBeenCalled();
     expect(deps.sessionRevocation.revokeUserSessions).toHaveBeenCalledWith({
       userId: 1,
       subjectIdentifier: "00000000-0000-4000-8000-000000000001",
@@ -397,9 +411,13 @@ describe("createUserService", () => {
     expect(afterCommitLogger.error).not.toHaveBeenCalled();
   });
 
-  test("revokes user sessions when deleting a user", async () => {
+  test.each([
+    ["Ended Employment", EmploymentStatus.Disable, false],
+    ["Legacy Employment Tombstone", EmploymentStatus.Enable, true],
+  ])("deletes and revokes sessions when the user has only %s history", async (_label, status, isDelete) => {
     const { service, deps, tx } = createService();
     (tx.userRepository.getUserByUsernameForAdmin as any).mockResolvedValue(user());
+    useEmploymentFixture(tx, { status, isDelete });
 
     await expect(service.deleteUser("zhangsan")).resolves.toBe(true);
 
@@ -416,10 +434,13 @@ describe("createUserService", () => {
     });
   });
 
-  test("rejects deleting a user with active employments", async () => {
+  test.each([
+    ["Enable", EmploymentStatus.Enable],
+    ["Pause", EmploymentStatus.Pause],
+  ])("rejects deleting a user with an Open Employment in %s state", async (_label, status) => {
     const { service, deps, tx } = createService();
     (tx.userRepository.getUserByUsernameForAdmin as any).mockResolvedValue(user());
-    tx.userRepository.countActiveEmploymentsByUsername.mockResolvedValue(1);
+    useEmploymentFixture(tx, { status, isDelete: false });
 
     await expect(service.deleteUser("zhangsan")).rejects.toThrow();
 

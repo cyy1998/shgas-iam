@@ -11,6 +11,7 @@ import type { Organization } from "@iam/db/schema";
 import { getChildOrganizationLevel, OrganizationStatus } from "@iam/contracts";
 import { compactUpdate, firstRow, ilikeContainsIf, inArrayIf } from "@iam/db/query-utils";
 import { employments, organizationClosures, organizations } from "@iam/db/schema";
+import { OPEN_EMPLOYMENT_STATUSES } from "@iam/domain/employment";
 import { and, count, eq, exists, gt, inArray, or, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 
@@ -242,13 +243,14 @@ export function createOrganizationRepository(db: DbClient) {
         ));
       return firstRow(rows)?.value ?? 0;
     },
-    async countActiveEmploymentsByOrgCode(orgCode: string) {
+    async countOpenEmploymentsByOrgCode(orgCode: string) {
       const ancestor = alias(organizations, "employment_org_count_ancestor");
       const rows = await db
         .select({ value: count() })
         .from(employments)
         .where(and(
           eq(employments.isDelete, false),
+          inArray(employments.status, OPEN_EMPLOYMENT_STATUSES),
           exists(
             db.select({ value: sql`1` })
               .from(organizationClosures)

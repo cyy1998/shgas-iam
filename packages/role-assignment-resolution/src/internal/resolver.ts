@@ -123,7 +123,7 @@ async function loadEmploymentAssignmentRoles(db: DbClient, employmentIds: number
     .innerJoin(roles, eq(roles.id, roleAssignments.roleId))
     .where(and(
       inArray(employments.id, employmentIds),
-      strictEmploymentContextWhere(),
+      activeEmploymentWhere(),
       activeRoleWhere(clientId),
     ));
 }
@@ -141,7 +141,8 @@ async function loadPositionAssignmentRoles(db: DbClient, employmentIds: number[]
     .innerJoin(roles, eq(roles.id, roleAssignments.roleId))
     .where(and(
       inArray(employments.id, employmentIds),
-      strictEmploymentContextWhere(),
+      activeEmploymentWhere(),
+      activePositionAssignmentTargetWhere(),
       activeRoleWhere(clientId),
     ));
 }
@@ -161,7 +162,7 @@ async function loadOrganizationAssignmentRoles(db: DbClient, employmentIds: numb
     .innerJoin(roles, eq(roles.id, roleAssignments.roleId))
     .where(and(
       inArray(employments.id, employmentIds),
-      strictEmploymentContextWhere(),
+      activeEmploymentWhere(),
       eq(assignmentOrganization.status, OrganizationStatus.Enable),
       eq(assignmentOrganization.isDelete, false),
       activeRoleWhere(clientId),
@@ -175,22 +176,18 @@ async function loadOrganizationAssignmentRoles(db: DbClient, employmentIds: numb
     ));
 }
 
-function strictEmploymentContextWhere() {
-  return and(
-    eq(employments.status, EmploymentStatus.Enable),
-    eq(employments.isDelete, false),
-    eq(positions.status, PositionStatus.Enable),
-    eq(positions.isDelete, false),
-    eq(organizations.status, OrganizationStatus.Enable),
-    eq(organizations.isDelete, false),
-  );
-}
-
 function activeRoleWhere(clientId: number | undefined) {
   return and(
     eq(roles.status, RoleStatus.Enable),
     eq(roles.isDelete, false),
     clientId === undefined ? undefined : eq(roles.clientId, clientId),
+  );
+}
+
+function activePositionAssignmentTargetWhere() {
+  return and(
+    eq(positions.status, PositionStatus.Enable),
+    eq(positions.isDelete, false),
   );
 }
 

@@ -13,7 +13,7 @@ export interface AdminPositionTransactionStorePort {
   getPositionByCode: (posCode: string) => Promise<Position | null>;
   setPosition: (input: PositionCreateDto) => Promise<void>;
   updatePositionByCode: (posCode: string, input: PositionUpdateDto) => Promise<unknown>;
-  countActiveEmploymentsByPosCode: (posCode: string) => Promise<number>;
+  countOpenEmploymentsByPosCode: (posCode: string) => Promise<number>;
   softDeletePositionByCode: (posCode: string) => Promise<unknown>;
 }
 

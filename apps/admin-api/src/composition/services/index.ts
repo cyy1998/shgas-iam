@@ -109,12 +109,8 @@ export function createAdminApiServices(options: CreateAdminApiServicesOptions) {
     employmentRepository: repositories.employment,
     roleAssignmentResolver,
     privilegeRepository: repositories.privilege,
-    clock: runtime.clock,
     uow: mapUnitOfWork(unitOfWork, tx => ({
       employmentRepository: tx.repositories.employment,
-      organizationRepository: tx.repositories.organization,
-      positionRepository: tx.repositories.position,
-      userRepository: tx.repositories.user,
       auditService: tx.auditService,
       userProfileInvalidation: tx.userProfileInvalidation,
     })),
