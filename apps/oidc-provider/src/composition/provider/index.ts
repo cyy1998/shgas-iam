@@ -16,6 +16,10 @@ import {
 import { createOidcInteractionHandler } from "../../interaction/handler.ts";
 import { createIamInteractionPolicy } from "../../interaction/policy.ts";
 import { createOidcClaimsAdapter } from "../../provider/claims.ts";
+import {
+  createOidcClientTrafficGate,
+  registerOidcClientTrafficGate,
+} from "../../provider/client-traffic-gate.ts";
 import { createOidcProvider } from "../../provider/create-provider.ts";
 import { createOidcAdapterFactory } from "../../storage/redis-adapter.ts";
 
@@ -32,10 +36,12 @@ export interface CreateOidcProviderRuntimeDeps {
   security: Pick<OidcProviderSecurity, "clientAuthRateLimiter" | "clientSecretVerifier">;
   session: Pick<OidcProviderSession, "oidcSession" | "subjectAccess">;
   stores: Pick<OidcProviderStores, | "clientRuntime"
+  | "clientTrafficGate"
   | "tokens">;
 }
 
 export function createOidcProviderRuntime(deps: CreateOidcProviderRuntimeDeps) {
+  const trafficGate = createOidcClientTrafficGate({ gate: deps.stores.clientTrafficGate });
   const subjectFacts = createSubjectFactsReader({
     db: deps.db,
     cache: createSubjectFactsRedisCache(deps.redis),
@@ -68,17 +74,24 @@ export function createOidcProviderRuntime(deps: CreateOidcProviderRuntimeDeps) {
     signingKeys: deps.signingKeys,
     adapter,
     claims,
-    interactionPolicy: createIamInteractionPolicy(deps.session.oidcSession, deps.session.oidcSession),
+    interactionPolicy: createIamInteractionPolicy(
+      deps.session.oidcSession,
+      deps.session.oidcSession,
+      trafficGate,
+    ),
     clientAuthRateLimiter: deps.security.clientAuthRateLimiter,
     clientSecretVerifier: deps.security.clientSecretVerifier,
     oidcSession: deps.session.oidcSession,
+    trafficGate,
   });
+  registerOidcClientTrafficGate(provider, trafficGate);
   const interactions = createOidcInteractionHandler({
     provider,
     clients: deps.stores.clientRuntime,
     globalSessions: deps.session.oidcSession,
     providerSessions: deps.session.oidcSession,
     returnHandles: deps.session.oidcSession,
+    trafficGate,
     env: deps.env,
   });
 

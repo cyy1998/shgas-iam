@@ -79,6 +79,11 @@ function assertValidCustomSsoStorageState(client: {
   }
 }
 
+function allowsProtocolEnable(status: ClientStatus) {
+  return status === ClientStatusValue.Enable
+    || status === ClientStatusValue.Maintenance;
+}
+
 function parseValidCustomSsoConfig(input: unknown) {
   const result = ClientCustomSsoConfigureDtoSchema.safeParse(input);
   if (!result.success) {
@@ -89,25 +94,34 @@ function parseValidCustomSsoConfig(input: unknown) {
 
 type AdminClientTransactionContext = Parameters<Parameters<AdminClientServiceDeps["uow"]["transaction"]>[0]>[0];
 
+interface ClientRuntimeMutationCoordination {
+  readonly abort: () => Promise<unknown>;
+  readonly afterCommitName: string;
+  readonly complete: () => Promise<unknown>;
+  readonly heartbeat: {
+    assertOwned: () => Promise<void>;
+    stopAndSettle: <T>(settle: () => Promise<T>) => Promise<T>;
+  };
+  settlementStarted: boolean;
+}
+
 type ClientSessionRevocationDecision
   = | { scope: "all-protocols"; reason: "client_disabled" | "client_deleted" | "client_config_changed" }
     | { scope: "protocol"; protocol: "custom-sso" | "oidc"; reason: "client_protocol_disabled" | "client_config_changed" };
 
+function isEnteringClientDisable(current: ClientStatus, next: ClientStatus | undefined) {
+  return next === ClientStatusValue.Disable
+    && current !== ClientStatusValue.Disable;
+}
+
 function resolveClientUpdateSessionRevocations(
   existing: GenericClientRuntimeDto,
-  updated: GenericClientRuntimeDto,
-  data: Pick<ClientUpdateDto | ClientInputDto, "clientSecret" | "extAttributes" | "status">,
+  data: Pick<ClientUpdateDto | ClientInputDto, "status">,
 ): ClientSessionRevocationDecision[] {
-  const statusChanged = data.status !== undefined && data.status !== existing.status;
-  if (statusChanged && updated.status === ClientStatusValue.Disable) {
+  if (isEnteringClientDisable(existing.status, data.status)) {
     return [{ scope: "all-protocols", reason: "client_disabled" }];
   }
-
-  const decisions: ClientSessionRevocationDecision[] = [];
-  if (statusChanged && updated.status === ClientStatusValue.Maintenance) {
-    decisions.push({ scope: "protocol", protocol: "oidc", reason: "client_config_changed" });
-  }
-  return decisions;
+  return [];
 }
 
 function toOidcRuntimeInvalidationTarget(client: OidcRuntimeInvalidationTarget): OidcRuntimeInvalidationTarget {
@@ -128,14 +142,11 @@ export function createClientService(deps: AdminClientServiceDeps) {
     transactionOptions: Parameters<
       AdminClientServiceDeps["uow"]["transaction"]
     >[1],
+    runtimeOptions: {
+      publishTrafficGateStatus?: (result: T) => ClientStatus;
+    } = {},
   ): Promise<T> {
-    let mutation: Awaited<
-      ReturnType<AdminClientServiceDeps["clientCache"]["beginRuntimeMutation"]>
-    > | undefined;
-    let heartbeat: ReturnType<
-      AdminClientServiceDeps["clientCache"]["startRuntimeMutationHeartbeat"]
-    > | undefined;
-    let heartbeatSettlementStarted = false;
+    const runtimeCoordinations: ClientRuntimeMutationCoordination[] = [];
     try {
       return await deps.uow.transaction(async (tx) => {
         const existing = typeof target === "string"
@@ -147,42 +158,72 @@ export function createClientService(deps: AdminClientServiceDeps) {
         // The runtime reader must be fenced after this row lock and before
         // any business write; see the documented pre-commit coordination
         // fence exception in backend-architecture.md.
-        mutation = await deps.clientCache.beginRuntimeMutation(
+        const customSsoMutation = await deps.clientCache.beginRuntimeMutation(
           existing.clientCode,
           deps.random.uuid(),
         );
-        heartbeat = deps.clientCache.startRuntimeMutationHeartbeat(
-          mutation,
-        );
-        const result = await operation(tx, existing);
-        await heartbeat.assertOwned();
-        const committedMutation = mutation;
-        const committedHeartbeat = heartbeat;
-        tx.afterCommit.required(
-          "admin.client.custom_sso.runtime_mutation.complete",
-          async () => {
-            heartbeatSettlementStarted = true;
-            await committedHeartbeat.stopAndSettle(
-              async () =>
-                await deps.clientCache.completeRuntimeMutation(
-                  committedMutation,
-                ),
+        runtimeCoordinations.push({
+          abort: async () =>
+            await deps.clientCache.abortRuntimeMutation(customSsoMutation),
+          afterCommitName:
+            "admin.client.custom_sso.runtime_mutation.complete",
+          complete: async () =>
+            await deps.clientCache.completeRuntimeMutation(customSsoMutation),
+          heartbeat: deps.clientCache.startRuntimeMutationHeartbeat(
+            customSsoMutation,
+          ),
+          settlementStarted: false,
+        });
+        if (runtimeOptions.publishTrafficGateStatus !== undefined) {
+          const trafficGateMutation
+            = await deps.clientCache.beginTrafficGateMutation(
+              existing.clientCode,
+              deps.random.uuid(),
             );
-          },
-        );
+          let committedStatus: ClientStatus | undefined;
+          runtimeCoordinations.push({
+            abort: async () =>
+              await deps.clientCache.abortTrafficGateMutation(
+                trafficGateMutation,
+              ),
+            afterCommitName: "admin.client.traffic_gate.publish",
+            complete: async () => {
+              if (committedStatus === undefined)
+                throw new Error("Client traffic gate status was not committed");
+              const outcome
+                = await deps.clientCache.publishTrafficGateMutation(
+                  trafficGateMutation,
+                  committedStatus,
+                );
+              if (outcome !== "published")
+                throw new Error(`Client traffic gate publish ${outcome}`);
+            },
+            heartbeat: deps.clientCache.startTrafficGateMutationHeartbeat(
+              trafficGateMutation,
+            ),
+            settlementStarted: false,
+          });
+          const result = await operation(tx, existing);
+          committedStatus = runtimeOptions.publishTrafficGateStatus(result);
+          await registerRuntimeMutationCompletion(tx, runtimeCoordinations);
+          return result;
+        }
+        const result = await operation(tx, existing);
+        await registerRuntimeMutationCompletion(tx, runtimeCoordinations);
         return result;
       }, transactionOptions);
     }
     catch (error) {
-      if (mutation === undefined)
+      if (runtimeCoordinations.length === 0)
         throw error;
       if (!consumeTransactionRollbackConfirmation(error)) {
-        if (
-          heartbeat !== undefined
-          && !heartbeatSettlementStarted
-        ) {
+        for (const coordination of runtimeCoordinations.toReversed()) {
+          if (coordination.settlementStarted)
+            continue;
           try {
-            await heartbeat.stopAndSettle(async () => undefined);
+            await coordination.heartbeat.stopAndSettle(
+              async () => undefined,
+            );
           }
           catch {
             // The transaction may already be committed. Preserve the
@@ -192,27 +233,43 @@ export function createClientService(deps: AdminClientServiceDeps) {
         }
         throw error;
       }
-      const abortedMutation = mutation;
-      try {
-        if (heartbeat === undefined) {
-          await deps.clientCache.abortRuntimeMutation(abortedMutation);
-        }
-        else {
-          await heartbeat.stopAndSettle(
-            async () =>
-              await deps.clientCache.abortRuntimeMutation(
-                abortedMutation,
-              ),
+      const abortFailures: unknown[] = [];
+      for (const coordination of runtimeCoordinations.toReversed()) {
+        try {
+          await coordination.heartbeat.stopAndSettle(
+            coordination.abort,
           );
         }
+        catch (abortError) {
+          abortFailures.push(abortError);
+        }
       }
-      catch (abortError) {
+      if (abortFailures.length > 0) {
         throw new AggregateError(
-          [error, abortError],
-          "Custom SSO client runtime mutation failed and remains fenced",
+          [error, ...abortFailures],
+          "Client runtime mutation failed and remains fenced",
         );
       }
       throw error;
+    }
+  }
+
+  async function registerRuntimeMutationCompletion(
+    tx: AdminClientTransactionContext,
+    coordinations: ClientRuntimeMutationCoordination[],
+  ) {
+    for (const coordination of coordinations)
+      await coordination.heartbeat.assertOwned();
+    for (const coordination of coordinations.toReversed()) {
+      tx.afterCommit.required(
+        coordination.afterCommitName,
+        async () => {
+          coordination.settlementStarted = true;
+          await coordination.heartbeat.stopAndSettle(
+            coordination.complete,
+          );
+        },
+      );
     }
   }
 
@@ -368,8 +425,8 @@ export function createClientService(deps: AdminClientServiceDeps) {
           throw new CustomSsoClientStateError("Custom SSO 尚未配置");
         if (existing.customSsoEnabled)
           throw new CustomSsoClientStateError("Custom SSO 已启用");
-        if (existing.status !== ClientStatusValue.Enable) {
-          throw new CustomSsoClientStateError("只有全局状态正常的客户端可以启用 Custom SSO");
+        if (!allowsProtocolEnable(existing.status)) {
+          throw new CustomSsoClientStateError("全局状态停用的客户端不能启用 Custom SSO");
         }
 
         parseValidCustomSsoConfig(existing.customSsoConfig);
@@ -562,8 +619,8 @@ export function createClientService(deps: AdminClientServiceDeps) {
     const updatedClient = await runLockedClientRuntimeMutation(
       clientCode,
       async (tx, existing) => {
-        const statusChanged = data.status !== undefined && data.status !== existing.status;
-        const client = statusChanged
+        const entersDisable = isEnteringClientDisable(existing.status, data.status);
+        const client = entersDisable
           ? await tx.clientRepository.updateClientByCodeWithProtocolEpochs(
               clientCode,
               data,
@@ -591,13 +648,16 @@ export function createClientService(deps: AdminClientServiceDeps) {
         });
         registerClientSessionRevocations(
           tx,
-          resolveClientUpdateSessionRevocations(parsedExisting, parsedUpdated, data),
+          resolveClientUpdateSessionRevocations(parsedExisting, data),
           client,
           auditContext,
         );
         return client;
       },
       adminAuditTransactionOptions(auditContext),
+      data.status === undefined
+        ? {}
+        : { publishTrafficGateStatus: client => client.status },
     );
     return toClientAdminDetailDto(updatedClient);
   }
@@ -607,8 +667,8 @@ export function createClientService(deps: AdminClientServiceDeps) {
       { id: clientDto.id },
       async (tx, existing) => {
         assertClientCodeUnchanged(existing.clientCode, clientDto.clientCode);
-        const statusChanged = clientDto.status !== undefined && clientDto.status !== existing.status;
-        const client = statusChanged
+        const entersDisable = isEnteringClientDisable(existing.status, clientDto.status);
+        const client = entersDisable
           ? await tx.clientRepository
               .updateClientByIdWithProtocolEpochs(clientDto)
           : await tx.clientRepository.updateClientById(clientDto);
@@ -637,13 +697,16 @@ export function createClientService(deps: AdminClientServiceDeps) {
         });
         registerClientSessionRevocations(
           tx,
-          resolveClientUpdateSessionRevocations(parsedExisting, parsedUpdated, clientDto),
+          resolveClientUpdateSessionRevocations(parsedExisting, clientDto),
           client,
           auditContext,
         );
         return client;
       },
       adminAuditTransactionOptions(auditContext),
+      clientDto.status === undefined
+        ? {}
+        : { publishTrafficGateStatus: client => client.status },
     );
     return toClientAdminDetailDto(updatedClient);
   }
@@ -726,7 +789,7 @@ export function createClientService(deps: AdminClientServiceDeps) {
     auditContext?: AdminAuditContext,
   ) {
     const result = await deps.uow.transaction(async (tx) => {
-      const existing = await tx.clientRepository.getClientByCode(clientCode);
+      const existing = await tx.clientRepository.lockClientByCode(clientCode);
       if (existing === null)
         throw new ClientNotFoundError("客户端不存在");
       if (existing.oidcConfig === null)
@@ -735,8 +798,8 @@ export function createClientService(deps: AdminClientServiceDeps) {
       if (existing.oidcEnabled === enabled) {
         throw new OidcClientStateError(enabled ? "OIDC 已启用" : "OIDC 已禁用");
       }
-      if (enabled && existing.status !== ClientStatusValue.Enable) {
-        throw new OidcClientStateError("只有全局状态正常的客户端可以启用 OIDC");
+      if (enabled && !allowsProtocolEnable(existing.status)) {
+        throw new OidcClientStateError("全局状态停用的客户端不能启用 OIDC");
       }
       const client = await tx.clientRepository.updateClientOidcByCode(clientCode, { oidcEnabled: enabled });
       await tx.auditService.recordAuditLog(buildAdminClientAudit(

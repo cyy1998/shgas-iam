@@ -28,6 +28,10 @@ const emptyAdapter: Adapter = {
   async revokeByGrantId() {},
   async upsert() {},
 };
+const enabledTrafficGate = {
+  assertIssuanceAllowed: async () => undefined,
+  assertOnlineAccessAllowed: async () => undefined,
+};
 
 describe("oIDC provider configuration", () => {
   it("exposes only the approved first-version protocol capabilities", () => {
@@ -39,6 +43,7 @@ describe("oIDC provider configuration", () => {
       } as never,
       currentSigningKey: { jwk: { kty: "RSA", kid: "current", alg: "RS256" } } as SigningKey,
       interactionPolicy: interactionPolicy.base(),
+      trafficGate: enabledTrafficGate,
     });
 
     assert.deepEqual(configuration.responseTypes, ["code"]);
@@ -66,6 +71,7 @@ describe("oIDC provider configuration", () => {
       } as never,
       currentSigningKey: { jwk: { kty: "RSA", kid: "current", alg: "RS256" } } as SigningKey,
       interactionPolicy: interactionPolicy.base(),
+      trafficGate: enabledTrafficGate,
     });
     const accessTokenTtl = configuration.ttl?.AccessToken as (ctx: unknown) => number;
     const boundedTtl = accessTokenTtl({
@@ -112,6 +118,7 @@ describe("oIDC provider configuration", () => {
       } as never,
       currentSigningKey: { jwk: { kty: "RSA", kid: "current", alg: "RS256" } } as SigningKey,
       interactionPolicy: interactionPolicy.base(),
+      trafficGate: enabledTrafficGate,
     });
     const code = { kind: "AuthorizationCode", claimsSnapshot: { claims: { sub: "subject-a" } } };
     const token = { kind: "AccessToken" };
@@ -121,5 +128,48 @@ describe("oIDC provider configuration", () => {
     } as never, token as never);
 
     assert.deepEqual(received, [[token, code]]);
+  });
+
+  it("checks client traffic before loading or saving an existing grant", async () => {
+    const trafficFailure = new Error("temporarily unavailable");
+    const configuration = createProviderConfiguration(env as never, {
+      adapter: () => emptyAdapter,
+      claims: {
+        createAccessTokenExtra: async () => undefined,
+        findAccount: async () => undefined,
+      } as never,
+      currentSigningKey: { jwk: { kty: "RSA", kid: "current", alg: "RS256" } } as SigningKey,
+      interactionPolicy: interactionPolicy.base(),
+      trafficGate: {
+        assertIssuanceAllowed: async () => {
+          throw trafficFailure;
+        },
+        assertOnlineAccessAllowed: async () => undefined,
+      },
+    });
+    let grantLookupCount = 0;
+    let grantConstructionCount = 0;
+
+    await assert.rejects(async () => await configuration.loadExistingGrant?.({
+      oidc: {
+        account: { accountId: "subject-a" },
+        client: { clientId: "client-a" },
+        params: { scope: "openid" },
+        provider: {
+          Grant: class {
+            static async find() {
+              grantLookupCount += 1;
+            }
+
+            constructor() {
+              grantConstructionCount += 1;
+            }
+          },
+        },
+        session: { grantIdFor: () => "grant-a" },
+      },
+    } as never), trafficFailure);
+    assert.equal(grantLookupCount, 0);
+    assert.equal(grantConstructionCount, 0);
   });
 });

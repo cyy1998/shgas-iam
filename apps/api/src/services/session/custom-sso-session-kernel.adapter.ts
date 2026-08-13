@@ -182,7 +182,7 @@ export function createCustomSsoSessionKernelAdapter(deps: CustomSsoSessionKernel
     if (
       client === null
       || client.clientCode !== input.clientCode
-      || client.status !== ClientStatus.Enable
+      || client.status === ClientStatus.Disable
       || client.isDelete
       || !client.customSsoEnabled
       || client.customSsoConfig === null
@@ -716,7 +716,7 @@ export function createCustomSsoSessionKernelAdapter(deps: CustomSsoSessionKernel
     const client = await deps.clients.findRuntimeRecord(expected.clientCode);
     if (
       client === null
-      || client.status !== ClientStatus.Enable
+      || client.status === ClientStatus.Disable
       || client.isDelete
       || !client.customSsoEnabled
       || client.customSsoConfig?.mode !== CustomSsoClientMode.Gateway
@@ -1070,7 +1070,7 @@ export function createCustomSsoSessionKernelAdapter(deps: CustomSsoSessionKernel
     const client = await deps.clients.findRuntimeRecord(clientCode);
     return client !== null
       && client.clientCode === clientCode
-      && client.status === ClientStatus.Enable
+      && client.status !== ClientStatus.Disable
       && !client.isDelete
       && client.customSsoEnabled
       && client.customSsoConfig !== null

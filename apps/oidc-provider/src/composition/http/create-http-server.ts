@@ -40,7 +40,7 @@ function getOriginalPath(requestUrl: string | undefined, publicOrigin: string) {
 }
 
 function classifyOidcHttpRoute(pathname: string) {
-  if (pathname === "/health")
+  if (isHealthPath(pathname))
     return "/health";
   if (pathname.startsWith("/oidc/interaction/"))
     return "/oidc/interaction/:uid";
@@ -49,6 +49,10 @@ function classifyOidcHttpRoute(pathname: string) {
   if (pathname === "/oidc" || pathname.startsWith("/oidc/"))
     return "/oidc/*";
   return "not_found";
+}
+
+function isHealthPath(pathname: string) {
+  return pathname === "/health" || pathname === "/oidc/health";
 }
 
 function logHttpRequestCompleted(
@@ -87,7 +91,9 @@ export function createOidcHttpServer(runtime: OidcHttpRuntime) {
     const requestId = ensureRequestId(request, response);
     const traceId = getTraceIdFromHeaders(name => request.headers[name.toLowerCase()]) ?? null;
     const originalUrl = request.url;
-    const route = classifyOidcHttpRoute(getOriginalPath(originalUrl, env.oidc.publicOrigin));
+    const originalPath = getOriginalPath(originalUrl, env.oidc.publicOrigin);
+    const isHealthRequest = isHealthPath(originalPath);
+    const route = classifyOidcHttpRoute(originalPath);
     let finished = false;
     let logged = false;
     const logCompleted = (aborted?: boolean) => {
@@ -114,7 +120,7 @@ export function createOidcHttpServer(runtime: OidcHttpRuntime) {
     });
 
     try {
-      if (request.url === "/health") {
+      if (isHealthRequest) {
         await health.ping();
         response.writeHead(200, { "content-type": "application/json" });
         response.end(JSON.stringify({ status: "ok" }));
@@ -162,13 +168,16 @@ export function createOidcHttpServer(runtime: OidcHttpRuntime) {
         errorMessage: error instanceof Error ? error.message : "Unknown OIDC HTTP request failure",
       }, "OIDC HTTP request failed");
       if (!response.headersSent) {
-        response.writeHead(request.url === "/health" ? 503 : 500, {
+        response.writeHead(isHealthRequest ? 503 : 500, {
           "cache-control": "no-store",
           "content-type": "application/json",
         });
       }
-      if (!response.writableEnded)
-        response.end(JSON.stringify({ error: request.url === "/health" ? "unavailable" : "server_error" }));
+      if (!response.writableEnded) {
+        response.end(JSON.stringify({
+          error: isHealthRequest ? "unavailable" : "server_error",
+        }));
+      }
     }
   });
 }

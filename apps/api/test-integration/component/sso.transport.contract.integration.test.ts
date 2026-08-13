@@ -580,6 +580,8 @@ describe("Custom SSO HTTP transport contract", () => {
     });
     expect(unavailableContract).toContain(ApiErrorCode.SubjectProjectionNotReady);
     expect(unavailableContract).toContain(ApiErrorCode.SubjectAccessUnavailable);
+    expect(unavailableContract).toContain(ApiErrorCode.Maintenance);
+    expect(unavailableContract).toContain(ApiErrorCode.InternalError);
     expect(unavailableContract).not.toContain("userInfo");
     for (const path of [
       authorizePath,

@@ -21,6 +21,10 @@ const client = {
   customSsoConfigVersion: 7,
 };
 
+const enabledTrafficGate = {
+  assertIssuanceAllowed: async () => undefined,
+};
+
 test("delegates once and maps the completed Gateway Local Session", async () => {
   const findRuntimeRecord = mock(async () => client);
   const completeGatewayLogin = mock(async () => ({
@@ -31,6 +35,7 @@ test("delegates once and maps the completed Gateway Local Session", async () => 
   const useCase = createCompleteSsoCallbackUseCase({
     authorizationGrants: { completeGatewayLogin },
     clients: { findRuntimeRecord },
+    trafficGate: enabledTrafficGate,
   });
 
   await expect(useCase.execute({
@@ -79,7 +84,6 @@ describe("current Gateway client state", () => {
     ["missing", null],
     ["disabled", { ...client, customSsoEnabled: false }],
     ["deleted", { ...client, isDelete: true }],
-    ["maintenance", { ...client, status: ClientStatus.Maintenance }],
     ["unconfigured", { ...client, customSsoConfig: null }],
     ["Independent mode", {
       ...client,
@@ -100,6 +104,7 @@ describe("current Gateway client state", () => {
     const useCase = createCompleteSsoCallbackUseCase({
       authorizationGrants: { completeGatewayLogin },
       clients: { findRuntimeRecord: mock(async () => currentClient) },
+      trafficGate: enabledTrafficGate,
     });
 
     await expect(useCase.execute({
@@ -112,6 +117,33 @@ describe("current Gateway client state", () => {
   });
 });
 
+test("does not consume the Gateway grant or establish a Local Session while traffic is suspended", async () => {
+  const completeGatewayLogin = mock(async () => ({
+    orcasSessionId: null,
+    token: "should-not-exist",
+  }));
+  const useCase = createCompleteSsoCallbackUseCase({
+    authorizationGrants: { completeGatewayLogin },
+    clients: { findRuntimeRecord: mock(async () => ({
+      ...client,
+      status: ClientStatus.Maintenance,
+    })) },
+    trafficGate: {
+      assertIssuanceAllowed: async () => {
+        throw new Error("traffic suspended");
+      },
+    },
+  });
+
+  await expect(useCase.execute({
+    clientCode: "gateway",
+    code: "auth-code",
+    redirectUrl: "https://gateway.example.com",
+  })).rejects.toThrow("traffic suspended");
+
+  expect(completeGatewayLogin).not.toHaveBeenCalled();
+});
+
 test("delegates the literal redirect to the grant without reapplying a redirect pattern", async () => {
   const completeGatewayLogin = mock(async () => {
     throw new Error("grant redirect mismatch");
@@ -119,6 +151,7 @@ test("delegates the literal redirect to the grant without reapplying a redirect 
   const useCase = createCompleteSsoCallbackUseCase({
     authorizationGrants: { completeGatewayLogin },
     clients: { findRuntimeRecord: mock(async () => client) },
+    trafficGate: enabledTrafficGate,
   });
 
   await expect(useCase.execute({

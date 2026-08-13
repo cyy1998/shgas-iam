@@ -3,6 +3,7 @@ import type { CustomSsoSessionKernelAdapter } from "@api/services/session/custom
 import type {
   CustomSsoSubjectDeliveryRequestScope,
 } from "@api/services/sso/custom-sso-subject-delivery-request-scope";
+import type { CustomSsoTrafficGate } from "@api/services/sso/custom-sso-traffic-gate.type";
 import type { Context, Next } from "hono";
 import { mapCustomSsoRetryableError } from "@api/middlewares/custom-sso-retryable.error";
 import {
@@ -36,6 +37,7 @@ export interface CreateApiAuthenticationHandlersDeps {
     CustomSsoSubjectDeliveryRequestScope,
     "runWithCapability"
   >;
+  trafficGate: Pick<CustomSsoTrafficGate, "assertSessionUseAllowed">;
   config: {
     readonly projectionRetryAfterSeconds: number;
   };
@@ -75,6 +77,7 @@ export function createApiAuthenticationHandlers(deps: CreateApiAuthenticationHan
       : [];
 
     try {
+      await deps.trafficGate.assertSessionUseAllowed(clientCode);
       return await subjectAccessHttp.run(c, {
         clearCookiesOnInvalidSession: sourceCookies,
         retryAfterSeconds: deps.config.projectionRetryAfterSeconds,

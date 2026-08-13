@@ -22,6 +22,10 @@ export interface IndependentAuthorizationGrantPort {
   }>;
 }
 
+export interface ExchangeSsoCodeTrafficGatePort {
+  assertIssuanceAllowed: (clientCode: string) => Promise<void>;
+}
+
 export interface ExchangeSsoCodeDeps {
   authorizationGrants: IndependentAuthorizationGrantPort;
   clientCredentials: {
@@ -30,4 +34,5 @@ export interface ExchangeSsoCodeDeps {
       secret: string,
     ) => Promise<AuthenticatedIndependentClient | null>;
   };
+  trafficGate: ExchangeSsoCodeTrafficGatePort;
 }

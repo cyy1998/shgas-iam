@@ -8,6 +8,10 @@ export interface InteractionClientReader {
   findRuntime: (clientId: string) => Promise<OidcClientRuntimeMetadata | null>;
 }
 
+export interface InteractionTrafficGate {
+  assertIssuanceAllowed: (clientId: string) => Promise<void>;
+}
+
 export interface InteractionGlobalSessionResolver {
   resolve: (request: Pick<IncomingMessage, "headers">) => Promise<ResolvedGlobalSession | null>;
   renew: (sessionId: string) => Promise<boolean>;
@@ -36,5 +40,6 @@ export interface InteractionProviderSessionBindingStore {
 
 export interface InteractionReturnHandleStore {
   create: (payload: OidcReturnHandlePayload, ttlSeconds: number) => Promise<string | null>;
+  resolveReturnHandle: (handle: string) => Promise<OidcReturnHandlePayload | null>;
   consume: (handle: string) => Promise<OidcReturnHandlePayload | null>;
 }

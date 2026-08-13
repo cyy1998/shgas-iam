@@ -93,4 +93,24 @@ describe("Custom SSO client repository", () => {
       "customSsoConfigVersion",
     ]);
   });
+
+  test("reads a Maintenance Independent secret record for a later Traffic Gate decision", async () => {
+    const row = {
+      id: 7,
+      clientCode: "independent-client",
+      status: ClientStatus.Maintenance,
+      isDelete: false,
+      customSsoEnabled: true,
+      customSsoConfig: independentConfig,
+      customSsoSecretHash: "strong-hash",
+      customSsoConfigVersion: 3,
+    };
+    const repository = createCustomSsoClientRepository(
+      createSelectDb(row).db as never,
+    );
+
+    await expect(repository.findSecretRecord("independent-client"))
+      .resolves
+      .toEqual(row);
+  });
 });

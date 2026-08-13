@@ -5,6 +5,10 @@ import { randomUUID } from "node:crypto";
 import { createServer } from "node:http";
 import { fileURLToPath } from "node:url";
 import {
+  beginClientTrafficGateMutation,
+  publishClientTrafficGateMutation,
+} from "@iam/api-core/client-traffic-gate";
+import {
   invalidateCustomSsoClientRuntime,
 } from "@iam/api-core/custom-sso";
 import { hashSecret } from "@iam/api-core/security";
@@ -38,6 +42,7 @@ import {
 } from "@iam/api-core/testing/process-smoke-harness";
 import {
   ApiErrorCode,
+  ClientStatus,
   CustomSsoClientMode,
   SubjectClaim,
 } from "@iam/contracts";
@@ -463,16 +468,8 @@ async function gatewayAuthz(
   signal: AbortSignal,
   localToken: string,
 ) {
-  const response = await fetch(`${origin}/auth/authz`, {
-    headers: {
-      "Client": gatewayClientCode,
-      "Cookie": `local_${gatewayClientCode}_session=${localToken}`,
-      "X-Forwarded-Uri": "/gateway/composition",
-    },
-    signal,
-  });
-  const body = await response.json() as Record<string, unknown>;
-  const encoded = response.headers.get("X-User-Info");
+  const response = await gatewayAuthzResponse(origin, signal, localToken);
+  const { body, encoded } = response;
   if (
     response.status !== 200
     || body.code !== 200
@@ -485,12 +482,10 @@ async function gatewayAuthz(
   }
   try {
     return {
-      body,
+      ...response,
       decoded: JSON.parse(
         Buffer.from(encoded, "base64").toString("utf8"),
       ) as Record<string, unknown>,
-      setCookie: response.headers.get("set-cookie"),
-      status: response.status,
     };
   }
   catch (error) {
@@ -499,6 +494,30 @@ async function gatewayAuthz(
       { cause: error },
     );
   }
+}
+
+async function gatewayAuthzResponse(
+  origin: string,
+  signal: AbortSignal,
+  localToken: string,
+) {
+  const response = await fetch(`${origin}/auth/authz`, {
+    headers: {
+      "Client": gatewayClientCode,
+      "Cookie": `local_${gatewayClientCode}_session=${localToken}`,
+      "X-Forwarded-Uri": "/gateway/composition",
+    },
+    signal,
+  });
+  const body = await response.json() as Record<string, unknown>;
+  const encoded = response.headers.get("X-User-Info");
+  return {
+    body,
+    encoded,
+    retryAfter: response.headers.get("retry-after"),
+    setCookie: response.headers.get("set-cookie"),
+    status: response.status,
+  };
 }
 
 async function logoutPrincipalSession(
@@ -1117,6 +1136,61 @@ describe("API explicit external entry", () => {
             signal,
             gatewaySession.localToken,
           );
+          const maintenanceMutation = await beginClientTrafficGateMutation(redis, {
+            clientCode: gatewayClientCode,
+            mutationId: randomUUID(),
+          });
+          await sql`
+            UPDATE client
+            SET status = ${ClientStatus.Maintenance},
+                update_time = NOW()
+            WHERE client_code = ${gatewayClientCode}
+          `;
+          const maintenancePublished = await publishClientTrafficGateMutation(
+            redis,
+            maintenanceMutation,
+            ClientStatus.Maintenance,
+          );
+          if (maintenancePublished !== "published")
+            throw new Error("API composition could not publish Maintenance Traffic Gate state");
+          const maintenancePublic = await publicUserInfo(
+            origin,
+            signal,
+            gatewaySession.localToken,
+          );
+          const maintenanceAuthz = await gatewayAuthzResponse(
+            origin,
+            signal,
+            gatewaySession.localToken,
+          );
+
+          const enableMutation = await beginClientTrafficGateMutation(redis, {
+            clientCode: gatewayClientCode,
+            mutationId: randomUUID(),
+          });
+          await sql`
+            UPDATE client
+            SET status = ${ClientStatus.Enable},
+                update_time = NOW()
+            WHERE client_code = ${gatewayClientCode}
+          `;
+          const enablePublished = await publishClientTrafficGateMutation(
+            redis,
+            enableMutation,
+            ClientStatus.Enable,
+          );
+          if (enablePublished !== "published")
+            throw new Error("API composition could not publish Enable Traffic Gate state");
+          const publicAfterMaintenance = await publicUserInfo(
+            origin,
+            signal,
+            gatewaySession.localToken,
+          );
+          const authzAfterMaintenance = await gatewayAuthz(
+            origin,
+            signal,
+            gatewaySession.localToken,
+          );
           const legacyKeysRejectedBeforeCleanup
             = await probeLegacyArtifactRejection(origin, signal);
           const logoutPayloadBefore = await observerRedis.get(legacyPayloadKey);
@@ -1228,6 +1302,7 @@ describe("API explicit external entry", () => {
               status: disabledAuthorize.status,
             },
             authzAfterCleanup,
+            authzAfterMaintenance,
             authzPositive,
             cleanupOutput,
             disabledGrant,
@@ -1241,12 +1316,15 @@ describe("API explicit external entry", () => {
             logout,
             logoutPayloadAfter,
             logoutPayloadBefore,
+            maintenanceAuthz,
+            maintenancePublic,
             notificationRequests: [...notificationObserver.requests],
             newSessionAfterReenable,
             oldSecret,
             oldSessionAfterReenable,
             publicPositive,
             publicAfterCleanup,
+            publicAfterMaintenance,
             replay,
             rotated,
             rotatedExchange,
@@ -1401,6 +1479,28 @@ describe("API explicit external entry", () => {
         status: 200,
       });
       expect(result.authzPositive.decoded).not.toHaveProperty("orcasId");
+      expect(result.maintenancePublic).toEqual({
+        body: {
+          code: ApiErrorCode.Maintenance,
+          data: null,
+          message: "系统维护中",
+        },
+        retryAfter: "7",
+        setCookie: null,
+        status: 503,
+      });
+      expect(result.maintenanceAuthz).toMatchObject({
+        body: {
+          code: ApiErrorCode.Maintenance,
+          data: null,
+          message: "系统维护中",
+        },
+        retryAfter: "7",
+        setCookie: null,
+        status: 503,
+      });
+      expect(result.publicAfterMaintenance).toEqual(result.publicPositive);
+      expect(result.authzAfterMaintenance).toEqual(result.authzPositive);
       expect(result.logout).toEqual({
         location: expect.stringContaining("/logout-complete"),
         status: 302,

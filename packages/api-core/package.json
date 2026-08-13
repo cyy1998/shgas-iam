@@ -9,6 +9,8 @@
     "./authorization-grant/testing": "./src/authorization-grant/testing.ts",
     "./core": "./src/core/index.ts",
     "./core/*": "./src/core/*.ts",
+    "./client-traffic-gate": "./src/client-traffic-gate/index.ts",
+    "./client-traffic-gate/testing": "./src/client-traffic-gate/testing.ts",
     "./custom-sso": "./src/custom-sso/index.ts",
     "./errors": "./src/errors/index.ts",
     "./errors/*": "./src/errors/*.ts",

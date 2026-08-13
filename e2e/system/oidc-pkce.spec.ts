@@ -1,13 +1,21 @@
+import type { APIRequestContext } from "@playwright/test";
 import { Buffer } from "node:buffer";
 import { randomBytes } from "node:crypto";
 import { expect, test } from "@playwright/test";
+import {
+  loginToAdmin,
+  openClientSection,
+  runClientProtocolLifecycleAction,
+  updateClientStatus,
+} from "./src/admin-client-journey.ts";
 import { requireEnvironment } from "./src/environment.ts";
 import {
   createPkceS256Pair,
   receiveOidcAuthorizationCallback,
 } from "./src/oidc-rp.ts";
 
-test("public RP completes OIDC Authorization Code + PKCE once and reads UserInfo", async ({
+test("public RP observes reversible Maintenance and permanent logout through real Admin control", async ({
+  browser,
   page,
   request,
 }) => {
@@ -16,6 +24,21 @@ test("public RP completes OIDC Authorization Code + PKCE once and reads UserInfo
   const adminPassword = requireEnvironment("IAM_E2E_ADMIN_PASSWORD");
   const clientId = requireEnvironment("IAM_E2E_OIDC_CLIENT_CODE");
   const redirectUri = requireEnvironment("IAM_E2E_OIDC_REDIRECT_URI");
+  const adminContext = await browser.newContext({ baseURL: origin });
+  const adminPage = await adminContext.newPage();
+  await loginToAdmin({
+    adminPassword,
+    adminUsername,
+    origin,
+    page: adminPage,
+  });
+  await updateClientStatus(adminPage, clientId, "维护中");
+  await openClientSection(adminPage, clientId, "oidc");
+  await runClientProtocolLifecycleAction(adminPage, "oidc", "禁用");
+  await runClientProtocolLifecycleAction(adminPage, "oidc", "启用");
+  await expect(adminPage.getByText("维护中", { exact: true })).toBeVisible();
+  await expect(adminPage.getByText("已启用", { exact: true })).toBeVisible();
+
   const pkce = createPkceS256Pair();
   const state = randomBytes(24).toString("base64url");
   const nonce = randomBytes(24).toString("base64url");
@@ -30,6 +53,24 @@ test("public RP completes OIDC Authorization Code + PKCE once and reads UserInfo
     scope: "openid profile",
     state,
   }).toString();
+
+  await expectMaintenanceAuthorizationError({
+    authorization,
+    redirectUri,
+    request,
+    state,
+  });
+
+  const [maintenanceDiscovery, maintenanceJwks, maintenanceHealth] = await Promise.all([
+    request.get(`${origin}/oidc/.well-known/openid-configuration`),
+    request.get(`${origin}/oidc/jwks`),
+    request.get(`${origin}/oidc/health`),
+  ]);
+  expect(maintenanceDiscovery.status()).toBe(200);
+  expect(maintenanceJwks.status()).toBe(200);
+  expect(maintenanceHealth.status()).toBe(200);
+
+  await updateClientStatus(adminPage, clientId, "正常");
 
   await page.goto(authorization.href);
   await expect(page).toHaveURL(/\/portal\/login\?/u);
@@ -105,6 +146,55 @@ test("public RP completes OIDC Authorization Code + PKCE once and reads UserInfo
     sub: userInfo.sub,
   });
 
+  await updateClientStatus(adminPage, clientId, "维护中");
+  const maintenanceUserInfo = await request.get(`${origin}/oidc/me`, {
+    headers: { authorization: `Bearer ${String(tokens.access_token)}` },
+  });
+  expect(maintenanceUserInfo.status()).toBe(503);
+  expect(await maintenanceUserInfo.json()).toEqual({
+    error: "temporarily_unavailable",
+  });
+  expect(maintenanceUserInfo.headers()["set-cookie"]).toBeUndefined();
+
+  await updateClientStatus(adminPage, clientId, "正常");
+  const recoveredUserInfo = await request.get(`${origin}/oidc/me`, {
+    headers: { authorization: `Bearer ${String(tokens.access_token)}` },
+  });
+  expect(recoveredUserInfo.status()).toBe(200);
+  expect(await recoveredUserInfo.json()).toMatchObject({ sub: userInfo.sub });
+
+  await updateClientStatus(adminPage, clientId, "维护中");
+  const logout = new URL("/oidc/session/end", origin);
+  logout.search = new URLSearchParams({
+    id_token_hint: String(tokens.id_token),
+    post_logout_redirect_uri: `${origin}/e2e/oidc/logged-out`,
+    state: "maintenance-logout",
+  }).toString();
+  const logoutPrompt = await page.context().request.get(logout.href, {
+    maxRedirects: 0,
+  });
+  expect(logoutPrompt.status()).toBe(200);
+  const logoutForm = await logoutPrompt.text();
+  const logoutAction = logoutForm.match(/<form[^>]+action="([^"]+)"/u)?.[1];
+  const logoutXsrf = logoutForm.match(/name="xsrf" value="([^"]+)"/u)?.[1];
+  expect(logoutAction).toEqual(expect.any(String));
+  expect(logoutXsrf).toEqual(expect.any(String));
+  const logoutResponse = await page.context().request.post(
+    new URL(String(logoutAction), origin).href,
+    {
+      form: { logout: "yes", xsrf: String(logoutXsrf) },
+      maxRedirects: 0,
+    },
+  );
+  expect([302, 303]).toContain(logoutResponse.status());
+
+  await updateClientStatus(adminPage, clientId, "正常");
+  const loggedOutUserInfo = await request.get(`${origin}/oidc/me`, {
+    headers: { authorization: `Bearer ${String(tokens.access_token)}` },
+  });
+  expect(loggedOutUserInfo.status()).toBe(401);
+  expect(await loggedOutUserInfo.json()).toMatchObject({ error: "invalid_token" });
+
   const replayResponse = await request.post(`${origin}/oidc/token`, {
     form: tokenForm,
   });
@@ -112,7 +202,37 @@ test("public RP completes OIDC Authorization Code + PKCE once and reads UserInfo
   expect(await replayResponse.json()).toMatchObject({
     error: "invalid_grant",
   });
+  await adminContext.close();
 });
+
+async function expectMaintenanceAuthorizationError(input: {
+  authorization: URL;
+  redirectUri: string;
+  request: APIRequestContext;
+  state: string;
+}) {
+  const callback = new URL(input.redirectUri);
+  let current = input.authorization;
+  for (let redirectCount = 0; redirectCount < 8; redirectCount += 1) {
+    const response = await input.request.get(current.href, { maxRedirects: 0 });
+    expect(response.headers()["set-cookie"]).toBeUndefined();
+    if (response.status() === 503) {
+      expect(await response.json()).toEqual({ error: "temporarily_unavailable" });
+      return;
+    }
+    expect([302, 303]).toContain(response.status());
+    const location = response.headers().location;
+    expect(location).toEqual(expect.any(String));
+    const target = new URL(String(location), current);
+    if (target.origin === callback.origin && target.pathname === callback.pathname) {
+      expect(target.searchParams.get("error")).toBe("temporarily_unavailable");
+      expect(target.searchParams.get("state")).toBe(input.state);
+      return;
+    }
+    current = target;
+  }
+  throw new Error("OIDC Maintenance authorization did not reach a temporary error boundary");
+}
 
 function readJwtClaims(token: string) {
   const payload = token.split(".")[1];

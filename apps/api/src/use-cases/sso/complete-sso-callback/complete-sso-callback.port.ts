@@ -38,7 +38,12 @@ export interface GatewayCallbackClientReaderPort {
   } | null>;
 }
 
+export interface CompleteSsoCallbackTrafficGatePort {
+  assertIssuanceAllowed: (clientCode: string) => Promise<void>;
+}
+
 export interface CompleteSsoCallbackDeps {
   authorizationGrants: GatewayLoginCompletionPort;
   clients: GatewayCallbackClientReaderPort;
+  trafficGate: CompleteSsoCallbackTrafficGatePort;
 }

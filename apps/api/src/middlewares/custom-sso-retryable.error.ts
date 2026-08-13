@@ -1,5 +1,8 @@
+import {
+  CustomSsoTrafficGateUnavailableError,
+} from "@api/services/sso/custom-sso-traffic-gate";
 import { SERVICE_UNAVAILABLE } from "@iam/api-core/core/http-status-codes";
-import { CustomError } from "@iam/api-core/errors";
+import { AuthzMaintenanceError, CustomError } from "@iam/api-core/errors";
 import { SubjectAccessUnavailableError } from "@iam/api-core/subject-access";
 import {
   ApiErrorCode,
@@ -14,7 +17,9 @@ class CustomSsoRetryableUnavailableError extends CustomError {
   public readonly retryAfterSeconds: number;
 
   constructor(
-    code: ApiErrorCode.SubjectAccessUnavailable
+    code: ApiErrorCode.InternalError
+      | ApiErrorCode.Maintenance
+      | ApiErrorCode.SubjectAccessUnavailable
       | ApiErrorCode.SubjectProjectionNotReady,
     message: string,
     retryAfterSeconds: number,
@@ -32,10 +37,25 @@ export function mapCustomSsoRetryableError(
   error: unknown,
   options: MapCustomSsoRetryableErrorOptions,
 ): unknown {
+  if (error instanceof AuthzMaintenanceError) {
+    assertRetryAfterSeconds(options.retryAfterSeconds);
+    return new CustomSsoRetryableUnavailableError(
+      ApiErrorCode.Maintenance,
+      error.message,
+      options.retryAfterSeconds,
+    );
+  }
+  if (error instanceof CustomSsoTrafficGateUnavailableError) {
+    assertRetryAfterSeconds(options.retryAfterSeconds);
+    return new CustomSsoRetryableUnavailableError(
+      ApiErrorCode.InternalError,
+      "服务暂时不可用",
+      options.retryAfterSeconds,
+    );
+  }
   if (!isRetryableServiceUnavailable(error))
     return error;
-  if (!Number.isSafeInteger(options.retryAfterSeconds) || options.retryAfterSeconds <= 0)
-    throw new Error("Custom SSO retryAfterSeconds must be a positive safe integer");
+  assertRetryAfterSeconds(options.retryAfterSeconds);
   return error instanceof SubjectAccessUnavailableError
     ? new CustomSsoRetryableUnavailableError(
         ApiErrorCode.SubjectAccessUnavailable,
@@ -47,4 +67,9 @@ export function mapCustomSsoRetryableError(
         "主体信息暂未就绪",
         options.retryAfterSeconds,
       );
+}
+
+function assertRetryAfterSeconds(retryAfterSeconds: number) {
+  if (!Number.isSafeInteger(retryAfterSeconds) || retryAfterSeconds <= 0)
+    throw new Error("Custom SSO retryAfterSeconds must be a positive safe integer");
 }

@@ -183,7 +183,17 @@ IAM 不会在 `/sso/token` 成功时替 Independent 业务系统创建 Cookie、
 `customSsoSecret` 不得出现在浏览器地址、前端代码、日志、移动端包或第三方可见配置中。它与通用
 `clientSecret` 是两套独立凭据，不得混用。
 
-### 4.4 Client Code 的 HTTP 传输
+### 4.4 Client Maintenance 重试
+
+Client Maintenance 暂停 Custom SSO 在线流量，但不清除协议启用意图或延长任何对象的 TTL。`/sso/authorize`、Gateway
+`/sso/callback` 与 Independent `/sso/token` 在维护中返回 HTTP 503 与 `AUTH.MAINTENANCE`；受保护的 user-info/authz 使用也采用
+相同暂态语义。调用方不得把该响应当作 401 或登出，也不得丢弃仍未过期的 code、credential/session 或 Cookie。
+
+`/sso/token` 和 `/sso/callback` 会在消费一次性 Authorization Grant 前检查维护门禁，因此维护响应不会消费 code。Client 恢复正常后，
+调用方可以在原始有效期内用同一 code 重试；已经签发且未过期、未发生真实协议 mutation 的 credential/session 也恢复可用。Maintenance
+期间的 configure、enable、disable、remove 或 secret rotation 仍按 Custom SSO 原有规则推进版本并永久淘汰旧对象。
+
+### 4.5 Client Code 的 HTTP 传输
 
 数据库和业务配置中的 Client Code 保持原值。只有把它放入 HTTP Basic username、`Client` 请求头或 Gateway
 Cookie 名时，才使用 `transportClientCode`：先按 UTF-8 编码，再按 RFC 3986 URI component 规则做
@@ -203,7 +213,7 @@ URL query 中的 Client Code 仍把原值交给 `URLSearchParams` 等 URL API，
 Client Code 原值的 64 字符上限与 PostgreSQL `varchar(64)` 一致，按 Unicode code point 计数；不要按
 JavaScript UTF-16 `length` 或 `transportClientCode` 编码后的字节/文本长度自行拒绝合法值。
 
-### 4.5 Session Kernel 会话边界
+### 4.6 Session Kernel 会话边界
 
 当前 custom SSO 通过 Session Kernel 管理 PrincipalSession、授权码、Independent Client Credential 和
 Gateway Local Session：
@@ -240,7 +250,7 @@ credential/session 过期视为重新发起 `/sso/authorize` 的信号。
 当前 production runtime 不读取、写入、规范化该 payload，也不据此通知 client logout。回滚后必须重新执行 custom SSO
 登录、网关鉴权和退出 smoke。
 
-### 4.6 IAM 内部职责边界
+### 4.7 IAM 内部职责边界
 
 当前 IAM 用三个最终操作承接 Custom SSO：
 
@@ -287,13 +297,15 @@ Authorization: {sid}
 注意：
 
 - `Authorization` 头当前直接传 Independent credential 或 Gateway session 值，不使用 `Bearer` 前缀。
-- `Client` 请求头使用 4.4 节的 `transportClientCode`，解码后必须与 credential/session 所属客户端一致。
+- `Client` 请求头使用 4.5 节的 `transportClientCode`，解码后必须与 credential/session 所属客户端一致。
 - 响应按请求时的当前 `subjectClaims` 生成；未选择的字段不会出现。IAM 数据库用户主键、其他 Client 的授权和 ORCAS
   信息永远不会进入该响应。
-- IAM credential/session 失效时返回 401；Independent 业务系统应清理自己的本地会话并重新发起 `/sso/authorize`。
+- IAM credential/session 永久失效时返回 401；Independent 业务系统应清理自己的本地会话并重新发起 `/sso/authorize`。
 - Gateway Local Session 绑定的 Client 配置失效时，IAM 清理对应 Local Session Cookie；有效
   `global_session` 通过 `Client: iam` 请求时，若只有 IAM Client 的 Custom SSO 交付配置不可用，请求同样返回
   401，但 IAM 保留全局登录 Cookie，其他 SSO/OIDC 流程不需要因此重新登录。
+- Client 明确处于 Maintenance 时返回 HTTP 503 与 `AUTH.MAINTENANCE`；调用方应保留仍有效的 credential/session 与 Cookie，
+  等 Client 恢复正常后重试。
 - Subject Access 或投影暂时无法确认时返回 503，并携带 `Retry-After`；调用方应保留有效 Cookie/session 并按建议重试。
 
 ## 6. 网关统一鉴权
@@ -327,9 +339,9 @@ X-User-Info: eyJ2ZXJzaW9uIjoxLCJzdWJqZWN0SWRlbnRpZmllciI6IjAwMDAwMDAwLTAwMDAtNDA
 Subject Identifier 必有；`username`/`name` 只在 Client 选择时出现。数据库 `id`、phone、employments、
 authorization 和 ORCAS 永远不会进入 Gateway Subject Header。`/auth/authz` 不做接口级角色或权限判定。
 
-会话无效、Client/Custom SSO 被禁用或配置版本变化时返回 401。Subject Access 或投影暂时无法确认时返回 503 和
-`Retry-After`，且不会清除本来有效的 Cookie。网关在 401 时应中断转发并重新登录，在 503 时应中断本次转发并按
-`Retry-After` 重试，不要把暂态故障当作登出。
+会话无效、Client/Custom SSO 被禁用或配置版本变化时返回 401。Client 明确处于 Maintenance 时返回 503 与
+`AUTH.MAINTENANCE`；Subject Access、Client 状态或投影暂时无法确认时返回通用 503，并可携带 `Retry-After`。这些暂态响应
+不会清除本来有效的 Cookie。网关在 401 时应中断转发并重新登录，在 503 时应中断本次转发并按建议重试，不要把暂态故障当作登出。
 
 ## 7. 退出登录
 
@@ -360,7 +372,7 @@ Cookie/session，再调用 IAM `/sso/logout`。Client 配置中的 `logoutEndpoi
 | 回调换取 token 报“非法Code” | 授权码过期、重复使用或 code 传错 | 重新发起登录，不要缓存或复用授权码。 |
 | `/public/user-info` 返回 400 | 缺少 `Client`，或 `Client` 格式非法 | 传入已注册 Client Code 的合法 transport 编码。 |
 | `/public/user-info` 返回 401 | 缺少 IAM credential/session，或 credential/session 已过期 | 清理第三方本地会话并重新发起 SSO 授权登录。 |
-| `/public/user-info` 或 `/auth/authz` 返回 503 | Subject Access 或主体投影暂时无法确认 | 保留当前 Cookie/session，读取 `Retry-After` 后重试。 |
+| `/sso/authorize`、`/sso/callback`、`/sso/token`、`/public/user-info` 或 `/auth/authz` 返回 503 | Client 明确处于 Maintenance，或 Client/Subject Access/主体投影暂时无法确认 | `AUTH.MAINTENANCE` 表示明确维护；其他 503 是通用暂态不可用。保留仍有效的 code、Cookie/session，按 `Retry-After` 或运维窗口重试。 |
 | 登出后业务系统仍显示已登录 | 业务系统只撤销了 IAM credential，未清理自己的 session | 业务退出入口先清理本地 Cookie/session，再调用 IAM `/sso/logout`。 |
 | 登录成功后循环跳登录页 | Cookie 域、反向代理路径或 `redirectUrl` 配置不一致 | 检查回调地址、Cookie 所属域和网关转发规则。 |
 

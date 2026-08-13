@@ -29,7 +29,7 @@ export function createCustomSsoClientSecretVerifier(
     if (
       !record
       || record.clientCode !== clientCode
-      || record.status !== ClientStatus.Enable
+      || record.status === ClientStatus.Disable
       || record.isDelete
       || !record.customSsoEnabled
       || record.customSsoConfig?.mode !== CustomSsoClientMode.Independent

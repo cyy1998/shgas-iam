@@ -16,8 +16,14 @@ const activeClient = {
 };
 
 describe("oIDC repository availability", () => {
+  it("keeps configured clients runtime-valid during maintenance", () => {
+    expect(isOidcClientAvailable({
+      ...activeClient,
+      status: ClientStatus.Maintenance,
+    } as never)).toBe(true);
+  });
+
   it.each([
-    ["maintenance", { ...activeClient, status: ClientStatus.Maintenance }],
     ["disabled", { ...activeClient, status: ClientStatus.Disable }],
     ["deleted", { ...activeClient, isDelete: true }],
     ["OIDC disabled", { ...activeClient, oidcEnabled: false }],

@@ -5,6 +5,7 @@ import type { ClientAuthRateLimiter } from "../security/client-auth-rate-limit.t
 import type { SigningKey } from "../security/signing-keys.ts";
 import type { OidcClaimsAdapter } from "./claims.ts";
 import type { ProviderClientSecretVerifier } from "./client-auth.ts";
+import type { OidcClientTrafficGate } from "./client-traffic-gate.ts";
 import type {
   ProviderMiddlewareOidcSessionAdapter,
 } from "./middleware.ts";
@@ -28,6 +29,7 @@ export interface CreateOidcProviderOptions {
   clientSecretVerifier: ProviderClientSecretVerifier;
   clientAuthRateLimiter: ClientAuthRateLimiter;
   oidcSession: ProviderMiddlewareOidcSessionAdapter;
+  trafficGate: OidcClientTrafficGate;
 }
 
 export function createOidcProvider(options: CreateOidcProviderOptions) {
@@ -37,6 +39,7 @@ export function createOidcProvider(options: CreateOidcProviderOptions) {
     currentSigningKey: options.signingKeys.current,
     previousSigningKey: options.signingKeys.previous,
     interactionPolicy: options.interactionPolicy,
+    trafficGate: options.trafficGate,
   }));
 
   provider.proxy = options.env.oidc.trustProxy;

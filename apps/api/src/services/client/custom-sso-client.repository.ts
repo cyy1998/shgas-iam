@@ -3,7 +3,7 @@ import type {
   CustomSsoClientRuntimeDto,
   CustomSsoClientSecretRecord,
 } from "@iam/domain/client";
-import { ClientStatus, CustomSsoClientMode } from "@iam/contracts";
+import { CustomSsoClientMode } from "@iam/contracts";
 import { clients } from "@iam/db/schema";
 import {
   CustomSsoClientRuntimeDtoSchema,
@@ -39,7 +39,6 @@ export function createCustomSsoClientRepository(db: DbClient) {
         customSsoConfigVersion: clients.customSsoConfigVersion,
       }).from(clients).where(and(
         eq(clients.clientCode, clientCode),
-        eq(clients.status, ClientStatus.Enable),
         eq(clients.isDelete, false),
         eq(clients.customSsoEnabled, true),
       )).limit(1);

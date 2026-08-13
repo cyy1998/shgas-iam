@@ -2,6 +2,7 @@ import type { UnknownObject } from "oidc-provider";
 import type {
   InteractionGlobalSessionResolver,
   InteractionProviderSessionPrincipalReader,
+  InteractionTrafficGate,
 } from "./interaction.port.ts";
 import { OidcScope } from "@iam/contracts";
 import { errors, interactionPolicy } from "oidc-provider";
@@ -40,6 +41,7 @@ export function validateAuthorizationRequest(params: UnknownObject, client: Auth
 export function createIamInteractionPolicy(
   globalSessions: InteractionGlobalSessionResolver,
   providerSessions: InteractionProviderSessionPrincipalReader,
+  trafficGate: InteractionTrafficGate,
 ) {
   const policy = interactionPolicy.base();
   policy.remove("consent");
@@ -55,6 +57,10 @@ export function createIamInteractionPolicy(
       const params = ctx.oidc.params ?? {};
       const client = ctx.oidc.client;
       validateAuthorizationRequest(params, client);
+      const clientId = typeof params.client_id === "string" ? params.client_id : null;
+      if (!clientId)
+        throw new errors.InvalidRequest("client is required");
+      await trafficGate.assertIssuanceAllowed(clientId);
 
       const session = await globalSessions.resolve(ctx.req);
       ctx.state.iamGlobalSession = session;
@@ -63,7 +69,6 @@ export function createIamInteractionPolicy(
         return interactionPolicy.Check.REQUEST_PROMPT;
       if (providerSession.accountId !== session.accountId)
         return interactionPolicy.Check.REQUEST_PROMPT;
-      const clientId = typeof params.client_id === "string" ? params.client_id : null;
       const authorizationAttemptId = ctx.oidc.entities.Interaction?.uid ?? null;
       if (!providerSession.uid
         || !clientId

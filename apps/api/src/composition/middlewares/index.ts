@@ -16,6 +16,7 @@ export async function createApiMiddlewares(options: CreateApiMiddlewaresOptions)
     customSsoSession: options.services.customSsoSession,
     subjectDeliveryRequests:
       options.services.customSsoSubjectDeliveryRequests,
+    trafficGate: options.services.customSsoTrafficGate,
     config: {
       projectionRetryAfterSeconds:
         options.runtime.config.env.sso.projectionRetryAfterSeconds,

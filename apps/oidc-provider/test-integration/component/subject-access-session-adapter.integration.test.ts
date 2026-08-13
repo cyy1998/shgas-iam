@@ -41,6 +41,39 @@ function createAdapter(
 }
 
 describe("oIDC Subject Access Session Adapter", () => {
+  it("resolves a return handle without consuming it", async () => {
+    const metadata = {
+      browserBinding: "browser-binding",
+      clientId: "client-a",
+      interactionUid: "interaction-a",
+      oidcConfigVersion: 1,
+      returnTarget: "https://issuer.example/oidc/interaction/interaction-a",
+    };
+    const consumeProtocolArtifact = vi.fn();
+    const adapter = createOidcSessionKernelAdapter({
+      accounts: { findBySubject: vi.fn() },
+      clients: { findActiveVersion: vi.fn(), findRuntime: vi.fn() },
+      clock: { now: () => Date.now() },
+      cookieName: "global_session",
+      kernel: {
+        consumeProtocolArtifact,
+        resolveProtocolArtifact: vi.fn(async () => ({
+          status: "resolved",
+          value: {
+            artifactType: "login_return_handle",
+            metadata,
+            protocol: "oidc",
+          },
+        })),
+      },
+      logger: { warn: vi.fn() },
+      providerSessionState: new ProviderSessionStateFake(),
+    } as never);
+
+    await expect(adapter.resolveReturnHandle("return-handle")).resolves.toEqual(metadata);
+    expect(consumeProtocolArtifact).not.toHaveBeenCalled();
+  });
+
   it.each([
     "user_disabled",
     "user_deleted",

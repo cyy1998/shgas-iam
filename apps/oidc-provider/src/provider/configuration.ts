@@ -10,6 +10,10 @@ export type ProviderConfigurationDependencies = {
   currentSigningKey: SigningKey;
   previousSigningKey?: SigningKey;
   interactionPolicy: interactionPolicy.Prompt[];
+  trafficGate: {
+    assertIssuanceAllowed: (clientId: string) => Promise<void>;
+    assertOnlineAccessAllowed: (clientId: string) => Promise<void>;
+  };
 };
 
 export function createProviderConfiguration(
@@ -98,7 +102,11 @@ export function createProviderConfiguration(
         throw new Error("OIDC global session is unavailable");
       return extra;
     },
-    findAccount: async (_ctx, subject, token) => await dependencies.claims.findAccount(subject, token),
+    findAccount: async (_ctx, subject, token) => {
+      if (token?.kind === "AccessToken" && token.clientId)
+        await dependencies.trafficGate.assertOnlineAccessAllowed(token.clientId);
+      return await dependencies.claims.findAccount(subject, token);
+    },
     interactions: {
       policy: dependencies.interactionPolicy,
       url: (_ctx, interaction) => `${env.oidc.issuer}/interaction/${interaction.uid}`,
@@ -108,6 +116,7 @@ export function createProviderConfiguration(
       const clientId = ctx.oidc.client?.clientId;
       if (!accountId || !clientId)
         return undefined;
+      await dependencies.trafficGate.assertIssuanceAllowed(clientId);
       const grantId = ctx.oidc.session?.grantIdFor(clientId);
       const grant = grantId
         ? await ctx.oidc.provider.Grant.find(grantId)

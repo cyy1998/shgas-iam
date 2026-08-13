@@ -1,10 +1,15 @@
 import type { AuditLogWriterPort } from "@admin-api/services/audit/audit.service";
 import type { AdminSessionRevocationPort } from "@admin-api/services/session-revocation/session-revocation.port";
 import type {
+  ClientTrafficGateMutation,
+  ClientTrafficGateMutationHeartbeat,
+} from "@iam/api-core/client-traffic-gate";
+import type {
   CustomSsoClientRuntimeMutation,
   CustomSsoClientRuntimeMutationHeartbeat,
 } from "@iam/api-core/custom-sso";
 import type { UnitOfWorkPort } from "@iam/api-core/uow";
+import type { ClientStatus } from "@iam/contracts";
 import type {
   AdminClientCustomSsoUpdate,
   AdminClientOidcUpdate,
@@ -62,6 +67,20 @@ export interface AdminClientCacheInvalidationTarget {
 }
 
 export interface AdminClientCachePort {
+  beginTrafficGateMutation: (
+    clientCode: string,
+    mutationId: string,
+  ) => Promise<ClientTrafficGateMutation>;
+  startTrafficGateMutationHeartbeat: (
+    mutation: ClientTrafficGateMutation,
+  ) => ClientTrafficGateMutationHeartbeat;
+  publishTrafficGateMutation: (
+    mutation: ClientTrafficGateMutation,
+    status: ClientStatus,
+  ) => Promise<"expired" | "published" | "superseded">;
+  abortTrafficGateMutation: (
+    mutation: ClientTrafficGateMutation,
+  ) => Promise<"aborted" | "expired" | "superseded">;
   beginRuntimeMutation: (
     clientCode: string,
     mutationId: string,

@@ -6,7 +6,9 @@ import type {
   InteractionGlobalSessionResolver,
   InteractionProviderSessionBindingStore,
   InteractionReturnHandleStore,
+  InteractionTrafficGate,
 } from "./interaction.port.ts";
+import { errors } from "oidc-provider";
 import { writeOidcSubjectAccessNodeResponse } from "../provider/subject-access-protocol.ts";
 import { getCookieValue, requestNeedsReauthentication } from "./global-session.ts";
 import {
@@ -38,6 +40,7 @@ export interface CreateOidcInteractionHandlerDeps {
   globalSessions: InteractionGlobalSessionResolver;
   providerSessions: InteractionProviderSessionBindingStore;
   returnHandles: InteractionReturnHandleStore;
+  trafficGate: InteractionTrafficGate;
   env: OidcProviderEnv;
 }
 
@@ -47,6 +50,7 @@ export function createOidcInteractionHandler(deps: CreateOidcInteractionHandlerD
     const clientId = typeof details.params.client_id === "string" ? details.params.client_id : null;
     if (!clientId || details.prompt.name !== "login")
       return failClosed(response);
+    await deps.trafficGate.assertIssuanceAllowed(clientId);
     const client = await deps.clients.findRuntime(clientId);
     if (!client)
       return failClosed(response);
@@ -99,9 +103,12 @@ export function createOidcInteractionHandler(deps: CreateOidcInteractionHandlerD
     const handle = url.searchParams.get("oidcReturn");
     if (!handle)
       return failClosed(response);
-    const payload = await deps.returnHandles.consume(handle);
+    const payload = await deps.returnHandles.resolveReturnHandle(handle);
     const browserBinding = getCookieValue(request.headers.cookie, BROWSER_BINDING_COOKIE);
     if (!payload || !browserBinding || !secureStringEqual(payload.browserBinding, browserBinding))
+      return failClosed(response);
+    await deps.trafficGate.assertIssuanceAllowed(payload.clientId);
+    if (!await deps.returnHandles.consume(handle))
       return failClosed(response);
 
     const client = await deps.clients.findRuntime(payload.clientId);
@@ -126,6 +133,15 @@ export function createOidcInteractionHandler(deps: CreateOidcInteractionHandlerD
       await operation();
     }
     catch (error) {
+      if (error instanceof errors.TemporarilyUnavailable) {
+        response.statusCode = 503;
+        response.setHeader("content-type", "application/json");
+        response.setHeader("cache-control", "no-store");
+        response.end(JSON.stringify({ error: "temporarily_unavailable" }));
+        return;
+      }
+      if (error instanceof errors.InvalidClient)
+        return failClosed(response);
       const handled = writeOidcSubjectAccessNodeResponse(error, response, {
         cookieName: deps.env.oidc.globalSessionCookie,
         cookieSecure: deps.env.oidc.cookieSecure,

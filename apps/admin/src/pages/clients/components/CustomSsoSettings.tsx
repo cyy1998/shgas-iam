@@ -12,7 +12,6 @@ import {
   rotateClientCustomSsoSecret,
 } from '@admin/services/client';
 import {
-  ClientStatus,
   CustomSsoClientMode,
   CustomSsoClientState,
   SUBJECT_CLAIMS_V1,
@@ -37,6 +36,7 @@ import {
 import { useEffect, useState } from 'react';
 import OneTimeSecretModal from './OneTimeSecretModal';
 import {
+  canEnableClientProtocol,
   confirmClientSettingAction,
   normalizeClientSettingList,
 } from './settingsHelpers';
@@ -393,7 +393,7 @@ export default function CustomSsoSettings({
             disabled={
               formDirty ||
               client.customSsoState !== CustomSsoClientState.Disabled ||
-              client.status !== ClientStatus.Enable
+              !canEnableClientProtocol(client.status)
             }
             onClick={() =>
               runAction(

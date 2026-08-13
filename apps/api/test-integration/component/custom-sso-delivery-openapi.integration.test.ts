@@ -41,6 +41,9 @@ function createContractApp() {
       })),
     },
     logger,
+    trafficGate: {
+      assertSessionUseAllowed: async () => undefined,
+    },
     config: {
       projectionRetryAfterSeconds: 3,
       redisExpireSeconds: 3600,
@@ -131,6 +134,8 @@ describe("Custom SSO delivery OpenAPI", () => {
     expect(contract).toContain("subjectIdentifier");
     expect(contract).toContain(ApiErrorCode.SubjectProjectionNotReady);
     expect(contract).toContain(ApiErrorCode.SubjectAccessUnavailable);
+    expect(contract).toContain(ApiErrorCode.Maintenance);
+    expect(contract).toContain(ApiErrorCode.InternalError);
     expect(contract).not.toContain("\"id\"");
     expect(contract).not.toContain("userInfo");
     expect(document.components.schemas.CustomSsoSubjectProjectionV1).toMatchObject({

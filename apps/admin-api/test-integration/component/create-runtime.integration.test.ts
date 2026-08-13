@@ -38,7 +38,7 @@ function createRedisDouble() {
 }
 
 describe("Admin API client cache composition", () => {
-  test("invalidates the generic and generation-fenced Custom SSO runtime caches", async () => {
+  test("invalidates generic and generation-fenced client runtime caches", async () => {
     const fake = createRedisDouble();
     const cache = createAdminClientCache({ redis: fake.redis as never });
 
@@ -51,10 +51,10 @@ describe("Admin API client cache composition", () => {
       ["cache:client:code:gateway"],
       ["cache:client:secret:generic-secret"],
     ]);
-    expect(fake.transactions).toEqual([[
+    expect(fake.transactions).toContainEqual([
       ["incr", customSsoClientRuntimeGenerationKey("gateway")],
       ["del", customSsoClientRuntimeCacheKey("gateway")],
-    ]]);
+    ]);
   });
 
   test("invalidates both old and new runtime cache identities on a client update", async () => {
@@ -72,15 +72,16 @@ describe("Admin API client cache composition", () => {
       },
     );
 
-    expect(fake.transactions).toEqual([
+    expect(fake.transactions).toContainEqual([
+      ["incr", customSsoClientRuntimeGenerationKey("before")],
+      ["del", customSsoClientRuntimeCacheKey("before")],
+    ]);
+    expect(fake.transactions).toContainEqual([
       [
-        ["incr", customSsoClientRuntimeGenerationKey("before")],
-        ["del", customSsoClientRuntimeCacheKey("before")],
+        "incr",
+        customSsoClientRuntimeGenerationKey("after"),
       ],
-      [
-        ["incr", customSsoClientRuntimeGenerationKey("after")],
-        ["del", customSsoClientRuntimeCacheKey("after")],
-      ],
+      ["del", customSsoClientRuntimeCacheKey("after")],
     ]);
   });
 

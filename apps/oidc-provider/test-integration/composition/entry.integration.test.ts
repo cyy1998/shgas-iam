@@ -5,6 +5,10 @@ import type Redis from "ioredis";
 import type { ClientCustomSsoConfigureDto } from "../../../admin-api/src/services/client/client.type.ts";
 import { createHash, randomUUID } from "node:crypto";
 import { fileURLToPath } from "node:url";
+import {
+  beginClientTrafficGateMutation,
+  publishClientTrafficGateMutation,
+} from "@iam/api-core/client-traffic-gate";
 import { hashSecret } from "@iam/api-core/security";
 import {
   createSubjectAccessBootstrap,
@@ -27,7 +31,7 @@ import {
   PROCESS_SMOKE_TEST_TIMEOUT_MS,
   spawnOwnedProcessTree,
 } from "@iam/api-core/testing/process-smoke-harness";
-import { CustomSsoClientMode, SubjectClaim } from "@iam/contracts";
+import { ClientStatus, CustomSsoClientMode, SubjectClaim } from "@iam/contracts";
 import { relations } from "@iam/db/relations";
 import {
   createSubjectFactsRedisInspector,
@@ -58,6 +62,9 @@ const username = "oidc-sensitive-username";
 const originalName = "OIDC Snapshot Name";
 const changedName = "OIDC Current Name Must Not Leak";
 const clientId = `oidc-real-entry-${resourceSuffix}`;
+const confidentialClientId = `oidc-confidential-${resourceSuffix}`;
+const confidentialClientSecret = `oidc-confidential-secret-${resourceSuffix}`;
+const confidentialRedirectUri = "https://oidc-confidential.example.test/callback";
 const redirectUri = "https://oidc-real-entry.example.test/callback";
 const postLogoutRedirectUri = "https://oidc-real-entry.example.test/logout-complete";
 const codeVerifier = "a".repeat(64);
@@ -180,7 +187,16 @@ async function requestRedirect(
 
 async function runPublicProtocolFlow(input: {
   issuer: string;
+  onAccessTokenReady: (accessToken: string) => Promise<{
+    discoveryStatus: number;
+    healthStatus: number;
+    jwksStatus: number;
+    maintenanceUserInfoStatus: number;
+  }>;
+  onAfterLogout: () => Promise<void>;
+  onBeforeLogout: () => Promise<void>;
   onCodeIssued: () => Promise<void>;
+  onCodeReadyForExchange: (code: string) => Promise<void>;
   origin: string;
   principalToken: string;
   registerOwnedProtocolToken: (token: string) => void;
@@ -231,6 +247,8 @@ async function runPublicProtocolFlow(input: {
 
   await input.onCodeIssued();
 
+  await input.onCodeReadyForExchange(code);
+
   const tokenResponse = await fetch(`${input.issuer}/token`, {
     body: new URLSearchParams({
       client_id: clientId,
@@ -255,6 +273,8 @@ async function runPublicProtocolFlow(input: {
   }
   input.registerOwnedProtocolToken(tokens.access_token);
 
+  const maintenanceBoundary = await input.onAccessTokenReady(tokens.access_token);
+
   const userInfoResponse = await fetch(`${input.issuer}/me`, {
     headers: { authorization: `Bearer ${tokens.access_token}` },
     signal: input.signal,
@@ -266,6 +286,7 @@ async function runPublicProtocolFlow(input: {
     );
   }
 
+  await input.onBeforeLogout();
   const logout = new URL(`${input.issuer}/session/end`);
   logout.search = new URLSearchParams({
     id_token_hint: tokens.id_token,
@@ -301,11 +322,26 @@ async function runPublicProtocolFlow(input: {
       `OIDC logout returned unexpected ${logoutResponse.status}/${logoutLocation}`,
     );
   }
+  await input.onAfterLogout();
+  const revokedUserInfoResponse = await fetch(`${input.issuer}/me`, {
+    headers: { authorization: `Bearer ${tokens.access_token}` },
+    signal: input.signal,
+  });
+  const revokedUserInfo = await revokedUserInfoResponse.json() as Record<string, unknown>;
+  if (revokedUserInfoResponse.status !== 401 || revokedUserInfo.error !== "invalid_token") {
+    throw new FatalReadinessError(
+      `OIDC logged-out UserInfo returned unexpected ${revokedUserInfoResponse.status}/${String(
+        revokedUserInfo.error,
+      )}`,
+    );
+  }
 
   return {
     authorizeStatus,
     idTokenClaims: decodeJwt(tokens.id_token),
     logoutStatus: logoutResponse.status,
+    maintenanceBoundary,
+    revokedUserInfoStatus: revokedUserInfoResponse.status,
     tokenStatus: tokenResponse.status,
     userInfo,
     userInfoStatus: userInfoResponse.status,
@@ -423,6 +459,8 @@ function createProductionOwnerSeed(input: {
   return {
     clientRuntimeCache: stores.clientRuntimeCache,
     clientRuntime: stores.clientRuntime,
+    clientTrafficGate: stores.clientTrafficGate,
+    redis: input.redis,
     sessionKernel: session.kernel,
     subjectAccessBootstrap: createSubjectAccessBootstrap({
       random: { uuid: randomUUID },
@@ -507,6 +545,7 @@ describe("oIDC provider explicit external entry", () => {
           await transaction`DELETE FROM user_profile WHERE user_id = ${userId} OR subject_identifier = ${subjectIdentifier}`;
           await transaction`DELETE FROM "user" WHERE id = ${userId} OR subject_identifier = ${subjectIdentifier}`;
           await transaction`DELETE FROM client WHERE client_code = ${clientId}`;
+          await transaction`DELETE FROM client WHERE client_code = ${confidentialClientId}`;
         });
       });
       const redisHarness = await createOidcProviderRedisTestHarness();
@@ -518,6 +557,7 @@ describe("oIDC provider explicit external entry", () => {
       const ownedRedisMarkers = new Set([
         subjectIdentifier,
         clientId,
+        confidentialClientId,
       ]);
       registerCleanup(async () => {
         await cleanupRedisKeysMatchingOwnerMarkers({
@@ -537,6 +577,8 @@ describe("oIDC provider explicit external entry", () => {
         await transaction`DELETE FROM user_profile WHERE user_id = ${userId} OR subject_identifier = ${subjectIdentifier}`;
         await transaction`DELETE FROM "user" WHERE id = ${userId} OR subject_identifier = ${subjectIdentifier}`;
         await transaction`DELETE FROM client WHERE client_code = ${clientId}`;
+        await transaction`DELETE FROM client WHERE client_code = ${confidentialClientId}`;
+        const confidentialSecretHash = await hashSecret(confidentialClientSecret, 4);
         await transaction`
           INSERT INTO client (
             client_code,
@@ -565,6 +607,38 @@ describe("oIDC provider explicit external entry", () => {
               tokenEndpointAuthMethod: "none",
             })},
             1
+          )
+        `;
+        await transaction`
+          INSERT INTO client (
+            client_code,
+            client_name,
+            client_secret,
+            status,
+            is_delete,
+            ext_attributes,
+            oidc_enabled,
+            oidc_config,
+            oidc_config_version,
+            oidc_secret_hash
+          )
+          VALUES (
+            ${confidentialClientId},
+            'OIDC confidential external entry',
+            'unused-confidential-client-placeholder',
+            1,
+            FALSE,
+            '{}'::jsonb,
+            TRUE,
+            ${transaction.json({
+              clientType: "confidential",
+              redirectUris: [confidentialRedirectUri],
+              postLogoutRedirectUris: [],
+              allowedScopes: ["openid"],
+              tokenEndpointAuthMethod: "client_secret_basic",
+            })},
+            1,
+            ${confidentialSecretHash}
           )
         `;
         await transaction`
@@ -715,6 +789,21 @@ describe("oIDC provider explicit external entry", () => {
           const discovery = await probeDiscovery(origin, issuer, signal);
           if (discovery === undefined)
             return undefined;
+          const publishPublicTrafficGate = async (status: ClientStatus) => {
+            if (productionOwners === undefined)
+              throw new FatalReadinessError("OIDC production owners were unavailable");
+            const mutation = await beginClientTrafficGateMutation(productionOwners.redis, {
+              clientCode: clientId,
+              mutationId: randomUUID(),
+            });
+            const published = await publishClientTrafficGateMutation(
+              productionOwners.redis,
+              mutation,
+              status,
+            );
+            if (published !== "published")
+              throw new FatalReadinessError(`OIDC ${status} gate publication failed`);
+          };
           const protocol = await runPublicProtocolFlow({
             issuer,
             origin,
@@ -723,6 +812,36 @@ describe("oIDC provider explicit external entry", () => {
               ownedRedisMarkers.add(token);
             },
             signal,
+            onAccessTokenReady: async (accessToken) => {
+              await publishPublicTrafficGate(ClientStatus.Maintenance);
+              const [blockedUserInfo, maintenanceDiscovery, maintenanceJwks, maintenanceHealth]
+                = await Promise.all([
+                  fetch(`${issuer}/me`, {
+                    headers: { authorization: `Bearer ${accessToken}` },
+                    signal,
+                  }),
+                  fetch(`${issuer}/.well-known/openid-configuration`, { signal }),
+                  fetch(`${issuer}/jwks`, { signal }),
+                  fetch(`${origin}/health`, { signal }),
+                ]);
+              const blockedBody = await blockedUserInfo.json() as Record<string, unknown>;
+              if (blockedUserInfo.status !== 503 || blockedBody.error !== "temporarily_unavailable") {
+                throw new FatalReadinessError(
+                  `OIDC Maintenance UserInfo returned unexpected ${blockedUserInfo.status}/${String(
+                    blockedBody.error,
+                  )}`,
+                );
+              }
+              await publishPublicTrafficGate(ClientStatus.Enable);
+              return {
+                discoveryStatus: maintenanceDiscovery.status,
+                healthStatus: maintenanceHealth.status,
+                jwksStatus: maintenanceJwks.status,
+                maintenanceUserInfoStatus: blockedUserInfo.status,
+              };
+            },
+            onAfterLogout: async () => await publishPublicTrafficGate(ClientStatus.Enable),
+            onBeforeLogout: async () => await publishPublicTrafficGate(ClientStatus.Maintenance),
             onCodeIssued: async () => {
               if (productionOwners === undefined)
                 throw new FatalReadinessError("OIDC production owners were unavailable");
@@ -734,6 +853,108 @@ describe("oIDC provider explicit external entry", () => {
                   `OIDC Subject Facts update failed: ${publication.status}`,
                 );
               }
+            },
+            onCodeReadyForExchange: async (code) => {
+              if (productionOwners === undefined)
+                throw new FatalReadinessError("OIDC production owners were unavailable");
+              await publishPublicTrafficGate(ClientStatus.Maintenance);
+              const blocked = await fetch(`${issuer}/token`, {
+                body: new URLSearchParams({
+                  client_id: clientId,
+                  code,
+                  code_verifier: codeVerifier,
+                  grant_type: "authorization_code",
+                  redirect_uri: redirectUri,
+                }),
+                headers: { "content-type": "application/x-www-form-urlencoded" },
+                method: "POST",
+                signal,
+              });
+              const body = await blocked.json() as Record<string, unknown>;
+              if (blocked.status !== 400 || body.error !== "temporarily_unavailable") {
+                throw new FatalReadinessError(
+                  `OIDC Maintenance token gate returned unexpected ${blocked.status}/${String(body.error)}`,
+                );
+              }
+              await rawSql`
+                UPDATE client
+                SET status = ${ClientStatus.Maintenance}
+                WHERE client_code = ${confidentialClientId}
+              `;
+              const confidentialMaintenance = await beginClientTrafficGateMutation(
+                productionOwners.redis,
+                { clientCode: confidentialClientId, mutationId: randomUUID() },
+              );
+              const confidentialMaintenancePublished = await publishClientTrafficGateMutation(
+                productionOwners.redis,
+                confidentialMaintenance,
+                ClientStatus.Maintenance,
+              );
+              if (confidentialMaintenancePublished !== "published") {
+                throw new FatalReadinessError(
+                  "OIDC confidential Maintenance gate publication failed",
+                );
+              }
+              const confidentialHeaders = {
+                "authorization": `Basic ${Buffer.from(
+                  `${confidentialClientId}:${confidentialClientSecret}`,
+                ).toString("base64")}`,
+                "content-type": "application/x-www-form-urlencoded",
+              };
+              const confidentialBody = new URLSearchParams({
+                code: "missing-code",
+                code_verifier: codeVerifier,
+                grant_type: "authorization_code",
+                redirect_uri: confidentialRedirectUri,
+              });
+              const confidentialBlocked = await fetch(`${issuer}/token`, {
+                body: confidentialBody,
+                headers: confidentialHeaders,
+                method: "POST",
+                signal,
+              });
+              const confidentialBlockedBody = await confidentialBlocked.json() as Record<string, unknown>;
+              if (
+                confidentialBlocked.status !== 400
+                || confidentialBlockedBody.error !== "temporarily_unavailable"
+              ) {
+                throw new FatalReadinessError(
+                  `OIDC confidential Maintenance gate returned unexpected ${confidentialBlocked.status}/${String(
+                    confidentialBlockedBody.error,
+                  )}`,
+                );
+              }
+              await rawSql`
+                UPDATE client
+                SET status = ${ClientStatus.Enable}
+                WHERE client_code = ${confidentialClientId}
+              `;
+              const confidentialEnable = await beginClientTrafficGateMutation(
+                productionOwners.redis,
+                { clientCode: confidentialClientId, mutationId: randomUUID() },
+              );
+              const confidentialEnablePublished = await publishClientTrafficGateMutation(
+                productionOwners.redis,
+                confidentialEnable,
+                ClientStatus.Enable,
+              );
+              if (confidentialEnablePublished !== "published")
+                throw new FatalReadinessError("OIDC confidential Enable gate publication failed");
+              const confidentialRecovered = await fetch(`${issuer}/token`, {
+                body: confidentialBody,
+                headers: confidentialHeaders,
+                method: "POST",
+                signal,
+              });
+              const confidentialRecoveredBody = await confidentialRecovered.json() as Record<string, unknown>;
+              if (confidentialRecovered.status !== 400 || confidentialRecoveredBody.error !== "invalid_grant") {
+                throw new FatalReadinessError(
+                  `OIDC confidential recovery returned unexpected ${confidentialRecovered.status}/${String(
+                    confidentialRecoveredBody.error,
+                  )}`,
+                );
+              }
+              await publishPublicTrafficGate(ClientStatus.Enable);
             },
           });
           return { discovery, protocol };
@@ -747,6 +968,13 @@ describe("oIDC provider explicit external entry", () => {
           sub: subjectIdentifier,
         },
         logoutStatus: 303,
+        maintenanceBoundary: {
+          discoveryStatus: 200,
+          healthStatus: 200,
+          jwksStatus: 200,
+          maintenanceUserInfoStatus: 503,
+        },
+        revokedUserInfoStatus: 401,
         tokenStatus: 200,
         userInfo: {
           "sub": subjectIdentifier,

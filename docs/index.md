@@ -42,6 +42,7 @@
 | [docs/adr/0009-adopt-canonical-test-collections.md](adr/0009-adopt-canonical-test-collections.md) | decision | Current | 2026-08-06 | 2026-10-31 | 采用 Unit/Integration/E2E canonical collections、永久 Guard，并原子切换默认 `test` 与 `verify`。 |
 | [docs/adr/0010-narrow-client-binding-to-oidc-lifecycle.md](adr/0010-narrow-client-binding-to-oidc-lifecycle.md) | decision | Current | 2026-08-07 | 2026-10-31 | Client Binding 只属于 OIDC；Custom SSO 使用可恢复 Credential 签发，OIDC 删除 full binding 派生副本。 |
 | [docs/adr/0011-model-employment-as-an-immutable-tenure-lifecycle.md](adr/0011-model-employment-as-an-immutable-tenure-lifecycle.md) | decision | Current | 2026-08-11 | 2026-10-31 | Employment 表示不可重开的任职期；写入端保证父对象完整性，Subject Facts 发布前 fail closed。 |
+| [docs/adr/0012-model-client-maintenance-as-reversible-protocol-traffic-suspension.md](adr/0012-model-client-maintenance-as-reversible-protocol-traffic-suspension.md) | decision | Current | 2026-08-13 | 2026-10-31 | Accepted：Client Maintenance 是已实现的可逆在线协议流量暂停；Disable 与软删除仍是永久失效边界。 |
 | [docs/agents/code-investigation.md](agents/code-investigation.md) | agent-config | Current | 2026-08-13 | 2026-10-31 | 项目级 `code_researcher`/`deep_researcher` 的分层路由、只读调查、证据返回和外置记忆规则。 |
 | [docs/agents/domain.md](agents/domain.md) | agent-config | Current | 2026-07-16 | 2026-10-31 | Engineering skills 的 single-context domain documentation 消费规则。 |
 | [docs/agents/issue-tracker.md](agents/issue-tracker.md) | agent-config | Current | 2026-08-06 | 2026-10-31 | 本地 spec、ticket、轻量 feature journal 与批量实施 handoff 的文件约定。 |

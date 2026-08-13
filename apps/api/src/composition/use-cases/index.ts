@@ -85,14 +85,17 @@ export function createApiUseCases(options: CreateApiUseCasesOptions) {
       authorizationGrants: services.customSsoSession,
       clients: services.customSsoClientRuntime,
       redirectUrls: services.ssoRedirectUrl,
+      trafficGate: services.customSsoTrafficGate,
     }),
     completeCallback: createCompleteSsoCallbackUseCase({
       authorizationGrants: services.customSsoSession,
       clients: services.customSsoClientRuntime,
+      trafficGate: services.customSsoTrafficGate,
     }),
     exchangeCode: createExchangeSsoCodeUseCase({
       authorizationGrants: services.customSsoSession,
       clientCredentials: services.customSsoClientCredentials,
+      trafficGate: services.customSsoTrafficGate,
     }),
     loginWithOa: createLoginWithOaUseCase({
       auditLogWriter,

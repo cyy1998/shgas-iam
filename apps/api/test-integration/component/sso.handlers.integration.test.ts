@@ -2,6 +2,7 @@ import { createSsoHandlers } from "@api/routes/sso/sso.handlers";
 import {
   CustomSsoClientRuntimeUnavailableError,
 } from "@api/services/client/custom-sso-client-runtime.reader";
+import { AuthzMaintenanceError } from "@iam/api-core/errors/AuthzMaintenanceError";
 import { createErrorHandler } from "@iam/api-core/middlewares";
 import {
   SubjectAccessSessionInvalidHttpError,
@@ -652,6 +653,63 @@ describe("createSsoHandlers protocol adaptation", () => {
       code: ApiErrorCode.SubjectAccessUnavailable,
     });
     expect(unavailable.headers.getSetCookie()).toEqual([]);
+  });
+
+  test("authorize, callback, and token expose Maintenance as retryable 503 without clearing cookies", async () => {
+    const handlers = createHandlers();
+    const authorizeApp = createHttpHandlerApp(
+      "/sso/authorize",
+      handlers.authorize,
+      {
+        client: "independent",
+        redirectUrl: "https://app.example.com/home",
+        token: "",
+      },
+    );
+    const callbackApp = createHttpHandlerApp(
+      "/sso/callback",
+      handlers.callback,
+      {
+        client: "gateway",
+        code: "auth-code",
+        redirectUrl: "https://gateway.example.com/home",
+      },
+    );
+    const tokenApp = createTokenHandlerApp(handlers.token);
+    const requests = [
+      [authorize, () => authorizeApp.request(
+        "/sso/authorize?client=independent&redirectUrl=https%3A%2F%2Fapp.example.com%2Fhome",
+        { headers: { Cookie: "global_session=global-token" } },
+      )],
+      [callback, () => callbackApp.request("/sso/callback", {
+        headers: {
+          Cookie: "global_session=global-token; local_gateway_session=local-token; orcas_sso_sessionid=orcas-token",
+        },
+      })],
+      [setToken, () => tokenApp.request("/sso/token", {
+        method: "POST",
+        headers: {
+          "Authorization":
+            `Basic ${Buffer.from("independent:secret").toString("base64")}`,
+          "Content-Type": "application/x-www-form-urlencoded",
+        },
+        body: new URLSearchParams({
+          code: "auth-code",
+          redirect_uri: "https://app.example.com/callback",
+        }),
+      })],
+    ] as const;
+
+    for (const [operation, request] of requests) {
+      operation.mockRejectedValueOnce(new AuthzMaintenanceError());
+      const response = await request();
+      expect(response.status).toBe(503);
+      expect(response.headers.get("Retry-After")).toBe("3");
+      await expect(response.json()).resolves.toMatchObject({
+        code: ApiErrorCode.Maintenance,
+      });
+      expect(response.headers.getSetCookie()).toEqual([]);
+    }
   });
 
   test("sanitizes unknown authorize, callback, and token failures", async () => {

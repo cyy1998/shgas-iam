@@ -527,6 +527,19 @@ export function createOidcSessionKernelAdapter(deps: OidcSessionKernelAdapterDep
     return parsed.success ? parsed.data : null;
   }
 
+  async function resolveReturnHandle(handle: string) {
+    const resolved = translateSubjectAccessResolveResult(
+      await deps.kernel.resolveProtocolArtifact(handle),
+    );
+    if (resolved.status !== "resolved"
+      || resolved.value.protocol !== OIDC_SESSION_PROTOCOL
+      || resolved.value.artifactType !== OIDC_RETURN_HANDLE_ARTIFACT_TYPE) {
+      return null;
+    }
+    const parsed = ReturnHandleMetadataSchema.safeParse(resolved.value.metadata);
+    return parsed.success ? parsed.data : null;
+  }
+
   async function registerAuthorizationCodeArtifact(input: RegisterAuthorizationCodeArtifactInput) {
     if (!input.binding) {
       deps.logger.warn({
@@ -749,6 +762,7 @@ export function createOidcSessionKernelAdapter(deps: OidcSessionKernelAdapterDep
     consumeAuthorizationCodeArtifact,
     consume: consumeReturnHandle,
     create: createReturnHandle,
+    resolveReturnHandle,
     consumeStaged,
     destroyProviderSession,
     ensureClientBinding,

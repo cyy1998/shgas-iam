@@ -8,7 +8,6 @@ import {
   type ClientOidcConfigureInput,
 } from '@admin/services/client';
 import {
-  ClientStatus,
   OidcClientState,
   OidcClientType,
   OidcScope,
@@ -29,6 +28,7 @@ import {
 import { useEffect, useState } from 'react';
 import OneTimeSecretModal from './OneTimeSecretModal';
 import {
+  canEnableClientProtocol,
   confirmClientSettingAction,
   normalizeClientSettingList,
 } from './settingsHelpers';
@@ -286,12 +286,12 @@ export default function OidcSettings({
             disabled={
               formDirty ||
               client.oidcState !== OidcClientState.Disabled ||
-              client.status !== ClientStatus.Enable
+              !canEnableClientProtocol(client.status)
             }
             onClick={() =>
               runAction(
                 '启用 OIDC？',
-                '启用后该 client 可立即发起 OIDC 请求。',
+                '启用只保存协议启用意图，不会访问 Redirect 或 Logout URI。',
                 () => enableClientOidc(client.clientCode),
               )
             }

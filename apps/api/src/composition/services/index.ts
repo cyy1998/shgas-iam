@@ -24,6 +24,7 @@ import {
 import {
   createCustomSsoSubjectDeliveryRequestScope,
 } from "@api/services/sso/custom-sso-subject-delivery-request-scope";
+import { createCustomSsoTrafficGate } from "@api/services/sso/custom-sso-traffic-gate";
 import { createSsoRedirectUrlValidator } from "@api/services/sso/redirect-url.validator";
 import { createUserDelegationQuery } from "@api/services/user/user-delegation-query.helper";
 import { createUserMobileBinding } from "@api/services/user/user-mobile-binding.helper";
@@ -33,6 +34,7 @@ import {
   createAuthorizationGrantRedemption,
   createRedisAuthorizationGrantRedemptionStore,
 } from "@iam/api-core/authorization-grant";
+import { createClientTrafficGateReader } from "@iam/api-core/client-traffic-gate";
 import { LoggerSourceApp } from "@iam/api-core/logger";
 import {
   createLoginRestriction,
@@ -123,6 +125,13 @@ export function createApiServices(options: CreateApiServicesOptions) {
   const customSsoClientRuntime = createCustomSsoClientRuntimeReader({
     redis: runtime.redis,
     source: repositories.customSsoClient,
+  });
+  const clientTrafficGate = createClientTrafficGateReader({
+    redis: runtime.redis,
+    source: repositories.client,
+  });
+  const customSsoTrafficGate = createCustomSsoTrafficGate({
+    gate: clientTrafficGate,
   });
   const customSsoClientCredentials = createCustomSsoClientSecretVerifier({
     repository: repositories.customSsoClient,
@@ -284,6 +293,7 @@ export function createApiServices(options: CreateApiServicesOptions) {
     customSsoSession,
     customSsoSubjectDelivery,
     customSsoSubjectDeliveryRequests,
+    customSsoTrafficGate,
     humanRisk: humanRiskService,
     loginCredential: loginCredentialParser,
     loginRestriction,

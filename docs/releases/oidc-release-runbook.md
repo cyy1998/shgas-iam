@@ -77,7 +77,9 @@ Session Kernel external token lookup 使用 HMAC hash。轮换顺序是：
 - 已配置但禁用的 client 先在管理端确认 redirect URI、post logout redirect URI、allowed scopes 和 secret 状态。
 - confidential client secret 只在生成或 rotate 响应中显示一次，不得写入发布记录。
 - 每个 client 通过 authorize/token/UserInfo/logout smoke 后，再启用下一个 client。
-- configure、enable、disable、remove、rotate secret、全局状态变化或软删除都会递增 `oidcConfigVersion` 并撤销旧协议对象。
+- configure、enable、disable、remove、rotate secret 等真实 OIDC mutation 会递增 `oidcConfigVersion` 并撤销旧协议对象；Client
+  实际进入 Disable 或软删除也会造成全协议永久失效。进入或退出 Maintenance 以及离开 Disable 不推进版本；Maintenance 中保存的
+  启用意图在恢复 Enable 后自动生效。
 
 ## 分阶段发布
 

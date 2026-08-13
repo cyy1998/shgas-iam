@@ -1,8 +1,15 @@
-import type { Response } from "@playwright/test";
 import { expect, test } from "@playwright/test";
+import {
+  isSuccessfulRpcResponse,
+  loginToAdmin,
+  openClientSection,
+  runClientProtocolLifecycleAction,
+  updateClientStatus,
+} from "./src/admin-client-journey.ts";
 import { requireEnvironment } from "./src/environment.ts";
 
-test("Admin configures and enables the seeded Custom SSO client", async ({
+test("Admin prepares Custom SSO in Maintenance and existing access resumes after recovery", async ({
+  context,
   page,
 }) => {
   const origin = requireEnvironment("IAM_E2E_ORIGIN");
@@ -14,32 +21,17 @@ test("Admin configures and enables the seeded Custom SSO client", async ({
   const customSsoRedirectUri = requireEnvironment(
     "IAM_E2E_CUSTOM_SSO_REDIRECT_URI",
   );
-  await page.goto("/iam-admin/");
-  await expect(page).toHaveURL(/\/portal\/login\?/u);
-
-  await page.getByLabel("工号 / 账号").fill(adminUsername);
-  await page.getByPlaceholder("请输入登录密码").fill(adminPassword);
-  await page.getByRole("button", { name: "安全登录" }).click();
-  await page.getByRole("button", { name: "跳过", exact: true }).click();
-
-  await expect(page).toHaveURL(new RegExp(
-    `^${escapeRegExp(origin)}/iam-admin(?:/|$)`,
-    "u",
-  ));
+  const actualRedirectUri = customSsoRedirectUri.replace(/\/\*$/u, "/callback");
+  await loginToAdmin({ adminPassword, adminUsername, origin, page });
   await expect(page.getByText("应用管理", { exact: true })).toBeVisible();
 
-  const initialDetailResponse = page.waitForResponse(isClientDetailResponse);
-  await page.goto(
-    `/iam-admin/clients/${encodeURIComponent(customSsoClientCode)}/edit?section=custom-sso`,
-  );
-  expect(await readClientDetail(await initialDetailResponse)).toMatchObject({
-    clientCode: customSsoClientCode,
-    customSsoConfig: null,
-    customSsoMode: null,
-    customSsoState: "unconfigured",
-  });
+  await openClientSection(page, customSsoClientCode, "custom-sso");
+  await expect(page.getByText("未配置", { exact: true })).toBeVisible();
+  await updateClientStatus(page, customSsoClientCode, "维护中");
+  await openClientSection(page, customSsoClientCode, "custom-sso");
 
   await expect(page.getByText(customSsoClientCode, { exact: true })).toBeVisible();
+  await expect(page.getByText("维护中", { exact: true })).toBeVisible();
   await expect(page.getByText("未配置", { exact: true })).toBeVisible();
   await page.getByLabel("允许的 Redirect Patterns").fill(customSsoRedirectUri);
   await page.getByLabel("允许的 Redirect Patterns").press("Enter");
@@ -61,42 +53,81 @@ test("Admin configures and enables the seeded Custom SSO client", async ({
   await enableResponse;
   await expect(page.getByText("已启用", { exact: true })).toBeVisible();
 
-  const finalDetailResponse = page.waitForResponse(isClientDetailResponse);
-  await page.reload();
-  expect(await readClientDetail(await finalDetailResponse)).toMatchObject({
-    clientCode: customSsoClientCode,
-    customSsoConfig: {
-      mode: "gateway",
-      orcas: { enabled: false },
-      subjectClaimCatalogVersion: 1,
-      subjectClaims: ["subjectIdentifier", "profile:username"],
-      validRedirectUrls: [customSsoRedirectUri],
-    },
-    customSsoMode: "gateway",
-    customSsoState: "enabled",
+  const authorize = new URL("/sso/authorize", origin);
+  authorize.search = new URLSearchParams({
+    client: customSsoClientCode,
+    redirectUrl: actualRedirectUri,
+    state: "maintenance-e2e",
+  }).toString();
+  const maintenanceAuthorize = await context.request.get(authorize.href, {
+    maxRedirects: 0,
   });
+  expect(maintenanceAuthorize.status()).toBe(503);
+  expect(await maintenanceAuthorize.json()).toMatchObject({
+    code: "AUTH.MAINTENANCE",
+  });
+  expect(maintenanceAuthorize.headers()["set-cookie"] ?? "").not.toContain("Max-Age=0");
+
+  const configuration = await context.request.get(
+    `${origin}/sso/.well-known/authentication-configuration`,
+    { headers: { "X-IAM-Entry-Network": "external" } },
+  );
+  expect(configuration.status()).toBe(200);
+
+  await updateClientStatus(page, customSsoClientCode, "正常");
+  await page.goto(authorize.href);
+  const callback = new URL(page.url());
+  expect(callback.pathname).toBe("/e2e/custom-sso/callback");
+  const localSession = callback.searchParams.get("token");
+  expect(localSession).toEqual(expect.any(String));
+
+  const userInfoRequest = () => context.request.get(
+    `${origin}/api/iam/public/user-info`,
+    {
+      headers: {
+        Authorization: String(localSession),
+        Client: encodeURIComponent(customSsoClientCode),
+      },
+    },
+  );
+  const initialUserInfo = await userInfoRequest();
+  expect(initialUserInfo.status()).toBe(200);
+  expect(await initialUserInfo.json()).toMatchObject({
+    data: {
+      profile: { username: adminUsername },
+      subjectIdentifier: expect.any(String),
+    },
+  });
+
+  await updateClientStatus(page, customSsoClientCode, "维护中");
+  const maintenanceUserInfo = await userInfoRequest();
+  expect(maintenanceUserInfo.status()).toBe(503);
+  expect(await maintenanceUserInfo.json()).toMatchObject({
+    code: "AUTH.MAINTENANCE",
+  });
+  expect(maintenanceUserInfo.headers()["set-cookie"] ?? "").not.toContain("Max-Age=0");
+
+  await updateClientStatus(page, customSsoClientCode, "正常");
+  const recoveredUserInfo = await userInfoRequest();
+  expect(recoveredUserInfo.status()).toBe(200);
+  expect(await recoveredUserInfo.json()).toMatchObject({
+    data: {
+      profile: { username: adminUsername },
+      subjectIdentifier: expect.any(String),
+    },
+  });
+
+  await updateClientStatus(page, customSsoClientCode, "维护中");
+  await openClientSection(page, customSsoClientCode, "custom-sso");
+  await runClientProtocolLifecycleAction(page, "custom-sso", "禁用");
+  await runClientProtocolLifecycleAction(page, "custom-sso", "启用");
+  await updateClientStatus(page, customSsoClientCode, "正常");
+  const revokedUserInfo = await userInfoRequest();
+  expect(revokedUserInfo.status()).toBe(401);
+
+  await openClientSection(page, customSsoClientCode, "custom-sso");
   await expect(page.getByText("已启用", { exact: true })).toBeVisible();
   await expect(page.getByText("Gateway", { exact: true }).first()).toBeVisible();
+  await expect(page.getByText(customSsoRedirectUri, { exact: true })).toBeVisible();
+  await expect(page.getByRole("checkbox", { name: /用户名/u })).toBeChecked();
 });
-
-function isClientDetailResponse(response: Response) {
-  return isSuccessfulRpcResponse(response, "admin.client.detail");
-}
-
-function isSuccessfulRpcResponse(response: Response, procedure: string) {
-  return response.ok() && response.url().includes(`/rpc/${procedure}`);
-}
-
-async function readClientDetail(response: Response) {
-  const body = await response.json() as Array<{
-    result?: { data?: unknown };
-  }>;
-  const data = body[0]?.result?.data;
-  if (typeof data === "object" && data !== null && "json" in data)
-    return (data as { json: unknown }).json;
-  return data;
-}
-
-function escapeRegExp(value: string) {
-  return value.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
-}

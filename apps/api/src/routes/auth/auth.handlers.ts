@@ -1,6 +1,7 @@
 import type { LoggerPort } from "@api/composition/runtime";
 import type { LoginCredentialParser } from "@api/services/authentication/login-credential.parser";
 import type { ClientService } from "@api/services/client/client.service";
+import type { CustomSsoTrafficGate } from "@api/services/sso/custom-sso-traffic-gate.type";
 import type { LoginWithMobileUseCase } from "@api/use-cases/authentication/login-with-mobile/login-with-mobile.use-case";
 import type { LoginWithPasswordUseCase } from "@api/use-cases/authentication/login-with-password/login-with-password.use-case";
 import type { AuthRouteHandler } from "./auth.type";
@@ -38,6 +39,7 @@ export interface CreateAuthHandlersDeps {
   };
   loginCredentialParser: Pick<LoginCredentialParser, "parseLoginPasswordCredential">;
   logger: Pick<LoggerPort, "info">;
+  trafficGate: Pick<CustomSsoTrafficGate, "assertSessionUseAllowed">;
   config: {
     projectionRetryAfterSeconds: number;
     redisExpireSeconds: number;
@@ -107,6 +109,7 @@ export function createAuthHandlers(deps: CreateAuthHandlersDeps) {
           : [localSessionCookieName, "orcas_sso_sessionid"],
       }, async () => {
         try {
+          await deps.trafficGate.assertSessionUseAllowed(clientCode);
           return await deps.localSessionAuthorizer.authorizeLocalSession(
             sessionId,
             clientCode,

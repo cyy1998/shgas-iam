@@ -69,6 +69,26 @@ describe("Custom SSO client secret verifier", () => {
     ).not.toContain("customSsoSecretHash");
   });
 
+  test("authenticates an Independent client in maintenance before the Traffic Gate decision", async () => {
+    const verifier = createCustomSsoClientSecretVerifier({
+      repository: {
+        findSecretRecord: async () => ({
+          ...activeIndependentClient,
+          status: ClientStatus.Maintenance,
+        }),
+      },
+    });
+
+    await expect(
+      verifier.authenticate("independent-client", "Existing123!"),
+    ).resolves.toEqual({
+      clientCode: "independent-client",
+      configVersion: 3,
+      subjectClaimCatalogVersion: 1,
+      subjectClaims: [SubjectClaim.SubjectIdentifier],
+    });
+  });
+
   test.each([
     ["missing", null],
     ["Gateway", {
@@ -86,10 +106,6 @@ describe("Custom SSO client secret verifier", () => {
     ["globally disabled", {
       ...activeIndependentClient,
       status: ClientStatus.Disable,
-    }],
-    ["globally in maintenance", {
-      ...activeIndependentClient,
-      status: ClientStatus.Maintenance,
     }],
     ["deleted", {
       ...activeIndependentClient,

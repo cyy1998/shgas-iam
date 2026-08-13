@@ -1,4 +1,18 @@
 import type { Redis } from "ioredis";
+import type {
+  GenerationFencedRuntimeMutationHeartbeat,
+  GenerationFencedRuntimeMutationHeartbeatTimer,
+  GenerationFencedRuntimeMutationOwnership,
+  GenerationFencedRuntimeMutationRedis,
+} from "../redis/generation-fenced-runtime-mutation";
+import {
+  beginGenerationFencedRuntimeMutation,
+  checkGenerationFencedRuntimeMutation,
+  finishGenerationFencedRuntimeMutation,
+  invalidateGenerationFencedRuntime,
+  renewGenerationFencedRuntimeMutation,
+  startGenerationFencedRuntimeMutationHeartbeat,
+} from "../redis/generation-fenced-runtime-mutation";
 
 export const CUSTOM_SSO_CLIENT_RUNTIME_POSITIVE_CACHE_TTL_MS = 30_000;
 export const CUSTOM_SSO_CLIENT_RUNTIME_NEGATIVE_CACHE_TTL_MS = 3_000;
@@ -22,60 +36,11 @@ export interface CustomSsoClientRuntimeMutation {
   readonly mutationId: string;
 }
 
-export interface CustomSsoClientRuntimeMutationRedis {
-  eval: (
-    script: string,
-    keyCount: number,
-    ...args: string[]
-  ) => Promise<unknown>;
-}
-
-const BEGIN_RUNTIME_MUTATION_SCRIPT = `
-redis.call("SET", KEYS[1], ARGV[1], "PX", ARGV[2])
-local generation = redis.call("INCR", KEYS[2])
-redis.call("DEL", KEYS[3])
-return tostring(generation)
-`;
-
-const FINISH_RUNTIME_MUTATION_SCRIPT = `
-local current = redis.call("GET", KEYS[1])
-if current and current ~= ARGV[1] then
-  return 0
-end
-redis.call("INCR", KEYS[2])
-redis.call("DEL", KEYS[3])
-if current then
-  redis.call("DEL", KEYS[1])
-  return 1
-end
-return 2
-`;
-
-const RENEW_RUNTIME_MUTATION_SCRIPT = `
-local current = redis.call("GET", KEYS[1])
-if not current then
-  return 2
-end
-if current ~= ARGV[1] then
-  return 0
-end
-redis.call("PEXPIRE", KEYS[1], ARGV[2])
-return 1
-`;
-
-const CHECK_RUNTIME_MUTATION_OWNERSHIP_SCRIPT = `
-local current = redis.call("GET", KEYS[1])
-if not current then
-  return 2
-end
-if current ~= ARGV[1] then
-  return 0
-end
-return 1
-`;
+export type CustomSsoClientRuntimeMutationRedis
+  = GenerationFencedRuntimeMutationRedis;
 
 export type CustomSsoClientRuntimeMutationOwnership
-  = "owned" | "expired" | "superseded";
+  = GenerationFencedRuntimeMutationOwnership;
 
 export class CustomSsoClientRuntimeMutationOwnershipError extends Error {
   constructor(
@@ -87,34 +52,15 @@ export class CustomSsoClientRuntimeMutationOwnershipError extends Error {
   }
 }
 
-export interface CustomSsoClientRuntimeMutationHeartbeatTimer {
-  setInterval: (
-    callback: () => void,
-    intervalMs: number,
-  ) => unknown;
-  clearInterval: (handle: unknown) => void;
-}
+export type CustomSsoClientRuntimeMutationHeartbeatTimer
+  = GenerationFencedRuntimeMutationHeartbeatTimer;
 
-export interface CustomSsoClientRuntimeMutationHeartbeat {
-  assertOwned: () => Promise<void>;
-  stopAndSettle: <T>(settle: () => Promise<T>) => Promise<T>;
-}
+export type CustomSsoClientRuntimeMutationHeartbeat
+  = GenerationFencedRuntimeMutationHeartbeat;
 
 export interface StartCustomSsoClientRuntimeMutationHeartbeatOptions {
   readonly timer?: CustomSsoClientRuntimeMutationHeartbeatTimer;
 }
-
-const defaultHeartbeatTimer:
-CustomSsoClientRuntimeMutationHeartbeatTimer = {
-  setInterval(callback, intervalMs) {
-    return globalThis.setInterval(callback, intervalMs);
-  },
-  clearInterval(handle) {
-    globalThis.clearInterval(
-      handle as ReturnType<typeof globalThis.setInterval>,
-    );
-  },
-};
 
 export async function beginCustomSsoClientRuntimeMutation(
   redis: CustomSsoClientRuntimeMutationRedis,
@@ -130,16 +76,11 @@ export async function beginCustomSsoClientRuntimeMutation(
       "Custom SSO client runtime mutation fence TTL must be at least 3 milliseconds",
     );
   }
-
-  await redis.eval(
-    BEGIN_RUNTIME_MUTATION_SCRIPT,
-    3,
-    customSsoClientRuntimeMutationKey(input.clientCode),
-    customSsoClientRuntimeGenerationKey(input.clientCode),
-    customSsoClientRuntimeCacheKey(input.clientCode),
-    input.mutationId,
-    String(fenceTtlMs),
-  );
+  await beginGenerationFencedRuntimeMutation(redis, {
+    ...runtimeKeys(input.clientCode),
+    fenceTtlMs,
+    mutationId: input.mutationId,
+  });
   return {
     clientCode: input.clientCode,
     fenceTtlMs,
@@ -151,35 +92,20 @@ export async function renewCustomSsoClientRuntimeMutation(
   redis: CustomSsoClientRuntimeMutationRedis,
   mutation: CustomSsoClientRuntimeMutation,
 ): Promise<"renewed" | "expired" | "superseded"> {
-  const result = await redis.eval(
-    RENEW_RUNTIME_MUTATION_SCRIPT,
-    1,
-    customSsoClientRuntimeMutationKey(mutation.clientCode),
-    mutation.mutationId,
-    String(mutation.fenceTtlMs),
+  return await renewGenerationFencedRuntimeMutation(
+    redis,
+    runtimeLease(mutation),
   );
-  if (Number(result) === 1)
-    return "renewed";
-  if (Number(result) === 2)
-    return "expired";
-  return "superseded";
 }
 
 export async function checkCustomSsoClientRuntimeMutationOwnership(
   redis: CustomSsoClientRuntimeMutationRedis,
   mutation: CustomSsoClientRuntimeMutation,
 ): Promise<CustomSsoClientRuntimeMutationOwnership> {
-  const result = await redis.eval(
-    CHECK_RUNTIME_MUTATION_OWNERSHIP_SCRIPT,
-    1,
-    customSsoClientRuntimeMutationKey(mutation.clientCode),
-    mutation.mutationId,
+  return await checkGenerationFencedRuntimeMutation(
+    redis,
+    runtimeLease(mutation),
   );
-  if (Number(result) === 1)
-    return "owned";
-  if (Number(result) === 2)
-    return "expired";
-  return "superseded";
 }
 
 export function startCustomSsoClientRuntimeMutationHeartbeat(
@@ -187,184 +113,69 @@ export function startCustomSsoClientRuntimeMutationHeartbeat(
   mutation: CustomSsoClientRuntimeMutation,
   options: StartCustomSsoClientRuntimeMutationHeartbeatOptions = {},
 ): CustomSsoClientRuntimeMutationHeartbeat {
-  const timer = options.timer ?? defaultHeartbeatTimer;
-  const intervalMs = Math.floor(mutation.fenceTtlMs / 3);
-  let stopped = false;
-  let checkingOwnership = false;
-  let inFlight: Promise<void> | undefined;
-  let hasFailure = false;
-  let failure: unknown;
-
-  function recordFailure(error: unknown) {
-    if (hasFailure)
-      return;
-    hasFailure = true;
-    failure = error;
-  }
-
-  function startRenewal() {
-    if (
-      stopped
-      || checkingOwnership
-      || hasFailure
-      || inFlight !== undefined
-    ) {
-      return;
-    }
-    const renewal = (async () => {
-      try {
-        const status = await renewCustomSsoClientRuntimeMutation(
-          redis,
-          mutation,
-        );
-        if (status !== "renewed") {
-          recordFailure(
-            new CustomSsoClientRuntimeMutationOwnershipError(status),
-          );
-        }
-      }
-      catch (error) {
-        recordFailure(error);
-      }
-    })().finally(() => {
-      if (inFlight === renewal)
-        inFlight = undefined;
-    });
-    inFlight = renewal;
-  }
-
-  async function waitForInFlight() {
-    const active = inFlight;
-    if (active !== undefined)
-      await active;
-  }
-
-  const timerHandle = timer.setInterval(
-    startRenewal,
-    intervalMs,
+  return startGenerationFencedRuntimeMutationHeartbeat(
+    redis,
+    runtimeLease(mutation),
+    {
+      createOwnershipError: ownership =>
+        new CustomSsoClientRuntimeMutationOwnershipError(ownership),
+      failureMessage: "Custom SSO client runtime heartbeat and settlement failed",
+      ...(options.timer === undefined ? {} : { timer: options.timer }),
+    },
   );
-
-  return {
-    async assertOwned() {
-      checkingOwnership = true;
-      try {
-        await waitForInFlight();
-        if (hasFailure)
-          throw failure;
-        let ownership: CustomSsoClientRuntimeMutationOwnership;
-        try {
-          ownership
-            = await checkCustomSsoClientRuntimeMutationOwnership(
-              redis,
-              mutation,
-            );
-        }
-        catch (error) {
-          recordFailure(error);
-          throw error;
-        }
-        if (ownership !== "owned") {
-          const error
-            = new CustomSsoClientRuntimeMutationOwnershipError(
-              ownership,
-            );
-          recordFailure(error);
-          throw error;
-        }
-      }
-      finally {
-        checkingOwnership = false;
-      }
-    },
-    async stopAndSettle<T>(settle: () => Promise<T>) {
-      if (!stopped) {
-        stopped = true;
-        timer.clearInterval(timerHandle);
-      }
-      await waitForInFlight();
-
-      let result: T | undefined;
-      let settleFailed = false;
-      let settleFailure: unknown;
-      try {
-        result = await settle();
-      }
-      catch (error) {
-        settleFailed = true;
-        settleFailure = error;
-      }
-
-      if (hasFailure && settleFailed) {
-        throw new AggregateError(
-          [failure, settleFailure],
-          "Custom SSO client runtime heartbeat and settlement failed",
-        );
-      }
-      if (hasFailure)
-        throw failure;
-      if (settleFailed)
-        throw settleFailure;
-      return result as T;
-    },
-  };
 }
 
 export async function completeCustomSsoClientRuntimeMutation(
   redis: CustomSsoClientRuntimeMutationRedis,
   mutation: CustomSsoClientRuntimeMutation,
 ): Promise<"completed" | "expired" | "superseded"> {
-  return await finishCustomSsoClientRuntimeMutation(
-    redis,
-    mutation,
-    "completed",
-  );
+  const result = await finishMutation(redis, mutation);
+  return result === "finished" ? "completed" : result;
 }
 
 export async function abortCustomSsoClientRuntimeMutation(
   redis: CustomSsoClientRuntimeMutationRedis,
   mutation: CustomSsoClientRuntimeMutation,
 ): Promise<"aborted" | "expired" | "superseded"> {
-  return await finishCustomSsoClientRuntimeMutation(
-    redis,
-    mutation,
-    "aborted",
-  );
-}
-
-async function finishCustomSsoClientRuntimeMutation<
-  T extends "aborted" | "completed",
->(
-  redis: CustomSsoClientRuntimeMutationRedis,
-  mutation: CustomSsoClientRuntimeMutation,
-  ownedStatus: T,
-): Promise<T | "expired" | "superseded"> {
-  const result = await redis.eval(
-    FINISH_RUNTIME_MUTATION_SCRIPT,
-    3,
-    customSsoClientRuntimeMutationKey(mutation.clientCode),
-    customSsoClientRuntimeGenerationKey(mutation.clientCode),
-    customSsoClientRuntimeCacheKey(mutation.clientCode),
-    mutation.mutationId,
-  );
-  return finishResult(result, ownedStatus);
+  const result = await finishMutation(redis, mutation);
+  return result === "finished" ? "aborted" : result;
 }
 
 export async function invalidateCustomSsoClientRuntime(
   redis: Redis,
   clientCode: string,
 ) {
-  const result = await redis.multi()
-    .incr(customSsoClientRuntimeGenerationKey(clientCode))
-    .del(customSsoClientRuntimeCacheKey(clientCode))
-    .exec();
-  if (result === null) {
-    throw new Error(
-      "Custom SSO client runtime invalidation transaction failed",
-    );
-  }
-  const failed = result.find(([error]) => error !== null);
-  if (failed?.[0])
-    throw failed[0];
+  await invalidateGenerationFencedRuntime(
+    redis,
+    runtimeKeys(clientCode),
+    "Custom SSO client runtime invalidation transaction failed",
+  );
+}
+
+async function finishMutation(
+  redis: CustomSsoClientRuntimeMutationRedis,
+  mutation: CustomSsoClientRuntimeMutation,
+) {
+  return await finishGenerationFencedRuntimeMutation(redis, {
+    ...runtimeKeys(mutation.clientCode),
+    mutationId: mutation.mutationId,
+  });
+}
+
+function runtimeKeys(clientCode: string) {
+  return {
+    cacheKey: customSsoClientRuntimeCacheKey(clientCode),
+    generationKey: customSsoClientRuntimeGenerationKey(clientCode),
+    mutationKey: customSsoClientRuntimeMutationKey(clientCode),
+  };
+}
+
+function runtimeLease(mutation: CustomSsoClientRuntimeMutation) {
+  return {
+    fenceTtlMs: mutation.fenceTtlMs,
+    mutationId: mutation.mutationId,
+    mutationKey: customSsoClientRuntimeMutationKey(mutation.clientCode),
+  };
 }
 
 function assertPositiveSafeInteger(value: number, label: string) {
@@ -374,15 +185,4 @@ function assertPositiveSafeInteger(value: number, label: string) {
 
 function encodeClientCodeKeySegment(clientCode: string) {
   return encodeURIComponent(clientCode);
-}
-
-function finishResult<T extends "aborted" | "completed">(
-  result: unknown,
-  ownedStatus: T,
-): T | "expired" | "superseded" {
-  if (Number(result) === 1)
-    return ownedStatus;
-  if (Number(result) === 2)
-    return "expired";
-  return "superseded";
 }

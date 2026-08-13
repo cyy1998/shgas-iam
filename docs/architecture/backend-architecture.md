@@ -81,7 +81,7 @@ composition。跨层实例连接统一由 composition 完成。
 - 一个 workflow 只拥有一个 UnitOfWork transaction boundary。嵌套 UnitOfWork 不受支持，因为 inner commit 可能在
   outer transaction 回滚前执行 after-commit tasks。
 - 外部 side effect 默认不在数据库 transaction callback 内直接执行；应在 callback 外执行，或注册为
-  after-commit task。唯一已批准的例外是下述 Custom SSO Client runtime pre-commit coordination fence；
+  after-commit task。唯一已批准的例外是下述 generation-fenced Client runtime pre-commit coordination；
   不得把该例外扩展到通知、Session 撤销、业务 cache 写入或其他不可逆作用。
   Task 只在 transaction 成功提交后按注册顺序运行：
   - `required`：失败会记录 error；所有 task 尝试完成后，required failures 聚合为
@@ -146,6 +146,12 @@ composition。跨层实例连接统一由 composition 完成。
   自动收敛。新建 Client 尚无可锁的行，不使用 pre-commit fence；它在 commit 后通过 `afterCommit.required`
   递增 generation 并删除 cache，晚到的旧 generation publish 会被拒绝。若该 invalidation 不可用，既有 negative
   cache 只会继续 fail closed 并在最多 3 秒 TTL 后收敛。
+  Custom SSO runtime 与协议中性的 Client Traffic Gate 复用同一个内部 generation-fenced mutation
+  coordinator；各 runtime 只拥有自己的 key namespace、缓存内容和完成语义，不复制 fence/heartbeat 状态机。
+  Traffic Gate 从现有 Client 全局状态派生，只有明确 `Enable` 放行；`Maintenance`、`Disable`、状态缺失/损坏、
+  读取失败和 mutation 中均返回可区分的 fail-closed 结果。Admin 状态写入在 commit 后通过
+  `afterCommit.required` 原子发布已提交状态并结束 Traffic Gate mutation；发布失败保留 fence，调用方不得把
+  Admin 失败响应解释为数据库回滚。
   这是 Transactions 规则中唯一的 pre-commit 外部协调例外，必须同时满足：
   - fence 只保存有界 TTL 的随机 ownership token，不承载业务事实；受保护的 runtime reader 在 fence 存在或状态
     无法确认时 fail closed。

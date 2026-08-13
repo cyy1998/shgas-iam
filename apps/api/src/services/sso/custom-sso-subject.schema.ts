@@ -15,6 +15,8 @@ export type {
 
 export const CustomSsoUnavailableResponseSchema = z.object({
   code: z.union([
+    z.literal(ApiErrorCode.InternalError),
+    z.literal(ApiErrorCode.Maintenance),
     z.literal(ApiErrorCode.SubjectProjectionNotReady),
     z.literal(ApiErrorCode.SubjectAccessUnavailable),
   ]),

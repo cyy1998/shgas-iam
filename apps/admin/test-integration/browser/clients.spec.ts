@@ -1,7 +1,9 @@
 // Browser Integration uses a mocked backend; this is not a full-system journey.
 import {
+  ClientStatus,
   CustomSsoClientMode,
   CustomSsoClientState,
+  OidcClientState,
   OidcClientType,
   OidcTokenEndpointAuthMethod,
 } from '@iam/contracts';
@@ -114,6 +116,124 @@ test('creating a basic client opens its unified editor', async ({ page }) => {
   await expect(page).toHaveURL(
     /\/iam-admin\/clients\/portal%20cn\/edit\?section=basic$/,
   );
+});
+
+test('maintenance preserves protocol states and allows protocol enable intent', async ({
+  page,
+}) => {
+  await mockAdminApi(page);
+  const maintenanceClient = {
+    ...adminClientDetail,
+    status: ClientStatus.Maintenance,
+    customSsoState: CustomSsoClientState.Disabled,
+    oidcState: OidcClientState.Disabled,
+  };
+  await page.unroute('**/rpc/admin.client.detail**');
+  await page.route('**/rpc/admin.client.detail**', (route) =>
+    fulfillTrpc(route, maintenanceClient),
+  );
+  let customSsoEnableRequests = 0;
+  let oidcEnableRequests = 0;
+  await page.unroute('**/rpc/admin.client.customSsoEnable**');
+  await page.route('**/rpc/admin.client.customSsoEnable**', (route) => {
+    customSsoEnableRequests += 1;
+    return fulfillTrpc(route, { client: maintenanceClient });
+  });
+  await page.unroute('**/rpc/admin.client.oidcEnable**');
+  await page.route('**/rpc/admin.client.oidcEnable**', (route) => {
+    oidcEnableRequests += 1;
+    return fulfillTrpc(route, { client: maintenanceClient });
+  });
+
+  await page.goto('/iam-admin/clients/iam-admin/edit?section=custom-sso');
+
+  await expect(page.getByText('维护中', { exact: true })).toBeVisible();
+  const customSsoPanel = page.getByRole('tabpanel', { name: 'Custom SSO' });
+  await expect(customSsoPanel.getByText('Custom SSO 状态')).toBeVisible();
+  await expect(
+    customSsoPanel.getByText('已禁用', { exact: true }),
+  ).toBeVisible();
+  await expect(page.getByText('待激活', { exact: true })).toHaveCount(0);
+  const customSsoEnable = customSsoPanel.getByRole('button', {
+    name: /启\s*用/,
+  });
+  await expect(customSsoEnable).toBeEnabled();
+  await customSsoEnable.click();
+  await expect(
+    page
+      .locator('.ant-modal-confirm-title')
+      .filter({ hasText: '启用 Custom SSO？' }),
+  ).toBeVisible();
+  await page.getByRole('button', { name: /确\s*定/ }).click();
+  await expect.poll(() => customSsoEnableRequests).toBe(1);
+
+  await page.getByRole('tab', { name: 'OIDC' }).click();
+  const oidcPanel = page.getByRole('tabpanel', { name: 'OIDC' });
+  await expect(oidcPanel.getByText('OIDC 状态')).toBeVisible();
+  await expect(oidcPanel.getByText('已禁用', { exact: true })).toBeVisible();
+  const oidcEnable = oidcPanel.getByRole('button', { name: /启\s*用/ });
+  await expect(oidcEnable).toBeEnabled();
+  await oidcEnable.click();
+  await expect(
+    page.locator('.ant-modal-confirm-title').filter({ hasText: '启用 OIDC？' }),
+  ).toBeVisible();
+  const oidcConfirmation = page
+    .locator('.ant-modal-confirm-body')
+    .filter({ hasText: '启用 OIDC？' });
+  await expect(oidcConfirmation).toContainText(
+    '启用只保存协议启用意图，不会访问 Redirect 或 Logout URI。',
+  );
+  await expect(oidcConfirmation).not.toContainText('可立即发起 OIDC 请求');
+  await page.getByRole('button', { name: /确\s*定/ }).click();
+  await expect.poll(() => oidcEnableRequests).toBe(1);
+});
+
+test('disabled clients cannot save new protocol enable intent', async ({
+  page,
+}) => {
+  await mockAdminApi(page);
+  await page.unroute('**/rpc/admin.client.detail**');
+  await page.route('**/rpc/admin.client.detail**', (route) =>
+    fulfillTrpc(route, {
+      ...adminClientDetail,
+      status: ClientStatus.Disable,
+      customSsoState: CustomSsoClientState.Disabled,
+      oidcState: OidcClientState.Disabled,
+    }),
+  );
+
+  await page.goto('/iam-admin/clients/iam-admin/edit?section=custom-sso');
+  await expect(
+    page
+      .getByRole('tabpanel', { name: 'Custom SSO' })
+      .getByRole('button', { name: /启\s*用/ }),
+  ).toBeDisabled();
+  await page.getByRole('tab', { name: 'OIDC' }).click();
+  await expect(
+    page
+      .getByRole('tabpanel', { name: 'OIDC' })
+      .getByRole('button', { name: /启\s*用/ }),
+  ).toBeDisabled();
+});
+
+test('maintenance status updates without a destructive confirmation', async ({
+  page,
+}) => {
+  await mockAdminApi(page);
+  await page.goto('/iam-admin/clients/iam-admin/edit?section=basic');
+
+  await page.getByLabel('全局状态').click();
+  await page
+    .locator('.ant-select-dropdown:visible')
+    .getByText('维护中', { exact: true })
+    .click();
+  await page.getByRole('button', { name: '更新全局状态' }).click();
+
+  const confirmation = page
+    .locator('.ant-modal-confirm-body')
+    .filter({ hasText: '更新应用全局状态？' });
+  await expect(confirmation).toHaveCount(0);
+  await expect(page.getByText('全局状态已更新')).toBeVisible();
 });
 
 test('unified editor guards dirty sections and destroys one-time Custom SSO secret', async ({

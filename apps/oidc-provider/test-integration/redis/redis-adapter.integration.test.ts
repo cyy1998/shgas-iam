@@ -18,6 +18,7 @@ import {
   vi,
 } from "vitest";
 import { startClientInvalidationSubscriber } from "../../src/invalidation/client-invalidation.ts";
+import { createOidcClientTrafficGate } from "../../src/provider/client-traffic-gate.ts";
 import { createOidcProtocolObjectStore, RedisOidcAdapter } from "../../src/storage/redis-adapter.ts";
 import { createOidcTokenStore } from "../../src/stores/token.store.ts";
 import { createOidcProviderRedisTestHarness } from "./redis-test-harness.ts";
@@ -86,7 +87,7 @@ describe("redis OIDC adapter real Redis contract", () => {
       });
     }
     finally {
-      await subscriber.quit();
+      subscriber.disconnect();
     }
   });
 
@@ -266,6 +267,93 @@ describe("redis OIDC adapter real Redis contract", () => {
     ])).toEqual([0, 0, 0]);
   });
 
+  it("keeps real protocol expirations during Maintenance and rejects old versions after rotation", async () => {
+    const testScope = scope!;
+    const clientId = testScope.unique("client");
+    const providerSessionUid = testScope.unique("provider-session");
+    const version = { value: 3 };
+    const artifacts = [
+      {
+        adapter: createAdapter(testScope, "Interaction", { version }),
+        id: testScope.unique("interaction"),
+        model: "Interaction",
+        payload: { params: { client_id: clientId } },
+        ttlSeconds: 600,
+      },
+      {
+        adapter: createAdapter(testScope, "Grant", { version }),
+        id: testScope.unique("grant"),
+        model: "Grant",
+        payload: { accountId: SUBJECT_IDENTIFIER, clientId },
+        ttlSeconds: 700,
+      },
+      {
+        adapter: createAdapter(testScope, "AccessToken", {
+          resolveAccessTokenCredential: tokenId => ({
+            credential: {
+              clientCode: clientId,
+              credentialId: `${tokenId}-credential`,
+              principalSessionId: "principal-a",
+            },
+            metadata: {
+              oidcConfigVersion: 3,
+              providerTokenId: tokenId,
+              providerTokenKey: `oidc:model:AccessToken:${tokenId}`,
+            },
+          } as never),
+          version,
+        }),
+        id: testScope.unique("access-token"),
+        model: "AccessToken",
+        payload: {
+          accountId: SUBJECT_IDENTIFIER,
+          clientId,
+          sessionUid: testScope.unique("provider-session-access"),
+        },
+        ttlSeconds: 800,
+      },
+      {
+        adapter: createAdapter(testScope, "Session", { version }),
+        id: testScope.unique("session"),
+        model: "Session",
+        payload: {
+          accountId: SUBJECT_IDENTIFIER,
+          authorizations: { [clientId]: {} },
+          uid: providerSessionUid,
+        },
+        ttlSeconds: 900,
+      },
+    ];
+    const keys = artifacts.map(artifact => `oidc:model:${artifact.model}:${artifact.id}`);
+    for (const key of [
+      ...keys,
+      ...keys.map(key => key.replace("oidc:model:", "oidc:consumed:")),
+      `oidc:client-objects:${clientId}`,
+      `oidc:session-uid:${providerSessionUid}`,
+    ]) {
+      testScope.trackKey(key);
+    }
+    for (const artifact of artifacts)
+      await artifact.adapter.upsert(artifact.id, artifact.payload, artifact.ttlSeconds);
+    const originalExpiresAt = await readAbsoluteExpirations(testScope, keys);
+    const maintenanceGate = createOidcClientTrafficGate({
+      gate: { check: async () => ({ outcome: "maintenance" }) },
+    });
+
+    await expect(maintenanceGate.assertIssuanceAllowed(clientId)).rejects.toMatchObject({
+      error: "temporarily_unavailable",
+    });
+
+    const afterMaintenanceExpiresAt = await readAbsoluteExpirations(testScope, keys);
+    for (let index = 0; index < keys.length; index += 1)
+      expect(Math.abs(afterMaintenanceExpiresAt[index]! - originalExpiresAt[index]!)).toBeLessThan(100);
+
+    version.value = 4;
+    for (const artifact of artifacts)
+      await expect(artifact.adapter.find(artifact.id)).resolves.toBeUndefined();
+    expect(await testScope.observer.exists(...keys)).toBe(0);
+  });
+
   it("preserves a newer Session owner when an old artifact is destroyed late", async () => {
     const testScope = scope!;
     const providerSessionUid = testScope.unique("provider-session");
@@ -304,7 +392,22 @@ describe("redis OIDC adapter real Redis contract", () => {
   });
 });
 
-function createAdapter(testScope: OidcProviderRedisTestScope, model = "Session") {
+async function readAbsoluteExpirations(
+  testScope: OidcProviderRedisTestScope,
+  keys: string[],
+) {
+  return await Promise.all(keys.map(async key => Date.now() + await testScope.observer.pttl(key)));
+}
+
+function createAdapter(
+  testScope: OidcProviderRedisTestScope,
+  model = "Session",
+  options: {
+    resolveAccessTokenCredential?: (tokenId: string) => unknown;
+    version?: { value: number | null };
+  } = {},
+) {
+  const version = options.version ?? { value: 3 };
   return new RedisOidcAdapter(model, testScope.writer, {
     claims: {
       createAuthorizationCodeSnapshot: async (input: CreateOidcAuthorizationCodeSnapshotInput) => ({
@@ -314,13 +417,13 @@ function createAdapter(testScope: OidcProviderRedisTestScope, model = "Session")
       }),
     },
     clientVersions: {
-      findActiveVersion: async () => 3,
+      findActiveVersion: async () => version.value,
     },
     oidcSession: {
       registerAuthorizationCodeArtifact: async () => true,
       consumeAuthorizationCodeArtifact: async () => null,
       registerAccessTokenCredential: async input => ({ credentialId: `${input.providerTokenId}-credential` }) as never,
-      resolveAccessTokenCredential: async () => null,
+      resolveAccessTokenCredential: async tokenId => options.resolveAccessTokenCredential?.(tokenId) as never ?? null,
       revokeAccessTokenCredential: async () => undefined,
       revokeClientProtocol: async () => undefined,
     },

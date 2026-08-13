@@ -103,6 +103,9 @@ describe("oIDC HTTP access logging", () => {
     const port = await listen(server);
 
     await fetch(`http://127.0.0.1:${port}/health`, { headers: { "x-request-id": "req-health" } });
+    const publicHealth = await fetch(`http://127.0.0.1:${port}/oidc/health`, {
+      headers: { "x-request-id": "req-public-health" },
+    });
     await fetch(`http://127.0.0.1:${port}/oidc/interaction/abc`, { headers: { "x-request-id": "req-interaction" } });
     await fetch(`http://127.0.0.1:${port}/oidc/resume`, { headers: { "x-request-id": "req-resume" }, redirect: "manual" });
     await fetch(`http://127.0.0.1:${port}/oidc/.well-known/openid-configuration`, {
@@ -112,11 +115,20 @@ describe("oIDC HTTP access logging", () => {
 
     await waitForLog(lines, line => line.requestId === "req-missing" && line.event === SystemLogEvent.HttpRequestCompleted);
 
+    expect(publicHealth.status).toBe(200);
+    await expect(publicHealth.json()).resolves.toEqual({ status: "ok" });
     expect(lines).toEqual(expect.arrayContaining([
       expect.objectContaining({
         event: SystemLogEvent.HttpRequestCompleted,
         sourceApp: LoggerSourceApp.OidcProvider,
         requestId: "req-health",
+        route: "/health",
+        statusCode: 200,
+      }),
+      expect.objectContaining({
+        event: SystemLogEvent.HttpRequestCompleted,
+        sourceApp: LoggerSourceApp.OidcProvider,
+        requestId: "req-public-health",
         route: "/health",
         statusCode: 200,
       }),

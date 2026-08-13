@@ -95,13 +95,15 @@ readiness 对 OIDC discovery 不只检查 HTTP 200，还精确核对 canonical o
 只记录 stage、timestamps、failure category 或 run-scoped public references，不记录 credential、token 或 secret。
 
 `admin:journey` 在上述 lifecycle 的 protocol readiness 之后运行浏览器 preflight，并以单 Chromium project、单 worker、零 retry
-执行 `admin-custom-sso.spec.ts`。Journey 用 bootstrap Admin client 通过真实 SSO 登录 Admin，再从目标 client 的未配置状态开始，经真实
-Admin UI 配置并启用 Gateway Custom SSO，最后 reload 并通过真实 detail RPC read-back 验证 provider、redirect URL、claims 与 enabled
-状态；不得通过 `page.route` 替代系统 seam。浏览器失败证据沿用 run-scoped Playwright staging，随后进入统一 diagnostics 与 exact-project
-cleanup。`oidc:journey` 复用同一 lifecycle 与浏览器约束；test-owned RP helper 生成 S256 verifier/challenge 并接收 registered
-callback，浏览器经真实 authorize、SSO/API password login 与 resume 取得 code，随后从 canonical origin 的公开 token endpoint
-与 `/oidc/me` 验收错误 verifier、成功兑换、authorization code 单次使用、ID Token issuer/nonce/subject 及 UserInfo。Local HTTP
-配置只令 interaction Cookie `Secure=false`，并继续验证 `HttpOnly`、`SameSite=Lax` 与 `Path=/oidc`。两个 journey 都不使用
+执行 `admin-custom-sso.spec.ts`。Journey 用 bootstrap Admin client 通过真实 SSO 登录 Admin，再由真实 Admin UI 将目标 client 切入
+Maintenance，在维护中配置并启用 Gateway Custom SSO；公开 authorize 与 user-info 观察 `503 AUTH.MAINTENANCE`，恢复正常后取得并复用
+未变更的 Local Session，再在维护中执行真实 disable/enable mutation 并确认旧 Session 永久失效，最后由 UI 回读 redirect、claims 与
+enabled 状态。浏览器失败证据沿用 run-scoped Playwright staging，随后进入统一
+diagnostics 与 exact-project cleanup。`oidc:journey` 复用同一 lifecycle 与浏览器约束；独立 Admin 浏览器上下文在 Maintenance 中执行
+OIDC disable/enable 并恢复正常，test-owned RP helper 生成 S256 verifier/challenge 并接收 registered callback。公开 authorize、token 与
+`/oidc/me` 验收标准暂态错误、恢复、PKCE、code 单次使用、ID Token 和 UserInfo；discovery、JWKS 与 `/oidc/health` 在维护中保持可用，
+RP-initiated logout 在维护中永久终止访问。Local HTTP 配置只令 interaction Cookie `Secure=false`，并继续验证 `HttpOnly`、
+`SameSite=Lax` 与 `Path=/oidc`。两个 journey 都不使用
 `page.route` 替代 repo-owned core。完整命令在同一个 exact-project lifecycle 中固定按 Admin → OIDC 运行；任一 journey
 失败都先收集 diagnostics 再尝试 cleanup，cleanup failure 始终使 root command 非零。
 

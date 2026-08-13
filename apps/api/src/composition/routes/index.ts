@@ -34,6 +34,7 @@ export async function createApiRoutes(options: CreateApiRoutesOptions): Promise<
     localSessionAuthorizer: services.customSsoSession,
     loginCredentialParser: services.loginCredential,
     logger: runtime.logger,
+    trafficGate: services.customSsoTrafficGate,
     config: {
       projectionRetryAfterSeconds:
         runtime.config.env.sso.projectionRetryAfterSeconds,

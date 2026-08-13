@@ -1,3 +1,4 @@
+import type { ClientTrafficGateResult } from "@iam/api-core/client-traffic-gate";
 import type { AddressInfo } from "node:net";
 import type { AdapterPayload } from "oidc-provider";
 import type {
@@ -12,9 +13,13 @@ import { afterEach, describe, expect, it } from "vitest";
 import { createOidcInteractionHandler } from "../../src/interaction/handler.ts";
 import { createIamInteractionPolicy } from "../../src/interaction/policy.ts";
 import { createOidcClaimsAdapter } from "../../src/provider/claims.ts";
+import {
+  registerOidcClientTrafficGate,
+} from "../../src/provider/client-traffic-gate.ts";
 import { createProviderConfiguration } from "../../src/provider/configuration.ts";
 import { registerProtocolModelPayloadExtensions } from "../../src/provider/protocol-models.ts";
 import { createOidcAdapterFactory } from "../../src/storage/redis-adapter.ts";
+import { createClientTrafficGateController } from "./support/client-traffic-gate.ts";
 
 const subjectIdentifier = "57b0e34d-bf33-4671-87ea-4ed2f1b0e420";
 const oldPrincipalSessionId = "principal-old";
@@ -364,6 +369,8 @@ async function createAuthorizationRuntime(options: { rejectEnsure?: boolean } = 
       return clients.get(clientId) as never ?? null;
     },
   };
+  const traffic = createClientTrafficGateController();
+  const trafficGate = traffic.trafficGate;
   const claims = createOidcClaimsAdapter({
     accounts: {
       findBySubject: async (accountId: string) => accountId === subjectIdentifier
@@ -463,9 +470,11 @@ async function createAuthorizationRuntime(options: { rejectEnsure?: boolean } = 
     adapter,
     claims,
     currentSigningKey: { jwk } as never,
-    interactionPolicy: createIamInteractionPolicy(globalSessions, providerSessions),
+    interactionPolicy: createIamInteractionPolicy(globalSessions, providerSessions, trafficGate),
+    trafficGate,
   }));
   registerProtocolModelPayloadExtensions(provider);
+  registerOidcClientTrafficGate(provider, trafficGate);
   const interactions = createOidcInteractionHandler({
     clients: clientStore,
     env: {
@@ -479,9 +488,11 @@ async function createAuthorizationRuntime(options: { rejectEnsure?: boolean } = 
     globalSessions,
     provider,
     providerSessions,
+    trafficGate,
     returnHandles: {
       consume: async () => null,
       create: async () => null,
+      resolveReturnHandle: async () => null,
     },
   });
   const providerCallback = provider.callback();
@@ -517,11 +528,20 @@ async function createAuthorizationRuntime(options: { rejectEnsure?: boolean } = 
     },
     provider,
     providerSessions,
+    protocolObjectCount(model: string) {
+      return [...redis.strings.keys()].filter(key => key.startsWith(`oidc:model:${model}:`)).length;
+    },
     rotatePrincipal(options: { keepPreviousValid?: boolean } = {}) {
       if (!options.keepPreviousValid)
         validPrincipalSessionIds.delete(activePrincipalSessionId);
       activePrincipalSessionId = newPrincipalSessionId;
       validPrincipalSessionIds.add(activePrincipalSessionId);
+    },
+    setClientTrafficOutcome(clientId: string, outcome: ClientTrafficGateResult) {
+      traffic.setClientOutcome(clientId, outcome);
+    },
+    setTrafficOutcome(outcome: ClientTrafficGateResult) {
+      traffic.setDefaultOutcome(outcome);
     },
     url: `http://127.0.0.1:${port}`,
   };
@@ -640,6 +660,35 @@ async function exchangeAuthorizationCode(url: string, clientId: string, code: st
 }
 
 describe("oIDC authorization Provider Session lifecycle", () => {
+  it.each([
+    ["Maintenance", { outcome: "maintenance" }],
+    ["unknown state", { outcome: "unavailable", reason: "read-failed" }],
+  ] as const)("temporarily blocks authorization for %s without creating protocol objects and recovers", async (
+    _label,
+    blockedOutcome,
+  ) => {
+    const runtime = await createAuthorizationRuntime();
+    const cookieJar = createCookieJar();
+    const { authorization } = authorizationUrl(runtime.url, "client-a");
+    runtime.setTrafficOutcome(blockedOutcome);
+
+    const blocked = await requestRedirect(authorization.href, cookieJar);
+
+    expect(blocked.response.status).toBe(303);
+    expect(new URL(blocked.location!).searchParams.get("error")).toBe("temporarily_unavailable");
+    expect(runtime.protocolObjectCount("Interaction")).toBe(0);
+    expect(runtime.protocolObjectCount("AuthorizationCode")).toBe(0);
+    expect(runtime.protocolObjectCount("Grant")).toBe(0);
+    expect(runtime.protocolObjectCount("Session")).toBe(0);
+    expect(runtime.providerSessions.stagedPrincipalSessionIds).toEqual([]);
+
+    runtime.setTrafficOutcome({ outcome: "enabled" });
+    const recovered = await authorize(runtime.url, "client-a", cookieJar);
+
+    expect(recovered.location?.origin).toBe("https://client-a.example");
+    expect(recovered.location?.searchParams.get("code")).toEqual(expect.any(String));
+  });
+
   it("keeps concurrent first-login attempts isolated for the same account and client", async () => {
     const { provider, providerSessions, url } = await createAuthorizationRuntime();
     const cookiesA = createCookieJar("principal-token-a");
@@ -704,6 +753,31 @@ describe("oIDC authorization Provider Session lifecycle", () => {
       providerSessionUid,
       subjectIdentifier,
     });
+  });
+
+  it("keeps another client authorizable in a shared Provider Session during Maintenance", async () => {
+    const runtime = await createAuthorizationRuntime();
+    const cookies = createCookieJar();
+    const authorizedA = await authorize(runtime.url, "client-a", cookies);
+    expect(authorizedA.location?.searchParams.get("code")).toEqual(expect.any(String));
+    const providerSessionUid = [...runtime.providerSessions.bindings.keys()][0]?.split(":", 1)[0];
+    expect(providerSessionUid).toEqual(expect.any(String));
+
+    runtime.setClientTrafficOutcome("client-a", { outcome: "maintenance" });
+    const authorizedB = await authorize(runtime.url, "client-b", cookies);
+
+    expect(authorizedB.location?.origin).toBe("https://client-b.example");
+    expect(authorizedB.location?.searchParams.get("code")).toEqual(expect.any(String));
+    await expect(runtime.providerSessions.read(providerSessionUid!, "client-a")).resolves.toMatchObject({
+      clientCode: "client-a",
+    });
+    await expect(runtime.providerSessions.read(providerSessionUid!, "client-b")).resolves.toMatchObject({
+      clientCode: "client-b",
+    });
+
+    const { authorization } = authorizationUrl(runtime.url, "client-a");
+    const blockedA = await requestRedirect(authorization.href, cookies);
+    expect(new URL(blockedA.location!).searchParams.get("error")).toBe("temporarily_unavailable");
   });
 
   it("keeps client A anchored and snapshotted after independently revoking silent client B", async () => {

@@ -21,6 +21,10 @@ const client = {
   customSsoConfigVersion: 7,
 } satisfies CustomSsoClientRuntimeDto;
 
+const enabledTrafficGate = {
+  assertIssuanceAllowed: async () => undefined,
+};
+
 test("delegates authorization-code issuance after resolving the client and validating the redirect", async () => {
   const requestContext = {
     sourceApp: "iam",
@@ -38,6 +42,7 @@ test("delegates authorization-code issuance after resolving the client and valid
     authorizationGrants: { issueAuthorizationCode },
     clients: { findRuntimeRecord },
     redirectUrls: { normalizeAllowed },
+    trafficGate: enabledTrafficGate,
   });
 
   await expect(useCase.execute({
@@ -85,6 +90,7 @@ test("rejects an unknown client before redirect validation or authorization-code
     authorizationGrants: { issueAuthorizationCode },
     clients: { findRuntimeRecord: mock(async () => null) },
     redirectUrls: { normalizeAllowed },
+    trafficGate: enabledTrafficGate,
   });
 
   await expect(useCase.execute({
@@ -94,6 +100,34 @@ test("rejects an unknown client before redirect validation or authorization-code
   })).rejects.toThrow("非法client代码");
 
   expect(normalizeAllowed).not.toHaveBeenCalled();
+  expect(issueAuthorizationCode).not.toHaveBeenCalled();
+});
+
+test("does not issue an authorization grant while client traffic is suspended", async () => {
+  const issueAuthorizationCode = mock(async () => ({ isLogin: true as const, code: "should-not-exist" }));
+  const useCase = createAuthorizeSsoUseCase({
+    authorizationGrants: { issueAuthorizationCode },
+    clients: { findRuntimeRecord: mock(async () => ({
+      ...client,
+      status: ClientStatus.Maintenance,
+    })) },
+    redirectUrls: {
+      normalizeAllowed: mock(() => "https://app.example.com/callback"),
+    },
+    trafficGate: {
+      assertIssuanceAllowed: async () => {
+        throw new Error("traffic suspended");
+      },
+    },
+  });
+
+  await expect(useCase.execute({
+    clientCode: "portal",
+    globalSessionToken: "principal-token",
+    redirectUrl: "https://app.example.com/callback",
+    tokenSource: "cookie",
+  })).rejects.toThrow("traffic suspended");
+
   expect(issueAuthorizationCode).not.toHaveBeenCalled();
 });
 
@@ -111,6 +145,7 @@ test("rejects a disallowed redirect before authorization-code issuance", async (
       })),
     },
     redirectUrls: { normalizeAllowed: mock(() => null) },
+    trafficGate: enabledTrafficGate,
   });
 
   await expect(useCase.execute({
@@ -142,6 +177,7 @@ test.each([
       } as CustomSsoClientRuntimeDto)),
     },
     redirectUrls: { normalizeAllowed },
+    trafficGate: enabledTrafficGate,
   });
 
   await expect(useCase.execute({
@@ -162,6 +198,7 @@ test("does not synthesize state when the authorize request omits it", async () =
     redirectUrls: {
       normalizeAllowed: mock(() => "https://app.example.com/callback"),
     },
+    trafficGate: enabledTrafficGate,
   });
 
   const result = await useCase.execute({

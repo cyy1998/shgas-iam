@@ -56,7 +56,7 @@ export function createCustomSsoSubjectDelivery(
     if (
       client === null
       || client.clientCode !== context.authenticatedClientCode
-      || client.status !== ClientStatus.Enable
+      || client.status === ClientStatus.Disable
       || client.isDelete
       || !client.customSsoEnabled
       || config === null

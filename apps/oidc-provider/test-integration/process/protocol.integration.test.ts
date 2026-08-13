@@ -92,6 +92,10 @@ describe("oIDC discovery and JWKS HTTP smoke", () => {
       oidcSession: {
         logoutPrincipalSession: async () => true,
       },
+      trafficGate: {
+        assertIssuanceAllowed: async () => undefined,
+        assertOnlineAccessAllowed: async () => undefined,
+      },
     });
     const server = createOidcHttpServer({
       provider,

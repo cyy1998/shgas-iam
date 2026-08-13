@@ -1,3 +1,4 @@
+import type { ClientTrafficGateSourceRecord } from "@iam/api-core/client-traffic-gate";
 import type { DbClient } from "@iam/db";
 import type { OidcClientRuntimeDto, OidcClientSecretRecord } from "@iam/domain/client";
 import {
@@ -6,10 +7,19 @@ import {
 } from "@iam/contracts";
 import { clients } from "@iam/db/schema";
 import { OidcClientRuntimeDtoSchema, OidcClientSecretRecordSchema } from "@iam/domain/client";
-import { and, eq } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 
 export function createOidcClientRepository(db: DbClient) {
   return {
+    async findClientTrafficState(clientCode: string): Promise<ClientTrafficGateSourceRecord | null> {
+      const [row] = await db.select({
+        clientCode: clients.clientCode,
+        isDelete: clients.isDelete,
+        status: clients.status,
+      }).from(clients).where(eq(clients.clientCode, clientCode)).limit(1);
+      return row ?? null;
+    },
+
     async findRuntimeRecord(clientCode: string): Promise<OidcClientRuntimeDto | null> {
       const [row] = await db.select({
         id: clients.id,
@@ -36,7 +46,7 @@ export function createOidcClientRepository(db: DbClient) {
         oidcConfig: clients.oidcConfig,
       }).from(clients).where(and(
         eq(clients.clientCode, clientCode),
-        eq(clients.status, ClientStatus.Enable),
+        inArray(clients.status, [ClientStatus.Enable, ClientStatus.Maintenance]),
         eq(clients.isDelete, false),
         eq(clients.oidcEnabled, true),
       )).limit(1);

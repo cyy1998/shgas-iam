@@ -65,6 +65,21 @@ Discovery 和 JWKS 允许跨域读取。Token CORS 只对 public client 开放�
 Origin 必须与 token 所属 client 的某个已注册 redirect URI Origin 匹配。IAM 外层不会为任何端点返回
 通配符 CORS。
 
+## Client Maintenance
+
+Client Maintenance 是可逆的在线协议流量暂停，不改变 OIDC 的配置或启用意图。管理员可以在维护中配置、启用、禁用、删除
+OIDC 或轮换 confidential client secret；恢复正常后，仍启用且未发生真实协议 mutation 的配置自动恢复在线可用。
+
+Maintenance 中的 authorize、interaction/resume、token 与 UserInfo 返回标准 `temporarily_unavailable`，其中在线 bearer
+使用返回 HTTP 503，不应被当作 `invalid_token` 或永久登出。暂态阻断不消费 Code、删除 Token/Session、清除 Cookie 或暂停 TTL；
+恢复后只有仍未过期且配置版本未变化的对象继续有效。真实 OIDC 配置、启停、删除或 secret rotation 仍推进
+`oidcConfigVersion` 并永久淘汰旧对象；进入 Client Disable 或软删除则使两个协议永久失效。
+
+Discovery、JWKS 与 `{issuer}/health` 不读取 client-scoped Traffic Gate，维护中继续可用。RP-Initiated Logout 不被 Maintenance
+阻断，并继续永久终止访问。当前未启用公开 OIDC Token Revocation endpoint；本文中的协议 revocation 指 Admin Client/OIDC
+生命周期 mutation 触发的 Session Kernel 永久撤销，它同样可在 Maintenance 中执行。已离开 IAM 的 ID Token 可由 client 离线验证至
+原始过期时间。
+
 ## 退出登录
 
 使用 Discovery 返回的 `end_session_endpoint`。包含 `post_logout_redirect_uri` 的请求必须同时携带有效的

@@ -14,6 +14,7 @@ import {
 import {
   createCustomSsoSubjectDeliveryRequestScope,
 } from "@api/services/sso/custom-sso-subject-delivery-request-scope";
+import { createCustomSsoTrafficGate } from "@api/services/sso/custom-sso-traffic-gate";
 import { AuthzUnauthorizedError } from "@iam/api-core/errors/AuthzUnauthorizedError";
 import { createErrorHandler } from "@iam/api-core/middlewares/error-handler";
 import {
@@ -33,13 +34,16 @@ type AuthenticationHandlerDeps = Parameters<
 function createApiAuthenticationHandlers(
   deps: Omit<
     AuthenticationHandlerDeps,
-    "subjectDeliveryRequests"
-  >,
+    "subjectDeliveryRequests" | "trafficGate"
+  > & Pick<Partial<AuthenticationHandlerDeps>, "trafficGate">,
 ) {
   return createApiAuthenticationHandlersImpl({
     ...deps,
     subjectDeliveryRequests:
       createCustomSsoSubjectDeliveryRequestScope(),
+    trafficGate: deps.trafficGate ?? {
+      assertSessionUseAllowed: async () => undefined,
+    },
   });
 }
 
@@ -72,6 +76,40 @@ function createMockLogger() {
 }
 
 describe("publicAuthenticationHandler", () => {
+  test("returns AUTH.MAINTENANCE without resolving or clearing a local session", async () => {
+    const logger = createMockLogger();
+    const resolvePublicAuthentication = mock(async () => {
+      throw new Error("session should not be resolved");
+    });
+    const handlers = createApiAuthenticationHandlers({
+      clientService: { getClientBySecret: mock(async () => null) },
+      customSsoSession: { resolvePublicAuthentication },
+      trafficGate: createCustomSsoTrafficGate({
+        gate: { check: async () => ({ outcome: "maintenance" }) },
+      }),
+      config: { projectionRetryAfterSeconds: 3 },
+    });
+    const app = new Hono();
+    app.use("*", handlers.publicAuthenticationHandler);
+    app.get("/public/user-info", c => c.json({ ok: true }));
+    app.onError(createErrorHandler(logger));
+
+    const response = await app.request("http://localhost/public/user-info", {
+      headers: {
+        Client: "gateway",
+        Cookie: "local_gateway_session=session-token; orcas_sso_sessionid=orcas-token",
+      },
+    });
+
+    expect(response.status).toBe(503);
+    expect(response.headers.get("Retry-After")).toBe("3");
+    await expect(response.json()).resolves.toMatchObject({
+      code: ApiErrorCode.Maintenance,
+    });
+    expect(response.headers.getSetCookie()).toEqual([]);
+    expect(resolvePublicAuthentication).not.toHaveBeenCalled();
+  });
+
   test("returns bad request when Client header is missing", async () => {
     const logger = createMockLogger();
     const handlers = createApiAuthenticationHandlers({
@@ -350,6 +388,9 @@ describe("publicAuthenticationHandler", () => {
         })),
       },
       subjectDeliveryRequests,
+      trafficGate: {
+        assertSessionUseAllowed: async () => undefined,
+      },
       config: { projectionRetryAfterSeconds: 3 },
     });
     let downstreamContext: object | undefined;

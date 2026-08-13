@@ -18,6 +18,7 @@ export function createExchangeSsoCodeUseCase(deps: ExchangeSsoCodeDeps) {
     if (client === null) {
       throw new InvalidSsoClientError("非法Client");
     }
+    await deps.trafficGate.assertIssuanceAllowed(input.clientCode);
     const { credential, ttl, subject } = await deps.authorizationGrants.redeemIndependentGrant({
       client,
       code: input.code,

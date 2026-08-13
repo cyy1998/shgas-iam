@@ -27,6 +27,10 @@ export interface AuthorizeSsoClientReaderPort {
   ) => Promise<CustomSsoClientRuntimeDto | null>;
 }
 
+export interface AuthorizeSsoTrafficGatePort {
+  assertIssuanceAllowed: (clientCode: string) => Promise<void>;
+}
+
 export interface AuthorizeSsoDeps {
   authorizationGrants: AuthorizationCodeIssuerPort;
   clients: AuthorizeSsoClientReaderPort;
@@ -38,4 +42,5 @@ export interface AuthorizeSsoDeps {
       options?: AuthorizeSsoOptions,
     ) => string | null;
   };
+  trafficGate: AuthorizeSsoTrafficGatePort;
 }

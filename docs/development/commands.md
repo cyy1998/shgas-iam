@@ -217,13 +217,15 @@ Intake 受独立 source deadline 约束，最多接受 128 个文件、单文件
 diagnostic source 失败时，已取得的 artifacts、unavailable placeholder 与 index 仍先写完，然后 run 在 cleanup 尝试后非零退出。
 Preflight 发生在 descriptor/resource 之前；其失败直接非零退出，不运行不存在 project 的 diagnostics/cleanup。Descriptor
 落盘后的 runtime setup/readiness/seed failure、timeout 与可捕获 signal 都先尽量保存有界原始诊断再尝试 best-effort cleanup；cleanup failure
-保持非零。`admin:journey` 复用同一 lifecycle，在 protocol readiness 后用真实 Chromium 登录 Admin，将独立目标 client 从未配置状态推进到
-Gateway Custom SSO 已配置且启用，并在 reload 后通过真实 detail RPC 与 UI 回读 provider、redirect URL、claims 和 enabled 状态。该命令固定
+保持非零。`admin:journey` 复用同一 lifecycle，在 protocol readiness 后用真实 Chromium 登录 Admin，通过真实状态 mutation 将独立目标
+client 切入 Maintenance，在维护中配置并启用 Gateway Custom SSO；公开 authorize/user-info 验证维护阻断，恢复正常后复用未变更的
+Local Session，再以维护中的真实 disable/enable mutation 验证旧 Session 永久失效，并由 UI 回读 redirect URL、claims 和 enabled 状态。该命令固定
 单 project、单 worker、零 retry；浏览器启动 preflight 失败时在资源创建前退出，journey 失败时则保留 raw trace/PNG/WebM 并进入统一
 diagnostics 与 exact-project cleanup。`oidc:journey` 以相同的单 project、单 worker、零 retry 与 evidence/cleanup 边界运行独立
-OIDC browser slice；test-owned RP helper 只生成 S256 verifier/challenge 并接收 registered callback，真实 repo-owned authorize、登录、
-resume、token 与 `/oidc/me` 负责协议行为。该 slice 从 canonical origin 验证 interaction Cookie、PKCE mismatch、成功兑换、code replay、
-ID Token 与 UserInfo。Root command 在同一个 exact-project lifecycle 中固定按 Admin → OIDC 运行，任一失败都进入统一
+OIDC browser slice；真实 Admin UI 在 Maintenance 中完成 OIDC disable/enable，test-owned RP helper 只生成 S256 verifier/challenge 并接收
+registered callback，真实 repo-owned authorize、登录、resume、token 与 `/oidc/me` 负责协议行为。该 slice 从 canonical origin 验证
+暂态阻断与恢复、interaction Cookie、PKCE mismatch、成功兑换、code replay、ID Token、UserInfo、discovery/JWKS/health 及维护中 logout
+永久失效。Root command 在同一个 exact-project lifecycle 中固定按 Admin → OIDC 运行，任一失败都进入统一
 diagnostics 与 cleanup；cleanup failure 传播为 root command 非零。Workspace-local 单 journey 命令只用于聚焦调试：
 
 ```bash

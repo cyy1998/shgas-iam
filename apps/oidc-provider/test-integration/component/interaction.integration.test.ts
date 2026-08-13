@@ -10,6 +10,7 @@ import {
   createOpaqueValue,
   secureStringEqual,
 } from "../../src/interaction/return-handle.ts";
+import { createOidcClientTrafficGate } from "../../src/provider/client-traffic-gate.ts";
 
 describe("oIDC login return handle", () => {
   it("creates opaque browser binding values", () => {
@@ -76,6 +77,72 @@ describe("oIDC authorization request validation", () => {
 });
 
 describe("oIDC interaction Subject Access protocol boundary", () => {
+  it("temporarily blocks resume without consuming the return handle", async () => {
+    const { response, result } = createNodeResponseCapture();
+    const payload = {
+      browserBinding: "browser-binding",
+      clientId: "client-a",
+      interactionUid: "interaction-a",
+      oidcConfigVersion: 1,
+      returnTarget: "https://issuer.example/oidc/interaction/interaction-a",
+    };
+    const consume = vi.fn(async () => payload);
+    let trafficOutcome = "maintenance" as "enabled" | "maintenance";
+    const handler = createOidcInteractionHandler({
+      clients: { findRuntime: vi.fn(async () => ({ oidc_config_version: 1 })) },
+      env: {
+        nodeEnv: "test",
+        oidc: {
+          cookieSecure: false,
+          globalSessionCookie: "global_session",
+          interactionTtlSeconds: 600,
+          issuer: "https://issuer.example/oidc",
+          publicOrigin: "https://issuer.example",
+          ssoLoginPath: "/portal/login",
+        },
+      },
+      globalSessions: {
+        renew: vi.fn(),
+        resolve: vi.fn(async () => ({
+          accountId: "subject-a",
+          authTime: 123,
+          sessionId: "principal-a",
+        })),
+      },
+      provider: {},
+      providerSessions: { stage: vi.fn() },
+      returnHandles: {
+        consume,
+        create: vi.fn(),
+        resolveReturnHandle: vi.fn(async () => payload),
+      },
+      trafficGate: createOidcClientTrafficGate({
+        gate: { check: async () => ({ outcome: trafficOutcome }) },
+      }),
+    } as never);
+
+    await handler.handleResume({
+      headers: { cookie: "oidc_interaction_binding=browser-binding" },
+      url: "/oidc/resume?oidcReturn=return-handle",
+    } as never, response as never);
+
+    expect(result.statusCode).toBe(503);
+    expect(JSON.parse(result.body)).toEqual({ error: "temporarily_unavailable" });
+    expect(result.headers).not.toHaveProperty("set-cookie");
+    expect(consume).not.toHaveBeenCalled();
+
+    trafficOutcome = "enabled";
+    const { response: recoveredResponse, result: recovered } = createNodeResponseCapture();
+    await handler.handleResume({
+      headers: { cookie: "oidc_interaction_binding=browser-binding" },
+      url: "/oidc/resume?oidcReturn=return-handle",
+    } as never, recoveredResponse as never);
+
+    expect(recovered.statusCode).toBe(302);
+    expect(recovered.headers.location).toBe("https://issuer.example/oidc/interaction/interaction-a");
+    expect(consume).toHaveBeenCalledOnce();
+  });
+
   it("returns login_required and expires the matching global cookie for a disabled subject", async () => {
     const { handler, request, response, result } = createSubjectAccessInteraction(
       new SubjectAccessSessionInvalidHttpError(),
@@ -109,22 +176,62 @@ describe("oIDC interaction Subject Access protocol boundary", () => {
 });
 
 describe("oIDC interaction browser binding cookie", () => {
+  it("temporarily blocks maintenance before creating a return handle", async () => {
+    const { response, result } = createNodeResponseCapture();
+    const resolveSession = vi.fn(async () => null);
+    const createReturnHandle = vi.fn(async () => "return-handle");
+    const stageBinding = vi.fn();
+    const handler = createOidcInteractionHandler({
+      clients: {
+        findRuntime: vi.fn(async () => ({ oidc_config_version: 1 })),
+      },
+      env: {
+        nodeEnv: "test",
+        oidc: {
+          cookieSecure: false,
+          globalSessionCookie: "global_session",
+          interactionTtlSeconds: 600,
+          issuer: "https://issuer.example/oidc",
+          publicOrigin: "https://issuer.example",
+          ssoLoginPath: "/portal/login",
+        },
+      },
+      globalSessions: {
+        renew: vi.fn(),
+        resolve: resolveSession,
+      },
+      provider: {
+        interactionDetails: vi.fn(async () => ({
+          params: { client_id: "client-a" },
+          prompt: { name: "login" },
+          uid: "interaction-a",
+        })),
+      },
+      providerSessions: { stage: stageBinding },
+      returnHandles: {
+        consume: vi.fn(),
+        create: createReturnHandle,
+      },
+      trafficGate: createOidcClientTrafficGate({
+        gate: { check: async () => ({ outcome: "maintenance" }) },
+      }),
+    } as never);
+
+    await handler.handleInteraction(
+      { headers: {}, url: "/oidc/interaction/interaction-a" } as never,
+      response as never,
+    );
+
+    expect(result.statusCode).toBe(503);
+    expect(JSON.parse(result.body)).toEqual({ error: "temporarily_unavailable" });
+    expect(result.headers).not.toHaveProperty("set-cookie");
+    expect(resolveSession).not.toHaveBeenCalled();
+    expect(stageBinding).not.toHaveBeenCalled();
+    expect(createReturnHandle).not.toHaveBeenCalled();
+  });
+
   it("honors the explicit local HTTP cookie setting while retaining the OIDC path contract", async () => {
-    const result = {
-      body: "",
-      headers: {} as Record<string, string>,
-      statusCode: 200,
-    };
-    const response = {
-      end(body = "") {
-        result.body = String(body);
-        result.statusCode = response.statusCode;
-      },
-      setHeader(name: string, value: string) {
-        result.headers[name.toLowerCase()] = value;
-      },
-      statusCode: 200,
-    };
+    const { response, result } = createNodeResponseCapture();
     const handler = createOidcInteractionHandler({
       clients: {
         findRuntime: vi.fn(async () => ({ oidc_config_version: 1 })),
@@ -158,6 +265,7 @@ describe("oIDC interaction browser binding cookie", () => {
         consume: vi.fn(),
         create: vi.fn(async () => "return-handle"),
       },
+      trafficGate: { assertIssuanceAllowed: async () => undefined },
     } as never);
 
     await handler.handleInteraction(
@@ -173,21 +281,7 @@ describe("oIDC interaction browser binding cookie", () => {
 });
 
 function createSubjectAccessInteraction(error: Error, cookie: string) {
-  const result = {
-    body: "",
-    headers: {} as Record<string, string>,
-    statusCode: 200,
-  };
-  const response = {
-    end(body = "") {
-      result.body = String(body);
-      result.statusCode = response.statusCode;
-    },
-    setHeader(name: string, value: string) {
-      result.headers[name.toLowerCase()] = value;
-    },
-    statusCode: 200,
-  };
+  const { response, result } = createNodeResponseCapture();
   const request = {
     headers: { cookie },
     url: "/oidc/interaction/interaction-a",
@@ -227,6 +321,7 @@ function createSubjectAccessInteraction(error: Error, cookie: string) {
       consume: vi.fn(),
       create: vi.fn(),
     },
+    trafficGate: { assertIssuanceAllowed: async () => undefined },
   } as never);
   return {
     handler,
@@ -234,4 +329,23 @@ function createSubjectAccessInteraction(error: Error, cookie: string) {
     response: response as never,
     result,
   };
+}
+
+function createNodeResponseCapture() {
+  const result = {
+    body: "",
+    headers: {} as Record<string, string>,
+    statusCode: 200,
+  };
+  const response = {
+    end(body = "") {
+      result.body = String(body);
+      result.statusCode = response.statusCode;
+    },
+    setHeader(name: string, value: string) {
+      result.headers[name.toLowerCase()] = value;
+    },
+    statusCode: 200,
+  };
+  return { response, result };
 }

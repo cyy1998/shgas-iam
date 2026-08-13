@@ -14,6 +14,10 @@ const subject = {
   subjectIdentifier: "00000000-0000-4000-8000-000000001001",
 };
 
+const enabledTrafficGate = {
+  assertIssuanceAllowed: async () => undefined,
+};
+
 test("authenticates with the dedicated credential verifier and returns only the Independent projection", async () => {
   const authenticate = mock(async () => authenticatedClient);
   const redeemIndependentGrant = mock(async () => ({
@@ -24,6 +28,7 @@ test("authenticates with the dedicated credential verifier and returns only the 
   const useCase = createExchangeSsoCodeUseCase({
     authorizationGrants: { redeemIndependentGrant },
     clientCredentials: { authenticate },
+    trafficGate: enabledTrafficGate,
   });
 
   await expect(useCase.execute({
@@ -74,6 +79,7 @@ test("rejects a wrong client secret before redeeming the authorization grant", a
   const useCase = createExchangeSsoCodeUseCase({
     authorizationGrants: { redeemIndependentGrant },
     clientCredentials: { authenticate: mock(async () => null) },
+    trafficGate: enabledTrafficGate,
   });
 
   await expect(useCase.execute({
@@ -82,6 +88,32 @@ test("rejects a wrong client secret before redeeming the authorization grant", a
     code: "auth-code",
     redirectUri: "https://app.example.com/callback",
   })).rejects.toThrow("非法Client");
+
+  expect(redeemIndependentGrant).not.toHaveBeenCalled();
+});
+
+test("does not redeem an authenticated client's grant while traffic is suspended", async () => {
+  const redeemIndependentGrant = mock(async () => ({
+    credential: "should-not-exist",
+    ttl: 3600,
+    subject,
+  }));
+  const useCase = createExchangeSsoCodeUseCase({
+    authorizationGrants: { redeemIndependentGrant },
+    clientCredentials: { authenticate: mock(async () => authenticatedClient) },
+    trafficGate: {
+      assertIssuanceAllowed: async () => {
+        throw new Error("traffic suspended");
+      },
+    },
+  });
+
+  await expect(useCase.execute({
+    clientCode: "independent",
+    clientSecret: "secret",
+    code: "auth-code",
+    redirectUri: "https://app.example.com/callback",
+  })).rejects.toThrow("traffic suspended");
 
   expect(redeemIndependentGrant).not.toHaveBeenCalled();
 });
@@ -96,6 +128,7 @@ test("does not expose the supplied secret or a generic client record to grant re
   const useCase = createExchangeSsoCodeUseCase({
     authorizationGrants: { redeemIndependentGrant },
     clientCredentials: { authenticate },
+    trafficGate: enabledTrafficGate,
   });
 
   await useCase.execute({

@@ -1844,7 +1844,7 @@ describe("Custom SSO module interface", () => {
     expect(fakeRedis.keysStartingWith("sess:v2:active:c:")).toHaveLength(0);
   });
 
-  test("rejects authorization issuance when the current client is not enabled", async () => {
+  test("keeps Maintenance out of permanent authorization-version validation", async () => {
     const services = createServices({
       findRuntimeClient: async () => ({
         ...independentRuntimeClient,
@@ -1864,9 +1864,7 @@ describe("Custom SSO module interface", () => {
         token: principalToken,
         tokenSource: "cookie",
       }),
-    ).rejects.toBeInstanceOf(AuthzUnauthorizedError);
-
-    expect(fakeRedis.keysStartingWith("sess:v2:active:c:")).toHaveLength(0);
+    ).resolves.toMatchObject({ isLogin: true });
   });
 
   test("completeGatewayLogin creates an ORCAS-disabled Gateway Local Session without loading a legacy account or User Detail", async () => {
@@ -1959,13 +1957,6 @@ describe("Custom SSO module interface", () => {
 
   test.each([
     [
-      "global client is not enabled",
-      (runtime: CustomSsoClientRuntimeDto): CustomSsoClientRuntimeDto => ({
-        ...runtime,
-        status: ClientStatus.Maintenance,
-      }),
-    ],
-    [
       "Custom SSO is disabled",
       (runtime: CustomSsoClientRuntimeDto): CustomSsoClientRuntimeDto => ({
         ...runtime,
@@ -2016,6 +2007,34 @@ describe("Custom SSO module interface", () => {
       ).rejects.toBeInstanceOf(AuthzUnauthorizedError);
     },
   );
+
+  test("does not revoke a Gateway Local Session solely because the client is in Maintenance", async () => {
+    const services = createServices();
+    const redirectUrl = "https://gateway.example.com/callback";
+    const { code } = await issueAuthorizationCode(services, {
+      clientCode: "gateway",
+      redirectUrl,
+    });
+    const result = await services.customSsoSession.completeGatewayLogin({
+      client: getGatewayClientContext("gateway"),
+      code,
+      redirectUrl,
+    });
+    currentGatewayRuntimeClient = {
+      ...currentGatewayRuntimeClient,
+      status: ClientStatus.Maintenance,
+    };
+
+    await expect(
+      services.resolveAuthenticationContext(result.token, "gateway"),
+    ).resolves.toMatchObject({
+      authenticatedClientCode: "gateway",
+      subjectIdentifier,
+    });
+    await expect(
+      services.kernel.resolveCredential(result.token),
+    ).resolves.toMatchObject({ status: "resolved" });
+  });
 
   test("resolves a Gateway Local Session without loading a legacy account or User Detail", async () => {
     const services = createServices();
@@ -2541,6 +2560,28 @@ describe("Custom SSO module interface", () => {
       ...independentRuntimeClient,
       status: ClientStatus.Maintenance,
     };
+    await expect(
+      services.resolveAuthenticationContext(
+        result.credential,
+        independentClient.clientCode,
+      ),
+    ).resolves.toEqual({
+      authenticatedClientCode: independentClient.clientCode,
+      subjectIdentifier,
+    });
+  });
+
+  test("Maintenance does not extend an Independent Credential's original TTL", async () => {
+    const services = createServices();
+    const result = await redeemIndependentCredential(services);
+    currentIndependentRuntimeClient = {
+      ...independentRuntimeClient,
+      status: ClientStatus.Maintenance,
+    };
+
+    fakeRedis.advance(3_600_001);
+    currentIndependentRuntimeClient = independentRuntimeClient;
+
     await expect(
       services.resolveAuthenticationContext(
         result.credential,

@@ -6,10 +6,11 @@ import { ClientStatus, CustomSsoClientMode } from "@iam/contracts";
 
 export function createAuthorizeSsoUseCase(deps: AuthorizeSsoDeps) {
   async function execute(input: AuthorizeSsoInput, options: AuthorizeSsoOptions = {}) {
+    await deps.trafficGate.assertIssuanceAllowed(input.clientCode);
     const client = await deps.clients.findRuntimeRecord(input.clientCode);
     if (
       client === null
-      || client.status !== ClientStatus.Enable
+      || client.status === ClientStatus.Disable
       || client.isDelete
       || !client.customSsoEnabled
       || client.customSsoConfig === null

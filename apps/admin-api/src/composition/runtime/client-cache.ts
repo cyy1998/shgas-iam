@@ -1,7 +1,17 @@
 import type {
+  ClientTrafficGateMutationHeartbeatTimer,
+} from "@iam/api-core/client-traffic-gate";
+import type {
   CustomSsoClientRuntimeMutationHeartbeatTimer,
 } from "@iam/api-core/custom-sso";
 import type { Redis } from "ioredis";
+import {
+  abortClientTrafficGateMutation,
+  beginClientTrafficGateMutation,
+  invalidateClientTrafficGate,
+  publishClientTrafficGateMutation,
+  startClientTrafficGateMutationHeartbeat,
+} from "@iam/api-core/client-traffic-gate";
 import {
   abortCustomSsoClientRuntimeMutation,
   beginCustomSsoClientRuntimeMutation,
@@ -15,6 +25,9 @@ export interface CreateAdminClientCacheOptions {
   mutationFenceTtlMs?: number;
   mutationHeartbeatTimer?:
   CustomSsoClientRuntimeMutationHeartbeatTimer;
+  trafficGateMutationFenceTtlMs?: number;
+  trafficGateMutationHeartbeatTimer?:
+  ClientTrafficGateMutationHeartbeatTimer;
 }
 
 export function createAdminClientCache(
@@ -22,6 +35,46 @@ export function createAdminClientCache(
 ) {
   const { redis } = options;
   return {
+    async beginTrafficGateMutation(
+      clientCode: string,
+      mutationId: string,
+    ) {
+      return await beginClientTrafficGateMutation(redis, {
+        clientCode,
+        mutationId,
+        ...(options.trafficGateMutationFenceTtlMs === undefined
+          ? {}
+          : { fenceTtlMs: options.trafficGateMutationFenceTtlMs }),
+      });
+    },
+    startTrafficGateMutationHeartbeat(
+      mutation: Parameters<
+        typeof startClientTrafficGateMutationHeartbeat
+      >[1],
+    ) {
+      return startClientTrafficGateMutationHeartbeat(redis, mutation, {
+        ...(options.trafficGateMutationHeartbeatTimer === undefined
+          ? {}
+          : { timer: options.trafficGateMutationHeartbeatTimer }),
+      });
+    },
+    async publishTrafficGateMutation(
+      mutation: Parameters<
+        typeof publishClientTrafficGateMutation
+      >[1],
+      status: Parameters<
+        typeof publishClientTrafficGateMutation
+      >[2],
+    ) {
+      return await publishClientTrafficGateMutation(redis, mutation, status);
+    },
+    async abortTrafficGateMutation(
+      mutation: Parameters<
+        typeof abortClientTrafficGateMutation
+      >[1],
+    ) {
+      return await abortClientTrafficGateMutation(redis, mutation);
+    },
     async beginRuntimeMutation(
       clientCode: string,
       mutationId: string,
@@ -77,6 +130,7 @@ export function createAdminClientCache(
           redis,
           clientDto.clientCode,
         ),
+        invalidateClientTrafficGate(redis, clientDto.clientCode),
       ]);
     },
     async invalidateUpdatedClient(

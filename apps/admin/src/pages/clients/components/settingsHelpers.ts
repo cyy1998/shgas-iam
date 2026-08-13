@@ -1,4 +1,9 @@
+import { ClientStatus } from '@iam/contracts';
 import { Modal } from 'antd';
+
+export function canEnableClientProtocol(status: ClientStatus) {
+  return status === ClientStatus.Enable || status === ClientStatus.Maintenance;
+}
 
 export function normalizeClientSettingList(values: string[] | undefined) {
   return [

@@ -584,7 +584,7 @@ Custom SSO 采用与 OIDC 对称、但完全独立的 Admin operations：
 | tRPC operation | REST | 前置状态 | 结果 |
 |---|---|---|---|
 | `customSsoConfigure` | `PUT /clients/:clientCode/custom-sso/configure` | 未配置或已禁用 | 保存严格配置；必要时一次性返回 Secret |
-| `customSsoEnable` | `POST /clients/:clientCode/custom-sso/enable` | 已禁用、全局状态正常 | 启用 |
+| `customSsoEnable` | `POST /clients/:clientCode/custom-sso/enable` | 已禁用、全局状态为 Enable 或 Maintenance | 保存启用意图；仅 Enable 时在线可用 |
 | `customSsoDisable` | `POST /clients/:clientCode/custom-sso/disable` | 已启用 | 禁用并撤销 Custom SSO artifact |
 | `customSsoRemove` | `POST /clients/:clientCode/custom-sso/remove` | 已禁用 | 清除配置与 Secret Hash |
 | `customSsoRotateSecret` | `POST /clients/:clientCode/custom-sso/rotate-secret` | 已禁用且为 Independent | 轮换并一次性返回 Secret |
