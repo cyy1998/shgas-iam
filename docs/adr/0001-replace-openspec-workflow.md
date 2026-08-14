@@ -4,6 +4,9 @@ status: accepted
 
 # 以 Matt skills 工作流取代 OpenSpec
 
+> 本 ADR 中把 `.scratch/` 指定为当前 issue tracker 的局部内容已不再适用；新工作使用
+> [GitHub Issues](../agents/issue-tracker.md)。停止以 OpenSpec 驱动新工作并采用 Matt skills 的其余决定保持有效。
+
 ## 背景
 
 仓库同时存在 OpenSpec change/capability specs 工作流与 Matt skills 工作流。两套入口、事实来源和交付生命周期并存，会让维护者和 agent 无法确定新工作应创建哪种产物，也难以判断历史规格是否仍代表当前实现。

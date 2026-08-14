@@ -1,98 +1,86 @@
-# 本地 Markdown 议题跟踪
+# GitHub 议题跟踪
 
-本仓库把 `.scratch/` 用作 Matt skills 的本地 issue tracker。它保存需要跨会话恢复的 feature 资料，不是 workflow
-数据库，也不由专用 checker 校验。
+本仓库新建的 spec、implementation ticket 和 wayfinding 记录统一存放在
+[`cyy1998/shgas-iam`](https://github.com/cyy1998/shgas-iam) 的 GitHub Issues 中。所有操作使用 `gh` CLI。
 
-## Feature 布局
+本地 `origin` 指向 Gitee，GitHub remote 名为 `github`。为避免命令解析到错误仓库，所有 `gh` 命令都必须显式传入
+`--repo cyy1998/shgas-iam`，不能依赖当前目录自动推断 remote。
 
-进入 `/to-tickets` 的 feature 使用以下布局：
+## 常用操作
 
-```text
-.scratch/<feature-slug>/
-├── spec.md
-├── delivery.md
-└── issues/
-    ├── 01-<slug>.md
-    └── 02-<slug>.md
-```
+- 创建 issue：`gh issue create --repo cyy1998/shgas-iam --title "..." --body "..."`。多行正文优先使用
+  `--body-file <path>`，避免 shell quoting 改写 Markdown。
+- 读取 issue：`gh issue view <number> --repo cyy1998/shgas-iam --comments`。需要结构化读取时同时请求
+  `number,title,body,state,labels,comments,assignees`。
+- 列出 issue：
+  `gh issue list --repo cyy1998/shgas-iam --state open --json number,title,body,labels,comments,assignees`，再按任务需要使用
+  `--label`、`--state` 或 `--jq` 过滤。
+- 评论：`gh issue comment <number> --repo cyy1998/shgas-iam --body "..."`。
+- 添加或移除标签：
+  `gh issue edit <number> --repo cyy1998/shgas-iam --add-label "..."` /
+  `gh issue edit <number> --repo cyy1998/shgas-iam --remove-label "..."`。
+- 认领：`gh issue edit <number> --repo cyy1998/shgas-iam --add-assignee @me`。
+- 关闭：`gh issue close <number> --repo cyy1998/shgas-iam --comment "..."`。
 
-- `/to-spec` 把当前共识发布到 `spec.md`。Spec 不维护 `draft → approved` 状态字段；是否继续拆票以用户确认和当前
-  对话为准。
-- `/to-tickets` 在用户确认拆分后，从 `01` 开始按依赖顺序一票一文件发布到 `issues/`。
-- 已知工作会跨会话时，随 spec 创建 `delivery.md`；否则在发布首批 tickets 时补建。
-- 可以在一个上下文中直接完成的小型 `/implement` 工作不创建上述 tracker 产物。
+实际标签名称由 [triage-labels.md](triage-labels.md) 定义，不得因远端暂时缺少标签而静默改用其他名称。
 
-## Ticket 形状
+## Pull request 是否进入 triage
 
-本地 ticket 保留上游模板的最小信息：
+**PRs as a request surface: no.** 如果以后要把外部 PR 当作 feature request，可把此标志改为 `yes`；`/triage` 会读取它。
 
-```markdown
-# NN — <中文标题>
+标志为 `yes` 时，PR 使用相同标签和状态，并改用 `gh pr` 对应操作：
 
-**What to build:** <从用户视角描述可独立工作的端到端行为>
+- 读取：`gh pr view <number> --repo cyy1998/shgas-iam --comments`，代码差异使用 `gh pr diff`。
+- 列出外部 PR：读取 `authorAssociation`，只保留 `CONTRIBUTOR`、`FIRST_TIME_CONTRIBUTOR` 或 `NONE`，排除
+  `OWNER`、`MEMBER` 和 `COLLABORATOR`。
+- 评论、标签和关闭：分别使用 `gh pr comment`、`gh pr edit` 和 `gh pr close`。
 
-**Blocked by:** <ticket 编号/标题，或 None — can start immediately>
+GitHub Issues 与 PR 共用编号空间。遇到裸 `#42` 时，先运行
+`gh pr view 42 --repo cyy1998/shgas-iam`；若不是 PR，再运行
+`gh issue view 42 --repo cyy1998/shgas-iam --comments`。
 
-**Status:** ready-for-agent
+## 当 skill 要求“publish to the issue tracker”
 
-- [ ] <可观察验收标准>
-```
+创建 GitHub issue：
 
-`Status` 是协作提示，只使用 `ready-for-agent`、`claimed`、`resolved`：
+- `/to-spec` 把 spec 发布为一个 issue；
+- `/to-tickets` 按 blockers-first 顺序为每张 implementation ticket 创建独立 issue，并用 GitHub 原生关系或正文中的
+  issue 引用表达来源与阻塞边；
+- `/wayfinder` 按下文的 map/child issue 结构发布决策记录。
 
-- blocker 全部 `resolved` 的 `ready-for-agent` ticket 位于依赖前沿；
-- 实现任务开始时改为 `claimed`，无需独立 claim commit；
-- 聚焦验证和 Standards/Spec 双轴评审清零后，勾选验收项并改为 `resolved`；
-- 不追加固定 `Resolution` 章节、candidate SHA、final merge SHA 或验证证据 schema。
+需要跨会话恢复时，GitHub issue 自身就是外置记忆：
 
-Ticket 标题、交付行为和验收使用自然中文；字段名、状态、命令、路径和代码标识符保持原语言。
+- spec issue 正文保存 feature 范围、设计和测试决策；
+- ticket 正文保存独立切片、验收条件和 blockers；
+- assignee 表达认领，open/closed 表达是否完成，triage label 表达当前处理角色；
+- 评论只追加重要决策、验证摘要、评审结果和下一安全动作，并链接正式来源，不复制整份 spec 或 ticket。
 
-## Feature Journal
+## 当 skill 要求“fetch the relevant ticket”
 
-`delivery.md` 只承担跨会话恢复，使用三个自由格式章节：
-
-```markdown
-# <功能名>开发记录
-
-## 当前状态
-
-## 验收与验证计划
-
-## 事件
-```
-
-- “当前状态”说明依赖前沿、当前 ticket、功能/目标分支和下一安全动作。
-- “验收与验证计划”概述 ticket 级聚焦检查，以及准备 merge 时的一次完整验证。
-- “事件”按日期追加重要过程摘要，可以使用 `Decision`、`Authorization`、`Validation`、`Review`、`Reopen` 或
-  `Repair` 标签，但不要求固定字段、Gate ID、SHA 或机器可解析格式。
-- Journal 链接正式来源而不复制需求。Feature 范围与测试决策以 spec 为准，切片范围与验收以 ticket 为准，稳定领域
-  语言与长期决策以 `CONTEXT.md`/ADR 为准。
-
-一次性实施多张 tickets 的批量模式中，每张 ticket 的专用 implementation 子代理从新上下文读取 `AGENTS.md`、当前
-分支、spec、ticket、blockers 和 journal。只实施一张 ticket 时由当前会话直接实施，不因同一 tracker 还存在其他
-tickets 而启动专用 implementation 子代理。实现通过后，ticket 状态、验收 checkbox 与 journal 摘要进入一个轻量
-handoff commit，供后续上下文恢复。
-
-## Skill 操作映射
-
-- “Publish to the issue tracker”表示写入上述 `.scratch/<feature-slug>/` 文件。
-- “Fetch the relevant ticket”表示读取指定 ticket，并同时读取同 feature 的 spec、journal 和 blocker tickets。
-- Triage label `ready-for-agent` 在本地 implementation ticket 中由同名 `Status` 表达；spec 不把 label 映射为生命周期
-  字段。其他默认 triage 标签见 [triage-labels.md](triage-labels.md)。
+运行 `gh issue view <number> --repo cyy1998/shgas-iam --comments`，并读取该 ticket 引用的 spec、blocker issues 及相关标签。
 
 ## Wayfinding operations
 
-`/wayfinder` 继续使用独立的本地 planning 形状：
+`/wayfinder` 使用一个 map issue 和多个 child issues：
 
-- Map：`.scratch/<effort>/map.md`，保存 Destination、Notes、Decisions so far、Not yet specified 与 Out of scope。
-- Child ticket：`.scratch/<effort>/issues/NN-<slug>.md`，记录 `Type: research | prototype | grilling | task`、
-  `Status: claimed | resolved` 和 `Blocked by`。
-- 认领时先写 `claimed`；解决时追加 `## Answer`、改为 `resolved`，并把一行摘要和链接加入 map 的
-  Decisions so far。
-- Wayfinding 是规划记录；只有后续进入 `/to-tickets` 的实现 feature 才按前述规则创建 journal。
+- **Map**：带 `wayfinder:map` 标签的单个 issue，正文保存 Notes、Decisions so far 和 Fog：
+  `gh issue create --repo cyy1998/shgas-iam --label wayfinder:map ...`。
+- **Child ticket**：使用 GitHub sub-issue 关联到 map，并添加 `wayfinder:<type>` 标签，其中 `<type>` 为
+  `research`、`prototype`、`grilling` 或 `task`。若仓库未启用 sub-issues，则把 child 加入 map 的 task list，并在 child
+  正文首行写 `Part of #<map>`。
+- **Blocking**：优先使用 GitHub 原生 issue dependencies。通过
+  `gh api --method POST repos/cyy1998/shgas-iam/issues/<child>/dependencies/blocked_by -F issue_id=<blocker-db-id>`
+  添加阻塞边；`<blocker-db-id>` 必须是
+  `gh api repos/cyy1998/shgas-iam/issues/<number> --jq .id` 返回的数据库 ID，而不是 issue number 或 `node_id`。若原生
+  dependencies 不可用，在 child 正文首部写 `Blocked by: #<n>, #<n>`。全部 blocker 关闭后才视为解阻。
+- **Frontier**：按 map 顺序查看 open children，排除仍有 open blocker 或已有 assignee 的 issue，第一个候选即为前沿。
+- **Claim**：用 `gh issue edit <number> --repo cyy1998/shgas-iam --add-assignee @me` 认领；这是会话的第一次写操作。
+- **Resolve**：先评论答案，再关闭 child，最后在 map 的 Decisions so far 中追加摘要和上下文链接。
 
-## 历史与归档
+## 历史兼容
 
-既有 `.scratch/` 内容是有效历史，保持原路径和原格式；不批量迁移、补写字段或用当前模板校验。Feature tracker 只有在
-维护者直接要求归档，或明确同意一条已经点名 feature 和归档动作的收尾问题时才移动；归档时由该能力修复仍受版本控制
-的旧路径引用。
+`.scratch/archived/**` 是旧本地 tracker 的有效历史，保持原路径和原格式。不得为切换 GitHub 而批量迁移、删除、补写或
+重新校验其中的 spec、tickets、maps、prototypes 和 `delivery.md`；现有 release 文档对这些历史文件的链接继续有效。
+
+只有维护者明确点名某个旧 tracker 及其归档操作时，才适用仓库的历史 `archive-feature` 流程。新建 GitHub issues 不进入
+该归档流程，完成后直接按 issue 工作流关闭。

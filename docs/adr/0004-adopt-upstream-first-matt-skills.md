@@ -4,6 +4,10 @@ status: accepted
 
 # 采用上游优先的 Matt skills 与仓库薄适配
 
+> 本 ADR 中关于 Markdown tracker、跨会话 `delivery.md` 和 tracker handoff commit 的局部内容已不再适用；新工作使用
+> [GitHub Issues](../agents/issue-tracker.md) 的正文、评论、assignee、labels 与 open/closed 状态。上游 skills 所有权、
+> 仓库薄适配、聚焦验证和双轴评审等其余决定保持有效。
+
 ## 背景
 
 仓库在采用 Matt skills 后，又增加了 delivery ledger schema、Gate、claim/candidate/resolution checkpoint、SHA

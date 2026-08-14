@@ -31,10 +31,10 @@
 
 | Document | Type | Status | Last verified | Next review | Notes |
 |---|---|---|---|---|---|
-| [docs/adr/0001-replace-openspec-workflow.md](adr/0001-replace-openspec-workflow.md) | decision | Current | 2026-08-13 | 2026-10-31 | 采用 Matt skills 工作流并冻结 OpenSpec 的架构决策。 |
+| [docs/adr/0001-replace-openspec-workflow.md](adr/0001-replace-openspec-workflow.md) | decision | Current | 2026-08-14 | 2026-10-31 | 采用 Matt skills 与 GitHub Issues 工作流，并冻结 OpenSpec。 |
 | [docs/adr/0002-centralize-role-assignment-resolution.md](adr/0002-centralize-role-assignment-resolution.md) | decision | Current | 2026-07-18 | 2026-10-31 | 以独立 workspace package 统一有效角色与受影响用户解析。 |
 | [docs/adr/0003-adopt-layered-test-lanes-and-resource-budgets.md](adr/0003-adopt-layered-test-lanes-and-resource-budgets.md) | decision | Historical | 2026-08-05 | n/a | 旧普通/smoke/external 通道决策；已由 ADR-0009 取代。 |
-| [docs/adr/0004-adopt-upstream-first-matt-skills.md](adr/0004-adopt-upstream-first-matt-skills.md) | decision | Current | 2026-07-24 | 2026-10-31 | 确立上游 Matt skills 的流程所有权，并以仓库薄适配取代可执行证据状态机。 |
+| [docs/adr/0004-adopt-upstream-first-matt-skills.md](adr/0004-adopt-upstream-first-matt-skills.md) | decision | Current | 2026-08-14 | 2026-10-31 | 确立上游 Matt skills 的流程所有权，仓库以 GitHub Issues 提供薄适配。 |
 | [docs/adr/0005-keep-live-login-state-in-redis.md](adr/0005-keep-live-login-state-in-redis.md) | decision | Current | 2026-07-28 | 2026-10-31 | 有效会话与临时登录限制只以 Redis 实时状态为事实来源，不建立 PostgreSQL 会话影子或历史快照。 |
 | [docs/adr/0006-elevate-user-subject-identifier.md](adr/0006-elevate-user-subject-identifier.md) | decision | Current | 2026-07-30 | 2026-10-31 | 保留现有 UUID，并将 Subject Identifier 的命名与所有权从 OIDC 提升到 IAM 身份域。 |
 | [docs/adr/0007-separate-versioned-custom-sso-client-configuration.md](adr/0007-separate-versioned-custom-sso-client-configuration.md) | decision | Current | 2026-08-07 | 2026-10-31 | Custom SSO 使用独立的严格配置、Secret Hash 和版本屏障；其中 Client Binding 要求已由 ADR-0010 取代。 |
@@ -44,16 +44,16 @@
 | [docs/adr/0011-model-employment-as-an-immutable-tenure-lifecycle.md](adr/0011-model-employment-as-an-immutable-tenure-lifecycle.md) | decision | Current | 2026-08-11 | 2026-10-31 | Employment 表示不可重开的任职期；写入端保证父对象完整性，Subject Facts 发布前 fail closed。 |
 | [docs/adr/0012-model-client-maintenance-as-reversible-protocol-traffic-suspension.md](adr/0012-model-client-maintenance-as-reversible-protocol-traffic-suspension.md) | decision | Current | 2026-08-13 | 2026-10-31 | Accepted：Client Maintenance 是已实现的可逆在线协议流量暂停；Disable 与软删除仍是永久失效边界。 |
 | [docs/adr/0013-guard-login-page-reentry-with-authentication-continuation.md](adr/0013-guard-login-page-reentry-with-authentication-continuation.md) | decision | Current | 2026-08-14 | 2026-10-31 | Accepted：统一登录页以认证续接守卫阻止已有有效会话重复认证，并明确 OIDC 新鲜认证要求的拒绝边界。 |
-| [docs/agents/code-investigation.md](agents/code-investigation.md) | agent-config | Current | 2026-08-13 | 2026-10-31 | 项目级 `code_researcher`/`deep_researcher` 的分层路由、只读调查、证据返回和外置记忆规则。 |
+| [docs/agents/code-investigation.md](agents/code-investigation.md) | agent-config | Current | 2026-08-14 | 2026-10-31 | 项目级 `code_researcher`/`deep_researcher` 的分层路由、只读调查、证据返回和 GitHub issue 外置记忆规则。 |
 | [docs/agents/domain.md](agents/domain.md) | agent-config | Current | 2026-07-16 | 2026-10-31 | Engineering skills 的 single-context domain documentation 消费规则。 |
-| [docs/agents/issue-tracker.md](agents/issue-tracker.md) | agent-config | Current | 2026-08-06 | 2026-10-31 | 本地 spec、ticket、轻量 feature journal 与批量实施 handoff 的文件约定。 |
+| [docs/agents/issue-tracker.md](agents/issue-tracker.md) | agent-config | Current | 2026-08-14 | 2026-10-31 | `cyy1998/shgas-iam` GitHub Issues 的 spec、ticket、跨会话状态与 wayfinding 约定。 |
 | [docs/agents/triage-labels.md](agents/triage-labels.md) | agent-config | Current | 2026-07-16 | 2026-10-31 | Engineering skills 使用的默认 triage 标签映射。 |
-| [docs/agents/workflow.md](agents/workflow.md) | agent-config | Current | 2026-08-13 | 2026-10-31 | Matt skills 的仓库薄适配：本地 tracker、批量实施子代理、分支、验证、授权、归档和本地合入。 |
+| [docs/agents/workflow.md](agents/workflow.md) | agent-config | Current | 2026-08-14 | 2026-10-31 | Matt skills 的仓库薄适配：GitHub tracker、批量实施子代理、分支、验证、授权和本地合入。 |
 | [docs/architecture/architecture-guard.md](architecture/architecture-guard.md) | architecture | Current | 2026-07-31 | 2026-10-31 | 架构守卫规范的验证层选择、允许观察模型、永久规则准入、封闭目录与复杂度边界。 |
 | [docs/architecture/backend-architecture.md](architecture/backend-architecture.md) | architecture | Current | 2026-08-11 | 2026-10-31 | 后端 runtime ownership、依赖方向、composition/DI、UnitOfWork/afterCommit、请求与审计上下文、关键 deep modules、OIDC/Worker lifecycle 和分层验证。 |
 | [docs/architecture/contracts-and-database.md](architecture/contracts-and-database.md) | architecture | Current | 2026-08-11 | 2026-10-31 | shared contracts、domain/db/jobs/role-assignment-resolution/read-model 边界、UnitOfWork/afterCommit 和 Drizzle schema/relations/migration 约定。 |
 | [docs/architecture/frontend-architecture.md](architecture/frontend-architecture.md) | architecture | Current | 2026-08-07 | 2026-10-31 | admin/sso 前端边界、service wrapper、contract、测试与生成路径约定。 |
-| [docs/architecture/repository-map.md](architecture/repository-map.md) | architecture | Current | 2026-08-06 | 2026-10-31 | monorepo apps/packages、root-owned E2E workspace、gateway/observability 基础设施、agent workflow roots，以及生成目录边界。 |
+| [docs/architecture/repository-map.md](architecture/repository-map.md) | architecture | Current | 2026-08-14 | 2026-10-31 | monorepo apps/packages、root-owned E2E workspace、gateway/observability 基础设施、agent workflow roots 与生成目录边界。 |
 | [docs/architecture/testing-architecture.md](architecture/testing-architecture.md) | architecture | Current | 2026-08-07 | 2026-10-31 | 已实施的 Unit/Integration/E2E canonical collections、六个 Integration profiles、永久 Collection Guard、资源预算与默认验证契约。 |
 | [docs/development/backend-implementation.md](development/backend-implementation.md) | development | Current | 2026-07-26 | 2026-10-31 | backend response envelope、OpenAPI status、logger、audit event 和 Architecture Guard 验证分层。 |
 | [docs/development/coding-style.md](development/coding-style.md) | development | Current | 2026-08-07 | 2026-10-31 | TypeScript、formatter 边界、文件命名、React 命名和 import alias 风格约定。 |

@@ -19,7 +19,7 @@
 ├── scripts/          # 仓库级检查、canonical test collection/Integration 编排和辅助脚本
 ├── docs/             # 当前架构、功能、runbook、ADR 与历史记录
 ├── CONTEXT.md        # 稳定领域语言
-├── .scratch/         # 跨会话 feature 的本地 Markdown tracker
+├── .scratch/         # 已退役本地 tracker 的只读历史归档
 └── openspec/         # 冻结的历史需求与设计记录
 ```
 
@@ -94,8 +94,9 @@
 - `docs/`：Current architecture/feature/runbook、agent workflow、ADR 和历史审查记录。文档状态与事实来源以
   [文档索引](../index.md) 为准。
 - `CONTEXT.md`：IAM 的稳定领域语言；长期架构决策位于 `docs/adr/`。
-- `.scratch/`：跨会话 feature 的 spec、tickets 与 delivery journal。布局和生命周期见
-  [本地 Markdown 议题跟踪](../agents/issue-tracker.md)。
+- GitHub Issues：新建 spec、tickets 与跨会话状态的 tracker。仓库与操作约定见
+  [GitHub 议题跟踪](../agents/issue-tracker.md)。
+- `.scratch/`：已退役本地 tracker 的历史归档；保留原路径和 release 链接。
 - `.agents/`、`.codex/`：仓库随附的 agent skills 与 Codex 配置，不属于 runtime source。
 - `openspec/`：冻结的只读历史需求与设计记录，不是当前事实来源；使用前先阅读
   [冻结说明](../../openspec/README.md)。

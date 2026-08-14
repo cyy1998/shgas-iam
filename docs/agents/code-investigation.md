@@ -83,5 +83,5 @@ protocol entry
 `deep_researcher` 还必须返回关键 `Invariants and failure modes`，以及用于挑战主假设的 `Counterevidence`。
 
 结果只返回压缩后的证据摘要，不返回原始搜索日志或大段源码。两个调查 agent 都使用硬只读 sandbox，因此需要跨上下文
-恢复时，由主代理把摘要、已排除假设、无需重读的文件和下一步动作写入当前 feature 的 `.scratch/` journal，或用户明确
-指定的调查报告路径；恢复后优先读取该记录，不重新扫描已完成范围。
+恢复时，由主代理把摘要、已排除假设、无需重读的文件和下一步动作写入当前 GitHub issue 的评论，或用户明确指定的调查
+报告路径；恢复后优先读取该记录，不重新扫描已完成范围。
