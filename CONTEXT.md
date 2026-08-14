@@ -76,22 +76,6 @@ _Avoid_: Open Employment, enabled user employment
 对一条 Effective Employment 生效的启用角色；其角色分配目标和角色必须启用且未删除。Position 与所属 Organization 由 Employment Integrity 保证，User 账号状态不属于该概念并由使用方单独判断。
 _Avoid_: parsed role, assigned role
 
-**Employment**:
-用户以某个岗位在某个组织任职的事实关系；它描述组织归属与岗位身份，不表示对其他组织承担责任，也不直接授予角色或权限。
-_Avoid_: Organization Responsibility Assignment, Role Assignment
-
-**Organization Responsibility Definition**:
-由 IAM 权威持有、对一类组织责任及其并发承担语义的稳定定义；`code` 创建后不可修改，`name`、`description` 与 `displayOrder` 是可修改且由审计追溯旧值的展示元数据，历史任命展示当前元数据。它描述责任类别，不表示任职，也不授予角色或权限；存在当前有效或未来预约的 Organization Responsibility Assignment 时不能停用。
-_Avoid_: position, role, free-text responsibility
-
-**Assignment Cardinality**:
-Organization Responsibility Definition 对同一目标 Organization、同一责任任期的并发承担规则；`single` 禁止不同 holder 的任期重叠，`multiple` 允许不同 holder 并行，但两者都禁止同一 holder Employment 的任期重叠。
-_Avoid_: assignment count, database uniqueness
-
-**Organization Responsibility Assignment**:
-一条带有效期的组织责任事实，表示某条 Employment 按一个 Organization Responsibility Definition 对目标 Organization 承担责任；任期按精确时刻采用 `[validFrom, validTo)`，空 `validTo` 表示无限期，非空时必须晚于 `validFrom`，未来、当前与结束状态完全由当前时刻派生而不经人工切换。普通管理任命不得回溯生效，只有受控初始化迁移可以回填过去时间；创建时 holder Employment 及其岗位和所属组织、目标 Organization 与 Definition 均须启用且未删除，三项引用创建后永久不可修改；holder Employment 因转岗、暂停、停用、软删除或 User Resignation 失效时，当前任命在同一时刻原子结束、未来预约取消并软删除，历史保持且新 Employment 不继承；目标 Organization 存在当前或未来任命时不得暂停、停用或软删除，历史任命不阻断且恢复不会复活旧任命；从未生效者可在不回溯并重新校验时间重叠的前提下调整任期，也可取消并软删除，取消后不得恢复；生效后 `validFrom` 冻结，`validTo` 只能面向当前或未来设置、调整或清空并重新校验重叠，结束后不得重开或改写任期。
-_Avoid_: Employment, Role Assignment, Privilege Delegation
-
 **ORCAS Session Identity**:
 Gateway Custom SSO 显式启用 ORCAS 集成后，由 ORCAS 返回并绑定到本次 local session 的外部 user/session 引用；它只存在于 ORCAS 专用上下文、Cookie 和端点，不是 IAM 用户档案属性，也不进入 Subject Claim Catalog、Client Subject Projection 或 Gateway Subject Header。
 _Avoid_: user detail field, user profile attribute, subject claim, Independent client context
