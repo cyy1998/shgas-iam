@@ -1,6 +1,5 @@
 interface:
-  display_name: "实施"
-  short_description: "按获批规格或 tickets 完成验证、提交与评审"
-  default_prompt: "使用 $implement 实施当前已授权 ticket，并按仓库 workflow 完成验证和双轴评审。"
+  display_name: "Implement"
+  short_description: "Build work from a spec or tickets"
 policy:
   allow_implicit_invocation: false
