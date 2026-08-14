@@ -48,6 +48,10 @@ _Avoid_: Primary Employment, supervising role, organization administrator
 一次 Employment 在明确业务有效期内，为某个 Organization Responsibility Type 承担目标 Organization 责任的持久事实；三项绑定创建后永久不可修改，目标 Organization 不受 Employment 所属组织或组织树位置限制。它具有稳定身份且保留结束后的生命周期记录，录错或调整绑定时结束旧 Assignment 并创建新 Assignment；它不表示任职、角色分配或授权。
 _Avoid_: Organization Responsibility Definition, Employment, Role Assignment, Effective Role
 
+**Organization Responsibility Assignment Authority**:
+一条 Organization Responsibility Assignment 的唯一权威事实来源，决定其创建和生命周期命令；首版只有 IAM Admin 命令面可以写入，HR、其他外部系统与 Internal reader 均只读。Employment、Organization 或 User 生命周期触发的系统级联仍执行同一 Authority 已声明的后果，并非第二来源；未来引入外部来源必须重新定义所有权，不能与 IAM 通过最后写入覆盖同一事实。
+_Avoid_: multi-source assignment authority, external assignment upsert, last-writer-wins responsibility
+
 **Organization Responsibility Period**:
 Organization Responsibility Assignment 的权威业务时间边界，采用 `[startTime, endTime)`；创建使用当前事务时刻，Open 期间 `endTime` 为空，只有 End 命令能以当前事务时刻写入该边界。管理员不能预约、回溯或直接设置、改写这些时间。
 _Avoid_: scheduled responsibility period, administrator-supplied responsibility dates, audit time
@@ -57,7 +61,7 @@ Organization Responsibility Assignment 创建时为 Enable，Open 期间可在 E
 _Avoid_: scheduled assignment, arbitrary status update, assignment deletion
 
 **Organization Responsibility Assignment History**:
-普通历史由 Assignment 的创建时间、结束时间及当前或最终状态表达，不保存可按任意历史时刻查询的 Pause/Resume 状态区间；每条直接或级联状态转换都以统一业务时刻和触发原因写入该 Assignment 自身的审计记录。
+普通历史由 Assignment 的创建时间、结束时间及当前或最终状态表达，不保存可按任意历史时刻查询的 Pause/Resume 状态区间。每条直接或级联状态转换都以统一业务时刻、触发原因和目标写入该 Assignment 自身的审计记录；级联仍归因于发起业务事务的 IAM Admin，只有系统自主发起时 actor 才是 system，且只有 IAM Admin 可查看全部 Open 与 Ended 记录及其审计，Internal、User Profile 与协议投影只消费 Effective 事实。
 _Avoid_: bitemporal assignment history, retroactive responsibility reconstruction
 
 **Open Organization Responsibility Assignment**:
@@ -65,7 +69,7 @@ _Avoid_: bitemporal assignment history, retroactive responsibility reconstructio
 _Avoid_: effective responsibility, enabled assignment, available cardinality slot
 
 **Effective Organization Responsibility Assignment**:
-当前时刻处于 Organization Responsibility Period 内、状态为 Enable，且 holder Employment、目标 Organization 及其全部祖先均为 Enable、组织链均未删除的 Assignment；User 账号状态不参与该判定。
+当前时刻处于 Organization Responsibility Period 内、状态为 Enable，且 holder Employment 与目标 Organization 均为 Enable、目标 Organization 未删除的 Assignment；祖先 Organization 的状态和删除标记不参与该判定，User 账号状态同样不参与。
 _Avoid_: Open Organization Responsibility Assignment, enabled user responsibility, Role Assignment
 
 **Organization Responsibility Assignment Cardinality**:
@@ -73,11 +77,11 @@ _Avoid_: Open Organization Responsibility Assignment, enabled user responsibilit
 _Avoid_: enabled-only cardinality, per-user responsibility deduplication, duplicate holder assignment
 
 **Organization Responsibility Assignment Integrity**:
-Assignment 创建或 Resume 时必须引用 Enable Employment，以及自身和全部祖先均为 Enable 且未删除的目标 Organization，并满足所属 Type 的 Open 基数；Employment Pause 原子 Pause 其 Enable Assignment，但 Resume 不自动恢复责任，Employment End、Transfer 或 User Resignation 原子 End 其全部 Open Assignment。所有联动与 Employment 生命周期变更在同一数据库事务完成；存在 Open Assignment 时，其目标 Organization 及全部祖先均不得 Pause、Disable 或 Delete。
+Assignment 创建或 Resume 时必须引用 Enable Employment，以及自身为 Enable 且未删除的目标 Organization，并满足所属 Type 的 Open 基数；不校验目标 Organization 的祖先状态。Employment Pause 原子 Pause 其 Enable Assignment，但 Resume 不自动恢复责任，Employment End、Transfer 或 User Resignation 原子 End 其全部 Open Assignment。所有联动与 Employment 生命周期变更在同一数据库事务完成；Organization 自身或任意 descendant 是 Open Assignment 的目标时，该 Organization 不得 Pause、Disable 或 Delete，descendant Organization 仅保持 Enable 本身不构成阻断。写入并发沿用 Employment 的事务内顺序预检和数据库唯一约束，不增加固定行锁顺序或祖先链锁。
 _Avoid_: best-effort responsibility cleanup, orphan responsibility, dynamically resurrected responsibility
 
 **Organization Responsibility Integrity Violation**:
-Open Assignment 与其 Employment、目标 Organization 祖先链或 Type 基数不再满足完整性规则的数据异常；它不是正常生命周期状态，也不产生 Effective Organization Responsibility Assignment。正常读写必须 fail closed 并报告异常，修复流程不得借读取隐式改写事实。
+Open Assignment 与其 Employment、目标 Organization 本身或 Type 基数不再满足完整性规则的数据异常；祖先 Organization 的状态或删除不属于该完整性条件。异常不是正常生命周期状态，也不产生 Effective Organization Responsibility Assignment；正常读写必须 fail closed 并报告异常，修复流程不得借读取隐式改写事实。
 _Avoid_: paused assignment, automatic read repair, effective orphan responsibility
 
 **Employment**:
