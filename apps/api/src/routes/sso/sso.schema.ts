@@ -2,6 +2,14 @@ import {
   CustomSsoSubjectProjectionV1Schema,
 } from "@api/services/sso/custom-sso-subject.schema";
 import { z } from "@hono/zod-openapi";
+import { LoginPageGuardDecision } from "@iam/contracts";
+
+export const LoginPageGuardResultSchema = z.object({
+  decision: z.enum([
+    LoginPageGuardDecision.Continue,
+    LoginPageGuardDecision.Login,
+  ]),
+}).strict().openapi("LoginPageGuardResult");
 
 export const SSOMetaInfoSchema = z.object({
   authorizationEndpoint: z.url().openapi({

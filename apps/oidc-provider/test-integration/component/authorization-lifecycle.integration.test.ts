@@ -1,6 +1,7 @@
 import type { ClientTrafficGateResult } from "@iam/api-core/client-traffic-gate";
 import type { AddressInfo } from "node:net";
 import type { AdapterPayload } from "oidc-provider";
+import type { OidcReturnHandlePayload } from "../../src/interaction/return-handle.ts";
 import type {
   ProviderSessionBinding,
   ProviderSessionLifecycleFence,
@@ -260,6 +261,16 @@ function createProviderSessionStore(options: {
             && staged.principalSessionId === session.sessionId
             && (staged.providerSessionUid === null || staged.providerSessionUid === sessionUid)));
     },
+    async isStagedPrincipal(
+      authorizationAttemptId: string,
+      clientId: string,
+      session: { accountId: string; sessionId: string },
+    ) {
+      const staged = pending.get(authorizationAttemptId);
+      return staged?.accountId === session.accountId
+        && staged.clientCode === clientId
+        && staged.principalSessionId === session.sessionId;
+    },
     async read(sessionUid: string, clientCode: string) {
       const binding = bindings.get(key(sessionUid, clientCode)) ?? null;
       return binding && options.isPrincipalValid?.(binding.principalSessionId) !== false
@@ -348,8 +359,14 @@ async function createAuthorizationRuntime(options: { rejectEnsure?: boolean } = 
     return cookie?.includes("global_session=principal-token") ? activePrincipalSessionId : null;
   };
   const globalSessions = {
+    async inspect(request: { headers: { cookie?: string } }) {
+      const principalSessionId = principalSessionIdFromCookie(request.headers.cookie);
+      return principalSessionId
+        ? { status: "valid" as const }
+        : { status: "absent" as const };
+    },
     async renew(sessionId: string) {
-      return sessionId === activePrincipalSessionId;
+      return validPrincipalSessionIds.has(sessionId);
     },
     async resolve(request: { headers: { cookie?: string } }) {
       const principalSessionId = principalSessionIdFromCookie(request.headers.cookie);
@@ -475,24 +492,56 @@ async function createAuthorizationRuntime(options: { rejectEnsure?: boolean } = 
   }));
   registerProtocolModelPayloadExtensions(provider);
   registerOidcClientTrafficGate(provider, trafficGate);
+  const returnHandles = new Map<string, OidcReturnHandlePayload>();
+  let returnHandleSequence = 0;
   const interactions = createOidcInteractionHandler({
     clients: clientStore,
     env: {
       nodeEnv: "test",
       oidc: {
+        cookieSecure: false,
         globalSessionCookie: "global_session",
         interactionTtlSeconds: 600,
         issuer: providerIssuer,
+        publicOrigin: "https://sso.example",
+        ssoLoginPath: "/portal/login",
       },
     } as never,
     globalSessions,
+    interactionArtifacts: {
+      async find(interactionUid) {
+        const interaction = await provider.Interaction.find(interactionUid);
+        if (!interaction)
+          return null;
+        const artifact = interaction as unknown as {
+          params: { client_id: string };
+          prompt: { name: string };
+          uid: string;
+        };
+        return {
+          clientId: artifact.params.client_id,
+          promptName: artifact.prompt.name,
+          uid: artifact.uid,
+        };
+      },
+    },
     provider,
     providerSessions,
     trafficGate,
     returnHandles: {
-      consume: async () => null,
-      create: async () => null,
-      resolveReturnHandle: async () => null,
+      async consume(handle) {
+        const payload = returnHandles.get(handle) ?? null;
+        returnHandles.delete(handle);
+        return payload;
+      },
+      async create(payload) {
+        const handle = `return-handle-${++returnHandleSequence}`;
+        returnHandles.set(handle, payload);
+        return handle;
+      },
+      async resolveReturnHandle(handle) {
+        return returnHandles.get(handle) ?? null;
+      },
     },
   });
   const providerCallback = provider.callback();
@@ -502,6 +551,20 @@ async function createAuthorizationRuntime(options: { rejectEnsure?: boolean } = 
       void interactions.handleInteraction(request, response).catch((error) => {
         response.statusCode = 500;
         response.end(error instanceof Error ? error.message : "interaction failed");
+      });
+      return;
+    }
+    if (pathname === "/oidc/login-guard") {
+      void interactions.handleLoginGuard(request, response).catch((error) => {
+        response.statusCode = 500;
+        response.end(error instanceof Error ? error.message : "login guard failed");
+      });
+      return;
+    }
+    if (pathname === "/oidc/resume") {
+      void interactions.handleResume(request, response).catch((error) => {
+        response.statusCode = 500;
+        response.end(error instanceof Error ? error.message : "resume failed");
       });
       return;
     }
@@ -547,8 +610,10 @@ async function createAuthorizationRuntime(options: { rejectEnsure?: boolean } = 
   };
 }
 
-function createCookieJar(globalSessionToken = "principal-token") {
-  const cookies = new Map([["global_session", globalSessionToken]]);
+function createCookieJar(globalSessionToken: string | null = "principal-token") {
+  const cookies = new Map<string, string>();
+  if (globalSessionToken)
+    cookies.set("global_session", globalSessionToken);
   return {
     absorb(response: Response) {
       for (const header of response.headers.getSetCookie()) {
@@ -566,6 +631,12 @@ function createCookieJar(globalSessionToken = "principal-token") {
     },
     header() {
       return [...cookies].map(([name, value]) => `${name}=${value}`).join("; ");
+    },
+    delete(name: string) {
+      cookies.delete(name);
+    },
+    set(name: string, value: string) {
+      cookies.set(name, value);
     },
   };
 }
@@ -753,6 +824,107 @@ describe("oIDC authorization Provider Session lifecycle", () => {
       providerSessionUid,
       subjectIdentifier,
     });
+  });
+
+  it("returns login_required instead of reopening login when an existing session must reauthenticate", async () => {
+    const runtime = await createAuthorizationRuntime();
+    const cookies = createCookieJar();
+    const initial = await authorize(runtime.url, "client-a", cookies);
+    expect(initial.location?.searchParams.get("code")).toEqual(expect.any(String));
+    const { authorization } = authorizationUrl(runtime.url, "client-a");
+    authorization.searchParams.set("prompt", "login");
+
+    const reauthentication = await finishAuthorization(
+      runtime.url,
+      "client-a",
+      cookies,
+      authorization.href,
+    );
+
+    expect(reauthentication.location?.origin).toBe("https://client-a.example");
+    expect(reauthentication.location?.searchParams.get("error")).toBe("login_required");
+    expect(reauthentication.location?.searchParams.get("code")).toBeNull();
+  });
+
+  it.each([
+    ["prompt=login", "prompt", "login"],
+    ["max_age=0", "max_age", "0"],
+  ])("allows a first login to satisfy %s", async (_label, parameter, value) => {
+    const runtime = await createAuthorizationRuntime();
+    const cookies = createCookieJar(null);
+    const { authorization } = authorizationUrl(runtime.url, "client-a");
+    authorization.searchParams.set(parameter, value);
+    const prompted = await requestRedirect(authorization.href, cookies);
+    const interactionTarget = new URL(prompted.location!, providerIssuer);
+    const login = await requestRedirect(
+      new URL(`${interactionTarget.pathname}${interactionTarget.search}`, runtime.url).href,
+      cookies,
+    );
+    const loginTarget = new URL(login.location!);
+    expect(loginTarget.pathname).toBe("/portal/login");
+    const oidcReturn = loginTarget.searchParams.get("oidcReturn");
+    expect(oidcReturn).toEqual(expect.any(String));
+    const guard = await requestRedirect(
+      `${runtime.url}/oidc/login-guard?oidcReturn=${encodeURIComponent(oidcReturn!)}`,
+      cookies,
+    );
+    expect(guard.response.status).toBe(200);
+
+    cookies.set("global_session", "principal-token");
+    const authorized = await finishAuthorization(
+      runtime.url,
+      "client-a",
+      cookies,
+      `${runtime.url}/oidc/resume?oidcReturn=${encodeURIComponent(oidcReturn!)}`,
+    );
+
+    expect(authorized.location?.origin).toBe("https://client-a.example");
+    expect(authorized.location?.searchParams.get("error")).toBeNull();
+    expect(authorized.location?.searchParams.get("code")).toEqual(expect.any(String));
+  });
+
+  it.each([
+    ["prompt=login", "prompt", "login"],
+    ["max_age=0", "max_age", "0"],
+  ])("allows a new Principal Session to satisfy %s with a retained Provider Session", async (
+    _label,
+    parameter,
+    value,
+  ) => {
+    const runtime = await createAuthorizationRuntime();
+    const cookies = createCookieJar();
+    const initial = await authorize(runtime.url, "client-a", cookies);
+    expect(initial.location?.searchParams.get("code")).toEqual(expect.any(String));
+    runtime.rotatePrincipal();
+    cookies.delete("global_session");
+
+    const { authorization } = authorizationUrl(runtime.url, "client-a");
+    authorization.searchParams.set(parameter, value);
+    const prompted = await requestRedirect(authorization.href, cookies);
+    const interactionTarget = new URL(prompted.location!, providerIssuer);
+    const login = await requestRedirect(
+      new URL(`${interactionTarget.pathname}${interactionTarget.search}`, runtime.url).href,
+      cookies,
+    );
+    const oidcReturn = new URL(login.location!).searchParams.get("oidcReturn");
+    expect(oidcReturn).toEqual(expect.any(String));
+    const guard = await requestRedirect(
+      `${runtime.url}/oidc/login-guard?oidcReturn=${encodeURIComponent(oidcReturn!)}`,
+      cookies,
+    );
+    expect(guard.response.status).toBe(200);
+
+    cookies.set("global_session", "principal-token");
+    const authorized = await finishAuthorization(
+      runtime.url,
+      "client-a",
+      cookies,
+      `${runtime.url}/oidc/resume?oidcReturn=${encodeURIComponent(oidcReturn!)}`,
+    );
+
+    expect(authorized.location?.origin).toBe("https://client-a.example");
+    expect(authorized.location?.searchParams.get("error")).toBeNull();
+    expect(authorized.location?.searchParams.get("code")).toEqual(expect.any(String));
   });
 
   it("keeps another client authorizable in a shared Provider Session during Maintenance", async () => {

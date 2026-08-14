@@ -1,4 +1,4 @@
-import { ApiErrorCode } from '@iam/contracts';
+import { ApiErrorCode, LoginPageGuardDecision } from '@iam/contracts';
 // Mock-backend fixtures owned by the browser Integration collection.
 import type { Page, Route } from '@playwright/test';
 import {
@@ -7,6 +7,7 @@ import {
 } from '../../test/mocks/fixtures';
 
 type SsoMockOptions = {
+  loginGuard?: 'continue' | 'login' | 'unavailable-then-login';
   passwordLogin?: 'success' | 'failure';
 };
 
@@ -24,6 +25,23 @@ async function fulfillJson(route: Route, data: unknown, status = 200) {
 
 export async function mockSsoApi(page: Page, options: SsoMockOptions = {}) {
   const passwordLogin = options.passwordLogin ?? 'success';
+  const loginGuard = options.loginGuard ?? 'login';
+  let loginGuardAttempts = 0;
+
+  await page.route('**/sso/login-guard?**', (route) => {
+    loginGuardAttempts += 1;
+    if (loginGuard === 'unavailable-then-login' && loginGuardAttempts === 1) {
+      return fulfillJson(route, { error: 'temporarily_unavailable' }, 503);
+    }
+    return fulfillJson(
+      route,
+      ok({
+        decision: loginGuard === 'continue'
+          ? LoginPageGuardDecision.Continue
+          : LoginPageGuardDecision.Login,
+      }),
+    );
+  });
 
   await page.route('**/sso/.well-known/authentication-configuration', (route) =>
     fulfillJson(route, ok(authenticationConfig)),

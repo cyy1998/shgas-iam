@@ -21,6 +21,7 @@ export function createSsoRoute(handlers: SsoHandlers) {
     .openapi(routes.callback, handlers.callback)
     .openapi(routes.token, handlers.token)
     .openapi(routes.authorize, handlers.authorize)
+    .openapi(routes.loginGuard, handlers.loginGuard)
     .openapi(routes.logout, handlers.logout)
     .openapi(routes.loginOA, handlers.loginOA)
     .openapi(routes.loginWX, handlers.loginWX);

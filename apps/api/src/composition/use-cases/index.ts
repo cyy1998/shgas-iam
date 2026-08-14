@@ -9,6 +9,7 @@ import { createLoginWithMobileUseCase } from "@api/use-cases/authentication/logi
 import { createLoginWithPasswordUseCase } from "@api/use-cases/authentication/login-with-password/login-with-password.use-case";
 import { createRegisterPurveyorContactUseCase } from "@api/use-cases/internal/register-purveyor-contact/register-purveyor-contact.use-case";
 import { createAuthorizeSsoUseCase } from "@api/use-cases/sso/authorize-sso/authorize-sso.use-case";
+import { createCheckSsoLoginContinuationUseCase } from "@api/use-cases/sso/check-login-continuation/check-login-continuation.use-case";
 import { createCompleteSsoCallbackUseCase } from "@api/use-cases/sso/complete-sso-callback/complete-sso-callback.use-case";
 import { createExchangeSsoCodeUseCase } from "@api/use-cases/sso/exchange-sso-code/exchange-sso-code.use-case";
 import { createLoginWithOaUseCase } from "@api/use-cases/sso/login-with-oa/login-with-oa.use-case";
@@ -84,6 +85,12 @@ export function createApiUseCases(options: CreateApiUseCasesOptions) {
     authorize: createAuthorizeSsoUseCase({
       authorizationGrants: services.customSsoSession,
       clients: services.customSsoClientRuntime,
+      redirectUrls: services.ssoRedirectUrl,
+      trafficGate: services.customSsoTrafficGate,
+    }),
+    checkLoginContinuation: createCheckSsoLoginContinuationUseCase({
+      clients: services.customSsoClientRuntime,
+      principalSessions: services.customSsoSession,
       redirectUrls: services.ssoRedirectUrl,
       trafficGate: services.customSsoTrafficGate,
     }),

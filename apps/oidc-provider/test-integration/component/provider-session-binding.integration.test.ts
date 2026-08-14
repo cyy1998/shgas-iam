@@ -173,6 +173,24 @@ describe("oIDC Provider Session client binding contract", () => {
     expect(committed).not.toHaveProperty("userId");
   });
 
+  it("recognizes first authentication staged onto a retained Provider Session", async () => {
+    const { adapter, kernel } = createFixture();
+    const session = await createPrincipalSession(kernel);
+
+    await adapter.stage(session, {
+      authorizationAttemptId: "attempt-retained-provider-session",
+      clientId: "client-a",
+      oidcConfigVersion: 1,
+      providerSessionUid: "provider-session-from-expired-principal",
+    });
+
+    await expect(adapter.isStagedPrincipal(
+      "attempt-retained-provider-session",
+      "client-a",
+      session,
+    )).resolves.toBe(true);
+  });
+
   it("creates a second client binding from the same verified Principal Session and revokes clients independently", async () => {
     const { adapter, kernel } = createFixture();
     const principal = await kernel.createPrincipalSession(subjectIdentifier);

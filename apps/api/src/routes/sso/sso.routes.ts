@@ -8,6 +8,7 @@ import jsonContent from "@iam/api-core/core/openapi/helpers/json-content";
 import createSuccessResponseSchema from "@iam/api-core/core/openapi/schemas/create-success-schema";
 import { ClientCodeSchema } from "@iam/contracts";
 import {
+  LoginPageGuardResultSchema,
   SSOMetaInfoSchema,
   SsoTokenResultSchema,
 } from "./sso.schema";
@@ -113,6 +114,27 @@ export const authorize = createRoute({
     },
     [HttpStatusCodes.SERVICE_UNAVAILABLE]:
       customSsoUnavailableResponse,
+  },
+});
+
+export const loginGuard = createRoute({
+  method: "get",
+  path: `${routePrefix}/login-guard`,
+  tags,
+  request: {
+    query: z.object({
+      client: CustomSsoClientCodeSchema,
+      redirectUrl: z.url().openapi({ example: "http://localhost:8080" }),
+      state: z.string().optional().openapi({ example: "opaque-client-state" }),
+    }),
+  },
+  responses: {
+    ...commonErrorResponses,
+    [HttpStatusCodes.OK]: jsonContent(
+      createSuccessResponseSchema(LoginPageGuardResultSchema),
+      "统一登录页重入守卫决策",
+    ),
+    [HttpStatusCodes.SERVICE_UNAVAILABLE]: customSsoUnavailableResponse,
   },
 });
 

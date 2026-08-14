@@ -1,6 +1,7 @@
 import type { LoggerPort } from "@api/composition/runtime";
 import type { SsoPrincipalTokenSource } from "@api/use-cases/sso/authorize-sso/authorize-sso.type";
 import type { AuthorizeSsoUseCase } from "@api/use-cases/sso/authorize-sso/authorize-sso.use-case";
+import type { CheckSsoLoginContinuationUseCase } from "@api/use-cases/sso/check-login-continuation/check-login-continuation.use-case";
 import type { CompleteSsoCallbackUseCase } from "@api/use-cases/sso/complete-sso-callback/complete-sso-callback.use-case";
 import type { ExchangeSsoCodeUseCase } from "@api/use-cases/sso/exchange-sso-code/exchange-sso-code.use-case";
 import type { LoginWithOaUseCase } from "@api/use-cases/sso/login-with-oa/login-with-oa.use-case";
@@ -36,6 +37,7 @@ export interface CreateSsoHandlersDeps {
   logger: Pick<LoggerPort, "warn">;
   sso: {
     authorize: AuthorizeSsoUseCase;
+    checkLoginContinuation: CheckSsoLoginContinuationUseCase;
     completeCallback: CompleteSsoCallbackUseCase;
     exchangeCode: ExchangeSsoCodeUseCase;
     loginWithOa: LoginWithOaUseCase;
@@ -222,6 +224,29 @@ export function createSsoHandlers(deps: CreateSsoHandlersDeps) {
     return c.redirect(callbackUrl.toString());
   };
 
+  const loginGuard: SsoRouteHandler<"loginGuard"> = async (c) => {
+    const { client, redirectUrl } = c.req.valid("query");
+    const globalSessionToken = getCookie(c, "global_session");
+    const data = await runCustomSsoHttpBoundary(
+      c,
+      {
+        clearCookiesOnInvalidSession: [],
+        retryAfterSeconds: deps.config.projectionRetryAfterSeconds,
+      },
+      async () => await deps.sso.checkLoginContinuation.execute({
+        clientCode: client,
+        globalSessionToken,
+        redirectUrl,
+      }),
+    );
+    if (data.clearGlobalSessionCookie)
+      expireCustomSsoCookies(c, ["global_session"]);
+    return c.json(
+      resp.ok({ decision: data.decision }),
+      HttpStatusCodes.OK,
+    );
+  };
+
   const logout: SsoRouteHandler<"logout"> = async (c) => {
     const { redirectUrl, token } = c.req.valid("query");
     const globalSessionCookie = getCookie(c, "global_session");
@@ -293,6 +318,7 @@ export function createSsoHandlers(deps: CreateSsoHandlersDeps) {
     callback,
     endpointsConfiguration,
     loginOA,
+    loginGuard,
     loginWX,
     logout,
     token,

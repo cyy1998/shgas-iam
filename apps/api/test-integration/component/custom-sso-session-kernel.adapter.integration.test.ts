@@ -1134,6 +1134,24 @@ describe("Custom SSO module interface", () => {
     })).resolves.toEqual({ isLogin: false, code: null });
   });
 
+  test("inspects a Principal Session without issuing a protocol artifact", async () => {
+    const services = createServices();
+    const principalToken = await createPrincipalToken(
+      services.customSsoSession,
+    );
+
+    await expect(
+      services.customSsoSession.inspectPrincipalSession(principalToken),
+    ).resolves.toBe("valid");
+    await expect(
+      services.customSsoSession.inspectPrincipalSession(undefined),
+    ).resolves.toBe("absent");
+    await expect(
+      services.customSsoSession.inspectPrincipalSession("unknown-token"),
+    ).resolves.toBe("invalid");
+    expect(fakeRedis.keysStartingWith("sess:v2:active:a:")).toHaveLength(0);
+  });
+
   test("issues a strict V1 authorization grant and initializes its redemption record", async () => {
     const services = createServices();
     const principalToken = await createPrincipalToken(services.customSsoSession);

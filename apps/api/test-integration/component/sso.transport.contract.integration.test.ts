@@ -9,7 +9,11 @@ import { defineConfig } from "@iam/api-core/core/define-config";
 import { InvalidRedirectUriError } from "@iam/api-core/errors/InvalidRedirectUriError";
 import { SubjectAccessUnavailableError } from "@iam/api-core/subject-access";
 import { SubjectProjectionNotReadyError } from "@iam/client-subject-projection";
-import { ApiErrorCode, CustomSsoClientMode } from "@iam/contracts";
+import {
+  ApiErrorCode,
+  CustomSsoClientMode,
+  LoginPageGuardDecision,
+} from "@iam/contracts";
 import { beforeEach, describe, expect, mock, test } from "bun:test";
 import pino from "pino";
 
@@ -64,10 +68,15 @@ function createHarness() {
     token: "principal-token",
     isMobileSet: true,
   }));
+  const checkLoginContinuation = mock(async () => ({
+    clearGlobalSessionCookie: false,
+    decision: LoginPageGuardDecision.Continue,
+  }));
   const handlers = createSsoHandlers({
     logger,
     sso: {
       authorize: { execute: authorize },
+      checkLoginContinuation: { execute: checkLoginContinuation },
       completeCallback: {
         execute: completeCallback,
       },
@@ -109,6 +118,7 @@ function createHarness() {
   return {
     app,
     authorize,
+    checkLoginContinuation,
     completeCallback,
     exchangeCode,
     loginWithOa,
@@ -142,6 +152,25 @@ describe("Custom SSO HTTP transport contract", () => {
 
   beforeEach(() => {
     harness = createHarness();
+  });
+
+  test("exposes a narrow login continuation guard contract", async () => {
+    const response = await harness.app.request(
+      "/sso/login-guard?client=independent&redirectUrl=https%3A%2F%2Fclient.example.com%2Fcallback",
+      { headers: { Cookie: "global_session=principal-token" } },
+    );
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toEqual({
+      code: 200,
+      data: { decision: LoginPageGuardDecision.Continue },
+      message: "success",
+    });
+    expect(harness.checkLoginContinuation).toHaveBeenCalledWith({
+      clientCode: "independent",
+      globalSessionToken: "principal-token",
+      redirectUrl: "https://client.example.com/callback",
+    });
   });
 
   test("accepts only Basic plus form and returns the narrow V1 response", async () => {

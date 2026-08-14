@@ -1,4 +1,8 @@
-import { ApiErrorCode, ClientStatus } from '@iam/contracts';
+import {
+  ApiErrorCode,
+  ClientStatus,
+  LoginPageGuardDecision,
+} from '@iam/contracts';
 import { HttpResponse, http } from 'msw';
 import {
   authenticationConfig,
@@ -11,6 +15,12 @@ function ok<T>(data: T) {
 }
 
 export const handlers = [
+  http.get('*/sso/login-guard', () =>
+    ok({ decision: LoginPageGuardDecision.Login }),
+  ),
+  http.get('*/oidc/login-guard', () =>
+    HttpResponse.json({ decision: LoginPageGuardDecision.Login }),
+  ),
   http.get('*/sso/.well-known/authentication-configuration', () =>
     ok(authenticationConfig),
   ),

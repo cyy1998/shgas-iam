@@ -21,7 +21,11 @@ import type {
   StagedProviderSessionBinding,
 } from "./provider-session.ts";
 import { createHash, randomUUID } from "node:crypto";
-import { translateSubjectAccessResolveResult } from "@iam/api-core/subject-access";
+import {
+  SubjectAccessDisabledError,
+  SubjectAccessUnavailableError,
+  translateSubjectAccessResolveResult,
+} from "@iam/api-core/subject-access";
 import { z } from "zod";
 import { getCookieValue } from "../interaction/global-session.ts";
 import { normalizeOidcProtocolScopes } from "../protocol/scopes.ts";
@@ -193,6 +197,28 @@ export function createOidcSessionKernelCleanupAdapter(
 
 export function createOidcSessionKernelAdapter(deps: OidcSessionKernelAdapterDeps) {
   const providerSessionState = deps.providerSessionState;
+  async function inspect(request: Pick<IncomingMessage, "headers">) {
+    const externalToken = getCookieValue(request.headers.cookie, deps.cookieName);
+    if (!externalToken)
+      return { status: "absent" as const };
+    try {
+      const principal = translateSubjectAccessResolveResult(
+        await deps.kernel.resolvePrincipalSession(externalToken),
+      );
+      if (principal.status === "fail_closed") {
+        throw new SubjectAccessUnavailableError(principal.cause);
+      }
+      if (principal.status !== "resolved")
+        return { status: "invalid" as const };
+      return { status: "valid" as const };
+    }
+    catch (error) {
+      if (error instanceof SubjectAccessDisabledError)
+        return { status: "invalid" as const };
+      throw markGlobalSessionCookieError(error);
+    }
+  }
+
   async function resolve(request: Pick<IncomingMessage, "headers">): Promise<ResolvedGlobalSession | null> {
     const externalToken = getCookieValue(request.headers.cookie, deps.cookieName);
     if (!externalToken)
@@ -221,6 +247,8 @@ export function createOidcSessionKernelAdapter(deps: OidcSessionKernelAdapterDep
     const principal = translateSubjectAccessResolveResult(
       await deps.kernel.renewPrincipalSession(principalSessionId),
     );
+    if (principal.status === "fail_closed")
+      throw new SubjectAccessUnavailableError(principal.cause);
     return principal.status === "resolved";
   }
 
@@ -413,6 +441,19 @@ export function createOidcSessionKernelAdapter(deps: OidcSessionKernelAdapterDep
     return anchor?.accountId === accountId ? anchor : null;
   }
 
+  function matchesStagedPrincipal(
+    staged: StagedProviderSessionBinding | null,
+    authorizationAttemptId: string,
+    clientId: string,
+    session: ResolvedGlobalSession,
+  ): staged is StagedProviderSessionBinding {
+    return staged?.accountId === session.accountId
+      && staged.authorizationAttemptId === authorizationAttemptId
+      && staged.clientCode === clientId
+      && staged.principalSessionId === session.sessionId
+      && staged.expiresAt > nowSeconds();
+  }
+
   async function destroyProviderSession(
     sessionUid: string,
     expected?: ProviderSessionLifecycleFence,
@@ -432,12 +473,30 @@ export function createOidcSessionKernelAdapter(deps: OidcSessionKernelAdapterDep
     if (!authorizationAttemptId)
       return false;
     const staged = await providerSessionState.readStaged(authorizationAttemptId);
-    return staged?.accountId === session.accountId
-      && staged.authorizationAttemptId === authorizationAttemptId
-      && staged.clientCode === clientId
-      && staged.principalSessionId === session.sessionId
-      && (staged.providerSessionUid === null || staged.providerSessionUid === sessionUid)
-      && staged.expiresAt > nowSeconds();
+    if (!matchesStagedPrincipal(
+      staged,
+      authorizationAttemptId,
+      clientId,
+      session,
+    )) {
+      return false;
+    }
+    return staged.providerSessionUid === null
+      || staged.providerSessionUid === sessionUid;
+  }
+
+  async function isStagedPrincipal(
+    authorizationAttemptId: string,
+    clientId: string,
+    session: ResolvedGlobalSession,
+  ) {
+    const staged = await providerSessionState.readStaged(authorizationAttemptId);
+    return matchesStagedPrincipal(
+      staged,
+      authorizationAttemptId,
+      clientId,
+      session,
+    );
   }
 
   async function read(sessionUid: string, clientCode: string): Promise<ProviderSessionBinding | null> {
@@ -511,6 +570,8 @@ export function createOidcSessionKernelAdapter(deps: OidcSessionKernelAdapterDep
       tokenKind: "oidcReturnHandle",
       metadata: payload,
     });
+    if (artifact.status === "fail_closed")
+      throw new SubjectAccessUnavailableError(artifact.cause);
     return artifact.status === "created" && artifact.externalToken ? artifact.externalToken : null;
   }
 
@@ -518,6 +579,8 @@ export function createOidcSessionKernelAdapter(deps: OidcSessionKernelAdapterDep
     const consumed = translateSubjectAccessResolveResult(
       await deps.kernel.consumeProtocolArtifact(handle),
     );
+    if (consumed.status === "fail_closed")
+      throw new SubjectAccessUnavailableError(consumed.cause);
     if (consumed.status !== "resolved"
       || consumed.value.protocol !== OIDC_SESSION_PROTOCOL
       || consumed.value.artifactType !== OIDC_RETURN_HANDLE_ARTIFACT_TYPE) {
@@ -531,6 +594,8 @@ export function createOidcSessionKernelAdapter(deps: OidcSessionKernelAdapterDep
     const resolved = translateSubjectAccessResolveResult(
       await deps.kernel.resolveProtocolArtifact(handle),
     );
+    if (resolved.status === "fail_closed")
+      throw new SubjectAccessUnavailableError(resolved.cause);
     if (resolved.status !== "resolved"
       || resolved.value.protocol !== OIDC_SESSION_PROTOCOL
       || resolved.value.artifactType !== OIDC_RETURN_HANDLE_ARTIFACT_TYPE) {
@@ -716,6 +781,8 @@ export function createOidcSessionKernelAdapter(deps: OidcSessionKernelAdapterDep
     const principal = translateSubjectAccessResolveResult(
       await deps.kernel.resolvePrincipalSessionById(principalSessionId),
     );
+    if (principal.status === "fail_closed")
+      throw new SubjectAccessUnavailableError(principal.cause);
     if (principal.status !== "resolved")
       return null;
     return Math.floor(principal.value.expiresAt / 1000);
@@ -766,7 +833,9 @@ export function createOidcSessionKernelAdapter(deps: OidcSessionKernelAdapterDep
     consumeStaged,
     destroyProviderSession,
     ensureClientBinding,
+    inspect,
     isCurrentOrStagedPrincipal,
+    isStagedPrincipal,
     logoutPrincipalSession,
     read,
     readPrincipalAnchor,

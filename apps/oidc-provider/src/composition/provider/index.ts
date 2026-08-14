@@ -87,6 +87,32 @@ export function createOidcProviderRuntime(deps: CreateOidcProviderRuntimeDeps) {
   registerOidcClientTrafficGate(provider, trafficGate);
   const interactions = createOidcInteractionHandler({
     provider,
+    interactionArtifacts: {
+      async find(interactionUid) {
+        const interaction = await provider.Interaction.find(interactionUid);
+        if (typeof interaction !== "object" || interaction === null)
+          return null;
+        const uid = Reflect.get(interaction, "uid");
+        const params = Reflect.get(interaction, "params");
+        const prompt = Reflect.get(interaction, "prompt");
+        if (typeof params !== "object" || params === null
+          || typeof prompt !== "object" || prompt === null) {
+          return null;
+        }
+        const clientId = Reflect.get(params, "client_id");
+        const promptName = Reflect.get(prompt, "name");
+        if (typeof uid !== "string"
+          || typeof clientId !== "string"
+          || typeof promptName !== "string") {
+          return null;
+        }
+        return {
+          clientId,
+          promptName,
+          uid,
+        };
+      },
+    },
     clients: deps.stores.clientRuntime,
     globalSessions: deps.session.oidcSession,
     providerSessions: deps.session.oidcSession,

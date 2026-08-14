@@ -1,4 +1,7 @@
 import {
+  LoginGuardNotice,
+} from './_components/LoginGuardNotice';
+import {
   CheckCircleOutlined,
   LockOutlined,
   LoginOutlined,
@@ -24,6 +27,7 @@ import {
 import { SmsLoginForm, type SmsLoginValues } from './_components/SmsLoginForm';
 import { UnsafeEntryNotice } from './_components/UnsafeEntryNotice';
 import { useLoginRedirect } from './_hooks/useLoginRedirect';
+import { useLoginPageGuard } from './_hooks/useLoginPageGuard';
 import './index.less';
 
 type LoginMode = 'PWD' | 'SMS' | 'BMN';
@@ -39,7 +43,26 @@ export default function LoginPage() {
   const [smsSending, setSmsSending] = useState(false);
   const [pwdForm] = Form.useForm<PasswordLoginValues>();
   const { countdown, isCounting, startCountdown } = useSmsCodeCountdown();
-  const { clientLabel, isUnsafeEntry, redirectAfterLogin } = useLoginRedirect();
+  const loginRedirect = useLoginRedirect();
+  const {
+    client,
+    clientLabel,
+    isContinuationReady,
+    isUnsafeEntry,
+    oidcReturn,
+    redirectAfterLogin,
+    redirectUrl,
+    state,
+  } = loginRedirect;
+  const loginGuard = useLoginPageGuard({
+    client: client ?? '',
+    isContinuationReady,
+    isUnsafeEntry,
+    oidcReturn,
+    redirectAfterLogin,
+    redirectUrl,
+    state,
+  });
 
   const showLoginFailureModal = (msg: string) => {
     Modal.error({
@@ -170,6 +193,15 @@ export default function LoginPage() {
 
   if (isUnsafeEntry) {
     return <UnsafeEntryNotice />;
+  }
+
+  if (loginGuard.status !== 'login') {
+    return (
+      <LoginGuardNotice
+        status={loginGuard.status as Exclude<typeof loginGuard.status, 'login' | 'unsafe'>}
+        onRetry={loginGuard.retry}
+      />
+    );
   }
 
   return (

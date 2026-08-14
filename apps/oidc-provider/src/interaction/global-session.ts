@@ -6,6 +6,11 @@ export type ResolvedGlobalSession = {
   accountId: string;
 };
 
+export type GlobalSessionInspection
+  = | { status: "absent" }
+    | { status: "invalid" }
+    | { status: "valid" };
+
 export function getCookieValue(cookieHeader: string | undefined, name: string) {
   if (!cookieHeader)
     return null;

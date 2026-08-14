@@ -1,5 +1,6 @@
 export * from "./audit/actions";
 export * from "./auth/login-credential";
+export * from "./auth/login-page-guard";
 export * from "./client";
 export * from "./custom-sso/client";
 export * from "./custom-sso/first-party-navigation";

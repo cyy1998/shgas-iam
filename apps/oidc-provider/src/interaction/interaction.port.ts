@@ -1,11 +1,22 @@
 import type { IncomingMessage } from "node:http";
 import type { OidcClientRuntimeMetadata } from "../provider/client-runtime-metadata.ts";
 import type { ProviderSessionBinding } from "../session/provider-session.ts";
-import type { ResolvedGlobalSession } from "./global-session.ts";
+import type {
+  GlobalSessionInspection,
+  ResolvedGlobalSession,
+} from "./global-session.ts";
 import type { OidcReturnHandlePayload } from "./return-handle.ts";
 
 export interface InteractionClientReader {
   findRuntime: (clientId: string) => Promise<OidcClientRuntimeMetadata | null>;
+}
+
+export interface InteractionArtifactReader {
+  find: (interactionUid: string) => Promise<{
+    clientId: string;
+    promptName: string;
+    uid: string;
+  } | null>;
 }
 
 export interface InteractionTrafficGate {
@@ -13,11 +24,21 @@ export interface InteractionTrafficGate {
 }
 
 export interface InteractionGlobalSessionResolver {
+  inspect: (request: Pick<IncomingMessage, "headers">) => Promise<GlobalSessionInspection>;
   resolve: (request: Pick<IncomingMessage, "headers">) => Promise<ResolvedGlobalSession | null>;
   renew: (sessionId: string) => Promise<boolean>;
 }
 
-export interface InteractionProviderSessionPrincipalReader {
+export interface InteractionStagedPrincipalReader {
+  isStagedPrincipal: (
+    authorizationAttemptId: string,
+    clientId: string,
+    session: ResolvedGlobalSession,
+  ) => Promise<boolean>;
+}
+
+export interface InteractionProviderSessionPrincipalReader
+  extends InteractionStagedPrincipalReader {
   isCurrentOrStagedPrincipal: (
     sessionUid: string,
     clientId: string,
@@ -26,7 +47,8 @@ export interface InteractionProviderSessionPrincipalReader {
   ) => Promise<boolean>;
 }
 
-export interface InteractionProviderSessionBindingStore {
+export interface InteractionProviderSessionBindingStore
+  extends InteractionStagedPrincipalReader {
   stage: (
     session: ResolvedGlobalSession,
     context: {

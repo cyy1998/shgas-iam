@@ -19,7 +19,7 @@ export default defineConfig({
     command: 'pnpm dev:e2e',
     reuseExistingServer: !process.env.CI,
     timeout: 240_000,
-    url: `${baseURL}/portal/login?client=iam-admin`,
+    url: `${baseURL}/portal`,
   },
   workers: 1,
   projects: [

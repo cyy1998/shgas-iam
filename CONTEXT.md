@@ -188,6 +188,14 @@ _Avoid_: token-endpoint live projection, current user profile, current authoriza
 用户完成 IAM 身份验证后形成、尚未过期且未被撤销的根登录会话；客户端是否仍打开不影响其有效性。
 _Avoid_: online session, 在线会话
 
+**Authentication Continuation**:
+IAM 在身份验证前保留、并在身份验证完成后继续原 Custom SSO 或 OIDC 授权请求的协议上下文；用户持有 Valid Principal Session 时重入统一登录页，应继续该上下文而不是创建新的 Principal Session。普通登录页参数不能绕过续接，Protocol Reauthentication Requirement 则终止本次授权而不再次进入身份验证。
+_Avoid_: post-login homepage, new login attempt, generic redirect, force-login query
+
+**Protocol Reauthentication Requirement**:
+OIDC Client 对当前授权请求提出、并由 OIDC Provider 验证和绑定到 Authentication Continuation 的新鲜身份验证要求；没有有效会话时它可通过首次登录满足，已有 Valid Principal Session 时 IAM 不再次执行身份验证，而以 `login_required` 终止本次授权。任意登录页 query 或 Custom SSO 参数不构成该要求。
+_Avoid_: force-login query, repeated login, session refresh
+
 **Temporary Login Restriction**:
 用户在统计窗口内登录失败次数过多后受到的用户级临时登录限制；它只阻止新的认证，不撤销已有会话，也不是账号禁用或永久黑名单。
 _Avoid_: blacklist, 黑名单, disabled account

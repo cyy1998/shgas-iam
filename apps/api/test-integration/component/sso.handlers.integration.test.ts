@@ -2,6 +2,7 @@ import { createSsoHandlers } from "@api/routes/sso/sso.handlers";
 import {
   CustomSsoClientRuntimeUnavailableError,
 } from "@api/services/client/custom-sso-client-runtime.reader";
+import { PrincipalSessionInspectionUnavailableError } from "@api/services/session/principal-session-inspection.error";
 import { AuthzMaintenanceError } from "@iam/api-core/errors/AuthzMaintenanceError";
 import { createErrorHandler } from "@iam/api-core/middlewares";
 import {
@@ -12,7 +13,11 @@ import { SubjectProjectionNotReadyError } from "@iam/client-subject-projection";
 import {
   CustomSsoSubjectProjectionInvariantError,
 } from "@iam/client-subject-projection/custom-sso";
-import { ApiErrorCode, CustomSsoClientMode } from "@iam/contracts";
+import {
+  ApiErrorCode,
+  CustomSsoClientMode,
+  LoginPageGuardDecision,
+} from "@iam/contracts";
 import { beforeEach, describe, expect, mock, test } from "bun:test";
 import { Hono } from "hono";
 
@@ -48,6 +53,13 @@ const callback = mock(async (): Promise<{
 const loginOA = mock(async () => ({ token: "global-session", isMobileSet: true }));
 const loginWX = mock(async () => ({ token: "global-session", isMobileSet: true }));
 const logout = mock(async () => true as const);
+const checkLoginContinuation = mock(async (): Promise<{
+  clearGlobalSessionCookie: boolean;
+  decision: LoginPageGuardDecision;
+}> => ({
+  clearGlobalSessionCookie: false,
+  decision: LoginPageGuardDecision.Continue,
+}));
 const setToken = mock(async () => ({
   sid: "local-session",
   ttl: 3600,
@@ -63,6 +75,7 @@ function createHandlers() {
       authorize: { execute: authorize },
       completeCallback: { execute: callback },
       exchangeCode: { execute: setToken },
+      checkLoginContinuation: { execute: checkLoginContinuation },
       loginWithOa: { execute: loginOA },
       loginWithWechat: { execute: loginWX },
       logout: { execute: logout },
@@ -79,6 +92,32 @@ function createHandlers() {
       thirdPartyOAEndpoint: "/sso/thirdparty/oa",
     },
   });
+}
+
+function createLoginGuardContext(cookie = "principal-session") {
+  const responseHeaders: unknown[][] = [];
+  const raw = new Request("https://iam.example.test/sso/login-guard", {
+    headers: cookie ? { Cookie: `global_session=${cookie}` } : {},
+  });
+  const query = {
+    client: "independent",
+    redirectUrl: "https://app.example.com/home?from=iam",
+  };
+  return {
+    responseHeaders,
+    req: {
+      header: mock((name: string) => raw.headers.get(name) ?? undefined),
+      method: "GET",
+      path: "/sso/login-guard",
+      raw,
+      valid: mock(() => query),
+    },
+    get: mock((key: string) => key === "requestId" ? "req-login-guard" : undefined),
+    header: mock((...args: unknown[]) => {
+      responseHeaders.push(args);
+    }),
+    json: mock((body: unknown, status: number) => ({ body, status })),
+  };
 }
 
 function createAuthorizeContext(options: {
@@ -348,9 +387,78 @@ beforeEach(() => {
   loginWX.mockClear();
   logout.mockClear();
   setToken.mockClear();
+  checkLoginContinuation.mockClear();
 });
 
 describe("createSsoHandlers protocol adaptation", () => {
+  test("login guard continues a valid Custom SSO request without exposing session data", async () => {
+    const handlers = createHandlers();
+    const context = createLoginGuardContext();
+
+    const response = await handlers.loginGuard(context as never, async () => {}) as unknown;
+
+    expect(checkLoginContinuation).toHaveBeenCalledWith({
+      clientCode: "independent",
+      globalSessionToken: "principal-session",
+      redirectUrl: "https://app.example.com/home?from=iam",
+    });
+    expect(response).toEqual({
+      body: {
+        code: 200,
+        data: { decision: LoginPageGuardDecision.Continue },
+        message: "success",
+      },
+      status: 200,
+    });
+    expect(context.responseHeaders).toEqual([]);
+  });
+
+  test("login guard clears an explicitly invalid Principal Session before showing login", async () => {
+    checkLoginContinuation.mockResolvedValueOnce({
+      clearGlobalSessionCookie: true,
+      decision: LoginPageGuardDecision.Login,
+    });
+    const handlers = createHandlers();
+    const context = createLoginGuardContext("stale-session");
+
+    const response = await handlers.loginGuard(context as never, async () => {});
+
+    expect(response).toEqual(expect.objectContaining({
+      body: expect.objectContaining({
+        data: { decision: LoginPageGuardDecision.Login },
+      }),
+      status: 200,
+    }));
+    expect(context.responseHeaders).toContainEqual([
+      "Set-Cookie",
+      expect.stringMatching(
+        /global_session=;.*Max-Age=0;.*Path=\/.*Expires=Thu, 01 Jan 1970 00:00:00 GMT/iu,
+      ),
+      { append: true },
+    ]);
+  });
+
+  test("login guard maps an uncertain Principal Session to Subject Access unavailable without clearing it", async () => {
+    checkLoginContinuation.mockRejectedValueOnce(
+      new PrincipalSessionInspectionUnavailableError(),
+    );
+    const handlers = createHandlers();
+    const app = createHttpHandlerApp("/sso/login-guard", handlers.loginGuard, {
+      client: "independent",
+      redirectUrl: "https://app.example.com/home?from=iam",
+    });
+
+    const response = await app.request("/sso/login-guard", {
+      headers: { Cookie: "global_session=principal-session" },
+    });
+
+    expect(response.status).toBe(503);
+    expect(response.headers.getSetCookie()).toEqual([]);
+    await expect(response.json()).resolves.toMatchObject({
+      code: ApiErrorCode.SubjectAccessUnavailable,
+    });
+  });
+
   test("authorize prefers the global-session cookie and preserves the login redirect query", async () => {
     const handlers = createHandlers();
     const context = createAuthorizeContext();

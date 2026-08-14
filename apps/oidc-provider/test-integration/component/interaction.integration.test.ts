@@ -2,6 +2,7 @@ import {
   SubjectAccessSessionInvalidHttpError,
   SubjectAccessUnavailableError,
 } from "@iam/api-core/subject-access";
+import { LoginPageGuardDecision } from "@iam/contracts";
 import { describe, expect, it, vi } from "vitest";
 import { requestNeedsReauthentication } from "../../src/interaction/global-session.ts";
 import { createOidcInteractionHandler } from "../../src/interaction/handler.ts";
@@ -34,6 +35,348 @@ describe("oIDC reauthentication policy", () => {
     expect(requestNeedsReauthentication({ max_age: "200" }, authTime, 1_100)).toBe(false);
     expect(requestNeedsReauthentication({ max_age: "50" }, authTime, 1_100)).toBe(true);
     expect(requestNeedsReauthentication({ max_age: "0" }, authTime, 1_000)).toBe(true);
+  });
+});
+
+describe("oIDC login page continuation guard", () => {
+  it("finishes an existing-session reauthentication request with login_required", async () => {
+    const { response } = createNodeResponseCapture();
+    const request = { headers: {}, url: "/oidc/interaction/interaction-a" };
+    const interactionFinished = vi.fn(async () => undefined);
+    const createReturnHandle = vi.fn();
+    const renew = vi.fn();
+    const handler = createOidcInteractionHandler({
+      clients: { findRuntime: vi.fn(async () => ({ oidc_config_version: 1 })) },
+      env: createInteractionEnv(),
+      globalSessions: {
+        inspect: vi.fn(),
+        renew,
+        resolve: vi.fn(async () => ({
+          accountId: "subject-a",
+          authTime: 123,
+          sessionId: "principal-a",
+        })),
+      },
+      provider: {
+        interactionDetails: vi.fn(async () => ({
+          params: { client_id: "client-a", prompt: "login" },
+          prompt: { name: "login" },
+          uid: "interaction-a",
+        })),
+        interactionFinished,
+      },
+      providerSessions: {
+        isStagedPrincipal: vi.fn(async () => false),
+        stage: vi.fn(),
+      },
+      returnHandles: {
+        consume: vi.fn(),
+        create: createReturnHandle,
+        resolveReturnHandle: vi.fn(),
+      },
+      trafficGate: { assertIssuanceAllowed: async () => undefined },
+    } as never);
+
+    await handler.handleInteraction(request as never, response as never);
+
+    expect(interactionFinished).toHaveBeenCalledWith(
+      request,
+      response,
+      { error: "login_required" },
+      { mergeWithLastSubmission: false },
+    );
+    expect(createReturnHandle).not.toHaveBeenCalled();
+    expect(renew).not.toHaveBeenCalled();
+  });
+
+  it("accepts prompt login after this interaction completed its first authentication", async () => {
+    const { response } = createNodeResponseCapture();
+    const request = {
+      headers: {
+        cookie: "oidc_interaction_binding=browser-binding; oidc_login_completion=login-completion",
+      },
+      url: "/oidc/interaction/interaction-a",
+    };
+    const interactionFinished = vi.fn(async () => undefined);
+    const renew = vi.fn(async () => true);
+    const stage = vi.fn(async () => ({ bindingId: "pending" }));
+    const resolveReturnHandle = vi.fn(async () => {
+      throw new SubjectAccessUnavailableError(new Error("return handle unavailable"));
+    });
+    const handler = createOidcInteractionHandler({
+      clients: { findRuntime: vi.fn(async () => ({ oidc_config_version: 1 })) },
+      env: createInteractionEnv(),
+      globalSessions: {
+        inspect: vi.fn(),
+        renew,
+        resolve: vi.fn(async () => ({
+          accountId: "subject-a",
+          authTime: 123,
+          sessionId: "principal-a",
+        })),
+      },
+      provider: {
+        interactionDetails: vi.fn(async () => ({
+          params: { client_id: "client-a", prompt: "login" },
+          prompt: { name: "login" },
+          uid: "interaction-a",
+        })),
+        interactionFinished,
+      },
+      providerSessions: {
+        isStagedPrincipal: vi.fn(async () => true),
+        stage,
+      },
+      returnHandles: {
+        consume: vi.fn(),
+        create: vi.fn(),
+        resolveReturnHandle,
+      },
+      trafficGate: { assertIssuanceAllowed: async () => undefined },
+    } as never);
+
+    await handler.handleInteraction(request as never, response as never);
+
+    expect(renew).toHaveBeenCalledWith("principal-a");
+    expect(stage).toHaveBeenCalledOnce();
+    expect(resolveReturnHandle).not.toHaveBeenCalled();
+    expect(interactionFinished).toHaveBeenCalledWith(
+      request,
+      response,
+      {
+        login: {
+          accountId: "subject-a",
+          amr: ["iam"],
+          ts: 123,
+        },
+      },
+    );
+  });
+
+  it("keeps login completion retryable when provider-session staging is unavailable", async () => {
+    const session = {
+      accountId: "subject-a",
+      authTime: 123,
+      sessionId: "principal-a",
+    };
+    const loginCompletion = {
+      browserBinding: "browser-binding",
+      clientId: "client-a",
+      interactionUid: "interaction-a",
+      oidcConfigVersion: 1,
+      returnTarget: "urn:iam:oidc-login-completion",
+    };
+    const request = {
+      headers: {
+        cookie: "oidc_interaction_binding=browser-binding; oidc_login_completion=login-completion",
+      },
+      url: "/oidc/interaction/interaction-a",
+    };
+    const stage = vi.fn()
+      .mockRejectedValueOnce(
+        new SubjectAccessUnavailableError(new Error("session store unavailable")),
+      )
+      .mockResolvedValueOnce({ bindingId: "pending" });
+    const consume = vi.fn(async () => loginCompletion);
+    const interactionFinished = vi.fn(async () => undefined);
+    const handler = createOidcInteractionHandler({
+      clients: { findRuntime: vi.fn(async () => ({ oidc_config_version: 1 })) },
+      env: createInteractionEnv(),
+      globalSessions: {
+        inspect: vi.fn(),
+        renew: vi.fn(async () => true),
+        resolve: vi.fn(async () => session),
+      },
+      provider: {
+        interactionDetails: vi.fn(async () => ({
+          params: { client_id: "client-a", prompt: "login" },
+          prompt: { name: "login" },
+          uid: "interaction-a",
+        })),
+        interactionFinished,
+      },
+      providerSessions: {
+        isStagedPrincipal: vi.fn(async () => false),
+        stage,
+      },
+      returnHandles: {
+        consume,
+        create: vi.fn(),
+        resolveReturnHandle: vi.fn(async () => loginCompletion),
+      },
+      trafficGate: { assertIssuanceAllowed: async () => undefined },
+    } as never);
+
+    const first = createNodeResponseCapture();
+    await handler.handleInteraction(request as never, first.response as never);
+
+    expect(first.result.statusCode).toBe(503);
+    expect(JSON.parse(first.result.body)).toEqual({
+      error: "temporarily_unavailable",
+    });
+    expect(consume).not.toHaveBeenCalled();
+    expect(first.result.headers).not.toHaveProperty("set-cookie");
+    expect(interactionFinished).not.toHaveBeenCalled();
+
+    const retry = createNodeResponseCapture();
+    await handler.handleInteraction(request as never, retry.response as never);
+
+    expect(consume).toHaveBeenCalledOnce();
+    expect(consume).toHaveBeenCalledWith("login-completion");
+    expect(interactionFinished).toHaveBeenCalledOnce();
+    expect(retry.result.headers["set-cookie"]).toMatch(
+      /^oidc_login_completion=; Path=\/oidc;/u,
+    );
+  });
+
+  it.each([
+    [null, LoginPageGuardDecision.Login],
+    [{ accountId: "subject-a", authTime: 123, sessionId: "principal-a" }, LoginPageGuardDecision.Continue],
+  ])("inspects a bound return handle without consuming or renewing it", async (session, decision) => {
+    const { response, result } = createNodeResponseCapture();
+    const consume = vi.fn();
+    const create = vi.fn(async () => "login-completion");
+    const renew = vi.fn();
+    const stage = vi.fn();
+    const handler = createOidcInteractionHandler({
+      clients: { findRuntime: vi.fn(async () => ({ oidc_config_version: 1 })) },
+      env: createInteractionEnv(),
+      globalSessions: {
+        inspect: vi.fn(async () => session
+          ? { status: "valid" }
+          : { status: "absent" }),
+        renew,
+        resolve: vi.fn(async () => session),
+      },
+      interactionArtifacts: {
+        find: vi.fn(async () => ({
+          clientId: "client-a",
+          promptName: "login",
+          uid: "interaction-a",
+        })),
+      },
+      provider: {
+        interactionDetails: vi.fn(async () => ({
+          params: { client_id: "client-a" },
+          prompt: { name: "login" },
+          uid: "interaction-a",
+        })),
+      },
+      providerSessions: { isStagedPrincipal: vi.fn(), stage },
+      returnHandles: {
+        consume,
+        create,
+        resolveReturnHandle: vi.fn(async () => ({
+          browserBinding: "browser-binding",
+          clientId: "client-a",
+          interactionUid: "interaction-a",
+          oidcConfigVersion: 1,
+          returnTarget: "https://issuer.example/oidc/resume",
+        })),
+      },
+      trafficGate: { assertIssuanceAllowed: async () => undefined },
+    } as never);
+
+    await handler.handleLoginGuard({
+      headers: { cookie: "oidc_interaction_binding=browser-binding" },
+      url: "/oidc/login-guard?oidcReturn=return-handle",
+    } as never, response as never);
+
+    expect(result.statusCode).toBe(200);
+    expect(JSON.parse(result.body)).toEqual({ decision });
+    expect(consume).not.toHaveBeenCalled();
+    if (decision === LoginPageGuardDecision.Login)
+      expect(create).toHaveBeenCalledOnce();
+    else
+      expect(create).not.toHaveBeenCalled();
+    expect(renew).not.toHaveBeenCalled();
+    expect(stage).not.toHaveBeenCalled();
+  });
+
+  it("clears an explicitly invalid global session before showing login", async () => {
+    const { response, result } = createNodeResponseCapture();
+    const handler = createOidcInteractionHandler({
+      clients: { findRuntime: vi.fn(async () => ({ oidc_config_version: 1 })) },
+      env: createInteractionEnv(),
+      globalSessions: {
+        inspect: vi.fn(async () => ({ status: "invalid" })),
+        renew: vi.fn(),
+        resolve: vi.fn(),
+      },
+      interactionArtifacts: {
+        find: vi.fn(async () => ({
+          clientId: "client-a",
+          promptName: "login",
+          uid: "interaction-a",
+        })),
+      },
+      provider: {},
+      providerSessions: { isStagedPrincipal: vi.fn(), stage: vi.fn() },
+      returnHandles: {
+        consume: vi.fn(),
+        create: vi.fn(async () => "login-completion"),
+        resolveReturnHandle: vi.fn(async () => ({
+          browserBinding: "browser-binding",
+          clientId: "client-a",
+          interactionUid: "interaction-a",
+          oidcConfigVersion: 1,
+          returnTarget: "https://issuer.example/oidc/resume",
+        })),
+      },
+      trafficGate: { assertIssuanceAllowed: async () => undefined },
+    } as never);
+
+    await handler.handleLoginGuard({
+      headers: {
+        cookie: "oidc_interaction_binding=browser-binding; global_session=expired-token",
+      },
+      url: "/oidc/login-guard?oidcReturn=return-handle",
+    } as never, response as never);
+
+    expect(result.statusCode).toBe(200);
+    expect(JSON.parse(result.body)).toEqual({
+      decision: LoginPageGuardDecision.Login,
+    });
+    expect(result.headers["set-cookie"]).toEqual(expect.arrayContaining([
+      expect.stringMatching(
+        /^global_session=; Path=\/; HttpOnly; SameSite=Lax; Max-Age=0; Expires=Thu, 01 Jan 1970 00:00:00 GMT$/u,
+      ),
+      expect.stringMatching(/^oidc_login_completion=login-completion;/u),
+    ]));
+  });
+
+  it("rejects a login-completion artifact before inspecting the global session", async () => {
+    const { response, result } = createNodeResponseCapture();
+    const inspect = vi.fn();
+    const handler = createOidcInteractionHandler({
+      clients: { findRuntime: vi.fn() },
+      env: createInteractionEnv(),
+      globalSessions: { inspect, renew: vi.fn(), resolve: vi.fn() },
+      interactionArtifacts: { find: vi.fn() },
+      provider: {},
+      providerSessions: { isStagedPrincipal: vi.fn(), stage: vi.fn() },
+      returnHandles: {
+        consume: vi.fn(),
+        create: vi.fn(),
+        resolveReturnHandle: vi.fn(async () => ({
+          browserBinding: "browser-binding",
+          clientId: "client-a",
+          interactionUid: "interaction-a",
+          oidcConfigVersion: 1,
+          returnTarget: "urn:iam:oidc-login-completion",
+        })),
+      },
+      trafficGate: { assertIssuanceAllowed: vi.fn() },
+    } as never);
+
+    await handler.handleLoginGuard({
+      headers: { cookie: "oidc_interaction_binding=browser-binding" },
+      url: "/oidc/login-guard?oidcReturn=login-completion",
+    } as never, response as never);
+
+    expect(result.statusCode).toBe(400);
+    expect(JSON.parse(result.body)).toEqual({ error: "invalid_request" });
+    expect(inspect).not.toHaveBeenCalled();
   });
 });
 
@@ -84,10 +427,12 @@ describe("oIDC interaction Subject Access protocol boundary", () => {
       clientId: "client-a",
       interactionUid: "interaction-a",
       oidcConfigVersion: 1,
-      returnTarget: "https://issuer.example/oidc/interaction/interaction-a",
+      returnTarget: "https://issuer.example/oidc/resume",
     };
     const consume = vi.fn(async () => payload);
     let trafficOutcome = "maintenance" as "enabled" | "maintenance";
+    const interactionFinished = vi.fn(async () => undefined);
+    const stage = vi.fn(async () => true);
     const handler = createOidcInteractionHandler({
       clients: { findRuntime: vi.fn(async () => ({ oidc_config_version: 1 })) },
       env: {
@@ -102,6 +447,7 @@ describe("oIDC interaction Subject Access protocol boundary", () => {
         },
       },
       globalSessions: {
+        inspect: vi.fn(),
         renew: vi.fn(),
         resolve: vi.fn(async () => ({
           accountId: "subject-a",
@@ -109,12 +455,31 @@ describe("oIDC interaction Subject Access protocol boundary", () => {
           sessionId: "principal-a",
         })),
       },
-      provider: {},
-      providerSessions: { stage: vi.fn() },
+      interactionArtifacts: {
+        find: vi.fn(async () => ({
+          clientId: "client-a",
+          promptName: "login",
+          uid: "interaction-a",
+        })),
+      },
+      provider: {
+        interactionDetails: vi.fn(async () => ({
+          params: { client_id: "client-a" },
+          prompt: { name: "login" },
+          uid: "interaction-a",
+        })),
+        interactionFinished,
+      },
+      providerSessions: {
+        isStagedPrincipal: vi.fn(),
+        stage,
+      },
       returnHandles: {
         consume,
         create: vi.fn(),
-        resolveReturnHandle: vi.fn(async () => payload),
+        resolveReturnHandle: vi.fn(async handle => handle === "login-completion"
+          ? { ...payload, returnTarget: "urn:iam:oidc-login-completion" }
+          : payload),
       },
       trafficGate: createOidcClientTrafficGate({
         gate: { check: async () => ({ outcome: trafficOutcome }) },
@@ -122,7 +487,9 @@ describe("oIDC interaction Subject Access protocol boundary", () => {
     } as never);
 
     await handler.handleResume({
-      headers: { cookie: "oidc_interaction_binding=browser-binding" },
+      headers: {
+        cookie: "oidc_interaction_binding=browser-binding; oidc_login_completion=login-completion",
+      },
       url: "/oidc/resume?oidcReturn=return-handle",
     } as never, response as never);
 
@@ -134,12 +501,32 @@ describe("oIDC interaction Subject Access protocol boundary", () => {
     trafficOutcome = "enabled";
     const { response: recoveredResponse, result: recovered } = createNodeResponseCapture();
     await handler.handleResume({
-      headers: { cookie: "oidc_interaction_binding=browser-binding" },
+      headers: {
+        cookie: "oidc_interaction_binding=browser-binding; oidc_login_completion=login-completion",
+      },
       url: "/oidc/resume?oidcReturn=return-handle",
     } as never, recoveredResponse as never);
 
     expect(recovered.statusCode).toBe(302);
-    expect(recovered.headers.location).toBe("https://issuer.example/oidc/interaction/interaction-a");
+    expect(recovered.headers.location).toBe(
+      "https://issuer.example/oidc/interaction/interaction-a",
+    );
+    expect(interactionFinished).not.toHaveBeenCalled();
+    expect(stage).not.toHaveBeenCalled();
+    expect(consume).toHaveBeenCalledOnce();
+    expect(consume).toHaveBeenCalledWith("return-handle");
+    expect(recovered.headers).not.toHaveProperty("set-cookie");
+
+    stage.mockClear();
+    consume.mockClear();
+    const { response: continuedResponse, result: continued } = createNodeResponseCapture();
+    await handler.handleResume({
+      headers: { cookie: "oidc_interaction_binding=browser-binding" },
+      url: "/oidc/resume?oidcReturn=return-handle",
+    } as never, continuedResponse as never);
+
+    expect(continued.statusCode).toBe(302);
+    expect(stage).not.toHaveBeenCalled();
     expect(consume).toHaveBeenCalledOnce();
   });
 
@@ -197,6 +584,7 @@ describe("oIDC interaction browser binding cookie", () => {
         },
       },
       globalSessions: {
+        inspect: vi.fn(),
         renew: vi.fn(),
         resolve: resolveSession,
       },
@@ -207,7 +595,10 @@ describe("oIDC interaction browser binding cookie", () => {
           uid: "interaction-a",
         })),
       },
-      providerSessions: { stage: stageBinding },
+      providerSessions: {
+        isStagedPrincipal: vi.fn(),
+        stage: stageBinding,
+      },
       returnHandles: {
         consume: vi.fn(),
         create: createReturnHandle,
@@ -248,6 +639,7 @@ describe("oIDC interaction browser binding cookie", () => {
         },
       },
       globalSessions: {
+        inspect: vi.fn(),
         renew: vi.fn(),
         resolve: vi.fn(async () => null),
       },
@@ -259,6 +651,7 @@ describe("oIDC interaction browser binding cookie", () => {
         })),
       },
       providerSessions: {
+        isStagedPrincipal: vi.fn(),
         stage: vi.fn(),
       },
       returnHandles: {
@@ -302,6 +695,7 @@ function createSubjectAccessInteraction(error: Error, cookie: string) {
       },
     },
     globalSessions: {
+      inspect: vi.fn(),
       renew: vi.fn(),
       resolve: vi.fn(async () => {
         throw error;
@@ -315,6 +709,7 @@ function createSubjectAccessInteraction(error: Error, cookie: string) {
       })),
     },
     providerSessions: {
+      isStagedPrincipal: vi.fn(),
       stage: vi.fn(),
     },
     returnHandles: {
@@ -331,10 +726,24 @@ function createSubjectAccessInteraction(error: Error, cookie: string) {
   };
 }
 
+function createInteractionEnv() {
+  return {
+    nodeEnv: "test",
+    oidc: {
+      cookieSecure: false,
+      globalSessionCookie: "global_session",
+      interactionTtlSeconds: 600,
+      issuer: "https://issuer.example/oidc",
+      publicOrigin: "https://issuer.example",
+      ssoLoginPath: "/portal/login",
+    },
+  } as const;
+}
+
 function createNodeResponseCapture() {
   const result = {
     body: "",
-    headers: {} as Record<string, string>,
+    headers: {} as Record<string, string | string[]>,
     statusCode: 200,
   };
   const response = {
@@ -342,7 +751,10 @@ function createNodeResponseCapture() {
       result.body = String(body);
       result.statusCode = response.statusCode;
     },
-    setHeader(name: string, value: string) {
+    getHeader(name: string) {
+      return result.headers[name.toLowerCase()];
+    },
+    setHeader(name: string, value: string | string[]) {
       result.headers[name.toLowerCase()] = value;
     },
     statusCode: 200,

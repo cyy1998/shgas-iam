@@ -80,7 +80,16 @@ export function createIamInteractionPolicy(
         )) {
         return interactionPolicy.Check.REQUEST_PROMPT;
       }
-      return requestNeedsReauthentication(params, session.authTime)
+      if (!requestNeedsReauthentication(params, session.authTime))
+        return interactionPolicy.Check.NO_NEED_TO_PROMPT;
+      const completedFirstAuthentication = authorizationAttemptId
+        ? await providerSessions.isStagedPrincipal(
+            authorizationAttemptId,
+            clientId,
+            session,
+          )
+        : false;
+      return !completedFirstAuthentication
         ? interactionPolicy.Check.REQUEST_PROMPT
         : interactionPolicy.Check.NO_NEED_TO_PROMPT;
     },

@@ -35,6 +35,7 @@ import { InvalidAuthCodeError } from "@iam/api-core/errors/InvalidAuthCodeError"
 import { LoggerSourceApp, SystemLogEvent } from "@iam/api-core/logger";
 import { observabilityLogFields } from "@iam/api-core/observability";
 import {
+  SubjectAccessDisabledError,
   translateSubjectAccessResolveResult,
 } from "@iam/api-core/subject-access";
 import {
@@ -47,6 +48,7 @@ import {
   isRetryableServiceUnavailable,
 } from "@iam/contracts";
 import { z } from "zod";
+import { PrincipalSessionInspectionUnavailableError } from "./principal-session-inspection.error";
 
 const CUSTOM_SSO_PROTOCOL = "custom-sso";
 const BROWSER_USER_SESSION_KIND = "browser_user";
@@ -300,6 +302,30 @@ export function createCustomSsoSessionKernelAdapter(deps: CustomSsoSessionKernel
       isLogin: true as const,
       code: artifact.externalToken,
     };
+  }
+
+  async function inspectPrincipalSession(token?: string) {
+    if (!token)
+      return "absent" as const;
+
+    try {
+      const principal = translateSubjectAccessResolveResult(
+        await deps.kernel.resolvePrincipalSession(token),
+      );
+      if (principal.status === "fail_closed") {
+        throw new PrincipalSessionInspectionUnavailableError({
+          cause: principal.cause,
+        });
+      }
+      return principal.status === "resolved"
+        ? "valid" as const
+        : "invalid" as const;
+    }
+    catch (error) {
+      if (error instanceof SubjectAccessDisabledError)
+        return "invalid" as const;
+      throw error;
+    }
   }
 
   async function resolveAuthorizationGrant(input: {
@@ -1125,6 +1151,7 @@ export function createCustomSsoSessionKernelAdapter(deps: CustomSsoSessionKernel
     completeGatewayLogin,
     createPrincipalSession,
     issueAuthorizationCode,
+    inspectPrincipalSession,
     logout,
     redeemIndependentGrant,
     resolvePublicAuthentication,

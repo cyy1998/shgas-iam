@@ -44,6 +44,8 @@ function classifyOidcHttpRoute(pathname: string) {
     return "/health";
   if (pathname.startsWith("/oidc/interaction/"))
     return "/oidc/interaction/:uid";
+  if (pathname === "/oidc/login-guard")
+    return "/oidc/login-guard";
   if (pathname === "/oidc/resume")
     return "/oidc/resume";
   if (pathname === "/oidc" || pathname.startsWith("/oidc/"))
@@ -139,6 +141,10 @@ export function createOidcHttpServer(runtime: OidcHttpRuntime) {
       }
       if (url.pathname.startsWith("/oidc/interaction/")) {
         await interactions.handleInteraction(request, response);
+        return;
+      }
+      if (url.pathname === "/oidc/login-guard") {
+        await interactions.handleLoginGuard(request, response);
         return;
       }
       if (url.pathname === "/oidc/resume") {

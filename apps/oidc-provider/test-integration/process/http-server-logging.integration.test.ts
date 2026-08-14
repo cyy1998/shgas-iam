@@ -77,6 +77,10 @@ function createRuntime(lines: LogLine[], providerCallback?: ProviderCallback) {
         response.writeHead(302, { location: "/portal" });
         response.end();
       },
+      async handleLoginGuard(_request: http.IncomingMessage, response: http.ServerResponse) {
+        response.writeHead(200, { "content-type": "application/json" });
+        response.end(JSON.stringify({ decision: "continue" }));
+      },
     },
     provider: {
       callback() {
@@ -96,7 +100,7 @@ function createRedis(ping: () => Promise<unknown> = async () => "PONG") {
 }
 
 describe("oIDC HTTP access logging", () => {
-  it("logs health, interaction, resume, provider callback, and not_found routes", async () => {
+  it("logs health, interaction, login guard, resume, provider callback, and not_found routes", async () => {
     const { createOidcHttpServer } = await loadApp();
     const lines: LogLine[] = [];
     const server = createOidcHttpServer({ ...createRuntime(lines), health: createRedis() } as never);
@@ -107,6 +111,9 @@ describe("oIDC HTTP access logging", () => {
       headers: { "x-request-id": "req-public-health" },
     });
     await fetch(`http://127.0.0.1:${port}/oidc/interaction/abc`, { headers: { "x-request-id": "req-interaction" } });
+    const loginGuard = await fetch(`http://127.0.0.1:${port}/oidc/login-guard?oidcReturn=return-handle`, {
+      headers: { "x-request-id": "req-login-guard" },
+    });
     await fetch(`http://127.0.0.1:${port}/oidc/resume`, { headers: { "x-request-id": "req-resume" }, redirect: "manual" });
     await fetch(`http://127.0.0.1:${port}/oidc/.well-known/openid-configuration`, {
       headers: { "x-request-id": "req-provider" },
@@ -117,6 +124,7 @@ describe("oIDC HTTP access logging", () => {
 
     expect(publicHealth.status).toBe(200);
     await expect(publicHealth.json()).resolves.toEqual({ status: "ok" });
+    await expect(loginGuard.json()).resolves.toEqual({ decision: "continue" });
     expect(lines).toEqual(expect.arrayContaining([
       expect.objectContaining({
         event: SystemLogEvent.HttpRequestCompleted,
@@ -136,6 +144,12 @@ describe("oIDC HTTP access logging", () => {
         event: SystemLogEvent.HttpRequestCompleted,
         requestId: "req-interaction",
         route: "/oidc/interaction/:uid",
+        statusCode: 200,
+      }),
+      expect.objectContaining({
+        event: SystemLogEvent.HttpRequestCompleted,
+        requestId: "req-login-guard",
+        route: "/oidc/login-guard",
         statusCode: 200,
       }),
       expect.objectContaining({

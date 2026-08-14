@@ -43,6 +43,7 @@
 | [docs/adr/0010-narrow-client-binding-to-oidc-lifecycle.md](adr/0010-narrow-client-binding-to-oidc-lifecycle.md) | decision | Current | 2026-08-07 | 2026-10-31 | Client Binding 只属于 OIDC；Custom SSO 使用可恢复 Credential 签发，OIDC 删除 full binding 派生副本。 |
 | [docs/adr/0011-model-employment-as-an-immutable-tenure-lifecycle.md](adr/0011-model-employment-as-an-immutable-tenure-lifecycle.md) | decision | Current | 2026-08-11 | 2026-10-31 | Employment 表示不可重开的任职期；写入端保证父对象完整性，Subject Facts 发布前 fail closed。 |
 | [docs/adr/0012-model-client-maintenance-as-reversible-protocol-traffic-suspension.md](adr/0012-model-client-maintenance-as-reversible-protocol-traffic-suspension.md) | decision | Current | 2026-08-13 | 2026-10-31 | Accepted：Client Maintenance 是已实现的可逆在线协议流量暂停；Disable 与软删除仍是永久失效边界。 |
+| [docs/adr/0013-guard-login-page-reentry-with-authentication-continuation.md](adr/0013-guard-login-page-reentry-with-authentication-continuation.md) | decision | Current | 2026-08-14 | 2026-10-31 | Accepted：统一登录页以认证续接守卫阻止已有有效会话重复认证，并明确 OIDC 新鲜认证要求的拒绝边界。 |
 | [docs/agents/code-investigation.md](agents/code-investigation.md) | agent-config | Current | 2026-08-13 | 2026-10-31 | 项目级 `code_researcher`/`deep_researcher` 的分层路由、只读调查、证据返回和外置记忆规则。 |
 | [docs/agents/domain.md](agents/domain.md) | agent-config | Current | 2026-07-16 | 2026-10-31 | Engineering skills 的 single-context domain documentation 消费规则。 |
 | [docs/agents/issue-tracker.md](agents/issue-tracker.md) | agent-config | Current | 2026-08-06 | 2026-10-31 | 本地 spec、ticket、轻量 feature journal 与批量实施 handoff 的文件约定。 |
@@ -61,6 +62,7 @@
 | [docs/features/oidc/oidc-integration.md](features/oidc/oidc-integration.md) | feature | Current | 2026-08-01 | 2026-09-30 | 内部 OIDC client 的端点、client 类型、scope/claim、CORS 和退出契约。 |
 | [docs/features/oidc/oidc-session-migration.md](features/oidc/oidc-session-migration.md) | feature | Current | 2026-08-09 | 2026-09-30 | Session Kernel 会话迁移、旧 key cleanup、staged payload rollout 和回滚边界。 |
 | [docs/features/sso/custom-sso-subject-projection-design.md](features/sso/custom-sso-subject-projection-design.md) | design | Current | 2026-08-12 | 2026-09-30 | 已接受并形成候选实现的目标设计；生产运行时只在完整维护窗口切换后采用，不单独代表某个环境已完成切换。 |
+| [docs/features/sso/login-page-reentry-guard.md](features/sso/login-page-reentry-guard.md) | design | Current | 2026-08-14 | 2026-09-30 | 已接受的登录页重入守卫设计；定义协议所有权、页面状态、OIDC 重新认证边界、验收与协调切换。 |
 | [docs/features/sso/public-thirdparty-unified-login.md](features/sso/public-thirdparty-unified-login.md) | feature | Current | 2026-08-12 | 2026-09-30 | 第三方统一登录入口、目标系统会话所有权与 Custom SSO 职责边界说明。 |
 | [docs/features/sso/third-party-sso-integration.md](features/sso/third-party-sso-integration.md) | feature | Current | 2026-08-12 | 2026-09-30 | 第三方业务系统 custom SSO 对接、受控主体投影、credential/session 所有权与 IAM 内部职责边界说明。 |
 | [docs/releases/apisix-gateway-release.md](releases/apisix-gateway-release.md) | runbook | Current | 2026-07-16 | 2026-10-31 | APISIX manifest validate/diff/apply/prune、限流、观测和回滚手册。 |

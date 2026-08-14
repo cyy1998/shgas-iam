@@ -51,27 +51,29 @@ export function useLoginRedirect() {
         message.error('OIDC 登录请求已失效，请返回应用重新发起登录');
         return;
       }
-      window.location.href = `/oidc/resume?oidcReturn=${encodeURIComponent(oidcReturn)}`;
+      window.location.replace(`/oidc/resume?oidcReturn=${encodeURIComponent(oidcReturn)}`);
       return;
     }
     if (!authConfig || !client) {
       message.error('SSO 配置未就绪，请刷新重试');
       return;
     }
-    window.location.href = buildAuthorizeUrl(
+    window.location.replace(buildAuthorizeUrl(
       authConfig,
       redirectUrl,
       client,
       state,
-    );
+    ));
   }, [authConfig, client, oidcReturn, redirectUrl, state]);
 
   return {
     client,
     oidcReturn,
     redirectUrl,
+    state,
     clientLabel,
     isUnsafeEntry,
+    isContinuationReady: Boolean(oidcReturn || (authConfig && client)),
     redirectAfterLogin,
   };
 }
