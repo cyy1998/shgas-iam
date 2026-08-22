@@ -3,6 +3,7 @@ import {
   CustomSsoClientRuntimeUnavailableError,
 } from "@api/services/client/custom-sso-client-runtime.reader";
 import { PrincipalSessionInspectionUnavailableError } from "@api/services/session/principal-session-inspection.error";
+import { createAuthorizeSsoUseCase } from "@api/use-cases/sso/authorize-sso/authorize-sso.use-case";
 import { AuthzMaintenanceError } from "@iam/api-core/errors/AuthzMaintenanceError";
 import { createErrorHandler } from "@iam/api-core/middlewares";
 import {
@@ -68,11 +69,13 @@ const setToken = mock(async () => ({
     subjectIdentifier: "00000000-0000-4000-8000-000000001001",
   },
 }));
-function createHandlers() {
+function createHandlers(
+  authorizeUseCase: Parameters<typeof createSsoHandlers>[0]["sso"]["authorize"] = { execute: authorize },
+) {
   return createSsoHandlers({
     logger,
     sso: {
-      authorize: { execute: authorize },
+      authorize: authorizeUseCase,
       completeCallback: { execute: callback },
       exchangeCode: { execute: setToken },
       checkLoginContinuation: { execute: checkLoginContinuation },
@@ -690,6 +693,49 @@ describe("createSsoHandlers protocol adaptation", () => {
     });
   });
 
+  test("authorize maps client runtime uncertainty before entering authorization grant issuance", async () => {
+    const issueAuthorizationCode = mock(async () => ({ isLogin: false as const, code: null }));
+    const authorizeUseCase = createAuthorizeSsoUseCase({
+      authorizationGrants: { issueAuthorizationCode },
+      clients: {
+        findRuntimeRecord: mock(async () => {
+          throw new CustomSsoClientRuntimeUnavailableError({
+            cause: new Error("redis://secret@runtime-reader"),
+          });
+        }),
+      },
+      redirectUrls: {
+        normalizeAllowed: mock(() => "https://app.example.com/home"),
+      },
+      trafficGate: {
+        assertIssuanceAllowed: async () => undefined,
+      },
+    });
+    const handlers = createHandlers(authorizeUseCase);
+    const app = createHttpHandlerApp("/sso/authorize", handlers.authorize, {
+      client: "independent",
+      redirectUrl: "https://app.example.com/home",
+      token: "",
+    });
+
+    const response = await app.request(
+      "/sso/authorize?client=independent&redirectUrl=https%3A%2F%2Fapp.example.com%2Fhome",
+      { headers: { Cookie: "global_session=global-token" } },
+    );
+    const body = await response.json();
+
+    expect(response.status).toBe(503);
+    expect(response.headers.get("Retry-After")).toBe("3");
+    expect(response.headers.getSetCookie()).toEqual([]);
+    expect(body).toEqual({
+      code: ApiErrorCode.InternalError,
+      data: null,
+      message: "服务暂时不可用",
+    });
+    expect(issueAuthorizationCode).not.toHaveBeenCalled();
+    expect(JSON.stringify(body)).not.toContain("runtime-reader");
+  });
+
   test("callback maps Subject Access errors and expires global, target local, and ORCAS cookies only when disabled", async () => {
     const handlers = createHandlers();
     const app = createHttpHandlerApp("/sso/callback", handlers.callback, {
@@ -933,7 +979,7 @@ describe("createSsoHandlers protocol adaptation", () => {
     expect(clientRuntimeUnavailable.headers.get("Retry-After")).toBe("3");
     expect(clientRuntimeUnavailable.headers.getSetCookie()).toEqual([]);
     await expect(clientRuntimeUnavailable.json()).resolves.toMatchObject({
-      code: ApiErrorCode.SubjectProjectionNotReady,
+      code: ApiErrorCode.InternalError,
     });
   });
 

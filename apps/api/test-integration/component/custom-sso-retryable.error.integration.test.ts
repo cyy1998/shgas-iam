@@ -107,7 +107,7 @@ describe("Custom SSO retryable HTTP error adapter", () => {
     })).toBe(oidcProtocolError);
   });
 
-  test("maps typed client runtime uncertainty without exposing its cause", async () => {
+  test("maps typed client runtime uncertainty to a generic unavailable response without exposing its cause", async () => {
     const mapped = mapCustomSsoRetryableError(
       new CustomSsoClientRuntimeUnavailableError({
         cause: new Error("redis://secret@internal"),
@@ -116,9 +116,9 @@ describe("Custom SSO retryable HTTP error adapter", () => {
     );
 
     expect(mapped).toMatchObject({
-      code: ApiErrorCode.SubjectProjectionNotReady,
+      code: ApiErrorCode.InternalError,
       httpStatus: 503,
-      message: "主体信息暂未就绪",
+      message: "服务暂时不可用",
       retryAfterSeconds: 3,
     });
     expect(JSON.stringify(mapped)).not.toContain("redis://secret@internal");

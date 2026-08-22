@@ -4,6 +4,7 @@ import {
 import { SERVICE_UNAVAILABLE } from "@iam/api-core/core/http-status-codes";
 import { AuthzMaintenanceError, CustomError } from "@iam/api-core/errors";
 import { SubjectAccessUnavailableError } from "@iam/api-core/subject-access";
+import { SubjectProjectionNotReadyError } from "@iam/client-subject-projection";
 import {
   ApiErrorCode,
   isRetryableServiceUnavailable,
@@ -56,17 +57,25 @@ export function mapCustomSsoRetryableError(
   if (!isRetryableServiceUnavailable(error))
     return error;
   assertRetryAfterSeconds(options.retryAfterSeconds);
-  return error instanceof SubjectAccessUnavailableError
-    ? new CustomSsoRetryableUnavailableError(
-        ApiErrorCode.SubjectAccessUnavailable,
-        "账号访问状态暂时不可用",
-        options.retryAfterSeconds,
-      )
-    : new CustomSsoRetryableUnavailableError(
-        ApiErrorCode.SubjectProjectionNotReady,
-        "主体信息暂未就绪",
-        options.retryAfterSeconds,
-      );
+  if (error instanceof SubjectAccessUnavailableError) {
+    return new CustomSsoRetryableUnavailableError(
+      ApiErrorCode.SubjectAccessUnavailable,
+      "账号访问状态暂时不可用",
+      options.retryAfterSeconds,
+    );
+  }
+  if (error instanceof SubjectProjectionNotReadyError) {
+    return new CustomSsoRetryableUnavailableError(
+      ApiErrorCode.SubjectProjectionNotReady,
+      "主体信息暂未就绪",
+      options.retryAfterSeconds,
+    );
+  }
+  return new CustomSsoRetryableUnavailableError(
+    ApiErrorCode.InternalError,
+    "服务暂时不可用",
+    options.retryAfterSeconds,
+  );
 }
 
 function assertRetryAfterSeconds(retryAfterSeconds: number) {
