@@ -19,6 +19,7 @@ import {
   readInternalResponsibility,
   waitForInternalResponsibility,
 } from "./src/responsibility-journey.ts";
+import { waitForEmploymentSearchVisibility } from "./src/user-profile-search-journey.ts";
 
 test("public RP observes reversible Maintenance and permanent logout through real Admin control", async ({
   browser,
@@ -132,6 +133,32 @@ test("public RP observes reversible Maintenance and permanent logout through rea
     positionCode: responsibilityHolderPositionCode,
     request,
     targetOrganizationCode: responsibilityTargetOrganizationCode,
+  });
+  await waitForEmploymentSearchVisibility({
+    adminUsername,
+    expected: false,
+    internalApiKey,
+    origin,
+    positionCode: responsibilityHolderPositionCode,
+    request,
+  });
+  await resumeEmployment(adminPage, responsibilityHolderPositionCode);
+  await waitForEmploymentSearchVisibility({
+    adminUsername,
+    expected: true,
+    internalApiKey,
+    origin,
+    positionCode: responsibilityHolderPositionCode,
+    request,
+  });
+  await endEmployment(adminPage, responsibilityHolderPositionCode);
+  await waitForEmploymentSearchVisibility({
+    adminUsername,
+    expected: false,
+    internalApiKey,
+    origin,
+    positionCode: responsibilityHolderPositionCode,
+    request,
   });
 
   const tokenForm = {
@@ -326,4 +353,33 @@ async function pauseEmploymentWithResponsibilityCascade(
   await confirmation.getByRole("button", { name: "暂停任职" }).click();
   await expect(adminPage.getByText("已暂停任职及其启用中的责任任命"))
     .toBeVisible();
+}
+
+async function resumeEmployment(
+  adminPage: Page,
+  positionCode: string,
+) {
+  await adminPage.goto("/iam-admin/employments");
+  const row = adminPage.getByRole("row", {
+    name: new RegExp(positionCode, "u"),
+  });
+  await row.getByText("恢复", { exact: true }).click();
+  await expect(adminPage.getByText(
+    "已恢复任职；责任任命不会自动恢复，请在组织责任中逐条确认后恢复",
+  )).toBeVisible();
+}
+
+async function endEmployment(
+  adminPage: Page,
+  positionCode: string,
+) {
+  await adminPage.goto("/iam-admin/employments");
+  const row = adminPage.getByRole("row", {
+    name: new RegExp(positionCode, "u"),
+  });
+  await row.getByText("结束", { exact: true }).click();
+  const confirmation = adminPage.getByRole("dialog");
+  await expect(confirmation).toContainText("结束后不可恢复");
+  await confirmation.getByRole("button", { name: "结束任职" }).click();
+  await expect(adminPage.getByText("已结束", { exact: true })).toBeVisible();
 }

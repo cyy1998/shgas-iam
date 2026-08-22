@@ -501,7 +501,7 @@ async function seedExternalSessionState(
 
 function subjectFacts(name: string): SubjectFactsCacheRecord {
   return {
-    schemaVersion: 2,
+    schemaVersion: 3,
     sourceDirtyVersion,
     publishedAt: new Date().toISOString(),
     subjectIdentifier,

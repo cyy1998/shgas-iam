@@ -1,4 +1,5 @@
-import type { UserService } from "@api/services/user/user.service";
+import type { UserProfileSearchPort } from "@api/services/user-profile-search/user-profile-search.port";
+import type { UserDelegationQuery } from "@api/services/user/user-delegation-query.helper";
 import type { RegisterPurveyorContactUseCase } from "@api/use-cases/internal/register-purveyor-contact/register-purveyor-contact.use-case";
 import type { InternalUserProfileQueryService } from "@iam/user-profile-read-model";
 import type { UserRouteHandler } from "./user.type";
@@ -6,46 +7,48 @@ import { getApiAuditRequestContext, getInternalAuditActor } from "@api/services/
 import * as HttpStatusCodes from "@iam/api-core/core/http-status-codes";
 import * as resp from "@iam/api-core/http";
 import { InternalUserProfileSearchUnavailableError } from "@iam/user-profile-read-model";
+import { V3UserProfileSearchUnavailableError } from "@iam/user-profile-read-model/v3";
+import { runWithinInternalUserHandlerBudget } from "./user-handler-budget";
 
-export const INTERNAL_USER_HANDLER_TIMEOUT_MS = 5_000;
+export { INTERNAL_USER_HANDLER_TIMEOUT_MS } from "./user-handler-budget";
 
 export interface CreateUserHandlersDeps {
   registerPurveyorContact: Pick<RegisterPurveyorContactUseCase, "execute">;
-  userService: Pick<
-    UserService,
-    "getUserDetailByUsername" | "searchUsers" | "searchUsersWithPrivilegeDelegation"
-  >;
+  userDelegationQuery: Pick<UserDelegationQuery, "searchUsersWithDelegations">;
+  userProfileSearch: UserProfileSearchPort;
   internalUserProfileQuery: Pick<
     InternalUserProfileQueryService,
-    "getDetailByUsername" | "searchDsl"
+    "getDetailByUsername"
   >;
 }
 
 export function createUserHandlers(deps: CreateUserHandlersDeps) {
   const userInfo: UserRouteHandler<"userInfo"> = async (c) => {
     const { username } = c.req.valid("param");
-    const data = await runWithinHandlerBudget(
-      deps.internalUserProfileQuery.getDetailByUsername(username),
+    const data = await runWithinInternalUserHandlerBudget(
+      () => deps.internalUserProfileQuery.getDetailByUsername(username),
+      () => new InternalUserProfileSearchUnavailableError(),
     );
     return c.json(resp.ok(data), HttpStatusCodes.OK);
   };
 
   const usersSearch: UserRouteHandler<"usersSearch"> = async (c) => {
     const userQueryDto = c.req.valid("json");
-    const data = await deps.userService.searchUsers(userQueryDto);
+    const data = await deps.userProfileSearch.searchLegacyUsers(userQueryDto);
     return c.json(resp.ok(data), HttpStatusCodes.OK);
   };
 
   const usersSearchWithPrivilegeDelegation: UserRouteHandler<"usersSearchWithPrivilegeDelegation"> = async (c) => {
     const userQueryDto = c.req.valid("json");
-    const data = await deps.userService.searchUsersWithPrivilegeDelegation(userQueryDto);
+    const data = await deps.userDelegationQuery.searchUsersWithDelegations(userQueryDto);
     return c.json(resp.ok(data), HttpStatusCodes.OK);
   };
 
   const usersSearchDsl: UserRouteHandler<"usersSearchDsl"> = async (c) => {
     const request = c.req.valid("json");
-    const data = await runWithinHandlerBudget(
-      deps.internalUserProfileQuery.searchDsl(request),
+    const data = await runWithinInternalUserHandlerBudget(
+      () => deps.userProfileSearch.searchDsl(request),
+      () => new V3UserProfileSearchUnavailableError(),
     );
     return c.json(resp.ok(data), HttpStatusCodes.OK);
   };
@@ -69,22 +72,3 @@ export function createUserHandlers(deps: CreateUserHandlersDeps) {
 }
 
 export type UserHandlers = ReturnType<typeof createUserHandlers>;
-
-async function runWithinHandlerBudget<T>(operation: Promise<T>): Promise<T> {
-  let timeout: ReturnType<typeof setTimeout> | undefined;
-  try {
-    return await Promise.race([
-      operation,
-      new Promise<never>((_resolve, reject) => {
-        timeout = setTimeout(
-          () => reject(new InternalUserProfileSearchUnavailableError()),
-          INTERNAL_USER_HANDLER_TIMEOUT_MS,
-        );
-      }),
-    ]);
-  }
-  finally {
-    if (timeout !== undefined)
-      clearTimeout(timeout);
-  }
-}

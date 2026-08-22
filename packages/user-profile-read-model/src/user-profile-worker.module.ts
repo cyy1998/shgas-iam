@@ -1,12 +1,16 @@
-import type { SubjectAccessBootstrap } from "@iam/api-core/subject-access";
 import type {
   RebuildUserProfileJobPayload,
   UserProfileJobName,
 } from "@iam/contracts";
 import type { db as database } from "@iam/db";
 import type { BullMqRedisConfig, CreateJobQueueInput, CreateJobWorkerInput, JobQueue } from "@iam/jobs";
+import type {
+  V3SubjectFactsCacheRecord,
+  V3UserProfile,
+} from "./profile-v3";
 import type { SubjectFactsRedisClient } from "./subject-facts-redis-publisher.core";
-import type { SubjectAccessRepairPort } from "./user-profile-rebuild.processor";
+import type { UserProfileProjectionBundle } from "./user-profile-projection";
+import type { SubjectAccessRepairPort, UserProfileRebuildProjection } from "./user-profile-rebuild.processor";
 import type { UserProfileWorkerMaintenance } from "./user-profile-worker-maintenance";
 import {
   RebuildUserProfileJobPayloadSchema,
@@ -17,35 +21,20 @@ import { createJobQueue, createJobWorker } from "@iam/jobs";
 import { createOrganizationResponsibilityResolver } from "@iam/organization-responsibility-resolution";
 import { createRoleAssignmentResolver } from "@iam/role-assignment-resolution";
 import { createUserProfileDirtyRepository } from "./dirty.repository";
-import { createProfileBuildRepository } from "./profile-build.repository";
-import { createProfileBuilder } from "./profile-builder.service";
-import { createProfilePublicationRepository } from "./profile-publication.repository";
-import { createProfileV2MaintenanceWithResolvers } from "./profile-v2-maintenance";
-import { createSubjectFactsRedisPublisher } from "./subject-facts-redis";
+import {
+  createV3UserProfileBuilder,
+  parseV3UserProfileRow,
+  V3_USER_PROFILE_SCHEMA_VERSION,
+  V3SubjectFactsCacheRecordSchema,
+} from "./profile-v3";
+import { createSubjectFactsCacheRecordInput } from "./subject-facts-cache.core";
 import { createUserProfileJobProducer } from "./user-profile-job.producer";
 import { createUserProfileMaintenanceRepository } from "./user-profile-maintenance.repository";
+import { createUserProfileProjectionBundle } from "./user-profile-projection";
 import { createUserProfileRebuildProcessor } from "./user-profile-rebuild.processor";
 import { createUserProfileWorkerMaintenance } from "./user-profile-worker-maintenance";
 
 export const USER_PROFILE_WORKER_MODULE_KEY = "user-profile";
-
-export function createProfileV2Maintenance(input: {
-  db: typeof database;
-  subjectFactsRedis: import("./subject-facts-redis-publisher.core").SubjectFactsRedisClient
-    & import("./subject-facts-redis-publisher.core").SubjectFactsRedisInspectionClient;
-  subjectAccessBootstrap: Pick<SubjectAccessBootstrap, "inspectMany" | "seedMany">;
-  clock: { nowDate: () => Date };
-  config: { buildBatchSize: number };
-}) {
-  return createProfileV2MaintenanceWithResolvers({
-    ...input,
-    config: {
-      ...input.config,
-      createRoleAssignmentResolver,
-      createResponsibilityResolver: createOrganizationResponsibilityResolver,
-    },
-  });
-}
 
 export interface UserProfileWorkerModuleLogger {
   info: (data: Record<string, unknown>, message: string) => void;
@@ -158,18 +147,56 @@ export interface UserProfileWorkerModule {
   close: () => Promise<void>;
 }
 
+export function createCurrentUserProfileProjectionBundle() {
+  return createUserProfileProjectionBundle<
+    V3UserProfile,
+    V3SubjectFactsCacheRecord
+  >({
+    schemaVersion: V3_USER_PROFILE_SCHEMA_VERSION,
+    parseProfileRow: parseV3UserProfileRow,
+    createBuilder(input) {
+      return createV3UserProfileBuilder({
+        db: input.db,
+        roleAssignmentResolver: createRoleAssignmentResolver(input.db),
+        responsibilityResolver: createOrganizationResponsibilityResolver(input.db),
+        clock: input.clock,
+        config: { batchSize: input.batchSize },
+      });
+    },
+    createFactsRecord(profile, publishedAt) {
+      return V3SubjectFactsCacheRecordSchema.parse(
+        createSubjectFactsCacheRecordInput(
+          profile,
+          publishedAt,
+          V3_USER_PROFILE_SCHEMA_VERSION,
+        ),
+      );
+    },
+    parseFactsRecord: input => V3SubjectFactsCacheRecordSchema.parse(input),
+  });
+}
+
 export function createUserProfileWorkerModule(input: CreateUserProfileWorkerModuleInput): UserProfileWorkerModule {
-  const dirtyRepository = createUserProfileDirtyRepository(input.db);
-  const publicationRepository = createProfilePublicationRepository(input.db);
-  const subjectFactsPublisher = createSubjectFactsRedisPublisher(input.subjectFactsRedis);
-  const roleAssignmentResolver = createRoleAssignmentResolver(input.db);
-  const responsibilityResolver = createOrganizationResponsibilityResolver(input.db);
-  const maintenanceRepository = createUserProfileMaintenanceRepository(input.db);
-  const buildRepository = createProfileBuildRepository(
-    input.db,
-    roleAssignmentResolver,
-    responsibilityResolver,
+  return createUserProfileWorkerModuleWithProjection(
+    input,
+    createCurrentUserProfileProjectionBundle(),
   );
+}
+
+function createUserProfileWorkerModuleWithProjection<
+  TProfile extends UserProfileRebuildProjection,
+  TFactsRecord extends {
+    subjectIdentifier: string;
+    sourceDirtyVersion: string;
+  },
+>(
+  input: CreateUserProfileWorkerModuleInput,
+  projection: UserProfileProjectionBundle<TProfile, TFactsRecord>,
+): UserProfileWorkerModule {
+  const dirtyRepository = createUserProfileDirtyRepository(input.db);
+  const publicationRepository = projection.createPublicationRepository(input.db);
+  const subjectFactsPublisher = projection.subjectFacts.createPublisher(input.subjectFactsRedis);
+  const maintenanceRepository = createUserProfileMaintenanceRepository(input.db);
   const queue
     = (input.factories?.createQueue
       ?? createJobQueue<RebuildUserProfileJobPayload, unknown, UserProfileJobName>)({
@@ -177,17 +204,16 @@ export function createUserProfileWorkerModule(input: CreateUserProfileWorkerModu
       redis: input.redis,
     });
   const jobProducer = createUserProfileJobProducer(queue);
-  const builder = createProfileBuilder({
-    buildRepository,
+  const builder = projection.createBuilder({
+    db: input.db,
     clock: input.clock,
-    config: {
-      batchSize: input.config.rebuildBatchSize,
-    },
+    batchSize: input.config.rebuildBatchSize,
   });
   const rebuildProcessor = createUserProfileRebuildProcessor({
     dirtyRepository,
     builder,
     publicationRepository,
+    createSubjectFactsRecord: projection.subjectFacts.createRecord,
     subjectFactsPublisher,
     subjectAccessRepair: input.subjectAccessRepair,
     logger: input.logger,

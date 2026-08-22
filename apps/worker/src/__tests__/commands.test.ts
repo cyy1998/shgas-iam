@@ -17,7 +17,10 @@ describe("user-profile commands", () => {
     })).resolves.toEqual({ enqueued: 3 });
 
     expect(backfillAllUsers).toHaveBeenCalledWith({ batchSize: 25 });
-    expect(info).toHaveBeenCalledWith({ enqueued: 3 }, "user profile backfill jobs enqueued");
+    expect(info).toHaveBeenCalledWith({
+      enqueued: 3,
+      readiness: "not-verified",
+    }, "user profile backfill jobs dispatched; run readiness gates after convergence");
   });
 
   test("repair command uses configured stale window by default", async () => {

@@ -1,4 +1,4 @@
-import type { db as database, DbClient } from "@iam/db";
+import type { db as database } from "@iam/db";
 import { randomUUID } from "node:crypto";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
@@ -19,7 +19,7 @@ export interface HeldDirtyRowLock {
 }
 
 export interface PostgresTestHarness {
-  readonly db: DbClient;
+  readonly db: typeof database;
   readonly sql: ReturnType<typeof postgres>;
   readonly reset: () => Promise<void>;
   readonly holdDirtyRowLock: (userId: number) => Promise<HeldDirtyRowLock>;

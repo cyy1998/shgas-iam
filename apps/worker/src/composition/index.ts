@@ -1,5 +1,5 @@
 import type { DbTransaction } from "@iam/db";
-import type { WorkerEnv } from "@worker/env";
+import type { UserProfilePostgresReadinessCommandEnv, WorkerEnv } from "@worker/env";
 import type { WorkerLogger } from "./runtime";
 import { randomUUID } from "node:crypto";
 import {
@@ -21,9 +21,10 @@ import {
   createSubjectAccessTransitionRepository,
 } from "@iam/user-profile-read-model/subject-access-transition";
 import {
+  createCurrentUserProfilePostgresReadiness,
+  createCurrentUserProfileRedisAccessReadiness,
   createEmploymentCutoverRepository,
   createEmploymentCutoverVerifier,
-  createProfileV2Maintenance,
   createSubjectAccessAuthorityRepository,
   createUserProfileWorkerModule,
 } from "@iam/user-profile-read-model/worker";
@@ -38,7 +39,7 @@ import {
 import { sql } from "drizzle-orm";
 import { createClientProtocolEpochCutover } from "../commands/client-protocol-epoch-cutover";
 import { createClientProtocolEpochCutoverRepository } from "../commands/client-protocol-epoch-cutover.repository";
-import { closeProfileV2MaintenanceResources } from "./profile-v2-maintenance-shutdown";
+import { closeWorkerCommandResources } from "./command-shutdown";
 import { createWorkerRuntime } from "./runtime";
 import { createWorkerSubjectAccess } from "./subject-access";
 
@@ -278,7 +279,36 @@ export function createEmploymentCutoverCommandComposition(options: {
   };
 }
 
-export function createProfileV2MaintenanceCommandComposition(
+export function createUserProfilePostgresReadinessCommandComposition(
+  options: {
+    env: UserProfilePostgresReadinessCommandEnv;
+    logger: WorkerLogger;
+  },
+) {
+  const postgresGate = createCurrentUserProfilePostgresReadiness({
+    db,
+    clock: { nowDate: () => new Date() },
+    config: {
+      buildBatchSize: options.env.userProfile.rebuildBatchSize,
+    },
+  });
+
+  async function shutdown(signal: string) {
+    options.logger.info({ signal }, "User Profile PostgreSQL readiness command shutting down");
+    await closeWorkerCommandResources([
+      closeDb({ timeoutSeconds: COMMAND_DB_SHUTDOWN_TIMEOUT_SECONDS }),
+    ]);
+  }
+
+  return {
+    env: options.env,
+    logger: options.logger,
+    postgresGate,
+    shutdown,
+  };
+}
+
+export function createUserProfileRedisReadinessCommandComposition(
   options: Omit<CreateWorkerCompositionOptions, "commandOnly">,
 ) {
   const runtime = createWorkerRuntime({
@@ -286,7 +316,7 @@ export function createProfileV2MaintenanceCommandComposition(
     logger: options.logger,
   });
   const subjectAccess = createWorkerSubjectAccess(runtime);
-  const profileV2 = createProfileV2Maintenance({
+  const redisAccessGate = createCurrentUserProfileRedisAccessReadiness({
     db,
     subjectFactsRedis: runtime.redis,
     subjectAccessBootstrap: subjectAccess.bootstrap,
@@ -297,8 +327,8 @@ export function createProfileV2MaintenanceCommandComposition(
   });
 
   async function shutdown(signal: string) {
-    runtime.logger.info({ signal }, "Profile V2 maintenance command shutting down");
-    await closeProfileV2MaintenanceResources([
+    runtime.logger.info({ signal }, "User Profile Redis readiness command shutting down");
+    await closeWorkerCommandResources([
       runtime.redis.quit(),
       closeDb({ timeoutSeconds: COMMAND_DB_SHUTDOWN_TIMEOUT_SECONDS }),
     ]);
@@ -308,7 +338,7 @@ export function createProfileV2MaintenanceCommandComposition(
     env: options.env,
     logger: runtime.logger,
     runtime,
-    profileV2,
+    redisAccessGate,
     shutdown,
   };
 }

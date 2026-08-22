@@ -1,4 +1,5 @@
 import type { db as database } from "@iam/db";
+import type { CreateUserProfileWorkerModuleInput } from "@iam/user-profile-read-model/worker";
 import type { Redis } from "ioredis";
 import type { E2EScenarioOwner, E2EScenarioReferences } from "./seed.ts";
 import { hashSecret } from "@iam/api-core/security";
@@ -14,6 +15,7 @@ import {
   OrganizationStatus,
   OrganizationType,
   PositionStatus,
+  PrivilegeStatus,
   RoleAssignmentTargetType,
   RoleStatus,
   SubjectClaim,
@@ -26,6 +28,8 @@ import {
   organizationClosures,
   organizations,
   positions,
+  privileges,
+  rolePrivileges,
   roles,
   userProfileDirty,
   userProfiles,
@@ -35,13 +39,14 @@ import { roleAssignments } from "@iam/db/schema/role-assignments";
 import { createRoleAssignmentResolver } from "@iam/role-assignment-resolution";
 import { createSubjectFactsRedisInspector } from "@iam/user-profile-read-model/subject-facts";
 import {
-  createProfileV2Maintenance,
+  createUserProfileWorkerModule,
 } from "@iam/user-profile-read-model/worker";
 import { and, eq } from "drizzle-orm";
 
 export interface CreateProductionE2EScenarioOwnerInput {
   db: typeof database;
   redis: Redis;
+  queueRedis: CreateUserProfileWorkerModuleInput["redis"];
   clock: { nowDate: () => Date };
   random: { uuid: () => string };
   passwordHashCost: number;
@@ -161,6 +166,41 @@ export function createProductionE2EScenarioOwner(
         depth: 0,
       });
 
+      const [responsibilityHolderOrganization] = await tx
+        .insert(organizations)
+        .values({
+          orgCode: scenario.responsibilityHolderOrganizationCode,
+          orgName: `E2E Responsibility Holder ${scenario.runId}`,
+          parentId: organization.id,
+          businessParentId: organization.id,
+          path: "/pending",
+          level: OrganizationLevel.Two,
+          orgType: OrganizationType.Department,
+          status: OrganizationStatus.Enable,
+          isEntity: true,
+        })
+        .returning({ id: organizations.id });
+      if (responsibilityHolderOrganization === undefined) {
+        throw new Error("E2E responsibility holder Organization was not created");
+      }
+      await tx.update(organizations)
+        .set({
+          path: `/${organization.id}/${responsibilityHolderOrganization.id}`,
+        })
+        .where(eq(organizations.id, responsibilityHolderOrganization.id));
+      await tx.insert(organizationClosures).values([
+        {
+          ancestorId: responsibilityHolderOrganization.id,
+          descendantId: responsibilityHolderOrganization.id,
+          depth: 0,
+        },
+        {
+          ancestorId: organization.id,
+          descendantId: responsibilityHolderOrganization.id,
+          depth: 1,
+        },
+      ]);
+
       const [responsibilityTargetOrganization] = await tx
         .insert(organizations)
         .values({
@@ -214,6 +254,27 @@ export function createProductionE2EScenarioOwner(
       if (admin === undefined)
         throw new Error("E2E admin subject was not created");
 
+      await tx.insert(users).values([
+        {
+          subjectIdentifier: scenario.delegateeSubjectIdentifier,
+          username: scenario.delegateeUsername,
+          name: `E2E Delegatee ${scenario.runId}`,
+          status: UserStatus.Enable,
+        },
+        {
+          subjectIdentifier: scenario.pausedSubjectIdentifier,
+          username: scenario.pausedUsername,
+          name: `E2E Paused User ${scenario.runId}`,
+          status: UserStatus.Pause,
+        },
+        {
+          subjectIdentifier: scenario.disabledSubjectIdentifier,
+          username: scenario.disabledUsername,
+          name: `E2E Disabled User ${scenario.runId}`,
+          status: UserStatus.Disable,
+        },
+      ]);
+
       const [employment] = await tx.insert(employments).values({
         userId: admin.id,
         orgId: organization.id,
@@ -227,7 +288,7 @@ export function createProductionE2EScenarioOwner(
       const [responsibilityHolderEmployment] = await tx.insert(employments)
         .values({
           userId: admin.id,
-          orgId: organization.id,
+          orgId: responsibilityHolderOrganization.id,
           posId: responsibilityHolderPosition.id,
           isPrimary: false,
           status: EmploymentStatus.Enable,
@@ -245,34 +306,157 @@ export function createProductionE2EScenarioOwner(
       }).returning({ id: roles.id });
       if (role === undefined)
         throw new Error("E2E admin role was not created");
+      const [privilege] = await tx.insert(privileges).values({
+        privilegeCode: scenario.adminPrivilegeCode,
+        privilegeName: `E2E Admin Privilege ${scenario.runId}`,
+        status: PrivilegeStatus.Enable,
+      }).returning({ id: privileges.id });
+      if (privilege === undefined)
+        throw new Error("E2E admin privilege was not created");
+      await tx.insert(rolePrivileges).values({
+        roleId: role.id,
+        privilegeId: privilege.id,
+      });
       await tx.insert(roleAssignments).values({
         roleId: role.id,
         targetType: RoleAssignmentTargetType.Employment,
         targetId: employment.id,
         includeDescendants: false,
       });
+
+      await tx.insert(userProfiles).values({
+        userId: admin.id,
+        subjectIdentifier: scenario.adminSubjectIdentifier,
+        username: scenario.adminUsername,
+        name: `E2E Admin ${scenario.runId}`,
+        mobile: null,
+        wxId: null,
+        status: UserStatus.Enable,
+        isDelete: false,
+        searchVisible: true,
+        profileSchemaVersion: 2,
+        sourceDirtyVersion: "1",
+        detail: {},
+        searchDoc: {},
+        subjectFacts: {},
+        rebuiltAt: input.clock.nowDate(),
+      });
     });
 
-    const profileV2 = createProfileV2Maintenance({
+    const legacyProfile = await input.db.query.userProfiles.findFirst({
+      columns: { profileSchemaVersion: true },
+      where: {
+        subjectIdentifier: scenario.adminSubjectIdentifier,
+      },
+    });
+    if (legacyProfile?.profileSchemaVersion !== 2) {
+      throw new Error(
+        "E2E User Profile cutover did not start from a stored v2 row",
+      );
+    }
+
+    const profileModule = createUserProfileWorkerModule({
       db: input.db,
+      redis: input.queueRedis,
       subjectFactsRedis: input.redis,
-      subjectAccessBootstrap: subjectAccess,
+      subjectAccessRepair: { repairSubject: async () => undefined },
+      logger: {
+        info: () => undefined,
+        warn: () => undefined,
+        error: () => undefined,
+      },
       clock: input.clock,
-      config: { buildBatchSize: 100 },
+      config: {
+        concurrency: 1,
+        rebuildBatchSize: 100,
+        backfillBatchSize: 100,
+      },
     });
-    const publication = await profileV2.backfill.backfillBatch({
-      version: 2,
-      afterUserId: 0,
-      batchSize: 100,
-    });
-    if (!publication.complete || publication.scanned !== 1)
-      throw new Error("E2E Subject Profile publication did not cover exactly the seeded admin");
+    try {
+      const backfill = await profileModule.maintenance.backfillAllUsers({ batchSize: 100 });
+      if (backfill.enqueued !== 4) {
+        throw new Error(
+          "E2E User Profile backfill did not enqueue all four seeded users",
+        );
+      }
+    }
+    finally {
+      await profileModule.close();
+    }
+
+    await waitForPublishedProfiles(scenario);
+    const access = await subjectAccess.seedMany([
+      {
+        subjectIdentifier: scenario.adminSubjectIdentifier,
+        state: "enabled",
+      },
+      {
+        subjectIdentifier: scenario.delegateeSubjectIdentifier,
+        state: "enabled",
+      },
+      {
+        subjectIdentifier: scenario.pausedSubjectIdentifier,
+        state: "disabled",
+      },
+      {
+        subjectIdentifier: scenario.disabledSubjectIdentifier,
+        state: "disabled",
+      },
+    ], input.clock.nowDate());
+    if (access.seeded !== 4 || access.retainedExisting !== 0) {
+      throw new Error(
+        "E2E Subject Access bootstrap did not seed all four users",
+      );
+    }
+  }
+
+  async function waitForPublishedProfiles(references: E2EScenarioReferences) {
+    const deadline = Date.now() + 30_000;
+    const subjectIdentifiers = [
+      references.adminSubjectIdentifier,
+      references.delegateeSubjectIdentifier,
+      references.pausedSubjectIdentifier,
+      references.disabledSubjectIdentifier,
+    ];
+    while (Date.now() < deadline) {
+      const rows = await input.db.select({
+        subjectIdentifier: userProfiles.subjectIdentifier,
+        profileSchemaVersion: userProfiles.profileSchemaVersion,
+        profileVersion: userProfiles.sourceDirtyVersion,
+        dirtyVersion: userProfileDirty.dirtyVersion,
+        dirtyStatus: userProfileDirty.status,
+      })
+        .from(userProfiles)
+        .innerJoin(
+          userProfileDirty,
+          eq(userProfileDirty.userId, userProfiles.userId),
+        );
+      const selectedRows = rows.filter(row =>
+        subjectIdentifiers.includes(row.subjectIdentifier));
+      const facts = await subjectFactsInspector.inspectMany(subjectIdentifiers);
+      if (
+        selectedRows.length === subjectIdentifiers.length
+        && selectedRows.every(row =>
+          row.profileSchemaVersion === 3
+          && row.profileVersion === row.dirtyVersion
+          && row.dirtyStatus === UserProfileDirtyStatus.Processed)
+        && facts.every(result => result.status === "valid")
+      ) {
+        return;
+      }
+      await Bun.sleep(250);
+    }
+    throw new Error(
+      "E2E production Worker did not publish all v3 User Profiles before the deadline",
+    );
   }
 
   async function readBack(references: E2EScenarioReferences) {
     const [
       admin,
+      delegatee,
       organization,
+      responsibilityHolderOrganization,
       responsibilityTargetOrganization,
       position,
       responsibilityHolderPosition,
@@ -285,8 +469,17 @@ export function createProductionE2EScenarioOwner(
       input.db.query.users.findFirst({
         where: { username: references.adminUsername, isDelete: false },
       }),
+      input.db.query.users.findFirst({
+        where: { username: references.delegateeUsername, isDelete: false },
+      }),
       input.db.query.organizations.findFirst({
         where: { orgCode: references.organizationCode, isDelete: false },
+      }),
+      input.db.query.organizations.findFirst({
+        where: {
+          orgCode: references.responsibilityHolderOrganizationCode,
+          isDelete: false,
+        },
       }),
       input.db.query.organizations.findFirst({
         where: {
@@ -330,13 +523,13 @@ export function createProductionE2EScenarioOwner(
           },
         });
     const responsibilityHolderEmployment = admin === undefined
-      || organization === undefined
+      || responsibilityHolderOrganization === undefined
       || responsibilityHolderPosition === undefined
       ? undefined
       : await input.db.query.employments.findFirst({
           where: {
             userId: admin.id,
-            orgId: organization.id,
+            orgId: responsibilityHolderOrganization.id,
             posId: responsibilityHolderPosition.id,
             isDelete: false,
           },
@@ -351,6 +544,7 @@ export function createProductionE2EScenarioOwner(
       ? undefined
       : (await input.db.select({
           profileVersion: userProfiles.sourceDirtyVersion,
+          profileSchemaVersion: userProfiles.profileSchemaVersion,
           dirtyVersion: userProfileDirty.dirtyVersion,
           dirtyStatus: userProfileDirty.status,
         })
@@ -380,9 +574,20 @@ export function createProductionE2EScenarioOwner(
         subjectIdentifier: admin?.subjectIdentifier ?? "",
         username: admin?.username ?? "",
       },
+      delegatee: {
+        active: delegatee?.status === UserStatus.Enable && delegatee.isDelete === false,
+        subjectIdentifier: delegatee?.subjectIdentifier ?? "",
+        username: delegatee?.username ?? "",
+      },
       organization: {
         active: organization?.status === OrganizationStatus.Enable && organization.isDelete === false,
         code: organization?.orgCode ?? "",
+      },
+      responsibilityHolderOrganization: {
+        active: responsibilityHolderOrganization?.status
+          === OrganizationStatus.Enable
+          && responsibilityHolderOrganization.isDelete === false,
+        code: responsibilityHolderOrganization?.orgCode ?? "",
       },
       responsibilityTargetOrganization: {
         active: responsibilityTargetOrganization?.status === OrganizationStatus.Enable
@@ -472,6 +677,7 @@ export function createProductionE2EScenarioOwner(
         && profileState.dirtyStatus === UserProfileDirtyStatus.Processed
         && profileState.profileVersion === profileState.dirtyVersion,
       subjectProfileVersion: profileState?.profileVersion ?? "",
+      subjectProfileSchemaVersion: profileState?.profileSchemaVersion ?? 0,
     };
   }
 

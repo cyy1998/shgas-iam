@@ -14,6 +14,10 @@ import {
   expectInternalResponsibilityDsl,
   waitForInternalResponsibility,
 } from "./src/responsibility-journey.ts";
+import {
+  expectInternalUserProfileSearchMatrix,
+  expectLegacyUserSearchEquivalence,
+} from "./src/user-profile-search-journey.ts";
 
 test("Admin prepares Custom SSO in Maintenance and existing access resumes after recovery", async ({
   context,
@@ -29,6 +33,13 @@ test("Admin prepares Custom SSO in Maintenance and existing access resumes after
     "IAM_E2E_CUSTOM_SSO_REDIRECT_URI",
   );
   const internalApiKey = requireEnvironment("IAM_E2E_INTERNAL_API_KEY");
+  const adminPrivilegeCode = requireEnvironment("IAM_E2E_ADMIN_PRIVILEGE_CODE");
+  const adminRoleCode = requireEnvironment("IAM_E2E_ADMIN_ROLE_CODE");
+  const delegateeUsername = requireEnvironment("IAM_E2E_DELEGATEE_USERNAME");
+  const disabledUsername = requireEnvironment("IAM_E2E_DISABLED_USERNAME");
+  const organizationCode = requireEnvironment("IAM_E2E_ORGANIZATION_CODE");
+  const pausedUsername = requireEnvironment("IAM_E2E_PAUSED_USERNAME");
+  const positionCode = requireEnvironment("IAM_E2E_POSITION_CODE");
   const responsibilityTargetOrganizationCode = requireEnvironment(
     "IAM_E2E_RESPONSIBILITY_TARGET_ORGANIZATION_CODE",
   );
@@ -62,6 +73,20 @@ test("Admin prepares Custom SSO in Maintenance and existing access resumes after
     positionCode: responsibilityHolderPositionCode,
     request: context.request,
     targetOrganizationCode: responsibilityTargetOrganizationCode,
+  });
+  await expectInternalUserProfileSearchMatrix({
+    adminPrivilegeCode,
+    adminRoleCode,
+    adminUsername,
+    delegateeUsername,
+    disabledUsername,
+    internalApiKey,
+    organizationCode,
+    origin,
+    pausedUsername,
+    positionCode,
+    request: context.request,
+    responsibilityHolderPositionCode,
   });
 
   await openClientSection(page, customSsoClientCode, "custom-sso");
@@ -150,6 +175,19 @@ test("Admin prepares Custom SSO in Maintenance and existing access resumes after
       targetOrganizationCode: responsibilityTargetOrganizationCode,
     },
   )).toBe(true);
+  await expectLegacyUserSearchEquivalence({
+    adminPrivilegeCode,
+    adminUsername,
+    clientCode: customSsoClientCode,
+    delegateeUsername,
+    disabledUsername,
+    internalApiKey,
+    localSession: String(localSession),
+    organizationCode,
+    origin,
+    pausedUsername,
+    request: context.request,
+  });
   expect(JSON.stringify(initialUserInfoBody.data.authorization)).not.toContain(
     "responsibilit",
   );

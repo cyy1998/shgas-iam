@@ -176,10 +176,11 @@ composition。跨层实例连接统一由 composition 完成。
   API 的 Custom SSO retryable error adapter 将 Projection Not Ready 与 Subject Access unavailable 分别映射为稳定
   `503` code 和配置的 `Retry-After`，不复用于 OIDC。
 
-- API production composition 直接组装 V2 Facts reader、projection 与 Custom SSO delivery；`/public/user-info` 在 projection
+- API production composition 直接组装 User Profile v3 Subject Facts reader、Client Protocol V2 projection 与 Custom SSO
+  delivery；`/public/user-info` 在 projection
   前后复查同一个 `customSsoConfigVersion`，Gateway Header 仍硬裁剪为 Subject、username/name。Catalog 版本固定在服务端，
   Admin 配置请求不能提交版本字段。Opaque Credential 继续只持有 Principal Session 关联与 mode/config version，UserInfo
-  每次按当前 V2 facts 重建，不保存 responsibility snapshot。
+  每次按当前 User Profile v3 Subject Facts 重建 Client Protocol V2 输出，不保存 responsibility snapshot。
 
 ### 角色分配解析
 
@@ -204,13 +205,13 @@ composition。跨层实例连接统一由 composition 完成。
   responsibility target reverse holders 合并后只登记一次 Dirty Version；Catalog 已发布字段/order 变化通过 Type holder
   seam 失效当前 holder。Admin 管理 repository 继续直接读写 Assignment，但不向其他 runtime 暴露其查询规则。
 - `@iam/user-profile-read-model` 默认入口生成并读取同一 Dirty Version
-  下的 Detail、Search 与 Subject Facts V2，并复用 PostgreSQL atomic publication、Redis monotonic CAS 与严格 V2
-  cache/PostgreSQL read-through。Active Internal Detail 与 DSL Search 均只读 `user_profile` 的 V2 row；API 使用独立的
-  2 秒 PostgreSQL statement timeout 连接和 5 秒 handler budget，并在 composition shutdown 中关闭该资源。专用 Worker
-  Profile V2 maintenance composition 通过
-  read-model `worker` subpath 调用批量 V2 backfill、PostgreSQL gate 与 Redis/Subject Access gate；它不启动普通 consumer、
-  不应用 client manifest 或推进 epoch。Active Worker consumer、Internal User、Custom SSO 与 OIDC 只发布和读取 V2，
-  不允许同一 live User 的 V1/V2 混写、双读或由 caller 选择版本。
+  下的 Detail、Search 与 Subject Facts v3，并复用 PostgreSQL atomic publication、Redis monotonic CAS 与严格 v3
+  cache/PostgreSQL read-through。Active Internal Detail、canonical Filter DSL、Internal/Public legacy adapter 与 Delegation
+  基础搜索均只读同一个 `user_profile` v3 row；API 使用独立的 2 秒 PostgreSQL statement timeout 连接和 5 秒 handler
+  budget，并在 composition shutdown 中关闭该资源。Worker 通过版本无关的 `user-profile:backfill`、`user-profile:repair`
+  与 PostgreSQL/Redis readiness 命令复用普通 dirty/job/publication 路径；命令不应用 client manifest 或推进 epoch。Active
+  Worker consumer、Internal User、Custom SSO 与 OIDC 只发布和读取 v3，不允许同一 live User 混写、双读、fallback 或由
+  caller 选择版本。Client Protocol V2 仍是独立版本边界。
 
 ### User Profile 失效
 

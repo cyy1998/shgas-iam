@@ -18,10 +18,13 @@ async function runSeed() {
     attemptedAt,
   });
 
+  const redisHost = requireEnvironment("IAM_E2E_REDIS_HOST");
+  const redisPort = requireIntegerEnvironment("IAM_E2E_REDIS_PORT");
+  const redisDb = requireIntegerEnvironment("IAM_E2E_REDIS_DB");
   const redis = new Redis({
-    host: requireEnvironment("IAM_E2E_REDIS_HOST"),
-    port: requireIntegerEnvironment("IAM_E2E_REDIS_PORT"),
-    db: requireIntegerEnvironment("IAM_E2E_REDIS_DB"),
+    host: redisHost,
+    port: redisPort,
+    db: redisDb,
     lazyConnect: true,
   });
   try {
@@ -32,6 +35,11 @@ async function runSeed() {
       owner: createProductionE2EScenarioOwner({
         db,
         redis,
+        queueRedis: {
+          host: redisHost,
+          port: redisPort,
+          db: redisDb,
+        },
         clock: { nowDate: () => new Date() },
         random: { uuid: randomUUID },
         passwordHashCost: 10,

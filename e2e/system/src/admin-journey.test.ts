@@ -56,6 +56,7 @@ describe("Admin Custom SSO journey operations", () => {
       IAM_E2E_ORIGIN: descriptor.origin,
       IAM_E2E_RUN_ID: descriptor.runId,
       IAM_E2E_ADMIN_CLIENT_CODE: "e2e-admin-admin-journey-01",
+      IAM_E2E_DELEGATEE_USERNAME: "e2e-delegatee-admin-journey-01",
       IAM_E2E_CUSTOM_SSO_CLIENT_CODE: "e2e-custom-admin-journey-01",
       IAM_E2E_CUSTOM_SSO_REDIRECT_URI:
         "http://127.0.0.1:43123/e2e/custom-sso/*",

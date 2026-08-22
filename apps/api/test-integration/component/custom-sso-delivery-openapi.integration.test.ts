@@ -68,6 +68,9 @@ function createContractApp() {
       setMobile: mock(async () => true),
       setPassword: mock(async () => true),
     },
+    userProfileSearch: {
+      searchLegacyUsers: mock(async () => []),
+    },
     config: {
       projectionRetryAfterSeconds: 3,
     },

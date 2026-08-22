@@ -1,8 +1,10 @@
 import { beforeAll, describe, expect, test } from "bun:test";
 
 type ParseWorkerEnv = typeof import("../env").parseWorkerEnv;
+type ParsePostgresReadinessEnv = typeof import("../env").parseUserProfilePostgresReadinessCommandEnv;
 
 let parseWorkerEnv: ParseWorkerEnv;
+let parsePostgresReadinessEnv: ParsePostgresReadinessEnv;
 
 function validEnv(): NodeJS.ProcessEnv {
   return {
@@ -16,7 +18,23 @@ function validEnv(): NodeJS.ProcessEnv {
 describe("worker environment", () => {
   beforeAll(async () => {
     Object.assign(process.env, validEnv());
-    ({ parseWorkerEnv } = await import("../env"));
+    ({
+      parseUserProfilePostgresReadinessCommandEnv: parsePostgresReadinessEnv,
+      parseWorkerEnv,
+    } = await import("../env"));
+  });
+
+  test("parses PostgreSQL readiness without Redis or Worker runtime configuration", () => {
+    expect(parsePostgresReadinessEnv({
+      IAM_WORKER_DATABASE_URL: "postgresql://iam:password@localhost/iam",
+      IAM_WORKER_USER_PROFILE_REBUILD_BATCH_SIZE: "25",
+      IAM_WORKER_USER_PROFILE_BACKFILL_BATCH_SIZE: "200",
+    })).toEqual({
+      databaseUrl: "postgresql://iam:password@localhost/iam",
+      nodeEnv: "development",
+      log: { level: "info", format: "auto" },
+      userProfile: { rebuildBatchSize: 25, backfillBatchSize: 200 },
+    });
   });
 
   test("exports grouped runtime config from IAM_WORKER raw env", () => {

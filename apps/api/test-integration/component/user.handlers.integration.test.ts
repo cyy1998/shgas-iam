@@ -15,10 +15,12 @@ function createHandlers() {
       getDetailByUsername: mock(async () => ({})),
       searchDsl: mock(async () => []),
     },
-    userService: {
-      getUserDetailByUsername: mock(async () => ({})),
-      searchUsers: mock(async () => [{ username: "zhangsan" }]),
-      searchUsersWithPrivilegeDelegation: mock(async () => ({ users: [], delegations: [] })),
+    userProfileSearch: {
+      searchDsl: mock(async () => []),
+      searchLegacyUsers: mock(async () => [{ username: "zhangsan" }]),
+    },
+    userDelegationQuery: {
+      searchUsersWithDelegations: mock(async () => ({ users: [], delegations: [] })),
     },
   };
 
@@ -64,7 +66,7 @@ describe("createUserHandlers", () => {
     });
   });
 
-  test("delegates legacy search through user service facade", async () => {
+  test("delegates legacy search through the shared profile search facade", async () => {
     const { deps, handlers } = createHandlers();
     const query = { usernames: ["zhangsan"] };
     const context = {
@@ -77,20 +79,44 @@ describe("createUserHandlers", () => {
       data: [{ username: "zhangsan" }],
     });
 
-    expect(deps.userService.searchUsers).toHaveBeenCalledWith(query);
+    expect(deps.userProfileSearch.searchLegacyUsers).toHaveBeenCalledWith(query);
   });
 
-  test("delegates strict V2 responsibility DSL search to the active profile query service", async () => {
+  test("combines live delegations after searching users through the shared facade", async () => {
+    const { deps, handlers } = createHandlers();
+    const query = { ancestorOrgCodes: ["ORG"], privilegeCode: "privilege:a" };
+    const context = {
+      req: { valid: mock(() => query) },
+      json: mock((payload: unknown) => payload),
+    };
+
+    const result = await handlers.usersSearchWithPrivilegeDelegation(
+      context as never,
+      undefined as never,
+    );
+
+    expect(result).toMatchObject({
+      code: 200,
+      data: { users: [], delegations: [] },
+    });
+    expect(deps.userDelegationQuery.searchUsersWithDelegations).toHaveBeenCalledWith(query);
+  });
+
+  test("delegates canonical v3 Filter search through the shared profile search facade", async () => {
     const { deps, handlers } = createHandlers();
     const input = {
       filter: {
-        nested: "employments",
-        where: {
-          nested: "responsibilities",
+        exists: {
+          path: "employments",
           where: {
-            field: "responsibility.type.code",
-            op: "eq",
-            value: OrganizationResponsibilityTypeCode.Head,
+            exists: {
+              path: "responsibilities",
+              where: {
+                field: "type.code",
+                op: "eq",
+                value: OrganizationResponsibilityTypeCode.Head,
+              },
+            },
           },
         },
       },
@@ -105,8 +131,8 @@ describe("createUserHandlers", () => {
       data: [],
     });
 
-    expect(deps.internalUserProfileQuery.searchDsl).toHaveBeenCalledWith(input);
-    expect(deps.userProfileQuery.searchDsl).not.toHaveBeenCalled();
+    expect(deps.userProfileSearch.searchDsl).toHaveBeenCalledWith(input);
+    expect(deps.internalUserProfileQuery.searchDsl).not.toHaveBeenCalled();
   });
 
   test("applies the fixed handler deadline to Internal Detail", async () => {
@@ -147,12 +173,12 @@ describe("createUserHandlers", () => {
 });
 
 describe("active usersSearchDsl route", () => {
-  test("rejects V1 filters and caller-controlled limits", () => {
+  test("accepts canonical conditions and rejects old aliases or caller-controlled execution", () => {
     const schema = usersSearchDsl.request.body.content["application/json"].schema;
 
     expect(schema.safeParse({
       filter: { field: "user.username", op: "eq", value: "zhangsan" },
-    }).success).toBe(false);
+    }).success).toBe(true);
     expect(schema.safeParse({
       filter: {
         nested: "employments",

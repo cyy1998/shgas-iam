@@ -11,9 +11,11 @@ import {
   ValidationFailureResponseSchema,
 } from "@iam/api-core/core/openapi/schemas/error-response-schema";
 import {
-  InternalUserProfileSearchRequestSchema,
   UserProfileDetailDocumentSchema,
 } from "@iam/user-profile-read-model";
+import {
+  V3UserProfileSearchTransportRequestSchema,
+} from "@iam/user-profile-read-model/v3";
 
 const tags = ["Internal/User"];
 
@@ -43,6 +45,7 @@ export const usersSearch = createRoute({
   method: "post",
   path: "/search",
   tags,
+  deprecated: true,
   request: {
     body: jsonContentRequired(UserQueryDtoSchema, "用户搜索条件"),
   },
@@ -76,15 +79,15 @@ export const usersSearchDsl = createRoute({
   tags,
   request: {
     body: jsonContentRequired(
-      InternalUserProfileSearchRequestSchema,
-      "用户责任 DSL 搜索条件",
+      V3UserProfileSearchTransportRequestSchema,
+      "User Profile v3 Filter DSL 搜索条件",
     ),
   },
   responses: {
     ...commonErrorResponses,
     [HttpStatusCodes.UNPROCESSABLE_ENTITY]: jsonContent(
       z.union([ValidationFailureResponseSchema, StandardErrorResponseSchema]),
-      "DSL 校验失败或搜索结果超过固定上限",
+      "Filter 校验失败或搜索结果超过固定上限",
     ),
     [HttpStatusCodes.SERVICE_UNAVAILABLE]: jsonContent(
       StandardErrorResponseSchema,
@@ -92,7 +95,7 @@ export const usersSearchDsl = createRoute({
     ),
     [HttpStatusCodes.OK]: jsonContent(
       createSuccessResponseSchema(z.array(UserProfileDetailDocumentSchema)),
-      "用户责任 DSL 搜索结果",
+      "User Profile v3 Filter DSL 搜索结果",
     ),
   },
 });

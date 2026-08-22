@@ -4,6 +4,7 @@ import {
   UserStatus,
 } from "@iam/contracts";
 import { afterAll, beforeAll, beforeEach, describe, expect, mock, test } from "bun:test";
+import { V3_USER_PROFILE_SCHEMA_VERSION } from "../../src/v3";
 import { createSubjectAccessAuthorityRepository } from "../../src/worker";
 import { createPostgresTestHarness } from "./postgres-test-harness";
 
@@ -135,7 +136,7 @@ async function seedProfileAndDirty(
       ${UserStatus.Enable},
       FALSE,
       TRUE,
-      2,
+      ${V3_USER_PROFILE_SCHEMA_VERSION},
       7,
       ${JSON.stringify({ legacyOnly: "must-not-be-read" })}::jsonb,
       ${JSON.stringify({ legacySearchOnly: "must-not-be-read" })}::jsonb,

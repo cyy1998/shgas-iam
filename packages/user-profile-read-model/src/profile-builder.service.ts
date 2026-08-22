@@ -3,8 +3,12 @@ import type {
   ProfileBuildRepository,
 } from "./profile-build.repository";
 import type { BuiltProfileDocuments } from "./profile-document-builder.core";
+import type { V3UserProfileSearchDocument } from "./profile-v3-search.schema";
 import type { PublishedProfile } from "./profile.schema";
-import { ORGANIZATION_RESPONSIBILITY_TYPE_CATALOG } from "@iam/contracts";
+import {
+  EmploymentStatus,
+  ORGANIZATION_RESPONSIBILITY_TYPE_CATALOG,
+} from "@iam/contracts";
 import { buildProfileDocumentsFromDataset } from "./profile-document-builder.core";
 import {
   PublishedProfileSchema,
@@ -68,19 +72,16 @@ function toPublishedProfile(
     ...employment,
     responsibilities: responsibilitiesByEmploymentId.get(employment.id) ?? [],
   }));
-  const searchEmployments = profile.searchDoc.employments.map(employment => ({
-    ...employment,
-    responsibilities: responsibilitiesByEmploymentId.get(employment.id) ?? [],
-  }));
   if (subjectFactsEmploymentIds.length !== profile.subjectFacts.employments.length) {
-    throw new Error("User Profile V2 Subject Facts employment mapping is inconsistent");
+    throw new Error("User Profile Subject Facts employment mapping is inconsistent");
   }
 
+  const detail = { ...profile.detail, employments: detailEmployments };
   return PublishedProfileSchema.parse({
     ...profile,
     profileSchemaVersion: USER_PROFILE_SCHEMA_VERSION,
-    detail: { ...profile.detail, employments: detailEmployments },
-    searchDoc: { ...profile.searchDoc, employments: searchEmployments },
+    detail,
+    searchDoc: buildV3SearchDocument({ ...profile, detail }),
     subjectFacts: {
       employments: profile.subjectFacts.employments.map((employment, index) => ({
         ...employment,
@@ -88,6 +89,87 @@ function toPublishedProfile(
       })),
     },
   });
+}
+
+function buildV3SearchDocument(
+  profile: Omit<PublishedProfile, "profileSchemaVersion" | "searchDoc" | "subjectFacts">
+    & Pick<PublishedProfile, "detail">,
+): V3UserProfileSearchDocument {
+  return {
+    user: {
+      subjectIdentifier: profile.subjectIdentifier,
+      username: profile.username,
+      name: profile.name,
+      mobile: profile.mobile,
+      wxId: profile.wxId,
+      userType: profile.detail.userType,
+      status: profile.status,
+    },
+    employments: profile.detail.employments
+      .filter(employment => isEffectiveEmployment(employment, profile.rebuiltAt))
+      .map(employment => ({
+        isPrimary: employment.isPrimary,
+        organization: toSearchOrganization({
+          code: employment.organization.assignedOrg.orgCode,
+          name: employment.organization.assignedOrg.orgName,
+          type: employment.organization.assignedOrg.orgType,
+          path: employment.organization.fullOrgPath.map(node => ({
+            code: node.orgCode,
+            name: node.orgName,
+            type: node.orgType,
+            distanceToTarget: node.distanceToAssignedOrg,
+          })),
+        }),
+        position: {
+          code: employment.position.posCode,
+          name: employment.position.posName,
+        },
+        roles: uniqueSorted(employment.roles),
+        privileges: uniqueSorted(employment.privileges),
+        responsibilities: employment.responsibilities.map(responsibility => ({
+          type: responsibility.type,
+          targetOrganization: toSearchOrganization(responsibility.targetOrganization),
+        })),
+      })),
+  };
+}
+
+type SearchOrganization = V3UserProfileSearchDocument["employments"][number]["organization"];
+type SearchOrganizationInput = Omit<SearchOrganization, "path"> & {
+  readonly path: readonly (
+    Omit<SearchOrganization["path"][number], "distanceToTarget">
+    & Partial<Pick<SearchOrganization["path"][number], "distanceToTarget">>
+  )[];
+};
+
+function toSearchOrganization(input: SearchOrganizationInput): SearchOrganization {
+  return {
+    code: input.code,
+    name: input.name,
+    type: input.type,
+    path: input.path.map((node, index, path) => ({
+      code: node.code,
+      name: node.name,
+      type: node.type,
+      distanceToTarget: node.distanceToTarget ?? path.length - index - 1,
+    })),
+  };
+}
+
+function isEffectiveEmployment(
+  employment: PublishedProfile["detail"]["employments"][number],
+  rebuiltAt: Date,
+) {
+  return employment.status === EmploymentStatus.Enable
+    && !employment.isDelete
+    && employment.startTime.getTime() <= rebuiltAt.getTime()
+    && employment.endTime === null;
+}
+
+function uniqueSorted(values: readonly string[]) {
+  return [...new Set(values)].sort((left, right) =>
+    left < right ? -1 : left > right ? 1 : 0,
+  );
 }
 
 function buildResponsibilitiesByEmploymentId(dataset: ProfileBuildDataset) {

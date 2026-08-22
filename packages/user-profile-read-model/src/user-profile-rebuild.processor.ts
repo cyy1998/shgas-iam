@@ -1,15 +1,17 @@
 import type { RebuildUserProfileJobPayload } from "@iam/contracts";
 import type { SubjectFactsCacheRecord } from "./profile-cache";
+import type { PublishedProfileRowInput } from "./profile-storage.schema";
 import type { PublishedProfile } from "./profile.schema";
-import { createSubjectFactsCacheRecord } from "./profile-cache";
 
-export type UserProfileRebuildProjection = PublishedProfile;
+export type UserProfileRebuildProjection = PublishedProfileRowInput;
 
-export interface UserProfilePublicationPort {
+export interface UserProfilePublicationPort<
+  TProfile extends UserProfileRebuildProjection = PublishedProfile,
+> {
   publishCandidate: (input: {
     userId: number;
     dirtyVersion: string;
-    profile: UserProfileRebuildProjection | null;
+    profile: TProfile | null;
     processedAt: Date;
   }) => Promise<
     | { status: "published" }
@@ -18,8 +20,13 @@ export interface UserProfilePublicationPort {
   >;
 }
 
-export interface SubjectFactsPublisherPort {
-  publish: (record: SubjectFactsCacheRecord) => Promise<{
+export interface SubjectFactsPublisherPort<
+  TFactsRecord extends {
+    subjectIdentifier: string;
+    sourceDirtyVersion: string;
+  } = SubjectFactsCacheRecord,
+> {
+  publish: (record: TFactsRecord) => Promise<{
     status: "published" | "retained-newer";
   }>;
 }
@@ -39,11 +46,13 @@ export interface UserProfileRebuildDirtyStorePort {
   }) => Promise<unknown | null>;
 }
 
-export interface UserProfileRebuildBuilderPort {
+export interface UserProfileRebuildBuilderPort<
+  TProfile extends UserProfileRebuildProjection = PublishedProfile,
+> {
   buildOne: (input: {
     userId: number;
     sourceDirtyVersion: string;
-  }) => Promise<UserProfileRebuildProjection | null>;
+  }) => Promise<TProfile | null>;
 }
 
 export interface UserProfileRebuildLoggerPort {
@@ -54,11 +63,21 @@ export interface SubjectAccessRepairPort {
   repairSubject: (subjectIdentifier: string) => Promise<unknown>;
 }
 
-export interface CreateUserProfileRebuildProcessorDeps {
+export interface CreateUserProfileRebuildProcessorDeps<
+  TProfile extends UserProfileRebuildProjection = PublishedProfile,
+  TFactsRecord extends {
+    subjectIdentifier: string;
+    sourceDirtyVersion: string;
+  } = SubjectFactsCacheRecord,
+> {
   dirtyRepository: UserProfileRebuildDirtyStorePort;
-  builder: UserProfileRebuildBuilderPort;
-  publicationRepository: UserProfilePublicationPort;
-  subjectFactsPublisher: SubjectFactsPublisherPort;
+  builder: UserProfileRebuildBuilderPort<TProfile>;
+  publicationRepository: UserProfilePublicationPort<TProfile>;
+  createSubjectFactsRecord: (
+    profile: TProfile,
+    publishedAt: Date,
+  ) => TFactsRecord;
+  subjectFactsPublisher: SubjectFactsPublisherPort<TFactsRecord>;
   subjectAccessRepair: SubjectAccessRepairPort;
   logger: UserProfileRebuildLoggerPort;
   clock: {
@@ -66,7 +85,13 @@ export interface CreateUserProfileRebuildProcessorDeps {
   };
 }
 
-export function createUserProfileRebuildProcessor(deps: CreateUserProfileRebuildProcessorDeps) {
+export function createUserProfileRebuildProcessor<
+  TProfile extends UserProfileRebuildProjection,
+  TFactsRecord extends {
+    subjectIdentifier: string;
+    sourceDirtyVersion: string;
+  },
+>(deps: CreateUserProfileRebuildProcessorDeps<TProfile, TFactsRecord>) {
   return {
     async process(
       payload: RebuildUserProfileJobPayload,
@@ -90,7 +115,7 @@ export function createUserProfileRebuildProcessor(deps: CreateUserProfileRebuild
         const processedAt = deps.clock.nowDate();
         const cacheRecord = builtProfile === null
           ? null
-          : createSubjectFactsCacheRecord(builtProfile, processedAt);
+          : deps.createSubjectFactsRecord(builtProfile, builtProfile.rebuiltAt);
         const publication = await deps.publicationRepository.publishCandidate({
           userId: payload.userId,
           dirtyVersion: payload.dirtyVersion,
@@ -176,9 +201,12 @@ function errorMessage(error: unknown) {
   return error instanceof Error ? error.message : String(error);
 }
 
-async function publishCache(
-  publisher: SubjectFactsPublisherPort,
-  record: SubjectFactsCacheRecord,
+async function publishCache<TFactsRecord extends {
+  subjectIdentifier: string;
+  sourceDirtyVersion: string;
+}>(
+  publisher: SubjectFactsPublisherPort<TFactsRecord>,
+  record: TFactsRecord,
   context: {
     userId: number;
     dirtyVersion: string;

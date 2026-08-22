@@ -68,22 +68,26 @@ export async function expectInternalResponsibilityDsl(
       headers: { apikey: input.internalApiKey },
       data: {
         filter: {
-          nested: "employments",
-          where: {
-            nested: "responsibilities",
+          exists: {
+            path: "employments",
             where: {
-              all: [
-                {
-                  field: "responsibility.type.code",
-                  op: "eq",
-                  value: "head",
+              exists: {
+                path: "responsibilities",
+                where: {
+                  and: [
+                    {
+                      field: "type.code",
+                      op: "eq",
+                      value: "head",
+                    },
+                    {
+                      field: "targetOrganization",
+                      op: "withinSubtreeOf",
+                      value: input.targetOrganizationCode,
+                    },
+                  ],
                 },
-                {
-                  field: "responsibility.targetOrganization.code",
-                  op: "eq",
-                  value: input.targetOrganizationCode,
-                },
-              ],
+              },
             },
           },
         },
@@ -100,6 +104,20 @@ export async function expectInternalResponsibilityDsl(
       "posCode",
     )))
     .toBe(true);
+
+  const legacyResponse = await input.request.post(
+    `${input.origin}/api/iam/internal/users/search-dsl`,
+    {
+      headers: { apikey: input.internalApiKey },
+      data: {
+        filter: {
+          nested: "employments",
+          where: { all: [] },
+        },
+      },
+    },
+  );
+  expect(legacyResponse.status()).toBe(422);
 }
 
 export function internalDetailHasResponsibility(

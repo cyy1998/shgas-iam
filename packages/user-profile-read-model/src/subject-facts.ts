@@ -1,4 +1,5 @@
 export {
+  createSubjectFactsCacheRecord,
   SubjectFactsCacheRecordSchema,
 } from "./profile-cache";
 export type {

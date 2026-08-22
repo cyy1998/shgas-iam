@@ -12,6 +12,7 @@ const getActiveUserBySubjectIdentifier = mock(async () => ({
   subjectIdentifier,
 }));
 const getUserDetailById = mock(async () => userDetail);
+const searchLegacyUsers = mock(async () => [{ username: "zhangsan" }]);
 const resolveUserInfoForRequest = mock(async () => ({
   version: 1 as const,
   subjectIdentifier,
@@ -34,6 +35,9 @@ function createHandlers() {
       getActiveUserBySubjectIdentifier,
       getUserDetailById,
     },
+    userProfileSearch: {
+      searchLegacyUsers,
+    },
   } as never);
 }
 
@@ -55,6 +59,7 @@ function makeContext(orcasId: string | null | undefined) {
 beforeEach(() => {
   getActiveUserBySubjectIdentifier.mockClear();
   getUserDetailById.mockClear();
+  searchLegacyUsers.mockClear();
   resolveUserInfoForRequest.mockClear();
   resolveUserInfoForRequest.mockImplementation(async () => ({
     version: 1 as const,
@@ -67,6 +72,23 @@ beforeEach(() => {
 });
 
 describe("createPublicHandlers", () => {
+  test("delegates legacy user search through the shared profile search facade", async () => {
+    const handlers = createHandlers();
+    const query = { usernames: ["zhangsan"] };
+    const context = {
+      req: { valid: mock(() => query) },
+      json: mock((body: unknown) => body),
+    };
+
+    const result = await handlers.usersSearch(context as never, undefined as never);
+
+    expect(result).toMatchObject({
+      code: 200,
+      data: [{ username: "zhangsan" }],
+    });
+    expect(searchLegacyUsers).toHaveBeenCalledWith(query);
+  });
+
   test("userInfo returns the live client-scoped projection without resolving a legacy account", async () => {
     const handlers = createHandlers();
     const context = makeContext(undefined);

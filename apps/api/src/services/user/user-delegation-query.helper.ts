@@ -8,10 +8,13 @@ export function createUserDelegationQuery(deps: UserDelegationQueryDeps) {
     query: UserQueryWithPrivilegeDelegationDto,
   ): Promise<UserSearchWithDelegationsResult> {
     const [orgCode] = query.ancestorOrgCodes;
-    if (query.ancestorOrgCodes.length !== 1 || orgCode === undefined) {
+    if (query.ancestorOrgCodes.length > 1) {
       throw new BadRequestError("该接口ancestorOrgCodes元素数量只支持为1");
     }
-    const userDtos = await deps.profileQuery.searchLegacyUsers(query);
+    const userDtos = await deps.userProfileSearch.searchLegacyUsers(query);
+    if (orgCode === undefined) {
+      throw new BadRequestError("该接口ancestorOrgCodes元素数量只支持为1");
+    }
     const delegations = (await deps.privilegeDelegationRepository.getDelegationsByUserAndOrganizationScopeAndPrivilege(
       userDtos.map(u => u.username),
       orgCode,

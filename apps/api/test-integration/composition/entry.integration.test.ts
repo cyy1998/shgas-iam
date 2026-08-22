@@ -411,7 +411,7 @@ async function seedGatewayPublicEntry(
 
 function subjectFactsRecord(version: string, name: string): SubjectFactsCacheRecord {
   return {
-    schemaVersion: 2,
+    schemaVersion: 3,
     sourceDirtyVersion: version,
     publishedAt: new Date().toISOString(),
     subjectIdentifier,

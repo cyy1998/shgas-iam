@@ -7,6 +7,7 @@ import {
 } from "@iam/contracts";
 import { afterAll, beforeAll, beforeEach, describe, expect, mock, test } from "bun:test";
 import { createSubjectFactsReader } from "../../src/subject-facts";
+import { V3_USER_PROFILE_SCHEMA_VERSION } from "../../src/v3";
 import { createPostgresTestHarness } from "./postgres-test-harness";
 
 const SUBJECT_IDENTIFIER = "62b1eede-a7a5-4b6a-a716-54e3314f790f";
@@ -45,8 +46,8 @@ describe("Subject Facts PostgreSQL reader", () => {
     expect(publish).not.toHaveBeenCalled();
   });
 
-  test("reads one strict V2 responsibility row and verifies its processed Dirty version", async () => {
-    await seedPublishedSubjectV2(harness, "22");
+  test("reads one strict v3 responsibility row and verifies its processed Dirty version", async () => {
+    await seedPublishedSubjectV3(harness, "22");
     const publish = mock(async () => ({ status: "published" as const }));
     const reader = createSubjectFactsReader({
       db: harness.db,
@@ -142,7 +143,7 @@ async function seedPublishedSubject(
   `;
 }
 
-async function seedPublishedSubjectV2(
+async function seedPublishedSubjectV3(
   harness: Awaited<ReturnType<typeof createPostgresTestHarness>>,
   dirtyVersion: string,
 ) {
@@ -208,7 +209,7 @@ async function seedPublishedSubjectV2(
       ${UserStatus.Enable},
       FALSE,
       TRUE,
-      2,
+      ${V3_USER_PROFILE_SCHEMA_VERSION},
       ${dirtyVersion},
       ${JSON.stringify({ candidate: true })}::jsonb,
       ${JSON.stringify({ candidate: true })}::jsonb,

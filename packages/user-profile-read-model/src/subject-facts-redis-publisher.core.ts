@@ -46,6 +46,46 @@ export interface CreateSubjectFactsRedisPublisherOptions {
   keyPrefix?: string;
 }
 
+export function createSubjectFactsRedisInspector<TRecord>(
+  redis: SubjectFactsRedisInspectionClient,
+  parse: (input: unknown) => TRecord,
+  options: CreateSubjectFactsRedisPublisherOptions = {},
+) {
+  const keyPrefix = options.keyPrefix ?? SUBJECT_FACTS_CACHE_KEY_PREFIX;
+  return {
+    async inspectMany(subjectIdentifiers: string[]) {
+      if (new Set(subjectIdentifiers).size !== subjectIdentifiers.length)
+        throw new Error("Subject Facts inspection contains duplicate subjects");
+      if (subjectIdentifiers.length === 0)
+        return [];
+      const values = await redis.mget(
+        ...subjectIdentifiers.map(subjectIdentifier => `${keyPrefix}${subjectIdentifier}`),
+      );
+      if (values.length !== subjectIdentifiers.length)
+        throw new Error("Subject Facts inspection returned an incomplete batch");
+      return values.map((value, index) => {
+        if (value === null)
+          return { status: "missing" as const };
+        try {
+          const record = parse(JSON.parse(value));
+          if (
+            typeof record !== "object"
+            || record === null
+            || !("subjectIdentifier" in record)
+            || record.subjectIdentifier !== subjectIdentifiers[index]
+          ) {
+            return { status: "invalid" as const };
+          }
+          return { status: "valid" as const, record };
+        }
+        catch {
+          return { status: "invalid" as const };
+        }
+      });
+    },
+  };
+}
+
 export function createMonotonicSubjectFactsRedisPublisher<TRecord extends {
   subjectIdentifier: string;
   sourceDirtyVersion: string;

@@ -87,7 +87,6 @@ function createDeps(overrides: Record<string, unknown> = {}) {
     uow: createImmediateUnitOfWork(tx),
     tx,
     user,
-    userDelegationQuery: { searchUsersWithDelegations: mock(async () => ({ users: [], delegations: [] })) },
     profileQuery: {
       getDetailByMobile: mock(async () => user),
       getDetailByUserId: mock(async () => user),
@@ -225,14 +224,12 @@ describe("createUserService", () => {
     expect(deps.sessionRevocation.revokeUserSessions).not.toHaveBeenCalled();
   });
 
-  test("delegates user detail and legacy search reads to profile query service", async () => {
+  test("delegates user detail reads to profile query service", async () => {
     const deps = createDeps();
     const service = createUserService(deps);
 
     await service.getUserDetailByUsername("zhangsan");
-    await service.searchUsers({ usernames: ["zhangsan"] });
 
     expect(deps.profileQuery.getDetailByUsername).toHaveBeenCalledWith("zhangsan");
-    expect(deps.profileQuery.searchLegacyUsers).toHaveBeenCalledWith({ usernames: ["zhangsan"] });
   });
 });

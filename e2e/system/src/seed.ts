@@ -6,11 +6,19 @@ export interface E2EScenarioReferences {
   canonicalOrigin: string;
   adminSubjectIdentifier: string;
   adminUsername: string;
+  delegateeSubjectIdentifier: string;
+  delegateeUsername: string;
+  pausedSubjectIdentifier: string;
+  pausedUsername: string;
+  disabledSubjectIdentifier: string;
+  disabledUsername: string;
   organizationCode: string;
+  responsibilityHolderOrganizationCode: string;
   responsibilityTargetOrganizationCode: string;
   positionCode: string;
   responsibilityHolderPositionCode: string;
   adminRoleCode: string;
+  adminPrivilegeCode: string;
   adminClientCode: string;
   adminRedirectUri: string;
   customSsoClientCode: string;
@@ -24,11 +32,16 @@ export interface E2EScenarioReferences {
 export type E2EScenarioIdentity = Pick<
   E2EScenarioReferences,
   | "adminUsername"
+  | "delegateeUsername"
+  | "pausedUsername"
+  | "disabledUsername"
   | "organizationCode"
+  | "responsibilityHolderOrganizationCode"
   | "responsibilityTargetOrganizationCode"
   | "positionCode"
   | "responsibilityHolderPositionCode"
   | "adminRoleCode"
+  | "adminPrivilegeCode"
   | "adminClientCode"
   | "customSsoClientCode"
   | "internalClientCode"
@@ -42,7 +55,13 @@ export interface E2EScenarioReadBack {
     subjectIdentifier: string;
     username: string;
   };
+  delegatee: {
+    active: boolean;
+    subjectIdentifier: string;
+    username: string;
+  };
   organization: { active: boolean; code: string };
+  responsibilityHolderOrganization: { active: boolean; code: string };
   responsibilityTargetOrganization: { active: boolean; code: string };
   position: { active: boolean; code: string };
   employment: { active: boolean };
@@ -84,6 +103,7 @@ export interface E2EScenarioReadBack {
   };
   subjectProfileReady: boolean;
   subjectProfileVersion: string;
+  subjectProfileSchemaVersion: number;
 }
 
 export interface E2EScenarioOwner {
@@ -119,6 +139,9 @@ export async function seedE2EScenario(
     runId: input.runId,
     canonicalOrigin: origin,
     adminSubjectIdentifier: input.random.uuid(),
+    delegateeSubjectIdentifier: input.random.uuid(),
+    pausedSubjectIdentifier: input.random.uuid(),
+    disabledSubjectIdentifier: input.random.uuid(),
     ...identity,
     adminRedirectUri: `${origin}/iam-admin/*`,
     customSsoRedirectUri: `${origin}/e2e/custom-sso/*`,
@@ -139,11 +162,16 @@ export function createE2EScenarioIdentity(runId: string): E2EScenarioIdentity {
   const runKey = requireRunKey(runId);
   return {
     adminUsername: `e2e-admin-${runKey}`,
+    delegateeUsername: `e2e-delegatee-${runKey}`,
+    pausedUsername: `e2e-paused-${runKey}`,
+    disabledUsername: `e2e-disabled-${runKey}`,
     organizationCode: `e2e-org-${runKey}`,
+    responsibilityHolderOrganizationCode: `e2e-holder-org-${runKey}`,
     responsibilityTargetOrganizationCode: `e2e-resp-target-${runKey}`,
     positionCode: `e2e-pos-${runKey}`,
     responsibilityHolderPositionCode: `e2e-resp-pos-${runKey}`,
     adminRoleCode: `e2e-role-${runKey}`,
+    adminPrivilegeCode: `e2e-privilege-${runKey}`,
     adminClientCode: `e2e-admin-${runKey}`,
     customSsoClientCode: `e2e-custom-${runKey}`,
     internalClientCode: `e2e-internal-${runKey}`,
@@ -184,8 +212,14 @@ function assertScenarioReadBack(
     && actual.admin.passwordConfigured
     && actual.admin.subjectIdentifier === expected.adminSubjectIdentifier
     && actual.admin.username === expected.adminUsername
+    && actual.delegatee.active
+    && actual.delegatee.subjectIdentifier === expected.delegateeSubjectIdentifier
+    && actual.delegatee.username === expected.delegateeUsername
     && actual.organization.active
     && actual.organization.code === expected.organizationCode
+    && actual.responsibilityHolderOrganization.active
+    && actual.responsibilityHolderOrganization.code
+    === expected.responsibilityHolderOrganizationCode
     && actual.responsibilityTargetOrganization.active
     && actual.responsibilityTargetOrganization.code
     === expected.responsibilityTargetOrganizationCode
@@ -218,8 +252,12 @@ function assertScenarioReadBack(
     && actual.subjectFacts.ready
     && actual.subjectFacts.subjectIdentifier === expected.adminSubjectIdentifier
     && actual.subjectFacts.sourceDirtyVersion === actual.subjectProfileVersion
+    && actual.subjectProfileSchemaVersion === 3
     && actual.subjectFacts.profileUsername === expected.adminUsername
-    && exactly(actual.subjectFacts.organizationCodes, expected.organizationCode)
+    && exactlyAll(actual.subjectFacts.organizationCodes, [
+      expected.organizationCode,
+      expected.responsibilityHolderOrganizationCode,
+    ])
     && exactlyAll(actual.subjectFacts.positionCodes, [
       expected.positionCode,
       expected.responsibilityHolderPositionCode,

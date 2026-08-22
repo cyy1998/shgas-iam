@@ -120,6 +120,64 @@ describe("exact-project Docker infrastructure", () => {
     expect(commands.flat().join(" ")).not.toMatch(/password|token|secret/iu);
   });
 
+  test("runs both production User Profile v3 gates before route publication", async () => {
+    const captures: string[][] = [];
+    const operations = createOperations({
+      captureCommand: async (command, args) => {
+        captures.push([command, ...args]);
+        const operation = args.at(-3)?.replace("user-profile:", "");
+        return {
+          stdout: JSON.stringify({
+            version: 3,
+            gate: operation === "verify-postgres" ? "postgres" : "redis-access",
+            status: "passed",
+          }),
+          stderr: "",
+        };
+      },
+    });
+
+    await operations.verifyUserProfileReadiness(descriptor);
+
+    expect(captures).toHaveLength(2);
+    expect(captures.map(command => command.slice(-6))).toEqual([
+      [
+        "worker",
+        "bun",
+        "run",
+        "user-profile:verify-postgres",
+        "--batch-size",
+        "100",
+      ],
+      [
+        "worker",
+        "bun",
+        "run",
+        "user-profile:verify-redis",
+        "--batch-size",
+        "100",
+      ],
+    ]);
+    expect(captures.flat().join(" ")).not.toMatch(/password|token|secret/iu);
+  });
+
+  test("rejects a gate command that does not report a passing v3 inventory", async () => {
+    const operations = createOperations({
+      captureCommand: async () => ({
+        stdout: JSON.stringify({
+          version: 2,
+          gate: "postgres",
+          status: "passed",
+        }),
+        stderr: "",
+      }),
+    });
+
+    await expect(operations.verifyUserProfileReadiness(descriptor)).rejects.toThrow(
+      "User Profile postgres gate did not report a passing v3 inventory",
+    );
+  });
+
   test("renders run-scoped client, role, and Gateway authority from the descriptor", async () => {
     const environments: NodeJS.ProcessEnv[] = [];
     const operations = createOperations({

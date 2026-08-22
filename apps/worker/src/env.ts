@@ -110,6 +110,15 @@ const EmploymentCutoverCommandEnvSchema = z.object({
   IAM_WORKER_LOG_FORMAT: z.enum(["auto", "json", "pretty"]).default("auto"),
 });
 
+const UserProfilePostgresReadinessCommandEnvSchema = z.object({
+  IAM_WORKER_DATABASE_URL: z.string().min(1),
+  NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
+  IAM_WORKER_LOG_LEVEL: z.string().default("info"),
+  IAM_WORKER_LOG_FORMAT: z.enum(["auto", "json", "pretty"]).default("auto"),
+  IAM_WORKER_USER_PROFILE_REBUILD_BATCH_SIZE: z.coerce.number().int().positive().default(100),
+  IAM_WORKER_USER_PROFILE_BACKFILL_BATCH_SIZE: z.coerce.number().int().positive().default(500),
+});
+
 type RawWorkerEnv = z.infer<typeof RawWorkerEnvSchema>;
 
 export interface WorkerEnv {
@@ -156,6 +165,19 @@ export interface EmploymentCutoverCommandEnv {
   log: {
     level: string;
     format: "auto" | "json" | "pretty";
+  };
+}
+
+export interface UserProfilePostgresReadinessCommandEnv {
+  databaseUrl: string;
+  nodeEnv: "development" | "test" | "production";
+  log: {
+    level: string;
+    format: "auto" | "json" | "pretty";
+  };
+  userProfile: {
+    rebuildBatchSize: number;
+    backfillBatchSize: number;
   };
 }
 
@@ -228,6 +250,25 @@ export function parseEmploymentCutoverCommandEnv(
     log: {
       level: raw.IAM_WORKER_LOG_LEVEL,
       format: raw.IAM_WORKER_LOG_FORMAT,
+    },
+  };
+}
+
+export function parseUserProfilePostgresReadinessCommandEnv(
+  source: NodeJS.ProcessEnv,
+): UserProfilePostgresReadinessCommandEnv {
+  const raw = UserProfilePostgresReadinessCommandEnvSchema.parse(source);
+  exposeDatabaseUrlForDbPackage(raw.IAM_WORKER_DATABASE_URL);
+  return {
+    databaseUrl: raw.IAM_WORKER_DATABASE_URL,
+    nodeEnv: raw.NODE_ENV,
+    log: {
+      level: raw.IAM_WORKER_LOG_LEVEL,
+      format: raw.IAM_WORKER_LOG_FORMAT,
+    },
+    userProfile: {
+      rebuildBatchSize: raw.IAM_WORKER_USER_PROFILE_REBUILD_BATCH_SIZE,
+      backfillBatchSize: raw.IAM_WORKER_USER_PROFILE_BACKFILL_BATCH_SIZE,
     },
   };
 }

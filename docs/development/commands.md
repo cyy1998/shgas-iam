@@ -174,7 +174,7 @@ pnpm --filter @iam/user-profile-read-model test:integration:redis
 ```
 
 两个 resolution package 都没有空的 Unit profile。旧 Subject Projection V1 rehearsal 已随 strict V2 激活撤销；
-受控数据准备统一由 Worker 的 Profile V2 maintenance 命令拥有。
+受控数据准备统一由 Worker 的版本无关 `user-profile:*` maintenance 命令拥有。
 
 Pure shared packages、ESLint config、Client Subject Projection 与 Gateway 已发布以下 package-local canonical commands：
 
@@ -208,8 +208,9 @@ Browser Integration 保留原 API mocks、package-local `webServer`、base URL �
 `@iam/e2e-system` 通过 root `pnpm test:e2e` 发布完整 Full-system collection：受独立 60 秒 deadline 约束的 preflight 通过后才创建唯一 Compose
 project，以动态 Gateway host port 等待 PostgreSQL、Redis、etcd 与 APISIX healthy，在空 volumes 上执行真实 Drizzle migrations，
 再启动 API、Admin API、OIDC Provider、Worker、Admin 与 SSO。Runtime healthy 后命令校验 rendered Compose 的 canonical origin 合同，
-通过 production owner 建立固定 synthetic scenario 并写安全 seed receipt，然后渲染 repo-owned Gateway routes，从 canonical origin
-完成 protocol readiness；OIDC
+通过 production owner 建立固定 synthetic scenario 并写安全 seed receipt，依次运行 production Worker 的
+`user-profile:verify-postgres` 与 `user-profile:verify-redis`；两道 gate 均通过后才渲染 repo-owned Gateway routes，并从
+canonical origin 完成 protocol readiness；OIDC
 discovery 会精确核对 issuer、authorization endpoint、token endpoint 与 JWKS URI，而不是只接受 HTTP 200。
 它还核对 UserInfo `/oidc/me` 与 RP-initiated logout `/oidc/session/end`。普通 lifecycle command 不回显 child stdout/stderr；
 Descriptor 落盘后、diagnostic tool build 与资源创建前先原子写入安全的 `not-attempted` migration receipt；初始化失败不会创建资源。
@@ -340,7 +341,7 @@ Agent 可以在运行命令前启动临时容器，但必须使用仓库声明�
 ready 后传入 URL，并在测试结束后只按预先记录的 container ID 清理。不得用 glob、prefix scan 或 prune 代替精确清理。
 
 旧 Ticket 12 的 V1 rehearsal/backfill/verify 入口已随 strict V2 激活撤销。维护者只使用本页列出的
-Profile V2 maintenance、API/OIDC external entry、hermetic process smoke 与数据库 rollback seams；不得把 URL credential、
+User Profile maintenance、API/OIDC external entry、hermetic process smoke 与数据库 rollback seams；不得把 URL credential、
 Token、Subject、完整 Redis key 或 Secret 写入验收记录。
 
 Subject Projection tightening migration 通过 Drizzle 应用后，rollback 必须在 authentication traffic 与 user/client writes
@@ -394,16 +395,18 @@ Hook 不运行 lint、typecheck、test、build 或 tracker checker。按改动�
 - API Core：`pnpm --filter @iam/api-core <lint|test|test:unit|test:integration:component|test:integration:process|test:integration:redis|typecheck>`
 - Client Subject Projection：`pnpm --filter @iam/client-subject-projection <lint|test|test:unit|test:integration:component|typecheck>`
 - User Profile Read Model：`pnpm --filter @iam/user-profile-read-model <lint|test|test:unit|test:integration:component|test:integration:postgres|test:integration:redis|typecheck>`
-- Worker：`pnpm --filter @iam/worker <dev|serve|lint|test|test:unit|test:integration:component|test:integration:process|test:integration:postgres|typecheck|employment:cutover-verify|profile-v2:backfill|profile-v2:verify-postgres|profile-v2:verify-redis|user-profile:backfill|user-profile:repair|client-protocol:epochs>`
+- Worker：`pnpm --filter @iam/worker <dev|serve|lint|test|test:unit|test:integration:component|test:integration:process|test:integration:postgres|typecheck|employment:cutover-verify|user-profile:backfill|user-profile:repair|user-profile:verify-postgres|user-profile:verify-redis|client-protocol:epochs>`
 - Employment 生命周期切换前只读 gate：
   `IAM_WORKER_DATABASE_URL=<target-url> pnpm --filter @iam/worker employment:cutover-verify`
 - 仅处理 Subject Access indexed backlog：
   `pnpm --filter @iam/worker run user-profile:repair -- --subject-access-only --limit <positive-integer>`
-- Profile V2 受控 backfill：
-  `pnpm --filter @iam/worker profile-v2:backfill -- [--batch-size <positive-integer>] [--after-user-id <safe-cursor>]`
-- Profile V2 两项独立只读 gate：
-  `pnpm --filter @iam/worker profile-v2:verify-postgres -- [--batch-size <positive-integer>]`，随后运行
-  `pnpm --filter @iam/worker profile-v2:verify-redis -- [--batch-size <positive-integer>]`。
+- User Profile 全量重建与版本无关 readiness：先运行
+  `pnpm --filter @iam/worker user-profile:backfill` 派发既有 versioned rebuild jobs；批量大小通过
+  `IAM_WORKER_USER_PROFILE_BACKFILL_BATCH_SIZE=<positive-integer>` 配置。
+  等待 Worker 收敛并按需运行 `user-profile:repair` 后，依次运行
+  `pnpm --filter @iam/worker user-profile:verify-postgres -- [--batch-size <positive-integer>]` 和
+  `pnpm --filter @iam/worker user-profile:verify-redis -- [--batch-size <positive-integer>]`。Backfill 的 `enqueued`
+  只表示已派发，不表示 readiness 已通过；两个 gate 任一失败都必须修复并重跑。
 - Client Protocol V2 epoch 与 artifact cleanup：
   `pnpm --filter @iam/worker client-protocol:epochs -- <dry-run|apply|verify> --manifest <path>`，随后运行
   `pnpm --filter @iam/oidc-provider client-protocol:artifacts -- <dry-run|apply|verify> --manifest <path>`；完整顺序与不可逆边界见
@@ -425,13 +428,6 @@ Hook 不运行 lint、typecheck、test、build 或 tracker checker。按改动�
 Ended `endTime`、未来 Open `startTime`、重复 Open 组合和多个 Open Primary。报告 `passed` 时退出 0；存在任一阻断项时
 报告 `failed` 并退出 1，按稳定分类列出全部相关 Employment ID。Legacy Employment Tombstone 单独计数且不因缺少可信
 `endTime` 阻断。命令不解释 `updateTime`、不生成修复 SQL，也不修改数据；管理员必须依据真实业务通过正式入口修正后重跑。
-
-`profile-v2:*` 同样只由运维人员显式调用，不启动普通 Worker consumer，也不应用 client manifest、推进 client epoch、
-冻结或恢复流量。`profile-v2:backfill` 只有在整批 PostgreSQL 提交、V2 Subject Facts 写入以及 Subject Access Barrier
-复核都成功后才输出新的 safe cursor；失败时从最后 safe cursor 重跑。只有 strict V2 Profile、精确匹配的 `Processed`
-Dirty Version 与 `Backfill` reason marker 同时存在时才复用已提交的 PostgreSQL 结果，其他 User 都推进一次 Dirty Version。
-两个 verifier 都从 PostgreSQL 全量 Subject inventory
-出发，分别验证 strict V2 Profile 与 Redis/Barrier，不使用抽样、Redis `SCAN` 或 runtime read-through。
 
 共享 packages 使用相同的 filtered 模式，例如：
 

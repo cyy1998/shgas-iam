@@ -6,8 +6,8 @@ Last verified: 2026-08-21
 Next review: n/a
 
 > 本手册记录 V1→初代 Subject Projection 的历史切换流程。其
-> `subject-projection:backfill|verify` 命令已撤销，不得在当前 strict V2 runtime 执行；
-> 当前数据准备与只读 gate 只使用 `profile-v2:*` maintenance 命令。
+> `subject-projection:backfill|verify` 及其后继的 Profile 专用 maintenance 命令均已撤销，
+> 不得在当前 strict V2 runtime 执行；当前 User Profile 运维只使用版本无关命令。
 
 ## 适用范围与安全边界
 

@@ -32,7 +32,10 @@ profile 不是新的测试层级、速度标签或 Gate。多资源测试按测�
 - Browser Integration 位于 `test-integration/browser/**/*.spec.ts`。
 - Full-system E2E 独占 `e2e/system/**/*.spec.ts`。Root `pnpm test:e2e` 是唯一完整 collection owner；workspace-local
   `admin:journey` 与 `oidc:journey` 只保留为单 journey 调试入口。
-- Profile V2 maintenance 是操作命令，不采用测试命名，也不属于任何 collection。
+- 版本无关的 User Profile backfill、repair 与 readiness 是操作命令，不采用测试命名，也不属于任何 collection；
+  PostgreSQL command Integration 验证命令进程；Full-system E2E 从存量 v2 row 经真实 Worker backfill 收敛到 v3，随后在
+  Gateway routes 发布前实际运行 PostgreSQL 与 Redis/Subject Facts/Subject Access 两道 production gate，并通过真实 HTTP
+  验证 canonical Filter、legacy/Public/Delegation adapter 与 Employment invalidation 的代表矩阵。
 
 每个测试候选必须由一个且仅一个 canonical collection 收集。Admin API 的 client cache 真实 contract 位于 `redis`
 profile，并通过 production Admin runtime 的 `clientCache` seam 验证 invalidation、update 与 mutation completion，不初始化

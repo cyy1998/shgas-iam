@@ -3,6 +3,7 @@ import type { ApiRequestContext } from "@api/services/audit/audit.context";
 import type { AuditLogWriterPort } from "@api/services/audit/audit.service";
 import type { MobileVerificationCodeReservation } from "@api/services/mobile/mobile.type";
 import type { PrivilegeDelegationDto } from "@api/services/privilege/privilegeDelegation.type";
+import type { UserProfileSearchPort } from "@api/services/user-profile-search/user-profile-search.port";
 import type {
   SubjectAccessMutationReceipt,
   SubjectAccessTransitionTarget,
@@ -12,8 +13,6 @@ import type {
   User,
   UserDetailDto,
   UserDto,
-  UserQueryDto,
-  UserQueryWithPrivilegeDelegationDto,
 } from "./user.type";
 
 export interface ApiUserProfileChange {
@@ -26,7 +25,6 @@ export interface UserProfileReaderPort {
   getDetailByUsername: (username: string) => Promise<UserDetailDto>;
   getDetailByMobile: (mobile: string) => Promise<UserDetailDto>;
   getDetailByWxId: (wxId: string) => Promise<UserDetailDto>;
-  searchLegacyUsers: (query: UserQueryDto) => Promise<UserDto[]>;
 }
 
 export interface UserDelegationReaderPort {
@@ -69,7 +67,7 @@ export interface UserTransactionStorePort {
 }
 
 export interface UserDelegationQueryDeps {
-  profileQuery: Pick<UserProfileReaderPort, "searchLegacyUsers">;
+  userProfileSearch: Pick<UserProfileSearchPort, "searchLegacyUsers">;
   privilegeDelegationRepository: UserDelegationReaderPort;
 }
 
@@ -137,12 +135,13 @@ export type UserUnitOfWorkPort = UnitOfWorkPort<UserTransactionPorts>;
 export interface UserServiceDeps {
   userRepository: UserStorePort;
   mobileService: UserMobileVerificationPort;
-  profileQuery: UserProfileReaderPort;
-  userDelegationQuery: {
-    searchUsersWithDelegations: (
-      query: UserQueryWithPrivilegeDelegationDto,
-    ) => Promise<UserSearchWithDelegationsResult>;
-  };
+  profileQuery: Pick<
+    UserProfileReaderPort,
+    | "getDetailByUserId"
+    | "getDetailByUsername"
+    | "getDetailByMobile"
+    | "getDetailByWxId"
+  >;
   mobileBinding: {
     assertCanBindMobile: (
       userId: number,

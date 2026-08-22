@@ -10,6 +10,7 @@
     "./query/repository": "./src/user-profile-query.repository.ts",
     "./subject-access-transition": "./src/subject-access-transition.repository.ts",
     "./subject-facts": "./src/subject-facts.ts",
+    "./v3": "./src/v3.ts",
     "./worker": "./src/worker.ts"
   },
   "scripts": {

@@ -80,6 +80,7 @@ describe("complete Full-system E2E journey", () => {
       seedE2EScenario: async () => undefined,
       startHealthyInfrastructure: async () => undefined,
       startRepoRuntimes: async () => undefined,
+      verifyUserProfileReadiness: async () => undefined,
       verifyCanonicalOriginConfiguration: async () => undefined,
     };
 

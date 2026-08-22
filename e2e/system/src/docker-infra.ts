@@ -375,6 +375,36 @@ export function createDockerInfraOperations(
       );
     },
 
+    async verifyUserProfileReadiness(
+      descriptor: RunDescriptor,
+      signal?: AbortSignal,
+    ) {
+      for (const operation of ["verify-postgres", "verify-redis"] as const) {
+        const script = `user-profile:${operation}`;
+        const result = await options.captureCommand(
+          "docker",
+          composeArguments(options.composeFile, descriptor.project, [
+            "run",
+            "--rm",
+            "--no-deps",
+            "worker",
+            "bun",
+            "run",
+            script,
+            "--batch-size",
+            "100",
+          ]),
+          {
+            capture: { maxBytes: 64 * 1024, mode: "line-tail" },
+            cwd: options.repositoryRoot,
+            env: descriptorEnvironment(descriptor),
+            signal: signal ?? options.signal,
+          },
+        );
+        assertUserProfileGateOutput(operation, `${result.stdout}\n${result.stderr}`);
+      }
+    },
+
     async renderGatewayRoutes(descriptor: RunDescriptor, signal?: AbortSignal) {
       await options.runCommand(
         "docker",
@@ -520,6 +550,31 @@ export function createDockerInfraOperations(
 
     cleanupProject,
   };
+}
+
+function assertUserProfileGateOutput(
+  operation: "verify-postgres" | "verify-redis",
+  output: string,
+) {
+  const expectedGate = operation === "verify-postgres"
+    ? "postgres"
+    : "redis-access";
+  const passed = output.split(/\r?\n/u).some((line) => {
+    try {
+      const record = JSON.parse(line) as Record<string, unknown>;
+      return record.version === 3
+        && record.gate === expectedGate
+        && record.status === "passed";
+    }
+    catch {
+      return false;
+    }
+  });
+  if (!passed) {
+    throw new Error(
+      `User Profile ${expectedGate} gate did not report a passing v3 inventory`,
+    );
+  }
 }
 
 function boundCompleteLineTail(value: string, maxBytes: number) {

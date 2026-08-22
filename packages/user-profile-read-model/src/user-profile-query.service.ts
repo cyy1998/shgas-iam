@@ -1,12 +1,7 @@
 import type { UserProfileQueryRecord, UserProfileQueryRepositoryPort } from "./user-profile-query.port";
-import type { UserDetailDto, UserDto, UserQueryDto } from "./user-profile.schema";
+import type { UserDetailDto } from "./user-profile.schema";
 import { UserNotFoundError } from "@iam/domain/user";
 import { parseUserProfileDetailDocument } from "./profile.schema";
-import {
-  compileLegacyUserQueryToProfileFilter,
-  toUserDtoFromProfile,
-} from "./user-profile-query.helper";
-import { UserDtoSchema } from "./user-profile.schema";
 
 export interface UserProfileQueryServiceDeps {
   profileRepository: UserProfileQueryRepositoryPort;
@@ -29,18 +24,11 @@ export function createUserProfileQueryService(deps: UserProfileQueryServiceDeps)
     return parseProfileDetail(await deps.profileRepository.getCurrentByWxId(wxId));
   }
 
-  async function searchLegacyUsers(query: UserQueryDto): Promise<UserDto[]> {
-    const filter = compileLegacyUserQueryToProfileFilter(query);
-    const profiles = await deps.profileRepository.searchCurrentVisibleProfiles({ filter });
-    return profiles.map(profile => UserDtoSchema.parse(toUserDtoFromProfile(profile)));
-  }
-
   return {
     getDetailByUserId,
     getDetailByUsername,
     getDetailByMobile,
     getDetailByWxId,
-    searchLegacyUsers,
   };
 }
 

@@ -27,7 +27,7 @@ import {
 } from "@api/services/sso/custom-sso-subject-delivery-request-scope";
 import { createCustomSsoTrafficGate } from "@api/services/sso/custom-sso-traffic-gate";
 import { createSsoRedirectUrlValidator } from "@api/services/sso/redirect-url.validator";
-import { createUserDelegationQuery } from "@api/services/user/user-delegation-query.helper";
+import { createV3UserProfileSearchAdapter } from "@api/services/user-profile-search/user-profile-search-v3.adapter";
 import { createUserMobileBinding } from "@api/services/user/user-mobile-binding.helper";
 import { createUserPasswordHelper } from "@api/services/user/user-password.helper";
 import { createUserService } from "@api/services/user/user.service";
@@ -63,6 +63,11 @@ import { createSubjectAccessTransitionRepository } from "@iam/user-profile-read-
 import {
   createSubjectFactsLoggerObservability,
 } from "@iam/user-profile-read-model/subject-facts";
+import {
+  createV3UserProfileQueryRepository,
+  createV3UserProfileQueryService,
+} from "@iam/user-profile-read-model/v3";
+import { createApiUserProfileSearch } from "./user-profile-search";
 
 type ApiUnitOfWork = ReturnType<typeof createApiUnitOfWork>;
 
@@ -195,9 +200,16 @@ export function createApiServices(options: CreateApiServicesOptions) {
       options.userProfileQueryDb,
     ),
   });
-
-  const userDelegationQuery = createUserDelegationQuery({
-    profileQuery: userProfileQuery,
+  const canonicalUserProfileSearch = createV3UserProfileSearchAdapter(
+    createV3UserProfileQueryService({
+      profileRepository: createV3UserProfileQueryRepository(
+        options.userProfileQueryDb,
+      ),
+    }),
+  );
+  const { userDelegationQuery, userProfileSearch } = createApiUserProfileSearch({
+    dslSearch: canonicalUserProfileSearch,
+    legacySearch: canonicalUserProfileSearch,
     privilegeDelegationRepository: repositories.privilegeDelegation,
   });
 
@@ -214,7 +226,6 @@ export function createApiServices(options: CreateApiServicesOptions) {
     userRepository: repositories.user,
     mobileService,
     profileQuery: userProfileQuery,
-    userDelegationQuery,
     mobileBinding: userMobileBinding,
     passwordHelper: userPasswordHelper,
     sessionRevocation: {
@@ -318,8 +329,10 @@ export function createApiServices(options: CreateApiServicesOptions) {
     subjectAccess,
     subjectAccessLifecycle,
     user: userService,
+    userDelegationQuery,
     userPassword: userPasswordHelper,
     userProfileQuery,
+    userProfileSearch,
     internalUserProfileQuery,
   };
 }

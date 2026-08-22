@@ -17,7 +17,7 @@ import {
 
 const now = new Date("2026-08-20T12:00:00.000Z");
 
-describe("User Profile V2 builder", () => {
+describe("User Profile v3 builder", () => {
   test("publishes one canonical responsibility snapshot across Detail, Search, and Subject Facts", async () => {
     const dataset = createDataset();
     const loadByUserIds = mock(async () => dataset);
@@ -68,13 +68,22 @@ describe("User Profile V2 builder", () => {
       },
     ];
     expect(profile).not.toBeNull();
-    expect(profile?.profileSchemaVersion).toBe(2);
+    expect(profile?.profileSchemaVersion).toBe(3);
     expect(profile?.detail.employments.map(item => item.responsibilities)).toEqual([
       expectedResponsibilities,
       [],
     ]);
     expect(profile?.searchDoc.employments.map(item => item.responsibilities)).toEqual([
-      expectedResponsibilities,
+      expectedResponsibilities.map(responsibility => ({
+        ...responsibility,
+        targetOrganization: {
+          ...responsibility.targetOrganization,
+          path: responsibility.targetOrganization.path.map((node, index, path) => ({
+            ...node,
+            distanceToTarget: path.length - index - 1,
+          })),
+        },
+      })),
       [],
     ]);
     expect(profile?.subjectFacts.employments.map(item => item.responsibilities)).toEqual([
@@ -120,7 +129,7 @@ describe("User Profile V2 builder", () => {
       .toBeInstanceOf(Error);
   });
 
-  test("strictly parses a persisted V2 Detail without losing responsibilities", async () => {
+  test("strictly parses a persisted v3 Detail without losing responsibilities", async () => {
     const builder = createProfileBuilder({
       buildRepository: { loadByUserIds: async () => createDataset() },
       clock: { nowDate: () => now },

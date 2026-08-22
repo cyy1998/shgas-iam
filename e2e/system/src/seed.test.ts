@@ -32,13 +32,22 @@ describe("E2E scenario seed", () => {
       canonicalOrigin: "http://127.0.0.1:43123",
       adminSubjectIdentifier: "3b766c91-1daa-4c09-89e4-ea87ad123456",
       adminUsername: "e2e-admin-123000000-a1b2c3d4",
+      delegateeSubjectIdentifier: "3b766c91-1daa-4c09-89e4-ea87ad123456",
+      delegateeUsername: "e2e-delegatee-123000000-a1b2c3d4",
+      pausedSubjectIdentifier: "3b766c91-1daa-4c09-89e4-ea87ad123456",
+      pausedUsername: "e2e-paused-123000000-a1b2c3d4",
+      disabledSubjectIdentifier: "3b766c91-1daa-4c09-89e4-ea87ad123456",
+      disabledUsername: "e2e-disabled-123000000-a1b2c3d4",
       organizationCode: "e2e-org-123000000-a1b2c3d4",
+      responsibilityHolderOrganizationCode:
+        "e2e-holder-org-123000000-a1b2c3d4",
       responsibilityTargetOrganizationCode:
         "e2e-resp-target-123000000-a1b2c3d4",
       positionCode: "e2e-pos-123000000-a1b2c3d4",
       responsibilityHolderPositionCode:
         "e2e-resp-pos-123000000-a1b2c3d4",
       adminRoleCode: "e2e-role-123000000-a1b2c3d4",
+      adminPrivilegeCode: "e2e-privilege-123000000-a1b2c3d4",
       adminClientCode: "e2e-admin-123000000-a1b2c3d4",
       adminRedirectUri: "http://127.0.0.1:43123/iam-admin/*",
       customSsoClientCode: "e2e-custom-123000000-a1b2c3d4",
@@ -125,6 +134,11 @@ function completeReadBack(references: E2EScenarioReferences) {
       subjectIdentifier: references.adminSubjectIdentifier,
       username: references.adminUsername,
     },
+    delegatee: {
+      active: true,
+      subjectIdentifier: references.delegateeSubjectIdentifier,
+      username: references.delegateeUsername,
+    },
     adminClient: {
       active: true,
       customSsoEnabled: true,
@@ -150,6 +164,10 @@ function completeReadBack(references: E2EScenarioReferences) {
       clientCode: "e2e-internal-123000000-a1b2c3d4",
     },
     organization: { active: true, code: references.organizationCode },
+    responsibilityHolderOrganization: {
+      active: true,
+      code: references.responsibilityHolderOrganizationCode,
+    },
     responsibilityTargetOrganization: {
       active: true,
       code: "e2e-resp-target-123000000-a1b2c3d4",
@@ -168,7 +186,10 @@ function completeReadBack(references: E2EScenarioReferences) {
       subjectIdentifier: references.adminSubjectIdentifier,
       sourceDirtyVersion: "1",
       profileUsername: references.adminUsername,
-      organizationCodes: [references.organizationCode],
+      organizationCodes: [
+        references.organizationCode,
+        references.responsibilityHolderOrganizationCode,
+      ],
       positionCodes: [
         references.positionCode,
         "e2e-resp-pos-123000000-a1b2c3d4",
@@ -180,5 +201,6 @@ function completeReadBack(references: E2EScenarioReferences) {
     },
     subjectProfileReady: true,
     subjectProfileVersion: "1",
+    subjectProfileSchemaVersion: 3,
   };
 }

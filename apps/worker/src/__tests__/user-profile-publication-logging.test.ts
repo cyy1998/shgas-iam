@@ -3,6 +3,9 @@ import { Writable } from "node:stream";
 import { buildLoggerOptions, LoggerSourceApp } from "@iam/api-core/logger";
 import { UserProfileDirtyReason, UserStatus } from "@iam/contracts";
 import {
+  createSubjectFactsCacheRecord,
+} from "@iam/user-profile-read-model";
+import {
   createUserProfileJobProcessor,
   createUserProfileRebuildProcessor,
 } from "@iam/user-profile-read-model/worker";
@@ -45,7 +48,7 @@ describe("User Profile publication logging", () => {
           status: UserStatus.Enable,
           isDelete: false,
           searchVisible: true,
-          profileSchemaVersion: 2,
+          profileSchemaVersion: 3 as const,
           sourceDirtyVersion: "4",
           detail: {} as never,
           searchDoc: {} as never,
@@ -76,6 +79,7 @@ describe("User Profile publication logging", () => {
       publicationRepository: {
         publishCandidate: async () => ({ status: "published" }),
       },
+      createSubjectFactsRecord: createSubjectFactsCacheRecord,
       subjectFactsPublisher: {
         publish: async (record) => {
           rejectedRecord = record;

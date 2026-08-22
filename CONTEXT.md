@@ -8,6 +8,42 @@
 IAM 中关于一个用户的稳定档案视图，包括用户基础身份信息、任职、角色和权限。
 _Avoid_: session payload, protocol payload
 
+**User Profile Search**:
+IAM 以未删除的当前 User Profile 为唯一结果根，按照用户自身及明确纳入搜索词汇的当前关联事实筛选用户，并按内部 user ID 稳定排序返回完整 User Profile Detail；Search Document 与 Filter DSL 不公开 numeric ID，不表示响应 Detail 需要删除既有 ID。Internal 与 Public 搜索观察相同的用户集合，不隐式排除 Pause 或 Disable 状态，调用方可以通过公开的 status 路径显式筛选。任职、组织责任、角色等只作为筛选作用域，不改变结果类型。任职条件只观察 Effective Employment，Privilege Delegation 不进入搜索档案或过滤作用域；本能力不承担历史任职、历史任命或其他实体的通用查询。
+_Avoid_: generic entity query, historical profile search, arbitrary data graph query
+
+**User Profile Search Document**:
+随 User Profile 一起发布并带版本的当前搜索事实快照；公开结构包含 User 的 subjectIdentifier、username、name、mobile、wxId、userType、status，以及 Effective Employment 的 isPrimary、Organization、Position、Role code、Privilege code 和 Organization Responsibility。Organization 公开 code、name、type 与 Organization Path，Position 公开 code 与 name；内部 numeric ID、任职时间字段和派生索引结构不进入该文档的公开搜索结构。
+_Avoid_: source-table view, historical employment document, internal index document
+
+**User Profile Search Path**:
+从 User Profile 根沿 User Profile Search Document 的公开结构到达可比较字段的类型化条件路径；Search Document 的公开类型结构是合法路径与通用操作符的唯一机器事实来源，普通标量产生 `eq`/`in`、标量数组产生 `containsAny`/`containsAll`、对象集合通过 `exists` 进入，标记为 Organization 的对象额外产生 `withinSubtreeOf`，不维护独立硬编码字段白名单。每个新增的公开可比较字段都会自动成为所有有效 Internal Client 共享的搜索条件。同一集合元素作用域内的条件必须由同一元素满足，独立作用域可以由不同元素满足；Subject Identifier 属于公开业务身份路径，内部 numeric ID、派生索引字段、未知路径、容器路径、源业务表路径和调用方任意指定的 JSON path 都不属于合法条件路径。
+_Avoid_: arbitrary JSON path, source-table path, client-specific search path
+
+**Legacy User Search Adapter**:
+既有 Internal 与 Public User Search 请求格式到 User Profile Filter DSL 的契约转换层；它保留原参数名称、参数组合规则和响应形状，但采用 User Profile Search 的统一事实、用户集合与执行边界。Internal `/search` 是待调用方迁移后通过独立变更删除的 deprecated 接口；Public `/search` 因不直接开放 Filter DSL 而继续作为正式 Public 契约，其内部转换不是对外弃用信号。
+_Avoid_: second search semantics, public Filter DSL endpoint, permanent internal compatibility endpoint
+
+**User Profile Search Cutover**:
+在维护窗口内把全局 User Profile schema 从 v2 单代原地替换为 v3 的协调发布边界；业务读取和源事实写入保持关闭，旧 v2 publisher 停止，唯一固定的 v3 publisher 通过既有 User Profile backfill 工作流重建全部 Profile，完整门禁通过后所有入口统一恢复并只接受 v3。调用方不能选择文档或 DSL 版本，运行时不保存并行代际、不双读或回退，硬切换后不保留旧 DSL 名称或兼容解释。
+_Avoid_: online shadow cutover, mixed-version search, caller-selected schema version, per-request version fallback
+
+**Organization Path**:
+从根 Organization 到目标 Organization 且包含目标自身的有序当前路径；每个公开节点包含 code、name、type 与 `distanceToTarget`，其中目标自身为 `0`、父级为 `1`。为查询或索引派生的平行数组和组合 key 不属于 Organization Path 的公开结构。
+_Avoid_: ancestorCodes, ancestorDepths, ancestorKeys, storage path encoding
+
+**User Profile Filter DSL**:
+User Profile Search 用于组合 User Profile Search Path 条件的非空类型化过滤表达式；JSON 节点统一为 `{ and: [...] }`、`{ or: [...] }`、`{ not: expression }`、`{ exists: { path, where } }` 或 `{ field, op, value }`，不兼容旧 `all`/`any`。它只决定用户是否匹配，不负责排序、分页或返回字段投影。集合条件使用带 `where` 的 `exists(path, where)` 建立元素作用域，内部字段路径相对于该作用域，并且不得把不同任职或其他不同关联事实拼成一个虚构事实；当前词汇不提供 null、空集合、字段缺失或无条件集合存在性查询。
+_Avoid_: generic query DSL, result projection DSL, flattened relation filter, `all`/`any` boolean vocabulary, null/empty/missing predicate
+
+**User Profile Search Condition**:
+User Profile Filter DSL 中对一个 User Profile Search Path 施加的类型化条件；标量 `eq`/`in` 使用规范事实的精确值，不做隐藏 trim、大小写转换或模糊匹配，标量数组使用 `containsAny`/`containsAll` 且查询值去重、非空。条件采用二值逻辑：null 上的原子条件为 false，`not` 对匹配结果取反，因此 `not (mobile eq X)` 包含 mobile 为 null 的用户。Organization 引用的 `withinSubtreeOf` 是“其 Organization Path 中存在给定 Organization code”的简化表达，包含给定 Organization 自身。
+_Avoid_: implicit normalization, fuzzy equality, empty membership condition, raw path containment
+
+**User Profile Search Budget**:
+保护统一 User Profile Search 的契约资源边界：Filter DSL 最大深度为 8、最多 64 个节点、每个 `and`/`or` 最多 16 个子表达式、每个 `in`/`contains` 最多 50 个去重值、字符串值最长 128；结果最多 500 个 User Profile，并保留数据库查询与请求级超时保护。非法、空或超预算过滤器以及超过结果上限都整体返回 422；无匹配返回 200 空数组，Profile 不可用、文档损坏或查询超时返回 503，任何情况都不截断或返回部分结果。
+_Avoid_: unbounded filter, unbounded result set, caller-controlled query cost
+
 **Legacy User Detail Read Model**:
 `user_profile.detail` 中面向既有用户详情与搜索接口预计算的完整 `UserDetailDto` 文档；在这些接口迁移前它仍是被实际使用的读模型，而不是 Custom SSO 兼容字段。Client Subject Projection Module 的 Repository Port 不得暴露、查询或回退到该文档，只能读取 Subject Facts 所需的显式字段；待全部既有消费者迁移后再单独删除。
 _Avoid_: Subject Facts, SSO projection fallback, compatibility alias
@@ -17,7 +53,7 @@ _Avoid_: Subject Facts, SSO projection fallback, compatibility alias
 _Avoid_: protocol session row, client projection row, untyped profile blob
 
 **Subject Identifier**:
-IAM 身份域为一个用户持有的稳定 opaque 标识；登录协议可以将它映射到各自契约，但任何协议都不拥有该标识。
+IAM 身份域为一个用户持有的稳定 opaque 标识，也是 User Profile Search 的公开精确身份路径；登录协议可以将它映射到各自契约，但任何协议都不拥有该标识。
 _Avoid_: OIDC-owned subject, protocol session ID, username
 
 **Principal Reference**:

@@ -22,7 +22,7 @@ import { createPostgresTestHarness } from "./postgres-test-harness";
 
 const at = new Date("2026-08-20T12:00:00.000Z");
 
-describe("User Profile V2 build repository", () => {
+describe("User Profile v3 build repository", () => {
   let harness: Awaited<ReturnType<typeof createPostgresTestHarness>>;
 
   beforeAll(async () => {

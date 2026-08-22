@@ -12,7 +12,7 @@ import { createPostgresTestHarness } from "./postgres-test-harness";
 const now = new Date("2026-08-20T12:00:00.000Z");
 const subjectIdentifier = "c188a58a-5f25-43ad-82c7-82b54ff972c5";
 
-describe("User Profile V2 PostgreSQL publication", () => {
+describe("User Profile v3 PostgreSQL publication", () => {
   let harness: Awaited<ReturnType<typeof createPostgresTestHarness>>;
 
   beforeAll(async () => {
@@ -27,7 +27,7 @@ describe("User Profile V2 PostgreSQL publication", () => {
     await harness?.close();
   });
 
-  test("atomically publishes all V2 documents and processes the same Dirty Version", async () => {
+  test("atomically publishes all v3 documents and processes the same Dirty Version", async () => {
     await seedProcessingDirty("4");
     const publication = createProfilePublicationRepository(harness.db);
 
@@ -58,7 +58,7 @@ describe("User Profile V2 PostgreSQL publication", () => {
       WHERE p.user_id = 1
     `;
     expect(row).toEqual({
-      profileSchemaVersion: 2,
+      profileSchemaVersion: 3,
       sourceDirtyVersion: "4",
       detail: jsonDocument(profile("4").detail),
       searchDoc: jsonDocument(profile("4").searchDoc),
@@ -81,19 +81,19 @@ describe("User Profile V2 PostgreSQL publication", () => {
     `;
     await seedProcessingDirty("4");
     await harness.sql.unsafe(`
-      CREATE FUNCTION reject_v2_processed_dirty() RETURNS trigger AS $$
+      CREATE FUNCTION reject_v3_processed_dirty() RETURNS trigger AS $$
       BEGIN
         IF NEW.status = 'processed' THEN
-          RAISE EXCEPTION 'forced V2 dirty failure';
+          RAISE EXCEPTION 'forced v3 dirty failure';
         END IF;
         RETURN NEW;
       END;
       $$ LANGUAGE plpgsql
     `);
     await harness.sql.unsafe(`
-      CREATE TRIGGER reject_v2_processed_dirty_trigger
+      CREATE TRIGGER reject_v3_processed_dirty_trigger
       BEFORE UPDATE ON user_profile_dirty
-      FOR EACH ROW EXECUTE FUNCTION reject_v2_processed_dirty()
+      FOR EACH ROW EXECUTE FUNCTION reject_v3_processed_dirty()
     `);
 
     try {
@@ -127,8 +127,8 @@ describe("User Profile V2 PostgreSQL publication", () => {
       });
     }
     finally {
-      await harness.sql.unsafe("DROP TRIGGER reject_v2_processed_dirty_trigger ON user_profile_dirty");
-      await harness.sql.unsafe("DROP FUNCTION reject_v2_processed_dirty()");
+      await harness.sql.unsafe("DROP TRIGGER reject_v3_processed_dirty_trigger ON user_profile_dirty");
+      await harness.sql.unsafe("DROP FUNCTION reject_v3_processed_dirty()");
     }
   });
 
@@ -156,7 +156,7 @@ function profile(sourceDirtyVersion: string) {
     status: UserStatus.Enable,
     isDelete: false,
     searchVisible: true,
-    profileSchemaVersion: 2,
+    profileSchemaVersion: 3,
     sourceDirtyVersion,
     detail: {
       id: 1,
@@ -176,7 +176,7 @@ function profile(sourceDirtyVersion: string) {
     },
     searchDoc: {
       user: {
-        id: 1,
+        subjectIdentifier,
         username: "user1",
         name: "User 1",
         mobile: null,

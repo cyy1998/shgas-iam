@@ -5,7 +5,7 @@ import { createProfilePublicationService } from "../../src/profile-publication.s
 
 const processedAt = new Date("2026-08-20T12:00:00.000Z");
 
-describe("User Profile V2 publication service", () => {
+describe("User Profile v3 publication service", () => {
   test("keeps the committed PostgreSQL candidate when the post-commit cache write fails", async () => {
     let postgresCommitted = false;
     const publishCandidate = mock(async () => {
@@ -45,7 +45,7 @@ function profile(): PublishedProfile {
     status: UserStatus.Enable,
     isDelete: false,
     searchVisible: true,
-    profileSchemaVersion: 2,
+    profileSchemaVersion: 3,
     sourceDirtyVersion: "7",
     detail: {
       id: 1,
@@ -65,7 +65,7 @@ function profile(): PublishedProfile {
     },
     searchDoc: {
       user: {
-        id: 1,
+        subjectIdentifier: "5ee46272-9123-4ec3-9d8d-8a7a6ac7f888",
         username: "user1",
         name: "User 1",
         mobile: null,

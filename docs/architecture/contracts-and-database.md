@@ -34,13 +34,13 @@
   version-bound Subject Facts 构建、`user_profile` 与 dirty row 的 PostgreSQL atomic publication、提交后的
   Redis monotonic publisher，以及 `subject-facts` subpath 下的 Redis read-through、单主体 single-flight、
   PostgreSQL 窄行重载与 Dirty freshness 仲裁；调用方不复制 profile/facts projection、cache repair 或版本仲裁规则。
-- User Profile V2 通过 `@iam/user-profile-read-model` 默认入口暴露 schema、Redis publisher/cache、strict Subject Facts
-  read-through/freshness reader 与只读 query seam；builder/publication 只由 `worker` subpath 组装。Internal Detail 和 DSL Search 从
-  同一个 `user_profile` V2 row 返回严格 Detail，Search 编译器只查询已发布的 Search Document，不回查 source tables。
-  V2 Snapshot 子项复用 Client Subject Projection 的协议中性 contract，read-model 仍拥有 resolver 驱动的
-  Snapshot build。专用 Worker maintenance command 只通过 read-model `worker` subpath 使用 V2 batch backfill 与两项全量
-  gate；active Worker consumer、Internal User、Custom SSO 与 OIDC composition 只使用 V2，同一 live User 不得 V1/V2
-  混写、双读或建立版本选择。
+- User Profile v3 通过 `@iam/user-profile-read-model` 默认入口暴露 schema、Redis publisher/cache、strict Subject Facts
+  read-through/freshness reader 与只读 query seam；builder/publication 只由 `worker` subpath 组装。Internal Detail、canonical
+  Filter engine、Internal/Public legacy adapter 与 Delegation 基础搜索从同一个 `user_profile` v3 row 返回严格 Detail，Search
+  编译器只查询已发布的 Search Document，不回查 source tables。Responsibility Snapshot 子项复用 Client Subject Projection
+  的协议中性 contract，read-model 仍拥有 resolver 驱动的 Snapshot build。版本无关 Worker maintenance/readiness 命令复用
+  同一 dirty/job/publication 与两项全量 gate；active Worker consumer、Internal User、Custom SSO 与 OIDC composition 只使用
+  v3，同一 live User 不得混写、双读、fallback 或建立版本选择。Client Protocol V2 不随 Profile 命令推进。
 - App-private enum、schema 和 error 可以留在所属 app 内。
 
 ## Repositories 与 Transactions
@@ -81,7 +81,7 @@
   之前验证全量 user/profile/dirty coverage、Subject Identifier 映射、schema/version 与 Subject Facts shape，失败时
   使用 `23514` 中止且不改变 staged schema。
 - `source_dirty_version` 的数据库 CHECK 只接受正 bigint；`subject_facts` 的数据库 CHECK 只约束为 JSON object，
-  strict V2 与顶层只允许 `employments` 由唯一 active Worker writer 和 read-side parser 在应用边界保证。数据库仍可
+  strict v3 与顶层只允许 `employments` 由唯一 active Worker writer 和 read-side parser 在应用边界保证。数据库仍可
   保留历史 V1 row 供迁移核验，但 active runtime 不双读、不 fallback。查询用 `search_doc` 保留现有 GIN，
   `subject_facts` 不建立 GIN。普通唯一索引需要在 maintenance
   freeze 中执行；显式 rollback 只回退本次收紧的唯一索引、四个 `NOT NULL` 与相关 CHECK。Drizzle-migrated database

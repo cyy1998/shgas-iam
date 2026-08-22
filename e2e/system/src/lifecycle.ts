@@ -51,6 +51,10 @@ export interface ExactProjectRuntimeLifecycle extends ExactProjectInfraLifecycle
     descriptor: RunDescriptor,
     signal?: AbortSignal,
   ) => Promise<unknown>;
+  verifyUserProfileReadiness: (
+    descriptor: RunDescriptor,
+    signal?: AbortSignal,
+  ) => Promise<unknown>;
   renderGatewayRoutes: (
     descriptor: RunDescriptor,
     signal?: AbortSignal,
@@ -134,6 +138,7 @@ async function runRuntimeLifecycle(
       await lifecycle.startRepoRuntimes(descriptor, signal);
       await lifecycle.verifyCanonicalOriginConfiguration(descriptor, signal);
       await lifecycle.seedE2EScenario(descriptor, signal);
+      await lifecycle.verifyUserProfileReadiness(descriptor, signal);
       await lifecycle.renderGatewayRoutes(descriptor, signal);
       await lifecycle.awaitGatewayRouteReadiness(descriptor, signal);
       await runJourney?.(descriptor, signal);

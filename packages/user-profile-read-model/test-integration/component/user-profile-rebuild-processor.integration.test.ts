@@ -1,5 +1,6 @@
 import { UserProfileDirtyReason, UserStatus } from "@iam/contracts";
 import { describe, expect, mock, test } from "bun:test";
+import { createSubjectFactsCacheRecord } from "../../src/profile-cache";
 import { USER_PROFILE_SCHEMA_VERSION } from "../../src/profile.schema";
 import { UserProfileEmploymentIntegrityError } from "../../src/user-profile-builder.service";
 import { createUserProfileRebuildProcessor } from "../../src/worker";
@@ -63,6 +64,7 @@ function createFixture(overrides: Record<string, unknown> = {}) {
     dirtyRepository,
     builder,
     publicationRepository,
+    createSubjectFactsRecord: createSubjectFactsCacheRecord,
     subjectFactsPublisher,
     subjectAccessRepair,
     logger,
@@ -84,6 +86,36 @@ function createFixture(overrides: Record<string, unknown> = {}) {
 }
 
 describe("UserProfileRebuildProcessor", () => {
+  test("publishes Facts at the profile rebuild time when processing completes later", async () => {
+    const completedAt = new Date("2026-07-25T10:00:01.000Z");
+    const nowDate = mock(() => completedAt);
+    let cachedRecord: { publishedAt?: string } | undefined;
+    const subjectFactsPublisher = {
+      publish: mock(async (record: { publishedAt?: string }) => {
+        cachedRecord = record;
+        return { status: "published" as const };
+      }),
+    };
+    const fixture = createFixture({
+      clock: { nowDate },
+      subjectFactsPublisher,
+    });
+
+    await fixture.processor.process({
+      userId: 1,
+      dirtyVersion: "4",
+      reason: UserProfileDirtyReason.UserUpdated,
+    });
+
+    expect(cachedRecord?.publishedAt).toBe(now.toISOString());
+    expect(fixture.observed.publication).toEqual({
+      userId: 1,
+      dirtyVersion: "4",
+      profile: builtProfile(),
+      processedAt: completedAt,
+    });
+  });
+
   test("publishes the committed candidate to the Subject-level cache", async () => {
     let cachedRecord: unknown;
     const subjectFactsPublisher = {
@@ -107,7 +139,7 @@ describe("UserProfileRebuildProcessor", () => {
       cacheStatus: "published",
     });
     expect(cachedRecord).toEqual({
-      schemaVersion: 2,
+      schemaVersion: 3,
       sourceDirtyVersion: "4",
       publishedAt: "2026-07-25T10:00:00.000Z",
       subjectIdentifier: "8af9666f-3e20-49ef-bd03-7ca7f5c51ed4",

@@ -2,6 +2,7 @@ import type { OrganizationService } from "@api/services/organization/organizatio
 import type {
   CustomSsoSubjectProjectionV2Dto,
 } from "@api/services/sso/custom-sso-subject.schema";
+import type { UserProfileSearchPort } from "@api/services/user-profile-search/user-profile-search.port";
 import type { UserService } from "@api/services/user/user.service";
 import type { PublicRouteHandler } from "./public.type";
 import {
@@ -23,10 +24,10 @@ export interface CreatePublicHandlersDeps {
     UserService,
     | "getActiveUserBySubjectIdentifier"
     | "getUserDetailById"
-    | "searchUsers"
     | "setMobile"
     | "setPassword"
   >;
+  userProfileSearch: Pick<UserProfileSearchPort, "searchLegacyUsers">;
   config: {
     projectionRetryAfterSeconds: number;
   };
@@ -84,7 +85,7 @@ export function createPublicHandlers(deps: CreatePublicHandlersDeps) {
 
   const usersSearch: PublicRouteHandler<"usersSearch"> = async (c) => {
     const userQueryDto = c.req.valid("json");
-    const data = await deps.userService.searchUsers(userQueryDto);
+    const data = await deps.userProfileSearch.searchLegacyUsers(userQueryDto);
     return c.json(resp.ok(data), HttpStatusCodes.OK);
   };
 

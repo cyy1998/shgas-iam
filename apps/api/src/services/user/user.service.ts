@@ -1,5 +1,5 @@
 import type { UserRequestOptions, UserServiceDeps } from "./user.port";
-import type { UserDetailDto, UserDto, UserQueryDto, UserQueryWithPrivilegeDelegationDto } from "./user.type";
+import type { UserDetailDto } from "./user.type";
 import { withApiRequestContext } from "@api/services/audit/audit.context";
 import {
   buildMobileBindSuccessAudit,
@@ -134,14 +134,6 @@ export function createUserService(deps: UserServiceDeps) {
     }
   }
 
-  async function searchUsers(userQueryDto: UserQueryDto): Promise<UserDto[]> {
-    return await deps.profileQuery.searchLegacyUsers(userQueryDto);
-  }
-
-  async function searchUsersWithPrivilegeDelegation(query: UserQueryWithPrivilegeDelegationDto) {
-    return await deps.userDelegationQuery.searchUsersWithDelegations(query);
-  }
-
   async function getUserDetailById(userId: number): Promise<UserDetailDto> {
     return await deps.profileQuery.getDetailByUserId(userId);
   }
@@ -168,8 +160,6 @@ export function createUserService(deps: UserServiceDeps) {
     getActiveUserByWxId,
     pauseEnabledUser,
     setMobile,
-    searchUsers,
-    searchUsersWithPrivilegeDelegation,
     getUserDetailById,
     getUserDetailByUsername,
     getUserDetailByMobile,

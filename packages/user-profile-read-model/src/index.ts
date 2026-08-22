@@ -3,7 +3,6 @@ export * from "./internal-user-query.port";
 export {
   createInternalUserProfileQueryRepository,
 } from "./internal-user-query.repository";
-export * from "./internal-user-query.schema";
 export {
   createInternalUserProfileQueryService,
 } from "./internal-user-query.service";

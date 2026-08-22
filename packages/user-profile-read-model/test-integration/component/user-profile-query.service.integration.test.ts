@@ -14,7 +14,6 @@ import { UserNotFoundError } from "@iam/domain/user";
 import { describe, expect, mock, test } from "bun:test";
 import { USER_PROFILE_SCHEMA_VERSION } from "../../src/profile.schema";
 import {
-  compileLegacyUserQueryToProfileFilter,
   createUserProfileQueryService,
 } from "../../src/query";
 import { createUserProfileQueryRepository } from "../../src/user-profile-query.repository";
@@ -164,7 +163,6 @@ describe("UserProfileQueryService", () => {
       getCurrentByUsername: mock(async () => currentProfile),
       getCurrentByMobile: mock(async () => currentProfile),
       getCurrentByWxId: mock(async () => currentProfile),
-      searchCurrentVisibleProfiles: mock(async () => [currentProfile]),
     } satisfies UserProfileQueryRepositoryPort;
     const service = createUserProfileQueryService({
       profileRepository: queryRepository,
@@ -192,16 +190,13 @@ describe("UserProfileQueryService", () => {
       employments: [employmentDetail()],
     });
     const jsonProfile = profile({ detail: jsonDetail as UserProfile["detail"] });
-    const searchCurrentVisibleProfiles = mock(async () => [jsonProfile]);
     const service = createUserProfileQueryService({
       profileRepository: {
         getCurrentByUserId: mock(async () => jsonProfile),
-        searchCurrentVisibleProfiles,
       } as any,
     });
 
     const detail = await service.getDetailByUserId(1);
-    const users = await service.searchLegacyUsers({ usernames: ["zhangsan"] });
 
     expect(detail).not.toHaveProperty("orcasId");
     expect(detail.createTime).toBeInstanceOf(Date);
@@ -209,10 +204,9 @@ describe("UserProfileQueryService", () => {
     expect(detail.employments[0]?.startTime).toBeInstanceOf(Date);
     expect(detail.employments[0]?.createTime).toBeInstanceOf(Date);
     expect(detail.employments[0]?.updateTime).toBeInstanceOf(Date);
-    expect(users[0]?.createTime).toBeInstanceOf(Date);
   });
 
-  test("rejects a V1-shaped Detail from legacy search without returning a partial user", async () => {
+  test("rejects a legacy-shaped Detail from the strict current reader", async () => {
     const { responsibilities: _responsibilities, ...v1Employment } = employmentDetail();
     const malformed = profile({
       detail: {
@@ -222,63 +216,12 @@ describe("UserProfileQueryService", () => {
     });
     const service = createUserProfileQueryService({
       profileRepository: {
-        searchCurrentVisibleProfiles: mock(async () => [malformed]),
+        getCurrentByUserId: mock(async () => malformed),
       } as any,
     });
 
-    await expect(service.searchLegacyUsers({ usernames: ["zhangsan"] })).rejects.toThrow();
-  });
-
-  test("compiles legacy employment filters into one nested employment filter", () => {
-    expect(compileLegacyUserQueryToProfileFilter({
-      positionCodes: ["P001"],
-      roleCodes: ["role:a"],
-      ancestorOrgCodes: ["SR"],
-      ancestorOrgDepths: [0, 2],
-    })).toEqual({
-      nested: "employments",
-      where: {
-        all: [
-          { field: "employment.position.code", op: "in", value: ["P001"] },
-          { field: "employment.roles", op: "containsAny", value: ["role:a"] },
-          { field: "employment.org.ancestorKeys", op: "containsAny", value: ["SR#0", "SR#2"] },
-        ],
-      },
-    });
-  });
-
-  test("compiles legacy name filters into exact user name matches", () => {
-    expect(compileLegacyUserQueryToProfileFilter({
-      names: ["张三", "李四"],
-    })).toEqual({
-      field: "user.name",
-      op: "in",
-      value: ["张三", "李四"],
-    });
-  });
-
-  test("combines legacy name and employment filters with top-level AND semantics", () => {
-    expect(compileLegacyUserQueryToProfileFilter({
-      names: ["张三"],
-      positionCodes: ["P001"],
-      roleCodes: ["role:a"],
-      ancestorOrgCodes: ["SR"],
-      ancestorOrgDepths: [0],
-    })).toEqual({
-      all: [
-        { field: "user.name", op: "in", value: ["张三"] },
-        {
-          nested: "employments",
-          where: {
-            all: [
-              { field: "employment.position.code", op: "in", value: ["P001"] },
-              { field: "employment.roles", op: "containsAny", value: ["role:a"] },
-              { field: "employment.org.ancestorKeys", op: "containsAny", value: ["SR#0"] },
-            ],
-          },
-        },
-      ],
-    });
+    const error = await service.getDetailByUserId(1).catch(error => error);
+    expect(error).toBeInstanceOf(Error);
   });
 
   test("validates dirty status and reason schemas used by profile DTOs", async () => {

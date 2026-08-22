@@ -2,6 +2,10 @@ import type { SubjectFactsCacheRecord } from "../../src/subject-facts";
 import type {
   SubjectFactsCacheRecordV1,
 } from "../../src/subject-facts-cache";
+import type {
+  SubjectFactsRedisClient,
+  SubjectFactsRedisInspectionClient,
+} from "../../src/subject-facts-redis-publisher.core";
 import { randomUUID } from "node:crypto";
 import process from "node:process";
 import { createSubjectAccessBootstrap } from "@iam/api-core/subject-access";
@@ -21,6 +25,11 @@ import {
 const TEST_REDIS_URL_ENV = "IAM_USER_PROFILE_TEST_REDIS_URL";
 
 export interface RedisTestScope {
+  readonly projectionRedis: {
+    readonly keyPrefix: string;
+    readonly publisher: SubjectFactsRedisClient;
+    readonly inspector: SubjectFactsRedisInspectionClient;
+  };
   readonly firstCache: ReturnType<typeof createLegacySubjectFactsRedisCache>;
   readonly secondCache: ReturnType<typeof createLegacySubjectFactsRedisCache>;
   readonly firstPublisher: Pick<ReturnType<typeof createLegacySubjectFactsRedisPublisher>, "publish">;
@@ -97,6 +106,11 @@ export async function createRedisTestHarness(): Promise<RedisTestHarness> {
           keyPrefix: subjectAccessKeyPrefix,
         }),
         profileInspector: createSubjectFactsRedisInspector(observerRedis, { keyPrefix }),
+        projectionRedis: {
+          keyPrefix,
+          publisher: firstRedis,
+          inspector: observerRedis,
+        },
         async readPublishedRecord(subjectIdentifier) {
           const stored = await observerRedis.get(`${keyPrefix}${subjectIdentifier}`);
           return stored === null

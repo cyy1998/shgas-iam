@@ -74,6 +74,7 @@ export async function createApiRoutes(options: CreateApiRoutesOptions): Promise<
     subjectDeliveryRequests:
       services.customSsoSubjectDeliveryRequests,
     userService: services.user,
+    userProfileSearch: services.userProfileSearch,
     config: {
       projectionRetryAfterSeconds:
         runtime.config.env.sso.projectionRetryAfterSeconds,
@@ -92,8 +93,9 @@ export async function createApiRoutes(options: CreateApiRoutesOptions): Promise<
 
   const userHandlers = createUserHandlers({
     registerPurveyorContact: useCases.registerPurveyorContact,
-    userService: services.user,
     internalUserProfileQuery: services.internalUserProfileQuery,
+    userDelegationQuery: services.userDelegationQuery,
+    userProfileSearch: services.userProfileSearch,
   });
 
   return {

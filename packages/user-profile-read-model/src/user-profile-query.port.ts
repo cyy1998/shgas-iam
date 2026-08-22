@@ -1,12 +1,5 @@
-import type { UserProfileFilterDsl } from "./user-profile.schema";
-
 export interface UserProfileQueryRecord {
   detail: unknown;
-}
-
-export interface UserProfileSearchInput {
-  filter?: UserProfileFilterDsl;
-  limit?: number;
 }
 
 export interface UserProfileQueryRepositoryPort {
@@ -14,5 +7,4 @@ export interface UserProfileQueryRepositoryPort {
   getCurrentByUsername: (username: string) => Promise<UserProfileQueryRecord | null>;
   getCurrentByMobile: (mobile: string) => Promise<UserProfileQueryRecord | null>;
   getCurrentByWxId: (wxId: string) => Promise<UserProfileQueryRecord | null>;
-  searchCurrentVisibleProfiles: (input?: UserProfileSearchInput) => Promise<UserProfileQueryRecord[]>;
 }

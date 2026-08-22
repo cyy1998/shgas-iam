@@ -12,7 +12,10 @@ export interface UserProfileBackfillCommandDeps {
 
 export async function runUserProfileBackfillCommand(deps: UserProfileBackfillCommandDeps) {
   const result = await deps.maintenance.backfillAllUsers({ batchSize: deps.config.batchSize });
-  deps.logger.info({ enqueued: result.enqueued }, "user profile backfill jobs enqueued");
+  deps.logger.info({
+    enqueued: result.enqueued,
+    readiness: "not-verified",
+  }, "user profile backfill jobs dispatched; run readiness gates after convergence");
   return result;
 }
 

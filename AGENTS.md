@@ -22,7 +22,19 @@
 - 跨文件、跨模块或高搜索噪声的只读代码调查优先使用项目级 `code_researcher`；事务一致性、并发、安全边界或证据冲突等
   复杂问题再升级到 `deep_researcher`。调用边界、返回契约和外置记忆规则见
   [docs/agents/code-investigation.md](docs/agents/code-investigation.md)。
+- Windows 环境默认使用 PowerShell 7（`pwsh`）执行命令；只有目标脚本明确要求时才切换到 Windows PowerShell 5.1、
+  `cmd.exe` 或其他 shell。
+- PowerShell 会把命令参数位置中未引用的 `@name` 解释为 splatting。向原生命令传递字面量 `@...` 时必须加引号，
+  例如使用 `gh issue edit <number> --repo cyy1998/shgas-iam --add-assignee '@me'`，不要传递裸 `@me`。
 - 在 PowerShell 中读取文本文件时显式指定 UTF-8 编码，例如 `Get-Content -Path "AGENTS.md" -Encoding utf8`，避免中文乱码。
+
+## Bun 测试硬约束
+
+- 数据库、Redis、HTTP、subprocess、readiness 等真实 I/O Promise 必须先用普通 `await` 完成，再做同步断言：
+  `const report = await gate.verify(...); expect(report).toMatchObject(...)`。
+- 禁止对真实 I/O 使用 `await expect(gate.verify(...)).resolves...`、`.rejects...` 或 async `toThrow`；Bun 1.3.14
+  可能在 async matcher 内重入 event loop，导致测试悬挂。失败路径先捕获 rejection，再同步断言错误。完整说明见
+  [Bun 异步断言](docs/architecture/testing-architecture.md#bun-异步断言)。
 
 ## Agent skills
 

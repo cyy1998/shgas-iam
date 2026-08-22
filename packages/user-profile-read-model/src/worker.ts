@@ -1,11 +1,10 @@
 export * from "./employment-cutover-verifier";
 export * from "./employment-cutover.repository";
-export * from "./profile-v2-backfill";
-export * from "./profile-v2-maintenance.repository";
-export * from "./profile-v2-postgres-gate";
-export * from "./profile-v2-redis-access-gate";
 export * from "./subject-access-authority.repository";
 export { createSubjectFactsRedisInspector } from "./subject-facts-redis";
+export * from "./user-profile-readiness";
+export * from "./user-profile-readiness.module";
+export * from "./user-profile-readiness.repository";
 export * from "./user-profile-rebuild.processor";
 export * from "./user-profile-worker-maintenance";
 export * from "./user-profile-worker.module";

@@ -7,15 +7,14 @@ import {
 } from "@iam/client-subject-projection";
 import { EmploymentDetailDtoSchema } from "@iam/domain/employment";
 import { UserDetailDtoSchema } from "@iam/domain/user";
-import {
-  UserProfileSearchDocSchema,
-  UserProfileSearchEmploymentDocSchema,
-} from "./profile-search.schema";
 import { PublishedProfileBaseSchema } from "./profile-storage.schema";
+import {
+  V3UserProfileSearchDocumentSchema,
+} from "./profile-v3-search.schema";
 import { SubjectFactsEmploymentSchema } from "./subject-facts-schema.core";
 import { reviveUserProfileDetailDates } from "./user-profile-detail-document";
 
-export const USER_PROFILE_SCHEMA_VERSION = 2;
+export const USER_PROFILE_SCHEMA_VERSION = 3;
 
 export const EmploymentResponsibilitySnapshotSchema
   = ClientEmploymentResponsibilitySnapshotSchema;
@@ -33,16 +32,8 @@ export const UserProfileDetailDocumentSchema = UserDetailDtoSchema.omit({
   employments: z.array(ProfileEmploymentDetailSchema),
 }).strict();
 
-export const UserProfileSearchEmploymentDocumentSchema
-  = UserProfileSearchEmploymentDocSchema.extend({
-    responsibilities: z.array(EmploymentResponsibilitySnapshotSchema),
-  }).strict();
-
-export const UserProfileSearchDocumentSchema = UserProfileSearchDocSchema.omit({
-  employments: true,
-}).extend({
-  employments: z.array(UserProfileSearchEmploymentDocumentSchema),
-}).strict();
+export const UserProfileSearchDocumentSchema
+  = V3UserProfileSearchDocumentSchema;
 
 export const ProfileSubjectFactsEmploymentSchema = SubjectFactsEmploymentSchema.extend({
   responsibilities: z.array(EmploymentResponsibilitySnapshotSchema),
