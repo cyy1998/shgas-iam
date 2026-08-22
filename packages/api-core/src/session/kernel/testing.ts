@@ -1,12 +1,20 @@
 import type { SessionKernelArtifactConsumer } from "./artifact-consumption";
 import type { SessionKernelDependencies } from "./facade";
-import type { SessionKernelRedis } from "./store";
+import type {
+  SessionKernelRedis,
+  SessionKernelRevocationTransitions,
+} from "./store";
 import { createInMemorySessionKernelArtifactConsumer } from "./artifact-consumption";
 import { createSessionKernelWithStateAdapterFactories } from "./facade";
+import { createInMemorySessionKernelRevocationTransitions } from "./revocation-transitions";
 
 const consumersByRedis = new WeakMap<
   SessionKernelRedis,
   Map<string, SessionKernelArtifactConsumer>
+>();
+const revocationTransitionsByRedis = new WeakMap<
+  SessionKernelRedis,
+  Map<string, SessionKernelRevocationTransitions>
 >();
 
 export function createSessionKernelForTesting(
@@ -30,5 +38,20 @@ export function createSessionKernelForTesting(
       return consumer;
     },
     () => undefined,
+    ({ redis, keys }) => {
+      let transitionsByNamespace = revocationTransitionsByRedis.get(redis);
+      if (!transitionsByNamespace) {
+        transitionsByNamespace = new Map();
+        revocationTransitionsByRedis.set(redis, transitionsByNamespace);
+      }
+
+      const existing = transitionsByNamespace.get(keys.namespace);
+      if (existing)
+        return existing;
+
+      const transitions = createInMemorySessionKernelRevocationTransitions(redis);
+      transitionsByNamespace.set(keys.namespace, transitions);
+      return transitions;
+    },
   );
 }

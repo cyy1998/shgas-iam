@@ -72,7 +72,7 @@ export const adminClients = [
     customSsoConfig: {
       mode: CustomSsoClientMode.Gateway,
       validRedirectUrls: ['http://localhost:8001/iam-admin/*'],
-      subjectClaimCatalogVersion: 1,
+      subjectClaimCatalogVersion: 2,
       subjectClaims: [
         SubjectClaim.SubjectIdentifier,
         SubjectClaim.ProfileUsername,

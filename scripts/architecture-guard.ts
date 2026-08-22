@@ -51,6 +51,7 @@ const protectedSourceRoots = [
   "apps/oidc-provider/src",
   "apps/worker/src",
   "packages/client-subject-projection/src",
+  "packages/organization-responsibility-resolution/src",
   "packages/role-assignment-resolution/src",
   "packages/user-profile-read-model/src",
 ] as const;
@@ -72,6 +73,7 @@ const excludedSourceDirectories = new Set([
 
 const architectureWorkspaceRoots = new Map([
   ["@iam/client-subject-projection", "packages/client-subject-projection"],
+  ["@iam/organization-responsibility-resolution", "packages/organization-responsibility-resolution"],
   ["@iam/role-assignment-resolution", "packages/role-assignment-resolution"],
   ["@iam/user-profile-read-model", "packages/user-profile-read-model"],
 ]);
@@ -104,6 +106,7 @@ const canonicalStaticSourceRoots = new Map([
   ["@iam/domain", "packages/domain/src"],
   ["@iam/gateway-apisix", "gateway/src"],
   ["@iam/oidc-provider", "apps/oidc-provider/src"],
+  ["@iam/organization-responsibility-resolution", "packages/organization-responsibility-resolution/src"],
   ["@iam/sso", "apps/sso/src"],
   ["@iam/user-profile-read-model", "packages/user-profile-read-model/src"],
   ["@iam/worker", "apps/worker/src"],

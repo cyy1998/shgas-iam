@@ -10,7 +10,7 @@ import {
   users,
 } from "@iam/db/schema";
 import { eq } from "drizzle-orm";
-import { SubjectFactsCacheRecordV1Schema } from "./subject-facts-cache";
+import { SubjectFactsCacheRecordSchema } from "./profile-cache";
 
 export interface CreateSubjectAccessAuthorityRepositoryOptions {
   readonly db: DbClient;
@@ -65,7 +65,7 @@ export function createSubjectAccessAuthorityRepository(
         };
       }
 
-      const record = SubjectFactsCacheRecordV1Schema.safeParse({
+      const record = SubjectFactsCacheRecordSchema.safeParse({
         schemaVersion: row.profileSchemaVersion,
         sourceDirtyVersion: row.sourceDirtyVersion,
         publishedAt: row.rebuiltAt?.toISOString(),

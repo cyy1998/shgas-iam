@@ -1,12 +1,19 @@
 import { PrivilegeDelegationDtoSchema } from "@api/services/privilege/privilegeDelegation.schema";
-import { UserDetailDtoSchema, UserDtoSchema, UserQueryDtoSchema, UserQueryWithPrivilegeDelegationDtoSchema } from "@api/services/user/user.schema";
+import { UserDtoSchema, UserQueryDtoSchema, UserQueryWithPrivilegeDelegationDtoSchema } from "@api/services/user/user.schema";
 import { createRoute, z } from "@hono/zod-openapi";
 import * as HttpStatusCodes from "@iam/api-core/core/http-status-codes";
 import { commonErrorResponses } from "@iam/api-core/core/openapi/helpers/common-error-responses";
 import jsonContent from "@iam/api-core/core/openapi/helpers/json-content";
 import jsonContentRequired from "@iam/api-core/core/openapi/helpers/json-content-required";
 import createSuccessResponseSchema from "@iam/api-core/core/openapi/schemas/create-success-schema";
-import { createUserProfileDslSearchRequestSchema } from "@iam/user-profile-read-model/query";
+import {
+  StandardErrorResponseSchema,
+  ValidationFailureResponseSchema,
+} from "@iam/api-core/core/openapi/schemas/error-response-schema";
+import {
+  InternalUserProfileSearchRequestSchema,
+  UserProfileDetailDocumentSchema,
+} from "@iam/user-profile-read-model";
 
 const tags = ["Internal/User"];
 
@@ -21,7 +28,14 @@ export const userInfo = createRoute({
   },
   responses: {
     ...commonErrorResponses,
-    [HttpStatusCodes.OK]: jsonContent(createSuccessResponseSchema(UserDetailDtoSchema), "用户详细信息"),
+    [HttpStatusCodes.SERVICE_UNAVAILABLE]: jsonContent(
+      StandardErrorResponseSchema,
+      "用户详情暂时不可用",
+    ),
+    [HttpStatusCodes.OK]: jsonContent(
+      createSuccessResponseSchema(UserProfileDetailDocumentSchema),
+      "用户详细信息",
+    ),
   },
 });
 
@@ -56,24 +70,32 @@ export const usersSearchWithPrivilegeDelegation = createRoute({
   },
 });
 
-export function createUsersSearchDslRoute(dslMaxLimit: number) {
-  return createRoute({
-    method: "post",
-    path: "/search-dsl",
-    tags,
-    request: {
-      body: jsonContentRequired(createUserProfileDslSearchRequestSchema(dslMaxLimit), "用户 profile DSL 搜索条件"),
-    },
-    responses: {
-      ...commonErrorResponses,
-      [HttpStatusCodes.OK]: jsonContent(createSuccessResponseSchema(
-        z.array(UserDetailDtoSchema),
-      ), "用户 profile DSL 搜索结果"),
-    },
-  });
-}
-
-export const usersSearchDsl = createUsersSearchDslRoute(500);
+export const usersSearchDsl = createRoute({
+  method: "post",
+  path: "/search-dsl",
+  tags,
+  request: {
+    body: jsonContentRequired(
+      InternalUserProfileSearchRequestSchema,
+      "用户责任 DSL 搜索条件",
+    ),
+  },
+  responses: {
+    ...commonErrorResponses,
+    [HttpStatusCodes.UNPROCESSABLE_ENTITY]: jsonContent(
+      z.union([ValidationFailureResponseSchema, StandardErrorResponseSchema]),
+      "DSL 校验失败或搜索结果超过固定上限",
+    ),
+    [HttpStatusCodes.SERVICE_UNAVAILABLE]: jsonContent(
+      StandardErrorResponseSchema,
+      "用户搜索暂时不可用",
+    ),
+    [HttpStatusCodes.OK]: jsonContent(
+      createSuccessResponseSchema(z.array(UserProfileDetailDocumentSchema)),
+      "用户责任 DSL 搜索结果",
+    ),
+  },
+});
 
 export const contactRegister = createRoute({
   method: "post",

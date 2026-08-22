@@ -5,8 +5,7 @@ import type {
 } from "@iam/contracts";
 import type { db as database } from "@iam/db";
 import type { BullMqRedisConfig, CreateJobQueueInput, CreateJobWorkerInput, JobQueue } from "@iam/jobs";
-import type { SubjectFactsRedisClient } from "./subject-facts-redis.publisher";
-import type { SubjectProjectionCutoverBackfill } from "./subject-projection-cutover-backfill";
+import type { SubjectFactsRedisClient } from "./subject-facts-redis-publisher.core";
 import type { SubjectAccessRepairPort } from "./user-profile-rebuild.processor";
 import type { UserProfileWorkerMaintenance } from "./user-profile-worker-maintenance";
 import {
@@ -15,20 +14,38 @@ import {
   UserProfileJobName as UserProfileJobNameValue,
 } from "@iam/contracts";
 import { createJobQueue, createJobWorker } from "@iam/jobs";
+import { createOrganizationResponsibilityResolver } from "@iam/organization-responsibility-resolution";
 import { createRoleAssignmentResolver } from "@iam/role-assignment-resolution";
 import { createUserProfileDirtyRepository } from "./dirty.repository";
-import { createSubjectFactsRedisPublisher } from "./subject-facts-redis.publisher";
-import { createSubjectProjectionCutoverBackfill } from "./subject-projection-cutover-backfill";
-import { createSubjectProjectionCutoverRepository } from "./subject-projection-cutover.repository";
-import { createUserProfileBuildRepository } from "./user-profile-build.repository";
-import { createUserProfileBuilder } from "./user-profile-builder.service";
+import { createProfileBuildRepository } from "./profile-build.repository";
+import { createProfileBuilder } from "./profile-builder.service";
+import { createProfilePublicationRepository } from "./profile-publication.repository";
+import { createProfileV2MaintenanceWithResolvers } from "./profile-v2-maintenance";
+import { createSubjectFactsRedisPublisher } from "./subject-facts-redis";
 import { createUserProfileJobProducer } from "./user-profile-job.producer";
 import { createUserProfileMaintenanceRepository } from "./user-profile-maintenance.repository";
-import { createUserProfilePublicationRepository } from "./user-profile-publication.repository";
 import { createUserProfileRebuildProcessor } from "./user-profile-rebuild.processor";
 import { createUserProfileWorkerMaintenance } from "./user-profile-worker-maintenance";
 
 export const USER_PROFILE_WORKER_MODULE_KEY = "user-profile";
+
+export function createProfileV2Maintenance(input: {
+  db: typeof database;
+  subjectFactsRedis: import("./subject-facts-redis-publisher.core").SubjectFactsRedisClient
+    & import("./subject-facts-redis-publisher.core").SubjectFactsRedisInspectionClient;
+  subjectAccessBootstrap: Pick<SubjectAccessBootstrap, "inspectMany" | "seedMany">;
+  clock: { nowDate: () => Date };
+  config: { buildBatchSize: number };
+}) {
+  return createProfileV2MaintenanceWithResolvers({
+    ...input,
+    config: {
+      ...input.config,
+      createRoleAssignmentResolver,
+      createResponsibilityResolver: createOrganizationResponsibilityResolver,
+    },
+  });
+}
 
 export interface UserProfileWorkerModuleLogger {
   info: (data: Record<string, unknown>, message: string) => void;
@@ -96,7 +113,6 @@ export interface CreateUserProfileWorkerModuleInput {
   redis: BullMqRedisConfig;
   subjectFactsRedis: SubjectFactsRedisClient;
   subjectAccessRepair: SubjectAccessRepairPort;
-  subjectAccessBootstrap: Pick<SubjectAccessBootstrap, "seedMany">;
   logger: UserProfileWorkerModuleLogger;
   clock: {
     nowDate: () => Date;
@@ -133,7 +149,6 @@ export interface UserProfileWorkerModule {
   key: typeof USER_PROFILE_WORKER_MODULE_KEY;
   queue: JobQueue<RebuildUserProfileJobPayload, unknown, UserProfileJobName>;
   maintenance: UserProfileWorkerMaintenance;
-  cutoverBackfill: SubjectProjectionCutoverBackfill;
   queueRegistrations: Array<{
     moduleKey: typeof USER_PROFILE_WORKER_MODULE_KEY;
     queueName: typeof USER_PROFILE_QUEUE_NAME;
@@ -145,12 +160,16 @@ export interface UserProfileWorkerModule {
 
 export function createUserProfileWorkerModule(input: CreateUserProfileWorkerModuleInput): UserProfileWorkerModule {
   const dirtyRepository = createUserProfileDirtyRepository(input.db);
-  const publicationRepository = createUserProfilePublicationRepository(input.db);
+  const publicationRepository = createProfilePublicationRepository(input.db);
   const subjectFactsPublisher = createSubjectFactsRedisPublisher(input.subjectFactsRedis);
   const roleAssignmentResolver = createRoleAssignmentResolver(input.db);
+  const responsibilityResolver = createOrganizationResponsibilityResolver(input.db);
   const maintenanceRepository = createUserProfileMaintenanceRepository(input.db);
-  const cutoverRepository = createSubjectProjectionCutoverRepository(input.db);
-  const buildRepository = createUserProfileBuildRepository(input.db, roleAssignmentResolver);
+  const buildRepository = createProfileBuildRepository(
+    input.db,
+    roleAssignmentResolver,
+    responsibilityResolver,
+  );
   const queue
     = (input.factories?.createQueue
       ?? createJobQueue<RebuildUserProfileJobPayload, unknown, UserProfileJobName>)({
@@ -158,7 +177,7 @@ export function createUserProfileWorkerModule(input: CreateUserProfileWorkerModu
       redis: input.redis,
     });
   const jobProducer = createUserProfileJobProducer(queue);
-  const builder = createUserProfileBuilder({
+  const builder = createProfileBuilder({
     buildRepository,
     clock: input.clock,
     config: {
@@ -186,13 +205,6 @@ export function createUserProfileWorkerModule(input: CreateUserProfileWorkerModu
     config: {
       backfillBatchSize: input.config.backfillBatchSize,
     },
-  });
-  const cutoverBackfill = createSubjectProjectionCutoverBackfill({
-    repository: cutoverRepository,
-    builder,
-    subjectFacts: subjectFactsPublisher,
-    subjectAccess: input.subjectAccessBootstrap,
-    clock: input.clock,
   });
   let worker: UserProfileWorkerHandle | undefined;
 
@@ -241,7 +253,6 @@ export function createUserProfileWorkerModule(input: CreateUserProfileWorkerModu
     key: USER_PROFILE_WORKER_MODULE_KEY,
     queue,
     maintenance,
-    cutoverBackfill,
     queueRegistrations: [{
       moduleKey: USER_PROFILE_WORKER_MODULE_KEY,
       queueName: USER_PROFILE_QUEUE_NAME,

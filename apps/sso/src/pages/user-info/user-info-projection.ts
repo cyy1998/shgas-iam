@@ -1,8 +1,8 @@
-import type { CustomSsoEmploymentV1 } from '@iam/client-subject-projection/custom-sso';
+import type { CustomSsoEmployment } from '@iam/client-subject-projection/custom-sso';
 import { OrganizationType } from '@iam/contracts';
 
 export function formatProjectionCompany(
-  employment: CustomSsoEmploymentV1,
+  employment: CustomSsoEmployment,
 ) {
   const companyNodes = employment.organization.path.filter(
     node => node.type === OrganizationType.Company,
@@ -11,7 +11,7 @@ export function formatProjectionCompany(
 }
 
 export function formatProjectionOrganizationPath(
-  employment: CustomSsoEmploymentV1,
+  employment: CustomSsoEmployment,
 ) {
   return (
     employment.organization.path.map(node => node.name).join(' / ')
@@ -21,7 +21,7 @@ export function formatProjectionOrganizationPath(
 }
 
 export function formatProjectionPosition(
-  employment: CustomSsoEmploymentV1,
+  employment: CustomSsoEmployment,
 ) {
   return `${employment.position.name} (${employment.position.code})`;
 }

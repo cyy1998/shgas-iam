@@ -1,5 +1,5 @@
-import { targetTypeLabels } from '@admin/pages/audit-logs/components/auditLogDisplay';
-import { buildConditions } from '@admin/pages/audit-logs/components/auditLogTable.helpers';
+import { targetTypeLabels } from '@admin/components/audit/auditLogDisplay';
+import { buildConditions } from '@admin/components/audit/auditLogTable.helpers';
 import { describe, expect, it } from 'vitest';
 
 describe('AuditLogTable buildConditions', () => {

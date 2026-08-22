@@ -26,6 +26,7 @@ import {
 import { createProviderSessionStateStore } from "../../src/session/provider-session-state.store.ts";
 import {
   pendingProviderSessionBindingKey,
+  pendingProviderSessionBindingsByClientKey,
   providerSessionBindingLookupKey,
   providerSessionGenerationMembersKey,
   providerSessionPrincipalAnchorKey,
@@ -60,7 +61,9 @@ describe("oIDC Provider Session real Redis contract", () => {
     const clientCode = testScope.unique("client");
     const firstAttemptId = testScope.unique("first-attempt");
     const firstPendingKey = pendingProviderSessionBindingKey(firstAttemptId);
+    const pendingIndexKey = pendingProviderSessionBindingsByClientKey(clientCode);
     testScope.trackKey(firstPendingKey);
+    testScope.trackKey(pendingIndexKey);
     const writerStore = createProviderSessionStateStore(asStateRedis(testScope.writer));
     const observerStore = createProviderSessionStateStore(asStateRedis(testScope.observer));
     const expiresAt = Math.floor(Date.now() / 1000) + 120;
@@ -87,6 +90,10 @@ describe("oIDC Provider Session real Redis contract", () => {
       principalSessionId: firstPrincipalSessionId,
       providerSessionUid: null,
     });
+    await expect(writerStore.inventoryClientStagedBindings(clientCode)).resolves.toMatchObject({
+      counts: { bindings: 1, invalid: 0, stale: 0, total: 1 },
+    });
+    expect(await testScope.observer.zcard(pendingIndexKey)).toBe(1);
 
     const firstClaims = await Promise.all([
       writerStore.claim({
@@ -105,6 +112,7 @@ describe("oIDC Provider Session real Redis contract", () => {
 
     expect(firstClaims.filter(Boolean)).toHaveLength(1);
     expect(await testScope.observer.exists(firstPendingKey)).toBe(0);
+    expect(await testScope.observer.zcard(pendingIndexKey)).toBe(0);
 
     const providerSessionUid = testScope.unique("provider-existing");
     const existingAttemptId = testScope.unique("existing-attempt");
@@ -187,6 +195,67 @@ describe("oIDC Provider Session real Redis contract", () => {
       providerSessionUid,
     });
     expect(await testScope.observer.exists(legacyPendingKey)).toBe(0);
+  });
+
+  it("does not let cleanup delete a staged binding replaced after its inventory snapshot", async () => {
+    const testScope = scope!;
+    const accountId = randomUUID();
+    const authorizationAttemptId = testScope.unique("attempt");
+    const clientCode = testScope.unique("client");
+    const pendingKey = pendingProviderSessionBindingKey(authorizationAttemptId);
+    const pendingIndexKey = pendingProviderSessionBindingsByClientKey(clientCode);
+    testScope.trackKey(pendingKey);
+    testScope.trackKey(pendingIndexKey);
+    const baseRedis = asStateRedis(testScope.writer);
+    const observerStore = createProviderSessionStateStore(asStateRedis(testScope.observer));
+    const expiresAt = Math.floor(Date.now() / 1000) + 120;
+    const originalPrincipalSessionId = testScope.unique("principal-original");
+    const replacementPrincipalSessionId = testScope.unique("principal-replacement");
+    await observerStore.stage({
+      accountId,
+      authorizationAttemptId,
+      authTime: 1_700_000_000,
+      clientCode,
+      expectedAnchorGeneration: null,
+      expiresAt,
+      oidcConfigVersion: 1,
+      principalSessionId: originalPrincipalSessionId,
+      providerSessionUid: null,
+    }, 60);
+    const cleanupRedis = new Proxy(baseRedis, {
+      get(target, property, receiver) {
+        if (property === "mget") {
+          return async (...keys: string[]) => {
+            const snapshot = await target.mget(...keys);
+            await observerStore.stage({
+              accountId,
+              authorizationAttemptId,
+              authTime: 1_700_000_001,
+              clientCode,
+              expectedAnchorGeneration: null,
+              expiresAt,
+              oidcConfigVersion: 1,
+              principalSessionId: replacementPrincipalSessionId,
+              providerSessionUid: null,
+            }, 60);
+            return snapshot;
+          };
+        }
+        const value = Reflect.get(target, property, receiver) as unknown;
+        return typeof value === "function" ? value.bind(target) : value;
+      },
+    });
+    const cleanupStore = createProviderSessionStateStore(cleanupRedis);
+
+    await expect(cleanupStore.revokeClientStagedBindings(clientCode)).rejects.toThrow(
+      "OIDC staged Provider Session binding inventory contains invalid records",
+    );
+    await expect(observerStore.readStaged(authorizationAttemptId)).resolves.toMatchObject({
+      principalSessionId: replacementPrincipalSessionId,
+    });
+    await expect(observerStore.inventoryClientStagedBindings(clientCode)).resolves.toMatchObject({
+      counts: { bindings: 1, invalid: 0, stale: 0, total: 1 },
+    });
   });
 
   it("publishes only minimal state, refreshes owned TTLs, and conditionally cleans its anchor", async () => {
@@ -489,8 +558,11 @@ describe("oIDC Provider Session real Redis contract", () => {
     let losePublicationResponse = true;
     const ambiguousRedis: ProviderSessionStateRedis = {
       get: key => delegate.get(key),
+      mget: (...keys) => delegate.mget(...keys),
       set: (key, value, ...args) => delegate.set(key, value, ...args),
       del: (...keys) => delegate.del(...keys),
+      zrangebyscore: (key, min, max) => delegate.zrangebyscore(key, min, max),
+      zremrangebyscore: (key, min, max) => delegate.zremrangebyscore(key, min, max),
       async eval(script, keyCount, ...args) {
         const result = await delegate.eval(script, keyCount, ...args);
         if (losePublicationResponse && script.includes("publish_provider_session_rebind")) {

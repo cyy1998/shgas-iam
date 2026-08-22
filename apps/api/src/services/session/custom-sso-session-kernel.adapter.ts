@@ -29,6 +29,9 @@ import {
   buildGatewayLoginSuccessAudit,
   buildIndependentLoginSuccessAudit,
 } from "@api/services/audit/events/auth.audit";
+import {
+  AUTHORIZATION_GRANT_REDEMPTION_CLEANUP_KIND,
+} from "@iam/api-core/authorization-grant";
 import { AuthzUnauthorizedError } from "@iam/api-core/errors/AuthzUnauthorizedError";
 import { CustomError } from "@iam/api-core/errors/CustomError";
 import { InvalidAuthCodeError } from "@iam/api-core/errors/InvalidAuthCodeError";
@@ -41,7 +44,7 @@ import {
 import {
   parseSubjectClaimSelection,
 } from "@iam/client-subject-projection";
-import { resolveCustomSsoSubjectProjectionV1 } from "@iam/client-subject-projection/custom-sso";
+import { resolveCustomSsoSubjectProjection } from "@iam/client-subject-projection/custom-sso";
 import {
   ClientStatus,
   CustomSsoClientMode,
@@ -105,7 +108,7 @@ type ValidatedCustomSsoCredentialContext
 type IndependentClientContext = {
   readonly clientCode: string;
   readonly configVersion: number;
-  readonly subjectClaimCatalogVersion: 1;
+  readonly subjectClaimCatalogVersion: 2;
   readonly subjectClaims: readonly SubjectClaimName[];
 };
 
@@ -123,7 +126,7 @@ type ResolvedIndependentAuthorizationGrant = {
 };
 
 const AuthCodeMetadataSchema = z.object({
-  version: z.literal(1),
+  version: z.literal(2),
   subjectIdentifier: z.uuid(),
   clientCode: z.string(),
   mode: z.enum(CustomSsoClientMode),
@@ -133,13 +136,13 @@ const AuthCodeMetadataSchema = z.object({
 }).strict();
 
 const IndependentCredentialMetadataSchema = z.object({
-  version: z.literal(1),
+  version: z.literal(2),
   mode: z.literal(CustomSsoClientMode.Independent),
   configVersion: z.number().int().nonnegative(),
 }).strict();
 
 const GatewayCredentialMetadataSchema = z.object({
-  version: z.literal(1),
+  version: z.literal(2),
   mode: z.literal(CustomSsoClientMode.Gateway),
   configVersion: z.number().int().nonnegative(),
   orcasId: z.string().min(1).optional(),
@@ -168,6 +171,7 @@ export interface CustomSsoSessionKernelAdapterDeps {
   userService: CustomSsoGatewayOrcasUserPort;
   auditLogWriter: ApiAuditLogWriter;
   clock: Pick<ClockPort, "now">;
+  random: { uuid: () => string };
   config: {
     authCodeExpireSeconds: number;
     localSessionTtlSeconds: number;
@@ -244,16 +248,23 @@ export function createCustomSsoSessionKernelAdapter(deps: CustomSsoSessionKernel
 
     await assertAuthorizationClientCurrent(input);
 
+    const artifactId = deps.random.uuid();
     const artifact = translateSubjectAccessResolveResult(
       await deps.kernel.createProtocolArtifact({
+        artifactId,
         principalSessionId: renewed.value.principalSessionId,
         protocol: CUSTOM_SSO_PROTOCOL,
         clientCode: input.clientCode,
         artifactType: AUTH_CODE_ARTIFACT_TYPE,
+        cleanupRefs: [{
+          protocol: CUSTOM_SSO_PROTOCOL,
+          kind: AUTHORIZATION_GRANT_REDEMPTION_CLEANUP_KIND,
+          ref: artifactId,
+        }],
         ttlMs: deps.config.authCodeExpireSeconds * 1000,
         tokenKind: "authCode",
         metadata: {
-          version: 1,
+          version: 2,
           subjectIdentifier: renewed.value.principal.subjectId,
           clientCode: input.clientCode,
           mode: input.mode,
@@ -368,7 +379,7 @@ export function createCustomSsoSessionKernelAdapter(deps: CustomSsoSessionKernel
     orcas?: CustomSsoOrcasContext | null;
   }): Promise<IssuedClientCredential> {
     const metadata = {
-      version: 1 as const,
+      version: 2 as const,
       mode: CustomSsoClientMode.Gateway,
       configVersion: input.client.configVersion,
     };
@@ -421,7 +432,7 @@ export function createCustomSsoSessionKernelAdapter(deps: CustomSsoSessionKernel
             catalogVersion: input.client.subjectClaimCatalogVersion,
             claims: [...input.client.subjectClaims],
           });
-          subject = await resolveCustomSsoSubjectProjectionV1(deps.subjectProjection, {
+          subject = await resolveCustomSsoSubjectProjection(deps.subjectProjection, {
             subjectIdentifier: authorizationGrant.subjectIdentifier,
             clientCode: input.client.clientCode,
             selection,
@@ -554,7 +565,7 @@ export function createCustomSsoSessionKernelAdapter(deps: CustomSsoSessionKernel
     principalSessionId: string;
   }) {
     const metadata = {
-      version: 1 as const,
+      version: 2 as const,
       mode: CustomSsoClientMode.Independent,
       configVersion: input.client.configVersion,
     };

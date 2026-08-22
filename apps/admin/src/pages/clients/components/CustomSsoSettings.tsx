@@ -1,5 +1,5 @@
 import {
-  buildCustomSsoPlaceholderPreviewV1,
+  buildCustomSsoPlaceholderPreview,
   CUSTOM_SSO_CLAIM_CATALOG,
 } from '@admin/pages/clients/customSsoCatalog';
 import {
@@ -14,7 +14,7 @@ import {
 import {
   CustomSsoClientMode,
   CustomSsoClientState,
-  SUBJECT_CLAIMS_V1,
+  SUBJECT_CLAIMS,
   SubjectClaim,
   type SubjectClaimName,
 } from '@iam/contracts';
@@ -191,7 +191,7 @@ export default function CustomSsoSettings({
               return;
             }
 
-            const orderedClaims = SUBJECT_CLAIMS_V1.filter((claim) =>
+            const orderedClaims = SUBJECT_CLAIMS.filter((claim) =>
               values.subjectClaims.includes(claim),
             );
             const common = {
@@ -199,7 +199,6 @@ export default function CustomSsoSettings({
               validRedirectUrls: normalizeClientSettingList(
                 values.validRedirectUrls,
               ),
-              subjectClaimCatalogVersion: 1 as const,
               subjectClaims: orderedClaims,
             };
             const data: ClientCustomSsoConfigureInput =
@@ -380,7 +379,7 @@ export default function CustomSsoSettings({
         </Typography.Paragraph>
         <pre data-testid="custom-sso-wire-preview">
           {JSON.stringify(
-            buildCustomSsoPlaceholderPreviewV1(subjectClaims),
+            buildCustomSsoPlaceholderPreview(subjectClaims),
             null,
             2,
           )}

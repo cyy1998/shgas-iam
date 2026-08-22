@@ -13,6 +13,8 @@
     "./employment/*": "./src/employment/*.ts",
     "./organization": "./src/organization/index.ts",
     "./organization/*": "./src/organization/*.ts",
+    "./organization-responsibility": "./src/organization-responsibility/index.ts",
+    "./organization-responsibility/*": "./src/organization-responsibility/*.ts",
     "./position": "./src/position/index.ts",
     "./position/*": "./src/position/*.ts",
     "./privilege": "./src/privilege/index.ts",

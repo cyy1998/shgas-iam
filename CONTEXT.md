@@ -28,6 +28,66 @@ _Avoid_: user snapshot, display user, database user reference
 共享 HTTP 认证中间件验证 Principal Session 或 Gateway Local Session 后产生的最小请求上下文，只包含 Subject Identifier、已验证的 client code，以及适用时独立保存的 ORCAS session 引用。它不包含 `UserDetailDto`、数据库用户主键、username 或 Client Subject Projection；需要内部账号字段的旧用例必须通过自己的 Account Resolver 按 Subject Identifier 获取。
 _Avoid_: request user detail, shared user DTO, protocol claim payload
 
+**Organization Responsibility Type**:
+IAM 封闭枚举中可被 Organization Responsibility Assignment 引用的一种组织责任类型；其 code、业务含义与 `assignmentCardinality` 永久稳定且不可复用，任一项需要改变时必须使用新的 Type，历史 Assignment 始终通过 code 解析当前名称和说明而不保存展示文本快照。Type 没有状态或生命周期，已发布成员永久保留并始终可用于新任命；它不表示具体任命或授予 Role、Privilege。
+_Avoid_: Organization Responsibility Definition, Organization Responsibility Assignment, Employment, Role Assignment
+
+**Organization Responsibility Type Catalog**:
+IAM 唯一拥有的封闭枚举目录，首版只包含 `head` 与 `supervising`，发布后只增不减；全部 Type 及其展示元数据和基数只随受控 IAM 发布演进，当前规范名称全局唯一，Admin 只读且外部来源不得覆盖。目录所有权本身就是来源事实，不为每个 Type 重复保存 source。
+_Avoid_: Admin-managed responsibility catalog, HR-synchronized definition catalog
+
+**Head Organization Responsibility**:
+code 为 `head`、`assignmentCardinality` 为 `single` 的内置 Organization Responsibility Type，表示目标 Organization 的负责人责任；它由通用 Type 与 Assignment 规则解释，不拥有专用运行逻辑。
+_Avoid_: Primary Employment, head role, organization administrator
+
+**Supervising Organization Responsibility**:
+code 为 `supervising`、`assignmentCardinality` 为 `multiple` 的内置 Organization Responsibility Type，规范中文名称为“分管领导”，表示目标 Organization 的分管领导责任；它由通用 Type 与 Assignment 规则解释，不拥有专用运行逻辑。
+_Avoid_: 分管负责人, Primary Employment, supervising role, organization administrator
+
+**Organization Responsibility Assignment**:
+一次 Employment 在明确业务有效期内，为某个 Organization Responsibility Type 承担目标 Organization 责任的持久事实；三项绑定创建后永久不可修改，目标 Organization 不受 Employment 所属组织或组织树位置限制。它具有稳定身份且保留结束后的生命周期记录，录错或调整绑定时结束旧 Assignment 并创建新 Assignment；它不表示任职、角色分配或授权。
+_Avoid_: Organization Responsibility Definition, Employment, Role Assignment, Effective Role
+
+**Organization Responsibility Assignment Authority**:
+一条 Organization Responsibility Assignment 的唯一权威事实来源，决定其创建和生命周期命令；首版只有 IAM Admin 命令面可以写入，HR、其他外部系统与 Internal reader 均只读。Employment、Organization 或 User 生命周期触发的系统级联仍执行同一 Authority 已声明的后果，并非第二来源；未来引入外部来源必须重新定义所有权，不能与 IAM 通过最后写入覆盖同一事实。
+_Avoid_: multi-source assignment authority, external assignment upsert, last-writer-wins responsibility
+
+**Organization Responsibility Period**:
+Organization Responsibility Assignment 的权威业务时间边界，采用 `[startTime, endTime)`；创建使用当前事务时刻，Open 期间 `endTime` 为空，只有 End 命令能以当前事务时刻写入该边界。管理员不能预约、回溯或直接设置、改写这些时间。
+_Avoid_: scheduled responsibility period, administrator-supplied responsibility dates, audit time
+
+**Organization Responsibility Assignment Lifecycle**:
+Organization Responsibility Assignment 创建时为 Enable，Open 期间可在 Enable 与 Pause 间显式切换，End 后进入不可恢复的 Disable 终态；已完成命令的重试不改写既有时间或历史。生命周期记录不物理删除，录入错误通过结束旧 Assignment 并创建新 Assignment 处理。
+_Avoid_: scheduled assignment, arbitrary status update, assignment deletion
+
+**Organization Responsibility Assignment History**:
+普通历史由 Assignment 的创建时间、结束时间及当前或最终状态表达，不保存可按任意历史时刻查询的 Pause/Resume 状态区间。每条直接或级联状态转换都以统一业务时刻、触发原因和目标写入该 Assignment 自身的审计记录；级联仍归因于发起业务事务的 IAM Admin，只有系统自主发起时 actor 才是 system，且只有 IAM Admin 可查看全部 Open 与 Ended 记录及其审计，Internal、User Profile 与协议投影只消费 Effective 事实。
+_Avoid_: bitemporal assignment history, retroactive responsibility reconstruction
+
+**Open Organization Responsibility Assignment**:
+尚未 End、状态为 Enable 或 Pause 的 Organization Responsibility Assignment；两种状态都占用所属 Type 的基数槽位，Pause 不释放槽位，也不允许同一持有关系以另一条 Open Assignment 重复占用。
+_Avoid_: effective responsibility, enabled assignment, available cardinality slot
+
+**Effective Organization Responsibility Assignment**:
+当前时刻处于 Organization Responsibility Period 内、状态为 Enable，且 holder Employment 与目标 Organization 均为 Enable、目标 Organization 未删除的 Assignment；祖先 Organization 的状态和删除标记不参与该判定，User 账号状态同样不参与。
+_Avoid_: Open Organization Responsibility Assignment, enabled user responsibility, Role Assignment
+
+**Employment Responsibility Snapshot**:
+面向 Internal、User Profile 与协议投影，表示一条 Effective Employment 当前承担的全部 Effective Organization Responsibility Assignment 的非授权档案事实。每项只使用当前 Organization Responsibility Type 的 code 与名称，以及目标 Organization 的 code、名称、类型和从根到目标的当前完整路径，不暴露 Assignment identity、生命周期或期间；没有责任时仍表达空集合，非 Effective Employment 不进入当前快照。
+_Avoid_: Organization Responsibility Assignment History, assignment administration detail, Role Assignment, Client Authorization Claim
+
+**Organization Responsibility Assignment Cardinality**:
+`single` 要求每个目标 Organization 与 Type 最多存在一条 Open Assignment；`multiple` 允许不同 Employment 并存，但同一目标 Organization、Type 与 Employment 最多存在一条 Open Assignment。同一 User 的不同 Employment 是不同持有关系。
+_Avoid_: enabled-only cardinality, per-user responsibility deduplication, duplicate holder assignment
+
+**Organization Responsibility Assignment Integrity**:
+Assignment 创建或 Resume 时必须引用 Enable Employment；任何 Open Assignment 都必须引用 Open Employment、自身为 Enable 且未删除的目标 Organization、满足所属 Type 的 Open 基数，且 holder Employment 为 Pause 时不能保持 Enable，目标 Organization 的祖先状态不参与完整性判定。Employment Pause 必须 Pause 其 Enable Assignment，Employment Resume 不自动恢复责任，Employment End、Transfer 或 User Resignation 必须 End 其全部 Open Assignment；当 Organization 自身或任意 descendant 是 Open Assignment 的目标时，该 Organization 不得 Pause、Disable 或 Delete，仅有 Enable descendant 不构成阻断，任何来源造成的规则不满足均是 Organization Responsibility Integrity Violation。
+_Avoid_: best-effort responsibility cleanup, orphan responsibility, dynamically resurrected responsibility
+
+**Organization Responsibility Integrity Violation**:
+Open Assignment 与其 Employment、目标 Organization 本身或 Type 基数不再满足完整性规则的数据异常；祖先 Organization 的状态或删除不属于该完整性条件。异常不是正常生命周期状态，也不产生 Effective Organization Responsibility Assignment；正常读写必须 fail closed 并报告异常，修复流程不得借读取隐式改写事实。
+_Avoid_: paused assignment, automatic read repair, effective orphan responsibility
+
 **Employment**:
 用户以某个 Position 在某个 Organization 持有的一次任职期事实；常规 Admin 管理不预约未来任职，也不回溯或改写任职期边界。暂停可在同一 Employment 上恢复，结束后不可重开；返聘、重新任职或转岗产生新 Employment，它只描述组织归属与岗位身份，不表示组织责任或直接授予角色与权限。
 _Avoid_: reusable employment slot, Organization Responsibility Assignment, Role Assignment
@@ -177,7 +237,7 @@ _Avoid_: open flow, public password helper
 _Avoid_: account disable, employment deletion, user deletion
 
 **User Deletion**:
-在用户已不存在任何 Open Employment 后软删除其 IAM 账号；暂停任职仍会阻止删除，已结束的 Employment 历史不会阻止。它不替代 User Resignation，也不是普通账号禁用。
+在用户已不存在任何 Open Employment 后软删除其 IAM 账号；暂停任职仍会阻止删除，已结束的 Employment 与 Organization Responsibility Assignment 历史不会阻止并继续保留。它不替代 User Resignation，也不是普通账号禁用；普通账号 Disable 不改变 Organization Responsibility Assignment。
 _Avoid_: User Resignation, account disable, employment cascade deletion
 
 **OIDC Claims Snapshot**:

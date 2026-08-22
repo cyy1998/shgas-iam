@@ -6,6 +6,7 @@ import { mapCustomErrorToTRPCError, publicProcedure, router } from "@iam/api-cor
 import { ApiErrorCode } from "@iam/contracts";
 import { describe, expect, mock, test } from "bun:test";
 import { Hono } from "hono";
+import { z } from "zod";
 
 type TrpcErrorResponse = {
   error: {
@@ -14,6 +15,7 @@ type TrpcErrorResponse = {
       serviceCode?: string;
       serviceMessage?: string;
       httpStatus?: number;
+      requestId?: string;
     };
   };
 };
@@ -57,6 +59,17 @@ function createTestApp(logger: ReturnType<typeof createMockLogger>["logger"], un
         mapCustomErrorToTRPCError(err);
       }
     }),
+    internal: publicProcedure.query(() => {
+      try {
+        throw new CustomError();
+      }
+      catch (err) {
+        mapCustomErrorToTRPCError(err);
+      }
+    }),
+    validated: publicProcedure
+      .input(z.strictObject({ id: z.number().int().positive() }))
+      .mutation(({ input }) => input.id),
     unknown: publicProcedure.query(() => {
       throw unknownError;
     }),
@@ -119,8 +132,19 @@ describe("createTrpcRoute error logging", () => {
     const app = createTestApp(logger.logger, unknownError);
 
     const res = asTestResponse(await app.request("http://localhost/rpc/unknown"));
+    const body = await res.json() as TrpcErrorResponse;
 
     expect(res.status).toBe(500);
+    expect(body.error).toMatchObject({
+      message: "服务器内部错误，请联系管理员并提供 requestId",
+      data: {
+        serviceCode: ApiErrorCode.InternalError,
+        serviceMessage: "服务器内部错误，请联系管理员并提供 requestId",
+        httpStatus: 500,
+        requestId: "req-trpc",
+      },
+    });
+    expect(JSON.stringify(body)).not.toContain("boom");
     expect(logger.error).toHaveBeenCalledTimes(1);
     const [firstCall] = logger.error.mock.calls;
     expect(firstCall?.[0]).toMatchObject({
@@ -138,5 +162,48 @@ describe("createTrpcRoute error logging", () => {
       procedurePath: "unknown",
       procedureType: "query",
     });
+  });
+
+  test("publishes only the safe internal code and request ID for a mapped InternalError", async () => {
+    const logger = createMockLogger();
+    const app = createTestApp(logger.logger);
+
+    const res = asTestResponse(await app.request("http://localhost/rpc/internal"));
+    const body = await res.json() as TrpcErrorResponse;
+
+    expect(res.status).toBe(500);
+    expect(body.error).toMatchObject({
+      message: "服务器内部错误，请联系管理员并提供 requestId",
+      data: {
+        serviceCode: ApiErrorCode.InternalError,
+        serviceMessage: "服务器内部错误，请联系管理员并提供 requestId",
+        httpStatus: 500,
+        requestId: "req-trpc",
+      },
+    });
+  });
+
+  test("maps tRPC input validation to the stable validation service code", async () => {
+    const logger = createMockLogger();
+    const app = createTestApp(logger.logger);
+
+    const res = asTestResponse(await app.request("http://localhost/rpc/validated", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ id: "not-a-number" }),
+    }));
+    const body = await res.json() as TrpcErrorResponse;
+
+    expect(res.status).toBe(400);
+    expect(body.error).toMatchObject({
+      message: "请求参数不合法",
+      data: {
+        serviceCode: ApiErrorCode.ValidationFailed,
+        serviceMessage: "请求参数不合法",
+        httpStatus: 400,
+        requestId: "req-trpc",
+      },
+    });
+    expect(JSON.stringify(body)).not.toContain("not-a-number");
   });
 });

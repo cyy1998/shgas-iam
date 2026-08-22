@@ -1,9 +1,9 @@
 import type { RebuildUserProfileJobPayload } from "@iam/contracts";
-import type { SubjectFactsCacheRecordV1 } from "./subject-facts-cache";
-import type { PublishedUserProfile } from "./user-profile.schema";
-import { createSubjectFactsCacheRecord } from "./subject-facts-cache";
+import type { SubjectFactsCacheRecord } from "./profile-cache";
+import type { PublishedProfile } from "./profile.schema";
+import { createSubjectFactsCacheRecord } from "./profile-cache";
 
-export type UserProfileRebuildProjection = PublishedUserProfile;
+export type UserProfileRebuildProjection = PublishedProfile;
 
 export interface UserProfilePublicationPort {
   publishCandidate: (input: {
@@ -19,7 +19,7 @@ export interface UserProfilePublicationPort {
 }
 
 export interface SubjectFactsPublisherPort {
-  publish: (record: SubjectFactsCacheRecordV1) => Promise<{
+  publish: (record: SubjectFactsCacheRecord) => Promise<{
     status: "published" | "retained-newer";
   }>;
 }
@@ -178,7 +178,7 @@ function errorMessage(error: unknown) {
 
 async function publishCache(
   publisher: SubjectFactsPublisherPort,
-  record: SubjectFactsCacheRecordV1,
+  record: SubjectFactsCacheRecord,
   context: {
     userId: number;
     dirtyVersion: string;

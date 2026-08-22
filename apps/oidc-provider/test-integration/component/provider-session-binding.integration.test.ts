@@ -17,6 +17,7 @@ function createFixture() {
   const redis = new KernelRedis();
   const providerSessionState = new ProviderSessionStateFake();
   const accountReadSubjects: string[] = [];
+  let clientAVersion = 1;
   let subjectEnabled = true;
   const kernel = createSessionKernelForTesting({
     redis,
@@ -58,7 +59,7 @@ function createFixture() {
       },
     },
     clients: {
-      findActiveVersion: async clientId => clientId === "client-a" ? 1 : clientId === "client-b" ? 2 : null,
+      findActiveVersion: async clientId => clientId === "client-a" ? clientAVersion : clientId === "client-b" ? 2 : null,
       findRuntime: async () => null,
     },
     clock: { now: () => redis.now },
@@ -73,6 +74,9 @@ function createFixture() {
     kernel,
     providerSessionState,
     redis,
+    advanceClientAEpoch() {
+      clientAVersion += 1;
+    },
     disableSubject() {
       subjectEnabled = false;
     },
@@ -171,6 +175,30 @@ describe("oIDC Provider Session client binding contract", () => {
     });
     expect(committed).not.toHaveProperty("globalSessionId");
     expect(committed).not.toHaveProperty("userId");
+  });
+
+  it("does not publish a staged Provider Session binding after the client epoch advances", async () => {
+    const { adapter, advanceClientAEpoch, kernel } = createFixture();
+    const session = await createPrincipalSession(kernel);
+    await adapter.stage(session, {
+      authorizationAttemptId: "attempt-old-epoch",
+      clientId: "client-a",
+      oidcConfigVersion: 1,
+      providerSessionUid: null,
+    });
+
+    advanceClientAEpoch();
+
+    await expect(adapter.consumeStaged({
+      accountId: subjectIdentifier,
+      authorizationAttemptId: "attempt-old-epoch",
+      clientCode: "client-a",
+      providerSessionUid: "provider-session-old-epoch",
+    })).resolves.toBeNull();
+    await expect(adapter.read(
+      "provider-session-old-epoch",
+      "client-a",
+    )).resolves.toBeNull();
   });
 
   it("recognizes first authentication staged onto a retained Provider Session", async () => {

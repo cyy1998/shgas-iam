@@ -7,7 +7,10 @@ export const auditActionCatalog = [
   {
     action: "auth.login.password",
     label: "密码登录",
-    legacyAliases: ["auth.login.password.success", "auth.login.password.failure"],
+    legacyAliases: [
+      "auth.login.password.success",
+      "auth.login.password.failure",
+    ],
   },
   {
     action: "auth.login.mobile",
@@ -250,6 +253,26 @@ export const auditActionCatalog = [
     legacyAliases: [],
   },
   {
+    action: "admin.organization_responsibility_assignment.create",
+    label: "创建组织责任任命",
+    legacyAliases: [],
+  },
+  {
+    action: "admin.organization_responsibility_assignment.pause",
+    label: "暂停组织责任任命",
+    legacyAliases: [],
+  },
+  {
+    action: "admin.organization_responsibility_assignment.resume",
+    label: "恢复组织责任任命",
+    legacyAliases: [],
+  },
+  {
+    action: "admin.organization_responsibility_assignment.end",
+    label: "结束组织责任任命",
+    legacyAliases: [],
+  },
+  {
     action: "internal.delegation.create",
     label: "创建权限委派",
     legacyAliases: [],
@@ -271,8 +294,12 @@ export const auditActionCatalog = [
   },
 ] as const;
 
-type AuditActionCatalogItem = typeof auditActionCatalog[number];
-type LegacyAliasOf<T> = T extends { readonly legacyAliases: readonly (infer Alias)[] } ? Alias : never;
+type AuditActionCatalogItem = (typeof auditActionCatalog)[number];
+type LegacyAliasOf<T> = T extends {
+  readonly legacyAliases: readonly (infer Alias)[];
+}
+  ? Alias
+  : never;
 
 export type CanonicalAuditAction = AuditActionCatalogItem["action"];
 export type LegacyAuditActionAlias = LegacyAliasOf<AuditActionCatalogItem>;
@@ -281,6 +308,13 @@ export type KnownAuditAction = CanonicalAuditAction | LegacyAuditActionAlias;
 export const AuditActions = Object.fromEntries(
   auditActionCatalog.map(item => [item.action, item.action]),
 ) as { readonly [Action in CanonicalAuditAction]: Action };
+
+export const ORGANIZATION_RESPONSIBILITY_ASSIGNMENT_AUDIT_ACTIONS = {
+  create: AuditActions["admin.organization_responsibility_assignment.create"],
+  pause: AuditActions["admin.organization_responsibility_assignment.pause"],
+  resume: AuditActions["admin.organization_responsibility_assignment.resume"],
+  end: AuditActions["admin.organization_responsibility_assignment.end"],
+} as const;
 
 export interface AuditActionOption {
   label: string;
@@ -298,16 +332,22 @@ export const auditActionLegacyAliases = Object.fromEntries(
 ) as Partial<Record<CanonicalAuditAction, readonly LegacyAuditActionAlias[]>>;
 
 export const legacyAuditActionToCanonical = Object.fromEntries(
-  auditActionCatalog.flatMap(item => item.legacyAliases.map(alias => [alias, item.action])),
+  auditActionCatalog.flatMap(item =>
+    item.legacyAliases.map(alias => [alias, item.action]),
+  ),
 ) as Partial<Record<LegacyAuditActionAlias, CanonicalAuditAction>>;
 
-export const auditActionOptions: AuditActionOption[] = auditActionCatalog.map(item => ({
-  label: item.label,
-  value: item.action,
-}));
+export const auditActionOptions: AuditActionOption[] = auditActionCatalog.map(
+  item => ({
+    label: item.label,
+    value: item.action,
+  }),
+);
 
 export function canonicalizeAuditAction(action: string): string {
-  return legacyAuditActionToCanonical[action as LegacyAuditActionAlias] ?? action;
+  return (
+    legacyAuditActionToCanonical[action as LegacyAuditActionAlias] ?? action
+  );
 }
 
 export function getAuditActionLabel(action: string): string {
@@ -316,9 +356,15 @@ export function getAuditActionLabel(action: string): string {
 }
 
 export function expandAuditActionAliases(actions: readonly string[]): string[] {
-  return Array.from(new Set(actions.flatMap((action) => {
-    const canonicalAction = canonicalizeAuditAction(action);
-    const aliases = auditActionLegacyAliases[canonicalAction as CanonicalAuditAction] ?? [];
-    return [canonicalAction, ...aliases];
-  })));
+  return Array.from(
+    new Set(
+      actions.flatMap((action) => {
+        const canonicalAction = canonicalizeAuditAction(action);
+        const aliases
+          = auditActionLegacyAliases[canonicalAction as CanonicalAuditAction]
+            ?? [];
+        return [canonicalAction, ...aliases];
+      }),
+    ),
+  );
 }

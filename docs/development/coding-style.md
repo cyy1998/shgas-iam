@@ -7,7 +7,8 @@
 - 根工具脚本（`scripts/`、`eslint.root.config.mjs`）以及 API/backend/shared/gateway packages（`apps/api`、
   `apps/admin-api`、`apps/oidc-provider`、`apps/worker`、
   `packages/api-core`, `packages/contracts`, `packages/db`, `packages/domain`, `packages/jobs`,
-  `packages/client-subject-projection`、`packages/role-assignment-resolution`,
+  `packages/client-subject-projection`、`packages/organization-responsibility-resolution`、
+  `packages/role-assignment-resolution`,
   `packages/user-profile-read-model`、`gateway`）：ESLint 使用 Antfu config，
   采用 double quotes、semicolons，以及
   120-character soft limit。

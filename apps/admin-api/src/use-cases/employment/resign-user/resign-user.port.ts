@@ -15,6 +15,10 @@ export type ResignUserProfileChange
   | {
     readonly kind: "employment";
     readonly userId: number;
+  }
+  | {
+    readonly kind: "organization-responsibility-assignment";
+    readonly userId: number;
   };
 
 export interface ResignUserTarget {
@@ -54,6 +58,13 @@ export interface ResignUserTransactionPorts {
   };
   employmentStore: {
     endOpenEmploymentsByUserId: (userId: number, endTime: Date) => Promise<unknown>;
+  };
+  responsibilityParentLifecycle: {
+    endOpenAssignmentsForUserResignation: (input: {
+      userId: number;
+      endTime: Date;
+      auditContext?: ResignUserOptions["auditContext"];
+    }) => Promise<boolean>;
   };
   subjectAccessMutation: {
     runMutation: <T>(

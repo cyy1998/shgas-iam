@@ -122,6 +122,12 @@ async function persistAvailabilityChange(
   auditContext: ChangeEmploymentAvailabilityOptions["auditContext"],
 ) {
   await tx.employmentStore.updateEmploymentRecord(employment.id, { status: toStatus });
+  const assignmentChanged = action === "admin.employment.pause"
+    ? await tx.responsibilityParentLifecycle.pauseEnabledAssignmentsForEmployment({
+        auditContext,
+        employmentId: employment.id,
+      })
+    : false;
   await tx.auditLogWriter.recordAuditLog(buildEmploymentAudit(
     action,
     employment,
@@ -130,5 +136,11 @@ async function persistAvailabilityChange(
   ));
   await tx.userProfileInvalidation.recordChanges([
     { kind: "employment", userId: employment.userId },
+    ...(assignmentChanged
+      ? [{
+          kind: "organization-responsibility-assignment" as const,
+          userId: employment.userId,
+        }]
+      : []),
   ]);
 }

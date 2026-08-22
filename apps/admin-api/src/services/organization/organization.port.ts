@@ -48,6 +48,11 @@ export interface AdminOrganizationProfileChange {
 export interface AdminOrganizationTransactionPorts {
   organizationRepository: AdminOrganizationTransactionStorePort;
   auditService: AuditLogWriterPort;
+  responsibilityParentLifecycle: {
+    assertNoOpenAssignmentsTargetingOrganizationSubtree: (input: {
+      organizationId: number;
+    }) => Promise<void>;
+  };
   userProfileInvalidation: {
     recordChanges: (changes: readonly AdminOrganizationProfileChange[]) => Promise<void>;
   };

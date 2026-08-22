@@ -7,6 +7,10 @@ import { logger } from "./lib/logger";
 
 const composition = await createApiComposition({ env, logger });
 
+export async function closeAppComposition() {
+  await composition.close();
+}
+
 const app = createApp(appConfig, {
   env,
   logger,

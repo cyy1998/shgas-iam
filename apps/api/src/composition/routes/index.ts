@@ -93,7 +93,7 @@ export async function createApiRoutes(options: CreateApiRoutesOptions): Promise<
   const userHandlers = createUserHandlers({
     registerPurveyorContact: useCases.registerPurveyorContact,
     userService: services.user,
-    userProfileQuery: services.userProfileQuery,
+    internalUserProfileQuery: services.internalUserProfileQuery,
   });
 
   return {
@@ -101,7 +101,7 @@ export async function createApiRoutes(options: CreateApiRoutesOptions): Promise<
     "./src/routes/internal/delegation/delegation.index.ts": { default: createDelegationRoute(delegationHandlers) },
     "./src/routes/internal/organization/organization.index.ts": { default: createOrganizationRoute(organizationHandlers) },
     "./src/routes/internal/user/user.index.ts": {
-      default: createUserRoute(userHandlers, { dslMaxLimit: runtime.config.userProfile.dslMaxLimit }),
+      default: createUserRoute(userHandlers),
     },
     "./src/routes/open/open.index.ts": { default: createOpenRoute(openHandlers) },
     "./src/routes/public/public.index.ts": { default: createPublicRoute(publicHandlers) },

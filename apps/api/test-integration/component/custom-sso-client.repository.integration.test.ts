@@ -10,7 +10,7 @@ import { describe, expect, test } from "bun:test";
 const independentConfig = {
   mode: CustomSsoClientMode.Independent,
   validRedirectUrls: ["https://client.example/callback"],
-  subjectClaimCatalogVersion: 1 as const,
+  subjectClaimCatalogVersion: 2 as const,
   subjectClaims: [SubjectClaim.SubjectIdentifier],
   callbackEndpoint: "https://client.example/callback",
   logoutEndpoint: "https://client.example/logout",

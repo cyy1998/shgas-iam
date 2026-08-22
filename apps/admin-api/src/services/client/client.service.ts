@@ -28,6 +28,7 @@ import {
   OidcClientType,
 } from "@iam/contracts";
 import {
+  customSsoClientConfigSchema,
   customSsoClientStorageStateSchema,
   oidcClientConfigSchema,
   oidcClientSecretStateSchema,
@@ -86,6 +87,17 @@ function allowsProtocolEnable(status: ClientStatus) {
 
 function parseValidCustomSsoConfig(input: unknown) {
   const result = ClientCustomSsoConfigureDtoSchema.safeParse(input);
+  if (!result.success) {
+    throw new CustomSsoClientConfigurationError(result.error.issues[0]?.message);
+  }
+  return customSsoClientConfigSchema.parse({
+    ...result.data,
+    subjectClaimCatalogVersion: 2,
+  });
+}
+
+function parseStoredCustomSsoConfig(input: unknown) {
+  const result = customSsoClientConfigSchema.safeParse(input);
   if (!result.success) {
     throw new CustomSsoClientConfigurationError(result.error.issues[0]?.message);
   }
@@ -429,7 +441,7 @@ export function createClientService(deps: AdminClientServiceDeps) {
           throw new CustomSsoClientStateError("全局状态停用的客户端不能启用 Custom SSO");
         }
 
-        parseValidCustomSsoConfig(existing.customSsoConfig);
+        parseStoredCustomSsoConfig(existing.customSsoConfig);
         assertValidCustomSsoStorageState(existing);
         const client = await tx.clientRepository.updateClientCustomSsoByCode(clientCode, {
           customSsoEnabled: true,
@@ -555,7 +567,7 @@ export function createClientService(deps: AdminClientServiceDeps) {
         }
         if (existing.customSsoEnabled)
           throw new CustomSsoClientStateError("请先禁用 Custom SSO 再轮换 secret");
-        parseValidCustomSsoConfig(existing.customSsoConfig);
+        parseStoredCustomSsoConfig(existing.customSsoConfig);
         assertValidCustomSsoStorageState(existing);
 
         const customSsoSecret = deps.random.customSsoClientSecret();

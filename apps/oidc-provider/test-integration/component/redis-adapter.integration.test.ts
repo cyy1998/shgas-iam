@@ -9,7 +9,7 @@ import {
 import { errors } from "oidc-provider";
 import { describe, expect, it } from "vitest";
 import { toOidcClientRuntimeMetadata } from "../../src/provider/client-runtime-metadata.ts";
-import { RedisOidcAdapter, revokeClientProtocolObjects } from "../../src/storage/redis-adapter.ts";
+import { RedisOidcAdapter } from "../../src/storage/redis-adapter.ts";
 import { createOidcTokenStore } from "../../src/stores/token.store.ts";
 
 class FakeRedis {
@@ -62,13 +62,14 @@ class FakeRedis {
   async eval(
     script: string,
     keyCount: number,
-    key: string,
-    consumed: string | number,
-    timestamp: string,
+    ...args: Array<string | number>
   ) {
+    const key = String(args[0]);
     if (keyCount === 3)
       return 1;
     if (script.includes("ZADD")) {
+      const consumed = args[1]!;
+      const timestamp = String(args[2]);
       const set = this.sortedSets.get(key) ?? new Map<string, number>();
       set.set(timestamp, Number(consumed));
       this.sortedSets.set(key, set);
@@ -76,6 +77,8 @@ class FakeRedis {
     }
     if (!this.strings.has(key))
       return 0;
+    const consumed = args[1]!;
+    const timestamp = String(args[2]);
     if (this.strings.has(String(consumed)))
       return -1;
     this.strings.set(String(consumed), timestamp);
@@ -101,6 +104,23 @@ class FakeRedis {
         operations.push(() => this.sortedSets.get(key)?.delete(member));
         return chain;
       },
+      eval: (
+        _script: string,
+        _keyCount: number,
+        key: string,
+        consumedKey: string,
+        ownerKey: string,
+        ownerId: string,
+      ) => {
+        operations.push(() => {
+          this.strings.delete(key);
+          this.strings.delete(consumedKey);
+          if (this.strings.get(ownerKey) === ownerId)
+            this.strings.delete(ownerKey);
+        });
+        return chain;
+      },
+      pexpireat: () => chain,
       expire: () => chain,
       exec: async () => {
         operations.forEach(operation => operation());
@@ -638,30 +658,6 @@ describe("redis OIDC adapter", () => {
 
     await expect(adapter.find("token-1")).resolves.toBeUndefined();
     expect(redis.mgetCalls).toEqual([]);
-  });
-
-  it("revokes all indexed protocol objects for an invalidated client", async () => {
-    const redis = new FakeRedis();
-    const version = { value: 3 };
-    await createAdapter("AuthorizationCode", redis, version).upsert("code-1", {
-      clientId: "client-a",
-      accountId: "subject-a",
-      sessionUid: "provider-session-a",
-      scope: "openid",
-    }, 300);
-    await createAdapter("Interaction", redis, version).upsert(
-      "interaction-1",
-      { params: { client_id: "client-a" } },
-      600,
-    );
-    await revokeClientProtocolObjects(
-      redis as unknown as Redis,
-      createOidcTokenStore(redis as unknown as Redis),
-      "client-a",
-    );
-
-    expect(redis.strings.has("oidc:model:AuthorizationCode:code-1")).toBe(false);
-    expect(redis.strings.has("oidc:model:Interaction:interaction-1")).toBe(false);
   });
 });
 

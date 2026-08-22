@@ -1,12 +1,21 @@
+import type { DbTransaction } from "@iam/db";
 import type { WorkerEnv } from "@worker/env";
 import type { WorkerLogger } from "./runtime";
-import { randomBytes } from "node:crypto";
-import { hashSecret } from "@iam/api-core/security";
+import { randomUUID } from "node:crypto";
+import {
+  abortCustomSsoClientRuntimeMutation,
+  beginCustomSsoClientRuntimeMutation,
+  completeCustomSsoClientRuntimeMutation,
+  startCustomSsoClientRuntimeMutationHeartbeat,
+} from "@iam/api-core/custom-sso";
+import { createRedisClient } from "@iam/api-core/redis";
 import {
   createSubjectAccessRepair,
   createSubjectAccessTransitionRecovery,
 } from "@iam/api-core/subject-access";
+import { createUnitOfWork } from "@iam/api-core/uow";
 import db, { closeDb } from "@iam/db";
+import { createSubjectFactsRedisPublisher } from "@iam/user-profile-read-model";
 import {
   createSubjectAccessTransitionRecoveryAuthority,
   createSubjectAccessTransitionRepository,
@@ -14,11 +23,8 @@ import {
 import {
   createEmploymentCutoverRepository,
   createEmploymentCutoverVerifier,
+  createProfileV2Maintenance,
   createSubjectAccessAuthorityRepository,
-  createSubjectFactsRedisInspector,
-  createSubjectFactsRedisPublisher,
-  createSubjectProjectionCutoverRepository,
-  createSubjectProjectionCutoverVerifier,
   createUserProfileWorkerModule,
 } from "@iam/user-profile-read-model/worker";
 import { createWorkerHttpApp, startWorkerHttpServer } from "@worker/http/server";
@@ -30,12 +36,12 @@ import {
   startWorkerModules,
 } from "@worker/modules/registry";
 import { sql } from "drizzle-orm";
-import { createSubjectProjectionClientCutover } from "../commands/subject-projection-client-cutover";
-import { createSubjectProjectionClientCutoverRepository } from "../commands/subject-projection-client-cutover.repository";
+import { createClientProtocolEpochCutover } from "../commands/client-protocol-epoch-cutover";
+import { createClientProtocolEpochCutoverRepository } from "../commands/client-protocol-epoch-cutover.repository";
+import { closeProfileV2MaintenanceResources } from "./profile-v2-maintenance-shutdown";
 import { createWorkerRuntime } from "./runtime";
 import { createWorkerSubjectAccess } from "./subject-access";
 
-const CUTOVER_SECRET_HASH_COST = 12;
 const COMMAND_DB_SHUTDOWN_TIMEOUT_SECONDS = 1;
 
 export interface CreateWorkerCompositionOptions {
@@ -88,26 +94,11 @@ export async function createWorkerComposition(options: CreateWorkerCompositionOp
   const commandOnly = options.commandOnly ?? false;
   const runtime = createWorkerRuntime({ env: options.env, logger: options.logger });
   const subjectAccess = createWorkerSubjectAccessRepair(runtime);
-  const subjectProjectionClients = createSubjectProjectionClientCutover({
-    clients: createSubjectProjectionClientCutoverRepository(db),
-    secrets: {
-      generate: () => `iam_sso_${randomBytes(32).toString("base64url")}`,
-      hash: async secret => await hashSecret(secret, CUTOVER_SECRET_HASH_COST),
-    },
-  });
-  const subjectProjectionVerifier = createSubjectProjectionCutoverVerifier({
-    projection: createSubjectProjectionCutoverRepository(db),
-    subjectFacts: createSubjectFactsRedisInspector(runtime.redis),
-    subjectAccess: subjectAccess.bootstrap,
-    clients: subjectProjectionClients,
-    clock: runtime.clock,
-  });
   const userProfileModule = createUserProfileWorkerModule({
     db,
     redis: runtime.config.redis,
     subjectFactsRedis: runtime.redis,
     subjectAccessRepair: subjectAccess.repair,
-    subjectAccessBootstrap: subjectAccess.bootstrap,
     logger: runtime.logger,
     clock: runtime.clock,
     config: runtime.config.userProfile,
@@ -183,10 +174,6 @@ export async function createWorkerComposition(options: CreateWorkerCompositionOp
     httpApp,
     httpServer,
     userProfile: userProfileModule,
-    subjectProjectionCutover: {
-      clients: subjectProjectionClients,
-      verifier: subjectProjectionVerifier,
-    },
     subjectAccess: {
       barrier: subjectAccess.barrier,
       repair: subjectAccess.repair,
@@ -202,6 +189,50 @@ export type WorkerComposition = Awaited<ReturnType<typeof createWorkerCompositio
 
 export async function createWorkerCommandComposition(options: Omit<CreateWorkerCompositionOptions, "commandOnly">) {
   return await createWorkerComposition({ ...options, commandOnly: true });
+}
+
+export function createClientProtocolEpochCommandComposition(
+  options: Pick<CreateWorkerCompositionOptions, "env" | "logger">,
+) {
+  const inventory = createClientProtocolEpochCutoverRepository(db);
+  const redis = createRedisClient(options.env.redis);
+  const uow = createUnitOfWork<DbTransaction, {
+    clients: Pick<ReturnType<typeof createClientProtocolEpochCutoverRepository>, "advanceEpochs">;
+  }>({
+    db,
+    logger: options.logger,
+    createTxPorts: tx => ({
+      clients: createClientProtocolEpochCutoverRepository(tx),
+    }),
+  });
+  return {
+    cutover: createClientProtocolEpochCutover({
+      runtimeCache: {
+        async beginMutation(clientCode) {
+          const mutation = await beginCustomSsoClientRuntimeMutation(redis, {
+            clientCode,
+            mutationId: randomUUID(),
+          });
+          return {
+            abort: async () =>
+              await abortCustomSsoClientRuntimeMutation(redis, mutation),
+            complete: async () =>
+              await completeCustomSsoClientRuntimeMutation(redis, mutation),
+            heartbeat: startCustomSsoClientRuntimeMutationHeartbeat(redis, mutation),
+          };
+        },
+      },
+      uow,
+    }),
+    inventory,
+    logger: options.logger,
+    async shutdown() {
+      await Promise.all([
+        redis.quit(),
+        closeDb({ timeoutSeconds: COMMAND_DB_SHUTDOWN_TIMEOUT_SECONDS }),
+      ]);
+    },
+  };
 }
 
 export async function createWorkerSubjectAccessRepairComposition(
@@ -244,5 +275,40 @@ export function createEmploymentCutoverCommandComposition(options: {
     async shutdown() {
       await closeDb({ timeoutSeconds: COMMAND_DB_SHUTDOWN_TIMEOUT_SECONDS });
     },
+  };
+}
+
+export function createProfileV2MaintenanceCommandComposition(
+  options: Omit<CreateWorkerCompositionOptions, "commandOnly">,
+) {
+  const runtime = createWorkerRuntime({
+    env: options.env,
+    logger: options.logger,
+  });
+  const subjectAccess = createWorkerSubjectAccess(runtime);
+  const profileV2 = createProfileV2Maintenance({
+    db,
+    subjectFactsRedis: runtime.redis,
+    subjectAccessBootstrap: subjectAccess.bootstrap,
+    clock: runtime.clock,
+    config: {
+      buildBatchSize: runtime.config.userProfile.rebuildBatchSize,
+    },
+  });
+
+  async function shutdown(signal: string) {
+    runtime.logger.info({ signal }, "Profile V2 maintenance command shutting down");
+    await closeProfileV2MaintenanceResources([
+      runtime.redis.quit(),
+      closeDb({ timeoutSeconds: COMMAND_DB_SHUTDOWN_TIMEOUT_SECONDS }),
+    ]);
+  }
+
+  return {
+    env: options.env,
+    logger: runtime.logger,
+    runtime,
+    profileV2,
+    shutdown,
   };
 }

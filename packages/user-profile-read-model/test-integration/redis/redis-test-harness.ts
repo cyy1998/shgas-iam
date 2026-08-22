@@ -1,30 +1,42 @@
-import type { SubjectFactsReaderCachePort } from "../../src/subject-facts";
+import type { SubjectFactsCacheRecord } from "../../src/subject-facts";
 import type {
   SubjectFactsCacheRecordV1,
-  SubjectFactsPublisherPort,
-} from "../../src/worker";
+} from "../../src/subject-facts-cache";
 import { randomUUID } from "node:crypto";
 import process from "node:process";
+import { createSubjectAccessBootstrap } from "@iam/api-core/subject-access";
 import Redis from "ioredis";
 import {
-  createSubjectFactsRedisCache,
   createSubjectFactsRedisInspector,
   createSubjectFactsRedisPublisher,
-  SubjectFactsCacheRecordV1Schema,
-} from "../../src/worker";
+  SubjectFactsCacheRecordSchema,
+} from "../../src/subject-facts";
+import { SubjectFactsCacheRecordV1Schema } from "../../src/subject-facts-cache";
+import {
+  createSubjectFactsRedisCache as createLegacySubjectFactsRedisCache,
+  createSubjectFactsRedisInspector as createLegacySubjectFactsRedisInspector,
+  createSubjectFactsRedisPublisher as createLegacySubjectFactsRedisPublisher,
+} from "../../src/subject-facts-redis.publisher";
 
 const TEST_REDIS_URL_ENV = "IAM_USER_PROFILE_TEST_REDIS_URL";
 
 export interface RedisTestScope {
-  readonly firstCache: SubjectFactsReaderCachePort;
-  readonly secondCache: SubjectFactsReaderCachePort;
-  readonly firstPublisher: SubjectFactsPublisherPort;
-  readonly secondPublisher: SubjectFactsPublisherPort;
-  readonly batchPublisher: ReturnType<typeof createSubjectFactsRedisPublisher>;
-  readonly inspector: ReturnType<typeof createSubjectFactsRedisInspector>;
+  readonly firstCache: ReturnType<typeof createLegacySubjectFactsRedisCache>;
+  readonly secondCache: ReturnType<typeof createLegacySubjectFactsRedisCache>;
+  readonly firstPublisher: Pick<ReturnType<typeof createLegacySubjectFactsRedisPublisher>, "publish">;
+  readonly secondPublisher: Pick<ReturnType<typeof createLegacySubjectFactsRedisPublisher>, "publish">;
+  readonly batchPublisher: ReturnType<typeof createLegacySubjectFactsRedisPublisher>;
+  readonly inspector: ReturnType<typeof createLegacySubjectFactsRedisInspector>;
+  readonly firstProfilePublisher: ReturnType<typeof createSubjectFactsRedisPublisher>;
+  readonly secondProfilePublisher: ReturnType<typeof createSubjectFactsRedisPublisher>;
+  readonly subjectAccessBootstrap: ReturnType<typeof createSubjectAccessBootstrap>;
+  readonly profileInspector: ReturnType<typeof createSubjectFactsRedisInspector>;
   readonly readPublishedRecord: (
     subjectIdentifier: string,
   ) => Promise<SubjectFactsCacheRecordV1 | null>;
+  readonly readPublishedProfileRecord: (
+    subjectIdentifier: string,
+  ) => Promise<SubjectFactsCacheRecord | null>;
   readonly close: () => Promise<void>;
 }
 
@@ -48,6 +60,7 @@ export async function createRedisTestHarness(): Promise<RedisTestHarness> {
   return {
     async createScope() {
       const keyPrefix = `iam:test:user-profile:subject-facts:${randomUUID()}:`;
+      const subjectAccessKeyPrefix = `iam:test:user-profile:subject-access:${randomUUID()}:`;
       const firstRedis = createRedisClient(redisUrl);
       const secondRedis = createRedisClient(redisUrl);
       const observerRedis = createRedisClient(redisUrl);
@@ -67,20 +80,34 @@ export async function createRedisTestHarness(): Promise<RedisTestHarness> {
       }
 
       let closed = false;
-      const firstCache = createSubjectFactsRedisCache(firstRedis, { keyPrefix });
-      const secondCache = createSubjectFactsRedisCache(secondRedis, { keyPrefix });
+      const firstCache = createLegacySubjectFactsRedisCache(firstRedis, { keyPrefix });
+      const secondCache = createLegacySubjectFactsRedisCache(secondRedis, { keyPrefix });
       return {
-        batchPublisher: createSubjectFactsRedisPublisher(firstRedis, { keyPrefix }),
+        batchPublisher: createLegacySubjectFactsRedisPublisher(firstRedis, { keyPrefix }),
         firstCache,
         secondCache,
         firstPublisher: firstCache,
-        inspector: createSubjectFactsRedisInspector(observerRedis, { keyPrefix }),
+        firstProfilePublisher: createSubjectFactsRedisPublisher(firstRedis, { keyPrefix }),
+        inspector: createLegacySubjectFactsRedisInspector(observerRedis, { keyPrefix }),
         secondPublisher: secondCache,
+        secondProfilePublisher: createSubjectFactsRedisPublisher(secondRedis, { keyPrefix }),
+        subjectAccessBootstrap: createSubjectAccessBootstrap({
+          redis: firstRedis,
+          random: { uuid: randomUUID },
+          keyPrefix: subjectAccessKeyPrefix,
+        }),
+        profileInspector: createSubjectFactsRedisInspector(observerRedis, { keyPrefix }),
         async readPublishedRecord(subjectIdentifier) {
           const stored = await observerRedis.get(`${keyPrefix}${subjectIdentifier}`);
           return stored === null
             ? null
             : SubjectFactsCacheRecordV1Schema.parse(JSON.parse(stored));
+        },
+        async readPublishedProfileRecord(subjectIdentifier) {
+          const stored = await observerRedis.get(`${keyPrefix}${subjectIdentifier}`);
+          return stored === null
+            ? null
+            : SubjectFactsCacheRecordSchema.parse(JSON.parse(stored));
         },
         async close() {
           if (closed)
@@ -100,6 +127,7 @@ export async function createRedisTestHarness(): Promise<RedisTestHarness> {
 
           try {
             await deleteOwnedKeys(cleanupRedis, keyPrefix);
+            await deleteOwnedKeys(cleanupRedis, subjectAccessKeyPrefix);
           }
           catch (error) {
             errors.push(error);

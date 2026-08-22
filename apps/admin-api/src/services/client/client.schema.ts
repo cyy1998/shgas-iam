@@ -107,7 +107,13 @@ export const ClientStatusUpdateDtoSchema = z.object({
 
 export const ClientOidcConfigureDtoSchema = oidcClientConfigSchema;
 
-export const ClientCustomSsoConfigureDtoSchema = customSsoClientConfigSchema
+const [customSsoGatewayConfigSchema, customSsoIndependentConfigSchema]
+  = customSsoClientConfigSchema.options;
+
+export const ClientCustomSsoConfigureDtoSchema = z.discriminatedUnion("mode", [
+  customSsoGatewayConfigSchema.omit({ subjectClaimCatalogVersion: true }),
+  customSsoIndependentConfigSchema.omit({ subjectClaimCatalogVersion: true }),
+])
   .superRefine((config, ctx) => {
     addRedirectUrlPatternIssues(config.validRedirectUrls, ctx, ["validRedirectUrls"]);
   })

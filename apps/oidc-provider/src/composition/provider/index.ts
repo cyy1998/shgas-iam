@@ -2,6 +2,7 @@ import type { DbClient } from "@iam/db";
 import type { Redis } from "ioredis";
 import type { OidcProviderEnv } from "../../env.ts";
 import type { OidcLogger } from "../../lib/logger.ts";
+import type { OidcClaimsSnapshot } from "../../provider/claims-snapshot.ts";
 import type { SigningKey } from "../../security/signing-keys.ts";
 import type { OidcProviderRepositories } from "../repositories/index.ts";
 import type { OidcProviderSecurity } from "../security/index.ts";
@@ -60,7 +61,7 @@ export function createOidcProviderRuntime(deps: CreateOidcProviderRuntimeDeps) {
     providerSessions: deps.session.oidcSession,
     tokens: deps.session.oidcSession,
   });
-  const adapter = createOidcAdapterFactory(deps.redis, {
+  const adapter = createOidcAdapterFactory<OidcClaimsSnapshot>(deps.redis, {
     claims,
     clients: deps.stores.clientRuntime,
     clientVersions: deps.stores.clientRuntime,

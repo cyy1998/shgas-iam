@@ -134,12 +134,6 @@ describe("createUserProfileWorkerModule", () => {
       subjectAccessRepair: {
         repairSubject: mock(async () => ({ status: "stable" as const })),
       },
-      subjectAccessBootstrap: {
-        seedMany: mock(async records => ({
-          seeded: records.length,
-          retainedExisting: 0,
-        })),
-      },
       logger: {
         info,
         warn: mock(() => {}),

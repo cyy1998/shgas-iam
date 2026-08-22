@@ -9,6 +9,7 @@
   "scripts": {
     "dev": "node --watch --import tsx src/index.ts",
     "serve": "node --import tsx src/index.ts",
+    "client-protocol:artifacts": "node --env-file-if-exists=.env --import tsx scripts/client-protocol-artifact-maintenance.ts",
     "lint": "eslint src test-integration vitest.unit.config.ts vitest.integration.component.config.ts vitest.integration.composition.config.ts vitest.integration.process.config.ts vitest.integration.redis.config.ts eslint.config.js",
     "lint:fix": "eslint --fix src test-integration vitest.unit.config.ts vitest.integration.component.config.ts vitest.integration.composition.config.ts vitest.integration.process.config.ts vitest.integration.redis.config.ts eslint.config.js",
     "test": "pnpm test:unit",

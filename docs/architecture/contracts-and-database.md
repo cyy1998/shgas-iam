@@ -10,23 +10,37 @@
   `packages/client-subject-projection`。调用方只通过公开 `resolve` Interface 提交 Subject Identifier、
   `clientCode` 和 `SubjectClaimSelection`；Subject Facts、Subject Access 与 Authorization Freshness 由
   composition 注入最窄 port。协议 wire mapper 只能消费 package root public Projection Interface，不能导入其他
-  core subpath 或直连 Facts persistence、client 配置、runtime 与 transport。Custom SSO V1 wire 的 runtime schema、
+  core subpath 或直连 Facts persistence、client 配置、runtime 与 transport。Custom SSO V2 wire 的 runtime schema、
   派生 TypeScript type、mapper 与 preview 统一由 `@iam/client-subject-projection/custom-sso` 拥有；API 只能复用该
-  schema 添加 OpenAPI metadata，不得重写第二份 wire shape。
+  schema 添加 OpenAPI metadata，不得重写第二份 wire shape。Package root 拥有 Catalog/Selection V2、带 canonical responsibility 子项的协议中性
+  Employment Profile、V2 projection service 与 Custom SSO V2 strict wire；responsibility 仍是
+  `profile:employments` 的原子子项，不形成独立 claim，也不进入 authorization employment。
 - 共享 DTO schema、DTO type、pure domain rule、audit helper 和可复用 business error 放在 `packages/domain`。
 - 共享 BullMQ helper 放在 `packages/jobs`。
 - 角色分配的正向 Effective Role 与反向受影响用户解析放在 `packages/role-assignment-resolution`；该 package
   接收 composition root 提供的 `DbClient`，调用方不复制 assignment 或组织闭包匹配规则。
-- 正向解析只把 Employment 本身、assignment target 和角色的启用/删除状态作为运行时有效性，并由 resolver 过滤可选
+- Organization Responsibility 的正向 Effective Type/target identity 与按 target Organization/Type 的反向 holder
+  Employment 解析放在 `packages/organization-responsibility-resolution`。该 package 只接收 `DbClient` 和调用方给定的
+  observation time；引用、父生命周期、Period 与 Open cardinality 异常整批 fail closed，调用方不得复制 SQL 或读取时修复。
+- Role Assignment 正向解析只把 Employment 本身、assignment target 和角色的启用/删除状态作为运行时有效性，并由
+  resolver 过滤可选
   client 范围；Employment 的 Position 与直属 Organization 状态属于 Employment Integrity，不再由正向解析静默过滤。
   User Profile Builder 在发布前加载并校验全部 Open Employment 的父对象事实，异常时整次 fail closed。反向 dirty-scope
   解析有意更保守，只过滤失效任职，不因角色、岗位或组织已失效而漏掉重建。
-- 两个操作都批量接收 ID、处理重复和空输入，并返回稳定排序结果。Admin 角色管理 CRUD 与 role-privilege 聚合仍属于
+- Role Assignment 的正向与反向操作都批量接收 ID、处理重复和空输入，并返回稳定排序结果。Admin 角色管理 CRUD 与
+  role-privilege 聚合仍属于
   调用方，不进入 resolver。
 - user-profile read-model producer/query/worker 逻辑放在 `packages/user-profile-read-model`。该 package 拥有
   version-bound Subject Facts 构建、`user_profile` 与 dirty row 的 PostgreSQL atomic publication、提交后的
   Redis monotonic publisher，以及 `subject-facts` subpath 下的 Redis read-through、单主体 single-flight、
   PostgreSQL 窄行重载与 Dirty freshness 仲裁；调用方不复制 profile/facts projection、cache repair 或版本仲裁规则。
+- User Profile V2 通过 `@iam/user-profile-read-model` 默认入口暴露 schema、Redis publisher/cache、strict Subject Facts
+  read-through/freshness reader 与只读 query seam；builder/publication 只由 `worker` subpath 组装。Internal Detail 和 DSL Search 从
+  同一个 `user_profile` V2 row 返回严格 Detail，Search 编译器只查询已发布的 Search Document，不回查 source tables。
+  V2 Snapshot 子项复用 Client Subject Projection 的协议中性 contract，read-model 仍拥有 resolver 驱动的
+  Snapshot build。专用 Worker maintenance command 只通过 read-model `worker` subpath 使用 V2 batch backfill 与两项全量
+  gate；active Worker consumer、Internal User、Custom SSO 与 OIDC composition 只使用 V2，同一 live User 不得 V1/V2
+  混写、双读或建立版本选择。
 - App-private enum、schema 和 error 可以留在所属 app 内。
 
 ## Repositories 与 Transactions
@@ -66,8 +80,10 @@
   `subject_facts` 均为 `NOT NULL`，`subject_identifier` 由普通唯一索引保证全表唯一；收紧 migration 在任何 DDL
   之前验证全量 user/profile/dirty coverage、Subject Identifier 映射、schema/version 与 Subject Facts shape，失败时
   使用 `23514` 中止且不改变 staged schema。
-- `source_dirty_version` 只接受正 bigint；`subject_facts` 只接受 JSON object，且当前 V1 顶层只允许
-  `employments`。查询用 `search_doc` 保留现有 GIN，`subject_facts` 不建立 GIN。普通唯一索引需要在 maintenance
+- `source_dirty_version` 的数据库 CHECK 只接受正 bigint；`subject_facts` 的数据库 CHECK 只约束为 JSON object，
+  strict V2 与顶层只允许 `employments` 由唯一 active Worker writer 和 read-side parser 在应用边界保证。数据库仍可
+  保留历史 V1 row 供迁移核验，但 active runtime 不双读、不 fallback。查询用 `search_doc` 保留现有 GIN，
+  `subject_facts` 不建立 GIN。普通唯一索引需要在 maintenance
   freeze 中执行；显式 rollback 只回退本次收紧的唯一索引、四个 `NOT NULL` 与相关 CHECK。Drizzle-migrated database
   必须通过 package rollback command 在同一 transaction 内精确补偿该 migration 的 name、folder timestamp 与 SHA-256
   journal identity；不得删除或改写其他 migration 行。同名 identity 不一致时 fail closed，raw-SQL rehearsal 则可直接运行

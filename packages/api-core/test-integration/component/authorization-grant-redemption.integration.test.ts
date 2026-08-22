@@ -3,11 +3,31 @@ import {
   createAuthorizationGrantRedemption,
 } from "../../src/authorization-grant/authorization-grant-redemption";
 import {
+  createAuthorizationGrantRedemptionCleanupAdapter,
+} from "../../src/authorization-grant/cleanup";
+import {
   createInMemoryAuthorizationGrantRedemptionStore,
   createManualAuthorizationGrantRedemptionScheduler,
 } from "../../src/authorization-grant/testing";
 
 describe("AuthorizationGrantRedemption", () => {
+  test("removes only the exact Custom SSO grant identities supplied by Kernel cleanup", async () => {
+    const removed: string[] = [];
+    const adapter = createAuthorizationGrantRedemptionCleanupAdapter({
+      remove: async (grantId) => {
+        removed.push(grantId);
+        return "removed" as const;
+      },
+    });
+
+    await adapter.cleanup([
+      { protocol: "custom-sso", kind: "authorization-grant-redemption", ref: "grant-1" },
+      { protocol: "custom-sso", kind: "authorization-grant-redemption", ref: "grant-2" },
+    ]);
+
+    expect(removed).toEqual(["grant-1", "grant-2"]);
+  });
+
   test("schedules lease heartbeats through the injected scheduler", async () => {
     let scheduledDelayMs: number | undefined;
     let resolveDelay = () => {};

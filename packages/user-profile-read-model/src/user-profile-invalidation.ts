@@ -1,13 +1,16 @@
 import type {
+  OrganizationResponsibilityTypeCode,
   RebuildUserProfileJobPayload,
   RoleAssignmentTargetType,
   UserProfileDirtyReason,
 } from "@iam/contracts";
 import type { DbClient } from "@iam/db";
+import type { UserProfileResponsibilityAffectedUserResolverPort } from "./affected-user.repository";
 import {
   RoleAssignmentTargetType as RoleAssignmentTargetTypeValue,
   UserProfileDirtyReason as UserProfileDirtyReasonValue,
 } from "@iam/contracts";
+import { createOrganizationResponsibilityResolver } from "@iam/organization-responsibility-resolution";
 import { createRoleAssignmentResolver } from "@iam/role-assignment-resolution";
 import { createUserProfileAffectedUserRepository } from "./affected-user.repository";
 import { createUserProfileDirtyWorkflow } from "./dirty-workflow";
@@ -21,6 +24,14 @@ export type UserProfileSourceChange
   | {
     readonly kind: "employment";
     readonly userId: number;
+  }
+  | {
+    readonly kind: "organization-responsibility-assignment";
+    readonly userId: number;
+  }
+  | {
+    readonly kind: "organization-responsibility-type";
+    readonly typeCodes: readonly OrganizationResponsibilityTypeCode[];
   }
   | {
     readonly kind: "organization";
@@ -43,6 +54,7 @@ export type UserProfileSourceChange
 const CANONICAL_DIRTY_REASON_ORDER: readonly UserProfileDirtyReason[] = [
   UserProfileDirtyReasonValue.UserUpdated,
   UserProfileDirtyReasonValue.EmploymentUpdated,
+  UserProfileDirtyReasonValue.OrganizationResponsibilityAssignmentUpdated,
   UserProfileDirtyReasonValue.OrganizationUpdated,
   UserProfileDirtyReasonValue.PositionUpdated,
   UserProfileDirtyReasonValue.RoleUpdated,
@@ -73,8 +85,23 @@ export interface CreateUserProfileInvalidationDeps {
 }
 
 export function createUserProfileInvalidation(deps: CreateUserProfileInvalidationDeps) {
+  return createUserProfileInvalidationInternal(
+    deps,
+    createOrganizationResponsibilityResolver(deps.db),
+  );
+}
+
+/** @internal */
+export function createUserProfileInvalidationInternal(
+  deps: CreateUserProfileInvalidationDeps,
+  responsibilityResolver: UserProfileResponsibilityAffectedUserResolverPort,
+) {
   const roleAssignmentResolver = createRoleAssignmentResolver(deps.db);
-  const affectedUserRepository = createUserProfileAffectedUserRepository(deps.db, roleAssignmentResolver);
+  const affectedUserRepository = createUserProfileAffectedUserRepository(
+    deps.db,
+    roleAssignmentResolver,
+    responsibilityResolver,
+  );
   const delivery = createAfterCommitDelivery(deps);
   const dirtyWorkflow = createUserProfileDirtyWorkflow({
     dirtyRepository: createUserProfileDirtyRepository(deps.db),
@@ -84,6 +111,7 @@ export function createUserProfileInvalidation(deps: CreateUserProfileInvalidatio
 
   return {
     async recordChanges(changes: readonly UserProfileSourceChange[]): Promise<void> {
+      const observationTime = deps.clock.nowDate();
       const reasonsByUserId = new Map<number, Set<UserProfileDirtyReason>>();
       const organizationIds = new Set<number>();
       const positionIds = new Set<number>();
@@ -91,12 +119,18 @@ export function createUserProfileInvalidation(deps: CreateUserProfileInvalidatio
       const roleAssignmentOrganizationIds = new Set<number>();
       const roleAssignmentPositionIds = new Set<number>();
       const roleAssignmentEmploymentIds = new Set<number>();
+      const responsibilityTypeCodes = new Set<OrganizationResponsibilityTypeCode>();
       for (const change of changes) {
         switch (change.kind) {
           case "user":
           case "employment":
+          case "organization-responsibility-assignment":
             if (isValidId(change.userId))
               addReason(reasonsByUserId, change.userId, reasonForChangeKind(change.kind));
+            break;
+          case "organization-responsibility-type":
+            for (const typeCode of change.typeCodes)
+              responsibilityTypeCodes.add(typeCode);
             break;
           case "organization":
             if (isValidId(change.organizationId))
@@ -131,6 +165,25 @@ export function createUserProfileInvalidation(deps: CreateUserProfileInvalidatio
       const organizationUserIds = await affectedUserRepository.findByOrganizationIds([...organizationIds]);
       for (const userId of organizationUserIds)
         addReason(reasonsByUserId, userId, reasonForChangeKind("organization"));
+      const responsibilityOrganizationUserIds
+        = await affectedUserRepository.findResponsibilityHoldersByOrganizationIds(
+          [...organizationIds],
+          observationTime,
+        );
+      for (const userId of responsibilityOrganizationUserIds)
+        addReason(reasonsByUserId, userId, reasonForChangeKind("organization"));
+      const responsibilityTypeUserIds
+        = await affectedUserRepository.findResponsibilityHoldersByTypeCodes(
+          [...responsibilityTypeCodes],
+          observationTime,
+        );
+      for (const userId of responsibilityTypeUserIds) {
+        addReason(
+          reasonsByUserId,
+          userId,
+          reasonForChangeKind("organization-responsibility-type"),
+        );
+      }
       const positionUserIds = await affectedUserRepository.findByPositionIds([...positionIds]);
       for (const userId of positionUserIds)
         addReason(reasonsByUserId, userId, reasonForChangeKind("position"));
@@ -177,6 +230,9 @@ function reasonForChangeKind(kind: UserProfileSourceChange["kind"]): UserProfile
       return UserProfileDirtyReasonValue.UserUpdated;
     case "employment":
       return UserProfileDirtyReasonValue.EmploymentUpdated;
+    case "organization-responsibility-assignment":
+    case "organization-responsibility-type":
+      return UserProfileDirtyReasonValue.OrganizationResponsibilityAssignmentUpdated;
     case "organization":
       return UserProfileDirtyReasonValue.OrganizationUpdated;
     case "position":

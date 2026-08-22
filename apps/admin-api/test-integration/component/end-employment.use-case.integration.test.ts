@@ -28,6 +28,9 @@ function createLifecycle() {
   const currentEmployment = employment();
   const tx = {
     auditLogWriter: { recordAuditLog: mock(async () => undefined) },
+    responsibilityParentLifecycle: {
+      endOpenAssignmentsForEmployment: mock(async () => true),
+    },
     sessionRevocation: { revokeAllForUser: mock(async () => undefined) },
     userProfileInvalidation: { recordChanges: mock(async () => undefined) },
     employmentStore: {
@@ -68,8 +71,17 @@ describe("Employment Lifecycle End", () => {
         toStatus: EmploymentStatus.Disable,
       }),
     }));
+    expect(
+      tx.responsibilityParentLifecycle.endOpenAssignmentsForEmployment,
+    ).toHaveBeenCalledWith({
+      action: "end",
+      auditContext: undefined,
+      employmentId: 4,
+      endTime: transactionTime,
+    });
     expect(tx.userProfileInvalidation.recordChanges).toHaveBeenCalledWith([
       { kind: "employment", userId: 1 },
+      { kind: "organization-responsibility-assignment", userId: 1 },
     ]);
     expect(tx.sessionRevocation.revokeAllForUser).not.toHaveBeenCalled();
   });
@@ -103,6 +115,9 @@ describe("Employment Lifecycle End", () => {
     await expect(useCase.execute({ employmentId: 4 })).resolves.toBe(true);
 
     expect(tx.employmentStore.updateEmploymentRecord).not.toHaveBeenCalled();
+    expect(
+      tx.responsibilityParentLifecycle.endOpenAssignmentsForEmployment,
+    ).not.toHaveBeenCalled();
     expect(tx.auditLogWriter.recordAuditLog).not.toHaveBeenCalled();
     expect(tx.userProfileInvalidation.recordChanges).not.toHaveBeenCalled();
   });

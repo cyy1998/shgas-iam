@@ -3,9 +3,9 @@ import type {
   UserProfileSearchDocument,
   UserProfileSubjectFactsDocument,
 } from "@iam/db/schema";
-import type { PublishedUserProfile } from "./user-profile.schema";
+import type { PublishedProfileRowInput } from "./profile-storage.schema";
 
-export function toUserProfileRow(input: PublishedUserProfile) {
+export function toUserProfileRow(input: PublishedProfileRowInput) {
   return {
     ...input,
     detail: input.detail as unknown as UserProfileDetailDocument,

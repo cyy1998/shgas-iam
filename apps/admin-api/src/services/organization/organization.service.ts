@@ -116,7 +116,15 @@ export function createOrganizationService(deps: AdminOrganizationServiceDeps) {
           throw new OrganizationCodeExistsError(`组织编码已存在: ${data.orgCode}`);
         }
       }
-      if (data.status !== undefined && data.status !== OrganizationStatus.Enable) {
+      if (
+        data.status !== undefined
+        && data.status !== existing.status
+        && data.status !== OrganizationStatus.Enable
+      ) {
+        await tx.responsibilityParentLifecycle
+          .assertNoOpenAssignmentsTargetingOrganizationSubtree({
+            organizationId: existing.id,
+          });
         const employmentCount = await tx.organizationRepository.countOpenEmploymentsByOrgCode(orgCode);
         if (employmentCount > 0) {
           throw new OrganizationHasEmploymentError();
@@ -153,6 +161,10 @@ export function createOrganizationService(deps: AdminOrganizationServiceDeps) {
       if (existing === null) {
         throw new OrganizationNotFoundError("组织不存在");
       }
+      await tx.responsibilityParentLifecycle
+        .assertNoOpenAssignmentsTargetingOrganizationSubtree({
+          organizationId: existing.id,
+        });
       const childrenCount = await tx.organizationRepository.countActiveChildrenByOrgCode(orgCode);
       if (childrenCount > 0) {
         throw new OrganizationHasChildrenError();

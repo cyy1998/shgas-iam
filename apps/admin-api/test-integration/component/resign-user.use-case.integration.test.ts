@@ -31,6 +31,12 @@ function createSessionRevocation() {
   return { revokeUserSessions: mock(async () => undefined) };
 }
 
+function createResponsibilityParentLifecycle(changed = false) {
+  return {
+    endOpenAssignmentsForUserResignation: mock(async () => changed),
+  };
+}
+
 function createSubjectAccessLifecycle(preBlockError?: Error) {
   return {
     run: mock(async (
@@ -85,6 +91,12 @@ describe("createResignUserUseCase", () => {
           events.push("employment:end");
         }),
       },
+      responsibilityParentLifecycle: {
+        endOpenAssignmentsForUserResignation: mock(async () => {
+          events.push("responsibility:end");
+          return true;
+        }),
+      },
       userProfileInvalidation: {
         recordChanges: mock(async () => {
           events.push("profile:invalidate");
@@ -118,13 +130,22 @@ describe("createResignUserUseCase", () => {
       1,
       transactionTime,
     );
+    expect(
+      tx.responsibilityParentLifecycle.endOpenAssignmentsForUserResignation,
+    ).toHaveBeenCalledWith({
+      auditContext: undefined,
+      endTime: transactionTime,
+      userId: 1,
+    });
     expect(tx.userProfileInvalidation.recordChanges).toHaveBeenCalledWith([
       { kind: "user", userId: 1 },
       { kind: "employment", userId: 1 },
+      { kind: "organization-responsibility-assignment", userId: 1 },
     ]);
     expect(events).toEqual([
       "user:lookup",
       "employment:end",
+      "responsibility:end",
       "user:disable",
       "audit",
       "profile:invalidate",
@@ -157,6 +178,7 @@ describe("createResignUserUseCase", () => {
           events.push("employment:end");
         }),
       },
+      responsibilityParentLifecycle: createResponsibilityParentLifecycle(),
       userProfileInvalidation: {
         recordChanges: mock(async () => {
           events.push("profile:invalidate");
@@ -231,6 +253,7 @@ describe("createResignUserUseCase", () => {
       auditLogWriter: { recordAuditLog: mock(async () => undefined) },
       subjectAccessMutation: createSubjectAccessMutation(),
       employmentStore: { endOpenEmploymentsByUserId: mock(async () => undefined) },
+      responsibilityParentLifecycle: createResponsibilityParentLifecycle(),
       userProfileInvalidation: { recordChanges: mock(async () => undefined) },
       userStore: {
         getUserByUsernameForAdmin: mock(async () => ({
@@ -260,6 +283,7 @@ describe("createResignUserUseCase", () => {
       auditLogWriter: { recordAuditLog: mock(async () => undefined) },
       subjectAccessMutation: createSubjectAccessMutation(),
       employmentStore: { endOpenEmploymentsByUserId: mock(async () => undefined) },
+      responsibilityParentLifecycle: createResponsibilityParentLifecycle(),
       userProfileInvalidation: { recordChanges: mock(async () => undefined) },
       userStore: {
         getUserByUsernameForAdmin: mock(async () => ({
@@ -321,6 +345,7 @@ describe("createResignUserUseCase", () => {
       auditLogWriter: { recordAuditLog: mock(async () => undefined) },
       subjectAccessMutation: createSubjectAccessMutation(),
       employmentStore,
+      responsibilityParentLifecycle: createResponsibilityParentLifecycle(),
       userProfileInvalidation: { recordChanges: mock(async () => undefined) },
       userStore: {
         getUserByUsernameForAdmin: mock(async () => ({
@@ -371,6 +396,7 @@ describe("createResignUserUseCase", () => {
       auditLogWriter: { recordAuditLog: mock(async () => undefined) },
       subjectAccessMutation: createSubjectAccessMutation(),
       employmentStore: { endOpenEmploymentsByUserId: mock(async () => undefined) },
+      responsibilityParentLifecycle: createResponsibilityParentLifecycle(),
       userProfileInvalidation: { recordChanges: mock(async () => undefined) },
       userStore: {
         getUserByUsernameForAdmin: mock(async () => ({
@@ -435,6 +461,7 @@ describe("createResignUserUseCase", () => {
       auditLogWriter: { recordAuditLog: mock(async () => undefined) },
       subjectAccessMutation: createSubjectAccessMutation(),
       employmentStore: { endOpenEmploymentsByUserId: mock(async () => undefined) },
+      responsibilityParentLifecycle: createResponsibilityParentLifecycle(),
       userProfileInvalidation: { recordChanges: mock(async () => undefined) },
       userStore: {
         getUserByUsernameForAdmin: mock(async () => null),
@@ -475,6 +502,7 @@ describe("createResignUserUseCase", () => {
         auditLogWriter: { recordAuditLog: mock(async () => runStage("audit")) },
         subjectAccessMutation: createSubjectAccessMutation(),
         employmentStore: { endOpenEmploymentsByUserId: mock(async () => runStage("employment:end")) },
+        responsibilityParentLifecycle: createResponsibilityParentLifecycle(),
         userProfileInvalidation: { recordChanges: mock(async () => runStage("profile:invalidate")) },
         userStore: {
           getUserByUsernameForAdmin: mock(async () => {
@@ -531,6 +559,7 @@ describe("createResignUserUseCase", () => {
                 staged.employmentIsPrimary = false;
               },
             },
+            responsibilityParentLifecycle: createResponsibilityParentLifecycle(),
             userStore: {
               async getUserByUsernameForAdmin() {
                 return { id: 1, subjectIdentifier, username: "zhangsan", name: "张三" };
@@ -584,6 +613,7 @@ describe("createResignUserUseCase", () => {
       auditLogWriter: { recordAuditLog: mock(async () => undefined) },
       subjectAccessMutation: createSubjectAccessMutation(),
       employmentStore: { endOpenEmploymentsByUserId: mock(async () => undefined) },
+      responsibilityParentLifecycle: createResponsibilityParentLifecycle(),
       userProfileInvalidation: { recordChanges: mock(async () => undefined) },
       userStore: {
         getUserByUsernameForAdmin: mock(async () => ({

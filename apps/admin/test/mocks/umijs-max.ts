@@ -20,6 +20,11 @@ export const history = {
 
 export const request = vi.fn();
 
+// eslint-disable-next-line react/no-unnecessary-use-prefix -- mirrors @umijs/max
+export function useLocation() {
+  return history.location;
+}
+
 function getModel<T = unknown>(namespace: string): T {
   return (modelMocks[namespace] ?? {}) as T;
 }

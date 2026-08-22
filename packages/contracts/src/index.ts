@@ -19,4 +19,5 @@ export * from "./enums/user.status";
 export * from "./enums/user.type";
 export * from "./jobs/user-profile";
 export * from "./oidc/client";
+export * from "./organization-responsibility";
 export * from "./retryable-service-unavailable";

@@ -1,4 +1,4 @@
-import type { CustomSsoSubjectProjectionV1 } from "@iam/client-subject-projection/custom-sso";
+import type { CustomSsoSubjectProjection } from "@iam/client-subject-projection/custom-sso";
 import type { AuditRequestContext } from "@iam/domain/audit";
 
 export interface ExchangeSsoCodeInput {
@@ -15,5 +15,5 @@ export interface ExchangeSsoCodeOptions {
 export interface ExchangeSsoCodeResult {
   sid: string;
   ttl: number;
-  subject: CustomSsoSubjectProjectionV1;
+  subject: CustomSsoSubjectProjection;
 }

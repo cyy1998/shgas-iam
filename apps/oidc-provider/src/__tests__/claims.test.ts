@@ -9,7 +9,8 @@ function createOpenIdClaimsSnapshot(
   oidcConfigVersion: number,
 ) {
   return {
-    version: 1 as const,
+    version: 2 as const,
+    claimsContractVersion: 2 as const,
     subjectIdentifier,
     clientId: "client-a",
     scopes: ["openid"],
@@ -152,7 +153,7 @@ describe("oIDC claims and UserInfo snapshot", () => {
       subjectIdentifier: "57b0e34d-bf33-4671-87ea-4ed2f1b0e420",
       clientCode: "client-a",
       selection: {
-        catalogVersion: 1,
+        catalogVersion: 2,
         optionalClaims: ["profile:username", "profile:name"],
       },
     }]);
@@ -190,6 +191,7 @@ describe("oIDC claims and UserInfo snapshot", () => {
               ],
             },
             position: { code: "engineer", name: "Engineer" },
+            responsibilities: [],
           };
           return {
             subjectIdentifier: "57b0e34d-bf33-4671-87ea-4ed2f1b0e420",
@@ -221,7 +223,7 @@ describe("oIDC claims and UserInfo snapshot", () => {
 
     expect(resolutions).toEqual([expect.objectContaining({
       selection: {
-        catalogVersion: 1,
+        catalogVersion: 2,
         optionalClaims: ["profile:employments", "iam:authorization"],
       },
     })]);
@@ -239,6 +241,7 @@ describe("oIDC claims and UserInfo snapshot", () => {
           ],
         },
         position: { posCode: "engineer", posName: "Engineer" },
+        responsibilities: [],
       }],
       "iam:authorization": {
         employments: [{
@@ -346,7 +349,8 @@ describe("oIDC claims and UserInfo snapshot", () => {
       },
     } as never);
     const claimsSnapshot = {
-      version: 1 as const,
+      version: 2 as const,
+      claimsContractVersion: 2 as const,
       subjectIdentifier: "57b0e34d-bf33-4671-87ea-4ed2f1b0e420",
       clientId: "client-a",
       scopes: ["openid", "profile"],
@@ -512,7 +516,8 @@ describe("oIDC claims and UserInfo snapshot", () => {
   it("replays only the Access Token snapshot for UserInfo without a current account or projection read", async () => {
     const subjectIdentifier = "57b0e34d-bf33-4671-87ea-4ed2f1b0e420";
     const claimsSnapshot = {
-      version: 1 as const,
+      version: 2 as const,
+      claimsContractVersion: 2 as const,
       subjectIdentifier,
       clientId: "client-a",
       scopes: ["openid", "profile"],
@@ -675,7 +680,8 @@ describe("oIDC claims and UserInfo snapshot", () => {
       scope: "openid profile phone iam:employments iam:authorization",
       scopes: new Set(["openid", "profile", "phone", "iam:employments", "iam:authorization"]),
       claimsSnapshot: {
-        version: 1,
+        version: 2,
+        claimsContractVersion: 2,
         subjectIdentifier,
         clientId: "client-a",
         scopes: ["openid", "profile", "phone", "iam:employments", "iam:authorization"],

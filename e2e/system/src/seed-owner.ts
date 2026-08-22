@@ -35,11 +35,7 @@ import { roleAssignments } from "@iam/db/schema/role-assignments";
 import { createRoleAssignmentResolver } from "@iam/role-assignment-resolution";
 import { createSubjectFactsRedisInspector } from "@iam/user-profile-read-model/subject-facts";
 import {
-  createSubjectFactsRedisPublisher,
-  createSubjectProjectionCutoverBackfill,
-  createSubjectProjectionCutoverRepository,
-  createUserProfileBuilder,
-  createUserProfileBuildRepository,
+  createProfileV2Maintenance,
 } from "@iam/user-profile-read-model/worker";
 import { and, eq } from "drizzle-orm";
 
@@ -62,7 +58,10 @@ export function createProductionE2EScenarioOwner(
   const subjectFactsInspector = createSubjectFactsRedisInspector(input.redis);
 
   async function establish(
-    scenario: E2EScenarioReferences & { adminPassword: string },
+    scenario: E2EScenarioReferences & {
+      adminPassword: string;
+      internalApiKey: string;
+    },
   ) {
     const passwordHash = await hashSecret(
       scenario.adminPassword,
@@ -81,7 +80,7 @@ export function createProductionE2EScenarioOwner(
         customSsoConfig: {
           mode: CustomSsoClientMode.Gateway,
           validRedirectUrls: [scenario.adminRedirectUri],
-          subjectClaimCatalogVersion: 1,
+          subjectClaimCatalogVersion: 2,
           subjectClaims: [
             SubjectClaim.SubjectIdentifier,
             SubjectClaim.ProfileUsername,
@@ -109,6 +108,15 @@ export function createProductionE2EScenarioOwner(
       });
 
       await tx.insert(clients).values({
+        clientCode: scenario.internalClientCode,
+        clientName: `E2E Internal Client ${scenario.runId}`,
+        clientSecret: scenario.internalApiKey,
+        url: `${scenario.canonicalOrigin}/e2e/internal`,
+        status: ClientStatus.Enable,
+        extAttributes: {},
+      });
+
+      await tx.insert(clients).values({
         clientCode: scenario.oidcClientCode,
         clientName: `E2E OIDC RP ${scenario.runId}`,
         clientSecret: input.random.uuid(),
@@ -122,7 +130,11 @@ export function createProductionE2EScenarioOwner(
           tokenEndpointAuthMethod: OidcTokenEndpointAuthMethod.None,
           redirectUris: [scenario.oidcRedirectUri],
           postLogoutRedirectUris: [scenario.oidcPostLogoutRedirectUri],
-          allowedScopes: [OidcScope.OpenId, OidcScope.Profile],
+          allowedScopes: [
+            OidcScope.OpenId,
+            OidcScope.Profile,
+            OidcScope.IamEmployments,
+          ],
         },
         oidcSecretHash: null,
       });
@@ -149,6 +161,32 @@ export function createProductionE2EScenarioOwner(
         depth: 0,
       });
 
+      const [responsibilityTargetOrganization] = await tx
+        .insert(organizations)
+        .values({
+          orgCode: scenario.responsibilityTargetOrganizationCode,
+          orgName: `E2E Responsibility Target ${scenario.runId}`,
+          parentId: -1,
+          businessParentId: -1,
+          path: "/pending",
+          level: OrganizationLevel.One,
+          orgType: OrganizationType.Department,
+          status: OrganizationStatus.Enable,
+          isEntity: true,
+        })
+        .returning({ id: organizations.id });
+      if (responsibilityTargetOrganization === undefined) {
+        throw new Error("E2E responsibility target Organization was not created");
+      }
+      await tx.update(organizations)
+        .set({ path: `/${responsibilityTargetOrganization.id}` })
+        .where(eq(organizations.id, responsibilityTargetOrganization.id));
+      await tx.insert(organizationClosures).values({
+        ancestorId: responsibilityTargetOrganization.id,
+        descendantId: responsibilityTargetOrganization.id,
+        depth: 0,
+      });
+
       const [position] = await tx.insert(positions).values({
         posCode: scenario.positionCode,
         posName: `E2E Position ${scenario.runId}`,
@@ -156,6 +194,15 @@ export function createProductionE2EScenarioOwner(
       }).returning({ id: positions.id });
       if (position === undefined)
         throw new Error("E2E position was not created");
+
+      const [responsibilityHolderPosition] = await tx.insert(positions).values({
+        posCode: scenario.responsibilityHolderPositionCode,
+        posName: `E2E Responsibility Holder ${scenario.runId}`,
+        status: PositionStatus.Enable,
+      }).returning({ id: positions.id });
+      if (responsibilityHolderPosition === undefined) {
+        throw new Error("E2E responsibility holder Position was not created");
+      }
 
       const [admin] = await tx.insert(users).values({
         subjectIdentifier: scenario.adminSubjectIdentifier,
@@ -177,6 +224,19 @@ export function createProductionE2EScenarioOwner(
       if (employment === undefined)
         throw new Error("E2E employment was not created");
 
+      const [responsibilityHolderEmployment] = await tx.insert(employments)
+        .values({
+          userId: admin.id,
+          orgId: organization.id,
+          posId: responsibilityHolderPosition.id,
+          isPrimary: false,
+          status: EmploymentStatus.Enable,
+        })
+        .returning({ id: employments.id });
+      if (responsibilityHolderEmployment === undefined) {
+        throw new Error("E2E responsibility holder Employment was not created");
+      }
+
       const [role] = await tx.insert(roles).values({
         roleCode: scenario.adminRoleCode,
         roleName: `E2E Admin Role ${scenario.runId}`,
@@ -193,22 +253,15 @@ export function createProductionE2EScenarioOwner(
       });
     });
 
-    const cutover = createSubjectProjectionCutoverBackfill({
-      repository: createSubjectProjectionCutoverRepository(input.db),
-      builder: createUserProfileBuilder({
-        buildRepository: createUserProfileBuildRepository(
-          input.db,
-          roleAssignmentResolver,
-        ),
-        clock: input.clock,
-        config: { batchSize: 100 },
-      }),
-      subjectFacts: createSubjectFactsRedisPublisher(input.redis),
-      subjectAccess,
+    const profileV2 = createProfileV2Maintenance({
+      db: input.db,
+      subjectFactsRedis: input.redis,
+      subjectAccessBootstrap: subjectAccess,
       clock: input.clock,
+      config: { buildBatchSize: 100 },
     });
-    const publication = await cutover.backfillBatch({
-      version: 1,
+    const publication = await profileV2.backfill.backfillBatch({
+      version: 2,
       afterUserId: 0,
       batchSize: 100,
     });
@@ -220,9 +273,12 @@ export function createProductionE2EScenarioOwner(
     const [
       admin,
       organization,
+      responsibilityTargetOrganization,
       position,
+      responsibilityHolderPosition,
       adminClient,
       customSsoClient,
+      internalClient,
       oidcClient,
       role,
     ] = await Promise.all([
@@ -232,14 +288,29 @@ export function createProductionE2EScenarioOwner(
       input.db.query.organizations.findFirst({
         where: { orgCode: references.organizationCode, isDelete: false },
       }),
+      input.db.query.organizations.findFirst({
+        where: {
+          orgCode: references.responsibilityTargetOrganizationCode,
+          isDelete: false,
+        },
+      }),
       input.db.query.positions.findFirst({
         where: { posCode: references.positionCode, isDelete: false },
+      }),
+      input.db.query.positions.findFirst({
+        where: {
+          posCode: references.responsibilityHolderPositionCode,
+          isDelete: false,
+        },
       }),
       input.db.query.clients.findFirst({
         where: { clientCode: references.adminClientCode, isDelete: false },
       }),
       input.db.query.clients.findFirst({
         where: { clientCode: references.customSsoClientCode, isDelete: false },
+      }),
+      input.db.query.clients.findFirst({
+        where: { clientCode: references.internalClientCode, isDelete: false },
       }),
       input.db.query.clients.findFirst({
         where: { clientCode: references.oidcClientCode, isDelete: false },
@@ -255,6 +326,18 @@ export function createProductionE2EScenarioOwner(
             userId: admin.id,
             orgId: organization.id,
             posId: position.id,
+            isDelete: false,
+          },
+        });
+    const responsibilityHolderEmployment = admin === undefined
+      || organization === undefined
+      || responsibilityHolderPosition === undefined
+      ? undefined
+      : await input.db.query.employments.findFirst({
+          where: {
+            userId: admin.id,
+            orgId: organization.id,
+            posId: responsibilityHolderPosition.id,
             isDelete: false,
           },
         });
@@ -301,12 +384,21 @@ export function createProductionE2EScenarioOwner(
         active: organization?.status === OrganizationStatus.Enable && organization.isDelete === false,
         code: organization?.orgCode ?? "",
       },
+      responsibilityTargetOrganization: {
+        active: responsibilityTargetOrganization?.status === OrganizationStatus.Enable
+          && responsibilityTargetOrganization.isDelete === false,
+        code: responsibilityTargetOrganization?.orgCode ?? "",
+      },
       position: {
         active: position?.status === PositionStatus.Enable && position.isDelete === false,
         code: position?.posCode ?? "",
       },
       employment: {
         active: employment?.status === EmploymentStatus.Enable && employment.isDelete === false,
+      },
+      responsibilityHolderEmployment: {
+        active: responsibilityHolderEmployment?.status === EmploymentStatus.Enable
+          && responsibilityHolderEmployment.isDelete === false,
       },
       role: {
         active: role?.status === RoleStatus.Enable && role.isDelete === false,
@@ -331,6 +423,11 @@ export function createProductionE2EScenarioOwner(
         clientCode: customSsoClient?.clientCode ?? "",
         mode: customSsoClient?.customSsoConfig?.mode ?? null,
         redirectUris: customSsoClient?.customSsoConfig?.validRedirectUrls ?? [],
+      },
+      internalClient: {
+        active: internalClient?.status === ClientStatus.Enable
+          && internalClient.isDelete === false,
+        clientCode: internalClient?.clientCode ?? "",
       },
       oidcClient: {
         active: oidcClient?.status === ClientStatus.Enable
@@ -363,6 +460,13 @@ export function createProductionE2EScenarioOwner(
         roleCodes: unique(factEmployments.flatMap(fact =>
           fact.clientAuthorizations.flatMap(authorization =>
             authorization.roles.map(factRole => factRole.code)))),
+        responsibilityTypeCodes: unique(factEmployments.flatMap(fact =>
+          fact.responsibilities.map(responsibility => responsibility.type.code))),
+        responsibilityTargetOrganizationCodes: unique(
+          factEmployments.flatMap(fact => fact.responsibilities.map(
+            responsibility => responsibility.targetOrganization.code,
+          )),
+        ),
       },
       subjectProfileReady: profileState !== undefined
         && profileState.dirtyStatus === UserProfileDirtyStatus.Processed

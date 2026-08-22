@@ -8,7 +8,10 @@ import type {
   SessionRevokeInput,
   SessionRevokeResult,
 } from '@admin/services/session-management';
-import { ApiErrorCode } from '@iam/contracts';
+import {
+  ApiErrorCode,
+  ORGANIZATION_RESPONSIBILITY_TYPE_CATALOG,
+} from '@iam/contracts';
 // Mock-backend fixtures owned by the browser Integration collection.
 import type { Page, Route } from '@playwright/test';
 import {
@@ -232,6 +235,14 @@ export async function mockAdminApi(page: Page) {
   );
   await page.route('**/rpc/admin.user.search**', (route) =>
     fulfillTrpc(route, adminUserSearchResult),
+  );
+  await page.route(
+    '**/rpc/admin.organizationResponsibility.listTypes**',
+    (route) =>
+      fulfillTrpc(
+        route,
+        ORGANIZATION_RESPONSIBILITY_TYPE_CATALOG.map(entry => ({ ...entry })),
+      ),
   );
   await page.route('**/rpc/admin.client.search**', (route) =>
     fulfillTrpc(route, adminClientSearchResult),

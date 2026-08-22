@@ -4,6 +4,7 @@ import type { OidcProviderEnv } from "../env.ts";
 import type { OidcLogger } from "../lib/logger.ts";
 import type { SigningKey } from "../security/signing-keys.ts";
 import db, { closeDb } from "@iam/db";
+import { createClientProtocolArtifactCleanup } from "../commands/client-protocol-artifact-cleanup.ts";
 import { createLogger } from "../lib/logger.ts";
 import { createProviderRedis } from "../lib/redis.ts";
 import { loadSigningKeys } from "../security/signing-keys.ts";
@@ -72,3 +73,31 @@ export async function createOidcProviderComposition(options: CreateOidcProviderC
 }
 
 export type OidcProviderComposition = Awaited<ReturnType<typeof createOidcProviderComposition>>;
+
+export function createOidcProtocolArtifactCommandComposition(
+  options: Pick<CreateOidcProviderCompositionOptions, "env" | "logger" | "redis" | "dbClient">,
+) {
+  const logger = options.logger ?? createLogger(options.env);
+  const redis = options.redis ?? createProviderRedis(options.env);
+  const dbClient = options.dbClient ?? db;
+  const repositories = createOidcProviderRepositories(dbClient);
+  const stores = createOidcProviderStores({ env: options.env, redis, repositories });
+  const session = createOidcProviderSession({
+    env: options.env,
+    redis,
+    logger,
+    repositories,
+    stores,
+  });
+  return {
+    cleanup: createClientProtocolArtifactCleanup({
+      kernel: session.kernel,
+      protocolObjects: stores.protocolObjects,
+      providerSessionBindings: session.providerSessionState,
+    }),
+    logger,
+    async shutdown() {
+      await Promise.allSettled([redis.quit(), closeDb({ timeoutSeconds: 1 })]);
+    },
+  };
+}

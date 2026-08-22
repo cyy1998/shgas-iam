@@ -1,8 +1,8 @@
 import type {
   ClientSubjectProjectionService,
   SubjectFactsSnapshot,
-} from "./index";
-import { createClientSubjectProjectionService } from "./index";
+} from "./legacy-maintenance";
+import { createClientSubjectProjectionService } from "./legacy-maintenance";
 
 export {
   assertCanonicalRehearsalSubjectClaimSeed,

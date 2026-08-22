@@ -14,7 +14,7 @@ export interface CreateCustomSsoClientSecretVerifierDeps {
 export interface AuthenticatedIndependentCustomSsoClient {
   readonly clientCode: string;
   readonly configVersion: number;
-  readonly subjectClaimCatalogVersion: 1;
+  readonly subjectClaimCatalogVersion: 2;
   readonly subjectClaims: readonly SubjectClaimName[];
 }
 

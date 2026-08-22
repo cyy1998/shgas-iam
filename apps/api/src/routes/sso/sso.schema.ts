@@ -1,5 +1,5 @@
 import {
-  CustomSsoSubjectProjectionV1Schema,
+  CustomSsoSubjectProjectionV2Schema,
 } from "@api/services/sso/custom-sso-subject.schema";
 import { z } from "@hono/zod-openapi";
 import { LoginPageGuardDecision } from "@iam/contracts";
@@ -29,5 +29,5 @@ export const SSOMetaInfoSchema = z.object({
 export const SsoTokenResultSchema = z.object({
   sid: z.string().min(1),
   ttl: z.number().int().positive(),
-  subject: CustomSsoSubjectProjectionV1Schema,
+  subject: CustomSsoSubjectProjectionV2Schema,
 }).strict().openapi("SsoTokenResult");

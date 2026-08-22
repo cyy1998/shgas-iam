@@ -54,8 +54,10 @@
       "dependsOn": ["transit"],
       "cache": false,
       "passThroughEnv": [
+        "IAM_ADMIN_API_TEST_DATABASE_URL",
         "IAM_API_TEST_DATABASE_URL",
         "IAM_DB_TEST_DATABASE_URL",
+        "IAM_ORGANIZATION_RESPONSIBILITY_TEST_DATABASE_URL",
         "IAM_ROLE_ASSIGNMENT_TEST_DATABASE_URL",
         "IAM_USER_PROFILE_TEST_DATABASE_URL",
         "IAM_WORKER_TEST_DATABASE_URL"

@@ -1,4 +1,4 @@
-import type { AuditLogInput } from "@admin-api/services/audit/audit.context";
+import type { AdminAuditContext, AuditLogInput } from "@admin-api/services/audit/audit.context";
 import type { UnitOfWorkPort } from "@iam/api-core/uow";
 import type { EmploymentStatus } from "@iam/contracts";
 import type { Employment } from "@iam/domain/employment";
@@ -59,11 +59,25 @@ export interface TransferEmploymentTransactionPorts {
   auditLogWriter: {
     recordAuditLog: (input: AuditLogInput) => Promise<void>;
   };
+  responsibilityParentLifecycle: {
+    endOpenAssignmentsForEmployment: (input: {
+      action: "transfer";
+      employmentId: number;
+      endTime: Date;
+      auditContext?: AdminAuditContext;
+    }) => Promise<boolean>;
+  };
   userProfileInvalidation: {
-    recordChanges: (changes: readonly {
-      readonly kind: "employment";
-      readonly userId: number;
-    }[]) => Promise<void>;
+    recordChanges: (changes: readonly (
+      | {
+        readonly kind: "employment";
+        readonly userId: number;
+      }
+      | {
+        readonly kind: "organization-responsibility-assignment";
+        readonly userId: number;
+      }
+    )[]) => Promise<void>;
   };
 }
 

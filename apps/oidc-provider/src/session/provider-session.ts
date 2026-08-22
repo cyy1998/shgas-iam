@@ -71,3 +71,7 @@ export function providerSessionGenerationMembersKey(sessionUid: string, generati
 export function pendingProviderSessionBindingKey(authorizationAttemptId: string) {
   return `oidc:pending-provider-session-binding:${encodeURIComponent(authorizationAttemptId)}`;
 }
+
+export function pendingProviderSessionBindingsByClientKey(clientCode: string) {
+  return `oidc:pending-provider-session-bindings:client:${encodeURIComponent(clientCode)}`;
+}

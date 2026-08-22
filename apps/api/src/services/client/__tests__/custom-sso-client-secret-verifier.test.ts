@@ -18,7 +18,7 @@ const activeIndependentClient: CustomSsoClientSecretRecord = {
   customSsoConfig: {
     mode: CustomSsoClientMode.Independent,
     validRedirectUrls: ["https://client.example/callback"],
-    subjectClaimCatalogVersion: 1,
+    subjectClaimCatalogVersion: 2,
     subjectClaims: [SubjectClaim.SubjectIdentifier],
     callbackEndpoint: "https://client.example/callback",
     logoutEndpoint: "https://client.example/logout",
@@ -30,7 +30,7 @@ const activeIndependentClient: CustomSsoClientSecretRecord = {
 const gatewayConfig: NonNullable<CustomSsoClientSecretRecord["customSsoConfig"]> = {
   mode: CustomSsoClientMode.Gateway,
   validRedirectUrls: ["https://client.example/callback"],
-  subjectClaimCatalogVersion: 1,
+  subjectClaimCatalogVersion: 2,
   subjectClaims: [SubjectClaim.SubjectIdentifier],
   orcas: { enabled: false },
 };
@@ -61,7 +61,7 @@ describe("Custom SSO client secret verifier", () => {
     ).resolves.toEqual({
       clientCode: "independent-client",
       configVersion: 3,
-      subjectClaimCatalogVersion: 1,
+      subjectClaimCatalogVersion: 2,
       subjectClaims: [SubjectClaim.SubjectIdentifier],
     });
     expect(
@@ -84,7 +84,7 @@ describe("Custom SSO client secret verifier", () => {
     ).resolves.toEqual({
       clientCode: "independent-client",
       configVersion: 3,
-      subjectClaimCatalogVersion: 1,
+      subjectClaimCatalogVersion: 2,
       subjectClaims: [SubjectClaim.SubjectIdentifier],
     });
   });

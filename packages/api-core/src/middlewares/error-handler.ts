@@ -7,6 +7,7 @@ import { HTTPException } from "hono/http-exception";
 import { INTERNAL_SERVER_ERROR } from "../core/http-status-codes";
 import { getRequestId } from "../core/request-context";
 import { isApiRuntimeError } from "../errors/api-runtime-error";
+import { getInternalErrorMessage } from "../errors/internal-error-presentation";
 import * as resp from "../http";
 import {
   buildApiErrorLogFields,
@@ -66,10 +67,6 @@ function logApiError(logger: ErrorLogger, fields: Parameters<typeof buildApiErro
 
 function createRequestIdData(requestId: string | undefined) {
   return requestId ? { requestId } : {};
-}
-
-function getInternalErrorMessage(requestId: string | undefined) {
-  return requestId ? "服务器内部错误，请联系管理员并提供 requestId" : "服务器内部错误";
 }
 
 function setRetryAfterHeader(err: { retryAfterSeconds?: number }, c: Context) {

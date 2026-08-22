@@ -1,8 +1,12 @@
-import { RoleAssignmentTargetType } from "@iam/contracts";
+import {
+  OrganizationResponsibilityTypeCode,
+  RoleAssignmentTargetType,
+} from "@iam/contracts";
 import { employments, organizationClosures } from "@iam/db/schema";
 import { roleAssignments } from "@iam/db/schema/role-assignments";
 import { describe, expect, mock, test } from "bun:test";
-import { createUserProfileInvalidation, createUserProfileJobProducer } from "../../src/producer";
+import { createUserProfileJobProducer } from "../../src/producer";
+import { createUserProfileInvalidationInternal } from "../../src/user-profile-invalidation";
 
 const now = new Date("2026-07-25T08:00:00.000Z");
 
@@ -11,6 +15,10 @@ type AffectedUserQuery = "employment" | "organization" | "position" | "role";
 interface FixtureOptions {
   affectedUserError?: AffectedUserQuery;
   affectedUsers?: Partial<Record<AffectedUserQuery, readonly number[]>>;
+  responsibilityEmploymentIds?: {
+    catalog?: readonly number[];
+    organization?: readonly number[];
+  };
   enqueueError?: Error;
   persistError?: Error;
 }
@@ -88,14 +96,22 @@ function createFixture(options: FixtureOptions = {}) {
       traceId: "trace-7",
     },
   };
-  const invalidation = createUserProfileInvalidation({
-    db: db as never,
-    jobProducer: createUserProfileJobProducer(queue),
-    lifecycle,
-    clock: {
-      nowDate: () => now,
+  const invalidation = createUserProfileInvalidationInternal(
+    {
+      db: db as never,
+      jobProducer: createUserProfileJobProducer(queue),
+      lifecycle,
+      clock: {
+        nowDate: () => now,
+      },
     },
-  });
+    {
+      resolveHolderEmploymentIds: mock(async () =>
+        options.responsibilityEmploymentIds?.organization ?? []),
+      resolveHolderEmploymentIdsByTypes: mock(async () =>
+        options.responsibilityEmploymentIds?.catalog ?? []),
+    },
+  );
 
   return {
     afterCommitTasks,
@@ -228,6 +244,51 @@ describe("UserProfileInvalidation", () => {
         userId: 9,
         reasonCodes: ["organization-updated"],
       },
+    ]]);
+  });
+
+  test("unions organization subtree users with cross-tree responsibility holders", async () => {
+    const fixture = createFixture({
+      affectedUsers: {
+        organization: [9, 3],
+        employment: [8, 3],
+      },
+      responsibilityEmploymentIds: {
+        organization: [91, 92],
+      },
+    });
+
+    await fixture.invalidation.recordChanges([
+      { kind: "organization", organizationId: 40 },
+    ]);
+
+    expect(fixture.persistedBatches.map(batch => batch.map(row => ({
+      userId: row.userId,
+      reasonCodes: row.reasonCodes,
+    })))).toEqual([[
+      { userId: 3, reasonCodes: ["organization-updated"] },
+      { userId: 8, reasonCodes: ["organization-updated"] },
+      { userId: 9, reasonCodes: ["organization-updated"] },
+    ]]);
+  });
+
+  test("invalidates current holders when published Catalog fields change", async () => {
+    const fixture = createFixture({
+      affectedUsers: { employment: [8, 3] },
+      responsibilityEmploymentIds: { catalog: [91, 92] },
+    });
+
+    await fixture.invalidation.recordChanges([{
+      kind: "organization-responsibility-type",
+      typeCodes: [OrganizationResponsibilityTypeCode.Head],
+    }]);
+
+    expect(fixture.persistedBatches.map(batch => batch.map(row => ({
+      userId: row.userId,
+      reasonCodes: row.reasonCodes,
+    })))).toEqual([[
+      { userId: 3, reasonCodes: ["organization-responsibility-assignment-updated"] },
+      { userId: 8, reasonCodes: ["organization-responsibility-assignment-updated"] },
     ]]);
   });
 

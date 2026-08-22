@@ -25,7 +25,7 @@ import {
 } from "drizzle-orm";
 import { toUserProfileRow } from "./user-profile-row";
 import {
-  CURRENT_USER_PROFILE_SCHEMA_VERSION,
+  LEGACY_USER_PROFILE_SCHEMA_VERSION,
   parseUserProfileDetailDocument,
   PublishedUserProfileSchema,
 } from "./user-profile.schema";
@@ -282,7 +282,7 @@ function parseCurrentProfile(row: {
     || row.profileSubjectIdentifier !== row.userSubjectIdentifier
     || row.profileStatus !== row.userStatus
     || row.profileDeleted !== row.userDeleted
-    || row.profileSchemaVersion !== CURRENT_USER_PROFILE_SCHEMA_VERSION
+    || row.profileSchemaVersion !== LEGACY_USER_PROFILE_SCHEMA_VERSION
     || row.sourceDirtyVersion === null
     || row.sourceDirtyVersion !== row.dirtyVersion
     || row.dirtyStatus !== UserProfileDirtyStatus.Processed

@@ -37,6 +37,13 @@ export function createEndEmploymentUseCase(deps: EndEmploymentUseCaseDeps) {
         endTime: transactionTime,
         isPrimary: false,
       });
+      const assignmentChanged
+        = await tx.responsibilityParentLifecycle.endOpenAssignmentsForEmployment({
+          action: "end",
+          auditContext,
+          employmentId: employment.id,
+          endTime: transactionTime,
+        });
       await tx.auditLogWriter.recordAuditLog(buildEmploymentAudit(
         "admin.employment.end",
         employment,
@@ -49,6 +56,12 @@ export function createEndEmploymentUseCase(deps: EndEmploymentUseCaseDeps) {
       ));
       await tx.userProfileInvalidation.recordChanges([
         { kind: "employment", userId: employment.userId },
+        ...(assignmentChanged
+          ? [{
+              kind: "organization-responsibility-assignment" as const,
+              userId: employment.userId,
+            }]
+          : []),
       ]);
       return true;
     }, adminAuditTransactionOptions(auditContext));

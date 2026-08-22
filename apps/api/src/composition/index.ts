@@ -7,6 +7,7 @@ import { USER_PROFILE_QUEUE_NAME } from "@iam/contracts";
 import db from "@iam/db";
 import { createJobQueue } from "@iam/jobs";
 import { createUserProfileJobProducer } from "@iam/user-profile-read-model/producer";
+import { createInternalUserQueryResource } from "./internal-user-query";
 import { createApiMiddlewares } from "./middlewares";
 import { createApiRepositories } from "./repositories";
 import { createApiRoutes } from "./routes";
@@ -28,6 +29,7 @@ export interface ApiComposition {
   useCases: ReturnType<typeof createApiUseCases>;
   routes: CreateAppOptions["routes"];
   middlewares: CreateAppOptions["middlewares"];
+  close: () => Promise<void>;
 }
 
 export interface CreateApiCompositionOptions {
@@ -39,6 +41,9 @@ export async function createApiComposition(options: CreateApiCompositionOptions 
   const compositionEnv = options.env ?? env;
   const compositionLogger = options.logger ?? logger;
   const runtime = createApiRuntime({ env: compositionEnv, logger: compositionLogger });
+  const userProfileQuery = createInternalUserQueryResource({
+    databaseUrl: compositionEnv.databaseUrl,
+  });
   const repositories = createApiRepositories(db);
   const auditLogWriter = createApiAuditLogWriter({ auditRepository: repositories.audit });
   const userProfileQueue = createJobQueue<RebuildUserProfileJobPayload, unknown, UserProfileJobName>({
@@ -56,6 +61,7 @@ export async function createApiComposition(options: CreateApiCompositionOptions 
     repositories,
     auditLogWriter,
     unitOfWork,
+    userProfileQueryDb: userProfileQuery.db,
   });
   const useCases = createApiUseCases({
     auditLogWriter,
@@ -77,5 +83,8 @@ export async function createApiComposition(options: CreateApiCompositionOptions 
     useCases,
     routes: await createApiRoutes({ auditLogWriter, runtime, services, useCases }),
     middlewares: await createApiMiddlewares({ runtime, services }),
+    async close() {
+      await userProfileQuery.close();
+    },
   };
 }

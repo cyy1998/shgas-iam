@@ -3,6 +3,7 @@ import * as Domain from "@iam/domain";
 import * as ClientErrors from "@iam/domain/client";
 import * as EmploymentErrors from "@iam/domain/employment";
 import * as OrganizationErrors from "@iam/domain/organization";
+import * as OrganizationResponsibilityErrors from "@iam/domain/organization-responsibility";
 import * as PositionErrors from "@iam/domain/position";
 import * as PrivilegeErrors from "@iam/domain/privilege";
 import * as RoleErrors from "@iam/domain/role";
@@ -19,6 +20,48 @@ interface ExpectedError {
 }
 
 const cases: ExpectedError[] = [
+  {
+    className: "OrganizationResponsibilityAssignmentNotFoundError",
+    exports: OrganizationResponsibilityErrors,
+    message: "组织责任任命不存在",
+    code: ApiErrorCode.OrganizationResponsibilityAssignmentNotFound,
+    httpStatus: 404,
+  },
+  {
+    className: "OrganizationResponsibilityAssignmentNotOpenError",
+    exports: OrganizationResponsibilityErrors,
+    message: "组织责任任命已结束",
+    code: ApiErrorCode.OrganizationResponsibilityAssignmentNotOpen,
+    httpStatus: 409,
+  },
+  {
+    className: "OrganizationResponsibilityHolderEmploymentUnavailableError",
+    exports: OrganizationResponsibilityErrors,
+    message: "责任持有任职未启用或不存在",
+    code: ApiErrorCode.OrganizationResponsibilityHolderEmploymentUnavailable,
+    httpStatus: 409,
+  },
+  {
+    className: "OrganizationResponsibilityTargetOrganizationUnavailableError",
+    exports: OrganizationResponsibilityErrors,
+    message: "责任目标组织未启用或不存在",
+    code: ApiErrorCode.OrganizationResponsibilityTargetOrganizationUnavailable,
+    httpStatus: 409,
+  },
+  {
+    className: "OrganizationResponsibilityAssignmentDuplicateOpenError",
+    exports: OrganizationResponsibilityErrors,
+    message: "同一任职已持有该 Open 组织责任",
+    code: ApiErrorCode.OrganizationResponsibilityAssignmentDuplicateOpen,
+    httpStatus: 409,
+  },
+  {
+    className: "OrganizationResponsibilityAssignmentCardinalityConflictError",
+    exports: OrganizationResponsibilityErrors,
+    message: "目标组织的 Open 责任已达到基数上限",
+    code: ApiErrorCode.OrganizationResponsibilityAssignmentCardinalityConflict,
+    httpStatus: 409,
+  },
   {
     className: "UserNotFoundError",
     exports: UserErrors,
@@ -108,6 +151,13 @@ const cases: ExpectedError[] = [
     exports: OrganizationErrors,
     message: "该组织层级内存在开放任职，无法停用或删除",
     code: ApiErrorCode.OrganizationHasEmployment,
+    httpStatus: 409,
+  },
+  {
+    className: "OrganizationHasOpenResponsibilityAssignmentError",
+    exports: OrganizationErrors,
+    message: "该组织层级内存在开放责任任命，无法暂停、停用或删除",
+    code: ApiErrorCode.OrganizationHasOpenResponsibilityAssignment,
     httpStatus: 409,
   },
   {
@@ -245,24 +295,32 @@ const cases: ExpectedError[] = [
   },
 ];
 
-function getErrorClass(exports: object, className: string): new () => DomainBusinessError {
+function getErrorClass(
+  exports: object,
+  className: string,
+): new () => DomainBusinessError {
   const ErrorClass = (exports as Record<string, unknown>)[className];
 
-  expect(ErrorClass).toBe((Domain as unknown as Record<string, unknown>)[className]);
+  expect(ErrorClass).toBe(
+    (Domain as unknown as Record<string, unknown>)[className],
+  );
   expect(typeof ErrorClass).toBe("function");
 
   return ErrorClass as new () => DomainBusinessError;
 }
 
 describe("domain business errors", () => {
-  test.each(cases)("$className preserves API runtime shape and exports", (expected) => {
-    const ErrorClass = getErrorClass(expected.exports, expected.className);
-    const error = new ErrorClass();
+  test.each(cases)(
+    "$className preserves API runtime shape and exports",
+    (expected) => {
+      const ErrorClass = getErrorClass(expected.exports, expected.className);
+      const error = new ErrorClass();
 
-    expect(error).toBeInstanceOf(DomainBusinessError);
-    expect(error.name).toBe(expected.className);
-    expect(error.message).toBe(expected.message);
-    expect(error.code).toBe(expected.code);
-    expect(error.httpStatus).toBe(expected.httpStatus);
-  });
+      expect(error).toBeInstanceOf(DomainBusinessError);
+      expect(error.name).toBe(expected.className);
+      expect(error.message).toBe(expected.message);
+      expect(error.code).toBe(expected.code);
+      expect(error.httpStatus).toBe(expected.httpStatus);
+    },
+  );
 });

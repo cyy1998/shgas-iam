@@ -33,6 +33,11 @@ export function organizationsRelations(r: RelationsHelper) {
         from: r.organizations.id,
         to: r.privilegeDelegations.organizationScopeId,
       }),
+      responsibilityAssignments: r.many.organizationResponsibilityAssignments({
+        from: r.organizations.id,
+        to: r.organizationResponsibilityAssignments.targetOrganizationId,
+        alias: "organization_responsibility_target",
+      }),
     },
   } satisfies RelationsConfig;
 }

@@ -23,7 +23,7 @@ const ownedEslintDependencies = [
 describe("shared ESLint config ownership", () => {
   test("keeps plugin graph ownership in @iam/eslint-config", async () => {
     const eslintConsumers = await discoverEslintConsumers();
-    expect(eslintConsumers).toHaveLength(16);
+    expect(eslintConsumers).toHaveLength(17);
 
     for (const consumer of eslintConsumers) {
       const manifest = await readWorkspaceManifest(consumer);

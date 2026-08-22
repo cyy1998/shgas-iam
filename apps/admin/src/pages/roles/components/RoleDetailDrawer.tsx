@@ -1,5 +1,5 @@
 import StatusTag from '@admin/components/StatusTag';
-import AuditLogTable from '@admin/pages/audit-logs/components/AuditLogTable';
+import AuditLogTable from '@admin/components/audit/AuditLogTable';
 import { roleAssignmentTargetTypeOptions } from '@admin/pages/roles/role-selectors';
 import {
   type RoleAssignmentVo,

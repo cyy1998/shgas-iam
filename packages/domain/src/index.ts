@@ -3,6 +3,7 @@ export * from "./client";
 export * from "./employment";
 export * from "./errors";
 export * from "./organization";
+export * from "./organization-responsibility";
 export * from "./position";
 export * from "./privilege";
 export * from "./role";

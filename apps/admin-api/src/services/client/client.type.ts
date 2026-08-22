@@ -1,4 +1,5 @@
 import type { z } from "@hono/zod-openapi";
+import type { CustomSsoClientConfig } from "@iam/db/schema";
 import type {
   AdminClientRecordSchema,
   ClientCreateDtoSchema,
@@ -26,6 +27,6 @@ export interface AdminClientOidcUpdate {
 
 export interface AdminClientCustomSsoUpdate {
   customSsoEnabled?: boolean;
-  customSsoConfig?: ClientCustomSsoConfigureDto | null;
+  customSsoConfig?: CustomSsoClientConfig | null;
   customSsoSecretHash?: string | null;
 }

@@ -28,7 +28,7 @@ describe("Subject Access authority repository", () => {
     expect(select).toHaveBeenCalledTimes(1);
     expect(limit).toHaveBeenCalledWith(1);
     expect(publish).toHaveBeenCalledWith({
-      schemaVersion: 1,
+      schemaVersion: 2,
       sourceDirtyVersion: "7",
       publishedAt: "2026-07-31T10:00:00.000Z",
       subjectIdentifier,
@@ -132,7 +132,7 @@ function authorityRow() {
     username: "alice",
     name: "Alice",
     mobile: null,
-    profileSchemaVersion: 1,
+    profileSchemaVersion: 2,
     sourceDirtyVersion: "7",
     subjectFacts: {
       employments: [],

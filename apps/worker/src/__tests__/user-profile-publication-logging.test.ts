@@ -1,4 +1,4 @@
-import type { SubjectFactsCacheRecordV1 } from "@iam/user-profile-read-model/worker";
+import type { SubjectFactsCacheRecord } from "@iam/user-profile-read-model";
 import { Writable } from "node:stream";
 import { buildLoggerOptions, LoggerSourceApp } from "@iam/api-core/logger";
 import { UserProfileDirtyReason, UserStatus } from "@iam/contracts";
@@ -26,7 +26,7 @@ describe("User Profile publication logging", () => {
       logFormat: "json",
       sourceApp: LoggerSourceApp.Worker,
     }), stream).child({ sourceApp: LoggerSourceApp.Worker });
-    let rejectedRecord: SubjectFactsCacheRecordV1 | undefined;
+    let rejectedRecord: SubjectFactsCacheRecord | undefined;
     const rebuildProcessor = createUserProfileRebuildProcessor({
       dirtyRepository: {
         claimForProcessing: async () => ({ userId: 1, dirtyVersion: "4" }),
@@ -45,7 +45,7 @@ describe("User Profile publication logging", () => {
           status: UserStatus.Enable,
           isDelete: false,
           searchVisible: true,
-          profileSchemaVersion: 1,
+          profileSchemaVersion: 2,
           sourceDirtyVersion: "4",
           detail: {} as never,
           searchDoc: {} as never,
@@ -67,6 +67,7 @@ describe("User Profile publication logging", () => {
                 name: "Position",
               },
               clientAuthorizations: [],
+              responsibilities: [],
             }],
           },
           rebuiltAt: NOW,

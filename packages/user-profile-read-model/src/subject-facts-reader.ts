@@ -1,25 +1,43 @@
-import type {
-  AuthorizationFreshnessCheckResult,
-  SubjectFactsSnapshot,
-} from "@iam/client-subject-projection";
 import type { DbClient } from "@iam/db";
 import type { SubjectFactsCacheRecordV1 } from "./subject-facts-cache";
+import type {
+  SubjectFactsReaderObservabilityPort,
+  SubjectFactsReaderObservation,
+} from "./subject-facts-observability.contract";
 import { UserProfileDirtyStatus } from "@iam/contracts";
 import { userProfileDirty, userProfiles } from "@iam/db/schema";
 import { eq } from "drizzle-orm";
 import { z } from "zod";
 import { SubjectFactsCacheRecordV1Schema } from "./subject-facts-cache";
 import {
-  CURRENT_USER_PROFILE_SCHEMA_VERSION,
+  LEGACY_USER_PROFILE_SCHEMA_VERSION,
   SubjectFactsDocumentV1Schema,
 } from "./user-profile.schema";
+
+interface SubjectFactsSnapshot {
+  readonly subjectIdentifier: string;
+  readonly sourceDirtyVersion: string;
+  readonly profile: {
+    readonly username: string;
+    readonly name: string;
+    readonly phone: string | null;
+  };
+  readonly employments: z.infer<
+    typeof SubjectFactsDocumentV1Schema
+  >["employments"];
+}
+
+type AuthorizationFreshnessCheckResult
+  = | { readonly status: "fresh" }
+    | { readonly status: "refreshed"; readonly facts: SubjectFactsSnapshot }
+    | { readonly status: "not-ready" };
 
 const SubjectFactsProfileRowSchema = z.object({
   subjectIdentifier: z.uuid(),
   username: z.string().min(1),
   name: z.string().min(1),
   mobile: z.string().nullable(),
-  profileSchemaVersion: z.literal(CURRENT_USER_PROFILE_SCHEMA_VERSION),
+  profileSchemaVersion: z.literal(LEGACY_USER_PROFILE_SCHEMA_VERSION),
   sourceDirtyVersion: z.string().regex(/^[1-9]\d*$/u),
   subjectFacts: SubjectFactsDocumentV1Schema,
   rebuiltAt: z.date(),
@@ -30,37 +48,6 @@ export interface SubjectFactsReaderCachePort {
   readonly publish: (
     record: SubjectFactsCacheRecordV1,
   ) => Promise<{ readonly status: "published" | "retained-newer" }>;
-}
-
-export type SubjectFactsReaderObservation
-  = | {
-    readonly operation: "cache-read";
-    readonly outcome: "hit" | "invalid" | "miss";
-    readonly durationMs: number;
-  }
-  | {
-    readonly operation: "profile-load";
-    readonly outcome: "error" | "not-ready" | "ready";
-    readonly durationMs: number;
-  }
-  | {
-    readonly operation: "single-flight-wait";
-    readonly outcome: "joined";
-    readonly durationMs: number;
-  }
-  | {
-    readonly operation: "dirty-load";
-    readonly outcome: "error" | "missing" | "ready";
-    readonly durationMs: number;
-  }
-  | {
-    readonly operation: "authorization-freshness";
-    readonly outcome: "error" | "fresh" | "not-ready" | "refreshed";
-    readonly durationMs: number;
-  };
-
-export interface SubjectFactsReaderObservabilityPort {
-  readonly record: (observation: SubjectFactsReaderObservation) => void;
 }
 
 export interface CreateSubjectFactsReaderOptions {

@@ -3,6 +3,7 @@ import { clientsRelations } from "./clients";
 import { delegationDetailsRelations } from "./delegation-details";
 import { employmentsRelations } from "./employments";
 import { organizationClosuresRelations } from "./organization-closures";
+import { organizationResponsibilityAssignmentsRelations } from "./organization-responsibility-assignments";
 import { organizationsRelations } from "./organizations";
 import { positionsRelations } from "./positions";
 import { privilegeDelegationsRelations } from "./privilege-delegations";
@@ -20,6 +21,7 @@ export function coreRelations(r: RelationsHelper) {
     ...delegationDetailsRelations(r),
     ...employmentsRelations(r),
     ...organizationClosuresRelations(r),
+    ...organizationResponsibilityAssignmentsRelations(r),
     ...organizationsRelations(r),
     ...positionsRelations(r),
     ...privilegeDelegationsRelations(r),

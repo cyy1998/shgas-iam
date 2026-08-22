@@ -165,6 +165,12 @@ describe('EmploymentsPage lifecycle actions', () => {
     expect(screen.queryByText('删除')).not.toBeInTheDocument();
 
     await user.click(enabledActions.getByText('暂停'));
+    expect(
+      await screen.findByText(
+        '该任职下所有启用中的责任任命也会一并暂停；恢复任职后，责任任命仍需逐条恢复。',
+      ),
+    ).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: '暂停任职' }));
     await waitFor(() => {
       expect(
         within(screen.getByTestId('enabled-actions')).getByText('恢复'),
@@ -186,6 +192,11 @@ describe('EmploymentsPage lifecycle actions', () => {
     await user.click(
       within(screen.getByTestId('enabled-actions')).getByText('结束'),
     );
+    expect(
+      await screen.findByText(
+        '结束后不可恢复；该任职下所有开放责任任命会一并结束，后续新任职不会继承这些责任。',
+      ),
+    ).toBeInTheDocument();
     await user.click(await screen.findByRole('button', { name: '结束任职' }));
 
     await waitFor(() => {

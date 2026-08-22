@@ -1,6 +1,6 @@
 import type { ProcessSmokeAttemptContext } from "@iam/api-core/testing/process-smoke-harness";
 import type { DbClient } from "@iam/db";
-import type { SubjectFactsCacheRecordV1 } from "@iam/user-profile-read-model/subject-facts";
+import type { SubjectFactsCacheRecord } from "@iam/user-profile-read-model/subject-facts";
 import type Redis from "ioredis";
 import type { ClientCustomSsoConfigureDto } from "../../../admin-api/src/services/client/client.type.ts";
 import { createHash, randomUUID } from "node:crypto";
@@ -76,7 +76,6 @@ const redisUrlName = "IAM_OIDC_PROVIDER_TEST_REDIS_URL";
 const customSsoIsolationConfig: ClientCustomSsoConfigureDto = {
   mode: CustomSsoClientMode.Independent,
   validRedirectUrls: ["https://oidc-isolation.example.test/sso/*"],
-  subjectClaimCatalogVersion: 1,
   subjectClaims: [SubjectClaim.SubjectIdentifier],
   callbackEndpoint: "https://oidc-isolation.example.test/sso/callback",
   logoutEndpoint: "https://oidc-isolation.example.test/logout",
@@ -404,7 +403,10 @@ async function createCustomSsoIsolationSentinel(input: {
     4,
   );
   await configurationOwner.updateClientCustomSsoByCode(input.clientCode, {
-    customSsoConfig: customSsoIsolationConfig,
+    customSsoConfig: {
+      ...customSsoIsolationConfig,
+      subjectClaimCatalogVersion: 2,
+    },
     customSsoEnabled: true,
     customSsoSecretHash,
   });
@@ -497,9 +499,9 @@ async function seedExternalSessionState(
   return { principalToken: principal.externalToken };
 }
 
-function subjectFacts(name: string): SubjectFactsCacheRecordV1 {
+function subjectFacts(name: string): SubjectFactsCacheRecord {
   return {
-    schemaVersion: 1,
+    schemaVersion: 2,
     sourceDirtyVersion,
     publishedAt: new Date().toISOString(),
     subjectIdentifier,
@@ -526,6 +528,7 @@ function subjectFacts(name: string): SubjectFactsCacheRecordV1 {
           clientCode: clientId,
           roles: [{ code: "ticket12:user", privileges: ["ticket12:read"] }],
         }],
+        responsibilities: [],
       }],
     },
   };
@@ -687,11 +690,11 @@ describe("oIDC provider explicit external entry", () => {
             1,
             FALSE,
             TRUE,
-            1,
+            2,
             ${sourceDirtyVersion},
             '{}'::jsonb,
             '{}'::jsonb,
-            ${transaction.json({ employments: [] })},
+            ${transaction.json(subjectFacts(originalName).facts)},
             NOW()
           )
         `;
@@ -724,14 +727,20 @@ describe("oIDC provider explicit external entry", () => {
       const initialCustomSsoIsolation = await customSsoIsolation.observe();
       expect(initialCustomSsoIsolation).toEqual({
         configuration: {
-          customSsoConfig: customSsoIsolationConfig,
+          customSsoConfig: {
+            ...customSsoIsolationConfig,
+            subjectClaimCatalogVersion: 2,
+          },
           customSsoConfigVersion: 1,
           customSsoEnabled: true,
           customSsoSecretHash: expect.any(String),
         },
         runtime: {
           clientCode: clientId,
-          customSsoConfig: customSsoIsolationConfig,
+          customSsoConfig: {
+            ...customSsoIsolationConfig,
+            subjectClaimCatalogVersion: 2,
+          },
           customSsoConfigVersion: 1,
           customSsoEnabled: true,
         },

@@ -1,16 +1,16 @@
 import { z } from "@hono/zod-openapi";
 import {
-  CustomSsoSubjectProjectionV1Schema as SharedCustomSsoSubjectProjectionV1Schema,
+  CustomSsoSubjectProjectionSchema,
 } from "@iam/client-subject-projection/custom-sso";
 import { ApiErrorCode } from "@iam/contracts";
 
-export const CustomSsoSubjectProjectionV1Schema
-  = SharedCustomSsoSubjectProjectionV1Schema.openapi(
-    "CustomSsoSubjectProjectionV1",
+export const CustomSsoSubjectProjectionV2Schema
+  = CustomSsoSubjectProjectionSchema.openapi(
+    "CustomSsoSubjectProjectionV2",
   );
 
 export type {
-  CustomSsoSubjectProjectionV1 as CustomSsoSubjectProjectionV1Dto,
+  CustomSsoSubjectProjection as CustomSsoSubjectProjectionV2Dto,
 } from "@iam/client-subject-projection/custom-sso";
 
 export const CustomSsoUnavailableResponseSchema = z.object({

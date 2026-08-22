@@ -33,7 +33,7 @@ export function createOidcProviderStores(deps: CreateOidcProviderStoresDeps) {
       deps.redis,
       deps.env.oidc.clientAuthFailureWindowSeconds,
     ),
-    protocolObjects: createOidcProtocolObjectStore(deps.redis, tokens),
+    protocolObjects: createOidcProtocolObjectStore(deps.redis),
     tokens,
   };
 }

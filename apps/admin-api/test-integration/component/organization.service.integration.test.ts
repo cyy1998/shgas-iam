@@ -2,7 +2,10 @@ import { createOrganizationRepository } from "@admin-api/services/organization/o
 import { createOrganizationService } from "@admin-api/services/organization/organization.service";
 import { createImmediateUnitOfWork } from "@admin-api/test/fakes";
 import { EmploymentStatus, OrganizationLevel, OrganizationStatus, OrganizationType } from "@iam/contracts";
-import { OrganizationHasEmploymentError } from "@iam/domain/organization";
+import {
+  OrganizationHasEmploymentError,
+  OrganizationHasOpenResponsibilityAssignmentError,
+} from "@iam/domain/organization";
 import { describe, expect, mock, test } from "bun:test";
 import { createOpenEmploymentFixtureDb } from "../helpers/drizzle-query-capture";
 
@@ -44,6 +47,11 @@ function createService() {
   }];
   const tx = {
     auditService: { recordAuditLog: mock(async () => undefined) },
+    responsibilityParentLifecycle: {
+      assertNoOpenAssignmentsTargetingOrganizationSubtree: mock(
+        async () => undefined,
+      ),
+    },
     userProfileInvalidation: {
       recordChanges: mock(async () => undefined),
     },
@@ -104,6 +112,31 @@ describe("createOrganizationService", () => {
     expect(tx.organizationRepository.softDeleteOrganizationByCode).not.toHaveBeenCalled();
   });
 
+  test("blocks deletion on an Open responsibility target before other subtree guards", async () => {
+    const { service, tx } = createService();
+    tx.responsibilityParentLifecycle
+      .assertNoOpenAssignmentsTargetingOrganizationSubtree
+      .mockRejectedValueOnce(
+        new OrganizationHasOpenResponsibilityAssignmentError(),
+      );
+    tx.organizationRepository.countActiveChildrenByOrgCode.mockResolvedValue(1);
+
+    await expect(service.deleteOrganization("ORG")).rejects.toBeInstanceOf(
+      OrganizationHasOpenResponsibilityAssignmentError,
+    );
+
+    expect(
+      tx.responsibilityParentLifecycle
+        .assertNoOpenAssignmentsTargetingOrganizationSubtree,
+    ).toHaveBeenCalledWith({ organizationId: 1 });
+    expect(
+      tx.organizationRepository.countActiveChildrenByOrgCode,
+    ).not.toHaveBeenCalled();
+    expect(tx.organizationRepository.softDeleteOrganizationByCode).not.toHaveBeenCalled();
+    expect(tx.auditService.recordAuditLog).not.toHaveBeenCalled();
+    expect(tx.userProfileInvalidation.recordChanges).not.toHaveBeenCalled();
+  });
+
   test.each([
     ["Enable", EmploymentStatus.Enable],
     ["Pause", EmploymentStatus.Pause],
@@ -137,6 +170,60 @@ describe("createOrganizationService", () => {
     expect(tx.userProfileInvalidation.recordChanges).toHaveBeenCalledWith([
       { kind: "organization", organizationId: 1 },
     ]);
+  });
+
+  test("does not treat an unchanged Pause status as a lifecycle transition during metadata edits", async () => {
+    const { service, tx } = createService();
+    tx.organizationRepository.getOrganizationByCodeForAdmin.mockResolvedValue(
+      organization({ status: OrganizationStatus.Pause }),
+    );
+    tx.responsibilityParentLifecycle
+      .assertNoOpenAssignmentsTargetingOrganizationSubtree
+      .mockRejectedValue(
+        new OrganizationHasOpenResponsibilityAssignmentError(),
+      );
+
+    await expect(service.updateOrganization("ORG", {
+      orgName: "Renamed Organization",
+      status: OrganizationStatus.Pause,
+    })).resolves.toBe(true);
+
+    expect(
+      tx.responsibilityParentLifecycle
+        .assertNoOpenAssignmentsTargetingOrganizationSubtree,
+    ).not.toHaveBeenCalled();
+    expect(
+      tx.organizationRepository.countOpenEmploymentsByOrgCode,
+    ).not.toHaveBeenCalled();
+    expect(tx.organizationRepository.updateOrganizationByCode).toHaveBeenCalledWith(
+      "ORG",
+      { orgName: "Renamed Organization", status: OrganizationStatus.Pause },
+    );
+  });
+
+  test("blocks Pause or Disable when the Organization subtree is an Open responsibility target", async () => {
+    const { service, tx } = createService();
+    tx.responsibilityParentLifecycle
+      .assertNoOpenAssignmentsTargetingOrganizationSubtree
+      .mockRejectedValueOnce(
+        new OrganizationHasOpenResponsibilityAssignmentError(),
+      );
+
+    await expect(
+      service.updateOrganizationStatus("ORG", OrganizationStatus.Pause),
+    ).rejects.toBeInstanceOf(
+      OrganizationHasOpenResponsibilityAssignmentError,
+    );
+
+    expect(
+      tx.responsibilityParentLifecycle
+        .assertNoOpenAssignmentsTargetingOrganizationSubtree,
+    ).toHaveBeenCalledWith({ organizationId: 1 });
+    expect(
+      tx.organizationRepository.countOpenEmploymentsByOrgCode,
+    ).not.toHaveBeenCalled();
+    expect(tx.organizationRepository.updateOrganizationByCode).not.toHaveBeenCalled();
+    expect(tx.auditService.recordAuditLog).not.toHaveBeenCalled();
   });
 
   test.each([

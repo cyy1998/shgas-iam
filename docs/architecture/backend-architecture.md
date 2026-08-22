@@ -123,21 +123,26 @@ composition。跨层实例连接统一由 composition 完成。
   可以使用最后发布事实；选择 `iam:authorization` 时，Module 根据 facts source version 调用 Authorization
   Freshness port。该 port 可以确认当前 facts、返回一次重载后的 facts，或报告 not-ready；Module 在组装任何已选
   claim 前采用已确认版本，无法证明新鲜时返回 `SubjectProjectionNotReadyError`。
-- 核心投影保持协议中性。`@iam/client-subject-projection/custom-sso` 只公开一个完整 V1 交付 Interface：
-  `resolveCustomSsoSubjectProjectionV1` 先调用 root Projection Service，再核对返回的 Subject Identifier 与 resolve input，
-  随后执行 wire mapping 和 strict schema parse。Raw mapper 留在 subpath 内部；schema、Wire 类型与 placeholder preview
+- 核心投影保持协议中性。`@iam/client-subject-projection/custom-sso` 只公开一个完整 V2 交付 Interface：
+  `resolveCustomSsoSubjectProjection` 先调用 root Projection Service，再核对返回的 Subject Identifier 与 resolve input，
+  随后执行 wire mapping 和 strict schema parse。Schema、Wire 类型与 placeholder preview
   继续公开。Subject mismatch 产生只含安全 reason `subject_mismatch` 的内部不变量错误，mapping/parse 失败产生
   `invalid_wire`；resolve 阶段的既有错误原样传播。该 subpath 只能通过 package root public Interface 取得 Projection
   类型或能力，不得导入其他 core subpath、Facts persistence、client 配置、runtime 或 transport。
+- Package root 是唯一 active V2 projection Interface；Custom SSO wire 只从 `/custom-sso` subpath 公开。Catalog V2 保持既有 claim vocabulary，
+  选择 `profile:employments` 时每条 Employment 原子携带 canonical `responsibilities`/`[]`；authorization employment
+  继续只含 Employment identity、roles 与 privileges。Custom SSO subpath 拥有 V2 strict schema/mapper，缺失、
+  未知或非法 responsibility 拒绝整份 projection，不提供 V1 alias、translation、fallback 或 caller version switch；
+  历史 V1 源码不再由 package exports、应用 composition 或命令入口公开。
 - `@iam/user-profile-read-model/subject-facts` 提供同时满足 Facts 与 Freshness ports 的 deep reader：有效 Redis
   record 直读；miss、损坏或未知 schema 按 Subject single-flight 查询一行窄 `user_profile` 并以版本 CAS 回填；
   查询不读取 Legacy `detail`/`search_doc` 或联查源业务表。严格授权每次只从 PostgreSQL 读取权威 Dirty version/status，
   仅 `processed` 且版本相等时放行；缓存落后时最多重载一次 Profile。普通 Profile 不读取 Dirty。
 - API production composition 已把 Projection Module 接入 Custom SSO Independent token exchange、
-  `/public/user-info` 和 Gateway `/auth/authz`。前两者按当前 Client selection 输出 Custom SSO V1 wire；
+  `/public/user-info` 和 Gateway `/auth/authz`。前两者按当前 Client selection 输出 Custom SSO V2 wire；
   `/auth/authz` 强制收窄为 Subject Identifier 与可选 username/name，并把同一 Base64 值写入 body/header。
   Gateway Local Session 解析形成最小 Subject/client/ORCAS 认证数据，并携带仅供服务端竞态校验的 config version；
-  该版本不进入 projection 或 wire。`/public/user-info` 在完整 V1 Interface 返回后、响应交付前再次复查当前
+  该版本不进入 projection 或 wire。`/public/user-info` 在完整 V2 Interface 返回后、响应交付前再次复查当前
   Client/config version，配置变化时丢弃已构建的 Wire；Gateway Header 继续使用独立最小 mapping、Subject equality 与
   Base64 路径。Client runtime 使用带 generation
   与 mutation fence 的 Redis read-through cache：positive/negative TTL 分别为 30 秒/3 秒，mutation fence 为
@@ -171,6 +176,11 @@ composition。跨层实例连接统一由 composition 完成。
   API 的 Custom SSO retryable error adapter 将 Projection Not Ready 与 Subject Access unavailable 分别映射为稳定
   `503` code 和配置的 `Retry-After`，不复用于 OIDC。
 
+- API production composition 直接组装 V2 Facts reader、projection 与 Custom SSO delivery；`/public/user-info` 在 projection
+  前后复查同一个 `customSsoConfigVersion`，Gateway Header 仍硬裁剪为 Subject、username/name。Catalog 版本固定在服务端，
+  Admin 配置请求不能提交版本字段。Opaque Credential 继续只持有 Principal Session 关联与 mode/config version，UserInfo
+  每次按当前 V2 facts 重建，不保存 responsibility snapshot。
+
 ### 角色分配解析
 
 - `@iam/role-assignment-resolution` 是 Effective Role 与角色变更受影响用户解析的唯一 production seam。Admin、OIDC
@@ -185,15 +195,34 @@ composition。跨层实例连接统一由 composition 完成。
   受影响用户解析。根级 Architecture Guard 允许该 owner，并阻止其他 production 调用方导入专用 assignment schema
   subpath。
 
+### Organization Responsibility 解析
+
+- `@iam/organization-responsibility-resolution` 是 Effective Responsibility 与跨树 holder 反向解析的唯一跨 runtime
+  seam。调用方显式提供 observation time；resolver 批量返回 Type/target identity，并在引用、父生命周期、Period 或
+  Open cardinality 异常时整批 fail closed，不拥有 cache、ACL、Admin history、transport DTO 或 protocol wire。
+- User Profile invalidation 使用 transaction-bound resolver，把 Organization subtree 的既有 Employment 用户与
+  responsibility target reverse holders 合并后只登记一次 Dirty Version；Catalog 已发布字段/order 变化通过 Type holder
+  seam 失效当前 holder。Admin 管理 repository 继续直接读写 Assignment，但不向其他 runtime 暴露其查询规则。
+- `@iam/user-profile-read-model` 默认入口生成并读取同一 Dirty Version
+  下的 Detail、Search 与 Subject Facts V2，并复用 PostgreSQL atomic publication、Redis monotonic CAS 与严格 V2
+  cache/PostgreSQL read-through。Active Internal Detail 与 DSL Search 均只读 `user_profile` 的 V2 row；API 使用独立的
+  2 秒 PostgreSQL statement timeout 连接和 5 秒 handler budget，并在 composition shutdown 中关闭该资源。专用 Worker
+  Profile V2 maintenance composition 通过
+  read-model `worker` subpath 调用批量 V2 backfill、PostgreSQL gate 与 Redis/Subject Access gate；它不启动普通 consumer、
+  不应用 client manifest 或推进 epoch。Active Worker consumer、Internal User、Custom SSO 与 OIDC 只发布和读取 V2，
+  不允许同一 live User 的 V1/V2 混写、双读或由 caller 选择版本。
+
 ### User Profile 失效
 
 - `@iam/user-profile-read-model` 的 transaction-bound `UserProfileInvalidation.recordChanges` 是业务写路径唯一的
-  User Profile 失效 seam。调用方只提交 user、employment、organization、position、role 或 role-assignment source
-  change，并在同一 source transaction 的领域写入完成后调用。
+  User Profile 失效 seam。调用方只提交 user、employment、organization、position、role、role-assignment、
+  organization-responsibility-assignment 或 organization-responsibility-type source change，并在同一 source
+  transaction 的领域写入完成后调用。
 - 调用方不选择 dirty reason 或 scope，不接触 dirty/affected-user repository、job producer、after-commit
   registration，也不复制 request/trace metadata。业务 service/use case 只接收自己所需的最窄 `recordChanges` port。
 - API/Admin API 的 transaction composition 使用当前 transaction `DbClient` 创建 `UserProfileInvalidation`；
-  模块内部拥有 tx-bound dirty repository、affected-user repository 和 role-assignment resolver。普通 repository
+  模块内部拥有 tx-bound dirty repository、affected-user repository、role-assignment resolver 和 Organization
+  Responsibility resolver。普通 repository
   composition 不创建或暴露这些 projection implementations。
 - `recordChanges` 成功表示 dirty fact 已在 source transaction 持久化并登记 rebuild wake-up，不表示 BullMQ 已完成
   入队。提交后的批量 enqueue 是 best-effort；失败由日志和 repair 路径恢复，不回滚业务事实。
@@ -355,7 +384,7 @@ composition。跨层实例连接统一由 composition 完成。
 - Gateway 与 Independent 共用独立 Grant redemption state machine。`begin` 通过 attempt fence 保证并发兑换只有
   一个赢家；reserved 工作由 heartbeat 定期续租，renew 必须匹配 grant、attempt 和上一 lease deadline，且只延长
   lease、不延长 Grant 原始 expiry。Independent 在任何 Credential issuance、post-validation、Grant consume、成功审计或
-  consumed artifact cleanup 前，必须先取得通过 Subject equality 与 strict schema 的完整 V1 Wire；随后只有 Credential
+  consumed artifact cleanup 前，必须先取得通过 Subject equality 与 strict schema 的完整 V2 Wire；随后只有 Credential
   签发并按当前 Client/Subject Access 复核成功才 consume。Gateway 只有最小 Local Session、可选 ORCAS 和当前 Client
   复核成功后才 consume。消费前
   失败按语义 release，并补偿已创建的 binding/credential；消费后 Session Kernel artifact 清理和成功审计是

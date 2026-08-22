@@ -1308,9 +1308,12 @@ describe("session kernel tombstone, cleanup, validation, and fail closed behavio
     expect(output).not.toContain("client:portal");
     expect(output).not.toContain("token-secret-12345678901234567890");
     expect(await kernel.resolveCredential(credential.externalToken!)).toMatchObject({ status: "revoked" });
-    expect(redis.expiresAt.get(kernel.keys.lookupTombstone("credential", credential.value.lookupHash))).toBe(
-      credential.value.expiresAt + 5_000,
-    );
+    expect(redis.expiresAt.get(
+      kernel.keys.lookupTombstone("credential", credential.value.lookupHash),
+    )).toBeUndefined();
+    await expect(kernel.inventoryClientProtocol("portal", "oidc")).resolves.toMatchObject({
+      counts: { cleanupPending: 1, total: 1 },
+    });
   });
 
   test("revokes user sessions with an excluded PrincipalSession while cascading its child objects", async () => {
@@ -1411,6 +1414,20 @@ describe("session kernel tombstone, cleanup, validation, and fail closed behavio
       return;
     }
 
+    await expect(kernel.inventoryClientProtocol("portal", "oidc")).resolves.toEqual({
+      clientCode: "portal",
+      protocol: "oidc",
+      counts: {
+        bindings: 1,
+        credentials: 1,
+        artifacts: 0,
+        cleanupPending: 0,
+        invalid: 0,
+        stale: 0,
+        total: 2,
+      },
+    });
+
     const protocolSummary = await kernel.revokeClientProtocol("portal", "oidc", "client_config_changed");
 
     expect(protocolSummary.bindings.revoked).toBe(1);
@@ -1422,6 +1439,22 @@ describe("session kernel tombstone, cleanup, validation, and fail closed behavio
       ref: "payload:1",
       error: "cleanup adapter not configured",
     }]);
+    await expect(kernel.inventoryClientProtocol("portal", "oidc")).resolves.toEqual({
+      clientCode: "portal",
+      protocol: "oidc",
+      counts: {
+        bindings: 0,
+        credentials: 0,
+        artifacts: 0,
+        cleanupPending: 1,
+        invalid: 0,
+        stale: 0,
+        total: 1,
+      },
+    });
+    await expect(kernel.resolvePrincipalSession(session.externalToken!)).resolves.toMatchObject({
+      status: "resolved",
+    });
     await expect(kernel.resolveCredential(customCredential.externalToken!)).resolves.toMatchObject({
       status: "resolved",
     });
@@ -1432,6 +1465,57 @@ describe("session kernel tombstone, cleanup, validation, and fail closed behavio
     expect(allProtocolsSummary.credentials.revoked).toBe(1);
     await expect(kernel.resolveCredential(customCredential.externalToken!)).resolves.toMatchObject({
       status: "revoked",
+    });
+  });
+
+  test("keeps failed cleanup discoverable and completes it on a forward retry", async () => {
+    let cleanupShouldFail = true;
+    const redis = new KernelFakeRedis();
+    const kernel = createSessionKernel({
+      redis,
+      config: createConfig(redis),
+      cleanupAdapters: [{
+        protocol: "oidc",
+        kind: "payload",
+        cleanup: async () => {
+          if (cleanupShouldFail)
+            throw new Error("payload cleanup unavailable");
+        },
+      }],
+    });
+    const principalSession = await kernel.createPrincipalSession(principal.subjectId);
+    if (principalSession.status !== "created")
+      throw new Error("expected Principal Session fixture");
+    const credential = await kernel.issueCredential({
+      principalSessionId: principalSession.value.principalSessionId,
+      protocol: "oidc",
+      clientCode: "portal",
+      credentialType: "access_token",
+      ttlMs: 30_000,
+      cleanupRefs: [{ protocol: "oidc", kind: "payload", ref: "payload:retry" }],
+    });
+    if (credential.status !== "created")
+      throw new Error("expected credential fixture");
+
+    const failed = await kernel.revokeClientProtocol(
+      "portal",
+      "oidc",
+      "client_config_changed",
+    );
+    expect(failed.cleanup.failed).toBe(1);
+    await expect(kernel.inventoryClientProtocol("portal", "oidc")).resolves.toMatchObject({
+      counts: { cleanupPending: 1, total: 1 },
+    });
+
+    cleanupShouldFail = false;
+    const retried = await kernel.revokeClientProtocol(
+      "portal",
+      "oidc",
+      "client_config_changed",
+    );
+    expect(retried.cleanup).toMatchObject({ attempted: 1, succeeded: 1, failed: 0 });
+    await expect(kernel.inventoryClientProtocol("portal", "oidc")).resolves.toMatchObject({
+      counts: { cleanupPending: 0, total: 0 },
     });
   });
 

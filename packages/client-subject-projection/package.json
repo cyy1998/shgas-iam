@@ -5,8 +5,7 @@
   "private": true,
   "exports": {
     ".": "./src/index.ts",
-    "./custom-sso": "./src/custom-sso.ts",
-    "./testing": "./src/testing.ts"
+    "./custom-sso": "./src/custom-sso.ts"
   },
   "scripts": {
     "lint": "eslint src test-integration eslint.config.js",

@@ -1,6 +1,7 @@
 import type { SubjectClaimName } from "@iam/contracts";
-import type { OptionalSubjectClaim, SubjectClaimSelection } from "./index";
+import type { OptionalSubjectClaim, SubjectClaimSelection } from "./legacy-maintenance";
 import { SubjectClaim } from "@iam/contracts";
+import { InvalidSubjectClaimSelectionError } from "./subject-claim-selection.error";
 
 interface SubjectClaimCatalogDeclaration {
   readonly catalogVersion: unknown;
@@ -67,15 +68,6 @@ export const SUBJECT_CLAIM_CATALOG_V1 = {
 } as const;
 
 const optionalSubjectClaims = new Set<string>(SUBJECT_CLAIM_CATALOG_V1.optionalClaims);
-
-export class InvalidSubjectClaimSelectionError extends Error {
-  public readonly code = "INVALID_SUBJECT_CLAIM_SELECTION";
-
-  constructor() {
-    super("Subject Claim Selection is invalid");
-    this.name = "InvalidSubjectClaimSelectionError";
-  }
-}
 
 export function assertSubjectClaimSelection(
   input: unknown,

@@ -28,6 +28,14 @@ import { ttlMsUntil } from "./time";
 
 type RedisResult = [Error | null, unknown];
 
+const REMOVE_INDEX_MEMBER_IF_OBJECT_INACTIVE_SCRIPT = `
+-- remove_index_member_if_object_inactive
+if redis.call("EXISTS", KEYS[1]) == 0 then
+  return redis.call("ZREM", KEYS[2], ARGV[1])
+end
+return 0
+`;
+
 type StoredResolveResult<T>
   = | LifecycleFailureResult
     | (ResolvedResult<T> & { serialized: string });
@@ -70,6 +78,36 @@ export type StoreIndexWrite = {
   member: string;
 };
 
+export type SessionKernelRevocationTransitions = {
+  updateActiveObject: (input: {
+    activeKey: string;
+    expectedActive: string;
+    expiresAt: number;
+    indexes: StoreIndexWrite[];
+    serializedObject: string;
+    tombstoneKey: string;
+  }) => Promise<boolean>;
+  revokeActiveObject: (input: {
+    activeKey: string;
+    cleanupPending?: { key: string; member: string; score: number };
+    expectedActive: string;
+    expiresAt: number;
+    indexRemovals: Array<{ key: string; member: string }>;
+    lookup?: { activeKey: string; tombstoneKey: string; expectedOwner: string };
+    serializedTombstone: string;
+    tombstoneKey: string;
+  }) => Promise<boolean>;
+  finalizeCleanupPending: (input: {
+    expiresAt: number;
+    indexKey: string;
+    lookupTombstoneKey?: string;
+    member: string;
+    now: number;
+    serializedTombstone: string;
+    tombstoneKey: string;
+  }) => Promise<boolean>;
+};
+
 export class SessionKernelStore {
   constructor(
     private readonly redis: SessionKernelRedis,
@@ -77,6 +115,7 @@ export class SessionKernelStore {
     private readonly config: SessionKernelConfig,
     private readonly artifactConsumer: SessionKernelArtifactConsumer,
     private readonly credentialCreator: SessionKernelCredentialCreator | undefined,
+    private readonly revocationTransitions: SessionKernelRevocationTransitions,
   ) {}
 
   async resolveByExternalToken<K extends ExternalKind>(
@@ -134,6 +173,14 @@ export class SessionKernelStore {
     now = this.config.clock.now(),
   ): Promise<ResolveResult<LifecycleObjectByKind[K]>> {
     return withoutSerialized(await this.resolveStoredObject(kind, id, now));
+  }
+
+  async resolveObjectForUpdate<K extends LifecycleObjectKind>(
+    kind: K,
+    id: string,
+    now = this.config.clock.now(),
+  ) {
+    return await this.resolveStoredObject(kind, id, now);
   }
 
   private async resolveStoredObject<K extends LifecycleObjectKind>(
@@ -212,17 +259,20 @@ export class SessionKernelStore {
   }
 
   async updateObject<K extends LifecycleObjectKind>(input: {
+    expectedSerialized: string;
     kind: K;
     id: string;
     object: LifecycleObjectByKind[K];
     indexes?: StoreIndexWrite[];
   }) {
-    const transaction = this.redis.multi()
-      .set(this.keys.active(input.kind, input.id), stringifyLifecycleObject(input.object))
-      .pexpireat(this.keys.active(input.kind, input.id), input.object.expiresAt);
-    for (const index of input.indexes ?? [])
-      transaction.zadd(index.key, index.score, index.member);
-    await assertTransaction(transaction.exec());
+    return await this.revocationTransitions.updateActiveObject({
+      activeKey: this.keys.active(input.kind, input.id),
+      expectedActive: input.expectedSerialized,
+      expiresAt: input.object.expiresAt,
+      indexes: input.indexes ?? [],
+      serializedObject: stringifyLifecycleObject(input.object),
+      tombstoneKey: this.keys.tombstone(input.kind, input.id),
+    });
   }
 
   async revokeActiveObject(input: {
@@ -231,6 +281,7 @@ export class SessionKernelStore {
     lookupHash?: string;
     tombstone: RevokedTombstone;
     indexRemovals?: Array<{ key: string; member: string }>;
+    cleanupPending?: { key: string; member: string };
   }) {
     const existing = await this.readTombstoneKey(this.keys.tombstone(input.kind, input.id));
     if (existing.status === "schema_invalid")
@@ -242,23 +293,63 @@ export class SessionKernelStore {
     if (!active)
       return { status: "missing" as const };
 
-    const transaction = this.redis.multi()
-      .set(this.keys.tombstone(input.kind, input.id), stringifyRevokedTombstone(input.tombstone))
-      .pexpireat(this.keys.tombstone(input.kind, input.id), input.tombstone.expiresAt)
-      .del(this.keys.active(input.kind, input.id));
-
-    if (input.lookupHash && isExternalKind(input.kind)) {
-      transaction
-        .set(this.keys.lookupTombstone(input.kind, input.lookupHash), stringifyRevokedTombstone(input.tombstone))
-        .pexpireat(this.keys.lookupTombstone(input.kind, input.lookupHash), input.tombstone.expiresAt)
-        .del(this.keys.lookup(input.kind, input.lookupHash));
+    const tombstoneKey = this.keys.tombstone(input.kind, input.id);
+    const transitioned = await this.revocationTransitions.revokeActiveObject({
+      activeKey: this.keys.active(input.kind, input.id),
+      ...(input.cleanupPending
+        ? {
+            cleanupPending: {
+              ...input.cleanupPending,
+              score: input.tombstone.revokedAt,
+            },
+          }
+        : {}),
+      expectedActive: active,
+      expiresAt: input.tombstone.expiresAt,
+      indexRemovals: input.indexRemovals ?? [],
+      ...(input.lookupHash && isExternalKind(input.kind)
+        ? {
+            lookup: {
+              activeKey: this.keys.lookup(input.kind, input.lookupHash),
+              tombstoneKey: this.keys.lookupTombstone(input.kind, input.lookupHash),
+              expectedOwner: input.id,
+            },
+          }
+        : {}),
+      serializedTombstone: stringifyRevokedTombstone(input.tombstone),
+      tombstoneKey,
+    });
+    if (!transitioned) {
+      const concurrent = await this.readTombstoneKey(tombstoneKey);
+      if (concurrent.status === "schema_invalid")
+        return concurrent;
+      if (concurrent.status === "revoked")
+        return { status: "already_revoked" as const, tombstone: concurrent.tombstone };
+      return { status: "missing" as const };
     }
-
-    for (const removal of input.indexRemovals ?? [])
-      transaction.zrem(removal.key, removal.member);
-
-    await assertTransaction(transaction.exec());
     return { status: "revoked" as const };
+  }
+
+  async finalizeCleanupPending(input: {
+    tombstone: RevokedTombstone;
+    indexKey: string;
+    member: string;
+  }) {
+    const now = this.config.clock.now();
+    const tombstoneKey = this.keys.tombstone(input.tombstone.objectKind, input.tombstone.objectId);
+    const lookupTombstoneKey = input.tombstone.lookupHash
+      && isExternalKind(input.tombstone.objectKind)
+      ? this.keys.lookupTombstone(input.tombstone.objectKind, input.tombstone.lookupHash)
+      : undefined;
+    await this.revocationTransitions.finalizeCleanupPending({
+      expiresAt: input.tombstone.expiresAt,
+      indexKey: input.indexKey,
+      ...(lookupTombstoneKey ? { lookupTombstoneKey } : {}),
+      member: input.member,
+      now,
+      serializedTombstone: stringifyRevokedTombstone(input.tombstone),
+      tombstoneKey,
+    });
   }
 
   async consumeArtifact(input: {
@@ -290,6 +381,10 @@ export class SessionKernelStore {
     return await this.redis.zrange(key, 0, -1);
   }
 
+  async readIndexWithoutMutation(key: string) {
+    return await this.redis.zrange(key, 0, -1);
+  }
+
   async cleanExpiredIndex(key: string, now = this.config.clock.now()) {
     await this.redis.zremrangebyscore(key, "-inf", now);
   }
@@ -309,6 +404,23 @@ export class SessionKernelStore {
     for (const member of members)
       transaction.zrem(key, member);
     await assertTransaction(transaction.exec());
+  }
+
+  async removeIndexMemberIfObjectInactive(
+    indexKey: string,
+    member: string,
+    kind: LifecycleObjectKind,
+    id: string,
+  ) {
+    if (!this.redis.eval)
+      throw new Error("Session Kernel stale index cleanup requires Redis EVAL");
+    await this.redis.eval(
+      REMOVE_INDEX_MEMBER_IF_OBJECT_INACTIVE_SCRIPT,
+      2,
+      this.keys.active(kind, id),
+      indexKey,
+      member,
+    );
   }
 
   private async readTombstoneKey(key: string): Promise<

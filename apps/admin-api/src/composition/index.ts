@@ -58,6 +58,7 @@ export async function createAdminApiComposition(
   });
   const userProfileJobProducer = createUserProfileJobProducer(userProfileQueue);
   const unitOfWork = createAdminApiUnitOfWork({
+    db: compositionDb,
     logger: runtime.afterCommitLogger,
     userProfileJobProducer,
     clock: runtime.clock,

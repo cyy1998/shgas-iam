@@ -9,6 +9,7 @@ export enum UserProfileJobName {
 export enum UserProfileDirtyReason {
   UserUpdated = "user-updated",
   EmploymentUpdated = "employment-updated",
+  OrganizationResponsibilityAssignmentUpdated = "organization-responsibility-assignment-updated",
   OrganizationUpdated = "organization-updated",
   PositionUpdated = "position-updated",
   RoleUpdated = "role-updated",

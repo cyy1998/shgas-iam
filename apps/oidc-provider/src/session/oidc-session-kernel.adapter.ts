@@ -382,6 +382,9 @@ export function createOidcSessionKernelAdapter(deps: OidcSessionKernelAdapterDep
     const staged = await providerSessionState.claim(input);
     if (!staged || staged.expiresAt <= nowSeconds())
       return null;
+    const activeVersion = await deps.clients.findActiveVersion(staged.clientCode);
+    if (activeVersion !== staged.oidcConfigVersion)
+      return null;
     const binding = await bindAndPublish(input.providerSessionUid, {
       sessionId: staged.principalSessionId,
       authTime: staged.authTime,

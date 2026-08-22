@@ -14,7 +14,7 @@ const client = {
   customSsoConfig: {
     mode: CustomSsoClientMode.Gateway,
     orcas: { enabled: true },
-    subjectClaimCatalogVersion: 1 as const,
+    subjectClaimCatalogVersion: 2 as const,
     subjectClaims: [SubjectClaim.SubjectIdentifier],
     validRedirectUrls: ["https://gateway.example.com"],
   },
@@ -91,7 +91,7 @@ describe("current Gateway client state", () => {
         mode: CustomSsoClientMode.Independent,
         callbackEndpoint: "https://gateway.example.com/sso/callback",
         logoutEndpoint: "https://gateway.example.com/sso/logout",
-        subjectClaimCatalogVersion: 1 as const,
+        subjectClaimCatalogVersion: 2 as const,
         subjectClaims: [SubjectClaim.SubjectIdentifier],
         validRedirectUrls: ["https://gateway.example.com"],
       },

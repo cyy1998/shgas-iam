@@ -1,6 +1,7 @@
 import type { AuthorizationGrantRedemption } from "../../src/authorization-grant";
 import type { LoginRestriction } from "../../src/login-restriction";
 import type {
+  CleanupAdapter,
   SessionKernel,
   SessionKernelRedis,
 } from "../../src/session/kernel";
@@ -23,6 +24,7 @@ import {
   createSessionKernel,
   createSessionKernelConfig,
   createSessionKernelKeyBuilder,
+  encodeIndexMember,
 } from "../../src/session/kernel";
 import {
   createRedisSubjectAccessStore,
@@ -46,7 +48,9 @@ export interface RedisTestHarness {
     readonly observerAttemptIds: readonly string[];
     readonly writerAttemptIds: readonly string[];
   }) => Promise<AuthorizationGrantRedisTestScope>;
-  readonly createSessionKernelScope: () => Promise<SessionKernelRedisTestScope>;
+  readonly createSessionKernelScope: (input?: {
+    cleanupAdapters?: CleanupAdapter[];
+  }) => Promise<SessionKernelRedisTestScope>;
   readonly createSubjectAccessScope: (input: {
     writerTransitionIds: readonly string[];
     observerTransitionIds: readonly string[];
@@ -105,6 +109,27 @@ export interface SessionKernelRedisTestScope {
   readonly observer: SessionKernel;
   readonly ambiguousWriter: SessionKernel;
   readonly failNextCredentialCreateAfterCommit: () => void;
+  readonly cleanupTombstoneTtl: (input: {
+    id: string;
+    kind: "artifact" | "client_binding" | "credential";
+  }) => Promise<number>;
+  readonly activeObjectExists: (input: {
+    id: string;
+    kind: "artifact" | "client_binding" | "credential" | "principal_session";
+  }) => Promise<boolean>;
+  readonly recreateObjectBeforeNextInactiveIndexRemoval: () => void;
+  readonly replaceObjectBeforeNextRevoke: () => void;
+  readonly replaceTombstoneBeforeNextFinalize: () => void;
+  readonly pauseNextPrincipalValidation: () => {
+    reached: Promise<void>;
+    release: () => void;
+  };
+  readonly seedClientProtocolIndexMember: (input: {
+    clientCode: string;
+    id: string;
+    kind: "artifact" | "client_binding" | "credential";
+    protocol: string;
+  }) => Promise<void>;
   readonly replaceArtifactPayloadBeforeNextValidation: (input: {
     artifactId: string;
     serializedPayload: string;
@@ -207,7 +232,7 @@ export async function createRedisTestHarness(): Promise<RedisTestHarness> {
         writer,
       };
     },
-    async createSessionKernelScope() {
+    async createSessionKernelScope(input = {}) {
       const keyPrefix = `iam:test:session-kernel:${randomUUID()}:`;
       const writerRedis = createRedisClient(redisUrl);
       const observerRedis = createRedisClient(redisUrl);
@@ -225,6 +250,10 @@ export async function createRedisTestHarness(): Promise<RedisTestHarness> {
       }
 
       let beforeNextArtifactValidation: (() => Promise<void>) | undefined;
+      let beforeNextPrincipalValidation: (() => Promise<void>) | undefined;
+      let recreateObjectBeforeNextInactiveIndexRemoval = false;
+      let replaceObjectBeforeNextRevoke = false;
+      let replaceTombstoneBeforeNextFinalize = false;
       let failNextCredentialCreateAfterCommit = false;
       const ambiguousWriter = createSessionKernelClient(
         createCommitThenErrorRedis(writerRedis, () => {
@@ -235,16 +264,75 @@ export async function createRedisTestHarness(): Promise<RedisTestHarness> {
         }),
         keyPrefix,
       );
+      const writerRedisWithHooks = new Proxy(writerRedis, {
+        get(target, property) {
+          if (property === "eval") {
+            return async (script: string, keyCount: number, ...args: Array<string | number>) => {
+              if (
+                recreateObjectBeforeNextInactiveIndexRemoval
+                && script.includes("remove_index_member_if_object_inactive")
+              ) {
+                recreateObjectBeforeNextInactiveIndexRemoval = false;
+                await target.set(String(args[0]), "concurrent replacement");
+              }
+              if (
+                replaceObjectBeforeNextRevoke
+                && script.includes("session-kernel-revoke-active-object-v1")
+              ) {
+                replaceObjectBeforeNextRevoke = false;
+                const key = String(args[0]);
+                const current = await target.get(key);
+                if (!current)
+                  throw new Error("expected active object before concurrent replacement");
+                const replacement = JSON.parse(current) as Record<string, unknown>;
+                replacement.metadata = { concurrentReplacement: true };
+                await target.set(key, JSON.stringify(replacement), "KEEPTTL");
+              }
+              if (
+                replaceTombstoneBeforeNextFinalize
+                && script.includes("session-kernel-finalize-cleanup-pending-v1")
+              ) {
+                replaceTombstoneBeforeNextFinalize = false;
+                const key = String(args[0]);
+                const current = await target.get(key);
+                if (!current)
+                  throw new Error("expected tombstone before concurrent replacement");
+                const replacement = JSON.parse(current) as {
+                  expiresAt: number;
+                  revokedAt: number;
+                };
+                replacement.expiresAt += 1;
+                replacement.revokedAt += 1;
+                await target.set(key, JSON.stringify(replacement));
+              }
+              return await target.eval(script, keyCount, ...args);
+            };
+          }
+          const value = Reflect.get(target, property, target) as unknown;
+          return typeof value === "function" ? value.bind(target) : value;
+        },
+      }) as SessionKernelRedis;
       const writer = createSessionKernelClient(
-        writerRedis,
+        writerRedisWithHooks,
         keyPrefix,
         async () => {
           const pending = beforeNextArtifactValidation;
           beforeNextArtifactValidation = undefined;
           await pending?.();
         },
+        input.cleanupAdapters,
+        async () => {
+          const pending = beforeNextPrincipalValidation;
+          beforeNextPrincipalValidation = undefined;
+          await pending?.();
+        },
       );
-      const observer = createSessionKernelClient(observerRedis, keyPrefix);
+      const observer = createSessionKernelClient(
+        observerRedis,
+        keyPrefix,
+        undefined,
+        input.cleanupAdapters,
+      );
       const close = createRedisTestScopeCloser({
         cleanupRedis,
         clients: [writerRedis, observerRedis],
@@ -253,12 +341,46 @@ export async function createRedisTestHarness(): Promise<RedisTestHarness> {
       });
 
       return {
+        async activeObjectExists(input) {
+          return await observerRedis.get(
+            createSessionKernelKeyBuilder(keyPrefix).active(input.kind, input.id),
+          ) !== null;
+        },
         ambiguousWriter,
+        async cleanupTombstoneTtl(tombstone) {
+          return await writerRedis.pttl(
+            createSessionKernelKeyBuilder(keyPrefix).tombstone(tombstone.kind, tombstone.id),
+          );
+        },
         close,
         failNextCredentialCreateAfterCommit() {
           failNextCredentialCreateAfterCommit = true;
         },
         observer,
+        recreateObjectBeforeNextInactiveIndexRemoval() {
+          recreateObjectBeforeNextInactiveIndexRemoval = true;
+        },
+        replaceObjectBeforeNextRevoke() {
+          replaceObjectBeforeNextRevoke = true;
+        },
+        replaceTombstoneBeforeNextFinalize() {
+          replaceTombstoneBeforeNextFinalize = true;
+        },
+        pauseNextPrincipalValidation() {
+          let markReached = () => {};
+          let release = () => {};
+          const reached = new Promise<void>((resolve) => {
+            markReached = resolve;
+          });
+          const released = new Promise<void>((resolve) => {
+            release = resolve;
+          });
+          beforeNextPrincipalValidation = async () => {
+            markReached();
+            await released;
+          };
+          return { reached, release };
+        },
         writer,
         replaceArtifactPayloadBeforeNextValidation(input) {
           const key = createSessionKernelKeyBuilder(keyPrefix).active(
@@ -268,6 +390,17 @@ export async function createRedisTestHarness(): Promise<RedisTestHarness> {
           beforeNextArtifactValidation = async () => {
             await writerRedis.set(key, input.serializedPayload);
           };
+        },
+        async seedClientProtocolIndexMember(index) {
+          const key = createSessionKernelKeyBuilder(keyPrefix).index.clientProtocol(
+            index.clientCode,
+            index.protocol,
+          );
+          await writerRedis.zadd(
+            key,
+            Date.now() + 30_000,
+            encodeIndexMember(index.kind, index.id),
+          );
         },
       };
     },
@@ -440,8 +573,11 @@ function createSessionKernelClient(
   redis: SessionKernelRedis,
   namespace: string,
   beforeArtifactValidation?: () => Promise<void>,
+  cleanupAdapters?: CleanupAdapter[],
+  beforePrincipalValidation?: () => Promise<void>,
 ) {
   return createSessionKernel({
+    cleanupAdapters,
     config: createSessionKernelConfig({
       lookupHmacKeys: {
         current: {
@@ -455,7 +591,10 @@ function createSessionKernelClient(
     }),
     principalAccessFence: {
       capture: async () => "00000000-0000-4000-8000-000000000002",
-      validate: async () => ({ ok: true }),
+      validate: async () => {
+        await beforePrincipalValidation?.();
+        return { ok: true };
+      },
     },
     validationHooks: beforeArtifactValidation
       ? {

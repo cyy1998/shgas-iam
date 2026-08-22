@@ -64,6 +64,15 @@ describe("user-profile job contract", () => {
     expect(RebuildUserProfileJobPayloadSchema.safeParse({
       userId: 123,
     }).success).toBe(false);
+
+    for (const version of [1, 2]) {
+      expect(RebuildUserProfileJobPayloadSchema.safeParse({
+        userId: 123,
+        dirtyVersion: "42",
+        reason: "user-updated",
+        version,
+      }).success).toBe(false);
+    }
   });
 
   test("continues parsing the historical privilege dirty reason", () => {

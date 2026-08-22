@@ -30,6 +30,12 @@ export function createResignUserUseCase(deps: ResignUserUseCaseDeps) {
 
             const transactionTime = deps.clock.nowDate();
             await tx.employmentStore.endOpenEmploymentsByUserId(current.id, transactionTime);
+            const assignmentChanged
+              = await tx.responsibilityParentLifecycle.endOpenAssignmentsForUserResignation({
+                auditContext,
+                endTime: transactionTime,
+                userId: current.id,
+              });
             await tx.userStore.updateUserByUsername(input.username, {
               status: UserStatus.Disable,
             });
@@ -37,6 +43,12 @@ export function createResignUserUseCase(deps: ResignUserUseCaseDeps) {
             await tx.userProfileInvalidation.recordChanges([
               { kind: "user", userId: current.id },
               { kind: "employment", userId: current.id },
+              ...(assignmentChanged
+                ? [{
+                    kind: "organization-responsibility-assignment" as const,
+                    userId: current.id,
+                  }]
+                : []),
             ]);
             return true as const;
           },

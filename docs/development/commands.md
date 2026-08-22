@@ -137,13 +137,14 @@ pnpm --filter @iam/oidc-provider test:integration:composition
 pnpm --filter @iam/oidc-provider test:integration:redis
 ```
 
-`@iam/admin-api` 已发布 Unit、component、process 与 redis package-local canonical commands；`@iam/worker` 已发布
+`@iam/admin-api` 已发布 Unit、component、process、postgres 与 redis package-local canonical commands；`@iam/worker` 已发布
 Unit、component、process 与 postgres commands：
 
 ```bash
 pnpm --filter @iam/admin-api test:unit
 pnpm --filter @iam/admin-api test:integration:component
 pnpm --filter @iam/admin-api test:integration:process
+pnpm --filter @iam/admin-api test:integration:postgres
 pnpm --filter @iam/admin-api test:integration:redis
 pnpm --filter @iam/worker test:unit
 pnpm --filter @iam/worker test:integration:component
@@ -156,11 +157,14 @@ fixture，不是测试候选。client cache 的 invalidation、update 与 mutati
 legacy cleanup 的精确删除边界由 API Core 的真实 Redis profile 在独占 cleanup 资源上验证；process profile 不再运行 RESP
 compatibility case。
 
-Database、Role Assignment 与 User Profile Read Model 已发布以下 package-local canonical commands：
+Database、Role Assignment、Organization Responsibility Resolution 与 User Profile Read Model 已发布以下
+package-local canonical commands：
 
 ```bash
 pnpm --filter @iam/db test:unit
 pnpm --filter @iam/db test:integration:postgres
+pnpm --filter @iam/organization-responsibility-resolution test:integration:component
+pnpm --filter @iam/organization-responsibility-resolution test:integration:postgres
 pnpm --filter @iam/role-assignment-resolution test:integration:component
 pnpm --filter @iam/role-assignment-resolution test:integration:postgres
 pnpm --filter @iam/user-profile-read-model test:unit
@@ -169,8 +173,8 @@ pnpm --filter @iam/user-profile-read-model test:integration:postgres
 pnpm --filter @iam/user-profile-read-model test:integration:redis
 ```
 
-Role Assignment 没有空的 Unit profile。User Profile 近规模 rehearsal 使用测试模型外的
-`subject-projection:rehearsal` 操作入口，不形成第七个 profile。
+两个 resolution package 都没有空的 Unit profile。旧 Subject Projection V1 rehearsal 已随 strict V2 激活撤销；
+受控数据准备统一由 Worker 的 Profile V2 maintenance 命令拥有。
 
 Pure shared packages、ESLint config、Client Subject Projection 与 Gateway 已发布以下 package-local canonical commands：
 
@@ -217,15 +221,18 @@ Intake 受独立 source deadline 约束，最多接受 128 个文件、单文件
 diagnostic source 失败时，已取得的 artifacts、unavailable placeholder 与 index 仍先写完，然后 run 在 cleanup 尝试后非零退出。
 Preflight 发生在 descriptor/resource 之前；其失败直接非零退出，不运行不存在 project 的 diagnostics/cleanup。Descriptor
 落盘后的 runtime setup/readiness/seed failure、timeout 与可捕获 signal 都先尽量保存有界原始诊断再尝试 best-effort cleanup；cleanup failure
-保持非零。`admin:journey` 复用同一 lifecycle，在 protocol readiness 后用真实 Chromium 登录 Admin，通过真实状态 mutation 将独立目标
-client 切入 Maintenance，在维护中配置并启用 Gateway Custom SSO；公开 authorize/user-info 验证维护阻断，恢复正常后复用未变更的
-Local Session，再以维护中的真实 disable/enable mutation 验证旧 Session 永久失效，并由 UI 回读 redirect URL、claims 和 enabled 状态。该命令固定
+保持非零。`admin:journey` 复用同一 lifecycle，在 protocol readiness 后用真实 Chromium 登录 Admin，通过真实 Admin UI 创建跨树
+Organization Responsibility，轮询 Internal Detail/DSL 与 Custom SSO UserInfo 验证 Profile/Facts 发布，并证明 Gateway/authorization
+裁剪责任；随后通过真实状态 mutation 将独立目标 client 切入 Maintenance，在维护中配置并启用 Gateway Custom SSO。公开
+authorize/user-info 验证维护阻断，恢复正常后复用未变更的 Local Session，再以维护中的真实 disable/enable mutation 验证旧 Session
+永久失效，并由同一 Principal Session 签发新 V2 artifact。该命令固定
 单 project、单 worker、零 retry；浏览器启动 preflight 失败时在资源创建前退出，journey 失败时则保留 raw trace/PNG/WebM 并进入统一
 diagnostics 与 exact-project cleanup。`oidc:journey` 以相同的单 project、单 worker、零 retry 与 evidence/cleanup 边界运行独立
 OIDC browser slice；真实 Admin UI 在 Maintenance 中完成 OIDC disable/enable，test-owned RP helper 只生成 S256 verifier/challenge 并接收
 registered callback，真实 repo-owned authorize、登录、resume、token 与 `/oidc/me` 负责协议行为。该 slice 从 canonical origin 验证
-暂态阻断与恢复、interaction Cookie、PKCE mismatch、成功兑换、code replay、ID Token、UserInfo、discovery/JWKS/health 及维护中 logout
-永久失效。Root command 在同一个 exact-project lifecycle 中固定按 Admin → OIDC 运行，任一失败都进入统一
+暂态阻断与恢复、interaction Cookie、PKCE mismatch、成功兑换、code replay、`iam:employments` responsibility snapshot、Employment
+Pause cascade 后的 authorization-time replay、ID Token 排除、discovery/JWKS/health 及维护中 logout 永久失效。Root command 在同一个
+exact-project lifecycle 中固定按 Admin → OIDC 运行，任一失败都进入统一
 diagnostics 与 cleanup；cleanup failure 传播为 root command 非零。Workspace-local 单 journey 命令只用于聚焦调试：
 
 ```bash
@@ -284,8 +291,14 @@ pnpm --filter @iam/worker test:integration:postgres
 # Role assignment PostgreSQL contract（需由调用方提供专用 IAM_ROLE_ASSIGNMENT_TEST_DATABASE_URL）
 pnpm --filter @iam/role-assignment-resolution test:integration:postgres
 
+# Organization Responsibility resolver PostgreSQL contract（需专用 IAM_ORGANIZATION_RESPONSIBILITY_TEST_DATABASE_URL）
+pnpm --filter @iam/organization-responsibility-resolution test:integration:postgres
+
 # API Purveyor contact 并发 contract（需由调用方提供专用 IAM_API_TEST_DATABASE_URL）
 pnpm --filter @iam/api test:integration:postgres
+
+# Admin API 组织责任任命事务/并发 contract（需由调用方提供专用 IAM_ADMIN_API_TEST_DATABASE_URL）
+pnpm --filter @iam/admin-api test:integration:postgres
 
 # API Custom SSO Client runtime Redis contract（需由调用方提供专用 IAM_API_TEST_REDIS_URL）
 pnpm --filter @iam/api test:integration:redis
@@ -326,18 +339,9 @@ Profile 的专用 Redis URL，明确排除正在验证的 cleanup URL 自身。�
 Agent 可以在运行命令前启动临时容器，但必须使用仓库声明的镜像版本、动态宿主端口与任务唯一的 name/label，等待服务
 ready 后传入 URL，并在测试结束后只按预先记录的 container ID 清理。不得用 glob、prefix scan 或 prune 代替精确清理。
 
-Ticket 12 不提供根级一键 rehearsal。维护者或 agent 按
-[Custom SSO Subject Projection 硬切换与回滚手册](../releases/custom-sso-subject-projection-release.md)，在调用方拥有的临时
-PostgreSQL/Redis 环境组合本节已有的 Worker backfill/verify、cleanup、API/OIDC external entry、hermetic process smoke、
-数据库 rollback 和
-下列近规模性能 lane 手动走完；只在 Historical 记录中保存候选 commit、实际命令、聚合计数/延迟、通过/失败和资源清理结果：
-
-```bash
-pnpm --filter @iam/user-profile-read-model subject-projection:rehearsal
-```
-
-不生成或提交 JSONL receipt、机器 evidence manifest/transcript。Client cutover manifest 与一次性 Secret 输出仍按下文作为
-backfill 的业务输入处理，且不得把 URL credential、Token、Subject、完整 Redis key 或 Secret 写入验收记录。
+旧 Ticket 12 的 V1 rehearsal/backfill/verify 入口已随 strict V2 激活撤销。维护者只使用本页列出的
+Profile V2 maintenance、API/OIDC external entry、hermetic process smoke 与数据库 rollback seams；不得把 URL credential、
+Token、Subject、完整 Redis key 或 Secret 写入验收记录。
 
 Subject Projection tightening migration 通过 Drizzle 应用后，rollback 必须在 authentication traffic 与 user/client writes
 均已停止的 maintenance freeze 内运行下列命令。命令读取显式 `DATABASE_URL`，默认精确补偿
@@ -385,20 +389,25 @@ Hook 不运行 lint、typecheck、test、build 或 tracker checker。按改动�
   `pnpm --filter @iam/e2e-system <test:e2e|runtime:lifecycle|admin:journey|oidc:journey|runtime:cleanup|lint|test|test:unit|typecheck>`。
   当前只完成 Windows 本地验收，未宣称 Linux/CI adoption
 - API backend：`pnpm --filter @iam/api <dev|serve|lint|test|test:unit|test:integration:component|test:integration:process|test:integration:composition|test:integration:postgres|test:integration:redis|typecheck>`
-- Admin API backend：`pnpm --filter @iam/admin-api <dev|serve|lint|test|test:unit|test:integration:component|test:integration:process|test:integration:redis|typecheck>`
-- OIDC provider：`pnpm --filter @iam/oidc-provider <dev|serve|lint|test|test:unit|test:integration:component|test:integration:process|test:integration:composition|test:integration:redis|typecheck>`
+- Admin API backend：`pnpm --filter @iam/admin-api <dev|serve|lint|test|test:unit|test:integration:component|test:integration:process|test:integration:postgres|test:integration:redis|typecheck>`
+- OIDC provider：`pnpm --filter @iam/oidc-provider <dev|serve|lint|test|test:unit|test:integration:component|test:integration:process|test:integration:composition|test:integration:redis|typecheck|client-protocol:artifacts>`
 - API Core：`pnpm --filter @iam/api-core <lint|test|test:unit|test:integration:component|test:integration:process|test:integration:redis|typecheck>`
 - Client Subject Projection：`pnpm --filter @iam/client-subject-projection <lint|test|test:unit|test:integration:component|typecheck>`
-- User Profile Read Model：`pnpm --filter @iam/user-profile-read-model <lint|test|test:unit|test:integration:component|test:integration:postgres|test:integration:redis|subject-projection:rehearsal|typecheck>`
-- Worker：`pnpm --filter @iam/worker <dev|serve|lint|test|test:unit|test:integration:component|test:integration:process|test:integration:postgres|typecheck|employment:cutover-verify|user-profile:backfill|user-profile:repair|subject-projection:backfill|subject-projection:verify>`
+- User Profile Read Model：`pnpm --filter @iam/user-profile-read-model <lint|test|test:unit|test:integration:component|test:integration:postgres|test:integration:redis|typecheck>`
+- Worker：`pnpm --filter @iam/worker <dev|serve|lint|test|test:unit|test:integration:component|test:integration:process|test:integration:postgres|typecheck|employment:cutover-verify|profile-v2:backfill|profile-v2:verify-postgres|profile-v2:verify-redis|user-profile:backfill|user-profile:repair|client-protocol:epochs>`
 - Employment 生命周期切换前只读 gate：
   `IAM_WORKER_DATABASE_URL=<target-url> pnpm --filter @iam/worker employment:cutover-verify`
 - 仅处理 Subject Access indexed backlog：
   `pnpm --filter @iam/worker run user-profile:repair -- --subject-access-only --limit <positive-integer>`
-- Subject Projection cutover：
-  `pnpm --filter @iam/worker subject-projection:backfill -- --manifest <path> --secret-output <new-path> [--batch-size <positive-integer>] [--after-user-id <safe-cursor>]`
-- Subject Projection 独立只读 gate：
-  `pnpm --filter @iam/worker subject-projection:verify -- --manifest <path> [--batch-size <positive-integer>]`
+- Profile V2 受控 backfill：
+  `pnpm --filter @iam/worker profile-v2:backfill -- [--batch-size <positive-integer>] [--after-user-id <safe-cursor>]`
+- Profile V2 两项独立只读 gate：
+  `pnpm --filter @iam/worker profile-v2:verify-postgres -- [--batch-size <positive-integer>]`，随后运行
+  `pnpm --filter @iam/worker profile-v2:verify-redis -- [--batch-size <positive-integer>]`。
+- Client Protocol V2 epoch 与 artifact cleanup：
+  `pnpm --filter @iam/worker client-protocol:epochs -- <dry-run|apply|verify> --manifest <path>`，随后运行
+  `pnpm --filter @iam/oidc-provider client-protocol:artifacts -- <dry-run|apply|verify> --manifest <path>`；完整顺序与不可逆边界见
+  [Client Protocol V2 epoch 与 artifact 清理](../releases/client-protocol-v2-artifact-cutover.md)。
 - Custom SSO hard cutover 旧会话清理：
   `pnpm --filter @iam/api-core session:cleanup-custom-sso-cutover -- --dry-run --batch-size 500`；核对摘要后把
   `--dry-run` 改为 `--verify`，有残留时必须非零退出；确认门禁有效后改为 `--apply`，完成后再以
@@ -408,6 +417,7 @@ Hook 不运行 lint、typecheck、test、build 或 tracker checker。按改动�
 - SSO frontend：`pnpm --filter @iam/sso <dev|build|lint|test|test:unit|test:integration:component|test:integration:browser|typecheck|format>`
 - Database：`pnpm --filter @iam/db <lint|test|test:unit|test:integration:postgres|typecheck|db:push|db:generate|db:migrate|db:check>`
 - Role Assignment：`pnpm --filter @iam/role-assignment-resolution <lint|test:integration:component|test:integration:postgres|typecheck>`
+- Organization Responsibility Resolution：`pnpm --filter @iam/organization-responsibility-resolution <lint|test:integration:component|test:integration:postgres|typecheck>`
 - Gateway：`pnpm --filter @iam/gateway-apisix <validate|diff|apply|lint|test|test:unit|test:integration:component|typecheck>`
 
 `employment:cutover-verify` 只在运维人员显式调用时扫描 Employment，不属于 Worker 启动或请求路径。它在 PostgreSQL
@@ -415,6 +425,13 @@ Hook 不运行 lint、typecheck、test、build 或 tracker checker。按改动�
 Ended `endTime`、未来 Open `startTime`、重复 Open 组合和多个 Open Primary。报告 `passed` 时退出 0；存在任一阻断项时
 报告 `failed` 并退出 1，按稳定分类列出全部相关 Employment ID。Legacy Employment Tombstone 单独计数且不因缺少可信
 `endTime` 阻断。命令不解释 `updateTime`、不生成修复 SQL，也不修改数据；管理员必须依据真实业务通过正式入口修正后重跑。
+
+`profile-v2:*` 同样只由运维人员显式调用，不启动普通 Worker consumer，也不应用 client manifest、推进 client epoch、
+冻结或恢复流量。`profile-v2:backfill` 只有在整批 PostgreSQL 提交、V2 Subject Facts 写入以及 Subject Access Barrier
+复核都成功后才输出新的 safe cursor；失败时从最后 safe cursor 重跑。只有 strict V2 Profile、精确匹配的 `Processed`
+Dirty Version 与 `Backfill` reason marker 同时存在时才复用已提交的 PostgreSQL 结果，其他 User 都推进一次 Dirty Version。
+两个 verifier 都从 PostgreSQL 全量 Subject inventory
+出发，分别验证 strict V2 Profile 与 Redis/Barrier，不使用抽样、Redis `SCAN` 或 runtime read-through。
 
 共享 packages 使用相同的 filtered 模式，例如：
 

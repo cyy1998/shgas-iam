@@ -1,4 +1,4 @@
-import type { SubjectFactsCacheRecordV1 } from "../../src/subject-facts-cache";
+import type { SubjectFactsCacheRecord } from "../../src/subject-facts";
 import {
   createClientSubjectProjectionService,
   SubjectProjectionNotReadyError,
@@ -287,7 +287,7 @@ describe("Subject Facts Reader", () => {
       subjectIdentifier: SUBJECT_IDENTIFIER,
       clientCode: "console",
       selection: {
-        catalogVersion: 1,
+        catalogVersion: 2,
         optionalClaims: ["profile:name"],
       },
     });
@@ -334,7 +334,7 @@ describe("Subject Facts Reader", () => {
       subjectIdentifier: SUBJECT_IDENTIFIER,
       clientCode: "console",
       selection: {
-        catalogVersion: 1,
+        catalogVersion: 2,
         optionalClaims: ["iam:authorization"],
       },
     })).resolves.toEqual({
@@ -481,7 +481,7 @@ describe("Subject Facts Reader", () => {
       subjectIdentifier: SUBJECT_IDENTIFIER,
       clientCode: "console",
       selection: {
-        catalogVersion: 1,
+        catalogVersion: 2,
         optionalClaims: ["profile:name", "iam:authorization"],
       },
       allowStaleAuthorization: true,
@@ -537,7 +537,7 @@ describe("Subject Facts Reader", () => {
       subjectIdentifier: SUBJECT_IDENTIFIER,
       clientCode: "console",
       selection: {
-        catalogVersion: 1,
+        catalogVersion: 2,
         optionalClaims: ["profile:name", "iam:authorization"],
       },
     })).resolves.toEqual({
@@ -583,7 +583,7 @@ describe("Subject Facts Reader", () => {
       subjectIdentifier: SUBJECT_IDENTIFIER,
       clientCode: "console",
       selection: {
-        catalogVersion: 1,
+        catalogVersion: 2,
         optionalClaims: ["profile:name"],
       },
     })).resolves.toEqual({
@@ -634,7 +634,7 @@ describe("Subject Facts Reader", () => {
       subjectIdentifier: SUBJECT_IDENTIFIER,
       clientCode: "console",
       selection: {
-        catalogVersion: 1,
+        catalogVersion: 2,
         optionalClaims: ["profile:name", "iam:authorization"],
       },
     });
@@ -645,9 +645,9 @@ describe("Subject Facts Reader", () => {
   });
 });
 
-function cacheRecord(sourceDirtyVersion: string): SubjectFactsCacheRecordV1 {
+function cacheRecord(sourceDirtyVersion: string): SubjectFactsCacheRecord {
   return {
-    schemaVersion: 1,
+    schemaVersion: 2,
     sourceDirtyVersion,
     publishedAt: "2026-07-25T10:00:00.000Z",
     subjectIdentifier: SUBJECT_IDENTIFIER,
@@ -668,7 +668,7 @@ function profileRow(sourceDirtyVersion: string) {
     username: "alice",
     name: "Alice",
     mobile: "13800138000",
-    profileSchemaVersion: 1,
+    profileSchemaVersion: 2,
     sourceDirtyVersion,
     subjectFacts: {
       employments: [],

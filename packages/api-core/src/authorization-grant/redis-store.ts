@@ -4,6 +4,7 @@ export const AUTHORIZATION_GRANT_REDEMPTION_KEY_PREFIX
   = "authorization-grant:redemption:v1:";
 
 export interface AuthorizationGrantRedemptionRedis {
+  readonly del: (...keys: string[]) => Promise<number>;
   readonly eval: (
     script: string,
     keyCount: number,
@@ -253,6 +254,11 @@ export function createRedisAuthorizationGrantRedemptionStore(
     ?? AUTHORIZATION_GRANT_REDEMPTION_KEY_PREFIX;
 
   return {
+    async remove(grantId) {
+      return await options.redis.del(`${keyPrefix}${grantId}`) > 0
+        ? "removed"
+        : "missing";
+    },
     async initialize(record) {
       const result = await options.redis.eval(
         INITIALIZE_SCRIPT,

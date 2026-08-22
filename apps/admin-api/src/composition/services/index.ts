@@ -12,6 +12,7 @@ import type { AdminApiSession } from "../session";
 import type { createAdminApiUnitOfWork } from "../tx";
 import { createClientService } from "@admin-api/services/client/client.service";
 import { createEmploymentService } from "@admin-api/services/employment/employment.service";
+import { createOrganizationResponsibilityService } from "@admin-api/services/organization-responsibility/organization-responsibility.service";
 import { createOrganizationService } from "@admin-api/services/organization/organization.service";
 import { createPositionService } from "@admin-api/services/position/position.service";
 import { createRoleService } from "@admin-api/services/role/role.service";
@@ -83,8 +84,12 @@ export function createAdminApiServices(options: CreateAdminApiServicesOptions) {
     uow: mapUnitOfWork(unitOfWork, tx => ({
       organizationRepository: tx.repositories.organization,
       auditService: tx.auditService,
+      responsibilityParentLifecycle: tx.responsibilityParentLifecycle,
       userProfileInvalidation: tx.userProfileInvalidation,
     })),
+  });
+  const organizationResponsibilityService = createOrganizationResponsibilityService({
+    repository: repositories.organizationResponsibility,
   });
 
   const positionService = createPositionService({
@@ -120,6 +125,7 @@ export function createAdminApiServices(options: CreateAdminApiServicesOptions) {
     client: clientService,
     employment: employmentService,
     organization: organizationService,
+    organizationResponsibility: organizationResponsibilityService,
     position: positionService,
     role: roleService,
     sessionManagement: sessionManagementService,

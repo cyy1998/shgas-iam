@@ -3,6 +3,7 @@ import type { CleanupRef, RevokeSummary } from "./model";
 export type CleanupAdapter = {
   protocol: string;
   kind: string;
+  /** Cleanup can be replayed after an ambiguous failure and must be idempotent. */
   cleanup: (refs: CleanupRef[]) => Promise<void>;
 };
 

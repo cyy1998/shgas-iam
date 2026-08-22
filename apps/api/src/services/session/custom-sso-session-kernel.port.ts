@@ -1,5 +1,5 @@
 import type {
-  CustomSsoSubjectProjectionV1Dto,
+  CustomSsoSubjectProjectionV2Dto,
 } from "@api/services/sso/custom-sso-subject.schema";
 import type { User, UserDetailDto } from "@api/services/user/user.type";
 
@@ -21,7 +21,7 @@ export interface CustomSsoSubjectDeliveryPort {
     readonly authenticatedClientCode: string;
     readonly expectedConfigVersion?: number;
   }) => {
-    resolveUserInfo: () => Promise<CustomSsoSubjectProjectionV1Dto>;
+    resolveUserInfo: () => Promise<CustomSsoSubjectProjectionV2Dto>;
   };
   resolveGatewaySubjectHeader: (context: {
     readonly subjectIdentifier: string;

@@ -10,14 +10,14 @@ import { describe, expect, mock, test } from "bun:test";
 const gatewayConfig: CustomSsoClientConfig = {
   mode: CustomSsoClientMode.Gateway,
   validRedirectUrls: ["https://gateway.example.com/sso/*"],
-  subjectClaimCatalogVersion: 1 as const,
+  subjectClaimCatalogVersion: 2 as const,
   subjectClaims: [SubjectClaim.SubjectIdentifier],
   orcas: { enabled: false },
 };
 const independentConfig: CustomSsoClientConfig = {
   mode: CustomSsoClientMode.Independent,
   validRedirectUrls: ["https://app.example.com/callback"],
-  subjectClaimCatalogVersion: 1 as const,
+  subjectClaimCatalogVersion: 2 as const,
   subjectClaims: [SubjectClaim.SubjectIdentifier, SubjectClaim.ProfileName],
   callbackEndpoint: "https://app.example.com/callback",
   logoutEndpoint: "https://app.example.com/logout",

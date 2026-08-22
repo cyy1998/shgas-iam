@@ -16,6 +16,11 @@ export function employmentsRelations(r: RelationsHelper) {
         from: r.employments.posId,
         to: r.positions.id,
       }),
+      responsibilityAssignments: r.many.organizationResponsibilityAssignments({
+        from: r.employments.id,
+        to: r.organizationResponsibilityAssignments.employmentId,
+        alias: "organization_responsibility_holder",
+      }),
     },
   } satisfies RelationsConfig;
 }

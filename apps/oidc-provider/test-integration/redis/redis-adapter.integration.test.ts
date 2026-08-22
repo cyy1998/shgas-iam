@@ -195,25 +195,35 @@ describe("redis OIDC adapter real Redis contract", () => {
     const tokenB = testScope.unique("token-b");
     const interactionA = testScope.unique("interaction-a");
     const interactionB = testScope.unique("interaction-b");
+    const sessionA = testScope.unique("session-a");
+    const providerSessionUidA = testScope.unique("provider-session-a");
+    const userCodeA = testScope.unique("user-code-a");
+    const grantA = testScope.unique("grant-a");
     const modelKeys = [
       `oidc:model:AccessToken:${tokenA}`,
       `oidc:model:AccessToken:${tokenB}`,
       `oidc:model:Interaction:${interactionA}`,
       `oidc:model:Interaction:${interactionB}`,
+      `oidc:model:Session:${sessionA}`,
     ];
     for (const key of [
       ...modelKeys,
       ...modelKeys.map(key => key.replace("oidc:model:", "oidc:consumed:")),
       `oidc:client-objects:${clientA}`,
       `oidc:client-objects:${clientB}`,
+      `oidc:grant-objects:${grantA}`,
+      `oidc:session-uid:${providerSessionUidA}`,
+      `oidc:user-code:${userCodeA}`,
     ]) {
       testScope.trackKey(key);
     }
     const accessTokens = createAdapter(testScope, "AccessToken");
     const interactions = createAdapter(testScope, "Interaction");
+    const sessions = createAdapter(testScope, "Session");
     await accessTokens.upsert(tokenA, {
       accountId: SUBJECT_IDENTIFIER,
       clientId: clientA,
+      grantId: grantA,
       sessionUid: testScope.unique("provider-session-a"),
     }, 60);
     await accessTokens.upsert(tokenB, {
@@ -221,17 +231,127 @@ describe("redis OIDC adapter real Redis contract", () => {
       clientId: clientB,
       sessionUid: testScope.unique("provider-session-b"),
     }, 60);
-    await interactions.upsert(interactionA, { params: { client_id: clientA } }, 60);
+    await interactions.upsert(interactionA, {
+      params: { client_id: clientA },
+      userCode: userCodeA,
+    }, 60);
     await interactions.upsert(interactionB, { params: { client_id: clientB } }, 60);
+    await sessions.upsert(sessionA, {
+      accountId: SUBJECT_IDENTIFIER,
+      authorizations: { [clientA]: {} },
+      uid: providerSessionUidA,
+    }, 60);
 
     const protocolObjects = createOidcProtocolObjectStore(
       testScope.writer,
-      createOidcTokenStore(testScope.writer),
     );
+    await expect(protocolObjects.inspectClient(clientA)).resolves.toEqual({
+      clientId: clientA,
+      counts: {
+        total: 3,
+        invalid: 0,
+        stale: 0,
+        byModel: {
+          AccessToken: 1,
+          Interaction: 1,
+          Session: 1,
+        },
+      },
+    });
+    expect(await testScope.observer.exists(...modelKeys)).toBe(5);
     await protocolObjects.revokeClient(clientA);
 
-    expect(await testScope.observer.exists(modelKeys[0]!, modelKeys[2]!)).toBe(0);
+    await expect(protocolObjects.inspectClient(clientA)).resolves.toEqual({
+      clientId: clientA,
+      counts: { total: 0, invalid: 0, stale: 0, byModel: {} },
+    });
+    expect(await testScope.observer.exists(modelKeys[0]!, modelKeys[2]!, modelKeys[4]!)).toBe(0);
     expect(await testScope.observer.exists(modelKeys[1]!, modelKeys[3]!)).toBe(2);
+    expect(await testScope.observer.exists(
+      `oidc:grant-objects:${grantA}`,
+      `oidc:session-uid:${providerSessionUidA}`,
+      `oidc:user-code:${userCodeA}`,
+    )).toBe(0);
+  });
+
+  it("keeps the client owner index until its longest-lived object expires", async () => {
+    const testScope = scope!;
+    const clientId = testScope.unique("client");
+    const indexKey = `oidc:client-objects:${clientId}`;
+    testScope.trackKey(indexKey);
+    const interactions = createAdapter(testScope, "Interaction");
+
+    await interactions.upsert(testScope.unique("long"), { params: { client_id: clientId } }, 120);
+    await interactions.upsert(testScope.unique("short"), { params: { client_id: clientId } }, 10);
+
+    expect(await testScope.observer.pttl(indexKey)).toBeGreaterThan(100_000);
+  });
+
+  it("reports and removes a dangling client owner member without hiding it during verify", async () => {
+    const testScope = scope!;
+    const clientId = testScope.unique("client-dangling");
+    const indexKey = `oidc:client-objects:${clientId}`;
+    const missingKey = `oidc:model:Interaction:${testScope.unique("missing")}`;
+    testScope.trackKey(indexKey);
+    await testScope.writer.zadd(indexKey, Date.now() + 60_000, missingKey);
+
+    const protocolObjects = createOidcProtocolObjectStore(
+      testScope.writer,
+    );
+    await expect(protocolObjects.inspectClient(clientId)).resolves.toMatchObject({
+      counts: { invalid: 0, stale: 1, total: 1 },
+    });
+
+    await protocolObjects.revokeClient(clientId);
+
+    await expect(protocolObjects.inspectClient(clientId)).resolves.toMatchObject({
+      counts: { invalid: 0, stale: 0, total: 0 },
+    });
+    expect(await testScope.observer.zcard(indexKey)).toBe(0);
+  });
+
+  it("does not erase a concurrently replaced protocol object from its owner index", async () => {
+    const testScope = scope!;
+    const clientId = testScope.unique("client-concurrent");
+    const objectKey = `oidc:model:Interaction:${testScope.unique("interaction")}`;
+    const indexKey = `oidc:client-objects:${clientId}`;
+    const initialPayload = JSON.stringify({ clientId, nonce: "initial" });
+    const replacementPayload = JSON.stringify({ clientId, nonce: "replacement" });
+    testScope.trackKey(objectKey);
+    testScope.trackKey(indexKey);
+    await testScope.writer.set(objectKey, initialPayload, "PX", 60_000);
+    await testScope.writer.zadd(indexKey, Date.now() + 60_000, objectKey);
+
+    let replaceBeforeDelete = true;
+    const concurrentRedis = new Proxy(testScope.writer, {
+      get(target, property) {
+        if (property === "eval") {
+          return async (script: string, keyCount: number, ...args: Array<string | number>) => {
+            if (
+              replaceBeforeDelete
+              && script.includes("delete_indexed_protocol_object_if_unchanged")
+            ) {
+              replaceBeforeDelete = false;
+              await target.set(objectKey, replacementPayload, "PX", 60_000);
+              await target.zadd(indexKey, Date.now() + 60_000, objectKey);
+            }
+            return await target.eval(script, keyCount, ...args);
+          };
+        }
+        const value = Reflect.get(target, property, target) as unknown;
+        return typeof value === "function" ? value.bind(target) : value;
+      },
+    }) as Redis;
+    const protocolObjects = createOidcProtocolObjectStore(
+      concurrentRedis,
+    );
+
+    await protocolObjects.revokeClient(clientId);
+
+    expect(await testScope.observer.get(objectKey)).toBe(replacementPayload);
+    await expect(protocolObjects.inspectClient(clientId)).resolves.toMatchObject({
+      counts: { invalid: 0, stale: 0, total: 1 },
+    });
   });
 
   it("removes every Session key when the artifact still owns its UID", async () => {
@@ -425,7 +545,6 @@ function createAdapter(
       registerAccessTokenCredential: async input => ({ credentialId: `${input.providerTokenId}-credential` }) as never,
       resolveAccessTokenCredential: async tokenId => options.resolveAccessTokenCredential?.(tokenId) as never ?? null,
       revokeAccessTokenCredential: async () => undefined,
-      revokeClientProtocol: async () => undefined,
     },
     providerSessions: {
       consumeStaged: async () => null,

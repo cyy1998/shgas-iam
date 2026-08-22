@@ -1,7 +1,7 @@
 import type {
   ClientAuthorizationEmployment,
   EmploymentProfile,
-  OptionalSubjectClaim,
+  EmploymentProfileBase,
   SubjectClaimSelection,
 } from "@iam/client-subject-projection";
 import type {
@@ -13,57 +13,64 @@ import type {
   UnknownObject,
 } from "oidc-provider";
 import type {
-  CreateOidcAuthorizationCodeSnapshotInput,
-  OidcClaimsSnapshot,
-  OidcUserInfoSnapshot,
-} from "./claims-snapshot.ts";
+  OidcUserInfoClaims,
+} from "./claims-contract.ts";
 import type {
-  ClaimsAccountReader,
-  ClaimsClientRuntimeReader,
-  ClaimsProviderSessionBindingStore,
-  ClaimsSessionResolver,
-  ClaimsSubjectProjectionResolver,
-  ClaimsTokenRevoker,
+  CreateOidcClaimsAdapterDeps,
 } from "./claims.port.ts";
 import { SubjectProjectionNotReadyError } from "@iam/client-subject-projection";
 import { OidcScope } from "@iam/contracts";
 import { errors } from "oidc-provider";
 import { normalizeOidcProtocolScopes } from "../protocol/scopes.ts";
-import { parseOidcClaimsSnapshot } from "./claims-snapshot.ts";
+import * as claimsSnapshotContract from "./claims-snapshot.ts";
 
 type ProtocolToken = AuthorizationCode | AccessToken;
-type FindAccountToken = ProtocolToken | DeviceCode | BackchannelAuthenticationRequest;
+type FindAccountToken
+  = | ProtocolToken
+    | DeviceCode
+    | BackchannelAuthenticationRequest;
 
 export type OidcAccessTokenExtra = UnknownObject & {
-  claimsSnapshot: OidcClaimsSnapshot;
+  claimsSnapshot: claimsSnapshotContract.OidcClaimsSnapshot;
   kernelCredentialId?: string;
 };
 
-function claimsSnapshotFromCode(code: AuthorizationCode): OidcClaimsSnapshot | null {
-  return parseOidcClaimsSnapshot(
+function claimsSnapshotFromCode(
+  code: AuthorizationCode,
+): claimsSnapshotContract.OidcClaimsSnapshot | null {
+  return claimsSnapshotContract.parseOidcClaimsSnapshot(
     (code as AuthorizationCode & { claimsSnapshot?: unknown }).claimsSnapshot,
   );
 }
 
-function snapshotAccessTokenExtra(token: AccessToken): OidcAccessTokenExtra | null {
-  const extra = token.extra as Partial<OidcAccessTokenExtra> | undefined;
-  const claimsSnapshot = parseOidcClaimsSnapshot(extra?.claimsSnapshot);
+function snapshotAccessTokenExtra(
+  token: AccessToken,
+): OidcAccessTokenExtra | null {
+  const extra = token.extra as Partial<OidcAccessTokenExtra>
+    | undefined;
+  const claimsSnapshot = claimsSnapshotContract.parseOidcClaimsSnapshot(
+    extra?.claimsSnapshot,
+  );
   if (!claimsSnapshot
-    || (extra?.kernelCredentialId !== undefined && typeof extra.kernelCredentialId !== "string")) {
+    || (extra?.kernelCredentialId !== undefined
+      && typeof extra.kernelCredentialId !== "string")) {
     return null;
   }
   return {
     claimsSnapshot,
-    ...(extra?.kernelCredentialId ? { kernelCredentialId: extra.kernelCredentialId } : {}),
+    ...(extra?.kernelCredentialId
+      ? { kernelCredentialId: extra.kernelCredentialId }
+      : {}),
   };
 }
 
 function sameScopes(left: readonly string[], right: readonly string[]) {
-  return left.length === right.length && left.every(scope => right.includes(scope));
+  return left.length === right.length
+    && left.every(scope => right.includes(scope));
 }
 
 function matchesSnapshotProtocolContext(
-  snapshot: OidcClaimsSnapshot,
+  snapshot: claimsSnapshotContract.OidcClaimsSnapshot,
   token: ProtocolToken,
   expectedSubjectIdentifier = token.accountId,
 ) {
@@ -76,18 +83,11 @@ function matchesSnapshotProtocolContext(
     && sameScopes(snapshot.scopes, tokenScopes);
 }
 
-export interface CreateOidcClaimsAdapterDeps {
-  accounts: ClaimsAccountReader;
-  clients: ClaimsClientRuntimeReader;
-  providerSessions: ClaimsProviderSessionBindingStore;
-  globalSessions: ClaimsSessionResolver;
-  projection: ClaimsSubjectProjectionResolver;
-  tokens: ClaimsTokenRevoker;
-}
-
-function selectionFromScopes(scopes: readonly OidcScope[]): SubjectClaimSelection {
+function selectionFromScopes(
+  scopes: readonly OidcScope[],
+): SubjectClaimSelection {
   const authorizedScopes = new Set(scopes);
-  const optionalClaims: OptionalSubjectClaim[] = [];
+  const optionalClaims: SubjectClaimSelection["optionalClaims"][number][] = [];
   if (authorizedScopes.has(OidcScope.Profile))
     optionalClaims.push("profile:username", "profile:name");
   if (authorizedScopes.has(OidcScope.Phone))
@@ -96,10 +96,10 @@ function selectionFromScopes(scopes: readonly OidcScope[]): SubjectClaimSelectio
     optionalClaims.push("profile:employments");
   if (authorizedScopes.has(OidcScope.IamAuthorization))
     optionalClaims.push("iam:authorization");
-  return { catalogVersion: 1, optionalClaims };
+  return { catalogVersion: 2, optionalClaims };
 }
 
-function toOidcEmployment(employment: EmploymentProfile) {
+function toOidcEmploymentBase(employment: EmploymentProfileBase) {
   return {
     isPrimary: employment.isPrimary,
     organization: {
@@ -119,17 +119,50 @@ function toOidcEmployment(employment: EmploymentProfile) {
   };
 }
 
-function toOidcAuthorizationEmployment(employment: ClientAuthorizationEmployment) {
+function toOidcEmployment(
+  employment: EmploymentProfile,
+) {
   return {
-    ...toOidcEmployment(employment),
+    ...toOidcEmploymentBase(employment),
+    responsibilities: employment.responsibilities.map(responsibility => ({
+      type: {
+        code: responsibility.type.code,
+        name: responsibility.type.name,
+      },
+      targetOrganization: {
+        code: responsibility.targetOrganization.code,
+        name: responsibility.targetOrganization.name,
+        type: responsibility.targetOrganization.type,
+        path: responsibility.targetOrganization.path.map(organization => ({
+          code: organization.code,
+          name: organization.name,
+          type: organization.type,
+        })),
+      },
+    })),
+  };
+}
+
+function toOidcAuthorizationEmployment(
+  employment: ClientAuthorizationEmployment,
+) {
+  return {
+    ...toOidcEmploymentBase(employment),
     roles: [...employment.roles],
     privileges: [...employment.privileges],
   };
 }
 
-export function createOidcClaimsAdapter(deps: CreateOidcClaimsAdapterDeps) {
-  async function validateSnapshotBinding(snapshot: OidcClaimsSnapshot) {
-    const binding = await deps.providerSessions.read(snapshot.providerSessionUid, snapshot.clientId);
+export function createOidcClaimsAdapter(
+  deps: CreateOidcClaimsAdapterDeps,
+) {
+  async function validateSnapshotBinding(
+    snapshot: claimsSnapshotContract.OidcClaimsSnapshot,
+  ) {
+    const binding = await deps.providerSessions.read(
+      snapshot.providerSessionUid,
+      snapshot.clientId,
+    );
     if (!binding
       || binding.clientCode !== snapshot.clientId
       || binding.accountId !== snapshot.subjectIdentifier
@@ -138,7 +171,9 @@ export function createOidcClaimsAdapter(deps: CreateOidcClaimsAdapterDeps) {
       || binding.oidcConfigVersion !== snapshot.oidcConfigVersion) {
       return null;
     }
-    const session = await deps.globalSessions.resolveById(snapshot.principalSessionId);
+    const session = await deps.globalSessions.resolveById(
+      snapshot.principalSessionId,
+    );
     if (!session
       || session.sessionId !== snapshot.principalSessionId
       || session.accountId !== snapshot.subjectIdentifier
@@ -149,12 +184,12 @@ export function createOidcClaimsAdapter(deps: CreateOidcClaimsAdapterDeps) {
   }
 
   function resolvedAccount(
-    subjectIdentifier: string,
-    claims: OidcUserInfoSnapshot,
+    resolvedSubjectIdentifier: string,
+    claims: OidcUserInfoClaims,
     tokenAuthTime?: number,
   ) {
     return {
-      accountId: subjectIdentifier,
+      accountId: resolvedSubjectIdentifier,
       claims: async (use: string): Promise<AccountClaims> => {
         if (use !== "id_token")
           return claims;
@@ -165,8 +200,10 @@ export function createOidcClaimsAdapter(deps: CreateOidcClaimsAdapterDeps) {
         } = claims;
         return {
           ...idTokenClaims,
-          sub: subjectIdentifier,
-          ...(typeof tokenAuthTime === "number" ? { auth_time: tokenAuthTime } : {}),
+          sub: resolvedSubjectIdentifier,
+          ...(typeof tokenAuthTime === "number"
+            ? { auth_time: tokenAuthTime }
+            : {}),
         };
       },
     };
@@ -174,20 +211,20 @@ export function createOidcClaimsAdapter(deps: CreateOidcClaimsAdapterDeps) {
 
   return {
     async createAuthorizationCodeSnapshot(
-      input: CreateOidcAuthorizationCodeSnapshotInput,
-    ): Promise<OidcClaimsSnapshot> {
-      const selection = selectionFromScopes(input.scopes);
+      input: claimsSnapshotContract.CreateOidcAuthorizationCodeSnapshotInput,
+    ) {
       const projection = await deps.projection.resolve({
         subjectIdentifier: input.subjectIdentifier,
         clientCode: input.clientId,
-        selection,
+        selection: selectionFromScopes(input.scopes),
       }).catch((error: unknown) => {
         if (error instanceof SubjectProjectionNotReadyError)
           throw new errors.TemporarilyUnavailable();
         throw error;
       });
-      const claimsSnapshot = {
-        version: 1,
+      const snapshot = {
+        version: 2,
+        claimsContractVersion: 2,
         subjectIdentifier: input.subjectIdentifier,
         clientId: input.clientId,
         scopes: [...input.scopes],
@@ -197,22 +234,32 @@ export function createOidcClaimsAdapter(deps: CreateOidcClaimsAdapterDeps) {
         providerSessionBindingId: input.providerSessionBindingId,
         claims: {
           sub: projection.subjectIdentifier,
-          ...(input.scopes.includes(OidcScope.Profile) && projection.username !== undefined
+          ...(input.scopes.includes(OidcScope.Profile)
+            && projection.username !== undefined
             ? { preferred_username: projection.username }
             : {}),
-          ...(input.scopes.includes(OidcScope.Profile) && projection.name !== undefined
+          ...(input.scopes.includes(OidcScope.Profile)
+            && projection.name !== undefined
             ? { name: projection.name }
             : {}),
           ...(input.scopes.includes(OidcScope.Phone) && projection.phone
             ? { phone_number: projection.phone }
             : {}),
-          ...(input.scopes.includes(OidcScope.IamEmployments) && projection.employments !== undefined
-            ? { [OidcScope.IamEmployments]: projection.employments.map(toOidcEmployment) }
+          ...(input.scopes.includes(OidcScope.IamEmployments)
+            && projection.employments !== undefined
+            ? {
+                [OidcScope.IamEmployments]: projection.employments.map(
+                  toOidcEmployment,
+                ),
+              }
             : {}),
-          ...(input.scopes.includes(OidcScope.IamAuthorization) && projection.authorization !== undefined
+          ...(input.scopes.includes(OidcScope.IamAuthorization)
+            && projection.authorization !== undefined
             ? {
                 [OidcScope.IamAuthorization]: {
-                  employments: projection.authorization.employments.map(toOidcAuthorizationEmployment),
+                  employments: projection.authorization.employments.map(
+                    toOidcAuthorizationEmployment,
+                  ),
                   roles: [...projection.authorization.roles],
                   privileges: [...projection.authorization.privileges],
                 },
@@ -220,7 +267,7 @@ export function createOidcClaimsAdapter(deps: CreateOidcClaimsAdapterDeps) {
             : {}),
         },
       };
-      const parsed = parseOidcClaimsSnapshot(claimsSnapshot);
+      const parsed = claimsSnapshotContract.parseOidcClaimsSnapshot(snapshot);
       if (!parsed)
         throw new Error("OIDC Claims Snapshot construction failed validation");
       return parsed;
@@ -233,7 +280,8 @@ export function createOidcClaimsAdapter(deps: CreateOidcClaimsAdapterDeps) {
       if (!code)
         return undefined;
       const snapshot = claimsSnapshotFromCode(code);
-      if (!snapshot || !matchesSnapshotProtocolContext(snapshot, token)) {
+      if (!snapshot
+        || !matchesSnapshotProtocolContext(snapshot, token)) {
         return undefined;
       }
       return { claimsSnapshot: snapshot };
@@ -242,12 +290,19 @@ export function createOidcClaimsAdapter(deps: CreateOidcClaimsAdapterDeps) {
     async findAccount(subject: string, token?: FindAccountToken) {
       if (token?.kind === "AuthorizationCode") {
         const snapshot = claimsSnapshotFromCode(token);
-        if (!snapshot)
-          return undefined;
-        if (!matchesSnapshotProtocolContext(snapshot, token, subject)) {
+        if (!snapshot
+          || !matchesSnapshotProtocolContext(
+            snapshot,
+            token,
+            subject,
+          )) {
           return undefined;
         }
-        return resolvedAccount(snapshot.subjectIdentifier, snapshot.claims, token.authTime);
+        return resolvedAccount(
+          snapshot.subjectIdentifier,
+          snapshot.claims,
+          token.authTime,
+        );
       }
 
       if (token?.kind === "AccessToken") {
@@ -265,15 +320,24 @@ export function createOidcClaimsAdapter(deps: CreateOidcClaimsAdapterDeps) {
           validateSnapshotBinding(snapshot),
         ]);
         if (!client
-          || !matchesSnapshotProtocolContext(snapshot, token, subject)
+          || !matchesSnapshotProtocolContext(
+            snapshot,
+            token,
+            subject,
+          )
           || credential.credential.credentialId !== extra.kernelCredentialId
-          || credential.credential.principalSessionId !== snapshot.principalSessionId
-          || credential.credential.bindingId !== snapshot.providerSessionBindingId
+          || credential.credential.principalSessionId
+          !== snapshot.principalSessionId
+          || credential.credential.bindingId
+          !== snapshot.providerSessionBindingId
           || credential.credential.clientCode !== snapshot.clientId
-          || credential.metadata.oidcConfigVersion !== snapshot.oidcConfigVersion
+          || credential.metadata.oidcConfigVersion
+          !== snapshot.oidcConfigVersion
           || client.oidc_config_version !== snapshot.oidcConfigVersion
           || !validBinding) {
-          await deps.tokens.revokeAccessTokenCredential(credential.credential.credentialId);
+          await deps.tokens.revokeAccessTokenCredential(
+            credential.credential.credentialId,
+          );
           return undefined;
         }
         return resolvedAccount(snapshot.subjectIdentifier, snapshot.claims);
@@ -282,16 +346,16 @@ export function createOidcClaimsAdapter(deps: CreateOidcClaimsAdapterDeps) {
       const account = await deps.accounts.findBySubject(subject);
       if (!account)
         return undefined;
-
-      const claims: OidcUserInfoSnapshot = {
+      return resolvedAccount(account.subjectIdentifier, {
         sub: account.subjectIdentifier,
         name: account.name,
         preferred_username: account.username,
         ...(account.mobile ? { phone_number: account.mobile } : {}),
-      };
-      return resolvedAccount(account.subjectIdentifier, claims);
+      });
     },
   };
 }
 
-export type OidcClaimsAdapter = ReturnType<typeof createOidcClaimsAdapter>;
+export type OidcClaimsAdapter = ReturnType<
+  typeof createOidcClaimsAdapter
+>;

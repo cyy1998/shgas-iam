@@ -1,15 +1,8 @@
+import { requestEmploymentOptions } from '@admin/components/employment-select-options';
 import { type ClientVo, searchClients } from '@admin/services/client';
-import {
-  type EmploymentVo,
-  searchEmployments,
-} from '@admin/services/employment';
 import { type PositionVo, searchPositions } from '@admin/services/position';
 import type { RoleAssignmentCreateInput } from '@admin/services/role';
-import {
-  EmploymentStatus,
-  PositionStatus,
-  RoleAssignmentTargetType,
-} from '@iam/contracts';
+import { PositionStatus, RoleAssignmentTargetType } from '@iam/contracts';
 
 type SelectRequestParams = {
   keyWords?: string;
@@ -62,25 +55,6 @@ export function formatPositionOption(position: PositionVo) {
   };
 }
 
-function formatEmploymentOrgPath(employment: EmploymentVo) {
-  return (
-    employment.organization.fullOrgPath
-      ?.map((node) => node.orgName)
-      .join(' / ') || employment.organization.assignedOrg.orgName
-  );
-}
-
-export function formatEmploymentOption(employment: EmploymentVo) {
-  return {
-    label: `${employment.user.name}（${employment.user.username}） / ${formatEmploymentOrgPath(
-      employment,
-    )} / ${employment.position.posName}（${
-      employment.position.posCode
-    }） / #${employment.id}`,
-    value: employment.id,
-  };
-}
-
 export async function requestClientOptions(
   params: SelectRequestParams,
   selectedClient?: ClientOptionSource,
@@ -115,19 +89,7 @@ export async function requestPositionOptions(params: SelectRequestParams) {
   return res.result.map(formatPositionOption);
 }
 
-export async function requestEmploymentOptions(params: SelectRequestParams) {
-  const text = keyword(params);
-  if (!text) return [];
-  const res = await searchEmployments({
-    pageNum: 1,
-    pageSize: 20,
-    conditions: {
-      fuzzyConditions: { text },
-      exactConditions: { statuses: [EmploymentStatus.Enable] },
-    },
-  });
-  return res.result.map(formatEmploymentOption);
-}
+export { requestEmploymentOptions };
 
 export function normalizeAssignmentCreateInput(
   values: AssignmentFormValues,

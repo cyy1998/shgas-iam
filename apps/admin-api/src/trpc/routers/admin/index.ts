@@ -1,6 +1,7 @@
 import type { AuditAdapter } from "@admin-api/routes/admin/audit/audit.adapter";
 import type { ClientAdapter } from "@admin-api/routes/admin/client/client.adapter";
 import type { EmploymentAdapter } from "@admin-api/routes/admin/employment/employment.adapter";
+import type { OrganizationResponsibilityAdapter } from "@admin-api/routes/admin/organization-responsibility/organization-responsibility.adapter";
 import type { OrganizationAdapter } from "@admin-api/routes/admin/organization/organization.adapter";
 import type { PositionAdapter } from "@admin-api/routes/admin/position/position.adapter";
 import type { RoleAdapter } from "@admin-api/routes/admin/role/role.adapter";
@@ -13,6 +14,7 @@ export interface CreateAdminRouterDeps {
   client: ClientAdapter["clientAdminRouter"];
   employment: EmploymentAdapter["employmentAdminRouter"];
   organization: OrganizationAdapter["organizationAdminRouter"];
+  organizationResponsibility: OrganizationResponsibilityAdapter["organizationResponsibilityAdminRouter"];
   position: PositionAdapter["positionAdminRouter"];
   role: RoleAdapter["roleAdminRouter"];
   sessionManagement: SessionManagementAdapter["sessionManagementAdminRouter"];
@@ -23,6 +25,7 @@ export function createAdminRouter(deps: CreateAdminRouterDeps) {
   return router({
     audit: deps.audit,
     organization: deps.organization,
+    organizationResponsibility: deps.organizationResponsibility,
     position: deps.position,
     role: deps.role,
     sessionManagement: deps.sessionManagement,

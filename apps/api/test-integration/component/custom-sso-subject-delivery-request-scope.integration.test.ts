@@ -9,11 +9,11 @@ describe("Custom SSO subject delivery request scope", () => {
     const firstRequest = {};
     const secondRequest = {};
     const firstResolve = mock(async () => ({
-      version: 1 as const,
+      version: 2 as const,
       subjectIdentifier: "00000000-0000-4000-8000-000000001001",
     }));
     const secondResolve = mock(async () => ({
-      version: 1 as const,
+      version: 2 as const,
       subjectIdentifier: "00000000-0000-4000-8000-000000001002",
     }));
 
@@ -59,7 +59,7 @@ describe("Custom SSO subject delivery request scope", () => {
     const request = {};
     const capability = {
       resolveUserInfo: mock(async () => ({
-        version: 1 as const,
+        version: 2 as const,
         subjectIdentifier:
           "00000000-0000-4000-8000-000000001001",
       })),

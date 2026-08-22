@@ -65,13 +65,9 @@ export async function updateClientStatus(
     .locator(".ant-select-dropdown:visible")
     .getByText(statusLabel, { exact: true })
     .click();
-  await page.getByRole("button", { name: "更新全局状态" }).click();
-  await expect(page.locator(".ant-modal-confirm-title").filter({
-    hasText: "更新应用全局状态？",
-  })).toBeVisible();
   const updateResponse = page.waitForResponse(response =>
     isSuccessfulRpcResponse(response, "admin.client.updateStatus"));
-  await page.getByRole("button", { name: /确\s*定/u }).click();
+  await page.getByRole("button", { name: "更新全局状态" }).click();
   await updateResponse;
   await expect(page.getByText("全局状态已更新", { exact: true })).toBeVisible();
 }

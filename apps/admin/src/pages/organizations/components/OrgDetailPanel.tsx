@@ -7,7 +7,10 @@ import {
   updateOrganizationStatus,
 } from '@admin/services/organization';
 import { ProDescriptions } from '@ant-design/pro-components';
-import { getOrganizationStatusOptions } from '@iam/contracts';
+import {
+  getOrganizationStatusOptions,
+  OrganizationStatus,
+} from '@iam/contracts';
 import {
   Button,
   Dropdown,
@@ -16,9 +19,12 @@ import {
   Modal,
   Space,
   Table,
+  Tabs,
   Tooltip,
+  Typography,
 } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
+import OrganizationResponsibilityAssignmentsPanel from './OrganizationResponsibilityAssignmentsPanel';
 
 type Props = {
   loading: boolean;
@@ -72,13 +78,26 @@ export default function OrgDetailPanel({
     message.error(err instanceof Error ? err.message : '操作失败');
 
   const onStatusChange = async (status: number) => {
-    try {
-      await updateOrganizationStatus(detail.orgCode, status);
-      message.success('状态已更新');
-      onChanged();
-    } catch (err) {
-      handleError(err);
+    const mutate = async () => {
+      try {
+        await updateOrganizationStatus(detail.orgCode, status);
+        message.success('状态已更新');
+        onChanged();
+      } catch (err) {
+        handleError(err);
+      }
+    };
+    if (status === OrganizationStatus.Enable) {
+      await mutate();
+      return;
     }
+    Modal.confirm({
+      title: '确认变更组织状态？',
+      content:
+        '服务端将检查该组织及全部下级组织；任一组织仍是开放责任任命目标时，本次变更会被阻止。',
+      okText: '确认变更',
+      onOk: mutate,
+    });
   };
 
   const deleteDisabled = detail.childrenCount > 0 || detail.employmentCount > 0;
@@ -86,13 +105,14 @@ export default function OrgDetailPanel({
     detail.childrenCount > 0
       ? '有下级组织，不可删除'
       : detail.employmentCount > 0
-      ? '存在关联雇佣，不可删除'
-      : '';
+        ? '存在关联雇佣，不可删除'
+        : '';
 
   const onDelete = () => {
     Modal.confirm({
       title: `删除组织 ${detail.orgName}？`,
-      content: '软删除后不会出现在列表中，如需恢复请联系管理员。',
+      content:
+        '服务端将检查该组织及全部下级组织；存在开放责任任命时会拒绝删除。软删除后不会出现在列表中。',
       okType: 'danger',
       onOk: async () => {
         try {
@@ -108,6 +128,9 @@ export default function OrgDetailPanel({
 
   return (
     <div style={{ padding: 16 }}>
+      <Typography.Paragraph type="secondary">
+        暂停、停用或删除时，服务端会检查该组织及全部下级组织是否仍有开放责任任命。
+      </Typography.Paragraph>
       <div
         style={{
           display: 'flex',
@@ -154,68 +177,98 @@ export default function OrgDetailPanel({
         </Space>
       </div>
 
-      <ProDescriptions<OrganizationDetailVo>
-        column={2}
-        dataSource={detail}
-        loading={loading}
-        columns={[
-          { title: '编码', dataIndex: 'orgCode' },
-          { title: '名称', dataIndex: 'orgName' },
-          { title: '类型', dataIndex: 'orgType' },
-          { title: '层级', dataIndex: 'level' },
-          { title: '路径', dataIndex: 'path', span: 2 },
+      <Tabs
+        items={[
           {
-            title: '上级',
-            dataIndex: 'parentName',
-            render: (_, row) =>
-              row.parentCode ? `${row.parentName} (${row.parentCode})` : '—',
+            key: 'organization-detail',
+            label: '组织详情',
+            children: (
+              <>
+                <ProDescriptions<OrganizationDetailVo>
+                  column={2}
+                  dataSource={detail}
+                  loading={loading}
+                  columns={[
+                    { title: '编码', dataIndex: 'orgCode' },
+                    { title: '名称', dataIndex: 'orgName' },
+                    { title: '类型', dataIndex: 'orgType' },
+                    { title: '层级', dataIndex: 'level' },
+                    { title: '路径', dataIndex: 'path', span: 2 },
+                    {
+                      title: '上级',
+                      dataIndex: 'parentName',
+                      render: (_, row) =>
+                        row.parentCode
+                          ? `${row.parentName} (${row.parentCode})`
+                          : '—',
+                    },
+                    {
+                      title: '状态',
+                      dataIndex: 'status',
+                      render: (_, row) => (
+                        <StatusTag domain="org" status={row.status} />
+                      ),
+                    },
+                    { title: '下级数', dataIndex: 'childrenCount' },
+                    { title: '在职雇佣', dataIndex: 'employmentCount' },
+                    {
+                      title: '创建时间',
+                      dataIndex: 'createTime',
+                      render: (_, row) =>
+                        new Date(row.createTime).toLocaleString(),
+                    },
+                    {
+                      title: '更新时间',
+                      dataIndex: 'updateTime',
+                      render: (_, row) =>
+                        new Date(row.updateTime).toLocaleString(),
+                    },
+                  ]}
+                />
+
+                <div style={{ marginTop: 24 }}>
+                  <h4>
+                    下级组织
+                    {childrenPage && childrenPage.total > 0 && (
+                      <span
+                        style={{ color: '#999', fontSize: 12, marginLeft: 8 }}
+                      >
+                        共 {childrenPage.total} 条
+                      </span>
+                    )}
+                  </h4>
+                  <Table<OrganizationTreeNode>
+                    rowKey="orgCode"
+                    size="small"
+                    loading={childrenLoading}
+                    columns={childColumns(onSelectChild)}
+                    dataSource={childrenPage?.result ?? []}
+                    pagination={{
+                      current: childrenPage?.pageNum ?? 1,
+                      pageSize: childrenPage?.pageSize ?? 20,
+                      total: childrenPage?.total ?? 0,
+                      showSizeChanger: true,
+                      pageSizeOptions: [10, 20, 50, 100],
+                      onChange: (page, size) =>
+                        onChildrenPageChange(page, size),
+                    }}
+                    locale={{ emptyText: '无下级组织' }}
+                  />
+                </div>
+              </>
+            ),
           },
           {
-            title: '状态',
-            dataIndex: 'status',
-            render: (_, row) => <StatusTag domain="org" status={row.status} />,
-          },
-          { title: '下级数', dataIndex: 'childrenCount' },
-          { title: '在职雇佣', dataIndex: 'employmentCount' },
-          {
-            title: '创建时间',
-            dataIndex: 'createTime',
-            render: (_, row) => new Date(row.createTime).toLocaleString(),
-          },
-          {
-            title: '更新时间',
-            dataIndex: 'updateTime',
-            render: (_, row) => new Date(row.updateTime).toLocaleString(),
+            key: 'responsibility-assignments',
+            label: '责任任命',
+            children: (
+              <OrganizationResponsibilityAssignmentsPanel
+                orgCode={detail.orgCode}
+              />
+            ),
           },
         ]}
       />
-
-      <div style={{ marginTop: 24 }}>
-        <h4>
-          下级组织
-          {childrenPage && childrenPage.total > 0 && (
-            <span style={{ color: '#999', fontSize: 12, marginLeft: 8 }}>
-              共 {childrenPage.total} 条
-            </span>
-          )}
-        </h4>
-        <Table<OrganizationTreeNode>
-          rowKey="orgCode"
-          size="small"
-          loading={childrenLoading}
-          columns={childColumns(onSelectChild)}
-          dataSource={childrenPage?.result ?? []}
-          pagination={{
-            current: childrenPage?.pageNum ?? 1,
-            pageSize: childrenPage?.pageSize ?? 20,
-            total: childrenPage?.total ?? 0,
-            showSizeChanger: true,
-            pageSizeOptions: [10, 20, 50, 100],
-            onChange: (page, size) => onChildrenPageChange(page, size),
-          }}
-          locale={{ emptyText: '无下级组织' }}
-        />
-      </div>
     </div>
   );
 }

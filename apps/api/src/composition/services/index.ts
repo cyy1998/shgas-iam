@@ -1,5 +1,6 @@
 import type { ApiAuditLogWriter } from "@api/services/audit/audit.service";
 import type { SessionKernelRedis } from "@iam/api-core/session/kernel";
+import type { DbClient } from "@iam/db";
 import type { ApiRepositories } from "../repositories";
 import type { ApiRuntimePorts } from "../runtime";
 import type { createApiUnitOfWork } from "../tx";
@@ -32,6 +33,7 @@ import { createUserPasswordHelper } from "@api/services/user/user-password.helpe
 import { createUserService } from "@api/services/user/user.service";
 import {
   createAuthorizationGrantRedemption,
+  createAuthorizationGrantRedemptionCleanupAdapter,
   createRedisAuthorizationGrantRedemptionStore,
 } from "@iam/api-core/authorization-grant";
 import { createClientTrafficGateReader } from "@iam/api-core/client-traffic-gate";
@@ -50,12 +52,16 @@ import {
 import { mapUnitOfWork } from "@iam/api-core/uow";
 import { createClientSubjectProjectionService } from "@iam/client-subject-projection";
 import db from "@iam/db";
+import {
+  createInternalUserProfileQueryRepository,
+  createInternalUserProfileQueryService,
+  createSubjectFactsReader,
+  createSubjectFactsRedisCache,
+} from "@iam/user-profile-read-model";
 import { createUserProfileQueryService } from "@iam/user-profile-read-model/query";
 import { createSubjectAccessTransitionRepository } from "@iam/user-profile-read-model/subject-access-transition";
 import {
   createSubjectFactsLoggerObservability,
-  createSubjectFactsReader,
-  createSubjectFactsRedisCache,
 } from "@iam/user-profile-read-model/subject-facts";
 
 type ApiUnitOfWork = ReturnType<typeof createApiUnitOfWork>;
@@ -65,6 +71,7 @@ export interface CreateApiServicesOptions {
   repositories: ApiRepositories;
   auditLogWriter: ApiAuditLogWriter;
   unitOfWork: ApiUnitOfWork;
+  userProfileQueryDb: DbClient;
 }
 
 function createApiSubjectAccess(
@@ -84,6 +91,9 @@ export function createApiServices(options: CreateApiServicesOptions) {
 
   const subjectAccess = createApiSubjectAccess(runtime);
   const subjectAccessPrincipal = createSubjectAccessPrincipalValidator(subjectAccess);
+  const authorizationGrantRedemptionStore = createRedisAuthorizationGrantRedemptionStore({
+    redis: runtime.redis,
+  });
   const sessionKernel = createSessionKernel({
     redis: runtime.redis as SessionKernelRedis,
     config: {
@@ -91,6 +101,9 @@ export function createApiServices(options: CreateApiServicesOptions) {
       clock: runtime.clock,
     },
     principalAccessFence: subjectAccessPrincipal,
+    cleanupAdapters: [
+      createAuthorizationGrantRedemptionCleanupAdapter(authorizationGrantRedemptionStore),
+    ],
     logger: runtime.logger,
     sourceApp: LoggerSourceApp.Api,
   });
@@ -103,9 +116,7 @@ export function createApiServices(options: CreateApiServicesOptions) {
   const authorizationGrantRedemption = createAuthorizationGrantRedemption({
     leaseDurationMs: 5_000,
     random: runtime.random,
-    store: createRedisAuthorizationGrantRedemptionStore({
-      redis: runtime.redis,
-    }),
+    store: authorizationGrantRedemptionStore,
   });
   const subjectFacts = createSubjectFactsReader({
     db,
@@ -178,9 +189,11 @@ export function createApiServices(options: CreateApiServicesOptions) {
 
   const userProfileQuery = createUserProfileQueryService({
     profileRepository: repositories.userProfile,
-    config: {
-      dslDefaultLimit: runtime.config.userProfile.dslMaxLimit,
-    },
+  });
+  const internalUserProfileQuery = createInternalUserProfileQueryService({
+    profileRepository: createInternalUserProfileQueryRepository(
+      options.userProfileQueryDb,
+    ),
   });
 
   const userDelegationQuery = createUserDelegationQuery({
@@ -251,6 +264,7 @@ export function createApiServices(options: CreateApiServicesOptions) {
     kernel: sessionKernel,
     logger: runtime.logger,
     orcas: runtime.integrations.orcas,
+    random: runtime.random,
     subjectDelivery: customSsoSubjectDelivery,
     subjectProjection,
     userService,
@@ -306,6 +320,7 @@ export function createApiServices(options: CreateApiServicesOptions) {
     user: userService,
     userPassword: userPasswordHelper,
     userProfileQuery,
+    internalUserProfileQuery,
   };
 }
 

@@ -10,6 +10,7 @@ import type {
   AdminEmploymentStorePort,
 } from "@admin-api/services/employment/employment.port";
 import type { EmploymentRepository } from "@admin-api/services/employment/employment.repository";
+import type { OrganizationResponsibilityRepository } from "@admin-api/services/organization-responsibility/organization-responsibility.repository";
 import type {
   AdminOrganizationReaderPort,
   AdminOrganizationTransactionStorePort,
@@ -43,6 +44,8 @@ import type {
 } from "@admin-api/services/user/user.port";
 import type { UserRepository } from "@admin-api/services/user/user.repository";
 import type { ResignUserSessionRevocationPort } from "@admin-api/use-cases/employment/resign-user/resign-user.port";
+import type { CreateOrganizationResponsibilityAssignmentTransactionPorts } from "@admin-api/use-cases/organization-responsibility/create-assignment/create-assignment.port";
+import type { ManageOrganizationResponsibilityAssignmentLifecycleTransactionPorts } from "@admin-api/use-cases/organization-responsibility/manage-assignment-lifecycle/manage-assignment-lifecycle.port";
 import type { LoginRestriction } from "@iam/api-core/login-restriction";
 import type { SessionKernel } from "@iam/api-core/session/kernel";
 import type { RoleAssignmentResolver } from "@iam/role-assignment-resolution";
@@ -51,7 +54,9 @@ import { expect, test } from "bun:test";
 function assertAssignable<Port, _Provider extends Port>() {}
 
 test("Admin API providers structurally satisfy consumer-owned ports", () => {
-  type RevokeUserInput = Parameters<AdminSessionUserControlPort["revokeUserSessions"]>[0];
+  type RevokeUserInput = Parameters<
+    AdminSessionUserControlPort["revokeUserSessions"]
+  >[0];
   // @ts-expect-error Admin user Session Revocation always requires server audit context.
   const missingAuditContext: RevokeUserInput = {
     userId: 1,
@@ -64,11 +69,33 @@ test("Admin API providers structurally satisfy consumer-owned ports", () => {
 
   assertAssignable<AdminEmploymentReaderPort, EmploymentRepository>();
   assertAssignable<AdminEmploymentStorePort, EmploymentRepository>();
-  assertAssignable<AdminEmploymentEffectiveRoleResolverPort, RoleAssignmentResolver>();
+  assertAssignable<
+    AdminEmploymentEffectiveRoleResolverPort,
+    RoleAssignmentResolver
+  >();
   assertAssignable<AdminEmploymentPrivilegeReaderPort, PrivilegeRepository>();
 
   assertAssignable<AdminOrganizationReaderPort, OrganizationRepository>();
-  assertAssignable<AdminOrganizationTransactionStorePort, OrganizationRepository>();
+  assertAssignable<
+    AdminOrganizationTransactionStorePort,
+    OrganizationRepository
+  >();
+  assertAssignable<
+    CreateOrganizationResponsibilityAssignmentTransactionPorts["assignmentStore"],
+    OrganizationResponsibilityRepository
+  >();
+  assertAssignable<
+    CreateOrganizationResponsibilityAssignmentTransactionPorts["employmentReader"],
+    OrganizationResponsibilityRepository
+  >();
+  assertAssignable<
+    CreateOrganizationResponsibilityAssignmentTransactionPorts["organizationReader"],
+    OrganizationResponsibilityRepository
+  >();
+  assertAssignable<
+    ManageOrganizationResponsibilityAssignmentLifecycleTransactionPorts["assignmentStore"],
+    OrganizationResponsibilityRepository
+  >();
   assertAssignable<AdminPositionReaderPort, PositionRepository>();
   assertAssignable<AdminPositionTransactionStorePort, PositionRepository>();
   assertAssignable<AdminRoleReaderPort, RoleRepository>();
@@ -77,7 +104,10 @@ test("Admin API providers structurally satisfy consumer-owned ports", () => {
   assertAssignable<AdminUserReaderPort, UserRepository>();
   assertAssignable<AdminUserTransactionStorePort, UserRepository>();
   assertAssignable<AdminUserEmploymentReaderPort, EmploymentRepository>();
-  assertAssignable<AdminUserEffectiveRoleResolverPort, RoleAssignmentResolver>();
+  assertAssignable<
+    AdminUserEffectiveRoleResolverPort,
+    RoleAssignmentResolver
+  >();
   assertAssignable<AdminUserPrivilegeReaderPort, PrivilegeRepository>();
 
   assertAssignable<AdminSessionInventoryPort, SessionKernel>();
@@ -85,7 +115,10 @@ test("Admin API providers structurally satisfy consumer-owned ports", () => {
   assertAssignable<AdminLoginRestrictionPort, LoginRestriction>();
   assertAssignable<AdminSessionUserControlPort, AdminSessionRevocationPort>();
   assertAssignable<AdminSessionUserSummaryPort, UserRepository>();
-  assertAssignable<ResignUserSessionRevocationPort, AdminSessionRevocationPort>();
+  assertAssignable<
+    ResignUserSessionRevocationPort,
+    AdminSessionRevocationPort
+  >();
 
   expect(true).toBe(true);
 });

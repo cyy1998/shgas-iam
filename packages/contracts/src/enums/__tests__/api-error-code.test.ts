@@ -9,3 +9,12 @@ test("exports the admin session mutation service codes at runtime", () => {
     "ADMIN_SESSION_CURRENT_PROTECTED",
   );
 });
+
+test("exports the internal user search candidate codes at runtime", () => {
+  expect(String(ApiErrorCode.UserSearchResultTooLarge)).toBe(
+    "USER_SEARCH_RESULT_TOO_LARGE",
+  );
+  expect(String(ApiErrorCode.UserSearchUnavailable)).toBe(
+    "USER_SEARCH_UNAVAILABLE",
+  );
+});

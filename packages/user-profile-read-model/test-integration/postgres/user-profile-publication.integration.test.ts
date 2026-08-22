@@ -1,4 +1,4 @@
-import type { BuiltUserProfile } from "../../src/worker";
+import type { BuiltUserProfile } from "../../src/user-profile-builder.service";
 import {
   UserProfileDirtyReason,
   UserProfileDirtyStatus,
@@ -6,10 +6,8 @@ import {
   UserType,
 } from "@iam/contracts";
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:test";
-import {
-  createUserProfileBuilder,
-  createUserProfilePublicationRepository,
-} from "../../src/worker";
+import { createUserProfileBuilder } from "../../src/user-profile-builder.service";
+import { createUserProfilePublicationRepository } from "../../src/user-profile-publication.repository";
 import { createPostgresTestHarness } from "./postgres-test-harness";
 
 const NOW = new Date("2026-07-25T10:00:00.000Z");

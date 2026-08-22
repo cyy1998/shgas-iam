@@ -43,6 +43,32 @@ export default defineConfig({
       access: 'isAdmin',
     },
     {
+      path: '/organization-responsibilities',
+      name: '组织责任',
+      icon: 'cluster',
+      access: 'isAdmin',
+      routes: [
+        {
+          path: '/organization-responsibilities',
+          redirect: '/organization-responsibilities/assignments',
+        },
+        {
+          path: '/organization-responsibilities/assignments',
+          name: '责任任命',
+          component:
+            './organization-responsibilities/OrganizationResponsibilityAssignmentsPage',
+          access: 'isAdmin',
+        },
+        {
+          path: '/organization-responsibilities/types',
+          name: '责任类型目录',
+          component:
+            './organization-responsibilities/OrganizationResponsibilityTypeCatalogPage',
+          access: 'isAdmin',
+        },
+      ],
+    },
+    {
       path: '/positions',
       name: '职位管理',
       icon: 'solution',

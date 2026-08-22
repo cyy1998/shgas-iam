@@ -12,8 +12,8 @@ import type {
 import { normalizeOidcProtocolScopes } from "../protocol/scopes.ts";
 import { OidcScopesSchema } from "../provider/claims-snapshot.ts";
 
-export interface RedisOidcAdapterDeps {
-  claims: AdapterClaimsSnapshotIssuer;
+export interface RedisOidcAdapterDeps<TClaimsSnapshot = unknown> {
+  claims: AdapterClaimsSnapshotIssuer<TClaimsSnapshot>;
   clientVersions: AdapterClientVersionReader;
   oidcSession: AdapterOidcSessionKernel;
   providerSessions: AdapterProviderSessionBindingStore;
@@ -48,28 +48,164 @@ end
 return 0
 `;
 
-function artifactKey(model: string, id: string) {
-  return `oidc:model:${model}:${id}`;
+const DELETE_INDEXED_PROTOCOL_OBJECT_IF_UNCHANGED_SCRIPT = `
+-- delete_indexed_protocol_object_if_unchanged
+if redis.call("GET", KEYS[1]) ~= ARGV[1] then return 0 end
+redis.call("DEL", KEYS[1], KEYS[2])
+local ownerKeyCount = tonumber(ARGV[3])
+for index = 3, 2 + ownerKeyCount do
+  if redis.call("GET", KEYS[index]) == ARGV[2] then
+    redis.call("DEL", KEYS[index])
+  end
+end
+for index = 3 + ownerKeyCount, #KEYS do
+  redis.call("ZREM", KEYS[index], KEYS[1])
+end
+return 1
+`;
+
+const REMOVE_MISSING_INDEXED_PROTOCOL_OBJECT_SCRIPT = `
+-- remove_missing_indexed_protocol_object
+if redis.call("EXISTS", KEYS[1]) == 0 then
+  return redis.call("ZREM", KEYS[2], KEYS[1])
+end
+return 0
+`;
+
+function artifactKey(model: string, id: string, keyPrefix = "") {
+  return `${keyPrefix}oidc:model:${model}:${id}`;
 }
 
-function consumedKey(model: string, id: string) {
-  return `oidc:consumed:${model}:${id}`;
+function consumedKey(model: string, id: string, keyPrefix = "") {
+  return `${keyPrefix}oidc:consumed:${model}:${id}`;
 }
 
-function grantIndexKey(grantId: string) {
-  return `oidc:grant-objects:${grantId}`;
+function grantIndexKey(grantId: string, keyPrefix = "") {
+  return `${keyPrefix}oidc:grant-objects:${grantId}`;
 }
 
-function clientObjectIndexKey(clientId: string) {
-  return `oidc:client-objects:${clientId}`;
+function clientObjectIndexKey(clientId: string, keyPrefix = "") {
+  return `${keyPrefix}oidc:client-objects:${clientId}`;
 }
 
-function sessionUidKey(uid: string) {
-  return `oidc:session-uid:${uid}`;
+function sessionUidKey(uid: string, keyPrefix = "") {
+  return `${keyPrefix}oidc:session-uid:${uid}`;
 }
 
-function userCodeKey(userCode: string) {
-  return `oidc:user-code:${userCode}`;
+function userCodeKey(userCode: string, keyPrefix = "") {
+  return `${keyPrefix}oidc:user-code:${userCode}`;
+}
+
+async function revokeIndexedProtocolObjects(
+  redis: Redis,
+  indexKey: string,
+  keyPrefix = "",
+) {
+  await redis.zremrangebyscore(indexKey, "-inf", Date.now());
+  const keys = await redis.zrange(indexKey, 0, -1);
+  const payloads = keys.length === 0 ? [] : await redis.mget(...keys);
+  const invalid = payloads.filter((payload, index) =>
+    payload !== null && !parseIndexedProtocolObject(keys[index]!, payload, keyPrefix)).length;
+  if (invalid > 0)
+    throw new Error("OIDC protocol object inventory contains invalid records");
+  for (let index = 0; index < keys.length; index += 1) {
+    const key = keys[index]!;
+    const payload = payloads[index];
+    if (payload === null || payload === undefined) {
+      await redis.eval(
+        REMOVE_MISSING_INDEXED_PROTOCOL_OBJECT_SCRIPT,
+        2,
+        key,
+        indexKey,
+      );
+      continue;
+    }
+    const parsed = parseIndexedProtocolObject(key, payload, keyPrefix);
+    if (!parsed)
+      continue;
+    const sessionUid = payloadSessionUid(parsed.payload) ?? payloadString(parsed.payload, "uid");
+    const userCode = payloadString(parsed.payload, "userCode");
+    const grantId = payloadString(parsed.payload, "grantId");
+    const ownerKeys = [
+      ...(sessionUid ? [sessionUidKey(sessionUid, keyPrefix)] : []),
+      ...(userCode ? [userCodeKey(userCode, keyPrefix)] : []),
+    ];
+    const ownerIndexes = [
+      ...(grantId ? [grantIndexKey(grantId, keyPrefix)] : []),
+      ...payloadClientIds(parsed.payload).map(clientId =>
+        clientObjectIndexKey(clientId, keyPrefix)),
+    ];
+    await redis.eval(
+      DELETE_INDEXED_PROTOCOL_OBJECT_IF_UNCHANGED_SCRIPT,
+      2 + ownerKeys.length + ownerIndexes.length,
+      key,
+      consumedKey(parsed.model, parsed.id, keyPrefix),
+      ...ownerKeys,
+      ...ownerIndexes,
+      payload,
+      parsed.id,
+      ownerKeys.length,
+    );
+  }
+}
+
+async function inspectIndexedProtocolObjects(
+  redis: Redis,
+  clientId: string,
+  keyPrefix = "",
+) {
+  const indexKey = clientObjectIndexKey(clientId, keyPrefix);
+  const keys = await redis.zrange(indexKey, 0, -1);
+  const payloads = keys.length === 0 ? [] : await redis.mget(...keys);
+  const byModel = new Map<string, number>();
+  let invalid = 0;
+  let stale = 0;
+  for (let index = 0; index < keys.length; index += 1) {
+    const key = keys[index]!;
+    const payload = payloads[index];
+    if (payload === null || payload === undefined) {
+      stale += 1;
+      continue;
+    }
+    const parsed = parseIndexedProtocolObject(key, payload, keyPrefix);
+    if (!parsed || !payloadClientIds(parsed.payload).includes(clientId)) {
+      invalid += 1;
+      continue;
+    }
+    byModel.set(parsed.model, (byModel.get(parsed.model) ?? 0) + 1);
+  }
+  const sortedByModel = Object.fromEntries([...byModel.entries()].sort(([left], [right]) => left.localeCompare(right)));
+  return {
+    clientId,
+    counts: {
+      total: [...byModel.values()].reduce((total, count) => total + count, 0) + invalid + stale,
+      invalid,
+      stale,
+      byModel: sortedByModel,
+    },
+  };
+}
+
+function parseIndexedProtocolObject(key: string, serialized: string, keyPrefix: string) {
+  const prefix = `${keyPrefix}oidc:model:`;
+  if (!key.startsWith(prefix))
+    return null;
+  const separator = key.indexOf(":", prefix.length);
+  if (separator < 0)
+    return null;
+  try {
+    const payload = JSON.parse(serialized) as AdapterPayload;
+    if (payload === null || typeof payload !== "object")
+      return null;
+    return {
+      model: key.slice(prefix.length, separator),
+      id: key.slice(separator + 1),
+      payload,
+    };
+  }
+  catch {
+    return null;
+  }
 }
 
 function payloadClientId(payload: AdapterPayload) {
@@ -105,11 +241,12 @@ function payloadString(payload: AdapterPayload, key: string) {
   return typeof value === "string" && value ? value : undefined;
 }
 
-export class RedisOidcAdapter implements Adapter {
+export class RedisOidcAdapter<TClaimsSnapshot = unknown> implements Adapter {
   constructor(
     private readonly model: string,
     private readonly redis: Redis,
-    private readonly deps: RedisOidcAdapterDeps,
+    private readonly deps: RedisOidcAdapterDeps<TClaimsSnapshot>,
+    private readonly keyPrefix = "",
   ) {}
 
   private async readOrConsumeProviderSessionBinding(accountId: string, sessionUid: string, clientId: string) {
@@ -163,7 +300,7 @@ export class RedisOidcAdapter implements Adapter {
   }
 
   async upsert(id: string, payload: AdapterPayload, expiresIn: number) {
-    const key = artifactKey(this.model, id);
+    const key = artifactKey(this.model, id, this.keyPrefix);
     const expiresAt = Date.now() + expiresIn * 1000;
     const clientIds = payloadClientIds(payload);
     const oidcConfigVersions = Object.fromEntries(await Promise.all(clientIds.map(async (clientId) => {
@@ -294,17 +431,55 @@ export class RedisOidcAdapter implements Adapter {
     };
     const transaction = this.redis.multi().set(key, JSON.stringify(stored), "EX", expiresIn);
 
-    if (this.model === "Session" && payload.uid)
-      transaction.set(sessionUidKey(payload.uid), id, "EX", expiresIn);
-    if (payload.userCode)
-      transaction.set(userCodeKey(payload.userCode), id, "EX", expiresIn);
+    if (this.model === "Session" && payload.uid) {
+      transaction.set(
+        sessionUidKey(payload.uid, this.keyPrefix),
+        id,
+        "EX",
+        expiresIn,
+      );
+    }
+    if (payload.userCode) {
+      transaction.set(
+        userCodeKey(payload.userCode, this.keyPrefix),
+        id,
+        "EX",
+        expiresIn,
+      );
+    }
     if (GRANTABLE_MODELS.has(this.model) && payload.grantId) {
-      transaction.zadd(grantIndexKey(payload.grantId), expiresAt, key);
-      transaction.expire(grantIndexKey(payload.grantId), expiresIn);
+      transaction.zadd(
+        grantIndexKey(payload.grantId, this.keyPrefix),
+        expiresAt,
+        key,
+      );
+      transaction.pexpireat(
+        grantIndexKey(payload.grantId, this.keyPrefix),
+        expiresAt,
+        "NX",
+      );
+      transaction.pexpireat(
+        grantIndexKey(payload.grantId, this.keyPrefix),
+        expiresAt,
+        "GT",
+      );
     }
     for (const indexedClientId of clientIds) {
-      transaction.zadd(clientObjectIndexKey(indexedClientId), expiresAt, key);
-      transaction.expire(clientObjectIndexKey(indexedClientId), expiresIn);
+      transaction.zadd(
+        clientObjectIndexKey(indexedClientId, this.keyPrefix),
+        expiresAt,
+        key,
+      );
+      transaction.pexpireat(
+        clientObjectIndexKey(indexedClientId, this.keyPrefix),
+        expiresAt,
+        "NX",
+      );
+      transaction.pexpireat(
+        clientObjectIndexKey(indexedClientId, this.keyPrefix),
+        expiresAt,
+        "GT",
+      );
     }
     await transaction.exec();
   }
@@ -316,8 +491,12 @@ export class RedisOidcAdapter implements Adapter {
     if (this.model === "AccessToken" && !resolvedCredential)
       return undefined;
 
-    const key = resolvedCredential?.metadata.providerTokenKey ?? artifactKey(this.model, id);
-    const [value, consumed] = await this.redis.mget(key, consumedKey(this.model, id));
+    const key = resolvedCredential?.metadata.providerTokenKey
+      ?? artifactKey(this.model, id, this.keyPrefix);
+    const [value, consumed] = await this.redis.mget(
+      key,
+      consumedKey(this.model, id, this.keyPrefix),
+    );
     if (!value)
       return undefined;
 
@@ -329,7 +508,10 @@ export class RedisOidcAdapter implements Adapter {
       const expectedVersion = payload.oidcConfigVersions?.[clientId] ?? payload.oidcConfigVersion;
       const currentVersion = await this.deps.clientVersions.findActiveVersion(clientId);
       if (currentVersion === null || currentVersion !== expectedVersion) {
-        await this.redis.del(key, consumedKey(this.model, id));
+        await this.redis.del(
+          key,
+          consumedKey(this.model, id, this.keyPrefix),
+        );
         return undefined;
       }
     }
@@ -344,12 +526,12 @@ export class RedisOidcAdapter implements Adapter {
   }
 
   async findByUid(uid: string) {
-    const id = await this.redis.get(sessionUidKey(uid));
+    const id = await this.redis.get(sessionUidKey(uid, this.keyPrefix));
     return id ? await this.find(id) : undefined;
   }
 
   async findByUserCode(userCode: string) {
-    const id = await this.redis.get(userCodeKey(userCode));
+    const id = await this.redis.get(userCodeKey(userCode, this.keyPrefix));
     return id ? await this.find(id) : undefined;
   }
 
@@ -357,8 +539,8 @@ export class RedisOidcAdapter implements Adapter {
     const result = await this.redis.eval(
       ATOMIC_CONSUME_SCRIPT,
       2,
-      artifactKey(this.model, id),
-      consumedKey(this.model, id),
+      artifactKey(this.model, id, this.keyPrefix),
+      consumedKey(this.model, id, this.keyPrefix),
       String(Math.floor(Date.now() / 1000)),
     );
     if (result === -1)
@@ -371,7 +553,7 @@ export class RedisOidcAdapter implements Adapter {
   }
 
   async destroy(id: string) {
-    const key = artifactKey(this.model, id);
+    const key = artifactKey(this.model, id, this.keyPrefix);
     if (this.model === "AccessToken") {
       const serialized = await this.redis.get(key);
       const credentialId = readKernelCredentialId(serialized);
@@ -396,27 +578,27 @@ export class RedisOidcAdapter implements Adapter {
           DELETE_OWNED_SESSION_ARTIFACT_SCRIPT,
           3,
           key,
-          consumedKey(this.model, id),
-          sessionUidKey(providerSession.uid),
+          consumedKey(this.model, id, this.keyPrefix),
+          sessionUidKey(providerSession.uid, this.keyPrefix),
           id,
         );
       }
       else {
-        await this.redis.del(key, consumedKey(this.model, id));
+        await this.redis.del(
+          key,
+          consumedKey(this.model, id, this.keyPrefix),
+        );
       }
     }
   }
 
   async revokeByGrantId(grantId: string) {
-    const indexKey = grantIndexKey(grantId);
-    await this.redis.zremrangebyscore(indexKey, "-inf", Date.now());
-    const keys = await this.redis.zrange(indexKey, 0, -1);
-    const accessTokenKeys = keys.filter(key => key.includes(":AccessToken:"));
-    const otherKeys = keys.filter(key => !key.includes(":AccessToken:"));
-    await Promise.all(accessTokenKeys.map(async key => await this.deps.tokens.revokeAccessToken(key)));
-    if (otherKeys.length)
-      await this.redis.del(...otherKeys, ...otherKeys.map(key => key.replace("oidc:model:", "oidc:consumed:")));
-    await this.redis.del(indexKey);
+    const indexKey = grantIndexKey(grantId, this.keyPrefix);
+    await revokeIndexedProtocolObjects(
+      this.redis,
+      indexKey,
+      this.keyPrefix,
+    );
   }
 }
 
@@ -443,24 +625,32 @@ class DynamicClientAdapter implements Adapter {
   async revokeByGrantId() {}
 }
 
-export interface CreateOidcAdapterFactoryDeps extends RedisOidcAdapterDeps {
+export interface CreateOidcAdapterFactoryDeps<TClaimsSnapshot = unknown>
+  extends RedisOidcAdapterDeps<TClaimsSnapshot> {
   clients: AdapterClientRuntimeReader;
 }
 
-export function createOidcAdapterFactory(redis: Redis, deps: CreateOidcAdapterFactoryDeps) {
+export function createOidcAdapterFactory<TClaimsSnapshot = unknown>(
+  redis: Redis,
+  deps: CreateOidcAdapterFactoryDeps<TClaimsSnapshot>,
+  options: { readonly keyPrefix?: string } = {},
+) {
   return (model: string): Adapter => model === "Client"
     ? new DynamicClientAdapter(deps.clients)
-    : new RedisOidcAdapter(model, redis, deps);
+    : new RedisOidcAdapter(model, redis, deps, options.keyPrefix);
 }
 
 export function createOidcProtocolObjectStore(
   redis: Redis,
-  tokens: AdapterTokenRegistry,
-  oidcSession?: Pick<AdapterOidcSessionKernel, "revokeClientProtocol">,
+  options: { readonly keyPrefix?: string } = {},
 ) {
+  const keyPrefix = options.keyPrefix ?? "";
   return {
+    inspectClient(clientId: string) {
+      return inspectIndexedProtocolObjects(redis, clientId, keyPrefix);
+    },
     revokeClient(clientId: string) {
-      return revokeClientProtocolObjects(redis, tokens, clientId, oidcSession);
+      return revokeClientProtocolObjects(redis, clientId, keyPrefix);
     },
   };
 }
@@ -469,20 +659,11 @@ export type OidcProtocolObjectStore = ReturnType<typeof createOidcProtocolObject
 
 export async function revokeClientProtocolObjects(
   redis: Redis,
-  tokens: AdapterTokenRegistry,
   clientId: string,
-  oidcSession?: Pick<AdapterOidcSessionKernel, "revokeClientProtocol">,
+  keyPrefix = "",
 ) {
-  await oidcSession?.revokeClientProtocol(clientId, "client_config_changed");
-  const indexKey = clientObjectIndexKey(clientId);
-  await redis.zremrangebyscore(indexKey, "-inf", Date.now());
-  const keys = await redis.zrange(indexKey, 0, -1);
-  const accessTokenKeys = keys.filter(key => key.includes(":AccessToken:"));
-  const otherKeys = keys.filter(key => !key.includes(":AccessToken:"));
-  await Promise.all(accessTokenKeys.map(async key => await tokens.revokeAccessToken(key)));
-  if (otherKeys.length)
-    await redis.del(...otherKeys, ...otherKeys.map(key => key.replace("oidc:model:", "oidc:consumed:")));
-  await redis.del(indexKey);
+  const indexKey = clientObjectIndexKey(clientId, keyPrefix);
+  await revokeIndexedProtocolObjects(redis, indexKey, keyPrefix);
 }
 
 function readKernelCredentialId(serialized: string | null) {

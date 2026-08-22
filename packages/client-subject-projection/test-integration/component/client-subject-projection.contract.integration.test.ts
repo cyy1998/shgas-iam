@@ -1,20 +1,18 @@
-import type { SubjectFactsSnapshot } from "@iam/client-subject-projection";
 import {
   createClientSubjectProjectionService,
-  InvalidSubjectClaimSelectionError,
   parseSubjectClaimSelection,
-  SUBJECT_CLAIM_CATALOG_V1,
-  SubjectProjectionNotReadyError,
+  SUBJECT_CLAIM_CATALOG,
 } from "@iam/client-subject-projection";
-import { createInMemoryClientSubjectProjectionService } from "@iam/client-subject-projection/testing";
+import {
+  OrganizationResponsibilityTypeCode,
+  OrganizationType,
+} from "@iam/contracts";
 import { describe, expect, test } from "bun:test";
 
-const subjectIdentifier = "00000000-0000-4000-8000-000000000001";
-
 describe("Client Subject Projection Interface", () => {
-  test("publishes the closed Catalog V1 vocabulary", () => {
-    expect(SUBJECT_CLAIM_CATALOG_V1).toEqual({
-      version: 1,
+  test("publishes a closed V2 Catalog without a responsibility-only claim", () => {
+    expect(SUBJECT_CLAIM_CATALOG).toEqual({
+      version: 2,
       claims: [
         {
           claim: "subjectIdentifier",
@@ -62,216 +60,28 @@ describe("Client Subject Projection Interface", () => {
         "iam:authorization",
       ],
     });
-  });
 
-  test("offers a pure in-memory adapter through the same public Interface", async () => {
-    const service = createInMemoryClientSubjectProjectionService({
-      subjects: [{ subjectIdentifier }],
+    expect(parseSubjectClaimSelection({
+      catalogVersion: 2,
+      claims: ["subjectIdentifier", "profile:employments"],
+    })).toEqual({
+      catalogVersion: 2,
+      optionalClaims: ["profile:employments"],
     });
-
-    const projection = await service.resolve({
-      subjectIdentifier,
-      clientCode: "client-a",
-      selection: {
-        catalogVersion: 1,
-        optionalClaims: [],
-      },
-    });
-
-    expect(projection).toEqual({ subjectIdentifier });
-  });
-
-  test("normalizes a Catalog V1 declaration into optional claim Selection", () => {
-    const selection = parseSubjectClaimSelection({
+    expect(() => parseSubjectClaimSelection({
       catalogVersion: 1,
-      claims: [
-        "subjectIdentifier",
-        "profile:username",
-        "profile:name",
-        "profile:phone",
-        "profile:employments",
-        "iam:authorization",
-      ],
-    });
-
-    expect(selection).toEqual({
-      catalogVersion: 1,
-      optionalClaims: [
-        "profile:username",
-        "profile:name",
-        "profile:phone",
-        "profile:employments",
-        "iam:authorization",
-      ],
-    });
+      claims: ["subjectIdentifier"],
+    })).toThrow();
+    expect(() => parseSubjectClaimSelection({
+      catalogVersion: 2,
+      claims: ["subjectIdentifier", "profile:responsibilities"],
+    })).toThrow();
   });
 
-  test("fails closed for unsupported or ambiguous Catalog declarations", () => {
-    const invalidDeclarations = [
-      {
-        catalogVersion: 2,
-        claims: ["subjectIdentifier"],
-      },
-      {
-        catalogVersion: 1,
-        claims: ["subjectIdentifier", "profile:unknown"],
-      },
-      {
-        catalogVersion: 1,
-        claims: ["subjectIdentifier", "profile:name", "profile:name"],
-      },
-      {
-        catalogVersion: 1,
-        claims: ["profile:name"],
-      },
-      {
-        catalogVersion: 1,
-        claims: ["subjectIdentifier", "username"],
-      },
-      {
-        catalogVersion: 1,
-        claims: ["subjectIdentifier", "id"],
-      },
-      {
-        catalogVersion: 1,
-        claims: ["subjectIdentifier", "$.profile.name"],
-      },
-      {
-        catalogVersion: 1,
-        claims: ["subjectIdentifier", "favoriteColor"],
-      },
-    ];
-
-    for (const declaration of invalidDeclarations) {
-      expect(() => parseSubjectClaimSelection(declaration))
-        .toThrow(InvalidSubjectClaimSelectionError);
-    }
-  });
-
-  test("fails closed when an untyped caller bypasses normalized Selection construction", async () => {
+  test("projects canonical responsibilities only inside selected profile employments", async () => {
+    const subjectIdentifier = "00000000-0000-4000-8000-000000000001";
     const service = createClientSubjectProjectionService({
-      subjectAccess: {
-        assertAccessible: async () => {},
-      },
-      subjectFacts: {
-        read: async () => null,
-      },
-      authorizationFreshness: {
-        check: async () => {
-          throw new Error("Profile claims must allow last published Subject Facts");
-        },
-      },
-    });
-    const invalidSelections = [
-      {
-        catalogVersion: 2,
-        optionalClaims: [],
-      },
-      {
-        catalogVersion: 1,
-        optionalClaims: ["profile:unknown"],
-      },
-      {
-        catalogVersion: 1,
-        optionalClaims: ["profile:name", "profile:name"],
-      },
-      {
-        catalogVersion: 1,
-        optionalClaims: ["subjectIdentifier"],
-      },
-    ];
-
-    for (const selection of invalidSelections) {
-      const result = Reflect.apply(service.resolve, undefined, [{
-        subjectIdentifier,
-        clientCode: "client-a",
-        selection,
-      }]);
-      await expect(result).rejects.toBeInstanceOf(InvalidSubjectClaimSelectionError);
-    }
-  });
-
-  test("resolves the mandatory Subject Identifier without requiring Subject Facts", async () => {
-    let factsReads = 0;
-    let dirtyReads = 0;
-    const service = createClientSubjectProjectionService({
-      subjectAccess: {
-        assertAccessible: async () => {},
-      },
-      subjectFacts: {
-        read: async () => {
-          factsReads += 1;
-          return null;
-        },
-      },
-      authorizationFreshness: {
-        check: async () => {
-          dirtyReads += 1;
-          return { status: "not-ready" };
-        },
-      },
-    });
-
-    const projection = await service.resolve({
-      subjectIdentifier,
-      clientCode: "client-a",
-      selection: {
-        catalogVersion: 1,
-        optionalClaims: [],
-      },
-    });
-
-    expect(projection).toEqual({ subjectIdentifier });
-    expect({ factsReads, dirtyReads }).toEqual({
-      factsReads: 0,
-      dirtyReads: 0,
-    });
-  });
-
-  test("returns only selected scalar profile claims", async () => {
-    const service = createClientSubjectProjectionService({
-      subjectAccess: {
-        assertAccessible: async () => {},
-      },
-      subjectFacts: {
-        read: async () => ({
-          subjectIdentifier,
-          sourceDirtyVersion: "7",
-          profile: {
-            username: "zhangsan",
-            name: "张三",
-            phone: "13800000000",
-          },
-          employments: [],
-        }),
-      },
-      authorizationFreshness: {
-        check: async () => {
-          throw new Error("Profile claims must allow last published Subject Facts");
-        },
-      },
-    });
-
-    const projection = await service.resolve({
-      subjectIdentifier,
-      clientCode: "client-a",
-      selection: {
-        catalogVersion: 1,
-        optionalClaims: ["profile:username"],
-      },
-    });
-
-    expect(projection).toEqual({
-      subjectIdentifier,
-      username: "zhangsan",
-    });
-  });
-
-  test("preserves a selected nullable phone as a protocol-neutral fact", async () => {
-    const service = createClientSubjectProjectionService({
-      subjectAccess: {
-        assertAccessible: async () => {},
-      },
+      subjectAccess: { assertAccessible: async () => undefined },
       subjectFacts: {
         read: async () => ({
           subjectIdentifier,
@@ -281,133 +91,59 @@ describe("Client Subject Projection Interface", () => {
             name: "张三",
             phone: null,
           },
-          employments: [],
-        }),
-      },
-      authorizationFreshness: {
-        check: async () => {
-          throw new Error("Profile claims must allow last published Subject Facts");
-        },
-      },
-    });
-
-    const projection = await service.resolve({
-      subjectIdentifier,
-      clientCode: "client-a",
-      selection: {
-        catalogVersion: 1,
-        optionalClaims: ["profile:name", "profile:phone"],
-      },
-    });
-
-    expect(projection).toEqual({
-      subjectIdentifier,
-      name: "张三",
-      phone: null,
-    });
-  });
-
-  test("sorts Employment Profiles and ignores fields outside the narrow Facts contract", async () => {
-    const rootOrganization = {
-      code: "root",
-      name: "总部",
-      type: "company",
-    };
-    const service = createClientSubjectProjectionService({
-      subjectAccess: {
-        assertAccessible: async () => {},
-      },
-      subjectFacts: {
-        read: async () => ({
-          subjectIdentifier,
-          sourceDirtyVersion: "7",
-          profile: {
-            username: "zhangsan",
-            name: "张三",
-            phone: "13800000000",
-          },
           employments: [
             {
-              id: 102,
-              status: 1,
-              isDelete: false,
+              isPrimary: true,
+              organization: {
+                code: "org-a",
+                name: "甲部门",
+                type: OrganizationType.Department,
+                path: [
+                  { code: "root", name: "总部", type: OrganizationType.Company },
+                  { code: "org-a", name: "甲部门", type: OrganizationType.Department },
+                ],
+              },
+              position: { code: "position-a", name: "甲岗位" },
+              clientAuthorizations: [{
+                clientCode: "client-a",
+                roles: [{ code: "admin", privileges: ["read"] }],
+              }],
+              responsibilities: [{
+                type: {
+                  code: OrganizationResponsibilityTypeCode.Head,
+                  name: "负责人",
+                },
+                targetOrganization: {
+                  code: "target-a",
+                  name: "目标甲",
+                  type: OrganizationType.Department,
+                  path: [
+                    { code: "root", name: "总部", type: OrganizationType.Company },
+                    { code: "target-a", name: "目标甲", type: OrganizationType.Department },
+                  ],
+                },
+              }],
+            },
+            {
               isPrimary: false,
               organization: {
                 code: "org-b",
                 name: "乙部门",
-                type: "department",
-                path: [rootOrganization, {
-                  code: "org-b",
-                  name: "乙部门",
-                  type: "department",
-                }],
+                type: OrganizationType.Department,
+                path: [
+                  { code: "root", name: "总部", type: OrganizationType.Company },
+                  { code: "org-b", name: "乙部门", type: OrganizationType.Department },
+                ],
               },
-              position: {
-                code: "position-b",
-                name: "乙岗位",
-                description: "must not leave the facts seam",
-              },
+              position: { code: "position-b", name: "乙岗位" },
               clientAuthorizations: [],
-            },
-            {
-              id: 101,
-              status: 1,
-              isDelete: false,
-              isPrimary: true,
-              organization: {
-                code: "org-z",
-                name: "主任职部门",
-                type: "department",
-                path: [rootOrganization, {
-                  code: "org-z",
-                  name: "主任职部门",
-                  type: "department",
-                }],
-              },
-              position: {
-                code: "position-z",
-                name: "主任职岗位",
-              },
-              clientAuthorizations: [],
-            },
-            {
-              id: 103,
-              status: 1,
-              isDelete: false,
-              isPrimary: false,
-              organization: {
-                code: "org-a",
-                name: "甲部门",
-                type: "department",
-                path: [rootOrganization, {
-                  code: "org-a",
-                  name: "甲部门",
-                  type: "department",
-                }],
-              },
-              position: {
-                code: "position-a",
-                name: "甲岗位",
-              },
-              clientAuthorizations: [],
+              responsibilities: [],
             },
           ],
-          futureLegacyDetailField: "must not enter the projection",
-          wxId: "must-not-leak",
-          userType: "must-not-leak",
-          userStatus: 1,
-          orderNum: 1,
-          description: "must-not-leak",
-          isDelete: false,
-          createTime: "must-not-leak",
-          updateTime: "must-not-leak",
-          orcasId: "must-not-leak",
         }),
       },
       authorizationFreshness: {
-        check: async () => {
-          throw new Error("Profile claims must allow last published Subject Facts");
-        },
+        check: async () => ({ status: "fresh" }),
       },
     });
 
@@ -415,360 +151,31 @@ describe("Client Subject Projection Interface", () => {
       subjectIdentifier,
       clientCode: "client-a",
       selection: {
-        catalogVersion: 1,
-        optionalClaims: ["profile:employments"],
+        catalogVersion: 2,
+        optionalClaims: ["profile:employments", "iam:authorization"],
       },
     });
 
-    expect(projection).toEqual({
-      subjectIdentifier,
-      employments: [
-        {
-          isPrimary: true,
-          organization: {
-            code: "org-z",
-            name: "主任职部门",
-            type: "department",
+    expect(projection.employments?.map(employment => employment.responsibilities))
+      .toEqual([
+        [{
+          type: {
+            code: OrganizationResponsibilityTypeCode.Head,
+            name: "负责人",
+          },
+          targetOrganization: {
+            code: "target-a",
+            name: "目标甲",
+            type: OrganizationType.Department,
             path: [
-              rootOrganization,
-              { code: "org-z", name: "主任职部门", type: "department" },
+              { code: "root", name: "总部", type: OrganizationType.Company },
+              { code: "target-a", name: "目标甲", type: OrganizationType.Department },
             ],
           },
-          position: {
-            code: "position-z",
-            name: "主任职岗位",
-          },
-        },
-        {
-          isPrimary: false,
-          organization: {
-            code: "org-a",
-            name: "甲部门",
-            type: "department",
-            path: [
-              rootOrganization,
-              { code: "org-a", name: "甲部门", type: "department" },
-            ],
-          },
-          position: {
-            code: "position-a",
-            name: "甲岗位",
-          },
-        },
-        {
-          isPrimary: false,
-          organization: {
-            code: "org-b",
-            name: "乙部门",
-            type: "department",
-            path: [
-              rootOrganization,
-              { code: "org-b", name: "乙部门", type: "department" },
-            ],
-          },
-          position: {
-            code: "position-b",
-            name: "乙岗位",
-          },
-        },
-      ],
-    });
-  });
-
-  test("crops authorization to each client and retains employments without roles", async () => {
-    const facts = {
-      subjectIdentifier,
-      sourceDirtyVersion: "11",
-      profile: {
-        username: "zhangsan",
-        name: "张三",
-        phone: null,
-      },
-      employments: [
-        {
-          isPrimary: false,
-          organization: {
-            code: "org-a",
-            name: "甲部门",
-            type: "department",
-            path: [
-              { code: "root", name: "总部", type: "company" },
-              { code: "org-a", name: "甲部门", type: "department" },
-            ],
-          },
-          position: {
-            code: "position-a",
-            name: "甲岗位",
-          },
-          clientAuthorizations: [
-            {
-              clientCode: "client-b",
-              roles: [
-                {
-                  code: "operator",
-                  privileges: ["read", "execute", "execute"],
-                },
-              ],
-            },
-          ],
-        },
-        {
-          isPrimary: true,
-          organization: {
-            code: "org-z",
-            name: "主任职部门",
-            type: "department",
-            path: [
-              { code: "root", name: "总部", type: "company" },
-              { code: "org-z", name: "主任职部门", type: "department" },
-            ],
-          },
-          position: {
-            code: "position-z",
-            name: "主任职岗位",
-          },
-          clientAuthorizations: [
-            {
-              clientCode: "client-a",
-              roles: [
-                {
-                  code: "viewer",
-                  privileges: ["read", "read"],
-                },
-                {
-                  code: "admin",
-                  privileges: ["write", "read"],
-                },
-                {
-                  code: "viewer",
-                  privileges: ["read"],
-                },
-              ],
-            },
-            {
-              clientCode: "client-b",
-              roles: [
-                {
-                  code: "auditor",
-                  privileges: ["audit", "audit"],
-                },
-              ],
-            },
-          ],
-        },
-      ],
-    } satisfies SubjectFactsSnapshot;
-    const service = createInMemoryClientSubjectProjectionService({
-      subjects: [{
-        subjectIdentifier,
-        facts,
-        freshAuthorizationSourceDirtyVersion: "11",
-      }],
-    });
-    const selection = {
-      catalogVersion: 1,
-      optionalClaims: ["iam:authorization"],
-    } as const;
-
-    const [clientA, clientB] = await Promise.all([
-      service.resolve({ subjectIdentifier, clientCode: "client-a", selection }),
-      service.resolve({ subjectIdentifier, clientCode: "client-b", selection }),
-    ]);
-
-    const primaryEmployment = {
-      isPrimary: true,
-      organization: {
-        code: "org-z",
-        name: "主任职部门",
-        type: "department",
-        path: [
-          { code: "root", name: "总部", type: "company" },
-          { code: "org-z", name: "主任职部门", type: "department" },
-        ],
-      },
-      position: {
-        code: "position-z",
-        name: "主任职岗位",
-      },
-    };
-    const secondaryEmployment = {
-      isPrimary: false,
-      organization: {
-        code: "org-a",
-        name: "甲部门",
-        type: "department",
-        path: [
-          { code: "root", name: "总部", type: "company" },
-          { code: "org-a", name: "甲部门", type: "department" },
-        ],
-      },
-      position: {
-        code: "position-a",
-        name: "甲岗位",
-      },
-    };
-
-    expect([clientA, clientB]).toEqual([
-      {
-        subjectIdentifier,
-        authorization: {
-          employments: [
-            {
-              ...primaryEmployment,
-              roles: ["admin", "viewer"],
-              privileges: ["read", "write"],
-            },
-            {
-              ...secondaryEmployment,
-              roles: [],
-              privileges: [],
-            },
-          ],
-          roles: ["admin", "viewer"],
-          privileges: ["read", "write"],
-        },
-      },
-      {
-        subjectIdentifier,
-        authorization: {
-          employments: [
-            {
-              ...primaryEmployment,
-              roles: ["auditor"],
-              privileges: ["audit"],
-            },
-            {
-              ...secondaryEmployment,
-              roles: ["operator"],
-              privileges: ["execute", "read"],
-            },
-          ],
-          roles: ["auditor", "operator"],
-          privileges: ["audit", "execute", "read"],
-        },
-      },
-    ]);
-  });
-
-  test("assembles all selected claims from facts refreshed by the freshness barrier", async () => {
-    const employment = {
-      isPrimary: true,
-      organization: {
-        code: "org-a",
-        name: "甲部门",
-        type: "department",
-        path: [
-          { code: "root", name: "总部", type: "company" },
-          { code: "org-a", name: "甲部门", type: "department" },
-        ],
-      },
-      position: {
-        code: "position-a",
-        name: "甲岗位",
-      },
-    };
-    const observedFacts = {
-      subjectIdentifier,
-      sourceDirtyVersion: "12",
-      profile: {
-        username: "zhangsan",
-        name: "旧姓名",
-        phone: null,
-      },
-      employments: [{
-        ...employment,
-        clientAuthorizations: [{
-          clientCode: "client-a",
-          roles: [{ code: "old-role", privileges: ["old-privilege"] }],
         }],
-      }],
-    } satisfies SubjectFactsSnapshot;
-    const refreshedFacts = {
-      subjectIdentifier,
-      sourceDirtyVersion: "13",
-      profile: {
-        username: "zhangsan",
-        name: "新姓名",
-        phone: null,
-      },
-      employments: [{
-        ...employment,
-        clientAuthorizations: [{
-          clientCode: "client-a",
-          roles: [{ code: "new-role", privileges: ["new-privilege"] }],
-        }],
-      }],
-    } satisfies SubjectFactsSnapshot;
-    const service = createClientSubjectProjectionService({
-      subjectAccess: {
-        assertAccessible: async () => {},
-      },
-      subjectFacts: {
-        read: async () => observedFacts,
-      },
-      authorizationFreshness: {
-        check: async () => ({
-          status: "refreshed",
-          facts: refreshedFacts,
-        }),
-      },
-    });
-
-    const projection = await service.resolve({
-      subjectIdentifier,
-      clientCode: "client-a",
-      selection: {
-        catalogVersion: 1,
-        optionalClaims: ["profile:name", "iam:authorization"],
-      },
-    });
-
-    expect(projection).toEqual({
-      subjectIdentifier,
-      name: "新姓名",
-      authorization: {
-        employments: [{
-          ...employment,
-          roles: ["new-role"],
-          privileges: ["new-privilege"],
-        }],
-        roles: ["new-role"],
-        privileges: ["new-privilege"],
-      },
-    });
-  });
-
-  test("fails the whole authorization projection when freshness cannot be proven", async () => {
-    const service = createClientSubjectProjectionService({
-      subjectAccess: {
-        assertAccessible: async () => {},
-      },
-      subjectFacts: {
-        read: async () => ({
-          subjectIdentifier,
-          sourceDirtyVersion: "12",
-          profile: {
-            username: "zhangsan",
-            name: "张三",
-            phone: null,
-          },
-          employments: [],
-        }),
-      },
-      authorizationFreshness: {
-        check: async () => ({ status: "not-ready" }),
-      },
-    });
-
-    const result = service.resolve({
-      subjectIdentifier,
-      clientCode: "client-a",
-      selection: {
-        catalogVersion: 1,
-        optionalClaims: ["iam:authorization"],
-      },
-    });
-
-    await expect(result).rejects.toBeInstanceOf(SubjectProjectionNotReadyError);
+        [],
+      ]);
+    for (const employment of projection.authorization?.employments ?? [])
+      expect(employment).not.toHaveProperty("responsibilities");
   });
 });

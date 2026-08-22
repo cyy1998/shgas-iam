@@ -15,7 +15,7 @@ import {
 import type { AppRouter } from '@iam/admin-api/trpc';
 import { PositionStatus } from '@iam/contracts';
 import type { inferRouterOutputs } from '@trpc/server';
-import { Descriptions, message } from 'antd';
+import { Alert, Descriptions, message } from 'antd';
 import { useRef } from 'react';
 
 type PosVo =
@@ -88,6 +88,12 @@ export default function TransferModal({
         }
       }}
     >
+      <Alert
+        type="warning"
+        showIcon
+        style={{ marginBottom: 16 }}
+        message="转岗会结束原任职及其全部开放责任任命；新任职不会自动继承责任。"
+      />
       {employment && (
         <Descriptions
           size="small"

@@ -1,8 +1,13 @@
 import type {
   SubjectFactsReaderObservabilityPort,
   SubjectFactsReaderObservation,
-} from "./subject-facts-reader";
+} from "./subject-facts-observability.contract";
 import { SystemLogEvent } from "@iam/api-core/logger";
+
+export type {
+  SubjectFactsReaderObservabilityPort,
+  SubjectFactsReaderObservation,
+} from "./subject-facts-observability.contract";
 
 export interface SubjectFactsObservabilityLogger {
   readonly info: (

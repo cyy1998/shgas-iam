@@ -64,7 +64,7 @@ const setToken = mock(async () => ({
   sid: "local-session",
   ttl: 3600,
   subject: {
-    version: 1 as const,
+    version: 2 as const,
     subjectIdentifier: "00000000-0000-4000-8000-000000001001",
   },
 }));
@@ -600,7 +600,7 @@ describe("createSsoHandlers protocol adaptation", () => {
       sid: "independent-token",
       ttl: 7200,
       subject: {
-        version: 1,
+        version: 2,
         subjectIdentifier: "00000000-0000-4000-8000-000000001001",
       },
     });
@@ -612,7 +612,7 @@ describe("createSsoHandlers protocol adaptation", () => {
           sid: "independent-token",
           ttl: 7200,
           subject: {
-            version: 1,
+            version: 2,
             subjectIdentifier: "00000000-0000-4000-8000-000000001001",
           },
         },
@@ -638,7 +638,7 @@ describe("createSsoHandlers protocol adaptation", () => {
     setToken.mockResolvedValueOnce({
       ...invalidCredential,
       subject: {
-        version: 1,
+        version: 2,
         subjectIdentifier: "00000000-0000-4000-8000-000000001001",
       },
     } as never);

@@ -1,4 +1,4 @@
-import type { APIRequestContext } from "@playwright/test";
+import type { APIRequestContext, Page } from "@playwright/test";
 import { Buffer } from "node:buffer";
 import { randomBytes } from "node:crypto";
 import { expect, test } from "@playwright/test";
@@ -13,6 +13,12 @@ import {
   createPkceS256Pair,
   receiveOidcAuthorizationCallback,
 } from "./src/oidc-rp.ts";
+import {
+  createHeadResponsibility,
+  oidcUserInfoHasResponsibility,
+  readInternalResponsibility,
+  waitForInternalResponsibility,
+} from "./src/responsibility-journey.ts";
 
 test("public RP observes reversible Maintenance and permanent logout through real Admin control", async ({
   browser,
@@ -24,6 +30,13 @@ test("public RP observes reversible Maintenance and permanent logout through rea
   const adminPassword = requireEnvironment("IAM_E2E_ADMIN_PASSWORD");
   const clientId = requireEnvironment("IAM_E2E_OIDC_CLIENT_CODE");
   const redirectUri = requireEnvironment("IAM_E2E_OIDC_REDIRECT_URI");
+  const internalApiKey = requireEnvironment("IAM_E2E_INTERNAL_API_KEY");
+  const responsibilityTargetOrganizationCode = requireEnvironment(
+    "IAM_E2E_RESPONSIBILITY_TARGET_ORGANIZATION_CODE",
+  );
+  const responsibilityHolderPositionCode = requireEnvironment(
+    "IAM_E2E_RESPONSIBILITY_HOLDER_POSITION_CODE",
+  );
   const adminContext = await browser.newContext({ baseURL: origin });
   const adminPage = await adminContext.newPage();
   await loginToAdmin({
@@ -38,6 +51,15 @@ test("public RP observes reversible Maintenance and permanent logout through rea
   await runClientProtocolLifecycleAction(adminPage, "oidc", "启用");
   await expect(adminPage.getByText("维护中", { exact: true })).toBeVisible();
   await expect(adminPage.getByText("已启用", { exact: true })).toBeVisible();
+  await ensureHeadResponsibility({
+    adminPage,
+    adminUsername,
+    internalApiKey,
+    origin,
+    request,
+    positionCode: responsibilityHolderPositionCode,
+    targetOrganizationCode: responsibilityTargetOrganizationCode,
+  });
 
   const pkce = createPkceS256Pair();
   const state = randomBytes(24).toString("base64url");
@@ -50,7 +72,7 @@ test("public RP observes reversible Maintenance and permanent logout through rea
     nonce,
     redirect_uri: redirectUri,
     response_type: "code",
-    scope: "openid profile",
+    scope: "openid profile iam:employments",
     state,
   }).toString();
 
@@ -98,6 +120,20 @@ test("public RP observes reversible Maintenance and permanent logout through rea
     state,
   });
 
+  await pauseEmploymentWithResponsibilityCascade(
+    adminPage,
+    responsibilityHolderPositionCode,
+  );
+  await waitForInternalResponsibility({
+    adminUsername,
+    expected: false,
+    internalApiKey,
+    origin,
+    positionCode: responsibilityHolderPositionCode,
+    request,
+    targetOrganizationCode: responsibilityTargetOrganizationCode,
+  });
+
   const tokenForm = {
     client_id: clientId,
     code,
@@ -123,7 +159,7 @@ test("public RP observes reversible Maintenance and permanent logout through rea
   const tokens = await tokenResponse.json() as Record<string, unknown>;
   expect(tokens).toMatchObject({
     token_type: "Bearer",
-    scope: "openid profile",
+    scope: "openid profile iam:employments",
   });
   expect(tokens.access_token).toEqual(expect.any(String));
   expect(tokens.id_token).toEqual(expect.any(String));
@@ -134,9 +170,14 @@ test("public RP observes reversible Maintenance and permanent logout through rea
   });
   expect(userInfoResponse.status()).toBe(200);
   const userInfo = await userInfoResponse.json() as Record<string, unknown>;
-  expect(userInfo).toMatchObject({
-    preferred_username: adminUsername,
-  });
+  expect(userInfo).toMatchObject({ preferred_username: adminUsername });
+  expect(oidcUserInfoHasResponsibility(
+    userInfo,
+    {
+      positionCode: responsibilityHolderPositionCode,
+      targetOrganizationCode: responsibilityTargetOrganizationCode,
+    },
+  )).toBe(true);
   expect(userInfo.sub).toEqual(expect.any(String));
   const idToken = readJwtClaims(String(tokens.id_token));
   expect(idToken).toMatchObject({
@@ -145,6 +186,9 @@ test("public RP observes reversible Maintenance and permanent logout through rea
     nonce,
     sub: userInfo.sub,
   });
+  expect(idToken).not.toHaveProperty("iam:employments");
+  expect(idToken).not.toHaveProperty("iam:authorization");
+  expect(JSON.stringify(idToken)).not.toContain("responsibilit");
 
   await updateClientStatus(adminPage, clientId, "维护中");
   const maintenanceUserInfo = await request.get(`${origin}/oidc/me`, {
@@ -243,4 +287,43 @@ function readJwtClaims(token: string) {
   if (typeof claims.sub !== "string")
     throw new Error("OIDC ID Token did not contain a subject");
   return claims;
+}
+
+async function ensureHeadResponsibility(input: {
+  adminPage: Page;
+  adminUsername: string;
+  internalApiKey: string;
+  origin: string;
+  positionCode: string;
+  request: APIRequestContext;
+  targetOrganizationCode: string;
+}) {
+  if (await readInternalResponsibility(input))
+    return;
+  await createHeadResponsibility({
+    adminUsername: input.adminUsername,
+    origin: input.origin,
+    page: input.adminPage,
+    positionCode: input.positionCode,
+    targetOrganizationCode: input.targetOrganizationCode,
+  });
+  await waitForInternalResponsibility({ ...input, expected: true });
+}
+
+async function pauseEmploymentWithResponsibilityCascade(
+  adminPage: Page,
+  responsibilityHolderPositionCode: string,
+) {
+  await adminPage.goto("/iam-admin/employments");
+  const row = adminPage.getByRole("row", {
+    name: new RegExp(responsibilityHolderPositionCode, "u"),
+  });
+  await row.getByText("暂停", { exact: true }).click();
+  const confirmation = adminPage.getByRole("dialog");
+  await expect(confirmation).toContainText(
+    "该任职下所有启用中的责任任命也会一并暂停",
+  );
+  await confirmation.getByRole("button", { name: "暂停任职" }).click();
+  await expect(adminPage.getByText("已暂停任职及其启用中的责任任命"))
+    .toBeVisible();
 }

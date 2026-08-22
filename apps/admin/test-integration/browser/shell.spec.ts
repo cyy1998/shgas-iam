@@ -14,6 +14,21 @@ test('users page opens with admin shell and user list', async ({ page }) => {
   await expect(page.getByText('李四')).toBeVisible();
 });
 
+test('global Organization Responsibility navigation opens the read-only Type Catalog', async ({
+  page,
+}) => {
+  await mockAdminApi(page);
+
+  await page.goto('/iam-admin/organization-responsibilities/types');
+
+  await expect(page.getByRole('menuitem', { name: /组织责任/ })).toBeVisible();
+  await expect(page.getByText('责任类型目录').first()).toBeVisible();
+  await expect(page.getByRole('cell', { name: 'head' })).toBeVisible();
+  await expect(page.getByRole('cell', { name: 'supervising' })).toBeVisible();
+  await expect(page.getByText('single')).toBeVisible();
+  await expect(page.getByText('multiple')).toBeVisible();
+});
+
 test('restores a trusted callback query and hash before the admin shell renders', async ({
   page,
 }) => {

@@ -1,5 +1,5 @@
+import AuditLogTable from '@admin/components/audit/AuditLogTable';
 import { PageContainer } from '@ant-design/pro-components';
-import AuditLogTable from './components/AuditLogTable';
 
 export default function AuditLogsPage() {
   return (

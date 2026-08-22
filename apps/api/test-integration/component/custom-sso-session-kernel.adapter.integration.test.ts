@@ -30,9 +30,7 @@ import {
 import {
   SubjectProjectionNotReadyError,
 } from "@iam/client-subject-projection";
-import {
-  CustomSsoSubjectProjectionInvariantError,
-} from "@iam/client-subject-projection/custom-sso";
+import { CustomSsoSubjectProjectionInvariantError } from "@iam/client-subject-projection/custom-sso";
 import {
   ClientStatus,
   CustomSsoClientMode,
@@ -286,7 +284,7 @@ const client = {
 const independentClient = {
   clientCode: "independent",
   configVersion: 7,
-  subjectClaimCatalogVersion: 1 as const,
+  subjectClaimCatalogVersion: 2 as const,
   subjectClaims: [SubjectClaim.SubjectIdentifier],
 };
 
@@ -299,7 +297,7 @@ const independentRuntimeClient = {
   customSsoEnabled: true,
   customSsoConfig: {
     mode: CustomSsoClientMode.Independent,
-    subjectClaimCatalogVersion: 1,
+    subjectClaimCatalogVersion: 2,
     subjectClaims: [SubjectClaim.SubjectIdentifier],
     validRedirectUrls: ["https://app.example.com/callback"],
     callbackEndpoint: "https://app.example.com/sso/callback",
@@ -323,7 +321,7 @@ function createGatewayRuntimeClient(
     customSsoConfig: {
       mode: CustomSsoClientMode.Gateway,
       orcas: { enabled: clientCode === "gateway-orcas" },
-      subjectClaimCatalogVersion: 1,
+      subjectClaimCatalogVersion: 2,
       subjectClaims: [SubjectClaim.SubjectIdentifier],
       validRedirectUrls: ["https://gateway.example.com"],
     },
@@ -481,7 +479,7 @@ function createServices(options: {
       subjectIdentifier: string;
     }) => Object.freeze({
       resolveUserInfo: mock(async () => ({
-        version: 1 as const,
+        version: 2 as const,
         subjectIdentifier: context.subjectIdentifier,
       })),
     })),
@@ -508,6 +506,7 @@ function createServices(options: {
     kernel: adapterKernel,
     logger,
     orcas,
+    random: { uuid: randomUUID },
     subjectDelivery,
     subjectProjection,
     userService: adapterUserService as any,
@@ -741,6 +740,23 @@ describe("Custom SSO module interface", () => {
     ).resolves.toMatchObject({ status: "revoked" });
   });
 
+  test("protocol artifact cleanup makes an issued Custom SSO code fail with InvalidAuthCodeError", async () => {
+    const services = createServices();
+    const { code } = await issueAuthorizationCode(services);
+
+    await services.kernel.revokeClientProtocol(
+      independentClient.clientCode,
+      "custom-sso",
+      "client_config_changed",
+    );
+
+    await expect(services.customSsoSession.redeemIndependentGrant({
+      client: independentClient,
+      code,
+      redirectUri: "https://app.example.com/callback",
+    })).rejects.toBeInstanceOf(InvalidAuthCodeError);
+  });
+
   test("revokes an ambiguously committed Credential and retries the Grant with a new attempt identity", async () => {
     await assertAmbiguousCredentialIssueRecovery(async (services) => {
       const { code } = await issueAuthorizationCode(services);
@@ -876,7 +892,7 @@ describe("Custom SSO module interface", () => {
       clientCode: independentClient.clientCode,
       credentialType: "local_session",
       metadata: {
-        version: 1,
+        version: 2,
         mode: CustomSsoClientMode.Independent,
         configVersion: independentClient.configVersion,
       },
@@ -1175,7 +1191,7 @@ describe("Custom SSO module interface", () => {
       value: {
         clientCode: client.clientCode,
         metadata: {
-          version: 1,
+          version: 2,
           subjectIdentifier,
           clientCode: client.clientCode,
           mode: CustomSsoClientMode.Independent,
@@ -1283,7 +1299,7 @@ describe("Custom SSO module interface", () => {
     ).toBeNull();
   });
 
-  test("redeems an Independent grant into a minimal credential and a client-scoped V1 projection", async () => {
+  test("redeems an Independent grant into a minimal credential and a client-scoped V2 projection", async () => {
     const services = createServices();
     const { code } = await issueAuthorizationCode(services);
 
@@ -1298,7 +1314,7 @@ describe("Custom SSO module interface", () => {
       credential: expect.stringContaining("iam_ls_"),
       ttl: expect.any(Number),
       subject: {
-        version: 1,
+        version: 2,
         subjectIdentifier,
       },
     });
@@ -1306,7 +1322,7 @@ describe("Custom SSO module interface", () => {
       subjectIdentifier,
       clientCode: independentClient.clientCode,
       selection: {
-        catalogVersion: 1,
+        catalogVersion: 2,
         optionalClaims: [],
       },
     });
@@ -1325,6 +1341,7 @@ describe("Custom SSO module interface", () => {
     expect(JSON.stringify(credential)).not.toContain("payloadRef");
     expect(JSON.stringify(credential)).not.toContain("userDetail");
     expect(JSON.stringify(credential)).not.toContain("projection");
+    expect(JSON.stringify(credential)).not.toContain("responsibilities");
     expect(fakeRedis.payloadKeys()).toHaveLength(0);
 
     await expect(
@@ -1391,7 +1408,7 @@ describe("Custom SSO module interface", () => {
       services.customSsoSession.redeemIndependentGrant(input),
     ).resolves.toMatchObject({
       credential: expect.stringContaining("iam_ls_"),
-      subject: { version: 1, subjectIdentifier },
+      subject: { version: 2, subjectIdentifier },
     });
     expect(credentialIssueAttempts).toBe(1);
   });
@@ -1466,7 +1483,7 @@ describe("Custom SSO module interface", () => {
       services.customSsoSession.redeemIndependentGrant(input),
     ).resolves.toMatchObject({
       credential: expect.stringContaining("iam_ls_"),
-      subject: { version: 1, subjectIdentifier },
+      subject: { version: 2, subjectIdentifier },
     });
     expect(projectionAttempts).toBe(2);
   });
@@ -1767,7 +1784,7 @@ describe("Custom SSO module interface", () => {
     expect(result).toEqual({
       credential: expect.stringContaining("iam_ls_"),
       ttl: expect.any(Number),
-      subject: { version: 1, subjectIdentifier },
+      subject: { version: 2, subjectIdentifier },
     });
     expect(result.ttl).toBeGreaterThan(0);
     await expect(
@@ -1814,7 +1831,7 @@ describe("Custom SSO module interface", () => {
     expect(typeof credentialToken).toBe("string");
     expect(result).toMatchObject({
       credential: expect.stringContaining("iam_ls_"),
-      subject: { version: 1, subjectIdentifier },
+      subject: { version: 2, subjectIdentifier },
     });
     await expect(
       services.customSsoSession.redeemIndependentGrant({
@@ -1959,7 +1976,7 @@ describe("Custom SSO module interface", () => {
       throw new Error("expected resolved Gateway credential");
 
     expect(credential.value.metadata).toEqual({
-      version: 1,
+      version: 2,
       mode: CustomSsoClientMode.Gateway,
       configVersion: 7,
     });
@@ -1968,6 +1985,7 @@ describe("Custom SSO module interface", () => {
     expect(serializedArtifacts).not.toContain("payloadRef");
     expect(serializedArtifacts).not.toContain("userDetail");
     expect(serializedArtifacts).not.toContain("projection");
+    expect(serializedArtifacts).not.toContain("responsibilities");
     expect(serializedArtifacts).not.toContain(userDetail.username);
     expect(serializedArtifacts).not.toContain(`"id":${userDetail.id}`);
     expect(fakeRedis.payloadKeys()).toHaveLength(0);
@@ -2548,7 +2566,7 @@ describe("Custom SSO module interface", () => {
     );
 
     expect(credential.value.metadata).toEqual({
-      version: 1,
+      version: 2,
       mode: CustomSsoClientMode.Gateway,
       configVersion: 7,
       orcasId: "orcas",

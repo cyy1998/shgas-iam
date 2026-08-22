@@ -96,7 +96,7 @@ function createContractApp() {
 }
 
 describe("Custom SSO delivery OpenAPI", () => {
-  test("publishes the shared V1 user-info projection and retryable 503", async () => {
+  test("publishes the shared V2 user-info projection and retryable 503", async () => {
     const app = createContractApp();
     const response = await app.request("/public/doc");
     const document = await response.json() as {
@@ -127,7 +127,7 @@ describe("Custom SSO delivery OpenAPI", () => {
     const contract = JSON.stringify({
       operation,
       projection:
-        document.components.schemas.CustomSsoSubjectProjectionV1,
+        document.components.schemas.CustomSsoSubjectProjectionV2,
       unavailable:
         document.components.schemas.CustomSsoUnavailableResponse,
     });
@@ -138,10 +138,21 @@ describe("Custom SSO delivery OpenAPI", () => {
     expect(contract).toContain(ApiErrorCode.InternalError);
     expect(contract).not.toContain("\"id\"");
     expect(contract).not.toContain("userInfo");
-    expect(document.components.schemas.CustomSsoSubjectProjectionV1).toMatchObject({
+    expect(document.components.schemas.CustomSsoSubjectProjectionV2).toMatchObject({
+      additionalProperties: false,
       properties: {
+        version: { enum: [2] },
         profile: {
-          minProperties: 1,
+          additionalProperties: false,
+          properties: {
+            employments: {
+              items: {
+                properties: {
+                  responsibilities: { type: "array" },
+                },
+              },
+            },
+          },
         },
       },
     });

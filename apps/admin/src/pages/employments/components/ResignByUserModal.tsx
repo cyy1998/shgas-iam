@@ -88,7 +88,7 @@ export default function ResignByUserDialog({
       width={480}
     >
       <p style={{ marginBottom: 12 }}>
-        选中用户后，该用户名下所有活跃雇佣将被结束，且账号状态置为「结束」。此操作不可撤销。
+        选中用户后，该用户名下所有活跃任职及其开放责任任命都会结束，且账号状态置为「结束」。此操作不可撤销。
       </p>
       <Select
         showSearch

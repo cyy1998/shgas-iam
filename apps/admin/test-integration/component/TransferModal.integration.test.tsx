@@ -126,6 +126,12 @@ describe('TransferModal', () => {
       />,
     );
 
+    expect(
+      screen.getByText(
+        '转岗会结束原任职及其全部开放责任任命；新任职不会自动继承责任。',
+      ),
+    ).toBeInTheDocument();
+
     await user.click(screen.getByText('新任职组织'));
     await user.click(screen.getByText('新岗位'));
     await user.click(screen.getByRole('button', { name: '确定' }));

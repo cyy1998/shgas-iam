@@ -5,7 +5,7 @@ describe('mapCurrentAdminUser', () => {
   it('reads identity and roles only from the nested Custom SSO V1 projection', () => {
     expect(
       mapCurrentAdminUser({
-        version: 1,
+        version: 2,
         subjectIdentifier: '00000000-0000-4000-8000-000000000001',
         profile: {
           username: 'admin',

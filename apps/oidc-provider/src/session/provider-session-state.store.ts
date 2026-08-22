@@ -8,6 +8,7 @@ import type {
 } from "./provider-session.ts";
 import {
   pendingProviderSessionBindingKey,
+  pendingProviderSessionBindingsByClientKey,
   providerSessionBindingLookupKey,
   providerSessionGenerationMembersKey,
   providerSessionPrincipalAnchorKey,
@@ -17,18 +18,42 @@ import {
 
 export interface ProviderSessionStateRedis {
   get: (key: string) => Promise<string | null>;
+  mget: (...keys: string[]) => Promise<Array<string | null>>;
   set: (key: string, value: string, ...args: unknown[]) => Promise<unknown>;
   del: (...keys: string[]) => Promise<unknown>;
   eval: (script: string, keyCount: number, ...args: Array<string | number>) => Promise<unknown>;
+  zrangebyscore: (key: string, min: string | number, max: string | number) => Promise<string[]>;
+  zremrangebyscore: (key: string, min: string | number, max: string | number) => Promise<number>;
 }
+
+export const STAGE_PROVIDER_SESSION_BINDING_SCRIPT = `
+-- stage_provider_session_binding
+local existing = redis.call("GET", KEYS[1])
+if existing then
+  local ok, staged = pcall(cjson.decode, existing)
+  if not ok or staged.clientCode ~= ARGV[4] then return 0 end
+end
+redis.call("SET", KEYS[1], ARGV[1], "EX", ARGV[2])
+redis.call("ZADD", KEYS[2], ARGV[3], KEYS[1])
+local indexTtl = redis.call("PTTL", KEYS[2])
+local requestedTtl = tonumber(ARGV[2]) * 1000
+if indexTtl < requestedTtl then
+  redis.call("PEXPIRE", KEYS[2], requestedTtl)
+end
+return 1
+`;
 
 export const CLAIM_STAGED_PROVIDER_SESSION_BINDING_SCRIPT = `
 -- claim_staged_provider_session_binding
 local serialized = redis.call("GET", KEYS[1])
-if not serialized then return false end
+if not serialized then
+  redis.call("ZREM", KEYS[2], KEYS[1])
+  return false
+end
 local ok, staged = pcall(cjson.decode, serialized)
 if not ok then
   redis.call("DEL", KEYS[1])
+  redis.call("ZREM", KEYS[2], KEYS[1])
   return false
 end
 if staged.authorizationAttemptId ~= ARGV[1]
@@ -40,7 +65,24 @@ if staged.authorizationAttemptId ~= ARGV[1]
   return false
 end
 redis.call("DEL", KEYS[1])
+redis.call("ZREM", KEYS[2], KEYS[1])
 return serialized
+`;
+
+export const DELETE_OWNED_STAGED_PROVIDER_SESSION_BINDING_SCRIPT = `
+-- delete_owned_staged_provider_session_binding
+local serialized = redis.call("GET", KEYS[1])
+if not serialized then
+  if ARGV[2] ~= "" then return 0 end
+  redis.call("ZREM", KEYS[2], KEYS[1])
+  return 1
+end
+if ARGV[2] == "" or serialized ~= ARGV[2] then return 0 end
+local ok, staged = pcall(cjson.decode, serialized)
+if not ok or staged.clientCode ~= ARGV[1] then return 0 end
+redis.call("DEL", KEYS[1])
+redis.call("ZREM", KEYS[2], KEYS[1])
+return 1
 `;
 
 export const PUBLISH_PROVIDER_SESSION_REBIND_SCRIPT = `
@@ -218,12 +260,18 @@ return 1
 export function createProviderSessionStateStore(redis: ProviderSessionStateRedis) {
   async function stage(staged: StagedProviderSessionBinding, ttlSeconds: number) {
     const parsed = StagedProviderSessionBindingSchema.parse(staged);
-    await redis.set(
+    const stagedResult = await redis.eval(
+      STAGE_PROVIDER_SESSION_BINDING_SCRIPT,
+      2,
       pendingProviderSessionBindingKey(parsed.authorizationAttemptId),
+      pendingProviderSessionBindingsByClientKey(parsed.clientCode),
       JSON.stringify(parsed),
-      "EX",
       ttlSeconds,
+      Date.now() + ttlSeconds * 1000,
+      parsed.clientCode,
     );
+    if (stagedResult !== 1)
+      throw new Error("OIDC staged Provider Session binding owner conflicted");
   }
 
   async function claim(input: {
@@ -234,8 +282,9 @@ export function createProviderSessionStateStore(redis: ProviderSessionStateRedis
   }) {
     const serialized = await redis.eval(
       CLAIM_STAGED_PROVIDER_SESSION_BINDING_SCRIPT,
-      1,
+      2,
       pendingProviderSessionBindingKey(input.authorizationAttemptId),
+      pendingProviderSessionBindingsByClientKey(input.clientCode),
       input.authorizationAttemptId,
       input.accountId,
       input.clientCode,
@@ -258,6 +307,56 @@ export function createProviderSessionStateStore(redis: ProviderSessionStateRedis
       await redis.get(pendingProviderSessionBindingKey(authorizationAttemptId)),
       StagedProviderSessionBindingSchema,
     );
+  }
+
+  async function inventoryClientStagedBindings(clientCode: string) {
+    const indexKey = pendingProviderSessionBindingsByClientKey(clientCode);
+    const keys = await redis.zrangebyscore(indexKey, "-inf", "+inf");
+    const payloads = keys.length === 0 ? [] : await redis.mget(...keys);
+    let invalid = 0;
+    let stale = 0;
+    let bindings = 0;
+    for (let index = 0; index < keys.length; index += 1) {
+      const serialized = payloads[index];
+      if (serialized === null || serialized === undefined) {
+        stale += 1;
+        continue;
+      }
+      const parsed = parseJson(serialized, StagedProviderSessionBindingSchema);
+      if (!parsed || parsed.clientCode !== clientCode) {
+        invalid += 1;
+        continue;
+      }
+      bindings += 1;
+    }
+    return {
+      clientCode,
+      counts: {
+        bindings,
+        invalid,
+        stale,
+        total: bindings + invalid + stale,
+      },
+    };
+  }
+
+  async function revokeClientStagedBindings(clientCode: string) {
+    const indexKey = pendingProviderSessionBindingsByClientKey(clientCode);
+    await redis.zremrangebyscore(indexKey, "-inf", Date.now());
+    const keys = await redis.zrangebyscore(indexKey, Date.now(), "+inf");
+    const payloads = keys.length === 0 ? [] : await redis.mget(...keys);
+    for (let index = 0; index < keys.length; index += 1) {
+      const removed = await redis.eval(
+        DELETE_OWNED_STAGED_PROVIDER_SESSION_BINDING_SCRIPT,
+        2,
+        keys[index]!,
+        indexKey,
+        clientCode,
+        payloads[index] ?? "",
+      );
+      if (removed !== 1)
+        throw new Error("OIDC staged Provider Session binding inventory contains invalid records");
+    }
   }
 
   async function readLookup(sessionUid: string, clientCode: string) {
@@ -464,11 +563,13 @@ export function createProviderSessionStateStore(redis: ProviderSessionStateRedis
     claim,
     deleteOwned,
     destroyProviderSession,
+    inventoryClientStagedBindings,
     publishClientBinding,
     publishRebind,
     readAnchor,
     readLookup,
     readStaged,
+    revokeClientStagedBindings,
     refresh,
     stage,
   };

@@ -1,0 +1,30 @@
+{
+  "name": "@iam/organization-responsibility-resolution",
+  "type": "module",
+  "version": "0.0.1",
+  "private": true,
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "lint": "eslint src test-integration eslint.config.js",
+    "lint:fix": "eslint --fix src test-integration eslint.config.js",
+    "test:integration:component": "bun test --max-concurrency=2 test-integration/component",
+    "test:integration:postgres": "bun test --max-concurrency=1 test-integration/postgres",
+    "typecheck": "pnpm exec tsc --noEmit"
+  },
+  "dependencies": {
+    "@iam/contracts": "workspace:*",
+    "@iam/db": "workspace:*",
+    "@iam/domain": "workspace:*",
+    "drizzle-orm": "1.0.0-rc.2"
+  },
+  "devDependencies": {
+    "@iam/eslint-config": "workspace:*",
+    "@types/bun": "latest",
+    "@typescript/native": "npm:typescript@7.0.2",
+    "eslint": "^10.7.0",
+    "postgres": "^3.4.9",
+    "typescript": "npm:@typescript/typescript6@6.0.2"
+  }
+}

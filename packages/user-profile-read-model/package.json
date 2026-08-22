@@ -7,20 +7,19 @@
     ".": "./src/index.ts",
     "./producer": "./src/producer.ts",
     "./query": "./src/query.ts",
-    "./query/repository": "./src/user-profile.repository.ts",
+    "./query/repository": "./src/user-profile-query.repository.ts",
     "./subject-access-transition": "./src/subject-access-transition.repository.ts",
     "./subject-facts": "./src/subject-facts.ts",
     "./worker": "./src/worker.ts"
   },
   "scripts": {
-    "lint": "eslint src test-integration scripts eslint.config.js",
-    "lint:fix": "eslint --fix src test-integration scripts eslint.config.js",
+    "lint": "eslint src test-integration eslint.config.js",
+    "lint:fix": "eslint --fix src test-integration eslint.config.js",
     "test": "pnpm test:unit",
     "test:unit": "bun test --max-concurrency=2 src",
     "test:integration:component": "bun test --max-concurrency=2 test-integration/component",
     "test:integration:postgres": "bun test --max-concurrency=1 test-integration/postgres",
     "test:integration:redis": "bun test --max-concurrency=1 test-integration/redis",
-    "subject-projection:rehearsal": "bun scripts/subject-projection-rehearsal.ts",
     "typecheck": "pnpm exec tsc --noEmit"
   },
   "dependencies": {
@@ -31,6 +30,7 @@
     "@iam/db": "workspace:*",
     "@iam/domain": "workspace:*",
     "@iam/jobs": "workspace:*",
+    "@iam/organization-responsibility-resolution": "workspace:*",
     "@iam/role-assignment-resolution": "workspace:*",
     "drizzle-orm": "1.0.0-rc.2",
     "zod": "^4.4.3"

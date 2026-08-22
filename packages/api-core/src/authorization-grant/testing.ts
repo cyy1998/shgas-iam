@@ -72,6 +72,9 @@ export function createInMemoryAuthorizationGrantRedemptionStore(
   const now = options.clock?.now ?? Date.now;
 
   return {
+    async remove(grantId) {
+      return records.delete(grantId) ? "removed" : "missing";
+    },
     async initialize(record) {
       const currentTime = now();
       if (record.expiresAt <= currentTime)

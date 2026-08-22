@@ -9,7 +9,7 @@ import {
   ProFormText,
 } from '@ant-design/pro-components';
 import { getOrganizationStatusOptions, OrganizationType } from '@iam/contracts';
-import { message } from 'antd';
+import { Alert, message } from 'antd';
 
 type Props = {
   open: boolean;
@@ -91,6 +91,14 @@ export default function OrgFormModal({
         }
       }}
     >
+      {isEdit && (
+        <Alert
+          type="info"
+          showIcon
+          style={{ marginBottom: 16 }}
+          message="若改为暂停或停用，服务端会全量检查当前组织及全部下级组织的开放责任任命。"
+        />
+      )}
       <ProFormText
         name="orgCode"
         label="组织编码"

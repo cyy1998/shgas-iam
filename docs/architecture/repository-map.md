@@ -13,7 +13,7 @@
 ├── apps/             # 可部署的后端、前端和 worker
 ├── packages/         # 跨 app 复用的 workspace packages
 ├── gateway/          # APISIX manifests 与发布工具
-├── e2e/system/       # root-owned Full-system E2E workspace；当前交付 runtime、两条 journey 与精确恢复入口
+├── e2e/system/       # root-owned Full-system E2E workspace；当前交付 runtime、两条 V2 journey 与精确恢复入口
 ├── docker/           # 本地依赖栈及 dev/prod Compose
 ├── observability/    # Alloy、Loki 与 Grafana 配置
 ├── scripts/          # 仓库级检查、canonical test collection/Integration 编排和辅助脚本
@@ -56,14 +56,15 @@
 | 路径 | 职责与边界 |
 |---|---|
 | `packages/api-core/src` | 共享后端基础设施：`createApp`、route/OpenAPI/response helpers、errors、middleware、Redis、logging、observability、Session Kernel、LoginRestriction、Subject Access Barrier、UnitOfWork 和 tRPC utilities。共享 process-smoke harness 位于 `src/testing/`，只通过独立 testing export 暴露；它不实现 Redis 协议或 persistence seed。 |
-| `packages/client-subject-projection/src` | 协议中性的 Client Subject Projection deep Module；公开 `resolve` Interface、Catalog V1、最窄 facts/access/freshness ports，并以独立 subpath 暴露 Custom SSO V1 wire mapper 和纯内存测试 adapter。 |
+| `packages/client-subject-projection/src` | 协议中性的 Client Subject Projection deep Module；默认入口只公开 active V2 `resolve` Interface、Catalog 与 canonical responsibility Employment Profile，`/custom-sso` 独占 Custom SSO V2 strict wire。V1 历史源码不由 package exports、应用 composition 或命令入口公开。 |
 | `packages/contracts/src` | 跨 app/package 消费的稳定 contracts 与 enums。 |
 | `packages/domain/src` | 共享 domain schemas/types、pure domain rules、audit helpers 和可复用 domain/business errors。 |
 | `packages/db/src` | Drizzle schemas、relations、migrations、singleton client 和 query helpers。Schema/relations domain 为 `core` 与 `log`；共享 column helpers 位于 `schema/_shard/`。 |
 | `packages/eslint-config` | 全仓唯一 ESLint 配置所有者，公开 root/backend/frontend preset factories。 |
 | `packages/jobs/src` | 共享 BullMQ connection、queue、worker、job ID 和 default option helpers。 |
+| `packages/organization-responsibility-resolution/src` | 通过 `createOrganizationResponsibilityResolver(db)` 暴露 Organization Responsibility 的批量 Effective 正向解析与跨树 holder 反向解析；完整性、时间、cardinality、去重和排序规则留在 package 内。 |
 | `packages/role-assignment-resolution/src` | 通过 `createRoleAssignmentResolver(db)` 暴露正向 Effective Role 与反向受影响用户解析的唯一 public seam；assignment 来源、组织闭包、有效性、去重和排序规则留在 package 内。 |
-| `packages/user-profile-read-model/src` | API/admin-api/worker 消费的 versioned user-profile read model，包括 transaction-bound `UserProfileInvalidation`、dirty/rebuild workflow、version-bound Subject Facts builder、PostgreSQL atomic publication、提交后的 Redis monotonic publisher、Subject Facts read-through/freshness reader、Subject Access PostgreSQL authority reader、producer/query、repositories 和 worker module；Effective Role 与受影响用户均通过唯一 role-assignment resolver seam 推导。 |
+| `packages/user-profile-read-model/src` | API/admin-api/worker 消费的 strict V2 user-profile read model，包括 transaction-bound `UserProfileInvalidation`、dirty/rebuild workflow、带 responsibility 的 Detail/Search/Subject Facts builder、PostgreSQL atomic publication、提交后的 Redis monotonic publisher、strict V2 read-through/freshness reader、producer/query、repositories 和 worker module。默认入口与 `subject-facts` 子路径均为 V2；历史 V1 verifier/backfill 只留在 `worker` maintenance 边界。 |
 
 更详细的 package ownership、公开 exports、数据库和 transaction 规则见
 [共享契约与数据库](contracts-and-database.md)。
@@ -72,7 +73,7 @@
 
 | 路径 | 当前职责与边界 |
 |---|---|
-| `e2e/system` | `@iam/e2e-system` 拥有 root `pnpm test:e2e` 的完整 owner task：preflight 在任何 descriptor/resource 前验证 Docker、browser 与固定配置，再以动态 Gateway host port 启动 PostgreSQL、Redis、etcd、APISIX、API、Admin API、OIDC Provider、Worker、Admin 与 SSO，在空 volumes 执行真实 Drizzle migrations、production-owner seed 与 protocol readiness，并在同一 exact-project lifecycle 中固定按 Admin → OIDC 运行两条零 retry journey。失败时保存有界 raw diagnostics 与 Playwright evidence，再尝试本 project 的 best-effort cleanup；cleanup failure 非零。`admin:journey`、`oidc:journey` 保留为 workspace-local 调试入口，`runtime:cleanup` 只接受明确 descriptor 或 exact project。Windows 本地已验收，Linux/CI 尚未验收。 |
+| `e2e/system` | `@iam/e2e-system` 拥有 root `pnpm test:e2e` 的完整 owner task：preflight 在任何 descriptor/resource 前验证 Docker、browser 与固定配置，再以动态 Gateway host port 启动 PostgreSQL、Redis、etcd、APISIX、API、Admin API、OIDC Provider、Worker、Admin 与 SSO，在空 volumes 执行真实 Drizzle migrations、production-owner strict V2 seed 与 protocol readiness，并在同一 exact-project lifecycle 中固定按 Admin → OIDC 运行两条零 retry journey。两条 journey 共同覆盖 Organization Responsibility 创建、Profile/Facts 发布、Internal DSL、Custom SSO/Gateway 裁剪、Employment cascade 与 OIDC authorization-time snapshot/ID Token 排除。失败时保存有界 raw diagnostics 与 Playwright evidence，再尝试本 project 的 best-effort cleanup；cleanup failure 非零。`admin:journey`、`oidc:journey` 保留为 workspace-local 调试入口，`runtime:cleanup` 只接受明确 descriptor 或 exact project。Windows 本地已验收，Linux/CI 尚未验收。 |
 
 该 workspace 的 Compose、one-shot migration/Gateway sync images、lifecycle/recovery commands 与 contract tests 都保留在
 `e2e/system/`；生成的 run descriptor、migration/seed receipts、Compose/Gateway diagnostics 与后续 Playwright artifacts 位于其

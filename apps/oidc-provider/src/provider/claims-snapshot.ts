@@ -1,44 +1,13 @@
 import type { UnknownObject } from "oidc-provider";
 import { OIDC_SUPPORTED_SCOPES, OidcScope } from "@iam/contracts";
 import { z } from "zod";
+import {
+  OidcUserInfoClaimsSchema,
+} from "./claims-contract.ts";
 
-const NonEmptyStringsSchema = z.array(z.string().min(1));
-const OrganizationNodeSchema = z.strictObject({
-  orgCode: z.string(),
-  orgName: z.string(),
-  orgType: z.string(),
-});
-const EmploymentSchema = z.strictObject({
-  isPrimary: z.boolean(),
-  organization: z.strictObject({
-    ...OrganizationNodeSchema.shape,
-    fullOrgPath: z.array(OrganizationNodeSchema),
-  }),
-  position: z.strictObject({
-    posCode: z.string(),
-    posName: z.string(),
-  }),
-});
-const AuthorizationEmploymentSchema = z.strictObject({
-  ...EmploymentSchema.shape,
-  roles: NonEmptyStringsSchema,
-  privileges: NonEmptyStringsSchema,
-});
-
-export const OidcUserInfoSnapshotSchema = z.strictObject({
-  sub: z.string().min(1),
-  preferred_username: z.string().optional(),
-  name: z.string().optional(),
-  phone_number: z.string().optional(),
-  [OidcScope.IamEmployments]: z.array(EmploymentSchema).optional(),
-  [OidcScope.IamAuthorization]: z.strictObject({
-    employments: z.array(AuthorizationEmploymentSchema),
-    roles: NonEmptyStringsSchema,
-    privileges: NonEmptyStringsSchema,
-  }).optional(),
-});
-
-export const OidcScopesSchema = z.array(z.enum(OIDC_SUPPORTED_SCOPES)).min(1).superRefine((scopes, context) => {
+export const OidcScopesSchema = z.array(
+  z.enum(OIDC_SUPPORTED_SCOPES),
+).min(1).superRefine((scopes, context) => {
   if (new Set(scopes).size !== scopes.length) {
     context.addIssue({
       code: "custom",
@@ -54,7 +23,8 @@ export const OidcScopesSchema = z.array(z.enum(OIDC_SUPPORTED_SCOPES)).min(1).su
 });
 
 export const OidcClaimsSnapshotSchema = z.strictObject({
-  version: z.literal(1),
+  version: z.literal(2),
+  claimsContractVersion: z.literal(2),
   subjectIdentifier: z.uuid(),
   clientId: z.string().min(1),
   scopes: OidcScopesSchema,
@@ -62,7 +32,7 @@ export const OidcClaimsSnapshotSchema = z.strictObject({
   providerSessionUid: z.string().min(1),
   principalSessionId: z.string().min(1),
   providerSessionBindingId: z.string().min(1),
-  claims: OidcUserInfoSnapshotSchema,
+  claims: OidcUserInfoClaimsSchema,
 }).superRefine((snapshot, context) => {
   if (snapshot.claims.sub !== snapshot.subjectIdentifier) {
     context.addIssue({
@@ -73,7 +43,8 @@ export const OidcClaimsSnapshotSchema = z.strictObject({
   }
 
   const claims = snapshot.claims;
-  const hasProfileClaim = claims.name !== undefined || claims.preferred_username !== undefined;
+  const hasProfileClaim
+    = claims.name !== undefined || claims.preferred_username !== undefined;
   if (hasProfileClaim && !snapshot.scopes.includes(OidcScope.Profile)) {
     context.addIssue({
       code: "custom",
@@ -89,7 +60,8 @@ export const OidcClaimsSnapshotSchema = z.strictObject({
       message: "OIDC profile scope requires both profile claims",
     });
   }
-  if (claims.phone_number !== undefined && !snapshot.scopes.includes(OidcScope.Phone)) {
+  if (claims.phone_number !== undefined
+    && !snapshot.scopes.includes(OidcScope.Phone)) {
     context.addIssue({
       code: "custom",
       path: ["claims", "phone_number"],
@@ -101,7 +73,7 @@ export const OidcClaimsSnapshotSchema = z.strictObject({
     context.addIssue({
       code: "custom",
       path: ["claims", "iam:employments"],
-      message: "OIDC employments claim requires the iam:employments scope",
+      message: "OIDC employments claim requires its scope",
     });
   }
   if (snapshot.scopes.includes(OidcScope.IamEmployments)
@@ -109,7 +81,7 @@ export const OidcClaimsSnapshotSchema = z.strictObject({
     context.addIssue({
       code: "custom",
       path: ["claims", "iam:employments"],
-      message: "OIDC iam:employments scope requires the employments claim",
+      message: "OIDC employments scope requires its claim",
     });
   }
   if (claims[OidcScope.IamAuthorization] !== undefined
@@ -117,7 +89,7 @@ export const OidcClaimsSnapshotSchema = z.strictObject({
     context.addIssue({
       code: "custom",
       path: ["claims", "iam:authorization"],
-      message: "OIDC authorization claim requires the iam:authorization scope",
+      message: "OIDC authorization claim requires its scope",
     });
   }
   if (snapshot.scopes.includes(OidcScope.IamAuthorization)
@@ -125,16 +97,24 @@ export const OidcClaimsSnapshotSchema = z.strictObject({
     context.addIssue({
       code: "custom",
       path: ["claims", "iam:authorization"],
-      message: "OIDC iam:authorization scope requires the authorization claim",
+      message: "OIDC authorization scope requires its claim",
     });
   }
 });
 
-export type OidcUserInfoSnapshot = UnknownObject & z.infer<typeof OidcUserInfoSnapshotSchema>;
-
-export type OidcClaimsSnapshot = Omit<z.infer<typeof OidcClaimsSnapshotSchema>, "claims"> & {
-  claims: OidcUserInfoSnapshot;
+export type OidcClaimsSnapshot = Omit<
+  z.infer<typeof OidcClaimsSnapshotSchema>,
+  "claims"
+> & {
+  claims: UnknownObject & z.infer<typeof OidcUserInfoClaimsSchema>;
 };
+
+export function parseOidcClaimsSnapshot(
+  input: unknown,
+): OidcClaimsSnapshot | null {
+  const parsed = OidcClaimsSnapshotSchema.safeParse(input);
+  return parsed.success ? parsed.data as OidcClaimsSnapshot : null;
+}
 
 export interface CreateOidcAuthorizationCodeSnapshotInput {
   subjectIdentifier: string;
@@ -144,9 +124,4 @@ export interface CreateOidcAuthorizationCodeSnapshotInput {
   providerSessionUid: string;
   principalSessionId: string;
   providerSessionBindingId: string;
-}
-
-export function parseOidcClaimsSnapshot(input: unknown): OidcClaimsSnapshot | null {
-  const parsed = OidcClaimsSnapshotSchema.safeParse(input);
-  return parsed.success ? parsed.data as OidcClaimsSnapshot : null;
 }

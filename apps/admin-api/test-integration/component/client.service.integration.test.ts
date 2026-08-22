@@ -22,7 +22,7 @@ import {
 import { describe, expect, mock, test } from "bun:test";
 
 function client(overrides: Record<string, unknown> = {}) {
-  return {
+  const record = {
     id: 1,
     clientCode: "portal",
     clientName: "Portal",
@@ -44,6 +44,18 @@ function client(overrides: Record<string, unknown> = {}) {
     customSsoConfigVersion: 0,
     ...overrides,
   };
+
+  if (
+    record.customSsoConfig !== null
+    && typeof record.customSsoConfig === "object"
+    && !("subjectClaimCatalogVersion" in record.customSsoConfig)
+  ) {
+    record.customSsoConfig = Object.assign({}, record.customSsoConfig, {
+      subjectClaimCatalogVersion: 2,
+    });
+  }
+
+  return record;
 }
 
 function createAfterCommitLogger() {
@@ -77,7 +89,6 @@ function independentCustomSsoConfig(): ClientCustomSsoConfigureDto {
   return {
     mode: CustomSsoClientMode.Independent,
     validRedirectUrls: ["https://portal.example.com/sso/*"],
-    subjectClaimCatalogVersion: 1,
     subjectClaims: ["subjectIdentifier", "profile:name"],
     callbackEndpoint: "https://portal.example.com/sso/callback",
     logoutEndpoint: "https://portal.example.com/logout",
@@ -88,7 +99,6 @@ function gatewayCustomSsoConfig(): ClientCustomSsoConfigureDto {
   return {
     mode: CustomSsoClientMode.Gateway,
     validRedirectUrls: ["https://portal.example.com/sso/*"],
-    subjectClaimCatalogVersion: 1,
     subjectClaims: ["subjectIdentifier"],
     orcas: { enabled: false },
   };
@@ -428,7 +438,10 @@ describe("createClientService", () => {
     expect(deps.passwordHasher.hashSecret).toHaveBeenCalledWith("iam_sso_test_secret");
     expect(tx.clientRepository.updateClientCustomSsoByCode).toHaveBeenCalledWith("portal", {
       customSsoEnabled: false,
-      customSsoConfig: input,
+      customSsoConfig: {
+        ...input,
+        subjectClaimCatalogVersion: 2,
+      },
       customSsoSecretHash: "hashed-secret:iam_sso_test_secret",
     });
     const [audit] = tx.auditService.recordAuditLog.mock.calls[0] ?? [];
@@ -614,7 +627,10 @@ describe("createClientService", () => {
     expect(independentToGateway.deps.random.customSsoClientSecret).not.toHaveBeenCalled();
     expect(independentToGateway.tx.clientRepository.updateClientCustomSsoByCode).toHaveBeenCalledWith("portal", {
       customSsoEnabled: false,
-      customSsoConfig: gateway,
+      customSsoConfig: {
+        ...gateway,
+        subjectClaimCatalogVersion: 2,
+      },
       customSsoSecretHash: null,
     });
 
@@ -642,7 +658,10 @@ describe("createClientService", () => {
     expect(independentToIndependent.deps.random.customSsoClientSecret).not.toHaveBeenCalled();
     expect(independentToIndependent.tx.clientRepository.updateClientCustomSsoByCode).toHaveBeenCalledWith("portal", {
       customSsoEnabled: false,
-      customSsoConfig: changedIndependent,
+      customSsoConfig: {
+        ...changedIndependent,
+        subjectClaimCatalogVersion: 2,
+      },
       customSsoSecretHash: "preserved-hash",
     });
     expect(JSON.stringify(independentResult)).not.toContain("preserved-hash");

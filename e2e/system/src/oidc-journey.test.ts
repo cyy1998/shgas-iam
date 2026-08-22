@@ -66,6 +66,12 @@ describe("OIDC PKCE journey operations", () => {
       IAM_E2E_OIDC_CLIENT_CODE: "e2e-oidc-oidc-journey-01",
       IAM_E2E_OIDC_REDIRECT_URI:
         "http://127.0.0.1:43123/e2e/oidc/callback",
+      IAM_E2E_INTERNAL_API_KEY:
+        "iam-e2e-internal-api-key-oidc-journey-01",
+      IAM_E2E_RESPONSIBILITY_TARGET_ORGANIZATION_CODE:
+        "e2e-resp-target-oidc-journey-01",
+      IAM_E2E_RESPONSIBILITY_HOLDER_POSITION_CODE:
+        "e2e-resp-pos-oidc-journey-01",
       IAM_E2E_PLAYWRIGHT_OUTPUT_DIR: playwrightStagingDirectory(descriptor),
     });
     expect(calls[1]?.env?.IAM_E2E_ADMIN_PASSWORD).toBeTruthy();

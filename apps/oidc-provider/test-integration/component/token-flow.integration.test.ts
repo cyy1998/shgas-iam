@@ -152,6 +152,7 @@ async function createRuntime() {
             path: [{ code: "org-a", name: "Organization A", type: "department" }],
           },
           position: { code: "position-a", name: "Position A" },
+          responsibilities: [],
         };
         return {
           subjectIdentifier: subject,
@@ -240,6 +241,9 @@ async function createRuntime() {
     protocolObjectCount(model: string) {
       return [...values.keys()].filter(key => key.startsWith(`${model}:`)).length;
     },
+    removeProtocolObjectForCleanup(model: string, id: string) {
+      values.delete(`${model}:${id}`);
+    },
     protocolObjectWasConsumed(model: string, id: string) {
       return values.get(`${model}:${id}`)?.consumed !== undefined;
     },
@@ -320,6 +324,49 @@ async function exchangeCode(
 }
 
 describe("authorization code token flow HTTP smoke", () => {
+  it("maps cleaned OIDC codes and tokens to invalid_grant and invalid_token", async () => {
+    const runtime = await createRuntime();
+    const redirectUri = "https://public.example/callback?from=iam";
+    const removedCode = await issueCode(
+      runtime.provider,
+      "public-client",
+      redirectUri,
+      { claims: runtime.claims },
+    );
+    runtime.removeProtocolObjectForCleanup("AuthorizationCode", removedCode);
+
+    const rejectedCode = await exchangeCode(runtime.url, {
+      clientId: "public-client",
+      code: removedCode,
+      redirectUri,
+      verifier,
+    });
+    expect(rejectedCode.status).toBe(400);
+    await expect(rejectedCode.json()).resolves.toMatchObject({ error: "invalid_grant" });
+
+    const liveCode = await issueCode(
+      runtime.provider,
+      "public-client",
+      redirectUri,
+      { claims: runtime.claims },
+    );
+    const issued = await exchangeCode(runtime.url, {
+      clientId: "public-client",
+      code: liveCode,
+      redirectUri,
+      verifier,
+    });
+    expect(issued.status).toBe(200);
+    const accessToken = (await issued.json() as { access_token: string }).access_token;
+    runtime.removeProtocolObjectForCleanup("AccessToken", accessToken);
+
+    const rejectedToken = await fetch(`${runtime.url}/me`, {
+      headers: { authorization: `Bearer ${accessToken}` },
+    });
+    expect(rejectedToken.status).toBe(401);
+    await expect(rejectedToken.json()).resolves.toMatchObject({ error: "invalid_token" });
+  });
+
   it.each([
     ["public Maintenance", "public-client", "https://public.example/callback?from=iam", undefined, { outcome: "maintenance" }],
     ["confidential Maintenance", "confidential-client", "https://confidential.example/callback", "confidential-secret-value-123456", { outcome: "maintenance" }],

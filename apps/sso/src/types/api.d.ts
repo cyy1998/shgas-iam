@@ -1,6 +1,6 @@
 import type {
-  CustomSsoEmploymentV1,
-  CustomSsoSubjectProjectionV1,
+  CustomSsoEmployment,
+  CustomSsoSubjectProjection,
 } from '@iam/client-subject-projection/custom-sso';
 import type { ApiErrorCode, ClientStatus } from '@iam/contracts';
 
@@ -15,9 +15,9 @@ export type AuthConfig = {
   logoutEndpoint: string;
 };
 
-export type Employment = CustomSsoEmploymentV1;
+export type Employment = CustomSsoEmployment;
 
-export type UserInfo = CustomSsoSubjectProjectionV1;
+export type UserInfo = CustomSsoSubjectProjection;
 
 export type AccountLookupUserInfo = {
   username: string;

@@ -8,6 +8,11 @@ export type {
   AuthorizationGrantRedemptionScheduler,
   CreateAuthorizationGrantRedemptionOptions,
 } from "./authorization-grant-redemption";
+export {
+  AUTHORIZATION_GRANT_REDEMPTION_CLEANUP_KIND,
+  createAuthorizationGrantRedemptionCleanupAdapter,
+  CUSTOM_SSO_PROTOCOL,
+} from "./cleanup";
 export type {
   AuthorizationGrantBeginResult,
   AuthorizationGrantRedemptionRecord,

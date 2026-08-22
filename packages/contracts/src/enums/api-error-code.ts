@@ -28,12 +28,15 @@ export enum ApiErrorCode {
   WeakPassword = "USER.WEAK_PASSWORD",
   InvalidOldPassword = "USER.INVALID_OLD_PASSWORD",
   UserHasActiveEmployment = "USER.HAS_ACTIVE_EMPLOYMENT",
+  UserSearchResultTooLarge = "USER_SEARCH_RESULT_TOO_LARGE",
+  UserSearchUnavailable = "USER_SEARCH_UNAVAILABLE",
 
   OrganizationNotFound = "ORG.NOT_FOUND",
   OrganizationAlreadyExists = "ORG.ALREADY_EXISTS",
   OrganizationCodeExists = "ORG.CODE_EXISTS",
   OrganizationHasChildren = "ORG.HAS_CHILDREN",
   OrganizationHasEmployment = "ORG.HAS_EMPLOYMENT",
+  OrganizationHasOpenResponsibilityAssignment = "ORG.HAS_OPEN_RESPONSIBILITY_ASSIGNMENT",
 
   PositionNotFound = "POSITION.NOT_FOUND",
   PositionCodeExists = "POSITION.CODE_EXISTS",
@@ -42,6 +45,13 @@ export enum ApiErrorCode {
   EmploymentNotFound = "EMPLOYMENT.NOT_FOUND",
   EmploymentNotEditable = "EMPLOYMENT.NOT_EDITABLE",
   EmploymentAlreadyExists = "EMPLOYMENT.ALREADY_EXISTS",
+
+  OrganizationResponsibilityAssignmentNotFound = "ORG_RESPONSIBILITY.ASSIGNMENT_NOT_FOUND",
+  OrganizationResponsibilityAssignmentNotOpen = "ORG_RESPONSIBILITY.ASSIGNMENT_NOT_OPEN",
+  OrganizationResponsibilityHolderEmploymentUnavailable = "ORG_RESPONSIBILITY.HOLDER_EMPLOYMENT_UNAVAILABLE",
+  OrganizationResponsibilityTargetOrganizationUnavailable = "ORG_RESPONSIBILITY.TARGET_ORGANIZATION_UNAVAILABLE",
+  OrganizationResponsibilityAssignmentDuplicateOpen = "ORG_RESPONSIBILITY.ASSIGNMENT_DUPLICATE_OPEN",
+  OrganizationResponsibilityAssignmentCardinalityConflict = "ORG_RESPONSIBILITY.ASSIGNMENT_CARDINALITY_CONFLICT",
 
   ClientNotFound = "CLIENT.NOT_FOUND",
   ClientCodeExists = "CLIENT.CODE_EXISTS",

@@ -3,6 +3,7 @@ import type { JobQueue } from "@iam/jobs";
 import type { UserProfileRebuildJobQueuePort } from "../../src/user-profile-job.producer";
 import { UserProfileDirtyReason } from "@iam/contracts";
 import { describe, expect, mock, test } from "bun:test";
+import * as producerPublicSurface from "../../src/producer";
 import { createUserProfileJobProducer } from "../../src/user-profile-job.producer";
 
 type Assert<T extends true> = T;
@@ -23,6 +24,10 @@ function createQueue() {
     }))),
   };
 }
+
+test("producer public surface keeps invalidation resolver construction internal", () => {
+  expect(producerPublicSurface).not.toHaveProperty("createUserProfileInvalidationInternal");
+});
 
 describe("createUserProfileJobProducer", () => {
   test("validates and bulk-enqueues rebuild payloads with versioned job ids", async () => {

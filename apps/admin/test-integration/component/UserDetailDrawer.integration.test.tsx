@@ -6,8 +6,8 @@ import {
   UserStatus,
   UserType,
 } from '@iam/contracts';
-import { render, screen, waitFor, within } from '~admin/test/render';
 import { describe, expect, it, vi } from 'vitest';
+import { render, screen, waitFor, within } from '~admin/test/render';
 
 const lifecycle = vi.hoisted(() => ({
   clearPrimaryEmployment: vi.fn(),
@@ -15,13 +15,14 @@ const lifecycle = vi.hoisted(() => ({
   getUser: vi.fn(),
   pauseEmployment: vi.fn(),
   resumeEmployment: vi.fn(),
+  searchAssignments: vi.fn(),
   setPrimaryEmployment: vi.fn(),
 }));
 
 vi.mock('@admin/components/StatusTag', () => ({
   default: ({ status }: { status: number }) => <span>{status}</span>,
 }));
-vi.mock('@admin/pages/audit-logs/components/AuditLogTable', () => ({
+vi.mock('@admin/components/audit/AuditLogTable', () => ({
   default: () => null,
 }));
 vi.mock('@admin/pages/employments/components/EmploymentFormModal', () => ({
@@ -45,6 +46,9 @@ vi.mock('@admin/services/user', () => ({
   deleteUser: vi.fn(),
   getUser: lifecycle.getUser,
   updateUserStatus: vi.fn(),
+}));
+vi.mock('@admin/services/organization-responsibility', () => ({
+  searchOrganizationResponsibilityAssignments: lifecycle.searchAssignments,
 }));
 
 vi.mock('@ant-design/pro-components', () => {
@@ -70,18 +74,20 @@ const organization = {
     distanceToAssignedOrg: 0,
   },
   fullOrgPath: [],
-  companyNodes: [{
-    id: 20,
-    orgCode: 'COMPANY',
-    orgName: 'Company',
-    orgType: OrganizationType.Company,
-    level: OrganizationLevel.One,
-    parentId: -1,
-    isVirtual: false,
-    isEntity: true,
-    pathIndex: 0,
-    distanceToAssignedOrg: 1,
-  }],
+  companyNodes: [
+    {
+      id: 20,
+      orgCode: 'COMPANY',
+      orgName: 'Company',
+      orgType: OrganizationType.Company,
+      level: OrganizationLevel.One,
+      parentId: -1,
+      isVirtual: false,
+      isEntity: true,
+      pathIndex: 0,
+      distanceToAssignedOrg: 1,
+    },
+  ],
 };
 
 function detail(employmentStatus: EmploymentStatus, isPrimary = true) {
@@ -99,36 +105,95 @@ function detail(employmentStatus: EmploymentStatus, isPrimary = true) {
     updateTime: now,
     roles: [],
     privileges: [],
-    employments: [{
-      id: 4,
-      userId: 1,
-      posId: 3,
-      orgId: 2,
-      isPrimary,
-      status: employmentStatus,
-      startTime: now,
-      endTime:
-        employmentStatus === EmploymentStatus.Disable ? now : null,
-      description: null,
-      isDelete: false,
-      createTime: now,
-      updateTime: now,
-      user: {
-        id: 1,
-        username: 'zhangsan',
-        name: '张三',
-        mobile: null,
-        wxId: null,
+    employments: [
+      {
+        id: 4,
+        userId: 1,
+        posId: 3,
+        orgId: 2,
+        isPrimary,
+        status: employmentStatus,
+        startTime: now,
+        endTime: employmentStatus === EmploymentStatus.Disable ? now : null,
+        description: null,
+        isDelete: false,
+        createTime: now,
+        updateTime: now,
+        user: {
+          id: 1,
+          username: 'zhangsan',
+          name: '张三',
+          mobile: null,
+          wxId: null,
+        },
+        position: { id: 3, posCode: 'DEV', posName: 'Developer' },
+        organization,
+        roles: [],
+        privileges: [],
       },
-      position: { id: 3, posCode: 'DEV', posName: 'Developer' },
-      organization,
-      roles: [],
-      privileges: [],
-    }],
+    ],
   };
 }
 
 describe('UserDetailDrawer Employment lifecycle actions', () => {
+  it('keeps responsibility summaries grouped under their Employment row', async () => {
+    lifecycle.getUser.mockResolvedValue(detail(EmploymentStatus.Enable));
+    lifecycle.searchAssignments.mockResolvedValue({
+      items: [
+        {
+          id: 101,
+          typeCode: 'head',
+          targetOrganization: {
+            id: 2,
+            orgCode: 'ORG',
+            orgName: 'Organization',
+            fullPath: [{ id: 2, orgCode: 'ORG', orgName: 'Organization' }],
+          },
+          holder: {
+            employmentId: 4,
+            user: { id: 1, username: 'zhangsan', name: '张三' },
+            organization: {
+              id: 2,
+              orgCode: 'ORG',
+              orgName: 'Organization',
+              fullPath: [],
+            },
+            position: { id: 3, posCode: 'DEV', posName: 'Developer' },
+          },
+          status: 1,
+          startTime: now,
+          endTime: null,
+        },
+      ],
+      nextCursor: null,
+    });
+    const { user } = render(
+      <UserDetailDrawer
+        open
+        username="zhangsan"
+        onClose={vi.fn()}
+        onEdit={vi.fn()}
+        onChanged={vi.fn()}
+      />,
+    );
+
+    await user.click(await screen.findByRole('tab', { name: '雇佣（1）' }));
+    const employmentRow = await screen.findByRole('row', { name: /Developer/ });
+
+    expect(lifecycle.searchAssignments).toHaveBeenCalledWith({
+      employmentId: 4,
+      lifecycle: 'open',
+      limit: 20,
+    });
+    expect(within(employmentRow).getByText('负责人（head）')).toBeVisible();
+    expect(
+      within(employmentRow).getByRole('link', { name: '查看全部组织责任' }),
+    ).toHaveAttribute(
+      'href',
+      '/organization-responsibilities/assignments?employment=4&lifecycle=open',
+    );
+  });
+
   it('refreshes the visible Employment state after an explicit Pause command', async () => {
     lifecycle.getUser
       .mockResolvedValueOnce(detail(EmploymentStatus.Enable))
@@ -147,6 +212,7 @@ describe('UserDetailDrawer Employment lifecycle actions', () => {
 
     await user.click(await screen.findByRole('tab', { name: '雇佣（1）' }));
     await user.click(await screen.findByText('暂停'));
+    await user.click(await screen.findByRole('button', { name: '暂停任职' }));
 
     await waitFor(() => {
       expect(lifecycle.pauseEmployment).toHaveBeenCalledWith(4);

@@ -48,7 +48,7 @@ function createHarness() {
     sid: "iam_ls_opaque",
     ttl: 3600,
     subject: {
-      version: 1 as const,
+      version: 2 as const,
       subjectIdentifier,
     },
   }));
@@ -184,7 +184,7 @@ describe("Custom SSO HTTP transport contract", () => {
         sid: "iam_ls_opaque",
         ttl: 3600,
         subject: {
-          version: 1,
+          version: 2,
           subjectIdentifier,
         },
       },

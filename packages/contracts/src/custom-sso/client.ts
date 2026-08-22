@@ -20,7 +20,7 @@ export const SubjectClaim = {
 
 export type SubjectClaimName = typeof SubjectClaim[keyof typeof SubjectClaim];
 
-export const SUBJECT_CLAIMS_V1 = Object.values(SubjectClaim) as [
+export const SUBJECT_CLAIMS = Object.values(SubjectClaim) as [
   SubjectClaimName,
   ...SubjectClaimName[],
 ];

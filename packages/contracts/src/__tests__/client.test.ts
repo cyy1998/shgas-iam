@@ -28,4 +28,9 @@ describe("Custom SSO Client public contract", () => {
     expect(contracts).not.toHaveProperty("clientManagementLevelToString");
     expect(contracts).not.toHaveProperty("getClientManagementLevelOptions");
   });
+
+  test("publishes one canonical Subject Claim vocabulary without a V1 alias", () => {
+    expect(contracts).toHaveProperty("SUBJECT_CLAIMS");
+    expect(contracts).not.toHaveProperty("SUBJECT_CLAIMS_V1");
+  });
 });

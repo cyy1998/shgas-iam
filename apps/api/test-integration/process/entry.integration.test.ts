@@ -87,7 +87,12 @@ async function probeApiDocs(origin: string, signal: AbortSignal) {
     "单点登录API",
     signal,
   );
-  return { authDocument, publicDocument, ssoDocument };
+  const internalDocument = await readOpenApiDocument(
+    `${origin}/internal/doc`,
+    "内部API",
+    signal,
+  );
+  return { authDocument, internalDocument, publicDocument, ssoDocument };
 }
 
 async function readOpenApiDocument(
@@ -123,7 +128,7 @@ async function readOpenApiDocument(
 }
 
 describe("API entry", () => {
-  test("starts the production entry and exposes its OpenAPI readiness documents", async () => {
+  test("starts the production entry with canonical Internal User routes", async () => {
     const result = await entrySmoke.run({
       start: context => spawnOwnedProcessTree({
         executable: process.execPath,
@@ -146,6 +151,10 @@ describe("API entry", () => {
     expect(result.ssoDocument).toMatchObject({
       openapi: "3.1.0",
       info: { title: "单点登录API", version: "1.0.0" },
+    });
+    expect(result.internalDocument.paths).toMatchObject({
+      "/internal/users/:username": { get: expect.any(Object) },
+      "/internal/users/search-dsl": { post: expect.any(Object) },
     });
   }, PROCESS_SMOKE_TEST_TIMEOUT_MS);
 });

@@ -17,7 +17,7 @@ import {
 
 const commonConfig = {
   validRedirectUrls: ["https://portal.example.com/sso/*"],
-  subjectClaimCatalogVersion: 1 as const,
+  subjectClaimCatalogVersion: 2 as const,
   subjectClaims: ["subjectIdentifier", "profile:name"] as const,
 };
 

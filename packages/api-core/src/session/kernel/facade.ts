@@ -22,7 +22,11 @@ import type {
   ValidationResult,
 } from "./model";
 import type { CreateResult, ResolveResult } from "./result";
-import type { SessionKernelRedis, StoreIndexWrite } from "./store";
+import type {
+  SessionKernelRedis,
+  SessionKernelRevocationTransitions,
+  StoreIndexWrite,
+} from "./store";
 import type { KernelTokenKind } from "./token";
 import { randomUUID } from "node:crypto";
 import { SystemLogEvent } from "../../logger";
@@ -34,6 +38,7 @@ import { createCurrentLookupHash } from "./hmac";
 import { createSessionKernelKeyBuilder, encodeIndexMember, parseIndexMember } from "./keys";
 import { normalizeSessionOrigin, PrincipalRefSchema } from "./model";
 import { counterForKind, createEmptyRevokeSummary, failClosed, mergeRevokeSummary } from "./result";
+import { createRedisSessionKernelRevocationTransitions } from "./revocation-transitions";
 import { SessionKernelStore } from "./store";
 import {
   calculateRenewedPrincipalSessionWindow,
@@ -113,6 +118,7 @@ export type IssueCredentialInput = {
 };
 
 export type CreateProtocolArtifactInput = {
+  artifactId?: string;
   principalSessionId?: string;
   bindingId?: string;
   protocol: string;
@@ -153,6 +159,20 @@ export type ListPrincipalSessionsResult = {
   total: number;
 };
 
+export type SessionKernelClientProtocolInventory = {
+  clientCode: string;
+  protocol: string;
+  counts: {
+    bindings: number;
+    credentials: number;
+    artifacts: number;
+    cleanupPending: number;
+    invalid: number;
+    stale: number;
+    total: number;
+  };
+};
+
 export type SessionKernel = ReturnType<typeof createSessionKernel>;
 
 export function createSessionKernel(deps: SessionKernelDependencies) {
@@ -162,6 +182,7 @@ export function createSessionKernel(deps: SessionKernelDependencies) {
       createRedisSessionKernelArtifactConsumer(redis, keys),
     ({ redis, keys }) =>
       createRedisSessionKernelCredentialCreator(redis, keys),
+    ({ redis }) => createRedisSessionKernelRevocationTransitions(redis),
   );
 }
 
@@ -175,6 +196,10 @@ export function createSessionKernelWithStateAdapterFactories(
     redis: SessionKernelRedis;
     keys: ReturnType<typeof createSessionKernelKeyBuilder>;
   }) => SessionKernelCredentialCreator | undefined,
+  createRevocationTransitions: (input: {
+    redis: SessionKernelRedis;
+    keys: ReturnType<typeof createSessionKernelKeyBuilder>;
+  }) => SessionKernelRevocationTransitions,
 ) {
   const config = normalizeSessionKernelConfig(deps.config);
   const keys = createSessionKernelKeyBuilder(config.namespace);
@@ -186,12 +211,17 @@ export function createSessionKernelWithStateAdapterFactories(
     redis: deps.redis,
     keys,
   });
+  const revocationTransitions = createRevocationTransitions({
+    redis: deps.redis,
+    keys,
+  });
   const store = new SessionKernelStore(
     deps.redis,
     keys,
     config,
     artifactConsumer,
     credentialCreator,
+    revocationTransitions,
   );
   const cleanupAdapters = deps.cleanupAdapters ?? [];
   const uuid = deps.random?.uuid ?? randomUUID;
@@ -279,7 +309,14 @@ export function createSessionKernelWithStateAdapterFactories(
   }
 
   async function renewPrincipalSession(principalSessionId: string): Promise<ResolveResult<PrincipalSession>> {
-    const result = await resolvePrincipalSessionById(principalSessionId);
+    const stored = await store.resolveObjectForUpdate(
+      "principal_session",
+      principalSessionId,
+    );
+    observeResolveResult(stored, { operation: "resolve_by_id", objectType: "principal_session" });
+    if (stored.status !== "resolved")
+      return stored;
+    const result = await applyPrincipalValidation(stored);
     if (result.status !== "resolved")
       return result;
     const now = config.clock.now();
@@ -292,12 +329,15 @@ export function createSessionKernelWithStateAdapterFactories(
       expiresAt: window.expiresAt,
     };
     try {
-      await store.updateObject({
+      const updated = await store.updateObject({
+        expectedSerialized: stored.serialized,
         kind: "principal_session",
         id: renewed.principalSessionId,
         object: renewed,
         indexes: principalSessionIndexes(renewed),
       });
+      if (!updated)
+        return await store.resolveObject("principal_session", principalSessionId);
       await renewPrincipalChildren(renewed);
       return { status: "resolved", value: renewed };
     }
@@ -488,10 +528,13 @@ export function createSessionKernelWithStateAdapterFactories(
       const now = config.clock.now();
       const externalToken = input.externalToken ?? generateKernelToken(config, input.tokenKind ?? "artifact");
       const lookup = createCurrentLookupHash(externalToken, config);
+      const artifactId = input.artifactId ?? uuid();
+      if (artifactId.length === 0)
+        return failClosed("artifact identity is invalid");
       const artifact: ProtocolArtifact = {
         version: 1,
         subjectAccessTransitionId: principal?.value.subjectAccessTransitionId,
-        artifactId: uuid(),
+        artifactId,
         protocol: input.protocol,
         artifactType: input.artifactType,
         lookupHash: lookup.lookupHash,
@@ -625,7 +668,99 @@ export function createSessionKernelWithStateAdapterFactories(
   }
 
   async function revokeClientProtocol(clientCode: string, protocol: string, reason: RevocationReason = "admin_revoke") {
-    return await revokeByIndex(keys.index.clientProtocol(clientCode, protocol), reason);
+    const summary = createEmptyRevokeSummary();
+    const cleanupIndexKey = keys.index.clientProtocolCleanup(clientCode, protocol);
+    const pendingMembers = await store.readIndexWithoutMutation(cleanupIndexKey);
+    for (const member of pendingMembers) {
+      mergeRevokeSummary(
+        summary,
+        await retryPendingCleanup(clientCode, protocol, cleanupIndexKey, member),
+      );
+    }
+    mergeRevokeSummary(
+      summary,
+      await revokeByIndex(
+        keys.index.clientProtocol(clientCode, protocol),
+        reason,
+        () => true,
+        true,
+      ),
+    );
+    return summary;
+  }
+
+  async function inventoryClientProtocol(
+    clientCode: string,
+    protocol: string,
+  ): Promise<SessionKernelClientProtocolInventory> {
+    if (clientCode.length === 0)
+      throw new RangeError("Client protocol inventory clientCode must not be empty");
+    if (protocol.length === 0)
+      throw new RangeError("Client protocol inventory protocol must not be empty");
+
+    const indexKey = keys.index.clientProtocol(clientCode, protocol);
+    const counts = {
+      bindings: 0,
+      credentials: 0,
+      artifacts: 0,
+      cleanupPending: 0,
+      invalid: 0,
+      stale: 0,
+      total: 0,
+    };
+    for (const member of await store.readIndexWithoutMutation(indexKey)) {
+      const parsed = parseIndexMember(member);
+      if (!parsed || parsed.kind === "principal_session") {
+        counts.invalid += 1;
+        continue;
+      }
+      const result = await store.resolveObject(parsed.kind, parsed.id);
+      if (result.status === "missing_or_expired" || result.status === "revoked" || result.status === "consumed_replay") {
+        counts.stale += 1;
+        continue;
+      }
+      if (result.status !== "resolved") {
+        counts.invalid += 1;
+        continue;
+      }
+      if (result.value.clientCode !== clientCode || result.value.protocol !== protocol) {
+        counts.invalid += 1;
+        continue;
+      }
+      if (parsed.kind === "client_binding")
+        counts.bindings += 1;
+      else if (parsed.kind === "credential")
+        counts.credentials += 1;
+      else
+        counts.artifacts += 1;
+    }
+    const cleanupIndexKey = keys.index.clientProtocolCleanup(clientCode, protocol);
+    for (const member of await store.readIndexWithoutMutation(cleanupIndexKey)) {
+      const parsed = parseIndexMember(member);
+      if (!parsed || parsed.kind === "principal_session") {
+        counts.invalid += 1;
+        continue;
+      }
+      const result = await store.resolveObject(parsed.kind, parsed.id);
+      if (
+        result.status !== "revoked"
+        || result.tombstone.reason === "consumed"
+        || result.tombstone.clientCode !== clientCode
+        || result.tombstone.protocol !== protocol
+        || result.tombstone.cleanupRefs.length === 0
+      ) {
+        counts.invalid += 1;
+        continue;
+      }
+      counts.cleanupPending += 1;
+    }
+    counts.total = counts.bindings
+      + counts.credentials
+      + counts.artifacts
+      + counts.cleanupPending
+      + counts.invalid
+      + counts.stale;
+    return { clientCode, protocol, counts };
   }
 
   async function revokeClient(clientCode: string, reason: RevocationReason = "admin_revoke") {
@@ -655,14 +790,72 @@ export function createSessionKernelWithStateAdapterFactories(
     key: string,
     reason: RevocationReason,
     filter: (kind: LifecycleObjectKind) => boolean = () => true,
+    includeExpired = false,
   ) {
     const summary = createEmptyRevokeSummary();
-    const members = await store.readIndex(key);
+    const members = includeExpired
+      ? await store.readIndexWithoutMutation(key)
+      : await store.readIndex(key);
+    const staleMembers: Array<{
+      id: string;
+      kind: LifecycleObjectKind;
+      member: string;
+    }> = [];
     for (const member of members) {
       const parsed = parseIndexMember(member);
-      if (parsed && filter(parsed.kind))
-        mergeRevokeSummary(summary, await revokeObject(parsed.kind, parsed.id, reason));
+      if (parsed && filter(parsed.kind)) {
+        const objectSummary = await revokeObject(parsed.kind, parsed.id, reason);
+        const counter = counterForKind(objectSummary, parsed.kind);
+        if (counter.missing > 0 || counter.alreadyRevoked > 0)
+          staleMembers.push({ id: parsed.id, kind: parsed.kind, member });
+        mergeRevokeSummary(summary, objectSummary);
+      }
     }
+    for (const stale of staleMembers) {
+      await store.removeIndexMemberIfObjectInactive(
+        key,
+        stale.member,
+        stale.kind,
+        stale.id,
+      );
+    }
+    return summary;
+  }
+
+  async function retryPendingCleanup(
+    clientCode: string,
+    protocol: string,
+    indexKey: string,
+    member: string,
+  ) {
+    const summary = createEmptyRevokeSummary();
+    const parsed = parseIndexMember(member);
+    if (!parsed || parsed.kind === "principal_session")
+      return summary;
+    const result = await store.resolveObject(parsed.kind, parsed.id);
+    if (
+      result.status !== "revoked"
+      || result.tombstone.reason === "consumed"
+      || result.tombstone.clientCode !== clientCode
+      || result.tombstone.protocol !== protocol
+      || result.tombstone.cleanupRefs.length === 0
+    ) {
+      return summary;
+    }
+    counterForKind(summary, parsed.kind).alreadyRevoked += 1;
+    const failedBeforeCleanup = summary.cleanup.failed;
+    await runCleanupRefs(result.tombstone.cleanupRefs, cleanupAdapters, summary, deps.logger);
+    if (summary.cleanup.failed === failedBeforeCleanup) {
+      await store.finalizeCleanupPending({
+        tombstone: result.tombstone,
+        indexKey,
+        member,
+      });
+    }
+    logCleanupFailureSummary(
+      result.tombstone,
+      summary.cleanup.failed - failedBeforeCleanup,
+    );
     return summary;
   }
 
@@ -688,18 +881,27 @@ export function createSessionKernelWithStateAdapterFactories(
 
     const now = config.clock.now();
     const tombstone = createTombstone(kind, resolved.value, reason, now);
+    const cleanupPending = cleanupPendingIndexForTombstone(tombstone);
     const revokeResult = await store.revokeActiveObject({
       kind,
       id,
       lookupHash: lookupHashForObject(resolved.value),
       tombstone,
       indexRemovals: indexRemovalsForObject(kind, resolved.value),
+      cleanupPending,
     });
 
     if (revokeResult.status === "revoked") {
       counterForKind(summary, kind).revoked += 1;
       const failedBeforeCleanup = summary.cleanup.failed;
       await runCleanupRefs(tombstone.cleanupRefs, cleanupAdapters, summary, deps.logger);
+      if (cleanupPending && summary.cleanup.failed === failedBeforeCleanup) {
+        await store.finalizeCleanupPending({
+          tombstone,
+          indexKey: cleanupPending.key,
+          member: cleanupPending.member,
+        });
+      }
       logCleanupFailureSummary(tombstone, summary.cleanup.failed - failedBeforeCleanup);
     }
     else if (revokeResult.status === "already_revoked") {
@@ -720,7 +922,7 @@ export function createSessionKernelWithStateAdapterFactories(
       const parsed = parseIndexMember(member);
       if (!parsed || (parsed.kind !== "client_binding" && parsed.kind !== "credential"))
         continue;
-      const result = await store.resolveObject(parsed.kind, parsed.id);
+      const result = await store.resolveObjectForUpdate(parsed.kind, parsed.id);
       if (result.status !== "resolved" || !canRenewWithPrincipal(result.value.renewalPolicy))
         continue;
       const next = {
@@ -729,6 +931,7 @@ export function createSessionKernelWithStateAdapterFactories(
       };
       if (parsed.kind === "client_binding") {
         await store.updateObject({
+          expectedSerialized: result.serialized,
           kind: "client_binding",
           id: parsed.id,
           object: next as ClientBinding,
@@ -737,6 +940,7 @@ export function createSessionKernelWithStateAdapterFactories(
       }
       else {
         await store.updateObject({
+          expectedSerialized: result.serialized,
           kind: "credential",
           id: parsed.id,
           object: next as IssuedCredential,
@@ -997,6 +1201,20 @@ export function createSessionKernelWithStateAdapterFactories(
     return indexes.map(({ key, member }) => ({ key, member }));
   }
 
+  function cleanupPendingIndexForTombstone(tombstone: RevokedTombstone) {
+    if (
+      tombstone.cleanupRefs.length === 0
+      || tombstone.clientCode === undefined
+      || tombstone.protocol === undefined
+    ) {
+      return undefined;
+    }
+    return {
+      key: keys.index.clientProtocolCleanup(tombstone.clientCode, tombstone.protocol),
+      member: encodeIndexMember(tombstone.objectKind, tombstone.objectId),
+    };
+  }
+
   function createTombstone(
     kind: LifecycleObjectKind,
     object: LifecycleObject,
@@ -1089,6 +1307,7 @@ export function createSessionKernelWithStateAdapterFactories(
     revokeCredential,
     revokeArtifact,
     revokeUserSessions,
+    inventoryClientProtocol,
     revokeClientProtocol,
     revokeClient,
     revokePrincipalObjects,

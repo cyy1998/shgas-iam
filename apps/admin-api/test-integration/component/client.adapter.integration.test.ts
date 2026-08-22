@@ -153,7 +153,6 @@ describe("admin client adapter", () => {
     const data = {
       mode: CustomSsoClientMode.Gateway,
       validRedirectUrls: ["https://portal.example.com/sso/*"],
-      subjectClaimCatalogVersion: 1,
       subjectClaims: ["subjectIdentifier"],
       orcas: { enabled: true },
     };

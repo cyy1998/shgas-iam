@@ -6,7 +6,7 @@ import type {
   EmploymentProfile,
   SubjectFactsEmployment,
   SubjectFactsSnapshot,
-} from "../index";
+} from "../legacy-maintenance";
 import { assertSubjectClaimSelection } from "../catalog";
 import { SubjectProjectionNotReadyError } from "../errors";
 

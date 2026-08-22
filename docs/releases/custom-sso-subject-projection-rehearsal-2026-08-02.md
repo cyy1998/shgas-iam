@@ -9,7 +9,7 @@ Next review: n/a
 
 本记录只保存 Ticket 12 在本机专用临时 PostgreSQL/Redis 环境的简洁人工摘要，不代表生产环境已经切换，也不替代发布、
 数据库、Redis、Gateway 和安全负责人的生产窗口审批。真实窗口仍按
-[硬切换与回滚手册](custom-sso-subject-projection-release.md)执行。
+[已废止的历史硬切换与回滚手册](custom-sso-subject-projection-release.md)解释当时流程；当前 strict V2 runtime 不得重放其 V1 命令。
 
 维护者决定最终验收由维护者或 agent 按 runbook 组合现有公开接口、package 命令与 process smoke 手动完成；不要求或
 提交根级一键 orchestrator、JSONL receipt、机器 evidence manifest/transcript 或自动 phase 状态机。旧 artifact 的认证

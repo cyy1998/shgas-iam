@@ -1,6 +1,6 @@
 import type { SessionKernelRedis } from "@iam/api-core/session/kernel";
 import type { ProcessSmokeAttemptContext } from "@iam/api-core/testing/process-smoke-harness";
-import type { SubjectFactsCacheRecordV1 } from "@iam/user-profile-read-model/subject-facts";
+import type { SubjectFactsCacheRecord } from "@iam/user-profile-read-model/subject-facts";
 import { randomUUID } from "node:crypto";
 import { createServer } from "node:http";
 import { fileURLToPath } from "node:url";
@@ -314,7 +314,7 @@ async function seedLogoutSession(
     clientCode,
     credentialType: "local_session",
     metadata: {
-      version: 1,
+      version: 2,
       mode: CustomSsoClientMode.Independent,
       configVersion: 1,
     },
@@ -360,7 +360,7 @@ async function seedGatewayPublicEntry(
   owners: ReturnType<typeof createProductionOwnerSeed>,
 ) {
   const metadata = {
-    version: 1,
+    version: 2,
     mode: CustomSsoClientMode.Gateway,
     configVersion: 1,
   };
@@ -409,9 +409,9 @@ async function seedGatewayPublicEntry(
   };
 }
 
-function subjectFactsRecord(version: string, name: string): SubjectFactsCacheRecordV1 {
+function subjectFactsRecord(version: string, name: string): SubjectFactsCacheRecord {
   return {
-    schemaVersion: 1,
+    schemaVersion: 2,
     sourceDirtyVersion: version,
     publishedAt: new Date().toISOString(),
     subjectIdentifier,
@@ -438,6 +438,7 @@ function subjectFactsRecord(version: string, name: string): SubjectFactsCacheRec
           clientCode,
           roles: [{ code: "ticket12:user", privileges: ["ticket12:read"] }],
         }],
+        responsibilities: [],
       }],
     },
   };
@@ -837,7 +838,7 @@ describe("API explicit external entry", () => {
             ${transaction.json({
               mode: "independent",
               validRedirectUrls: [redirectUri],
-              subjectClaimCatalogVersion: 1,
+              subjectClaimCatalogVersion: 2,
               subjectClaims: [
                 "subjectIdentifier",
                 "profile:username",
@@ -876,7 +877,7 @@ describe("API explicit external entry", () => {
             ${transaction.json({
               mode: CustomSsoClientMode.Gateway,
               orcas: { enabled: false },
-              subjectClaimCatalogVersion: 1,
+              subjectClaimCatalogVersion: 2,
               subjectClaims: [
                 SubjectClaim.SubjectIdentifier,
                 SubjectClaim.ProfileUsername,
@@ -918,11 +919,11 @@ describe("API explicit external entry", () => {
             1,
             FALSE,
             TRUE,
-            1,
+            2,
             ${sourceDirtyVersion},
             '{}'::jsonb,
             '{}'::jsonb,
-            ${transaction.json({ employments: [] })},
+            ${transaction.json(subjectFactsRecord(sourceDirtyVersion, "Ticket 12 User").facts)},
             NOW()
           )
         `;
@@ -1433,7 +1434,7 @@ describe("API explicit external entry", () => {
           data: {
             sid: expect.stringMatching(/^iam_ls_/u),
             subject: {
-              version: 1,
+              version: 2,
               subjectIdentifier,
               profile: {
                 username: "ticket12-user",
@@ -1462,7 +1463,7 @@ describe("API explicit external entry", () => {
         body: {
           code: 200,
           data: {
-            version: 1,
+            version: 2,
             subjectIdentifier,
           },
         },

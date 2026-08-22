@@ -32,7 +32,7 @@ profile 不是新的测试层级、速度标签或 Gate。多资源测试按测�
 - Browser Integration 位于 `test-integration/browser/**/*.spec.ts`。
 - Full-system E2E 独占 `e2e/system/**/*.spec.ts`。Root `pnpm test:e2e` 是唯一完整 collection owner；workspace-local
   `admin:journey` 与 `oidc:journey` 只保留为单 journey 调试入口。
-- `subject-projection:rehearsal` 是近规模操作命令，不采用测试命名，也不属于任何 collection。
+- Profile V2 maintenance 是操作命令，不采用测试命名，也不属于任何 collection。
 
 每个测试候选必须由一个且仅一个 canonical collection 收集。Admin API 的 client cache 真实 contract 位于 `redis`
 profile，并通过 production Admin runtime 的 `clientCache` seam 验证 invalidation、update 与 mutation completion，不初始化
@@ -95,13 +95,16 @@ readiness 对 OIDC discovery 不只检查 HTTP 200，还精确核对 canonical o
 只记录 stage、timestamps、failure category 或 run-scoped public references，不记录 credential、token 或 secret。
 
 `admin:journey` 在上述 lifecycle 的 protocol readiness 之后运行浏览器 preflight，并以单 Chromium project、单 worker、零 retry
-执行 `admin-custom-sso.spec.ts`。Journey 用 bootstrap Admin client 通过真实 SSO 登录 Admin，再由真实 Admin UI 将目标 client 切入
-Maintenance，在维护中配置并启用 Gateway Custom SSO；公开 authorize 与 user-info 观察 `503 AUTH.MAINTENANCE`，恢复正常后取得并复用
-未变更的 Local Session，再在维护中执行真实 disable/enable mutation 并确认旧 Session 永久失效，最后由 UI 回读 redirect、claims 与
-enabled 状态。浏览器失败证据沿用 run-scoped Playwright staging，随后进入统一
+执行 `admin-custom-sso.spec.ts`。Journey 用 bootstrap Admin client 通过真实 SSO 登录 Admin，由真实 Admin UI 创建跨树 Organization
+Responsibility，再轮询 Internal Detail/DSL 与 Custom SSO UserInfo 证明 PostgreSQL/Redis 发布一致，并证明 Gateway/authorization 裁剪责任。
+随后 Admin UI 将目标 client 切入 Maintenance，在维护中配置并启用 Gateway Custom SSO；公开 authorize 与 user-info 观察
+`503 AUTH.MAINTENANCE`，恢复正常后取得并复用未变更的 Local Session，再在维护中执行真实 disable/enable mutation、确认旧 Session
+永久失效，并由同一 Principal Session 签发新的 V2 artifact。浏览器失败证据沿用 run-scoped Playwright staging，随后进入统一
 diagnostics 与 exact-project cleanup。`oidc:journey` 复用同一 lifecycle 与浏览器约束；独立 Admin 浏览器上下文在 Maintenance 中执行
 OIDC disable/enable 并恢复正常，test-owned RP helper 生成 S256 verifier/challenge 并接收 registered callback。公开 authorize、token 与
-`/oidc/me` 验收标准暂态错误、恢复、PKCE、code 单次使用、ID Token 和 UserInfo；discovery、JWKS 与 `/oidc/health` 在维护中保持可用，
+`/oidc/me` 验收标准暂态错误、恢复、PKCE、code 单次使用与 `iam:employments` responsibility snapshot；Authorization Code 取得后通过
+真实 Employment Pause 级联使当前 Profile 不再含责任，既有 Code→Token→UserInfo 仍重放 authorization-time snapshot，ID Token 明确排除
+employment/authorization responsibility。Discovery、JWKS 与 `/oidc/health` 在维护中保持可用，
 RP-initiated logout 在维护中永久终止访问。Local HTTP 配置只令 interaction Cookie `Secure=false`，并继续验证 `HttpOnly`、
 `SameSite=Lax` 与 `Path=/oidc`。两个 journey 都不使用
 `page.route` 替代 repo-owned core。完整命令在同一个 exact-project lifecycle 中固定按 Admin → OIDC 运行；任一 journey
@@ -172,11 +175,32 @@ Timeout 只保护测试不永久挂起，不承担性能 SLA。Process harness �
 限制 stdout/stderr 缓冲，并在成功、失败、timeout 与中断路径清理完整进程树、端口与临时目录。不得通过放宽全局 timeout、
 重试或吞掉 cleanup 错误换取绿色结果。
 
+### Bun 异步断言
+
+当前固定的 Bun 1.3.14 中，`bun:test` 的 async matcher 可能在 matcher 内同步重入 event loop；数据库、Redis、HTTP、
+subprocess、readiness 或其他依赖 I/O callback 完成的 Promise 因此可能悬挂。仓库解除此兼容约束前，新增或修改的 Bun 测试
+必须先用普通 `await` 完成异步操作，再对结果做同步断言：
+
+```ts
+const report = await databaseOperation();
+expect(report).toMatchObject(expectedReport);
+```
+
+失败路径先捕获 rejection，再同步断言错误；不要把 I/O-backed Promise 直接传给 `.resolves`、`.rejects` 或 async
+`toThrow`。即使外层写成 `await expect(databaseOperation()).resolves...` 也没有消除 matcher 内的 event-loop 重入。
+这属于测试 runner 兼容边界，不得用增大 timeout、重试或修改 production I/O lifecycle 掩盖。Bun 修复并完成仓库级
+真实 PostgreSQL/Redis/process 回归验证后，才能移除此约束；上游跟踪见
+[oven-sh/bun#33261](https://github.com/oven-sh/bun/issues/33261)。Vitest 测试不受本条 Bun 专用约束影响。
+
 PostgreSQL 测试只清理自己创建的随机 schema。Redis 测试只清理自己的随机 namespace；禁止对共享实例执行
 `FLUSHDB`/`FLUSHALL`。Integration 测试命令和 harness 不负责启动 Docker、PostgreSQL 或 Redis。Agent 可以在运行命令前
 启动任务独占的临时容器，但必须等待服务 ready、传入专用 URL，并负责测试成功、失败和中断后的精确清理。Browser
 profile 可以按 Playwright config 启动 package-local web server。缺少资源 URL 时命令仍然 fail closed，且不得回退开发或
 生产资源。
+
+Admin API 的真实事务与 PostgreSQL correctness contract 使用 owner-specific
+`IAM_ADMIN_API_TEST_DATABASE_URL`；其 harness 必须通过 production Admin UoW factory 注入随机 schema client，不能回退
+进程级数据库 singleton。
 
 Destructive legacy cleanup 不使用普通 namespace-isolated Redis。它只接受调用方提供的
 `IAM_API_CORE_CLEANUP_TEST_REDIS_URL`，该 URL 必须指向独占、初始为空且可销毁的 logical DB 或 instance，并且不能与任何

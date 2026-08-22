@@ -1,24 +1,18 @@
 import type { UserProfileQueryRecord, UserProfileQueryRepositoryPort } from "./user-profile-query.port";
-import type { UserDetailDto, UserDto, UserProfileFilterDsl, UserQueryDto } from "./user-profile.schema";
+import type { UserDetailDto, UserDto, UserQueryDto } from "./user-profile.schema";
 import { UserNotFoundError } from "@iam/domain/user";
+import { parseUserProfileDetailDocument } from "./profile.schema";
 import {
   compileLegacyUserQueryToProfileFilter,
   toUserDtoFromProfile,
 } from "./user-profile-query.helper";
-import { parseUserProfileDetailDocument, UserDtoSchema, UserProfileFilterDslSchema } from "./user-profile.schema";
+import { UserDtoSchema } from "./user-profile.schema";
 
 export interface UserProfileQueryServiceDeps {
   profileRepository: UserProfileQueryRepositoryPort;
-  config?: {
-    dslDefaultLimit?: number;
-  };
 }
 
-const DEFAULT_DSL_SEARCH_LIMIT = 50;
-
 export function createUserProfileQueryService(deps: UserProfileQueryServiceDeps) {
-  const dslDefaultLimit = deps.config?.dslDefaultLimit ?? DEFAULT_DSL_SEARCH_LIMIT;
-
   async function getDetailByUserId(userId: number): Promise<UserDetailDto> {
     return parseProfileDetail(await deps.profileRepository.getCurrentByUserId(userId));
   }
@@ -41,22 +35,12 @@ export function createUserProfileQueryService(deps: UserProfileQueryServiceDeps)
     return profiles.map(profile => UserDtoSchema.parse(toUserDtoFromProfile(profile)));
   }
 
-  async function searchDsl(input: UserProfileFilterDsl, options: { limit?: number } = {}): Promise<UserDetailDto[]> {
-    const filter = UserProfileFilterDslSchema.parse(input);
-    const profiles = await deps.profileRepository.searchCurrentVisibleProfiles({
-      filter,
-      limit: options.limit ?? dslDefaultLimit,
-    });
-    return profiles.map(profile => parseUserProfileDetailDocument(profile.detail));
-  }
-
   return {
     getDetailByUserId,
     getDetailByUsername,
     getDetailByMobile,
     getDetailByWxId,
     searchLegacyUsers,
-    searchDsl,
   };
 }
 

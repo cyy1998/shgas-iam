@@ -18,10 +18,12 @@ export interface AdapterClientVersionReader {
   findActiveVersion: (clientId: string) => Promise<number | null>;
 }
 
-export interface AdapterClaimsSnapshotIssuer {
+export interface AdapterClaimsSnapshotIssuer<
+  TClaimsSnapshot = OidcClaimsSnapshot,
+> {
   createAuthorizationCodeSnapshot: (
     input: CreateOidcAuthorizationCodeSnapshotInput,
-  ) => Promise<OidcClaimsSnapshot>;
+  ) => Promise<TClaimsSnapshot>;
 }
 
 export interface AdapterProviderSessionBindingStore {
@@ -74,7 +76,6 @@ export interface AdapterOidcSessionKernel {
     };
   } | null>;
   revokeAccessTokenCredential: (credentialId: string) => Promise<unknown>;
-  revokeClientProtocol: (clientId: string, reason: "client_config_changed") => Promise<unknown>;
 }
 
 export interface AdapterTokenRegistry {

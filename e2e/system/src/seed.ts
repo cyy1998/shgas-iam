@@ -7,12 +7,15 @@ export interface E2EScenarioReferences {
   adminSubjectIdentifier: string;
   adminUsername: string;
   organizationCode: string;
+  responsibilityTargetOrganizationCode: string;
   positionCode: string;
+  responsibilityHolderPositionCode: string;
   adminRoleCode: string;
   adminClientCode: string;
   adminRedirectUri: string;
   customSsoClientCode: string;
   customSsoRedirectUri: string;
+  internalClientCode: string;
   oidcClientCode: string;
   oidcRedirectUri: string;
   oidcPostLogoutRedirectUri: string;
@@ -22,10 +25,13 @@ export type E2EScenarioIdentity = Pick<
   E2EScenarioReferences,
   | "adminUsername"
   | "organizationCode"
+  | "responsibilityTargetOrganizationCode"
   | "positionCode"
+  | "responsibilityHolderPositionCode"
   | "adminRoleCode"
   | "adminClientCode"
   | "customSsoClientCode"
+  | "internalClientCode"
   | "oidcClientCode"
 >;
 
@@ -37,8 +43,10 @@ export interface E2EScenarioReadBack {
     username: string;
   };
   organization: { active: boolean; code: string };
+  responsibilityTargetOrganization: { active: boolean; code: string };
   position: { active: boolean; code: string };
   employment: { active: boolean };
+  responsibilityHolderEmployment: { active: boolean };
   role: { active: boolean; assigned: boolean; code: string };
   adminClient: {
     active: boolean;
@@ -54,6 +62,7 @@ export interface E2EScenarioReadBack {
     mode: CustomSsoClientMode | null;
     redirectUris: string[];
   };
+  internalClient: { active: boolean; clientCode: string };
   oidcClient: {
     active: boolean;
     clientCode: string;
@@ -70,6 +79,8 @@ export interface E2EScenarioReadBack {
     positionCodes: string[];
     clientCodes: string[];
     roleCodes: string[];
+    responsibilityTypeCodes: string[];
+    responsibilityTargetOrganizationCodes: string[];
   };
   subjectProfileReady: boolean;
   subjectProfileVersion: string;
@@ -77,7 +88,10 @@ export interface E2EScenarioReadBack {
 
 export interface E2EScenarioOwner {
   establish: (
-    input: E2EScenarioReferences & { adminPassword: string },
+    input: E2EScenarioReferences & {
+      adminPassword: string;
+      internalApiKey: string;
+    },
   ) => Promise<void>;
   readBack: (
     references: E2EScenarioReferences,
@@ -115,6 +129,7 @@ export async function seedE2EScenario(
   await input.owner.establish({
     ...references,
     adminPassword: input.adminPassword,
+    internalApiKey: createE2EScenarioInternalApiKey(input.runId),
   });
   assertScenarioReadBack(references, await input.owner.readBack(references));
   return references;
@@ -125,12 +140,19 @@ export function createE2EScenarioIdentity(runId: string): E2EScenarioIdentity {
   return {
     adminUsername: `e2e-admin-${runKey}`,
     organizationCode: `e2e-org-${runKey}`,
+    responsibilityTargetOrganizationCode: `e2e-resp-target-${runKey}`,
     positionCode: `e2e-pos-${runKey}`,
+    responsibilityHolderPositionCode: `e2e-resp-pos-${runKey}`,
     adminRoleCode: `e2e-role-${runKey}`,
     adminClientCode: `e2e-admin-${runKey}`,
     customSsoClientCode: `e2e-custom-${runKey}`,
+    internalClientCode: `e2e-internal-${runKey}`,
     oidcClientCode: `e2e-oidc-${runKey}`,
   };
+}
+
+export function createE2EScenarioInternalApiKey(runId: string) {
+  return `iam-e2e-internal-api-key-${requireRunKey(runId)}`;
 }
 
 function requireCanonicalOrigin(value: string) {
@@ -164,9 +186,13 @@ function assertScenarioReadBack(
     && actual.admin.username === expected.adminUsername
     && actual.organization.active
     && actual.organization.code === expected.organizationCode
+    && actual.responsibilityTargetOrganization.active
+    && actual.responsibilityTargetOrganization.code
+    === expected.responsibilityTargetOrganizationCode
     && actual.position.active
     && actual.position.code === expected.positionCode
     && actual.employment.active
+    && actual.responsibilityHolderEmployment.active
     && actual.role.active
     && actual.role.assigned
     && actual.role.code === expected.adminRoleCode
@@ -181,6 +207,8 @@ function assertScenarioReadBack(
     && actual.customSsoClient.clientCode === expected.customSsoClientCode
     && actual.customSsoClient.mode === null
     && actual.customSsoClient.redirectUris.length === 0
+    && actual.internalClient.active
+    && actual.internalClient.clientCode === expected.internalClientCode
     && actual.oidcClient.active
     && actual.oidcClient.clientCode === expected.oidcClientCode
     && actual.oidcClient.clientType === OidcClientType.Public
@@ -192,9 +220,14 @@ function assertScenarioReadBack(
     && actual.subjectFacts.sourceDirtyVersion === actual.subjectProfileVersion
     && actual.subjectFacts.profileUsername === expected.adminUsername
     && exactly(actual.subjectFacts.organizationCodes, expected.organizationCode)
-    && exactly(actual.subjectFacts.positionCodes, expected.positionCode)
+    && exactlyAll(actual.subjectFacts.positionCodes, [
+      expected.positionCode,
+      expected.responsibilityHolderPositionCode,
+    ])
     && exactly(actual.subjectFacts.clientCodes, expected.adminClientCode)
     && exactly(actual.subjectFacts.roleCodes, expected.adminRoleCode)
+    && actual.subjectFacts.responsibilityTypeCodes.length === 0
+    && actual.subjectFacts.responsibilityTargetOrganizationCodes.length === 0
     && actual.subjectProfileReady;
   if (!matches)
     throw new Error("E2E scenario owner read-back did not confirm the complete fixed scenario");
@@ -202,4 +235,11 @@ function assertScenarioReadBack(
 
 function exactly(values: string[], expected: string) {
   return values.length === 1 && values[0] === expected;
+}
+
+function exactlyAll(values: string[], expected: string[]) {
+  const sortedExpected = [...expected].sort();
+  return values.length === sortedExpected.length
+    && [...values].sort().every((value, index) =>
+      value === sortedExpected[index]);
 }

@@ -3,7 +3,7 @@ import type {
   CustomSsoSubjectProjectionPort,
 } from "./custom-sso-subject-delivery.port";
 import type {
-  CustomSsoSubjectProjectionV1Dto,
+  CustomSsoSubjectProjectionV2Dto,
 } from "./custom-sso-subject.schema";
 import {
   CustomSsoClientRuntimeUnavailableError,
@@ -15,9 +15,7 @@ import { AuthzUnauthorizedError } from "@iam/api-core/errors/AuthzUnauthorizedEr
 import {
   parseSubjectClaimSelection,
 } from "@iam/client-subject-projection";
-import {
-  resolveCustomSsoSubjectProjectionV1,
-} from "@iam/client-subject-projection/custom-sso";
+import { resolveCustomSsoSubjectProjection } from "@iam/client-subject-projection/custom-sso";
 import {
   ClientStatus,
   CustomSsoClientMode,
@@ -40,7 +38,7 @@ export interface CustomSsoSubjectDeliveryContext {
 }
 
 export interface CustomSsoSubjectDeliveryCapability {
-  resolveUserInfo: () => Promise<CustomSsoSubjectProjectionV1Dto>;
+  resolveUserInfo: () => Promise<CustomSsoSubjectProjectionV2Dto>;
 }
 
 export function createCustomSsoSubjectDelivery(
@@ -80,7 +78,7 @@ export function createCustomSsoSubjectDelivery(
       catalogVersion: config.subjectClaimCatalogVersion,
       claims: [...config.subjectClaims],
     });
-    const wire = await resolveCustomSsoSubjectProjectionV1(deps.projection, {
+    const wire = await resolveCustomSsoSubjectProjection(deps.projection, {
       subjectIdentifier: context.subjectIdentifier,
       clientCode: context.authenticatedClientCode,
       selection,

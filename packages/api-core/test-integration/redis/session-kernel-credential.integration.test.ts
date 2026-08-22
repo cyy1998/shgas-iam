@@ -215,7 +215,7 @@ describe("Session Kernel credential real Redis contract", () => {
     expect(expiredIndex.credentials).toMatchObject({
       revoked: 0,
       alreadyRevoked: 0,
-      missing: 0,
+      missing: 1,
     });
 
     const replacement = await scope!.writer.issueCredential({

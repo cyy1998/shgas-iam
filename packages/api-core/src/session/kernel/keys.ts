@@ -42,6 +42,8 @@ export function createSessionKernelKeyBuilder(namespace = "sess:v2:") {
       client: (clientCode: string) => `${ns}idx:client:${encodePart(clientCode)}`,
       clientProtocol: (clientCode: string, protocol: string) =>
         `${ns}idx:client_protocol:${encodePart(clientCode)}:${encodePart(protocol)}`,
+      clientProtocolCleanup: (clientCode: string, protocol: string) =>
+        `${ns}idx:client_protocol_cleanup:${encodePart(clientCode)}:${encodePart(protocol)}`,
       principal: (principalSessionId: string) => `${ns}idx:principal:${encodePart(principalSessionId)}`,
       binding: (bindingId: string) => `${ns}idx:binding:${encodePart(bindingId)}`,
       protocol: (protocol: string) => `${ns}idx:protocol:${encodePart(protocol)}`,

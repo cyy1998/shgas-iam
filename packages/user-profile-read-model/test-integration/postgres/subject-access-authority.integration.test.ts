@@ -135,7 +135,7 @@ async function seedProfileAndDirty(
       ${UserStatus.Enable},
       FALSE,
       TRUE,
-      1,
+      2,
       7,
       ${JSON.stringify({ legacyOnly: "must-not-be-read" })}::jsonb,
       ${JSON.stringify({ legacySearchOnly: "must-not-be-read" })}::jsonb,

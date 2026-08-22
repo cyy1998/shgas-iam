@@ -1,12 +1,32 @@
-import type { Configuration, interactionPolicy, KoaContextWithOIDC } from "oidc-provider";
+import type {
+  AccessToken,
+  Account,
+  AuthorizationCode,
+  BackchannelAuthenticationRequest,
+  Configuration,
+  DeviceCode,
+  interactionPolicy,
+  KoaContextWithOIDC,
+  UnknownObject,
+} from "oidc-provider";
 import type { OidcProviderEnv } from "../env.ts";
 import type { SigningKey } from "../security/signing-keys.ts";
-import type { OidcClaimsAdapter } from "./claims.ts";
 import { OIDC_SUPPORTED_SCOPES, OidcScope } from "@iam/contracts";
+
+export interface ProviderClaimsPort {
+  readonly createAccessTokenExtra: (
+    token: AccessToken,
+    code?: AuthorizationCode,
+  ) => Promise<UnknownObject | undefined>;
+  readonly findAccount: (
+    subject: string,
+    token?: AuthorizationCode | AccessToken | DeviceCode | BackchannelAuthenticationRequest,
+  ) => Promise<Account | undefined>;
+}
 
 export type ProviderConfigurationDependencies = {
   adapter: NonNullable<Configuration["adapter"]>;
-  claims: OidcClaimsAdapter;
+  claims: ProviderClaimsPort;
   currentSigningKey: SigningKey;
   previousSigningKey?: SigningKey;
   interactionPolicy: interactionPolicy.Prompt[];

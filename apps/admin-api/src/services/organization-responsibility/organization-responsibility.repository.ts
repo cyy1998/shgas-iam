@@ -1,0 +1,908 @@
+import type { EmploymentStatus, OrganizationStatus } from "@iam/contracts";
+import type { DbClient } from "@iam/db";
+import type { OrganizationResponsibilityAssignmentRecordCreate } from "@iam/domain/organization-responsibility";
+import type {
+  OrganizationResponsibilityAssignmentLifecycle,
+  OrganizationResponsibilityAssignmentView,
+} from "./organization-responsibility.schema";
+import {
+  OrganizationResponsibilityAssignmentStatus,
+  OrganizationResponsibilityTypeCode,
+} from "@iam/contracts";
+import { firstRow } from "@iam/db/query-utils";
+import {
+  employments,
+  organizationClosures,
+  organizationResponsibilityAssignments,
+  organizations,
+  positions,
+  users,
+} from "@iam/db/schema";
+import {
+  assertOrganizationResponsibilityAssignmentSlotAvailable,
+  getOrganizationResponsibilityOpenCardinalityViolation,
+  getOrganizationResponsibilityParentLifecycleViolation,
+} from "@iam/domain/organization-responsibility";
+import { and, desc, eq, inArray, isNull, lt } from "drizzle-orm";
+import { alias } from "drizzle-orm/pg-core";
+
+const OPEN_ASSIGNMENT_STATUSES = [
+  OrganizationResponsibilityAssignmentStatus.Enable,
+  OrganizationResponsibilityAssignmentStatus.Pause,
+] as const;
+
+export function createOrganizationResponsibilityRepository(db: DbClient) {
+  async function hasOpenAssignmentTargetingOrganizationSubtree(
+    organizationId: number,
+  ) {
+    const row = firstRow(
+      await db
+        .select({ id: organizationResponsibilityAssignments.id })
+        .from(organizationResponsibilityAssignments)
+        .innerJoin(
+          organizationClosures,
+          eq(
+            organizationResponsibilityAssignments.targetOrganizationId,
+            organizationClosures.descendantId,
+          ),
+        )
+        .where(
+          and(
+            eq(organizationClosures.ancestorId, organizationId),
+            inArray(organizationResponsibilityAssignments.status, [
+              ...OPEN_ASSIGNMENT_STATUSES,
+            ]),
+          ),
+        )
+        .limit(1),
+    );
+    return row !== null;
+  }
+
+  async function endOpenAssignmentsForUser(userId: number, endTime: Date) {
+    const candidates = db.$with("responsibility_resignation_candidates").as(
+      db
+        .select({
+          id: organizationResponsibilityAssignments.id,
+          employmentId: organizationResponsibilityAssignments.employmentId,
+          targetOrganizationId:
+            organizationResponsibilityAssignments.targetOrganizationId,
+          typeCode: organizationResponsibilityAssignments.typeCode,
+          startTime: organizationResponsibilityAssignments.startTime,
+          beforeEndTime: organizationResponsibilityAssignments.endTime,
+          beforeStatus: organizationResponsibilityAssignments.status,
+        })
+        .from(organizationResponsibilityAssignments)
+        .innerJoin(
+          employments,
+          eq(
+            organizationResponsibilityAssignments.employmentId,
+            employments.id,
+          ),
+        )
+        .where(
+          and(
+            eq(employments.userId, userId),
+            inArray(organizationResponsibilityAssignments.status, [
+              ...OPEN_ASSIGNMENT_STATUSES,
+            ]),
+          ),
+        ),
+    );
+    return await db
+      .with(candidates)
+      .update(organizationResponsibilityAssignments)
+      .set({
+        status: OrganizationResponsibilityAssignmentStatus.Disable,
+        endTime,
+      })
+      .from(candidates)
+      .where(and(
+        eq(organizationResponsibilityAssignments.id, candidates.id),
+        eq(
+          organizationResponsibilityAssignments.status,
+          candidates.beforeStatus,
+        ),
+      ))
+      .returning({
+        id: organizationResponsibilityAssignments.id,
+        employmentId: organizationResponsibilityAssignments.employmentId,
+        targetOrganizationId:
+          organizationResponsibilityAssignments.targetOrganizationId,
+        typeCode: organizationResponsibilityAssignments.typeCode,
+        startTime: organizationResponsibilityAssignments.startTime,
+        beforeStatus: candidates.beforeStatus,
+        beforeEndTime: candidates.beforeEndTime,
+        afterStatus: organizationResponsibilityAssignments.status,
+        afterEndTime: organizationResponsibilityAssignments.endTime,
+      });
+  }
+
+  async function endOpenAssignmentsForEmployment(
+    employmentId: number,
+    endTime: Date,
+  ) {
+    const candidates = db.$with("responsibility_end_candidates").as(
+      db
+        .select({
+          id: organizationResponsibilityAssignments.id,
+          employmentId: organizationResponsibilityAssignments.employmentId,
+          targetOrganizationId:
+            organizationResponsibilityAssignments.targetOrganizationId,
+          typeCode: organizationResponsibilityAssignments.typeCode,
+          startTime: organizationResponsibilityAssignments.startTime,
+          beforeEndTime: organizationResponsibilityAssignments.endTime,
+          beforeStatus: organizationResponsibilityAssignments.status,
+        })
+        .from(organizationResponsibilityAssignments)
+        .where(
+          and(
+            eq(
+              organizationResponsibilityAssignments.employmentId,
+              employmentId,
+            ),
+            inArray(organizationResponsibilityAssignments.status, [
+              ...OPEN_ASSIGNMENT_STATUSES,
+            ]),
+          ),
+        ),
+    );
+    return await db
+      .with(candidates)
+      .update(organizationResponsibilityAssignments)
+      .set({
+        status: OrganizationResponsibilityAssignmentStatus.Disable,
+        endTime,
+      })
+      .from(candidates)
+      .where(and(
+        eq(organizationResponsibilityAssignments.id, candidates.id),
+        eq(
+          organizationResponsibilityAssignments.status,
+          candidates.beforeStatus,
+        ),
+      ))
+      .returning({
+        id: organizationResponsibilityAssignments.id,
+        employmentId: organizationResponsibilityAssignments.employmentId,
+        targetOrganizationId:
+          organizationResponsibilityAssignments.targetOrganizationId,
+        typeCode: organizationResponsibilityAssignments.typeCode,
+        startTime: organizationResponsibilityAssignments.startTime,
+        beforeStatus: candidates.beforeStatus,
+        beforeEndTime: candidates.beforeEndTime,
+        afterStatus: organizationResponsibilityAssignments.status,
+        afterEndTime: organizationResponsibilityAssignments.endTime,
+      });
+  }
+
+  async function pauseEnabledAssignmentsForEmployment(employmentId: number) {
+    const candidates = db.$with("responsibility_pause_candidates").as(
+      db
+        .select({
+          id: organizationResponsibilityAssignments.id,
+          employmentId: organizationResponsibilityAssignments.employmentId,
+          targetOrganizationId:
+            organizationResponsibilityAssignments.targetOrganizationId,
+          typeCode: organizationResponsibilityAssignments.typeCode,
+          startTime: organizationResponsibilityAssignments.startTime,
+          beforeEndTime: organizationResponsibilityAssignments.endTime,
+          beforeStatus: organizationResponsibilityAssignments.status,
+        })
+        .from(organizationResponsibilityAssignments)
+        .where(
+          and(
+            eq(
+              organizationResponsibilityAssignments.employmentId,
+              employmentId,
+            ),
+            eq(
+              organizationResponsibilityAssignments.status,
+              OrganizationResponsibilityAssignmentStatus.Enable,
+            ),
+          ),
+        ),
+    );
+    return await db
+      .with(candidates)
+      .update(organizationResponsibilityAssignments)
+      .set({ status: OrganizationResponsibilityAssignmentStatus.Pause })
+      .from(candidates)
+      .where(and(
+        eq(organizationResponsibilityAssignments.id, candidates.id),
+        eq(
+          organizationResponsibilityAssignments.status,
+          candidates.beforeStatus,
+        ),
+      ))
+      .returning({
+        id: organizationResponsibilityAssignments.id,
+        employmentId: organizationResponsibilityAssignments.employmentId,
+        targetOrganizationId:
+          organizationResponsibilityAssignments.targetOrganizationId,
+        typeCode: organizationResponsibilityAssignments.typeCode,
+        startTime: organizationResponsibilityAssignments.startTime,
+        beforeStatus: candidates.beforeStatus,
+        beforeEndTime: candidates.beforeEndTime,
+        afterStatus: organizationResponsibilityAssignments.status,
+        afterEndTime: organizationResponsibilityAssignments.endTime,
+      });
+  }
+
+  async function findOpenAssignmentForSlot(input: {
+    employmentId: number;
+    targetOrganizationId: number;
+    typeCode: OrganizationResponsibilityTypeCode;
+    excludeAssignmentId?: number;
+  }) {
+    const row = await db.query.organizationResponsibilityAssignments.findFirst({
+      columns: { id: true, employmentId: true },
+      where: {
+        targetOrganizationId: input.targetOrganizationId,
+        typeCode: input.typeCode,
+        status: { in: [...OPEN_ASSIGNMENT_STATUSES] },
+        ...(input.excludeAssignmentId === undefined
+          ? {}
+          : { id: { ne: input.excludeAssignmentId } }),
+        ...(input.typeCode === OrganizationResponsibilityTypeCode.Supervising
+          ? { employmentId: input.employmentId }
+          : {}),
+      },
+    });
+    return row ?? null;
+  }
+
+  async function readAssignmentViews(input: {
+    targetOrganizationCode?: string;
+    employmentId?: number;
+    typeCode?: OrganizationResponsibilityTypeCode;
+    lifecycle: OrganizationResponsibilityAssignmentLifecycle;
+    id?: number;
+    cursorId?: number;
+    limit: number;
+  }): Promise<OrganizationResponsibilityAssignmentView[]> {
+    const holderOrganization = alias(
+      organizations,
+      "responsibility_holder_organization",
+    );
+    const targetOrganization = alias(
+      organizations,
+      "responsibility_target_organization",
+    );
+    const orphanTargetOrganization = alias(
+      organizations,
+      "responsibility_orphan_target_organization",
+    );
+    if (input.targetOrganizationCode !== undefined) {
+      const orphanTarget = firstRow(
+        await db
+          .select({ id: organizationResponsibilityAssignments.id })
+          .from(organizationResponsibilityAssignments)
+          .leftJoin(
+            orphanTargetOrganization,
+            eq(
+              organizationResponsibilityAssignments.targetOrganizationId,
+              orphanTargetOrganization.id,
+            ),
+          )
+          .where(
+            and(
+              inArray(organizationResponsibilityAssignments.status, [
+                ...OPEN_ASSIGNMENT_STATUSES,
+              ]),
+              isNull(orphanTargetOrganization.id),
+            ),
+          )
+          .limit(1),
+      );
+      if (orphanTarget !== null) {
+        throw new Error(
+          `Organization responsibility assignment ${orphanTarget.id} has no valid target Organization`,
+        );
+      }
+    }
+    const rows = await db
+      .select({
+        id: organizationResponsibilityAssignments.id,
+        typeCode: organizationResponsibilityAssignments.typeCode,
+        status: organizationResponsibilityAssignments.status,
+        startTime: organizationResponsibilityAssignments.startTime,
+        endTime: organizationResponsibilityAssignments.endTime,
+        employmentId: employments.id,
+        holderEmploymentStatus: employments.status,
+        holderEmploymentIsDelete: employments.isDelete,
+        userId: users.id,
+        username: users.username,
+        userName: users.name,
+        holderOrganizationId: holderOrganization.id,
+        holderOrganizationCode: holderOrganization.orgCode,
+        holderOrganizationName: holderOrganization.orgName,
+        holderOrganizationPath: holderOrganization.path,
+        positionId: positions.id,
+        positionCode: positions.posCode,
+        positionName: positions.posName,
+        targetOrganizationId: targetOrganization.id,
+        targetOrganizationCode: targetOrganization.orgCode,
+        targetOrganizationName: targetOrganization.orgName,
+        targetOrganizationPath: targetOrganization.path,
+        targetOrganizationStatus: targetOrganization.status,
+        targetOrganizationIsDelete: targetOrganization.isDelete,
+      })
+      .from(organizationResponsibilityAssignments)
+      .leftJoin(
+        employments,
+        and(
+          eq(
+            organizationResponsibilityAssignments.employmentId,
+            employments.id,
+          ),
+          eq(employments.isDelete, false),
+        ),
+      )
+      .leftJoin(
+        users,
+        and(eq(employments.userId, users.id), eq(users.isDelete, false)),
+      )
+      .leftJoin(
+        holderOrganization,
+        and(
+          eq(employments.orgId, holderOrganization.id),
+          eq(holderOrganization.isDelete, false),
+        ),
+      )
+      .leftJoin(
+        positions,
+        and(eq(employments.posId, positions.id), eq(positions.isDelete, false)),
+      )
+      .leftJoin(
+        targetOrganization,
+        eq(
+          organizationResponsibilityAssignments.targetOrganizationId,
+          targetOrganization.id,
+        ),
+      )
+      .where(
+        and(
+          input.id === undefined
+            ? input.targetOrganizationCode === undefined
+              ? undefined
+              : eq(targetOrganization.orgCode, input.targetOrganizationCode)
+            : eq(organizationResponsibilityAssignments.id, input.id),
+          input.employmentId === undefined
+            ? undefined
+            : eq(
+                organizationResponsibilityAssignments.employmentId,
+                input.employmentId,
+              ),
+          input.typeCode === undefined
+            ? undefined
+            : eq(
+                organizationResponsibilityAssignments.typeCode,
+                input.typeCode,
+              ),
+          input.cursorId === undefined
+            ? undefined
+            : lt(organizationResponsibilityAssignments.id, input.cursorId),
+          input.id === undefined && input.lifecycle === "open"
+            ? inArray(organizationResponsibilityAssignments.status, [
+                ...OPEN_ASSIGNMENT_STATUSES,
+              ])
+            : undefined,
+          input.id === undefined && input.lifecycle === "ended"
+            ? eq(
+                organizationResponsibilityAssignments.status,
+                OrganizationResponsibilityAssignmentStatus.Disable,
+              )
+            : undefined,
+        ),
+      )
+      .orderBy(desc(organizationResponsibilityAssignments.id))
+      .limit(input.limit);
+
+    if (input.id !== undefined && rows[0] !== undefined) {
+      const targetOrganizationCode = requireValue(
+        rows[0].targetOrganizationCode,
+        rows[0].id,
+        "target Organization code",
+      );
+      if (
+        input.targetOrganizationCode !== undefined
+        && targetOrganizationCode !== input.targetOrganizationCode
+      ) {
+        return [];
+      }
+    }
+
+    const openTargetOrganizationIds = [
+      ...new Set(
+        rows
+          .filter(row => isOpenAssignmentStatus(row.status))
+          .map(row =>
+            requireValue(
+              row.targetOrganizationId,
+              row.id,
+              "target Organization",
+            ),
+          ),
+      ),
+    ];
+    if (openTargetOrganizationIds.length > 0) {
+      const openSlots = await db
+        .select({
+          id: organizationResponsibilityAssignments.id,
+          targetOrganizationId:
+            organizationResponsibilityAssignments.targetOrganizationId,
+          typeCode: organizationResponsibilityAssignments.typeCode,
+          employmentId: organizationResponsibilityAssignments.employmentId,
+          assignmentStatus: organizationResponsibilityAssignments.status,
+          holderEmploymentStatus: employments.status,
+          holderEmploymentIsDelete: employments.isDelete,
+          targetOrganizationStatus: targetOrganization.status,
+          targetOrganizationIsDelete: targetOrganization.isDelete,
+        })
+        .from(organizationResponsibilityAssignments)
+        .innerJoin(
+          targetOrganization,
+          eq(
+            organizationResponsibilityAssignments.targetOrganizationId,
+            targetOrganization.id,
+          ),
+        )
+        .leftJoin(
+          employments,
+          eq(
+            organizationResponsibilityAssignments.employmentId,
+            employments.id,
+          ),
+        )
+        .where(
+          and(
+            inArray(
+              organizationResponsibilityAssignments.targetOrganizationId,
+              openTargetOrganizationIds,
+            ),
+            inArray(organizationResponsibilityAssignments.status, [
+              ...OPEN_ASSIGNMENT_STATUSES,
+            ]),
+          ),
+        );
+      const slotsByTarget = new Map<number, typeof openSlots>();
+      for (const row of openSlots) {
+        assertAssignmentParentLifecycle(row);
+        const targetRows = slotsByTarget.get(row.targetOrganizationId) ?? [];
+        targetRows.push(row);
+        slotsByTarget.set(row.targetOrganizationId, targetRows);
+      }
+      for (const targetRows of slotsByTarget.values())
+        assertOpenCardinality(targetRows);
+    }
+
+    const organizationIds = rows.flatMap(row => [
+      requireValue(row.holderOrganizationId, row.id, "holder Organization"),
+      requireValue(row.targetOrganizationId, row.id, "target Organization"),
+    ]);
+    const paths = await readOrganizationPaths(organizationIds);
+
+    return rows.map((row) => {
+      assertAssignmentParentLifecycle({
+        id: row.id,
+        assignmentStatus: row.status,
+        holderEmploymentStatus: row.holderEmploymentStatus,
+        holderEmploymentIsDelete: row.holderEmploymentIsDelete,
+        targetOrganizationStatus: row.targetOrganizationStatus,
+        targetOrganizationIsDelete: row.targetOrganizationIsDelete,
+      });
+      return {
+        id: row.id,
+        typeCode: row.typeCode,
+        status: row.status,
+        startTime: row.startTime.toISOString(),
+        endTime: row.endTime?.toISOString() ?? null,
+        holder: {
+          employmentId: requireValue(row.employmentId, row.id, "Employment"),
+          user: {
+            id: requireValue(row.userId, row.id, "User"),
+            username: requireValue(row.username, row.id, "User username"),
+            name: requireValue(row.userName, row.id, "User name"),
+          },
+          organization: {
+            id: requireValue(
+              row.holderOrganizationId,
+              row.id,
+              "holder Organization",
+            ),
+            orgCode: requireValue(
+              row.holderOrganizationCode,
+              row.id,
+              "holder Organization code",
+            ),
+            orgName: requireValue(
+              row.holderOrganizationName,
+              row.id,
+              "holder Organization name",
+            ),
+            fullPath: requirePath(
+              paths,
+              row.holderOrganizationId,
+              row.holderOrganizationPath,
+              row.id,
+              "holder Organization",
+            ),
+          },
+          position: {
+            id: requireValue(row.positionId, row.id, "Position"),
+            posCode: requireValue(row.positionCode, row.id, "Position code"),
+            posName: requireValue(row.positionName, row.id, "Position name"),
+          },
+        },
+        targetOrganization: {
+          id: requireValue(
+            row.targetOrganizationId,
+            row.id,
+            "target Organization",
+          ),
+          orgCode: requireValue(
+            row.targetOrganizationCode,
+            row.id,
+            "target Organization code",
+          ),
+          orgName: requireValue(
+            row.targetOrganizationName,
+            row.id,
+            "target Organization name",
+          ),
+          fullPath: requirePath(
+            paths,
+            row.targetOrganizationId,
+            row.targetOrganizationPath,
+            row.id,
+            "target Organization",
+          ),
+        },
+      };
+    });
+  }
+
+  async function readOrganizationPaths(orgIds: number[]) {
+    if (orgIds.length === 0) {
+      return new Map<
+        number,
+        { id: number; orgCode: string; orgName: string }[]
+      >();
+    }
+    const ancestor = alias(organizations, "responsibility_path_ancestor");
+    const rows = await db
+      .select({
+        descendantId: organizationClosures.descendantId,
+        depth: organizationClosures.depth,
+        id: ancestor.id,
+        orgCode: ancestor.orgCode,
+        orgName: ancestor.orgName,
+      })
+      .from(organizationClosures)
+      .innerJoin(
+        ancestor,
+        and(
+          eq(organizationClosures.ancestorId, ancestor.id),
+          eq(ancestor.isDelete, false),
+        ),
+      )
+      .where(inArray(organizationClosures.descendantId, [...new Set(orgIds)]));
+    const result = new Map<
+      number,
+      { id: number; orgCode: string; orgName: string; depth: number }[]
+    >();
+    for (const { descendantId, ...node } of rows) {
+      const path = result.get(descendantId) ?? [];
+      path.push(node);
+      result.set(descendantId, path);
+    }
+    return new Map(
+      [...result].map(([id, path]) => [
+        id,
+        path
+          .sort((a, b) => b.depth - a.depth || a.id - b.id)
+          .map(({ depth: _depth, ...node }) => node),
+      ]),
+    );
+  }
+
+  return {
+    endOpenAssignmentsForEmployment,
+    endOpenAssignmentsForUser,
+    hasOpenAssignmentTargetingOrganizationSubtree,
+    pauseEnabledAssignmentsForEmployment,
+    async getEmploymentForResponsibilityById(id: number) {
+      const row = await db
+        .select({
+          id: employments.id,
+          userId: employments.userId,
+          status: employments.status,
+          isDelete: employments.isDelete,
+        })
+        .from(employments)
+        .where(eq(employments.id, id))
+        .limit(1);
+      return firstRow(row) ?? null;
+    },
+    async getOrganizationForResponsibilityByCode(orgCode: string) {
+      const row = await db
+        .select({
+          id: organizations.id,
+          orgCode: organizations.orgCode,
+          status: organizations.status,
+          isDelete: organizations.isDelete,
+        })
+        .from(organizations)
+        .where(eq(organizations.orgCode, orgCode))
+        .limit(1);
+      return firstRow(row) ?? null;
+    },
+    findOpenAssignmentForSlot,
+    async getAssignmentLifecycleContextById(id: number) {
+      const row = firstRow(
+        await db
+          .select({
+            assignmentId: organizationResponsibilityAssignments.id,
+            employmentId: organizationResponsibilityAssignments.employmentId,
+            targetOrganizationId:
+              organizationResponsibilityAssignments.targetOrganizationId,
+            typeCode: organizationResponsibilityAssignments.typeCode,
+            assignmentStatus: organizationResponsibilityAssignments.status,
+            startTime: organizationResponsibilityAssignments.startTime,
+            endTime: organizationResponsibilityAssignments.endTime,
+            holderEmploymentId: employments.id,
+            holderUserId: employments.userId,
+            holderEmploymentStatus: employments.status,
+            holderEmploymentIsDelete: employments.isDelete,
+            targetOrganizationRowId: organizations.id,
+            targetOrganizationStatus: organizations.status,
+            targetOrganizationIsDelete: organizations.isDelete,
+          })
+          .from(organizationResponsibilityAssignments)
+          .leftJoin(
+            employments,
+            eq(
+              organizationResponsibilityAssignments.employmentId,
+              employments.id,
+            ),
+          )
+          .leftJoin(
+            organizations,
+            eq(
+              organizationResponsibilityAssignments.targetOrganizationId,
+              organizations.id,
+            ),
+          )
+          .where(eq(organizationResponsibilityAssignments.id, id))
+          .limit(1),
+      );
+      if (row === null)
+        return null;
+      return {
+        assignment: {
+          id: row.assignmentId,
+          employmentId: row.employmentId,
+          targetOrganizationId: row.targetOrganizationId,
+          typeCode: row.typeCode,
+          status: row.assignmentStatus,
+          startTime: row.startTime,
+          endTime: row.endTime,
+        },
+        employment:
+          row.holderEmploymentId === null
+            ? null
+            : {
+                userId: requireValue(
+                  row.holderUserId,
+                  row.assignmentId,
+                  "holder User",
+                ),
+                status: requireValue(
+                  row.holderEmploymentStatus,
+                  row.assignmentId,
+                  "holder Employment status",
+                ),
+                isDelete: requireValue(
+                  row.holderEmploymentIsDelete,
+                  row.assignmentId,
+                  "holder Employment deletion state",
+                ),
+              },
+        targetOrganization:
+          row.targetOrganizationRowId === null
+            ? null
+            : {
+                status: requireValue(
+                  row.targetOrganizationStatus,
+                  row.assignmentId,
+                  "target Organization status",
+                ),
+                isDelete: requireValue(
+                  row.targetOrganizationIsDelete,
+                  row.assignmentId,
+                  "target Organization deletion state",
+                ),
+              },
+      };
+    },
+    async updateAssignmentLifecycle(input: {
+      id: number;
+      expectedStatus: OrganizationResponsibilityAssignmentStatus;
+      status: OrganizationResponsibilityAssignmentStatus;
+      endTime: Date | null;
+    }) {
+      const updated = firstRow(
+        await db
+          .update(organizationResponsibilityAssignments)
+          .set({ status: input.status, endTime: input.endTime })
+          .where(
+            and(
+              eq(organizationResponsibilityAssignments.id, input.id),
+              eq(
+                organizationResponsibilityAssignments.status,
+                input.expectedStatus,
+              ),
+            ),
+          )
+          .returning({ id: organizationResponsibilityAssignments.id }),
+      );
+      return updated !== null;
+    },
+    async listAssignmentsForAdmin(input: {
+      targetOrganizationCode?: string;
+      employmentId?: number;
+      typeCode?: OrganizationResponsibilityTypeCode;
+      lifecycle: OrganizationResponsibilityAssignmentLifecycle;
+      cursorId?: number;
+      limit: number;
+    }) {
+      return await readAssignmentViews({ ...input });
+    },
+    async getAssignmentDetailForAdmin(input: { orgCode?: string; id: number }) {
+      return (
+        firstRow(
+          await readAssignmentViews({
+            targetOrganizationCode: input.orgCode,
+            id: input.id,
+            lifecycle: "all",
+            limit: 1,
+          }),
+        ) ?? null
+      );
+    },
+    async createAssignmentRecord(
+      data: OrganizationResponsibilityAssignmentRecordCreate,
+    ) {
+      const created = firstRow(
+        await db
+          .insert(organizationResponsibilityAssignments)
+          .values(data)
+          .onConflictDoNothing()
+          .returning({ id: organizationResponsibilityAssignments.id }),
+      );
+      if (created != null)
+        return created;
+
+      const existing = await findOpenAssignmentForSlot(data);
+      assertOrganizationResponsibilityAssignmentSlotAvailable({
+        typeCode: data.typeCode,
+        employmentId: data.employmentId,
+        existing,
+      });
+
+      throw new Error(
+        "Organization responsibility assignment insert was rejected without an Open slot conflict",
+      );
+    },
+  };
+}
+
+function isOpenAssignmentStatus(
+  status: OrganizationResponsibilityAssignmentStatus,
+) {
+  return (
+    status === OrganizationResponsibilityAssignmentStatus.Enable
+    || status === OrganizationResponsibilityAssignmentStatus.Pause
+  );
+}
+
+function requireValue<T>(
+  value: T | null,
+  assignmentId: number,
+  relation: string,
+): T {
+  if (value === null) {
+    throw new Error(
+      `Organization responsibility assignment ${assignmentId} has no valid ${relation}`,
+    );
+  }
+  return value;
+}
+
+function assertTargetOrganizationAvailable(
+  isDelete: boolean | null,
+  assignmentId: number,
+) {
+  if (isDelete !== false) {
+    throw new Error(
+      `Organization responsibility assignment ${assignmentId} has no valid target Organization`,
+    );
+  }
+}
+
+function assertAssignmentParentLifecycle(input: {
+  id: number;
+  assignmentStatus: OrganizationResponsibilityAssignmentStatus;
+  holderEmploymentStatus: EmploymentStatus | null;
+  holderEmploymentIsDelete: boolean | null;
+  targetOrganizationStatus: OrganizationStatus | null;
+  targetOrganizationIsDelete: boolean | null;
+}) {
+  assertTargetOrganizationAvailable(input.targetOrganizationIsDelete, input.id);
+  const violation = getOrganizationResponsibilityParentLifecycleViolation({
+    assignmentStatus: input.assignmentStatus,
+    holderEmploymentStatus:
+      input.holderEmploymentIsDelete === false
+        ? input.holderEmploymentStatus
+        : null,
+    targetOrganizationStatus: input.targetOrganizationStatus,
+  });
+  if (violation !== null) {
+    throw new Error(
+      `Organization responsibility assignment ${input.id} parent lifecycle is invalid: ${violation}`,
+    );
+  }
+}
+
+function requirePath(
+  paths: Map<number, { id: number; orgCode: string; orgName: string }[]>,
+  organizationIdValue: number | null,
+  organizationPathValue: string | null,
+  assignmentId: number,
+  relation: string,
+) {
+  const organizationId = requireValue(
+    organizationIdValue,
+    assignmentId,
+    relation,
+  );
+  const path = paths.get(organizationId);
+  const persistedPath = requireValue(
+    organizationPathValue,
+    assignmentId,
+    `${relation} path`,
+  );
+  const expectedIds = persistedPath.split("/").filter(Boolean).map(Number);
+  if (
+    path === undefined
+    || expectedIds.length === 0
+    || expectedIds.some(id => !Number.isSafeInteger(id) || id <= 0)
+    || expectedIds.length !== path.length
+    || expectedIds.some((id, index) => path[index]?.id !== id)
+  ) {
+    throw new Error(
+      `Organization responsibility assignment ${assignmentId} has no valid ${relation} path`,
+    );
+  }
+  return path;
+}
+
+function assertOpenCardinality(
+  rows: readonly {
+    id: number;
+    typeCode: OrganizationResponsibilityTypeCode;
+    employmentId: number | null;
+  }[],
+) {
+  const violation = getOrganizationResponsibilityOpenCardinalityViolation(rows);
+  if (violation !== null) {
+    throw new Error(
+      `Organization responsibility Open cardinality is invalid: ${violation}`,
+    );
+  }
+}
+
+export type OrganizationResponsibilityRepository = ReturnType<
+  typeof createOrganizationResponsibilityRepository
+>;

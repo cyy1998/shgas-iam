@@ -1,4 +1,6 @@
 import {
+  OrganizationResponsibilityTypeCode,
+  OrganizationType,
   UserProfileDirtyReason,
   UserProfileDirtyStatus,
   UserStatus,
@@ -26,7 +28,7 @@ describe("Subject Facts PostgreSQL reader", () => {
       await harness.close();
   });
 
-  test("reads one published row and verifies its processed Dirty version by Subject Identifier", async () => {
+  test("rejects a published V1 row without fallback or cache publication", async () => {
     await seedPublishedSubject(harness, "21");
     const publish = mock(async () => ({ status: "published" as const }));
     const reader = createSubjectFactsReader({
@@ -39,19 +41,42 @@ describe("Subject Facts PostgreSQL reader", () => {
 
     const facts = await reader.read(SUBJECT_IDENTIFIER);
 
-    expect(facts).toEqual({
-      subjectIdentifier: SUBJECT_IDENTIFIER,
-      sourceDirtyVersion: "21",
-      profile: {
-        username: "alice",
-        name: "Alice",
-        phone: null,
+    expect(facts).toBeNull();
+    expect(publish).not.toHaveBeenCalled();
+  });
+
+  test("reads one strict V2 responsibility row and verifies its processed Dirty version", async () => {
+    await seedPublishedSubjectV2(harness, "22");
+    const publish = mock(async () => ({ status: "published" as const }));
+    const reader = createSubjectFactsReader({
+      db: harness.db,
+      cache: {
+        read: mock(async () => null),
+        publish,
       },
-      employments: [],
     });
+
+    const facts = await reader.read(SUBJECT_IDENTIFIER);
+
+    expect(facts?.employments[0]?.responsibilities).toEqual([{
+      type: {
+        code: OrganizationResponsibilityTypeCode.Head,
+        name: "负责人",
+      },
+      targetOrganization: {
+        code: "target-a",
+        name: "目标甲",
+        type: OrganizationType.Department,
+        path: [{
+          code: "target-a",
+          name: "目标甲",
+          type: OrganizationType.Department,
+        }],
+      },
+    }]);
     expect(await reader.check({
       subjectIdentifier: SUBJECT_IDENTIFIER,
-      sourceDirtyVersion: "21",
+      sourceDirtyVersion: "22",
     })).toEqual({ status: "fresh" });
     expect(publish).toHaveBeenCalledTimes(1);
   });
@@ -94,6 +119,100 @@ async function seedPublishedSubject(
       ${JSON.stringify({ legacyOnly: "must-not-be-read" })}::jsonb,
       ${JSON.stringify({ legacySearchOnly: "must-not-be-read" })}::jsonb,
       ${JSON.stringify({ employments: [] })}::jsonb,
+      ${REBUILT_AT.toISOString()}
+    )
+  `;
+  await harness.sql`
+    INSERT INTO user_profile_dirty (
+      user_id,
+      dirty_version,
+      status,
+      reason_codes,
+      dirty_at,
+      processed_at
+    )
+    VALUES (
+      1,
+      ${dirtyVersion},
+      ${UserProfileDirtyStatus.Processed},
+      ${JSON.stringify([UserProfileDirtyReason.UserUpdated])}::jsonb,
+      ${REBUILT_AT.toISOString()},
+      ${REBUILT_AT.toISOString()}
+    )
+  `;
+}
+
+async function seedPublishedSubjectV2(
+  harness: Awaited<ReturnType<typeof createPostgresTestHarness>>,
+  dirtyVersion: string,
+) {
+  const responsibilities = [{
+    type: {
+      code: OrganizationResponsibilityTypeCode.Head,
+      name: "负责人",
+    },
+    targetOrganization: {
+      code: "target-a",
+      name: "目标甲",
+      type: OrganizationType.Department,
+      path: [{
+        code: "target-a",
+        name: "目标甲",
+        type: OrganizationType.Department,
+      }],
+    },
+  }];
+  const subjectFacts = {
+    employments: [{
+      isPrimary: true,
+      organization: {
+        code: "org-a",
+        name: "甲部门",
+        type: OrganizationType.Department,
+        path: [{
+          code: "org-a",
+          name: "甲部门",
+          type: OrganizationType.Department,
+        }],
+      },
+      position: { code: "position-a", name: "甲岗位" },
+      clientAuthorizations: [],
+      responsibilities,
+    }],
+  };
+  await harness.sql`
+    INSERT INTO user_profile (
+      user_id,
+      subject_identifier,
+      username,
+      name,
+      mobile,
+      wx_id,
+      status,
+      is_delete,
+      search_visible,
+      profile_schema_version,
+      source_dirty_version,
+      detail,
+      search_doc,
+      subject_facts,
+      rebuilt_at
+    )
+    VALUES (
+      1,
+      ${SUBJECT_IDENTIFIER},
+      'alice',
+      'Alice',
+      NULL,
+      NULL,
+      ${UserStatus.Enable},
+      FALSE,
+      TRUE,
+      2,
+      ${dirtyVersion},
+      ${JSON.stringify({ candidate: true })}::jsonb,
+      ${JSON.stringify({ candidate: true })}::jsonb,
+      ${JSON.stringify(subjectFacts)}::jsonb,
       ${REBUILT_AT.toISOString()}
     )
   `;

@@ -33,18 +33,26 @@ describe("E2E scenario seed", () => {
       adminSubjectIdentifier: "3b766c91-1daa-4c09-89e4-ea87ad123456",
       adminUsername: "e2e-admin-123000000-a1b2c3d4",
       organizationCode: "e2e-org-123000000-a1b2c3d4",
+      responsibilityTargetOrganizationCode:
+        "e2e-resp-target-123000000-a1b2c3d4",
       positionCode: "e2e-pos-123000000-a1b2c3d4",
+      responsibilityHolderPositionCode:
+        "e2e-resp-pos-123000000-a1b2c3d4",
       adminRoleCode: "e2e-role-123000000-a1b2c3d4",
       adminClientCode: "e2e-admin-123000000-a1b2c3d4",
       adminRedirectUri: "http://127.0.0.1:43123/iam-admin/*",
       customSsoClientCode: "e2e-custom-123000000-a1b2c3d4",
       customSsoRedirectUri: "http://127.0.0.1:43123/e2e/custom-sso/*",
+      internalClientCode: "e2e-internal-123000000-a1b2c3d4",
       oidcClientCode: "e2e-oidc-123000000-a1b2c3d4",
       oidcRedirectUri: "http://127.0.0.1:43123/e2e/oidc/callback",
       oidcPostLogoutRedirectUri: "http://127.0.0.1:43123/e2e/oidc/logged-out",
     });
     expect(established).toHaveLength(1);
-    expect(established[0]?.adminPassword).toBe("SYNTHETIC-PASSWORD-ONLY-FOR-E2E");
+    expect(established[0]).toMatchObject({
+      adminPassword: "SYNTHETIC-PASSWORD-ONLY-FOR-E2E",
+      internalApiKey: "iam-e2e-internal-api-key-123000000-a1b2c3d4",
+    });
     expect(result.adminClientCode).not.toBe(result.customSsoClientCode);
     expect(JSON.stringify(result)).not.toMatch(/password|token|secret/iu);
   });
@@ -64,6 +72,8 @@ describe("E2E scenario seed", () => {
             positionCodes: [],
             clientCodes: [],
             roleCodes: [],
+            responsibilityTypeCodes: [],
+            responsibilityTargetOrganizationCodes: [],
           },
         };
       },
@@ -135,9 +145,18 @@ function completeReadBack(references: E2EScenarioReferences) {
       clientType: OidcClientType.Public,
       redirectUris: [references.oidcRedirectUri],
     },
+    internalClient: {
+      active: true,
+      clientCode: "e2e-internal-123000000-a1b2c3d4",
+    },
     organization: { active: true, code: references.organizationCode },
+    responsibilityTargetOrganization: {
+      active: true,
+      code: "e2e-resp-target-123000000-a1b2c3d4",
+    },
     position: { active: true, code: references.positionCode },
     employment: { active: true },
+    responsibilityHolderEmployment: { active: true },
     role: {
       active: true,
       assigned: true,
@@ -150,9 +169,14 @@ function completeReadBack(references: E2EScenarioReferences) {
       sourceDirtyVersion: "1",
       profileUsername: references.adminUsername,
       organizationCodes: [references.organizationCode],
-      positionCodes: [references.positionCode],
+      positionCodes: [
+        references.positionCode,
+        "e2e-resp-pos-123000000-a1b2c3d4",
+      ],
       clientCodes: [references.adminClientCode],
       roleCodes: [references.adminRoleCode],
+      responsibilityTypeCodes: [],
+      responsibilityTargetOrganizationCodes: [],
     },
     subjectProfileReady: true,
     subjectProfileVersion: "1",

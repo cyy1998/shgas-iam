@@ -1,10 +1,13 @@
 import type { UserService } from "@api/services/user/user.service";
 import type { RegisterPurveyorContactUseCase } from "@api/use-cases/internal/register-purveyor-contact/register-purveyor-contact.use-case";
-import type { UserProfileQueryService } from "@iam/user-profile-read-model/query";
+import type { InternalUserProfileQueryService } from "@iam/user-profile-read-model";
 import type { UserRouteHandler } from "./user.type";
 import { getApiAuditRequestContext, getInternalAuditActor } from "@api/services/audit/audit.context";
 import * as HttpStatusCodes from "@iam/api-core/core/http-status-codes";
 import * as resp from "@iam/api-core/http";
+import { InternalUserProfileSearchUnavailableError } from "@iam/user-profile-read-model";
+
+export const INTERNAL_USER_HANDLER_TIMEOUT_MS = 5_000;
 
 export interface CreateUserHandlersDeps {
   registerPurveyorContact: Pick<RegisterPurveyorContactUseCase, "execute">;
@@ -12,13 +15,18 @@ export interface CreateUserHandlersDeps {
     UserService,
     "getUserDetailByUsername" | "searchUsers" | "searchUsersWithPrivilegeDelegation"
   >;
-  userProfileQuery: Pick<UserProfileQueryService, "searchDsl">;
+  internalUserProfileQuery: Pick<
+    InternalUserProfileQueryService,
+    "getDetailByUsername" | "searchDsl"
+  >;
 }
 
 export function createUserHandlers(deps: CreateUserHandlersDeps) {
   const userInfo: UserRouteHandler<"userInfo"> = async (c) => {
     const { username } = c.req.valid("param");
-    const data = await deps.userService.getUserDetailByUsername(username);
+    const data = await runWithinHandlerBudget(
+      deps.internalUserProfileQuery.getDetailByUsername(username),
+    );
     return c.json(resp.ok(data), HttpStatusCodes.OK);
   };
 
@@ -35,8 +43,10 @@ export function createUserHandlers(deps: CreateUserHandlersDeps) {
   };
 
   const usersSearchDsl: UserRouteHandler<"usersSearchDsl"> = async (c) => {
-    const { filter, limit } = c.req.valid("json");
-    const data = await deps.userProfileQuery.searchDsl(filter, { limit });
+    const request = c.req.valid("json");
+    const data = await runWithinHandlerBudget(
+      deps.internalUserProfileQuery.searchDsl(request),
+    );
     return c.json(resp.ok(data), HttpStatusCodes.OK);
   };
 
@@ -59,3 +69,22 @@ export function createUserHandlers(deps: CreateUserHandlersDeps) {
 }
 
 export type UserHandlers = ReturnType<typeof createUserHandlers>;
+
+async function runWithinHandlerBudget<T>(operation: Promise<T>): Promise<T> {
+  let timeout: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      operation,
+      new Promise<never>((_resolve, reject) => {
+        timeout = setTimeout(
+          () => reject(new InternalUserProfileSearchUnavailableError()),
+          INTERNAL_USER_HANDLER_TIMEOUT_MS,
+        );
+      }),
+    ]);
+  }
+  finally {
+    if (timeout !== undefined)
+      clearTimeout(timeout);
+  }
+}

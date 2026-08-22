@@ -14,7 +14,7 @@ import {
   redirectToLogin,
   restoreLoginRedirectState,
 } from '@admin/utils/auth';
-import type { CustomSsoSubjectProjectionV1 } from '@iam/client-subject-projection/custom-sso';
+import type { CustomSsoSubjectProjection } from '@iam/client-subject-projection/custom-sso';
 import { history } from '@umijs/max';
 import { ConfigProvider } from 'antd';
 import { createElement, type ReactElement } from 'react';
@@ -52,7 +52,7 @@ export async function getInitialState(): Promise<InitialState> {
 
     if (res.ok) {
       const body = (await res.json()) as {
-        data: CustomSsoSubjectProjectionV1;
+        data: CustomSsoSubjectProjection;
       };
       const currentUser = mapCurrentAdminUser(body.data);
 

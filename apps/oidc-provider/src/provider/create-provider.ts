@@ -3,9 +3,9 @@ import type { OidcProviderEnv } from "../env.ts";
 import type { OidcLogger } from "../lib/logger.ts";
 import type { ClientAuthRateLimiter } from "../security/client-auth-rate-limit.ts";
 import type { SigningKey } from "../security/signing-keys.ts";
-import type { OidcClaimsAdapter } from "./claims.ts";
 import type { ProviderClientSecretVerifier } from "./client-auth.ts";
 import type { OidcClientTrafficGate } from "./client-traffic-gate.ts";
+import type { ProviderClaimsPort } from "./configuration.ts";
 import type {
   ProviderMiddlewareOidcSessionAdapter,
 } from "./middleware.ts";
@@ -24,7 +24,7 @@ export interface CreateOidcProviderOptions {
     previous?: SigningKey;
   };
   adapter: NonNullable<Configuration["adapter"]>;
-  claims: OidcClaimsAdapter;
+  claims: ProviderClaimsPort;
   interactionPolicy: interactionPolicy.Prompt[];
   clientSecretVerifier: ProviderClientSecretVerifier;
   clientAuthRateLimiter: ClientAuthRateLimiter;

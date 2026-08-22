@@ -29,10 +29,11 @@ const employment = {
     code: 'FIN-001',
     name: '财务经理',
   },
+  responsibilities: [],
 } as const;
 
-describe('Custom SSO V1 user-info projection presentation', () => {
-  it('formats company, organization path and position from nested V1 fields', () => {
+describe('Custom SSO V2 user-info projection presentation', () => {
+  it('formats company, organization path and position from nested V2 fields', () => {
     expect(formatProjectionCompany(employment)).toBe('集团');
     expect(formatProjectionOrganizationPath(employment)).toBe(
       '集团 / 财务部',

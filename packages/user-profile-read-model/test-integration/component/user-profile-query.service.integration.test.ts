@@ -1,6 +1,6 @@
 import type { UserProfile } from "@iam/db/schema";
 import type { UserProfileQueryRepositoryPort } from "../../src/query";
-import type { UserProfileRepository } from "../../src/user-profile.repository";
+import type { UserProfileQueryRepository } from "../../src/user-profile-query.repository";
 import {
   EmploymentStatus,
   OrganizationLevel,
@@ -12,12 +12,12 @@ import {
 } from "@iam/contracts";
 import { UserNotFoundError } from "@iam/domain/user";
 import { describe, expect, mock, test } from "bun:test";
+import { USER_PROFILE_SCHEMA_VERSION } from "../../src/profile.schema";
 import {
   compileLegacyUserQueryToProfileFilter,
   createUserProfileQueryService,
 } from "../../src/query";
-import { createUserProfileRepository } from "../../src/user-profile.repository";
-import { CURRENT_USER_PROFILE_SCHEMA_VERSION } from "../../src/user-profile.schema";
+import { createUserProfileQueryRepository } from "../../src/user-profile-query.repository";
 
 const now = new Date("2026-06-30T08:00:00.000Z");
 
@@ -34,7 +34,7 @@ function profile(overrides: Partial<UserProfile> = {}): UserProfile {
     status: UserStatus.Enable,
     isDelete: false,
     searchVisible: true,
-    profileSchemaVersion: CURRENT_USER_PROFILE_SCHEMA_VERSION,
+    profileSchemaVersion: USER_PROFILE_SCHEMA_VERSION,
     sourceDirtyVersion: "1",
     detail: {
       id: 1,
@@ -121,6 +121,7 @@ function employmentDetail(overrides: Record<string, unknown> = {}) {
     },
     privileges: ["privilege:a"],
     roles: ["role:a"],
+    responsibilities: [],
     ...overrides,
   };
 }
@@ -129,10 +130,10 @@ function jsonDocument<T>(value: T): T {
   return JSON.parse(JSON.stringify(value)) as T;
 }
 
-describe("UserProfileRepository", () => {
+describe("UserProfileQueryRepository", () => {
   test("filters identity reads to the current profile schema version", async () => {
     const findFirst = mock(async (_args?: unknown) => profile());
-    const repository = createUserProfileRepository({
+    const repository = createUserProfileQueryRepository({
       query: {
         userProfiles: { findFirst },
       },
@@ -140,10 +141,12 @@ describe("UserProfileRepository", () => {
 
     await repository.getCurrentByUserId(1);
 
+    expect(repository).not.toHaveProperty("upsertProfile");
+    expect(repository).not.toHaveProperty("deleteByUserId");
     expect((findFirst.mock.calls as unknown as Array<[unknown]>)[0]?.[0]).toEqual({
       where: {
         userId: 1,
-        profileSchemaVersion: CURRENT_USER_PROFILE_SCHEMA_VERSION,
+        profileSchemaVersion: USER_PROFILE_SCHEMA_VERSION,
       },
     });
   });
@@ -151,7 +154,7 @@ describe("UserProfileRepository", () => {
 
 describe("UserProfileQueryService", () => {
   test("the production repository satisfies the query-only read port", () => {
-    assertAssignable<UserProfileQueryRepositoryPort, UserProfileRepository>();
+    assertAssignable<UserProfileQueryRepositoryPort, UserProfileQueryRepository>();
   });
 
   test("depends on a query-only read port", async () => {
@@ -199,11 +202,6 @@ describe("UserProfileQueryService", () => {
 
     const detail = await service.getDetailByUserId(1);
     const users = await service.searchLegacyUsers({ usernames: ["zhangsan"] });
-    const [dslDetail] = await service.searchDsl({
-      field: "user.username",
-      op: "eq",
-      value: "zhangsan",
-    });
 
     expect(detail).not.toHaveProperty("orcasId");
     expect(detail.createTime).toBeInstanceOf(Date);
@@ -212,7 +210,23 @@ describe("UserProfileQueryService", () => {
     expect(detail.employments[0]?.createTime).toBeInstanceOf(Date);
     expect(detail.employments[0]?.updateTime).toBeInstanceOf(Date);
     expect(users[0]?.createTime).toBeInstanceOf(Date);
-    expect(dslDetail?.employments[0]?.startTime).toBeInstanceOf(Date);
+  });
+
+  test("rejects a V1-shaped Detail from legacy search without returning a partial user", async () => {
+    const { responsibilities: _responsibilities, ...v1Employment } = employmentDetail();
+    const malformed = profile({
+      detail: {
+        ...(profile().detail as Record<string, unknown>),
+        employments: [v1Employment],
+      } as UserProfile["detail"],
+    });
+    const service = createUserProfileQueryService({
+      profileRepository: {
+        searchCurrentVisibleProfiles: mock(async () => [malformed]),
+      } as any,
+    });
+
+    await expect(service.searchLegacyUsers({ usernames: ["zhangsan"] })).rejects.toThrow();
   });
 
   test("compiles legacy employment filters into one nested employment filter", () => {
@@ -264,71 +278,6 @@ describe("UserProfileQueryService", () => {
           },
         },
       ],
-    });
-  });
-
-  test("rejects employment DSL fields outside explicit nested employment filters", async () => {
-    const service = createUserProfileQueryService({
-      profileRepository: {
-        searchCurrentVisibleProfiles: mock(async () => []),
-      } as any,
-    });
-
-    await expect(service.searchDsl({
-      field: "employment.roles",
-      op: "containsAny",
-      value: ["role:a"],
-    })).rejects.toThrow("employment fields must be inside a nested employments filter");
-  });
-
-  test("uses the server DSL default limit when no explicit limit is provided", async () => {
-    const searchCurrentVisibleProfiles = mock(async () => []);
-    const service = createUserProfileQueryService({
-      profileRepository: {
-        searchCurrentVisibleProfiles,
-      } as any,
-      config: {
-        dslDefaultLimit: 25,
-      },
-    });
-
-    await service.searchDsl({
-      field: "user.username",
-      op: "eq",
-      value: "zhangsan",
-    });
-
-    expect(searchCurrentVisibleProfiles).toHaveBeenCalledWith({
-      filter: {
-        field: "user.username",
-        op: "eq",
-        value: "zhangsan",
-      },
-      limit: 25,
-    });
-  });
-
-  test("passes explicit DSL limits to the profile repository", async () => {
-    const searchCurrentVisibleProfiles = mock(async () => []);
-    const service = createUserProfileQueryService({
-      profileRepository: {
-        searchCurrentVisibleProfiles,
-      } as any,
-    });
-
-    await service.searchDsl({
-      field: "user.username",
-      op: "eq",
-      value: "zhangsan",
-    }, { limit: 10 });
-
-    expect(searchCurrentVisibleProfiles).toHaveBeenCalledWith({
-      filter: {
-        field: "user.username",
-        op: "eq",
-        value: "zhangsan",
-      },
-      limit: 10,
     });
   });
 

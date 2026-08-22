@@ -111,6 +111,7 @@ class AuthorizationRedis {
         operations.push(() => this.sortedSets.get(key)?.delete(member));
         return transaction;
       },
+      pexpireat: () => transaction,
       expire: () => transaction,
       exec: async () => {
         operations.forEach(operation => operation());

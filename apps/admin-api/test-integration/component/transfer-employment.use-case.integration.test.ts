@@ -100,6 +100,9 @@ function createLifecycle() {
   };
   const tx = {
     auditLogWriter: { recordAuditLog: mock(async () => undefined) },
+    responsibilityParentLifecycle: {
+      endOpenAssignmentsForEmployment: mock(async () => true),
+    },
     sessionRevocation: { revokeAllForUser: mock(async () => undefined) },
     userProfileInvalidation: { recordChanges: mock(async () => undefined) },
     employmentStore: {
@@ -183,8 +186,17 @@ describe("Employment Lifecycle Transfer", () => {
         posCode: "SOURCE_POS",
       }),
     }));
+    expect(
+      tx.responsibilityParentLifecycle.endOpenAssignmentsForEmployment,
+    ).toHaveBeenCalledWith({
+      action: "transfer",
+      auditContext: undefined,
+      employmentId: 4,
+      endTime: transactionTime,
+    });
     expect(tx.userProfileInvalidation.recordChanges).toHaveBeenCalledWith([
       { kind: "employment", userId: 1 },
+      { kind: "organization-responsibility-assignment", userId: 1 },
     ]);
     expect(tx.sessionRevocation.revokeAllForUser).not.toHaveBeenCalled();
   });
@@ -238,6 +250,9 @@ describe("Employment Lifecycle Transfer", () => {
 
     expect(tx.employmentStore.updateEmploymentRecord).not.toHaveBeenCalled();
     expect(tx.employmentStore.createEmploymentRecord).not.toHaveBeenCalled();
+    expect(
+      tx.responsibilityParentLifecycle.endOpenAssignmentsForEmployment,
+    ).not.toHaveBeenCalled();
   });
 
   test("rejects a disabled target Organization before ending the source", async () => {

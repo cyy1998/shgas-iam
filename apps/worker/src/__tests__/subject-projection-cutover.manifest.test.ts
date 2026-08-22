@@ -8,7 +8,7 @@ const gatewayClient = {
   config: {
     mode: CustomSsoClientMode.Gateway,
     validRedirectUrls: ["https://portal.example.com/sso/*"],
-    subjectClaimCatalogVersion: 1,
+    subjectClaimCatalogVersion: 2,
     subjectClaims: [SubjectClaim.SubjectIdentifier, SubjectClaim.ProfileName],
     orcas: { enabled: true },
   },
@@ -21,7 +21,7 @@ const independentClient = {
   config: {
     mode: CustomSsoClientMode.Independent,
     validRedirectUrls: ["https://app.example.com/sso/callback"],
-    subjectClaimCatalogVersion: 1,
+    subjectClaimCatalogVersion: 2,
     subjectClaims: [SubjectClaim.SubjectIdentifier],
     callbackEndpoint: "https://app.example.com/sso/callback",
     logoutEndpoint: "https://app.example.com/logout",

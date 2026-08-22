@@ -6,9 +6,9 @@ import type {
   UserProfileUserField,
   UserQueryDto,
 } from "./user-profile.schema";
+import { parseUserProfileDetailDocument } from "./profile.schema";
 import {
   buildAncestorKey,
-  parseUserProfileDetailDocument,
 } from "./user-profile.schema";
 
 export function compileLegacyUserQueryToProfileFilter(query: UserQueryDto): UserProfileFilterDsl | undefined {

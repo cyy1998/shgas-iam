@@ -1,7 +1,8 @@
-import StatusTag from '@admin/components/StatusTag';
+import AuditLogTable from '@admin/components/audit/AuditLogTable';
 import EmploymentLifecycleActions from '@admin/components/EmploymentLifecycleActions';
 import EmploymentPrimaryActions from '@admin/components/EmploymentPrimaryActions';
-import AuditLogTable from '@admin/pages/audit-logs/components/AuditLogTable';
+import EmploymentResponsibilitySummary from '@admin/components/organization-responsibility/EmploymentResponsibilitySummary';
+import StatusTag from '@admin/components/StatusTag';
 import EmploymentFormModal from '@admin/pages/employments/components/EmploymentFormModal';
 import TransferModal from '@admin/pages/employments/components/TransferModal';
 import type { EmploymentVo } from '@admin/services/employment';
@@ -209,6 +210,14 @@ function UserDetailDrawerContent({
       width: 110,
     },
     {
+      title: '组织责任',
+      key: 'responsibilities',
+      width: 280,
+      render: (_: unknown, row: EmploymentRow) => (
+        <EmploymentResponsibilitySummary employmentId={row.id} />
+      ),
+    },
+    {
       title: '操作',
       key: 'action',
       width: 160,
@@ -221,14 +230,8 @@ function UserDetailDrawerContent({
             >
               转岗
             </a>
-            <EmploymentPrimaryActions
-              employment={row}
-              onSuccess={refresh}
-            />
-            <EmploymentLifecycleActions
-              employment={row}
-              onSuccess={refresh}
-            />
+            <EmploymentPrimaryActions employment={row} onSuccess={refresh} />
+            <EmploymentLifecycleActions employment={row} onSuccess={refresh} />
           </Space>
         );
       },
@@ -410,7 +413,7 @@ function UserDetailDrawerContent({
                       columns={employmentColumns}
                       dataSource={detail.employments}
                       pagination={false}
-                      scroll={{ x: 780 }}
+                      scroll={{ x: 1060 }}
                       locale={{ emptyText: '暂无雇佣' }}
                     />
                   </div>

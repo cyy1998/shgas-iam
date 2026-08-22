@@ -43,3 +43,12 @@ export interface ClaimsTokenRevoker {
   } | null>;
   revokeAccessTokenCredential: (credentialId: string) => Promise<unknown>;
 }
+
+export interface CreateOidcClaimsAdapterDeps {
+  accounts: ClaimsAccountReader;
+  clients: ClaimsClientRuntimeReader;
+  globalSessions: ClaimsSessionResolver;
+  projection: ClaimsSubjectProjectionResolver;
+  providerSessions: ClaimsProviderSessionBindingStore;
+  tokens: ClaimsTokenRevoker;
+}

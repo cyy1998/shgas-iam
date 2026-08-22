@@ -12,6 +12,9 @@ import { createClientAdminRouter } from "@admin-api/routes/admin/client/client.t
 import { createEmploymentAdapter } from "@admin-api/routes/admin/employment/employment.adapter";
 import { createEmploymentRoute } from "@admin-api/routes/admin/employment/employment.index";
 import { createEmploymentAdminRouter } from "@admin-api/routes/admin/employment/employment.trpc";
+import { createOrganizationResponsibilityAdapter } from "@admin-api/routes/admin/organization-responsibility/organization-responsibility.adapter";
+import { createOrganizationResponsibilityRoute } from "@admin-api/routes/admin/organization-responsibility/organization-responsibility.index";
+import { createOrganizationResponsibilityAdminRouter } from "@admin-api/routes/admin/organization-responsibility/organization-responsibility.trpc";
 import { createOrganizationAdapter } from "@admin-api/routes/admin/organization/organization.adapter";
 import { createOrganizationRoute } from "@admin-api/routes/admin/organization/organization.index";
 import { createOrganizationAdminRouter } from "@admin-api/routes/admin/organization/organization.trpc";
@@ -46,7 +49,8 @@ export async function createAdminApiRoutes(
   const auditAdapter = createAuditAdapter({ auditService });
   const clientAdapter = createClientAdapter({ clientService: services.client });
   const employmentAdapter = createEmploymentAdapter({
-    changeEmploymentAvailability: useCases.employment.changeEmploymentAvailability,
+    changeEmploymentAvailability:
+      useCases.employment.changeEmploymentAvailability,
     createEmployment: useCases.employment.createEmployment,
     endEmployment: useCases.employment.endEmployment,
     employmentService: services.employment,
@@ -54,8 +58,19 @@ export async function createAdminApiRoutes(
     resignUser: useCases.employment.resignUser,
     transferEmployment: useCases.employment.transferEmployment,
   });
-  const organizationAdapter = createOrganizationAdapter({ organizationService: services.organization });
-  const positionAdapter = createPositionAdapter({ positionService: services.position });
+  const organizationAdapter = createOrganizationAdapter({
+    organizationService: services.organization,
+  });
+  const organizationResponsibilityAdapter
+    = createOrganizationResponsibilityAdapter({
+      createAssignment: useCases.organizationResponsibility.createAssignment,
+      manageAssignmentLifecycle:
+        useCases.organizationResponsibility.manageAssignmentLifecycle,
+      service: services.organizationResponsibility,
+    });
+  const positionAdapter = createPositionAdapter({
+    positionService: services.position,
+  });
   const roleAdapter = createRoleAdapter({ roleService: services.role });
   const sessionManagementAdapter = createSessionManagementAdapter({
     sessionManagementService: services.sessionManagement,
@@ -70,24 +85,49 @@ export async function createAdminApiRoutes(
     client: createClientAdminRouter(clientAdapter),
     employment: createEmploymentAdminRouter(employmentAdapter),
     organization: createOrganizationAdminRouter(organizationAdapter),
+    organizationResponsibility: createOrganizationResponsibilityAdminRouter(
+      organizationResponsibilityAdapter,
+    ),
     position: createPositionAdminRouter(positionAdapter),
     role: createRoleAdminRouter(roleAdapter),
-    sessionManagement: createSessionManagementAdminRouter(sessionManagementAdapter),
+    sessionManagement: createSessionManagementAdminRouter(
+      sessionManagementAdapter,
+    ),
     user: createUserAdminRouter(userAdapter),
   });
   const appRouter = createAppRouter(adminRouter);
 
   return {
-    "./src/routes/admin/audit/audit.index.ts": { default: createAuditRoute(auditAdapter) },
-    "./src/routes/admin/client/client.index.ts": { default: createClientRoute(clientAdapter) },
-    "./src/routes/admin/employment/employment.index.ts": { default: createEmploymentRoute(employmentAdapter) },
-    "./src/routes/admin/organization/organization.index.ts": { default: createOrganizationRoute(organizationAdapter) },
-    "./src/routes/admin/position/position.index.ts": { default: createPositionRoute(positionAdapter) },
-    "./src/routes/admin/role/role.index.ts": { default: createRoleRoute(roleAdapter) },
+    "./src/routes/admin/audit/audit.index.ts": {
+      default: createAuditRoute(auditAdapter),
+    },
+    "./src/routes/admin/client/client.index.ts": {
+      default: createClientRoute(clientAdapter),
+    },
+    "./src/routes/admin/employment/employment.index.ts": {
+      default: createEmploymentRoute(employmentAdapter),
+    },
+    "./src/routes/admin/organization/organization.index.ts": {
+      default: createOrganizationRoute(organizationAdapter),
+    },
+    "./src/routes/admin/organization-responsibility/organization-responsibility.index.ts":
+      {
+        default: createOrganizationResponsibilityRoute(
+          organizationResponsibilityAdapter,
+        ),
+      },
+    "./src/routes/admin/position/position.index.ts": {
+      default: createPositionRoute(positionAdapter),
+    },
+    "./src/routes/admin/role/role.index.ts": {
+      default: createRoleRoute(roleAdapter),
+    },
     "./src/routes/admin/session-management/session-management.index.ts": {
       default: createSessionManagementRoute(sessionManagementAdapter),
     },
-    "./src/routes/admin/user/user.index.ts": { default: createUserRoute(userAdapter) },
+    "./src/routes/admin/user/user.index.ts": {
+      default: createUserRoute(userAdapter),
+    },
     "./src/routes/trpc/trpc.index.ts": { default: createTrpcRoute(appRouter) },
   };
 }

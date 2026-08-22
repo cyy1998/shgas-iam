@@ -13,12 +13,12 @@ import { AuthzUnauthorizedError } from "@iam/api-core/errors/AuthzUnauthorizedEr
 import {
   createClientSubjectProjectionService,
 } from "@iam/client-subject-projection";
-import {
-  CustomSsoSubjectProjectionInvariantError,
-} from "@iam/client-subject-projection/custom-sso";
+import { CustomSsoSubjectProjectionInvariantError } from "@iam/client-subject-projection/custom-sso";
 import {
   ClientStatus,
   CustomSsoClientMode,
+  OrganizationResponsibilityTypeCode,
+  OrganizationType,
   SubjectClaim,
 } from "@iam/contracts";
 import { beforeEach, describe, expect, mock, test } from "bun:test";
@@ -39,7 +39,7 @@ function runtimeClient(
     customSsoConfig: {
       mode: CustomSsoClientMode.Gateway,
       orcas: { enabled: true },
-      subjectClaimCatalogVersion: 1,
+      subjectClaimCatalogVersion: 2,
       subjectClaims: [...subjectClaims],
       validRedirectUrls: ["https://gateway.example.com/callback"],
     },
@@ -72,6 +72,26 @@ const subjectFacts = {
       code: "developer",
       name: "Developer",
     },
+    responsibilities: [{
+      type: {
+        code: OrganizationResponsibilityTypeCode.Head,
+        name: "负责人",
+      },
+      targetOrganization: {
+        code: "engineering",
+        name: "Engineering",
+        type: OrganizationType.Department,
+        path: [{
+          code: "root",
+          name: "Root",
+          type: OrganizationType.Company,
+        }, {
+          code: "engineering",
+          name: "Engineering",
+          type: OrganizationType.Department,
+        }],
+      },
+    }],
     clientAuthorizations: [
       {
         clientCode: "gateway",
@@ -188,7 +208,7 @@ describe("Custom SSO subject delivery", () => {
     }).resolveUserInfo();
 
     expect(projection).toMatchObject({
-      version: 1,
+      version: 2,
       subjectIdentifier: SUBJECT_IDENTIFIER,
       profile: {
         username: "alice",
@@ -439,7 +459,7 @@ describe("Custom SSO subject delivery", () => {
     const client = runtimeClient([SubjectClaim.SubjectIdentifier], {
       customSsoConfig: {
         mode: CustomSsoClientMode.Independent,
-        subjectClaimCatalogVersion: 1,
+        subjectClaimCatalogVersion: 2,
         subjectClaims: [SubjectClaim.SubjectIdentifier],
         validRedirectUrls: ["https://app.example.com/callback"],
         callbackEndpoint: "https://app.example.com/callback",

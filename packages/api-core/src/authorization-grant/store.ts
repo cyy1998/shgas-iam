@@ -6,6 +6,7 @@ import type {
 } from "./model";
 
 export interface AuthorizationGrantRedemptionStore {
+  readonly remove: (grantId: string) => Promise<"removed" | "missing">;
   readonly initialize: (
     record: Extract<AuthorizationGrantRedemptionRecord, { state: "issued" }>,
   ) => Promise<"created" | "exists" | "expired">;

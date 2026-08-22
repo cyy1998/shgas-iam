@@ -21,13 +21,20 @@ const apiRoot = join(repoRoot, "apps", "api");
 const apiCoreRoot = join(repoRoot, "packages", "api-core");
 const dbRoot = join(repoRoot, "packages", "db");
 const oidcRoot = join(repoRoot, "apps", "oidc-provider");
+const organizationResponsibilityRoot = join(
+  repoRoot,
+  "packages",
+  "organization-responsibility-resolution",
+);
 const workerRoot = join(repoRoot, "apps", "worker");
 const roleAssignmentRoot = join(repoRoot, "packages", "role-assignment-resolution");
 const userProfileRoot = join(repoRoot, "packages", "user-profile-read-model");
 const ssoRoot = join(repoRoot, "apps", "sso");
 const postgresIntegrationPassThroughEnv = [
+  "IAM_ADMIN_API_TEST_DATABASE_URL",
   "IAM_API_TEST_DATABASE_URL",
   "IAM_DB_TEST_DATABASE_URL",
+  "IAM_ORGANIZATION_RESPONSIBILITY_TEST_DATABASE_URL",
   "IAM_ROLE_ASSIGNMENT_TEST_DATABASE_URL",
   "IAM_USER_PROFILE_TEST_DATABASE_URL",
   "IAM_WORKER_TEST_DATABASE_URL",
@@ -69,11 +76,13 @@ const integrationResourceEnvNames = [
   "IAM_API_CORE_CLEANUP_TEST_REDIS_URL",
   "IAM_API_CORE_TEST_REDIS_URL",
   "IAM_ADMIN_API_TEST_REDIS_URL",
+  "IAM_ADMIN_API_TEST_DATABASE_URL",
   "IAM_API_TEST_DATABASE_URL",
   "IAM_API_TEST_REDIS_URL",
   "IAM_DB_TEST_DATABASE_URL",
   "IAM_OIDC_PROVIDER_TEST_DATABASE_URL",
   "IAM_OIDC_PROVIDER_TEST_REDIS_URL",
+  "IAM_ORGANIZATION_RESPONSIBILITY_TEST_DATABASE_URL",
   "IAM_ROLE_ASSIGNMENT_TEST_DATABASE_URL",
   "IAM_USER_PROFILE_TEST_DATABASE_URL",
   "IAM_USER_PROFILE_TEST_REDIS_URL",
@@ -1094,6 +1103,7 @@ describe("test orchestration", () => {
           "test:unit": "bun test --max-concurrency=2 src",
           "test:integration:component": "bun test --max-concurrency=2 test-integration/component",
           "test:integration:process": "bun test --max-concurrency=1 test-integration/process",
+          "test:integration:postgres": "bun test --max-concurrency=1 test-integration/postgres",
           "test:integration:redis": "bun test --max-concurrency=1 test-integration/redis",
         },
       },
@@ -1127,7 +1137,6 @@ describe("test orchestration", () => {
           "test:integration:component": "bun test --max-concurrency=2 test-integration/component",
           "test:integration:postgres": "bun test --max-concurrency=1 test-integration/postgres",
           "test:integration:redis": "bun test --max-concurrency=1 test-integration/redis",
-          "subject-projection:rehearsal": "bun scripts/subject-projection-rehearsal.ts",
         },
       },
     ];
@@ -1160,6 +1169,11 @@ describe("test orchestration", () => {
   test("keeps caller-owned resource harnesses isolated", () => {
     const harnesses = [
       {
+        envName: "IAM_ADMIN_API_TEST_DATABASE_URL",
+        harnessPath: "test-integration/postgres/postgres-test-harness.ts",
+        workspaceRoot: adminApiRoot,
+      },
+      {
         envName: "IAM_API_TEST_DATABASE_URL",
         harnessPath: "test-integration/postgres/postgres-test-harness.ts",
         workspaceRoot: apiRoot,
@@ -1188,6 +1202,11 @@ describe("test orchestration", () => {
         envName: "IAM_DB_TEST_DATABASE_URL",
         harnessPath: "test-integration/postgres/postgres-harness.ts",
         workspaceRoot: dbRoot,
+      },
+      {
+        envName: "IAM_ORGANIZATION_RESPONSIBILITY_TEST_DATABASE_URL",
+        harnessPath: "test-integration/postgres/postgres-harness.ts",
+        workspaceRoot: organizationResponsibilityRoot,
       },
       {
         envName: "IAM_ROLE_ASSIGNMENT_TEST_DATABASE_URL",

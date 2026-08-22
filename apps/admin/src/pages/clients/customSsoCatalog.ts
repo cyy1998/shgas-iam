@@ -1,4 +1,4 @@
-import { SUBJECT_CLAIM_CATALOG_V1 } from '@iam/client-subject-projection';
+import { SUBJECT_CLAIM_CATALOG } from '@iam/client-subject-projection';
 import { type SubjectClaimName, SubjectClaim } from '@iam/contracts';
 
 const claimDisplayText: Record<
@@ -31,11 +31,11 @@ const claimDisplayText: Record<
   },
 };
 
-export const CUSTOM_SSO_CLAIM_CATALOG = SUBJECT_CLAIM_CATALOG_V1.claims.map(
+export const CUSTOM_SSO_CLAIM_CATALOG = SUBJECT_CLAIM_CATALOG.claims.map(
   (entry) => ({
     ...entry,
     ...claimDisplayText[entry.claim],
   }),
 );
 
-export { buildCustomSsoPlaceholderPreviewV1 } from '@iam/client-subject-projection/custom-sso';
+export { buildCustomSsoPlaceholderPreview } from '@iam/client-subject-projection/custom-sso';

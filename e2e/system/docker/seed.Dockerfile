@@ -21,6 +21,7 @@ COPY packages/db/package.json ./packages/db/package.json
 COPY packages/domain/package.json ./packages/domain/package.json
 COPY packages/eslint-config/package.json ./packages/eslint-config/package.json
 COPY packages/jobs/package.json ./packages/jobs/package.json
+COPY packages/organization-responsibility-resolution/package.json ./packages/organization-responsibility-resolution/package.json
 COPY packages/role-assignment-resolution/package.json ./packages/role-assignment-resolution/package.json
 COPY packages/user-profile-read-model/package.json ./packages/user-profile-read-model/package.json
 RUN --mount=type=cache,id=iam-e2e-pnpm-v11,target=/pnpm/store \
@@ -34,6 +35,7 @@ COPY packages/contracts ./packages/contracts
 COPY packages/db ./packages/db
 COPY packages/domain ./packages/domain
 COPY packages/jobs ./packages/jobs
+COPY packages/organization-responsibility-resolution ./packages/organization-responsibility-resolution
 COPY packages/role-assignment-resolution ./packages/role-assignment-resolution
 COPY packages/user-profile-read-model ./packages/user-profile-read-model
 RUN --mount=type=cache,id=iam-e2e-pnpm-v11,target=/pnpm/store \

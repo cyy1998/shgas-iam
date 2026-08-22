@@ -84,6 +84,13 @@ export function createTransferEmploymentUseCase(
         endTime: transactionTime,
         isPrimary: false,
       });
+      const assignmentChanged
+        = await tx.responsibilityParentLifecycle.endOpenAssignmentsForEmployment({
+          action: "transfer",
+          auditContext,
+          employmentId: employment.id,
+          endTime: transactionTime,
+        });
       if (input.isPrimary) {
         await tx.employmentStore.unsetOpenPrimariesByUserId(employment.userId);
       }
@@ -129,6 +136,12 @@ export function createTransferEmploymentUseCase(
       ));
       await tx.userProfileInvalidation.recordChanges([
         { kind: "employment", userId: employment.userId },
+        ...(assignmentChanged
+          ? [{
+              kind: "organization-responsibility-assignment" as const,
+              userId: employment.userId,
+            }]
+          : []),
       ]);
       return { newEmploymentId: created.id };
     }, adminAuditTransactionOptions(auditContext));

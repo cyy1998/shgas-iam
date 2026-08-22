@@ -5,7 +5,7 @@ import {
   OidcClientType,
   OidcScope,
   OidcTokenEndpointAuthMethod,
-  SUBJECT_CLAIMS_V1,
+  SUBJECT_CLAIMS,
   SubjectClaim,
 } from "@iam/contracts";
 import { sql } from "drizzle-orm";
@@ -16,7 +16,7 @@ import { baseColumns } from "../_shard/base-columns";
 
 const clientStorageExtAttributesSchema = z.record(z.string(), z.unknown());
 
-const customSsoSubjectClaimsSchema = z.array(z.enum(SUBJECT_CLAIMS_V1))
+const customSsoSubjectClaimsSchema = z.array(z.enum(SUBJECT_CLAIMS))
   .min(1)
   .superRefine((claims, ctx) => {
     if (!claims.includes(SubjectClaim.SubjectIdentifier)) {
@@ -35,7 +35,7 @@ const customSsoSubjectClaimsSchema = z.array(z.enum(SUBJECT_CLAIMS_V1))
 
 const customSsoCommonConfigFields = {
   validRedirectUrls: z.array(z.string().min(1)).min(1),
-  subjectClaimCatalogVersion: z.literal(1),
+  subjectClaimCatalogVersion: z.literal(2),
   subjectClaims: customSsoSubjectClaimsSchema,
 };
 
@@ -195,7 +195,8 @@ export const clients = snakeCase.table("client", {
         AND jsonb_typeof(${table.customSsoConfig}->'subjectClaims') = 'array'
         AND jsonb_array_length(${table.customSsoConfig}->'subjectClaims') > 0
         AND ${table.customSsoConfig}->'subjectClaims' @> '["subjectIdentifier"]'::jsonb
-        AND ${table.customSsoConfig}->>'subjectClaimCatalogVersion' = '1'
+        AND jsonb_typeof(${table.customSsoConfig}->'subjectClaimCatalogVersion') = 'number'
+        AND ${table.customSsoConfig}->>'subjectClaimCatalogVersion' = '2'
         AND (
           (
             ${table.customSsoConfig}->>'mode' = 'gateway'

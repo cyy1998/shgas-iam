@@ -5,12 +5,12 @@ import { expect, mock, test } from "bun:test";
 const authenticatedClient = {
   clientCode: "independent",
   configVersion: 7,
-  subjectClaimCatalogVersion: 1 as const,
+  subjectClaimCatalogVersion: 2 as const,
   subjectClaims: [SubjectClaim.SubjectIdentifier],
 };
 
 const subject = {
-  version: 1 as const,
+  version: 2 as const,
   subjectIdentifier: "00000000-0000-4000-8000-000000001001",
 };
 

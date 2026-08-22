@@ -12,6 +12,7 @@ export {
   type PrincipalSessionInventoryItem,
   type RevokeUserSessionsOptions,
   type SessionKernel,
+  type SessionKernelClientProtocolInventory,
   type SessionKernelDependencies,
   type SessionKernelPrincipalAccessFence,
   type SessionKernelValidationHooks,

@@ -1,10 +1,24 @@
-export {
-  InvalidSubjectClaimSelectionError,
-  parseSubjectClaimSelection,
-  SUBJECT_CLAIM_CATALOG_V1,
-} from "./catalog";
 export { SubjectProjectionNotReadyError } from "./errors";
-export { createClientSubjectProjectionService } from "./internal/client-subject-projection";
+export {
+  parseSubjectClaimSelection,
+  SUBJECT_CLAIM_CATALOG,
+} from "./internal/catalog";
+export { EmploymentResponsibilitySnapshotSchema } from "./internal/contract";
+export type {
+  AuthorizationFreshnessCheckResult,
+  ClientAuthorization,
+  ClientAuthorizationEmployment,
+  ClientSubjectProjection,
+  ClientSubjectProjectionService,
+  EmploymentProfile,
+  EmploymentResponsibilitySnapshot,
+  ResolveClientSubjectInput,
+  SubjectClaimSelection,
+  SubjectFactsEmployment,
+  SubjectFactsSnapshot,
+} from "./internal/contract";
+export { createClientSubjectProjectionService } from "./internal/projection";
+export { InvalidSubjectClaimSelectionError } from "./subject-claim-selection.error";
 
 export type OptionalSubjectClaim
   = | "profile:username"
@@ -12,17 +26,6 @@ export type OptionalSubjectClaim
     | "profile:phone"
     | "profile:employments"
     | "iam:authorization";
-
-export interface SubjectClaimSelection {
-  readonly catalogVersion: 1;
-  readonly optionalClaims: readonly OptionalSubjectClaim[];
-}
-
-export interface ResolveClientSubjectInput {
-  readonly subjectIdentifier: string;
-  readonly clientCode: string;
-  readonly selection: SubjectClaimSelection;
-}
 
 export interface SubjectOrganization {
   readonly code: string;
@@ -49,14 +52,14 @@ export interface SubjectFactsClientAuthorization {
   readonly roles: readonly SubjectFactsRole[];
 }
 
-export interface SubjectFactsEmployment {
+export interface SubjectFactsEmploymentBase {
   readonly isPrimary: boolean;
   readonly organization: SubjectOrganizationWithPath;
   readonly position: SubjectPosition;
   readonly clientAuthorizations: readonly SubjectFactsClientAuthorization[];
 }
 
-export interface SubjectFactsSnapshot {
+export interface SubjectFactsSnapshotBase {
   readonly subjectIdentifier: string;
   readonly sourceDirtyVersion: string;
   readonly profile: {
@@ -64,65 +67,25 @@ export interface SubjectFactsSnapshot {
     readonly name: string;
     readonly phone: string | null;
   };
-  /**
-   * Contains only current effective employments. Publication adapters own
-   * source-state validation before exposing this narrow facts contract.
-   */
-  readonly employments: readonly SubjectFactsEmployment[];
 }
 
-export interface EmploymentProfile {
+export interface EmploymentProfileBase {
   readonly isPrimary: boolean;
   readonly organization: SubjectOrganizationWithPath;
   readonly position: SubjectPosition;
 }
 
-export interface ClientAuthorizationEmployment extends EmploymentProfile {
+export interface ClientAuthorizationEmploymentBase extends EmploymentProfileBase {
   readonly roles: readonly string[];
   readonly privileges: readonly string[];
 }
 
-export interface ClientAuthorization {
-  readonly employments: readonly ClientAuthorizationEmployment[];
+export interface ClientAuthorizationBase {
+  readonly employments: readonly ClientAuthorizationEmploymentBase[];
   readonly roles: readonly string[];
   readonly privileges: readonly string[];
-}
-
-export interface ClientSubjectProjection {
-  readonly subjectIdentifier: string;
-  readonly username?: string;
-  readonly name?: string;
-  readonly phone?: string | null;
-  readonly employments?: readonly EmploymentProfile[];
-  readonly authorization?: ClientAuthorization;
 }
 
 export interface SubjectAccessPort {
   readonly assertAccessible: (subjectIdentifier: string) => Promise<void>;
-}
-
-export interface SubjectFactsPort {
-  readonly read: (subjectIdentifier: string) => Promise<SubjectFactsSnapshot | null>;
-}
-
-export type AuthorizationFreshnessCheckResult
-  = | { readonly status: "fresh" }
-    | { readonly status: "refreshed"; readonly facts: SubjectFactsSnapshot }
-    | { readonly status: "not-ready" };
-
-export interface AuthorizationFreshnessPort {
-  readonly check: (input: {
-    readonly subjectIdentifier: string;
-    readonly sourceDirtyVersion: string;
-  }) => Promise<AuthorizationFreshnessCheckResult>;
-}
-
-export interface ClientSubjectProjectionService {
-  readonly resolve: (input: ResolveClientSubjectInput) => Promise<ClientSubjectProjection>;
-}
-
-export interface CreateClientSubjectProjectionServiceOptions {
-  readonly subjectAccess: SubjectAccessPort;
-  readonly subjectFacts: SubjectFactsPort;
-  readonly authorizationFreshness: AuthorizationFreshnessPort;
 }

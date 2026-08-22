@@ -1,7 +1,7 @@
 import { UserProfileDirtyReason, UserStatus } from "@iam/contracts";
 import { describe, expect, mock, test } from "bun:test";
+import { USER_PROFILE_SCHEMA_VERSION } from "../../src/profile.schema";
 import { UserProfileEmploymentIntegrityError } from "../../src/user-profile-builder.service";
-import { CURRENT_USER_PROFILE_SCHEMA_VERSION } from "../../src/user-profile.schema";
 import { createUserProfileRebuildProcessor } from "../../src/worker";
 
 const now = new Date("2026-07-25T10:00:00.000Z");
@@ -17,7 +17,7 @@ function builtProfile(userId = 1) {
     status: UserStatus.Enable,
     isDelete: false,
     searchVisible: true,
-    profileSchemaVersion: CURRENT_USER_PROFILE_SCHEMA_VERSION,
+    profileSchemaVersion: USER_PROFILE_SCHEMA_VERSION,
     sourceDirtyVersion: "4",
     detail: {} as never,
     searchDoc: {} as never,
@@ -107,7 +107,7 @@ describe("UserProfileRebuildProcessor", () => {
       cacheStatus: "published",
     });
     expect(cachedRecord).toEqual({
-      schemaVersion: 1,
+      schemaVersion: 2,
       sourceDirtyVersion: "4",
       publishedAt: "2026-07-25T10:00:00.000Z",
       subjectIdentifier: "8af9666f-3e20-49ef-bd03-7ca7f5c51ed4",

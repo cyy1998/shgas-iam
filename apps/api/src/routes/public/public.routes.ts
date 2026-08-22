@@ -9,7 +9,7 @@ import {
   createCustomSsoUnavailableResponse,
 } from "@api/services/sso/custom-sso-retryable.openapi";
 import {
-  CustomSsoSubjectProjectionV1Schema,
+  CustomSsoSubjectProjectionV2Schema,
 } from "@api/services/sso/custom-sso-subject.schema";
 import { UserDtoSchema, UserQueryDtoSchema } from "@api/services/user/user.schema";
 import { createRoute, z } from "@hono/zod-openapi";
@@ -41,7 +41,7 @@ export const userInfo = createRoute({
   responses: {
     ...commonErrorResponses,
     [HttpStatusCodes.OK]: jsonContent(
-      createSuccessResponseSchema(CustomSsoSubjectProjectionV1Schema),
+      createSuccessResponseSchema(CustomSsoSubjectProjectionV2Schema),
       "当前 Custom SSO Client 可见的主体投影",
     ),
     [HttpStatusCodes.SERVICE_UNAVAILABLE]: createCustomSsoUnavailableResponse(

@@ -1,45 +1,30 @@
-import type { SubjectFactsEmployment } from "@iam/client-subject-projection";
 import type { UserProfileDirtyReason, UserProfileDirtyStatus } from "@iam/contracts";
 import type { UserDetailDto } from "@iam/domain/user";
 import { z } from "@hono/zod-openapi";
-import { UserProfileDirtyReasonSchema, UserProfileDirtyStatusSchema, UserStatus, UserType } from "@iam/contracts";
+import { UserProfileDirtyReasonSchema, UserProfileDirtyStatusSchema } from "@iam/contracts";
 import { EmploymentDetailDtoSchema, toEmploymentDto } from "@iam/domain/employment";
 import { UserDetailDtoSchema, UserDtoSchema } from "@iam/domain/user";
+import {
+  UserProfileSearchDocSchema,
+} from "./profile-search.schema";
+import { PublishedProfileBaseSchema } from "./profile-storage.schema";
+import { SubjectFactsEmploymentSchema } from "./subject-facts-schema.core";
+import { reviveUserProfileDetailDates } from "./user-profile-detail-document";
 
+export {
+  UserProfileSearchDocSchema,
+  UserProfileSearchEmploymentDocSchema,
+} from "./profile-search.schema";
 export type { EmploymentDetailDto } from "@iam/domain/employment";
-export type { UserDetailDto, UserDto } from "@iam/domain/user";
 export {
   EmploymentDetailDtoSchema,
   toEmploymentDto,
   UserDetailDtoSchema,
   UserDtoSchema,
 };
+export type { UserDetailDto, UserDto } from "@iam/domain/user";
 
-export const CURRENT_USER_PROFILE_SCHEMA_VERSION = 1;
-
-const SubjectOrganizationSchema = z.object({
-  code: z.string().min(1),
-  name: z.string().min(1),
-  type: z.string().min(1),
-}).strict();
-
-const SubjectFactsEmploymentSchema: z.ZodType<SubjectFactsEmployment> = z.object({
-  isPrimary: z.boolean(),
-  organization: SubjectOrganizationSchema.extend({
-    path: z.array(SubjectOrganizationSchema).min(1),
-  }).strict(),
-  position: z.object({
-    code: z.string().min(1),
-    name: z.string().min(1),
-  }).strict(),
-  clientAuthorizations: z.array(z.object({
-    clientCode: z.string().min(1),
-    roles: z.array(z.object({
-      code: z.string().min(1),
-      privileges: z.array(z.string().min(1)),
-    }).strict()).min(1),
-  }).strict()),
-}).strict();
+export const LEGACY_USER_PROFILE_SCHEMA_VERSION = 1;
 
 export const SubjectFactsDocumentV1Schema = z.object({
   employments: z.array(SubjectFactsEmploymentSchema),
@@ -58,54 +43,11 @@ export const UserQueryDtoSchema = z.object({
   roleCodes: z.array(z.string()).describe("角色编码列表").openapi({ example: ["tender:default-user"] }),
 }).partial().openapi("UserQueryDto");
 
-export const UserProfileSearchEmploymentDocSchema = z.object({
-  id: z.number().int().positive(),
-  org: z.object({
-    id: z.number().int().positive(),
-    code: z.string(),
-    ancestorCodes: z.array(z.string()),
-    ancestorDepths: z.array(z.number().int().nonnegative()),
-    ancestorKeys: z.array(z.string()),
-    companyCodes: z.array(z.string()),
-  }),
-  position: z.object({
-    id: z.number().int().positive(),
-    code: z.string(),
-  }),
-  roles: z.array(z.string()),
-  privileges: z.array(z.string()),
-  isPrimary: z.boolean(),
-});
-
-export const UserProfileSearchDocSchema = z.object({
-  user: z.object({
-    id: z.number().int().positive(),
-    username: z.string(),
-    name: z.string(),
-    mobile: z.string().nullable(),
-    wxId: z.string().nullable(),
-    userType: z.enum(UserType),
-    status: z.enum(UserStatus),
-  }),
-  employments: z.array(UserProfileSearchEmploymentDocSchema),
-});
-
-export const PublishedUserProfileSchema = z.object({
-  userId: z.number().int().positive(),
-  subjectIdentifier: z.uuid(),
-  username: z.string().min(1),
-  name: z.string().min(1),
-  mobile: z.string().nullable(),
-  wxId: z.string().nullable(),
-  status: z.enum(UserStatus),
-  isDelete: z.boolean(),
-  searchVisible: z.boolean(),
-  profileSchemaVersion: z.literal(CURRENT_USER_PROFILE_SCHEMA_VERSION),
-  sourceDirtyVersion: z.string().regex(/^[1-9]\d*$/u),
+export const PublishedUserProfileSchema = PublishedProfileBaseSchema.extend({
+  profileSchemaVersion: z.literal(LEGACY_USER_PROFILE_SCHEMA_VERSION),
   detail: UserDetailDtoSchema,
   searchDoc: UserProfileSearchDocSchema,
   subjectFacts: SubjectFactsDocumentV1Schema,
-  rebuiltAt: z.date(),
 }).strict();
 
 export const UserProfileDirtyStatusDtoSchema = UserProfileDirtyStatusSchema;
@@ -224,11 +166,8 @@ export type UserProfileDirtyStatusType = UserProfileDirtyStatus;
 export type UserProfileDirtyReasonType = UserProfileDirtyReason;
 export type UserQueryDto = z.infer<typeof UserQueryDtoSchema>;
 
-const ISO_DATE_REGEX = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,3})?(?:Z|[+-]\d{2}:\d{2})$/;
-const PROFILE_DETAIL_DATE_KEYS = new Set(["createTime", "updateTime", "startTime", "endTime"]);
-
 export function parseUserProfileDetailDocument(input: unknown): UserDetailDto {
-  return UserDetailDtoSchema.parse(reviveProfileDetailDates(input));
+  return UserDetailDtoSchema.parse(reviveUserProfileDetailDates(input));
 }
 
 function validateEmploymentFieldsAreNested(
@@ -263,24 +202,6 @@ function validateEmploymentFieldsAreNested(
   }
 
   validateEmploymentFieldsAreNested(node.not, insideEmploymentNested, ctx);
-}
-
-function reviveProfileDetailDates(value: unknown, key?: string): unknown {
-  if (typeof value === "string" && key !== undefined && PROFILE_DETAIL_DATE_KEYS.has(key) && ISO_DATE_REGEX.test(value)) {
-    return new Date(value);
-  }
-
-  if (value instanceof Date || value === null || typeof value !== "object") {
-    return value;
-  }
-
-  if (Array.isArray(value)) {
-    return value.map(item => reviveProfileDetailDates(item));
-  }
-
-  return Object.fromEntries(
-    Object.entries(value).map(([childKey, childValue]) => [childKey, reviveProfileDetailDates(childValue, childKey)]),
-  );
 }
 
 function validateFilterOperators(node: UserProfileFilterDsl, ctx: z.RefinementCtx) {

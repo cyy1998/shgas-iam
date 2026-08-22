@@ -134,7 +134,6 @@ describe("client update contracts", () => {
   test("accepts only strict mode-specific Custom SSO config with safe redirect patterns and claims", () => {
     const common = {
       validRedirectUrls: ["https://portal.example.com/sso/*"],
-      subjectClaimCatalogVersion: 1 as const,
       subjectClaims: ["subjectIdentifier", "profile:name"],
     };
     expect(ClientCustomSsoConfigureDtoSchema.safeParse({
@@ -166,6 +165,14 @@ describe("client update contracts", () => {
       mode: CustomSsoClientMode.Gateway,
       orcas: { enabled: true },
     }).success).toBe(false);
+    for (const subjectClaimCatalogVersion of [1, 2]) {
+      expect(ClientCustomSsoConfigureDtoSchema.safeParse({
+        ...common,
+        subjectClaimCatalogVersion,
+        mode: CustomSsoClientMode.Gateway,
+        orcas: { enabled: true },
+      }).success).toBe(false);
+    }
   });
 
   test("supports structured Custom SSO state and mode filters but rejects legacy management filters", () => {

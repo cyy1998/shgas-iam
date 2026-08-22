@@ -56,7 +56,7 @@ function resolvedAuthentication(authenticationContext: {
     authenticationContext,
     subjectDeliveryCapability: {
       resolveUserInfo: async () => ({
-        version: 1 as const,
+        version: 2 as const,
         subjectIdentifier: authenticationContext.subjectIdentifier,
       }),
     },
@@ -369,7 +369,7 @@ describe("publicAuthenticationHandler", () => {
     const subjectDeliveryRequests
       = createCustomSsoSubjectDeliveryRequestScope();
     const resolveUserInfo = mock(async () => ({
-      version: 1 as const,
+      version: 2 as const,
       subjectIdentifier:
         "00000000-0000-4000-8000-000000001001",
     }));

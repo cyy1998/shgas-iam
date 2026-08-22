@@ -1,5 +1,6 @@
 import { createUserHandlers } from "@api/routes/internal/user/user.handlers";
-import { createUsersSearchDslRoute } from "@api/routes/internal/user/user.routes";
+import { usersSearchDsl } from "@api/routes/internal/user/user.routes";
+import { OrganizationResponsibilityTypeCode } from "@iam/contracts";
 import { describe, expect, mock, test } from "bun:test";
 
 function createHandlers() {
@@ -8,6 +9,10 @@ function createHandlers() {
       execute: mock(async () => true),
     },
     userProfileQuery: {
+      searchDsl: mock(async () => []),
+    },
+    internalUserProfileQuery: {
+      getDetailByUsername: mock(async () => ({})),
       searchDsl: mock(async () => []),
     },
     userService: {
@@ -75,11 +80,20 @@ describe("createUserHandlers", () => {
     expect(deps.userService.searchUsers).toHaveBeenCalledWith(query);
   });
 
-  test("delegates internal DSL search to profile query service", async () => {
+  test("delegates strict V2 responsibility DSL search to the active profile query service", async () => {
     const { deps, handlers } = createHandlers();
     const input = {
-      filter: { field: "user.username", op: "eq", value: "zhangsan" },
-      limit: 10,
+      filter: {
+        nested: "employments",
+        where: {
+          nested: "responsibilities",
+          where: {
+            field: "responsibility.type.code",
+            op: "eq",
+            value: OrganizationResponsibilityTypeCode.Head,
+          },
+        },
+      },
     };
     const context = {
       req: { valid: mock(() => input) },
@@ -91,18 +105,68 @@ describe("createUserHandlers", () => {
       data: [],
     });
 
-    expect(deps.userProfileQuery.searchDsl).toHaveBeenCalledWith(input.filter, { limit: 10 });
+    expect(deps.internalUserProfileQuery.searchDsl).toHaveBeenCalledWith(input);
+    expect(deps.userProfileQuery.searchDsl).not.toHaveBeenCalled();
+  });
+
+  test("applies the fixed handler deadline to Internal Detail", async () => {
+    const originalSetTimeout = globalThis.setTimeout;
+    const originalClearTimeout = globalThis.clearTimeout;
+    globalThis.setTimeout = ((callback: () => void) => {
+      callback();
+      return 1;
+    }) as typeof setTimeout;
+    globalThis.clearTimeout = (() => {}) as typeof clearTimeout;
+    try {
+      const { deps } = createHandlers();
+      deps.internalUserProfileQuery.getDetailByUsername
+        = mock(async () => await new Promise<never>(() => {}));
+      const handlers = createUserHandlers(deps as never);
+      const context = {
+        req: { valid: mock(() => ({ username: "user-1" })) },
+        json: mock(() => {
+          throw new Error("not reached");
+        }),
+      };
+
+      const error = await Promise.resolve(handlers.userInfo(
+        context as never,
+        undefined as never,
+      )).catch((error: unknown) => error);
+
+      expect(error).toMatchObject({
+        code: "USER_SEARCH_UNAVAILABLE",
+        httpStatus: 503,
+      });
+    }
+    finally {
+      globalThis.setTimeout = originalSetTimeout;
+      globalThis.clearTimeout = originalClearTimeout;
+    }
   });
 });
 
-describe("createUsersSearchDslRoute", () => {
-  test("bounds request limit with configured DSL max", () => {
-    const route = createUsersSearchDslRoute(2);
-    const schema = route.request.body.content["application/json"].schema;
+describe("active usersSearchDsl route", () => {
+  test("rejects V1 filters and caller-controlled limits", () => {
+    const schema = usersSearchDsl.request.body.content["application/json"].schema;
 
     expect(schema.safeParse({
       filter: { field: "user.username", op: "eq", value: "zhangsan" },
-      limit: 3,
     }).success).toBe(false);
+    expect(schema.safeParse({
+      filter: {
+        nested: "employments",
+        where: {
+          nested: "responsibilities",
+          where: {
+            field: "responsibility.type.code",
+            op: "eq",
+            value: OrganizationResponsibilityTypeCode.Head,
+          },
+        },
+      },
+      limit: 1,
+    }).success).toBe(false);
+    expect(schema.safeParse({ filter: {}, version: 2 }).success).toBe(false);
   });
 });

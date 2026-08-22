@@ -1,6 +1,6 @@
 import type { OrganizationService } from "@api/services/organization/organization.service";
 import type {
-  CustomSsoSubjectProjectionV1Dto,
+  CustomSsoSubjectProjectionV2Dto,
 } from "@api/services/sso/custom-sso-subject.schema";
 import type { UserService } from "@api/services/user/user.service";
 import type { PublicRouteHandler } from "./public.type";
@@ -17,7 +17,7 @@ export interface CreatePublicHandlersDeps {
   subjectDeliveryRequests: {
     resolveUserInfoForRequest: (
       request: object,
-    ) => Promise<CustomSsoSubjectProjectionV1Dto>;
+    ) => Promise<CustomSsoSubjectProjectionV2Dto>;
   };
   userService: Pick<
     UserService,

@@ -1,5 +1,6 @@
+import AuditLogTable from '@admin/components/audit/AuditLogTable';
+import EmploymentResponsibilitySummary from '@admin/components/organization-responsibility/EmploymentResponsibilitySummary';
 import StatusTag from '@admin/components/StatusTag';
-import AuditLogTable from '@admin/pages/audit-logs/components/AuditLogTable';
 import {
   type EmploymentDetailVo,
   getEmployment,
@@ -188,6 +189,13 @@ function EmploymentDetailDrawerContent({ open, employmentId, onClose }: Props) {
                     )}
                   </div>
                 </div>
+              ),
+            },
+            {
+              key: 'responsibilities',
+              label: '组织责任',
+              children: (
+                <EmploymentResponsibilitySummary employmentId={detail.id} />
               ),
             },
             {

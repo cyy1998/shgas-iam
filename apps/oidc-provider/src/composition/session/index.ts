@@ -9,6 +9,10 @@ import type { ProviderSessionStateRedis } from "../../session/provider-session-s
 import type { OidcProviderRepositories } from "../repositories/index.ts";
 import type { OidcProviderStores } from "../stores/index.ts";
 import { randomUUID } from "node:crypto";
+import {
+  createAuthorizationGrantRedemptionCleanupAdapter,
+  createRedisAuthorizationGrantRedemptionStore,
+} from "@iam/api-core/authorization-grant";
 import { LoggerSourceApp } from "@iam/api-core/logger";
 import {
   createSessionKernel,
@@ -96,10 +100,15 @@ export function createOidcProviderSession(deps: CreateOidcProviderSessionDeps) {
   const kernel = createSessionKernel({
     redis: deps.redis as SessionKernelRedis,
     config: createOidcProviderSessionKernelConfig(deps.env),
-    cleanupAdapters: createOidcSessionKernelCleanupAdapter({
-      providerSessionState,
-      redis: deps.redis,
-    }),
+    cleanupAdapters: [
+      ...createOidcSessionKernelCleanupAdapter({
+        providerSessionState,
+        redis: deps.redis,
+      }),
+      createAuthorizationGrantRedemptionCleanupAdapter(
+        createRedisAuthorizationGrantRedemptionStore({ redis: deps.redis }),
+      ),
+    ],
     principalAccessFence: subjectAccessPrincipal,
     validationHooks,
     logger: deps.logger,
@@ -119,6 +128,7 @@ export function createOidcProviderSession(deps: CreateOidcProviderSessionDeps) {
   return {
     kernel,
     oidcSession: adapter,
+    providerSessionState,
     subjectAccess,
   };
 }
