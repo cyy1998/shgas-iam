@@ -2,18 +2,21 @@
 
 Status: Current
 
-Last verified: 2026-08-22
+Last verified: 2026-08-23
 
 Next review: 2026-10-31
 
 本手册只说明 Client Protocol V2 epoch 与协议产物清理。命令不会自动 freeze、运行 data gate、切换 runtime、恢复流量、
 执行 smoke 或 production cutover；这些动作仍由维护窗口负责人显式编排。
 
+Custom SSO 的 active Subject Claim Catalog 由服务端统一固定为当前 V2。数据库 migration 会删除所有非空配置中的历史
+`subjectClaimCatalogVersion` key，并用当前 strict schema 验证其余内容；未知 claim 或其他损坏配置会令 migration 失败。
+不得手工修剪损坏配置或把旧 marker 写回数据库。
+
 ## Manifest 与人工责任
 
 manifest 必须覆盖 PostgreSQL 中全部非删除且已配置 Custom SSO/OIDC 的 client，包括禁用中的 client、协议和
-`iam-admin`。每个非空协议目标固定声明执行前的 `expectedEpoch` 和人工维护的 `ownerStatus`；每个 Custom SSO 目标还必须
-显式声明 `targetCatalogVersion: 2`：
+`iam-admin`。每个非空协议目标固定声明执行前的 `expectedEpoch` 和人工维护的 `ownerStatus`：
 
 ```json
 {
@@ -23,8 +26,7 @@ manifest 必须覆盖 PostgreSQL 中全部非删除且已配置 Custom SSO/OIDC 
       "clientCode": "portal",
       "customSso": {
         "expectedEpoch": 3,
-        "ownerStatus": "confirmed",
-        "targetCatalogVersion": 2
+        "ownerStatus": "confirmed"
       },
       "oidc": {
         "expectedEpoch": 7,
@@ -36,13 +38,13 @@ manifest 必须覆盖 PostgreSQL 中全部非删除且已配置 Custom SSO/OIDC 
 ```
 
 `pending` 会阻断 apply；`confirmed` 表示 owner 已确认 `expectedEpoch` 所围栏的完整当前数据库配置。命令不会根据配置内容自动
-确认 owner，也不会为缺少的 `targetCatalogVersion` 提供默认值。没有配置某协议时必须写 `null`，不得通过遗漏 client 或协议
-缩小 inventory。
+确认 owner。没有配置某协议时必须写 `null`，不得通过遗漏 client 或协议缩小 inventory。旧 manifest 中的
+`targetCatalogVersion` 会被 strict parser 拒绝，不再作为兼容输入。
 
-Custom SSO Catalog V1 配置只允许处于 `expectedEpoch`。命令在同一个完整 inventory `FOR UPDATE` transaction 中只把
-`subjectClaimCatalogVersion` 从 `1` 改为 `2`，以当前严格 V2 schema 验证完整候选配置，并把 epoch 推进一次；其余字段保持不变。
+完成 schema migration 后，每个 Custom SSO 配置都按服务端当前 V2 Catalog 解释。命令在同一个完整 inventory
+`FOR UPDATE` transaction 中只推进协议 epoch，不再读取或改写 per-Client Catalog marker。
 锁定完整 inventory 后、任何写入前，命令会为每个 Custom SSO target 建立并持续续租 runtime mutation fence，commit 前再次确认
-ownership。`expectedEpoch + 1` 只接受 Catalog V2，数据库保持 no-op，但仍在提交后完成该 client 的精确、generation-fenced
+ownership。`expectedEpoch + 1` 数据库保持 no-op，但仍在提交后完成该 client 的精确、generation-fenced
 runtime cache invalidation。所需 cache invalidation 失败会令命令失败，但不会伪装成数据库 transaction 已回滚。
 
 ## 执行顺序
@@ -66,10 +68,10 @@ runtime cache invalidation。所需 cache invalidation 失败会令命令失败�
 Binding 自然耗尽。然后按现有 Phase 4–7 依次执行，不增加额外切换阶段：
 
 ```bash
-# Phase 4: epoch 与 Catalog dry-run
+# Phase 4: epoch dry-run
 pnpm --filter @iam/worker client-protocol:epochs -- dry-run --manifest <manifest.json>
 
-# Phase 5: epoch 与 Catalog apply + verify
+# Phase 5: epoch apply + verify
 pnpm --filter @iam/worker client-protocol:epochs -- apply --manifest <manifest.json>
 pnpm --filter @iam/worker client-protocol:epochs -- verify --manifest <manifest.json>
 
@@ -80,8 +82,8 @@ pnpm --filter @iam/oidc-provider client-protocol:artifacts -- verify --manifest 
 # Phase 7: start V2-only runtime（由维护窗口负责人执行）
 ```
 
-epoch apply 在一个 PostgreSQL transaction 中锁定全部已配置协议的 client，验证 manifest 完整覆盖、Catalog 与 epoch fence 后，
-原子转换所需 Custom SSO 配置并对每个尚未应用的协议恰好推进一次。即使 selection 未变化也必须推进。第一次成功提交是永久拒绝 V1 artifact 的不可逆边界；
+epoch apply 在一个 PostgreSQL transaction 中锁定全部已配置协议的 client，验证 manifest 完整覆盖与 epoch fence 后，
+对每个尚未应用的协议恰好推进一次。即使 selection 未变化也必须推进。第一次成功提交是永久拒绝旧 artifact 的不可逆边界；
 命令只接受 `expectedEpoch` 或已推进的 `expectedEpoch + 1`，因此提交后响应丢失可以原 manifest forward 重跑，但不得递减
 epoch、恢复旧 parser/cache/artifact，或把流量提前打开。
 

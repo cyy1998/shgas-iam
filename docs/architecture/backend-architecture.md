@@ -181,6 +181,8 @@ composition。跨层实例连接统一由 composition 完成。
   前后复查同一个 `customSsoConfigVersion`，Gateway Header 仍硬裁剪为 Subject、username/name。Catalog 版本固定在服务端，
   Admin 配置请求不能提交版本字段。Opaque Credential 继续只持有 Principal Session 关联与 mode/config version，UserInfo
   每次按当前 User Profile v3 Subject Facts 重建 Client Protocol V2 输出，不保存 responsibility snapshot。
+  `custom_sso_config` JSONB、Admin detail/audit、runtime context 与 Client Protocol cutover manifest 均不再携带 per-Client
+  Catalog marker；历史 key 由 schema migration 删除，旧配置输入和旧 manifest 字段由 strict parser 拒绝。
 
 ### 角色分配解析
 

@@ -43,6 +43,7 @@ import {
 } from "@iam/api-core/subject-access";
 import {
   parseSubjectClaimSelection,
+  SUBJECT_CLAIM_CATALOG,
 } from "@iam/client-subject-projection";
 import { resolveCustomSsoSubjectProjection } from "@iam/client-subject-projection/custom-sso";
 import {
@@ -108,7 +109,6 @@ type ValidatedCustomSsoCredentialContext
 type IndependentClientContext = {
   readonly clientCode: string;
   readonly configVersion: number;
-  readonly subjectClaimCatalogVersion: 2;
   readonly subjectClaims: readonly SubjectClaimName[];
 };
 
@@ -429,7 +429,7 @@ export function createCustomSsoSessionKernelAdapter(deps: CustomSsoSessionKernel
           }
 
           const selection = parseSubjectClaimSelection({
-            catalogVersion: input.client.subjectClaimCatalogVersion,
+            catalogVersion: SUBJECT_CLAIM_CATALOG.version,
             claims: [...input.client.subjectClaims],
           });
           subject = await resolveCustomSsoSubjectProjection(deps.subjectProjection, {

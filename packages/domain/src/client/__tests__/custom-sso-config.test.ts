@@ -17,7 +17,6 @@ import {
 
 const commonConfig = {
   validRedirectUrls: ["https://portal.example.com/sso/*"],
-  subjectClaimCatalogVersion: 2 as const,
   subjectClaims: ["subjectIdentifier", "profile:name"] as const,
 };
 
@@ -37,6 +36,10 @@ describe("Custom SSO client configuration", () => {
 
     expect(customSsoClientConfigSchema.safeParse(gateway).success).toBe(true);
     expect(customSsoClientConfigSchema.safeParse(independent).success).toBe(true);
+    expect(customSsoClientConfigSchema.safeParse({
+      ...gateway,
+      subjectClaimCatalogVersion: 2,
+    }).success).toBe(false);
     expect(customSsoClientConfigSchema.safeParse({
       ...gateway,
       callbackEndpoint: independent.callbackEndpoint,

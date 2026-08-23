@@ -29,7 +29,6 @@ function clientRow(overrides: Record<string, unknown> = {}) {
     customSsoConfig: {
       mode: CustomSsoClientMode.Gateway,
       orcas: { enabled: false },
-      subjectClaimCatalogVersion: 2,
       subjectClaims: [SubjectClaim.SubjectIdentifier],
       validRedirectUrls: ["https://portal.example.com/sso/*"],
     },

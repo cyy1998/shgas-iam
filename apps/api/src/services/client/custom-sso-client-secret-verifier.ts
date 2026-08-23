@@ -14,7 +14,6 @@ export interface CreateCustomSsoClientSecretVerifierDeps {
 export interface AuthenticatedIndependentCustomSsoClient {
   readonly clientCode: string;
   readonly configVersion: number;
-  readonly subjectClaimCatalogVersion: 2;
   readonly subjectClaims: readonly SubjectClaimName[];
 }
 
@@ -41,7 +40,6 @@ export function createCustomSsoClientSecretVerifier(
     return {
       clientCode: record.clientCode,
       configVersion: record.customSsoConfigVersion,
-      subjectClaimCatalogVersion: record.customSsoConfig.subjectClaimCatalogVersion,
       subjectClaims: [...record.customSsoConfig.subjectClaims],
     };
   }

@@ -1,9 +1,11 @@
 ---
-status: accepted
-implementation: pending
+status: historical
+implementation: superseded
 ---
 
 # Client Subject Projection 修复设计
+
+> **Historical**：本文保留初代 Catalog V1 与 per-Client Catalog version 的目标设计快照，不再作为当前实现或发布依据。Catalog 代际的当前决定见 [ADR-0016](../../adr/0016-own-subject-claim-catalog-version-server-side.md)，当前 runtime 边界见 [后端架构](../../architecture/backend-architecture.md)，当前可执行切换步骤见 [Client Protocol V2 epoch 与 artifact 清理](../../releases/client-protocol-v2-artifact-cutover.md)。
 
 > 本文是已确认的目标设计和候选实现依据，不代表任一环境已完成硬切换。当前外部接口以
 > [第三方业务系统 SSO 单点登录对接说明](third-party-sso-integration.md) 为准；生产启用必须完成

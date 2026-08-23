@@ -107,7 +107,6 @@ describe('client service wrappers', () => {
     const customSsoBody = {
       mode: CustomSsoClientMode.Gateway,
       validRedirectUrls: ['https://app.example.com/callback'],
-      subjectClaimCatalogVersion: 2,
       subjectClaims: [SubjectClaim.SubjectIdentifier],
       orcas: { enabled: false },
     } as Parameters<typeof configureClientCustomSso>[1];

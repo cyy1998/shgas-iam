@@ -5,15 +5,9 @@ const ClientProtocolCutoverTargetSchema = z.object({
   ownerStatus: z.enum(["pending", "confirmed"]),
 }).strict();
 
-const CustomSsoClientProtocolCutoverTargetSchema = z.object({
-  expectedEpoch: z.number().int().nonnegative(),
-  ownerStatus: z.enum(["pending", "confirmed"]),
-  targetCatalogVersion: z.literal(2),
-}).strict();
-
 const ClientProtocolCutoverManifestEntrySchema = z.object({
   clientCode: z.string().min(1).max(64),
-  customSso: CustomSsoClientProtocolCutoverTargetSchema.nullable(),
+  customSso: ClientProtocolCutoverTargetSchema.nullable(),
   oidc: ClientProtocolCutoverTargetSchema.nullable(),
 }).strict().refine(
   value => value.customSso !== null || value.oidc !== null,
@@ -46,7 +40,6 @@ export interface ClientProtocolCutoverTarget {
   protocol: "custom-sso" | "oidc";
   expectedEpoch: number;
   ownerConfirmed: boolean;
-  targetCatalogVersion?: 2;
 }
 
 export function clientProtocolCutoverTargets(
@@ -60,7 +53,6 @@ export function clientProtocolCutoverTargets(
           protocol: "custom-sso" as const,
           expectedEpoch: client.customSso.expectedEpoch,
           ownerConfirmed: client.customSso.ownerStatus === "confirmed",
-          targetCatalogVersion: client.customSso.targetCatalogVersion,
         }]),
     ...(client.oidc === null
       ? []

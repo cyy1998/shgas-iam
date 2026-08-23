@@ -90,10 +90,7 @@ function parseValidCustomSsoConfig(input: unknown) {
   if (!result.success) {
     throw new CustomSsoClientConfigurationError(result.error.issues[0]?.message);
   }
-  return customSsoClientConfigSchema.parse({
-    ...result.data,
-    subjectClaimCatalogVersion: 2,
-  });
+  return customSsoClientConfigSchema.parse(result.data);
 }
 
 function parseStoredCustomSsoConfig(input: unknown) {
@@ -399,7 +396,6 @@ export function createClientService(deps: AdminClientServiceDeps) {
           {
             mode: customSsoConfig.mode,
             validRedirectUrls: customSsoConfig.validRedirectUrls,
-            subjectClaimCatalogVersion: customSsoConfig.subjectClaimCatalogVersion,
             subjectClaims: customSsoConfig.subjectClaims,
             orcas: customSsoConfig.mode === CustomSsoClientMode.Gateway
               ? customSsoConfig.orcas

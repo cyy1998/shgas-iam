@@ -12,7 +12,6 @@ const client = {
   customSsoEnabled: true,
   customSsoConfig: {
     mode: CustomSsoClientMode.Independent,
-    subjectClaimCatalogVersion: 2,
     subjectClaims: ["subjectIdentifier"],
     validRedirectUrls: ["https://app.example.com/callback"],
     callbackEndpoint: "https://app.example.com/sso/callback",

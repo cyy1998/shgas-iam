@@ -39,7 +39,6 @@ function runtimeClient(
     customSsoConfig: {
       mode: CustomSsoClientMode.Gateway,
       orcas: { enabled: true },
-      subjectClaimCatalogVersion: 2,
       subjectClaims: [...subjectClaims],
       validRedirectUrls: ["https://gateway.example.com/callback"],
     },
@@ -459,7 +458,6 @@ describe("Custom SSO subject delivery", () => {
     const client = runtimeClient([SubjectClaim.SubjectIdentifier], {
       customSsoConfig: {
         mode: CustomSsoClientMode.Independent,
-        subjectClaimCatalogVersion: 2,
         subjectClaims: [SubjectClaim.SubjectIdentifier],
         validRedirectUrls: ["https://app.example.com/callback"],
         callbackEndpoint: "https://app.example.com/callback",

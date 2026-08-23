@@ -35,7 +35,6 @@ const customSsoSubjectClaimsSchema = z.array(z.enum(SUBJECT_CLAIMS))
 
 const customSsoCommonConfigFields = {
   validRedirectUrls: z.array(z.string().min(1)).min(1),
-  subjectClaimCatalogVersion: z.literal(2),
   subjectClaims: customSsoSubjectClaimsSchema,
 };
 
@@ -192,18 +191,19 @@ export const clients = snakeCase.table("client", {
         AND jsonb_typeof(${table.customSsoConfig}) = 'object'
         AND jsonb_typeof(${table.customSsoConfig}->'validRedirectUrls') = 'array'
         AND jsonb_array_length(${table.customSsoConfig}->'validRedirectUrls') > 0
+        AND NOT jsonb_path_exists(
+          ${table.customSsoConfig},
+          '$.validRedirectUrls[*] ? (@.type() != "string" || @ == "")'
+        )
         AND jsonb_typeof(${table.customSsoConfig}->'subjectClaims') = 'array'
         AND jsonb_array_length(${table.customSsoConfig}->'subjectClaims') > 0
         AND ${table.customSsoConfig}->'subjectClaims' @> '["subjectIdentifier"]'::jsonb
-        AND jsonb_typeof(${table.customSsoConfig}->'subjectClaimCatalogVersion') = 'number'
-        AND ${table.customSsoConfig}->>'subjectClaimCatalogVersion' = '2'
         AND (
           (
             ${table.customSsoConfig}->>'mode' = 'gateway'
             AND ${table.customSsoSecretHash} IS NULL
             AND (${table.customSsoConfig} - ARRAY[
               'validRedirectUrls',
-              'subjectClaimCatalogVersion',
               'subjectClaims',
               'mode',
               'orcas'
@@ -218,7 +218,6 @@ export const clients = snakeCase.table("client", {
             AND ${table.customSsoSecretHash} IS NOT NULL
             AND (${table.customSsoConfig} - ARRAY[
               'validRedirectUrls',
-              'subjectClaimCatalogVersion',
               'subjectClaims',
               'mode',
               'callbackEndpoint',
@@ -226,8 +225,10 @@ export const clients = snakeCase.table("client", {
             ]::text[]) = '{}'::jsonb
             AND jsonb_typeof(${table.customSsoConfig}->'callbackEndpoint') = 'string'
             AND ${table.customSsoConfig}->>'callbackEndpoint' <> ''
+            AND ${table.customSsoConfig}->>'callbackEndpoint' ~ '^[A-Za-z][A-Za-z0-9+.-]*:[^[:space:]]+$'
             AND jsonb_typeof(${table.customSsoConfig}->'logoutEndpoint') = 'string'
             AND ${table.customSsoConfig}->>'logoutEndpoint' <> ''
+            AND ${table.customSsoConfig}->>'logoutEndpoint' ~ '^[A-Za-z][A-Za-z0-9+.-]*:[^[:space:]]+$'
           )
         )
       )

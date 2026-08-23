@@ -5,7 +5,6 @@ import { clientProtocolCutoverTargets } from "@iam/domain/client";
 
 export interface ClientProtocolEpochInventoryRecord {
   clientCode: string;
-  customSsoCatalogVersion: 1 | 2 | null;
   customSsoConfigured: boolean;
   customSsoEpoch: number;
   oidcConfigured: boolean;
@@ -15,7 +14,6 @@ export interface ClientProtocolEpochInventoryRecord {
 export interface ClientProtocolEpochTarget {
   clientCode: string;
   customSsoExpectedEpoch?: number;
-  customSsoTargetCatalogVersion?: 2;
   oidcExpectedEpoch?: number;
 }
 
@@ -42,8 +40,7 @@ export interface ClientProtocolEpochCutoverDeps {
 
 type Protocol = "custom-sso" | "oidc";
 type FailureReason
-  = | "catalog-version-mismatch"
-    | "epoch-fence-mismatch"
+  = | "epoch-fence-mismatch"
     | "epoch-not-advanced"
     | "manifest-client-not-found"
     | "manifest-missing-client"
@@ -88,7 +85,6 @@ export function createClientProtocolEpochCutover(
         continue;
       }
       inspectProtocol({
-        catalogVersion: record.customSsoCatalogVersion,
         clientCode: client.clientCode,
         configured: record.customSsoConfigured,
         currentEpoch: record.customSsoEpoch,
@@ -124,7 +120,6 @@ export function createClientProtocolEpochCutover(
     };
 
     function inspectProtocol(input: {
-      catalogVersion?: 1 | 2 | null;
       clientCode: string;
       configured: boolean;
       currentEpoch: number;
@@ -133,7 +128,6 @@ export function createClientProtocolEpochCutover(
       target: {
         expectedEpoch: number;
         ownerStatus: "confirmed" | "pending";
-        targetCatalogVersion?: 2;
       } | null;
     }) {
       if (input.configured !== (input.target !== null)) {
@@ -152,19 +146,6 @@ export function createClientProtocolEpochCutover(
           clientCode: input.clientCode,
           protocol: input.protocol,
           reason: "owner-unconfirmed",
-        });
-      }
-      if (
-        input.protocol === "custom-sso"
-        && input.catalogVersion !== input.target.targetCatalogVersion
-        && !(input.phase === "before"
-          && input.currentEpoch === input.target.expectedEpoch
-          && input.catalogVersion === 1)
-      ) {
-        failures.push({
-          clientCode: input.clientCode,
-          protocol: input.protocol,
-          reason: "catalog-version-mismatch",
         });
       }
       if (input.currentEpoch === input.target.expectedEpoch) {
@@ -229,12 +210,12 @@ export function createClientProtocolEpochCutover(
       const epochTarget = targetsByClient.get(target.clientCode) ?? {
         clientCode: target.clientCode,
       };
-      if (target.protocol === "custom-sso")
+      if (target.protocol === "custom-sso") {
         epochTarget.customSsoExpectedEpoch = target.expectedEpoch;
-      if (target.protocol === "custom-sso")
-        epochTarget.customSsoTargetCatalogVersion = target.targetCatalogVersion;
-      else
+      }
+      else {
         epochTarget.oidcExpectedEpoch = target.expectedEpoch;
+      }
       targetsByClient.set(target.clientCode, epochTarget);
     }
     const runtimeCoordinations: Array<Awaited<ReturnType<

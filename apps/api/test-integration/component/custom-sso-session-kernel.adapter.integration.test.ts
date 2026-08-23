@@ -284,7 +284,6 @@ const client = {
 const independentClient = {
   clientCode: "independent",
   configVersion: 7,
-  subjectClaimCatalogVersion: 2 as const,
   subjectClaims: [SubjectClaim.SubjectIdentifier],
 };
 
@@ -297,7 +296,6 @@ const independentRuntimeClient = {
   customSsoEnabled: true,
   customSsoConfig: {
     mode: CustomSsoClientMode.Independent,
-    subjectClaimCatalogVersion: 2,
     subjectClaims: [SubjectClaim.SubjectIdentifier],
     validRedirectUrls: ["https://app.example.com/callback"],
     callbackEndpoint: "https://app.example.com/sso/callback",
@@ -321,7 +319,6 @@ function createGatewayRuntimeClient(
     customSsoConfig: {
       mode: CustomSsoClientMode.Gateway,
       orcas: { enabled: clientCode === "gateway-orcas" },
-      subjectClaimCatalogVersion: 2,
       subjectClaims: [SubjectClaim.SubjectIdentifier],
       validRedirectUrls: ["https://gateway.example.com"],
     },

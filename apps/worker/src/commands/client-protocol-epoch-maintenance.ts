@@ -27,7 +27,6 @@ export async function runClientProtocolEpochCommand(
 interface InventoryPort {
   readInventory: () => Promise<Array<{
     clientCode: string;
-    customSsoCatalogVersion: 1 | 2 | null;
     customSsoConfigured: boolean;
     customSsoEpoch: number;
     oidcConfigured: boolean;

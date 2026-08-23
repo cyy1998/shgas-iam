@@ -215,7 +215,6 @@ describe("client Protocol artifact cleanup real Redis contract", () => {
         customSso: {
           expectedEpoch: 3,
           ownerStatus: "confirmed" as const,
-          targetCatalogVersion: 2 as const,
         },
         oidc: { expectedEpoch: 7, ownerStatus: "confirmed" as const },
       }],

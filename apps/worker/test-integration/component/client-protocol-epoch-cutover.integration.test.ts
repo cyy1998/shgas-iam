@@ -7,7 +7,7 @@ const manifest: ClientProtocolCutoverManifest = {
   version: 2,
   clients: [{
     clientCode: "portal",
-    customSso: { expectedEpoch: 3, ownerStatus: "confirmed", targetCatalogVersion: 2 },
+    customSso: { expectedEpoch: 3, ownerStatus: "confirmed" },
     oidc: { expectedEpoch: 7, ownerStatus: "confirmed" },
   }],
 };
@@ -39,16 +39,15 @@ describe("Client Protocol epoch cutover", () => {
 
   test("advances each configured protocol once and safely finishes a partial retry", async () => {
     const advanceEpochs = mock(async (targets, afterLockBeforeWrite) => {
+      expect(targets[0]).not.toHaveProperty("customSsoTargetCatalogVersion");
       expect(targets).toEqual([{
         clientCode: "portal",
         customSsoExpectedEpoch: 3,
-        customSsoTargetCatalogVersion: 2,
         oidcExpectedEpoch: 7,
       }]);
       await afterLockBeforeWrite();
       return [{
         clientCode: "portal",
-        customSsoCatalogVersion: 2 as const,
         customSsoConfigured: true,
         customSsoEpoch: 4,
         oidcConfigured: true,
@@ -85,7 +84,6 @@ describe("Client Protocol epoch cutover", () => {
 
     const report = await cutover.verify(manifest, [{
       clientCode: "portal",
-      customSsoCatalogVersion: 2,
       customSsoConfigured: true,
       customSsoEpoch: 4,
       oidcConfigured: true,
@@ -289,7 +287,6 @@ function createLifecycleRuntimeCache(events: string[]) {
 function appliedInventory() {
   return [{
     clientCode: "portal",
-    customSsoCatalogVersion: 2 as const,
     customSsoConfigured: true,
     customSsoEpoch: 4,
     oidcConfigured: true,

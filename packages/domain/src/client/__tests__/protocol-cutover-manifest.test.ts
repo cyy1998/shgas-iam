@@ -5,19 +5,19 @@ import {
 } from "../protocol-cutover-manifest";
 
 describe("Client Protocol cutover manifest", () => {
-  test("requires an explicit Catalog V2 target and owner decision for every Custom SSO client", () => {
+  test("requires an explicit owner decision without persisting a Catalog target", () => {
     const manifest = ClientProtocolCutoverManifestSchema.parse({
       version: 2,
       clients: [{
         clientCode: "portal",
-        customSso: { expectedEpoch: 3, ownerStatus: "confirmed", targetCatalogVersion: 2 },
+        customSso: { expectedEpoch: 3, ownerStatus: "confirmed" },
         oidc: { expectedEpoch: 7, ownerStatus: "pending" },
       }],
     });
 
     expect(manifest.clients[0]).toEqual({
       clientCode: "portal",
-      customSso: { expectedEpoch: 3, ownerStatus: "confirmed", targetCatalogVersion: 2 },
+      customSso: { expectedEpoch: 3, ownerStatus: "confirmed" },
       oidc: { expectedEpoch: 7, ownerStatus: "pending" },
     });
     expect(ClientProtocolCutoverManifestSchema.safeParse({
@@ -28,15 +28,7 @@ describe("Client Protocol cutover manifest", () => {
       version: 2,
       clients: [{
         clientCode: "portal",
-        customSso: { expectedEpoch: 3, ownerStatus: "confirmed" },
-        oidc: null,
-      }],
-    }).success).toBe(false);
-    expect(ClientProtocolCutoverManifestSchema.safeParse({
-      version: 2,
-      clients: [{
-        clientCode: "portal",
-        customSso: { expectedEpoch: 3, ownerStatus: "confirmed", targetCatalogVersion: 1 },
+        customSso: { expectedEpoch: 3, ownerStatus: "confirmed", targetCatalogVersion: 2 },
         oidc: null,
       }],
     }).success).toBe(false);
@@ -47,7 +39,7 @@ describe("Client Protocol cutover manifest", () => {
       version: 2,
       clients: [{
         clientCode: "portal",
-        customSso: { expectedEpoch: 3, ownerStatus: "confirmed", targetCatalogVersion: 2 },
+        customSso: { expectedEpoch: 3, ownerStatus: "confirmed" },
         oidc: { expectedEpoch: 7, ownerStatus: "pending" },
       }],
     });
@@ -57,7 +49,6 @@ describe("Client Protocol cutover manifest", () => {
       protocol: "custom-sso",
       expectedEpoch: 3,
       ownerConfirmed: true,
-      targetCatalogVersion: 2,
     }, {
       clientCode: "portal",
       protocol: "oidc",

@@ -86,7 +86,6 @@ describe("Subject Projection Client cutover PostgreSQL contract", () => {
         config: {
           mode: CustomSsoClientMode.Gateway,
           validRedirectUrls: ["https://disabled.example.com/sso/*"],
-          subjectClaimCatalogVersion: 2,
           subjectClaims: [SubjectClaim.SubjectIdentifier],
           orcas: { enabled: false },
         },

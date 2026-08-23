@@ -273,7 +273,6 @@ function runtimeClient(
     customSsoConfig: {
       mode: CustomSsoClientMode.Gateway,
       orcas: { enabled: false },
-      subjectClaimCatalogVersion: 2,
       subjectClaims: [SubjectClaim.SubjectIdentifier],
       validRedirectUrls: ["https://gateway.example.com/*"],
     },

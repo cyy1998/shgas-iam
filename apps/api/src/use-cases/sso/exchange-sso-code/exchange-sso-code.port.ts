@@ -5,7 +5,6 @@ import type { ExchangeSsoCodeOptions } from "./exchange-sso-code.type";
 export interface AuthenticatedIndependentClient {
   readonly clientCode: string;
   readonly configVersion: number;
-  readonly subjectClaimCatalogVersion: 2;
   readonly subjectClaims: readonly SubjectClaimName[];
 }
 

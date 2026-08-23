@@ -838,7 +838,6 @@ describe("API explicit external entry", () => {
             ${transaction.json({
               mode: "independent",
               validRedirectUrls: [redirectUri],
-              subjectClaimCatalogVersion: 2,
               subjectClaims: [
                 "subjectIdentifier",
                 "profile:username",
@@ -877,7 +876,6 @@ describe("API explicit external entry", () => {
             ${transaction.json({
               mode: CustomSsoClientMode.Gateway,
               orcas: { enabled: false },
-              subjectClaimCatalogVersion: 2,
               subjectClaims: [
                 SubjectClaim.SubjectIdentifier,
                 SubjectClaim.ProfileUsername,

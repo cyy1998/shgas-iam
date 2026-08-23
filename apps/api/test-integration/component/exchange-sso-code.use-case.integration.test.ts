@@ -5,7 +5,6 @@ import { expect, mock, test } from "bun:test";
 const authenticatedClient = {
   clientCode: "independent",
   configVersion: 7,
-  subjectClaimCatalogVersion: 2 as const,
   subjectClaims: [SubjectClaim.SubjectIdentifier],
 };
 

@@ -6,7 +6,7 @@ const manifest: ClientProtocolCutoverManifest = {
   version: 2,
   clients: [{
     clientCode: "portal",
-    customSso: { expectedEpoch: 3, ownerStatus: "confirmed", targetCatalogVersion: 2 },
+    customSso: { expectedEpoch: 3, ownerStatus: "confirmed" },
     oidc: { expectedEpoch: 7, ownerStatus: "confirmed" },
   }],
 };

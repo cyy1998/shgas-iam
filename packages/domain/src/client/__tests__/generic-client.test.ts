@@ -39,7 +39,6 @@ test("generic Client runtime exposes only the protocol-neutral storage projectio
     customSsoConfig: {
       mode: CustomSsoClientMode.Gateway,
       validRedirectUrls: ["https://portal.example.com/*"],
-      subjectClaimCatalogVersion: 2,
       subjectClaims: [SubjectClaim.SubjectIdentifier],
       orcas: { enabled: false },
     },

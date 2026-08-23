@@ -41,7 +41,6 @@ describe("Client Protocol epoch cutover PostgreSQL contract", () => {
       customSsoConfig: {
         mode: CustomSsoClientMode.Gateway,
         validRedirectUrls: ["https://portal.example.com/sso/*"],
-        subjectClaimCatalogVersion: 2,
         subjectClaims: [SubjectClaim.SubjectIdentifier],
         orcas: { enabled: false },
       },
@@ -64,7 +63,6 @@ describe("Client Protocol epoch cutover PostgreSQL contract", () => {
       customSsoConfig: {
         mode: CustomSsoClientMode.Gateway,
         validRedirectUrls: ["https://deleted.example.com/sso/*"],
-        subjectClaimCatalogVersion: 2,
         subjectClaims: [SubjectClaim.SubjectIdentifier],
         orcas: { enabled: false },
       },
@@ -84,7 +82,7 @@ describe("Client Protocol epoch cutover PostgreSQL contract", () => {
       version: 2,
       clients: [{
         clientCode: "portal",
-        customSso: { expectedEpoch: 3, ownerStatus: "confirmed", targetCatalogVersion: 2 },
+        customSso: { expectedEpoch: 3, ownerStatus: "confirmed" },
         oidc: { expectedEpoch: 7, ownerStatus: "confirmed" },
       }],
     });
@@ -102,8 +100,21 @@ describe("Client Protocol epoch cutover PostgreSQL contract", () => {
     expect(record).toEqual({ customSsoEpoch: 4, oidcEpoch: 8 });
   });
 
-  test("upgrades an approved Catalog V1 configuration and advances its epoch exactly once", async () => {
-    await insertLegacyCustomSsoClient("legacy", 3);
+  test("advances a migrated Custom SSO configuration exactly once across cache invalidation retry", async () => {
+    await harness!.db.insert(clients).values({
+      clientCode: "portal",
+      clientName: "Portal",
+      clientSecret: "legacy-secret",
+      extAttributes: {},
+      customSsoEnabled: true,
+      customSsoConfig: {
+        mode: CustomSsoClientMode.Gateway,
+        validRedirectUrls: ["https://portal.example.com/sso/*"],
+        subjectClaims: [SubjectClaim.SubjectIdentifier],
+        orcas: { enabled: false },
+      },
+      customSsoConfigVersion: 3,
+    });
     const invalidatedClients: string[] = [];
     let invalidationShouldFail = true;
     const runtimeCache = createRuntimeCache(invalidatedClients);
@@ -134,8 +145,8 @@ describe("Client Protocol epoch cutover PostgreSQL contract", () => {
     const manifest = ClientProtocolCutoverManifestSchema.parse({
       version: 2,
       clients: [{
-        clientCode: "legacy",
-        customSso: { expectedEpoch: 3, ownerStatus: "confirmed", targetCatalogVersion: 2 },
+        clientCode: "portal",
+        customSso: { expectedEpoch: 3, ownerStatus: "confirmed" },
         oidc: null,
       }],
     });
@@ -145,12 +156,11 @@ describe("Client Protocol epoch cutover PostgreSQL contract", () => {
     const [committedRecord] = await harness!.db.select({
       customSsoConfig: clients.customSsoConfig,
       customSsoEpoch: clients.customSsoConfigVersion,
-    }).from(clients).where(eq(clients.clientCode, "legacy"));
+    }).from(clients).where(eq(clients.clientCode, "portal"));
     expect(committedRecord).toEqual({
       customSsoConfig: {
         mode: CustomSsoClientMode.Gateway,
-        validRedirectUrls: ["https://legacy.example.com/sso/*"],
-        subjectClaimCatalogVersion: 2,
+        validRedirectUrls: ["https://portal.example.com/sso/*"],
         subjectClaims: [SubjectClaim.SubjectIdentifier],
         orcas: { enabled: false },
       },
@@ -164,12 +174,12 @@ describe("Client Protocol epoch cutover PostgreSQL contract", () => {
     });
     const [retriedRecord] = await harness!.db.select({
       customSsoEpoch: clients.customSsoConfigVersion,
-    }).from(clients).where(eq(clients.clientCode, "legacy"));
+    }).from(clients).where(eq(clients.clientCode, "portal"));
     expect(retriedRecord).toEqual({ customSsoEpoch: 4 });
-    expect(invalidatedClients).toEqual(["legacy"]);
+    expect(invalidatedClients).toEqual(["portal"]);
   });
 
-  test("keeps an already-applied Catalog V2 target unchanged and retries cache invalidation", async () => {
+  test("keeps an already-applied epoch unchanged and retries cache invalidation", async () => {
     const originalUpdateTime = new Date("2026-08-01T00:00:00.000Z");
     await harness!.db.insert(clients).values({
       clientCode: "applied",
@@ -181,7 +191,6 @@ describe("Client Protocol epoch cutover PostgreSQL contract", () => {
       customSsoConfig: {
         mode: CustomSsoClientMode.Gateway,
         validRedirectUrls: ["https://applied.example.com/sso/*"],
-        subjectClaimCatalogVersion: 2,
         subjectClaims: [SubjectClaim.SubjectIdentifier],
         orcas: { enabled: false },
       },
@@ -202,7 +211,7 @@ describe("Client Protocol epoch cutover PostgreSQL contract", () => {
       version: 2,
       clients: [{
         clientCode: "applied",
-        customSso: { expectedEpoch: 3, ownerStatus: "confirmed", targetCatalogVersion: 2 },
+        customSso: { expectedEpoch: 3, ownerStatus: "confirmed" },
         oidc: null,
       }],
     });
@@ -224,51 +233,6 @@ describe("Client Protocol epoch cutover PostgreSQL contract", () => {
     expect(invalidatedClients).toEqual(["applied"]);
   });
 
-  test("rejects an expected-plus-one epoch that still has a Catalog V1 configuration", async () => {
-    await insertLegacyCustomSsoClient("bypassed", 4);
-    const invalidatedClients: string[] = [];
-    const cutover = createClientProtocolEpochCutover({
-      runtimeCache: createRuntimeCache(invalidatedClients),
-      uow: createUnitOfWork({
-        db: harness!.db,
-        logger: testLogger,
-        createTxPorts: tx => ({
-          clients: createClientProtocolEpochCutoverRepository(tx),
-        }),
-      }),
-    });
-    const manifest = ClientProtocolCutoverManifestSchema.parse({
-      version: 2,
-      clients: [{
-        clientCode: "bypassed",
-        customSso: { expectedEpoch: 3, ownerStatus: "confirmed", targetCatalogVersion: 2 },
-        oidc: null,
-      }],
-    });
-
-    let failure: unknown;
-    try {
-      await cutover.apply(manifest);
-    }
-    catch (error) {
-      failure = error;
-    }
-    expect(failure).toBeInstanceOf(Error);
-    expect((failure as Error).message).toBe(
-      "Client Protocol epoch batch was not applied completely",
-    );
-
-    const [record] = await harness!.sql<{ catalogVersion: number; customSsoEpoch: number }[]>`
-      SELECT
-        (custom_sso_config->>'subjectClaimCatalogVersion')::integer AS "catalogVersion",
-        custom_sso_config_version AS "customSsoEpoch"
-      FROM client
-      WHERE client_code = 'bypassed'
-    `;
-    expect(record).toEqual({ catalogVersion: 1, customSsoEpoch: 4 });
-    expect(invalidatedClients).toEqual([]);
-  });
-
   test("does not partially mutate when any epoch fence changed concurrently", async () => {
     await harness!.db.insert(clients).values({
       clientCode: "portal",
@@ -278,7 +242,6 @@ describe("Client Protocol epoch cutover PostgreSQL contract", () => {
       customSsoConfig: {
         mode: CustomSsoClientMode.Gateway,
         validRedirectUrls: ["https://portal.example.com/sso/*"],
-        subjectClaimCatalogVersion: 2,
         subjectClaims: [SubjectClaim.SubjectIdentifier],
         orcas: { enabled: false },
       },
@@ -334,49 +297,4 @@ function createRuntimeCache(completedClients: string[] = []) {
       };
     },
   };
-}
-
-async function insertLegacyCustomSsoClient(clientCode: string, epoch: number) {
-  await harness!.sql.unsafe(`
-    ALTER TABLE client
-      DROP CONSTRAINT client_custom_sso_state_check,
-      ADD CONSTRAINT client_custom_sso_state_check CHECK (
-        custom_sso_config IS NULL
-        OR custom_sso_config->>'subjectClaimCatalogVersion' = '1'
-      )
-  `);
-  const migration = new URL(
-    "../../../../packages/db/src/migrations/20260821080203_tearful_microchip/migration.sql",
-    import.meta.url,
-  );
-  try {
-    await harness!.sql`
-      INSERT INTO client (
-        client_code,
-        client_name,
-        client_secret,
-        ext_attributes,
-        custom_sso_enabled,
-        custom_sso_config,
-        custom_sso_config_version
-      ) VALUES (
-        ${clientCode},
-        'Legacy',
-        'legacy-secret',
-        '{}'::jsonb,
-        true,
-        ${JSON.stringify({
-          mode: CustomSsoClientMode.Gateway,
-          validRedirectUrls: [`https://${clientCode}.example.com/sso/*`],
-          subjectClaimCatalogVersion: 1,
-          subjectClaims: [SubjectClaim.SubjectIdentifier],
-          orcas: { enabled: false },
-        })}::jsonb,
-        ${epoch}
-      )
-    `;
-  }
-  finally {
-    await harness!.sql.file(migration, { cache: false });
-  }
 }

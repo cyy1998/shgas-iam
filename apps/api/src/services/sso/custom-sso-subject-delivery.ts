@@ -14,6 +14,7 @@ import {
 import { AuthzUnauthorizedError } from "@iam/api-core/errors/AuthzUnauthorizedError";
 import {
   parseSubjectClaimSelection,
+  SUBJECT_CLAIM_CATALOG,
 } from "@iam/client-subject-projection";
 import { resolveCustomSsoSubjectProjection } from "@iam/client-subject-projection/custom-sso";
 import {
@@ -75,7 +76,7 @@ export function createCustomSsoSubjectDelivery(
   ) {
     const { client, config } = await loadCurrentClient(context);
     const selection = parseSubjectClaimSelection({
-      catalogVersion: config.subjectClaimCatalogVersion,
+      catalogVersion: SUBJECT_CLAIM_CATALOG.version,
       claims: [...config.subjectClaims],
     });
     const wire = await resolveCustomSsoSubjectProjection(deps.projection, {
@@ -154,7 +155,7 @@ export function createCustomSsoSubjectDelivery(
         || claim === SubjectClaim.ProfileName,
     );
     const selection = parseSubjectClaimSelection({
-      catalogVersion: config.subjectClaimCatalogVersion,
+      catalogVersion: SUBJECT_CLAIM_CATALOG.version,
       claims: [...claims],
     });
     const projection = await deps.projection.resolve({

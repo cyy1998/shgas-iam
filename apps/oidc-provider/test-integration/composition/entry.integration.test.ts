@@ -405,7 +405,6 @@ async function createCustomSsoIsolationSentinel(input: {
   await configurationOwner.updateClientCustomSsoByCode(input.clientCode, {
     customSsoConfig: {
       ...customSsoIsolationConfig,
-      subjectClaimCatalogVersion: 2,
     },
     customSsoEnabled: true,
     customSsoSecretHash,
@@ -729,7 +728,6 @@ describe("oIDC provider explicit external entry", () => {
         configuration: {
           customSsoConfig: {
             ...customSsoIsolationConfig,
-            subjectClaimCatalogVersion: 2,
           },
           customSsoConfigVersion: 1,
           customSsoEnabled: true,
@@ -739,7 +737,6 @@ describe("oIDC provider explicit external entry", () => {
           clientCode: clientId,
           customSsoConfig: {
             ...customSsoIsolationConfig,
-            subjectClaimCatalogVersion: 2,
           },
           customSsoConfigVersion: 1,
           customSsoEnabled: true,

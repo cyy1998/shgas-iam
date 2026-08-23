@@ -45,16 +45,6 @@ function client(overrides: Record<string, unknown> = {}) {
     ...overrides,
   };
 
-  if (
-    record.customSsoConfig !== null
-    && typeof record.customSsoConfig === "object"
-    && !("subjectClaimCatalogVersion" in record.customSsoConfig)
-  ) {
-    record.customSsoConfig = Object.assign({}, record.customSsoConfig, {
-      subjectClaimCatalogVersion: 2,
-    });
-  }
-
   return record;
 }
 
@@ -438,10 +428,7 @@ describe("createClientService", () => {
     expect(deps.passwordHasher.hashSecret).toHaveBeenCalledWith("iam_sso_test_secret");
     expect(tx.clientRepository.updateClientCustomSsoByCode).toHaveBeenCalledWith("portal", {
       customSsoEnabled: false,
-      customSsoConfig: {
-        ...input,
-        subjectClaimCatalogVersion: 2,
-      },
+      customSsoConfig: input,
       customSsoSecretHash: "hashed-secret:iam_sso_test_secret",
     });
     const [audit] = tx.auditService.recordAuditLog.mock.calls[0] ?? [];
@@ -454,6 +441,7 @@ describe("createClientService", () => {
     });
     expect(JSON.stringify(audit)).not.toContain("iam_sso_test_secret");
     expect(JSON.stringify(audit)).not.toContain("hashed-secret");
+    expect(JSON.stringify(audit)).not.toContain("subjectClaimCatalogVersion");
     expect(deps.clientCache.invalidateClient).toHaveBeenCalledWith(expect.objectContaining({
       clientCode: "portal",
     }));
@@ -627,10 +615,7 @@ describe("createClientService", () => {
     expect(independentToGateway.deps.random.customSsoClientSecret).not.toHaveBeenCalled();
     expect(independentToGateway.tx.clientRepository.updateClientCustomSsoByCode).toHaveBeenCalledWith("portal", {
       customSsoEnabled: false,
-      customSsoConfig: {
-        ...gateway,
-        subjectClaimCatalogVersion: 2,
-      },
+      customSsoConfig: gateway,
       customSsoSecretHash: null,
     });
 
@@ -658,10 +643,7 @@ describe("createClientService", () => {
     expect(independentToIndependent.deps.random.customSsoClientSecret).not.toHaveBeenCalled();
     expect(independentToIndependent.tx.clientRepository.updateClientCustomSsoByCode).toHaveBeenCalledWith("portal", {
       customSsoEnabled: false,
-      customSsoConfig: {
-        ...changedIndependent,
-        subjectClaimCatalogVersion: 2,
-      },
+      customSsoConfig: changedIndependent,
       customSsoSecretHash: "preserved-hash",
     });
     expect(JSON.stringify(independentResult)).not.toContain("preserved-hash");

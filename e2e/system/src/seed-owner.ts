@@ -85,7 +85,6 @@ export function createProductionE2EScenarioOwner(
         customSsoConfig: {
           mode: CustomSsoClientMode.Gateway,
           validRedirectUrls: [scenario.adminRedirectUri],
-          subjectClaimCatalogVersion: 2,
           subjectClaims: [
             SubjectClaim.SubjectIdentifier,
             SubjectClaim.ProfileUsername,

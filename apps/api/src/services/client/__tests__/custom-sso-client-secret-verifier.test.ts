@@ -18,7 +18,6 @@ const activeIndependentClient: CustomSsoClientSecretRecord = {
   customSsoConfig: {
     mode: CustomSsoClientMode.Independent,
     validRedirectUrls: ["https://client.example/callback"],
-    subjectClaimCatalogVersion: 2,
     subjectClaims: [SubjectClaim.SubjectIdentifier],
     callbackEndpoint: "https://client.example/callback",
     logoutEndpoint: "https://client.example/logout",
@@ -30,7 +29,6 @@ const activeIndependentClient: CustomSsoClientSecretRecord = {
 const gatewayConfig: NonNullable<CustomSsoClientSecretRecord["customSsoConfig"]> = {
   mode: CustomSsoClientMode.Gateway,
   validRedirectUrls: ["https://client.example/callback"],
-  subjectClaimCatalogVersion: 2,
   subjectClaims: [SubjectClaim.SubjectIdentifier],
   orcas: { enabled: false },
 };
@@ -56,14 +54,13 @@ describe("Custom SSO client secret verifier", () => {
     await expect(
       verifier.authenticate("independent-client", "Wrong123!"),
     ).resolves.toBeNull();
-    await expect(
-      verifier.authenticate("independent-client", "Existing123!"),
-    ).resolves.toEqual({
+    const authenticated = await verifier.authenticate("independent-client", "Existing123!");
+    expect(authenticated).toEqual({
       clientCode: "independent-client",
       configVersion: 3,
-      subjectClaimCatalogVersion: 2,
       subjectClaims: [SubjectClaim.SubjectIdentifier],
     });
+    expect(authenticated).not.toHaveProperty("subjectClaimCatalogVersion");
     expect(
       JSON.stringify(await verifier.authenticate("independent-client", "Existing123!")),
     ).not.toContain("customSsoSecretHash");
@@ -84,7 +81,6 @@ describe("Custom SSO client secret verifier", () => {
     ).resolves.toEqual({
       clientCode: "independent-client",
       configVersion: 3,
-      subjectClaimCatalogVersion: 2,
       subjectClaims: [SubjectClaim.SubjectIdentifier],
     });
   });
