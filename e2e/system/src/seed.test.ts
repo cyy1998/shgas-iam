@@ -12,6 +12,13 @@ describe("E2E scenario seed", () => {
     const owner: E2EScenarioOwner = {
       async establish(input) {
         established.push(input);
+        return {
+          adminMixedRoleAssignmentId: 45,
+          hiddenResponsibilityAssignmentId: 41,
+          hrSecondScopeRoleAssignmentId: 42,
+          outsideResponsibilityHolderEmploymentId: 43,
+          responsibilityHolderEmploymentId: 44,
+        };
       },
       async readBack(references) {
         return completeReadBack(references);
@@ -46,10 +53,25 @@ describe("E2E scenario seed", () => {
         "e2e-holder-org-123000000-a1b2c3d4",
       responsibilityTargetOrganizationCode:
         "e2e-resp-target-123000000-a1b2c3d4",
+      hrSecondScopeRootOrganizationCode:
+        "e2e-hr-root-123000000-a1b2c3d4",
+      hrResponsibilityTargetOrganizationCode:
+        "e2e-hr-target-123000000-a1b2c3d4",
       positionCode: "e2e-pos-123000000-a1b2c3d4",
       globalPositionCode: "e2e-global-pos-123000000-a1b2c3d4",
       responsibilityHolderPositionCode:
         "e2e-resp-pos-123000000-a1b2c3d4",
+      outsideResponsibilityHolderPositionCode:
+        "e2e-outside-resp-pos-123000000-a1b2c3d4",
+      noScopeHrAdminSubjectIdentifier:
+        "3b766c91-1daa-4c09-89e4-ea87ad123456",
+      noScopeHrAdminUsername:
+        "e2e-no-scope-hr-123000000-a1b2c3d4",
+      adminMixedRoleAssignmentId: 45,
+      hiddenResponsibilityAssignmentId: 41,
+      hrSecondScopeRoleAssignmentId: 42,
+      outsideResponsibilityHolderEmploymentId: 43,
+      responsibilityHolderEmploymentId: 44,
       adminRoleCode: "iam:admin",
       hrAdminRoleCode: "iam:hr-admin",
       adminPrivilegeCode: "e2e-privilege-123000000-a1b2c3d4",
@@ -73,7 +95,7 @@ describe("E2E scenario seed", () => {
 
   test("rejects an applied result when production Subject Facts are missing", async () => {
     const owner: E2EScenarioOwner = {
-      establish: async () => undefined,
+      establish: async () => generatedReferences(),
       async readBack(references) {
         return {
           ...completeReadBack(references),
@@ -106,7 +128,7 @@ describe("E2E scenario seed", () => {
 
   test("rejects Subject Facts published for a different Dirty Version", async () => {
     const owner: E2EScenarioOwner = {
-      establish: async () => undefined,
+      establish: async () => generatedReferences(),
       async readBack(references) {
         const readBack = completeReadBack(references);
         return {
@@ -147,8 +169,15 @@ function completeReadBack(references: E2EScenarioReferences) {
     },
     delegatee: {
       active: true,
+      passwordConfigured: true,
       subjectIdentifier: references.delegateeSubjectIdentifier,
       username: references.delegateeUsername,
+    },
+    noScopeHrAdmin: {
+      active: true,
+      passwordConfigured: true,
+      subjectIdentifier: references.noScopeHrAdminSubjectIdentifier,
+      username: references.noScopeHrAdminUsername,
     },
     adminClient: {
       active: true,
@@ -183,10 +212,26 @@ function completeReadBack(references: E2EScenarioReferences) {
       active: true,
       code: "e2e-resp-target-123000000-a1b2c3d4",
     },
+    hrSecondScopeRootOrganization: {
+      active: true,
+      code: references.hrSecondScopeRootOrganizationCode,
+    },
+    hrResponsibilityTargetOrganization: {
+      active: true,
+      code: references.hrResponsibilityTargetOrganizationCode,
+    },
     position: { active: true, code: references.positionCode },
     globalPosition: { active: true, code: references.globalPositionCode },
+    outsideResponsibilityHolderPosition: {
+      active: true,
+      code: references.outsideResponsibilityHolderPositionCode,
+    },
     employment: { active: true },
     responsibilityHolderEmployment: { active: true },
+    outsideResponsibilityHolderEmployment: {
+      active: true,
+      id: references.outsideResponsibilityHolderEmploymentId,
+    },
     role: {
       active: true,
       assigned: true,
@@ -198,7 +243,16 @@ function completeReadBack(references: E2EScenarioReferences) {
       code: references.hrAdminRoleCode,
     },
     hrRoleBearingEmployment: { active: true },
+    hrSecondScopeRoleBearingEmployment: { active: true },
     hrOrdinaryEmployment: { active: true },
+    adminHasMixedRole: true,
+    noScopeHrRoleIsIneffective: true,
+    hiddenResponsibilityAssignment: {
+      active: true,
+      id: references.hiddenResponsibilityAssignmentId,
+      holderEmploymentId: references.outsideResponsibilityHolderEmploymentId,
+      targetOrganizationCode: references.hrResponsibilityTargetOrganizationCode,
+    },
     hrSubjectAccess: "enabled" as const,
     hrSubjectFacts: {
       ready: true,
@@ -208,10 +262,11 @@ function completeReadBack(references: E2EScenarioReferences) {
       organizationCodes: [
         references.responsibilityHolderOrganizationCode,
         references.responsibilityTargetOrganizationCode,
+        references.hrSecondScopeRootOrganizationCode,
       ],
       positionCodes: [
         references.positionCode,
-        references.responsibilityHolderPositionCode,
+        references.outsideResponsibilityHolderPositionCode,
       ],
       clientCodes: [references.adminClientCode],
       roleCodes: [references.hrAdminRoleCode],
@@ -234,12 +289,22 @@ function completeReadBack(references: E2EScenarioReferences) {
         "e2e-resp-pos-123000000-a1b2c3d4",
       ],
       clientCodes: [references.adminClientCode],
-      roleCodes: [references.adminRoleCode],
+      roleCodes: [references.adminRoleCode, references.hrAdminRoleCode],
       responsibilityTypeCodes: [],
       responsibilityTargetOrganizationCodes: [],
     },
     subjectProfileReady: true,
     subjectProfileVersion: "1",
     subjectProfileSchemaVersion: 3,
+  };
+}
+
+function generatedReferences() {
+  return {
+    adminMixedRoleAssignmentId: 45,
+    hiddenResponsibilityAssignmentId: 41,
+    hrSecondScopeRoleAssignmentId: 42,
+    outsideResponsibilityHolderEmploymentId: 43,
+    responsibilityHolderEmploymentId: 44,
   };
 }

@@ -1,5 +1,5 @@
-import { ADMIN_MODULE_ACCESS_KEYS } from './admin-route-registry';
 import type { AdminCapabilitySummary } from '@iam/contracts';
+import { ADMIN_MODULE_ACCESS_KEYS } from './admin-route-registry';
 
 export default function access(initialState: {
   capabilities?: AdminCapabilitySummary;
@@ -14,12 +14,14 @@ export default function access(initialState: {
         visibleModules.has(module as never),
       ]),
     ),
-    canCreateUser:
-      capabilities?.collectionActions.user.create.allowed ?? false,
+    canCreateUser: capabilities?.collectionActions.user.create.allowed ?? false,
     canCreateEmployment:
       capabilities?.collectionActions.employment.create.allowed ?? false,
     canCreateOrganizationRoot:
       capabilities?.collectionActions.organization.createRoot.allowed ?? false,
+    canCreateOrganizationResponsibility:
+      capabilities?.collectionActions.organizationResponsibility.create
+        .allowed ?? false,
     canCreatePosition:
       capabilities?.collectionActions.position.create.allowed ?? false,
     canEditPosition:

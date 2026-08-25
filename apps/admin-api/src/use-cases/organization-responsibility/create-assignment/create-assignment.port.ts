@@ -1,3 +1,4 @@
+import type { OrganizationResponsibilityReadScope } from "@admin-api/services/admin-authorization/admin-organization-responsibility-authorization.type";
 import type { AuditLogInput } from "@admin-api/services/audit/audit.context";
 import type { UnitOfWorkPort } from "@iam/api-core/uow";
 import type {
@@ -13,10 +14,20 @@ export interface CreateOrganizationResponsibilityAssignmentTransactionPorts {
       employmentId: number;
       targetOrganizationId: number;
       typeCode: OrganizationResponsibilityTypeCode;
-    }) => Promise<{ id: number; employmentId: number } | null>;
+      readScope: OrganizationResponsibilityReadScope;
+    }) => Promise<{
+      id: number;
+      employmentId: number;
+      isManageable: boolean;
+    } | null>;
     createAssignmentRecord: (
       input: OrganizationResponsibilityAssignmentRecordCreate,
     ) => Promise<{ id: number }>;
+    isEndpointPairWithinReadScope: (input: {
+      readScope: OrganizationResponsibilityReadScope;
+      holderOrganizationId: number;
+      targetOrganizationId: number;
+    }) => boolean;
   };
   auditLogWriter: {
     recordAuditLog: (input: AuditLogInput) => Promise<void>;
@@ -25,6 +36,7 @@ export interface CreateOrganizationResponsibilityAssignmentTransactionPorts {
     getEmploymentForResponsibilityById: (id: number) => Promise<{
       id: number;
       userId: number;
+      organizationId: number;
       status: EmploymentStatus;
       isDelete: boolean;
     } | null>;

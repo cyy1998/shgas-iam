@@ -8,6 +8,7 @@ export const ADMIN_AUTHORIZATION_REASON_CODES = [
   "USER_NOT_ENABLED",
   "RESOURCE_STATE_NOT_ACTIONABLE",
   "INTEGRITY_GUARD_BLOCKED",
+  "UNMANAGEABLE_RESPONSIBILITY_BLOCKED",
 ] as const;
 
 export const ADMIN_MODULE_CODES = [
@@ -51,6 +52,9 @@ export const AdminCapabilitySummarySchema = z.object({
     organization: z.object({
       createRoot: AdminAuthorizationDecisionSchema,
     }).strict(),
+    organizationResponsibility: z.object({
+      create: AdminAuthorizationDecisionSchema,
+    }).strict(),
     position: z.object({
       create: AdminAuthorizationDecisionSchema,
       edit: AdminAuthorizationDecisionSchema,
@@ -85,6 +89,12 @@ export const AdminEmploymentAllowedActionsSchema = z.object({
   clearPrimary: AdminAuthorizationDecisionSchema,
 }).strict();
 
+export const AdminOrganizationResponsibilityAllowedActionsSchema = z.object({
+  pause: AdminAuthorizationDecisionSchema,
+  resume: AdminAuthorizationDecisionSchema,
+  end: AdminAuthorizationDecisionSchema,
+}).strict();
+
 export type AdminAuthorizationReasonCode = z.infer<
   typeof AdminAuthorizationReasonCodeSchema
 >;
@@ -103,4 +113,7 @@ export type AdminOrganizationAllowedActions = z.infer<
 >;
 export type AdminEmploymentAllowedActions = z.infer<
   typeof AdminEmploymentAllowedActionsSchema
+>;
+export type AdminOrganizationResponsibilityAllowedActions = z.infer<
+  typeof AdminOrganizationResponsibilityAllowedActionsSchema
 >;

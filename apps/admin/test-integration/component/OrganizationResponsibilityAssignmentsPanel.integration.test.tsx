@@ -68,6 +68,11 @@ const assignment = {
   status: OrganizationResponsibilityAssignmentStatus.Enable,
   startTime: '2026-08-20T00:00:00.000Z',
   endTime: null,
+  allowedActions: {
+    pause: { allowed: true, reason: null },
+    resume: { allowed: false, reason: 'RESOURCE_STATE_NOT_ACTIONABLE' },
+    end: { allowed: true, reason: null },
+  },
 };
 
 describe('OrganizationResponsibilityAssignmentsPanel', () => {

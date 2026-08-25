@@ -80,9 +80,27 @@ test("publishes the HR scoped Capability Summary through REST and tRPC", async (
 
   expect(restResult).toMatchObject({
     code: 200,
-    data: { visibleModules: ["user", "organization", "position", "employment"] },
+    data: {
+      visibleModules: [
+        "user",
+        "organization",
+        "organizationResponsibility",
+        "position",
+        "employment",
+      ],
+    },
   });
-  expect(trpcResult.visibleModules).toEqual(["user", "organization", "position", "employment"]);
+  expect(trpcResult.visibleModules).toEqual([
+    "user",
+    "organization",
+    "organizationResponsibility",
+    "position",
+    "employment",
+  ]);
+  expect(trpcResult.collectionActions.organizationResponsibility.create).toEqual({
+    allowed: true,
+    reason: null,
+  });
   expect(trpcResult.collectionActions.employment.create).toEqual({
     allowed: true,
     reason: null,

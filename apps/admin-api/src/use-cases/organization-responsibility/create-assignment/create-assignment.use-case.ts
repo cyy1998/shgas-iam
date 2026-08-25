@@ -13,6 +13,7 @@ import { OrganizationNotFoundError } from "@iam/domain/organization";
 import {
   assertOrganizationResponsibilityAssignmentSlotAvailable,
   getOrganizationResponsibilityParentLifecycleViolation,
+  OrganizationResponsibilityAssignmentUnmanageableConflictError,
   OrganizationResponsibilityHolderEmploymentUnavailableError,
   OrganizationResponsibilityTargetOrganizationUnavailableError,
 } from "@iam/domain/organization-responsibility";
@@ -22,9 +23,9 @@ export function createCreateOrganizationResponsibilityAssignmentUseCase(
 ) {
   async function execute(
     input: CreateOrganizationResponsibilityAssignmentInput,
-    options: CreateOrganizationResponsibilityAssignmentOptions = {},
+    options: CreateOrganizationResponsibilityAssignmentOptions,
   ) {
-    const { auditContext } = options;
+    const { auditContext, authorization } = options;
     return await deps.uow.transaction(async (tx) => {
       const employment = await tx.employmentReader.getEmploymentForResponsibilityById(input.employmentId);
       if (employment === null)
@@ -34,6 +35,19 @@ export function createCreateOrganizationResponsibilityAssignmentUseCase(
       );
       if (targetOrganization === null)
         throw new OrganizationNotFoundError();
+      const endpointsWithinScope
+        = tx.assignmentStore.isEndpointPairWithinReadScope({
+          readScope: authorization.readScope,
+          holderOrganizationId: employment.organizationId,
+          targetOrganizationId: targetOrganization.id,
+        });
+      if (!endpointsWithinScope) {
+        authorization.denyMutation({
+          operationId: "admin.organizationResponsibility.createAssignment",
+          resourceIdentifier: "create-request",
+          reason: "RESOURCE_OUT_OF_SCOPE",
+        });
+      }
       const parentViolation = getOrganizationResponsibilityParentLifecycleViolation({
         assignmentStatus: OrganizationResponsibilityAssignmentStatus.Enable,
         holderEmploymentStatus: employment.isDelete ? null : employment.status,
@@ -49,7 +63,16 @@ export function createCreateOrganizationResponsibilityAssignmentUseCase(
         targetOrganizationId: targetOrganization.id,
         typeCode: input.typeCode,
       };
-      const existing = await tx.assignmentStore.findOpenAssignmentForSlot(slot);
+      const existing = await tx.assignmentStore.findOpenAssignmentForSlot({
+        ...slot,
+        readScope: authorization.readScope,
+      });
+      if (
+        existing !== null
+        && !existing.isManageable
+      ) {
+        throw new OrganizationResponsibilityAssignmentUnmanageableConflictError();
+      }
       assertOrganizationResponsibilityAssignmentSlotAvailable({
         typeCode: input.typeCode,
         employmentId: employment.id,

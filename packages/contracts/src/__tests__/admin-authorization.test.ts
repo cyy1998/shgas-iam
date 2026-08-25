@@ -4,6 +4,7 @@ import {
   ADMIN_MODULE_CODES,
   AdminCapabilitySummarySchema,
   AdminOrganizationAllowedActionsSchema,
+  AdminOrganizationResponsibilityAllowedActionsSchema,
   AdminUserAllowedActionsSchema,
 } from "../admin-authorization";
 
@@ -15,6 +16,9 @@ describe("Admin authorization contract", () => {
         user: { create: { allowed: true, reason: null } },
         employment: { create: { allowed: true, reason: null } },
         organization: { createRoot: { allowed: false, reason: "ACTION_NOT_GRANTED" } },
+        organizationResponsibility: {
+          create: { allowed: true, reason: null },
+        },
         position: {
           create: { allowed: true, reason: null },
           edit: { allowed: true, reason: null },
@@ -33,6 +37,7 @@ describe("Admin authorization contract", () => {
       "USER_NOT_ENABLED",
       "RESOURCE_STATE_NOT_ACTIONABLE",
       "INTEGRITY_GUARD_BLOCKED",
+      "UNMANAGEABLE_RESPONSIBILITY_BLOCKED",
     ]);
   });
 
@@ -90,6 +95,28 @@ describe("Admin authorization contract", () => {
       createChild: allowed,
       edit: allowed,
       changeStatus: denied,
+    })).toThrow();
+  });
+
+  test("requires every canonical Organization Responsibility row decision", () => {
+    const allowed = { allowed: true, reason: null } as const;
+    const denied = {
+      allowed: false,
+      reason: "RESOURCE_STATE_NOT_ACTIONABLE",
+    } as const;
+
+    expect(AdminOrganizationResponsibilityAllowedActionsSchema.parse({
+      pause: allowed,
+      resume: denied,
+      end: allowed,
+    })).toEqual({
+      pause: allowed,
+      resume: denied,
+      end: allowed,
+    });
+    expect(() => AdminOrganizationResponsibilityAllowedActionsSchema.parse({
+      pause: allowed,
+      end: allowed,
     })).toThrow();
   });
 });

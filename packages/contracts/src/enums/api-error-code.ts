@@ -52,6 +52,7 @@ export enum ApiErrorCode {
   OrganizationResponsibilityTargetOrganizationUnavailable = "ORG_RESPONSIBILITY.TARGET_ORGANIZATION_UNAVAILABLE",
   OrganizationResponsibilityAssignmentDuplicateOpen = "ORG_RESPONSIBILITY.ASSIGNMENT_DUPLICATE_OPEN",
   OrganizationResponsibilityAssignmentCardinalityConflict = "ORG_RESPONSIBILITY.ASSIGNMENT_CARDINALITY_CONFLICT",
+  OrganizationResponsibilityAssignmentUnmanageableConflict = "ORG_RESPONSIBILITY.ASSIGNMENT_UNMANAGEABLE_CONFLICT",
 
   ClientNotFound = "CLIENT.NOT_FOUND",
   ClientCodeExists = "CLIENT.CODE_EXISTS",

@@ -107,4 +107,37 @@ describe('OrgDetailPanel authorization actions', () => {
     expect(mutations.updateOrganizationStatus).not.toHaveBeenCalled();
     expect(mutations.deleteOrganization).not.toHaveBeenCalled();
   });
+
+  it('explains an unmanageable responsibility blocker without exposing its record', async () => {
+    __setAccess({ canAccessOrganizationResponsibility: true });
+    const unmanageableDenied = {
+      allowed: false,
+      reason: 'UNMANAGEABLE_RESPONSIBILITY_BLOCKED',
+    } as const;
+    const { user } = render(
+      <OrgDetailPanel
+        loading={false}
+        detail={detail({
+          createChild: allowed,
+          edit: allowed,
+          changeStatus: unmanageableDenied,
+          delete: unmanageableDenied,
+        })}
+        childrenPage={null}
+        childrenLoading={false}
+        onChildrenPageChange={vi.fn()}
+        onEdit={vi.fn()}
+        onCreateChild={vi.fn()}
+        onSelectChild={vi.fn()}
+        onChanged={vi.fn()}
+      />,
+    );
+
+    await user.hover(screen.getByRole('button', { name: /状\s*态/ }));
+    expect(await screen.findByText(
+      '存在当前管理员不可管理的开放责任任命，请联系完整管理员处理',
+    )).toBeInTheDocument();
+    expect(document.body.textContent).not.toContain('Assignment #');
+    expect(document.body.textContent).not.toContain('holder');
+  });
 });

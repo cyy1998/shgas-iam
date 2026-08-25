@@ -1,5 +1,7 @@
 import type { HrAdminOutcomeScenario } from "./hr-admin-outcome.ts";
 import {
+  OrganizationResponsibilityAssignmentStatus,
+  OrganizationResponsibilityTypeCode,
   UserProfileDirtyReason,
   UserProfileDirtyStatus,
 } from "@iam/contracts";
@@ -8,38 +10,45 @@ import { verifyHrAdminOutcome } from "./hr-admin-outcome.ts";
 
 const scenario = {
   runId: "outcome-01",
+  adminUsername: "e2e-admin-outcome-01",
   hrAdminUsername: "e2e-hr-admin-outcome-01",
-  hrAdminUpdatedName: "E2E HR Admin Updated outcome-01",
+  hrAdminRoleCode: "iam:hr-admin",
+  responsibilityHolderPositionCode: "e2e-resp-pos-outcome-01",
+  outsideResponsibilityHolderPositionCode:
+    "e2e-outside-resp-pos-outcome-01",
   responsibilityTargetOrganizationCode: "e2e-resp-target-outcome-01",
+  hrSecondScopeRootOrganizationCode: "e2e-hr-root-outcome-01",
+  hrResponsibilityTargetOrganizationCode: "e2e-hr-target-outcome-01",
 } satisfies HrAdminOutcomeScenario;
 
-describe("HR Admin journey outcome", () => {
-  test("accepts the committed User, audit, publication, and denied no-write facts", async () => {
+describe("HR Admin responsibility journey outcome", () => {
+  test("accepts lifecycle audit, publication convergence, scope revocation, and denied no-write facts", async () => {
     const result = await verifyHrAdminOutcome({
       scenario,
-      owner: {
-        readBack: async () => completeReadBack(),
-      },
+      owner: { readBack: async () => completeReadBack() },
     });
 
     expect(result).toEqual({
       status: "passed",
-      dirtyVersion: "2",
+      assignmentId: 51,
+      dirtyVersion: "6",
     });
   });
 
-  test("waits for the production Worker to publish the invalidated User Profile", async () => {
+  test("waits for the production Worker to publish the final ended state", async () => {
     const observations = [
       {
         ...completeReadBack(),
-        profile: {
-          name: "E2E HR Admin outcome-01",
-          sourceDirtyVersion: "1",
-        },
         dirty: {
-          dirtyVersion: "2",
-          reasonCodes: [UserProfileDirtyReason.UserUpdated],
+          dirtyVersion: "6",
+          reasonCodes: [
+            UserProfileDirtyReason.OrganizationResponsibilityAssignmentUpdated,
+          ],
           status: UserProfileDirtyStatus.Pending,
+        },
+        profile: {
+          sourceDirtyVersion: "5",
+          containsEndedTargetResponsibility: true,
         },
       },
       completeReadBack(),
@@ -57,7 +66,7 @@ describe("HR Admin journey outcome", () => {
     expect(reads).toBe(2);
   });
 
-  test("rejects any business audit for the concealed out-of-scope mutation", async () => {
+  test("rejects any Assignment or audit written by a concealed denial", async () => {
     let rejection: unknown;
     try {
       await verifyHrAdminOutcome({
@@ -65,10 +74,7 @@ describe("HR Admin journey outcome", () => {
         owner: {
           readBack: async () => ({
             ...completeReadBack(),
-            outsideOrganizationAudits: [{
-              action: "admin.organization.update",
-              outcome: "failed",
-            }],
+            deniedCombinationAssignments: 1,
           }),
         },
         sleep: async () => undefined,
@@ -85,25 +91,42 @@ describe("HR Admin journey outcome", () => {
 
 function completeReadBack() {
   return {
-    user: { name: scenario.hrAdminUpdatedName },
-    successfulUserAudits: [{
-      action: "admin.user.update",
+    assignment: {
+      id: 51,
+      status: OrganizationResponsibilityAssignmentStatus.Disable,
+      ended: true,
+      typeCode: OrganizationResponsibilityTypeCode.Supervising,
+      actorVisibleTargetCode: scenario.hrResponsibilityTargetOrganizationCode,
+      holderPositionCode: scenario.responsibilityHolderPositionCode,
+    },
+    assignmentAudits: [
+      "admin.organization_responsibility_assignment.create",
+      "admin.organization_responsibility_assignment.pause",
+      "admin.organization_responsibility_assignment.resume",
+      "admin.organization_responsibility_assignment.end",
+    ].map(action => ({
+      action,
       actorUsername: scenario.hrAdminUsername,
       outcome: "success",
-      targetCode: scenario.hrAdminUsername,
-    }],
+    })),
     dirty: {
-      dirtyVersion: "2",
-      reasonCodes: [UserProfileDirtyReason.UserUpdated],
+      dirtyVersion: "6",
+      reasonCodes: [
+        UserProfileDirtyReason.OrganizationResponsibilityAssignmentUpdated,
+      ],
       status: UserProfileDirtyStatus.Processed,
     },
     profile: {
-      name: scenario.hrAdminUpdatedName,
-      sourceDirtyVersion: "2",
+      sourceDirtyVersion: "6",
+      containsEndedTargetResponsibility: false,
     },
-    outsideOrganization: {
-      name: `E2E Responsibility Target ${scenario.runId}`,
+    hiddenBlocker: {
+      count: 1,
+      status: OrganizationResponsibilityAssignmentStatus.Enable,
     },
-    outsideOrganizationAudits: [],
+    deniedCombinationAssignments: 0,
+    deniedAssignmentAudits: 0,
+    adminMixedRoleAssignmentExists: false,
+    secondScopeRoleAssignmentExists: false,
   };
 }

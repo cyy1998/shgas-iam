@@ -26,6 +26,11 @@
   Principal Session；不提供阈值、窗口或时长配置，不要求备注，也不发送通知。成功与 `changed:false` 都刷新一次，
   Redis 503 保留当前状态且不显示假成功；`ADMIN_LOGIN_STATE_AUDIT_FAILED_AFTER_EFFECT` 提示作用可能已生效、刷新
   一次且不自动重试 mutation。
+- Admin Organization Responsibility 使用 capability 驱动模块与 collection action，可由完整管理员或具有有效
+  HR Administration Scope 的 `iam:hr-admin` 进入。独立 Assignment 页面和 Organization、Employment、User 嵌入面板
+  复用同一 scoped service；holder 与 target selector 都只展示当前 scope 候选，但允许从不同 Scope Roots 选择两端。
+  Assignment 行为按钮只消费服务端 `allowedActions`，mutation 后重新加载列表与详情；HR 不展示 Assignment Audit Tab
+  或全局 Audit 菜单。不可管理的隐藏 blocker 只显示稳定安全文案，不渲染 Assignment、holder 或范围外 Organization。
 - `apps/sso` 是 SSO 门户。它应通过 `src/services/` 下的 wrapper 消费 public/auth/self-service 能力，并把共享
   request 与浏览器 helper 集中在 `src/lib/` 和 `src/utils/`。
 - Umi runtime integration 放在 `src/app.ts`、`src/access.ts` 和 app-local `src/models/`。这些文件只聚焦 runtime

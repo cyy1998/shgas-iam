@@ -63,6 +63,13 @@ const cases: ExpectedError[] = [
     httpStatus: 409,
   },
   {
+    className: "OrganizationResponsibilityAssignmentUnmanageableConflictError",
+    exports: OrganizationResponsibilityErrors,
+    message: "责任槽位已占用；如果当前列表没有可管理记录，请联系完整管理员",
+    code: ApiErrorCode.OrganizationResponsibilityAssignmentUnmanageableConflict,
+    httpStatus: 409,
+  },
+  {
     className: "UserNotFoundError",
     exports: UserErrors,
     message: "用户不存在",

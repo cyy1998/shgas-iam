@@ -206,6 +206,15 @@ composition。跨层实例连接统一由 composition 完成。
 - User Profile invalidation 使用 transaction-bound resolver，把 Organization subtree 的既有 Employment 用户与
   responsibility target reverse holders 合并后只登记一次 Dirty Version；Catalog 已发布字段/order 变化通过 Type holder
   seam 失效当前 holder。Admin 管理 repository 继续直接读写 Assignment，但不向其他 runtime 暴露其查询规则。
+- Admin Organization Responsibility 管理由同一个 `AdminOrganizationResponsibilityAuthorization` deep seam 统一表达
+  `full` 与 `scoped`。有效 `iam:hr-admin` 的 scoped read scope 在 SQL pagination/cursor 前同时约束 holder Employment
+  Organization 与 target Organization，并以 `AND` 组合；Create、Pause、Resume、End 在事务内复查同一双端条件。
+  任一端越界对 detail/mutation 返回 404 concealment，拒绝日志只记录稳定 operation/resource/reason，不记录 Assignment、
+  holder、Organization path 或 scope/root 集合。`iam:admin` 以及 mixed-role actor 继续走 full 分支。
+- Assignment view/detail 的 `allowedActions` 是服务端事实，综合当前 scope、lifecycle、parent integrity 与隐藏 blocker；
+  Organization lifecycle 的不可管理开放责任使用稳定 `UNMANAGEABLE_RESPONSIBILITY_BLOCKED` reason，安全 cardinality
+  conflict 不暴露被隐藏记录。请求时 scope 每次从 PostgreSQL Effective Role/Employment/Organization Path 解析，撤权后的
+  下一请求立即收敛。
 - `@iam/user-profile-read-model` 默认入口生成并读取同一 Dirty Version
   下的 Detail、Search 与 Subject Facts v3，并复用 PostgreSQL atomic publication、Redis monotonic CAS 与严格 v3
   cache/PostgreSQL read-through。Active Internal Detail、canonical Filter DSL、Internal/Public legacy adapter 与 Delegation

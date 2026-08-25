@@ -29,14 +29,26 @@ describe("seed receipt", () => {
           pausedUsername: "e2e-paused-run-receipt-01",
           disabledSubjectIdentifier: "5b766c91-1daa-4c09-89e4-ea87ad123456",
           disabledUsername: "e2e-disabled-run-receipt-01",
+          noScopeHrAdminSubjectIdentifier: "8b766c91-1daa-4c09-89e4-ea87ad123456",
+          noScopeHrAdminUsername: "e2e-no-scope-hr-run-receipt-01",
           organizationCode: "e2e-org-run-receipt-01",
           responsibilityHolderOrganizationCode:
             "e2e-holder-org-run-receipt-01",
           responsibilityTargetOrganizationCode:
             "e2e-resp-target-run-receipt-01",
+          hrSecondScopeRootOrganizationCode: "e2e-hr-root-run-receipt-01",
+          hrResponsibilityTargetOrganizationCode:
+            "e2e-hr-target-run-receipt-01",
           positionCode: "e2e-pos-run-receipt-01",
           globalPositionCode: "e2e-global-pos-run-receipt-01",
           responsibilityHolderPositionCode: "e2e-resp-pos-run-receipt-01",
+          outsideResponsibilityHolderPositionCode:
+            "e2e-outside-resp-pos-run-receipt-01",
+          responsibilityHolderEmploymentId: 44,
+          outsideResponsibilityHolderEmploymentId: 43,
+          adminMixedRoleAssignmentId: 40,
+          hiddenResponsibilityAssignmentId: 41,
+          hrSecondScopeRoleAssignmentId: 42,
           adminRoleCode: "e2e-role-run-receipt-01",
           hrAdminRoleCode: "iam:hr-admin",
           adminPrivilegeCode: "e2e-privilege-run-receipt-01",

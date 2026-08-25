@@ -5,9 +5,11 @@ import {
   ADMIN_MODULE_CODES,
   EmploymentStatus,
   OrganizationLevel,
+  OrganizationResponsibilityAssignmentStatus,
   OrganizationStatus,
   UserStatus,
 } from "@iam/contracts";
+import { OrganizationResponsibilityAssignmentNotFoundError } from "@iam/domain/organization-responsibility";
 import { describe, expect, mock, test } from "bun:test";
 
 function actor(roles: string[]) {
@@ -45,6 +47,9 @@ describe("Admin Authorization Policy", () => {
       user: { create: { allowed: true, reason: null } },
       employment: { create: { allowed: true, reason: null } },
       organization: { createRoot: { allowed: true, reason: null } },
+      organizationResponsibility: {
+        create: { allowed: true, reason: null },
+      },
       position: {
         create: { allowed: true, reason: null },
         edit: { allowed: true, reason: null },
@@ -56,6 +61,106 @@ describe("Admin Authorization Policy", () => {
       .toEqual([]);
   });
 
+  test("projects lifecycle Assignment actions for full and scoped administrators", async () => {
+    const policy = createPolicy(hrScope);
+
+    for (const roles of [["iam:admin"], ["iam:admin", "iam:hr-admin"]]) {
+      const authorization
+        = await policy.getOrganizationResponsibilityAuthorization(actor(roles));
+      expect(authorization).toMatchObject({
+        kind: "full",
+        readScope: { kind: "full" },
+      });
+      expect(authorization.getAllowedActions({
+        status: OrganizationResponsibilityAssignmentStatus.Enable,
+      })).toEqual({
+        pause: { allowed: true, reason: null },
+        resume: {
+          allowed: false,
+          reason: "RESOURCE_STATE_NOT_ACTIONABLE",
+        },
+        end: { allowed: true, reason: null },
+      });
+      expect(authorization.getAllowedActions({
+        status: OrganizationResponsibilityAssignmentStatus.Pause,
+      })).toEqual({
+        pause: {
+          allowed: false,
+          reason: "RESOURCE_STATE_NOT_ACTIONABLE",
+        },
+        resume: { allowed: true, reason: null },
+        end: { allowed: true, reason: null },
+      });
+      expect(authorization.getAllowedActions({
+        status: OrganizationResponsibilityAssignmentStatus.Disable,
+      })).toEqual({
+        pause: {
+          allowed: false,
+          reason: "RESOURCE_STATE_NOT_ACTIONABLE",
+        },
+        resume: {
+          allowed: false,
+          reason: "RESOURCE_STATE_NOT_ACTIONABLE",
+        },
+        end: {
+          allowed: false,
+          reason: "RESOURCE_STATE_NOT_ACTIONABLE",
+        },
+      });
+    }
+
+    const scopedAuthorization
+      = await policy.getOrganizationResponsibilityAuthorization(
+        actor(["iam:hr-admin"]),
+      );
+    expect(scopedAuthorization).toMatchObject({
+      kind: "scoped",
+      readScope: {
+        kind: "scoped",
+        organizationIds: hrScope.organizationIds,
+      },
+    });
+    expect(scopedAuthorization.getAllowedActions({
+      status: OrganizationResponsibilityAssignmentStatus.Enable,
+    })).toEqual({
+      pause: { allowed: true, reason: null },
+      resume: {
+        allowed: false,
+        reason: "RESOURCE_STATE_NOT_ACTIONABLE",
+      },
+      end: { allowed: true, reason: null },
+    });
+  });
+
+  test("conceals scoped Organization Responsibility mutation denials with a safe log identifier", async () => {
+    const logger = { warn: mock() };
+    const policy = createAdminAuthorizationPolicy({
+      logger,
+      hrAdministrationScopeResolver: {
+        resolveForActor: async () => ({
+          rootOrganizationIds: [10, 20],
+          organizationIds: [10, 11, 20, 21],
+        }),
+      },
+    });
+    const authorization = await policy.getOrganizationResponsibilityAuthorization(
+      actor(["iam:hr-admin"]),
+    );
+    expect(() => authorization.denyMutation({
+      operationId: "admin.organizationResponsibility.createAssignment",
+      resourceIdentifier: "create-request",
+      reason: "RESOURCE_OUT_OF_SCOPE",
+    })).toThrow(OrganizationResponsibilityAssignmentNotFoundError);
+    expect(logger.warn).toHaveBeenCalledWith({
+      event: SystemLogEvent.AdminAuthorizationDenied,
+      actor: { userId: 7, username: "operator" },
+      action: "admin.organizationResponsibility.createAssignment",
+      resourceType: "organizationResponsibilityAssignment",
+      resourceIdentifier: "create-request",
+      reasonCode: "RESOURCE_OUT_OF_SCOPE",
+    }, "admin mutation authorization denied");
+  });
+
   test("grants User, Organization, Position, and the approved Employment slice to HR", async () => {
     const policy = createPolicy(hrScope);
 
@@ -63,7 +168,17 @@ describe("Admin Authorization Policy", () => {
       actor(["iam:user", "iam:hr-admin"]),
     );
 
-    expect(summary.visibleModules).toEqual(["user", "organization", "position", "employment"]);
+    expect(summary.visibleModules).toEqual([
+      "user",
+      "organization",
+      "organizationResponsibility",
+      "position",
+      "employment",
+    ]);
+    expect(summary.collectionActions.organizationResponsibility.create).toEqual({
+      allowed: true,
+      reason: null,
+    });
     expect(summary.collectionActions.employment.create).toEqual({
       allowed: true,
       reason: null,
@@ -91,6 +206,15 @@ describe("Admin Authorization Policy", () => {
       "admin.organization.update",
       "admin.organization.updateStatus",
       "admin.organization.delete",
+      "admin.organizationResponsibility.listTypes",
+      "admin.organizationResponsibility.listAssignments",
+      "admin.organizationResponsibility.searchAssignments",
+      "admin.organizationResponsibility.detailAssignment",
+      "admin.organizationResponsibility.scopedDetailAssignment",
+      "admin.organizationResponsibility.createAssignment",
+      "admin.organizationResponsibility.pauseAssignment",
+      "admin.organizationResponsibility.resumeAssignment",
+      "admin.organizationResponsibility.endAssignment",
       "admin.position.search",
       "admin.position.detail",
       "admin.employment.search",
@@ -524,6 +648,35 @@ describe("Admin Authorization Policy", () => {
     expect(JSON.stringify(warn.mock.calls)).not.toContain("scope");
   });
 
+  test("uses a safe Create identifier when the operation gate rejects Organization Responsibility input", async () => {
+    const warn = mock();
+    const policy = createAdminAuthorizationPolicy({
+      logger: { warn },
+      hrAdministrationScopeResolver: { resolveForActor: async () => null },
+    });
+
+    const failure = await policy.assertOperationAllowed({
+      actor: actor(["iam:hr-admin"]),
+      operationId: "admin.organizationResponsibility.createAssignment",
+      operationInput: {
+        employmentId: 999,
+        orgCode: "OUTSIDE_SECRET",
+      },
+    }).catch(error => error);
+
+    expect(failure).toMatchObject({ httpStatus: 403 });
+    expect(warn).toHaveBeenCalledWith({
+      event: SystemLogEvent.AdminAuthorizationDenied,
+      actor: { userId: 7, username: "operator" },
+      action: "admin.organizationResponsibility.createAssignment",
+      resourceType: "organizationResponsibilityAssignment",
+      resourceIdentifier: "create-request",
+      reasonCode: "ACTION_NOT_GRANTED",
+    }, "admin mutation authorization denied");
+    expect(JSON.stringify(warn.mock.calls)).not.toContain("999");
+    expect(JSON.stringify(warn.mock.calls)).not.toContain("OUTSIDE_SECRET");
+  });
+
   test("projects the complete Organization action map from server-side state and integrity facts", async () => {
     const authorization = await createPolicy(hrScope)
       .getOrganizationAuthorization(actor(["iam:hr-admin"]));
@@ -539,6 +692,7 @@ describe("Admin Authorization Policy", () => {
       childrenCount: 1,
       employmentCount: 0,
       hasOpenResponsibilityAssignment: false,
+      hasUnmanageableOpenResponsibilityAssignment: false,
     })).toEqual({
       createChild: { allowed: true, reason: null },
       edit: { allowed: true, reason: null },
@@ -551,11 +705,29 @@ describe("Admin Authorization Policy", () => {
       childrenCount: 0,
       employmentCount: 1,
       hasOpenResponsibilityAssignment: true,
+      hasUnmanageableOpenResponsibilityAssignment: false,
     })).toEqual({
       createChild: { allowed: false, reason: "RESOURCE_STATE_NOT_ACTIONABLE" },
       edit: { allowed: true, reason: null },
       changeStatus: { allowed: false, reason: "INTEGRITY_GUARD_BLOCKED" },
       delete: { allowed: false, reason: "INTEGRITY_GUARD_BLOCKED" },
+    });
+    expect(authorization.getAllowedActions({
+      status: OrganizationStatus.Enable,
+      level: OrganizationLevel.Three,
+      childrenCount: 0,
+      employmentCount: 0,
+      hasOpenResponsibilityAssignment: true,
+      hasUnmanageableOpenResponsibilityAssignment: true,
+    })).toMatchObject({
+      changeStatus: {
+        allowed: false,
+        reason: "UNMANAGEABLE_RESPONSIBILITY_BLOCKED",
+      },
+      delete: {
+        allowed: false,
+        reason: "UNMANAGEABLE_RESPONSIBILITY_BLOCKED",
+      },
     });
   });
 

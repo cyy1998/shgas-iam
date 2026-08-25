@@ -13,7 +13,7 @@
 ├── apps/             # 可部署的后端、前端和 worker
 ├── packages/         # 跨 app 复用的 workspace packages
 ├── gateway/          # APISIX manifests 与发布工具
-├── e2e/system/       # root-owned Full-system E2E workspace；当前交付 runtime、两条 V2 journey 与精确恢复入口
+├── e2e/system/       # root-owned Full-system E2E workspace；当前交付 runtime、三条 production journey 与精确恢复入口
 ├── docker/           # 本地依赖栈及 dev/prod Compose
 ├── observability/    # Alloy、Loki 与 Grafana 配置
 ├── scripts/          # 仓库级检查、canonical test collection/Integration 编排和辅助脚本
@@ -73,7 +73,7 @@
 
 | 路径 | 当前职责与边界 |
 |---|---|
-| `e2e/system` | `@iam/e2e-system` 拥有 root `pnpm test:e2e` 的完整 owner task：preflight 在任何 descriptor/resource 前验证 Docker、browser 与固定配置，再以动态 Gateway host port 启动 PostgreSQL、Redis、etcd、APISIX、API、Admin API、OIDC Provider、Worker、Admin 与 SSO，在空 volumes 执行真实 Drizzle migrations、User Profile v2 cutover fixture、production-owner strict v3 backfill 与 Client Protocol V2 readiness，并在同一 exact-project lifecycle 中固定按 Admin → HR Admin → OIDC 运行三条零 retry journey。Gateway Profile routes 在 backfill 期间保持未发布；Seed 驱动真实 Worker 等待 Enable/Pause/Disable User 的 v3 Profile/Facts 收敛并 bootstrap 对应 Barrier，随后实际运行 production `user-profile:verify-postgres` 与 `user-profile:verify-redis`，两道 v3 全量 gate 均通过后才统一发布 routes。三条 journey 共同覆盖 schema-driven Filter 的代表行为、Organization Responsibility、Employment invalidation、Custom SSO/Gateway 裁剪、普通 `iam:hr-admin` 的 PostgreSQL 请求时范围与四模块 UI，以及 OIDC authorization-time snapshot/ID Token 排除。HR journey 后置 production Drizzle verifier 与有界 Admin API log capture 证明范围内业务/audit/invalidation 收敛和范围外无写入、不泄露 scope 的 denial log。失败时保存有界 raw diagnostics、Playwright evidence 与安全 receipt，再尝试本 project 的 best-effort cleanup；cleanup failure 非零。`admin:journey`、`hr-admin:journey`、`oidc:journey` 保留为 workspace-local 调试入口，`runtime:cleanup` 只接受明确 descriptor 或 exact project。Windows 本地已验收，Linux/CI 尚未验收。 |
+| `e2e/system` | `@iam/e2e-system` 拥有 root `pnpm test:e2e` 的完整 owner task：preflight 在任何 descriptor/resource 前验证 Docker、browser 与固定配置，再以动态 Gateway host port 启动 PostgreSQL、Redis、etcd、APISIX、API、Admin API、OIDC Provider、Worker、Admin 与 SSO，在空 volumes 执行真实 Drizzle migrations、User Profile v2 cutover fixture、production-owner strict v3 backfill 与 Client Protocol V2 readiness，并在同一 exact-project lifecycle 中固定按 Admin → HR Admin → OIDC 运行三条零 retry journey。Gateway Profile routes 在 backfill 期间保持未发布；Seed 驱动真实 Worker 等待 Enable/Pause/Disable User 的 v3 Profile/Facts 收敛并 bootstrap 对应 Barrier，随后实际运行 production `user-profile:verify-postgres` 与 `user-profile:verify-redis`，两道 v3 全量 gate 均通过后才统一发布 routes。三条 journey 共同覆盖 schema-driven Filter 的代表行为、Organization Responsibility、Employment invalidation、Custom SSO/Gateway 裁剪、普通 `iam:hr-admin` 的 PostgreSQL 请求时双端责任范围、完整责任 UI 生命周期与 scope 撤销，以及 OIDC authorization-time snapshot/ID Token 排除。HR journey 后置 production Drizzle verifier 与有界 Admin API log capture 证明范围内 lifecycle/audit/invalidation 收敛、隐藏 blocker 保持、范围外无写入且 denial log 不泄露 Assignment、holder、Organization path 或 scope/root 集合。失败时保存有界 raw diagnostics、Playwright evidence 与安全 receipt，再尝试本 project 的 best-effort cleanup；cleanup failure 非零。`admin:journey`、`hr-admin:journey`、`oidc:journey` 保留为 workspace-local 调试入口，`runtime:cleanup` 只接受明确 descriptor 或 exact project。Windows 本地已验收，Linux/CI 尚未验收。 |
 
 该 workspace 的 Compose、one-shot migration/Gateway sync images、lifecycle/recovery commands 与 contract tests 都保留在
 `e2e/system/`；生成的 run descriptor、migration/seed receipts、Compose/Gateway diagnostics 与后续 Playwright artifacts 位于其

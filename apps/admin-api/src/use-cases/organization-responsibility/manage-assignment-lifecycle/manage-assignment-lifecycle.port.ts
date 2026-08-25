@@ -1,3 +1,4 @@
+import type { OrganizationResponsibilityReadScope } from "@admin-api/services/admin-authorization/admin-organization-responsibility-authorization.type";
 import type { AuditLogInput } from "@admin-api/services/audit/audit.context";
 import type { UnitOfWorkPort } from "@iam/api-core/uow";
 import type {
@@ -19,6 +20,7 @@ export interface OrganizationResponsibilityAssignmentLifecycleContext {
   };
   employment: {
     userId: number;
+    organizationId: number;
     status: EmploymentStatus;
     isDelete: boolean;
   } | null;
@@ -30,6 +32,11 @@ export interface OrganizationResponsibilityAssignmentLifecycleContext {
 
 export interface ManageOrganizationResponsibilityAssignmentLifecycleTransactionPorts {
   assignmentStore: {
+    isEndpointPairWithinReadScope: (input: {
+      readScope: OrganizationResponsibilityReadScope;
+      holderOrganizationId: number;
+      targetOrganizationId: number;
+    }) => boolean;
     findOpenAssignmentForSlot: (input: {
       employmentId: number;
       targetOrganizationId: number;

@@ -77,6 +77,9 @@ function createService() {
     },
     responsibilityReader: {
       hasOpenAssignmentTargetingOrganizationSubtree: mock(async () => false),
+      hasOpenAssignmentTargetingOrganizationSubtreeOutsideScope: mock(
+        async () => false,
+      ),
     },
     uow: createImmediateUnitOfWork(tx),
   } as any;
@@ -153,7 +156,35 @@ describe("createOrganizationService", () => {
       childrenCount: 0,
       employmentCount: 0,
       hasOpenResponsibilityAssignment: false,
+      hasUnmanageableOpenResponsibilityAssignment: false,
     });
+  });
+
+  test("projects an opaque unmanageable responsibility blocker for scoped Organization actions", async () => {
+    const { service, deps } = createService();
+    const { authorization } = scopedAuthorization([1, 2], [1]);
+    deps.responsibilityReader.hasOpenAssignmentTargetingOrganizationSubtree
+      .mockResolvedValueOnce(true);
+    deps.responsibilityReader
+      .hasOpenAssignmentTargetingOrganizationSubtreeOutsideScope
+      .mockResolvedValueOnce(true);
+
+    const detail = await service.getOrganizationDetailByCodeForAdmin(
+      "ORG",
+      authorization as any,
+    );
+
+    expect(detail.authorizationFacts).toMatchObject({
+      hasOpenResponsibilityAssignment: true,
+      hasUnmanageableOpenResponsibilityAssignment: true,
+    });
+    expect(
+      deps.responsibilityReader
+        .hasOpenAssignmentTargetingOrganizationSubtreeOutsideScope,
+    ).toHaveBeenCalledWith(1, [1, 2]);
+    expect(JSON.stringify(detail.authorizationFacts)).not.toContain(
+      "assignmentId",
+    );
   });
 
   test("returns 404 before reading children for an out-of-scope parent", async () => {

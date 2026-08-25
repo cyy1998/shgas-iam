@@ -77,6 +77,10 @@ export interface AdminOrganizationServiceDeps {
     hasOpenAssignmentTargetingOrganizationSubtree: (
       organizationId: number,
     ) => Promise<boolean>;
+    hasOpenAssignmentTargetingOrganizationSubtreeOutsideScope: (
+      organizationId: number,
+      organizationIds: readonly number[],
+    ) => Promise<boolean>;
   };
   uow: AdminOrganizationUnitOfWorkPort;
 }

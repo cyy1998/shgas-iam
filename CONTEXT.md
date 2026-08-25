@@ -85,7 +85,7 @@ _Avoid_: 分管负责人, Primary Employment, supervising role, organization adm
 _Avoid_: Organization Responsibility Definition, Employment, Role Assignment, Effective Role
 
 **Organization Responsibility Assignment Authority**:
-一条 Organization Responsibility Assignment 的唯一权威事实来源，决定其创建和生命周期命令；首版只有 IAM Admin 命令面可以写入，HR、其他外部系统与 Internal reader 均只读。Employment、Organization 或 User 生命周期触发的系统级联仍执行同一 Authority 已声明的后果，并非第二来源；未来引入外部来源必须重新定义所有权，不能与 IAM 通过最后写入覆盖同一事实。
+一条 Organization Responsibility Assignment 的唯一权威事实来源，决定其创建和生命周期命令；只有 IAM Admin 命令面可以写入，授权的完整管理员与 HR Administrator 均通过该命令面操作，其他外部系统与 Internal reader 只读。Employment、Organization 或 User 生命周期触发的系统级联仍执行同一 Authority 已声明的后果，并非第二来源；未来引入外部来源必须重新定义所有权，不能与 IAM 通过最后写入覆盖同一事实。
 _Avoid_: multi-source assignment authority, external assignment upsert, last-writer-wins responsibility
 
 **Organization Responsibility Period**:
@@ -220,9 +220,13 @@ _Avoid_: self-management bypass, mandatory self-action prohibition, pre-change a
 HR Administrator 对 HR Administration Scope 内 Organization 的管理能力，包括查看根及后代、在范围内父组织下创建子组织，以及在既有完整性门禁内修改名称、类型、状态或删除；它不创建一级根组织、不修改 Organization code，也不移动组织树。
 _Avoid_: root provisioning, organization code rename, organization reparenting
 
+**HR Organization Responsibility Administration**:
+HR Administrator 对 target Organization 与 holder Employment 所属 Organization 均位于当前 HR Administration Scope 内的 Organization Responsibility Assignment，具有与完整管理员相同的查询、创建和显式生命周期管理能力；两端可以位于不同的 HR Administration Scope Root。Type Catalog 保持只读，Ended 历史继续按请求时当前范围可见，任一端位于范围外都不授予读取或写入能力，本能力也不包含 Assignment 操作日志读取。
+_Avoid_: target-only responsibility administration, holder-only responsibility administration, single-root responsibility administration, historical scope snapshot
+
 **HR Employment Responsibility Cascade**:
-HR Administrator 改变 HR-Visible Employment 生命周期时，为保持 Organization Responsibility Assignment Integrity 而同步暂停或结束该任职全部相应责任任命的强制后果；Assignment 的目标 Organization 可以位于 HR Administration Scope 外，这不授予 HR Administrator 独立管理该目标或责任任命的能力。
-_Avoid_: cross-tree responsibility administration, optional responsibility cleanup
+HR Administrator 改变 HR-Visible Employment 生命周期时，为保持 Organization Responsibility Assignment Integrity 而同步暂停或结束该任职全部相应责任任命的强制后果；Assignment 的目标 Organization 可以位于 HR Administration Scope 外，但只有 holder Employment 与 target Organization 均位于当前范围内时才授予独立管理能力。
+_Avoid_: one-sided responsibility administration, optional responsibility cleanup
 
 **HR Primary Employment Administration**:
 HR Administrator 可以为 HR Administration Scope 内的 Open Employment 设置或清除 Primary Employment，不要求该 User 的其他 Open Employment 也位于范围内；设置时为保持全局最多一个 Primary Employment，可以清除范围外任职原有的 Primary 标记。该能力不允许把范围外 Employment 直接作为操作目标。

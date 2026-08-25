@@ -54,5 +54,8 @@ it('maps every closed authorization reason to a localized explanation', () => {
   expect(getAdminAuthorizationReasonText('INTEGRITY_GUARD_BLOCKED')).toBe(
     '当前数据完整性约束阻止此操作',
   );
+  expect(
+    getAdminAuthorizationReasonText('UNMANAGEABLE_RESPONSIBILITY_BLOCKED'),
+  ).toBe('存在当前管理员不可管理的开放责任任命，请联系完整管理员处理');
   expect(getAdminAuthorizationReasonText(null)).toBeNull();
 });

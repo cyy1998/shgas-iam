@@ -3,9 +3,12 @@ import type {
 } from "./docker-infra.ts";
 import type { RunDescriptor } from "./lifecycle.ts";
 import type { PlaywrightJourneyRuntimeOptions } from "./playwright-journey.ts";
+import type { E2EScenarioGeneratedReferences } from "./seed.ts";
+import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { SystemLogEvent } from "@iam/api-core/logger";
 import { writeAtomicJsonFile } from "./atomic-json-file.ts";
+import { containsScalarValue } from "./concealment.ts";
 import {
   composeArguments,
   descriptorEnvironment,
@@ -29,26 +32,55 @@ export interface CreateHrAdminJourneyOperationsOptions
     descriptor: RunDescriptor,
     receipt: HrAdminOutcomeReceipt,
   ) => Promise<unknown>;
+  readScenarioReferences?: (
+    descriptor: RunDescriptor,
+  ) => Promise<E2EScenarioGeneratedReferences>;
 }
 
 export function createHrAdminJourneyOperations(
   options: CreateHrAdminJourneyOperationsOptions,
 ) {
+  const readScenarioReferences = options.readScenarioReferences
+    ?? readGeneratedScenarioReferences;
   const playwright = createPlaywrightJourneyOperations({
     ...options,
     specPath: "hr-admin-user-management.spec.ts",
-    environment: (_descriptor, scenario) => ({
-      IAM_E2E_ADMIN_CLIENT_CODE: scenario.adminClientCode,
-      IAM_E2E_HR_ADMIN_UPDATED_NAME: scenario.hrAdminUpdatedName,
-      IAM_E2E_HR_ADMIN_USERNAME: scenario.hrAdminUsername,
-      IAM_E2E_GLOBAL_POSITION_CODE: scenario.globalPositionCode,
-      IAM_E2E_IN_SCOPE_ORGANIZATION_CODE:
+    environment: async (descriptor, scenario) => {
+      const generated = await readScenarioReferences(descriptor);
+      return {
+        IAM_E2E_ADMIN_CLIENT_CODE: scenario.adminClientCode,
+        IAM_E2E_ADMIN_MIXED_ROLE_ASSIGNMENT_ID:
+        String(generated.adminMixedRoleAssignmentId),
+        IAM_E2E_ADMIN_USERNAME: scenario.adminUsername,
+        IAM_E2E_DELEGATEE_USERNAME: scenario.delegateeUsername,
+        IAM_E2E_HIDDEN_RESPONSIBILITY_ASSIGNMENT_ID:
+        String(generated.hiddenResponsibilityAssignmentId),
+        IAM_E2E_HR_ADMIN_UPDATED_NAME: scenario.hrAdminUpdatedName,
+        IAM_E2E_HR_ADMIN_USERNAME: scenario.hrAdminUsername,
+        IAM_E2E_HR_RESPONSIBILITY_TARGET_ORGANIZATION_CODE:
+        scenario.hrResponsibilityTargetOrganizationCode,
+        IAM_E2E_HR_SECOND_SCOPE_ROLE_ASSIGNMENT_ID:
+        String(generated.hrSecondScopeRoleAssignmentId),
+        IAM_E2E_HR_SECOND_SCOPE_ROOT_ORGANIZATION_CODE:
+        scenario.hrSecondScopeRootOrganizationCode,
+        IAM_E2E_GLOBAL_POSITION_CODE: scenario.globalPositionCode,
+        IAM_E2E_IN_SCOPE_ORGANIZATION_CODE:
         scenario.responsibilityHolderOrganizationCode,
-      IAM_E2E_JOURNEY: "hr-admin",
-      IAM_E2E_OUTSIDE_ORGANIZATION_CODE:
+        IAM_E2E_JOURNEY: "hr-admin",
+        IAM_E2E_NO_SCOPE_HR_ADMIN_USERNAME: scenario.noScopeHrAdminUsername,
+        IAM_E2E_OUTSIDE_RESPONSIBILITY_HOLDER_EMPLOYMENT_ID:
+        String(generated.outsideResponsibilityHolderEmploymentId),
+        IAM_E2E_OUTSIDE_RESPONSIBILITY_HOLDER_POSITION_CODE:
+        scenario.outsideResponsibilityHolderPositionCode,
+        IAM_E2E_OUTSIDE_ORGANIZATION_CODE:
         scenario.responsibilityTargetOrganizationCode,
-      IAM_E2E_SCOPE_ROOT_ORGANIZATION_CODE: scenario.organizationCode,
-    }),
+        IAM_E2E_SCOPE_ROOT_ORGANIZATION_CODE: scenario.organizationCode,
+        IAM_E2E_RESPONSIBILITY_HOLDER_EMPLOYMENT_ID:
+        String(generated.responsibilityHolderEmploymentId),
+        IAM_E2E_RESPONSIBILITY_HOLDER_POSITION_CODE:
+        scenario.responsibilityHolderPositionCode,
+      };
+    },
   });
   const writeOutcomeReceipt = options.writeOutcomeReceipt
     ?? persistHrAdminOutcomeReceipt;
@@ -94,6 +126,7 @@ export function createHrAdminJourneyOperations(
         assertHrAdminDenialLog(
           `${logs.stdout}\n${logs.stderr}`,
           createE2EScenarioIdentity(descriptor.runId),
+          await readScenarioReferences(descriptor),
         );
         await writeOutcomeReceipt(descriptor, {
           version: 1,
@@ -116,25 +149,78 @@ export function createHrAdminJourneyOperations(
   };
 }
 
+async function readGeneratedScenarioReferences(
+  descriptor: RunDescriptor,
+): Promise<E2EScenarioGeneratedReferences> {
+  const raw = await readFile(
+    join(descriptor.artifactDirectory, "seed-receipt.json"),
+    "utf8",
+  );
+  const receipt: unknown = JSON.parse(raw);
+  if (!isObject(receipt) || receipt.status !== "applied"
+    || !isObject(receipt.scenario)) {
+    throw new Error("HR Admin journey requires an applied seed receipt");
+  }
+  const scenario = receipt.scenario;
+  const references = {
+    adminMixedRoleAssignmentId: scenario.adminMixedRoleAssignmentId,
+    hiddenResponsibilityAssignmentId:
+      scenario.hiddenResponsibilityAssignmentId,
+    hrSecondScopeRoleAssignmentId: scenario.hrSecondScopeRoleAssignmentId,
+    outsideResponsibilityHolderEmploymentId:
+      scenario.outsideResponsibilityHolderEmploymentId,
+    responsibilityHolderEmploymentId: scenario.responsibilityHolderEmploymentId,
+  };
+  if (!Object.values(references).every(
+    value => Number.isInteger(value) && Number(value) > 0,
+  )) {
+    throw new Error("HR Admin seed receipt is missing generated references");
+  }
+  return references as E2EScenarioGeneratedReferences;
+}
+
 export function assertHrAdminDenialLog(
   rawLogs: string,
   scenario: ReturnType<typeof createE2EScenarioIdentity>,
+  references: E2EScenarioGeneratedReferences,
 ) {
-  const denial = rawLogs.split(/\r?\n/u)
+  const denials = rawLogs.split(/\r?\n/u)
     .map(line => parseJsonObject(line))
-    .find(entry => entry?.event === SystemLogEvent.AdminAuthorizationDenied
+    .filter((entry): entry is Record<string, unknown> =>
+      entry?.event === SystemLogEvent.AdminAuthorizationDenied
       && isObject(entry.actor)
-      && entry.actor.username === scenario.hrAdminUsername
-      && entry.action === "admin.organization.update"
-      && entry.resourceType === "organization"
-      && entry.resourceIdentifier
-      === scenario.responsibilityTargetOrganizationCode
-      && entry.reasonCode === "RESOURCE_OUT_OF_SCOPE");
-  if (denial === undefined)
+      && entry.actor.username === scenario.hrAdminUsername);
+  const expectedDenial = denials.find(entry => entry?.action
+    === "admin.organizationResponsibility.createAssignment"
+    && entry.resourceType === "organizationResponsibilityAssignment"
+    && entry.resourceIdentifier === "create-request"
+    && entry.reasonCode === "RESOURCE_OUT_OF_SCOPE");
+  if (expectedDenial === undefined)
     throw new Error("HR Admin denial security log was not observed");
-  if (containsForbiddenScopeKey(denial)) {
-    throw new Error("HR Admin denial security log leaked authorization scope");
+  for (const denial of denials) {
+    if (containsForbiddenScopeKey(denial)) {
+      throw new Error("HR Admin denial security log leaked authorization scope");
+    }
+    if (concealedFixtureValues(scenario).some(value =>
+      containsScalarValue(denial, value))) {
+      throw new Error("HR Admin denial security log leaked concealed fixture value");
+    }
+    if (denial.resourceIdentifier
+      === references.hiddenResponsibilityAssignmentId
+      || denial.resourceIdentifier
+      === references.outsideResponsibilityHolderEmploymentId) {
+      throw new Error("HR Admin denial security log leaked concealed fixture value");
+    }
   }
+}
+
+function concealedFixtureValues(
+  scenario: ReturnType<typeof createE2EScenarioIdentity>,
+) {
+  return [
+    scenario.outsideResponsibilityHolderPositionCode,
+    scenario.responsibilityTargetOrganizationCode,
+  ];
 }
 
 function containsForbiddenScopeKey(value: unknown): boolean {
@@ -143,8 +229,9 @@ function containsForbiddenScopeKey(value: unknown): boolean {
   if (!isObject(value))
     return false;
   return Object.entries(value).some(([key, nested]) =>
-    /^(?:scope|organizationIds|rootOrganizationIds)$/iu.test(key)
-    || containsForbiddenScopeKey(nested));
+    /^(?:scope|organizationIds|rootOrganizationIds|assignmentId|employmentId|holder|holderOrganizationId|targetOrganizationId|organizationPath)$/iu
+      .test(key)
+      || containsForbiddenScopeKey(nested));
 }
 
 function parseJsonObject(value: string): Record<string, unknown> | undefined {

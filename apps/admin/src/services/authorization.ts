@@ -9,6 +9,8 @@ const authorizationReasonText = {
   USER_NOT_ENABLED: '该用户当前不是启用状态',
   RESOURCE_STATE_NOT_ACTIONABLE: '目标资源当前状态不支持此操作',
   INTEGRITY_GUARD_BLOCKED: '当前数据完整性约束阻止此操作',
+  UNMANAGEABLE_RESPONSIBILITY_BLOCKED:
+    '存在当前管理员不可管理的开放责任任命，请联系完整管理员处理',
 } as const satisfies Record<AdminAuthorizationReasonCode, string>;
 
 export function getAdminCapabilitySummary() {

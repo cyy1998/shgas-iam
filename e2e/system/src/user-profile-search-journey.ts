@@ -15,7 +15,9 @@ interface InternalSearchInput {
   delegateeUsername: string;
   disabledUsername: string;
   hrAdminUsername: string;
+  hrAdminRoleCode: string;
   internalApiKey: string;
+  noScopeHrAdminUsername: string;
   organizationCode: string;
   origin: string;
   pausedUsername: string;
@@ -33,6 +35,7 @@ export async function expectInternalUserProfileSearchMatrix(
     input.delegateeUsername,
     input.pausedUsername,
     input.disabledUsername,
+    input.noScopeHrAdminUsername,
   ];
   const allProfiles = await searchDsl(input, {
     field: "user.username",
@@ -69,6 +72,7 @@ export async function expectInternalUserProfileSearchMatrix(
     input.adminUsername,
     input.hrAdminUsername,
     input.delegateeUsername,
+    input.noScopeHrAdminUsername,
   ]);
 
   const sameEmployment = await searchDsl(input, {
@@ -117,14 +121,14 @@ export async function expectInternalUserProfileSearchMatrix(
           }),
           privileges: [input.adminPrivilegeCode],
           responsibilities: expect.any(Array),
-          roles: [input.adminRoleCode],
+          roles: [input.adminRoleCode, input.hrAdminRoleCode],
           status: EmploymentStatus.Enable,
         }),
       ]),
       id: expect.any(Number),
       name: expect.any(String),
       privileges: [input.adminPrivilegeCode],
-      roles: [input.adminRoleCode],
+      roles: [input.adminRoleCode, input.hrAdminRoleCode],
       status: UserStatus.Enable,
       username: input.adminUsername,
     }),

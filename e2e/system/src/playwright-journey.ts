@@ -28,7 +28,7 @@ interface CreatePlaywrightJourneyOperationsOptions
   environment: (
     descriptor: RunDescriptor,
     scenario: E2EScenarioIdentity,
-  ) => NodeJS.ProcessEnv;
+  ) => NodeJS.ProcessEnv | Promise<NodeJS.ProcessEnv>;
 }
 
 export function createPlaywrightJourneyOperations(
@@ -53,6 +53,7 @@ export function createPlaywrightJourneyOperations(
 
     async runJourney(descriptor: RunDescriptor, signal?: AbortSignal) {
       const scenario = createE2EScenarioIdentity(descriptor.runId);
+      const environment = await options.environment(descriptor, scenario);
       await options.runCommand(
         "node",
         [
@@ -76,7 +77,7 @@ export function createPlaywrightJourneyOperations(
             IAM_E2E_PLAYWRIGHT_OUTPUT_DIR:
               playwrightStagingDirectory(descriptor),
             IAM_E2E_RUN_ID: descriptor.runId,
-            ...options.environment(descriptor, scenario),
+            ...environment,
           },
           signal,
         },

@@ -16,6 +16,30 @@ import {
   parseTrpcBatchInput,
 } from './fixtures';
 
+function allowedActionsForStatus(
+  status: OrganizationResponsibilityAssignmentStatus,
+) {
+  const allowed = { allowed: true, reason: null } as const;
+  const unavailable = {
+    allowed: false,
+    reason: 'RESOURCE_STATE_NOT_ACTIONABLE',
+  } as const;
+  return {
+    pause:
+      status === OrganizationResponsibilityAssignmentStatus.Enable
+        ? allowed
+        : unavailable,
+    resume:
+      status === OrganizationResponsibilityAssignmentStatus.Pause
+        ? allowed
+        : unavailable,
+    end:
+      status === OrganizationResponsibilityAssignmentStatus.Disable
+        ? unavailable
+        : allowed,
+  };
+}
+
 const assignment = {
   id: 101,
   typeCode: OrganizationResponsibilityTypeCode.Head,
@@ -45,6 +69,9 @@ const assignment = {
   status: OrganizationResponsibilityAssignmentStatus.Enable,
   startTime: '2026-08-20T00:00:00.000Z',
   endTime: null,
+  allowedActions: allowedActionsForStatus(
+    OrganizationResponsibilityAssignmentStatus.Enable,
+  ),
 };
 
 const targetOrganization = {
@@ -190,6 +217,7 @@ test('hydrates global filters and manages the complete lifecycle with audit refr
                   id: 100,
                   status: currentStatus,
                   endTime: currentEndTime,
+                  allowedActions: allowedActionsForStatus(currentStatus),
                 },
               ],
               nextCursor: null,
@@ -200,6 +228,7 @@ test('hydrates global filters and manages the complete lifecycle with audit refr
                   ...assignment,
                   status: currentStatus,
                   endTime: currentEndTime,
+                  allowedActions: allowedActionsForStatus(currentStatus),
                 },
               ],
               nextCursor: '100',
@@ -214,6 +243,7 @@ test('hydrates global filters and manages the complete lifecycle with audit refr
         ...assignment,
         status: currentStatus,
         endTime: currentEndTime,
+        allowedActions: allowedActionsForStatus(currentStatus),
       }),
   );
   await page.route(
@@ -284,6 +314,7 @@ test('hydrates global filters and manages the complete lifecycle with audit refr
                   ...assignment,
                   status: currentStatus,
                   endTime: currentEndTime,
+                  allowedActions: allowedActionsForStatus(currentStatus),
                 },
               ],
               nextCursor: '100',
@@ -296,6 +327,7 @@ test('hydrates global filters and manages the complete lifecycle with audit refr
               ...assignment,
               status: currentStatus,
               endTime: currentEndTime,
+              allowedActions: allowedActionsForStatus(currentStatus),
             },
           },
         },

@@ -19,6 +19,7 @@ import {
   type OrganizationResponsibilityAssignmentLifecycleCommand as OrganizationResponsibilityAssignmentLifecycleCommandType,
   type OrganizationResponsibilityTypeCode,
 } from '@iam/contracts';
+import { useAccess } from '@umijs/max';
 import { Alert, Button, Descriptions, Drawer, message, Tabs, Tag } from 'antd';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import OrganizationResponsibilityAssignmentFormModal from './OrganizationResponsibilityAssignmentFormModal';
@@ -285,6 +286,7 @@ export default function OrganizationResponsibilityAssignmentModule({
 }: {
   host: Host;
 }) {
+  const access = useAccess();
   const fixedTarget =
     host.kind === 'organization' ? host.targetOrganizationCode : undefined;
   const initialState =
@@ -522,15 +524,19 @@ export default function OrganizationResponsibilityAssignmentModule({
         pagination={false}
         onSubmit={applyFilters}
         onReset={resetFilters}
-        toolBarRender={() => [
-          <Button
-            key="create"
-            type="primary"
-            onClick={() => setCreateOpen(true)}
-          >
-            + 新建责任任命
-          </Button>,
-        ]}
+        toolBarRender={() =>
+          access.canCreateOrganizationResponsibility
+            ? [
+                <Button
+                  key="create"
+                  type="primary"
+                  onClick={() => setCreateOpen(true)}
+                >
+                  + 新建责任任命
+                </Button>,
+              ]
+            : []
+        }
         locale={{ emptyText: '无符合条件的责任任命' }}
       />
       {nextCursor && (
@@ -541,13 +547,15 @@ export default function OrganizationResponsibilityAssignmentModule({
         </div>
       )}
 
-      <OrganizationResponsibilityAssignmentFormModal
-        open={createOpen}
-        orgCode={fixedTarget}
-        onOpenChange={setCreateOpen}
-        onFailure={() => loadPage(undefined, { preserveOnError: true })}
-        onSuccess={() => void loadPage()}
-      />
+      {access.canCreateOrganizationResponsibility && (
+        <OrganizationResponsibilityAssignmentFormModal
+          open={createOpen}
+          orgCode={fixedTarget}
+          onOpenChange={setCreateOpen}
+          onFailure={() => loadPage(undefined, { preserveOnError: true })}
+          onSuccess={() => void loadPage()}
+        />
+      )}
 
       <Drawer
         title={detail ? `任命 #${detail.id}` : '责任任命详情'}
@@ -567,27 +575,32 @@ export default function OrganizationResponsibilityAssignmentModule({
                   <>
                     <OrganizationResponsibilityAssignmentLifecycleActions
                       loading={lifecycleLoading}
-                      status={detail.status}
+                      allowedActions={detail.allowedActions}
                       onCommand={runLifecycleCommand}
                     />
                     <Descriptions column={1} items={detailItems(detail)} />
                   </>
                 ),
               },
-              {
-                key: 'audit',
-                label: '操作日志',
-                forceRender: true,
-                children: (
-                  <AuditLogTable
-                    key={`${detail.id}:${auditRevision}`}
-                    fixedConditions={{
-                      targetType: 'organization_responsibility_assignment',
-                      targetId: detail.id,
-                    }}
-                  />
-                ),
-              },
+              ...(access.canAccessAudit
+                ? [
+                    {
+                      key: 'audit',
+                      label: '操作日志',
+                      forceRender: true,
+                      children: (
+                        <AuditLogTable
+                          key={`${detail.id}:${auditRevision}`}
+                          fixedConditions={{
+                            targetType:
+                              'organization_responsibility_assignment',
+                            targetId: detail.id,
+                          }}
+                        />
+                      ),
+                    },
+                  ]
+                : []),
             ]}
           />
         )}

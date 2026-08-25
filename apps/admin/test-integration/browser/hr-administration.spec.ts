@@ -43,6 +43,10 @@ async function mockHrAdmin(page: Page) {
     currentUser: currentHrAdminUser,
     userDetail: hrAdminUserDetail,
   });
+  await page.route(
+    '**/rpc/admin.organizationResponsibility.searchAssignments**',
+    (route) => fulfillTrpc(route, { items: [], nextCursor: null }),
+  );
   const userUpdates: unknown[] = [];
   const passwordResets: unknown[] = [];
   await page.route('**/rpc/admin.user.update**', (route) => {
@@ -270,7 +274,7 @@ test('HR admin reads scoped directories and manages an authorized User from deta
   await expect(page.getByRole('menuitem', { name: /用户管理/ })).toBeVisible();
   await expect(page.getByRole('menuitem', { name: /职位管理/ })).toBeVisible();
   await expect(page.getByRole('menuitem', { name: /组织管理/ })).toBeVisible();
-  await expect(page.getByRole('menuitem', { name: /组织责任/ })).toHaveCount(0);
+  await expect(page.getByRole('menuitem', { name: /组织责任/ })).toBeVisible();
   await expect(page.getByRole('menuitem', { name: /雇佣关系/ })).toBeVisible();
   await expect(page.getByRole('menuitem', { name: /应用管理/ })).toHaveCount(0);
   await expect(page.getByRole('menuitem', { name: /角色管理/ })).toHaveCount(0);
@@ -421,7 +425,7 @@ test('HR admin reads scoped directories and manages an authorized User from deta
   await expect(editOrganization).toBeEnabled();
   await expect(page.getByRole('button', { name: /状\s*态/ })).toBeDisabled();
   await expect(page.getByRole('button', { name: /删\s*除/ })).toBeDisabled();
-  await expect(page.getByRole('tab', { name: '责任任命' })).toHaveCount(0);
+  await expect(page.getByRole('tab', { name: '责任任命' })).toBeVisible();
   await editOrganization.click();
   const editOrganizationDialog = page.getByRole('dialog', { name: '编辑组织' });
   await expect(
@@ -831,7 +835,7 @@ test('HR admin manages Primary and transfers between scoped roots with the globa
   );
 });
 
-test('HR admin is denied before hidden management namespaces are requested', async ({
+test('HR admin can browse responsibility pages while other management namespaces stay hidden', async ({
   page,
 }) => {
   const mutationRequests = collectMutationRequests(page);
@@ -840,7 +844,7 @@ test('HR admin is denied before hidden management namespaces are requested', asy
   page.on('request', (request) => {
     const url = decodeURIComponent(request.url());
     if (
-      /\/rpc\/admin\.(?:organizationResponsibility|client|role|sessionManagement|audit|systemLog)\./.test(
+      /\/rpc\/admin\.(?:client|role|sessionManagement|audit|systemLog)\./.test(
         url,
       )
     ) {
@@ -848,8 +852,17 @@ test('HR admin is denied before hidden management namespaces are requested', asy
     }
   });
 
+  await page.goto('/iam-admin/organization-responsibilities/types');
+  await expect(page.getByText('责任类型目录').first()).toBeVisible();
+  await expect(page.getByRole('cell', { name: 'head' })).toBeVisible();
+
+  await page.goto('/iam-admin/organization-responsibilities/assignments');
+  await expect(page.getByText('责任任命列表')).toBeVisible();
+  await expect(page.getByRole('button', { name: /新建责任任命/ })).toHaveCount(
+    0,
+  );
+
   const hiddenRoutes = [
-    'organization-responsibilities/types',
     'clients',
     'roles',
     'sessions',

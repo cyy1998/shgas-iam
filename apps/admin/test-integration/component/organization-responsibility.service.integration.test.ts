@@ -61,6 +61,10 @@ describe('Organization Responsibility mutation service', () => {
       OrganizationResponsibilityMutationErrorKind.Cardinality,
     ],
     [
+      ApiErrorCode.OrganizationResponsibilityAssignmentUnmanageableConflict,
+      OrganizationResponsibilityMutationErrorKind.Unmanageable,
+    ],
+    [
       ApiErrorCode.Forbidden,
       OrganizationResponsibilityMutationErrorKind.Forbidden,
     ],

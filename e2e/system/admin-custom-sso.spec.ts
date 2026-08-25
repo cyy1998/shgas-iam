@@ -35,9 +35,13 @@ test("Admin prepares Custom SSO in Maintenance and existing access resumes after
   const internalApiKey = requireEnvironment("IAM_E2E_INTERNAL_API_KEY");
   const adminPrivilegeCode = requireEnvironment("IAM_E2E_ADMIN_PRIVILEGE_CODE");
   const adminRoleCode = requireEnvironment("IAM_E2E_ADMIN_ROLE_CODE");
+  const hrAdminRoleCode = requireEnvironment("IAM_E2E_HR_ADMIN_ROLE_CODE");
   const delegateeUsername = requireEnvironment("IAM_E2E_DELEGATEE_USERNAME");
   const disabledUsername = requireEnvironment("IAM_E2E_DISABLED_USERNAME");
   const hrAdminUsername = requireEnvironment("IAM_E2E_HR_ADMIN_USERNAME");
+  const noScopeHrAdminUsername = requireEnvironment(
+    "IAM_E2E_NO_SCOPE_HR_ADMIN_USERNAME",
+  );
   const organizationCode = requireEnvironment("IAM_E2E_ORGANIZATION_CODE");
   const pausedUsername = requireEnvironment("IAM_E2E_PAUSED_USERNAME");
   const positionCode = requireEnvironment("IAM_E2E_POSITION_CODE");
@@ -82,7 +86,9 @@ test("Admin prepares Custom SSO in Maintenance and existing access resumes after
     delegateeUsername,
     disabledUsername,
     hrAdminUsername,
+    hrAdminRoleCode,
     internalApiKey,
+    noScopeHrAdminUsername,
     organizationCode,
     origin,
     pausedUsername,

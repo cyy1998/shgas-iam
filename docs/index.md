@@ -48,6 +48,7 @@
 | [docs/adr/0015-adopt-schema-driven-user-profile-filter-dsl.md](adr/0015-adopt-schema-driven-user-profile-filter-dsl.md) | decision | Current | 2026-08-22 | 2026-10-31 | Accepted：User Profile Search 采用 Search Document 公开结构驱动的通用 Filter DSL，并复用现有 backfill/publication 在维护窗口内完成全局 v3 单代原地硬切换。 |
 | [docs/adr/0016-own-subject-claim-catalog-version-server-side.md](adr/0016-own-subject-claim-catalog-version-server-side.md) | decision | Current | 2026-08-23 | 2026-10-31 | Accepted：Catalog 代际由服务端全局拥有，不按 Client 持久化；切换时仍推进全部协议 epoch 并清理旧 artifact。 |
 | [docs/adr/0017-centralize-admin-role-policy-with-request-time-scope.md](adr/0017-centralize-admin-role-policy-with-request-time-scope.md) | decision | Current | 2026-08-23 | 2026-10-31 | Accepted：Admin 授权由服务端集中角色策略拥有，HR 组织范围使用 PostgreSQL 请求时事实，并明确接受低并发下的非线性撤权窗口。 |
+| [docs/adr/0018-authorize-hr-organization-responsibility-by-both-endpoints.md](adr/0018-authorize-hr-organization-responsibility-by-both-endpoints.md) | decision | Current | 2026-08-25 | 2026-10-31 | Accepted：HR 复用现有管理入口，仅在 holder Employment 与 target Organization 双端均属于请求时 scope 时管理责任任命；跨 scope roots 允许。 |
 | [docs/agents/code-investigation.md](agents/code-investigation.md) | agent-config | Current | 2026-08-14 | 2026-10-31 | 项目级 `code_researcher`/`deep_researcher` 的分层路由、只读调查、证据返回和 GitHub issue 外置记忆规则。 |
 | [docs/agents/domain.md](agents/domain.md) | agent-config | Current | 2026-07-16 | 2026-10-31 | Engineering skills 的 single-context domain documentation 消费规则。 |
 | [docs/agents/issue-tracker.md](agents/issue-tracker.md) | agent-config | Current | 2026-08-14 | 2026-10-31 | `cyy1998/shgas-iam` GitHub Issues 的 spec、ticket、跨会话状态与 wayfinding 约定。 |
@@ -65,6 +66,7 @@
 | [docs/features/audit/audit-logging.md](features/audit/audit-logging.md) | feature | Current | 2026-07-16 | 2026-09-30 | 统一审计日志、安全字段和已完成 `login_log` 退役后的当前边界。 |
 | [docs/features/oidc/oidc-integration.md](features/oidc/oidc-integration.md) | feature | Current | 2026-08-01 | 2026-09-30 | 内部 OIDC client 的端点、client 类型、scope/claim、CORS 和退出契约。 |
 | [docs/features/oidc/oidc-session-migration.md](features/oidc/oidc-session-migration.md) | feature | Current | 2026-08-09 | 2026-09-30 | Session Kernel 会话迁移、旧 key cleanup、staged payload rollout 和回滚边界。 |
+| [docs/features/organization-responsibility/hr-admin-management-design.md](features/organization-responsibility/hr-admin-management-design.md) | design | Current | 2026-08-25 | 2026-10-31 | 已实现：纯 HR 通过现有 operations 获得双端 scoped 责任管理，记录 deep authorization seam、错误语义、UI、Full-system 验证与发布边界。 |
 | [docs/features/sso/custom-sso-subject-projection-design.md](features/sso/custom-sso-subject-projection-design.md) | design | Historical | 2026-08-12 | n/a | 初代 Catalog V1 与 per-Client Catalog version 目标设计快照；相关决定已由 ADR-0016 取代，不代表当前实现。 |
 | [docs/features/sso/login-page-reentry-guard.md](features/sso/login-page-reentry-guard.md) | design | Current | 2026-08-14 | 2026-09-30 | 已接受的登录页重入守卫设计；定义协议所有权、页面状态、OIDC 重新认证边界、验收与协调切换。 |
 | [docs/features/sso/public-thirdparty-unified-login.md](features/sso/public-thirdparty-unified-login.md) | feature | Current | 2026-08-12 | 2026-09-30 | 第三方统一登录入口、目标系统会话所有权与 Custom SSO 职责边界说明。 |

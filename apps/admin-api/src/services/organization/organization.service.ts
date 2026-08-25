@@ -158,9 +158,20 @@ export function createOrganizationService(deps: AdminOrganizationServiceDeps) {
     if (org === null) {
       throw new OrganizationNotFoundError("组织不存在");
     }
-    const [employmentCount, hasOpenResponsibilityAssignment] = await Promise.all([
+    const [
+      employmentCount,
+      hasOpenResponsibilityAssignment,
+      hasUnmanageableOpenResponsibilityAssignment,
+    ] = await Promise.all([
       deps.organizationRepository.countOpenEmploymentsByOrgCode(orgCode),
       deps.responsibilityReader.hasOpenAssignmentTargetingOrganizationSubtree(org.id),
+      authorization?.kind === "scoped"
+        ? deps.responsibilityReader
+            .hasOpenAssignmentTargetingOrganizationSubtreeOutsideScope(
+              org.id,
+              authorization.organizationIds,
+            )
+        : Promise.resolve(false),
     ]);
     const dto = toOrganizationDto(org);
     return {
@@ -174,6 +185,7 @@ export function createOrganizationService(deps: AdminOrganizationServiceDeps) {
         childrenCount: org.children.length,
         employmentCount,
         hasOpenResponsibilityAssignment,
+        hasUnmanageableOpenResponsibilityAssignment,
       },
     };
   }

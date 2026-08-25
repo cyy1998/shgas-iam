@@ -1,22 +1,26 @@
 import {
   ORGANIZATION_RESPONSIBILITY_ASSIGNMENT_LIFECYCLE_COMMANDS,
-  OrganizationResponsibilityAssignmentStatus,
+  type AdminOrganizationResponsibilityAllowedActions,
   type OrganizationResponsibilityAssignmentLifecycleCommand as OrganizationResponsibilityAssignmentLifecycleCommandType,
 } from '@iam/contracts';
 import { Button, Modal, Space } from 'antd';
 
 export default function OrganizationResponsibilityAssignmentLifecycleActions({
   loading,
-  status,
+  allowedActions,
   onCommand,
 }: {
   loading: boolean;
-  status: OrganizationResponsibilityAssignmentStatus;
+  allowedActions: AdminOrganizationResponsibilityAllowedActions;
   onCommand: (
     command: OrganizationResponsibilityAssignmentLifecycleCommandType,
   ) => Promise<void>;
 }) {
-  if (status === OrganizationResponsibilityAssignmentStatus.Disable)
+  if (
+    !allowedActions.pause.allowed &&
+    !allowedActions.resume.allowed &&
+    !allowedActions.end.allowed
+  )
     return null;
 
   const confirmEnd = () => {
@@ -35,7 +39,7 @@ export default function OrganizationResponsibilityAssignmentLifecycleActions({
 
   return (
     <Space wrap style={{ marginBottom: 16 }}>
-      {status === OrganizationResponsibilityAssignmentStatus.Enable ? (
+      {allowedActions.pause.allowed && (
         <Button
           loading={loading}
           onClick={() =>
@@ -46,7 +50,8 @@ export default function OrganizationResponsibilityAssignmentLifecycleActions({
         >
           暂停任命
         </Button>
-      ) : (
+      )}
+      {allowedActions.resume.allowed && (
         <Button
           loading={loading}
           type="primary"
@@ -59,9 +64,11 @@ export default function OrganizationResponsibilityAssignmentLifecycleActions({
           恢复任命
         </Button>
       )}
-      <Button danger disabled={loading} onClick={confirmEnd}>
-        结束任命
-      </Button>
+      {allowedActions.end.allowed && (
+        <Button danger disabled={loading} onClick={confirmEnd}>
+          结束任命
+        </Button>
+      )}
     </Space>
   );
 }

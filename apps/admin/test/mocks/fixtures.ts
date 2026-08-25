@@ -23,6 +23,9 @@ export const adminCapabilitySummary = {
     user: { create: { allowed: true, reason: null } },
     employment: { create: { allowed: true, reason: null } },
     organization: { createRoot: { allowed: true, reason: null } },
+    organizationResponsibility: {
+      create: { allowed: true, reason: null },
+    },
     position: {
       create: { allowed: true, reason: null },
       edit: { allowed: true, reason: null },
@@ -44,11 +47,18 @@ const stateNotActionableAction = {
 } as const;
 
 export const hrAdminCapabilitySummary = {
-  visibleModules: ['user', 'organization', 'position', 'employment'],
+  visibleModules: [
+    'user',
+    'organization',
+    'organizationResponsibility',
+    'position',
+    'employment',
+  ],
   collectionActions: {
     user: { create: deniedAction },
     employment: { create: allowedAction },
     organization: { createRoot: deniedAction },
+    organizationResponsibility: { create: deniedAction },
     position: {
       create: deniedAction,
       edit: deniedAction,
@@ -241,8 +251,7 @@ export function createHrEmploymentAllowedActions(
         ? stateNotActionableAction
         : allowedAction,
     transfer: isOpen ? allowedAction : stateNotActionableAction,
-    setPrimary:
-      isOpen && !isPrimary ? allowedAction : stateNotActionableAction,
+    setPrimary: isOpen && !isPrimary ? allowedAction : stateNotActionableAction,
     clearPrimary:
       isOpen && isPrimary ? allowedAction : stateNotActionableAction,
   };

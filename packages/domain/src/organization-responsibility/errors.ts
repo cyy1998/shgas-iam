@@ -54,3 +54,14 @@ export class OrganizationResponsibilityAssignmentCardinalityConflictError extend
     });
   }
 }
+
+export class OrganizationResponsibilityAssignmentUnmanageableConflictError extends DomainBusinessError {
+  constructor(
+    message: string = "责任槽位已占用；如果当前列表没有可管理记录，请联系完整管理员",
+  ) {
+    super(message, {
+      code: ApiErrorCode.OrganizationResponsibilityAssignmentUnmanageableConflict,
+      httpStatus: DomainHttpStatus.Conflict,
+    });
+  }
+}

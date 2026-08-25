@@ -1,9 +1,10 @@
+import type { OrganizationResponsibilityReadScope } from "@admin-api/services/admin-authorization/admin-organization-responsibility-authorization.type";
 import type { EmploymentStatus, OrganizationStatus } from "@iam/contracts";
 import type { DbClient } from "@iam/db";
 import type { OrganizationResponsibilityAssignmentRecordCreate } from "@iam/domain/organization-responsibility";
 import type {
+  OrganizationResponsibilityAssignmentData,
   OrganizationResponsibilityAssignmentLifecycle,
-  OrganizationResponsibilityAssignmentView,
 } from "./organization-responsibility.schema";
 import {
   OrganizationResponsibilityAssignmentStatus,
@@ -23,7 +24,7 @@ import {
   getOrganizationResponsibilityOpenCardinalityViolation,
   getOrganizationResponsibilityParentLifecycleViolation,
 } from "@iam/domain/organization-responsibility";
-import { and, desc, eq, inArray, isNull, lt } from "drizzle-orm";
+import { and, desc, eq, inArray, isNull, lt, ne, notInArray, or } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 
 const OPEN_ASSIGNMENT_STATUSES = [
@@ -32,6 +33,18 @@ const OPEN_ASSIGNMENT_STATUSES = [
 ] as const;
 
 export function createOrganizationResponsibilityRepository(db: DbClient) {
+  function isEndpointPairWithinReadScope(input: {
+    readScope: OrganizationResponsibilityReadScope;
+    holderOrganizationId: number;
+    targetOrganizationId: number;
+  }) {
+    return input.readScope.kind === "full"
+      || (
+        input.readScope.organizationIds.includes(input.holderOrganizationId)
+        && input.readScope.organizationIds.includes(input.targetOrganizationId)
+      );
+  }
+
   async function hasOpenAssignmentTargetingOrganizationSubtree(
     organizationId: number,
   ) {
@@ -54,6 +67,60 @@ export function createOrganizationResponsibilityRepository(db: DbClient) {
             ]),
           ),
         )
+        .limit(1),
+    );
+    return row !== null;
+  }
+
+  async function hasOpenAssignmentTargetingOrganizationSubtreeOutsideScope(
+    organizationId: number,
+    organizationIds: readonly number[],
+  ) {
+    if (organizationIds.length === 0)
+      return await hasOpenAssignmentTargetingOrganizationSubtree(organizationId);
+    const holderOrganization = alias(
+      organizations,
+      "responsibility_blocker_holder_organization",
+    );
+    const row = firstRow(
+      await db
+        .select({ id: organizationResponsibilityAssignments.id })
+        .from(organizationResponsibilityAssignments)
+        .innerJoin(
+          organizationClosures,
+          eq(
+            organizationResponsibilityAssignments.targetOrganizationId,
+            organizationClosures.descendantId,
+          ),
+        )
+        .leftJoin(
+          employments,
+          eq(
+            organizationResponsibilityAssignments.employmentId,
+            employments.id,
+          ),
+        )
+        .leftJoin(
+          holderOrganization,
+          eq(employments.orgId, holderOrganization.id),
+        )
+        .where(and(
+          eq(organizationClosures.ancestorId, organizationId),
+          inArray(organizationResponsibilityAssignments.status, [
+            ...OPEN_ASSIGNMENT_STATUSES,
+          ]),
+          or(
+            isNull(employments.id),
+            eq(employments.isDelete, true),
+            isNull(holderOrganization.id),
+            eq(holderOrganization.isDelete, true),
+            notInArray(holderOrganization.id, [...organizationIds]),
+            notInArray(
+              organizationResponsibilityAssignments.targetOrganizationId,
+              [...organizationIds],
+            ),
+          ),
+        ))
         .limit(1),
     );
     return row !== null;
@@ -234,25 +301,60 @@ export function createOrganizationResponsibilityRepository(db: DbClient) {
     targetOrganizationId: number;
     typeCode: OrganizationResponsibilityTypeCode;
     excludeAssignmentId?: number;
+    readScope?: OrganizationResponsibilityReadScope;
   }) {
-    const row = await db.query.organizationResponsibilityAssignments.findFirst({
-      columns: { id: true, employmentId: true },
-      where: {
-        targetOrganizationId: input.targetOrganizationId,
-        typeCode: input.typeCode,
-        status: { in: [...OPEN_ASSIGNMENT_STATUSES] },
-        ...(input.excludeAssignmentId === undefined
-          ? {}
-          : { id: { ne: input.excludeAssignmentId } }),
-        ...(input.typeCode === OrganizationResponsibilityTypeCode.Supervising
-          ? { employmentId: input.employmentId }
-          : {}),
-      },
-    });
-    return row ?? null;
+    const row = firstRow(await db
+      .select({
+        id: organizationResponsibilityAssignments.id,
+        employmentId: organizationResponsibilityAssignments.employmentId,
+        holderOrganizationId: employments.orgId,
+      })
+      .from(organizationResponsibilityAssignments)
+      .leftJoin(
+        employments,
+        eq(organizationResponsibilityAssignments.employmentId, employments.id),
+      )
+      .where(and(
+        eq(
+          organizationResponsibilityAssignments.targetOrganizationId,
+          input.targetOrganizationId,
+        ),
+        eq(organizationResponsibilityAssignments.typeCode, input.typeCode),
+        inArray(organizationResponsibilityAssignments.status, [
+          ...OPEN_ASSIGNMENT_STATUSES,
+        ]),
+        input.excludeAssignmentId === undefined
+          ? undefined
+          : ne(
+              organizationResponsibilityAssignments.id,
+              input.excludeAssignmentId,
+            ),
+        input.typeCode === OrganizationResponsibilityTypeCode.Supervising
+          ? eq(
+              organizationResponsibilityAssignments.employmentId,
+              input.employmentId,
+            )
+          : undefined,
+      ))
+      .limit(1));
+    if (row === null)
+      return null;
+    return {
+      id: row.id,
+      employmentId: row.employmentId,
+      isManageable: input.readScope === undefined
+        ? true
+        : row.holderOrganizationId !== null
+          && isEndpointPairWithinReadScope({
+            readScope: input.readScope,
+            holderOrganizationId: row.holderOrganizationId,
+            targetOrganizationId: input.targetOrganizationId,
+          }),
+    };
   }
 
   async function readAssignmentViews(input: {
+    readScope: OrganizationResponsibilityReadScope;
     targetOrganizationCode?: string;
     employmentId?: number;
     typeCode?: OrganizationResponsibilityTypeCode;
@@ -260,7 +362,7 @@ export function createOrganizationResponsibilityRepository(db: DbClient) {
     id?: number;
     cursorId?: number;
     limit: number;
-  }): Promise<OrganizationResponsibilityAssignmentView[]> {
+  }): Promise<OrganizationResponsibilityAssignmentData[]> {
     const holderOrganization = alias(
       organizations,
       "responsibility_holder_organization",
@@ -273,7 +375,10 @@ export function createOrganizationResponsibilityRepository(db: DbClient) {
       organizations,
       "responsibility_orphan_target_organization",
     );
-    if (input.targetOrganizationCode !== undefined) {
+    if (
+      input.readScope.kind === "full"
+      && input.targetOrganizationCode !== undefined
+    ) {
       const orphanTarget = firstRow(
         await db
           .select({ id: organizationResponsibilityAssignments.id })
@@ -368,6 +473,18 @@ export function createOrganizationResponsibilityRepository(db: DbClient) {
               ? undefined
               : eq(targetOrganization.orgCode, input.targetOrganizationCode)
             : eq(organizationResponsibilityAssignments.id, input.id),
+          input.readScope.kind === "scoped"
+            ? and(
+                inArray(
+                  holderOrganization.id,
+                  [...input.readScope.organizationIds],
+                ),
+                inArray(
+                  targetOrganization.id,
+                  [...input.readScope.organizationIds],
+                ),
+              )
+            : undefined,
           input.employmentId === undefined
             ? undefined
             : eq(
@@ -611,12 +728,14 @@ export function createOrganizationResponsibilityRepository(db: DbClient) {
     endOpenAssignmentsForEmployment,
     endOpenAssignmentsForUser,
     hasOpenAssignmentTargetingOrganizationSubtree,
+    hasOpenAssignmentTargetingOrganizationSubtreeOutsideScope,
     pauseEnabledAssignmentsForEmployment,
     async getEmploymentForResponsibilityById(id: number) {
       const row = await db
         .select({
           id: employments.id,
           userId: employments.userId,
+          organizationId: employments.orgId,
           status: employments.status,
           isDelete: employments.isDelete,
         })
@@ -639,6 +758,7 @@ export function createOrganizationResponsibilityRepository(db: DbClient) {
       return firstRow(row) ?? null;
     },
     findOpenAssignmentForSlot,
+    isEndpointPairWithinReadScope,
     async getAssignmentLifecycleContextById(id: number) {
       const row = firstRow(
         await db
@@ -653,6 +773,7 @@ export function createOrganizationResponsibilityRepository(db: DbClient) {
             endTime: organizationResponsibilityAssignments.endTime,
             holderEmploymentId: employments.id,
             holderUserId: employments.userId,
+            holderOrganizationId: employments.orgId,
             holderEmploymentStatus: employments.status,
             holderEmploymentIsDelete: employments.isDelete,
             targetOrganizationRowId: organizations.id,
@@ -697,6 +818,11 @@ export function createOrganizationResponsibilityRepository(db: DbClient) {
                   row.holderUserId,
                   row.assignmentId,
                   "holder User",
+                ),
+                organizationId: requireValue(
+                  row.holderOrganizationId,
+                  row.assignmentId,
+                  "holder Organization",
                 ),
                 status: requireValue(
                   row.holderEmploymentStatus,
@@ -756,13 +882,29 @@ export function createOrganizationResponsibilityRepository(db: DbClient) {
       lifecycle: OrganizationResponsibilityAssignmentLifecycle;
       cursorId?: number;
       limit: number;
-    }) {
-      return await readAssignmentViews({ ...input });
+    }, readScope: OrganizationResponsibilityReadScope) {
+      if (
+        readScope.kind === "scoped"
+        && readScope.organizationIds.length === 0
+      ) {
+        return [];
+      }
+      return await readAssignmentViews({ ...input, readScope });
     },
-    async getAssignmentDetailForAdmin(input: { orgCode?: string; id: number }) {
+    async getAssignmentDetailForAdmin(
+      input: { orgCode?: string; id: number },
+      readScope: OrganizationResponsibilityReadScope,
+    ) {
+      if (
+        readScope.kind === "scoped"
+        && readScope.organizationIds.length === 0
+      ) {
+        return null;
+      }
       return (
         firstRow(
           await readAssignmentViews({
+            readScope,
             targetOrganizationCode: input.orgCode,
             id: input.id,
             lifecycle: "all",

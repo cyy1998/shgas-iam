@@ -58,6 +58,9 @@ describe("Admin Custom SSO journey operations", () => {
       IAM_E2E_ADMIN_CLIENT_CODE: "iam-admin",
       IAM_E2E_DELEGATEE_USERNAME: "e2e-delegatee-admin-journey-01",
       IAM_E2E_HR_ADMIN_USERNAME: "e2e-hr-admin-admin-journey-01",
+      IAM_E2E_HR_ADMIN_ROLE_CODE: "iam:hr-admin",
+      IAM_E2E_NO_SCOPE_HR_ADMIN_USERNAME:
+        "e2e-no-scope-hr-admin-journey-01",
       IAM_E2E_CUSTOM_SSO_CLIENT_CODE: "e2e-custom-admin-journey-01",
       IAM_E2E_CUSTOM_SSO_REDIRECT_URI:
         "http://127.0.0.1:43123/e2e/custom-sso/*",

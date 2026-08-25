@@ -15,12 +15,22 @@ export interface E2EScenarioReferences {
   pausedUsername: string;
   disabledSubjectIdentifier: string;
   disabledUsername: string;
+  noScopeHrAdminSubjectIdentifier: string;
+  noScopeHrAdminUsername: string;
   organizationCode: string;
   responsibilityHolderOrganizationCode: string;
   responsibilityTargetOrganizationCode: string;
+  hrSecondScopeRootOrganizationCode: string;
+  hrResponsibilityTargetOrganizationCode: string;
   positionCode: string;
   globalPositionCode: string;
   responsibilityHolderPositionCode: string;
+  outsideResponsibilityHolderPositionCode: string;
+  responsibilityHolderEmploymentId: number;
+  outsideResponsibilityHolderEmploymentId: number;
+  adminMixedRoleAssignmentId: number;
+  hiddenResponsibilityAssignmentId: number;
+  hrSecondScopeRoleAssignmentId: number;
   adminRoleCode: string;
   hrAdminRoleCode: string;
   adminPrivilegeCode: string;
@@ -34,6 +44,20 @@ export interface E2EScenarioReferences {
   oidcPostLogoutRedirectUri: string;
 }
 
+export type E2EScenarioGeneratedReferences = Pick<
+  E2EScenarioReferences,
+  | "hiddenResponsibilityAssignmentId"
+  | "adminMixedRoleAssignmentId"
+  | "hrSecondScopeRoleAssignmentId"
+  | "outsideResponsibilityHolderEmploymentId"
+  | "responsibilityHolderEmploymentId"
+>;
+
+export type E2EScenarioSeedReferences = Omit<
+  E2EScenarioReferences,
+  keyof E2EScenarioGeneratedReferences
+>;
+
 export type E2EScenarioIdentity = Pick<
   E2EScenarioReferences,
   | "adminUsername"
@@ -42,12 +66,16 @@ export type E2EScenarioIdentity = Pick<
   | "delegateeUsername"
   | "pausedUsername"
   | "disabledUsername"
+  | "noScopeHrAdminUsername"
   | "organizationCode"
   | "responsibilityHolderOrganizationCode"
   | "responsibilityTargetOrganizationCode"
+  | "hrSecondScopeRootOrganizationCode"
+  | "hrResponsibilityTargetOrganizationCode"
   | "positionCode"
   | "globalPositionCode"
   | "responsibilityHolderPositionCode"
+  | "outsideResponsibilityHolderPositionCode"
   | "adminRoleCode"
   | "hrAdminRoleCode"
   | "adminPrivilegeCode"
@@ -72,20 +100,40 @@ export interface E2EScenarioReadBack {
   };
   delegatee: {
     active: boolean;
+    passwordConfigured: boolean;
+    subjectIdentifier: string;
+    username: string;
+  };
+  noScopeHrAdmin: {
+    active: boolean;
+    passwordConfigured: boolean;
     subjectIdentifier: string;
     username: string;
   };
   organization: { active: boolean; code: string };
   responsibilityHolderOrganization: { active: boolean; code: string };
   responsibilityTargetOrganization: { active: boolean; code: string };
+  hrSecondScopeRootOrganization: { active: boolean; code: string };
+  hrResponsibilityTargetOrganization: { active: boolean; code: string };
   position: { active: boolean; code: string };
   globalPosition: { active: boolean; code: string };
+  outsideResponsibilityHolderPosition: { active: boolean; code: string };
   employment: { active: boolean };
   responsibilityHolderEmployment: { active: boolean };
+  outsideResponsibilityHolderEmployment: { active: boolean; id: number };
   role: { active: boolean; assigned: boolean; code: string };
   hrRole: { active: boolean; assigned: boolean; code: string };
   hrRoleBearingEmployment: { active: boolean };
+  hrSecondScopeRoleBearingEmployment: { active: boolean };
   hrOrdinaryEmployment: { active: boolean };
+  adminHasMixedRole: boolean;
+  noScopeHrRoleIsIneffective: boolean;
+  hiddenResponsibilityAssignment: {
+    active: boolean;
+    id: number;
+    holderEmploymentId: number;
+    targetOrganizationCode: string;
+  };
   adminClient: {
     active: boolean;
     customSsoEnabled: boolean;
@@ -141,11 +189,11 @@ export interface E2EScenarioReadBack {
 
 export interface E2EScenarioOwner {
   establish: (
-    input: E2EScenarioReferences & {
+    input: E2EScenarioSeedReferences & {
       adminPassword: string;
       internalApiKey: string;
     },
-  ) => Promise<void>;
+  ) => Promise<E2EScenarioGeneratedReferences>;
   readBack: (
     references: E2EScenarioReferences,
   ) => Promise<E2EScenarioReadBack>;
@@ -167,7 +215,7 @@ export async function seedE2EScenario(
   if (input.adminPassword.length < 12)
     throw new Error("E2E synthetic admin credential is too short");
 
-  const references: E2EScenarioReferences = {
+  const fixedReferences = {
     version: 1,
     runId: input.runId,
     canonicalOrigin: origin,
@@ -176,18 +224,23 @@ export async function seedE2EScenario(
     delegateeSubjectIdentifier: input.random.uuid(),
     pausedSubjectIdentifier: input.random.uuid(),
     disabledSubjectIdentifier: input.random.uuid(),
+    noScopeHrAdminSubjectIdentifier: input.random.uuid(),
     ...identity,
     adminRedirectUri: `${origin}/iam-admin/*`,
     customSsoRedirectUri: `${origin}/e2e/custom-sso/*`,
     oidcRedirectUri: `${origin}/e2e/oidc/callback`,
     oidcPostLogoutRedirectUri: `${origin}/e2e/oidc/logged-out`,
-  };
+  } satisfies E2EScenarioSeedReferences;
 
-  await input.owner.establish({
-    ...references,
+  const generatedReferences = await input.owner.establish({
+    ...fixedReferences,
     adminPassword: input.adminPassword,
     internalApiKey: createE2EScenarioInternalApiKey(input.runId),
   });
+  const references: E2EScenarioReferences = {
+    ...fixedReferences,
+    ...generatedReferences,
+  };
   assertScenarioReadBack(references, await input.owner.readBack(references));
   return references;
 }
@@ -201,12 +254,16 @@ export function createE2EScenarioIdentity(runId: string): E2EScenarioIdentity {
     delegateeUsername: `e2e-delegatee-${runKey}`,
     pausedUsername: `e2e-paused-${runKey}`,
     disabledUsername: `e2e-disabled-${runKey}`,
+    noScopeHrAdminUsername: `e2e-no-scope-hr-${runKey}`,
     organizationCode: `e2e-org-${runKey}`,
     responsibilityHolderOrganizationCode: `e2e-holder-org-${runKey}`,
     responsibilityTargetOrganizationCode: `e2e-resp-target-${runKey}`,
+    hrSecondScopeRootOrganizationCode: `e2e-hr-root-${runKey}`,
+    hrResponsibilityTargetOrganizationCode: `e2e-hr-target-${runKey}`,
     positionCode: `e2e-pos-${runKey}`,
     globalPositionCode: `e2e-global-pos-${runKey}`,
     responsibilityHolderPositionCode: `e2e-resp-pos-${runKey}`,
+    outsideResponsibilityHolderPositionCode: `e2e-outside-resp-pos-${runKey}`,
     adminRoleCode: "iam:admin",
     hrAdminRoleCode: "iam:hr-admin",
     adminPrivilegeCode: `e2e-privilege-${runKey}`,
@@ -255,8 +312,14 @@ function assertScenarioReadBack(
     && actual.hrAdmin.subjectIdentifier === expected.hrAdminSubjectIdentifier
     && actual.hrAdmin.username === expected.hrAdminUsername
     && actual.delegatee.active
+    && actual.delegatee.passwordConfigured
     && actual.delegatee.subjectIdentifier === expected.delegateeSubjectIdentifier
     && actual.delegatee.username === expected.delegateeUsername
+    && actual.noScopeHrAdmin.active
+    && actual.noScopeHrAdmin.passwordConfigured
+    && actual.noScopeHrAdmin.subjectIdentifier
+    === expected.noScopeHrAdminSubjectIdentifier
+    && actual.noScopeHrAdmin.username === expected.noScopeHrAdminUsername
     && actual.organization.active
     && actual.organization.code === expected.organizationCode
     && actual.responsibilityHolderOrganization.active
@@ -265,12 +328,24 @@ function assertScenarioReadBack(
     && actual.responsibilityTargetOrganization.active
     && actual.responsibilityTargetOrganization.code
     === expected.responsibilityTargetOrganizationCode
+    && actual.hrSecondScopeRootOrganization.active
+    && actual.hrSecondScopeRootOrganization.code
+    === expected.hrSecondScopeRootOrganizationCode
+    && actual.hrResponsibilityTargetOrganization.active
+    && actual.hrResponsibilityTargetOrganization.code
+    === expected.hrResponsibilityTargetOrganizationCode
     && actual.position.active
     && actual.position.code === expected.positionCode
     && actual.globalPosition.active
     && actual.globalPosition.code === expected.globalPositionCode
+    && actual.outsideResponsibilityHolderPosition.active
+    && actual.outsideResponsibilityHolderPosition.code
+    === expected.outsideResponsibilityHolderPositionCode
     && actual.employment.active
     && actual.responsibilityHolderEmployment.active
+    && actual.outsideResponsibilityHolderEmployment.active
+    && actual.outsideResponsibilityHolderEmployment.id
+    === expected.outsideResponsibilityHolderEmploymentId
     && actual.role.active
     && actual.role.assigned
     && actual.role.code === expected.adminRoleCode
@@ -278,7 +353,17 @@ function assertScenarioReadBack(
     && actual.hrRole.assigned
     && actual.hrRole.code === expected.hrAdminRoleCode
     && actual.hrRoleBearingEmployment.active
+    && actual.hrSecondScopeRoleBearingEmployment.active
     && actual.hrOrdinaryEmployment.active
+    && actual.adminHasMixedRole
+    && actual.noScopeHrRoleIsIneffective
+    && actual.hiddenResponsibilityAssignment.active
+    && actual.hiddenResponsibilityAssignment.id
+    === expected.hiddenResponsibilityAssignmentId
+    && actual.hiddenResponsibilityAssignment.holderEmploymentId
+    === expected.outsideResponsibilityHolderEmploymentId
+    && actual.hiddenResponsibilityAssignment.targetOrganizationCode
+    === expected.hrResponsibilityTargetOrganizationCode
     && actual.adminClient.active
     && actual.adminClient.customSsoEnabled
     && actual.adminClient.clientCode === expected.adminClientCode
@@ -312,7 +397,10 @@ function assertScenarioReadBack(
       expected.responsibilityHolderPositionCode,
     ])
     && exactly(actual.subjectFacts.clientCodes, expected.adminClientCode)
-    && exactly(actual.subjectFacts.roleCodes, expected.adminRoleCode)
+    && exactlyAll(actual.subjectFacts.roleCodes, [
+      expected.adminRoleCode,
+      expected.hrAdminRoleCode,
+    ])
     && actual.subjectFacts.responsibilityTypeCodes.length === 0
     && actual.subjectFacts.responsibilityTargetOrganizationCodes.length === 0
     && actual.subjectProfileReady;
@@ -324,10 +412,11 @@ function assertScenarioReadBack(
     && exactlyAll(actual.hrSubjectFacts.organizationCodes, [
       expected.responsibilityHolderOrganizationCode,
       expected.responsibilityTargetOrganizationCode,
+      expected.hrSecondScopeRootOrganizationCode,
     ])
     && exactlyAll(actual.hrSubjectFacts.positionCodes, [
       expected.positionCode,
-      expected.responsibilityHolderPositionCode,
+      expected.outsideResponsibilityHolderPositionCode,
     ])
     && exactly(actual.hrSubjectFacts.clientCodes, expected.adminClientCode)
     && exactly(actual.hrSubjectFacts.roleCodes, expected.hrAdminRoleCode)

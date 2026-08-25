@@ -7,6 +7,7 @@ import type {
   ManageOrganizationResponsibilityAssignmentLifecycleInput,
   ManageOrganizationResponsibilityAssignmentLifecycleOptions,
 } from "./manage-assignment-lifecycle.type";
+import { ADMIN_ORGANIZATION_RESPONSIBILITY_LIFECYCLE_OPERATION_IDS } from "@admin-api/services/admin-authorization/admin-organization-responsibility-authorization.type";
 import { adminAuditTransactionOptions } from "@admin-api/services/audit/audit.context";
 import { buildOrganizationResponsibilityAssignmentLifecycleAudit } from "@admin-api/services/audit/events/organization-responsibility-assignment.audit";
 import { CustomError } from "@iam/api-core/errors";
@@ -27,14 +28,33 @@ export function createManageOrganizationResponsibilityAssignmentLifecycleUseCase
 ) {
   async function execute(
     input: ManageOrganizationResponsibilityAssignmentLifecycleInput,
-    options: ManageOrganizationResponsibilityAssignmentLifecycleOptions = {},
+    options: ManageOrganizationResponsibilityAssignmentLifecycleOptions,
   ) {
-    const { auditContext } = options;
+    const { auditContext, authorization } = options;
     return await deps.uow.transaction(async (tx) => {
       const context
         = await tx.assignmentStore.getAssignmentLifecycleContextById(input.id);
       if (context === null)
         throw new OrganizationResponsibilityAssignmentNotFoundError();
+
+      const employment = context.employment;
+      const endpointsWithinScope = authorization.kind === "full"
+        || (employment !== null
+          && tx.assignmentStore.isEndpointPairWithinReadScope({
+            readScope: authorization.readScope,
+            holderOrganizationId: employment.organizationId,
+            targetOrganizationId: context.assignment.targetOrganizationId,
+          }));
+      if (!endpointsWithinScope) {
+        authorization.denyMutation({
+          operationId:
+            ADMIN_ORGANIZATION_RESPONSIBILITY_LIFECYCLE_OPERATION_IDS[
+              input.command
+            ],
+          resourceIdentifier: "assignment-request",
+          reason: "RESOURCE_OUT_OF_SCOPE",
+        });
+      }
 
       const transition = resolveOrganizationResponsibilityAssignmentTransition({
         command: input.command,
@@ -43,7 +63,6 @@ export function createManageOrganizationResponsibilityAssignmentLifecycleUseCase
       if (!transition.changed)
         return true;
 
-      const employment = context.employment;
       if (employment === null)
         throw new OrganizationResponsibilityHolderEmploymentUnavailableError();
       if (

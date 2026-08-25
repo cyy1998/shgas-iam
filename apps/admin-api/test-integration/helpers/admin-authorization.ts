@@ -1,5 +1,10 @@
+import type { AdminOrganizationResponsibilityAuthorization } from "@admin-api/services/admin-authorization/admin-organization-responsibility-authorization.type";
+import type { AdminAuditContext } from "@admin-api/services/audit/audit.context";
 import type { Hono } from "hono";
-import { createAdminAuthorizationPolicy } from "@admin-api/services/admin-authorization/admin-authorization.policy";
+import {
+  createAdminAuthorizationPolicy,
+  getOrganizationResponsibilityAllowedActions,
+} from "@admin-api/services/admin-authorization/admin-authorization.policy";
 import { mock } from "bun:test";
 
 export const testAdminAuthorizationPolicy = createAdminAuthorizationPolicy({
@@ -8,6 +13,39 @@ export const testAdminAuthorizationPolicy = createAdminAuthorizationPolicy({
   },
   logger: { warn: mock() },
 });
+
+export const testFullOrganizationResponsibilityAuthorization = {
+  kind: "full",
+  readScope: { kind: "full" },
+  getAllowedActions: getOrganizationResponsibilityAllowedActions,
+  denyMutation: () => {
+    throw new Error("mutation denial is outside full-administrator tests");
+  },
+} as const satisfies AdminOrganizationResponsibilityAuthorization;
+
+export function withTestFullOrganizationResponsibilityAuthorization<
+  TInput,
+  TResult,
+>(useCase: {
+  execute: (
+    input: TInput,
+    options: {
+      auditContext?: AdminAuditContext;
+      authorization: AdminOrganizationResponsibilityAuthorization;
+    },
+  ) => TResult;
+}) {
+  return {
+    ...useCase,
+    execute: (
+      input: TInput,
+      options: { auditContext?: AdminAuditContext } = {},
+    ) => useCase.execute(input, {
+      ...options,
+      authorization: testFullOrganizationResponsibilityAuthorization,
+    }),
+  };
+}
 
 export function getTestAdminAuthorizationValue(key: string) {
   if (key === "adminAuthorizationPolicy")

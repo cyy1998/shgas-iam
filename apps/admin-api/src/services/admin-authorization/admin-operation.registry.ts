@@ -191,7 +191,12 @@ export const ADMIN_OPERATION_REGISTRY = {
   "admin.organizationResponsibility.searchAssignments": { module: "organizationResponsibility", type: "query", resourceType: "organizationResponsibilityAssignment" },
   "admin.organizationResponsibility.detailAssignment": { module: "organizationResponsibility", type: "query", resourceType: "organizationResponsibilityAssignment" },
   "admin.organizationResponsibility.scopedDetailAssignment": { module: "organizationResponsibility", type: "query", resourceType: "organizationResponsibilityAssignment" },
-  "admin.organizationResponsibility.createAssignment": responsibilityMutation(["employmentId", "orgCode"]),
+  "admin.organizationResponsibility.createAssignment": {
+    module: "organizationResponsibility",
+    type: "mutation",
+    resourceType: "organizationResponsibilityAssignment",
+    resourceIdentifier: () => "create-request",
+  },
   "admin.organizationResponsibility.pauseAssignment": responsibilityMutation(["id"]),
   "admin.organizationResponsibility.resumeAssignment": responsibilityMutation(["id"]),
   "admin.organizationResponsibility.endAssignment": responsibilityMutation(["id"]),

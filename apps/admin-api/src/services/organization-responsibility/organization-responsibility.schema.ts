@@ -1,5 +1,6 @@
 import { z } from "@hono/zod-openapi";
 import {
+  AdminOrganizationResponsibilityAllowedActionsSchema,
   OrganizationResponsibilityAssignmentStatus,
   OrganizationResponsibilityTypeCode,
 } from "@iam/contracts";
@@ -62,6 +63,7 @@ export const OrganizationResponsibilityAssignmentViewSchema = z.object({
     }),
   }),
   targetOrganization: OrganizationWithFullPathSchema,
+  allowedActions: AdminOrganizationResponsibilityAllowedActionsSchema,
 });
 
 export const OrganizationResponsibilityAssignmentCursorPageSchema = z.object({
@@ -74,4 +76,8 @@ export type OrganizationResponsibilityAssignmentCreateDto = z.infer<
 >;
 export type OrganizationResponsibilityAssignmentView = z.infer<
   typeof OrganizationResponsibilityAssignmentViewSchema
+>;
+export type OrganizationResponsibilityAssignmentData = Omit<
+  OrganizationResponsibilityAssignmentView,
+  "allowedActions"
 >;

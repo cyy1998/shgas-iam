@@ -97,6 +97,21 @@ export async function resolveAdminUserAuthorizationForContext(
   );
 }
 
+export async function resolveAdminOrganizationResponsibilityAuthorizationForContext(
+  c: Context,
+  operationId: AdminOperationId,
+) {
+  const { actor, policy } = getAdminAuthorizationContext(c);
+  const operationAuthorization = await authorizeAdminOperationForContext(c, {
+    operationId,
+    operationInput: undefined,
+  });
+  return await policy.getOrganizationResponsibilityAuthorization(
+    actor,
+    operationAuthorization.hrAdministrationScope,
+  );
+}
+
 export function createAdminRestAuthorizationHandler(
   surface: AdminRestOperationSurface,
 ) {

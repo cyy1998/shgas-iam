@@ -46,6 +46,7 @@ export const OrganizationResponsibilityMutationErrorKind = {
   NotOpen: 'not-open',
   Duplicate: 'duplicate',
   Cardinality: 'cardinality',
+  Unmanageable: 'unmanageable',
   Forbidden: 'forbidden',
   Internal: 'internal',
   Network: 'network',
@@ -173,6 +174,11 @@ function toOrganizationResponsibilityMutationErrorKind(
     ApiErrorCode.OrganizationResponsibilityAssignmentCardinalityConflict
   )
     return OrganizationResponsibilityMutationErrorKind.Cardinality;
+  if (
+    serviceCode ===
+    ApiErrorCode.OrganizationResponsibilityAssignmentUnmanageableConflict
+  )
+    return OrganizationResponsibilityMutationErrorKind.Unmanageable;
   if (serviceCode === ApiErrorCode.Forbidden)
     return OrganizationResponsibilityMutationErrorKind.Forbidden;
   return data === undefined
@@ -207,6 +213,8 @@ function getOrganizationResponsibilityMutationErrorMessage(
       '同一任职已持有该责任',
     [OrganizationResponsibilityMutationErrorKind.Cardinality]:
       '目标组织的责任已达到基数上限',
+    [OrganizationResponsibilityMutationErrorKind.Unmanageable]:
+      '责任槽位已占用；如果当前列表没有可管理记录，请联系完整管理员',
     [OrganizationResponsibilityMutationErrorKind.Forbidden]:
       '无权管理组织责任任命',
     [OrganizationResponsibilityMutationErrorKind.Internal]:

@@ -7,6 +7,7 @@ import {
 } from '@iam/contracts';
 import { Modal } from 'antd';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { __setAccess } from '~admin/test/mocks/umijs-max';
 import { render, screen, waitFor, within } from '~admin/test/render';
 
 const responsibilityService = vi.hoisted(() => ({
@@ -68,6 +69,22 @@ vi.mock('@admin/components/audit/AuditLogTable', () => ({
   ),
 }));
 
+const enabledAllowedActions = {
+  pause: { allowed: true, reason: null },
+  resume: { allowed: false, reason: 'RESOURCE_STATE_NOT_ACTIONABLE' },
+  end: { allowed: true, reason: null },
+} as const;
+const pausedAllowedActions = {
+  pause: { allowed: false, reason: 'RESOURCE_STATE_NOT_ACTIONABLE' },
+  resume: { allowed: true, reason: null },
+  end: { allowed: true, reason: null },
+} as const;
+const endedAllowedActions = {
+  pause: { allowed: false, reason: 'RESOURCE_STATE_NOT_ACTIONABLE' },
+  resume: { allowed: false, reason: 'RESOURCE_STATE_NOT_ACTIONABLE' },
+  end: { allowed: false, reason: 'RESOURCE_STATE_NOT_ACTIONABLE' },
+} as const;
+
 const assignment = {
   id: 101,
   typeCode: OrganizationResponsibilityTypeCode.Head,
@@ -97,6 +114,7 @@ const assignment = {
   status: OrganizationResponsibilityAssignmentStatus.Enable,
   startTime: '2026-08-20T00:00:00.000Z',
   endTime: null,
+  allowedActions: enabledAllowedActions,
 };
 
 describe('OrganizationResponsibilityAssignmentModule', () => {
@@ -203,6 +221,41 @@ describe('OrganizationResponsibilityAssignmentModule', () => {
     await screen.findByText(
       '{"targetType":"organization_responsibility_assignment","targetId":101}',
     );
+  });
+
+  it('offers scoped HR Create and server-owned lifecycle actions while keeping Audit hidden', async () => {
+    __setAccess({
+      canAccessOrganizationResponsibility: true,
+      canCreateOrganizationResponsibility: true,
+      canAccessAudit: false,
+    });
+    render(
+      <OrganizationResponsibilityAssignmentModule
+        host={{
+          kind: 'global',
+          state: { lifecycle: 'open', assignmentId: 101 },
+          onStateChange: vi.fn(),
+        }}
+      />,
+    );
+
+    const dialog = await screen.findByRole('dialog');
+    expect(
+      screen.getByRole('button', { name: /新建责任任命/ }),
+    ).toBeVisible();
+    expect(
+      within(dialog).queryByRole('tab', { name: '操作日志' }),
+    ).not.toBeInTheDocument();
+    expect(
+      within(dialog).getByRole('button', { name: '暂停任命' }),
+    ).toBeVisible();
+    expect(
+      within(dialog).getByRole('button', { name: '结束任命' }),
+    ).toBeVisible();
+    expect(
+      within(dialog).queryByRole('button', { name: '恢复任命' }),
+    ).toBeNull();
+    expect(screen.queryByTestId('assignment-audit')).not.toBeInTheDocument();
   });
 
   it('rejects an Assignment ID outside the restored global scope', async () => {
@@ -362,12 +415,45 @@ describe('OrganizationResponsibilityAssignmentModule', () => {
     });
   });
 
+  it('renders only server-owned lifecycle decisions instead of inferring from status', async () => {
+    responsibilityService.detailAssignment.mockResolvedValueOnce({
+      ...assignment,
+      allowedActions: {
+        pause: { allowed: false, reason: 'ACTION_NOT_GRANTED' },
+        resume: { allowed: true, reason: null },
+        end: { allowed: false, reason: 'ACTION_NOT_GRANTED' },
+      },
+    });
+
+    render(
+      <OrganizationResponsibilityAssignmentModule
+        host={{
+          kind: 'global',
+          state: { lifecycle: 'open', assignmentId: 101 },
+          onStateChange: vi.fn(),
+        }}
+      />,
+    );
+
+    const dialog = await screen.findByRole('dialog');
+    expect(
+      within(dialog).getByRole('button', { name: '恢复任命' }),
+    ).toBeVisible();
+    expect(
+      within(dialog).queryByRole('button', { name: '暂停任命' }),
+    ).toBeNull();
+    expect(
+      within(dialog).queryByRole('button', { name: '结束任命' }),
+    ).toBeNull();
+  });
+
   it('offers Resume for Pause and keeps Ended detail read-only', async () => {
     responsibilityService.searchAssignments.mockResolvedValueOnce({
       items: [
         {
           ...assignment,
           status: OrganizationResponsibilityAssignmentStatus.Pause,
+          allowedActions: pausedAllowedActions,
         },
       ],
       nextCursor: null,
@@ -375,6 +461,7 @@ describe('OrganizationResponsibilityAssignmentModule', () => {
     responsibilityService.detailAssignment.mockResolvedValueOnce({
       ...assignment,
       status: OrganizationResponsibilityAssignmentStatus.Pause,
+      allowedActions: pausedAllowedActions,
     });
     const paused = render(
       <OrganizationResponsibilityAssignmentModule
@@ -399,6 +486,7 @@ describe('OrganizationResponsibilityAssignmentModule', () => {
         {
           ...assignment,
           status: OrganizationResponsibilityAssignmentStatus.Disable,
+          allowedActions: endedAllowedActions,
         },
       ],
       nextCursor: null,
@@ -407,6 +495,7 @@ describe('OrganizationResponsibilityAssignmentModule', () => {
       ...assignment,
       status: OrganizationResponsibilityAssignmentStatus.Disable,
       endTime: '2026-08-20T08:00:00.000Z',
+      allowedActions: endedAllowedActions,
     });
     render(
       <OrganizationResponsibilityAssignmentModule

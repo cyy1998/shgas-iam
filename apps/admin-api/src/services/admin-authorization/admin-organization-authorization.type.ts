@@ -12,6 +12,7 @@ export interface AdminOrganizationActionFacts {
   childrenCount: number;
   employmentCount: number;
   hasOpenResponsibilityAssignment: boolean;
+  hasUnmanageableOpenResponsibilityAssignment: boolean;
 }
 
 export interface AdminOrganizationMutationDenial {

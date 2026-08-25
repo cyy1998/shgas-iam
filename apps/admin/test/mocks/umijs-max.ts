@@ -23,6 +23,7 @@ const fullAdminAccess = {
   canCreateUser: true,
   canCreateEmployment: true,
   canCreateOrganizationRoot: true,
+  canCreateOrganizationResponsibility: true,
   canCreatePosition: true,
   canEditPosition: true,
   canChangePositionStatus: true,
