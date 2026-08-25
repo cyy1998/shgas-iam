@@ -22,6 +22,12 @@ export interface AdminEmploymentRecordCreate {
   status: EmploymentStatus;
 }
 
+export interface AdminEmploymentAuthorizationFacts {
+  organizationId: number;
+  status: EmploymentStatus;
+  isPrimary: boolean;
+}
+
 export type AdminEmploymentRecordUpdate = {
   isPrimary?: boolean;
   startTime?: Date;

@@ -192,8 +192,8 @@ describe("exact-project Docker infrastructure", () => {
     expect(environments).toHaveLength(2);
     for (const environment of environments) {
       expect(environment).toEqual(expect.objectContaining({
-        IAM_E2E_ADMIN_CLIENT_CODE: "e2e-admin-n-command-contract",
-        IAM_E2E_ADMIN_ROLE_CODE: "e2e-role-n-command-contract",
+        IAM_E2E_ADMIN_CLIENT_CODE: "iam-admin",
+        IAM_E2E_ADMIN_ROLE_CODE: "iam:admin",
         IAM_E2E_GATEWAY_AUTHORITY: "127.0.0.1:43210",
       }));
     }
@@ -339,12 +339,10 @@ function renderedComposeContract() {
         IAM_SSO_EXTERNAL_HOST: "127.0.0.1:43210",
       } },
       "admin-api": { environment: {
-        IAM_ADMIN_API_ADMIN_CLIENT_CODES: "e2e-admin-n-command-contract",
-        IAM_ADMIN_API_ADMIN_ROLE_CODES: "e2e-role-n-command-contract",
+        IAM_ADMIN_API_ADMIN_CLIENT_CODES: "iam-admin",
       } },
       "admin": { build: { args: {
-        UMI_APP_ADMIN_CLIENT_CODE: "e2e-admin-n-command-contract",
-        UMI_APP_ADMIN_ROLE_CODE: "e2e-role-n-command-contract",
+        UMI_APP_ADMIN_CLIENT_CODE: "iam-admin",
       } } },
       "seed": { environment: {
         IAM_E2E_RUN_ID: descriptor.runId,

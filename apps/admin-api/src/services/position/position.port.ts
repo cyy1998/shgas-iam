@@ -4,6 +4,7 @@ import type {
   Position,
   PositionCreateDto,
   PositionFuzzyQueryDto,
+  PositionMemberCountDetail,
   PositionSearchResult,
   PositionUpdateDto,
 } from "./position.type";
@@ -18,7 +19,7 @@ export interface AdminPositionTransactionStorePort {
 }
 
 export interface AdminPositionReaderPort {
-  getPositionByCode: (posCode: string) => Promise<Position | null>;
+  getPositionDetailByCode: (posCode: string) => Promise<PositionMemberCountDetail | null>;
   searchPositionsFuzzy: (query: PositionFuzzyQueryDto) => Promise<PositionSearchResult>;
 }
 

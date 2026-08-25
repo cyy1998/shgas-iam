@@ -1,4 +1,8 @@
-import { PositionDetailSchema, PositionDtoSchema } from "@admin-api/services/position/position.schema";
+import {
+  PositionDetailSchema,
+  PositionDtoSchema,
+  PositionMemberCountDetailSchema,
+} from "@admin-api/services/position/position.schema";
 import { z } from "@hono/zod-openapi";
 import { positionStatusToString } from "@iam/contracts";
 
@@ -14,5 +18,15 @@ export function toPositionVo(input: unknown) {
     ...dto,
     statusText: positionStatusToString[dto.status],
     memberNumber: e.employments.length,
+  });
+}
+
+export function toPositionMemberCountVo(input: unknown) {
+  const detail = PositionMemberCountDetailSchema.parse(input);
+  const dto = PositionDtoSchema.parse(detail);
+  return PositionVoSchema.parse({
+    ...dto,
+    statusText: positionStatusToString[dto.status],
+    memberNumber: detail.memberNumber,
   });
 }

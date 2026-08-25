@@ -19,10 +19,6 @@ export const SSO_LOGOUT_URL =
 export const SSO_CLIENT_CODE =
   process.env.UMI_APP_ADMIN_CLIENT_CODE || 'iam-admin';
 
-// 允许访问管理后台的角色码。
-export const ADMIN_ROLE_CODE =
-  process.env.UMI_APP_ADMIN_ROLE_CODE || 'iam:admin';
-
 function normalizeExternalUrl(value?: string) {
   const url = value?.trim() ?? '';
   return url.endsWith('/') ? url.slice(0, -1) : url;

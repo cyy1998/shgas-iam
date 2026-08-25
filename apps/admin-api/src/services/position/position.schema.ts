@@ -11,6 +11,10 @@ export const PositionDetailSchema = PositionDtoSchema.extend({
   employments: z.lazy(() => z.array(EmploymentSchema)),
 });
 
+export const PositionMemberCountDetailSchema = PositionDtoSchema.extend({
+  memberNumber: z.number().int().nonnegative(),
+});
+
 export const PositionCreateDtoSchema = z.object(insertPositionSchema.shape).openapi("PositionCreateDto");
 
 export const PositionPaginationQueryDtoSchema = createPageQuerySchema(

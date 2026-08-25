@@ -15,8 +15,11 @@ import {
 // Mock-backend fixtures owned by the browser Integration collection.
 import type { Page, Route } from '@playwright/test';
 import {
+  adminCapabilitySummary,
   adminClientDetail,
   adminClientSearchResult,
+  adminPositionSearchResult,
+  adminUserDetail,
   adminUserSearchResult,
   currentAdminUser,
 } from '../../test/mocks/fixtures';
@@ -229,19 +232,40 @@ export async function mockSessionRevokeRoute(
   );
 }
 
-export async function mockAdminApi(page: Page) {
+export async function mockAdminApi(
+  page: Page,
+  options: {
+    capabilitySummary?: unknown;
+    currentUser?: unknown;
+    positionSearchResult?: unknown;
+    userDetail?: unknown;
+    userSearchResult?: unknown;
+  } = {},
+) {
   await page.route('**/public/user-info', (route) =>
-    fulfillJson(route, ok(currentAdminUser)),
+    fulfillJson(route, ok(options.currentUser ?? currentAdminUser)),
   );
   await page.route('**/rpc/admin.user.search**', (route) =>
-    fulfillTrpc(route, adminUserSearchResult),
+    fulfillTrpc(route, options.userSearchResult ?? adminUserSearchResult),
+  );
+  await page.route('**/rpc/admin.user.detail**', (route) =>
+    fulfillTrpc(route, options.userDetail ?? adminUserDetail),
+  );
+  await page.route('**/rpc/admin.position.search**', (route) =>
+    fulfillTrpc(
+      route,
+      options.positionSearchResult ?? adminPositionSearchResult,
+    ),
+  );
+  await page.route('**/rpc/admin.authorization.capabilitySummary**', (route) =>
+    fulfillTrpc(route, options.capabilitySummary ?? adminCapabilitySummary),
   );
   await page.route(
     '**/rpc/admin.organizationResponsibility.listTypes**',
     (route) =>
       fulfillTrpc(
         route,
-        ORGANIZATION_RESPONSIBILITY_TYPE_CATALOG.map(entry => ({ ...entry })),
+        ORGANIZATION_RESPONSIBILITY_TYPE_CATALOG.map((entry) => ({ ...entry })),
       ),
   );
   await page.route('**/rpc/admin.client.search**', (route) =>

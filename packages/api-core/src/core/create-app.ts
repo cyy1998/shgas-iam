@@ -34,14 +34,17 @@ function resolveTierBasePath(tier: TierConfig, config: AppConfig): string {
 }
 
 /** Route matching (three modes) / 路由匹配（三种模式） */
-function resolveTierRoutes(tier: TierConfig, allRoutes: Record<string, { default: AnyRouter }>) {
+function isTierRouteModulePath(path: string, dirName: string) {
+  const match = path.match(/[/\\]+routes[/\\]+([^/\\]+)[/\\]+/);
+  return match?.[1] === dirName;
+}
+
+export function resolveTierRoutes(tier: TierConfig, allRoutes: Record<string, { default: AnyRouter }>) {
   if (tier.routes)
     return tier.routes;
   const dirName = tier.routeDir ?? tier.name;
-  return Object.fromEntries(Object.entries(allRoutes).filter(([path]) => {
-    const match = path.match(/[/\\]+routes[/\\]+([^/\\]+)[/\\]+/);
-    return match?.[1] === dirName;
-  }));
+  return Object.fromEntries(Object.entries(allRoutes).filter(([path]) =>
+    isTierRouteModulePath(path, dirName)));
 }
 
 /** Middleware loading / 中间件加载 */

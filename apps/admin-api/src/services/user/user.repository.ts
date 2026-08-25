@@ -1,6 +1,6 @@
 import type { UserCreateDto, UserPaginationQueryDto, UserUpdateDto } from "@admin-api/services/user/user.type";
 import type { DbClient } from "@iam/db";
-import { UserStatus } from "@iam/contracts";
+import { EmploymentStatus, UserStatus } from "@iam/contracts";
 import { compactUpdate, firstRow, ilikeContainsIf, inArrayIf } from "@iam/db/query-utils";
 import {
   employments,
@@ -48,7 +48,7 @@ export function createUserRepository(db: DbClient) {
         .update(users)
         .set({ password })
         .where(and(eq(users.id, userId), eq(users.status, UserStatus.Enable), eq(users.isDelete, false)))
-        .returning())!;
+        .returning());
     },
     async getUserByUsernameForAdmin(username: string) {
       return await db.query.users.findFirst({
@@ -57,6 +57,35 @@ export function createUserRepository(db: DbClient) {
           isDelete: false,
         },
       }) ?? null;
+    },
+    async getUserByUsernameIncludingDeletedForAuthorization(username: string) {
+      return await db.query.users.findFirst({
+        where: { username },
+      }) ?? null;
+    },
+    async getOpenEmploymentOrganizationIdsByUserId(userId: number) {
+      const rows = await db
+        .selectDistinct({ organizationId: employments.orgId })
+        .from(employments)
+        .where(and(
+          eq(employments.userId, userId),
+          eq(employments.isDelete, false),
+          inArray(employments.status, OPEN_EMPLOYMENT_STATUSES),
+        ))
+        .orderBy(employments.orgId);
+      return rows.map(row => row.organizationId);
+    },
+    async getEndedEmploymentOrganizationIdsByUserId(userId: number) {
+      const rows = await db
+        .selectDistinct({ organizationId: employments.orgId })
+        .from(employments)
+        .where(and(
+          eq(employments.userId, userId),
+          eq(employments.isDelete, false),
+          eq(employments.status, EmploymentStatus.Disable),
+        ))
+        .orderBy(employments.orgId);
+      return rows.map(row => row.organizationId);
     },
     async getUserByIdForAdmin(id: number) {
       return await db.query.users.findFirst({
@@ -93,8 +122,8 @@ export function createUserRepository(db: DbClient) {
       return firstRow(await db
         .update(users)
         .set(compactUpdate(data))
-        .where(eq(users.username, username))
-        .returning())!;
+        .where(and(eq(users.username, username), eq(users.isDelete, false)))
+        .returning());
     },
     async softDeleteUserByUsername(username: string) {
       return firstRow(await db

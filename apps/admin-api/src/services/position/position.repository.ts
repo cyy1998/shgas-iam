@@ -3,7 +3,7 @@ import type { PositionCreateDto, PositionFuzzyQueryDto, PositionUpdateDto } from
 import { compactUpdate, firstRow } from "@iam/db/query-utils";
 import { employments, positions } from "@iam/db/schema";
 import { OPEN_EMPLOYMENT_STATUSES } from "@iam/domain/employment";
-import { and, count, eq, inArray } from "drizzle-orm";
+import { and, count, eq, getTableColumns, inArray } from "drizzle-orm";
 
 export function createPositionRepository(db: DbClient) {
   return {
@@ -11,6 +11,21 @@ export function createPositionRepository(db: DbClient) {
       return await db.query.positions.findFirst({
         where: { posCode, isDelete: false },
       }) ?? null;
+    },
+    async getPositionDetailByCode(posCode: string) {
+      const rows = await db
+        .select({
+          ...getTableColumns(positions),
+          memberNumber: count(employments.id),
+        })
+        .from(positions)
+        .leftJoin(employments, eq(employments.posId, positions.id))
+        .where(and(
+          eq(positions.posCode, posCode),
+          eq(positions.isDelete, false),
+        ))
+        .groupBy(positions.id);
+      return firstRow(rows) ?? null;
     },
     async setPosition(positionCreateDto: PositionCreateDto) {
       await db.insert(positions).values(positionCreateDto);

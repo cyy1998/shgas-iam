@@ -29,15 +29,26 @@ export interface AdminOrganizationReaderPort {
     parentOrgCode: string | null,
     pageNum: number,
     pageSize: number,
+    scope?: AdminOrganizationReadScope,
   ) => Promise<{ rows: AdminOrganizationChildRecord[]; total: number }>;
-  getOrganizationByCodeForAdmin: (orgCode: string) => Promise<AdminOrganizationRecord | null>;
+  getOrganizationByCodeForAdmin: (
+    orgCode: string,
+    scope?: AdminOrganizationReadScope,
+  ) => Promise<AdminOrganizationRecord | null>;
   countOpenEmploymentsByOrgCode: (orgCode: string) => Promise<number>;
   searchOrganizationsForAdmin: (
     query: OrganizationPaginationQueryDto,
+    scope?: AdminOrganizationReadScope,
   ) => Promise<AdminOrganizationRecord[]>;
   getOrganizationSelectorNodesForAdmin: (
     query: OrganizationSelectorQueryDto,
+    scope?: AdminOrganizationReadScope,
   ) => Promise<OrganizationSelectorNode[]>;
+}
+
+export interface AdminOrganizationReadScope {
+  organizationIds: readonly number[];
+  rootOrganizationIds: readonly number[];
 }
 
 export interface AdminOrganizationProfileChange {
@@ -62,5 +73,10 @@ export type AdminOrganizationUnitOfWorkPort = UnitOfWorkPort<AdminOrganizationTr
 
 export interface AdminOrganizationServiceDeps {
   organizationRepository: AdminOrganizationReaderPort;
+  responsibilityReader: {
+    hasOpenAssignmentTargetingOrganizationSubtree: (
+      organizationId: number,
+    ) => Promise<boolean>;
+  };
   uow: AdminOrganizationUnitOfWorkPort;
 }

@@ -94,7 +94,7 @@ type MigrationReceipt
   = | AttemptedMigrationReceipt
     | NotAttemptedMigrationReceipt;
 
-function composeArguments(
+export function composeArguments(
   composeFile: string,
   project: string,
   args: string[],
@@ -109,7 +109,7 @@ function composeArguments(
   ];
 }
 
-function descriptorEnvironment(descriptor: RunDescriptor) {
+export function descriptorEnvironment(descriptor: RunDescriptor) {
   const scenario = createE2EScenarioIdentity(descriptor.runId);
   return {
     ...process.env,
@@ -351,7 +351,6 @@ export function createDockerInfraOperations(
       }
       assertCanonicalOriginComposeConfig(renderedConfig, {
         adminClientCode: scenario.adminClientCode,
-        adminRoleCode: scenario.adminRoleCode,
         canonicalOrigin: descriptor.origin,
         runId: descriptor.runId,
       });

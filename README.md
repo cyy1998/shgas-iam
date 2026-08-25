@@ -513,7 +513,6 @@ Playwright Chromium 系统依赖时，preflight 会提示运行 `pnpm e2e:instal
 | `IAM_ADMIN_API_LOG_FORMAT`   | Pino 日志格式                               | `auto`             |
 | `IAM_ADMIN_API_PASSWORD_HASH_ROUNDS` | 密码哈希轮数                        | `10`               |
 | `IAM_ADMIN_API_ADMIN_CLIENT_CODES` | 允许访问管理端 API 的 client code，逗号分隔 | `iam-admin` |
-| `IAM_ADMIN_API_ADMIN_ROLE_CODES` | 允许访问管理端 API 的角色码，逗号分隔   | `iam:admin`        |
 | `IAM_ADMIN_API_SESSION_KERNEL_NAMESPACE` | Session Kernel Redis key namespace；需与公共 API 一致 | `sess:v2:` |
 | `IAM_ADMIN_API_SESSION_KERNEL_PRINCIPAL_IDLE_TTL_SECONDS` | PrincipalSession idle TTL（秒） | `86400` |
 | `IAM_ADMIN_API_SESSION_KERNEL_PRINCIPAL_ABSOLUTE_TTL_SECONDS` | PrincipalSession absolute TTL（秒） | `86400` |
@@ -564,7 +563,6 @@ Playwright Chromium 系统依赖时，preflight 会提示运行 `pnpm e2e:instal
 | `UMI_APP_ADMIN_SSO_AUTHORIZE_URL` | SSO 授权端点         | `/sso/authorize` |
 | `UMI_APP_ADMIN_SSO_LOGOUT_URL` | SSO 登出端点            | `/sso/logout`    |
 | `UMI_APP_ADMIN_CLIENT_CODE` | 当前应用注册的 client code | `iam-admin`      |
-| `UMI_APP_ADMIN_ROLE_CODE`   | 允许访问后台的角色码       | `iam:admin`      |
 | `UMI_APP_ADMIN_GRAFANA_URL` | Grafana 系统日志入口       | `http://localhost:30030` |
 | `UMI_APP_ADMIN_SYSTEM_LOG_ENV` | Grafana dashboard 环境变量 | `dev`         |
 

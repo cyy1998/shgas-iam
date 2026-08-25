@@ -26,6 +26,17 @@ export interface ResignUserTarget {
   subjectIdentifier: string;
   username: string;
   name?: string | null;
+  status: UserStatus;
+  isDelete: boolean;
+}
+
+export interface ResignUserEligibilityReaderPort {
+  getUserByUsernameForAdmin: (username: string) => Promise<ResignUserTarget | null>;
+  getUserByUsernameIncludingDeletedForAuthorization: (
+    username: string,
+  ) => Promise<ResignUserTarget | null>;
+  getOpenEmploymentOrganizationIdsByUserId: (userId: number) => Promise<number[]>;
+  getEndedEmploymentOrganizationIdsByUserId: (userId: number) => Promise<number[]>;
 }
 
 export interface ResignUserAuditInput {
@@ -76,9 +87,11 @@ export interface ResignUserTransactionPorts {
   userProfileInvalidation: {
     recordChanges: (changes: readonly ResignUserProfileChange[]) => Promise<void>;
   };
-  userStore: {
-    getUserByUsernameForAdmin: (username: string) => Promise<ResignUserTarget | null>;
-    updateUserByUsername: (username: string, patch: { status: UserStatus }) => Promise<unknown>;
+  userStore: ResignUserEligibilityReaderPort & {
+    updateUserByUsername: (
+      username: string,
+      patch: { status: UserStatus },
+    ) => Promise<ResignUserTarget | null>;
   };
 }
 
@@ -96,9 +109,7 @@ export interface ResignUserSessionRevocationPort {
   }) => Promise<unknown>;
 }
 
-export interface ResignUserReaderPort {
-  getUserByUsernameForAdmin: (username: string) => Promise<ResignUserTarget | null>;
-}
+export interface ResignUserReaderPort extends ResignUserEligibilityReaderPort {}
 
 export interface ResignUserSubjectAccessLifecyclePort {
   run: (input: {

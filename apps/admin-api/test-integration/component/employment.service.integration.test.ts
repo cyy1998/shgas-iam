@@ -1,8 +1,10 @@
+import type { AdminEmploymentAuthorization } from "@admin-api/services/admin-authorization/admin-employment-authorization.type";
 import { createEmploymentService } from "@admin-api/services/employment/employment.service";
 import { createFakeClock, createImmediateUnitOfWork } from "@admin-api/test/fakes";
 import { EmploymentStatus, OrganizationLevel, OrganizationStatus, OrganizationType, PositionStatus, UserStatus, UserType } from "@iam/contracts";
 import { EmploymentNotEditableError } from "@iam/domain/employment";
 import { describe, expect, mock, test } from "bun:test";
+import { createTestHrEmploymentAuthorization } from "../helpers/hr-employment-authorization";
 
 const now = new Date("2026-01-01T00:00:00Z");
 
@@ -117,6 +119,11 @@ function createService() {
     clock: createFakeClock(now.getTime()),
     employmentRepository: {
       getEmploymentByIdForAdmin: mock(async () => employment()),
+      getEmploymentAuthorizationFactsByIdForAdmin: mock(async () => ({
+        organizationId: 2,
+        status: EmploymentStatus.Enable,
+        isPrimary: false,
+      })),
       searchEmploymentsFuzzyForAdminPaged: mock(async () => ({ rows: [], total: 0 })),
     },
     privilegeRepository: {
@@ -130,7 +137,170 @@ function createService() {
   return { service: createEmploymentService(deps), tx, deps };
 }
 
+function scopedAuthorization(
+  organizationIds: readonly number[] = [2],
+): Promise<AdminEmploymentAuthorization> {
+  return createTestHrEmploymentAuthorization({
+    organizationIds,
+    rootOrganizationIds: [2],
+    denyMutation: mock((input) => {
+      throw new Error(`denied:${input.reason}`);
+    }) as AdminEmploymentAuthorization["denyMutation"],
+  });
+}
+
 describe("createEmploymentService", () => {
+  test.each([
+    ["admin.employment.pause" as const, false],
+    ["admin.employment.transfer" as const, false],
+    ["admin.employment.setPrimary" as const, false],
+    ["admin.employment.clearPrimary" as const, true],
+  ])("allows scoped %s from current Employment facts", async (operationId, isPrimary) => {
+    const { service, deps } = createService();
+    const authorization = await scopedAuthorization([2]);
+    deps.employmentRepository.getEmploymentAuthorizationFactsByIdForAdmin
+      .mockResolvedValueOnce({
+        organizationId: 2,
+        status: EmploymentStatus.Enable,
+        isPrimary,
+      });
+
+    await service.guardEmploymentMutationForAdmin(
+      4,
+      operationId,
+      authorization,
+    );
+
+    expect(deps.employmentRepository.getEmploymentAuthorizationFactsByIdForAdmin)
+      .toHaveBeenCalledWith(4);
+    expect(deps.employmentRepository.getEmploymentByIdForAdmin).not.toHaveBeenCalled();
+    expect(authorization.denyMutation).not.toHaveBeenCalled();
+  });
+
+  test("rejects lifecycle actions that are not actionable from current Employment facts", async () => {
+    const { service, deps } = createService();
+    const authorization = await scopedAuthorization([2]);
+    deps.employmentRepository.getEmploymentAuthorizationFactsByIdForAdmin
+      .mockResolvedValueOnce({
+        organizationId: 2,
+        status: EmploymentStatus.Pause,
+        isPrimary: false,
+      });
+
+    let failure: unknown;
+    try {
+      await service.guardEmploymentMutationForAdmin(
+        4,
+        "admin.employment.pause",
+        authorization,
+      );
+    }
+    catch (error) {
+      failure = error;
+    }
+
+    expect(failure).toEqual(new Error("denied:RESOURCE_STATE_NOT_ACTIONABLE"));
+    expect(authorization.denyMutation).toHaveBeenCalledWith({
+      operationId: "admin.employment.pause",
+      resourceIdentifier: 4,
+      reason: "RESOURCE_STATE_NOT_ACTIONABLE",
+    });
+  });
+
+  test("conceals missing and out-of-scope lifecycle mutation targets", async () => {
+    const { service, deps } = createService();
+    const authorization = await scopedAuthorization([2]);
+    deps.employmentRepository.getEmploymentAuthorizationFactsByIdForAdmin
+      .mockResolvedValueOnce({
+        organizationId: 99,
+        status: EmploymentStatus.Enable,
+        isPrimary: false,
+      })
+      .mockResolvedValueOnce(null);
+
+    for (const id of [4, 404]) {
+      let failure: unknown;
+      try {
+        await service.guardEmploymentMutationForAdmin(
+          id,
+          "admin.employment.end",
+          authorization,
+        );
+      }
+      catch (error) {
+        failure = error;
+      }
+      expect(failure).toEqual(new Error("denied:RESOURCE_OUT_OF_SCOPE"));
+    }
+
+    expect(authorization.denyMutation).toHaveBeenNthCalledWith(1, {
+      operationId: "admin.employment.end",
+      resourceIdentifier: 4,
+      reason: "RESOURCE_OUT_OF_SCOPE",
+      concealExistence: true,
+    });
+    expect(authorization.denyMutation).toHaveBeenNthCalledWith(2, {
+      operationId: "admin.employment.end",
+      resourceIdentifier: 404,
+      reason: "RESOURCE_OUT_OF_SCOPE",
+      concealExistence: true,
+    });
+  });
+
+  test("applies HR scope and the server-owned Open default before pagination", async () => {
+    const { service, deps } = createService();
+    const authorization = await scopedAuthorization();
+    const query = {
+      pageNum: 1,
+      pageSize: 20,
+      conditions: { fuzzyConditions: {}, exactConditions: {} },
+    };
+
+    await service.searchEmploymentsFuzzyForAdmin(query, authorization);
+    await service.getEmploymentDetailByIdForAdmin(4, authorization);
+
+    expect(deps.employmentRepository.searchEmploymentsFuzzyForAdminPaged)
+      .toHaveBeenCalledWith({
+        ...query,
+        conditions: {
+          ...query.conditions,
+          exactConditions: {
+            statuses: [EmploymentStatus.Enable, EmploymentStatus.Pause],
+          },
+        },
+      }, { organizationIds: [2] });
+    expect(deps.employmentRepository.getEmploymentByIdForAdmin)
+      .toHaveBeenCalledWith(4, { organizationIds: [2] });
+  });
+
+  test("conceals an out-of-scope Employment before description update writes", async () => {
+    const { service, tx } = createService();
+    const authorization = await scopedAuthorization([99]);
+
+    let failure: unknown;
+    try {
+      await service.updateEmployment(
+        4,
+        { description: "forbidden" },
+        undefined,
+        authorization,
+      );
+    }
+    catch (error) {
+      failure = error;
+    }
+
+    expect(failure).toBeDefined();
+    expect(authorization.denyMutation).toHaveBeenCalledWith({
+      operationId: "admin.employment.update",
+      resourceIdentifier: 4,
+      reason: "RESOURCE_OUT_OF_SCOPE",
+      concealExistence: true,
+    });
+    expect(tx.employmentRepository.updateEmploymentRecord).not.toHaveBeenCalled();
+    expect(tx.auditService.recordAuditLog).not.toHaveBeenCalled();
+  });
+
   test("resolves Effective Roles for an employment detail through the batch interface", async () => {
     const { service, deps } = createService();
     deps.roleAssignmentResolver.resolveEffectiveRoles.mockResolvedValueOnce(new Map([

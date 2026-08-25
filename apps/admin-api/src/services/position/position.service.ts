@@ -14,7 +14,7 @@ import {
   PositionHasEmploymentError,
   PositionNotFoundError,
 } from "@iam/domain/position";
-import { PositionDtoSchema } from "./position.schema";
+import { PositionMemberCountDetailSchema } from "./position.schema";
 
 async function assertRenamedPositionCodeAvailable(
   currentPosCode: string,
@@ -51,11 +51,11 @@ export function createPositionService(deps: AdminPositionServiceDeps) {
   }
 
   async function getPositionDetailByCode(posCode: string) {
-    const pos = await deps.positionRepository.getPositionByCode(posCode);
+    const pos = await deps.positionRepository.getPositionDetailByCode(posCode);
     if (pos === null) {
       throw new PositionNotFoundError("岗位不存在");
     }
-    return PositionDtoSchema.parse(pos);
+    return PositionMemberCountDetailSchema.parse(pos);
   }
 
   async function updatePosition(

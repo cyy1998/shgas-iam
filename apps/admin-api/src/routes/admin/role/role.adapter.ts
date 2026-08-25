@@ -33,6 +33,7 @@ export interface CreateRoleAdapterDeps {
 
 export function createRoleAdapter(deps: CreateRoleAdapterDeps) {
   const searchRole = defineAdminApiQueryOperation({
+    operationId: "admin.role.search",
     input: RolePaginationQueryDtoSchema,
     restInput: c => c.req.valid("json") as z.infer<typeof RolePaginationQueryDtoSchema>,
     handler: async (input) => {
@@ -42,12 +43,14 @@ export function createRoleAdapter(deps: CreateRoleAdapterDeps) {
   });
 
   const getRole = defineAdminApiQueryOperation({
+    operationId: "admin.role.detail",
     input: z.object({ roleCode: z.string() }),
     restInput: c => c.req.valid("param") as { roleCode: string },
     handler: async ({ roleCode }) => toRoleDetailVo(await deps.roleService.getRoleDetailByCode(roleCode)),
   });
 
   const createRole = defineAdminApiMutationOperation({
+    operationId: "admin.role.create",
     input: RoleCreateDtoSchema,
     restInput: c => c.req.valid("json") as z.infer<typeof RoleCreateDtoSchema>,
     handler: async (input, context) =>
@@ -55,6 +58,7 @@ export function createRoleAdapter(deps: CreateRoleAdapterDeps) {
   });
 
   const updateRole = defineAdminApiMutationOperation({
+    operationId: "admin.role.update",
     input: z.object({
       roleCode: z.string(),
       data: RoleUpdateDtoSchema,
@@ -68,6 +72,7 @@ export function createRoleAdapter(deps: CreateRoleAdapterDeps) {
   });
 
   const updateRoleStatus = defineAdminApiMutationOperation({
+    operationId: "admin.role.updateStatus",
     input: z.object({
       roleCode: z.string(),
       status: RoleStatusUpdateDtoSchema.shape.status,
@@ -81,12 +86,14 @@ export function createRoleAdapter(deps: CreateRoleAdapterDeps) {
   });
 
   const deleteRole = defineAdminApiMutationOperation({
+    operationId: "admin.role.delete",
     input: z.object({ roleCode: z.string() }),
     restInput: c => c.req.valid("param") as { roleCode: string },
     handler: ({ roleCode }, context) => deps.roleService.deleteRole(roleCode, resolveAdminAuditContext(context)),
   });
 
   const searchAssignment = defineAdminApiQueryOperation({
+    operationId: "admin.role.assignments.search",
     input: z.object({
       roleCode: z.string(),
       query: RoleAssignmentPaginationQueryDtoSchema,
@@ -102,6 +109,7 @@ export function createRoleAdapter(deps: CreateRoleAdapterDeps) {
   });
 
   const createAssignment = defineAdminApiMutationOperation({
+    operationId: "admin.role.assignments.create",
     input: z.object({
       roleCode: z.string(),
       data: RoleAssignmentCreateDtoSchema,
@@ -115,6 +123,7 @@ export function createRoleAdapter(deps: CreateRoleAdapterDeps) {
   });
 
   const updateAssignmentScope = defineAdminApiMutationOperation({
+    operationId: "admin.role.assignments.updateScope",
     input: z.object({
       roleCode: z.string(),
       assignmentId: z.number().int().positive(),
@@ -136,6 +145,7 @@ export function createRoleAdapter(deps: CreateRoleAdapterDeps) {
   });
 
   const deleteAssignment = defineAdminApiMutationOperation({
+    operationId: "admin.role.assignments.delete",
     input: z.object({
       roleCode: z.string(),
       assignmentId: z.number().int().positive(),

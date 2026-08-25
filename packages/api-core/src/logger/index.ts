@@ -82,6 +82,7 @@ export const SystemLogEvent = {
   AdminSessionRevokeClientAllProtocols: "admin.session_revoke.client_all_protocols",
   AdminSessionRevokeCleanupFailed: "admin.session_revoke.cleanup_failed",
   AdminLoginStateAuditFailedAfterEffect: "admin.login_state.audit_failed_after_effect",
+  AdminAuthorizationDenied: "admin.authorization.denied",
   InternalAuthzChecked: "auth.internal_authorization.checked",
   OidcProviderStarted: "oidc.provider.started",
   OidcProviderStopping: "oidc.provider.stopping",

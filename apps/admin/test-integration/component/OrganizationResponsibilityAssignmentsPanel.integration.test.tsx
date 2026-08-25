@@ -324,6 +324,12 @@ describe('OrganizationResponsibilityAssignmentsPanel', () => {
           statusText: '正常',
           childrenCount: 0,
           employmentCount: 0,
+          allowedActions: {
+            createChild: { allowed: true, reason: null },
+            edit: { allowed: true, reason: null },
+            changeStatus: { allowed: true, reason: null },
+            delete: { allowed: true, reason: null },
+          },
           createTime: '2026-08-20T00:00:00.000Z',
           updateTime: '2026-08-20T00:00:00.000Z',
         }}

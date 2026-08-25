@@ -1,7 +1,9 @@
 import type { DbClient } from "@iam/db";
 import type { Employment, Organization, User } from "@iam/db/schema";
 import type { SQLWrapper } from "drizzle-orm";
+import type { AdminEmploymentReadScope } from "./employment.port";
 import type {
+  AdminEmploymentAuthorizationFacts,
   AdminEmploymentRecordCreate,
   AdminEmploymentRecordUpdate,
   EmploymentAdminPaginationQueryDto,
@@ -78,18 +80,36 @@ export function createEmploymentRepository(db: DbClient) {
       });
       return row ?? null;
     },
-    async getEmploymentByIdForAdmin(id: number) {
+    async getEmploymentByIdForAdmin(id: number, scope?: AdminEmploymentReadScope) {
       const row = await db.query.employments.findFirst({
         where: {
           id,
           isDelete: false,
+          ...(scope === undefined ? {} : { orgId: { in: [...scope.organizationIds] } }),
         },
       });
       return (await attachEmploymentRelations(row === undefined ? [] : [row], db))[0] ?? null;
     },
-    async searchEmploymentsFuzzyForAdminPaged(dto: EmploymentAdminPaginationQueryDto) {
+    async getEmploymentAuthorizationFactsByIdForAdmin(
+      id: number,
+    ): Promise<AdminEmploymentAuthorizationFacts | null> {
+      const row = firstRow(await db
+        .select({
+          organizationId: employments.orgId,
+          status: employments.status,
+          isPrimary: employments.isPrimary,
+        })
+        .from(employments)
+        .where(and(eq(employments.id, id), eq(employments.isDelete, false)))
+        .limit(1));
+      return row ?? null;
+    },
+    async searchEmploymentsFuzzyForAdminPaged(
+      dto: EmploymentAdminPaginationQueryDto,
+      scope?: AdminEmploymentReadScope,
+    ) {
       const { pageNum, pageSize } = dto;
-      const where = buildEmploymentAdminWhere(dto, db);
+      const where = buildEmploymentAdminWhere(dto, db, scope);
       const [rows, totalRows] = await Promise.all([
         db
           .select()
@@ -348,12 +368,17 @@ function buildLegacyOrganizationFilterCondition(
   );
 }
 
-function buildEmploymentAdminWhere(dto: EmploymentAdminPaginationQueryDto, tx: DbClient) {
+function buildEmploymentAdminWhere(
+  dto: EmploymentAdminPaginationQueryDto,
+  tx: DbClient,
+  scope?: AdminEmploymentReadScope,
+) {
   const text = dto.conditions.fuzzyConditions.text;
   const organizationCondition = buildOrganizationFilterCondition(dto.conditions.exactConditions.organization, tx)
     ?? buildLegacyOrganizationFilterCondition(dto, tx);
   return and(
     eq(employments.isDelete, false),
+    inArrayIf(employments.orgId, scope?.organizationIds),
     inArrayIf(employments.status, dto.conditions.exactConditions.statuses),
     dto.conditions.exactConditions.isPrimary === undefined
       ? undefined

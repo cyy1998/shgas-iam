@@ -32,6 +32,7 @@ const defaultSourceTimeoutMs = 10_000;
 const existingEvidenceNames = [
   "migration-receipt.json",
   "seed-receipt.json",
+  "hr-admin-outcome-receipt.json",
 ];
 
 export async function collectRunDiagnostics(

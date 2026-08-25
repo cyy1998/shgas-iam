@@ -18,6 +18,7 @@ type ClientProtocolLifecycleAction = keyof typeof clientProtocolLifecycleProcedu
 export async function loginToAdmin(input: {
   adminPassword: string;
   adminUsername: string;
+  expectedNavigationText?: string;
   origin: string;
   page: Page;
 }) {
@@ -27,7 +28,9 @@ export async function loginToAdmin(input: {
     "u",
   );
   const usernameInput = input.page.getByLabel("工号 / 账号");
-  const adminNavigation = input.page.getByText("应用管理", { exact: true });
+  const adminNavigation = input.page.getByRole("menuitem", {
+    name: input.expectedNavigationText ?? "应用管理",
+  });
   await Promise.race([
     adminNavigation.waitFor({ state: "visible" }),
     usernameInput.waitFor({ state: "visible" }),

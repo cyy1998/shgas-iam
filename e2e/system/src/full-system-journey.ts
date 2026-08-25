@@ -10,6 +10,7 @@ interface JourneyOperations {
 
 interface FullSystemJourneyOperationsOptions {
   admin: JourneyOperations;
+  hrAdmin: JourneyOperations;
   oidc: JourneyOperations;
 }
 
@@ -19,11 +20,13 @@ export function createFullSystemJourneyOperations(
   return {
     async preflight(signal?: AbortSignal) {
       await options.admin.preflight(signal);
+      await options.hrAdmin.preflight(signal);
       await options.oidc.preflight(signal);
     },
 
     async runJourney(descriptor: RunDescriptor, signal?: AbortSignal) {
       await options.admin.runJourney(descriptor, signal);
+      await options.hrAdmin.runJourney(descriptor, signal);
       await options.oidc.runJourney(descriptor, signal);
     },
   };

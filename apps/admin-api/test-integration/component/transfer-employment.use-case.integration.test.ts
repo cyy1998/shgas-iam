@@ -20,6 +20,7 @@ import { OrganizationNotFoundError } from "@iam/domain/organization";
 import { PositionNotFoundError } from "@iam/domain/position";
 import { UserNotFoundError } from "@iam/domain/user";
 import { describe, expect, mock, test } from "bun:test";
+import { createTestHrEmploymentAuthorization } from "../helpers/hr-employment-authorization";
 
 const startTime = new Date("2025-01-01T00:00:00.000Z");
 const transactionTime = new Date("2026-01-01T00:00:00.000Z");
@@ -354,6 +355,55 @@ describe("Employment Lifecycle Transfer", () => {
     })).rejects.toBeInstanceOf(EmploymentOrganizationScopeMismatchError);
 
     expect(tx.employmentStore.updateEmploymentRecord).not.toHaveBeenCalled();
+  });
+
+  test.each([
+    ["enabled", {}],
+    ["disabled", { status: OrganizationStatus.Disable }],
+    ["soft-deleted", { isDelete: true }],
+  ])("conceals an out-of-scope %s destination before integrity checks or writes", async (
+    _state,
+    overrides,
+  ) => {
+    const { tx, useCase } = createLifecycle();
+    const target = await tx.organizationReader.getOrganizationByCode();
+    tx.organizationReader.getOrganizationByCode.mockResolvedValueOnce({
+      ...target!,
+      ...overrides,
+    });
+    const denyMutation = mock((input: unknown): never => {
+      throw new Error(`denied:${JSON.stringify(input)}`);
+    });
+    const authorization = await createTestHrEmploymentAuthorization({
+      organizationIds: [2],
+      denyMutation,
+    });
+
+    let failure: unknown;
+    try {
+      await useCase.execute({
+        employmentId: 4,
+        newOrgCode: "TARGET_ORG",
+        expectedAncestorOrgCode: "TARGET_ORG",
+        newPosCode: "TARGET_POS",
+        isPrimary: false,
+      }, { authorization });
+    }
+    catch (error) {
+      failure = error;
+    }
+
+    expect(failure).toBeDefined();
+    expect(denyMutation).toHaveBeenCalledWith({
+      operationId: "admin.employment.transfer",
+      resourceIdentifier: "TARGET_ORG",
+      reason: "RESOURCE_OUT_OF_SCOPE",
+      concealExistence: true,
+    });
+    expect(tx.organizationReader.isOrganizationDescendantOf).not.toHaveBeenCalled();
+    expect(tx.employmentStore.updateEmploymentRecord).not.toHaveBeenCalled();
+    expect(tx.responsibilityParentLifecycle.endOpenAssignmentsForEmployment).not.toHaveBeenCalled();
+    expect(tx.auditLogWriter.recordAuditLog).not.toHaveBeenCalled();
   });
 
   test("rejects a duplicate Open target combination before ending the source", async () => {

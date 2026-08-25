@@ -9,7 +9,30 @@ type LinkProps = {
 };
 
 let modelMocks: Record<string, unknown> = {};
-let accessMock: Record<string, unknown> = { isAdmin: true };
+const fullAdminAccess = {
+  canAccessUser: true,
+  canAccessOrganization: true,
+  canAccessOrganizationResponsibility: true,
+  canAccessPosition: true,
+  canAccessEmployment: true,
+  canAccessClient: true,
+  canAccessRole: true,
+  canAccessSessionManagement: true,
+  canAccessAudit: true,
+  canAccessSystemLog: true,
+  canCreateUser: true,
+  canCreateEmployment: true,
+  canCreateOrganizationRoot: true,
+  canCreatePosition: true,
+  canEditPosition: true,
+  canChangePositionStatus: true,
+  canDeletePosition: true,
+};
+let accessMock: Record<string, unknown> = fullAdminAccess;
+
+export function defineConfig<T>(config: T): T {
+  return config;
+}
 
 export const history = {
   push: vi.fn(),
@@ -45,7 +68,7 @@ export function __setAccess(value: Record<string, unknown>) {
 
 export function __resetUmiMaxMocks() {
   modelMocks = {};
-  accessMock = { isAdmin: true };
+  accessMock = fullAdminAccess;
   history.push.mockReset();
   history.replace.mockReset();
   history.goBack.mockReset();

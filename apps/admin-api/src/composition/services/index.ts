@@ -81,6 +81,7 @@ export function createAdminApiServices(options: CreateAdminApiServicesOptions) {
 
   const organizationService = createOrganizationService({
     organizationRepository: repositories.organization,
+    responsibilityReader: repositories.organizationResponsibility,
     uow: mapUnitOfWork(unitOfWork, tx => ({
       organizationRepository: tx.repositories.organization,
       auditService: tx.auditService,

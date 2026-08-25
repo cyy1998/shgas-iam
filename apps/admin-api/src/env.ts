@@ -24,7 +24,6 @@ const RawEnvSchema = z.object({
   IAM_ADMIN_API_LOG_LEVEL: z.string().default("info"),
   IAM_ADMIN_API_LOG_FORMAT: z.enum(["auto", "json", "pretty"]).default("auto"),
   IAM_ADMIN_API_ADMIN_CLIENT_CODES: listString("iam-admin"),
-  IAM_ADMIN_API_ADMIN_ROLE_CODES: listString("iam:admin"),
   IAM_ADMIN_API_SESSION_KERNEL_NAMESPACE: z.string().default("sess:v2:"),
   IAM_ADMIN_API_SESSION_KERNEL_PRINCIPAL_IDLE_TTL_SECONDS: z.coerce.number().int().positive().default(24 * 60 * 60),
   IAM_ADMIN_API_SESSION_KERNEL_PRINCIPAL_ABSOLUTE_TTL_SECONDS: z.coerce.number().int().positive().default(24 * 60 * 60),
@@ -88,7 +87,6 @@ export interface Env extends Record<string, unknown> {
   };
   auth: {
     adminClientCodes: string[];
-    adminRoleCodes: string[];
   };
   sessionKernel: {
     namespace: string;
@@ -121,7 +119,6 @@ function toAdminApiEnv(raw: RawEnv): Env {
     },
     auth: {
       adminClientCodes: raw.IAM_ADMIN_API_ADMIN_CLIENT_CODES,
-      adminRoleCodes: raw.IAM_ADMIN_API_ADMIN_ROLE_CODES,
     },
     sessionKernel: {
       namespace: raw.IAM_ADMIN_API_SESSION_KERNEL_NAMESPACE,

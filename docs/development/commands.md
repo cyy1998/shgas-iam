@@ -55,6 +55,7 @@ pnpm test:integration:<component|process|redis|postgres|composition|browser>
 - `pnpm e2e:install:browsers`
 - Full-system runtime lifecycle（workspace-local）：`pnpm --filter @iam/e2e-system runtime:lifecycle`
 - Full-system Admin Custom SSO journey（workspace-local）：`pnpm --filter @iam/e2e-system admin:journey`
+- Full-system HR Admin User Management journey（workspace-local）：`pnpm --filter @iam/e2e-system hr-admin:journey`
 - Full-system OIDC Authorization Code + PKCE journey（workspace-local）：`pnpm --filter @iam/e2e-system oidc:journey`
 - Full-system exact-project recovery（workspace-local）：
   `pnpm --filter @iam/e2e-system runtime:cleanup -- --descriptor <run-descriptor.json>` 或
@@ -228,18 +229,23 @@ Organization Responsibility，轮询 Internal Detail/DSL 与 Custom SSO UserInfo
 authorize/user-info 验证维护阻断，恢复正常后复用未变更的 Local Session，再以维护中的真实 disable/enable mutation 验证旧 Session
 永久失效，并由同一 Principal Session 签发新 V2 artifact。该命令固定
 单 project、单 worker、零 retry；浏览器启动 preflight 失败时在资源创建前退出，journey 失败时则保留 raw trace/PNG/WebM 并进入统一
-diagnostics 与 exact-project cleanup。`oidc:journey` 以相同的单 project、单 worker、零 retry 与 evidence/cleanup 边界运行独立
+diagnostics 与 exact-project cleanup。`hr-admin:journey` 使用真实 `iam-admin` Client、普通 `iam:hr-admin` Role、Role Assignment、
+两棵一级根组织及跨根普通任职，通过真实 Worker 发布后经 SSO 登录 Admin；它证明四模块 UI、全局只读 Position、User/Employment
+范围导航、一个范围内 User 编辑，以及范围外 Organization REST mutation 的 `404`。Playwright 后、cleanup 前的 production Drizzle
+verifier 同时证明 User、成功 audit、`user-updated` invalidation/Profile 收敛与范围外无写入；有界 Admin API 日志 capture 证明
+denial security log 不包含 scope/root 集合，并写入安全的 `hr-admin-outcome-receipt.json`。`oidc:journey` 以相同的单 project、单 worker、零 retry 与 evidence/cleanup 边界运行独立
 OIDC browser slice；真实 Admin UI 在 Maintenance 中完成 OIDC disable/enable，test-owned RP helper 只生成 S256 verifier/challenge 并接收
 registered callback，真实 repo-owned authorize、登录、resume、token 与 `/oidc/me` 负责协议行为。该 slice 从 canonical origin 验证
 暂态阻断与恢复、interaction Cookie、PKCE mismatch、成功兑换、code replay、`iam:employments` responsibility snapshot、Employment
 Pause cascade 后的 authorization-time replay、ID Token 排除、discovery/JWKS/health 及维护中 logout 永久失效。Root command 在同一个
-exact-project lifecycle 中固定按 Admin → OIDC 运行，任一失败都进入统一
+exact-project lifecycle 中固定按 Admin → HR Admin → OIDC 运行，任一失败都进入统一
 diagnostics 与 cleanup；cleanup failure 传播为 root command 非零。Workspace-local 单 journey 命令只用于聚焦调试：
 
 ```bash
 pnpm test:e2e
 pnpm --filter @iam/e2e-system runtime:lifecycle
 pnpm --filter @iam/e2e-system admin:journey
+pnpm --filter @iam/e2e-system hr-admin:journey
 pnpm --filter @iam/e2e-system oidc:journey
 
 # 宿主异常后只按一个明确恢复目标清理；不接受 glob/prefix scan
@@ -387,7 +393,7 @@ Hook 不运行 lint、typecheck、test、build 或 tracker checker。按改动�
 
 - Full-system E2E lifecycle：
   root `pnpm test:e2e`；workspace-local
-  `pnpm --filter @iam/e2e-system <test:e2e|runtime:lifecycle|admin:journey|oidc:journey|runtime:cleanup|lint|test|test:unit|typecheck>`。
+  `pnpm --filter @iam/e2e-system <test:e2e|runtime:lifecycle|admin:journey|hr-admin:journey|oidc:journey|runtime:cleanup|lint|test|test:unit|typecheck>`。
   当前只完成 Windows 本地验收，未宣称 Linux/CI adoption
 - API backend：`pnpm --filter @iam/api <dev|serve|lint|test|test:unit|test:integration:component|test:integration:process|test:integration:composition|test:integration:postgres|test:integration:redis|typecheck>`
 - Admin API backend：`pnpm --filter @iam/admin-api <dev|serve|lint|test|test:unit|test:integration:component|test:integration:process|test:integration:postgres|test:integration:redis|typecheck>`

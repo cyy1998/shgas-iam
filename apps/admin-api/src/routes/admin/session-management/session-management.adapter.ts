@@ -29,6 +29,7 @@ export interface CreateSessionManagementAdapterDeps {
 
 export function createSessionManagementAdapter(deps: CreateSessionManagementAdapterDeps) {
   const listLoginRestrictions = defineAdminApiQueryOperation({
+    operationId: "admin.sessionManagement.listLoginRestrictions",
     input: SessionManagementListLoginRestrictionsInputSchema,
     restInput: c =>
       c.req.valid("json") as z.infer<typeof SessionManagementListLoginRestrictionsInputSchema>,
@@ -43,6 +44,7 @@ export function createSessionManagementAdapter(deps: CreateSessionManagementAdap
   });
 
   const listSessions = defineAdminApiQueryOperation({
+    operationId: "admin.sessionManagement.listSessions",
     input: SessionManagementListSessionsInputSchema,
     restInput: c => c.req.valid("json") as z.infer<typeof SessionManagementListSessionsInputSchema>,
     handler: async (input, context) => {
@@ -56,6 +58,7 @@ export function createSessionManagementAdapter(deps: CreateSessionManagementAdap
   });
 
   const revokeSessions = defineAdminApiMutationOperation({
+    operationId: "admin.sessionManagement.revokeSessions",
     input: SessionManagementRevokeSessionsInputSchema,
     restInput: c => c.req.valid("json") as z.infer<typeof SessionManagementRevokeSessionsInputSchema>,
     handler: async (input, context) => {
@@ -70,6 +73,7 @@ export function createSessionManagementAdapter(deps: CreateSessionManagementAdap
   });
 
   const releaseLoginRestriction = defineAdminApiMutationOperation({
+    operationId: "admin.sessionManagement.releaseLoginRestriction",
     input: SessionManagementReleaseLoginRestrictionInputSchema,
     restInput: c =>
       c.req.valid("param") as z.infer<typeof SessionManagementReleaseLoginRestrictionInputSchema>,

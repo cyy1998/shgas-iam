@@ -14,6 +14,7 @@ interface InternalSearchInput {
   adminUsername: string;
   delegateeUsername: string;
   disabledUsername: string;
+  hrAdminUsername: string;
   internalApiKey: string;
   organizationCode: string;
   origin: string;
@@ -28,6 +29,7 @@ export async function expectInternalUserProfileSearchMatrix(
 ) {
   const allUsernames = [
     input.adminUsername,
+    input.hrAdminUsername,
     input.delegateeUsername,
     input.pausedUsername,
     input.disabledUsername,
@@ -65,6 +67,7 @@ export async function expectInternalUserProfileSearchMatrix(
   });
   expect(readUsernames(enabledProfile)).toEqual([
     input.adminUsername,
+    input.hrAdminUsername,
     input.delegateeUsername,
   ]);
 

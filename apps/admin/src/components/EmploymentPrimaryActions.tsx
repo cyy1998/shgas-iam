@@ -1,10 +1,13 @@
+import AuthorizationActionButton from '@admin/components/AuthorizationActionButton';
 import {
   clearPrimaryEmployment,
   type EmploymentVo,
   setPrimaryEmployment,
 } from '@admin/services/employment';
+import type { AdminAuthorizationDecision } from '@iam/contracts';
 import { EmploymentStatus } from '@iam/contracts';
 import { message, Modal } from 'antd';
+import type { ButtonProps } from 'antd';
 
 type EmploymentPrimary = Pick<
   EmploymentVo,
@@ -12,11 +15,17 @@ type EmploymentPrimary = Pick<
 >;
 
 type Props = {
+  buttonStyle?: ButtonProps['style'];
+  buttonType?: ButtonProps['type'];
+  decision: AdminAuthorizationDecision;
   employment: EmploymentPrimary;
   onSuccess: () => Promise<void> | void;
 };
 
 export default function EmploymentPrimaryActions({
+  buttonStyle,
+  buttonType,
+  decision,
   employment,
   onSuccess,
 }: Props) {
@@ -54,5 +63,14 @@ export default function EmploymentPrimaryActions({
     });
   };
 
-  return <a onClick={confirm}>{nextPrimary ? '设主岗' : '取消主岗'}</a>;
+  return (
+    <AuthorizationActionButton
+      decision={decision}
+      onClick={confirm}
+      style={buttonStyle}
+      type={buttonType}
+    >
+      {nextPrimary ? '设主岗' : '取消主岗'}
+    </AuthorizationActionButton>
+  );
 }

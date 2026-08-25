@@ -1,4 +1,5 @@
 import type { SubjectAccessMutationReceipt } from "@iam/api-core/subject-access";
+import { createAdminAuthorizationPolicy } from "@admin-api/services/admin-authorization/admin-authorization.policy";
 import { createUserRepository } from "@admin-api/services/user/user.repository";
 import { createUserService } from "@admin-api/services/user/user.service";
 import { createFakePasswordHasher, createFakeRandom, createImmediateUnitOfWork } from "@admin-api/test/fakes";
@@ -148,6 +149,8 @@ function createService(options: {
   afterCommitLogger?: ReturnType<typeof createAfterCommitLogger>;
   preBlockError?: Error;
 } = {}) {
+  const getUserByUsernameForAdmin = mock(async (_username: string) =>
+    null as ReturnType<typeof user> | null);
   const tx = {
     auditService: { recordAuditLog: mock(async () => undefined) },
     subjectAccessMutation: createSubjectAccessMutation(),
@@ -156,7 +159,10 @@ function createService(options: {
     },
     userRepository: {
       countOpenEmploymentsByUsername: mock(async (_username: string) => 0),
-      getUserByUsernameForAdmin: mock(async () => null),
+      getOpenEmploymentOrganizationIdsByUserId: mock(async (_userId: number) => [10]),
+      getUserByUsernameForAdmin,
+      getUserByUsernameIncludingDeletedForAuthorization: mock(async (username: string) =>
+        await getUserByUsernameForAdmin(username)),
       setPassword: mock(async () => user()),
       setUserForAdmin: mock(async (input: Record<string, unknown>) => user(input)),
       softDeleteUserByUsername: mock(async () => user({ isDelete: true })),
@@ -212,11 +218,32 @@ function createService(options: {
     },
     uow: createImmediateUnitOfWork(tx, { logger: options.afterCommitLogger }),
     userRepository: {
+      getOpenEmploymentOrganizationIdsByUserId: mock(async (userId: number) =>
+        await tx.userRepository.getOpenEmploymentOrganizationIdsByUserId(userId)),
       getUserByUsernameForAdmin: mock(async () => user()),
+      getUserByUsernameIncludingDeletedForAuthorization: mock(async (username: string) =>
+        await tx.userRepository.getUserByUsernameIncludingDeletedForAuthorization(username)),
       searchUsersFuzzyPaged: mock(async () => ({ rows: [user()], total: 1 })),
     },
   } as any;
   return { service: createUserService(deps), deps, tx };
+}
+
+async function createScopedUserAuthorization(warn = mock()) {
+  const policy = createAdminAuthorizationPolicy({
+    logger: { warn },
+    hrAdministrationScopeResolver: {
+      resolveForActor: async () => ({
+        rootOrganizationIds: [10],
+        organizationIds: [10, 11],
+      }),
+    },
+  });
+  return await policy.getUserAuthorization({
+    userId: 7,
+    username: "hr-admin",
+    roles: ["iam:hr-admin"],
+  });
 }
 
 function useEmploymentFixture(
@@ -350,6 +377,220 @@ describe("createUserService", () => {
     });
   });
 
+  test("updates an HR-managed profile and rejects a target with only out-of-scope Open Employment", async () => {
+    const authorization = await createScopedUserAuthorization();
+    const allowedCase = createService();
+    (allowedCase.tx.userRepository.getUserByUsernameForAdmin as any)
+      .mockResolvedValue(user());
+    allowedCase.tx.userRepository.getOpenEmploymentOrganizationIdsByUserId
+      .mockResolvedValueOnce([20, 10]);
+
+    const updated = await allowedCase.service.updateUser(
+      "zhangsan",
+      { name: "新姓名", mobile: "13900000000" },
+      undefined,
+      authorization,
+    );
+
+    expect(updated).toBe(true);
+    expect(allowedCase.tx.userRepository.updateUserByUsername).toHaveBeenCalledWith(
+      "zhangsan",
+      { name: "新姓名", mobile: "13900000000" },
+    );
+    expect(allowedCase.tx.auditService.recordAuditLog).toHaveBeenCalledTimes(1);
+    expect(allowedCase.tx.userProfileInvalidation.recordChanges).toHaveBeenCalledWith([
+      { kind: "user", userId: 1 },
+    ]);
+
+    const deniedCase = createService();
+    (deniedCase.tx.userRepository.getUserByUsernameForAdmin as any)
+      .mockResolvedValue(user());
+    deniedCase.tx.userRepository.getOpenEmploymentOrganizationIdsByUserId
+      .mockResolvedValueOnce([20]);
+    let failure: unknown;
+    try {
+      await deniedCase.service.updateUser(
+        "zhangsan",
+        { name: "越权姓名" },
+        undefined,
+        authorization,
+      );
+    }
+    catch (error) {
+      failure = error;
+    }
+
+    expect(failure).toMatchObject({ httpStatus: 403 });
+    expect(deniedCase.tx.userRepository.updateUserByUsername).not.toHaveBeenCalled();
+    expect(deniedCase.tx.auditService.recordAuditLog).not.toHaveBeenCalled();
+    expect(deniedCase.tx.userProfileInvalidation.recordChanges).not.toHaveBeenCalled();
+  });
+
+  test("rechecks every Open Employment before an HR User status write", async () => {
+    const warn = mock();
+    const authorization = await createScopedUserAuthorization(warn);
+    const allowedCase = createService();
+    allowedCase.tx.userRepository.getUserByUsernameForAdmin.mockResolvedValue(user());
+    allowedCase.tx.userRepository.getOpenEmploymentOrganizationIdsByUserId
+      .mockResolvedValue([10, 11]);
+
+    const updated = await allowedCase.service.updateUserStatus(
+      "zhangsan",
+      UserStatus.Pause,
+      undefined,
+      authorization,
+    );
+
+    expect(updated).toBe(true);
+    expect(allowedCase.tx.userRepository.updateUserByUsername).toHaveBeenCalledWith(
+      "zhangsan",
+      { status: UserStatus.Pause },
+    );
+    expect(allowedCase.tx.auditService.recordAuditLog).toHaveBeenCalledWith(
+      expect.objectContaining({ action: "admin.user.status_update" }),
+    );
+
+    const deniedCase = createService();
+    deniedCase.tx.userRepository.getUserByUsernameForAdmin.mockResolvedValue(user());
+    deniedCase.tx.userRepository.getOpenEmploymentOrganizationIdsByUserId
+      .mockResolvedValue([10, 20]);
+    let failure: unknown;
+    try {
+      await deniedCase.service.updateUserStatus(
+        "zhangsan",
+        UserStatus.Disable,
+        undefined,
+        authorization,
+      );
+    }
+    catch (error) {
+      failure = error;
+    }
+
+    expect(failure).toMatchObject({ httpStatus: 403 });
+    expect(deniedCase.tx.userRepository.updateUserByUsername).not.toHaveBeenCalled();
+    expect(deniedCase.tx.auditService.recordAuditLog).not.toHaveBeenCalled();
+    expect(deniedCase.tx.userProfileInvalidation.recordChanges).not.toHaveBeenCalled();
+    expect(deniedCase.deps.subjectAccessLifecycle.run).not.toHaveBeenCalled();
+    expect(deniedCase.deps.sessionRevocation.revokeUserSessions).not.toHaveBeenCalled();
+    expect(warn).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: "admin.user.updateStatus",
+        resourceType: "user",
+        resourceIdentifier: "zhangsan",
+        reasonCode: "USER_HAS_OUT_OF_SCOPE_OPEN_EMPLOYMENT",
+      }),
+      "admin mutation authorization denied",
+    );
+
+    const changedCase = createService();
+    changedCase.tx.userRepository.getUserByUsernameForAdmin.mockResolvedValue(user());
+    changedCase.tx.userRepository.getOpenEmploymentOrganizationIdsByUserId
+      .mockResolvedValueOnce([10])
+      .mockResolvedValueOnce([10, 20]);
+    let changedFailure: unknown;
+    try {
+      await changedCase.service.updateUserStatus(
+        "zhangsan",
+        UserStatus.Disable,
+        undefined,
+        authorization,
+      );
+    }
+    catch (error) {
+      changedFailure = error;
+    }
+
+    expect(changedFailure).toMatchObject({ httpStatus: 403 });
+    expect(changedCase.deps.subjectAccessLifecycle.run).toHaveBeenCalledTimes(1);
+    expect(changedCase.tx.userRepository.updateUserByUsername).not.toHaveBeenCalled();
+  });
+
+  test("logs the status operation when a scoped User status write loses its target", async () => {
+    const warn = mock();
+    const authorization = await createScopedUserAuthorization(warn);
+    const { service, tx } = createService();
+    tx.userRepository.getUserByUsernameForAdmin.mockResolvedValue(user());
+    (tx.userRepository.updateUserByUsername as any).mockResolvedValue(null);
+
+    let failure: unknown;
+    try {
+      await service.updateUserStatus(
+        "zhangsan",
+        UserStatus.Pause,
+        undefined,
+        authorization,
+      );
+    }
+    catch (error) {
+      failure = error;
+    }
+
+    expect(failure).toMatchObject({ httpStatus: 403 });
+    expect(tx.auditService.recordAuditLog).not.toHaveBeenCalled();
+    expect(warn).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: "admin.user.updateStatus",
+        resourceIdentifier: "zhangsan",
+        reasonCode: "USER_NOT_HR_MANAGED",
+      }),
+      "admin mutation authorization denied",
+    );
+  });
+
+  test("rejects a soft-deleted target as non-HR-managed for scoped profile and password mutations", async () => {
+    const authorization = await createScopedUserAuthorization();
+    const { service, deps, tx } = createService();
+    deps.userRepository.getUserByUsernameForAdmin.mockResolvedValue(null);
+    tx.userRepository.getUserByUsernameForAdmin.mockResolvedValue(null);
+    tx.userRepository.getUserByUsernameIncludingDeletedForAuthorization
+      .mockResolvedValue(user({ isDelete: true }));
+
+    const failures: unknown[] = [];
+    try {
+      await service.updateUser(
+        "zhangsan",
+        { name: "Forbidden" },
+        undefined,
+        authorization,
+      );
+    }
+    catch (error) {
+      failures.push(error);
+    }
+    try {
+      await service.resetPasswordByUsername(
+        "zhangsan",
+        undefined,
+        authorization,
+      );
+    }
+    catch (error) {
+      failures.push(error);
+    }
+    try {
+      await service.updateUserStatus(
+        "zhangsan",
+        UserStatus.Pause,
+        undefined,
+        authorization,
+      );
+    }
+    catch (error) {
+      failures.push(error);
+    }
+
+    expect(failures).toHaveLength(3);
+    for (const failure of failures)
+      expect(failure).toMatchObject({ httpStatus: 403 });
+    expect(tx.userRepository.updateUserByUsername).not.toHaveBeenCalled();
+    expect(tx.userRepository.setPassword).not.toHaveBeenCalled();
+    expect(tx.auditService.recordAuditLog).not.toHaveBeenCalled();
+    expect(deps.random.password).not.toHaveBeenCalled();
+    expect(deps.subjectAccessLifecycle.run).not.toHaveBeenCalled();
+    expect(deps.sessionRevocation.revokeUserSessions).not.toHaveBeenCalled();
+  });
+
   test("does not write the database when Subject Access pre-block fails", async () => {
     const preBlockError = new Error("subject access unavailable");
     const { service, deps, tx } = createService({ preBlockError });
@@ -466,7 +707,8 @@ describe("createUserService", () => {
     });
   });
 
-  test("keeps current PrincipalSession when an admin resets their own password", async () => {
+  test("applies the same scoped rules while keeping the current PrincipalSession for a self reset", async () => {
+    const authorization = await createScopedUserAuthorization();
     const { service, deps, tx } = createService();
     (tx.userRepository.getUserByUsernameForAdmin as any).mockResolvedValue(user());
     const auditContext = {
@@ -475,7 +717,11 @@ describe("createUserService", () => {
       principalSessionId: "ps-current",
     };
 
-    await expect(service.resetPasswordByUsername("zhangsan", auditContext)).resolves.toBe("Rand1234");
+    await expect(service.resetPasswordByUsername(
+      "zhangsan",
+      auditContext,
+      authorization,
+    )).resolves.toBe("Rand1234");
 
     expect(deps.sessionRevocation.revokeUserSessions).toHaveBeenCalledWith({
       userId: 1,
@@ -484,6 +730,81 @@ describe("createUserService", () => {
       exceptPrincipalSessionId: "ps-current",
       auditContext,
     });
+  });
+
+  test("returns the committed password when best-effort session revocation fails", async () => {
+    const afterCommitLogger = createAfterCommitLogger();
+    const { service, deps, tx } = createService({ afterCommitLogger });
+    (tx.userRepository.getUserByUsernameForAdmin as any).mockResolvedValue(user());
+    const revocationFailure = new Error("revocation failed");
+    const auditContext = {
+      actorType: "admin" as const,
+      actorUserId: 100,
+      requestId: "req-password-revoke",
+      traceId: "22222222222222222222222222222222",
+    };
+    deps.sessionRevocation.revokeUserSessions.mockRejectedValueOnce(revocationFailure);
+
+    const password = await service.resetPasswordByUsername("zhangsan", auditContext);
+
+    expect(password).toBe("Rand1234");
+    expect(tx.userRepository.setPassword).toHaveBeenCalledWith(1, "hashed:Rand1234");
+    expect(afterCommitLogger.warn).toHaveBeenCalledWith({
+      afterCommit: "admin.session_revoke.user",
+      mode: "bestEffort",
+      err: revocationFailure,
+      requestId: "req-password-revoke",
+      traceId: "22222222222222222222222222222222",
+    }, "best-effort afterCommit task failed");
+  });
+
+  test.each([
+    ["Pause", UserStatus.Pause],
+    ["Disable", UserStatus.Disable],
+  ])("rejects resetting an HR-managed User in %s without generating or returning a password", async (_label, status) => {
+    const authorization = await createScopedUserAuthorization();
+    const { service, deps, tx } = createService();
+    (tx.userRepository.getUserByUsernameForAdmin as any)
+      .mockResolvedValue(user({ status }));
+    tx.userRepository.getOpenEmploymentOrganizationIdsByUserId
+      .mockResolvedValueOnce([10]);
+
+    let failure: unknown;
+    try {
+      await service.resetPasswordByUsername(
+        "zhangsan",
+        undefined,
+        authorization,
+      );
+    }
+    catch (error) {
+      failure = error;
+    }
+
+    expect(failure).toMatchObject({ httpStatus: 403 });
+    expect(deps.random.password).not.toHaveBeenCalled();
+    expect(deps.passwordHasher.hashPassword).not.toHaveBeenCalled();
+    expect(tx.userRepository.setPassword).not.toHaveBeenCalled();
+    expect(tx.auditService.recordAuditLog).not.toHaveBeenCalled();
+    expect(deps.sessionRevocation.revokeUserSessions).not.toHaveBeenCalled();
+  });
+
+  test("does not return a generated password when the guarded password write affects no User", async () => {
+    const { service, deps, tx } = createService();
+    (tx.userRepository.getUserByUsernameForAdmin as any).mockResolvedValue(user());
+    tx.userRepository.setPassword.mockResolvedValueOnce(null as never);
+
+    let failure: unknown;
+    try {
+      await service.resetPasswordByUsername("zhangsan");
+    }
+    catch (error) {
+      failure = error;
+    }
+
+    expect(failure).toBeInstanceOf(Error);
+    expect(tx.auditService.recordAuditLog).not.toHaveBeenCalled();
+    expect(deps.sessionRevocation.revokeUserSessions).not.toHaveBeenCalled();
   });
 
   test("restores enabled access when the highest-level status mutation rolls back", async () => {

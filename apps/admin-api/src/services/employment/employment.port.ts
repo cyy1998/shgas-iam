@@ -1,6 +1,7 @@
 import type { AuditLogWriterPort } from "@admin-api/services/audit/audit.service";
 import type { UnitOfWorkPort } from "@iam/api-core/uow";
 import type {
+  AdminEmploymentAuthorizationFacts,
   AdminEmploymentRecordUpdate,
   Employment,
   EmploymentAdminPaginationQueryDto,
@@ -17,9 +18,22 @@ export interface AdminEmploymentStorePort {
   updateEmploymentRecord: (id: number, input: AdminEmploymentRecordUpdate) => Promise<Employment>;
 }
 
+export interface AdminEmploymentReadScope {
+  organizationIds: readonly number[];
+}
+
 export interface AdminEmploymentReaderPort {
-  getEmploymentByIdForAdmin: (id: number) => Promise<EmploymentDetail | null>;
-  searchEmploymentsFuzzyForAdminPaged: (query: EmploymentAdminPaginationQueryDto) => Promise<{
+  getEmploymentAuthorizationFactsByIdForAdmin: (
+    id: number,
+  ) => Promise<AdminEmploymentAuthorizationFacts | null>;
+  getEmploymentByIdForAdmin: (
+    id: number,
+    scope?: AdminEmploymentReadScope,
+  ) => Promise<EmploymentDetail | null>;
+  searchEmploymentsFuzzyForAdminPaged: (
+    query: EmploymentAdminPaginationQueryDto,
+    scope?: AdminEmploymentReadScope,
+  ) => Promise<{
     rows: EmploymentDetail[];
     total: number;
   }>;

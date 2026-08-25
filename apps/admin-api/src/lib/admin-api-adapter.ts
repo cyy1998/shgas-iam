@@ -1,14 +1,38 @@
+import type { AdminOperationId } from "@admin-api/services/admin-authorization/admin-operation.registry";
 import type { ApiEnvelope } from "@iam/api-core/http";
 import type { Context, Env, TypedResponse } from "hono";
 import type { JSONParsed } from "hono/utils/types";
 import type { z } from "zod";
+import { authorizeAdminOperationForContext } from "@admin-api/services/admin-authorization/admin-authorization.context";
 import * as resp from "@iam/api-core/http";
 import { mapCustomErrorToTRPCError, publicProcedure } from "@iam/api-core/trpc";
 
 export type AdminApiOperationType = "query" | "mutation";
 
+const ADMIN_OPERATION_ID = Symbol.for(
+  "@iam/admin-api/admin-operation-id",
+);
+
+export function getAdminOperationId(value: unknown): AdminOperationId | null {
+  if (!value || (typeof value !== "object" && typeof value !== "function"))
+    return null;
+  return (value as { [ADMIN_OPERATION_ID]?: AdminOperationId })[
+    ADMIN_OPERATION_ID
+  ] ?? null;
+}
+
+function tagAdminOperation<T>(value: T, operationId: AdminOperationId): T {
+  Object.defineProperty(value as object, ADMIN_OPERATION_ID, {
+    configurable: false,
+    enumerable: false,
+    value: operationId,
+    writable: false,
+  });
+  return value;
+}
+
 export type AdminApiOperationContext = {
-  hono?: Context;
+  hono: Context;
 };
 
 export type AdminApiRestContext = Context<Env, string, {
@@ -37,11 +61,12 @@ type AdminApiRestHandlerCompatibility<THandler, TOutput>
 
 type AdminApiOperationHandler<TSchema extends z.ZodTypeAny, TOutput> = (
   input: z.infer<TSchema>,
-  context?: AdminApiOperationContext,
+  context: AdminApiOperationContext,
 ) => MaybePromise<TOutput>;
 
 export interface AdminApiOperationConfig<TSchema extends z.ZodTypeAny, TOutput> {
   type: AdminApiOperationType;
+  operationId: AdminOperationId;
   input: TSchema;
   restInput: (c: AdminApiRestContext) => z.infer<TSchema>;
   handler: AdminApiOperationHandler<TSchema, TOutput>;
@@ -59,8 +84,20 @@ type AdminApiOperationDefinition<TSchema extends z.ZodTypeAny, TOutput> = Omit<
 function createAdminApiOperationBase<TSchema extends z.ZodTypeAny, TOutput>(
   config: AdminApiOperationDefinition<TSchema, TOutput>,
 ) {
-  async function run(input: z.infer<TSchema>, context?: AdminApiOperationContext) {
-    return config.handler(config.input.parse(input), context);
+  async function authorize(
+    operationInput: unknown,
+    context: AdminApiOperationContext,
+  ) {
+    await authorizeAdminOperationForContext(context.hono, {
+      operationId: config.operationId,
+      operationInput,
+    });
+  }
+
+  async function run(input: z.infer<TSchema>, context: AdminApiOperationContext) {
+    await authorize(input, context);
+    const parsedInput = config.input.parse(input);
+    return config.handler(parsedInput, context);
   }
 
   function toHandler<THandler = AdminApiGeneratedRestHandler<TOutput>>(
@@ -70,10 +107,10 @@ function createAdminApiOperationBase<TSchema extends z.ZodTypeAny, TOutput>(
       const data = await run(config.restInput(c), { hono: c });
       return c.json(resp.ok(data), 200);
     };
-    return handler as unknown as THandler;
+    return tagAdminOperation(handler, config.operationId) as unknown as THandler;
   }
 
-  const resolver = async (opts: { input: unknown; ctx?: AdminApiOperationContext }) => {
+  const resolver = async (opts: { input: unknown; ctx: AdminApiOperationContext }) => {
     try {
       return await run(opts.input as z.infer<TSchema>, opts.ctx);
     }
@@ -82,9 +119,20 @@ function createAdminApiOperationBase<TSchema extends z.ZodTypeAny, TOutput>(
     }
   };
 
+  const authorizedProcedure = publicProcedure.use(async (opts) => {
+    try {
+      await authorize(await opts.getRawInput(), opts.ctx);
+    }
+    catch (err) {
+      mapCustomErrorToTRPCError(err);
+    }
+    return opts.next();
+  });
+
   return {
     handler: config.handler,
     input: config.input,
+    authorizedProcedure,
     resolver,
     restInput: config.restInput,
     run,
@@ -98,7 +146,10 @@ export function defineAdminApiQueryOperation<TSchema extends z.ZodTypeAny, TOutp
   const operation = createAdminApiOperationBase(config);
   return {
     ...operation,
-    toTRPC: () => publicProcedure.input(config.input).query(operation.resolver),
+    toTRPC: () => tagAdminOperation(
+      operation.authorizedProcedure.input(config.input).query(operation.resolver),
+      config.operationId,
+    ),
     type: "query" as const,
   };
 }
@@ -109,7 +160,10 @@ export function defineAdminApiMutationOperation<TSchema extends z.ZodTypeAny, TO
   const operation = createAdminApiOperationBase(config);
   return {
     ...operation,
-    toTRPC: () => publicProcedure.input(config.input).mutation(operation.resolver),
+    toTRPC: () => tagAdminOperation(
+      operation.authorizedProcedure.input(config.input).mutation(operation.resolver),
+      config.operationId,
+    ),
     type: "mutation" as const,
   };
 }

@@ -4,6 +4,7 @@ import type {
   ResignUserUseCaseDeps,
 } from "@admin-api/use-cases/employment/resign-user/resign-user.port";
 import type { SubjectAccessMutationReceipt } from "@iam/api-core/subject-access";
+import { createAdminAuthorizationPolicy } from "@admin-api/services/admin-authorization/admin-authorization.policy";
 import { createFakeClock, createImmediateUnitOfWork } from "@admin-api/testing/fakes";
 import { createResignUserUseCase } from "@admin-api/use-cases/employment/resign-user/resign-user.use-case";
 import { EmploymentStatus, UserStatus } from "@iam/contracts";
@@ -17,6 +18,14 @@ const subjectAccessMutationReceipt: SubjectAccessMutationReceipt = {
   transitionId: "10000000-0000-4000-8000-000000000001",
   ownerToken: "10000000-0000-4000-8000-000000000002",
 };
+const defaultTarget = {
+  id: 1,
+  subjectIdentifier,
+  username: "zhangsan",
+  name: "张三",
+  status: UserStatus.Enable,
+  isDelete: false,
+} as const;
 
 function createSubjectAccessMutation(): ResignUserTransactionPorts["subjectAccessMutation"] {
   return {
@@ -62,19 +71,282 @@ function createSubjectAccessLifecycle(preBlockError?: Error) {
 function createUserReader(
   value: ResignUserUseCaseDeps["userReader"] extends {
     getUserByUsernameForAdmin: (...args: never[]) => Promise<infer T>;
-  } ? T : never = {
+  } ? T : never = defaultTarget,
+) {
+  return {
+    getUserByUsernameForAdmin: mock(async () => value),
+    getUserByUsernameIncludingDeletedForAuthorization: mock(async () => value),
+    getOpenEmploymentOrganizationIdsByUserId: mock(async () => []),
+    getEndedEmploymentOrganizationIdsByUserId: mock(async () => []),
+  };
+}
+
+function createUserStore(
+  overrides: Partial<ResignUserTransactionPorts["userStore"]> = {},
+): ResignUserTransactionPorts["userStore"] {
+  return {
+    getUserByUsernameForAdmin: mock(async () => defaultTarget),
+    getUserByUsernameIncludingDeletedForAuthorization: mock(async () => defaultTarget),
+    getOpenEmploymentOrganizationIdsByUserId: mock(async () => []),
+    getEndedEmploymentOrganizationIdsByUserId: mock(async () => []),
+    updateUserByUsername: mock(async () => defaultTarget),
+    ...overrides,
+  };
+}
+
+async function createScopedAuthorization(organizationIds = [10]) {
+  return await createAdminAuthorizationPolicy({
+    logger: { warn: mock() },
+    hrAdministrationScopeResolver: {
+      resolveForActor: async () => ({
+        rootOrganizationIds: [organizationIds[0]!],
+        organizationIds,
+      }),
+    },
+  }).getUserAuthorization({
+    userId: 99,
+    username: "hr-admin",
+    roles: ["iam:hr-admin"],
+  });
+}
+
+describe("createResignUserUseCase", () => {
+  test("rejects an HR target with any out-of-scope Open Employment before Subject Access starts", async () => {
+    const subjectAccessLifecycle = createSubjectAccessLifecycle();
+    const target = {
       id: 1,
       subjectIdentifier,
       username: "zhangsan",
       name: "张三",
-    },
-) {
-  return {
-    getUserByUsernameForAdmin: mock(async () => value),
-  };
-}
+      status: UserStatus.Enable,
+      isDelete: false,
+    };
+    const userReader = {
+      getUserByUsernameForAdmin: mock(async () => target),
+      getUserByUsernameIncludingDeletedForAuthorization: mock(async () => target),
+      getOpenEmploymentOrganizationIdsByUserId: mock(async () => [10, 20]),
+      getEndedEmploymentOrganizationIdsByUserId: mock(async () => []),
+    };
+    const authorization = await createScopedAuthorization();
+    const tx = {
+      auditLogWriter: { recordAuditLog: mock(async () => undefined) },
+      subjectAccessMutation: createSubjectAccessMutation(),
+      employmentStore: { endOpenEmploymentsByUserId: mock(async () => undefined) },
+      responsibilityParentLifecycle: createResponsibilityParentLifecycle(),
+      userProfileInvalidation: { recordChanges: mock(async () => undefined) },
+      userStore: {
+        ...userReader,
+        updateUserByUsername: mock(async () => target),
+      },
+    };
+    const useCase = createResignUserUseCase({
+      clock: createFakeClock(),
+      sessionRevocation: createSessionRevocation(),
+      subjectAccessLifecycle,
+      uow: createImmediateUnitOfWork(tx),
+      userReader,
+    });
 
-describe("createResignUserUseCase", () => {
+    let failure: unknown;
+    try {
+      await useCase.execute({ username: "zhangsan" }, {
+        authorization,
+        auditContext: {
+          actorType: "admin",
+          actorUserId: target.id,
+        },
+      });
+    }
+    catch (error) {
+      failure = error;
+    }
+
+    expect(failure).toMatchObject({ httpStatus: 403 });
+    expect(subjectAccessLifecycle.run).not.toHaveBeenCalled();
+    expect(tx.employmentStore.endOpenEmploymentsByUserId).not.toHaveBeenCalled();
+  });
+
+  test("rejects every zero-Open non-completed HR shape before Subject Access starts", async () => {
+    const cases = [
+      {
+        status: UserStatus.Enable,
+        isDelete: false,
+        endedEmploymentOrganizationIds: [10],
+      },
+      {
+        status: UserStatus.Pause,
+        isDelete: false,
+        endedEmploymentOrganizationIds: [10],
+      },
+      {
+        status: UserStatus.Disable,
+        isDelete: false,
+        endedEmploymentOrganizationIds: [],
+      },
+      {
+        status: UserStatus.Disable,
+        isDelete: false,
+        endedEmploymentOrganizationIds: [20],
+      },
+      {
+        status: UserStatus.Disable,
+        isDelete: true,
+        endedEmploymentOrganizationIds: [10],
+      },
+    ] as const;
+
+    for (const facts of cases) {
+      const target = { ...defaultTarget, status: facts.status, isDelete: facts.isDelete };
+      const subjectAccessLifecycle = createSubjectAccessLifecycle();
+      const userReader = {
+        getUserByUsernameForAdmin: mock(async () => target),
+        getUserByUsernameIncludingDeletedForAuthorization: mock(async () => target),
+        getOpenEmploymentOrganizationIdsByUserId: mock(async () => []),
+        getEndedEmploymentOrganizationIdsByUserId: mock(async () =>
+          [...facts.endedEmploymentOrganizationIds]),
+      };
+      const useCase = createResignUserUseCase({
+        clock: createFakeClock(),
+        sessionRevocation: createSessionRevocation(),
+        subjectAccessLifecycle,
+        uow: createImmediateUnitOfWork({
+          auditLogWriter: { recordAuditLog: mock(async () => undefined) },
+          subjectAccessMutation: createSubjectAccessMutation(),
+          employmentStore: { endOpenEmploymentsByUserId: mock(async () => undefined) },
+          responsibilityParentLifecycle: createResponsibilityParentLifecycle(),
+          userProfileInvalidation: { recordChanges: mock(async () => undefined) },
+          userStore: createUserStore(),
+        }),
+        userReader,
+      });
+
+      let failure: unknown;
+      try {
+        await useCase.execute(
+          { username: "zhangsan" },
+          { authorization: await createScopedAuthorization() },
+        );
+      }
+      catch (error) {
+        failure = error;
+      }
+
+      expect(failure).toMatchObject({ httpStatus: 403 });
+      expect(subjectAccessLifecycle.run).not.toHaveBeenCalled();
+    }
+  });
+
+  test("rechecks HR resignation scope inside the transaction before any business write", async () => {
+    const target = {
+      id: 1,
+      subjectIdentifier,
+      username: "zhangsan",
+      name: "张三",
+      status: UserStatus.Enable,
+      isDelete: false,
+    };
+    const userReader = {
+      getUserByUsernameForAdmin: mock(async () => target),
+      getUserByUsernameIncludingDeletedForAuthorization: mock(async () => target),
+      getOpenEmploymentOrganizationIdsByUserId: mock(async () => [10]),
+      getEndedEmploymentOrganizationIdsByUserId: mock(async () => []),
+    };
+    const tx = {
+      auditLogWriter: { recordAuditLog: mock(async () => undefined) },
+      subjectAccessMutation: createSubjectAccessMutation(),
+      employmentStore: { endOpenEmploymentsByUserId: mock(async () => undefined) },
+      responsibilityParentLifecycle: createResponsibilityParentLifecycle(),
+      userProfileInvalidation: { recordChanges: mock(async () => undefined) },
+      userStore: {
+        getUserByUsernameForAdmin: mock(async () => target),
+        getUserByUsernameIncludingDeletedForAuthorization: mock(async () => target),
+        getOpenEmploymentOrganizationIdsByUserId: mock(async () => [10, 20]),
+        getEndedEmploymentOrganizationIdsByUserId: mock(async () => []),
+        updateUserByUsername: mock(async () => target),
+      },
+    };
+    const sessionRevocation = createSessionRevocation();
+    const useCase = createResignUserUseCase({
+      clock: createFakeClock(),
+      sessionRevocation,
+      subjectAccessLifecycle: createSubjectAccessLifecycle(),
+      uow: createImmediateUnitOfWork(tx),
+      userReader,
+    });
+
+    let failure: unknown;
+    try {
+      await useCase.execute(
+        { username: "zhangsan" },
+        { authorization: await createScopedAuthorization() },
+      );
+    }
+    catch (error) {
+      failure = error;
+    }
+
+    expect(failure).toMatchObject({ httpStatus: 403 });
+    expect(tx.employmentStore.endOpenEmploymentsByUserId).not.toHaveBeenCalled();
+    expect(tx.userStore.updateUserByUsername).not.toHaveBeenCalled();
+    expect(tx.auditLogWriter.recordAuditLog).not.toHaveBeenCalled();
+    expect(tx.userProfileInvalidation.recordChanges).not.toHaveBeenCalled();
+    expect(sessionRevocation.revokeUserSessions).not.toHaveBeenCalled();
+  });
+
+  test("treats only the scoped completed shape as a no-op retry and revokes Sessions again", async () => {
+    const target = {
+      id: 1,
+      subjectIdentifier,
+      username: "zhangsan",
+      name: "张三",
+      status: UserStatus.Disable,
+      isDelete: false,
+    };
+    const createEligibilityReader = () => ({
+      getUserByUsernameForAdmin: mock(async () => target),
+      getUserByUsernameIncludingDeletedForAuthorization: mock(async () => target),
+      getOpenEmploymentOrganizationIdsByUserId: mock(async () => []),
+      getEndedEmploymentOrganizationIdsByUserId: mock(async () => [10]),
+    });
+    const userReader = createEligibilityReader();
+    const tx = {
+      auditLogWriter: { recordAuditLog: mock(async () => undefined) },
+      subjectAccessMutation: createSubjectAccessMutation(),
+      employmentStore: { endOpenEmploymentsByUserId: mock(async () => undefined) },
+      responsibilityParentLifecycle: createResponsibilityParentLifecycle(),
+      userProfileInvalidation: { recordChanges: mock(async () => undefined) },
+      userStore: {
+        ...createEligibilityReader(),
+        updateUserByUsername: mock(async () => target),
+      },
+    };
+    const clock = createFakeClock();
+    const sessionRevocation = createSessionRevocation();
+    const useCase = createResignUserUseCase({
+      clock,
+      sessionRevocation,
+      subjectAccessLifecycle: createSubjectAccessLifecycle(),
+      uow: createImmediateUnitOfWork(tx),
+      userReader,
+    });
+
+    const result = await useCase.execute(
+      { username: "zhangsan" },
+      { authorization: await createScopedAuthorization() },
+    );
+
+    expect(result).toBe(true);
+    expect(clock.nowDate).not.toHaveBeenCalled();
+    expect(tx.employmentStore.endOpenEmploymentsByUserId).not.toHaveBeenCalled();
+    expect(
+      tx.responsibilityParentLifecycle.endOpenAssignmentsForUserResignation,
+    ).not.toHaveBeenCalled();
+    expect(tx.userStore.updateUserByUsername).not.toHaveBeenCalled();
+    expect(tx.auditLogWriter.recordAuditLog).not.toHaveBeenCalled();
+    expect(tx.userProfileInvalidation.recordChanges).not.toHaveBeenCalled();
+    expect(sessionRevocation.revokeUserSessions).toHaveBeenCalledTimes(1);
+  });
+
   test("ends Open Employments at one authoritative time before disabling an existing user", async () => {
     const events: string[] = [];
     const transactionTime = new Date("2026-08-11T10:30:00.000Z");
@@ -102,15 +374,16 @@ describe("createResignUserUseCase", () => {
           events.push("profile:invalidate");
         }),
       },
-      userStore: {
+      userStore: createUserStore({
         getUserByUsernameForAdmin: mock(async () => {
           events.push("user:lookup");
-          return { id: 1, subjectIdentifier, username: "zhangsan", name: "张三" };
+          return defaultTarget;
         }),
         updateUserByUsername: mock(async () => {
           events.push("user:disable");
+          return defaultTarget;
         }),
-      },
+      }),
     };
     const useCase = createResignUserUseCase({
       clock,
@@ -184,17 +457,12 @@ describe("createResignUserUseCase", () => {
           events.push("profile:invalidate");
         }),
       },
-      userStore: {
-        getUserByUsernameForAdmin: mock(async () => ({
-          id: 1,
-          subjectIdentifier,
-          username: "zhangsan",
-          name: "张三",
-        })),
+      userStore: createUserStore({
         updateUserByUsername: mock(async () => {
           events.push("user:disable");
+          return defaultTarget;
         }),
-      },
+      }),
     };
     const uow: ResignUserUseCaseDeps["uow"] = {
       async transaction(callback) {
@@ -255,15 +523,7 @@ describe("createResignUserUseCase", () => {
       employmentStore: { endOpenEmploymentsByUserId: mock(async () => undefined) },
       responsibilityParentLifecycle: createResponsibilityParentLifecycle(),
       userProfileInvalidation: { recordChanges: mock(async () => undefined) },
-      userStore: {
-        getUserByUsernameForAdmin: mock(async () => ({
-          id: 1,
-          subjectIdentifier,
-          username: "zhangsan",
-          name: "张三",
-        })),
-        updateUserByUsername: mock(async () => undefined),
-      },
+      userStore: createUserStore(),
     };
     const useCase = createResignUserUseCase({
       clock: createFakeClock(),
@@ -285,15 +545,7 @@ describe("createResignUserUseCase", () => {
       employmentStore: { endOpenEmploymentsByUserId: mock(async () => undefined) },
       responsibilityParentLifecycle: createResponsibilityParentLifecycle(),
       userProfileInvalidation: { recordChanges: mock(async () => undefined) },
-      userStore: {
-        getUserByUsernameForAdmin: mock(async () => ({
-          id: 1,
-          subjectIdentifier,
-          username: "zhangsan",
-          name: "张三",
-        })),
-        updateUserByUsername: mock(async () => undefined),
-      },
+      userStore: createUserStore(),
     };
     const useCase = createResignUserUseCase({
       clock: createFakeClock(),
@@ -347,15 +599,7 @@ describe("createResignUserUseCase", () => {
       employmentStore,
       responsibilityParentLifecycle: createResponsibilityParentLifecycle(),
       userProfileInvalidation: { recordChanges: mock(async () => undefined) },
-      userStore: {
-        getUserByUsernameForAdmin: mock(async () => ({
-          id: 1,
-          subjectIdentifier,
-          username: "zhangsan",
-          name: "张三",
-        })),
-        updateUserByUsername: mock(async () => undefined),
-      },
+      userStore: createUserStore(),
     };
     const useCase = createResignUserUseCase({
       clock,
@@ -398,15 +642,7 @@ describe("createResignUserUseCase", () => {
       employmentStore: { endOpenEmploymentsByUserId: mock(async () => undefined) },
       responsibilityParentLifecycle: createResponsibilityParentLifecycle(),
       userProfileInvalidation: { recordChanges: mock(async () => undefined) },
-      userStore: {
-        getUserByUsernameForAdmin: mock(async () => ({
-          id: 1,
-          subjectIdentifier,
-          username: "zhangsan",
-          name: "张三",
-        })),
-        updateUserByUsername: mock(async () => undefined),
-      },
+      userStore: createUserStore(),
     };
     let transactionOptions: unknown;
     const uow: ResignUserUseCaseDeps["uow"] = {
@@ -463,10 +699,9 @@ describe("createResignUserUseCase", () => {
       employmentStore: { endOpenEmploymentsByUserId: mock(async () => undefined) },
       responsibilityParentLifecycle: createResponsibilityParentLifecycle(),
       userProfileInvalidation: { recordChanges: mock(async () => undefined) },
-      userStore: {
+      userStore: createUserStore({
         getUserByUsernameForAdmin: mock(async () => null),
-        updateUserByUsername: mock(async () => undefined),
-      },
+      }),
     };
     const sessionRevocation = createSessionRevocation();
     const useCase = createResignUserUseCase({
@@ -504,13 +739,16 @@ describe("createResignUserUseCase", () => {
         employmentStore: { endOpenEmploymentsByUserId: mock(async () => runStage("employment:end")) },
         responsibilityParentLifecycle: createResponsibilityParentLifecycle(),
         userProfileInvalidation: { recordChanges: mock(async () => runStage("profile:invalidate")) },
-        userStore: {
+        userStore: createUserStore({
           getUserByUsernameForAdmin: mock(async () => {
             events.push("user:lookup");
-            return { id: 1, subjectIdentifier, username: "zhangsan", name: "张三" };
+            return defaultTarget;
           }),
-          updateUserByUsername: mock(async () => runStage("user:disable")),
-        },
+          updateUserByUsername: mock(async () => {
+            await runStage("user:disable");
+            return defaultTarget;
+          }),
+        }),
       };
       const sessionRevocation = createSessionRevocation();
       const useCase = createResignUserUseCase({
@@ -562,10 +800,20 @@ describe("createResignUserUseCase", () => {
             responsibilityParentLifecycle: createResponsibilityParentLifecycle(),
             userStore: {
               async getUserByUsernameForAdmin() {
-                return { id: 1, subjectIdentifier, username: "zhangsan", name: "张三" };
+                return defaultTarget;
+              },
+              async getUserByUsernameIncludingDeletedForAuthorization() {
+                return defaultTarget;
+              },
+              async getOpenEmploymentOrganizationIdsByUserId() {
+                return [];
+              },
+              async getEndedEmploymentOrganizationIdsByUserId() {
+                return [];
               },
               async updateUserByUsername(_username, patch) {
                 staged.userStatus = patch.status;
+                return defaultTarget;
               },
             },
             auditLogWriter: {
@@ -615,15 +863,7 @@ describe("createResignUserUseCase", () => {
       employmentStore: { endOpenEmploymentsByUserId: mock(async () => undefined) },
       responsibilityParentLifecycle: createResponsibilityParentLifecycle(),
       userProfileInvalidation: { recordChanges: mock(async () => undefined) },
-      userStore: {
-        getUserByUsernameForAdmin: mock(async () => ({
-          id: 1,
-          subjectIdentifier,
-          username: "zhangsan",
-          name: "张三",
-        })),
-        updateUserByUsername: mock(async () => undefined),
-      },
+      userStore: createUserStore(),
     };
     const sessionRevocation = createSessionRevocation();
     const useCase = createResignUserUseCase({

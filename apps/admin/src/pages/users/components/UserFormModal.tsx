@@ -61,7 +61,6 @@ export default function UserFormModal({
               mobile: initialValues.mobile ?? '',
               wxId: initialValues.wxId ?? '',
               userType: initialValues.userType ?? '',
-              status: initialValues.status,
             }
           : { status: 1 }
       }
@@ -78,7 +77,6 @@ export default function UserFormModal({
               mobile: values.mobile || null,
               wxId: values.wxId || null,
               userType: values.userType || undefined,
-              status: values.status,
             });
             message.success('更新成功');
           } else {
@@ -130,15 +128,17 @@ export default function UserFormModal({
           placeholder="留空则后端生成随机密码"
         />
       )}
-      <ProFormSelect
-        name="status"
-        label="状态"
-        options={getUserStatusOptions().map((o) => ({
-          label: o.label,
-          value: o.value,
-        }))}
-        rules={[{ required: true }]}
-      />
+      {!isEdit && (
+        <ProFormSelect
+          name="status"
+          label="状态"
+          options={getUserStatusOptions().map((o) => ({
+            label: o.label,
+            value: o.value,
+          }))}
+          rules={[{ required: true }]}
+        />
+      )}
     </ModalForm>
   );
 }

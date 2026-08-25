@@ -2,7 +2,6 @@
 import shanghaiGasLogo from '@admin/assets/logo.png';
 import AvatarDropdown from '@admin/components/RightContent/AvatarDropdown';
 import {
-  ADMIN_ROLE_CODE,
   API_PREFIX,
   SSO_CLIENT_CODE,
 } from '@admin/constants/config';
@@ -10,11 +9,13 @@ import {
   mapCurrentAdminUser,
   type CurrentAdminUser,
 } from '@admin/lib/current-admin-user';
+import { getAdminCapabilitySummary } from '@admin/services/authorization';
 import {
   redirectToLogin,
   restoreLoginRedirectState,
 } from '@admin/utils/auth';
 import type { CustomSsoSubjectProjection } from '@iam/client-subject-projection/custom-sso';
+import type { AdminCapabilitySummary } from '@iam/contracts';
 import { history } from '@umijs/max';
 import { ConfigProvider } from 'antd';
 import { createElement, type ReactElement } from 'react';
@@ -28,6 +29,7 @@ ConfigProvider.config({
 
 type InitialState = {
   currentUser?: CurrentAdminUser;
+  capabilities?: AdminCapabilitySummary;
 };
 
 if (typeof window !== 'undefined') {
@@ -56,12 +58,18 @@ export async function getInitialState(): Promise<InitialState> {
       };
       const currentUser = mapCurrentAdminUser(body.data);
 
-      if (!currentUser.roles.includes(ADMIN_ROLE_CODE)) {
+      let capabilities: AdminCapabilitySummary;
+      try {
+        capabilities = await getAdminCapabilitySummary();
+      } catch {
         history.replace('/403');
         return { currentUser };
       }
 
-      return { currentUser };
+      if (capabilities.visibleModules.length === 0) {
+        history.replace('/403');
+      }
+      return { capabilities, currentUser };
     }
   } catch {
     // Network error — don't redirect

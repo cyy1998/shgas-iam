@@ -27,7 +27,7 @@ export function createTransferEmploymentUseCase(
     input: TransferEmploymentInput,
     options: TransferEmploymentOptions = {},
   ) {
-    const { auditContext } = options;
+    const { auditContext, authorization } = options;
     return await deps.uow.transaction(async (tx) => {
       const context = await tx.employmentStore.getEmploymentLifecycleContextById(input.employmentId);
       if (context === null) {
@@ -48,9 +48,22 @@ export function createTransferEmploymentUseCase(
       if (user === null || user.isDelete) {
         throw new UserNotFoundError("用户不存在");
       }
+      if (organization === null) {
+        throw new OrganizationNotFoundError("新任职组织未启用或不存在");
+      }
       if (
-        organization === null
-        || organization.status !== OrganizationStatus.Enable
+        authorization?.kind === "scoped"
+        && !authorization.organizationIds.includes(organization.id)
+      ) {
+        authorization.denyMutation({
+          operationId: "admin.employment.transfer",
+          resourceIdentifier: input.newOrgCode,
+          reason: "RESOURCE_OUT_OF_SCOPE",
+          concealExistence: true,
+        });
+      }
+      if (
+        organization.status !== OrganizationStatus.Enable
         || organization.isDelete
       ) {
         throw new OrganizationNotFoundError("新任职组织未启用或不存在");

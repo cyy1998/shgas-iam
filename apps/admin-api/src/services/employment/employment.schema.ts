@@ -41,7 +41,7 @@ export const EmploymentAdminPaginationQueryDtoSchema = createPageQuerySchema(
       isPrimary: z.boolean().optional().openapi({ example: true }),
       statuses: z.array(z.enum(EmploymentStatus)).optional().openapi({
         example: [EmploymentStatus.Enable, EmploymentStatus.Pause],
-        description: "未传则返回全部状态，前端默认注入 [Enable, Pause] 以隐藏已结束",
+        description: "未传时全局管理员返回全部状态，范围管理员由服务端默认限定为 [Enable, Pause]；显式传入可查询已结束历史",
       }),
     }),
   }),

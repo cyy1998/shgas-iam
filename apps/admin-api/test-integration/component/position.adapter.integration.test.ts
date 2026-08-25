@@ -4,6 +4,7 @@ import { createPositionAdapter } from "@admin-api/routes/admin/position/position
 import { createPositionService } from "@admin-api/services/position/position.service";
 import { EmploymentStatus, PositionStatus } from "@iam/contracts";
 import { describe, expect, mock, test } from "bun:test";
+import { getTestAdminAuthorizationValue } from "../helpers/admin-authorization";
 
 const now = new Date("2026-01-01T00:00:00Z");
 
@@ -26,6 +27,16 @@ function employment(id: number) {
 
 function createRestContext(query: Record<string, unknown>) {
   return {
+    get: mock((key: string) => {
+      const authorizationValue = getTestAdminAuthorizationValue(key);
+      if (authorizationValue !== undefined)
+        return authorizationValue;
+      if (key === "userId")
+        return 1001;
+      if (key === "username")
+        return "admin";
+      return undefined;
+    }),
     req: {
       valid: mock(() => query),
     },
@@ -72,6 +83,7 @@ describe("admin position adapter", () => {
     ]);
     const positionService = createPositionService({
       positionRepository: {
+        getPositionDetailByCode: mock(async () => null),
         getPositionByCode: mock(async () => null),
         searchPositionsFuzzy,
       },
@@ -106,9 +118,40 @@ describe("admin position adapter", () => {
       message: "success",
     }, 200);
 
-    const caller = adapter.positionAdminRouter.createCaller({ hono: {} as Context });
+    const caller = adapter.positionAdminRouter.createCaller({ hono: createRestContext(query) as Context });
     await expect(caller.search(query)).resolves.toEqual(expected);
     expect(searchPositionsFuzzy).toHaveBeenNthCalledWith(1, query);
     expect(searchPositionsFuzzy).toHaveBeenNthCalledWith(2, query);
+  });
+
+  test("returns memberNumber in Position detail without loading Employment rows", async () => {
+    const positionService = createPositionService({
+      positionRepository: {
+        getPositionDetailByCode: mock(async () => ({
+          id: 2,
+          posCode: "SRE",
+          posName: "Site Reliability Engineer",
+          status: PositionStatus.Enable,
+          description: null,
+          isDelete: false,
+          createTime: now,
+          updateTime: now,
+          memberNumber: 2,
+        })),
+      },
+      uow: { transaction: mock() },
+    } as any);
+    const adapter = createPositionAdapter({ positionService } as any);
+    const caller = adapter.positionAdminRouter.createCaller({
+      hono: createRestContext({}) as Context,
+    });
+
+    const detail = await caller.detail({ posCode: "SRE" });
+
+    expect(detail).toMatchObject({
+      posCode: "SRE",
+      memberNumber: 2,
+      statusText: "正常",
+    });
   });
 });

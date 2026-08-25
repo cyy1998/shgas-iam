@@ -1,4 +1,5 @@
 import type { AuditAdapter } from "@admin-api/routes/admin/audit/audit.adapter";
+import type { AdminAuthorizationAdapter } from "@admin-api/routes/admin/authorization/authorization.adapter";
 import type { ClientAdapter } from "@admin-api/routes/admin/client/client.adapter";
 import type { EmploymentAdapter } from "@admin-api/routes/admin/employment/employment.adapter";
 import type { OrganizationResponsibilityAdapter } from "@admin-api/routes/admin/organization-responsibility/organization-responsibility.adapter";
@@ -11,6 +12,7 @@ import { router } from "@iam/api-core/trpc";
 
 export interface CreateAdminRouterDeps {
   audit: AuditAdapter["auditAdminRouter"];
+  authorization: AdminAuthorizationAdapter["authorizationAdminRouter"];
   client: ClientAdapter["clientAdminRouter"];
   employment: EmploymentAdapter["employmentAdminRouter"];
   organization: OrganizationAdapter["organizationAdminRouter"];
@@ -24,6 +26,7 @@ export interface CreateAdminRouterDeps {
 export function createAdminRouter(deps: CreateAdminRouterDeps) {
   return router({
     audit: deps.audit,
+    authorization: deps.authorization,
     organization: deps.organization,
     organizationResponsibility: deps.organizationResponsibility,
     position: deps.position,

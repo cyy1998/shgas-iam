@@ -1,3 +1,4 @@
+import type { AdminEmploymentAuthorization } from "@admin-api/services/admin-authorization/admin-employment-authorization.type";
 import type { AdminEmploymentRecordCreate } from "@admin-api/services/employment/employment.type";
 import { createFakeClock, createImmediateUnitOfWork } from "@admin-api/test/fakes";
 import { createCreateEmploymentUseCase } from "@admin-api/use-cases/employment/create-employment/create-employment.use-case";
@@ -201,6 +202,41 @@ describe("Employment Lifecycle", () => {
       posCode: "DEV",
     })).rejects.toBeInstanceOf(EmploymentOrganizationScopeMismatchError);
 
+    expect(tx.employmentStore.createEmploymentRecord).not.toHaveBeenCalled();
+  });
+
+  test("rejects an HR destination outside server-resolved scope even when the caller ancestor matches", async () => {
+    const { useCase, tx } = createLifecycle();
+    const authorization: AdminEmploymentAuthorization = {
+      kind: "scoped",
+      rootOrganizationIds: [99],
+      organizationIds: [99],
+      getAllowedActions: mock() as never,
+      denyMutation: mock((input) => {
+        throw new Error(`denied:${input.reason}`);
+      }) as never,
+    };
+
+    let failure: unknown;
+    try {
+      await useCase.execute({
+        username: "zhangsan",
+        orgCode: "ORG",
+        expectedAncestorOrgCode: "COMPANY",
+        posCode: "DEV",
+      }, { authorization });
+    }
+    catch (error) {
+      failure = error;
+    }
+
+    expect(failure).toBeDefined();
+    expect(authorization.denyMutation).toHaveBeenCalledWith({
+      operationId: "admin.employment.create",
+      resourceIdentifier: "ORG",
+      reason: "RESOURCE_OUT_OF_SCOPE",
+      concealExistence: true,
+    });
     expect(tx.employmentStore.createEmploymentRecord).not.toHaveBeenCalled();
   });
 

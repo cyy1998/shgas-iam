@@ -6,6 +6,9 @@ import type { AdminApiUseCases } from "../use-cases";
 import { createAuditAdapter } from "@admin-api/routes/admin/audit/audit.adapter";
 import { createAuditRoute } from "@admin-api/routes/admin/audit/audit.index";
 import { createAuditAdminRouter } from "@admin-api/routes/admin/audit/audit.trpc";
+import { createAdminAuthorizationAdapter } from "@admin-api/routes/admin/authorization/authorization.adapter";
+import { createAdminAuthorizationRoute } from "@admin-api/routes/admin/authorization/authorization.index";
+import { createAdminAuthorizationAdminRouter } from "@admin-api/routes/admin/authorization/authorization.trpc";
 import { createClientAdapter } from "@admin-api/routes/admin/client/client.adapter";
 import { createClientRoute } from "@admin-api/routes/admin/client/client.index";
 import { createClientAdminRouter } from "@admin-api/routes/admin/client/client.trpc";
@@ -31,8 +34,11 @@ import { createUserAdapter } from "@admin-api/routes/admin/user/user.adapter";
 import { createUserRoute } from "@admin-api/routes/admin/user/user.index";
 import { createUserAdminRouter } from "@admin-api/routes/admin/user/user.trpc";
 import { createTrpcRoute } from "@admin-api/routes/trpc/trpc.index";
+import { createAdminRestOperationSurface } from "@admin-api/services/admin-authorization/admin-rest-operation.surface";
+import { createAdminTrpcOperationSurface } from "@admin-api/services/admin-authorization/admin-trpc-operation.surface";
 import { createAdminRouter } from "@admin-api/trpc/routers/admin";
 import { createAppRouter } from "@admin-api/trpc/trpc.router";
+import appConfig from "~admin-api/app.config";
 
 export interface CreateAdminApiRoutesOptions {
   auditService: AdminAuditService;
@@ -41,11 +47,12 @@ export interface CreateAdminApiRoutesOptions {
   useCases: AdminApiUseCases;
 }
 
-export async function createAdminApiRoutes(
+export function createAdminApiRouteComposition(
   options: CreateAdminApiRoutesOptions,
-): Promise<CreateAppOptions["routes"]> {
+) {
   const { auditService, runtime, services, useCases } = options;
 
+  const authorizationAdapter = createAdminAuthorizationAdapter();
   const auditAdapter = createAuditAdapter({ auditService });
   const clientAdapter = createClientAdapter({ clientService: services.client });
   const employmentAdapter = createEmploymentAdapter({
@@ -81,6 +88,9 @@ export async function createAdminApiRoutes(
   });
 
   const adminRouter = createAdminRouter({
+    authorization: createAdminAuthorizationAdminRouter(
+      authorizationAdapter,
+    ),
     audit: createAuditAdminRouter(auditAdapter),
     client: createClientAdminRouter(clientAdapter),
     employment: createEmploymentAdminRouter(employmentAdapter),
@@ -96,8 +106,14 @@ export async function createAdminApiRoutes(
     user: createUserAdminRouter(userAdapter),
   });
   const appRouter = createAppRouter(adminRouter);
+  const adminTier = appConfig.tiers.find(tier => tier.name === "admin");
+  if (!adminTier)
+    throw new Error("Admin API config must declare the admin tier");
 
-  return {
+  const routes: CreateAppOptions["routes"] = {
+    "./src/routes/admin/authorization/authorization.index.ts": {
+      default: createAdminAuthorizationRoute(authorizationAdapter),
+    },
     "./src/routes/admin/audit/audit.index.ts": {
       default: createAuditRoute(auditAdapter),
     },
@@ -129,5 +145,13 @@ export async function createAdminApiRoutes(
       default: createUserRoute(userAdapter),
     },
     "./src/routes/trpc/trpc.index.ts": { default: createTrpcRoute(appRouter) },
+  };
+
+  return {
+    adminRouter,
+    appRouter,
+    restOperationSurface: createAdminRestOperationSurface(routes, adminTier),
+    trpcOperationSurface: createAdminTrpcOperationSurface(appRouter),
+    routes,
   };
 }

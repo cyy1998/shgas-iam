@@ -4,6 +4,7 @@ import { createAdminRouter } from "@admin-api/trpc/routers/admin";
 import { createAppRouter } from "@admin-api/trpc/trpc.router";
 import { router } from "@iam/api-core/trpc";
 import { expect, test } from "bun:test";
+import { getTestAdminAuthorizationValue } from "../helpers/admin-authorization";
 
 test("publishes all four login-state intents under admin.sessionManagement", async () => {
   const emptyRouter = router({});
@@ -59,6 +60,9 @@ test("publishes all four login-state intents under admin.sessionManagement", asy
   const caller = appRouter.createCaller({
     hono: {
       get(key: string) {
+        const authorizationValue = getTestAdminAuthorizationValue(key);
+        if (authorizationValue !== undefined)
+          return authorizationValue;
         if (key === "userId")
           return 7;
         if (key === "username")

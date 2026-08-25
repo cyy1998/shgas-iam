@@ -31,7 +31,7 @@ profile 不是新的测试层级、速度标签或 Gate。多资源测试按测�
 - 非 browser Integration 位于 `test-integration/<profile>/**/*.integration.test.ts[x]`。
 - Browser Integration 位于 `test-integration/browser/**/*.spec.ts`。
 - Full-system E2E 独占 `e2e/system/**/*.spec.ts`。Root `pnpm test:e2e` 是唯一完整 collection owner；workspace-local
-  `admin:journey` 与 `oidc:journey` 只保留为单 journey 调试入口。
+  `admin:journey`、`hr-admin:journey` 与 `oidc:journey` 只保留为单 journey 调试入口。
 - 版本无关的 User Profile backfill、repair 与 readiness 是操作命令，不采用测试命名，也不属于任何 collection；
   PostgreSQL command Integration 验证命令进程；Full-system E2E 从存量 v2 row 经真实 Worker backfill 收敛到 v3，随后在
   Gateway routes 发布前实际运行 PostgreSQL 与 Redis/Subject Facts/Subject Access 两道 production gate，并通过真实 HTTP
@@ -103,14 +103,19 @@ Responsibility，再轮询 Internal Detail/DSL 与 Custom SSO UserInfo 证明 Po
 随后 Admin UI 将目标 client 切入 Maintenance，在维护中配置并启用 Gateway Custom SSO；公开 authorize 与 user-info 观察
 `503 AUTH.MAINTENANCE`，恢复正常后取得并复用未变更的 Local Session，再在维护中执行真实 disable/enable mutation、确认旧 Session
 永久失效，并由同一 Principal Session 签发新的 V2 artifact。浏览器失败证据沿用 run-scoped Playwright staging，随后进入统一
-diagnostics 与 exact-project cleanup。`oidc:journey` 复用同一 lifecycle 与浏览器约束；独立 Admin 浏览器上下文在 Maintenance 中执行
+diagnostics 与 exact-project cleanup。`hr-admin:journey` 复用同一 lifecycle 与浏览器约束；seed 通过真实 `iam-admin` Client、普通
+`iam:hr-admin` Role/Assignment、两个一级根、role-bearing Employment 与跨根普通 Employment 建立不扩权场景，经 production Worker
+发布后真实 SSO 登录。Journey 验收四个管理模块、隐藏直达路由、全局只读 Position、User/Employment 范围导航、范围内 User 编辑和
+范围外 Organization REST `404`；随后 production Drizzle verifier 在 cleanup 前证明业务写、成功 audit、`user-updated` invalidation/Profile
+收敛、范围外无写入，并从有界 Admin API 日志 capture 验证不泄露 scope/root 集合的 denial security log。
+`oidc:journey` 复用同一 lifecycle 与浏览器约束；独立 Admin 浏览器上下文在 Maintenance 中执行
 OIDC disable/enable 并恢复正常，test-owned RP helper 生成 S256 verifier/challenge 并接收 registered callback。公开 authorize、token 与
 `/oidc/me` 验收标准暂态错误、恢复、PKCE、code 单次使用与 `iam:employments` responsibility snapshot；Authorization Code 取得后通过
 真实 Employment Pause 级联使当前 Profile 不再含责任，既有 Code→Token→UserInfo 仍重放 authorization-time snapshot，ID Token 明确排除
 employment/authorization responsibility。Discovery、JWKS 与 `/oidc/health` 在维护中保持可用，
 RP-initiated logout 在维护中永久终止访问。Local HTTP 配置只令 interaction Cookie `Secure=false`，并继续验证 `HttpOnly`、
-`SameSite=Lax` 与 `Path=/oidc`。两个 journey 都不使用
-`page.route` 替代 repo-owned core。完整命令在同一个 exact-project lifecycle 中固定按 Admin → OIDC 运行；任一 journey
+`SameSite=Lax` 与 `Path=/oidc`。三个 journey 都不使用
+`page.route` 替代 repo-owned core。完整命令在同一个 exact-project lifecycle 中固定按 Admin → HR Admin → OIDC 运行；任一 journey
 失败都先收集 diagnostics 再尝试 cleanup，cleanup failure 始终使 root command 非零。
 
 Root `test:unit` 通过 Turbo fan out package Unit tasks，并由 `test:unit:root` 精确收集四个 root tooling tests。
@@ -172,7 +177,7 @@ browser、Full-system E2E 与其他外部验证均 `cache:false`。资源 tasks 
 | component | 2 | Vitest `maxWorkers: 25%`；Bun `--max-concurrency=2` |
 | process / redis / postgres / composition | 1 | 单 package；资源 owner 独占 |
 | browser | 1 | Playwright 管理单 Chromium project |
-| Full-system E2E | 1 | 两次 Playwright journey 均为单 Chromium project、单 worker、零 retry |
+| Full-system E2E | 1 | 三次 Playwright journey 均为单 Chromium project、单 worker、零 retry |
 
 Timeout 只保护测试不永久挂起，不承担性能 SLA。Process harness 必须使用真实 readiness 信号、同时观察 child exit/error、
 限制 stdout/stderr 缓冲，并在成功、失败、timeout 与中断路径清理完整进程树、端口与临时目录。不得通过放宽全局 timeout、

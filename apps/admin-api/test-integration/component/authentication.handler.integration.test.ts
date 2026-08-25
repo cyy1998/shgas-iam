@@ -24,7 +24,6 @@ function createProtectedApp(options: {
   resolvePrincipalSession: (token: string) => Promise<{ status: string; value?: PrincipalSession }>;
   getUserDetailBySubjectIdentifierForAdmin: (subjectIdentifier: string) => Promise<UserDetailDto>;
   allowedClientCodes?: string[];
-  adminRoleCodes?: string[];
 }) {
   const handlers = createAdminAuthenticationHandlers({
     sessionKernel: {
@@ -35,7 +34,6 @@ function createProtectedApp(options: {
     },
     config: {
       allowedClientCodes: options.allowedClientCodes ?? ["iam"],
-      adminRoleCodes: options.adminRoleCodes ?? ["iam:admin"],
     },
   });
   const app = new Hono();
@@ -179,7 +177,7 @@ describe("admin authentication handler", () => {
     expect(res.headers.getSetCookie()).toEqual([]);
   });
 
-  test("rejects Kernel PrincipalSession users without an admin role", async () => {
+  test("authenticates enabled users without deciding Admin operation capabilities", async () => {
     const resolvePrincipalSession = mock(async () => ({
       status: "resolved",
       value: principalSession(),
@@ -197,8 +195,8 @@ describe("admin authentication handler", () => {
       },
     }));
 
-    expect(res.status).toBe(403);
-    expect(await res.text()).toBe("无管理端访问权限");
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ ok: true });
   });
 });
 

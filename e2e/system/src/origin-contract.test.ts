@@ -7,7 +7,6 @@ describe("canonical origin rendered configuration", () => {
       runId: "run-origin-01",
       canonicalOrigin: "http://127.0.0.1:43123",
       adminClientCode: "e2e-admin-run-origin-01",
-      adminRoleCode: "e2e-role-run-origin-01",
     };
     const rendered = renderedComposeContract(contract);
 
@@ -24,7 +23,6 @@ function renderedComposeContract(input: {
   runId: string;
   canonicalOrigin: string;
   adminClientCode: string;
-  adminRoleCode: string;
 }) {
   const authority = new URL(input.canonicalOrigin).host;
   return {
@@ -43,11 +41,9 @@ function renderedComposeContract(input: {
       } },
       "admin-api": { environment: {
         IAM_ADMIN_API_ADMIN_CLIENT_CODES: input.adminClientCode,
-        IAM_ADMIN_API_ADMIN_ROLE_CODES: input.adminRoleCode,
       } },
       "admin": { build: { args: {
         UMI_APP_ADMIN_CLIENT_CODE: input.adminClientCode,
-        UMI_APP_ADMIN_ROLE_CODE: input.adminRoleCode,
       } } },
       "seed": { environment: {
         IAM_E2E_RUN_ID: input.runId,

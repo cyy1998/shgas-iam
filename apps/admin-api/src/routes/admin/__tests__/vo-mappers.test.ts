@@ -122,7 +122,16 @@ describe("admin route VO mappers", () => {
       employments: [],
       privileges: ["priv:1"],
       roles: ["role:1"],
+    }, {
+      editProfile: { allowed: true, reason: null },
+      resetPassword: { allowed: true, reason: null },
+      changeStatus: { allowed: true, reason: null },
+      delete: { allowed: true, reason: null },
+      resign: { allowed: true, reason: null },
     })).toMatchObject({
+      allowedActions: {
+        editProfile: { allowed: true, reason: null },
+      },
       username: "user1",
       privileges: ["priv:1"],
       roles: ["role:1"],
@@ -144,7 +153,15 @@ describe("admin route VO mappers", () => {
     expect(vo).not.toHaveProperty("posCode");
     expect(vo).not.toHaveProperty("orgCode");
     expect(vo).not.toHaveProperty("compCode");
-    expect(schemaModule.toEmploymentDetailVo(employmentDto())).toMatchObject({
+    expect(schemaModule.toEmploymentDetailVo(employmentDto(), {
+      editDescription: { allowed: true, reason: null },
+      pause: { allowed: true, reason: null },
+      resume: { allowed: false, reason: "RESOURCE_STATE_NOT_ACTIONABLE" },
+      end: { allowed: true, reason: null },
+      transfer: { allowed: true, reason: null },
+      setPrimary: { allowed: true, reason: null },
+      clearPrimary: { allowed: false, reason: "RESOURCE_STATE_NOT_ACTIONABLE" },
+    })).toMatchObject({
       privileges: [],
       roles: [],
       statusText: employmentStatusToString[EmploymentStatus.Enable],

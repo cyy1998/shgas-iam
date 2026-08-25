@@ -3,6 +3,8 @@ import type { RebuildUserProfileJobPayload, UserProfileJobName } from "@iam/cont
 import type { DbClient } from "@iam/db";
 import env from "@admin-api/env";
 import { logger } from "@admin-api/lib/logger";
+import { createAdminAuthorizationPolicy } from "@admin-api/services/admin-authorization/admin-authorization.policy";
+import { createHrAdministrationScopeResolver } from "@admin-api/services/admin-authorization/hr-administration-scope.resolver";
 import { createAdminAuditService } from "@admin-api/services/audit/audit.service";
 import { USER_PROFILE_QUEUE_NAME } from "@iam/contracts";
 import db from "@iam/db";
@@ -11,7 +13,7 @@ import { createRoleAssignmentResolver } from "@iam/role-assignment-resolution";
 import { createUserProfileJobProducer } from "@iam/user-profile-read-model/producer";
 import { createAdminApiMiddlewares } from "./middlewares";
 import { createAdminApiRepositories } from "./repositories";
-import { createAdminApiRoutes } from "./routes";
+import { createAdminApiRouteComposition } from "./routes";
 import { createAdminApiRuntime } from "./runtime";
 import { createAdminApiServices } from "./services";
 import { createAdminApiSession } from "./session";
@@ -26,6 +28,7 @@ export interface AdminApiComposition {
   repositories: ReturnType<typeof createAdminApiRepositories>;
   roleAssignmentResolver: ReturnType<typeof createRoleAssignmentResolver>;
   auditService: ReturnType<typeof createAdminAuditService>;
+  authorizationPolicy: ReturnType<typeof createAdminAuthorizationPolicy>;
   userProfileQueue: ReturnType<typeof createJobQueue<RebuildUserProfileJobPayload, unknown, UserProfileJobName>>;
   userProfileJobProducer: ReturnType<typeof createUserProfileJobProducer>;
   unitOfWork: ReturnType<typeof createAdminApiUnitOfWork>;
@@ -50,8 +53,16 @@ export async function createAdminApiComposition(
   const runtime = createAdminApiRuntime({ env: compositionEnv, logger: compositionLogger });
   const session = createAdminApiSession({ runtime });
   const roleAssignmentResolver = createRoleAssignmentResolver(compositionDb);
+  const hrAdministrationScopeResolver = createHrAdministrationScopeResolver({
+    db: compositionDb,
+    roleAssignmentResolver,
+  });
   const repositories = createAdminApiRepositories(compositionDb);
   const auditService = createAdminAuditService({ auditRepository: repositories.audit });
+  const authorizationPolicy = createAdminAuthorizationPolicy({
+    hrAdministrationScopeResolver,
+    logger: runtime.logger,
+  });
   const userProfileQueue = createJobQueue<RebuildUserProfileJobPayload, unknown, UserProfileJobName>({
     name: USER_PROFILE_QUEUE_NAME,
     redis: runtime.config.env.redis,
@@ -78,6 +89,12 @@ export async function createAdminApiComposition(
     unitOfWork,
     userReader: repositories.user,
   });
+  const routeComposition = createAdminApiRouteComposition({
+    auditService,
+    runtime,
+    services,
+    useCases,
+  });
 
   return {
     env: compositionEnv,
@@ -87,12 +104,19 @@ export async function createAdminApiComposition(
     repositories,
     roleAssignmentResolver,
     auditService,
+    authorizationPolicy,
     userProfileQueue,
     userProfileJobProducer,
     unitOfWork,
     services,
     useCases,
-    routes: await createAdminApiRoutes({ auditService, runtime, services, useCases }),
-    middlewares: await createAdminApiMiddlewares({ runtime, services, sessionKernel: session.kernel }),
+    routes: routeComposition.routes,
+    middlewares: await createAdminApiMiddlewares({
+      authorizationPolicy,
+      restOperationSurface: routeComposition.restOperationSurface,
+      runtime,
+      services,
+      sessionKernel: session.kernel,
+    }),
   };
 }

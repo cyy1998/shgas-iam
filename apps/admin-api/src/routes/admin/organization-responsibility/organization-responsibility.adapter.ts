@@ -1,3 +1,4 @@
+import type { AdminOperationId } from "@admin-api/services/admin-authorization/admin-operation.registry";
 import type { OrganizationResponsibilityService } from "@admin-api/services/organization-responsibility/organization-responsibility.service";
 import type { CreateOrganizationResponsibilityAssignmentUseCase } from "@admin-api/use-cases/organization-responsibility/create-assignment/create-assignment.use-case";
 import type { ManageOrganizationResponsibilityAssignmentLifecycleUseCase } from "@admin-api/use-cases/organization-responsibility/manage-assignment-lifecycle/manage-assignment-lifecycle.use-case";
@@ -31,6 +32,7 @@ export function createOrganizationResponsibilityAdapter(
   deps: CreateOrganizationResponsibilityAdapterDeps,
 ) {
   const listTypes = defineAdminApiQueryOperation({
+    operationId: "admin.organizationResponsibility.listTypes",
     input: z.strictObject({}),
     restInput: () => ({}),
     handler: () =>
@@ -38,6 +40,7 @@ export function createOrganizationResponsibilityAdapter(
   });
 
   const listAssignments = defineAdminApiQueryOperation({
+    operationId: "admin.organizationResponsibility.listAssignments",
     input: OrganizationResponsibilityAssignmentListQuerySchema.extend({
       orgCode: z.string(),
     }),
@@ -54,6 +57,7 @@ export function createOrganizationResponsibilityAdapter(
   });
 
   const searchAssignments = defineAdminApiQueryOperation({
+    operationId: "admin.organizationResponsibility.searchAssignments",
     input: OrganizationResponsibilityAssignmentSearchQuerySchema,
     restInput: c =>
       c.req.valid("query") as z.infer<
@@ -63,6 +67,7 @@ export function createOrganizationResponsibilityAdapter(
   });
 
   const scopedDetailAssignment = defineAdminApiQueryOperation({
+    operationId: "admin.organizationResponsibility.scopedDetailAssignment",
     input: z.strictObject({
       orgCode: z.string(),
       id: z.number().int().positive(),
@@ -72,6 +77,7 @@ export function createOrganizationResponsibilityAdapter(
   });
 
   const detailAssignment = defineAdminApiQueryOperation({
+    operationId: "admin.organizationResponsibility.detailAssignment",
     input: z.strictObject({
       orgCode: z.string().optional(),
       id: z.number().int().positive(),
@@ -81,6 +87,7 @@ export function createOrganizationResponsibilityAdapter(
   });
 
   const createAssignment = defineAdminApiMutationOperation({
+    operationId: "admin.organizationResponsibility.createAssignment",
     input: OrganizationResponsibilityAssignmentCreateDtoSchema.extend({
       orgCode: z.string(),
     }),
@@ -102,8 +109,10 @@ export function createOrganizationResponsibilityAdapter(
 
   function createLifecycleOperation(
     command: OrganizationResponsibilityAssignmentLifecycleCommandType,
+    operationId: AdminOperationId,
   ) {
     return defineAdminApiMutationOperation({
+      operationId,
       input: z.strictObject({ id: z.number().int().positive() }),
       restInput: c => c.req.valid("param") as { id: number },
       handler: (input, context) =>
@@ -116,12 +125,15 @@ export function createOrganizationResponsibilityAdapter(
 
   const pauseAssignment = createLifecycleOperation(
     ORGANIZATION_RESPONSIBILITY_ASSIGNMENT_LIFECYCLE_COMMANDS.Pause,
+    "admin.organizationResponsibility.pauseAssignment",
   );
   const resumeAssignment = createLifecycleOperation(
     ORGANIZATION_RESPONSIBILITY_ASSIGNMENT_LIFECYCLE_COMMANDS.Resume,
+    "admin.organizationResponsibility.resumeAssignment",
   );
   const endAssignment = createLifecycleOperation(
     ORGANIZATION_RESPONSIBILITY_ASSIGNMENT_LIFECYCLE_COMMANDS.End,
+    "admin.organizationResponsibility.endAssignment",
   );
 
   return {

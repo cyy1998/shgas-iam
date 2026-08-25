@@ -19,7 +19,6 @@ export interface CreateAdminAuthenticationHandlersDeps {
   userService: Pick<UserService, "getUserDetailBySubjectIdentifierForAdmin">;
   config: {
     allowedClientCodes: string[];
-    adminRoleCodes: string[];
   };
 }
 
@@ -63,11 +62,6 @@ export function createAdminAuthenticationHandlers(deps: CreateAdminAuthenticatio
     if (!user || user.status !== UserStatus.Enable) {
       clearGlobalSessionCookies(c);
       throw new AuthzUnauthorizedError("未登录");
-    }
-
-    const hasAdminRole = user.roles.some(role => deps.config.adminRoleCodes.includes(role));
-    if (!hasAdminRole) {
-      throw new AuthzForbiddenError("无管理端访问权限");
     }
 
     c.set("userId", user.id);

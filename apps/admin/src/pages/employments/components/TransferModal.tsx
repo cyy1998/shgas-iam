@@ -21,14 +21,19 @@ import { useRef } from 'react';
 type PosVo =
   inferRouterOutputs<AppRouter>['admin']['position']['search']['result'][number];
 
+type EmploymentTransferSource = Pick<
+  EmploymentVo,
+  'id' | 'isPrimary' | 'organization' | 'position' | 'user'
+>;
+
 type Props = {
   open: boolean;
-  employment: EmploymentVo | null;
+  employment: EmploymentTransferSource | null;
   onOpenChange: (open: boolean) => void;
   onSuccess?: () => void;
 };
 
-function formatOrgPath(employment: EmploymentVo) {
+function formatOrgPath(employment: EmploymentTransferSource) {
   return (
     employment.organization?.fullOrgPath
       ?.map((node) => node.orgName)
@@ -36,11 +41,11 @@ function formatOrgPath(employment: EmploymentVo) {
   );
 }
 
-function formatUser(employment: EmploymentVo) {
+function formatUser(employment: EmploymentTransferSource) {
   return `${employment.user.name} (${employment.user.username})`;
 }
 
-function formatPosition(employment: EmploymentVo) {
+function formatPosition(employment: EmploymentTransferSource) {
   return `${employment.position.posName} (${employment.position.posCode})`;
 }
 

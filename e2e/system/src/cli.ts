@@ -6,6 +6,7 @@ import { createAdminJourneyOperations } from "./admin-journey.ts";
 import { createRunDescriptor, persistRunDescriptor } from "./descriptor.ts";
 import { createDockerInfraOperations } from "./docker-infra.ts";
 import { createFullSystemJourneyOperations } from "./full-system-journey.ts";
+import { createHrAdminJourneyOperations } from "./hr-admin-journey.ts";
 import {
   runExactProjectJourneyLifecycle,
   runExactProjectRuntimeLifecycle,
@@ -28,6 +29,19 @@ const repositoryRoot = resolve(workspaceRoot, "../..");
 const composeFile = join(workspaceRoot, "compose.yaml");
 const artifactRoot = join(workspaceRoot, "test-results");
 const runtimeTimeoutMs = 12 * 60 * 1000;
+
+type JourneyFactoryOptions = PlaywrightJourneyRuntimeOptions & {
+  captureCommand: typeof captureCommand;
+  composeFile: string;
+};
+
+interface JourneyOperations {
+  preflight: (signal?: AbortSignal) => Promise<unknown>;
+  runJourney: (
+    descriptor: Awaited<ReturnType<typeof createRunDescriptor>>,
+    signal?: AbortSignal,
+  ) => Promise<unknown>;
+}
 
 function createRunId() {
   const timestamp = new Date().toISOString().replaceAll(/\D/gu, "");
@@ -100,10 +114,18 @@ async function runOidcJourneyLifecycle() {
   );
 }
 
+async function runHrAdminJourneyLifecycle() {
+  await runJourneyLifecycle(
+    createHrAdminJourneyOperations,
+    "hr-admin-user-management-journey-passed-and-cleaned",
+  );
+}
+
 async function runFullSystemJourneyLifecycle() {
   await runJourneyLifecycle(
     options => createFullSystemJourneyOperations({
       admin: createAdminJourneyOperations(options),
+      hrAdmin: createHrAdminJourneyOperations(options),
       oidc: createOidcJourneyOperations(options),
     }),
     "full-system-e2e-passed-and-cleaned",
@@ -112,13 +134,15 @@ async function runFullSystemJourneyLifecycle() {
 
 async function runJourneyLifecycle(
   createJourney: (
-    options: PlaywrightJourneyRuntimeOptions,
-  ) => ReturnType<typeof createAdminJourneyOperations>,
+    options: JourneyFactoryOptions,
+  ) => JourneyOperations,
   status: string,
 ) {
   await withCapturableSignals(async (signal) => {
     const operations = createOperations(signal);
     const journey = createJourney({
+      captureCommand,
+      composeFile,
       repositoryRoot,
       runCommand,
       workspaceRoot,
@@ -203,6 +227,8 @@ try {
   const command = process.argv[2];
   if (command === "admin")
     await runAdminJourneyLifecycle();
+  else if (command === "hr-admin")
+    await runHrAdminJourneyLifecycle();
   else if (command === "oidc")
     await runOidcJourneyLifecycle();
   else if (command === "e2e")
@@ -212,7 +238,7 @@ try {
   else if (command === "cleanup")
     await runRecovery(process.argv.slice(3));
   else
-    throw new Error("expected command: admin | oidc | e2e | run | cleanup");
+    throw new Error("expected command: admin | hr-admin | oidc | e2e | run | cleanup");
 }
 catch (error) {
   console.error(formatFailure(error));

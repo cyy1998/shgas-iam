@@ -11,9 +11,9 @@ supersedes: 0003-adopt-layered-test-lanes-and-resource-budgets
 
 Unit 保留 owner-local 路径，通常是 `src/**/*.test.ts[x]`；Integration 使用
 `test-integration/<profile>/**/*.integration.test.ts[x]`，browser 使用
-`test-integration/browser/**/*.spec.ts`；Full-system E2E 独占 `e2e/system/**/*.spec.ts`。当前 Admin Custom SSO 与 OIDC PKCE
+`test-integration/browser/**/*.spec.ts`；Full-system E2E 独占 `e2e/system/**/*.spec.ts`。当前 Admin Custom SSO、HR Admin User Management 与 OIDC PKCE
 journeys 由 root `pnpm test:e2e` 通过 `@iam/e2e-system#test:e2e` 唯一收集，并在同一个 exact-project lifecycle 中固定按
-Admin → OIDC 运行；workspace-local `admin:journey`、`oidc:journey` 只保留为聚焦调试入口。
+Admin → HR Admin → OIDC 运行；workspace-local `admin:journey`、`hr-admin:journey`、`oidc:journey` 只保留为聚焦调试入口。
 
 Root 长期接口是 `test:unit`、`test:integration`、六个 `test:integration:<profile>` 与 `test:e2e`。`test` 永久代理
 `test:unit`；有 Unit collection 的 package 采用相同代理，无 Unit collection 的 package 不发布空 `test`。旧

@@ -10,6 +10,7 @@ import {
 } from '@admin/services/organization';
 import { PageContainer } from '@ant-design/pro-components';
 import { Button, Card, Col, message, Row, Space } from 'antd';
+import { useAccess } from '@umijs/max';
 import { useCallback, useEffect, useState } from 'react';
 
 type FormState =
@@ -21,6 +22,7 @@ type FormState =
 const DETAIL_CHILDREN_DEFAULT_SIZE = 20;
 
 export default function OrganizationsPage() {
+  const access = useAccess();
   const [selectedCode, setSelectedCode] = useState<string | undefined>();
   const [formState, setFormState] = useState<FormState>({ open: false });
 
@@ -124,7 +126,7 @@ export default function OrganizationsPage() {
         <Col span={8}>
           <Card
             title="组织树"
-            extra={
+            extra={access.canCreateOrganizationRoot ? (
               <Button
                 type="primary"
                 size="small"
@@ -134,7 +136,7 @@ export default function OrganizationsPage() {
               >
                 + 新建根组织
               </Button>
-            }
+            ) : null}
           >
             <Space
               orientation="vertical"

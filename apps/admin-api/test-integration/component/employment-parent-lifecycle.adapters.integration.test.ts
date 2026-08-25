@@ -7,10 +7,14 @@ import { OrganizationHasEmploymentError } from "@iam/domain/organization";
 import { PositionHasEmploymentError } from "@iam/domain/position";
 import { UserHasOpenEmploymentError } from "@iam/domain/user";
 import { describe, expect, mock, test } from "bun:test";
+import { getTestAdminAuthorizationValue } from "../helpers/admin-authorization";
 
 function createCallerContext() {
   const hono = {
     get: mock((key: string) => {
+      const authorizationValue = getTestAdminAuthorizationValue(key);
+      if (authorizationValue !== undefined)
+        return authorizationValue;
       if (key === "userId")
         return 1001;
       if (key === "username")

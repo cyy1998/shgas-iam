@@ -1,6 +1,6 @@
 import { EmploymentDetailDtoSchema, EmploymentDtoSchema } from "@admin-api/services/employment/employment.schema";
 import { z } from "@hono/zod-openapi";
-import { employmentStatusToString } from "@iam/contracts";
+import { AdminEmploymentAllowedActionsSchema, employmentStatusToString } from "@iam/contracts";
 
 export const EmploymentVoSchema = EmploymentDtoSchema.extend({
   statusText: z.string().openapi({ example: "正常" }),
@@ -15,15 +15,17 @@ export function toEmploymentVo(input: unknown) {
 }
 
 export const EmploymentDetailVoSchema = EmploymentDetailDtoSchema.extend({
+  allowedActions: AdminEmploymentAllowedActionsSchema,
   statusText: z.string().openapi({ example: "正常" }),
   privileges: z.array(z.string()).openapi({ example: ["ui:button:tender:create-GYBG"] }),
   roles: z.array(z.string()).openapi({ example: ["tender:default-user"] }),
 }).openapi("EmploymentDetailVo");
 
-export function toEmploymentDetailVo(input: unknown) {
+export function toEmploymentDetailVo(input: unknown, allowedActions: unknown) {
   const parsed = EmploymentDetailDtoSchema.parse(input);
   return EmploymentDetailVoSchema.parse({
     ...parsed,
+    allowedActions,
     privileges: parsed.privileges ?? [],
     roles: parsed.roles ?? [],
     statusText: employmentStatusToString[parsed.status],

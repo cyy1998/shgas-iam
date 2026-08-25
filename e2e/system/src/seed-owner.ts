@@ -243,6 +243,14 @@ export function createProductionE2EScenarioOwner(
         throw new Error("E2E responsibility holder Position was not created");
       }
 
+      const [globalPosition] = await tx.insert(positions).values({
+        posCode: scenario.globalPositionCode,
+        posName: `E2E Global Position ${scenario.runId}`,
+        status: PositionStatus.Enable,
+      }).returning({ id: positions.id });
+      if (globalPosition === undefined)
+        throw new Error("E2E global unassigned Position was not created");
+
       const [admin] = await tx.insert(users).values({
         subjectIdentifier: scenario.adminSubjectIdentifier,
         username: scenario.adminUsername,
@@ -252,6 +260,16 @@ export function createProductionE2EScenarioOwner(
       }).returning({ id: users.id });
       if (admin === undefined)
         throw new Error("E2E admin subject was not created");
+
+      const [hrAdmin] = await tx.insert(users).values({
+        subjectIdentifier: scenario.hrAdminSubjectIdentifier,
+        username: scenario.hrAdminUsername,
+        name: `E2E HR Admin ${scenario.runId}`,
+        password: passwordHash,
+        status: UserStatus.Enable,
+      }).returning({ id: users.id });
+      if (hrAdmin === undefined)
+        throw new Error("E2E HR Admin subject was not created");
 
       await tx.insert(users).values([
         {
@@ -297,6 +315,26 @@ export function createProductionE2EScenarioOwner(
         throw new Error("E2E responsibility holder Employment was not created");
       }
 
+      const [hrRoleBearingEmployment] = await tx.insert(employments).values({
+        userId: hrAdmin.id,
+        orgId: responsibilityHolderOrganization.id,
+        posId: position.id,
+        isPrimary: true,
+        status: EmploymentStatus.Enable,
+      }).returning({ id: employments.id });
+      if (hrRoleBearingEmployment === undefined)
+        throw new Error("E2E HR role-bearing Employment was not created");
+
+      const [hrOrdinaryEmployment] = await tx.insert(employments).values({
+        userId: hrAdmin.id,
+        orgId: responsibilityTargetOrganization.id,
+        posId: responsibilityHolderPosition.id,
+        isPrimary: false,
+        status: EmploymentStatus.Enable,
+      }).returning({ id: employments.id });
+      if (hrOrdinaryEmployment === undefined)
+        throw new Error("E2E HR ordinary Employment was not created");
+
       const [role] = await tx.insert(roles).values({
         roleCode: scenario.adminRoleCode,
         roleName: `E2E Admin Role ${scenario.runId}`,
@@ -305,6 +343,14 @@ export function createProductionE2EScenarioOwner(
       }).returning({ id: roles.id });
       if (role === undefined)
         throw new Error("E2E admin role was not created");
+      const [hrRole] = await tx.insert(roles).values({
+        roleCode: scenario.hrAdminRoleCode,
+        roleName: `E2E HR Admin Role ${scenario.runId}`,
+        clientId: adminClient.id,
+        status: RoleStatus.Enable,
+      }).returning({ id: roles.id });
+      if (hrRole === undefined)
+        throw new Error("E2E HR Admin role was not created");
       const [privilege] = await tx.insert(privileges).values({
         privilegeCode: scenario.adminPrivilegeCode,
         privilegeName: `E2E Admin Privilege ${scenario.runId}`,
@@ -316,12 +362,20 @@ export function createProductionE2EScenarioOwner(
         roleId: role.id,
         privilegeId: privilege.id,
       });
-      await tx.insert(roleAssignments).values({
-        roleId: role.id,
-        targetType: RoleAssignmentTargetType.Employment,
-        targetId: employment.id,
-        includeDescendants: false,
-      });
+      await tx.insert(roleAssignments).values([
+        {
+          roleId: role.id,
+          targetType: RoleAssignmentTargetType.Employment,
+          targetId: employment.id,
+          includeDescendants: false,
+        },
+        {
+          roleId: hrRole.id,
+          targetType: RoleAssignmentTargetType.Employment,
+          targetId: hrRoleBearingEmployment.id,
+          includeDescendants: false,
+        },
+      ]);
 
       await tx.insert(userProfiles).values({
         userId: admin.id,
@@ -373,9 +427,9 @@ export function createProductionE2EScenarioOwner(
     });
     try {
       const backfill = await profileModule.maintenance.backfillAllUsers({ batchSize: 100 });
-      if (backfill.enqueued !== 4) {
+      if (backfill.enqueued !== 5) {
         throw new Error(
-          "E2E User Profile backfill did not enqueue all four seeded users",
+          "E2E User Profile backfill did not enqueue all five seeded users",
         );
       }
     }
@@ -387,6 +441,10 @@ export function createProductionE2EScenarioOwner(
     const access = await subjectAccess.seedMany([
       {
         subjectIdentifier: scenario.adminSubjectIdentifier,
+        state: "enabled",
+      },
+      {
+        subjectIdentifier: scenario.hrAdminSubjectIdentifier,
         state: "enabled",
       },
       {
@@ -402,9 +460,9 @@ export function createProductionE2EScenarioOwner(
         state: "disabled",
       },
     ], input.clock.nowDate());
-    if (access.seeded !== 4 || access.retainedExisting !== 0) {
+    if (access.seeded !== 5 || access.retainedExisting !== 0) {
       throw new Error(
-        "E2E Subject Access bootstrap did not seed all four users",
+        "E2E Subject Access bootstrap did not seed all five users",
       );
     }
   }
@@ -413,6 +471,7 @@ export function createProductionE2EScenarioOwner(
     const deadline = Date.now() + 30_000;
     const subjectIdentifiers = [
       references.adminSubjectIdentifier,
+      references.hrAdminSubjectIdentifier,
       references.delegateeSubjectIdentifier,
       references.pausedSubjectIdentifier,
       references.disabledSubjectIdentifier,
@@ -453,20 +512,26 @@ export function createProductionE2EScenarioOwner(
   async function readBack(references: E2EScenarioReferences) {
     const [
       admin,
+      hrAdmin,
       delegatee,
       organization,
       responsibilityHolderOrganization,
       responsibilityTargetOrganization,
       position,
+      globalPosition,
       responsibilityHolderPosition,
       adminClient,
       customSsoClient,
       internalClient,
       oidcClient,
       role,
+      hrRole,
     ] = await Promise.all([
       input.db.query.users.findFirst({
         where: { username: references.adminUsername, isDelete: false },
+      }),
+      input.db.query.users.findFirst({
+        where: { username: references.hrAdminUsername, isDelete: false },
       }),
       input.db.query.users.findFirst({
         where: { username: references.delegateeUsername, isDelete: false },
@@ -490,6 +555,9 @@ export function createProductionE2EScenarioOwner(
         where: { posCode: references.positionCode, isDelete: false },
       }),
       input.db.query.positions.findFirst({
+        where: { posCode: references.globalPositionCode, isDelete: false },
+      }),
+      input.db.query.positions.findFirst({
         where: {
           posCode: references.responsibilityHolderPositionCode,
           isDelete: false,
@@ -509,6 +577,9 @@ export function createProductionE2EScenarioOwner(
       }),
       input.db.query.roles.findFirst({
         where: { roleCode: references.adminRoleCode, isDelete: false },
+      }),
+      input.db.query.roles.findFirst({
+        where: { roleCode: references.hrAdminRoleCode, isDelete: false },
       }),
     ]);
     const employment = admin === undefined || organization === undefined || position === undefined
@@ -533,12 +604,43 @@ export function createProductionE2EScenarioOwner(
             isDelete: false,
           },
         });
+    const hrRoleBearingEmployment = hrAdmin === undefined
+      || responsibilityHolderOrganization === undefined
+      || position === undefined
+      ? undefined
+      : await input.db.query.employments.findFirst({
+          where: {
+            userId: hrAdmin.id,
+            orgId: responsibilityHolderOrganization.id,
+            posId: position.id,
+            isDelete: false,
+          },
+        });
+    const hrOrdinaryEmployment = hrAdmin === undefined
+      || responsibilityTargetOrganization === undefined
+      || responsibilityHolderPosition === undefined
+      ? undefined
+      : await input.db.query.employments.findFirst({
+          where: {
+            userId: hrAdmin.id,
+            orgId: responsibilityTargetOrganization.id,
+            posId: responsibilityHolderPosition.id,
+            isDelete: false,
+          },
+        });
     const effectiveRoles = employment === undefined || adminClient === undefined
       ? []
       : (await roleAssignmentResolver.resolveEffectiveRoles({
           employmentIds: [employment.id],
           clientId: adminClient.id,
         })).get(employment.id) ?? [];
+    const hrEffectiveRoles = hrRoleBearingEmployment === undefined
+      || adminClient === undefined
+      ? []
+      : (await roleAssignmentResolver.resolveEffectiveRoles({
+          employmentIds: [hrRoleBearingEmployment.id],
+          clientId: adminClient.id,
+        })).get(hrRoleBearingEmployment.id) ?? [];
     const profileState = admin === undefined
       ? undefined
       : (await input.db.select({
@@ -554,16 +656,38 @@ export function createProductionE2EScenarioOwner(
             eq(userProfiles.subjectIdentifier, references.adminSubjectIdentifier),
           ))
           .limit(1))[0];
-    const barrier = await subjectAccess.inspectMany([
+    const hrProfileState = hrAdmin === undefined
+      ? undefined
+      : (await input.db.select({
+          profileVersion: userProfiles.sourceDirtyVersion,
+          profileSchemaVersion: userProfiles.profileSchemaVersion,
+          dirtyVersion: userProfileDirty.dirtyVersion,
+          dirtyStatus: userProfileDirty.status,
+        })
+          .from(userProfiles)
+          .innerJoin(userProfileDirty, eq(userProfileDirty.userId, userProfiles.userId))
+          .where(and(
+            eq(userProfiles.userId, hrAdmin.id),
+            eq(userProfiles.subjectIdentifier, references.hrAdminSubjectIdentifier),
+          ))
+          .limit(1))[0];
+    const barriers = await subjectAccess.inspectMany([
       references.adminSubjectIdentifier,
+      references.hrAdminSubjectIdentifier,
     ]);
-    const barrierResult = barrier[0];
+    const barrierResult = barriers[0];
+    const hrBarrierResult = barriers[1];
     const facts = await subjectFactsInspector.inspectMany([
       references.adminSubjectIdentifier,
+      references.hrAdminSubjectIdentifier,
     ]);
     const factsResult = facts[0];
+    const hrFactsResult = facts[1];
     const factEmployments = factsResult?.status === "valid"
       ? factsResult.record.facts.employments
+      : [];
+    const hrFactEmployments = hrFactsResult?.status === "valid"
+      ? hrFactsResult.record.facts.employments
       : [];
 
     return {
@@ -572,6 +696,13 @@ export function createProductionE2EScenarioOwner(
         passwordConfigured: typeof admin?.password === "string" && admin.password.length > 0,
         subjectIdentifier: admin?.subjectIdentifier ?? "",
         username: admin?.username ?? "",
+      },
+      hrAdmin: {
+        active: hrAdmin?.status === UserStatus.Enable && hrAdmin.isDelete === false,
+        passwordConfigured: typeof hrAdmin?.password === "string"
+          && hrAdmin.password.length > 0,
+        subjectIdentifier: hrAdmin?.subjectIdentifier ?? "",
+        username: hrAdmin?.username ?? "",
       },
       delegatee: {
         active: delegatee?.status === UserStatus.Enable && delegatee.isDelete === false,
@@ -597,6 +728,11 @@ export function createProductionE2EScenarioOwner(
         active: position?.status === PositionStatus.Enable && position.isDelete === false,
         code: position?.posCode ?? "",
       },
+      globalPosition: {
+        active: globalPosition?.status === PositionStatus.Enable
+          && globalPosition.isDelete === false,
+        code: globalPosition?.posCode ?? "",
+      },
       employment: {
         active: employment?.status === EmploymentStatus.Enable && employment.isDelete === false,
       },
@@ -611,6 +747,22 @@ export function createProductionE2EScenarioOwner(
             && effectiveRole.roleCode === references.adminRoleCode,
         ),
         code: role?.roleCode ?? "",
+      },
+      hrRole: {
+        active: hrRole?.status === RoleStatus.Enable && hrRole.isDelete === false,
+        assigned: hrEffectiveRoles.some(
+          effectiveRole => effectiveRole.id === hrRole?.id
+            && effectiveRole.roleCode === references.hrAdminRoleCode,
+        ),
+        code: hrRole?.roleCode ?? "",
+      },
+      hrRoleBearingEmployment: {
+        active: hrRoleBearingEmployment?.status === EmploymentStatus.Enable
+          && hrRoleBearingEmployment.isDelete === false,
+      },
+      hrOrdinaryEmployment: {
+        active: hrOrdinaryEmployment?.status === EmploymentStatus.Enable
+          && hrOrdinaryEmployment.isDelete === false,
       },
       adminClient: {
         active: adminClient?.status === ClientStatus.Enable
@@ -677,6 +829,35 @@ export function createProductionE2EScenarioOwner(
         && profileState.profileVersion === profileState.dirtyVersion,
       subjectProfileVersion: profileState?.profileVersion ?? "",
       subjectProfileSchemaVersion: profileState?.profileSchemaVersion ?? 0,
+      hrSubjectAccess: hrBarrierResult?.status === "valid"
+        ? hrBarrierResult.record.state
+        : hrBarrierResult?.status ?? "missing",
+      hrSubjectFacts: {
+        ready: hrFactsResult?.status === "valid",
+        subjectIdentifier: hrFactsResult?.status === "valid"
+          ? hrFactsResult.record.subjectIdentifier
+          : "",
+        sourceDirtyVersion: hrFactsResult?.status === "valid"
+          ? hrFactsResult.record.sourceDirtyVersion
+          : "",
+        profileUsername: hrFactsResult?.status === "valid"
+          ? hrFactsResult.record.profile.username
+          : "",
+        organizationCodes: unique(hrFactEmployments.map(
+          fact => fact.organization.code,
+        )),
+        positionCodes: unique(hrFactEmployments.map(fact => fact.position.code)),
+        clientCodes: unique(hrFactEmployments.flatMap(fact =>
+          fact.clientAuthorizations.map(authorization => authorization.clientCode))),
+        roleCodes: unique(hrFactEmployments.flatMap(fact =>
+          fact.clientAuthorizations.flatMap(authorization =>
+            authorization.roles.map(factRole => factRole.code)))),
+      },
+      hrSubjectProfileReady: hrProfileState !== undefined
+        && hrProfileState.dirtyStatus === UserProfileDirtyStatus.Processed
+        && hrProfileState.profileVersion === hrProfileState.dirtyVersion,
+      hrSubjectProfileVersion: hrProfileState?.profileVersion ?? "",
+      hrSubjectProfileSchemaVersion: hrProfileState?.profileSchemaVersion ?? 0,
     };
   }
 

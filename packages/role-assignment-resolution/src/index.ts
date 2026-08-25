@@ -1,5 +1,5 @@
 import type { DbClient } from "@iam/db";
-import { createResolver } from "./internal/resolver.ts";
+import { createResolver } from "./internal/resolver";
 
 export interface EffectiveRole {
   readonly id: number;

@@ -12,6 +12,49 @@ test('users page opens with admin shell and user list', async ({ page }) => {
   await expect(page.getByText('管理员(admin)')).toBeVisible();
   await expect(page.getByText('张三')).toBeVisible();
   await expect(page.getByText('李四')).toBeVisible();
+  await expect(page.getByRole('menuitem', { name: /组织管理/ })).toBeVisible();
+  await expect(page.getByRole('menuitem', { name: /职位管理/ })).toBeVisible();
+  await expect(page.getByRole('menuitem', { name: /雇佣关系/ })).toBeVisible();
+  await expect(page.getByRole('menuitem', { name: /应用管理/ })).toBeVisible();
+  await expect(page.getByRole('menuitem', { name: /角色管理/ })).toBeVisible();
+  await expect(page.getByRole('menuitem', { name: /审计日志/ })).toBeVisible();
+  await expect(page.getByRole('menuitem', { name: /系统日志/ })).toBeVisible();
+});
+
+test('a role without Admin capability is default-denied before management requests', async ({
+  page,
+}) => {
+  let clientRequestCount = 0;
+  await mockAdminApi(page, {
+    capabilitySummary: {
+      visibleModules: [],
+      collectionActions: {
+        user: { create: { allowed: false, reason: 'ACTION_NOT_GRANTED' } },
+        employment: {
+          create: { allowed: false, reason: 'ACTION_NOT_GRANTED' },
+        },
+        organization: {
+          createRoot: { allowed: false, reason: 'ACTION_NOT_GRANTED' },
+        },
+        position: {
+          create: { allowed: false, reason: 'ACTION_NOT_GRANTED' },
+          edit: { allowed: false, reason: 'ACTION_NOT_GRANTED' },
+          changeStatus: { allowed: false, reason: 'ACTION_NOT_GRANTED' },
+          delete: { allowed: false, reason: 'ACTION_NOT_GRANTED' },
+        },
+      },
+    },
+  });
+  await page.route('**/rpc/admin.client.search**', (route) => {
+    clientRequestCount += 1;
+    return route.abort();
+  });
+
+  await page.goto('/iam-admin/clients');
+
+  await expect(page).toHaveURL(/\/iam-admin\/403$/);
+  await expect(page.getByText('无访问权限')).toBeVisible();
+  expect(clientRequestCount).toBe(0);
 });
 
 test('global Organization Responsibility navigation opens the read-only Type Catalog', async ({

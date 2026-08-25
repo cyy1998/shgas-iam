@@ -55,13 +55,19 @@ describe("Custom SSO Traffic Gate Redis integration", () => {
         }),
       });
 
-      await expect(first.assertIssuanceAllowed(clientCode)).resolves.toBeUndefined();
+      const initialDecision = await first.assertIssuanceAllowed(clientCode);
+      expect(initialDecision).toBeUndefined();
       currentStatus = ClientStatus.Maintenance;
       await invalidateClientTrafficGate(scope.redis, clientCode);
 
-      await expect(second.assertIssuanceAllowed(clientCode))
-        .rejects
-        .toBeInstanceOf(AuthzMaintenanceError);
+      let maintenanceFailure: unknown;
+      try {
+        await second.assertIssuanceAllowed(clientCode);
+      }
+      catch (error) {
+        maintenanceFailure = error;
+      }
+      expect(maintenanceFailure).toBeInstanceOf(AuthzMaintenanceError);
 
       const enableMutation = await beginClientTrafficGateMutation(scope.redis, {
         clientCode,

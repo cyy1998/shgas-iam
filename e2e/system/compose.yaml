@@ -160,8 +160,7 @@ services:
       IAM_ADMIN_API_REDIS_DB: "0"
       IAM_ADMIN_API_PORT: "30001"
       IAM_ADMIN_API_LOG_FORMAT: json
-      IAM_ADMIN_API_ADMIN_CLIENT_CODES: ${IAM_E2E_ADMIN_CLIENT_CODE:-e2e-admin-preflight}
-      IAM_ADMIN_API_ADMIN_ROLE_CODES: ${IAM_E2E_ADMIN_ROLE_CODE:-e2e-role-preflight}
+      IAM_ADMIN_API_ADMIN_CLIENT_CODES: ${IAM_E2E_ADMIN_CLIENT_CODE:-iam-admin}
       IAM_ADMIN_API_SESSION_KERNEL_NAMESPACE: "sess:v2:"
       IAM_ADMIN_API_SESSION_LOOKUP_HMAC_CURRENT_ID: e2e-current
       IAM_ADMIN_API_SESSION_LOOKUP_HMAC_CURRENT_SECRET: iam-e2e-session-lookup-hmac-secret-local-only
@@ -238,8 +237,7 @@ services:
         UMI_APP_ADMIN_API_PREFIX: /api/iam
         UMI_APP_ADMIN_SSO_AUTHORIZE_URL: /sso/authorize
         UMI_APP_ADMIN_SSO_LOGOUT_URL: /sso/logout
-        UMI_APP_ADMIN_CLIENT_CODE: ${IAM_E2E_ADMIN_CLIENT_CODE:-e2e-admin-preflight}
-        UMI_APP_ADMIN_ROLE_CODE: ${IAM_E2E_ADMIN_ROLE_CODE:-e2e-role-preflight}
+        UMI_APP_ADMIN_CLIENT_CODE: ${IAM_E2E_ADMIN_CLIENT_CODE:-iam-admin}
         UMI_APP_ADMIN_GRAFANA_URL: ""
         UMI_APP_ADMIN_SYSTEM_LOG_ENV: e2e
     labels: *e2e-labels

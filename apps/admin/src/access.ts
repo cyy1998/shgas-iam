@@ -1,11 +1,32 @@
-import { ADMIN_ROLE_CODE } from '@admin/constants/config';
+import { ADMIN_MODULE_ACCESS_KEYS } from './admin-route-registry';
+import type { AdminCapabilitySummary } from '@iam/contracts';
 
 export default function access(initialState: {
-  currentUser?: { username: string; name: string; roles: string[] };
+  capabilities?: AdminCapabilitySummary;
 }) {
-  const roles = initialState?.currentUser?.roles ?? [];
+  const capabilities = initialState?.capabilities;
+  const visibleModules = new Set(capabilities?.visibleModules ?? []);
 
   return {
-    isAdmin: roles.includes(ADMIN_ROLE_CODE),
+    ...Object.fromEntries(
+      Object.entries(ADMIN_MODULE_ACCESS_KEYS).map(([module, key]) => [
+        key,
+        visibleModules.has(module as never),
+      ]),
+    ),
+    canCreateUser:
+      capabilities?.collectionActions.user.create.allowed ?? false,
+    canCreateEmployment:
+      capabilities?.collectionActions.employment.create.allowed ?? false,
+    canCreateOrganizationRoot:
+      capabilities?.collectionActions.organization.createRoot.allowed ?? false,
+    canCreatePosition:
+      capabilities?.collectionActions.position.create.allowed ?? false,
+    canEditPosition:
+      capabilities?.collectionActions.position.edit.allowed ?? false,
+    canChangePositionStatus:
+      capabilities?.collectionActions.position.changeStatus.allowed ?? false,
+    canDeletePosition:
+      capabilities?.collectionActions.position.delete.allowed ?? false,
   };
 }

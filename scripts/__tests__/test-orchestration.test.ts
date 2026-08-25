@@ -620,9 +620,10 @@ describe("test orchestration", () => {
     }
   });
 
-  test("Collection Guard lists the fixed Admin and OIDC owners without per-spec mappings", async () => {
+  test("Collection Guard lists the fixed Admin, HR Admin, and OIDC owners without per-spec mappings", async () => {
     const journeys = [
       { file: "admin-custom-sso.spec.ts", name: "admin" },
+      { file: "hr-admin-user-management.spec.ts", name: "hr-admin" },
       { file: "oidc-pkce.spec.ts", name: "oidc" },
     ];
     const root = createCollectionGuardFixture({ workspaceLocalJourneys: journeys });
@@ -652,9 +653,10 @@ describe("test orchestration", () => {
     }
   });
 
-  test("Collection Guard assigns both journeys to the published workspace E2E owner", async () => {
+  test("Collection Guard assigns all journeys to the published workspace E2E owner", async () => {
     const journeys = [
       { file: "admin-custom-sso.spec.ts", name: "admin" },
+      { file: "hr-admin-user-management.spec.ts", name: "hr-admin" },
       { file: "oidc-pkce.spec.ts", name: "oidc" },
     ];
     const root = createCollectionGuardFixture({
@@ -683,7 +685,7 @@ describe("test orchestration", () => {
     };
     try {
       expect(await analyzeTestCollections(root, runner)).toEqual([]);
-      expect(listedSelectors).toEqual(["admin", "oidc"]);
+      expect(listedSelectors).toEqual(["admin", "hr-admin", "oidc"]);
     }
     finally {
       rmSync(root, { recursive: true, force: true });

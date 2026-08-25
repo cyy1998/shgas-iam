@@ -1,11 +1,13 @@
 import AuditLogTable from '@admin/components/audit/AuditLogTable';
+import AuthorizationActionButton from '@admin/components/AuthorizationActionButton';
+import AuthorizationActionDropdown from '@admin/components/AuthorizationActionDropdown';
 import EmploymentLifecycleActions from '@admin/components/EmploymentLifecycleActions';
 import EmploymentPrimaryActions from '@admin/components/EmploymentPrimaryActions';
 import EmploymentResponsibilitySummary from '@admin/components/organization-responsibility/EmploymentResponsibilitySummary';
 import StatusTag from '@admin/components/StatusTag';
 import EmploymentFormModal from '@admin/pages/employments/components/EmploymentFormModal';
 import TransferModal from '@admin/pages/employments/components/TransferModal';
-import type { EmploymentVo } from '@admin/services/employment';
+import { resignUser } from '@admin/services/employment';
 import {
   deleteUser,
   getUser,
@@ -13,15 +15,11 @@ import {
   type UserDetailVo,
 } from '@admin/services/user';
 import { ProDescriptions } from '@ant-design/pro-components';
-import {
-  EmploymentStatus,
-  getUserStatusOptions,
-  type UserStatus,
-} from '@iam/contracts';
+import { getUserStatusOptions, type UserStatus } from '@iam/contracts';
+import { Link, useAccess } from '@umijs/max';
 import {
   Button,
   Drawer,
-  Dropdown,
   Empty,
   message,
   Modal,
@@ -51,6 +49,11 @@ const roleTagStyle: CSSProperties = {
   maxWidth: '100%',
   whiteSpace: 'normal',
   wordBreak: 'break-all',
+};
+
+const employmentTableActionStyle: CSSProperties = {
+  fontWeight: 'inherit',
+  paddingInline: 0,
 };
 
 const formatDate = (value: Date | string | null | undefined) =>
@@ -98,12 +101,12 @@ function UserDetailDrawerContent({
   onEdit,
   onChanged,
 }: Props) {
+  const access = useAccess();
   const [detail, setDetail] = useState<UserDetailVo | null>(null);
   const [loading, setLoading] = useState(open && username !== null);
-  const [transferTarget, setTransferTarget] = useState<EmploymentVo | null>(
-    null,
-  );
   const [employmentFormOpen, setEmploymentFormOpen] = useState(false);
+  const [transferEmployment, setTransferEmployment] =
+    useState<EmploymentRow | null>(null);
 
   useEffect(() => {
     if (!open || !username) return;
@@ -172,6 +175,24 @@ function UserDetailDrawerContent({
     });
   };
 
+  const onResign = () => {
+    if (!detail) return;
+    Modal.confirm({
+      title: `办理用户 ${detail.name} 离职？`,
+      content: '该操作将结束全部开放任职并停用用户，提交后会尝试撤销现有会话。',
+      okType: 'danger',
+      onOk: async () => {
+        try {
+          await resignUser(detail.username);
+          message.success('离职已完成');
+          await refresh();
+        } catch (err) {
+          handleError(err);
+        }
+      },
+    });
+  };
+
   const employmentColumns: ColumnsType<EmploymentRow> = [
     {
       title: '组织路径',
@@ -209,58 +230,93 @@ function UserDetailDrawerContent({
       render: (val: EmploymentRow['endTime']) => formatDate(val),
       width: 110,
     },
-    {
+  ];
+
+  if (access.canAccessOrganizationResponsibility) {
+    employmentColumns.push({
       title: '组织责任',
       key: 'responsibilities',
       width: 280,
       render: (_: unknown, row: EmploymentRow) => (
         <EmploymentResponsibilitySummary employmentId={row.id} />
       ),
-    },
-    {
+    });
+  }
+
+  if (access.canAccessEmployment) {
+    employmentColumns.push({
       title: '操作',
       key: 'action',
-      width: 160,
+      width: 280,
       render: (_: unknown, row: EmploymentRow) => {
-        if (row.status === EmploymentStatus.Disable) return null;
+        const hasAllowedAction = Object.values(row.allowedActions).some(
+          (decision) => decision.allowed,
+        );
+        if (!row.managementPath && !hasAllowedAction) return null;
         return (
-          <Space size="middle">
-            <a
-              onClick={() => setTransferTarget(row as unknown as EmploymentVo)}
+          <Space size="small">
+            {row.managementPath ? (
+              <Link to={row.managementPath}>查看任职</Link>
+            ) : null}
+            <AuthorizationActionButton
+              decision={row.allowedActions.transfer}
+              onClick={() => setTransferEmployment(row)}
+              style={employmentTableActionStyle}
+              type="link"
             >
               转岗
-            </a>
-            <EmploymentPrimaryActions employment={row} onSuccess={refresh} />
-            <EmploymentLifecycleActions employment={row} onSuccess={refresh} />
+            </AuthorizationActionButton>
+            <EmploymentPrimaryActions
+              decision={
+                row.isPrimary
+                  ? row.allowedActions.clearPrimary
+                  : row.allowedActions.setPrimary
+              }
+              buttonStyle={employmentTableActionStyle}
+              buttonType="link"
+              employment={row}
+              onSuccess={refresh}
+            />
+            <EmploymentLifecycleActions
+              buttonStyle={employmentTableActionStyle}
+              buttonType="link"
+              decisions={row.allowedActions}
+              employment={row}
+              onSuccess={refresh}
+            />
           </Space>
         );
       },
-    },
-  ];
+    });
+  }
 
   return (
     <>
-      <EmploymentFormModal
-        open={employmentFormOpen}
-        presetUsername={detail?.username}
-        presetName={detail?.name}
-        onOpenChange={setEmploymentFormOpen}
-        onSuccess={async () => {
-          setEmploymentFormOpen(false);
-          await refresh();
-        }}
-      />
-      <TransferModal
-        open={transferTarget !== null}
-        employment={transferTarget}
-        onOpenChange={(open) => {
-          if (!open) setTransferTarget(null);
-        }}
-        onSuccess={async () => {
-          setTransferTarget(null);
-          await refresh();
-        }}
-      />
+      {access.canAccessEmployment && (
+        <>
+          <EmploymentFormModal
+            open={employmentFormOpen}
+            presetUsername={detail?.username}
+            presetName={detail?.name}
+            onOpenChange={setEmploymentFormOpen}
+            onSuccess={async () => {
+              setEmploymentFormOpen(false);
+              await refresh();
+            }}
+          />
+          <TransferModal
+            open={transferEmployment !== null}
+            employment={transferEmployment}
+            onOpenChange={(nextOpen) => {
+              if (!nextOpen) setTransferEmployment(null);
+            }}
+            onSuccess={() => {
+              setTransferEmployment(null);
+              void refresh();
+            }}
+          />
+        </>
+      )}
       <Drawer
         size={640}
         open={open}
@@ -282,8 +338,14 @@ function UserDetailDrawerContent({
         extra={
           detail && (
             <Space>
-              <Button onClick={() => onEdit(detail)}>编辑</Button>
-              <Dropdown
+              <AuthorizationActionButton
+                decision={detail.allowedActions.editProfile}
+                onClick={() => onEdit(detail)}
+              >
+                编辑
+              </AuthorizationActionButton>
+              <AuthorizationActionDropdown
+                decision={detail.allowedActions.changeStatus}
                 menu={{
                   items: getUserStatusOptions()
                     .filter((o) => o.value !== detail.status)
@@ -294,9 +356,10 @@ function UserDetailDrawerContent({
                     })),
                 }}
               >
-                <Button>状态</Button>
-              </Dropdown>
-              <Button
+                状态
+              </AuthorizationActionDropdown>
+              <AuthorizationActionButton
+                decision={detail.allowedActions.resetPassword}
                 onClick={() =>
                   confirmResetPassword({
                     username: detail.username,
@@ -305,10 +368,21 @@ function UserDetailDrawerContent({
                 }
               >
                 重置密码
-              </Button>
-              <Button danger onClick={onDelete}>
+              </AuthorizationActionButton>
+              <AuthorizationActionButton
+                danger
+                decision={detail.allowedActions.delete}
+                onClick={onDelete}
+              >
                 删除
-              </Button>
+              </AuthorizationActionButton>
+              <AuthorizationActionButton
+                danger
+                decision={detail.allowedActions.resign}
+                onClick={onResign}
+              >
+                离职
+              </AuthorizationActionButton>
             </Space>
           )
         }
@@ -399,41 +473,47 @@ function UserDetailDrawerContent({
                 label: `雇佣（${detail.employments.length}）`,
                 children: (
                   <div>
-                    <div style={{ marginBottom: 12, textAlign: 'right' }}>
-                      <Button
-                        type="primary"
-                        onClick={() => setEmploymentFormOpen(true)}
-                      >
-                        + 新增雇佣
-                      </Button>
-                    </div>
+                    {access.canCreateEmployment && (
+                      <div style={{ marginBottom: 12, textAlign: 'right' }}>
+                        <Button
+                          type="primary"
+                          onClick={() => setEmploymentFormOpen(true)}
+                        >
+                          + 新增雇佣
+                        </Button>
+                      </div>
+                    )}
                     <Table<EmploymentRow>
                       rowKey="id"
                       size="small"
                       columns={employmentColumns}
                       dataSource={detail.employments}
                       pagination={false}
-                      scroll={{ x: 1060 }}
+                      scroll={{ x: 1320 }}
                       locale={{ emptyText: '暂无雇佣' }}
                     />
                   </div>
                 ),
               },
-              {
-                key: 'logs',
-                label: '操作日志',
-                children: (
-                  <AuditLogTable
-                    fixedConditions={{
-                      targetType: 'user',
-                      targetCode: detail.username,
-                    }}
-                    pageSize={10}
-                    search={false}
-                    size="small"
-                  />
-                ),
-              },
+              ...(access.canAccessAudit
+                ? [
+                    {
+                      key: 'logs',
+                      label: '操作日志',
+                      children: (
+                        <AuditLogTable
+                          fixedConditions={{
+                            targetType: 'user',
+                            targetCode: detail.username,
+                          }}
+                          pageSize={10}
+                          search={false}
+                          size="small"
+                        />
+                      ),
+                    },
+                  ]
+                : []),
             ]}
           />
         )}

@@ -11,7 +11,7 @@ import { router } from "@iam/api-core/trpc";
 import { paginate } from "@iam/api-core/utils";
 import { PositionStatus } from "@iam/contracts";
 import { z } from "zod";
-import { toPositionVo } from "./position.schema";
+import { toPositionMemberCountVo, toPositionVo } from "./position.schema";
 
 export interface CreatePositionAdapterDeps {
   positionService: Pick<
@@ -27,6 +27,7 @@ export interface CreatePositionAdapterDeps {
 
 export function createPositionAdapter(deps: CreatePositionAdapterDeps) {
   const searchPosition = defineAdminApiQueryOperation({
+    operationId: "admin.position.search",
     input: PositionPaginationQueryDtoSchema,
     restInput: c => c.req.valid("json") as z.infer<typeof PositionPaginationQueryDtoSchema>,
     handler: async (input) => {
@@ -37,18 +38,23 @@ export function createPositionAdapter(deps: CreatePositionAdapterDeps) {
   });
 
   const getPosition = defineAdminApiQueryOperation({
+    operationId: "admin.position.detail",
     input: z.object({ posCode: z.string() }),
     restInput: c => c.req.valid("param") as { posCode: string },
-    handler: ({ posCode }) => deps.positionService.getPositionDetailByCode(posCode),
+    handler: async ({ posCode }) => toPositionMemberCountVo(
+      await deps.positionService.getPositionDetailByCode(posCode),
+    ),
   });
 
   const createPosition = defineAdminApiMutationOperation({
+    operationId: "admin.position.create",
     input: PositionCreateDtoSchema,
     restInput: c => c.req.valid("json") as z.infer<typeof PositionCreateDtoSchema>,
     handler: (input, context) => deps.positionService.setPosition(input, resolveAdminAuditContext(context)),
   });
 
   const updatePosition = defineAdminApiMutationOperation({
+    operationId: "admin.position.update",
     input: z.object({
       posCode: z.string(),
       data: PositionUpdateDtoSchema,
@@ -62,6 +68,7 @@ export function createPositionAdapter(deps: CreatePositionAdapterDeps) {
   });
 
   const updatePositionStatus = defineAdminApiMutationOperation({
+    operationId: "admin.position.updateStatus",
     input: z.object({
       posCode: z.string(),
       status: z.enum(PositionStatus),
@@ -75,6 +82,7 @@ export function createPositionAdapter(deps: CreatePositionAdapterDeps) {
   });
 
   const deletePosition = defineAdminApiMutationOperation({
+    operationId: "admin.position.delete",
     input: z.object({ posCode: z.string() }),
     restInput: c => c.req.valid("param") as { posCode: string },
     handler: ({ posCode }, context) =>

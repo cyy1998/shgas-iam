@@ -3,6 +3,7 @@ import {
   type OrganizationDetailVo,
   updateOrganization,
 } from '@admin/services/organization';
+import { getAdminAuthorizationReasonText } from '@admin/services/authorization';
 import {
   ModalForm,
   ProFormSelect,
@@ -40,6 +41,13 @@ export default function OrgFormModal({
   onSuccess,
 }: Props) {
   const isEdit = mode === 'edit';
+  const canChangeStatus = !isEdit
+    || initialValues?.allowedActions.changeStatus.allowed !== false;
+  const changeStatusReason = isEdit
+    ? getAdminAuthorizationReasonText(
+        initialValues?.allowedActions.changeStatus.reason ?? null,
+      )
+    : undefined;
 
   return (
     <ModalForm
@@ -70,7 +78,7 @@ export default function OrgFormModal({
             await updateOrganization(initialValues.orgCode, {
               orgName: values.orgName,
               orgType: values.orgType,
-              status: values.status,
+              ...(canChangeStatus ? { status: values.status } : {}),
             });
             message.success('更新成功');
           } else {
@@ -91,7 +99,7 @@ export default function OrgFormModal({
         }
       }}
     >
-      {isEdit && (
+      {isEdit && canChangeStatus && (
         <Alert
           type="info"
           showIcon
@@ -127,6 +135,8 @@ export default function OrgFormModal({
       <ProFormSelect
         name="status"
         label="状态"
+        disabled={!canChangeStatus}
+        tooltip={changeStatusReason}
         options={getOrganizationStatusOptions().map((o) => ({
           label: o.label,
           value: o.value,

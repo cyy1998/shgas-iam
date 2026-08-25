@@ -8,19 +8,31 @@ import {
 } from '@iam/contracts';
 import { describe, expect, it, vi } from 'vitest';
 import { render, screen } from '~admin/test/render';
+import { createHrEmploymentAllowedActions } from '../../test/mocks/fixtures';
 
 const services = vi.hoisted(() => ({
+  endEmployment: vi.fn(),
   getEmployment: vi.fn(),
+  pauseEmployment: vi.fn(),
+  resumeEmployment: vi.fn(),
   searchAssignments: vi.fn(),
+  updateEmployment: vi.fn(),
 }));
 
 vi.mock('@admin/services/employment', () => ({
+  endEmployment: services.endEmployment,
   getEmployment: services.getEmployment,
+  pauseEmployment: services.pauseEmployment,
+  resumeEmployment: services.resumeEmployment,
+  updateEmployment: services.updateEmployment,
 }));
 vi.mock('@admin/services/organization-responsibility', () => ({
   searchOrganizationResponsibilityAssignments: services.searchAssignments,
 }));
 vi.mock('@admin/components/audit/AuditLogTable', () => ({
+  default: () => null,
+}));
+vi.mock('@admin/pages/employments/components/TransferModal', () => ({
   default: () => null,
 }));
 vi.mock('@ant-design/pro-components', () => {
@@ -71,6 +83,10 @@ const employment = {
   },
   roles: [],
   privileges: [],
+  allowedActions: createHrEmploymentAllowedActions(
+    EmploymentStatus.Enable,
+    true,
+  ),
 };
 
 const assignment = {
@@ -99,6 +115,45 @@ const assignment = {
 };
 
 describe('EmploymentDetailDrawer responsibility wayfinding', () => {
+  it('edits description and renders only the server-granted lifecycle actions', async () => {
+    services.getEmployment.mockResolvedValue(employment);
+    services.updateEmployment.mockResolvedValue(true);
+    const { user } = render(
+      <EmploymentDetailDrawer open employmentId={42} onClose={vi.fn()} />,
+    );
+
+    const edit = await screen.findByRole('button', { name: '编辑备注' });
+    expect(edit).toBeEnabled();
+    for (const action of [/暂\s*停/, /结\s*束/]) {
+      expect(screen.getByRole('button', { name: action })).toBeEnabled();
+    }
+    for (const label of ['转岗', '取消主岗']) {
+      expect(
+        screen.getByRole('button', {
+          name: label === '转岗' ? /转\s*岗/ : label,
+        }),
+      ).toBeEnabled();
+    }
+    for (const action of [
+      '编辑备注',
+      /转\s*岗/,
+      '取消主岗',
+      /暂\s*停/,
+      /结\s*束/,
+    ]) {
+      expect(
+        screen.getByRole('button', { name: action }),
+      ).toHaveClass('ant-btn-variant-outlined');
+    }
+    await user.click(edit);
+    await user.type(screen.getByRole('textbox', { name: '备注' }), 'HR note');
+    await user.click(screen.getByRole('button', { name: /保\s*存/ }));
+
+    expect(services.updateEmployment).toHaveBeenCalledWith(42, {
+      description: 'HR note',
+    });
+  });
+
   it('shows the Employment open assignments and links to the global context', async () => {
     services.getEmployment.mockResolvedValue(employment);
     services.searchAssignments.mockResolvedValue({
@@ -116,7 +171,7 @@ describe('EmploymentDetailDrawer responsibility wayfinding', () => {
       lifecycle: 'open',
       limit: 20,
     });
-    expect(await screen.findByText('暂停')).toBeVisible();
+    expect((await screen.findAllByText('暂停')).length).toBeGreaterThan(0);
     expect(screen.getByText('负责人（head）')).toBeVisible();
     expect(screen.getByRole('link', { name: '查看任命 #101' })).toHaveAttribute(
       'href',

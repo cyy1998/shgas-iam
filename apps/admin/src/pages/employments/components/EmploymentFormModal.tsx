@@ -10,7 +10,7 @@ import {
   ProFormTextArea,
 } from '@ant-design/pro-components';
 import type { AppRouter } from '@iam/admin-api/trpc';
-import { PositionStatus, UserStatus } from '@iam/contracts';
+import { PositionStatus } from '@iam/contracts';
 import type { inferRouterOutputs } from '@trpc/server';
 import { message } from 'antd';
 import { useRef } from 'react';
@@ -106,7 +106,7 @@ export default function EmploymentFormModal({
             pageSize: 20,
             conditions: {
               fuzzyConditions: { text },
-              exactConditions: { statuses: [UserStatus.Enable] },
+              exactConditions: {},
             },
           });
           return res.result.map((u: UserVo) => ({

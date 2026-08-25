@@ -1,11 +1,8 @@
 import StatusTag from '@admin/components/StatusTag';
-import { confirmResetPassword } from '@admin/pages/users/components/ResetPasswordModal';
 import UserDetailDrawer from '@admin/pages/users/components/UserDetailDrawer';
 import UserFormModal from '@admin/pages/users/components/UserFormModal';
 import {
-  deleteUser,
   searchUsers,
-  updateUserStatus,
   type UserDetailVo,
   type UserVo,
 } from '@admin/services/user';
@@ -21,7 +18,8 @@ import {
   type UserStatus,
   type UserType,
 } from '@iam/contracts';
-import { Button, Dropdown, message, Modal } from 'antd';
+import { useAccess } from '@umijs/max';
+import { Button, message } from 'antd';
 import { useRef, useState } from 'react';
 
 type FormState =
@@ -30,39 +28,13 @@ type FormState =
   | { open: true; mode: 'edit'; initialValues: UserDetailVo };
 
 export default function UsersPage() {
+  const access = useAccess();
   const actionRef = useRef<ActionType>(undefined);
   const [formState, setFormState] = useState<FormState>({ open: false });
   const [drawerUsername, setDrawerUsername] = useState<string | null>(null);
 
   const handleError = (err: unknown) =>
     message.error(err instanceof Error ? err.message : '操作失败');
-
-  const onDelete = (row: UserVo) => {
-    Modal.confirm({
-      title: `删除用户 ${row.name}？`,
-      content: '软删除后用户不再可见。若存在活跃雇佣将被拒绝。',
-      okType: 'danger',
-      onOk: async () => {
-        try {
-          await deleteUser(row.username);
-          message.success('已删除');
-          actionRef.current?.reload();
-        } catch (err) {
-          handleError(err);
-        }
-      },
-    });
-  };
-
-  const onStatusChange = async (row: UserVo, status: UserStatus) => {
-    try {
-      await updateUserStatus(row.username, status);
-      message.success('状态已更新');
-      actionRef.current?.reload();
-    } catch (err) {
-      handleError(err);
-    }
-  };
 
   const columns: ProColumns<UserVo>[] = [
     {
@@ -103,41 +75,12 @@ export default function UsersPage() {
     {
       title: '操作',
       valueType: 'option',
-      width: 280,
-      render: (_, row) => [
+      width: 80,
+      render: (_, row) => (
         <a key="view" onClick={() => setDrawerUsername(row.username)}>
           查看
-        </a>,
-        <a
-          key="reset"
-          onClick={() =>
-            confirmResetPassword({ username: row.username, name: row.name })
-          }
-        >
-          重置密码
-        </a>,
-        <Dropdown
-          key="status"
-          menu={{
-            items: getUserStatusOptions()
-              .filter((o) => o.value !== row.status)
-              .map((o) => ({
-                key: String(o.value),
-                label: `切为「${o.label}」`,
-                onClick: () => onStatusChange(row, o.value as UserStatus),
-              })),
-          }}
-        >
-          <a>状态</a>
-        </Dropdown>,
-        <a
-          key="delete"
-          style={{ color: '#d4380d' }}
-          onClick={() => onDelete(row)}
-        >
-          删除
-        </a>,
-      ],
+        </a>
+      ),
     },
   ];
 
@@ -190,15 +133,19 @@ export default function UsersPage() {
             return { data: [], total: 0, success: false };
           }
         }}
-        toolBarRender={() => [
-          <Button
-            key="create"
-            type="primary"
-            onClick={() => setFormState({ open: true, mode: 'create' })}
-          >
-            + 新建用户
-          </Button>,
-        ]}
+        toolBarRender={() =>
+          access.canCreateUser
+            ? [
+                <Button
+                  key="create"
+                  type="primary"
+                  onClick={() => setFormState({ open: true, mode: 'create' })}
+                >
+                  + 新建用户
+                </Button>,
+              ]
+            : []
+        }
       />
 
       <UserFormModal

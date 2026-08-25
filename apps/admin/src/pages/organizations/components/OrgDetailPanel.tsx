@@ -1,3 +1,5 @@
+import AuthorizationActionDropdown from '@admin/components/AuthorizationActionDropdown';
+import AuthorizationActionButton from '@admin/components/AuthorizationActionButton';
 import StatusTag from '@admin/components/StatusTag';
 import {
   deleteOrganization,
@@ -12,18 +14,16 @@ import {
   OrganizationStatus,
 } from '@iam/contracts';
 import {
-  Button,
-  Dropdown,
   Empty,
   message,
   Modal,
   Space,
   Table,
   Tabs,
-  Tooltip,
   Typography,
 } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
+import { useAccess } from '@umijs/max';
 import OrganizationResponsibilityAssignmentsPanel from './OrganizationResponsibilityAssignmentsPanel';
 
 type Props = {
@@ -66,6 +66,7 @@ export default function OrgDetailPanel({
   onSelectChild,
   onChanged,
 }: Props) {
+  const access = useAccess();
   if (!detail) {
     return (
       <div style={{ padding: 48 }}>
@@ -99,14 +100,6 @@ export default function OrgDetailPanel({
       onOk: mutate,
     });
   };
-
-  const deleteDisabled = detail.childrenCount > 0 || detail.employmentCount > 0;
-  const deleteDisabledReason =
-    detail.childrenCount > 0
-      ? '有下级组织，不可删除'
-      : detail.employmentCount > 0
-        ? '存在关联雇佣，不可删除'
-        : '';
 
   const onDelete = () => {
     Modal.confirm({
@@ -148,9 +141,20 @@ export default function OrgDetailPanel({
           <StatusTag domain="org" status={detail.status} />
         </Space>
         <Space>
-          <Button onClick={onCreateChild}>+ 下级组织</Button>
-          <Button onClick={onEdit}>编辑</Button>
-          <Dropdown
+          <AuthorizationActionButton
+            decision={detail.allowedActions.createChild}
+            onClick={onCreateChild}
+          >
+            + 下级组织
+          </AuthorizationActionButton>
+          <AuthorizationActionButton
+            decision={detail.allowedActions.edit}
+            onClick={onEdit}
+          >
+            编辑
+          </AuthorizationActionButton>
+          <AuthorizationActionDropdown
+            decision={detail.allowedActions.changeStatus}
             menu={{
               items: getOrganizationStatusOptions()
                 .filter((o) => o.value !== detail.status)
@@ -161,19 +165,15 @@ export default function OrgDetailPanel({
                 })),
             }}
           >
-            <Button>状态</Button>
-          </Dropdown>
-          {deleteDisabled ? (
-            <Tooltip title={deleteDisabledReason}>
-              <Button danger disabled>
-                删除
-              </Button>
-            </Tooltip>
-          ) : (
-            <Button danger onClick={onDelete}>
-              删除
-            </Button>
-          )}
+            状态
+          </AuthorizationActionDropdown>
+          <AuthorizationActionButton
+            danger
+            decision={detail.allowedActions.delete}
+            onClick={onDelete}
+          >
+            删除
+          </AuthorizationActionButton>
         </Space>
       </div>
 
@@ -258,7 +258,7 @@ export default function OrgDetailPanel({
               </>
             ),
           },
-          {
+          ...(access.canAccessOrganizationResponsibility ? [{
             key: 'responsibility-assignments',
             label: '责任任命',
             children: (
@@ -266,7 +266,7 @@ export default function OrgDetailPanel({
                 orgCode={detail.orgCode}
               />
             ),
-          },
+          }] : []),
         ]}
       />
     </div>

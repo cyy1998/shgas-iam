@@ -6,6 +6,9 @@ export interface E2EScenarioReferences {
   canonicalOrigin: string;
   adminSubjectIdentifier: string;
   adminUsername: string;
+  hrAdminSubjectIdentifier: string;
+  hrAdminUsername: string;
+  hrAdminUpdatedName: string;
   delegateeSubjectIdentifier: string;
   delegateeUsername: string;
   pausedSubjectIdentifier: string;
@@ -16,8 +19,10 @@ export interface E2EScenarioReferences {
   responsibilityHolderOrganizationCode: string;
   responsibilityTargetOrganizationCode: string;
   positionCode: string;
+  globalPositionCode: string;
   responsibilityHolderPositionCode: string;
   adminRoleCode: string;
+  hrAdminRoleCode: string;
   adminPrivilegeCode: string;
   adminClientCode: string;
   adminRedirectUri: string;
@@ -32,6 +37,8 @@ export interface E2EScenarioReferences {
 export type E2EScenarioIdentity = Pick<
   E2EScenarioReferences,
   | "adminUsername"
+  | "hrAdminUsername"
+  | "hrAdminUpdatedName"
   | "delegateeUsername"
   | "pausedUsername"
   | "disabledUsername"
@@ -39,8 +46,10 @@ export type E2EScenarioIdentity = Pick<
   | "responsibilityHolderOrganizationCode"
   | "responsibilityTargetOrganizationCode"
   | "positionCode"
+  | "globalPositionCode"
   | "responsibilityHolderPositionCode"
   | "adminRoleCode"
+  | "hrAdminRoleCode"
   | "adminPrivilegeCode"
   | "adminClientCode"
   | "customSsoClientCode"
@@ -55,6 +64,12 @@ export interface E2EScenarioReadBack {
     subjectIdentifier: string;
     username: string;
   };
+  hrAdmin: {
+    active: boolean;
+    passwordConfigured: boolean;
+    subjectIdentifier: string;
+    username: string;
+  };
   delegatee: {
     active: boolean;
     subjectIdentifier: string;
@@ -64,9 +79,13 @@ export interface E2EScenarioReadBack {
   responsibilityHolderOrganization: { active: boolean; code: string };
   responsibilityTargetOrganization: { active: boolean; code: string };
   position: { active: boolean; code: string };
+  globalPosition: { active: boolean; code: string };
   employment: { active: boolean };
   responsibilityHolderEmployment: { active: boolean };
   role: { active: boolean; assigned: boolean; code: string };
+  hrRole: { active: boolean; assigned: boolean; code: string };
+  hrRoleBearingEmployment: { active: boolean };
+  hrOrdinaryEmployment: { active: boolean };
   adminClient: {
     active: boolean;
     customSsoEnabled: boolean;
@@ -104,6 +123,20 @@ export interface E2EScenarioReadBack {
   subjectProfileReady: boolean;
   subjectProfileVersion: string;
   subjectProfileSchemaVersion: number;
+  hrSubjectAccess: "enabled" | "disabled" | "blocking" | "missing" | "invalid";
+  hrSubjectFacts: {
+    ready: boolean;
+    subjectIdentifier: string;
+    sourceDirtyVersion: string;
+    profileUsername: string;
+    organizationCodes: string[];
+    positionCodes: string[];
+    clientCodes: string[];
+    roleCodes: string[];
+  };
+  hrSubjectProfileReady: boolean;
+  hrSubjectProfileVersion: string;
+  hrSubjectProfileSchemaVersion: number;
 }
 
 export interface E2EScenarioOwner {
@@ -139,6 +172,7 @@ export async function seedE2EScenario(
     runId: input.runId,
     canonicalOrigin: origin,
     adminSubjectIdentifier: input.random.uuid(),
+    hrAdminSubjectIdentifier: input.random.uuid(),
     delegateeSubjectIdentifier: input.random.uuid(),
     pausedSubjectIdentifier: input.random.uuid(),
     disabledSubjectIdentifier: input.random.uuid(),
@@ -162,6 +196,8 @@ export function createE2EScenarioIdentity(runId: string): E2EScenarioIdentity {
   const runKey = requireRunKey(runId);
   return {
     adminUsername: `e2e-admin-${runKey}`,
+    hrAdminUsername: `e2e-hr-admin-${runKey}`,
+    hrAdminUpdatedName: `E2E HR Admin Updated ${runKey}`,
     delegateeUsername: `e2e-delegatee-${runKey}`,
     pausedUsername: `e2e-paused-${runKey}`,
     disabledUsername: `e2e-disabled-${runKey}`,
@@ -169,10 +205,12 @@ export function createE2EScenarioIdentity(runId: string): E2EScenarioIdentity {
     responsibilityHolderOrganizationCode: `e2e-holder-org-${runKey}`,
     responsibilityTargetOrganizationCode: `e2e-resp-target-${runKey}`,
     positionCode: `e2e-pos-${runKey}`,
+    globalPositionCode: `e2e-global-pos-${runKey}`,
     responsibilityHolderPositionCode: `e2e-resp-pos-${runKey}`,
-    adminRoleCode: `e2e-role-${runKey}`,
+    adminRoleCode: "iam:admin",
+    hrAdminRoleCode: "iam:hr-admin",
     adminPrivilegeCode: `e2e-privilege-${runKey}`,
-    adminClientCode: `e2e-admin-${runKey}`,
+    adminClientCode: "iam-admin",
     customSsoClientCode: `e2e-custom-${runKey}`,
     internalClientCode: `e2e-internal-${runKey}`,
     oidcClientCode: `e2e-oidc-${runKey}`,
@@ -212,6 +250,10 @@ function assertScenarioReadBack(
     && actual.admin.passwordConfigured
     && actual.admin.subjectIdentifier === expected.adminSubjectIdentifier
     && actual.admin.username === expected.adminUsername
+    && actual.hrAdmin.active
+    && actual.hrAdmin.passwordConfigured
+    && actual.hrAdmin.subjectIdentifier === expected.hrAdminSubjectIdentifier
+    && actual.hrAdmin.username === expected.hrAdminUsername
     && actual.delegatee.active
     && actual.delegatee.subjectIdentifier === expected.delegateeSubjectIdentifier
     && actual.delegatee.username === expected.delegateeUsername
@@ -225,11 +267,18 @@ function assertScenarioReadBack(
     === expected.responsibilityTargetOrganizationCode
     && actual.position.active
     && actual.position.code === expected.positionCode
+    && actual.globalPosition.active
+    && actual.globalPosition.code === expected.globalPositionCode
     && actual.employment.active
     && actual.responsibilityHolderEmployment.active
     && actual.role.active
     && actual.role.assigned
     && actual.role.code === expected.adminRoleCode
+    && actual.hrRole.active
+    && actual.hrRole.assigned
+    && actual.hrRole.code === expected.hrAdminRoleCode
+    && actual.hrRoleBearingEmployment.active
+    && actual.hrOrdinaryEmployment.active
     && actual.adminClient.active
     && actual.adminClient.customSsoEnabled
     && actual.adminClient.clientCode === expected.adminClientCode
@@ -267,7 +316,24 @@ function assertScenarioReadBack(
     && actual.subjectFacts.responsibilityTypeCodes.length === 0
     && actual.subjectFacts.responsibilityTargetOrganizationCodes.length === 0
     && actual.subjectProfileReady;
-  if (!matches)
+  const hrMatches = actual.hrSubjectAccess === "enabled"
+    && actual.hrSubjectFacts.ready
+    && actual.hrSubjectFacts.subjectIdentifier === expected.hrAdminSubjectIdentifier
+    && actual.hrSubjectFacts.sourceDirtyVersion === actual.hrSubjectProfileVersion
+    && actual.hrSubjectFacts.profileUsername === expected.hrAdminUsername
+    && exactlyAll(actual.hrSubjectFacts.organizationCodes, [
+      expected.responsibilityHolderOrganizationCode,
+      expected.responsibilityTargetOrganizationCode,
+    ])
+    && exactlyAll(actual.hrSubjectFacts.positionCodes, [
+      expected.positionCode,
+      expected.responsibilityHolderPositionCode,
+    ])
+    && exactly(actual.hrSubjectFacts.clientCodes, expected.adminClientCode)
+    && exactly(actual.hrSubjectFacts.roleCodes, expected.hrAdminRoleCode)
+    && actual.hrSubjectProfileReady
+    && actual.hrSubjectProfileSchemaVersion === 3;
+  if (!matches || !hrMatches)
     throw new Error("E2E scenario owner read-back did not confirm the complete fixed scenario");
 }
 

@@ -1,3 +1,4 @@
+import type { AdminOperationId } from "@admin-api/services/admin-authorization/admin-operation.registry";
 import type { ClientService } from "@admin-api/services/client/client.service";
 import type { Context } from "hono";
 import type { ClientRouteHandler } from "./client.type";
@@ -54,24 +55,28 @@ function resolveAuditContext(context?: unknown) {
 
 export function createClientAdapter(deps: CreateClientAdapterDeps) {
   const searchClient = defineAdminApiQueryOperation({
+    operationId: "admin.client.search",
     input: ClientPaginationQueryDtoSchema,
     restInput: c => c.req.valid("json") as z.infer<typeof ClientPaginationQueryDtoSchema>,
     handler: input => deps.clientService.searchClientsForAdmin(input),
   });
 
   const getClient = defineAdminApiQueryOperation({
+    operationId: "admin.client.detail",
     input: z.object({ clientCode: z.string() }),
     restInput: c => c.req.valid("param") as { clientCode: string },
     handler: ({ clientCode }) => deps.clientService.getClientDetailByCode(clientCode),
   });
 
   const createClient = defineAdminApiMutationOperation({
+    operationId: "admin.client.create",
     input: ClientCreateDtoSchema,
     restInput: c => c.req.valid("json") as z.infer<typeof ClientCreateDtoSchema>,
     handler: (input, context) => deps.clientService.createClient(input, resolveAuditContext(context)),
   });
 
   const updateClient = defineAdminApiMutationOperation({
+    operationId: "admin.client.update",
     input: z.object({
       clientCode: z.string(),
       data: ClientUpdateDtoSchema,
@@ -85,12 +90,14 @@ export function createClientAdapter(deps: CreateClientAdapterDeps) {
   });
 
   const updateClientById = defineAdminApiMutationOperation({
+    operationId: "admin.client.updateLegacy",
     input: ClientInputDtoSchema,
     restInput: c => c.req.valid("json") as z.infer<typeof ClientInputDtoSchema>,
     handler: (input, context) => deps.clientService.updateClientById(input, resolveAuditContext(context)),
   });
 
   const updateClientStatus = defineAdminApiMutationOperation({
+    operationId: "admin.client.updateStatus",
     input: z.object({
       clientCode: z.string(),
       status: ClientStatusUpdateDtoSchema.shape.status,
@@ -104,12 +111,14 @@ export function createClientAdapter(deps: CreateClientAdapterDeps) {
   });
 
   const deleteClient = defineAdminApiMutationOperation({
+    operationId: "admin.client.delete",
     input: z.object({ clientCode: z.string() }),
     restInput: c => c.req.valid("param") as { clientCode: string },
     handler: ({ clientCode }, context) => deps.clientService.deleteClient(clientCode, resolveAuditContext(context)),
   });
 
   const configureClientOidc = defineAdminApiMutationOperation({
+    operationId: "admin.client.oidcConfigure",
     input: z.object({
       clientCode: z.string(),
       data: ClientOidcConfigureDtoSchema,
@@ -123,6 +132,7 @@ export function createClientAdapter(deps: CreateClientAdapterDeps) {
   });
 
   const configureClientCustomSso = defineAdminApiMutationOperation({
+    operationId: "admin.client.customSsoConfigure",
     input: z.object({
       clientCode: z.string(),
       data: ClientCustomSsoConfigureDtoSchema,
@@ -136,30 +146,32 @@ export function createClientAdapter(deps: CreateClientAdapterDeps) {
   });
 
   function defineClientAction<TResult>(
+    operationId: AdminOperationId,
     handler: (clientCode: string, auditContext: ReturnType<typeof resolveAuditContext>) => Promise<TResult>,
   ) {
     return defineAdminApiMutationOperation({
+      operationId,
       input: z.object({ clientCode: z.string() }),
       restInput: c => c.req.valid("param") as { clientCode: string },
       handler: ({ clientCode }, context) => handler(clientCode, resolveAuditContext(context)),
     });
   }
 
-  const enableClientOidc = defineClientAction((clientCode, auditContext) =>
+  const enableClientOidc = defineClientAction("admin.client.oidcEnable", (clientCode, auditContext) =>
     deps.clientService.enableClientOidc(clientCode, auditContext));
-  const disableClientOidc = defineClientAction((clientCode, auditContext) =>
+  const disableClientOidc = defineClientAction("admin.client.oidcDisable", (clientCode, auditContext) =>
     deps.clientService.disableClientOidc(clientCode, auditContext));
-  const removeClientOidc = defineClientAction((clientCode, auditContext) =>
+  const removeClientOidc = defineClientAction("admin.client.oidcRemove", (clientCode, auditContext) =>
     deps.clientService.removeClientOidc(clientCode, auditContext));
-  const rotateClientOidcSecret = defineClientAction((clientCode, auditContext) =>
+  const rotateClientOidcSecret = defineClientAction("admin.client.oidcRotateSecret", (clientCode, auditContext) =>
     deps.clientService.rotateClientOidcSecret(clientCode, auditContext));
-  const enableClientCustomSso = defineClientAction((clientCode, auditContext) =>
+  const enableClientCustomSso = defineClientAction("admin.client.customSsoEnable", (clientCode, auditContext) =>
     deps.clientService.enableClientCustomSso(clientCode, auditContext));
-  const disableClientCustomSso = defineClientAction((clientCode, auditContext) =>
+  const disableClientCustomSso = defineClientAction("admin.client.customSsoDisable", (clientCode, auditContext) =>
     deps.clientService.disableClientCustomSso(clientCode, auditContext));
-  const removeClientCustomSso = defineClientAction((clientCode, auditContext) =>
+  const removeClientCustomSso = defineClientAction("admin.client.customSsoRemove", (clientCode, auditContext) =>
     deps.clientService.removeClientCustomSso(clientCode, auditContext));
-  const rotateClientCustomSsoSecret = defineClientAction((clientCode, auditContext) =>
+  const rotateClientCustomSsoSecret = defineClientAction("admin.client.customSsoRotateSecret", (clientCode, auditContext) =>
     deps.clientService.rotateClientCustomSsoSecret(clientCode, auditContext));
 
   const clientAdminRouter = router({

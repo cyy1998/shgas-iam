@@ -2,6 +2,7 @@ import type { Context } from "hono";
 import { createRoleAdapter } from "@admin-api/routes/admin/role/role.adapter";
 import { RoleAssignmentTargetType, RoleStatus } from "@iam/contracts";
 import { beforeEach, describe, expect, mock, test } from "bun:test";
+import { getTestAdminAuthorizationValue } from "../helpers/admin-authorization";
 
 const now = new Date("2026-01-01T00:00:00Z");
 
@@ -68,6 +69,9 @@ beforeEach(() => {
 function createContext(valid: Record<string, unknown>) {
   return {
     get: mock((key: string) => {
+      const authorizationValue = getTestAdminAuthorizationValue(key);
+      if (authorizationValue !== undefined)
+        return authorizationValue;
       if (key === "userId")
         return 1001;
       if (key === "username")

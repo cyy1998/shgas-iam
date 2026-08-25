@@ -9,6 +9,7 @@ import {
   OrganizationType,
 } from '@iam/contracts';
 import { expect, test } from '@playwright/test';
+import { adminEmploymentAllowedActions } from '../../test/mocks/fixtures';
 import {
   fulfillJson,
   fulfillTrpc,
@@ -36,6 +37,12 @@ const detail = {
   statusText: '正常',
   childrenCount: 0,
   employmentCount: 0,
+  allowedActions: {
+    createChild: { allowed: true, reason: null },
+    edit: { allowed: true, reason: null },
+    changeStatus: { allowed: true, reason: null },
+    delete: { allowed: true, reason: null },
+  },
   createTime: '2026-08-20T00:00:00.000Z',
   updateTime: '2026-08-20T00:00:00.000Z',
 };
@@ -174,6 +181,7 @@ test('manages both Organization Responsibility types inside Organization detail'
   );
 
   await page.goto('/iam-admin/organizations');
+  await expect(page.getByRole('button', { name: /新建根组织/ })).toBeVisible();
   await page.getByText('财务部').first().click();
   await expect(
     page.getByText(
@@ -190,6 +198,7 @@ test('manages both Organization Responsibility types inside Organization detail'
   await expect(
     page.getByText('该组织层级内存在开放责任任命，无法暂停、停用或删除').last(),
   ).toBeVisible();
+  await expect(page.getByText('状态已更新')).toHaveCount(0);
   await expect(page.getByText('财务部').first()).toBeVisible();
   await page.getByRole('tab', { name: '责任任命' }).click();
 
@@ -238,34 +247,43 @@ test('shows the Employment Pause cascade before executing the parent lifecycle c
 }) => {
   await mockAdminApi(page);
   const pauseInputs: unknown[] = [];
+  const employment = {
+    id: 42,
+    status: EmploymentStatus.Enable,
+    isPrimary: true,
+    startTime: '2026-08-20T00:00:00.000Z',
+    endTime: null,
+    description: null,
+    user: { id: 7, name: '张三', username: 'zhangsan' },
+    organization: {
+      assignedOrg: {
+        id: 8,
+        orgCode: 'OPS',
+        orgName: '运营部',
+        orgType: OrganizationType.Department,
+      },
+      fullOrgPath: [
+        { id: 1, orgCode: 'ROOT', orgName: '集团' },
+        { id: 8, orgCode: 'OPS', orgName: '运营部' },
+      ],
+      companyNodes: [{ id: 1, orgCode: 'ROOT', orgName: '集团' }],
+    },
+    position: { id: 9, posCode: 'OPS-LEAD', posName: '运营负责人' },
+  };
   await page.route('**/rpc/admin.employment.search**', (route) =>
     fulfillTrpc(route, {
-      result: [
-        {
-          id: 42,
-          status: EmploymentStatus.Enable,
-          isPrimary: true,
-          startTime: '2026-08-20T00:00:00.000Z',
-          endTime: null,
-          description: null,
-          user: { id: 7, name: '张三', username: 'zhangsan' },
-          organization: {
-            assignedOrg: {
-              id: 8,
-              orgCode: 'OPS',
-              orgName: '运营部',
-              orgType: OrganizationType.Department,
-            },
-            fullOrgPath: [
-              { id: 1, orgCode: 'ROOT', orgName: '集团' },
-              { id: 8, orgCode: 'OPS', orgName: '运营部' },
-            ],
-            companyNodes: [{ id: 1, orgCode: 'ROOT', orgName: '集团' }],
-          },
-          position: { id: 9, posCode: 'OPS-LEAD', posName: '运营负责人' },
-        },
-      ],
+      result: [employment],
       total: 1,
+    }),
+  );
+  await page.route('**/rpc/admin.employment.detail**', (route) =>
+    fulfillTrpc(route, {
+      ...employment,
+      allowedActions: adminEmploymentAllowedActions,
+      createTime: '2026-08-20T00:00:00.000Z',
+      updateTime: '2026-08-20T00:00:00.000Z',
+      roles: [],
+      privileges: [],
     }),
   );
   await page.route('**/rpc/admin.organization.selector**', (route) =>
@@ -278,8 +296,12 @@ test('shows the Employment Pause cascade before executing the parent lifecycle c
 
   await page.goto('/iam-admin/employments');
   const row = page.getByRole('row', { name: /张三.*运营部.*运营负责人/u });
-  await row.getByText('暂停').click();
-  const confirmation = page.getByRole('dialog');
+  await row.getByText('查看').click();
+  const drawer = page.getByRole('dialog').filter({ hasText: '张三' });
+  await drawer.getByRole('button', { name: /暂\s*停/u }).click();
+  const confirmation = page
+    .getByRole('dialog')
+    .filter({ hasText: '确认暂停该任职' });
   await expect(confirmation).toContainText(
     '该任职下所有启用中的责任任命也会一并暂停；恢复任职后，责任任命仍需逐条恢复。',
   );

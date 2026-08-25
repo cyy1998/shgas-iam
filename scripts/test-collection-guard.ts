@@ -20,6 +20,10 @@ const workspaceLocalE2eJourneyOwners = {
     command: "bun src/cli.ts admin",
     selector: "admin",
   },
+  "hr-admin:journey": {
+    command: "bun src/cli.ts hr-admin",
+    selector: "hr-admin",
+  },
   "oidc:journey": {
     command: "bun src/cli.ts oidc",
     selector: "oidc",
@@ -244,7 +248,7 @@ async function listRunnerCollectionFiles(
     const files = new Set<string>();
     let rootDirectory = workspace.directory;
     const selectors = fullSystemE2e
-      ? ["admin", "oidc"]
+      ? ["admin", "hr-admin", "oidc"]
       : [workspaceLocalJourney];
     for (const selector of selectors) {
       const args = ["node", playwright, "test"];

@@ -31,7 +31,6 @@ export interface AdminApiRuntimeConfig {
   env: Env;
   auth: {
     adminClientCodes: string[];
-    adminRoleCodes: string[];
   };
   sessionKernel: SessionKernelConfig;
 }

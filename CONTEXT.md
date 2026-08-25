@@ -172,6 +172,66 @@ _Avoid_: Open Employment, enabled user employment
 对一条 Effective Employment 生效的启用角色；其角色分配目标和角色必须启用且未删除。Position 与所属 Organization 由 Employment Integrity 保证，User 账号状态不属于该概念并由使用方单独判断。
 _Avoid_: parsed role, assigned role
 
+**HR Administrator**:
+对至少一条 Effective Employment 具有 `iam:hr-admin` Effective Role 的管理员主体；`iam:hr-admin` 是绑定 `iam-admin` Client、沿用普通 Role 生命周期的角色，不是内置或受保护角色。该角色自身只授予限定管理能力，其组织范围只从承载该 Effective Role 的 Employment 推导，其他普通 Employment 不扩大范围；与其他角色组合时权限取并集，本角色不撤销其他角色授予的能力。
+_Avoid_: full administrator, global administrator, deny-override role
+
+**Admin Authorization Policy**:
+IAM Admin 服务端把当前有效管理角色映射为模块、动作与数据范围能力的集中式授权规则；`iam:admin` 授予完整能力，正确绑定 `iam-admin` Client 的 `iam:hr-admin` 授予 HR 限定能力，多角色能力取并集。它不以 `role_privilege`、前端可见性、管理入口 allowlist 或调用方声明的组织范围作为授权事实。
+_Avoid_: UI access flag, admin admission allowlist, role-privilege policy, caller-declared scope
+
+**HR Administration Scope Root**:
+HR Administrator 的某条角色承载任职所属 Organization Path 中首个一级 Organization；`iam:hr-admin` 通过任职、Position 或 Organization 分配成为该任职的 Effective Role 时口径相同，角色分配目标和路径中的 Company 节点都不替代该结构根。
+_Avoid_: nearest Company, role assignment target, ordinary-employment root
+
+**HR Administration Scope**:
+HR Administrator 全部 HR Administration Scope Root 自身及其各自完整后代子树的并集；它从当前 Effective Role、Effective Employment 与 Organization Path 推导，任一事实变化都使后续请求立即使用新范围，无法确定时不授予范围，已经通过授权检查的在途请求遵守 Admin Authorization Policy 的请求时一致性边界。
+_Avoid_: primary-employment scope, login snapshot, caller-declared organization scope
+
+**HR-Managed User**:
+至少有一条 Open Employment 的所属 Organization 位于 HR Administration Scope 内的未删除 User；Pause Employment 仍使用户满足条件，只有已结束任职不满足。该资格允许编辑用户基础档案，但不把范围外任职纳入 HR Administration Scope。
+_Avoid_: all-employments-in-scope user, Effective-Employment-only user, employment authorization
+
+**HR-Visible Employment**:
+所属 Organization 位于 HR Administration Scope 内的非墓碑 Employment；Open Employment 与已结束历史都可查看，但只有 Open Employment 可执行其允许的生命周期操作，已结束历史不使 User 成为 HR-Managed User。默认管理列表只显示 Open Employment，已结束历史由管理员显式筛选。
+_Avoid_: open-only employment view, editable employment history, Legacy Employment Tombstone
+
+**HR User Profile Administration**:
+HR Administrator 对未删除 User 的全局读取和对 HR-Managed User 的受限档案管理能力；User 详情与 `iam:admin` 一样展示其全部非墓碑 Employment 及 Role、Privilege，范围外任职保持只读且不能进入任职管理，普通档案编辑只包含 name、mobile、wxId 与 userType。它不创建或删除 User；Credential 重置与 User Status 变更是另行约束的全局账号动作。
+_Avoid_: scoped user visibility, user provisioning, user deletion
+
+**HR Credential Reset**:
+HR Administrator 为状态为 Enable 的 HR-Managed User 生成一次性展示的新随机密码并撤销该 User 全部现有 Session 的全局账号动作；目标存在范围外 Open Employment 不阻断该动作。它不是管理员指定密码、Account Recovery 或普通档案编辑，Pause 或 Disable User 不允许执行。
+_Avoid_: administrator-selected password, Account Recovery, profile edit
+
+**HR User Status Administration**:
+HR Administrator 修改 HR-Managed User 全局状态的账号动作；只有目标 User 的每一条 Open Employment 都位于当前 HR Administration Scope 内时才允许，已结束历史不参与判断。它允许既有 User Status 之间的变更，但不授权 User Deletion。
+_Avoid_: any-employment status authority, historical-employment scope check, User Deletion
+
+**HR User Resignation**:
+HR Administrator 仅在目标是 HR-Managed User 且每一条 Open Employment 都位于当前 HR Administration Scope 内时可以首次执行的 User Resignation；它整体结束这些任职及其开放责任任命、禁用 User 并撤销全部 Session，存在任一范围外 Open Employment 时整体拒绝。已结束历史不参与首次执行的范围判断，也不提供局部离职语义；已 Disable 且没有 Open Employment 的 User 只要至少有一条已结束 Employment 位于当前范围内，就允许幂等重试并再次尝试撤销 Session。
+_Avoid_: partial resignation, single-root employment ending, historical-employment scope check
+
+**HR Self-Administration**:
+HR Administrator 以自己为目标时仍适用与其他 User 相同的管理规则，不享有额外能力，也不受特殊禁止；动作可以改变或撤销其账号、任职和 HR Administration Scope。已获授权的事务可以完成，后续请求立即使用变化后的当前权限。
+_Avoid_: self-management bypass, mandatory self-action prohibition, pre-change authorization snapshot
+
+**HR Organization Administration**:
+HR Administrator 对 HR Administration Scope 内 Organization 的管理能力，包括查看根及后代、在范围内父组织下创建子组织，以及在既有完整性门禁内修改名称、类型、状态或删除；它不创建一级根组织、不修改 Organization code，也不移动组织树。
+_Avoid_: root provisioning, organization code rename, organization reparenting
+
+**HR Employment Responsibility Cascade**:
+HR Administrator 改变 HR-Visible Employment 生命周期时，为保持 Organization Responsibility Assignment Integrity 而同步暂停或结束该任职全部相应责任任命的强制后果；Assignment 的目标 Organization 可以位于 HR Administration Scope 外，这不授予 HR Administrator 独立管理该目标或责任任命的能力。
+_Avoid_: cross-tree responsibility administration, optional responsibility cleanup
+
+**HR Primary Employment Administration**:
+HR Administrator 可以为 HR Administration Scope 内的 Open Employment 设置或清除 Primary Employment，不要求该 User 的其他 Open Employment 也位于范围内；设置时为保持全局最多一个 Primary Employment，可以清除范围外任职原有的 Primary 标记。该能力不允许把范围外 Employment 直接作为操作目标。
+_Avoid_: scope-local primary invariant, out-of-scope employment administration
+
+**HR Employment Administration**:
+HR Administrator 可以为任意未删除 User 在 HR Administration Scope 内创建 Employment，并对 HR-Visible Open Employment 修改描述、暂停、恢复或结束；Position 从全局目录选择，已结束 Employment 保持只读。Employment Transfer 的源 Employment 与目标 Organization 都必须位于当前范围并集内，可以跨 HR Administration Scope Root，并继续遵守 HR Employment Responsibility Cascade 与 HR Primary Employment Administration。
+_Avoid_: user provisioning, out-of-scope employment mutation, single-root transfer
+
 **ORCAS Session Identity**:
 Gateway Custom SSO 显式启用 ORCAS 集成后，由 ORCAS 返回并绑定到本次 local session 的外部 user/session 引用；它只存在于 ORCAS 专用上下文、Cookie 和端点，不是 IAM 用户档案属性，也不进入 Subject Claim Catalog、Client Subject Projection 或 Gateway Subject Header。
 _Avoid_: user detail field, user profile attribute, subject claim, Independent client context

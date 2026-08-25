@@ -17,6 +17,7 @@ export function createAdminJourneyOperations(
       IAM_E2E_ADMIN_ROLE_CODE: scenario.adminRoleCode,
       IAM_E2E_DELEGATEE_USERNAME: scenario.delegateeUsername,
       IAM_E2E_DISABLED_USERNAME: scenario.disabledUsername,
+      IAM_E2E_HR_ADMIN_USERNAME: scenario.hrAdminUsername,
       IAM_E2E_CUSTOM_SSO_CLIENT_CODE: scenario.customSsoClientCode,
       IAM_E2E_CUSTOM_SSO_REDIRECT_URI:
         `${descriptor.origin}/e2e/custom-sso/*`,

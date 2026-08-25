@@ -4,8 +4,8 @@ import { requireEnvironment } from "./src/environment.ts";
 const origin = requireEnvironment("IAM_E2E_ORIGIN");
 const outputDir = requireEnvironment("IAM_E2E_PLAYWRIGHT_OUTPUT_DIR");
 const journey = process.env.IAM_E2E_JOURNEY ?? "admin";
-if (journey !== "admin" && journey !== "oidc")
-  throw new Error("IAM_E2E_JOURNEY must be admin or oidc");
+if (journey !== "admin" && journey !== "hr-admin" && journey !== "oidc")
+  throw new Error("IAM_E2E_JOURNEY must be admin, hr-admin, or oidc");
 
 export default defineConfig({
   expect: { timeout: 30_000 },
@@ -23,7 +23,9 @@ export default defineConfig({
   testDir: ".",
   testMatch: journey === "oidc"
     ? "oidc-pkce.spec.ts"
-    : "admin-custom-sso.spec.ts",
+    : journey === "hr-admin"
+      ? "hr-admin-user-management.spec.ts"
+      : "admin-custom-sso.spec.ts",
   timeout: 120_000,
   use: {
     baseURL: origin,

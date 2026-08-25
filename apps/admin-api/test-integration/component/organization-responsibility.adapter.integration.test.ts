@@ -10,6 +10,10 @@ import {
 } from "@iam/contracts";
 import { describe, expect, mock, test } from "bun:test";
 import { Hono } from "hono";
+import {
+  addTestAdminAuthorizationMiddleware,
+  getTestAdminAuthorizationValue,
+} from "../helpers/admin-authorization";
 
 const principalSession = {
   principalSessionId: "ps-admin",
@@ -37,11 +41,11 @@ function createProtectedCatalogApp(roles: string[]) {
     },
     config: {
       allowedClientCodes: ["iam-admin"],
-      adminRoleCodes: ["iam:admin"],
     },
   } as never);
   const app = new Hono();
   app.use("*", authentication.adminAuthenticationHandler);
+  addTestAdminAuthorizationMiddleware(app, roles);
   app.route(
     "/admin",
     createOrganizationResponsibilityRoute(createCatalogAdapter()),
@@ -60,7 +64,9 @@ describe("Organization Responsibility Type Catalog admin adapter", () => {
   test("publishes the same canonical catalog through REST GET and a tRPC query only", async () => {
     const adapter = createCatalogAdapter();
     const route = createOrganizationResponsibilityRoute(adapter);
-    const restApp = new Hono().route("/admin", route);
+    const restApp = new Hono();
+    addTestAdminAuthorizationMiddleware(restApp);
+    restApp.route("/admin", route);
 
     const restResponse = await restApp.request(
       "http://localhost/admin/organization-responsibilities/types",
@@ -75,6 +81,9 @@ describe("Organization Responsibility Type Catalog admin adapter", () => {
     const caller = adapter.organizationResponsibilityAdminRouter.createCaller({
       hono: {
         get: (key: string) => {
+          const authorizationValue = getTestAdminAuthorizationValue(key);
+          if (authorizationValue !== undefined)
+            return authorizationValue;
           if (key === "userId")
             return 3;
           if (key === "username")
@@ -156,6 +165,7 @@ describe("Organization Responsibility Type Catalog admin adapter", () => {
       c.set("username" as never, "holder" as never);
       await next();
     });
+    addTestAdminAuthorizationMiddleware(app);
     app.route("/admin", createOrganizationResponsibilityRoute(adapter));
 
     const listResponse = await app.request(
@@ -232,6 +242,9 @@ describe("Organization Responsibility Type Catalog admin adapter", () => {
     const caller = adapter.organizationResponsibilityAdminRouter.createCaller({
       hono: {
         get: (key: string) => {
+          const authorizationValue = getTestAdminAuthorizationValue(key);
+          if (authorizationValue !== undefined)
+            return authorizationValue;
           if (key === "userId")
             return 3;
           if (key === "username")
@@ -278,10 +291,9 @@ describe("Organization Responsibility Type Catalog admin adapter", () => {
         searchAssignments,
       } as never,
     });
-    const app = new Hono().route(
-      "/admin",
-      createOrganizationResponsibilityRoute(adapter),
-    );
+    const app = new Hono();
+    addTestAdminAuthorizationMiddleware(app);
+    app.route("/admin", createOrganizationResponsibilityRoute(adapter));
 
     const response = await app.request(
       "http://localhost/admin/organization-responsibilities/assignments"
@@ -304,7 +316,19 @@ describe("Organization Responsibility Type Catalog admin adapter", () => {
     });
 
     const caller = adapter.organizationResponsibilityAdminRouter.createCaller({
-      hono: {} as Context,
+      hono: {
+        get: (key: string) => {
+          const authorizationValue = getTestAdminAuthorizationValue(key);
+          if (authorizationValue !== undefined)
+            return authorizationValue;
+          if (key === "userId")
+            return 3;
+          if (key === "username")
+            return "holder";
+          return undefined;
+        },
+        req: { header: () => undefined, method: "POST", path: "/rpc/admin.organizationResponsibility.searchAssignments" },
+      } as unknown as Context,
     });
     await expect(
       caller.searchAssignments({
@@ -334,7 +358,7 @@ describe("Organization Responsibility Type Catalog admin adapter", () => {
     );
 
     expect(response.status).toBe(403);
-    expect(await response.text()).toBe("无管理端访问权限");
+    expect(await response.text()).toBe("无管理端操作权限");
 
     const discoveryResponse = await createProtectedCatalogApp([
       "iam:user",

@@ -123,6 +123,7 @@ test("public RP observes reversible Maintenance and permanent logout through rea
 
   await pauseEmploymentWithResponsibilityCascade(
     adminPage,
+    adminUsername,
     responsibilityHolderPositionCode,
   );
   await waitForInternalResponsibility({
@@ -142,7 +143,11 @@ test("public RP observes reversible Maintenance and permanent logout through rea
     positionCode: responsibilityHolderPositionCode,
     request,
   });
-  await resumeEmployment(adminPage, responsibilityHolderPositionCode);
+  await resumeEmployment(
+    adminPage,
+    adminUsername,
+    responsibilityHolderPositionCode,
+  );
   await waitForEmploymentSearchVisibility({
     adminUsername,
     expected: true,
@@ -151,7 +156,11 @@ test("public RP observes reversible Maintenance and permanent logout through rea
     positionCode: responsibilityHolderPositionCode,
     request,
   });
-  await endEmployment(adminPage, responsibilityHolderPositionCode);
+  await endEmployment(
+    adminPage,
+    adminUsername,
+    responsibilityHolderPositionCode,
+  );
   await waitForEmploymentSearchVisibility({
     adminUsername,
     expected: false,
@@ -339,14 +348,25 @@ async function ensureHeadResponsibility(input: {
 
 async function pauseEmploymentWithResponsibilityCascade(
   adminPage: Page,
+  adminUsername: string,
   responsibilityHolderPositionCode: string,
 ) {
   await adminPage.goto("/iam-admin/employments");
-  const row = adminPage.getByRole("row", {
-    name: new RegExp(responsibilityHolderPositionCode, "u"),
+  const row = findEmploymentRow(
+    adminPage,
+    adminUsername,
+    responsibilityHolderPositionCode,
+  );
+  const drawer = await openEmploymentDrawer(
+    adminPage,
+    row,
+    adminUsername,
+    responsibilityHolderPositionCode,
+  );
+  await drawer.getByRole("button", { name: /暂\s*停/u }).click();
+  const confirmation = adminPage.getByRole("dialog", {
+    name: "确认暂停该任职？",
   });
-  await row.getByText("暂停", { exact: true }).click();
-  const confirmation = adminPage.getByRole("dialog");
   await expect(confirmation).toContainText(
     "该任职下所有启用中的责任任命也会一并暂停",
   );
@@ -357,13 +377,18 @@ async function pauseEmploymentWithResponsibilityCascade(
 
 async function resumeEmployment(
   adminPage: Page,
+  adminUsername: string,
   positionCode: string,
 ) {
   await adminPage.goto("/iam-admin/employments");
-  const row = adminPage.getByRole("row", {
-    name: new RegExp(positionCode, "u"),
-  });
-  await row.getByText("恢复", { exact: true }).click();
+  const row = findEmploymentRow(adminPage, adminUsername, positionCode);
+  const drawer = await openEmploymentDrawer(
+    adminPage,
+    row,
+    adminUsername,
+    positionCode,
+  );
+  await drawer.getByRole("button", { name: /恢\s*复/u }).click();
   await expect(adminPage.getByText(
     "已恢复任职；责任任命不会自动恢复，请在组织责任中逐条确认后恢复",
   )).toBeVisible();
@@ -371,15 +396,46 @@ async function resumeEmployment(
 
 async function endEmployment(
   adminPage: Page,
+  adminUsername: string,
   positionCode: string,
 ) {
   await adminPage.goto("/iam-admin/employments");
-  const row = adminPage.getByRole("row", {
-    name: new RegExp(positionCode, "u"),
+  const row = findEmploymentRow(adminPage, adminUsername, positionCode);
+  const drawer = await openEmploymentDrawer(
+    adminPage,
+    row,
+    adminUsername,
+    positionCode,
+  );
+  await drawer.getByRole("button", { name: /结\s*束/u }).click();
+  const confirmation = adminPage.getByRole("dialog", {
+    name: "确认结束该任职？",
   });
-  await row.getByText("结束", { exact: true }).click();
-  const confirmation = adminPage.getByRole("dialog");
   await expect(confirmation).toContainText("结束后不可恢复");
   await confirmation.getByRole("button", { name: "结束任职" }).click();
   await expect(adminPage.getByText("已结束", { exact: true })).toBeVisible();
+}
+
+function findEmploymentRow(
+  adminPage: Page,
+  username: string,
+  positionCode: string,
+) {
+  return adminPage.getByRole("row")
+    .filter({ hasText: username })
+    .filter({ hasText: positionCode });
+}
+
+async function openEmploymentDrawer(
+  adminPage: Page,
+  row: ReturnType<Page["getByRole"]>,
+  username: string,
+  positionCode: string,
+) {
+  await row.getByText("查看", { exact: true }).click();
+  const drawer = adminPage.getByRole("dialog")
+    .filter({ hasText: username })
+    .filter({ hasText: positionCode });
+  await expect(drawer).toBeVisible();
+  return drawer;
 }

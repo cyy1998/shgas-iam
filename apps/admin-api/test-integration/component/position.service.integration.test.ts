@@ -37,6 +37,7 @@ function createService(overrides: Record<string, unknown> = {}) {
   };
   const deps = {
     positionRepository: {
+      getPositionDetailByCode: mock(async () => position({ memberNumber: 0 })),
       getPositionByCode: mock(async () => position()),
     },
     uow: createImmediateUnitOfWork(tx),

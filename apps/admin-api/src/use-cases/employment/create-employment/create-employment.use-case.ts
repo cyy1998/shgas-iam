@@ -20,7 +20,7 @@ export function createCreateEmploymentUseCase(deps: CreateEmploymentUseCaseDeps)
     input: CreateEmploymentInput,
     options: CreateEmploymentOptions = {},
   ) {
-    const { auditContext } = options;
+    const { auditContext, authorization } = options;
     return await deps.uow.transaction(async (tx) => {
       const [user, organization, position] = await Promise.all([
         tx.userReader.getUserByUsernameForAdmin(input.username),
@@ -36,6 +36,17 @@ export function createCreateEmploymentUseCase(deps: CreateEmploymentUseCaseDeps)
         || organization.isDelete
       ) {
         throw new OrganizationNotFoundError("组织未启用或不存在");
+      }
+      if (
+        authorization?.kind === "scoped"
+        && !authorization.organizationIds.includes(organization.id)
+      ) {
+        authorization.denyMutation({
+          operationId: "admin.employment.create",
+          resourceIdentifier: input.orgCode,
+          reason: "RESOURCE_OUT_OF_SCOPE",
+          concealExistence: true,
+        });
       }
       if (
         position === null

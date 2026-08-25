@@ -47,4 +47,4 @@ export const OrganizationUpdateDtoSchema = z.object({
   orgName: z.string().min(1).optional(),
   orgType: z.enum(OrganizationType).optional(),
   status: z.enum(OrganizationStatus).optional(),
-}).openapi("OrganizationUpdateDto");
+}).strict().openapi("OrganizationUpdateDto");

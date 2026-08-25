@@ -65,7 +65,11 @@ describe("redis OIDC adapter real Redis contract", () => {
         expect(Number(subscription[1])).toBeGreaterThan(0);
       });
 
+      const disconnected = new Promise<void>((resolve) => {
+        subscriber.once("end", resolve);
+      });
       subscriber.disconnect();
+      await disconnected;
       await vi.waitFor(async () => {
         const subscription = await testScope.observer.pubsub("NUMSUB", OIDC_CLIENT_INVALIDATION_CHANNEL);
         expect(Number(subscription[1])).toBe(0);

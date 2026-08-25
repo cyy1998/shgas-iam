@@ -23,6 +23,7 @@ import { getApiRuntimeErrorFormatterData } from "@iam/api-core/trpc";
 import { TRPCError } from "@trpc/server";
 import { describe, expect, mock, test } from "bun:test";
 import { Hono } from "hono";
+import { getTestAdminAuthorizationValue } from "../helpers/admin-authorization";
 
 function sessionListResult() {
   return {
@@ -96,6 +97,11 @@ function createContext(
 ) {
   return {
     get: mock((key: string) => {
+      if (key === "userDetailDto")
+        return { name: "Root Admin", roles: ["iam:admin"] };
+      const authorizationValue = getTestAdminAuthorizationValue(key);
+      if (authorizationValue !== undefined)
+        return authorizationValue;
       if (key === "userId")
         return 7;
       if (key === "username")
@@ -104,8 +110,6 @@ function createContext(
         return "ps-admin";
       if (key === "requestId")
         return "req-adapter";
-      if (key === "userDetailDto")
-        return { name: "Root Admin" };
       return undefined;
     }),
     req: {
@@ -949,7 +953,7 @@ describe("admin session management adapter", () => {
     await assertLoginRestrictionReleaseTransportMapping(mapping);
   });
 
-  test("fails closed when the authenticated server context is absent", async () => {
+  test("fails closed at authorization when the authenticated server context is absent", async () => {
     const listSessions = mock(async () => sessionListResult());
     const adapter = createSessionManagementAdapter({
       sessionManagementService: {
@@ -963,8 +967,8 @@ describe("admin session management adapter", () => {
     context.get.mockImplementation(() => undefined);
 
     await expect(adapter.sessionsSearch(context as never, async () => {})).rejects.toMatchObject({
-      code: "AUTH.UNAUTHORIZED",
-      httpStatus: 401,
+      code: "AUTH.FORBIDDEN",
+      httpStatus: 403,
     });
     expect(listSessions).not.toHaveBeenCalled();
   });
@@ -1017,6 +1021,8 @@ describe("admin session management adapter", () => {
     };
     const context = createContext(input);
     context.get.mockImplementation((key: string) => {
+      if (key === "adminAuthorizationPolicy")
+        return getTestAdminAuthorizationValue(key);
       if (key === "userId")
         return 7;
       if (key === "username")
@@ -1024,7 +1030,7 @@ describe("admin session management adapter", () => {
       if (key === "requestId")
         return "req-adapter";
       if (key === "userDetailDto")
-        return { name: "Root Admin" };
+        return { name: "Root Admin", roles: ["iam:admin"] };
       return undefined;
     });
 

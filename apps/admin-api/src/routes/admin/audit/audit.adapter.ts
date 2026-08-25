@@ -11,6 +11,7 @@ export interface CreateAuditAdapterDeps {
 
 export function createAuditAdapter(deps: CreateAuditAdapterDeps) {
   const searchAuditLogs = defineAdminApiQueryOperation({
+    operationId: "admin.audit.search",
     input: AuditLogPaginationQueryDtoSchema,
     restInput: c => c.req.valid("json") as z.infer<typeof AuditLogPaginationQueryDtoSchema>,
     handler: input => deps.auditService.searchAuditLogsForAdmin(input),

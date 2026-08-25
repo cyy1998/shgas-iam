@@ -13,10 +13,12 @@ import {
   ProTable,
 } from '@ant-design/pro-components';
 import { getPositionStatusOptions } from '@iam/contracts';
+import { useAccess } from '@umijs/max';
 import { Button, Dropdown, message, Modal } from 'antd';
 import { useRef, useState } from 'react';
 
 export default function PositionsPage() {
+  const access = useAccess();
   const actionRef = useRef<ActionType>(undefined);
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<PositionVo | null>(null);
@@ -73,32 +75,39 @@ export default function PositionsPage() {
       title: '操作',
       valueType: 'option',
       width: 220,
-      render: (_, row) => [
-        <a key="edit" onClick={() => onEdit(row)}>
-          编辑
-        </a>,
-        <Dropdown
-          key="status"
-          menu={{
-            items: getPositionStatusOptions()
-              .filter((o) => o.value !== row.status)
-              .map((o) => ({
-                key: String(o.value),
-                label: `切为「${o.label}」`,
-                onClick: () => onStatusChange(row, o.value),
-              })),
-          }}
-        >
-          <a>状态</a>
-        </Dropdown>,
-        <a
-          key="delete"
-          style={{ color: '#d4380d' }}
-          onClick={() => onDelete(row)}
-        >
-          删除
-        </a>,
-      ],
+      render: (_, row) =>
+        [
+          access.canEditPosition && (
+            <a key="edit" onClick={() => onEdit(row)}>
+              编辑
+            </a>
+          ),
+          access.canChangePositionStatus && (
+            <Dropdown
+              key="status"
+              menu={{
+                items: getPositionStatusOptions()
+                  .filter((o) => o.value !== row.status)
+                  .map((o) => ({
+                    key: String(o.value),
+                    label: `切为「${o.label}」`,
+                    onClick: () => onStatusChange(row, o.value),
+                  })),
+              }}
+            >
+              <a>状态</a>
+            </Dropdown>
+          ),
+          access.canDeletePosition && (
+            <a
+              key="delete"
+              style={{ color: '#d4380d' }}
+              onClick={() => onDelete(row)}
+            >
+              删除
+            </a>
+          ),
+        ].filter(Boolean),
     },
   ];
 
@@ -142,18 +151,22 @@ export default function PositionsPage() {
             return { data: [], total: 0, success: false };
           }
         }}
-        toolBarRender={() => [
-          <Button
-            key="create"
-            type="primary"
-            onClick={() => {
-              setEditing(null);
-              setModalOpen(true);
-            }}
-          >
-            + 新建岗位
-          </Button>,
-        ]}
+        toolBarRender={() =>
+          access.canCreatePosition
+            ? [
+                <Button
+                  key="create"
+                  type="primary"
+                  onClick={() => {
+                    setEditing(null);
+                    setModalOpen(true);
+                  }}
+                >
+                  + 新建岗位
+                </Button>,
+              ]
+            : []
+        }
       />
       <PositionFormModal
         open={modalOpen}

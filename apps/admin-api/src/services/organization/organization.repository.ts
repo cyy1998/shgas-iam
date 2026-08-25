@@ -1,3 +1,4 @@
+import type { AdminOrganizationReadScope } from "@admin-api/services/organization/organization.port";
 import type {
   OrganizationCreateDto,
   OrganizationPaginationQueryDto,
@@ -68,23 +69,44 @@ export function createOrganizationRepository(db: DbClient) {
       await db.insert(organizationClosures).values(closureRelations).onConflictDoNothing();
       return firstRow(await attachOrganizationRelations([updatedOrganization], db))!;
     },
-    async listOrgChildrenByParentCode(parentOrgCode: string | null, pageNum: number, pageSize: number) {
+    async listOrgChildrenByParentCode(
+      parentOrgCode: string | null,
+      pageNum: number,
+      pageSize: number,
+      scope?: AdminOrganizationReadScope,
+    ) {
       let parentId: number;
       if (parentOrgCode === null) {
         parentId = -1;
       }
       else {
-        const parent = await db.query.organizations.findFirst({
-          columns: { id: true },
-          where: { orgCode: parentOrgCode, isDelete: false },
-        });
-        if (parent === undefined) {
+        const parent = firstRow(await db
+          .select({ id: organizations.id })
+          .from(organizations)
+          .where(and(
+            eq(organizations.orgCode, parentOrgCode),
+            eq(organizations.isDelete, false),
+            scope ? inArray(organizations.id, scope.organizationIds) : undefined,
+          ))
+          .limit(1));
+        if (parent == null) {
           return { rows: [], total: 0 };
         }
         parentId = parent.id;
       }
 
-      const where = and(eq(organizations.isDelete, false), eq(organizations.parentId, parentId));
+      const where = and(
+        eq(organizations.isDelete, false),
+        eq(organizations.parentId, parentId),
+        scope
+          ? inArray(
+              organizations.id,
+              parentOrgCode === null
+                ? scope.rootOrganizationIds
+                : scope.organizationIds,
+            )
+          : undefined,
+      );
       const [rows, totalRows] = await Promise.all([
         db
           .select()
@@ -104,7 +126,11 @@ export function createOrganizationRepository(db: DbClient) {
       const grandchildCounts = await db
         .select({ parentId: organizations.parentId, value: count() })
         .from(organizations)
-        .where(and(eq(organizations.isDelete, false), inArray(organizations.parentId, rows.map(r => r.id))))
+        .where(and(
+          eq(organizations.isDelete, false),
+          inArray(organizations.parentId, rows.map(r => r.id)),
+          scope ? inArray(organizations.id, scope.organizationIds) : undefined,
+        ))
         .groupBy(organizations.parentId);
       const countMap = new Map(grandchildCounts.map(c => [c.parentId, c.value]));
 
@@ -116,20 +142,31 @@ export function createOrganizationRepository(db: DbClient) {
         total,
       };
     },
-    async getOrganizationByCodeForAdmin(orgCode: string) {
+    async getOrganizationByCodeForAdmin(
+      orgCode: string,
+      scope?: AdminOrganizationReadScope,
+    ) {
       const rows = await db.select().from(organizations).where(and(
         eq(organizations.orgCode, orgCode),
         eq(organizations.isDelete, false),
+        scope ? inArray(organizations.id, scope.organizationIds) : undefined,
       )).limit(1);
-      return firstRow(await attachOrganizationRelations(rows, db, { activeChildrenOnly: true })) ?? null;
+      return firstRow(await attachOrganizationRelations(rows, db, {
+        activeChildrenOnly: true,
+        organizationIds: scope?.organizationIds,
+      })) ?? null;
     },
-    async searchOrganizationsForAdmin(query: OrganizationPaginationQueryDto) {
+    async searchOrganizationsForAdmin(
+      query: OrganizationPaginationQueryDto,
+      scope?: AdminOrganizationReadScope,
+    ) {
       const { fuzzyConditions, exactConditions } = query.conditions;
       const parent = alias(organizations, "admin_parent");
       const ancestor = alias(organizations, "admin_ancestor");
 
       const rows = await db.select().from(organizations).where(and(
         eq(organizations.isDelete, false),
+        scope ? inArray(organizations.id, scope.organizationIds) : undefined,
         exactConditions.orgType ? eq(organizations.orgType, exactConditions.orgType) : undefined,
         exactConditions.status !== undefined ? eq(organizations.status, exactConditions.status) : undefined,
         exactConditions.parentOrgCode
@@ -160,18 +197,29 @@ export function createOrganizationRepository(db: DbClient) {
           : undefined,
       )).orderBy(organizations.level, organizations.orderNum, organizations.id);
 
-      return await attachOrganizationRelations(rows, db, { activeChildrenOnly: true });
+      return await attachOrganizationRelations(rows, db, {
+        activeChildrenOnly: true,
+        organizationIds: scope?.organizationIds,
+      });
     },
-    async getOrganizationSelectorNodesForAdmin(query: OrganizationSelectorQueryDto) {
+    async getOrganizationSelectorNodesForAdmin(
+      query: OrganizationSelectorQueryDto,
+      scope?: AdminOrganizationReadScope,
+    ) {
       let parentId: number | undefined;
       const visibleStatusCondition = inArrayIf(organizations.status, query.visibleStatuses);
 
       if (query.parentOrgCode !== undefined && query.parentOrgCode !== null) {
-        const parent = await db.query.organizations.findFirst({
-          columns: { id: true },
-          where: { orgCode: query.parentOrgCode, isDelete: false },
-        });
-        if (parent === undefined) {
+        const parent = firstRow(await db
+          .select({ id: organizations.id })
+          .from(organizations)
+          .where(and(
+            eq(organizations.orgCode, query.parentOrgCode),
+            eq(organizations.isDelete, false),
+            scope ? inArray(organizations.id, scope.organizationIds) : undefined,
+          ))
+          .limit(1));
+        if (parent == null) {
           return [];
         }
         parentId = parent.id;
@@ -182,10 +230,13 @@ export function createOrganizationRepository(db: DbClient) {
         .from(organizations)
         .where(and(
           eq(organizations.isDelete, false),
+          scope ? inArray(organizations.id, scope.organizationIds) : undefined,
           parentId !== undefined
             ? eq(organizations.parentId, parentId)
             : query.text === undefined && query.orgCode === undefined
-              ? eq(organizations.parentId, -1)
+              ? scope
+                ? inArray(organizations.id, scope.rootOrganizationIds)
+                : eq(organizations.parentId, -1)
               : undefined,
           query.orgCode === undefined ? undefined : eq(organizations.orgCode, query.orgCode),
           visibleStatusCondition,
@@ -199,7 +250,7 @@ export function createOrganizationRepository(db: DbClient) {
         .orderBy(organizations.level, organizations.orderNum, organizations.id)
         .limit(query.pageSize);
 
-      return await attachSelectorNodeContext(rows, query, db);
+      return await attachSelectorNodeContext(rows, query, db, scope);
     },
     async isOrganizationDescendantOf(descendantOrgCode: string, ancestorOrgCode: string) {
       const descendant = alias(organizations, "ancestor_check_descendant");
@@ -277,7 +328,10 @@ type OrganizationWithRelations = Organization & {
 async function attachOrganizationRelations(
   rows: Organization[],
   tx: DbClient,
-  options: { activeChildrenOnly?: boolean } = {},
+  options: {
+    activeChildrenOnly?: boolean;
+    organizationIds?: readonly number[];
+  } = {},
 ): Promise<OrganizationWithRelations[]> {
   if (rows.length === 0) {
     return [];
@@ -293,6 +347,9 @@ async function attachOrganizationRelations(
     tx.select().from(organizations).where(and(
       inArray(organizations.parentId, rowIds),
       options.activeChildrenOnly ? eq(organizations.isDelete, false) : undefined,
+      options.organizationIds
+        ? inArray(organizations.id, options.organizationIds)
+        : undefined,
     )),
   ]);
 
@@ -330,6 +387,7 @@ async function attachSelectorNodeContext(
   rows: Organization[],
   query: Pick<OrganizationSelectorQueryDto, "selectableOrgTypes" | "selectableStatuses" | "visibleStatuses">,
   tx: DbClient,
+  scope?: AdminOrganizationReadScope,
 ): Promise<OrganizationSelectorNode[]> {
   if (rows.length === 0) {
     return [];
@@ -345,6 +403,7 @@ async function attachSelectorNodeContext(
       .where(and(
         eq(organizations.isDelete, false),
         inArray(organizations.parentId, rowIds),
+        scope ? inArray(organizations.id, scope.organizationIds) : undefined,
         visibleChildStatusCondition,
       ))
       .groupBy(organizations.parentId),

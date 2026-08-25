@@ -1,23 +1,29 @@
+import AuthorizationActionButton from '@admin/components/AuthorizationActionButton';
 import {
   endEmployment,
-  type EmploymentVo,
   pauseEmployment,
   resumeEmployment,
+  type EmploymentVo,
 } from '@admin/services/employment';
+import type { AdminEmploymentAllowedActions } from '@iam/contracts';
 import { EmploymentStatus } from '@iam/contracts';
 import { message, Modal, Space } from 'antd';
+import type { ButtonProps } from 'antd';
 
-type EmploymentLifecycle = Pick<
-  EmploymentVo,
-  'id' | 'organization' | 'status'
->;
+type EmploymentLifecycle = Pick<EmploymentVo, 'id' | 'organization' | 'status'>;
 
 type Props = {
+  buttonStyle?: ButtonProps['style'];
+  buttonType?: ButtonProps['type'];
+  decisions: Pick<AdminEmploymentAllowedActions, 'end' | 'pause' | 'resume'>;
   employment: EmploymentLifecycle;
   onSuccess: () => Promise<void> | void;
 };
 
 export default function EmploymentLifecycleActions({
+  buttonStyle,
+  buttonType,
+  decisions,
   employment,
   onSuccess,
 }: Props) {
@@ -28,7 +34,8 @@ export default function EmploymentLifecycleActions({
 
   const availabilityAction =
     employment.status === EmploymentStatus.Enable ? (
-      <a
+      <AuthorizationActionButton
+        decision={decisions.pause}
         onClick={() => {
           Modal.confirm({
             title: '确认暂停该任职？',
@@ -46,20 +53,20 @@ export default function EmploymentLifecycleActions({
             },
           });
         }}
+        style={buttonStyle}
+        type={buttonType}
       >
         暂停
-      </a>
+      </AuthorizationActionButton>
     ) : (
-      <a
+      <AuthorizationActionButton
+        decision={decisions.resume}
         onClick={async () => {
           const expectedAncestorOrgCode =
             employment.organization.companyNodes.at(-1)?.orgCode ??
             employment.organization.assignedOrg.orgCode;
           try {
-            await resumeEmployment(
-              employment.id,
-              expectedAncestorOrgCode,
-            );
+            await resumeEmployment(employment.id, expectedAncestorOrgCode);
             message.success(
               '已恢复任职；责任任命不会自动恢复，请在组织责任中逐条确认后恢复',
             );
@@ -68,9 +75,11 @@ export default function EmploymentLifecycleActions({
             handleError(error);
           }
         }}
+        style={buttonStyle}
+        type={buttonType}
       >
         恢复
-      </a>
+      </AuthorizationActionButton>
     );
 
   const confirmEnd = () => {
@@ -95,9 +104,15 @@ export default function EmploymentLifecycleActions({
   return (
     <Space size="small">
       {availabilityAction}
-      <a style={{ color: '#d4380d' }} onClick={confirmEnd}>
+      <AuthorizationActionButton
+        danger
+        decision={decisions.end}
+        onClick={confirmEnd}
+        style={buttonStyle}
+        type={buttonType}
+      >
         结束
-      </a>
+      </AuthorizationActionButton>
     </Space>
   );
 }

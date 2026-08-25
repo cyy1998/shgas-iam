@@ -1,11 +1,7 @@
 import OrganizationTreeSelector from '@admin/components/OrganizationTreeSelector';
-import EmploymentLifecycleActions from '@admin/components/EmploymentLifecycleActions';
-import EmploymentPrimaryActions from '@admin/components/EmploymentPrimaryActions';
 import StatusTag from '@admin/components/StatusTag';
 import EmploymentDetailDrawer from '@admin/pages/employments/components/EmploymentDetailDrawer';
 import EmploymentFormModal from '@admin/pages/employments/components/EmploymentFormModal';
-import ResignByUserDialog from '@admin/pages/employments/components/ResignByUserModal';
-import TransferModal from '@admin/pages/employments/components/TransferModal';
 import {
   type EmploymentVo,
   searchEmployments,
@@ -18,17 +14,27 @@ import {
   ProTable,
 } from '@ant-design/pro-components';
 import { EmploymentStatus, getEmploymentStatusOptions } from '@iam/contracts';
-import { useLocation } from '@umijs/max';
+import { useAccess, useLocation } from '@umijs/max';
 import { Button, message, Space, Tag } from 'antd';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
-type PresetFromUrl = { username?: string; name?: string };
+type PresetFromUrl = {
+  username?: string;
+  name?: string;
+  employmentId?: number;
+};
 
 function parseQuery(search: string): PresetFromUrl {
   const params = new URLSearchParams(search);
   const username = params.get('username');
   const name = params.get('name');
-  return username ? { username, name: name ?? undefined } : {};
+  const employmentId = Number(params.get('employmentId'));
+  return {
+    ...(username ? { username, name: name ?? undefined } : {}),
+    ...(Number.isInteger(employmentId) && employmentId > 0
+      ? { employmentId }
+      : {}),
+  };
 }
 
 function formatOrgPath(row: EmploymentVo) {
@@ -47,6 +53,7 @@ function formatPosition(row: EmploymentVo) {
 }
 
 export default function EmploymentsPage() {
+  const access = useAccess();
   const actionRef = useRef<ActionType>(undefined);
   const searchFormRef = useRef<ProFormInstance>(undefined);
   const location = useLocation();
@@ -59,31 +66,35 @@ export default function EmploymentsPage() {
   const [formPresetOrgCode, setFormPresetOrgCode] = useState<string | null>(
     null,
   );
-  const [transferTarget, setTransferTarget] = useState<EmploymentVo | null>(
-    null,
-  );
   const [drawerId, setDrawerId] = useState<number | null>(null);
-  const [resignOpen, setResignOpen] = useState(false);
 
   const getSearchOrgCode = useCallback(() => {
     const value = searchFormRef.current?.getFieldValue('organizationOrgCode');
     return typeof value === 'string' && value ? value : null;
   }, []);
 
-  // URL ?username=xxx → 自动打开新增 Modal
+  // URL presets open either Employment detail or the create modal.
   useEffect(() => {
     const preset = parseQuery(location.search);
-    if (preset.username) {
-      // The route query is an external navigation source. Hydrate the complete
-      // modal snapshot together so it opens with the matching URL preset.
-      /* eslint-disable react/set-state-in-effect */
+    // The route query is an external navigation source. Hydrate its UI snapshot
+    // together so the requested destination opens consistently.
+    /* eslint-disable react/set-state-in-effect */
+    if (preset.employmentId && access.canAccessEmployment) {
+      setDrawerId(preset.employmentId);
+    }
+    if (preset.username && access.canCreateEmployment) {
       setFormPresetUsername(preset.username);
       setFormPresetName(preset.name ?? null);
       setFormPresetOrgCode(getSearchOrgCode());
       setFormOpen(true);
-      /* eslint-enable react/set-state-in-effect */
     }
-  }, [getSearchOrgCode, location.search]);
+    /* eslint-enable react/set-state-in-effect */
+  }, [
+    access.canAccessEmployment,
+    access.canCreateEmployment,
+    getSearchOrgCode,
+    location.search,
+  ]);
 
   const handleError = (err: unknown) =>
     message.error(err instanceof Error ? err.message : '操作失败');
@@ -154,35 +165,12 @@ export default function EmploymentsPage() {
     {
       title: '操作',
       valueType: 'option',
-      width: 260,
-      render: (_, row) => {
-        const ended = row.status === EmploymentStatus.Disable;
-        if (ended) {
-          return [
-            <a key="view" onClick={() => setDrawerId(row.id)}>
-              查看
-            </a>,
-          ];
-        }
-        return [
-          <a key="view" onClick={() => setDrawerId(row.id)}>
-            查看
-          </a>,
-          <a key="transfer" onClick={() => setTransferTarget(row)}>
-            转岗
-          </a>,
-          <EmploymentPrimaryActions
-            key="primary"
-            employment={row}
-            onSuccess={() => actionRef.current?.reload()}
-          />,
-          <EmploymentLifecycleActions
-            key="lifecycle"
-            employment={row}
-            onSuccess={() => actionRef.current?.reload()}
-          />,
-        ].filter(Boolean) as React.ReactNode[];
-      },
+      width: 80,
+      render: (_, row) => [
+        <a key="view" onClick={() => setDrawerId(row.id)}>
+          查看
+        </a>,
+      ],
     },
   ];
 
@@ -252,19 +240,18 @@ export default function EmploymentsPage() {
         }}
         toolBarRender={() => [
           <Space key="toolbar">
-            <Button
-              type="primary"
-              onClick={() => {
-                setFormPresetUsername(null);
-                setFormPresetOrgCode(getSearchOrgCode());
-                setFormOpen(true);
-              }}
-            >
-              + 新增雇佣
-            </Button>
-            <Button danger onClick={() => setResignOpen(true)}>
-              按用户离职
-            </Button>
+            {access.canCreateEmployment && (
+              <Button
+                type="primary"
+                onClick={() => {
+                  setFormPresetUsername(null);
+                  setFormPresetOrgCode(getSearchOrgCode());
+                  setFormOpen(true);
+                }}
+              >
+                + 新增雇佣
+              </Button>
+            )}
           </Space>,
         ]}
       />
@@ -291,31 +278,11 @@ export default function EmploymentsPage() {
         }}
       />
 
-      <TransferModal
-        open={transferTarget !== null}
-        employment={transferTarget}
-        onOpenChange={(open) => {
-          if (!open) setTransferTarget(null);
-        }}
-        onSuccess={() => {
-          setTransferTarget(null);
-          actionRef.current?.reload();
-        }}
-      />
-
       <EmploymentDetailDrawer
         open={drawerId !== null}
         employmentId={drawerId}
         onClose={() => setDrawerId(null)}
-      />
-
-      <ResignByUserDialog
-        open={resignOpen}
-        onClose={() => setResignOpen(false)}
-        onSuccess={() => {
-          setResignOpen(false);
-          actionRef.current?.reload();
-        }}
+        onChanged={() => actionRef.current?.reload()}
       />
     </PageContainer>
   );

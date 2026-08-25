@@ -20,12 +20,16 @@ const descriptor: RunDescriptor = {
 };
 
 describe("complete Full-system E2E journey", () => {
-  test("preflights both journeys before resources and then runs Admin before OIDC", async () => {
+  test("preflights every journey before resources and then runs Admin, HR Admin, and OIDC in order", async () => {
     const events: string[] = [];
     const operations = createFullSystemJourneyOperations({
       admin: {
         preflight: async () => events.push("preflight:admin"),
         runJourney: async () => events.push("journey:admin"),
+      },
+      hrAdmin: {
+        preflight: async () => events.push("preflight:hr-admin"),
+        runJourney: async () => events.push("journey:hr-admin"),
       },
       oidc: {
         preflight: async () => events.push("preflight:oidc"),
@@ -39,9 +43,11 @@ describe("complete Full-system E2E journey", () => {
 
     expect(events).toEqual([
       "preflight:admin",
+      "preflight:hr-admin",
       "preflight:oidc",
       "resources",
       "journey:admin",
+      "journey:hr-admin",
       "journey:oidc",
     ]);
   });
@@ -57,6 +63,10 @@ describe("complete Full-system E2E journey", () => {
           events.push("journey:admin");
           throw adminFailure;
         },
+      },
+      hrAdmin: {
+        preflight: async () => undefined,
+        runJourney: async () => events.push("journey:hr-admin"),
       },
       oidc: {
         preflight: async () => undefined,

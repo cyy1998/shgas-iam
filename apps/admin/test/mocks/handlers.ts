@@ -1,6 +1,7 @@
 import { HttpResponse, http } from 'msw';
 import {
   adminClientDetail,
+  adminCapabilitySummary,
   adminClientSearchResult,
   adminEmploymentSearchResult,
   adminPositionSearchResult,
@@ -18,6 +19,9 @@ function trpc<T>(data: T) {
 
 export const handlers = [
   http.get('*/public/user-info', () => ok(currentAdminUser)),
+  http.get('*/rpc/admin.authorization.capabilitySummary', () =>
+    trpc(adminCapabilitySummary),
+  ),
   http.get('*/rpc/admin.user.search', () => trpc(adminUserSearchResult)),
   http.get('*/rpc/admin.client.search', () => trpc(adminClientSearchResult)),
   http.get('*/rpc/admin.client.detail', () => trpc(adminClientDetail)),

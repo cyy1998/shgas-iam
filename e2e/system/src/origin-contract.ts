@@ -1,6 +1,5 @@
 export interface CanonicalOriginContract {
   adminClientCode: string;
-  adminRoleCode: string;
   canonicalOrigin: string;
   runId: string;
 }
@@ -21,9 +20,7 @@ export function assertCanonicalOriginComposeConfig(
     ["services.gateway-sync.environment.IAM_SSO_INTERNAL_HOST", authority],
     ["services.gateway-sync.environment.IAM_SSO_EXTERNAL_HOST", authority],
     ["services.admin-api.environment.IAM_ADMIN_API_ADMIN_CLIENT_CODES", contract.adminClientCode],
-    ["services.admin-api.environment.IAM_ADMIN_API_ADMIN_ROLE_CODES", contract.adminRoleCode],
     ["services.admin.build.args.UMI_APP_ADMIN_CLIENT_CODE", contract.adminClientCode],
-    ["services.admin.build.args.UMI_APP_ADMIN_ROLE_CODE", contract.adminRoleCode],
     ["services.seed.environment.IAM_E2E_RUN_ID", contract.runId],
     ["services.seed.environment.IAM_E2E_ORIGIN", contract.canonicalOrigin],
     ["services.seed.environment.IAM_E2E_SEED_RECEIPT_PATH", `/artifacts/${contract.runId}/seed-receipt.json`],

@@ -43,7 +43,11 @@ import type {
   AdminUserTransactionStorePort,
 } from "@admin-api/services/user/user.port";
 import type { UserRepository } from "@admin-api/services/user/user.repository";
-import type { ResignUserSessionRevocationPort } from "@admin-api/use-cases/employment/resign-user/resign-user.port";
+import type {
+  ResignUserReaderPort,
+  ResignUserSessionRevocationPort,
+  ResignUserTransactionPorts,
+} from "@admin-api/use-cases/employment/resign-user/resign-user.port";
 import type { CreateOrganizationResponsibilityAssignmentTransactionPorts } from "@admin-api/use-cases/organization-responsibility/create-assignment/create-assignment.port";
 import type { ManageOrganizationResponsibilityAssignmentLifecycleTransactionPorts } from "@admin-api/use-cases/organization-responsibility/manage-assignment-lifecycle/manage-assignment-lifecycle.port";
 import type { LoginRestriction } from "@iam/api-core/login-restriction";
@@ -103,6 +107,8 @@ test("Admin API providers structurally satisfy consumer-owned ports", () => {
 
   assertAssignable<AdminUserReaderPort, UserRepository>();
   assertAssignable<AdminUserTransactionStorePort, UserRepository>();
+  assertAssignable<ResignUserReaderPort, UserRepository>();
+  assertAssignable<ResignUserTransactionPorts["userStore"], UserRepository>();
   assertAssignable<AdminUserEmploymentReaderPort, EmploymentRepository>();
   assertAssignable<
     AdminUserEffectiveRoleResolverPort,

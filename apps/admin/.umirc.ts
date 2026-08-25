@@ -1,6 +1,7 @@
 import { defineConfig } from '@umijs/max';
 import { resolve } from 'node:path';
 import { adminTheme } from './src/theme';
+import { getAdminRouteAccess } from './src/admin-route-registry';
 
 export default defineConfig({
   alias: {
@@ -33,38 +34,41 @@ export default defineConfig({
       name: '用户管理',
       icon: 'team',
       component: './users/index',
-      access: 'isAdmin',
+      access: getAdminRouteAccess('/users'),
     },
     {
       path: '/organizations',
       name: '组织管理',
       icon: 'apartment',
       component: './organizations/index',
-      access: 'isAdmin',
+      access: getAdminRouteAccess('/organizations'),
     },
     {
       path: '/organization-responsibilities',
       name: '组织责任',
       icon: 'cluster',
-      access: 'isAdmin',
+      access: getAdminRouteAccess('/organization-responsibilities'),
       routes: [
         {
           path: '/organization-responsibilities',
           redirect: '/organization-responsibilities/assignments',
+          access: getAdminRouteAccess('/organization-responsibilities'),
         },
         {
           path: '/organization-responsibilities/assignments',
           name: '责任任命',
           component:
             './organization-responsibilities/OrganizationResponsibilityAssignmentsPage',
-          access: 'isAdmin',
+          access: getAdminRouteAccess(
+            '/organization-responsibilities/assignments',
+          ),
         },
         {
           path: '/organization-responsibilities/types',
           name: '责任类型目录',
           component:
             './organization-responsibilities/OrganizationResponsibilityTypeCatalogPage',
-          access: 'isAdmin',
+          access: getAdminRouteAccess('/organization-responsibilities/types'),
         },
       ],
     },
@@ -73,26 +77,26 @@ export default defineConfig({
       name: '职位管理',
       icon: 'solution',
       component: './positions/index',
-      access: 'isAdmin',
+      access: getAdminRouteAccess('/positions'),
     },
     {
       path: '/employments',
       name: '雇佣关系',
       icon: 'profile',
       component: './employments/index',
-      access: 'isAdmin',
+      access: getAdminRouteAccess('/employments'),
     },
     {
       path: '/clients',
       name: '应用管理',
       icon: 'appstore',
       component: './clients/index',
-      access: 'isAdmin',
+      access: getAdminRouteAccess('/clients'),
     },
     {
       path: '/clients/:clientCode/edit',
       component: './clients/edit',
-      access: 'isAdmin',
+      access: getAdminRouteAccess('/clients/:clientCode/edit'),
       hideInMenu: true,
     },
     {
@@ -100,30 +104,31 @@ export default defineConfig({
       name: '角色管理',
       icon: 'safety',
       component: './roles/index',
-      access: 'isAdmin',
+      access: getAdminRouteAccess('/roles'),
     },
     {
       path: '/sessions',
       name: '会话管理',
       icon: 'history',
       component: './sessions/index',
-      access: 'isAdmin',
+      access: getAdminRouteAccess('/sessions'),
     },
     {
       path: '/audit-logs',
       name: '审计日志',
       icon: 'fileSearch',
       component: './audit-logs/index',
-      access: 'isAdmin',
+      access: getAdminRouteAccess('/audit-logs'),
     },
     {
       path: '/system-logs',
       name: '系统日志',
       icon: 'bug',
       component: './system-logs/index',
-      access: 'isAdmin',
+      access: getAdminRouteAccess('/system-logs'),
     },
     { path: '/403', component: './403', hideInMenu: true },
+    { path: '*', redirect: '/403', hideInMenu: true },
   ],
   npmClient: 'pnpm',
   proxy: {

@@ -59,7 +59,6 @@ export function createAdminApiRuntime(options: CreateAdminApiRuntimeOptions = {}
       env: runtimeEnv,
       auth: {
         adminClientCodes: runtimeEnv.auth.adminClientCodes,
-        adminRoleCodes: runtimeEnv.auth.adminRoleCodes,
       },
       sessionKernel: createSessionKernelConfigFromEnv({
         namespace: runtimeEnv.sessionKernel.namespace,
