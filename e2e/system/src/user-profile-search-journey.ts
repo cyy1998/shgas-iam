@@ -26,6 +26,11 @@ interface InternalSearchInput {
   responsibilityHolderPositionCode: string;
 }
 
+type InternalRequestInput = Pick<
+  InternalSearchInput,
+  "internalApiKey" | "origin" | "request"
+>;
+
 export async function expectInternalUserProfileSearchMatrix(
   input: InternalSearchInput,
 ) {
@@ -104,35 +109,36 @@ export async function expectInternalUserProfileSearchMatrix(
       },
     },
   });
-  expect(sameEmployment).toEqual([
-    expect.objectContaining({
-      employments: expect.arrayContaining([
-        expect.objectContaining({
-          isPrimary: true,
-          organization: expect.objectContaining({
-            assignedOrg: expect.objectContaining({
-              orgCode: input.organizationCode,
-            }),
-            companyNodes: expect.any(Array),
-            fullOrgPath: expect.any(Array),
+  expectUserProfileBases(sameEmployment, [input.adminUsername]);
+
+  const adminDetail = await readInternalUserDetail(input, input.adminUsername);
+  expect(adminDetail).toEqual(expect.objectContaining({
+    employments: expect.arrayContaining([
+      expect.objectContaining({
+        isPrimary: true,
+        organization: expect.objectContaining({
+          assignedOrg: expect.objectContaining({
+            orgCode: input.organizationCode,
           }),
-          position: expect.objectContaining({
-            posCode: input.positionCode,
-          }),
-          privileges: [input.adminPrivilegeCode],
-          responsibilities: expect.any(Array),
-          roles: [input.adminRoleCode, input.hrAdminRoleCode],
-          status: EmploymentStatus.Enable,
+          companyNodes: expect.any(Array),
+          fullOrgPath: expect.any(Array),
         }),
-      ]),
-      id: expect.any(Number),
-      name: expect.any(String),
-      privileges: [input.adminPrivilegeCode],
-      roles: [input.adminRoleCode, input.hrAdminRoleCode],
-      status: UserStatus.Enable,
-      username: input.adminUsername,
-    }),
-  ]);
+        position: expect.objectContaining({
+          posCode: input.positionCode,
+        }),
+        privileges: [input.adminPrivilegeCode],
+        responsibilities: expect.any(Array),
+        roles: [input.adminRoleCode, input.hrAdminRoleCode],
+        status: EmploymentStatus.Enable,
+      }),
+    ]),
+    id: expect.any(Number),
+    name: expect.any(String),
+    privileges: [input.adminPrivilegeCode],
+    roles: [input.adminRoleCode, input.hrAdminRoleCode],
+    status: UserStatus.Enable,
+    username: input.adminUsername,
+  }));
 
   const crossEmployment = await searchDsl(input, {
     exists: {
@@ -322,11 +328,7 @@ export async function waitForEmploymentSearchVisibility(input: {
 }
 
 async function searchDsl(
-  input: {
-    internalApiKey: string;
-    origin: string;
-    request: APIRequestContext;
-  },
+  input: InternalRequestInput,
   filter: unknown,
 ) {
   const response = await input.request.post(
@@ -338,6 +340,37 @@ async function searchDsl(
   );
   expect(response.status()).toBe(200);
   return readData(await response.json());
+}
+
+async function readInternalUserDetail(
+  input: InternalRequestInput,
+  username: string,
+) {
+  const response = await input.request.get(
+    `${input.origin}/api/iam/internal/users/${encodeURIComponent(username)}`,
+    { headers: { apikey: input.internalApiKey } },
+  );
+  expect(response.status()).toBe(200);
+  return readData(await response.json());
+}
+
+function expectUserProfileBases(value: unknown, usernames: string[]) {
+  const profiles = readRecords(value);
+  expect(readUsernames(profiles)).toEqual(usernames);
+  expect(profiles).toHaveLength(usernames.length);
+  for (const profile of profiles) {
+    expect(Object.keys(profile).sort()).toEqual([
+      "mobile",
+      "name",
+      "subjectIdentifier",
+      "username",
+      "wxId",
+    ]);
+    expect(typeof profile.name).toBe("string");
+    expect(typeof profile.subjectIdentifier).toBe("string");
+    expect(profile.mobile === null || typeof profile.mobile === "string").toBe(true);
+    expect(profile.wxId === null || typeof profile.wxId === "string").toBe(true);
+  }
 }
 
 function readData(value: unknown) {

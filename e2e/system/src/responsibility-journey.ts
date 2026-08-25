@@ -98,11 +98,7 @@ export async function expectInternalResponsibilityDsl(
   const body = readRecord(await response.json());
   const profiles = body?.data;
   expect(Array.isArray(profiles)
-    && profiles.some(profile => profileHasResponsibility(
-      profile,
-      input,
-      "posCode",
-    )))
+    && profiles.some(profile => readRecord(profile)?.username === input.adminUsername))
     .toBe(true);
 
   const legacyResponse = await input.request.post(

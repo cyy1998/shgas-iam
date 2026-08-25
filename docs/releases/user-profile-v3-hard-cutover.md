@@ -154,8 +154,8 @@ diagnostics/cleanup。它不得连接 production endpoint、credential 或数据
 隔离 E2E 通过后，在目标环境继续保持 freeze，启动其余固定 candidate runtime 并确认 readiness。随后只对批准的 synthetic/canary
 数据执行以下 smoke，逐项记录 HTTP status、稳定 error code、requestId/traceId 和聚合结果：
 
-1. Internal direct DSL 返回完整 User Profile Detail；User scalar、同一 Employment 的 Organization+Position、Role/Privilege 数组、
-   Responsibility target subtree 与 `not exists` 命中预期。
+1. Internal direct DSL 返回固定五字段 User Profile Base；User scalar、同一 Employment 的 Organization+Position、Role/Privilege 数组、
+   Responsibility target subtree 与 `not exists` 命中预期用户集合，完整嵌套 Profile 通过 Internal Detail endpoint 独立核验。
 2. 合法无匹配 DSL 返回 `200` 空数组；Pause/Disable User 可见，显式 `status=Enable` 只返回 Enable User。
 3. Internal legacy 与 Public adapter 保持各自既有响应形状，并与等价 canonical filter 返回同一用户集合。
 4. `/internal/users/search-with-delegation` 先返回相同基础用户集合，再组合当时实时 Privilege Delegation；Delegation 不进入 Search

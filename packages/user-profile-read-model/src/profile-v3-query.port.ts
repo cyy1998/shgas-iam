@@ -7,7 +7,19 @@ export interface V3UserProfileQueryRow {
   readonly searchDocument: unknown;
 }
 
+export interface V3UserProfileBaseQueryRow {
+  readonly mobile: string | null;
+  readonly name: string;
+  readonly searchDocument: unknown;
+  readonly subjectIdentifier: string;
+  readonly username: string;
+  readonly wxId: string | null;
+}
+
 export interface V3UserProfileQueryRepositoryPort {
+  searchCurrentProfileBases: (
+    filter: V3UserProfileFilter,
+  ) => Promise<readonly V3UserProfileBaseQueryRow[]>;
   searchCurrentProfiles: (
     filter: V3UserProfileFilter,
   ) => Promise<readonly V3UserProfileQueryRow[]>;

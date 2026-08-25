@@ -58,7 +58,10 @@ test("deduplicates membership values before applying the distinct value budget",
 test("rejects every structural and value budget before calling the repository", async () => {
   const searchCurrentProfiles = mock(async () => []);
   const service = createV3UserProfileQueryService({
-    profileRepository: { searchCurrentProfiles },
+    profileRepository: {
+      searchCurrentProfileBases: mock(async () => []),
+      searchCurrentProfiles,
+    },
   });
   const invalidRequests = [
     { filter: nestedNot(9) },
@@ -108,6 +111,7 @@ test("rejects every structural and value budget before calling the repository", 
 test("maps repository failures to the stable sanitized unavailable error", async () => {
   const service = createV3UserProfileQueryService({
     profileRepository: {
+      searchCurrentProfileBases: mock(async () => []),
       searchCurrentProfiles: mock(async () => {
         throw new Error("postgresql://user:secret@database/internal-detail");
       }),

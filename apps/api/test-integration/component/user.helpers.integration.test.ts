@@ -141,7 +141,10 @@ describe("user helper factories", () => {
     const searchCurrentProfiles = mock(async () => []);
     const profileSearch = createV3UserProfileSearchAdapter(
       createV3UserProfileQueryService({
-        profileRepository: { searchCurrentProfiles },
+        profileRepository: {
+          searchCurrentProfileBases: mock(async () => []),
+          searchCurrentProfiles,
+        },
       }),
     );
     const getDelegationsByUserAndOrganizationScopeAndPrivilege = mock(async () => []);

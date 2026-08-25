@@ -48,7 +48,10 @@ test("maps legacy user search to one canonical Filter and preserves the UserDto 
     roles: [],
   };
   const search = mock(async () => [detail]);
-  const adapter = createV3UserProfileSearchAdapter({ search });
+  const adapter = createV3UserProfileSearchAdapter({
+    search,
+    searchBase: mock(async () => []),
+  });
 
   const result = await adapter.searchLegacyUsers({
     usernames: ["zhangsan", "lisi"],
@@ -111,7 +114,10 @@ test("maps legacy user search to one canonical Filter and preserves the UserDto 
 test("rejects legacy requests without real conditions before querying profiles", async () => {
   const searchCurrentProfiles = mock(async () => []);
   const query = createV3UserProfileQueryService({
-    profileRepository: { searchCurrentProfiles },
+    profileRepository: {
+      searchCurrentProfileBases: mock(async () => []),
+      searchCurrentProfiles,
+    },
   });
   const adapter = createV3UserProfileSearchAdapter(query);
 
@@ -143,7 +149,10 @@ test("maps a lone ancestor parameter to one Organization Path node condition", a
 
   for (const { input, condition } of cases) {
     const search = mock(async () => []);
-    const adapter = createV3UserProfileSearchAdapter({ search });
+    const adapter = createV3UserProfileSearchAdapter({
+      search,
+      searchBase: mock(async () => []),
+    });
 
     await adapter.searchLegacyUsers(input);
 

@@ -8,8 +8,12 @@
 IAM 中关于一个用户的稳定档案视图，包括用户基础身份信息、任职、角色和权限。
 _Avoid_: session payload, protocol payload
 
+**User Profile Base**:
+User Profile 面向搜索结果公开的最小稳定身份与联系方式视图，只包含 Subject Identifier、username、name、mobile 和 wxId；它不包含内部 numeric ID、账号分类与状态、排序与审计字段、任职、角色、权限或组织责任。
+_Avoid_: UserDto, User Profile Detail, Basic User
+
 **User Profile Search**:
-IAM 以未删除的当前 User Profile 为唯一结果根，按照用户自身及明确纳入搜索词汇的当前关联事实筛选用户，并按内部 user ID 稳定排序返回完整 User Profile Detail；Search Document 与 Filter DSL 不公开 numeric ID，不表示响应 Detail 需要删除既有 ID。Internal 与 Public 搜索观察相同的用户集合，不隐式排除 Pause 或 Disable 状态，调用方可以通过公开的 status 路径显式筛选。任职、组织责任、角色等只作为筛选作用域，不改变结果类型。任职条件只观察 Effective Employment，Privilege Delegation 不进入搜索档案或过滤作用域；本能力不承担历史任职、历史任命或其他实体的通用查询。
+IAM 以未删除的当前 User Profile 为唯一结果根，按照用户自身及明确纳入搜索词汇的当前关联事实筛选用户；Internal Filter DSL 按内部 user ID 稳定排序返回 User Profile Base，既有 Internal 与 Public 适配器保留各自响应形状。Internal 与 Public 搜索观察相同的用户集合，不隐式排除 Pause 或 Disable 状态，调用方可以通过公开的 status 路径显式筛选。任职、组织责任、角色等只作为筛选作用域，不进入 User Profile Base。任职条件只观察 Effective Employment，Privilege Delegation 不进入搜索档案或过滤作用域；本能力不承担历史任职、历史任命或其他实体的通用查询。
 _Avoid_: generic entity query, historical profile search, arbitrary data graph query
 
 **User Profile Search Document**:

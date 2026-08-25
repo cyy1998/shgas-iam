@@ -18,10 +18,10 @@ type V3OrganizationPathFilter = Extract<
 >["exists"]["where"];
 
 export function createV3UserProfileSearchAdapter(
-  query: Pick<V3UserProfileQueryService, "search">,
+  query: Pick<V3UserProfileQueryService, "search" | "searchBase">,
 ) {
   return {
-    searchDsl: async (input: unknown) => await query.search(input),
+    searchDsl: async (input: unknown) => await query.searchBase(input),
     searchLegacyUsers: async (input: UserQueryDto) => {
       const filter = compileLegacyUserSearchFilter(input);
       const details = await query.search({ filter });

@@ -292,7 +292,7 @@ describe("User Profile v3 User scalar tracer", () => {
       expect(await query.search({ filter })).toEqual([]);
   });
 
-  test("fails the whole query when a matched persisted Search Document is malformed", async () => {
+  test("fails the base query when a matched persisted Search Document is malformed", async () => {
     await harness!.db.insert(users).values(user({
       id: 1,
       subjectIdentifier: "5ee46272-9123-4ec3-9d8d-8a7a6ac7f881",
@@ -315,7 +315,7 @@ describe("User Profile v3 User scalar tracer", () => {
       })
       .where(eq(userProfiles.userId, 1));
 
-    const error = await query.search({
+    const error = await query.searchBase({
       filter: {
         field: "user.username",
         op: "eq",
@@ -329,7 +329,7 @@ describe("User Profile v3 User scalar tracer", () => {
     });
   });
 
-  test("fails the whole query when a matched persisted Detail is malformed", async () => {
+  test("returns typed base facts without reading a malformed persisted Detail", async () => {
     await harness!.db.insert(users).values(user({
       id: 1,
       subjectIdentifier: "5ee46272-9123-4ec3-9d8d-8a7a6ac7f881",
@@ -345,13 +345,27 @@ describe("User Profile v3 User scalar tracer", () => {
     await candidatePersistence.upsert(candidate!);
     await harness!.db
       .update(userProfiles)
-      .set({ detail: { leaked: "not-a-profile-detail" } })
+      .set({
+        detail: { leaked: "not-a-profile-detail" },
+        name: "Typed Bob",
+        subjectIdentifier: "87b69425-6d95-4a36-93c8-95327869318e",
+        username: "typed-bob",
+      })
       .where(eq(userProfiles.userId, 1));
 
-    const error = await query.search({
+    const filter = {
       filter: { field: "user.username", op: "eq", value: "alice" },
-    }).catch(error => error);
+    } as const;
+    const bases = await query.searchBase(filter);
+    const error = await query.search(filter).catch(error => error);
 
+    expect(bases).toEqual([{
+      mobile: null,
+      name: "Typed Bob",
+      subjectIdentifier: "87b69425-6d95-4a36-93c8-95327869318e",
+      username: "typed-bob",
+      wxId: null,
+    }]);
     expect(error).toMatchObject({
       code: ApiErrorCode.UserSearchUnavailable,
       httpStatus: 503,

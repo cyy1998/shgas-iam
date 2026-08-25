@@ -11,6 +11,14 @@ export const UserDtoSchema = UserSchema.omit({
   subjectIdentifier: true,
 }).openapi("UserDto");
 
+export const UserProfileBaseSchema = UserSchema.pick({
+  subjectIdentifier: true,
+  username: true,
+  name: true,
+  mobile: true,
+  wxId: true,
+}).strict().openapi("UserProfileBase");
+
 export const UserDetailDtoSchema = UserDtoSchema.extend({
   employments: z.array(EmploymentDetailDtoSchema).default([]),
   privileges: z.array(z.string()).default([]).openapi({ example: ["ui:button:tender:create-GYBG"] }),

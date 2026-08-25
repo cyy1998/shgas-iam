@@ -1,16 +1,16 @@
 # User Profile Filter DSL 规则
 
-本文定义当前已激活的 User Profile Search v3 过滤契约。它采用 [ADR-0015](../../adr/0015-adopt-schema-driven-user-profile-filter-dsl.md)；领域术语以根目录 [CONTEXT.md](../../../CONTEXT.md) 为准。全部搜索入口只使用 canonical Filter engine；旧的 Organization Responsibility DSL、别名解释和版本回退均已撤销。
+本文定义当前已激活的 User Profile Search v3 过滤契约。它采用 [ADR-0015](../../adr/0015-adopt-schema-driven-user-profile-filter-dsl.md)，Internal Filter DSL 响应采用 [ADR-0019](../../adr/0019-return-user-profile-base-from-internal-filter-dsl.md)；领域术语以根目录 [CONTEXT.md](../../../CONTEXT.md) 为准。全部搜索入口只使用 canonical Filter engine；旧的 Organization Responsibility DSL、别名解释和版本回退均已撤销。
 
 ## 1. 能力边界
 
-`POST /internal/users/search-dsl` 始终搜索 User Profile，并返回完整 User Profile Detail。User、Employment、Organization、Position、Role、Privilege 和 Organization Responsibility 可以提供条件，但不会变成结果根。
+`POST /internal/users/search-dsl` 始终搜索 User Profile，并返回固定的 User Profile Base。User、Employment、Organization、Position、Role、Privilege 和 Organization Responsibility 可以提供条件，但不会变成结果根或进入响应摘要。
 
 - 搜索范围是所有未删除用户，包括 Enable、Pause 和 Disable；账号状态需要通过 `user.status` 显式筛选。
 - 关联任职只观察 Effective Employment，历史、暂停或已结束任职不能满足条件。
 - 搜索只读取已发布 User Profile Search Document，不实时联查源业务表。
 - 所有有效 Internal Client 使用相同路径和操作符，不存在 client 级字段授权。
-- Filter DSL 不提供排序、分页、字段投影或其他实体查询。
+- Filter DSL 不提供调用方排序、分页、字段投影或其他实体查询；User Profile Base 是服务端固定响应，不是 projection DSL。
 - Privilege Delegation 不进入 Search Document 或 Filter DSL。
 
 ## 2. 表达式结构
@@ -133,7 +133,9 @@ DSL 使用二值匹配语义。nullable 字段为 null 时，任何原子比较�
 
 ## 8. 结果与资源边界
 
-- `/internal/users/search-dsl` 按内部 user ID 升序返回完整 User Profile Detail；ID 虽不可作为过滤路径，仍保留在既有 Detail 中。
+- `/internal/users/search-dsl` 按内部 user ID 升序返回 User Profile Base；内部 ID 只用于稳定排序，不进入响应。
+- 每项固定包含 `username`、`name`、`mobile`、`wxId` 与 `subjectIdentifier`；`mobile`、`wxId` 缺失时返回 `null`。五项事实来自 `user_profile` 类型化列，全部有效 Internal Client 都能读取 Subject Identifier。
+- 匹配行的 Search Document 继续严格校验；`detail` 不读取、不校验，单纯的 Detail 损坏不影响本端点。类型化列不与 `search_doc.user` 做跨副本一致性比较，不一致时仍返回类型化列值。
 - 不支持调用方排序、分页或字段投影。
 - 最多返回 500 个用户；查询第 501 个匹配项后整体返回 422，不截断。
 - DSL 最大深度 8，最多 64 个节点，每个 `and`/`or` 最多 16 个子表达式。
@@ -144,10 +146,10 @@ HTTP 结果统一如下：
 
 | 情况 | 结果 |
 | --- | --- |
-| 合法且有不超过上限的匹配 | `200` + 完整结果数组 |
+| 合法且有不超过上限的匹配 | `200` + User Profile Base 数组 |
 | 合法但无匹配 | `200` + `[]` |
 | 空过滤器、未知路径、类型或操作符错误、结构超预算、结果超过 500 | `422` |
-| Profile 不可用、文档损坏、版本门禁失败或查询超时 | `503` |
+| Profile 不可用、Search Document 损坏、版本门禁失败或查询超时 | `503` |
 
 任何失败都不返回部分结果。
 

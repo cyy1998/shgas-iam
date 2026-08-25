@@ -2,16 +2,19 @@ import { createUserHandlers } from "@api/routes/internal/user/user.handlers";
 import { createUserRoute } from "@api/routes/internal/user/user.index";
 import { createV3UserProfileSearchAdapter } from "@api/services/user-profile-search/user-profile-search-v3.adapter";
 import createApp from "@iam/api-core/core/create-app";
-import { UserStatus } from "@iam/contracts";
+import { UserStatus, UserType } from "@iam/contracts";
 import { createV3UserProfileQueryService } from "@iam/user-profile-read-model/v3";
 import { expect, mock, test } from "bun:test";
 import pino from "pino";
 import appConfig from "~api/app.config";
 
 test("maps the canonical v3 Filter request through the production Internal HTTP route", async () => {
-  const searchCurrentProfiles = mock(async () => []);
+  const searchCurrentProfileBases = mock(async () => []);
   const query = createV3UserProfileQueryService({
-    profileRepository: { searchCurrentProfiles },
+    profileRepository: {
+      searchCurrentProfileBases,
+      searchCurrentProfiles: mock(async () => []),
+    },
   });
   const app = createProductionApp(query);
 
@@ -56,12 +59,62 @@ test("maps the canonical v3 Filter request through the production Internal HTTP 
   expect(await whitespaceBody.json()).toMatchObject({ code: "COMMON.VALIDATION_FAILED" });
   expect(excessiveRawValues.status).toBe(422);
   expect(callerControlledExecution.status).toBe(422);
-  expect(searchCurrentProfiles).toHaveBeenCalledTimes(1);
+  expect(searchCurrentProfileBases).toHaveBeenCalledTimes(1);
+});
+
+test("returns UserProfileBase from typed profile columns without depending on Detail", async () => {
+  const searchCurrentProfileBases = mock(async () => [{
+    mobile: null,
+    name: "Typed Bob",
+    searchDocument: {
+      user: {
+        subjectIdentifier: "c7553267-7081-4a69-b2c8-121b208327a6",
+        username: "filtered-alice",
+        name: "Search Alice",
+        mobile: "13800000000",
+        wxId: "search-wx",
+        userType: UserType.Formal,
+        status: UserStatus.Enable,
+      },
+      employments: [],
+    },
+    subjectIdentifier: "87b69425-6d95-4a36-93c8-95327869318e",
+    username: "typed-bob",
+    wxId: null,
+  }]);
+  const query = createV3UserProfileQueryService({
+    profileRepository: {
+      searchCurrentProfileBases,
+      searchCurrentProfiles: mock(async () => [{
+        detail: { malformed: "unused" },
+        searchDocument: {},
+      }]),
+    },
+  });
+  const app = createProductionApp(query);
+
+  const response = await request(app, {
+    filter: { field: "user.username", op: "eq", value: "filtered-alice" },
+  });
+
+  expect(response.status).toBe(200);
+  expect(await response.json()).toEqual({
+    code: 200,
+    data: [{
+      mobile: null,
+      name: "Typed Bob",
+      subjectIdentifier: "87b69425-6d95-4a36-93c8-95327869318e",
+      username: "typed-bob",
+      wxId: null,
+    }],
+    message: "success",
+  });
 });
 
 test("describes one generic recursive Filter AST without enumerating field and operator pairs", async () => {
   const query = createV3UserProfileQueryService({
     profileRepository: {
+      searchCurrentProfileBases: mock(async () => []),
       searchCurrentProfiles: mock(async () => []),
     },
   });
@@ -98,6 +151,32 @@ test("describes one generic recursive Filter AST without enumerating field and o
   expect(expressionDocument).toContain("\"field\"");
   expect(expressionDocument).not.toContain("user.username");
   expect(expressionDocument).not.toContain("responsibility.type.code");
+
+  const userProfileBase = document.components.schemas.UserProfileBase as {
+    additionalProperties?: unknown;
+    properties?: Record<string, unknown>;
+    required?: unknown[];
+    type?: unknown;
+  };
+  expect(userProfileBase).toMatchObject({
+    additionalProperties: false,
+    type: "object",
+  });
+  expect(Object.keys(userProfileBase.properties ?? {}).sort()).toEqual([
+    "mobile",
+    "name",
+    "subjectIdentifier",
+    "username",
+    "wxId",
+  ]);
+  expect(userProfileBase.required).toHaveLength(5);
+  expect(userProfileBase.required).toEqual(expect.arrayContaining([
+    "mobile",
+    "name",
+    "subjectIdentifier",
+    "username",
+    "wxId",
+  ]));
 });
 
 test("maps the fixed Internal handler deadline to the sanitized v3 unavailable response", async () => {
@@ -112,7 +191,7 @@ test("maps the fixed Internal handler deadline to the sanitized v3 unavailable r
   globalThis.clearTimeout = (() => {}) as typeof clearTimeout;
   try {
     const app = createProductionApp({
-      search: async () => {
+      searchBase: async () => {
         events.push("query-started");
         await new Promise<void>(resolve => queueMicrotask(resolve));
         throw new Error("database detail must not escape");

@@ -1,5 +1,10 @@
 import { PrivilegeDelegationDtoSchema } from "@api/services/privilege/privilegeDelegation.schema";
-import { UserDtoSchema, UserQueryDtoSchema, UserQueryWithPrivilegeDelegationDtoSchema } from "@api/services/user/user.schema";
+import {
+  UserDtoSchema,
+  UserProfileBaseSchema,
+  UserQueryDtoSchema,
+  UserQueryWithPrivilegeDelegationDtoSchema,
+} from "@api/services/user/user.schema";
 import { createRoute, z } from "@hono/zod-openapi";
 import * as HttpStatusCodes from "@iam/api-core/core/http-status-codes";
 import { commonErrorResponses } from "@iam/api-core/core/openapi/helpers/common-error-responses";
@@ -94,7 +99,7 @@ export const usersSearchDsl = createRoute({
       "用户搜索暂时不可用",
     ),
     [HttpStatusCodes.OK]: jsonContent(
-      createSuccessResponseSchema(z.array(UserProfileDetailDocumentSchema)),
+      createSuccessResponseSchema(z.array(UserProfileBaseSchema)),
       "User Profile v3 Filter DSL 搜索结果",
     ),
   },

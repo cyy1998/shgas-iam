@@ -1,4 +1,6 @@
+import type { V3UserProfileFilter } from "./profile-v3-filter";
 import type { V3UserProfileQueryRepositoryPort } from "./profile-v3-query.port";
+import { UserProfileBaseSchema } from "@iam/domain/user";
 import { V3UserProfileSearchRequestSchema } from "./profile-v3-filter";
 import {
   V3UserProfileDocumentIntegrityError,
@@ -19,34 +21,59 @@ export function createV3UserProfileQueryService(
 ) {
   return {
     async search(input: unknown) {
-      let request;
-      try {
-        request = V3UserProfileSearchRequestSchema.parse(input);
-      }
-      catch {
-        throw new V3UserProfileFilterValidationError();
-      }
-
-      let rows;
-      try {
-        rows = await deps.profileRepository.searchCurrentProfiles(request.filter);
-      }
-      catch {
-        throw new V3UserProfileSearchUnavailableError();
-      }
-      if (rows.length > V3_USER_PROFILE_RESULT_LIMIT)
-        throw new V3UserProfileSearchResultTooLargeError();
-      try {
-        return rows.map((row) => {
-          V3UserProfileSearchDocumentSchema.parse(row.searchDocument);
-          return parseUserProfileDetailDocument(row.detail);
-        });
-      }
-      catch {
-        throw new V3UserProfileDocumentIntegrityError();
-      }
+      const rows = await executeSearch(input, deps.profileRepository.searchCurrentProfiles);
+      return parseRows(rows, row => parseUserProfileDetailDocument(row.detail));
+    },
+    async searchBase(input: unknown) {
+      const rows = await executeSearch(input, deps.profileRepository.searchCurrentProfileBases);
+      return parseRows(rows, row => UserProfileBaseSchema.parse({
+        mobile: row.mobile,
+        name: row.name,
+        subjectIdentifier: row.subjectIdentifier,
+        username: row.username,
+        wxId: row.wxId,
+      }));
     },
   };
+}
+
+async function executeSearch<Row>(
+  input: unknown,
+  search: (filter: V3UserProfileFilter) => Promise<readonly Row[]>,
+) {
+  let request;
+  try {
+    request = V3UserProfileSearchRequestSchema.parse(input);
+  }
+  catch {
+    throw new V3UserProfileFilterValidationError();
+  }
+
+  let rows;
+  try {
+    rows = await search(request.filter);
+  }
+  catch {
+    throw new V3UserProfileSearchUnavailableError();
+  }
+  if (rows.length > V3_USER_PROFILE_RESULT_LIMIT)
+    throw new V3UserProfileSearchResultTooLargeError();
+  return rows;
+}
+
+function parseRows<Row extends { readonly searchDocument: unknown }, Result>(
+  rows: readonly Row[],
+  parse: (row: Row) => Result,
+) {
+  try {
+    return rows.map((row) => {
+      V3UserProfileSearchDocumentSchema.parse(row.searchDocument);
+      return parse(row);
+    });
+  }
+  catch {
+    throw new V3UserProfileDocumentIntegrityError();
+  }
 }
 
 export type V3UserProfileQueryService = ReturnType<

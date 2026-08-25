@@ -166,7 +166,10 @@ test("maps Internal, Public, and Delegation requests through the inactive v3 ada
     roles: [],
   };
   const search = mock(async (_input: unknown) => [detail]);
-  const adapter = createV3UserProfileSearchAdapter({ search });
+  const adapter = createV3UserProfileSearchAdapter({
+    search,
+    searchBase: mock(async () => []),
+  });
   const getDelegationsByUserAndOrganizationScopeAndPrivilege = mock(async () => []);
   const userProfileSearch = createApiUserProfileSearch({
     dslSearch: adapter,
