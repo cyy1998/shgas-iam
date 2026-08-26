@@ -89,6 +89,7 @@ export async function createApiRoutes(options: CreateApiRoutesOptions): Promise<
   const delegationHandlers = createDelegationHandlers({
     auditLogWriter,
     privilegeDelegationService: services.privilegeDelegation,
+    resolvePrivilegeDelegations: useCases.resolvePrivilegeDelegations,
   });
 
   const userHandlers = createUserHandlers({

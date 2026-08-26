@@ -71,6 +71,8 @@ export enum ApiErrorCode {
 
   PrivilegeDelegationNotFound = "PRIVILEGE.DELEGATION_NOT_FOUND",
   PrivilegeDelegationEnded = "PRIVILEGE.DELEGATION_ENDED",
+  PrivilegeDelegationResolutionInputNotFound = "PRIVILEGE.DELEGATION_RESOLUTION_INPUT_NOT_FOUND",
+  PrivilegeDelegationResolutionUnavailable = "PRIVILEGE.DELEGATION_RESOLUTION_UNAVAILABLE",
   PrivilegeNotFound = "PRIVILEGE.NOT_FOUND",
   PrivilegeAlreadyDelegated = "PRIVILEGE.ALREADY_DELEGATED",
 

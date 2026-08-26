@@ -48,6 +48,22 @@ _Avoid_: implicit normalization, fuzzy equality, empty membership condition, raw
 保护统一 User Profile Search 的契约资源边界：Filter DSL 最大深度为 8、最多 64 个节点、每个 `and`/`or` 最多 16 个子表达式、每个 `in`/`contains` 最多 50 个去重值、字符串值最长 128；结果最多 500 个 User Profile，并保留数据库查询与请求级超时保护。非法、空或超预算过滤器以及超过结果上限都整体返回 422；无匹配返回 200 空数组，Profile 不可用、文档损坏或查询超时返回 503，任何情况都不截断或返回部分结果。
 _Avoid_: unbounded filter, unbounded result set, caller-controlled query cost
 
+**Current Privilege Delegation**:
+自身未删除、状态为 Enable 且服务端观察时刻位于闭区间 `[startTime, endTime]` 内的 Privilege Delegation；其引用对象的 Pause 或 Disable 状态以及委托人当时是否拥有该 Privilege 都不参与判定。
+_Avoid_: effective authorization, currently authorized delegation
+
+**Privilege Delegation Resolution Input**:
+Privilege Delegation Resolution 中以 username、Organization code 或 Privilege code 指向的存在且未删除领域对象；Pause 或 Disable 状态不影响识别。任一输入无法识别时解析整体失败，不返回部分结果。
+_Avoid_: enabled-only resolution input, missing input as no delegation
+
+**Privilege Delegation Resolution**:
+在同一服务端观察时刻，对一组已识别 User 和一个指定 Organization、Privilege，按照 Organization scope 覆盖该 Organization 的 Current Privilege Delegation，为每个 User 确定零或一个直接 Delegatee；没有 Current Privilege Delegation 时结果为 null。它不沿委托链递归，也不重新验证委托人当前是否拥有该 Privilege。
+_Avoid_: authorization resolution, recursive delegation resolution, missing user as no delegation
+
+**Privilege Delegation Resolution Integrity Violation**:
+同一观察时刻、Organization 与 Privilege 下，一个已识别 User 匹配多条 Current Privilege Delegation、匹配记录发生自委托，或匹配记录引用缺失或已删除的 User、Organization 或 Privilege 的数据异常；多条记录即使指向同一 Delegatee 仍属异常，直接委托形成双向环则不属于异常。解析必须整体失败，不得选择或折叠记录、把异常降级为 null 或返回部分结果。
+_Avoid_: delegation winner selection, duplicate delegation collapse, self-delegation, multi-delegate resolution
+
 **Legacy User Detail Read Model**:
 `user_profile.detail` 中面向既有用户详情与搜索接口预计算的完整 `UserDetailDto` 文档；在这些接口迁移前它仍是被实际使用的读模型，而不是 Custom SSO 兼容字段。Client Subject Projection Module 的 Repository Port 不得暴露、查询或回退到该文档，只能读取 Subject Facts 所需的显式字段；待全部既有消费者迁移后再单独删除。
 _Avoid_: Subject Facts, SSO projection fallback, compatibility alias

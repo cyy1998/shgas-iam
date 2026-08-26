@@ -36,6 +36,9 @@ test('a role without Admin capability is default-denied before management reques
         organization: {
           createRoot: { allowed: false, reason: 'ACTION_NOT_GRANTED' },
         },
+        organizationResponsibility: {
+          create: { allowed: false, reason: 'ACTION_NOT_GRANTED' },
+        },
         position: {
           create: { allowed: false, reason: 'ACTION_NOT_GRANTED' },
           edit: { allowed: false, reason: 'ACTION_NOT_GRANTED' },

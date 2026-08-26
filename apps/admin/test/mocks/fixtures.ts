@@ -1,5 +1,6 @@
 import {
   ADMIN_MODULE_CODES,
+  type AdminCapabilitySummary,
   type AdminEmploymentAllowedActions,
   ClientStatus,
   CustomSsoClientMode,
@@ -33,7 +34,7 @@ export const adminCapabilitySummary = {
       delete: { allowed: true, reason: null },
     },
   },
-} as const;
+} satisfies AdminCapabilitySummary;
 
 const deniedAction = {
   allowed: false,
@@ -66,7 +67,7 @@ export const hrAdminCapabilitySummary = {
       delete: deniedAction,
     },
   },
-} as const;
+} satisfies AdminCapabilitySummary;
 
 export const currentAdminUser = {
   version: 1,

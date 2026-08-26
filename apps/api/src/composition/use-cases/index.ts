@@ -1,4 +1,5 @@
 import type { ApiAuditLogWriter } from "@api/services/audit/audit.service";
+import type { DbClient } from "@iam/db";
 import type { ApiRuntimePorts } from "../runtime";
 import type { ApiServices } from "../services";
 import type { createApiUnitOfWork } from "../tx";
@@ -8,6 +9,7 @@ import { createVerifyPasswordResetCodeUseCase } from "@api/use-cases/account-rec
 import { createLoginWithMobileUseCase } from "@api/use-cases/authentication/login-with-mobile/login-with-mobile.use-case";
 import { createLoginWithPasswordUseCase } from "@api/use-cases/authentication/login-with-password/login-with-password.use-case";
 import { createRegisterPurveyorContactUseCase } from "@api/use-cases/internal/register-purveyor-contact/register-purveyor-contact.use-case";
+import { createResolvePrivilegeDelegationsUseCase } from "@api/use-cases/internal/resolve-privilege-delegations/resolve-privilege-delegations.use-case";
 import { createAuthorizeSsoUseCase } from "@api/use-cases/sso/authorize-sso/authorize-sso.use-case";
 import { createCheckSsoLoginContinuationUseCase } from "@api/use-cases/sso/check-login-continuation/check-login-continuation.use-case";
 import { createCompleteSsoCallbackUseCase } from "@api/use-cases/sso/complete-sso-callback/complete-sso-callback.use-case";
@@ -17,6 +19,7 @@ import { createLoginWithWechatUseCase } from "@api/use-cases/sso/login-with-wech
 import { createLogoutSsoSessionUseCase } from "@api/use-cases/sso/logout-sso-session/logout-sso-session.use-case";
 import { mapUnitOfWork } from "@iam/api-core/uow";
 import { sleep } from "bun";
+import { createPrivilegeDelegationResolutionRepository } from "../repositories/privilege-delegation-resolution.repository";
 
 type ApiUnitOfWork = ReturnType<typeof createApiUnitOfWork>;
 
@@ -25,6 +28,7 @@ export interface CreateApiUseCasesOptions {
   runtime: ApiRuntimePorts;
   services: ApiServices;
   unitOfWork: ApiUnitOfWork;
+  delegationResolutionDb: DbClient;
 }
 
 export function createApiUseCases(options: CreateApiUseCasesOptions) {
@@ -148,7 +152,20 @@ export function createApiUseCases(options: CreateApiUseCasesOptions) {
     userReader: services.user,
   });
 
-  return { accountRecovery, authentication, registerPurveyorContact, sso };
+  const resolvePrivilegeDelegations = createResolvePrivilegeDelegationsUseCase({
+    clock: runtime.clock,
+    resolution: createPrivilegeDelegationResolutionRepository(
+      options.delegationResolutionDb,
+    ),
+  });
+
+  return {
+    accountRecovery,
+    authentication,
+    registerPurveyorContact,
+    resolvePrivilegeDelegations,
+    sso,
+  };
 }
 
 export type ApiUseCases = ReturnType<typeof createApiUseCases>;

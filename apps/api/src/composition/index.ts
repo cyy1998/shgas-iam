@@ -4,6 +4,7 @@ import { logger } from "@api/lib/logger";
 import { createApiAuditLogWriter } from "@api/services/audit/audit.service";
 import db from "@iam/db";
 import { createUserProfileJobProducer } from "@iam/user-profile-read-model/producer";
+import { createInternalDelegationQueryResource } from "./internal-delegation-query";
 import { createApiMiddlewares } from "./middlewares";
 import { createApiRepositories } from "./repositories";
 import { createApiRoutes } from "./routes";
@@ -42,6 +43,9 @@ export async function createApiComposition(options: CreateApiCompositionOptions 
     databaseUrl: compositionEnv.databaseUrl,
     redis: runtime.config.env.redis,
   });
+  const delegationResolutionResource = createInternalDelegationQueryResource({
+    databaseUrl: compositionEnv.databaseUrl,
+  });
   const repositories = createApiRepositories(db);
   const auditLogWriter = createApiAuditLogWriter({ auditRepository: repositories.audit });
   const userProfileQueue = userProfileResources.queue;
@@ -63,6 +67,7 @@ export async function createApiComposition(options: CreateApiCompositionOptions 
     runtime,
     services,
     unitOfWork,
+    delegationResolutionDb: delegationResolutionResource.db,
   });
 
   return {
@@ -79,7 +84,10 @@ export async function createApiComposition(options: CreateApiCompositionOptions 
     routes: await createApiRoutes({ auditLogWriter, runtime, services, useCases }),
     middlewares: await createApiMiddlewares({ runtime, services }),
     async close() {
-      await userProfileResources.close();
+      await Promise.all([
+        delegationResolutionResource.close(),
+        userProfileResources.close(),
+      ]);
     },
   };
 }

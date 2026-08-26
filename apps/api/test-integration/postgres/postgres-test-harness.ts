@@ -43,7 +43,15 @@ export async function createApiPostgresTestHarness(): Promise<ApiPostgresTestHar
       sql: scopedSql,
       async reset() {
         await scopedSql!.unsafe(
-          "TRUNCATE TABLE employment, \"user\" RESTART IDENTITY CASCADE",
+          `TRUNCATE TABLE
+            delegation_detail,
+            privilege_delegation,
+            organization_closure,
+            organization,
+            privilege,
+            employment,
+            "user"
+          RESTART IDENTITY CASCADE`,
         );
       },
       async close() {

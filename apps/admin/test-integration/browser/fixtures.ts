@@ -9,6 +9,7 @@ import type {
   SessionRevokeResult,
 } from '@admin/services/session-management';
 import {
+  type AdminCapabilitySummary,
   ApiErrorCode,
   ORGANIZATION_RESPONSIBILITY_TYPE_CATALOG,
 } from '@iam/contracts';
@@ -235,7 +236,7 @@ export async function mockSessionRevokeRoute(
 export async function mockAdminApi(
   page: Page,
   options: {
-    capabilitySummary?: unknown;
+    capabilitySummary?: AdminCapabilitySummary;
     currentUser?: unknown;
     positionSearchResult?: unknown;
     userDetail?: unknown;

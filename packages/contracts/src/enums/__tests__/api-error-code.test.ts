@@ -18,3 +18,12 @@ test("exports the internal user search candidate codes at runtime", () => {
     "USER_SEARCH_UNAVAILABLE",
   );
 });
+
+test("exports the Privilege Delegation Resolution input error code at runtime", () => {
+  expect(String(ApiErrorCode.PrivilegeDelegationResolutionInputNotFound)).toBe(
+    "PRIVILEGE.DELEGATION_RESOLUTION_INPUT_NOT_FOUND",
+  );
+  expect(String(ApiErrorCode.PrivilegeDelegationResolutionUnavailable)).toBe(
+    "PRIVILEGE.DELEGATION_RESOLUTION_UNAVAILABLE",
+  );
+});

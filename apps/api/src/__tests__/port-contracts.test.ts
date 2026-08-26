@@ -1,3 +1,4 @@
+import type { PrivilegeDelegationResolutionRepository } from "@api/composition/repositories/privilege-delegation-resolution.repository";
 import type { ApiServices } from "@api/composition/services";
 import type { OrcasClient } from "@api/lib/integrations/orcas";
 import type { ClientReaderPort } from "@api/services/client/client.port";
@@ -64,6 +65,9 @@ import type {
   RegisterPurveyorPositionReaderPort,
   RegisterPurveyorUserStorePort,
 } from "@api/use-cases/internal/register-purveyor-contact/register-purveyor-contact.port";
+import type {
+  PrivilegeDelegationResolutionPort,
+} from "@api/use-cases/internal/resolve-privilege-delegations/resolve-privilege-delegations.port";
 import type {
   AuthorizationCodeIssuerPort,
   AuthorizeSsoClientReaderPort,
@@ -160,6 +164,10 @@ test("API providers structurally satisfy consumer-owned ports", () => {
   assertAssignable<PrivilegeDelegationPrivilegeReaderPort, PrivilegeRepository>();
   assertAssignable<PrivilegeDelegationTransactionStorePort, PrivilegeDelegationRepository>();
   assertAssignable<PrivilegeDelegationSearchPort, PrivilegeDelegationRepository>();
+  assertAssignable<
+    PrivilegeDelegationResolutionPort,
+    PrivilegeDelegationResolutionRepository
+  >();
 
   assertAssignable<UserProfileReaderPort, UserProfileQueryService>();
   assertAssignable<UserDelegationReaderPort, PrivilegeDelegationRepository>();

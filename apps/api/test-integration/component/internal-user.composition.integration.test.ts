@@ -1,10 +1,17 @@
 import {
+  createInternalDelegationQueryResource,
+  INTERNAL_DELEGATION_STATEMENT_TIMEOUT_MS,
+} from "@api/composition/internal-delegation-query";
+import {
   createInternalUserQueryResource,
   INTERNAL_USER_STATEMENT_TIMEOUT_MS,
 } from "@api/composition/internal-user-query";
 import { createApiRoutes } from "@api/composition/routes";
 import { createApiUserProfileSearch } from "@api/composition/services/user-profile-search";
 import { createApiUserProfileResources } from "@api/composition/user-profile-resources";
+import {
+  PRIVILEGE_DELEGATION_RESOLUTION_HANDLER_TIMEOUT_MS,
+} from "@api/routes/internal/delegation/delegation.handlers";
 import { INTERNAL_USER_HANDLER_TIMEOUT_MS } from "@api/routes/internal/user/user.handlers";
 import { createV3UserProfileSearchAdapter } from "@api/services/user-profile-search/user-profile-search-v3.adapter";
 import createApp from "@iam/api-core/core/create-app";
@@ -13,32 +20,49 @@ import { expect, mock, test } from "bun:test";
 import pino from "pino";
 import appConfig from "~api/app.config";
 
-test("owns the active Internal v3 query client with fixed query and handler budgets", async () => {
-  const end = mock(async () => {});
-  const queryClient = { end };
-  const createSql = mock((_databaseUrl: string, _options: unknown) => queryClient as never);
-  const createDatabase = mock((_client: unknown) => ({}) as never);
-
-  const resource = createInternalUserQueryResource({
-    databaseUrl: "postgresql://internal-user.invalid/iam",
-    createSql,
-    createDatabase,
-  });
-
+test("owns dedicated Internal query clients with fixed budgets and deterministic shutdown", async () => {
   expect(INTERNAL_USER_STATEMENT_TIMEOUT_MS).toBe(2_000);
   expect(INTERNAL_USER_HANDLER_TIMEOUT_MS).toBe(5_000);
-  expect(createSql).toHaveBeenCalledWith(
-    "postgresql://internal-user.invalid/iam",
-    {
-      connection: {
-        application_name: "iam-api-internal-user-v3",
-        statement_timeout: 2_000,
-      },
-    },
-  );
-  await resource.close();
+  expect(INTERNAL_DELEGATION_STATEMENT_TIMEOUT_MS).toBe(2_000);
+  expect(PRIVILEGE_DELEGATION_RESOLUTION_HANDLER_TIMEOUT_MS).toBe(5_000);
 
-  expect(end).toHaveBeenCalledTimes(1);
+  const resources = [
+    {
+      applicationName: "iam-api-internal-user-v3",
+      createResource: createInternalUserQueryResource,
+      databaseUrl: "postgresql://internal-user.invalid/iam",
+    },
+    {
+      applicationName: "iam-api-internal-delegation-resolution",
+      createResource: createInternalDelegationQueryResource,
+      databaseUrl: "postgresql://delegation-resolution.invalid/iam",
+    },
+  ];
+  for (const expected of resources) {
+    const end = mock(async () => {});
+    const queryClient = { end };
+    const createSql = mock(
+      (_databaseUrl: string, _options: unknown) => queryClient as never,
+    );
+    const createDatabase = mock((_client: unknown) => ({}) as never);
+    const resource = expected.createResource({
+      databaseUrl: expected.databaseUrl,
+      createSql,
+      createDatabase,
+    });
+
+    expect(createSql).toHaveBeenCalledWith(
+      expected.databaseUrl,
+      {
+        connection: {
+          application_name: expected.applicationName,
+          statement_timeout: 2_000,
+        },
+      },
+    );
+    await resource.close();
+    expect(end).toHaveBeenCalledTimes(1);
+  }
 });
 
 test("closes the production user profile query and queue resources", async () => {
