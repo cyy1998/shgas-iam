@@ -19,11 +19,9 @@ function createApplicationFixture() {
     info: vi.fn(),
     error: vi.fn(),
   };
-  const clientInvalidationSubscriber = { quit: vi.fn(async () => "OK") };
   const redis = { quit: vi.fn(async () => "OK") };
   const closeDatabase = vi.fn(async () => {});
   const shutdown = createOidcProviderShutdown({
-    clientInvalidationSubscriber,
     closeDatabase,
     logger,
     redis,
@@ -45,7 +43,6 @@ function createApplicationFixture() {
   });
 
   return {
-    clientInvalidationSubscriber,
     closeDatabase,
     composition,
     logger,
@@ -58,7 +55,6 @@ function createApplicationFixture() {
 async function expectResourcesClosed(fixture: ReturnType<typeof createApplicationFixture>, signal: string) {
   await vi.waitFor(() => {
     expect(fixture.server.close).toHaveBeenCalledOnce();
-    expect(fixture.clientInvalidationSubscriber.quit).toHaveBeenCalledOnce();
     expect(fixture.redis.quit).toHaveBeenCalledOnce();
     expect(fixture.closeDatabase).toHaveBeenCalledOnce();
   });

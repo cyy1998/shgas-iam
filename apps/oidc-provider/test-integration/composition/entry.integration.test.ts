@@ -6,9 +6,8 @@ import type { ClientCustomSsoConfigureDto } from "../../../admin-api/src/service
 import { createHash, randomUUID } from "node:crypto";
 import { fileURLToPath } from "node:url";
 import {
-  beginClientTrafficGateMutation,
-  publishClientTrafficGateMutation,
-} from "@iam/api-core/client-traffic-gate";
+  createClientRuntimeSnapshotModule,
+} from "@iam/api-core/client-runtime-snapshot";
 import { hashSecret } from "@iam/api-core/security";
 import {
   createSubjectAccessBootstrap,
@@ -42,7 +41,10 @@ import { decodeJwt, exportJWK, generateKeyPair } from "jose";
 import postgres from "postgres";
 import { afterEach, describe, expect, it } from "vitest";
 import { createClientRepository } from "../../../admin-api/src/services/client/client.repository.ts";
-import { createCustomSsoClientRuntimeReader } from "../../../api/src/services/client/custom-sso-client-runtime.reader.ts";
+import {
+  createCustomSsoClientRuntimeReader,
+  createCustomSsoClientRuntimeSnapshotAdapter,
+} from "../../../api/src/services/client/custom-sso-client-runtime.reader.ts";
 import { createCustomSsoClientRepository } from "../../../api/src/services/client/custom-sso-client.repository.ts";
 import { createOidcProviderSession } from "../../src/composition/session/index.ts";
 import { createOidcProviderStores } from "../../src/composition/stores/index.ts";
@@ -384,20 +386,30 @@ async function createCustomSsoIsolationSentinel(input: {
 }) {
   const configurationOwner = createClientRepository(input.dbClient);
   const runtimeSource = createCustomSsoClientRepository(input.dbClient);
-  const ownerRuntime = createCustomSsoClientRuntimeReader({
+  const ownerSnapshots = createClientRuntimeSnapshotModule({
     redis: input.ownerRedis,
-    source: runtimeSource,
+    adapters: [createCustomSsoClientRuntimeSnapshotAdapter({
+      repository: runtimeSource,
+    })],
   });
-  const observerRuntime = createCustomSsoClientRuntimeReader({
+  let observerSourceLoadCount = 0;
+  const observerSnapshots = createClientRuntimeSnapshotModule({
     redis: input.observerRedis,
-    source: {
-      async findRuntimeRecord() {
-        throw new Error(
-          "OIDC Custom SSO cache observer must not read through PostgreSQL",
-        );
+    adapters: [createCustomSsoClientRuntimeSnapshotAdapter({
+      repository: {
+        async findRuntimeRecord(clientCode) {
+          observerSourceLoadCount += 1;
+          return await runtimeSource.findRuntimeRecord(clientCode);
+        },
       },
-    },
+    })],
   });
+  const ownerRuntime = createCustomSsoClientRuntimeReader(
+    ownerSnapshots.reader("custom-sso"),
+  );
+  const observerRuntime = createCustomSsoClientRuntimeReader(
+    observerSnapshots.reader("custom-sso"),
+  );
   const customSsoSecretHash = await hashSecret(
     `iam_sso_${input.clientCode}`,
     4,
@@ -414,6 +426,9 @@ async function createCustomSsoIsolationSentinel(input: {
     throw new Error("OIDC Custom SSO runtime cache seed was unavailable");
 
   return {
+    getObserverSourceLoadCount() {
+      return observerSourceLoadCount;
+    },
     async observe() {
       const [client, runtime] = await Promise.all([
         configurationOwner.getClientByCode(input.clientCode),
@@ -458,8 +473,8 @@ function createProductionOwnerSeed(input: {
     stores,
   });
   return {
-    clientRuntimeCache: stores.clientRuntimeCache,
     clientRuntime: stores.clientRuntime,
+    clientRuntimeSnapshots: stores.clientRuntimeSnapshots,
     clientTrafficGate: stores.clientTrafficGate,
     redis: input.redis,
     sessionKernel: session.kernel,
@@ -724,6 +739,7 @@ describe("oIDC provider explicit external entry", () => {
         ownerRedis: redis.writer,
       });
       const initialCustomSsoIsolation = await customSsoIsolation.observe();
+      expect(customSsoIsolation.getObserverSourceLoadCount()).toBe(0);
       expect(initialCustomSsoIsolation).toEqual({
         configuration: {
           customSsoConfig: {
@@ -798,17 +814,12 @@ describe("oIDC provider explicit external entry", () => {
           const publishPublicTrafficGate = async (status: ClientStatus) => {
             if (productionOwners === undefined)
               throw new FatalReadinessError("OIDC production owners were unavailable");
-            const mutation = await beginClientTrafficGateMutation(productionOwners.redis, {
-              clientCode: clientId,
-              mutationId: randomUUID(),
-            });
-            const published = await publishClientTrafficGateMutation(
-              productionOwners.redis,
-              mutation,
-              status,
-            );
-            if (published !== "published")
-              throw new FatalReadinessError(`OIDC ${status} gate publication failed`);
+            await rawSql`
+              UPDATE client
+              SET status = ${status}
+              WHERE client_code = ${clientId}
+            `;
+            await productionOwners.clientRuntimeSnapshots.invalidateClient(clientId);
           };
           const protocol = await runPublicProtocolFlow({
             issuer,
@@ -887,20 +898,9 @@ describe("oIDC provider explicit external entry", () => {
                 SET status = ${ClientStatus.Maintenance}
                 WHERE client_code = ${confidentialClientId}
               `;
-              const confidentialMaintenance = await beginClientTrafficGateMutation(
-                productionOwners.redis,
-                { clientCode: confidentialClientId, mutationId: randomUUID() },
+              await productionOwners.clientRuntimeSnapshots.invalidateClient(
+                confidentialClientId,
               );
-              const confidentialMaintenancePublished = await publishClientTrafficGateMutation(
-                productionOwners.redis,
-                confidentialMaintenance,
-                ClientStatus.Maintenance,
-              );
-              if (confidentialMaintenancePublished !== "published") {
-                throw new FatalReadinessError(
-                  "OIDC confidential Maintenance gate publication failed",
-                );
-              }
               const confidentialHeaders = {
                 "authorization": `Basic ${Buffer.from(
                   `${confidentialClientId}:${confidentialClientSecret}`,
@@ -935,17 +935,9 @@ describe("oIDC provider explicit external entry", () => {
                 SET status = ${ClientStatus.Enable}
                 WHERE client_code = ${confidentialClientId}
               `;
-              const confidentialEnable = await beginClientTrafficGateMutation(
-                productionOwners.redis,
-                { clientCode: confidentialClientId, mutationId: randomUUID() },
+              await productionOwners.clientRuntimeSnapshots.invalidateClient(
+                confidentialClientId,
               );
-              const confidentialEnablePublished = await publishClientTrafficGateMutation(
-                productionOwners.redis,
-                confidentialEnable,
-                ClientStatus.Enable,
-              );
-              if (confidentialEnablePublished !== "published")
-                throw new FatalReadinessError("OIDC confidential Enable gate publication failed");
               const confidentialRecovered = await fetch(`${issuer}/token`, {
                 body: confidentialBody,
                 headers: confidentialHeaders,
@@ -1021,15 +1013,16 @@ describe("oIDC provider explicit external entry", () => {
           subjectIdentifier,
         },
       });
-      expect(await observerOwners.clientRuntimeCache.get(clientId)).toMatchObject({
+      expect(await observerOwners.clientRuntime.findRuntime(clientId)).toMatchObject({
         client_id: clientId,
         oidc_config_version: 1,
       });
       expect(
         await observerOwners.sessionKernel.resolvePrincipalSession(seeded.principalToken),
       ).toMatchObject({ status: "revoked" });
-      expect(await customSsoIsolation.observe())
-        .toEqual(initialCustomSsoIsolation);
+      const finalCustomSsoIsolation = await customSsoIsolation.observe();
+      expect(finalCustomSsoIsolation).toEqual(initialCustomSsoIsolation);
+      expect(customSsoIsolation.getObserverSourceLoadCount()).toBe(1);
       const ownerMarkers = [...ownedRedisMarkers];
       const unownedAddedKeyCount = [...await inventoryRedisKeys(redisInventory)]
         .filter(key => !existingKeys.has(key))

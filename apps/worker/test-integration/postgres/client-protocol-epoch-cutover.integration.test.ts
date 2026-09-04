@@ -69,7 +69,7 @@ describe("Client Protocol epoch cutover PostgreSQL contract", () => {
       customSsoConfigVersion: 1,
     }]);
     const cutover = createClientProtocolEpochCutover({
-      runtimeCache: createRuntimeCache(),
+      runtimeSnapshot: createRuntimeSnapshot(),
       uow: createUnitOfWork({
         db: harness!.db,
         logger: testLogger,
@@ -100,7 +100,7 @@ describe("Client Protocol epoch cutover PostgreSQL contract", () => {
     expect(record).toEqual({ customSsoEpoch: 4, oidcEpoch: 8 });
   });
 
-  test("advances a migrated Custom SSO configuration exactly once across cache invalidation retry", async () => {
+  test("advances a migrated Custom SSO configuration exactly once across Snapshot invalidation retry", async () => {
     await harness!.db.insert(clients).values({
       clientCode: "portal",
       clientName: "Portal",
@@ -117,23 +117,17 @@ describe("Client Protocol epoch cutover PostgreSQL contract", () => {
     });
     const invalidatedClients: string[] = [];
     let invalidationShouldFail = true;
-    const runtimeCache = createRuntimeCache(invalidatedClients);
-    const beginMutation = runtimeCache.beginMutation;
-    runtimeCache.beginMutation = async (clientCode) => {
-      const coordination = await beginMutation(clientCode);
-      return {
-        ...coordination,
-        complete: async () => {
-          if (invalidationShouldFail) {
-            invalidationShouldFail = false;
-            throw new Error("runtime invalidation unavailable");
-          }
-          await coordination.complete();
-        },
-      };
+    const runtimeSnapshot = {
+      async invalidateClient(clientCode: string) {
+        if (invalidationShouldFail) {
+          invalidationShouldFail = false;
+          throw new Error("runtime invalidation unavailable");
+        }
+        invalidatedClients.push(clientCode);
+      },
     };
     const cutover = createClientProtocolEpochCutover({
-      runtimeCache,
+      runtimeSnapshot,
       uow: createUnitOfWork({
         db: harness!.db,
         logger: testLogger,
@@ -179,7 +173,7 @@ describe("Client Protocol epoch cutover PostgreSQL contract", () => {
     expect(invalidatedClients).toEqual(["portal"]);
   });
 
-  test("keeps an already-applied epoch unchanged and retries cache invalidation", async () => {
+  test("keeps an already-applied epoch unchanged and retries Snapshot invalidation", async () => {
     const originalUpdateTime = new Date("2026-08-01T00:00:00.000Z");
     await harness!.db.insert(clients).values({
       clientCode: "applied",
@@ -198,7 +192,7 @@ describe("Client Protocol epoch cutover PostgreSQL contract", () => {
     });
     const invalidatedClients: string[] = [];
     const cutover = createClientProtocolEpochCutover({
-      runtimeCache: createRuntimeCache(invalidatedClients),
+      runtimeSnapshot: createRuntimeSnapshot(invalidatedClients),
       uow: createUnitOfWork({
         db: harness!.db,
         logger: testLogger,
@@ -263,7 +257,7 @@ describe("Client Protocol epoch cutover PostgreSQL contract", () => {
           clientCode: "portal",
           customSsoExpectedEpoch: 3,
           oidcExpectedEpoch: 7,
-        }], async () => undefined);
+        }]);
       });
     }
     catch (error) {
@@ -282,19 +276,10 @@ describe("Client Protocol epoch cutover PostgreSQL contract", () => {
   });
 });
 
-function createRuntimeCache(completedClients: string[] = []) {
+function createRuntimeSnapshot(invalidatedClients: string[] = []) {
   return {
-    async beginMutation(clientCode: string) {
-      return {
-        abort: async () => undefined,
-        complete: async () => {
-          completedClients.push(clientCode);
-        },
-        heartbeat: {
-          assertOwned: async () => undefined,
-          stopAndSettle: async <T>(settle: () => Promise<T>) => await settle(),
-        },
-      };
+    async invalidateClient(clientCode: string) {
+      invalidatedClients.push(clientCode);
     },
   };
 }

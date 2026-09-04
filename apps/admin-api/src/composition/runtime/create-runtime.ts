@@ -3,7 +3,10 @@ import { randomBytes, randomInt, randomUUID } from "node:crypto";
 import env from "@admin-api/env";
 import redis from "@admin-api/lib/infra/redis";
 import { logger } from "@admin-api/lib/logger";
-import { invalidateOidcClient } from "@iam/api-core/oidc";
+import {
+  createClientRuntimeSnapshotLoggerObservability,
+  createClientRuntimeSnapshotModule,
+} from "@iam/api-core/client-runtime-snapshot";
 import { hashSecret } from "@iam/api-core/security";
 import { createSessionKernelConfigFromEnv } from "@iam/api-core/session/kernel";
 import { generateRandomPassword } from "@iam/api-core/utils";
@@ -20,7 +23,11 @@ export function createAdminApiRuntime(options: CreateAdminApiRuntimeOptions = {}
   const runtimeEnv = options.env ?? env;
   const runtimeLogger = options.logger ?? logger;
   const runtimeRedis = options.redis ?? redis;
-
+  const clientRuntimeSnapshots = createClientRuntimeSnapshotModule({
+    redis: runtimeRedis,
+    adapters: [] as const,
+    observability: createClientRuntimeSnapshotLoggerObservability(runtimeLogger),
+  });
   return {
     logger: runtimeLogger,
     afterCommitLogger: runtimeLogger,
@@ -75,15 +82,7 @@ export function createAdminApiRuntime(options: CreateAdminApiRuntimeOptions = {}
     },
     integrations: {
       clientCache: createAdminClientCache({ redis: runtimeRedis }),
-      oidcInvalidation: {
-        async invalidateClient(client) {
-          await invalidateOidcClient(runtimeRedis, {
-            clientId: client.id,
-            clientCode: client.clientCode,
-            oidcConfigVersion: client.oidcConfigVersion,
-          });
-        },
-      },
+      clientRuntimeInvalidation: clientRuntimeSnapshots,
     },
   };
 }

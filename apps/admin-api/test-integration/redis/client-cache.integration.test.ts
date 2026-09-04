@@ -1,11 +1,20 @@
-import type { ClientTrafficGateSourceRecord } from "@iam/api-core/client-traffic-gate";
+import type { AdminClientRecord } from "@admin-api/services/client/client.type";
 import type { DedicatedRedisTestConfig } from "@iam/api-core/testing/external-test-resources";
 import type { CustomSsoClientRuntimeDto } from "@iam/domain/client";
 import type { Redis } from "ioredis";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
 import {
+  createFakePasswordHasher,
+  createFakeRandom,
+  createImmediateUnitOfWork,
+} from "@admin-api/test/fakes";
+import {
+  createClientRuntimeSnapshotModule,
+} from "@iam/api-core/client-runtime-snapshot";
+import {
   createClientTrafficGateReader,
+  createClientTrafficGateSnapshotAdapter,
 } from "@iam/api-core/client-traffic-gate";
 import {
   createProcessSmokeEnvironment,
@@ -13,12 +22,21 @@ import {
   spawnOwnedProcessTree,
   withOwnedTemporaryDirectory,
 } from "@iam/api-core/testing/process-smoke-harness";
-import { ClientStatus, CustomSsoClientMode, SubjectClaim } from "@iam/contracts";
+import {
+  ClientStatus,
+  CustomSsoClientMode,
+  OidcClientType,
+  OidcScope,
+  OidcTokenEndpointAuthMethod,
+  SubjectClaim,
+} from "@iam/contracts";
 import { afterAll, beforeAll, describe, expect, mock, test } from "bun:test";
 import {
   createCustomSsoClientRuntimeReader,
+  createCustomSsoClientRuntimeSnapshotAdapter,
 } from "../../../api/src/services/client/custom-sso-client-runtime.reader";
-import { createAdminClientCache } from "../../src/composition/runtime/client-cache";
+import { createClientService } from "../../src/services/client/client.service";
+import { createAdminSessionRevocationPort } from "../../src/services/session-revocation/session-revocation.port";
 import { createAdminApiRedisTestHarness } from "./redis-test-harness";
 
 const adminApiRoot = fileURLToPath(new URL("../../", import.meta.url));
@@ -54,25 +72,66 @@ describe("Admin client cache Redis contract", () => {
     expect([...before].filter(key => !after.has(key))).toEqual([]);
   });
 
-  test("makes production runtime invalidation visible through the runtime reader", async () => {
+  test("deletes exactly the four generic cache identities through the production update entry", async () => {
+    const scope = await harness.createScope();
+    try {
+      const oldClientCode = scope.clientCode("update-old");
+      const newClientCode = scope.clientCode("update-new");
+      const oldSecret = `secret-${oldClientCode}`;
+      const newSecret = `secret-${newClientCode}`;
+      const expectedDeletedKeys = [
+        `cache:client:code:${oldClientCode}`,
+        `cache:client:secret:${oldSecret}`,
+        `cache:client:code:${newClientCode}`,
+        `cache:client:secret:${newSecret}`,
+      ] as const;
+      const unrelatedKey = `cache:client:code:${scope.clientCode("unrelated")}`;
+      await scope.redis.mset(
+        expectedDeletedKeys[0],
+        "old-code",
+        expectedDeletedKeys[1],
+        "old-secret",
+        expectedDeletedKeys[2],
+        "new-code",
+        expectedDeletedKeys[3],
+        "new-secret",
+        unrelatedKey,
+        "unrelated",
+      );
+
+      await runCacheRuntimeEntry(
+        ["update", oldClientCode, oldSecret, newClientCode, newSecret],
+        harness.redisConfig,
+      );
+
+      const deletedValues = await scope.observer.mget(...expectedDeletedKeys);
+      const unrelatedValue = await scope.observer.get(unrelatedKey);
+      expect(deletedValues).toEqual([null, null, null, null]);
+      expect(unrelatedValue).toBe("unrelated");
+    }
+    finally {
+      await scope.close();
+    }
+  });
+
+  test("propagates a Custom SSO mutation through the production Snapshot seam", async () => {
     const scope = await harness.createScope();
     try {
       const clientCode = scope.clientCode("invalidate");
       let current = runtimeClient(clientCode, 3);
       const source = mock(async () => current);
-      const reader = createCustomSsoClientRuntimeReader({
-        redis: scope.observer,
-        source: { findRuntimeRecord: source },
-      });
-      expect(await reader.findRuntimeRecord(clientCode)).toEqual(current);
+      const reader = createCustomSsoSnapshotRuntime(scope.observer, source);
+      const before = await reader.findRuntimeRecord(clientCode);
+      expect(before).toEqual(current);
 
-      current = runtimeClient(clientCode, 4);
+      current = { ...current, customSsoEnabled: false, customSsoConfigVersion: 4 };
       await runCacheRuntimeEntry(
-        ["invalidate", clientCode, `secret-${clientCode}`],
+        ["custom-sso-disable", clientCode],
         harness.redisConfig,
       );
 
-      expect(await reader.findRuntimeRecord(clientCode)).toEqual(current);
+      const after = await reader.findRuntimeRecord(clientCode);
+      expect(after).toBeNull();
       expect(source).toHaveBeenCalledTimes(2);
     }
     finally {
@@ -80,327 +139,111 @@ describe("Admin client cache Redis contract", () => {
     }
   });
 
-  test("makes both sides of a production client code update observable", async () => {
+  test("reloads the canonical OIDC Snapshot after a production Admin mutation", async () => {
     const scope = await harness.createScope();
     try {
-      const oldClientCode = scope.clientCode("old");
-      const newClientCode = scope.clientCode("new");
-      const oldInitial = runtimeClient(oldClientCode, 5);
-      const newInitial = runtimeClient(newClientCode, 5);
-      const records = new Map([
-        [oldClientCode, oldInitial],
-        [newClientCode, newInitial],
-      ]);
-      const source = mock(async (clientCode: string) => records.get(clientCode) ?? null);
-      const reader = createCustomSsoClientRuntimeReader({
+      const clientCode = scope.clientCode("oidc-mutation");
+      let sourceVersion = 1;
+      const source = mock(async () => ({ version: sourceVersion }));
+      const snapshots = createClientRuntimeSnapshotModule({
         redis: scope.observer,
-        source: { findRuntimeRecord: source },
+        adapters: [testOidcAdapter(source)],
       });
-      expect(await reader.findRuntimeRecord(oldClientCode)).toEqual(oldInitial);
-      expect(await reader.findRuntimeRecord(newClientCode)).toEqual(newInitial);
+      const reader = snapshots.reader("oidc");
+      const before = await reader.acquire(clientCode);
 
-      const oldUpdated = runtimeClient(oldClientCode, 6);
-      const newUpdated = runtimeClient(newClientCode, 6);
-      records.set(oldClientCode, oldUpdated);
-      records.set(newClientCode, newUpdated);
-      await runCacheRuntimeEntry([
-        "update",
-        oldClientCode,
-        `secret-${oldClientCode}`,
-        newClientCode,
-        `secret-${newClientCode}`,
-      ], harness.redisConfig);
-
-      expect(await reader.findRuntimeRecord(oldClientCode)).toEqual(oldUpdated);
-      expect(await reader.findRuntimeRecord(newClientCode)).toEqual(newUpdated);
-      expect(source).toHaveBeenCalledTimes(4);
-    }
-    finally {
-      await scope.close();
-    }
-  });
-
-  test("publishes a production mutation completion to the runtime reader", async () => {
-    const scope = await harness.createScope();
-    try {
-      const clientCode = scope.clientCode("mutation");
-      let current = runtimeClient(clientCode, 7);
-      const source = mock(async () => current);
-      const reader = createCustomSsoClientRuntimeReader({
-        redis: scope.observer,
-        source: { findRuntimeRecord: source },
-      });
-      expect(await reader.findRuntimeRecord(clientCode)).toEqual(current);
-
-      current = runtimeClient(clientCode, 8);
-      await runCacheRuntimeEntry(
-        ["mutation", clientCode, `mutation-${clientCode}`],
-        harness.redisConfig,
-      );
-
-      expect(await reader.findRuntimeRecord(clientCode)).toEqual(current);
-      expect(source).toHaveBeenCalledTimes(2);
-    }
-    finally {
-      await scope.close();
-    }
-  });
-
-  test("distinguishes known and indeterminate traffic gate outcomes", async () => {
-    const scope = await harness.createScope();
-    try {
-      const enabledCode = scope.clientCode("gate-enabled");
-      const maintenanceCode = scope.clientCode("gate-maintenance");
-      const disabledCode = scope.clientCode("gate-disabled");
-      const deletedCode = scope.clientCode("gate-deleted");
-      const corruptDeletedCode = scope.clientCode("gate-cdel");
-      const missingCode = scope.clientCode("gate-missing");
-      const corruptCode = scope.clientCode("gate-corrupt");
-      const failedCode = scope.clientCode("gate-failed");
-      const source = mock(async (clientCode: string) => {
-        if (clientCode === enabledCode)
-          return trafficGateSource(enabledCode, ClientStatus.Enable);
-        if (clientCode === maintenanceCode)
-          return trafficGateSource(maintenanceCode, ClientStatus.Maintenance);
-        if (clientCode === disabledCode)
-          return trafficGateSource(disabledCode, ClientStatus.Disable);
-        if (clientCode === deletedCode) {
-          return {
-            ...trafficGateSource(deletedCode, ClientStatus.Enable),
-            isDelete: true,
-          };
-        }
-        if (clientCode === corruptDeletedCode) {
-          return {
-            ...trafficGateSource(`${corruptDeletedCode}-wrong`, ClientStatus.Enable),
-            isDelete: true,
-          };
-        }
-        if (clientCode === missingCode)
-          return null;
-        if (clientCode === corruptCode)
-          return trafficGateSource(`${corruptCode}-wrong`, ClientStatus.Enable);
-        throw new Error("database unavailable");
-      });
-      const gate = createClientTrafficGateReader({
-        redis: scope.observer,
-        source: { findClientTrafficState: source },
-      });
-
-      expect(await gate.check(enabledCode)).toEqual({ outcome: "enabled" });
-      expect(await gate.check(maintenanceCode)).toEqual({ outcome: "maintenance" });
-      expect(await gate.check(disabledCode)).toEqual({ outcome: "disabled" });
-      expect(await gate.check(deletedCode)).toEqual({ outcome: "deleted" });
-      expect(await gate.check(corruptDeletedCode)).toEqual({
-        outcome: "unavailable",
-        reason: "corrupt",
-      });
-      expect(await gate.check(missingCode)).toEqual({
-        outcome: "unavailable",
-        reason: "missing",
-      });
-      expect(await gate.check(corruptCode)).toEqual({
-        outcome: "unavailable",
-        reason: "corrupt",
-      });
-      expect(await gate.check(failedCode)).toEqual({
-        outcome: "unavailable",
-        reason: "read-failed",
-      });
-    }
-    finally {
-      await scope.close();
-    }
-  });
-
-  test("makes production client invalidation visible through the traffic gate", async () => {
-    const scope = await harness.createScope();
-    try {
-      const clientCode = scope.clientCode("gate-invalidate");
-      let status = ClientStatus.Enable;
-      const source = mock(async () => trafficGateSource(clientCode, status));
-      const gate = createClientTrafficGateReader({
-        redis: scope.observer,
-        source: { findClientTrafficState: source },
-      });
-      const cache = createAdminClientCache({ redis: scope.redis });
-      expect(await gate.check(clientCode)).toEqual({ outcome: "enabled" });
-
-      status = ClientStatus.Maintenance;
-      await cache.invalidateClient({
+      const service = createOidcMutationService({
         clientCode,
-        clientSecret: `secret-${clientCode}`,
-      });
-
-      expect(await gate.check(clientCode)).toEqual({ outcome: "maintenance" });
-      expect(source).toHaveBeenCalledTimes(2);
-    }
-    finally {
-      await scope.close();
-    }
-  });
-
-  test("fences a stale source read and publishes the committed state", async () => {
-    const scope = await harness.createScope();
-    try {
-      const clientCode = scope.clientCode("gate-stale-read");
-      let releaseSource!: () => void;
-      let sourceStarted!: () => void;
-      const sourceWasStarted = new Promise<void>((resolve) => {
-        sourceStarted = resolve;
-      });
-      const sourceRelease = new Promise<void>((resolve) => {
-        releaseSource = resolve;
-      });
-      const source = mock(async () => {
-        sourceStarted();
-        await sourceRelease;
-        return trafficGateSource(clientCode, ClientStatus.Enable);
-      });
-      const gate = createClientTrafficGateReader({
-        redis: scope.observer,
-        source: { findClientTrafficState: source },
-      });
-      const cache = createAdminClientCache({ redis: scope.redis });
-
-      const staleRead = gate.check(clientCode);
-      await sourceWasStarted;
-      const mutation = await cache.beginTrafficGateMutation(
-        clientCode,
-        `mutation-${clientCode}`,
-      );
-      releaseSource();
-
-      expect(await staleRead).toEqual({
-        outcome: "unavailable",
-        reason: "mutation-in-progress",
-      });
-      expect(await gate.check(clientCode)).toEqual({
-        outcome: "unavailable",
-        reason: "mutation-in-progress",
-      });
-      expect(
-        await cache.publishTrafficGateMutation(
-          mutation,
-          ClientStatus.Maintenance,
-        ),
-      ).toBe("published");
-      expect(await gate.check(clientCode)).toEqual({ outcome: "maintenance" });
-      expect(source).toHaveBeenCalledTimes(1);
-    }
-    finally {
-      await scope.close();
-    }
-  });
-
-  test("rejects a stale source refill after generation-only invalidation", async () => {
-    const scope = await harness.createScope();
-    try {
-      const clientCode = scope.clientCode("gate-gen");
-      let status = ClientStatus.Enable;
-      let releaseFirstRead!: () => void;
-      let firstReadStarted!: () => void;
-      const firstReadWasStarted = new Promise<void>((resolve) => {
-        firstReadStarted = resolve;
-      });
-      const firstReadRelease = new Promise<void>((resolve) => {
-        releaseFirstRead = resolve;
-      });
-      let firstRead = true;
-      const source = mock(async () => {
-        const capturedStatus = status;
-        if (firstRead) {
-          firstRead = false;
-          firstReadStarted();
-          await firstReadRelease;
-        }
-        return trafficGateSource(clientCode, capturedStatus);
-      });
-      const gate = createClientTrafficGateReader({
-        redis: scope.observer,
-        source: { findClientTrafficState: source },
-      });
-      const cache = createAdminClientCache({ redis: scope.redis });
-
-      const staleRead = gate.check(clientCode);
-      await firstReadWasStarted;
-      status = ClientStatus.Maintenance;
-      await cache.invalidateClient({
-        clientCode,
-        clientSecret: `secret-${clientCode}`,
-      });
-      releaseFirstRead();
-
-      expect(await staleRead).toEqual({
-        outcome: "unavailable",
-        reason: "mutation-in-progress",
-      });
-      expect(await gate.check(clientCode)).toEqual({ outcome: "maintenance" });
-      expect(source).toHaveBeenCalledTimes(2);
-    }
-    finally {
-      await scope.close();
-    }
-  });
-
-  test("keeps a failed publish fenced until a safe retry recovers it", async () => {
-    const scope = await harness.createScope();
-    try {
-      const clientCode = scope.clientCode("gate-publish-retry");
-      let failNextRedisCommand = false;
-      const failingRedis = {
-        eval: async (script: string, keyCount: number, ...args: string[]) => {
-          if (failNextRedisCommand) {
-            failNextRedisCommand = false;
-            throw new Error("simulated publish failure");
-          }
-          return await scope.redis.eval(script, keyCount, ...args);
+        onCommittedVersion(version) {
+          sourceVersion = version;
         },
-      } as Redis;
-      const failingCache = createAdminClientCache({ redis: failingRedis });
-      const healthyCache = createAdminClientCache({ redis: scope.redis });
-      const source = mock(async () =>
-        trafficGateSource(clientCode, ClientStatus.Enable));
-      const gate = createClientTrafficGateReader({
+        async invalidateClientRuntime(targetClientCode) {
+          await snapshots.invalidateClient(targetClientCode);
+        },
+      });
+      await service.configureClientOidc(clientCode, oidcConfiguration());
+      const after = await reader.acquire(clientCode);
+
+      expect(before).toEqual({ kind: "present", value: { version: 1 } });
+      expect(after).toEqual({ kind: "present", value: { version: 2 } });
+      expect(source).toHaveBeenCalledTimes(2);
+    }
+    finally {
+      await scope.close();
+    }
+  });
+
+  test("keeps the old normal Gate Snapshot on failed propagation until targeted repair", async () => {
+    const scope = await harness.createScope();
+    try {
+      const clientCode = scope.clientCode("gate-propagation");
+      let status = ClientStatus.Enable;
+      let failInvalidation = true;
+      const source = mock(async () => ({ clientCode, isDelete: false, status }));
+      const snapshots = createClientRuntimeSnapshotModule({
         redis: scope.observer,
-        source: { findClientTrafficState: source },
+        adapters: [createClientTrafficGateSnapshotAdapter({
+          source: { findClientTrafficState: source },
+        })],
       });
-      const failedMutation = await failingCache.beginTrafficGateMutation(
+      const gate = createClientTrafficGateReader(snapshots.reader("traffic-gate"));
+      const service = createStatusMutationService({
         clientCode,
-        `failed-${clientCode}`,
-      );
-      failNextRedisCommand = true;
-
-      await expect(
-        failingCache.publishTrafficGateMutation(
-          failedMutation,
-          ClientStatus.Maintenance,
-        ),
-      ).rejects.toThrow("simulated publish failure");
-      expect(await gate.check(clientCode)).toEqual({
-        outcome: "unavailable",
-        reason: "mutation-in-progress",
+        onCommittedStatus(nextStatus) {
+          status = nextStatus;
+        },
+        async invalidateClientRuntime(targetClientCode) {
+          if (failInvalidation)
+            throw new Error("simulated shared invalidation failure");
+          await snapshots.invalidateClient(targetClientCode);
+        },
       });
-      expect(source).not.toHaveBeenCalled();
 
-      const retryMutation = await healthyCache.beginTrafficGateMutation(
-        clientCode,
-        `retry-${clientCode}`,
-      );
-      expect(
-        await healthyCache.publishTrafficGateMutation(
-          retryMutation,
-          ClientStatus.Enable,
-        ),
-      ).toBe("published");
-      expect(await gate.check(clientCode)).toEqual({ outcome: "enabled" });
-      expect(source).not.toHaveBeenCalled();
+      const before = await gate.check(clientCode);
+      let mutationFailure: unknown;
+      try {
+        await service.updateClientStatus(clientCode, ClientStatus.Maintenance);
+      }
+      catch (error) {
+        mutationFailure = error;
+      }
+      const acceptedBeforeRepair = await gate.check(clientCode);
+
+      failInvalidation = false;
+      await snapshots.invalidateClient(clientCode);
+      const afterRepair = await gate.check(clientCode);
+
+      expect(mutationFailure).toMatchObject({ name: "AfterCommitRequiredTaskError" });
+      expect(before).toEqual({ outcome: "enabled" });
+      expect(acceptedBeforeRepair).toEqual({ outcome: "enabled" });
+      expect(afterRepair).toEqual({ outcome: "maintenance" });
+      expect(source).toHaveBeenCalledTimes(2);
     }
     finally {
       await scope.close();
     }
   });
 });
+
+function testOidcAdapter(source: () => Promise<{ version: number }>) {
+  return {
+    kind: "oidc" as const,
+    presentTtlMs: 60_000,
+    async load() {
+      return { kind: "present" as const, value: await source() };
+    },
+    codec: {
+      encode: (value: unknown) => value,
+      decode(payload: unknown) {
+        if (typeof payload !== "object" || payload === null
+          || typeof Reflect.get(payload, "version") !== "number") {
+          throw new Error("invalid OIDC runtime test payload");
+        }
+        return { version: Reflect.get(payload, "version") as number };
+      },
+    },
+  };
+}
 
 async function runCacheRuntimeEntry(
   args: string[],
@@ -421,10 +264,7 @@ async function runCacheRuntimeEntry(
             ...args,
           ],
           cwd: adminApiRoot,
-          env: createCacheRuntimeEnvironment(
-            temporaryDirectory,
-            redisConfig,
-          ),
+          env: createCacheRuntimeEnvironment(temporaryDirectory, redisConfig),
         }),
         completionTimeoutMs: 20_000,
         cleanupTimeoutMs: 5_000,
@@ -485,13 +325,147 @@ function runtimeClient(
   };
 }
 
-function trafficGateSource(
-  clientCode: string,
-  status: ClientStatus,
-): ClientTrafficGateSourceRecord {
+function createCustomSsoSnapshotRuntime(
+  redis: Redis,
+  findRuntimeRecord: (
+    clientCode: string,
+  ) => Promise<CustomSsoClientRuntimeDto | null>,
+) {
+  const snapshots = createClientRuntimeSnapshotModule({
+    redis,
+    adapters: [createCustomSsoClientRuntimeSnapshotAdapter({
+      repository: { findRuntimeRecord },
+    })],
+  });
+  return createCustomSsoClientRuntimeReader(snapshots.reader("custom-sso"));
+}
+
+function createOidcMutationService(input: {
+  readonly clientCode: string;
+  readonly invalidateClientRuntime: (clientCode: string) => Promise<void>;
+  readonly onCommittedVersion: (version: number) => void;
+}) {
+  let client = oidcAdminClient(input.clientCode);
+  const tx = {
+    auditService: { recordAuditLog: mock(async () => undefined) },
+    clientRepository: {
+      getClientByCode: mock(async () => client),
+      updateClientOidcByCode: mock(async (
+        _clientCode: string,
+        update: Partial<AdminClientRecord>,
+      ) => {
+        client = { ...client, ...update, oidcConfigVersion: client.oidcConfigVersion + 1 };
+        input.onCommittedVersion(client.oidcConfigVersion);
+        return client;
+      }),
+    },
+  };
+  return createTestClientService(client, tx, input.invalidateClientRuntime);
+}
+
+function createStatusMutationService(input: {
+  readonly clientCode: string;
+  readonly invalidateClientRuntime: (clientCode: string) => Promise<void>;
+  readonly onCommittedStatus: (status: ClientStatus) => void;
+}) {
+  let client = oidcAdminClient(input.clientCode);
+  const tx = {
+    auditService: { recordAuditLog: mock(async () => undefined) },
+    clientRepository: {
+      lockClientByCode: mock(async () => client),
+      updateClientByCode: mock(async (_clientCode: string, update: { status?: ClientStatus }) => {
+        client = { ...client, ...update };
+        input.onCommittedStatus(client.status);
+        return client;
+      }),
+      updateClientByCodeWithProtocolEpochs: mock(async (
+        _clientCode: string,
+        update: { status?: ClientStatus },
+      ) => {
+        client = { ...client, ...update };
+        input.onCommittedStatus(client.status);
+        return client;
+      }),
+    },
+  };
+  return createTestClientService(client, tx, input.invalidateClientRuntime);
+}
+
+function createTestClientService(
+  client: AdminClientRecord,
+  tx: Record<string, unknown>,
+  invalidateClientRuntime: (clientCode: string) => Promise<void>,
+) {
+  const revocation = createAdminSessionRevocationPort({
+    sessionKernel: {
+      revokeClientProtocol: mock(async () => emptyRevocationSummary()),
+      revokeClient: mock(async () => emptyRevocationSummary()),
+      revokeUserSessions: mock(async () => emptyRevocationSummary()),
+    },
+    logger: {
+      logClientAllProtocolsRevocation: mock(() => undefined),
+      logClientProtocolRevocation: mock(() => undefined),
+      logUserRevocation: mock(() => undefined),
+    },
+  });
+  return createClientService({
+    clientRepository: {
+      getClientByCode: mock(async () => client),
+      searchClientsPaged: mock(async () => ({ rows: [client], total: 1 })),
+    },
+    clientCache: {
+      invalidateClient: mock(async () => undefined),
+      invalidateUpdatedClient: mock(async () => undefined),
+    },
+    clientRuntimeInvalidation: { invalidateClient: invalidateClientRuntime },
+    clientMutationLogger: { error: mock(() => undefined) },
+    sessionRevocation: revocation,
+    passwordHasher: createFakePasswordHasher(),
+    random: createFakeRandom(),
+    uow: createImmediateUnitOfWork(tx as never),
+  });
+}
+
+function oidcAdminClient(clientCode: string): AdminClientRecord {
   return {
+    id: 7,
     clientCode,
+    clientName: clientCode,
+    clientSecret: `secret-${clientCode}`,
+    url: "https://client.example.com",
+    status: ClientStatus.Enable,
+    description: null,
     isDelete: false,
-    status,
+    createTime: new Date("2026-09-03T00:00:00Z"),
+    updateTime: new Date("2026-09-03T00:00:00Z"),
+    extAttributes: {},
+    oidcEnabled: true,
+    oidcConfig: oidcConfiguration(),
+    oidcSecretHash: "managed-secret-hash",
+    oidcConfigVersion: 1,
+    customSsoEnabled: false,
+    customSsoConfig: null,
+    customSsoSecretHash: null,
+    customSsoConfigVersion: 0,
+  };
+}
+
+function oidcConfiguration() {
+  return {
+    clientType: OidcClientType.Confidential as const,
+    redirectUris: ["https://client.example.com/callback"],
+    postLogoutRedirectUris: ["https://client.example.com/logout"],
+    allowedScopes: [OidcScope.OpenId, OidcScope.Profile],
+    tokenEndpointAuthMethod: OidcTokenEndpointAuthMethod.ClientSecretBasic as const,
+  };
+}
+
+function emptyRevocationSummary() {
+  return {
+    principalSessions: { revoked: 0, alreadyRevoked: 0, missing: 0, excluded: 0 },
+    bindings: { revoked: 0, alreadyRevoked: 0, missing: 0, excluded: 0 },
+    credentials: { revoked: 0, alreadyRevoked: 0, missing: 0, excluded: 0 },
+    artifacts: { revoked: 0, alreadyRevoked: 0, missing: 0, excluded: 0 },
+    cleanup: { attempted: 0, succeeded: 0, failed: 0, failures: [] },
   };
 }

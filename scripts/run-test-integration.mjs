@@ -17,6 +17,7 @@ const resourceEnvNames = [
   "IAM_USER_PROFILE_TEST_DATABASE_URL",
   "IAM_USER_PROFILE_TEST_REDIS_URL",
   "IAM_WORKER_TEST_DATABASE_URL",
+  "IAM_WORKER_TEST_REDIS_URL",
 ];
 const profiles = [
   "component",

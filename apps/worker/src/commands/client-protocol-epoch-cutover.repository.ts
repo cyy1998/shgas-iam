@@ -30,7 +30,6 @@ export function createClientProtocolEpochCutoverRepository(db: DbClient) {
 
   const advanceEpochs = async (
     targets: ClientProtocolEpochTarget[],
-    afterLockBeforeWrite: () => Promise<void>,
   ) => {
     if (targets.length === 0)
       throw new Error("Client Protocol epoch batch was not applied completely");
@@ -57,8 +56,6 @@ export function createClientProtocolEpochCutoverRepository(db: DbClient) {
     })) {
       throw new Error("Client Protocol epoch batch was not applied completely");
     }
-
-    await afterLockBeforeWrite();
 
     const after = [] as ClientProtocolEpochInventoryRecord[];
     for (const target of targets) {

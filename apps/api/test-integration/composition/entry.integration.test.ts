@@ -5,12 +5,8 @@ import { randomUUID } from "node:crypto";
 import { createServer } from "node:http";
 import { fileURLToPath } from "node:url";
 import {
-  beginClientTrafficGateMutation,
-  publishClientTrafficGateMutation,
-} from "@iam/api-core/client-traffic-gate";
-import {
-  invalidateCustomSsoClientRuntime,
-} from "@iam/api-core/custom-sso";
+  createClientRuntimeSnapshotModule,
+} from "@iam/api-core/client-runtime-snapshot";
 import { hashSecret } from "@iam/api-core/security";
 import { createSessionKernel } from "@iam/api-core/session/kernel";
 import {
@@ -769,6 +765,10 @@ describe("API explicit external entry", () => {
         enableReadyCheck: true,
         maxRetriesPerRequest: 1,
       });
+      const clientRuntimeSnapshots = createClientRuntimeSnapshotModule({
+        redis,
+        adapters: [] as const,
+      });
       registerCleanup(() => redis.disconnect());
       const observerRedis = new Redis(redisUrl, {
         enableReadyCheck: true,
@@ -1069,7 +1069,7 @@ describe("API explicit external entry", () => {
                 update_time = NOW()
             WHERE client_code = ${clientCode}
           `;
-          await invalidateCustomSsoClientRuntime(redis, clientCode);
+          await clientRuntimeSnapshots.invalidateClient(clientCode);
           const rotated = await authorize(
             origin,
             "ticket12-state-rotated",
@@ -1104,7 +1104,7 @@ describe("API explicit external entry", () => {
                 update_time = NOW()
             WHERE client_code = ${clientCode}
           `;
-          await invalidateCustomSsoClientRuntime(redis, clientCode);
+          await clientRuntimeSnapshots.invalidateClient(clientCode);
           const disabledGrant = await exchange(
             origin,
             beforeDisable.code,
@@ -1135,23 +1135,13 @@ describe("API explicit external entry", () => {
             signal,
             gatewaySession.localToken,
           );
-          const maintenanceMutation = await beginClientTrafficGateMutation(redis, {
-            clientCode: gatewayClientCode,
-            mutationId: randomUUID(),
-          });
           await sql`
             UPDATE client
             SET status = ${ClientStatus.Maintenance},
                 update_time = NOW()
             WHERE client_code = ${gatewayClientCode}
           `;
-          const maintenancePublished = await publishClientTrafficGateMutation(
-            redis,
-            maintenanceMutation,
-            ClientStatus.Maintenance,
-          );
-          if (maintenancePublished !== "published")
-            throw new Error("API composition could not publish Maintenance Traffic Gate state");
+          await clientRuntimeSnapshots.invalidateClient(gatewayClientCode);
           const maintenancePublic = await publicUserInfo(
             origin,
             signal,
@@ -1163,23 +1153,13 @@ describe("API explicit external entry", () => {
             gatewaySession.localToken,
           );
 
-          const enableMutation = await beginClientTrafficGateMutation(redis, {
-            clientCode: gatewayClientCode,
-            mutationId: randomUUID(),
-          });
           await sql`
             UPDATE client
             SET status = ${ClientStatus.Enable},
                 update_time = NOW()
             WHERE client_code = ${gatewayClientCode}
           `;
-          const enablePublished = await publishClientTrafficGateMutation(
-            redis,
-            enableMutation,
-            ClientStatus.Enable,
-          );
-          if (enablePublished !== "published")
-            throw new Error("API composition could not publish Enable Traffic Gate state");
+          await clientRuntimeSnapshots.invalidateClient(gatewayClientCode);
           const publicAfterMaintenance = await publicUserInfo(
             origin,
             signal,

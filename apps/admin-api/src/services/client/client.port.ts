@@ -1,15 +1,6 @@
 import type { AuditLogWriterPort } from "@admin-api/services/audit/audit.service";
 import type { AdminSessionRevocationPort } from "@admin-api/services/session-revocation/session-revocation.port";
-import type {
-  ClientTrafficGateMutation,
-  ClientTrafficGateMutationHeartbeat,
-} from "@iam/api-core/client-traffic-gate";
-import type {
-  CustomSsoClientRuntimeMutation,
-  CustomSsoClientRuntimeMutationHeartbeat,
-} from "@iam/api-core/custom-sso";
 import type { UnitOfWorkPort } from "@iam/api-core/uow";
-import type { ClientStatus } from "@iam/contracts";
 import type {
   AdminClientCustomSsoUpdate,
   AdminClientOidcUpdate,
@@ -66,34 +57,15 @@ export interface AdminClientCacheInvalidationTarget {
   clientSecret: string;
 }
 
+export interface AdminClientRuntimeInvalidationPort {
+  invalidateClient: (clientCode: string) => Promise<unknown>;
+}
+
+export interface AdminClientMutationLoggerPort {
+  error: (fields: Record<string, unknown>, message: string) => void;
+}
+
 export interface AdminClientCachePort {
-  beginTrafficGateMutation: (
-    clientCode: string,
-    mutationId: string,
-  ) => Promise<ClientTrafficGateMutation>;
-  startTrafficGateMutationHeartbeat: (
-    mutation: ClientTrafficGateMutation,
-  ) => ClientTrafficGateMutationHeartbeat;
-  publishTrafficGateMutation: (
-    mutation: ClientTrafficGateMutation,
-    status: ClientStatus,
-  ) => Promise<"expired" | "published" | "superseded">;
-  abortTrafficGateMutation: (
-    mutation: ClientTrafficGateMutation,
-  ) => Promise<"aborted" | "expired" | "superseded">;
-  beginRuntimeMutation: (
-    clientCode: string,
-    mutationId: string,
-  ) => Promise<CustomSsoClientRuntimeMutation>;
-  startRuntimeMutationHeartbeat: (
-    mutation: CustomSsoClientRuntimeMutation,
-  ) => CustomSsoClientRuntimeMutationHeartbeat;
-  completeRuntimeMutation: (
-    mutation: CustomSsoClientRuntimeMutation,
-  ) => Promise<"completed" | "expired" | "superseded">;
-  abortRuntimeMutation: (
-    mutation: CustomSsoClientRuntimeMutation,
-  ) => Promise<"aborted" | "expired" | "superseded">;
   invalidateClient: (
     client: AdminClientCacheInvalidationTarget,
   ) => Promise<unknown>;
@@ -108,7 +80,6 @@ export interface AdminClientSecretHasherPort {
 }
 
 export interface AdminClientSecretGeneratorPort {
-  uuid: () => string;
   customSsoClientSecret: () => string;
   oidcClientSecret: () => string;
 }
@@ -116,6 +87,8 @@ export interface AdminClientSecretGeneratorPort {
 export interface AdminClientServiceDeps {
   clientRepository: AdminClientReaderPort;
   clientCache: AdminClientCachePort;
+  clientRuntimeInvalidation: AdminClientRuntimeInvalidationPort;
+  clientMutationLogger: AdminClientMutationLoggerPort;
   sessionRevocation: Pick<AdminSessionRevocationPort, "revokeClientProtocol" | "revokeClientAllProtocols">;
   passwordHasher: AdminClientSecretHasherPort;
   random: AdminClientSecretGeneratorPort;

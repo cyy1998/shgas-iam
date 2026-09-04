@@ -11,6 +11,7 @@ import {
 import {
   createCustomSsoSessionKernelAdapter,
 } from "@api/services/session/custom-sso-session-kernel.adapter";
+import { createAuthorizeSsoUseCase } from "@api/use-cases/sso/authorize-sso/authorize-sso.use-case";
 import { createLoginWithOaUseCase } from "@api/use-cases/sso/login-with-oa/login-with-oa.use-case";
 import { createLoginWithWechatUseCase } from "@api/use-cases/sso/login-with-wechat/login-with-wechat.use-case";
 import { createLogoutSsoSessionUseCase } from "@api/use-cases/sso/logout-sso-session/logout-sso-session.use-case";
@@ -494,11 +495,17 @@ function createServices(options: {
         ?? (async (clientCode: string) =>
           clientCode === currentIndependentRuntimeClient.clientCode
             ? currentIndependentRuntimeClient
-            : clientCode === currentGatewayRuntimeClient.clientCode
-              ? currentGatewayRuntimeClient
-              : clientCode === currentGatewayOrcasRuntimeClient.clientCode
-                ? currentGatewayOrcasRuntimeClient
-                : null),
+            : clientCode === "iam"
+              ? {
+                  ...currentIndependentRuntimeClient,
+                  clientCode: "iam",
+                  clientName: "IAM",
+                }
+              : clientCode === currentGatewayRuntimeClient.clientCode
+                ? currentGatewayRuntimeClient
+                : clientCode === currentGatewayOrcasRuntimeClient.clientCode
+                  ? currentGatewayOrcasRuntimeClient
+                  : null),
     },
     kernel: adapterKernel,
     logger,
@@ -1217,27 +1224,26 @@ describe("Custom SSO module interface", () => {
     });
   });
 
-  test("revokes a newly issued authorization artifact when the client changes during issuance", async () => {
-    let runtimeReadCount = 0;
+  test("keeps a newly issued authorization artifact when the accepted client changes during issuance", async () => {
+    let currentRuntimeClient = independentRuntimeClient;
     const revokeArtifact = mock(async (
       _artifactId: string,
       _reason?: string,
     ) => undefined);
     const services = createServices({
-      findRuntimeClient: async (clientCode) => {
-        if (clientCode !== independentRuntimeClient.clientCode)
-          return null;
-        runtimeReadCount += 1;
-        return runtimeReadCount === 1
-          ? independentRuntimeClient
-          : {
-              ...independentRuntimeClient,
-              customSsoConfigVersion:
-                independentRuntimeClient.customSsoConfigVersion + 1,
-            };
+      findRuntimeClient: async () => {
+        throw new Error("the session adapter must reuse the accepted request client");
       },
       decorateKernel: kernel => ({
         ...kernel,
+        async createProtocolArtifact(input) {
+          currentRuntimeClient = {
+            ...independentRuntimeClient,
+            customSsoConfigVersion:
+              independentRuntimeClient.customSsoConfigVersion + 1,
+          };
+          return await kernel.createProtocolArtifact(input);
+        },
         async revokeArtifact(artifactId, reason) {
           await revokeArtifact(artifactId, reason);
           return await kernel.revokeArtifact(artifactId, reason);
@@ -1247,23 +1253,31 @@ describe("Custom SSO module interface", () => {
     const principalToken = await createPrincipalToken(
       services.customSsoSession,
     );
+    const findRuntimeRecord = mock(async () => currentRuntimeClient);
+    const authorize = createAuthorizeSsoUseCase({
+      authorizationGrants: services.customSsoSession,
+      clients: { findRuntimeRecord },
+      redirectUrls: {
+        normalizeAllowed: () => "https://app.example.com/callback",
+      },
+      trafficGate: { assertIssuanceAllowed: async () => undefined },
+    });
 
-    await expect(
-      services.customSsoSession.issueAuthorizationCode({
-        clientCode: independentClient.clientCode,
-        configVersion: independentClient.configVersion,
-        mode: CustomSsoClientMode.Independent,
-        redirectUrl: "https://app.example.com/callback",
-        token: principalToken,
-        tokenSource: "cookie",
-      }),
-    ).rejects.toBeInstanceOf(AuthzUnauthorizedError);
+    const result = await authorize.execute({
+      clientCode: independentClient.clientCode,
+      globalSessionToken: principalToken,
+      redirectUrl: "https://app.example.com/callback",
+      tokenSource: "cookie",
+    });
 
-    expect(runtimeReadCount).toBe(2);
-    expect(revokeArtifact).toHaveBeenCalledWith(
-      expect.any(String),
-      "client_config_changed",
-    );
+    expect(result).toMatchObject({ isLogin: true });
+    expect(findRuntimeRecord).toHaveBeenCalledTimes(1);
+    expect(currentRuntimeClient.customSsoConfigVersion).toBe(8);
+    expect(revokeArtifact).not.toHaveBeenCalled();
+    if (!result.isLogin)
+      throw new Error("expected issued authorization code");
+    const artifact = await services.kernel.resolveProtocolArtifact(result.code);
+    expect(artifact.status).toBe("resolved");
   });
 
   test("revokes the authorization artifact when redemption initialization cannot create its record", async () => {
@@ -2131,7 +2145,7 @@ describe("Custom SSO module interface", () => {
         authenticatedClientCode: "gateway",
         expectedConfigVersion: 7,
         subjectIdentifier,
-      });
+      }, currentGatewayRuntimeClient);
   });
 
   test("completeGatewayLogin has one atomic winner for concurrent valid callbacks", async () => {
@@ -2720,11 +2734,10 @@ describe("Custom SSO module interface", () => {
     await expect(
       services.customSsoSession.logout(credential.credential),
     ).rejects.toBeInstanceOf(CustomSsoClientRuntimeUnavailableError);
-    await expect(
-      services.resolveAuthenticationContext(principalToken),
-    ).resolves.toEqual({
-      authenticatedClientCode: "iam",
-      subjectIdentifier,
+    const principal = await services.kernel.resolvePrincipalSession(principalToken);
+    expect(principal).toMatchObject({
+      status: "resolved",
+      value: { principal: { subjectId: subjectIdentifier } },
     });
   });
 

@@ -46,6 +46,7 @@ const redisIntegrationPassThroughEnv = [
   "IAM_API_TEST_REDIS_URL",
   "IAM_OIDC_PROVIDER_TEST_REDIS_URL",
   "IAM_USER_PROFILE_TEST_REDIS_URL",
+  "IAM_WORKER_TEST_REDIS_URL",
 ];
 const pnpmRecorderScript = join(
   repoRoot,
@@ -87,6 +88,7 @@ const integrationResourceEnvNames = [
   "IAM_USER_PROFILE_TEST_DATABASE_URL",
   "IAM_USER_PROFILE_TEST_REDIS_URL",
   "IAM_WORKER_TEST_DATABASE_URL",
+  "IAM_WORKER_TEST_REDIS_URL",
 ] as const;
 
 function readJson(path: string) {
@@ -900,6 +902,7 @@ describe("test orchestration", () => {
       dependsOn: ["transit"],
       cache: false,
       passThroughEnv: [
+        "IAM_ADMIN_API_TEST_DATABASE_URL",
         "IAM_ADMIN_API_TEST_REDIS_URL",
         "IAM_API_CORE_CLEANUP_TEST_REDIS_URL",
         "IAM_API_CORE_TEST_REDIS_URL",
@@ -908,6 +911,7 @@ describe("test orchestration", () => {
         "IAM_OIDC_PROVIDER_TEST_DATABASE_URL",
         "IAM_OIDC_PROVIDER_TEST_REDIS_URL",
         "IAM_USER_PROFILE_TEST_REDIS_URL",
+        "IAM_WORKER_TEST_REDIS_URL",
       ],
     });
     expect(turbo.tasks["test:integration:redis"]).toEqual({
@@ -1116,6 +1120,7 @@ describe("test orchestration", () => {
           "test:integration:component": "bun test --max-concurrency=2 test-integration/component",
           "test:integration:process": "bun test --max-concurrency=1 test-integration/process",
           "test:integration:postgres": "bun test --max-concurrency=1 test-integration/postgres",
+          "test:integration:redis": "bun test --max-concurrency=1 test-integration/redis",
         },
       },
       {
@@ -1198,6 +1203,11 @@ describe("test orchestration", () => {
       {
         envName: "IAM_WORKER_TEST_DATABASE_URL",
         harnessPath: "test-integration/postgres/postgres-test-harness.ts",
+        workspaceRoot: workerRoot,
+      },
+      {
+        envName: "IAM_WORKER_TEST_REDIS_URL",
+        harnessPath: "test-integration/redis/redis-test-harness.ts",
         workspaceRoot: workerRoot,
       },
       {

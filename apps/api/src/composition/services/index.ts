@@ -9,6 +9,7 @@ import { createLoginCredentialParser } from "@api/services/authentication/login-
 import { createClientService } from "@api/services/client/client.service";
 import {
   createCustomSsoClientRuntimeReader,
+  createCustomSsoClientRuntimeSnapshotAdapter,
 } from "@api/services/client/custom-sso-client-runtime.reader";
 import { createCustomSsoClientSecretVerifier } from "@api/services/client/custom-sso-client-secret-verifier";
 import { createCapService } from "@api/services/human-verification/cap.service";
@@ -36,7 +37,14 @@ import {
   createAuthorizationGrantRedemptionCleanupAdapter,
   createRedisAuthorizationGrantRedemptionStore,
 } from "@iam/api-core/authorization-grant";
-import { createClientTrafficGateReader } from "@iam/api-core/client-traffic-gate";
+import {
+  createClientRuntimeSnapshotLoggerObservability,
+  createClientRuntimeSnapshotModule,
+} from "@iam/api-core/client-runtime-snapshot";
+import {
+  createClientTrafficGateReader,
+  createClientTrafficGateSnapshotAdapter,
+} from "@iam/api-core/client-traffic-gate";
 import { LoggerSourceApp } from "@iam/api-core/logger";
 import {
   createLoginRestriction,
@@ -138,14 +146,27 @@ export function createApiServices(options: CreateApiServicesOptions) {
     redis: runtime.redis,
     clientRepository: repositories.client,
   });
-  const customSsoClientRuntime = createCustomSsoClientRuntimeReader({
+  const clientRuntimeSnapshots = createClientRuntimeSnapshotModule({
     redis: runtime.redis,
-    source: repositories.customSsoClient,
+    adapters: [
+      createCustomSsoClientRuntimeSnapshotAdapter({
+        repository: repositories.customSsoClient,
+      }),
+      createClientTrafficGateSnapshotAdapter({
+        source: repositories.client,
+      }),
+    ],
+    createEpoch: runtime.random.uuid,
+    observability: createClientRuntimeSnapshotLoggerObservability(
+      runtime.logger,
+    ),
   });
-  const clientTrafficGate = createClientTrafficGateReader({
-    redis: runtime.redis,
-    source: repositories.client,
-  });
+  const customSsoClientRuntime = createCustomSsoClientRuntimeReader(
+    clientRuntimeSnapshots.reader("custom-sso"),
+  );
+  const clientTrafficGate = createClientTrafficGateReader(
+    clientRuntimeSnapshots.reader("traffic-gate"),
+  );
   const customSsoTrafficGate = createCustomSsoTrafficGate({
     gate: clientTrafficGate,
   });
@@ -153,7 +174,6 @@ export function createApiServices(options: CreateApiServicesOptions) {
     repository: repositories.customSsoClient,
   });
   const customSsoSubjectDelivery = createCustomSsoSubjectDelivery({
-    clients: customSsoClientRuntime,
     projection: subjectProjection,
   });
   const customSsoSubjectDeliveryRequests

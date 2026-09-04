@@ -105,14 +105,17 @@ test("HR Admin manages cross-root responsibilities without widening either endpo
     `/iam-admin/organization-responsibilities/assignments?lifecycle=all&assignment=${scenario.hiddenResponsibilityAssignmentId}`,
   );
   const concealedDrawer = page.getByRole("dialog");
-  await expect(concealedDrawer.getByRole("alert")).toBeVisible();
+  await expect(concealedDrawer.getByRole("alert").filter({
+    hasText: "组织责任任命不存在",
+  })).toHaveCount(1);
   await expect(concealedDrawer).not.toContainText(
     scenario.outsideResponsibilityHolderPositionCode,
   );
   await expect(concealedDrawer).not.toContainText(
     scenario.outsideOrganizationCode,
   );
-  await concealedDrawer.getByRole("button", { name: "关闭" }).click();
+  await page.keyboard.press("Escape");
+  await expect(concealedDrawer).toBeHidden();
 
   await expectSafeBlockers(page, context.request, scenario);
 
@@ -224,11 +227,13 @@ async function manageLifecycle(page: Page, assignmentId: number) {
   await page.locator(".ant-modal-confirm").getByRole("button", {
     name: "确认结束",
   }).click();
-  await expect(page.getByText("责任任命已结束", { exact: true })).toBeVisible();
+  const endedMessage = page.getByText("责任任命已结束", { exact: true });
+  await expect(endedMessage).toBeVisible();
   await expect(drawer.getByText("已结束", { exact: true })).toBeVisible();
   await expect(drawer.getByRole("button", { name: "暂停任命" })).toHaveCount(0);
   await expect(drawer.getByRole("button", { name: "恢复任命" })).toHaveCount(0);
   await expect(drawer.getByRole("button", { name: "结束任命" })).toHaveCount(0);
+  await expect(endedMessage).toBeHidden();
   await drawer.getByRole("button", { name: "关闭" }).click();
 
   await page.goto(

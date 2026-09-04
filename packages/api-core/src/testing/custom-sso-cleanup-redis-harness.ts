@@ -18,6 +18,7 @@ const callerOwnedRedisTestUrlEnvironmentNames = [
   "IAM_API_TEST_REDIS_URL",
   "IAM_OIDC_PROVIDER_TEST_REDIS_URL",
   "IAM_USER_PROFILE_TEST_REDIS_URL",
+  "IAM_WORKER_TEST_REDIS_URL",
 ] as const;
 const apiCoreRoot = fileURLToPath(new URL("../../", import.meta.url));
 

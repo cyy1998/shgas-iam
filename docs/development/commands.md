@@ -138,23 +138,27 @@ pnpm --filter @iam/oidc-provider test:integration:composition
 pnpm --filter @iam/oidc-provider test:integration:redis
 ```
 
-`@iam/admin-api` 已发布 Unit、component、process、postgres 与 redis package-local canonical commands；`@iam/worker` 已发布
-Unit、component、process 与 postgres commands：
+`@iam/admin-api` 已发布 Unit、component、process、postgres、composition 与 redis package-local canonical commands；`@iam/worker` 已发布
+Unit、component、process、postgres 与 redis commands：
 
 ```bash
 pnpm --filter @iam/admin-api test:unit
 pnpm --filter @iam/admin-api test:integration:component
 pnpm --filter @iam/admin-api test:integration:process
 pnpm --filter @iam/admin-api test:integration:postgres
+pnpm --filter @iam/admin-api test:integration:composition
 pnpm --filter @iam/admin-api test:integration:redis
 pnpm --filter @iam/worker test:unit
 pnpm --filter @iam/worker test:integration:component
 pnpm --filter @iam/worker test:integration:process
 pnpm --filter @iam/worker test:integration:postgres
+pnpm --filter @iam/worker test:integration:redis
 ```
 
 Admin 的 `test-smoke/client-cache-invalidation.runtime-smoke.ts` 是 Redis test 使用的 production runtime entry
-fixture，不是测试候选。client cache 的 invalidation、update 与 mutation completion 已由真实 Redis profile 验证；API
+fixture，不是测试候选。legacy client cache 仅以真实 Redis profile 验证通用 invalidation/update；Custom SSO 与 Traffic Gate
+通过 production `clientRuntimeInvalidation` seam 和真实 service mutation 验证 required Snapshot invalidation，Traffic Gate acquisition
+另由 canonical Snapshot Adapter/Reader、共享真实 Redis 与 production composition contracts 覆盖；API
 legacy cleanup 的精确删除边界由 API Core 的真实 Redis profile 在独占 cleanup 资源上验证；process profile 不再运行 RESP
 compatibility case。
 
@@ -271,6 +275,14 @@ Explicit recovery 的 cleanup 有独立 120 秒 deadline，对 exact project 执
 diagnostics 或 cleanup。命令名不表示已经接入 CI provider，也不授予 merge、发布或部署权限。Integration 资源与 Full-system
 E2E lifecycle 的详细契约分别由本页后续专用资源说明和 [测试编排架构](../architecture/testing-architecture.md) 持有。
 
+Client Runtime Snapshot 首次激活不提供 feature-specific root runner。候选验证由发布平台或 release owner 对同一固定候选逐项调用
+`pnpm verify`、`pnpm check:test-collection`、相关 Module/Adapter/Admin/Worker package commands 与 `pnpm test:e2e`，并独立保存每项
+退出状态与证据。其中 `pnpm --filter @iam/admin-api client-runtime:hard-cutover-rehearsal` 通过真实 Admin mutation、临时 PostgreSQL
+schema、真实 Redis 与三类公开 Reader 验证 mutation 后事实及恢复，并精确清理本次 owner 资源。各真实资源命令要求调用方提供专用
+URL，且不会创建、推断或清理这些调用方资源；仓库命令也不执行 production freeze、部署、drain、PONR、namespace reset 或切流。
+完整命令矩阵与人工阶段见
+[Client Runtime Snapshot hard-cutover 与验收手册](../releases/client-runtime-snapshot-hard-cutover.md)。
+
 当前 Windows 本地聚合 evidence 与平台 adoption 状态见
 [测试编排架构的“默认验证与交付”](../architecture/testing-architecture.md#默认验证与交付)；Linux/真实 CI 尚未验收。
 
@@ -294,6 +306,10 @@ pnpm --filter @iam/db test:integration:postgres
 
 # Worker Subject Projection Client cutover contract（需专用 IAM_WORKER_TEST_DATABASE_URL）
 pnpm --filter @iam/worker test:integration:postgres
+
+# Worker Client Runtime targeted/full repair 与独立 full verify production wiring（需 owner-specific 专用 URL）
+IAM_WORKER_TEST_REDIS_URL=<dedicated-non-production-url> \
+pnpm --filter @iam/worker test:integration:redis
 
 # Role assignment PostgreSQL contract（需由调用方提供专用 IAM_ROLE_ASSIGNMENT_TEST_DATABASE_URL）
 pnpm --filter @iam/role-assignment-resolution test:integration:postgres
@@ -340,11 +356,15 @@ pnpm gateway:apisix:validate -- <environment-arguments>
 `FLUSHDB`/`FLUSHALL`。Cleanup 测试不会把 `IAM_API_CORE_TEST_REDIS_URL` 或 runtime Redis 用作 fallback；它会在连接前
 比较去除 credential 后的 host/port/logical DB identity，并拒绝与任一可见普通测试或 runtime Redis identity 相同的资源。
 Caller-owned 对照集合与 `turbo.json` 的 `test:integration:redis.passThroughEnv` 及
-`test:integration:composition.passThroughEnv` 中 Redis URL 集合一致，包含 Admin API、API Core、API、OIDC Provider 与 User
-Profile 的专用 Redis URL，明确排除正在验证的 cleanup URL 自身。任何 Redis URL 出现 query 参数时也会在
+`test:integration:composition.passThroughEnv` 中 Redis URL 集合一致，包含 Admin API、API Core、API、OIDC Provider、User
+Profile 与 Worker 的专用 Redis URL，明确排除正在验证的 cleanup URL 自身。任何 Redis URL 出现 query 参数时也会在
 连接前失败，避免 `?db=`、`?port=` 等产生第二种 connection identity 表示。测试命令和 harness 不负责启动 Docker。
 Agent 可以在运行命令前启动临时容器，但必须使用仓库声明的镜像版本、动态宿主端口与任务唯一的 name/label，等待服务
 ready 后传入 URL，并在测试结束后只按预先记录的 container ID 清理。不得用 glob、prefix scan 或 prune 代替精确清理。
+
+维护者决定 #69 的 Client Runtime full repair contract 与 #68 targeted repair 共用
+`IAM_WORKER_TEST_REDIS_URL` owner resource，不新增 cleanup-specific env，也不跨其他可见环境推断 Redis identity。Worker harness
+只登记本次 Client/restore fixture 与 non-owner sentinel，测试后精确 `UNLINK` 并验证 Module-owned inventory 无残留。
 
 旧 Ticket 12 的 V1 rehearsal/backfill/verify 入口已随 strict V2 激活撤销。维护者只使用本页列出的
 User Profile maintenance、API/OIDC external entry、hermetic process smoke 与数据库 rollback seams；不得把 URL credential、
@@ -396,12 +416,12 @@ Hook 不运行 lint、typecheck、test、build 或 tracker checker。按改动�
   `pnpm --filter @iam/e2e-system <test:e2e|runtime:lifecycle|admin:journey|hr-admin:journey|oidc:journey|runtime:cleanup|lint|test|test:unit|typecheck>`。
   当前只完成 Windows 本地验收，未宣称 Linux/CI adoption
 - API backend：`pnpm --filter @iam/api <dev|serve|lint|test|test:unit|test:integration:component|test:integration:process|test:integration:composition|test:integration:postgres|test:integration:redis|typecheck>`
-- Admin API backend：`pnpm --filter @iam/admin-api <dev|serve|lint|test|test:unit|test:integration:component|test:integration:process|test:integration:postgres|test:integration:redis|typecheck>`
+- Admin API backend：`pnpm --filter @iam/admin-api <dev|serve|lint|test|test:unit|test:integration:component|test:integration:process|test:integration:postgres|test:integration:composition|test:integration:redis|client-runtime:hard-cutover-rehearsal|typecheck>`
 - OIDC provider：`pnpm --filter @iam/oidc-provider <dev|serve|lint|test|test:unit|test:integration:component|test:integration:process|test:integration:composition|test:integration:redis|typecheck|client-protocol:artifacts>`
-- API Core：`pnpm --filter @iam/api-core <lint|test|test:unit|test:integration:component|test:integration:process|test:integration:redis|typecheck>`
+- API Core：`pnpm --filter @iam/api-core <lint|test|test:unit|test:integration:component|test:integration:process|test:integration:redis|client-runtime:hard-cutover-redis|typecheck>`
 - Client Subject Projection：`pnpm --filter @iam/client-subject-projection <lint|test|test:unit|test:integration:component|typecheck>`
 - User Profile Read Model：`pnpm --filter @iam/user-profile-read-model <lint|test|test:unit|test:integration:component|test:integration:postgres|test:integration:redis|typecheck>`
-- Worker：`pnpm --filter @iam/worker <dev|serve|lint|test|test:unit|test:integration:component|test:integration:process|test:integration:postgres|typecheck|employment:cutover-verify|user-profile:backfill|user-profile:repair|user-profile:verify-postgres|user-profile:verify-redis|client-protocol:epochs>`
+- Worker：`pnpm --filter @iam/worker <dev|serve|lint|test|test:unit|test:integration:component|test:integration:process|test:integration:postgres|test:integration:redis|typecheck|employment:cutover-verify|user-profile:backfill|user-profile:repair|user-profile:verify-postgres|user-profile:verify-redis|client-protocol:epochs|client-runtime:repair|client-runtime:verify>`
 - Employment 生命周期切换前只读 gate：
   `IAM_WORKER_DATABASE_URL=<target-url> pnpm --filter @iam/worker employment:cutover-verify`
 - 仅处理 Subject Access indexed backlog：
@@ -417,6 +437,22 @@ Hook 不运行 lint、typecheck、test、build 或 tracker checker。按改动�
   `pnpm --filter @iam/worker client-protocol:epochs -- <dry-run|apply|verify> --manifest <path>`，随后运行
   `pnpm --filter @iam/oidc-provider client-protocol:artifacts -- <dry-run|apply|verify> --manifest <path>`；完整顺序与不可逆边界见
   [Client Protocol V2 epoch 与 artifact 清理](../releases/client-protocol-v2-artifact-cutover.md)。
+- 单 Client Runtime repair：
+  `pnpm --filter @iam/worker client-runtime:repair -- --client-code <clientCode>`。该 targeted 入口只接受一个由 canonical
+  `ClientCodeSchema` 验证的 code；缺失、空值、额外位置参数、`--all` 或 traffic-stopped/full-mode 参数均在创建 Redis
+  resource 前失败。命令只修复可重建 Runtime cache，不读取 PostgreSQL、不重放业务 mutation、不推进协议版本，也不撤销
+  Session/artifact 或轮换 Secret。`completed` report 退出 0，`failed` report 或 cleanup failure 非零退出。
+- Redis restore 后的 Client Runtime full repair 与独立 verify：
+  `pnpm --filter @iam/worker client-runtime:repair -- --all --protocol-traffic-stopped` 与
+  `pnpm --filter @iam/worker client-runtime:verify -- --all --protocol-traffic-stopped`。Full repair 与 targeted 参数互斥，
+  两个 full command 都必须显式确认协议流量已关闭；缺少确认时在创建 Redis resource 前失败。Repair 以 `SCAN` 和分批
+  `UNLINK` 清理 Module-owned versioned namespace 与三套 legacy Runtime inventory，部分失败后保持停流并从头安全重跑；
+  verify 在新的 Worker process 中只读重扫，只有完整扫描成功且 owner key 为零时报告 `completed` 并退出 0。Safe report
+  不包含 Redis URL、key、control、payload、credential 或原始错误；status 是发布 gate，计数只用于诊断，verify 不证明
+  traffic freeze、旧实例 drain、PONR receipt 或业务可用。两条 full command 的默认 deadline 是 5 分钟；受控演练可通过
+  正整数 `IAM_WORKER_CLIENT_RUNTIME_MAINTENANCE_TIMEOUT_MS` 收紧 deadline，超时必须输出 failed report、非零退出并完成资源
+  shutdown。完整 hard-cutover 顺序见
+  [Client Runtime Snapshot hard-cutover 与验收手册](../releases/client-runtime-snapshot-hard-cutover.md)。
 - Custom SSO hard cutover 旧会话清理：
   `pnpm --filter @iam/api-core session:cleanup-custom-sso-cutover -- --dry-run --batch-size 500`；核对摘要后把
   `--dry-run` 改为 `--verify`，有残留时必须非零退出；确认门禁有效后改为 `--apply`，完成后再以

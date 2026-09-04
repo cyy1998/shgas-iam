@@ -12,7 +12,10 @@ import {
 } from "@iam/api-core/testing/external-test-resources";
 import Redis from "ioredis";
 
-const TEST_REDIS_URL_ENV = "IAM_ADMIN_API_TEST_REDIS_URL";
+const DEFAULT_TEST_REDIS_URL_ENV = "IAM_ADMIN_API_TEST_REDIS_URL";
+type AdminApiRedisTestResourceEnvName
+  = | "IAM_ADMIN_API_TEST_REDIS_URL"
+    | "IAM_API_CORE_TEST_REDIS_URL";
 
 export interface AdminApiRedisTestScope {
   readonly redis: Redis;
@@ -25,14 +28,18 @@ export interface AdminApiRedisTestHarness {
   readonly createScope: () => Promise<AdminApiRedisTestScope>;
   readonly close: () => Promise<void>;
   readonly inventoryKeys: () => Promise<Set<string>>;
+  readonly removeKeys: (keys: readonly string[]) => Promise<void>;
   readonly redisConfig: DedicatedRedisTestConfig;
 }
 
-export async function createAdminApiRedisTestHarness():
+export async function createAdminApiRedisTestHarness(options?: {
+  readonly resourceEnvName?: AdminApiRedisTestResourceEnvName;
+}):
 Promise<AdminApiRedisTestHarness> {
-  const redisUrl = requireDedicatedRedisTestUrl();
+  const resourceEnvName = options?.resourceEnvName ?? DEFAULT_TEST_REDIS_URL_ENV;
+  const redisUrl = requireDedicatedRedisTestUrl(resourceEnvName);
   const redisConfig = parseDedicatedRedisTestUrl({
-    name: TEST_REDIS_URL_ENV,
+    name: resourceEnvName,
     value: redisUrl,
   });
   const cleanupRedis = createRedisClient(redisUrl);
@@ -50,6 +57,10 @@ Promise<AdminApiRedisTestHarness> {
       return await inventoryRedisKeys(
         createRedisKeyInventoryPort(cleanupRedis),
       );
+    },
+    async removeKeys(keys) {
+      if (keys.length > 0)
+        await cleanupRedis.unlink(...keys);
     },
     async createScope() {
       const ownerMarker = `admin-api-${randomUUID().replaceAll("-", "")}`;
@@ -128,11 +139,13 @@ async function connectRedis(redis: Redis) {
   await redis.ping();
 }
 
-function requireDedicatedRedisTestUrl() {
+function requireDedicatedRedisTestUrl(
+  resourceEnvName: AdminApiRedisTestResourceEnvName,
+) {
   const redisUrl = requireExternalTestUrl({
     environment: process.env,
     lane: "Admin API Redis Integration",
-    name: TEST_REDIS_URL_ENV,
+    name: resourceEnvName,
   });
   return redisUrl;
 }

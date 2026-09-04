@@ -1,32 +1,54 @@
 import type { Redis } from "ioredis";
 import type { OidcProviderEnv } from "../../env.ts";
+import type { OidcLogger } from "../../lib/logger.ts";
 import type { OidcProviderRepositories } from "../repositories/index.ts";
-import { createClientTrafficGateReader } from "@iam/api-core/client-traffic-gate";
+import {
+  createClientRuntimeSnapshotLoggerObservability,
+  createClientRuntimeSnapshotModule,
+} from "@iam/api-core/client-runtime-snapshot";
+import {
+  createClientTrafficGateReader,
+  createClientTrafficGateSnapshotAdapter,
+} from "@iam/api-core/client-traffic-gate";
 import { createOidcProtocolObjectStore } from "../../storage/redis-adapter.ts";
 import { createClientAuthFailureStore } from "../../stores/client-auth-failure.store.ts";
-import { createOidcClientRuntimeCache, createOidcClientRuntimeStore } from "../../stores/client-runtime.store.ts";
+import {
+  createOidcClientRuntimeSnapshotAdapter,
+  createOidcClientRuntimeStore,
+} from "../../stores/client-runtime.store.ts";
 import { createOidcTokenStore } from "../../stores/token.store.ts";
 
 export interface CreateOidcProviderStoresDeps {
   env: OidcProviderEnv;
   redis: Redis;
   repositories: Pick<OidcProviderRepositories, "client">;
+  logger?: OidcLogger;
 }
 
 export function createOidcProviderStores(deps: CreateOidcProviderStoresDeps) {
-  const clientRuntimeCache = createOidcClientRuntimeCache(deps.redis, deps.env.oidc.clientCacheTtlSeconds);
-  const clientRuntime = createOidcClientRuntimeStore({
-    repository: deps.repositories.client,
-    cache: clientRuntimeCache,
-  });
-  const tokens = createOidcTokenStore(deps.redis);
-  const clientTrafficGate = createClientTrafficGateReader({
+  const clientRuntimeSnapshots = createClientRuntimeSnapshotModule({
     redis: deps.redis,
-    source: deps.repositories.client,
+    adapters: [
+      createOidcClientRuntimeSnapshotAdapter({
+        repository: deps.repositories.client,
+        cacheTtlSeconds: deps.env.oidc.clientCacheTtlSeconds,
+      }),
+      createClientTrafficGateSnapshotAdapter({
+        source: deps.repositories.client,
+      }),
+    ],
+    observability: deps.logger === undefined
+      ? undefined
+      : createClientRuntimeSnapshotLoggerObservability(deps.logger),
   });
+  const clientRuntime = createOidcClientRuntimeStore(clientRuntimeSnapshots.reader("oidc"));
+  const tokens = createOidcTokenStore(deps.redis);
+  const clientTrafficGate = createClientTrafficGateReader(
+    clientRuntimeSnapshots.reader("traffic-gate"),
+  );
 
   return {
-    clientRuntimeCache,
+    clientRuntimeSnapshots,
     clientRuntime,
     clientTrafficGate,
     clientAuthFailures: createClientAuthFailureStore(

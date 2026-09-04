@@ -13,6 +13,7 @@ describe("Custom SSO cleanup Redis resource safety", () => {
     "IAM_API_TEST_REDIS_URL",
     "IAM_OIDC_PROVIDER_TEST_REDIS_URL",
     "IAM_USER_PROFILE_TEST_REDIS_URL",
+    "IAM_WORKER_TEST_REDIS_URL",
     "REDIS_URL",
   ])("rejects the same canonical logical DB exposed as %s", (candidateName) => {
     expect(() => resolveCustomSsoCleanupRedisResource({

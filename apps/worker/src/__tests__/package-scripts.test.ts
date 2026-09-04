@@ -19,6 +19,8 @@ describe("maintenance command package scripts", () => {
       "user-profile:verify-postgres": "bun run src/commands/user-profile-readiness.ts verify-postgres",
       "user-profile:verify-redis": "bun run src/commands/user-profile-readiness.ts verify-redis",
       "client-protocol:epochs": "bun run src/commands/client-protocol-epoch-maintenance.ts",
+      "client-runtime:repair": "bun run src/commands/client-runtime-repair.ts",
+      "client-runtime:verify": "bun run src/commands/client-runtime-verify.ts",
     });
     expect(Object.keys(workerManifest.scripts ?? {})).not.toEqual(
       expect.arrayContaining([

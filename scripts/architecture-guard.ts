@@ -193,7 +193,6 @@ const staticModuleOwnershipRules: readonly StaticModuleOwnershipRule[] = [
       "apps/admin-api/src/composition",
     ],
     targets: [
-      { kind: "exact", module: "@iam/api-core/oidc" },
       { kind: "prefix", module: "@iam/api-core/session/kernel" },
       { kind: "suffix", module: "custom-sso-session-kernel.adapter" },
       { kind: "suffix", module: "oidc-session-kernel.adapter" },

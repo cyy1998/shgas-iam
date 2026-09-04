@@ -15,7 +15,6 @@ import { createOidcProviderSecurity } from "./security/index.ts";
 import { createOidcProviderSession } from "./session/index.ts";
 import { createOidcProviderShutdown } from "./shutdown.ts";
 import { createOidcProviderStores } from "./stores/index.ts";
-import { createOidcProviderWorkers } from "./workers/index.ts";
 
 export interface CreateOidcProviderCompositionOptions {
   env: OidcProviderEnv;
@@ -35,7 +34,7 @@ export async function createOidcProviderComposition(options: CreateOidcProviderC
     ?? await loadSigningKeys(options.env.oidc.currentJwkJson, options.env.oidc.previousJwkJson);
   const dbClient = options.dbClient ?? db;
   const repositories = createOidcProviderRepositories(dbClient);
-  const stores = createOidcProviderStores({ env: options.env, redis, repositories });
+  const stores = createOidcProviderStores({ env: options.env, redis, repositories, logger });
   const session = createOidcProviderSession({ env: options.env, redis, logger, repositories, stores });
   const security = createOidcProviderSecurity({ env: options.env, repositories, stores });
   const providerRuntime = createOidcProviderRuntime({
@@ -56,9 +55,7 @@ export async function createOidcProviderComposition(options: CreateOidcProviderC
     logger,
     health: redis,
   });
-  const workers = createOidcProviderWorkers({ redis, logger, stores, session });
   const shutdown = createOidcProviderShutdown({
-    clientInvalidationSubscriber: workers.clientInvalidationSubscriber,
     closeDatabase: closeDb,
     logger,
     redis,
@@ -81,7 +78,7 @@ export function createOidcProtocolArtifactCommandComposition(
   const redis = options.redis ?? createProviderRedis(options.env);
   const dbClient = options.dbClient ?? db;
   const repositories = createOidcProviderRepositories(dbClient);
-  const stores = createOidcProviderStores({ env: options.env, redis, repositories });
+  const stores = createOidcProviderStores({ env: options.env, redis, repositories, logger });
   const session = createOidcProviderSession({
     env: options.env,
     redis,

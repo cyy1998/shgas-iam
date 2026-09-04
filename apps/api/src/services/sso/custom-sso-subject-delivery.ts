@@ -6,9 +6,6 @@ import type {
   CustomSsoSubjectProjectionV2Dto,
 } from "./custom-sso-subject.schema";
 import {
-  CustomSsoClientRuntimeUnavailableError,
-} from "@api/services/client/custom-sso-client-runtime.reader";
-import {
   CustomSsoClientDeliveryUnauthorizedError,
 } from "@api/services/sso/custom-sso-client-delivery.error";
 import { AuthzUnauthorizedError } from "@iam/api-core/errors/AuthzUnauthorizedError";
@@ -24,11 +21,6 @@ import {
 } from "@iam/contracts";
 
 export interface CustomSsoSubjectDeliveryDeps {
-  clients: {
-    findRuntimeRecord: (
-      clientCode: string,
-    ) => Promise<CustomSsoClientRuntimeDto | null>;
-  };
   projection: CustomSsoSubjectProjectionPort;
 }
 
@@ -45,16 +37,13 @@ export interface CustomSsoSubjectDeliveryCapability {
 export function createCustomSsoSubjectDelivery(
   deps: CustomSsoSubjectDeliveryDeps,
 ) {
-  async function loadCurrentClient(
+  function loadAcceptedClient(
     context: CustomSsoSubjectDeliveryContext,
+    client: CustomSsoClientRuntimeDto,
   ) {
-    const client = await deps.clients.findRuntimeRecord(
-      context.authenticatedClientCode,
-    );
-    const config = client?.customSsoConfig;
+    const config = client.customSsoConfig;
     if (
-      client === null
-      || client.clientCode !== context.authenticatedClientCode
+      client.clientCode !== context.authenticatedClientCode
       || client.status === ClientStatus.Disable
       || client.isDelete
       || !client.customSsoEnabled
@@ -73,8 +62,9 @@ export function createCustomSsoSubjectDelivery(
 
   async function resolveUserInfo(
     context: CustomSsoSubjectDeliveryContext,
+    client: CustomSsoClientRuntimeDto,
   ) {
-    const { client, config } = await loadCurrentClient(context);
+    const { config } = loadAcceptedClient(context, client);
     const selection = parseSubjectClaimSelection({
       catalogVersion: SUBJECT_CLAIM_CATALOG.version,
       claims: [...config.subjectClaims],
@@ -84,15 +74,12 @@ export function createCustomSsoSubjectDelivery(
       clientCode: context.authenticatedClientCode,
       selection,
     });
-    await assertClientRemainsCurrent(
-      context,
-      client.customSsoConfigVersion,
-    );
     return wire;
   }
 
   function createUserInfoCapability(
     context: CustomSsoSubjectDeliveryContext,
+    client: CustomSsoClientRuntimeDto,
   ): CustomSsoSubjectDeliveryCapability {
     const capturedContext = {
       subjectIdentifier: context.subjectIdentifier,
@@ -101,15 +88,18 @@ export function createCustomSsoSubjectDelivery(
         ? {}
         : { expectedConfigVersion: context.expectedConfigVersion }),
     };
+    const acceptedClient = loadAcceptedClient(capturedContext, client).client;
     return Object.freeze({
-      resolveUserInfo: async () => await resolveUserInfo(capturedContext),
+      resolveUserInfo: async () =>
+        await resolveUserInfo(capturedContext, acceptedClient),
     });
   }
 
   async function resolveGatewaySubjectHeader(
     context: CustomSsoSubjectDeliveryContext,
+    client: CustomSsoClientRuntimeDto,
   ) {
-    const projection = await resolveGatewaySubjectProjection(context);
+    const projection = await resolveGatewaySubjectProjection(context, client);
     const payload = {
       version: 1 as const,
       subjectIdentifier: context.subjectIdentifier,
@@ -128,22 +118,11 @@ export function createCustomSsoSubjectDelivery(
     resolveGatewaySubjectHeader,
   };
 
-  async function assertClientRemainsCurrent(
-    context: CustomSsoSubjectDeliveryContext,
-    projectedConfigVersion: number,
-  ) {
-    const { client } = await loadCurrentClient(context);
-    if (client.customSsoConfigVersion === projectedConfigVersion)
-      return;
-    if (context.expectedConfigVersion !== undefined)
-      throw new AuthzUnauthorizedError("未登录");
-    throw new CustomSsoClientRuntimeUnavailableError();
-  }
-
   async function resolveGatewaySubjectProjection(
     context: CustomSsoSubjectDeliveryContext,
+    client: CustomSsoClientRuntimeDto,
   ) {
-    const { client, config } = await loadCurrentClient(context);
+    const { config } = loadAcceptedClient(context, client);
     if (config.mode !== CustomSsoClientMode.Gateway) {
       throw new AuthzUnauthorizedError("未登录");
     }
@@ -164,10 +143,6 @@ export function createCustomSsoSubjectDelivery(
       selection,
     });
     assertProjectionSubject(projection.subjectIdentifier, context);
-    await assertClientRemainsCurrent(
-      context,
-      client.customSsoConfigVersion,
-    );
     return projection;
   }
 }

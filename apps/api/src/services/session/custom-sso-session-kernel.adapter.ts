@@ -104,6 +104,7 @@ type CustomSsoLocalSessionContext = {
 type ValidatedCustomSsoCredentialContext
   = CustomSsoLocalSessionContext & {
     credentialConfigVersion: number;
+    runtimeClient: CustomSsoClientRuntimeDto;
   };
 
 type IndependentClientContext = {
@@ -179,26 +180,6 @@ export interface CustomSsoSessionKernelAdapterDeps {
 }
 
 export function createCustomSsoSessionKernelAdapter(deps: CustomSsoSessionKernelAdapterDeps) {
-  async function assertAuthorizationClientCurrent(input: {
-    readonly clientCode: string;
-    readonly configVersion: number;
-    readonly mode: CustomSsoClientMode;
-  }) {
-    const client = await deps.clients.findRuntimeRecord(input.clientCode);
-    if (
-      client === null
-      || client.clientCode !== input.clientCode
-      || client.status === ClientStatus.Disable
-      || client.isDelete
-      || !client.customSsoEnabled
-      || client.customSsoConfig === null
-      || client.customSsoConfig.mode !== input.mode
-      || client.customSsoConfigVersion !== input.configVersion
-    ) {
-      throw new AuthzUnauthorizedError("客户端配置已变更");
-    }
-  }
-
   async function createPrincipalSession(
     subjectIdentifier: string,
     options: CustomSsoPrincipalSessionCreationOptions = {},
@@ -246,8 +227,6 @@ export function createCustomSsoSessionKernelAdapter(deps: CustomSsoSessionKernel
       return { isLogin: false as const, code: null };
     }
 
-    await assertAuthorizationClientCurrent(input);
-
     const artifactId = deps.random.uuid();
     const artifact = translateSubjectAccessResolveResult(
       await deps.kernel.createProtocolArtifact({
@@ -290,24 +269,6 @@ export function createCustomSsoSessionKernelAdapter(deps: CustomSsoSessionKernel
       if (error instanceof CustomError)
         throw error;
       throw new CustomError("授权码创建失败");
-    }
-    try {
-      await assertAuthorizationClientCurrent(input);
-    }
-    catch (error) {
-      try {
-        await deps.kernel.revokeArtifact(
-          artifact.value.artifactId,
-          "client_config_changed",
-        );
-      }
-      catch {
-        deps.logger.warn({
-          clientCode: input.clientCode,
-          ...observabilityLogFields(input.requestContext),
-        }, "failed to revoke stale custom sso authorization artifact");
-      }
-      throw error;
     }
     return {
       isLogin: true as const,
@@ -445,17 +406,18 @@ export function createCustomSsoSessionKernelAdapter(deps: CustomSsoSessionKernel
             principalSessionId: authorizationGrant.principalSessionId,
           });
           credentialIssueState = "issued";
-          const currentContext = await resolveIndependentCredentialContext(
-            credential.token,
-            input.client.clientCode,
+          const postIssuePrincipal = translateSubjectAccessResolveResult(
+            await deps.kernel.resolvePrincipalSessionById(
+              authorizationGrant.principalSessionId,
+            ),
           );
           if (
-            currentContext.authenticatedClientCode !== input.client.clientCode
-            || currentContext.subjectIdentifier !== authorizationGrant.subjectIdentifier
+            postIssuePrincipal.status !== "resolved"
+            || postIssuePrincipal.value.principal.subjectId
+            !== authorizationGrant.subjectIdentifier
           ) {
-            throw new AuthzUnauthorizedError("未登录");
+            throw new AuthzUnauthorizedError("全局session不存在或已过期");
           }
-
           const consumed = await lease.consume();
           if (consumed !== "consumed")
             throw new InvalidAuthCodeError("非法Code");
@@ -738,32 +700,6 @@ export function createCustomSsoSessionKernelAdapter(deps: CustomSsoSessionKernel
     throw reportedError;
   }
 
-  async function resolveIndependentCredentialContext(
-    credentialToken: string,
-    clientCode: string,
-  ) {
-    return (await resolveLocalSessionContext(
-      credentialToken,
-      clientCode,
-      CustomSsoClientMode.Independent,
-    )).authenticationContext;
-  }
-
-  async function assertCurrentGatewayClient(expected: GatewayClientContext) {
-    const client = await deps.clients.findRuntimeRecord(expected.clientCode);
-    if (
-      client === null
-      || client.status === ClientStatus.Disable
-      || client.isDelete
-      || !client.customSsoEnabled
-      || client.customSsoConfig?.mode !== CustomSsoClientMode.Gateway
-      || client.customSsoConfigVersion !== expected.configVersion
-      || client.customSsoConfig.orcas.enabled !== expected.orcasEnabled
-    ) {
-      throw new AuthzUnauthorizedError("非法code");
-    }
-  }
-
   async function completeGatewayLogin(input: {
     client: GatewayClientContext;
     code: string;
@@ -836,7 +772,6 @@ export function createCustomSsoSessionKernelAdapter(deps: CustomSsoSessionKernel
           });
           credentialIssueState = "issued";
 
-          await assertCurrentGatewayClient(input.client);
           const consumed = await lease.consume();
           if (consumed !== "consumed")
             throw new AuthzUnauthorizedError("非法code");
@@ -913,7 +848,7 @@ export function createCustomSsoSessionKernelAdapter(deps: CustomSsoSessionKernel
       subjectIdentifier: context.subjectIdentifier,
       authenticatedClientCode: context.authenticatedClientCode,
       expectedConfigVersion: context.credentialConfigVersion,
-    });
+    }, context.runtimeClient);
   }
 
   async function resolvePrincipalSessionContext(token: string) {
@@ -941,6 +876,7 @@ export function createCustomSsoSessionKernelAdapter(deps: CustomSsoSessionKernel
     return {
       authenticationContext: toLocalSessionContext(credentialContext),
       credentialConfigVersion: credentialContext.credentialConfigVersion,
+      runtimeClient: credentialContext.runtimeClient,
     };
   }
 
@@ -954,11 +890,15 @@ export function createCustomSsoSessionKernelAdapter(deps: CustomSsoSessionKernel
         ...principal,
         authenticatedClientCode: clientCode,
       };
+      const runtimeClient = await deps.clients.findRuntimeRecord(clientCode);
+      if (runtimeClient === null)
+        throw new AuthzUnauthorizedError("未登录");
       return {
         authenticationContext,
         subjectDeliveryCapability:
           deps.subjectDelivery.createUserInfoCapability(
             authenticationContext,
+            runtimeClient,
           ),
       };
     }
@@ -974,7 +914,7 @@ export function createCustomSsoSessionKernelAdapter(deps: CustomSsoSessionKernel
           ...localSessionContext.authenticationContext,
           expectedConfigVersion:
             localSessionContext.credentialConfigVersion,
-        }),
+        }, localSessionContext.runtimeClient),
     };
   }
 
@@ -1070,10 +1010,11 @@ export function createCustomSsoSessionKernelAdapter(deps: CustomSsoSessionKernel
       throw new AuthzUnauthorizedError("未登录");
     }
 
-    if (!await isCredentialClientCurrent(
+    const runtimeClient = await findCredentialClient(
       clientCode,
       credentialMetadata.data,
-    )) {
+    );
+    if (runtimeClient === null) {
       await deps.kernel.revokeCredential(
         credential.value.credentialId,
         "client_config_changed",
@@ -1093,6 +1034,7 @@ export function createCustomSsoSessionKernelAdapter(deps: CustomSsoSessionKernel
       subjectIdentifier: principal.value.principal.subjectId,
       authenticatedClientCode: clientCode,
       credentialConfigVersion: credentialMetadata.data.configVersion,
+      runtimeClient,
       ...(credentialMetadata.data.mode === CustomSsoClientMode.Gateway
         && credentialMetadata.data.orcasId !== undefined
         ? { orcasId: credentialMetadata.data.orcasId }
@@ -1104,6 +1046,13 @@ export function createCustomSsoSessionKernelAdapter(deps: CustomSsoSessionKernel
     clientCode: string,
     metadata: CustomSsoCredentialMetadata,
   ) {
+    return await findCredentialClient(clientCode, metadata) !== null;
+  }
+
+  async function findCredentialClient(
+    clientCode: string,
+    metadata: CustomSsoCredentialMetadata,
+  ) {
     const client = await deps.clients.findRuntimeRecord(clientCode);
     return client !== null
       && client.clientCode === clientCode
@@ -1112,7 +1061,9 @@ export function createCustomSsoSessionKernelAdapter(deps: CustomSsoSessionKernel
       && client.customSsoEnabled
       && client.customSsoConfig !== null
       && client.customSsoConfig.mode === metadata.mode
-      && client.customSsoConfigVersion === metadata.configVersion;
+      && client.customSsoConfigVersion === metadata.configVersion
+      ? client
+      : null;
   }
 
   async function assertLiveUserAvailable(

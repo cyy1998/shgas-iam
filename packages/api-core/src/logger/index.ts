@@ -72,6 +72,7 @@ export const SystemLogEvent = {
   RedirectPatternInvalid: "sso.redirect_pattern.invalid",
   SsoLegacyBearerSourceUsed: "sso.legacy_bearer_source.used",
   SubjectFactsOperationObserved: "subject_facts.operation.observed",
+  ClientRuntimeSnapshotOperationObserved: "client_runtime_snapshot.operation.observed",
   SessionKernelCleanupLegacyKeysCompleted: "session_kernel.cleanup_legacy_keys.completed",
   SessionKernelCleanupLegacyKeysFailed: "session_kernel.cleanup_legacy_keys.failed",
   SessionKernelSchemaCorrupted: "session_kernel.schema_corrupted",
@@ -89,8 +90,6 @@ export const SystemLogEvent = {
   OidcProviderServerError: "oidc.provider.server_error",
   OidcProviderProtocolError: "oidc.provider.protocol_error",
   OidcProviderHttpRequestFailed: "oidc.provider.http_request.failed",
-  OidcClientInvalidationCleanupFailed: "oidc.client_invalidation.cleanup_failed",
-  OidcClientInvalidationSubscriptionFailed: "oidc.client_invalidation.subscription_failed",
 } as const;
 
 export function resolveLogFormat(logFormat: LogFormat = "auto", nodeEnv: string): ResolvedLogFormat {

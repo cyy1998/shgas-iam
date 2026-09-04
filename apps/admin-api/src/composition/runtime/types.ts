@@ -1,5 +1,8 @@
 import type { Env } from "@admin-api/env";
-import type { AdminClientCachePort } from "@admin-api/services/client/client.port";
+import type {
+  AdminClientCachePort,
+  AdminClientRuntimeInvalidationPort,
+} from "@admin-api/services/client/client.port";
 import type { SessionKernelConfig } from "@iam/api-core/session/kernel";
 import type Redis from "ioredis";
 import type { Logger } from "pino";
@@ -35,13 +38,9 @@ export interface AdminApiRuntimeConfig {
   sessionKernel: SessionKernelConfig;
 }
 
-export interface OidcInvalidationPort {
-  invalidateClient: (client: { id: number; clientCode: string; oidcConfigVersion: number }) => Promise<unknown>;
-}
-
 export interface AdminApiIntegrationPorts {
   clientCache: AdminClientCachePort;
-  oidcInvalidation: OidcInvalidationPort;
+  clientRuntimeInvalidation: AdminClientRuntimeInvalidationPort;
 }
 
 export interface AdminApiRuntimePorts {

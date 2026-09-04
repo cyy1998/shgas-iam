@@ -70,6 +70,8 @@ export function createAdminApiServices(options: CreateAdminApiServicesOptions) {
   const clientService = createClientService({
     clientRepository: repositories.client,
     clientCache: runtime.integrations.clientCache,
+    clientRuntimeInvalidation: runtime.integrations.clientRuntimeInvalidation,
+    clientMutationLogger: runtime.logger,
     sessionRevocation: session.revocation,
     passwordHasher: runtime.passwordHasher,
     random: runtime.random,

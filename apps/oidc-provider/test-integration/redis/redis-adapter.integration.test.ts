@@ -1,12 +1,10 @@
+import type Redis from "ioredis";
 import type { CreateOidcAuthorizationCodeSnapshotInput } from "../../src/provider/claims-snapshot.ts";
 import type {
   OidcProviderRedisTestHarness,
   OidcProviderRedisTestScope,
 } from "./redis-test-harness.ts";
 import { randomInt } from "node:crypto";
-import { SystemLogEvent } from "@iam/api-core/logger";
-import { OIDC_CLIENT_INVALIDATION_CHANNEL } from "@iam/api-core/oidc";
-import Redis from "ioredis";
 import {
   afterAll,
   afterEach,
@@ -15,9 +13,7 @@ import {
   describe,
   expect,
   it,
-  vi,
 } from "vitest";
-import { startClientInvalidationSubscriber } from "../../src/invalidation/client-invalidation.ts";
 import { createOidcClientTrafficGate } from "../../src/provider/client-traffic-gate.ts";
 import { createOidcProtocolObjectStore, RedisOidcAdapter } from "../../src/storage/redis-adapter.ts";
 import { createOidcTokenStore } from "../../src/stores/token.store.ts";
@@ -46,93 +42,6 @@ afterAll(async () => {
 });
 
 describe("redis OIDC adapter real Redis contract", () => {
-  it("coordinates client invalidation through current lifecycle owners", async () => {
-    const testScope = scope!;
-    const clientId = testScope.unique("client");
-    const revokeClientProtocol = vi.fn(async () => undefined);
-    const revokeClient = vi.fn(async () => undefined);
-    const subscriber = startClientInvalidationSubscriber(
-      testScope.writer,
-      { warn: vi.fn() } as never,
-      {
-        oidcSession: { revokeClientProtocol },
-        protocolObjects: { revokeClient },
-      },
-    );
-    try {
-      await vi.waitFor(async () => {
-        const subscription = await testScope.observer.pubsub("NUMSUB", OIDC_CLIENT_INVALIDATION_CHANNEL);
-        expect(Number(subscription[1])).toBeGreaterThan(0);
-      });
-
-      const disconnected = new Promise<void>((resolve) => {
-        subscriber.once("end", resolve);
-      });
-      subscriber.disconnect();
-      await disconnected;
-      await vi.waitFor(async () => {
-        const subscription = await testScope.observer.pubsub("NUMSUB", OIDC_CLIENT_INVALIDATION_CHANNEL);
-        expect(Number(subscription[1])).toBe(0);
-      });
-      await subscriber.connect();
-      await vi.waitFor(async () => {
-        const subscription = await testScope.observer.pubsub("NUMSUB", OIDC_CLIENT_INVALIDATION_CHANNEL);
-        expect(Number(subscription[1])).toBeGreaterThan(0);
-      });
-
-      await testScope.writer.publish(
-        OIDC_CLIENT_INVALIDATION_CHANNEL,
-        JSON.stringify({ clientCode: clientId }),
-      );
-
-      await vi.waitFor(() => {
-        expect(revokeClientProtocol).toHaveBeenCalledWith(clientId, "client_config_changed");
-        expect(revokeClient).toHaveBeenCalledWith(clientId);
-      });
-    }
-    finally {
-      subscriber.disconnect();
-    }
-  });
-
-  it("fails startup observably when the invalidation subscriber cannot connect", async () => {
-    const logger = { warn: vi.fn() };
-    const consoleError = vi.spyOn(console, "error").mockImplementation(() => undefined);
-    const redis = new Redis({
-      enableOfflineQueue: false,
-      host: "127.0.0.1",
-      lazyConnect: true,
-      port: 1,
-      retryStrategy: () => null,
-    });
-    try {
-      const subscriber = startClientInvalidationSubscriber(
-        redis,
-        logger as never,
-        {
-          oidcSession: { revokeClientProtocol: vi.fn(async () => undefined) },
-          protocolObjects: { revokeClient: vi.fn(async () => undefined) },
-        },
-      );
-
-      await vi.waitFor(() => {
-        expect(logger.warn).toHaveBeenCalledWith(
-          expect.objectContaining({
-            event: SystemLogEvent.OidcClientInvalidationSubscriptionFailed,
-            err: expect.any(Error),
-          }),
-          "OIDC client invalidation subscription failed",
-        );
-      });
-      expect(consoleError).not.toHaveBeenCalled();
-      subscriber.disconnect();
-    }
-    finally {
-      redis.disconnect();
-      consoleError.mockRestore();
-    }
-  });
-
   it("keeps access token authority in Session Kernel without legacy token indexes", async () => {
     const testScope = scope!;
     const clientId = testScope.unique("client");

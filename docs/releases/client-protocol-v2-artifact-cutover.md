@@ -43,9 +43,9 @@ manifest 必须覆盖 PostgreSQL 中全部非删除且已配置 Custom SSO/OIDC 
 
 完成 schema migration 后，每个 Custom SSO 配置都按服务端当前 V2 Catalog 解释。命令在同一个完整 inventory
 `FOR UPDATE` transaction 中只推进协议 epoch，不再读取或改写 per-Client Catalog marker。
-锁定完整 inventory 后、任何写入前，命令会为每个 Custom SSO target 建立并持续续租 runtime mutation fence，commit 前再次确认
-ownership。`expectedEpoch + 1` 数据库保持 no-op，但仍在提交后完成该 client 的精确、generation-fenced
-runtime cache invalidation。所需 cache invalidation 失败会令命令失败，但不会伪装成数据库 transaction 已回滚。
+`expectedEpoch + 1` 数据库保持 no-op，但每个包含 Custom SSO 或 OIDC target 的 Client 仍在提交后通过共享 Client Runtime
+Snapshot control 恰好完成一次 required invalidation。命令不再建立 legacy Custom SSO runtime ownership fence，也不再续租 heartbeat 或执行
+complete/abort settlement。所需 Snapshot invalidation 失败会令命令失败，但不会伪装成数据库 transaction 已回滚。
 
 ## 执行顺序
 

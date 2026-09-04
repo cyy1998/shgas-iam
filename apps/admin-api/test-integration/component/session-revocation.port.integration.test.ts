@@ -35,7 +35,6 @@ describe("createAdminSessionRevocationPort", () => {
     };
     const port = createAdminSessionRevocationPort({
       sessionKernel: kernel,
-      oidcInvalidation: { invalidateClient: mock(async () => undefined) },
       logger,
     });
 
@@ -61,43 +60,6 @@ describe("createAdminSessionRevocationPort", () => {
     }));
   });
 
-  test("keeps OIDC invalidation failure in client protocol summary logging", async () => {
-    const logger = {
-      logUserRevocation: mock(() => undefined),
-      logClientProtocolRevocation: mock(() => undefined),
-      logClientAllProtocolsRevocation: mock(() => undefined),
-    };
-    const invalidationFailure = new Error("Authorization token leaked");
-    const port = createAdminSessionRevocationPort({
-      sessionKernel: {
-        revokeUserSessions: mock(async () => revokeSummary()),
-        revokeClientProtocol: mock(async () => revokeSummary()),
-        revokeClient: mock(async () => revokeSummary()),
-      },
-      oidcInvalidation: { invalidateClient: mock(async () => { throw invalidationFailure; }) },
-      logger,
-    });
-
-    await expect(port.revokeClientProtocol({
-      clientCode: "portal",
-      protocol: "oidc",
-      reason: "client_config_changed",
-      oidcInvalidationClient: { id: 1, clientCode: "portal", oidcConfigVersion: 2 },
-    })).resolves.toMatchObject({ cleanup: { failed: 0 } });
-
-    expect(logger.logClientProtocolRevocation).toHaveBeenCalledWith(expect.objectContaining({
-      clientCode: "portal",
-      protocol: "oidc",
-      reason: "client_config_changed",
-      oidcInvalidation: {
-        attempted: true,
-        succeeded: false,
-        failed: true,
-        error: "Authorization token leaked",
-      },
-    }));
-  });
-
   test("reports Custom SSO revocation as Credentials without virtual Client Bindings", async () => {
     const summary = revokeSummary({
       bindings: { revoked: 0, alreadyRevoked: 0, missing: 0, excluded: 0 },
@@ -114,7 +76,6 @@ describe("createAdminSessionRevocationPort", () => {
         revokeClientProtocol: mock(async () => summary),
         revokeClient: mock(async () => revokeSummary()),
       },
-      oidcInvalidation: { invalidateClient: mock(async () => undefined) },
       logger,
     });
 

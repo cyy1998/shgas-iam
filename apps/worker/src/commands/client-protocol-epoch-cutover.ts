@@ -1,6 +1,5 @@
 import type { UnitOfWorkPort } from "@iam/api-core/uow";
 import type { ClientProtocolCutoverManifest } from "@iam/domain/client";
-import { consumeTransactionRollbackConfirmation } from "@iam/api-core/uow";
 import { clientProtocolCutoverTargets } from "@iam/domain/client";
 
 export interface ClientProtocolEpochInventoryRecord {
@@ -18,21 +17,13 @@ export interface ClientProtocolEpochTarget {
 }
 
 export interface ClientProtocolEpochCutoverDeps {
-  runtimeCache: {
-    beginMutation: (clientCode: string) => Promise<{
-      abort: () => Promise<unknown>;
-      complete: () => Promise<unknown>;
-      heartbeat: {
-        assertOwned: () => Promise<void>;
-        stopAndSettle: <T>(settle: () => Promise<T>) => Promise<T>;
-      };
-    }>;
+  runtimeSnapshot: {
+    invalidateClient: (clientCode: string) => Promise<unknown>;
   };
   uow: UnitOfWorkPort<{
     clients: {
       advanceEpochs: (
         targets: ClientProtocolEpochTarget[],
-        afterLockBeforeWrite: () => Promise<void>,
       ) => Promise<ClientProtocolEpochInventoryRecord[]>;
     };
   }>;
@@ -218,73 +209,22 @@ export function createClientProtocolEpochCutover(
       }
       targetsByClient.set(target.clientCode, epochTarget);
     }
-    const runtimeCoordinations: Array<Awaited<ReturnType<
-      ClientProtocolEpochCutoverDeps["runtimeCache"]["beginMutation"]
-    >> & { clientCode: string; settlementStarted: boolean }> = [];
-    let inventory: ClientProtocolEpochInventoryRecord[];
-    try {
-      inventory = await deps.uow.transaction(async (tx) => {
-        const appliedInventory = await tx.clients.advanceEpochs(
-          [...targetsByClient.values()],
+    const inventory = await deps.uow.transaction(async (tx) => {
+      const appliedInventory = await tx.clients.advanceEpochs(
+        [...targetsByClient.values()],
+      );
+      for (const client of manifest.clients) {
+        if (client.customSso === null && client.oidc === null)
+          continue;
+        tx.afterCommit.required(
+          `invalidate-client-runtime-snapshots:${client.clientCode}`,
           async () => {
-            for (const client of manifest.clients) {
-              if (client.customSso === null)
-                continue;
-              runtimeCoordinations.push({
-                ...await deps.runtimeCache.beginMutation(client.clientCode),
-                clientCode: client.clientCode,
-                settlementStarted: false,
-              });
-            }
+            await deps.runtimeSnapshot.invalidateClient(client.clientCode);
           },
         );
-        for (const coordination of runtimeCoordinations)
-          await coordination.heartbeat.assertOwned();
-        for (const coordination of runtimeCoordinations.toReversed()) {
-          tx.afterCommit.required(
-            `complete-custom-sso-client-runtime-mutation:${coordination.clientCode}`,
-            async () => {
-              coordination.settlementStarted = true;
-              await coordination.heartbeat.stopAndSettle(coordination.complete);
-            },
-          );
-        }
-        return appliedInventory;
-      });
-    }
-    catch (error) {
-      if (runtimeCoordinations.length === 0)
-        throw error;
-      if (!consumeTransactionRollbackConfirmation(error)) {
-        for (const coordination of runtimeCoordinations.toReversed()) {
-          if (coordination.settlementStarted)
-            continue;
-          try {
-            await coordination.heartbeat.stopAndSettle(async () => undefined);
-          }
-          catch {
-            // The transaction may already be committed. Preserve the original error and leave the fence to expire.
-          }
-        }
-        throw error;
       }
-      const abortFailures: unknown[] = [];
-      for (const coordination of runtimeCoordinations.toReversed()) {
-        try {
-          await coordination.heartbeat.stopAndSettle(coordination.abort);
-        }
-        catch (abortError) {
-          abortFailures.push(abortError);
-        }
-      }
-      if (abortFailures.length > 0) {
-        throw new AggregateError(
-          [error, ...abortFailures],
-          "Client Protocol epoch mutation failed and remains fenced",
-        );
-      }
-      throw error;
-    }
+      return appliedInventory;
+    });
     const after = await inspect(manifest, inventory, "after");
     if (after.status === "failed")
       throw new Error("Client Protocol epoch repository returned an invalid applied batch");

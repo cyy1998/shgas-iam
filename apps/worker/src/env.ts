@@ -119,6 +119,16 @@ const UserProfilePostgresReadinessCommandEnvSchema = z.object({
   IAM_WORKER_USER_PROFILE_BACKFILL_BATCH_SIZE: z.coerce.number().int().positive().default(500),
 });
 
+const ClientRuntimeMaintenanceCommandEnvSchema = z.object({
+  IAM_WORKER_REDIS_HOST: z.string().min(1),
+  IAM_WORKER_REDIS_PORT: z.coerce.number().int().min(1).max(65535).default(6379),
+  IAM_WORKER_REDIS_PASSWORD: optionalNonEmptyString(),
+  IAM_WORKER_REDIS_DB: z.coerce.number().int().min(0).default(0),
+  NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
+  IAM_WORKER_LOG_LEVEL: z.string().default("info"),
+  IAM_WORKER_LOG_FORMAT: z.enum(["auto", "json", "pretty"]).default("auto"),
+});
+
 type RawWorkerEnv = z.infer<typeof RawWorkerEnvSchema>;
 
 export interface WorkerEnv {
@@ -179,6 +189,12 @@ export interface UserProfilePostgresReadinessCommandEnv {
     rebuildBatchSize: number;
     backfillBatchSize: number;
   };
+}
+
+export interface ClientRuntimeMaintenanceCommandEnv {
+  redis: WorkerEnv["redis"];
+  nodeEnv: WorkerEnv["nodeEnv"];
+  log: WorkerEnv["log"];
 }
 
 function toWorkerEnv(raw: RawWorkerEnv): WorkerEnv {
@@ -269,6 +285,25 @@ export function parseUserProfilePostgresReadinessCommandEnv(
     userProfile: {
       rebuildBatchSize: raw.IAM_WORKER_USER_PROFILE_REBUILD_BATCH_SIZE,
       backfillBatchSize: raw.IAM_WORKER_USER_PROFILE_BACKFILL_BATCH_SIZE,
+    },
+  };
+}
+
+export function parseClientRuntimeMaintenanceCommandEnv(
+  source: NodeJS.ProcessEnv,
+): ClientRuntimeMaintenanceCommandEnv {
+  const raw = ClientRuntimeMaintenanceCommandEnvSchema.parse(source);
+  return {
+    redis: {
+      host: raw.IAM_WORKER_REDIS_HOST,
+      port: raw.IAM_WORKER_REDIS_PORT,
+      password: raw.IAM_WORKER_REDIS_PASSWORD,
+      db: raw.IAM_WORKER_REDIS_DB,
+    },
+    nodeEnv: raw.NODE_ENV,
+    log: {
+      level: raw.IAM_WORKER_LOG_LEVEL,
+      format: raw.IAM_WORKER_LOG_FORMAT,
     },
   };
 }

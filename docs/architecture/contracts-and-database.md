@@ -52,12 +52,9 @@
 - Transaction callback 接收 tx-bound repository、audit writer port 和 `afterCommit` registration port；业务代码不传递
   raw transaction client。
 - Redis/cache/OIDC/SMS/fetch side effect 默认不在数据库 transaction callback 内直接执行；应在 callback 外执行，
-  或注册 after-commit task。唯一例外是
-  [后端架构](backend-architecture.md#client-subject-projection)
-  定义的既有 Custom SSO Client runtime pre-commit coordination fence：它必须在 Client row lock 后、任何业务
-  写入前建立，只保存有界 TTL ownership token，并具备 heartbeat、commit 前 ownership check、已确认 rollback
-  才 abort、`afterCommit.required` complete 与 reader fail-closed。Client create 因不存在可锁行而不使用该例外，
-  只在 commit 后 required invalidation。不得借此在 transaction 内执行不可逆业务副作用。
+  或注册 after-commit task。Client Traffic Gate 不再是例外：Client mutation 只在取得 canonical target 后注册
+  required client-wide Runtime Snapshot invalidation，不在 transaction 内建立 Redis reserve、ownership fence、heartbeat
+  或 settlement。不得借缓存协调在 transaction 内执行不可逆业务副作用。
 - `required` after-commit 用于调用契约要求完成的动作，失败会在数据库提交后返回错误；`bestEffort` 用于可恢复动作，
   失败只记录日志。两种模式都不能回滚已经提交的业务事实。完整语义见
   [后端架构](backend-architecture.md#transactions-与-aftercommit)。

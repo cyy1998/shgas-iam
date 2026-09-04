@@ -276,8 +276,12 @@ _Avoid_: Independent Client Credential, third-party local session
 一个 client 对 Custom SSO 接入模式、回调行为和所需 Subject Claims 的独立版本化声明；它由 `customSsoEnabled`、可空的 `customSsoConfig`、Independent 模式专用的 `customSsoSecretHash` 与单调递增的 `customSsoConfigVersion` 表达，不属于 OIDC 配置。未配置、已配置但停用、启用是三个不同状态；其中启用表达管理员的协议启用意图，不等于 Custom SSO 当前可用，全局 Client 生命周期状态另行决定是否接受运行流量。`mode` 只区分 Gateway 与 Independent，不使用 `None` 表示关闭；Independent 必须有 Secret Hash，Gateway 必须没有。配置是按 `mode` 区分的严格联合类型，跨模式无意义或未知字段必须被拒绝。配置、启停、Custom SSO secret 或 claim disclosure 的任何变更都原子递增版本；服务端 active Catalog 的任何 claim disclosure 变化都推进全部已配置 Custom SSO Client 的版本。Custom SSO Authorization Grant 与 Credential 必须记录并校验签发版本，因此旧 artifact 即使尚未被批量清理也会 fail closed。配置按服务端唯一 active Subject Claim Catalog 显式列出完整 `subjectClaims`，其中必须包含 Subject Identifier；Catalog 版本不由 client 选择或持久化，新 client 默认只包含 Subject Identifier。配置不内嵌永久的按用户维护绕过名单。
 _Avoid_: client ext attributes, shared clientSecret, plaintext secret, OIDC client configuration, unversioned SSO settings, userExcluding
 
+**Client Runtime Snapshot**:
+IAM 在线协议入口为一次请求取得的 Client Traffic Gate 与协议配置时点视图；成功取得后，后续 Admin mutation 不追溯使其失效。Admin mutation 只有在运行时传播成功后才约束后续取得的 Snapshot；传播失败时，先前已发布的 Snapshot 可以继续被新请求取得，直到显式修复。它不是 Client 业务事实或协议 artifact version。
+_Avoid_: live Client row, protocol config version, linearizable Client state
+
 **Client Maintenance**:
-Client 暂时拒绝 IAM 控制的 client-scoped 在线协议流量、但允许管理员完成各协议全部配置与生命周期准备的可恢复状态；恢复正常服务后，各协议已经声明的启用意图自动生效，协议之间仍保持独立配置与生命周期。在线协议入口只有明确确认 Client 正常时才允许流量，无法确认当前状态时同样暂时拒绝，但不破坏既有访问；协议 discovery、JWKS、公共认证配置和健康检查不属于该门禁范围。进入或退出维护状态本身不使既有协议访问永久失效；未发生协议变更的访问在恢复正常后继续有效，维护期间发生变更的协议按自己的生命周期规则使旧产物失效。维护不暂停 Authorization Grant、Authorization Code、Credential、Token 或 Session 的原始有效期；恢复正常时只有尚未过期且未因协议变更失效的访问可以继续。维护期间仍允许退出与撤销，并且由此终止的访问在恢复正常后不会复活。维护状态不保证追溯阻止已经离开 IAM、由 client 离线验证的 OIDC ID Token。
+Client 暂时拒绝 IAM 控制的 client-scoped 在线协议流量、但允许管理员完成各协议全部配置与生命周期准备的可恢复状态；恢复正常服务后，各协议已经声明的启用意图自动生效，协议之间仍保持独立配置与生命周期。在线协议入口只有在成功取得的 Client Runtime Snapshot 明确表示 Client 正常时才允许流量，无法取得可信 Snapshot 时同样暂时拒绝；已提交的状态变更若未成功传播，先前的正常 Snapshot 可以继续被取得，直到显式修复。协议 discovery、JWKS、公共认证配置和健康检查不属于该门禁范围。进入或退出维护状态本身不使既有协议访问永久失效；未发生协议变更的访问在恢复正常后继续有效，维护期间发生变更的协议按自己的生命周期规则使旧产物失效。维护不暂停 Authorization Grant、Authorization Code、Credential、Token 或 Session 的原始有效期；恢复正常时只有尚未过期且未因协议变更失效的访问可以继续。维护期间仍允许退出与撤销，并且由此终止的访问在恢复正常后不会复活。维护状态不保证追溯阻止已经离开 IAM、由 client 离线验证的 OIDC ID Token。
 _Avoid_: configuration freeze, protocol disablement, maintenance bypass
 
 **Client Disablement**:
@@ -285,7 +289,7 @@ Client 被明确行政停用并拒绝协议运行流量的状态；进入该状�
 _Avoid_: Client Maintenance, configuration removal, protocol reset
 
 **Client Maintenance Unavailable**:
-目标 Client 处于 Client Maintenance 时，IAM 在线协议入口产生的可重试暂态结果；它不表示 client、credential、token 或 session 永久无效，也不得消费 Authorization Grant/Code、删除协议产物、撤销访问或清除仍可能恢复有效的 Cookie。Custom SSO 将其映射为 HTTP `503`、稳定错误码 `AUTH.MAINTENANCE` 和可选重试提示，OIDC 使用适合相应 endpoint 的 `temporarily_unavailable` 或 HTTP `503` 语义。无法确认 Client 当前状态属于通用暂态不可用，不得冒充明确的 Client Maintenance。
+Client Runtime Snapshot 明确表示目标 Client 处于 Client Maintenance 时，IAM 在线协议入口产生的可重试暂态结果；它不表示 client、credential、token 或 session 永久无效，也不得消费 Authorization Grant/Code、删除协议产物、撤销访问或清除仍可能恢复有效的 Cookie。Custom SSO 将其映射为 HTTP `503`、稳定错误码 `AUTH.MAINTENANCE` 和可选重试提示，OIDC 使用适合相应 endpoint 的 `temporarily_unavailable` 或 HTTP `503` 语义。无法取得可信 Client Runtime Snapshot 属于通用暂态不可用，不得冒充明确的 Client Maintenance。
 _Avoid_: invalid client, invalid token, unauthorized, protocol revocation
 
 **Custom SSO Redirect Pattern**:

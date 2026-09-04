@@ -1,18 +1,15 @@
 import type { CustomSsoClientRuntimeDto } from "@iam/domain/client";
 import {
   createCustomSsoClientRuntimeReader,
-  CustomSsoClientRuntimeUnavailableError,
+  createCustomSsoClientRuntimeSnapshotAdapter,
 } from "@api/services/client/custom-sso-client-runtime.reader";
 import {
-  beginCustomSsoClientRuntimeMutation,
-  completeCustomSsoClientRuntimeMutation,
-  CUSTOM_SSO_CLIENT_RUNTIME_MUTATION_FENCE_TTL_MS,
-  CUSTOM_SSO_CLIENT_RUNTIME_NEGATIVE_CACHE_TTL_MS,
-  CUSTOM_SSO_CLIENT_RUNTIME_POSITIVE_CACHE_TTL_MS,
-  customSsoClientRuntimeCacheKey,
-  customSsoClientRuntimeGenerationKey,
-  customSsoClientRuntimeMutationKey,
-} from "@iam/api-core/custom-sso";
+  CLIENT_RUNTIME_SNAPSHOT_KINDS,
+  createClientRuntimeSnapshotModule,
+} from "@iam/api-core/client-runtime-snapshot";
+import {
+  clientRuntimeSnapshotTestingKeys,
+} from "@iam/api-core/client-runtime-snapshot/testing";
 import {
   ClientStatus,
   CustomSsoClientMode,
@@ -21,7 +18,7 @@ import {
 import { afterAll, beforeAll, describe, expect, mock, test } from "bun:test";
 import { createApiRedisTestHarness } from "./redis-test-harness";
 
-describe("Custom SSO client runtime Redis contract", () => {
+describe("Custom SSO Client Runtime Snapshot Redis contract", () => {
   let harness: Awaited<ReturnType<typeof createApiRedisTestHarness>>;
 
   beforeAll(async () => {
@@ -33,42 +30,49 @@ describe("Custom SSO client runtime Redis contract", () => {
       await harness.close();
   });
 
-  test("uses bounded positive and shorter negative read-through caches", async () => {
+  test("uses bounded positive and shorter absent Snapshot payloads", async () => {
     const scope = await harness.createScope();
     try {
       const presentCode = scope.clientCode("present");
       const missingCode = scope.clientCode("missing");
+      const unconfiguredCode = scope.clientCode("unconfigured");
       const present = runtimeClient(presentCode, 3);
-      const source = mock(async (clientCode: string) =>
-        clientCode === presentCode ? present : null);
-      const reader = createCustomSsoClientRuntimeReader({
-        redis: scope.redis,
-        source: { findRuntimeRecord: source },
+      const source = mock(async (clientCode: string) => {
+        if (clientCode === presentCode)
+          return present;
+        if (clientCode === unconfiguredCode) {
+          return {
+            ...runtimeClient(unconfiguredCode, 0),
+            customSsoConfig: null,
+            customSsoEnabled: false,
+          };
+        }
+        return null;
       });
+      const { facade } = createRuntime(scope.redis, source);
 
-      expect(await reader.findRuntimeRecord(presentCode)).toEqual(present);
-      expect(await reader.findRuntimeRecord(presentCode)).toEqual(present);
-      expect(await reader.findRuntimeRecord(missingCode)).toBeNull();
-      expect(await reader.findRuntimeRecord(missingCode)).toBeNull();
+      const firstPresent = await facade.findRuntimeRecord(presentCode);
+      const secondPresent = await facade.findRuntimeRecord(presentCode);
+      const firstAbsent = await facade.findRuntimeRecord(missingCode);
+      const secondAbsent = await facade.findRuntimeRecord(missingCode);
+      const unconfigured = await facade.findRuntimeRecord(unconfiguredCode);
+      const positiveTtl = await scope.observer.pttl(payloadKey(presentCode));
+      const negativeTtl = await scope.observer.pttl(payloadKey(missingCode));
 
+      expect(firstPresent).toEqual(present);
+      expect(secondPresent).toEqual(present);
+      expect(firstAbsent).toBeNull();
+      expect(secondAbsent).toBeNull();
+      expect(unconfigured).toBeNull();
       expect(source.mock.calls).toEqual([
         [presentCode],
         [missingCode],
+        [unconfiguredCode],
       ]);
-      const positiveTtl = await scope.observer.pttl(
-        customSsoClientRuntimeCacheKey(presentCode),
-      );
-      const negativeTtl = await scope.observer.pttl(
-        customSsoClientRuntimeCacheKey(missingCode),
-      );
       expect(positiveTtl).toBeGreaterThan(0);
-      expect(positiveTtl).toBeLessThanOrEqual(
-        CUSTOM_SSO_CLIENT_RUNTIME_POSITIVE_CACHE_TTL_MS,
-      );
+      expect(positiveTtl).toBeLessThanOrEqual(30_000);
       expect(negativeTtl).toBeGreaterThan(0);
-      expect(negativeTtl).toBeLessThanOrEqual(
-        CUSTOM_SSO_CLIENT_RUNTIME_NEGATIVE_CACHE_TTL_MS,
-      );
+      expect(negativeTtl).toBeLessThanOrEqual(3_000);
       expect(negativeTtl).toBeLessThan(positiveTtl);
     }
     finally {
@@ -76,117 +80,41 @@ describe("Custom SSO client runtime Redis contract", () => {
     }
   });
 
-  test("discards an in-flight source read when an Admin mutation begins", async () => {
+  test("rejects a late source result after shared invalidation and reloads once", async () => {
     const scope = await harness.createScope();
     try {
-      const clientCode = scope.clientCode("race");
-      const stale = runtimeClient(clientCode, 3);
-      let releaseSource!: (value: CustomSsoClientRuntimeDto) => void;
-      let markSourceStarted!: () => void;
-      const sourceStarted = new Promise<void>((resolve) => {
-        markSourceStarted = resolve;
-      });
-      const sourceResult = new Promise<CustomSsoClientRuntimeDto>(
-        (resolve) => {
-          releaseSource = resolve;
-        },
-      );
-      const source = mock(async () => {
-        markSourceStarted();
-        return await sourceResult;
-      });
-      const reader = createCustomSsoClientRuntimeReader({
-        redis: scope.redis,
-        source: { findRuntimeRecord: source },
-      });
-
-      const pendingRead = reader.findRuntimeRecord(clientCode);
-      await sourceStarted;
-      const mutation = await beginCustomSsoClientRuntimeMutation(
-        scope.observer,
-        {
-          clientCode,
-          mutationId: "mutation-race",
-        },
-      );
-      releaseSource(stale);
-
-      expect(await captureRejection(pendingRead)).toBeInstanceOf(
-        CustomSsoClientRuntimeUnavailableError,
-      );
-      expect(await scope.observer.get(
-        customSsoClientRuntimeCacheKey(clientCode),
-      )).toBeNull();
-      expect(await captureRejection(
-        reader.findRuntimeRecord(clientCode),
-      )).toBeInstanceOf(CustomSsoClientRuntimeUnavailableError);
-      expect(await completeCustomSsoClientRuntimeMutation(
-        scope.observer,
-        mutation,
-      )).toBe("completed");
-    }
-    finally {
-      await scope.close();
-    }
-  });
-
-  test("keeps a newer fence against late completion and converges after TTL expiry", async () => {
-    const scope = await harness.createScope();
-    try {
-      const clientCode = scope.clientCode("recovery");
+      const clientCode = scope.clientCode("late-refill");
       let current = runtimeClient(clientCode, 3);
-      const source = mock(async () => current);
-      const reader = createCustomSsoClientRuntimeReader({
-        redis: scope.redis,
-        source: { findRuntimeRecord: source },
+      let releaseFirstSource!: () => void;
+      let markFirstSourceStarted!: () => void;
+      const firstSourceStarted = new Promise<void>((resolve) => {
+        markFirstSourceStarted = resolve;
       });
-      expect(await reader.findRuntimeRecord(clientCode)).toEqual(current);
+      const firstSourceGate = new Promise<void>((resolve) => {
+        releaseFirstSource = resolve;
+      });
+      let firstSource = true;
+      const source = mock(async () => {
+        const captured = current;
+        if (firstSource) {
+          firstSource = false;
+          markFirstSourceStarted();
+          await firstSourceGate;
+        }
+        return captured;
+      });
+      const { facade, snapshots } = createRuntime(scope.redis, source);
 
-      const first = await beginCustomSsoClientRuntimeMutation(
-        scope.observer,
-        { clientCode, mutationId: "mutation-old" },
-      );
-      await beginCustomSsoClientRuntimeMutation(
-        scope.observer,
-        { clientCode, mutationId: "mutation-current" },
-      );
-      expect(await completeCustomSsoClientRuntimeMutation(
-        scope.observer,
-        first,
-      )).toBe("superseded");
-      expect(await scope.observer.get(
-        customSsoClientRuntimeMutationKey(clientCode),
-      )).toBe("mutation-current");
-      expect(await scope.observer.get(
-        customSsoClientRuntimeCacheKey(clientCode),
-      )).toBeNull();
-      expect(Number(await scope.observer.get(
-        customSsoClientRuntimeGenerationKey(clientCode),
-      ))).toBeGreaterThanOrEqual(2);
-      const fenceTtl = await scope.observer.pttl(
-        customSsoClientRuntimeMutationKey(clientCode),
-      );
-      expect(fenceTtl).toBeGreaterThan(
-        CUSTOM_SSO_CLIENT_RUNTIME_POSITIVE_CACHE_TTL_MS,
-      );
-      expect(fenceTtl).toBeLessThanOrEqual(
-        CUSTOM_SSO_CLIENT_RUNTIME_MUTATION_FENCE_TTL_MS,
-      );
-
+      const acquiring = facade.findRuntimeRecord(clientCode);
+      await firstSourceStarted;
       current = runtimeClient(clientCode, 4);
-      expect(await captureRejection(
-        reader.findRuntimeRecord(clientCode),
-      )).toBeInstanceOf(CustomSsoClientRuntimeUnavailableError);
-      await scope.observer.pexpire(
-        customSsoClientRuntimeMutationKey(clientCode),
-        25,
-      );
-      await waitUntil(async () =>
-        await scope.observer.exists(
-          customSsoClientRuntimeMutationKey(clientCode),
-        ) === 0);
+      await snapshots.invalidateClient(clientCode);
+      releaseFirstSource();
+      const result = await acquiring;
+      const cached = await facade.findRuntimeRecord(clientCode);
 
-      expect(await reader.findRuntimeRecord(clientCode)).toEqual(current);
+      expect(result).toEqual(current);
+      expect(cached).toEqual(current);
       expect(source).toHaveBeenCalledTimes(2);
     }
     finally {
@@ -194,70 +122,57 @@ describe("Custom SSO client runtime Redis contract", () => {
     }
   });
 
-  test("an expired mutation invalidates a stale refill without clearing a newer fence", async () => {
+  test("self-heals a bad payload and reloads after shared invalidation", async () => {
     const scope = await harness.createScope();
     try {
-      const clientCode = scope.clientCode("expired-finish");
+      const clientCode = scope.clientCode("repair");
       let current = runtimeClient(clientCode, 3);
       const source = mock(async () => current);
-      const reader = createCustomSsoClientRuntimeReader({
-        redis: scope.redis,
-        source: { findRuntimeRecord: source },
-      });
-      const expired = await beginCustomSsoClientRuntimeMutation(
-        scope.observer,
-        {
-          clientCode,
-          mutationId: "mutation-expired",
-          fenceTtlMs: 30,
-        },
-      );
-      await waitUntil(async () =>
-        await scope.observer.exists(
-          customSsoClientRuntimeMutationKey(clientCode),
-        ) === 0);
+      const { facade, snapshots } = createRuntime(scope.redis, source);
 
-      expect(await reader.findRuntimeRecord(clientCode)).toEqual(current);
-      expect(await scope.observer.get(
-        customSsoClientRuntimeCacheKey(clientCode),
-      )).not.toBeNull();
-
-      expect(await completeCustomSsoClientRuntimeMutation(
-        scope.observer,
-        expired,
-      )).toBe("expired");
-      expect(await scope.observer.get(
-        customSsoClientRuntimeCacheKey(clientCode),
-      )).toBeNull();
-
-      const currentMutation = await beginCustomSsoClientRuntimeMutation(
-        scope.observer,
-        {
-          clientCode,
-          mutationId: "mutation-current",
-          fenceTtlMs: 300,
-        },
-      );
-      expect(await completeCustomSsoClientRuntimeMutation(
-        scope.observer,
-        expired,
-      )).toBe("superseded");
-      expect(await scope.observer.get(
-        customSsoClientRuntimeMutationKey(clientCode),
-      )).toBe("mutation-current");
-
+      const initial = await facade.findRuntimeRecord(clientCode);
+      await scope.observer.set(payloadKey(clientCode), "{malformed");
       current = runtimeClient(clientCode, 4);
-      expect(await completeCustomSsoClientRuntimeMutation(
-        scope.observer,
-        currentMutation,
-      )).toBe("completed");
-      expect(await reader.findRuntimeRecord(clientCode)).toEqual(current);
+      const repaired = await facade.findRuntimeRecord(clientCode);
+      current = runtimeClient(clientCode, 5);
+      await snapshots.invalidateClient(clientCode);
+      const invalidated = await facade.findRuntimeRecord(clientCode);
+
+      expect(initial?.customSsoConfigVersion).toBe(3);
+      expect(repaired?.customSsoConfigVersion).toBe(4);
+      expect(invalidated?.customSsoConfigVersion).toBe(5);
+      expect(source).toHaveBeenCalledTimes(3);
     }
     finally {
       await scope.close();
     }
   });
 });
+
+function createRuntime(
+  redis: Parameters<typeof createClientRuntimeSnapshotModule>[0]["redis"],
+  findRuntimeRecord: (
+    clientCode: string,
+  ) => Promise<CustomSsoClientRuntimeDto | null>,
+) {
+  const snapshots = createClientRuntimeSnapshotModule({
+    redis,
+    adapters: [createCustomSsoClientRuntimeSnapshotAdapter({
+      repository: { findRuntimeRecord },
+    })],
+  });
+  return {
+    snapshots,
+    facade: createCustomSsoClientRuntimeReader(
+      snapshots.reader("custom-sso"),
+    ),
+  };
+}
+
+function payloadKey(clientCode: string) {
+  const index = CLIENT_RUNTIME_SNAPSHOT_KINDS.indexOf("custom-sso");
+  return clientRuntimeSnapshotTestingKeys(clientCode).payloads[index]!;
+}
 
 function runtimeClient(
   clientCode: string,
@@ -278,23 +193,4 @@ function runtimeClient(
     },
     customSsoConfigVersion,
   };
-}
-
-async function waitUntil(condition: () => Promise<boolean>) {
-  for (let attempt = 0; attempt < 50; attempt += 1) {
-    if (await condition())
-      return;
-    await Bun.sleep(10);
-  }
-  throw new Error("Timed out waiting for Redis state");
-}
-
-async function captureRejection(promise: PromiseLike<unknown>): Promise<unknown> {
-  try {
-    await promise;
-  }
-  catch (error) {
-    return error;
-  }
-  throw new Error("expected Redis operation to reject");
 }

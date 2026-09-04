@@ -1,3 +1,4 @@
+import type { OidcClientRuntimeMetadata } from "../provider/client-runtime-metadata.ts";
 import { SubjectProjectionNotReadyError } from "@iam/client-subject-projection";
 import { OidcScope } from "@iam/contracts";
 import { errors } from "oidc-provider";
@@ -32,8 +33,18 @@ function createFixture() {
     status: 1,
     isDelete: false,
   };
-  const client = {
+  const client: OidcClientRuntimeMetadata = {
     client_id: "client-a",
+    client_name: "Client A",
+    redirect_uris: ["https://client.example.com/callback"],
+    post_logout_redirect_uris: [],
+    grant_types: ["authorization_code"],
+    response_types: ["code"],
+    subject_type: "public",
+    id_token_signed_response_alg: "RS256",
+    require_auth_time: true,
+    token_endpoint_auth_method: "none",
+    scope: "openid profile phone iam:authorization",
     iam_client_id: 11,
     oidc_config_version: 3,
     allowed_scopes: ["openid", "profile", "phone", "iam:authorization"],

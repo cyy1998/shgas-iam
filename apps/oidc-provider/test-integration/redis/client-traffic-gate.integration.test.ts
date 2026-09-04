@@ -1,9 +1,13 @@
 import {
-  beginClientTrafficGateMutation,
+  createClientRuntimeSnapshotModule,
+} from "@iam/api-core/client-runtime-snapshot";
+import {
+  clientRuntimeSnapshotTestingKeys,
+} from "@iam/api-core/client-runtime-snapshot/testing";
+import {
   createClientTrafficGateReader,
-  publishClientTrafficGateMutation,
+  createClientTrafficGateSnapshotAdapter,
 } from "@iam/api-core/client-traffic-gate";
-import { deleteClientTrafficGateTestState } from "@iam/api-core/client-traffic-gate/testing";
 import { ClientStatus } from "@iam/contracts";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { createOidcClientTrafficGate } from "../../src/provider/client-traffic-gate.ts";
@@ -21,12 +25,15 @@ describe("oIDC Client Traffic Gate Redis integration", () => {
       await harness.close();
   });
 
-  it("observes Maintenance across readers and recovers after Enable publication", async () => {
+  it("observes Maintenance only after shared Snapshot invalidation and then resumes", async () => {
     const scope = await harness.createScope();
     const clientCode = scope.unique("traffic-cycle");
+    const keys = clientRuntimeSnapshotTestingKeys(clientCode);
+    scope.trackKey(keys.control);
+    for (const payload of keys.payloads)
+      scope.trackKey(payload);
     try {
       let sourceStatus = ClientStatus.Enable;
-      let now = Date.now();
       const source = {
         findClientTrafficState: async () => ({
           clientCode,
@@ -34,68 +41,49 @@ describe("oIDC Client Traffic Gate Redis integration", () => {
           status: sourceStatus,
         }),
       };
-      const warmingReader = createOidcClientTrafficGate({
-        gate: createClientTrafficGateReader({
-          cache: { negativeTtlMs: 500, positiveTtlMs: 1_000 },
-          clock: { now: () => now },
-          redis: scope.writer,
-          source,
-        }),
+      const runtime = createClientRuntimeSnapshotModule({
+        redis: scope.writer,
+        adapters: [createClientTrafficGateSnapshotAdapter({ source })],
       });
-      const observingReader = createOidcClientTrafficGate({
-        gate: createClientTrafficGateReader({
-          cache: { negativeTtlMs: 500, positiveTtlMs: 1_000 },
-          clock: { now: () => now },
-          redis: scope.observer,
-          source,
-        }),
+      const gate = createOidcClientTrafficGate({
+        gate: createClientTrafficGateReader(runtime.reader("traffic-gate")),
       });
 
-      await expect(warmingReader.assertIssuanceAllowed(clientCode)).resolves.toBeUndefined();
-      await expect(warmingReader.assertOnlineAccessAllowed(clientCode)).resolves.toBeUndefined();
-      const maintenanceMutation = await beginClientTrafficGateMutation(scope.writer, {
-        clientCode,
-        mutationId: "00000000-0000-4000-8000-000000000303",
-      });
+      await gate.assertIssuanceAllowed(clientCode);
+      await gate.assertOnlineAccessAllowed(clientCode);
+
       sourceStatus = ClientStatus.Maintenance;
-      await expect(publishClientTrafficGateMutation(
-        scope.writer,
-        maintenanceMutation,
-        ClientStatus.Maintenance,
-        { clock: { now: () => now }, ttlMs: 1_000 },
-      )).resolves.toBe("published");
-      await expect(observingReader.assertIssuanceAllowed(clientCode)).rejects.toMatchObject({
-        error: "temporarily_unavailable",
-      });
-      await expect(observingReader.assertOnlineAccessAllowed(clientCode)).rejects.toMatchObject({
+      await gate.assertIssuanceAllowed(clientCode);
+      await runtime.invalidateClient(clientCode);
+
+      let issuanceFailure: unknown;
+      try {
+        await gate.assertIssuanceAllowed(clientCode);
+      }
+      catch (error) {
+        issuanceFailure = error;
+      }
+      expect(issuanceFailure).toMatchObject({ error: "temporarily_unavailable" });
+
+      let onlineFailure: unknown;
+      try {
+        await gate.assertOnlineAccessAllowed(clientCode);
+      }
+      catch (error) {
+        onlineFailure = error;
+      }
+      expect(onlineFailure).toMatchObject({
         error: "temporarily_unavailable",
         statusCode: 503,
       });
 
-      const enableMutation = await beginClientTrafficGateMutation(scope.writer, {
-        clientCode,
-        mutationId: "00000000-0000-4000-8000-000000000304",
-      });
       sourceStatus = ClientStatus.Enable;
-      await expect(publishClientTrafficGateMutation(
-        scope.writer,
-        enableMutation,
-        ClientStatus.Enable,
-        { clock: { now: () => now }, ttlMs: 1_000 },
-      )).resolves.toBe("published");
-      await observingReader.assertIssuanceAllowed(clientCode);
-      await observingReader.assertOnlineAccessAllowed(clientCode);
-      now += 1_001;
-      await observingReader.assertIssuanceAllowed(clientCode);
-      await observingReader.assertOnlineAccessAllowed(clientCode);
+      await runtime.invalidateClient(clientCode);
+      await gate.assertIssuanceAllowed(clientCode);
+      await gate.assertOnlineAccessAllowed(clientCode);
     }
     finally {
-      try {
-        await deleteClientTrafficGateTestState(scope.writer, clientCode);
-      }
-      finally {
-        await scope.close();
-      }
+      await scope.close();
     }
   });
 });

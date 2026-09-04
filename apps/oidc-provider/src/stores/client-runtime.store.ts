@@ -1,58 +1,70 @@
+import type {
+  ClientRuntimeSnapshotAdapter,
+  ClientRuntimeSnapshotReader,
+} from "@iam/api-core/client-runtime-snapshot";
 import type { OidcClientRuntimeDto } from "@iam/domain/client";
-import type { Redis } from "ioredis";
 import type { OidcClientRuntimeMetadata } from "../provider/client-runtime-metadata.ts";
-import { oidcClientRuntimeCacheKey } from "@iam/api-core/oidc";
-import { toOidcClientRuntimeMetadata } from "../provider/client-runtime-metadata.ts";
+import {
+  ClientRuntimeSnapshotUnavailableError,
+} from "@iam/api-core/client-runtime-snapshot";
+import { errors } from "oidc-provider";
+import {
+  OidcClientRuntimeMetadataSchema,
+  toOidcClientRuntimeMetadata,
+} from "../provider/client-runtime-metadata.ts";
 import { isOidcClientAvailable } from "../repositories/availability.ts";
-
-export function createOidcClientRuntimeCache(redis: Redis, cacheTtlSeconds: number) {
-  return {
-    async get(clientCode: string): Promise<OidcClientRuntimeMetadata | null> {
-      const cacheKey = oidcClientRuntimeCacheKey(clientCode);
-      const cached = await redis.get(cacheKey);
-      if (!cached)
-        return null;
-      try {
-        return JSON.parse(cached) as OidcClientRuntimeMetadata;
-      }
-      catch {
-        await redis.del(cacheKey);
-        return null;
-      }
-    },
-    async set(clientCode: string, metadata: OidcClientRuntimeMetadata) {
-      await redis.set(oidcClientRuntimeCacheKey(clientCode), JSON.stringify(metadata), "EX", cacheTtlSeconds);
-    },
-    async delete(clientCode: string) {
-      await redis.del(oidcClientRuntimeCacheKey(clientCode));
-    },
-  };
-}
-
-export type OidcClientRuntimeCache = ReturnType<typeof createOidcClientRuntimeCache>;
 
 export interface OidcClientRuntimeRecordReader {
   findRuntimeRecord: (clientCode: string) => Promise<OidcClientRuntimeDto | null>;
 }
 
-export interface CreateOidcClientRuntimeStoreDeps {
-  repository: OidcClientRuntimeRecordReader;
-  cache: OidcClientRuntimeCache;
+export interface CreateOidcClientRuntimeSnapshotAdapterDeps {
+  readonly repository: OidcClientRuntimeRecordReader;
+  readonly cacheTtlSeconds: number;
 }
 
-export function createOidcClientRuntimeStore(deps: CreateOidcClientRuntimeStoreDeps) {
+export function createOidcClientRuntimeSnapshotAdapter(
+  deps: CreateOidcClientRuntimeSnapshotAdapterDeps,
+): ClientRuntimeSnapshotAdapter<"oidc", OidcClientRuntimeMetadata> {
+  const presentTtlMs = deps.cacheTtlSeconds * 1_000;
+  if (!Number.isSafeInteger(presentTtlMs) || presentTtlMs <= 0)
+    throw new RangeError("OIDC Client Runtime Snapshot TTL must be a positive safe integer");
+  return {
+    kind: "oidc",
+    presentTtlMs,
+    async load(clientCode) {
+      const client = await deps.repository.findRuntimeRecord(clientCode);
+      if (!client || !isOidcClientAvailable(client))
+        return { kind: "absent" };
+      return {
+        kind: "present",
+        value: toOidcClientRuntimeMetadata(client),
+      };
+    },
+    codec: {
+      encode(value) {
+        return OidcClientRuntimeMetadataSchema.parse(value);
+      },
+      decode(payload) {
+        return OidcClientRuntimeMetadataSchema.parse(payload);
+      },
+    },
+  };
+}
+
+export function createOidcClientRuntimeStore(
+  reader: ClientRuntimeSnapshotReader<OidcClientRuntimeMetadata>,
+) {
   async function findRuntime(clientCode: string): Promise<OidcClientRuntimeMetadata | null> {
-    const cached = await deps.cache.get(clientCode);
-    if (cached)
-      return cached;
-
-    const client = await deps.repository.findRuntimeRecord(clientCode);
-    if (!client || !isOidcClientAvailable(client))
-      return null;
-
-    const metadata = toOidcClientRuntimeMetadata(client);
-    await deps.cache.set(clientCode, metadata);
-    return metadata;
+    try {
+      const snapshot = await reader.acquire(clientCode);
+      return snapshot.kind === "present" ? snapshot.value : null;
+    }
+    catch (error) {
+      if (error instanceof ClientRuntimeSnapshotUnavailableError)
+        throw new errors.TemporarilyUnavailable("Client Runtime Snapshot unavailable");
+      throw error;
+    }
   }
 
   return {

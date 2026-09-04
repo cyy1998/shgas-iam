@@ -4,7 +4,6 @@ export * from "./http";
 export * from "./logger";
 export * from "./middlewares";
 export * from "./observability";
-export * from "./oidc";
 export * from "./redis";
 export * from "./security";
 export * from "./trpc";

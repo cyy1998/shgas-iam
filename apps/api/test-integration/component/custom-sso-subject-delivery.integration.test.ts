@@ -1,9 +1,6 @@
 import type { SubjectClaimName } from "@iam/contracts";
 import type { CustomSsoClientRuntimeDto } from "@iam/domain/client";
 import {
-  CustomSsoClientRuntimeUnavailableError,
-} from "@api/services/client/custom-sso-client-runtime.reader";
-import {
   CustomSsoClientDeliveryUnauthorizedError,
 } from "@api/services/sso/custom-sso-client-delivery.error";
 import {
@@ -115,18 +112,21 @@ const freshnessCheck = mock(async () => ({ status: "fresh" as const }));
 const assertAccessible = mock(async () => undefined);
 
 function createDelivery(client: CustomSsoClientRuntimeDto) {
-  const findRuntimeRecord = mock(async () => client);
   const projection = createClientSubjectProjectionService({
     subjectAccess: { assertAccessible },
     subjectFacts: { read: factsRead },
     authorizationFreshness: { check: freshnessCheck },
   });
+  const rawDelivery = createCustomSsoSubjectDelivery({ projection });
   return {
-    delivery: createCustomSsoSubjectDelivery({
-      clients: { findRuntimeRecord },
-      projection,
-    }),
-    findRuntimeRecord,
+    delivery: {
+      createUserInfoCapability: (
+        context: Parameters<typeof rawDelivery.createUserInfoCapability>[0],
+      ) => rawDelivery.createUserInfoCapability(context, client),
+      resolveGatewaySubjectHeader: (
+        context: Parameters<typeof rawDelivery.resolveGatewaySubjectHeader>[0],
+      ) => rawDelivery.resolveGatewaySubjectHeader(context, client),
+    },
   };
 }
 
@@ -229,192 +229,89 @@ describe("Custom SSO subject delivery", () => {
     expect(freshnessCheck).toHaveBeenCalledTimes(1);
   });
 
-  test("does not project a local session through a newer client selection", async () => {
-    const initial = runtimeClient([
+  test("keeps the accepted request selection when the client mutates during projection", async () => {
+    const accepted = runtimeClient([
       SubjectClaim.SubjectIdentifier,
       SubjectClaim.ProfileUsername,
     ]);
+    let current = accepted;
     const changed = runtimeClient([
       SubjectClaim.SubjectIdentifier,
       SubjectClaim.ProfilePhone,
     ], {
       customSsoConfigVersion: 4,
     });
-    const { delivery, findRuntimeRecord } = createDelivery(initial);
-    findRuntimeRecord.mockResolvedValueOnce(initial);
-    findRuntimeRecord.mockResolvedValueOnce(changed);
-
+    const resolve = mock(async () => {
+      current = changed;
+      return {
+        subjectIdentifier: SUBJECT_IDENTIFIER,
+        username: "alice",
+      };
+    });
+    const delivery = createCustomSsoSubjectDelivery({
+      projection: { resolve },
+    });
     const capability = delivery.createUserInfoCapability({
       subjectIdentifier: SUBJECT_IDENTIFIER,
       authenticatedClientCode: "gateway",
       expectedConfigVersion: 3,
-    });
+    }, accepted);
 
     expect(Object.keys(capability)).toEqual(["resolveUserInfo"]);
-    await expect(
-      capability.resolveUserInfo(),
-    ).rejects.toBeInstanceOf(
-      CustomSsoClientDeliveryUnauthorizedError,
-    );
-
-    expect(findRuntimeRecord).toHaveBeenCalledTimes(2);
-  });
-
-  test("returns retryable uncertainty when a global session races a client selection change", async () => {
-    const initial = runtimeClient([
-      SubjectClaim.SubjectIdentifier,
-      SubjectClaim.ProfileUsername,
-    ]);
-    const changed = runtimeClient([
-      SubjectClaim.SubjectIdentifier,
-      SubjectClaim.ProfilePhone,
-    ], {
-      customSsoConfigVersion: 4,
-    });
-    const { delivery, findRuntimeRecord } = createDelivery(initial);
-    findRuntimeRecord.mockResolvedValueOnce(initial);
-    findRuntimeRecord.mockResolvedValueOnce(changed);
-
-    await expect(delivery.createUserInfoCapability({
+    const projection = await capability.resolveUserInfo();
+    expect(projection).toEqual({
+      version: 2,
       subjectIdentifier: SUBJECT_IDENTIFIER,
-      authenticatedClientCode: "gateway",
-    }).resolveUserInfo()).rejects.toBeInstanceOf(
-      CustomSsoClientRuntimeUnavailableError,
-    );
-
-    expect(findRuntimeRecord).toHaveBeenCalledTimes(2);
-  });
-
-  test.each([
-    [
-      "a Gateway Local Session",
-      { expectedConfigVersion: 3 },
-      CustomSsoClientDeliveryUnauthorizedError,
-    ],
-    [
-      "a global session",
-      {},
-      CustomSsoClientRuntimeUnavailableError,
-    ],
-  ] as const)("revalidates %s after one Gateway projection", async (
-    _sessionType,
-    context,
-    ExpectedError,
-  ) => {
-    const initial = runtimeClient([SubjectClaim.SubjectIdentifier]);
-    const changed = runtimeClient([SubjectClaim.SubjectIdentifier], {
-      customSsoConfigVersion: 4,
+      profile: { username: "alice" },
     });
-    const findRuntimeRecord = mock()
-      .mockResolvedValueOnce(initial)
-      .mockResolvedValueOnce(changed);
-    const resolve = mock(async () => ({
-      subjectIdentifier: SUBJECT_IDENTIFIER,
-    }));
-    const delivery = createCustomSsoSubjectDelivery({
-      clients: { findRuntimeRecord },
-      projection: { resolve },
-    });
-
-    await expect(delivery.resolveGatewaySubjectHeader({
-      subjectIdentifier: SUBJECT_IDENTIFIER,
-      authenticatedClientCode: "gateway",
-      ...context,
-    })).rejects.toBeInstanceOf(ExpectedError);
-
+    expect(current).toBe(changed);
     expect(resolve).toHaveBeenCalledTimes(1);
-    expect(findRuntimeRecord).toHaveBeenCalledTimes(2);
   });
 
   test.each([
     [
       "public user-info",
-      async (delivery: ReturnType<typeof createCustomSsoSubjectDelivery>) =>
+      async (
+        delivery: ReturnType<typeof createCustomSsoSubjectDelivery>,
+        client: CustomSsoClientRuntimeDto,
+      ) =>
         await delivery.createUserInfoCapability({
           subjectIdentifier: SUBJECT_IDENTIFIER,
           authenticatedClientCode: "gateway",
-        }).resolveUserInfo(),
+        }, client).resolveUserInfo(),
       CustomSsoSubjectProjectionInvariantError,
     ],
     [
       "the Gateway header",
-      async (delivery: ReturnType<typeof createCustomSsoSubjectDelivery>) =>
+      async (
+        delivery: ReturnType<typeof createCustomSsoSubjectDelivery>,
+        client: CustomSsoClientRuntimeDto,
+      ) =>
         await delivery.resolveGatewaySubjectHeader({
           subjectIdentifier: SUBJECT_IDENTIFIER,
           authenticatedClientCode: "gateway",
-        }),
+        }, client),
       TypeError,
     ],
-  ] as const)("validates the projected Subject before reloading the Client for %s", async (
+  ] as const)("validates the projected Subject for %s", async (
     _deliveryType,
     deliver,
     ExpectedError,
   ) => {
-    const findRuntimeRecord = mock(async () =>
-      runtimeClient([SubjectClaim.SubjectIdentifier]));
+    const client = runtimeClient([SubjectClaim.SubjectIdentifier]);
     const resolve = mock(async () => ({
       subjectIdentifier: "00000000-0000-4000-8000-000000001002",
     }));
     const delivery = createCustomSsoSubjectDelivery({
-      clients: { findRuntimeRecord },
       projection: { resolve },
     });
 
-    await expect(deliver(delivery)).rejects.toBeInstanceOf(ExpectedError);
+    await expect(deliver(delivery, client)).rejects.toBeInstanceOf(ExpectedError);
 
     expect(resolve).toHaveBeenCalledTimes(1);
-    expect(findRuntimeRecord).toHaveBeenCalledTimes(1);
   });
 
   test.each([
-    [
-      "global disable",
-      runtimeClient([SubjectClaim.SubjectIdentifier], {
-        status: ClientStatus.Disable,
-      }),
-    ],
-    [
-      "deletion",
-      runtimeClient([SubjectClaim.SubjectIdentifier], {
-        isDelete: true,
-      }),
-    ],
-    [
-      "Custom SSO disable",
-      runtimeClient([SubjectClaim.SubjectIdentifier], {
-        customSsoEnabled: false,
-      }),
-    ],
-    [
-      "config removal",
-      runtimeClient([SubjectClaim.SubjectIdentifier], {
-        customSsoConfig: null,
-      }),
-    ],
-  ] as const)("classifies a mid-flight %s as client-local delivery rejection", async (
-    _reason,
-    changed,
-  ) => {
-    const initial = runtimeClient([SubjectClaim.SubjectIdentifier]);
-    const { delivery, findRuntimeRecord } = createDelivery(initial);
-    findRuntimeRecord.mockResolvedValueOnce(initial);
-    findRuntimeRecord.mockResolvedValueOnce(changed);
-
-    await expect(delivery.createUserInfoCapability({
-      subjectIdentifier: SUBJECT_IDENTIFIER,
-      authenticatedClientCode: "gateway",
-    }).resolveUserInfo()).rejects.toBeInstanceOf(
-      CustomSsoClientDeliveryUnauthorizedError,
-    );
-
-    expect(findRuntimeRecord).toHaveBeenCalledTimes(2);
-  });
-
-  test.each([
-    [
-      "missing",
-      null,
-    ],
     [
       "globally disabled",
       runtimeClient([SubjectClaim.SubjectIdentifier], {
@@ -441,16 +338,20 @@ describe("Custom SSO subject delivery", () => {
       throw new Error("projection must not run");
     });
     const delivery = createCustomSsoSubjectDelivery({
-      clients: { findRuntimeRecord: mock(async () => client) },
       projection: { resolve },
     });
 
-    await expect(delivery.createUserInfoCapability({
-      subjectIdentifier: SUBJECT_IDENTIFIER,
-      authenticatedClientCode: "gateway",
-    }).resolveUserInfo()).rejects.toBeInstanceOf(
-      CustomSsoClientDeliveryUnauthorizedError,
-    );
+    let error: unknown;
+    try {
+      delivery.createUserInfoCapability({
+        subjectIdentifier: SUBJECT_IDENTIFIER,
+        authenticatedClientCode: "gateway",
+      }, client);
+    }
+    catch (caught) {
+      error = caught;
+    }
+    expect(error).toBeInstanceOf(CustomSsoClientDeliveryUnauthorizedError);
     expect(resolve).not.toHaveBeenCalled();
   });
 

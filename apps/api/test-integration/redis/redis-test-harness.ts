@@ -1,10 +1,8 @@
 import { randomUUID } from "node:crypto";
 import process from "node:process";
 import {
-  customSsoClientRuntimeCacheKey,
-  customSsoClientRuntimeGenerationKey,
-  customSsoClientRuntimeMutationKey,
-} from "@iam/api-core/custom-sso";
+  clientRuntimeSnapshotTestingKeys,
+} from "@iam/api-core/client-runtime-snapshot/testing";
 import Redis from "ioredis";
 
 const TEST_REDIS_URL_ENV = "IAM_API_TEST_REDIS_URL";
@@ -60,9 +58,10 @@ Promise<ApiRedisTestHarness> {
         clientCode(label) {
           sequence += 1;
           const code = `t${namespace.slice(0, 20)}-${label}-${sequence}`;
-          ownedKeys.add(customSsoClientRuntimeCacheKey(code));
-          ownedKeys.add(customSsoClientRuntimeGenerationKey(code));
-          ownedKeys.add(customSsoClientRuntimeMutationKey(code));
+          const snapshotKeys = clientRuntimeSnapshotTestingKeys(code);
+          ownedKeys.add(snapshotKeys.control);
+          for (const payloadKey of snapshotKeys.payloads)
+            ownedKeys.add(payloadKey);
           return code;
         },
         trackKey(key) {

@@ -2,10 +2,7 @@ import type { ClientService } from "@admin-api/services/client/client.service";
 import type { ClientCustomSsoConfigureDto } from "@admin-api/services/client/client.type";
 import { createClientService } from "@admin-api/services/client/client.service";
 import { createFakePasswordHasher, createFakeRandom, createImmediateUnitOfWork } from "@admin-api/test/fakes";
-import {
-  AfterCommitRequiredTaskError,
-  markTransactionRollbackConfirmed,
-} from "@iam/api-core/uow";
+import { AfterCommitRequiredTaskError } from "@iam/api-core/uow";
 import {
   ClientStatus,
   CustomSsoClientMode,
@@ -139,32 +136,14 @@ function createService(options: {
       searchClientsPaged: mock(async () => ({ rows: [client()], total: 1 })),
     },
     clientCache: {
-      beginTrafficGateMutation: mock(async (clientCode: string) => ({
-        clientCode,
-        fenceTtlMs: 120_000,
-        mutationId: "00000000-0000-4000-8000-000000000002",
-      })),
-      startTrafficGateMutationHeartbeat: mock(() => ({
-        assertOwned: mock(async () => undefined),
-        stopAndSettle: mock(async <T>(settle: () => Promise<T>) =>
-          await settle()),
-      })),
-      publishTrafficGateMutation: mock(async () => "published" as const),
-      abortTrafficGateMutation: mock(async () => "aborted" as const),
-      beginRuntimeMutation: mock(async (clientCode: string) => ({
-        clientCode,
-        fenceTtlMs: 120_000,
-        mutationId: "00000000-0000-4000-8000-000000000001",
-      })),
-      startRuntimeMutationHeartbeat: mock(() => ({
-        assertOwned: mock(async () => undefined),
-        stopAndSettle: mock(async <T>(settle: () => Promise<T>) =>
-          await settle()),
-      })),
-      completeRuntimeMutation: mock(async () => "completed" as const),
-      abortRuntimeMutation: mock(async () => "aborted" as const),
       invalidateClient: mock(async () => undefined),
       invalidateUpdatedClient: mock(async () => undefined),
+    },
+    clientRuntimeInvalidation: {
+      invalidateClient: mock(async () => undefined),
+    },
+    clientMutationLogger: {
+      error: mock((_fields: Record<string, unknown>, _message: string) => undefined),
     },
     sessionRevocation: {
       revokeClientAllProtocols: mock(async () => revokeSummary()),
@@ -181,224 +160,6 @@ function createService(options: {
 }
 
 describe("createClientService", () => {
-  test("does not commit when the runtime mutation heartbeat loses ownership", async () => {
-    let committed = false;
-    const { service, deps } = createService({
-      uowFactory: tx => ({
-        async transaction(
-          callback: (input: Record<string, unknown>) => Promise<unknown>,
-        ) {
-          try {
-            const result = await callback({
-              ...tx,
-              afterCommit: {
-                bestEffort: () => undefined,
-                required: () => undefined,
-              },
-            });
-            committed = true;
-            return result;
-          }
-          catch (error) {
-            markTransactionRollbackConfirmed(error);
-            throw error;
-          }
-        },
-      }),
-    });
-    const heartbeat = {
-      assertOwned: mock(async () => {
-        throw new Error("runtime mutation ownership lost");
-      }),
-      stopAndSettle: mock(async <T>(settle: () => Promise<T>) =>
-        await settle()),
-    };
-    deps.clientCache.startRuntimeMutationHeartbeat
-      .mockReturnValueOnce(heartbeat);
-
-    await expect(
-      service.configureClientCustomSso(
-        "portal",
-        gatewayCustomSsoConfig(),
-      ),
-    ).rejects.toThrow("runtime mutation ownership lost");
-
-    expect(committed).toBe(false);
-    expect(deps.clientCache.completeRuntimeMutation).not.toHaveBeenCalled();
-    expect(deps.clientCache.abortRuntimeMutation).toHaveBeenCalledTimes(1);
-  });
-
-  test("does not mutate PostgreSQL when the runtime mutation fence cannot begin", async () => {
-    const { service, deps, tx } = createService();
-    deps.clientCache.beginRuntimeMutation.mockRejectedValueOnce(
-      new Error("redis unavailable"),
-    );
-
-    await expect(
-      service.configureClientCustomSso(
-        "portal",
-        gatewayCustomSsoConfig(),
-      ),
-    ).rejects.toThrow("redis unavailable");
-
-    expect(tx.clientRepository.updateClientCustomSsoByCode)
-      .not
-      .toHaveBeenCalled();
-    expect(deps.clientCache.completeRuntimeMutation).not.toHaveBeenCalled();
-    expect(deps.clientCache.abortRuntimeMutation).not.toHaveBeenCalled();
-  });
-
-  test("aborts the runtime mutation fence when the database transaction rolls back", async () => {
-    const { service, deps, tx } = createService();
-    let releaseHeartbeat!: () => void;
-    let markHeartbeatStopped!: () => void;
-    const heartbeatStopped = new Promise<void>((resolve) => {
-      markHeartbeatStopped = resolve;
-    });
-    const heartbeatGate = new Promise<void>((resolve) => {
-      releaseHeartbeat = resolve;
-    });
-    deps.clientCache.startRuntimeMutationHeartbeat.mockReturnValueOnce({
-      assertOwned: mock(async () => undefined),
-      stopAndSettle: mock(async <T>(settle: () => Promise<T>) => {
-        markHeartbeatStopped();
-        await heartbeatGate;
-        return await settle();
-      }),
-    });
-    tx.clientRepository.updateClientCustomSsoByCode.mockRejectedValueOnce(
-      new Error("database write failed"),
-    );
-
-    const operation = service.configureClientCustomSso(
-      "portal",
-      gatewayCustomSsoConfig(),
-    );
-    await heartbeatStopped;
-    expect(deps.clientCache.abortRuntimeMutation).not.toHaveBeenCalled();
-    releaseHeartbeat();
-    await expect(operation).rejects.toThrow("database write failed");
-
-    expect(deps.clientCache.abortRuntimeMutation).toHaveBeenCalledWith({
-      clientCode: "portal",
-      fenceTtlMs: 120_000,
-      mutationId: "00000000-0000-4000-8000-000000000001",
-    });
-    expect(deps.clientCache.completeRuntimeMutation).not.toHaveBeenCalled();
-  });
-
-  test("reports both the transaction and abort failures after a confirmed rollback", async () => {
-    const { service, deps, tx } = createService();
-    const databaseFailure = new Error("database write failed");
-    const abortFailure = new Error("redis abort failed");
-    tx.clientRepository.updateClientCustomSsoByCode.mockRejectedValueOnce(
-      databaseFailure,
-    );
-    deps.clientCache.abortRuntimeMutation.mockRejectedValueOnce(
-      abortFailure,
-    );
-
-    const caught = await service.configureClientCustomSso(
-      "portal",
-      gatewayCustomSsoConfig(),
-    ).catch(error => error);
-
-    expect(caught).toBeInstanceOf(AggregateError);
-    expect((caught as AggregateError).errors).toEqual([
-      databaseFailure,
-      abortFailure,
-    ]);
-    expect(deps.clientCache.completeRuntimeMutation).not.toHaveBeenCalled();
-  });
-
-  test("keeps the runtime fenced when required completion fails after commit", async () => {
-    const { service, deps, tx } = createService({
-      afterCommitLogger: createAfterCommitLogger(),
-    });
-    tx.clientRepository.lockClientByCode.mockResolvedValueOnce(client({
-      status: ClientStatus.Maintenance,
-      customSsoEnabled: true,
-      customSsoConfig: gatewayCustomSsoConfig(),
-      customSsoConfigVersion: 1,
-    }));
-    deps.clientCache.completeRuntimeMutation.mockRejectedValueOnce(
-      new Error("redis completion failed"),
-    );
-
-    await expect(
-      service.disableClientCustomSso("portal"),
-    ).rejects.toBeInstanceOf(AfterCommitRequiredTaskError);
-
-    expect(tx.clientRepository.updateClientCustomSsoByCode)
-      .toHaveBeenCalled();
-    expect(deps.clientCache.abortRuntimeMutation).not.toHaveBeenCalled();
-  });
-
-  test("stops the heartbeat without settling the fence when the transaction outcome is unknown", async () => {
-    const commitOutcomeUnknown = new Error("commit response lost");
-    const { service, deps } = createService({
-      uowFactory: tx => ({
-        async transaction(
-          callback: (input: Record<string, unknown>) => Promise<unknown>,
-        ) {
-          await callback({
-            ...tx,
-            afterCommit: {
-              bestEffort: () => undefined,
-              required: () => undefined,
-            },
-          });
-          throw commitOutcomeUnknown;
-        },
-      }),
-    });
-    const stopAndSettle = mock(async <T>(settle: () => Promise<T>) =>
-      await settle());
-    deps.clientCache.startRuntimeMutationHeartbeat.mockReturnValueOnce({
-      assertOwned: mock(async () => undefined),
-      stopAndSettle,
-    });
-
-    await expect(
-      service.configureClientCustomSso(
-        "portal",
-        gatewayCustomSsoConfig(),
-      ),
-    ).rejects.toBe(commitOutcomeUnknown);
-
-    expect(stopAndSettle).toHaveBeenCalledTimes(1);
-    expect(deps.clientCache.completeRuntimeMutation).not.toHaveBeenCalled();
-    expect(deps.clientCache.abortRuntimeMutation).not.toHaveBeenCalled();
-  });
-
-  test("uses the documented pre-commit fence only after the client row lock", async () => {
-    const { service, deps, tx } = createService();
-
-    await service.configureClientCustomSso(
-      "portal",
-      gatewayCustomSsoConfig(),
-    );
-
-    expect(
-      tx.clientRepository.lockClientByCode.mock.invocationCallOrder[0],
-    ).toBeLessThan(
-      deps.clientCache.beginRuntimeMutation.mock.invocationCallOrder[0]!,
-    );
-    expect(
-      deps.clientCache.beginRuntimeMutation.mock.invocationCallOrder[0],
-    ).toBeLessThan(
-      tx.clientRepository.updateClientCustomSsoByCode
-        .mock
-        .invocationCallOrder[0]!,
-    );
-    expect(
-      tx.clientRepository.updateClientCustomSsoByCode
-        .mock.invocationCallOrder[0],
-    ).toBeLessThan(
-      deps.clientCache.completeRuntimeMutation.mock.invocationCallOrder[0]!,
-    );
-  });
-
   test("configures an Independent Custom SSO client with a one-time secret after commit", async () => {
     const { service, deps, tx } = createService();
     const input = independentCustomSsoConfig();
@@ -442,9 +203,8 @@ describe("createClientService", () => {
     expect(JSON.stringify(audit)).not.toContain("iam_sso_test_secret");
     expect(JSON.stringify(audit)).not.toContain("hashed-secret");
     expect(JSON.stringify(audit)).not.toContain("subjectClaimCatalogVersion");
-    expect(deps.clientCache.invalidateClient).toHaveBeenCalledWith(expect.objectContaining({
-      clientCode: "portal",
-    }));
+    expect(deps.clientCache.invalidateClient).not.toHaveBeenCalled();
+    expect(deps.clientRuntimeInvalidation.invalidateClient).toHaveBeenCalledWith("portal");
     expect(deps.sessionRevocation.revokeClientProtocol).toHaveBeenCalledWith(expect.objectContaining({
       clientCode: "portal",
       protocol: "custom-sso",
@@ -487,7 +247,8 @@ describe("createClientService", () => {
         customSsoConfigVersion: 8,
       }),
     }));
-    expect(deps.clientCache.invalidateClient).toHaveBeenCalled();
+    expect(deps.clientCache.invalidateClient).not.toHaveBeenCalled();
+    expect(deps.clientRuntimeInvalidation.invalidateClient).toHaveBeenCalledWith("portal");
     expect(deps.sessionRevocation.revokeClientProtocol).toHaveBeenCalledWith(expect.objectContaining({
       protocol: "custom-sso",
       reason: "client_config_changed",
@@ -518,6 +279,7 @@ describe("createClientService", () => {
       protocol: "custom-sso",
       reason: "client_protocol_disabled",
     }));
+    expect(disableCase.deps.clientRuntimeInvalidation.invalidateClient).toHaveBeenCalledWith("portal");
     expect(disableCase.tx.auditService.recordAuditLog).toHaveBeenCalledWith(expect.objectContaining({
       action: "admin.client.custom_sso.disable",
     }));
@@ -550,6 +312,7 @@ describe("createClientService", () => {
     expect(removeCase.tx.auditService.recordAuditLog).toHaveBeenCalledWith(expect.objectContaining({
       action: "admin.client.custom_sso.remove",
     }));
+    expect(removeCase.deps.clientRuntimeInvalidation.invalidateClient).toHaveBeenCalledWith("portal");
 
     const rotateCase = createService();
     rotateCase.tx.clientRepository.lockClientByCode.mockResolvedValueOnce(client({
@@ -574,6 +337,7 @@ describe("createClientService", () => {
     });
     expect(JSON.stringify(rotateAudit)).not.toContain("iam_sso_test_secret");
     expect(JSON.stringify(rotateAudit)).not.toContain("hashed-secret");
+    expect(rotateCase.deps.clientRuntimeInvalidation.invalidateClient).toHaveBeenCalledWith("portal");
   });
 
   test("applies all disabled Custom SSO mode transitions with exact secret semantics", async () => {
@@ -740,11 +504,13 @@ describe("createClientService", () => {
     expect(tx.clientRepository.updateClientCustomSsoByCode).not.toHaveBeenCalled();
   });
 
-  test("reports required Custom SSO cache invalidation failure after commit and still attempts revocation", async () => {
+  test("reports required Custom SSO Snapshot invalidation failure after commit and still attempts revocation", async () => {
     const afterCommitLogger = createAfterCommitLogger();
     const { service, deps, tx } = createService({ afterCommitLogger });
-    const cacheFailure = new Error("cache unavailable");
-    deps.clientCache.invalidateClient.mockRejectedValueOnce(cacheFailure);
+    const cacheFailure = new Error("Runtime Snapshot unavailable");
+    deps.clientRuntimeInvalidation.invalidateClient.mockRejectedValueOnce(
+      cacheFailure,
+    );
     tx.clientRepository.updateClientCustomSsoByCode.mockResolvedValueOnce(client({
       customSsoConfig: gatewayCustomSsoConfig(),
       customSsoSecretHash: null,
@@ -761,11 +527,11 @@ describe("createClientService", () => {
       protocol: "custom-sso",
     }));
     expect(afterCommitLogger.error).toHaveBeenCalledWith(expect.objectContaining({
-      afterCommit: "admin.client.custom_sso.cache.invalidate",
+      afterCommit: "admin.client.runtime_snapshot.invalidate",
       err: cacheFailure,
       mode: "required",
     }), "required afterCommit task failed");
-    expect(deps.clientCache.abortRuntimeMutation).not.toHaveBeenCalled();
+    expect(deps.clientCache.invalidateClient).not.toHaveBeenCalled();
   });
 
   test("maps paged client search results", async () => {
@@ -805,39 +571,12 @@ describe("createClientService", () => {
     expect(deps.clientCache.invalidateClient).toHaveBeenCalledWith(
       expect.objectContaining({ clientCode: "portal" }),
     );
+    expect(deps.clientRuntimeInvalidation.invalidateClient).toHaveBeenCalledWith("portal");
     expect(
       tx.clientRepository.createClient.mock.invocationCallOrder[0],
     ).toBeLessThan(
       deps.clientCache.invalidateClient.mock.invocationCallOrder[0]!,
     );
-    expect(deps.clientCache.beginRuntimeMutation).not.toHaveBeenCalled();
-    expect(deps.clientCache.startRuntimeMutationHeartbeat)
-      .not
-      .toHaveBeenCalled();
-    expect(deps.clientCache.completeRuntimeMutation).not.toHaveBeenCalled();
-    expect(deps.clientCache.abortRuntimeMutation).not.toHaveBeenCalled();
-  });
-
-  test("does not acquire an existing-client runtime fence while creating a client", async () => {
-    const { service, deps, tx } = createService();
-    deps.clientCache.beginRuntimeMutation.mockRejectedValueOnce(
-      new Error("redis unavailable"),
-    );
-
-    await expect(service.createClient({
-      clientCode: "portal",
-      clientName: "Portal",
-      clientSecret: "secret",
-      url: "https://portal.example.com",
-      status: ClientStatus.Enable,
-      description: null,
-      extAttributes: client().extAttributes,
-    } as any)).resolves.toMatchObject({ clientCode: "portal" });
-
-    expect(tx.clientRepository.createClient).toHaveBeenCalled();
-    expect(deps.clientCache.beginRuntimeMutation).not.toHaveBeenCalled();
-    expect(deps.clientCache.completeRuntimeMutation).not.toHaveBeenCalled();
-    expect(deps.clientCache.abortRuntimeMutation).not.toHaveBeenCalled();
   });
 
   test("reports required cache failures after creating a client", async () => {
@@ -857,9 +596,6 @@ describe("createClientService", () => {
     expect(tx.clientRepository.createClient).toHaveBeenCalled();
     expect(tx.auditService.recordAuditLog).toHaveBeenCalled();
     expect(deps.clientCache.invalidateClient).toHaveBeenCalled();
-    expect(deps.clientCache.beginRuntimeMutation).not.toHaveBeenCalled();
-    expect(deps.clientCache.completeRuntimeMutation).not.toHaveBeenCalled();
-    expect(deps.clientCache.abortRuntimeMutation).not.toHaveBeenCalled();
   });
 
   test("rejects duplicate client codes before creating", async () => {
@@ -902,16 +638,10 @@ describe("createClientService", () => {
     });
     expect(tx.clientRepository.updateClientCustomSsoByCode).not.toHaveBeenCalled();
     expect(deps.clientCache.invalidateUpdatedClient).toHaveBeenCalled();
-    expect(deps.clientCache.beginRuntimeMutation).toHaveBeenCalled();
-    expect(deps.clientCache.completeRuntimeMutation).toHaveBeenCalled();
     expect(deps.sessionRevocation.revokeClientAllProtocols).toHaveBeenCalledWith({
       clientCode: "portal",
       reason: "client_disabled",
       auditContext: undefined,
-      oidcInvalidationClient: expect.objectContaining({
-        clientCode: "portal",
-        oidcConfigVersion: 2,
-      }),
     });
   });
 
@@ -1006,7 +736,7 @@ describe("createClientService", () => {
       customSsoState: CustomSsoClientState.Enabled,
     });
     expect(deps.clientCache.invalidateUpdatedClient).toHaveBeenCalledTimes(2);
-    expect(deps.clientCache.completeRuntimeMutation).toHaveBeenCalledTimes(2);
+    expect(deps.clientRuntimeInvalidation.invalidateClient).toHaveBeenCalledTimes(2);
   });
 
   test("maintenance round trips preserve protocol epochs and do not revoke", async () => {
@@ -1089,10 +819,7 @@ describe("createClientService", () => {
       .toHaveBeenCalled();
     expect(deps.sessionRevocation.revokeClientProtocol).not.toHaveBeenCalled();
     expect(deps.sessionRevocation.revokeClientAllProtocols).not.toHaveBeenCalled();
-    expect(deps.clientCache.publishTrafficGateMutation).toHaveBeenCalledWith(
-      expect.objectContaining({ clientCode: "portal" }),
-      ClientStatus.Maintenance,
-    );
+    expect(deps.clientRuntimeInvalidation.invalidateClient).toHaveBeenCalledWith("portal");
   });
 
   test("idempotent disable writes do not advance protocol epochs or revoke again", async () => {
@@ -1118,7 +845,7 @@ describe("createClientService", () => {
     expect(deps.sessionRevocation.revokeClientAllProtocols).not.toHaveBeenCalled();
   });
 
-  test("publishes the committed maintenance state through the traffic gate", async () => {
+  test("invalidates the shared Runtime Snapshot after committing Maintenance", async () => {
     const { service, deps, tx } = createService();
     tx.clientRepository.updateClientByCode
       .mockResolvedValueOnce(client({
@@ -1131,36 +858,17 @@ describe("createClientService", () => {
       service.updateClientStatus("portal", ClientStatus.Maintenance),
     ).resolves.toBe(true);
 
-    expect(deps.clientCache.beginTrafficGateMutation).toHaveBeenCalledWith(
-      "portal",
-      expect.any(String),
-    );
-    expect(deps.clientCache.publishTrafficGateMutation).toHaveBeenCalledWith(
-      expect.objectContaining({ clientCode: "portal" }),
-      ClientStatus.Maintenance,
-    );
-    expect(
-      tx.clientRepository.lockClientByCode.mock.invocationCallOrder[0],
-    ).toBeLessThan(
-      deps.clientCache.beginTrafficGateMutation.mock.invocationCallOrder[0]!,
-    );
-    expect(
-      deps.clientCache.beginTrafficGateMutation.mock.invocationCallOrder[0],
-    ).toBeLessThan(
-      tx.clientRepository.updateClientByCode
-        .mock
-        .invocationCallOrder[0]!,
-    );
     expect(
       tx.clientRepository.updateClientByCode
         .mock
         .invocationCallOrder[0],
     ).toBeLessThan(
-      deps.clientCache.publishTrafficGateMutation.mock.invocationCallOrder[0]!,
+      deps.clientRuntimeInvalidation.invalidateClient.mock.invocationCallOrder[0]!,
     );
+    expect(deps.clientRuntimeInvalidation.invalidateClient).toHaveBeenCalledWith("portal");
   });
 
-  test("reports a required traffic gate publish failure after committing the status", async () => {
+  test("reports required shared invalidation failure after committing Maintenance", async () => {
     const { service, deps, tx } = createService();
     tx.clientRepository.updateClientByCode
       .mockResolvedValueOnce(client({
@@ -1168,33 +876,23 @@ describe("createClientService", () => {
         customSsoConfigVersion: 1,
         oidcConfigVersion: 2,
       }));
-    deps.clientCache.publishTrafficGateMutation.mockRejectedValueOnce(
-      new Error("traffic gate publish unavailable"),
+    deps.clientRuntimeInvalidation.invalidateClient.mockRejectedValueOnce(
+      new Error("shared Runtime Snapshot invalidation unavailable"),
     );
 
     await expect(
       service.updateClientStatus("portal", ClientStatus.Maintenance),
     ).rejects.toBeInstanceOf(AfterCommitRequiredTaskError);
 
-    expect(deps.clientCache.abortTrafficGateMutation).not.toHaveBeenCalled();
-  });
-
-  test("aborts both runtime fences when a status update rolls back", async () => {
-    const { service, deps, tx } = createService();
-    tx.clientRepository.updateClientByCode
-      .mockRejectedValueOnce(new Error("database write failed"));
-
-    await expect(
-      service.updateClientStatus("portal", ClientStatus.Maintenance),
-    ).rejects.toThrow("database write failed");
-
-    expect(deps.clientCache.abortTrafficGateMutation).toHaveBeenCalledTimes(1);
-    expect(deps.clientCache.abortRuntimeMutation).toHaveBeenCalledTimes(1);
-    expect(deps.clientCache.publishTrafficGateMutation).not.toHaveBeenCalled();
+    expect(tx.clientRepository.updateClientByCode).toHaveBeenCalledWith(
+      "portal",
+      { status: ClientStatus.Maintenance },
+    );
+    expect(deps.clientRuntimeInvalidation.invalidateClient).toHaveBeenCalledTimes(1);
   });
 
   test("advances both protocol epochs for a status change through the legacy ID update path", async () => {
-    const { service, tx } = createService();
+    const { service, deps, tx } = createService();
     const customSsoConfig = gatewayCustomSsoConfig();
     tx.clientRepository.lockClientById.mockResolvedValueOnce(client({
       customSsoEnabled: true,
@@ -1222,6 +920,7 @@ describe("createClientService", () => {
     expect(
       tx.clientRepository.updateClientByIdWithProtocolEpochs,
     ).toHaveBeenCalled();
+    expect(deps.clientRuntimeInvalidation.invalidateClient).toHaveBeenCalledWith("portal");
   });
 
   test("leaves disable through the legacy ID update path without advancing protocol epochs", async () => {
@@ -1275,16 +974,14 @@ describe("createClientService", () => {
     await expect(service.deleteClient("portal")).resolves.toBe(true);
 
     expect(tx.clientRepository.updateClientCustomSsoByCode).not.toHaveBeenCalled();
-    expect(deps.clientCache.beginRuntimeMutation).toHaveBeenCalled();
-    expect(deps.clientCache.completeRuntimeMutation).toHaveBeenCalled();
     expect(deps.clientCache.invalidateClient).toHaveBeenCalledWith(
       expect.objectContaining({ clientCode: "portal" }),
     );
+    expect(deps.clientRuntimeInvalidation.invalidateClient).toHaveBeenCalledWith("portal");
     expect(deps.sessionRevocation.revokeClientAllProtocols).toHaveBeenCalledWith({
       clientCode: "portal",
       reason: "client_deleted",
       auditContext: undefined,
-      oidcInvalidationClient: expect.objectContaining({ clientCode: "portal" }),
     });
   });
 
@@ -1313,6 +1010,7 @@ describe("createClientService", () => {
       .toMatchObject({ clientName: "Portal New" });
 
     expect(deps.clientCache.invalidateUpdatedClient).toHaveBeenCalled();
+    expect(deps.clientRuntimeInvalidation.invalidateClient).toHaveBeenCalledWith("portal");
     expect(deps.sessionRevocation.revokeClientProtocol).not.toHaveBeenCalled();
     expect(deps.sessionRevocation.revokeClientAllProtocols).not.toHaveBeenCalled();
   });
@@ -1353,11 +1051,42 @@ describe("createClientService", () => {
       protocol: "oidc",
       reason: "client_config_changed",
       auditContext: undefined,
-      oidcInvalidationClient: expect.objectContaining({
-        clientCode: "portal",
-        oidcConfigVersion: 2,
-      }),
     });
+    expect(deps.clientRuntimeInvalidation.invalidateClient).toHaveBeenCalledWith("portal");
+  });
+
+  test("reports required Snapshot propagation failure after OIDC commit and still attempts artifact revocation", async () => {
+    const afterCommitLogger = createAfterCommitLogger();
+    const { service, deps, tx } = createService({ afterCommitLogger });
+    const invalidationFailure = new Error("Runtime Snapshot unavailable");
+    deps.clientRuntimeInvalidation.invalidateClient.mockRejectedValueOnce(
+      invalidationFailure,
+    );
+    tx.clientRepository.updateClientOidcByCode.mockResolvedValueOnce(client({
+      oidcConfig: oidcConfig(),
+      oidcSecretHash: "hashed-secret:iam_oidc_test_secret",
+      oidcConfigVersion: 2,
+    }));
+    let rejected: unknown;
+
+    try {
+      await service.configureClientOidc("portal", oidcConfig());
+    }
+    catch (error) {
+      rejected = error;
+    }
+
+    expect(rejected).toBeInstanceOf(AfterCommitRequiredTaskError);
+    expect(tx.clientRepository.updateClientOidcByCode).toHaveBeenCalledTimes(1);
+    expect(deps.clientRuntimeInvalidation.invalidateClient).toHaveBeenCalledTimes(1);
+    expect(deps.sessionRevocation.revokeClientProtocol).toHaveBeenCalledWith(
+      expect.objectContaining({ protocol: "oidc" }),
+    );
+    expect(afterCommitLogger.error).toHaveBeenCalledWith(expect.objectContaining({
+      afterCommit: "admin.client.runtime_snapshot.invalidate",
+      err: invalidationFailure,
+      mode: "required",
+    }), "required afterCommit task failed");
   });
 
   test("OIDC enable and disable revoke OIDC protocol with expected reasons", async () => {
@@ -1388,6 +1117,7 @@ describe("createClientService", () => {
       protocol: "oidc",
       reason: "client_config_changed",
     }));
+    expect(enableCase.deps.clientRuntimeInvalidation.invalidateClient).toHaveBeenCalledWith("portal");
 
     const disableCase = createService();
     disableCase.tx.clientRepository.lockClientByCode.mockResolvedValueOnce(client({
@@ -1405,6 +1135,7 @@ describe("createClientService", () => {
       protocol: "oidc",
       reason: "client_protocol_disabled",
     }));
+    expect(disableCase.deps.clientRuntimeInvalidation.invalidateClient).toHaveBeenCalledWith("portal");
   });
 
   test("uses the locked Client status when enabling OIDC", async () => {
@@ -1470,6 +1201,7 @@ describe("createClientService", () => {
       protocol: "oidc",
       reason: "client_protocol_disabled",
     }));
+    expect(removeCase.deps.clientRuntimeInvalidation.invalidateClient).toHaveBeenCalledWith("portal");
 
     const rotateCase = createService();
     (rotateCase.tx.clientRepository.getClientByCode as any).mockResolvedValue(client({
@@ -1492,5 +1224,6 @@ describe("createClientService", () => {
     });
     expect(JSON.stringify(input)).not.toContain("iam_oidc_test_secret");
     expect(JSON.stringify(input)).not.toContain("hashed-secret");
+    expect(rotateCase.deps.clientRuntimeInvalidation.invalidateClient).toHaveBeenCalledWith("portal");
   });
 });

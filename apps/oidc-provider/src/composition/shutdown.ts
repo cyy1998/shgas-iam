@@ -1,9 +1,6 @@
 import { SystemLogEvent } from "@iam/api-core/logger";
 
 interface CreateOidcProviderShutdownOptions {
-  clientInvalidationSubscriber: {
-    quit: () => Promise<unknown>;
-  };
   closeDatabase: () => Promise<unknown>;
   logger: {
     info: (fields: Record<string, unknown>, message: string) => unknown;
@@ -26,7 +23,6 @@ export function createOidcProviderShutdown(options: CreateOidcProviderShutdownOp
       new Promise<void>((resolve) => {
         options.server.close(() => resolve());
       }),
-      options.clientInvalidationSubscriber.quit(),
       options.redis.quit(),
       options.closeDatabase(),
     ]);

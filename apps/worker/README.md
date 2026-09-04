@@ -11,7 +11,23 @@ pnpm --filter @iam/worker employment:cutover-verify
 pnpm --filter @iam/worker user-profile:backfill
 pnpm --filter @iam/worker user-profile:repair
 pnpm --filter @iam/worker run user-profile:repair -- --subject-access-only --limit 500
+pnpm --filter @iam/worker client-runtime:repair -- --client-code <clientCode>
+pnpm --filter @iam/worker client-runtime:repair -- --all --protocol-traffic-stopped
+pnpm --filter @iam/worker client-runtime:verify -- --all --protocol-traffic-stopped
 ```
+
+Client Runtime targeted repair 与 restore full repair 使用 repair-only Redis command composition，不创建数据库、queue、consumer、
+HTTP server 或 Bull Board。Targeted repair 只接受一个 canonical `clientCode`；full repair 与 targeted 参数互斥，并且只有
+显式提供 `--protocol-traffic-stopped` 才会连接 Redis。Full repair 使用 `SCAN` 和分批 `UNLINK` 清理 Module-owned
+versioned namespace 与三类 legacy Runtime inventory；中断或部分失败后保持停流并从头重跑。
+
+`client-runtime:verify` 是另一次 Worker process 中以 scan-only composition 执行的独立只读全扫描，不持有 eval、unlink 或
+repair capability，同样要求 `--all` 与
+`--protocol-traffic-stopped`。只有完整扫描成功且 owner inventory 为零时报告 `completed` 并退出 0；计数只用于诊断，
+不证明协议停流、旧实例 drain、PONR receipt 或新代业务可用。两类命令的 JSON report 都不输出 Redis URL、key、control、
+payload、credential 或原始错误，也不读取 PostgreSQL、重放业务 mutation、推进协议版本或撤销 Session/artifact。
+Full repair 与 verify 默认各有 5 分钟 deadline；受控演练可用正整数
+`IAM_WORKER_CLIENT_RUNTIME_MAINTENANCE_TIMEOUT_MS` 收紧，超时会安全失败并执行 command resource shutdown。
 
 `employment:cutover-verify` 是 Employment 新生命周期切换前的显式只读 gate。命令只要求
 `IAM_WORKER_DATABASE_URL`，不会启动 Worker consumer、HTTP server、Bull Board 或 Redis，也不会随普通 Worker 启动和请求

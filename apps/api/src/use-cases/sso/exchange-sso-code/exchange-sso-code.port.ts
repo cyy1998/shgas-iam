@@ -1,5 +1,6 @@
 import type { CustomSsoSubjectProjection } from "@iam/client-subject-projection/custom-sso";
 import type { SubjectClaimName } from "@iam/contracts";
+import type { CustomSsoClientRuntimeDto } from "@iam/domain/client";
 import type { ExchangeSsoCodeOptions } from "./exchange-sso-code.type";
 
 export interface AuthenticatedIndependentClient {
@@ -32,6 +33,11 @@ export interface ExchangeSsoCodeDeps {
       clientCode: string,
       secret: string,
     ) => Promise<AuthenticatedIndependentClient | null>;
+  };
+  clients: {
+    findRuntimeRecord: (
+      clientCode: string,
+    ) => Promise<CustomSsoClientRuntimeDto | null>;
   };
   trafficGate: ExchangeSsoCodeTrafficGatePort;
 }

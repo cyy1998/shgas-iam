@@ -590,7 +590,6 @@ describe("repository architecture guard", () => {
   test("keeps Admin user and client services behind the Session Revocation port", () => {
     const repoRoot = createFixtureRepository({
       "apps/admin-api/src/services/client/client.service.ts": [
-        "import type { OidcRuntime } from \"@iam/api-core/oidc\";",
         "import type { OidcSessionAdapter } "
         + "from \"@admin-api/services/session/oidc-session-kernel.adapter.ts\";",
         "import type { Redis } from \"@admin-api/lib/infra/redis\";",
@@ -615,20 +614,13 @@ describe("repository architecture guard", () => {
         file: "apps/admin-api/src/services/client/client.service.ts",
         line: 1,
         message: "Admin user and client services must not import session runtime module "
-          + "\"@iam/api-core/oidc\"; depend on the consumer-owned Session Revocation port.",
-      },
-      {
-        ruleId: "session-runtime-owner",
-        file: "apps/admin-api/src/services/client/client.service.ts",
-        line: 2,
-        message: "Admin user and client services must not import session runtime module "
           + "\"@admin-api/services/session/oidc-session-kernel.adapter.ts\"; "
           + "depend on the consumer-owned Session Revocation port.",
       },
       {
         ruleId: "session-runtime-owner",
         file: "apps/admin-api/src/services/client/client.service.ts",
-        line: 3,
+        line: 2,
         message: "Admin user and client services must not import session runtime module "
           + "\"@admin-api/lib/infra/redis\"; depend on the consumer-owned Session Revocation port.",
       },

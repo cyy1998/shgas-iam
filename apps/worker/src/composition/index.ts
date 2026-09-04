@@ -1,13 +1,7 @@
 import type { DbTransaction } from "@iam/db";
 import type { UserProfilePostgresReadinessCommandEnv, WorkerEnv } from "@worker/env";
 import type { WorkerLogger } from "./runtime";
-import { randomUUID } from "node:crypto";
-import {
-  abortCustomSsoClientRuntimeMutation,
-  beginCustomSsoClientRuntimeMutation,
-  completeCustomSsoClientRuntimeMutation,
-  startCustomSsoClientRuntimeMutationHeartbeat,
-} from "@iam/api-core/custom-sso";
+import { createClientRuntimeSnapshotModule } from "@iam/api-core/client-runtime-snapshot";
 import { createRedisClient } from "@iam/api-core/redis";
 import {
   createSubjectAccessRepair,
@@ -197,6 +191,10 @@ export function createClientProtocolEpochCommandComposition(
 ) {
   const inventory = createClientProtocolEpochCutoverRepository(db);
   const redis = createRedisClient(options.env.redis);
+  const clientRuntimeSnapshots = createClientRuntimeSnapshotModule({
+    redis,
+    adapters: [] as const,
+  });
   const uow = createUnitOfWork<DbTransaction, {
     clients: Pick<ReturnType<typeof createClientProtocolEpochCutoverRepository>, "advanceEpochs">;
   }>({
@@ -208,21 +206,7 @@ export function createClientProtocolEpochCommandComposition(
   });
   return {
     cutover: createClientProtocolEpochCutover({
-      runtimeCache: {
-        async beginMutation(clientCode) {
-          const mutation = await beginCustomSsoClientRuntimeMutation(redis, {
-            clientCode,
-            mutationId: randomUUID(),
-          });
-          return {
-            abort: async () =>
-              await abortCustomSsoClientRuntimeMutation(redis, mutation),
-            complete: async () =>
-              await completeCustomSsoClientRuntimeMutation(redis, mutation),
-            heartbeat: startCustomSsoClientRuntimeMutationHeartbeat(redis, mutation),
-          };
-        },
-      },
+      runtimeSnapshot: clientRuntimeSnapshots,
       uow,
     }),
     inventory,

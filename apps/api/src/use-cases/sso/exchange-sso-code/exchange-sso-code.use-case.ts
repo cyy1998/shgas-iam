@@ -5,6 +5,7 @@ import type {
   ExchangeSsoCodeResult,
 } from "./exchange-sso-code.type";
 import { InvalidSsoClientError } from "@iam/api-core/errors/InvalidSsoClientError";
+import { ClientStatus, CustomSsoClientMode } from "@iam/contracts";
 
 export function createExchangeSsoCodeUseCase(deps: ExchangeSsoCodeDeps) {
   async function execute(
@@ -19,8 +20,25 @@ export function createExchangeSsoCodeUseCase(deps: ExchangeSsoCodeDeps) {
       throw new InvalidSsoClientError("非法Client");
     }
     await deps.trafficGate.assertIssuanceAllowed(input.clientCode);
+    const runtimeClient = await deps.clients.findRuntimeRecord(input.clientCode);
+    if (
+      runtimeClient === null
+      || runtimeClient.clientCode !== client.clientCode
+      || runtimeClient.status === ClientStatus.Disable
+      || runtimeClient.isDelete
+      || !runtimeClient.customSsoEnabled
+      || runtimeClient.customSsoConfig?.mode
+      !== CustomSsoClientMode.Independent
+      || runtimeClient.customSsoConfigVersion !== client.configVersion
+    ) {
+      throw new InvalidSsoClientError("非法Client");
+    }
     const { credential, ttl, subject } = await deps.authorizationGrants.redeemIndependentGrant({
-      client,
+      client: {
+        clientCode: runtimeClient.clientCode,
+        configVersion: runtimeClient.customSsoConfigVersion,
+        subjectClaims: [...runtimeClient.customSsoConfig.subjectClaims],
+      },
       code: input.code,
       redirectUri: input.redirectUri,
       requestContext: options.requestContext,

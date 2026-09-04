@@ -67,6 +67,7 @@
       "dependsOn": ["transit"],
       "cache": false,
       "passThroughEnv": [
+        "IAM_ADMIN_API_TEST_DATABASE_URL",
         "IAM_ADMIN_API_TEST_REDIS_URL",
         "IAM_API_CORE_CLEANUP_TEST_REDIS_URL",
         "IAM_API_CORE_TEST_REDIS_URL",
@@ -74,7 +75,8 @@
         "IAM_API_TEST_REDIS_URL",
         "IAM_OIDC_PROVIDER_TEST_DATABASE_URL",
         "IAM_OIDC_PROVIDER_TEST_REDIS_URL",
-        "IAM_USER_PROFILE_TEST_REDIS_URL"
+        "IAM_USER_PROFILE_TEST_REDIS_URL",
+        "IAM_WORKER_TEST_REDIS_URL"
       ]
     },
     "test:integration:redis": {
@@ -86,7 +88,8 @@
         "IAM_API_CORE_TEST_REDIS_URL",
         "IAM_API_TEST_REDIS_URL",
         "IAM_OIDC_PROVIDER_TEST_REDIS_URL",
-        "IAM_USER_PROFILE_TEST_REDIS_URL"
+        "IAM_USER_PROFILE_TEST_REDIS_URL",
+        "IAM_WORKER_TEST_REDIS_URL"
       ]
     },
     "test:e2e": {

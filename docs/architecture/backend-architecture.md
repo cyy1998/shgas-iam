@@ -10,7 +10,7 @@
 |---|---|---|
 | `apps/api` | Bun + Hono public IAM backend，拥有 `/public`、`/open`、`/internal`、`/sso`、`/auth` | `src/app.ts` → `createApiComposition()` |
 | `apps/admin-api` | Bun + Hono admin backend，拥有 `/admin` 和 `/rpc`；`/rpc` 对应 `src/routes/trpc/` | `src/app.ts` → `createAdminApiComposition()` |
-| `apps/oidc-provider` | Node.js 24 + `oidc-provider`，拥有标准 OIDC protocol、interaction、session、store 和 client invalidation runtime | `src/index.ts` → `createOidcProviderComposition()` |
+| `apps/oidc-provider` | Node.js 24 + `oidc-provider`，拥有标准 OIDC protocol、interaction、session 和 store runtime | `src/index.ts` → `createOidcProviderComposition()` |
 | `apps/worker` | Bun background runtime，拥有 queue consumer、health/Bull Board HTTP 面和 maintenance commands | `src/index.ts` 或 `src/commands/` → worker composition |
 
 API tier 分别在 `apps/api/app.config.ts` 和 `apps/admin-api/app.config.ts` 声明。共享 `createApp` 位于
@@ -80,9 +80,9 @@ composition。跨层实例连接统一由 composition 完成。
   callback 暴露的是同一个 registration port；`mapUnitOfWork` 必须保留该 registration API。
 - 一个 workflow 只拥有一个 UnitOfWork transaction boundary。嵌套 UnitOfWork 不受支持，因为 inner commit 可能在
   outer transaction 回滚前执行 after-commit tasks。
-- 外部 side effect 默认不在数据库 transaction callback 内直接执行；应在 callback 外执行，或注册为
-  after-commit task。唯一已批准的例外是下述 generation-fenced Client runtime pre-commit coordination；
-  不得把该例外扩展到通知、Session 撤销、业务 cache 写入或其他不可逆作用。
+- 外部 side effect 不在数据库 transaction callback 内直接执行；应在 callback 外执行，或注册为
+  after-commit task。Client runtime cache 同样只通过 required after-commit invalidation 协调，不存在 pre-commit
+  Redis fence 例外；不得把通知、Session 撤销、业务 cache 写入或其他不可逆作用放入 transaction callback。
   Task 只在 transaction 成功提交后按注册顺序运行：
   - `required`：失败会记录 error；所有 task 尝试完成后，required failures 聚合为
     `AfterCommitRequiredTaskError` 返回给调用方。
@@ -141,34 +141,30 @@ composition。跨层实例连接统一由 composition 完成。
 - API production composition 已把 Projection Module 接入 Custom SSO Independent token exchange、
   `/public/user-info` 和 Gateway `/auth/authz`。前两者按当前 Client selection 输出 Custom SSO V2 wire；
   `/auth/authz` 强制收窄为 Subject Identifier 与可选 username/name，并把同一 Base64 值写入 body/header。
-  Gateway Local Session 解析形成最小 Subject/client/ORCAS 认证数据，并携带仅供服务端竞态校验的 config version；
-  该版本不进入 projection 或 wire。`/public/user-info` 在完整 V2 Interface 返回后、响应交付前再次复查当前
-  Client/config version，配置变化时丢弃已构建的 Wire；Gateway Header 继续使用独立最小 mapping、Subject equality 与
-  Base64 路径。Client runtime 使用带 generation
-  与 mutation fence 的 Redis read-through cache：positive/negative TTL 分别为 30 秒/3 秒，mutation fence 为
-  120 秒；既有 Client 的 Admin mutation 在持有 Client row lock 后原子写 fence、递增 generation 并删除 cache，
-  commit 后按 token 完成。完成失败时读取保持 fail-closed，fence 自然过期后因旧 cache 已删除而从 PostgreSQL
-  自动收敛。新建 Client 尚无可锁的行，不使用 pre-commit fence；它在 commit 后通过 `afterCommit.required`
-  递增 generation 并删除 cache，晚到的旧 generation publish 会被拒绝。若该 invalidation 不可用，既有 negative
-  cache 只会继续 fail closed 并在最多 3 秒 TTL 后收敛。
-  Custom SSO runtime 与协议中性的 Client Traffic Gate 复用同一个内部 generation-fenced mutation
-  coordinator；各 runtime 只拥有自己的 key namespace、缓存内容和完成语义，不复制 fence/heartbeat 状态机。
-  Traffic Gate 从现有 Client 全局状态派生，只有明确 `Enable` 放行；`Maintenance`、`Disable`、状态缺失/损坏、
-  读取失败和 mutation 中均返回可区分的 fail-closed 结果。Admin 状态写入在 commit 后通过
-  `afterCommit.required` 原子发布已提交状态并结束 Traffic Gate mutation；发布失败保留 fence，调用方不得把
-  Admin 失败响应解释为数据库回滚。
-  这是 Transactions 规则中唯一的 pre-commit 外部协调例外，必须同时满足：
-  - fence 只保存有界 TTL 的随机 ownership token，不承载业务事实；受保护的 runtime reader 在 fence 存在或状态
-    无法确认时 fail closed。
-  - 只有既有 Client mutation 使用该例外；transaction 先取得 Client row lock，再在任何业务写入前建立 fence；
-    建立失败必须让 transaction 回滚。Client create 不得在无 row lock 时建立 fence。
-  - mutation 全程续租 heartbeat，并在 callback 返回、允许 commit 前再次确认 ownership；ownership 丢失必须回滚。
-  - 只有 UnitOfWork 已确认 rollback 时，才在 transaction 外停止 heartbeat 并按 token abort；成功路径只通过
-    `afterCommit.required` 停止 heartbeat 并按同一 token complete。commit 结果不确定或 after-commit 失败时只停止
-    heartbeat、保留 fence，不能把它误当成 rollback 后 abort。abort/complete 失败不得开放读取，只能由 TTL 与
-    generation 收敛。
-  - begin、abort、complete 对 generation、cache 与 ownership 的变更必须由 Redis 原子脚本完成；其他 Redis/cache、
-    通知和 Session 副作用仍遵守普通 transaction/afterCommit 规则。
+  Gateway Local Session 解析形成最小 Subject/client/ORCAS 认证数据，并携带仅供跨请求凭据校验的 config version；
+  该版本不进入 projection 或 wire。Authorize、callback、token、`/public/user-info` 与 Gateway `/auth/authz` 各自在
+  request boundary 接受一次 Runtime Snapshot，并把该 request capability 贯穿 Session Kernel 与 delivery；一旦接受，
+  当前请求不会在 artifact/credential/projection 副作用前后重读 generation 或当前 Client。并发 mutation 只影响后续请求，
+  已签发凭据仍在下一次独立请求按当前 Snapshot 校验。Gateway Header 继续使用独立最小 mapping、Subject equality 与
+  Base64 路径。Custom SSO Runtime 已使用 `@iam/api-core` 的 Client Runtime Snapshot Module：API composition 注册
+  `custom-sso` canonical Adapter，并通过绑定 kind 的窄 Reader 取得 present/absent Snapshot；positive/negative TTL
+  分别为 30 秒/3 秒。Adapter 只拥有 PostgreSQL loader、strict codec 与 TTL，业务调用方不接触 control、generation、
+  Redis key 或 Lua。共享 required invalidation 成功后，late source result 不能发布；Snapshot acquisition unavailable
+  映射为既有 Custom SSO typed retryable error。Admin Client mutation 的 canonical freshness seam 是 target-bound wrapper
+  注册的 `clientRuntimeInvalidation` required task；Custom SSO 在线 mutation 不再写 legacy cache/generation/mutation key，
+  也不再建立 ownership fence、续租 heartbeat 或执行 settlement。legacy Custom SSO key pattern 只存在于
+  Client Runtime Snapshot Module 私有的 restore cleanup inventory，不由应用或协议 package 公开。
+  协议中性的 Client Traffic Gate 使用同一 Client Runtime Snapshot Module：API 与 OIDC Provider composition
+  各自注册 `traffic-gate` canonical Adapter，并通过绑定 kind 的窄 Reader 取得 Gate Snapshot。Adapter 从 PostgreSQL
+  Client 全局状态派生 `enabled`、`maintenance`、`disabled` 或 `deleted`；只有明确 `enabled` 放行，absent、source/Redis/CAS
+  失败与无法取得可信 control 均映射为通用 unavailable 并 fail closed。成功取得的 normal 或 Maintenance Snapshot 对当前
+  请求保持有效，不在后续协议副作用前重新校验 generation。
+  Admin Client mutation 不再建立 Traffic Gate pre-commit reserve，不持有 ownership token，也不运行 heartbeat、
+  complete/abort 或 settlement。target-bound wrapper 在 commit 后执行 required client-wide Snapshot invalidation；成功传播后
+  后续 Gate acquisition 重新取得 PostgreSQL 当前事实。若 PostgreSQL 已提交但 invalidation 失败，Admin 返回 required
+  after-commit error，既有正常 Snapshot 仍可被新请求取得并放行，直到显式 targeted repair；这不回滚数据库事实，也不
+  改变协议 Session、Credential 或 artifact revocation 规则。legacy Traffic Gate key pattern 同样只存在于 Snapshot Module
+  私有的 restore cleanup inventory，不参与在线读取或 mutation correctness。
   Subject Facts cache hit 热路径不访问 PostgreSQL。OIDC Provider production composition 已注入同一 Projection
   Module，并在 Authorization Code 持久化前按当前 client、scope、config version 与 Provider Session binding 创建严格
   Claims Snapshot；Access Token 只转移该快照，UserInfo/ID Token 只重放并复验快照，不重新读取当前主体事实。
@@ -177,8 +173,8 @@ composition。跨层实例连接统一由 composition 完成。
   `503` code 和配置的 `Retry-After`，不复用于 OIDC。
 
 - API production composition 直接组装 User Profile v3 Subject Facts reader、Client Protocol V2 projection 与 Custom SSO
-  delivery；`/public/user-info` 在 projection
-  前后复查同一个 `customSsoConfigVersion`，Gateway Header 仍硬裁剪为 Subject、username/name。Catalog 版本固定在服务端，
+  delivery；`/public/user-info` 与 Gateway Header 都复用 request boundary 已接受的 Runtime Snapshot，且 Gateway Header
+  仍硬裁剪为 Subject、username/name。Catalog 版本固定在服务端，
   Admin 配置请求不能提交版本字段。Opaque Credential 继续只持有 Principal Session 关联与 mode/config version，UserInfo
   每次按当前 User Profile v3 Subject Facts 重建 Client Protocol V2 输出，不保存 responsibility snapshot。
   `custom_sso_config` JSONB、Admin detail/audit、runtime context 与 Client Protocol cutover manifest 均不再携带 per-Client
@@ -456,11 +452,11 @@ composition。跨层实例连接统一由 composition 完成。
 - Access Token、UserInfo 与 ID Token 复用 Authorization Code 的 Claims Snapshot，并校验 subject、client、scopes、
   Provider Session、Principal Session 与 binding ownership；撤销一个 client lifecycle 不得删除同一 Provider Session
   下其他 client 的 binding。
-- `composition/workers` 是 client invalidation subscriber 的唯一 runtime owner。它创建 Redis subscriber，并只注入
-  `oidcSession` 与 protocol-object store 的最窄 client revocation 能力：前者撤销当前 OIDC Client Binding 与 Session
-  Kernel credential/token，后者清理该 client 的 provider protocol objects。Token store 只在 Redis adapter/store 内部提供
-  单 token provider payload 删除，不作为 worker dependency；旧 user/client/global-session token index 不参与 runtime
-  注册或撤销。单条消息的 cleanup failure 记录 structured warning，不反向进入 client update transaction。
+- OIDC artifact 生命周期不再与 Runtime cache invalidation 通过 Pub/Sub 串联。Admin mutation 仍通过 Session Kernel
+  revocation seam 撤销当前 OIDC Client Binding 与 credential/token；Provider protocol object 在读取时使用当前
+  `oidcConfigVersion` fail closed，并由其 store 删除确认过期的对象。显式 Client Protocol artifact cleanup 继续由独立
+  maintenance command 拥有，不作为 Runtime Snapshot invalidation 的在线副作用。旧 OIDC runtime key pattern 只存在于
+  Client Runtime Snapshot Module 私有的 restore cleanup inventory。
 - Provider protocol module 可以静态 import `oidc-provider` types 和纯 protocol helpers，但不得静态绑定 app-local
   DB、Redis、logger 或 concrete production repository；production 实例连接只发生在 composition。
 
@@ -474,6 +470,16 @@ composition。跨层实例连接统一由 composition 完成。
   module 状态；Bull Board 只接收 module 显式注册的 queues。
 - `createWorkerCommandComposition` 使用 `commandOnly` 模式复用 DB/Redis/module wiring，但不启动 consumers、不注册
   dashboard queues，也不启动 HTTP server；`src/commands/` 的 backfill/repair entrypoints 使用该入口。
+- `createClientRuntimeRepairCommandComposition` 位于独立 composition 子模块，只创建有界连接的 Redis client 和
+  Client Runtime Snapshot maintenance 窄 Interface；它不经过普通 Worker composition barrel，因而不静态加载数据库、
+  UnitOfWork、ClientService、Reader Adapter、queue 或业务 mutation owner。`client-runtime:repair --client-code
+  <clientCode>` 原子推进目标 Client 的共享 control 并删除三类 payload；重复执行保持安全。命令只输出包含 canonical
+  `clientCode` 的低熵 completed/failed report，observer/report logger 失败不反转已完成 repair。Full restore repair 与
+  targeted 模式互斥并要求显式停流确认；它以 `SCAN` 和分批 `UNLINK` 清理 Module-owned versioned/legacy inventory，
+  部分失败后可以从头重跑。独立 `createClientRuntimeVerifyCommandComposition` 只注入 scan-only verifier，不持有 eval、
+  unlink 或 repair capability；`client-runtime:verify` 在新的 Worker process 只读重扫同一 inventory，只有完整扫描且 owner key
+  为零时退出 0。两类 full command 的 safe report 以 status 为 gate，计数只用于诊断，不声称证明停流、drain、
+  PONR 或业务可用。
 - `createEmploymentCutoverCommandComposition` 是更窄的 PostgreSQL-only composition：只从
   `@iam/user-profile-read-model/worker` 组装 Employment Cutover Verifier 与只读 repository，不构造 Redis、queue、consumer、
   dashboard 或 HTTP server。对应命令仅由运维人员在切换前显式调用，不进入普通 Worker 启动或请求路径。

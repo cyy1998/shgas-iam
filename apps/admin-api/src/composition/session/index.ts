@@ -56,7 +56,6 @@ export function createAdminApiSession(options: CreateAdminApiSessionOptions) {
   const revocationLogger = createAdminSessionRevocationLogger({ logger: options.runtime.logger });
   const revocation = createAdminSessionRevocationPort({
     sessionKernel,
-    oidcInvalidation: options.runtime.integrations.oidcInvalidation,
     logger: revocationLogger,
   });
   const subjectAccessLifecycle = createSubjectAccessLifecycle({

@@ -37,9 +37,11 @@ profile 不是新的测试层级、速度标签或 Gate。多资源测试按测�
   Gateway routes 发布前实际运行 PostgreSQL 与 Redis/Subject Facts/Subject Access 两道 production gate，并通过真实 HTTP
   验证 canonical Filter、legacy/Public/Delegation adapter 与 Employment invalidation 的代表矩阵。
 
-每个测试候选必须由一个且仅一个 canonical collection 收集。Admin API 的 client cache 真实 contract 位于 `redis`
-profile，并通过 production Admin runtime 的 `clientCache` seam 验证 invalidation、update 与 mutation completion，不初始化
-与该 contract 无关的 queue；process profile 只保留 entry/readiness/exit/cleanup。Redis-dependent 状态由各 production owner
+每个测试候选必须由一个且仅一个 canonical collection 收集。Admin API 的 client runtime 真实 contract 位于 `redis`
+profile：Custom SSO 与 Traffic Gate 通过 production Admin runtime 的 `clientRuntimeInvalidation` seam 与真实 Client service
+mutation 验证 required Snapshot invalidation；legacy `clientCache` 只验证仍由它拥有的通用 cache invalidation。Traffic Gate
+acquisition 由 canonical Snapshot Adapter/Reader 的 Component contract，以及共享真实 Redis 与 production composition contract
+覆盖。该 profile 不初始化与 contract 无关的 queue；process profile 只保留 entry/readiness/exit/cleanup。Redis-dependent 状态由各 production owner
 在 `redis` 或 `composition` profile 建立，测试 fixture 不实现 Redis 协议、key、serialization、TTL、Lua 或 transaction
 排列。原 process-smoke RESP server、testing export 与 compatibility cases 已在真实 owner coverage 通过后退役。
 
@@ -217,6 +219,15 @@ Admin API 的真实事务与 PostgreSQL correctness contract 使用 owner-specif
 `IAM_ADMIN_API_TEST_DATABASE_URL`；其 harness 必须通过 production Admin UoW factory 注入随机 schema client，不能回退
 进程级数据库 singleton。
 
+维护者决定 Client Runtime targeted/full repair 与独立 verify 的真实成功路径统一沿用 #68 的 owner-specific
+`IAM_WORKER_TEST_REDIS_URL`，不为 full repair 增加第二个 cleanup URL，也不枚举或推断其他可见 test/runtime Redis 的
+hostname、port 或 logical DB identity。调用方仍须提供专用、非 production Redis；harness 保留 #68 对 Worker 自身 runtime
+tuple 的直接防误用检查，full restore contract 在写 fixture 前证明 Module-owned inventory 为空，并只登记本次
+Client/restore fixture 与 non-owner sentinel。该 profile 运行 production Redis-only command composition：targeted contract 以独立 observer 验证三类
+payload 均重新回源、重复 repair 安全且 sentinel 保留；restore contract 建立 versioned 与三套 legacy owner inventory，验证
+分批 full repair、另起 Worker process 的 scan-only full verify 与 sentinel 保留。测试结束只精确 `UNLINK` 本次登记键并验证
+owner inventory 无残留，禁止 `FLUSHDB`/`FLUSHALL`。
+
 Destructive legacy cleanup 不使用普通 namespace-isolated Redis。它只接受调用方提供的
 `IAM_API_CORE_CLEANUP_TEST_REDIS_URL`，该 URL 必须指向独占、初始为空且可销毁的 logical DB 或 instance，并且不能与任何
 可见的普通 test/runtime Redis identity 相同。其真实 Redis contract 同时验证 ACL 禁止 `FLUSHDB`/`FLUSHALL`、non-target
@@ -249,6 +260,14 @@ pnpm verify:release  = verify:ci -> test:e2e
 Gate 本身不读取资源配置，不复制 Integration preflight 或 Full-system E2E 的 descriptor、diagnostics 与 exact-project
 cleanup，也不把命令名解释为 provider adoption。各 owner command 的资源与 lifecycle 契约见
 [构建、测试与开发命令](../development/commands.md)。
+
+Client Runtime Snapshot 不增加 feature-specific root gate；验收矩阵由发布平台或 release owner 显式调用共享 Module
+Component/Redis、三类 Adapter Component、Admin Component/PostgreSQL/composition rehearsal、Worker Component/Process/Redis 与
+Full-system E2E 的 owner commands。API Core 的真实 Redis contract 证明 Module 的受控 source fact/invalidation；Admin composition
+rehearsal 再用临时 PostgreSQL schema、真实 Admin target-bound mutation、required Redis invalidation 和 OIDC/Custom SSO/Traffic
+Gate 公开 Reader 证明 canary 的 Maintenance 事实与恢复事实均被重新 acquisition。Maintenance 与可信 Snapshot acquisition failure
+的不同业务映射仍由各 Adapter 的 Component contract 负责。任何测试结果都不能替代 production freeze、drain、PONR 或 namespace
+verify 证据。
 
 | 阶段 | 最小范围 |
 |---|---|

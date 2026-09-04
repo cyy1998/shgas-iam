@@ -1,13 +1,19 @@
+import type {
+  ClientRuntimeSnapshotReader,
+} from "@iam/api-core/client-runtime-snapshot";
 import type { CustomSsoClientRuntimeDto } from "@iam/domain/client";
 import {
   createCustomSsoClientRuntimeReader,
+  createCustomSsoClientRuntimeSnapshotAdapter,
   CustomSsoClientRuntimeUnavailableError,
 } from "@api/services/client/custom-sso-client-runtime.reader";
 import {
-  customSsoClientRuntimeCacheKey,
-  customSsoClientRuntimeGenerationKey,
-  customSsoClientRuntimeMutationKey,
-} from "@iam/api-core/custom-sso";
+  ClientRuntimeSnapshotUnavailableError,
+} from "@iam/api-core/client-runtime-snapshot";
+import {
+  createClientRuntimeSnapshotModuleWithAtomicStore,
+  InMemoryClientRuntimeSnapshotAtomicStore,
+} from "@iam/api-core/client-runtime-snapshot/testing";
 import {
   ClientStatus,
   CustomSsoClientMode,
@@ -15,391 +21,182 @@ import {
 } from "@iam/contracts";
 import { describe, expect, mock, test } from "bun:test";
 
-const runtimeClient = {
-  id: 7,
-  clientCode: "gateway",
-  clientName: "Gateway",
-  status: ClientStatus.Enable,
-  isDelete: false,
-  customSsoEnabled: true,
-  customSsoConfig: {
-    mode: CustomSsoClientMode.Gateway,
-    orcas: { enabled: false },
-    subjectClaims: [SubjectClaim.SubjectIdentifier],
-    validRedirectUrls: ["https://gateway.example.com/callback"],
-  },
-  customSsoConfigVersion: 3,
-} satisfies CustomSsoClientRuntimeDto;
+const activeClient = runtimeClient("gateway", 3);
 
-const clock = {
-  value: 1_000_000,
-  now() {
-    return clock.value;
-  },
-};
-
-const positiveCacheTtlMs = 30_000;
-const negativeCacheTtlMs = 3_000;
-
-class FakeRuntimeCacheRedis {
-  readonly values = new Map<string, string>();
-  readonly expirations = new Map<string, number>();
-
-  async get(key: string) {
-    this.expireIfNeeded(key);
-    return this.values.get(key) ?? null;
-  }
-
-  async eval(
-    _script: string,
-    keyCount: number,
-    ...args: string[]
-  ) {
-    if (keyCount !== 3)
-      throw new Error(`unexpected key count ${keyCount}`);
-
-    const [cacheKey, mutationKey, generationKey] = args;
-    if (
-      cacheKey === undefined
-      || mutationKey === undefined
-      || generationKey === undefined
-    ) {
-      throw new Error("missing runtime cache keys");
-    }
-    this.expireIfNeeded(cacheKey);
-    this.expireIfNeeded(mutationKey);
-
-    if (args.length === 3) {
-      const mutation = this.values.get(mutationKey);
-      if (mutation !== undefined)
-        return ["blocked"];
-      return [
-        "ready",
-        this.values.get(generationKey) ?? "0",
-        this.values.get(cacheKey) ?? null,
-      ];
-    }
-
-    const expectedGeneration = args[3];
-    const serialized = args[4];
-    const ttlMs = Number(args[5]);
-    if (
-      expectedGeneration === undefined
-      || serialized === undefined
-      || !Number.isSafeInteger(ttlMs)
-      || ttlMs <= 0
-    ) {
-      throw new Error("invalid runtime cache publish");
-    }
-    if (this.values.has(mutationKey))
-      return 0;
-    const currentGeneration = this.values.get(generationKey) ?? "0";
-    if (currentGeneration !== expectedGeneration)
-      return 0;
-    this.values.set(cacheKey, serialized);
-    this.expirations.set(cacheKey, clock.now() + ttlMs);
-    return 1;
-  }
-
-  beginMutation(clientCode: string, mutationId = "mutation-1") {
-    const cacheKey = customSsoClientRuntimeCacheKey(clientCode);
-    const generationKey = customSsoClientRuntimeGenerationKey(clientCode);
-    const mutationKey = customSsoClientRuntimeMutationKey(clientCode);
-    const current = BigInt(this.values.get(generationKey) ?? "0");
-    this.values.set(generationKey, String(current + 1n));
-    this.values.delete(cacheKey);
-    this.expirations.delete(cacheKey);
-    this.values.set(mutationKey, mutationId);
-  }
-
-  private expireIfNeeded(key: string) {
-    const expiration = this.expirations.get(key);
-    if (expiration !== undefined && expiration <= clock.now()) {
-      this.expirations.delete(key);
-      this.values.delete(key);
-    }
-  }
-}
-
-function cachedRecord(
-  client: CustomSsoClientRuntimeDto | null,
-  options: {
-    clientCode?: string;
-    expiresAt?: number;
-    generation?: string;
-  } = {},
-) {
-  return JSON.stringify({
-    version: 1,
-    generation: options.generation ?? "0",
-    clientCode: options.clientCode ?? client?.clientCode ?? "missing",
-    expiresAt: options.expiresAt ?? clock.now() + positiveCacheTtlMs,
-    client,
-  });
-}
-
-function createReader(
-  redis: FakeRuntimeCacheRedis,
-  findRuntimeRecord: (
-    clientCode: string,
-  ) => Promise<CustomSsoClientRuntimeDto | null>,
-) {
-  return createCustomSsoClientRuntimeReader({
-    redis,
-    source: { findRuntimeRecord },
-    clock,
-    cache: {
-      positiveTtlMs: positiveCacheTtlMs,
-      negativeTtlMs: negativeCacheTtlMs,
-    },
-  });
-}
-
-describe("Custom SSO client runtime reader", () => {
-  test("returns a bounded strict cache hit without consulting PostgreSQL", async () => {
-    const redis = new FakeRuntimeCacheRedis();
-    redis.values.set(
-      customSsoClientRuntimeCacheKey(runtimeClient.clientCode),
-      cachedRecord(runtimeClient),
-    );
-    const findRuntimeRecord = mock(async () => {
-      throw new Error("PostgreSQL must not be queried on a cache hit");
-    });
-    const reader = createReader(redis, findRuntimeRecord);
-
-    await expect(reader.findRuntimeRecord(runtimeClient.clientCode))
-      .resolves
-      .toEqual(runtimeClient);
-    expect(findRuntimeRecord).not.toHaveBeenCalled();
-  });
-
+describe("Custom SSO Client Runtime Snapshot adapter", () => {
   test.each([
-    ["missing", null],
-    ["malformed", "{\"version\":\"legacy\"}"],
+    ["active", activeClient, "present"],
     [
-      "cross-client",
-      cachedRecord(
-        { ...runtimeClient, clientCode: "other" },
-        { clientCode: runtimeClient.clientCode },
-      ),
+      "maintenance",
+      { ...activeClient, status: ClientStatus.Maintenance },
+      "present",
     ],
-  ])("loads one current row and replaces a %s cache entry", async (_, cached) => {
-    const redis = new FakeRuntimeCacheRedis();
-    if (cached !== null) {
-      redis.values.set(
-        customSsoClientRuntimeCacheKey(runtimeClient.clientCode),
-        cached,
-      );
-    }
-    const findRuntimeRecord = mock(async () => runtimeClient);
-    const reader = createReader(redis, findRuntimeRecord);
+    ["missing", null, "absent"],
+    [
+      "unconfigured",
+      { ...activeClient, customSsoConfig: null },
+      "absent",
+    ],
+    [
+      "Custom SSO disabled",
+      { ...activeClient, customSsoEnabled: false },
+      "absent",
+    ],
+    [
+      "globally disabled",
+      { ...activeClient, status: ClientStatus.Disable },
+      "absent",
+    ],
+    ["deleted", { ...activeClient, isDelete: true }, "absent"],
+  ] as const)(
+    "maps %s source state to the expected Snapshot",
+    async (_label, record, expectedKind) => {
+      const adapter = createCustomSsoClientRuntimeSnapshotAdapter({
+        repository: {
+          findRuntimeRecord: mock(async () => record),
+        },
+      });
 
-    await expect(reader.findRuntimeRecord(runtimeClient.clientCode))
-      .resolves
-      .toEqual(runtimeClient);
-    expect(findRuntimeRecord).toHaveBeenCalledTimes(1);
-    expect(JSON.parse(
-      redis.values.get(customSsoClientRuntimeCacheKey(runtimeClient.clientCode))
-      ?? "null",
-    )).toEqual({
-      version: 1,
-      generation: "0",
-      clientCode: runtimeClient.clientCode,
-      expiresAt: clock.now() + positiveCacheTtlMs,
-      client: runtimeClient,
+      const snapshot = await adapter.load("gateway");
+
+      expect(snapshot.kind).toBe(expectedKind);
+      if (snapshot.kind === "present")
+        expect(snapshot.value).toEqual(record as CustomSsoClientRuntimeDto);
+      expect(adapter.presentTtlMs).toBe(30_000);
+      expect(adapter.absentTtlMs).toBe(3_000);
+    },
+  );
+
+  test("round-trips strict runtime records and rejects malformed payloads", () => {
+    const adapter = createCustomSsoClientRuntimeSnapshotAdapter({
+      repository: { findRuntimeRecord: mock() },
     });
-    expect(
-      redis.expirations.get(
-        customSsoClientRuntimeCacheKey(runtimeClient.clientCode),
-      ),
-    ).toBe(clock.now() + positiveCacheTtlMs);
+    const encoded = adapter.codec.encode(activeClient);
+
+    expect(adapter.codec.decode(encoded)).toEqual(activeClient);
+    expect(() => adapter.codec.decode({
+      ...activeClient,
+      customSsoConfigVersion: "3",
+    })).toThrow();
   });
+});
 
-  test("single-flights concurrent misses into one current-client query", async () => {
-    const redis = new FakeRuntimeCacheRedis();
-    const findRuntimeRecord = mock(async () => {
-      await Promise.resolve();
-      return runtimeClient;
+describe("Custom SSO client runtime facade", () => {
+  test("discards a source read invalidated before publish and reloads current facts", async () => {
+    const store = new InMemoryClientRuntimeSnapshotAtomicStore();
+    let current = activeClient;
+    let releaseFirstSource!: () => void;
+    let markFirstSourceStarted!: () => void;
+    const firstSourceStarted = new Promise<void>((resolve) => {
+      markFirstSourceStarted = resolve;
     });
-    const reader = createReader(redis, findRuntimeRecord);
-
-    const clients = await Promise.all(
-      Array.from(
-        { length: 16 },
-        () => reader.findRuntimeRecord(runtimeClient.clientCode),
-      ),
+    const firstSourceGate = new Promise<void>((resolve) => {
+      releaseFirstSource = resolve;
+    });
+    let firstSource = true;
+    const findRuntimeRecord = mock(async () => {
+      const captured = current;
+      if (firstSource) {
+        firstSource = false;
+        markFirstSourceStarted();
+        await firstSourceGate;
+      }
+      return captured;
+    });
+    const snapshots = createClientRuntimeSnapshotModuleWithAtomicStore({
+      store,
+      adapters: [createCustomSsoClientRuntimeSnapshotAdapter({
+        repository: { findRuntimeRecord },
+      })],
+      createEpoch: () => "custom-sso-component-epoch",
+    });
+    const facade = createCustomSsoClientRuntimeReader(
+      snapshots.reader("custom-sso"),
     );
 
-    expect(clients).toEqual(clients.map(() => runtimeClient));
-    expect(findRuntimeRecord).toHaveBeenCalledTimes(1);
-  });
+    const lateRuntime = facade.findRuntimeRecord("gateway");
+    await firstSourceStarted;
+    current = runtimeClient("gateway", 4);
+    await snapshots.invalidateClient("gateway");
+    releaseFirstSource();
+    const runtime = await lateRuntime;
+    const cached = await facade.findRuntimeRecord("gateway");
 
-  test("fails closed when an Admin mutation overlaps an in-flight database read", async () => {
-    const redis = new FakeRuntimeCacheRedis();
-    let releaseLoad!: () => void;
-    const loadBlocked = new Promise<void>((resolve) => {
-      releaseLoad = resolve;
-    });
-    const findRuntimeRecord = mock(async () => {
-      await loadBlocked;
-      return runtimeClient;
-    });
-    const reader = createReader(redis, findRuntimeRecord);
-
-    const overlappingRead = reader.findRuntimeRecord(runtimeClient.clientCode);
-    await Promise.resolve();
-    redis.beginMutation(runtimeClient.clientCode);
-    releaseLoad();
-
-    await expect(overlappingRead).rejects.toBeInstanceOf(
-      CustomSsoClientRuntimeUnavailableError,
-    );
-    expect(
-      redis.values.has(customSsoClientRuntimeCacheKey(runtimeClient.clientCode)),
-    ).toBe(false);
-  });
-
-  test("uses a shorter bounded TTL for absent clients", async () => {
-    const redis = new FakeRuntimeCacheRedis();
-    const findRuntimeRecord = mock(async () => null);
-    const reader = createReader(redis, findRuntimeRecord);
-
-    await expect(reader.findRuntimeRecord("missing")).resolves.toBeNull();
-    await expect(reader.findRuntimeRecord("missing")).resolves.toBeNull();
-    expect(findRuntimeRecord).toHaveBeenCalledTimes(1);
-    expect(JSON.parse(
-      redis.values.get(customSsoClientRuntimeCacheKey("missing")) ?? "null",
-    )).toEqual({
-      version: 1,
-      generation: "0",
-      clientCode: "missing",
-      expiresAt: clock.now() + negativeCacheTtlMs,
-      client: null,
-    });
-
-    clock.value += negativeCacheTtlMs;
-    await expect(reader.findRuntimeRecord("missing")).resolves.toBeNull();
+    expect(runtime).toEqual(current);
+    expect(cached).toEqual(current);
     expect(findRuntimeRecord).toHaveBeenCalledTimes(2);
   });
 
-  test("ignores an expired envelope even when Redis retained the key", async () => {
-    const redis = new FakeRuntimeCacheRedis();
-    redis.values.set(
-      customSsoClientRuntimeCacheKey(runtimeClient.clientCode),
-      cachedRecord(runtimeClient, { expiresAt: clock.now() }),
-    );
-    const disabledClient = {
-      ...runtimeClient,
-      customSsoEnabled: false,
-      customSsoConfigVersion: 4,
+  test("keeps present, Maintenance, absent and unavailable outcomes distinct", async () => {
+    const maintenance = {
+      ...activeClient,
+      status: ClientStatus.Maintenance,
     };
-    const findRuntimeRecord = mock(async () => disabledClient);
-    const reader = createReader(redis, findRuntimeRecord);
+    const presentReader: ClientRuntimeSnapshotReader<CustomSsoClientRuntimeDto>
+      = { acquire: mock(async () => ({ kind: "present" as const, value: activeClient })) };
+    const maintenanceReader: ClientRuntimeSnapshotReader<CustomSsoClientRuntimeDto>
+      = { acquire: mock(async () => ({ kind: "present" as const, value: maintenance })) };
+    const absentReader: ClientRuntimeSnapshotReader<CustomSsoClientRuntimeDto>
+      = { acquire: mock(async () => ({ kind: "absent" as const })) };
+    const unavailableReader: ClientRuntimeSnapshotReader<CustomSsoClientRuntimeDto>
+      = {
+        acquire: mock(async () => {
+          throw new ClientRuntimeSnapshotUnavailableError();
+        }),
+      };
 
-    await expect(reader.findRuntimeRecord(runtimeClient.clientCode))
-      .resolves
-      .toEqual(disabledClient);
-    expect(findRuntimeRecord).toHaveBeenCalledTimes(1);
+    const present = await createCustomSsoClientRuntimeReader(presentReader)
+      .findRuntimeRecord("gateway");
+    const maintenanceResult
+      = await createCustomSsoClientRuntimeReader(maintenanceReader)
+        .findRuntimeRecord("gateway");
+    const absent = await createCustomSsoClientRuntimeReader(absentReader)
+      .findRuntimeRecord("gateway");
+    let unavailable: unknown;
+    try {
+      await createCustomSsoClientRuntimeReader(unavailableReader)
+        .findRuntimeRecord("gateway");
+    }
+    catch (error) {
+      unavailable = error;
+    }
+
+    expect(present).toEqual(activeClient);
+    expect(maintenanceResult).toEqual(maintenance);
+    expect(absent).toBeNull();
+    expect(unavailable).toBeInstanceOf(CustomSsoClientRuntimeUnavailableError);
   });
 
-  test("rejects a cache envelope from a different runtime generation", async () => {
-    const redis = new FakeRuntimeCacheRedis();
-    redis.values.set(
-      customSsoClientRuntimeGenerationKey(runtimeClient.clientCode),
-      "1",
-    );
-    redis.values.set(
-      customSsoClientRuntimeCacheKey(runtimeClient.clientCode),
-      cachedRecord(runtimeClient, { generation: "0" }),
-    );
-    const updatedClient = {
-      ...runtimeClient,
-      customSsoEnabled: false,
-      customSsoConfigVersion: 4,
-    };
-    const findRuntimeRecord = mock(async () => updatedClient);
-    const reader = createReader(redis, findRuntimeRecord);
-
-    await expect(reader.findRuntimeRecord(runtimeClient.clientCode))
-      .resolves
-      .toEqual(updatedClient);
-    expect(findRuntimeRecord).toHaveBeenCalledTimes(1);
-    expect(JSON.parse(
-      redis.values.get(
-        customSsoClientRuntimeCacheKey(runtimeClient.clientCode),
-      ) ?? "null",
-    )).toMatchObject({
-      generation: "1",
-      client: updatedClient,
-    });
-  });
-
-  test("preserves existing non-ASCII and delimiter Client Codes", async () => {
-    const redis = new FakeRuntimeCacheRedis();
-    const findRuntimeRecord = mock(async (clientCode: string) => ({
-      ...runtimeClient,
-      clientCode,
+  test("rejects only out-of-range client codes before Snapshot acquisition", async () => {
+    const acquire = mock(async () => ({
+      kind: "present" as const,
+      value: activeClient,
     }));
-    const reader = createReader(redis, findRuntimeRecord);
+    const facade = createCustomSsoClientRuntimeReader({ acquire });
 
-    for (const clientCode of [
-      "_legacy",
-      "legacy:client",
-      "中文客户端",
-      "legacy/client",
-    ]) {
-      await expect(reader.findRuntimeRecord(clientCode)).resolves.toMatchObject({
-        clientCode,
-      });
-    }
-
-    expect(findRuntimeRecord).toHaveBeenCalledTimes(4);
-  });
-
-  test("rejects only out-of-range client codes before Redis or PostgreSQL", async () => {
-    const redis = new FakeRuntimeCacheRedis();
-    const evalCall = mock(redis.eval.bind(redis));
-    redis.eval = evalCall;
-    const findRuntimeRecord = mock(async () => runtimeClient);
-    const reader = createReader(redis, findRuntimeRecord);
-
-    for (const clientCode of ["", "a".repeat(65)]) {
-      await expect(reader.findRuntimeRecord(clientCode))
-        .resolves
-        .toBeNull();
-    }
-
-    expect(evalCall).not.toHaveBeenCalled();
-    expect(findRuntimeRecord).not.toHaveBeenCalled();
-  });
-
-  test("fails closed while a client runtime mutation fence is active", async () => {
-    const redis = new FakeRuntimeCacheRedis();
-    redis.beginMutation(runtimeClient.clientCode);
-    const findRuntimeRecord = mock(async () => runtimeClient);
-    const reader = createReader(redis, findRuntimeRecord);
-
-    await expect(reader.findRuntimeRecord(runtimeClient.clientCode))
-      .rejects
-      .toBeInstanceOf(CustomSsoClientRuntimeUnavailableError);
-    expect(findRuntimeRecord).not.toHaveBeenCalled();
-  });
-
-  test("maps Redis and source uncertainty to a stable typed unavailable error", async () => {
-    const redisFailure = new FakeRuntimeCacheRedis();
-    redisFailure.eval = mock(async () => {
-      throw new Error("redis unavailable");
-    });
-    const sourceFailure = new FakeRuntimeCacheRedis();
-
-    await expect(
-      createReader(redisFailure, mock(async () => runtimeClient))
-        .findRuntimeRecord(runtimeClient.clientCode),
-    ).rejects.toBeInstanceOf(CustomSsoClientRuntimeUnavailableError);
-    await expect(
-      createReader(sourceFailure, mock(async () => {
-        throw new Error("postgres unavailable");
-      })).findRuntimeRecord(runtimeClient.clientCode),
-    ).rejects.toBeInstanceOf(CustomSsoClientRuntimeUnavailableError);
+    expect(await facade.findRuntimeRecord("")).toBeNull();
+    expect(await facade.findRuntimeRecord("a".repeat(65))).toBeNull();
+    expect(acquire).not.toHaveBeenCalled();
   });
 });
+
+function runtimeClient(
+  clientCode: string,
+  customSsoConfigVersion: number,
+): CustomSsoClientRuntimeDto {
+  return {
+    id: 7,
+    clientCode,
+    clientName: clientCode,
+    status: ClientStatus.Enable,
+    isDelete: false,
+    customSsoEnabled: true,
+    customSsoConfig: {
+      mode: CustomSsoClientMode.Gateway,
+      orcas: { enabled: false },
+      subjectClaims: [SubjectClaim.SubjectIdentifier],
+      validRedirectUrls: ["https://gateway.example.com/*"],
+    },
+    customSsoConfigVersion,
+  };
+}

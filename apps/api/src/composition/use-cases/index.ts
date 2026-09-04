@@ -106,6 +106,7 @@ export function createApiUseCases(options: CreateApiUseCasesOptions) {
     exchangeCode: createExchangeSsoCodeUseCase({
       authorizationGrants: services.customSsoSession,
       clientCredentials: services.customSsoClientCredentials,
+      clients: services.customSsoClientRuntime,
       trafficGate: services.customSsoTrafficGate,
     }),
     loginWithOa: createLoginWithOaUseCase({

@@ -4,7 +4,6 @@ import type { CleanupFailure, RevokeSummary } from "@iam/api-core/session/kernel
 import type {
   AdminSessionProtocol,
   AdminSessionRevocationReason,
-  OidcInvalidationSummary,
 } from "./session-revocation.port";
 import { SystemLogEvent } from "@iam/api-core/logger";
 
@@ -19,7 +18,6 @@ type SummaryLogInput = {
   protocol?: AdminSessionProtocol;
   reason: AdminSessionRevocationReason;
   summary: RevokeSummary;
-  oidcInvalidation?: OidcInvalidationSummary;
 };
 
 export interface CreateAdminSessionRevocationLoggerDeps {
@@ -69,7 +67,6 @@ function toSummaryLogFields(input: SummaryLogInput) {
   return {
     ...toBaseLogFields(input),
     ...summaryCounters(input.summary),
-    ...(input.oidcInvalidation ? { oidcInvalidation: sanitizeOidcInvalidation(input.oidcInvalidation) } : {}),
   };
 }
 
@@ -117,15 +114,6 @@ function summarizeCleanupFailures(failures: CleanupFailure[]) {
     groups.set(key, group);
   }
   return [...groups.values()];
-}
-
-function sanitizeOidcInvalidation(summary: OidcInvalidationSummary) {
-  return {
-    attempted: summary.attempted,
-    succeeded: summary.succeeded,
-    failed: summary.failed,
-    ...(summary.error ? { error: redactSensitiveText(summary.error) } : {}),
-  };
 }
 
 function redactSensitiveText(value: string) {

@@ -3,10 +3,11 @@ import {
   CustomSsoTrafficGateUnavailableError,
 } from "@api/services/sso/custom-sso-traffic-gate";
 import {
-  beginClientTrafficGateMutation,
+  createClientRuntimeSnapshotModule,
+} from "@iam/api-core/client-runtime-snapshot";
+import {
   createClientTrafficGateReader,
-  invalidateClientTrafficGate,
-  publishClientTrafficGateMutation,
+  createClientTrafficGateSnapshotAdapter,
 } from "@iam/api-core/client-traffic-gate";
 import { AuthzMaintenanceError } from "@iam/api-core/errors/AuthzMaintenanceError";
 import { ClientStatus } from "@iam/contracts";
@@ -25,12 +26,11 @@ describe("Custom SSO Traffic Gate Redis integration", () => {
       await harness.close();
   });
 
-  test("observes Maintenance across readers and resumes after Enable", async () => {
+  test("keeps an accepted normal Snapshot until targeted invalidation exposes Maintenance", async () => {
     const scope = await harness.createScope();
     try {
       const clientCode = scope.clientCode("gate-cycle");
       let currentStatus = ClientStatus.Enable;
-      let now = Date.now();
       const source = {
         findClientTrafficState: async () => ({
           clientCode,
@@ -38,77 +38,59 @@ describe("Custom SSO Traffic Gate Redis integration", () => {
           status: currentStatus,
         }),
       };
-      const first = createCustomSsoTrafficGate({
-        gate: createClientTrafficGateReader({
-          cache: { negativeTtlMs: 500, positiveTtlMs: 1_000 },
-          clock: { now: () => now },
-          redis: scope.redis,
-          source,
-        }),
+      const runtime = createClientRuntimeSnapshotModule({
+        redis: scope.redis,
+        adapters: [createClientTrafficGateSnapshotAdapter({ source })],
       });
-      const second = createCustomSsoTrafficGate({
-        gate: createClientTrafficGateReader({
-          cache: { negativeTtlMs: 500, positiveTtlMs: 1_000 },
-          clock: { now: () => now },
-          redis: scope.observer,
-          source,
-        }),
+      const gate = createCustomSsoTrafficGate({
+        gate: createClientTrafficGateReader(runtime.reader("traffic-gate")),
       });
 
-      const initialDecision = await first.assertIssuanceAllowed(clientCode);
+      const initialDecision = await gate.assertIssuanceAllowed(clientCode);
       expect(initialDecision).toBeUndefined();
-      currentStatus = ClientStatus.Maintenance;
-      await invalidateClientTrafficGate(scope.redis, clientCode);
 
+      currentStatus = ClientStatus.Maintenance;
+      const acceptedBeforeRepair = await gate.assertSessionUseAllowed(clientCode);
+      expect(acceptedBeforeRepair).toBeUndefined();
+
+      await runtime.invalidateClient(clientCode);
       let maintenanceFailure: unknown;
       try {
-        await second.assertIssuanceAllowed(clientCode);
+        await gate.assertIssuanceAllowed(clientCode);
       }
       catch (error) {
         maintenanceFailure = error;
       }
       expect(maintenanceFailure).toBeInstanceOf(AuthzMaintenanceError);
 
-      const enableMutation = await beginClientTrafficGateMutation(scope.redis, {
-        clientCode,
-        mutationId: "00000000-0000-4000-8000-000000000202",
-      });
       currentStatus = ClientStatus.Enable;
-      const published = await publishClientTrafficGateMutation(
-        scope.redis,
-        enableMutation,
-        ClientStatus.Enable,
-        { clock: { now: () => now }, ttlMs: 1_000 },
-      );
-      expect(published).toBe("published");
-      await second.assertSessionUseAllowed(clientCode);
-      now += 1_001;
-      await second.assertSessionUseAllowed(clientCode);
+      await runtime.invalidateClient(clientCode);
+      const enabledAgain = await gate.assertSessionUseAllowed(clientCode);
+      expect(enabledAgain).toBeUndefined();
     }
     finally {
       await scope.close();
     }
   });
 
-  test("fails closed generically while an Admin status mutation is in progress", async () => {
+  test("fails closed when the Snapshot source cannot produce a trusted Client", async () => {
     const scope = await harness.createScope();
     try {
-      const clientCode = scope.clientCode("gate-fence");
-      const gate = createCustomSsoTrafficGate({
-        gate: createClientTrafficGateReader({
-          redis: scope.redis,
+      const clientCode = scope.clientCode("gate-source-corrupt");
+      const runtime = createClientRuntimeSnapshotModule({
+        redis: scope.redis,
+        adapters: [createClientTrafficGateSnapshotAdapter({
           source: {
             findClientTrafficState: async () => ({
-              clientCode,
+              clientCode: `${clientCode}-wrong`,
               isDelete: false,
               status: ClientStatus.Enable,
             }),
           },
-        }),
+        })],
       });
-      const mutation = await beginClientTrafficGateMutation(scope.redis, {
-        clientCode,
-        mutationId: "00000000-0000-4000-8000-000000000203",
+      const gate = createCustomSsoTrafficGate({
+        gate: createClientTrafficGateReader(runtime.reader("traffic-gate")),
       });
 
       let failure: unknown;
@@ -119,12 +101,6 @@ describe("Custom SSO Traffic Gate Redis integration", () => {
         failure = error;
       }
       expect(failure).toBeInstanceOf(CustomSsoTrafficGateUnavailableError);
-      const published = await publishClientTrafficGateMutation(
-        scope.redis,
-        mutation,
-        ClientStatus.Enable,
-      );
-      expect(published).toBe("published");
     }
     finally {
       await scope.close();

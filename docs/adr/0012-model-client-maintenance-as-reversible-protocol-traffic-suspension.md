@@ -4,6 +4,8 @@ status: accepted
 
 # 将 Client Maintenance 建模为可逆的协议流量暂停
 
+> Client Traffic Gate 的缓存一致性边界及运行时传播失败语义已由 ADR-0022 局部修订；本 ADR 的 Maintenance 生命周期、协议 artifact 与成功传播后的门禁语义继续有效。
+
 Client Maintenance 应只暂停 IAM 控制的 client-scoped 在线协议流量，并允许管理员在维护期间完成 Custom SSO 与 OIDC 的全部配置和生命周期准备；协议启用表达启用意图，实际可用还要求 Client 全局状态为正常。Maintenance 不得充当配置冻结或永久撤销：进入和退出 Maintenance 不推进协议配置版本，不使未变更的既有访问永久失效，也不暂停其原始 TTL；恢复正常后，仍未过期且未因真实协议变更失效的访问继续有效。
 
 ## 生命周期边界
