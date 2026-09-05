@@ -3,9 +3,71 @@
 本文记录 package 边界、repository 事务规则，以及 Drizzle/PostgreSQL 布局约定。修改数据库 schema 或 migration 前，
 先使用 schema 相关 skill 并遵守 workflow 门禁。
 
-## 共享 Package 边界
+## 共享代码选址
 
-- 跨 app enum 和稳定常量放在 `packages/contracts`。
+先查已有能力 owner，再按消费方与运行环境选择落点。下面的规则约束新增代码与受影响的修改；既有实现的收敛范围见
+[现存差距与验证](#现存差距与验证)。共享不等于集中到 `contracts`，文件名含 DTO 也不构成提升为共享代码的理由。
+
+| 位置 | 职责与允许依赖 |
+|---|---|
+| `packages/contracts` | 跨端或跨应用的稳定枚举、常量、runtime schema、派生类型及紧贴这些契约的协议 helper；不依赖数据库、app 或服务端基础设施。 |
+| `packages/domain` 的纯规则文件 | 根据显式输入计算结果或抛出业务错误；依赖共享常量、纯 helper 和业务错误，不依赖数据库、OpenAPI、网络、运行时实例或 composition。 |
+| `packages/domain` 的 DTO/schema/mapper | 后端复用的领域输入输出；允许依赖数据库字段 schema、Drizzle schema 派生工具和既有 OpenAPI 工具，不执行数据库访问。 |
+| `packages/domain` 的 error/audit helper | 可复用业务错误和纯审计 payload 构造；实际审计写入由后端注入的能力负责。 |
+| 专用能力包 | 拥有完整业务能力及其公开 schema、类型和行为；已有 owner 的协议 schema 继续留在该 owner，例如 Custom SSO wire 由 projection 包拥有。 |
+| `packages/db`、`packages/api-core`、`packages/jobs` | 分别拥有持久化定义与查询基础能力、后端基础设施、BullMQ 基础能力；业务事实的解析规则由业务 owner 持有。 |
+| app 内部 | 单 app 的 enum、schema、error、流程类型和页面模型；有实际共享消费者后再评估提升位置。 |
+
+`domain` 当前同时包含纯规则和数据库派生 DTO；“纯”约束适用于规则文件，不代表整个 package 无数据库依赖。
+新增纯规则放在所属领域中按职责命名的文件，DTO/mapper 依赖规则，规则不反向依赖 DTO 或其聚合出口。
+
+### 公开接口与运行环境
+
+- 跨包通过 `package.json` 声明的公开出口消费能力，不通过相对源码路径或未公开的深层路径访问实现。
+- 公开出口不自动代表浏览器可用。浏览器运行时代码不 value-import `domain`、`db` 或后端基础设施；共享 runtime
+  schema 使用 `contracts` 或支持浏览器的专用能力出口，类型共享使用 type-only import。
+- Admin 可以从后端公开 tRPC 入口进行 type-only 推断，推断集中在 app-local service/client 边界；不为此复制一套
+  DTO 到 `contracts`。前端职责见 [前端架构](frontend-architecture.md)。
+- 已有 runtime schema 时，从 schema 派生 TypeScript type；解析与 mapper 复用同一个 shape owner。Protocol entry
+  可以添加 OpenAPI metadata，不另写一份相同 wire shape。
+- 协议 helper 只实现该契约的编码、解码或续接语义，不承载 app 业务流程或数据库、网络请求。现有 SSO 导航恢复
+  helper 通过调用方传入的窄接口操作 browser history 和派发事件；平台适配应保持显式，不在共享模块中绑定 app 实例。
+- `contracts` 当前 root 还公开登录 credential 的加解密 helper。它们是跨运行时协议实现，依赖 `sm-crypto`、
+  Web Crypto 及 `btoa`/`atob` 等能力，并使用时间和随机数；不属于纯规则。修改这些 helper 或引入新的消费运行环境时，
+  核验实际执行分支所需的平台能力。本约定保留现有出口，不据此允许任意平台实现进入 `contracts`，也不声称 root
+  re-export 的所有代码必然进入每个浏览器 bundle。
+
+### 独立模块与独立包
+
+独立模块不一定需要独立 workspace package。新建包应说明稳定的业务职责、实际消费者或具体的依赖隔离需求，
+以及希望隐藏的实现；文件数量、提炼出一个 helper 或假设未来复用都不足以单独证明建包必要性。
+
+多个独立模块可以共享一个包，通过明确的公开 subpath 保持职责分离。合并包前应界定业务收录范围，并评估依赖并集、
+测试与构建失效粒度；不要求仅因共享包就互相调用。`resolution` 只是处理方式，不能成为所有解析逻辑的默认落点。
+选择独立包或共享包时，不以独立发布作为没有实际需求支撑的理由。
+
+当前三个服务端能力包的分工如下；本约定不改变它们的物理布局：
+
+| 包 | 当前职责与消费关系 |
+|---|---|
+| `role-assignment-resolution` | 统一有效角色与角色变化影响用户的解析；管理后端授权和 User Profile 构建/失效使用同一规则。 |
+| `organization-responsibility-resolution` | 统一有效责任与 holder 反向解析；当前生产直接消费者是 User Profile Read Model，用于构建和变更影响分析。 |
+| `user-profile-read-model` | 拥有派生档案的失效、重建、PostgreSQL 发布、Redis 缓存、查询与恢复；由 API、Admin API、OIDC Provider、Worker 按职责消费。Read Model 为读取整理数据，也负责写入和维护这些派生数据。 |
+
+## DTO 字段与兼容演进
+
+- 新增或修改跨边界 DTO 字段形状时，使用显式 `pick` 或 `z.object` 确定允许字段；允许从已经明确选字段的 DTO
+  继续 `omit`、`extend` 或调整可选性。直接从整表 shape 排除少数字段，不能保证新增数据库字段仍留在持久化边界内。
+- 请求输入、响应输出与内部敏感记录分别定义。数据库新增字段不能自动成为可提交或可返回字段；修改数据库字段时
+  检查其派生 DTO，受影响且仍自动继承整表字段的跨边界 DTO 在该次改动中收敛到显式字段集合。
+- DTO schema 要在实际输入解析或输出 mapper/serializer 边界生效；仅声明类型或 schema 不证明运行时输出已被裁剪。
+- 字段新增、删除、类型、必填性、可空性及未知字段解析策略变化都要检查消费者。新增响应字段也可能被旧 strict
+  parser 拒绝，不能一律认定为向后兼容。是否使用 `.strict()` 由协议要求决定，不统一收紧所有 DTO。
+- 兼容发布应说明新旧生产者/消费者的可共存组合与部署顺序；不能共存时使用对应功能的协调切换契约。消费范围包括
+  浏览器、后端、Worker、外部协议客户端及会跨发布保留的消息或缓存（按实际契约涉及范围检查），不建立通用双版本框架。
+
+## 专用能力包契约
+
 - client-scoped 主体信息裁剪、Subject Claim Catalog 与协议中性投影类型放在
   `packages/client-subject-projection`。调用方只通过公开 `resolve` Interface 提交 Subject Identifier、
   `clientCode` 和 `SubjectClaimSelection`；Subject Facts、Subject Access 与 Authorization Freshness 由
@@ -15,8 +77,6 @@
   schema 添加 OpenAPI metadata，不得重写第二份 wire shape。Package root 拥有 Catalog/Selection V2、带 canonical responsibility 子项的协议中性
   Employment Profile、V2 projection service 与 Custom SSO V2 strict wire；responsibility 仍是
   `profile:employments` 的原子子项，不形成独立 claim，也不进入 authorization employment。
-- 共享 DTO schema、DTO type、pure domain rule、audit helper 和可复用 business error 放在 `packages/domain`。
-- 共享 BullMQ helper 放在 `packages/jobs`。
 - 角色分配的正向 Effective Role 与反向受影响用户解析放在 `packages/role-assignment-resolution`；该 package
   接收 composition root 提供的 `DbClient`，调用方不复制 assignment 或组织闭包匹配规则。
 - Organization Responsibility 的正向 Effective Type/target identity 与按 target Organization/Type 的反向 holder
@@ -41,7 +101,24 @@
   的协议中性 contract，read-model 仍拥有 resolver 驱动的 Snapshot build。版本无关 Worker maintenance/readiness 命令复用
   同一 dirty/job/publication 与两项全量 gate；active Worker consumer、Internal User、Custom SSO 与 OIDC composition 只使用
   v3，同一 live User 不得混写、双读、fallback 或建立版本选择。Client Protocol V2 不随 Profile 命令推进。
-- App-private enum、schema 和 error 可以留在所属 app 内。
+
+## 现存差距与验证
+
+当前部分 User、Client、Role DTO 仍由整表 schema 或排除字段派生，不能视为已满足显式字段规则。修改这些 DTO 的
+形状或其来源数据库字段时按上述规则收敛；不因无关改动批量迁移。既有 crypto root 出口按前述运行环境约定维护，
+新增 subpath 或搬迁实现应作为明确的结构变更处理。
+
+| 要证明的事实 | 验证方式 |
+|---|---|
+| 公开出口可用、类型结构兼容 | package exports 与消费方 typecheck；类型正确不等于浏览器运行时可加载。 |
+| DTO 输入与输出字段受控 | 公开解析/mapper 的行为测试，覆盖允许字段、额外存储字段不外溢、敏感字段裁剪及协议要求的未知字段处理。 |
+| 共享出口支持目标浏览器 | 相关前端构建；涉及平台能力时补对应运行环境的执行验证。 |
+| 业务解析、发布与恢复行为 | 最高相关公开接口的行为测试，以及涉及 PostgreSQL/Redis 等资源的 Integration 通道。 |
+| 稳定依赖方向与 owner 路径 | 仅在既有 Architecture Guard 覆盖范围内由其检查；新增规则须通过准入流程。 |
+
+当前 Architecture Guard 不覆盖这里全部通用共享包分层、浏览器运行环境或 DTO 字段规则；这些约束仍需实现时审查并选择
+对应验证。不要用源码字符串检查推断 Zod 链、运行时字段裁剪或 bundle 行为。验证层与准入条件见
+[架构守卫规范](architecture-guard.md)，测试通道见 [测试编排架构](testing-architecture.md)。
 
 ## Repositories 与 Transactions
 

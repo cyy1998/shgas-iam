@@ -57,8 +57,8 @@
 |---|---|
 | `packages/api-core/src` | 共享后端基础设施：`createApp`、route/OpenAPI/response helpers、errors、middleware、Redis、logging、observability、Session Kernel、LoginRestriction、Subject Access Barrier、UnitOfWork 和 tRPC utilities。共享 process-smoke harness 位于 `src/testing/`，只通过独立 testing export 暴露；它不实现 Redis 协议或 persistence seed。 |
 | `packages/client-subject-projection/src` | 协议中性的 Client Subject Projection deep Module；默认入口只公开 active V2 `resolve` Interface、Catalog 与 canonical responsibility Employment Profile，`/custom-sso` 独占 Custom SSO V2 strict wire。V1 历史源码不由 package exports、应用 composition 或命令入口公开。 |
-| `packages/contracts/src` | 跨 app/package 消费的稳定 contracts 与 enums。 |
-| `packages/domain/src` | 共享 domain schemas/types、pure domain rules、audit helpers 和可复用 domain/business errors。 |
+| `packages/contracts/src` | 跨端或跨 app/package 的稳定枚举、常量、runtime schemas、派生类型与相关协议 helper（包括 SSO 导航和登录 credential）；具体运行环境约束见共享契约文档。 |
+| `packages/domain/src` | 后端复用的 DTO schemas/types/mappers、pure domain rules、audit helpers 和业务错误；DTO 可依赖数据库 schema，纯规则文件保持独立，不将整个包视为浏览器运行时依赖。 |
 | `packages/db/src` | Drizzle schemas、relations、migrations、singleton client 和 query helpers。Schema/relations domain 为 `core` 与 `log`；共享 column helpers 位于 `schema/_shard/`。 |
 | `packages/eslint-config` | 全仓唯一 ESLint 配置所有者，公开 root/backend/frontend preset factories。 |
 | `packages/jobs/src` | 共享 BullMQ connection、queue、worker、job ID 和 default option helpers。 |

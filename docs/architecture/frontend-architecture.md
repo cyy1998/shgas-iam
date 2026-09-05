@@ -1,63 +1,56 @@
 # 前端架构
 
-本文记录 `apps/admin` 和 `apps/sso` 下 Umi Max + React 前端 app 的结构与 composition 约定。编码风格见
-[../development/coding-style.md](../development/coding-style.md)。
+本文定义 `apps/admin` 和 `apps/sso` 下 Umi Max + React 前端 app 的通用结构与 composition 约定。
+编码风格见 [../development/coding-style.md](../development/coding-style.md)，共享类型的所有权和运行环境边界见
+[contracts-and-database.md](contracts-and-database.md)。下列规则适用于新增代码；旧代码的收敛时机见本文末节。
 
-## App 边界
+## App 与状态边界
 
-- `apps/admin` 是管理前端。它应通过 `src/services/` 下的 page-side wrapper 消费 admin 能力，并把 tRPC client
-  集中在 `src/lib/api-client.ts`。
-- Admin `/sessions` 页面通过 `src/services/session-management.ts` 消费四个 intent：Valid Principal Session
-  列表与单会话/用户全部撤销，以及 Temporary Login Restriction 列表与解除。页面使用“有效会话”和
-  “临时登录限制”两个标签页；两个列表都复用用户远程搜索提交精确 numeric user ID，使用默认 20、最大 100 的分页
-  与手动刷新，不轮询。
-- “有效会话”每行统一提供“强制下线本次”和“下线该用户全部”。当前管理会话的单会话按钮禁用；本人全部下线仍可用，
-  确认框明确保留当前根会话但撤销其关联 IAM 凭证与其他 roots。确认框同时说明点式撤销的并发窗口、不能保证第三方
-  本地会话退出、不会阻止未来登录，以及凭据泄露时的密码重置、账号暂停或结束处置；不展示推测的关联应用清单，也不要求备注
-  或原因。成功、幂等无变化和 cleanup 部分失败分别显示稳定提示并刷新当前列表；
-  `ADMIN_LOGIN_STATE_AUDIT_FAILED_AFTER_EFFECT` 显示“作用可能已生效”，刷新状态且不自动重试 mutation。
-- 页面只渲染后端安全 VO，不接触原始 User-Agent、Session Kernel 模型或 cleanup failure 内容。Transport 错误由
-  service wrapper 使用共享 API error code 归一化为稳定的页面错误；页面不得解析 tRPC `httpStatus`、展示
-  `serviceCode` 或原始错误 message。
-- “临时登录限制”每行显示用户与账号状态、固定“登录失败次数过多”原因、最后 Trigger Method、自动解除时间与剩余
-  时间。倒计时只在行内按服务端初值本地推进，不触发列表重载、服务端轮询或实时推送；异常 Trigger Method 显示为
-  “未知”。
-- 解除确认明确同时清除限制和当前失败历史、不创建白名单或宽限期、新失败立即重新计数，且不影响任何已有
-  Principal Session；不提供阈值、窗口或时长配置，不要求备注，也不发送通知。成功与 `changed:false` 都刷新一次，
-  Redis 503 保留当前状态且不显示假成功；`ADMIN_LOGIN_STATE_AUDIT_FAILED_AFTER_EFFECT` 提示作用可能已生效、刷新
-  一次且不自动重试 mutation。
-- Admin Organization Responsibility 使用 capability 驱动模块与 collection action，可由完整管理员或具有有效
-  HR Administration Scope 的 `iam:hr-admin` 进入。独立 Assignment 页面和 Organization、Employment、User 嵌入面板
-  复用同一 scoped service；holder 与 target selector 都只展示当前 scope 候选，但允许从不同 Scope Roots 选择两端。
-  Assignment 行为按钮只消费服务端 `allowedActions`，mutation 后重新加载列表与详情；HR 不展示 Assignment Audit Tab
-  或全局 Audit 菜单。不可管理的隐藏 blocker 只显示稳定安全文案，不渲染 Assignment、holder 或范围外 Organization。
-- `apps/sso` 是 SSO 门户。它应通过 `src/services/` 下的 wrapper 消费 public/auth/self-service 能力，并把共享
-  request 与浏览器 helper 集中在 `src/lib/` 和 `src/utils/`。
-- Umi runtime integration 放在 `src/app.ts`、`src/access.ts` 和 app-local `src/models/`。这些文件只聚焦 runtime
-  bootstrap、layout/auth hooks 和全局状态 wiring。
-- 构建时公开 env 必须留在 Umi `UMI_APP_` 前缀和 env contract 定义的 app-specific namespace 之后。不要在
-  page component 中散落 raw deployment env 名称。
+- `apps/admin` 是管理前端，通过 app-local `src/services/` 消费 admin 能力；共享 tRPC client 位于
+  `src/lib/api-client.ts`。`apps/sso` 是 SSO 门户，通过 app-local service 消费 public/auth/self-service 能力；
+  共享 request 与浏览器机制放在 `src/lib/` 和 `src/utils/`。
+- Route-level screen 放在 `src/pages/`，拥有筛选、选中记录、弹窗、提交状态和 mutation 后的刷新编排。
+  Page-private component 放在页面旁的 `components/` 或 `_components/`；多个 page 复用的 UI 放在 `src/components/`。
+- 可复用浏览器或 UI 行为放在 `src/hooks/`；page-only hook 放在页面旁。`src/models/` 只承载跨 route 的全局状态。
+- Umi runtime integration 放在 `src/app.ts`、`src/access.ts` 和 app-local models，聚焦 bootstrap、layout/auth hooks
+  与全局状态 wiring；页面业务流程留在页面和对应 hook/service。
+- 构建时公开 env 必须留在 Umi `UMI_APP_` 前缀和 env contract 定义的 app-specific namespace 之后。
+  Page component 不散落 raw deployment env 名称。
 
-## Pages、Components 与 Hooks
+## 请求、类型与错误的所有权
 
-- Route-level screen 放在 `src/pages/` 下，并拥有 page workflow state，例如筛选条件、选中记录、modal open state
-  和 submit orchestration。
-- Page-private component 放在 page 目录下，通常是 `components/` 或 `_components/`。
-- 多个 page 复用的 UI 放在 `src/components/`。
-- 共享 hook 在表达可复用浏览器行为或 UI 行为时放在 `src/hooks/`；page-only hook 放在对应 page 旁边。
-- `src/models/` 应保持薄层，只承载多个 route 都需要的 Umi/global state。
+- 新增业务请求统一经过 app-local service。先复用已有方法，没有时增加最小 wrapper；页面、组件和页面 hook
+  通过 service 发起请求。
+- Service 拥有 endpoint、请求选项、transport 响应解析和必要的错误归一化。Admin service 拥有 tRPC procedure
+  path 及从公开 tRPC 入口进行的 type-only request/response 推断；SSO service 拥有 REST path、auth redirect
+  与 response-envelope handling。页面消费 service 公开的方法和类型。
+- 简单 service 可以透传已有结果与错误，不强造 DTO、错误类或通用 CRUD 抽象。需要将协议错误转成稳定页面语义时，
+  在 service 完成映射，页面按功能契约呈现；不要让页面解析 transport envelope 或 HTTP/tRPC 错误结构。
+- 共享 transport 与浏览器机制由 `lib/utils` 拥有；特殊协议可由专用 service 使用 `fetch`，例如登录页 guard。
+  这里约束的是业务请求调用与 transport 解析，不是一律禁止导入低层文件；页面仍可消费已有公共错误类型。
+- 优先消费 `@iam/contracts` 的稳定枚举、schema 派生类型或 service 导出的 tRPC 推断类型，避免重复 enum、magic
+  number 和为复用而复制 DTO。浏览器依赖边界遵守共享契约文档，type-only 推断不意味着可以 value-import 后端包。
 
-## API 与 Contract 边界
+## 管理路由与权限
 
-- Page 和 component code 应优先使用 app-local service wrapper，而不是直接导入低层 request client。
-- Admin service wrapper 可以调用 `apiClient`，并应对 page component 隐藏 tRPC procedure path、response
-  normalization 和推断出的 request/response type。
-- SSO service wrapper 应对 page component 隐藏 raw REST path、request options、auth redirect 和 response-envelope
-  handling。
-- 优先使用来自 `@iam/contracts` 的共享 contract 或推断出的 tRPC type，避免本地 magic number 和重复 enum 定义，
-  尤其是 user、client、employment、organization、position 和 role status 值。
-- 当 component 当前为了狭窄 UI flow 需要低层 client access 时，先保持局部访问；当该 flow 变得共享、复杂或涉及
-  contract 敏感逻辑时，再迁移到 service wrapper。
+- 新管理路由登记到 `admin-route-registry`，复用模块 access key 和既有拒绝访问路径。
+- 模块可见性与 collection action 消费服务端 capability；服务端提供资源 `allowedActions` 时，行或详情按钮
+  以它为准。新增需要资源级授权的操作时，同步设计服务端授权元数据，前端不复制角色字符串或组织范围策略。
+- Capability 未加载或加载失败时不默认开放受保护功能。Capability 和按钮状态指导 UI，服务端仍须在每次请求时授权。
+- Mutation 后按功能契约刷新数据和操作能力。“可能已生效”、部分失败和是否可重试由该功能明确规定，不能统一按
+  失败自动重试。
+- 修改 Sessions 的列表、撤销或临时登录限制交互时，读取
+  [会话管理页面契约](../features/admin/session-management.md)。
+- 修改 Organization Responsibility 的 scoped selector、嵌入面板、操作按钮、Audit 可见性或隐藏 blocker 时，读取
+  [HR 管理设计](../features/organization-responsibility/hr-admin-management-design.md#响应与前端)。
+
+## SSO 登录守卫
+
+- 受 guard 保护的登录流程只在 guard 明确允许登录后展示表单。检查中、续接中、无效请求和暂时不可用分别表达，
+  检查失败不能回退成无会话。
+- Service 解析协议结果；hook 管理超时、取消和过期响应；页面渲染互斥状态并执行对应交互。
+- 修改 `/portal/login` 的重入检查、协议续接、超时重试或浏览器历史时，读取
+  [统一登录页重入守卫设计](../features/sso/login-page-reentry-guard.md)，其中定义适用范围、状态转换和协议语义。
 
 ## 测试与生成路径
 
@@ -69,5 +62,16 @@
   全局 DOM setup；确实使用浏览器全局或 React DOM render 的测试命名为 `*.dom.test.ts[x]`，由 jsdom project 加载
   Testing Library 和浏览器兼容 setup。这个后缀只表达 Unit 执行环境；Component Integration 仍整体使用 jsdom、完整
   setup 与 `*.integration.test.ts[x]` 收集规则。
+- 类型与公开出口通过 typecheck 验证，service 的响应与错误语义使用行为测试；路由、权限 UI 和 guard 状态使用
+  组件或浏览器测试。具体通道与预算遵守 [testing-architecture.md](testing-architecture.md)。
 - 不要直接编辑 Umi generated directory 或 frontend build output；generated 和 vendored path 规则见
   [repository-map.md](repository-map.md)。
+
+## 现存差距与收敛时机
+
+当前仍有页面直接调用低层 client，普通 service 也不都提供错误归一化。这些现状不表示新增调用可以继续绕过 service，
+也不要求一次性重写所有 wrapper：修改旧请求的参数、调用流程、响应或错误处理时，将该调用收敛到上述边界；
+纯布局、样式和文案改动不触发请求迁移。
+
+本次文档整理不批量迁移代码或新增守卫。现有 Architecture Guard 的通过结果不能证明本页全部规则已被自动检查；
+评审仍需检查请求和状态所有权，以及相关功能契约。

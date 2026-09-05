@@ -89,6 +89,8 @@ HR scope 仍在事务外按请求时 PostgreSQL 事实解析，再传入事务�
 
 ## 响应与前端
 
+通用 service、路由与权限 UI 规则见 [前端架构](../../architecture/frontend-architecture.md#管理路由与权限)。
+
 `AdminCapabilitySummary` 作以下扩展：
 
 - 有效 HR 的 `visibleModules` 增加 `organizationResponsibility`；
@@ -97,7 +99,11 @@ HR scope 仍在事务外按请求时 PostgreSQL 事实解析，再传入事务�
 
 Admin Assignment view/detail 增加服务端计算的 `allowedActions.pause/resume/end`。React module 不再只根据 status 推断按钮；按钮使用 `allowedActions`，mutation 后重新加载列表和详情。服务端每次 mutation 仍重新授权，响应 capability 不是凭据。
 
-HR 可访问独立 Organization Responsibility 页面，也可在 Organization、Employment、User 详情中看到责任入口。所有入口复用同一 scoped queries；holder 在 scope 但 target 越界，或 target 在 scope 但 holder 越界的 Assignment 都不显示。Assignment drawer 的 Audit Tab 按 `canAccessAudit` 隐藏，不新增 scoped audit operation，也不开放 `admin.audit.search`。
+HR 可访问独立 Organization Responsibility Assignment 页面，也可在 Organization、Employment、User 详情中看到责任入口。
+所有入口复用同一 scoped service；holder 与 target selector 只展示当前 scope 候选，允许从不同 Scope Roots 选择两端。
+holder 在 scope 但 target 越界，或 target 在 scope 但 holder 越界的 Assignment 都不显示。Assignment drawer 的 Audit Tab
+按 `canAccessAudit` 隐藏，纯 HR 不展示全局 Audit 菜单；不新增 scoped audit operation，也不开放 `admin.audit.search`。
+不可管理的隐藏 blocker 只显示下一节规定的稳定安全文案，不渲染 Assignment、holder 或范围外 Organization。
 
 ## 越界阻塞与错误语义
 
