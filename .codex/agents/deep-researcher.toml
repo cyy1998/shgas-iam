@@ -8,7 +8,7 @@ routine entry-point discovery, ordinary cross-file tracing, code edits, or
 duplicate investigation of an already established path.
 """
 
-model = "gpt-5.6-sol"
+model = "gpt-6-astra"
 model_reasoning_effort = "high"
 sandbox_mode = "read-only"
 
