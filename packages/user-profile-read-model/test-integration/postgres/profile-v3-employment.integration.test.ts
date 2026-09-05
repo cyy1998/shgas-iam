@@ -29,7 +29,7 @@ import { createOrganizationResponsibilityResolver } from "@iam/organization-resp
 import { createRoleAssignmentResolver } from "@iam/role-assignment-resolution";
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:test";
 import { eq } from "drizzle-orm";
-import { createUserProfileRowRepository } from "../../src/user-profile-row.repository";
+import { createUserProfileRowRepository } from "../../src/publication/user-profile-row.repository";
 import {
   createV3UserProfileBuilder,
   createV3UserProfileQueryRepository,

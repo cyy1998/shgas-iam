@@ -7,8 +7,8 @@
     ".": "./src/index.ts",
     "./producer": "./src/producer.ts",
     "./query": "./src/query.ts",
-    "./query/repository": "./src/user-profile-query.repository.ts",
-    "./subject-access-transition": "./src/subject-access-transition.repository.ts",
+    "./query/repository": "./src/query/user-profile-query.repository.ts",
+    "./subject-access-transition": "./src/subject-access/subject-access-transition.repository.ts",
     "./subject-facts": "./src/subject-facts.ts",
     "./v3": "./src/v3.ts",
     "./worker": "./src/worker.ts"

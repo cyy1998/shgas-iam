@@ -136,7 +136,7 @@ const staticModuleOwnershipRules: readonly StaticModuleOwnershipRule[] = [
     ],
     allowedSources: [
       "packages/client-subject-projection/src/custom-sso.ts",
-      "packages/client-subject-projection/src/testing.ts",
+      "packages/client-subject-projection/src/testing/testing.ts",
     ],
     dependencyKind: "all",
     message: moduleSpecifier =>
@@ -887,8 +887,8 @@ function isRoleAssignmentSchemaOwner(file: string) {
 
 function isRoleAssignmentResolverValueOwner(file: string) {
   return /^apps\/(?:api|admin-api|oidc-provider|worker)\/src\/composition(?:\/|$)/u.test(file)
-    || file === "packages/user-profile-read-model/src/user-profile-invalidation.ts"
-    || file === "packages/user-profile-read-model/src/user-profile-worker.module.ts";
+    || file === "packages/user-profile-read-model/src/invalidation/user-profile-invalidation.ts"
+    || file === "packages/user-profile-read-model/src/worker/user-profile-worker.module.ts";
 }
 
 function isUserProfileProducerOwner(file: string) {

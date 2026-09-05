@@ -1,4 +1,4 @@
-import type { OidcClientRuntimeMetadata } from "../provider/client-runtime-metadata.ts";
+import type { OidcClientRuntimeMetadata } from "../provider/client/client-runtime-metadata.ts";
 import { SubjectProjectionNotReadyError } from "@iam/client-subject-projection";
 import { OidcScope } from "@iam/contracts";
 import { errors } from "oidc-provider";

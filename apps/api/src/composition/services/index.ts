@@ -20,14 +20,14 @@ import { createPrivilegeDelegationService } from "@api/services/privilege/privil
 import {
   createCustomSsoSessionKernelAdapter,
 } from "@api/services/session/custom-sso-session-kernel.adapter";
+import { createSsoRedirectUrlValidator } from "@api/services/sso/redirect-url.validator";
 import {
   createCustomSsoSubjectDelivery,
-} from "@api/services/sso/custom-sso-subject-delivery";
+} from "@api/services/sso/subject-delivery/custom-sso-subject-delivery";
 import {
   createCustomSsoSubjectDeliveryRequestScope,
-} from "@api/services/sso/custom-sso-subject-delivery-request-scope";
-import { createCustomSsoTrafficGate } from "@api/services/sso/custom-sso-traffic-gate";
-import { createSsoRedirectUrlValidator } from "@api/services/sso/redirect-url.validator";
+} from "@api/services/sso/subject-delivery/custom-sso-subject-delivery-request-scope";
+import { createCustomSsoTrafficGate } from "@api/services/sso/traffic-gate/custom-sso-traffic-gate";
 import { createV3UserProfileSearchAdapter } from "@api/services/user-profile-search/user-profile-search-v3.adapter";
 import { createUserMobileBinding } from "@api/services/user/user-mobile-binding.helper";
 import { createUserPasswordHelper } from "@api/services/user/user-password.helper";

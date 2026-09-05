@@ -1,7 +1,7 @@
-import type { PublishedUserProfile } from "../../src/user-profile.schema";
+import type { PublishedUserProfile } from "../../src/schema/user-profile.schema";
 import { UserStatus, UserType } from "@iam/contracts";
 import { describe, expect, mock, test } from "bun:test";
-import { createSubjectProjectionCutoverBackfill } from "../../src/subject-projection-cutover-backfill";
+import { createSubjectProjectionCutoverBackfill } from "../../src/cutover/subject-projection-cutover-backfill";
 
 const now = new Date("2026-08-01T02:00:00.000Z");
 

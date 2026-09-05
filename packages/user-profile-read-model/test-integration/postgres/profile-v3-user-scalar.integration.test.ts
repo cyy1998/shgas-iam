@@ -13,7 +13,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:tes
 import { eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/postgres-js";
 import postgres from "postgres";
-import { createUserProfileRowRepository } from "../../src/user-profile-row.repository";
+import { createUserProfileRowRepository } from "../../src/publication/user-profile-row.repository";
 import {
   createV3UserProfileBuilder,
   createV3UserProfileQueryRepository,

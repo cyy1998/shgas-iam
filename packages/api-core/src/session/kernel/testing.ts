@@ -1,12 +1,12 @@
-import type { SessionKernelArtifactConsumer } from "./artifact-consumption";
 import type { SessionKernelDependencies } from "./facade";
+import type { SessionKernelArtifactConsumer } from "./storage/artifact-consumption";
 import type {
   SessionKernelRedis,
   SessionKernelRevocationTransitions,
-} from "./store";
-import { createInMemorySessionKernelArtifactConsumer } from "./artifact-consumption";
+} from "./storage/store";
 import { createSessionKernelWithStateAdapterFactories } from "./facade";
-import { createInMemorySessionKernelRevocationTransitions } from "./revocation-transitions";
+import { createInMemorySessionKernelArtifactConsumer } from "./storage/artifact-consumption";
+import { createInMemorySessionKernelRevocationTransitions } from "./storage/revocation-transitions";
 
 const consumersByRedis = new WeakMap<
   SessionKernelRedis,

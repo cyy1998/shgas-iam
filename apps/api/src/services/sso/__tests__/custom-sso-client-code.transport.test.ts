@@ -2,7 +2,7 @@ import {
   customSsoLocalSessionCookieName,
   decodeCustomSsoClientCode,
   encodeCustomSsoClientCode,
-} from "@api/services/sso/custom-sso-client-code.transport";
+} from "@api/services/sso/transport/custom-sso-client-code.transport";
 import { describe, expect, test } from "bun:test";
 
 describe("Custom SSO Client Code transport", () => {

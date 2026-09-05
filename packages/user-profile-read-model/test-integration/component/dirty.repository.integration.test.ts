@@ -2,8 +2,8 @@ import type { SQL } from "drizzle-orm";
 import { UserProfileDirtyReason, UserProfileDirtyStatus } from "@iam/contracts";
 import { describe, expect, mock, test } from "bun:test";
 import { PgDialect } from "drizzle-orm/pg-core";
-import { formatDirtyVersion } from "../../src/dirty-version";
-import { createUserProfileDirtyRepository, mergeUserProfileDirtyReasons } from "../../src/dirty.repository";
+import { formatDirtyVersion } from "../../src/invalidation/dirty-version";
+import { createUserProfileDirtyRepository, mergeUserProfileDirtyReasons } from "../../src/invalidation/dirty.repository";
 
 describe("user profile dirty repository", () => {
   test("merges reason codes deterministically", () => {

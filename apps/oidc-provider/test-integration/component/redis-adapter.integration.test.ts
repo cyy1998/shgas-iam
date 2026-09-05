@@ -1,5 +1,5 @@
 import type { Redis } from "ioredis";
-import type { CreateOidcAuthorizationCodeSnapshotInput } from "../../src/provider/claims-snapshot.ts";
+import type { CreateOidcAuthorizationCodeSnapshotInput } from "../../src/provider/claims/claims-snapshot.ts";
 import type { ProviderSessionLifecycleFence } from "../../src/session/provider-session.ts";
 import {
   OidcClientType,
@@ -8,7 +8,7 @@ import {
 } from "@iam/contracts";
 import { errors } from "oidc-provider";
 import { describe, expect, it } from "vitest";
-import { toOidcClientRuntimeMetadata } from "../../src/provider/client-runtime-metadata.ts";
+import { toOidcClientRuntimeMetadata } from "../../src/provider/client/client-runtime-metadata.ts";
 import { RedisOidcAdapter } from "../../src/storage/redis-adapter.ts";
 import { createOidcTokenStore } from "../../src/stores/token.store.ts";
 

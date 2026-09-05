@@ -7,6 +7,7 @@ import type {
   InteractionProviderSessionPrincipalReader,
   InteractionReturnHandleStore,
 } from "../interaction/interaction.port.ts";
+import type { OidcClaimsAdapter } from "../provider/claims.ts";
 import type {
   ClaimsAccountReader,
   ClaimsClientRuntimeReader,
@@ -14,8 +15,7 @@ import type {
   ClaimsSessionResolver,
   ClaimsSubjectProjectionResolver,
   ClaimsTokenRevoker,
-} from "../provider/claims.port.ts";
-import type { OidcClaimsAdapter } from "../provider/claims.ts";
+} from "../provider/claims/claims.port.ts";
 import type { OidcAccountRepository } from "../repositories/account.repository.ts";
 import type {
   OidcSessionKernelAccountReader,

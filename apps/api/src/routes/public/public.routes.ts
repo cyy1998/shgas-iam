@@ -1,16 +1,16 @@
 import { OrganizationDtoSchema, OrganizationQueryDtoSchema } from "@api/services/organization/organization.schema";
 import {
   CustomSsoDeliveryRequestHeadersSchema,
-} from "@api/services/sso/custom-sso-delivery-request.schema";
+} from "@api/services/sso/transport/custom-sso-delivery-request.schema";
 import {
   CUSTOM_SSO_SESSION_AUTHORIZATION_SECURITY_SCHEME,
-} from "@api/services/sso/custom-sso-delivery.security";
+} from "@api/services/sso/transport/custom-sso-delivery.security";
 import {
   createCustomSsoUnavailableResponse,
-} from "@api/services/sso/custom-sso-retryable.openapi";
+} from "@api/services/sso/transport/custom-sso-retryable.openapi";
 import {
   CustomSsoSubjectProjectionV2Schema,
-} from "@api/services/sso/custom-sso-subject.schema";
+} from "@api/services/sso/transport/custom-sso-subject.schema";
 import { UserDtoSchema, UserQueryDtoSchema } from "@api/services/user/user.schema";
 import { createRoute, z } from "@hono/zod-openapi";
 import * as HttpStatusCodes from "@iam/api-core/core/http-status-codes";

@@ -1,6 +1,6 @@
 import { UserStatus, UserType } from "@iam/contracts";
 import { expect, mock, test } from "bun:test";
-import { createInternalUserProfileQueryService } from "../../src/internal-user-query.service";
+import { createInternalUserProfileQueryService } from "../../src/query/internal-user-query.service";
 
 const now = new Date("2026-08-22T12:00:00.000Z");
 

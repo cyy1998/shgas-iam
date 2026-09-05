@@ -3,7 +3,7 @@ import type { ApiRequestContext } from "@api/services/audit/audit.context";
 import type { ApiAuditLogWriter } from "@api/services/audit/audit.service";
 import type {
   CustomSsoSubjectProjectionPort,
-} from "@api/services/sso/custom-sso-subject-delivery.port";
+} from "@api/services/sso/subject-delivery/custom-sso-subject-delivery.port";
 import type { UserDetailDto } from "@api/services/user/user.type";
 import type {
   AuthorizationGrantLease,

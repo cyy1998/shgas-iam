@@ -1,6 +1,6 @@
 import {
   createCustomSsoSubjectDeliveryRequestScope,
-} from "@api/services/sso/custom-sso-subject-delivery-request-scope";
+} from "@api/services/sso/subject-delivery/custom-sso-subject-delivery-request-scope";
 import { describe, expect, mock, test } from "bun:test";
 
 describe("Custom SSO subject delivery request scope", () => {

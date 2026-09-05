@@ -1,5 +1,5 @@
 import type { ClientTrafficGateResult } from "@iam/api-core/client-traffic-gate";
-import { createOidcClientTrafficGate } from "../../../src/provider/client-traffic-gate.ts";
+import { createOidcClientTrafficGate } from "../../../src/provider/client/client-traffic-gate.ts";
 
 export function createClientTrafficGateController() {
   let defaultOutcome: ClientTrafficGateResult = { outcome: "enabled" };

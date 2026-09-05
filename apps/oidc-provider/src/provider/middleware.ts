@@ -4,7 +4,7 @@ import type { ClientAuthRateLimiter } from "../security/client-auth-rate-limit.t
 import { getTraceIdFromHeaders } from "@iam/api-core/logger";
 import { getCookieValue } from "../interaction/global-session.ts";
 import { isGlobalSessionCookieError } from "../session/global-session-error-provenance.ts";
-import { parseBasicClientId } from "./basic-client-auth.ts";
+import { parseBasicClientId } from "./client/basic-client-auth.ts";
 import { setOidcRoute } from "./request-route.ts";
 import { handleOidcSubjectAccessProtocolError } from "./subject-access-protocol.ts";
 

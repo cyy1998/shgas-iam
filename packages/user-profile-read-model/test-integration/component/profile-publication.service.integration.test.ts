@@ -1,7 +1,7 @@
-import type { PublishedProfile } from "../../src/profile.schema";
+import type { PublishedProfile } from "../../src/schema/profile.schema";
 import { UserStatus, UserType } from "@iam/contracts";
 import { describe, expect, mock, test } from "bun:test";
-import { createProfilePublicationService } from "../../src/profile-publication.service";
+import { createProfilePublicationService } from "../../src/publication/profile-publication.service";
 
 const processedAt = new Date("2026-08-20T12:00:00.000Z");
 

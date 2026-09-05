@@ -1,4 +1,4 @@
-import type { ProfileBuildDataset } from "../../src/profile-build.repository";
+import type { ProfileBuildDataset } from "../../src/build/profile-build.repository";
 import {
   EmploymentStatus,
   OrganizationLevel,
@@ -10,10 +10,10 @@ import {
   UserType,
 } from "@iam/contracts";
 import { describe, expect, mock, test } from "bun:test";
-import { createProfileBuilder } from "../../src/profile-builder.service";
+import { createProfileBuilder } from "../../src/build/profile-builder.service";
 import {
   parseUserProfileDetailDocument,
-} from "../../src/profile.schema";
+} from "../../src/schema/profile.schema";
 
 const now = new Date("2026-08-20T12:00:00.000Z");
 

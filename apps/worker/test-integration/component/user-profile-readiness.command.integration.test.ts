@@ -2,7 +2,7 @@ import {
   runUserProfilePostgresGateCommand,
   runUserProfileRedisGateCommand,
   userProfileGateExitCode,
-} from "@worker/commands/user-profile-readiness";
+} from "@worker/commands/user-profile/user-profile-readiness";
 import { describe, expect, mock, test } from "bun:test";
 
 describe("User Profile readiness command", () => {

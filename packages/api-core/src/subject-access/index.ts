@@ -1,14 +1,21 @@
+export {
+  createSubjectAccessHttpAdapter,
+  SubjectAccessSessionInvalidHttpError,
+  SubjectAccessUnavailableHttpError,
+} from "./adapters/http-adapter";
+export type {
+  SubjectAccessHttpRunOptions,
+} from "./adapters/http-adapter";
+export { translateSubjectAccessResolveResult } from "./adapters/resolve-result";
+export { createSubjectAccessPrincipalValidator } from "./adapters/session-validator";
+export type {
+  SubjectAccessPrincipalValidationTarget,
+} from "./adapters/session-validator";
 export { createSubjectAccessBarrier } from "./barrier";
 export type {
   CreateSubjectAccessBarrierOptions,
   SubjectAccessBarrier,
 } from "./barrier";
-export { createSubjectAccessBootstrap } from "./bootstrap";
-export type {
-  CreateSubjectAccessBootstrapOptions,
-  SubjectAccessBootstrap,
-  SubjectAccessBootstrapRedis,
-} from "./bootstrap";
 export {
   SubjectAccessBeginPendingError,
   SubjectAccessCommitPendingError,
@@ -18,14 +25,6 @@ export {
   SubjectAccessUnavailableError,
   SubjectAccessWriteUnavailableError,
 } from "./errors";
-export {
-  createSubjectAccessHttpAdapter,
-  SubjectAccessSessionInvalidHttpError,
-  SubjectAccessUnavailableHttpError,
-} from "./http-adapter";
-export type {
-  SubjectAccessHttpRunOptions,
-} from "./http-adapter";
 export { createSubjectAccessLifecycle } from "./lifecycle";
 export type {
   CreateSubjectAccessLifecycleOptions,
@@ -47,15 +46,13 @@ export type {
   SubjectAccessTransition,
   SubjectAccessTransitionTarget,
 } from "./model";
-export {
-  createRedisSubjectAccessStore,
-  SUBJECT_ACCESS_REDIS_KEY_PREFIX,
-} from "./redis-store";
+export { createSubjectAccessBootstrap } from "./recovery/bootstrap";
 export type {
-  CreateRedisSubjectAccessStoreOptions,
-  SubjectAccessRedis,
-} from "./redis-store";
-export { createSubjectAccessRepair } from "./repair";
+  CreateSubjectAccessBootstrapOptions,
+  SubjectAccessBootstrap,
+  SubjectAccessBootstrapRedis,
+} from "./recovery/bootstrap";
+export { createSubjectAccessRepair } from "./recovery/repair";
 export type {
   CreateSubjectAccessRepairOptions,
   SubjectAccessAuthorityPort,
@@ -63,13 +60,8 @@ export type {
   SubjectAccessRepair,
   SubjectAccessRepairLogger,
   SubjectAccessRepairStatus,
-} from "./repair";
-export { translateSubjectAccessResolveResult } from "./resolve-result";
-export { createSubjectAccessPrincipalValidator } from "./session-validator";
-export type {
-  SubjectAccessPrincipalValidationTarget,
-} from "./session-validator";
-export { createSubjectAccessTransitionRecovery } from "./transition-recovery";
+} from "./recovery/repair";
+export { createSubjectAccessTransitionRecovery } from "./recovery/transition-recovery";
 export type {
   CreateSubjectAccessTransitionRecoveryOptions,
   SubjectAccessTransitionRecoveryAuthority,
@@ -78,4 +70,12 @@ export type {
   SubjectAccessTransitionRecoveryReconcileResult,
   SubjectAccessTransitionRecoveryRescheduleResult,
   SubjectAccessTransitionResolution,
-} from "./transition-recovery";
+} from "./recovery/transition-recovery";
+export {
+  createRedisSubjectAccessStore,
+  SUBJECT_ACCESS_REDIS_KEY_PREFIX,
+} from "./storage/redis-store";
+export type {
+  CreateRedisSubjectAccessStoreOptions,
+  SubjectAccessRedis,
+} from "./storage/redis-store";

@@ -1,12 +1,12 @@
 import { OidcScope } from "@iam/contracts";
 import { describe, expect, it } from "vitest";
 import {
-  OidcClaimsSnapshotSchema,
-  parseOidcClaimsSnapshot,
-} from "../provider/claims-snapshot.ts";
-import {
   createOidcClaimsAdapter,
 } from "../provider/claims.ts";
+import {
+  OidcClaimsSnapshotSchema,
+  parseOidcClaimsSnapshot,
+} from "../provider/claims/claims-snapshot.ts";
 
 const subjectIdentifier = "57b0e34d-bf33-4671-87ea-4ed2f1b0e420";
 

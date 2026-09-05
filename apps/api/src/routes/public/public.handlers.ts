@@ -1,7 +1,7 @@
 import type { OrganizationService } from "@api/services/organization/organization.service";
 import type {
   CustomSsoSubjectProjectionV2Dto,
-} from "@api/services/sso/custom-sso-subject.schema";
+} from "@api/services/sso/transport/custom-sso-subject.schema";
 import type { UserProfileSearchPort } from "@api/services/user-profile-search/user-profile-search.port";
 import type { UserService } from "@api/services/user/user.service";
 import type { PublicRouteHandler } from "./public.type";

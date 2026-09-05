@@ -143,8 +143,8 @@ describe("repository architecture guard", () => {
       "apps/api/src/services/user/user.port.ts":
         "import type { RoleAssignmentResolver } from \"@iam/role-assignment-resolution\";",
       "apps/admin-api/src/composition/index.ts": valueImport,
-      "packages/user-profile-read-model/src/user-profile-invalidation.ts": valueImport,
-      "packages/user-profile-read-model/src/user-profile-worker.module.ts": valueImport,
+      "packages/user-profile-read-model/src/invalidation/user-profile-invalidation.ts": valueImport,
+      "packages/user-profile-read-model/src/worker/user-profile-worker.module.ts": valueImport,
     });
 
     expect(analyzeRepositoryArchitecture(repoRoot)).toEqual([]);
@@ -251,7 +251,7 @@ describe("repository architecture guard", () => {
 
   test("allows Projection implementation ports and Custom SSO public interface consumption", () => {
     const repoRoot = createFixtureRepository({
-      "packages/client-subject-projection/src/internal/client-subject-projection.ts":
+      "packages/client-subject-projection/src/legacy/client-subject-projection.ts":
         "import type { SubjectFactsPort } from \"../index.ts\";",
       "packages/client-subject-projection/src/custom-sso.ts": [
         "import type { ClientSubjectProjection } from \"./index.ts\";",
@@ -264,33 +264,33 @@ describe("repository architecture guard", () => {
 
   test("keeps every Projection core source independent of client protocol configuration", () => {
     const repoRoot = createFixtureRepository({
-      "packages/client-subject-projection/src/catalog.ts": [
+      "packages/client-subject-projection/src/legacy/catalog.ts": [
         "import type { ClientDto } from \"@iam/domain/client\";",
-        "import type { RelativeClientDto } from \"../../domain/src/client/index.ts\";",
+        "import type { RelativeClientDto } from \"../../../domain/src/client/index.ts\";",
       ].join("\n"),
     });
 
     expect(analyzeRepositoryArchitecture(repoRoot)).toEqual([
       {
         ruleId: "client-subject-projection-owner",
-        file: "packages/client-subject-projection/src/catalog.ts",
+        file: "packages/client-subject-projection/src/legacy/catalog.ts",
         line: 1,
         message: "Client Subject Projection implementation must not import runtime or protocol module "
           + "\"@iam/domain/client\"; depend on its injected facts and safety ports.",
       },
       {
         ruleId: "client-subject-projection-owner",
-        file: "packages/client-subject-projection/src/catalog.ts",
+        file: "packages/client-subject-projection/src/legacy/catalog.ts",
         line: 2,
         message: "Client Subject Projection implementation must not import runtime or protocol module "
-          + "\"../../domain/src/client/index.ts\"; depend on its injected facts and safety ports.",
+          + "\"../../../domain/src/client/index.ts\"; depend on its injected facts and safety ports.",
       },
     ]);
   });
 
   test("rejects Hono package subpaths from both Projection core and wire sources", () => {
     const repoRoot = createFixtureRepository({
-      "packages/client-subject-projection/src/catalog.ts":
+      "packages/client-subject-projection/src/legacy/catalog.ts":
         "import type { CookieOptions } from \"hono/cookie\";",
       "packages/client-subject-projection/src/custom-sso.ts":
         "import type { Context } from \"hono/types\";",
@@ -299,25 +299,25 @@ describe("repository architecture guard", () => {
     expect(analyzeRepositoryArchitecture(repoRoot)).toEqual([
       {
         ruleId: "client-subject-projection-owner",
-        file: "packages/client-subject-projection/src/catalog.ts",
-        line: 1,
-        message: "Client Subject Projection implementation must not import runtime or protocol module "
-          + "\"hono/cookie\"; depend on its injected facts and safety ports.",
-      },
-      {
-        ruleId: "client-subject-projection-owner",
         file: "packages/client-subject-projection/src/custom-sso.ts",
         line: 1,
         message: "Custom SSO wire adapter must not import facts persistence, configuration, runtime, "
           + "or transport module \"hono/types\"; "
           + "depend only on the root public Client Subject Projection interface.",
       },
+      {
+        ruleId: "client-subject-projection-owner",
+        file: "packages/client-subject-projection/src/legacy/catalog.ts",
+        line: 1,
+        message: "Client Subject Projection implementation must not import runtime or protocol module "
+          + "\"hono/cookie\"; depend on its injected facts and safety ports.",
+      },
     ]);
   });
 
   test("matches blocked external package roots only at exact or slash-subpath boundaries", () => {
     const repoRoot = createFixtureRepository({
-      "packages/client-subject-projection/src/catalog.ts": [
+      "packages/client-subject-projection/src/legacy/catalog.ts": [
         "import type { Redis } from \"ioredis/built/Redis\";",
         "import type { RedisClient } from \"redis/client\";",
         "import type { ProviderHelper } from \"oidc-provider/lib/helpers\";",
@@ -328,21 +328,21 @@ describe("repository architecture guard", () => {
     expect(analyzeRepositoryArchitecture(repoRoot)).toEqual([
       {
         ruleId: "client-subject-projection-owner",
-        file: "packages/client-subject-projection/src/catalog.ts",
+        file: "packages/client-subject-projection/src/legacy/catalog.ts",
         line: 1,
         message: "Client Subject Projection implementation must not import runtime or protocol module "
           + "\"ioredis/built/Redis\"; depend on its injected facts and safety ports.",
       },
       {
         ruleId: "client-subject-projection-owner",
-        file: "packages/client-subject-projection/src/catalog.ts",
+        file: "packages/client-subject-projection/src/legacy/catalog.ts",
         line: 2,
         message: "Client Subject Projection implementation must not import runtime or protocol module "
           + "\"redis/client\"; depend on its injected facts and safety ports.",
       },
       {
         ruleId: "client-subject-projection-owner",
-        file: "packages/client-subject-projection/src/catalog.ts",
+        file: "packages/client-subject-projection/src/legacy/catalog.ts",
         line: 3,
         message: "Client Subject Projection implementation must not import runtime or protocol module "
           + "\"oidc-provider/lib/helpers\"; depend on its injected facts and safety ports.",
@@ -352,7 +352,7 @@ describe("repository architecture guard", () => {
 
   test("maps every app and Gateway workspace package to its production owner", () => {
     const repoRoot = createFixtureRepository({
-      "packages/client-subject-projection/src/catalog.ts": [
+      "packages/client-subject-projection/src/legacy/catalog.ts": [
         "import \"@iam/admin/routes/client\";",
         "import \"@iam/admin-api/routes/client\";",
         "import \"@iam/api\";",
@@ -367,53 +367,53 @@ describe("repository architecture guard", () => {
     expect(analyzeRepositoryArchitecture(repoRoot)).toEqual([
       {
         ruleId: "client-subject-projection-owner",
-        file: "packages/client-subject-projection/src/catalog.ts",
+        file: "packages/client-subject-projection/src/custom-sso.ts",
+        line: 1,
+        message: "Custom SSO wire adapter must not import facts persistence, configuration, runtime, "
+          + "or transport module \"@iam/gateway-apisix/planner\"; "
+          + "depend only on the root public Client Subject Projection interface.",
+      },
+      {
+        ruleId: "client-subject-projection-owner",
+        file: "packages/client-subject-projection/src/legacy/catalog.ts",
         line: 1,
         message: "Client Subject Projection implementation must not import runtime or protocol module "
           + "\"@iam/admin/routes/client\"; depend on its injected facts and safety ports.",
       },
       {
         ruleId: "client-subject-projection-owner",
-        file: "packages/client-subject-projection/src/catalog.ts",
+        file: "packages/client-subject-projection/src/legacy/catalog.ts",
         line: 2,
         message: "Client Subject Projection implementation must not import runtime or protocol module "
           + "\"@iam/admin-api/routes/client\"; depend on its injected facts and safety ports.",
       },
       {
         ruleId: "client-subject-projection-owner",
-        file: "packages/client-subject-projection/src/catalog.ts",
+        file: "packages/client-subject-projection/src/legacy/catalog.ts",
         line: 3,
         message: "Client Subject Projection implementation must not import runtime or protocol module "
           + "\"@iam/api\"; depend on its injected facts and safety ports.",
       },
       {
         ruleId: "client-subject-projection-owner",
-        file: "packages/client-subject-projection/src/catalog.ts",
+        file: "packages/client-subject-projection/src/legacy/catalog.ts",
         line: 4,
         message: "Client Subject Projection implementation must not import runtime or protocol module "
           + "\"@iam/oidc-provider/session\"; depend on its injected facts and safety ports.",
       },
       {
         ruleId: "client-subject-projection-owner",
-        file: "packages/client-subject-projection/src/catalog.ts",
+        file: "packages/client-subject-projection/src/legacy/catalog.ts",
         line: 5,
         message: "Client Subject Projection implementation must not import runtime or protocol module "
           + "\"@iam/sso/pages/login\"; depend on its injected facts and safety ports.",
       },
       {
         ruleId: "client-subject-projection-owner",
-        file: "packages/client-subject-projection/src/catalog.ts",
+        file: "packages/client-subject-projection/src/legacy/catalog.ts",
         line: 6,
         message: "Client Subject Projection implementation must not import runtime or protocol module "
           + "\"@iam/worker/queues\"; depend on its injected facts and safety ports.",
-      },
-      {
-        ruleId: "client-subject-projection-owner",
-        file: "packages/client-subject-projection/src/custom-sso.ts",
-        line: 1,
-        message: "Custom SSO wire adapter must not import facts persistence, configuration, runtime, "
-          + "or transport module \"@iam/gateway-apisix/planner\"; "
-          + "depend only on the root public Client Subject Projection interface.",
       },
     ]);
   });
@@ -448,7 +448,7 @@ describe("repository architecture guard", () => {
 
   test("normalizes canonical self-imports before enforcing the Projection protocol edge", () => {
     const repoRoot = createFixtureRepository({
-      "packages/client-subject-projection/src/internal/client-subject-projection.ts":
+      "packages/client-subject-projection/src/legacy/client-subject-projection.ts":
         "import type { CustomSsoSubjectProjectionV1 } "
         + "from \"@iam/client-subject-projection/custom-sso\";",
     });
@@ -456,7 +456,7 @@ describe("repository architecture guard", () => {
     expect(analyzeRepositoryArchitecture(repoRoot)).toEqual([
       {
         ruleId: "client-subject-projection-owner",
-        file: "packages/client-subject-projection/src/internal/client-subject-projection.ts",
+        file: "packages/client-subject-projection/src/legacy/client-subject-projection.ts",
         line: 1,
         message: "Client Subject Projection implementation must not import runtime or protocol module "
           + "\"@iam/client-subject-projection/custom-sso\"; "
@@ -484,7 +484,7 @@ describe("repository architecture guard", () => {
 
   test("keeps Projection implementation protocol-neutral and its wire adapter behind the public interface", () => {
     const repoRoot = createFixtureRepository({
-      "packages/client-subject-projection/src/internal/client-subject-projection.ts": [
+      "packages/client-subject-projection/src/legacy/client-subject-projection.ts": [
         "import type { Context } from \"hono\";",
         "import type { UserProfileQuery } from \"@iam/user-profile-read-model/query\";",
         "import type { CustomSsoSubjectProjectionV1 } from \"../custom-sso.ts\";",
@@ -504,21 +504,21 @@ describe("repository architecture guard", () => {
       },
       {
         ruleId: "client-subject-projection-owner",
-        file: "packages/client-subject-projection/src/internal/client-subject-projection.ts",
+        file: "packages/client-subject-projection/src/legacy/client-subject-projection.ts",
         line: 1,
         message: "Client Subject Projection implementation must not import runtime or protocol module \"hono\"; "
           + "depend on its injected facts and safety ports.",
       },
       {
         ruleId: "client-subject-projection-owner",
-        file: "packages/client-subject-projection/src/internal/client-subject-projection.ts",
+        file: "packages/client-subject-projection/src/legacy/client-subject-projection.ts",
         line: 2,
         message: "Client Subject Projection implementation must not import runtime or protocol module "
           + "\"@iam/user-profile-read-model/query\"; depend on its injected facts and safety ports.",
       },
       {
         ruleId: "client-subject-projection-owner",
-        file: "packages/client-subject-projection/src/internal/client-subject-projection.ts",
+        file: "packages/client-subject-projection/src/legacy/client-subject-projection.ts",
         line: 3,
         message: "Client Subject Projection implementation must not import runtime or protocol module "
           + "\"../custom-sso.ts\"; depend on its injected facts and safety ports.",

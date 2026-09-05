@@ -1,10 +1,10 @@
 import type { CustomSsoClientConfig } from "@iam/db/schema";
-import type { SubjectProjectionCutoverClientRecord } from "@worker/commands/subject-projection-client-cutover";
+import type { SubjectProjectionCutoverClientRecord } from "@worker/commands/subject-projection/subject-projection-client-cutover";
 import { CustomSsoClientMode, SubjectClaim } from "@iam/contracts";
 import {
   createSubjectProjectionClientCutover,
-} from "@worker/commands/subject-projection-client-cutover";
-import { SubjectProjectionCutoverManifestSchema } from "@worker/commands/subject-projection-cutover.manifest";
+} from "@worker/commands/subject-projection/subject-projection-client-cutover";
+import { SubjectProjectionCutoverManifestSchema } from "@worker/commands/subject-projection/subject-projection-cutover.manifest";
 import { describe, expect, mock, test } from "bun:test";
 
 const gatewayConfig: CustomSsoClientConfig = {

@@ -2,7 +2,7 @@ import type { DbClient } from "@iam/db";
 import type { Redis } from "ioredis";
 import type { OidcProviderEnv } from "../../env.ts";
 import type { OidcLogger } from "../../lib/logger.ts";
-import type { OidcClaimsSnapshot } from "../../provider/claims-snapshot.ts";
+import type { OidcClaimsSnapshot } from "../../provider/claims/claims-snapshot.ts";
 import type { SigningKey } from "../../security/signing-keys.ts";
 import type { OidcProviderRepositories } from "../repositories/index.ts";
 import type { OidcProviderSecurity } from "../security/index.ts";
@@ -20,7 +20,7 @@ import { createOidcClaimsAdapter } from "../../provider/claims.ts";
 import {
   createOidcClientTrafficGate,
   registerOidcClientTrafficGate,
-} from "../../provider/client-traffic-gate.ts";
+} from "../../provider/client/client-traffic-gate.ts";
 import { createOidcProvider } from "../../provider/create-provider.ts";
 import { createOidcAdapterFactory } from "../../storage/redis-adapter.ts";
 

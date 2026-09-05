@@ -11,7 +11,7 @@ import {
   createOpaqueValue,
   secureStringEqual,
 } from "../../src/interaction/return-handle.ts";
-import { createOidcClientTrafficGate } from "../../src/provider/client-traffic-gate.ts";
+import { createOidcClientTrafficGate } from "../../src/provider/client/client-traffic-gate.ts";
 
 describe("oIDC login return handle", () => {
   it("creates opaque browser binding values", () => {

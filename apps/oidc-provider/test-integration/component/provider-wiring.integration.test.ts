@@ -1,7 +1,7 @@
 import type Provider from "oidc-provider";
 import { describe, expect, it } from "vitest";
 import { createOidcProviderSecurity } from "../../src/composition/security/index.ts";
-import { registerClientAuthentication } from "../../src/provider/client-auth.ts";
+import { registerClientAuthentication } from "../../src/provider/client/client-auth.ts";
 import { registerProtocolModelPayloadExtensions } from "../../src/provider/protocol-models.ts";
 
 describe("oIDC provider wiring", () => {

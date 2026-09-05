@@ -1,15 +1,15 @@
 import type { db as database } from "@iam/db";
-import type { createSubjectFactsCacheRecord } from "../../src/subject-facts-cache";
-import type { PublishedUserProfile } from "../../src/user-profile.schema";
+import type { PublishedUserProfile } from "../../src/schema/user-profile.schema";
+import type { createSubjectFactsCacheRecord } from "../../src/subject-facts/subject-facts-cache";
 import {
   UserProfileDirtyStatus,
   UserStatus,
   UserType,
 } from "@iam/contracts";
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:test";
-import { createSubjectProjectionCutoverBackfill } from "../../src/subject-projection-cutover-backfill";
-import { createSubjectProjectionCutoverVerifier } from "../../src/subject-projection-cutover-verifier";
-import { createSubjectProjectionCutoverRepository } from "../../src/subject-projection-cutover.repository";
+import { createSubjectProjectionCutoverBackfill } from "../../src/cutover/subject-projection-cutover-backfill";
+import { createSubjectProjectionCutoverVerifier } from "../../src/cutover/subject-projection-cutover-verifier";
+import { createSubjectProjectionCutoverRepository } from "../../src/cutover/subject-projection-cutover.repository";
 import { createPostgresTestHarness } from "./postgres-test-harness";
 
 const NOW = new Date("2026-08-01T06:00:00.000Z");

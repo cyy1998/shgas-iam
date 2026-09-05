@@ -1,5 +1,5 @@
 import type { IncomingMessage } from "node:http";
-import type { OidcClientRuntimeMetadata } from "../provider/client-runtime-metadata.ts";
+import type { OidcClientRuntimeMetadata } from "../provider/client/client-runtime-metadata.ts";
 import type { ProviderSessionBinding } from "../session/provider-session.ts";
 import type {
   GlobalSessionInspection,

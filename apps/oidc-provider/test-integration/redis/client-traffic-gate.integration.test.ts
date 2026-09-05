@@ -10,7 +10,7 @@ import {
 } from "@iam/api-core/client-traffic-gate";
 import { ClientStatus } from "@iam/contracts";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { createOidcClientTrafficGate } from "../../src/provider/client-traffic-gate.ts";
+import { createOidcClientTrafficGate } from "../../src/provider/client/client-traffic-gate.ts";
 import { createOidcProviderRedisTestHarness } from "./redis-test-harness.ts";
 
 describe("oIDC Client Traffic Gate Redis integration", () => {

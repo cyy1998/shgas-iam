@@ -1,6 +1,6 @@
 import type { UserProfile } from "@iam/db/schema";
 import type { UserProfileQueryRepositoryPort } from "../../src/query";
-import type { UserProfileQueryRepository } from "../../src/user-profile-query.repository";
+import type { UserProfileQueryRepository } from "../../src/query/user-profile-query.repository";
 import {
   EmploymentStatus,
   OrganizationLevel,
@@ -12,11 +12,11 @@ import {
 } from "@iam/contracts";
 import { UserNotFoundError } from "@iam/domain/user";
 import { describe, expect, mock, test } from "bun:test";
-import { USER_PROFILE_SCHEMA_VERSION } from "../../src/profile.schema";
 import {
   createUserProfileQueryService,
 } from "../../src/query";
-import { createUserProfileQueryRepository } from "../../src/user-profile-query.repository";
+import { createUserProfileQueryRepository } from "../../src/query/user-profile-query.repository";
+import { USER_PROFILE_SCHEMA_VERSION } from "../../src/schema/profile.schema";
 
 const now = new Date("2026-06-30T08:00:00.000Z");
 
@@ -225,7 +225,7 @@ describe("UserProfileQueryService", () => {
   });
 
   test("validates dirty status and reason schemas used by profile DTOs", async () => {
-    const schema = await import("../../src/user-profile.schema");
+    const schema = await import("../../src/schema/user-profile.schema");
 
     expect(schema.UserProfileDirtyStatusDtoSchema.parse(UserProfileDirtyStatus.Pending)).toBe(
       UserProfileDirtyStatus.Pending,

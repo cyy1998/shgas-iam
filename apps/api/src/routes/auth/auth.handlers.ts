@@ -1,7 +1,7 @@
 import type { LoggerPort } from "@api/composition/runtime";
 import type { LoginCredentialParser } from "@api/services/authentication/login-credential.parser";
 import type { ClientService } from "@api/services/client/client.service";
-import type { CustomSsoTrafficGate } from "@api/services/sso/custom-sso-traffic-gate.type";
+import type { CustomSsoTrafficGate } from "@api/services/sso/traffic-gate/custom-sso-traffic-gate.type";
 import type { LoginWithMobileUseCase } from "@api/use-cases/authentication/login-with-mobile/login-with-mobile.use-case";
 import type { LoginWithPasswordUseCase } from "@api/use-cases/authentication/login-with-password/login-with-password.use-case";
 import type { AuthRouteHandler } from "./auth.type";
@@ -12,8 +12,8 @@ import { getApiAuditRequestContext } from "@api/services/audit/audit.context";
 import {
   customSsoLocalSessionCookieName,
   decodeCustomSsoClientCode,
-} from "@api/services/sso/custom-sso-client-code.transport";
-import { expireCustomSsoCookies } from "@api/services/sso/custom-sso-cookie";
+} from "@api/services/sso/transport/custom-sso-client-code.transport";
+import { expireCustomSsoCookies } from "@api/services/sso/transport/custom-sso-cookie";
 import * as HttpStatusCodes from "@iam/api-core/core/http-status-codes";
 import { AuthzUnauthorizedError } from "@iam/api-core/errors/AuthzUnauthorizedError";
 import * as resp from "@iam/api-core/http";

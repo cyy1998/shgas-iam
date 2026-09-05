@@ -10,7 +10,7 @@ import type {
   AdapterTokenRegistry,
 } from "./redis-adapter.port.ts";
 import { normalizeOidcProtocolScopes } from "../protocol/scopes.ts";
-import { OidcScopesSchema } from "../provider/claims-snapshot.ts";
+import { OidcScopesSchema } from "../provider/claims/claims-snapshot.ts";
 
 export interface RedisOidcAdapterDeps<TClaimsSnapshot = unknown> {
   claims: AdapterClaimsSnapshotIssuer<TClaimsSnapshot>;

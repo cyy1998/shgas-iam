@@ -1,10 +1,10 @@
-import type { PublishedProfile } from "../../src/profile.schema";
+import type { PublishedProfile } from "../../src/schema/profile.schema";
 import { UserStatus, UserType } from "@iam/contracts";
 import { describe, expect, mock, test } from "bun:test";
 import {
   createUserProfilePostgresGate,
   createUserProfileRedisAccessGate,
-} from "../../src/user-profile-readiness";
+} from "../../src/readiness/user-profile-readiness";
 
 const observedAt = new Date("2026-08-22T04:00:00.000Z");
 

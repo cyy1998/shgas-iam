@@ -1,4 +1,4 @@
-import type { SubjectFactsCacheRecordV1 } from "../../src/subject-facts-cache";
+import type { SubjectFactsCacheRecordV1 } from "../../src/subject-facts/subject-facts-cache";
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { createRedisTestHarness } from "./redis-test-harness";
 

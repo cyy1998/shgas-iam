@@ -1,6 +1,6 @@
 import {
   CustomSsoTrafficGateUnavailableError,
-} from "@api/services/sso/custom-sso-traffic-gate";
+} from "@api/services/sso/traffic-gate/custom-sso-traffic-gate";
 import { SERVICE_UNAVAILABLE } from "@iam/api-core/core/http-status-codes";
 import { AuthzMaintenanceError, CustomError } from "@iam/api-core/errors";
 import { SubjectAccessUnavailableError } from "@iam/api-core/subject-access";

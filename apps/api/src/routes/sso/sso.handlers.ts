@@ -14,8 +14,8 @@ import { getApiAuditRequestContext } from "@api/services/audit/audit.context";
 import {
   customSsoLocalSessionCookieName,
   decodeCustomSsoClientCode,
-} from "@api/services/sso/custom-sso-client-code.transport";
-import { expireCustomSsoCookies } from "@api/services/sso/custom-sso-cookie";
+} from "@api/services/sso/transport/custom-sso-client-code.transport";
+import { expireCustomSsoCookies } from "@api/services/sso/transport/custom-sso-cookie";
 import * as HttpStatusCodes from "@iam/api-core/core/http-status-codes";
 import { BadRequestError } from "@iam/api-core/errors/BadRequestError";
 import { InvalidSsoClientError } from "@iam/api-core/errors/InvalidSsoClientError";

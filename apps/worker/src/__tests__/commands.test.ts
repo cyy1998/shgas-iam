@@ -1,9 +1,9 @@
 import { describe, expect, mock, test } from "bun:test";
-import { runUserProfileBackfillCommand } from "../commands/user-profile-backfill";
+import { runUserProfileBackfillCommand } from "../commands/user-profile/user-profile-backfill";
 import {
   runSubjectAccessRepairCommand,
   runUserProfileRepairCommand,
-} from "../commands/user-profile-repair";
+} from "../commands/user-profile/user-profile-repair";
 
 describe("user-profile commands", () => {
   test("backfill command delegates to worker maintenance", async () => {

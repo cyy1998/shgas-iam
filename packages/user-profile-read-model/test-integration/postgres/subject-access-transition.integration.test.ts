@@ -4,7 +4,7 @@ import {
   createSubjectAccessTransitionRecoveryAuthority,
   createSubjectAccessTransitionRepository,
   SubjectAccessTransitionOwnershipError,
-} from "../../src/subject-access-transition.repository";
+} from "../../src/subject-access/subject-access-transition.repository";
 import { createPostgresTestHarness } from "./postgres-test-harness";
 
 const SUBJECT_IDENTIFIER = "11111111-1111-4111-8111-111111111111";

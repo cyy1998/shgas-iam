@@ -72,6 +72,21 @@
 更详细的 package ownership、公开 exports、数据库和 transaction 规则见
 [共享契约与数据库](contracts-and-database.md)。
 
+### 密集模块的内部目录
+
+下列目录按已有职责归组，公开 package exports 与命令名称保持稳定；定位内部实现时沿入口进入对应目录，
+不跨 package 直接引用内部文件。
+
+| 模块 | 内部职责目录 |
+|---|---|
+| `packages/user-profile-read-model/src` | `invalidation/`：影响分析与 dirty/job；`build/`：加载与文档构建；`publication/`：行转换与原子发布；`query/`：查询与 Filter；`schema/`：文档契约；`subject-facts/`：缓存、读写与观测；`subject-access/`：authority 与 transition repositories；`worker/`：重建与维护装配；`readiness/`：版本无关 gate；`cutover/`：切换工具。根层保留六个公开入口文件。 |
+| `packages/client-subject-projection/src` | `internal/`：当前 V2 实现；`legacy/`：旧 catalog、projection、wire 与 maintenance；`testing/`：演练 seed 和测试 helper。公开入口与共享错误留在根层。 |
+| `packages/api-core/src/session/kernel` | `state/`：模型、结果与时间；`storage/`：存储、key、Lua 与状态变更；`security/`：HMAC/token；`cleanup/`：清理。facade、配置和公开入口留在根层。 |
+| `packages/api-core/src/subject-access` | `storage/`：store 与 Redis adapter；`adapters/`：HTTP、Session validator 和结果转换；`recovery/`：bootstrap、repair 与 transition recovery。在线 barrier/lifecycle、模型、错误与公开入口留在根层。 |
+| `apps/api/src/services/sso` | `subject-delivery/`：Subject 交付；`transport/`：Cookie、请求/schema、安全和 OpenAPI helper；`traffic-gate/`：流量 gate。redirect validator 留在根层。 |
+| `apps/oidc-provider/src/provider` | `claims/`：claims port、snapshot 与 contract；`client/`：Client auth、runtime metadata 与 Traffic Gate。`claims.ts` 和 provider 装配、生命周期文件留在根层。 |
+| `apps/worker/src/commands` | `user-profile/`、`client-runtime/`、`client-protocol/`、`subject-projection/`：对应命令族与其 helper/repository。Employment verifier 留在根层。 |
+
 ## Root-owned Full-system E2E Workspace
 
 | 路径 | 当前职责与边界 |

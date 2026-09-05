@@ -1,7 +1,7 @@
-import type { PublishedUserProfile } from "../../src/user-profile.schema";
+import type { PublishedUserProfile } from "../../src/schema/user-profile.schema";
 import { UserStatus, UserType } from "@iam/contracts";
 import { describe, expect, mock, test } from "bun:test";
-import { createSubjectProjectionCutoverVerifier } from "../../src/subject-projection-cutover-verifier";
+import { createSubjectProjectionCutoverVerifier } from "../../src/cutover/subject-projection-cutover-verifier";
 
 const verifiedAt = new Date("2026-08-01T04:00:00.000Z");
 const enabledProfile = profile(1, "3", UserStatus.Enable, false);

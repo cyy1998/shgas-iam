@@ -1,6 +1,6 @@
 import {
   CustomSsoSubjectProjectionV2Schema,
-} from "@api/services/sso/custom-sso-subject.schema";
+} from "@api/services/sso/transport/custom-sso-subject.schema";
 import { z } from "@hono/zod-openapi";
 import { LoginPageGuardDecision } from "@iam/contracts";
 

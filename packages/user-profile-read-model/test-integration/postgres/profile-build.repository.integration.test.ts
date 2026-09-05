@@ -17,7 +17,7 @@ import {
 } from "@iam/db/schema";
 import { createOrganizationResponsibilityResolver } from "@iam/organization-responsibility-resolution";
 import { afterAll, beforeAll, describe, expect, mock, test } from "bun:test";
-import { createProfileBuildRepository } from "../../src/profile-build.repository";
+import { createProfileBuildRepository } from "../../src/build/profile-build.repository";
 import { createPostgresTestHarness } from "./postgres-test-harness";
 
 const at = new Date("2026-08-20T12:00:00.000Z");

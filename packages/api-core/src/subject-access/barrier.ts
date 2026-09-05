@@ -5,7 +5,7 @@ import type {
 import type {
   SubjectAccessAtomicStore,
   SubjectAccessRepairLease,
-} from "./store";
+} from "./storage/store";
 import {
   SubjectAccessBeginPendingError,
   SubjectAccessDisabledError,

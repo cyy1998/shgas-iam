@@ -1,10 +1,10 @@
 import type { RebuildUserProfileJobPayload, UserProfileJobName } from "@iam/contracts";
 import type { JobQueue } from "@iam/jobs";
-import type { UserProfileRebuildJobQueuePort } from "../../src/user-profile-job.producer";
+import type { UserProfileRebuildJobQueuePort } from "../../src/invalidation/user-profile-job.producer";
 import { UserProfileDirtyReason } from "@iam/contracts";
 import { describe, expect, mock, test } from "bun:test";
+import { createUserProfileJobProducer } from "../../src/invalidation/user-profile-job.producer";
 import * as producerPublicSurface from "../../src/producer";
-import { createUserProfileJobProducer } from "../../src/user-profile-job.producer";
 
 type Assert<T extends true> = T;
 type _BullMqQueueSatisfiesProducerPort = Assert<

@@ -1,6 +1,6 @@
 import {
   createCustomSsoUnavailableResponse,
-} from "@api/services/sso/custom-sso-retryable.openapi";
+} from "@api/services/sso/transport/custom-sso-retryable.openapi";
 import { createRoute, z } from "@hono/zod-openapi";
 import * as HttpStatusCodes from "@iam/api-core/core/http-status-codes";
 import { commonErrorResponses } from "@iam/api-core/core/openapi/helpers/common-error-responses";

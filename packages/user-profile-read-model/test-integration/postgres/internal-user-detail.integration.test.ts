@@ -2,8 +2,8 @@ import type { PostgresTestHarness } from "./postgres-test-harness";
 import { ApiErrorCode, UserStatus, UserType } from "@iam/contracts";
 import { userProfiles } from "@iam/db/schema";
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:test";
-import { createInternalUserProfileQueryRepository } from "../../src/internal-user-query.repository";
-import { createInternalUserProfileQueryService } from "../../src/internal-user-query.service";
+import { createInternalUserProfileQueryRepository } from "../../src/query/internal-user-query.repository";
+import { createInternalUserProfileQueryService } from "../../src/query/internal-user-query.service";
 import { createPostgresTestHarness } from "./postgres-test-harness";
 
 const now = new Date("2026-08-22T12:00:00.000Z");

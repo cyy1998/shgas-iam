@@ -1,5 +1,5 @@
 import { describe, expect, mock, test } from "bun:test";
-import { createSubjectAccessBootstrap } from "../../src/subject-access/bootstrap";
+import { createSubjectAccessBootstrap } from "../../src/subject-access/recovery/bootstrap";
 
 const subjects = [
   "00000000-0000-4000-8000-000000000001",

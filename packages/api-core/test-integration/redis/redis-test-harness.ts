@@ -9,7 +9,7 @@ import type {
   SubjectAccessBarrier,
   SubjectAccessBootstrap,
 } from "../../src/subject-access";
-import type { SubjectAccessAtomicStore } from "../../src/subject-access/store";
+import type { SubjectAccessAtomicStore } from "../../src/subject-access/storage/store";
 import { randomUUID } from "node:crypto";
 import Redis from "ioredis";
 import {

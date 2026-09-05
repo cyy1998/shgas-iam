@@ -11,7 +11,7 @@ import type { AdapterPayload } from "oidc-provider";
 import type { ResolvedGlobalSession } from "../interaction/global-session.ts";
 import type { OidcReturnHandlePayload } from "../interaction/return-handle.ts";
 import type { OidcLogger } from "../lib/logger.ts";
-import type { OidcClientRuntimeMetadata } from "../provider/client-runtime-metadata.ts";
+import type { OidcClientRuntimeMetadata } from "../provider/client/client-runtime-metadata.ts";
 import type {
   ProviderSessionBinding,
   ProviderSessionBindingLookup,

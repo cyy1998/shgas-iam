@@ -3,7 +3,7 @@ import type { AdapterPayload } from "oidc-provider";
 import type {
   CreateOidcAuthorizationCodeSnapshotInput,
   OidcClaimsSnapshot,
-} from "../provider/claims-snapshot.ts";
+} from "../provider/claims/claims-snapshot.ts";
 import type {
   ProviderSessionBinding,
   ProviderSessionLifecycleFence,

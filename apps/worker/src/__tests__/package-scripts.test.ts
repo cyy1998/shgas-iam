@@ -14,13 +14,13 @@ describe("maintenance command package scripts", () => {
     ).json() as PackageManifest;
 
     expect(workerManifest.scripts).toMatchObject({
-      "user-profile:backfill": "bun run src/commands/user-profile-backfill.ts",
-      "user-profile:repair": "bun run src/commands/user-profile-repair.ts",
-      "user-profile:verify-postgres": "bun run src/commands/user-profile-readiness.ts verify-postgres",
-      "user-profile:verify-redis": "bun run src/commands/user-profile-readiness.ts verify-redis",
-      "client-protocol:epochs": "bun run src/commands/client-protocol-epoch-maintenance.ts",
-      "client-runtime:repair": "bun run src/commands/client-runtime-repair.ts",
-      "client-runtime:verify": "bun run src/commands/client-runtime-verify.ts",
+      "user-profile:backfill": "bun run src/commands/user-profile/user-profile-backfill.ts",
+      "user-profile:repair": "bun run src/commands/user-profile/user-profile-repair.ts",
+      "user-profile:verify-postgres": "bun run src/commands/user-profile/user-profile-readiness.ts verify-postgres",
+      "user-profile:verify-redis": "bun run src/commands/user-profile/user-profile-readiness.ts verify-redis",
+      "client-protocol:epochs": "bun run src/commands/client-protocol/client-protocol-epoch-maintenance.ts",
+      "client-runtime:repair": "bun run src/commands/client-runtime/client-runtime-repair.ts",
+      "client-runtime:verify": "bun run src/commands/client-runtime/client-runtime-verify.ts",
     });
     expect(Object.keys(workerManifest.scripts ?? {})).not.toEqual(
       expect.arrayContaining([

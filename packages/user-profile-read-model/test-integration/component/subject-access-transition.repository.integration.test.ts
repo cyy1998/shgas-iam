@@ -1,6 +1,6 @@
 import type { SubjectAccessMutationReceipt } from "@iam/api-core/subject-access";
 import { describe, expect, mock, test } from "bun:test";
-import { createSubjectAccessTransitionRepository } from "../../src/subject-access-transition.repository";
+import { createSubjectAccessTransitionRepository } from "../../src/subject-access/subject-access-transition.repository";
 
 const receipt: SubjectAccessMutationReceipt = {
   subjectIdentifier: "00000000-0000-4000-8000-000000000001",

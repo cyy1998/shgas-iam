@@ -3,7 +3,7 @@ import type {
   ClientRuntimeSnapshotReader,
 } from "@iam/api-core/client-runtime-snapshot";
 import type { OidcClientRuntimeDto } from "@iam/domain/client";
-import type { OidcClientRuntimeMetadata } from "../provider/client-runtime-metadata.ts";
+import type { OidcClientRuntimeMetadata } from "../provider/client/client-runtime-metadata.ts";
 import {
   ClientRuntimeSnapshotUnavailableError,
 } from "@iam/api-core/client-runtime-snapshot";
@@ -11,7 +11,7 @@ import { errors } from "oidc-provider";
 import {
   OidcClientRuntimeMetadataSchema,
   toOidcClientRuntimeMetadata,
-} from "../provider/client-runtime-metadata.ts";
+} from "../provider/client/client-runtime-metadata.ts";
 import { isOidcClientAvailable } from "../repositories/availability.ts";
 
 export interface OidcClientRuntimeRecordReader {

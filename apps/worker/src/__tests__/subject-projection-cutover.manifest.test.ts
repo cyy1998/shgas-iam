@@ -1,6 +1,6 @@
 import { CustomSsoClientMode, SubjectClaim } from "@iam/contracts";
 import { describe, expect, test } from "bun:test";
-import { SubjectProjectionCutoverManifestSchema } from "../commands/subject-projection-cutover.manifest";
+import { SubjectProjectionCutoverManifestSchema } from "../commands/subject-projection/subject-projection-cutover.manifest";
 
 const gatewayClient = {
   clientCode: "gateway-portal",

@@ -31,8 +31,8 @@ import {
   startWorkerModules,
 } from "@worker/modules/registry";
 import { sql } from "drizzle-orm";
-import { createClientProtocolEpochCutover } from "../commands/client-protocol-epoch-cutover";
-import { createClientProtocolEpochCutoverRepository } from "../commands/client-protocol-epoch-cutover.repository";
+import { createClientProtocolEpochCutover } from "../commands/client-protocol/client-protocol-epoch-cutover";
+import { createClientProtocolEpochCutoverRepository } from "../commands/client-protocol/client-protocol-epoch-cutover.repository";
 import { closeWorkerCommandResources } from "./command-shutdown";
 import { createWorkerRuntime } from "./runtime";
 import { createWorkerSubjectAccess } from "./subject-access";

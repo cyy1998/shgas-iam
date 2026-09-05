@@ -1,6 +1,6 @@
 import type { ClientProtocolCutoverManifest } from "@iam/domain/client";
 import { AfterCommitRequiredTaskError, createImmediateUnitOfWork } from "@iam/api-core/uow";
-import { createClientProtocolEpochCutover } from "@worker/commands/client-protocol-epoch-cutover";
+import { createClientProtocolEpochCutover } from "@worker/commands/client-protocol/client-protocol-epoch-cutover";
 import { describe, expect, mock, test } from "bun:test";
 
 const manifest: ClientProtocolCutoverManifest = {

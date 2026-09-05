@@ -47,7 +47,7 @@ async function runCommandSmoke(
             args: [
               "--no-env-file",
               "run",
-              "src/commands/user-profile-readiness.ts",
+              "src/commands/user-profile/user-profile-readiness.ts",
               operation,
               "--batch-size",
               "5",

@@ -1,7 +1,7 @@
 import { ApiErrorCode, UserStatus } from "@iam/contracts";
 import { expect, mock, test } from "bun:test";
-import { V3UserProfileSearchRequestSchema } from "../profile-v3-filter";
-import { createV3UserProfileQueryService } from "../profile-v3-query.service";
+import { V3UserProfileSearchRequestSchema } from "../query/profile-v3-filter";
+import { createV3UserProfileQueryService } from "../query/profile-v3-query.service";
 
 test("rejects an extremely deep filter without overflowing the public schema parser", () => {
   let filter: unknown = {

@@ -5,8 +5,8 @@ import {
 import { employments, organizationClosures } from "@iam/db/schema";
 import { roleAssignments } from "@iam/db/schema/role-assignments";
 import { describe, expect, mock, test } from "bun:test";
+import { createUserProfileInvalidationInternal } from "../../src/invalidation/user-profile-invalidation";
 import { createUserProfileJobProducer } from "../../src/producer";
-import { createUserProfileInvalidationInternal } from "../../src/user-profile-invalidation";
 
 const now = new Date("2026-07-25T08:00:00.000Z");
 

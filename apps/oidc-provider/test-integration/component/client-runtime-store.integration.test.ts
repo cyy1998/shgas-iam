@@ -1,6 +1,6 @@
 import type { ClientRuntimeSnapshotReader } from "@iam/api-core/client-runtime-snapshot";
 import type { OidcClientRuntimeDto } from "@iam/domain/client";
-import type { OidcClientRuntimeMetadata } from "../../src/provider/client-runtime-metadata.ts";
+import type { OidcClientRuntimeMetadata } from "../../src/provider/client/client-runtime-metadata.ts";
 import {
   ClientRuntimeSnapshotUnavailableError,
 } from "@iam/api-core/client-runtime-snapshot";

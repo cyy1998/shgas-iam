@@ -9,7 +9,7 @@ import type {
   SubjectAccessRepairLease,
   SubjectAccessRepairRescheduleResult,
   SubjectAccessRollbackResult,
-} from "./store";
+} from "./storage/store";
 import {
   parseSubjectAccessRecord,
   serializeSubjectAccessRecord,
@@ -574,7 +574,7 @@ function leaseMatches(
 
 function recoveryLeaseMatches(
   journal: TransitionJournal | undefined,
-  lease: import("./transition-recovery").SubjectAccessTransitionRecoveryLease,
+  lease: import("./recovery/transition-recovery").SubjectAccessTransitionRecoveryLease,
 ): journal is Extract<TransitionJournal, { status: "mutating" }> {
   return journal?.status === "mutating"
     && journal.transitionId === lease.transitionId

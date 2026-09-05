@@ -3,14 +3,14 @@ import type { OidcProviderEnv } from "../env.ts";
 import type { OidcLogger } from "../lib/logger.ts";
 import type { ClientAuthRateLimiter } from "../security/client-auth-rate-limit.ts";
 import type { SigningKey } from "../security/signing-keys.ts";
-import type { ProviderClientSecretVerifier } from "./client-auth.ts";
-import type { OidcClientTrafficGate } from "./client-traffic-gate.ts";
+import type { ProviderClientSecretVerifier } from "./client/client-auth.ts";
+import type { OidcClientTrafficGate } from "./client/client-traffic-gate.ts";
 import type { ProviderClaimsPort } from "./configuration.ts";
 import type {
   ProviderMiddlewareOidcSessionAdapter,
 } from "./middleware.ts";
 import Provider from "oidc-provider";
-import { registerClientAuthentication } from "./client-auth.ts";
+import { registerClientAuthentication } from "./client/client-auth.ts";
 import { createProviderConfiguration } from "./configuration.ts";
 import { registerProviderEvents } from "./events.ts";
 import { registerProviderMiddleware } from "./middleware.ts";

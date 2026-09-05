@@ -85,7 +85,7 @@ export async function runClientRuntimeMaintenanceProcess(options: {
             args: [
               "--no-env-file",
               "run",
-              `src/commands/${options.entrypoint}`,
+              `src/commands/client-runtime/${options.entrypoint}`,
               ...options.args,
             ],
             cwd: workerRoot,

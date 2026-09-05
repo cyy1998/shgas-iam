@@ -1,4 +1,4 @@
-import type { UserProfileEffectiveRoleResolverPort } from "../../src/user-profile-build.repository";
+import type { UserProfileEffectiveRoleResolverPort } from "../../src/build/user-profile-build.repository";
 import {
   employments,
   organizationClosures,
@@ -8,7 +8,7 @@ import {
   users,
 } from "@iam/db/schema";
 import { describe, expect, mock, test } from "bun:test";
-import { createUserProfileBuildRepository } from "../../src/user-profile-build.repository";
+import { createUserProfileBuildRepository } from "../../src/build/user-profile-build.repository";
 
 interface BuildQueryRows {
   readonly users: readonly unknown[];

@@ -25,7 +25,7 @@ describe("Worker production composition command smoke", () => {
               args: [
                 "--no-env-file",
                 "run",
-                "src/commands/user-profile-repair.ts",
+                "src/commands/user-profile/user-profile-repair.ts",
                 "--subject-access-only",
                 "--limit",
                 "5",

@@ -14,15 +14,15 @@ import type {
 } from "oidc-provider";
 import type {
   OidcUserInfoClaims,
-} from "./claims-contract.ts";
+} from "./claims/claims-contract.ts";
 import type {
   CreateOidcClaimsAdapterDeps,
-} from "./claims.port.ts";
+} from "./claims/claims.port.ts";
 import { SubjectProjectionNotReadyError } from "@iam/client-subject-projection";
 import { OidcScope } from "@iam/contracts";
 import { errors } from "oidc-provider";
 import { normalizeOidcProtocolScopes } from "../protocol/scopes.ts";
-import * as claimsSnapshotContract from "./claims-snapshot.ts";
+import * as claimsSnapshotContract from "./claims/claims-snapshot.ts";
 
 type ProtocolToken = AuthorizationCode | AccessToken;
 type FindAccountToken

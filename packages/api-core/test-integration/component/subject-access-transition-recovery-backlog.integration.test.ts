@@ -1,5 +1,5 @@
 import { describe, expect, mock, test } from "bun:test";
-import { createRedisSubjectAccessStore } from "../../src/subject-access/redis-store";
+import { createRedisSubjectAccessStore } from "../../src/subject-access/storage/redis-store";
 import { createInMemorySubjectAccessStore } from "../../src/subject-access/testing";
 
 const subjectIdentifier = "00000000-0000-4000-8000-000000000001";

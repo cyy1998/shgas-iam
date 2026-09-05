@@ -1,5 +1,5 @@
 import type Redis from "ioredis";
-import type { CreateOidcAuthorizationCodeSnapshotInput } from "../../src/provider/claims-snapshot.ts";
+import type { CreateOidcAuthorizationCodeSnapshotInput } from "../../src/provider/claims/claims-snapshot.ts";
 import type {
   OidcProviderRedisTestHarness,
   OidcProviderRedisTestScope,
@@ -14,7 +14,7 @@ import {
   expect,
   it,
 } from "vitest";
-import { createOidcClientTrafficGate } from "../../src/provider/client-traffic-gate.ts";
+import { createOidcClientTrafficGate } from "../../src/provider/client/client-traffic-gate.ts";
 import { createOidcProtocolObjectStore, RedisOidcAdapter } from "../../src/storage/redis-adapter.ts";
 import { createOidcTokenStore } from "../../src/stores/token.store.ts";
 import { createOidcProviderRedisTestHarness } from "./redis-test-harness.ts";

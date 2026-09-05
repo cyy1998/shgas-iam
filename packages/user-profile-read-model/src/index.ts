@@ -1,15 +1,15 @@
-export * from "./internal-user-query.error";
-export * from "./internal-user-query.port";
+export * from "./query";
+export * from "./query/internal-user-query.error";
+export * from "./query/internal-user-query.port";
 export {
   createInternalUserProfileQueryRepository,
-} from "./internal-user-query.repository";
+} from "./query/internal-user-query.repository";
 export {
   createInternalUserProfileQueryService,
-} from "./internal-user-query.service";
+} from "./query/internal-user-query.service";
 export type {
   InternalUserProfileQueryService,
   InternalUserProfileQueryServiceDeps,
-} from "./internal-user-query.service";
-export * from "./profile.schema";
-export * from "./query";
+} from "./query/internal-user-query.service";
+export * from "./schema/profile.schema";
 export * from "./subject-facts";

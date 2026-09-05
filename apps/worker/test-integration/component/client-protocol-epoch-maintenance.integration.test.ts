@@ -1,5 +1,5 @@
 import type { ClientProtocolCutoverManifest } from "@iam/domain/client";
-import { runClientProtocolEpochCommand } from "@worker/commands/client-protocol-epoch-maintenance";
+import { runClientProtocolEpochCommand } from "@worker/commands/client-protocol/client-protocol-epoch-maintenance";
 import { describe, expect, mock, test } from "bun:test";
 
 const manifest: ClientProtocolCutoverManifest = {

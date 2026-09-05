@@ -1,4 +1,4 @@
-import type { ClientSubjectProjection } from "../legacy-maintenance";
+import type { ClientSubjectProjection } from "../legacy/legacy-maintenance";
 import { SubjectClaim } from "@iam/contracts";
 import { describe, expect, test } from "bun:test";
 import {
@@ -6,10 +6,10 @@ import {
   CustomSsoSubjectProjectionInvariantError,
   CustomSsoSubjectProjectionV1Schema,
   resolveCustomSsoSubjectProjectionV1,
-} from "../legacy-custom-sso";
+} from "../legacy/legacy-custom-sso";
 import {
   SubjectProjectionNotReadyError,
-} from "../legacy-maintenance";
+} from "../legacy/legacy-maintenance";
 
 const subjectIdentifier = "00000000-0000-4000-8000-000000000001";
 

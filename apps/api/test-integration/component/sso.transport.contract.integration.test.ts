@@ -3,7 +3,7 @@ import { createSsoHandlers } from "@api/routes/sso/sso.handlers";
 import { createSsoRoute } from "@api/routes/sso/sso.index";
 import {
   encodeCustomSsoClientCode,
-} from "@api/services/sso/custom-sso-client-code.transport";
+} from "@api/services/sso/transport/custom-sso-client-code.transport";
 import createApp from "@iam/api-core/core/create-app";
 import { defineConfig } from "@iam/api-core/core/define-config";
 import { InvalidRedirectUriError } from "@iam/api-core/errors/InvalidRedirectUriError";

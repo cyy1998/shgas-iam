@@ -5,8 +5,8 @@ import {
   UserType,
 } from "@iam/contracts";
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:test";
-import { createProfilePublicationRepository } from "../../src/profile-publication.repository";
-import { PublishedProfileSchema } from "../../src/profile.schema";
+import { createProfilePublicationRepository } from "../../src/publication/profile-publication.repository";
+import { PublishedProfileSchema } from "../../src/schema/profile.schema";
 import { createPostgresTestHarness } from "./postgres-test-harness";
 
 const now = new Date("2026-08-20T12:00:00.000Z");

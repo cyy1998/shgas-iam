@@ -1,9 +1,9 @@
 import { createAuthHandlers } from "@api/routes/auth/auth.handlers";
+import { createCustomSsoTrafficGate } from "@api/services/sso/traffic-gate/custom-sso-traffic-gate";
 import {
   customSsoLocalSessionCookieName,
   encodeCustomSsoClientCode,
-} from "@api/services/sso/custom-sso-client-code.transport";
-import { createCustomSsoTrafficGate } from "@api/services/sso/custom-sso-traffic-gate";
+} from "@api/services/sso/transport/custom-sso-client-code.transport";
 import * as HttpStatusCodes from "@iam/api-core/core/http-status-codes";
 import { AuthzUnauthorizedError } from "@iam/api-core/errors/AuthzUnauthorizedError";
 import * as resp from "@iam/api-core/http";

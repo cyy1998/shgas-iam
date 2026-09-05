@@ -2,10 +2,10 @@ import type { SubjectClaimName } from "@iam/contracts";
 import type { CustomSsoClientRuntimeDto } from "@iam/domain/client";
 import {
   CustomSsoClientDeliveryUnauthorizedError,
-} from "@api/services/sso/custom-sso-client-delivery.error";
+} from "@api/services/sso/subject-delivery/custom-sso-client-delivery.error";
 import {
   createCustomSsoSubjectDelivery,
-} from "@api/services/sso/custom-sso-subject-delivery";
+} from "@api/services/sso/subject-delivery/custom-sso-subject-delivery";
 import { AuthzUnauthorizedError } from "@iam/api-core/errors/AuthzUnauthorizedError";
 import {
   createClientSubjectProjectionService,

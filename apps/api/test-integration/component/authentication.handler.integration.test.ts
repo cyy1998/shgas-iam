@@ -5,16 +5,16 @@ import {
   mapCustomSsoRetryableError,
 } from "@api/middlewares/custom-sso-retryable.error";
 import {
-  customSsoLocalSessionCookieName,
-  encodeCustomSsoClientCode,
-} from "@api/services/sso/custom-sso-client-code.transport";
-import {
   CustomSsoClientDeliveryUnauthorizedError,
-} from "@api/services/sso/custom-sso-client-delivery.error";
+} from "@api/services/sso/subject-delivery/custom-sso-client-delivery.error";
 import {
   createCustomSsoSubjectDeliveryRequestScope,
-} from "@api/services/sso/custom-sso-subject-delivery-request-scope";
-import { createCustomSsoTrafficGate } from "@api/services/sso/custom-sso-traffic-gate";
+} from "@api/services/sso/subject-delivery/custom-sso-subject-delivery-request-scope";
+import { createCustomSsoTrafficGate } from "@api/services/sso/traffic-gate/custom-sso-traffic-gate";
+import {
+  customSsoLocalSessionCookieName,
+  encodeCustomSsoClientCode,
+} from "@api/services/sso/transport/custom-sso-client-code.transport";
 import { AuthzUnauthorizedError } from "@iam/api-core/errors/AuthzUnauthorizedError";
 import { createErrorHandler } from "@iam/api-core/middlewares/error-handler";
 import {

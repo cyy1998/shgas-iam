@@ -16,7 +16,7 @@ import { createIamInteractionPolicy } from "../../src/interaction/policy.ts";
 import { createOidcClaimsAdapter } from "../../src/provider/claims.ts";
 import {
   registerOidcClientTrafficGate,
-} from "../../src/provider/client-traffic-gate.ts";
+} from "../../src/provider/client/client-traffic-gate.ts";
 import { createProviderConfiguration } from "../../src/provider/configuration.ts";
 import { registerProtocolModelPayloadExtensions } from "../../src/provider/protocol-models.ts";
 import { createOidcAdapterFactory } from "../../src/storage/redis-adapter.ts";

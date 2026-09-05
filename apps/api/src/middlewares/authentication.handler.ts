@@ -2,18 +2,18 @@ import type { ClientService } from "@api/services/client/client.service";
 import type { CustomSsoSessionKernelAdapter } from "@api/services/session/custom-sso-session-kernel.adapter";
 import type {
   CustomSsoSubjectDeliveryRequestScope,
-} from "@api/services/sso/custom-sso-subject-delivery-request-scope";
-import type { CustomSsoTrafficGate } from "@api/services/sso/custom-sso-traffic-gate.type";
+} from "@api/services/sso/subject-delivery/custom-sso-subject-delivery-request-scope";
+import type { CustomSsoTrafficGate } from "@api/services/sso/traffic-gate/custom-sso-traffic-gate.type";
 import type { Context, Next } from "hono";
 import { mapCustomSsoRetryableError } from "@api/middlewares/custom-sso-retryable.error";
 import {
+  CustomSsoClientDeliveryUnauthorizedError,
+} from "@api/services/sso/subject-delivery/custom-sso-client-delivery.error";
+import {
   customSsoLocalSessionCookieName,
   decodeCustomSsoClientCode,
-} from "@api/services/sso/custom-sso-client-code.transport";
-import {
-  CustomSsoClientDeliveryUnauthorizedError,
-} from "@api/services/sso/custom-sso-client-delivery.error";
-import { expireCustomSsoCookies } from "@api/services/sso/custom-sso-cookie";
+} from "@api/services/sso/transport/custom-sso-client-code.transport";
+import { expireCustomSsoCookies } from "@api/services/sso/transport/custom-sso-cookie";
 import { AuthzUnauthorizedError } from "@iam/api-core/errors/AuthzUnauthorizedError";
 import { BadRequestError } from "@iam/api-core/errors/BadRequestError";
 import {

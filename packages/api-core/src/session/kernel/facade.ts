@@ -1,10 +1,6 @@
-import type { SessionKernelArtifactConsumer } from "./artifact-consumption";
-import type { CleanupAdapter, SessionKernelLogger } from "./cleanup";
+import type { CleanupAdapter, SessionKernelLogger } from "./cleanup/cleanup";
 import type { SessionKernelConfig, SessionKernelConfigInput } from "./config";
-import type {
-  CredentialCreateResult,
-  SessionKernelCredentialCreator,
-} from "./credential-creation";
+import type { KernelTokenKind } from "./security/token";
 import type {
   CleanupRef,
   ClientBinding,
@@ -20,34 +16,38 @@ import type {
   RevokeSummary,
   SessionOrigin,
   ValidationResult,
-} from "./model";
-import type { CreateResult, ResolveResult } from "./result";
+} from "./state/model";
+import type { CreateResult, ResolveResult } from "./state/result";
+import type { SessionKernelArtifactConsumer } from "./storage/artifact-consumption";
+import type {
+  CredentialCreateResult,
+  SessionKernelCredentialCreator,
+} from "./storage/credential-creation";
 import type {
   SessionKernelRedis,
   SessionKernelRevocationTransitions,
   StoreIndexWrite,
-} from "./store";
-import type { KernelTokenKind } from "./token";
+} from "./storage/store";
 import { randomUUID } from "node:crypto";
 import { SystemLogEvent } from "../../logger";
-import { createRedisSessionKernelArtifactConsumer } from "./artifact-consumption";
-import { runCleanupRefs } from "./cleanup";
+import { runCleanupRefs } from "./cleanup/cleanup";
 import { normalizeSessionKernelConfig } from "./config";
-import { createRedisSessionKernelCredentialCreator } from "./credential-creation";
-import { createCurrentLookupHash } from "./hmac";
-import { createSessionKernelKeyBuilder, encodeIndexMember, parseIndexMember } from "./keys";
-import { normalizeSessionOrigin, PrincipalRefSchema } from "./model";
-import { counterForKind, createEmptyRevokeSummary, failClosed, mergeRevokeSummary } from "./result";
-import { createRedisSessionKernelRevocationTransitions } from "./revocation-transitions";
-import { SessionKernelStore } from "./store";
+import { createCurrentLookupHash } from "./security/hmac";
+import { generateKernelToken } from "./security/token";
+import { normalizeSessionOrigin, PrincipalRefSchema } from "./state/model";
+import { counterForKind, createEmptyRevokeSummary, failClosed, mergeRevokeSummary } from "./state/result";
 import {
   calculateRenewedPrincipalSessionWindow,
   calculateTombstoneExpiresAt,
   canRenewWithPrincipal,
   clampDerivedExpiresAt,
   createPrincipalSessionWindow,
-} from "./time";
-import { generateKernelToken } from "./token";
+} from "./state/time";
+import { createRedisSessionKernelArtifactConsumer } from "./storage/artifact-consumption";
+import { createRedisSessionKernelCredentialCreator } from "./storage/credential-creation";
+import { createSessionKernelKeyBuilder, encodeIndexMember, parseIndexMember } from "./storage/keys";
+import { createRedisSessionKernelRevocationTransitions } from "./storage/revocation-transitions";
+import { SessionKernelStore } from "./storage/store";
 
 type MaybePromise<T> = Promise<T> | T;
 type PrincipalValidationTarget = PrincipalSession | ClientBinding | IssuedCredential;

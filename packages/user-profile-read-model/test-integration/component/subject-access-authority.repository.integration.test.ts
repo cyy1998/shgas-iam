@@ -8,7 +8,7 @@ import {
   users,
 } from "@iam/db/schema";
 import { describe, expect, mock, test } from "bun:test";
-import { createSubjectAccessAuthorityRepository } from "../../src/subject-access-authority.repository";
+import { createSubjectAccessAuthorityRepository } from "../../src/subject-access/subject-access-authority.repository";
 
 const subjectIdentifier = "46739d0b-cdda-48f5-af1f-1f90e2d81169";
 

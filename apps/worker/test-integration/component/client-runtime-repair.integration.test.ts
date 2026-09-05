@@ -2,7 +2,7 @@ import {
   clientRuntimeRepairExitCode,
   parseClientRuntimeRepairArgs,
   runClientRuntimeRepairCommand,
-} from "@worker/commands/client-runtime-repair";
+} from "@worker/commands/client-runtime/client-runtime-repair";
 import { createClientRuntimeRepairCommandComposition } from "@worker/composition/client-runtime-repair";
 import { describe, expect, mock, test } from "bun:test";
 

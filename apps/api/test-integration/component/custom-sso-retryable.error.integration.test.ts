@@ -1,6 +1,6 @@
 import { mapCustomSsoRetryableError } from "@api/middlewares/custom-sso-retryable.error";
 import { CustomSsoClientRuntimeUnavailableError } from "@api/services/client/custom-sso-client-runtime.reader";
-import { CustomSsoTrafficGateUnavailableError } from "@api/services/sso/custom-sso-traffic-gate";
+import { CustomSsoTrafficGateUnavailableError } from "@api/services/sso/traffic-gate/custom-sso-traffic-gate";
 import { AuthzMaintenanceError } from "@iam/api-core/errors/AuthzMaintenanceError";
 import { createErrorHandler } from "@iam/api-core/middlewares/error-handler";
 import { SubjectProjectionNotReadyError } from "@iam/client-subject-projection";

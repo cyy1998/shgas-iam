@@ -2,7 +2,7 @@ import Redis from "ioredis";
 import {
   cleanupLegacySessionKeys,
   parseLegacySessionCleanupArgs,
-} from "../src/session/kernel/legacy-cleanup";
+} from "../src/session/kernel/cleanup/legacy-cleanup";
 
 const logger = {
   info(data: Record<string, unknown>) {

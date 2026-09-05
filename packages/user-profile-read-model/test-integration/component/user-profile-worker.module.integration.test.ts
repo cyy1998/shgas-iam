@@ -5,7 +5,7 @@ import {
   createUserProfileJobProcessor,
   createUserProfileWorkerModule,
   USER_PROFILE_WORKER_MODULE_KEY,
-} from "../../src/user-profile-worker.module";
+} from "../../src/worker/user-profile-worker.module";
 
 describe("createUserProfileJobProcessor", () => {
   test("parses and delegates the current versioned rebuild job", async () => {

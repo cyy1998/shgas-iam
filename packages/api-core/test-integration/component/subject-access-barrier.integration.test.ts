@@ -1,4 +1,4 @@
-import type { SubjectAccessAtomicStore } from "../../src/subject-access/store";
+import type { SubjectAccessAtomicStore } from "../../src/subject-access/storage/store";
 import { describe, expect, mock, test } from "bun:test";
 import {
   createSubjectAccessBarrier,

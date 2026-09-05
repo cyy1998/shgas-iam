@@ -1,7 +1,7 @@
 import {
   createCustomSsoTrafficGate,
   CustomSsoTrafficGateUnavailableError,
-} from "@api/services/sso/custom-sso-traffic-gate";
+} from "@api/services/sso/traffic-gate/custom-sso-traffic-gate";
 import {
   createClientRuntimeSnapshotModule,
 } from "@iam/api-core/client-runtime-snapshot";

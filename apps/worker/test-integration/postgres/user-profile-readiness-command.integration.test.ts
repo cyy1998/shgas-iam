@@ -37,7 +37,7 @@ describe("User Profile PostgreSQL readiness production command", () => {
           args: [
             "--no-env-file",
             "run",
-            "src/commands/user-profile-readiness.ts",
+            "src/commands/user-profile/user-profile-readiness.ts",
             "verify-postgres",
           ],
           cwd: workerRoot,

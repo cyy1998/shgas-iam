@@ -1,13 +1,8 @@
-import type { UserProfileDirtyRepository } from "../dirty.repository";
-import type { createProfileBuilder } from "../profile-builder.service";
-import type { createProfilePublicationRepository } from "../profile-publication.repository";
-import type { createSubjectFactsRedisPublisher } from "../subject-facts-redis";
-import type { UserProfileJobProducer } from "../user-profile-job.producer";
-import type { UserProfileMaintenanceRepository } from "../user-profile-maintenance.repository";
-import type {
-  createUserProfileJobProcessor,
-  UserProfileJobProcessor,
-} from "../user-profile-worker.module";
+import type { createProfileBuilder } from "../build/profile-builder.service";
+import type { UserProfileDirtyRepository } from "../invalidation/dirty.repository";
+import type { UserProfileJobProducer } from "../invalidation/user-profile-job.producer";
+import type { createProfilePublicationRepository } from "../publication/profile-publication.repository";
+import type { createSubjectFactsRedisPublisher } from "../subject-facts/subject-facts-redis";
 import type {
   SubjectFactsPublisherPort,
   UserProfileMaintenanceDirtyRepositoryPort,
@@ -17,6 +12,11 @@ import type {
   UserProfileRebuildBuilderPort,
   UserProfileRebuildDirtyStorePort,
 } from "../worker";
+import type { UserProfileMaintenanceRepository } from "../worker/user-profile-maintenance.repository";
+import type {
+  createUserProfileJobProcessor,
+  UserProfileJobProcessor,
+} from "../worker/user-profile-worker.module";
 import { describe, test } from "bun:test";
 
 function assertAssignable<Port, _Provider extends Port>() {}

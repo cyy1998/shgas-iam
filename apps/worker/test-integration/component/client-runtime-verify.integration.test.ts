@@ -2,7 +2,7 @@ import {
   clientRuntimeVerifyExitCode,
   parseClientRuntimeVerifyArgs,
   runClientRuntimeVerifyCommand,
-} from "@worker/commands/client-runtime-verify";
+} from "@worker/commands/client-runtime/client-runtime-verify";
 import { createClientRuntimeVerifyCommandRedis } from "@worker/composition/client-runtime-command-redis";
 import { createClientRuntimeVerifyCommandComposition } from "@worker/composition/client-runtime-verify";
 import { describe, expect, mock, test } from "bun:test";

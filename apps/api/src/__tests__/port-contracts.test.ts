@@ -36,10 +36,10 @@ import type {
 } from "@api/services/session/custom-sso-session-kernel.port";
 import type {
   CustomSsoSubjectDelivery,
-} from "@api/services/sso/custom-sso-subject-delivery";
+} from "@api/services/sso/subject-delivery/custom-sso-subject-delivery";
 import type {
   CustomSsoSubjectProjectionPort,
-} from "@api/services/sso/custom-sso-subject-delivery.port";
+} from "@api/services/sso/subject-delivery/custom-sso-subject-delivery.port";
 import type {
   UserDelegationReaderPort,
   UserMobileBindingPort,

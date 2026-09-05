@@ -6,11 +6,11 @@ import { createServer } from "node:http";
 import { exportJWK, generateKeyPair, importJWK, jwtVerify } from "jose";
 import Provider, { interactionPolicy } from "oidc-provider";
 import { afterEach, describe, expect, it } from "vitest";
-import { OidcScopesSchema } from "../../src/provider/claims-snapshot.ts";
 import { createOidcClaimsAdapter } from "../../src/provider/claims.ts";
+import { OidcScopesSchema } from "../../src/provider/claims/claims-snapshot.ts";
 import {
   registerOidcClientTrafficGate,
-} from "../../src/provider/client-traffic-gate.ts";
+} from "../../src/provider/client/client-traffic-gate.ts";
 import { createProviderConfiguration } from "../../src/provider/configuration.ts";
 import { registerProtocolModelPayloadExtensions } from "../../src/provider/protocol-models.ts";
 import { createClientTrafficGateController } from "./support/client-traffic-gate.ts";

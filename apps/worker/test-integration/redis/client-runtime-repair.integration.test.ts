@@ -167,7 +167,7 @@ async function runRepairProcess(clientCode: string) {
             args: [
               "--no-env-file",
               "run",
-              "src/commands/client-runtime-repair.ts",
+              "src/commands/client-runtime/client-runtime-repair.ts",
               "--client-code",
               clientCode,
             ],
@@ -184,7 +184,7 @@ async function runRepairProcess(clientCode: string) {
 
 async function runFullRepairProcess() {
   return await runRuntimeMaintenanceProcess(
-    "src/commands/client-runtime-repair.ts",
+    "src/commands/client-runtime/client-runtime-repair.ts",
     ["--all", "--protocol-traffic-stopped"],
     "Worker Client Runtime full restore repair Redis command",
   );
@@ -192,7 +192,7 @@ async function runFullRepairProcess() {
 
 async function runVerifyProcess(expectedExitCode = 1) {
   return await runRuntimeMaintenanceProcess(
-    "src/commands/client-runtime-verify.ts",
+    "src/commands/client-runtime/client-runtime-verify.ts",
     ["--all", "--protocol-traffic-stopped"],
     "Worker Client Runtime full restore verify Redis command",
     expectedExitCode,

@@ -2,7 +2,7 @@ import { describe, expect, mock, test } from "bun:test";
 import {
   createSubjectFactsRedisInspector,
   createSubjectFactsRedisPublisher,
-} from "../../src/subject-facts-redis.publisher";
+} from "../../src/subject-facts/subject-facts-redis.publisher";
 
 describe("Subject Facts Redis batch publisher", () => {
   test("reports every published and retained-newer record without serializing the batch", async () => {

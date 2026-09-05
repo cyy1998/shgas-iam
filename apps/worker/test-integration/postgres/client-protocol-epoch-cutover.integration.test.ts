@@ -5,8 +5,8 @@ import { clients } from "@iam/db/schema";
 import { ClientProtocolCutoverManifestSchema } from "@iam/domain/client";
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:test";
 import { eq } from "drizzle-orm";
-import { createClientProtocolEpochCutover } from "../../src/commands/client-protocol-epoch-cutover";
-import { createClientProtocolEpochCutoverRepository } from "../../src/commands/client-protocol-epoch-cutover.repository";
+import { createClientProtocolEpochCutover } from "../../src/commands/client-protocol/client-protocol-epoch-cutover";
+import { createClientProtocolEpochCutoverRepository } from "../../src/commands/client-protocol/client-protocol-epoch-cutover.repository";
 import { createWorkerPostgresTestHarness } from "./postgres-test-harness";
 
 const testLogger = {

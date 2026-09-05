@@ -1,7 +1,7 @@
-import type { EmploymentCutoverInventoryRow } from "../../src/employment-cutover-verifier";
+import type { EmploymentCutoverInventoryRow } from "../../src/cutover/employment-cutover-verifier";
 import { EmploymentStatus, OrganizationStatus, PositionStatus } from "@iam/contracts";
 import { describe, expect, test } from "bun:test";
-import { createEmploymentCutoverVerifier } from "../../src/employment-cutover-verifier";
+import { createEmploymentCutoverVerifier } from "../../src/cutover/employment-cutover-verifier";
 
 const NOW = new Date("2026-08-11T12:00:00.000Z");
 

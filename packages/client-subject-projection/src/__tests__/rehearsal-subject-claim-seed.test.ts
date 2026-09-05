@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import {
   assertCanonicalRehearsalSubjectClaimSeed,
   CUSTOM_SSO_REHEARSAL_SUBJECT_CLAIM_SEEDS,
-} from "../testing";
+} from "../testing/testing";
 
 describe("Custom SSO rehearsal Subject Claim seeds", () => {
   test("publishes one canonical seed for each client mode", () => {

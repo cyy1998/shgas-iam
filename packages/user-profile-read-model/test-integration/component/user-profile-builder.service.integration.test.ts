@@ -1,4 +1,4 @@
-import type { UserProfileBuildDataset } from "../../src/user-profile-build.repository";
+import type { UserProfileBuildDataset } from "../../src/build/user-profile-build.repository";
 import {
   EmploymentStatus,
   OrganizationLevel,
@@ -12,8 +12,8 @@ import { describe, expect, mock, test } from "bun:test";
 import {
   createUserProfileBuilder,
   UserProfileEmploymentIntegrityError,
-} from "../../src/user-profile-builder.service";
-import { LEGACY_USER_PROFILE_SCHEMA_VERSION } from "../../src/user-profile.schema";
+} from "../../src/build/user-profile-builder.service";
+import { LEGACY_USER_PROFILE_SCHEMA_VERSION } from "../../src/schema/user-profile.schema";
 
 const now = new Date("2026-06-30T08:00:00.000Z");
 

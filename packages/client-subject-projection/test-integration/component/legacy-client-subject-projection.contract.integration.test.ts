@@ -1,4 +1,4 @@
-import type { SubjectFactsSnapshot } from "../../src/legacy-maintenance";
+import type { SubjectFactsSnapshot } from "../../src/legacy/legacy-maintenance";
 import { describe, expect, test } from "bun:test";
 import {
   createClientSubjectProjectionService,
@@ -6,8 +6,8 @@ import {
   parseSubjectClaimSelection,
   SUBJECT_CLAIM_CATALOG_V1,
   SubjectProjectionNotReadyError,
-} from "../../src/legacy-maintenance";
-import { createInMemoryClientSubjectProjectionService } from "../../src/testing";
+} from "../../src/legacy/legacy-maintenance";
+import { createInMemoryClientSubjectProjectionService } from "../../src/testing/testing";
 
 const subjectIdentifier = "00000000-0000-4000-8000-000000000001";
 

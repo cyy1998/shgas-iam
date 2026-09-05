@@ -1,8 +1,8 @@
 import { UserProfileDirtyReason, UserStatus } from "@iam/contracts";
 import { describe, expect, mock, test } from "bun:test";
-import { createSubjectFactsCacheRecord } from "../../src/profile-cache";
-import { USER_PROFILE_SCHEMA_VERSION } from "../../src/profile.schema";
-import { UserProfileEmploymentIntegrityError } from "../../src/user-profile-builder.service";
+import { UserProfileEmploymentIntegrityError } from "../../src/build/user-profile-builder.service";
+import { USER_PROFILE_SCHEMA_VERSION } from "../../src/schema/profile.schema";
+import { createSubjectFactsCacheRecord } from "../../src/subject-facts/profile-cache";
 import { createUserProfileRebuildProcessor } from "../../src/worker";
 
 const now = new Date("2026-07-25T10:00:00.000Z");

@@ -16,7 +16,7 @@ import {
   users,
 } from "@iam/db/schema";
 import { afterAll, beforeAll, describe, expect, mock, test } from "bun:test";
-import { createUserProfileInvalidation } from "../../src/user-profile-invalidation";
+import { createUserProfileInvalidation } from "../../src/invalidation/user-profile-invalidation";
 import { createPostgresTestHarness } from "./postgres-test-harness";
 
 const now = new Date("2026-08-20T12:00:00.000Z");

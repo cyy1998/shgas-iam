@@ -14,9 +14,9 @@ import {
   test,
 } from "bun:test";
 import { eq } from "drizzle-orm";
-import { createSubjectProjectionClientCutover } from "../../src/commands/subject-projection-client-cutover";
-import { createSubjectProjectionClientCutoverRepository } from "../../src/commands/subject-projection-client-cutover.repository";
-import { SubjectProjectionCutoverManifestSchema } from "../../src/commands/subject-projection-cutover.manifest";
+import { createSubjectProjectionClientCutover } from "../../src/commands/subject-projection/subject-projection-client-cutover";
+import { createSubjectProjectionClientCutoverRepository } from "../../src/commands/subject-projection/subject-projection-client-cutover.repository";
+import { SubjectProjectionCutoverManifestSchema } from "../../src/commands/subject-projection/subject-projection-cutover.manifest";
 import { createWorkerPostgresTestHarness } from "./postgres-test-harness";
 
 let harness: WorkerPostgresTestHarness | undefined;

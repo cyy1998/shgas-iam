@@ -1,11 +1,11 @@
 import type { SubjectFactsCacheRecord } from "../../src/subject-facts";
 import type {
   SubjectFactsCacheRecordV1,
-} from "../../src/subject-facts-cache";
+} from "../../src/subject-facts/subject-facts-cache";
 import type {
   SubjectFactsRedisClient,
   SubjectFactsRedisInspectionClient,
-} from "../../src/subject-facts-redis-publisher.core";
+} from "../../src/subject-facts/subject-facts-redis-publisher.core";
 import { randomUUID } from "node:crypto";
 import process from "node:process";
 import { createSubjectAccessBootstrap } from "@iam/api-core/subject-access";
@@ -15,12 +15,12 @@ import {
   createSubjectFactsRedisPublisher,
   SubjectFactsCacheRecordSchema,
 } from "../../src/subject-facts";
-import { SubjectFactsCacheRecordV1Schema } from "../../src/subject-facts-cache";
+import { SubjectFactsCacheRecordV1Schema } from "../../src/subject-facts/subject-facts-cache";
 import {
   createSubjectFactsRedisCache as createLegacySubjectFactsRedisCache,
   createSubjectFactsRedisInspector as createLegacySubjectFactsRedisInspector,
   createSubjectFactsRedisPublisher as createLegacySubjectFactsRedisPublisher,
-} from "../../src/subject-facts-redis.publisher";
+} from "../../src/subject-facts/subject-facts-redis.publisher";
 
 const TEST_REDIS_URL_ENV = "IAM_USER_PROFILE_TEST_REDIS_URL";
 

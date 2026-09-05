@@ -2,7 +2,7 @@ import type { AuthHandlers } from "./auth.handlers";
 import {
   CUSTOM_SSO_SESSION_AUTHORIZATION_SECURITY_DEFINITION,
   CUSTOM_SSO_SESSION_AUTHORIZATION_SECURITY_SCHEME,
-} from "@api/services/sso/custom-sso-delivery.security";
+} from "@api/services/sso/transport/custom-sso-delivery.security";
 import { createRouter } from "@iam/api-core/core/create-router";
 import * as routes from "./auth.routes";
 

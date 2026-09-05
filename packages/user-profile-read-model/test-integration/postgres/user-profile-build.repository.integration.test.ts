@@ -13,7 +13,7 @@ import {
   users,
 } from "@iam/db/schema";
 import { afterAll, beforeAll, describe, expect, mock, test } from "bun:test";
-import { createUserProfileBuildRepository } from "../../src/user-profile-build.repository";
+import { createUserProfileBuildRepository } from "../../src/build/user-profile-build.repository";
 import { createPostgresTestHarness } from "./postgres-test-harness";
 
 describe("User Profile build repository", () => {
