@@ -80,6 +80,8 @@ assignee 和 GitHub open/closed 状态表达：
   `pnpm verify`。
 - `pnpm verify` 只在准备 merge、release 或用户明确要求时，在最终实现内容上运行一次。它不替代需要显式环境的
   PostgreSQL、浏览器 E2E 或 Gateway 检查。
+- 合入或发布负责人还须完成[最终候选验证](../architecture/testing-architecture.md#默认验证与交付)中独立的 Collection Guard；
+  聚合 Gate 的成功不表示已经执行该检查。
 - Integration 测试所需的 PostgreSQL 和 Redis 由调用方负责。没有专用测试 URL 时，agent 应在 Docker 可用的情况下
   启动本地临时容器，等待服务 ready，再把生成的 URL 传给测试命令；测试命令和 harness 本身不启动 Docker。
 - 临时容器必须使用仓库声明的镜像版本、动态宿主端口和本次任务唯一的 name/label。Agent 创建容器后立即记录准确的

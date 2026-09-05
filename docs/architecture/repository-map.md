@@ -3,6 +3,9 @@
 本仓库是 `pnpm` workspace + Turborepo monorepo。本页用于回答“代码或配置应该去哪里找”，不是逐文件清单。
 当前行为仍以实现、可执行测试和 [Current 文档](../index.md) 为准。
 
+跨 runtime 的请求流、数据权威来源与恢复责任见[系统架构视图](system-architecture.md)，关键约束的证据入口见
+[架构验证归属](architecture-verification.md)。
+
 `pnpm` workspace 包含 `apps/*`、`packages/*`、`gateway` 和 root-owned `e2e/system`；`docker/`、
 `observability/` 等目录属于仓库级运行和运维资产，不是 workspace package。
 

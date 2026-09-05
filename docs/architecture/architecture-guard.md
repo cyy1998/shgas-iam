@@ -8,6 +8,8 @@ closure，帮助维护者尽早发现跨 module 的所有权回退。
 `pnpm check:architecture` 是唯一的静态架构入口；它在根目录一次加载受保护的 production source，不进入 package
 普通测试。
 
+当前 source roots、未覆盖范围及其他验证 owner 见[架构验证归属](architecture-verification.md#静态类型与收集验证)。
+
 ## 验证层选择
 
 新增或迁移约束前，先选择能直接观察该事实的验证层：

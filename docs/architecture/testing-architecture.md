@@ -5,6 +5,8 @@
 核心决策见 [ADR-0009](../adr/0009-adopt-canonical-test-collections.md)。Architecture Guard 的规则准入与观察边界见
 [架构守卫规范](architecture-guard.md)；可执行入口见[构建、测试与开发命令](../development/commands.md)。
 
+系统关键约束由哪个 owner 验证、现有代表性测试及其证明范围，见[架构验证归属](architecture-verification.md)。
+
 ## 公开测试语言
 
 仓库只使用 Unit、Integration、E2E 三层。Integration 的六个 sibling profiles 表达资源模型与 harness owner：
@@ -261,6 +263,10 @@ Gate 本身不读取资源配置，不复制 Integration preflight 或 Full-syst
 cleanup，也不把命令名解释为 provider adoption。各 owner command 的资源与 lifecycle 契约见
 [构建、测试与开发命令](../development/commands.md)。
 
+`check:test-collection` 当前不在上述聚合 Gate 中。准备合入或发布时，候选交付负责人必须在同一最终候选上单独运行
+`pnpm check:test-collection` 并记录结果；缺少该结果时不能声称当前测试已完整、唯一收集。执行或解析失败时先修复，
+不能以其他 Gate 成功替代。该检查不加入每次开发内循环；未来若接入聚合 Gate，应同步更新这里的执行归属。
+
 Client Runtime Snapshot 不增加 feature-specific root gate；验收矩阵由发布平台或 release owner 显式调用共享 Module
 Component/Redis、三类 Adapter Component、Admin Component/PostgreSQL/composition rehearsal、Worker Component/Process/Redis 与
 Full-system E2E 的 owner commands。API Core 的真实 Redis contract 证明 Module 的受控 source fact/invalidation；Admin composition
@@ -273,7 +279,7 @@ verify 证据。
 |---|---|
 | 开发内循环 | 当前 Unit/profile、单文件或测试名 |
 | Ticket 实现 | 最高层相关 collection、受影响 package lint/typecheck 与永久 Guard |
-| 准备 merge/release | 最终内容上一次 `pnpm verify`，再按风险显式执行 Integration/Gateway 等检查 |
+| 准备 merge/release | 最终内容上一次 `pnpm verify` 和独立 `pnpm check:test-collection`，再按风险显式执行 Integration/Gateway 等检查 |
 
 2026-08-06 的 Windows 本地候选周期在同一次完整连续流程中依次通过 `pnpm verify` 3/3、全资源 `pnpm verify:ci` 1/1、
 干净 E2E `pnpm verify:release` 1/1，且最终 task-owned 与 exact-project Docker inventory 均为零。Feature 历史中的正式

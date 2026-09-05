@@ -1,0 +1,82 @@
+# 架构验证归属
+
+本文把[系统架构](system-architecture.md)中的关键约束连接到验证 owner、现有入口和证明范围。
+它是代表性证据索引，不是逐文件强制测试矩阵、完整覆盖率报告或本次测试通过记录。
+测试层级、资源预算与执行时机由[测试编排架构](testing-architecture.md)拥有，静态规则准入由
+[架构守卫规范](architecture-guard.md)拥有，命令参数与资源 URL 见[命令入口](../development/commands.md)。
+
+## 谁负责什么
+
+| 责任 | Owner 与完成条件 |
+|---|---|
+| 定义和维护不变量 | 能力所属 app/package 的实现者维护公开接口契约，并为本次行为变化选择直接观察该事实的测试。跨 runtime 变化同时检查各消费方的契约。 |
+| 核对证据是否适用 | 评审者确认测试触及本次变化、使用了正确的真实或替代资源，且结论没有超出断言范围。存在测试文件不等于已经执行，也不等于覆盖全部场景。 |
+| 候选交付验证 | 合入或发布负责人按测试编排契约执行最终候选检查，记录候选、命令、结果和未执行项；有 issue 时记录在对应 issue，否则在交付摘要中说明。 |
+| 真实环境与放流 | 发布负责人取得目标环境配置、readiness、smoke 和适用 runbook 要求的停流、drain、恢复证据。测试命令不代替这些操作，也不提供部署授权。 |
+
+这里的 owner 是维护职责，不表示每个 app 必须有独立团队，也不建立新的审批或 tracker 流程。
+
+## 静态、类型与收集验证
+
+| 要证明的事实 | 入口与 owner | 范围限制 |
+|---|---|---|
+| 稳定依赖方向、owner 路径与 Docker build closure | 根 `pnpm check:architecture`；[analyzer](../../scripts/architecture-guard.ts) 与[公开接口 fixtures](../../scripts/__tests__/architecture-guard.test.ts)。 | 仅检查允许观察模型和受保护 source roots，不能证明业务授权、事务原子性或 runtime wiring。 |
+| Package 公开出口与结构兼容 | 所属 package exports、消费方 `typecheck`，例如 [Admin ports type contract](../../apps/admin-api/src/__tests__/port-contracts.test.ts)。 | Type-only 兼容不证明浏览器运行时可加载，也不证明 DTO 字段裁剪；对应边界见[共享契约](contracts-and-database.md#现存差距与验证)。 |
+| 每个测试候选唯一收集且 root task 可达 | 根 `pnpm check:test-collection`；[collection 入口](../../scripts/check-test-collection.ts)。 | 不读取断言、不推断资源使用；没有执行它时不能从其他 gate 成功推断当前测试均已收集。 |
+| 文档登记、状态日期与本地目标存在 | 根 `pnpm check:docs`；[文档检查实现](../../scripts/check-docs-index.ts)。 | 当前检查 `docs/**/*.md`，不验证语义一致性、根 AGENTS.md 链接或 Markdown 锚点；这些变更须另行核对。 |
+
+Architecture Guard 当前 production source roots 为四个后端 app（API、Admin API、OIDC Provider、Worker）及
+Client Subject Projection、Organization Responsibility Resolution、Role Assignment Resolution、User Profile Read Model 四个包。
+Admin/SSO 前端、`api-core`、`domain`、`contracts`、`db`、`jobs`、Gateway 等源码内部不在该扫描范围；被某条规则识别为
+依赖目标不等于其内部也被扫描。Docker closure 另按 workspace manifests 与 Dockerfile `COPY` 检查。
+改变该覆盖范围时同步维护本说明，不扩张扫描器去推断业务语义。
+
+## 行为、资源与系统验证
+
+下表的 owner 是 workspace 名称；Integration 命令使用
+`pnpm --filter <owner> test:integration:<profile>`，其中 profile 只取表中列出的值。表中链接是现有代表性测试，
+实现者仍需按本次不变量选择或补充断言，不能把跑完所在 package 当作自动覆盖新行为。
+
+| 契约与 owner | 代表性证据 / profile | 能证明什么，不能替代什么 |
+|---|---|---|
+| UnitOfWork / `@iam/api-core` | [UoW contract](../../packages/api-core/test-integration/component/unit-of-work.integration.test.ts)；`component`。 | 提交后的顺序、尝试所有 task、required failure 语义；fake adapter 不证明 PostgreSQL 原子性。 |
+| 业务写入、审计与 invalidation / `@iam/admin-api` | [责任任命事务](../../apps/admin-api/test-integration/postgres/organization-responsibility-assignment.integration.test.ts)、[Client mutation](../../apps/admin-api/test-integration/postgres/client-mutation.integration.test.ts)；`postgres`。 | 真实 PostgreSQL 与 production UoW 的 commit/rollback、提交后失败；被替代的 queue 或 Redis seam 不构成真实投递证据。 |
+| Profile invalidation / publication / `@iam/user-profile-read-model` | [失效归并](../../packages/user-profile-read-model/test-integration/component/user-profile-invalidation.integration.test.ts)用 `component`；[原子发布](../../packages/user-profile-read-model/test-integration/postgres/profile-publication.integration.test.ts)用 `postgres`。 | Source changes 归并、提交后唤醒注册、Profile 与 Dirty Version 同事务发布；不单独证明 BullMQ 已成功处理。 |
+| Facts 单调缓存与授权 freshness / `@iam/user-profile-read-model` | [Redis publisher](../../packages/user-profile-read-model/test-integration/redis/subject-facts-publisher-v3.integration.test.ts)用 `redis`；[Facts reader](../../packages/user-profile-read-model/test-integration/postgres/subject-facts-reader.integration.test.ts)用 `postgres`。 | 版本单调写入、strict v3 与 PostgreSQL Dirty 检查；两类资源测试分别证明各自 seam，不等于完整跨存储时序证明。 |
+| Client Runtime Snapshot / `@iam/api-core`、`@iam/admin-api` | [Snapshot Redis contract](../../packages/api-core/test-integration/redis/client-runtime-snapshot.integration.test.ts)用 API Core `redis`；上面的 Client mutation 用 Admin API `postgres`。 | Late refill、共享 invalidation、repair 和提交后动作分别有 owner；真实 Admin mutation 与三类 Reader 的联合证据还需现有 `client-runtime:hard-cutover-rehearsal`，完整矩阵见 [runbook](../releases/client-runtime-snapshot-hard-cutover.md)。 |
+| Subject Access lifecycle / `@iam/api-core`、`@iam/user-profile-read-model` | [Redis transition/lease/repair](../../packages/api-core/test-integration/redis/subject-access.integration.test.ts)用 API Core `redis`；[durable transition intent](../../packages/user-profile-read-model/test-integration/postgres/subject-access-transition.integration.test.ts)用 Read Model `postgres`。 | 各存储 owner 的原子行为与恢复事实；实际定时调度、恢复 SLO 和持续排空由部署 owner 验收。 |
+| Session Kernel / LoginRestriction / `@iam/api-core` | [Credential contract](../../packages/api-core/test-integration/redis/session-kernel-credential.integration.test.ts)、[LoginRestriction contract](../../packages/api-core/test-integration/redis/login-restriction.integration.test.ts)；`redis`。 | Redis 实时状态、并发和原子清理；不替代 API/OIDC 的协议适配测试，也不保证第三方自有会话退出。 |
+| Admin capability / HR scope / `@iam/admin-api`、`@iam/admin` | [Policy](../../apps/admin-api/test-integration/component/admin-authorization.policy.integration.test.ts)用 Admin API `component`；[请求时 scope](../../apps/admin-api/test-integration/postgres/hr-administration-scope.resolver.integration.test.ts)用 `postgres`；[HR UI](../../apps/admin/test-integration/browser/hr-administration.spec.ts)用 Admin `browser`。 | 后端策略、数据库事实和 UI 各有验证；Browser 的 mocked backend 不能证明服务端拒绝越权，真实联合路径由 Full-system HR journey 补充。 |
+| SSO 登录续接 / `@iam/api`、`@iam/sso` | [Guard use case](../../apps/api/test-integration/component/login-continuation-guard.use-case.integration.test.ts)用 API `component`；[Login Browser](../../apps/sso/test-integration/browser/login.spec.ts)用 SSO `browser`。 | Guard 语义与表单状态；mocked HTTP 不证明真实协议连接或完整第三方登录矩阵。 |
+| Gateway 与进程 lifecycle / `@iam/gateway-apisix`、各后端 app | [Gateway commands](../../gateway/test-integration/component/commands.integration.test.ts)用 Gateway `component`；以 API [process entry](../../apps/api/test-integration/process/entry.integration.test.ts) / [composition entry](../../apps/api/test-integration/composition/entry.integration.test.ts)为例，对应 app 使用 `process` / `composition`。 | Process 观察子进程、readiness 与退出清理；composition 按声明连接真实 adapter/resources。Gateway Component 不证明目标 APISIX routes 已发布或生效。 |
+| 代表性系统旅程 / `@iam/e2e-system` | 根 `pnpm test:e2e`；[Admin](../../e2e/system/admin-custom-sso.spec.ts)、[HR](../../e2e/system/hr-admin-user-management.spec.ts)、[OIDC](../../e2e/system/oidc-pkce.spec.ts)。 | 固定 synthetic 场景中的真实仓库系统协作。Workspace-local journey 是调试入口；不证明生产代理信任、真实外部集成、备份恢复或全部协议场景。 |
+
+## 聚合 Gate 与人工证据
+
+当前[基础 runner](../../scripts/verify.mjs)与[聚合 runner](../../scripts/run-verification-gate.mjs)实际执行：
+
+```text
+verify         = static -> typecheck -> test:unit -> build
+static         = lint -> check:docs -> check:env-names -> check:architecture
+verify:ci      = verify -> test:integration
+verify:release = verify:ci -> test:e2e
+```
+
+三条聚合都没有包含 `check:test-collection`；它由候选交付负责人按
+[最终候选验证要求](testing-architecture.md#默认验证与交付)单独执行并记录。命令名 `verify:ci` 不代表已接入 CI 平台；
+当前 Linux/真实 CI adoption 仍未验收。未配置的自动合入限制不能用本地执行记录代替。
+
+运维 readiness、repair、verify 是操作命令，不属于测试 collection。它们的成功报告只证明自己的检查范围：
+例如 Runtime namespace verify 不证明停流或业务可用；Profile backfill 入队不证明 Profile/Facts 已收敛。
+发布负责人按对应 Current runbook 组合这些报告与人工证据，尤其核对：
+
+- [Gateway](../releases/apisix-gateway-release.md)：生效 route、可信代理、真实 IP、限流与目标 upstream smoke。
+- [Runtime Snapshot](../releases/client-runtime-snapshot-hard-cutover.md)：freeze、旧实例 drain、PONR、namespace repair/verify 与新代 mutation/acquisition smoke。
+- [User Profile v3](../releases/user-profile-v3-hard-cutover.md)：固定 candidate、writer 停止、完整 backfill、PostgreSQL/Redis 两道 gate 与放流条件。
+- [OIDC](../releases/oidc-release-runbook.md)及[观测](../releases/observability-system-logs.md)：目标部署的协议、轮换、采集与查询 smoke。
+
+## 变更时如何维护
+
+新增或改变跨 runtime 能力时，实现者先指认现有权威契约和 owner，明确观察时点、失败路径与恢复责任，再选择最高相关
+公开接口的行为验证及必要资源通道。若现有测试没有观察新不变量，应补验证或明确未证明项，不能以相邻绿色测试代替。
+只有 owner、公开 seam、验证层或关键证明范围变化时才更新本索引；普通内部测试增删不需要扩展成逐文件清单。

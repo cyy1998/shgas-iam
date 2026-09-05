@@ -57,13 +57,15 @@
 | [docs/agents/domain.md](agents/domain.md) | agent-config | Current | 2026-07-16 | 2026-10-31 | Engineering skills 的 single-context domain documentation 消费规则。 |
 | [docs/agents/issue-tracker.md](agents/issue-tracker.md) | agent-config | Current | 2026-08-14 | 2026-10-31 | `cyy1998/shgas-iam` GitHub Issues 的 spec、ticket、跨会话状态与 wayfinding 约定。 |
 | [docs/agents/triage-labels.md](agents/triage-labels.md) | agent-config | Current | 2026-07-16 | 2026-10-31 | Engineering skills 使用的默认 triage 标签映射。 |
-| [docs/agents/workflow.md](agents/workflow.md) | agent-config | Current | 2026-08-14 | 2026-10-31 | Matt skills 的仓库薄适配：GitHub tracker、批量实施子代理、分支、验证、授权和本地合入。 |
-| [docs/architecture/architecture-guard.md](architecture/architecture-guard.md) | architecture | Current | 2026-07-31 | 2026-10-31 | 架构守卫规范的验证层选择、允许观察模型、永久规则准入、封闭目录与复杂度边界。 |
+| [docs/agents/workflow.md](agents/workflow.md) | agent-config | Current | 2026-09-05 | 2026-10-31 | Matt skills 的仓库薄适配：GitHub tracker、批量实施子代理、分支、验证、授权和本地合入；候选交付关联独立 Collection Guard。 |
+| [docs/architecture/architecture-guard.md](architecture/architecture-guard.md) | architecture | Current | 2026-09-05 | 2026-10-31 | 架构守卫规范的验证层选择、允许观察模型、永久规则准入、封闭目录与复杂度边界；覆盖说明链接验证归属。 |
+| [docs/architecture/architecture-verification.md](architecture/architecture-verification.md) | architecture | Current | 2026-09-05 | 2026-10-31 | 系统关键约束的验证 owner、代表性测试、静态覆盖范围、聚合 Gate 与人工发布证据边界。 |
 | [docs/architecture/backend-architecture.md](architecture/backend-architecture.md) | architecture | Current | 2026-09-05 | 2026-10-31 | 后端 runtime ownership、依赖方向、composition/DI、User Profile v3、Client Protocol V2 当前边界、UnitOfWork/afterCommit、关键 deep modules 和分层验证；Custom SSO 签发沿用请求已接受的 Client Snapshot。 |
 | [docs/architecture/contracts-and-database.md](architecture/contracts-and-database.md) | architecture | Current | 2026-09-05 | 2026-10-31 | 共享代码选址、纯规则与后端 DTO 分层、公开接口、建包条件、DTO 字段演进与渐进收敛；保留专用能力包、事务与 Drizzle 契约。 |
 | [docs/architecture/frontend-architecture.md](architecture/frontend-architecture.md) | architecture | Current | 2026-09-05 | 2026-10-31 | Admin/SSO 通用 service、页面状态、路由/capability、登录守卫与渐进收敛规则；具体功能细则由链接的功能文档拥有。 |
 | [docs/architecture/repository-map.md](architecture/repository-map.md) | architecture | Current | 2026-09-05 | 2026-10-31 | monorepo apps/packages、共享 contracts/domain 职责、User Profile v3 read-model、root-owned E2E workspace、基础设施与生成目录边界。 |
-| [docs/architecture/testing-architecture.md](architecture/testing-architecture.md) | architecture | Current | 2026-08-22 | 2026-10-31 | 已实施的 Unit/Integration/E2E canonical collections、六个 Integration profiles、User Profile v3 Worker 证据、永久 Collection Guard、资源预算与默认验证契约。 |
+| [docs/architecture/system-architecture.md](architecture/system-architecture.md) | architecture | Current | 2026-09-05 | 2026-10-31 | 运行时逻辑拓扑、信任与协议边界、数据权威来源、一致性、恢复责任及部署观测边界；链接既有模块契约。 |
+| [docs/architecture/testing-architecture.md](architecture/testing-architecture.md) | architecture | Current | 2026-09-05 | 2026-10-31 | Unit/Integration/E2E canonical collections、资源预算与验证契约；候选交付负责人单独执行 Collection Guard，关键证据链接验证归属。 |
 | [docs/development/backend-implementation.md](development/backend-implementation.md) | development | Current | 2026-07-26 | 2026-10-31 | backend response envelope、OpenAPI status、logger、audit event 和 Architecture Guard 验证分层。 |
 | [docs/development/coding-style.md](development/coding-style.md) | development | Current | 2026-08-07 | 2026-10-31 | TypeScript、formatter 边界、文件命名、React 命名和 import alias 风格约定。 |
 | [docs/development/commands.md](development/commands.md) | development | Current | 2026-09-05 | 2026-10-31 | 聚焦实现、canonical Unit/Integration commands、默认 verify、显式资源 profiles、Architecture Guard、性能与 commit guard 的可执行入口；移除初代切换操作说明，Subject Access repair 包含 PostgreSQL intent 回收。 |

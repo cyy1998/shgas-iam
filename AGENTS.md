@@ -12,12 +12,13 @@
 | 任务触发条件 | 必须读取 |
 |---|---|
 | 定位陌生代码、新增或移动文件、涉及生成目录或 vendored 资源 | [仓库地图](docs/architecture/repository-map.md) |
+| 跨 runtime 设计、调整信任边界、数据权威来源、一致性或恢复责任 | [系统架构视图](docs/architecture/system-architecture.md)、[架构验证归属](docs/architecture/architecture-verification.md) |
 | 理解业务语义、设计功能或修改业务规则 | [CONTEXT.md](CONTEXT.md)、[领域文档规则](docs/agents/domain.md)，并从索引选择该领域已接受的 ADR |
 | 修改源码、测试或工具配置 | [编码风格与命名](docs/development/coding-style.md) |
 | 后端代码或配置，包括协议入口、runtime、composition 与后端共享包 | [后端架构](docs/architecture/backend-architecture.md)、[后端实现约定](docs/development/backend-implementation.md) |
 | Admin/SSO 前端代码或配置，包括页面、请求、路由、权限展示与 Umi runtime | [前端架构](docs/architecture/frontend-architecture.md) |
 | 共享代码选址、package exports、DTO/schema 演进、repository 或数据库 schema/relations/migration | [共享契约与数据库](docs/architecture/contracts-and-database.md)；数据库改动按该文档使用 schema 相关 skill |
-| 新增或修改测试、测试编排，或选择验证通道与资源 | [测试编排架构](docs/architecture/testing-architecture.md) |
+| 新增或修改测试、测试编排，或选择验证通道与资源 | [测试编排架构](docs/architecture/testing-architecture.md)；核对系统约束的证明范围时读[架构验证归属](docs/architecture/architecture-verification.md) |
 | 调整模块依赖边界、公开出口，或新增/修改 Architecture Guard | [架构守卫规范](docs/architecture/architecture-guard.md) |
 | 运行开发、构建、测试或维护命令 | [命令入口](docs/development/commands.md)中的对应通道或 workspace 入口 |
 | Gateway、Docker、observability 配置，或部署、数据切换、运维修复 | [仓库地图](docs/architecture/repository-map.md)，以及索引中覆盖该系统或操作的 Current runbook；执行命令前读完整的适用流程 |
