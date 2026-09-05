@@ -424,8 +424,11 @@ Hook 不运行 lint、typecheck、test、build 或 tracker checker。按改动�
 - Worker：`pnpm --filter @iam/worker <dev|serve|lint|test|test:unit|test:integration:component|test:integration:process|test:integration:postgres|test:integration:redis|typecheck|employment:cutover-verify|user-profile:backfill|user-profile:repair|user-profile:verify-postgres|user-profile:verify-redis|client-protocol:epochs|client-runtime:repair|client-runtime:verify>`
 - Employment 生命周期切换前只读 gate：
   `IAM_WORKER_DATABASE_URL=<target-url> pnpm --filter @iam/worker employment:cutover-verify`
-- 仅处理 Subject Access indexed backlog：
-  `pnpm --filter @iam/worker run user-profile:repair -- --subject-access-only --limit <positive-integer>`
+- Subject Access 恢复：
+  `pnpm --filter @iam/worker run user-profile:repair -- --subject-access-only --limit <positive-integer>`。
+  该模式依次执行 PostgreSQL stale pending transition intent 回收、Redis transition recovery 与 authority repair，
+  不执行 User Profile maintenance。它会更新 PostgreSQL transition intent，不局限于 Redis indexed backlog；所需权限、
+  stale threshold 与调度责任见[Subject Access Barrier](../architecture/backend-architecture.md#subject-access-barrier)。
 - User Profile 全量重建与版本无关 readiness：先运行
   `pnpm --filter @iam/worker user-profile:backfill` 派发既有 versioned rebuild jobs；批量大小通过
   `IAM_WORKER_USER_PROFILE_BACKFILL_BATCH_SIZE=<positive-integer>` 配置。
@@ -437,6 +440,9 @@ Hook 不运行 lint、typecheck、test、build 或 tracker checker。按改动�
   `pnpm --filter @iam/worker client-protocol:epochs -- <dry-run|apply|verify> --manifest <path>`，随后运行
   `pnpm --filter @iam/oidc-provider client-protocol:artifacts -- <dry-run|apply|verify> --manifest <path>`；完整顺序与不可逆边界见
   [Client Protocol V2 epoch 与 artifact 清理](../releases/client-protocol-v2-artifact-cutover.md)。
+  与 Organization Responsibility V2、User Profile v3 协调切换时，遵循
+  [完整 hard-cutover 手册](../releases/organization-responsibility-v2-hard-cutover.md)；当前切换不得运行
+  `session:cleanup-custom-sso-cutover` 或 `session:cleanup-legacy-keys`。
 - 单 Client Runtime repair：
   `pnpm --filter @iam/worker client-runtime:repair -- --client-code <clientCode>`。该 targeted 入口只接受一个由 canonical
   `ClientCodeSchema` 验证的 code；缺失、空值、额外位置参数、`--all` 或 traffic-stopped/full-mode 参数均在创建 Redis
@@ -453,11 +459,6 @@ Hook 不运行 lint、typecheck、test、build 或 tracker checker。按改动�
   正整数 `IAM_WORKER_CLIENT_RUNTIME_MAINTENANCE_TIMEOUT_MS` 收紧 deadline，超时必须输出 failed report、非零退出并完成资源
   shutdown。完整 hard-cutover 顺序见
   [Client Runtime Snapshot hard-cutover 与验收手册](../releases/client-runtime-snapshot-hard-cutover.md)。
-- Custom SSO hard cutover 旧会话清理：
-  `pnpm --filter @iam/api-core session:cleanup-custom-sso-cutover -- --dry-run --batch-size 500`；核对摘要后把
-  `--dry-run` 改为 `--verify`，有残留时必须非零退出；确认门禁有效后改为 `--apply`，完成后再以
-  `--verify` 零退出收尾。
-
 - Admin frontend：`pnpm --filter @iam/admin <dev|build|lint|test|test:unit|test:integration:component|test:integration:browser|typecheck|format>`
 - SSO frontend：`pnpm --filter @iam/sso <dev|build|lint|test|test:unit|test:integration:component|test:integration:browser|typecheck|format>`
 - Database：`pnpm --filter @iam/db <lint|test|test:unit|test:integration:postgres|typecheck|db:push|db:generate|db:migrate|db:check>`
@@ -478,20 +479,3 @@ pnpm --filter @iam/domain test
 pnpm --filter @iam/domain lint
 pnpm --filter @iam/domain typecheck
 ```
-
-Cutover manifest 必须显式列出全部启用中的 legacy Custom SSO client。Independent client 的新 secret 只生成一次，
-`--secret-output` 使用 exclusive create 和 `0600` mode；不得把文件内容或 secret 写入日志。delivery 为 `pending` 时
-client 保持 disabled，operator 完成外部交付后将 manifest 标记为 `confirmed` 并重跑 backfill。若输出文件已创建但 DB
-apply 失败，保留该文件用于审计、改用新的 exclusive 路径重跑，确认旧 secret 未生效后再按操作规程销毁。Client apply
-会在同一 SQL update 中删除六个 legacy Custom SSO `ext_attributes` key 并保留其他属性；独立 verify 检测到任一残留时
-以 `legacy-attributes-not-removed` 阻断切换。
-
-正式执行顺序为：maintenance freeze、backfill（可从最后 safe cursor 恢复）、独立 `verify`。只有 verify 返回 passed
-才可继续 migration 收紧与流量切换；failed report 返回非零退出码。收紧 migration 使用普通唯一索引，必须保持 freeze，
-不得在仍有 `user_profile` writer 时执行。
-
-`session:cleanup-custom-sso-cutover` 固定使用仓库内建 allowlist，只覆盖旧 `global_session:*` Principal Session、Custom
-SSO grant/local-session/reverse/set 与 `custom-sso:local-session-payload:*`。该命令不会扫描或删除任何 `oidc:*` key，且不
-接受外部 `--pattern`。原 `session:cleanup-legacy-keys` 仍保持包含 OIDC legacy key 的完整默认范围，供既有 Session Kernel
-与 OIDC 迁移手册使用；Custom SSO hard cutover 不得改用该完整命令。完整维护窗口顺序、四类 smoke 与回滚边界见
-[Custom SSO Subject Projection 硬切换与回滚手册](../releases/custom-sso-subject-projection-release.md)。

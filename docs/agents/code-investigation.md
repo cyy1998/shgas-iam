@@ -3,9 +3,11 @@
 本仓库提供两个互补的项目级只读调查 agent：
 
 - `code_researcher`：隔离跨文件搜索、调用链追踪和证据收集产生的中间噪声；定义位于
-  `.codex/agents/code-researcher.toml`，固定使用 `gpt-5.6-luna`、`max` 推理和 `read-only` sandbox；
+  [`.codex/agents/code-researcher.toml`](../../.codex/agents/code-researcher.toml)；
 - `deep_researcher`：裁决高风险、高歧义或证据冲突的复杂行为；定义位于
-  `.codex/agents/deep-researcher.toml`，固定使用 `gpt-5.6-sol`、`high` 推理和 `read-only` sandbox。
+  [`.codex/agents/deep-researcher.toml`](../../.codex/agents/deep-researcher.toml)。
+
+模型、推理档位与 sandbox 配置以对应 TOML 为准；本页维护调查职责、调用策略与返回契约。
 
 ## 调用策略
 

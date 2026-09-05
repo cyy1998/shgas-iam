@@ -393,9 +393,10 @@ composition。跨层实例连接统一由 composition 完成。
   一个赢家；reserved 工作由 heartbeat 定期续租，renew 必须匹配 grant、attempt 和上一 lease deadline，且只延长
   lease、不延长 Grant 原始 expiry。Independent 在任何 Credential issuance、post-validation、Grant consume、成功审计或
   consumed artifact cleanup 前，必须先取得通过 Subject equality 与 strict schema 的完整 V2 Wire；随后只有 Credential
-  签发并按当前 Client/Subject Access 复核成功才 consume。Gateway 只有最小 Local Session、可选 ORCAS 和当前 Client
-  复核成功后才 consume。消费前
-  失败按语义 release，并补偿已创建的 binding/credential；消费后 Session Kernel artifact 清理和成功审计是
+  签发并通过 Principal Session、Subject equality 与 Subject Access 复核后才 consume。Gateway 完成 Grant/Principal
+  校验、可选 ORCAS 登录与最小 Local Session 签发后才 consume。两条路径都使用请求入口已接受的 Client Runtime
+  Snapshot，不在签发后重新读取当前 Client 或 generation。消费前失败按语义 release，并补偿已创建的
+  binding/credential；消费后 Session Kernel artifact 清理和成功审计是
   best-effort after-effect。
 - Custom SSO Subject Projection 不变量错误按未处理内部错误返回通用 `500`，不增加公开 error code、logger dependency 或
   `Retry-After`。它发生在 Independent Credential issue state 为 `not_started` 时，不创建或撤销 Credential、不 consume、不写
