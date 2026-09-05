@@ -1,4 +1,4 @@
-import type { UserDetailDto } from "../schema/user-profile.schema";
+import type { UserDetailDto } from "@iam/domain/user";
 import type { UserProfileQueryRecord, UserProfileQueryRepositoryPort } from "./user-profile-query.port";
 import { UserNotFoundError } from "@iam/domain/user";
 import { parseUserProfileDetailDocument } from "../schema/profile.schema";

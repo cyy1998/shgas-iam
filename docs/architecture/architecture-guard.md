@@ -103,8 +103,8 @@ Architecture Guard 只覆盖仓库规范的静态写法。对同一依赖边采�
 - `worker-ownership`
 - `docker-build-closure`
 
-`client-subject-projection-owner` 只观察 package 内 production source path 与规范静态依赖。除 Custom SSO wire、
-testing export 和普通测试外，Projection core 全部受保护，不能反向依赖 client 协议配置、数据库、User Profile
+`client-subject-projection-owner` 只观察 package 内 production source path 与规范静态依赖。除 Custom SSO wire 和普通测试外，
+Projection core 全部受保护，不能反向依赖 client 协议配置、数据库、User Profile
 implementation、shared provider DTO、app/Gateway runtime 或协议 transport，也不能依赖协议 wire surface。Custom
 SSO wire mapper 只能从 package root public Projection Interface 取得 core 类型或能力，不能直接依赖其他 core
 subpath、Facts persistence、client 配置、runtime 或 transport。该 package 的 canonical subpath 与

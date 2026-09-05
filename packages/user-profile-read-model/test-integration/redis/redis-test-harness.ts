@@ -1,8 +1,5 @@
 import type { SubjectFactsCacheRecord } from "../../src/subject-facts";
 import type {
-  SubjectFactsCacheRecordV1,
-} from "../../src/subject-facts/subject-facts-cache";
-import type {
   SubjectFactsRedisClient,
   SubjectFactsRedisInspectionClient,
 } from "../../src/subject-facts/subject-facts-redis-publisher.core";
@@ -11,16 +8,11 @@ import process from "node:process";
 import { createSubjectAccessBootstrap } from "@iam/api-core/subject-access";
 import Redis from "ioredis";
 import {
+  createSubjectFactsRedisCache,
   createSubjectFactsRedisInspector,
   createSubjectFactsRedisPublisher,
   SubjectFactsCacheRecordSchema,
 } from "../../src/subject-facts";
-import { SubjectFactsCacheRecordV1Schema } from "../../src/subject-facts/subject-facts-cache";
-import {
-  createSubjectFactsRedisCache as createLegacySubjectFactsRedisCache,
-  createSubjectFactsRedisInspector as createLegacySubjectFactsRedisInspector,
-  createSubjectFactsRedisPublisher as createLegacySubjectFactsRedisPublisher,
-} from "../../src/subject-facts/subject-facts-redis.publisher";
 
 const TEST_REDIS_URL_ENV = "IAM_USER_PROFILE_TEST_REDIS_URL";
 
@@ -30,19 +22,12 @@ export interface RedisTestScope {
     readonly publisher: SubjectFactsRedisClient;
     readonly inspector: SubjectFactsRedisInspectionClient;
   };
-  readonly firstCache: ReturnType<typeof createLegacySubjectFactsRedisCache>;
-  readonly secondCache: ReturnType<typeof createLegacySubjectFactsRedisCache>;
-  readonly firstPublisher: Pick<ReturnType<typeof createLegacySubjectFactsRedisPublisher>, "publish">;
-  readonly secondPublisher: Pick<ReturnType<typeof createLegacySubjectFactsRedisPublisher>, "publish">;
-  readonly batchPublisher: ReturnType<typeof createLegacySubjectFactsRedisPublisher>;
-  readonly inspector: ReturnType<typeof createLegacySubjectFactsRedisInspector>;
+  readonly firstCache: ReturnType<typeof createSubjectFactsRedisCache>;
+  readonly secondCache: ReturnType<typeof createSubjectFactsRedisCache>;
   readonly firstProfilePublisher: ReturnType<typeof createSubjectFactsRedisPublisher>;
   readonly secondProfilePublisher: ReturnType<typeof createSubjectFactsRedisPublisher>;
   readonly subjectAccessBootstrap: ReturnType<typeof createSubjectAccessBootstrap>;
   readonly profileInspector: ReturnType<typeof createSubjectFactsRedisInspector>;
-  readonly readPublishedRecord: (
-    subjectIdentifier: string,
-  ) => Promise<SubjectFactsCacheRecordV1 | null>;
   readonly readPublishedProfileRecord: (
     subjectIdentifier: string,
   ) => Promise<SubjectFactsCacheRecord | null>;
@@ -89,16 +74,12 @@ export async function createRedisTestHarness(): Promise<RedisTestHarness> {
       }
 
       let closed = false;
-      const firstCache = createLegacySubjectFactsRedisCache(firstRedis, { keyPrefix });
-      const secondCache = createLegacySubjectFactsRedisCache(secondRedis, { keyPrefix });
+      const firstCache = createSubjectFactsRedisCache(firstRedis, { keyPrefix });
+      const secondCache = createSubjectFactsRedisCache(secondRedis, { keyPrefix });
       return {
-        batchPublisher: createLegacySubjectFactsRedisPublisher(firstRedis, { keyPrefix }),
         firstCache,
         secondCache,
-        firstPublisher: firstCache,
         firstProfilePublisher: createSubjectFactsRedisPublisher(firstRedis, { keyPrefix }),
-        inspector: createLegacySubjectFactsRedisInspector(observerRedis, { keyPrefix }),
-        secondPublisher: secondCache,
         secondProfilePublisher: createSubjectFactsRedisPublisher(secondRedis, { keyPrefix }),
         subjectAccessBootstrap: createSubjectAccessBootstrap({
           redis: firstRedis,
@@ -110,12 +91,6 @@ export async function createRedisTestHarness(): Promise<RedisTestHarness> {
           keyPrefix,
           publisher: firstRedis,
           inspector: observerRedis,
-        },
-        async readPublishedRecord(subjectIdentifier) {
-          const stored = await observerRedis.get(`${keyPrefix}${subjectIdentifier}`);
-          return stored === null
-            ? null
-            : SubjectFactsCacheRecordV1Schema.parse(JSON.parse(stored));
         },
         async readPublishedProfileRecord(subjectIdentifier) {
           const stored = await observerRedis.get(`${keyPrefix}${subjectIdentifier}`);

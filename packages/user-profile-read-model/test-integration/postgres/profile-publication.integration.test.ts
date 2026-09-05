@@ -5,8 +5,8 @@ import {
   UserType,
 } from "@iam/contracts";
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:test";
-import { createProfilePublicationRepository } from "../../src/publication/profile-publication.repository";
 import { PublishedProfileSchema } from "../../src/schema/profile.schema";
+import { createCurrentUserProfileProjectionBundle } from "../../src/worker";
 import { createPostgresTestHarness } from "./postgres-test-harness";
 
 const now = new Date("2026-08-20T12:00:00.000Z");
@@ -29,14 +29,15 @@ describe("User Profile v3 PostgreSQL publication", () => {
 
   test("atomically publishes all v3 documents and processes the same Dirty Version", async () => {
     await seedProcessingDirty("4");
-    const publication = createProfilePublicationRepository(harness.db);
+    const publication = createCurrentUserProfileProjectionBundle().createPublicationRepository(harness.db);
 
-    expect(await publication.publishCandidate({
+    const publicationResult = await publication.publishCandidate({
       userId: 1,
       dirtyVersion: "4",
       profile: profile("4"),
       processedAt: now,
-    })).toEqual({ status: "published" });
+    });
+    expect(publicationResult).toEqual({ status: "published" });
 
     const [row] = await harness.sql<{
       profileSchemaVersion: number;
@@ -97,7 +98,7 @@ describe("User Profile v3 PostgreSQL publication", () => {
     `);
 
     try {
-      const publication = createProfilePublicationRepository(harness.db);
+      const publication = createCurrentUserProfileProjectionBundle().createPublicationRepository(harness.db);
       let failure: unknown;
       try {
         await publication.publishCandidate({

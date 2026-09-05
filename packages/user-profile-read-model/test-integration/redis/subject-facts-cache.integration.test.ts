@@ -1,4 +1,4 @@
-import type { SubjectFactsCacheRecordV1 } from "../../src/subject-facts/subject-facts-cache";
+import type { SubjectFactsCacheRecord } from "../../src/subject-facts";
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { createRedisTestHarness } from "./redis-test-harness";
 
@@ -16,37 +16,17 @@ describe("Subject Facts Redis publisher", () => {
       await harness.close();
   });
 
-  test("atomically retains the greatest dirty version across concurrent publishers", async () => {
-    const scope = await harness.createScope();
-    try {
-      const versions = ["2", "11", "3", "10", "1", "12"];
-      await Promise.all(versions.map((version, index) =>
-        (index % 2 === 0 ? scope.firstPublisher : scope.secondPublisher)
-          .publish(cacheRecord(version))));
-
-      expect(await scope.readPublishedRecord(SUBJECT_IDENTIFIER))
-        .toEqual(cacheRecord("12"));
-      await expect(scope.firstPublisher.publish(cacheRecord("11")))
-        .resolves
-        .toEqual({ status: "retained-newer" });
-      expect(await scope.readPublishedRecord(SUBJECT_IDENTIFIER))
-        .toEqual(cacheRecord("12"));
-    }
-    finally {
-      await scope.close();
-    }
-  });
-
   test("compares dirty versions without losing bigint precision", async () => {
     const scope = await harness.createScope();
     try {
       const higherVersion = "9007199254740993";
-      await scope.firstPublisher.publish(cacheRecord(higherVersion));
+      await scope.firstProfilePublisher.publish(cacheRecord(higherVersion));
 
-      await expect(scope.secondPublisher.publish(cacheRecord("9007199254740992")))
-        .resolves
+      const retained = await scope.secondProfilePublisher.publish(cacheRecord("9007199254740992"));
+      expect(retained)
         .toEqual({ status: "retained-newer" });
-      expect(await scope.readPublishedRecord(SUBJECT_IDENTIFIER))
+      const published = await scope.readPublishedProfileRecord(SUBJECT_IDENTIFIER);
+      expect(published)
         .toEqual(cacheRecord(higherVersion));
     }
     finally {
@@ -74,16 +54,17 @@ describe("Subject Facts Redis publisher", () => {
     const scope = await harness.createScope();
     const secondSubject = "46739d0b-cdda-48f5-af1f-1f90e2d81170";
     try {
-      await scope.firstPublisher.publish(cacheRecord("20"));
+      await scope.firstProfilePublisher.publish(cacheRecord("20"));
 
-      const publication = await scope.batchPublisher.publishMany([
+      const publication = await scope.firstProfilePublisher.publishMany([
         cacheRecord("19"),
         cacheRecord("1", secondSubject),
       ]);
       expect(publication).toEqual({ published: 1, retainedNewer: 1 });
-      expect(await scope.readPublishedRecord(SUBJECT_IDENTIFIER))
+      const published = await scope.readPublishedProfileRecord(SUBJECT_IDENTIFIER);
+      expect(published)
         .toEqual(cacheRecord("20"));
-      const inspected = await scope.inspector.inspectMany([
+      const inspected = await scope.profileInspector.inspectMany([
         SUBJECT_IDENTIFIER,
         secondSubject,
       ]);
@@ -104,9 +85,9 @@ describe("Subject Facts Redis publisher", () => {
 function cacheRecord(
   sourceDirtyVersion: string,
   subjectIdentifier = SUBJECT_IDENTIFIER,
-): SubjectFactsCacheRecordV1 {
+): SubjectFactsCacheRecord {
   return {
-    schemaVersion: 1,
+    schemaVersion: 3,
     sourceDirtyVersion,
     publishedAt: "2026-07-25T10:00:00.000Z",
     subjectIdentifier,
@@ -136,6 +117,7 @@ function cacheRecord(
           code: "engineer",
           name: "Engineer",
         },
+        responsibilities: [],
         clientAuthorizations: [{
           clientCode: "console",
           roles: [{

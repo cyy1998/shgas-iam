@@ -1,17 +1,8 @@
 import type { createProfileBuilder } from "../build/profile-builder.service";
 import type { UserProfileDirtyRepository } from "../invalidation/dirty.repository";
 import type { UserProfileJobProducer } from "../invalidation/user-profile-job.producer";
-import type { createProfilePublicationRepository } from "../publication/profile-publication.repository";
 import type { createSubjectFactsRedisPublisher } from "../subject-facts/subject-facts-redis";
-import type {
-  SubjectFactsPublisherPort,
-  UserProfileMaintenanceDirtyRepositoryPort,
-  UserProfileMaintenanceJobProducerPort,
-  UserProfileMaintenanceUserRepositoryPort,
-  UserProfilePublicationPort,
-  UserProfileRebuildBuilderPort,
-  UserProfileRebuildDirtyStorePort,
-} from "../worker";
+import type { createCurrentUserProfileProjectionBundle, SubjectFactsPublisherPort, UserProfileMaintenanceDirtyRepositoryPort, UserProfileMaintenanceJobProducerPort, UserProfileMaintenanceUserRepositoryPort, UserProfilePublicationPort, UserProfileRebuildBuilderPort, UserProfileRebuildDirtyStorePort } from "../worker";
 import type { UserProfileMaintenanceRepository } from "../worker/user-profile-maintenance.repository";
 import type {
   createUserProfileJobProcessor,
@@ -37,7 +28,7 @@ describe("User Profile worker port contracts", () => {
     assertAssignable<UserProfileMaintenanceDirtyRepositoryPort, UserProfileDirtyRepository>();
     assertAssignable<UserProfileMaintenanceJobProducerPort, UserProfileJobProducer>();
 
-    assertAssignable<UserProfilePublicationPort, ReturnType<typeof createProfilePublicationRepository>>();
+    assertAssignable<UserProfilePublicationPort, ReturnType<ReturnType<typeof createCurrentUserProfileProjectionBundle>["createPublicationRepository"]>>();
     assertAssignable<SubjectFactsPublisherPort, ReturnType<typeof createSubjectFactsRedisPublisher>>();
     assertAssignable<UserProfileRebuildDirtyStorePort, UserProfileDirtyRepository>();
     assertAssignable<UserProfileRebuildBuilderPort, ReturnType<typeof createProfileBuilder>>();

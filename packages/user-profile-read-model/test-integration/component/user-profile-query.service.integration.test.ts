@@ -5,8 +5,6 @@ import {
   EmploymentStatus,
   OrganizationLevel,
   OrganizationType,
-  UserProfileDirtyReason,
-  UserProfileDirtyStatus,
   UserStatus,
   UserType,
 } from "@iam/contracts";
@@ -222,16 +220,5 @@ describe("UserProfileQueryService", () => {
 
     const error = await service.getDetailByUserId(1).catch(error => error);
     expect(error).toBeInstanceOf(Error);
-  });
-
-  test("validates dirty status and reason schemas used by profile DTOs", async () => {
-    const schema = await import("../../src/schema/user-profile.schema");
-
-    expect(schema.UserProfileDirtyStatusDtoSchema.parse(UserProfileDirtyStatus.Pending)).toBe(
-      UserProfileDirtyStatus.Pending,
-    );
-    expect(schema.UserProfileDirtyReasonDtoSchema.parse(UserProfileDirtyReason.Backfill)).toBe(
-      UserProfileDirtyReason.Backfill,
-    );
   });
 });

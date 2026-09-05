@@ -61,4 +61,4 @@ actor Principal Session ID、原始异常或其他 provider 细节。Redis 原�
 
 若仍有早于该退役版本的环境，升级前必须基于现有 `audit_log` schema 单独制定迁移方案：先备份并盘点 legacy 数据，
 验证 actor、target、action、outcome 与脱敏 details 的映射，再确认待迁移数量归零。不得假设当前分支仍包含旧 schema
-或旧迁移实现；即使旧 script key 仍出现在某个历史 package 配置中，也不得把它视为可运行入口。
+或旧迁移实现；失效的 `migrate:login-log-audit` script 注册也已移除。

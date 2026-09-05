@@ -70,7 +70,7 @@
 | [docs/development/coding-style.md](development/coding-style.md) | development | Current | 2026-08-07 | 2026-10-31 | TypeScript、formatter 边界、文件命名、React 命名和 import alias 风格约定。 |
 | [docs/development/commands.md](development/commands.md) | development | Current | 2026-09-05 | 2026-10-31 | 聚焦实现、canonical Unit/Integration commands、默认 verify、显式资源 profiles、Architecture Guard、性能与 commit guard 的可执行入口；移除初代切换操作说明，Subject Access repair 包含 PostgreSQL intent 回收。 |
 | [docs/features/admin/session-management.md](features/admin/session-management.md) | feature | Current | 2026-09-05 | 2026-10-31 | 从前端架构页迁入的 Sessions 页面契约：有效会话、临时登录限制、安全输出、刷新和作用后失败语义。 |
-| [docs/features/audit/audit-logging.md](features/audit/audit-logging.md) | feature | Current | 2026-07-16 | 2026-09-30 | 统一审计日志、安全字段和已完成 `login_log` 退役后的当前边界。 |
+| [docs/features/audit/audit-logging.md](features/audit/audit-logging.md) | feature | Current | 2026-09-05 | 2026-09-30 | 统一审计日志、安全字段和已完成 `login_log` 退役后的当前边界。 |
 | [docs/features/oidc/oidc-integration.md](features/oidc/oidc-integration.md) | feature | Current | 2026-08-01 | 2026-09-30 | 内部 OIDC client 的端点、client 类型、scope/claim、CORS 和退出契约。 |
 | [docs/features/oidc/oidc-session-migration.md](features/oidc/oidc-session-migration.md) | feature | Current | 2026-08-09 | 2026-09-30 | Session Kernel 会话迁移、旧 key cleanup、staged payload rollout 和回滚边界。 |
 | [docs/features/organization-responsibility/hr-admin-management-design.md](features/organization-responsibility/hr-admin-management-design.md) | design | Current | 2026-09-05 | 2026-10-31 | 已实现：HR 双端 scoped 责任管理、错误语义、UI、Full-system 验证与发布边界；归并前端架构页中的 selector、嵌入面板与安全展示细则。 |

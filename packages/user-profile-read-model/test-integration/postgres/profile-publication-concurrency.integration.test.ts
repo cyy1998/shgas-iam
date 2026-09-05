@@ -1,4 +1,4 @@
-import type { BuiltUserProfile } from "../../src/build/user-profile-builder.service";
+import type { PublishedProfile } from "../../src/schema/profile.schema";
 import {
   UserProfileDirtyReason,
   UserProfileDirtyStatus,
@@ -6,8 +6,8 @@ import {
   UserType,
 } from "@iam/contracts";
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:test";
-import { createUserProfileBuilder } from "../../src/build/user-profile-builder.service";
-import { createUserProfilePublicationRepository } from "../../src/publication/user-profile-publication.repository";
+import { createProfileBuilder } from "../../src/build/profile-builder.service";
+import { createCurrentUserProfileProjectionBundle } from "../../src/worker";
 import { createPostgresTestHarness } from "./postgres-test-harness";
 
 const NOW = new Date("2026-07-25T10:00:00.000Z");
@@ -40,32 +40,8 @@ describe("User Profile PostgreSQL publication", () => {
       await harness.close();
   });
 
-  test("commits the profile, source version, and processed Dirty state together", async () => {
-    await seedProcessingDirty(harness, 1, "4");
-    const publication = createUserProfilePublicationRepository(harness.db);
-    const profile = await buildProfile(1, "4");
-
-    expect(await publication.publishCandidate({
-      userId: 1,
-      dirtyVersion: "4",
-      profile,
-      processedAt: NOW,
-    })).toEqual({ status: "published" });
-
-    expect(await readPublishedState(harness, 1)).toEqual({
-      dirtyVersion: "4",
-      dirtyStatus: UserProfileDirtyStatus.Processed,
-      profile: {
-        sourceDirtyVersion: "4",
-        subjectIdentifier: SUBJECT_IDENTIFIER,
-        subjectFacts: { employments: [] },
-        username: "user1",
-      },
-    });
-  });
-
   test("atomically deletes the current profile and processes the same Dirty version", async () => {
-    const publication = createUserProfilePublicationRepository(harness.db);
+    const publication = createCurrentUserProfileProjectionBundle().createPublicationRepository(harness.db);
     await seedProcessingDirty(harness, 1, "4");
     await publication.publishCandidate({
       userId: 1,
@@ -75,14 +51,16 @@ describe("User Profile PostgreSQL publication", () => {
     });
     await resetProcessingDirty(harness, 1, "4");
 
-    expect(await publication.publishCandidate({
+    const publicationResult = await publication.publishCandidate({
       userId: 1,
       dirtyVersion: "4",
       profile: null,
       processedAt: NOW,
-    })).toEqual({ status: "missing" });
+    });
+    expect(publicationResult).toEqual({ status: "missing" });
 
-    expect(await readPublishedState(harness, 1)).toEqual({
+    const state = await readPublishedState(harness, 1);
+    expect(state).toEqual({
       dirtyVersion: "4",
       dirtyStatus: UserProfileDirtyStatus.Processed,
       profile: null,
@@ -92,7 +70,7 @@ describe("User Profile PostgreSQL publication", () => {
   test("discards a candidate when the locked Dirty version changes but remains processing", async () => {
     await seedProcessingDirty(harness, 1, "4");
     const heldLock = await harness.holdDirtyRowLock(1);
-    const publication = createUserProfilePublicationRepository(harness.db);
+    const publication = createCurrentUserProfileProjectionBundle().createPublicationRepository(harness.db);
     const pendingPublication = publication.publishCandidate({
       userId: 1,
       dirtyVersion: "4",
@@ -109,8 +87,10 @@ describe("User Profile PostgreSQL publication", () => {
       });
       released = true;
 
-      expect(await pendingPublication).toEqual({ status: "stale" });
-      expect(await readPublishedState(harness, 1)).toEqual({
+      const publicationResult = await pendingPublication;
+      expect(publicationResult).toEqual({ status: "stale" });
+      const state = await readPublishedState(harness, 1);
+      expect(state).toEqual({
         dirtyVersion: "5",
         dirtyStatus: UserProfileDirtyStatus.Processing,
         profile: null,
@@ -126,7 +106,7 @@ describe("User Profile PostgreSQL publication", () => {
   test("discards a candidate when the locked Dirty status changes at the same version", async () => {
     await seedProcessingDirty(harness, 1, "4");
     const heldLock = await harness.holdDirtyRowLock(1);
-    const publication = createUserProfilePublicationRepository(harness.db);
+    const publication = createCurrentUserProfileProjectionBundle().createPublicationRepository(harness.db);
     const pendingPublication = publication.publishCandidate({
       userId: 1,
       dirtyVersion: "4",
@@ -143,8 +123,10 @@ describe("User Profile PostgreSQL publication", () => {
       });
       released = true;
 
-      expect(await pendingPublication).toEqual({ status: "stale" });
-      expect(await readPublishedState(harness, 1)).toEqual({
+      const publicationResult = await pendingPublication;
+      expect(publicationResult).toEqual({ status: "stale" });
+      const state = await readPublishedState(harness, 1);
+      expect(state).toEqual({
         dirtyVersion: "4",
         dirtyStatus: UserProfileDirtyStatus.Pending,
         profile: null,
@@ -159,70 +141,32 @@ describe("User Profile PostgreSQL publication", () => {
 
   test("discards a candidate when the processing Dirty row belongs to another user", async () => {
     await seedProcessingDirty(harness, 2, "4");
-    const publication = createUserProfilePublicationRepository(harness.db);
+    const publication = createCurrentUserProfileProjectionBundle().createPublicationRepository(harness.db);
 
-    expect(await publication.publishCandidate({
+    const publicationResult = await publication.publishCandidate({
       userId: 1,
       dirtyVersion: "4",
       profile: await buildProfile(1, "4"),
       processedAt: NOW,
-    })).toEqual({ status: "stale" });
+    });
+    expect(publicationResult).toEqual({ status: "stale" });
 
-    expect(await readPublishedState(harness, 1)).toEqual({
+    const state = await readPublishedState(harness, 1);
+    expect(state).toEqual({
       dirtyVersion: undefined,
       dirtyStatus: undefined,
       profile: null,
     });
-    expect(await readPublishedState(harness, 2)).toEqual({
+    const otherUserState = await readPublishedState(harness, 2);
+    expect(otherUserState).toEqual({
       dirtyVersion: "4",
       dirtyStatus: UserProfileDirtyStatus.Processing,
       profile: null,
     });
   });
 
-  test("rolls back the profile when processing the Dirty row fails", async () => {
-    await seedProcessingDirty(harness, 1, "4");
-    await harness.sql.unsafe(`
-      CREATE FUNCTION reject_processed_dirty() RETURNS trigger AS $$
-      BEGIN
-        IF NEW.status = 'processed' THEN
-          RAISE EXCEPTION 'forced dirty failure';
-        END IF;
-        RETURN NEW;
-      END;
-      $$ LANGUAGE plpgsql
-    `);
-    await harness.sql.unsafe(`
-      CREATE TRIGGER reject_processed_dirty_trigger
-      BEFORE UPDATE ON user_profile_dirty
-      FOR EACH ROW EXECUTE FUNCTION reject_processed_dirty()
-    `);
-    const publication = createUserProfilePublicationRepository(harness.db);
-
-    try {
-      expect(errorCause(await captureRejection(publication.publishCandidate({
-        userId: 1,
-        dirtyVersion: "4",
-        profile: await buildProfile(1, "4"),
-        processedAt: NOW,
-      })))).toContain("forced dirty failure");
-
-      expect(await readPublishedState(harness, 1)).toEqual({
-        dirtyVersion: "4",
-        dirtyStatus: UserProfileDirtyStatus.Processing,
-        profile: null,
-      });
-    }
-    finally {
-      await harness.sql.unsafe(
-        "DROP TRIGGER reject_processed_dirty_trigger ON user_profile_dirty",
-      );
-      await harness.sql.unsafe("DROP FUNCTION reject_processed_dirty()");
-    }
-  });
-
   test("rolls back a profile deletion when processing the Dirty row fails", async () => {
-    const publication = createUserProfilePublicationRepository(harness.db);
+    const publication = createCurrentUserProfileProjectionBundle().createPublicationRepository(harness.db);
     await seedProcessingDirty(harness, 1, "4");
     await publication.publishCandidate({
       userId: 1,
@@ -248,14 +192,16 @@ describe("User Profile PostgreSQL publication", () => {
     `);
 
     try {
-      expect(errorCause(await captureRejection(publication.publishCandidate({
+      const failure = await captureRejection(publication.publishCandidate({
         userId: 1,
         dirtyVersion: "4",
         profile: null,
         processedAt: NOW,
-      })))).toContain("forced missing dirty failure");
+      }));
+      expect(errorCause(failure)).toContain("forced missing dirty failure");
 
-      expect(await readPublishedState(harness, 1)).toEqual({
+      const state = await readPublishedState(harness, 1);
+      expect(state).toEqual({
         dirtyVersion: "4",
         dirtyStatus: UserProfileDirtyStatus.Processing,
         profile: {
@@ -275,7 +221,7 @@ describe("User Profile PostgreSQL publication", () => {
   });
 
   test("rejects a lower source version without changing the current profile or Dirty row", async () => {
-    const publication = createUserProfilePublicationRepository(harness.db);
+    const publication = createCurrentUserProfileProjectionBundle().createPublicationRepository(harness.db);
     await seedProcessingDirty(harness, 1, "5");
     await publication.publishCandidate({
       userId: 1,
@@ -292,7 +238,7 @@ describe("User Profile PostgreSQL publication", () => {
       WHERE user_id = 1
     `;
 
-    expect(await publication.publishCandidate({
+    const publicationResult = await publication.publishCandidate({
       userId: 1,
       dirtyVersion: "4",
       profile: {
@@ -300,9 +246,11 @@ describe("User Profile PostgreSQL publication", () => {
         username: "older-user",
       },
       processedAt: NOW,
-    })).toEqual({ status: "stale" });
+    });
+    expect(publicationResult).toEqual({ status: "stale" });
 
-    expect(await readPublishedState(harness, 1)).toEqual({
+    const state = await readPublishedState(harness, 1);
+    expect(state).toEqual({
       dirtyVersion: "4",
       dirtyStatus: UserProfileDirtyStatus.Processing,
       profile: {
@@ -315,7 +263,7 @@ describe("User Profile PostgreSQL publication", () => {
   });
 
   test("does not let an older missing candidate delete a newer profile", async () => {
-    const publication = createUserProfilePublicationRepository(harness.db);
+    const publication = createCurrentUserProfileProjectionBundle().createPublicationRepository(harness.db);
     await seedProcessingDirty(harness, 1, "5");
     await publication.publishCandidate({
       userId: 1,
@@ -325,14 +273,16 @@ describe("User Profile PostgreSQL publication", () => {
     });
     await resetProcessingDirty(harness, 1, "4");
 
-    expect(await publication.publishCandidate({
+    const publicationResult = await publication.publishCandidate({
       userId: 1,
       dirtyVersion: "4",
       profile: null,
       processedAt: NOW,
-    })).toEqual({ status: "stale" });
+    });
+    expect(publicationResult).toEqual({ status: "stale" });
 
-    expect(await readPublishedState(harness, 1)).toEqual({
+    const state = await readPublishedState(harness, 1);
+    expect(state).toEqual({
       dirtyVersion: "4",
       dirtyStatus: UserProfileDirtyStatus.Processing,
       profile: {
@@ -422,11 +372,12 @@ async function readPublishedState(
 async function buildProfile(
   userId: number,
   sourceDirtyVersion: string,
-): Promise<BuiltUserProfile> {
-  const builder = createUserProfileBuilder({
+): Promise<PublishedProfile> {
+  const builder = createProfileBuilder({
     buildRepository: {
       async loadByUserIds() {
         return {
+          responsibilityRows: [],
           users: [{
             id: userId,
             subjectIdentifier: SUBJECT_IDENTIFIER,

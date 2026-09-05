@@ -1,6 +1,6 @@
 import { UserProfileDirtyReason, UserStatus } from "@iam/contracts";
 import { describe, expect, mock, test } from "bun:test";
-import { UserProfileEmploymentIntegrityError } from "../../src/build/user-profile-builder.service";
+import { UserProfileEmploymentIntegrityError } from "../../src/build/profile-document-builder.core";
 import { USER_PROFILE_SCHEMA_VERSION } from "../../src/schema/profile.schema";
 import { createSubjectFactsCacheRecord } from "../../src/subject-facts/profile-cache";
 import { createUserProfileRebuildProcessor } from "../../src/worker";

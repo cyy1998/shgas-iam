@@ -59,7 +59,7 @@
 | 路径 | 职责与边界 |
 |---|---|
 | `packages/api-core/src` | 共享后端基础设施：`createApp`、route/OpenAPI/response helpers、errors、middleware、Redis、logging、observability、Session Kernel、LoginRestriction、Subject Access Barrier、UnitOfWork 和 tRPC utilities。共享 process-smoke harness 位于 `src/testing/`，只通过独立 testing export 暴露；它不实现 Redis 协议或 persistence seed。 |
-| `packages/client-subject-projection/src` | 协议中性的 Client Subject Projection deep Module；默认入口只公开 active V2 `resolve` Interface、Catalog 与 canonical responsibility Employment Profile，`/custom-sso` 独占 Custom SSO V2 strict wire。V1 历史源码不由 package exports、应用 composition 或命令入口公开。 |
+| `packages/client-subject-projection/src` | 协议中性的 Client Subject Projection deep Module；默认入口只公开 active V2 `resolve` Interface、Catalog 与 canonical responsibility Employment Profile，`/custom-sso` 独占 Custom SSO V2 strict wire。V1 投影与演练源码已移除。 |
 | `packages/contracts/src` | 跨端或跨 app/package 的稳定枚举、常量、runtime schemas、派生类型与相关协议 helper（包括 SSO 导航和登录 credential）；具体运行环境约束见共享契约文档。 |
 | `packages/domain/src` | 后端复用的 DTO schemas/types/mappers、pure domain rules、audit helpers 和业务错误；DTO 可依赖数据库 schema，纯规则文件保持独立，不将整个包视为浏览器运行时依赖。 |
 | `packages/db/src` | Drizzle schemas、relations、migrations、singleton client 和 query helpers。Schema/relations domain 为 `core` 与 `log`；共享 column helpers 位于 `schema/_shard/`。 |
@@ -79,13 +79,13 @@
 
 | 模块 | 内部职责目录 |
 |---|---|
-| `packages/user-profile-read-model/src` | `invalidation/`：影响分析与 dirty/job；`build/`：加载与文档构建；`publication/`：行转换与原子发布；`query/`：查询与 Filter；`schema/`：文档契约；`subject-facts/`：缓存、读写与观测；`subject-access/`：authority 与 transition repositories；`worker/`：重建与维护装配；`readiness/`：版本无关 gate；`cutover/`：切换工具。根层保留六个公开入口文件。 |
-| `packages/client-subject-projection/src` | `internal/`：当前 V2 实现；`legacy/`：旧 catalog、projection、wire 与 maintenance；`testing/`：演练 seed 和测试 helper。公开入口与共享错误留在根层。 |
+| `packages/user-profile-read-model/src` | `invalidation/`：影响分析与 dirty/job；`build/`：加载与文档构建；`publication/`：行转换与原子发布；`query/`：查询与 Filter；`schema/`：文档契约；`subject-facts/`：缓存、读写与观测；`subject-access/`：authority 与 transition repositories；`worker/`：重建与维护装配；`readiness/`：版本无关 gate；`cutover/`：Employment verifier 与 readiness 复用的校验规则。根层保留六个公开入口文件。 |
+| `packages/client-subject-projection/src` | `internal/`：当前 V2 Catalog、contract 与 projection。公开入口、Custom SSO wire 与共享错误留在根层；测试 fixture 由测试文件本地持有。 |
 | `packages/api-core/src/session/kernel` | `state/`：模型、结果与时间；`storage/`：存储、key、Lua 与状态变更；`security/`：HMAC/token；`cleanup/`：清理。facade、配置和公开入口留在根层。 |
 | `packages/api-core/src/subject-access` | `storage/`：store 与 Redis adapter；`adapters/`：HTTP、Session validator 和结果转换；`recovery/`：bootstrap、repair 与 transition recovery。在线 barrier/lifecycle、模型、错误与公开入口留在根层。 |
 | `apps/api/src/services/sso` | `subject-delivery/`：Subject 交付；`transport/`：Cookie、请求/schema、安全和 OpenAPI helper；`traffic-gate/`：流量 gate。redirect validator 留在根层。 |
 | `apps/oidc-provider/src/provider` | `claims/`：claims port、snapshot 与 contract；`client/`：Client auth、runtime metadata 与 Traffic Gate。`claims.ts` 和 provider 装配、生命周期文件留在根层。 |
-| `apps/worker/src/commands` | `user-profile/`、`client-runtime/`、`client-protocol/`、`subject-projection/`：对应命令族与其 helper/repository。Employment verifier 留在根层。 |
+| `apps/worker/src/commands` | `user-profile/`、`client-runtime/`、`client-protocol/`：对应命令族与其 helper/repository。Employment verifier 留在根层。 |
 
 ## Root-owned Full-system E2E Workspace
 

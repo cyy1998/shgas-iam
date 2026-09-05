@@ -2,7 +2,7 @@ import { describe, expect, mock, test } from "bun:test";
 import {
   createSubjectFactsRedisInspector,
   createSubjectFactsRedisPublisher,
-} from "../../src/subject-facts/subject-facts-redis.publisher";
+} from "../../src/subject-facts";
 
 describe("Subject Facts Redis batch publisher", () => {
   test("reports every published and retained-newer record without serializing the batch", async () => {
@@ -21,7 +21,8 @@ describe("Subject Facts Redis batch publisher", () => {
     await Promise.resolve();
     expect(evalScript).toHaveBeenCalledTimes(2);
     release();
-    await expect(pending).resolves.toEqual({ published: 1, retainedNewer: 1 });
+    const publicationResult = await pending;
+    expect(publicationResult).toEqual({ published: 1, retainedNewer: 1 });
   });
 
   test("batch-inspects valid, missing, and malformed cache records without exposing raw values", async () => {
@@ -30,11 +31,12 @@ describe("Subject Facts Redis batch publisher", () => {
       mget: mock(async () => [JSON.stringify(valid), null, "not-json"]),
     });
 
-    await expect(inspector.inspectMany([
+    const inspected = await inspector.inspectMany([
       valid.subjectIdentifier,
       "00000000-0000-4000-8000-000000000002",
       "00000000-0000-4000-8000-000000000003",
-    ])).resolves.toEqual([{
+    ]);
+    expect(inspected).toEqual([{
       status: "valid",
       record: valid,
     }, { status: "missing" }, { status: "invalid" }]);
@@ -43,7 +45,7 @@ describe("Subject Facts Redis batch publisher", () => {
 
 function record(sourceDirtyVersion: string, suffix: number) {
   return {
-    schemaVersion: 1 as const,
+    schemaVersion: 3 as const,
     sourceDirtyVersion,
     publishedAt: "2026-08-01T02:00:00.000Z",
     subjectIdentifier: `00000000-0000-4000-8000-${String(suffix).padStart(12, "0")}`,

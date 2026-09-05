@@ -304,7 +304,7 @@ pnpm --filter @iam/oidc-provider test:integration:composition
 pnpm --filter @iam/db db:check
 pnpm --filter @iam/db test:integration:postgres
 
-# Worker Subject Projection Client cutover contract（需专用 IAM_WORKER_TEST_DATABASE_URL）
+# Worker Client Protocol epoch 与 User Profile maintenance contracts（需专用 IAM_WORKER_TEST_DATABASE_URL）
 pnpm --filter @iam/worker test:integration:postgres
 
 # Worker Client Runtime targeted/full repair 与独立 full verify production wiring（需 owner-specific 专用 URL）
@@ -332,7 +332,7 @@ pnpm --filter @iam/admin-api test:integration:redis
 # OIDC Provider Session binding Redis contract（需专用 IAM_OIDC_PROVIDER_TEST_REDIS_URL）
 pnpm --filter @iam/oidc-provider test:integration:redis
 
-# User Profile publication/cutover backfill 与 verify contract（需专用 IAM_USER_PROFILE_TEST_DATABASE_URL）
+# User Profile V3 publication、readiness 与查询 contracts（需专用 IAM_USER_PROFILE_TEST_DATABASE_URL）
 pnpm --filter @iam/user-profile-read-model test:integration:postgres
 
 # User Profile Subject Facts 单条/CAS/batch prewarm contract（需专用 IAM_USER_PROFILE_TEST_REDIS_URL）

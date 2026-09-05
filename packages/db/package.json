@@ -21,8 +21,7 @@
     "db:migrate": "drizzle-kit migrate",
     "db:push": "drizzle-kit push",
     "db:check": "drizzle-kit check",
-    "subject-projection:rollback": "bun scripts/rollback-subject-projection-cutover.ts",
-    "migrate:login-log-audit": "bun scripts/migrate-login-log-to-audit.ts"
+    "subject-projection:rollback": "bun scripts/rollback-subject-projection-cutover.ts"
   },
   "dependencies": {
     "@iam/contracts": "workspace:*",

@@ -1,4 +1,4 @@
-import type { UserProfileBuildDataset } from "../../src/build/user-profile-build.repository";
+import type { ProfileBuildDataset } from "../../src/build/profile-build.repository";
 import {
   EmploymentStatus,
   OrganizationLevel,
@@ -9,11 +9,9 @@ import {
   UserType,
 } from "@iam/contracts";
 import { describe, expect, mock, test } from "bun:test";
-import {
-  createUserProfileBuilder,
-  UserProfileEmploymentIntegrityError,
-} from "../../src/build/user-profile-builder.service";
-import { LEGACY_USER_PROFILE_SCHEMA_VERSION } from "../../src/schema/user-profile.schema";
+import { createProfileBuilder } from "../../src/build/profile-builder.service";
+import { UserProfileEmploymentIntegrityError } from "../../src/build/profile-document-builder.core";
+import { USER_PROFILE_SCHEMA_VERSION } from "../../src/schema/profile.schema";
 
 const now = new Date("2026-06-30T08:00:00.000Z");
 
@@ -102,14 +100,15 @@ function orgPathRow(
 describe("UserProfileBuilder", () => {
   test("binds the published identity fields to the requested Dirty Version", async () => {
     const dataset = {
+      responsibilityRows: [],
       users: [user(1)],
       employments: [],
       positions: [],
       orgPathRows: [],
       roleRows: [],
       privilegeRows: [],
-    } as UserProfileBuildDataset;
-    const builder = createUserProfileBuilder({
+    } as ProfileBuildDataset;
+    const builder = createProfileBuilder({
       buildRepository: {
         loadByUserIds: mock(async () => dataset),
       },
@@ -134,6 +133,7 @@ describe("UserProfileBuilder", () => {
 
   test("publishes only Enable employments inside the half-open Employment Period", async () => {
     const dataset = {
+      responsibilityRows: [],
       users: [user(1, { status: UserStatus.Disable })],
       employments: [
         employment(10, 1, 100, 1000, true),
@@ -166,8 +166,8 @@ describe("UserProfileBuilder", () => {
       ],
       roleRows: [],
       privilegeRows: [],
-    } as unknown as UserProfileBuildDataset;
-    const builder = createUserProfileBuilder({
+    } as unknown as ProfileBuildDataset;
+    const builder = createProfileBuilder({
       buildRepository: {
         loadByUserIds: mock(async () => dataset),
       },
@@ -187,11 +187,12 @@ describe("UserProfileBuilder", () => {
           path: [{ code: "VALID", name: "VALID name", type: "部门" }],
         },
         position: { code: "POS1000", name: "Position 1000" },
+        responsibilities: [],
         clientAuthorizations: [],
       }],
     });
     expect(profile?.detail.employments.map(item => item.id)).toEqual([10, 11, 12]);
-    expect(profile?.searchDoc.employments.map(item => item.id)).toEqual([10, 11, 12]);
+    expect(profile?.searchDoc.employments.map(item => item.organization.code)).toEqual(["VALID"]);
   });
 
   test.each([
@@ -212,16 +213,17 @@ describe("UserProfileBuilder", () => {
       reason: "organization-not-effective",
     },
   ])("fails the whole build when $name", async ({ employment: employmentRow, positions, orgPathRows, reason }) => {
-    const builder = createUserProfileBuilder({
+    const builder = createProfileBuilder({
       buildRepository: {
         loadByUserIds: mock(async () => ({
+          responsibilityRows: [],
           users: [user(1)],
           employments: [employmentRow],
           positions,
           orgPathRows,
           roleRows: [],
           privilegeRows: [],
-        } as unknown as UserProfileBuildDataset)),
+        } as unknown as ProfileBuildDataset)),
       },
       clock: { nowDate: () => now },
       config: { batchSize: 100 },
@@ -241,6 +243,7 @@ describe("UserProfileBuilder", () => {
 
   test("publishes minimal client-scoped Subject Facts in deterministic order", async () => {
     const dataset = {
+      responsibilityRows: [],
       users: [user(1)],
       employments: [
         employment(11, 1, 200, 2000),
@@ -267,8 +270,8 @@ describe("UserProfileBuilder", () => {
         { roleId: 6, privilegeCode: "audit" },
         { roleId: 8, privilegeCode: "export" },
       ],
-    } as unknown as UserProfileBuildDataset;
-    const builder = createUserProfileBuilder({
+    } as unknown as ProfileBuildDataset;
+    const builder = createProfileBuilder({
       buildRepository: {
         loadByUserIds: mock(async () => dataset),
       },
@@ -296,6 +299,7 @@ describe("UserProfileBuilder", () => {
             code: "POS1000",
             name: "Position 1000",
           },
+          responsibilities: [],
           clientAuthorizations: [
             {
               clientCode: "client-a",
@@ -327,6 +331,7 @@ describe("UserProfileBuilder", () => {
             code: "POS2000",
             name: "Position 2000",
           },
+          responsibilities: [],
           clientAuthorizations: [],
         },
       ],
@@ -334,20 +339,21 @@ describe("UserProfileBuilder", () => {
   });
 
   test("builds detail and search documents from the batch dataset", async () => {
-    const dataset: UserProfileBuildDataset = {
+    const dataset: ProfileBuildDataset = {
+      responsibilityRows: [],
       users: [
         user(1),
         user(2, { status: UserStatus.Pause, isDelete: true }),
-      ] as UserProfileBuildDataset["users"],
+      ] as ProfileBuildDataset["users"],
       employments: [
         employment(10, 1, 100, 1000, true),
         employment(11, 1, 200, 2000),
         employment(12, 1, 300, 3000, false, { status: EmploymentStatus.Disable, endTime: now }),
-      ] as UserProfileBuildDataset["employments"],
+      ] as ProfileBuildDataset["employments"],
       positions: [
         position(1000),
         position(2000),
-      ] as UserProfileBuildDataset["positions"],
+      ] as ProfileBuildDataset["positions"],
       orgPathRows: [
         orgPathRow(100, 1, "COMP", 2, OrganizationType.Company),
         orgPathRow(100, 100, "DEPT", 0),
@@ -367,7 +373,7 @@ describe("UserProfileBuilder", () => {
         { roleId: 4, privilegeCode: "priv:second" },
       ],
     };
-    const builder = createUserProfileBuilder({
+    const builder = createProfileBuilder({
       buildRepository: {
         loadByUserIds: mock(async () => dataset),
       },
@@ -382,7 +388,7 @@ describe("UserProfileBuilder", () => {
     const activeProfile = profiles.find(item => item.userId === 1)!;
     const hiddenProfile = profiles.find(item => item.userId === 2)!;
 
-    expect(activeProfile.profileSchemaVersion).toBe(LEGACY_USER_PROFILE_SCHEMA_VERSION);
+    expect(activeProfile.profileSchemaVersion).toBe(USER_PROFILE_SCHEMA_VERSION);
     expect(activeProfile.rebuiltAt).toBe(now);
     expect(activeProfile.searchVisible).toBe(true);
     expect(activeProfile.detail).not.toHaveProperty("orcasId");
@@ -401,15 +407,16 @@ describe("UserProfileBuilder", () => {
       "priv:second",
     ]);
     expect(activeProfile.searchDoc.employments[0]).toMatchObject({
-      org: {
-        ancestorCodes: ["COMP", "DEPT"],
-        ancestorDepths: [2, 0],
-        ancestorKeys: ["COMP#2", "DEPT#0"],
-        companyCodes: ["COMP"],
+      organization: {
+        code: "DEPT",
+        path: [
+          { code: "COMP", distanceToTarget: 2 },
+          { code: "DEPT", distanceToTarget: 0 },
+        ],
       },
       position: { code: "POS1000" },
-      roles: ["position-role", "employment-role", "organization-role"],
-      privileges: ["priv:position", "priv:employment", "priv:organization"],
+      roles: ["employment-role", "organization-role", "position-role"],
+      privileges: ["priv:employment", "priv:organization", "priv:position"],
       isPrimary: true,
     });
     expect(hiddenProfile.searchVisible).toBe(false);

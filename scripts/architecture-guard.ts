@@ -136,7 +136,6 @@ const staticModuleOwnershipRules: readonly StaticModuleOwnershipRule[] = [
     ],
     allowedSources: [
       "packages/client-subject-projection/src/custom-sso.ts",
-      "packages/client-subject-projection/src/testing/testing.ts",
     ],
     dependencyKind: "all",
     message: moduleSpecifier =>

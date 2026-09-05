@@ -133,7 +133,7 @@ composition。跨层实例连接统一由 composition 完成。
   选择 `profile:employments` 时每条 Employment 原子携带 canonical `responsibilities`/`[]`；authorization employment
   继续只含 Employment identity、roles 与 privileges。Custom SSO subpath 拥有 V2 strict schema/mapper，缺失、
   未知或非法 responsibility 拒绝整份 projection，不提供 V1 alias、translation、fallback 或 caller version switch；
-  历史 V1 源码不再由 package exports、应用 composition 或命令入口公开。
+  V1 投影、wire 与演练源码已移除。
 - `@iam/user-profile-read-model/subject-facts` 提供同时满足 Facts 与 Freshness ports 的 deep reader：有效 Redis
   record 直读；miss、损坏或未知 schema 按 Subject single-flight 查询一行窄 `user_profile` 并以版本 CAS 回填；
   查询不读取 Legacy `detail`/`search_doc` 或联查源业务表。严格授权每次只从 PostgreSQL 读取权威 Dirty version/status，
@@ -179,6 +179,10 @@ composition。跨层实例连接统一由 composition 完成。
   每次按当前 User Profile v3 Subject Facts 重建 Client Protocol V2 输出，不保存 responsibility snapshot。
   `custom_sso_config` JSONB、Admin detail/audit、runtime context 与 Client Protocol cutover manifest 均不再携带 per-Client
   Catalog marker；历史 key 由 schema migration 删除，旧配置输入和旧 manifest 字段由 strict parser 拒绝。
+
+User Profile 的初代 V1 builder、Facts reader/publisher 与 Subject Projection 切换实现已移除。
+当前 Worker 通过 `createCurrentUserProfileProjectionBundle` 直接组装 V3 builder、原子 publication 与 Facts publisher；
+查询 DTO 由 `query/user-query.schema.ts` 拥有，readiness 继续复用版本无关校验规则。
 
 ### 角色分配解析
 
