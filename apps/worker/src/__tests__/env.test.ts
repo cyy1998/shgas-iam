@@ -3,10 +3,12 @@ import { beforeAll, describe, expect, test } from "bun:test";
 type ParseWorkerEnv = typeof import("../env").parseWorkerEnv;
 type ParsePostgresReadinessEnv = typeof import("../env").parseUserProfilePostgresReadinessCommandEnv;
 type ParseClientRuntimeMaintenanceEnv = typeof import("../env").parseClientRuntimeMaintenanceCommandEnv;
+type ParseAuditActionMaintenanceEnv = typeof import("../env").parseAuditActionMaintenanceCommandEnv;
 
 let parseWorkerEnv: ParseWorkerEnv;
 let parsePostgresReadinessEnv: ParsePostgresReadinessEnv;
 let parseClientRuntimeMaintenanceEnv: ParseClientRuntimeMaintenanceEnv;
+let parseAuditActionMaintenanceEnv: ParseAuditActionMaintenanceEnv;
 
 function validEnv(): NodeJS.ProcessEnv {
   return {
@@ -21,10 +23,30 @@ describe("worker environment", () => {
   beforeAll(async () => {
     Object.assign(process.env, validEnv());
     ({
+      parseAuditActionMaintenanceCommandEnv: parseAuditActionMaintenanceEnv,
       parseClientRuntimeMaintenanceCommandEnv: parseClientRuntimeMaintenanceEnv,
       parseUserProfilePostgresReadinessCommandEnv: parsePostgresReadinessEnv,
       parseWorkerEnv,
     } = await import("../env"));
+  });
+
+  test("audit maintenance accepts only its PostgreSQL configuration without changing global database configuration", () => {
+    const previousDatabaseUrl = process.env.DATABASE_URL;
+    expect(parseAuditActionMaintenanceEnv({
+      IAM_WORKER_DATABASE_URL: "postgresql://iam:password@localhost/iam?options=-csearch_path%3Daudit",
+      IAM_WORKER_REDIS_PORT: "invalid-unused",
+      IAM_WORKER_LOG_FORMAT: "invalid-unused",
+    })).toEqual({ databaseUrl: "postgresql://iam:password@localhost/iam?options=-csearch_path%3Daudit" });
+    expect(process.env.DATABASE_URL).toBe(previousDatabaseUrl);
+    for (const databaseUrl of [undefined, "", "not-a-url", "https://localhost/iam"]) {
+      expect(() => parseAuditActionMaintenanceEnv({
+        IAM_WORKER_DATABASE_URL: databaseUrl,
+        DATABASE_URL: "postgresql://unused-fallback/iam",
+      })).toThrow();
+    }
+    expect(parseAuditActionMaintenanceEnv({
+      IAM_WORKER_DATABASE_URL: "postgres://iam:password@localhost/iam",
+    })).toEqual({ databaseUrl: "postgres://iam:password@localhost/iam" });
   });
 
   test("parses Client Runtime maintenance without PostgreSQL or general Worker runtime configuration", () => {

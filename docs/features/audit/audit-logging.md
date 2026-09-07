@@ -52,6 +52,12 @@ actor Principal Session ID、原始异常或其他 provider 细节。Redis 原�
 `changed:true` 后审计失败沿用 `ADMIN_LOGIN_STATE_AUDIT_FAILED_AFTER_EFFECT`，作用不回滚，调用方刷新确认且不得
 自动重试解除。解除不产生 Session Revocation 审计，因为它不影响任何已有 Principal Session。
 
+## 历史 action 规范化
+
+历史 `audit_log.action` 的八类登录别名由独立 Worker `audit:actions` 工具规范化，只修改 action，不改变 outcome 或其他审计事实。
+当前代码候选已移除运行时别名：Admin API 合并去重单 action/多 actions 后精确查询，outcome 独立筛选；展示直接使用规范中文标签，未知 action 原文回退，不解释旧后缀。部署前须按[规范化与恢复手册](../../releases/audit-action-canonicalization.md)完成目标环境旧 writer 退出、迁移、独立 verify 与查询验收。
+恢复迁移前备份同样需要重复门禁；迁移失败继续使用兼容候选。工具票与无别名票关闭均不表示目标数据已经迁移。
+
 ## `login_log` 已退役
 
 新登录事件只写入 `audit_log`，`packages/db` 不再导出 legacy `login_log` schema 或 relations。删除 `login_log` 的数据库迁移属于破坏性迁移；生产执行前必须确认历史登录记录已经迁移到 `audit_log`，或确认当前环境没有需要保留的 legacy 登录记录。

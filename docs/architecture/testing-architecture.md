@@ -38,6 +38,9 @@ profile 不是新的测试层级、速度标签或 Gate。多资源测试按测�
   PostgreSQL command Integration 验证命令进程；Full-system E2E 从存量 v2 row 经真实 Worker backfill 收敛到 v3，随后在
   Gateway routes 发布前实际运行 PostgreSQL 与 Redis/Subject Facts/Subject Access 两道 production gate，并通过真实 HTTP
   验证 canonical Filter、legacy/Public/Delegation adapter 与 Employment invalidation 的代表矩阵。
+- Employment 全库诊断通过 `@iam/user-profile-read-model/worker` 与 Worker `employment:verify` 验证；Component
+  覆盖分类、完整 ID 集合与稳定排序，PostgreSQL contract 验证真实只读库存和命令退出码。它不等价于 Profile builder
+  发布前的父对象 fail-closed 守卫，后者的独立行为测试继续保留。
 
 每个测试候选必须由一个且仅一个 canonical collection 收集。Admin API 的 client runtime 真实 contract 位于 `redis`
 profile：Custom SSO 与 Traffic Gate 通过 production Admin runtime 的 `clientRuntimeInvalidation` seam 与真实 Client service
@@ -138,7 +141,7 @@ agent 先启动临时 Docker 容器。`test:integration` 本身不创建资源�
 component -> process -> redis -> postgres -> composition -> browser
 ```
 
-预检包括 `IAM_API_CORE_CLEANUP_TEST_REDIS_URL`；它不得回退普通 Redis URL。缺少任一 URL 时，命令在启动 profile 前失败。
+每项专用 URL 均不得回退 runtime 或其他 test URL。缺少任一 URL 时，命令在启动 profile 前失败。
 Agent 可以补齐临时资源后重新运行，但命令不得 skip、自动 retry 或读取 runtime/development 配置。
 
 ## Collection Guard
@@ -226,16 +229,16 @@ Admin API 的真实事务与 PostgreSQL correctness contract 使用 owner-specif
 hostname、port 或 logical DB identity。调用方仍须提供专用、非 production Redis；harness 保留 #68 对 Worker 自身 runtime
 tuple 的直接防误用检查，full restore contract 在写 fixture 前证明 Module-owned inventory 为空，并只登记本次
 Client/restore fixture 与 non-owner sentinel。该 profile 运行 production Redis-only command composition：targeted contract 以独立 observer 验证三类
-payload 均重新回源、重复 repair 安全且 sentinel 保留；restore contract 建立 versioned 与三套 legacy owner inventory，验证
-分批 full repair、另起 Worker process 的 scan-only full verify 与 sentinel 保留。测试结束只精确 `UNLINK` 本次登记键并验证
+payload 均重新回源、重复 repair 安全且 sentinel 保留；restore contract 建立当前 Snapshot owner inventory，验证
+分批 full repair、部分失败重跑、另起 Worker process 的 scan-only full verify 与 non-owner sentinel 保留。
+旧 OIDC、Custom SSO 与 Traffic Gate key 不属于当前 owner inventory，其残留不使 verify 失败；测试不证明旧 namespace 已清空。
+测试结束只精确 `UNLINK` 本次登记键并验证
 owner inventory 无残留，禁止 `FLUSHDB`/`FLUSHALL`。
 
-Destructive legacy cleanup 不使用普通 namespace-isolated Redis。它只接受调用方提供的
-`IAM_API_CORE_CLEANUP_TEST_REDIS_URL`，该 URL 必须指向独占、初始为空且可销毁的 logical DB 或 instance，并且不能与任何
-可见的普通 test/runtime Redis identity 相同。其真实 Redis contract 同时验证 ACL 禁止 `FLUSHDB`/`FLUSHALL`、non-target
-sentinel 保留，以及独立 client 观察到的完整 before/after inventory 精确等于目标删除集合。API Core Redis contract 与 API
-composition 复用同一个 API Core-owned testing harness 完成 identity preflight、初始 inventory、CLI 执行和最终 teardown；
-调用方不各自实现弱化的 destructive cleanup validator。
+API Core 的 Client Runtime full restore contract 使用现有 `IAM_API_CORE_TEST_REDIS_URL`，按 Redis profile 串行运行。
+写入 fixture 前先验证当前 Snapshot owner inventory 为空，测试后只精确清理登记的 fixture，并验证 owner inventory 无残留。
+非 owner namespace 可保留；不要求整个 logical DB 为空，也不使用 `FLUSHDB`/`FLUSHALL`。
+旧 Session cleanup CLI、共享 harness 与专属 Redis 配置已退役；API composition 继续使用 API 自有 PostgreSQL/Redis 资源。
 
 ## 默认验证与交付
 
@@ -272,8 +275,9 @@ Component/Redis、三类 Adapter Component、Admin Component/PostgreSQL/composit
 Full-system E2E 的 owner commands。API Core 的真实 Redis contract 证明 Module 的受控 source fact/invalidation；Admin composition
 rehearsal 再用临时 PostgreSQL schema、真实 Admin target-bound mutation、required Redis invalidation 和 OIDC/Custom SSO/Traffic
 Gate 公开 Reader 证明 canary 的 Maintenance 事实与恢复事实均被重新 acquisition。Maintenance 与可信 Snapshot acquisition failure
-的不同业务映射仍由各 Adapter 的 Component contract 负责。任何测试结果都不能替代 production freeze、drain、PONR 或 namespace
-verify 证据。
+的不同业务映射仍由各 Adapter 的 Component contract 负责。任何测试结果都不能替代 production freeze、drain 或当前 namespace
+verify 证据。当前恢复矩阵与操作阶段见[恢复手册](../releases/client-runtime-snapshot-restore.md)；首次旧代切换的 PONR 与
+legacy 清理证据仅由[历史手册](../releases/client-runtime-snapshot-hard-cutover.md)记录，不属于当前 repair/verify 的证明范围。
 
 | 阶段 | 最小范围 |
 |---|---|

@@ -80,18 +80,27 @@ describe("Client Runtime Snapshot module", () => {
 
     expect(report.unlinkBatches > 1).toBe(true);
     expect(report).toMatchObject({
-      scannedKeys: 10,
-      unlinkedKeys: 10,
+      scannedKeys: 3,
+      unlinkedKeys: 3,
       unlinkBatches: expect.any(Number),
     });
     expect(verify).toEqual({ matchingKeys: 0 });
-    expect(redis.keys()).toEqual(["iam:sentinel:must-remain"]);
+    expect(redis.keys()).toEqual([
+      "oidc:client-runtime:a",
+      "custom-sso:client-runtime:a",
+      "custom-sso:client-runtime-generation:a",
+      "custom-sso:client-runtime-mutation:a",
+      "client:traffic-gate:a",
+      "client:traffic-gate-generation:a",
+      "client:traffic-gate-mutation:a",
+      "iam:sentinel:must-remain",
+    ].sort());
   });
 
   test("full restore repair fails closed without confirmation and can restart after a partial unlink failure", async () => {
     const redis = new RestoreMaintenanceRedisFake([
       "client-runtime-snapshot:v1:{a}:control",
-      "oidc:client-runtime:a",
+      "client-runtime-snapshot:v1:{b}:control",
       "iam:sentinel:must-remain",
     ]);
     const maintenance = createClientRuntimeSnapshotRestoreRepairWithInventory({
@@ -144,7 +153,7 @@ describe("Client Runtime Snapshot module", () => {
     const report = await verifier.verifyAllAfterRedisRestore({
       protocolTrafficStopped: true,
     });
-    expect(report).toEqual({ matchingKeys: 2 });
+    expect(report).toEqual({ matchingKeys: 1 });
     expect(redis.unlinkCalls).toBe(0);
 
     redis.failNextScan = true;

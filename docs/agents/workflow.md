@@ -86,7 +86,7 @@ assignee 和 GitHub open/closed 状态表达：
   启动本地临时容器，等待服务 ready，再把生成的 URL 传给测试命令；测试命令和 harness 本身不启动 Docker。
 - 临时容器必须使用仓库声明的镜像版本、动态宿主端口和本次任务唯一的 name/label。Agent 创建容器后立即记录准确的
   container ID，并在测试成功、失败或中断后只按该 ID 清理，不使用 glob、prefix scan 或 prune。不得使用 development、
-  runtime 或 production 资源；`IAM_API_CORE_CLEANUP_TEST_REDIS_URL` 还必须使用独立的临时 Redis。
+  runtime 或 production 资源。
 - Docker 不可用或临时资源无法安全创建时，agent 必须明确报告未执行的测试及原因，不得把该测试记录为通过。
 - 不维护按路径展开的强制验证矩阵。Agent 根据风险选择直接相关的命令，并把结果摘要写入相关 issue 评论；命令无法运行时
   明确报告，不伪造通过记录。

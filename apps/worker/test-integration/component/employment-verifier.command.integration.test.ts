@@ -1,8 +1,8 @@
-import type { EmploymentCutoverVerifyCommandReport } from "@worker/commands/employment-cutover-verifier";
-import { runEmploymentCutoverVerifyCommand } from "@worker/commands/employment-cutover-verifier";
+import type { EmploymentVerifyCommandReport } from "@worker/commands/employment-verifier";
+import { runEmploymentVerifyCommand } from "@worker/commands/employment-verifier";
 import { describe, expect, mock, test } from "bun:test";
 
-describe("Employment cutover verifier command", () => {
+describe("Employment verifier command", () => {
   test("returns and logs the complete read-only verification report", async () => {
     const report = {
       version: 1 as const,
@@ -18,23 +18,23 @@ describe("Employment cutover verifier command", () => {
         count: 1,
         employmentIds: [41],
       }],
-    } satisfies EmploymentCutoverVerifyCommandReport;
+    } satisfies EmploymentVerifyCommandReport;
     const verify = mock(async () => report);
     const info = mock(() => {});
 
-    expect(await runEmploymentCutoverVerifyCommand({
+    expect(await runEmploymentVerifyCommand({
       verifier: { verify },
       logger: { info },
     })).toEqual(report);
     expect(info).toHaveBeenNthCalledWith(
       1,
       {},
-      "Employment cutover verification started",
+      "Employment verification started",
     );
     expect(info).toHaveBeenNthCalledWith(
       2,
       report,
-      "Employment cutover verification completed",
+      "Employment verification completed",
     );
   });
 });

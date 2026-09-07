@@ -3,7 +3,6 @@ import type { Context } from "hono";
 import type { AuditLogInput } from "./audit.context";
 import type { AuditRepository } from "./audit.repository";
 import type { AuditLogPaginationQueryDto } from "./audit.type";
-import { expandAuditActionAliases } from "@iam/contracts";
 import {
   AuditLogDtoSchema,
   AuditLogWriteDtoSchema,
@@ -33,7 +32,7 @@ function enrichAuditDetails(input: AuditLogInput): AuditDetails {
   return details;
 }
 
-export function normalizeAuditLogQueryActions(query: AuditLogPaginationQueryDto): AuditLogPaginationQueryDto {
+function normalizeAuditLogQueryActions(query: AuditLogPaginationQueryDto): AuditLogPaginationQueryDto {
   const { action, actions, ...conditions } = query.conditions;
   const requestedActions = [
     action,
@@ -48,7 +47,7 @@ export function normalizeAuditLogQueryActions(query: AuditLogPaginationQueryDto)
     ...query,
     conditions: {
       ...conditions,
-      actions: expandAuditActionAliases(requestedActions),
+      actions: [...new Set(requestedActions)],
     },
   };
 }

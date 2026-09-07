@@ -152,8 +152,8 @@ composition。跨层实例连接统一由 composition 完成。
   Redis key 或 Lua。共享 required invalidation 成功后，late source result 不能发布；Snapshot acquisition unavailable
   映射为既有 Custom SSO typed retryable error。Admin Client mutation 的 canonical freshness seam 是 target-bound wrapper
   注册的 `clientRuntimeInvalidation` required task；Custom SSO 在线 mutation 不再写 legacy cache/generation/mutation key，
-  也不再建立 ownership fence、续租 heartbeat 或执行 settlement。legacy Custom SSO key pattern 只存在于
-  Client Runtime Snapshot Module 私有的 restore cleanup inventory，不由应用或协议 package 公开。
+  也不再建立 ownership fence、续租 heartbeat 或执行 settlement。旧 Custom SSO Runtime key 已退出当前
+  repair/verify inventory；旧部署或备份的迁移须另行安排。
   协议中性的 Client Traffic Gate 使用同一 Client Runtime Snapshot Module：API 与 OIDC Provider composition
   各自注册 `traffic-gate` canonical Adapter，并通过绑定 kind 的窄 Reader 取得 Gate Snapshot。Adapter 从 PostgreSQL
   Client 全局状态派生 `enabled`、`maintenance`、`disabled` 或 `deleted`；只有明确 `enabled` 放行，absent、source/Redis/CAS
@@ -163,8 +163,8 @@ composition。跨层实例连接统一由 composition 完成。
   complete/abort 或 settlement。target-bound wrapper 在 commit 后执行 required client-wide Snapshot invalidation；成功传播后
   后续 Gate acquisition 重新取得 PostgreSQL 当前事实。若 PostgreSQL 已提交但 invalidation 失败，Admin 返回 required
   after-commit error，既有正常 Snapshot 仍可被新请求取得并放行，直到显式 targeted repair；这不回滚数据库事实，也不
-  改变协议 Session、Credential 或 artifact revocation 规则。legacy Traffic Gate key pattern 同样只存在于 Snapshot Module
-  私有的 restore cleanup inventory，不参与在线读取或 mutation correctness。
+  改变协议 Session、Credential 或 artifact revocation 规则。旧 Traffic Gate Runtime key 同样不参与在线读取、mutation
+  correctness 或当前 repair/verify。
   Subject Facts cache hit 热路径不访问 PostgreSQL。OIDC Provider production composition 已注入同一 Projection
   Module，并在 Authorization Code 持久化前按当前 client、scope、config version 与 Provider Session binding 创建严格
   Claims Snapshot；Access Token 只转移该快照，UserInfo/ID Token 只重放并复验快照，不重新读取当前主体事实。
@@ -412,9 +412,9 @@ User Profile 的初代 V1 builder、Facts reader/publisher 与 Subject Projectio
   `consumeAuthCode → createLocalSession` 两阶段 interface。
 - SSO route 只拥有 HTTP query/header/Cookie 解析、response envelope、Gateway/ORCAS Cookie、redirect query 和
   status 适配，不接触 Session Kernel 模型，也不编排 grant、credential、session、ORCAS 或补偿步骤。
-- 现有 Redis key、credential discriminator 和 audit action 不因 module interface 收缩而重命名。维护窗口中的旧 key
-  清理由独立运维命令负责；production composition 不注册旧 active session payload reader、normalizer 或 client logout
-  notifier。
+- 现有 Redis key、credential discriminator 和 audit action 不因 module interface 收缩而重命名。旧 Session cleanup 命令已退役，旧环境或旧备份的迁移须另行安排。
+  当前维护保留 Kernel 撤销/pending cleanup 与协议 owner 的精确 artifact 清理；后者保护 Principal Session，不是全量 reset。
+  Production composition 不注册旧 active session payload reader、normalizer 或 client logout notifier。
 
 ## Runtime-specific Composition
 
@@ -460,8 +460,8 @@ User Profile 的初代 V1 builder、Facts reader/publisher 与 Subject Projectio
 - OIDC artifact 生命周期不再与 Runtime cache invalidation 通过 Pub/Sub 串联。Admin mutation 仍通过 Session Kernel
   revocation seam 撤销当前 OIDC Client Binding 与 credential/token；Provider protocol object 在读取时使用当前
   `oidcConfigVersion` fail closed，并由其 store 删除确认过期的对象。显式 Client Protocol artifact cleanup 继续由独立
-  maintenance command 拥有，不作为 Runtime Snapshot invalidation 的在线副作用。旧 OIDC runtime key pattern 只存在于
-  Client Runtime Snapshot Module 私有的 restore cleanup inventory。
+  maintenance command 拥有，不作为 Runtime Snapshot invalidation 的在线副作用。旧 OIDC Runtime key 已退出当前
+  Snapshot Module 的 repair/verify inventory。
 - Provider protocol module 可以静态 import `oidc-provider` types 和纯 protocol helpers，但不得静态绑定 app-local
   DB、Redis、logger 或 concrete production repository；production 实例连接只发生在 composition。
 
@@ -480,14 +480,19 @@ User Profile 的初代 V1 builder、Facts reader/publisher 与 Subject Projectio
   UnitOfWork、ClientService、Reader Adapter、queue 或业务 mutation owner。`client-runtime:repair --client-code
   <clientCode>` 原子推进目标 Client 的共享 control 并删除三类 payload；重复执行保持安全。命令只输出包含 canonical
   `clientCode` 的低熵 completed/failed report，observer/report logger 失败不反转已完成 repair。Full restore repair 与
-  targeted 模式互斥并要求显式停流确认；它以 `SCAN` 和分批 `UNLINK` 清理 Module-owned versioned/legacy inventory，
+  targeted 模式互斥并要求显式停流确认；它以 `SCAN` 和分批 `UNLINK` 只清理当前 Module-owned Snapshot namespace，
   部分失败后可以从头重跑。独立 `createClientRuntimeVerifyCommandComposition` 只注入 scan-only verifier，不持有 eval、
   unlink 或 repair capability；`client-runtime:verify` 在新的 Worker process 只读重扫同一 inventory，只有完整扫描且 owner key
   为零时退出 0。两类 full command 的 safe report 以 status 为 gate，计数只用于诊断，不声称证明停流、drain、
-  PONR 或业务可用。
-- `createEmploymentCutoverCommandComposition` 是更窄的 PostgreSQL-only composition：只从
-  `@iam/user-profile-read-model/worker` 组装 Employment Cutover Verifier 与只读 repository，不构造 Redis、queue、consumer、
-  dashboard 或 HTTP server。对应命令仅由运维人员在切换前显式调用，不进入普通 Worker 启动或请求路径。
+  业务可用或旧 namespace 已清空。当前 namespace 中的 `v1` 是有效存储版本；七条旧 OIDC、Custom SSO 与 Traffic Gate
+  pattern 已退出维护 inventory。当前恢复步骤见[恢复手册](../releases/client-runtime-snapshot-restore.md)，旧备份迁移须另行
+  固定适用候选与操作边界，不允许旧 reader/writer 混跑。
+- `createEmploymentCommandComposition` 是更窄的 PostgreSQL-only composition：只从
+  `@iam/user-profile-read-model/worker` 组装 Employment Verifier 与只读 repository，不构造 Redis、queue、consumer、
+  dashboard 或 HTTP server。对应命令仅由运维人员按需显式调用，不进入普通 Worker 启动或请求路径。
+- `audit:actions` 是独立 PostgreSQL-only 一次性命令，入口直接拥有单连接与关闭，不加载 Worker composition barrel。
+  固定八映射不依赖 runtime aliases；只读 inventory/verify 与持写锁事务 apply 的门禁见
+  [审计规范化手册](../releases/audit-action-canonicalization.md)。当前代码候选已删除运行时别名，Admin 按精确 action/outcome 查询；目标环境迁移与代码交付分开。
 - Worker composition 负责关闭构造出的 modules、HTTP server、Redis 和 DB。业务 package 不拥有 process signal
   handling；`src/index.ts` 只负责启动、记录 runtime 状态和转交 graceful shutdown。
 

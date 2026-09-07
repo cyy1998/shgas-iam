@@ -13,6 +13,7 @@ const RESERVED_DATABASE_NAMES = new Set(["postgres", "template0", "template1"]);
 export interface AdminApiPostgresTestHarness {
   readonly db: DbClient;
   readonly sql: ReturnType<typeof postgres>;
+  readonly commandDatabaseUrl: string;
   readonly reset: () => Promise<void>;
   readonly close: () => Promise<void>;
 }
@@ -38,9 +39,12 @@ export async function createAdminApiPostgresTestHarness(): Promise<AdminApiPostg
     );
     await migrate(db, { migrationsFolder, migrationsSchema: schemaName });
 
+    const commandDatabaseUrl = new URL(databaseUrl);
+    commandDatabaseUrl.searchParams.set("options", `-c search_path=${schemaName}`);
     return {
       db,
       sql: scopedSql,
+      commandDatabaseUrl: commandDatabaseUrl.toString(),
       async reset() {
         await scopedSql!.unsafe(`
           TRUNCATE TABLE

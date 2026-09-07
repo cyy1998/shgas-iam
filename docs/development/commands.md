@@ -84,8 +84,8 @@ pnpm test:integration:browser
 
 `test:unit` 通过 Turbo 运行 package Unit，并精确加入四个 root tooling tests。各 profile command 只运行同名 package task。
 Integration 资源由调用方负责：维护者可以提供现有 URL，agent 也可以先启动临时 Docker 容器。聚合
-`test:integration` 本身不启动 Docker，而是在任何 profile 启动前一次性列出全部缺失的 PostgreSQL/Redis 环境变量；其中
-包括 `IAM_API_CORE_CLEANUP_TEST_REDIS_URL`，且任何专用 URL 都不得回退 runtime 或其他 test URL。资源 tasks 在 Turbo
+`test:integration` 本身不启动 Docker，而是在任何 profile 启动前一次性列出全部缺失的 PostgreSQL/Redis 环境变量；
+任何专用 URL 都不得回退 runtime 或其他 test URL。资源 tasks 在 Turbo
 strict env 下显式透传对应 owner URL 并保持 `cache:false`。
 `pnpm test` 永久代理 `pnpm test:unit`；有 Unit collection 的 package 使用同一代理，没有 Unit collection 的 package
 不发布空 `test`。旧 `test:smoke`、`test:external`、package-local `test:postgres`/`test:redis` 与 frontend `e2e`
@@ -275,13 +275,13 @@ Explicit recovery 的 cleanup 有独立 120 秒 deadline，对 exact project 执
 diagnostics 或 cleanup。命令名不表示已经接入 CI provider，也不授予 merge、发布或部署权限。Integration 资源与 Full-system
 E2E lifecycle 的详细契约分别由本页后续专用资源说明和 [测试编排架构](../architecture/testing-architecture.md) 持有。
 
-Client Runtime Snapshot 首次激活不提供 feature-specific root runner。候选验证由发布平台或 release owner 对同一固定候选逐项调用
+Client Runtime Snapshot 当前恢复不提供 feature-specific root runner。候选验证由发布平台或 release owner 对同一固定候选逐项调用
 `pnpm verify`、`pnpm check:test-collection`、相关 Module/Adapter/Admin/Worker package commands 与 `pnpm test:e2e`，并独立保存每项
 退出状态与证据。其中 `pnpm --filter @iam/admin-api client-runtime:hard-cutover-rehearsal` 通过真实 Admin mutation、临时 PostgreSQL
 schema、真实 Redis 与三类公开 Reader 验证 mutation 后事实及恢复，并精确清理本次 owner 资源。各真实资源命令要求调用方提供专用
-URL，且不会创建、推断或清理这些调用方资源；仓库命令也不执行 production freeze、部署、drain、PONR、namespace reset 或切流。
-完整命令矩阵与人工阶段见
-[Client Runtime Snapshot hard-cutover 与验收手册](../releases/client-runtime-snapshot-hard-cutover.md)。
+URL，且不会创建、推断或清理这些调用方资源；测试命令也不执行 production freeze、部署、drain、namespace reset 或切流。
+当前命令矩阵与恢复阶段见[Client Runtime Snapshot 恢复手册](../releases/client-runtime-snapshot-restore.md)；
+[首次 hard-cutover 手册](../releases/client-runtime-snapshot-hard-cutover.md)仅作为旧代切换历史参考。
 
 当前 Windows 本地聚合 evidence 与平台 adoption 状态见
 [测试编排架构的“默认验证与交付”](../architecture/testing-architecture.md#默认验证与交付)；Linux/真实 CI 尚未验收。
@@ -289,9 +289,7 @@ URL，且不会创建、推断或清理这些调用方资源；仓库命令也�
 外部资源检查不进入 `pnpm verify`，需要时显式运行：
 
 ```bash
-# API/OIDC 真实 production entry 联合 PG/Redis 验证；普通资源与 cleanup Redis 必须彼此独立，
-# 且全部指向调用方独占、非生产、可销毁的资源
-IAM_API_CORE_CLEANUP_TEST_REDIS_URL=<exclusive-disposable-url> \
+# API/OIDC 真实 production entry 联合 PG/Redis 验证；全部资源由调用方独占、非生产且可销毁
 IAM_API_TEST_DATABASE_URL=<dedicated-url> IAM_API_TEST_REDIS_URL=<dedicated-url> \
 IAM_OIDC_PROVIDER_TEST_DATABASE_URL=<dedicated-url> IAM_OIDC_PROVIDER_TEST_REDIS_URL=<dedicated-url> \
 pnpm test:integration:composition
@@ -338,9 +336,8 @@ pnpm --filter @iam/user-profile-read-model test:integration:postgres
 # User Profile Subject Facts 单条/CAS/batch prewarm contract（需专用 IAM_USER_PROFILE_TEST_REDIS_URL）
 pnpm --filter @iam/user-profile-read-model test:integration:redis
 
-# API Core 普通 Redis contracts 与 legacy cleanup 精确边界（需两个彼此独立的专用 URL）
+# API Core Redis contracts（需专用 owner URL；当前 Snapshot inventory 测试串行运行）
 IAM_API_CORE_TEST_REDIS_URL=<namespace-isolated-url> \
-IAM_API_CORE_CLEANUP_TEST_REDIS_URL=<exclusive-disposable-url> \
 pnpm --filter @iam/api-core test:integration:redis
 
 # Mock-browser Integration
@@ -351,20 +348,14 @@ pnpm --filter @iam/sso test:integration:browser
 pnpm gateway:apisix:validate -- <environment-arguments>
 ```
 
-`IAM_API_CORE_CLEANUP_TEST_REDIS_URL` 必须指向初始为空、调用方独占且可销毁的 logical DB/instance；URL 所使用的 ACL user
-必须允许测试所需的 `ACL DRYRUN`、inventory、fixture 与 cleanup 命令，同时由 `ACL DRYRUN` 证明其不能执行
-`FLUSHDB`/`FLUSHALL`。Cleanup 测试不会把 `IAM_API_CORE_TEST_REDIS_URL` 或 runtime Redis 用作 fallback；它会在连接前
-比较去除 credential 后的 host/port/logical DB identity，并拒绝与任一可见普通测试或 runtime Redis identity 相同的资源。
-Caller-owned 对照集合与 `turbo.json` 的 `test:integration:redis.passThroughEnv` 及
-`test:integration:composition.passThroughEnv` 中 Redis URL 集合一致，包含 Admin API、API Core、API、OIDC Provider、User
-Profile 与 Worker 的专用 Redis URL，明确排除正在验证的 cleanup URL 自身。任何 Redis URL 出现 query 参数时也会在
-连接前失败，避免 `?db=`、`?port=` 等产生第二种 connection identity 表示。测试命令和 harness 不负责启动 Docker。
-Agent 可以在运行命令前启动临时容器，但必须使用仓库声明的镜像版本、动态宿主端口与任务唯一的 name/label，等待服务
-ready 后传入 URL，并在测试结束后只按预先记录的 container ID 清理。不得用 glob、prefix scan 或 prune 代替精确清理。
+测试命令和 harness 不负责启动 Docker。Agent 按开发工作流提供临时资源、等待 ready 并记录准确 container ID，
+测试结束只按该 ID 清理，不使用 glob、prefix scan 或 prune。
 
 维护者决定 #69 的 Client Runtime full repair contract 与 #68 targeted repair 共用
 `IAM_WORKER_TEST_REDIS_URL` owner resource，不新增 cleanup-specific env，也不跨其他可见环境推断 Redis identity。Worker harness
-只登记本次 Client/restore fixture 与 non-owner sentinel，测试后精确 `UNLINK` 并验证 Module-owned inventory 无残留。
+只登记本次 Client/restore fixture 与 non-owner sentinel，测试后精确 `UNLINK` 并验证当前 Module-owned inventory 无残留。
+API Core full restore contract 使用现有 `IAM_API_CORE_TEST_REDIS_URL`，写 fixture 前证明当前 Snapshot inventory 为空；七条旧 Runtime pattern 对应的测试 key 只是 non-owner fixture，
+用于证明当前 repair 保留它们且 verify 不以其残留失败。测试仅精确清理自己登记的 fixture，维护命令不拥有旧 key。
 
 旧 Ticket 12 的 V1 rehearsal/backfill/verify 入口已随 strict V2 激活撤销。维护者只使用本页列出的
 User Profile maintenance、API/OIDC external entry、hermetic process smoke 与数据库 rollback seams；不得把 URL credential、
@@ -421,9 +412,14 @@ Hook 不运行 lint、typecheck、test、build 或 tracker checker。按改动�
 - API Core：`pnpm --filter @iam/api-core <lint|test|test:unit|test:integration:component|test:integration:process|test:integration:redis|client-runtime:hard-cutover-redis|typecheck>`
 - Client Subject Projection：`pnpm --filter @iam/client-subject-projection <lint|test|test:unit|test:integration:component|typecheck>`
 - User Profile Read Model：`pnpm --filter @iam/user-profile-read-model <lint|test|test:unit|test:integration:component|test:integration:postgres|test:integration:redis|typecheck>`
-- Worker：`pnpm --filter @iam/worker <dev|serve|lint|test|test:unit|test:integration:component|test:integration:process|test:integration:postgres|test:integration:redis|typecheck|employment:cutover-verify|user-profile:backfill|user-profile:repair|user-profile:verify-postgres|user-profile:verify-redis|client-protocol:epochs|client-runtime:repair|client-runtime:verify>`
-- Employment 生命周期切换前只读 gate：
-  `IAM_WORKER_DATABASE_URL=<target-url> pnpm --filter @iam/worker employment:cutover-verify`
+- Worker：`pnpm --filter @iam/worker <dev|serve|lint|test|test:unit|test:integration:component|test:integration:process|test:integration:postgres|test:integration:redis|typecheck|employment:verify|user-profile:backfill|user-profile:repair|user-profile:verify-postgres|user-profile:verify-redis|client-protocol:epochs|client-runtime:repair|client-runtime:verify>`
+- Employment 全库只读诊断：
+  `IAM_WORKER_DATABASE_URL=<target-url> pnpm --filter @iam/worker employment:verify`
+- 历史审计 action 一次性规范化：显式 `IAM_WORKER_DATABASE_URL` 下运行
+  `pnpm --filter @iam/worker audit:actions -- inventory`、
+  `pnpm --filter @iam/worker audit:actions -- apply --writers-stopped` 和独立
+  `pnpm --filter @iam/worker audit:actions -- verify`。固定映射、退出码、事务锁及发布/恢复门禁见
+  [操作手册](../releases/audit-action-canonicalization.md)；当前代码候选已移除运行时别名，工具继续独立保留；代码交付不证明目标环境已迁移。
 - Subject Access 恢复：
   `pnpm --filter @iam/worker run user-profile:repair -- --subject-access-only --limit <positive-integer>`。
   该模式依次执行 PostgreSQL stale pending transition intent 回收、Redis transition recovery 与 authority repair，
@@ -452,13 +448,14 @@ Hook 不运行 lint、typecheck、test、build 或 tracker checker。按改动�
   `pnpm --filter @iam/worker client-runtime:repair -- --all --protocol-traffic-stopped` 与
   `pnpm --filter @iam/worker client-runtime:verify -- --all --protocol-traffic-stopped`。Full repair 与 targeted 参数互斥，
   两个 full command 都必须显式确认协议流量已关闭；缺少确认时在创建 Redis resource 前失败。Repair 以 `SCAN` 和分批
-  `UNLINK` 清理 Module-owned versioned namespace 与三套 legacy Runtime inventory，部分失败后保持停流并从头安全重跑；
+  `UNLINK` 只清理当前 Module-owned Snapshot namespace，部分失败后保持停流并从头安全重跑；
   verify 在新的 Worker process 中只读重扫，只有完整扫描成功且 owner key 为零时报告 `completed` 并退出 0。Safe report
   不包含 Redis URL、key、control、payload、credential 或原始错误；status 是发布 gate，计数只用于诊断，verify 不证明
-  traffic freeze、旧实例 drain、PONR receipt 或业务可用。两条 full command 的默认 deadline 是 5 分钟；受控演练可通过
+  traffic freeze、实例 drain、业务可用或旧 namespace 已清空。七条旧 Runtime pattern 已退出 inventory，当前 namespace 的
+  `v1` 存储版本继续有效。两条 full command 的默认 deadline 是 5 分钟；受控演练可通过
   正整数 `IAM_WORKER_CLIENT_RUNTIME_MAINTENANCE_TIMEOUT_MS` 收紧 deadline，超时必须输出 failed report、非零退出并完成资源
-  shutdown。完整 hard-cutover 顺序见
-  [Client Runtime Snapshot hard-cutover 与验收手册](../releases/client-runtime-snapshot-hard-cutover.md)。
+  shutdown。完整恢复顺序见[Client Runtime Snapshot 恢复手册](../releases/client-runtime-snapshot-restore.md)。
+  旧部署或旧备份迁移须另行固定适用候选与操作边界，不得混跑旧 reader/writer。
 - Admin frontend：`pnpm --filter @iam/admin <dev|build|lint|test|test:unit|test:integration:component|test:integration:browser|typecheck|format>`
 - SSO frontend：`pnpm --filter @iam/sso <dev|build|lint|test|test:unit|test:integration:component|test:integration:browser|typecheck|format>`
 - Database：`pnpm --filter @iam/db <lint|test|test:unit|test:integration:postgres|typecheck|db:push|db:generate|db:migrate|db:check>`
@@ -466,7 +463,7 @@ Hook 不运行 lint、typecheck、test、build 或 tracker checker。按改动�
 - Organization Responsibility Resolution：`pnpm --filter @iam/organization-responsibility-resolution <lint|test:integration:component|test:integration:postgres|typecheck>`
 - Gateway：`pnpm --filter @iam/gateway-apisix <validate|diff|apply|lint|test|test:unit|test:integration:component|typecheck>`
 
-`employment:cutover-verify` 只在运维人员显式调用时扫描 Employment，不属于 Worker 启动或请求路径。它在 PostgreSQL
+`employment:verify` 只在运维人员显式调用时扫描 Employment，不属于 Worker 启动或请求路径。它在 PostgreSQL
 `READ ONLY` transaction 中检查非墓碑未知状态、Open Position/Organization 完整性、Employment Period、Open `endTime`、
 Ended `endTime`、未来 Open `startTime`、重复 Open 组合和多个 Open Primary。报告 `passed` 时退出 0；存在任一阻断项时
 报告 `failed` 并退出 1，按稳定分类列出全部相关 Employment ID。Legacy Employment Tombstone 单独计数且不因缺少可信

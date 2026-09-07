@@ -165,7 +165,7 @@
 - Worker publication transaction 必须锁定并重验同一 `user_profile_dirty` 的 user/version/processing 状态，再以
   单调 `source_dirty_version` 写入或删除 profile，并在同一 transaction 标记 dirty processed。Redis publication
   只能发生在 PostgreSQL 提交后，失败不得回滚已提交事实。
-- Employment Cutover Verifier 通过 `@iam/user-profile-read-model/worker` 的公开 read-side seam 在 PostgreSQL
+- Employment Verifier 通过 `@iam/user-profile-read-model/worker` 的公开 read-side seam 在 PostgreSQL
   `READ ONLY` transaction 中取得按 Employment ID 排序的一致 snapshot，只联接 Position 与直属 Organization 事实。
   Verifier 不写数据库、不从 `updateTime` 推断结束时间，也不生成修复 SQL；全部非墓碑 blocker 以稳定分类和完整
   Employment ID 集合报告，Legacy Employment Tombstone 只计数。

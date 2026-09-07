@@ -73,8 +73,6 @@ export const SystemLogEvent = {
   SsoLegacyBearerSourceUsed: "sso.legacy_bearer_source.used",
   SubjectFactsOperationObserved: "subject_facts.operation.observed",
   ClientRuntimeSnapshotOperationObserved: "client_runtime_snapshot.operation.observed",
-  SessionKernelCleanupLegacyKeysCompleted: "session_kernel.cleanup_legacy_keys.completed",
-  SessionKernelCleanupLegacyKeysFailed: "session_kernel.cleanup_legacy_keys.failed",
   SessionKernelSchemaCorrupted: "session_kernel.schema_corrupted",
   SessionKernelTombstoneReplayDetected: "session_kernel.tombstone_replay.detected",
   SessionKernelRevokeCleanupFailed: "session_kernel.revoke.cleanup_failed",

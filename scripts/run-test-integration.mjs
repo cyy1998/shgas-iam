@@ -3,7 +3,6 @@ import { spawnSync } from "node:child_process";
 import process from "node:process";
 
 const resourceEnvNames = [
-  "IAM_API_CORE_CLEANUP_TEST_REDIS_URL",
   "IAM_API_CORE_TEST_REDIS_URL",
   "IAM_ADMIN_API_TEST_REDIS_URL",
   "IAM_ADMIN_API_TEST_DATABASE_URL",

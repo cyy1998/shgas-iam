@@ -1,9 +1,9 @@
 import type { SubjectAccessRecordV1 } from "@iam/api-core/subject-access";
 import { isDeepStrictEqual } from "node:util";
 import {
-  assertSubjectProjectionPage,
+  assertUserProfileInventoryPage,
   requirePositiveSafeInteger,
-} from "../cutover/subject-projection-cutover.guards";
+} from "./user-profile-inventory.guards";
 
 export interface UserProfileReadinessProjection {
   userId: number;
@@ -208,7 +208,7 @@ async function runUserProfileInventoryGate<
     });
     if (page.length === 0)
       break;
-    assertSubjectProjectionPage(page, afterUserId, input.batchSize);
+    assertUserProfileInventoryPage(page, afterUserId, input.batchSize);
     verifiedUsers += page.length;
     await input.checkPage(page, failures);
     afterUserId = page.at(-1)!.userId;

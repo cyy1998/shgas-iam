@@ -105,7 +105,8 @@ describe("Worker Client Runtime maintenance real Redis wiring", () => {
   }, PROCESS_SMOKE_TEST_TIMEOUT_MS);
 
   test("production full repair and a fresh verify process gate the complete owner inventory", async () => {
-    expect(await harness.inventoryRestoreOwnerKeys()).toEqual([]);
+    const initialInventory = await harness.inventoryRestoreOwnerKeys();
+    expect(initialInventory).toEqual([]);
     const fixtureId = randomUUID();
     const versionedKeys = Array.from({ length: 105 }, (_, index) =>
       harness.ownedRestoreFixtureKey(`client-runtime-snapshot:v1:{w69-${fixtureId}-${index}}:control`));
@@ -126,7 +127,8 @@ describe("Worker Client Runtime maintenance real Redis wiring", () => {
     const beforeRepair = await runVerifyProcess();
     const repair = await runFullRepairProcess();
     const afterRepair = await runVerifyProcess(0);
-    const ownerValues = await harness.observer.mget(...versionedKeys, ...legacyKeys);
+    const ownerValues = await harness.observer.mget(...versionedKeys);
+    const legacyValues = await harness.observer.mget(...legacyKeys);
     const sentinel = await harness.observer.get(sentinelKey);
 
     expect(beforeRepair.exitCode).toBe(1);
@@ -140,9 +142,8 @@ describe("Worker Client Runtime maintenance real Redis wiring", () => {
     expect(afterRepair.output).toContain(
       "{\"schemaVersion\":1,\"operation\":\"verify-all\",\"status\":\"completed\",\"matchingKeys\":0}",
     );
-    expect(ownerValues).toEqual(
-      Array.from({ length: ownerValues.length }).fill(null) as Array<string | null>,
-    );
+    expect(ownerValues).toEqual(versionedKeys.map(() => null));
+    expect(legacyValues).toEqual(legacyKeys.map(() => "fixture"));
     expect(sentinel).toBe("fixture");
     for (const output of [beforeRepair.output, repair.output, afterRepair.output]) {
       expect(output).not.toContain(process.env.IAM_WORKER_TEST_REDIS_URL!);

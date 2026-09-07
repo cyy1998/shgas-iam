@@ -24,7 +24,7 @@ export {
 export type {
   CreateClientRuntimeSnapshotModuleWithAtomicStoreOptions,
 } from "./client-runtime-snapshot";
-export { CLIENT_RUNTIME_SNAPSHOT_RESTORE_CLEANUP_PATTERNS } from "./legacy-restore-cleanup-inventory";
+export { CLIENT_RUNTIME_SNAPSHOT_RESTORE_CLEANUP_PATTERNS } from "./maintenance-inventory";
 export { clientRuntimeSnapshotTestingKeys } from "./redis-store";
 export {
   createClientRuntimeRestoreInventoryReaderForTesting,

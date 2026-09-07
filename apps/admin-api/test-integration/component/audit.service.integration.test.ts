@@ -1,5 +1,5 @@
 import { AuditLogPaginationQueryDtoSchema } from "@admin-api/services/audit/audit.schema";
-import { createAdminAuditService, normalizeAuditLogQueryActions } from "@admin-api/services/audit/audit.service";
+import { createAdminAuditService } from "@admin-api/services/audit/audit.service";
 import { beforeEach, describe, expect, mock, test } from "bun:test";
 
 const insertedValues: unknown[] = [];
@@ -87,45 +87,25 @@ describe("admin audit writer", () => {
 });
 
 describe("admin auditService.searchAuditLogsForAdmin", () => {
-  test("expands canonical login action queries to canonical and legacy actions", () => {
-    expect(normalizeAuditLogQueryActions({
-      conditions: { action: "auth.login.password" },
-      pageNum: 1,
-      pageSize: 10,
-    })).toMatchObject({
+  test("merges and deduplicates exact single and multiple action filters", async () => {
+    await auditService.searchAuditLogsForAdmin(AuditLogPaginationQueryDtoSchema.parse({
       conditions: {
-        actions: [
-          "auth.login.password",
-          "auth.login.password.success",
-          "auth.login.password.failure",
-        ],
+        action: "auth.login.password",
+        actions: ["auth.login.password", "auth.login.password.failure", "external.import.success"],
+        outcome: "failure",
       },
+      pageNum: 2,
+      pageSize: 10,
+    }));
+    expect(searchAuditLogsPaged).toHaveBeenCalledWith({
+      conditions: {
+        actions: ["auth.login.password", "auth.login.password.failure", "external.import.success"],
+        outcome: "failure",
+      },
+      pageNum: 2,
+      pageSize: 10,
     });
   });
-
-  test("deduplicates multiple action queries while keeping non-login actions exact", () => {
-    expect(normalizeAuditLogQueryActions({
-      conditions: {
-        actions: [
-          "auth.login.password",
-          "auth.login.password.failure",
-          "admin.user.update",
-        ],
-      },
-      pageNum: 1,
-      pageSize: 10,
-    })).toMatchObject({
-      conditions: {
-        actions: [
-          "auth.login.password",
-          "auth.login.password.success",
-          "auth.login.password.failure",
-          "admin.user.update",
-        ],
-      },
-    });
-  });
-
   test("returns target user audit records", async () => {
     selectedRows = [auditRow()];
 

@@ -6,15 +6,15 @@ import {
 } from "@iam/contracts";
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:test";
 import {
-  createEmploymentCutoverRepository,
-  createEmploymentCutoverVerifier,
+  createEmploymentRepository,
+  createEmploymentVerifier,
 } from "../../src/worker";
 import { createPostgresTestHarness } from "./postgres-test-harness";
 
 const NOW = new Date("2026-08-11T12:00:00.000Z");
 const START = new Date("2026-08-01T00:00:00.000Z");
 
-describe("Employment cutover verifier PostgreSQL contract", () => {
+describe("Employment verifier PostgreSQL contract", () => {
   let harness: Awaited<ReturnType<typeof createPostgresTestHarness>>;
 
   beforeAll(async () => {
@@ -38,7 +38,8 @@ describe("Employment cutover verifier PostgreSQL contract", () => {
     await insertEmployment({ id: 1 });
     const verifier = createVerifier();
 
-    expect(await verifier.verify()).toEqual({
+    const report = await verifier.verify();
+    expect(report).toEqual({
       version: 1,
       verifiedAt: NOW.toISOString(),
       status: "passed",
@@ -121,12 +122,13 @@ describe("Employment cutover verifier PostgreSQL contract", () => {
       count: 2,
       employmentIds: [12, 13],
     }]);
-    expect(await readAllowedTables()).toEqual(before);
+    const after = await readAllowedTables();
+    expect(after).toEqual(before);
   });
 
   function createVerifier() {
-    return createEmploymentCutoverVerifier({
-      inventory: createEmploymentCutoverRepository(harness.db as typeof database),
+    return createEmploymentVerifier({
+      inventory: createEmploymentRepository(harness.db as typeof database),
       clock: { nowDate: () => NOW },
     });
   }

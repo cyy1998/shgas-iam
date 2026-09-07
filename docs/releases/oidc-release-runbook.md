@@ -2,7 +2,7 @@
 
 Type: runbook
 Status: Current
-Last verified: 2026-08-09
+Last verified: 2026-09-07
 Next review: 2026-10-31
 
 ## 发布前提
@@ -33,9 +33,8 @@ pnpm gateway:apisix:diff -- --env prod:iam --render-env
 
 确保 localhost 或 Admin API 主机不经过 HTTP 代理。
 
-代码中退役 legacy token-index runtime 不等于任何环境已完成迁移。进入维护窗口前必须盘点并 drain 所有仍可能写入或依赖
-`oidc:user-tokens:*`、`oidc:client-tokens:*`、`oidc:global-session-tokens:*` 的 Provider 实例、scheduler、sidecar 和旧镜像；
-同时确认 cleanup 后只回滚到不依赖这些 index 的版本。无法确认任一项时不得 apply Redis cleanup。
+旧 Session cleanup 命令已撤销。旧环境及旧备份的首次升级迁移不在当前候选支持范围，必须另行固定适用版本与迁移流程。
+本手册仅用于当前 Session Kernel/OIDC 架构，禁止旧 reader/writer 混跑；代码退役不证明环境已经完成迁移。
 
 ## JWK Signing Key Rotation
 
@@ -85,48 +84,26 @@ Session Kernel external token lookup 使用 HMAC hash。轮换顺序是：
 
 1. 部署数据库、API、管理端 API/UI、SSO Portal 和 Provider 代码，但暂不开放 APISIX `/oidc` 路由。
 2. 在维护窗口内停止 login、authorize、callback、token、UserInfo、logout 和 session refresh/renewal 流量。
-3. drain 所有旧 OIDC runtime、scheduler、sidecar 和旧镜像，确认没有进程会重新写入或依赖 legacy token index；记录已批准的
-   rollback image/strategy。若回滚版本依赖将被删除的旧 index，则停止发布，不得继续 cleanup。
+3. 确认部署与回滚候选均支持当前 Session Kernel 和协议存储；旧环境先完成独立迁移验收。
 4. staged Provider Session binding schema 变更时，不得长期混跑旧 reader 与新 writer。选择统一切换全部 OIDC 实例，
    或在停止新 authorization 后等待至少 60 秒，使旧 `oidc:pending-provider-session-binding:*` payload 过期。
-5. 执行旧 Redis key cleanup dry-run：
-
-```bash
-pnpm --filter @iam/api-core session:cleanup-legacy-keys -- --dry-run --batch-size 500
-```
-
-6. 审核 dry-run 的 pattern/count 摘要和全量 Principal Session、OIDC Client Binding、credential/token 影响，确认结果与维护窗口、
-   强制重新登录计划一致，且输出不包含完整 key、token、code、cookie 或 secret。
-7. 显式执行 cleanup apply：
-
-```bash
-pnpm --filter @iam/api-core session:cleanup-legacy-keys -- --apply --batch-size 500
-```
-
-8. 再次执行 dry-run，确认旧 key count 为 `0`。这只证明被检查环境在该时点的 allowlist inventory，不由仓库代码状态替代。
-   清理范围以 [OIDC Session 迁移说明](../features/oidc/oidc-session-migration.md) 为准。
-9. 启动 Provider，通过内部直连端口验证 `/health`。
-10. 配置一个保持禁用的测试 client，检查 redirect URI 和 scope；如为 confidential client，生成 secret，然后只启用该测试 client。
-11. 应用 APISIX Provider upstream、service、plugin 和 route，确认 forwarded host/proto 能生成已配置的 issuer。
-12. 对 Discovery、JWKS、authorize、token、UserInfo、CORS、`prompt`/`max_age`、authorization code 重放拒绝和 RP-Initiated Logout 执行 smoke。
-13. 执行 custom SSO smoke：`/sso/authorize`、`/sso/callback` 或 `/sso/token`、`/auth/authz`、`/sso/logout`。
-14. 执行 admin revoke smoke：用户禁用/密码重置、client 禁用或 OIDC 配置变更触发 Session Kernel revoke，并查询 `admin.session_revoke.*` 日志。
-15. 由每个 client owner 验证其 authorize/token/UserInfo/logout 与重新登录行为；任一 owner smoke 失败都保持流量冻结并进入已批准的回滚路径。
-16. 恢复登录流量并监控 Provider/APISIX/API/admin-api 错误率，日志中不得记录 code、token、secret、verifier、cookie 或完整 Redis key。
-17. 每个生产 client 完成各自的 smoke 后，再逐个启用。
+5. 如需精确清理协议 artifact，按 [Client Protocol artifact 手册](client-protocol-v2-artifact-cutover.md) 固定 manifest 并完成 dry-run/apply/verify。
+   该操作保护 Principal Session 和非目标状态，不是旧 Session 工具的完整等价替代，也不是全量认证状态重置。
+6. 启动 Provider，通过内部直连端口验证 `/health`。
+7. 配置一个保持禁用的测试 client，检查 redirect URI 和 scope；如为 confidential client，生成 secret，然后只启用该测试 client。
+8. 应用 APISIX Provider upstream、service、plugin 和 route，确认 forwarded host/proto 能生成已配置的 issuer。
+9. 对 Discovery、JWKS、authorize、token、UserInfo、CORS、`prompt`/`max_age`、authorization code 重放拒绝和 RP-Initiated Logout 执行 smoke。
+10. 执行 custom SSO smoke：`/sso/authorize`、`/sso/callback` 或 `/sso/token`、`/auth/authz`、`/sso/logout`。
+11. 执行 admin revoke smoke：用户禁用/密码重置、client 禁用或 OIDC 配置变更触发 Session Kernel revoke，并查询 `admin.session_revoke.*` 日志。
+12. 由每个 client owner 验证其 authorize/token/UserInfo/logout 与重新登录行为；任一 owner smoke 失败都保持流量冻结并进入已批准的回滚路径。
+13. 恢复登录流量并监控 Provider/APISIX/API/admin-api 错误率，日志中不得记录 code、token、secret、verifier、cookie 或完整 Redis key。
+14. 每个生产 client 完成各自的 smoke 后，再逐个启用。
 
 ## 回滚
 
 1. 首先关闭 APISIX `/oidc` 路由或停止全部 OIDC 流量。
 2. 停止 login、authorize、callback、token、UserInfo、logout 和 session refresh/renewal 流量。
-3. 如需回滚到不理解 Session Kernel 的旧版本，先清理新版本 key：
-   - `sess:v2:active:*`
-   - `sess:v2:lookup:*`
-   - `sess:v2:revoked:*`
-   - `sess:v2:revoked_lookup:*`
-   - `sess:v2:index:*`
-   - `custom-sso:local-session-payload:*`
-   - OIDC adapter 私有 payload/mapping key，例如 `oidc:model:*`、`oidc:consumed:*` 和 `oidc:provider-session-binding*`
+3. 确认回滚候选理解当前 Session Kernel 和协议存储；不理解当前存储的旧版本必须另行设计迁移，保持停流。
 4. 禁用已配置 client 的 OIDC；该操作会递增配置版本并触发 admin revoke。
 5. 停止 Provider 部署，恢复上一版 APISIX manifest 和应用镜像。
 6. 回滚后要求所有用户重新登录。
@@ -136,7 +113,7 @@ pnpm --filter @iam/api-core session:cleanup-legacy-keys -- --apply --batch-size 
 
 ## 验收记录
 
-发布或回滚都必须把命令输出摘要、Redis cleanup dry-run/apply 摘要、custom SSO/OIDC/admin revoke smoke 结果和 Loki/Grafana 查询证据写入 Session Kernel release smoke 记录。
+发布或回滚都必须把命令输出摘要、适用时的精确 artifact dry-run/apply/verify 摘要、custom SSO/OIDC/admin revoke smoke 结果和 Loki/Grafana 查询证据写入 Session Kernel release smoke 记录。
 
 建议记录模板：
 
@@ -146,7 +123,7 @@ pnpm --filter @iam/api-core session:cleanup-legacy-keys -- --apply --batch-size 
 | JWK rotation | 通过/跳过 | current/previous `kid`、JWKS public key 数量、token header `kid`。 |
 | HMAC lookup rotation | 通过/跳过 | current/previous id、保留窗口、移除 previous 时间。 |
 | client enable matrix | 通过/失败 | 每个 client 的启用状态、smoke 路径和 requestId/traceId。 |
-| Redis cleanup | 通过/跳过 | dry-run/apply pattern/count 摘要，不记录完整 key。 |
+| 协议 artifact 维护 | 通过/跳过 | 适用 manifest 的 dry-run/apply/verify 聚合摘要，不记录完整 key。 |
 | protocol smoke | 通过/失败 | Discovery、JWKS、authorize、token、UserInfo、replay、logout。 |
 | admin revoke | 通过/失败 | `admin.session_revoke.*` 日志与旧 token 拒绝结果。 |
 | redaction | 通过/失败 | 未发现 code、token、verifier、secret、cookie、完整 Redis key 或 private payload。 |

@@ -17,8 +17,8 @@ import {
 import {
   createCurrentUserProfilePostgresReadiness,
   createCurrentUserProfileRedisAccessReadiness,
-  createEmploymentCutoverRepository,
-  createEmploymentCutoverVerifier,
+  createEmploymentRepository,
+  createEmploymentVerifier,
   createSubjectAccessAuthorityRepository,
   createUserProfileWorkerModule,
 } from "@iam/user-profile-read-model/worker";
@@ -246,14 +246,14 @@ export async function createWorkerSubjectAccessRepairComposition(
   };
 }
 
-export function createEmploymentCutoverCommandComposition(options: {
+export function createEmploymentCommandComposition(options: {
   logger: WorkerLogger;
 }) {
   return {
     logger: options.logger,
-    employmentCutover: {
-      verifier: createEmploymentCutoverVerifier({
-        inventory: createEmploymentCutoverRepository(db),
+    employment: {
+      verifier: createEmploymentVerifier({
+        inventory: createEmploymentRepository(db),
         clock: { nowDate: () => new Date() },
       }),
     },

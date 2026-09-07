@@ -1,14 +1,42 @@
 import type { PublishedProfile } from "../../src/schema/profile.schema";
 import { UserStatus, UserType } from "@iam/contracts";
-import { describe, expect, mock, test } from "bun:test";
 import {
   createUserProfilePostgresGate,
   createUserProfileRedisAccessGate,
-} from "../../src/readiness/user-profile-readiness";
+} from "@iam/user-profile-read-model/worker";
+import { describe, expect, mock, test } from "bun:test";
 
 const observedAt = new Date("2026-08-22T04:00:00.000Z");
 
 describe("version-independent User Profile readiness gates", () => {
+  for (const kind of ["postgres", "redis"] as const) {
+    test(`${kind} rejects invalid batch sizes and malformed inventory pages`, async () => {
+      for (const batchSize of [0, -1, 1.5, Number.MAX_SAFE_INTEGER + 1]) {
+        const error = await inventoryGate(kind, []).verify({ batchSize }).catch(error => error);
+        expect(error).toBeInstanceOf(RangeError);
+      }
+      for (const ids of [[2, 1], [1, 1], [0], [1.5], [Number.MAX_SAFE_INTEGER + 1], [1, 2, 3]]) {
+        const error = await inventoryGate(kind, ids).verify({ batchSize: 2 }).catch(error => error);
+        expect(error).toBeInstanceOf(Error);
+      }
+    });
+
+    test(`${kind} detects an incomplete scan and accepts a complete multipage inventory`, async () => {
+      const incomplete = await inventoryGate(kind, [1], 2).verify({ batchSize: 2 });
+      expect(incomplete.failures).toEqual([
+        { code: "verified-user-count-mismatch", count: 1, samples: [] },
+      ]);
+      const complete = await inventoryGate(kind, [1, 2, 3], 3, true).verify({ batchSize: 2 });
+      expect(complete.status).toBe("passed");
+      expect(complete.counts.verifiedUsers).toBe(3);
+    });
+
+    test(`${kind} rejects a page that repeats an earlier cursor`, async () => {
+      const error = await inventoryGate(kind, [1, 2], 4).verify({ batchSize: 2 }).catch(error => error);
+      expect(error).toBeInstanceOf(Error);
+    });
+  }
+
   test("pins the PostgreSQL gate version in composition and rebuilds every profile", async () => {
     const stored = v3Profile(1, "3");
     const expected = { ...stored, name: "Current name" };
@@ -110,6 +138,40 @@ describe("version-independent User Profile readiness gates", () => {
     ]);
   });
 });
+
+function inventoryGate(kind: "postgres" | "redis", ids: number[], count = ids.length, paginate = false) {
+  const profiles = ids.map(id => v3Profile(id, "3"));
+  const inventory = {
+    readVerificationSummary: async () => summary(count),
+    scanPage: async ({ afterUserId, limit }: { afterUserId: number; limit: number }) =>
+      (paginate ? profiles.filter(profile => profile.userId > afterUserId).slice(0, limit) : profiles).map(pageRow),
+  };
+  if (kind === "postgres") {
+    return createUserProfilePostgresGate({
+      schemaVersion: 3,
+      repository: { ...inventory, rebuildExpected: async profiles => profiles },
+      clock: { nowDate: () => observedAt },
+    });
+  }
+  return createUserProfileRedisAccessGate({
+    schemaVersion: 3,
+    inventory,
+    subjectFacts: {
+      createRecord: factsRecord,
+      inspectMany: async subjects => subjects.map(subject => ({
+        status: "valid" as const,
+        record: factsRecord(profiles.find(profile => profile.subjectIdentifier === subject)!),
+      })),
+    },
+    subjectAccess: {
+      inspectMany: async subjects => subjects.map(subject => ({
+        status: "valid" as const,
+        record: barrierRecord(profiles.find(profile => profile.subjectIdentifier === subject)!, "enabled"),
+      })),
+    },
+    clock: { nowDate: () => observedAt },
+  });
+}
 
 function summary(count: number) {
   return {

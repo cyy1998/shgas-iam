@@ -2,11 +2,16 @@
 
 Type: runbook
 
-Status: Current
+Status: Historical
 
 Last verified: 2026-09-03
 
-Next review: 2026-10-31
+Next review: n/a
+
+> 本文是首次旧代切换的历史版本参考，正文操作与证据合同保留当时语境，不代表当前候选的命令支持范围，也不证明任何环境已完成切换。
+> 按 [ADR-0023](../adr/0023-retire-legacy-maintenance-support.md)，当前 full repair/verify 只拥有当前 Snapshot namespace，
+> 不再清理或验证本文所列旧 Runtime keys。当前日常恢复须使用[恢复手册](client-runtime-snapshot-restore.md)。
+> 旧部署或旧备份升级迁移须另行固定适用候选与操作边界，不能未经评估将本文旧版工具用于新环境，也不得混跑旧 reader/writer。
 
 本手册用于首次激活 ADR-0021 与 ADR-0022 定义的 Client Runtime Snapshot cache protocol，修复 issue #27 的 OIDC late-refill，并把 OIDC、Custom SSO 与 Client Traffic Gate 切换到一份 per-Client Redis control。它只编排 owner command、人工发布动作与可执行 smoke，不会自动 freeze、部署、drain、切流、访问 production 或创建 production receipt；真实切换必须由维护者另行授权。
 

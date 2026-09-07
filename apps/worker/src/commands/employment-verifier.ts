@@ -1,4 +1,4 @@
-export interface EmploymentCutoverVerifyCommandReport {
+export interface EmploymentVerifyCommandReport {
   version: 1;
   verifiedAt: string;
   status: "failed" | "passed";
@@ -14,27 +14,27 @@ export interface EmploymentCutoverVerifyCommandReport {
   }>;
 }
 
-export interface EmploymentCutoverVerifyCommandDeps {
+export interface EmploymentVerifyCommandDeps {
   verifier: {
-    verify: () => Promise<EmploymentCutoverVerifyCommandReport>;
+    verify: () => Promise<EmploymentVerifyCommandReport>;
   };
   logger: {
     info: (data: Record<string, unknown>, message: string) => void;
   };
 }
 
-export async function runEmploymentCutoverVerifyCommand(
-  deps: EmploymentCutoverVerifyCommandDeps,
+export async function runEmploymentVerifyCommand(
+  deps: EmploymentVerifyCommandDeps,
 ) {
-  deps.logger.info({}, "Employment cutover verification started");
+  deps.logger.info({}, "Employment verification started");
   const report = await deps.verifier.verify();
-  deps.logger.info({ ...report }, "Employment cutover verification completed");
+  deps.logger.info({ ...report }, "Employment verification completed");
   return report;
 }
 
 async function main() {
-  const { parseEmploymentCutoverCommandEnv } = await import("@worker/env");
-  const env = parseEmploymentCutoverCommandEnv(process.env);
+  const { parseEmploymentCommandEnv } = await import("@worker/env");
+  const env = parseEmploymentCommandEnv(process.env);
   const { createLogger, LoggerSourceApp } = await import("@iam/api-core/logger");
   const logger = createLogger({
     nodeEnv: env.nodeEnv,
@@ -42,11 +42,11 @@ async function main() {
     logFormat: env.log.format,
     sourceApp: LoggerSourceApp.Worker,
   });
-  const { createEmploymentCutoverCommandComposition } = await import("@worker/composition");
-  const composition = createEmploymentCutoverCommandComposition({ logger });
+  const { createEmploymentCommandComposition } = await import("@worker/composition");
+  const composition = createEmploymentCommandComposition({ logger });
   try {
-    const report = await runEmploymentCutoverVerifyCommand({
-      verifier: composition.employmentCutover.verifier,
+    const report = await runEmploymentVerifyCommand({
+      verifier: composition.employment.verifier,
       logger: composition.logger,
     });
     if (report.status === "failed")
@@ -65,7 +65,7 @@ if (import.meta.main) {
   catch {
     process.exitCode = 1;
     process.stderr.write(
-      "Employment cutover verification failed; inspect structured logs for the report.\n",
+      "Employment verification failed; inspect structured logs for the report.\n",
     );
   }
 }

@@ -29,7 +29,6 @@
     "./session/kernel/testing": "./src/session/kernel/testing.ts",
     "./subject-access": "./src/subject-access/index.ts",
     "./subject-access/testing": "./src/subject-access/testing.ts",
-    "./testing/custom-sso-cleanup-redis-harness": "./src/testing/custom-sso-cleanup-redis-harness.ts",
     "./testing/external-test-resources": "./src/testing/external-test-resources.ts",
     "./testing/process-smoke-harness": "./src/testing/process-smoke-harness.ts",
     "./trpc": "./src/trpc/index.ts",
@@ -39,10 +38,8 @@
     "./utils/*": "./src/utils/*.ts"
   },
   "scripts": {
-    "lint": "eslint src test-integration scripts eslint.config.js",
-    "lint:fix": "eslint --fix src test-integration scripts eslint.config.js",
-    "session:cleanup-custom-sso-cutover": "bun --no-env-file run scripts/cleanup-legacy-session-keys.ts --profile custom-sso-cutover",
-    "session:cleanup-legacy-keys": "bun --no-env-file run scripts/cleanup-legacy-session-keys.ts",
+    "lint": "eslint src test-integration eslint.config.js",
+    "lint:fix": "eslint --fix src test-integration eslint.config.js",
     "client-runtime:hard-cutover-redis": "bun test --max-concurrency=1 test-integration/redis/client-runtime-snapshot.integration.test.ts",
     "test": "pnpm test:unit",
     "test:integration:component": "bun test --max-concurrency=2 test-integration/component",

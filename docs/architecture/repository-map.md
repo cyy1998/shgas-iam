@@ -56,6 +56,10 @@
 
 ## 共享 Packages
 
+Client Runtime Snapshot 的当前 namespace 清单位于 `packages/api-core/src/client-runtime-snapshot/maintenance-inventory.ts`，
+由 Worker repair/verify 消费；七类旧 Runtime key 已退出该 owner，当前恢复入口见
+[恢复手册](../releases/client-runtime-snapshot-restore.md)。
+
 | 路径 | 职责与边界 |
 |---|---|
 | `packages/api-core/src` | 共享后端基础设施：`createApp`、route/OpenAPI/response helpers、errors、middleware、Redis、logging、observability、Session Kernel、LoginRestriction、Subject Access Barrier、UnitOfWork 和 tRPC utilities。共享 process-smoke harness 位于 `src/testing/`，只通过独立 testing export 暴露；它不实现 Redis 协议或 persistence seed。 |
@@ -79,7 +83,7 @@
 
 | 模块 | 内部职责目录 |
 |---|---|
-| `packages/user-profile-read-model/src` | `invalidation/`：影响分析与 dirty/job；`build/`：加载与文档构建；`publication/`：行转换与原子发布；`query/`：查询与 Filter；`schema/`：文档契约；`subject-facts/`：缓存、读写与观测；`subject-access/`：authority 与 transition repositories；`worker/`：重建与维护装配；`readiness/`：版本无关 gate；`cutover/`：Employment verifier 与 readiness 复用的校验规则。根层保留六个公开入口文件。 |
+| `packages/user-profile-read-model/src` | `invalidation/`：影响分析与 dirty/job；`build/`：加载与文档构建；`publication/`：行转换与原子发布；`query/`：查询与 Filter；`schema/`：文档契约；`subject-facts/`：缓存、读写与观测；`subject-access/`：authority 与 transition repositories；`worker/`：重建与维护装配；`readiness/`：版本无关 gate 与 Profile inventory 校验规则；`employment/`：全库只读 Employment verifier/repository。根层保留六个公开入口文件。 |
 | `packages/client-subject-projection/src` | `internal/`：当前 V2 Catalog、contract 与 projection。公开入口、Custom SSO wire 与共享错误留在根层；测试 fixture 由测试文件本地持有。 |
 | `packages/api-core/src/session/kernel` | `state/`：模型、结果与时间；`storage/`：存储、key、Lua 与状态变更；`security/`：HMAC/token；`cleanup/`：清理。facade、配置和公开入口留在根层。 |
 | `packages/api-core/src/subject-access` | `storage/`：store 与 Redis adapter；`adapters/`：HTTP、Session validator 和结果转换；`recovery/`：bootstrap、repair 与 transition recovery。在线 barrier/lifecycle、模型、错误与公开入口留在根层。 |

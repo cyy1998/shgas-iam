@@ -1,13 +1,13 @@
-import type { EmploymentCutoverInventoryRow } from "../../src/cutover/employment-cutover-verifier";
+import type { EmploymentInventoryRow } from "@iam/user-profile-read-model/worker";
 import { EmploymentStatus, OrganizationStatus, PositionStatus } from "@iam/contracts";
+import { createEmploymentVerifier } from "@iam/user-profile-read-model/worker";
 import { describe, expect, test } from "bun:test";
-import { createEmploymentCutoverVerifier } from "../../src/cutover/employment-cutover-verifier";
 
 const NOW = new Date("2026-08-11T12:00:00.000Z");
 
-describe("Employment cutover verifier", () => {
+describe("Employment verifier", () => {
   test("fails with a stable category for a non-tombstone unknown status", async () => {
-    const verifier = createEmploymentCutoverVerifier({
+    const verifier = createEmploymentVerifier({
       inventory: {
         readAll: async () => [employment({ id: 41, status: 99 })],
       },
@@ -32,7 +32,7 @@ describe("Employment cutover verifier", () => {
   });
 
   test("reports every Open Employment whose Position or Organization is not effective", async () => {
-    const verifier = createEmploymentCutoverVerifier({
+    const verifier = createEmploymentVerifier({
       inventory: {
         readAll: async () => [
           employment({ id: 42, positionId: 42, positionStatus: PositionStatus.Pause }),
@@ -56,7 +56,7 @@ describe("Employment cutover verifier", () => {
   });
 
   test("classifies invalid, contradictory, and unsupported Employment periods", async () => {
-    const verifier = createEmploymentCutoverVerifier({
+    const verifier = createEmploymentVerifier({
       inventory: {
         readAll: async () => [
           employment({ id: 50, positionId: 50, endTime: new Date("2026-08-10T00:00:00.000Z") }),
@@ -97,12 +97,11 @@ describe("Employment cutover verifier", () => {
   });
 
   test("aggregates duplicate Open relationships and multiple Open Primary records", async () => {
-    const verifier = createEmploymentCutoverVerifier({
+    const verifier = createEmploymentVerifier({
       inventory: {
         readAll: async () => [
-          employment({ id: 60, userId: 10 }),
           employment({ id: 61, userId: 10, status: EmploymentStatus.Pause }),
-          employment({ id: 62, userId: 11, isPrimary: true }),
+          employment({ id: 60, userId: 10 }),
           employment({
             id: 63,
             userId: 11,
@@ -111,6 +110,7 @@ describe("Employment cutover verifier", () => {
             isPrimary: true,
             status: EmploymentStatus.Pause,
           }),
+          employment({ id: 62, userId: 11, isPrimary: true }),
         ],
       },
       clock: { nowDate: () => NOW },
@@ -128,7 +128,7 @@ describe("Employment cutover verifier", () => {
   });
 
   test("reports multiple independently knowable anomalies on the same Employment", async () => {
-    const verifier = createEmploymentCutoverVerifier({
+    const verifier = createEmploymentVerifier({
       inventory: {
         readAll: async () => [employment({
           id: 70,
@@ -151,11 +151,30 @@ describe("Employment cutover verifier", () => {
       employmentIds: [70],
     }]);
   });
+
+  test("accepts the start boundary, ended history and tombstones without guessing an end time", async () => {
+    const verifier = createEmploymentVerifier({
+      inventory: {
+        readAll: async () => [
+          employment({ id: 1, startTime: NOW }),
+          employment({ id: 2, status: EmploymentStatus.Disable, endTime: NOW }),
+          employment({ id: 3, isDelete: true, status: 99, positionStatus: null }),
+        ],
+      },
+      clock: { nowDate: () => NOW },
+    });
+    const report = await verifier.verify();
+    expect(report).toMatchObject({
+      status: "passed",
+      counts: { employments: 3, legacyTombstones: 1, blockingEmployments: 0 },
+      failures: [],
+    });
+  });
 });
 
 function employment(
-  overrides: Partial<EmploymentCutoverInventoryRow> = {},
-): EmploymentCutoverInventoryRow {
+  overrides: Partial<EmploymentInventoryRow> = {},
+): EmploymentInventoryRow {
   return {
     id: 1,
     userId: 10,

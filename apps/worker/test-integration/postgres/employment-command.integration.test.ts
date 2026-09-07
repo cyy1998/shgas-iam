@@ -11,7 +11,7 @@ import { createWorkerPostgresTestHarness } from "./postgres-test-harness";
 
 const workerRoot = fileURLToPath(new URL("../../", import.meta.url));
 
-describe("Employment cutover verifier production command", () => {
+describe("Employment verifier production command", () => {
   let harness: Awaited<ReturnType<typeof createWorkerPostgresTestHarness>>;
 
   beforeAll(async () => {
@@ -58,7 +58,7 @@ describe("Employment cutover verifier production command", () => {
     const failed = await runCommand(1);
 
     expect(failed.exitCode).toBe(1);
-    expect(failed.output).toContain("Employment cutover verification completed");
+    expect(failed.output).toContain("Employment verification completed");
     expect(failed.output).toContain("unknown-employment-status");
 
     await harness.sql`
@@ -70,20 +70,20 @@ describe("Employment cutover verifier production command", () => {
     const passed = await runCommand(0);
 
     expect(passed.exitCode).toBe(0);
-    expect(passed.output).toContain("Employment cutover verification completed");
+    expect(passed.output).toContain("Employment verification completed");
     expect(passed.output).toContain("\"status\":\"passed\"");
   }, PROCESS_SMOKE_TEST_TIMEOUT_MS);
 
   async function runCommand(expectedExitCode: number) {
     return await runProcessCommandSmoke({
-      label: "Worker Employment cutover verification command",
+      label: "Worker Employment verification command",
       start() {
         return spawnOwnedProcessTree({
           executable: process.execPath,
           args: [
             "--no-env-file",
             "run",
-            "src/commands/employment-cutover-verifier.ts",
+            "employment:verify",
           ],
           cwd: workerRoot,
           env: {

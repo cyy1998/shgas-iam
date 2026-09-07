@@ -1,4 +1,4 @@
-import { CLIENT_RUNTIME_SNAPSHOT_RESTORE_CLEANUP_PATTERNS } from "./legacy-restore-cleanup-inventory";
+import { CLIENT_RUNTIME_SNAPSHOT_RESTORE_CLEANUP_PATTERNS } from "./maintenance-inventory";
 
 const DEFAULT_SCAN_COUNT = 100;
 

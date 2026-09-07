@@ -72,7 +72,10 @@ IAM 自身 routes 不统一使用 `forward-auth`。例如 [Tender manifests](../
 
 因此，Redis 故障或恢复不能统一按“删缓存后回源”处理：实时登录状态、访问屏障、Runtime Snapshot 和队列分别有自己的
 owner 与恢复路径。Redis backup restore 后的 Client Runtime 必须在停流下执行 full repair 与独立 verify，不能依赖
-TTL 或逐 Client 访问自然收敛；完整步骤由 [Snapshot hard-cutover 手册](../releases/client-runtime-snapshot-hard-cutover.md)拥有。
+TTL 或逐 Client 访问自然收敛。当前 full repair/verify 只拥有当前 Snapshot namespace，不清理或验证旧 Runtime key；
+旧部署、旧备份的升级迁移须另行安排，不能混跑旧 reader/writer。完整步骤由
+[Snapshot 恢复手册](../releases/client-runtime-snapshot-restore.md)拥有，首次切换的历史边界见
+[历史 hard-cutover 手册](../releases/client-runtime-snapshot-hard-cutover.md)。
 
 ## 一致性边界
 

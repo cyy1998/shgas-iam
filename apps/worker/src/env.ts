@@ -103,11 +103,15 @@ const RawWorkerEnvSchema = z.object({
   }
 });
 
-const EmploymentCutoverCommandEnvSchema = z.object({
+const EmploymentCommandEnvSchema = z.object({
   IAM_WORKER_DATABASE_URL: z.string().min(1),
   NODE_ENV: z.string().default("development"),
   IAM_WORKER_LOG_LEVEL: z.string().default("info"),
   IAM_WORKER_LOG_FORMAT: z.enum(["auto", "json", "pretty"]).default("auto"),
+});
+
+const AuditActionMaintenanceCommandEnvSchema = z.object({
+  IAM_WORKER_DATABASE_URL: z.string().min(1),
 });
 
 const UserProfilePostgresReadinessCommandEnvSchema = z.object({
@@ -169,7 +173,7 @@ export interface WorkerEnv {
   };
 }
 
-export interface EmploymentCutoverCommandEnv {
+export interface EmploymentCommandEnv {
   databaseUrl: string;
   nodeEnv: string;
   log: {
@@ -255,10 +259,10 @@ export function parseWorkerEnv(source: NodeJS.ProcessEnv): WorkerEnv {
   return env;
 }
 
-export function parseEmploymentCutoverCommandEnv(
+export function parseEmploymentCommandEnv(
   source: NodeJS.ProcessEnv,
-): EmploymentCutoverCommandEnv {
-  const raw = EmploymentCutoverCommandEnvSchema.parse(source);
+): EmploymentCommandEnv {
+  const raw = EmploymentCommandEnvSchema.parse(source);
   exposeDatabaseUrlForDbPackage(raw.IAM_WORKER_DATABASE_URL);
   return {
     databaseUrl: raw.IAM_WORKER_DATABASE_URL,
@@ -268,6 +272,14 @@ export function parseEmploymentCutoverCommandEnv(
       format: raw.IAM_WORKER_LOG_FORMAT,
     },
   };
+}
+
+export function parseAuditActionMaintenanceCommandEnv(source: NodeJS.ProcessEnv) {
+  const raw = AuditActionMaintenanceCommandEnvSchema.parse(source);
+  const databaseUrl = raw.IAM_WORKER_DATABASE_URL;
+  if (!["postgres:", "postgresql:"].includes(new URL(databaseUrl).protocol))
+    throw new Error("invalid database configuration");
+  return { databaseUrl };
 }
 
 export function parseUserProfilePostgresReadinessCommandEnv(

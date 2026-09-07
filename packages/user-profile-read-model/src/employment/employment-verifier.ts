@@ -9,7 +9,7 @@ import {
   PositionStatus as PositionStatusValue,
 } from "@iam/contracts";
 
-const EMPLOYMENT_CUTOVER_FAILURE_CODES = [
+const EMPLOYMENT_FAILURE_CODES = [
   "unknown-employment-status",
   "position-not-effective",
   "organization-not-effective",
@@ -21,10 +21,10 @@ const EMPLOYMENT_CUTOVER_FAILURE_CODES = [
   "multiple-open-primary-employments",
 ] as const;
 
-export type EmploymentCutoverFailureCode
-  = typeof EMPLOYMENT_CUTOVER_FAILURE_CODES[number];
+export type EmploymentFailureCode
+  = typeof EMPLOYMENT_FAILURE_CODES[number];
 
-export interface EmploymentCutoverInventoryRow {
+export interface EmploymentInventoryRow {
   id: number;
   userId: number;
   positionId: number;
@@ -40,22 +40,22 @@ export interface EmploymentCutoverInventoryRow {
   organizationDeleted: boolean | null;
 }
 
-export interface CreateEmploymentCutoverVerifierDeps {
+export interface CreateEmploymentVerifierDeps {
   inventory: {
-    readAll: () => Promise<EmploymentCutoverInventoryRow[]>;
+    readAll: () => Promise<EmploymentInventoryRow[]>;
   };
   clock: {
     nowDate: () => Date;
   };
 }
 
-export interface EmploymentCutoverVerificationFailure {
-  code: EmploymentCutoverFailureCode;
+export interface EmploymentVerificationFailure {
+  code: EmploymentFailureCode;
   count: number;
   employmentIds: number[];
 }
 
-export interface EmploymentCutoverVerificationReport {
+export interface EmploymentVerificationReport {
   version: 1;
   verifiedAt: string;
   status: "failed" | "passed";
@@ -64,13 +64,13 @@ export interface EmploymentCutoverVerificationReport {
     legacyTombstones: number;
     blockingEmployments: number;
   };
-  failures: EmploymentCutoverVerificationFailure[];
+  failures: EmploymentVerificationFailure[];
 }
 
-export function createEmploymentCutoverVerifier(
-  deps: CreateEmploymentCutoverVerifierDeps,
+export function createEmploymentVerifier(
+  deps: CreateEmploymentVerifierDeps,
 ) {
-  async function verify(): Promise<EmploymentCutoverVerificationReport> {
+  async function verify(): Promise<EmploymentVerificationReport> {
     const verifiedAt = deps.clock.nowDate();
     const rows = await deps.inventory.readAll();
     const failures = createFailureAccumulator();
@@ -158,12 +158,12 @@ function isKnownEmploymentStatus(status: number): status is EmploymentStatus {
 }
 
 function collectGroupConflict<TKey>(
-  rows: EmploymentCutoverInventoryRow[],
+  rows: EmploymentInventoryRow[],
   failures: ReturnType<typeof createFailureAccumulator>,
-  code: EmploymentCutoverFailureCode,
-  groupKey: (row: EmploymentCutoverInventoryRow) => TKey,
+  code: EmploymentFailureCode,
+  groupKey: (row: EmploymentInventoryRow) => TKey,
 ) {
-  const groups = new Map<TKey, EmploymentCutoverInventoryRow[]>();
+  const groups = new Map<TKey, EmploymentInventoryRow[]>();
   for (const row of rows) {
     const key = groupKey(row);
     const group = groups.get(key) ?? [];
@@ -179,15 +179,15 @@ function collectGroupConflict<TKey>(
 }
 
 function createFailureAccumulator() {
-  const failures = new Map<EmploymentCutoverFailureCode, number[]>();
+  const failures = new Map<EmploymentFailureCode, number[]>();
   const blockingEmploymentIds = new Set<number>();
-  function add(code: EmploymentCutoverFailureCode, employmentId: number) {
+  function add(code: EmploymentFailureCode, employmentId: number) {
     const employmentIds = failures.get(code) ?? [];
     employmentIds.push(employmentId);
     failures.set(code, employmentIds);
     blockingEmploymentIds.add(employmentId);
   }
-  function report(): EmploymentCutoverVerificationFailure[] {
+  function report(): EmploymentVerificationFailure[] {
     return [...failures.entries()]
       .sort(([left], [right]) => failureOrder(left) - failureOrder(right))
       .map(([code, employmentIds]) => ({
@@ -203,6 +203,6 @@ function createFailureAccumulator() {
   };
 }
 
-function failureOrder(code: EmploymentCutoverFailureCode) {
-  return EMPLOYMENT_CUTOVER_FAILURE_CODES.indexOf(code);
+function failureOrder(code: EmploymentFailureCode) {
+  return EMPLOYMENT_FAILURE_CODES.indexOf(code);
 }

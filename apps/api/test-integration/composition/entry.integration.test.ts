@@ -16,10 +16,6 @@ import {
   createSubjectAccessPrincipalValidator,
 } from "@iam/api-core/subject-access";
 import {
-  createCustomSsoCleanupRedisHarness,
-  resolveCustomSsoCleanupRedisResource,
-} from "@iam/api-core/testing/custom-sso-cleanup-redis-harness";
-import {
   cleanupRedisKeysMatchingOwnerMarkers,
   createRedisKeyInventoryPort,
   parseDedicatedRedisTestUrl,
@@ -74,7 +70,6 @@ const redisConfig = parseDedicatedRedisTestUrl({
   name: redisUrlName,
   value: redisUrl,
 });
-const cleanupRedisResource = resolveCustomSsoCleanupRedisResource(process.env);
 const lookupHmacId = "entry-external";
 const lookupHmacSecret = "api-entry-external-secret-that-is-at-least-32-bytes";
 const loginCredentialPrivateKey = "319b4e59ca80d7b4cc35955b63da4edf1ed51772ec8f33c0a4f769dda7b9fc65";
@@ -93,7 +88,6 @@ const legacyLocalSessionId = `legacy-local-${resourceSuffix}`;
 const legacyPayloadRef = `legacy-payload-${resourceSuffix}`;
 const legacyPayloadKey = `custom-sso:local-session-payload:${legacyPayloadRef}`;
 const legacyRedirectUri = "https://ticket12-gateway.example.test/legacy-complete";
-const cleanupSentinelKey = `iam:test:cleanup:sentinel:${resourceSuffix}`;
 const legacyArtifactEntries = new Map([
   [`global_session:${legacyGlobalSessionId}`, "legacy-principal-session"],
   [`auth_code:${legacyAuthorizationCode}`, "legacy-authorization-grant"],
@@ -775,10 +769,6 @@ describe("API explicit external entry", () => {
         maxRetriesPerRequest: 1,
       });
       registerCleanup(() => observerRedis.disconnect());
-      const cleanupHarness = await createCustomSsoCleanupRedisHarness(
-        cleanupRedisResource,
-      );
-      registerCleanup(async () => await cleanupHarness.close());
       const notificationObserver = await createClientNotificationObserver();
       registerCleanup(async () => await notificationObserver.close());
       const redisInventory = createRedisKeyInventoryPort(observerRedis);
@@ -956,10 +946,6 @@ describe("API explicit external entry", () => {
       await redis.mset(
         ...[...ordinaryLegacyArtifactEntries].flatMap(entry => entry),
       );
-      await cleanupHarness.seed(new Map([
-        ...legacyArtifactEntries,
-        [cleanupSentinelKey, "must-survive-cleanup"],
-      ]));
 
       const independentSession = await seedExternalSessionState(productionOwners);
       const gatewaySession = await seedGatewayPublicEntry(productionOwners);
@@ -1170,7 +1156,7 @@ describe("API explicit external entry", () => {
             signal,
             gatewaySession.localToken,
           );
-          const legacyKeysRejectedBeforeCleanup
+          const legacyKeysRejected
             = await probeLegacyArtifactRejection(origin, signal);
           const logoutPayloadBefore = await observerRedis.get(legacyPayloadKey);
           const logout = await logoutPrincipalSession(
@@ -1179,21 +1165,8 @@ describe("API explicit external entry", () => {
             logoutSession.externalToken,
           );
           const logoutPayloadAfter = await observerRedis.get(legacyPayloadKey);
-          const cleanupApply = await cleanupHarness.runCleanup("--apply", 0);
-          const cleanupVerify = await cleanupHarness.runCleanup("--verify", 0);
-          const cleanupOutput = `${cleanupApply.output}\n${cleanupVerify.output}`;
-          const legacyKeysRejectedAfterCleanup
-            = await probeLegacyArtifactRejection(origin, signal);
-          const publicAfterCleanup = await publicUserInfo(
-            origin,
-            signal,
-            gatewaySession.localToken,
-          );
-          const authzAfterCleanup = await gatewayAuthz(
-            origin,
-            signal,
-            gatewaySession.localToken,
-          );
+          const publicAfterLogout = await publicUserInfo(origin, signal, gatewaySession.localToken);
+          const authzAfterLogout = await gatewayAuthz(origin, signal, gatewaySession.localToken);
           const staleGateway = await publicUserInfo(
             origin,
             signal,
@@ -1280,18 +1253,17 @@ describe("API explicit external entry", () => {
               body: disabledAuthorizeBody,
               status: disabledAuthorize.status,
             },
-            authzAfterCleanup,
             authzAfterMaintenance,
             authzPositive,
-            cleanupOutput,
             disabledGrant,
             disabledSubject,
             first,
             firstExchange,
             gatewayProjectionRetry,
             independentGrantProjectionRetry,
-            legacyKeysRejectedAfterCleanup,
-            legacyKeysRejectedBeforeCleanup,
+            legacyKeysRejected,
+            publicAfterLogout,
+            authzAfterLogout,
             logout,
             logoutPayloadAfter,
             logoutPayloadBefore,
@@ -1302,7 +1274,6 @@ describe("API explicit external entry", () => {
             oldSecret,
             oldSessionAfterReenable,
             publicPositive,
-            publicAfterCleanup,
             publicAfterMaintenance,
             replay,
             rotated,
@@ -1359,9 +1330,6 @@ describe("API explicit external entry", () => {
           logoutSession.credentialToken,
         ),
       ).not.toMatchObject({ status: "resolved" });
-      expect(await cleanupHarness.inventory()).toEqual(new Map([
-        [cleanupSentinelKey, "must-survive-cleanup"],
-      ]));
 
       expect(result.first).toMatchObject({ status: 302 });
       expect(result.gatewayProjectionRetry).toEqual({
@@ -1492,23 +1460,15 @@ describe("API explicit external entry", () => {
         before: notificationObserver.endpoint,
       });
       expect(result.notificationRequests).toEqual([]);
-      expect(result.legacyKeysRejectedBeforeCleanup).toEqual({
+      expect(result.legacyKeysRejected).toEqual({
         authorizeRedirectedToLogin: true,
         authorizeStatus: 302,
         authzStatus: 401,
         callbackStatus: 401,
         userInfoStatus: 401,
       });
-      expect(result.legacyKeysRejectedAfterCleanup)
-        .toEqual(result.legacyKeysRejectedBeforeCleanup);
-      expect(result.publicAfterCleanup).toEqual(result.publicPositive);
-      expect(result.authzAfterCleanup).toEqual(result.authzPositive);
-      expect(result.cleanupOutput).toContain(
-        "Legacy cleanup custom-sso-cutover apply completed: matched 6, deleted 6.",
-      );
-      expect(result.cleanupOutput).toContain(
-        "Legacy cleanup custom-sso-cutover verify completed: matched 0, deleted 0.",
-      );
+      expect(result.publicAfterLogout).toEqual(result.publicPositive);
+      expect(result.authzAfterLogout).toEqual(result.authzPositive);
       expect(result.staleGateway).toMatchObject({
         status: 401,
       });

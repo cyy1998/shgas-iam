@@ -62,18 +62,15 @@ const PAYLOAD_MISMATCH_CASES = [
 ] as const;
 
 const TEST_REDIS_URL_ENV = "IAM_API_CORE_TEST_REDIS_URL";
-const CLEANUP_REDIS_URL_ENV = "IAM_API_CORE_CLEANUP_TEST_REDIS_URL";
 let writerRedis: RedisType;
 let observerRedis: RedisType;
 let cleanupRedis: RedisType;
 let testRedisUrl: string;
-let cleanupRedisUrl: string;
 let ownedClientCodes: string[] = [];
 const sharedRedisClients: RedisType[] = [];
 
 beforeAll(async () => {
   testRedisUrl = requireDedicatedRedisTestUrl();
-  cleanupRedisUrl = requireExclusiveCleanupRedisUrl();
   writerRedis = createRedisClient(testRedisUrl);
   observerRedis = createRedisClient(testRedisUrl);
   cleanupRedis = createRedisClient(testRedisUrl);
@@ -96,12 +93,12 @@ afterAll(async () => {
 });
 
 describe("Client Runtime Snapshot real Redis contract", () => {
-  test("full restore repair removes versioned and legacy inventory, restarts after partial failure, and verifies independently", async () => {
-    const restoreWriter = createRedisClient(cleanupRedisUrl);
-    const restoreObserver = createRedisClient(cleanupRedisUrl);
-    const restoreCleanup = createRedisClient(cleanupRedisUrl);
+  test("full restore repair clears current inventory, preserves legacy keys, restarts after failure, and verifies independently", async () => {
+    const restoreWriter = createRedisClient(testRedisUrl);
+    const restoreObserver = createRedisClient(testRedisUrl);
+    const restoreCleanup = createRedisClient(testRedisUrl);
     const fixtureId = randomUUID();
-    const versionedKeys = Array.from({ length: 17 }, (_, index) =>
+    const versionedKeys = Array.from({ length: 205 }, (_, index) =>
       `client-runtime-snapshot:v1:{restore-${fixtureId}-${index}}:control`);
     const legacyKeys = [
       `oidc:client-runtime:${fixtureId}`,
@@ -120,8 +117,6 @@ describe("Client Runtime Snapshot real Redis contract", () => {
         connectRedis(restoreObserver),
         connectRedis(restoreCleanup),
       ]);
-      const initialKeyCount = await restoreObserver.dbsize();
-      expect(initialKeyCount).toBe(0);
       const emptyBeforeSeed = await createClientRuntimeSnapshotVerifier({
         inventory: createClientRuntimeRestoreInventoryReader(restoreObserver),
       }).verifyAllAfterRedisRestore({ protocolTrafficStopped: true });
@@ -142,7 +137,7 @@ describe("Client Runtime Snapshot real Redis contract", () => {
               throw new Error("partial-unlink-secret");
             return await restoreWriter.unlink(...keys);
           },
-        }),
+        }, 2),
       });
 
       let partialFailure: unknown;
@@ -166,7 +161,8 @@ describe("Client Runtime Snapshot real Redis contract", () => {
         protocolTrafficStopped: true,
       });
       expect(incomplete.matchingKeys > 0).toBe(true);
-      expect(await restoreObserver.get(sentinelKey)).toBe("fixture");
+      const sentinelBeforeRerun = await restoreObserver.get(sentinelKey);
+      expect(sentinelBeforeRerun).toBe("fixture");
 
       const repair = createClientRuntimeSnapshotRestoreRepair({
         inventory: createClientRuntimeRestoreInventoryRepairer(restoreWriter),
@@ -184,10 +180,12 @@ describe("Client Runtime Snapshot real Redis contract", () => {
       expect(completed.unlinkedKeys > 0).toBe(true);
       expect(completed.unlinkBatches > 1).toBe(true);
       expect(verified).toEqual({ matchingKeys: 0 });
-      expect(await restoreObserver.mget(...versionedKeys, ...legacyKeys)).toEqual(
-        Array.from({ length: versionedKeys.length + legacyKeys.length }).fill(null) as Array<string | null>,
-      );
-      expect(await restoreObserver.get(sentinelKey)).toBe("fixture");
+      const currentValues = await restoreObserver.mget(...versionedKeys);
+      const legacyValues = await restoreObserver.mget(...legacyKeys);
+      const sentinelAfterRepair = await restoreObserver.get(sentinelKey);
+      expect(currentValues).toEqual(versionedKeys.map(() => null));
+      expect(legacyValues).toEqual(legacyKeys.map(() => "fixture"));
+      expect(sentinelAfterRepair).toBe("fixture");
     }
     catch (error) {
       testFailure = { error };
@@ -205,8 +203,6 @@ describe("Client Runtime Snapshot real Redis contract", () => {
         inventory: createClientRuntimeRestoreInventoryReader(restoreObserver),
       }).verifyAllAfterRedisRestore({ protocolTrafficStopped: true });
       expect(emptyAfterCleanup).toEqual({ matchingKeys: 0 });
-      const finalKeyCount = await restoreObserver.dbsize();
-      expect(finalKeyCount).toBe(0);
     }
     catch (error) {
       cleanupFailures.push(error);
@@ -672,16 +668,6 @@ function requireDedicatedRedisTestUrl() {
   const parsed = new URL(redisUrl);
   if (parsed.protocol !== "redis:" && parsed.protocol !== "rediss:")
     throw new Error(`${TEST_REDIS_URL_ENV} must use the redis or rediss protocol`);
-  return redisUrl;
-}
-
-function requireExclusiveCleanupRedisUrl() {
-  const redisUrl = process.env[CLEANUP_REDIS_URL_ENV];
-  if (!redisUrl)
-    throw new Error(`${CLEANUP_REDIS_URL_ENV} must point to a caller-provided exclusive disposable Redis logical DB; no fallback is allowed`);
-  const parsed = new URL(redisUrl);
-  if (parsed.protocol !== "redis:" && parsed.protocol !== "rediss:")
-    throw new Error(`${CLEANUP_REDIS_URL_ENV} must use the redis or rediss protocol`);
   return redisUrl;
 }
 

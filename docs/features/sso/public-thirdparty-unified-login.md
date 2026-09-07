@@ -178,12 +178,9 @@ Set-Cookie: global_session={globalSessionId}; HttpOnly; SameSite=Lax; Path=/
 redirect，`/sso/token` 校验 client 与 client secret，`/sso/callback` 校验 client 与 redirect。Custom SSO deep module
 随后一次性完成 grant resolution，以及 Independent credential 或 Gateway session 的生命周期；Gateway 所需 ORCAS、
 最小 session metadata、ORCAS 专用引用、审计与失败补偿留在该 module 内。运行时不再读取、写入或规范化 legacy
-私有 payload；旧 key 只由维护窗口的
-`pnpm --filter @iam/api-core session:cleanup-custom-sso-cutover -- --dry-run` 独立清理命令处理；核对摘要后才可改用
-`--verify` 检查残留；门禁有效后才可改用 `--apply`，并以 clean `--verify` 零退出收尾。该内建 profile 只覆盖旧
-Principal Session 与 Custom SSO artifact，不扫描或删除 `oidc:*` key。完整顺序见
-[Custom SSO Subject Projection 硬切换与回滚手册](../../releases/custom-sso-subject-projection-release.md)。Route
-只负责 HTTP 参数、Cookie、response 和 redirect 适配。
+私有 payload。旧 Session cleanup 命令已退役，旧环境或旧备份迁移不在当前候选支持范围，须另行固定适用版本与迁移流程。
+当前维护由 Session Kernel 撤销/pending cleanup 与协议 owner 的精确 artifact 清理承担；后者保留 Principal Session，
+不等价于全量认证状态重置。Route 只负责 HTTP 参数、Cookie、response 和 redirect 适配。
 
 第三方系统不应依赖 IAM 内部的授权码消费与 credential/session 创建顺序，只依赖最终 HTTP、Cookie 和 redirect contract。
 
