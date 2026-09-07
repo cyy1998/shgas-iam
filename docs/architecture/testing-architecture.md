@@ -251,7 +251,8 @@ flowchart LR
   C --> D["build"]
 ```
 
-`static` 依次运行 lint、文档索引、环境变量命名 Guard 与 Architecture Guard。`verify` 不读取真实 PostgreSQL/Redis，
+`pnpm verify:static` 通过同一 runner 的 `--static` 参数只运行静态阶段：lint、文档索引、环境变量命名 Guard、
+Architecture Guard 与 Collection Guard。`verify` 不读取真实 PostgreSQL/Redis，
 不启动 browser 或 Full-system stack，也不隐式执行 Integration。开发者按改动风险显式追加相关 profiles；完整
 `test:integration` 只在调用方准备好全部专用资源时运行。
 
@@ -266,9 +267,9 @@ Gate 本身不读取资源配置，不复制 Integration preflight 或 Full-syst
 cleanup，也不把命令名解释为 provider adoption。各 owner command 的资源与 lifecycle 契约见
 [构建、测试与开发命令](../development/commands.md)。
 
-`check:test-collection` 当前不在上述聚合 Gate 中。准备合入或发布时，候选交付负责人必须在同一最终候选上单独运行
-`pnpm check:test-collection` 并记录结果；缺少该结果时不能声称当前测试已完整、唯一收集。执行或解析失败时先修复，
-不能以其他 Gate 成功替代。该检查不加入每次开发内循环；未来若接入聚合 Gate，应同步更新这里的执行归属。
+每票每轮交接前运行 `pnpm verify:static`，最终候选的 `pnpm verify` 复用同一静态阶段；无需另外重复执行
+`pnpm check:test-collection`。独立命令保留用于聚焦排查。收集检查通过不表示测试断言已执行或通过；执行或解析失败
+同样阻断交接与交付。责任、交接材料和失败处理见[开发工作流](../agents/workflow.md#验证节奏)。
 
 Client Runtime Snapshot 不增加 feature-specific root gate；验收矩阵由发布平台或 release owner 显式调用共享 Module
 Component/Redis、三类 Adapter Component、Admin Component/PostgreSQL/composition rehearsal、Worker Component/Process/Redis 与
@@ -282,8 +283,8 @@ legacy 清理证据仅由[历史手册](../releases/client-runtime-snapshot-hard
 | 阶段 | 最小范围 |
 |---|---|
 | 开发内循环 | 当前 Unit/profile、单文件或测试名 |
-| Ticket 实现 | 最高层相关 collection、受影响 package lint/typecheck 与永久 Guard |
-| 准备 merge/release | 最终内容上一次 `pnpm verify` 和独立 `pnpm check:test-collection`，再按风险显式执行 Integration/Gateway 等检查 |
+| Ticket 实现 | 每轮交接前 `pnpm verify:static`、完整受影响范围的 typecheck 与行为测试、diff 检查 |
+| 准备 merge/release | 最终内容上一次 `pnpm verify`（含 Collection Guard），再按风险显式执行 Integration/Gateway 等检查 |
 
 2026-08-06 的 Windows 本地候选周期在同一次完整连续流程中依次通过 `pnpm verify` 3/3、全资源 `pnpm verify:ci` 1/1、
 干净 E2E `pnpm verify:release` 1/1，且最终 task-owned 与 exact-project Docker inventory 均为零。Feature 历史中的正式

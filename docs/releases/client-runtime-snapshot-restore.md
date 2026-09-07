@@ -40,8 +40,7 @@ Redis 安全环境 identity、备份来源代际、恢复时间、PostgreSQL 权
 候选发生变更时按受影响范围重新验证。完整候选验证由 release owner 逐项调用，不提供 feature-specific root runner：
 
 ```bash
-pnpm verify
-pnpm check:test-collection
+pnpm verify # 包含 Collection Guard
 pnpm --filter @iam/api-core test:integration:component
 IAM_API_CORE_TEST_REDIS_URL=<namespace-isolated-url> \
   pnpm --filter @iam/api-core client-runtime:hard-cutover-redis

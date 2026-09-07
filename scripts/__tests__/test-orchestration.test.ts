@@ -447,8 +447,9 @@ function runWithPnpmRecorder(options: {
   }
 }
 
-function runVerifyWithRecorder(failCommand?: string) {
+function runVerifyWithRecorder(failCommand?: string, args: string[] = []) {
   const result = runWithPnpmRecorder({
+    args,
     commandLogEnvName: "IAM_VERIFY_COMMAND_LOG",
     environment: { IAM_VERIFY_FAIL_COMMAND: failCommand },
     orchestrationScript: verifyScript,
@@ -1285,6 +1286,7 @@ describe("test orchestration", () => {
         "check:docs",
         "check:env-names",
         "check:architecture",
+        "check:test-collection",
         "typecheck",
         "test:unit",
         "build",
@@ -1292,6 +1294,71 @@ describe("test orchestration", () => {
       exitCode: 0,
     });
   }, 15_000);
+
+  test("runs only the five static checks through the public static entry", () => {
+    const rootPackage = readJson(join(repoRoot, "package.json"));
+    expect(rootPackage.scripts["verify:static"]).toBe("node scripts/verify.mjs --static");
+    expect(runVerifyWithRecorder(undefined, ["--static"])).toEqual({
+      commands: ["lint", "check:docs", "check:env-names", "check:architecture", "check:test-collection"],
+      exitCode: 0,
+    });
+  }, 15_000);
+
+  test.each([[[]], [["--static"]]])("blocks downstream commands on static guard failures with args %j", (args) => {
+    expect(runVerifyWithRecorder("check:env-names", args)).toEqual({
+      commands: ["lint", "check:docs", "check:env-names"],
+      exitCode: 37,
+    });
+    expect(runVerifyWithRecorder("check:test-collection", args)).toEqual({
+      commands: ["lint", "check:docs", "check:env-names", "check:architecture", "check:test-collection"],
+      exitCode: 37,
+    });
+  }, 15_000);
+
+  test.each([["--unknown"], ["static"], ["--static", "--static"], ["--static", "extra"]])(
+    "rejects invalid verify arguments before launching checks: %j",
+    (...args) => {
+      expect(runVerifyWithRecorder(undefined, args)).toEqual({ commands: [], exitCode: 1 });
+    },
+  );
+
+  test("fails before checks when pnpm lifecycle context is missing", () => {
+    const result = runWithPnpmRecorder({
+      commandLogEnvName: "IAM_VERIFY_COMMAND_LOG",
+      environment: { npm_execpath: undefined },
+      orchestrationScript: verifyScript,
+      temporaryDirectoryPrefix: "iam-verify-context-",
+    });
+    expect(result.commands).toEqual([]);
+    expect(result.exitCode).toBe(1);
+    expect(result.output).toContain("pnpm lifecycle script");
+  });
+
+  test("stops verify when the child entry cannot start", () => {
+    const result = runWithPnpmRecorder({
+      commandLogEnvName: "IAM_VERIFY_COMMAND_LOG",
+      environment: { npm_execpath: join(repoRoot, "missing-pnpm-entry.mjs") },
+      orchestrationScript: verifyScript,
+      temporaryDirectoryPrefix: "iam-verify-launch-",
+    });
+    expect(result.commands).toEqual([]);
+    expect(result.exitCode).toBe(1);
+    expect(result.output).not.toContain("[verify] typecheck");
+  });
+
+  test("stops verify with a nonzero exit when a child terminates abnormally", () => {
+    const result = runWithPnpmRecorder({
+      commandLogEnvName: "IAM_VERIFY_COMMAND_LOG",
+      environment: {
+        IAM_VERIFICATION_GATE_SIGNAL_COMMAND: "lint",
+        IAM_VERIFICATION_GATE_SIGNAL: "SIGTERM",
+      },
+      orchestrationScript: verifyScript,
+      temporaryDirectoryPrefix: "iam-verify-signal-",
+    });
+    expect(result.commands).toEqual(["lint"]);
+    expect(result.exitCode).toBe(1);
+  });
 
   test("runs the provider-neutral CI gate in owner-command order", () => {
     const rootPackage = readJson(join(repoRoot, "package.json"));
@@ -1416,6 +1483,7 @@ describe("test orchestration", () => {
         "check:docs",
         "check:env-names",
         "check:architecture",
+        "check:test-collection",
         "typecheck",
         "test:unit",
       ],

@@ -36,6 +36,7 @@
     "gateway:apisix:diff": "pnpm --filter @iam/gateway-apisix diff",
     "gateway:apisix:apply": "pnpm --filter @iam/gateway-apisix apply",
     "verify": "node scripts/verify.mjs",
+    "verify:static": "node scripts/verify.mjs --static",
     "verify:ci": "node scripts/run-verification-gate.mjs ci",
     "verify:release": "node scripts/run-verification-gate.mjs release"
   },

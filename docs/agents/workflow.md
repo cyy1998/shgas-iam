@@ -60,34 +60,42 @@ assignee 和 GitHub open/closed 状态表达：
    production/test/docs 改动、finding 修复和 issue 完成更新全部由对应子代理执行。
 3. 若子代理工具支持控制历史继承，implementation 子代理必须禁用主会话历史继承，并从仓库事实来源恢复上下文。
    子代理读取功能分支、`AGENTS.md`、来源 spec issue、当前 ticket issue、blocker issues 及其相关评论，把 ticket 开始前
-   的提交固定为 review fixed point，并在其他写操作前通过 `gh issue edit --add-assignee @me` 认领；不为 claim 创建
-   独立 checkpoint。
-4. 同一功能分支默认顺序执行 tickets，除非维护者明确要求并行分支或 worktree。当前 ticket 完成验收与聚焦验证后，
-   implementation 子代理创建正常的 focused implementation commit。
-5. 主会话随后按上述生命周期开始一轮 `/code-review`，对 review fixed point 到候选 `HEAD` 的完整范围执行 Standards
+   的提交固定为 review fixed point，列出验收行为、相关验证命令与资源需求，并在其他写操作前通过
+   `gh issue edit --add-assignee '@me'` 认领；不为 claim 创建独立 checkpoint。
+4. 同一功能分支默认顺序执行 tickets，除非维护者明确要求并行分支或 worktree。当前 ticket 按下节完成交接前验证后，
+   implementation 子代理创建正常的 focused implementation commit，并提交交接摘要：候选 SHA、实际执行的命令及结果、
+   未执行项及原因、验收结果和评审轮次。
+5. 主会话先检查必需验证与交接摘要是否齐全；缺少验证时退回原 implementation 子代理补齐，不计为评审失败。
+   工具覆盖某条规则不等于工具已执行，通过交接检查后才按上述生命周期开始一轮 `/code-review`，对 review fixed point 到候选 `HEAD` 的完整范围执行 Standards
    与 Spec 评审。Finding 交回原 implementation 子代理，用额外 focused fix commit 修复，再由全新的两轴评审子代理
    重新审查完整范围；不自动 amend 或 rebase。
-6. 两轴 findings 清零后，原 implementation 子代理在 ticket issue 评论中写入聚焦验证与评审摘要，确认验收项后关闭
+6. 验收满足、必需检查通过且两轴 findings 清零后，原 implementation 子代理在 ticket issue 评论中写入聚焦验证与评审摘要，确认验收项后关闭
    issue。Issue 评论保存验收结果，普通 focused commits 保存实现历史。
 7. Ticket issue 关闭后，主会话才能为下一张已解阻 ticket 显式调用另一个全新的 implementation 子代理。
-8. 如果批量模式下当前运行环境没有可用的子代理能力，主会话必须停止并向维护者报告；不得静默退回主会话直接实施。
+8. 同一 ticket 连续第 11 轮评审仍未通过时，停止批量实施并汇报每轮 findings、反复失败原因和当前恢复点。
+   工具失败不计入评审轮数。
+9. 如果批量模式下当前运行环境没有可用的子代理能力，主会话必须停止并向维护者报告；不得静默退回主会话直接实施。
 
 ## 验证节奏
 
 - TDD 与实现内循环运行最高层相关测试、单测试文件，以及受影响 workspace 的 lint/typecheck；文档变化运行
-  `pnpm check:docs`，所有 ticket 在提交前运行 `git diff --check`。
+  `pnpm check:docs`。每票、每轮修复在交接评审前必须通过 `pnpm verify:static`、当前 ticket 完整受影响范围的
+  typecheck 与行为测试，以及 `git diff --check`。静态入口已包含 Collection Guard，无需另外重复执行。
 - 上游 `/implement` 所说的结束时完整测试，在本仓库映射为当前 ticket 的完整受影响范围，不是每票运行全仓
   `pnpm verify`。
 - `pnpm verify` 只在准备 merge、release 或用户明确要求时，在最终实现内容上运行一次。它不替代需要显式环境的
   PostgreSQL、浏览器 E2E 或 Gateway 检查。
-- 合入或发布负责人还须完成[最终候选验证](../architecture/testing-architecture.md#默认验证与交付)中独立的 Collection Guard；
-  聚合 Gate 的成功不表示已经执行该检查。
+- 最终验证的证明范围见[最终候选验证](../architecture/testing-architecture.md#默认验证与交付)。Collection Guard 只证明
+  测试收集与命令可达，不证明测试断言已执行或通过。
 - Integration 测试所需的 PostgreSQL 和 Redis 由调用方负责。没有专用测试 URL 时，agent 应在 Docker 可用的情况下
   启动本地临时容器，等待服务 ready，再把生成的 URL 传给测试命令；测试命令和 harness 本身不启动 Docker。
 - 临时容器必须使用仓库声明的镜像版本、动态宿主端口和本次任务唯一的 name/label。Agent 创建容器后立即记录准确的
   container ID，并在测试成功、失败或中断后只按该 ID 清理，不使用 glob、prefix scan 或 prune。不得使用 development、
   runtime 或 production 资源。
 - Docker 不可用或临时资源无法安全创建时，agent 必须明确报告未执行的测试及原因，不得把该测试记录为通过。
+- 新失败先定位；只有在固定基线、可比环境中复现同样失败，才能认定为基线失败，并保留命令、失败现象与环境差异。
+  必需检查失败或未执行时，不关闭 ticket、不宣称验收通过。维护者明确接受基线失败后才能记录例外继续推进；创建
+  issue 本身不构成豁免。
 - 不维护按路径展开的强制验证矩阵。Agent 根据风险选择直接相关的命令，并把结果摘要写入相关 issue 评论；命令无法运行时
   明确报告，不伪造通过记录。
 
@@ -95,15 +103,19 @@ assignee 和 GitHub open/closed 状态表达：
 
 ## 完成与本地合入
 
-`/implement` 的全部实现、适用的 issue 完成更新和双轴评审完成后，agent 只提出一次本地收尾授权问题，不得把最终校验、
-合并和分支删除拆成多次确认。问题必须列出 feature、相关 issue、目标分支、固定采用的 squash merge 策略、将要连续执行
-的完整本地范围，以及明确排除的外部副作用。维护者一次明确同意后，agent 连续完成下列本地事务：
+全部 tickets 完成后，父 spec issue 保持 open，报告“切片完成，最终验证待完成”。协调者确认候选与目标分支，
+处理已发现的漂移并完成必要复审，再在固定最终候选上运行一次 `pnpm verify` 及 spec 要求的额外 Integration、E2E
+或运维检查。全部必需验证通过后，记录父 issue 的最终验收结果并关闭；代码候选通过验收不代表已合入或部署。
+没有 issue 的直接实现也遵守先完成评审与最终验证、再请求本地收尾授权的顺序。
 
-1. 处理目标分支漂移；
-2. 在最终实现内容上运行一次 `pnpm verify`；
-3. 再次确认目标分支 tip 后，以 `git merge --squash` 加一个聚合提交完成本地合入；不得使用 fast-forward、普通 merge
+此时 agent 只提出一次本地收尾授权问题，列出 feature、适用 issue、目标分支、固定采用的 squash merge 策略、
+完整本地范围与明确排除的外部副作用。维护者一次明确同意后，agent 连续完成下列本地事务：
+
+1. 再次核对候选 SHA 和目标分支 tip；内容未变化时复用最终验证，发生漂移或修改时更新候选、完成必要复审并重跑
+   失效的验证，不能使用旧候选的结果合入；
+2. 再次确认目标分支 tip 后，以 `git merge --squash` 加一个聚合提交完成本地合入；不得使用 fast-forward、普通 merge
    commit 或 rebase 代替；
-4. 确认目标分支只新增一个 squash commit、该提交包含预期最终文件树且工作区干净后，删除本地功能分支。
+3. 确认目标分支只新增一个 squash commit、该提交包含预期最终文件树且工作区干净后，删除本地功能分支。
 
 取得上述授权后，只要范围没有扩大且步骤没有失败，agent 不得在各步骤之间重复询问。任一步失败都停止后续动作并保留
 功能分支作为恢复点；修复失败原因或改变范围需要新的维护者指示。Push、远端分支删除、PR、部署和其他外部副作用不包含

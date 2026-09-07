@@ -22,7 +22,7 @@
 |---|---|---|
 | 稳定依赖方向、owner 路径与 Docker build closure | 根 `pnpm check:architecture`；[analyzer](../../scripts/architecture-guard.ts) 与[公开接口 fixtures](../../scripts/__tests__/architecture-guard.test.ts)。 | 仅检查允许观察模型和受保护 source roots，不能证明业务授权、事务原子性或 runtime wiring。 |
 | Package 公开出口与结构兼容 | 所属 package exports、消费方 `typecheck`，例如 [Admin ports type contract](../../apps/admin-api/src/__tests__/port-contracts.test.ts)。 | Type-only 兼容不证明浏览器运行时可加载，也不证明 DTO 字段裁剪；对应边界见[共享契约](contracts-and-database.md#现存差距与验证)。 |
-| 每个测试候选唯一收集且 root task 可达 | 根 `pnpm check:test-collection`；[collection 入口](../../scripts/check-test-collection.ts)。 | 不读取断言、不推断资源使用；没有执行它时不能从其他 gate 成功推断当前测试均已收集。 |
+| 每个测试候选唯一收集且 root task 可达 | 根 `pnpm check:test-collection`；[collection 入口](../../scripts/check-test-collection.ts)。 | 不读取断言、不推断资源使用；已纳入静态与完整验证入口，成功只证明收集正确，不证明测试断言通过。 |
 | 文档登记、状态日期与本地目标存在 | 根 `pnpm check:docs`；[文档检查实现](../../scripts/check-docs-index.ts)。 | 当前检查 `docs/**/*.md`，不验证语义一致性、根 AGENTS.md 链接或 Markdown 锚点；这些变更须另行核对。 |
 
 Architecture Guard 当前 production source roots 为四个后端 app（API、Admin API、OIDC Provider、Worker）及
@@ -60,13 +60,13 @@ Admin/SSO 前端、`api-core`、`domain`、`contracts`、`db`、`jobs`、Gateway
 
 ```text
 verify         = static -> typecheck -> test:unit -> build
-static         = lint -> check:docs -> check:env-names -> check:architecture
+verify:static  = lint -> check:docs -> check:env-names -> check:architecture -> check:test-collection
 verify:ci      = verify -> test:integration
 verify:release = verify:ci -> test:e2e
 ```
 
-三条聚合都没有包含 `check:test-collection`；它由候选交付负责人按
-[最终候选验证要求](testing-architecture.md#默认验证与交付)单独执行并记录。命令名 `verify:ci` 不代表已接入 CI 平台；
+`verify` 的 static 阶段与 `verify:static` 共用命令列表，因此上述完整聚合均包含 Collection Guard；
+[最终候选验证](testing-architecture.md#默认验证与交付)无需另外重复运行它。命令名 `verify:ci` 不代表已接入 CI 平台；
 当前 Linux/真实 CI adoption 仍未验收。未配置的自动合入限制不能用本地执行记录代替。
 
 运维 readiness、repair、verify 是操作命令，不属于测试 collection。它们的成功报告只证明自己的检查范围：

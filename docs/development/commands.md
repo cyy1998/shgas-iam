@@ -16,6 +16,9 @@ pnpm check:docs
 git diff --check
 ```
 
+每票每轮交接前统一运行 `pnpm verify:static`，再确认完整受影响范围的 typecheck、行为测试和 `git diff --check`
+通过；具体责任与失败处理见[开发工作流](../agents/workflow.md#验证节奏)。
+
 根工具链变化的聚焦 Bun 测试：
 
 ```bash
@@ -48,6 +51,7 @@ pnpm test:integration:<component|process|redis|postgres|composition|browser>
 - `pnpm test:integration:<component|process|redis|postgres|composition|browser>`
 - `pnpm test:e2e`
 - `pnpm typecheck`
+- `pnpm verify:static`
 - `pnpm verify`
 - `pnpm verify:ci`
 - `pnpm verify:release`
@@ -265,10 +269,13 @@ Explicit recovery 的 cleanup 有独立 120 秒 deadline，对 exact project 执
 
 `pnpm verify` 通过 `scripts/verify.mjs` 按以下顺序 fail-fast：
 
-1. static：`pnpm lint`、`pnpm check:docs`、`pnpm check:env-names`、`pnpm check:architecture`；
+1. static：`pnpm lint`、`pnpm check:docs`、`pnpm check:env-names`、`pnpm check:architecture`、`pnpm check:test-collection`；
 2. typecheck：`pnpm typecheck`；
 3. test:unit：`pnpm test:unit`；
 4. build：`pnpm build`。
+
+`pnpm verify:static` 使用同一 runner 的 `--static` 参数，仅运行上述 static 阶段；默认 `verify` 复用该阶段，
+不重复运行 Collection Guard。未知参数、启动失败和子进程异常均非零退出。各单项检查命令保留用于排查。
 
 `pnpm verify:ci` 固定顺序执行 `verify -> test:integration`；`pnpm verify:release` 固定顺序执行
 `verify:ci -> test:e2e`。两者都是 provider-neutral 的浅组合：任一 owner command 非零即停止并透传失败，不另行解释资源、
@@ -276,7 +283,7 @@ diagnostics 或 cleanup。命令名不表示已经接入 CI provider，也不授
 E2E lifecycle 的详细契约分别由本页后续专用资源说明和 [测试编排架构](../architecture/testing-architecture.md) 持有。
 
 Client Runtime Snapshot 当前恢复不提供 feature-specific root runner。候选验证由发布平台或 release owner 对同一固定候选逐项调用
-`pnpm verify`、`pnpm check:test-collection`、相关 Module/Adapter/Admin/Worker package commands 与 `pnpm test:e2e`，并独立保存每项
+`pnpm verify`（含 Collection Guard）、相关 Module/Adapter/Admin/Worker package commands 与 `pnpm test:e2e`，并独立保存每项
 退出状态与证据。其中 `pnpm --filter @iam/admin-api client-runtime:hard-cutover-rehearsal` 通过真实 Admin mutation、临时 PostgreSQL
 schema、真实 Redis 与三类公开 Reader 验证 mutation 后事实及恢复，并精确清理本次 owner 资源。各真实资源命令要求调用方提供专用
 URL，且不会创建、推断或清理这些调用方资源；测试命令也不执行 production freeze、部署、drain、namespace reset 或切流。
