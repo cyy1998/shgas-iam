@@ -7,6 +7,10 @@ Next review: 2026-10-31
 
 ## 发布前提
 
+在线状态由应用时间切换为 Redis 时间时，先完整执行[专用维护手册](online-auth-redis-time-cutover.md)，
+其中的停流、排空、全 owner 清理、统一版本与独立 verify 门禁优先；本页的普通协议发布、轮换和 smoke 说明继续适用。
+不能用仅等待 staged TTL 或 per-client artifact cleanup 替代此次全体旧在线状态清理。当前环境切换未执行。
+
 1. 使用 Node.js 24.x 构建并测试 `@iam/oidc-provider`。
 2. 执行数据库迁移，检查 `oidc_subject` 回填、client OIDC 字段和启用/配置 check constraint。
 3. 配置以 `/oidc` 结尾且不可随意变更的外部 issuer；后续修改 issuer 会改变 token 身份和校验结果。

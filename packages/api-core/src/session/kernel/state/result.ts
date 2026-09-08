@@ -9,6 +9,8 @@ import type {
 export type ResolvedResult<T> = {
   status: "resolved";
   value: T;
+  /** Redis acquisition time in milliseconds; deadline consumers must use this observation, not their local clock. */
+  observedAt: number;
   lookupKeyId?: string;
 };
 
@@ -59,7 +61,7 @@ export type ResolveResult<T>
     | LifecycleFailureResult;
 
 export type CreateResult<T>
-  = | { status: "created"; value: T; externalToken?: string }
+  = | { status: "created"; value: T; observedAt: number; externalToken?: string }
     | LifecycleFailureResult;
 
 export function failClosed(message: string, cause?: unknown): FailClosedResult {

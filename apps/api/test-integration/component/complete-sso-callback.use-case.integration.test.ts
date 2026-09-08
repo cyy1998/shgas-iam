@@ -27,6 +27,7 @@ const enabledTrafficGate = {
 test("delegates once and maps the completed Gateway Local Session", async () => {
   const findRuntimeRecord = mock(async () => client);
   const completeGatewayLogin = mock(async () => ({
+    ttl: 37,
     orcasSessionId: "orcas-session",
     state: "opaque-state",
     token: "local-token",
@@ -52,6 +53,7 @@ test("delegates once and maps the completed Gateway Local Session", async () => 
       method: null,
     },
   })).resolves.toEqual({
+    ttl: 37,
     orcasSessionId: "orcas-session",
     state: "opaque-state",
     token: "local-token",
@@ -96,6 +98,7 @@ describe("current Gateway client state", () => {
     }],
   ])("rejects %s before Gateway login completion", async (_name, currentClient) => {
     const completeGatewayLogin = mock(async () => ({
+      ttl: 37,
       orcasSessionId: null,
       token: "should-not-exist",
     }));
@@ -117,6 +120,7 @@ describe("current Gateway client state", () => {
 
 test("does not consume the Gateway grant or establish a Local Session while traffic is suspended", async () => {
   const completeGatewayLogin = mock(async () => ({
+    ttl: 37,
     orcasSessionId: null,
     token: "should-not-exist",
   }));

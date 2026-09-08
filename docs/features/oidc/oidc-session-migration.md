@@ -34,6 +34,11 @@ HMAC rotation 的发布顺序是：先把旧 current 配为 previous、新 key �
 [Client Protocol artifact 手册](../../releases/client-protocol-v2-artifact-cutover.md)。它不是旧工具的完整等价替代，也不提供全体登出或全量认证状态重置。
 当前 OIDC store/key helpers 继续由协议 owner 使用，不能按旧 allowlist 删除同名 key。
 
+Spec #115 的当前在线时间模型切换另由 `online-auth:state` 拥有：显式停流并排空全部 reader/writer 后，直接扫描 Kernel、
+Grant、OIDC 主对象/索引与 Provider Session 衔接状态，不依赖可能丢失的旧索引；它会终止全体 Principal，且不写 PostgreSQL。
+仅用于当前 owner 键族，不恢复退役工具或支持退役 namespace；完整前提、独立 verify 和人工验收见
+[Redis 时间切换手册](../../releases/online-auth-redis-time-cutover.md)。本段不表示环境已执行。
+
 ## 运行时兼容边界
 
 - OIDC provider 不读取旧 `global_session:*` envelope，也不会把裸 user DTO 或旧 envelope 自动迁移为 PrincipalSession。

@@ -35,6 +35,7 @@ export type SessionKernelConfigInput = {
   tombstoneTtlMs?: number;
   tombstoneGraceMs?: number;
   tokenPrefixes?: Partial<SessionKernelTokenPrefixes>;
+  /** Authentication event time; production lifecycle deadlines and observations belong to Redis. */
   clock?: SessionKernelClock;
 };
 

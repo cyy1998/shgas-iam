@@ -96,14 +96,14 @@ export interface OidcSessionKernelProviderSessionStateStore {
     binding: ProviderSessionBinding;
     expectedLookup: ProviderSessionBindingLookup | null;
     providerSessionUid: string;
-    ttlSeconds: number;
+    expiresAt: number;
   }) => Promise<ProviderSessionPublicationResult>;
   publishRebind: (input: {
     attemptId: string;
     binding: ProviderSessionBinding;
     expectedAnchorGeneration: string | null;
     providerSessionUid: string;
-    ttlSeconds: number;
+    expiresAt: number;
   }) => Promise<ProviderSessionPublicationResult>;
   readAnchor: (sessionUid: string) => Promise<ProviderSessionPrincipalAnchor | null>;
   readLookup: (sessionUid: string, clientCode: string) => Promise<{
@@ -114,9 +114,9 @@ export interface OidcSessionKernelProviderSessionStateStore {
   refresh: (input: {
     binding: ProviderSessionBinding;
     providerSessionUid: string;
-    ttlSeconds: number;
+    expiresAt: number;
   }) => Promise<boolean>;
-  stage: (staged: StagedProviderSessionBinding, ttlSeconds: number) => Promise<void>;
+  stage: (staged: StagedProviderSessionBinding, expiresAt: number) => Promise<void>;
 }
 
 export interface OidcSessionKernelAdapterDeps {
@@ -126,7 +126,6 @@ export interface OidcSessionKernelAdapterDeps {
   accounts: OidcSessionKernelAccountReader;
   clients: OidcSessionKernelClientReader;
   cookieName: string;
-  clock: { now: () => number };
 }
 
 export interface ProviderSessionBindingContext {
@@ -298,21 +297,21 @@ export function createOidcSessionKernelAdapter(deps: OidcSessionKernelAdapterDep
       return null;
 
     const mapped = toProviderSessionBinding(binding.value, session);
-    const ttlSeconds = Math.max(1, mapped.expiresAt - nowSeconds());
+    const expiresAt = binding.value.expiresAt;
     const published = publication.kind === "rebind"
       ? await providerSessionState.publishRebind({
           attemptId: publication.attemptId,
           binding: mapped,
           expectedAnchorGeneration: publication.expectedAnchorGeneration,
           providerSessionUid: sessionUid,
-          ttlSeconds,
+          expiresAt,
         })
       : await providerSessionState.publishClientBinding({
           anchor: publication.anchor,
           binding: mapped,
           expectedLookup: existingLookup.value,
           providerSessionUid: sessionUid,
-          ttlSeconds,
+          expiresAt,
         });
     if (published.status === "unknown") {
       deps.logger.warn({ err: published.error, sessionUid }, "OIDC provider session binding publish outcome is unknown");
@@ -338,7 +337,7 @@ export function createOidcSessionKernelAdapter(deps: OidcSessionKernelAdapterDep
   async function stage(session: ResolvedGlobalSession, context: ProviderSessionBindingContext) {
     if (!context.authorizationAttemptId)
       return null;
-    const expiresAt = await principalSessionExpiresAtSeconds(session.sessionId);
+    const expiresAt = await principalSessionExpiresAt(session.sessionId);
     if (expiresAt === null)
       return null;
     const anchor = context.providerSessionUid
@@ -352,14 +351,14 @@ export function createOidcSessionKernelAdapter(deps: OidcSessionKernelAdapterDep
       authTime: session.authTime,
       clientCode: context.clientId,
       expectedAnchorGeneration: anchor?.generation ?? null,
-      expiresAt,
+      expiresAt: Math.floor(expiresAt / 1000),
       oidcConfigVersion: context.oidcConfigVersion,
       principalSessionId: session.sessionId,
       providerSessionUid: context.providerSessionUid ?? null,
     };
     await providerSessionState.stage(
       staged,
-      Math.min(Math.max(1, expiresAt - nowSeconds()), 60),
+      expiresAt,
     );
     return {
       principalSessionId: session.sessionId,
@@ -368,7 +367,7 @@ export function createOidcSessionKernelAdapter(deps: OidcSessionKernelAdapterDep
       accountId: session.accountId,
       authTime: session.authTime,
       oidcConfigVersion: context.oidcConfigVersion,
-      expiresAt,
+      expiresAt: Math.floor(expiresAt / 1000),
       anchorGeneration: context.authorizationAttemptId,
     };
   }
@@ -380,7 +379,7 @@ export function createOidcSessionKernelAdapter(deps: OidcSessionKernelAdapterDep
     providerSessionUid: string;
   }) {
     const staged = await providerSessionState.claim(input);
-    if (!staged || staged.expiresAt <= nowSeconds())
+    if (!staged)
       return null;
     const activeVersion = await deps.clients.findActiveVersion(staged.clientCode);
     if (activeVersion !== staged.oidcConfigVersion)
@@ -453,8 +452,7 @@ export function createOidcSessionKernelAdapter(deps: OidcSessionKernelAdapterDep
     return staged?.accountId === session.accountId
       && staged.authorizationAttemptId === authorizationAttemptId
       && staged.clientCode === clientId
-      && staged.principalSessionId === session.sessionId
-      && staged.expiresAt > nowSeconds();
+      && staged.principalSessionId === session.sessionId;
   }
 
   async function destroyProviderSession(
@@ -560,7 +558,7 @@ export function createOidcSessionKernelAdapter(deps: OidcSessionKernelAdapterDep
       return null;
     }
     if (providerBinding.mappingOwnerId)
-      await refreshProviderSessionBinding(sessionUid, providerBinding);
+      await refreshProviderSessionBinding(sessionUid, providerBinding, binding.value.expiresAt);
     return providerBinding;
   }
 
@@ -682,6 +680,25 @@ export function createOidcSessionKernelAdapter(deps: OidcSessionKernelAdapterDep
     return artifact.status === "created";
   }
 
+  async function resolveAuthorizationCodeSessionLifetime(providerCodeId: string) {
+    const artifact = translateSubjectAccessResolveResult(
+      await deps.kernel.resolveProtocolArtifact(providerCodeId),
+    );
+    if (artifact.status !== "resolved"
+      || artifact.value.protocol !== OIDC_SESSION_PROTOCOL
+      || artifact.value.artifactType !== OIDC_AUTHORIZATION_CODE_ARTIFACT_TYPE
+      || !artifact.value.principalSessionId
+      || !AuthorizationCodeMetadataSchema.safeParse(artifact.value.metadata).success) {
+      return null;
+    }
+    const principal = translateSubjectAccessResolveResult(
+      await deps.kernel.resolvePrincipalSessionById(artifact.value.principalSessionId),
+    );
+    if (principal.status !== "resolved")
+      return null;
+    return { remainingSeconds: Math.ceil((principal.value.expiresAt - principal.observedAt) / 1000) };
+  }
+
   async function consumeAuthorizationCodeArtifact(providerCodeId: string) {
     const consumed = translateSubjectAccessResolveResult(
       await deps.kernel.consumeProtocolArtifact(providerCodeId),
@@ -780,7 +797,7 @@ export function createOidcSessionKernelAdapter(deps: OidcSessionKernelAdapterDep
     };
   }
 
-  async function principalSessionExpiresAtSeconds(principalSessionId: string) {
+  async function principalSessionExpiresAt(principalSessionId: string) {
     const principal = translateSubjectAccessResolveResult(
       await deps.kernel.resolvePrincipalSessionById(principalSessionId),
     );
@@ -788,14 +805,14 @@ export function createOidcSessionKernelAdapter(deps: OidcSessionKernelAdapterDep
       throw new SubjectAccessUnavailableError(principal.cause);
     if (principal.status !== "resolved")
       return null;
-    return Math.floor(principal.value.expiresAt / 1000);
+    return principal.value.expiresAt;
   }
 
-  async function refreshProviderSessionBinding(sessionUid: string, binding: ProviderSessionBinding) {
+  async function refreshProviderSessionBinding(sessionUid: string, binding: ProviderSessionBinding, expiresAt: number) {
     await providerSessionState.refresh({
       binding,
       providerSessionUid: sessionUid,
-      ttlSeconds: Math.max(1, binding.expiresAt - nowSeconds()),
+      expiresAt,
     });
   }
 
@@ -824,12 +841,9 @@ export function createOidcSessionKernelAdapter(deps: OidcSessionKernelAdapterDep
     };
   }
 
-  function nowSeconds() {
-    return Math.floor(deps.clock.now() / 1000);
-  }
-
   return {
     consumeAuthorizationCodeArtifact,
+    resolveAuthorizationCodeSessionLifetime,
     consume: consumeReturnHandle,
     create: createReturnHandle,
     resolveReturnHandle,

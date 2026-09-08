@@ -4,6 +4,7 @@ import type {
   SessionKernelRedis,
   SessionKernelRevocationTransitions,
 } from "./storage/store";
+import { normalizeSessionKernelConfig } from "./config";
 import { createSessionKernelWithStateAdapterFactories } from "./facade";
 import { createInMemorySessionKernelArtifactConsumer } from "./storage/artifact-consumption";
 import { createInMemorySessionKernelRevocationTransitions } from "./storage/revocation-transitions";
@@ -19,6 +20,7 @@ const revocationTransitionsByRedis = new WeakMap<
 
 export function createSessionKernelForTesting(
   deps: SessionKernelDependencies,
+  redisClock = normalizeSessionKernelConfig(deps.config).clock,
 ) {
   return createSessionKernelWithStateAdapterFactories(
     deps,
@@ -53,5 +55,12 @@ export function createSessionKernelForTesting(
       transitionsByNamespace.set(keys.namespace, transitions);
       return transitions;
     },
+    redis => ({
+      async now() { return redisClock.now(); },
+      async read(key) {
+        const observedAt = redisClock.now();
+        return { observedAt, serialized: await redis.get(key) };
+      },
+    }),
   );
 }

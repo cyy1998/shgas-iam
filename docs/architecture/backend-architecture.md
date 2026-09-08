@@ -347,6 +347,36 @@ User Profile 的初代 V1 builder、Facts reader/publisher 与 Subject Projectio
 
 ### Session runtime 与跨 App 边界
 
+- Session Kernel 的 Principal Session、Client Binding、Credential 与 Protocol Artifact 使用 Redis 时间计算生命周期期限；
+  读取通过同一次 Redis 原子观察取得对象和当前时间，成功结果的 `observedAt` 是该观察的毫秒时间。
+  签发派生对象与续期复用取得时的观察，校验通过后不按应用时钟或再次取得的当前时间追加到期拒绝；
+  后续对象缺失、撤销、消费和 CAS 冲突仍可阻止操作，不恢复已消失的对象。`authTime` 保留应用记录的原认证事件时间。
+- 续期以 active payload CAS 维护对象与索引；有 token lookup 的对象还校验 lookup owner 和 lookup tombstone，并同步延长 lookup。
+  共享索引不设置由某个成员决定的 TTL，读时按 Redis 时间清理到期 score；pending cleanup tombstone 在外围清理成功前保持存在，
+  成功后按 Redis 时间恢复其原 tombstone 期限或删除。Credential 正常新签发使用服务端 UUID，内部已知 identity 与不确定写入补偿保持。
+- 上述 Kernel 契约由 [ADR-0027](../adr/0027-own-online-authentication-lifecycle-time-in-redis.md) 和 #116 落实；
+  #117 已让 Custom SSO Grant 初始化使用 Kernel Artifact deadline，与预占、heartbeat、release、consume 的 Redis 时间保持一致。
+  Independent 响应 TTL 与 Gateway Local Session Cookie 的 Max-Age 从 Credential `expiresAt - observedAt` 向上取整为秒，
+  亚秒有效结果仍交付一秒，不以取整或应用时间追加过期拒绝，也不延长 Redis 中的期限。ORCAS Cookie 保持原外部集成契约。
+  Independent 签发后与 Local Session 认证中的父 Session 读取继续保护对象存在、撤销和 Subject Access；这些独立操作仍可因真实缺失失败。
+  每个兑换 attempt 的服务端 UUID 在签发前固定，不确定写入仍按同一 identity 精确补偿；后续 attempt 使用新 UUID。
+  #118 已让 OIDC store 在一次 Redis Lua 写入中以 Redis 时间计算主对象、UID/user-code lookup 与 Grant/Client 索引的相同期限，
+  共享索引只延长到期时间，短成员和重复写入不会缩短长成员的追踪期限。清理与盘点读取实际对象，清理不按应用时间裁剪成员；
+  payload CAS、lookup owner 比较和已有 Kernel/config 校验保持。此保证覆盖正常新写入，不自动发现或修复历史已丢索引的孤立对象。
+  #119 将 mapping 发布/刷新改为 Kernel 毫秒绝对 deadline，anchor 与 generation membership 只延长期限。
+  staged binding 以 Redis TIME 和 Principal deadline 的较小值限制最长 60 秒，并与索引原子写入；claim 后不按应用时间复查。
+  每次未消费 Code 读取重新取得 Kernel Principal 的 `expiresAt - observedAt` 并向上取整，供本次 AccessToken/IdToken TTL 使用；
+  该观察不持久化；已消费 Code 返回原消费标记供 provider 拒绝回放并撤销关联 Grant，不要求已删除的 Kernel artifact 提供签发期限。
+  Code、AccessToken 与 Grant 的 opaque 模型只在本次 Redis adapter 取得成功时沿用有效结果，
+  不再由模型的本地 `exp` 校验推翻；后续读取仍须经过 Redis 存在性、Kernel 和配置校验。JWT `exp`、`auth_time` 保持协议语义。
+  已取得的 Grant 增补 scope 后再保存时，Lua 保留 Redis 当前绝对期限并要求对象仍存在，不消费模型按应用时钟计算的 remainingTTL。
+  #120 最终核对补齐 Session/Interaction 的取得时有效观察：Interaction 更新与 Session.persist 保留原 Redis deadline；
+  Session.save(configuredTTL) 保持 rolling 续期，同 identity 已缺失时失败；瞬时标记不持久化。
+  42 条故事与证据见[最终契约核对](../features/oidc/online-auth-redis-time-contract.md)。
+  `online-auth:state` 人工命令直接扫描当前 Kernel/Grant/OIDC owner 固定键族，清理无索引孤立对象，并要求新进程独立 verify；
+  不写 PostgreSQL，不改变正常按 owner index 的业务撤销。代码迁移不代表维护切换已执行，执行边界见
+  [维护手册](../releases/online-auth-redis-time-cutover.md)。
+
 - Admin `services/user/**` 和 `services/client/**` 的会话终止只经过 consumer-owned Session Revocation port。
   只有 `services/session-revocation/**` 与 `composition/**` 直接持有 Session Kernel、OIDC runtime、concrete
   session adapter 或 app-local Redis runtime dependency。

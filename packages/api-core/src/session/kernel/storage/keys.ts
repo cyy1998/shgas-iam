@@ -23,6 +23,12 @@ const codeObjectKinds = {
 
 export type SessionKernelKeyBuilder = ReturnType<typeof createSessionKernelKeyBuilder>;
 
+/** Current lifecycle state only; callers must stop and drain every writer before deletion. */
+export function sessionKernelMaintenancePrefixes(namespace: string) {
+  const ns = createSessionKernelKeyBuilder(namespace).namespace;
+  return ["active:", "lookup:", "revoked:", "revoked_lookup:", "idx:"].map(kind => `${ns}${kind}`);
+}
+
 export function createSessionKernelKeyBuilder(namespace = "sess:v2:") {
   const ns = namespace.endsWith(":") ? namespace : `${namespace}:`;
   return {

@@ -75,9 +75,13 @@ describe("oIDC provider configuration", () => {
     });
     const accessTokenTtl = configuration.ttl?.AccessToken as (ctx: unknown) => number;
     const boundedTtl = accessTokenTtl({
-      oidc: { entities: { AuthorizationCode: { globalSessionExpiresAt: Math.floor(Date.now() / 1000) + 90 } } },
+      oidc: { entities: { AuthorizationCode: { globalSessionRemainingSeconds: 90 } } },
     });
-    assert.ok(boundedTtl >= 89 && boundedTtl <= 90);
+    assert.equal(boundedTtl, 90);
+    const idTokenTtl = configuration.ttl?.IdToken as (ctx: unknown) => number;
+    assert.equal(idTokenTtl({ oidc: { entities: { AuthorizationCode: { globalSessionRemainingSeconds: 90 } } } }), 90);
+    assert.equal(accessTokenTtl({ oidc: { entities: { AuthorizationCode: { globalSessionRemainingSeconds: 9000 } } } }), 3600);
+    assert.throws(() => accessTokenTtl({ oidc: { entities: { AuthorizationCode: {} } } }));
     assert.equal(accessTokenTtl({ oidc: { entities: {} } }), 3600);
 
     const publicClient = {

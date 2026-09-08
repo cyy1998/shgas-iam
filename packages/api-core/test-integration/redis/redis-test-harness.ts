@@ -4,6 +4,7 @@ import type {
   CleanupAdapter,
   PrincipalRef,
   SessionKernel,
+  SessionKernelConfigInput,
   SessionKernelLogger,
   SessionKernelPrincipalAccessFence,
   SessionKernelRedis,
@@ -55,6 +56,9 @@ export interface RedisTestHarness {
     cleanupAdapters?: CleanupAdapter[];
     principalAccessFence?: SessionKernelPrincipalAccessFence;
     logger?: SessionKernelLogger;
+    writerClock?: { now: () => number };
+    observerClock?: { now: () => number };
+    lifetime?: Pick<SessionKernelConfigInput, "principalIdleTtlMs" | "principalAbsoluteTtlMs" | "tombstoneTtlMs" | "tombstoneGraceMs">;
   }) => Promise<SessionKernelRedisTestScope>;
   readonly createSubjectAccessScope: (input: {
     writerTransitionIds: readonly string[];
@@ -64,6 +68,7 @@ export interface RedisTestHarness {
 }
 
 export interface AuthorizationGrantRedisTestScope {
+  readonly redisNow: () => Promise<number>;
   readonly writer: AuthorizationGrantRedemption;
   readonly observer: AuthorizationGrantRedemption;
   readonly close: () => Promise<void>;
@@ -110,6 +115,7 @@ export interface SubjectAccessRedisTestScope {
 }
 
 export interface SessionKernelRedisTestScope {
+  readonly redisNow: () => Promise<number>;
   readonly writer: SessionKernel;
   readonly observer: SessionKernel;
   readonly ambiguousWriter: SessionKernel;
@@ -196,6 +202,10 @@ export async function createRedisTestHarness(): Promise<RedisTestHarness> {
       });
 
       return {
+        async redisNow() {
+          const [seconds, micros] = await observerRedis.time();
+          return Number(seconds) * 1000 + Math.floor(Number(micros) / 1000);
+        },
         close,
         observer,
         writer,
@@ -352,6 +362,7 @@ export async function createRedisTestHarness(): Promise<RedisTestHarness> {
         },
         input.principalAccessFence,
         input.logger,
+        { ...input.lifetime, clock: input.writerClock },
       );
       const observer = createSessionKernelClient(
         observerRedis,
@@ -361,6 +372,7 @@ export async function createRedisTestHarness(): Promise<RedisTestHarness> {
         undefined,
         input.principalAccessFence,
         input.logger,
+        { ...input.lifetime, clock: input.observerClock },
       );
       const close = createRedisTestScopeCloser({
         cleanupRedis,
@@ -370,6 +382,10 @@ export async function createRedisTestHarness(): Promise<RedisTestHarness> {
       });
 
       return {
+        async redisNow() {
+          const [seconds, micros] = await observerRedis.time();
+          return Number(seconds) * 1000 + Math.floor(Number(micros) / 1000);
+        },
         failNextUserIndexRead() {
           failNextUserIndexRead = true;
         },
@@ -622,6 +638,7 @@ function createSessionKernelClient(
   beforePrincipalValidation?: () => Promise<void>,
   principalAccessFence?: SessionKernelPrincipalAccessFence,
   logger?: SessionKernelLogger,
+  config: Partial<Pick<SessionKernelConfigInput, "clock" | "principalIdleTtlMs" | "principalAbsoluteTtlMs" | "tombstoneTtlMs" | "tombstoneGraceMs">> = {},
 ) {
   return createSessionKernel({
     cleanupAdapters,
@@ -636,6 +653,7 @@ function createSessionKernelClient(
       namespace,
       principalAbsoluteTtlMs: 60_000,
       principalIdleTtlMs: 30_000,
+      ...config,
     }),
     principalAccessFence: principalAccessFence ?? {
       capture: async () => "00000000-0000-4000-8000-000000000002",
@@ -666,7 +684,7 @@ function createCommitThenErrorRedis(
       if (property === "eval") {
         return async (...args: Parameters<NonNullable<SessionKernelRedis["eval"]>>) => {
           const result = await target.eval(...args);
-          if (shouldFailAfterCommit())
+          if (args[0].includes("session-kernel-create-credential-v1") && shouldFailAfterCommit())
             throw new Error("simulated connection loss after Redis commit");
           return result;
         };
@@ -737,4 +755,14 @@ async function deleteOwnedKeys(redis: Redis, keyPrefix: string) {
     if (keys.length > 0)
       await redis.unlink(...keys);
   } while (cursor !== "0");
+}
+
+export async function waitForRedisCondition(observe: () => Promise<boolean>, message: string) {
+  const deadline = performance.now() + 4_000;
+  while (performance.now() < deadline) {
+    if (await observe())
+      return;
+    await new Promise(resolve => setTimeout(resolve, 5));
+  }
+  throw new Error(message);
 }

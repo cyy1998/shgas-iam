@@ -62,7 +62,6 @@ function createFixture() {
       findActiveVersion: async clientId => clientId === "client-a" ? clientAVersion : clientId === "client-b" ? 2 : null,
       findRuntime: async () => null,
     },
-    clock: { now: () => redis.now },
     cookieName: "global_session",
     kernel,
     logger: { warn: () => undefined },

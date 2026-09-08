@@ -24,7 +24,7 @@ export function createCompleteSsoCallbackUseCase(deps: CompleteSsoCallbackDeps) 
     ) {
       throw new InvalidSsoClientError("非法client代码");
     }
-    const { token, orcasSessionId, state } = await deps.authorizationGrants.completeGatewayLogin({
+    const { token, ttl, orcasSessionId, state } = await deps.authorizationGrants.completeGatewayLogin({
       client: {
         clientCode: client.clientCode,
         configVersion: client.customSsoConfigVersion,
@@ -38,6 +38,7 @@ export function createCompleteSsoCallbackUseCase(deps: CompleteSsoCallbackDeps) 
       orcasSessionId,
       ...(state === undefined ? {} : { state }),
       token,
+      ttl,
     };
   }
 

@@ -32,6 +32,9 @@ describe("oIDC provider wiring", () => {
   it("keeps protocol-owned payload on loaded authorization codes and Provider Sessions", () => {
     class AuthorizationCode {}
     class Session {}
+    class AccessToken { static IN_PAYLOAD = []; }
+    class Grant { static IN_PAYLOAD = []; }
+    class Interaction { static IN_PAYLOAD = []; }
     Object.defineProperty(AuthorizationCode, "IN_PAYLOAD", {
       configurable: true,
       value: ["foo"],
@@ -40,7 +43,7 @@ describe("oIDC provider wiring", () => {
       configurable: true,
       value: ["bar"],
     });
-    const provider = { AuthorizationCode, Session } as unknown as Provider;
+    const provider = { AuthorizationCode, Session, AccessToken, Grant, Interaction } as unknown as Provider;
 
     registerProtocolModelPayloadExtensions(provider);
 
@@ -50,14 +53,18 @@ describe("oIDC provider wiring", () => {
 
     expect(authorizationCodeModel.IN_PAYLOAD).toEqual([
       "foo",
+      "redisLifetimeObserved",
       "authorizationAttemptId",
       "claimsSnapshot",
-      "globalSessionExpiresAt",
+      "globalSessionRemainingSeconds",
     ]);
     expect(authorizationCodeModel.IN_PAYLOAD).not.toBe(authorizationCodeModel.IN_PAYLOAD);
     const sessionModel = provider.Session as unknown as typeof Session & { IN_PAYLOAD: string[] };
     expect(sessionModel.IN_PAYLOAD).toEqual([
       "bar",
+      "redisLifetimeObserved",
+      "redisPreserveDeadline",
+      "redisObservedId",
       "kernelPrincipalSessionId",
       "providerSessionAnchorGeneration",
     ]);

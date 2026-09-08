@@ -31,15 +31,17 @@ export const STAGE_PROVIDER_SESSION_BINDING_SCRIPT = `
 local existing = redis.call("GET", KEYS[1])
 if existing then
   local ok, staged = pcall(cjson.decode, existing)
-  if not ok or staged.clientCode ~= ARGV[4] then return 0 end
+  if not ok or staged.clientCode ~= ARGV[3] then return 0 end
 end
-redis.call("SET", KEYS[1], ARGV[1], "EX", ARGV[2])
-redis.call("ZADD", KEYS[2], ARGV[3], KEYS[1])
-local indexTtl = redis.call("PTTL", KEYS[2])
-local requestedTtl = tonumber(ARGV[2]) * 1000
-if indexTtl < requestedTtl then
-  redis.call("PEXPIRE", KEYS[2], requestedTtl)
-end
+local time = redis.call("TIME")
+local now = tonumber(time[1]) * 1000 + math.floor(tonumber(time[2]) / 1000)
+local expiresAt = math.min(tonumber(ARGV[2]), now + 60000)
+local staged = cjson.decode(ARGV[1])
+staged.expiresAt = math.ceil(expiresAt / 1000)
+redis.call("SET", KEYS[1], cjson.encode(staged), "PXAT", expiresAt)
+redis.call("ZADD", KEYS[2], expiresAt, KEYS[1])
+redis.call("PEXPIREAT", KEYS[2], expiresAt, "NX")
+redis.call("PEXPIREAT", KEYS[2], expiresAt, "GT")
 return 1
 `;
 
@@ -108,10 +110,12 @@ if currentAnchor
   and currentLookup
   and currentLookup.bindingId == ARGV[5]
   and currentLookup.mappingOwnerId == ARGV[6] then
-  redis.call("EXPIRE", KEYS[1], ARGV[9])
-  redis.call("SET", KEYS[2], ARGV[8], "EX", ARGV[9])
+  redis.call("PEXPIREAT", KEYS[1], ARGV[9], "NX")
+redis.call("PEXPIREAT", KEYS[1], ARGV[9], "GT")
+  redis.call("SET", KEYS[2], ARGV[8], "PXAT", ARGV[9])
   redis.call("SADD", KEYS[3], ARGV[6])
-  redis.call("EXPIRE", KEYS[3], ARGV[9])
+  redis.call("PEXPIREAT", KEYS[3], ARGV[9], "NX")
+redis.call("PEXPIREAT", KEYS[3], ARGV[9], "GT")
   return 2
 end
 if ARGV[1] == "" then
@@ -119,10 +123,11 @@ if ARGV[1] == "" then
 elseif not currentAnchor or currentAnchor.generation ~= ARGV[1] then
   return 0
 end
-redis.call("SET", KEYS[1], ARGV[7], "EX", ARGV[9])
-redis.call("SET", KEYS[2], ARGV[8], "EX", ARGV[9])
+redis.call("SET", KEYS[1], ARGV[7], "PXAT", ARGV[9])
+redis.call("SET", KEYS[2], ARGV[8], "PXAT", ARGV[9])
 redis.call("SADD", KEYS[3], ARGV[6])
-redis.call("EXPIRE", KEYS[3], ARGV[9])
+redis.call("PEXPIREAT", KEYS[3], ARGV[9], "NX")
+redis.call("PEXPIREAT", KEYS[3], ARGV[9], "GT")
 return 1
 `;
 
@@ -145,10 +150,12 @@ if currentAnchor.generation == ARGV[1]
   and currentLookup
   and currentLookup.bindingId == ARGV[4]
   and currentLookup.mappingOwnerId == ARGV[5] then
-  redis.call("EXPIRE", KEYS[1], ARGV[10])
-  redis.call("SET", KEYS[2], ARGV[9], "EX", ARGV[10])
+  redis.call("PEXPIREAT", KEYS[1], ARGV[10], "NX")
+redis.call("PEXPIREAT", KEYS[1], ARGV[10], "GT")
+  redis.call("SET", KEYS[2], ARGV[9], "PXAT", ARGV[10])
   redis.call("SADD", KEYS[3], ARGV[5])
-  redis.call("EXPIRE", KEYS[3], ARGV[10])
+  redis.call("PEXPIREAT", KEYS[3], ARGV[10], "NX")
+redis.call("PEXPIREAT", KEYS[3], ARGV[10], "GT")
   return 2
 end
 if currentAnchor.generation ~= ARGV[1]
@@ -163,10 +170,12 @@ elseif not currentLookup
   or (currentLookup.mappingOwnerId or "") ~= ARGV[7] then
   return 0
 end
-redis.call("EXPIRE", KEYS[1], ARGV[10])
-redis.call("SET", KEYS[2], ARGV[9], "EX", ARGV[10])
+redis.call("PEXPIREAT", KEYS[1], ARGV[10], "NX")
+redis.call("PEXPIREAT", KEYS[1], ARGV[10], "GT")
+redis.call("SET", KEYS[2], ARGV[9], "PXAT", ARGV[10])
 redis.call("SADD", KEYS[3], ARGV[5])
-redis.call("EXPIRE", KEYS[3], ARGV[10])
+redis.call("PEXPIREAT", KEYS[3], ARGV[10], "NX")
+redis.call("PEXPIREAT", KEYS[3], ARGV[10], "GT")
 return 1
 `;
 
@@ -204,10 +213,12 @@ if decodedAnchor.generation ~= ARGV[1]
   or decodedLookup.mappingOwnerId ~= ARGV[5] then
   return 0
 end
-redis.call("EXPIRE", KEYS[1], ARGV[7])
-redis.call("SET", KEYS[2], ARGV[6], "EX", ARGV[7])
+redis.call("PEXPIREAT", KEYS[1], ARGV[7], "NX")
+redis.call("PEXPIREAT", KEYS[1], ARGV[7], "GT")
+redis.call("SET", KEYS[2], ARGV[6], "PXAT", ARGV[7])
 redis.call("SADD", KEYS[3], ARGV[5])
-redis.call("EXPIRE", KEYS[3], ARGV[7])
+redis.call("PEXPIREAT", KEYS[3], ARGV[7], "NX")
+redis.call("PEXPIREAT", KEYS[3], ARGV[7], "GT")
 return 1
 `;
 
@@ -258,7 +269,7 @@ return 1
 `;
 
 export function createProviderSessionStateStore(redis: ProviderSessionStateRedis) {
-  async function stage(staged: StagedProviderSessionBinding, ttlSeconds: number) {
+  async function stage(staged: StagedProviderSessionBinding, expiresAt: number) {
     const parsed = StagedProviderSessionBindingSchema.parse(staged);
     const stagedResult = await redis.eval(
       STAGE_PROVIDER_SESSION_BINDING_SCRIPT,
@@ -266,8 +277,7 @@ export function createProviderSessionStateStore(redis: ProviderSessionStateRedis
       pendingProviderSessionBindingKey(parsed.authorizationAttemptId),
       pendingProviderSessionBindingsByClientKey(parsed.clientCode),
       JSON.stringify(parsed),
-      ttlSeconds,
-      Date.now() + ttlSeconds * 1000,
+      expiresAt,
       parsed.clientCode,
     );
     if (stagedResult !== 1)
@@ -342,8 +352,7 @@ export function createProviderSessionStateStore(redis: ProviderSessionStateRedis
 
   async function revokeClientStagedBindings(clientCode: string) {
     const indexKey = pendingProviderSessionBindingsByClientKey(clientCode);
-    await redis.zremrangebyscore(indexKey, "-inf", Date.now());
-    const keys = await redis.zrangebyscore(indexKey, Date.now(), "+inf");
+    const keys = await redis.zrangebyscore(indexKey, "-inf", "+inf");
     const payloads = keys.length === 0 ? [] : await redis.mget(...keys);
     for (let index = 0; index < keys.length; index += 1) {
       const removed = await redis.eval(
@@ -374,7 +383,7 @@ export function createProviderSessionStateStore(redis: ProviderSessionStateRedis
     binding: ProviderSessionBinding;
     expectedAnchorGeneration: string | null;
     providerSessionUid: string;
-    ttlSeconds: number;
+    expiresAt: number;
   }): Promise<ProviderSessionPublicationResult> {
     const anchor = createAnchor(input.binding, input.attemptId);
     const mappingOwnerId = requireMappingOwner(input.binding);
@@ -387,7 +396,7 @@ export function createProviderSessionStateStore(redis: ProviderSessionStateRedis
       mappingOwnerId,
       JSON.stringify(anchor),
       JSON.stringify(toLookup(input.binding)),
-      input.ttlSeconds,
+      input.expiresAt,
     ] as Array<string | number>;
     return await publishWithRecovery({
       script: PUBLISH_PROVIDER_SESSION_REBIND_SCRIPT,
@@ -406,7 +415,7 @@ export function createProviderSessionStateStore(redis: ProviderSessionStateRedis
     binding: ProviderSessionBinding;
     expectedLookup: ProviderSessionBindingLookup | null;
     providerSessionUid: string;
-    ttlSeconds: number;
+    expiresAt: number;
   }): Promise<ProviderSessionPublicationResult> {
     const anchor = createAnchor(input.binding, input.anchor.generation);
     const mappingOwnerId = requireMappingOwner(input.binding);
@@ -420,7 +429,7 @@ export function createProviderSessionStateStore(redis: ProviderSessionStateRedis
       input.expectedLookup?.mappingOwnerId ?? "",
       input.expectedLookup ? "1" : "0",
       JSON.stringify(toLookup(input.binding)),
-      input.ttlSeconds,
+      input.expiresAt,
     ] as Array<string | number>;
     return await publishWithRecovery({
       script: PUBLISH_PROVIDER_SESSION_CLIENT_BINDING_SCRIPT,
@@ -437,7 +446,7 @@ export function createProviderSessionStateStore(redis: ProviderSessionStateRedis
   async function refresh(input: {
     binding: ProviderSessionBinding;
     providerSessionUid: string;
-    ttlSeconds: number;
+    expiresAt: number;
   }) {
     if (!input.binding.anchorGeneration || !input.binding.mappingOwnerId)
       return false;
@@ -455,7 +464,7 @@ export function createProviderSessionStateStore(redis: ProviderSessionStateRedis
       input.binding.bindingId,
       input.binding.mappingOwnerId,
       JSON.stringify(toLookup(input.binding)),
-      input.ttlSeconds,
+      input.expiresAt,
     );
     return refreshed === 1;
   }

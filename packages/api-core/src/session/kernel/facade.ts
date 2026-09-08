@@ -23,6 +23,7 @@ import type {
   CredentialCreateResult,
   SessionKernelCredentialCreator,
 } from "./storage/credential-creation";
+import type { SessionKernelObservation } from "./storage/observation";
 import type {
   SessionKernelRedis,
   SessionKernelRevocationTransitions,
@@ -46,6 +47,7 @@ import {
 import { createRedisSessionKernelArtifactConsumer } from "./storage/artifact-consumption";
 import { createRedisSessionKernelCredentialCreator } from "./storage/credential-creation";
 import { createSessionKernelKeyBuilder, encodeIndexMember, parseIndexMember } from "./storage/keys";
+import { createRedisSessionKernelObservation } from "./storage/observation";
 import { createRedisSessionKernelRevocationTransitions } from "./storage/revocation-transitions";
 import { SessionKernelStore } from "./storage/store";
 
@@ -190,6 +192,7 @@ export function createSessionKernel(deps: SessionKernelDependencies) {
     ({ redis, keys }) =>
       createRedisSessionKernelCredentialCreator(redis, keys),
     ({ redis }) => createRedisSessionKernelRevocationTransitions(redis),
+    createRedisSessionKernelObservation,
   );
 }
 
@@ -207,6 +210,7 @@ export function createSessionKernelWithStateAdapterFactories(
     redis: SessionKernelRedis;
     keys: ReturnType<typeof createSessionKernelKeyBuilder>;
   }) => SessionKernelRevocationTransitions,
+  createObservation: (redis: SessionKernelRedis) => SessionKernelObservation,
 ) {
   const config = normalizeSessionKernelConfig(deps.config);
   const keys = createSessionKernelKeyBuilder(config.namespace);
@@ -229,6 +233,7 @@ export function createSessionKernelWithStateAdapterFactories(
     artifactConsumer,
     credentialCreator,
     revocationTransitions,
+    createObservation(deps.redis),
   );
   const cleanupAdapters = deps.cleanupAdapters ?? [];
   const uuid = deps.random?.uuid ?? randomUUID;
@@ -245,11 +250,11 @@ export function createSessionKernelWithStateAdapterFactories(
       principal: PrincipalRef;
     };
     try {
-      const now = config.clock.now();
+      const now = await store.now();
       const externalToken = generateKernelToken(config, "principalSession");
       const lookup = createCurrentLookupHash(externalToken, config);
       const principalSessionId = uuid();
-      const window = createPrincipalSessionWindow(now, config);
+      const window = { ...createPrincipalSessionWindow(now, config), authTime: config.clock.now() };
       const principal = PrincipalRefSchema.parse({
         principalType: "user",
         subjectId: subjectIdentifier,
@@ -296,7 +301,7 @@ export function createSessionKernelWithStateAdapterFactories(
         lookupHash: prepared.lookup.lookupHash,
         indexes: principalSessionIndexes(session),
       });
-      return { status: "created", value: session, externalToken: prepared.externalToken };
+      return { status: "created", value: session, observedAt: prepared.window.lastActiveAt, externalToken: prepared.externalToken };
     }
     catch (cause) {
       return failClosed("failed to create principal session", cause);
@@ -326,7 +331,7 @@ export function createSessionKernelWithStateAdapterFactories(
     const result = await applyPrincipalValidation(stored);
     if (result.status !== "resolved")
       return result;
-    const now = config.clock.now();
+    const now = result.observedAt;
     const window = calculateRenewedPrincipalSessionWindow(result.value, now, config);
     if (!window)
       return { status: "missing_or_expired" };
@@ -346,7 +351,7 @@ export function createSessionKernelWithStateAdapterFactories(
       if (!updated)
         return await store.resolveObject("principal_session", principalSessionId);
       await renewPrincipalChildren(renewed);
-      return { status: "resolved", value: renewed };
+      return { status: "resolved", value: renewed, observedAt: now };
     }
     catch (cause) {
       return failClosed("failed to renew principal session", cause);
@@ -425,13 +430,15 @@ export function createSessionKernelWithStateAdapterFactories(
       return principal;
 
     try {
-      const now = config.clock.now();
+      const now = principal.observedAt;
       const expiresAt = clampDerivedExpiresAt({
         now,
         ttlMs: input.ttlMs,
         expiresAt: input.expiresAt,
         principalSession: principal.value,
       });
+      if (expiresAt <= now)
+        return failClosed("cannot create an expired lifecycle object");
       const binding: ClientBinding = {
         version: 1,
         subjectAccessTransitionId: principal.value.subjectAccessTransitionId,
@@ -453,7 +460,7 @@ export function createSessionKernelWithStateAdapterFactories(
         object: binding,
         indexes: clientBindingIndexes(binding),
       });
-      return { status: "created", value: binding };
+      return { status: "created", value: binding, observedAt: now };
     }
     catch (cause) {
       return failClosed("failed to create client binding", cause);
@@ -475,7 +482,7 @@ export function createSessionKernelWithStateAdapterFactories(
       return principal;
 
     try {
-      const now = config.clock.now();
+      const now = principal.observedAt;
       const externalToken = input.externalToken ?? generateKernelToken(config, input.tokenKind ?? "credential");
       const lookup = createCurrentLookupHash(externalToken, config);
       const expiresAt = clampDerivedExpiresAt({
@@ -484,6 +491,8 @@ export function createSessionKernelWithStateAdapterFactories(
         expiresAt: input.expiresAt,
         principalSession: principal.value,
       });
+      if (expiresAt <= now)
+        return failClosed("cannot create an expired lifecycle object");
       const credentialId = input.credentialId ?? uuid();
       if (credentialId.length === 0)
         return failClosed("credential identity is invalid");
@@ -511,7 +520,7 @@ export function createSessionKernelWithStateAdapterFactories(
       });
       if (createResult !== "created")
         return failClosed(credentialCreateFailureMessage(createResult));
-      return { status: "created", value: credential, externalToken };
+      return { status: "created", value: credential, observedAt: now, externalToken };
     }
     catch (cause) {
       return failClosed("failed to issue credential", cause);
@@ -532,7 +541,9 @@ export function createSessionKernelWithStateAdapterFactories(
       return principal;
 
     try {
-      const now = config.clock.now();
+      const now = principal?.observedAt ?? await store.now();
+      if (!Number.isSafeInteger(input.ttlMs) || input.ttlMs <= 0)
+        return failClosed("artifact TTL must be a positive integer");
       const externalToken = input.externalToken ?? generateKernelToken(config, input.tokenKind ?? "artifact");
       const lookup = createCurrentLookupHash(externalToken, config);
       const artifactId = input.artifactId ?? uuid();
@@ -562,7 +573,7 @@ export function createSessionKernelWithStateAdapterFactories(
         lookupHash: lookup.lookupHash,
         indexes: artifactIndexes(artifact),
       });
-      return { status: "created", value: artifact, externalToken };
+      return { status: "created", value: artifact, observedAt: now, externalToken };
     }
     catch (cause) {
       return failClosed("failed to create protocol artifact", cause);
@@ -581,6 +592,7 @@ export function createSessionKernelWithStateAdapterFactories(
       ? {
           status: "resolved",
           value: stored.value,
+          observedAt: stored.observedAt,
           lookupKeyId: stored.lookupKeyId,
         }
       : stored;
@@ -589,7 +601,7 @@ export function createSessionKernelWithStateAdapterFactories(
     if (result.status !== "resolved") {
       return result;
     }
-    const now = config.clock.now();
+    const now = result.observedAt;
     const tombstone = createTombstone("artifact", result.value, "consumed", now);
     try {
       if (stored.status !== "resolved")
@@ -597,6 +609,7 @@ export function createSessionKernelWithStateAdapterFactories(
       return await store.consumeArtifact({
         artifact: result.value,
         serializedArtifact: stored.serialized,
+        observedAt: result.observedAt,
         tombstone,
       });
     }
@@ -961,7 +974,7 @@ export function createSessionKernelWithStateAdapterFactories(
       return summary;
     }
 
-    const now = config.clock.now();
+    const now = resolved.observedAt;
     const tombstone = createTombstone(kind, resolved.value, reason, now);
     const cleanupPending = cleanupPendingIndexForTombstone(tombstone);
     const revokeResult = await store.revokeActiveObject({

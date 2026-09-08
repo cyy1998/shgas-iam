@@ -54,10 +54,12 @@ function createHarness() {
   }));
   const completeCallback = mock(async () => ({
     token: "gateway-token",
+    ttl: 37,
     orcasSessionId: null,
   } as {
     token: string;
     orcasSessionId: string | null;
+    ttl: number;
     state?: string;
   }));
   const loginWithOa = mock(async () => ({
@@ -497,6 +499,7 @@ describe("Custom SSO HTTP transport contract", () => {
 
     harness.completeCallback.mockResolvedValueOnce({
       token: "gateway-token",
+      ttl: 37,
       orcasSessionId: null,
       state,
     });

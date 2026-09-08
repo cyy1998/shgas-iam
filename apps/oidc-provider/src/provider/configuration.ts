@@ -45,10 +45,12 @@ export function createProviderConfiguration(
     signingKeys.push(dependencies.previousSigningKey.jwk);
 
   const tokenTtl = (configuredTtl: number) => (ctx: KoaContextWithOIDC) => {
-    const code = ctx.oidc.entities.AuthorizationCode as { globalSessionExpiresAt?: number } | undefined;
-    if (!code?.globalSessionExpiresAt)
+    const code = ctx.oidc.entities.AuthorizationCode as { globalSessionRemainingSeconds?: number } | undefined;
+    if (!code)
       return configuredTtl;
-    return Math.max(1, Math.min(configuredTtl, code.globalSessionExpiresAt - Math.floor(Date.now() / 1000)));
+    if (!Number.isFinite(code.globalSessionRemainingSeconds) || code.globalSessionRemainingSeconds! <= 0)
+      throw new Error("OIDC Authorization Code session lifetime is unavailable");
+    return Math.min(configuredTtl, code.globalSessionRemainingSeconds!);
   };
 
   return {

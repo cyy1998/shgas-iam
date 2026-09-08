@@ -46,9 +46,11 @@ const authorize = mock(async (): Promise<
 const callback = mock(async (): Promise<{
   token: string;
   orcasSessionId: string | null;
+  ttl: number;
   state?: string;
 }> => ({
   token: "local-session",
+  ttl: 37,
   orcasSessionId: null,
 }));
 const loginOA = mock(async () => ({ token: "global-session", isMobileSet: true }));
@@ -562,6 +564,7 @@ describe("createSsoHandlers protocol adaptation", () => {
     const context = createCallbackContext();
     callback.mockResolvedValueOnce({
       token: "local-token",
+      ttl: 37,
       orcasSessionId: "orcas-token",
       state: "trusted-grant-state",
     });
@@ -578,6 +581,7 @@ describe("createSsoHandlers protocol adaptation", () => {
     );
     expect(context.responseHeaders).toEqual(expect.arrayContaining([
       expect.arrayContaining(["Set-Cookie", expect.stringContaining("local_gateway_session=local-token")]),
+      expect.arrayContaining(["Set-Cookie", expect.stringMatching(/local_gateway_session=.*Max-Age=37/)]),
       expect.arrayContaining(["Set-Cookie", expect.stringContaining("orcas_sso_sessionid=orcas-token")]),
     ]));
     expect(context.redirect).toHaveBeenCalledWith(

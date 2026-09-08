@@ -416,6 +416,11 @@ Hook 不运行 lint、typecheck、test、build 或 tracker checker。按改动�
 - API backend：`pnpm --filter @iam/api <dev|serve|lint|test|test:unit|test:integration:component|test:integration:process|test:integration:composition|test:integration:postgres|test:integration:redis|typecheck>`
 - Admin API backend：`pnpm --filter @iam/admin-api <dev|serve|lint|test|test:unit|test:integration:component|test:integration:process|test:integration:postgres|test:integration:composition|test:integration:redis|client-runtime:hard-cutover-rehearsal|typecheck>`
 - OIDC provider：`pnpm --filter @iam/oidc-provider <dev|serve|lint|test|test:unit|test:integration:component|test:integration:process|test:integration:composition|test:integration:redis|typecheck|client-protocol:artifacts>`
+- 全体当前在线认证状态维护：`pnpm --filter @iam/oidc-provider online-auth:state -- <dry-run|apply|verify> --writers-stopped`。
+  执行前完整读取[Redis 时间切换手册](../releases/online-auth-redis-time-cutover.md)。显式设置 OIDC Redis host/port/db、Kernel namespace
+  和必要 password；所有操作要求已停流排空，无 runtime 默认目标推断。按当前 Kernel/Grant/OIDC owner 固定键族 SCAN、分批 UNLINK，
+  不依赖 client index；apply 后必须在新进程 verify。安全 report 不含完整 key/凭据/原始错误，失败/超时非零；不写 PG，
+  不推进 epoch，不操作非目标 owner 或退役 namespace，也不自动部署、切流或执行演练。
 - API Core：`pnpm --filter @iam/api-core <lint|test|test:unit|test:integration:component|test:integration:process|test:integration:redis|client-runtime:hard-cutover-redis|typecheck>`
 - Client Subject Projection：`pnpm --filter @iam/client-subject-projection <lint|test|test:unit|test:integration:component|typecheck>`
 - User Profile Read Model：`pnpm --filter @iam/user-profile-read-model <lint|test|test:unit|test:integration:component|test:integration:postgres|test:integration:redis|typecheck>`

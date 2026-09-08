@@ -16,6 +16,7 @@ import type {
 import type { SessionKernelArtifactConsumer } from "./artifact-consumption";
 import type { SessionKernelCredentialCreator } from "./credential-creation";
 import type { SessionKernelKeyBuilder } from "./keys";
+import type { SessionKernelObservation } from "./observation";
 import { createLookupHashCandidates } from "../security/hmac";
 import {
   parseLifecycleObject,
@@ -24,7 +25,6 @@ import {
   stringifyRevokedTombstone,
 } from "../state/model";
 import { failClosed } from "../state/result";
-import { ttlMsUntil } from "../state/time";
 
 type RedisResult = [Error | null, unknown];
 
@@ -84,6 +84,7 @@ export type SessionKernelRevocationTransitions = {
     expectedActive: string;
     expiresAt: number;
     indexes: StoreIndexWrite[];
+    lookup?: { key: string; tombstoneKey: string; expectedOwner: string };
     serializedObject: string;
     tombstoneKey: string;
   }) => Promise<boolean>;
@@ -116,7 +117,12 @@ export class SessionKernelStore {
     private readonly artifactConsumer: SessionKernelArtifactConsumer,
     private readonly credentialCreator: SessionKernelCredentialCreator | undefined,
     private readonly revocationTransitions: SessionKernelRevocationTransitions,
+    private readonly observation: SessionKernelObservation,
   ) {}
+
+  async now() {
+    return await this.observation.now();
+  }
 
   async resolveByExternalToken<K extends ExternalKind>(
     kind: K,
@@ -137,7 +143,6 @@ export class SessionKernelStore {
     kind: K,
     externalToken: string,
   ): Promise<StoredResolveResult<LifecycleObjectByKind[K]>> {
-    const now = this.config.clock.now();
     for (const candidate of createLookupHashCandidates(externalToken, this.config)) {
       const lookupTombstone = await this.readTombstoneKey(this.keys.lookupTombstone(kind, candidate.lookupHash));
       if (lookupTombstone.status === "schema_invalid")
@@ -149,7 +154,7 @@ export class SessionKernelStore {
       if (!id)
         continue;
 
-      const resolved = await this.resolveStoredObject(kind, id, now);
+      const resolved = await this.resolveStoredObject(kind, id);
       if (resolved.status === "resolved") {
         const objectLookupHash = lookupHashForResolvedObject(resolved.value);
         if (objectLookupHash !== candidate.lookupHash) {
@@ -170,23 +175,20 @@ export class SessionKernelStore {
   async resolveObject<K extends LifecycleObjectKind>(
     kind: K,
     id: string,
-    now = this.config.clock.now(),
   ): Promise<ResolveResult<LifecycleObjectByKind[K]>> {
-    return withoutSerialized(await this.resolveStoredObject(kind, id, now));
+    return withoutSerialized(await this.resolveStoredObject(kind, id));
   }
 
   async resolveObjectForUpdate<K extends LifecycleObjectKind>(
     kind: K,
     id: string,
-    now = this.config.clock.now(),
   ) {
-    return await this.resolveStoredObject(kind, id, now);
+    return await this.resolveStoredObject(kind, id);
   }
 
   private async resolveStoredObject<K extends LifecycleObjectKind>(
     kind: K,
     id: string,
-    now: number,
   ): Promise<StoredResolveResult<LifecycleObjectByKind[K]>> {
     const tombstone = await this.readTombstoneKey(this.keys.tombstone(kind, id));
     if (tombstone.status === "schema_invalid")
@@ -194,7 +196,7 @@ export class SessionKernelStore {
     if (tombstone.status === "revoked")
       return tombstoneResolveResult(tombstone.tombstone);
 
-    const serialized = await this.redis.get(this.keys.active(kind, id));
+    const { serialized, observedAt } = await this.observation.read(this.keys.active(kind, id));
     if (!serialized)
       return { status: "missing_or_expired" };
 
@@ -207,9 +209,9 @@ export class SessionKernelStore {
         issues: parsed.issues,
       };
     }
-    if (parsed.data.expiresAt <= now)
+    if (parsed.data.expiresAt <= observedAt)
       return { status: "missing_or_expired" };
-    return { status: "resolved", value: parsed.data, serialized };
+    return { status: "resolved", value: parsed.data, observedAt, serialized };
   }
 
   async putObject<K extends LifecycleObjectKind>(input: {
@@ -219,10 +221,6 @@ export class SessionKernelStore {
     lookupHash?: string;
     indexes?: StoreIndexWrite[];
   }) {
-    const now = this.config.clock.now();
-    if (ttlMsUntil(input.object.expiresAt, now) <= 0)
-      throw new Error("cannot store an expired lifecycle object");
-
     const transaction = this.redis.multi()
       .set(this.keys.active(input.kind, input.id), stringifyLifecycleObject(input.object))
       .pexpireat(this.keys.active(input.kind, input.id), input.object.expiresAt);
@@ -243,9 +241,6 @@ export class SessionKernelStore {
     credential: IssuedCredential;
     indexes: StoreIndexWrite[];
   }) {
-    const now = this.config.clock.now();
-    if (ttlMsUntil(input.credential.expiresAt, now) <= 0)
-      throw new Error("cannot store an expired lifecycle object");
     if (this.credentialCreator)
       return await this.credentialCreator.create(input);
     await this.putObject({
@@ -265,11 +260,21 @@ export class SessionKernelStore {
     object: LifecycleObjectByKind[K];
     indexes?: StoreIndexWrite[];
   }) {
+    const lookupHash = "externalTokenLookupHash" in input.object
+      ? input.object.externalTokenLookupHash
+      : "lookupHash" in input.object ? input.object.lookupHash : undefined;
     return await this.revocationTransitions.updateActiveObject({
       activeKey: this.keys.active(input.kind, input.id),
       expectedActive: input.expectedSerialized,
       expiresAt: input.object.expiresAt,
       indexes: input.indexes ?? [],
+      ...(lookupHash && isExternalKind(input.kind)
+        ? { lookup: {
+            key: this.keys.lookup(input.kind, lookupHash),
+            tombstoneKey: this.keys.lookupTombstone(input.kind, lookupHash),
+            expectedOwner: input.id,
+          } }
+        : {}),
       serializedObject: stringifyLifecycleObject(input.object),
       tombstoneKey: this.keys.tombstone(input.kind, input.id),
     });
@@ -335,7 +340,6 @@ export class SessionKernelStore {
     indexKey: string;
     member: string;
   }) {
-    const now = this.config.clock.now();
     const tombstoneKey = this.keys.tombstone(input.tombstone.objectKind, input.tombstone.objectId);
     const lookupTombstoneKey = input.tombstone.lookupHash
       && isExternalKind(input.tombstone.objectKind)
@@ -346,7 +350,7 @@ export class SessionKernelStore {
       indexKey: input.indexKey,
       ...(lookupTombstoneKey ? { lookupTombstoneKey } : {}),
       member: input.member,
-      now,
+      now: await this.now(),
       serializedTombstone: stringifyRevokedTombstone(input.tombstone),
       tombstoneKey,
     });
@@ -355,6 +359,7 @@ export class SessionKernelStore {
   async consumeArtifact(input: {
     artifact: ProtocolArtifact;
     serializedArtifact: string;
+    observedAt: number;
     tombstone: RevokedTombstone;
   }): Promise<ResolveResult<ProtocolArtifact>> {
     const existing = await this.readTombstoneKey(this.keys.tombstone("artifact", input.artifact.artifactId));
@@ -366,7 +371,7 @@ export class SessionKernelStore {
     const tombstoneKey = this.keys.tombstone("artifact", input.artifact.artifactId);
     const result = await this.artifactConsumer.consume(input);
     if (result === "consumed")
-      return { status: "resolved", value: input.artifact };
+      return { status: "resolved", value: input.artifact, observedAt: input.observedAt };
 
     const tombstone = await this.readTombstoneKey(tombstoneKey);
     if (tombstone.status === "schema_invalid")
@@ -376,8 +381,8 @@ export class SessionKernelStore {
     return { status: "missing_or_expired" };
   }
 
-  async readIndex(key: string, now = this.config.clock.now()) {
-    await this.redis.zremrangebyscore(key, "-inf", now);
+  async readIndex(key: string) {
+    await this.redis.zremrangebyscore(key, "-inf", await this.now());
     return await this.redis.zrange(key, 0, -1);
   }
 
@@ -385,8 +390,8 @@ export class SessionKernelStore {
     return await this.redis.zrange(key, 0, -1);
   }
 
-  async cleanExpiredIndex(key: string, now = this.config.clock.now()) {
-    await this.redis.zremrangebyscore(key, "-inf", now);
+  async cleanExpiredIndex(key: string) {
+    await this.redis.zremrangebyscore(key, "-inf", await this.now());
   }
 
   async readIndexChunkDescending(key: string, start: number, stop: number) {
@@ -452,11 +457,13 @@ function withoutSerialized<T>(
     return {
       status: "resolved",
       value: result.value,
+      observedAt: result.observedAt,
     };
   }
   return {
     status: "resolved",
     value: result.value,
+    observedAt: result.observedAt,
     lookupKeyId: result.lookupKeyId,
   };
 }

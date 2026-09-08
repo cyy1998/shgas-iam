@@ -132,7 +132,7 @@ export function createSsoHandlers(deps: CreateSsoHandlersDeps) {
     setCookie(c, localSessionCookieName, data.token, {
       httpOnly: true,
       sameSite: "Lax",
-      maxAge: deps.config.redisExpireSeconds,
+      maxAge: data.ttl,
       path: "/",
     });
     const urlObject = new URL(redirectUrl);

@@ -11,7 +11,7 @@ import {
   expect,
   test,
 } from "bun:test";
-import { createRedisTestHarness } from "./redis-test-harness";
+import { createRedisTestHarness, waitForRedisCondition } from "./redis-test-harness";
 
 const writerAttemptIds = [
   "50000000-0000-4000-8000-000000000001",
@@ -50,9 +50,70 @@ afterAll(async () => {
 });
 
 describe("Authorization Grant redemption real Redis contract", () => {
+  test.each([0, 5_000, -5_000])("initializes from Kernel deadlines across application offset %d", async (offset) => {
+    let applicationOffset = offset;
+    const kernelScope = await harness!.createSessionKernelScope({
+      writerClock: { now: () => Date.now() + applicationOffset },
+      observerClock: { now: () => Date.now() - applicationOffset },
+    });
+    try {
+      const principal = await kernelScope.writer.createPrincipalSession("00000000-0000-4000-8000-000000000001");
+      if (principal.status !== "created")
+        throw new Error("expected Principal Session");
+      const artifact = await kernelScope.writer.createProtocolArtifact({
+        principalSessionId: principal.value.principalSessionId,
+        clientCode: "portal",
+        protocol: "custom-sso",
+        artifactType: "auth_code",
+        ttlMs: 1_500,
+      });
+      if (artifact.status !== "created")
+        throw new Error("expected authorization artifact");
+      const grantId = artifact.value.artifactId;
+      const initialized = await scope!.writer.initialize({ grantId, expiresAt: artifact.value.expiresAt });
+      expect(initialized).toBe("created");
+      applicationOffset += 86_400_000;
+      const first = await scope!.writer.begin(grantId);
+      if (first.status !== "reserved")
+        throw new Error("expected reservation");
+      const released = await scope!.writer.release(first.reservation);
+      expect(released).toBe("released");
+      applicationOffset -= 172_800_000;
+      const next = await scope!.observer.begin(grantId);
+      if (next.status !== "reserved")
+        throw new Error("expected retry reservation");
+      expect(next.reservation.attemptId).not.toBe(first.reservation.attemptId);
+      const renewed = await scope!.observer.renew(next.reservation);
+      if (renewed.status !== "renewed")
+        throw new Error("expected renewal");
+      expect(renewed.reservation.expiresAt).toBe(artifact.value.expiresAt);
+      expect(renewed.reservation.leaseExpiresAt).toBeLessThanOrEqual(artifact.value.expiresAt);
+      const credential = await kernelScope.observer.issueCredential({
+        credentialId: next.reservation.attemptId,
+        principalSessionId: principal.value.principalSessionId,
+        clientCode: "portal",
+        protocol: "custom-sso",
+        credentialType: "local_session",
+        ttlMs: 1_000,
+      });
+      if (credential.status !== "created")
+        throw new Error("expected Credential");
+      expect(credential.value.expiresAt - credential.observedAt).toBe(1_000);
+      const stale = await scope!.writer.consume(first.reservation);
+      expect(stale).toBe("stale-attempt");
+      const consumed = await scope!.observer.consume(renewed.reservation);
+      expect(consumed).toBe("consumed");
+      const replay = await scope!.writer.begin(grantId);
+      expect(replay.status).toBe("consumed");
+    }
+    finally {
+      await kernelScope.close();
+    }
+  });
+
   test("linearizes concurrent reservation and one-time consumption across clients", async () => {
     await scope!.writer.initialize({
-      expiresAt: Date.now() + 30_000,
+      expiresAt: (await scope!.redisNow()) + 30_000,
       grantId: "redis-grant-1",
     });
 
@@ -77,14 +138,14 @@ describe("Authorization Grant redemption real Redis contract", () => {
 
   test("uses Redis time to fence an expired lease before a new attempt takes over", async () => {
     await scope!.writer.initialize({
-      expiresAt: Date.now() + 30_000,
+      expiresAt: (await scope!.redisNow()) + 30_000,
       grantId: "redis-grant-2",
     });
     const first = await scope!.writer.begin("redis-grant-2");
     if (first.status !== "reserved")
       throw new Error("expected the first Redis reservation");
 
-    await Bun.sleep(250);
+    await waitForRedisCondition(async () => (await scope!.redisNow()) >= first.reservation.leaseExpiresAt, "lease did not expire");
     const expiredConsumption = await scope!.writer.consume(first.reservation);
     expect(expiredConsumption).toBe("lease-expired");
     const second = await scope!.observer.begin("redis-grant-2");
@@ -98,7 +159,7 @@ describe("Authorization Grant redemption real Redis contract", () => {
 
   test("releases a retryable attempt to the issued state", async () => {
     await scope!.writer.initialize({
-      expiresAt: Date.now() + 30_000,
+      expiresAt: (await scope!.redisNow()) + 30_000,
       grantId: "redis-grant-3",
     });
     const first = await scope!.writer.begin("redis-grant-3");
@@ -119,14 +180,14 @@ describe("Authorization Grant redemption real Redis contract", () => {
 
   test("renews the winning attempt beyond its original Redis-time lease", async () => {
     await scope!.writer.initialize({
-      expiresAt: Date.now() + 30_000,
+      expiresAt: (await scope!.redisNow()) + 30_000,
       grantId: "redis-grant-4",
     });
     const first = await scope!.writer.begin("redis-grant-4");
     if (first.status !== "reserved")
       throw new Error("expected the first Redis reservation");
 
-    await Bun.sleep(120);
+    await waitForRedisCondition(async () => (await scope!.redisNow()) >= first.reservation.leaseExpiresAt - 80, "lease did not approach renewal");
     const renewed = await scope!.writer.renew(first.reservation);
     if (renewed.status !== "renewed")
       throw new Error("expected the Redis lease renewal");
@@ -134,7 +195,7 @@ describe("Authorization Grant redemption real Redis contract", () => {
       first.reservation.leaseExpiresAt,
     );
 
-    await Bun.sleep(120);
+    await waitForRedisCondition(async () => (await scope!.redisNow()) >= first.reservation.leaseExpiresAt, "original lease did not expire");
     const originalConsumption = await scope!.writer.consume(first.reservation);
     expect(originalConsumption).toBe("stale-attempt");
     const renewedConsumption = await scope!.writer.consume(renewed.reservation);

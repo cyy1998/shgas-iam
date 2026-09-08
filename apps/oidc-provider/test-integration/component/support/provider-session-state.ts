@@ -38,7 +38,7 @@ export class ProviderSessionStateFake implements OidcSessionKernelProviderSessio
     this.anchors.set(sessionUid, structuredClone(anchor));
   }
 
-  async stage(staged: StagedProviderSessionBinding, _ttlSeconds: number) {
+  async stage(staged: StagedProviderSessionBinding, _expiresAt: number) {
     this.staged.set(staged.authorizationAttemptId, structuredClone(staged));
   }
 
@@ -80,7 +80,7 @@ export class ProviderSessionStateFake implements OidcSessionKernelProviderSessio
     binding: ProviderSessionBinding;
     expectedAnchorGeneration: string | null;
     providerSessionUid: string;
-    ttlSeconds: number;
+    expiresAt: number;
   }): Promise<ProviderSessionPublicationResult> {
     const failure = this.publicationFailureResult();
     if (failure)
@@ -115,7 +115,7 @@ export class ProviderSessionStateFake implements OidcSessionKernelProviderSessio
     binding: ProviderSessionBinding;
     expectedLookup: ProviderSessionBindingLookup | null;
     providerSessionUid: string;
-    ttlSeconds: number;
+    expiresAt: number;
   }): Promise<ProviderSessionPublicationResult> {
     const failure = this.publicationFailureResult();
     if (failure)
@@ -140,7 +140,7 @@ export class ProviderSessionStateFake implements OidcSessionKernelProviderSessio
   async refresh(input: {
     binding: ProviderSessionBinding;
     providerSessionUid: string;
-    ttlSeconds: number;
+    expiresAt: number;
   }) {
     const generation = input.binding.anchorGeneration;
     const owner = input.binding.mappingOwnerId;

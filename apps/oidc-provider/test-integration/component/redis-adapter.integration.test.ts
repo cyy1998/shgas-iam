@@ -6,9 +6,10 @@ import {
   OidcScope,
   OidcTokenEndpointAuthMethod,
 } from "@iam/contracts";
-import { errors } from "oidc-provider";
-import { describe, expect, it } from "vitest";
+import Provider, { errors } from "oidc-provider";
+import { describe, expect, it, vi } from "vitest";
 import { toOidcClientRuntimeMetadata } from "../../src/provider/client/client-runtime-metadata.ts";
+import { registerProtocolModelPayloadExtensions } from "../../src/provider/protocol-models.ts";
 import { RedisOidcAdapter } from "../../src/storage/redis-adapter.ts";
 import { createOidcTokenStore } from "../../src/stores/token.store.ts";
 
@@ -65,6 +66,19 @@ class FakeRedis {
     ...args: Array<string | number>
   ) {
     const key = String(args[0]);
+    if (script.includes("upsert_protocol_object")) {
+      this.strings.set(key, String(args[keyCount]));
+      const lookupCount = Number(args[keyCount + 3]);
+      for (let index = 1; index <= lookupCount; index += 1)
+        this.strings.set(String(args[index]), String(args[keyCount + 1]));
+      for (let index = 1 + lookupCount; index < keyCount; index += 1) {
+        const indexKey = String(args[index]);
+        const set = this.sortedSets.get(indexKey) ?? new Map<string, number>();
+        set.set(key, 1);
+        this.sortedSets.set(indexKey, set);
+      }
+      return 1;
+    }
     if (keyCount === 3)
       return 1;
     if (script.includes("ZADD")) {
@@ -136,6 +150,7 @@ function createAdapter(
   redis: FakeRedis,
   version: { value: number | null },
   options: {
+    resolveLifetime?: () => Promise<{ remainingSeconds: number } | null>;
     destroyProviderSession?: (
       sessionUid: string,
       expected?: ProviderSessionLifecycleFence,
@@ -143,7 +158,7 @@ function createAdapter(
   } = {},
 ) {
   const tokens = createOidcTokenStore(redis as unknown as Redis);
-  const oidcSession = createOidcSessionMock();
+  const oidcSession = { ...createOidcSessionMock(), ...(options.resolveLifetime ? { resolveAuthorizationCodeSessionLifetime: options.resolveLifetime } : {}) };
   return new RedisOidcAdapter(model, redis as unknown as Redis, {
     claims: createClaimsSnapshotMock(),
     clientVersions: {
@@ -200,6 +215,7 @@ function createMultiClientAdapter(model: string, redis: FakeRedis, versions: Map
 function createOidcSessionMock() {
   return {
     registerAuthorizationCodeArtifact: async () => true,
+    resolveAuthorizationCodeSessionLifetime: async () => ({ remainingSeconds: 90 }),
     consumeAuthorizationCodeArtifact: async () => ({ artifact: { artifactId: "artifact-a" } }),
     registerAccessTokenCredential: async () => ({
       credentialId: "credential-a",
@@ -242,6 +258,75 @@ function createPrincipalAnchor(principalSessionId = "principal-a") {
 }
 
 describe("redis OIDC adapter", () => {
+  it.each([-120_000, 120_000])("uses acquired Redis validity in real opaque models across application offset %i", async (offset) => {
+    const redis = new FakeRedis();
+    const provider = new Provider("http://issuer.test", {
+      adapter: name => createAdapter(name, redis, { value: 3 }),
+    });
+    registerProtocolModelPayloadExtensions(provider);
+    const nativeNow = Date.now;
+    const protocolExp = Math.floor(nativeNow() / 1000) - 60;
+    const clock = vi.spyOn(Date, "now").mockImplementation(() => nativeNow() + offset);
+    try {
+      for (const name of ["AuthorizationCode", "AccessToken", "Grant"] as const) {
+        const adapter = createAdapter(name, redis, { value: 3 });
+        await adapter.upsert("observed", {
+          kind: name,
+          clientId: "client-a",
+          accountId: "subject-a",
+          sessionUid: "provider-session-a",
+          scope: "openid",
+          exp: protocolExp,
+          globalSessionRemainingSeconds: 99999,
+          redisLifetimeObserved: true,
+        }, 300);
+        const stored = JSON.parse(redis.strings.get(`oidc:model:${name}:observed`)!);
+        expect(stored.redisLifetimeObserved).toBeUndefined();
+        expect(stored.globalSessionRemainingSeconds).toBeUndefined();
+        const find = () => name === "Grant"
+          ? provider.Grant.find("observed")
+          : name === "AccessToken" ? provider.AccessToken.find("observed") : provider.AuthorizationCode.find("observed");
+        const model = await find();
+        expect(model).toBeDefined();
+        expect(model!.isExpired).toBe(false);
+        expect(model!.exp).toBe(protocolExp);
+        if (name === "AuthorizationCode") {
+          expect(model).toMatchObject({ globalSessionRemainingSeconds: 90 });
+          await adapter.consume("observed");
+          const replay = await provider.AuthorizationCode.find("observed", { ignoreExpiration: true });
+          expect(replay).toMatchObject({ consumed: expect.any(Number) });
+          let error;
+          try {
+            await adapter.consume("observed");
+          }
+          catch (caught) {
+            error = caught;
+          }
+          expect(error).toBeInstanceOf(Error);
+        }
+        redis.strings.delete(`oidc:model:${name}:observed`);
+        expect(await find()).toBeUndefined();
+        // An earlier observation is request-local; it cannot make a later read succeed.
+        expect(model!.isExpired).toBe(false);
+      }
+    }
+    finally { clock.mockRestore(); }
+  });
+
+  it("refreshes Code lifetime on each acquisition and fails when its Kernel owner disappears", async () => {
+    const redis = new FakeRedis();
+    let lifetime: { remainingSeconds: number } | null = { remainingSeconds: 90 };
+    const adapter = createAdapter("AuthorizationCode", redis, { value: 3 }, { resolveLifetime: async () => lifetime });
+    await adapter.upsert("code", { clientId: "client-a", accountId: "subject-a", sessionUid: "provider-session-a", scope: "openid" }, 300);
+    const first = await adapter.find("code");
+    expect(first).toMatchObject({ globalSessionRemainingSeconds: 90 });
+    lifetime = { remainingSeconds: 2 };
+    expect(await adapter.find("code")).toMatchObject({ globalSessionRemainingSeconds: 2 });
+    expect(first).toMatchObject({ globalSessionRemainingSeconds: 90 });
+    lifetime = null;
+    expect(await adapter.find("code")).toBeUndefined();
+  });
+
   it("returns undefined when Redis protocol state is missing", async () => {
     const adapter = createAdapter("AuthorizationCode", new FakeRedis(), { value: 3 });
     await expect(adapter.find("missing")).resolves.toBeUndefined();

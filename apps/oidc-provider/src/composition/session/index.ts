@@ -122,7 +122,6 @@ export function createOidcProviderSession(deps: CreateOidcProviderSessionDeps) {
     accounts: deps.repositories.account,
     clients: deps.stores.clientRuntime,
     cookieName: deps.env.oidc.globalSessionCookie,
-    clock: { now: Date.now },
   });
 
   return {

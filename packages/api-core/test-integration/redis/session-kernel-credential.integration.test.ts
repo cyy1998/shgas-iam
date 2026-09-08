@@ -11,7 +11,7 @@ import {
   expect,
   test,
 } from "bun:test";
-import { createRedisTestHarness } from "./redis-test-harness";
+import { createRedisTestHarness, waitForRedisCondition } from "./redis-test-harness";
 
 const subjectIdentifier = "00000000-0000-4000-8000-000000000001";
 
@@ -184,16 +184,14 @@ describe("Session Kernel credential real Redis contract", () => {
     expect(missing.credentials.missing).toBe(1);
   });
 
-  test("lets a naturally expired identity and its indexes be used by a later credential", async () => {
+  test("uses fresh server UUIDs for new issuance after natural expiry", async () => {
     const principalSession = await scope!.writer.createPrincipalSession(
       subjectIdentifier,
     );
     if (principalSession.status !== "created")
       throw new Error("expected a Principal Session fixture");
 
-    const credentialId = "30000000-0000-4000-8000-000000000008";
     const expired = await scope!.writer.issueCredential({
-      credentialId,
       externalToken: "expiring-bearer-token",
       principalSessionId: principalSession.value.principalSessionId,
       protocol: "custom-sso",
@@ -202,7 +200,11 @@ describe("Session Kernel credential real Redis contract", () => {
       ttlMs: 100,
     });
     expect(expired.status).toBe("created");
-    await new Promise(resolve => setTimeout(resolve, 1_500));
+    if (expired.status !== "created")
+      throw new Error("expected a Credential fixture");
+    expect(expired.value.credentialId).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
+    await waitForRedisCondition(async () =>
+      (await scope!.observer.resolveCredential("expiring-bearer-token")).status === "missing_or_expired", "Credential did not expire within the observation deadline");
 
     const resolvedExpired = await scope!.observer.resolveCredential("expiring-bearer-token");
     expect(resolvedExpired).toMatchObject({
@@ -219,7 +221,6 @@ describe("Session Kernel credential real Redis contract", () => {
     });
 
     const replacement = await scope!.writer.issueCredential({
-      credentialId,
       externalToken: "replacement-after-expiry",
       principalSessionId: principalSession.value.principalSessionId,
       protocol: "custom-sso",
@@ -228,10 +229,14 @@ describe("Session Kernel credential real Redis contract", () => {
       ttlMs: 30_000,
     });
     expect(replacement.status).toBe("created");
+    if (replacement.status !== "created")
+      throw new Error("expected a new Credential");
+    expect(replacement.value.credentialId).not.toBe(expired.value.credentialId);
+    expect(replacement.value.credentialId).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
     const resolvedReplacement = await scope!.observer.resolveCredential("replacement-after-expiry");
     expect(resolvedReplacement).toMatchObject({
       status: "resolved",
-      value: { credentialId },
+      value: { credentialId: replacement.value.credentialId },
     });
   });
 

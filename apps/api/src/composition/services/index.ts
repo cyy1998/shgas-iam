@@ -301,7 +301,6 @@ export function createApiServices(options: CreateApiServicesOptions) {
     subjectProjection,
     userService,
     auditLogWriter,
-    clock: runtime.clock,
     config: {
       authCodeExpireSeconds: runtime.config.auth.authCodeExpireSeconds,
       localSessionTtlSeconds: runtime.config.auth.redisExpireSeconds,

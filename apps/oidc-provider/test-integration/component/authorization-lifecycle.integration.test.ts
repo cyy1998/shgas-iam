@@ -83,7 +83,23 @@ class AuthorizationRedis {
     return removed;
   }
 
-  async eval(_script: string, _keyCount: number, key: string, consumed: string | number, timestamp: string) {
+  async eval(script: string, keyCount: number, ...args: Array<string | number>) {
+    const key = String(args[0]);
+    if (script.includes("upsert_protocol_object")) {
+      this.strings.set(key, String(args[keyCount]));
+      const lookupCount = Number(args[keyCount + 3]);
+      for (let index = 1; index <= lookupCount; index += 1)
+        this.strings.set(String(args[index]), String(args[keyCount + 1]));
+      for (let index = 1 + lookupCount; index < keyCount; index += 1) {
+        const indexKey = String(args[index]);
+        const set = this.sortedSets.get(indexKey) ?? new Map<string, number>();
+        set.set(key, 1);
+        this.sortedSets.set(indexKey, set);
+      }
+      return 1;
+    }
+    const consumed = args[1];
+    const timestamp = String(args[2]);
     if (!this.strings.has(key))
       return 0;
     if (this.strings.has(String(consumed)))
@@ -427,6 +443,7 @@ async function createAuthorizationRuntime(options: { rejectEnsure?: boolean } = 
     };
   }>();
   const oidcSession = {
+    resolveAuthorizationCodeSessionLifetime: async () => ({ remainingSeconds: 90 }),
     consumeAuthorizationCodeArtifact: async () => ({}),
     registerAccessTokenCredential: async (input: {
       binding: ProviderSessionBinding | null;

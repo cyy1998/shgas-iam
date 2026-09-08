@@ -53,6 +53,7 @@ export interface AdapterProviderSessionBindingStore {
 }
 
 export interface AdapterOidcSessionKernel {
+  resolveAuthorizationCodeSessionLifetime: (providerCodeId: string) => Promise<{ remainingSeconds: number } | null>;
   registerAuthorizationCodeArtifact: (input: {
     providerCodeId: string;
     payload: AdapterPayload;

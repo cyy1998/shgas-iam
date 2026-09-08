@@ -14,4 +14,5 @@ export interface CompleteSsoCallbackResult {
   orcasSessionId: string | null;
   state?: string;
   token: string;
+  ttl: number;
 }

@@ -2,12 +2,15 @@
 
 Status: Current
 
-Last verified: 2026-08-23
+Last verified: 2026-09-08
 
 Next review: 2026-10-31
 
 本手册只说明 Client Protocol V2 epoch 与协议产物清理。命令不会自动 freeze、运行 data gate、切换 runtime、恢复流量、
 执行 smoke 或 production cutover；这些动作仍由维护窗口负责人显式编排。
+
+Spec #115 的全体在线时间模型切换使用独立的[Redis 时间维护手册](online-auth-redis-time-cutover.md)。
+该手册按当前 owner 扫描全体在线状态，包含 Principal；不得把其能力用于省略本手册的 epoch/历史耗尽前提。
 
 Custom SSO 的 active Subject Claim Catalog 由服务端统一固定为当前 V2。数据库 migration 会删除所有非空配置中的历史
 `subjectClaimCatalogVersion` key，并用当前 strict schema 验证其余内容；未知 claim 或其他损坏配置会令 migration 失败。
@@ -92,6 +95,11 @@ index，以及 pending Provider Session Binding 的精确 client index。它不�
 inventory，也不执行 `FLUSHDB`/`FLUSHALL`。`dry-run` 只输出 binding、credential、artifact、pending binding 和 OIDC
 model 的安全计数；`apply` 撤销 owner 已声明的 Grant、Code、Token、Provider Session、Binding、Gateway Local Session
 等协议对象；`verify` 要求 owner inventory、stale 与 invalid 计数均为零。
+
+OIDC object store 的正常新写入使用同一次 Redis 时间计算主对象、lookup、Grant/Client 索引成员期限；共享索引保留到最长成员期限，
+不被后写的短成员缩短。其清理和盘点依据实际对象存在性，不按应用时钟提前丢弃成员。该保证不自动修复历史已丢失索引的孤立对象；
+零 inventory 不能替代上述旧状态耗尽证据，也不证明授权绕过已被修复。Spec #115 的全量在线时间模型切换由上述独立维护手册覆盖，
+本手册的 Client Protocol 清理继续保留 Principal Session，不是全量在线状态 reset。
 
 ## 保留集与失败处理
 

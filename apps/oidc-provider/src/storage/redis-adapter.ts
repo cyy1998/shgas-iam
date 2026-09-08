@@ -28,6 +28,45 @@ const GRANTABLE_MODELS = new Set([
   "BackchannelAuthenticationRequest",
 ]);
 
+export function oidcProtocolObjectMaintenancePrefixes() {
+  return ["model:", "consumed:", "grant-objects:", "client-objects:", "session-uid:", "user-code:"]
+    .map(kind => `oidc:${kind}`);
+}
+
+const UPSERT_PROTOCOL_OBJECT_SCRIPT = `
+-- upsert_protocol_object
+local expiresAt
+if ARGV[5] == "1" then
+  -- Loaded Grant/Interaction updates and Session.persist retain the live deadline.
+  -- The provider's remainingTTL is calculated in the application clock domain.
+  expiresAt = redis.call("PEXPIRETIME", KEYS[1])
+  if expiresAt <= 0 then
+    return redis.error_reply("OIDC protocol object no longer exists")
+  end
+else
+  if ARGV[5] == "2" and redis.call("EXISTS", KEYS[1]) == 0 then
+    return redis.error_reply("OIDC protocol object no longer exists")
+  end
+  local ttlSeconds = tonumber(ARGV[3])
+  if not ttlSeconds or ttlSeconds <= 0 or ttlSeconds ~= math.floor(ttlSeconds) then
+    return redis.error_reply("invalid OIDC protocol object expiry")
+  end
+  local time = redis.call("TIME")
+  expiresAt = tonumber(time[1]) * 1000 + math.floor(tonumber(time[2]) / 1000) + ttlSeconds * 1000
+end
+redis.call("SET", KEYS[1], ARGV[1], "PXAT", expiresAt)
+local lookupCount = tonumber(ARGV[4])
+for index = 2, 1 + lookupCount do
+  redis.call("SET", KEYS[index], ARGV[2], "PXAT", expiresAt)
+end
+for index = 2 + lookupCount, #KEYS do
+  redis.call("ZADD", KEYS[index], expiresAt, KEYS[1])
+  redis.call("PEXPIREAT", KEYS[index], expiresAt, "NX")
+  redis.call("PEXPIREAT", KEYS[index], expiresAt, "GT")
+end
+return 1
+`;
+
 const ATOMIC_CONSUME_SCRIPT = `
 local value = redis.call("GET", KEYS[1])
 if not value then return 0 end
@@ -101,7 +140,6 @@ async function revokeIndexedProtocolObjects(
   indexKey: string,
   keyPrefix = "",
 ) {
-  await redis.zremrangebyscore(indexKey, "-inf", Date.now());
   const keys = await redis.zrange(indexKey, 0, -1);
   const payloads = keys.length === 0 ? [] : await redis.mget(...keys);
   const invalid = payloads.filter((payload, index) =>
@@ -301,7 +339,6 @@ export class RedisOidcAdapter<TClaimsSnapshot = unknown> implements Adapter {
 
   async upsert(id: string, payload: AdapterPayload, expiresIn: number) {
     const key = artifactKey(this.model, id, this.keyPrefix);
-    const expiresAt = Date.now() + expiresIn * 1000;
     const clientIds = payloadClientIds(payload);
     const oidcConfigVersions = Object.fromEntries(await Promise.all(clientIds.map(async (clientId) => {
       const version = await this.deps.clientVersions.findActiveVersion(clientId);
@@ -418,7 +455,7 @@ export class RedisOidcAdapter<TClaimsSnapshot = unknown> implements Adapter {
       ...(this.model === "Session" && sessionAnchorGeneration ? { providerSessionAnchorGeneration: sessionAnchorGeneration } : {}),
       ...(clientId ? { clientId, oidcConfigVersion: oidcConfigVersions[clientId] } : {}),
       ...(clientIds.length ? { oidcConfigVersions } : {}),
-      ...(sessionBinding ? { globalSessionExpiresAt: sessionBinding.expiresAt } : {}),
+
       ...(issuedCredential
         ? {
             kernelCredentialId: issuedCredential.credentialId,
@@ -429,59 +466,35 @@ export class RedisOidcAdapter<TClaimsSnapshot = unknown> implements Adapter {
           }
         : {}),
     };
-    const transaction = this.redis.multi().set(key, JSON.stringify(stored), "EX", expiresIn);
-
-    if (this.model === "Session" && payload.uid) {
-      transaction.set(
-        sessionUidKey(payload.uid, this.keyPrefix),
-        id,
-        "EX",
-        expiresIn,
-      );
-    }
-    if (payload.userCode) {
-      transaction.set(
-        userCodeKey(payload.userCode, this.keyPrefix),
-        id,
-        "EX",
-        expiresIn,
-      );
-    }
-    if (GRANTABLE_MODELS.has(this.model) && payload.grantId) {
-      transaction.zadd(
-        grantIndexKey(payload.grantId, this.keyPrefix),
-        expiresAt,
-        key,
-      );
-      transaction.pexpireat(
-        grantIndexKey(payload.grantId, this.keyPrefix),
-        expiresAt,
-        "NX",
-      );
-      transaction.pexpireat(
-        grantIndexKey(payload.grantId, this.keyPrefix),
-        expiresAt,
-        "GT",
-      );
-    }
-    for (const indexedClientId of clientIds) {
-      transaction.zadd(
-        clientObjectIndexKey(indexedClientId, this.keyPrefix),
-        expiresAt,
-        key,
-      );
-      transaction.pexpireat(
-        clientObjectIndexKey(indexedClientId, this.keyPrefix),
-        expiresAt,
-        "NX",
-      );
-      transaction.pexpireat(
-        clientObjectIndexKey(indexedClientId, this.keyPrefix),
-        expiresAt,
-        "GT",
-      );
-    }
-    await transaction.exec();
+    // This observation belongs to one find operation and must never be persisted.
+    delete stored.globalSessionRemainingSeconds;
+    delete stored.redisLifetimeObserved;
+    delete stored.redisPreserveDeadline;
+    delete stored.redisObservedId;
+    const lookupKeys = [
+      ...(this.model === "Session" && payload.uid ? [sessionUidKey(payload.uid, this.keyPrefix)] : []),
+      ...(payload.userCode ? [userCodeKey(payload.userCode, this.keyPrefix)] : []),
+    ];
+    const indexKeys = [
+      ...(GRANTABLE_MODELS.has(this.model) && payload.grantId ? [grantIndexKey(payload.grantId, this.keyPrefix)] : []),
+      ...clientIds.map(indexedClientId => clientObjectIndexKey(indexedClientId, this.keyPrefix)),
+    ];
+    await this.redis.eval(
+      UPSERT_PROTOCOL_OBJECT_SCRIPT,
+      1 + lookupKeys.length + indexKeys.length,
+      key,
+      ...lookupKeys,
+      ...indexKeys,
+      JSON.stringify(stored),
+      id,
+      expiresIn,
+      lookupKeys.length,
+      payload.redisLifetimeObserved === true
+      && (this.model === "Grant" || this.model === "Interaction"
+        || (this.model === "Session" && payload.redisPreserveDeadline === true))
+        ? 1
+        : this.model === "Session" && payload.redisObservedId === id ? 2 : 0,
+    );
   }
 
   async find(id: string) {
@@ -521,6 +534,19 @@ export class RedisOidcAdapter<TClaimsSnapshot = unknown> implements Adapter {
       const credentialId = readKernelCredentialId(value);
       if (credentialId !== resolvedCredential.credential.credentialId)
         return undefined;
+    }
+    // Consumed codes must reach the provider replay branch, which revokes their Grant.
+    // Their Kernel artifact has already been consumed and cannot supply a new issuance lifetime.
+    if (this.model === "AuthorizationCode" && !consumed) {
+      const lifetime = await this.deps.oidcSession.resolveAuthorizationCodeSessionLifetime(id);
+      if (!lifetime)
+        return undefined;
+      payload.globalSessionRemainingSeconds = lifetime.remainingSeconds;
+    }
+    if (["AuthorizationCode", "AccessToken", "Grant", "Session", "Interaction"].includes(this.model)) {
+      payload.redisLifetimeObserved = true;
+      if (this.model === "Session")
+        payload.redisObservedId = id;
     }
     return payload;
   }

@@ -1,4 +1,4 @@
-import type { ClockPort, LoggerPort } from "@api/composition/runtime";
+import type { LoggerPort } from "@api/composition/runtime";
 import type { ApiRequestContext } from "@api/services/audit/audit.context";
 import type { ApiAuditLogWriter } from "@api/services/audit/audit.service";
 import type {
@@ -171,7 +171,6 @@ export interface CustomSsoSessionKernelAdapterDeps {
   subjectDelivery: CustomSsoSubjectDeliveryPort;
   userService: CustomSsoGatewayOrcasUserPort;
   auditLogWriter: ApiAuditLogWriter;
-  clock: Pick<ClockPort, "now">;
   random: { uuid: () => string };
   config: {
     authCodeExpireSeconds: number;
@@ -406,6 +405,8 @@ export function createCustomSsoSessionKernelAdapter(deps: CustomSsoSessionKernel
             principalSessionId: authorizationGrant.principalSessionId,
           });
           credentialIssueState = "issued";
+          // Preserve parent existence, revocation and Subject Access checks. Kernel
+          // owns this new Redis observation; the adapter does not recheck deadlines.
           const postIssuePrincipal = translateSubjectAccessResolveResult(
             await deps.kernel.resolvePrincipalSessionById(
               authorizationGrant.principalSessionId,
@@ -578,11 +579,7 @@ export function createCustomSsoSessionKernelAdapter(deps: CustomSsoSessionKernel
       );
     }
 
-    const ttl = Math.floor((credential.value.expiresAt - deps.clock.now()) / 1000);
-    if (ttl <= 0) {
-      await deps.kernel.revokeCredential(credential.value.credentialId, "credential_corrupted");
-      throw new AuthzUnauthorizedError("局部session创建失败");
-    }
+    const ttl = Math.ceil((credential.value.expiresAt - credential.observedAt) / 1000);
     return {
       credentialId: credential.value.credentialId,
       token: credential.externalToken,
@@ -830,6 +827,7 @@ export function createCustomSsoSessionKernelAdapter(deps: CustomSsoSessionKernel
             ? {}
             : { state: authorizationGrant.state }),
           token: localSession.token,
+          ttl: localSession.ttl,
         };
       },
     );

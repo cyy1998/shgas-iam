@@ -10,6 +10,7 @@ import {
   createSessionKernel,
   createSessionKernelConfig,
 } from "@iam/api-core/session/kernel";
+import Provider from "oidc-provider";
 import {
   afterAll,
   afterEach,
@@ -18,7 +19,9 @@ import {
   describe,
   expect,
   it,
+  vi,
 } from "vitest";
+import { registerProtocolModelPayloadExtensions } from "../../src/provider/protocol-models.ts";
 import {
   createOidcSessionKernelAdapter,
   createOidcSessionKernelCleanupAdapter,
@@ -31,6 +34,7 @@ import {
   providerSessionGenerationMembersKey,
   providerSessionPrincipalAnchorKey,
 } from "../../src/session/provider-session.ts";
+import { RedisOidcAdapter } from "../../src/storage/redis-adapter.ts";
 import { createOidcProviderRedisTestHarness } from "./redis-test-harness.ts";
 
 let harness: OidcProviderRedisTestHarness | undefined;
@@ -47,6 +51,7 @@ beforeEach(async () => {
 afterEach(async () => {
   await scope?.close();
   scope = undefined;
+  vi.restoreAllMocks();
 });
 
 afterAll(async () => {
@@ -78,14 +83,14 @@ describe("oIDC Provider Session real Redis contract", () => {
       oidcConfigVersion: 1,
       principalSessionId: firstPrincipalSessionId,
       providerSessionUid: null,
-    }, 60);
+    }, expiresAt * 1000);
     expect(JSON.parse(await testScope.observer.get(firstPendingKey) ?? "null")).toEqual({
       accountId,
       authorizationAttemptId: firstAttemptId,
       authTime: 1_700_000_000,
       clientCode,
       expectedAnchorGeneration: null,
-      expiresAt,
+      expiresAt: expect.any(Number),
       oidcConfigVersion: 1,
       principalSessionId: firstPrincipalSessionId,
       providerSessionUid: null,
@@ -128,7 +133,7 @@ describe("oIDC Provider Session real Redis contract", () => {
       oidcConfigVersion: 1,
       principalSessionId: testScope.unique("principal-existing"),
       providerSessionUid,
-    }, 60);
+    }, expiresAt * 1000);
     const ttl = await testScope.observer.ttl(existingPendingKey);
     expect(ttl).toBeGreaterThan(0);
     expect(ttl).toBeLessThanOrEqual(60);
@@ -221,7 +226,7 @@ describe("oIDC Provider Session real Redis contract", () => {
       oidcConfigVersion: 1,
       principalSessionId: originalPrincipalSessionId,
       providerSessionUid: null,
-    }, 60);
+    }, expiresAt * 1000);
     const cleanupRedis = new Proxy(baseRedis, {
       get(target, property, receiver) {
         if (property === "mget") {
@@ -237,7 +242,7 @@ describe("oIDC Provider Session real Redis contract", () => {
               oidcConfigVersion: 1,
               principalSessionId: replacementPrincipalSessionId,
               providerSessionUid: null,
-            }, 60);
+            }, expiresAt * 1000);
             return snapshot;
           };
         }
@@ -256,6 +261,36 @@ describe("oIDC Provider Session real Redis contract", () => {
     await expect(observerStore.inventoryClientStagedBindings(clientCode)).resolves.toMatchObject({
       counts: { bindings: 1, invalid: 0, stale: 0, total: 1 },
     });
+  });
+
+  it("preserves long-lived anchor and generation members when another writer publishes and refreshes a short member", async () => {
+    const testScope = scope!;
+    const writer = createProviderSessionStateStore(asStateRedis(testScope.writer));
+    const observer = createProviderSessionStateStore(asStateRedis(testScope.observer));
+    const uid = testScope.unique("provider");
+    const generation = testScope.unique("generation");
+    const binding = createBinding({ accountId: randomUUID(), anchorGeneration: generation, bindingId: testScope.unique("binding"), clientCode: testScope.unique("client"), mappingOwnerId: randomUUID(), principalSessionId: testScope.unique("principal") });
+    const other = { ...binding, clientCode: testScope.unique("short-client"), bindingId: testScope.unique("short-binding"), mappingOwnerId: randomUUID() };
+    trackPublication(testScope, uid, binding.clientCode);
+    trackPublication(testScope, uid, other.clientCode);
+    const time = await testScope.observer.time();
+    const deadline = Number(time[0]) * 1000 + Math.floor(Number(time[1]) / 1000) + 60_000;
+    await writer.publishRebind({ attemptId: generation, binding, expectedAnchorGeneration: null, providerSessionUid: uid, expiresAt: deadline });
+    const anchor = await observer.readAnchor(uid);
+    const nativeNow = Date.now;
+    const clock = vi.spyOn(Date, "now").mockImplementation(() => nativeNow() + 120_000);
+    await observer.publishClientBinding({ anchor: anchor!, binding: other, expectedLookup: null, providerSessionUid: uid, expiresAt: deadline - 59_000 });
+    clock.mockImplementation(() => nativeNow() - 120_000);
+    await observer.refresh({ binding: other, providerSessionUid: uid, expiresAt: deadline - 59_000 });
+    expect(await testScope.observer.pexpiretime(providerSessionPrincipalAnchorKey(uid))).toBe(deadline);
+    expect(await testScope.observer.pexpiretime(providerSessionGenerationMembersKey(uid, generation))).toBe(deadline);
+    expect(await testScope.observer.pexpiretime(providerSessionBindingLookupKey(uid, binding.clientCode))).toBe(deadline);
+    await vi.waitFor(async () => {
+      const short = await observer.readLookup(uid, other.clientCode);
+      expect(short.exists).toBe(false);
+    }, { timeout: 2500, interval: 20 });
+    expect((await writer.readLookup(uid, binding.clientCode)).exists).toBe(true);
+    expect(await observer.readAnchor(uid)).toEqual(anchor);
   });
 
   it("publishes only minimal state, refreshes owned TTLs, and conditionally cleans its anchor", async () => {
@@ -280,7 +315,7 @@ describe("oIDC Provider Session real Redis contract", () => {
       binding: initialBinding,
       expectedAnchorGeneration: null,
       providerSessionUid,
-      ttlSeconds: 60,
+      expiresAt: Date.now() + 60_000,
     })).resolves.toMatchObject({ status: "committed" });
     const initialAnchor = await writerStore.readAnchor(providerSessionUid);
     expect(initialAnchor).not.toBeNull();
@@ -299,7 +334,7 @@ describe("oIDC Provider Session real Redis contract", () => {
       binding: secondaryBinding,
       expectedLookup: null,
       providerSessionUid,
-      ttlSeconds: 60,
+      expiresAt: Date.now() + 60_000,
     })).resolves.toMatchObject({ status: "committed" });
     await expect(writerStore.publishClientBinding({
       anchor: initialAnchor!,
@@ -313,7 +348,7 @@ describe("oIDC Provider Session real Redis contract", () => {
         mappingOwnerId: testScope.unique("owner-wrong-expected"),
       },
       providerSessionUid,
-      ttlSeconds: 60,
+      expiresAt: Date.now() + 60_000,
     })).resolves.toMatchObject({ status: "conflict" });
     await expect(writerStore.readLookup(providerSessionUid, secondaryClientCode))
       .resolves
@@ -329,7 +364,7 @@ describe("oIDC Provider Session real Redis contract", () => {
       binding: initialBinding,
       expectedAnchorGeneration: null,
       providerSessionUid,
-      ttlSeconds: 60,
+      expiresAt: Date.now() + 60_000,
     })).resolves.toMatchObject({ status: "committed" });
     await expect(writerStore.readAnchor(providerSessionUid)).resolves.toMatchObject({
       generation: initialAttemptId,
@@ -355,7 +390,7 @@ describe("oIDC Provider Session real Redis contract", () => {
         binding,
         expectedAnchorGeneration: initialAttemptId,
         providerSessionUid,
-        ttlSeconds: 60,
+        expiresAt: Date.now() + 60_000,
       });
     }));
 
@@ -377,12 +412,12 @@ describe("oIDC Provider Session real Redis contract", () => {
     await expect(writerStore.refresh({
       binding: { ...winner, mappingOwnerId: testScope.unique("owner-stale-refresh") },
       providerSessionUid,
-      ttlSeconds: 60,
+      expiresAt: Date.now() + 60_000,
     })).resolves.toBe(false);
     await expect(writerStore.refresh({
       binding: winner,
       providerSessionUid,
-      ttlSeconds: 60,
+      expiresAt: Date.now() + 60_000,
     })).resolves.toBe(true);
     const refreshedTtls = await Promise.all(publicationKeys.map(key => testScope.observer.pttl(key)));
     expect(refreshedTtls.every(ttl => ttl > 50_000)).toBe(true);
@@ -428,7 +463,7 @@ describe("oIDC Provider Session real Redis contract", () => {
       binding: bindingA,
       expectedAnchorGeneration: null,
       providerSessionUid,
-      ttlSeconds: 60,
+      expiresAt: Date.now() + 60_000,
     })).resolves.toMatchObject({ status: "committed" });
     const anchor = await store.readAnchor(providerSessionUid);
     expect(anchor).not.toBeNull();
@@ -445,7 +480,7 @@ describe("oIDC Provider Session real Redis contract", () => {
       binding: bindingB,
       expectedLookup: null,
       providerSessionUid,
-      ttlSeconds: 60,
+      expiresAt: Date.now() + 60_000,
     })).resolves.toMatchObject({ status: "committed" });
 
     await store.deleteOwned({
@@ -494,7 +529,7 @@ describe("oIDC Provider Session real Redis contract", () => {
       binding,
       expectedAnchorGeneration: null,
       providerSessionUid,
-      ttlSeconds: 60,
+      expiresAt: Date.now() + 60_000,
     })).resolves.toMatchObject({ status: "committed" });
     expect(await testScope.observer.exists(membersKey)).toBe(1);
 
@@ -534,7 +569,7 @@ describe("oIDC Provider Session real Redis contract", () => {
     expect(await testScope.observer.exists(membersKey)).toBe(0);
   });
 
-  it("confirms a committed binding when the publish response is lost and does not revoke it", async () => {
+  it.each([0, -5000, 5000])("keeps Kernel deadlines through staged publication, Code and Credential under offset %i", async (offset) => {
     const testScope = scope!;
     const accountId = randomUUID();
     const clientCode = testScope.unique("client");
@@ -574,8 +609,8 @@ describe("oIDC Provider Session real Redis contract", () => {
           },
         },
         namespace: kernelNamespace,
-        principalAbsoluteTtlMs: 120_000,
-        principalIdleTtlMs: 60_000,
+        principalAbsoluteTtlMs: 6000,
+        principalIdleTtlMs: 3000,
       }),
       principalAccessFence: {
         capture: async () => randomUUID(),
@@ -602,12 +637,14 @@ describe("oIDC Provider Session real Redis contract", () => {
         findActiveVersion: async code => code === clientCode ? 1 : null,
         findRuntime: async () => null,
       },
-      clock: { now: Date.now },
       cookieName: "global_session",
       kernel,
       logger: { warn: () => undefined },
       providerSessionState,
     });
+    const nativeNow = Date.now;
+    let applicationOffset = offset;
+    vi.spyOn(Date, "now").mockImplementation(() => nativeNow() + applicationOffset);
     const principal = await kernel.createPrincipalSession(accountId);
     if (principal.status !== "created")
       throw new Error("expected a Principal Session fixture");
@@ -618,12 +655,19 @@ describe("oIDC Provider Session real Redis contract", () => {
       authTime: Math.floor(principal.value.authTime / 1000),
       sessionId: principal.value.principalSessionId,
     };
+    testScope.trackKey(pendingProviderSessionBindingKey(authorizationAttemptId));
+    testScope.trackKey(pendingProviderSessionBindingsByClientKey(clientCode));
     await adapter.stage(session, {
       authorizationAttemptId,
       clientId: clientCode,
       oidcConfigVersion: 1,
       providerSessionUid,
     });
+    const stagedDeadline = await testScope.observer.pexpiretime(pendingProviderSessionBindingKey(authorizationAttemptId));
+    expect(stagedDeadline).toBe(principal.value.expiresAt);
+    expect(Number(await testScope.observer.zscore(pendingProviderSessionBindingsByClientKey(clientCode), pendingProviderSessionBindingKey(authorizationAttemptId)))).toBe(stagedDeadline);
+    applicationOffset = -offset;
+    expect(await adapter.isStagedPrincipal(authorizationAttemptId, clientCode, session)).toBe(true);
     const binding = await adapter.consumeStaged({
       accountId,
       authorizationAttemptId,
@@ -632,6 +676,54 @@ describe("oIDC Provider Session real Redis contract", () => {
     });
 
     expect(binding).not.toBeNull();
+    const mappingKey = providerSessionBindingLookupKey(providerSessionUid, clientCode);
+    expect(await testScope.observer.pexpiretime(mappingKey)).toBe(principal.value.expiresAt);
+    applicationOffset = 120_000;
+    await adapter.read(providerSessionUid, clientCode);
+    expect(await testScope.observer.pexpiretime(mappingKey)).toBe(principal.value.expiresAt);
+    const codeId = testScope.unique("code");
+    const payload = { clientId: clientCode, scope: "openid", authTime: session.authTime };
+    testScope.trackKey(`oidc:model:AuthorizationCode:${codeId}`);
+    testScope.trackKey(`oidc:consumed:AuthorizationCode:${codeId}`);
+    testScope.trackKey(`oidc:client-objects:${clientCode}`);
+    const protocolAdapter = (name: string) => new RedisOidcAdapter(name, testScope.writer, {
+      oidcSession: adapter,
+      providerSessions: adapter,
+      clientVersions: { findActiveVersion: async () => 1 },
+      claims: { createAuthorizationCodeSnapshot: async () => ({}) },
+      tokens: { revokeAccessToken: async () => undefined },
+    });
+    const provider = new Provider("http://issuer.test", { adapter: protocolAdapter });
+    registerProtocolModelPayloadExtensions(provider);
+    const codes = protocolAdapter("AuthorizationCode");
+    await codes.upsert(codeId, { ...payload, kind: "AuthorizationCode", accountId, sessionUid: providerSessionUid }, 60);
+    expect(await provider.AuthorizationCode.find(codeId)).toBeDefined();
+    const lifetime = await adapter.resolveAuthorizationCodeSessionLifetime(codeId);
+    expect(lifetime!.remainingSeconds).toBeGreaterThan(0);
+    expect(lifetime!.remainingSeconds).toBeLessThanOrEqual(3);
+    applicationOffset = -120_000;
+    await codes.consume(codeId);
+    expect(await adapter.resolveAuthorizationCodeSessionLifetime(codeId)).toBeNull();
+    const replay = await provider.AuthorizationCode.find(codeId, { ignoreExpiration: true });
+    expect(replay).toMatchObject({ consumed: expect.any(Number), clientId: clientCode });
+    expect(replay!.isExpired).toBe(false);
+    expect(replay).not.toHaveProperty("globalSessionRemainingSeconds");
+    let replayFailure;
+    try {
+      await codes.consume(codeId);
+    }
+    catch (error) {
+      replayFailure = error;
+    }
+    expect(replayFailure).toBeInstanceOf(Error);
+    expect(await adapter.consumeAuthorizationCodeArtifact(codeId)).toBeNull();
+    const tokenId = testScope.unique("token");
+    const credential = await adapter.registerAccessTokenCredential({ providerTokenId: tokenId, providerTokenKey: testScope.unique("payload"), payload, expiresIn: lifetime!.remainingSeconds, binding });
+    expect(credential!.expiresAt).toBeLessThanOrEqual(principal.value.expiresAt);
+    expect((await adapter.resolveAccessTokenCredential(tokenId))!.credential.credentialId).toBe(credential!.credentialId);
+    await adapter.revokeAccessTokenCredential(credential!.credentialId);
+    expect(await adapter.resolveAccessTokenCredential(tokenId)).toBeNull();
+
     await expect(kernel.resolveClientBindingById(binding!.bindingId)).resolves.toMatchObject({
       status: "resolved",
       value: { bindingId: binding!.bindingId },

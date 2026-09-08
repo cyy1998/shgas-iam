@@ -5,6 +5,9 @@ import type {
   OidcProviderRedisTestHarness,
   OidcProviderRedisTestScope,
 } from "./redis-test-harness.ts";
+import { IncomingMessage, ServerResponse } from "node:http";
+import { Socket } from "node:net";
+import Provider, { interactionPolicy } from "oidc-provider";
 import {
   afterAll,
   afterEach,
@@ -13,8 +16,11 @@ import {
   describe,
   expect,
   it,
+  vi,
 } from "vitest";
 import { createOidcClientTrafficGate } from "../../src/provider/client/client-traffic-gate.ts";
+import { createProviderConfiguration } from "../../src/provider/configuration.ts";
+import { registerProtocolModelPayloadExtensions } from "../../src/provider/protocol-models.ts";
 import { createOidcProtocolObjectStore, RedisOidcAdapter } from "../../src/storage/redis-adapter.ts";
 import { createOidcTokenStore } from "../../src/stores/token.store.ts";
 import { createOidcProviderRedisTestHarness } from "./redis-test-harness.ts";
@@ -32,6 +38,7 @@ beforeEach(async () => {
 });
 
 afterEach(async () => {
+  vi.restoreAllMocks();
   await scope?.close();
   scope = undefined;
 });
@@ -42,6 +49,226 @@ afterAll(async () => {
 });
 
 describe("redis OIDC adapter real Redis contract", () => {
+  it.each([-120_000, 120_000])("keeps Session and Interaction reads and updates in Redis time across writers at offset %i", async (offset) => {
+    const testScope = scope!;
+    const prefix = `${testScope.unique("interaction-time")}:`;
+    testScope.trackPrefix(prefix);
+    const configuration = {
+      adapter: (name: string) => createAdapter(testScope, name, { keyPrefix: prefix }),
+      cookies: { names: { interaction: "time-interaction" }, short: { signed: false, secure: false } },
+    };
+    const writer = new Provider("http://issuer.test", configuration);
+    const reader = new Provider("http://issuer.test", configuration);
+    registerProtocolModelPayloadExtensions(writer);
+    registerProtocolModelPayloadExtensions(reader);
+    const nativeNow = Date.now.bind(Date);
+    let currentOffset = offset;
+    vi.spyOn(Date, "now").mockImplementation(() => nativeNow() + currentOffset);
+    const session = new writer.Session();
+    session.loginAccount({ accountId: SUBJECT_IDENTIFIER });
+    await session.save(30);
+    const interaction = new writer.Interaction();
+    Object.assign(interaction, {
+      jti: testScope.unique("interaction"),
+      returnTo: "http://issuer.test/resume",
+      prompt: { name: "login", reasons: [], details: {} },
+      params: {},
+      session: { accountId: SUBJECT_IDENTIFIER, uid: session.uid, cookie: session.jti },
+    });
+    await interaction.save(30);
+    const sessionKey = `${prefix}oidc:model:Session:${session.jti}`;
+    const interactionKey = `${prefix}oidc:model:Interaction:${interaction.jti}`;
+    const initialSessionDeadline = await testScope.observer.pexpiretime(sessionKey);
+    const interactionDeadline = await testScope.observer.pexpiretime(interactionKey);
+    currentOffset = -offset;
+    const loadedSession = await reader.Session.findByUid(session.uid);
+    expect(loadedSession?.uid).toBe(session.uid);
+    expect(loadedSession).toMatchObject({ isExpired: false });
+    const req = new IncomingMessage(new Socket());
+    req.headers = { host: "issuer.test", cookie: `time-interaction=${interaction.jti}` };
+    const res = new ServerResponse(req);
+    const details = await reader.interactionDetails(req, res);
+    expect(details.uid).toBe(interaction.jti);
+    currentOffset = offset;
+    const returnTo = await reader.interactionResult(req, res, { login: { accountId: SUBJECT_IDENTIFIER } });
+    expect(returnTo).toBe("http://issuer.test/resume");
+    const afterInteraction = await testScope.observer.pexpiretime(interactionKey);
+    expect(afterInteraction).toBe(interactionDeadline);
+    await loadedSession!.persist();
+    const afterPersist = await testScope.observer.pexpiretime(sessionKey);
+    expect(afterPersist).toBe(initialSessionDeadline);
+    // Normal Session.save is an explicit rolling renewal, unlike persist.
+    await loadedSession!.save(60);
+    const afterRenew = await testScope.observer.pexpiretime(sessionKey);
+    const lookupDeadline = await testScope.observer.pexpiretime(`${prefix}oidc:session-uid:${session.uid}`);
+    expect(afterRenew).toBeGreaterThan(initialSessionDeadline + 25_000);
+    expect(lookupDeadline).toBe(afterRenew);
+    const storedSession = JSON.parse((await testScope.observer.get(sessionKey))!);
+    expect(storedSession.redisLifetimeObserved).toBeUndefined();
+    expect(storedSession.redisPreserveDeadline).toBeUndefined();
+    expect(storedSession.redisObservedId).toBeUndefined();
+    const loadedInteraction = await reader.Interaction.find(interaction.jti);
+    await testScope.observer.del(sessionKey, interactionKey);
+    for (const update of [
+      () => loadedSession!.persist(),
+      () => loadedSession!.save(60),
+      () => loadedInteraction!.persist(),
+    ]) {
+      let failure;
+      try {
+        await update();
+      }
+      catch (error) {
+        failure = error;
+      }
+      expect(failure).toBeInstanceOf(Error);
+    }
+    const missing = await testScope.observer.mget(sessionKey, interactionKey);
+    expect(missing).toEqual([null, null]);
+    const nextSession = await reader.Session.find(session.jti);
+    const nextInteraction = await reader.Interaction.find(interaction.jti);
+    expect(nextSession).toBeUndefined();
+    expect(nextInteraction).toBeUndefined();
+  });
+
+  it.each([-120_000, 120_000])("preserves a loaded Grant deadline through model and production hook saves at offset %i", async (offset) => {
+    const testScope = scope!;
+    const prefix = `${testScope.unique("grant-resave")}:`;
+    testScope.trackPrefix(prefix);
+    const provider = new Provider("http://issuer.test", {
+      adapter: name => createAdapter(testScope, name, { keyPrefix: prefix }),
+      ttl: { Grant: 2 },
+    });
+    registerProtocolModelPayloadExtensions(provider);
+    const clientId = testScope.unique("client");
+    const grant = new provider.Grant({ accountId: SUBJECT_IDENTIFIER, clientId });
+    grant.addOIDCScope("openid");
+    await grant.save();
+    const key = `${prefix}oidc:model:Grant:${grant.jti}`;
+    const deadline = await testScope.observer.pexpiretime(key);
+    const initialTtl = await testScope.observer.pttl(key);
+    const nativeNow = Date.now.bind(Date);
+    vi.spyOn(Date, "now").mockImplementation(() => nativeNow() + offset);
+    const loaded = await provider.Grant.find(grant.jti);
+    expect(loaded).toBeDefined();
+    // Let independent Redis time pass after acquisition before the model supplies remainingTTL.
+    await vi.waitFor(async () => {
+      expect(await testScope.observer.pttl(key)).toBeLessThan(initialTtl - 20);
+    }, { timeout: 1000, interval: 10 });
+    loaded!.addOIDCScope("profile");
+    await loaded!.save();
+    expect(await testScope.observer.pexpiretime(key)).toBe(deadline);
+    const configuration = createProviderConfiguration({ oidc: {} } as never, {
+      adapter: name => createAdapter(testScope, name, { keyPrefix: prefix }),
+      claims: {} as never,
+      currentSigningKey: { jwk: {} } as never,
+      interactionPolicy: interactionPolicy.base(),
+      trafficGate: { assertIssuanceAllowed: async () => undefined, assertOnlineAccessAllowed: async () => undefined },
+    });
+    const refreshed = await configuration.loadExistingGrant!({ oidc: {
+      account: { accountId: SUBJECT_IDENTIFIER },
+      client: { clientId },
+      provider,
+      session: { grantIdFor: () => grant.jti },
+      params: { scope: "email" },
+    } } as never);
+    expect(refreshed).toBeDefined();
+    expect(await testScope.observer.pexpiretime(key)).toBe(deadline);
+    expect(Number(await testScope.observer.zscore(`${prefix}oidc:client-objects:${clientId}`, key))).toBe(deadline);
+    const stored = JSON.parse((await testScope.observer.get(key))!);
+    expect(stored.redisLifetimeObserved).toBeUndefined();
+    expect(stored.exp).toBe(loaded!.exp);
+    const beforeDelete = await provider.Grant.find(grant.jti);
+    await testScope.observer.del(key);
+    let failure;
+    try {
+      await beforeDelete!.save();
+    }
+    catch (error) {
+      failure = error;
+    }
+    expect(failure).toBeInstanceOf(Error);
+    expect(await testScope.observer.get(key)).toBeNull();
+    expect(await provider.Grant.find(grant.jti)).toBeUndefined();
+  });
+
+  it.each([-5_000, 0, 5_000])("keeps Redis deadlines and Grant/Client cleanup complete with application offset %i", async (offset) => {
+    const testScope = scope!;
+    const prefix = `${testScope.unique("clock")}:`;
+    testScope.trackPrefix(prefix);
+    const nativeNow = Date.now.bind(Date);
+    const clock = vi.spyOn(Date, "now").mockImplementation(() => nativeNow() + offset);
+    for (const cleanupBy of ["grant", "client"]) {
+      const clientId = testScope.unique("client");
+      const grantId = testScope.unique("grant");
+      const longId = testScope.unique("long");
+      const shortId = testScope.unique("short");
+      const userCode = testScope.unique("user-code");
+      const longKey = `${prefix}oidc:model:DeviceCode:${longId}`;
+      const shortKey = `${prefix}oidc:model:DeviceCode:${shortId}`;
+      const lookupKey = `${prefix}oidc:user-code:${userCode}`;
+      const grantIndex = `${prefix}oidc:grant-objects:${grantId}`;
+      const clientIndex = `${prefix}oidc:client-objects:${clientId}`;
+      const firstWriter = createAdapter(testScope, "DeviceCode", { keyPrefix: prefix });
+      const secondWriter = createAdapter(testScope, "DeviceCode", { keyPrefix: prefix, redis: testScope.observer });
+      clock.mockImplementation(() => nativeNow() + offset);
+      await firstWriter.upsert(longId, { clientId, grantId, userCode }, 60);
+      clock.mockImplementation(() => nativeNow() - offset);
+      await secondWriter.upsert(shortId, { clientId, grantId }, 30);
+      await secondWriter.upsert(shortId, { clientId, grantId }, 1);
+
+      const deadline = await testScope.observer.pexpiretime(longKey);
+      const lookupDeadline = await testScope.observer.pexpiretime(lookupKey);
+      const indexDeadlines = await Promise.all([grantIndex, clientIndex]
+        .map(key => testScope.observer.pexpiretime(key)));
+      const longScores = await Promise.all([grantIndex, clientIndex]
+        .map(key => testScope.observer.zscore(key, longKey)));
+      const shortDeadline = await testScope.observer.pexpiretime(shortKey);
+      const shortScores = await Promise.all([grantIndex, clientIndex]
+        .map(key => testScope.observer.zscore(key, shortKey)));
+      const [seconds, micros] = await testScope.observer.time();
+      const redisNow = Number(seconds) * 1000 + Math.floor(Number(micros) / 1000);
+      expect(deadline - redisNow).toBeGreaterThan(55_000);
+      expect(deadline - redisNow).toBeLessThanOrEqual(60_000);
+      expect(lookupDeadline).toBe(deadline);
+      expect(indexDeadlines).toEqual([deadline, deadline]);
+      expect(longScores.map(Number)).toEqual([deadline, deadline]);
+      expect(shortScores.map(Number)).toEqual([shortDeadline, shortDeadline]);
+      const inventory = createOidcProtocolObjectStore(testScope.observer, { keyPrefix: prefix });
+      const before = await inventory.inspectClient(clientId);
+      expect(before.counts).toEqual({ total: 2, stale: 0, invalid: 0, byModel: { DeviceCode: 2 } });
+
+      clock.mockImplementation(() => nativeNow() + 120_000);
+      if (cleanupBy === "grant")
+        await firstWriter.revokeByGrantId(grantId);
+      else
+        await createOidcProtocolObjectStore(testScope.writer, { keyPrefix: prefix }).revokeClient(clientId);
+      const remaining = await testScope.observer.exists(longKey, shortKey, lookupKey, grantIndex, clientIndex);
+      const after = await inventory.inspectClient(clientId);
+      expect(remaining).toBe(0);
+      expect(after.counts).toEqual({ total: 0, stale: 0, invalid: 0, byModel: {} });
+    }
+  });
+
+  it("gives the Session UID lookup the same Redis deadline as its object under a lagging application clock", async () => {
+    const testScope = scope!;
+    const prefix = `${testScope.unique("session-clock")}:`;
+    testScope.trackPrefix(prefix);
+    const now = Date.now.bind(Date);
+    vi.spyOn(Date, "now").mockImplementation(() => now() - 120_000);
+    const adapter = createAdapter(testScope, "Session", { keyPrefix: prefix });
+    await adapter.upsert("session", { uid: "uid", authorizations: { client: {} } }, 60);
+    const result = await adapter.findByUid("uid");
+    const deadlines = await Promise.all([
+      `${prefix}oidc:model:Session:session`,
+      `${prefix}oidc:session-uid:uid`,
+      `${prefix}oidc:client-objects:client`,
+    ].map(key => testScope.observer.pexpiretime(key)));
+    expect(result?.uid).toBe("uid");
+    expect(deadlines[0]).toBeGreaterThan(0);
+    expect(deadlines).toEqual([deadlines[0], deadlines[0], deadlines[0]]);
+  });
+
   it("persists the Kernel credential identity and revokes that credential with its protocol mirror", async () => {
     const testScope = scope!;
     const clientId = testScope.unique("client");
@@ -159,7 +386,7 @@ describe("redis OIDC adapter real Redis contract", () => {
 
     const result = await adapter.find(tokenId);
 
-    expect(result).toEqual(selectedPayload);
+    expect(result).toEqual({ ...selectedPayload, redisLifetimeObserved: true });
   });
 
   it("removes an access token provider payload during grant cleanup", async () => {
@@ -278,11 +505,32 @@ describe("redis OIDC adapter real Redis contract", () => {
     const indexKey = `oidc:client-objects:${clientId}`;
     testScope.trackKey(indexKey);
     const interactions = createAdapter(testScope, "Interaction");
+    const longId = testScope.unique("long");
+    const shortId = testScope.unique("short");
+    const longKey = `oidc:model:Interaction:${longId}`;
+    const shortKey = `oidc:model:Interaction:${shortId}`;
+    testScope.trackKey(longKey);
+    testScope.trackKey(shortKey);
 
-    await interactions.upsert(testScope.unique("long"), { params: { client_id: clientId } }, 120);
-    await interactions.upsert(testScope.unique("short"), { params: { client_id: clientId } }, 10);
+    await interactions.upsert(longId, { params: { client_id: clientId } }, 120);
+    await interactions.upsert(shortId, { params: { client_id: clientId } }, 1);
 
-    expect(await testScope.observer.pttl(indexKey)).toBeGreaterThan(100_000);
+    const timeout = performance.now() + 3_000;
+    while (await testScope.observer.exists(shortKey)) {
+      if (performance.now() >= timeout)
+        throw new Error("short OIDC object did not expire within its bounded observation");
+      await new Promise(resolve => setTimeout(resolve, 10));
+    }
+    const remainingTtl = await testScope.observer.pttl(indexKey);
+    const store = createOidcProtocolObjectStore(testScope.observer);
+    const inventory = await store.inspectClient(clientId);
+    expect(remainingTtl).toBeGreaterThan(100_000);
+    expect(inventory.counts).toEqual({ total: 2, stale: 1, invalid: 0, byModel: { Interaction: 1 } });
+    await createOidcProtocolObjectStore(testScope.writer).revokeClient(clientId);
+    const remaining = await testScope.observer.exists(longKey, shortKey, indexKey);
+    const after = await store.inspectClient(clientId);
+    expect(remaining).toBe(0);
+    expect(after.counts.total).toBe(0);
   });
 
   it("reports and removes a dangling client owner member without hiding it during verify", async () => {
@@ -525,10 +773,12 @@ function createAdapter(
     revokeAccessTokenCredential?: AdapterOidcSessionKernel["revokeAccessTokenCredential"];
     resolveAccessTokenCredential?: (tokenId: string) => unknown;
     version?: { value: number | null };
+    keyPrefix?: string;
+    redis?: Redis;
   } = {},
 ) {
   const version = options.version ?? { value: 3 };
-  return new RedisOidcAdapter(model, testScope.writer, {
+  return new RedisOidcAdapter(model, options.redis ?? testScope.writer, {
     claims: {
       createAuthorizationCodeSnapshot: async (input: CreateOidcAuthorizationCodeSnapshotInput) => ({
         version: 1,
@@ -541,6 +791,7 @@ function createAdapter(
     },
     oidcSession: {
       registerAuthorizationCodeArtifact: async () => true,
+      resolveAuthorizationCodeSessionLifetime: async () => ({ remainingSeconds: 90 }),
       consumeAuthorizationCodeArtifact: async () => null,
       registerAccessTokenCredential: options.registerAccessTokenCredential
         ?? (async input => ({ credentialId: `${input.providerTokenId}-credential` }) as never),
@@ -563,5 +814,5 @@ function createAdapter(
       readPrincipalAnchor: async () => null,
     },
     tokens: createOidcTokenStore(testScope.writer),
-  });
+  }, options.keyPrefix);
 }

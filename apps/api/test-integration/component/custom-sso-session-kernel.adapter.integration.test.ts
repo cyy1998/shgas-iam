@@ -343,6 +343,10 @@ function getGatewayClientContext(clientCode: "gateway" | "gateway-orcas") {
 }
 
 function createServices(options: {
+  applicationClock?: { now: () => number };
+  authCodeExpireSeconds?: number;
+  localSessionTtlSeconds?: number;
+  principalTtlMs?: number;
   authorizationGrantRedemption?: (
     defaultRedemption: AuthorizationGrantRedemption,
   ) => AuthorizationGrantRedemption;
@@ -396,8 +400,8 @@ function createServices(options: {
     },
     config: {
       namespace: "sess:v2:",
-      principalIdleTtlMs: 3_600_000,
-      principalAbsoluteTtlMs: 3_600_000,
+      principalIdleTtlMs: options.principalTtlMs ?? 3_600_000,
+      principalAbsoluteTtlMs: options.principalTtlMs ?? 3_600_000,
       lookupHmacKeys: {
         current: {
           id: "test-current",
@@ -406,13 +410,13 @@ function createServices(options: {
       },
       tombstoneTtlMs: 86_400_000,
       tombstoneGraceMs: 300_000,
-      clock: { now: () => fakeRedis.now() },
+      clock: options.applicationClock ?? { now: () => fakeRedis.now() },
     },
     validationHooks: options.validatePrincipal === undefined
       ? undefined
       : { validatePrincipal: options.validatePrincipal },
     logger,
-  });
+  }, { now: () => fakeRedis.now() });
   const adapterKernel = options.decorateKernel?.(kernel) ?? kernel;
   const adapterUserService = {
     getActiveUserBySubjectIdentifier: mock(async (input: string) => {
@@ -505,10 +509,9 @@ function createServices(options: {
     subjectProjection,
     userService: adapterUserService as any,
     auditLogWriter,
-    clock: { now: () => fakeRedis.now() },
     config: {
-      authCodeExpireSeconds: 60,
-      localSessionTtlSeconds: 3600,
+      authCodeExpireSeconds: options.authCodeExpireSeconds ?? 60,
+      localSessionTtlSeconds: options.localSessionTtlSeconds ?? 3600,
     },
   });
   const wechat = {
@@ -633,6 +636,7 @@ async function assertAmbiguousCredentialIssueRecovery(
   prepareOperation: (
     services: ReturnType<typeof createServices>,
   ) => Promise<() => Promise<string>>,
+  offset: number,
 ) {
   const firstAttemptId = "10000000-0000-4000-8000-000000000001";
   const secondAttemptId = "20000000-0000-4000-8000-000000000002";
@@ -640,6 +644,9 @@ async function assertAmbiguousCredentialIssueRecovery(
   let firstCredentialToken: string | undefined;
   let issueAttempts = 0;
   const services = createServices({
+    applicationClock: { now: () => fakeRedis.now() + offset },
+    authCodeExpireSeconds: 2,
+    localSessionTtlSeconds: 2,
     grantAttemptIds: [firstAttemptId, secondAttemptId],
     decorateKernel: kernel => ({
       ...kernel,
@@ -691,6 +698,85 @@ beforeEach(() => {
 });
 
 describe("Custom SSO module interface", () => {
+  test.each([0, 5_000, -5_000])("delivers both modes across application offset %d and clock jumps", async (offset) => {
+    let applicationOffset = offset;
+    const services = createServices({
+      applicationClock: { now: () => fakeRedis.now() + applicationOffset },
+      authCodeExpireSeconds: 2,
+      localSessionTtlSeconds: 2,
+    });
+    const independent = await redeemIndependentCredential(services);
+    expect(independent.ttl).toBe(2);
+    const { code, principalToken } = await issueAuthorizationCode(services, { clientCode: "gateway" });
+    applicationOffset += 86_400_000;
+    const gateway = await services.customSsoSession.completeGatewayLogin({
+      client: getGatewayClientContext("gateway"),
+      code,
+      redirectUrl: "https://app.example.com/callback",
+    });
+    expect(gateway.ttl).toBe(2);
+    applicationOffset -= 172_800_000;
+    const observer = createServices({ applicationClock: { now: () => fakeRedis.now() - offset } });
+    const independentContext = await observer.resolveAuthenticationContext(independent.credential, client.clientCode);
+    const gatewayContext = await observer.resolveAuthenticationContext(gateway.token, "gateway");
+    const principalContext = await observer.resolveAuthenticationContext(principalToken);
+    expect(independentContext.subjectIdentifier).toBe(subjectIdentifier);
+    expect(gatewayContext.subjectIdentifier).toBe(subjectIdentifier);
+    expect(principalContext.subjectIdentifier).toBe(subjectIdentifier);
+    const header = await observer.customSsoSession.authorizeLocalSession(gateway.token, "gateway");
+    expect(header).toBeTruthy();
+    await observer.customSsoSession.logout(independent.credential);
+    await observer.customSsoSession.logout(gateway.token);
+    for (const token of [independent.credential, gateway.token]) {
+      const result = await services.kernel.resolveCredential(token);
+      expect(result.status).toBe("revoked");
+    }
+  });
+
+  test("rounds a valid subsecond parent-clamped Credential up to one protocol second", async () => {
+    const services = createServices({ principalTtlMs: 750 });
+    const independent = await redeemIndependentCredential(services);
+    expect(independent.ttl).toBe(1);
+    const { code } = await issueAuthorizationCode(services, { clientCode: "gateway" });
+    const gateway = await services.customSsoSession.completeGatewayLogin({
+      client: getGatewayClientContext("gateway"),
+      code,
+      redirectUrl: "https://app.example.com/callback",
+    });
+    expect(gateway.ttl).toBe(1);
+  });
+
+  test.each(["independent", "gateway"])("delivers the acquired %s result after its Credential deadline passes", async (mode) => {
+    const services = createServices({
+      localSessionTtlSeconds: 1,
+      decorateKernel: kernel => ({
+        ...kernel,
+        issueCredential: async (input) => {
+          const result = await kernel.issueCredential(input);
+          await Promise.resolve();
+          fakeRedis.advance(1_001);
+          return result;
+        },
+      }),
+    });
+    const { code } = await issueAuthorizationCode(services, { clientCode: mode === "gateway" ? "gateway" : client.clientCode });
+    const result = mode === "gateway"
+      ? await services.customSsoSession.completeGatewayLogin({
+          client: getGatewayClientContext("gateway"),
+          code,
+          redirectUrl: "https://app.example.com/callback",
+        })
+      : await services.customSsoSession.redeemIndependentGrant({
+          client: independentClient,
+          code,
+          redirectUri: "https://app.example.com/callback",
+        });
+    expect(result.ttl).toBe(1);
+    const token = "token" in result ? result.token : result.credential;
+    const nextRequest = await services.kernel.resolveCredential(token);
+    expect(nextRequest.status).toBe("missing_or_expired");
+  });
+
   test("issues an Independent Credential with the reserved attempt identity and no Client Binding", async () => {
     const grantAttemptId = "10000000-0000-4000-8000-000000000001";
     const services = createServices({ grantAttemptId });
@@ -751,7 +837,7 @@ describe("Custom SSO module interface", () => {
     })).rejects.toBeInstanceOf(InvalidAuthCodeError);
   });
 
-  test("revokes an ambiguously committed Credential and retries the Grant with a new attempt identity", async () => {
+  test.each([0, 5_000, -5_000])("recovers an Independent Grant after ambiguous commit with application offset %d", async (offset) => {
     await assertAmbiguousCredentialIssueRecovery(async (services) => {
       const { code } = await issueAuthorizationCode(services);
       const input = {
@@ -763,10 +849,10 @@ describe("Custom SSO module interface", () => {
         const result = await services.customSsoSession.redeemIndependentGrant(input);
         return result.credential;
       };
-    });
+    }, offset);
   });
 
-  test("recovers a Gateway Grant after an ambiguously committed Local Session", async () => {
+  test.each([0, 5_000, -5_000])("recovers a Gateway Grant after ambiguous commit with application offset %d", async (offset) => {
     await assertAmbiguousCredentialIssueRecovery(async (services) => {
       const redirectUrl = "https://gateway.example.com/callback";
       const { code } = await issueAuthorizationCode(services, {
@@ -782,7 +868,7 @@ describe("Custom SSO module interface", () => {
         const result = await services.customSsoSession.completeGatewayLogin(input);
         return result.token;
       };
-    });
+    }, offset);
   });
 
   test("rejects and revokes a legacy binding-backed Custom SSO Credential", async () => {
@@ -1927,6 +2013,7 @@ describe("Custom SSO module interface", () => {
 
     expect(result).toEqual({
       orcasSessionId: null,
+      ttl: 3600,
       state: "trusted-gateway-state",
       token: expect.stringContaining("iam_ls_"),
     });
@@ -2460,6 +2547,7 @@ describe("Custom SSO module interface", () => {
     });
     expect(result).toEqual({
       orcasSessionId: "orcas-session",
+      ttl: 3600,
       token: expect.stringContaining("iam_ls_"),
     });
     expect(sessionContext).toEqual({

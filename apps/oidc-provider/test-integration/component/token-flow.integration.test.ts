@@ -48,7 +48,10 @@ class MemoryAdapter implements Adapter {
   async find(id: string) {
     if (this.model === "Client")
       return this.clients.get(id);
-    return this.values.get(`${this.model}:${id}`);
+    const value = this.values.get(`${this.model}:${id}`);
+    return value && this.model === "AuthorizationCode"
+      ? { ...value, globalSessionRemainingSeconds: 3600 }
+      : value;
   }
 
   async consume(id: string) {
@@ -489,6 +492,7 @@ describe("authorization code token flow HTTP smoke", () => {
       nonce: "nonce-a",
       auth_time: 123,
     });
+    expect(verified.payload.exp! - verified.payload.iat!).toBe(3600);
     expect(verified.payload).not.toHaveProperty("iam:employments");
     expect(verified.payload).not.toHaveProperty("iam:authorization");
 

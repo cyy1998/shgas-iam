@@ -87,9 +87,17 @@ if redis.call("EXISTS", KEYS[2]) == 1
   return 0
 end
 
+local indexCount = tonumber(ARGV[4])
+local lookupOwner = ARGV[5 + indexCount * 2]
+if lookupOwner ~= "" then
+  if redis.call("GET", KEYS[3 + indexCount]) ~= lookupOwner
+    or redis.call("EXISTS", KEYS[4 + indexCount]) == 1 then
+    return 0
+  end
+  redis.call("PEXPIREAT", KEYS[3 + indexCount], ARGV[3])
+end
 redis.call("SET", KEYS[1], ARGV[2])
 redis.call("PEXPIREAT", KEYS[1], ARGV[3])
-local indexCount = tonumber(ARGV[4])
 for index = 1, indexCount do
   local argumentCursor = 4 + ((index - 1) * 2)
   redis.call(
@@ -155,6 +163,7 @@ export function createRedisSessionKernelRevocationTransitions(
         input.activeKey,
         input.tombstoneKey,
         ...input.indexes.map(index => index.key),
+        ...(input.lookup ? [input.lookup.key, input.lookup.tombstoneKey] : []),
       ];
       return parseTransitionResult(await redis.eval!(
         UPDATE_ACTIVE_OBJECT_SCRIPT,
@@ -165,6 +174,7 @@ export function createRedisSessionKernelRevocationTransitions(
         input.expiresAt,
         input.indexes.length,
         ...input.indexes.flatMap(index => [index.score, index.member]),
+        input.lookup?.expectedOwner ?? "",
       ));
     },
   };
@@ -253,9 +263,17 @@ export function createInMemorySessionKernelRevocationTransitions(
         ) {
           return false;
         }
+        if (input.lookup && (
+          await redis.get(input.lookup.key) !== input.lookup.expectedOwner
+          || await redis.get(input.lookup.tombstoneKey) !== null
+        )) {
+          return false;
+        }
         const transaction = redis.multi()
           .set(input.activeKey, input.serializedObject)
           .pexpireat(input.activeKey, input.expiresAt);
+        if (input.lookup)
+          transaction.pexpireat(input.lookup.key, input.expiresAt);
         for (const index of input.indexes)
           transaction.zadd(index.key, index.score, index.member);
         await assertTransitionTransaction(transaction.exec());
